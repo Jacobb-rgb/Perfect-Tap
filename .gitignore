@@ -1,9 +1,6 @@
 # build outputs (TerraForge.rbxl is committed on purpose so you can open it directly)
 build/*
 !build/TerraForge.rbxl
-!build/preview/
-build/preview/*
-!build/preview/shots/
 sourcemap.json
 node_modules/
 *.rbxl.lock
