@@ -1,0 +1,255 @@
+--[[
+	CarryService: pick up, carry (stacked in front of you), drop and throw
+	physical items. Hydroneer-style: no magic inventory for raw ore.
+
+	Validation: the item exists, is loose, belongs to the player, is within
+	reach, and the player has free carry capacity. Throw direction and power
+	from the client are clamped.
+
+	Carried items are welded to the HumanoidRootPart (massless, no collision),
+	so the character owns their physics. Walk speed drops a little per item.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local GameConfig = require(Shared.Config.GameConfig)
+local ToolData = require(Shared.Config.ToolData)
+local Net = require(Shared.Net)
+local Guard = require(script.Parent.Parent.Guard)
+local Perks = require(script.Parent.Parent.Perks)
+local DataService = require(script.Parent.DataService)
+local ItemService = require(script.Parent.ItemService)
+
+local CarryService = {}
+
+local BASE_WALK_SPEED = 18
+local SLOW_PER_ITEM = 0.5
+local MIN_WALK_SPEED = 13
+
+local carried: { [Player]: { ItemService.ItemRecord } } = {}
+local pickupCallbacks: { (Player, ItemService.ItemRecord) -> () } = {}
+
+function CarryService.onPickup(callback: (Player, ItemService.ItemRecord) -> ())
+	table.insert(pickupCallbacks, callback)
+end
+
+function CarryService.capacity(player: Player): number
+	local data = DataService.get(player)
+	local level = if data then data.CarryLevel else 1
+	return ToolData.carryCapacity(level, Perks.has(player, "StrongBack"))
+end
+
+function CarryService.list(player: Player): { ItemService.ItemRecord }
+	return carried[player] or {}
+end
+
+local function stackOffset(index: number): CFrame
+	-- two columns in front of the chest, rising up
+	local column = (index - 1) % 2
+	local row = math.floor((index - 1) / 2)
+	return CFrame.new((column - 0.5) * 1.3, 0.2 + row * 1.15, -2.1)
+end
+
+local function updateWalkSpeed(player: Player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		local count = #(carried[player] or {})
+		humanoid.WalkSpeed = math.max(MIN_WALK_SPEED, BASE_WALK_SPEED - count * SLOW_PER_ITEM)
+	end
+	player:SetAttribute("CarryCount", #(carried[player] or {}))
+	player:SetAttribute("CarryCapacity", CarryService.capacity(player))
+end
+
+local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
+	ItemService.wake(record)
+	local model = record.Model
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = false
+			d.CanCollide = false
+			d.CanTouch = false
+			d.Massless = true
+		end
+	end
+	model:PivotTo(root.CFrame * stackOffset(index))
+	local weld = Instance.new("WeldConstraint")
+	weld.Name = "CarryWeld"
+	weld.Part0 = root
+	weld.Part1 = record.Body
+	weld.Parent = record.Body
+	ItemService.setState(record, "Carried")
+	model:SetAttribute("CarriedBy", player.UserId)
+end
+
+local function detach(record: ItemService.ItemRecord)
+	local weld = record.Body:FindFirstChild("CarryWeld")
+	if weld then
+		weld:Destroy()
+	end
+	record.Model:SetAttribute("CarriedBy", nil)
+	for _, d in record.Model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanTouch = d == record.Body
+		end
+	end
+end
+
+-- Removes the top carried item without releasing it (for machines/selling).
+function CarryService.takeTop(player: Player, predicate: ((ItemService.ItemRecord) -> boolean)?): ItemService.ItemRecord?
+	local list = carried[player]
+	if not list then
+		return nil
+	end
+	for i = #list, 1, -1 do
+		local record = list[i]
+		if not predicate or predicate(record) then
+			table.remove(list, i)
+			detach(record)
+			updateWalkSpeed(player)
+			return record
+		end
+	end
+	return nil
+end
+
+function CarryService.pickup(player: Player, record: ItemService.ItemRecord): boolean
+	local root = Guard.rootPart(player)
+	if not root or not DataService.get(player) then
+		return false
+	end
+	if record.Owner ~= player.UserId or record.State ~= "Loose" then
+		return false
+	end
+	if (record.Body.Position - root.Position).Magnitude > GameConfig.PickupRange + 2 then
+		return false
+	end
+	local list = carried[player]
+	if not list then
+		list = {}
+		carried[player] = list
+	end
+	if #list >= CarryService.capacity(player) then
+		Net.fire("Notify", player, { Text = "Your hands are full! Upgrade your carry gear at the Tool Smithy.", Kind = "Deny" })
+		return false
+	end
+	table.insert(list, record)
+	attach(player, root, record, #list)
+	updateWalkSpeed(player)
+	Net.fire("Fx", player, "Pickup", record.Body.Position, record.OreId)
+	for _, callback in pickupCallbacks do
+		task.spawn(callback, player, record)
+	end
+	return true
+end
+
+local function dropTop(player: Player, velocity: Vector3?)
+	local root = Guard.rootPart(player)
+	local list = carried[player]
+	if not root or not list or #list == 0 then
+		return
+	end
+	local record = table.remove(list) :: ItemService.ItemRecord
+	detach(record)
+	local cf = root.CFrame * CFrame.new(0, 0.8, -3)
+	ItemService.release(record, cf, velocity or (root.AssemblyLinearVelocity + root.CFrame.LookVector * 4))
+	updateWalkSpeed(player)
+end
+
+-- Drops everything (death, leaving, teleport).
+function CarryService.dropAll(player: Player)
+	local list = carried[player]
+	carried[player] = nil
+	if not list then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	for i, record in list do
+		if record.State == "Carried" then
+			detach(record)
+			if root then
+				ItemService.release(record, root.CFrame * CFrame.new((i % 3 - 1) * 1.5, 1 + math.floor(i / 3), -2))
+			else
+				ItemService.stash(record, nil)
+			end
+		end
+	end
+	updateWalkSpeed(player)
+end
+
+local function onPickup(player: Player, target: any)
+	local model = Guard.instance(target, "Model", Workspace:FindFirstChild("Items"))
+	local record = model and ItemService.get(model)
+	if record then
+		CarryService.pickup(player, record)
+	end
+end
+
+local function onDrop(player: Player)
+	dropTop(player, nil)
+end
+
+local function onThrow(player: Player, direction: any, power: any)
+	local dir = Guard.unitVector(direction)
+	local charge = Guard.number(power, 0, 1)
+	local root = Guard.rootPart(player)
+	if not dir or not charge or not root then
+		return
+	end
+	-- no throwing straight down through the floor or straight up
+	local flat = Vector3.new(dir.X, 0, dir.Z)
+	if flat.Magnitude < 0.2 then
+		flat = root.CFrame.LookVector
+	end
+	local pitch = math.clamp(dir.Y, -0.3, 0.85)
+	local throwDir = (flat.Unit * math.sqrt(1 - pitch * pitch) + Vector3.new(0, pitch, 0)).Unit
+	local speed = GameConfig.ThrowSpeedMin + (GameConfig.ThrowSpeedMax - GameConfig.ThrowSpeedMin) * charge
+	local velocity = throwDir * speed + Vector3.new(0, 8, 0) + root.AssemblyLinearVelocity * 0.5
+	dropTop(player, velocity)
+	Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
+end
+
+function CarryService.init()
+	Net.on("CarryPickup", onPickup)
+	Net.on("CarryDrop", onDrop)
+	Net.on("CarryThrow", onThrow)
+
+	local function hookCharacter(player: Player, character: Model)
+		local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
+		if humanoid then
+			humanoid.Died:Connect(function()
+				CarryService.dropAll(player)
+			end)
+		end
+		updateWalkSpeed(player)
+	end
+	local function setupPlayer(player: Player)
+		player.CharacterAdded:Connect(function(character)
+			hookCharacter(player, character)
+		end)
+		player.CharacterRemoving:Connect(function()
+			CarryService.dropAll(player)
+		end)
+		if player.Character then
+			task.spawn(hookCharacter, player, player.Character)
+		end
+	end
+	Players.PlayerAdded:Connect(setupPlayer)
+	for _, player in Players:GetPlayers() do
+		setupPlayer(player)
+	end
+
+	-- leaving: carried items become part of storage (ItemService stashes them)
+	DataService.beforeRelease(function(player)
+		carried[player] = nil
+	end)
+	DataService.onLoaded(function(player)
+		updateWalkSpeed(player)
+	end)
+end
+
+return CarryService

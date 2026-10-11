@@ -8,6 +8,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { renderUI } from "./ui.js";
 
 const params = new URLSearchParams(location.search);
 const sceneName = params.get("scene") || "world";
@@ -349,6 +350,11 @@ async function main() {
   );
 
   composer.render();
+  if (shot.ui) {
+    const guis = await fetch(`/scenes/${shot.ui}.json`).then((r) => r.json());
+    renderUI(document.getElementById("ui"), guis, WIDTH, HEIGHT);
+    await document.fonts.ready;
+  }
   window.__shot = shot;
   window.__done = true;
 }

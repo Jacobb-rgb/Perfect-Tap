@@ -16,7 +16,7 @@ echo "== Type analysis (luau-lsp, strict mode)"
 rojo sourcemap default.project.json --output build/sourcemap.json
 echo '{"languageMode":"strict"}' > build/strict.luaurc
 analysis=$(luau-lsp analyze --platform=roblox --sourcemap=build/sourcemap.json --definitions="$defs" \
-    --base-luaurc=build/strict.luaurc src 2>&1 | grep -v "^src/.*\[game/" )
+    --base-luaurc=build/strict.luaurc src 2>&1 | grep -v "\[game/" )
 if [ -n "$analysis" ]; then
   echo "$analysis"
   status=1

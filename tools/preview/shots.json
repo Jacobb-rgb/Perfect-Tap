@@ -1,11 +1,184 @@
 {
-  "town_overview": { "scene": "world", "position": [95, 75, 150], "target": [0, 0, -30], "fov": 60, "preset": "Surface", "shadowExtent": 260 },
-  "great_forge": { "scene": "world", "position": [22, 14, -4], "target": [0, 9, -48], "fov": 65, "preset": "Surface", "shadowExtent": 90 },
-  "plaza": { "scene": "world", "position": [-26, 9, 34], "target": [10, 4, -8], "fov": 70, "preset": "Surface", "shadowExtent": 90 },
-  "trading_post": { "scene": "world", "position": [8, 9, 12], "target": [38, 4, -6], "fov": 65, "preset": "Surface", "shadowExtent": 80 },
-  "plots": { "scene": "world", "position": [-40, 55, 70], "target": [-104, 0, 10], "fov": 60, "preset": "Surface", "shadowExtent": 160 },
-  "quarry": { "scene": "world", "position": [-10, 28, -108], "target": [5, -12, -190], "fov": 70, "preset": "Quarry", "shadowExtent": 160 },
-  "ember_caves": { "scene": "world", "position": [-30, 2, -250], "target": [10, -10, -305], "fov": 70, "preset": "EmberCaves", "maxLights": 14 },
-  "deep_hollow": { "scene": "world", "position": [30, -26, -388], "target": [-10, -38, -445], "fov": 70, "preset": "DeepHollow", "maxLights": 14 },
-  "grotto": { "scene": "world", "position": [92, -4, -158], "target": [122, -10, -195], "fov": 70, "preset": "Grotto", "maxLights": 10 }
+  "town_overview": {
+    "scene": "world",
+    "position": [
+      95,
+      75,
+      150
+    ],
+    "target": [
+      0,
+      0,
+      -30
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 260
+  },
+  "great_forge": {
+    "scene": "world",
+    "position": [
+      22,
+      14,
+      -4
+    ],
+    "target": [
+      0,
+      9,
+      -48
+    ],
+    "fov": 65,
+    "preset": "Surface",
+    "shadowExtent": 90
+  },
+  "plaza": {
+    "scene": "world",
+    "position": [
+      -26,
+      9,
+      34
+    ],
+    "target": [
+      10,
+      4,
+      -8
+    ],
+    "fov": 70,
+    "preset": "Surface",
+    "shadowExtent": 90
+  },
+  "trading_post": {
+    "scene": "world",
+    "position": [
+      8,
+      9,
+      12
+    ],
+    "target": [
+      38,
+      4,
+      -6
+    ],
+    "fov": 65,
+    "preset": "Surface",
+    "shadowExtent": 80
+  },
+  "plots": {
+    "scene": "world",
+    "position": [
+      -40,
+      55,
+      70
+    ],
+    "target": [
+      -104,
+      0,
+      10
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 160
+  },
+  "quarry": {
+    "scene": "world",
+    "position": [
+      -10,
+      28,
+      -108
+    ],
+    "target": [
+      5,
+      -12,
+      -190
+    ],
+    "fov": 70,
+    "preset": "Quarry",
+    "shadowExtent": 160
+  },
+  "ember_caves": {
+    "scene": "world",
+    "position": [
+      -30,
+      2,
+      -250
+    ],
+    "target": [
+      10,
+      -10,
+      -305
+    ],
+    "fov": 70,
+    "preset": "EmberCaves",
+    "maxLights": 14
+  },
+  "deep_hollow": {
+    "scene": "world",
+    "position": [
+      30,
+      -26,
+      -388
+    ],
+    "target": [
+      -10,
+      -38,
+      -445
+    ],
+    "fov": 70,
+    "preset": "DeepHollow",
+    "maxLights": 14
+  },
+  "grotto": {
+    "scene": "world",
+    "position": [
+      92,
+      -4,
+      -158
+    ],
+    "target": [
+      122,
+      -10,
+      -195
+    ],
+    "fov": 70,
+    "preset": "Grotto",
+    "maxLights": 10
+  },
+  "mining": {
+    "scene": "gameplay",
+    "position": [
+      -14.5,
+      -4.5,
+      -171
+    ],
+    "target": [
+      -28.5,
+      -9.6,
+      -161
+    ],
+    "fov": 62,
+    "preset": "Quarry",
+    "shadowExtent": 60,
+    "ui": "hud_mining",
+    "sunDir": [
+      -0.5,
+      0.6,
+      0.62
+    ]
+  },
+  "items": {
+    "scene": "gameplay",
+    "position": [
+      86,
+      13,
+      84
+    ],
+    "target": [
+      104,
+      0.5,
+      84
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 40
+  }
 }

@@ -6,10 +6,22 @@
 	then start() runs for each in its own thread (loops, connections).
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
+
 local Services = script:WaitForChild("Services")
 
+-- Remotes exist before any client script asks for them.
+Net.setupServer()
+
 local ORDER = {
+	"DataService",
 	"WorldService",
+	"StateService",
+	"ItemService",
+	"ToolService",
+	"MiningService",
+	"CarryService",
 }
 
 local loaded = {}

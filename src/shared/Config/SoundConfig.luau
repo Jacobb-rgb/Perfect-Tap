@@ -1,0 +1,38 @@
+--[[
+	Sounds. Defaults are built-in Roblox client sounds (rbxasset://), which
+	are free and need no upload. For better sounds, pick audio uploaded by
+	Roblox in the Creator Store (Toolbox -> Audio) and paste the id like
+	"rbxassetid://1234567". Pitch = random range for variation (juice!).
+	See docs/ASSETS.md.
+]]
+
+export type SoundDef = { Id: string, Volume: number, Pitch: { number }, Looped: boolean? }
+
+local SoundConfig: { [string]: SoundDef } = {
+	PickHit = { Id = "rbxasset://sounds/collide.wav", Volume = 0.55, Pitch = { 0.7, 0.9 } },
+	PickBounce = { Id = "rbxasset://sounds/collide.wav", Volume = 0.4, Pitch = { 1.4, 1.6 } },
+	NodeCrack = { Id = "rbxasset://sounds/snap.wav", Volume = 0.6, Pitch = { 0.55, 0.7 } },
+	NodeShatter = { Id = "rbxasset://sounds/glassbreak.wav", Volume = 0.55, Pitch = { 0.45, 0.6 } },
+	Pickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.5, Pitch = { 1.1, 1.3 } },
+	Drop = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = { 0.9, 1.1 } },
+	Throw = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.45, Pitch = { 1.0, 1.25 } },
+	-- cleaning minigame
+	ChiselCrack = { Id = "rbxasset://sounds/snap.wav", Volume = 0.75, Pitch = { 0.8, 1.15 } },
+	ChiselScratch = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.25, Pitch = { 1.6, 1.9 } },
+	Chip = { Id = "rbxasset://sounds/collide.wav", Volume = 0.5, Pitch = { 1.5, 1.8 } },
+	Scrape = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.3, Pitch = { 0.55, 0.7 }, Looped = true },
+	DirtPop = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Pitch = { 0.7, 1.0 } },
+	Polish = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.25, Pitch = { 1.6, 2.0 } },
+	Reveal = { Id = "rbxasset://sounds/victory.wav", Volume = 0.6, Pitch = { 1.0, 1.0 } },
+	-- machines and economy
+	Sell = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5, Pitch = { 1.15, 1.3 } },
+	Furnace = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.4, Pitch = { 0.45, 0.55 } },
+	Crusher = { Id = "rbxasset://sounds/collide.wav", Volume = 0.5, Pitch = { 0.45, 0.6 } },
+	AnvilClang = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.6, Pitch = { 0.8, 1.0 } },
+	Place = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.6, Pitch = { 0.7, 0.8 } },
+	UIClick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.4, Pitch = { 1.0, 1.1 } },
+	UIDeny = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.6, 0.7 } },
+	Discovery = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.55, Pitch = { 0.9, 0.9 } },
+}
+
+return SoundConfig
