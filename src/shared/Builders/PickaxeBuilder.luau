@@ -18,7 +18,9 @@ function PickaxeBuilder.build(pickaxeId: string): Tool
 	tool.ToolTip = info.Name
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
-	tool.Grip = CFrame.new(0, 0, -1.6)
+	-- R15 grip attachment: its Y axis points forward out of the fist. Turning
+	-- the handle 90 degrees makes the shaft (Z) point forward, head up/down.
+	tool.Grip = CFrame.new(0, 0, -1.6) * CFrame.Angles(math.rad(90), 0, 0)
 	tool:SetAttribute("PickaxeId", info.Id)
 	tool:SetAttribute("Tier", info.Tier)
 	tool:SetAttribute("Cooldown", info.Cooldown)

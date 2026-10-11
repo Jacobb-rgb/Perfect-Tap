@@ -44,7 +44,8 @@ type Node = {
 }
 
 local nodes: { [Model]: Node } = {}
-local lastSwing: { [Player]: number } = {}
+-- token bucket per player: bursts from lag are fine, the average can't beat the cooldown
+local swingBuckets: { [Player]: { tokens: number, last: number } } = {}
 local random = Random.new()
 local nodesFolder: Folder
 
@@ -198,13 +199,19 @@ local function onSwing(player: Player, target: any)
 	end
 	local pickaxe = ToolData.PickaxeById[data.Pickaxe] or ToolData.PickaxeById[ToolData.DefaultPickaxe]
 
-	-- cooldown (with leniency for network jitter)
+	-- cooldown: 2-swing burst allowance refilled at 1 swing per cooldown
 	local now = os.clock()
-	local last = lastSwing[player] or 0
-	if now - last < pickaxe.Cooldown * GameConfig.SwingLeniency then
+	local bucket = swingBuckets[player]
+	if not bucket then
+		bucket = { tokens = 2, last = now }
+		swingBuckets[player] = bucket
+	end
+	bucket.tokens = math.min(2, bucket.tokens + (now - bucket.last) / pickaxe.Cooldown)
+	bucket.last = now
+	if bucket.tokens < 1 then
 		return
 	end
-	lastSwing[player] = now
+	bucket.tokens -= 1
 
 	-- distance from the character to the node surface
 	local primary = node.Model.PrimaryPart :: BasePart
@@ -270,7 +277,7 @@ function MiningService.init()
 	nodesFolder = Workspace:FindFirstChild("Nodes") :: Folder
 	Net.on("MineSwing", onSwing)
 	Players.PlayerRemoving:Connect(function(player)
-		lastSwing[player] = nil
+		swingBuckets[player] = nil
 	end)
 end
 

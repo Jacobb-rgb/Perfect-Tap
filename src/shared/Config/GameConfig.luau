@@ -14,16 +14,14 @@ local GameConfig = {
 
 	-- Mining
 	MineRange = 13, -- max studs from character to the node surface
-	SwingLeniency = 0.85, -- server accepts swings at 85% of the cooldown (network jitter)
 
 	-- Physical items (performance)
-	MaxLooseItemsPerPlayer = 40, -- above this, the oldest loose item is moved to storage
-	ItemSleepAfter = 10, -- seconds at rest before an item is anchored ("asleep")
-	ItemSleepSpeed = 0.15, -- studs/s, below this an item counts as resting
+	MaxLooseItemsPerPlayer = 30, -- above this, the oldest loose item is moved to storage
+	ServerOwnershipAfter = 3, -- seconds after a drop/throw before the server takes back item physics
 	PickupRange = 11,
 	ThrowSpeedMin = 22,
 	ThrowSpeedMax = 52,
-	ItemFallKillY = -200, -- items below this are rescued back to their owner's plot
+	ItemFallKillY = -60, -- items below this fell out of the world and are rescued (lowest floor is -40)
 
 	-- Machines
 	MachineIntakeQueue = 4, -- items a machine can buffer

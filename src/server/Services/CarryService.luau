@@ -65,7 +65,6 @@ local function updateWalkSpeed(player: Player)
 end
 
 local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
-	ItemService.wake(record)
 	local model = record.Model
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -146,6 +145,22 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 	return true
 end
 
+-- Where a dropped item appears: 3 studs ahead, but never inside/behind a wall.
+local function dropCFrame(player: Player, root: BasePart): CFrame
+	local origin = root.Position + Vector3.new(0, 0.8, 0)
+	local ahead = root.CFrame.LookVector * 3
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local ignore: { Instance } = { Workspace:FindFirstChild("Items") :: Instance }
+	if player.Character then
+		table.insert(ignore, player.Character)
+	end
+	params.FilterDescendantsInstances = ignore
+	local hit = Workspace:Raycast(origin, ahead, params)
+	local position = if hit then hit.Position - root.CFrame.LookVector * 1.2 else origin + ahead
+	return CFrame.new(position)
+end
+
 local function dropTop(player: Player, velocity: Vector3?)
 	local root = Guard.rootPart(player)
 	local list = carried[player]
@@ -154,8 +169,7 @@ local function dropTop(player: Player, velocity: Vector3?)
 	end
 	local record = table.remove(list) :: ItemService.ItemRecord
 	detach(record)
-	local cf = root.CFrame * CFrame.new(0, 0.8, -3)
-	ItemService.release(record, cf, velocity or (root.AssemblyLinearVelocity + root.CFrame.LookVector * 4))
+	ItemService.release(record, dropCFrame(player, root), velocity or (root.AssemblyLinearVelocity + root.CFrame.LookVector * 4))
 	updateWalkSpeed(player)
 end
 

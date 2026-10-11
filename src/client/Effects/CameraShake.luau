@@ -15,6 +15,7 @@ local MAX_OFFSET = 0.35
 local DECAY = 2.4 -- trauma lost per second
 local t = 0
 local bound = false
+local applied = CFrame.identity -- offset added last frame, removed before the camera updates
 
 local function noise(seed: number): number
 	return math.noise(t * 22, seed) * 2
@@ -25,6 +26,15 @@ local function bind()
 		return
 	end
 	bound = true
+	-- undo last frame's offset before the camera scripts run (no slow drift)...
+	RunService:BindToRenderStep("TerraForgeCameraUnshake", Enum.RenderPriority.Camera.Value - 1, function()
+		local camera = Workspace.CurrentCamera
+		if camera and applied ~= CFrame.identity then
+			camera.CFrame = camera.CFrame * applied:Inverse()
+			applied = CFrame.identity
+		end
+	end)
+	-- ...and add this frame's offset after they ran
 	RunService:BindToRenderStep("TerraForgeCameraShake", Enum.RenderPriority.Camera.Value + 1, function(dt)
 		if trauma <= 0 then
 			return
@@ -34,9 +44,9 @@ local function bind()
 		local shake = trauma * trauma
 		local camera = Workspace.CurrentCamera
 		if camera then
-			camera.CFrame = camera.CFrame
-				* CFrame.new(noise(1) * MAX_OFFSET * shake, noise(2) * MAX_OFFSET * shake, 0)
+			applied = CFrame.new(noise(1) * MAX_OFFSET * shake, noise(2) * MAX_OFFSET * shake, 0)
 				* CFrame.Angles(noise(3) * MAX_ANGLE * shake, noise(4) * MAX_ANGLE * shake, noise(5) * MAX_ANGLE * shake)
+			camera.CFrame = camera.CFrame * applied
 		end
 	end)
 end

@@ -74,6 +74,11 @@ local function itemFromPart(part: Instance?): Model?
 	return nil
 end
 
+local function handsFull(): boolean
+	local capacity = (player:GetAttribute("CarryCapacity") :: number?) or 1
+	return carryCount() >= capacity
+end
+
 local function isPickable(model: Model, root: BasePart): boolean
 	if model:GetAttribute("Owner") ~= player.UserId or model:GetAttribute("State") ~= "Loose" then
 		return false
@@ -220,6 +225,7 @@ function InteractController.init()
 		Enabled = false,
 		LightInfluence = 0,
 		MaxDistance = 40,
+		ResetOnSpawn = false,
 	}, player:WaitForChild("PlayerGui"))
 	hintName = UIKit.label(hint, "", 22, { Size = UDim2.new(1, 0, 0, 28) })
 	hintAction = UIKit.label(hint, "", 16, {
@@ -252,7 +258,8 @@ function InteractController.start()
 		end
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		local newTarget = if root then chooseTarget(root) else nil
+		-- with full hands there is no pickup target, so E/Grab drops instead
+		local newTarget = if root and not handsFull() then chooseTarget(root) else nil
 		if newTarget ~= target then
 			target = newTarget
 		end

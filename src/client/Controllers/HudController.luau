@@ -171,11 +171,13 @@ function HudController.start()
 		task.defer(updateScale)
 	end)
 
-	player:GetAttributeChangedSignal("CarryCount"):Connect(refreshCarry)
-	player:GetAttributeChangedSignal("CarryCapacity"):Connect(refreshCarry)
-	CollectionService:GetInstanceAddedSignal("Item"):Connect(function()
-		task.defer(refreshCarry)
-	end)
+	-- the item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
+	local function carryChanged()
+		refreshCarry()
+		task.delay(0.25, refreshCarry)
+	end
+	player:GetAttributeChangedSignal("CarryCount"):Connect(carryChanged)
+	player:GetAttributeChangedSignal("CarryCapacity"):Connect(carryChanged)
 	refreshCarry()
 
 	task.spawn(zoneLoop)

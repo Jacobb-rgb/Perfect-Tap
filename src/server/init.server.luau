@@ -13,6 +13,7 @@ local Services = script:WaitForChild("Services")
 
 -- Remotes exist before any client script asks for them.
 Net.setupServer()
+game:GetService("Players").PlayerRemoving:Connect(Net.forget)
 
 local ORDER = {
 	"DataService",

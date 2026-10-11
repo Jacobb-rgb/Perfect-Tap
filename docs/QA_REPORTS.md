@@ -116,3 +116,29 @@ the pass. Only "stuck" spots left: standing on top of the shop counters (harmles
 8. Walk into the glowing VIP door. It should block you, because VIP is not built yet.
 9. From the town, go to the far north-east corner, behind the east plots, and walk north along the invisible wall. You should not fall into a hole.
 10. On the **Test** tab, choose a phone in **Device**, press Play and turn on **View → Stats** (or press Shift+F5). Write down the FPS in the plaza, Ember Caves and Deep Hollow; it should stay at 30 or more.
+
+## Step b – Mining, items & carrying
+
+Full review: [docs/qa/step_b.md](qa/step_b.md). `tools/check.sh` passed; 12 issues found, all fixed:
+
+1. **Shutdown saves**: BindToClose now waits for every final save in flight (also players who left
+   just before), and a failed final save is retried up to 4 times.
+2. **Quick rejoin rollback**: a player rejoining the same server waits until their previous final
+   save has finished before loading.
+3. **Pickaxe grip**: rotated so the shaft points forward out of the fist (confirm in Studio).
+4. **Falling items**: rescue line is now y = -60 (checked 4x per second), items destroyed by the
+   engine go to storage instead of becoming ghosts, one bad item can't stop the loop, drops raycast
+   so they never appear behind a wall.
+5. **Item physics exploits**: items are in an "Items" collision group that doesn't hit characters
+   (no flinging), the owner's client only simulates an item for 3 s after a drop/throw, and the
+   server tracks `LastNearOwner` for machine intake checks (step d).
+6. **Full hands**: E / Grab drops when your hands are full.
+7. **Item hint** survives respawning (ResetOnSpawn = false).
+8. **Floating chunks**: items are no longer anchored to "sleep" (Roblox physics sleeps them itself).
+9. **Camera shake drift**: the shake offset is removed before the camera scripts run each frame.
+10. **Swing rate**: per-player token bucket (2-swing burst, refills at the pickaxe cooldown).
+11. **Dropped item vanishing at the cap**: dropping/ejecting resets the item's age; the cap toast is
+    shown at most every 20 s. Loose-item cap lowered to 30.
+12. **Net memory**: rate-limit tables are cleared when a player leaves.
+
+Performance: raw chunks are now 6 parts (was 10); carry slots only rebuild when your carry count changes.

@@ -30,6 +30,10 @@ local MAX_PURCHASE_IDS = 100
 
 local profiles: { [Player]: ProfileStore.Profile } = {}
 local loading: { [Player]: boolean } = {}
+-- userId -> true while that user's final save is still being written.
+-- A quick rejoin to the same server waits for it (no rollback).
+local releasing: { [number]: boolean } = {}
+local inFlight = 0 -- final saves in progress (BindToClose waits for these)
 local loadedCallbacks: { (Player, { [string]: any }) -> ...any } = {}
 local releaseCallbacks: { (Player, { [string]: any }) -> ...any } = {}
 local changedCallbacks: { (Player) -> ...any } = {}
@@ -172,6 +176,12 @@ local function loadPlayer(player: Player)
 		return
 	end
 	loading[player] = true
+	-- rejoined while the last session is still saving: wait for it first
+	local waited = 0
+	while releasing[player.UserId] and waited < 40 and player.Parent do
+		task.wait(0.25)
+		waited += 0.25
+	end
 	local profile, reason = profileStore:load(key(player))
 	loading[player] = nil
 	if not profile then
@@ -197,6 +207,29 @@ local function loadPlayer(player: Player)
 	DataService.changed(player)
 end
 
+-- Final save with a few retries. Keeps `releasing` set until it is done.
+local function finalSave(userId: number, profile: ProfileStore.Profile)
+	releasing[userId] = true
+	inFlight += 1
+	local ok = false
+	for attempt = 1, 4 do
+		if profile.Released or profile.SessionLost then
+			ok = true
+			break
+		end
+		ok = profileStore:save(profile, true)
+		if ok or profile.SessionLost then
+			break
+		end
+		task.wait(2 * attempt)
+	end
+	if not ok then
+		warn("[DataService] final save failed for user " .. userId)
+	end
+	inFlight -= 1
+	releasing[userId] = nil
+end
+
 local function releasePlayer(player: Player)
 	local profile = profiles[player]
 	if not profile then
@@ -205,10 +238,7 @@ local function releasePlayer(player: Player)
 	runReleaseCallbacks(player, profile)
 	profiles[player] = nil
 	if not profile.Released then
-		local ok = profileStore:save(profile, true)
-		if not ok and not profile.SessionLost then
-			warn("[DataService] final save failed for " .. player.Name)
-		end
+		finalSave(player.UserId, profile)
 	end
 end
 
@@ -261,20 +291,20 @@ function DataService.init()
 
 	game:BindToClose(function()
 		shuttingDown = true
-		local pending = 0
 		for player, profile in profiles do
-			pending += 1
 			task.spawn(function()
 				runReleaseCallbacks(player, profile)
 				profiles[player] = nil
 				if not profile.Released then
-					profileStore:save(profile, true)
+					finalSave(player.UserId, profile)
 				end
-				pending -= 1
 			end)
 		end
+		-- wait for every final save, including players who left just before
+		-- the shutdown (Roblox allows ~30 seconds here)
+		task.wait()
 		local waited = 0
-		while pending > 0 and waited < 26 do
+		while inFlight > 0 and waited < 27 do
 			task.wait(0.25)
 			waited += 0.25
 		end

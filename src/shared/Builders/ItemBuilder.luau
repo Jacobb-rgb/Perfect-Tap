@@ -87,43 +87,33 @@ local function rawChunk(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 		Color = Geo.vary(ore.Crust, rng, 0.08),
 		Material = Enum.Material.SmoothPlastic,
 	})))
-	-- ore crystals poking out of the crust (the readable part of a chunk)
+	-- ore crystals poking out of the crust (the readable part of a chunk).
+	-- Kept to 6 parts per chunk: many chunks can lie around (mobile budget).
 	local glowy = rarity.Order >= 3
 	local crystals = {
-		{ x = 0.5, y = 0.5, z = 0.1, tilt = -0.55, size = 1.0 },
-		{ x = -0.45, y = 0.45, z = -0.25, tilt = 0.6, size = 0.85 },
-		{ x = 0.05, y = 0.6, z = 0.45, tilt = 0.15, size = 0.75 },
+		{ x = 0.45, y = 0.55, z = 0.1, tilt = -0.55, size = 1.05 },
+		{ x = -0.4, y = 0.5, z = -0.2, tilt = 0.6, size = 0.9 },
+		{ x = 0.05, y = 0.62, z = 0.42, tilt = 0.15, size = 0.8 },
 	}
 	for i, c in crystals do
 		local crystalCf = cf
 			* CFrame.new(c.x * s, c.y * s, c.z * s)
 			* CFrame.Angles(rng:range(-0.25, 0.25), 0, c.tilt)
 			* CFrame.Angles(0, math.pi / 4 + i, 0)
-		local size = Vector3.new(0.55, 1.0, 0.55) * s * c.size
-		local color = if glowy then ore.Glow else ore.Color
-		local material = if glowy then Enum.Material.Neon else Enum.Material.SmoothPlastic
 		addDecor(model, b, Geo.make("Part", decorProps({
 			CFrame = crystalCf,
-			Size = size,
-			Color = color,
-			Material = material,
-		})))
-		addDecor(model, b, Geo.make("WedgePart", decorProps({
-			CFrame = crystalCf * CFrame.new(0, size.Y / 2 + size.X * 0.4, 0),
-			Size = Vector3.new(size.X, size.X * 0.8, size.Z),
-			Color = color,
-			Material = material,
+			Size = Vector3.new(0.55, 1.15, 0.55) * s * c.size,
+			Color = if glowy then ore.Glow else ore.Color,
+			Material = if glowy then Enum.Material.Neon else Enum.Material.SmoothPlastic,
 		})))
 	end
-	-- glowing vein lines on two sides
-	for _, side in { -1, 1 } do
-		addDecor(model, b, Geo.make("Part", decorProps({
-			CFrame = cf * CFrame.new(0, -0.1 * s, side * 0.76 * s) * CFrame.Angles(0, 0, rng:range(-0.7, 0.7)),
-			Size = Vector3.new(1.3 * s, 0.2, 0.06),
-			Color = ore.Glow,
-			Material = Enum.Material.Neon,
-		})))
-	end
+	-- glowing vein line
+	addDecor(model, b, Geo.make("Part", decorProps({
+		CFrame = cf * CFrame.new(0, -0.1 * s, -0.76 * s) * CFrame.Angles(0, 0, rng:range(-0.7, 0.7)),
+		Size = Vector3.new(1.3 * s, 0.2, 0.06),
+		Color = ore.Glow,
+		Material = Enum.Material.Neon,
+	})))
 end
 
 local function cleanOre(model: Model, cf: CFrame, info: ItemInfo, _rng: Rng.Rng)
