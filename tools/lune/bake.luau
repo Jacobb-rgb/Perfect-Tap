@@ -17,7 +17,9 @@ local Loader = require("./lib/loader")
 local root = process.cwd
 Loader.init(root)
 
-local basePath = root .. "/build/TerraForge.base.rbxl"
+-- args: [basePlace] [outputPlace] (unique temp names let several builds run at once)
+local basePath = process.args[1] or (root .. "/build/TerraForge.base.rbxl")
+local outputPath = process.args[2] or (root .. "/build/TerraForge.rbxl")
 if not fs.isFile(basePath) then
 	error("Missing " .. basePath .. " - run: rojo build -o build/TerraForge.base.rbxl")
 end
@@ -40,6 +42,8 @@ for _, d in map:GetDescendants() do
 	end
 end
 
-fs.writeFile(root .. "/build/TerraForge.rbxl", roblox.serializePlace(place))
+local tempOut = outputPath .. ".tmp"
+fs.writeFile(tempOut, roblox.serializePlace(place))
+fs.move(tempOut, outputPath, true)
 fs.removeFile(basePath)
 print(string.format("Baked map v%d with %d parts -> build/TerraForge.rbxl", WorldBuilder.Version, parts))

@@ -80,11 +80,10 @@ local spin = TweenService:Create(ember, TweenInfo.new(0.7, Enum.EasingStyle.Sine
 })
 spin:Play()
 
-if not game:IsLoaded() then
-	game.Loaded:Wait()
-end
-if not player.Character then
-	player.CharacterAdded:Wait()
+-- wait for the game and the character, but never longer than ~15 seconds
+local started = os.clock()
+while (not game:IsLoaded() or not player.Character) and os.clock() - started < 15 do
+	task.wait(0.1)
 end
 task.wait(0.6)
 

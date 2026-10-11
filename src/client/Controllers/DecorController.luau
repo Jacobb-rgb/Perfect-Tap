@@ -10,20 +10,38 @@ local Workspace = game:GetService("Workspace")
 
 local DecorController = {}
 
-type Spinner = { part: BasePart, base: CFrame, phase: number }
+-- A spinner is a part or a whole model (all parts turn around the model's pivot).
+type Spinner = { pivot: CFrame, parts: { { part: BasePart, offset: CFrame } }, phase: number }
 
-local spinners: { [BasePart]: Spinner } = {}
+local spinners: { [Instance]: Spinner } = {}
 local pulsers: { [BasePart]: { base: Color3, phase: number } } = {}
 
 local function addSpinner(instance: Instance)
-	if instance:IsA("BasePart") and not spinners[instance] then
-		spinners[instance] = { part = instance, base = instance.CFrame, phase = math.random() * 6 }
+	if spinners[instance] then
+		return
 	end
+	local pivot: CFrame
+	local parts = {}
+	if instance:IsA("BasePart") then
+		pivot = instance.CFrame
+		table.insert(parts, { part = instance, offset = CFrame.identity })
+	elseif instance:IsA("Model") then
+		pivot = instance:GetPivot()
+		for _, d in instance:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(parts, { part = d, offset = pivot:ToObjectSpace(d.CFrame) })
+			end
+		end
+	else
+		return
+	end
+	spinners[instance] = { pivot = pivot, parts = parts, phase = math.random() * 6 }
 end
 
 local function scanPulsers(root: Instance)
 	for _, d in root:GetDescendants() do
-		if d:IsA("BasePart") and (d.Name == "ForgeGlow" or d.Name == "Lava" or d.Name == "MoltenChannel") then
+		-- only the first time: later scans must not take the dimmed color as the new base
+		if not pulsers[d :: BasePart] and d:IsA("BasePart") and (d.Name == "ForgeGlow" or d.Name == "Lava" or d.Name == "MoltenChannel") then
 			pulsers[d] = { base = d.Color, phase = math.random() * 6 }
 		end
 	end
@@ -35,7 +53,7 @@ function DecorController.start()
 	end
 	CollectionService:GetInstanceAddedSignal("Spin"):Connect(addSpinner)
 	CollectionService:GetInstanceRemovedSignal("Spin"):Connect(function(instance)
-		spinners[instance :: BasePart] = nil
+		spinners[instance] = nil
 	end)
 
 	-- StreamingEnabled: parts arrive over time, so rescan now and then.
@@ -57,11 +75,14 @@ function DecorController.start()
 	local t = 0
 	RunService.RenderStepped:Connect(function(dt)
 		t += dt
-		for part, s in spinners do
-			if part.Parent then
-				part.CFrame = s.base * CFrame.new(0, math.sin(t * 1.4 + s.phase) * 0.4, 0) * CFrame.Angles(0, t * 0.8, 0)
+		for instance, s in spinners do
+			if instance.Parent then
+				local cf = s.pivot * CFrame.new(0, math.sin(t * 1.4 + s.phase) * 0.4, 0) * CFrame.Angles(0, t * 0.8, 0)
+				for _, entry in s.parts do
+					entry.part.CFrame = cf * entry.offset
+				end
 			else
-				spinners[part] = nil
+				spinners[instance] = nil
 			end
 		end
 		local pulse = 0.88 + math.sin(t * 2.1) * 0.12

@@ -26,6 +26,8 @@
       "$className": "StarterPlayer",
       "$properties": {
         "CharacterWalkSpeed": 18,
+        "CharacterUseJumpPower": false,
+        "CharacterJumpHeight": 7.5,
         "CameraMaxZoomDistance": 70,
         "CameraMinZoomDistance": 4
       },

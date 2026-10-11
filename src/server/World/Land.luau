@@ -45,7 +45,14 @@ local function decor(extra: { [string]: any }?): { [string]: any }
 end
 
 -- Axis-aligned box part from min/max corners.
-local function boxPart(parent: Instance, min: Vector3, max: Vector3, color: Color3, material: Enum.Material?, extra: { [string]: any }?): Part
+local function boxPart(
+	parent: Instance,
+	min: Vector3,
+	max: Vector3,
+	color: Color3,
+	material: Enum.Material?,
+	extra: { [string]: any }?
+): Part
 	return Geo.block(parent, CFrame.new((min + max) / 2), max - min, color, material, solid(extra))
 end
 
@@ -58,7 +65,10 @@ local function protectedSpaces(): { { box: Box, roofTop: number?, open: boolean?
 	local caves = WorldLayout.Caves
 	local quarry = WorldLayout.Quarry
 	return {
-		{ box = { Min = Vector3.new(quarry.Min.X, quarry.Min.Y, quarry.Min.Z), Max = Vector3.new(quarry.Max.X, 200, quarry.Max.Z) }, open = true },
+		{
+			box = { Min = Vector3.new(quarry.Min.X, quarry.Min.Y, quarry.Min.Z), Max = Vector3.new(quarry.Max.X, 200, quarry.Max.Z) },
+			open = true,
+		},
 		{ box = { Min = caves.EmberCaves.Min, Max = caves.EmberCaves.Max }, roofTop = caves.EmberCaves.Max.Y + 4 },
 		{ box = { Min = caves.DeepHollow.Min, Max = caves.DeepHollow.Max }, roofTop = caves.DeepHollow.Max.Y + 4 },
 		{ box = { Min = caves.Grotto.Min, Max = caves.Grotto.Max }, roofTop = caves.Grotto.Max.Y + 3 },
@@ -103,7 +113,8 @@ local function rockWall(
 			local width = rng:range(9, 13)
 			local depth = rng:range(7, 10)
 			local center = Vector3.new(p.X, bottom + height / 2 - 1, p.Z) - inward * (depth / 2 - rng:range(0.5, 2))
-			local cf = CFrame.lookAt(center, center + inward) * CFrame.Angles(rng:range(-0.05, 0.05), rng:range(-0.18, 0.18), rng:range(-0.05, 0.05))
+			local cf = CFrame.lookAt(center, center + inward)
+				* CFrame.Angles(rng:range(-0.05, 0.05), rng:range(-0.18, 0.18), rng:range(-0.05, 0.05))
 			Geo.block(parent, cf, Vector3.new(width, height, depth), Geo.vary(color, rng, 0.06), nil, solid())
 			-- a smaller boulder at the foot of the wall for a natural edge
 			if rng:chance(0.45) then
@@ -145,7 +156,14 @@ local function caveRoom(
 	-- floor
 	boxPart(room, Vector3.new(min.X - 8, floorY - 6, min.Z - 8), Vector3.new(max.X + 8, floorY, max.Z + 8), darkColor)
 	-- ceiling (4 studs thick)
-	boxPart(room, Vector3.new(min.X - 10, ceilY, min.Z - 10), Vector3.new(max.X + 10, ceilY + 4, max.Z + 10), darkColor, nil, { CastShadow = true })
+	boxPart(
+		room,
+		Vector3.new(min.X - 10, ceilY, min.Z - 10),
+		Vector3.new(max.X + 10, ceilY + 4, max.Z + 10),
+		darkColor,
+		nil,
+		{ CastShadow = true }
+	)
 	-- walls (inward normals)
 	local width = max.X - min.X
 	local depth = max.Z - min.Z
@@ -160,7 +178,14 @@ local function caveRoom(
 		local z = rng:range(min.Z + 4, max.Z - 4)
 		if not WorldLayout.isKeepOut(Vector3.new(x, floorY, z), 4) then
 			local s = Vector3.new(rng:range(5, 12), rng:range(0.3, 0.8), rng:range(5, 12))
-			Geo.block(room, CFrame.new(x, floorY, z) * CFrame.Angles(0, rng:range(0, 6.28), 0), s, Geo.vary(darkColor, rng, 0.05), nil, solid({ CastShadow = false }))
+			Geo.block(
+				room,
+				CFrame.new(x, floorY, z) * CFrame.Angles(0, rng:range(0, 6.28), 0),
+				s,
+				Geo.vary(darkColor, rng, 0.05),
+				nil,
+				solid({ CastShadow = false })
+			)
 		end
 	end
 	return room
@@ -170,14 +195,16 @@ local function tunnel(parent: Instance, min: Vector3, max: Vector3, alongZ: bool
 	local t = Instance.new("Model")
 	t.Name = "Tunnel"
 	t.Parent = parent
+	-- thick side walls so the gaps in the rock walls next to the mouth are closed
+	local wall = 8
 	if alongZ then
-		boxPart(t, Vector3.new(min.X - 4, min.Y, min.Z), Vector3.new(min.X, max.Y, max.Z), color)
-		boxPart(t, Vector3.new(max.X, min.Y, min.Z), Vector3.new(max.X + 4, max.Y, max.Z), color)
+		boxPart(t, Vector3.new(min.X - wall, min.Y, min.Z), Vector3.new(min.X, max.Y, max.Z), color)
+		boxPart(t, Vector3.new(max.X, min.Y, min.Z), Vector3.new(max.X + wall, max.Y, max.Z), color)
 	else
-		boxPart(t, Vector3.new(min.X, min.Y, min.Z - 4), Vector3.new(max.X, max.Y, min.Z), color)
-		boxPart(t, Vector3.new(min.X, min.Y, max.Z), Vector3.new(max.X, max.Y, max.Z + 4), color)
+		boxPart(t, Vector3.new(min.X, min.Y, min.Z - wall), Vector3.new(max.X, max.Y, min.Z), color)
+		boxPart(t, Vector3.new(min.X, min.Y, max.Z), Vector3.new(max.X, max.Y, max.Z + wall), color)
 	end
-	boxPart(t, Vector3.new(min.X - 4, max.Y, min.Z - 4), Vector3.new(max.X + 4, max.Y + 4, max.Z + 4), color)
+	boxPart(t, Vector3.new(min.X - wall, max.Y, min.Z - wall), Vector3.new(max.X + wall, max.Y + 4, max.Z + wall), color)
 	return t
 end
 
@@ -207,13 +234,13 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	local island = WorldLayout.Island
 
 	---------------------------------------------------------------- ground
-	local townMin = Vector3.new(island.Min.X - 6, -6, -122)
+	local townMin = Vector3.new(island.Min.X - 6, -18, -122)
 	local townMax = Vector3.new(island.Max.X + 6, 0, island.Max.Z + 6)
 	local ground = boxPart(land, townMin, townMax, Palette.Grass, nil, { Name = "Ground" })
 	ground.Name = "Ground"
 	-- strips of ground beside the quarry up to the mountains
-	boxPart(land, Vector3.new(townMin.X, -6, -240), Vector3.new(-72, 0, -122), Palette.GrassDark).Name = "Ground"
-	boxPart(land, Vector3.new(72, -6, -150), Vector3.new(townMax.X, 0, -122), Palette.GrassDark).Name = "Ground"
+	boxPart(land, Vector3.new(townMin.X, -18, -240), Vector3.new(-72, 0, -122), Palette.GrassDark).Name = "Ground"
+	boxPart(land, Vector3.new(72, -18, -150), Vector3.new(townMax.X, 0, -122), Palette.GrassDark).Name = "Ground"
 
 	-- soft color patches so the grass is not one flat color
 	for _ = 1, 140 do
@@ -221,7 +248,14 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		local z = rng:range(-118, island.Max.Z)
 		local s = Vector3.new(rng:range(8, 22), 0.2, rng:range(8, 22))
 		local color = if rng:chance(0.5) then Palette.GrassLight else Palette.GrassDark
-		Geo.block(land, CFrame.new(x, 0.02, z) * CFrame.Angles(0, rng:range(0, 6.28), 0), s, Geo.vary(color, rng, 0.03), nil, decor({ CastShadow = false, CanCollide = false }))
+		Geo.block(
+			land,
+			CFrame.new(x, 0.02, z) * CFrame.Angles(0, rng:range(0, 6.28), 0),
+			s,
+			Geo.vary(color, rng, 0.03),
+			nil,
+			decor({ CastShadow = false, CanCollide = false })
+		)
 	end
 
 	---------------------------------------------------------------- sea + cliffs
@@ -229,7 +263,7 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	-- through the Deep Hollow, which lies below sea level.
 	local seaFolder = folder("Sea", land)
 	local seaY = -22
-	local far = 1000
+	local far = 850 -- keeps every sea strip under Roblox's 2048-stud part size limit
 	local iMin = Vector3.new(island.Min.X - 6, 0, island.Min.Z - 30)
 	local iMax = Vector3.new(island.Max.X + 6, 0, island.Max.Z + 6)
 	local seaStrips = {
@@ -239,7 +273,14 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		{ Vector3.new(iMax.X, seaY - 1, iMin.Z), Vector3.new(iMax.X + far, seaY + 1, iMax.Z) }, -- east
 	}
 	for _, strip in seaStrips do
-		local sea = boxPart(seaFolder, strip[1], strip[2], Palette.Sea, Enum.Material.SmoothPlastic, decor({ Reflectance = 0.12, CanCollide = false, CastShadow = false }))
+		local sea = boxPart(
+			seaFolder,
+			strip[1],
+			strip[2],
+			Palette.Sea,
+			Enum.Material.SmoothPlastic,
+			decor({ Reflectance = 0.12, CanCollide = false, CastShadow = false })
+		)
 		sea.Name = "Sea"
 	end
 	local cliffs = folder("Cliffs", land)
@@ -257,11 +298,19 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			local p = from + dir * t
 			local s = Vector3.new(rng:range(12, 18), rng:range(22, 28), rng:range(10, 16))
 			local center = Vector3.new(p.X, -24 + s.Y / 2 + rng:range(-1, 1.5), p.Z) - inward * (s.Z * 0.3)
-			local cf = CFrame.lookAt(center, center + inward) * CFrame.Angles(rng:range(-0.08, 0.08), rng:range(-0.25, 0.25), rng:range(-0.08, 0.08))
+			local cf = CFrame.lookAt(center, center + inward)
+				* CFrame.Angles(rng:range(-0.08, 0.08), rng:range(-0.25, 0.25), rng:range(-0.08, 0.08))
 			Geo.block(cliffs, cf, s, Geo.vary(Palette.Cliff, rng, 0.07), nil, solid())
 			-- grassy cap on some cliff blocks
 			if rng:chance(0.5) then
-				Geo.block(cliffs, cf * CFrame.new(0, s.Y / 2, 0), Vector3.new(s.X * 0.9, 0.8, s.Z * 0.9), Geo.vary(Palette.Grass, rng, 0.04), nil, decor({ CastShadow = false }))
+				Geo.block(
+					cliffs,
+					cf * CFrame.new(0, s.Y / 2, 0),
+					Vector3.new(s.X * 0.9, 0.8, s.Z * 0.9),
+					Geo.vary(Palette.Grass, rng, 0.04),
+					nil,
+					decor({ CastShadow = false })
+				)
 			end
 			t += rng:range(9, 13)
 		end
@@ -269,10 +318,38 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	-- invisible walls around the island
 	local bounds = folder("Bounds", land)
 	local wallProps = decor({ Transparency = 1, CanCollide = true, CastShadow = false })
-	boxPart(bounds, Vector3.new(island.Min.X - 10, -60, island.Max.Z + 2), Vector3.new(island.Max.X + 10, 200, island.Max.Z + 4), Palette.Cliff, nil, wallProps)
-	boxPart(bounds, Vector3.new(island.Min.X - 4, -60, island.Min.Z - 20), Vector3.new(island.Min.X - 2, 200, island.Max.Z + 4), Palette.Cliff, nil, wallProps)
-	boxPart(bounds, Vector3.new(island.Max.X + 2, -60, island.Min.Z - 20), Vector3.new(island.Max.X + 4, 200, island.Max.Z + 4), Palette.Cliff, nil, wallProps)
-	boxPart(bounds, Vector3.new(island.Min.X - 10, -60, island.Min.Z - 22), Vector3.new(island.Max.X + 10, 200, island.Min.Z - 20), Palette.Cliff, nil, wallProps)
+	boxPart(
+		bounds,
+		Vector3.new(island.Min.X - 10, -60, island.Max.Z + 2),
+		Vector3.new(island.Max.X + 10, 200, island.Max.Z + 4),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(island.Min.X - 4, -60, island.Min.Z - 20),
+		Vector3.new(island.Min.X - 2, 200, island.Max.Z + 4),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(island.Max.X + 2, -60, island.Min.Z - 20),
+		Vector3.new(island.Max.X + 4, 200, island.Max.Z + 4),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
+	boxPart(
+		bounds,
+		Vector3.new(island.Min.X - 10, -60, island.Min.Z - 22),
+		Vector3.new(island.Max.X + 10, 200, island.Min.Z - 20),
+		Palette.Cliff,
+		nil,
+		wallProps
+	)
 	for _, child in bounds:GetChildren() do
 		child.Name = "Boundary"
 	end
@@ -282,20 +359,72 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	local q = Instance.new("Model")
 	q.Name = "Quarry"
 	q.Parent = land
-	boxPart(q, Vector3.new(quarry.Min.X - 4, quarry.Min.Y - 6, quarry.Min.Z - 2), Vector3.new(quarry.Max.X + 4, quarry.Min.Y, quarry.Max.Z), Palette.QuarryFloor).Name = "Floor"
+	boxPart(
+		q,
+		Vector3.new(quarry.Min.X - 4, quarry.Min.Y - 6, quarry.Min.Z - 2),
+		Vector3.new(quarry.Max.X + 4, quarry.Min.Y, quarry.Max.Z),
+		Palette.QuarryFloor
+	).Name =
+		"Floor"
 	-- dusty floor patches
 	for _ = 1, 40 do
 		local x = rng:range(quarry.Min.X + 4, quarry.Max.X - 4)
 		local z = rng:range(quarry.Min.Z + 4, quarry.Max.Z - 4)
 		local s = Vector3.new(rng:range(6, 16), 0.25, rng:range(6, 16))
-		Geo.block(q, CFrame.new(x, quarry.Min.Y + 0.05, z) * CFrame.Angles(0, rng:range(0, 6.28), 0), s, Geo.vary(Palette.StoneWarm, rng, 0.05), nil, decor({ CastShadow = false, CanCollide = false }))
+		Geo.block(
+			q,
+			CFrame.new(x, quarry.Min.Y + 0.05, z) * CFrame.Angles(0, rng:range(0, 6.28), 0),
+			s,
+			Geo.vary(Palette.StoneWarm, rng, 0.05),
+			nil,
+			decor({ CastShadow = false, CanCollide = false })
+		)
 	end
 	-- walls: south cliff (ground edge), west, east (grotto gap), north (cave gap)
 	local qBottom, qTop = quarry.Min.Y - 2, 4
-	rockWall(q, Vector3.new(quarry.Min.X, 0, quarry.Max.Z), Vector3.new(quarry.Max.X, 0, quarry.Max.Z), Vector3.new(0, 0, -1), qBottom, 1, Palette.Cliff, rng, { { -quarry.Min.X, 10 } })
-	rockWall(q, Vector3.new(quarry.Min.X, 0, quarry.Min.Z), Vector3.new(quarry.Min.X, 0, quarry.Max.Z), Vector3.new(1, 0, 0), qBottom, qTop + 8, Palette.Cliff, rng)
-	rockWall(q, Vector3.new(quarry.Max.X, 0, quarry.Min.Z), Vector3.new(quarry.Max.X, 0, quarry.Max.Z), Vector3.new(-1, 0, 0), qBottom, qTop + 8, Palette.Cliff, rng, { { -182 - quarry.Min.Z, 7 } })
-	rockWall(q, Vector3.new(quarry.Min.X, 0, quarry.Min.Z), Vector3.new(quarry.Max.X, 0, quarry.Min.Z), Vector3.new(0, 0, 1), qBottom, qTop + 14, Palette.Cliff, rng, { { -quarry.Min.X, 10 } })
+	rockWall(
+		q,
+		Vector3.new(quarry.Min.X, 0, quarry.Max.Z),
+		Vector3.new(quarry.Max.X, 0, quarry.Max.Z),
+		Vector3.new(0, 0, -1),
+		qBottom,
+		1,
+		Palette.Cliff,
+		rng,
+		{ { -quarry.Min.X, 10 } }
+	)
+	rockWall(
+		q,
+		Vector3.new(quarry.Min.X, 0, quarry.Min.Z),
+		Vector3.new(quarry.Min.X, 0, quarry.Max.Z),
+		Vector3.new(1, 0, 0),
+		qBottom,
+		qTop + 8,
+		Palette.Cliff,
+		rng
+	)
+	rockWall(
+		q,
+		Vector3.new(quarry.Max.X, 0, quarry.Min.Z),
+		Vector3.new(quarry.Max.X, 0, quarry.Max.Z),
+		Vector3.new(-1, 0, 0),
+		qBottom,
+		qTop + 8,
+		Palette.Cliff,
+		rng,
+		{ { -182 - quarry.Min.Z, 7 } }
+	)
+	rockWall(
+		q,
+		Vector3.new(quarry.Min.X, 0, quarry.Min.Z),
+		Vector3.new(quarry.Max.X, 0, quarry.Min.Z),
+		Vector3.new(0, 0, 1),
+		qBottom,
+		qTop + 14,
+		Palette.Cliff,
+		rng,
+		{ { -quarry.Min.X, 10 } }
+	)
 	ramp(q, Vector3.new(0, 0, quarry.Max.Z), Vector3.new(0, quarry.Min.Y, quarry.Max.Z - 26), quarry.RampWidth, Palette.Dirt)
 	-- wooden scaffolding + mine cart rails for flavor
 	for i = 0, 3 do
@@ -306,7 +435,15 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	Props.lantern(q, CFrame.new(11, quarry.Min.Y, -150) * CFrame.Angles(0, -math.pi / 2, 0), true)
 	Props.lantern(q, CFrame.new(-12, quarry.Min.Y, -228) * CFrame.Angles(0, math.pi / 2, 0), true)
 	Props.lantern(q, CFrame.new(12, quarry.Min.Y, -228) * CFrame.Angles(0, -math.pi / 2, 0), true)
-	Props.sign(q, CFrame.new(0, quarry.Min.Y + 14, -235) * CFrame.Angles(0, 0, 0), "EMBER CAVES", 16, 3.2, Palette.WoodDark, Palette.ForgeGlow)
+	Props.sign(
+		q,
+		CFrame.new(0, quarry.Min.Y + 14, -235) * CFrame.Angles(0, math.pi, 0),
+		"EMBER CAVES",
+		16,
+		3.2,
+		Palette.WoodDark,
+		Palette.ForgeGlow
+	)
 
 	---------------------------------------------------------------- caves
 	local caves = WorldLayout.Caves
@@ -337,13 +474,29 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			table.insert(placed, p)
 			local d = rng:range(10, 15)
 			Geo.cylinder(pools, p + Vector3.new(0, 0.25, 0), 0.5, d + 2.5, Palette.LavaCrust, nil, solid({ CastShadow = false }))
-			local lava = Geo.cylinder(pools, p + Vector3.new(0, 0.32, 0), 0.5, d, Palette.Lava, Enum.Material.Neon, decor({ CastShadow = false, CanCollide = false }))
+			local lava = Geo.cylinder(
+				pools,
+				p + Vector3.new(0, 0.32, 0),
+				0.5,
+				d,
+				Palette.Lava,
+				Enum.Material.Neon,
+				decor({ CastShadow = false, CanCollide = false })
+			)
 			lava.Name = "Lava"
 			Props.pointLight(lava, Palette.ForgeGlow, 28, 2.2)
 			Props.emitter(lava, "Embers", Palette.Ember, 5)
 			for _ = 1, 3 do
 				local a = rng:range(0, 6.28)
-				Geo.rock(pools, CFrame.new(p + Vector3.new(math.cos(a), 0, math.sin(a)) * (d / 2 + 1.5)), Vector3.new(2.5, 2, 2.5), Palette.LavaCrust, rng, nil, solid())
+				Geo.rock(
+					pools,
+					CFrame.new(p + Vector3.new(math.cos(a), 0, math.sin(a)) * (d / 2 + 1.5)),
+					Vector3.new(2.5, 2, 2.5),
+					Palette.LavaCrust,
+					rng,
+					nil,
+					solid()
+				)
 			end
 		end
 	end
@@ -363,7 +516,8 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		south = { { -hollow.Min.X, 9 } },
 	})
 	tunnel(land, Vector3.new(-11, hollow.Min.Y, hollow.Max.Z), Vector3.new(11, 4, ember.Min.Z), true, Palette.HollowRock)
-	ramp(land, Vector3.new(0, ember.Min.Y, ember.Min.Z), Vector3.new(0, hollow.Min.Y, hollow.Max.Z - 12), 16, Palette.HollowRockDark)
+	-- starts where the Ember Caves floor slab ends (it overhangs the room by 8) and fills the tunnel
+	ramp(land, Vector3.new(0, ember.Min.Y, ember.Min.Z - 8), Vector3.new(0, hollow.Min.Y, hollow.Max.Z - 14), 22, Palette.HollowRockDark)
 
 	-- glowing crystal clusters
 	local crystalColors = {
@@ -383,9 +537,20 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			local w = h * rng:range(0.22, 0.3)
 			local a = rng:range(0, 6.28)
 			local base = p + Vector3.new(math.cos(a), 0, math.sin(a)) * rng:range(0, size * 0.3)
-			local cf = CFrame.new(base) * CFrame.Angles(rng:range(-0.45, 0.45), rng:range(0, 6.28), rng:range(-0.45, 0.45)) * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, math.pi / 4, 0)
-			local body = Geo.block(cluster, cf, Vector3.new(w, h, w), Geo.vary(color, rng, 0.04), Enum.Material.Neon, decor({ CastShadow = false }))
-			Geo.wedge(cluster, cf * CFrame.new(0, h / 2 + w * 0.55, 0), Vector3.new(w, w * 1.1, w), color, Enum.Material.Neon, decor({ CastShadow = false }))
+			local cf = CFrame.new(base)
+				* CFrame.Angles(rng:range(-0.45, 0.45), rng:range(0, 6.28), rng:range(-0.45, 0.45))
+				* CFrame.new(0, h / 2, 0)
+				* CFrame.Angles(0, math.pi / 4, 0)
+			local body =
+				Geo.block(cluster, cf, Vector3.new(w, h, w), Geo.vary(color, rng, 0.04), Enum.Material.Neon, decor({ CastShadow = false }))
+			Geo.wedge(
+				cluster,
+				cf * CFrame.new(0, h / 2 + w * 0.55, 0),
+				Vector3.new(w, w * 1.1, w),
+				color,
+				Enum.Material.Neon,
+				decor({ CastShadow = false })
+			)
 			if i == 1 then
 				biggest = body
 			end
@@ -395,19 +560,26 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		end
 	end
 	for i = 1, hollow.CrystalClusters do
-		local side = rng:int(1, 4)
-		local p: Vector3
-		if side == 1 then
-			p = Vector3.new(rng:range(hollow.Min.X + 6, hollow.Max.X - 6), hollow.Min.Y, hollow.Min.Z + 8)
-		elseif side == 2 then
-			p = Vector3.new(hollow.Min.X + 8, hollow.Min.Y, rng:range(hollow.Min.Z + 6, hollow.Max.Z - 6))
-		elseif side == 3 then
-			p = Vector3.new(hollow.Max.X - 8, hollow.Min.Y, rng:range(hollow.Min.Z + 6, hollow.Max.Z - 6))
-		else
-			p = Vector3.new(rng:range(hollow.Min.X + 30, hollow.Max.X - 30), hollow.Min.Y, rng:range(hollow.Min.Z + 20, hollow.Max.Z - 40))
-		end
-		if clearOfNodes(p, 10) then
-			crystalCluster(hollowRoom, p, crystalColors[(i - 1) % #crystalColors + 1], rng:range(9, 16))
+		for _ = 1, 25 do
+			local side = rng:int(1, 4)
+			local p: Vector3
+			if side == 1 then
+				p = Vector3.new(rng:range(hollow.Min.X + 6, hollow.Max.X - 6), hollow.Min.Y, hollow.Min.Z + 8)
+			elseif side == 2 then
+				p = Vector3.new(hollow.Min.X + 8, hollow.Min.Y, rng:range(hollow.Min.Z + 6, hollow.Max.Z - 6))
+			elseif side == 3 then
+				p = Vector3.new(hollow.Max.X - 8, hollow.Min.Y, rng:range(hollow.Min.Z + 6, hollow.Max.Z - 6))
+			else
+				p = Vector3.new(
+					rng:range(hollow.Min.X + 30, hollow.Max.X - 30),
+					hollow.Min.Y,
+					rng:range(hollow.Min.Z + 20, hollow.Max.Z - 40)
+				)
+			end
+			if clearOfNodes(p, 9) and not WorldLayout.isKeepOut(p, 6) then
+				crystalCluster(hollowRoom, p, crystalColors[(i - 1) % #crystalColors + 1], rng:range(9, 16))
+				break
+			end
 		end
 	end
 
@@ -416,17 +588,50 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		west = { { -182 - grotto.Min.Z, 6 } },
 	})
 	tunnel(land, Vector3.new(quarry.Max.X, grotto.Min.Y, -188), Vector3.new(grotto.Min.X, -1, -176), false, Palette.GrottoRock)
-	boxPart(land, Vector3.new(quarry.Max.X - 2, grotto.Min.Y - 6, -190), Vector3.new(grotto.Min.X + 2, grotto.Min.Y, -174), Palette.HollowRockDark)
+	boxPart(
+		land,
+		Vector3.new(quarry.Max.X - 2, grotto.Min.Y - 6, -200),
+		Vector3.new(grotto.Min.X + 2, grotto.Min.Y, -164),
+		Palette.HollowRockDark
+	)
+	-- solid rock above the tunnel up to the grotto ceiling (nothing to sneak through)
+	boxPart(land, Vector3.new(quarry.Max.X - 2, 3, -200), Vector3.new(grotto.Min.X + 2, grotto.Max.Y + 3, -164), Palette.GrottoRock)
 	for _ = 1, grotto.CrystalClusters do
-		local p = Vector3.new(rng:range(grotto.Min.X + 8, grotto.Max.X - 8), grotto.Min.Y, rng:range(grotto.Min.Z + 8, grotto.Max.Z - 8))
-		if math.abs(p.Z + 182) > 10 and clearOfNodes(p, 9) then
-			crystalCluster(grottoRoom, p, Palette.Vip, rng:range(6, 10))
+		for _ = 1, 25 do
+			-- along the walls, where no ore grows
+			local alongX = rng:chance(0.5)
+			local p = if alongX
+				then Vector3.new(
+					rng:range(grotto.Min.X + 6, grotto.Max.X - 6),
+					grotto.Min.Y,
+					if rng:chance(0.5) then grotto.Min.Z + 5 else grotto.Max.Z - 5
+				)
+				else Vector3.new(grotto.Max.X - 5, grotto.Min.Y, rng:range(grotto.Min.Z + 6, grotto.Max.Z - 6))
+			if math.abs(p.Z + 182) > 10 and clearOfNodes(p, 7) then
+				crystalCluster(grottoRoom, p, Palette.Vip, rng:range(6, 9))
+				break
+			end
 		end
 	end
-	local door = Geo.block(land, CFrame.new(80, grotto.Min.Y + 5.5, -182), Vector3.new(1, 11, 12), Palette.Vip, Enum.Material.Neon, { Transparency = 0.55, CanTouch = true, CanQuery = false, CastShadow = false })
+	local door = Geo.block(
+		land,
+		CFrame.new(80, grotto.Min.Y + 5.5, -182),
+		Vector3.new(1, 11, 12),
+		Palette.Vip,
+		Enum.Material.Neon,
+		{ Transparency = 0.55, CanTouch = true, CanQuery = false, CastShadow = false }
+	)
 	door.Name = "VipDoor"
 	door:AddTag("VipDoor")
-	Props.sign(land, CFrame.new(73, grotto.Min.Y + 11, -182) * CFrame.Angles(0, -math.pi / 2, 0), "GLIMMER GROTTO - VIP", 12, 2.4, Palette.HollowRockDark, Palette.Vip)
+	Props.sign(
+		land,
+		CFrame.new(73, grotto.Min.Y + 9, -182) * CFrame.Angles(0, math.pi / 2, 0),
+		"GLIMMER GROTTO - VIP",
+		12,
+		2.4,
+		Palette.HollowRockDark,
+		Palette.Vip
+	)
 
 	---------------------------------------------------------------- mountains
 	-- Columns on a 40-stud grid. Cells touching a cave or tunnel are split into
@@ -468,7 +673,14 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		local center = Vector3.new(x, bottom + size.Y / 2, z)
 		local band = math.clamp((top - 20) / 60, 0, 1)
 		local colorBase = Palette.Cliff:Lerp(Palette.CliffDark, band)
-		Geo.block(mountains, CFrame.new(center) * CFrame.Angles(0, rng:range(-0.12, 0.12), 0), size, Geo.vary(colorBase, rng, 0.05), nil, solid())
+		Geo.block(
+			mountains,
+			CFrame.new(center) * CFrame.Angles(0, rng:range(-0.12, 0.12), 0),
+			size,
+			Geo.vary(colorBase, rng, 0.05),
+			nil,
+			solid()
+		)
 		if depth <= 1 then
 			-- a tilted cap block gives a jagged low-poly silhouette
 			local peak = Vector3.new(size.X * rng:range(0.5, 0.75), rng:range(6, 14), size.Z * rng:range(0.5, 0.75))
@@ -482,13 +694,17 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 				solid()
 			)
 			if top < 34 and rng:chance(0.5) then
-				Props.pine(mountains, CFrame.new(center + Vector3.new(rng:range(-half * 0.6, half * 0.6), size.Y / 2, rng:range(-half * 0.6, half * 0.6))), rng)
+				Props.pine(
+					mountains,
+					CFrame.new(center + Vector3.new(rng:range(-half * 0.6, half * 0.6), size.Y / 2, rng:range(-half * 0.6, half * 0.6))),
+					rng
+				)
 			end
 		end
 	end
 	local cell = 40
 	local gx = island.Min.X - 8
-	while gx <= island.Max.X + 8 do
+	while gx - cell / 2 <= island.Max.X + 8 do
 		local gz = -142
 		while gz >= island.Min.Z - 8 do
 			placeColumn(gx, gz, cell / 2, 0)

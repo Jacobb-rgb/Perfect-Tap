@@ -83,14 +83,18 @@ local function plaza(parent: Instance, rng: Rng.Rng)
 	Geo.block(mon, CFrame.new(center + Vector3.new(0, 4.4, 0)), Vector3.new(3, 2.8, 2.4), Palette.Metal, Enum.Material.Metal, solid())
 	Geo.block(mon, CFrame.new(center + Vector3.new(0, 6.2, 0)), Vector3.new(6, 1.2, 2.6), Palette.Metal, Enum.Material.Metal, solid())
 	Geo.wedge(mon, CFrame.new(center + Vector3.new(-4, 6.2, 0)) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(2.6, 1.2, 2), Palette.Metal, Enum.Material.Metal, solid())
+	local shardModel = model("HeartShard", mon)
 	local shardCf = CFrame.new(center + Vector3.new(0, 11, 0)) * CFrame.Angles(0, 0.4, 0.2) * CFrame.Angles(0, math.pi / 4, 0)
-	local shard = Geo.block(mon, shardCf, Vector3.new(1.8, 4, 1.8), Color3.fromRGB(255, 70, 120), Enum.Material.Neon, decor({ CastShadow = false }))
+	local shard = Geo.block(shardModel, shardCf, Vector3.new(1.8, 4, 1.8), Color3.fromRGB(255, 70, 120), Enum.Material.Neon, decor({ CastShadow = false }))
 	shard.Name = "HeartShard"
-	Geo.wedge(mon, shardCf * CFrame.new(0, 2.9, 0), Vector3.new(1.8, 1.8, 1.8), Color3.fromRGB(255, 90, 140), Enum.Material.Neon, decor({ CastShadow = false }))
-	Geo.wedge(mon, shardCf * CFrame.new(0, -2.9, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(1.8, 1.8, 1.8), Color3.fromRGB(255, 90, 140), Enum.Material.Neon, decor({ CastShadow = false }))
+	Geo.wedge(shardModel, shardCf * CFrame.new(0, 2.9, 0), Vector3.new(1.8, 1.8, 1.8), Color3.fromRGB(255, 90, 140), Enum.Material.Neon, decor({ CastShadow = false }))
+	Geo.wedge(shardModel, shardCf * CFrame.new(0, -2.9, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(1.8, 1.8, 1.8), Color3.fromRGB(255, 90, 140), Enum.Material.Neon, decor({ CastShadow = false }))
 	Props.pointLight(shard, Color3.fromRGB(255, 80, 130), 22, 1.8)
 	Props.emitter(shard, "Sparkle", Color3.fromRGB(255, 140, 180), 4)
-	shard:AddTag("Spin")
+	shardModel.PrimaryPart = shard
+	-- stream in as one piece so the client can spin all three parts together
+	shardModel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	shardModel:AddTag("Spin")
 	for i = 0, 3 do
 		local a = i * math.pi / 2 + math.pi / 4
 		Props.brazier(m, CFrame.new(center + Vector3.new(math.cos(a), 0, math.sin(a)) * 13), i % 2 == 0)
@@ -117,7 +121,7 @@ local function greatForge(parent: Instance, rng: Rng.Rng)
 	glow.Name = "ForgeGlow"
 	Geo.wedge(m, mouthCf * CFrame.new(-4, 4.4, -0.35) * CFrame.Angles(0, -math.pi / 2, 0), Vector3.new(0.7, 2, 2.2), Palette.StoneDark, nil, decor())
 	Geo.wedge(m, mouthCf * CFrame.new(4, 4.4, -0.35) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(0.7, 2, 2.2), Palette.StoneDark, nil, decor())
-	Props.pointLight(glow, Palette.ForgeGlow, 40, 3, true)
+	Props.pointLight(glow, Palette.ForgeGlow, 40, 3, false)
 	Props.emitter(glow, "Embers", Palette.ForgeGlow, 10)
 	Props.sign(m, cf * CFrame.new(0, 15.5, -7.6), "THE GREAT FORGE", 20, 3.2, Palette.WoodDark, Palette.Gold)
 	-- chimneys with glowing tops and smoke

@@ -4,5 +4,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build
-rojo build default.project.json -o build/TerraForge.base.rbxl
-lune run tools/lune/bake.luau
+base="build/TerraForge.base.$$.rbxl"
+rojo build default.project.json -o "$base"
+lune run tools/lune/bake.luau "$base" build/TerraForge.rbxl

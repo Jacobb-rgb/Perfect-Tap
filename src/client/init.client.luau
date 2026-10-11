@@ -14,6 +14,7 @@ local ORDER = {
 	"FxController",
 	"MiningController",
 	"InteractController",
+	"AccessController",
 }
 
 local loaded = {}

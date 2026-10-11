@@ -112,7 +112,8 @@ function OreNodeBuilder.build(oreId: string, base: CFrame, seed: number | string
 		vein.Name = "Vein"
 	end
 
-	if glowy and biggest then
+	-- lights only on Epic+ (rare ores already glow through Neon + Bloom); keeps phones fast
+	if rarity.Order >= 4 and biggest then
 		local light = Instance.new("PointLight")
 		light.Color = ore.Glow
 		light.Range = 10 + rarity.Order * 1.5
