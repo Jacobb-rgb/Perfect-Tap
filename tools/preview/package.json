@@ -1,0 +1,14 @@
+{
+  "name": "terraforge-preview",
+  "private": true,
+  "description": "Offline preview renders of the generated Terra Forge map (not part of the game).",
+  "type": "module",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@fontsource/fredoka-one": "5.2.5",
+    "@fontsource/luckiest-guy": "5.2.8",
+    "three": "0.169.0"
+  }
+}
