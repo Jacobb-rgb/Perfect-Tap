@@ -1,6 +1,6 @@
 --[[
 	CarryService: pick up, carry (stacked in front of you), drop and throw
-	physical items. Hydroneer-style: no magic inventory for raw ore.
+	physical items: no magic inventory for raw ore.
 
 	Validation: the item exists, is loose, belongs to the player, is within
 	reach, and the player has free carry capacity. Throw direction and power

@@ -22,35 +22,44 @@ from the description.
 | Mine nodes, physical chunks, carry and throw | b | [ ] TODO |
 | Cleaning Station: chisel, scrape, polish, grades up to Flawless | c | [ ] TODO |
 | 10 ores, Quarry, Ember Caves, Deep Hollow, VIP Glimmer Grotto | a, b | [ ] TODO |
-| Smelt, crush, anvil (dagger, helm…), selling | d, e | [ ] TODO |
-| Furnaces, crushers, anvils, conveyors on your own plot (9 machines) | d | [ ] TODO |
-| Daily Ember Chest, Ore Codex, badges | e, f | [ ] TODO |
-| "F / Y to use" works on **every** machine, not only the Cleaning Station | d | [ ] TODO |
+| Crush, smelt, anvil (dagger, helm…), selling | d, e | [ ] TODO |
+| Furnaces, crushers, anvils, conveyors on your own plot (9 machines, Cleaning Station included) | d | [ ] TODO |
+| Daily Ember Chest, Ore Codex, badges (today only the "New ore discovered" tracking exists, no Codex screen yet) | e, f | [ ] TODO |
 | Passes are optional, every ore can be mined without them | f | [ ] TODO |
+| "PC, phone, tablet and console": the **Console** device box is ticked and the game was tested on a controller. If not, remove "console" / "i konzoli" from both descriptions | f | [ ] TODO |
 
 ### Dashboard checklist
 
 - [ ] **Maturity & Compliance Questionnaire** (Creator Dashboard → Configure → Questionnaire). Answer honestly.
-      There is no combat and no blood. Daggers and helms are only crafted goods you sell. Forge names go through
-      Roblox text filtering, so they don't count as "free-form user creation". There are no paid random items.
-      If you skip the questionnaire, Roblox limits who can play the game. TODO: fill it in and note the label you get here: `TODO`.
-- [ ] **Audience**: to reach players under 16 (Roblox Kids and Select accounts), you need an age-checked account, 2FA,
-      and either Roblox Plus/Premium for 2 months or the refundable publishing fee. The game also has to pass Roblox's
-      evaluation (250 unique plays from highly engaged players in 60 days). Until then, only 16+ players can play it.
+      There is no combat and no blood. The dagger, greatsword and helm are only crafted goods you sell; nobody can
+      equip or swing them. The forge name is a short typed name that goes through Roblox's text filter, not freehand
+      drawing or writing, so it isn't "free-form user creation". There are no paid random items.
+      You can't make the game Public (or Limited) until the questionnaire is done, and Roblox restricts games
+      without it. Full answers: `COMPLIANCE.md` section 1. TODO: fill it in and note the label you get here: `TODO`.
+- [ ] **Audience**: to reach players under 16 (Roblox Kids and Select accounts), your account must be verified
+      (government ID if you are 18+, face age estimation if you are under 18) with 2-step verification on, and you need
+      either Roblox Plus/Premium for 2 months in a row or the refundable publishing fee (1,000 Robux per game).
+      The game also has to pass Roblox's evaluation (250 unique plays by highly engaged, age-checked players within
+      60 days, plus a safety review). Until then, only age-checked players aged 16+ can play it.
       TODO: decide which route you take.
-- [ ] **Description length**: both descriptions below are about 970 characters (counted). Older DevForum posts say
-      the limit is 1,000, but no current Roblox page gives a number. TODO: check the counter in the dashboard when you paste.
-- [ ] **Czech**: Czech (`cs` / `cs-cz`) is a supported Roblox language. Paste the Czech text in
-      Creator Dashboard → Localization → **Translate** → Czech → **Information** tab. Players who turn on
-      automatic translations get a machine translation unless you add your own.
+- [ ] **Description length**: the limit is **1,000 characters** (Roblox's "Game descriptions" guide). Both descriptions
+      below fit (English 908, Czech 954 characters, counted with the emoji), so keep the "What's new" line short.
+      TODO: check the counter in the dashboard when you paste.
+- [ ] **Czech**: Czech (`cs` / `cs-cz`) is in Roblox's language list. First add it under Creator Dashboard →
+      Localization → **Languages** → Add Language, then paste the Czech text in **Translate** → Czech →
+      **Information** tab. Czech is **not** on Roblox's automatic-translation list, so without your text Czech
+      players see the English one. TODO: check with an account set to Czech that the Czech page really shows
+      (I could not confirm that Czech is a language players can pick in the Roblox app).
 - [ ] **Social links** (Engagement → Social Links): up to 3 links, and each type only once. You can choose from Facebook, X/Twitter,
       YouTube, Twitch, Discord, Guilded or a Roblox Community. You must be age-checked as 16+ to add them,
       and only age-checked 16+ players can see them. Don't put URLs in the description or inside the game.
       TODO: your links.
 - [ ] **Group / Community**: TODO: community name. The design gives 500 coins for joining once. That's fine in-game,
       but don't make it the headline anywhere. Roblox shows fewer people pages that lead with rewards.
-- [ ] **No "like" reward**: it isn't in the design, and Roblox has no clear rule that allows it.
-      The Community Standards ban misleading tricks to drive engagement. Leave it out.
+- [ ] **No "like" or "favorite" reward**: it isn't in the design, and Roblox has no rule that allows it.
+      The Community Standards ban misleading content or metadata used to drive engagement, and DevForum answers warn
+      that paying players for a thumbs-up can get a game moderated. Code can't check likes anyway. Leave it out, and
+      never mention likes, favorites or rewards in the description or thumbnails.
 
 ---
 
@@ -62,8 +71,8 @@ from the description.
 TERRA FORGE
 ```
 
-Roblox has no separate subtitle field. You can use a subtitle in two ways: (a) as the first line of the
-description and on social posts, or (b) added to the name. If you add it to the name, choose before launch and then keep it.
+Roblox has no separate subtitle field yet. You can use a subtitle in two ways: (a) on social posts and the trailer's
+end card, or (b) added to the name. If you add it to the name, choose before launch and then keep it.
 Roblox says renaming often makes a game harder to find.
 
 **Subtitle variant A** (the feeling of the game, 32 characters as a full name):
@@ -78,55 +87,60 @@ TERRA FORGE: Mine, Clean & Forge
 TERRA FORGE: Mining & Crafting Tycoon
 ```
 
-Czech name (optional, Localization → Czech → Information → Name):
+Czech name (optional, Localization → Czech → Information → Name). Only use it if you also chose variant A
+for the English name; with plain TERRA FORGE, leave the Czech name empty so it stays the same:
 
 ```text
 TERRA FORGE: Těž, čisti a kuj
 ```
 
-My pick: launch as plain **TERRA FORGE** and use variant A as the description hook and on thumbnails or social posts.
-The name stays short, easy to remember and the same in every language. Roblox's roadmap lists "name checks" that
-protect game names from copycats for late 2026, so a stable name will also help then.
+My pick: launch as plain **TERRA FORGE** and use variant A on social posts and on the trailer's end card
+(not on thumbnails: our thumbnail rule below allows only the logo). The name stays short, easy to remember and the
+same in every language. Roblox's roadmap lists "name checks" for late 2026, which will protect game names from
+copycats and add a separate **promotional text** field for update info. A stable name will help then, and when that
+field ships, move the "What's new" line there.
 
 ---
 
 ## 2. English description
 
-**Short hook (1 line, 79 characters):**
+**Hook (the first line, 124 characters).** Roblox's description guide says the first ~160 characters show in search
+snippets and on mobile before "read more", so it names the game, the genre and the unique feature:
 
 ```text
-Mine glowing ore, clean it by hand and forge it into gear in your own workshop!
+TERRA FORGE is a mining and crafting tycoon: mine glowing ore, clean it by hand and forge it into gear in your own workshop!
 ```
 
-**Full description (paste as is, about 970 characters):**
+**Full description (paste as is, 908 characters):**
 
 ```text
-Mine glowing ore, clean it by hand and forge it into gear in your own workshop!
+TERRA FORGE is a mining and crafting tycoon: mine glowing ore, clean it by hand and forge it into gear in your own workshop!
 
-Terra's Heartstone has cracked into glowing ore. Join the Forgekeepers of Emberfall and help relight the Great Forge.
+The Heartstone, the heart of Terra, has shattered into glowing ore. Join the Forgekeepers' Guild in Emberfall and help reforge it.
 
 ⛏️ HOW IT WORKS
 • Crack ore nodes with your pickaxe. Real chunks drop: carry them or throw them
 • Clean each chunk by hand: chisel, scrape, polish. Can you get Flawless?
-• Smelt, crush and hammer ingots into daggers, helms and more, then sell
+• Crush and smelt ore into ingots, forge daggers, helms and more, then sell
 • Set up furnaces, crushers, anvils and conveyors on your own plot
-• Find 10 ores in the Quarry, Ember Caves and Deep Hollow, up to the mythic Heartstone
+• Find 10 ores in the Quarry, Ember Caves and Deep Hollow, up to the mythic Heartstone Shard
 • Daily Ember Chest, Ore Codex and badges
-• No combat. Every ore is free to mine
+• No combat. Every ore can be mined without a game pass
 
-🎮 CONTROLS
-PC: Click to mine, E grab/drop, hold Q to throw, F to use
-Mobile: Tap to mine, Grab/Throw buttons, drag to clean
-Console: R2 mine, X grab, hold R1 to throw, Y to use
+🎮 Play on PC, phone, tablet and console
 
 🆕 WHAT'S NEW (v1.0, TODO date)
-• Launch! Emberfall, 4 mining zones, 10 ores, 9 machines and the Cleaning Station
+• Launch! 3 mining zones plus the VIP Glimmer Grotto, 10 ores, 9 machines
 ```
 
 The "What's new" block: replace it with every update and keep it to 1–2 lines, so the whole text stays under the limit.
 Only list things that are in the build you just published.
 
-### Controls reference (taken from the code)
+No controls in the description: Roblox's description guide asks creators not to list controls there and to teach
+them in the game instead (they also eat the character limit). Use the table below for the tutorial and the
+on-screen hints.
+
+### Controls reference (taken from the code, for the in-game tutorial)
 
 | Action | PC | Mobile | Console |
 |---|---|---|---|
@@ -146,38 +160,36 @@ Sources in code: `src/client/Controllers/InteractController.luau`, `CleaningCont
 
 ## 3. Czech description (Popis v češtině)
 
-Written for Czech players, not translated word by word. Place names and grade names stay in English
-because that's how players see them in the game.
+Written for Czech players, not translated word by word. Place, item and grade names stay in English
+because that's how players see them in the game. The game itself is in English for now, so the Czech text says so
+(remove that sentence once the game is translated).
 
-**Krátký háček (1 řádek):**
+**Úvodní věta (1 řádek):**
 
 ```text
-Těž zářící rudu, vyčisti ji vlastníma rukama a ve své dílně z ní ukovej výbavu!
+TERRA FORGE je tycoon o těžbě a kovářství: těž zářící rudu, ručně ji vyčisti a ve své dílně z ní ukovej výbavu!
 ```
 
-**Celý popis (vložit beze změn, cca 970 znaků):**
+**Celý popis (vložit beze změn, 954 znaků):**
 
 ```text
-Těž zářící rudu, vyčisti ji vlastníma rukama a ve své dílně z ní ukovej výbavu!
+TERRA FORGE je tycoon o těžbě a kovářství: těž zářící rudu, ručně ji vyčisti a ve své dílně z ní ukovej výbavu!
 
-Srdce světa Terra puklo a jeho úlomky se staly zářící rudou. Pomoz Strážcům výhně z Emberfallu znovu rozdmýchat Velkou výheň.
+Srdce světa Terra se roztříštilo na zářící rudu. Přidej se k Cechu strážců výhně v Emberfallu a pomoz ho znovu vykovat.
 
 ⛏️ JAK SE HRAJE
-• Rozbíjej ložiska krumpáčem, kusy rudy pak nos v náručí nebo je hoď
-• Každý kus vyčisti ručně: dláto, škrabka, leštění. Dáš to na Flawless?
-• Tav, drť a na kovadlině kovej dýky, přilby a další zboží na prodej
-• Postav si na pozemku pece, drtiče, kovadliny a dopravníky
-• 10 druhů rudy v Quarry, Ember Caves a Deep Hollow, až po mýtický Heartstone
+• Rozbíjej ložiska krumpáčem a sbírej skutečné kusy rudy. Nos je v náručí nebo je házej
+• Každý kus ručně vyčisti: otesej dlátem, oškrábej a vylešti. Zvládneš Flawless?
+• Rudu podrť a roztav na ingoty, ukovej z nich dýky, přilby a další zboží a prodávej
+• Postav si na svém pozemku pece, drtiče, kovadliny a dopravníky
+• Najdi 10 druhů rudy v Greystone Quarry, Ember Caves a Deep Hollow, až po mýtický Heartstone Shard
 • Denní Ember Chest, Ore Codex a odznaky
-• Žádné souboje. Každou rudu vytěžíš zdarma
+• Žádné souboje. Každou rudu vytěžíš i bez game passu
 
-🎮 OVLÁDÁNÍ
-PC: klik = kopat, E = zvednout/položit, drž Q = hodit, F = použít
-Mobil: ťukni = kopat, tlačítka Grab/Throw, čisti tahem prstu
-Konzole: R2 = kopat, X = zvednout, drž R1 = hodit, Y = použít
+🎮 Hraj na PC, mobilu, tabletu i konzoli. Hra je zatím v angličtině.
 
 🆕 CO JE NOVÉHO (v1.0, TODO datum)
-• Start hry! Emberfall, 4 těžební oblasti, 10 rud, 9 strojů a čisticí stanice
+• Hra je venku! 3 těžební oblasti a k tomu VIP Glimmer Grotto, 10 druhů rudy, 9 strojů
 ```
 
 ---
@@ -208,26 +220,28 @@ That is TERRA FORGE's loop: gather and process ore, sell it, upgrade, and grow y
   It has been delayed several times, so check the dashboard again after it ships. TODO: re-check around 2027-01.
 - Search now understands plain-language searches ("mining games") in all supported languages.
   So the keywords that matter are the ones in the **name and description**. Use them naturally and don't repeat them.
-  Roblox shows fewer people games that stuff keywords or name other games.
+  Roblox shows fewer people games that stuff keywords or name other games. Roblox's description guide also says
+  tags and hashtags in the description don't help ranking and only use up characters, so don't add any.
 
 ### Keywords
 
-Already in the descriptions: mine/mining, ore, pickaxe, clean, polish, smelt, crush, anvil, forge, conveyors, plot, workshop.
+Already in the descriptions: mine/mining, ore, pickaxe, crafting, tycoon, clean, polish, smelt, crush, anvil, forge, conveyors, plot, workshop.
 
-**Search ads** (Ads Manager → Search ad; up to **10 keywords per ad set**, and they only match the exact search).
-Choose from the suggestions Roblox shows while you type. TODO: build the ad sets.
+**Search ads** (Ads Manager → new campaign with the **Visits** objective → ad set placement **Search Experience**;
+up to **10 keywords per ad set**, and an ad only shows when the search exactly matches a keyword).
+Choose from the suggestions Roblox shows while you type; if a word isn't suggested, drop it. TODO: build the ad sets.
 
 | Ad set | Keywords (English) |
 |---|---|
-| Core | mining, mine, ore, pickaxe, forge, blacksmith, crafting, smelting, mining tycoon, mining simulator |
+| Core | mining, mine, ore, pickaxe, forge, blacksmith, crafting, smelting, mining tycoon, mining game |
 | Feel | satisfying, cleaning, polishing, crystals, factory, conveyor, furnace, anvil, workshop, cozy |
 
 | Sada | Klíčová slova (čeština) |
 |---|---|
 | Základ | těžba, ruda, krumpáč, kovárna, kovář, tavení, výroba, dílna, tycoon, simulátor |
 
-**Never use:** names of other games, "free robux", "admin", "pets", "obby", "fight", "PvP", or anything
-that isn't in the game.
+**Never use:** names of other games (for example "mining simulator" or "the forge", which are titles of existing
+Roblox games), "free robux", "admin", "pets", "obby", "fight", "PvP", or anything that isn't in the game.
 
 ---
 
@@ -236,7 +250,7 @@ that isn't in the game.
 ### Roblox rules and best practices (checked 2026-10-12)
 
 **Icon**
-- Square, **512×512** px. One icon per language. You can upload a Czech icon in Localization → Information,
+- Square, **512×512** px. One icon per language. You can upload a Czech icon in Localization → Translate → Czech → Information,
   but if the icon has no text, one icon works everywhere.
 - It shrinks to about **150×150** in some places, so check that it still reads at that size.
 - It should be unique and show what the game is about. No vague symbols or graphics.
@@ -257,8 +271,10 @@ that isn't in the game.
   Gameplay, UI or graphics that aren't in the game are not allowed. No real-life footage.
 - **No voice-over, narration or songs with lyrics.** Music must come from the Roblox audio catalog.
 - Use text **sparingly** and only to describe gameplay. No ads or claims ("50% off", "FREE!").
+- Graphics must look like the real game. Roblox rejects videos that make the game look better than players will see it.
 - Quota: **3 video uploads per month**. Rejected videos count toward it.
 - A video shows first on the details page. Xbox, PlayStation and VR don't show videos.
+- Private games can't have a video preview (Roblox staff reply on the announcement thread), so upload it after launch.
 
 **Our house rules (stricter than Roblox's):** no text in the icon. In thumbnails, at most a small TERRA FORGE logo
 at the top. No arrows, red circles, fake buttons, prices, "UPDATE!" stickers or shocked faces.
@@ -270,8 +286,10 @@ Every picture must show something that really happens in the game.
 
 1. Set up the moment in Studio, start a solo playtest and press **Shift+P** to get the free camera.
    Capture at 1920×1080.
-2. Use the AI prompts below either **to plan the shot**, or with your real capture as the **reference image** at low
-   strength (about 0.25–0.4), so shapes, colors and the low-poly style stay true to the game.
+2. **Thumbnails: use the real capture.** The AI prompts below are mainly for planning the shot. If you run AI over a
+   capture at all, use it as the **reference image** at low strength (about 0.25–0.4) and only for cleanup, so shapes,
+   colors and the low-poly style stay true to the game. Never use it to make the graphics look better than the game.
+   The **icon** may be a drawn or rendered illustration, but it must still show things that exist in the game.
 3. Never let AI invent UI. If a shot needs UI, such as the FLAWLESS card, paste in the real UI from your capture.
 4. Compare the result with the real game. If a player would say "it doesn't look like that", don't use it.
 
@@ -290,23 +308,24 @@ coins raining, dollar signs, gift boxes, arrows, red circles, shocked face, bran
 ```
 
 **Icon A – "Flawless Ore" (recommended)**
-A single cracked ore chunk with a shining gold core, sitting on an anvil. It shows the clean-it-yourself idea in one glance.
+A single cracked ore chunk with a shining gold core, held in the Cleaning Station's metal vise (as in
+`cleaning_reveal.jpg`). It shows the clean-it-yourself idea in one glance.
 
 ```text
 Square game icon, 1:1, 512x512, low-poly 3D render. One chunky ore rock split open in the center, its core
-glowing bright gold with soft bloom and light rays, clean chisel cuts glowing along its edges, resting on a dark
-iron anvil. A few orange sparks float upward. Warm forge-orange to deep brown radial background, strong rim light,
+glowing bright gold with soft bloom and light rays, clean chisel cuts glowing along its edges, clamped in a dark
+metal vise on a wooden workbench. A few golden sparkles float upward. Warm forge-orange to deep brown radial background, strong rim light,
 flat-shaded faces, chunky blocky shapes, saturated warm colors, bold silhouette that still reads at 150x150,
 subject fills about 70% of the frame, centered.
 ```
 
 **Icon B – "First Strike"**
-A pickaxe hitting a dark node as glowing chunks burst out. It says "mining" right away.
+A pickaxe hitting a dark node as a glowing chunk pops out. It says "mining" right away.
 
 ```text
 Square game icon, 1:1, 512x512, low-poly 3D render. A chunky stone-and-wood pickaxe striking a dark grey rock node;
-the rock cracks with glowing white seams and three chunky ore pieces (ember orange, silver, icy blue) burst toward
-the viewer with small rock fragments. Warm orange glow from below, dark cave background with soft orange haze,
+the rock cracks with glowing white seams and one chunky ore piece with the same glowing white seams pops out toward
+the viewer with small rock fragments and dust. Warm orange glow from below, dark cave background with soft orange haze,
 flat-shaded faces, chunky blocky shapes, saturated colors, bold silhouette, centered, readable at small size.
 ```
 
@@ -336,31 +355,33 @@ distorted hands, cluttered composition, important details in the bottom 15 perce
 ```
 
 **1 – "Flawless!" (the Cleaning Station reveal)**
-Moment: the last polish stroke and the reveal. Real reference: `docs/screenshots/cleaning_reveal.jpg`.
-Paste the real FLAWLESS result card into the empty lower-middle area.
+Moment: the last polish stroke and the reveal. Real reference: `docs/screenshots/cleaning_reveal.jpg` (Solarite).
+Use a Legendary or Mythic ore: the light rays only appear for those. Paste the real FLAWLESS result card into the
+empty middle area, with the word FLAWLESS well above the bottom 15% (the player count can cover the bottom).
 
 ```text
 16:9 widescreen game screenshot, 1920x1080, low-poly 3D, chunky blocky shapes, flat-shaded faces, warm forge glow,
 soft bloom, saturated colors. Close view over a wooden workbench with a dark metal vise holding a large faceted ore
 chunk that has just been cleaned and polished: its golden core blazes with light rays and bloom, clean glowing cut
 lines around its edges. Tools hang on the back wall: a chisel, a brush, a hammer. Warm amber workshop light, softly
-blurred background. Keep the lower-middle third calm and empty for an in-game result card.
+blurred background. Keep the center below the ore calm and empty for an in-game result card.
 ```
 
-Alt text: "A polished gold ore glows on the Cleaning Station after a Flawless clean."
+Alt text: "A polished golden Solarite ore glows on the Cleaning Station after a Flawless clean."
 
 **2 – "First Strike" (mining in Greystone Quarry)**
-Moment: a node breaking in its last crack stage while chunks pop out. Real reference: `docs/screenshots/mining.jpg`.
+Moment: a node breaking in its last crack stage while a chunk pops out. A node drops one chunk per crack stage, so
+the chunks from earlier stages already lie on the ground. Real reference: `docs/screenshots/mining.jpg`.
 
 ```text
 16:9 widescreen game screenshot, 1920x1080, low-poly 3D, chunky blocky shapes, flat-shaded faces, soft bloom,
 saturated colors. Third-person view in an open-pit quarry with layered tan and brown blocky cliffs under a warm
 pink-orange sky. A blocky avatar in a red shirt swings a chunky pickaxe into a dark grey ore node with glowing white
-cracks; the node bursts into three chunky ore pieces with glowing seams flying toward the camera, small dust puffs
-and rock fragments. Long soft shadows, golden hour.
+cracks; one chunky ore piece with glowing seams pops off toward the camera with small dust puffs and rock fragments,
+two more chunks already lie on the sandy ground. Long soft shadows, golden hour.
 ```
 
-Alt text: "A player swings a pickaxe and ore chunks burst out of a rock in the quarry."
+Alt text: "A player swings a pickaxe and an ore chunk pops out of a rock in the quarry."
 
 **3 – "Arms Full" (carrying and throwing)**
 Moment: walking home with a stack of 5 chunks (the Ore Frame upgrade) and throwing one toward the plot.
@@ -369,8 +390,8 @@ Capture it in Emberfall with the Great Forge behind (see `town_overview.jpg`, `g
 ```text
 16:9 widescreen game screenshot, 1920x1080, low-poly 3D, chunky blocky shapes, flat-shaded faces, warm glow, soft
 bloom, saturated colors. Third-person view from behind and to the side: a blocky avatar walks a dirt path through a
-low-poly village at golden hour, carrying a tall stack of five glowing ore chunks in its arms (orange, silver, gold,
-blue and green glowing seams), one more chunk flying in a throw arc toward a fenced workshop plot. In the background
+low-poly village at golden hour, carrying a tall stack of four glowing ore chunks in its arms (orange, silver, gold
+and blue glowing seams), a fifth chunk flying in a throw arc toward a fenced workshop plot. In the background
 a forge building with a red roof and two chimneys glows orange, sparks rise, lamp posts glow, autumn orange and
 green blocky trees.
 ```
@@ -399,7 +420,7 @@ Turn the exposure up a little in the capture. The real cave is very dark.
 16:9 widescreen game screenshot, 1920x1080, low-poly 3D, chunky blocky shapes, flat-shaded faces, soft bloom,
 saturated colors. Wide shot inside a huge dark cavern lit only by glowing crystals: tall pastel crystal pillars in
 cyan, pink, mint and lavender, and rock ore nodes topped with glowing green, white and gold crystals. In the center
-one rare ore node pulses with a deep pink-red glow and soft light rays; a small blocky avatar holding a chunky
+one rare ore node glows a deep pink-red with soft bloom; a small blocky avatar holding a chunky
 pickaxe stands in front of it, lit pink. Deep blue-black shadows, light volumetric haze, strong sense of depth.
 ```
 
@@ -411,16 +432,18 @@ Alt text: "A player finds a rare glowing pink-red ore node in a dark crystal cav
 
 Rules recap: real gameplay only, 1920×1080, music from the Roblox audio catalog (instrumental), in-game sounds,
 **no voice and no lyrics**, very little text that only describes gameplay, logo at the end. 3 uploads per month.
-TODO: check the maximum video length in the upload dialog. A DevForum summary says 60 s, but the Roblox docs don't give a number.
+Roblox's announcement allows videos up to **60 s** and up to 1920×1080; the docs page gives no number, and some
+older forum posts mention about 30 s. This plan is 27 s, so it fits either way. Upload it only after the game is
+public (private games can't have a video preview). TODO: confirm the limit in the upload dialog.
 
 | Time | Shot (capture with Shift+P free camera) | On-screen text | Sound |
 |---|---|---|---|
 | 0:00–0:03 | Slow push over Emberfall at sunset toward the glowing Great Forge | – | Music starts soft |
 | 0:03–0:07 | Quarry: pickaxe hits, the node cracks in 3 stages, chunks pop out | "Mine it" | Rock hits on the beat |
 | 0:07–0:10 | Player grabs chunks, the stack grows in their arms, a charged throw lands next to the Cleaning Station | – | Thud |
-| 0:10–0:17 | Cleaning: chisel along the glowing line ("GREAT CUT!"), dirt patches pop off, polish circles ("SHINY!"), FLAWLESS card | "Clean it by hand" | Scrape and polish sounds, reveal chime |
+| 0:10–0:17 | Cleaning: chisel along the glowing line ("Great cut!"), dirt patches pop off ("Spotless!"), polish circles ("Gleaming!"), FLAWLESS card | "Clean it by hand" | Scrape and polish sounds, reveal chime |
 | 0:17–0:21 | Furnace glow, an ingot comes out, anvil hammering, the helm appears; quick shot of the conveyor line (TODO after step d) | "Forge it" | Clangs |
-| 0:21–0:24 | Fast cuts: Ember Caves lava glow, Deep Hollow crystals, Heartstone node pulse | – | Music peaks |
+| 0:21–0:24 | Fast cuts: Ember Caves lava glow, Deep Hollow crystals, a glowing Heartstone node | – | Music peaks |
 | 0:24–0:27 | Logo end card over the Great Forge | TERRA FORGE | Music ends |
 
 Don't add "Play now", "Free", "Best game", prices or anything that isn't in the build.
@@ -439,11 +462,12 @@ TERRA FORGE is open! Mine, clean and forge your first ore
 (57 characters)
 
 ```text
-TERRA FORGE je tady! Těž, čisti a kuj svou první rudu
+TERRA FORGE je tady! Těž rudu, čisti ji a kuj výbavu
 ```
-(53 characters)
+(52 characters)
 
-More examples, to use only when the feature ships:
+More examples. The Blast Furnace is one of the 9 launch machines, so use these only if it is held back from v1.0
+and ships later:
 `New: the Blast Furnace smelts ore in just 2.5 seconds` (53) /
 `Novinka: Blast Furnace taví rudu za pouhé 2,5 sekundy` (53).
 
@@ -485,7 +509,7 @@ Czech version:
 ```text
 TERRA FORGE – aktualizace vX.Y (TODO datum)
 
-NOVÉ
+NOVINKY
 • TODO
 
 ZMĚNY
@@ -495,7 +519,7 @@ OPRAVY
 • TODO
 
 ZNÁMÉ PROBLÉMY
-• TODO nebo „Žádné o nich nevíme“
+• TODO nebo „Zatím o žádných nevíme“
 
 Díky, že hrajete a hlásíte chyby! – TODO název studia/komunity
 ```
@@ -510,8 +534,8 @@ Now on Roblox. Link: TODO (use a Roblox share link so you can track visits)
 
 ```text
 Tvoje ruda je špinavá. Tak s tím něco udělej. ⛏️
-V TERRA FORGE každý kus ručně odsekáš, oškrábeš a vyleštíš, pak ho roztavíš a ukuješ z něj výbavu.
-Teď na Robloxu. Odkaz: TODO (použij Roblox share link, ať vidíš návštěvy)
+V TERRA FORGE každý kus ručně otešeš dlátem, oškrábeš a vyleštíš, pak ho roztavíš a ukuješ z něj výbavu.
+Nově na Robloxu. Odkaz: TODO (použij Roblox share link, ať vidíš, kolik návštěv přinese)
 ```
 
 Reminders: post links only on social media and in the game page's Social Links, never inside the game.
@@ -521,9 +545,10 @@ Don't name other games in posts. Use footage from the real build.
 
 ## Sources
 
-Checked on 2026-10-12. The create.roblox.com pages could not be opened directly from this environment, so they were
-read from Roblox's official public docs source (github.com/Roblox/creator-docs, `main` branch). The DevForum and
-Community Standards pages were checked through search-result excerpts; those are marked *(excerpt)*.
+Checked on 2026-10-12 (and re-checked in review the same day). The create.roblox.com pages could not be opened
+directly from this environment, so they were read from Roblox's official public docs source
+(github.com/Roblox/creator-docs, `main` branch, commit `af5f853` of 2026-10-10). The DevForum and Community Standards
+pages could not be opened either; they were checked through search-result excerpts and are marked *(excerpt)*.
 
 **Roblox Creator Hub docs**
 - Thumbnails (sizes, max 10, video rules, 3/month quota, personalization 2–5, <3 MB, bottom area): https://create.roblox.com/docs/production/publishing/thumbnails
@@ -531,24 +556,26 @@ Community Standards pages were checked through search-result excerpts; those are
 - Genres and subgenres (full list, 3-month change limit, appeals): https://create.roblox.com/docs/production/publishing/experience-genres
 - Publish games and places (name/description best practices, audience, publishing requirements, fees): https://create.roblox.com/docs/production/publishing/publish-games-and-places
 - Discovery (best practices, issues that limit exposure, semantic search): https://create.roblox.com/docs/discovery
+- Game descriptions (1,000-character limit, ~160-character hook, don't list controls, no tags/hashtags; Roblox marks this guide as experimental): https://create.roblox.com/docs/production/publishing/descriptions
 - Events and updates (60-character updates, once every 3 days, event setup): https://create.roblox.com/docs/production/promotion/experience-events
 - Social media links (16+ rules, 3 links, allowed sites, no links in-game): https://create.roblox.com/docs/production/promotion/social-media-links
-- Search ads (10 keywords per ad set, exact match): https://create.roblox.com/docs/production/promotion/search-ads
+- Search ads (Visits campaign, Search Experience placement, 10 keywords per ad set, exact match): https://create.roblox.com/docs/production/promotion/search-ads
+- Share links (trackable links for social posts): https://create.roblox.com/docs/production/promotion/share-links
 - Promotion overview (share links, communities): https://create.roblox.com/docs/production/promotion
 - Content maturity and compliance (questionnaire, labels, free-form creation, paid random items): https://create.roblox.com/docs/production/promotion/content-maturity
-- Roblox Kids and Select (evaluation, 250 plays in 60 days): https://create.roblox.com/docs/production/publishing/kids-and-select
-- Localization overview (automatic translations): https://create.roblox.com/docs/production/localization
+- Roblox Kids and Select (verified account, 2FA, fee or subscription, evaluation: 250 plays in 60 days): https://create.roblox.com/docs/production/publishing/kids-and-select
+- Localization overview (source and supported languages): https://create.roblox.com/docs/production/localization
+- Automatic translation (supported-language list, which does not include Czech): https://create.roblox.com/docs/production/localization/automatic-translations
 - Add translations (Information tab: name, description, icon, thumbnails): https://create.roblox.com/docs/production/localization/add-translations
 - Language codes (Czech `cs` / `cs-cz`): https://create.roblox.com/docs/production/localization/language-codes
 - Passes (pass icon max 512×512, circular crop): https://create.roblox.com/docs/production/monetization/passes
 - Docs source mirror: https://github.com/Roblox/creator-docs
 
 **Roblox DevForum and roadmap**
-- Creator Roadmap 2026: Fall Update (dynamic genre/tag filters and name checks, late 2026) *(excerpt)*: https://devforum.roblox.com/t/creator-roadmap-2026-fall-update/4880208
+- Creator Roadmap 2026: Fall Update (dynamic genre/tag filters delayed to late 2026; name checks and a promotional text field, late 2026) *(excerpt)*: https://devforum.roblox.com/t/creator-roadmap-2026-fall-update/4880208
 - Creator Roadmap: https://create.roblox.com/roadmap
-- Video Previews for your game's page (uploaded gameplay videos replace YouTube previews; 60 s is a community summary) *(excerpt)*: https://devforum.roblox.com/t/video-previews-for-your-games-page/4068103
+- Video Previews for your game's page (Roblox announcement: up to 60 s and 1920×1080, 3 free uploads a month; staff reply: private games can't have a preview) *(excerpt)*: https://devforum.roblox.com/t/video-previews-for-your-games-page/4068103
 - Like rewards, no clear official rule *(excerpt)*: https://devforum.roblox.com/t/do-tos-allow-x-likes-for-next-reward/1029127 and https://devforum.roblox.com/t/asking-people-to-like-your-game-against-tos/3753529
-- Description length (older posts say 1,000 characters) *(excerpt)*: https://devforum.roblox.com/t/max-description-characters/1399618
 
 **Roblox policy (en.help.roblox.com / about.roblox.com)**
 - Community Standards (Integrity section: no misleading content or metadata to drive engagement) *(excerpt)*: https://en.help.roblox.com/hc/articles/203313410 and https://about.roblox.com/community-standards

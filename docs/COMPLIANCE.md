@@ -10,16 +10,18 @@ maturity label, and reach as many players as possible, including younger ones.
 - "Dashboard" means the Creator Dashboard / Creator Hub
   (create.roblox.com/dashboard/creations). "Studio settings" means
   **File → Experience Settings** in Studio. Older notes, such as
-  `STUDIO_CHECKLIST.md`, still call it "Game Settings".
+  `STUDIO_CHECKLIST.md` and a warning in `DataService.luau`, still call it
+  "Game Settings".
 
 **In short:** Terra Forge has no violence, blood, scares, romance, alcohol,
 gambling, paid random items or trading, so it should get the lowest label,
 **Minimal**. That makes it eligible for **every age group**, including
 Roblox Kids (5–8) and Roblox Select (9–15). The game stays 16+ until it
 passes Roblox's Kids & Select evaluation (see 2.9). The main risks are the
-public **forge name sign** (it must be filtered), the **group/like reward**
-(only the group part is safe) and **purchase handling** (receipts must be
-processed safely).
+public **forge name sign** (it must be filtered and limited to one change per
+minute), the **group/like reward** (only the group part is safe),
+**purchase handling** (receipts must be processed safely) and **store page
+images** (they must show the real game).
 
 ---
 
@@ -48,13 +50,13 @@ only what is really in the game.
 | 4 | **Crude humor** | **None** | No burping or toilet jokes. |
 | 5 | **Unplayable gambling** (depictions) | **None** | No casino, cards, dice or slot imagery. Selling at Pell's Trading Post pays a fixed, shown price. |
 | 6 | **Strong language** | **None** | No swearing in game text. Keep **Allow Strong Language** off (section 3). |
-| 7 | **Romantic themes** | **None** | No romance or dating. |
+| 7 | **Romantic themes** (also private spaces and adult settings such as clubs or bars) | **None** | No romance or dating, and the game doesn't take place in bedrooms, bathrooms, clubs or bars. |
 | 8 | **Alcohol** | **None** | No bars, taverns or drinks. The barrels and crates in Emberfall are plain props. Never label them "ale", "mead" and so on. |
 | 9 | **Social hangout** | **No** | The main activity is mining and crafting, not chatting. Keep "hangout", "chill" or "vibe" wording out of the title and description: Roblox classifies a game as a hangout if its title or description refers to one. |
 | 10 | **Free-form user creation** | **No** | This means freehand drawing, painting, writing on surfaces, or pixel canvases. Placing machines on your plot is building with 3D assets, which Roblox excludes. The forge name is a short typed name, not freehand writing, and it goes through Roblox's text filter before anyone sees it (see 2.1). Roblox also excludes anything that goes through Roblox moderation before it is shown. |
 | 11 | **Sensitive issues** (political, social, religious) | **No** | The lore is original fantasy (the Heartstone, the Forgekeepers' Guild). |
-| 12 | **Paid random items** | **No** | Nothing you pay for (Robux or coins) gives a random result. Coin pouches give a fixed amount. Shop items (pickaxes, machines, upgrades) are fixed. The **Ember Chest** daily reward is free and its rewards are fixed (see 2.5). Ore drops and cleaning grades are random, but they come from playing, not from paying. **Careful:** coins can be bought with Robux, so a "mystery crate for coins" added later would count as a paid random item. |
-| 13 | **Paid item trading** | **No** | Players cannot trade. Every item belongs to one player: only the owner can pick it up, and selling always pays the owner (`ItemService`). |
+| 12 | **Paid random items** | **No** | Nothing you pay for (Robux or coins) gives a random result. Coin pouches give a fixed amount. Shop items (pickaxes, machines, upgrades) are fixed. The **Ember Chest** daily reward is free and its rewards are fixed (see 2.6). Ore drops, bonus chunks and cleaning grades are random, but they come from playing, not from paying, and Roblox says rewards for actions that cost no Robux or currency don't count. **Careful:** Roblox counts anything random that is bought with Robux *or any other currency*, so a "mystery crate for coins" added later would be a paid random item. |
+| 13 | **Paid item trading** | **No** | Players cannot trade. Every item belongs to one player: only the owner can pick it up (`ItemService`), and selling is designed to always pay the owner. |
 | 14 | **Media: players share media** (images, video, text, audio, models) with built-in game tools | **No** | There is no in-game screenshot sharing, feed or gallery. |
 | 15 | **Media: endless feeds / autoplay** | **No** | None. |
 | 16 | **Media: viewing content captured in other games** | **No** | None. |
@@ -85,6 +87,9 @@ Violence and resubmit.**
 - Scary cave sounds, creatures or jump scares in Deep Hollow → Fear.
 - Loot crates or spin wheels paid with Robux or coins → Paid random items. You
   would also have to show the odds and use PolicyService.
+- "Luck" boosts or lucky pickaxes (for Robux or coins) that raise the chance
+  of rare ore → Roblox requires the new odds to be shown in numbers before
+  purchase. Today pickaxes only change tier, damage and speed, never odds.
 - Trading or gifting items between players → Paid item trading.
 - A drawing board, paintable signs or a free-text bulletin board → Free-form
   user creation, which limits the game to players aged 16+.
@@ -99,26 +104,35 @@ Violence and resubmit.**
 Roblox already filters chat. **Any other text that players type and others
 can see is your job to filter.** Roblox's docs say games without text
 filtering can be removed. In Terra Forge that text is the **forge name**,
-which is shown on a sign at the player's plot (`SetForgeName` remote,
-`DataTemplate.ForgeName`).
+which will be shown on the sign at the player's plot (`SetForgeName` remote,
+`DataTemplate.ForgeName`). The naming feature isn't built yet: today the sign
+(`PlotSign`) shows "<DisplayName>'s Forge" while the plot is owned and
+"Free Plot" when it isn't (`PlotService`).
 
 **How it must work (server only):**
 
 1. The client sends the name once, when the player presses **OK**. Don't
-   filter on every keystroke. The remote is already rate-limited in
-   `Net.luau`.
-2. Clean it up on the server: trim spaces, remove line breaks and control
+   filter on every keystroke.
+2. **Accept a new name at most once per minute per player.** Roblox's chat
+   guidelines require a rate limit of at least 1 minute for any editable text
+   that other players can see, and they name signs as an example. The
+   current limit for `SetForgeName` in `Net.luau` (`Rate = 0.5, Burst = 2`)
+   allows a change every 2 seconds, which is too fast. **TODO (code):** add
+   a 60-second cooldown in the server handler (count it from the last
+   accepted name) and tell the player kindly how long to wait. You can also
+   lower the `Net.luau` limit to `Rate = 1/60, Burst = 1` as a backstop.
+3. Clean it up on the server: trim spaces, remove line breaks and control
    characters, and limit the length. **TODO:** pick a length, for example 3–24
    characters. Turn off `RichText` on the sign's TextLabel so tags show as
    plain text.
-3. Filter it with Roblox's text filter. The owner must be in this server,
+4. Filter it with Roblox's text filter. The owner must be in this server,
    because `FilterStringAsync` throws if the user isn't:
    ```lua
    local ok, result = pcall(function()
        return TextService:FilterStringAsync(raw, player.UserId, Enum.TextFilterContext.PublicChat)
    end)
    ```
-4. Get the version that is safe for everyone. The sign is seen by every
+5. Get the version that is safe for everyone. The sign is seen by every
    player on the server, so use the **broadcast** version, not the per-user
    one:
    ```lua
@@ -126,28 +140,31 @@ which is shown on a sign at the player's plot (`SetForgeName` remote,
        return result:GetNonChatStringForBroadcastAsync()
    end)
    ```
-5. Only put `shown` on the sign. Never show `raw` to anyone, including on the
+6. Only put `shown` on the sign. Never show `raw` to anyone, including on the
    owner's own screen.
 
 **If filtering fails** (an error is thrown, or `ok`/`ok2` is false):
 
 - **Show nothing from the player's text.** Roblox: "If it fails, do not
-  display the text to any user." Put a neutral fallback on the sign instead,
-  such as "Forge Plot 3". **TODO:** pick the fallback wording.
+  display the text to any user." Keep the sign on the default text that
+  `PlotService` already shows, "<DisplayName>'s Forge". Display names are
+  already moderated by Roblox, so this is safe.
 - Tell the player kindly: "We couldn't check that name right now. Please try
   again in a moment."
 - Don't loop retries. `FilterStringAsync` already retries internally. Let the
   player try again later, or try once more on their next join.
 - If the filtered text came back with `#` characters (the filter blocked
   part of it), it is still safe to show. It is friendlier to say "That name
-  can't be used, please pick another" and keep the old name or the fallback.
+  can't be used, please pick another" and keep the old name or the default
+  sign text.
 
 **Saving:** the save stores the raw name (`ForgeName`). That is fine, as long
 as you **filter it again every time you show it**, for example when the owner
 joins and their plot sign is built. Filter rules change over time, and
 Roblox's docs list stored text (their example: pet names in data stores) as
-text you must filter when you show it. When the owner leaves, clear the sign; you can't filter for a user who
-isn't in the server.
+text you must filter when you show it. When the owner leaves, the sign must
+go back to "Free Plot" (`PlotService` already does this when it releases
+the plot); you can't filter for a user who isn't in the server.
 
 **Prompt text:** in the naming box, write: *"Name your forge! Please don't use
 your real name or any personal info."*
@@ -171,13 +188,16 @@ ads.
 | `IsPaidItemTradingAllowed` | `false` = this player may not trade paid items | **Not today**: there is no trading. If you add it, block trading for these players. |
 | `AllowedExternalLinkReferences` | Legacy field. Roblox's reference says it **always returns an empty list** now. | Treat it as "no external links are ever allowed in the game" (see 2.3). |
 | `IsSubjectToChinaPolicies` | `true` = the game should apply China-related compliance changes | Nothing in Terra Forge is known to need changing. **TODO:** log how often it is `true` (analytics). If it ever is, read the DevForum post linked from the PolicyService page. |
-| `AreAdsAllowed` | `true` = immersive ads may be shown | Only needed if you add ads later. Ads have their own rules too, for example no rewards for interacting with Portal Ads. |
+| `AreAdsAllowed` | `true` = immersive ads may be shown | Only needed if you add ads later. Ads have their own rules (Roblox's Advertising Standards and the immersive / rewarded video ads docs); the only allowed way to reward players for an ad is Roblox's Rewarded Video Ads feature. |
 | `IsContentSharingAllowed`, `IsEndlessContentLoadAllowed`, `IsEndlessContentAutoplayAllowed` | Media-sharing features | Not used. |
 | `IsEligibleToPurchaseSubscription`, `IsEligibleToPurchaseCommerceProduct` | Subscriptions and commerce products | Not used. Terra Forge sells only passes and developer products. |
 
 **TODO (code):** add a small `PolicyService` wrapper in `src/server/` that
 caches these values per player and exposes them as server-only attributes or
 a module. Then any future feature (crates, trading, ads) has one place to ask.
+Roblox's monetization guidelines say games must use PolicyService to check
+these rules, so build the wrapper before launch even though nothing uses it
+yet.
 
 ### 2.3 No off-platform links
 
@@ -185,11 +205,11 @@ a module. Then any future feature (crates, trading, ads) has one place to ask.
   contact emails in any text, sign, decal or loading screen. Roblox's social
   links doc says creators cannot share social media links within a game. You
   may say *"Find us on the game page"* and leave it at that.
-- **On the game page:** add social links in the Dashboard instead (up to 3;
-  Discord, YouTube, X, Twitch, Facebook, Guilded or a Roblox community). You
-  must age-verify as 16+ to add them, and only players verified as 16+ can
-  see them. Never offer rewards for joining Discord or following accounts
-  outside Roblox.
+- **On the game page:** add social links in the Dashboard instead
+  (**Engagement → Social Links**, up to 3; Discord, YouTube, X, Twitch,
+  Facebook, Guilded or a Roblox community). You must age-verify as 16+ to add
+  them, and only players verified as 16+ can see them. Never offer rewards
+  for joining Discord or following accounts outside Roblox.
 
 ### 2.4 Never ask for personal info
 
@@ -208,26 +228,38 @@ a module. Then any future feature (crates, trading, ads) has one place to ask.
   and by default can chat only with nearby groups. Chat is off by default for
   Roblox Kids (5–8) and for Select accounts that haven't done an age check.
 - **The game must be fully playable without chat.** Many young players won't
-  have it. The tutorial and prompts already use on-screen UI, which is good.
-- Don't build a custom chat, whispers or a message board. That would need
-  filtering, and possibly a questionnaire change.
+  have it. Prompts, notifications and the cleaning minigame already use
+  on-screen UI, which is good. Keep the tutorial (not built yet) on-screen too.
+- Don't build a custom chat, whispers or a message board. Roblox requires all
+  in-game chat to go through `TextChatService`, and any other player text
+  needs filtering and a 1-minute rate limit (see 2.1), and possibly a
+  questionnaire change.
+- **On console**, Roblox's console guidelines say to hide the chat window
+  (`ChatWindowConfiguration.Enabled = false`, for example when
+  `GuiService:IsTenFootInterface()` is true).
 - System messages from the game (`DisplaySystemMessage`, `Notify`) are text
   you write, so they need no filter.
-- **Voice chat:** keep it off (section 3). Terra Forge doesn't need it.
+- **Voice chat:** turn it off (section 3). It is **on by default** for new
+  games, so you have to switch it off yourself. Terra Forge doesn't need it.
 
 ### 2.6 Fair monetization
 
 What Terra Forge sells (from `GAME_DESIGN.md`):
 
-| Product | Type | What it does |
-|---|---|---|
-| Strong Back | Game pass | 2× carry capacity |
-| Forge VIP | Game pass | Opens the Glimmer Grotto (denser Silver/Gold/Emberite) and adds a VIP tag |
-| Workshop Expansion | Game pass | +6 machine slots, +20 conveyor slots |
-| Coin pouches (S/M/L/Huge) | Developer products | A fixed number of coins |
+| Product | Type | Perk id in code | What it does |
+|---|---|---|---|
+| Strong Back | Game pass | `StrongBack` | 2× carry capacity |
+| Forge VIP | Game pass | `ForgeVip` | Opens the Glimmer Grotto (denser Silver/Gold/Emberite) and adds a VIP tag |
+| Workshop Expansion | Game pass | `Workshop` | +6 machine slots, +20 conveyor slots |
+| Coin pouches (small/medium/large/huge) | Developer products | — | A fixed number of coins |
 
-**TODO:** set prices, write descriptions and upload icons. Pass icons must
-keep important details inside the circle, at most 512×512 (.png/.jpg/.bmp).
+**TODO:** set prices, write descriptions and upload icons. Pass and
+developer product icons must be at most 512×512 (.png/.jpg/.bmp) and keep
+important details inside the circle.
+
+Listed passes and products can also be bought **outside the game**, on the
+game page's Store tab, so a player may join already owning one. The join
+check for passes and `ProcessReceipt` for products (below) cover this.
 
 **Rules to follow** (from Roblox's monetization guidelines, plus our own
 choices marked *(ours)*):
@@ -236,10 +268,11 @@ choices marked *(ours)*):
   confused or pressured into purchases they did not intend. Roblox also says
   to avoid "pushy or urgent messages" with minors.
   - Only open a purchase prompt after the player taps a shop or buy button.
-    Never open one on join, after a death or failure, or on a timer *(ours)*.
+    Never open one on join, after a bad cleaning grade, or on a timer *(ours)*.
   - No fake countdown timers, no timers that restart, and no "70% OFF" unless
     it is a real, temporary discount. A price that is always "on sale" is not
-    a real discount (Roblox).
+    a real discount, and a sale that only lasts a very short time to rush
+    players is not fair (Roblox).
   - The close (X) button must be easy to see on every shop screen, including
     on mobile *(ours)*.
   - Don't say "you'll lose your streak!" or similar in a scary way. Daily
@@ -247,7 +280,18 @@ choices marked *(ours)*):
 - **Benefits exactly as described.** Each pass's description must match what
   the code does (2× carry, the Grotto, +6/+20 slots). If you change a pass,
   update the description, and never take away something buyers already have.
-  **TODO:** check the descriptions against `Perks.luau` before launch.
+  **TODO:** before launch, check each description against the code that
+  applies the perk: `ToolData.carryCapacity` (Strong Back), `AccessService`
+  and `MiningService` (Forge VIP), and the slot limits once machines are
+  built (Workshop Expansion). The VIP tag and the slot limits aren't built
+  yet, so don't promise them until they work.
+- **Forge VIP and ore odds** *(to be safe)*. Roblox says paid items that
+  improve the odds of random outcomes must explain the new odds in numbers
+  before purchase (their example is a "magic fishing rod"). The Grotto has
+  its own ore mix (`WorldLayout.luau`: 40% Silver, 32% Emberite, 28% Gold of
+  its nodes), so put those numbers in the Forge VIP description, for example
+  "Glimmer Grotto ore: 40% Silver, 32% Emberite, 28% Gold". Update the text
+  whenever the weights change.
 - **Not pay-to-win only.** Every ore is minable by everyone: Silver, Gold and
   Emberite also spawn outside the Grotto. Coin pouches only skip time. Keep
   it that way.
@@ -261,6 +305,10 @@ choices marked *(ours)*):
     succeeds, return `Enum.ProductPurchaseDecision.PurchaseGranted`.
   - If the player isn't in this server, their data isn't loaded, or the save
     fails, return `NotProcessedYet`. Roblox retries the next time they join.
+  - Roblox can run the same receipt on two servers at once (for example
+    right after a server hop). Only grant on the server that holds the
+    player's session lock (`DataService` / `ProfileStore`); everywhere else
+    return `NotProcessedYet`.
   - Never grant from `PromptProductPurchaseFinished`. Roblox warns that it
     firing doesn't mean the purchase succeeded.
   - Roblox doesn't keep per-player purchase history for you. The `Purchases`
@@ -277,7 +325,8 @@ choices marked *(ours)*):
   `ArePaidRandomItemsRestricted`.
 - **Daily Ember Chest:** it's free, so it's allowed either way. To avoid
   looking like a loot box, show the whole 7-day reward ladder in the UI
-  (day 1 … day 7 + Gold chunk), so players see exactly what they get *(ours)*.
+  (day 1 … day 7 + raw Gold chunk, with the coin amounts for the player's
+  current pickaxe tier), so players see exactly what they get *(ours)*.
 
 ### 2.7 Group join and like rewards: what is safe
 
@@ -298,12 +347,12 @@ What we could verify:
 
 | Reward | Verdict | How |
 |---|---|---|
-| **Join the game's Roblox group → 500 coins once** (**TODO:** create the group, put its id in config) | **OK, with care** | A small "Join our group" button in the menu, with no pop-up on join. Open `GroupService:PromptJoinAsync` only when the button is tapped. Grant only after `IsInGroupAsync` returns true on the **server**, and save `GroupRewardClaimed`. Keep the reward small; it must never unlock content or be needed to progress. No nagging, no repeat pop-ups, no "you must join to play" screens. If the prompt returns `None` (the player closed it or can't join), just close it quietly. |
+| **Join the game's Roblox group → 500 coins once** (**TODO:** create the group, put its id in config) | **OK, with care** | A small "Join our group" button in the menu, with no pop-up on join. Open `GroupService:PromptJoinAsync` (it runs on the player's client) only when the button is tapped. Grant only after `Player:IsInGroupAsync` returns true on the **server** (`GroupClaim` remote), and save `GroupRewardClaimed`. The server caches `IsInGroupAsync` results, so don't call it on the server before the player taps "Claim"; an early `false` can stick for the rest of the session. If the check still says no, say "Rejoin the game to claim your reward". Keep the reward small; it must never unlock content or be needed to progress. No nagging, no repeat pop-ups, no "you must join to play" screens. If the prompt returns `None` (the player closed it or can't join), just close it quietly. |
 | **Like / thumbs-up reward** | **Don't** | Drop the "like reward" from the plan. It's fine to show *one* gentle, unrewarded message after the tutorial: "Enjoying Terra Forge? A thumbs-up on the game page helps us a lot!" It must be easy to close and shown once. |
 | **Favorite reward** | **Don't** | Same reason as likes. |
 | **"Code for everyone at X likes"** | **Skip** | One DevForum reply calls this OK, but it still ties a reward to likes. Not worth the risk. |
 | **Discord / YouTube / X follow rewards** | **Never** | Off-platform, and you can't mention them in the game anyway (2.3). |
-| **Inviting friends** | OK, using Roblox's own tools | Roblox's promotion docs describe built-in invite prompts and rewards for bringing in new players. Use those features only as documented. **TODO:** read the "Player invite prompts" / referral docs before adding this. |
+| **Inviting friends** | OK, using Roblox's own tools | Not in the design today. Roblox has built-in invite prompts and a "Friend referral system" that rewards players for bringing in new players. Use those features only as documented. **TODO:** read the "Player invite prompts" and "Friend referral system" docs before adding this. |
 
 **TODO (before launch):** read Roblox Community Standards (link at the end),
 especially the spam and "Misusing Roblox Systems" sections, and the new Terms
@@ -317,10 +366,12 @@ group button.
   title, description, thumbnails, icons, badge and pass names, signs, NPC lines,
   update notes. Terra Forge's names (Emberfall, Heartstone, Pell's Trading Post,
   Forgemaster Ulda…) are all original.
-- Internal docs (`PLAN.md`) and a few code comments mention the games that
-  inspired the feel (for example `src/shared/Builders/Geo.luau`, which is
-  replicated to clients). Players never see these, but a comment-cleanup pass
-  is an easy optional **TODO**.
+- Internal docs (`PLAN.md`) and two code comments mention the games that
+  inspired the feel: `src/shared/Builders/Geo.luau` (replicated to clients)
+  and `src/server/Services/CarryService.luau` (server only). Players never
+  see these, but a comment-cleanup pass is an easy optional **TODO**.
+- **TODO:** before launch, search Roblox for existing games named
+  "Terra Forge" so the name isn't confused with someone else's game.
 - Only use sounds, meshes and images you made, Roblox-made assets, or assets
   whose license allows it (see `SoundConfig.luau`).
 
@@ -330,36 +381,44 @@ Roblox sorts players into **Roblox Kids** (5–8), **Roblox Select** (9–15) an
 standard Roblox (16+). With a **Minimal** label, Terra Forge *can* reach all
 of them, but only after these steps:
 
-1. **Before going public at all** (16+ audience): your account must be in good
-   standing and at least 2 days old, you must complete an age check (face age
-   estimation or government ID), and the questionnaire must be submitted.
+1. **Before going public at all** (16+ audience), and also before you can use
+   any **Limited** audience (Playtesters, Friends, Community Members): your
+   account must be in good standing and at least 2 days old, you must
+   complete an age check (face age estimation or government ID), and the
+   questionnaire must be submitted.
 2. **For Kids and Select (all ages), the creator also needs to:**
    - verify age (government ID if you are 18+; face age estimation if under 18),
    - turn on **2-step verification**,
    - **either** keep Roblox Plus or Roblox Premium active for 2 months in a
      row, **or** pay a one-time, refundable per-game fee (1,000 Robux at the
-     time of writing; read the refund rules on the publishing page). **TODO:**
+     time of writing; read the refund rules on the publishing page). If you
+     use Plus/Premium, it has to be active whenever you publish a new version
+     for all ages; the game stays published if it runs out later. **TODO:**
      choose which.
 3. **The game is then evaluated:** first it is only available to age-checked
    players aged 16+ (a trial). Roblox then needs about **250 unique plays from
    "highly engaged" players within 60 days**, followed by a safety review.
    You can follow progress in the **Audience Reach** dashboard. An optional
-   50,000 Robux (refundable) expedited review exists. It doesn't lower the
-   bar.
+   50,000 Robux (refundable) expedited review exists. It lets you skip the
+   wait for the 250 plays (useful for a timed launch), but the game must
+   still pass the same safety review.
 4. **Group or personal account?** Roblox recommends publishing under a group.
-   **TODO:** decide, and check on the Kids & Select page how the creator
-   requirements apply to a group-owned game.
+   For a group-owned game, the **group owner's** account must meet all the
+   creator requirements above. **TODO:** decide.
 
-**Design rules for young players** (most of these are already true):
-simple words, no chat needed, no pushy purchase prompts, no time-limited
-pressure, and a short, friendly tutorial.
+**Design rules for young players** (keep them in mind while the shop,
+tutorial and daily reward are being built): simple words, no chat needed, no
+pushy purchase prompts, no time-limited pressure, and a short, friendly
+tutorial.
 
 ### 2.10 Data and privacy
 
 - **Only gameplay data is saved.** DataStore `TerraForge_PlayerData_v1`, key
-  `Player_<UserId>`, contains coins, tools, upgrades, placed machines, stored
-  items, stats, tutorial step, daily streak, badge cache, the
-  group-reward flag, the raw forge name and purchase ids (`DataTemplate.luau`).
+  `Player_<UserId>`, contains coins, pickaxes, carry level, upgrades,
+  machines (owned and placed), stored items, the Ore Codex, stats, tutorial
+  step, daily streak, badge cache, the group-reward flag, the raw forge name
+  and purchase ids (`DataTemplate.luau`), plus a session lock (server id and
+  time, `ProfileStore.luau`).
 - **Never save:** real names, emails, birthdays, IP addresses, device ids,
   chat logs or anything else players type, apart from the forge name.
 - **Analytics** (`AnalyticsTracker`, planned): only gameplay events (ore
@@ -388,29 +447,29 @@ pressure, and a short, friendly tutorial.
 | Setting | Where | Value for Terra Forge |
 |---|---|---|
 | **Name** | Dashboard → Configure → Basic Info | `Terra Forge` (**TODO:** confirm). No other game names, no "free Robux", no emoji spam. |
-| **Description** | Same | **TODO:** write 2–4 friendly lines about mining, cleaning ore by hand, smelting, forging and building your workshop. No links, and no "hangout" wording (see 1.1 #9). |
-| **Genre** | Dashboard → Configure → Settings | **Simulation → Tycoon**: you build up your own plot with machines and conveyors and sell to grow. Alternative: **Simulation → Incremental Simulator**. You can only change genre **once every 3 months**, so choose carefully. **TODO:** pick one. |
-| **Devices** | Publish window / Basic Info | **Computer: on. Phone: on. Tablet: on. Console: on**: the code already supports gamepad (X grab, RB throw, Y prompts, left stick + A in cleaning). **VR: off.** **TODO:** test on a real controller and on a phone before launch. If console isn't tested yet, leave it off and add it later. |
-| **Audience** | Dashboard → Configure → Settings | Keep **Private** while building. Use **Limited → Playtesters** for testers. Switch to **Public** at launch (after the questionnaire). |
+| **Description** | Same | **TODO:** write 2–4 friendly lines about mining, cleaning ore by hand, smelting, forging and building your workshop. No links, no "hangout" wording (see 1.1 #9), and no other games' names as keywords (Roblox demotes keyword spam). |
+| **Genre** | Dashboard → Configure → Settings | **Simulation → Tycoon**: you build up your own plot with machines and conveyors and sell to grow. Alternative: **Simulation → Sandbox**, only if building the plot becomes the main activity (not Incremental Simulator, see `STORE_PAGE.md`). You can only change genre **once every 3 months**, so choose carefully. **TODO:** pick one. |
+| **Devices** | Studio settings → Basic Info → Playable Devices (also asked in the first Publish window) | **Computer: on. Phone: on. Tablet: on. Console: on**: mining, carrying and cleaning already support a gamepad (X grab, RB throw, Y at the Cleaning Station, left stick + A or R2 in cleaning, B to leave). **VR: off.** **TODO:** the shop and other menus aren't built yet; make sure they work with a D-pad too, hide the chat window on console (see 2.5), and test on a real controller and on a phone before launch. If console isn't tested yet, leave it off and add it later. |
+| **Audience** | Dashboard → Configure → Settings | Keep **Private** while building (only people with Edit access can join). **Limited → Playtesters** lets testers in, but it already needs the 16+ publishing requirements (age-checked account, questionnaire; see 2.9). Switch to **Public** at launch. |
 | **Minimum age / regions** | Audience → Access Settings | No minimum age; all regions on. |
 | **Max players per server** | Place settings (server size / max players) | **8**, matching the 8 forge plots and `GameConfig.MaxPlayers = 8`. If these numbers differ, a 9th player would have no plot. |
 | **Private servers** | Audience → Access Settings → Allow private servers | **On**, suggested **100 Robux/month** (**TODO:** decide; free is also fine). Changing the price later cancels every existing subscription, so choose once. Private servers can't be combined with paid access, which Terra Forge doesn't use anyway. Private servers don't bypass Forge VIP: the Grotto still checks the pass. |
 | **Paid access** | Monetization | **Off.** Terra Forge is free to play. |
 | **Allowed gear** | Studio settings → Permissions (if still shown) | **None**: untick all gear types. Gear would break the carry/mining balance. |
 | **Comments** | — | We found no current comments toggle for games. Player feedback arrives as ratings and feedback in the Dashboard. **TODO:** if your Dashboard shows a comments option, leave it off unless you will moderate it. |
-| **Text chat** | Studio settings → Communication (or Audience → Communication Settings) | **On** (Roblox handles filtering and age groups). |
+| **Text chat** | `TextChatService` in Studio (on by default) | **On** (Roblox handles filtering and age groups), except hide the chat window on console (see 2.5). |
 | **Allow Strong Language** | Audience → Communication Settings | **Off.** |
-| **Voice chat / camera** | Studio settings → Communication | **Off** (not needed). |
+| **Voice chat / camera** | Studio settings → Communication | **Off** (not needed). Voice is **on by default** for new games, so switch off **Enable Voice Chat** and **Enable Camera**, then publish. |
 | **Enable Studio Access to API Services** | Studio settings → Security | **On only before launch, or in a separate test copy.** It's needed for saving while testing in Studio (`GameConfig.SaveInStudio = true`). After launch, Roblox advises against using it on the live game, because Studio play-tests would write to real player data. **TODO:** at launch, either make a test copy of the game for Studio testing or turn this off. |
-| **Allow HTTP Requests** | Studio settings → Security | **Off.** Terra Forge makes no web requests (DataStores don't need it). |
+| **Allow HTTP Requests** | Studio settings → Security | **Off.** Terra Forge makes no web requests. DataStores and `HttpService:GenerateGUID` (used in `ItemService`) don't need it. |
 | **Allow Third Party Sales** | Studio settings → Security | **Off.** We only sell our own passes and products. |
 | **Allow Third Party Teleports** | Studio settings → Security | **Off.** No teleports to other games. |
 | **LoadStringEnabled** | ServerScriptService property | **Off** (default). |
 | **Allow copying** | Places → Permissions | **Off** (the place stays copylocked). |
-| **Social links** | Dashboard → game page | Optional (needs 16+ verification; see 2.3). |
-| **Icon & thumbnails** | Dashboard → Configure → Places/Basic Info | **TODO:** use real screenshots from `docs/screenshots/`. No fake UI, no other games' art, no "FREE ROBUX" or "ADMIN" text, no misleading promises. |
-| **Badges** | Dashboard → your game → Badges (menu name may differ) | **TODO:** create Welcome, First Ore, First Clean, First Flawless, First Legendary, First Mythic, First Gear, Tutorial Done, Tycoon. Images and names must follow Community Standards. |
-| **Game passes / developer products** | Dashboard → Monetization | **TODO:** create them and paste the ids into the config (see 2.6). |
+| **Social links** | Dashboard → Engagement → Social Links | Optional (needs 16+ verification; see 2.3). |
+| **Icon & thumbnails** | Dashboard → Configure → Places → start place | **Icon:** square, 512×512. **Thumbnails:** up to 10 images or videos, 16:9, ideally 1920×1080, under 3 MB; keep text away from the bottom edge (the player count covers it). All of them are moderated. **TODO:** use real screenshots of the **launch build**. The files in `docs/screenshots/` (1600×900) are from development builds: only use ones that show features that work at launch (for example, no machines or shop until they exist), and treat `items.jpg` (a lineup of item models) as a showcase, not a scene players see. No fake UI, no other games' art, no "FREE ROBUX" or "ADMIN" text, no misleading promises. Videos must show real gameplay (3 uploads per month). |
+| **Badges** | Dashboard → Engagement → Badges | **TODO:** create Welcome, First Ore, First Clean, First Flawless, First Legendary, First Mythic, First Gear, Tutorial Done, Tycoon. 5 badges per game per day are free (then 100 Robux each), so spread these 9 over two days. Images (512×512) and names must follow Community Standards. |
+| **Game passes / developer products** | Dashboard → Monetization → Passes / Developer Products | **TODO:** create them and paste the ids into the config (see 2.6). |
 
 ---
 
@@ -420,28 +479,29 @@ pressure, and a short, friendly tutorial.
 - [ ] Re-read section 1.1 against the current build. Nothing new (enemies, damage, scary sounds, crates, trading, drawing)?
 - [ ] Questionnaire submitted (Configure → Questionnaire); preview shows **Minimal**, no descriptors.
 - [ ] Title and description contain no "hangout", other game names, links or misleading claims.
-- [ ] Icon, thumbnails, badge, pass and product images are original and honest.
+- [ ] Icon, thumbnails, badge, pass and product images are original and honest; thumbnails come from the launch build and only show features that exist.
 
 ### Text and safety
 - [ ] Forge name: filtered on the server with `FilterStringAsync` + `GetNonChatStringForBroadcastAsync`, both in `pcall`.
-- [ ] Filter failure shows a neutral fallback ("Forge Plot N") and never the raw text.
-- [ ] Forge name filtered again every time it's shown (on owner join); sign cleared when the owner leaves.
+- [ ] Forge name changes accepted at most once per minute per player (server cooldown).
+- [ ] Filter failure keeps the default sign ("<DisplayName>'s Forge") and never shows the raw text.
+- [ ] Forge name filtered again every time it's shown (on owner join); sign back to "Free Plot" when the owner leaves.
 - [ ] Name box says "don't use your real name or personal info"; length limit and RichText off.
 - [ ] No URLs, Discord/YouTube/X mentions, invite codes or emails anywhere in the game.
 - [ ] Nothing in the game asks for personal info.
-- [ ] Game fully playable with chat off; voice off; strong language off.
+- [ ] Game fully playable with chat off; voice and camera switched off (they start on); strong language off; chat window hidden on console.
 
 ### Monetization
-- [ ] One `ProcessReceipt` callback; dedupe by `PurchaseId`; grant + save before `PurchaseGranted`; `NotProcessedYet` on any failure.
+- [ ] One `ProcessReceipt` callback; dedupe by `PurchaseId`; grant only on the server holding the session lock; grant + save before `PurchaseGranted`; `NotProcessedYet` on any failure.
 - [ ] Tested: buy a coin pouch, leave right away, rejoin → coins arrive exactly once.
 - [ ] Passes: ownership checked on join (in `pcall`, with a retry) and on purchase; perks work as described.
-- [ ] Pass and product descriptions match exactly what the code does.
+- [ ] Pass and product descriptions match exactly what the code does; the Forge VIP description lists the Grotto's ore odds in numbers.
 - [ ] Purchase prompts only open after a player taps a button; no fake timers or fake discounts; close button easy to find on mobile.
 - [ ] No paid random items. The Ember Chest shows its fixed 7-day rewards.
 - [ ] PolicyService wrapper in place (`pcall`, strict defaults when the call fails).
 
 ### Engagement rewards
-- [ ] Group reward: button only (no pop-up on join), `PromptJoinAsync` on tap, server `IsInGroupAsync` check, one-time, small, saved flag, never needed to progress.
+- [ ] Group reward: button only (no pop-up on join), `PromptJoinAsync` on tap, server `IsInGroupAsync` check only when the player claims, one-time, small, saved flag, never needed to progress.
 - [ ] No rewards for likes, favorites, Discord or social follows.
 - [ ] Community Standards and the 1 November 2026 Terms of Use re-read; group reward still OK.
 
@@ -451,16 +511,17 @@ pressure, and a short, friendly tutorial.
 - [ ] Someone checks the daily RTBF message in the Roblox inbox. **TODO:** name the person: __________
 
 ### Settings
-- [ ] Genre chosen (Simulation → Tycoon or Incremental Simulator).
-- [ ] Devices: Computer, Phone, Tablet on; Console on only if tested; VR off.
+- [ ] Genre chosen (Simulation → Tycoon, or Sandbox).
+- [ ] Devices: Computer, Phone, Tablet on; Console on only if tested (menus work with a D-pad); VR off.
 - [ ] Server size 8 = plots = `GameConfig.MaxPlayers`.
 - [ ] Private servers on with chosen price (or free).
 - [ ] Gear none; HTTP off; third-party sales off; third-party teleports off; copying off.
 - [ ] Studio API access: test copy set up, or turned off for the live game.
+- [ ] Badges created (5 free per day, so over two days).
 
 ### Audience (Kids & Select)
 - [ ] Creator account at least 2 days old, in good standing, age-checked.
-- [ ] Government ID verified (18+), 2-step verification on.
+- [ ] Account verified (government ID if 18+, face age estimation if under 18), 2-step verification on. For a group game: the group owner.
 - [ ] Roblox Plus/Premium for 2 months **or** the refundable per-game fee paid.
 - [ ] Watching the Audience Reach dashboard after launch (needs about 250 highly engaged plays in 60 days).
 - [ ] Set a reminder to resubmit the questionnaire whenever an update changes an answer.
@@ -473,9 +534,9 @@ Checked on 12 October 2026. This tool could not open `create.roblox.com`,
 `devforum.roblox.com`, `en.help.roblox.com` or `about.roblox.com` directly.
 The Creator Hub pages were read from Roblox's official source repository for
 those docs, `github.com/Roblox/creator-docs`, which is what create.roblox.com
-is built from. DevForum and Help Center pages were read through search
-results. Pages marked *(read by hand)* should be opened in a browser before
-launch.
+is built from (re-checked against the version of 10 October 2026). DevForum
+and Help Center pages were read through search results. Pages marked
+*(read by hand)* should be opened in a browser before launch.
 
 **Roblox Creator Hub docs**
 - Content maturity and compliance (questionnaire, labels, categories): https://create.roblox.com/docs/production/promotion/content-maturity
@@ -485,17 +546,27 @@ launch.
 - Configure games (age/region, strong language, copying): https://create.roblox.com/docs/projects/configure-games
 - Game genres: https://create.roblox.com/docs/production/publishing/experience-genres
 - Text filtering: https://create.roblox.com/docs/ui/text-filtering
+- Chat system guidelines (TextChatService required, 1-minute rate limit for signs): https://create.roblox.com/docs/chat/guidelines
+- Rate-limited text inputs (example): https://create.roblox.com/docs/chat/examples/rate-limit-public-text-inputs
+- Voice chat (on by default, Communication settings): https://create.roblox.com/docs/chat/voice-chat
+- Console guidelines (hide the chat window on console): https://create.roblox.com/docs/production/publishing/console-guidelines
 - TextService (FilterStringAsync): https://create.roblox.com/docs/reference/engine/classes/TextService
 - TextFilterResult (GetNonChatStringForBroadcastAsync): https://create.roblox.com/docs/reference/engine/classes/TextFilterResult
 - PolicyService (GetPolicyInfoForPlayerAsync keys): https://create.roblox.com/docs/reference/engine/classes/PolicyService
 - GroupService (PromptJoinAsync): https://create.roblox.com/docs/reference/engine/classes/GroupService
-- Monetization overview (presenting products, no pressure, genuine discounts): https://create.roblox.com/docs/production/monetization
-- Paid random items (chance-based monetization): https://create.roblox.com/docs/production/monetization/paid-random-items
+- Player (IsInGroupAsync, caching): https://create.roblox.com/docs/reference/engine/classes/Player
+- MarketplaceService (ProcessReceipt guarantees, two servers at once): https://create.roblox.com/docs/reference/engine/classes/MarketplaceService
+- Monetization overview (presenting products, no pressure, genuine discounts, PolicyService required): https://create.roblox.com/docs/production/monetization
+- Paid random items (chance-based monetization, odds disclosure, odds-boosting items): https://create.roblox.com/docs/production/monetization/paid-random-items
 - Developer products (ProcessReceipt): https://create.roblox.com/docs/production/monetization/developer-products
 - Passes: https://create.roblox.com/docs/production/monetization/passes
 - Private servers: https://create.roblox.com/docs/production/monetization/private-servers
 - Social media links (16+ rule, no links inside games): https://create.roblox.com/docs/production/promotion/social-media-links
 - Promotion overview (invites, social links): https://create.roblox.com/docs/production/promotion
+- Friend referral system: https://create.roblox.com/docs/production/promotion/referral-system
+- Badges (5 free per day): https://create.roblox.com/docs/production/publishing/badges
+- Thumbnails (sizes, video accuracy): https://create.roblox.com/docs/production/publishing/thumbnails
+- Game icons: https://create.roblox.com/docs/production/publishing/experience-icons
 - Data stores (Studio access warning): https://create.roblox.com/docs/cloud-services/data-stores
 - Data store right to be forgotten (deletion templates): https://create.roblox.com/docs/cloud-services/data-stores/right-to-be-forgotten
 - RTBF and creators: https://create.roblox.com/docs/production/publishing/RTBF-and-creators

@@ -2,7 +2,7 @@
 	Low-poly geometry helpers. Pure: only creates Instances (no services,
 	no events), so the Lune tools can run it too.
 
-	Style rules (The Forge-like stylized look, all original):
+	Style rules (stylized low-poly look, all original):
 	- SmoothPlastic for most surfaces (flat, clean colors), Neon for glow.
 	- Chunky, slightly rotated blocks; wedges for facets and roofs.
 	- Decoration parts: CastShadow off for tiny bits, CanTouch/CanQuery off.
