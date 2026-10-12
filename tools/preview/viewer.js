@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { renderUI } from "./ui.js";
@@ -144,14 +145,16 @@ function textTexture(text, color, family, aspect) {
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
   await document.fonts.load('40px "Luckiest Guy"');
-  const [scene, shots] = await Promise.all([
-    fetch(`/scenes/${sceneName}.json`).then((r) => r.json()),
-    fetch(`/shots.json`).then((r) => r.json()),
-  ]);
+  const shots = await fetch(`/shots.json`).then((r) => r.json());
   const shot = shots[shotName];
   if (!shot) throw new Error("unknown shot " + shotName);
-  const preset = scene.presets[shot.preset || "Surface"];
-  const isCaveShot = !['Surface', 'Quarry'].includes(shot.preset || 'Surface');
+  const scene = await fetch(`/scenes/${shot.scene || sceneName}.json`).then((r) => r.json());
+  // presets with empty groups (e.g. Workbench) inherit from Surface
+  const base = scene.presets.Surface;
+  const own = scene.presets[shot.preset || "Surface"] || base;
+  const preset = {};
+  for (const group of Object.keys(base)) preset[group] = { ...base[group], ...(own[group] || {}) };
+  const isCaveShot = !['Surface', 'Quarry', 'Workbench'].includes(shot.preset || 'Surface');
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(WIDTH, HEIGHT);
@@ -164,6 +167,10 @@ async function main() {
 
   const world = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(shot.fov ?? 70, WIDTH / HEIGHT, 0.3, 4000);
+  if (shot.useSceneCamera && scene.camera) {
+    shot.position = scene.camera.camera;
+    shot.target = scene.camera.target;
+  }
   camera.position.set(...shot.position);
   camera.lookAt(new THREE.Vector3(...shot.target));
 
@@ -223,7 +230,7 @@ async function main() {
   // ---- lighting ----
   const L = preset.Lighting;
   const atm = preset.Atmosphere;
-  const isCave = (shot.preset || "Surface") !== "Surface" && (shot.preset || "Surface") !== "Quarry";
+  const isCave = isCaveShot;
   const outdoor = fromArray3(L.OutdoorAmbient || [0.5, 0.45, 0.4]);
   const ambient = fromArray3(L.Ambient || [0.2, 0.2, 0.2]);
   world.add(new THREE.HemisphereLight(outdoor.clone().multiplyScalar(isCave ? 1.2 : 1.6), ambient.clone().multiplyScalar(isCave ? 0.8 : 1.2), isCave ? 1.0 : 1.3));
@@ -325,6 +332,11 @@ async function main() {
   const composer = new EffectComposer(renderer);
   composer.setSize(WIDTH, HEIGHT);
   composer.addPass(new RenderPass(world, camera));
+  // DepthOfFieldEffect stand-in (the cleaning close-up blurs the background)
+  if (shot.dof) {
+    const focus = camera.position.distanceTo(new THREE.Vector3(...shot.target));
+    composer.addPass(new BokehPass(world, camera, { focus, aperture: shot.dof.aperture ?? 0.004, maxblur: shot.dof.maxblur ?? 0.008 }));
+  }
   const B = preset.Bloom || {};
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(WIDTH, HEIGHT), (B.Intensity ?? 0.8) * (isCaveShot ? 0.45 : 0.75), ((B.Size ?? 24) / 56) * 0.9, isCaveShot ? 0.9 : 0.82));
   composer.addPass(new OutputPass());

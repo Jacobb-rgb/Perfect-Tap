@@ -158,8 +158,8 @@ LightingConfig.Presets = {
 		Atmosphere = {},
 		ColorCorrection = {
 			Brightness = 0.04,
-			Contrast = 0.16,
-			Saturation = 0.28,
+			Contrast = 0.12,
+			Saturation = 0.12,
 			TintColor = Color3.new(1, 0.95, 0.88),
 		},
 		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.9 },

@@ -1,8 +1,9 @@
 --[[
 	InteractController: pick up / drop / throw physical items.
 
-	  Grab / Drop : E        | gamepad X | touch button "Grab"
-	  Throw       : hold F   | gamepad Y | touch button "Throw" (hold to charge)
+	  Grab / Drop : E        | gamepad X  | touch button "Grab"
+	  Throw       : hold Q   | gamepad RB | touch button "Throw" (hold to charge)
+	  (machine prompts use F / gamepad Y)
 
 	The nearest item you own (or the one under the mouse) is highlighted with
 	its rarity color and a small hint shows its name and value. The server
@@ -57,6 +58,22 @@ function InteractController.setEnabled(value: boolean)
 		clearHint()
 		hint.Enabled = false
 	end
+end
+
+-- Removes the grab/throw buttons completely (cleaning close-up, build mode).
+function InteractController.suspend()
+	InteractController.setEnabled(false)
+	ContextActionService:UnbindAction("TerraForgeGrab")
+	if throwBound then
+		throwBound = false
+		ContextActionService:UnbindAction("TerraForgeThrow")
+	end
+end
+
+local bindGrab: () -> () = function() end
+function InteractController.resume()
+	InteractController.setEnabled(true)
+	bindGrab()
 end
 
 local function carryCount(): number
@@ -197,7 +214,7 @@ local function updateBindings()
 	local shouldBind = carryCount() > 0
 	if shouldBind and not throwBound then
 		throwBound = true
-		ContextActionService:BindAction("TerraForgeThrow", throw, true, Enum.KeyCode.F, Enum.KeyCode.ButtonY)
+		ContextActionService:BindAction("TerraForgeThrow", throw, true, Enum.KeyCode.Q, Enum.KeyCode.ButtonR1)
 		ContextActionService:SetTitle("TerraForgeThrow", "Throw")
 		ContextActionService:SetPosition("TerraForgeThrow", UDim2.new(1, -95, 1, -215))
 	elseif not shouldBind and throwBound then
@@ -236,11 +253,18 @@ function InteractController.init()
 end
 
 function InteractController.start()
-	ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.E, Enum.KeyCode.ButtonX)
-	ContextActionService:SetTitle("TerraForgeGrab", "Grab")
-	ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))
-	player:GetAttributeChangedSignal("CarryCount"):Connect(updateBindings)
-	updateBindings()
+	bindGrab = function()
+		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.E, Enum.KeyCode.ButtonX)
+		ContextActionService:SetTitle("TerraForgeGrab", "Grab")
+		ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))
+		updateBindings()
+	end
+	bindGrab()
+	player:GetAttributeChangedSignal("CarryCount"):Connect(function()
+		if enabled then
+			updateBindings()
+		end
+	end)
 
 	local accumulator = 0
 	RunService.RenderStepped:Connect(function(dt)

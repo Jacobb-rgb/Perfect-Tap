@@ -23,6 +23,9 @@ local ORDER = {
 	"ToolService",
 	"MiningService",
 	"CarryService",
+	"PlotService",
+	"MachineService",
+	"CleaningService",
 	"AccessService",
 }
 

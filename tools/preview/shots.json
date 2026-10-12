@@ -180,5 +180,109 @@
     "fov": 55,
     "preset": "Surface",
     "shadowExtent": 40
+  },
+  "clean_chisel": {
+    "scene": "cleaning_chisel",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "useSceneCamera": true,
+    "fov": 40,
+    "preset": "Workbench",
+    "shadowExtent": 20,
+    "ui": "ui_clean_chisel",
+    "dof": {
+      "aperture": 0.0035,
+      "maxblur": 0.008
+    }
+  },
+  "clean_scrape": {
+    "scene": "cleaning_scrape",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "useSceneCamera": true,
+    "fov": 40,
+    "preset": "Workbench",
+    "shadowExtent": 20,
+    "ui": "ui_clean_scrape",
+    "dof": {
+      "aperture": 0.0035,
+      "maxblur": 0.008
+    }
+  },
+  "clean_polish": {
+    "scene": "cleaning_polish",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "useSceneCamera": true,
+    "fov": 40,
+    "preset": "Workbench",
+    "shadowExtent": 20,
+    "ui": "ui_clean_polish",
+    "dof": {
+      "aperture": 0.0035,
+      "maxblur": 0.008
+    }
+  },
+  "station": {
+    "scene": "cleaning_chisel",
+    "position": [
+      -82,
+      14,
+      -46
+    ],
+    "target": [
+      -100,
+      3,
+      -32
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 50
+  },
+  "clean_reveal": {
+    "scene": "cleaning_reveal",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "useSceneCamera": true,
+    "fov": 40,
+    "preset": "Workbench",
+    "shadowExtent": 20,
+    "ui": "ui_clean_reveal",
+    "dof": {
+      "aperture": 0.0035,
+      "maxblur": 0.008
+    }
   }
 }

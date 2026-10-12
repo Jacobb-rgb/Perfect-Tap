@@ -65,6 +65,7 @@ local function addNodes(parent)
 end
 
 local uiExports: { [string]: { any } } = {}
+local scene_extra: any = nil
 
 if sceneName == "world" then
 	WorldBuilder.build(workspace)
@@ -147,6 +148,179 @@ elseif sceneName == "gameplay" then
 	HudView.slot(refs.CarrySlots, nil, 3)
 	HudView.toast(refs.Toasts, "New ore discovered: Silver!", Rarity.get("Uncommon").Color)
 	uiExports.hud_mining = UiExport.export({ refs.Gui })
+elseif sceneName == "cleaning" then
+	local CF = Loader.CFrame
+	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
+	local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
+	WorldBuilder.build(workspace)
+	-- plot 1 with the starter kit, like a new player
+	local plot = WorldLayout.Plots[1]
+	local plotCf = WorldLayout.plotCFrame(plot)
+	local stationCf
+	for _, entry in MachineData.StarterKit do
+		local machine = MachineData.ById[entry.Id]
+		local w, d = MachineData.footprint(machine, entry.R)
+		local half = GameConfig.PlotCells * GameConfig.CellSize / 2
+		local cf = plotCf * CF.new(-half + (entry.X + w / 2) * GameConfig.CellSize, 0, -half + (entry.Z + d / 2) * GameConfig.CellSize) * CF.Angles(0, -entry.R * math.pi / 2, 0)
+		local model = MachineBuilder.build(entry.Id)
+		model:PivotTo(cf)
+		model.Parent = workspace
+		if entry.Id == "CleaningStation" then
+			stationCf = cf
+		end
+	end
+	local base = stationCf
+	local orePoint = base * CF.new(0, 3.4 + 1.95, 0.3)
+	local camPos = (base * CF.new(0, 3.4 + 5.4, -4.6)).Position
+	local oreId = process.args[2] or "Gold"
+	local pattern = Patterns.generate(oreId, 4242)
+	local workCf = CF.lookAt(orePoint.Position, orePoint.Position - (camPos - orePoint.Position).Unit)
+	local shell = OreShellBuilder.build(pattern, workCf, workspace)
+	local stage = process.args[3] or "chisel"
+	local fx = roblox.Instance.new("Folder")
+	fx.Parent = workspace
+	local scrapedCount = 0
+	local workLight = OreShellBuilder.workLight(workCf, fx)
+	if stage == "reveal" then
+		local lamp: any = workLight:FindFirstChildOfClass("PointLight")
+		lamp.Brightness = 0.4
+	end
+	if stage == "chisel" then
+		OreShellBuilder.guideDots(shell, pattern.Cuts[1], roblox.Color3.fromRGB(255, 230, 140), fx)
+		OreShellBuilder.updateGroove(shell, pattern.Cuts[1], 0.45, 1, {}, fx, roblox.Color3.fromRGB(255, 160, 60))
+	elseif stage == "scrape" or stage == "polish" or stage == "reveal" then
+		for _, caps in shell.Caps do
+			for _, cap in caps do
+				cap:Destroy()
+			end
+		end
+		for _, part in shell.CoreRim do
+			part.Transparency = 0
+		end
+		if stage == "scrape" then
+			local i = 0
+			for _, patch in shell.Dirt do
+				i += 1
+				if i % 3 ~= 0 then
+					patch:Destroy()
+					scrapedCount += 1
+				end
+			end
+		else
+			for _, patch in shell.Dirt do
+				patch:Destroy()
+			end
+			local ore = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData").get(oreId)
+			for _, part in shell.Core do
+				part.Color = ore.Color
+				part.Reflectance = 0.25
+			end
+		end
+	end
+	-- tool in hand + UI overlay, as the real controller would show it
+	local Geometry2D = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.Geometry2D")
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local CleaningView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CleaningView")
+	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local ore = OreData.get(oreId)
+	local function toolAt(u, v, kind)
+		local tip = workCf:PointToWorldSpace(roblox.Vector3.new(u * OreShellBuilder.Scale, v * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.05))
+		local axis = workCf:VectorToWorldSpace(roblox.Vector3.new(0.35, 0.5, 0.8)).Unit
+		local right = axis:Cross(workCf.LookVector * -1).Unit
+		local back = right:Cross(axis).Unit
+		local cf = CF.fromMatrix(tip, right, axis, back)
+		local props = { CanCollide = false }
+		if kind == "Chisel" then
+			Geo.wedge(fx, cf * CF.new(0, 0.12, 0) * CF.Angles(math.pi, 0, 0), roblox.Vector3.new(0.16, 0.24, 0.12), roblox.Color3.fromRGB(200, 205, 215), roblox.Enum.Material.Metal, props)
+			Geo.block(fx, cf * CF.new(0, 0.5, 0), roblox.Vector3.new(0.16, 0.55, 0.12), roblox.Color3.fromRGB(170, 176, 188), roblox.Enum.Material.Metal, props)
+			Geo.block(fx, cf * CF.new(0, 1.1, 0), roblox.Vector3.new(0.24, 0.7, 0.24), roblox.Color3.fromRGB(150, 98, 56), nil, props)
+		elseif kind == "Brush" then
+			for x = -1, 1 do
+				Geo.block(fx, cf * CF.new(x * 0.11, 0.1, 0), roblox.Vector3.new(0.08, 0.22, 0.32), roblox.Color3.fromRGB(230, 205, 140), nil, props)
+			end
+			Geo.block(fx, cf * CF.new(0, 0.3, 0), roblox.Vector3.new(0.42, 0.18, 0.4), roblox.Color3.fromRGB(150, 98, 56), nil, props)
+			Geo.block(fx, cf * CF.new(0, 0.75, 0.05), roblox.Vector3.new(0.16, 0.8, 0.16), roblox.Color3.fromRGB(120, 80, 48), nil, props)
+		else
+			Geo.block(fx, cf * CF.new(0, 0.1, 0), roblox.Vector3.new(0.6, 0.18, 0.5), roblox.Color3.fromRGB(240, 222, 190), nil, props)
+		end
+	end
+	local view = CleaningView.build()
+	view.Gui.Scale.Scale = 1.25
+	if stage == "chisel" then
+		local p = Geometry2D.pointAt(pattern.Cuts[1].Line, pattern.Cuts[1].Length * 0.45)
+		toolAt(p.X, p.Y, "Chisel")
+		CleaningView.setStep(view, 1, "CHISEL", "Cut 1 of " .. #pattern.Cuts .. ": trace the glowing line.")
+		CleaningView.setMeter(view, 0.94)
+		view.Progress.Text = "Cut 1 / " .. #pattern.Cuts
+		view.Feedback.Text = "Great cut!"
+		view.Feedback.TextTransparency = 0
+		view.Feedback.TextColor3 = roblox.Color3.fromRGB(160, 255, 170)
+		view.Hint.Text = "Hold the left mouse button and drag"
+	elseif stage == "scrape" then
+		toolAt(-0.15, 0.1, "Brush")
+		CleaningView.setStep(view, 2, "SCRAPE", "Brush away the dirt. Careful: don't scrape the glinting crystals!")
+		CleaningView.setMeter(view, 0.9)
+		view.Chips.Text = "Chips: 1"
+		view.Progress.Text = "Dirt: " .. scrapedCount .. " / " .. pattern.DirtCount
+		view.Hint.Text = "Drag with your finger"
+	elseif stage == "polish" then
+		toolAt(0.35, -0.3, "Cloth")
+		CleaningView.setStep(view, 3, "POLISH", "Rub in circles around the ore to polish it!")
+		CleaningView.setMeter(view, 0.88)
+		view.Chips.Text = "Chips: 1"
+		view.Progress.Text = "Shine: 72%"
+		view.Gauge.Visible = true
+		view.GaugeNeedle.Position = roblox.UDim2.fromScale(0.52, 0.5)
+		view.Shine.Visible = true
+		view.ShineFill.Size = roblox.UDim2.fromScale(0.72, 1)
+		view.RubToggle.Parent.Visible = true
+		view.Feedback.Text = "Shiny!"
+		view.Feedback.TextTransparency = 0
+		view.Feedback.TextColor3 = roblox.Color3.fromRGB(255, 240, 170)
+	elseif stage == "reveal" then
+		CleaningView.setReveal(view, "Let's see what you uncovered...")
+		CleaningView.setMeter(view, 0.95)
+		local grade = ItemData.GradeById.Flawless
+		local rarity = Rarity.get(ore.Rarity)
+		view.CardGrade.Text = "FLAWLESS"
+		view.CardGrade.TextColor3 = grade.Color
+		view.CardStars.Text = "★★★★"
+		view.CardOre.Text = ore.Name .. "  (" .. rarity.Name .. ")"
+		view.CardOre.TextColor3 = rarity.Color
+		view.CardValue.Text = "Worth " .. ItemData.value("Clean", oreId, "Flawless") .. " coins"
+		view.CardDetail.Text = "Chisel 96%  ·  Scrape 100%  ·  Polish 91%  ·  Chips 0"
+		view.Card.Visible = true
+		-- core lifted out and glowing, rays around it
+		local lift = workCf:VectorToWorldSpace(roblox.Vector3.new(0, 0.2, 0.9))
+		for _, part in shell.Core do
+			part.CFrame = part.CFrame + lift
+		end
+		for _, part in shell.CoreRim do
+			part.CFrame = part.CFrame + lift
+			part.Transparency = 0.6
+		end
+		local center = orePoint.Position + (camPos - orePoint.Position).Unit * 0.6
+		local rayCount = if rarity.Order >= 6 then 12 else 8
+		for i = 1, rayCount do
+			local a = i / rayCount * math.pi * 2 + 0.8
+			local dir = workCf:VectorToWorldSpace(roblox.Vector3.new(math.cos(a), math.sin(a), 0.15))
+			Geo.block(fx, CF.lookAt(center + dir * 3.2, center + dir * 4), roblox.Vector3.new(0.12, 0.12, 6), rarity.Color, roblox.Enum.Material.Neon, { CanCollide = false, Transparency = 0.7 })
+		end
+		-- the glow light stays at the vise (behind the lifted core), like the controller's holder
+		local holder = Geo.ball(fx, workCf:PointToWorldSpace(roblox.Vector3.new(0, 0, OreShellBuilder.CoreFront - 0.4)), 0.1, ore.Glow, nil, { CanCollide = false, Transparency = 1 })
+		local light = roblox.Instance.new("PointLight")
+		light.Color = ore.Glow
+		light.Range = 18
+		light.Brightness = 2
+		light.Parent = holder
+	end
+	uiExports["ui_clean_" .. stage] = UiExport.export({ view.Gui })
+	scene_extra = { camera = { camPos.X, camPos.Y, camPos.Z }, target = { orePoint.Position.X, orePoint.Position.Y, orePoint.Position.Z } }
 else
 	error("Unknown scene: " .. sceneName)
 end
@@ -157,9 +331,13 @@ for name, preset in LightingConfig.Presets do
 	presets[name] = presetToJson(preset)
 end
 scene.presets = presets
+if scene_extra then
+	scene.camera = scene_extra
+end
 
 fs.writeDir(root .. "/build/preview")
-fs.writeFile(root .. "/build/preview/" .. sceneName .. ".json", serde.encode("json", scene))
+local outName = if sceneName == "cleaning" then "cleaning_" .. (process.args[3] or "chisel") else sceneName
+fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do
 	fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", guis))
 	print("Exported UI " .. name)
