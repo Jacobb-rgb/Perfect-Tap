@@ -23,8 +23,22 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2", ".woff": "font/woff", ".png": "image/png" };
 
+// Extra shots from a private file (SHOTS_EXTRA=path), merged over shots.json, so parallel
+// workers can add camera angles without editing the shared file.
+function allShots() {
+  const base = JSON.parse(fs.readFileSync(path.join(here, "shots.json"), "utf8"));
+  const extra = process.env.SHOTS_EXTRA;
+  if (extra && fs.existsSync(extra)) Object.assign(base, JSON.parse(fs.readFileSync(extra, "utf8")));
+  return base;
+}
+
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split("?")[0]);
+  if (url === "/shots.json") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(allShots()));
+    return;
+  }
   let file;
   if (url.startsWith("/scenes/")) file = path.join(scenesDir, url.slice("/scenes/".length));
   else file = path.join(here, url === "/" ? "index.html" : url);
@@ -46,7 +60,7 @@ await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const port = server.address().port;
 
 const [sceneName = "world", ...requested] = process.argv.slice(2);
-const shots = JSON.parse(fs.readFileSync(path.join(here, "shots.json"), "utf8"));
+const shots = allShots();
 const names = requested.length ? requested : Object.keys(shots).filter((n) => (shots[n].scene || "world") === sceneName);
 
 const browser = await chromium.launch({
