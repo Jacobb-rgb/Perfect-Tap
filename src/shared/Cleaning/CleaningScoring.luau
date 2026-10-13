@@ -3,9 +3,13 @@
 	feedback; the server runs CleaningScoring.score() on the recorded input
 	to decide the real grade. Same code on both sides = same result.
 
-	Submission (client -> server), all arrays flat for a small payload:
-	  Cuts   = { { Samples = { u, v, t, u, v, t, ... } }, ... }  t = seconds since cut start
-	  Scrape = { Removed = { index, t, ... }, Fragile = { index, t, ... } }
+	Submission (client -> server), all arrays flat for a small payload.
+	Every t is seconds since the session started on the client (one clock for
+	all three steps), so the server can compare the whole timeline with the
+	real session time.
+	  Cuts   = { { Samples = { u, v, t, u, v, t, ... } }, ... }  only samples from the moment the cut started
+	  Scrape = { Samples = { u, v, t, ... } }  brush positions that removed dirt or snapped a crystal;
+	                                           the server replays them (ScrapeTracker) to find what was hit
 	  Polish = { Samples = { t, angle, t, angle, ... }, Mode = "Circle" | "Rub" }
 	  Input  = "Mouse" | "Touch" | "Gamepad"
 ]]
@@ -22,6 +26,12 @@ CleaningScoring.ChipPenalty = 0.05
 CleaningScoring.MaxChipPenalty = 0.3
 CleaningScoring.InputLeniency = { Mouse = 1.0, Touch = 1.35, Gamepad = 1.25 }
 CleaningScoring.PolishBand = { Min = 1.5, Max = 8.5 } -- radians per second that count as good polishing
+CleaningScoring.BrushRadius = 0.17 -- face units; a dirt patch goes when the brush is within this + half its size
+CleaningScoring.FragileRadius = 0.12 -- face units; closer than this to a crystal snaps it
+-- Samples later than this can't come from a live session (the server ends sessions at CleaningTimeout).
+CleaningScoring.MaxSampleTime = GameConfig.CleaningTimeout + 10
+-- Only a bot is this fast (humans just lose points for going fast):
+CleaningScoring.MaxPolishSpeed = 60 -- average rad/s over the whole polish (about 10 turns per second)
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
@@ -184,7 +194,7 @@ local function scoreCut(cut: CleaningPatterns.Cut, samples: any, tol: number, ma
 		if not (finite(u) and finite(v) and finite(t)) then
 			return false, "non-finite sample", 0, 0, 0
 		end
-		if math.abs(u) > 3 or math.abs(v) > 3 or t < lastT - 1e-6 or t > 180 then
+		if math.abs(u) > 3 or math.abs(v) > 3 or t < lastT - 1e-6 or t < 0 or t > CleaningScoring.MaxSampleTime then
 			return false, "sample out of range", 0, 0, 0
 		end
 		lastT = t
@@ -201,52 +211,98 @@ local function scoreCut(cut: CleaningPatterns.Cut, samples: any, tol: number, ma
 	return true, nil, tracker:score(), tracker.chips, duration
 end
 
+---------------------------------------------------------------- scrape tracker
+
+--[[
+	Replays brush positions over the dirt. The client feeds every brush
+	position but records only the ones that removed dirt or snapped a crystal
+	(the others change nothing), so the server gets the same result from the
+	short recorded list.
+]]
+local ScrapeTracker = {}
+ScrapeTracker.__index = ScrapeTracker
+CleaningScoring.ScrapeTracker = ScrapeTracker
+
+function ScrapeTracker.new(pattern: CleaningPatterns.Pattern)
+	return setmetatable({
+		pattern = pattern,
+		cleared = {} :: { [number]: boolean },
+		snapped = {} :: { [number]: boolean },
+		removed = 0,
+		hits = 0,
+		firstT = nil :: number?, -- first removal
+		lastT = nil :: number?, -- last removal
+	}, ScrapeTracker)
+end
+
+-- Returns the indices of dirt patches removed and crystals snapped by a brush at p.
+function ScrapeTracker.add(self: any, p: Vector2, t: number): ({ number }, { number })
+	local removedNow: { number } = {}
+	local snappedNow: { number } = {}
+	for _, d in self.pattern.Dirt do
+		local distance = (d.Center - p).Magnitude
+		if d.Fragile then
+			if not self.snapped[d.Index] and distance <= CleaningScoring.FragileRadius then
+				self.snapped[d.Index] = true
+				self.hits += 1
+				table.insert(snappedNow, d.Index)
+			end
+		elseif not self.cleared[d.Index] and distance <= CleaningScoring.BrushRadius + d.Size * 0.5 then
+			self.cleared[d.Index] = true
+			self.removed += 1
+			table.insert(removedNow, d.Index)
+		end
+	end
+	if #removedNow > 0 then
+		self.firstT = self.firstT or t
+		self.lastT = t
+	end
+	return removedNow, snappedNow
+end
+
+function ScrapeTracker.complete(self: any): boolean
+	return self.removed >= self.pattern.DirtCount
+end
+
+-- Scrape score: each snapped crystal costs 0.15; dawdling costs up to 0.2.
+-- duration = first to last removal (the client passes "now" while still scraping).
+function CleaningScoring.scrapeScore(dirtCount: number, hits: number, duration: number): number
+	local par = 1.5 + dirtCount * 0.07
+	local slow = math.clamp((duration - par * 2) / (par * 2), 0, 1) * 0.2
+	return math.clamp(1 - 0.15 * hits - slow, 0, 1)
+end
+
 local function scoreScrape(pattern: CleaningPatterns.Pattern, scrape: any): (boolean, string?, number, number, number)
-	if type(scrape) ~= "table" or type(scrape.Removed) ~= "table" then
+	if type(scrape) ~= "table" or type(scrape.Samples) ~= "table" then
 		return false, "bad scrape", 0, 0, 0
 	end
-	local removed, fragile = scrape.Removed, scrape.Fragile or {}
-	if type(fragile) ~= "table" or #removed % 2 ~= 0 or #fragile % 2 ~= 0 or #removed > 400 or #fragile > 40 then
-		return false, "bad scrape lists", 0, 0, 0
+	local samples = scrape.Samples
+	-- every recorded sample removes or snaps at least one patch
+	if #samples % 3 ~= 0 or #samples > (#pattern.Dirt + 4) * 3 then
+		return false, "bad scrape samples", 0, 0, 0
 	end
-	local seen = {}
-	local count = 0
-	local lastT, firstT = -1, nil
-	for i = 1, #removed, 2 do
-		local index, t = removed[i], removed[i + 1]
-		if not finite(index) or not finite(t) or index ~= math.floor(index) then
-			return false, "bad scrape entry", 0, 0, 0
+	local tracker = ScrapeTracker.new(pattern)
+	local lastT = -1
+	for i = 1, #samples, 3 do
+		local u, v, t = samples[i], samples[i + 1], samples[i + 2]
+		if not (finite(u) and finite(v) and finite(t)) then
+			return false, "non-finite scrape sample", 0, 0, 0
 		end
-		local patch = pattern.Dirt[index]
-		if not patch or patch.Fragile or seen[index] or t < lastT - 1e-6 or t > 180 then
-			return false, "bad scrape entry", 0, 0, 0
+		if math.abs(u) > 3 or math.abs(v) > 3 or t < lastT - 1e-6 or t < 0 or t > CleaningScoring.MaxSampleTime then
+			return false, "scrape sample out of range", 0, 0, 0
 		end
-		seen[index] = true
-		count += 1
 		lastT = t
-		firstT = firstT or t
+		tracker:add(Vector2.new(u, v), t)
 	end
-	if count < pattern.DirtCount then
+	if not tracker:complete() then
 		return false, "dirt left", 0, 0, 0
 	end
-	local duration = lastT - (firstT or 0)
-	if duration < pattern.DirtCount / 40 then
+	local duration = (tracker.lastT or 0) - (tracker.firstT or 0)
+	-- a bot clearing everything at once; any human scrub takes longer
+	if duration < pattern.DirtCount / 200 then
 		return false, "scraped impossibly fast", 0, 0, 0
 	end
-	local hits = 0
-	local seenFragile = {}
-	for i = 1, #fragile, 2 do
-		local index = fragile[i]
-		local patch = finite(index) and pattern.Dirt[index] or nil
-		if patch and patch.Fragile and not seenFragile[index] then
-			seenFragile[index] = true
-			hits += 1
-		end
-	end
-	local par = 1.5 + pattern.DirtCount * 0.07
-	local slow = math.clamp((duration - par * 2) / (par * 2), 0, 1) * 0.2
-	local score = math.clamp(1 - 0.15 * hits - slow, 0, 1)
-	return true, nil, score, hits, duration
+	return true, nil, CleaningScoring.scrapeScore(pattern.DirtCount, tracker.hits, duration), tracker.hits, duration
 end
 
 local function wrapAngle(a: number): number
@@ -280,6 +336,20 @@ function CleaningScoring.polishProgress(samples: { number }): (number, number, n
 	return total, inBand, net
 end
 
+-- Polish score: 70% time in the speed band, 30% circling one way. "Rub" mode
+-- (accessibility: no circling needed) is capped.
+CleaningScoring.RubCap = 0.75
+function CleaningScoring.polishScore(total: number, inBand: number, net: number, mode: any): number
+	if total <= 0 then
+		return 0
+	end
+	local score = 0.7 * (inBand / total) + 0.3 * (math.abs(net) / total)
+	if mode == "Rub" then
+		score = math.min(score, CleaningScoring.RubCap)
+	end
+	return math.clamp(score, 0, 1)
+end
+
 local function scorePolish(pattern: CleaningPatterns.Pattern, polish: any): (boolean, string?, number, number)
 	if type(polish) ~= "table" or type(polish.Samples) ~= "table" then
 		return false, "bad polish", 0, 0
@@ -291,7 +361,7 @@ local function scorePolish(pattern: CleaningPatterns.Pattern, polish: any): (boo
 	local lastT = -1
 	for i = 1, #samples, 2 do
 		local t, a = samples[i], samples[i + 1]
-		if not finite(t) or not finite(a) or t < lastT - 1e-6 or t > 180 or math.abs(a) > math.pi + 1e-3 then
+		if not finite(t) or not finite(a) or t < lastT - 1e-6 or t < 0 or t > CleaningScoring.MaxSampleTime or math.abs(a) > math.pi + 1e-3 then
 			return false, "bad polish sample", 0, 0
 		end
 		lastT = t
@@ -302,16 +372,11 @@ local function scorePolish(pattern: CleaningPatterns.Pattern, polish: any): (boo
 		return false, "not polished", 0, 0
 	end
 	local duration = samples[#samples - 1] - samples[1]
-	-- faster than ~4 turns per second is a bot, not a fast hand (fast hands lose points instead)
-	if duration < total / 25 then
+	-- only a bot is this fast; fast hands just lose points (outside the speed band)
+	if duration < total / CleaningScoring.MaxPolishSpeed then
 		return false, "polished impossibly fast", 0, 0
 	end
-	local consistency = math.abs(net) / math.max(total, 1e-6)
-	local score = 0.7 * (inBand / total) + 0.3 * consistency
-	if polish.Mode == "Rub" then
-		score = math.min(score, 0.75)
-	end
-	return true, nil, math.clamp(score, 0, 1), duration
+	return true, nil, CleaningScoring.polishScore(total, inBand, net, polish.Mode), duration
 end
 
 --[[
@@ -365,6 +430,35 @@ function CleaningScoring.score(pattern: CleaningPatterns.Pattern, submission: an
 		Chips = chips,
 		FragileHits = fragileHits,
 	}
+end
+
+--[[
+	Checks a submission that score() accepted: the steps happen in order (each
+	cut after the previous one, scraping after the last cut, polishing after
+	scraping) and returns the latest timestamp. The server compares that with
+	how long the session really lasted.
+]]
+function CleaningScoring.timeline(submission: any): (boolean, number)
+	local previous = 0
+	for _, cut in submission.Cuts do
+		local samples = cut.Samples
+		if samples[3] < previous - 1e-6 then
+			return false, 0
+		end
+		previous = samples[#samples]
+	end
+	local scrape = submission.Scrape.Samples
+	if #scrape > 0 then
+		if scrape[3] < previous - 1e-6 then
+			return false, 0
+		end
+		previous = scrape[#scrape]
+	end
+	local polish = submission.Polish.Samples
+	if polish[1] < previous - 1e-6 then
+		return false, 0
+	end
+	return true, polish[#polish - 1]
 end
 
 return CleaningScoring

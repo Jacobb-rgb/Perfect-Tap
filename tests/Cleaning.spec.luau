@@ -10,9 +10,10 @@ return function(T, Loader)
 	local Vector2 = roblox.Vector2
 
 	-- Simulated player. offset = distance from the line in tolerance units (inward if negative).
-	local function traceCut(cut, speed, offset, tol, jitter)
+	-- t0 = session clock when the cut starts (all steps share one clock).
+	local function traceCut(cut, speed, offset, tol, jitter, t0)
 		local samples = {}
-		local t = 0
+		local t = t0 or 0
 		local step = 1 / 60
 		local s = 0
 		while s <= cut.Length do
@@ -37,27 +38,65 @@ return function(T, Loader)
 		return samples
 	end
 
-	local function scrapeAll(pattern, perSecond, hitFragile)
-		local removed, fragile = {}, {}
-		local t = 0.2
+	-- Records brush positions like the client: feed every position to the
+	-- shared tracker, keep only the ones that removed dirt or snapped a crystal.
+	local function recordBrush(pattern, points)
+		local tracker = Scoring.ScrapeTracker.new(pattern)
+		local samples = {}
+		for _, point in points do
+			local removed, snapped = tracker:add(point.p, point.t)
+			if #removed > 0 or #snapped > 0 then
+				table.insert(samples, point.p.X)
+				table.insert(samples, point.p.Y)
+				table.insert(samples, point.t)
+			end
+		end
+		return { Samples = samples }, tracker
+	end
+
+	-- Brush onto each dirt patch in turn (and onto the crystals if clumsy).
+	local function scrapeAll(pattern, perSecond, hitFragile, t0)
+		local points = {}
+		local t = (t0 or 0) + 0.2
 		for _, d in pattern.Dirt do
-			if d.Fragile then
-				if hitFragile then
-					table.insert(fragile, d.Index)
-					table.insert(fragile, t)
-				end
-			else
-				table.insert(removed, d.Index)
-				table.insert(removed, t)
+			if not d.Fragile or hitFragile then
+				table.insert(points, { p = d.Center, t = t })
 				t += 1 / perSecond
 			end
 		end
-		return { Removed = removed, Fragile = fragile }
+		local scrape = recordBrush(pattern, points)
+		return scrape, t
 	end
 
-	local function polishCircles(turns, radPerSecond, mode)
+	-- Zig-zag scrubbing over the whole core at `speed` face units per second, 60 fps.
+	local function scrub(pattern, speed, t0)
+		local points = {}
+		local t = t0 or 0
+		local minU, maxU, minV, maxV = math.huge, -math.huge, math.huge, -math.huge
+		for _, p in pattern.Core do
+			minU, maxU = math.min(minU, p.X), math.max(maxU, p.X)
+			minV, maxV = math.min(minV, p.Y), math.max(maxV, p.Y)
+		end
+		local rows = math.ceil((maxV - minV) / 0.2) + 1
+		for row = 0, rows do
+			local v = minV + row * (maxV - minV) / rows
+			local fromU, toU = minU, maxU
+			if row % 2 == 1 then
+				fromU, toU = maxU, minU
+			end
+			local length = math.abs(toU - fromU)
+			local steps = math.max(1, math.ceil(length / (speed / 60)))
+			for i = 0, steps do
+				table.insert(points, { p = Vector2.new(fromU + (toU - fromU) * i / steps, v), t = t })
+				t += 1 / 60
+			end
+		end
+		return recordBrush(pattern, points)
+	end
+
+	local function polishCircles(turns, radPerSecond, mode, t0)
 		local samples = {}
-		local t, angle = 0, 0
+		local t, angle = t0 or 0, 0
 		local total = 0
 		while total < turns * math.pi * 2 do
 			local wrapped = math.atan2(math.sin(angle), math.cos(angle))
@@ -70,16 +109,21 @@ return function(T, Loader)
 		return { Samples = samples, Mode = mode or "Circle" }
 	end
 
+	-- A whole honest session on one clock: cuts one after another, then scrape, then polish.
 	local function submission(pattern, speedFactor, offset, jitter, opts)
 		opts = opts or {}
+		local clock = opts.start or 1
 		local cuts = {}
 		for _, cut in pattern.Cuts do
-			table.insert(cuts, { Samples = traceCut(cut, pattern.MaxCutSpeed * speedFactor, offset, pattern.Tolerance, jitter) })
+			local samples = traceCut(cut, pattern.MaxCutSpeed * speedFactor, offset, pattern.Tolerance, jitter, clock)
+			table.insert(cuts, { Samples = samples })
+			clock = samples[#samples] + 1.2 -- the crack animation
 		end
+		local scrape, scrapeEnd = scrapeAll(pattern, opts.scrapeRate or 12, opts.hitFragile, clock)
 		return {
 			Cuts = cuts,
-			Scrape = scrapeAll(pattern, opts.scrapeRate or 12, opts.hitFragile),
-			Polish = polishCircles(pattern.PolishTurns + 0.2, opts.polishSpeed or 4.5, opts.polishMode),
+			Scrape = scrape,
+			Polish = polishCircles(pattern.PolishTurns + 0.2, opts.polishSpeed or 4.5, opts.polishMode, scrapeEnd + 1),
 			Input = opts.input or "Mouse",
 		}
 	end
@@ -178,11 +222,16 @@ return function(T, Loader)
 		local nan = submission(p, 0.5, 0, 0)
 		nan.Cuts[1].Samples[1] = 0 / 0
 		T.falsy(Scoring.score(p, nan).Valid, "NaN rejected")
-		-- skipped dirt
+		-- skipped dirt (drop the last brush position)
 		local lazy = submission(p, 0.5, 0, 0)
-		table.remove(lazy.Scrape.Removed)
-		table.remove(lazy.Scrape.Removed)
+		for _ = 1, 3 do
+			table.remove(lazy.Scrape.Samples)
+		end
 		T.falsy(Scoring.score(p, lazy).Valid, "dirt left rejected")
+		-- brush positions far off the ore
+		local far = submission(p, 0.5, 0, 0)
+		far.Scrape.Samples[1] = 7
+		T.falsy(Scoring.score(p, far).Valid, "far brush rejected")
 		-- instant scraping
 		local instant = submission(p, 0.5, 0, 0, { scrapeRate = 10000 })
 		T.falsy(Scoring.score(p, instant).Valid, "instant scrape rejected")
@@ -203,5 +252,79 @@ return function(T, Loader)
 		end
 		skip.Cuts[1].Samples = trimmed
 		T.falsy(Scoring.score(p, skip).Valid, "half cut rejected")
+		-- timestamps after the session could have ended
+		local late = submission(p, 0.5, 0, 0, { start = Scoring.MaxSampleTime })
+		T.falsy(Scoring.score(p, late).Valid, "impossible timestamps rejected")
+	end)
+
+	T.test("scoring: slow players (several minutes) are still graded", function()
+		for _, ore in OreData.List do
+			local p = Patterns.generate(ore.Id, 314)
+			local r = Scoring.score(p, submission(p, 0.5, 0, 0.1, { start = 240 }))
+			T.truthy(r.Valid, `{ore.Id}: {r.Reason}`)
+		end
+	end)
+
+	T.test("scoring: fast honest scrubbing is never rejected", function()
+		local runs, covered = 0, 0
+		for _, ore in OreData.List do
+			for seed = 1, 25 do
+				local p = Patterns.generate(ore.Id, seed * 104729)
+				for _, speed in { 4, 8, 12 } do
+					local sub = submission(p, 0.5, 0, 0.1)
+					local scrape, tracker = scrub(p, speed, sub.Cuts[#sub.Cuts].Samples[#sub.Cuts[#sub.Cuts].Samples] + 1)
+					runs += 1
+					if tracker:complete() then
+						covered += 1
+						sub.Scrape = scrape
+						sub.Polish = polishCircles(p.PolishTurns + 0.2, 4.5, nil, scrape.Samples[#scrape.Samples] + 1)
+						local r = Scoring.score(p, sub)
+						T.truthy(r.Valid, `{ore.Id} seed {seed} at {speed} u/s: {r.Reason}`)
+					end
+				end
+			end
+		end
+		-- the zig-zag must actually clear the dirt in most runs for this test to mean anything
+		T.truthy(covered >= runs * 0.8, `scrub covered {covered}/{runs}`)
+	end)
+
+	T.test("scoring: crystals are found from the brush path, not reported by the client", function()
+		local p = Patterns.generate("Heartstone", 42)
+		local careful = submission(p, 0.5, 0, 0.1)
+		local clumsy = submission(p, 0.5, 0, 0.1, { hitFragile = true })
+		local fragileCount = 0
+		for _, d in p.Dirt do
+			if d.Fragile then
+				fragileCount += 1
+			end
+		end
+		T.truthy(fragileCount > 0, "Heartstone has crystals")
+		local a, b = Scoring.score(p, careful), Scoring.score(p, clumsy)
+		T.truthy(a.Valid and b.Valid, tostring(a.Reason) .. " / " .. tostring(b.Reason))
+		T.eq(a.FragileHits, 0, "careful brushing snaps nothing")
+		T.eq(b.FragileHits, fragileCount, "every crystal brushed is counted")
+		T.lt(b.Scrape, a.Scrape, "snapped crystals cost scrape score")
+	end)
+
+	T.test("scoring: polishing too fast scores low instead of failing", function()
+		local p = Patterns.generate("Copper", 8)
+		local frantic = Scoring.score(p, submission(p, 0.5, 0, 0.1, { polishSpeed = 28 }))
+		T.truthy(frantic.Valid, frantic.Reason)
+		T.lt(frantic.Polish, 0.5, "fast polish loses points")
+		local bot = Scoring.score(p, submission(p, 0.5, 0, 0.1, { polishSpeed = 400 }))
+		T.falsy(bot.Valid, "inhuman polish speed rejected")
+	end)
+
+	T.test("timeline: steps must be in order and the latest time is reported", function()
+		local p = Patterns.generate("Silver", 21)
+		local sub = submission(p, 0.5, 0, 0.1)
+		local ordered, latest = Scoring.timeline(sub)
+		T.truthy(ordered, "honest run is in order")
+		T.eq(latest, sub.Polish.Samples[#sub.Polish.Samples - 1], "latest = last polish sample")
+		-- polishing claimed before scraping
+		local early = submission(p, 0.5, 0, 0.1)
+		early.Polish = polishCircles(p.PolishTurns + 0.2, 4.5, nil, 0)
+		local ok = Scoring.timeline(early)
+		T.falsy(ok, "polish before scrape is out of order")
 	end)
 end

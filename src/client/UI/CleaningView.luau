@@ -18,6 +18,8 @@ local CleaningView = {}
 
 export type Refs = {
 	Gui: ScreenGui,
+	Banner: Frame,
+	PipRow: Frame,
 	StepLabel: TextLabel,
 	Title: TextLabel,
 	Instruction: TextLabel,
@@ -49,7 +51,17 @@ export type Refs = {
 
 local METER_HEIGHT = 300
 
-function CleaningView.build(): Refs
+-- Design-unit layout numbers the controller needs to keep the ore in view.
+CleaningView.BannerBottom = 152 -- banner + step pips, from the top
+CleaningView.BottomReserved = 150 -- progress / speed gauge / shine bar, from the bottom
+CleaningView.CompactWidth = 300 -- banner width in compact mode (top-left, under Leave)
+
+export type Options = {
+	Touch: boolean?, -- bigger buttons and text for fingers
+}
+
+function CleaningView.build(options: Options?): Refs
+	local touch = options ~= nil and options.Touch == true
 	local gui = UIKit.screen("TerraForgeCleaning", 20)
 
 	-- full-screen flash (white/rarity colored on cracks and the reveal)
@@ -113,8 +125,8 @@ function CleaningView.build(): Refs
 	local leave = UIKit.button(gui, "Leave", Theme.Bad, Theme.BadDark, {
 		Name = "Leave",
 		Position = UDim2.fromOffset(16, 16),
-		Size = UDim2.fromOffset(118, 48),
-		TextSize = 20,
+		Size = if touch then UDim2.fromOffset(150, 70) else UDim2.fromOffset(118, 48),
+		TextSize = if touch then 26 else 20,
 	})
 
 	-- quality meter
@@ -176,7 +188,7 @@ function CleaningView.build(): Refs
 		Position = UDim2.fromOffset(0, METER_HEIGHT + 38),
 		Size = UDim2.new(1, 0, 0, 20),
 	})
-	local chips = UIKit.label(meter, "Chips: 0", 15, {
+	local chips = UIKit.label(meter, "Chips: 0", if touch then 18 else 15, {
 		Name = "Chips",
 		Position = UDim2.fromOffset(0, METER_HEIGHT + 62),
 		Size = UDim2.new(1, 0, 0, 20),
@@ -200,7 +212,7 @@ function CleaningView.build(): Refs
 		Size = UDim2.fromOffset(500, 26),
 		TextColor3 = Theme.Accent,
 	})
-	local hint = UIKit.label(gui, "", 17, {
+	local hint = UIKit.label(gui, "", if touch then 19 else 17, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -16),
@@ -216,7 +228,7 @@ function CleaningView.build(): Refs
 		Size = UDim2.fromOffset(340, 42),
 		Visible = false,
 	})
-	UIKit.label(gauge, "SPEED", 13, { Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(60, 42), TextColor3 = Theme.TextDim })
+	UIKit.label(gauge, "SPEED", if touch then 17 else 13, { Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(60, 42), TextColor3 = Theme.TextDim })
 	local gaugeTrack = UIKit.new("Frame", {
 		Name = "Track",
 		Position = UDim2.fromOffset(72, 13),
@@ -265,8 +277,8 @@ function CleaningView.build(): Refs
 		Name = "Rub",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -16),
-		Size = UDim2.fromOffset(190, 44),
-		TextSize = 16,
+		Size = if touch then UDim2.fromOffset(240, 72) else UDim2.fromOffset(210, 44),
+		TextSize = if touch then 22 else 16,
 		Visible = false,
 	})
 
@@ -315,7 +327,7 @@ function CleaningView.build(): Refs
 		Size = UDim2.new(1, 0, 0, 22),
 		TextColor3 = Theme.Coin,
 	})
-	local cardDetail = UIKit.label(card, "", 14, {
+	local cardDetail = UIKit.label(card, "", if touch then 17 else 14, {
 		Name = "Detail",
 		Position = UDim2.fromOffset(0, 148),
 		Size = UDim2.new(1, 0, 0, 20),
@@ -325,11 +337,17 @@ function CleaningView.build(): Refs
 		Name = "Collect",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(180, 50),
+		Size = if touch then UDim2.fromOffset(220, 64) else UDim2.fromOffset(180, 50),
 	})
+
+	if touch then
+		card.Size = UDim2.fromOffset(440, 254)
+	end
 
 	return {
 		Gui = gui,
+		Banner = banner,
+		PipRow = pipRow,
 		StepLabel = stepLabel,
 		Title = title,
 		Instruction = instruction,
@@ -378,6 +396,31 @@ function CleaningView.setStep(refs: Refs, index: number, title: string, instruct
 	refs.Instruction.Text = instruction
 	for i, pip in refs.Pips do
 		pip.BackgroundColor3 = if i < index then Theme.Good elseif i == index then Theme.Accent else Theme.PanelDark
+	end
+end
+
+--[[
+	Compact layout for small screens: the step banner moves to the top-left
+	corner under Leave, so the middle of the screen (where the ore is) stays
+	clear. On big screens the banner sits top-center.
+]]
+function CleaningView.setCompact(refs: Refs, compact: boolean, leaveHeight: number?)
+	local banner, pips = refs.Banner, refs.PipRow
+	if compact then
+		local top = 16 + (leaveHeight or 48) + 12
+		banner.AnchorPoint = Vector2.new(0, 0)
+		banner.Position = UDim2.fromOffset(16, top)
+		banner.Size = UDim2.fromOffset(CleaningView.CompactWidth, 140)
+		refs.Instruction.Size = UDim2.new(1, -24, 0, 62)
+		pips.AnchorPoint = Vector2.new(0.5, 0)
+		pips.Position = UDim2.fromOffset(16 + CleaningView.CompactWidth / 2, top + 146)
+	else
+		banner.AnchorPoint = Vector2.new(0.5, 0)
+		banner.Position = UDim2.new(0.5, 0, 0, 12)
+		banner.Size = UDim2.fromOffset(470, 108)
+		refs.Instruction.Size = UDim2.new(1, -24, 0, 30)
+		pips.AnchorPoint = Vector2.new(0.5, 0)
+		pips.Position = UDim2.new(0.5, 0, 0, 126)
 	end
 end
 

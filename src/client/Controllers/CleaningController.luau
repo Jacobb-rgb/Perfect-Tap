@@ -16,6 +16,7 @@ local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -35,6 +36,7 @@ local Geo = require(Shared.Builders.Geo)
 local Cleaning = script.Parent.Parent.Cleaning
 local PointerInput = require(Cleaning.PointerInput)
 local ChiselStep = require(Cleaning.ChiselStep)
+local CameraFit = require(Cleaning.CameraFit)
 local ScrapeStep = require(Cleaning.ScrapeStep)
 local PolishStep = require(Cleaning.PolishStep)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
@@ -139,7 +141,7 @@ local function makeContext(data: { [string]: any }, station: Model): any
 	local workCF = CFrame.lookAt(orePoint.Position, orePoint.Position - toCamera)
 	local shell = OreShellBuilder.build(pattern, workCF, folder)
 	OreShellBuilder.workLight(workCF, folder)
-	local view = CleaningView.build()
+	local view = CleaningView.build({ Touch = UserInputService.TouchEnabled })
 	view.Gui:SetAttribute("TerraForge", true)
 
 	local ctx: any = {
@@ -158,6 +160,8 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		tolerance = pattern.Tolerance * (CleaningScoring.InputLeniency[pointer.Kind] or 1),
 		submission = { Cuts = {}, Scrape = { Removed = {}, Fragile = {} }, Polish = { Samples = {}, Mode = "Circle" }, Input = pointer.Kind },
 		startClock = os.clock(),
+		lastFineDust = 0,
+		hintKind = pointer.Kind,
 		chips = 0,
 		stepScores = {},
 		cancelled = false,
@@ -207,6 +211,13 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		ctx.chips += 1
 		view.Chips.Text = "Chips: " .. ctx.chips
 		view.Chips.TextColor3 = Theme.Bad
+		ctx.setMeter(ctx.combinedScore())
+	end
+	-- a restarted chisel attempt takes its chips back (the server never sees them)
+	function ctx.removeChips(count: number)
+		ctx.chips = math.max(0, ctx.chips - count)
+		view.Chips.Text = "Chips: " .. ctx.chips
+		view.Chips.TextColor3 = if ctx.chips > 0 then Theme.Bad else Theme.TextDim
 		ctx.setMeter(ctx.combinedScore())
 	end
 	-- Quality you'd get if the rest went perfectly (starts at the top, mistakes lower it).
@@ -304,6 +315,20 @@ local function playerControls(enabled: boolean)
 	end
 end
 
+local function fitCamera(ctx: any, scale: number, compact: boolean): (CFrame, number)
+	return CameraFit.compute({
+		ViewportHeight = ctx.camera.ViewportSize.Y,
+		InsetTop = GuiService:GetGuiInset().Y,
+		FreeTop = if compact then 16 else CleaningView.BannerBottom,
+		FreeBottom = CleaningView.BottomReserved,
+		UiScale = scale,
+		Outline = ctx.pattern.Outline,
+		FaceScale = ctx.shell.Scale,
+		CamPoint = ctx.camPoint,
+		OrePoint = ctx.orePoint.Position,
+	})
+end
+
 local function enter(ctx: any)
 	MiningController.setBusy(true)
 	InteractController.suspend()
@@ -320,6 +345,13 @@ local function enter(ctx: any)
 	if hud then
 		hud.Gui.Enabled = false
 	end
+	-- the hotbar would cover the bottom hints (and could re-equip the pickaxe)
+	local okBackpack, backpackEnabled = pcall(StarterGui.GetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack)
+	ctx.backpackWasEnabled = if okBackpack then backpackEnabled else nil
+	pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false)
+	local scale = HudController.uiScale()
+	local compact = scale <= 0.75 or ctx.camera.ViewportSize.Y < 520
+	CleaningView.setCompact(ctx.view, compact, if UserInputService.TouchEnabled then 70 else 48)
 	ctx.view.Gui.Parent = player:WaitForChild("PlayerGui")
 	ctx.view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
 	ctx.view.Cursor.Visible = ctx.pointer.Kind == "Gamepad"
@@ -337,9 +369,10 @@ local function enter(ctx: any)
 	ctx.savedCameraCF = camera.CFrame
 	ctx.savedFov = camera.FieldOfView
 	camera.CameraType = Enum.CameraType.Scriptable
+	local target, fov = fitCamera(ctx, scale, compact)
 	TweenService:Create(camera, TweenInfo.new(0.75, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-		CFrame = ctx.camPoint,
-		FieldOfView = 40,
+		CFrame = target,
+		FieldOfView = fov,
 	}):Play()
 	ctx.pointer:start()
 end
@@ -367,11 +400,17 @@ local function exit(ctx: any)
 	back:Play()
 	TweenService:Create(ctx.view.Flash, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
 	task.delay(0.5, function()
-		camera.CameraType = Enum.CameraType.Custom
-		camera.FieldOfView = ctx.savedFov or 70
+		-- a new session may already own the camera
+		if active == nil then
+			camera.CameraType = Enum.CameraType.Custom
+			camera.FieldOfView = ctx.savedFov or 70
+		end
 		ctx.folder:Destroy()
 		ctx.view.Gui:Destroy()
 	end)
+	if ctx.backpackWasEnabled ~= nil then
+		pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, ctx.backpackWasEnabled)
+	end
 	local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
 	if dof then
 		dof.Enabled = false
@@ -582,6 +621,12 @@ local function run(ctx: any)
 	table.insert(ctx.connections, RunService.RenderStepped:Connect(function(dt)
 		ctx.pointer:update(dt)
 		local view = ctx.view
+		if ctx.pointer.Kind ~= ctx.hintKind then
+			ctx.hintKind = ctx.pointer.Kind
+			if not ctx.revealing then
+				view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
+			end
+		end
 		if ctx.pointer.Kind == "Gamepad" then
 			view.Cursor.Visible = true
 			local inset = GuiService:GetGuiInset()
@@ -627,6 +672,9 @@ local function run(ctx: any)
 		ctx.step = nil
 		task.wait(0.25)
 	end
+	if ctx.cancelled or ctx.exited then
+		return
+	end
 	-- done: send the recording, then the big reveal
 	Net.send("CleanSubmit", ctx.Id, ctx.submission)
 	reveal(ctx)
@@ -634,7 +682,16 @@ end
 
 function CleaningController.init()
 	Net.listen("CleanBegin", function(data)
-		if active or type(data) ~= "table" or type(data.Id) ~= "string" or not OreData.exists(data.OreId) or type(data.Seed) ~= "number" then
+		if type(data) ~= "table" or type(data.Id) ~= "string" then
+			return
+		end
+		if active then
+			-- still on the last result card: tell the server so it doesn't hold a session nobody plays
+			Net.send("CleanCancel", data.Id)
+			return
+		end
+		if not OreData.exists(data.OreId) or type(data.Seed) ~= "number" then
+			Net.send("CleanCancel", data.Id)
 			return
 		end
 		local station = data.Station
@@ -674,5 +731,4 @@ function CleaningController.init()
 	end)
 end
 
-local _ = UserInputService
 return CleaningController

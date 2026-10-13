@@ -249,8 +249,27 @@ elseif sceneName == "cleaning" then
 			Geo.block(fx, cf * CF.new(0, 0.1, 0), roblox.Vector3.new(0.6, 0.18, 0.5), roblox.Color3.fromRGB(240, 222, 190), nil, props)
 		end
 	end
-	local view = CleaningView.build()
-	view.Gui.Scale.Scale = 1.25
+	-- "phone": an iPhone SE-sized screen (375 pt tall) scaled up to the 900 px render
+	local phone = process.args[4] == "phone"
+	local pxPerPoint = 900 / 375
+	local uiScale = if phone then 0.62 * pxPerPoint else 1.25
+	local insetTop = if phone then 58 * pxPerPoint else 36
+	local view = CleaningView.build({ Touch = phone })
+	view.Gui.Scale.Scale = uiScale
+	CleaningView.setCompact(view, phone, if phone then 70 else 48)
+	local CameraFit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Cleaning.CameraFit")
+	local camPoint = CF.lookAt(camPos, orePoint.Position + roblox.Vector3.new(0, 0.1, 0))
+	local camCf, camFov = CameraFit.compute({
+		ViewportHeight = 900,
+		InsetTop = insetTop,
+		FreeTop = if phone then 16 else CleaningView.BannerBottom,
+		FreeBottom = CleaningView.BottomReserved,
+		UiScale = uiScale,
+		Outline = pattern.Outline,
+		FaceScale = OreShellBuilder.Scale,
+		CamPoint = camPoint,
+		OrePoint = orePoint.Position,
+	})
 	if stage == "chisel" then
 		local p = Geometry2D.pointAt(pattern.Cuts[1].Line, pattern.Cuts[1].Length * 0.45)
 		toolAt(p.X, p.Y, "Chisel")
@@ -260,7 +279,7 @@ elseif sceneName == "cleaning" then
 		view.Feedback.Text = "Great cut!"
 		view.Feedback.TextTransparency = 0
 		view.Feedback.TextColor3 = roblox.Color3.fromRGB(160, 255, 170)
-		view.Hint.Text = "Hold the left mouse button and drag"
+		view.Hint.Text = if phone then "Drag with your finger" else "Hold the left mouse button and drag"
 	elseif stage == "scrape" then
 		toolAt(-0.15, 0.1, "Brush")
 		CleaningView.setStep(view, 2, "SCRAPE", "Brush away the dirt. Careful: don't scrape the glinting crystals!")
@@ -319,8 +338,15 @@ elseif sceneName == "cleaning" then
 		light.Brightness = 2
 		light.Parent = holder
 	end
-	uiExports["ui_clean_" .. stage] = UiExport.export({ view.Gui })
-	scene_extra = { camera = { camPos.X, camPos.Y, camPos.Z }, target = { orePoint.Position.X, orePoint.Position.Y, orePoint.Position.Z } }
+	local suffix = if phone then "_phone" else ""
+	uiExports["ui_clean_" .. stage .. suffix] = UiExport.export({ view.Gui })
+	local look = camCf.Position + camCf.LookVector * 10
+	scene_extra = {
+		camera = { camCf.Position.X, camCf.Position.Y, camCf.Position.Z },
+		target = { look.X, look.Y, look.Z },
+		fov = camFov,
+		uiInset = insetTop,
+	}
 else
 	error("Unknown scene: " .. sceneName)
 end
@@ -336,7 +362,7 @@ if scene_extra then
 end
 
 fs.writeDir(root .. "/build/preview")
-local outName = if sceneName == "cleaning" then "cleaning_" .. (process.args[3] or "chisel") else sceneName
+local outName = if sceneName == "cleaning" then "cleaning_" .. (process.args[3] or "chisel") .. (if process.args[4] == "phone" then "_phone" else "") else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do
 	fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", guis))

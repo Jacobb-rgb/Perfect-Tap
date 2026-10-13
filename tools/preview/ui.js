@@ -184,11 +184,11 @@ function layoutChildren(node, el, w, h) {
   }
 }
 
-export function renderUI(container, guis, width, height) {
+export function renderUI(container, guis, width, height, topbarInset) {
   const sorted = [...guis].sort((a, b) => (a.order || 0) - (b.order || 0));
   for (const gui of sorted) {
     if (gui.enabled === false) continue;
-    const inset = gui.inset ? TOPBAR_INSET : 0;
+    const inset = gui.inset ? (topbarInset ?? TOPBAR_INSET) : 0;
     const scaleNode = child(gui, "UIScale");
     const s = scaleNode ? scaleNode.s : 1;
     const vw = width / s;

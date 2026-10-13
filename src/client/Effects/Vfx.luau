@@ -62,6 +62,20 @@ local function createHolder(index: number): BasePart
 		e.Rotation = NumberRange.new(0, 360)
 		e.RotSpeed = NumberRange.new(-60, 60)
 	end)
+	-- small dust for the cleaning close-up (the camera is only ~6 studs away)
+	makeEmitter(part, "FineDust", function(e)
+		e.Texture = SMOKE
+		e.Color = ColorSequence.new(Color3.fromRGB(190, 168, 146))
+		e.LightInfluence = 1
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.08), NumberSequenceKeypoint.new(1, 0.32) })
+		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+		e.Lifetime = NumberRange.new(0.3, 0.55)
+		e.Speed = NumberRange.new(0.8, 2.5)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Acceleration = Vector3.new(0, -2, 0)
+		e.Drag = 3
+		e.Rotation = NumberRange.new(0, 360)
+	end)
 	makeEmitter(part, "Glint", function(e)
 		e.Texture = SPARKLE
 		e.LightEmission = 1
@@ -98,7 +112,7 @@ local function ensure()
 	end
 end
 
--- kind: "Sparks" | "Dust" | "Glint" | "Burst"
+-- kind: "Sparks" | "Dust" | "FineDust" | "Glint" | "Burst"
 function Vfx.burst(kind: string, position: Vector3, count: number, color: Color3?, direction: Vector3?)
 	ensure()
 	local holder = holders[nextHolder]
@@ -117,7 +131,7 @@ function Vfx.burst(kind: string, position: Vector3, count: number, color: Color3
 		emitter.Color = ColorSequence.new(color)
 	elseif kind == "Sparks" then
 		emitter.Color = ColorSequence.new(Color3.fromRGB(255, 210, 130))
-	elseif kind == "Dust" then
+	elseif kind == "Dust" or kind == "FineDust" then
 		emitter.Color = ColorSequence.new(Color3.fromRGB(190, 168, 146))
 	end
 	emitter:Emit(count)

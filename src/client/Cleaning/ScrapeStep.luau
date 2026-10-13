@@ -1,6 +1,9 @@
 --[[
 	Step 2: SCRAPE. Drag the brush over the core: dirt patches pop off with
 	dust. Avoid the glinting fragile crystals (scraping one snaps it).
+	The shared ScrapeTracker decides what the brush hits; only brush
+	positions that changed something are recorded, and the server replays
+	them to get the same result.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
+local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local OreShellBuilder = require(Shared.Builders.OreShellBuilder)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -16,21 +20,19 @@ local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local ScrapeStep = {}
 ScrapeStep.__index = ScrapeStep
 
-local BRUSH_RADIUS = 0.17 -- face units
+local MAX_REACH = 2.5 -- face units; the pointer is nowhere near the ore beyond this
 
 function ScrapeStep.new(ctx: any)
 	local self = setmetatable({
 		ctx = ctx,
-		removed = 0,
+		tracker = CleaningScoring.ScrapeTracker.new(ctx.pattern),
+		samples = {} :: { number },
 		total = ctx.pattern.DirtCount,
-		cleared = {} :: { [number]: boolean },
-		hit = {} :: { [number]: boolean },
-		hits = 0,
 		lastPop = 0,
 		done = false,
 		finishing = false,
 	}, ScrapeStep)
-	ctx.submission.Scrape = { Removed = {}, Fragile = {} }
+	ctx.submission.Scrape = { Samples = self.samples }
 	ctx.setInstruction("Brush away the dirt. Careful: don't scrape the glinting crystals!")
 	ctx.setProgress(`Dirt: 0 / {self.total}`)
 	-- the crystals sparkle so players can spot them
@@ -49,8 +51,15 @@ function ScrapeStep.new(ctx: any)
 	return self
 end
 
+-- Same formula as the server; while scraping, "now" stands in for the last removal.
 function ScrapeStep.liveScore(self: any): number
-	return math.clamp(1 - 0.15 * self.hits, 0, 1)
+	local tracker = self.tracker
+	local duration = 0
+	if tracker.firstT then
+		local last = if self.finishing then tracker.lastT else self.ctx.now()
+		duration = last - tracker.firstT
+	end
+	return CleaningScoring.scrapeScore(self.total, tracker.hits, duration)
 end
 
 local function popPatch(ctx: any, patch: BasePart)
@@ -63,8 +72,10 @@ local function popPatch(ctx: any, patch: BasePart)
 	tween.Completed:Once(function()
 		patch:Destroy()
 	end)
-	Vfx.burst("Dust", position, 2, patch.Color)
-	local _ = ctx
+	if ctx.now() - ctx.lastFineDust > 0.08 then
+		ctx.lastFineDust = ctx.now()
+		Vfx.burst("FineDust", position, 3, patch.Color)
+	end
 end
 
 function ScrapeStep.finish(self: any)
@@ -81,7 +92,7 @@ function ScrapeStep.finish(self: any)
 		end
 	end
 	Vfx.burst("Glint", ctx.worldAt(0, 0, OreShellBuilder.CoreFront + 0.1), 14, ctx.ore.Glow)
-	if self.hits == 0 then
+	if self.tracker.hits == 0 then
 		ctx.feedback("Spotless!", Color3.fromRGB(160, 255, 170))
 	else
 		ctx.feedback("Clean... mostly", Color3.fromRGB(200, 200, 160))
@@ -104,50 +115,44 @@ function ScrapeStep.update(self: any, _dt: number): boolean
 	local scraping = false
 	if pointer.Down then
 		local p = ctx.faceAt(pointer.Position, OreShellBuilder.DirtFront)
-		if p then
+		if p and math.abs(p.X) <= MAX_REACH and math.abs(p.Y) <= MAX_REACH then
 			local t = ctx.now()
-			for _, d in ctx.pattern.Dirt do
-				local distance = (d.Center - p).Magnitude
-				if d.Fragile then
-					if not self.hit[d.Index] and distance <= BRUSH_RADIUS * 0.7 then
-						self.hit[d.Index] = true
-						self.hits += 1
-						table.insert(ctx.submission.Scrape.Fragile, d.Index)
-						table.insert(ctx.submission.Scrape.Fragile, t)
-						local shard = ctx.shell.Fragile[d.Index]
-						if shard then
-							Vfx.burst("Glint", shard.Position, 10, ctx.ore.Glow)
-							Vfx.chips(shard.Position, 3, ctx.ore.Glow, 0.5)
-							shard:Destroy()
-						end
-						Sfx.play("Chip")
-						CameraShake.add(0.15)
-						ctx.addChip()
-						ctx.feedback("Crystal snapped!", Theme.Bad)
-						ctx.flash(Color3.fromRGB(255, 80, 60), 0.85)
-					end
-				elseif not self.cleared[d.Index] and distance <= BRUSH_RADIUS + d.Size * 0.5 then
-					self.cleared[d.Index] = true
-					self.removed += 1
-					scraping = true
-					table.insert(ctx.submission.Scrape.Removed, d.Index)
-					table.insert(ctx.submission.Scrape.Removed, t)
-					local patch = ctx.shell.Dirt[d.Index]
-					if patch then
-						popPatch(ctx, patch)
-					end
-					if t - self.lastPop > 0.06 then
-						self.lastPop = t
-						Sfx.play("DirtPop")
-					end
+			local removedNow, snappedNow = self.tracker:add(p, t)
+			if #removedNow > 0 or #snappedNow > 0 then
+				-- only brush positions that changed something are sent
+				table.insert(self.samples, p.X)
+				table.insert(self.samples, p.Y)
+				table.insert(self.samples, t)
+			end
+			for _, index in snappedNow do
+				local shard = ctx.shell.Fragile[index]
+				if shard then
+					Vfx.burst("Glint", shard.Position, 10, ctx.ore.Glow)
+					Vfx.chips(shard.Position, 3, ctx.ore.Glow, 0.5)
+					shard:Destroy()
+				end
+				Sfx.play("Chip")
+				CameraShake.add(0.15)
+				ctx.feedback("Crystal snapped!", Theme.Bad)
+				ctx.flash(Color3.fromRGB(255, 80, 60), 0.85)
+			end
+			for _, index in removedNow do
+				scraping = true
+				local patch = ctx.shell.Dirt[index]
+				if patch then
+					popPatch(ctx, patch)
 				end
 			end
-			ctx.setProgress(`Dirt: {self.removed} / {self.total}`)
-			ctx.setMeter(ctx.combinedScore())
+			if scraping and t - self.lastPop > 0.06 then
+				self.lastPop = t
+				Sfx.play("DirtPop")
+			end
+			ctx.setProgress(`Dirt: {self.tracker.removed} / {self.total}`)
 		end
 	end
+	ctx.setMeter(ctx.combinedScore())
 	Sfx.loop("Scrape", pointer.Down and (pointer.Moved or scraping))
-	if self.removed >= self.total then
+	if self.tracker:complete() then
 		self:finish()
 	end
 	return false

@@ -170,6 +170,9 @@ async function main() {
   if (shot.useSceneCamera && scene.camera) {
     shot.position = scene.camera.camera;
     shot.target = scene.camera.target;
+    if (scene.camera.fov) camera.fov = scene.camera.fov;
+    if (scene.camera.uiInset !== undefined) shot.uiInset = scene.camera.uiInset;
+    camera.updateProjectionMatrix();
   }
   camera.position.set(...shot.position);
   camera.lookAt(new THREE.Vector3(...shot.target));
@@ -364,7 +367,7 @@ async function main() {
   composer.render();
   if (shot.ui) {
     const guis = await fetch(`/scenes/${shot.ui}.json`).then((r) => r.json());
-    renderUI(document.getElementById("ui"), guis, WIDTH, HEIGHT);
+    renderUI(document.getElementById("ui"), guis, WIDTH, HEIGHT, shot.uiInset);
     await document.fonts.ready;
   }
   window.__shot = shot;

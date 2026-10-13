@@ -5,6 +5,7 @@
 	but can't reach the top polish score.
 ]]
 
+local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -17,6 +18,10 @@ local Sfx = require(script.Parent.Parent.Effects.Sfx)
 
 local PolishStep = {}
 PolishStep.__index = PolishStep
+
+local RUB_ACTION = "TerraForgeRubToggle"
+local STILL_ANGLE = 0.04 -- radians; smaller moves are "holding still"
+local STILL_SAMPLE_TIME = 0.5 -- while holding still, record at most this often
 
 local function wrap(a: number): number
 	while a > math.pi do
@@ -59,6 +64,7 @@ function PolishStep.new(ctx: any)
 		sparkle = nil :: ParticleEmitter?,
 		pulse = 0,
 		connection = nil :: RBXScriptConnection?,
+		lastTooFast = 0,
 	}, PolishStep)
 	local needed = ctx.pattern.PolishTurns * math.pi * 2
 	self.needed = needed
@@ -68,11 +74,24 @@ function PolishStep.new(ctx: any)
 	ctx.view.Gauge.Visible = true
 	ctx.view.Shine.Visible = true
 	ctx.view.RubToggle.Parent.Visible = true
-	self.connection = ctx.view.RubToggle.Activated:Connect(function()
+	local key = if ctx.pointer.Kind == "Gamepad" then "Y" elseif ctx.pointer.Kind == "Touch" then nil else "R"
+	local function label()
+		local state = if self.rubMode then "ON" else "OFF"
+		ctx.view.RubToggle.Text = if key then `Hold to rub ({key}): {state}` else `Hold to rub: {state}`
+	end
+	local function toggle()
 		self.rubMode = not self.rubMode
-		ctx.view.RubToggle.Text = if self.rubMode then "Hold to rub: ON" else "Hold to rub: OFF"
+		label()
 		Sfx.play("UIClick")
-	end)
+	end
+	label()
+	self.connection = ctx.view.RubToggle.Activated:Connect(toggle)
+	ContextActionService:BindAction(RUB_ACTION, function(_, state)
+		if state == Enum.UserInputState.Begin then
+			toggle()
+		end
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.KeyCode.R, Enum.KeyCode.ButtonY)
 	-- a dotted ring around the core shows where to rub
 	for i = 1, 24 do
 		local a = i / 24 * math.pi * 2
@@ -105,15 +124,12 @@ function PolishStep.new(ctx: any)
 	return self
 end
 
+-- Same formula as the server (rub mode caps the whole polish once it was used).
 function PolishStep.liveScore(self: any): number
 	if self.total <= 0 then
 		return 1
 	end
-	local score = 0.7 * (self.inBand / self.total) + 0.3 * (math.abs(self.net) / self.total)
-	if self.rubMode then
-		score = math.min(score, 0.75)
-	end
-	return score
+	return CleaningScoring.polishScore(self.total, self.inBand, self.net, self.ctx.submission.Polish.Mode)
 end
 
 function PolishStep.applyShine(self: any, progress: number)
@@ -134,11 +150,16 @@ end
 function PolishStep.addSample(self: any, angle: number, t: number)
 	local ctx = self.ctx
 	if #self.samples >= (GameConfig.MaxPolishSamples - 2) * 2 then
+		-- out of room (only possible after a very long, messy polish): start the shine over
+		table.clear(self.samples)
+		self.lastAngle = nil
+		self.total, self.inBand, self.net, self.quarter = 0, 0, 0, 0
+		ctx.feedback("Keep polishing!", Color3.fromRGB(255, 200, 90))
 		return
 	end
 	if self.lastAngle then
 		local delta = wrap(angle - self.lastAngle)
-		if math.abs(delta) < 0.04 and t - self.lastT < 0.06 then
+		if math.abs(delta) < STILL_ANGLE and t - self.lastT < STILL_SAMPLE_TIME then
 			return
 		end
 		if math.abs(delta) <= math.pi * 0.75 then
@@ -150,6 +171,9 @@ function PolishStep.addSample(self: any, angle: number, t: number)
 			local band = CleaningScoring.PolishBand
 			if speed >= band.Min and speed <= band.Max then
 				self.inBand += math.abs(delta)
+			elseif speed > band.Max * 1.4 and t - self.lastTooFast > 1.2 then
+				self.lastTooFast = t
+				ctx.feedback("Too fast! Smooth circles", Color3.fromRGB(255, 200, 90))
 			end
 		end
 	end
@@ -227,6 +251,7 @@ function PolishStep.destroy(self: any)
 	if self.connection then
 		self.connection:Disconnect()
 	end
+	ContextActionService:UnbindAction(RUB_ACTION)
 	ctx.view.Gauge.Visible = false
 	ctx.view.Shine.Visible = false
 	ctx.view.RubToggle.Parent.Visible = false

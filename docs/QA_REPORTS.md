@@ -142,3 +142,72 @@ Full review: [docs/qa/step_b.md](qa/step_b.md). `tools/check.sh` passed; 12 issu
 12. **Net memory**: rate-limit tables are cleared when a player leaves.
 
 Performance: raw chunks are now 6 parts (was 10); carry slots only rebuild when your carry count changes.
+
+## Step c – Cleaning Station minigame
+
+Four reviewers (server exploits, client/server scoring consistency, client runtime, mobile/input)
+found the issues below. Full findings with reproduction steps: [docs/qa/step_c_findings.txt](qa/step_c_findings.txt).
+The second-opinion (verify) pass and the design review could not run because the agent usage limit
+was reached; every finding was instead re-checked against the code by hand before fixing.
+`tools/check.sh` passes: strict types clean, 62 tests (7 new), place builds.
+
+Fixed:
+
+1. **Bot speed (high)**: the server now checks the whole timeline. Every timestamp must fit inside
+   the real session time and the steps must come in order (`CleaningScoring.timeline`), so a bot
+   has to take as long as a careful human.
+2. **Crystals self-reported**: the client now sends brush positions, not a list of what it hit.
+   The server replays them with the shared `ScrapeTracker` and finds removed dirt and snapped
+   crystals itself.
+3. **Sessions over 3 minutes rejected**: the 180 s cap is now the session timeout + 10 s.
+4. **Fast honest scrubbing rejected** (Epic+ ores): the "too fast" rule now only catches a bot
+   (whole-ore scrape in under DirtCount/200 s). A new test scrubs every ore at 4–12 face units/s.
+5. **Fast polishing rejected**: the limit is now ~10 turns/s; fast hands just lose points, and the
+   client shows "Too fast! Smooth circles".
+6. **Tap near the screen edge voided the run**: the chisel ignores points far from the ore, and
+   only records samples from the moment the cut starts.
+7. **Chisel stuck after ~400 points**: pre-start samples are no longer recorded; a cut that still
+   runs out of room restarts with "Try that line again!".
+8. **Cut locked to the wrong end (touch)**: letting go before 30% of the line forgets the attempt
+   (and its chips), so you can start again from either end.
+9. **Station locked for 5 minutes**: a CleanBegin that arrives while the result card is still up
+   is cancelled straight away, so the ore stays in the vise with its prompt.
+10. **Camera snapped back on quick restart**: the delayed camera reset only runs when no new
+    session took over.
+11. **Reveal after leaving at the last moment**: no submit or reveal once the player left.
+12. **Quality meter ≠ final grade**: the meter now uses the server formulas: chips during
+    chisel, the slow-scrape penalty, the rub cap once used, and crystal hits are no longer
+    counted twice as chips.
+13. **Phone layout**: on small screens the step banner moves to the top-left (under Leave), and
+    the camera fits the ore into the free area (`CameraFit`, unit tested for PC, laptop and two
+    phone sizes).
+14. **Big dust puffs in the close-up**: new small `FineDust` effect, throttled.
+15. **Controller on PC**: the input type comes from the last input used, and the hint updates
+    when it changes.
+16. **Rub toggle unreachable on controller/keyboard**: R / gamepad Y toggles it.
+17. **Small touch targets**: Leave, Rub and Collect are larger on touch screens, small text bigger.
+18. **Backpack hotbar** is hidden during cleaning (and restored).
+19. **Machines spawned before their behaviour registered** now catch up (station prompts in Studio
+    without API access).
+
+Accepted risks (cannot be verified by any server): the client says which input it used (touch and
+controller get wider lines) and whether "Hold to rub" was used. A cheater gains no more from these
+than from feeding a perfect synthetic trace, and the timeline check still forces human pace.
+
+### What to test in Studio
+
+1. Clean one ore of each rarity carefully. The grade on the QUALITY meter at the end of POLISH
+   should match the grade on the result card.
+2. **Test → Device → iPhone SE (landscape)**: the step panel sits top-left under Leave and the
+   whole ore is visible between it and the meter. Tap near the screen edge during CHISEL, then
+   finish: you get a grade, not "Something went wrong".
+3. Start a line from its middle, drag to one end, let go, then trace it from the other end. The
+   cut works.
+4. Leave the minigame open for 4 minutes, then finish. You get a grade.
+5. On a Legendary/Mythic ore, scrub the dirt as fast as you can, and spin very fast when polishing.
+   You get a (lower) grade, not an error.
+6. Throw two raw ores onto the station; clean the first, wait 2 s on the card, press Collect.
+   The station shows "Clean Ore" again right away.
+7. Plug a controller into a PC: the hint talks about the stick, Y toggles "Hold to rub", B leaves,
+   A collects.
+8. During cleaning the pickaxe hotbar is hidden; after leaving it is back.

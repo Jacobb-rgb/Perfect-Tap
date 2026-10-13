@@ -41,6 +41,17 @@ local behaviours: { [string]: { Behaviour } } = {}
 function MachineService.register(machineId: string, behaviour: Behaviour)
 	behaviours[machineId] = behaviours[machineId] or {}
 	table.insert(behaviours[machineId], behaviour)
+	-- machines that spawned before this behaviour was registered catch up
+	if behaviour.spawned then
+		for _, machine in placed do
+			if machine.Id == machineId then
+				local ok, err = pcall(behaviour.spawned, machine)
+				if not ok then
+					warn(`[MachineService] {machineId} spawned hook failed: {err}`)
+				end
+			end
+		end
+	end
 end
 
 function MachineService.get(model: Instance?): PlacedMachine?

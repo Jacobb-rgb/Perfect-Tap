@@ -69,13 +69,22 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 	end)
 end
 
+-- UI scale for the current screen (phones get a floor so text stays readable).
+function HudController.uiScale(): number
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return 1
+	end
+	local size = camera.ViewportSize
+	return math.clamp(math.min(size.Y / Theme.BaseHeight, size.X / 1100), 0.62, 1.25)
+end
+
 local function updateScale()
 	local camera = Workspace.CurrentCamera
 	if not camera then
 		return
 	end
-	local size = camera.ViewportSize
-	local scale = math.clamp(math.min(size.Y / Theme.BaseHeight, size.X / 1100), 0.62, 1.25)
+	local scale = HudController.uiScale()
 	for _, gui in player:WaitForChild("PlayerGui"):GetChildren() do
 		local uiScale = gui:IsA("ScreenGui") and gui:FindFirstChild("Scale")
 		if uiScale and uiScale:IsA("UIScale") and gui:GetAttribute("TerraForge") then

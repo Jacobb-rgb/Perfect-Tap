@@ -30,12 +30,27 @@ export type Pointer = typeof(setmetatable(
 local STICK_SPEED = 0.9 -- screen heights per second at full tilt
 local DEADZONE = 0.15
 
+-- What the player is using right now (a PC with a controller plugged in counts as Gamepad).
+local function currentKind(): string
+	local last = UserInputService:GetLastInputType()
+	if last == Enum.UserInputType.Touch then
+		return "Touch"
+	elseif last.Name:sub(1, 7) == "Gamepad" then
+		return "Gamepad"
+	elseif last == Enum.UserInputType.MouseMovement or last.Name:sub(1, 11) == "MouseButton" or last == Enum.UserInputType.Keyboard then
+		return "Mouse"
+	end
+	if UserInputService.GamepadEnabled and not UserInputService.MouseEnabled and not UserInputService.TouchEnabled then
+		return "Gamepad"
+	elseif UserInputService.TouchEnabled and not UserInputService.MouseEnabled then
+		return "Touch"
+	end
+	return "Mouse"
+end
+
 function PointerInput.new(): Pointer
 	local camera = Workspace.CurrentCamera
-	local kind = if UserInputService.GamepadEnabled and not UserInputService.MouseEnabled and not UserInputService.TouchEnabled
-		then "Gamepad"
-		elseif UserInputService.TouchEnabled and not UserInputService.MouseEnabled then "Touch"
-		else "Mouse"
+	local kind = currentKind()
 	local self = setmetatable({
 		Position = camera.ViewportSize / 2,
 		Down = false,

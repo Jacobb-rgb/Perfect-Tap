@@ -1,6 +1,9 @@
 --[[
 	Step 1: CHISEL. Trace each glowing guide line (from either end).
 	The shared CutTracker scores the trace exactly like the server will.
+	Only samples from the moment the cut starts are recorded (earlier ones
+	don't change the tracker), and a short false start is forgotten when the
+	pointer is released, so the server replays exactly the final attempt.
 	Completing a line cracks the crust: flash, shake, a tiny hit-stop, then
 	the crust pieces break away with real (client) physics.
 ]]
@@ -28,6 +31,8 @@ local DONE_DOT = Color3.fromRGB(120, 100, 70)
 local OFF_COLOR = Color3.fromRGB(255, 90, 70)
 local MIN_SAMPLE_DISTANCE = 0.015
 local MIN_SAMPLE_TIME = 1 / 50
+local MAX_REACH = 2.5 -- face units; the pointer is nowhere near the ore beyond this (server limit is 3)
+local FALSE_START = 0.3 -- releasing before this much of the line is done restarts the cut
 
 function ChiselStep.new(ctx: any)
 	local self = setmetatable({
@@ -45,7 +50,9 @@ function ChiselStep.new(ctx: any)
 		lastScratch = 0,
 		lastWarning = 0,
 		scores = {} :: { number },
-		chips = 0,
+		attemptChips = 0, -- chips of the current attempt (dropped if the attempt restarts)
+		chipMarks = {} :: { BasePart },
+		wasDown = false,
 		pulse = 0,
 	}, ChiselStep)
 	self:beginCut(1)
@@ -76,10 +83,7 @@ function ChiselStep.beginCut(self: any, index: number)
 		return
 	end
 	self.cutIndex = index
-	self.tracker = CleaningScoring.CutTracker.new(cut, ctx.tolerance, ctx.pattern.MaxCutSpeed)
-	self.samples = {}
-	self.lastSample = nil
-	self.lastSampleT = -1
+	self:resetAttempt()
 	self.dots = OreShellBuilder.guideDots(ctx.shell, cut, DOT_COLOR, ctx.folder)
 	-- both ends glow bigger: you may start from either
 	for _, p in { cut.Line[1], cut.Line[#cut.Line] } do
@@ -104,6 +108,33 @@ function ChiselStep.beginCut(self: any, index: number)
 	end
 end
 
+-- Starts the current cut over: new tracker, no samples, no groove.
+function ChiselStep.resetAttempt(self: any)
+	local ctx = self.ctx
+	local cut = ctx.pattern.Cuts[self.cutIndex]
+	self.tracker = CleaningScoring.CutTracker.new(cut, ctx.tolerance, ctx.pattern.MaxCutSpeed)
+	self.samples = {}
+	self.lastSample = nil
+	self.lastSampleT = -1
+	for _, part in self.groove do
+		part:Destroy()
+	end
+	table.clear(self.groove)
+	for _, dot in self.dots do
+		dot.Color = DOT_COLOR
+		dot.Transparency = 0
+	end
+	-- chips of an abandoned attempt don't count (the server never sees them)
+	if self.attemptChips > 0 then
+		ctx.removeChips(self.attemptChips)
+		self.attemptChips = 0
+	end
+	for _, mark in self.chipMarks do
+		mark:Destroy()
+	end
+	table.clear(self.chipMarks)
+end
+
 function ChiselStep.liveScore(self: any): number
 	local total, weight = 0, 0
 	for i, cut in self.ctx.pattern.Cuts do
@@ -119,11 +150,11 @@ function ChiselStep.liveScore(self: any): number
 	return if weight > 0 then total / weight else 1
 end
 
-local function chipEffect(ctx: any, p: Vector2)
+local function chipEffect(ctx: any, p: Vector2): BasePart
 	local world = ctx.worldAt(p.X, p.Y, OreShellBuilder.CoreFront + 0.04)
 	local ore = ctx.ore
 	-- a small permanent notch on the core
-	Geo.block(ctx.folder, ctx.shell.WorkCF.Rotation + world, Vector3.new(0.22, 0.18, 0.05), Color3.fromRGB(40, 32, 30), nil, {
+	local mark = Geo.block(ctx.folder, ctx.shell.WorkCF.Rotation + world, Vector3.new(0.22, 0.18, 0.05), Color3.fromRGB(40, 32, 30), nil, {
 		Anchored = true,
 		CanCollide = false,
 		CanQuery = false,
@@ -150,6 +181,7 @@ local function chipEffect(ctx: any, p: Vector2)
 	CameraShake.add(0.12)
 	ctx.feedback("CHIP!", Theme.Bad)
 	ctx.flash(Color3.fromRGB(255, 80, 60), 0.85)
+	return mark
 end
 
 function ChiselStep.crack(self: any)
@@ -157,6 +189,9 @@ function ChiselStep.crack(self: any)
 	local cutIndex = self.cutIndex
 	local cut = ctx.pattern.Cuts[cutIndex]
 	self.cracking = true
+	-- this attempt's chips (and their notches) are final now
+	self.attemptChips = 0
+	table.clear(self.chipMarks)
 	ctx.submission.Cuts[cutIndex] = { Samples = self.samples }
 	local score = self.tracker:score()
 	self.scores[cutIndex] = score
@@ -195,7 +230,7 @@ function ChiselStep.crack(self: any)
 				local toward = ctx.shell.WorkCF.LookVector * -1
 				primary.AssemblyLinearVelocity = outward * math.random(7, 11) + toward * 4 + Vector3.new(0, 6, 0)
 				primary.AssemblyAngularVelocity = Vector3.new(math.random(-6, 6), math.random(-6, 6), math.random(-6, 6))
-				Vfx.burst("Dust", pieceCenter, 10, ctx.ore.Crust)
+				Vfx.burst("FineDust", pieceCenter, 4, ctx.ore.Crust)
 				Vfx.chips(pieceCenter, 4, ctx.ore.Crust, 0.7)
 				local _ = centroid
 				task.delay(1.2, function()
@@ -253,62 +288,83 @@ function ChiselStep.update(self: any, dt: number): boolean
 		return false
 	end
 	local pointer = ctx.pointer
-	if pointer.Down then
-		local p = ctx.faceAt(pointer.Position, OreShellBuilder.DotZ)
-		local t = ctx.now()
-		if p and #self.samples < (GameConfig.MaxTracePoints - 4) * 3 then
-			local spacing = if #self.samples > GameConfig.MaxTracePoints * 2 then MIN_SAMPLE_DISTANCE * 3 else MIN_SAMPLE_DISTANCE
-			local movedEnough = not self.lastSample or (p - self.lastSample).Magnitude >= spacing
-			if movedEnough and t - self.lastSampleT >= MIN_SAMPLE_TIME then
-				self.lastSample = p
-				self.lastSampleT = t
-				table.insert(self.samples, p.X)
-				table.insert(self.samples, p.Y)
-				table.insert(self.samples, t)
-				local state = self.tracker:add(p, t)
-				if state.Started then
-					OreShellBuilder.updateGroove(ctx.shell, self.tracker.cut, state.Progress, self.tracker.direction, self.groove, ctx.folder, Color3.fromRGB(255, 170, 70))
-					-- dots already cut fade out
-					local cutLength = self.tracker.cut.Length
-					local reached = state.Progress * cutLength
-					for _, dot in self.dots do
-						local s = dot:GetAttribute("S") :: number
-						local along = if self.tracker.direction == 1 then s else cutLength - s
-						if along <= reached then
-							dot.Color = DONE_DOT
-							dot.Transparency = 0.6
-						else
-							dot.Color = if state.OnLine then DOT_COLOR else OFF_COLOR
-						end
-					end
-					if state.OnLine and t - self.lastScratch > 0.07 then
-						self.lastScratch = t
-						Sfx.play("ChiselScratch")
-						local world = ctx.worldAt(p.X, p.Y, OreShellBuilder.DotZ)
-						Vfx.burst("Dust", world, 1, ctx.ore.Crust)
-						if state.Quality > 0.9 then
-							Vfx.burst("Sparks", world, 1)
-						end
-					end
-					if not state.OnLine and t - self.lastWarning > 0.8 then
-						self.lastWarning = t
-						ctx.feedback("Back to the line!", Theme.Bad)
-					elseif state.TooFast and t - self.lastWarning > 0.8 then
-						self.lastWarning = t
-						ctx.feedback("Slow down!", Color3.fromRGB(255, 200, 90))
-					end
-					if state.Chipped and state.ChipPoint then
-						self.chips += 1
-						ctx.addChip()
-						chipEffect(ctx, state.ChipPoint)
-					end
-					ctx.setMeter(self:liveScore())
-					if state.Complete then
-						self:crack()
-					end
-				end
-			end
+	local cutLength = self.tracker.cut.Length
+	if not pointer.Down and self.wasDown then
+		-- released early: a false start (often from the wrong end) is forgotten
+		if self.tracker.started and self.tracker.progress < cutLength * FALSE_START then
+			self:resetAttempt()
 		end
+	end
+	self.wasDown = pointer.Down
+	if not pointer.Down then
+		return false
+	end
+	local p = ctx.faceAt(pointer.Position, OreShellBuilder.DotZ)
+	if not p or math.abs(p.X) > MAX_REACH or math.abs(p.Y) > MAX_REACH then
+		return false
+	end
+	local t = ctx.now()
+	local spacing = if #self.samples > GameConfig.MaxTracePoints * 2 then MIN_SAMPLE_DISTANCE * 3 else MIN_SAMPLE_DISTANCE
+	local movedEnough = not self.lastSample or (p - self.lastSample).Magnitude >= spacing
+	if not movedEnough or t - self.lastSampleT < MIN_SAMPLE_TIME then
+		return false
+	end
+	self.lastSample = p
+	self.lastSampleT = t
+	-- samples before the cut starts don't change the tracker, so they aren't sent
+	local state = self.tracker:add(p, t)
+	if not state.Started then
+		return false
+	end
+	if #self.samples >= (GameConfig.MaxTracePoints - 1) * 3 then
+		-- very long wobbly attempt: start the line over rather than get stuck
+		self:resetAttempt()
+		ctx.feedback("Try that line again!", Color3.fromRGB(255, 200, 90))
+		return false
+	end
+	table.insert(self.samples, p.X)
+	table.insert(self.samples, p.Y)
+	table.insert(self.samples, t)
+	OreShellBuilder.updateGroove(ctx.shell, self.tracker.cut, state.Progress, self.tracker.direction, self.groove, ctx.folder, Color3.fromRGB(255, 170, 70))
+	-- dots already cut fade out
+	local reached = state.Progress * cutLength
+	for _, dot in self.dots do
+		local s = dot:GetAttribute("S") :: number
+		local along = if self.tracker.direction == 1 then s else cutLength - s
+		if along <= reached then
+			dot.Color = DONE_DOT
+			dot.Transparency = 0.6
+		else
+			dot.Color = if state.OnLine then DOT_COLOR else OFF_COLOR
+		end
+	end
+	if state.OnLine and t - self.lastScratch > 0.07 then
+		self.lastScratch = t
+		Sfx.play("ChiselScratch")
+		local world = ctx.worldAt(p.X, p.Y, OreShellBuilder.DotZ)
+		if t - ctx.lastFineDust > 0.2 then
+			ctx.lastFineDust = t
+			Vfx.burst("FineDust", world, 1, ctx.ore.Crust)
+		end
+		if state.Quality > 0.9 then
+			Vfx.burst("Sparks", world, 1)
+		end
+	end
+	if not state.OnLine and t - self.lastWarning > 0.8 then
+		self.lastWarning = t
+		ctx.feedback("Back to the line!", Theme.Bad)
+	elseif state.TooFast and t - self.lastWarning > 0.8 then
+		self.lastWarning = t
+		ctx.feedback("Slow down!", Color3.fromRGB(255, 200, 90))
+	end
+	if state.Chipped and state.ChipPoint then
+		self.attemptChips += 1
+		table.insert(self.chipMarks, chipEffect(ctx, state.ChipPoint))
+		ctx.addChip()
+	end
+	ctx.setMeter(ctx.combinedScore())
+	if state.Complete then
+		self:crack()
 	end
 	return false
 end

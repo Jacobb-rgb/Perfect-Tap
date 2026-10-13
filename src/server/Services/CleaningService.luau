@@ -198,14 +198,14 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		result = { Valid = false, Reason = "too fast" } :: any
 	end
 	if result.Valid then
-		-- every cut, scrape and polish timestamp must fit in the real session time
-		local latest = 0
-		for _, cut in payload.Cuts do
-			local samples = cut.Samples
-			latest += samples[#samples] - samples[3]
-		end
-		if latest > elapsed + 3 then
-			result = { Valid = false, Reason = "timing mismatch" } :: any
+		-- The client's clock starts when CleanBegin arrives, so every timestamp it
+		-- sends must fit inside the real session time, with the steps in order.
+		-- A bot can't claim a long, careful run it finished in seconds.
+		local ordered, latest = CleaningScoring.timeline(payload)
+		if not ordered then
+			result = { Valid = false, Reason = "steps out of order" } :: any
+		elseif latest > elapsed + 1 then
+			result = { Valid = false, Reason = `timing mismatch ({math.floor(latest)}s claimed in {math.floor(elapsed)}s)` } :: any
 		end
 	end
 	if not result.Valid then
