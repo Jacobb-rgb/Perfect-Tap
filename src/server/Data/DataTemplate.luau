@@ -5,7 +5,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 1,
+	Version = 2, -- Data/Migrations brings older saves up to this
 
 	Coins = 0,
 	TotalEarned = 0,
@@ -21,13 +21,16 @@ local DataTemplate = {
 		ExtraSlots = 0, -- machine slot upgrades bought
 	},
 
-	-- machines: bought but not placed { [machineId] = count }
+	-- machines: bought but not placed { [machineId] = count 1..999 } (no zero keys)
 	MachineInventory = {},
-	-- placed machines on the plot: { { Id, X, Z, R } } (grid cell + rotation 0-3)
+	-- placed machines on the plot: { { Id, X, Z, R, In?, Out? } } (min grid cell +
+	-- rotation 0-3). In = input queue (In[1] is being worked, max 4), Out = finished
+	-- items waiting to leave (max 4); both are lists of { K, O, G?, R? }, nil when empty.
 	PlacedMachines = {},
 	StarterKitGiven = false,
 
-	-- items in storage crates: { { K = kind, O = oreId, G = grade?, R = recipe? } }
+	-- items in storage, one pool shared by all crates:
+	-- { { K = kind, O = oreId, G = grade?, R = recipe? } }
 	Storage = {},
 
 	-- progression

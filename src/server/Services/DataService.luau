@@ -21,6 +21,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
 local DataTemplate = require(script.Parent.Parent.Data.DataTemplate)
+local Migrations = require(script.Parent.Parent.Data.Migrations)
 local ProfileStore = require(script.Parent.Parent.Data.ProfileStore)
 
 local DataService = {}
@@ -57,7 +58,7 @@ function MemoryStore.UpdateAsync(self: any, key: string, transform: (any) -> any
 end
 
 local function migrate(data: { [string]: any })
-	-- Version 1 is the first release; future migrations go here.
+	-- Version 1 is the first release; Data/Migrations brings saves up to date.
 	if type(data.Version) ~= "number" then
 		data.Version = 1
 	end
@@ -73,6 +74,11 @@ local function migrate(data: { [string]: any })
 		for i = MAX_PURCHASE_IDS + 1, #ids do
 			data.Purchases[ids[i].id] = nil
 		end
+	end
+	-- type clean-up and version bump (idempotent, runs on every load)
+	local report = Migrations.run(data)
+	if report.Moved > 0 or report.Dropped > 0 then
+		warn(`[DataService] save repaired: {report.Moved} moved, {report.Dropped} dropped`)
 	end
 end
 

@@ -1,7 +1,9 @@
 --[[
-	Player plots: a flat pad (12x12 grid of 4-stud cells), low border rails,
-	a name sign at the front and a banner. Machines are added at runtime
-	into the plot's "Machines" folder by MachineService.
+	Player plots: a flat pad (12x12 grid of 4-stud cells plus a 1-stud
+	border), low border rails, a name sign at the front and a banner.
+	Everything decorative stays outside the 48x48 build grid, so every cell
+	is free for machines. Machines are added at runtime into the plot's
+	"Machines" folder by MachineService.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -36,24 +38,27 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	m:SetAttribute("PlotId", plot.Id)
 	m:AddTag("Plot")
 
-	local pad = Geo.block(m, cf * CFrame.new(0, -0.6, 0), Vector3.new(size, 1.2, size), Palette.PlotPad, nil, { CanTouch = false })
+	-- the pad has a 1-stud border around the grid for the rails and posts
+	local pad = Geo.block(m, cf * CFrame.new(0, -0.6, 0), Vector3.new(size + 2, 1.2, size + 2), Palette.PlotPad, nil, { CanTouch = false })
 	pad.Name = "Pad"
-	-- slightly darker inner area so the build space reads clearly
-	Geo.block(m, cf * CFrame.new(0, -0.02, 0), Vector3.new(size - 2, 0.06, size - 2), Palette.PlotTile, nil, {
+	-- slightly darker inner area that is exactly the build grid
+	local tile = Geo.block(m, cf * CFrame.new(0, -0.02, 0), Vector3.new(size, 0.06, size), Palette.PlotTile, nil, {
 		CanTouch = false,
 		CanQuery = false,
 		CanCollide = false,
 		CastShadow = false,
 	})
+	tile.Name = "PlotTile"
 
-	-- rails on the back and sides; the front (road side, -Z local) stays open
+	-- rails on the back and sides, on the border; the front (road side, -Z local) stays open
+	local edge = half + 0.5
 	local railColor = Palette.WoodDark
 	local railProps = { CanTouch = false, CanQuery = false }
-	Geo.block(m, cf * CFrame.new(0, 0.35, half - 0.5), Vector3.new(size, 0.7, 1), railColor, nil, railProps)
-	Geo.block(m, cf * CFrame.new(-half + 0.5, 0.35, 0), Vector3.new(1, 0.7, size), railColor, nil, railProps)
-	Geo.block(m, cf * CFrame.new(half - 0.5, 0.35, 0), Vector3.new(1, 0.7, size), railColor, nil, railProps)
+	Geo.block(m, cf * CFrame.new(0, 0.35, edge), Vector3.new(size + 2, 0.7, 1), railColor, nil, railProps)
+	Geo.block(m, cf * CFrame.new(-edge, 0.35, 0), Vector3.new(1, 0.7, size + 2), railColor, nil, railProps)
+	Geo.block(m, cf * CFrame.new(edge, 0.35, 0), Vector3.new(1, 0.7, size + 2), railColor, nil, railProps)
 	for _, corner in { Vector3.new(-1, 0, -1), Vector3.new(1, 0, -1), Vector3.new(-1, 0, 1), Vector3.new(1, 0, 1) } do
-		Geo.block(m, cf * CFrame.new(corner.X * (half - 0.6), 1, corner.Z * (half - 0.6)), Vector3.new(1.4, 2, 1.4), Palette.Wood, nil, railProps)
+		Geo.block(m, cf * CFrame.new(corner.X * edge, 1, corner.Z * edge), Vector3.new(1, 2, 1), Palette.Wood, nil, railProps)
 	end
 
 	-- front lanterns
@@ -67,9 +72,10 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	local sign = Props.sign(m, signBase * CFrame.new(0, 3.6, 0), "Free Plot", 6.4, 2.2, Palette.WoodLight, Palette.WoodDark)
 	sign.Name = "PlotSign"
 
-	-- banner pole at the back corner (owner color)
-	local pole = cf * CFrame.new(half - 2, 0, half - 2)
-	Geo.block(m, pole * CFrame.new(0, 6, 0), Vector3.new(0.5, 12, 0.5), Palette.WoodDark, nil, railProps)
+	-- banner pole just outside the back corner (owner color); it reaches
+	-- down past the pad so it never floats over lower ground
+	local pole = cf * CFrame.new(half + 1.5, 0, half + 1.5)
+	Geo.block(m, pole * CFrame.new(0, 5.4, 0), Vector3.new(0.5, 13.2, 0.5), Palette.WoodDark, nil, railProps)
 	local banner = Geo.block(m, pole * CFrame.new(-1.8, 9.4, 0), Vector3.new(3.4, 4.4, 0.15), BANNER_COLORS[(plot.Id - 1) % #BANNER_COLORS + 1], nil, {
 		CanTouch = false,
 		CanQuery = false,

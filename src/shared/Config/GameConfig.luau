@@ -2,6 +2,23 @@
 	General tuning and safety limits. Server and client both read this.
 ]]
 
+export type DevKitEntry = { Id: string, X: number, Z: number, R: number }
+export type DevKit = { Layout: { DevKitEntry }, Inventory: { [string]: number } }
+
+-- Studio-only test layout (MachineService adds it once, together with the
+-- StarterKit, and only in Studio sessions whose saves live in memory).
+-- Set it to false to switch it off.
+local STUDIO_DEV_KIT: DevKit | false = {
+	Layout = {
+		{ Id = "Crusher", X = 4, Z = 9, R = 0 },
+		{ Id = "AutoCleaner", X = 0, Z = 10, R = 0 },
+		{ Id = "BlastFurnace", X = 7, Z = 8, R = 0 },
+		{ Id = "Anvil", X = 10, Z = 1, R = 0 },
+		{ Id = "SellChute", X = 2, Z = 1, R = 0 },
+	},
+	Inventory = { Conveyor = 24, StorageCrate = 1, SellChute = 1, ClayFurnace = 1 },
+}
+
 local GameConfig = {
 	Version = "0.1.0",
 	CurrencyName = "Coins",
@@ -24,10 +41,55 @@ local GameConfig = {
 	ItemFallKillY = -60, -- items below this fell out of the world and are rescued (lowest floor is -40)
 
 	-- Machines
-	MachineIntakeQueue = 4, -- items a machine can buffer
+	MachineIntakeQueue = 4, -- items a machine can buffer (includes the item being worked)
 	ConveyorSpeed = 7, -- studs per second
-	StorageCrateCapacity = 60,
+	StorageCrateCapacity = 60, -- every placed crate adds this much to the shared store
 	MaxStoredItems = 300, -- hard cap across all crates (DataStore size safety)
+	MachineTick = 0.1, -- seconds between machine job/output updates
+	MinProcessTime = 0.5, -- no upgrade makes a job faster than this
+	OutputPop = { Forward = 6, Up = 4 }, -- velocity of an item leaving a machine's front
+	OutputRetry = 1, -- seconds before a blocked output tries again
+	LooseHeadroom = 2, -- machines pause output this many items below the loose-item cap
+
+	-- Intake (items going into machines)
+	IntakeTick = 0.2, -- seconds between intake scans
+	IntakeMargin = 0.4, -- extra studs around a hopper's intake box
+	FeedReachBelt = 1.6, -- belt-end feeder box: studs back onto the belt
+	FeedReachInto = 1.5, -- belt-end feeder box: studs into the machine's cell
+	RejectPop = { Out = 8, Up = 14 }, -- a refused item dropped into a hopper bounces out the front
+	BeltRejectPop = { Side = 9, Up = 7 }, -- a refused item on a belt is pushed off the side
+	RejectCooldown = 1.5, -- seconds before the same item can be refused again
+	WrongHintCooldown = 10, -- seconds between wrong-item hints (per player, per machine type)
+	ForeignItemReturn = 8, -- seconds before an item on someone else's plot goes back to its owner
+
+	-- Range and anti-cheat
+	MachineUseRange = 14, -- studs from a machine to use its actions
+	BuildRange = 70, -- studs from your plot centre to build
+	AntiTeleportRange = 40, -- an item's owner must be this close for it to enter a machine
+	MaxItemSpeed = 75, -- studs/s an item can plausibly travel after a drop or throw
+	PlausibleSlack = 6, -- extra studs allowed on top of MaxItemSpeed
+	MaxItemTravel = 90, -- further than this from its release point, an item snaps back
+	ClientPhysicsRange = 80, -- owners further away never simulate their items (below StreamingMinRadius 96)
+
+	-- Conveyors
+	ConveyorStuckSpeed = 0.6, -- slower than this on a belt counts as stuck
+	ConveyorStuckSeconds = 1.5, -- stuck this long gets a nudge
+	ConveyorMaxNudges = 5, -- this many nudges...
+	ConveyorNudgeWindow = 30, -- ...within this many seconds pushes the item off the belt
+
+	-- Selling and storage
+	SellComboWindow = 0.8, -- sales closer together than this count as one combo
+	SellOthersRadius = 60, -- other players this close see the sell puff
+	StorageTakeMax = 5, -- items per Take request
+
+	-- Anvil
+	AnvilTimeout = 60, -- seconds before a forging session is cancelled
+	AnvilWalkAway = 20, -- studs from the anvil that cancel a session
+	AnvilMinStrikeGap = 0.18, -- seconds; no human hammers faster than this
+	AnvilMinSecondsPerHit = 0.3, -- the last strike comes at least Hits x this after the start
+
+	-- Studio testing
+	StudioDevKit = STUDIO_DEV_KIT,
 
 	-- Cleaning minigame (server sanity limits)
 	CleaningTimeout = 300, -- seconds before an open session is cancelled

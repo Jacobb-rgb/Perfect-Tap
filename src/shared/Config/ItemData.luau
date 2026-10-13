@@ -81,6 +81,50 @@ function ItemData.value(kind: string, oreId: string, gradeId: string?, recipeId:
 	return math.max(1, math.floor(value + 0.5))
 end
 
+-- One stored or moving item, as saved in data.Storage and machine queues.
+export type Desc = { K: string, O: string, G: string?, R: string? }
+
+local MAX_KEY_LENGTH = 80
+
+-- Storage key "Kind|Ore|Grade|Recipe" (a missing grade or recipe is "").
+-- The server, the client and the tests all use this one format.
+function ItemData.storageKey(desc: Desc): string
+	return `{desc.K}|{desc.O}|{desc.G or ""}|{desc.R or ""}`
+end
+
+-- The item a storage key stands for, or nil when the key is junk: too long,
+-- an unknown kind, ore, grade or recipe, a Gear without a recipe, or a
+-- recipe on something that isn't Gear.
+function ItemData.parseKey(key: string): Desc?
+	if type(key) ~= "string" or #key > MAX_KEY_LENGTH then
+		return nil
+	end
+	local parts = string.split(key, "|")
+	if #parts ~= 4 then
+		return nil
+	end
+	local kind, oreId, gradeId, recipeId = parts[1], parts[2], parts[3], parts[4]
+	if not ItemData.Kinds[kind] or not OreData.ById[oreId] then
+		return nil
+	end
+	if gradeId ~= "" and not ItemData.GradeById[gradeId] then
+		return nil
+	end
+	if kind == "Gear" then
+		if not ItemData.RecipeById[recipeId] then
+			return nil
+		end
+	elseif recipeId ~= "" then
+		return nil
+	end
+	return {
+		K = kind,
+		O = oreId,
+		G = if gradeId ~= "" then gradeId else nil,
+		R = if recipeId ~= "" then recipeId else nil,
+	}
+end
+
 function ItemData.displayName(kind: string, oreId: string, gradeId: string?, recipeId: string?): string
 	local ore = OreData.ById[oreId]
 	local oreName = ore and ore.Name or oreId

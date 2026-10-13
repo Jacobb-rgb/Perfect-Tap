@@ -21,7 +21,7 @@ local PlotBuilder = require(script.Parent.PlotBuilder)
 
 local WorldBuilder = {}
 
-WorldBuilder.Version = 2
+WorldBuilder.Version = 3
 
 export type NodeSpawn = { Position: Vector3, Zone: string }
 

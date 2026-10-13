@@ -1,7 +1,11 @@
 --[[
 	Placeable machines. Size = footprint in grid cells (X wide, Z deep) at
-	rotation 0. Machines take items from any side/top and push results out
-	of their front (the side facing the road at rotation 0).
+	rotation 0. Items go in by dropping or throwing them into the hopper on
+	top, or by running a belt into any side except the output front (crates
+	and Sell Chutes take every side). Results leave the front (the side
+	facing the road at rotation 0), from the right front cell on 2-wide
+	machines, straight into a machine standing there if it takes them.
+	Grid maths (footprints, output cells, sides) lives in Machines/Grid.
 ]]
 
 export type Machine = {
@@ -19,9 +23,16 @@ export type Machine = {
 	MaxGrade: string?, -- Auto Cleaner cap
 	IsConveyor: boolean?,
 	SlotFree: boolean?, -- doesn't use a machine slot (conveyors use conveyor slots)
+	LoadText: string?, -- ActionText of the "Put In" prompt (shown while you carry something)
+	WrongHint: string?, -- toast when the machine refuses an item
+	ConveyorFaces: ("All" | "NoFront")?, -- sides a belt can feed (nil = belts never feed it)
+	AcceptsForeign: boolean?, -- takes items owned by other players
+	GradeChances: { [string]: number }?, -- output grade odds (Auto Cleaner)
 }
 
 local MachineData = {}
+
+local FURNACE_HINT = "Furnaces melt CLEAN or CRUSHED ore. Clean raw ore at your Cleaning Station first!"
 
 MachineData.List = {
 	{
@@ -37,12 +48,14 @@ MachineData.List = {
 	{
 		Id = "StorageCrate",
 		Name = "Storage Crate",
-		Description = "Stores up to 60 items. Drop items in, take them out any time.",
+		Description = "Adds 60 item spaces to your storage (all crates share one store). Drop items in, take them out any time.",
 		Size = { 2, 2 },
 		Price = 150,
 		Category = "Storage",
 		Order = 2,
 		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Gear = true },
+		LoadText = "Store Items",
+		ConveyorFaces = "All",
 	},
 	{
 		Id = "ClayFurnace",
@@ -56,6 +69,9 @@ MachineData.List = {
 		Time = 6,
 		Output = "Ingot",
 		OutputCount = 1,
+		LoadText = "Smelt Ore",
+		WrongHint = FURNACE_HINT,
+		ConveyorFaces = "NoFront",
 	},
 	{
 		Id = "Crusher",
@@ -69,21 +85,26 @@ MachineData.List = {
 		Time = 3,
 		Output = "Crushed",
 		OutputCount = 2,
+		LoadText = "Crush Ore",
+		WrongHint = "The Crusher only takes CLEAN ore.",
+		ConveyorFaces = "NoFront",
 	},
 	{
 		Id = "Anvil",
 		Name = "Anvil",
-		Description = "Hammer ingots into gear, the most valuable items in Terra.",
+		Description = "Hammer ingots of one ore into gear, the most valuable items in Terra.",
 		Size = { 2, 2 },
 		Price = 600,
 		Category = "Processing",
 		Order = 5,
 		Accepts = { Ingot = true },
+		WrongHint = "The Anvil only takes INGOTS of one ore. Smelt ore in a Furnace first!",
+		ConveyorFaces = "NoFront",
 	},
 	{
 		Id = "AutoCleaner",
 		Name = "Auto Cleaner",
-		Description = "Cleans raw ore by itself. Fast, but never better than Clean grade.",
+		Description = "Cleans raw ore by itself: 60% Rough, 40% Clean. Your own hands can do better.",
 		Size = { 2, 2 },
 		Price = 2500,
 		Category = "Processing",
@@ -93,16 +114,23 @@ MachineData.List = {
 		Output = "Clean",
 		OutputCount = 1,
 		MaxGrade = "Clean",
+		LoadText = "Auto-Clean",
+		WrongHint = "The Auto Cleaner only takes RAW ore.",
+		ConveyorFaces = "NoFront",
+		GradeChances = { Rough = 0.6, Clean = 0.4 },
 	},
 	{
 		Id = "SellChute",
 		Name = "Sell Chute",
-		Description = "Sells anything that drops in. Pays the same as Pell.",
+		Description = "Sells anything that drops in and pays the item's owner, the same as Pell.",
 		Size = { 1, 1 },
 		Price = 1200,
 		Category = "Selling",
 		Order = 7,
 		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Gear = true },
+		LoadText = "Sell Items",
+		ConveyorFaces = "All",
+		AcceptsForeign = true,
 	},
 	{
 		Id = "BlastFurnace",
@@ -116,11 +144,14 @@ MachineData.List = {
 		Time = 2.5,
 		Output = "Ingot",
 		OutputCount = 1,
+		LoadText = "Smelt Ore",
+		WrongHint = FURNACE_HINT,
+		ConveyorFaces = "NoFront",
 	},
 	{
 		Id = "Conveyor",
 		Name = "Conveyor",
-		Description = "Moves items in the direction of its arrows.",
+		Description = "Moves items in the direction of its arrows. You can walk through belts.",
 		Size = { 1, 1 },
 		Price = 25,
 		Category = "Logistics",
@@ -147,6 +178,23 @@ MachineData.SlotUpgrade = { Amount = 3, Prices = { 1000, 5000 } }
 MachineData.WorkshopPassSlots = 6
 MachineData.BaseConveyorSlots = 40
 MachineData.WorkshopPassConveyors = 20
+
+-- Finished items a machine holds while its front is blocked.
+MachineData.MaxOutBuffer = 4
+
+-- Machine slots: 10 base, +3 per slot upgrade bought (2 exist), +6 with the
+-- Workshop pass. Gives 10 / 13 / 16, or 22 with everything.
+function MachineData.machineSlots(extraBought: number, workshop: boolean): number
+	local bought = math.clamp(math.floor(tonumber(extraBought) or 0), 0, #MachineData.SlotUpgrade.Prices)
+	return MachineData.BaseMachineSlots
+		+ MachineData.SlotUpgrade.Amount * bought
+		+ (if workshop then MachineData.WorkshopPassSlots else 0)
+end
+
+-- Conveyor slots: 40, or 60 with the Workshop pass.
+function MachineData.conveyorSlots(workshop: boolean): number
+	return MachineData.BaseConveyorSlots + (if workshop then MachineData.WorkshopPassConveyors else 0)
+end
 
 -- Bellows upgrade: each level makes machines 10% faster.
 MachineData.Bellows = { Prices = { 500, 1500, 4000, 10000, 25000 }, SpeedPerLevel = 0.1 }

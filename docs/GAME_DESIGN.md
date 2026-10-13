@@ -93,18 +93,40 @@ The *Strong Back* pass doubles it.
 ## Machines (placed on your 12×12 plot grid, 4 studs per cell)
 | Machine | Size | Price | What it does |
 |---|---|---|---|
-| Storage Crate | 2×2 | 150 | stores 60 items; take them out again |
+| Storage Crate | 2×2 | 150 | crates share one store: 60 per crate, 300 max; take items out again |
 | Cleaning Station | 3×2 | 250 | the hand-cleaning minigame |
-| Clay Furnace | 2×2 | 300 | clean/crushed ore → ingot, 6 s |
-| Crusher | 2×2 | 450 | clean ore → 2 crushed piles, 3 s |
-| Anvil | 2×2 | 600 | ingots → gear (hammer it) |
-| Auto Cleaner | 2×2 | 2,500 | raw → clean (max grade *Clean*), 8 s |
-| Sell Chute | 1×1 | 1,200 | sells anything dropped in |
-| Blast Furnace | 3×3 | 6,000 | like the Clay Furnace, 2.5 s |
-| Conveyor | 1×1 | 25 | moves items, 4 rotations |
+| Clay Furnace | 2×2 | 300 | clean/crushed ore → ingot, 6 s. Queue: 4 items |
+| Crusher | 2×2 | 450 | clean ore → 2 crushed piles, 3 s. Queue: 4 items |
+| Anvil | 2×2 | 600 | holds 4 ingots of one ore; 3/4/5/6 hammer taps make a Dagger / Tool Head / Helm / Greatsword |
+| Auto Cleaner | 2×2 | 2,500 | raw → clean, 8 s: 60% Rough / 40% Clean. Queue: 4 items |
+| Sell Chute | 1×1 | 1,200 | sells anything dropped in; pays the item's owner |
+| Blast Furnace | 3×3 | 6,000 | like the Clay Furnace, 2.5 s. Queue: 4 items |
+| Conveyor | 1×1 | 25 | moves items 7 studs/s, 4 rotations; players walk through |
 
 New players start with a Storage Crate, Cleaning Station and Clay Furnace.
-Machines take items from any side or the top and push results out of the front.
+Drop or throw items into the hopper on top, or run a belt into any side
+except the output front (crates and Sell Chutes take all sides). Results go
+out of the front cell (the right front cell on 2-wide machines), straight
+into a machine standing there if it takes them. A machine holds up to 4
+finished items while its front is blocked. Wrong items bounce back out with
+a hint; items owned by someone else only go into Sell Chutes.
+
+### Build controls
+| Action | PC | Touch | Gamepad |
+|---|---|---|---|
+| Open / close build mode | B or the BUILD button | BUILD button / Done | D-pad Up / B |
+| Pick a machine | click a card in the tray | tap a card | LB / RB |
+| Move the cursor | mouse | tap a cell | left stick |
+| Rotate | R | Rotate button | X |
+| Place | left click (drag to paint belts) | Place button | A |
+| Select a placed machine | click it | tap it | cursor on it |
+| Move / pack up the selection | M / X or Delete | Move / Pack Up buttons | Y |
+| Cancel | right click or C | Cancel button | B |
+| Pan the camera | WASD or right-drag | one-finger drag | right stick |
+| Zoom | mouse wheel | pinch | LT / RT |
+
+Belts auto-advance one cell after placing, so you can lay a line by placing
+again. The ghost turns red with the reason when a spot doesn't work.
 
 Speed upgrade *Bellows* (5 levels, −10% machine time each): 500 / 1,500 / 4,000 / 10,000 / 25,000.
 Machine slots: 10 (+3 for 1,000, +3 for 5,000, +6 with *Workshop Expansion*). Conveyor slots: 40 (+20 with the pass).

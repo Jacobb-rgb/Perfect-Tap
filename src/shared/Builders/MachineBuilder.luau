@@ -3,16 +3,21 @@
 
 	Local space: origin = footprint center on the plot surface, front = -Z
 	(LookVector). Every model has a PrimaryPart "Base" with Attachments:
-	  Intake   center of the intake box (attribute IntakeSize: Vector3)
-	  Output   where results are pushed out (front)
+	  Intake   center of the hopper's intake box (attribute IntakeSize: Vector3)
+	  Output   where results are pushed out, at Grid.outputLocal (a cell
+	           centre column, 0.5 studs in front of the footprint)
 	  Prompt   where ProximityPrompts go
-	  OrePoint / CamPoint   (Cleaning Station close-up)
+	  Status   above the model (machine billboards)
+	  OrePoint / CamPoint   (Cleaning Station close-up; its Output is the tray)
+	  AnvilPoint / CamPoint / IngotSlot1..4   (Anvil)
+	Conveyors are 6 parts: Base, Belt (tag ConveyorBelt), RailL, RailR, 2x Arrow.
 	Moving parts are named so the client can animate them (Roller, Drum, Glow).
 ]]
 
 local Geo = require(script.Parent.Geo)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
+local Grid = require(script.Parent.Parent.Machines.Grid)
 
 local MachineBuilder = {}
 
@@ -62,6 +67,14 @@ local function attach(base: BasePart, name: string, cf: CFrame): Attachment
 	a.CFrame = cf
 	a.Parent = base
 	return a
+end
+
+-- Output attachment at the shared grid position; returns it so lips and
+-- chutes can line up with it.
+local function output(base: BasePart, id: string): Vector3
+	local position = Grid.outputLocal(id) :: Vector3
+	attach(base, "Output", CFrame.new(position))
+	return position
 end
 
 local function light(parent: Instance, color: Color3, range: number, brightness: number): PointLight
@@ -221,7 +234,7 @@ local function storageCrate(): Model
 	local label = sign(model, CFrame.new(0, 2.6, -2.98), "0/60", 3)
 	label.Name = "CountSign"
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
-	attach(base, "Output", CFrame.new(0, 2, -4.4))
+	output(base, "StorageCrate")
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.2))
 	intake:SetAttribute("IntakeSize", Vector3.new(6, 2.4, 6))
 	local _ = body
@@ -242,18 +255,19 @@ local function furnace(id: string, scale: number): Model
 	local chimney = Geo.block(model, CFrame.new(1.3 * s, 7.6 * s, 1.8 * s), Vector3.new(1.4, 3 * s, 1.4) * Vector3.new(s, 1, s), C.StoneDark, nil, solid())
 	local top = Geo.block(model, CFrame.new(1.3 * s, 9.15 * s, 1.8 * s), Vector3.new(1.5 * s, 0.15, 1.5 * s), C.Glow, Enum.Material.Neon, decor({ Name = "ChimneyTop" }))
 	emitter(top, "Smoke", rgb(110, 100, 96), if id == "BlastFurnace" then 5 else 2)
-	-- glowing mouth
-	Geo.block(model, CFrame.new(0, 2.3 * s, -2.65 * s), Vector3.new(3.2 * s, 2.6 * s, 0.4), C.StoneDark, nil, solid())
-	local glow = Geo.block(model, CFrame.new(0, 2.2 * s, -2.75 * s), Vector3.new(2.4 * s, 1.8 * s, 0.25), C.Glow, Enum.Material.Neon, decor({ Name = "Glow" }))
+	-- glowing mouth, moved toward the output column but kept on the body
+	local out = output(base, id)
+	local mouthX = math.clamp(out.X, -1.4 * s, 1.4 * s)
+	Geo.block(model, CFrame.new(mouthX, 2.3 * s, -2.65 * s), Vector3.new(3.2 * s, 2.6 * s, 0.4), C.StoneDark, nil, solid())
+	local glow = Geo.block(model, CFrame.new(mouthX, 2.2 * s, -2.75 * s), Vector3.new(2.4 * s, 1.8 * s, 0.25), C.Glow, Enum.Material.Neon, decor({ Name = "Glow" }))
 	light(glow, C.Glow, 12 * s, 1.2)
 	emitter(glow, "Embers", C.Glow, 2)
-	-- output lip
-	Geo.block(model, CFrame.new(0, 1.15, -3.3 * s), Vector3.new(2.4 * s, 0.3, 1.2), C.Metal, Enum.Material.Metal, solid())
+	-- output lip leading to the Output point
+	Geo.block(model, CFrame.new(out.X, 1.15, out.Z + 1.4), Vector3.new(2.4 * s, 0.3, 1.8), C.Metal, Enum.Material.Metal, solid())
 	-- hopper on top
 	funnel(model, Vector3.new(0, 7.2 * s, 0.8), 3 * s, 1.2, C.Metal)
 	sign(model, CFrame.new(0, 4.1 * s, -2.62 * s), if id == "BlastFurnace" then "BLAST FURNACE" else "FURNACE", 3.6 * s)
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3.6 * s))
-	attach(base, "Output", CFrame.new(0, 1.8, -4.4 * s))
 	local intake = attach(base, "Intake", CFrame.new(0, 4.5 * s, 1.2))
 	intake:SetAttribute("IntakeSize", Vector3.new(7 * s, 9 * s, 6 * s))
 	local _ = chimney
@@ -282,10 +296,10 @@ local function crusher(): Model
 		Geo.block(model, CFrame.new(i * 1.1, 0.6, -2.42) * CFrame.Angles(0, 0, math.rad(45)), Vector3.new(0.4, 1, 0.05), if i % 2 == 0 then C.Belt else rgb(240, 190, 40), nil, decor())
 	end
 	-- output chute
-	Geo.wedge(model, CFrame.new(0, 1.2, -3.1) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.6, 0.8, 1.6), C.MetalLight, Enum.Material.Metal, solid())
+	local out = output(base, "Crusher")
+	Geo.wedge(model, CFrame.new(out.X, 1.2, out.Z + 1.3) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.2, 0.8, 1.6), C.MetalLight, Enum.Material.Metal, solid())
 	sign(model, CFrame.new(0, 2.8, -2.42), "CRUSHER", 3)
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
-	attach(base, "Output", CFrame.new(0, 1.8, -4.4))
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.6))
 	intake:SetAttribute("IntakeSize", Vector3.new(6.6, 6, 6.2))
 	return model
@@ -307,9 +321,17 @@ local function anvil(): Model
 	Geo.cylinder(model, Vector3.new(-2.4, 0.9, 2), 1.5, 1.6, C.Wood, nil, solid())
 	Geo.cylinder(model, Vector3.new(-2.4, 1.6, 2), 0.1, 1.4, rgb(70, 140, 180), nil, decor())
 	sign(model, CFrame.new(0, 1.6, -1.55), "ANVIL", 1.8)
-	attach(base, "AnvilPoint", CFrame.new(0, 4.95, 0.3))
+	local anvilPoint = Vector3.new(0, 4.95, 0.3)
+	attach(base, "AnvilPoint", CFrame.new(anvilPoint))
+	-- forging close-up: in front and above, looking down at the face
+	attach(base, "CamPoint", CFrame.lookAt(Vector3.new(0, 8.5, -5.5), anvilPoint + Vector3.new(0, 0.2, 0)))
+	-- where the client shows waiting ingots: side by side across the face,
+	-- turned so their long side runs front to back
+	for i = 1, 4 do
+		attach(base, "IngotSlot" .. i, CFrame.new((i - 2.5) * 0.9, 5.05, 0.3) * CFrame.Angles(0, math.pi / 2, 0))
+	end
 	attach(base, "Prompt", CFrame.new(0, 3.5, -1.8))
-	attach(base, "Output", CFrame.new(0, 2, -3.6))
+	output(base, "Anvil")
 	local intake = attach(base, "Intake", CFrame.new(0, 5, 0.3))
 	intake:SetAttribute("IntakeSize", Vector3.new(4.4, 2.6, 3.4))
 	local _ = face
@@ -331,10 +353,10 @@ local function autoCleaner(): Model
 	-- dust vent
 	local vent = Geo.block(model, CFrame.new(2.2, 5.4, 2.2), Vector3.new(0.9, 1.4, 0.9), C.Metal, Enum.Material.Metal, decor({ Name = "Vent" }))
 	emitter(vent, "Smoke", rgb(190, 170, 150), 1)
-	Geo.wedge(model, CFrame.new(0, 1.2, -2.6) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.6, 0.8, 1.6), C.MetalLight, Enum.Material.Metal, solid())
+	local out = output(base, "AutoCleaner")
+	Geo.wedge(model, CFrame.new(out.X, 1.2, out.Z + 1.3) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.2, 0.8, 1.6), C.MetalLight, Enum.Material.Metal, solid())
 	sign(model, CFrame.new(0, 0.9, -1.85), "AUTO CLEANER", 3)
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3))
-	attach(base, "Output", CFrame.new(0, 1.8, -4))
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.6))
 	intake:SetAttribute("IntakeSize", Vector3.new(6, 6.6, 6))
 	return model
@@ -359,19 +381,24 @@ local function conveyor(): Model
 	base.Transparency = 1
 	base.CanCollide = false
 	base.CanQuery = true
-	for _, x in { -1.85, 1.85 } do
-		Geo.block(model, CFrame.new(x, 0.55, 0), Vector3.new(0.3, 1.1, 4), C.Metal, Enum.Material.Metal, solid())
+	base.CastShadow = false
+	Geo.block(model, CFrame.new(-1.85, 0.55, 0), Vector3.new(0.3, 1.1, 4), C.Metal, Enum.Material.Metal, solid({ Name = "RailL", CastShadow = false }))
+	Geo.block(model, CFrame.new(1.85, 0.55, 0), Vector3.new(0.3, 1.1, 4), C.Metal, Enum.Material.Metal, solid({ Name = "RailR", CastShadow = false }))
+	-- zero bounce and high friction so items ride the belt instead of hopping
+	local belt = Geo.block(model, CFrame.new(0, 0.6, 0), Vector3.new(3.4, 0.4, 4), C.Belt, nil, solid({
+		Name = "Belt",
+		CanTouch = true,
+		CastShadow = false,
+		CustomPhysicalProperties = PhysicalProperties.new(0.7, 1.2, 0, 100, 100),
+	}))
+	belt:AddTag("ConveyorBelt")
+	-- one flat chevron pointing to the front (-Z), the direction items move:
+	-- two wedges lying flat, mirrored around x = 0
+	local w, h = 1.8, 1.2
+	for _, side in { -1, 1 } do
+		Geo.wedge(model, CFrame.new(side * w / 4, 0.82, 0) * CFrame.Angles(0, 0, -side * math.pi / 2), Vector3.new(0.04, w / 2, h), C.Arrow, Enum.Material.Neon, decor({ Name = "Arrow" }))
 	end
-	local belt = Geo.block(model, CFrame.new(0, 0.6, 0), Vector3.new(3.4, 0.4, 4), C.Belt, nil, solid({ Name = "Belt", CanTouch = true }))
-	belt:SetAttribute("Conveyor", true)
-	-- flat chevrons pointing to the front (-Z), the direction items move.
-	-- Each chevron = two wedges lying flat, mirrored around x = 0.
-	local w, h = 1.4, 0.9
-	for i = -1, 1 do
-		local z = i * 1.3
-		Geo.wedge(model, CFrame.new(-w / 4, 0.82, z) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(0.04, w / 2, h), C.Arrow, Enum.Material.Neon, decor({ Name = "Arrow" }))
-		Geo.wedge(model, CFrame.new(w / 4, 0.82, z) * CFrame.Angles(0, 0, -math.pi / 2), Vector3.new(0.04, w / 2, h), C.Arrow, Enum.Material.Neon, decor({ Name = "Arrow" }))
-	end
+	attach(base, "Prompt", CFrame.new(0, 1.5, 0))
 	return model
 end
 
@@ -396,11 +423,19 @@ function MachineBuilder.build(id: string): Model
 	local builder = BUILDERS[id]
 	assert(builder, "No model for machine " .. tostring(id))
 	local model = builder()
+	local base = model.PrimaryPart :: BasePart
+	local top = 0
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = true
+			-- highest point of the (possibly rotated) part
+			local cf, size = d.CFrame, d.Size
+			local _, _, _, _, _, _, r10, r11, r12 = cf:GetComponents()
+			local halfHeight = math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2
+			top = math.max(top, cf.Position.Y + halfHeight)
 		end
 	end
+	attach(base, "Status", CFrame.new(0, top - base.CFrame.Position.Y + 1.5, 0))
 	return model
 end
 
