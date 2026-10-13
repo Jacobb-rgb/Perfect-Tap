@@ -350,5 +350,21 @@
       "aperture": 0.0035,
       "maxblur": 0.008
     }
+  },
+  "plot_machines": {
+    "scene": "cleaning_reveal",
+    "position": [
+      -70,
+      16,
+      108
+    ],
+    "target": [
+      -106,
+      1,
+      82
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 70
   }
 }
