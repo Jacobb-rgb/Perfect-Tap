@@ -2,8 +2,12 @@
 	Terra Forge server bootstrap.
 
 	Every module in Services/ is a table with optional init() and start().
-	init() runs first for all services in ORDER (set up state, remotes),
-	then start() runs for each in its own thread (loops, connections).
+	init() runs first for all services in ORDER (set up state, remotes,
+	MachineService behaviours), then start() runs for each in its own thread
+	(loops, connections). MachineService spawns machines in start(), so every
+	behaviour is registered before the first machine appears.
+	A service listed here that doesn't exist yet is skipped with a warning
+	(feature packages add theirs over time).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,7 +29,15 @@ local ORDER = {
 	"CarryService",
 	"PlotService",
 	"MachineService",
+	"IntakeService",
+	"EconomyService",
 	"CleaningService",
+	"ProcessingService",
+	"StorageService",
+	"SellService",
+	"ConveyorService",
+	"AnvilService",
+	"BuildService",
 	"AccessService",
 }
 

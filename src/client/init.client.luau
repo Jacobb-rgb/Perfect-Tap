@@ -2,6 +2,7 @@
 	Terra Forge client bootstrap. Controllers are modules with optional
 	init() and start(); same lifecycle as the server services.
 	The client only does visuals and input; the server decides everything else.
+	A controller listed here that doesn't exist yet is skipped with a warning.
 ]]
 
 local Controllers = script:WaitForChild("Controllers")
@@ -17,6 +18,11 @@ local ORDER = {
 	"AccessController",
 	"PromptController",
 	"CleaningController",
+	"MachineFxController",
+	"StorageController",
+	"SellController",
+	"AnvilController",
+	"PlacementController",
 }
 
 local loaded = {}

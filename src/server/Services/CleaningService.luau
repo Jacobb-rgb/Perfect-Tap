@@ -11,6 +11,9 @@
 	   sanity-checks the timing, and turns the raw chunk into a clean ore of
 	   that grade on the station's output tray.
 	Cancelling leaves the ore in the vise; "Take Ore" gives it back.
+	The station has no canAccept, so IntakeService leaves it alone: its own
+	vise scan below mounts dropped raw ore. Moving the station carries the
+	vise ore along; packing it up (or leaving) stashes it.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -272,7 +275,13 @@ local function intakeLoop()
 						local size = intake:GetAttribute("IntakeSize") :: Vector3? or Vector3.new(3, 3, 3)
 						for _, part in Workspace:GetPartBoundsInBox(intake.WorldCFrame, size, params) do
 							local record = ItemService.fromPart(part)
-							if record and record.State == "Loose" and record.Kind == "Raw" and record.Owner == machine.Owner.UserId then
+							if
+								record
+								and record.State == "Loose"
+								and record.Kind == "Raw"
+								and record.Owner == machine.Owner.UserId
+								and ItemService.isTrusted(record, os.clock())
+							then
 								mount(machine, record)
 								-- start right away if the owner is close by
 								local root = Guard.rootPart(machine.Owner)
@@ -305,14 +314,23 @@ function CleaningService.init()
 			end)
 			updatePrompts(machine)
 		end,
-		removed = function(machine)
+		-- packed up or unloaded: the same either way (the vise ore goes to Storage)
+		removed = function(machine, _reason)
 			local session = machine.State.Session :: Session?
 			if session then
 				endSession(session)
 			end
 			local record = stationItem(machine)
 			if record then
+				machine.State.Item = nil
 				ItemService.stash(record, nil)
+			end
+		end,
+		-- moved in build mode: the ore in the vise moves with the station
+		moved = function(machine)
+			local record = stationItem(machine)
+			if record then
+				mount(machine, record)
 			end
 		end,
 	})

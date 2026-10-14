@@ -1,6 +1,8 @@
 --[[
 	PlotService: gives every player their own workshop plot when their data
 	loads, frees it when they leave, and converts grid cells to world space.
+	The grid maths itself lives in Shared/Machines/Grid (the build-mode
+	ghost uses the same code).
 ]]
 
 local Players = game:GetService("Players")
@@ -8,8 +10,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
-local MachineData = require(Shared.Config.MachineData)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local Grid = require(Shared.Machines.Grid)
 local DataService = require(script.Parent.DataService)
 local WorldService = require(script.Parent.WorldService)
 
@@ -40,36 +42,62 @@ function PlotService.ownerOf(plotId: number): Player?
 	return ownerOfPlot[plotId]
 end
 
+-- Plots never move, so their CFrames are worked out once.
+local plotFrames: { [number]: CFrame } = {}
+
 function PlotService.plotCFrame(plotId: number): CFrame
-	return WorldLayout.plotCFrame(WorldLayout.Plots[plotId])
+	local cf = plotFrames[plotId]
+	if not cf then
+		cf = WorldLayout.plotCFrame(WorldLayout.Plots[plotId])
+		plotFrames[plotId] = cf
+	end
+	return cf
 end
 
 function PlotService.model(plotId: number): Model?
 	return WorldService.getPlotModel(plotId)
 end
 
--- Center of a machine footprint in plot space (gx, gz = min corner cell).
+-- World CFrame of a machine footprint's centre (gx, gz = min corner cell),
+-- turned so the machine's front faces Grid.dir(rotation).
 function PlotService.footprintCFrame(plotId: number, machineId: string, gx: number, gz: number, rotation: number): CFrame
-	local machine = MachineData.ById[machineId]
-	local w, d = MachineData.footprint(machine, rotation)
-	local cell = GameConfig.CellSize
-	local half = GameConfig.PlotCells * cell / 2
-	local x = -half + (gx + w / 2) * cell
-	local z = -half + (gz + d / 2) * cell
-	return PlotService.plotCFrame(plotId) * CFrame.new(x, 0, z) * CFrame.Angles(0, -rotation * math.pi / 2, 0)
+	return PlotService.plotCFrame(plotId) * Grid.localCFrame(machineId, gx, gz, rotation)
 end
 
 -- Grid cell under a world position on a plot (or nil when off the plot).
 function PlotService.cellAt(plotId: number, position: Vector3): (number?, number?)
-	local localPos = PlotService.plotCFrame(plotId):PointToObjectSpace(position)
-	local cell = GameConfig.CellSize
-	local half = GameConfig.PlotCells * cell / 2
-	local gx = math.floor((localPos.X + half) / cell)
-	local gz = math.floor((localPos.Z + half) / cell)
-	if gx < 0 or gz < 0 or gx >= GameConfig.PlotCells or gz >= GameConfig.PlotCells then
-		return nil, nil
+	return Grid.cellFromLocal(PlotService.plotCFrame(plotId):PointToObjectSpace(position))
+end
+
+-- Half the plot pad plus a little: anything further from a plot centre is off it.
+local QUICK_REJECT = GameConfig.PlotCells * GameConfig.CellSize / 2 + 2
+local MIN_LOCAL_Y, MAX_LOCAL_Y = -3, 24
+
+-- Which plot a world position is over (any plot, owned or not), and the
+-- position in that plot's local space. Cheap: a box reject per plot first.
+function PlotService.plotAt(position: Vector3): (number?, Vector3?)
+	for _, plot in WorldLayout.Plots do
+		local center = plot.Center
+		if math.abs(position.X - center.X) <= QUICK_REJECT and math.abs(position.Z - center.Z) <= QUICK_REJECT then
+			local localPos = PlotService.plotCFrame(plot.Id):PointToObjectSpace(position)
+			if localPos.Y >= MIN_LOCAL_Y and localPos.Y <= MAX_LOCAL_Y then
+				return plot.Id, localPos
+			end
+		end
 	end
-	return gx, gz
+	return nil, nil
+end
+
+-- Is the player's character within `range` studs (horizontally) of the plot centre?
+function PlotService.isNear(player: Player, plotId: number, range: number): boolean
+	local plot = WorldLayout.Plots[plotId]
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not plot or not root then
+		return false
+	end
+	local offset = root.Position - plot.Center
+	return Vector3.new(offset.X, 0, offset.Z).Magnitude <= range
 end
 
 function PlotService.setSignText(plotId: number, text: string)

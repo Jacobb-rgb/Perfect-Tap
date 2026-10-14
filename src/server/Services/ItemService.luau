@@ -8,9 +8,17 @@
 	  owner can pick it up, and selling always pays the owner, so stealing
 	  or griefing other players' items gains nothing.
 	- Physics: the owner's client simulates an item for a few seconds after a
-	  drop/throw (smooth), then the server takes it back. Items are in the
-	  "Items" collision group, which does not collide with characters
-	  (no flinging other players with items).
+	  drop/throw (smooth), then the server takes it back. Only owners within
+	  GameConfig.ClientPhysicsRange get it (a far-away client may not have
+	  the part streamed in). Items are in the "Items" collision group, which
+	  does not collide with characters (no flinging other players with items).
+	- Trust: while a client simulates an item it could move it anywhere, so
+	  machines only take an item when isTrusted() says its travel since the
+	  drop is plausible. Items that end up far from where they were dropped
+	  snap back when the server takes physics back.
+	- Descriptors: an item outside the world (storage, machine queues) is a
+	  Desc { K = kind, O = oreId, G = grade?, R = recipe? }. absorb() turns an
+	  item into a Desc, spawnDesc() turns a Desc back into an item.
 	- Performance: max GameConfig.MaxLooseItemsPerPlayer loose items per
 	  player; when exceeded the oldest one is moved into storage (data), so
 	  nothing is ever lost. Resting items sleep in Roblox physics by themselves.
@@ -37,6 +45,9 @@ local ItemService = {}
 ItemService.ItemGroup = "Items"
 ItemService.CharacterGroup = "Characters"
 
+export type Desc = ItemData.Desc
+export type StoreResult = "Stored" | "Sold" | "Lost"
+
 export type ItemRecord = {
 	Id: string,
 	Model: Model,
@@ -50,10 +61,14 @@ export type ItemRecord = {
 	CreatedAt: number, -- also reset when the item is dropped/ejected (loose-cap order)
 	ClientOwnedUntil: number?,
 	LastNearOwner: number, -- os.clock() when the item was last near its owner or a machine
+	ReleasePos: Vector3, -- where it was last spawned or released (trust and snap-back)
+	ReleasedAt: number, -- os.clock() of that release
 }
 
 local records: { [Model]: ItemRecord } = {}
 local byId: { [string]: ItemRecord } = {}
+-- owner UserId -> their records, so per-player counts don't walk every item
+local byOwner: { [number]: { [ItemRecord]: boolean } } = {}
 local folder: Folder
 local lastCapToast: { [number]: number } = {}
 
@@ -61,13 +76,45 @@ local function ownerPlayer(record: ItemRecord): Player?
 	return Players:GetPlayerByUserId(record.Owner)
 end
 
+-- Root part of a user's living character (nil when not in the game).
+local function ownerRoot(userId: number): BasePart?
+	local player = Players:GetPlayerByUserId(userId)
+	local character = player and player.Character
+	return character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function index(record: ItemRecord)
+	records[record.Model] = record
+	byId[record.Id] = record
+	local set = byOwner[record.Owner]
+	if not set then
+		set = {}
+		byOwner[record.Owner] = set
+	end
+	set[record] = true
+end
+
+local function unindex(record: ItemRecord)
+	records[record.Model] = nil
+	byId[record.Id] = nil
+	local set = byOwner[record.Owner]
+	if set then
+		set[record] = nil
+		if next(set) == nil then
+			byOwner[record.Owner] = nil
+		end
+	end
+end
+
+-- Where an item is (Body.CFrame.Position is Body.Position; the Lune tests can read it).
+local function positionOf(record: ItemRecord): Vector3
+	return record.Body.CFrame.Position
+end
+
 local function setNetworkOwner(record: ItemRecord, player: Player?)
 	local body = record.Body
-	if body.Anchored or not body:IsDescendantOf(Workspace) then
-		return
-	end
 	pcall(function()
-		if body:CanSetNetworkOwnership() then
+		if not body.Anchored and body:IsDescendantOf(Workspace) and body:CanSetNetworkOwnership() then
 			body:SetNetworkOwner(player)
 		end
 	end)
@@ -91,6 +138,11 @@ local function syncAttributes(record: ItemRecord)
 	m:SetAttribute("Owner", record.Owner)
 	m:SetAttribute("State", record.State)
 	m:SetAttribute("Value", ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe))
+end
+
+local function markReleased(record: ItemRecord)
+	record.ReleasePos = positionOf(record)
+	record.ReleasedAt = os.clock()
 end
 
 function ItemService.get(model: Instance?): ItemRecord?
@@ -123,61 +175,112 @@ function ItemService.setState(record: ItemRecord, state: string)
 	end
 end
 
+-- The item as a storage descriptor (a fresh table).
+function ItemService.descOf(record: ItemRecord): Desc
+	return { K = record.Kind, O = record.OreId, G = record.Grade, R = record.Recipe }
+end
+
 function ItemService.looseCount(userId: number): number
 	local count = 0
-	for _, record in records do
-		if record.Owner == userId and record.State == "Loose" then
-			count += 1
+	local set = byOwner[userId]
+	if set then
+		for record in set do
+			if record.State == "Loose" then
+				count += 1
+			end
 		end
 	end
 	return count
 end
 
+-- Every loose item. A copy, so callers may destroy items while walking it.
+function ItemService.looseList(): { ItemRecord }
+	local list = {}
+	for _, record in records do
+		if record.State == "Loose" then
+			table.insert(list, record)
+		end
+	end
+	return list
+end
+
 function ItemService.destroy(record: ItemRecord)
 	record.State = "Consumed"
-	records[record.Model] = nil
-	byId[record.Id] = nil
+	unindex(record)
 	record.Model:Destroy()
+end
+
+-- Takes an item out of the world (into a machine, a sale...) and returns
+-- what it was. Works in any state except Consumed; a carried item should
+-- come off the carry stack first (CarryService.takeTop).
+function ItemService.absorb(record: ItemRecord): Desc
+	assert(record.State ~= "Consumed", "absorb: item already consumed")
+	local desc = ItemService.descOf(record)
+	local weld = record.Body:FindFirstChild("CarryWeld")
+	if weld then
+		weld:Destroy()
+	end
+	record.Model:SetAttribute("CarriedBy", nil)
+	ItemService.destroy(record)
+	return desc
+end
+
+--[[
+	Puts an item descriptor into the player's storage (data.Storage), or
+	pays its full value when storage is full (MaxStoredItems), so nothing is
+	ever lost. 'Lost' only when the player's data isn't loaded or the
+	descriptor is junk. With a reason, the player gets a toast.
+]]
+function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): StoreResult
+	local data = DataService.get(player)
+	if not data then
+		return "Lost"
+	end
+	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
+		warn("[ItemService] storeDesc got a bad item for " .. player.Name)
+		return "Lost"
+	end
+	local result: StoreResult
+	if #data.Storage < GameConfig.MaxStoredItems then
+		table.insert(data.Storage, { K = desc.K, O = desc.O, G = desc.G, R = desc.R })
+		result = "Stored"
+	else
+		-- storage full: pay the full value instead of losing the item
+		local value = ItemData.value(desc.K, desc.O, desc.G, desc.R)
+		data.Coins += value
+		data.TotalEarned += value
+		result = "Sold"
+	end
+	DataService.changed(player)
+	if reason and player.Parent then
+		Net.fire("Notify", player, {
+			Text = if result == "Stored" then reason .. " (moved to your Storage Crate)" else reason .. " (storage full: sold it)",
+			Kind = "Info",
+		})
+	end
+	return result
 end
 
 -- Moves an item into the owner's storage data (or sells it if storage is full).
 -- Returns true when the item was kept (stored).
 function ItemService.stash(record: ItemRecord, reason: string?): boolean
 	local player = ownerPlayer(record)
-	local data = player and DataService.get(player)
-	local stored = false
-	if data and #data.Storage < GameConfig.MaxStoredItems then
-		table.insert(data.Storage, {
-			K = record.Kind,
-			O = record.OreId,
-			G = record.Grade,
-			R = record.Recipe,
-		})
-		stored = true
-	elseif data then
-		-- storage full: pay the full value instead of losing the item
-		local value = ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe)
-		data.Coins += value
-		data.TotalEarned += value
-	end
+	local desc = ItemService.descOf(record)
 	ItemService.destroy(record)
-	if player and data then
-		DataService.changed(player)
-		if reason and player.Parent then
-			Net.fire("Notify", player, {
-				Text = if stored then reason .. " (moved to your Storage Crate)" else reason .. " (storage full: sold it)",
-				Kind = "Info",
-			})
-		end
+	if not player then
+		return false
 	end
-	return stored
+	return ItemService.storeDesc(player, desc, reason) == "Stored"
 end
 
 local function enforceLooseLimit(userId: number)
 	local loose = {}
-	for _, record in records do
-		if record.Owner == userId and record.State == "Loose" then
-			table.insert(loose, record)
+	local set = byOwner[userId]
+	if set then
+		for record in set do
+			if record.State == "Loose" then
+				table.insert(loose, record)
+			end
 		end
 	end
 	if #loose <= GameConfig.MaxLooseItemsPerPlayer then
@@ -196,9 +299,12 @@ local function enforceLooseLimit(userId: number)
 	end
 end
 
+-- The owner's client simulates the item for a moment (smooth throws), but
+-- only when it is close enough to surely have the item streamed in.
 local function giveClientPhysics(record: ItemRecord)
 	local player = ownerPlayer(record)
-	if player then
+	local root = ownerRoot(record.Owner)
+	if player and root and (root.Position - positionOf(record)).Magnitude <= GameConfig.ClientPhysicsRange then
 		setNetworkOwner(record, player)
 		record.ClientOwnedUntil = os.clock() + GameConfig.ServerOwnershipAfter
 	else
@@ -207,11 +313,12 @@ local function giveClientPhysics(record: ItemRecord)
 	end
 end
 
---[[
-	Spawns a physical item.
-	info = { Kind, OreId, Grade?, Recipe? }, owner = UserId.
-]]
-function ItemService.spawn(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?): ItemRecord?
+local function keepServerPhysics(record: ItemRecord)
+	setNetworkOwner(record, nil)
+	record.ClientOwnedUntil = nil
+end
+
+local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean): ItemRecord?
 	if not OreData.exists(info.OreId) or not ItemData.Kinds[info.Kind] then
 		warn("[ItemService] bad item info", info.Kind, info.OreId)
 		return nil
@@ -236,23 +343,50 @@ function ItemService.spawn(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame
 		CreatedAt = now,
 		ClientOwnedUntil = nil,
 		LastNearOwner = now,
+		ReleasePos = cf.Position,
+		ReleasedAt = now,
 	}
-	records[model] = record
-	byId[id] = record
+	index(record)
 	syncAttributes(record)
 	model.Parent = folder
+	markReleased(record)
 	if velocity then
 		body.AssemblyLinearVelocity = velocity
 		body.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 8
 	end
-	giveClientPhysics(record)
+	if serverOwned then
+		keepServerPhysics(record)
+	else
+		giveClientPhysics(record)
+	end
 	enforceLooseLimit(owner)
 	return record
 end
 
+--[[
+	Spawns a physical item.
+	info = { Kind, OreId, Grade?, Recipe? }, owner = UserId.
+]]
+function ItemService.spawn(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?): ItemRecord?
+	return create(info, owner, cf, velocity, false)
+end
+
+--[[
+	Spawns an item from a descriptor (machine output, storage). With
+	`serverOwned` the server keeps its physics from the start: machine
+	outputs riding belts are then never waiting on a client (see isTrusted).
+]]
+function ItemService.spawnDesc(desc: Desc, ownerUserId: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean?): ItemRecord?
+	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
+		warn("[ItemService] spawnDesc got a bad item")
+		return nil
+	end
+	return create({ Kind = desc.K, OreId = desc.O, Grade = desc.G, Recipe = desc.R }, ownerUserId, cf, velocity, serverOwned == true)
+end
+
 -- Re-creates an item from storage data next to a position.
 function ItemService.spawnFromStorage(entry: { [string]: any }, owner: number, cf: CFrame): ItemRecord?
-	return ItemService.spawn({ Kind = entry.K, OreId = entry.O, Grade = entry.G, Recipe = entry.R }, owner, cf)
+	return ItemService.spawnDesc(entry :: any, owner, cf)
 end
 
 -- Makes an item loose again at a CFrame (after being carried or ejected by a machine).
@@ -269,11 +403,17 @@ function ItemService.release(record: ItemRecord, cf: CFrame, velocity: Vector3?)
 	ItemService.setState(record, "Loose")
 	record.CreatedAt = os.clock()
 	record.LastNearOwner = os.clock()
+	markReleased(record)
 	if velocity then
 		record.Body.AssemblyLinearVelocity = velocity
 	end
 	giveClientPhysics(record)
 	enforceLooseLimit(record.Owner)
+end
+
+-- Pops an item out of where it is (a refused item bouncing out of a hopper).
+function ItemService.eject(record: ItemRecord, velocity: Vector3)
+	ItemService.release(record, record.Model:GetPivot() + Vector3.new(0, 1.5, 0), velocity)
 end
 
 -- Anchors an item into a machine slot (state "Machine").
@@ -289,11 +429,34 @@ function ItemService.mount(record: ItemRecord, cf: CFrame)
 	ItemService.setState(record, "Machine")
 end
 
+--[[
+	Can a machine believe where this item is? Always, while the server
+	simulates it. While the owner's client does, the owner must be close
+	(AntiTeleportRange) and the item can't have travelled further since its
+	release than MaxItemSpeed allows (plus PlausibleSlack). `now` = os.clock().
+]]
+function ItemService.isTrusted(record: ItemRecord, now: number): boolean
+	if record.ClientOwnedUntil == nil then
+		return true
+	end
+	local root = ownerRoot(record.Owner)
+	if not root then
+		return false
+	end
+	local position = positionOf(record)
+	if (root.Position - position).Magnitude > GameConfig.AntiTeleportRange then
+		return false
+	end
+	local flat = Vector3.new(position.X - record.ReleasePos.X, 0, position.Z - record.ReleasePos.Z).Magnitude
+	return flat <= math.max(0, now - record.ReleasedAt) * GameConfig.MaxItemSpeed + GameConfig.PlausibleSlack
+end
+
 -- All items (any state) owned by a user.
 function ItemService.ownedBy(userId: number): { ItemRecord }
 	local list = {}
-	for _, record in records do
-		if record.Owner == userId then
+	local set = byOwner[userId]
+	if set then
+		for record in set do
 			table.insert(list, record)
 		end
 	end
@@ -301,54 +464,58 @@ function ItemService.ownedBy(userId: number): { ItemRecord }
 end
 
 local function rescueCFrame(userId: number): CFrame?
-	local player = Players:GetPlayerByUserId(userId)
-	local character = player and player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local root = ownerRoot(userId)
 	if root then
 		return root.CFrame * CFrame.new(0, 2, -4)
 	end
 	return nil
 end
 
+-- Puts a lost item back next to its owner, or into storage when they have no character.
+local function rescue(record: ItemRecord)
+	local cf = rescueCFrame(record.Owner)
+	if cf then
+		record.Body.AssemblyLinearVelocity = Vector3.zero
+		ItemService.release(record, cf)
+	else
+		ItemService.stash(record, nil)
+	end
+end
+
 local function maintainOne(record: ItemRecord, now: number)
 	if not record.Model.Parent or not record.Body.Parent then
 		-- destroyed by the engine (fell below FallenPartsDestroyHeight): keep it as storage
-		records[record.Model] = nil
+		unindex(record)
 		if record.State ~= "Consumed" then
-			byId[record.Id] = nil
-			local player = ownerPlayer(record)
-			local data = player and DataService.get(player)
-			if data and player and #data.Storage < GameConfig.MaxStoredItems then
-				table.insert(data.Storage, { K = record.Kind, O = record.OreId, G = record.Grade, R = record.Recipe })
-				DataService.changed(player)
-			end
 			record.State = "Consumed"
+			local player = ownerPlayer(record)
+			if player then
+				ItemService.storeDesc(player, ItemService.descOf(record), nil)
+			end
 		end
 		return
 	end
 	if record.State ~= "Loose" then
 		return
 	end
-	local body = record.Body
-	if body.Position.Y < GameConfig.ItemFallKillY then
-		local rescue = rescueCFrame(record.Owner)
-		if rescue then
-			body.AssemblyLinearVelocity = Vector3.zero
-			ItemService.release(record, rescue)
-		else
-			ItemService.stash(record, nil)
-		end
+	local position = positionOf(record)
+	if position.Y < GameConfig.ItemFallKillY then
+		rescue(record)
 		return
 	end
 	if record.ClientOwnedUntil and now > record.ClientOwnedUntil then
 		record.ClientOwnedUntil = nil
 		setNetworkOwner(record, nil)
+		-- a client moved it implausibly far while it simulated it: put it back
+		if (position - record.ReleasePos).Magnitude > GameConfig.MaxItemTravel then
+			warn(`[ItemService] item {record.Id} of user {record.Owner} travelled too far, returning it`)
+			rescue(record)
+			return
+		end
 	end
 	-- remember when the owner was last close (machines use this against item teleporting)
-	local player = ownerPlayer(record)
-	local character = player and player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if root and (root.Position - body.Position).Magnitude < 40 then
+	local root = ownerRoot(record.Owner)
+	if root and (root.Position - position).Magnitude < 40 then
 		record.LastNearOwner = now
 	end
 end
@@ -385,6 +552,18 @@ local function setupCollisionGroups()
 		setupPlayer(player)
 	end
 end
+
+-- Internals for the Lune tests only (tests/ItemService.spec.luau).
+ItemService._test = {
+	maintain = maintainOne,
+	-- forget every item record (the models are left alone)
+	reset = function()
+		table.clear(records)
+		table.clear(byId)
+		table.clear(byOwner)
+		table.clear(lastCapToast)
+	end,
+}
 
 function ItemService.init()
 	folder = Workspace:FindFirstChild("Items") :: Folder

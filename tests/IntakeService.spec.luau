@@ -1,0 +1,353 @@
+-- IntakeService under Lune: the per-plot zone index (hoppers and belt
+-- ends), what the scan does with each loose item, refusals, foreign-item
+-- return, town zones and the Put In prompt's loading loop. Roblox-only
+-- neighbours are swapped for small fakes and put back afterwards.
+return function(T, Loader)
+	local roblox = require("@lune/roblox") :: any
+	local Vector3 = roblox.Vector3
+	local CFrame = Loader.CFrame
+	local Instance = roblox.Instance
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
+	local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
+	local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
+	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
+	local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
+	local IntakeService = Loader.requirePath("ServerScriptService.Server.Services.IntakeService")
+	local Players = Loader.game:GetService("Players")
+
+	local PLOT = 5
+	local USER, STRANGER = 201, 202
+	local CELL = GameConfig.CellSize
+	local HALF = GameConfig.PlotCells * CELL / 2
+	local intake = IntakeService._test
+
+	local function deepCopy(v: any): any
+		if type(v) ~= "table" then
+			return v
+		end
+		local out = {}
+		for k, x in v do
+			out[k] = deepCopy(x)
+		end
+		return out
+	end
+
+	local function setup(): any
+		local w: any = { notes = {}, ejects = {}, stashes = {}, inserts = {}, carried = {}, full = false }
+		local plotModel = Instance.new("Model")
+		local folder = Instance.new("Folder")
+		folder.Name = "Machines"
+		folder.Parent = plotModel
+		w.player = { UserId = USER, Name = "Owner", Parent = true, GetAttribute = function() return nil end }
+		w.stranger = { UserId = STRANGER, Name = "Stranger", Parent = true, GetAttribute = function() return nil end }
+		local data = deepCopy(DataTemplate)
+		data.StarterKitGiven = true
+		data.MachineInventory = { ClayFurnace = 1, Conveyor = 3, StorageCrate = 1 }
+		w.data = data
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		patch(DataService, "get", function(p)
+			return if p == w.player then data else nil
+		end)
+		patch(DataService, "changed", function() end)
+		patch(PlotService, "plotOf", function(p)
+			return if p == w.player then PLOT else nil
+		end)
+		patch(PlotService, "ownerOf", function(id)
+			return if id == PLOT then w.player else nil
+		end)
+		patch(PlotService, "model", function(id)
+			return if id == PLOT then plotModel else nil
+		end)
+		patch(Net, "fire", function(name, p, a, b)
+			table.insert(w.notes, { Name = name, Player = p, A = a, B = b })
+		end)
+		patch(ItemService, "isTrusted", function(record)
+			return record.Trusted ~= false
+		end)
+		patch(ItemService, "absorb", function(record)
+			record.State = "Consumed"
+			return ItemService.descOf(record)
+		end)
+		patch(ItemService, "eject", function(record, velocity)
+			record.State = "Loose"
+			table.insert(w.ejects, { Record = record, Velocity = velocity })
+		end)
+		patch(ItemService, "stash", function(record, reason)
+			record.State = "Consumed"
+			table.insert(w.stashes, { Record = record, Reason = reason })
+			return true
+		end)
+		patch(CarryService, "takeTop", function(_, predicate)
+			for i = #w.carried, 1, -1 do
+				local record = w.carried[i]
+				if not predicate or predicate(record) then
+					table.remove(w.carried, i)
+					return record
+				end
+			end
+			return nil
+		end)
+		patch(CarryService, "list", function()
+			return w.carried
+		end)
+		patch(Players, "GetPlayerByUserId", function(_, id)
+			return if id == USER then w.player elseif id == STRANGER then w.stranger else nil
+		end)
+		MachineService._test.reset()
+		intake.reset()
+		-- the furnace takes clean ore from its owner, refuses raw ore
+		MachineService.register("ClayFurnace", {
+			canAccept = function(m, d, owner)
+				if owner ~= m.Owner.UserId then
+					return false, "Foreign"
+				elseif d.K == "Raw" then
+					return false, "Wrong"
+				elseif w.full then
+					return false, "Full"
+				end
+				return true, nil
+			end,
+			insert = function(m, d, owner, via)
+				table.insert(w.inserts, { Machine = m, Desc = d, Owner = owner, Via = via })
+			end,
+		})
+		MachineService._test.spawnAll(w.player, PLOT)
+		-- furnace at 4,4 facing the road; a belt into its left side; a belt
+		-- into its front; a lone belt; a crate nobody registered
+		w.furnace = MachineService.place(w.player, "ClayFurnace", 4, 4, 0)
+		w.sideBelt = MachineService.place(w.player, "Conveyor", 3, 4, 1)
+		w.frontBelt = MachineService.place(w.player, "Conveyor", 4, 3, 2)
+		w.loneBelt = MachineService.place(w.player, "Conveyor", 9, 9, 0)
+		w.crate = MachineService.place(w.player, "StorageCrate", 0, 10, 0)
+		assert(w.furnace and w.sideBelt and w.frontBelt and w.loneBelt and w.crate, "layout placed")
+		intake.rebuild(PLOT)
+		w.restore = function()
+			MachineService._test.reset()
+			intake.reset()
+			for i = #saved, 1, -1 do
+				rawset(saved[i][1], saved[i][2], saved[i][3])
+			end
+		end
+		return w
+	end
+
+	local function withWorld(name: string, fn: (any) -> ())
+		T.test(name, function()
+			local w = setup()
+			local ok, err = pcall(fn, w)
+			w.restore()
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end
+
+	-- A loose item at a plot-local position.
+	local function item(kind: string, localPos: any, owner: number?): any
+		local world = PlotService.plotCFrame(PLOT):PointToWorldSpace(localPos)
+		return {
+			Id = "item",
+			Kind = kind,
+			OreId = "Copper",
+			Grade = if kind == "Raw" then nil else "Rough",
+			Owner = owner or USER,
+			State = "Loose",
+			Body = { Position = world },
+			ClientOwnedUntil = nil,
+		}
+	end
+
+	-- plot-local centre of a cell, `up` studs above the pad
+	local function cellCentre(x: number, z: number, up: number): any
+		return Vector3.new(-HALF + (x + 0.5) * CELL, up, -HALF + (z + 0.5) * CELL)
+	end
+
+	local function kinds(list: { any }): string
+		local out = {}
+		for _, zone in list do
+			table.insert(out, zone.Kind)
+		end
+		return table.concat(out, ",")
+	end
+
+	withWorld("IntakeService: hoppers and belt ends are indexed on the right cells", function(w)
+		T.eq(kinds(intake.zonesAt(PLOT, 3, 4)), "Feeder", "belt cell")
+		local onFurnace = intake.zonesAt(PLOT, 4, 4)
+		T.eq(kinds(onFurnace), "Hopper,Feeder", "target cell: hopper first")
+		T.truthy(onFurnace[1].Machine == w.furnace, "hopper of the furnace")
+		T.truthy(onFurnace[2].Machine == w.furnace and onFurnace[2].Belt == w.sideBelt, "feeder into the furnace")
+		T.eq(kinds(intake.zonesAt(PLOT, 5, 5)), "Hopper", "other furnace cell")
+		T.eq(kinds(intake.zonesAt(PLOT, 4, 3)), "", "a belt into the output front feeds nothing")
+		T.eq(kinds(intake.zonesAt(PLOT, 9, 9)), "", "lone belt")
+		T.eq(kinds(intake.zonesAt(PLOT, 0, 10)), "", "unregistered crate has no hopper")
+		-- the index follows the layout
+		MachineService.move(w.sideBelt, 3, 5, 1)
+		intake.rebuild(PLOT)
+		T.eq(kinds(intake.zonesAt(PLOT, 3, 4)), "", "old belt cell")
+		T.eq(kinds(intake.zonesAt(PLOT, 3, 5)), "Feeder", "new belt cell")
+		MachineService.pickup(w.furnace)
+		intake.rebuild(PLOT)
+		T.eq(kinds(intake.zonesAt(PLOT, 4, 4)), "", "packed-up furnace")
+	end)
+
+	withWorld("IntakeService: belt ends and hoppers put items in", function(w)
+		-- on the belt, just before the furnace's side
+		local onBelt = item("Clean", Vector3.new(-HALF + 4 * CELL - 0.3, 1, -HALF + 4.5 * CELL))
+		intake.scanOne(onBelt, 10)
+		T.eq(#w.inserts, 1, "fed from the belt")
+		T.eq(w.inserts[1].Via, "Belt", "via Belt")
+		T.eq(onBelt.State, "Consumed", "absorbed")
+		-- pressed into the furnace's own cell
+		local pressed = item("Clean", Vector3.new(-HALF + 4 * CELL + 0.05, 1, -HALF + 4.5 * CELL))
+		intake.scanOne(pressed, 10)
+		T.eq(#w.inserts, 2, "fed from inside the target cell")
+		T.eq(w.inserts[2].Via, "Belt", "via Belt")
+		-- dropped into the hopper
+		local base = w.furnace.Model.PrimaryPart
+		local hopper = base.CFrame * base:FindFirstChild("Intake").CFrame
+		local dropped = item("Clean", PlotService.plotCFrame(PLOT):PointToObjectSpace(hopper.Position))
+		intake.scanOne(dropped, 10)
+		T.eq(#w.inserts, 3, "hopper")
+		T.eq(w.inserts[3].Via, "Drop", "via Drop")
+		T.eq(w.inserts[3].Owner, USER, "owner passed on")
+		-- untrusted items wait
+		local sketchy = item("Clean", Vector3.new(-HALF + 4 * CELL - 0.3, 1, -HALF + 4.5 * CELL))
+		sketchy.Trusted = false
+		intake.scanOne(sketchy, 10)
+		T.eq(#w.inserts, 3, "untrusted item skipped")
+		T.eq(sketchy.State, "Loose", "still loose")
+		-- a full machine: the item just waits
+		w.full = true
+		local waiting = item("Clean", Vector3.new(-HALF + 4 * CELL - 0.3, 1, -HALF + 4.5 * CELL))
+		intake.scanOne(waiting, 10)
+		T.eq(waiting.State, "Loose", "waits")
+		T.eq(#w.ejects, 0, "not pushed away")
+	end)
+
+	withWorld("IntakeService: refused items bounce out with a hint", function(w)
+		local beltPos = Vector3.new(-HALF + 4 * CELL - 0.3, 1, -HALF + 4.5 * CELL)
+		local raw = item("Raw", beltPos)
+		intake.scanOne(raw, 10)
+		T.eq(#w.inserts, 0, "refused")
+		T.eq(#w.ejects, 1, "pushed off")
+		local right = w.sideBelt.Model:GetPivot().RightVector
+		local expected = right * GameConfig.BeltRejectPop.Side + Vector3.new(0, GameConfig.BeltRejectPop.Up, 0)
+		T.near((w.ejects[1].Velocity - expected).Magnitude, 0, 1e-4, "off the belt's side")
+		local fx, hints = 0, 0
+		for _, note in w.notes do
+			if note.Name == "Fx" and note.A == "Reject" then
+				fx += 1
+			elseif note.Name == "Notify" then
+				hints += 1
+				T.eq(note.A.Text, MachineData.ById.ClayFurnace.WrongHint, "hint text")
+			end
+		end
+		T.eq(fx, 1, "reject effect")
+		T.eq(hints, 1, "hint")
+		-- the same item again right away: no second bounce
+		intake.scanOne(raw, 10)
+		T.eq(#w.ejects, 1, "per-item cooldown")
+		-- another raw item: bounces, but the hint is throttled
+		intake.scanOne(item("Raw", beltPos), 10)
+		T.eq(#w.ejects, 2, "second item bounces")
+		local hintsAfter = 0
+		for _, note in w.notes do
+			if note.Name == "Notify" then
+				hintsAfter += 1
+			end
+		end
+		T.eq(hintsAfter, 1, "hint throttled")
+		-- someone else's ore thrown into the hopper: bounces out the front, no hint
+		local base = w.furnace.Model.PrimaryPart
+		local hopper = base.CFrame * base:FindFirstChild("Intake").CFrame
+		local foreign = item("Clean", PlotService.plotCFrame(PLOT):PointToObjectSpace(hopper.Position), STRANGER)
+		intake.scanOne(foreign, 10)
+		T.eq(#w.ejects, 3, "foreign item bounces")
+		local look = w.furnace.Model:GetPivot().LookVector
+		local out = look * GameConfig.RejectPop.Out + Vector3.new(0, GameConfig.RejectPop.Up, 0)
+		T.near((w.ejects[3].Velocity - out).Magnitude, 0, 1e-4, "out of the front")
+		local last = w.notes[#w.notes]
+		T.eq(last.Name, "Fx", "only the effect")
+		T.truthy(last.Player == w.stranger, "to the item's owner")
+	end)
+
+	withWorld("IntakeService: belts, other forges and town zones", function(w)
+		-- an item riding a belt that feeds nothing goes to the belt handler
+		local calls = {}
+		IntakeService.setBeltHandler(function(belt, record, localPos, now)
+			table.insert(calls, { belt, record, localPos, now })
+		end)
+		local riding = item("Clean", cellCentre(4, 3, 1))
+		intake.scanOne(riding, 12)
+		T.eq(#calls, 1, "belt handler")
+		T.truthy(calls[1][1] == w.frontBelt, "the belt under it")
+		T.near((calls[1][3] - Vector3.new(0, 1, 0)).Magnitude, 0, 1e-3, "belt-local position")
+		T.eq(calls[1][4], 12, "time")
+		T.eq(#w.inserts, 0, "a belt into the front feeds nothing")
+
+		-- someone else's item lying on this forge goes home after a while
+		local visitor = item("Clean", cellCentre(10, 10, 0.5), STRANGER)
+		intake.scanOne(visitor, 100)
+		intake.scanOne(visitor, 100 + GameConfig.ForeignItemReturn - 0.1)
+		T.eq(#w.stashes, 0, "not yet")
+		intake.scanOne(visitor, 100 + GameConfig.ForeignItemReturn)
+		T.eq(#w.stashes, 1, "returned")
+		T.eq(w.stashes[1].Reason, "Your item landed on another forge", "toast")
+		local mine = item("Clean", cellCentre(10, 10, 0.5))
+		intake.scanOne(mine, 100)
+		intake.scanOne(mine, 200)
+		T.eq(#w.stashes, 1, "your own items stay")
+
+		-- town zones take trusted items
+		local part = Instance.new("Part")
+		part.CFrame = CFrame.new(0, 3, 60)
+		part.Size = Vector3.new(8, 5, 6)
+		part.Parent = Instance.new("Folder")
+		local sold = {}
+		IntakeService.addZone("SellBin", part, function(record)
+			table.insert(sold, record)
+		end)
+		local function at(position: any, trusted: boolean): any
+			return { Kind = "Clean", OreId = "Copper", Owner = USER, State = "Loose", Body = { Position = position }, Trusted = trusted }
+		end
+		intake.scanOne(at(Vector3.new(1, 2, 61), false), 5)
+		T.eq(#sold, 0, "untrusted item ignored")
+		intake.scanOne(at(Vector3.new(1, 2, 61), true), 5)
+		T.eq(#sold, 1, "sold")
+		intake.scanOne(at(Vector3.new(10, 2, 61), true), 5)
+		T.eq(#sold, 1, "outside the box")
+	end)
+
+	withWorld("IntakeService: Put In loads what fits from your hands", function(w)
+		local function carried(kind: string): any
+			return { Id = kind, Kind = kind, OreId = "Copper", Grade = if kind == "Raw" then nil else "Rough", Owner = USER, State = "Carried" }
+		end
+		w.carried = { carried("Clean"), carried("Raw"), carried("Clean") }
+		intake.load(w.player, w.furnace)
+		T.eq(#w.inserts, 2, "both clean ores")
+		T.eq(w.inserts[1].Via, "Hand", "via Hand")
+		T.eq(#w.carried, 1, "raw ore stays in your hands")
+		T.eq(w.carried[1].Kind, "Raw", "raw")
+		local notes = #w.notes
+		intake.load(w.player, w.furnace)
+		T.eq(w.notes[notes + 1].A.Text, MachineData.ById.ClayFurnace.WrongHint, "why nothing went in")
+		w.carried = { carried("Clean") }
+		w.full = true
+		intake.load(w.player, w.furnace)
+		T.eq(w.notes[#w.notes].A.Text, "Your Clay Furnace is full.", "full")
+		T.eq(#w.carried, 1, "kept")
+		intake.load(w.stranger, w.furnace)
+		T.eq(w.notes[#w.notes].A.Text, "That's not your machine.", "not yours")
+		w.carried = {}
+		intake.load(w.player, w.furnace)
+		T.eq(w.notes[#w.notes].A.Text, "Carry items here to put them in the Clay Furnace.", "empty hands")
+	end)
+end

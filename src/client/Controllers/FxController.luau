@@ -2,6 +2,7 @@
 	FxController: plays effects the server announces (other players' hits,
 	node cracks and shatters, pickups, throws). Your own pickaxe hits are
 	predicted locally by MiningController so they feel instant.
+	Feature controllers add their own Fx kinds with FxController.register.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -65,6 +66,14 @@ end
 
 handlers.Throw = function(position: Vector3)
 	Sfx.play("Throw", position)
+end
+
+-- Adds a handler for an Fx kind (e.g. 'Sold', 'Reject'). One handler per kind.
+function FxController.register(kind: string, handler: (...any) -> ())
+	if handlers[kind] then
+		warn("[FxController] Fx kind registered twice: " .. kind)
+	end
+	handlers[kind] = handler
 end
 
 function FxController.play(kind: string, ...: any)

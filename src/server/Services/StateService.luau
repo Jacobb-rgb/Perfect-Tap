@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ItemData = require(Shared.Config.ItemData)
 local ToolData = require(Shared.Config.ToolData)
 local Net = require(Shared.Net)
 local Perks = require(script.Parent.Parent.Perks)
@@ -25,11 +26,11 @@ function StateService.addProvider(provider: Provider)
 	table.insert(providers, provider)
 end
 
-local function storageSummary(storage: { { [string]: any } }): { [string]: number }
-	-- "Kind|Ore|Grade|Recipe" -> count (compact for the network)
+local function storageSummary(storage: { ItemData.Desc }): { [string]: number }
+	-- ItemData.storageKey ("Kind|Ore|Grade|Recipe") -> count (compact for the network)
 	local summary = {}
 	for _, entry in storage do
-		local key = `{entry.K}|{entry.O}|{entry.G or ""}|{entry.R or ""}`
+		local key = ItemData.storageKey(entry)
 		summary[key] = (summary[key] or 0) + 1
 	end
 	return summary

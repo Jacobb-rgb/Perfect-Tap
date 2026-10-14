@@ -1,0 +1,452 @@
+--[[
+	IntakeService: the only scanner that moves loose items into machines.
+
+	- Hoppers: the box around a machine's Intake attachment (IntakeSize +
+	  IntakeMargin). Only machines whose behaviour takes items have one.
+	- Belt ends: a belt whose front cell is a machine face that takes items
+	  (ConveyorLogic.feeders) hands over anything pressed against that face.
+	  The box reaches FeedReachBelt back onto the belt and FeedReachInto into
+	  the machine's cell, so it works wherever the item comes to rest.
+	- Town zones (Pell's SellBin) are added with addZone().
+	- Items on a belt that no box takes go to the belt handler (ConveyorService).
+	- Items lying on someone else's plot go back to their owner's Storage
+	  after ForeignItemReturn seconds.
+	- Put In prompts (addLoadPrompt): load what you carry into a machine.
+
+	Zones are pure maths in a per-plot cell index, rebuilt on every layout
+	change, so the 5 Hz scan costs a few box tests per item and no spatial
+	queries. Items a client may have moved implausibly (ItemService.isTrusted)
+	are skipped until the server has them back.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local GameConfig = require(Shared.Config.GameConfig)
+local Grid = require(Shared.Machines.Grid)
+local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
+local Net = require(Shared.Net)
+local CarryService = require(script.Parent.CarryService)
+local ItemService = require(script.Parent.ItemService)
+local MachineService = require(script.Parent.MachineService)
+local PlotService = require(script.Parent.PlotService)
+
+local IntakeService = {}
+
+type PlacedMachine = MachineService.PlacedMachine
+type ItemRecord = ItemService.ItemRecord
+type Reason = MachineService.Reason
+type Via = MachineService.Via
+
+type Zone = {
+	Kind: "Hopper" | "Feeder",
+	Machine: PlacedMachine, -- the machine the item goes into
+	Belt: PlacedMachine?, -- the feeding belt (feeders only)
+	CFrame: CFrame, -- box centre, world space
+	Half: Vector3, -- half the box size
+}
+type StaticZone = { Name: string, Part: BasePart, Handler: (ItemRecord) -> ...any }
+export type BeltHandler = (belt: PlacedMachine, record: ItemRecord, localPos: Vector3, now: number) -> ...any
+
+local CELL = GameConfig.CellSize
+local CELLS = GameConfig.PlotCells
+local HALF = CELLS * CELL / 2
+-- zone boxes that exactly touch a cell edge don't count that neighbour cell
+local EDGE = 0.01
+-- Put In prompt: at most this many items per press (more than any carry stack)
+local MAX_LOAD = 64
+local WARN_COOLDOWN = 10
+
+-- plotId -> cell key -> zones on that cell (hoppers before feeders)
+local plotZones: { [number]: { [number]: { Zone } } } = {}
+local staticZones: { StaticZone } = {}
+local beltHandler: BeltHandler? = nil
+local lastReject: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
+local foreignSince: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
+local hintTimes: { [Player]: { [string]: number } } = {}
+local lastWarn: { [string]: number } = {}
+
+local function warnThrottled(key: string, message: string)
+	local now = os.clock()
+	if now - (lastWarn[key] or -math.huge) >= WARN_COOLDOWN then
+		lastWarn[key] = now
+		warn(message)
+	end
+end
+
+local function inBox(cf: CFrame, half: Vector3, position: Vector3): boolean
+	local p = cf:PointToObjectSpace(position)
+	return math.abs(p.X) <= half.X and math.abs(p.Y) <= half.Y and math.abs(p.Z) <= half.Z
+end
+
+---------------------------------------------------------------- zone index
+
+-- Registers a zone on every plot cell its box covers.
+local function addZoneToCells(cells: { [number]: { Zone } }, plotCF: CFrame, zone: Zone)
+	local minX, minZ, maxX, maxZ = math.huge, math.huge, -math.huge, -math.huge
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			local corner = zone.CFrame:PointToWorldSpace(Vector3.new(sx * zone.Half.X, 0, sz * zone.Half.Z))
+			local p = plotCF:PointToObjectSpace(corner)
+			minX, maxX = math.min(minX, p.X), math.max(maxX, p.X)
+			minZ, maxZ = math.min(minZ, p.Z), math.max(maxZ, p.Z)
+		end
+	end
+	local x0 = math.max(0, math.floor((minX + EDGE + HALF) / CELL))
+	local x1 = math.min(CELLS - 1, math.floor((maxX - EDGE + HALF) / CELL))
+	local z0 = math.max(0, math.floor((minZ + EDGE + HALF) / CELL))
+	local z1 = math.min(CELLS - 1, math.floor((maxZ - EDGE + HALF) / CELL))
+	for cz = z0, z1 do
+		for cx = x0, x1 do
+			local key = Grid.key(cx, cz)
+			local list = cells[key]
+			if not list then
+				list = {}
+				cells[key] = list
+			end
+			table.insert(list, zone)
+		end
+	end
+end
+
+local function hopperZone(machine: PlacedMachine): Zone?
+	local base = machine.Model.PrimaryPart
+	local intake = base and base:FindFirstChild("Intake")
+	if not intake or not intake:IsA("Attachment") then
+		return nil
+	end
+	local size = intake:GetAttribute("IntakeSize")
+	if typeof(size) ~= "Vector3" then
+		return nil
+	end
+	local margin = GameConfig.IntakeMargin
+	return {
+		Kind = "Hopper",
+		Machine = machine,
+		CFrame = (base :: BasePart).CFrame * intake.CFrame,
+		Half = (size :: Vector3) / 2 + Vector3.new(margin, margin, margin),
+	}
+end
+
+-- Belt-local box: x +/-2, y 0..4, z from -2 - FeedReachInto (into the
+-- machine's cell) to -2 + FeedReachBelt (back onto the belt).
+local function feederZone(belt: PlacedMachine, target: PlacedMachine): Zone
+	local zMin = -CELL / 2 - GameConfig.FeedReachInto
+	local zMax = -CELL / 2 + GameConfig.FeedReachBelt
+	return {
+		Kind = "Feeder",
+		Machine = target,
+		Belt = belt,
+		CFrame = belt.Model:GetPivot() * CFrame.new(0, 2, (zMin + zMax) / 2),
+		Half = Vector3.new(CELL / 2, 2, (zMax - zMin) / 2),
+	}
+end
+
+local function rebuild(plotId: number)
+	local machines = MachineService.ofPlot(plotId)
+	local cells: { [number]: { Zone } } = {}
+	local plotCF = PlotService.plotCFrame(plotId)
+	local entries: { MachineService.Entry } = {}
+	local byEntry: { [MachineService.Entry]: PlacedMachine } = {}
+	-- hoppers first, so they win over feeders on the same cell
+	for _, machine in machines do
+		if not machine.Removed then
+			table.insert(entries, machine.Entry)
+			byEntry[machine.Entry] = machine
+			if MachineService.hasIntake(machine) then
+				local zone = hopperZone(machine)
+				if zone then
+					addZoneToCells(cells, plotCF, zone)
+				end
+			end
+		end
+	end
+	for _, feeder in ConveyorLogic.feeders(entries) do
+		local belt = byEntry[feeder.Conveyor]
+		local target = byEntry[feeder.Target]
+		if belt and target and MachineService.hasIntake(target) then
+			addZoneToCells(cells, plotCF, feederZone(belt, target))
+		end
+	end
+	if next(cells) then
+		plotZones[plotId] = cells
+	else
+		plotZones[plotId] = nil
+	end
+end
+
+---------------------------------------------------------------- public API
+
+-- A fixed box in the world (not on a plot) that takes trusted loose items,
+-- e.g. Pell's SellBin. The handler owns the item from then on.
+function IntakeService.addZone(name: string, part: BasePart, handler: (ItemRecord) -> ...any)
+	table.insert(staticZones, { Name = name, Part = part, Handler = handler })
+end
+
+-- Called for every trusted loose item on a belt cell that no hopper or belt
+-- end took. localPos is the item's position in the belt model's space
+-- (front = -Z, the way items move). One handler (ConveyorService).
+function IntakeService.setBeltHandler(handler: BeltHandler)
+	if beltHandler then
+		warn("[IntakeService] belt handler replaced")
+	end
+	beltHandler = handler
+end
+
+-- Throttled toast: at most once per WrongHintCooldown per player per machine type.
+function IntakeService.hint(player: Player, machineId: string, text: string)
+	local times = hintTimes[player]
+	if not times then
+		times = {}
+		hintTimes[player] = times
+	end
+	local now = os.clock()
+	if now - (times[machineId] or -math.huge) < GameConfig.WrongHintCooldown then
+		return
+	end
+	times[machineId] = now
+	Net.fire("Notify", player, { Text = text, Kind = "Info" })
+end
+
+-- The belt an item is riding, for pushing it off the side.
+local function beltUnder(record: ItemRecord): PlacedMachine?
+	local plotId, localPos = PlotService.plotAt(record.Body.Position)
+	if not plotId or not localPos then
+		return nil
+	end
+	local cx, cz = Grid.cellFromLocal(localPos)
+	local machine = if cx and cz then MachineService.atCell(plotId, cx, cz) else nil
+	if machine and machine.Info.IsConveyor then
+		return machine
+	end
+	return nil
+end
+
+--[[
+	What happens to an item a machine refused. 'Full' and 'Busy': nothing,
+	the item waits. 'Wrong', 'Mixed' and 'Foreign' (at most once per
+	RejectCooldown per item): a dropped item bounces out of the hopper's
+	front, a belt item is pushed off the belt's side, the owner sees a
+	Reject effect and (not for 'Foreign') the machine's WrongHint.
+]]
+function IntakeService.react(machine: PlacedMachine, record: ItemRecord, reason: Reason, via: Via, belt: PlacedMachine?)
+	if reason == "Full" or reason == "Busy" or record.State == "Consumed" then
+		return
+	end
+	local now = os.clock()
+	local last = lastReject[record]
+	if last and now - last < GameConfig.RejectCooldown then
+		return
+	end
+	lastReject[record] = now
+	if record.State == "Loose" then
+		if via == "Drop" then
+			local look = machine.Model:GetPivot().LookVector
+			ItemService.eject(record, look * GameConfig.RejectPop.Out + Vector3.new(0, GameConfig.RejectPop.Up, 0))
+		elseif via == "Belt" then
+			local from = belt or beltUnder(record)
+			local right = (if from then from.Model else machine.Model):GetPivot().RightVector
+			ItemService.eject(record, right * GameConfig.BeltRejectPop.Side + Vector3.new(0, GameConfig.BeltRejectPop.Up, 0))
+		end
+	end
+	local owner = Players:GetPlayerByUserId(record.Owner)
+	if owner then
+		Net.fire("Fx", owner, "Reject", record.Body.Position)
+		local hint = machine.Info.WrongHint
+		if reason ~= "Foreign" and hint then
+			IntakeService.hint(owner, machine.Id, hint)
+		end
+	end
+end
+
+-- Loads carried items that the machine takes, top of the stack first.
+local function loadFromHands(player: Player, machine: PlacedMachine)
+	if machine.Removed then
+		return
+	end
+	if machine.Owner ~= player then
+		Net.fire("Notify", player, { Text = "That's not your machine.", Kind = "Deny" })
+		return
+	end
+	local function fits(record: ItemRecord): boolean
+		return (MachineService.canAccept(machine, ItemService.descOf(record), record.Owner, "Hand"))
+	end
+	local loaded = 0
+	for _ = 1, MAX_LOAD do
+		local record = CarryService.takeTop(player, fits)
+		if not record then
+			break
+		end
+		-- no yield between taking it off the stack and putting it in
+		if MachineService.insertRecord(machine, record, "Hand") then
+			loaded += 1
+		else
+			ItemService.eject(record, Vector3.zero)
+			break
+		end
+	end
+	if loaded > 0 then
+		return
+	end
+	-- nothing went in: say why
+	local carried = CarryService.list(player)
+	local reason: Reason? = nil
+	for _, record in carried do
+		local ok, why = MachineService.canAccept(machine, ItemService.descOf(record), record.Owner, "Hand")
+		if not ok and (why == "Full" or why == "Busy") then
+			reason = why :: Reason?
+			break
+		end
+		reason = reason or why :: Reason?
+	end
+	local name = machine.Info.Name
+	local text = if #carried == 0
+		then `Carry items here to put them in the {name}.`
+		elseif reason == "Full" then `Your {name} is full.`
+		elseif reason == "Busy" then `Your {name} is busy right now.`
+		else machine.Info.WrongHint or `That doesn't go in the {name}.`
+	Net.fire("Notify", player, { Text = text, Kind = "Deny" })
+end
+
+--[[
+	The 'Put In' prompt (F / gamepad Y) on the machine's Prompt attachment.
+	The server never changes its Enabled after this: the client shows it only
+	while you carry something (PromptController).
+]]
+function IntakeService.addLoadPrompt(machine: PlacedMachine, actionText: string, order: number): ProximityPrompt
+	local base = machine.Model.PrimaryPart :: BasePart
+	local attachment = base:FindFirstChild("Prompt") or base
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "LoadPrompt"
+	prompt.ActionText = actionText
+	prompt.ObjectText = machine.Info.Name
+	prompt.KeyboardKeyCode = Enum.KeyCode.F
+	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.UIOffset = Vector2.new(0, order * 72)
+	prompt.Parent = attachment
+	prompt.Triggered:Connect(function(player)
+		loadFromHands(player, machine)
+	end)
+	return prompt
+end
+
+---------------------------------------------------------------- scan
+
+local function scanOne(record: ItemRecord, now: number)
+	local position = record.Body.Position
+	-- 1. town zones
+	for _, zone in staticZones do
+		local part = zone.Part
+		if part.Parent and inBox(part.CFrame, part.Size / 2, position) then
+			if ItemService.isTrusted(record, now) then
+				zone.Handler(record)
+			end
+			return
+		end
+	end
+	-- 2. which plot and cell
+	local plotId, localPos = PlotService.plotAt(position)
+	if not plotId or not localPos then
+		foreignSince[record] = nil
+		return
+	end
+	if not ItemService.isTrusted(record, now) then
+		return
+	end
+	local cx, cz = Grid.cellFromLocal(localPos)
+	-- 3. hoppers, then belt ends: the first box holding the item wins
+	local cells = plotZones[plotId]
+	local list = if cells and cx and cz then cells[Grid.key(cx, cz)] else nil
+	if list then
+		for _, zone in list do
+			if not zone.Machine.Removed and inBox(zone.CFrame, zone.Half, position) then
+				local via: Via = if zone.Kind == "Hopper" then "Drop" else "Belt"
+				local ok, reason = MachineService.insertRecord(zone.Machine, record, via)
+				if not ok and reason then
+					IntakeService.react(zone.Machine, record, reason :: Reason, via, zone.Belt)
+				end
+				return
+			end
+		end
+	end
+	-- 4. riding a belt
+	local cellMachine = if cx and cz then MachineService.atCell(plotId, cx, cz) else nil
+	local handler = beltHandler
+	if handler and cellMachine and cellMachine.Info.IsConveyor and not cellMachine.Removed then
+		local ok, err = pcall(handler, cellMachine, record, cellMachine.Model:GetPivot():PointToObjectSpace(position), now)
+		if not ok then
+			warnThrottled("belt", "[IntakeService] belt handler failed: " .. tostring(err))
+		end
+		if record.State ~= "Loose" then
+			return
+		end
+	end
+	-- 5. lying on someone else's forge: it goes home after a while
+	local plotOwner = PlotService.ownerOf(plotId)
+	if plotOwner and plotOwner.UserId ~= record.Owner then
+		local since = foreignSince[record]
+		if not since then
+			foreignSince[record] = now
+		elseif now - since >= GameConfig.ForeignItemReturn then
+			foreignSince[record] = nil
+			ItemService.stash(record, "Your item landed on another forge")
+		end
+	else
+		foreignSince[record] = nil
+	end
+end
+
+local function scan()
+	local now = os.clock()
+	for _, record in ItemService.looseList() do
+		if record.State == "Loose" then
+			local ok, err = pcall(function()
+				scanOne(record, now)
+			end)
+			if not ok then
+				warnThrottled("scan", "[IntakeService] scan failed: " .. tostring(err))
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------- lifecycle
+
+-- Internals for the Lune tests only (tests/IntakeService.spec.luau).
+IntakeService._test = {
+	rebuild = rebuild,
+	scanOne = scanOne,
+	load = loadFromHands,
+	reset = function()
+		table.clear(plotZones)
+		table.clear(staticZones)
+		table.clear(hintTimes)
+		beltHandler = nil
+	end,
+	zonesAt = function(plotId: number, gx: number, gz: number): { Zone }
+		local cells = plotZones[plotId]
+		return cells and cells[Grid.key(gx, gz)] or {}
+	end,
+}
+
+function IntakeService.init()
+	MachineService.onLayoutChanged(function(_, plotId)
+		rebuild(plotId)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		hintTimes[player] = nil
+	end)
+end
+
+function IntakeService.start()
+	while true do
+		task.wait(GameConfig.IntakeTick)
+		scan()
+	end
+end
+
+return IntakeService
