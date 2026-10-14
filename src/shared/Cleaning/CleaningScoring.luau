@@ -6,8 +6,10 @@
 	Submission (client -> server), all arrays flat for a small payload.
 	Every t is seconds since the session started on the client (one clock for
 	all three steps), so the server can compare the whole timeline with the
-	real session time.
+	real session time, and with the real client's fixed pauses (ClientPauses)
+	between the steps.
 	  Cuts   = { { Samples = { u, v, t, u, v, t, ... } }, ... }  only samples from the moment the cut started
+	                                           (CutRecorder; one kept attempt may span several strokes)
 	  Scrape = { Samples = { u, v, t, ... } }  brush positions that removed dirt or snapped a crystal;
 	                                           the server replays them (ScrapeTracker) to find what was hit
 	  Polish = { Samples = { t, angle, t, angle, ... }, Mode = "Circle" | "Rub" }
@@ -24,14 +26,47 @@ local CleaningScoring = {}
 CleaningScoring.Weights = { Chisel = 0.5, Scrape = 0.25, Polish = 0.25 }
 CleaningScoring.ChipPenalty = 0.05
 CleaningScoring.MaxChipPenalty = 0.3
-CleaningScoring.InputLeniency = { Mouse = 1.0, Touch = 1.35, Gamepad = 1.25 }
-CleaningScoring.PolishBand = { Min = 1.5, Max = 8.5 } -- radians per second that count as good polishing
+-- Line tolerance multiplier per input. A phone shows one face unit at only ~105 pt (a 1080p
+-- PC: ~315 px) and a finger is far less precise than a mouse, so touch gets twice the line
+-- (Lune test: Mythic on a phone with an 8 pt wobble still reaches Clean or better).
+CleaningScoring.InputLeniency = { Mouse = 1.0, Touch = 2.0, Gamepad = 1.4 }
+-- Radians per second that count as good polishing. Demo = the speed of the ring's moving dot:
+-- the middle of the band on a log scale (sqrt(Min * Max)), where shaky hands lose the least.
+-- Max 10.5 (was 8.5): in the reviewer simulation jittery hands keep >= 0.98 polish from 0.5 to
+-- 0.8 turns/s (8.5 only allowed 0.5 to 0.64).
+CleaningScoring.PolishBand = { Min = 1.5, Max = 10.5, Demo = 4 }
 CleaningScoring.BrushRadius = 0.17 -- face units; a dirt patch goes when the brush is within this + half its size
 CleaningScoring.FragileRadius = 0.12 -- face units; closer than this to a crystal snaps it
 -- Samples later than this can't come from a live session (the server ends sessions at CleaningTimeout).
 CleaningScoring.MaxSampleTime = GameConfig.CleaningTimeout + 10
 -- Only a bot is this fast (humans just lose points for going fast):
 CleaningScoring.MaxPolishSpeed = 60 -- average rad/s over the whole polish (about 10 turns per second)
+
+--[[
+	Fixed pauses of the real client (seconds). The client waits exactly these
+	(task.wait / task.delay never return early), and the server's timeline
+	check requires the same gaps between the recorded steps. Change them here
+	only: a client-only change would get every honest run rejected.
+]]
+CleaningScoring.ClientPauses = {
+	Intro = 0.75, -- camera flies in before the first cut
+	HitStop = 0.06, -- a finished cut freezes for a moment before the crust breaks away
+	Crack = 0.45, -- the crust breaks away before the next cut (or the next step)
+	LastCrack = 0.5, -- extra pause after the last cut (the core rim lights up)
+	StepGap = 0.25, -- between two steps, and before the recording is sent
+	ScrapeFinish = 0.7, -- "Spotless!" before polishing
+	PolishFinish = 0.4, -- "Gleaming!" before the recording is sent
+}
+local PAUSE_SLACK = 0.05 -- frame timing; the real client is always slower than these gaps
+local pauses = CleaningScoring.ClientPauses
+-- The smallest gaps the real client can produce (on its session clock).
+CleaningScoring.MinGaps = {
+	FirstCut = pauses.Intro - PAUSE_SLACK, -- session start -> first cut sample
+	BetweenCuts = pauses.HitStop + pauses.Crack - PAUSE_SLACK, -- last sample of a cut -> first of the next
+	ToScrape = pauses.HitStop + pauses.LastCrack + pauses.Crack + pauses.StepGap - PAUSE_SLACK,
+	ToPolish = pauses.ScrapeFinish + pauses.StepGap - PAUSE_SLACK,
+	ToSubmit = pauses.PolishFinish + pauses.StepGap - PAUSE_SLACK, -- last polish sample -> CleanSubmit
+}
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
@@ -153,6 +188,18 @@ function CutTracker.score(self: any): number
 		return 0
 	end
 	return math.clamp(self.weighted / self.weight, 0, 1)
+end
+
+-- Arc length (from Line[1]) where the groove ends; only meaningful once started.
+function CutTracker.tipS(self: any): number
+	return if self.direction == 1 then self.progress else self.cut.Length - self.progress
+end
+
+-- Is p on the line and within `distance` (face units, along the line) of the groove tip?
+function CutTracker.nearTip(self: any, p: Vector2, distance: number): boolean
+	local d, s = Geometry2D.closest(self.cut.Line, p)
+	local along = if self.direction == 1 then s else self.cut.Length - s
+	return d <= self.tol * 3 and math.abs(along - self.progress) < distance
 end
 
 ---------------------------------------------------------------- scoring
@@ -433,32 +480,125 @@ function CleaningScoring.score(pattern: CleaningPatterns.Pattern, submission: an
 end
 
 --[[
-	Checks a submission that score() accepted: the steps happen in order (each
-	cut after the previous one, scraping after the last cut, polishing after
-	scraping) and returns the latest timestamp. The server compares that with
-	how long the session really lasted.
+	Checks a submission that score() accepted: the steps happen in order, with
+	at least the real client's pauses between them (MinGaps: the camera intro,
+	the crack after each cut, the step finishes). Returns the latest timestamp;
+	the server compares that with how long the session really lasted.
 ]]
 function CleaningScoring.timeline(submission: any): (boolean, number)
-	local previous = 0
+	local gaps = CleaningScoring.MinGaps
+	local previous, gap = 0, gaps.FirstCut
 	for _, cut in submission.Cuts do
 		local samples = cut.Samples
-		if samples[3] < previous - 1e-6 then
+		if samples[3] < previous + gap - 1e-6 then
 			return false, 0
 		end
-		previous = samples[#samples]
+		previous, gap = samples[#samples], gaps.BetweenCuts
 	end
 	local scrape = submission.Scrape.Samples
-	if #scrape > 0 then
-		if scrape[3] < previous - 1e-6 then
-			return false, 0
-		end
-		previous = scrape[#scrape]
+	-- a finished scrape always has samples (score() checks the dirt is gone)
+	if #scrape == 0 or scrape[3] < previous + gaps.ToScrape - 1e-6 then
+		return false, 0
 	end
+	previous = scrape[#scrape]
 	local polish = submission.Polish.Samples
-	if polish[1] < previous - 1e-6 then
+	if polish[1] < previous + gaps.ToPolish - 1e-6 then
 		return false, 0
 	end
 	return true, polish[#polish - 1]
+end
+
+--[[
+	The server's timing check for a submission that score() accepted.
+	elapsed = seconds since the server started the session. The client's clock
+	starts later (when CleanBegin arrives) and it sends the recording only
+	after the polish finish pause, so an honest run always has
+	elapsed >= latest + MinGaps.ToSubmit. A bot therefore needs at least as
+	long as a perfect player going through the real client.
+]]
+function CleaningScoring.fitsSession(submission: any, elapsed: number): (boolean, string?)
+	local ordered, latest = CleaningScoring.timeline(submission)
+	if not ordered then
+		return false, "steps out of order"
+	end
+	if latest + CleaningScoring.MinGaps.ToSubmit > elapsed then
+		return false, `timing mismatch ({math.floor(latest * 10) / 10}s claimed in {math.floor(elapsed * 10) / 10}s)`
+	end
+	return true, nil
+end
+
+---------------------------------------------------------------- polish gauge
+
+-- Where the green zone sits on the SPEED gauge (0..1 along the track).
+CleaningScoring.GaugeGreen = { From = 0.3, To = 0.75 }
+
+-- Needle position (0..1) for a speed in rad/s: green exactly inside PolishBand, on a log
+-- scale (shaky hands vary their speed by a factor, not by a fixed amount).
+function CleaningScoring.needleFor(speed: number): number
+	local band = CleaningScoring.PolishBand
+	local green = CleaningScoring.GaugeGreen
+	if speed < band.Min then
+		return green.From * math.max(speed, 0) / band.Min
+	elseif speed <= band.Max then
+		return green.From + (green.To - green.From) * math.log(speed / band.Min) / math.log(band.Max / band.Min)
+	end
+	return green.To + (1 - green.To) * math.min(1, math.log(speed / band.Max) / math.log(2))
+end
+
+--[[
+	The speed the gauge shows: the angle covered by the recorded polish
+	samples over the last Window seconds (the same samples the server scores),
+	so the needle reads the real speed and not a lagging average. When no
+	sample comes for MaxGap seconds the window slides on and the needle drops.
+]]
+local PolishGauge = {}
+PolishGauge.__index = PolishGauge
+CleaningScoring.PolishGauge = PolishGauge
+PolishGauge.Window = 0.3
+PolishGauge.MaxGap = 0.12
+
+function PolishGauge.new()
+	return setmetatable({
+		spans = {} :: { number }, -- fromT, toT, travel, fromT, toT, travel, ...
+		lastT = -math.huge,
+	}, PolishGauge)
+end
+
+-- A recorded sample at t that covered `travel` radians since the previous one at fromT.
+function PolishGauge.add(self: any, fromT: number, t: number, travel: number)
+	local spans = self.spans
+	table.insert(spans, fromT)
+	table.insert(spans, t)
+	table.insert(spans, travel)
+	self.lastT = t
+	-- forget spans that ended long before the window
+	while #spans > 0 and spans[2] < t - PolishGauge.Window - PolishGauge.MaxGap - 1 do
+		table.remove(spans, 1)
+		table.remove(spans, 1)
+		table.remove(spans, 1)
+	end
+end
+
+-- Average speed (rad/s) over the window ending now (or at the last sample, if it was recent).
+function PolishGauge.speed(self: any, now: number): number
+	local finish = math.max(self.lastT, now - PolishGauge.MaxGap)
+	local start = finish - PolishGauge.Window
+	local spans = self.spans
+	local covered = 0
+	for i = 1, #spans, 3 do
+		local from, to, travel = spans[i], spans[i + 1], spans[i + 2]
+		if to - from <= 1e-6 then
+			if to > start and to <= finish then
+				covered += travel
+			end
+		else
+			local overlap = math.min(to, finish) - math.max(from, start)
+			if overlap > 0 then
+				covered += travel * overlap / (to - from)
+			end
+		end
+	end
+	return covered / PolishGauge.Window
 end
 
 return CleaningScoring

@@ -1,7 +1,11 @@
 --[[
 	PromptController: hides machine prompts on other players' machines (on
-	this screen only; the server still checks ownership) and keeps prompt
-	keys consistent (F / gamepad Y; E is Grab).
+	this screen only; the server still checks ownership).
+	Prompt keys: F / gamepad Y for machine prompts; the Cleaning Station's
+	"Take Ore Back" uses G / gamepad B and is always shown (its own keys, so
+	it never fires together with another prompt). Taken elsewhere: E / X
+	Grab, Q / RB Throw; B is also Leave inside the cleaning minigame, while
+	the station prompts are disabled.
 ]]
 
 local Players = game:GetService("Players")

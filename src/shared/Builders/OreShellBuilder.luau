@@ -8,7 +8,8 @@
 	Layers (front to back):
 	  guide dots   z = +0.34 (on the crust)
 	  crust caps   z +0.30 .. -0.25 (one Model per cut piece, welded)
-	  dirt/fragile front at z = +0.17
+	  dirt front at z = +0.17; fragile crystals (Neon, on a pale base) lean
+	               out to about z +0.31 so they read on a phone
 	  core         z +0.12 .. -1.0 (dull ore color until polished; its sides
 	               show once the crust falls away)
 	  rock body    the outline shape, front at z = -0.25, plus lumps behind
@@ -26,6 +27,8 @@ OreShellBuilder.CapFront = 0.3
 OreShellBuilder.CoreFront = 0.12
 OreShellBuilder.DirtFront = 0.17
 OreShellBuilder.DotZ = 0.34
+OreShellBuilder.CrystalBaseSize = 0.2 -- face units; the pale base under a crystal (snap radius is 0.12)
+OreShellBuilder.CrystalLean = 45 -- degrees out of the face, toward the camera
 
 export type Shell = {
 	Model: Model,
@@ -164,11 +167,21 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 	for _, d in pattern.Dirt do
 		local cf = workCF * CFrame.new(d.Center.X * scale, d.Center.Y * scale, OreShellBuilder.DirtFront - 0.04) * CFrame.Angles(0, 0, rng:range(-0.12, 0.12))
 		if d.Fragile then
-			-- a small glinting crystal poking out of the dirt: don't scrape it!
-			local shard = Geo.block(model, cf * CFrame.Angles(math.rad(-60), 0, 0) * CFrame.new(0, 0.1, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.12, 0.28, 0.12) * scale, ore.Glow:Lerp(Color3.new(1, 1, 1), 0.35), Enum.Material.SmoothPlastic, props({ Name = "Fragile", CastShadow = false, Reflectance = 0.3 }))
+			-- A glowing crystal leaning out toward the camera (so it reads on a phone) on a small
+			-- pale base: clearly not dirt, and smaller than the snap radius around it.
+			local lean = cf * CFrame.Angles(0, 0, rng:range(-0.6, 0.6)) * CFrame.Angles(math.rad(OreShellBuilder.CrystalLean), 0, 0)
+			-- (a darker Neon tone: the workbench bloom turns near-white Neon into a blob)
+			local shard = Geo.block(model, lean * CFrame.new(0, 0.11, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.1, 0.24, 0.1) * scale, ore.Glow:Lerp(Color3.new(0, 0, 0), 0.35), Enum.Material.Neon, props({ Name = "Fragile", CastShadow = false }))
 			fragile[d.Index] = shard
-			local patch = Geo.block(model, cf, Vector3.new(d.Size * scale, d.Size * scale, 0.06), rng:pick(dirtColors), nil, props({ Name = "FragileDirt", CastShadow = false }))
-			patch:SetAttribute("Fragile", true)
+			local diameter = OreShellBuilder.CrystalBaseSize * scale
+			local baseProps = props({ Name = "CrystalBase", CastShadow = false })
+			baseProps.Shape = Enum.PartType.Cylinder
+			-- a cylinder's axis is its X: turn it to face the camera
+			baseProps.CFrame = cf * CFrame.new(0, 0, -0.025) * CFrame.Angles(0, math.pi / 2, 0)
+			baseProps.Size = Vector3.new(0.03, diameter, diameter)
+			baseProps.Color = Color3.fromRGB(236, 226, 200)
+			baseProps.Material = Enum.Material.SmoothPlastic
+			Geo.make("Part", baseProps, model)
 		else
 			local size = d.Size * scale * rng:range(1.05, 1.2)
 			local patch = Geo.block(model, cf, Vector3.new(size, size * rng:range(0.9, 1.05), 0.1), rng:pick(dirtColors), nil, props({ Name = "Dirt", CastShadow = false }))

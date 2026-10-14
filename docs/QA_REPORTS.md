@@ -154,11 +154,13 @@ was reached; every finding was instead re-checked against the code by hand befor
 Fixed:
 
 1. **Bot speed (high)**: the server now checks the whole timeline. Every timestamp must fit inside
-   the real session time and the steps must come in order (`CleaningScoring.timeline`), so a bot
-   has to take as long as a careful human.
-2. **Crystals self-reported**: the client now sends brush positions, not a list of what it hit.
-   The server replays them with the shared `ScrapeTracker` and finds removed dirt and snapped
-   crystals itself.
+   the real session time and the steps must come in order (`CleaningScoring.timeline`). *Second
+   round:* this only capped the claimed time from above; the real client's pauses are now
+   required too (see below), so a bot needs at least as long as a perfect player going through the
+   real client.
+2. **Crystals self-reported**: the server replays the brush positions with the shared
+   `ScrapeTracker`, so the meter and the card agree on crystal hits. (A modified client can still
+   leave out positions: see Accepted risks.)
 3. **Sessions over 3 minutes rejected**: the 180 s cap is now the session timeout + 10 s.
 4. **Fast honest scrubbing rejected** (Epic+ ores): the "too fast" rule now only catches a bot
    (whole-ore scrape in under DirtCount/200 s). A new test scrubs every ore at 4–12 face units/s.
@@ -190,9 +192,17 @@ Fixed:
 19. **Machines spawned before their behaviour registered** now catch up (station prompts in Studio
     without API access).
 
-Accepted risks (cannot be verified by any server): the client says which input it used (touch and
-controller get wider lines) and whether "Hold to rub" was used. A cheater gains no more from these
-than from feeding a perfect synthetic trace, and the timeline check still forces human pace.
+Accepted risks (cannot be verified by any server):
+- **Input**: the client says which input it used (touch and controller get wider lines).
+- **Easy polish** (was "Hold to rub"): the client says whether it was used.
+- **Crystal hits**: a modified client can leave out the brush positions that snapped a crystal.
+  This gains nothing over a fully made-up run.
+- **Perfect synthetic runs**: a bot needs at least as long as a perfect player going through the
+  real client (5.7 s for Copper to 10.3 s for Heartstone, was 3 s; every pause of the real client
+  is required). It still gets Flawless every time, which no server can tell apart from a perfect
+  player.
+
+A cheater gains no more from any of these than from feeding a perfect synthetic trace.
 
 ### What to test in Studio
 
@@ -208,6 +218,74 @@ than from feeding a perfect synthetic trace, and the timeline check still forces
    You get a (lower) grade, not an error.
 6. Throw two raw ores onto the station; clean the first, wait 2 s on the card, press Collect.
    The station shows "Clean Ore" again right away.
-7. Plug a controller into a PC: the hint talks about the stick, Y toggles "Hold to rub", B leaves,
+7. Plug a controller into a PC: the hint talks about the stick, Y toggles "Easy polish", B leaves,
    A collects.
 8. During cleaning the pickaxe hotbar is hidden; after leaving it is back.
+
+### Second review round (12 confirmed findings, all fixed)
+
+Full findings with reproduction steps: [docs/qa/step_c_round2_findings.txt](qa/step_c_round2_findings.txt).
+`tools/check.sh` passes: strict types clean, Lune tests (new: `tests/CleaningPlay.spec.luau` and
+four timeline tests in `tests/Cleaning.spec.luau`), place builds.
+
+- **Lifting before 30% erased the cut (Gold+)** and **resume after a lift**: the chisel
+  recording rules moved to the shared `CutRecorder`. Letting go keeps the groove. After an early
+  lift the next press decides: near the groove tip the cut goes on, anywhere else (for example
+  the other end) it starts over. The end the cut started from goes dark and a white "continue
+  here" ball pulses at the groove tip while you are not cutting there. Scratch sound, dust and
+  sparks only play when the groove moves or you are at its tip; otherwise "Continue from the
+  glowing tip!". The server replays the kept samples, and the Lune tests check client == server
+  for lifts, wrong-end starts and controller re-presses.
+- **Quick restart saved a half-restored camera**: the camera from before cleaning is kept once
+  (module level) until the camera is really handed back.
+- **Bot lower bound**: `CleaningScoring.ClientPauses` holds the real client's fixed pauses; the
+  client waits exactly these and the server's timeline requires them (`MinGaps`, 0.05 s slack):
+  first cut after the intro, the crack after every cut, the step finishes, and
+  `latest + 0.6 <= elapsed` (`CleaningScoring.fitsSession`). The fastest accepted bot went from
+  3 s to 5.7 s (Copper) and 10.3 s (Heartstone).
+- **Crystal omission**: documented as an accepted risk (above).
+- **Phones got Rough on Legendary/Mythic**: `InputLeniency.Touch` 1.35 → 2.0 (Gamepad 1.25 →
+  1.4). Lune model (phone at 105 pt per face unit, 8 pt wobble, 60 seeds): Mythic reaches Clean or
+  better in 96% of runs (61% before).
+- **Station prompts hid each other**: "Take Ore Back" uses G / gamepad B and always shows next
+  to "Clean Ore" (F / Y). "Clean Ore" keeps the default exclusivity so one F press never fires
+  two machines' prompts.
+- **Polish speed**: the SPEED needle shows the real speed (angle covered in the last 0.3 s, same
+  samples the server scores) and is green exactly inside the band; "Slower!" / "Faster!" pop up
+  after 0.3 s / 0.5 s outside it; the ring's moving dot runs at a good speed (4 rad/s, mid-green);
+  the instruction says to keep the needle in the green. `PolishBand.Max` 8.5 → 10.5: shaky hands
+  now keep ≥ 0.98 polish from 0.5 to 0.8 turns per second.
+- **Dirt look-alike under crystals**: replaced by a small pale base (smaller than the snap zone);
+  the crystal is Neon and leans out toward the camera. The last 3 dirt patches pulse.
+- **Leave**: hidden (and B unbound) during the reveal; the buttons say "Leave (B)" / "Collect (A)"
+  on a controller; once a cut is done the first press asks to press again within 2 s ("Your ore
+  stays in the vise.").
+- **"Hold to rub"** is now "Easy polish (R/Y): ON/OFF"; the first time it counts it says
+  "Easy polish: max 75% shine".
+- **Chisel hid the dots ahead**: the chisel is see-through while you press, and on touch the tools
+  disappear when the finger is lifted.
+
+What to test in Studio:
+
+1. Gold or rarer ore, CHISEL: trace a quarter of a line, let go, press again where the groove
+   ends and finish the line. The cut finishes. Then on the next line: touch one end briefly, let
+   go, trace the whole line from the other end. That works too.
+2. Trace half a line, let go, then drag from the other end: no scratching, "Continue from the
+   glowing tip!", and the white ball shows where to go on.
+3. Start cleaning, press Leave twice, and press F on "Clean Ore" right away (spam it). Leave
+   again and wait 2 s: Workspace.CurrentCamera.FieldOfView is back to 70.
+4. Clean a Copper ore as fast as you can and a Heartstone normally; with Studio's incoming
+   replication lag at 0.3–0.5 s too. You always get a grade card, never "Something went wrong",
+   and no `[CleaningService] rejected` line in Output.
+5. Put raw ore in the vise, start, Leave. At the station both "Clean Ore" (F / Y) and "Take Ore
+   Back" (G / B) show, on keyboard, controller and touch.
+6. POLISH: follow the moving bright dot: the needle stays green and Polish on the card is
+   ≥ 90%. Circle fast (2 turns per second): "Slower!" appears.
+7. Gold+ ore, SCRAPE: the crystals glow and stick out, there are no brown squares under them,
+   and on an iPhone SE window they are easy to see.
+8. Controller: B once after the first cut shows "Press again to leave"; B again leaves. On the
+   result card there is no Leave button and B does nothing; A collects.
+9. POLISH: turn "Easy polish" on, rub a moment, turn it off and finish: a message says the shine
+   is capped and the card shows Polish ≤ 75%.
+10. A line running from bottom-left to top-right: while you hold the button the chisel is
+    see-through and the dots ahead stay visible.

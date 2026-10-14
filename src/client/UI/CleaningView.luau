@@ -4,7 +4,7 @@
 	  left     Leave button
 	  right    live QUALITY meter (grade zones) + chips counter
 	  center   feedback pop text ("Perfect!", "Slow down!", "CHIP!")
-	  bottom   device hint, polish speed gauge, "Hold to rub" toggle
+	  bottom   device hint, polish speed gauge (green = CleaningScoring band), "Easy polish" toggle
 	  card     grade reveal (grade, ore, value, stars, details, Collect)
 ]]
 
@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local ItemData = require(Shared.Config.ItemData)
+local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local UIKit = require(script.Parent.UIKit)
 
 local CleaningView = {}
@@ -237,10 +238,11 @@ function CleaningView.build(options: Options?): Refs
 		BorderSizePixel = 0,
 	}, gauge)
 	UIKit.corner(gaugeTrack, 8)
+	local green = CleaningScoring.GaugeGreen
 	UIKit.new("Frame", {
 		Name = "Sweet",
-		Position = UDim2.fromScale(0.3, 0),
-		Size = UDim2.fromScale(0.45, 1),
+		Position = UDim2.fromScale(green.From, 0),
+		Size = UDim2.fromScale(green.To - green.From, 1),
 		BackgroundColor3 = Theme.Good,
 		BorderSizePixel = 0,
 	}, gaugeTrack)
@@ -273,7 +275,7 @@ function CleaningView.build(options: Options?): Refs
 	}, shine)
 	UIKit.corner(shineFill, 7)
 
-	local rub = UIKit.button(gui, "Hold to rub: OFF", Theme.PanelLight, Theme.PanelDark, {
+	local rub = UIKit.button(gui, "Easy polish: OFF", Theme.PanelLight, Theme.PanelDark, {
 		Name = "Rub",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -16),

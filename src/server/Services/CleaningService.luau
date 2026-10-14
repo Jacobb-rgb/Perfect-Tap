@@ -10,7 +10,8 @@
 	   it with the shared CleaningScoring code (it never trusts a client grade),
 	   sanity-checks the timing, and turns the raw chunk into a clean ore of
 	   that grade on the station's output tray.
-	Cancelling leaves the ore in the vise; "Take Ore" gives it back.
+	Cancelling leaves the ore in the vise; "Take Ore Back" (G / gamepad B)
+	gives it back.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -198,14 +199,12 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		result = { Valid = false, Reason = "too fast" } :: any
 	end
 	if result.Valid then
-		-- The client's clock starts when CleanBegin arrives, so every timestamp it
-		-- sends must fit inside the real session time, with the steps in order.
-		-- A bot can't claim a long, careful run it finished in seconds.
-		local ordered, latest = CleaningScoring.timeline(payload)
-		if not ordered then
-			result = { Valid = false, Reason = "steps out of order" } :: any
-		elseif latest > elapsed + 1 then
-			result = { Valid = false, Reason = `timing mismatch ({math.floor(latest)}s claimed in {math.floor(elapsed)}s)` } :: any
+		-- Every timestamp must fit inside the real session time, with the steps in order and
+		-- the real client's pauses between them (CleaningScoring.fitsSession). So a bot needs
+		-- at least as long as a perfect player going through the real client.
+		local fits, why = CleaningScoring.fitsSession(payload, elapsed)
+		if not fits then
+			result = { Valid = false, Reason = why } :: any
 		end
 	end
 	if not result.Valid then
@@ -294,6 +293,11 @@ function CleaningService.init()
 		spawned = function(machine)
 			local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", 0, 0)
 			local take = makePrompt(machine, "TakePrompt", "Take Ore Back", 0.4, 1)
+			-- its own keys (G / gamepad B; F and Y stay "Clean Ore"), and always shown next to
+			-- "Clean Ore". No other prompt uses G or B, so one press never fires two prompts.
+			take.KeyboardKeyCode = Enum.KeyCode.G
+			take.GamepadKeyCode = Enum.KeyCode.ButtonB
+			take.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
 			take.Enabled = false
 			machine.State.MainPrompt = main
 			machine.State.TakePrompt = take

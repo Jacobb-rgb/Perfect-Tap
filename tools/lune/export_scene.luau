@@ -189,8 +189,21 @@ elseif sceneName == "cleaning" then
 		lamp.Brightness = 0.4
 	end
 	if stage == "chisel" then
-		OreShellBuilder.guideDots(shell, pattern.Cuts[1], roblox.Color3.fromRGB(255, 230, 140), fx)
-		OreShellBuilder.updateGroove(shell, pattern.Cuts[1], 0.45, 1, {}, fx, roblox.Color3.fromRGB(255, 160, 60))
+		local cut = pattern.Cuts[1]
+		OreShellBuilder.guideDots(shell, cut, roblox.Color3.fromRGB(255, 230, 140), fx)
+		OreShellBuilder.updateGroove(shell, cut, 0.45, 1, {}, fx, roblox.Color3.fromRGB(255, 160, 60))
+		-- like ChiselStep once a cut started: the start end is dark and the far end stays as
+		-- the goal ("phone" shows the finger lifted: no tool, a white ball at the groove tip)
+		local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+		local Geometry2D = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.Geometry2D")
+		local function marker(p, size, color)
+			local world = workCf:PointToWorldSpace(roblox.Vector3.new(p.X * OreShellBuilder.Scale, p.Y * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.03))
+			Geo.ball(fx, world, size, color, roblox.Enum.Material.Neon, { CanCollide = false, CastShadow = false })
+		end
+		marker(cut.Line[#cut.Line], 0.2, roblox.Color3.fromRGB(255, 232, 150))
+		if process.args[4] == "phone" then
+			marker(Geometry2D.pointAt(cut.Line, cut.Length * 0.45), 0.2, roblox.Color3.fromRGB(255, 255, 255))
+		end
 	elseif stage == "scrape" or stage == "polish" or stage == "reveal" then
 		for _, caps in shell.Caps do
 			for _, cap in caps do
@@ -234,7 +247,8 @@ elseif sceneName == "cleaning" then
 		local right = axis:Cross(workCf.LookVector * -1).Unit
 		local back = right:Cross(axis).Unit
 		local cf = CF.fromMatrix(tip, right, axis, back)
-		local props = { CanCollide = false }
+		-- a working (pressed) chisel is see-through, like CleaningController.updateTool
+		local props = { CanCollide = false, Transparency = if kind == "Chisel" then 0.55 else 0 }
 		if kind == "Chisel" then
 			Geo.wedge(fx, cf * CF.new(0, 0.12, 0) * CF.Angles(math.pi, 0, 0), roblox.Vector3.new(0.16, 0.24, 0.12), roblox.Color3.fromRGB(200, 205, 215), roblox.Enum.Material.Metal, props)
 			Geo.block(fx, cf * CF.new(0, 0.5, 0), roblox.Vector3.new(0.16, 0.55, 0.12), roblox.Color3.fromRGB(170, 176, 188), roblox.Enum.Material.Metal, props)
@@ -272,29 +286,40 @@ elseif sceneName == "cleaning" then
 	})
 	if stage == "chisel" then
 		local p = Geometry2D.pointAt(pattern.Cuts[1].Line, pattern.Cuts[1].Length * 0.45)
-		toolAt(p.X, p.Y, "Chisel")
+		if not phone then
+			toolAt(p.X, p.Y, "Chisel")
+		end
 		CleaningView.setStep(view, 1, "CHISEL", "Cut 1 of " .. #pattern.Cuts .. ": trace the glowing line.")
 		CleaningView.setMeter(view, 0.94)
 		view.Progress.Text = "Cut 1 / " .. #pattern.Cuts
-		view.Feedback.Text = "Great cut!"
 		view.Feedback.TextTransparency = 0
-		view.Feedback.TextColor3 = roblox.Color3.fromRGB(160, 255, 170)
+		if phone then
+			-- the long hint at the size CleaningController.feedback gives it
+			view.Feedback.Text = "Continue from the glowing tip!"
+			view.Feedback.TextSize = 28
+			view.Feedback.TextColor3 = roblox.Color3.fromRGB(255, 200, 90)
+		else
+			view.Feedback.Text = "Great cut!"
+			view.Feedback.TextColor3 = roblox.Color3.fromRGB(160, 255, 170)
+		end
 		view.Hint.Text = if phone then "Drag with your finger" else "Hold the left mouse button and drag"
 	elseif stage == "scrape" then
 		toolAt(-0.15, 0.1, "Brush")
-		CleaningView.setStep(view, 2, "SCRAPE", "Brush away the dirt. Careful: don't scrape the glinting crystals!")
+		CleaningView.setStep(view, 2, "SCRAPE", "Brush away the dirt. Careful: don't scrape the glowing crystals!")
 		CleaningView.setMeter(view, 0.9)
 		view.Chips.Text = "Chips: 1"
 		view.Progress.Text = "Dirt: " .. scrapedCount .. " / " .. pattern.DirtCount
 		view.Hint.Text = "Drag with your finger"
 	elseif stage == "polish" then
 		toolAt(0.35, -0.3, "Cloth")
-		CleaningView.setStep(view, 3, "POLISH", "Rub in circles around the ore to polish it!")
+		CleaningView.setStep(view, 3, "POLISH", "Rub in circles around the ore. Keep the SPEED needle in the green!")
 		CleaningView.setMeter(view, 0.88)
 		view.Chips.Text = "Chips: 1"
 		view.Progress.Text = "Shine: 72%"
 		view.Gauge.Visible = true
-		view.GaugeNeedle.Position = roblox.UDim2.fromScale(0.52, 0.5)
+		local Scoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningScoring")
+		view.GaugeNeedle.Position = roblox.UDim2.fromScale(Scoring.needleFor(Scoring.PolishBand.Demo), 0.5)
+		view.RubToggle.Text = "Easy polish (R): OFF"
 		view.Shine.Visible = true
 		view.ShineFill.Size = roblox.UDim2.fromScale(0.72, 1)
 		view.RubToggle.Parent.Visible = true
@@ -303,6 +328,8 @@ elseif sceneName == "cleaning" then
 		view.Feedback.TextColor3 = roblox.Color3.fromRGB(255, 240, 170)
 	elseif stage == "reveal" then
 		CleaningView.setReveal(view, "Let's see what you uncovered...")
+		-- Leave is hidden during the reveal (only Collect works)
+		view.Leave.Parent.Visible = false
 		CleaningView.setMeter(view, 0.95)
 		local grade = ItemData.GradeById.Flawless
 		local rarity = Rarity.get(ore.Rarity)

@@ -1,8 +1,12 @@
 --[[
 	Step 3: POLISH. Rub in circles around the core (or rotate the left
-	stick). The core goes from dull to gleaming; a speed gauge shows the
-	sweet spot. "Hold to rub" mode (accessibility) works without circling,
-	but can't reach the top polish score.
+	stick). The core goes from dull to gleaming. The SPEED gauge shows the
+	real circling speed (CleaningScoring.PolishGauge) and is green exactly
+	where the server counts it as good polishing; "Slower!" / "Faster!" pop up
+	when you stay outside it. A bright dot runs round the ring at a good speed.
+	"Easy polish" (accessibility toggle, R / gamepad Y) works without
+	circling, but caps the polish score at RubCap (75%) once it was used;
+	the first time it counts, a message says so.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -22,6 +26,11 @@ PolishStep.__index = PolishStep
 local RUB_ACTION = "TerraForgeRubToggle"
 local STILL_ANGLE = 0.04 -- radians; smaller moves are "holding still"
 local STILL_SAMPLE_TIME = 0.5 -- while holding still, record at most this often
+local RING_DOTS = 24
+local SLOW_DOWN_AFTER = 0.3 -- seconds above the band before "Slower!"
+local SPEED_UP_AFTER = 0.5 -- seconds below the band (while rubbing) before "Faster!"
+local SPEED_HINT_COOLDOWN = 1.2
+local HINT_COLOR = Color3.fromRGB(255, 200, 90)
 
 local function wrap(a: number): number
 	while a > math.pi do
@@ -33,17 +42,6 @@ local function wrap(a: number): number
 	return a
 end
 
--- Speed (rad/s) -> needle position matching the gauge's green zone (0.3..0.75).
-local function needleFor(speed: number): number
-	local band = CleaningScoring.PolishBand
-	if speed < band.Min then
-		return 0.3 * speed / band.Min
-	elseif speed <= band.Max then
-		return 0.3 + 0.45 * (speed - band.Min) / (band.Max - band.Min)
-	end
-	return 0.75 + 0.25 * math.min(1, (speed - band.Max) / 6)
-end
-
 function PolishStep.new(ctx: any)
 	local self = setmetatable({
 		ctx = ctx,
@@ -53,32 +51,38 @@ function PolishStep.new(ctx: any)
 		total = 0,
 		inBand = 0,
 		net = 0,
-		speed = 0,
+		gauge = CleaningScoring.PolishGauge.new(),
+		fastSince = nil :: number?,
+		slowSince = nil :: number?,
+		lastSpeedHint = -math.huge,
 		quarter = 0,
 		rubMode = false,
 		rubAngle = 0,
+		rubNoticed = false,
 		done = false,
 		finishing = false,
 		ring = {} :: { BasePart },
 		dull = nil :: Color3?,
 		sparkle = nil :: ParticleEmitter?,
-		pulse = 0,
+		demoAngle = 0,
 		connection = nil :: RBXScriptConnection?,
-		lastTooFast = 0,
+		label = nil :: any, -- refreshes the Easy polish button text
+		labelKind = ctx.pointer.Kind :: string,
 	}, PolishStep)
 	local needed = ctx.pattern.PolishTurns * math.pi * 2
 	self.needed = needed
 	ctx.submission.Polish = { Samples = self.samples, Mode = "Circle" }
-	ctx.setInstruction("Rub in circles around the ore to polish it!")
+	ctx.setInstruction("Rub in circles around the ore. Keep the SPEED needle in the green!")
 	ctx.setProgress("Shine: 0%")
 	ctx.view.Gauge.Visible = true
 	ctx.view.Shine.Visible = true
 	ctx.view.RubToggle.Parent.Visible = true
-	local key = if ctx.pointer.Kind == "Gamepad" then "Y" elseif ctx.pointer.Kind == "Touch" then nil else "R"
 	local function label()
+		local key = if ctx.pointer.Kind == "Gamepad" then "Y" elseif ctx.pointer.Kind == "Touch" then nil else "R"
 		local state = if self.rubMode then "ON" else "OFF"
-		ctx.view.RubToggle.Text = if key then `Hold to rub ({key}): {state}` else `Hold to rub: {state}`
+		ctx.view.RubToggle.Text = if key then `Easy polish ({key}): {state}` else `Easy polish: {state}`
 	end
+	self.label = label
 	local function toggle()
 		self.rubMode = not self.rubMode
 		label()
@@ -93,8 +97,8 @@ function PolishStep.new(ctx: any)
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.KeyCode.R, Enum.KeyCode.ButtonY)
 	-- a dotted ring around the core shows where to rub
-	for i = 1, 24 do
-		local a = i / 24 * math.pi * 2
+	for i = 1, RING_DOTS do
+		local a = i / RING_DOTS * math.pi * 2
 		local world = ctx.worldAt(math.cos(a) * 0.62, math.sin(a) * 0.62, OreShellBuilder.CoreFront + 0.06)
 		local dot = Geo.ball(ctx.folder, world, 0.07, Color3.fromRGB(255, 240, 200), Enum.Material.Neon, {
 			Anchored = true,
@@ -124,7 +128,7 @@ function PolishStep.new(ctx: any)
 	return self
 end
 
--- Same formula as the server (rub mode caps the whole polish once it was used).
+-- Same formula as the server (easy polish caps the whole polish once it was used).
 function PolishStep.liveScore(self: any): number
 	if self.total <= 0 then
 		return 1
@@ -147,6 +151,16 @@ function PolishStep.applyShine(self: any, progress: number)
 	ctx.setProgress(string.format("Shine: %d%%", math.floor(shine * 100)))
 end
 
+-- Easy polish counts from the first sample recorded with it on (the server caps the score).
+function PolishStep.markRub(self: any)
+	local ctx = self.ctx
+	ctx.submission.Polish.Mode = "Rub"
+	if not self.rubNoticed then
+		self.rubNoticed = true
+		ctx.feedback(`Easy polish: max {math.floor(CleaningScoring.RubCap * 100)}% shine`, HINT_COLOR)
+	end
+end
+
 function PolishStep.addSample(self: any, angle: number, t: number)
 	local ctx = self.ctx
 	if #self.samples >= (GameConfig.MaxPolishSamples - 2) * 2 then
@@ -154,7 +168,7 @@ function PolishStep.addSample(self: any, angle: number, t: number)
 		table.clear(self.samples)
 		self.lastAngle = nil
 		self.total, self.inBand, self.net, self.quarter = 0, 0, 0, 0
-		ctx.feedback("Keep polishing!", Color3.fromRGB(255, 200, 90))
+		ctx.feedback("Keep polishing!", HINT_COLOR)
 		return
 	end
 	if self.lastAngle then
@@ -165,15 +179,12 @@ function PolishStep.addSample(self: any, angle: number, t: number)
 		if math.abs(delta) <= math.pi * 0.75 then
 			local dt = math.max(t - self.lastT, 1 / 240)
 			local speed = math.abs(delta) / dt
-			self.speed = self.speed * 0.7 + speed * 0.3
+			self.gauge:add(self.lastT, t, math.abs(delta))
 			self.total += math.abs(delta)
 			self.net += delta
 			local band = CleaningScoring.PolishBand
 			if speed >= band.Min and speed <= band.Max then
 				self.inBand += math.abs(delta)
-			elseif speed > band.Max * 1.4 and t - self.lastTooFast > 1.2 then
-				self.lastTooFast = t
-				ctx.feedback("Too fast! Smooth circles", Color3.fromRGB(255, 200, 90))
 			end
 		end
 	end
@@ -181,7 +192,9 @@ function PolishStep.addSample(self: any, angle: number, t: number)
 	self.lastT = t
 	table.insert(self.samples, t)
 	table.insert(self.samples, angle)
-	ctx.submission.Polish.Mode = if self.rubMode then "Rub" else ctx.submission.Polish.Mode
+	if self.rubMode then
+		self:markRub()
+	end
 	-- feedback
 	local progress = self.total / self.needed
 	local quarter = math.floor(progress * 4 * self.ctx.pattern.PolishTurns)
@@ -195,48 +208,86 @@ function PolishStep.addSample(self: any, angle: number, t: number)
 	ctx.setMeter(ctx.combinedScore())
 end
 
+-- "Slower!" / "Faster!" when the real speed stays outside the band (circling only).
+function PolishStep.speedHints(self: any, speed: number, t: number, rubbing: boolean)
+	local band = CleaningScoring.PolishBand
+	if not rubbing or self.rubMode then
+		self.fastSince, self.slowSince = nil, nil
+		return
+	end
+	if speed > band.Max then
+		self.fastSince = self.fastSince or t
+		self.slowSince = nil
+	elseif speed < band.Min then
+		self.slowSince = self.slowSince or t
+		self.fastSince = nil
+	else
+		self.fastSince, self.slowSince = nil, nil
+	end
+	if t - self.lastSpeedHint < SPEED_HINT_COOLDOWN then
+		return
+	end
+	if self.fastSince and t - self.fastSince >= SLOW_DOWN_AFTER then
+		self.lastSpeedHint = t
+		self.ctx.feedback("Slower!", HINT_COLOR)
+	elseif self.slowSince and t - self.slowSince >= SPEED_UP_AFTER then
+		self.lastSpeedHint = t
+		self.ctx.feedback("Faster!", HINT_COLOR)
+	end
+end
+
 function PolishStep.update(self: any, dt: number): boolean
 	local ctx = self.ctx
 	if self.done then
 		return true
 	end
-	self.pulse += dt
-	-- a bright dot runs around the ring to show the motion
-	local lead = math.floor((self.pulse * 6) % #self.ring) + 1
+	-- a bright dot runs round the ring at a good polishing speed
+	self.demoAngle = (self.demoAngle + CleaningScoring.PolishBand.Demo * dt) % (math.pi * 2)
+	local lead = math.floor(self.demoAngle / (math.pi * 2) * RING_DOTS) % RING_DOTS + 1
 	for i, dot in self.ring do
 		dot.Transparency = if i == lead then 0 else 0.55
 	end
 	local pointer = ctx.pointer
+	if pointer.Kind ~= self.labelKind then
+		-- the key hint on the Easy polish button follows the device in use
+		self.labelKind = pointer.Kind
+		self.label()
+	end
 	ctx.updateTool("Cloth", pointer.Down)
-	ctx.view.GaugeNeedle.Position = UDim2.fromScale(needleFor(self.speed), 0.5)
-	self.speed *= 0.92
+	local t = ctx.now()
+	local speed = self.gauge:speed(t)
+	ctx.view.GaugeNeedle.Position = UDim2.fromScale(CleaningScoring.needleFor(speed), 0.5)
 	if self.finishing then
 		return false
 	end
-	local t = ctx.now()
+	local rubbing = false
 	if self.rubMode then
 		if pointer.Down or pointer.Stick.Magnitude > 0.5 then
 			self.rubAngle = wrap(self.rubAngle + 3.2 * dt)
-			ctx.submission.Polish.Mode = "Rub"
+			self:markRub()
 			self:addSample(self.rubAngle, t)
 		end
 	elseif pointer.Kind == "Gamepad" and pointer.Stick.Magnitude > 0.5 then
+		rubbing = true
 		self:addSample(math.atan2(pointer.Stick.Y, pointer.Stick.X), t)
 	elseif pointer.Down then
 		local center = ctx.screenAt(0, 0, OreShellBuilder.CoreFront)
 		if center then
 			local offset = pointer.Position - center
 			if offset.Magnitude > 12 then
+				rubbing = true
 				-- screen y grows downwards: flip so counter-clockwise is positive
 				self:addSample(math.atan2(-offset.Y, offset.X), t)
 			end
 		end
 	end
+	self:speedHints(speed, t, rubbing)
 	if self.total >= self.needed * 1.03 then
 		self.finishing = true
 		self:applyShine(1)
 		ctx.feedback("Gleaming!", Color3.fromRGB(255, 240, 170))
-		task.delay(0.4, function()
+		-- a ClientPauses value: the server's timeline check expects this pause
+		task.delay(CleaningScoring.ClientPauses.PolishFinish, function()
 			self.done = true
 		end)
 	end
@@ -257,5 +308,4 @@ function PolishStep.destroy(self: any)
 	ctx.view.RubToggle.Parent.Visible = false
 end
 
-local _ = CleaningScoring
 return PolishStep
