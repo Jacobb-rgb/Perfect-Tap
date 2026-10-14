@@ -6,3 +6,6 @@ node_modules/
 *.rbxl.lock
 *.rbxlx.lock
 .DS_Store
+
+# agent worktrees (temporary)
+.claude/worktrees/
