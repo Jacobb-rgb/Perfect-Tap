@@ -272,7 +272,7 @@ return function(T, Loader)
 				local p = Patterns.generate(ore.Id, seed * 104729)
 				for _, speed in { 4, 8, 12 } do
 					local sub = submission(p, 0.5, 0, 0.1)
-					local scrape, tracker = scrub(p, speed, sub.Cuts[#sub.Cuts].Samples[#sub.Cuts[#sub.Cuts].Samples] + 1)
+					local scrape, tracker = scrub(p, speed, sub.Cuts[#sub.Cuts].Samples[#sub.Cuts[#sub.Cuts].Samples] + 1.3)
 					runs += 1
 					if tracker:complete() then
 						covered += 1
@@ -326,5 +326,126 @@ return function(T, Loader)
 		early.Polish = polishCircles(p.PolishTurns + 0.2, 4.5, nil, 0)
 		local ok = Scoring.timeline(early)
 		T.falsy(ok, "polish before scrape is out of order")
+		-- each real client pause is required
+		local gaps = Scoring.MinGaps
+		T.falsy(Scoring.timeline(submission(p, 0.5, 0, 0.1, { start = gaps.FirstCut - 0.1 })), "first cut before the camera intro")
+		local squeezed = submission(p, 0.5, 0, 0.1)
+		local first, second = squeezed.Cuts[1].Samples, squeezed.Cuts[2].Samples
+		local shift = second[3] - (first[#first] + gaps.BetweenCuts - 0.05)
+		for i = 3, #second, 3 do
+			second[i] -= shift
+		end
+		T.falsy(Scoring.timeline(squeezed), "next cut during the crack")
+	end)
+
+	T.test("timeline: the client's fixed pauses and the server's gaps agree", function()
+		local P, G = Scoring.ClientPauses, Scoring.MinGaps
+		T.lt(G.FirstCut, P.Intro, "intro")
+		T.lt(G.BetweenCuts, P.HitStop + P.Crack, "crack")
+		T.lt(G.ToScrape, P.HitStop + P.LastCrack + P.Crack + P.StepGap, "last crack + step gap")
+		T.lt(G.ToPolish, P.ScrapeFinish + P.StepGap, "scrape finish + step gap")
+		T.lt(G.ToSubmit, P.PolishFinish + P.StepGap, "polish finish + step gap")
+		for name, gap in G do
+			T.truthy(gap > 0.3, name .. " is a real pause")
+		end
+	end)
+
+	-- A scripted run as short as the scoring physics allow (reviewer's bot): cuts right on the
+	-- line just under MaxCutSpeed, scrape at the dirt centres in DirtCount/200 s, polish 60% in
+	-- the band and the rest near MaxPolishSpeed. `gaps` = pauses between the steps.
+	local function botRun(p, gaps)
+		local t = gaps.Intro
+		local cuts = {}
+		for i, cut in p.Cuts do
+			if i > 1 then
+				t += gaps.Crack
+			end
+			local samples = traceCut(cut, p.MaxCutSpeed * 0.999, 0, p.Tolerance, nil, t)
+			table.insert(cuts, { Samples = samples })
+			t = samples[#samples]
+		end
+		t += gaps.ToScrape
+		-- only the dirt centres that remove something, spread over the shortest allowed time
+		local probe = Scoring.ScrapeTracker.new(p)
+		local centres = {}
+		for _, d in p.Dirt do
+			if not d.Fragile and #probe:add(d.Center, 0) > 0 then
+				table.insert(centres, d.Center)
+			end
+		end
+		local window = p.DirtCount / 200 + 0.002
+		local points = {}
+		for i, c in centres do
+			table.insert(points, { p = c, t = t + window * (i - 1) / math.max(1, #centres - 1) })
+		end
+		local scrape = recordBrush(p, points)
+		t += window + gaps.ToPolish
+		local samples = { t, 0 }
+		local angle, done = 0, 0
+		local need = p.PolishTurns * math.pi * 2
+		for _, segment in { { 0.6, 8.4 }, { 0.4, 59 } } do
+			local target = done + need * segment[1]
+			while done < target do
+				local d = math.min(segment[2] / 60, 2.2)
+				t += d / segment[2]
+				angle += d
+				done += d
+				table.insert(samples, t)
+				table.insert(samples, math.atan2(math.sin(angle), math.cos(angle)))
+			end
+		end
+		return { Cuts = cuts, Scrape = scrape, Polish = { Samples = samples, Mode = "Circle" }, Input = "Touch" }, t
+	end
+
+	T.test("anti-cheat: a compressed bot run is rejected, the real client's timing passes", function()
+		local P = Scoring.ClientPauses
+		local none = { Intro = 0, Crack = 0, ToScrape = 0, ToPolish = 0 }
+		local real = {
+			Intro = P.Intro,
+			Crack = P.HitStop + P.Crack,
+			ToScrape = P.HitStop + P.LastCrack + P.Crack + P.StepGap,
+			ToPolish = P.ScrapeFinish + P.StepGap,
+		}
+		local atRule = {
+			Intro = Scoring.MinGaps.FirstCut,
+			Crack = Scoring.MinGaps.BetweenCuts,
+			ToScrape = Scoring.MinGaps.ToScrape,
+			ToPolish = Scoring.MinGaps.ToPolish,
+		}
+		for _, ore in OreData.List do
+			for seed = 1, 5 do
+				local p = Patterns.generate(ore.Id, seed * 7919)
+				local label = `{ore.Id} seed {seed}`
+				-- the compressed bot scores perfectly, but its timeline can't come from the client
+				local bot, botLatest = botRun(p, none)
+				local r = Scoring.score(p, bot)
+				T.truthy(r.Valid, label .. ": bot input is physically possible: " .. tostring(r.Reason))
+				T.falsy(Scoring.fitsSession(bot, botLatest + 0.6 + 1e-3), label .. ": compressed bot rejected")
+				T.falsy(Scoring.fitsSession(bot, botLatest + 60), label .. ": waiting before sending doesn't help")
+				-- the same moves at the real client's pace pass, even submitted at the earliest moment
+				local honest, latest = botRun(p, real)
+				T.truthy(Scoring.score(p, honest).Valid, label .. ": padded run valid")
+				local fits, why = Scoring.fitsSession(honest, latest + P.PolishFinish + P.StepGap)
+				T.truthy(fits, label .. ": real client timing accepted: " .. tostring(why))
+				T.falsy(Scoring.fitsSession(honest, latest + 0.3), label .. ": sent before the polish finish")
+				-- a bot padding to the exact rule saves only the frame slack
+				local padded, paddedLatest = botRun(p, atRule)
+				T.truthy(Scoring.fitsSession(padded, paddedLatest + Scoring.MinGaps.ToSubmit + 1e-6), label .. ": padded bot fits")
+				local floor = paddedLatest + Scoring.MinGaps.ToSubmit
+				local client = latest + P.PolishFinish + P.StepGap
+				T.truthy(floor >= client - 0.05 * (#p.Cuts + 3) - 1e-6, `{label}: bot {floor}s vs real client {client}s`)
+			end
+		end
+	end)
+
+	T.test("anti-cheat: careful honest runs with the real pauses always fit", function()
+		local P = Scoring.ClientPauses
+		for _, ore in OreData.List do
+			local p = Patterns.generate(ore.Id, 2718)
+			local sub = submission(p, 0.5, 0, 0.1, { start = P.Intro })
+			local _, latest = Scoring.timeline(sub)
+			local fits, why = Scoring.fitsSession(sub, latest + P.PolishFinish + P.StepGap)
+			T.truthy(fits, `{ore.Id}: {why}`)
+		end
 	end)
 end

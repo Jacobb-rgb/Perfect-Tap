@@ -1,6 +1,8 @@
 --[[
 	Step 2: SCRAPE. Drag the brush over the core: dirt patches pop off with
-	dust. Avoid the glinting fragile crystals (scraping one snaps it).
+	dust. Avoid the glowing crystals (scraping one snaps it); each sits on a
+	small pale base that is clearly not dirt. The last few patches pulse so
+	they are easy to find.
 	The shared ScrapeTracker decides what the brush hits; only brush
 	positions that changed something are recorded, and the server replays
 	them to get the same result.
@@ -21,6 +23,7 @@ local ScrapeStep = {}
 ScrapeStep.__index = ScrapeStep
 
 local MAX_REACH = 2.5 -- face units; the pointer is nowhere near the ore beyond this
+local PULSE_LAST = 3 -- this many patches left: they pulse so they are easy to find
 
 function ScrapeStep.new(ctx: any)
 	local self = setmetatable({
@@ -29,11 +32,12 @@ function ScrapeStep.new(ctx: any)
 		samples = {} :: { number },
 		total = ctx.pattern.DirtCount,
 		lastPop = 0,
+		pulse = 0,
 		done = false,
 		finishing = false,
 	}, ScrapeStep)
 	ctx.submission.Scrape = { Samples = self.samples }
-	ctx.setInstruction("Brush away the dirt. Careful: don't scrape the glinting crystals!")
+	ctx.setInstruction("Brush away the dirt. Careful: don't scrape the glowing crystals!")
 	ctx.setProgress(`Dirt: 0 / {self.total}`)
 	-- the crystals sparkle so players can spot them
 	for _, shard in ctx.shell.Fragile do
@@ -85,9 +89,9 @@ function ScrapeStep.finish(self: any)
 	self.finishing = true
 	local ctx = self.ctx
 	Sfx.loop("Scrape", false)
-	-- the dirt around the crystals goes too
+	-- the pale bases under the crystals go too
 	for _, d in ctx.shell.Model:GetChildren() do
-		if d:IsA("BasePart") and d.Name == "FragileDirt" then
+		if d:IsA("BasePart") and d.Name == "CrystalBase" then
 			popPatch(ctx, d)
 		end
 	end
@@ -97,16 +101,36 @@ function ScrapeStep.finish(self: any)
 	else
 		ctx.feedback("Clean... mostly", Color3.fromRGB(200, 200, 160))
 	end
-	task.delay(0.7, function()
+	-- a ClientPauses value: the server's timeline check expects this pause
+	task.delay(CleaningScoring.ClientPauses.ScrapeFinish, function()
 		self.done = true
 	end)
 end
 
-function ScrapeStep.update(self: any, _dt: number): boolean
+-- The last few patches pulse so they are easy to spot (never more than PULSE_LAST parts).
+function ScrapeStep.pulseLast(self: any)
+	local tracker = self.tracker
+	local left = self.total - tracker.removed
+	if left <= 0 or left > PULSE_LAST then
+		return
+	end
+	local transparency = 0.2 + 0.2 * math.sin(self.pulse * 7)
+	for _, d in self.ctx.pattern.Dirt do
+		if not d.Fragile and not tracker.cleared[d.Index] then
+			local patch = self.ctx.shell.Dirt[d.Index]
+			if patch and patch.Parent then
+				patch.Transparency = transparency
+			end
+		end
+	end
+end
+
+function ScrapeStep.update(self: any, dt: number): boolean
 	local ctx = self.ctx
 	if self.done then
 		return true
 	end
+	self.pulse += dt
 	local pointer = ctx.pointer
 	ctx.updateTool("Brush", pointer.Down)
 	if self.finishing then
@@ -151,6 +175,7 @@ function ScrapeStep.update(self: any, _dt: number): boolean
 		end
 	end
 	ctx.setMeter(ctx.combinedScore())
+	self:pulseLast()
 	Sfx.loop("Scrape", pointer.Down and (pointer.Moved or scraping))
 	if self.tracker:complete() then
 		self:finish()

@@ -3,7 +3,8 @@
 
 	  Grab / Drop : E        | gamepad X  | touch button "Grab"
 	  Throw       : hold Q   | gamepad RB | touch button "Throw" (hold to charge)
-	  (machine prompts use F / gamepad Y)
+	  (machine prompts use F / gamepad Y; the Cleaning Station's "Take Ore
+	  Back" uses G / gamepad B)
 
 	The nearest item you own (or the one under the mouse) is highlighted with
 	its rarity color and a small hint shows its name and value. The server

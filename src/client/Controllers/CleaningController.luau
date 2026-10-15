@@ -52,6 +52,14 @@ local CleaningController = {}
 
 local player = Players.LocalPlayer
 local active: any = nil
+-- The camera from before cleaning. Kept here, not per session: a session that starts while
+-- the last one's camera is still flying back must not save that half-restored camera.
+local restoreCF: CFrame? = nil
+local restoreFov: number? = nil
+
+local pauses = CleaningScoring.ClientPauses
+local LEAVE_CONFIRM_TIME = 2 -- seconds to press Leave again once a cut is done
+local CHISEL_PRESSED_TRANSPARENCY = 0.55 -- a working chisel never hides the dots ahead
 
 local STEPS: { { Module: any, Title: string, Text: string } } = {
 	{ Module = ChiselStep, Title = "CHISEL", Text = "Trace the glowing line" },
@@ -62,7 +70,7 @@ local STEPS: { { Module: any, Title: string, Text: string } } = {
 local HINTS = {
 	Mouse = "Hold the left mouse button and drag",
 	Touch = "Drag with your finger",
-	Gamepad = "Steer with the left stick, hold A to work",
+	Gamepad = "Steer with the left stick, hold A to work, B to leave",
 }
 
 function CleaningController.isActive(): boolean
@@ -115,11 +123,11 @@ local function buildTools(folder: Instance): { [string]: Model }
 	return tools
 end
 
-local function placeTool(model: Model, cf: CFrame, visible: boolean)
+local function placeTool(model: Model, cf: CFrame, visible: boolean, transparency: number?)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.CFrame = cf * (d:GetAttribute("BaseCF") :: CFrame)
-			d.Transparency = if visible then 0 else 1
+			d.Transparency = if visible then transparency or 0 else 1
 		end
 	end
 end
@@ -232,6 +240,8 @@ local function makeContext(data: { [string]: any }, station: Model): any
 	function ctx.feedback(text: string, color: Color3?)
 		local label = view.Feedback
 		label.Text = text
+		-- long messages get smaller so they stay on one or two lines
+		label.TextSize = if #text > 24 then 28 elseif #text > 20 then 36 else 44
 		label.TextColor3 = color or Theme.Text
 		label.TextTransparency = 0
 		local stroke = label:FindFirstChildOfClass("UIStroke")
@@ -266,7 +276,8 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		end
 		local model = ctx.tools[name]
 		local p = ctx.faceAt(pointer.Position, OreShellBuilder.DotZ)
-		if not p or p.Magnitude > 1.6 then
+		-- a lifted finger has no hover: a tool left there would cover the groove tip marker
+		if not p or p.Magnitude > 1.6 or (not pressed and pointer.Kind == "Touch") then
 			placeTool(model, CFrame.new(0, -1000, 0), false)
 			return
 		end
@@ -277,12 +288,26 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		local right = axis:Cross(workCF.LookVector * -1)
 		right = if right.Magnitude > 1e-3 then right.Unit else workCF.RightVector
 		local back = right:Cross(axis).Unit
-		placeTool(model, CFrame.fromMatrix(tip, right, axis, back), true)
+		-- while working, the chisel turns see-through so the guide dots ahead stay visible
+		local transparency = if pressed and name == "Chisel" then CHISEL_PRESSED_TRANSPARENCY else 0
+		placeTool(model, CFrame.fromMatrix(tip, right, axis, back), true, transparency)
 	end
 	return ctx
 end
 
 ---------------------------------------------------------------- enter / exit
+
+local function leaveConfirming(ctx: any): boolean
+	return ctx.leaveArmedAt ~= nil and os.clock() - ctx.leaveArmedAt < LEAVE_CONFIRM_TIME
+end
+
+-- Button texts; the controller cursor can't click buttons, so they name their keys.
+local function updateButtonLabels(ctx: any)
+	local gamepad = ctx.pointer.Kind == "Gamepad"
+	local view = ctx.view
+	view.Leave.Text = (if leaveConfirming(ctx) then "Sure?" else "Leave") .. (if gamepad then " (B)" else "")
+	view.Collect.Text = if gamepad then "Collect (A)" else "Collect"
+end
 
 local function setRawItemHidden(ctx: any, hidden: boolean)
 	for _, item in CollectionService:GetTagged("Item") do
@@ -355,6 +380,7 @@ local function enter(ctx: any)
 	ctx.view.Gui.Parent = player:WaitForChild("PlayerGui")
 	ctx.view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
 	ctx.view.Cursor.Visible = ctx.pointer.Kind == "Gamepad"
+	updateButtonLabels(ctx)
 	ctx.popLighting = LightingController.push("Workbench", 0.6)
 	local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
 	if dof then
@@ -366,11 +392,13 @@ local function enter(ctx: any)
 	end
 	setRawItemHidden(ctx, true)
 	local camera = ctx.camera
-	ctx.savedCameraCF = camera.CFrame
-	ctx.savedFov = camera.FieldOfView
+	-- a quick restart keeps the camera from before the first session (see restoreCF)
+	ctx.savedCameraCF = restoreCF or camera.CFrame
+	ctx.savedFov = restoreFov or camera.FieldOfView
+	restoreCF, restoreFov = ctx.savedCameraCF, ctx.savedFov
 	camera.CameraType = Enum.CameraType.Scriptable
 	local target, fov = fitCamera(ctx, scale, compact)
-	TweenService:Create(camera, TweenInfo.new(0.75, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+	TweenService:Create(camera, TweenInfo.new(pauses.Intro, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 		CFrame = target,
 		FieldOfView = fov,
 	}):Play()
@@ -404,6 +432,7 @@ local function exit(ctx: any)
 		if active == nil then
 			camera.CameraType = Enum.CameraType.Custom
 			camera.FieldOfView = ctx.savedFov or 70
+			restoreCF, restoreFov = nil, nil
 		end
 		ctx.folder:Destroy()
 		ctx.view.Gui:Destroy()
@@ -441,6 +470,33 @@ local function cancel(ctx: any)
 	Net.send("CleanCancel", ctx.Id)
 	Sfx.play("UIClick")
 	exit(ctx)
+end
+
+-- Leave button, B or Backspace. Once a cut is done, the first press asks for a second one.
+local function requestLeave(ctx: any)
+	if ctx.revealing or ctx.exited then
+		return
+	end
+	local invested = next(ctx.submission.Cuts) ~= nil
+	if invested and not leaveConfirming(ctx) then
+		local armedAt = os.clock()
+		ctx.leaveArmedAt = armedAt
+		Sfx.play("UIClick", nil, 0.8)
+		ctx.feedback("Press again to leave", Theme.Bad)
+		ctx.view.Hint.Text = "Your ore stays in the vise."
+		updateButtonLabels(ctx)
+		task.delay(LEAVE_CONFIRM_TIME, function()
+			if ctx.leaveArmedAt == armedAt and not ctx.exited then
+				ctx.leaveArmedAt = nil
+				updateButtonLabels(ctx)
+				if not ctx.revealing then
+					ctx.view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
+				end
+			end
+		end)
+		return
+	end
+	cancel(ctx)
 end
 
 ---------------------------------------------------------------- reveal
@@ -481,6 +537,9 @@ local function reveal(ctx: any)
 	CleaningView.setReveal(view, "Let's see what you uncovered...")
 	view.Progress.Text = ""
 	view.Hint.Text = ""
+	-- nothing to leave any more (cancel() ignores it now): only Collect works from here
+	view.Leave.Parent.Visible = false
+	ContextActionService:UnbindAction("TerraForgeCleanBack")
 	for _, model in ctx.tools do
 		placeTool(model, CFrame.new(0, -1000, 0), false)
 	end
@@ -603,11 +662,11 @@ end
 local function run(ctx: any)
 	enter(ctx)
 	table.insert(ctx.connections, ctx.view.Leave.Activated:Connect(function()
-		cancel(ctx)
+		requestLeave(ctx)
 	end))
 	ContextActionService:BindAction("TerraForgeCleanBack", function(_, state)
 		if state == Enum.UserInputState.Begin then
-			cancel(ctx)
+			requestLeave(ctx)
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
@@ -623,9 +682,10 @@ local function run(ctx: any)
 		local view = ctx.view
 		if ctx.pointer.Kind ~= ctx.hintKind then
 			ctx.hintKind = ctx.pointer.Kind
-			if not ctx.revealing then
+			if not ctx.revealing and not leaveConfirming(ctx) then
 				view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
 			end
+			updateButtonLabels(ctx)
 		end
 		if ctx.pointer.Kind == "Gamepad" then
 			view.Cursor.Visible = true
@@ -650,7 +710,8 @@ local function run(ctx: any)
 			cancel(ctx)
 		end
 	end))
-	task.wait(0.75)
+	-- every wait in this flow is a ClientPauses value: the server's timeline check expects them
+	task.wait(pauses.Intro)
 	CleaningView.setMeter(ctx.view, 1)
 	for index, def in STEPS do
 		if ctx.cancelled or ctx.exited then
@@ -670,7 +731,7 @@ local function run(ctx: any)
 		ctx.stepScores[index] = ctx.step:liveScore()
 		ctx.step:destroy()
 		ctx.step = nil
-		task.wait(0.25)
+		task.wait(pauses.StepGap)
 	end
 	if ctx.cancelled or ctx.exited then
 		return

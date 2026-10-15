@@ -148,9 +148,10 @@ on-screen hints.
 | Grab / drop a chunk | E | "Grab" button | X |
 | Throw (hold to charge, release) | Q | "Throw" button | R1 |
 | Use the Cleaning Station | F | Tap the prompt | Y |
+| Take the raw ore back out of the station | G | Tap "Take Ore Back" | B |
 | Cleaning: chisel / scrape / polish | Hold left mouse button and drag | Drag with your finger | Left stick moves the tool, hold A (or R2) |
-| Polish without circling (accessibility) | "Hold to rub" toggle | same | same |
-| Leave cleaning / collect the result | Leave button or Backspace / E or Enter | Leave / Collect buttons | B / A |
+| Polish without circling (accessibility, max 75% polish) | "Easy polish" toggle or R | "Easy polish" button | Y |
+| Leave cleaning (press twice once a cut is done) / collect the result | Leave button or Backspace / E or Enter | Leave / Collect buttons | B / A |
 | Other machines, build mode | TODO (step d) | TODO | TODO |
 
 Sources in code: `src/client/Controllers/InteractController.luau`, `CleaningController.luau`,

@@ -1,7 +1,7 @@
 --[[
 	PromptController: machine prompts that fit what you're doing (on this
 	screen only; the server still checks everything) and consistent prompt
-	keys (F / gamepad Y; E is Grab).
+	keys.
 
 	- Prompts on other players' machines are hidden.
 	- 'LoadPrompt' (Put In) on your own machines shows only while you carry
@@ -9,6 +9,11 @@
 	- Pell's 'SellPrompt' shows what your carried items are worth.
 	- setSuppressed(reason, on) hides every prompt during close-ups (build
 	  mode, the anvil); prompts come back when no reason is left.
+	Keys: F / gamepad Y for machine prompts; the Cleaning Station's "Take Ore
+	Back" uses G / gamepad B and is always shown (its own keys, so it never
+	fires together with another prompt). Taken elsewhere: E / X Grab, Q / RB
+	Throw; B is also Leave inside the cleaning minigame, while the station
+	prompts are disabled.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
