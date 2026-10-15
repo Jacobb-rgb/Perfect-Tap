@@ -41,7 +41,21 @@ function Gallery.build(Loader: any, parent: any)
 	Style.sign(root, CF.new(82, 6, 40) * CF.Angles(0, math.pi, 0), "DEPTHS", 10, 3.4, { Kind = "Stone" })
 	local _ = wood
 	local _g = glow
-	local icons = { "CrossedHammers", "CrossedPickaxes", "Gear", "House", "Compass", "Arrow", "ArrowDown", "Coin", "Bone", "Target", "Pickaxe", "Hammer" }
+	local icons = {
+		"CrossedHammers",
+		"CrossedPickaxes",
+		"Gear",
+		"House",
+		"Compass",
+		"Arrow",
+		"ArrowLeft",
+		"ArrowDown",
+		"Coin",
+		"Bone",
+		"Target",
+		"Pickaxe",
+		"Hammer",
+	}
 	for i, kind in icons do
 		local x = (i - 1) * 7
 		local board = Style.sign(root, CF.new(x, 13, 40) * CF.Angles(0, math.pi, 0), "", 6, 6, { Kind = "Wood" })
@@ -76,6 +90,14 @@ function Gallery.build(Loader: any, parent: any)
 	Style.path(root, V3.new(90, 0, 150), V3.new(90, 0, 170), 6, rng, { Kind = "Plank" })
 	Style.crate(root, CF.new(100, 0, 158), rng)
 	Style.barrel(root, V3.new(104, 0, 162), rng)
+	Style.boulder(root, V3.new(112, 0, 160), 4, rng)
+	Style.boulder(root, V3.new(120, 0, 160), 3, rng, { Color = C.StoneDark })
+
+	-- row 3b: pillar and windows on a wall
+	Style.pillar(root, CF.new(104, 0, 80), 9, rng, { Glow = C.Fire })
+	Style.block(root, CF.new(118, 5, 80), V3.new(12, 10, 2), C.Stone)
+	Style.window(root, CF.new(115, 6, 81.2) * CF.Angles(0, math.pi, 0), 2.4, 3)
+	Style.window(root, CF.new(121, 6, 81.2) * CF.Angles(0, math.pi, 0), 2.4, 3, { Color = C.CrystalBlue })
 	return root
 end
 

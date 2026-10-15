@@ -41,9 +41,23 @@ function Blockout.build(Loader: any, parent: any)
 				box.CFrame = CF.new(piece.Center + V3.new(0, size.Y / 2, 0)) * CF.Angles(0, 0, math.pi / 2)
 			end
 			-- front marker and a label facing the front
-			Style.block(root, frame * CF.new(0, 0.6, -size.Z / 2 - 0.6), V3.new(math.min(size.X, 4), 1.2, 1.2), roblox.Color3.new(1, 1, 1), roblox.Enum.Material.Neon, Style.tiny())
+			Style.block(
+				root,
+				frame * CF.new(0, 0.6, -size.Z / 2 - 0.6),
+				V3.new(math.min(size.X, 4), 1.2, 1.2),
+				roblox.Color3.new(1, 1, 1),
+				roblox.Enum.Material.Neon,
+				Style.tiny()
+			)
 			local labelWidth = math.clamp(#piece.Id * 1.1, 6, 40)
-			Style.sign(root, frame * CF.new(0, size.Y + 2.5, 0), piece.Id, labelWidth, 3, { Kind = "Glow", Frame = false, DoubleSided = true })
+			Style.sign(
+				root,
+				frame * CF.new(0, size.Y + 2.5, 0),
+				piece.Id,
+				labelWidth,
+				3,
+				{ Kind = "Glow", Frame = false, DoubleSided = true }
+			)
 		end
 	end
 	for _, path in LobbyLayout.Paths do

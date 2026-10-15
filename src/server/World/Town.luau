@@ -68,7 +68,8 @@ function Town.build(map: Model, rng: Rng.Rng)
 	-- legacy pieces that no landed lobby module replaces yet
 	local replaced: { [string]: boolean } = {}
 	for _, entry in modules do
-		for _, piece in entry.Module.Replaces or {} do
+		local list: { string } = entry.Module.Replaces or {}
+		for _, piece in list do
 			replaced[piece] = true
 		end
 	end

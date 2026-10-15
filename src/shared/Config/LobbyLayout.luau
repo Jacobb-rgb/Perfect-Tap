@@ -56,15 +56,22 @@ LobbyLayout.Budget = {
 	LobbyParts = 5000,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
-	-- LobbyLights = lights of that package inside the lobby area,
-	-- Lights = all lights of that package
+	-- LobbyParts = those of them inside LobbyLayout.Area,
+	-- Lights = all PointLights/SpotLights of that package,
+	-- LobbyLights = those of them inside LobbyLayout.Area.
+	-- Everything else inside the lobby area today (ground, plots, ore
+	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
-		Sky = { Parts = 1400, LobbyLights = 2, Lights = 6 },
-		Backdrop = { Parts = 1800, LobbyLights = 3, Lights = 11 },
-		Plaza = { Parts = 1100, LobbyLights = 11, Lights = 11 },
-		Districts = { Parts = 1000, LobbyLights = 9, Lights = 9 },
-		Flora = { Parts = 1500, LobbyLights = 9, Lights = 10 },
-	} :: { [string]: { Parts: number, LobbyLights: number, Lights: number } },
+		Sky = { Parts = 1400, LobbyParts = 150, Lights = 6, LobbyLights = 2 },
+		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
+		Plaza = { Parts = 1100, LobbyParts = 1100, Lights = 10, LobbyLights = 10 },
+		Districts = { Parts = 1000, LobbyParts = 1000, Lights = 8, LobbyLights = 8 },
+		Flora = { Parts = 1500, LobbyParts = 1300, Lights = 8, LobbyLights = 8 },
+	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
+	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
+	-- lobby pass and may grow by at most LandExtraParts.
+	LandBaselineParts = 1775,
+	LandExtraParts = 300,
 }
 
 -- Where the low evening sun should sit (unit vector toward the sun):
@@ -123,9 +130,9 @@ LobbyLayout.Pieces = {
 		Id = "GreatForge",
 		Package = "Plaza",
 		Center = v(0, 0, -58),
-		Size = v(42, 50, 40),
+		Size = v(42, 44, 40),
 		Facing = v(0, 0, 1),
-		Note = "Stone hall, red stepped gable roofs, crossed-hammers gable sign, THE GREAT FORGE board, open glowing interior.",
+		Note = "Stone hall, red stepped gable roofs (ridge <= 32 so the DEPTHS portal shows above it in the hero shot), chimneys <= 44 at (x +-17, z -72), crossed-hammers gable sign, THE GREAT FORGE board, open glowing interior.",
 	},
 	------------------------------------------------------------ Districts package
 	{
@@ -327,7 +334,15 @@ LobbyLayout.Pieces = {
 		Center = v(0, -12, -236),
 		Size = v(44, 40, 8),
 		Facing = v(0, 0, 1),
-		Note = "Stone tunnel portal around the Ember Caves entrance (keep the 18x16 opening and the KeepOut box clear), DEPTHS sign with down arrow, THE FORGE sign above.",
+		Note = "Stone-and-iron tunnel portal framing the Ember Caves entrance (keep the 18x16 opening and the tunnel walkable), receding glowing arch rings inside, DEPTHS sign with a down arrow over the arch, lanterns. Replaces Land's EMBER CAVES sign.",
+	},
+	{
+		Id = "ForgeWorks",
+		Package = "Backdrop",
+		Center = v(34, 26, -250),
+		Size = v(34, 34, 18),
+		Facing = v(0, 0, 1),
+		Note = "Industrial works on the cave roof right of the portal (seen right of the Great Forge in the hero shot): THE FORGE sign with crossed hammers, stone-and-iron block house with lit windows and a PWR gauge board, ore chute with a conveyor down to the quarry, derrick.",
 	},
 	{
 		Id = "DepthsRails",
@@ -390,11 +405,11 @@ LobbyLayout.Pieces = {
 	{
 		Id = "WestPier",
 		Package = "Sky",
-		Center = v(-192, 0, -36),
-		Size = v(8, 6, 44),
+		Center = v(-196, -22, -36),
+		Size = v(10, 26, 44),
 		Facing = v(-1, 0, 0),
 		Walkable = true,
-		Note = "Wooden pier on posts from the west cliff out over the sea, lanterns, a moored rowboat.",
+		Note = "Decor only (beyond the island's invisible wall): timber stairs down the west cliff to a plank dock 2.5 above the sea, posts in the water, lantern posts, a moored rowboat and a small sailboat.",
 	},
 	{
 		Id = "SunGlitter",

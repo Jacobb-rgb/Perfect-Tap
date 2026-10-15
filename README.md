@@ -29,6 +29,7 @@ minigame**, smelt them, forge gear and grow your workshop.
 | `docs/` | – | design, plan, QA reports, checklists |
 
 Balance lives in `src/shared/Config/*`. Design summary: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
+Art: style bible [docs/ART_DIRECTION.md](docs/ART_DIRECTION.md), lobby layout and build packages [docs/plans/LOBBY_PLAN.md](docs/plans/LOBBY_PLAN.md).
 
 ## Team (Claude subagents)
 `.claude/agents/`: **game-designer** (plans), **luau-dev** (implements),

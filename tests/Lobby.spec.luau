@@ -126,10 +126,16 @@ return function(T, Loader)
 				local p = a + (b - a) * (t / length)
 				for _, plot in WorldLayout.Plots do
 					local d = p - plot.Center
-					T.falsy(math.abs(d.X) < 27 + path.Width / 2 and math.abs(d.Z) < 27 + path.Width / 2, `path {path.Id} crosses plot {plot.Id}`)
+					T.falsy(
+						math.abs(d.X) < 27 + path.Width / 2 and math.abs(d.Z) < 27 + path.Width / 2,
+						`path {path.Id} crosses plot {plot.Id}`
+					)
 				end
 				for _, spot in WorldLayout.OutcropSpots do
-					T.truthy((Vector3.new(p.X, 0, p.Z) - Vector3.new(spot.X, 0, spot.Z)).Magnitude >= 5 + path.Width / 2, `path {path.Id} crosses an outcrop`)
+					T.truthy(
+						(Vector3.new(p.X, 0, p.Z) - Vector3.new(spot.X, 0, spot.Z)).Magnitude >= 5 + path.Width / 2,
+						`path {path.Id} crosses an outcrop`
+					)
 				end
 			end
 		end
@@ -170,10 +176,13 @@ return function(T, Loader)
 			for name, b in budget.Packages do
 				local m = lobby:FindFirstChild(name)
 				if m then
-					local parts, lights, inLights = 0, 0, 0
+					local parts, inParts, lights, inLights = 0, 0, 0, 0
 					for _, d in m:GetDescendants() do
 						if d:IsA("BasePart") then
 							parts += 1
+							if LobbyLayout.inArea(d.CFrame.Position) then
+								inParts += 1
+							end
 						elseif (d:IsA("PointLight") or d:IsA("SpotLight")) and d.Parent and d.Parent:IsA("BasePart") then
 							lights += 1
 							if LobbyLayout.inArea(d.Parent.CFrame.Position) then
@@ -182,9 +191,53 @@ return function(T, Loader)
 						end
 					end
 					T.lt(parts, b.Parts + 1, name .. " parts")
+					T.lt(inParts, b.LobbyParts + 1, name .. " parts in the lobby")
 					T.lt(lights, b.Lights + 1, name .. " lights")
 					T.lt(inLights, b.LobbyLights + 1, name .. " lights in the lobby")
 				end
+			end
+		end
+
+		-- Land (restyled by the Backdrop package) stays near its old size
+		local landParts = 0
+		for _, d in map.Land:GetDescendants() do
+			if d:IsA("BasePart") then
+				landParts += 1
+			end
+		end
+		T.lt(landParts, budget.LandBaselineParts + budget.LandExtraParts + 1, "Land parts")
+	end)
+
+	T.test("the spawn stays clear and spinning decor streams as one piece", function()
+		local game = roblox.Instance.new("DataModel")
+		local map = WorldBuilder.build(game:GetService("Workspace"))
+		local spawn = WorldLayout.SpawnPoint
+		-- a player-sized box above the spawn pad must be free of colliding parts
+		local min = Vector3.new(spawn.X - 4, 0.6, spawn.Z - 4)
+		local max = Vector3.new(spawn.X + 4, 8, spawn.Z + 4)
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and d.CanCollide and d.Transparency < 1 then
+				local cf, size = d.CFrame, d.Size
+				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+				local hx = math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2
+				local hy = math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2
+				local hz = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
+				local p = cf.Position
+				local overlaps = p.X - hx < max.X
+					and p.X + hx > min.X
+					and p.Y - hy < max.Y
+					and p.Y + hy > min.Y
+					and p.Z - hz < max.Z
+					and p.Z + hz > min.Z
+				T.falsy(overlaps, d:GetFullName() .. " blocks the spawn")
+			end
+			if d:IsA("Model") and table.find(d:GetTags(), "Spin") then
+				T.truthy(d.PrimaryPart, d:GetFullName() .. " (Spin) has a PrimaryPart")
+				local mode = d.ModelStreamingMode
+				T.truthy(
+					mode == roblox.Enum.ModelStreamingMode.Atomic or mode == roblox.Enum.ModelStreamingMode.Persistent,
+					d:GetFullName() .. " (Spin) streams atomically"
+				)
 			end
 		end
 	end)
@@ -227,6 +280,20 @@ return function(T, Loader)
 			local chest = (tagged.EmberChest or {})[1]
 			local wheel = chest and chest:FindFirstAncestor("SpinWheel")
 			T.truthy(wheel, "EmberChest sits on the SpinWheel model")
+			for _, tag in { "SellBin", "SellCounter", "ShopCounter", "UpgradeCounter", "EmberChest", "GuildBoard", "OreCodex", "FossilDig" } do
+				for _, inst in tagged[tag] or {} do
+					T.truthy(inst:IsDescendantOf(districts), tag .. " is built by the Districts package")
+				end
+			end
+		end
+		-- the fire crystal spins once the Plaza package has landed
+		local plaza = map.Emberfall:FindFirstChild("Lobby") and map.Emberfall.Lobby:FindFirstChild("Plaza")
+		if plaza then
+			local spins = false
+			for _, inst in tagged.Spin or {} do
+				spins = spins or inst:IsDescendantOf(plaza)
+			end
+			T.truthy(spins, "the Plaza's fire crystal is tagged Spin")
 		end
 	end)
 end

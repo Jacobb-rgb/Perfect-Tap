@@ -61,7 +61,14 @@ local function gableRoof(parent: Instance, cf: CFrame, width: number, depth: num
 	local half = depth / 2
 	-- WedgePart's tall side is at +Z: the front half needs no turn, the back half is turned around
 	Geo.wedge(parent, cf * CFrame.new(0, height / 2, -half / 2), Vector3.new(width, height, half), color, nil, solid())
-	Geo.wedge(parent, cf * CFrame.new(0, height / 2, half / 2) * CFrame.Angles(0, math.pi, 0), Vector3.new(width, height, half), color, nil, solid())
+	Geo.wedge(
+		parent,
+		cf * CFrame.new(0, height / 2, half / 2) * CFrame.Angles(0, math.pi, 0),
+		Vector3.new(width, height, half),
+		color,
+		nil,
+		solid()
+	)
 end
 
 local function plaza(parent: Instance, rng: Rng.Rng)
@@ -78,7 +85,14 @@ local function plaza(parent: Instance, rng: Rng.Rng)
 		local p = center + Vector3.new(math.cos(a), 0, math.sin(a)) * (radius - 0.6)
 		local open = math.abs(math.sin(a)) < 0.16 or math.abs(math.cos(a)) < 0.16
 		if not open then
-			Geo.block(m, CFrame.lookAt(p, center) * CFrame.new(0, 0.5, 0), Vector3.new(3.2, 1, 1.4), Geo.vary(Palette.StoneWarm, rng, 0.05), nil, solid({ CastShadow = false }))
+			Geo.block(
+				m,
+				CFrame.lookAt(p, center) * CFrame.new(0, 0.5, 0),
+				Vector3.new(3.2, 1, 1.4),
+				Geo.vary(Palette.StoneWarm, rng, 0.05),
+				nil,
+				solid({ CastShadow = false })
+			)
 		end
 	end
 	-- Heartstone monument: pedestal, anvil, floating shard
@@ -87,13 +101,41 @@ local function plaza(parent: Instance, rng: Rng.Rng)
 	Geo.cylinder(mon, center + Vector3.new(0, 2.5, 0), 1, 9, Palette.Stone, nil, solid())
 	Geo.block(mon, CFrame.new(center + Vector3.new(0, 4.4, 0)), Vector3.new(3, 2.8, 2.4), Palette.Metal, Enum.Material.Metal, solid())
 	Geo.block(mon, CFrame.new(center + Vector3.new(0, 6.2, 0)), Vector3.new(6, 1.2, 2.6), Palette.Metal, Enum.Material.Metal, solid())
-	Geo.wedge(mon, CFrame.new(center + Vector3.new(-4, 6.2, 0)) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(2.6, 1.2, 2), Palette.Metal, Enum.Material.Metal, solid())
+	Geo.wedge(
+		mon,
+		CFrame.new(center + Vector3.new(-4, 6.2, 0)) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(math.pi, 0, 0),
+		Vector3.new(2.6, 1.2, 2),
+		Palette.Metal,
+		Enum.Material.Metal,
+		solid()
+	)
 	local shardModel = model("HeartShard", mon)
 	local shardCf = CFrame.new(center + Vector3.new(0, 11, 0)) * CFrame.Angles(0, 0.4, 0.2) * CFrame.Angles(0, math.pi / 4, 0)
-	local shard = Geo.block(shardModel, shardCf, Vector3.new(1.8, 4, 1.8), Color3.fromRGB(255, 70, 120), Enum.Material.Neon, decor({ CastShadow = false }))
+	local shard = Geo.block(
+		shardModel,
+		shardCf,
+		Vector3.new(1.8, 4, 1.8),
+		Color3.fromRGB(255, 70, 120),
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
 	shard.Name = "HeartShard"
-	Geo.wedge(shardModel, shardCf * CFrame.new(0, 2.9, 0), Vector3.new(1.8, 1.8, 1.8), Color3.fromRGB(255, 90, 140), Enum.Material.Neon, decor({ CastShadow = false }))
-	Geo.wedge(shardModel, shardCf * CFrame.new(0, -2.9, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(1.8, 1.8, 1.8), Color3.fromRGB(255, 90, 140), Enum.Material.Neon, decor({ CastShadow = false }))
+	Geo.wedge(
+		shardModel,
+		shardCf * CFrame.new(0, 2.9, 0),
+		Vector3.new(1.8, 1.8, 1.8),
+		Color3.fromRGB(255, 90, 140),
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
+	Geo.wedge(
+		shardModel,
+		shardCf * CFrame.new(0, -2.9, 0) * CFrame.Angles(math.pi, 0, 0),
+		Vector3.new(1.8, 1.8, 1.8),
+		Color3.fromRGB(255, 90, 140),
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
 	Props.pointLight(shard, Color3.fromRGB(255, 80, 130), 22, 1.8)
 	Props.emitter(shard, "Sparkle", Color3.fromRGB(255, 140, 180), 4)
 	shardModel.PrimaryPart = shard
@@ -122,10 +164,31 @@ local function greatForge(parent: Instance, rng: Rng.Rng)
 	-- forge mouth (glowing arch) facing the plaza
 	local mouthCf = cf * CFrame.new(0, 7, -7.2)
 	Geo.block(m, mouthCf * CFrame.new(0, 0, 0), Vector3.new(14, 11, 1), Palette.StoneDark, nil, solid())
-	local glow = Geo.block(m, mouthCf * CFrame.new(0, -0.5, -0.3), Vector3.new(10, 8, 0.6), Palette.ForgeGlow, Enum.Material.Neon, decor({ CastShadow = false }))
+	local glow = Geo.block(
+		m,
+		mouthCf * CFrame.new(0, -0.5, -0.3),
+		Vector3.new(10, 8, 0.6),
+		Palette.ForgeGlow,
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
 	glow.Name = "ForgeGlow"
-	Geo.wedge(m, mouthCf * CFrame.new(-4, 4.4, -0.35) * CFrame.Angles(0, -math.pi / 2, 0), Vector3.new(0.7, 2, 2.2), Palette.StoneDark, nil, decor())
-	Geo.wedge(m, mouthCf * CFrame.new(4, 4.4, -0.35) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(0.7, 2, 2.2), Palette.StoneDark, nil, decor())
+	Geo.wedge(
+		m,
+		mouthCf * CFrame.new(-4, 4.4, -0.35) * CFrame.Angles(0, -math.pi / 2, 0),
+		Vector3.new(0.7, 2, 2.2),
+		Palette.StoneDark,
+		nil,
+		decor()
+	)
+	Geo.wedge(
+		m,
+		mouthCf * CFrame.new(4, 4.4, -0.35) * CFrame.Angles(0, math.pi / 2, 0),
+		Vector3.new(0.7, 2, 2.2),
+		Palette.StoneDark,
+		nil,
+		decor()
+	)
 	Props.pointLight(glow, Palette.ForgeGlow, 40, 3, false)
 	Props.emitter(glow, "Embers", Palette.ForgeGlow, 10)
 	Props.sign(m, cf * CFrame.new(0, 15.5, -7.6), "THE GREAT FORGE", 20, 3.2, Palette.WoodDark, Palette.Gold)
@@ -133,18 +196,33 @@ local function greatForge(parent: Instance, rng: Rng.Rng)
 	for _, x in { -12, 12 } do
 		Geo.block(m, cf * CFrame.new(x, 22, 8), Vector3.new(7, 36, 7), Palette.StoneDark, nil, solid())
 		Geo.block(m, cf * CFrame.new(x, 40.5, 8), Vector3.new(8.4, 1.6, 8.4), Palette.Stone, nil, solid())
-		local top = Geo.block(m, cf * CFrame.new(x, 41.4, 8), Vector3.new(5.6, 0.4, 5.6), Palette.Ember, Enum.Material.Neon, decor({ CastShadow = false }))
+		local top = Geo.block(
+			m,
+			cf * CFrame.new(x, 41.4, 8),
+			Vector3.new(5.6, 0.4, 5.6),
+			Palette.Ember,
+			Enum.Material.Neon,
+			decor({ CastShadow = false })
+		)
 		Props.emitter(top, "Smoke", nil, 4)
 		Props.emitter(top, "Embers", nil, 3)
 	end
 	-- molten channel to a basin in front
-	local channel = Geo.block(m, cf * CFrame.new(0, 0.35, -15), Vector3.new(2.2, 0.5, 14), Palette.Lava, Enum.Material.Neon, decor({ CastShadow = false }))
+	local channel = Geo.block(
+		m,
+		cf * CFrame.new(0, 0.35, -15),
+		Vector3.new(2.2, 0.5, 14),
+		Palette.Lava,
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
 	channel.Name = "MoltenChannel"
 	Geo.block(m, cf * CFrame.new(-1.6, 0.6, -15), Vector3.new(1, 1, 14), Palette.StoneDark, nil, solid())
 	Geo.block(m, cf * CFrame.new(1.6, 0.6, -15), Vector3.new(1, 1, 14), Palette.StoneDark, nil, solid())
 	local basinPos = (cf * CFrame.new(0, 0, -23)).Position
 	Geo.cylinder(m, basinPos + Vector3.new(0, 0.9, 0), 1.8, 8, Palette.StoneDark, nil, solid())
-	local molten = Geo.cylinder(m, basinPos + Vector3.new(0, 1.85, 0), 0.2, 6.4, Palette.Lava, Enum.Material.Neon, decor({ CastShadow = false }))
+	local molten =
+		Geo.cylinder(m, basinPos + Vector3.new(0, 1.85, 0), 0.2, 6.4, Palette.Lava, Enum.Material.Neon, decor({ CastShadow = false }))
 	Props.pointLight(molten, Palette.ForgeGlow, 18, 1.5)
 	Props.emitter(molten, "Embers", nil, 4)
 	-- anvils, barrels and crates around the forge
@@ -160,7 +238,15 @@ local function greatForge(parent: Instance, rng: Rng.Rng)
 	end
 end
 
-local function stall(parent: Instance, name: string, cf: CFrame, awningA: Color3, awningB: Color3, title: string, rng: Rng.Rng): (Model, Part)
+local function stall(
+	parent: Instance,
+	name: string,
+	cf: CFrame,
+	awningA: Color3,
+	awningB: Color3,
+	title: string,
+	rng: Rng.Rng
+): (Model, Part)
 	local m = model(name, parent)
 	-- platform
 	Geo.block(m, cf * CFrame.new(0, 0.5, 2), Vector3.new(18, 1, 14), Palette.WoodDark, nil, solid())
@@ -197,11 +283,25 @@ local function tradingPost(parent: Instance, rng: Rng.Rng)
 	local m, counter = stall(parent, "TradingPost", cf, Palette.Cloth, Palette.ClothCream, "PELL'S TRADING POST", rng)
 	counter.Name = "SellCounter"
 	counter:AddTag("SellCounter")
-	Props.npc(m, cf * CFrame.new(0, 1, 1) * CFrame.Angles(0, 0, 0), "Pell the Trader", Color3.fromRGB(60, 130, 170), Color3.fromRGB(70, 60, 60), Color3.fromRGB(120, 80, 50))
+	Props.npc(
+		m,
+		cf * CFrame.new(0, 1, 1) * CFrame.Angles(0, 0, 0),
+		"Pell the Trader",
+		Color3.fromRGB(60, 130, 170),
+		Color3.fromRGB(70, 60, 60),
+		Color3.fromRGB(120, 80, 50)
+	)
 	-- shelves with ore samples
 	for i = 0, 4 do
 		Geo.block(m, cf * CFrame.new(-6 + i * 3, 6.5, 7.6), Vector3.new(2.6, 0.3, 1.2), Palette.WoodDark, nil, decor())
-		Geo.block(m, cf * CFrame.new(-6 + i * 3, 7.2, 7.6), Vector3.new(1, 1, 1), Color3.fromHSV(i / 5, 0.7, 1), Enum.Material.SmoothPlastic, decor())
+		Geo.block(
+			m,
+			cf * CFrame.new(-6 + i * 3, 7.2, 7.6),
+			Vector3.new(1, 1, 1),
+			Color3.fromHSV(i / 5, 0.7, 1),
+			Enum.Material.SmoothPlastic,
+			decor()
+		)
 	end
 	-- the sell bin in front of the stall
 	local bin = model("SellBin", m)
@@ -225,7 +325,14 @@ local function tradingPost(parent: Instance, rng: Rng.Rng)
 	bin:AddTag("SellBin")
 	Props.sign(bin, binCf * CFrame.new(0, 5.6, -3.4), "SELL", 5, 1.8, Palette.WoodDark, Palette.Gold)
 	-- coin glow inside
-	local coins = Geo.block(bin, binCf * CFrame.new(0, 1.0, 0), Vector3.new(7.6, 0.4, 5.6), Palette.Gold, Enum.Material.Neon, decor({ CastShadow = false }))
+	local coins = Geo.block(
+		bin,
+		binCf * CFrame.new(0, 1.0, 0),
+		Vector3.new(7.6, 0.4, 5.6),
+		Palette.Gold,
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
 	coins.Name = "Coins"
 	coins.Transparency = 0.2
 end
@@ -237,7 +344,13 @@ local function toolSmithy(parent: Instance, rng: Rng.Rng)
 	counter:AddTag("ShopCounter")
 	Props.npc(m, cf * CFrame.new(0, 1, 1), "Forgemaster Ulda", Color3.fromRGB(150, 60, 50), Color3.fromRGB(60, 50, 50), nil)
 	-- pickaxe rack on the back wall
-	local colors = { Color3.fromRGB(130, 128, 124), Color3.fromRGB(222, 120, 60), Color3.fromRGB(176, 182, 194), Color3.fromRGB(255, 96, 36), Color3.fromRGB(52, 128, 255) }
+	local colors = {
+		Color3.fromRGB(130, 128, 124),
+		Color3.fromRGB(222, 120, 60),
+		Color3.fromRGB(176, 182, 194),
+		Color3.fromRGB(255, 96, 36),
+		Color3.fromRGB(52, 128, 255),
+	}
 	for i, color in colors do
 		local p = cf * CFrame.new(-6 + (i - 1) * 3, 7, 7.8)
 		Geo.block(m, p, Vector3.new(0.35, 4.5, 0.35), Palette.WoodLight, nil, decor())
@@ -259,7 +372,14 @@ local function emberChest(parent: Instance)
 	for _, x in { -1.8, 1.8 } do
 		Geo.block(m, cf * CFrame.new(x, 2.3, 0), Vector3.new(0.4, 3.4, 3.3), Palette.Gold, Enum.Material.Metal, decor())
 	end
-	local lock = Geo.block(m, cf * CFrame.new(0, 2.8, -1.6), Vector3.new(0.9, 1, 0.3), Palette.ForgeGlow, Enum.Material.Neon, decor({ CastShadow = false }))
+	local lock = Geo.block(
+		m,
+		cf * CFrame.new(0, 2.8, -1.6),
+		Vector3.new(0.9, 1, 0.3),
+		Palette.ForgeGlow,
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
 	Props.pointLight(lock, Palette.ForgeGlow, 10, 1)
 	Props.emitter(lock, "Embers", nil, 3)
 	body.Name = "Chest"
@@ -288,14 +408,28 @@ local function roads(parent: Instance, rng: Rng.Rng)
 		local delta = to - from
 		local length = delta.Magnitude
 		local cf = CFrame.lookAt((from + to) / 2, to)
-		Geo.block(m, cf * CFrame.new(0, 0.06, 0), Vector3.new(width, 0.3, length + width), Palette.Dirt, nil, decor({ CastShadow = false, CanCollide = false }))
+		Geo.block(
+			m,
+			cf * CFrame.new(0, 0.06, 0),
+			Vector3.new(width, 0.3, length + width),
+			Palette.Dirt,
+			nil,
+			decor({ CastShadow = false, CanCollide = false })
+		)
 		-- pebbles along the edges
 		local steps = math.floor(length / 7)
 		for i = 0, steps do
 			if rng:chance(0.5) then
 				local side = if rng:chance(0.5) then -1 else 1
 				local p = cf * CFrame.new(side * (width / 2 + rng:range(0.3, 1)), 0.2, -length / 2 + i * 7)
-				Geo.block(m, p * CFrame.Angles(0, rng:range(0, 3), 0), Vector3.new(rng:range(0.8, 1.6), 0.6, rng:range(0.8, 1.6)), Geo.vary(Palette.Stone, rng, 0.06), nil, decor({ CastShadow = false }))
+				Geo.block(
+					m,
+					p * CFrame.Angles(0, rng:range(0, 3), 0),
+					Vector3.new(rng:range(0.8, 1.6), 0.6, rng:range(0.8, 1.6)),
+					Geo.vary(Palette.Stone, rng, 0.06),
+					nil,
+					decor({ CastShadow = false })
+				)
 			end
 		end
 		-- lanterns every ~28 studs
@@ -380,10 +514,25 @@ local function scatter(parent: Instance, rng: Rng.Rng)
 		if isFree(p, occupied, 3) then
 			table.insert(occupied, { P = p, R = 3 })
 			if rng:chance(0.55) then
-				Geo.rock(m, CFrame.new(p), Vector3.new(rng:range(2.5, 6), rng:range(2, 4.5), rng:range(2.5, 6)), Palette.Stone, rng, nil, solid())
+				Geo.rock(
+					m,
+					CFrame.new(p),
+					Vector3.new(rng:range(2.5, 6), rng:range(2, 4.5), rng:range(2.5, 6)),
+					Palette.Stone,
+					rng,
+					nil,
+					solid()
+				)
 			else
 				local s = rng:range(2.2, 3.6)
-				Geo.block(m, CFrame.new(p + Vector3.new(0, s * 0.35, 0)) * Geo.randomTilt(rng, 0.3), Vector3.new(s * 1.3, s, s * 1.2), Geo.vary(Palette.LeafDeep, rng, 0.06), nil, decor())
+				Geo.block(
+					m,
+					CFrame.new(p + Vector3.new(0, s * 0.35, 0)) * Geo.randomTilt(rng, 0.3),
+					Vector3.new(s * 1.3, s, s * 1.2),
+					Geo.vary(Palette.LeafDeep, rng, 0.06),
+					nil,
+					decor()
+				)
 			end
 			rocks += 1
 		end
@@ -392,10 +541,22 @@ local function scatter(parent: Instance, rng: Rng.Rng)
 	for _ = 1, 60 do
 		local p = Vector3.new(rng:range(island.Min.X + 6, island.Max.X - 6), 0, rng:range(-110, island.Max.Z - 6))
 		if isFree(p, occupied, 1) then
-			local color = rng:pick({ Color3.fromRGB(255, 220, 90), Color3.fromRGB(255, 120, 120), Color3.fromRGB(250, 250, 250), Color3.fromRGB(190, 140, 255) })
+			local color = rng:pick({
+				Color3.fromRGB(255, 220, 90),
+				Color3.fromRGB(255, 120, 120),
+				Color3.fromRGB(250, 250, 250),
+				Color3.fromRGB(190, 140, 255),
+			})
 			for _ = 1, 4 do
 				local q = p + Vector3.new(rng:range(-1.5, 1.5), 0.35, rng:range(-1.5, 1.5))
-				Geo.block(m, CFrame.new(q) * CFrame.Angles(0, rng:range(0, 3), 0), Vector3.new(0.45, 0.45, 0.45), color, nil, decor({ CastShadow = false, CanCollide = false }))
+				Geo.block(
+					m,
+					CFrame.new(q) * CFrame.Angles(0, rng:range(0, 3), 0),
+					Vector3.new(0.45, 0.45, 0.45),
+					color,
+					nil,
+					decor({ CastShadow = false, CanCollide = false })
+				)
 			end
 		end
 	end

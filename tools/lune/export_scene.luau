@@ -3,7 +3,8 @@
 	for tools/preview/render.mjs.
 
 	  lune run tools/lune/export_scene.luau [scene]
-	Scenes: world (default)
+	Scenes: world (default), style (the lobby Style kit gallery), lobby_blockout
+	(world + a box per LobbyLayout set piece), gameplay, cleaning
 ]]
 
 local fs = require("@lune/fs")

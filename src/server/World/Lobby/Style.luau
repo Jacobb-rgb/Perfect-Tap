@@ -251,7 +251,17 @@ function Style.canopy(parent: Instance, cf: CFrame, size: number, shades: { Colo
 	local parts = {}
 	table.insert(parts, Style.block(parent, cf, Vector3.new(size, size * 0.78, size), Style.vary(mid, rng, 0.03), nil, p))
 	local capOffset = Vector3.new(rng:range(-0.12, 0.12) * size, size * 0.42, rng:range(-0.12, 0.12) * size)
-	table.insert(parts, Style.block(parent, cf * CFrame.new(capOffset), Vector3.new(size * 0.66, size * 0.34, size * 0.66), Style.vary(light, rng, 0.03), nil, p))
+	table.insert(
+		parts,
+		Style.block(
+			parent,
+			cf * CFrame.new(capOffset),
+			Vector3.new(size * 0.66, size * 0.34, size * 0.66),
+			Style.vary(light, rng, 0.03),
+			nil,
+			p
+		)
+	)
 	local sides = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
 	local start = rng:int(0, 3)
 	for i = 1, rng:int(4, 6) do
@@ -264,8 +274,27 @@ function Style.canopy(parent: Instance, cf: CFrame, size: number, shades: { Colo
 		local color = if y < -0.06 * size then dark elseif rng:chance(0.45) then light else mid
 		table.insert(parts, Style.block(parent, cf * CFrame.new(offset), Vector3.new(k, k * 0.9, k), Style.vary(color, rng, 0.04), nil, p))
 	end
+	-- two top shoulders round off the silhouette
+	for _, corner in { { 1, 1 }, { -1, -1 } } do
+		local k = size * rng:range(0.36, 0.46)
+		local offset = Vector3.new(corner[1] * size * 0.28, size * 0.3, corner[2] * size * rng:range(0.1, 0.3))
+		table.insert(
+			parts,
+			Style.block(
+				parent,
+				cf * CFrame.new(offset),
+				Vector3.new(k, k * 0.8, k),
+				Style.vary(if rng:chance(0.6) then light else mid, rng, 0.04),
+				nil,
+				p
+			)
+		)
+	end
 	-- darker underside so the canopy reads as a volume from below
-	table.insert(parts, Style.block(parent, cf * CFrame.new(0, -size * 0.37, 0), Vector3.new(size * 0.84, size * 0.1, size * 0.84), dark, nil, Style.tiny()))
+	table.insert(
+		parts,
+		Style.block(parent, cf * CFrame.new(0, -size * 0.37, 0), Vector3.new(size * 0.84, size * 0.1, size * 0.84), dark, nil, Style.tiny())
+	)
 	return parts
 end
 
@@ -302,9 +331,23 @@ function Style.bush(parent: Instance, position: Vector3, color: Color3, rng: Rng
 	local s = size or rng:range(2, 3.2)
 	local base = CFrame.new(position) * CFrame.Angles(0, rng:int(0, 3) * math.pi / 2, 0)
 	Style.block(m, base * CFrame.new(0, s * 0.4, 0), Vector3.new(s * 1.3, s * 0.8, s), Style.vary(color, rng, 0.05), nil, Style.ghost())
-	Style.block(m, base * CFrame.new(s * 0.35, s * 0.75, rng:range(-0.2, 0.2) * s), Vector3.new(s * 0.6, s * 0.5, s * 0.6), Style.vary(color, rng, 0.08), nil, Style.tiny())
+	Style.block(
+		m,
+		base * CFrame.new(s * 0.35, s * 0.75, rng:range(-0.2, 0.2) * s),
+		Vector3.new(s * 0.6, s * 0.5, s * 0.6),
+		Style.vary(color, rng, 0.08),
+		nil,
+		Style.tiny()
+	)
 	if rng:chance(0.5) then
-		Style.block(m, base * CFrame.new(-s * 0.55, s * 0.3, s * 0.2), Vector3.new(s * 0.6, s * 0.6, s * 0.6), Style.vary(color, rng, 0.08), nil, Style.tiny())
+		Style.block(
+			m,
+			base * CFrame.new(-s * 0.55, s * 0.3, s * 0.2),
+			Vector3.new(s * 0.6, s * 0.6, s * 0.6),
+			Style.vary(color, rng, 0.08),
+			nil,
+			Style.tiny()
+		)
 	end
 	return m
 end
@@ -338,7 +381,7 @@ end
 	named "LanternGlow".
 ]]
 function Style.lantern(parent: Instance, base: CFrame, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local kind = o.Kind or "Post"
 	local glowColor = o.Color or C.Lamp
 	local m = Style.model("Lantern", parent)
@@ -389,7 +432,7 @@ end
 	opts.Depth (board thickness, default 0.6). Returns the board ("Sign").
 ]]
 function Style.sign(parent: Instance, cf: CFrame, text: string, width: number, height: number, opts: Opts?): Part
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local kind = o.Kind or "Wood"
 	local depth = o.Depth or 0.6
 	local boardColor, frameColor, textColor, frameMaterial = C.SignBoard, C.SignFrame, C.SignText, SMOOTH
@@ -447,16 +490,19 @@ end
 
 --[[
 	Part-built icon for signs (no decals). `cf` = icon center, front = LookVector;
-	place it just in front of a board. kind: "Hammer", "CrossedHammers",
-	"Pickaxe", "CrossedPickaxes", "Gear", "House", "Compass", "Arrow" (points
-	to the icon's right), "ArrowDown", "Coin", "Bone", "Target".
+	place it just in front of a board (board.CFrame * CFrame.new(0, 0, -depth/2 - 0.2)).
+	kind: "Hammer", "CrossedHammers", "Pickaxe", "CrossedPickaxes", "Gear",
+	"House", "Compass", "Arrow" (points to the VIEWER's right when seen from
+	the front), "ArrowLeft", "ArrowDown", "Coin", "Bone", "Target".
+	Note: seen from the front, a frame's local +X is on the viewer's LEFT, so
+	"viewer's right" = local -X.
 ]]
-function Style.icon(parent: Instance, cf: CFrame, kind: string, size: number, color: Color3, material: Enum.Material?): { Part }
+function Style.icon(parent: Instance, cf: CFrame, kind: string, size: number, color: Color3, material: Enum.Material?): { BasePart }
 	local s = size
 	local mat = material or SMOOTH
 	local d = 0.3
-	local parts = {}
-	local function add(p: Part)
+	local parts: { BasePart } = {}
+	local function add(p: BasePart)
 		table.insert(parts, p)
 	end
 	local function hammer(at: CFrame)
@@ -487,29 +533,85 @@ function Style.icon(parent: Instance, cf: CFrame, kind: string, size: number, co
 		add(bar(parent, cf * CFrame.new(0, 0, -d * 0.6), s * 0.22, s * 0.22, d * 0.3, C.SignBoard, SMOOTH))
 	elseif kind == "House" then
 		add(bar(parent, cf * CFrame.new(0, -s * 0.18, 0), s * 0.6, s * 0.5, d, color, mat))
-		add(Style.block(parent, cf * CFrame.new(-s * 0.2, s * 0.22, 0) * CFrame.Angles(0, -math.pi / 2, 0), Vector3.new(d, s * 0.36, s * 0.4), color, mat, Style.tiny()))
-		add(Style.block(parent, cf * CFrame.new(s * 0.2, s * 0.22, 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(d, s * 0.36, s * 0.4), color, mat, Style.tiny()))
+		-- roof: two wedges, tall sides meeting in the middle (a wedge's tall side is +Z;
+		-- a quarter turn of +pi/2 turns +Z to +X)
+		add(
+			Geo.wedge(
+				parent,
+				cf * CFrame.new(-s * 0.2, s * 0.25, 0) * CFrame.Angles(0, math.pi / 2, 0),
+				Vector3.new(d, s * 0.36, s * 0.4),
+				color,
+				mat,
+				Style.tiny()
+			)
+		)
+		add(
+			Geo.wedge(
+				parent,
+				cf * CFrame.new(s * 0.2, s * 0.25, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+				Vector3.new(d, s * 0.36, s * 0.4),
+				color,
+				mat,
+				Style.tiny()
+			)
+		)
 		add(bar(parent, cf * CFrame.new(0, -s * 0.28, -d * 0.6), s * 0.16, s * 0.3, d * 0.3, C.SignBoard, SMOOTH))
 	elseif kind == "Compass" then
 		add(bar(parent, cf * CFrame.Angles(0, 0, math.pi / 4), s * 0.6, s * 0.6, d, color, mat))
-		add(bar(parent, cf * CFrame.new(0, 0, -d * 0.6) * CFrame.Angles(0, 0, math.pi / 4), s * 0.36, s * 0.36, d * 0.3, C.SignBoard, SMOOTH))
+		add(
+			bar(
+				parent,
+				cf * CFrame.new(0, 0, -d * 0.6) * CFrame.Angles(0, 0, math.pi / 4),
+				s * 0.36,
+				s * 0.36,
+				d * 0.3,
+				C.SignBoard,
+				SMOOTH
+			)
+		)
 		add(bar(parent, cf * CFrame.new(0, 0, -d) * CFrame.Angles(0, 0, 0.5), s * 0.1, s * 0.7, d * 0.3, color, mat))
-	elseif kind == "Arrow" then
-		add(bar(parent, cf * CFrame.new(-s * 0.1, 0, 0), s * 0.7, s * 0.16, d, color, mat))
-		add(bar(parent, cf * CFrame.new(s * 0.2, s * 0.13, 0) * CFrame.Angles(0, 0, -math.pi / 4), s * 0.42, s * 0.16, d, color, mat))
-		add(bar(parent, cf * CFrame.new(s * 0.2, -s * 0.13, 0) * CFrame.Angles(0, 0, math.pi / 4), s * 0.42, s * 0.16, d, color, mat))
+	elseif kind == "Arrow" or kind == "ArrowLeft" then
+		-- k = -1: the head is at local -X, i.e. on the viewer's right
+		local k = if kind == "Arrow" then -1 else 1
+		add(bar(parent, cf * CFrame.new(-k * s * 0.1, 0, 0), s * 0.7, s * 0.16, d, color, mat))
+		add(
+			bar(
+				parent,
+				cf * CFrame.new(k * s * 0.2, s * 0.13, 0) * CFrame.Angles(0, 0, -k * math.pi / 4),
+				s * 0.42,
+				s * 0.16,
+				d,
+				color,
+				mat
+			)
+		)
+		add(
+			bar(
+				parent,
+				cf * CFrame.new(k * s * 0.2, -s * 0.13, 0) * CFrame.Angles(0, 0, k * math.pi / 4),
+				s * 0.42,
+				s * 0.16,
+				d,
+				color,
+				mat
+			)
+		)
 	elseif kind == "ArrowDown" then
 		add(bar(parent, cf * CFrame.new(0, s * 0.1, 0), s * 0.16, s * 0.7, d, color, mat))
 		add(bar(parent, cf * CFrame.new(-s * 0.13, -s * 0.2, 0) * CFrame.Angles(0, 0, -math.pi / 4), s * 0.16, s * 0.42, d, color, mat))
 		add(bar(parent, cf * CFrame.new(s * 0.13, -s * 0.2, 0) * CFrame.Angles(0, 0, math.pi / 4), s * 0.16, s * 0.42, d, color, mat))
 	elseif kind == "Coin" then
-		local coin = Geo.make("Part", Style.tiny({
-			Shape = Enum.PartType.Cylinder,
-			CFrame = cf * CFrame.Angles(0, math.pi / 2, 0),
-			Size = Vector3.new(d, s * 0.7, s * 0.7),
-			Color = color,
-			Material = mat,
-		}), parent)
+		local coin = Geo.make(
+			"Part",
+			Style.tiny({
+				Shape = Enum.PartType.Cylinder,
+				CFrame = cf * CFrame.Angles(0, math.pi / 2, 0),
+				Size = Vector3.new(d, s * 0.7, s * 0.7),
+				Color = color,
+				Material = mat,
+			}),
+			parent
+		)
 		add(coin)
 	elseif kind == "Bone" then
 		add(bar(parent, cf, s * 0.7, s * 0.16, d, color, mat))
@@ -522,7 +624,17 @@ function Style.icon(parent: Instance, cf: CFrame, kind: string, size: number, co
 		add(bar(parent, cf, s * 0.8, s * 0.8, d, color, mat))
 		add(bar(parent, cf * CFrame.Angles(0, 0, math.pi / 4), s * 0.8, s * 0.8, d, color, mat))
 		add(bar(parent, cf * CFrame.new(0, 0, -d * 0.55), s * 0.56, s * 0.56, d * 0.2, C.SignBoard, SMOOTH))
-		add(bar(parent, cf * CFrame.new(0, 0, -d * 0.55) * CFrame.Angles(0, 0, math.pi / 4), s * 0.56, s * 0.56, d * 0.2, C.SignBoard, SMOOTH))
+		add(
+			bar(
+				parent,
+				cf * CFrame.new(0, 0, -d * 0.55) * CFrame.Angles(0, 0, math.pi / 4),
+				s * 0.56,
+				s * 0.56,
+				d * 0.2,
+				C.SignBoard,
+				SMOOTH
+			)
+		)
 		add(bar(parent, cf * CFrame.new(0, 0, -d * 0.7), s * 0.2, s * 0.2, d * 0.3, color, mat))
 	end
 	return parts
@@ -537,7 +649,7 @@ end
 	from +X toward +Z), Y (base height).
 ]]
 function Style.stoneRing(parent: Instance, center: Vector3, radius: number, rng: Rng.Rng, opts: Opts?): { Part }
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local h = o.Height or 1.4
 	local w = o.Width or 2.2
 	local color = o.Color or C.Stone
@@ -563,9 +675,19 @@ function Style.stoneRing(parent: Instance, center: Vector3, radius: number, rng:
 		if not skip then
 			local bump = if i % 3 == 0 then 0.3 else 0
 			local frame = CFrame.new(center) * CFrame.Angles(0, -a, 0) * CFrame.new(radius, y + (h + bump) / 2, 0)
-			table.insert(parts, Style.block(parent, frame, Vector3.new(w, h + bump, segLen), Style.vary(color, rng, 0.06), nil, Style.solid()))
+			table.insert(
+				parts,
+				Style.block(parent, frame, Vector3.new(w, h + bump, segLen), Style.vary(color, rng, 0.06), nil, Style.solid())
+			)
 			if o.Glow and i % 2 == 0 then
-				Style.block(parent, frame * CFrame.new(w / 2 + 0.06, -h * 0.05, 0), Vector3.new(0.2, h * 0.36, segLen * 0.55), o.Glow, NEON, Style.tiny())
+				Style.block(
+					parent,
+					frame * CFrame.new(w / 2 + 0.06, -h * 0.05, 0),
+					Vector3.new(0.2, h * 0.36, segLen * 0.55),
+					o.Glow,
+					NEON,
+					Style.tiny()
+				)
 			end
 		end
 	end
@@ -573,21 +695,41 @@ function Style.stoneRing(parent: Instance, center: Vector3, radius: number, rng:
 end
 
 --[[
-	Stone/brick wall slab with a voxel brick texture made of a few
-	protruding bricks and a cap row. `base` = bottom center, front =
-	LookVector, size = (width, height, thickness). opts: Color, Accent
-	(brick shade, default lighter), Density (0..1, default 0.45), Cap
-	(default true), TwoSided.
+	Stone/brick wall slab with a voxel brick texture: dark mortar courses
+	every ~2 studs, a few protruding bricks in lighter/darker shades and a
+	cap row. `base` = bottom center, front = LookVector, size = (width,
+	height, thickness). opts: Color, Accent (brick shade), Density (0..1,
+	default 0.45), Courses (default true; stud spacing via CourseEvery = 2),
+	Cap (default true), TwoSided. About 6 + 0.5 * area/9 * Density parts per side.
 ]]
 function Style.stoneWall(parent: Instance, base: CFrame, size: Vector3, rng: Rng.Rng, opts: Opts?): { Part }
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local color = o.Color or C.Stone
 	local parts = {}
 	table.insert(parts, Style.block(parent, base * CFrame.new(0, size.Y / 2, 0), size, Style.vary(color, rng, 0.03), nil, Style.solid()))
 	local density = o.Density or 0.45
 	local count = math.floor(size.X * size.Y / 9 * density)
-	local sidesList = if o.TwoSided then { -1, 1 } else { -1 }
+	local sidesList: { number } = if o.TwoSided then { -1, 1 } else { -1 }
+	local mortar = (o.Color or C.Stone):Lerp(C.StoneDeep, 0.55)
 	for _, side in sidesList do
+		if o.Courses ~= false then
+			local every = o.CourseEvery or 2
+			local y = every
+			while y < size.Y - 0.5 do
+				table.insert(
+					parts,
+					Style.block(
+						parent,
+						base * CFrame.new(0, y, side * (size.Z / 2 + 0.04)),
+						Vector3.new(size.X - 0.1, 0.18, 0.12),
+						mortar,
+						nil,
+						Style.tiny()
+					)
+				)
+				y += every
+			end
+		end
 		for _ = 1, count do
 			local bw = rng:pick({ 1.6, 2, 2.4 })
 			local bh = rng:pick({ 0.8, 1, 1.2 })
@@ -596,12 +738,29 @@ function Style.stoneWall(parent: Instance, base: CFrame, size: Vector3, rng: Rng
 			local shade = o.Accent or (if rng:chance(0.5) then C.StoneLight else C.StoneDark)
 			table.insert(
 				parts,
-				Style.block(parent, base * CFrame.new(x, yy, side * (size.Z / 2 + 0.1)), Vector3.new(bw, bh, 0.3), Style.vary(shade, rng, 0.05), nil, Style.tiny())
+				Style.block(
+					parent,
+					base * CFrame.new(x, yy, side * (size.Z / 2 + 0.1)),
+					Vector3.new(bw, bh, 0.3),
+					Style.vary(shade, rng, 0.05),
+					nil,
+					Style.tiny()
+				)
 			)
 		end
 	end
 	if o.Cap ~= false then
-		table.insert(parts, Style.block(parent, base * CFrame.new(0, size.Y + 0.3, 0), Vector3.new(size.X + 0.4, 0.6, size.Z + 0.4), Style.vary(C.StoneDark, rng, 0.03), nil, Style.solid()))
+		table.insert(
+			parts,
+			Style.block(
+				parent,
+				base * CFrame.new(0, size.Y + 0.3, 0),
+				Vector3.new(size.X + 0.4, 0.6, size.Z + 0.4),
+				Style.vary(C.StoneDark, rng, 0.03),
+				nil,
+				Style.solid()
+			)
+		)
 	end
 	return parts
 end
@@ -612,7 +771,7 @@ end
 	lines per slope, default 2), Ridge (default true). About 13-17 parts.
 ]]
 function Style.gableRoof(parent: Instance, cf: CFrame, width: number, depth: number, height: number, opts: Opts?): { BasePart }
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local color = o.Color or C.Roof
 	local dark = o.Dark or C.RoofDark
 	local trim = o.Trim or C.RoofTrim
@@ -621,7 +780,17 @@ function Style.gableRoof(parent: Instance, cf: CFrame, width: number, depth: num
 	local p = Style.solid()
 	-- WedgePart's tall side is at +Z: the front half needs no turn, the back half turns around
 	table.insert(parts, Geo.wedge(parent, cf * CFrame.new(0, height / 2, -half / 2), Vector3.new(width, height, half), color, SMOOTH, p))
-	table.insert(parts, Geo.wedge(parent, cf * CFrame.new(0, height / 2, half / 2) * CFrame.Angles(0, math.pi, 0), Vector3.new(width, height, half), color, SMOOTH, p))
+	table.insert(
+		parts,
+		Geo.wedge(
+			parent,
+			cf * CFrame.new(0, height / 2, half / 2) * CFrame.Angles(0, math.pi, 0),
+			Vector3.new(width, height, half),
+			color,
+			SMOOTH,
+			p
+		)
+	)
 	parts[1].Name = "Roof"
 	parts[2].Name = "Roof"
 	local slope = math.atan2(height, half)
@@ -632,18 +801,44 @@ function Style.gableRoof(parent: Instance, cf: CFrame, width: number, depth: num
 			local t = r / ((o.Rows or 2) + 1)
 			local pos = Vector3.new(0, height * (1 - t) + 0.12, side * half * t)
 			local rot = CFrame.Angles(side * slope, 0, 0)
-			table.insert(parts, Style.block(parent, cf * CFrame.new(pos) * rot, Vector3.new(width + 0.1, 0.3, 0.7), dark, nil, Style.tiny()))
+			table.insert(
+				parts,
+				Style.block(parent, cf * CFrame.new(pos) * rot, Vector3.new(width + 0.1, 0.3, 0.7), dark, nil, Style.tiny())
+			)
 		end
 		-- eave board
-		table.insert(parts, Style.block(parent, cf * CFrame.new(0, -0.2, side * (half + 0.15)), Vector3.new(width + 0.4, 0.7, 0.5), trim, nil, Style.tiny()))
+		table.insert(
+			parts,
+			Style.block(parent, cf * CFrame.new(0, -0.2, side * (half + 0.15)), Vector3.new(width + 0.4, 0.7, 0.5), trim, nil, Style.tiny())
+		)
 		-- gable edge boards (both ends of this slope)
 		for _, x in { -1, 1 } do
 			local mid = Vector3.new(x * (width / 2 + 0.15), height / 2 + 0.1, side * half / 2)
-			table.insert(parts, Style.block(parent, cf * CFrame.new(mid) * CFrame.Angles(side * slope, 0, 0), Vector3.new(0.5, 0.6, slopeLen + 0.4), trim, nil, Style.tiny()))
+			table.insert(
+				parts,
+				Style.block(
+					parent,
+					cf * CFrame.new(mid) * CFrame.Angles(side * slope, 0, 0),
+					Vector3.new(0.5, 0.6, slopeLen + 0.4),
+					trim,
+					nil,
+					Style.tiny()
+				)
+			)
 		end
 	end
 	if o.Ridge ~= false then
-		table.insert(parts, Style.block(parent, cf * CFrame.new(0, height + 0.2, 0), Vector3.new(width + 0.6, 0.8, 1.2), trim, nil, Style.tiny({ CastShadow = true })))
+		table.insert(
+			parts,
+			Style.block(
+				parent,
+				cf * CFrame.new(0, height + 0.2, 0),
+				Vector3.new(width + 0.6, 0.8, 1.2),
+				trim,
+				nil,
+				Style.tiny({ CastShadow = true })
+			)
+		)
 	end
 	return parts
 end
@@ -653,8 +848,17 @@ end
 	LookVector = outward. It slopes `drop` studs down over `depth` studs and
 	ends in a scalloped valance. opts: Stripes (count), Scallops (default true).
 ]]
-function Style.awning(parent: Instance, cf: CFrame, width: number, depth: number, drop: number, colorA: Color3, colorB: Color3, opts: Opts?): { Part }
-	local o = opts or {}
+function Style.awning(
+	parent: Instance,
+	cf: CFrame,
+	width: number,
+	depth: number,
+	drop: number,
+	colorA: Color3,
+	colorB: Color3,
+	opts: Opts?
+): { Part }
+	local o: Opts = opts or {}
 	local stripes = o.Stripes or math.max(2, math.floor(width / 2.4 + 0.5))
 	local stripeW = width / stripes
 	local angle = math.atan2(drop, depth)
@@ -675,18 +879,30 @@ end
 
 --[[
 	One crystal: a diamond-section prism with a ridge tip. `base` = bottom
-	center, up = growth direction. Neon. 3 parts.
+	center, up = growth direction. Neon; the tip is a lighter tint so the
+	facets still read under bloom (pass `tip` to override). 3 parts.
 ]]
-function Style.crystal(parent: Instance, base: CFrame, height: number, width: number, color: Color3): { BasePart }
+function Style.crystal(parent: Instance, base: CFrame, height: number, width: number, color: Color3, tip: Color3?): { BasePart }
 	local body = base * CFrame.Angles(0, math.pi / 4, 0)
 	local bodyH = height * 0.78
 	local tipH = height - bodyH
 	local p = Style.tiny()
 	local parts: { BasePart } = {}
 	table.insert(parts, Style.block(parent, body * CFrame.new(0, bodyH / 2, 0), Vector3.new(width, bodyH, width), color, NEON, p))
-	local tip = body * CFrame.new(0, bodyH + tipH / 2, 0)
-	table.insert(parts, Geo.wedge(parent, tip * CFrame.new(0, 0, -width / 4), Vector3.new(width, tipH, width / 2), color, NEON, p))
-	table.insert(parts, Geo.wedge(parent, tip * CFrame.new(0, 0, width / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(width, tipH, width / 2), color, NEON, p))
+	local tipAt = body * CFrame.new(0, bodyH + tipH / 2, 0)
+	local tipColor = tip or color:Lerp(Color3.new(1, 1, 1), 0.35)
+	table.insert(parts, Geo.wedge(parent, tipAt * CFrame.new(0, 0, -width / 4), Vector3.new(width, tipH, width / 2), tipColor, NEON, p))
+	table.insert(
+		parts,
+		Geo.wedge(
+			parent,
+			tipAt * CFrame.new(0, 0, width / 4) * CFrame.Angles(0, math.pi, 0),
+			Vector3.new(width, tipH, width / 2),
+			color,
+			NEON,
+			p
+		)
+	)
 	return parts
 end
 
@@ -695,11 +911,24 @@ end
 	outward, on a dark rock. opts: Count, Light (adds one PointLight).
 ]]
 function Style.crystalCluster(parent: Instance, base: CFrame, size: number, color: Color3, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("CrystalCluster", parent)
-	Style.block(m, base * CFrame.new(0, size * 0.08, 0) * CFrame.Angles(0, rng:range(0, 1.5), 0), Vector3.new(size * 0.5, size * 0.2, size * 0.45), C.StoneDeep, nil, Style.decor())
+	Style.block(
+		m,
+		base * CFrame.new(0, size * 0.08, 0) * CFrame.Angles(0, rng:range(0, 1.5), 0),
+		Vector3.new(size * 0.5, size * 0.2, size * 0.45),
+		C.StoneDeep,
+		nil,
+		Style.decor()
+	)
 	local tint = color:Lerp(Color3.new(1, 1, 1), 0.3)
-	local main = Style.crystal(m, base * CFrame.new(0, size * 0.1, 0) * CFrame.Angles(rng:range(-0.12, 0.12), 0, rng:range(-0.12, 0.12)), size, size * 0.24, color)
+	local main = Style.crystal(
+		m,
+		base * CFrame.new(0, size * 0.1, 0) * CFrame.Angles(rng:range(-0.12, 0.12), 0, rng:range(-0.12, 0.12)),
+		size,
+		size * 0.24,
+		color
+	)
 	local count = o.Count or rng:int(3, 5)
 	for i = 1, count do
 		local a = (i / count) * math.pi * 2 + rng:range(-0.3, 0.3)
@@ -730,22 +959,43 @@ end
 	(default true). About 10-12 parts.
 ]]
 function Style.waterfall(parent: Instance, top: CFrame, height: number, width: number, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Waterfall", parent)
-	local sheet = Style.block(m, top * CFrame.new(0, -height / 2, 0), Vector3.new(width, height, 0.6), C.Falls, SMOOTH, Style.tiny({ Transparency = 0.12, Reflectance = 0.1 }))
+	local sheet = Style.block(
+		m,
+		top * CFrame.new(0, -height / 2, 0),
+		Vector3.new(width, height, 0.6),
+		C.Falls,
+		SMOOTH,
+		Style.tiny({ Transparency = 0.12, Reflectance = 0.1 })
+	)
 	sheet.Name = "Water"
 	Style.block(m, top * CFrame.new(0, 0.2, 0.2), Vector3.new(width + 0.6, 0.9, 1.4), C.Water, SMOOTH, Style.tiny())
 	for _ = 1, 3 do
 		local x = rng:range(-width * 0.38, width * 0.38)
 		local h = height * rng:range(0.55, 0.95)
-		Style.block(m, top * CFrame.new(x, -h / 2 - 0.4, -0.4), Vector3.new(math.max(0.3, width * 0.09), h, 0.2), C.Foam, NEON, Style.tiny({ Transparency = 0.35 }))
+		Style.block(
+			m,
+			top * CFrame.new(x, -h / 2 - 0.4, -0.4),
+			Vector3.new(math.max(0.3, width * 0.09), h, 0.2),
+			C.Foam,
+			NEON,
+			Style.tiny({ Transparency = 0.35 })
+		)
 	end
 	if o.Foam ~= false then
 		local foamTop: Part? = nil
 		for i = 1, math.max(3, math.floor(width / 1.6)) do
 			local s = rng:range(1.2, 2.4)
 			local x = -width / 2 + (i - 0.5) * (width / math.max(3, math.floor(width / 1.6)))
-			local f = Style.block(m, top * CFrame.new(x, -height + s * 0.3, -rng:range(0.2, 1.2)), Vector3.new(s, s * 0.7, s), C.Foam, SMOOTH, Style.tiny())
+			local f = Style.block(
+				m,
+				top * CFrame.new(x, -height + s * 0.3, -rng:range(0.2, 1.2)),
+				Vector3.new(s, s * 0.7, s),
+				C.Foam,
+				SMOOTH,
+				Style.tiny()
+			)
 			foamTop = foamTop or f
 		end
 		if foamTop and o.Mist ~= false then
@@ -762,7 +1012,7 @@ end
 	The water is non-collide over solid ground (wading, never a hole).
 ]]
 function Style.pond(parent: Instance, center: Vector3, sizeX: number, sizeZ: number, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Pond", parent)
 	local inX, inZ = sizeX - 2, sizeZ - 2
 	Style.block(m, CFrame.new(center + Vector3.new(0, 0.08, 0)), Vector3.new(inX, 0.16, inZ * 0.7), C.WaterDeep, nil, Style.tiny())
@@ -782,7 +1032,14 @@ function Style.pond(parent: Instance, center: Vector3, sizeX: number, sizeZ: num
 			local p = center + Vector3.new(rx * sizeX / 2, 0, rz * sizeZ / 2)
 			local s = rng:range(1.8, 2.6)
 			local h = rng:range(0.8, 1.4)
-			Style.block(m, CFrame.new(p + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, -a, 0), Vector3.new(s, h, s * 1.1), Style.vary(rimColor, rng, 0.07), nil, Style.solid())
+			Style.block(
+				m,
+				CFrame.new(p + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, -a, 0),
+				Vector3.new(s, h, s * 1.1),
+				Style.vary(rimColor, rng, 0.07),
+				nil,
+				Style.solid()
+			)
 		end
 	end
 	for _ = 1, o.LilyPads or 0 do
@@ -811,7 +1068,7 @@ end
 	opts.PostEvery (5) studs and opts.Rails (2) rails. Collides.
 ]]
 function Style.fence(parent: Instance, from: Vector3, to: Vector3, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Fence", parent)
 	local h = o.Height or 3
 	local delta = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
@@ -832,7 +1089,14 @@ function Style.fence(parent: Instance, from: Vector3, to: Vector3, opts: Opts?):
 	local rails = o.Rails or 2
 	for r = 1, rails do
 		local y = h * (0.35 + 0.5 * (r - 1) / math.max(1, rails - 1))
-		Style.block(m, frame * CFrame.new(0, y, -length / 2), Vector3.new(0.35, 0.45, length), o.RailColor or C.Wood, nil, Style.decor({ CastShadow = false }))
+		Style.block(
+			m,
+			frame * CFrame.new(0, y, -length / 2),
+			Vector3.new(0.35, 0.45, length),
+			o.RailColor or C.Wood,
+			nil,
+			Style.decor({ CastShadow = false })
+		)
 	end
 	return m
 end
@@ -842,7 +1106,7 @@ end
 	sleepers. Flat walk-over decor. opts: Gauge (3), SleeperEvery (2.2).
 ]]
 function Style.rails(parent: Instance, from: Vector3, to: Vector3, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Rails", parent)
 	local delta = to - from
 	local length = delta.Magnitude
@@ -876,7 +1140,7 @@ end
 	About 12-16 parts.
 ]]
 function Style.mineCart(parent: Instance, base: CFrame, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("MineCart", parent)
 	local body = Style.block(m, base * CFrame.new(0, 1.7, 0), Vector3.new(3, 1.8, 4.2), C.Iron, nil, Style.decor())
 	body.Name = "Body"
@@ -886,13 +1150,17 @@ function Style.mineCart(parent: Instance, base: CFrame, rng: Rng.Rng, opts: Opts
 	end
 	for _, x in { -1.45, 1.45 } do
 		for _, z in { -1.3, 1.3 } do
-			Geo.make("Part", Style.tiny({
-				Shape = Enum.PartType.Cylinder,
-				CFrame = base * CFrame.new(x, 0.65, z),
-				Size = Vector3.new(0.45, 1.2, 1.2),
-				Color = C.StoneDeep,
-				Material = SMOOTH,
-			}), m)
+			Geo.make(
+				"Part",
+				Style.tiny({
+					Shape = Enum.PartType.Cylinder,
+					CFrame = base * CFrame.new(x, 0.65, z),
+					Size = Vector3.new(0.45, 1.2, 1.2),
+					Color = C.StoneDeep,
+					Material = SMOOTH,
+				}),
+				m
+			)
 		end
 	end
 	local load = o.Load or "Gold"
@@ -902,7 +1170,14 @@ function Style.mineCart(parent: Instance, base: CFrame, rng: Rng.Rng, opts: Opts
 			local s = rng:range(0.8, 1.4)
 			local q = Vector3.new(rng:range(-0.9, 0.9), 2.6 + rng:range(0, 0.5), rng:range(-1.4, 1.4))
 			local glowing = load == "Gold" and i <= 2
-			Style.block(m, base * CFrame.new(q) * Geo.randomTilt(rng, 0.5), Vector3.new(s, s * 0.8, s), Style.vary(color, rng, 0.06), if glowing then NEON else SMOOTH, Style.tiny())
+			Style.block(
+				m,
+				base * CFrame.new(q) * Geo.randomTilt(rng, 0.5),
+				Vector3.new(s, s * 0.8, s),
+				Style.vary(color, rng, 0.06),
+				if glowing then NEON else SMOOTH,
+				Style.tiny()
+			)
 		end
 	end
 	m.PrimaryPart = body
@@ -915,7 +1190,7 @@ end
 	alternating lighter plank strips (no collision).
 ]]
 function Style.planks(parent: Instance, cf: CFrame, size: Vector3, rng: Rng.Rng, opts: Opts?): { Part }
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local color = o.Color or C.Plank
 	local parts = {}
 	table.insert(parts, Style.block(parent, cf * CFrame.new(0, -size.Y / 2, 0), size, color, nil, Style.solid()))
@@ -923,7 +1198,17 @@ function Style.planks(parent: Instance, cf: CFrame, size: Vector3, rng: Rng.Rng,
 	local n = math.floor(size.Z / pw)
 	for i = 0, n - 1, 2 do
 		local z = -size.Z / 2 + (i + 0.5) * pw
-		table.insert(parts, Style.block(parent, cf * CFrame.new(0, 0.03, z), Vector3.new(size.X - 0.1, 0.06, pw - 0.15), Style.vary(C.WoodLight, rng, 0.05), nil, Style.tiny()))
+		table.insert(
+			parts,
+			Style.block(
+				parent,
+				cf * CFrame.new(0, 0.03, z),
+				Vector3.new(size.X - 0.1, 0.06, pw - 0.15),
+				Style.vary(C.WoodLight, rng, 0.05),
+				nil,
+				Style.tiny()
+			)
+		)
 	end
 	return parts
 end
@@ -934,7 +1219,7 @@ end
 	with posts and handrails on both sides. About 30-36 parts.
 ]]
 function Style.archBridge(parent: Instance, from: Vector3, to: Vector3, width: number, rise: number, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Bridge", parent)
 	local n = o.Segments or 6
 	local delta = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
@@ -960,7 +1245,14 @@ function Style.archBridge(parent: Instance, from: Vector3, to: Vector3, width: n
 		Style.block(m, frame, Vector3.new(width, thickness, seg.Magnitude + 0.35), Style.vary(color, rng, 0.03), nil, Style.solid())
 		-- side beams under the deck edge
 		for _, side in { -1, 1 } do
-			Style.block(m, frame * CFrame.new(side * (width / 2 + 0.2), -0.25, 0), Vector3.new(0.5, 0.9, seg.Magnitude + 0.3), C.WoodDark, nil, Style.tiny())
+			Style.block(
+				m,
+				frame * CFrame.new(side * (width / 2 + 0.2), -0.25, 0),
+				Vector3.new(0.5, 0.9, seg.Magnitude + 0.3),
+				C.WoodDark,
+				nil,
+				Style.tiny()
+			)
 		end
 	end
 	if o.Rails ~= false then
@@ -969,7 +1261,12 @@ function Style.archBridge(parent: Instance, from: Vector3, to: Vector3, width: n
 			for _, side in { -1, 1 } do
 				local tall = (i == 0 or i == n)
 				local h = if tall then 3.4 else 2.6
-				Style.block(m, CFrame.new(p + right * side * (width / 2 + 0.3) + Vector3.new(0, h / 2, 0)), Vector3.new(0.7, h, 0.7), C.WoodDark)
+				Style.block(
+					m,
+					CFrame.new(p + right * side * (width / 2 + 0.3) + Vector3.new(0, h / 2, 0)),
+					Vector3.new(0.7, h, 0.7),
+					C.WoodDark
+				)
 			end
 		end
 		for i = 0, n - 1 do
@@ -993,7 +1290,7 @@ end
 	0 = none); CurbEvery (studs between curb stones, default 0 = none).
 ]]
 function Style.path(parent: Instance, from: Vector3, to: Vector3, width: number, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Path", parent)
 	local delta = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
 	local length = delta.Magnitude
@@ -1032,7 +1329,14 @@ function Style.path(parent: Instance, from: Vector3, to: Vector3, width: number,
 		for i = 0, count - 1 do
 			local side = if i % 2 == 0 then -1 else 1
 			local z = -full / 2 + (i + 0.5) * curb
-			Style.block(m, frame * CFrame.new(side * (width / 2 + 0.3), 0.25, z), Vector3.new(1.1, 0.5, rng:range(1.6, 2.4)), Style.vary(C.StoneDark, rng, 0.06), nil, Style.tiny())
+			Style.block(
+				m,
+				frame * CFrame.new(side * (width / 2 + 0.3), 0.25, z),
+				Vector3.new(1.1, 0.5, rng:range(1.6, 2.4)),
+				Style.vary(C.StoneDark, rng, 0.06),
+				nil,
+				Style.tiny()
+			)
 		end
 	end
 	return m
@@ -1045,7 +1349,7 @@ end
 	Grass (default true), Columns.
 ]]
 function Style.voxelCliff(parent: Instance, base: CFrame, size: Vector3, rng: Rng.Rng, opts: Opts?): Model
-	local o = opts or {}
+	local o: Opts = opts or {}
 	local m = Style.model("Cliff", parent)
 	local color = o.Color or C.StoneDark
 	local n = o.Columns or math.max(2, math.floor(size.X / 6 + 0.5))
@@ -1058,20 +1362,145 @@ function Style.voxelCliff(parent: Instance, base: CFrame, size: Vector3, rng: Rn
 		local col = base * CFrame.new(x, 0, z)
 		Style.block(m, col * CFrame.new(0, h / 2, 0), Vector3.new(colW * 1.04, h, d), Style.vary(color, rng, 0.05), nil, Style.solid())
 		if o.Grass ~= false then
-			Style.block(m, col * CFrame.new(0, h - 0.6, 0), Vector3.new(colW * 1.04 + 0.4, 1.2, d + 0.4), Style.vary(C.DirtDark, rng, 0.04), nil, Style.tiny())
-			Style.block(m, col * CFrame.new(0, h + 0.4, 0), Vector3.new(colW * 1.04 + 0.6, 1, d + 0.6), Style.vary(C.Grass, rng, 0.05), nil, Style.solid())
+			Style.block(
+				m,
+				col * CFrame.new(0, h - 0.6, 0),
+				Vector3.new(colW * 1.04 + 0.4, 1.2, d + 0.4),
+				Style.vary(C.DirtDark, rng, 0.04),
+				nil,
+				Style.tiny()
+			)
+			Style.block(
+				m,
+				col * CFrame.new(0, h + 0.4, 0),
+				Vector3.new(colW * 1.04 + 0.6, 1, d + 0.6),
+				Style.vary(C.Grass, rng, 0.05),
+				nil,
+				Style.solid()
+			)
 		end
 		-- accent stones on the face
 		for _ = 1, 2 do
 			local s = rng:range(1.4, 2.6)
 			local yy = rng:range(s, math.max(s + 0.1, h - 2))
-			Style.block(m, col * CFrame.new(rng:range(-colW * 0.35, colW * 0.35), yy, -d / 2 - 0.15), Vector3.new(s * 1.2, s, 0.6), Style.vary(if rng:chance(0.5) then C.Stone else C.StoneDeep, rng, 0.05), nil, Style.tiny())
+			Style.block(
+				m,
+				col * CFrame.new(rng:range(-colW * 0.35, colW * 0.35), yy, -d / 2 - 0.15),
+				Vector3.new(s * 1.2, s, 0.6),
+				Style.vary(if rng:chance(0.5) then C.Stone else C.StoneDeep, rng, 0.05),
+				nil,
+				Style.tiny()
+			)
 		end
 	end
 	return m
 end
 
 ---------------------------------------------------------------- small props
+
+--[[
+	Voxel boulder: 2-3 stacked, slightly offset cubes (one may tilt a
+	little). `position` = ground point, size = rough width. opts: Color
+	(default Stone), Solid (default true: players bump into it).
+]]
+function Style.boulder(parent: Instance, position: Vector3, size: number, rng: Rng.Rng, opts: Opts?): Model
+	local o: Opts = opts or {}
+	local m = Style.model("Boulder", parent)
+	local color = o.Color or C.Stone
+	local props = if o.Solid == false then Style.ghost() else Style.decor()
+	local yaw = CFrame.Angles(0, rng:int(0, 3) * math.pi / 2 + rng:range(-0.2, 0.2), 0)
+	local base = CFrame.new(position) * yaw
+	local h = size * rng:range(0.55, 0.75)
+	Style.block(
+		m,
+		base * CFrame.new(0, h / 2, 0),
+		Vector3.new(size, h, size * rng:range(0.75, 0.95)),
+		Style.vary(color, rng, 0.05),
+		nil,
+		props
+	)
+	local top = size * rng:range(0.5, 0.65)
+	Style.block(
+		m,
+		base * CFrame.new(rng:range(-0.15, 0.15) * size, h + top * 0.32, rng:range(-0.12, 0.12) * size) * Geo.randomTilt(rng, 0.12),
+		Vector3.new(top, top * 0.7, top),
+		Style.vary(color:Lerp(C.StoneLight, 0.3), rng, 0.05),
+		nil,
+		Style.tiny({ CastShadow = true })
+	)
+	if rng:chance(0.5) then
+		local s = size * 0.4
+		Style.block(
+			m,
+			base * CFrame.new(size * 0.55, s * 0.35, size * 0.2),
+			Vector3.new(s, s * 0.7, s),
+			Style.vary(color:Lerp(C.StoneDeep, 0.3), rng, 0.05),
+			nil,
+			Style.tiny()
+		)
+	end
+	return m
+end
+
+--[[
+	Voxel stone pillar: a plinth, a shaft of stacked blocks with alternating
+	small offsets and a capital. `base` = bottom center. opts: Color, Width
+	(default 2.4), Cap (default true), Glow (Color3: a neon band near the top).
+]]
+function Style.pillar(parent: Instance, base: CFrame, height: number, rng: Rng.Rng, opts: Opts?): Model
+	local o: Opts = opts or {}
+	local m = Style.model("Pillar", parent)
+	local color = o.Color or C.Stone
+	local w = o.Width or 2.4
+	Style.block(m, base * CFrame.new(0, 0.4, 0), Vector3.new(w + 0.8, 0.8, w + 0.8), Style.vary(C.StoneDark, rng, 0.04), nil, Style.solid())
+	local blocks = math.max(2, math.floor((height - 1.6) / 2.2 + 0.5))
+	local bh = (height - 1.6) / blocks
+	for i = 0, blocks - 1 do
+		local jitter = if i % 2 == 0 then 0.12 else -0.12
+		local shade = if i % 2 == 0 then color else color:Lerp(C.StoneLight, 0.18)
+		Style.block(
+			m,
+			base * CFrame.new(jitter, 0.8 + bh * (i + 0.5), -jitter),
+			Vector3.new(w, bh - 0.08, w),
+			Style.vary(shade, rng, 0.04),
+			nil,
+			Style.solid()
+		)
+	end
+	if o.Cap ~= false then
+		Style.block(
+			m,
+			base * CFrame.new(0, height - 0.4, 0),
+			Vector3.new(w + 0.7, 0.8, w + 0.7),
+			Style.vary(C.StoneDark, rng, 0.04),
+			nil,
+			Style.solid()
+		)
+	end
+	if o.Glow then
+		Style.block(m, base * CFrame.new(0, height - 1.3, 0), Vector3.new(w + 0.12, 0.3, w + 0.12), o.Glow, NEON, Style.tiny())
+	end
+	return m
+end
+
+--[[
+	Lit window: dark frame, warm neon pane, wooden cross bars and a sill.
+	`cf` = pane center, front = LookVector (outward). opts: Color (pane,
+	default Lamp), Frame (default WoodDark), Bars (default true). 4-7 parts.
+]]
+function Style.window(parent: Instance, cf: CFrame, width: number, height: number, opts: Opts?): Part
+	local o: Opts = opts or {}
+	local frameColor = o.Frame or C.WoodDark
+	Style.block(parent, cf * CFrame.new(0, 0, 0.1), Vector3.new(width + 0.5, height + 0.5, 0.3), frameColor, nil, Style.tiny())
+	local pane = Style.block(parent, cf * CFrame.new(0, 0, -0.08), Vector3.new(width, height, 0.2), o.Color or C.Lamp, NEON, Style.tiny())
+	pane.Name = "WindowGlow"
+	if o.Bars ~= false then
+		Style.block(parent, cf * CFrame.new(0, 0, -0.22), Vector3.new(0.22, height, 0.12), frameColor, nil, Style.tiny())
+		Style.block(parent, cf * CFrame.new(0, 0, -0.22), Vector3.new(width, 0.22, 0.12), frameColor, nil, Style.tiny())
+	end
+	Style.block(parent, cf * CFrame.new(0, -height / 2 - 0.3, -0.2), Vector3.new(width + 0.9, 0.3, 0.6), frameColor, nil, Style.tiny())
+	return pane
+end
 
 function Style.crate(parent: Instance, base: CFrame, rng: Rng.Rng, size: number?): Model
 	local m = Style.model("Crate", parent)
