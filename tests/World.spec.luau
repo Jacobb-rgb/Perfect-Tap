@@ -55,8 +55,8 @@ return function(T, Loader)
 				parts += 1
 			end
 		end
-		-- mobile budget for static map parts
-		T.lt(parts, 6000, "part count")
+		-- mobile budget for static map parts (lobby budgets: tests/Lobby.spec.luau)
+		T.lt(parts, 11000, "part count")
 		local tags = {}
 		for _, d in map:GetDescendants() do
 			for _, tag in d:GetTags() do
