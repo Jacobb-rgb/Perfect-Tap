@@ -39,6 +39,18 @@ local DataTemplate = {
 	-- os.time() of the last moment the podiums were paying (offline earnings)
 	LastSeen = 0,
 
+	-- your ore train (TrainConfig): Cargo waits at the station; TripCargo is on
+	-- the moving train (saved, so leaving mid-trip never loses ore); trip times
+	-- are os.time() seconds (0 = no trip)
+	Train = {
+		CapacityLevel = 0,
+		SpeedLevel = 0,
+		Cargo = {},
+		TripCargo = {},
+		TripDepartAt = 0,
+		TripArriveAt = 0,
+	},
+
 	-- progression
 	Discovered = {}, -- [oreId] = true
 	Stats = {

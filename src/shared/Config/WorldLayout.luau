@@ -283,6 +283,10 @@ WorldLayout.KeepOut = {
 	{ Min = Vector3.new(-12, -50, -250), Max = Vector3.new(12, 10, -228) }, -- cave entrance
 	{ Min = Vector3.new(-12, -50, -400), Max = Vector3.new(12, 10, -344) }, -- hollow ramp
 	{ Min = Vector3.new(60, -50, -192), Max = Vector3.new(100, 10, -172) }, -- grotto door
+	-- ore trains (TrainConfig): the quarry track + Mine Station, and the two Mine Lifts
+	{ Min = Vector3.new(-74, -50, -162), Max = Vector3.new(74, 10, -141) },
+	{ Min = Vector3.new(14, -50, -266), Max = Vector3.new(30, 10, -250) },
+	{ Min = Vector3.new(8, -50, -410), Max = Vector3.new(24, 10, -394) },
 }
 
 function WorldLayout.isInBox(position: Vector3, min: Vector3, max: Vector3): boolean

@@ -35,6 +35,7 @@ Net.Events = {
 	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium", arg: { Key, Count?, Slot? })
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
+	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed" }?)
 	-- economy / meta
 	ShopBuy = { Rate = 3, Burst = 5 },
 	DailyClaim = { Rate = 1, Burst = 2 },
@@ -53,6 +54,7 @@ Net.Events = {
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
+	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

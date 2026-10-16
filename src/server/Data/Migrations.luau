@@ -24,6 +24,12 @@
 	- Podiums is a list of exactly 4 strings: a storage key of a cleaned
 	  ore, or "". Anything else on a podium moves to the pen.
 	- Coins, TotalEarned and LastSeen are finite numbers >= 0.
+
+	Trains (step 2, same Version 3; DataTemplate fills the record in):
+	- Train levels are whole numbers in range; Cargo and TripCargo keep
+	  well-formed items of known kinds/ores (unknown ones go to the pen),
+	  together at most TrainConfig.MaxCargoSaved (the rest goes to the pen);
+	  trip times are finite and >= 0, and 0 when nothing is on the move.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,6 +38,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
+local TrainConfig = require(Shared.Config.TrainConfig)
 local OreData = require(Shared.Config.OreData)
 
 local Migrations = {}
@@ -264,6 +271,52 @@ function Migrations.run(data: { [string]: any }): Report
 		if not isFinite(v) or v < 0 then
 			data[field] = 0
 		end
+	end
+
+	-- trains: levels in range, clean cargo lists, sane trip times
+	local train = data.Train
+	if type(train) ~= "table" then
+		if train ~= nil then
+			report.Dropped += 1
+		end
+		train = {}
+		data.Train = train
+	end
+	for _, field in { "CapacityLevel", "SpeedLevel" } do
+		local list = if field == "CapacityLevel" then TrainConfig.Capacity else TrainConfig.Speed
+		local v = train[field]
+		train[field] = if isFinite(v) then math.clamp(math.floor(v), 0, TrainConfig.maxLevel(list)) else 0
+	end
+	local cargoKept = 0
+	for _, field in { "Cargo", "TripCargo" } do
+		local list = train[field]
+		local clean = {}
+		if type(list) == "table" then
+			for _, item in values(list) do
+				if not wellFormed(item) then
+					report.Dropped += 1
+				elseif not (ItemData.Kinds[item.K] and OreData.ById[item.O]) or cargoKept >= TrainConfig.MaxCargoSaved then
+					table.insert(storage, item)
+					report.Moved += 1
+				else
+					table.insert(clean, item)
+					cargoKept += 1
+				end
+			end
+		elseif list ~= nil then
+			report.Dropped += 1
+		end
+		train[field] = clean
+	end
+	for _, field in { "TripDepartAt", "TripArriveAt" } do
+		local v = train[field]
+		if not isFinite(v) or v < 0 then
+			train[field] = 0
+		end
+	end
+	if #train.TripCargo == 0 then
+		train.TripDepartAt = 0
+		train.TripArriveAt = 0
 	end
 
 	local version = data.Version

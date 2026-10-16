@@ -203,4 +203,33 @@ return function(T, Loader)
 		T.eq(data.BlasterLevel, 10)
 		T.eq(data.BlasterOre, "Ruby")
 	end)
+
+	T.test("Migration: train levels, cargo and trip times are cleaned", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Train = {
+			CapacityLevel = 99.5,
+			SpeedLevel = -3,
+			Cargo = { { K = "Raw", O = "Coal" }, "junk", { K = "Raw", O = "Unobtainium" } },
+			TripCargo = {},
+			TripDepartAt = 0 / 0,
+			TripArriveAt = 12345,
+		}
+		local report = Migrations.run(data)
+		T.eq(data.Train.CapacityLevel, 5, "clamped to the top level")
+		T.eq(data.Train.SpeedLevel, 0)
+		T.eq(#data.Train.Cargo, 1, "the coal stays in the cargo")
+		T.eq(data.Storage[#data.Storage].O, "Unobtainium", "unknown ore went to the pen")
+		T.eq(data.Train.TripDepartAt, 0)
+		T.eq(data.Train.TripArriveAt, 0, "no trip without cargo on the move")
+		T.truthy(report.Dropped > 0 and report.Moved > 0)
+		local copy = ProfileStore.deepCopy(data)
+		report = Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		-- a broken record becomes a clean one
+		local broken = ProfileStore.deepCopy(DataTemplate)
+		broken.Train = "x"
+		Migrations.run(broken)
+		T.eq(type(broken.Train), "table")
+		T.eq(#broken.Train.Cargo, 0)
+	end)
 end
