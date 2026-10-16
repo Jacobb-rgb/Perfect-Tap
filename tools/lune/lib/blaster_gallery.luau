@@ -118,8 +118,9 @@ function Gallery.forgekeeper(Loader: any, parent: any, root: any, aim: any, leve
 	-- the blaster: its grip in the right hand, the barrel line on the target
 	local tool = BlasterBuilder.build(level, oreId)
 	local handDesign, muzzleDesign = Gallery.measure(tool)
-	-- the hand well forward and to the right, so long stocks end at the shoulder, not in the head
-	local hand = root * CF.new(1.25, 3.9, -2.6)
+	-- the hand where an R15 hand is in the tool-hold pose: the right arm raised forward, the
+	-- hand ~2 studs in front of the shoulder (the stock then rests over the forearm)
+	local hand = root * CF.new(1.3, 3.75, -1.95)
 	local barrelUp = muzzleDesign.Y - handDesign.Position.Y
 	local gunCf = CF.lookAt(hand.Position, aim - V3.new(0, barrelUp, 0)) * CF.new(-handDesign.Position)
 	-- arms: the right one points at the target, the left one steadies the blaster under the body
@@ -178,14 +179,25 @@ end
 --[[
 	Builds a blaster and stands it at `at` (bottom center of where it rests),
 	turned by `yaw` (0 = barrel along -Z). The gun is centered along its
-	length and rests on its lowest part. Returns the tool.
+	length and rests on its lowest part. `scale` is a display scale (the back
+	tiers of the stand are farther from the camera; scaling them up keeps the
+	on-screen sizes true to each other). Returns the tool.
 ]]
-local function showcase(Loader: any, parent: any, level: number, oreId: string, at: any, yaw: number, lift: number?)
+local function showcase(Loader: any, parent: any, level: number, oreId: string, at: any, yaw: number, scale: number?)
 	local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
 	local CF = Loader.CFrame
 	local tool = BlasterBuilder.build(level, oreId)
+	local f = scale or 1
+	if f ~= 1 then
+		for _, d in tool:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Size = d.Size * f
+				d.CFrame = CF.new(d.CFrame.Position * f) * d.CFrame.Rotation
+			end
+		end
+	end
 	local _, _, box = Gallery.measure(tool)
-	local center = roblox.Vector3.new(0, box.minY - (lift or 0), (box.minZ + box.maxZ) / 2)
+	local center = roblox.Vector3.new(0, box.minY, (box.minZ + box.maxZ) / 2)
 	Gallery.place(tool, CF.new(at) * CF.Angles(0, yaw, 0) * CF.new(-center), parent)
 	return tool
 end
@@ -212,13 +224,14 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 		end
 		label(Loader, root, CF.new(0, 9.9, -9.0), V3.new(13, 1.5, 0.1), "LASER BLASTERS  Lv 1 - 10")
 		-- a stepped display stand, three steps like the side-view wall: pistols and SMGs at the
-		-- back, the carbines in the middle, the long rifles in front
+		-- back, the carbines in the middle, the long rifles in front; the farther tiers show their
+		-- guns a little bigger (display scale ~ camera distance), so the pistols are not tiny
 		local STAND = C3.fromRGB(84, 76, 78)
 		local TRIM = C3.fromRGB(176, 106, 48)
 		local tiers = {
-			{ z = -7, top = 5.8, spacing = 5.2, levels = { 1, 2, 3, 4 } },
-			{ z = -3, top = 3.4, spacing = 6.8, levels = { 5, 6, 7 } },
-			{ z = 1, top = 1.0, spacing = 7.2, levels = { 8, 9, 10 } },
+			{ z = -7, top = 5.8, spacing = 5.4, scale = 1.32, levels = { 1, 2, 3, 4 } },
+			{ z = -3, top = 3.4, spacing = 6.9, scale = 1.14, levels = { 5, 6, 7 } },
+			{ z = 1, top = 1.0, spacing = 7.2, scale = 1, levels = { 8, 9, 10 } },
 		}
 		for _, tier in tiers do
 			Geo.block(root, CF.new(0, tier.top / 2, tier.z), V3.new(24, tier.top, 3.6), STAND, SLATE)
@@ -239,7 +252,7 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 				)
 				-- like the Kenney sheet: the right side toward the camera, the barrel pointing right and a little away
 				-- (no PointLights in the guns: they painted glow blobs on the shelf)
-				showcase(Loader, root, level, oreId, V3.new(x, tier.top + 0.1, tier.z), -1.2)
+				showcase(Loader, root, level, oreId, V3.new(x, tier.top + 0.1, tier.z), -1.2, tier.scale)
 			end
 		end
 		-- two braziers with embers (warm light from the sides)
