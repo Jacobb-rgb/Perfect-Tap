@@ -3,7 +3,8 @@
 	for tools/preview/render.mjs.
 
 	  lune run tools/lune/export_scene.luau [scene]
-	Scenes: world (default)
+	Scenes: world (default), style (the lobby Style kit gallery), lobby_blockout
+	(world + a box per LobbyLayout set piece), gameplay, cleaning
 ]]
 
 local fs = require("@lune/fs")
@@ -70,6 +71,13 @@ local scene_extra: any = nil
 if sceneName == "world" then
 	WorldBuilder.build(workspace)
 	addNodes(workspace)
+elseif sceneName == "style" then
+	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
+	require("./lib/style_gallery").build(Loader, workspace)
+elseif sceneName == "lobby_blockout" then
+	-- the world plus a translucent box for every lobby set piece (LobbyLayout)
+	WorldBuilder.build(workspace)
+	require("./lib/lobby_blockout").build(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

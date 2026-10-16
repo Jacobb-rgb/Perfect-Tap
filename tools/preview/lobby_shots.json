@@ -1,0 +1,84 @@
+{
+  "lobby_hero": {
+    "scene": "world",
+    "position": [24, 96, 178],
+    "target": [-2, 8, -46],
+    "fov": 40,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 280,
+    "maxLights": 32
+  },
+  "lobby_spawn": {
+    "scene": "world",
+    "position": [0, 9, 46],
+    "target": [0, 12, -40],
+    "fov": 70,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "lobby_west": {
+    "scene": "world",
+    "position": [18, 18, 26],
+    "target": [-70, 6, -14],
+    "fov": 65,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 160,
+    "maxLights": 24
+  },
+  "lobby_east": {
+    "scene": "world",
+    "position": [-14, 16, 36],
+    "target": [64, 6, -6],
+    "fov": 65,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 160,
+    "maxLights": 24
+  },
+  "lobby_south": {
+    "scene": "world",
+    "position": [6, 34, -28],
+    "target": [-4, 0, 78],
+    "fov": 65,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 160,
+    "maxLights": 24
+  },
+  "lobby_backdrop": {
+    "scene": "world",
+    "position": [26, 24, -96],
+    "target": [4, 16, -240],
+    "fov": 62,
+    "preset": "Quarry",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 220,
+    "maxLights": 24
+  },
+  "blockout_hero": {
+    "scene": "lobby_blockout",
+    "position": [24, 96, 178],
+    "target": [-2, 8, -46],
+    "fov": 40,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 280
+  },
+  "blockout_top": {
+    "scene": "lobby_blockout",
+    "position": [0, 430, 12],
+    "target": [0, 0, 0],
+    "fov": 62,
+    "preset": "Surface",
+    "shadowExtent": 320
+  },
+  "style_trees": { "scene": "style", "position": [48, 15, 32], "target": [48, 6, 0], "fov": 62, "preset": "Surface", "shadowExtent": 90 },
+  "style_signs": { "scene": "style", "position": [44, 11, 68], "target": [44, 9, 40], "fov": 74, "preset": "Surface", "shadowExtent": 90 },
+  "style_build": { "scene": "style", "position": [62, 16, 108], "target": [62, 5, 80], "fov": 78, "preset": "Surface", "shadowExtent": 110 },
+  "style_water": { "scene": "style", "position": [36, 24, 178], "target": [36, 6, 128], "fov": 62, "preset": "Surface", "shadowExtent": 110 },
+  "style_props": { "scene": "style", "position": [62, 20, 194], "target": [62, 2, 160], "fov": 66, "preset": "Surface", "shadowExtent": 110 }
+}

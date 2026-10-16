@@ -1,7 +1,13 @@
 --[[
 	Small client-only animations for world decoration (no network cost):
-	- parts tagged "Spin" rotate and bob (the Heartstone shard in the plaza)
-	- neon parts named "ForgeGlow" / "Lava" pulse gently
+	- parts/models tagged "Spin" rotate about their pivot's Y axis and bob
+	  (the plaza's fire crystal, the SPIN & WIN wheel, the balloon).
+	  Optional attributes on the tagged instance:
+	    SpinSpeed  radians per second (default 0.8; 0 = no spin)
+	    BobHeight  studs (default 0.4; 0 = no bob)
+	    BobSpeed   (default 1.4)
+	  A wheel spins around its axle when its pivot's Y axis is the axle.
+	- neon parts named "ForgeGlow" / "Lava" / "MoltenChannel" pulse gently
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -11,7 +17,19 @@ local Workspace = game:GetService("Workspace")
 local DecorController = {}
 
 -- A spinner is a part or a whole model (all parts turn around the model's pivot).
-type Spinner = { pivot: CFrame, parts: { { part: BasePart, offset: CFrame } }, phase: number }
+type Spinner = {
+	pivot: CFrame,
+	parts: { { part: BasePart, offset: CFrame } },
+	phase: number,
+	speed: number,
+	bob: number,
+	bobSpeed: number,
+}
+
+local function numberAttribute(instance: Instance, name: string, default: number): number
+	local value = instance:GetAttribute(name)
+	return if type(value) == "number" then value else default
+end
 
 local spinners: { [Instance]: Spinner } = {}
 local pulsers: { [BasePart]: { base: Color3, phase: number } } = {}
@@ -35,7 +53,14 @@ local function addSpinner(instance: Instance)
 	else
 		return
 	end
-	spinners[instance] = { pivot = pivot, parts = parts, phase = math.random() * 6 }
+	spinners[instance] = {
+		pivot = pivot,
+		parts = parts,
+		phase = math.random() * 6,
+		speed = numberAttribute(instance, "SpinSpeed", 0.8),
+		bob = numberAttribute(instance, "BobHeight", 0.4),
+		bobSpeed = numberAttribute(instance, "BobSpeed", 1.4),
+	}
 end
 
 local function scanPulsers(root: Instance)
@@ -77,7 +102,7 @@ function DecorController.start()
 		t += dt
 		for instance, s in spinners do
 			if instance.Parent then
-				local cf = s.pivot * CFrame.new(0, math.sin(t * 1.4 + s.phase) * 0.4, 0) * CFrame.Angles(0, t * 0.8, 0)
+				local cf = s.pivot * CFrame.new(0, math.sin(t * s.bobSpeed + s.phase) * s.bob, 0) * CFrame.Angles(0, t * s.speed, 0)
 				for _, entry in s.parts do
 					entry.part.CFrame = cf * entry.offset
 				end
