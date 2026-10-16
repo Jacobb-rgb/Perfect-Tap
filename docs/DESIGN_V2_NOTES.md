@@ -189,3 +189,7 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
    **Tech shop**.
 3. **Trading:** golems and ores only (no blasters, no money). ✔
 4. **Leaderboards: 4 boards:** Money per second, Total earned, Artifacts found, and **Most hours played**.
+
+### Platforms (owner, 2026-10-16)
+The game must play **perfectly on PC, mobile, Xbox and PlayStation** (mouse+keyboard, touch, gamepad, TV).
+See the project skill .claude/skills/all-platforms/SKILL.md.

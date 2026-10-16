@@ -20,6 +20,10 @@ Lore, ores, names, UI and art are all original (docs/GAME_DESIGN.md).
   machines, pipes, fuel tanks, hoppers and conveyors in the style of **Kenney Factory Kit**
   (docs/art/kenney_*.jpg, docs/KENNEY_FACTORY_KIT.md), rebuilt from Roblox parts in the forge palette.
 
+## Project skills (.claude/skills/)
+ore-design · kenney-style-builder · lobby-art · preview-pictures · game-ui · roblox-rules · all-platforms
+(the game must play perfectly on PC, mobile, Xbox and PlayStation). Use them for the matching work.
+
 ## Layout (Rojo, default.project.json)
 | Folder | In Roblox | What |
 |---|---|---|
