@@ -9,6 +9,7 @@ Open questions are at the bottom; once answered, fold everything into GAME_DESIG
 | Train Kit | https://kenney.nl/assets/train-kit | trains that carry ore from the mine to the player's base |
 | Blaster Kit | https://kenney.nl/assets/blaster-kit | **blasters replace pickaxes** (laser mining) |
 | Mini Dungeon | https://kenney.nl/assets/mini-dungeon | style reference for decorations in general |
+| Mini Characters | https://kenney.nl/assets/mini-characters | style reference for the **golem pets** (chunky little figures; ours are metal/ore golems, e.g. silver ones, some with helmets) |
 | Factory Kit | https://kenney.nl/assets/factory-kit | machines, pipes, fuel tanks, hoppers, conveyors (docs/KENNEY_FACTORY_KIT.md) |
 
 ## What the owner said (translated from Czech)
@@ -176,3 +177,15 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 11. **Artifacts:** collection book in the UI **and** a small **museum on your base** to display them. ✔
 12. **Music:** chosen from Roblox's free licensed library (Studio Toolbox → Audio), calm tracks; Claude writes what to
     search for and where to paste the IDs.
+
+### Round 4 answers (owner, 2026-10-16)
+- **Golem pets look:** based on Kenney **Mini Characters** (https://kenney.nl/assets/mini-characters), turned into
+  golems: silver, gold, ore-colored and more, some with helmets and other gear. Original designs, built from parts.
+1. **Enchant shop:** many perks for in-game money; rarer ones for a lot of money or for shards; the **2 rarest** for
+   an enormous amount of money **or 20 Robux**.
+2. **Cleaning:** you clean by hand (the minigame) only **until you buy the automatic cleaner**. After that you don't
+   have to clean by hand anymore (no "Flawless only by hand" rule; the cleaner's quality comes from its upgrades).
+   The automatic cleaner, all conveyors and the other automation machines are bought for in-game money in a
+   **Tech shop**.
+3. **Trading:** golems and ores only (no blasters, no money). ✔
+4. **Leaderboards: 4 boards:** Money per second, Total earned, Artifacts found, and **Most hours played**.
