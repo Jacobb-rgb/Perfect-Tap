@@ -157,11 +157,100 @@ return function(T, Loader)
 		T.falsy(model.PrimaryPart.CanCollide, "Base doesn't collide")
 	end)
 
+	T.test("Machines: water pours from WaterOut down to WaterIn on the station and the Auto Cleaner", function()
+		for _, id in { "CleaningStation", "AutoCleaner" } do
+			local model = MachineBuilder.build(id)
+			local out, into = attachment(model, "WaterOut"), attachment(model, "WaterIn")
+			T.truthy(out and into, id .. " has WaterOut and WaterIn")
+			local a, b = out.CFrame.Position, into.CFrame.Position
+			T.truthy(a.Y > b.Y + 1.5, id .. " the water falls")
+			T.eq(type(out:GetAttribute("Curve")), "number", id .. " WaterOut Curve")
+			T.eq(type(into:GetAttribute("Curve")), "number", id .. " WaterIn Curve")
+			-- the Beam's control points stay between the two ends (no loops)
+			local p1 = a + out.CFrame.RightVector * out:GetAttribute("Curve")
+			local p2 = b - into.CFrame.RightVector * into:GetAttribute("Curve")
+			T.truthy(p1.Y <= a.Y + 1e-3 and p2.Y >= b.Y - 1e-3, id .. " curve goes down")
+			local w, d = MachineData.ById[id].Size[1] * CELL / 2, MachineData.ById[id].Size[2] * CELL / 2
+			T.truthy(math.abs(b.X) < w and math.abs(b.Z) < d, id .. " water lands on the machine")
+		end
+		-- the station's stream lands in its basin, the cleaner's is a shower over the rollers
+		local station = MachineBuilder.build("CleaningStation")
+		local pool = station:FindFirstChild("WaterPool")
+		T.truthy(pool, "station has a WaterPool")
+		local landing = attachment(station, "WaterIn").CFrame.Position
+		local poolTop = pool.CFrame.Position.Y + pool.Size.Y / 2 - station.PrimaryPart.CFrame.Position.Y
+		T.near(landing.Y, poolTop, 0.05, "lands on the water surface")
+		T.truthy(math.abs(landing.X - pool.CFrame.Position.X) < pool.Size.X / 2, "inside the basin (x)")
+		T.truthy(math.abs(landing.Z - pool.CFrame.Position.Z) < pool.Size.Z / 2, "inside the basin (z)")
+		T.falsy(pool.CanCollide, "water does not collide")
+		local cleaner = MachineBuilder.build("AutoCleaner")
+		T.eq(attachment(cleaner, "WaterOut"):GetAttribute("Spray"), true, "cleaner sprays")
+		T.eq(attachment(station, "WaterOut"):GetAttribute("Spray"), nil, "station pours")
+		-- the close-up camera keeps a clear view: the stream is off to the side of the ore
+		local ore = attachment(station, "OrePoint").CFrame.Position
+		T.truthy(math.abs(landing.X - ore.X) > 3, "stream beside the vise")
+	end)
+
+	T.test("Machines: moving parts and glows the client animates are named", function()
+		local function count(model: any, name: string): number
+			local n = 0
+			for _, part in parts(model) do
+				if part.Name == name then
+					n += 1
+				end
+			end
+			return n
+		end
+		local crusher = MachineBuilder.build("Crusher")
+		for i = 1, 2 do
+			T.eq(count(crusher, "Roller" .. i), 1, "Roller" .. i)
+			-- teeth + a side cog turn with each roller
+			T.truthy(count(crusher, "Roller" .. i .. "Tooth") >= 6, "Roller" .. i .. " teeth and cog")
+		end
+		local cleaner = MachineBuilder.build("AutoCleaner")
+		T.eq(count(cleaner, "Drum"), 1, "Drum")
+		T.truthy(count(cleaner, "DrumRib") >= 2, "DrumRib")
+		T.truthy(count(cleaner, "BedRoller") >= 3, "BedRoller")
+		T.truthy(cleaner:FindFirstChild("Vent"):FindFirstChild("Smoke"), "Vent smoke")
+		for _, name in { "StackRed", "StackAmber", "StackGreen" } do
+			T.eq(count(cleaner, name), 1, name)
+		end
+		for _, id in { "ClayFurnace", "BlastFurnace" } do
+			local furnace = MachineBuilder.build(id)
+			local glow = furnace:FindFirstChild("Glow")
+			T.truthy(glow and glow:FindFirstChildOfClass("PointLight") and glow:FindFirstChild("Embers"), id .. " Glow")
+			T.truthy(furnace:FindFirstChild("ChimneyTop"):FindFirstChild("Smoke"), id .. " chimney smoke")
+			local lights = 0
+			for _, d in furnace:GetDescendants() do
+				if d:IsA("PointLight") then
+					lights += 1
+				end
+			end
+			T.eq(lights, 1, id .. " one light")
+		end
+		T.truthy(count(MachineBuilder.build("BlastFurnace"), "Molten") >= 1, "molten glass tap")
+		T.truthy(MachineBuilder.build("SellChute"):FindFirstChild("Coins"):FindFirstChildOfClass("PointLight"), "coin light")
+		T.truthy(MachineBuilder.build("StorageCrate"):FindFirstChild("CountSign"), "crate count sign")
+	end)
+
+	T.test("Machines: the belt paints its rollers on one SurfaceGui", function()
+		local belt = MachineBuilder.build("Conveyor"):FindFirstChild("Belt")
+		local guis = 0
+		for _, d in belt:GetChildren() do
+			if d:IsA("SurfaceGui") then
+				guis += 1
+				T.truthy(d.Face == roblox.Enum.NormalId.Top, "on the top face")
+				T.truthy(d.MaxDistance > 0, "fades out with distance")
+			end
+		end
+		T.eq(guis, 1, "one SurfaceGui")
+	end)
+
 	T.test("Machines: part budget and footprint", function()
 		for _, machine in MachineData.List do
 			local model = MachineBuilder.build(machine.Id)
 			if not machine.IsConveyor then
-				T.le(#parts(model), 40, machine.Id .. " part count")
+				T.le(#parts(model), 70, machine.Id .. " part count")
 			end
 			-- nothing pokes more than half a stud into the neighbouring cells
 			local hw, hd = machine.Size[1] * CELL / 2, machine.Size[2] * CELL / 2

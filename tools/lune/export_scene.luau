@@ -79,6 +79,7 @@ elseif sceneName == "lobby_blockout" then
 	-- the world plus a translucent box for every lobby set piece (LobbyLayout)
 	WorldBuilder.build(workspace)
 	require("./lib/lobby_blockout").build(Loader, workspace)
+elseif sceneName == "machines" then require("./lib/machines_gallery").build(Loader, workspace) -- every machine on a plot pad (Kenney Factory Kit style)
 elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	-- laser blasters: the 10 levels in ore skins / a forgekeeper blasting a quarry rock
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)

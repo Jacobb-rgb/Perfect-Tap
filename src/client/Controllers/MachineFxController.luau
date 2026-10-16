@@ -18,6 +18,16 @@
 	  Forging.
 	- Progress billboards over YOUR busy machines (MachineBillboard, at most 12).
 	- Fx 'Reject': red dust + a reject sound where a machine refused an item.
+	- Water (Cleaning Station, Auto Cleaner: Base attachments WaterOut and
+	  WaterIn from MachineBuilder): the nearest WATER_MAX wet machines in range
+	  borrow a pooled rig (an invisible anchor with two Beams for the stream,
+	  droplet / mist / ripple / spray emitters with built-in textures). It
+	  always runs gently and gets stronger while the machine works (Working,
+	  or Busy for a station someone is cleaning at); the basin's WaterPool
+	  shimmers. Leaving the range gives the rig back.
+	- Auto Cleaner: the bed rollers turn with the drum, the stacked light
+	  shows green (working), amber (idle) or red (blocked). Furnaces: the
+	  Molten parts (glass tap, mould) pulse with the Glow.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -33,6 +43,7 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local MachineBillboard = require(script.Parent.Parent.UI.MachineBillboard)
+local MachineBuilder = require(Shared.Builders.MachineBuilder)
 local FxController = require(script.Parent.FxController)
 
 local MachineFxController = {}
@@ -40,6 +51,25 @@ local MachineFxController = {}
 -- Rest pose of a spinning part, both relative to the machine's Base.
 type Spinner = { Part: BasePart, Rest: CFrame, Axis: CFrame, Dir: number }
 type Emitter = { Emitter: ParticleEmitter, Idle: number, Busy: number }
+
+-- Pooled client water: Beams between Out and In, emitters at the landing
+-- point (Splash) and the outlet (Nozzle). All attachments sit on Anchor,
+-- which is moved onto the machine's Base.
+type WaterRig = {
+	Anchor: Part,
+	Out: Attachment,
+	In: Attachment,
+	Splash: Attachment,
+	Nozzle: Attachment,
+	Stream: Beam,
+	Core: Beam,
+	Drops: ParticleEmitter,
+	Mist: ParticleEmitter,
+	Ripple: ParticleEmitter,
+	Spray: ParticleEmitter,
+	Placed: CFrame?,
+	Width1: number, -- stream end width before the wobble
+}
 
 type Fx = {
 	Model: Model,
@@ -72,6 +102,22 @@ type Fx = {
 	ForgeLight: PointLight?,
 	Billboard: MachineBillboard.Refs?,
 	Connections: { RBXScriptConnection },
+	-- molten parts that pulse with the Glow (furnaces)
+	Hot: { BasePart },
+	HotColors: { Color3 },
+	-- water (see WaterRig)
+	HasWater: boolean,
+	Spray: boolean,
+	Water: WaterRig?,
+	Flow: number, -- 0 gentle .. 1 working, eased
+	FlowApplied: number,
+	Pool: BasePart?,
+	PoolColor: Color3,
+	PoolTransparency: number,
+	-- stacked status light (Auto Cleaner)
+	Signals: { [string]: BasePart }?,
+	SignalColors: { [string]: Color3 },
+	SignalState: string?,
 }
 
 type Hum = { Part: Part, Sound: Sound, Target: Fx? }
@@ -96,11 +142,20 @@ local STUB_SIZE = Vector3.new(1.5, 0.45, 0.75)
 local STUB_DROP = -0.22 -- from the slot attachment down onto the anvil face
 local REJECT_COLOR = Color3.fromRGB(235, 72, 60)
 local HOT = Color3.fromRGB(255, 140, 50)
+local BED_ROLLER_DIR = -1 -- roller tops move toward the front (-Z)
+-- water
+local WATER_MAX = 6 -- rigs in use at once (nearest wet machines)
+local FLOW_RATE = 1.2 -- per second
+local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
+local SOFT = "rbxasset://textures/particles/smoke_main.dds"
+local WATER = MachineBuilder.Water
+local SIGNALS = { "StackRed", "StackAmber", "StackGreen" }
 
 local player = Players.LocalPlayer
 local machines: { [Model]: Fx } = {}
 local active: { Fx } = {}
 local hums: { Hum } = {}
+local rigPool: { WaterRig } = {}
 local fxFolder: Folder? = nil
 local clock = 0
 
@@ -173,6 +228,35 @@ local function addSpinners(fx: Fx, base: BasePart, axisName: string, partNames: 
 	end
 end
 
+-- Parts that each turn around their own axis (cylinders run along X).
+local function addSelfSpinners(fx: Fx, base: BasePart, partName: string, dir: number)
+	for _, child in fx.Model:GetChildren() do
+		if child:IsA("BasePart") and child.Name == partName then
+			local rest = base.CFrame:ToObjectSpace(child.CFrame)
+			table.insert(fx.Spinners, { Part = child, Rest = rest, Axis = rest, Dir = dir })
+		end
+	end
+end
+
+-- The machine's water hooks (Base attachments WaterOut / WaterIn, a basin
+-- part WaterPool).
+local function captureWater(fx: Fx)
+	local base = fx.Base
+	local out = base and base:FindFirstChild("WaterOut")
+	local into = base and base:FindFirstChild("WaterIn")
+	if not (out and out:IsA("Attachment") and into and into:IsA("Attachment")) then
+		return
+	end
+	fx.HasWater = true
+	fx.Spray = out:GetAttribute("Spray") == true
+	local pool = fx.Model:FindFirstChild("WaterPool")
+	if pool and pool:IsA("BasePart") then
+		fx.Pool = pool
+		fx.PoolColor = pool.Color
+		fx.PoolTransparency = pool.Transparency
+	end
+end
+
 -- Finds the parts each machine type animates (names from MachineBuilder).
 local function capture(fx: Fx)
 	local model, base = fx.Model, fx.Base
@@ -191,6 +275,12 @@ local function capture(fx: Fx)
 		end
 		emitterOn(fx, glow, "Embers", EMBERS_BUSY)
 		emitterOn(fx, model:FindFirstChild("ChimneyTop"), "Smoke", SMOKE_BUSY[id])
+		for _, child in model:GetChildren() do
+			if child:IsA("BasePart") and child.Name == "Molten" then
+				table.insert(fx.Hot, child)
+				table.insert(fx.HotColors, child.Color)
+			end
+		end
 	elseif id == "AutoCleaner" then
 		local vent = model:FindFirstChild("Vent")
 		local smoke = vent and vent:FindFirstChild("Smoke")
@@ -199,6 +289,20 @@ local function capture(fx: Fx)
 		end
 		if base then
 			addSpinners(fx, base, "Drum", { "Drum", "DrumRib" }, 1)
+			addSelfSpinners(fx, base, "BedRoller", BED_ROLLER_DIR)
+		end
+		local lamps: { [string]: BasePart } = {}
+		local found = false
+		for _, name in SIGNALS do
+			local lamp = model:FindFirstChild(name)
+			if lamp and lamp:IsA("BasePart") then
+				lamps[name] = lamp
+				fx.SignalColors[name] = lamp.Color
+				found = true
+			end
+		end
+		if found then
+			fx.Signals = lamps
 		end
 	elseif id == "Crusher" then
 		if base then
@@ -219,6 +323,7 @@ local function capture(fx: Fx)
 		end
 	end
 	fx.SpinRate = SPIN_RATE[id] or 0
+	captureWater(fx)
 end
 
 -- Lights and emitter rates for the current heat (no pulse).
@@ -235,6 +340,295 @@ local function applyHeat(fx: Fx)
 	local glow = fx.Glow
 	if glow and heat <= 0 then
 		glow.Color = fx.GlowColor
+	end
+	if heat <= 0 then
+		for i, part in fx.Hot do
+			part.Color = fx.HotColors[i]
+		end
+	end
+end
+
+---------------------------------------------------------------- status light
+
+-- Auto Cleaner stack light: green while working, red when blocked, amber when
+-- idle; all lit (the built look) while out of range.
+local function applySignal(fx: Fx)
+	local lamps = fx.Signals
+	if not lamps then
+		return
+	end
+	local status = fx.Attr.Status
+	local state = if not fx.Active
+		then "All"
+		elseif fx.Attr.Working == true then "StackGreen"
+		elseif type(status) == "string" and status ~= "" then "StackRed"
+		else "StackAmber"
+	if state == fx.SignalState then
+		return
+	end
+	fx.SignalState = state
+	for name, lamp in lamps do
+		local lit = state == "All" or name == state
+		local color = fx.SignalColors[name] or lamp.Color
+		lamp.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		lamp.Color = if lit then color else color:Lerp(Color3.new(0, 0, 0), 0.55)
+	end
+end
+
+---------------------------------------------------------------- water
+
+local function waterAttachment(anchor: Part, name: string): Attachment
+	local a = Instance.new("Attachment")
+	a.Name = name
+	a.Parent = anchor
+	return a
+end
+
+local function waterBeam(anchor: Part, name: string, out: Attachment, into: Attachment, color: Color3, emission: number): Beam
+	local b = Instance.new("Beam")
+	b.Name = name
+	b.Attachment0 = out
+	b.Attachment1 = into
+	b.FaceCamera = true
+	b.Segments = 12
+	b.Color = ColorSequence.new(color)
+	b.LightEmission = emission
+	b.LightInfluence = 0.6
+	b.Enabled = false
+	b.Parent = anchor
+	return b
+end
+
+local function waterEmitter(parent: Attachment, name: string, texture: string, color: Color3): ParticleEmitter
+	local e = Instance.new("ParticleEmitter")
+	e.Name = name
+	e.Texture = texture
+	e.Color = ColorSequence.new(color)
+	e.LightInfluence = 0.6
+	e.Rate = 0
+	e.Enabled = false
+	e.Parent = parent
+	return e
+end
+
+-- One rig (built once, then pooled): stream + core Beams, droplets, mist,
+-- ripples on the pool and a shower spray.
+local function newRig(): WaterRig
+	local anchor = Instance.new("Part")
+	anchor.Name = "WaterRig"
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.CastShadow = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
+	local out = waterAttachment(anchor, "Out")
+	local into = waterAttachment(anchor, "In")
+	local splash = waterAttachment(anchor, "Splash")
+	local nozzle = waterAttachment(anchor, "Nozzle")
+
+	local stream = waterBeam(anchor, "Stream", out, into, WATER.Stream, 0.25)
+	stream.Texture = SOFT
+	stream.TextureMode = Enum.TextureMode.Wrap
+	stream.TextureLength = 1.4
+	stream.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(0.8, 0.28),
+		NumberSequenceKeypoint.new(1, 0.55),
+	})
+	local core = waterBeam(anchor, "Core", out, into, WATER.Core, 0.5)
+	core.Transparency = NumberSequence.new(0.15, 0.45)
+
+	-- droplets jumping out where the water lands
+	local drops = waterEmitter(splash, "Drops", SPARKLE, WATER.Splash)
+	drops.EmissionDirection = Enum.NormalId.Top
+	drops.Size = NumberSequence.new(0.22, 0.06)
+	drops.Transparency = NumberSequence.new(0.05, 1)
+	drops.Lifetime = NumberRange.new(0.35, 0.6)
+	drops.Speed = NumberRange.new(3, 6)
+	drops.SpreadAngle = Vector2.new(40, 40)
+	drops.Acceleration = Vector3.new(0, -32, 0)
+	drops.Drag = 1
+	drops.LightEmission = 0.4
+	-- a soft puff of mist
+	local mist = waterEmitter(splash, "Mist", SOFT, WATER.Splash)
+	mist.EmissionDirection = Enum.NormalId.Top
+	mist.Size = NumberSequence.new(0.5, 1.4)
+	mist.Transparency = NumberSequence.new(0.72, 1)
+	mist.Lifetime = NumberRange.new(0.5, 0.9)
+	mist.Speed = NumberRange.new(0.6, 1.4)
+	mist.SpreadAngle = Vector2.new(60, 60)
+	mist.LightInfluence = 0.8
+	-- ripples lying flat on the pool, growing and fading
+	local ripple = waterEmitter(splash, "Ripple", SOFT, WATER.Splash)
+	ripple.EmissionDirection = Enum.NormalId.Top
+	ripple.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+	ripple.Size = NumberSequence.new(0.3, 1.5)
+	ripple.Transparency = NumberSequence.new(0.5, 1)
+	ripple.Lifetime = NumberRange.new(0.8, 1)
+	ripple.Speed = NumberRange.new(0.02, 0.02)
+	ripple.LightEmission = 0.3
+	-- shower spray out of a nozzle (Spray outlets)
+	local spray = waterEmitter(nozzle, "Spray", SPARKLE, WATER.Splash)
+	spray.EmissionDirection = Enum.NormalId.Bottom
+	spray.Size = NumberSequence.new(0.16, 0.08)
+	spray.Transparency = NumberSequence.new(0.1, 0.8)
+	spray.Lifetime = NumberRange.new(0.3, 0.45)
+	spray.Speed = NumberRange.new(4, 7)
+	spray.SpreadAngle = Vector2.new(16, 16)
+	spray.Acceleration = Vector3.new(0, -20, 0)
+	spray.LightEmission = 0.4
+
+	return {
+		Anchor = anchor,
+		Out = out,
+		In = into,
+		Splash = splash,
+		Nozzle = nozzle,
+		Stream = stream,
+		Core = core,
+		Drops = drops,
+		Mist = mist,
+		Ripple = ripple,
+		Spray = spray,
+		Placed = nil,
+		Width1 = WATER.WidthEnd,
+	}
+end
+
+local function rigEnabled(rig: WaterRig, on: boolean, spray: boolean)
+	rig.Stream.Enabled = on
+	rig.Core.Enabled = on
+	rig.Drops.Enabled = on
+	rig.Mist.Enabled = on
+	rig.Ripple.Enabled = on
+	rig.Spray.Enabled = on and spray
+end
+
+-- Moves the rig onto the machine (copies WaterOut / WaterIn and the curve).
+local function placeRig(fx: Fx)
+	local rig, base = fx.Water, fx.Base
+	if not rig or not base then
+		return
+	end
+	local out = base:FindFirstChild("WaterOut")
+	local into = base:FindFirstChild("WaterIn")
+	if not (out and out:IsA("Attachment") and into and into:IsA("Attachment")) then
+		return
+	end
+	rig.Anchor.CFrame = base.CFrame
+	rig.Placed = base.CFrame
+	rig.Out.CFrame = out.CFrame
+	rig.In.CFrame = into.CFrame
+	rig.Splash.CFrame = CFrame.new(into.CFrame.Position)
+	rig.Nozzle.CFrame = CFrame.new(out.CFrame.Position)
+	local c0, c1 = out:GetAttribute("Curve"), into:GetAttribute("Curve")
+	for _, beam in { rig.Stream, rig.Core } do
+		beam.CurveSize0 = if type(c0) == "number" then c0 else 0
+		beam.CurveSize1 = if type(c1) == "number" then c1 else 0
+	end
+end
+
+-- Widths and rates for the current flow (gentle 0 .. working 1).
+local function applyFlow(fx: Fx)
+	local rig = fx.Water
+	if not rig then
+		return
+	end
+	local f = fx.Flow
+	fx.FlowApplied = f
+	local k = 0.55 + 0.45 * f
+	if fx.Spray then
+		rig.Stream.Width0 = WATER.SprayWidth * k
+		rig.Width1 = WATER.SprayWidthEnd * k
+		rig.Core.Width0 = 0.12 * k
+		rig.Core.Width1 = 0.5 * k
+		rig.Spray.Rate = 14 + 36 * f
+	else
+		rig.Stream.Width0 = WATER.Width * k
+		rig.Width1 = WATER.WidthEnd * k
+		rig.Core.Width0 = WATER.Width * 0.38 * k
+		rig.Core.Width1 = WATER.WidthEnd * 0.38 * k
+		rig.Spray.Rate = 0
+	end
+	rig.Stream.Width1 = rig.Width1
+	rig.Stream.TextureSpeed = 1.2 + 1.8 * f
+	rig.Drops.Rate = 10 + 24 * f
+	rig.Mist.Rate = 2 + 4 * f
+	rig.Ripple.Rate = if fx.Pool then 1.5 + 2.5 * f else 0
+end
+
+local function restorePool(fx: Fx)
+	local pool = fx.Pool
+	if pool then
+		pool.Color = fx.PoolColor
+		pool.Transparency = fx.PoolTransparency
+	end
+end
+
+local function releaseRig(fx: Fx)
+	local rig = fx.Water
+	if not rig then
+		return
+	end
+	fx.Water = nil
+	rigEnabled(rig, false, false)
+	restorePool(fx)
+	table.insert(rigPool, rig)
+end
+
+-- False when the rig can't be parented any more (its folder was destroyed).
+local function parentRig(rig: WaterRig): boolean
+	return pcall(function()
+		rig.Anchor.Parent = folder()
+	end)
+end
+
+local function acquireRig(fx: Fx)
+	if fx.Water or not fx.HasWater then
+		return
+	end
+	local pooled = table.remove(rigPool)
+	local ready: WaterRig
+	if pooled and parentRig(pooled) then
+		ready = pooled
+	else
+		ready = newRig()
+		ready.Anchor.Parent = folder()
+	end
+	fx.Water = ready
+	fx.Flow = if fx.Attr.Working == true or fx.Attr.Busy == true then 1 else 0
+	placeRig(fx)
+	applyFlow(fx)
+	rigEnabled(ready, true, fx.Spray)
+end
+
+-- Per frame for a machine with a rig: ease the flow, follow the machine,
+-- wobble the stream, shimmer the pool.
+local function stepWater(fx: Fx, dt: number)
+	local rig = fx.Water
+	local base = fx.Base
+	if not rig or not base then
+		return
+	end
+	if rig.Placed ~= base.CFrame then
+		placeRig(fx)
+	end
+	local target = if fx.Attr.Working == true or fx.Attr.Busy == true then 1 else 0
+	if fx.Flow ~= target then
+		local delta = FLOW_RATE * dt
+		fx.Flow = if fx.Flow < target then math.min(target, fx.Flow + delta) else math.max(target, fx.Flow - delta)
+	end
+	if math.abs(fx.Flow - fx.FlowApplied) > 0.03 or (fx.Flow == target and fx.FlowApplied ~= target) then
+		applyFlow(fx)
+	end
+	rig.Stream.Width1 = rig.Width1 * (1 + 0.08 * math.sin(clock * 9 + fx.Phase))
+	local pool = fx.Pool
+	if pool then
+		local wave = math.sin(clock * 2.2 + fx.Phase)
+		pool.Color = fx.PoolColor:Lerp(WATER.Stream, 0.18 + 0.12 * wave * (0.5 + 0.5 * fx.Flow))
+		pool.Transparency = fx.PoolTransparency + 0.06 * math.sin(clock * 3.3 + fx.Phase)
 	end
 end
 
@@ -364,6 +758,9 @@ local function onAttribute(fx: Fx, name: string)
 		if fx.Active and value == true and before ~= true then
 			onWorkStart(fx)
 		end
+		applySignal(fx)
+	elseif name == "Status" then
+		applySignal(fx)
 	elseif name == "GridX" or name == "GridZ" or name == "Rotation" then
 		-- moved: the server put every part back in its rest pose
 		fx.Angle = 0
@@ -385,11 +782,14 @@ local function setActive(fx: Fx, on: boolean)
 		fx.Heat = if fx.Attr.Working == true then 1 else 0
 		applyHeat(fx)
 		fx.StubsDirty = true
+		applySignal(fx)
 		return
 	end
 	-- back to the idle look
 	fx.Heat = 0
 	applyHeat(fx)
+	releaseRig(fx)
+	applySignal(fx)
 	fx.Flash = 0
 	local coins = fx.Coins
 	if coins then
@@ -450,6 +850,19 @@ local function register(instance: Instance)
 		ForgeLight = nil,
 		Billboard = nil,
 		Connections = {},
+		Hot = {},
+		HotColors = {},
+		HasWater = false,
+		Spray = false,
+		Water = nil,
+		Flow = 0,
+		FlowApplied = 0,
+		Pool = nil,
+		PoolColor = Color3.new(1, 1, 1),
+		PoolTransparency = 0,
+		Signals = nil,
+		SignalColors = {},
+		SignalState = nil,
 	}
 	capture(fx)
 	table.insert(
@@ -563,6 +976,23 @@ local function pickActive()
 	end
 	table.sort(active, byDistance)
 
+	-- water rigs: the nearest WATER_MAX wet machines (give rigs back first)
+	local wet = 0
+	local wanted: { Fx } = {}
+	for _, fx in active do
+		if fx.HasWater then
+			wet += 1
+			if wet <= WATER_MAX then
+				table.insert(wanted, fx)
+			else
+				releaseRig(fx)
+			end
+		end
+	end
+	for _, fx in wanted do
+		acquireRig(fx)
+	end
+
 	local humming: { Fx } = {}
 	local signs = 0
 	for _, fx in active do
@@ -618,6 +1048,9 @@ local function step(dt: number)
 			if glow then
 				glow.Color = fx.GlowColor:Lerp(Color3.new(1, 0.92, 0.7), 0.35 * pulse * fx.Heat)
 			end
+			for i, part in fx.Hot do
+				part.Color = fx.HotColors[i]:Lerp(Color3.new(1, 0.92, 0.7), 0.3 * pulse * fx.Heat)
+			end
 			if base and #fx.Spinners > 0 then
 				fx.Angle = (fx.Angle + fx.SpinRate * fx.Heat * dt) % (math.pi * 2)
 				local origin = base.CFrame
@@ -639,6 +1072,10 @@ local function step(dt: number)
 			if light then
 				light.Brightness = fx.CoinsIdle + 3 * fx.Flash
 			end
+		end
+		-- water stream, splash and pool
+		if fx.Water then
+			stepWater(fx, dt)
 		end
 		-- anvil
 		if fx.StubsDirty then
