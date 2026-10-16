@@ -78,12 +78,15 @@ elseif sceneName == "lobby_blockout" then
 	-- the world plus a translucent box for every lobby set piece (LobbyLayout)
 	WorldBuilder.build(workspace)
 	require("./lib/lobby_blockout").build(Loader, workspace)
+elseif sceneName == "blasters" or sceneName == "blaster_fire" then
+	-- laser blasters: the 10 levels in ore skins / a forgekeeper blasting a quarry rock
+	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
 	local Dummy = require("./lib/dummy")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
-	local PickaxeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.PickaxeBuilder")
+	local BlasterGallery = require("./lib/blaster_gallery")
 	WorldBuilder.build(workspace)
 	local props = roblox.Instance.new("Folder")
 	props.Name = "Props"
@@ -95,7 +98,9 @@ elseif sceneName == "gameplay" then
 	OreNodeBuilder.applyStage(node, 1, 42)
 	node.Parent = props
 	local root = CF.lookAt(nodePos + V3.new(4.2, 0, 4.2), nodePos)
-	Dummy.build(props, CF, root, "swing", nil, PickaxeBuilder.build("CopperPick"))
+	local hit = BlasterGallery.surface(node, root.Position, 0.5)
+	local _, muzzle = BlasterGallery.forgekeeper(Loader, props, root, hit, 2, "Copper")
+	BlasterGallery.beam(Loader, props, muzzle, hit, Loader.requirePath("ReplicatedStorage.Shared.Config.OreData").ById.Copper.Glow)
 	local chunkSpots = {
 		{ V3.new(-31, -6.5, -161), "Silver" },
 		{ V3.new(-28.5, -5, -163.5), "Silver" },

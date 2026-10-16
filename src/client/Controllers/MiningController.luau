@@ -1,42 +1,176 @@
 --[[
-	MiningController: swing the pickaxe at ore nodes.
+	MiningController: hold to fire the laser Blaster at rocks.
 
-	- PC: click (aims at the node under the mouse, else the nearest node in front)
-	- Mobile: tap the screen / tool button; Console: R2. Both aim at the
-	  nearest node in front of the character.
-	- The character turns toward the node, plays the slash animation and
-	  shows sparks/sound/shake immediately (prediction); the server decides
-	  damage and drops.
+	  PC       hold the left mouse button, aim with the mouse
+	  Touch    hold the round FIRE button (aims at the nearest rock in front of
+	           the camera) or touch and hold a rock directly
+	  Gamepad  hold R2 (aim assist: the nearest rock in front of the camera)
+
+	Fires only while the Blaster is in hand; starting to fire near a rock
+	equips it. The local beam is drawn every frame from the tool's Muzzle to
+	the hit point; the server only hears about target changes (MineBlast,
+	at most every BlasterData.Beam.ClientRetarget seconds, nil = stop) and
+	decides all damage. Rocks you can't mine yet show "Needs Lv N"; the rock
+	you blast shows its HP. Cleaning and build mode set busy (setBusy) and
+	nothing fires while PlayerControls is claimed (anvil, build mode).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local GuiService = game:GetService("GuiService")
+local HapticService = game:GetService("HapticService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local GameConfig = require(Shared.Config.GameConfig)
-local OreData = require(Shared.Config.OreData)
+local BlasterData = require(Shared.Config.BlasterData)
+local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
+local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
+local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 
 local MiningController = {}
 
+local ROCK_TAG = "Rock"
+local TOOL_NAME = "Blaster"
+local AIM_DISTANCE = 300 -- mouse / touch ray length
+local ASSIST_FACING = 0.35 -- aim assist only looks this far to the sides (dot product)
+local ASSIST_REFRESH = 0.1 -- seconds between aim assist searches
+local NEAR_EXTRA = 6 -- studs past the range that still count as "near a rock" (FIRE button, hint)
+local SPARK_GAP = 0.07
+local DUST_GAP = 0.3
+local TURN_SPEED = 14
+local DEFAULT_GLOW = Color3.fromRGB(255, 150, 70)
+
+type Device = "Mouse" | "Touch" | "Gamepad"
+
 local player = Players.LocalPlayer
-local lastSwing = 0
-local busy = false -- set while the cleaning minigame owns the input
+local busy = false -- set while the cleaning minigame / build mode owns the input
+local rumbleOn = true
+
+local holding: { [string]: boolean } = {} -- Mouse | Gamepad | FireButton | TouchRock
+local touchRockInput: InputObject? = nil
+local touchRockPos: Vector2? = nil
+local fireButtonInput: InputObject? = nil
+
+local firing = false
+local target: Model? = nil -- the rock the beam hits (in range), nil = none
+local lastSent: Model? = nil
+local lastSendAt = -math.huge
+local assistAt = -math.huge
+local assistTarget: Model? = nil
+local aimRock: Model? = nil -- the rock the player aims at (also when not firing)
+local aimTooFar = false
+local seenStage = 0
+local sparkAt, dustAt = 0, 0
+local lastHitAt = -math.huge
+local savedAutoRotate: boolean? = nil
+local device: Device = "Mouse"
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+-- UI
+local gui: ScreenGui
+local fireHolder: Frame
+local fireButton: TextButton
+local hint: Frame
+local hintIcon: ImageLabel
+local hintText: TextLabel
+local info: BillboardGui
+local infoLabel: TextLabel
+local infoBar: Frame
+local infoFill: Frame
 
 function MiningController.setBusy(value: boolean)
 	busy = value
+	if value then
+		table.clear(holding)
+		touchRockInput, fireButtonInput = nil, nil
+	end
 end
 
-local function nodeFromPart(part: Instance?): Model?
+-- Gamepad rumble while blasting (a settings menu can turn it off).
+function MiningController.setRumble(on: boolean)
+	rumbleOn = on
+end
+
+function MiningController.isFiring(): boolean
+	return firing
+end
+
+---------------------------------------------------------------- helpers
+
+local function deviceOf(inputType: Enum.UserInputType): Device?
+	if inputType == Enum.UserInputType.Touch then
+		return "Touch"
+	elseif inputType.Name:sub(1, 7) == "Gamepad" then
+		return "Gamepad"
+	elseif inputType == Enum.UserInputType.Keyboard or inputType.Name:sub(1, 5) == "Mouse" then
+		return "Mouse"
+	end
+	return nil
+end
+
+local function characterParts(): (Model?, Humanoid?, BasePart?)
+	local character = player.Character
+	if not character then
+		return nil, nil, nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then
+		return character, nil, nil
+	end
+	return character, humanoid, root
+end
+
+local function equippedTool(): Tool?
+	local character = player.Character
+	local tool = character and character:FindFirstChild(TOOL_NAME)
+	return if tool and tool:IsA("Tool") then tool else nil
+end
+
+local function backpackTool(): Tool?
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	local tool = backpack and backpack:FindFirstChild(TOOL_NAME)
+	return if tool and tool:IsA("Tool") then tool else nil
+end
+
+local function anyTool(): Tool?
+	return equippedTool() or backpackTool()
+end
+
+local function levelOf(tool: Tool?): number
+	local level = tool and tool:GetAttribute("Level")
+	return if type(level) == "number" then level else 1
+end
+
+local function rangeOf(tool: Tool?): number
+	local range = tool and tool:GetAttribute("Range")
+	return if type(range) == "number" then range else BlasterData.get(levelOf(tool)).Range
+end
+
+local function glowOf(tool: Tool?): Color3
+	local glow = tool and tool:GetAttribute("Glow")
+	return if typeof(glow) == "Color3" then glow else DEFAULT_GLOW
+end
+
+local function muzzleOf(tool: Tool?): Attachment?
+	local handle = tool and tool:FindFirstChild("Handle")
+	local muzzle = handle and handle:FindFirstChild("Muzzle")
+	return if muzzle and muzzle:IsA("Attachment") then muzzle else nil
+end
+
+local function rockFromPart(part: Instance?): Model?
 	local node = part
 	while node and node ~= Workspace do
-		if node:IsA("Model") and CollectionService:HasTag(node, "OreNode") then
+		if node:IsA("Model") and CollectionService:HasTag(node, ROCK_TAG) then
 			return node
 		end
 		node = node.Parent
@@ -44,49 +178,73 @@ local function nodeFromPart(part: Instance?): Model?
 	return nil
 end
 
-local function nodeRadius(model: Model): number
-	local primary = model.PrimaryPart
-	return if primary then primary.Size.Magnitude / 2 else 3
+local function radiusOf(rock: Model): number
+	local primary = rock.PrimaryPart
+	return if primary then math.max(primary.Size.X, primary.Size.Z) * 0.5 + 0.5 else 2
 end
 
-local function inRange(root: BasePart, model: Model): boolean
-	local primary = model.PrimaryPart
-	if not primary then
-		return false
+-- Why the local player can't mine this rock yet ("" = they can).
+local function gateText(rock: Model, tool: Tool?): string
+	if rock:GetAttribute("VipOnly") == true and player:GetAttribute("Perk_ForgeVip") ~= true then
+		return "VIP only"
 	end
-	return (primary.Position - root.Position).Magnitude - nodeRadius(model) <= GameConfig.MineRange - 1
+	local needed = rock:GetAttribute("MinBlaster")
+	if type(needed) == "number" and needed > levelOf(tool) then
+		return "Needs Lv " .. needed
+	end
+	return ""
 end
 
-local function findTarget(root: BasePart): Model?
-	-- 1) mouse aim (PC)
-	if UserInputService.MouseEnabled and not UserInputService.TouchEnabled then
-		local camera = Workspace.CurrentCamera
-		local mouse = UserInputService:GetMouseLocation()
-		local ray = camera:ViewportPointToRay(mouse.X, mouse.Y)
-		local params = RaycastParams.new()
-		params.FilterType = Enum.RaycastFilterType.Exclude
-		local character = player.Character
-		if character then
-			params.FilterDescendantsInstances = { character }
-		end
-		local hit = Workspace:Raycast(ray.Origin, ray.Direction * 80, params)
-		local model = hit and nodeFromPart(hit.Instance)
-		if model and inRange(root, model) then
-			return model
+local function refreshFilter()
+	local list: { Instance } = {}
+	local character = player.Character
+	if character then
+		table.insert(list, character)
+	end
+	for _, name in { "Items", "ClientFx", "Debris" } do
+		local folder = Workspace:FindFirstChild(name)
+		if folder then
+			table.insert(list, folder)
 		end
 	end
-	-- 2) nearest node in front of the character
-	local best, bestScore = nil, math.huge
-	local look = root.CFrame.LookVector
-	for _, model in CollectionService:GetTagged("OreNode") do
-		if model:IsA("Model") and model.PrimaryPart and inRange(root, model) then
-			local offset = model.PrimaryPart.Position - root.Position
-			local flat = Vector3.new(offset.X, 0, offset.Z)
-			local facing = if flat.Magnitude > 0.1 then look:Dot(flat.Unit) else 1
-			if facing > -0.2 then
-				local score = flat.Magnitude * (1.6 - facing)
-				if score < bestScore then
-					best, bestScore = model, score
+	rayParams.FilterDescendantsInstances = list
+end
+
+local function cast(origin: Vector3, direction: Vector3): RaycastResult?
+	return Workspace:Raycast(origin, direction, rayParams)
+end
+
+-- Ray through a point on the screen. `viewport` = coordinates include the top bar inset.
+local function screenRay(point: Vector2, viewport: boolean): Ray?
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	return if viewport then camera:ViewportPointToRay(point.X, point.Y) else camera:ScreenPointToRay(point.X, point.Y)
+end
+
+-- The nearest rock in front of the camera within `range` of the character.
+local function findAssist(root: BasePart, range: number): Model?
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	local look = camera.CFrame.LookVector * Vector3.new(1, 0, 1)
+	local flatLook = if look.Magnitude > 0.05 then look.Unit else root.CFrame.LookVector
+	local best: Model? = nil
+	local bestScore = math.huge
+	for _, rock in CollectionService:GetTagged(ROCK_TAG) do
+		if rock:IsA("Model") and rock.PrimaryPart then
+			local offset = rock.PrimaryPart.Position - root.Position
+			local flat = offset * Vector3.new(1, 0, 1)
+			local distance = offset.Magnitude - radiusOf(rock)
+			if distance <= range then
+				local facing = if flat.Magnitude > 0.5 then flatLook:Dot(flat.Unit) else 1
+				if facing > ASSIST_FACING then
+					local score = math.max(distance, 0) + 1 + (1 - facing) * 12
+					if score < bestScore then
+						best, bestScore = rock, score
+					end
 				end
 			end
 		end
@@ -94,90 +252,567 @@ local function findTarget(root: BasePart): Model?
 	return best
 end
 
-local function playSlash(tool: Tool)
-	-- The default Animate script plays its slash animation when it sees this.
-	local value = Instance.new("StringValue")
-	value.Name = "toolanim"
-	value.Value = "Slash"
-	value.Parent = tool
-	task.delay(0.5, function()
-		value:Destroy()
+-- Any rock within reach of the character (for the FIRE button and auto-equip)?
+local function rockNear(root: BasePart, range: number): boolean
+	for _, rock in CollectionService:GetTagged(ROCK_TAG) do
+		if rock:IsA("Model") and rock.PrimaryPart then
+			if (rock.PrimaryPart.Position - root.Position).Magnitude - radiusOf(rock) <= range + NEAR_EXTRA then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Where the beam from `from` hits `rock` (its surface facing the shooter).
+local function surfacePoint(from: Vector3, rock: Model): Vector3
+	local center = (rock.PrimaryPart :: BasePart).Position
+	local result = cast(from, (center - from) * 1.2)
+	if result and rockFromPart(result.Instance) == rock then
+		return result.Position
+	end
+	return center
+end
+
+--[[
+	Aims the blaster. Returns the rock to damage (in range, else nil), the
+	beam's end point and whether that point is on something solid.
+]]
+local function aim(root: BasePart, tool: Tool, now: number): (Model?, Vector3, boolean)
+	local range = rangeOf(tool)
+	local muzzle = muzzleOf(tool)
+	local origin = if muzzle then muzzle.WorldPosition else root.Position + Vector3.new(0, 1.5, 0)
+	local ray: Ray? = nil
+	if holding.TouchRock and touchRockPos then
+		ray = screenRay(touchRockPos, false)
+	elseif holding.Mouse then
+		ray = screenRay(UserInputService:GetMouseLocation(), true)
+	end
+	if ray then
+		local result = cast(ray.Origin, ray.Direction * AIM_DISTANCE)
+		local point = if result then result.Position else ray.Origin + ray.Direction * AIM_DISTANCE
+		local rock = if result then rockFromPart(result.Instance) else nil
+		local offset = point - origin
+		if (point - root.Position).Magnitude <= range + 1 then
+			return rock, point, result ~= nil
+		end
+		-- too far: the beam fizzles out at its range
+		local direction = if offset.Magnitude > 0.01 then offset.Unit else root.CFrame.LookVector
+		return nil, origin + direction * range, false
+	end
+	-- FIRE button / R2: aim assist
+	if now - assistAt >= ASSIST_REFRESH or (assistTarget and not assistTarget.Parent) then
+		assistAt = now
+		assistTarget = findAssist(root, range)
+	end
+	local rock = assistTarget
+	if rock and rock.PrimaryPart then
+		return rock, surfacePoint(origin, rock), true
+	end
+	local camera = Workspace.CurrentCamera
+	local look = if camera then camera.CFrame.LookVector else root.CFrame.LookVector
+	local forward = (look * Vector3.new(1, 0, 1))
+	local direction = if forward.Magnitude > 0.05 then (forward.Unit + Vector3.new(0, -0.08, 0)).Unit else root.CFrame.LookVector
+	local result = cast(origin, direction * range)
+	if result then
+		return nil, result.Position, true
+	end
+	return nil, origin + direction * range, false
+end
+
+---------------------------------------------------------------- feedback
+
+local function rumble(motor: Enum.VibrationMotor, strength: number)
+	if not rumbleOn or device ~= "Gamepad" then
+		return
+	end
+	pcall(function()
+		local pad = Enum.UserInputType.Gamepad1
+		if HapticService:IsVibrationSupported(pad) and HapticService:IsMotorSupported(pad, motor) then
+			HapticService:SetMotor(pad, motor, strength)
+		end
 	end)
 end
 
-local function swing(tool: Tool)
-	if busy then
+local function stopRumble()
+	pcall(function()
+		local pad = Enum.UserInputType.Gamepad1
+		if HapticService:IsVibrationSupported(pad) then
+			HapticService:SetMotor(pad, Enum.VibrationMotor.Small, 0)
+			HapticService:SetMotor(pad, Enum.VibrationMotor.Large, 0)
+		end
+	end)
+end
+
+local function faceTowards(humanoid: Humanoid, root: BasePart, point: Vector3, dt: number)
+	if savedAutoRotate == nil then
+		savedAutoRotate = humanoid.AutoRotate
+		humanoid.AutoRotate = false
+	end
+	local flat = Vector3.new(point.X, root.Position.Y, point.Z)
+	if (flat - root.Position).Magnitude < 0.5 then
 		return
 	end
-	local cooldown = (tool:GetAttribute("Cooldown") :: number?) or 0.6
-	local now = os.clock()
-	if now - lastSwing < cooldown then
+	local goal = CFrame.lookAt(root.Position, flat)
+	root.CFrame = root.CFrame:Lerp(goal, math.min(1, dt * TURN_SPEED))
+end
+
+local function restoreRotate()
+	local saved = savedAutoRotate
+	if saved == nil then
 		return
 	end
-	lastSwing = now
+	savedAutoRotate = nil
 	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not root then
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.AutoRotate = saved
+	end
+end
+
+local function startFiring()
+	firing = true
+	Sfx.play("BlasterStart")
+	Sfx.loop("BlasterHum", true)
+	rumble(Enum.VibrationMotor.Small, 0.18)
+end
+
+local function stopFiring()
+	if not firing then
 		return
 	end
-	local target = findTarget(root)
-	if target and target.PrimaryPart then
-		local p = target.PrimaryPart.Position
-		root.CFrame = CFrame.lookAt(root.Position, Vector3.new(p.X, root.Position.Y, p.Z))
+	firing = false
+	target = nil
+	Vfx.hideBeam("local")
+	Sfx.loop("BlasterHum", false)
+	Sfx.play("BlasterStop")
+	stopRumble()
+	restoreRotate()
+end
+
+-- Tell the server about the current target (throttled; nil = stop).
+local function syncTarget(now: number)
+	local desired = if firing then target else nil
+	if desired ~= lastSent and now - lastSendAt >= BlasterData.Beam.ClientRetarget then
+		lastSent = desired
+		lastSendAt = now
+		Net.send("MineBlast", desired)
 	end
-	playSlash(tool)
-	if not target then
-		return
-	end
-	task.delay(0.14, function()
-		local primary = target.PrimaryPart
-		if not primary or not target.Parent then
-			return
-		end
-		-- impact point on the side facing the player
-		local toPlayer = (root.Position - primary.Position) * Vector3.new(1, 0, 1)
-		local impact = primary.Position + (if toPlayer.Magnitude > 0.1 then toPlayer.Unit else Vector3.zero) * nodeRadius(target) * 0.7 + Vector3.new(0, 0.5, 0)
-		local oreId = target:GetAttribute("OreId")
-		local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
-		local tier = (tool:GetAttribute("Tier") :: number?) or 1
-		if ore and tier < ore.Tier then
-			Vfx.burst("Sparks", impact, 4, Color3.fromRGB(200, 200, 220), toPlayer)
-			Sfx.play("PickBounce", impact)
-		else
-			Vfx.burst("Sparks", impact, 10, nil, toPlayer)
-			Vfx.burst("Dust", impact, 2, if ore then ore.Crust else nil)
-			Sfx.play("PickHit", impact)
-			CameraShake.add(0.12)
-		end
-		Net.send("MineSwing", target)
+end
+
+---------------------------------------------------------------- UI
+
+local function buildUI()
+	gui = UIKit.screen("TerraForgeBlaster", 3)
+	gui:SetAttribute("TerraForge", true)
+	pcall(function()
+		gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	end)
+
+	-- hint: "[R2] Hold to blast"
+	hint = UIKit.panel(gui, {
+		Name = "BlastHint",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -122),
+		Size = UDim2.fromOffset(250, 40),
+		Visible = false,
+	})
+	hintIcon = UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(30, 30),
+		Position = UDim2.fromOffset(10, 5),
+		Visible = false,
+	}, hint)
+	hintText = UIKit.label(hint, "", 18, {
+		Name = "Text",
+		Size = UDim2.new(1, -20, 1, 0),
+		Position = UDim2.fromOffset(10, 0),
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+
+	-- the round FIRE button (touch), in its own unscaled gui next to the jump button
+	local touchGui = UIKit.new("ScreenGui", {
+		Name = "TerraForgeFire",
+		ResetOnSpawn = false,
+		DisplayOrder = 3,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Enabled = false,
+	})
+	fireHolder = UIKit.new("Frame", {
+		Name = "FireHolder",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.BadDark,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(92, 92),
+		Position = UDim2.new(1, -240, 1, -100),
+	}, touchGui)
+	UIKit.corner(fireHolder, 999)
+	UIKit.stroke(fireHolder, 3)
+	fireButton = UIKit.new("TextButton", {
+		Name = "Fire",
+		AutoButtonColor = false,
+		BackgroundColor3 = Theme.Bad,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, -5),
+		Size = UDim2.fromScale(1, 1),
+		Text = "FIRE",
+		TextColor3 = Theme.Text,
+		TextSize = 24,
+		FontFace = Theme.Font,
+	}, fireHolder)
+	UIKit.corner(fireButton, 999)
+	UIKit.gradient(fireButton, Color3.new(1, 1, 1), Color3.fromRGB(215, 215, 215))
+	UIKit.textStroke(fireButton)
+
+	-- over the aimed rock: "Needs Lv 3" or the HP bar of the rock you blast
+	info = UIKit.new("BillboardGui", {
+		Name = "TerraForgeRockInfo",
+		Size = UDim2.fromOffset(170, 54),
+		StudsOffsetWorldSpace = Vector3.new(0, 4.5, 0),
+		AlwaysOnTop = true,
+		Enabled = false,
+		LightInfluence = 0,
+		MaxDistance = 90,
+		ResetOnSpawn = false,
+	})
+	infoLabel = UIKit.label(info, "", 22, { Size = UDim2.new(1, 0, 0, 28), TextColor3 = Theme.Bad })
+	infoBar = UIKit.new("Frame", {
+		Name = "Bar",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 32),
+		Size = UDim2.fromOffset(120, 14),
+		BackgroundColor3 = Theme.PanelDark,
+		BorderSizePixel = 0,
+	}, info)
+	UIKit.corner(infoBar, 7)
+	UIKit.stroke(infoBar, 2)
+	infoFill = UIKit.new("Frame", {
+		Name = "Fill",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Accent,
+		BorderSizePixel = 0,
+	}, infoBar)
+	UIKit.corner(infoFill, 7)
+
+	local playerGui = player:WaitForChild("PlayerGui")
+	gui.Parent = playerGui
+	touchGui.Parent = playerGui
+	info.Parent = playerGui
 end
 
-local function hookTool(tool: Instance)
-	if tool:IsA("Tool") and tool.Name == "Pickaxe" and not tool:GetAttribute("_Hooked") then
-		tool:SetAttribute("_Hooked", true)
-		tool.Activated:Connect(function()
-			swing(tool)
-		end)
+local function layoutFireButton()
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local size = camera.ViewportSize
+	local small = math.min(size.X, size.Y) <= 500
+	-- left of Grab / Throw and the jump button, in reach of the right thumb
+	if small then
+		fireHolder.Size = UDim2.fromOffset(88, 88)
+		fireHolder.Position = UDim2.new(1, -240, 1, -100)
+	else
+		fireHolder.Size = UDim2.fromOffset(116, 116)
+		fireHolder.Position = UDim2.new(1, -310, 1, -140)
 	end
 end
 
-local function hookCharacter(character: Model)
-	for _, child in character:GetChildren() do
-		hookTool(child)
+local function updateHint(show: boolean)
+	if not show or firing then
+		hint.Visible = false
+		return
 	end
-	character.ChildAdded:Connect(hookTool)
+	hint.Visible = true
+	if device == "Gamepad" then
+		local image = UserInputService:GetImageForKeyCode(Enum.KeyCode.ButtonR2)
+		hintIcon.Image = image
+		hintIcon.Visible = image ~= ""
+		local key = UserInputService:GetStringForKeyCode(Enum.KeyCode.ButtonR2)
+		hintText.Text = if image ~= "" then "Hold to blast" else "Hold " .. (if key ~= "" then key else "R2") .. " to blast"
+	elseif device == "Touch" then
+		hintIcon.Visible = false
+		hintText.Text = "Hold FIRE or touch a rock"
+	else
+		hintIcon.Visible = false
+		hintText.Text = "Hold left mouse to blast"
+	end
+	hintText.Position = UDim2.fromOffset(if hintIcon.Visible then 40 else 10, 0)
+	hintText.Size = UDim2.new(1, if hintIcon.Visible then -50 else -20, 1, 0)
+end
+
+local function updateInfo(now: number, tool: Tool?)
+	local rock = if firing and target then target else aimRock
+	if not rock or not rock.Parent or not rock.PrimaryPart then
+		info.Enabled = false
+		return
+	end
+	local gate = gateText(rock, tool)
+	local recent = now - lastHitAt < 1.5
+	local showBar = gate == "" and (firing or recent) and rock == (target or aimRock)
+	if gate == "" and not showBar and not aimTooFar then
+		info.Enabled = false
+		return
+	end
+	info.Adornee = rock.PrimaryPart
+	info.StudsOffsetWorldSpace = Vector3.new(0, radiusOf(rock) + 2.5, 0)
+	info.Enabled = true
+	if gate ~= "" then
+		infoLabel.Text = gate
+		infoLabel.TextColor3 = Theme.Bad
+		infoBar.Visible = false
+	elseif aimTooFar and not firing then
+		infoLabel.Text = "Get closer"
+		infoLabel.TextColor3 = Theme.TextDim
+		infoBar.Visible = false
+	else
+		infoLabel.Text = ""
+		infoBar.Visible = true
+		local health = rock:GetAttribute("Health")
+		local maxHealth = rock:GetAttribute("MaxHealth")
+		local ratio = if type(health) == "number" and type(maxHealth) == "number" and maxHealth > 0 then health / maxHealth else 1
+		infoFill.Size = UDim2.fromScale(math.clamp(ratio, 0, 1), 1)
+	end
+end
+
+---------------------------------------------------------------- input
+
+local function anyHolding(): boolean
+	for _, on in holding do
+		if on then
+			return true
+		end
+	end
+	return false
+end
+
+local function canUse(): boolean
+	return not busy and PlayerControls.owner() == nil
+end
+
+-- Starting to fire with the blaster in the backpack equips it when a rock is near.
+local function tryEquip()
+	if equippedTool() or not canUse() then
+		return
+	end
+	local tool = backpackTool()
+	local _, humanoid, root = characterParts()
+	if tool and humanoid and root and rockNear(root, rangeOf(tool)) then
+		humanoid:EquipTool(tool)
+	end
+end
+
+local function press(source: string)
+	if not canUse() then
+		return
+	end
+	holding[source] = true
+	tryEquip()
+end
+
+local function release(source: string)
+	holding[source] = nil
+end
+
+local function onInputBegan(input: InputObject, processed: boolean)
+	local kind = input.UserInputType
+	if kind == Enum.UserInputType.MouseButton1 then
+		if not processed then
+			press("Mouse")
+		end
+	elseif input.KeyCode == Enum.KeyCode.ButtonR2 then
+		if not processed and GuiService.SelectedObject == nil then
+			press("Gamepad")
+		end
+	elseif kind == Enum.UserInputType.Touch and not processed and not holding.TouchRock then
+		-- touch and hold a rock directly
+		local _, _, root = characterParts()
+		local tool = anyTool()
+		local ray = screenRay(Vector2.new(input.Position.X, input.Position.Y), false)
+		if root and tool and ray then
+			refreshFilter()
+			local result = cast(ray.Origin, ray.Direction * AIM_DISTANCE)
+			local rock = result and rockFromPart(result.Instance)
+			if rock and result and (result.Position - root.Position).Magnitude <= rangeOf(tool) + NEAR_EXTRA then
+				touchRockInput = input
+				touchRockPos = Vector2.new(input.Position.X, input.Position.Y)
+				press("TouchRock")
+			end
+		end
+	end
+end
+
+local function onInputChanged(input: InputObject)
+	if input == touchRockInput then
+		touchRockPos = Vector2.new(input.Position.X, input.Position.Y)
+	end
+end
+
+local function onInputEnded(input: InputObject)
+	local kind = input.UserInputType
+	if kind == Enum.UserInputType.MouseButton1 then
+		release("Mouse")
+	elseif input.KeyCode == Enum.KeyCode.ButtonR2 then
+		release("Gamepad")
+	end
+	if input == touchRockInput then
+		touchRockInput, touchRockPos = nil, nil
+		release("TouchRock")
+	end
+	if input == fireButtonInput then
+		fireButtonInput = nil
+		release("FireButton")
+		fireButton.Position = UDim2.fromOffset(0, -5)
+	end
+end
+
+---------------------------------------------------------------- frame update
+
+local function update(dt: number)
+	local now = os.clock()
+	local _, humanoid, root = characterParts()
+	local tool = equippedTool()
+	local usable = canUse() and humanoid ~= nil and root ~= nil
+	if not usable then
+		table.clear(holding)
+	end
+	local wantFire = usable and tool ~= nil and anyHolding()
+
+	if wantFire and humanoid and root and tool then
+		if not firing then
+			startFiring()
+			seenStage = 0
+		end
+		local rock, point, solid = aim(root, tool, now)
+		if rock ~= target then
+			target = rock
+			seenStage = if rock then (rock:GetAttribute("Stage") :: number?) or 0 else 0
+		end
+		local muzzle = muzzleOf(tool)
+		local from = if muzzle then muzzle.WorldPosition else root.Position
+		local glow = glowOf(tool)
+		Vfx.setBeam("local", muzzle, from, point, glow)
+		faceTowards(humanoid, root, point, dt)
+		local gated = rock ~= nil and gateText(rock, tool) ~= ""
+		if solid and now - sparkAt >= SPARK_GAP then
+			sparkAt = now
+			if gated then
+				Vfx.burst("Sparks", point, 2, Color3.fromRGB(200, 200, 220), from - point)
+			else
+				Vfx.impact(point, glow, from - point, 3)
+			end
+		end
+		if rock and not gated then
+			lastHitAt = now
+			if now - dustAt >= DUST_GAP then
+				dustAt = now
+				local primary = rock.PrimaryPart
+				Vfx.burst("Dust", point, 1, if primary then primary.Color else nil)
+			end
+			local stage = rock:GetAttribute("Stage")
+			if type(stage) == "number" and stage > seenStage then
+				seenStage = stage
+				CameraShake.add(0.12)
+				rumble(Enum.VibrationMotor.Large, 0.45)
+				task.delay(0.15, function()
+					rumble(Enum.VibrationMotor.Large, 0)
+				end)
+			end
+		end
+		if rock and not rock.Parent then
+			target = nil
+		end
+	elseif firing then
+		stopFiring()
+	end
+	syncTarget(now)
+end
+
+-- 10 times a second: what the player aims at, hints, the FIRE button.
+local function slowUpdate()
+	local _, _, root = characterParts()
+	local tool = equippedTool()
+	local someTool = tool or backpackTool()
+	aimRock, aimTooFar = nil, false
+	local near = false
+	if root and someTool and canUse() then
+		refreshFilter()
+		local range = rangeOf(someTool)
+		near = rockNear(root, range)
+		if firing then
+			aimRock = target
+		elseif device == "Mouse" and UserInputService.MouseEnabled then
+			local ray = screenRay(UserInputService:GetMouseLocation(), true)
+			local result = ray and cast(ray.Origin, ray.Direction * AIM_DISTANCE)
+			local rock = result and rockFromPart(result.Instance)
+			if rock and result then
+				aimRock = rock
+				aimTooFar = (result.Position - root.Position).Magnitude > range + 1
+			end
+		elseif tool and near then
+			aimRock = findAssist(root, range)
+		end
+	end
+	local now = os.clock()
+	updateInfo(now, someTool)
+	updateHint(near and someTool ~= nil and (aimRock ~= nil or device ~= "Mouse"))
+	local touchGui = fireHolder.Parent :: ScreenGui
+	touchGui.Enabled = device == "Touch" and canUse() and someTool ~= nil and (tool ~= nil or near)
+end
+
+function MiningController.init()
+	buildUI()
 end
 
 function MiningController.start()
-	if player.Character then
-		hookCharacter(player.Character)
+	local last = UserInputService:GetLastInputType()
+	local fallback: Device = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "Touch" else "Mouse"
+	device = deviceOf(last) or fallback
+	UserInputService.LastInputTypeChanged:Connect(function(inputType: Enum.UserInputType)
+		local newDevice: Device? = deviceOf(inputType)
+		if newDevice == nil then
+			return
+		end
+		device = newDevice :: Device
+		if device ~= "Gamepad" then
+			stopRumble()
+		end
+	end)
+	UserInputService.InputBegan:Connect(onInputBegan)
+	UserInputService.InputChanged:Connect(onInputChanged)
+	UserInputService.InputEnded:Connect(onInputEnded)
+	UserInputService.TouchEnded:Connect(function(touch: InputObject)
+		onInputEnded(touch)
+	end)
+	fireButton.InputBegan:Connect(function(input: InputObject)
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.Touch or kind == Enum.UserInputType.MouseButton1 then
+			fireButtonInput = input
+			fireButton.Position = UDim2.fromOffset(0, -1)
+			press("FireButton")
+		end
+	end)
+	local camera = Workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutFireButton)
 	end
-	player.CharacterAdded:Connect(hookCharacter)
-	local backpack = player:WaitForChild("Backpack")
-	backpack.ChildAdded:Connect(hookTool)
-	for _, child in backpack:GetChildren() do
-		hookTool(child)
+	layoutFireButton()
+	player.CharacterAdded:Connect(function()
+		table.clear(holding)
+		touchRockInput, fireButtonInput = nil, nil
+		savedAutoRotate = nil
+		stopFiring()
+	end)
+	refreshFilter()
+	RunService.RenderStepped:Connect(update)
+	while true do
+		local ok, err = pcall(function()
+			slowUpdate()
+		end)
+		if not ok then
+			warn("[MiningController] " .. tostring(err))
+		end
+		task.wait(0.1)
 	end
 end
 

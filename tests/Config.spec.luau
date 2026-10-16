@@ -1,8 +1,10 @@
--- Config sanity: every ore/pickaxe/item table is consistent.
+-- Config sanity: every ore/blaster/item table is consistent.
 return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
+	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+	local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
@@ -10,17 +12,80 @@ return function(T, Loader)
 	local SoundConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SoundConfig")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 
-	T.test("every ore has a known rarity and a reachable pickaxe tier", function()
-		local maxTier = 0
-		for _, pick in ToolData.Pickaxes do
-			maxTier = math.max(maxTier, pick.Tier)
-		end
+	T.test("every ore has a known rarity and a reachable blaster tier", function()
 		for _, ore in OreData.List do
 			T.truthy(Rarity.ById[ore.Rarity], ore.Id .. " rarity")
-			T.le(ore.Tier, maxTier, ore.Id .. " tier")
+			T.le(1, ore.Tier, ore.Id .. " tier")
+			T.le(ore.Tier, BlasterData.MaxLevel, ore.Id .. " tier")
 			T.lt(0, ore.Value, ore.Id .. " value")
 			T.lt(0, ore.Hardness, ore.Id .. " hardness")
 		end
+		T.eq(ToolData.Pickaxes, nil, "no pickaxes any more")
+		T.eq(ToolData.carryCapacity(1, false), 1, "carry levels stay")
+		T.eq(ToolData.carryCapacity(99, true), ToolData.CarryLevels[#ToolData.CarryLevels].Capacity * 2)
+	end)
+
+	T.test("blasters: one Blaster tool per level, within budget, welded, with a Muzzle", function()
+		local skins = { "", "Coal", "Gold", "Quartz", "Heartstone", "NotAnOre" }
+		local counts = {}
+		for level = 1, BlasterData.MaxLevel do
+			for _, oreId in skins do
+				local tool = BlasterBuilder.build(level, oreId)
+				local label = `level {level} {oreId}`
+				T.eq(tool.ClassName, "Tool", label)
+				T.eq(tool.Name, "Blaster", label)
+				T.eq(tool:GetAttribute("Level"), level, label)
+				T.eq(tool:GetAttribute("Range"), BlasterData.get(level).Range, label)
+				T.eq(typeof(tool:GetAttribute("Glow")), "Color3", label)
+				local handle = tool:FindFirstChild("Handle")
+				T.truthy(handle and handle:IsA("BasePart"), label .. " handle")
+				local muzzle = handle:FindFirstChild("Muzzle")
+				T.truthy(muzzle and muzzle:IsA("Attachment"), label .. " muzzle")
+				local tip = handle.CFrame:PointToWorldSpace(muzzle.Position)
+				T.lt(tip.Z, -2.5, label .. " muzzle at the barrel tip (-Z)")
+				-- in the hand (the grip attachment frame) the barrel points straight forward
+				local hand = handle.CFrame * tool.Grip
+				T.near(hand.LookVector.Z, -1, 1e-4, label .. " barrel along the arm")
+				T.near(hand.UpVector.Y, 1, 1e-4, label .. " upright")
+				T.lt(hand.Position.Y, tip.Y, label .. " hand below the barrel")
+				local parts = 0
+				for _, d in tool:GetDescendants() do
+					if d:IsA("BasePart") then
+						parts += 1
+						T.falsy(d.CanCollide, label .. " " .. d.Name .. " CanCollide")
+						T.truthy(d.Massless, label .. " " .. d.Name .. " Massless")
+						T.falsy(d.Anchored, label .. " " .. d.Name .. " Anchored")
+						if d ~= handle then
+							local weld = d:FindFirstChildOfClass("WeldConstraint")
+							T.truthy(weld and weld.Part0 == handle and weld.Part1 == d, label .. " " .. d.Name .. " welded")
+						end
+					end
+				end
+				T.le(parts, BlasterBuilder.MaxParts, label .. " part budget")
+				T.eq(tool:FindFirstChild("Barrel2") ~= nil, level >= 8, label .. " twin barrels from 8")
+				counts[level] = parts
+			end
+		end
+		T.lt(counts[1], counts[BlasterData.MaxLevel], "more detail at level 10")
+		for level = 2, BlasterData.MaxLevel do
+			T.le(counts[level - 1], counts[level], "detail never drops at level " .. level)
+		end
+		-- level 1 is always the rusty starter, later levels take the ore's colors
+		T.eq(BlasterBuilder.build(1, "Gold"):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty level 1")
+		T.eq(BlasterBuilder.build(5, ""):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty without an ore")
+		T.eq(BlasterBuilder.build(5, "Gold"):GetAttribute("Glow"), OreData.ById.Gold.Glow, "gold glow")
+		T.eq(BlasterBuilder.build(5, "Gold").ToolTip, "Gold Forgefire Blaster")
+		T.eq(BlasterBuilder.build(0 / 0, nil):GetAttribute("Level"), 1, "junk level")
+	end)
+
+	T.test("blaster sounds and remotes", function()
+		for _, name in { "BlasterHum", "BlasterStart", "BlasterStop", "BlastHit", "BlastBounce", "NodeCrack", "NodeShatter" } do
+			T.truthy(SoundConfig[name], "sound " .. name)
+		end
+		T.truthy(SoundConfig.BlasterHum.Looped, "the hum loops")
+		T.eq(SoundConfig.PickHit, nil, "no pickaxe sounds")
+		T.eq(Net.Events.MineSwing, nil, "the pickaxe swing remote is gone")
+		T.truthy(Net.Events.MineBlast, "MineBlast is rate limited")
 	end)
 
 	T.test("ores get more valuable with rarity", function()
@@ -28,16 +93,6 @@ return function(T, Loader)
 			local a, b = OreData.List[i - 1], OreData.List[i]
 			T.le(Rarity.ById[a.Rarity].Order, Rarity.ById[b.Rarity].Order, a.Id .. " before " .. b.Id)
 			T.lt(a.Value, b.Value, a.Id .. " value < " .. b.Id)
-		end
-	end)
-
-	T.test("pickaxes are ordered by tier, damage and price", function()
-		for i = 2, #ToolData.Pickaxes do
-			local a, b = ToolData.Pickaxes[i - 1], ToolData.Pickaxes[i]
-			T.eq(b.Tier, a.Tier + 1, b.Id .. " tier")
-			T.lt(a.Damage, b.Damage, b.Id .. " damage")
-			T.lt(a.Price, b.Price, b.Id .. " price")
-			T.le(b.Cooldown, a.Cooldown, b.Id .. " cooldown")
 		end
 	end)
 

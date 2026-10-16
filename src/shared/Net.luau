@@ -15,7 +15,6 @@ export type Limit = { Rate: number, Burst: number }
 -- name = rate limit for client->server traffic (nil = server->client only)
 Net.Events = {
 	-- mining / carrying
-	MineSwing = { Rate = 6, Burst = 8 }, -- old pickaxe swing (removed with the blaster package)
 	MineBlast = { Rate = 10, Burst = 14 }, -- (rock: Model?) aim the held beam at a rock; nil = stop firing
 	CarryPickup = { Rate = 8, Burst = 10 },
 	CarryDrop = { Rate = 8, Burst = 10 },

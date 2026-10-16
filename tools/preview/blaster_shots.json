@@ -1,0 +1,34 @@
+{
+  "blasters": {
+    "scene": "blasters",
+    "position": [
+      0,
+      10.5,
+      19.5
+    ],
+    "target": [
+      0,
+      3.0,
+      -0.6
+    ],
+    "fov": 46,
+    "preset": "Surface",
+    "shadowExtent": 40
+  },
+  "blaster_fire": {
+    "scene": "blaster_fire",
+    "position": [
+      -14.0,
+      -6.0,
+      -170.4
+    ],
+    "target": [
+      -25.7,
+      -10.0,
+      -161.7
+    ],
+    "fov": 62,
+    "preset": "Quarry",
+    "shadowExtent": 90
+  }
+}

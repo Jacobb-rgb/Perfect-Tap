@@ -1,15 +1,19 @@
 --[[
-	FxController: plays effects the server announces (other players' hits,
-	node cracks and shatters, pickups, throws). Your own pickaxe hits are
-	predicted locally by MiningController so they feel instant.
+	FxController: plays effects the server announces (other players' laser
+	beams, rock cracks and shatters, pickups, throws). Your own beam is drawn
+	locally by MiningController every frame so it feels instant.
 	Feature controllers add their own Fx kinds with FxController.register.
+
+	Rock effects never name the ores inside (they stay secret until cleaned):
+	they carry the rock's crust color and the beam's glow color instead.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local OreData = require(Shared.Config.OreData)
-local Rarity = require(Shared.Config.Rarity)
 local Net = require(Shared.Net)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -17,50 +21,114 @@ local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 
 local FxController = {}
 
-local function oreColors(oreId: any): (Color3, Color3, number)
-	local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
-	if not ore then
-		return Color3.fromRGB(150, 130, 110), Color3.fromRGB(255, 200, 120), 1
+local DEFAULT_CRUST = Color3.fromRGB(150, 130, 110)
+local DEFAULT_GLOW = Color3.fromRGB(255, 150, 70)
+local OTHER_BEAM_HOLD = 0.35 -- seconds an other player's beam stays without a new BlastHit
+local SHAKE_RANGE = 30 -- cracks farther from the camera than this don't shake it
+
+local function isVector(value: any): boolean
+	return typeof(value) == "Vector3" and value.X == value.X and value.Y == value.Y and value.Z == value.Z
+end
+
+-- A Color3 from the payload, or an ore id (old payloads), or the fallback.
+local function colorOf(value: any, fallback: Color3, glow: boolean?): Color3
+	if typeof(value) == "Color3" then
+		return value
 	end
-	return ore.Crust, ore.Glow, Rarity.get(ore.Rarity).Order
+	local ore = if type(value) == "string" then OreData.ById[value] else nil
+	if ore then
+		return if glow then ore.Glow else ore.Crust
+	end
+	return fallback
+end
+
+-- Shake the camera only for things happening close to it.
+local function shakeNear(position: Vector3, amount: number)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local distance = (camera.CFrame.Position - position).Magnitude
+	if distance < SHAKE_RANGE then
+		CameraShake.add(amount * (1 - distance / SHAKE_RANGE * 0.6))
+	end
+end
+
+-- The Muzzle attachment of a player's blaster, if they hold it.
+local function muzzleOf(shooter: any): (Attachment?, Vector3?)
+	if typeof(shooter) ~= "Instance" or not shooter:IsA("Player") then
+		return nil, nil
+	end
+	local character = (shooter :: Player).Character
+	if not character then
+		return nil, nil
+	end
+	local tool = character:FindFirstChild("Blaster")
+	local handle = tool and tool:FindFirstChild("Handle")
+	local muzzle = handle and handle:FindFirstChild("Muzzle")
+	if muzzle and muzzle:IsA("Attachment") then
+		return muzzle, muzzle.WorldPosition
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		return nil, root.Position + Vector3.new(0, 1, 0)
+	end
+	return nil, nil
 end
 
 local handlers: { [string]: (...any) -> () } = {}
 
--- position, oreId, stage
-handlers.MineHit = function(position: Vector3, oreId: any)
-	local crust = oreColors(oreId)
-	Vfx.burst("Sparks", position, 8)
-	Vfx.burst("Dust", position, 2, crust)
-	Sfx.play("PickHit", position)
+-- Another player's beam hits a rock: (position, glowColor, stage, shooter)
+handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any)
+	if not isVector(position) then
+		return
+	end
+	local color = colorOf(glow, DEFAULT_GLOW, true)
+	local muzzle, from = muzzleOf(shooter)
+	if from and shooter ~= Players.LocalPlayer then
+		Vfx.setBeam(shooter, muzzle, from, position, color, OTHER_BEAM_HOLD)
+	end
+	Vfx.impact(position, color, if from then from - position else nil, 5)
+	Sfx.play("BlastHit", position)
 end
 
-handlers.MineBounce = function(position: Vector3)
-	Vfx.burst("Sparks", position, 4, Color3.fromRGB(200, 200, 220))
-	Sfx.play("PickBounce", position)
+-- Your beam bounced off a rock you can't mine yet: (position)
+handlers.MineBounce = function(position: any)
+	if not isVector(position) then
+		return
+	end
+	Vfx.burst("Sparks", position, 6, Color3.fromRGB(200, 200, 220))
+	Sfx.play("BlastBounce", position)
 end
 
-handlers.NodeCrack = function(position: Vector3, oreId: any, stage: any)
-	local crust, glow = oreColors(oreId)
-	Vfx.burst("Dust", position, 6, crust)
-	Vfx.burst("Glint", position + Vector3.new(0, 1, 0), 6, glow)
-	Vfx.chips(position + Vector3.new(0, 1.5, 0), if stage == 2 then 6 else 3, crust)
+-- (position, crustColor, stage)
+handlers.NodeCrack = function(position: any, crust: any, stage: any)
+	if not isVector(position) then
+		return
+	end
+	local color = colorOf(crust, DEFAULT_CRUST)
+	Vfx.burst("Dust", position, 6, color)
+	Vfx.burst("Glint", position + Vector3.new(0, 1, 0), 5, color:Lerp(Color3.new(1, 1, 1), 0.5))
+	Vfx.chips(position + Vector3.new(0, 1.5, 0), if stage == 2 then 6 else 3, color)
 	Sfx.play("NodeCrack", position)
-	CameraShake.add(if stage == 2 then 0.32 else 0.2)
+	shakeNear(position, if stage == 2 then 0.32 else 0.2)
 end
 
-handlers.NodeShatter = function(position: Vector3, oreId: any)
-	local crust, glow, order = oreColors(oreId)
-	Vfx.burst("Dust", position, 14, crust)
-	Vfx.burst("Burst", position + Vector3.new(0, 1, 0), 10 + order * 4, glow)
-	Vfx.chips(position + Vector3.new(0, 2, 0), 10, crust, 1.3)
+-- (position, crustColor, glowColor)
+handlers.NodeShatter = function(position: any, crust: any, glow: any)
+	if not isVector(position) then
+		return
+	end
+	local color = colorOf(crust, DEFAULT_CRUST)
+	Vfx.burst("Dust", position, 14, color)
+	Vfx.burst("Burst", position + Vector3.new(0, 1, 0), 18, colorOf(glow, DEFAULT_GLOW, true))
+	Vfx.chips(position + Vector3.new(0, 2, 0), 10, color, 1.3)
 	Sfx.play("NodeShatter", position)
-	CameraShake.add(0.45)
+	shakeNear(position, 0.45)
 end
 
 handlers.Pickup = function(position: Vector3, oreId: any)
-	local _, glow = oreColors(oreId)
-	Vfx.burst("Glint", position, 5, glow)
+	Vfx.burst("Glint", position, 5, colorOf(oreId, DEFAULT_GLOW, true))
 	Sfx.play("Pickup")
 end
 
@@ -88,6 +156,9 @@ function FxController.init()
 		if type(kind) == "string" then
 			FxController.play(kind, ...)
 		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		Vfx.releaseBeam(player)
 	end)
 end
 
