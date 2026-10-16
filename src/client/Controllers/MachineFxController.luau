@@ -19,21 +19,27 @@
 	- Progress billboards over YOUR busy machines (MachineBillboard, at most 12).
 	- Fx 'Reject': red dust + a reject sound where a machine refused an item.
 	- Water (Cleaning Station, Auto Cleaner: Base attachments WaterOut and
-	  WaterIn from MachineBuilder): the nearest WATER_MAX wet machines in range
-	  borrow a pooled rig (an invisible anchor with two Beams for the stream,
-	  droplet / mist / ripple / spray emitters with built-in textures). It
-	  always runs gently and gets stronger while the machine works (Working,
-	  or Busy for a station someone is cleaning at); the basin's WaterPool
-	  shimmers. Leaving the range gives the rig back.
+	  WaterIn from MachineBuilder): the nearest WATER_MAX wet machines within
+	  WATER_RANGE borrow a pooled rig (an invisible anchor with two Beams for
+	  the stream - a see-through light blue ribbon and a faint highlight -
+	  soft round droplet / mist / ripple / spray emitters with built-in
+	  textures). It always runs gently and gets stronger while the machine
+	  works (Working, or Busy for a station someone is cleaning at); the
+	  basin's WaterPool shimmers. Emitter rates follow the graphics quality
+	  (half on low quality and on phones left on automatic). Leaving the range
+	  gives the rig back.
 	- Auto Cleaner: the bed rollers turn with the drum, the stacked light
-	  shows green (working), amber (idle) or red (blocked). Furnaces: the
-	  Molten parts (glass tap, mould) pulse with the Glow.
+	  lights one lamp: green (working), amber (idle) or red (blocked), and the
+	  built look (MachineBuilder.Stack.Lit) out of range. Crusher: the side
+	  cogs turn with the rollers. Furnaces: the Molten parts (glass sections,
+	  mould) pulse with the Glow.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -116,7 +122,6 @@ type Fx = {
 	PoolTransparency: number,
 	-- stacked status light (Auto Cleaner)
 	Signals: { [string]: BasePart }?,
-	SignalColors: { [string]: Color3 },
 	SignalState: string?,
 }
 
@@ -144,11 +149,12 @@ local REJECT_COLOR = Color3.fromRGB(235, 72, 60)
 local HOT = Color3.fromRGB(255, 140, 50)
 local BED_ROLLER_DIR = -1 -- roller tops move toward the front (-Z)
 -- water
-local WATER_MAX = 6 -- rigs in use at once (nearest wet machines)
+local WATER_RANGE = 48 -- a stream is a few pixels wide beyond this
+local WATER_MAX = 4 -- rigs in use at once (nearest wet machines)
 local FLOW_RATE = 1.2 -- per second
-local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
 local SOFT = "rbxasset://textures/particles/smoke_main.dds"
 local WATER = MachineBuilder.Water
+local STACK = MachineBuilder.Stack
 local SIGNALS = { "StackRed", "StackAmber", "StackGreen" }
 
 local player = Players.LocalPlayer
@@ -158,6 +164,7 @@ local hums: { Hum } = {}
 local rigPool: { WaterRig } = {}
 local fxFolder: Folder? = nil
 local clock = 0
+local quality = 1 -- emitter rate scale from the graphics quality
 
 ---------------------------------------------------------------- helpers
 
@@ -204,6 +211,21 @@ local function focusPosition(): Vector3?
 	end
 	local camera = Workspace.CurrentCamera
 	return if camera then camera.Focus.Position else nil
+end
+
+-- Emitter rate scale for the player's graphics quality: half on low
+-- quality (and on touch-only devices left on automatic), 3/4 on medium.
+local function qualityScale(): number
+	local ok, level = pcall(function(): number
+		return UserSettings():GetService("UserGameSettings").SavedQualityLevel.Value
+	end)
+	if not ok or type(level) ~= "number" then
+		return 1
+	end
+	if level <= 0 then -- automatic
+		return if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then 0.5 else 1
+	end
+	return if level <= 3 then 0.5 elseif level <= 6 then 0.75 else 1
 end
 
 ---------------------------------------------------------------- looks
@@ -297,7 +319,6 @@ local function capture(fx: Fx)
 			local lamp = model:FindFirstChild(name)
 			if lamp and lamp:IsA("BasePart") then
 				lamps[name] = lamp
-				fx.SignalColors[name] = lamp.Color
 				found = true
 			end
 		end
@@ -309,6 +330,9 @@ local function capture(fx: Fx)
 			-- the two rollers turn toward each other
 			addSpinners(fx, base, "Roller1", { "Roller1", "Roller1Tooth" }, 1)
 			addSpinners(fx, base, "Roller2", { "Roller2", "Roller2Tooth" }, -1)
+			-- side cogs: each name sits on one axis line on both sides
+			addSpinners(fx, base, "Cog1", { "Cog1" }, 1)
+			addSpinners(fx, base, "Cog2", { "Cog2" }, -MachineBuilder.CogRatio)
 		end
 	elseif id == "SellChute" then
 		local coins = model:FindFirstChild("Coins")
@@ -350,8 +374,8 @@ end
 
 ---------------------------------------------------------------- status light
 
--- Auto Cleaner stack light: green while working, red when blocked, amber when
--- idle; all lit (the built look) while out of range.
+-- Auto Cleaner stack light, one lamp lit: green while working, red when
+-- blocked, amber when idle; the built look (Stack.Lit) while out of range.
 local function applySignal(fx: Fx)
 	local lamps = fx.Signals
 	if not lamps then
@@ -359,7 +383,7 @@ local function applySignal(fx: Fx)
 	end
 	local status = fx.Attr.Status
 	local state = if not fx.Active
-		then "All"
+		then STACK.Lit
 		elseif fx.Attr.Working == true then "StackGreen"
 		elseif type(status) == "string" and status ~= "" then "StackRed"
 		else "StackAmber"
@@ -368,10 +392,10 @@ local function applySignal(fx: Fx)
 	end
 	fx.SignalState = state
 	for name, lamp in lamps do
-		local lit = state == "All" or name == state
-		local color = fx.SignalColors[name] or lamp.Color
+		local lit = name == state
+		local color = STACK.Lamps[name] or lamp.Color
 		lamp.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
-		lamp.Color = if lit then color else color:Lerp(Color3.new(0, 0, 0), 0.55)
+		lamp.Color = if lit then color else color:Lerp(Color3.new(0, 0, 0), STACK.Dim)
 	end
 end
 
@@ -384,14 +408,14 @@ local function waterAttachment(anchor: Part, name: string): Attachment
 	return a
 end
 
-local function waterBeam(anchor: Part, name: string, out: Attachment, into: Attachment, color: Color3, emission: number): Beam
+local function waterBeam(anchor: Part, name: string, out: Attachment, into: Attachment, color: ColorSequence, emission: number): Beam
 	local b = Instance.new("Beam")
 	b.Name = name
 	b.Attachment0 = out
 	b.Attachment1 = into
 	b.FaceCamera = true
 	b.Segments = 12
-	b.Color = ColorSequence.new(color)
+	b.Color = color
 	b.LightEmission = emission
 	b.LightInfluence = 0.6
 	b.Enabled = false
@@ -412,7 +436,8 @@ local function waterEmitter(parent: Attachment, name: string, texture: string, c
 end
 
 -- One rig (built once, then pooled): stream + core Beams, droplets, mist,
--- ripples on the pool and a shower spray.
+-- ripples on the pool and a shower spray. Soft round particles only (no
+-- star glints): water, not magic.
 local function newRig(): WaterRig
 	local anchor = Instance.new("Part")
 	anchor.Name = "WaterRig"
@@ -428,29 +453,32 @@ local function newRig(): WaterRig
 	local splash = waterAttachment(anchor, "Splash")
 	local nozzle = waterAttachment(anchor, "Nozzle")
 
-	local stream = waterBeam(anchor, "Stream", out, into, WATER.Stream, 0.25)
+	-- the stream: see-through light blue, deeper blue where it lands, a long
+	-- soft texture scrolling down it
+	local stream = waterBeam(anchor, "Stream", out, into, ColorSequence.new(WATER.Stream, WATER.Deep), 0.1)
 	stream.Texture = SOFT
 	stream.TextureMode = Enum.TextureMode.Wrap
-	stream.TextureLength = 1.4
+	stream.TextureLength = 3.5
 	stream.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.3),
-		NumberSequenceKeypoint.new(0.8, 0.28),
-		NumberSequenceKeypoint.new(1, 0.55),
+		NumberSequenceKeypoint.new(0, 0.38),
+		NumberSequenceKeypoint.new(0.75, 0.42),
+		NumberSequenceKeypoint.new(1, 0.62),
 	})
-	local core = waterBeam(anchor, "Core", out, into, WATER.Core, 0.5)
-	core.Transparency = NumberSequence.new(0.15, 0.45)
+	-- a faint highlight down the middle (stays see-through, tinted blue)
+	local core = waterBeam(anchor, "Core", out, into, ColorSequence.new(WATER.Core, WATER.Stream), 0.15)
+	core.Transparency = NumberSequence.new(0.6, 0.8)
 
 	-- droplets jumping out where the water lands
-	local drops = waterEmitter(splash, "Drops", SPARKLE, WATER.Splash)
+	local drops = waterEmitter(splash, "Drops", SOFT, WATER.Splash)
 	drops.EmissionDirection = Enum.NormalId.Top
-	drops.Size = NumberSequence.new(0.22, 0.06)
-	drops.Transparency = NumberSequence.new(0.05, 1)
+	drops.Size = NumberSequence.new(0.16, 0.08)
+	drops.Transparency = NumberSequence.new(0.2, 1)
 	drops.Lifetime = NumberRange.new(0.35, 0.6)
 	drops.Speed = NumberRange.new(3, 6)
 	drops.SpreadAngle = Vector2.new(40, 40)
 	drops.Acceleration = Vector3.new(0, -32, 0)
 	drops.Drag = 1
-	drops.LightEmission = 0.4
+	drops.LightEmission = 0
 	-- a soft puff of mist
 	local mist = waterEmitter(splash, "Mist", SOFT, WATER.Splash)
 	mist.EmissionDirection = Enum.NormalId.Top
@@ -468,17 +496,17 @@ local function newRig(): WaterRig
 	ripple.Transparency = NumberSequence.new(0.5, 1)
 	ripple.Lifetime = NumberRange.new(0.8, 1)
 	ripple.Speed = NumberRange.new(0.02, 0.02)
-	ripple.LightEmission = 0.3
+	ripple.LightEmission = 0.1
 	-- shower spray out of a nozzle (Spray outlets)
-	local spray = waterEmitter(nozzle, "Spray", SPARKLE, WATER.Splash)
+	local spray = waterEmitter(nozzle, "Spray", SOFT, WATER.Splash:Lerp(WATER.Stream, 0.4))
 	spray.EmissionDirection = Enum.NormalId.Bottom
-	spray.Size = NumberSequence.new(0.16, 0.08)
-	spray.Transparency = NumberSequence.new(0.1, 0.8)
+	spray.Size = NumberSequence.new(0.12, 0.08)
+	spray.Transparency = NumberSequence.new(0.25, 1)
 	spray.Lifetime = NumberRange.new(0.3, 0.45)
 	spray.Speed = NumberRange.new(4, 7)
 	spray.SpreadAngle = Vector2.new(16, 16)
 	spray.Acceleration = Vector3.new(0, -20, 0)
-	spray.LightEmission = 0.4
+	spray.LightEmission = 0
 
 	return {
 		Anchor = anchor,
@@ -530,7 +558,8 @@ local function placeRig(fx: Fx)
 	end
 end
 
--- Widths and rates for the current flow (gentle 0 .. working 1).
+-- Widths and rates for the current flow (gentle 0 .. working 1), rates
+-- scaled by the graphics quality.
 local function applyFlow(fx: Fx)
 	local rig = fx.Water
 	if not rig then
@@ -539,24 +568,25 @@ local function applyFlow(fx: Fx)
 	local f = fx.Flow
 	fx.FlowApplied = f
 	local k = 0.55 + 0.45 * f
+	local q = quality
 	if fx.Spray then
 		rig.Stream.Width0 = WATER.SprayWidth * k
 		rig.Width1 = WATER.SprayWidthEnd * k
 		rig.Core.Width0 = 0.12 * k
 		rig.Core.Width1 = 0.5 * k
-		rig.Spray.Rate = 14 + 36 * f
+		rig.Spray.Rate = (10 + 26 * f) * q
 	else
 		rig.Stream.Width0 = WATER.Width * k
 		rig.Width1 = WATER.WidthEnd * k
-		rig.Core.Width0 = WATER.Width * 0.38 * k
-		rig.Core.Width1 = WATER.WidthEnd * 0.38 * k
+		rig.Core.Width0 = WATER.Width * 0.3 * k
+		rig.Core.Width1 = WATER.WidthEnd * 0.3 * k
 		rig.Spray.Rate = 0
 	end
 	rig.Stream.Width1 = rig.Width1
 	rig.Stream.TextureSpeed = 1.2 + 1.8 * f
-	rig.Drops.Rate = 10 + 24 * f
-	rig.Mist.Rate = 2 + 4 * f
-	rig.Ripple.Rate = if fx.Pool then 1.5 + 2.5 * f else 0
+	rig.Drops.Rate = (8 + 18 * f) * q
+	rig.Mist.Rate = (1.5 + 3 * f) * q
+	rig.Ripple.Rate = if fx.Pool then (1.5 + 2.5 * f) * q else 0
 end
 
 local function restorePool(fx: Fx)
@@ -861,7 +891,6 @@ local function register(instance: Instance)
 		PoolColor = Color3.new(1, 1, 1),
 		PoolTransparency = 0,
 		Signals = nil,
-		SignalColors = {},
 		SignalState = nil,
 	}
 	capture(fx)
@@ -976,13 +1005,23 @@ local function pickActive()
 	end
 	table.sort(active, byDistance)
 
-	-- water rigs: the nearest WATER_MAX wet machines (give rigs back first)
-	local wet = 0
+	-- graphics quality changed: re-apply the water rates
+	local q = qualityScale()
+	if q ~= quality then
+		quality = q
+		for _, fx in active do
+			if fx.Water then
+				applyFlow(fx)
+			end
+		end
+	end
+
+	-- water rigs: the nearest WATER_MAX wet machines within WATER_RANGE
+	-- (give rigs back first)
 	local wanted: { Fx } = {}
 	for _, fx in active do
 		if fx.HasWater then
-			wet += 1
-			if wet <= WATER_MAX then
+			if fx.Distance <= WATER_RANGE and #wanted < WATER_MAX then
 				table.insert(wanted, fx)
 			else
 				releaseRig(fx)

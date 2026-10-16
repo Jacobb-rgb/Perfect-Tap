@@ -204,17 +204,39 @@ return function(T, Loader)
 		local crusher = MachineBuilder.build("Crusher")
 		for i = 1, 2 do
 			T.eq(count(crusher, "Roller" .. i), 1, "Roller" .. i)
-			-- teeth + a side cog turn with each roller
-			T.truthy(count(crusher, "Roller" .. i .. "Tooth") >= 6, "Roller" .. i .. " teeth and cog")
+			-- tooth bars turn with each roller
+			T.truthy(count(crusher, "Roller" .. i .. "Tooth") >= 3, "Roller" .. i .. " teeth")
 		end
+		-- a big and a small cog on each side, each pair on one shared axis line
+		-- (the client spins every part of a name around the first one's X axis)
+		for _, name in { "Cog1", "Cog2" } do
+			T.truthy(count(crusher, name) >= 8, name .. " parts on both sides")
+			local axis = crusher:FindFirstChild(name)
+			for _, part in parts(crusher) do
+				if part.Name == name then
+					local p = part.CFrame.Position
+					T.near(p.Y, axis.CFrame.Position.Y, 1e-3, name .. " on the axis (y)")
+					T.near(p.Z, axis.CFrame.Position.Z, 1e-3, name .. " on the axis (z)")
+				end
+			end
+		end
+		T.eq(typeof(MachineBuilder.CogRatio), "number", "cog ratio for the client")
 		local cleaner = MachineBuilder.build("AutoCleaner")
 		T.eq(count(cleaner, "Drum"), 1, "Drum")
 		T.truthy(count(cleaner, "DrumRib") >= 2, "DrumRib")
 		T.truthy(count(cleaner, "BedRoller") >= 3, "BedRoller")
 		T.truthy(cleaner:FindFirstChild("Vent"):FindFirstChild("Smoke"), "Vent smoke")
+		-- stack light: one lamp lit (Neon) in the built look, the rest dim plastic
+		local lit = 0
 		for _, name in { "StackRed", "StackAmber", "StackGreen" } do
 			T.eq(count(cleaner, name), 1, name)
+			T.truthy(MachineBuilder.Stack.Lamps[name], name .. " colour for the client")
+			if cleaner:FindFirstChild(name).Material == roblox.Enum.Material.Neon then
+				lit += 1
+				T.eq(name, MachineBuilder.Stack.Lit, "the built look lights Stack.Lit")
+			end
 		end
+		T.eq(lit, 1, "one stack lamp lit")
 		for _, id in { "ClayFurnace", "BlastFurnace" } do
 			local furnace = MachineBuilder.build(id)
 			local glow = furnace:FindFirstChild("Glow")
