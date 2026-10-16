@@ -1,5 +1,6 @@
--- Save migration to version 2: type clean-up only, idempotent, and no known
--- machine or well-formed item is ever deleted.
+-- Save migrations up to version 3: type clean-up, idempotent, no known
+-- machine or well-formed item is ever deleted (retired machines are refunded
+-- and their contents go to the pen).
 return function(T, Loader)
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -37,15 +38,15 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 2", function()
-		T.eq(DataTemplate.Version, 2)
-		T.eq(Migrations.Latest, 2)
+	T.test("Migration: template is version 3", function()
+		T.eq(DataTemplate.Version, 3)
+		T.eq(Migrations.Latest, 3)
 	end)
 
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 2)
+		T.eq(data.Version, 3)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -56,12 +57,13 @@ return function(T, Loader)
 		T.eq(furnace.In[1].O, "Copper")
 		T.eq(furnace.Out, nil)
 		T.eq(data.MachineInventory.Crusher, 1, "the Crusher went back to the inventory")
-		T.eq(data.MachineInventory.Anvil, 2, "count floored")
+		T.eq(data.MachineInventory.Anvil, nil, "the retired Anvil left the inventory")
+		T.eq(data.Coins, 1200, "2 anvils (count floored) refunded at 600")
 		local keys = 0
 		for _ in data.MachineInventory do
 			keys += 1
 		end
-		T.eq(keys, 2, "inventory is exactly {Crusher=1, Anvil=2}")
+		T.eq(keys, 1, "inventory is exactly {Crusher=1}")
 		T.truthy(report.Moved >= 1, "moved counted")
 		T.truthy(report.Dropped >= 3, "dropped counted")
 	end)
@@ -87,7 +89,7 @@ return function(T, Loader)
 		data.Version = 1
 		data.Storage = { { K = "Raw", O = "Copper" }, 42, "x", { K = "Ingot", O = "Iron", G = "Clean" } }
 		data.PlacedMachines = {
-			{ Id = "Anvil", X = 1, Z = 1, R = 0, In = "nope", Out = {} },
+			{ Id = "BlastFurnace", X = 1, Z = 1, R = 0, In = "nope", Out = {} },
 			{ Id = "Crusher", X = 4, Z = 4, R = 0, In = { { K = "Clean", O = "Unobtainium", G = "Rough" }, { K = "Clean", O = "Iron", G = 7 } } },
 			{ Id = "FutureMachine", X = 6, Z = 6, R = 2, In = { { K = "Raw", O = "Gold" } } },
 			{ Id = "FutureMachine", X = math.huge, Z = 6, R = 0, In = { { K = "Raw", O = "Silver" } } },
@@ -108,10 +110,10 @@ return function(T, Loader)
 		T.truthy(rescued.Unobtainium, "unknown ore moved to Storage unchanged")
 		T.truthy(rescued.Silver, "contents of a dropped unknown machine are kept")
 		T.truthy(rescued.Gold, "contents of a machine sent to the inventory are kept")
-		local anvil = data.PlacedMachines[1]
-		T.eq(anvil.Id, "Anvil")
-		T.eq(anvil.In, nil, "non-table In becomes nil")
-		T.eq(anvil.Out, nil, "empty Out becomes nil")
+		local blast = data.PlacedMachines[1]
+		T.eq(blast.Id, "BlastFurnace")
+		T.eq(blast.In, nil, "non-table In becomes nil")
+		T.eq(blast.Out, nil, "empty Out becomes nil")
 		local crusher = data.PlacedMachines[2]
 		T.eq(crusher.In, nil, "both queue items left the Crusher")
 		local future = data.PlacedMachines[3]
@@ -141,9 +143,64 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 2)
+		T.eq(data.Version, 3)
 		local newer = { Version = 7, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
 		T.eq(newer.Version, 7, "a newer save's version is not lowered")
+	end)
+
+	T.test("Migration v3: retired machines, pickaxes, podiums and money", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 2
+		data.Coins = 100
+		data.Pickaxe = "IronPick"
+		data.OwnedPickaxes = { StonePick = true, IronPick = true }
+		data.BlasterLevel = nil
+		data.BlasterOre = "Unobtainium"
+		data.Storage = { { K = "Raw", O = "Coal" } }
+		data.PlacedMachines = {
+			{ Id = "StorageCrate", X = 1, Z = 7, R = 0 },
+			{ Id = "Anvil", X = 4, Z = 4, R = 0, In = { { K = "Ingot", O = "Gold", G = "Clean" } } },
+			{ Id = "ClayFurnace", X = 8, Z = 4, R = 0 },
+		}
+		data.MachineInventory = { SellChute = 1, Conveyor = 3 }
+		data.Podiums = { "Clean|Gold|Pristine|", "Ingot|Iron|Rough|", "junk", nil :: any, "Clean|Nope|Rough|" }
+		data.TotalEarned = -5
+		data.LastSeen = 0 / 0
+		local report = Migrations.run(data)
+		T.eq(data.Version, 3)
+		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
+		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
+		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")
+		T.eq(data.MachineInventory.Conveyor, 3)
+		T.eq(data.Coins, 100 + 150 + 600 + 1200, "crate, anvil and chute refunded")
+		T.eq(#data.Storage, 3, "pen: coal + the anvil's ingot + the ingot from podium 2")
+		T.eq(data.Storage[2].O, "Gold", "anvil contents kept")
+		T.eq(data.Storage[3].K, "Ingot", "an ingot can't stand on a podium")
+		T.eq(data.Pickaxe, nil)
+		T.eq(data.OwnedPickaxes, nil)
+		T.eq(data.BlasterLevel, 1)
+		T.eq(data.BlasterOre, "", "unknown blaster ore reset")
+		T.eq(#data.Podiums, 4, "exactly 4 podium slots")
+		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
+		T.eq(data.Podiums[2], "")
+		T.eq(data.Podiums[3], "")
+		T.eq(data.Podiums[4], "")
+		T.eq(data.TotalEarned, 0)
+		T.eq(data.LastSeen, 0)
+		T.truthy(report.Moved > 0 and report.Dropped > 0)
+		local copy = ProfileStore.deepCopy(data)
+		report = Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		T.eq(report.Moved + report.Dropped, 0)
+	end)
+
+	T.test("Migration v3: blaster level clamped, known ore kept", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.BlasterLevel = 99.7
+		data.BlasterOre = "Ruby"
+		Migrations.run(data)
+		T.eq(data.BlasterLevel, 10)
+		T.eq(data.BlasterOre, "Ruby")
 	end)
 end

@@ -1,6 +1,6 @@
 --[[
 	StateService: sends each player a small snapshot of their own data for
-	the HUD and menus (coins, pickaxe, carry, machines, codex...).
+	the HUD and menus (coins, blaster, carry, machines, pen, podiums, codex...).
 	Pushes are coalesced: at most one every 0.2 s per player.
 	Other services add fields with StateService.addProvider().
 ]]
@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local ItemData = require(Shared.Config.ItemData)
 local ToolData = require(Shared.Config.ToolData)
 local Net = require(Shared.Net)
@@ -41,13 +42,12 @@ function StateService.snapshot(player: Player): { [string]: any }?
 	if not data then
 		return nil
 	end
-	local pickaxe = ToolData.PickaxeById[data.Pickaxe]
 	local snapshot: { [string]: any } = {
 		Coins = data.Coins,
 		TotalEarned = data.TotalEarned,
-		Pickaxe = data.Pickaxe,
-		PickaxeTier = if pickaxe then pickaxe.Tier else 1,
-		OwnedPickaxes = data.OwnedPickaxes,
+		BlasterLevel = BlasterData.get(data.BlasterLevel).Level,
+		BlasterOre = data.BlasterOre,
+		Podiums = data.Podiums,
 		CarryLevel = data.CarryLevel,
 		CarryCapacity = ToolData.carryCapacity(data.CarryLevel, Perks.has(player, "StrongBack")),
 		Upgrades = data.Upgrades,
@@ -63,6 +63,8 @@ function StateService.snapshot(player: Player): { [string]: any }?
 			StrongBack = Perks.has(player, "StrongBack"),
 			ForgeVip = Perks.has(player, "ForgeVip"),
 			Workshop = Perks.has(player, "Workshop"),
+			Podiums = Perks.has(player, "Podiums"),
+			OfflineExtension = Perks.has(player, "OfflineExtension"),
 		},
 	}
 	for _, provider in providers do

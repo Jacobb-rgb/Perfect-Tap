@@ -15,7 +15,8 @@ export type Limit = { Rate: number, Burst: number }
 -- name = rate limit for client->server traffic (nil = server->client only)
 Net.Events = {
 	-- mining / carrying
-	MineSwing = { Rate = 6, Burst = 8 },
+	MineSwing = { Rate = 6, Burst = 8 }, -- old pickaxe swing (removed with the blaster package)
+	MineBlast = { Rate = 10, Burst = 14 }, -- (rock: Model?) aim the held beam at a rock; nil = stop firing
 	CarryPickup = { Rate = 8, Burst = 10 },
 	CarryDrop = { Rate = 8, Burst = 10 },
 	CarryThrow = { Rate = 6, Burst = 8 },
@@ -31,6 +32,10 @@ Net.Events = {
 	-- anvil forging
 	AnvilSubmit = { Rate = 2, Burst = 3 }, -- (sessionId, recipeId, strikes)
 	AnvilCancel = { Rate = 2, Burst = 3 }, -- (sessionId)
+	-- base: Ore Pen, podiums, Sell stall (design v2)
+	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium", arg: { Key, Count?, Slot? })
+	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
+	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
 	-- economy / meta
 	ShopBuy = { Rate = 3, Burst = 5 },
 	DailyClaim = { Rate = 1, Burst = 2 },
@@ -48,6 +53,7 @@ Net.Events = {
 	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
+	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

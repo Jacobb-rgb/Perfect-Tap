@@ -28,6 +28,7 @@ export type Machine = {
 	ConveyorFaces: ("All" | "NoFront")?, -- sides a belt can feed (nil = belts never feed it)
 	AcceptsForeign: boolean?, -- takes items owned by other players
 	GradeChances: { [string]: number }?, -- output grade odds (Auto Cleaner)
+	Retired: boolean?, -- design v2 removed it: not sold, migrations take it off plots
 }
 
 local MachineData = {}
@@ -47,6 +48,7 @@ MachineData.List = {
 	},
 	{
 		Id = "StorageCrate",
+		Retired = true, -- design v2 (see MachineData.Retired)
 		Name = "Storage Crate",
 		Description = "Adds 60 item spaces to your storage (all crates share one store). Drop items in, take them out any time.",
 		Size = { 2, 2 },
@@ -91,6 +93,7 @@ MachineData.List = {
 	},
 	{
 		Id = "Anvil",
+		Retired = true, -- design v2 (see MachineData.Retired)
 		Name = "Anvil",
 		Description = "Hammer ingots of one ore into gear, the most valuable items in Terra.",
 		Size = { 2, 2 },
@@ -121,6 +124,7 @@ MachineData.List = {
 	},
 	{
 		Id = "SellChute",
+		Retired = true, -- design v2 (see MachineData.Retired)
 		Name = "Sell Chute",
 		Description = "Sells anything that drops in and pays the item's owner, the same as Pell.",
 		Size = { 1, 1 },
@@ -162,13 +166,23 @@ MachineData.List = {
 } :: { Machine }
 
 MachineData.ById = {} :: { [string]: Machine }
+-- Machines design v2 removed (the Ore Pen replaced the Storage Crate, Tobin's
+-- Sell stall the Sell Chute, the Foundry the Anvil). Kept here so old saves
+-- and the builders still know them; Migrations refunds and removes them.
+MachineData.Retired = {} :: { [string]: boolean }
+-- Machines a player can buy and place.
+MachineData.Buildable = {} :: { Machine }
 for _, machine in MachineData.List do
 	MachineData.ById[machine.Id] = machine
+	if machine.Retired then
+		MachineData.Retired[machine.Id] = true
+	else
+		table.insert(MachineData.Buildable, machine)
+	end
 end
 
 -- New players get these placed for free (grid X, Z, rotation 0-3).
 MachineData.StarterKit = {
-	{ Id = "StorageCrate", X = 1, Z = 7, R = 0 },
 	{ Id = "CleaningStation", X = 4, Z = 4, R = 0 },
 	{ Id = "ClayFurnace", X = 8, Z = 4, R = 0 },
 }

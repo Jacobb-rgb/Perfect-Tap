@@ -1,6 +1,10 @@
 --[[
-	Item stages, quality grades, anvil recipes and the sell-value formula.
+	Item stages, quality grades, anvil recipes, the sell-value formula and
+	podium income (design v2).
 	value = ore.Value * stage multiplier * grade multiplier (* recipe for gear)
+	  (ore.Value = ore.Income * OreData.SellSeconds: what Tobin pays)
+	income = ore.Income * grade multiplier, for cleaned ore on a podium
+	Raw ore is "Dirty Ore": its name and rarity stay hidden until it is cleaned.
 ]]
 
 local OreData = require(script.Parent.OreData)
@@ -125,11 +129,28 @@ function ItemData.parseKey(key: string): Desc?
 	}
 end
 
+-- Podium income per second of one item at grade multiplier only (bonuses
+-- such as golems or passes are applied by EconomyService). 0 for anything a
+-- podium can't hold (only cleaned ore goes on podiums).
+function ItemData.income(desc: Desc?): number
+	if type(desc) ~= "table" or desc.K ~= "Clean" then
+		return 0
+	end
+	local ore = OreData.ById[desc.O]
+	if not ore then
+		return 0
+	end
+	return ore.Income * ItemData.gradeMult(desc.G)
+end
+
+ItemData.DirtyName = "Dirty Ore"
+
+-- Name shown to players. Raw ore is always "Dirty Ore" (cleaning reveals it).
 function ItemData.displayName(kind: string, oreId: string, gradeId: string?, recipeId: string?): string
 	local ore = OreData.ById[oreId]
 	local oreName = ore and ore.Name or oreId
 	if kind == "Raw" then
-		return "Raw " .. oreName
+		return ItemData.DirtyName
 	elseif kind == "Clean" then
 		return (gradeId or "Rough") .. " " .. oreName
 	elseif kind == "Crushed" then

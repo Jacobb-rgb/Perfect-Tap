@@ -13,10 +13,8 @@ local STUDIO_DEV_KIT: DevKit | false = {
 		{ Id = "Crusher", X = 4, Z = 9, R = 0 },
 		{ Id = "AutoCleaner", X = 0, Z = 10, R = 0 },
 		{ Id = "BlastFurnace", X = 7, Z = 8, R = 0 },
-		{ Id = "Anvil", X = 10, Z = 1, R = 0 },
-		{ Id = "SellChute", X = 2, Z = 1, R = 0 },
 	},
-	Inventory = { Conveyor = 24, StorageCrate = 1, SellChute = 1, ClayFurnace = 1 },
+	Inventory = { Conveyor = 24, ClayFurnace = 1 },
 }
 
 local GameConfig = {
@@ -77,7 +75,7 @@ local GameConfig = {
 	ConveyorMaxNudges = 5, -- this many nudges...
 	ConveyorNudgeWindow = 30, -- ...within this many seconds pushes the item off the belt
 
-	-- Selling and storage
+	-- Selling and storage (the Ore Pen = data.Storage, design v2)
 	SellComboWindow = 0.8, -- sales closer together than this count as one combo
 	SellOthersRadius = 60, -- other players this close see the sell puff
 	StorageTakeMax = 5, -- items per Take request

@@ -10,5 +10,8 @@
     "@fontsource/fredoka-one": "5.2.5",
     "@fontsource/luckiest-guy": "5.2.8",
     "three": "0.169.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
   }
 }

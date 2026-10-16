@@ -147,6 +147,23 @@ function OreNodeBuilder.build(oreId: string, base: CFrame, seed: number | string
 	return model
 end
 
+--[[
+	Contract (design v2): a rock in zone `zoneId` that holds 1-3 ores
+	(`oreIds`, the server rolled them). The rock hides what is inside: at
+	most small glints in the ores' colors. Same layout rules as build
+	(PrimaryPart, Stage attribute, applyStage works on it). Attributes:
+	Zone, OreCount. Budget: <= 20 parts.
+	(P0 stub: the old single-ore node of the first ore. The ore package replaces it.)
+]]
+function OreNodeBuilder.buildRock(zoneId: string, oreIds: { string }, base: CFrame, seed: number | string): Model
+	local model = OreNodeBuilder.build(oreIds[1] or "Coal", base, seed)
+	model.Name = "Rock"
+	model:SetAttribute("OreId", nil)
+	model:SetAttribute("Zone", zoneId)
+	model:SetAttribute("OreCount", #oreIds)
+	return model
+end
+
 -- Adds crack lines for a new stage. Returns parts that should fall off (stage 2).
 function OreNodeBuilder.applyStage(model: Model, stage: number, seed: number | string): { BasePart }
 	local oreId = model:GetAttribute("OreId") :: string

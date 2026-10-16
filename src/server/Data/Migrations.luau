@@ -14,22 +14,34 @@
 	- Storage: entries that aren't tables are dropped.
 	Layout repair (off the plot, overlapping) is NOT done here:
 	Placement.sanitize does it when the plot spawns, so the player gets a toast.
+
+	Version 3 (design v2):
+	- Pickaxes are gone: Pickaxe/OwnedPickaxes are removed, BlasterLevel is a
+	  whole number 1..BlasterData.MaxLevel and BlasterOre a known ore id or "".
+	- Retired machines (MachineData.Retired: Storage Crate, Sell Chute, Anvil)
+	  leave the plot and the inventory; their queued items go to the pen
+	  (data.Storage) and each machine is refunded at its price.
+	- Podiums is a list of exactly 4 strings: a storage key of a cleaned
+	  ore, or "". Anything else on a podium moves to the pen.
+	- Coins, TotalEarned and LastSeen are finite numbers >= 0.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
 
 local Migrations = {}
 
-Migrations.Latest = 2
+Migrations.Latest = 3
 
 export type Report = { Moved: number, Dropped: number }
 
 local MAX_INVENTORY = 999
+local PODIUM_SLOTS = 4
 
 local function isFinite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
@@ -187,6 +199,72 @@ function Migrations.run(data: { [string]: any }): Report
 		end
 	end
 	refill(placed, kept)
+
+	-- v3: retired machines leave (items to the pen, coins back)
+	local retired = MachineData.Retired
+	local stillPlaced = {}
+	for _, entry in placed do
+		if retired[entry.Id] then
+			for _, queue in { entry.In, entry.Out } do
+				if queue then
+					for _, item in queue do
+						table.insert(storage, item)
+						report.Moved += 1
+					end
+				end
+			end
+			data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + MachineData.ById[entry.Id].Price
+			report.Moved += 1
+		else
+			table.insert(stillPlaced, entry)
+		end
+	end
+	refill(placed, stillPlaced)
+	for id in retired do
+		local count = inventory[id]
+		if count then
+			data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + MachineData.ById[id].Price * count
+			inventory[id] = nil
+			report.Moved += 1
+		end
+	end
+
+	-- v3: blasters instead of pickaxes
+	data.Pickaxe = nil
+	data.OwnedPickaxes = nil
+	local level = data.BlasterLevel
+	data.BlasterLevel = if isFinite(level) then math.clamp(math.floor(level), 1, BlasterData.MaxLevel) else 1
+	if type(data.BlasterOre) ~= "string" or (data.BlasterOre ~= "" and not OreData.ById[data.BlasterOre]) then
+		data.BlasterOre = ""
+	end
+
+	-- v3: exactly 4 podium strings, each a cleaned ore or ""
+	local podiums = data.Podiums
+	local slots = {}
+	for i = 1, PODIUM_SLOTS do
+		local key = if type(podiums) == "table" then podiums[i] else nil
+		local desc = if type(key) == "string" and key ~= "" then ItemData.parseKey(key) else nil
+		if desc and desc.K == "Clean" then
+			slots[i] = ItemData.storageKey(desc)
+		else
+			if desc then
+				table.insert(storage, desc)
+				report.Moved += 1
+			elseif key ~= nil and key ~= "" then
+				report.Dropped += 1
+			end
+			slots[i] = ""
+		end
+	end
+	data.Podiums = slots
+
+	-- v3: money and time are finite and not negative
+	for _, field in { "Coins", "TotalEarned", "LastSeen" } do
+		local v = data[field]
+		if not isFinite(v) or v < 0 then
+			data[field] = 0
+		end
+	end
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

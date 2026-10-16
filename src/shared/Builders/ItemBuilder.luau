@@ -261,4 +261,26 @@ function ItemBuilder.build(info: ItemInfo, cf: CFrame, seed: number | string): M
 	return model
 end
 
+--[[
+	Contract (design v2): a still, anchored display copy of an item for
+	podiums and the Ore Pen pile. No collisions, no welds, no physics.
+	`cf` is the bottom center of where it should stand. Budget: <= 14 parts
+	and at most 1 light (Legendary and Mythic only).
+	(P0 stub: the physical item, anchored. The ore package replaces it.)
+]]
+function ItemBuilder.display(desc: { K: string, O: string, G: string?, R: string? }, cf: CFrame, seed: number | string?): Model
+	local model = ItemBuilder.build({ Kind = desc.K, OreId = desc.O, Grade = desc.G, Recipe = desc.R }, cf, seed or 1)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanTouch = false
+		elseif d:IsA("WeldConstraint") then
+			d:Destroy()
+		end
+	end
+	model.Name = "Display_" .. desc.K .. "_" .. desc.O
+	return model
+end
+
 return ItemBuilder

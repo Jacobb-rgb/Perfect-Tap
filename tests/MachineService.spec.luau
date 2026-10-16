@@ -644,13 +644,13 @@ return function(T, Loader)
 		task.wait()
 		T.eq(layouts, 1, "spawn layout")
 		local seen = {}
-		MachineService.register("StorageCrate", {
+		MachineService.register("CleaningStation", {
 			spawned = function(m)
 				table.insert(seen, m)
 			end,
 		})
-		T.eq(#seen, 1, "the StarterKit crate got the spawned hook")
-		T.eq(seen[1].Id, "StorageCrate", "crate")
+		T.eq(#seen, 1, "the StarterKit station got the spawned hook")
+		T.eq(seen[1].Id, "CleaningStation", "station")
 		task.wait()
 		T.eq(layouts, 2, "the plot's layout listeners ran again")
 	end)
