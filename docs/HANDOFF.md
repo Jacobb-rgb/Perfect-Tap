@@ -3,6 +3,11 @@
 This file lets a new Claude Code session (or a new account) continue exactly where the last one stopped.
 Read CLAUDE.md first (project rules and commands), then this file.
 
+> **IMPORTANT (2026-10-16): the owner changed the core design** (trains bring ore to the base, an ore pen, two podiums
+> with money per second, laser blasters instead of pickaxes, ~30 ores, a foundry that crafts stronger blasters).
+> Read **docs/DESIGN_V2_NOTES.md** first; it overrides GAME_DESIGN.md where they conflict, and its open questions must
+> be answered before planning the next steps.
+
 ## 1. The request (owner's brief, summarised)
 Build **TERRA FORGE**, a Roblox mining/crafting game in Luau via Rojo, all the way to a **published, public** game.
 - Mix: The Forge (stylized low-poly, warm forge lighting, progression feel) + Hydroneer (physical ore chunks you carry

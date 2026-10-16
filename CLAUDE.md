@@ -1,6 +1,7 @@
 # TERRA FORGE – project memory for Claude
 
-Read this first, then **docs/HANDOFF.md** (exact status, branches, next steps).
+Read this first, then **docs/HANDOFF.md** (exact status, branches, next steps) and **docs/DESIGN_V2_NOTES.md**
+(the owner's new design direction: trains, ore pen, podiums with income per second, laser blasters, foundry).
 
 ## What this is
 TERRA FORGE is an original Roblox mining/crafting game in Luau, built with Rojo. The goal is a
