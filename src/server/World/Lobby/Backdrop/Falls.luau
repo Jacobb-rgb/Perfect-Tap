@@ -79,11 +79,11 @@ function Falls.build(parent: Instance, rng: Rng.Rng)
 		Style.water(
 			m,
 			CFrame.new(x, lipY - 0.1, (Massif.FrontZ - 1.5 + Falls.SheetZ) / 2),
-			Vector3.new(7.6, 0.4, Falls.SheetZ - Massif.FrontZ + 1.5)
+			Vector3.new(9.4, 0.4, Falls.SheetZ - Massif.FrontZ + 1.5)
 		)
 		local top = CFrame.lookAt(Vector3.new(x, lipY, Falls.SheetZ), Vector3.new(x, lipY, Falls.SheetZ + 1))
-		Style.waterfall(m, top, lipY - WorldLayout.Quarry.Min.Y, 8, rng)
-		pool(m, x, 11, rng)
+		Style.waterfall(m, top, lipY - WorldLayout.Quarry.Min.Y, 9.4, rng)
+		pool(m, x, 12, rng)
 	end
 	-- east: out of the ForgeWorks sluice
 	do
@@ -108,7 +108,7 @@ function Falls.build(parent: Instance, rng: Rng.Rng)
 		)
 		Style.water(m, CFrame.new(x, lipY - 0.1, (-238.6 + Falls.SheetZ) / 2), Vector3.new(6.2, 0.4, Falls.SheetZ + 238.6))
 		local top = CFrame.lookAt(Vector3.new(x, lipY, Falls.SheetZ), Vector3.new(x, lipY, Falls.SheetZ + 1))
-		Style.waterfall(m, top, lipY - WorldLayout.Quarry.Min.Y, 7, rng)
+		Style.waterfall(m, top, lipY - WorldLayout.Quarry.Min.Y, 7.4, rng)
 		pool(m, x, 10, rng)
 	end
 end

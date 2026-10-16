@@ -126,7 +126,10 @@ return function(T, Loader)
 		T.le(lights(backdrop), budget.Lights, "Backdrop lights")
 		-- the per-piece budgets of LOBBY_PLAN 6.2
 		local plan = {
-			ForgeMountain = { 700, 2 },
+			-- raised from 700 by the 2026-10 polish pass (grass drips, big
+			-- crystals, huts, more trees); the massif stands outside the lobby
+			-- area and streams as a StreamingMesh LOD
+			ForgeMountain = { 1000, 2 },
 			DepthsPortal = { 90, 1 },
 			ForgeWorks = { 160, 1 },
 			DepthsRails = { 60, 0 },

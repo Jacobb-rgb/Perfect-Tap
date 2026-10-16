@@ -80,7 +80,7 @@ function Lowlands.buildNWCliff(parent: Instance, rng: Rng.Rng)
 	local fallX = cx
 	local lipY = cols[3][1] + 0.6
 	local front = cz + piece.Size.Z / 2 + cols[3][2] + 0.4
-	Style.waterfall(m, CFrame.lookAt(Vector3.new(fallX, lipY, front), Vector3.new(fallX, lipY, front + 1)), lipY - 0.3, 5, rng)
+	Style.waterfall(m, CFrame.lookAt(Vector3.new(fallX, lipY, front), Vector3.new(fallX, lipY, front + 1)), lipY - 0.3, 7, rng)
 end
 
 function Lowlands.buildNWPool(parent: Instance, rng: Rng.Rng)
@@ -143,6 +143,15 @@ function Lowlands.buildMineEntrance(parent: Instance, rng: Rng.Rng)
 	Style.sign(m, Kit.facing(Vector3.new(signX, 15.2, 85.9), EAST), "MINE", 12, 4.2, { Kind = "Wood" })
 	Style.sign(m, Kit.facing(Vector3.new(signX, 15.2, 94.2), EAST), "", 4.2, 4.2, { Kind = "Wood" })
 	Style.icon(m, Kit.facing(Vector3.new(signX + 0.6, 15.2, 94.2), EAST), "CrossedPickaxes", 3.4, C.SignText)
+	-- a second MINE board on the hilltop, turned toward the south road and the
+	-- hero camera over the autumn trees (the portal's own sign faces the yard)
+	local hilltop = Kit.facing(Vector3.new(-48.5, 18.8, 88.5), Vector3.new(0.5, 0, 0.87))
+	for _, x in { -5.2, 5.2 } do
+		Style.block(m, hilltop * CFrame.new(x, 2.3, 0.35), Vector3.new(0.7, 4.6, 0.7), C.WoodDark, nil, Style.tiny())
+	end
+	Style.sign(m, hilltop * CFrame.new(-1.6, 2.9, 0), "MINE", 7.8, 3.4, { Kind = "Wood" })
+	Style.sign(m, hilltop * CFrame.new(4.0, 2.9, 0), "", 3.4, 3.4, { Kind = "Wood" })
+	Style.icon(m, hilltop * CFrame.new(4.0, 2.9, -0.55), "CrossedPickaxes", 2.8, C.SignText)
 	-- two hanging lanterns at the posts (one light)
 	for i, z in { 82.4, 93.6 } do
 		Kit.beam(m, Vector3.new(px1, 9.4, z), Vector3.new(px1 + 1.4, 9.4, z), 0.3, C.Iron)
@@ -163,7 +172,11 @@ function Lowlands.buildMineYard(parent: Instance, rng: Rng.Rng)
 	local x0, x1 = -40.5, -8
 	Style.rails(m, Vector3.new(x0, 0, z), Vector3.new(x1, 0, z), { SleeperEvery = 2.4 })
 	for _, x in { -28.5, -18 } do
-		Style.mineCart(m, Kit.facing(Vector3.new(x, 0, z), EAST), rng, { Load = "Gold" })
+		local base = Kit.facing(Vector3.new(x, 0, z), EAST)
+		Style.mineCart(m, base, rng, { Load = "Gold" })
+		-- heaped with glowing gold, like the concept's carts
+		Style.block(m, base * CFrame.new(0, 2.85, 0), Vector3.new(2.6, 0.7, 3.7), C.Gold, NEON, Style.tiny())
+		Style.block(m, base * CFrame.new(0.2, 3.35, -0.3), Vector3.new(1.6, 0.6, 2.2), C.FireCore, NEON, Style.tiny())
 	end
 	-- buffer stop
 	for _, side in { -1, 1 } do

@@ -18,11 +18,12 @@ local C = Style.C
 local Signs = {}
 
 -- Boards top to bottom: text, icon, a small yaw (radians) toward where it leads.
+-- (big boards: the concept's signpost reads from the hero camera)
 Signs.Boards = {
-	{ Text = "MINE", Icon = "Pickaxe", Y = 8.2, Yaw = 0.14 },
-	{ Text = "UPGRADE", Icon = "Gear", Y = 6.4, Yaw = -0.1 },
-	{ Text = "EXPLORE", Icon = "Compass", Y = 4.6, Yaw = 0.05 },
-	{ Text = "BUILD", Icon = "House", Y = 2.8, Yaw = -0.12 },
+	{ Text = "MINE", Icon = "Pickaxe", Y = 8.7, Yaw = 0.14 },
+	{ Text = "UPGRADE", Icon = "Gear", Y = 6.6, Yaw = -0.1 },
+	{ Text = "EXPLORE", Icon = "Compass", Y = 4.5, Yaw = 0.05 },
+	{ Text = "BUILD", Icon = "House", Y = 2.4, Yaw = -0.12 },
 }
 
 --[[
@@ -39,7 +40,7 @@ function Signs.signpost(parent: Instance, rng: Rng.Rng)
 	-- stone foot, post, cap and lamp
 	Style.block(m, post * CFrame.new(0, 0.3, 0), Vector3.new(2.4, 0.6, 2.4), Style.vary(C.StoneDark, rng, 0.04), nil, Style.solid())
 	Style.block(m, post * CFrame.new(0.15, 0.85, 0.1), Vector3.new(1.8, 0.5, 1.8), Style.vary(C.Stone, rng, 0.04), nil, Style.tiny())
-	local height = 9.3
+	local height = 10.2
 	local main = Style.block(m, post * CFrame.new(0, height / 2, 0), Vector3.new(1.2, height, 1.2), C.WoodDark, nil, Style.decor())
 	main.Name = "Post"
 	Style.block(m, post * CFrame.new(0, height + 0.15, 0), Vector3.new(1.6, 0.3, 1.6), C.Wood, nil, Style.tiny())
@@ -47,7 +48,7 @@ function Signs.signpost(parent: Instance, rng: Rng.Rng)
 	-- the boards
 	for _, b in Signs.Boards do
 		local pivot = post * CFrame.new(-0.6, b.Y, 0) * CFrame.Angles(0, b.Yaw, 0)
-		local iconW, textW, h = 1.6, 4.4, 1.6
+		local iconW, textW, h = 1.9, 5.0, 1.9
 		local total = iconW + textW
 		-- one frame block behind both boards shows as a rim on both faces
 		Style.block(
@@ -62,7 +63,7 @@ function Signs.signpost(parent: Instance, rng: Rng.Rng)
 		local iconBoard = Style.block(m, iconCf, Vector3.new(iconW - 0.1, h - 0.1, 0.56), C.SignBoard, nil, Style.tiny())
 		iconBoard.Name = "IconBoard"
 		for _, turn in { 0, math.pi } do
-			Style.icon(m, iconCf * CFrame.Angles(0, turn, 0) * CFrame.new(0, 0, -0.3 - 0.15), b.Icon, 1.35, C.SignText)
+			Style.icon(m, iconCf * CFrame.Angles(0, turn, 0) * CFrame.new(0, 0, -0.3 - 0.15), b.Icon, 1.6, C.SignText)
 		end
 		local board = Style.sign(m, pivot * CFrame.new(-iconW - textW / 2 - 0.05, 0, 0), b.Text, textW - 0.1, h - 0.1, {
 			Kind = "Wood",

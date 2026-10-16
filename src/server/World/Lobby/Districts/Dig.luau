@@ -198,6 +198,18 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	Style.block(m, iconBoard, Vector3.new(2.4, 2.4, 0.4), C.SignBoard)
 	Style.icon(m, iconBoard * CFrame.new(0, 0, -0.4), "Bone", 2.0, C.SignText)
 
+	-- a second, bigger FOSSIL DIG sign on tall posts over the south fence,
+	-- facing the south road and the hero camera (the concept shows the dig's
+	-- board from the south); its frame turns local -Z (west) to local -X (south)
+	local south = at(-8.5, 0, 5.8) * CFrame.Angles(0, math.pi / 2, 0)
+	for _, dx in { -4.7, 4.7 } do
+		Style.block(m, south * CFrame.new(dx, 3.95, 0.2), Vector3.new(0.6, 7.9, 0.6), C.WoodDark)
+	end
+	Style.sign(m, south * CFrame.new(-1.3, 6.25, 0), "FOSSIL DIG", 7.6, 2.9, { Depth = 0.4 })
+	local southIcon = south * CFrame.new(3.85, 6.25, 0)
+	Style.block(m, southIcon, Vector3.new(2.7, 2.7, 0.4), C.SignBoard)
+	Style.icon(m, southIcon * CFrame.new(0, 0, -0.35), "Bone", 2.2, C.SignText)
+
 	m.PrimaryPart = bed
 	Kit.tag(m, "FossilDig")
 end

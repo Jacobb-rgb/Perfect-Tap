@@ -67,77 +67,94 @@ local function sunward(az: number): number
 end
 
 --[[
-	One cloud bank, a stepped voxel cumulus. `frame` = bottom center,
-	LookVector = toward the plaza. Three rows of overlapping flat blocks:
-	a wide base lit warm (CloudLight/CloudOrange toward the sun, CloudPink
-	away), a narrower pink row, a small purple top (CloudPurple/SkyPurple);
-	SkyTop shadow blocks behind and on the side away from the sun, light
-	puffs under the front edge and, toward the sun, a golden glowing rim
-	along the underside. About 11-16 parts.
+	One cloud bank, a puffy voxel cumulus with volume and two tones.
+	`frame` = bottom center, LookVector = toward the plaza. A flat lit base
+	(CloudLight/CloudOrange toward the sun, CloudPink away) with a glowing
+	under-rim, then a dome of 5-7 puffs, tallest in the middle, each split
+	into a warm lower half (CloudPink, or the lit tone near the sun) and a
+	purple upper half (CloudPurple/SkyPurple); puffs stick out toward the
+	town by different amounts so their faces catch different light. Two
+	small crowns on top, a SkyTop shadow flank on the side away from the
+	sun and, toward the sun, a golden glowing rim along the underside.
+	About 16-20 parts.
 ]]
 local function bank(m: Model, frame: CFrame, scale: number, warm: number, rng: Rng.Rng)
-	-- saturated shades: the Atmosphere haze at 450-900 studs washes them
-	-- toward orange, so the rows step from warm to a deep purple
 	local lit = if warm > 0.75 then C.CloudLight elseif warm > 0.45 then C.CloudOrange else C.CloudPink
-	local middle = if warm > 0.6 then C.CloudPink elseif rng:chance(0.3) then C.CloudPink else C.CloudPurple
+	-- warm lower halves everywhere (pink, orange toward the sun), purple tops
+	local lower = if warm > 0.75 then C.CloudOrange elseif warm > 0.45 then C.CloudLight else C.CloudPink
 	local top = if warm > 0.6 then C.CloudPurple elseif rng:chance(0.5) then C.SkyPurple else C.CloudPurple
-	local depth = rng:range(30, 42) * scale
-	local function row(count: number, minW: number, maxW: number, minH: number, maxH: number, y: number, center: number, z: number, color: Color3): (number, number)
-		local widths = {}
-		local span = 0
-		for i = 1, count do
-			widths[i] = rng:range(minW, maxW) * scale
-			span += widths[i] * (if i < count then 0.7 else 1)
+	local width = rng:range(100, 140) * scale
+	local depth = rng:range(36, 48) * scale
+	local half = width / 2
+	local baseH = 6 * scale
+	-- flat lit base and a glowing under-rim: the town looks up at the
+	-- undersides, which the concept paints pink/orange in the sunset light
+	-- (the low sun cannot reach them, so the rim glows on its own)
+	Kit.box(m, frame, Vector3.new(0, baseH / 2, 0), Vector3.new(width, baseH, depth), Style.vary(lit, rng, 0.04))
+	Kit.glow(
+		m,
+		frame * CFrame.new(rng:range(-0.06, 0.06) * width, -0.8 * scale, -depth * 0.08),
+		Vector3.new(width * rng:range(0.72, 0.88), 1.6 * scale, depth * 0.8),
+		if warm > 0.45 then C.CloudOrange else C.CloudPink,
+		0.45 + (1 - warm) * 0.2
+	)
+	-- the dome of puffs
+	local n = rng:int(5, 7)
+	local tallest = 0
+	local tallestX = 0
+	for i = 1, n do
+		local t = (i - 0.5) / n * 2 - 1
+		local dome = math.sqrt(math.max(0.12, 1 - t * t))
+		local w = width / n * rng:range(1.3, 1.7)
+		local h = (12 + 28 * dome) * scale * rng:range(0.85, 1.15)
+		local x = t * (half - w / 3)
+		local z = rng:range(-0.22, 0.12) * depth
+		local d = depth * rng:range(0.55, 0.85)
+		local lowH = h * rng:range(0.58, 0.72)
+		Kit.box(m, frame, Vector3.new(x, baseH + lowH / 2 - 0.5, z), Vector3.new(w, lowH, d), Style.vary(lower, rng, 0.04))
+		Kit.box(
+			m,
+			frame,
+			Vector3.new(x + rng:range(-0.1, 0.1) * w, baseH + lowH + (h - lowH) / 2 - 1, z + d * 0.06),
+			Vector3.new(w * rng:range(0.75, 0.9), h - lowH, d * 0.86),
+			Style.vary(top, rng, 0.04)
+		)
+		if h > tallest then
+			tallest, tallestX = h, x
 		end
-		local x = center - span / 2
-		local tallest = 0
-		for _, w in widths do
-			local h = rng:range(minH, maxH) * scale
-			tallest = math.max(tallest, h)
-			local d = depth * rng:range(0.75, 0.95) * (1 - math.abs(z))
-			Kit.box(m, frame, Vector3.new(x + w / 2, y + h / 2, depth * z + rng:range(-2, 2)), Vector3.new(w, h, d), Style.vary(color, rng, 0.04))
-			x += w * 0.7
-		end
-		return span, tallest
 	end
-	-- tall rows flush at the front: from the town the bank shows one big
-	-- stepped face (warm below, pink in the middle, purple on top)
-	local span1, h1 = row(rng:int(3, 4), 36, 58, 11, 15, 0, 0, 0, lit)
-	local c2 = rng:range(-0.15, 0.15) * span1
-	local span2, h2 = row(rng:int(2, 3), 24, 44, 13, 18, h1 - 1.5, c2, -0.04, middle)
-	local c3 = c2 + rng:range(-0.2, 0.2) * span2
-	row(rng:int(1, 2), 16, 30, 10, 16, h1 + h2 - 3, c3, 0.02, top)
-	-- SkyTop shadow: a slab behind the upper rows and a flank on the side
-	-- away from the sun, so every bank shows light, mid and dark shades
-	Kit.box(m, frame, Vector3.new(c2, h1 + h2 * 0.4, depth * 0.4), Vector3.new(span2 * 0.85, h2 * 0.9, depth * 0.3), Style.vary(C.SkyTop, rng, 0.04))
+	-- two small crowns on the tallest part
+	for k = 1, 2 do
+		local w = width * rng:range(0.1, 0.16)
+		local h = rng:range(6, 10) * scale
+		Kit.box(
+			m,
+			frame,
+			Vector3.new(tallestX + (k - 1.5) * w * 1.1, baseH + tallest + h / 2 - 2, rng:range(-0.1, 0.1) * depth),
+			Vector3.new(w, h, depth * 0.45),
+			Style.vary(if k == 1 then top else C.SkyPurple, rng, 0.04)
+		)
+	end
+	-- SkyTop shadow flank on the side away from the sun
 	local away = frame:VectorToObjectSpace(Vector3.new(0.99, 0, -0.14))
 	local shadowSide = if away.X >= 0 then 1 else -1
 	Kit.box(
 		m,
 		frame,
-		Vector3.new(c2 + shadowSide * span2 * 0.44, h1 + h2 * 0.42, -depth * 0.02),
-		Vector3.new(span2 * 0.2, h2 * 0.8, depth * 0.72),
+		Vector3.new(shadowSide * half * 0.82, baseH + tallest * 0.3, depth * 0.08),
+		Vector3.new(width * 0.18, tallest * 0.55, depth * 0.7),
 		Style.vary(C.SkyTop, rng, 0.05)
 	)
-	-- light puffs hanging under the front edge
-	for _ = 1, rng:int(1, 2) do
-		local pw = span1 * rng:range(0.12, 0.2)
-		Kit.box(
-			m,
-			frame,
-			Vector3.new(rng:range(-span1 * 0.35, span1 * 0.35), -rng:range(1.2, 2.4) * scale, -depth * rng:range(0.15, 0.3)),
-			Vector3.new(pw, rng:range(3.5, 5.5) * scale, depth * rng:range(0.3, 0.45)),
-			Style.vary(if warm > 0.5 then C.CloudLight else C.CloudPink, rng, 0.04)
-		)
-	end
-	-- toward the sun the underside glows like the concept's golden rims
-	if warm > 0.45 then
+	-- the concept's golden rims: a glowing band along the town-facing lower
+	-- edge of the base, strongest toward the sun (the faces the town sees
+	-- turn away from the low sun, so the rim carries the sunset light)
+	if warm > 0.2 then
 		Kit.glow(
 			m,
-			frame * CFrame.new(rng:range(-0.1, 0.1) * span1, -0.3, -depth * 0.4),
-			Vector3.new(span1 * rng:range(0.5, 0.7), 1.2 * scale, depth * 0.2),
+			frame * CFrame.new(rng:range(-0.1, 0.1) * width, 1.1 * scale, -depth / 2 - 0.4),
+			Vector3.new(width * rng:range(0.6, 0.8), 2 * scale, 0.8),
 			C.CloudOrange,
-			0.4
+			0.25 + (1 - warm) * 0.45
 		)
 	end
 end

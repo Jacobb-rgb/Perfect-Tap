@@ -36,6 +36,32 @@ that work in parallel without touching the same files (section 6).
 - The legacy `tradingPost` in TownLegacy.luau is being renamed to Tobin by another package right now; Districts
   replaces it anyway. Do not edit TownLegacy.luau, Land.luau, PlotBuilder.luau or WorldBuilder.luau.
 
+## 0.1 Polish pass (2026-10-16, art director) - closer to the concept
+- **Hero camera** moved closer and lower (table in section 3): the town fills the middle, the massif the upper
+  middle, sky only in the top corners; MINE, signpost, ponds/bridge, FOSSIL DIG, ROCK SCANNER and SPIN & WIN are
+  all in frame. The plots stay at the image sides, foreshortened.
+- **Colors and atmosphere** (LightingConfig = default.project.json): light haze (Density 0.26, Haze 0.9), warm
+  peach toward the sun, lavender-blue `Decay` away from it, cool purple-blue ambient shadows, more contrast and
+  saturation, a neutral tint. Style stone is now blue-grey (`Stone`, `StoneDark`, `StoneDeep`, `StoneLight`), the
+  sky deeper purple-blue at the zenith. The preview (tools/preview/viewer.js) fades far things toward Atmosphere
+  `Color` toward the sun and `Decay` away from it (like Roblox), mirrors the sky in reflective parts (water, sea)
+  and lights shaded faces with EnvironmentDiffuseScale too.
+- **Plot pads** (PlotBuilder visuals only): mown lawn with subtle stripes per cell row, a paving band inside
+  blue-grey stone curbs, lamp caps on the corner posts. Names, attachments, tags, the grid, the yard and the gate
+  are unchanged; everything over the grid stays flat (tops <= 0.048).
+- **Massif**: lighter blue-grey blocks, mossy grass drips over every grassy ledge, 16 trees in five colors, 12 big
+  crystal clusters (size 12-18), three miners' huts with lit windows, 20 lit tunnel windows, a gold cart on the
+  cart ledge. ForgeMountain per-piece budget 700 -> **1000** (outside the lobby area, StreamingMesh LOD).
+- **Waterfalls** (`Style.waterfall`): light sky-blue sheet with a paler middle band, cyan glints, white foam slab
+  and cubes at the foot; the massif cascades are 7.5-10 wide, the quarry falls 7.4-9.4.
+- **Signs**: THE FORGE 30 x 8.5 (+ 8.5 icon board), DEPTHS 26 x 7.4 with brighter arch rings; THE GREAT FORGE board
+  moved onto the nave gable (y 22) with the hammer roundel at the apex and two lit windows over the door, and the
+  fire crystal's base lowered by 0.8 so the board reads above the crystal from the spawn; a second FOSSIL DIG
+  board faces south over the dig's south fence; a second MINE board stands on the mine hill facing the south
+  road; bigger signpost boards; a bigger glowing ROCK SCANNER ring.
+- **Sky**: puffy voxel cloud banks (a dome of puffs, warm lower halves, purple tops, glowing pink/orange
+  under-rims, golden front rims toward the sun).
+
 ---
 
 ## 1. How to look at it
@@ -82,7 +108,7 @@ lines the plot roads with trees.
 
 | Shot | Camera -> target (fov) | Purpose |
 |---|---|---|
-| `lobby_hero` | (22, 100, 206) -> (-2, 22, -40) (50) | **The concept angle.** Elevated from the south, looking north over the bridge and plaza at the Great Forge with the mountain, DEPTHS and THE FORGE behind, sea and sunset glow on the left, islands and balloon in the sky. Compare it side by side with the concept. |
+| `lobby_hero` | (6, 62, 168) -> (0, 12, -46) (48) | **The concept angle** (polish pass). From the south over the bridge and ponds, MINE bottom left, ROCK SCANNER bottom right, the plaza with the fire crystal, SHOP / SPIN & WIN left, UPGRADES / FOSSIL DIG right, THE GREAT FORGE in the middle, the massif with DEPTHS, THE FORGE, waterfalls and crystals filling the upper middle, sky, islands and balloon in the top corners. Compare it side by side with the concept (docs/screenshots/lobby_compare.jpg). |
 | `lobby_spawn` | (0, 9, 46) -> (0, 12, -40) (70) | What a new player sees: fire crystal, Great Forge, SHOP left, UPGRADES right, mountain and portal above the roof. |
 | `lobby_west` | (18, 18, 26) -> (-70, 6, -14) (65) | Toward the sunset: SHOP, SPIN & WIN, NW cliff and waterfall, sea, ships, pier, sun glitter. |
 | `lobby_east` | (-14, 16, 36) -> (64, 6, -6) (65) | UPGRADES, FOSSIL DIG, ROCK SCANNER, pink grove, NEXT AREA in the distance. |
@@ -303,7 +329,7 @@ Build:
    40 high, StoneLight caps above, Style.tree (Green, sparse) instead of pines; skip the
    columns inside the ForgeMountain box (x -80..160, z -340..-240) and let the massif
    replace them; quarry walls recolored to Stone/StoneDark; delete the EMBER CAVES sign.
-2. **ForgeMountain** (<= 700): three stepped tiers of dark voxel columns (8-12 wide):
+2. **ForgeMountain** (<= 700, raised to 1000 by the polish pass, section 0.1): three stepped tiers of dark voxel columns (8-12 wide):
    tier 1 y 22-52 over the full width, front face at z ~ -242 right above the quarry's
    north wall; tier 2 y 52-82, x -50..140, set back to z ~ -258; tier 3 y 82-112,
    x 20..100, z ~ -275 (peak). Tier 1 leaves a ledge at y 26 for ForgeWorks (x 17..51,

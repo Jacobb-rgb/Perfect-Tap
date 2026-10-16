@@ -1,9 +1,9 @@
 {
   "lobby_hero": {
     "scene": "world",
-    "position": [22, 100, 206],
-    "target": [-2, 22, -40],
-    "fov": 50,
+    "position": [6, 62, 168],
+    "target": [0, 12, -46],
+    "fov": 48,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],
     "shadowExtent": 280,

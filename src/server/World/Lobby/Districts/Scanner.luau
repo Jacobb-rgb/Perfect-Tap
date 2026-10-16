@@ -77,19 +77,19 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 	Kit.tag(terminal, "OreCodex")
 
 	-- the scanner ring (viewer's right): iron casing, cyan neon octagon, sample rock, scan line
-	local rx, rz = -2.4, 0.9
-	local apothem = 2.4
+	local rx, rz = -2.5, 0.9
+	local apothem = 2.9 -- a big glowing blue frame that reads from the hero camera
 	local ringY = TOP + apothem + 0.8
 	local center = at(rx, ringY, rz)
 	local ring: { BasePart } = {}
 	for k = 0, 7 do
 		local a = k * math.pi / 4
 		local seg = center * CFrame.Angles(0, 0, a) * CFrame.new(0, -apothem, 0)
-		table.insert(ring, Kit.glow(m, seg, Vector3.new(2.05, 0.45, 0.6), C.GlowEdge))
+		table.insert(ring, Kit.glow(m, seg, Vector3.new(2.45, 0.55, 0.6), C.GlowEdge))
 		Kit.block(
 			m,
 			center * CFrame.Angles(0, 0, a) * CFrame.new(0, -apothem - 0.45, 0.15),
-			Vector3.new(2.4, 0.5, 0.75),
+			Vector3.new(2.85, 0.5, 0.75),
 			C.Iron,
 			nil,
 			Style.decor()
@@ -100,7 +100,7 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 	end
 	Kit.bit(m, at(rx, ringY - apothem + 0.38, rz), Vector3.new(1.0, 0.3, 0.8), C.Iron)
 	sampleRock(m, at(rx, ringY - apothem + 0.5, rz), 1.4, C.CrystalPurple, rng)
-	Kit.block(m, at(rx, ringY - 0.6, rz), Vector3.new(4.6, 0.08, 0.4), C.CrystalCyan, Kit.NEON, Style.tiny({ Transparency = 0.35 }))
+	Kit.block(m, at(rx, ringY - 0.6, rz), Vector3.new(5.8, 0.1, 0.4), C.CrystalCyan, Kit.NEON, Style.tiny({ Transparency = 0.35 }))
 	local topSeg = ring[5]
 	Style.light(topSeg, C.CrystalBlue, 14, 1.5)
 

@@ -10,20 +10,25 @@
 	Over the caves (x -74..74) columns start at y 22 (the cave roof); outside
 	they reach down to y -20. The B1 band leaves the DEPTHS portal ledge
 	at x -22..17 (top < 28) and the ForgeWorks deck (x 17..51) open.
-	Decoration: grass ledges with trees, crystal clusters (two lit), a
-	cascade from the summit toward ForgeWorks, the west cascade feeding
-	QuarryFallsWest, a zig-zag timber walkway with ladders, a cart track with
-	an ore cart under the crane, lanterns.
+	Decoration (concept: cool blue-grey blocks, lots of green, big glowing
+	crystals): mossy grass drips over the ledge fronts, trees in five
+	colors, big purple/blue/pink crystal clusters (two lit), three little
+	miners' huts with lit windows on the terraces, a cascade from the summit
+	toward ForgeWorks, the west cascade feeding QuarryFallsWest, the east
+	fall, a zig-zag timber walkway with ladders, a cart track with a gold
+	cart under the crane, lanterns.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 
 local C = Style.C
+local NEON = Enum.Material.Neon
 
 local Massif = {}
 
@@ -58,14 +63,19 @@ local function bottomFor(x0: number, x1: number): number
 	return -20
 end
 
-local function shade(rng: Rng.Rng): Color3
+-- Mostly mid blue-grey with darker and lighter blocks (the concept's
+-- painted voxel stone); the high back tiers catch more light.
+local function shade(rng: Rng.Rng, band: string): Color3
 	local r = rng:next()
-	if r < 0.7 then
+	local high = band == "B3" or band == "B4"
+	if r < (if high then 0.06 else 0.12) then
 		return C.StoneDeep
-	elseif r < 0.95 then
+	elseif r < (if high then 0.36 else 0.5) then
 		return C.StoneDark
+	elseif r < 0.85 then
+		return C.Stone:Lerp(C.StoneDark, 0.3)
 	end
-	return C.Stone:Lerp(C.StoneDark, 0.5)
+	return C.Stone
 end
 
 function Massif.build(parent: Instance, rng: Rng.Rng): Model
@@ -76,14 +86,33 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 	local south = Vector3.new(0, 0, 1)
 
 	local function column(x0: number, x1: number, z0: number, z1: number, top: number, band: string, cap: string?, accents: number?)
+		local capKind = cap or "Grass"
 		Kit.column(rock, x0, z0, x1, z1, bottomFor(x0, x1), top, rng, {
-			Color = shade(rng),
-			Cap = cap or "Grass",
+			Color = shade(rng, band),
+			Cap = capKind,
 			Band = band ~= "B3" and band ~= "B4",
 			Front = if (accents or 0) > 0 then south else nil,
 			Accents = accents,
 		})
-		table.insert(columns, { x0 = x0, x1 = x1, z0 = math.max(z0, z1), z1 = math.min(z0, z1), top = top, band = band })
+		local front = math.max(z0, z1)
+		table.insert(columns, { x0 = x0, x1 = x1, z0 = front, z1 = math.min(z0, z1), top = top, band = band })
+		-- mossy grass drips over the front edge of the grassy ledges the town sees
+		if capKind == "Grass" and band ~= "B4" and x1 - x0 > 4 then
+			for _ = 1, if x1 - x0 > 10 then 2 else 1 do
+				local w = rng:range(2.4, math.min(5.5, (x1 - x0) * 0.45))
+				-- (never below the cave roof: the caves run under the massif)
+				local h = math.min(rng:range(2.4, 6), top + 0.7 - (CAVE_ROOF + 0.5))
+				local x = rng:range(x0 + w / 2 + 0.4, x1 - w / 2 - 0.4)
+				Style.block(
+					decor,
+					CFrame.new(x, top + 0.7 - h / 2, front + 0.55),
+					Vector3.new(w, h, 0.9),
+					Style.vary(if rng:chance(0.55) then C.Grass else C.GrassDark, rng, 0.05),
+					nil,
+					Style.tiny()
+				)
+			end
+		end
 	end
 
 	---------------------------------------------------------------- B1 (tier 1)
@@ -236,28 +265,33 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 	local lit = 0
 	for _, col in columns do
 		local face = col.band == "B1" or col.band == "B2" or col.band == "B2s"
-		if face and col.top > 40 and lit < 10 and rng:chance(0.3) then
+		if face and col.top > 40 and lit < 20 and rng:chance(0.45) then
 			local y = rng:range(col.top - 14, col.top - 4)
 			local x = rng:range(col.x0 + 1.5, col.x1 - 1.5)
-			Style.block(decor, CFrame.new(x, y, col.z0 + 0.3), Vector3.new(1.2, 1.5, 0.5), C.Lamp, Enum.Material.Neon, Style.tiny())
+			Style.block(decor, CFrame.new(x, y, col.z0 + 0.3), Vector3.new(1.6, 2, 0.5), C.Lamp, Enum.Material.Neon, Style.tiny())
 			lit += 1
 		end
 	end
 
-	-- trees on the ledges (the concept mixes green, yellow, orange, pink, red)
+	-- trees on the ledges (the concept mixes green, yellow, orange, pink, red);
+	-- Dz pushes them toward the ledge's front edge so the town sees them
 	local trees: { { Kind: string, X: number, Band: string, Scale: number, Dz: number } } = {
-		{ Kind = "Green", X = -66, Band = "B1", Scale = 1.15, Dz = 0 },
-		{ Kind = "Yellow", X = -29, Band = "B1", Scale = 1.0, Dz = 1 },
-		{ Kind = "Orange", X = 58, Band = "B1", Scale = 1.05, Dz = 0 },
-		{ Kind = "Green", X = 148, Band = "B1", Scale = 1.2, Dz = 0 },
-		{ Kind = "Pink", X = -4, Band = "B2s", Scale = 1.0, Dz = 0 },
-		{ Kind = "Green", X = 86, Band = "B2s", Scale = 1.1, Dz = 0 },
-		{ Kind = "Red", X = 26, Band = "B3", Scale = 1.0, Dz = 2 },
-		{ Kind = "Yellow", X = -36, Band = "B3", Scale = 1.1, Dz = 6 },
-		{ Kind = "Green", X = 152, Band = "B2", Scale = 1.0, Dz = 0 },
-		{ Kind = "Orange", X = -62, Band = "B2", Scale = 1.0, Dz = 0 },
-		{ Kind = "Green", X = 6, Band = "B3", Scale = 1.1, Dz = 4 },
-		{ Kind = "Pink", X = 66, Band = "B2s", Scale = 0.95, Dz = 0 },
+		{ Kind = "Green", X = -73, Band = "B1", Scale = 1.2, Dz = 3 },
+		{ Kind = "Yellow", X = -29, Band = "B1", Scale = 1.1, Dz = 3 },
+		{ Kind = "Orange", X = 62, Band = "B1", Scale = 1.15, Dz = 1 },
+		{ Kind = "Yellow", X = 137, Band = "B1", Scale = 0.95, Dz = 3 },
+		{ Kind = "Green", X = 152, Band = "B1", Scale = 1.25, Dz = 2 },
+		{ Kind = "Orange", X = -66, Band = "B2", Scale = 1.1, Dz = 4 },
+		{ Kind = "Green", X = -14, Band = "B2", Scale = 1.15, Dz = 5 },
+		{ Kind = "Pink", X = -4, Band = "B2s", Scale = 1.15, Dz = 2 },
+		{ Kind = "Pink", X = 66, Band = "B2s", Scale = 1.05, Dz = 2 },
+		{ Kind = "Red", X = 80, Band = "B2", Scale = 1.1, Dz = 5 },
+		{ Kind = "Green", X = 90, Band = "B2s", Scale = 1.2, Dz = 2 },
+		{ Kind = "Green", X = 155, Band = "B2", Scale = 1.0, Dz = 4 },
+		{ Kind = "Green", X = 6, Band = "B3", Scale = 1.2, Dz = 6 },
+		{ Kind = "Red", X = 26, Band = "B3", Scale = 1.1, Dz = 4 },
+		{ Kind = "Green", X = 36, Band = "B3", Scale = 1.0, Dz = 8 },
+		{ Kind = "Yellow", X = -36, Band = "B3", Scale = 1.2, Dz = 6 },
 	}
 	for _, t in trees do
 		local p = onTop(t.X, t.Band, t.Dz)
@@ -266,16 +300,21 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 		end
 	end
 
-	-- crystal clusters: 4 purple, 3 blue, 1 pink; two carry a light
+	-- big glowing crystal clusters (purple, blue, pink, violet) on the ledge
+	-- fronts, like the concept's; two carry a light
 	local crystals: { { Color: Color3, X: number, Band: string, Size: number, Light: boolean, Dz: number } } = {
-		{ Color = C.CrystalPurple, X = 57, Band = "B1", Size = 12, Light = true, Dz = -3 },
-		{ Color = C.CrystalBlue, X = 104, Band = "B1", Size = 10, Light = false, Dz = -4 },
-		{ Color = C.CrystalPurple, X = -16, Band = "B1", Size = 9, Light = false, Dz = 2 },
-		{ Color = C.CrystalBlue, X = 30, Band = "B2", Size = 12, Light = true, Dz = 0 },
-		{ Color = C.CrystalPink, X = -60, Band = "B1", Size = 8, Light = false, Dz = 0 },
-		{ Color = C.CrystalPurple, X = 80, Band = "B3", Size = 11, Light = false, Dz = 0 },
-		{ Color = C.CrystalBlue, X = 145, Band = "B1", Size = 10, Light = false, Dz = 2 },
-		{ Color = C.CrystalPurple, X = -70, Band = "B2", Size = 9, Light = false, Dz = 0 },
+		{ Color = C.CrystalPink, X = -55, Band = "B1", Size = 13, Light = false, Dz = 3 },
+		{ Color = C.CrystalPurple, X = -16, Band = "B1", Size = 12, Light = false, Dz = 2 },
+		{ Color = C.CrystalPurple, X = 55, Band = "B1", Size = 17, Light = true, Dz = 5 },
+		{ Color = C.CrystalBlue, X = 104, Band = "B1", Size = 13, Light = false, Dz = 6 },
+		{ Color = C.CrystalBlue, X = 142, Band = "B1", Size = 15, Light = false, Dz = 5 },
+		{ Color = C.CrystalPurple, X = -77, Band = "B2", Size = 15, Light = false, Dz = 4 },
+		{ Color = C.CrystalViolet, X = -58, Band = "B2", Size = 14, Light = false, Dz = 5 },
+		{ Color = C.CrystalBlue, X = 30, Band = "B2", Size = 18, Light = true, Dz = 4 },
+		{ Color = C.CrystalPink, X = 136, Band = "B2", Size = 14, Light = false, Dz = 4 },
+		{ Color = C.CrystalBlue, X = 14, Band = "B3", Size = 16, Light = false, Dz = 6 },
+		{ Color = C.CrystalPurple, X = 80, Band = "B3", Size = 18, Light = false, Dz = 6 },
+		{ Color = C.CrystalPink, X = 60, Band = "B3", Size = 13, Light = false, Dz = 6 },
 	}
 	for _, c in crystals do
 		local p = onTop(c.X, c.Band, c.Dz)
@@ -283,9 +322,56 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 			Style.crystalCluster(decor, CFrame.new(p) * CFrame.Angles(0, rng:range(0, 6.28), 0), c.Size, c.Color, rng, {
 				Count = 3,
 				Light = c.Light,
-				Range = 24,
-				Brightness = 1.6,
+				Range = 26,
+				Brightness = 1.8,
 			})
+		end
+	end
+
+	-- little miners' huts on the terraces: stone walls, a dark plank roof,
+	-- warm lit windows and door (the concept's lit mountain houses)
+	local function hut(p: Vector3, w: number, d: number, h: number)
+		local base = CFrame.new(p)
+		Style.block(decor, base * CFrame.new(0, h / 2, 0), Vector3.new(w, h, d), Style.vary(C.StoneLight, rng, 0.05), nil, Style.decor())
+		local roofH = math.max(2, d * 0.45)
+		local half = (d + 1.2) / 2
+		-- a WedgePart's tall side is its +Z: the back slope as is, the front
+		-- (town-facing, +Z) slope turned around
+		Geo.wedge(
+			decor,
+			base * CFrame.new(0, h + roofH / 2, -half / 2),
+			Vector3.new(w + 1.2, roofH, half),
+			C.WoodDark,
+			Enum.Material.SmoothPlastic,
+			Style.ghost()
+		)
+		Geo.wedge(
+			decor,
+			base * CFrame.new(0, h + roofH / 2, half / 2) * CFrame.Angles(0, math.pi, 0),
+			Vector3.new(w + 1.2, roofH, half),
+			C.Wood,
+			Enum.Material.SmoothPlastic,
+			Style.ghost()
+		)
+		Style.block(
+			decor,
+			base * CFrame.new(-w * 0.22, h * 0.36, d / 2 + 0.06),
+			Vector3.new(1.4, h * 0.62, 0.2),
+			C.Molten,
+			NEON,
+			Style.tiny()
+		)
+		Style.block(decor, base * CFrame.new(w * 0.22, h * 0.58, d / 2 + 0.06), Vector3.new(1.6, 1.4, 0.2), C.Lamp, NEON, Style.tiny())
+	end
+	local huts: { { X: number, Band: string, W: number, D: number, H: number } } = {
+		{ X = -62, Band = "B1", W = 6, D = 5, H = 4.5 },
+		{ X = -30, Band = "B2", W = 6, D = 5, H = 4.5 },
+		{ X = 148, Band = "B2", W = 7, D = 5, H = 5 },
+	}
+	for _, spot in huts do
+		local p = onTop(spot.X, spot.Band, 99)
+		if p then
+			hut(p - Vector3.new(0, 0, 3), spot.W, spot.D, spot.H)
 		end
 	end
 
@@ -295,11 +381,11 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 		local col = at(x, "B2")
 		if col then
 			local lip = CFrame.lookAt(Vector3.new(x, col.top + 0.4, col.z0 + 0.6), Vector3.new(x, col.top + 0.4, col.z0 + 2))
-			Style.waterfall(decor, lip, col.top + 0.4 - (Massif.WestNotch.Top + 0.8), 7, rng, { Mist = false })
+			Style.waterfall(decor, lip, col.top + 0.4 - (Massif.WestNotch.Top + 0.8), 10, rng, { Mist = false })
 			Style.water(
 				decor,
 				CFrame.new(x, Massif.WestNotch.Top + 1.0, (col.z0 + Massif.FrontZ) / 2),
-				Vector3.new(7.4, 0.4, math.abs(col.z0 - Massif.FrontZ) + 1)
+				Vector3.new(10.4, 0.4, math.abs(col.z0 - Massif.FrontZ) + 1)
 			)
 		end
 	end
@@ -311,7 +397,7 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 		local below = at(x, "B2")
 		if col and below then
 			local lip = CFrame.lookAt(Vector3.new(x, col.top + 0.4, col.z0 + 0.6), Vector3.new(x, col.top + 0.4, col.z0 + 2))
-			Style.waterfall(decor, lip, col.top + 0.4 - (below.top + 0.8), 6, rng, { Mist = false })
+			Style.waterfall(decor, lip, col.top + 0.4 - (below.top + 0.8), 7.5, rng, { Mist = false })
 			Style.water(
 				decor,
 				CFrame.new(x, below.top + 1.0, (col.z0 + below.z0) / 2),
@@ -326,7 +412,7 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 		local pool = at(x, "B1")
 		if col and pool then
 			local lip = CFrame.lookAt(Vector3.new(x, col.top + 0.4, col.z0 + 0.6), Vector3.new(x, col.top + 0.4, col.z0 + 2))
-			Style.waterfall(decor, lip, col.top + 0.4 - (pool.top + 0.8), 6.5, rng, { Mist = false })
+			Style.waterfall(decor, lip, col.top + 0.4 - (pool.top + 0.8), 10, rng, { Mist = false })
 			local center = Vector3.new(x, pool.top + 1.0, (pool.z0 + pool.z1) / 2 - 1)
 			Style.water(decor, CFrame.new(center), Vector3.new(9, 0.4, 9))
 			for _, off in { Vector3.new(-5, 0, 0), Vector3.new(5, 0, 0), Vector3.new(0, 0, 5) } do
@@ -385,7 +471,7 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 		local z = -251
 		local x0, x1 = Massif.CartLedge.X0 + 4, Massif.CartLedge.X1 - 3
 		Style.rails(decor, Vector3.new(x0, y, z), Vector3.new(x1, y, z), { SleeperEvery = 3 })
-		Style.mineCart(decor, CFrame.lookAt(Vector3.new(84, y, z), Vector3.new(90, y, z)), rng, { Load = "Ore" })
+		Style.mineCart(decor, CFrame.lookAt(Vector3.new(84, y, z), Vector3.new(90, y, z)), rng, { Load = "Gold" })
 		-- buffer stop
 		Kit.box(decor, Vector3.new(x1 - 0.6, y, z - 2.2), Vector3.new(x1 + 0.4, y + 2.4, z - 1.4), C.WoodDark, nil, Style.decor())
 		Kit.box(decor, Vector3.new(x1 - 0.6, y, z + 1.4), Vector3.new(x1 + 0.4, y + 2.4, z + 2.2), C.WoodDark, nil, Style.decor())
