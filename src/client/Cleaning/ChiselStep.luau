@@ -20,6 +20,7 @@ local Theme = require(Shared.Config.UITheme)
 local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local CutRecorder = require(Shared.Cleaning.CutRecorder)
 local OreShellBuilder = require(Shared.Builders.OreShellBuilder)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Geo = require(Shared.Builders.Geo)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -276,8 +277,8 @@ function ChiselStep.crack(self: any)
 				local toward = ctx.shell.WorkCF.LookVector * -1
 				primary.AssemblyLinearVelocity = outward * math.random(7, 11) + toward * 4 + Vector3.new(0, 6, 0)
 				primary.AssemblyAngularVelocity = Vector3.new(math.random(-6, 6), math.random(-6, 6), math.random(-6, 6))
-				Vfx.burst("FineDust", pieceCenter, 4, ctx.ore.Crust)
-				Vfx.chips(pieceCenter, 4, ctx.ore.Crust, 0.7)
+				Vfx.burst("FineDust", pieceCenter, 4, ItemBuilder.DirtyCrust)
+				Vfx.chips(pieceCenter, 4, ItemBuilder.DirtyCrust, 0.7)
 				task.delay(1.2, function()
 					for _, d in capModel:GetDescendants() do
 						if d:IsA("BasePart") then
@@ -398,7 +399,7 @@ function ChiselStep.update(self: any, dt: number): boolean
 		local world = ctx.worldAt(p.X, p.Y, OreShellBuilder.DotZ)
 		if t - ctx.lastFineDust > 0.2 then
 			ctx.lastFineDust = t
-			Vfx.burst("FineDust", world, 1, ctx.ore.Crust)
+			Vfx.burst("FineDust", world, 1, ItemBuilder.DirtyCrust)
 		end
 		if state.Quality > 0.9 then
 			Vfx.burst("Sparks", world, 1)

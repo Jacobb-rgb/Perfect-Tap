@@ -275,7 +275,13 @@ end
 
 ---------------------------------------------------------------- turning ores
 
-type Spinner = { Pivot: CFrame, Parts: { { Part: BasePart, Offset: CFrame } }, Phase: number }
+type Spinner = {
+	Pivot: CFrame,
+	Parts: { { Part: BasePart, Offset: CFrame, Mote: boolean } },
+	Phase: number,
+	Light: PointLight?,
+	LightBase: number,
+}
 local spinners: { [Model]: Spinner } = {}
 
 local function scanSpinners()
@@ -295,17 +301,29 @@ local function scanSpinners()
 				local podium = yard:FindFirstChild("Podium" .. slot)
 				local display = podium and podium:FindFirstChild("Display")
 				if display and display:IsA("Model") then
-					local pivot = display:GetPivot()
+					-- turn around the ore's visual middle (ItemBuilder.display sets Center)
+					local center = display:GetAttribute("Center")
+					local base = display:GetPivot()
+					local pivot = if typeof(center) == "Vector3" then CFrame.new(center) * base.Rotation else base
 					if (pivot.Position - eye).Magnitude <= SPIN_RANGE then
 						seen[display] = true
 						if not spinners[display] then
 							local parts = {}
+							local light: PointLight? = nil
 							for _, d in display:GetDescendants() do
 								if d:IsA("BasePart") then
-									table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame) })
+									table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame), Mote = d.Name == "Mote" })
+								elseif d:IsA("PointLight") and display:GetAttribute("Pulse") == true then
+									light = d
 								end
 							end
-							spinners[display] = { Pivot = pivot, Parts = parts, Phase = math.random() * 6 }
+							spinners[display] = {
+								Pivot = pivot,
+								Parts = parts,
+								Phase = math.random() * 6,
+								Light = light,
+								LightBase = if light then light.Brightness else 0,
+							}
 						end
 					end
 				end
@@ -323,8 +341,14 @@ local function spin(t: number)
 	for display, s in spinners do
 		if display.Parent then
 			local cf = s.Pivot * CFrame.new(0, math.sin(t * 1.4 + s.Phase) * BOB, 0) * CFrame.Angles(0, t * SPIN_SPEED + s.Phase, 0)
+			-- Mythic motes circle faster than the ore turns
+			local orbit = cf * CFrame.Angles(0, t * SPIN_SPEED * 2.5, 0)
 			for _, entry in s.Parts do
-				entry.Part.CFrame = cf * entry.Offset
+				entry.Part.CFrame = (if entry.Mote then orbit else cf) * entry.Offset
+			end
+			local light = s.Light
+			if light then
+				light.Brightness = s.LightBase * (0.75 + 0.35 * math.sin(t * 2.2 + s.Phase))
 			end
 		else
 			spinners[display] = nil
