@@ -1,9 +1,12 @@
 --[[
-	The giant fire crystal in the middle of the plaza (LOBBY_PLAN 6.3.2):
-	a glowing ember moat inside a ring of dark stone blocks with Fire
-	insets (open N and S, a threshold step in each gap), a stepped
-	star-shaped stone base with a glowing fire bed, an octagonal pedestal
-	with an Ember seam, and the crystal cluster on top.
+	The giant fire crystal in the middle of the plaza (LOBBY_PLAN 6.3.2,
+	restyled after concept v2): a chunky mechanical ring (16 dark metal
+	housing segments with light cap plates, orange glowing slots on their
+	outer faces, a blue neon outer top edge and orange glows facing the
+	crystal, clamped by taller dark ribs with bolt caps and status lights)
+	around a glowing ember bed, a stepped octagonal metal base with a blue
+	neon rim and a glowing fire bed, an octagonal pedestal with an Ember
+	seam, and the crystal cluster on top.
 
 	Hook: the crystal cluster is the Model "FireCrystal", tagged Spin
 	(SpinSpeed 0.25, BobHeight 0.5, BobSpeed 0.9), streamed Atomic, its
@@ -21,6 +24,7 @@ local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 
 local C = Style.C
+local K = Common.Colors
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
 
@@ -30,10 +34,17 @@ FireCrystal.SpinSpeed = 0.25
 FireCrystal.BobHeight = 0.5
 FireCrystal.BobSpeed = 0.9
 
-local RING_R = 11
-local RING_SEGMENTS = 18 -- one block centered on S (90 deg) and N (270 deg)
-local RING_H = 1.6
-local INNER = 12.4 -- side of the star base blocks
+-- the mechanical housing ring (segments 8.8 .. 11.6 from the center)
+FireCrystal.RingRadius = 10.2
+FireCrystal.RingWidth = 2.8
+FireCrystal.RingHeight = 2.2
+FireCrystal.Segments = 16
+local RING_R = FireCrystal.RingRadius
+local RING_W = FireCrystal.RingWidth
+local RING_H = FireCrystal.RingHeight
+local SEGMENTS = FireCrystal.Segments
+local MOAT_R = 8.9 -- the glowing ember bed inside the housing
+local INNER = 10.4 -- side of the star base blocks (points reach r 7.35)
 -- low base: the crystal tip stays under y 14 (with the bob), so THE GREAT
 -- FORGE board on the gable reads above it from the spawn
 local INNER_H = 1.2
@@ -113,51 +124,112 @@ local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Mod
 	return m
 end
 
+-- Status light colors on every fourth rib (concept v2: blue, green, orange).
+local STATUS = { K.NeonBlue, C.LeafGreenLight, K.NeonBlue, C.FireCore }
+
+--[[
+	The chunky mechanical housing (concept v2, Kenney pipe-ring-colored):
+	16 dark metal segments, each with an inset light cap plate, a blue neon
+	strip on the outer top edge, an orange glowing slot on the outer face
+	and (every other one) an orange glow facing the crystal; between them
+	taller dark clamp ribs with bolt caps or status lights.
+]]
+local function housing(m: Model, center: Vector3, y0: number, rng: Rng.Rng)
+	local step = 2 * math.pi / SEGMENTS
+	local segLen = 2 * math.pi * RING_R / SEGMENTS * 0.8
+	for i = 0, SEGMENTS - 1 do
+		local frame = CFrame.new(center) * CFrame.Angles(0, -(i + 0.5) * step, 0) * CFrame.new(RING_R, y0, 0)
+		local seg = Style.block(
+			m,
+			frame * CFrame.new(0, RING_H / 2, 0),
+			Vector3.new(RING_W, RING_H, segLen),
+			Style.vary(K.Metal, rng, 0.04),
+			nil,
+			Style.solid()
+		)
+		seg.Name = "RingSegment"
+		Style.block(
+			m,
+			frame * CFrame.new(-0.15, RING_H + 0.08, 0),
+			Vector3.new(RING_W - 0.8, 0.16, segLen - 0.5),
+			Style.vary(K.MetalLight, rng, 0.04),
+			nil,
+			Style.tiny()
+		)
+		local edge = Style.block(
+			m,
+			frame * CFrame.new(RING_W / 2 - 0.12, RING_H - 0.05, 0),
+			Vector3.new(0.3, 0.22, segLen + 0.02),
+			K.NeonBlue,
+			NEON,
+			Style.tiny()
+		)
+		edge.Name = "RingEdgeGlow"
+		local slot = Style.block(
+			m,
+			frame * CFrame.new(RING_W / 2 + 0.02, RING_H * 0.42, 0),
+			Vector3.new(0.12, 0.52, segLen * 0.62),
+			K.NeonOrange,
+			NEON,
+			Style.tiny()
+		)
+		slot.Name = "RingSlot"
+		if i % 2 == 0 then
+			Style.block(
+				m,
+				frame * CFrame.new(-RING_W / 2 - 0.02, RING_H * 0.55, 0),
+				Vector3.new(0.12, 0.6, segLen * 0.5),
+				C.Fire,
+				NEON,
+				Style.tiny()
+			)
+		end
+		-- clamp rib between this segment and the next
+		local rib = CFrame.new(center) * CFrame.Angles(0, -(i + 1) * step, 0) * CFrame.new(RING_R + 0.1, y0, 0)
+		local ribH = RING_H + 0.5
+		Style.block(
+			m,
+			rib * CFrame.new(0, ribH / 2, 0),
+			Vector3.new(RING_W + 0.5, ribH, 0.95),
+			Style.vary(K.MetalDark, rng, 0.04),
+			nil,
+			Style.solid()
+		)
+		if i % 4 == 1 then
+			local status = Style.block(
+				m,
+				rib * CFrame.new(0.3, ribH + 0.15, 0),
+				Vector3.new(0.6, 0.3, 0.6),
+				STATUS[(i - 1) // 4 + 1],
+				NEON,
+				Style.tiny()
+			)
+			status.Name = "StatusLight"
+		else
+			Style.block(m, rib * CFrame.new(0, ribH + 0.08, 0), Vector3.new(RING_W - 0.2, 0.16, 0.7), K.MetalLight, nil, Style.tiny())
+		end
+	end
+end
+
 function FireCrystal.build(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("FireCrystal")
 	local center = piece.Center
 	local y0 = Common.TileTop
 	local m = Style.model("FireCrystalRing", parent)
 
-	-- glowing ember moat between the outer ring and the star base
-	local moat = Geo.cylinder(m, center + Vector3.new(0, y0 - 0.01, 0), 0.1, (RING_R - 1.25) * 2, C.Ember, NEON, Style.tiny())
+	-- glowing ember bed inside the housing
+	local moat = Geo.cylinder(m, center + Vector3.new(0, y0 - 0.01, 0), 0.1, MOAT_R * 2, C.Ember, NEON, Style.tiny())
 	moat.Name = "EmberMoat"
 
-	-- outer ring: dark stone blocks with Fire insets, open toward S and N
-	local gaps = {
-		{ math.rad(80), math.rad(100) },
-		{ math.rad(260), math.rad(280) },
-	}
-	local ring = Style.stoneRing(m, center, RING_R, rng, {
-		Segments = RING_SEGMENTS,
-		Height = RING_H,
-		Width = 2.4,
-		Color = C.StoneDark,
-		Glow = C.Fire,
-		Y = y0,
-		Gaps = gaps,
-	})
-	for _, block in ring do
-		block.Name = "RingStone"
-	end
-	-- threshold steps in the two gaps
-	for _, deg in { 90, 270 } do
-		local a = math.rad(deg)
-		local frame = CFrame.new(center) * CFrame.Angles(0, -a, 0) * CFrame.new(RING_R, y0 + 0.25, 0)
-		Style.block(m, frame, Vector3.new(2.4, 0.5, 3.6), Style.vary(C.StoneLight, rng, 0.04), nil, Style.solid())
-	end
-	-- little ground lamps on four ring blocks
-	for _, i in { 2, 6, 11, 15 } do
-		local a = (i + 0.5) / RING_SEGMENTS * 2 * math.pi
-		local top = y0 + RING_H + (if i % 3 == 0 then 0.3 else 0)
-		local base = CFrame.new(center) * CFrame.Angles(0, -a, 0) * CFrame.new(RING_R, top, 0)
-		Style.lantern(m, base, { Kind = "Ground", Color = C.Fire })
-	end
+	housing(m, center, y0, rng)
 
-	-- stepped star base, StoneDark cap and the glowing fire bed
+	-- stepped octagonal metal base with a blue neon rim under its cap, and the glowing fire bed
 	local yInner = y0 + INNER_H
-	star(m, CFrame.new(center + Vector3.new(0, y0 + INNER_H / 2, 0)), INNER, INNER_H, Style.vary(C.Stone, rng, 0.03))
-	star(m, CFrame.new(center + Vector3.new(0, yInner + 0.2, 0)), INNER + 0.6, 0.4, Style.vary(C.StoneDark, rng, 0.03))
+	star(m, CFrame.new(center + Vector3.new(0, y0 + INNER_H / 2, 0)), INNER, INNER_H, Style.vary(K.Metal, rng, 0.03))
+	local rim = star(m, CFrame.new(center + Vector3.new(0, yInner - 0.08, 0)), INNER + 0.2, 0.16, K.NeonBlue, NEON, Style.tiny())
+	rim[1].Name = "BaseGlow"
+	rim[2].Name = "BaseGlow"
+	star(m, CFrame.new(center + Vector3.new(0, yInner + 0.2, 0)), INNER + 0.5, 0.4, Style.vary(K.MetalDark, rng, 0.03))
 	local bed = star(m, CFrame.new(center + Vector3.new(0, yInner + 0.4, 0)), INNER - 3.4, 0.2, C.Ember, NEON, Style.tiny())
 	bed[1].Name = "FireBed"
 	bed[2].Name = "FireBed"
@@ -171,7 +243,7 @@ function FireCrystal.build(parent: Instance, rng: Rng.Rng)
 		CFrame.new(center + Vector3.new(0, yPed + PEDESTAL_H / 2, 0)) * CFrame.Angles(0, math.pi / 8, 0),
 		PEDESTAL,
 		PEDESTAL_H,
-		Style.vary(C.StoneDark, rng, 0.03)
+		Style.vary(K.MetalDark, rng, 0.03)
 	)
 	star(
 		m,

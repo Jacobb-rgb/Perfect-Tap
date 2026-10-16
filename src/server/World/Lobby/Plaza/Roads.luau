@@ -1,16 +1,23 @@
 --[[
-	Roads, paths and lanterns (LOBBY_PLAN 6.3.5 + 6.3.6).
+	Roads, paths and lanterns (LOBBY_PLAN 6.3.5 + 6.3.6, near the plaza
+	restyled after concept v2).
 
 	Every WorldLayout road and LobbyLayout path as a flat, non-collide strip
-	over the solid ground (Common.path): the south road, the spurs, the
-	forge paths and the district paths in cobble (curb stones near the
-	plaza), the plot roads, the rim road, ToMine and ToNextArea in dirt.
-	The south road stops at the creek bridge (Flora builds the bridge).
+	over the solid ground. The walkways that leave the plaza (the south road
+	up to the creek bridge, the spurs, the forge paths and the four district
+	paths) are dark neon walkways (Common.walkway: polished slate panels,
+	dark metal borders with orange neon edge strips) and the south walkway
+	carries glowing chevrons pointing to the forge; the south road past the
+	bridge and ToScanner stay cobble (Common.path), the plot roads, the rim
+	road, ToMine and ToNextArea dirt. The south road stops at the creek
+	bridge (Flora builds the bridge).
 
-	Lanterns: Post lanterns every ~19 studs, alternating sides, along the
-	south road, the spurs, the forge paths and the rim road; a pair of
-	Pillar lanterns at each of the four plaza entrances. Seven of them carry
-	a PointLight (four at the entrances, three on the roads).
+	Lanterns every ~19 studs, alternating sides, along the south road, the
+	spurs, the forge paths and the rim road: dark metal lantern pillars with
+	glowing orange slots along the neon walkways, wooden Post lanterns on
+	the far roads; a pair of lantern pillars at each of the four plaza
+	entrances. Seven of them carry a PointLight (four at the entrances,
+	three on the roads).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -73,13 +80,38 @@ local function segments(s: Common.Strip): { { From: Vector3, To: Vector3 } }
 	}
 end
 
+-- Glowing chevrons on the south walkway, pointing north to the forge
+-- (z of each double chevron's front tip).
+Roads.ChevronZ = { 40, 47.5 }
+
+local function chevrons(m: Model, s: Common.Strip)
+	for _, z in Roads.ChevronZ do
+		for _, d in { 0, 1.3 } do
+			local tip = Vector3.new(s.From.X, s.Lift + Common.WalkwayTop.Neon - 0.03, z + d)
+			Common.chevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.4, 0.7, Common.Colors.NeonOrange)
+		end
+	end
+end
+
 local function paveAll(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("Roads", parent)
 	for _, s in Common.strips() do
 		local cobble = s.Kind == "Cobble"
 		-- curb stones along the first ~20 studs of cobble strips that leave the plaza
 		local nearPlaza = onPlaza(s.From, 6)
-		for _, seg in segments(s) do
+		for i, seg in segments(s) do
+			if s.Neon and i == 1 then
+				local walk = Common.walkway(m, seg.From, seg.To, s.Width, rng, {
+					Name = s.Id,
+					Lift = s.Lift,
+					Self = s.Id,
+					EdgeInset = if s.Id == "SouthRoad" then 0 else 0.5,
+				})
+				if s.Id == "SouthRoad" then
+					chevrons(walk, s)
+				end
+				continue
+			end
 			Common.path(m, seg.From, seg.To, s.Width, rng, {
 				Kind = s.Kind,
 				Name = s.Id,
@@ -145,10 +177,16 @@ local function roadLanterns(parent: Instance)
 				end
 			end
 			for i, entry in placed do
-				-- the lamp arm reaches over the road (LookVector = toward the road)
+				-- the lamp arm / the glowing slots face the road (LookVector = toward the road)
 				local look = -right * entry.Side
 				local base = CFrame.lookAt(entry.P, entry.P + look)
-				Style.lantern(m, base, { Kind = "Post", Light = i == litIndex, Range = 18, Brightness = 1.4 })
+				local lit = i == litIndex
+				-- dark metal pillars along the neon walkways (the south road's lie past the bridge)
+				if s.Neon and not (s.Id == "SouthRoad" and entry.P.Z > Roads.SouthRoadDarkZ[1]) then
+					Common.pillarLantern(m, base, { Height = 4.2, Light = lit, Range = 18, Brightness = 1.4 })
+				else
+					Style.lantern(m, base, { Kind = "Post", Light = lit, Range = 18, Brightness = 1.4 })
+				end
 			end
 		end
 	end
@@ -160,9 +198,8 @@ local function entranceLanterns(parent: Instance)
 		for i, side in { -1, 1 } do
 			local p = e.Center + e.Across * side
 			local lit = e.Lit[i]
-			Style.lantern(m, CFrame.lookAt(p, Vector3.new(0, 0, 0)), {
-				Kind = "Pillar",
-				Height = 4.6,
+			Common.pillarLantern(m, CFrame.lookAt(p, Vector3.new(0, 0, 0)), {
+				Height = 4.8,
 				Light = lit,
 				Range = 18,
 				Brightness = 1.4,
