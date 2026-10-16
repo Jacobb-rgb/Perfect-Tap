@@ -1,0 +1,35 @@
+<!doctype html><html><body style="margin:0;background:#2a2a33">
+<canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+const params = new URLSearchParams(location.search);
+const names = params.get("names").split(",");
+const cell = 320, cols = 6, rows = Math.ceil(names.length / cols);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("c"), antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(cols * cell, rows * cell); renderer.setScissorTest(true);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const loader = new GLTFLoader();
+const labels = [];
+for (let i = 0; i < names.length; i++) {
+  const gltf = await loader.loadAsync(`/kit/${names[i]}.glb`);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2a2a33);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(3, 5, 4); scene.add(sun);
+  const obj = gltf.scene; scene.add(obj);
+  const box = new THREE.Box3().setFromObject(obj); const size = box.getSize(new THREE.Vector3()); const center = box.getCenter(new THREE.Vector3());
+  const r = Math.max(size.x, size.y, size.z);
+  const cam = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+  cam.position.copy(center).add(new THREE.Vector3(1, 0.8, 1.2).normalize().multiplyScalar(r * 2.3)); cam.lookAt(center);
+  const x = (i % cols) * cell, y = (rows - 1 - Math.floor(i / cols)) * cell;
+  renderer.setViewport(x, y, cell, cell); renderer.setScissor(x, y, cell, cell);
+  renderer.render(scene, cam);
+  labels.push(`${names[i]} (${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)})`);
+}
+const out = document.createElement("canvas"); out.width = cols * cell; out.height = rows * cell;
+const ctx = out.getContext("2d"); ctx.drawImage(renderer.domElement, 0, 0);
+ctx.fillStyle = "#e8e8f0"; ctx.font = "15px sans-serif";
+labels.forEach((l, i) => ctx.fillText(l, (i % cols) * cell + 6, Math.floor(i / cols) * cell + cell - 8));
+window.__png = out.toDataURL("image/jpeg", 0.85); window.__done = true;
+</script></body></html>

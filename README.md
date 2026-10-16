@@ -13,6 +13,10 @@ minigame**, smelt them, forge gear and grow your workshop.
 
 *Screenshots are offline preview renders of the generated map (tools/preview).*
 
+## Status / continuing the work
+Current state, branches and next steps: **[docs/HANDOFF.md](docs/HANDOFF.md)** (project rules for Claude: [CLAUDE.md](CLAUDE.md)).
+Kenney Factory Kit (machine style reference): [docs/KENNEY_FACTORY_KIT.md](docs/KENNEY_FACTORY_KIT.md).
+
 ## Quick start
 - **Just play / publish:** open `build/TerraForge.rbxl` in Roblox Studio → Play. See [docs/ROJO_SETUP.md](docs/ROJO_SETUP.md).
 - **Česky:** [ZACNI_TADY.md](ZACNI_TADY.md)

@@ -1,0 +1,497 @@
+===== wf_d7de2899-077 P0 contracts
+SUMMARY: P0 Contracts package is finished and committed (07f7e95), and tools/check.sh passes. The four new pure shared modules match the Contracts section's API names and signatures: src/shared/Machines/Grid.luau, Placement.luau, ConveyorLogic.luau and MachineLogic.luau. They use only Config, Vector3 and CFrame, so they run in Lune.
+
+Config, remote and data changes:
+- Net declares every step-d remote with the planned rates.
+- GameConfig has every listed tuning key, plus StudioDevKit with the planned Layout and Inventory.
+- MachineData has LoadText, WrongHint, ConveyorFaces, AcceptsForeign, the Auto Cleaner's 60/40 GradeChances, MaxOutBuffer=4, machineSlots and conveyorSlots.
+- ItemData has storageKey and parseKey; SoundConfig has the six new sounds.
+- DataTemplate.Version is 2. The new src/server/Data/Migrations.luau (Latest=2, run(data) -> {Moved, Dropped}) is idempotent, and DataService.migrate calls it after the purchase trim.
+
+Model and world changes:
+- MachineBuilder: Output attachments sit at Grid.outputLocal, and the lips, chute wedges and furnace mouth moved with them. Every machine has a Status attachment. The Anvil has CamPoint and IngotSlot1..4. The conveyor is 6 parts: Base, Belt (tagged ConveyorBelt, PhysicalProperties 0.7/1.2/0/100/100), RailL, RailR and 2 Arrow wedges. The Cleaning Station's OrePoint, CamPoint and tray Output are unchanged (a test checks this).
+- PlotBuilder: the pad is now 50x50 and the PlotTile is exactly the 48x48 grid. Rails and posts sit at ±24.5 and the banner pole at (25.5, 25.5), so nothing is inside the grid. WorldBuilder.Version is 3 and build/TerraForge.rbxl was rebaked and committed.
+- GAME_DESIGN.md has the updated machines table, the new intake rule and a Build controls table.
+
+Tests: new specs Grid, Placement, ConveyorLogic, MachineLogic, Machines, Migration and PlotBorder (brand new), plus additions to Config.spec.
+- MachineLogic includes the 20,000-step seeded conservation fuzz. It checks, per machine and per ore, that pushed = in queue + consumed + drained and produced = in Out + popped + drained, with the recipe ratios, and In/Out <= 4 at every step. I confirmed it catches two deliberately injected bugs.
+- Placement.spec checks that the StarterKit plus StudioDevKit.Layout validate together and that every kit output lands on a free cell. It also runs a 4,000-step random ledger check: placed + inventory stays constant, failed commits change nothing and no zero-count keys are left.
+
+The game should play as before: MachineService, PlotService and CleaningService are untouched, PlotService.footprintCFrame uses the same maths as Grid.localCFrame, and old saves migrate to Version 2.
+
+Part counts: Cleaning Station 30, Crusher 25, Clay and Blast Furnace 15, Auto Cleaner 15, Anvil 12, Crate 11, Sell Chute 8, Conveyor 6.
+
+Files: /home/user/Perfect-Tap/src/shared/Machines/{Grid,Placement,ConveyorLogic,MachineLogic}.luau, /home/user/Perfect-Tap/src/server/Data/Migrations.luau, /home/user/Perfect-Tap/tests/{Grid,Placement,ConveyorLogic,MachineLogic,Machines,Migration,PlotBorder,Config}.spec.luau.
+COMMIT: 07f7e95af00ea831b1deb09caafb8887635fd83e
+CHECKSPASSED: True
+DEVIATIONS:
+  - GameConfig: StudioDevKit is typed `DevKit | false`, and GameConfig now exports the types DevKitEntry and DevKit. Consumers must narrow it (`local kit = GameConfig.StudioDevKit; if kit then ... kit.Layout`). The values are exactly as planned.
+  - MachineData: ConveyorFaces is typed ("All"|"NoFront")?. The Description text changed for StorageCrate, Anvil, AutoCleaner, SellChute and Conveyor to match the new rules (shared store, one ore, 60/40, pays the owner, walk-through), and the header comment now states the new intake rule. No price, time, size or StarterKit changes.
+  - ItemData: added the exported type ItemData.Desc = {K, O, G?, R?}; Placement.Desc and MachineLogic.Desc alias it. parseKey also rejects a recipe on a non-Gear kind and needs exactly 4 '|' parts. A grade is allowed on any kind, so Raw with a grade round-trips.
+  - Grid: footprint, outputLocal, outputCell, localCFrame and sideOf error (assert) on an unknown machine id; callers should filter with MachineData.ById. Grid exports `type Side`. The no-output set (CleaningStation, SellChute, Conveyor) is a local table in Grid, not a MachineData field. Grid.key is only unique for on-plot cells.
+  - Placement.cells leaves out off-plot cells, so their keys never clash with real cells.
+  - Placement.occupancy skips entries with an unknown Id or non-integer X/Z/R; when saved entries overlap, the earlier entry keeps the cell.
+  - Placement.commitPlace checks inventory ('NoneOwned') before validate, as the plan's text says, so an unknown id with no inventory returns 'NoneOwned', not 'UnknownMachine'.
+  - Placement.commitMove returns (false, 'Invalid') when the entry is not in data.PlacedMachines (found by identity).
+  - Placement.commitPickup only removes the entry and adds 1 to inventory (creating MachineInventory if missing, no 999 cap). It does not drain In/Out: call MachineLogic.drain first.
+  - Placement.clampOrigin: the cursor cell becomes the footprint's middle cell (the lower middle for even sizes), then the origin is clamped onto the plot; NaN becomes 0.
+  - Placement.sanitize also displaces entries with non-integer X/Z/R or R outside 0..3. Spills go to Storage while #Storage < MaxStoredItems; beyond that Coins and TotalEarned rise by ItemData.value (same as ItemService.stash). It rewrites data.PlacedMachines in place (same table), leaves unknown-Id entries untouched (their In/Out are not trimmed) and does not call DataService.changed (it is pure).
+  - ConveyorLogic exports the types Sides = {Left, Right} and Feeder = {Conveyor, Target}. headOn returns {a, b} pairs, each listed once. Entries that don't own their cell (unknown Id, out of bounds, overlapping an earlier entry) are ignored by openSides, feeders and headOn.
+  - ConveyorLogic.faceAllowed: (fromX, fromZ) is the cell the item comes FROM. For a belt that is the belt's cell; for machine-to-machine handoff it is the source machine's own front cell (outputCell minus Grid.dir(source.R)), not the output cell.
+  - MachineLogic.rollGrade clamps a rolled grade above maxGrade down to maxGrade (it does not renormalise). Odds that don't sum to 1 are scaled, and a NaN roll counts as 0.
+  - MachineLogic.isValidDesc requires a known kind and ore and a grade that is nil or known. R is allowed only on Gear and is required there.
+  - MachineLogic.accepts: an unknown machine id gives 'Wrong'. AcceptsForeign machines (SellChute) also require the kind in Accepts and value > 0. accepts never returns 'Busy' (AnvilService adds that).
+  - MachineLogic.queueSize is MachineIntakeQueue (4) for processors (Output and Time set) and the Anvil, and 0 for StorageCrate, SellChute, CleaningStation, Conveyor and unknown ids.
+  - MachineLogic.outputs returns {} for non-processors. Non-rolled outputs (Crusher too, not only furnaces) get grade input.G or 'Rough'. Each output is a fresh table.
+  - MachineLogic.push does not enforce the queue cap and complete does not check MaxOutBuffer; callers check accepts and #Out + #outputs first.
+  - MachineLogic.forge returns (nil, 0) and changes nothing unless the first N items in In are Ingots of In[1]'s ore.
+  - MachineLogic.validateStrikes also rejects tables with extra or non-array keys. The `why` values are short English strings ('wrong count', 'too fast', ...).
+  - MachineBuilder, Conveyor: the conveyor also gets a Prompt attachment (y=1.5, unused) and Status. The belt's old 'Conveyor' boolean attribute was removed; the ConveyorBelt tag replaces it (nothing read the attribute).
+  - MachineBuilder, Status height: Status sits at the model's highest part + 1.5, chimneys included. Relative to the pivot that is about 10.6 for the Clay Furnace, 14.7 for the Blast Furnace, 9.8 for the Cleaning Station, 6.1 for the Anvil and 2.45 for the Conveyor.
+  - MachineBuilder, Crate and Anvil Output: the Output y moved from 2 to 1.8, as the outputLocal formula gives. The Anvil Output moved to (2, 1.8, -4.5) and the Crate Output to (2, 1.8, -4.5).
+  - MachineBuilder, Anvil slots: IngotSlot1..4 are at x = -1.35, -0.45, 0.45, 1.35, y = 5.05, z = 0.3 relative to Base, turned 90 degrees about Y so an ingot's long side runs front to back.
+  - MachineBuilder, Clay Furnace mouth: the mouth and glow are clamped to x = 1.4 so they stay on the body, while the output lip is at x = 2.
+  - PlotBuilder: the corner posts shrank from 1.4 to 1.0 studs wide; at ±(half+0.5) a 1.4 post would reach 0.2 studs into the grid. The banner pole was lengthened 1.2 studs downward so it never floats outside the pad. The inner tile is now named 'PlotTile'.
+  - Migrations, rotation: only non-finite X/Z send a machine back to the inventory. A missing or non-finite R becomes 0 and the machine stays placed.
+  - Migrations, rescued contents: items in the queues of entries removed for non-finite X/Z are moved to Storage instead of lost, for unknown Ids too (the unknown machine itself is dropped with a warning). These moves and the plan's unknown-kind/ore moves append to Storage without the 300 cap.
+  - Migrations, malformed items: a queue element whose G or R is non-nil and not a string is dropped as malformed.
+  - Migrations, inventory cap: when a machine is sent back, the inventory count is capped at 999.
+  - Migrations, Version: it is set to 2 only when missing or lower; a newer save's Version is not lowered.
+  - Migrations, report: Moved = machines sent to inventory + items moved to Storage. Dropped = removed entries, elements and keys, plus non-table top-level fields replaced by empty tables.
+  - Extra test file tests/PlotBorder.spec.luau (new, for my PlotBuilder change): the pad and tile sizes, and no plot decoration above the 48x48 grid on any plot.
+REQUESTS:
+  - P1 MachineService.emit: call ConveyorLogic.faceAllowed(target, ox - dx, oz - dz), where (ox, oz) = Grid.outputCell(src.Id, src.X, src.Z, src.R) and (dx, dz) = Grid.dir(src.R). The from-cell is the source machine's own front cell; passing the output cell itself would always return false.
+  - P1 MachineService.pickup: call MachineLogic.drain(m.Entry) and store the items before Placement.commitPickup; commitPickup does not drain.
+  - P1: pass only known ids to Grid functions (they assert). Spawned machines are always known, but data.PlacedMachines may hold unknown Ids, which sanitize keeps.
+  - P1 PlotService.footprintCFrame: switch to PlotService.plotCFrame(plotId) * Grid.localCFrame(id, gx, gz, r), as planned. The maths is identical, so the current code already lines up. PlotService.cellAt could reuse Grid.cellFromLocal.
+  - P1 StateService.storageSummary: use ItemData.storageKey (same 'K|O|G|R' output as today), as planned.
+  - Optional, for whoever edits GameConfig next: the order-1 packages still need numbers that only appear in the plan text: crate-full toast every 5 s, raw-sell tip every 60 s while ItemsSold < 40, Placed/PackedUp fireNear 100, build lift +3 / +2 studs, anvil walk-away check every 1 s, StorageTake spawn offset 0.5. I left them out of GameConfig to keep to the contract.
+  - WP-Docs/QA: QA screenshots of plots and machines need redoing (map v3, moved outputs, new plot border).
+STUDIOTESTS:
+  - Join with a fresh save: the StarterKit (Crate 1,7; Cleaning Station 4,4; Clay Furnace 8,4) appears; rejoin and the layout is the same.
+  - Full cleaning loop: carry raw ore to the vise, chisel, scrape, polish; the clean ore appears on the tray. The close-up camera framing is unchanged.
+  - Plot border: the rails, corner posts and banner pole are on the 1-stud border or outside it, none inside the 48x48 grid; the darker PlotTile covers exactly the grid.
+  - The Clay Furnace output lip and glowing mouth sit toward the right front cell (looking out of the front); the Crusher and Auto Cleaner chute wedges sit on the right front cell.
+  - Load an old save with Version 1: it comes back as Version 2 with no '[DataService] save repaired' warning unless the save was damaged.
+  - Conveyor model in Studio: 6 parts; the Belt has the ConveyorBelt tag; RailL is on the left and RailR on the right when looking along the arrow; the single chevron points the way items move.
+===== wf_d7de2899-077 P1 core
+SUMMARY: P1 Core runtime is done and committed (ff4c0f4 on claude/keen-wozniak-mx7azn). tools/check.sh passes: strict type analysis is clean, 152 Lune tests pass and the place builds and bakes.
+
+What was built:
+- **MachineService (the big refactor).** Each placed machine links to its saved entry: `m.Entry` (the saved table itself), `Info` and `Removed`. Spawning now starts in `start()`, which fixes the init-order race. New players get the StarterKit once. The Studio dev kit is added only when the game runs in Studio with in-memory saves. `Placement.sanitize` repairs saved layouts and sends one "didn't fit" toast. Unknown machine ids stay in the save but don't spawn.
+  - place / move / pickup go through the Placement ledger, and pickup moves the machine's queued and finished items into Storage. Busy machines can't be moved or packed up, and Unload writes no data.
+  - Behaviour registry with spawned/removed/moved/canAccept/insert/tick. register back-fills spawned for machines already placed.
+  - canAccept, insertRecord and insertDesc are synchronous. If an insert hook fails, the item is respawned rather than lost.
+  - pushOut and emit: a machine hands its output straight to the machine in its front cell, using `ConveyorLogic.faceAllowed(target, ox - dx, oz - dz)` as P0 asked. Output pauses with a status when that machine refuses or the owner has too many loose items.
+  - A 10 Hz tick sends finished items out one per tick and retries after OutputRetry when blocked.
+  - ofPlot, atCell (per-plot cell index), setAttrs, onLayoutChanged (deferred, at most once per player per frame), onAction plus the MachineAction dispatcher, limits and usage.
+- **IntakeService (new).** The only scanner that moves loose items into machines. A per-plot cell index of hopper and belt-end boxes (pure maths, rebuilt on every layout change), town zones (addZone), the belt handler hook, refusal handling, the throttled wrong-item hint, foreign-item return after 8 s, and addLoadPrompt (the Put In loop).
+- **ItemService.** descOf, absorb, spawnDesc, storeDesc (stash is rebuilt on it with the same texts), looseList, a per-owner index for looseCount and ownedBy, isTrusted, eject, ReleasePos and ReleasedAt. The owner's client simulates an item only when the owner is within 80 studs. An item a client moved more than 90 studs from where it was dropped is put back next to its owner.
+- **PlotService.** footprintCFrame now uses `Grid.localCFrame`; cellAt uses Grid; new plotAt and isNear; plot CFrames are cached.
+- **CleaningService.** A moved hook re-mounts the vise ore; the removed hook accepts the reason. Its own vise scan stays (the plan keeps it off IntakeService) and now ignores untrusted items.
+- **StateService.** The storage summary uses `ItemData.storageKey`.
+- **ORDER lists.** Both init scripts list every step-d service and controller, and a missing module only warns.
+- **Client.** FxController.register; PromptController hides Put In unless you carry something, shows "Worth N coins" on Pell's prompt, and adds setSuppressed; new Util/PlayerControls with set, claim, release and owner.
+
+Not done: I could not run the d1 Studio test (join, full cleaning loop, rejoin, overlap repair toast, dev layout appearing). It needs a real Studio session.
+
+Files: /home/user/Perfect-Tap/src/server/Services/{MachineService,IntakeService,ItemService,PlotService,CleaningService,StateService}.luau, /home/user/Perfect-Tap/src/server/init.server.luau, /home/user/Perfect-Tap/src/client/init.client.luau, /home/user/Perfect-Tap/src/client/Controllers/{FxController,PromptController}.luau, /home/user/Perfect-Tap/src/client/Util/PlayerControls.luau, /home/user/Perfect-Tap/tests/{PlotService,ItemService,MachineService,IntakeService}.spec.luau.
+COMMIT: ff4c0f47425f8cbe8c9067221823515a91a0b82e
+CHECKSPASSED: True
+DEVIATIONS:
+  - ItemService.spawnDesc takes an optional 5th parameter, serverOwned: boolean?. MachineService.emit (and the fallback when an insert hook fails) passes true, so the server keeps physics for machine outputs and belts and hoppers never wait on a client trust check. Other callers get the planned behaviour (client physics within 80 studs).
+  - ItemService: spawnFromStorage now goes through spawnDesc. Item positions are read from Body.CFrame.Position (same value, but Lune can read it). setNetworkOwner is fully wrapped in pcall.
+  - ItemService: when the engine destroys an item (it fell out of the world), storeDesc now keeps it, paying full value when Storage is full. The old code only stored it while Storage had room.
+  - IntakeService.react takes an optional 5th parameter, belt: PlacedMachine?, the feeding belt used to push a refused item off its side. Without it, the belt under the item is looked up.
+  - IntakeService.setBeltHandler: localPos is the item's position in the belt model's own space (front = -Z, the way items move), not plot space. Only one handler is kept; setting a second one warns.
+  - IntakeService: hopper and belt-end zones are put on every plot cell their box covers, not only on footprint, belt and target cells. Feeder boxes only go on machines with an intake behaviour.
+  - IntakeService: foreign-item return applies only on plots that have an owner, and it also covers items on a belt (after the belt handler runs).
+  - IntakeService.hint sends Notify with Kind 'Info'. Put In texts when nothing went in: 'Your <Name> is full.' (the plan says '<Name> is full'), 'Your <Name> is busy right now.', the WrongHint, or 'That doesn't go in the <Name>.' when there is none, and 'Carry items here to put them in the <Name>.' for empty hands. All use Kind 'Deny'.
+  - MachineService adds hasIntake(m): boolean (true when a behaviour has both canAccept and insert). IntakeService uses it to decide which machines get hopper zones.
+  - MachineService behaviours: the first registered behaviour with both canAccept and insert takes items for its machine type. A canAccept without insert counts as no intake. Every behaviour's tick, spawned, removed and moved hooks run.
+  - MachineService.canAccept returns (false, 'Busy') for a removed machine or when canAccept throws, and (false, 'Wrong') for an invalid descriptor (the behaviour is never asked) or when there is no intake behaviour. insertRecord on a consumed record returns (false, 'Busy').
+  - MachineService.insertDesc / insertRecord: if the insert hook throws after the item was accepted, the item is respawned at the machine's Output, server-owned, and the call still returns true.
+  - MachineService.remove(m, reason) is runtime only (hooks, then the model is destroyed) for both reasons. pickup() does the drain and commitPickup itself; calling remove(m, 'Pickup') directly does not touch data.
+  - MachineService.onLayoutChanged also fires on unload (the plot is empty afterwards, and the player may have left by then, so DataService.get can be nil). It also fires when register() back-fills machines already placed. Rebuilding the cell map is immediate; only listeners are deferred.
+  - MachineService.spawnAll: the 'didn't fit' Notify comes 3 s later (TOAST_DELAY, a local constant) so the client HUD exists. With more than one displaced machine it reads '<N> machines didn't fit and are waiting in your Build menu.'. Running spawnAll again only spawns entries without a machine. If sanitize displaces an entry that is already spawned, that machine is removed with reason 'Pickup'. The dev kit raises inventory with math.max (a top-up) and prints one line.
+  - MachineService.pickup toast: '<N> items from your <Name> went to Storage.' ('1 item' when singular). When some items were sold because Storage was full: '<N> items from your <Name>: <S> went to Storage, <M> sold (storage full).'.
+  - MachineService sets OutCount and Status='' on every machine at spawn. emit sets Status 'OutputBlocked' / 'TooManyItems'. The tick clears Status on a successful emit, pops one Out item per tick, and drops (with a warning) an Out item that isn't a valid descriptor.
+  - MachineService.pushOut on a packed-up machine whose entry is no longer saved stores the item through ItemService.storeDesc instead.
+  - MachineService.point (and IntakeService hopper boxes) work out attachment world frames as Base.CFrame * Attachment.CFrame. That equals WorldCFrame in Roblox and also runs in Lune.
+  - Test-only hooks: MachineService._test {spawnAll, tick, action, reset}, IntakeService._test {rebuild, scanOne, load, reset, zonesAt} and ItemService._test {maintain, reset}. Nothing in the game calls them.
+  - Local constants in services (not in GameConfig): MachineService TOAST_DELAY=3 and WARN_COOLDOWN=10; IntakeService MAX_LOAD=64 (loop guard), EDGE=0.01 and WARN_COOLDOWN=10; PlotService plotAt local y range -3..24 and quick-reject half+2 (the plan's 26); Put In MaxActivationDistance 10 (as the plan says, same as CleaningService).
+  - PlayerControls.release(name) only frees the claim; callers turn the controls back on with set(true) themselves. set() caches the PlayerModule controls and may wait up to 5 s the first time.
+  - FxController.register replaces an existing handler for that kind and warns.
+  - build/TerraForge.rbxl (owned by WP-Docs/QA) is regenerated by check.sh because it contains the scripts. I restored it to the committed P0 version rather than committing a rebake.
+REQUESTS:
+  - WP-Docs/QA: rebake and commit build/TerraForge.rbxl after the merges. The committed place still has P0's scripts, and check.sh rewrites it on every run.
+  - WP-Docs/QA: run the d1 Studio test, which I could not do here: join, StarterKit present, full cleaning loop (mine, vise, clean, tray), rejoin keeps the layout, two overlapping PlacedMachines written in the command bar give one toast after about 3 s, and the dev layout appears in an in-memory Studio session.
+  - GameConfig owner (P0 or whoever edits it next): consider moving MachineService TOAST_DELAY (3 s) and the Put In prompt range (10) into GameConfig, together with the order-1 numbers P0 already listed.
+  - WP-Conveyor: the belt handler's localPos is belt-local (front = -Z). The handler is called only for trusted loose items on a belt cell that no hopper or belt end took. Use record.ClientOwnedUntil == nil to tell server-owned items. onLayoutChanged also fires on unload, with an empty plot and possibly a departed player.
+  - WP-Process / WP-Anvil / WP-StorageSell: register behaviours in init(), not start(). For hand-ins, give one behaviour both canAccept and insert. Behaviour tick receives os.clock(). MachineService.emit already sets Status for blocked outputs.
+  - WP-Build: MachineService.place/move/pickup return Placement.Reasons codes ('NoPlot' when there is no data or plot, 'Invalid' for removed or unknown machines and spawn failures, 'Busy'). pickup already sends the contents toast; BuildService only needs the last-crate 'items are safe' toast.
+  - WP-StorageSell: ItemService.absorb asserts the item is not already Consumed; take carried items off the stack with CarryService.takeTop first. IntakeService.addZone handlers only get trusted loose items and must consume the item (or leave it, and it is retried every 0.2 s).
+STUDIOTESTS:
+  - d1: join a fresh in-memory Studio session; the StarterKit (crate, Cleaning Station, Clay Furnace) and the dev layout (Crusher, Auto Cleaner, Blast Furnace, Anvil, Sell Chute) appear, and MachineInventory shows Conveyor 24, StorageCrate 1, SellChute 1, ClayFurnace 1.
+  - d1: full cleaning loop: mine raw ore, drop or throw it into the vise (or use the prompt), clean it, and the clean ore lands on the tray; Take Ore Back still works.
+  - d1: leave and rejoin (with DataStores on); the layout is the same and nothing duplicates.
+  - d1: in the command bar give the player two overlapping PlacedMachines entries and rejoin; one machine is back in MachineInventory and the 'didn't fit' toast shows about 3 s after spawning.
+  - d1: the plot border has no rails inside the grid, and the output shows no warnings other than the 'missing service/controller' ones for packages not merged yet.
+===== wf_d7de2899-077 WP-Process
+SUMMARY: WP-Process is finished and committed as 5f34018 on branch worktree-wf_d7de2899-077-4. tools/check.sh passes: strict type analysis is clean, 162 Lune tests pass (152 before plus 10 new) and the place builds and bakes. The sandbox refused `bash tools/check.sh`, so I ran the same script directly as `env PATH=<scratchpad tools/bin>:... tools/check.sh`. I did not run the d3 Studio tests (they need a real Studio session).
+
+**ProcessingService** (/home/user/Perfect-Tap/.claude/worktrees/wf_d7de2899-077-4/src/server/Services/ProcessingService.luau)
+- init() registers one behaviour for ClayFurnace, BlastFurnace, Crusher and AutoCleaner.
+- spawned sets Queue, QueueMax=4, OutCount, Working=false, Cycles=0 and Status='', and adds the Put In prompt with IntakeService.addLoadPrompt(m, Info.LoadText, 0).
+- canAccept is MachineLogic.accepts with sameOwner. insert pushes onto Entry.In, sets Queue/OutCount and calls DataService.changed.
+- tick runs one job per machine. Job time is MachineData.processTime with the owner's Bellows level, read when each job starts, and never below MinProcessTime. While working it sets Working, WorkStart (server time), WorkTime and WorkOre.
+- When a job ends, outputs come from MachineLogic.outputs and go into Entry.Out through MachineLogic.complete, only if Out stays within MaxOutBuffer. Otherwise the job waits with Status 'OutputBlocked'.
+- Each finished job adds 1 to Cycles. Furnaces add to Stats.IngotsSmelted, and the first ingot sends a Notify. onProcessed(cb) listeners are called.
+- It never spawns items: MachineService sends Out through the machine's front.
+- In and Out live in the saved entry, so leaving, rejoining and shutdown keep the queue; the job on In[1] restarts after a rejoin.
+
+**MachineFxController** (/home/user/Perfect-Tap/.claude/worktrees/wf_d7de2899-077-4/src/client/Controllers/MachineFxController.luau)
+- Finds machines by the 'Machine' tag (conveyors are skipped). Every 0.5 s it picks the ones within 80 studs; only those get per-frame work and one-off effects, and a machine that leaves the range goes back to its idle look.
+- Working effects ease in and out:
+  - Furnaces: the glow pulses, the light goes from 1.2 to 2.8, embers from 2 to 14, chimney smoke from 2 to 6 (Blast Furnace 5 to 12).
+  - Crusher: the rollers and their teeth spin at 6 rad/s in opposite directions, in one BulkMoveTo per frame.
+  - Auto Cleaner: the drum and ribs spin at 3 rad/s and the vent smokes 3x.
+  - Spinners are positioned relative to Base and reset their angle when GridX, GridZ or Rotation changes.
+- 4 pooled looped MachineHum sounds play on the nearest working machines within 60 studs.
+- One-off effects:
+  - Queue up: Gulp and dust at the hopper.
+  - Cycles up: MachineDone and a glint at the Output in the ore's colour, plus a 0.06 camera shake for your own machine within 25 studs.
+  - Crate Cycles: Gulp. Sell Chute Cycles: the coins flash.
+  - Anvil: local ingot stubs sit on IngotSlot1..n from Ingots/IngotOre and glow while Forging.
+- Registers Fx 'Reject'.
+- I checked the spinner maths and the stub positions numerically in Lune with a scratch script.
+
+**MachineBillboard** (/home/user/Perfect-Tap/.claude/worktrees/wf_d7de2899-077-4/src/client/UI/MachineBillboard.luau)
+- Pure builder with attach(model), update(refs, progress, queue, queueMax, outCount, status, oreColor) and detach(refs).
+- Shows a bar in the ore's colour, queue pips, a red FULL chip, an 'N ready' count and the status text ('Output blocked' / 'Too many loose items').
+- MaxDistance is 45, and update() writes only values that changed.
+
+**Tests**
+- /home/user/Perfect-Tap/.claude/worktrees/wf_d7de2899-077-4/tests/ProcessingService.spec.luau (8 tests on the real MachineService with fakes):
+  - spawn attributes and prompts, and accept rules (Wrong, Foreign, Full);
+  - furnace job timing, chaining, Bellows 5 and broken Bellows values, MinProcessTime, stats, the toast and onProcessed;
+  - the Crusher's 2 piles waiting for room in Out, with no re-roll while waiting;
+  - Auto Cleaner 60/40 over 600 seeded jobs;
+  - damaged-save handling;
+  - a Crusher handing its piles straight to a furnace and the furnace's ingot popping out;
+  - a 4,000-step conservation fuzz.
+  - A deliberate off-by-one bug on the Out check made 2 of these tests fail, so they catch real errors.
+- /home/user/Perfect-Tap/.claude/worktrees/wf_d7de2899-077-4/tests/MachineBillboard.spec.luau: 2 tests.
+
+build/TerraForge.rbxl is restored to the committed version, as P1 did. It is owned by WP-Docs/QA and check.sh rewrites it on every run.
+COMMIT: 5f3401828a3d3888b1dbedc6ac313822730c9491
+CHECKSPASSED: True
+DEVIATIONS:
+  - ProcessingService: while a finished job waits for room in Out, Working is set to false (the plan only says Status='OutputBlocked', wait), so the hum and spinning stop. 'OutputBlocked' is only written when Status is ''; a more specific reason set by MachineService.emit (e.g. 'TooManyItems') is kept. ProcessingService never clears Status itself; MachineService clears it on the next successful emit.
+  - ProcessingService: a blocked job rolls its outputs once and keeps that roll until it can finish (no re-roll every tick).
+  - ProcessingService: chained jobs. When a job finishes on time, the next one starts from the previous job's end time, not the tick time, so the 0.1 s tick doesn't slow machines down. WorkStart is set to GetServerTimeNow() - (now - start), so it can be slightly in the past. After a blocked wait the next job starts at the tick time.
+  - ProcessingService: randomness uses the shared Util/Rng (xorshift, seeded from os.time/os.clock) instead of Roblox Random:NextNumber(), so the service runs under Lune. _test.reseed(seed) is for tests only.
+  - ProcessingService: damaged saves. A non-valid In[1] is dropped with a warning (like MachineService does for Out). A valid item whose kind the machine doesn't accept (e.g. Raw in a furnace) passes through unchanged into Out, with no Cycles, stats or onProcessed. If the In[1] table changes under a running job, the job restarts on the new In[1].
+  - ProcessingService: spawned also sets WorkStart=0 and WorkTime=0 (as well as the planned Queue, QueueMax, OutCount, Working, Cycles and Status). WorkOre is never cleared after a job (it keeps the last ore).
+  - ProcessingService: Stats.IngotsSmelted goes up by the number of Ingot outputs (1 per furnace job, as planned). The first-ingot Notify uses Kind 'Reward' (the plan gives no Kind). The text is exactly the planned one.
+  - ProcessingService.onProcessed: listeners run through task.spawn and get copies of the input and outputs. The callback type returns ...any.
+  - ProcessingService: the insert hook also sets OutCount and calls DataService.changed. Every job finish also calls DataService.changed. The LoadPrompt falls back to the text 'Put In' if a machine had no LoadText (not reachable today).
+  - ProcessingService exports a test-only `_test` = {behaviour, reseed, reset}. Nothing in the game calls it.
+  - MachineFxController: the plan's numbers (80 studs active range, 0.5 s re-pick, hum on 4 machines within 60 studs, shake 0.06 within 25 studs, at most 12 billboards) and the effect rates are local constants in the controller, not in GameConfig (I don't own GameConfig).
+  - MachineFxController: billboards show for your own machines when Queue > 0, Working, OR Status ~= '' (the plan says Queue > 0 or Working), so an empty machine whose finished items are stuck still shows 'Output blocked'. Billboards are attached within 50 studs (MaxDistance 45). When not Working but Status ~= '' and Queue > 0, the bar is drawn full ('done, waiting').
+  - MachineFxController extras beyond the plan: when a furnace or Crusher starts from idle (Working false -> true), the reused 'Furnace' / 'Crusher' sound plays. Fx 'Reject' also emits a few red sparks. The Sell Chute coin flash adds a small gold glint and no sound (SellController plays the sale sounds). A machine that comes into range while working starts at full glow and spin instead of warming up.
+  - MachineFxController, anvil: the stubs are local parts named 'IngotStub' in Workspace.ClientMachineFx, sized 1.5x0.45x0.75 and sitting on the face. While Forging they turn Neon in a hot colour, and a local PointLight 'AnvilGlow' goes on AnvilPoint. Anvil Cycles up uses the generic MachineDone + glint, coloured by WorkOre or IngotOre.
+  - MachineFxController: the hum sounds sit at each machine's Intake attachment. Conveyors are never registered (no effects for belts).
+  - MachineBillboard: the BillboardGui is parented to the model's Status attachment (Adornee = Status) rather than PlayerGui, so it goes away with the model. Size 170x58 px, AlwaysOnTop false. Refs is an exported type: {Gui, Bar, Fill, PipRow, Pips, Full, Ready, Status, Shown}. The 'N ready' label shows OutCount.
+  - New test files: tests/ProcessingService.spec.luau and tests/MachineBillboard.spec.luau (both for my own modules).
+REQUESTS:
+  - WP-Anvil (AnvilService/AnvilController): MachineFxController draws ingot stubs from the Ingots, IngotOre and Forging attributes, and plays MachineDone + glint when the anvil's Cycles goes up. Set Queue/QueueMax too if you want queue pips on the anvil billboard. If AnvilController shows its own ingot in the close-up, it may want to hide the local 'IngotStub' parts in Workspace.ClientMachineFx during the session, so they don't overlap.
+  - WP-StorageSell: MachineFxController plays the crate gulp and the Sell Chute coin flash when the model's Cycles attribute goes up. StorageService should add 1 to Cycles per deposit and SellService 1 per chute sale, as the contract says. It also plays Gulp + dust when Queue rises, if you set Queue.
+  - WP-Docs/QA: run Studio d3. Check the following.
+- StarterKit Clay Furnace: throw clean ore in and use 'Smelt Ore'; you get glow, hum and a 6 s bar, and the ingot comes out of the front cell.
+- Raw ore bounces out with the hint; a 5th item waits in the hopper.
+- Leave with 3 queued and rejoin: they resume.
+- Pack up the furnace mid-job: you get +3 in Storage.
+- BindToClose mid-job.
+- The dev-layout Crusher, Auto Cleaner and Blast Furnace work.
+Also check on a phone that the effects stay cheap (at most 12 billboards, 4 hum sounds).
+  - WP-Docs/QA: rebake and commit build/TerraForge.rbxl after the merges. I restored it to the committed version; check.sh rewrites it on every run.
+  - GameConfig owner (optional): if you want client effect tuning in config, the MachineFxController constants (active range 80, re-pick 0.5 s, hum count 4 within 60 studs, shake 0.06 within 25 studs, max billboards 12) could move into GameConfig.
+STUDIOTESTS:
+  - d3: StarterKit Clay Furnace. Throw clean ore into the hopper and use 'Smelt Ore': glow, hum and a 6 s progress bar, and the ingot pops out of the front cell.
+  - d3: Raw ore thrown into a furnace bounces out with the red Reject effect and the WrongHint toast. A 5th clean ore waits in the hopper while 4 are queued (FULL chip on the billboard).
+  - d3: Leave with 3 items queued, rejoin: the queue is intact and the first job restarts.
+  - d3: Pack up the furnace mid-job: the toast appears and StorageCount goes up by 3.
+  - d3: Stop the server mid-job (BindToClose), rejoin: the queue is intact.
+  - d3: Studio dev layout. The Crusher makes 2 crushed piles; the Auto Cleaner gives Rough or Clean only; the Blast Furnace smelts in 2.5 s; the rollers and drum spin while working.
+  - d3: Block the furnace output (a full Storage Crate in front, or 28 loose items): the billboard shows 'Output blocked' / 'Too many loose items', the machine stops working when Out holds 4, and it resumes when unblocked.
+  - d3: Walk 150 studs away while machines run: outputs keep flowing and effects stop; walk back and the effects resume at full glow.
+  - d3: The first ingot ever shows the 'Your first ingot!' toast once; Stats.IngotsSmelted counts up.
+===== wf_d7de2899-077 WP-Build
+SUMMARY: I built WP-Build and committed it as b996909 on worktree-wf_d7de2899-077-3. tools/check.sh passes: strict type analysis is clean, 176 Lune tests pass (10 of them new) and the place builds and bakes. PlacementController, BuildView and GridOverlay are checked only by type analysis and compiling: the d4 Studio test (PC, phone emulation, gamepad) still needs a real Studio session.
+
+Server, src/server/Services/BuildService.luau:
+- BuildPlace, BuildMove and BuildPickup run the checks in the contract order (BadInput, NoPlot, TooFar, NotYours), then pass MachineService's own reason codes through. Every request is answered with BuildResult {Seq, Op, Ok, Reason?, Id?, X?, Z?, R?}.
+- Placing a machine that isn't a belt onto players lifts them to its top + 3; loose items there go to the top + 2.
+- Other players within 100 studs get Fx 'Placed' or 'PackedUp'; the builder plays their own effects locally.
+- Packing up the last crate while Storage holds items sends the "items are safe" toast.
+- A StateService provider sends Placed {{Id,X,Z,R}} and Build {MachineSlots, ConveyorSlots, MachinesUsed, ConveyorsUsed}. BuildService.onPlaced(cb) is there for listeners.
+
+Client:
+- src/client/Controllers/PlacementController.luau:
+  - Opening and exiting: B, D-pad Up, or a BUILD button added to the HUD menu (it pulses while the Cleaning Station is unplaced). Opening needs your plot within 70 studs and nothing else running.
+  - Camera: scriptable overview (pitch 55, distance 60, FOV 50) with pan and zoom on all three devices.
+  - Ghost: checked with Placement.validate on the snapshot plus requests in flight. It shows red reasons, yellow warnings, an amber OUT plate, and fades your other machines.
+  - Phone: tap a cell, then press PLACE.
+  - PC: belts can be painted with a mouse drag; belts auto-advance one cell after each placement.
+  - Gamepad: a cell cursor that selects the machine under it.
+  - Requests carry a Seq, are limited to 6 a second, and a refusal shakes the ghost and toasts the reason.
+  - It exits automatically on death, respawn, plot loss or walking out of range.
+- src/client/UI/BuildView.luau is a pure UI builder: the tray cards, the slot chip, reason and hint lines, and 76 px touch buttons.
+- src/client/Effects/GridOverlay.luau draws 26 lines plus pooled plates in Workspace.BuildClient, which is parented to nil outside build mode.
+
+Tests: tests/BuildService.spec.luau runs the real MachineService with fakes; tests/BuildView.spec.luau covers the UI builder.
+
+build/TerraForge.rbxl is rebuilt by check.sh; I restored the committed version instead of committing a rebake.
+COMMIT: b996909bbeb0bbb155f5dc5937d80197e029d66b
+CHECKSPASSED: True
+DEVIATIONS:
+  - BuildService: a seq that is not an integer in 0..2^31-1 is answered with BuildResult Seq = -1 and Reason 'BadInput', because there is no Seq to echo. All other bad arguments are answered with the request's own Seq.
+  - BuildService: a successful BuildMove (not a belt) also lifts characters and loose items in the new footprint, and fires Fx 'Placed' at the new position to players within 100 studs except the builder. The plan lists lifting and Fx only for placing.
+  - BuildResult fields: a successful Place or Move carries the new Id/X/Z/R. A successful Pickup carries the Id/X/Z/R where the machine stood. Refusals echo the requested X/Z/R (and the Id when known); NoPlot, TooFar and NotYours on Pickup carry no Id.
+  - BuildService: the last-crate toast uses Notify Kind 'Info'.
+  - BuildService: these numbers are local constants, not GameConfig keys: FX_RANGE=100, CHARACTER_LIFT=3 (the root goes to the model's top + 3, keeping its X/Z and facing), ITEM_LIFT=2, MAX_ID_LENGTH=32. The model top is the highest point of any part, rotated parts and chimneys included.
+  - BuildService: lifted loose items go through ItemService.release(record, cf, Vector3.new(0,-1,0)). This also resets their trust point (ReleasePos/ReleasedAt) and may give physics to the owner's client within 80 studs.
+  - BuildService: exports `type Op = 'Place'|'Move'|'Pickup'` and a test-only hook BuildService._test {place, move, pickup, provide, modelTop, reset}.
+  - BuildService provider: Placed is a projection of every table entry in PlacedMachines, unknown Ids included (Placement ignores them on the client).
+  - PlacementController, accepted requests: they stay applied on top of the snapshot (Done) until the next State snapshot arrives, instead of being dropped as soon as BuildResult arrives. This stops the ghost flickering and stops an auto-advanced belt being placed twice. Refused requests are dropped at once, and unanswered ones after 5 s.
+  - PlacementController: the client does not send requests its own check refuses; it shows the toast and shakes the ghost instead. During mouse belt painting, occupied cells only shake the ghost; running out of belts or slots stops painting with one toast. The same refusal text toasts at most every 1.2 s.
+  - PlacementController, refusal text: when cleaning, forging (the PlayerControls lock is held by someone else) or the claim fails, the toast is 'Finish what you're doing first!'. 'Go to your forge to build!' is used for no plot or too far.
+  - PlacementController, gamepad: tapping Y moves the selected machine; holding Y for 0.5 s packs it up (Selected and Moving). A on a selected machine also picks it up to move it. In Idle and Selected, the machine under the cursor is selected automatically.
+  - PlacementController, on enter it also unequips tools, hides the CoreGui backpack hotbar, and hides HudController.refs().CarryPanel and Menu (restored on exit). It forces UserInputService.MouseBehavior to Default every frame (shift lock), and keyboard panning is ignored while a TextBox has focus. Arrow keys pan as well as WASD.
+  - PlacementController, belt painting: one belt per cell left, facing the drag step; the last cell is placed on release; the path goes along X first, then Z. After a click or drag, the cursor auto-advances and stays on that cell until the mouse leaves the cell it is over. A click far off the plot (more than 3 cells) is ignored.
+  - PlacementController, extra yellow warnings beyond 'Output blocked' and 'Belts face each other': "Blocks the <Name>'s output", 'A belt runs into a side that takes nothing' and 'That side takes nothing'. headOn uses ConveyorLogic.headOn. Warnings never block placement.
+  - PlacementController visuals: own machines fade to 0.4 while Placing or Moving, and the machine being moved to 0.75. A selected machine gets a gold Highlight, a 'Selected' footprint plate and a 'SelectedOut' plate. Idle and Selected show a white 'Cursor' plate. Both Highlights use DepthMode AlwaysOnTop and live in the GridOverlay folder.
+  - PlacementController camera: the starting focus is plot-local (0, -3), a little toward the road. Pan speed is 36 studs/s (keys and right stick), LT/RT zoom at 40 studs/s, the mouse wheel steps 6, and the camera eases toward its target (FOLLOW=14). It is bound with BindToRenderStep at Camera+2. Exit tweens back over 0.4 s, then sets CameraType Custom.
+  - PlacementController public API beyond isActive/enter/exit: pick(id) (tray picks) and refreshButton() (BUILD pulse). B and D-pad Up are bound all the time through CAS action 'TerraForgeBuildToggle', so pressing B away from your plot shows the 'Go to your forge to build!' toast. The BUILD button (LayoutOrder 10) keeps its label.
+  - PlacementController Fx handlers: 'Placed' plays the Place sound and Dust x10; 'PackedUp' plays the Place sound at pitch x1.35 and Dust x8. Your own accepted Place/Move/Pickup plays the same effects locally.
+  - GridOverlay API additions: folder(): Folder (also used for the ghost and highlights) and hidePlate(name). The lines are Neon and 48.08 studs long so the corners meet. plate(name, cf, w, d, color?) takes a point on the plot surface, lifts the plate 0.08 and makes it 0.3 studs smaller than w x d.
+  - BuildView API additions: setHint(refs, text?), menuButton(menu): TextButton, CategoryColors, ReasonColors, TouchButtonHeight=76, TrayHeight=112. Refs = {Gui, Chip, Reason, Hint, Tray, Empty, Cards{Button, Count, Stroke, Bound}, Actions, Cancel, Rotate, Move, PackUp, Place, Done, OnPick}. setReason kinds are 'Bad', 'Warn' and 'Info'. setMode shows touch buttons only when isTouch and moves the tray to the left of them. setInventory connects each card's Activated once and calls the latest onPick. The chip text turns Accent when slots are full. Done shows on every device.
+REQUESTS:
+  - GameConfig owner: add BuildFxRange=100, BuildLiftCharacter=3 and BuildLiftItem=2. They are local constants in BuildService for now, along with the order-1 numbers P0 already listed.
+  - GAME_DESIGN.md owner (P0, or WP-Docs if allowed): in the Build controls table, gamepad 'Move / pack up the selection' should read 'A or Y to move, hold Y to pack up'.
+  - WP-Docs/QA: run the d4 Studio test on PC (B), phone emulation (BUILD, tap, PLACE) and gamepad (D-pad Up, stick, A/X/Y/LB/RB/B). Also run the command-bar spam test (BuildPlace with NaN, 99, or another player's model) and check the layout survives a rejoin. Then rebake build/TerraForge.rbxl; I restored the committed copy.
+  - WP-Anvil: AnvilController should also refuse to open while PlacementController.isActive(). PlayerControls.claim('Build') already blocks overlap, but checking it avoids a confusing state.
+  - WP-Docs/QA (optional): add BuildView to the UI preview export in tools/lune/export_scene.luau. It is a pure builder and loads in Lune (see tests/BuildView.spec.luau).
+STUDIOTESTS:
+  - PC: B opens build mode and the camera flies to the road-side overview; B, DONE or the BUILD button closes it, and walking, prompts and Grab come back.
+  - PC: pick a card, the ghost follows the mouse; it turns red with 'Something is already there' or 'Doesn't fit on your plot', and a rotated 3x2 at the edge is clamped; R rotates; a click places it and the dust and sound play.
+  - PC: drag with a belt picked to paint a line with a corner (the corner rail opens); clicking again without moving continues the line; right-click or C cancels; WASD or right-drag pans; the wheel zooms.
+  - PC: click a placed machine, M moves it (a smelting furnace keeps smelting), X or Delete packs it up; packing up a Cleaning Station mid-session is refused with 'Finish using it first'.
+  - Phone emulation: the BUILD button opens; tap a card, tap a cell, then PLACE; a belt auto-advances one cell; tap your own machine to get Move / Pack Up; one finger pans, pinch zooms; the thumbstick and jump button come back after DONE.
+  - Gamepad: D-pad Up opens; the left stick moves the cursor (0.25 s delay, then repeats); LB/RB pick from the tray; A places; X rotates; the machine under the cursor is selected; A or a Y tap moves it; holding Y packs it up; B goes back, then exits; the right stick pans; LT/RT zoom.
+  - Placing a furnace where you stand lifts you onto its roof; loose ore in that footprint pops on top.
+  - Packing up the last crate while Storage has items shows 'Your stored items are safe. Place a crate to reach them.'
+  - A second player within 100 studs sees dust and hears the sound when you place or pack up.
+  - Build mode closes on death, respawn, or being teleported more than 70 studs away; the HUD carry panel, menu and backpack come back.
+  - The BUILD button pulses while the Cleaning Station is in your inventory.
+  - Command-bar spam: BuildPlace with NaN or 99, and BuildMove or BuildPickup with another player's model, are all refused through BuildResult with no server errors, and the rate limit drops the excess.
+  - Rejoin keeps the layout after place, move and pickup.
+===== wf_0266df6f-f09 art director
+SUMMARY: Picked up the earlier art director's unfinished work (c78fb34) on branch lobby-direction and finished it in commit 70dd8ba. tools/check.sh passes: strict types clean, 136 tests pass, place build OK. build/TerraForge.rbxl was restored before committing.
+
+**What was in c78fb34 and what changed**
+- Kept: the shared style kit (src/server/World/Lobby/Style.luau), the layout file (src/shared/Config/LobbyLayout.luau), the new Town.luau loader with TownLegacy as fallback, the DecorController Spin attributes, and the blockout and style-gallery preview scenes.
+- Fixed: about 70 strict-mode type errors in Style.luau and Town.luau.
+- Style kit: two sign icons were wrong (House was built from plain blocks; Arrow pointed the wrong way for the viewer). Both now render correctly, and ArrowLeft was added. Stone walls now have mortar lines. Tree tops are rounder. Crystal tips are two-tone so they still read under bloom. New helpers: boulder, pillar and lit window.
+- Layout: each package now has a parts budget inside the lobby area, and Land.luau may grow by at most 300 parts (baseline 1775). The Great Forge height budget dropped from 50 to 44 studs, with ridge ≤ 32 and chimneys moved to x ±17. This is so the DEPTHS portal shows above the forge in the concept-angle shot. Added a ForgeWorks piece (THE FORGE sign and works building) right of the portal, and moved the west pier down to sea level.
+- New tests in tests/Lobby.spec.luau: per-package lobby budgets, the Land growth cap, nothing solid above the spawn, spinning decor must stream as one piece, and once Districts or Plaza exist, their hooks must come from that package.
+- New tool: tools/lune/lobby_stats.luau prints parts and lights per package against the budgets.
+
+**New docs**
+- docs/ART_DIRECTION.md is the style bible:
+  - what makes the concept read
+  - the full palette with exact RGB
+  - materials and chunky voxel rules
+  - recipes for walls, roofs, trees, cliffs, waterfalls, crystals, lanterns and signs
+  - light and part budgets, the sunset sky values, a review checklist
+  - a Machines section for the later Kenney-style rebuild in iron, copper, brass and molten colors, keeping the current MachineBuilder interface
+- docs/plans/LOBBY_PLAN.md maps every concept element to world coordinates (centre, size, facing), lists the gameplay hooks, and gives the five package briefs with owned files and the legacy-fallback table.
+- tools/preview/lobby_shots.json has six hero shots plus blockout and style-gallery shots. lobby_hero is the concept angle: camera (24,96,178) looking at (-2,8,-46), fov 40.
+- docs/art/lobby_blockout_hero.jpg is the layout blockout from the concept angle.
+
+**Renders (all looked at)**
+- Current legacy town from all six hero shots.
+- Blockout from the hero angle and from the top.
+- The five style-gallery shots.
+
+The town still looks like the old one until packages land, because no lobby module exists yet. I tested the loader with a throwaway module: it builds the module and drops the matching legacy piece. Then I removed it.
+
+**Things that differ from the concept**
+- The plots can't move, so the hero shot frames the corridor between them and the plots fall to the image edges.
+- The DEPTHS portal has to stay at the real cave entrance directly behind the forge. It shows above the forge roof rather than beside it, with THE FORGE sign off to the right.
+- The sun sits in the west-southwest to light the town warmly from the side. In the hero shot it is just out of frame on the left, so only its glow shows there.
+- The pier and the NEXT AREA boardwalk are decoration beyond the island's invisible walls; players can't walk onto them.
+
+**For the package teams**
+- The checked-in build/globalTypes.d.luau download is newer than the installed luau-lsp, so type checking fails in a fresh worktree. Copy /home/user/Perfect-Tap/build/globalTypes.d.luau over it first.
+- In this sandbox, run `./tools/check.sh` directly with PATH set; `bash tools/check.sh` is refused.
+COMMIT: 70dd8ba045aa701511d4a99f806e5148a58aa08b
+SHOTSFILE: tools/preview/lobby_shots.json
+PACKAGES:
+  # Sky | owns: src/server/World/Lobby/Sky.luau, src/server/World/Lobby/Sky/, src/shared/Config/LightingConfig.luau, default.project.json (Lighting section only), src/client/Controllers/LightingController.luau, tools/preview/viewer.js (sky dome, sun glow, clouds only), tests/LobbySky.spec.luau
+    Start from branch lobby-direction (commit 70dd8ba). Read docs/ART_DIRECTION.md (sections 2, 5, 7, 8) and docs/plans/LOBBY_PLAN.md (sections 2-6.1). Create src/server/World/Lobby/Sky.luau (or Lobby/Sky/init.luau plus submodules) returning { Replaces = {}, build = function(parent: Model, rng) }. Town.luau finds it and builds it into Map.Emberfall.Lobby.Sky. Pure builder; deterministic from rng. Read every position with LobbyLayout.get(id) and LobbyLayout.frame(piece); never hard-code centres. Use Style.C colours and Style helpers only. Do NOT edit LobbyLayout.luau, Lobby/Style.luau, Town.luau, TownLegacy.luau, tests/Lobby.spec.luau, tests/Style.spec.luau, tools/preview/lobby_shots.json, WorldBuilder.luau, PlotBuilder.luau, Palette.luau, Props.luau or Geo.luau.
+
+1) SUNSET LIGHTING
+- Set LightingConfig.Presets.Surface and default.project.json Lighting to the same values: Brightness ~2.3; Ambient (0.30,0.22,0.26); OutdoorAmbient (0.58,0.44,0.48); ExposureCompensation ~0.1; EnvironmentDiffuseScale 0.5; EnvironmentSpecularScale 0.6.
+- Atmosphere: Density ~0.34, Offset ~0.25, Color (0.98,0.64,0.46), Decay (0.50,0.32,0.56), Glare ~0.6, Haze ~1.8.
+- ColorCorrection: Saturation +0.25, Contrast +0.14, Tint (1,0.95,0.9). Bloom: Intensity 0.9, Size 32, Threshold 0.92. SunRays: Intensity 0.12, Spread 0.7.
+- Quarry preset: the same sunset, a bit dustier.
+- Add a Sky object: default skybox, SunAngularSize ~16, StarCount 0.
+- Create Clouds under Workspace.Terrain at runtime in LightingController if missing: Cover ~0.5, Density ~0.6, Color 255,196,176.
+- Sun: tune ClockTime (start at 17.6) and GeographicLatitude until Lighting:GetSunDirection() is about LobbyLayout.SunDirection (-0.965, 0.225, 0.136), i.e. west-southwest, about 13 degrees up.
+
+2) PREVIEW SKY (viewer.js, surface presets only)
+- Gradient dome: SkyHorizon (255,162,86) at the horizon, SkyPurple (150,98,168) at about 25 degrees, SkyTop (64,72,150) at the zenith.
+- Additive sun glow, colour Sun (255,222,150): about 10-degree halo and 2-degree disc around shot.sunDir.
+- Keep cave shots unchanged.
+
+3) PIECES (budget in parts)
+- CloudBanks (<=350): 14-20 voxel cloud clusters at 450-900 studs from the plaza, y 120-240, W through NW to N plus a few NE. Each is 3-7 flat blocks, 12-60 wide and 6-18 tall. Tops CloudPurple (148,108,176) or SkyPurple; west faces and undersides CloudOrange (255,176,112), CloudPink (240,150,168) or CloudLight (255,216,200). No collide, query or shadow; Persistent streaming. No cloud part inside the lobby box (x -170..170, z -122..150).
+- SunGlitter (<=120): neon strips in Sun and CloudOrange, Transparency 0.25-0.5, 0.2 thick, 1-3 wide, 4-24 long laid across the sun path. Along the piece axis from x=-185 to -850; spread +-6 near to +-18 far, denser toward the horizon; top at y -20.85. Persistent.
+- ShipA (-240,-22,-90), facing S (<=90) and ShipB (-330,-22,10), smaller, one mast (<=60):
+  - stepped hulls: WoodDark keel, Wood sides, Plank deck, RoofTrim stripe
+  - stern castle with Lam
+  # Backdrop | owns: src/server/World/Lobby/Backdrop.luau, src/server/World/Lobby/Backdrop/, src/server/World/Land.luau (restyle only), tests/LobbyBackdrop.spec.luau
+    Start from branch lobby-direction (commit 70dd8ba). Read docs/ART_DIRECTION.md (sections 4, 5 cliffs/waterfalls/crystals/signs, 8) and docs/plans/LOBBY_PLAN.md (sections 2-6.2). Create Lobby/Backdrop.luau (or Backdrop/init.luau plus submodules) returning { Replaces = {}, build(parent, rng) }. Positions come from LobbyLayout.get(id) and frame(piece); use Style.C and Style helpers. Do NOT edit LobbyLayout, Lobby/Style, Town, TownLegacy, Lobby.spec, Style.spec, lobby_shots.json, WorldBuilder, PlotBuilder, Palette, Props or Geo.
+
+1) LAND.LUAU RESTYLE (you are its only editor)
+Keep exactly in place: every protected space, the quarry pit/ramp/wall footprint, tunnels, cave rooms and roofs, entrances, VipDoor and its sign, Bounds, ground extents and sea strips. tests/World.spec.luau (cave intrusion) must pass. At most +300 parts over the baseline of 1775; no new lights. Require script.Parent.Lobby.Style for colours; don't change Palette.
+- Ground: Grass (104,178,62); colour patches GrassLight/GrassDark.
+- Sea: Sea (44,112,156), Reflectance 0.2.
+- Island rim cliffs: axis-aligned dark voxel stone (StoneDark 86,80,88 / Stone / StoneDeep 60,56,66) with DirtDark bands and Grass caps.
+- Mountain columns:
+  - axis-aligned: no yaw jitter, no tilted caps
+  - colour runs from Stone at the bottom to StoneDark/StoneDeep up high
+  - grass slabs on columns under 40 high, StoneLight caps above
+  - sparse Green Style.tree instead of pines
+  - skip the columns inside the ForgeMountain box (x -80..160, z -340..-240)
+- Quarry walls: recolour to Stone/StoneDark.
+- Delete the EMBER CAVES sign (the DEPTHS portal replaces it).
+
+2) PIECES
+- ForgeMountain (40,22,-290), 240x100x100, faces S (<=700 parts). Three stepped tiers of 8-12-wide dark voxel columns:
+  - Tier 1: y 22-52 across the full width; front face at z~-242, right above the quarry north wall. Leave a ledge at y 26 for ForgeWorks (x 17..51, z -259..-241) and stay below y 28 above the portal (x -22..22).
+  - Tier 2: y 52-82, x -50..140, set back to z~-258.
+  - Tier 3: y 82-112, x 20..100, z~-275 (the peak).
+  - Details: grass ledges with trees and timber railings; 6-8 crystal clusters (4 CrystalPurple 180,96,255; 3 CrystalBlue 84,168,255; 1 CrystalPink; size 6-12; two with PointLights); a zig-zag timber walkway with ladders; a cart track with one cart.
+  - Never below y 22 for x -74..74 (the cave roof). Lod streaming.
+- DepthsPortal (0,-12,-236), 44x40x8 (<=90, 1 light):
+  - two Style.pillar columns (width 4, height 22) at x = +-14
+  - stone lintel arch at y 6-12 with a keystone
+  - DEPTHS sign (Kind Stone, 14x4, gold letters) above it, with an ArrowDown icon board
+  - 3 receding U-shaped iron arch frames inside the tunnel at z -238/-241/-244, Ember neon (255,92,24) on the inner edges
+  - Pillar lanterns on each side; one PointLight (Fire, range 22)
+  - keep x -9..9, y -12..4 open and walkable.
+- ForgeWorks (34,26,-250), 34x34x18 (<=160, 1 light):
+  - 14x10x10 stone-and-iron block house with an Iron roof and 3 Style.wi
+  # Plaza | owns: src/server/World/Lobby/Plaza.luau, src/server/World/Lobby/Plaza/, tests/LobbyPlaza.spec.luau
+    Start from branch lobby-direction (commit 70dd8ba). Read docs/ART_DIRECTION.md and docs/plans/LOBBY_PLAN.md (sections 2-6.3). Create Lobby/Plaza.luau (or Plaza/init.luau plus submodules) with Replaces = { 'roads', 'plaza', 'greatForge' } and build(parent, rng). Positions come from LobbyLayout.get(id) and frame(piece); use Style.C and Style helpers. Do NOT edit LobbyLayout, Lobby/Style, Town, TownLegacy, Lobby.spec, Style.spec, lobby_shots.json, WorldBuilder, PlotBuilder, Palette, Props or Geo.
+
+HOOKS
+- The fire crystal must be a Model tagged Spin. The legacy Heartstone shard provides Spin until this package lands; Lobby.spec then requires a Spin under Lobby.Plaza.
+- TownSpawn stays in Town.luau. Keep the box x+-4, y 0.6..8, z+-4 around (0,0,26) free of colliding parts (tested).
+
+PIECES
+- Plaza paving, r 36 (<=170):
+  - base disc Flag (178,152,126), top at y 0.4, collides
+  - FlagDark (146,122,102) bands at r 30-31.2 and 18-19; FlagLight (204,180,146) disc r 14
+  - 16 radial FlagDark seams, 0.5 wide, from r 14 to 30; about 40 worn tiles
+  - StoneDark curb, 1 tall, at r~35.6, with gaps for the south road, both spurs, the forge approach (x -10..10) and the paths ToShop, ToUpgrades, ToWheel, ToFossil
+  - keep everything players walk on below y 0.6.
+- FireCrystal, r 11, height 24 (<=70, 1 light):
+  - outer Style.stoneRing r 11 (Height 1.6, Width 2.4, Glow = Fire 255,140,32) with gaps at S and N for steps
+  - inner ring r 7.5, 2.8 tall, StoneDark cap
+  - octagonal pedestal: two 7x2.2x7 blocks turned 45 degrees, with an Ember seam
+  - Model 'FireCrystal': main crystal 3.6 wide x 13 tall (Fire body, FireCore 255,200,96 tip) plus 4 leaning side crystals 5-8 tall (Ember/Fire)
+  - tag Spin (SpinSpeed 0.25, BobHeight 0.5); ModelStreamingMode Atomic; PrimaryPart = main body
+  - PointLight Fire, range 40, brightness 2.2, no shadows
+  - emitters: Fire, Embers, Sparkle
+  - two Style.mineCart{Load='Gold'} and a few crates/barrels at the plaza edge.
+- SpawnPad (0,0,26) (<=30): a flush compass-rose inlay of FlagLight and Brass strips 0.05 proud, r 8; nothing colliding above y 0.6 within r 9.
+- GreatForge (0,0,-58), footprint x -21..21, z -78..-38, front at z=-38, height <=44 (<=320 parts, 2 lights):
+  - StoneDark plinth with 3 front steps
+  - ground floor: Style.stoneWall, 12 tall, Style.pillar at the corners and either side of the entrance
+  - entrance 14 wide x 10 tall under a WoodDark lintel with braces
+  - interior visible: back-wall Molten (255,112,26) neon named 'ForgeGlow', two furnaces with Ember mouths, Metal anvils, chains, embers; PointLight #1 (Fire, range 36)
+  - timber upper floor: 6 tall, WoodDark beams, Wood infill, 4 Lamp Style.window on the front and 2 per side
+  - main Style.gableRoof (ridge along X): width 44, depth 34, height 10, eave y 18, so the ridge is about 28; ridge must be <=32 so DEPTHS shows over it from the hero camera
+  - front cross gable (ridge along Z): width 18, depth 14, height 7, over the entrance, with a StoneLight roundel and
+  # Districts | owns: src/server/World/Lobby/Districts.luau, src/server/World/Lobby/Districts/, tests/LobbyDistricts.spec.luau
+    Start from branch lobby-direction (commit 70dd8ba). Read docs/ART_DIRECTION.md and docs/plans/LOBBY_PLAN.md (sections 2-6.4). Create Lobby/Districts.luau (or Districts/init.luau plus submodules) with Replaces = { 'tradingPost', 'toolSmithy', 'emberChest', 'guildBoard' } and build(parent, rng). Positions come from LobbyLayout.get(id) and frame(piece); each piece's front = its Facing (toward the plaza or its path). Use Style.C and Style helpers. Do NOT edit LobbyLayout, Lobby/Style, Town, TownLegacy, Lobby.spec, Style.spec, lobby_shots.json, WorldBuilder, PlotBuilder, Palette, Props or Geo.
+
+HOOKS (all move to this package; the legacy builders provide them until you land)
+- SellCounter: BasePart.
+- SellBin: Model with a child BasePart 'Intake' that does not collide.
+- ShopCounter: BasePart.
+- UpgradeCounter: BasePart (new).
+- EmberChest: Model with PrimaryPart, inside the SpinWheel model.
+- GuildBoard: Model with PrimaryPart.
+- OreCodex: terminal Model with PrimaryPart (new).
+- FossilDig: Model with PrimaryPart (new).
+- Spin on the wheel disc.
+Once Districts exists, tests/Lobby.spec.luau requires all of these under Lobby.Districts.
+
+PIECES
+- Shop = Pell's Trading Post (-46,0,-22), 20x20x14, faces (0.90,0,0.43) (<=200, 2 lights):
+  - StoneDark plinth; plank walls with WoodDark posts, 10 tall
+  - Style.awning AwningPink (236,82,150) / AwningWhite (250,242,236): 7 stripes, depth 6, drop 2.5, at y 9
+  - small Wood gable roof (not red)
+  - 'SHOP' sign (Kind Glow, 10x3.4) at y~13 plus a Coin icon board; 'PELL'S TRADING POST' (Wood 12x2) under the awning edge
+  - counter 3.5 tall, 16 wide: left half part tagged ShopCounter (pickaxe rack, gem samples), right half part tagged SellCounter (brass scale, coin stacks)
+  - Props.npc 'Pell the Trader' behind the SellCounter; ore shelves; hanging lanterns (1 light); crates and barrels.
+- ShopFront (-35.6,0,-17) (<=60): SellBin model (tag):
+  - Wood bin 9x4x7 with Gold Metal bands
+  - child part 'Intake': Transparency 1, CanCollide/CanTouch/CanQuery false, about 8x5x6
+  - 'SELL' Wood sign 5x1.8; Gold neon coins inside (Transparency 0.2)
+  - open toward the plaza.
+- Upgrades (46,0,-22), faces (-0.90,0,0.43) (<=200, 2 lights): mirror of the SHOP.
+  - AwningPurple (150,82,214) / AwningWhite
+  - 'UPGRADES' Glow sign 12x3.4 plus a Gear icon
+  - GlowEdge (70,176,255) neon trims along the counter top, posts and roof edge
+  - counter part tagged UpgradeCounter
+  - Props.npc 'Forgemaster Ulda'; tiered pickaxe rack; a bench with a CrystalBlue screen.
+- UpgradesFront (35.6,0,-17) (<=50): a glowing pickaxe (WoodDark handle, CrystalBlue neon head) over a Style.pillar (height 3, Glow GlowEdge); two gear crates.
+- SpinWheel (-48,0,18), faces (0.85,0,0.53) (<=150, 1 light):
+  - stone platform 18x1x10; timber A-frame of WoodDark legs 1.2 thick, axle at y 12
+  - wheel diameter 16 with 8 segments: AwningRed, LeafOrange, LeafYellow, LeafGreen, CrystalCyan, CrystalBlue, CrystalPurple, AwningPink; WoodDark dividers
+  - Gold rim with 16 
+  # Flora | owns: src/server/World/Lobby/Flora.luau, src/server/World/Lobby/Flora/, tests/LobbyFlora.spec.luau
+    Start from branch lobby-direction (commit 70dd8ba). Read docs/ART_DIRECTION.md (trees, water, signs, lanterns) and docs/plans/LOBBY_PLAN.md (sections 2-6.5). Create Lobby/Flora.luau (or Flora/init.luau plus submodules) with Replaces = { 'scatter' } and build(parent, rng). Positions come from LobbyLayout.get(id) and frame(piece); use Style.C and Style helpers (tree, canopy, bush, flowers, boulder, pond, water, archBridge, fence, lantern, sign, icon, planks). Do NOT edit LobbyLayout, Lobby/Style, Town, TownLegacy, Lobby.spec, Style.spec, lobby_shots.json, WorldBuilder, PlotBuilder, Palette, Props or Geo.
+
+PIECES
+- LilyPond (-26,0,62), 24x14 (<=60): Style.pond with LilyPads 5; pink flowers; LeafGreenDark cattails; two small CrystalPurple clusters on the west bank (no light); a Ground lantern.
+- KoiPond (26,0,62), 24x14 (<=70, 1 light): Style.pond with LilyPads 4 and Koi 6; StoneLight stepping stones; two Ground lanterns; one Post lantern with a light.
+- Creek (0,0,62) (<=30): water strip x -14..14, z 59..65, non-collide over the ground at the ponds' water height; bank stones; joins both ponds under the bridge.
+- CreekBridge (<=45, 1 light): Style.archBridge from (0,0,54) to (0,0,70), width 10, rise 2.4; two Post lanterns at the south end (1 light).
+- Signpost (-14,0,46), faces (0.52,0,0.86) (<=60):
+  - WoodDark post 1.2x10 with a cap and a glow lantern on top
+  - four double-sided Wood boards 6.5x1.6 at y 8.2 / 6.4 / 4.6 / 2.8, each with a 1.6 icon board at its left end:
+    - MINE (Pickaxe), turned toward the mine (SW)
+    - UPGRADE (Gear), NE
+    - EXPLORE (Compass), N
+    - BUILD (House), E
+  - at most eighth turns.
+- NextArea (150,0,-120), faces S (<=60):
+  - 'NEXT AREA' Wood sign 11x3 with an Arrow icon (Arrow points to the viewer's right = east) on two posts
+  - two lantern posts
+  - a closed rope gate (AwningRed rope) at x~168 with a small 'SOON' plank.
+- NextAreaBoardwalk (205,0,-112), faces E (<=110): Style.planks deck 6 wide from x 166 to 240, stepping down over the cliff edge onto posts above the sea; rails; glow lantern posts every 15; ends at the NextIsland bridge stub (Sky). It is decor beyond the invisible wall.
+- PinkGrove (41,0,-66), r 9 (<=45): Pink trees at scale 1.5 and 1.3 at about (37,0,-68) and (46,0,-62); pink bushes; a pink Sparkle emitter, rate 2.
+- RedTree (28,0,40), r 6 (<=30): one Red tree at scale 1.5; red and orange bushes; a flower ring.
+- AutumnCorner (-50,0,118), r 12 (<=80): 3 Yellow and 2 Orange trees (scale 1.0-1.3), bushes, orange pumpkin cubes, flowers.
+- Scatter (<=750), placed with LobbyLayout.isFree(p, radius):
+  - <=45 trees: about 45% Green, 15% Pink, 12% Red, 14% Yellow, 14% Orange; scale 0.8-1.2; quarter-turn yaw
+  - denser along the plot roads (x +-56..64), behind the forge (z -80..-110) and in the south foreground (z 95..140)
+  - <=35 bushes; <=50 flower patches (FlowerYellow / White / Purple / Pink / Red / Blue); <=15 Style.boulder
+  - keep sight lines: no tree within 6 studs of the south road for z 3
