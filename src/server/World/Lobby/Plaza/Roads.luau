@@ -15,9 +15,11 @@
 	Lanterns every ~19 studs, alternating sides, along the south road, the
 	spurs, the forge paths and the rim road: dark metal lantern pillars with
 	glowing orange slots along the neon walkways, wooden Post lanterns on
-	the far roads; a pair of lantern pillars at each of the four plaza
-	entrances. Seven of them carry a PointLight (four at the entrances,
-	three on the roads).
+	the far roads; a pair of lantern pillars at the south, east and west
+	plaza entrances (the forge's stair cheeks carry the north pair). Five of
+	them carry a PointLight (one at the east and west entrances, three on
+	the roads); the south pair glows without a light, so the dark walkway
+	near the spawn stays dark.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,12 +55,14 @@ local LIT_POSTS = {
 }
 
 -- Plaza entrances: two Pillar lanterns each (center, half spacing across, lit?).
+-- The south pair stands a little down the road, behind the spawn camera, and
+-- stays unlit (glow only), so the dark walkway is not washed out; the forge
+-- side has no pair here: the Great Forge's stair cheeks carry two lit
+-- lantern pillars (GreatForge.luau), clear of the banners.
 local ENTRANCES = {
-	-- the south pair stands a little down the road, behind the spawn camera
-	{ Center = Vector3.new(0, 0, 44), Across = Vector3.new(7.3, 0, 0), Lit = { true, true } },
+	{ Center = Vector3.new(0, 0, 44), Across = Vector3.new(7.3, 0, 0), Lit = { false, false } },
 	{ Center = Vector3.new(37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { true, false } },
 	{ Center = Vector3.new(-37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { false, true } },
-	{ Center = Vector3.new(0, 0, -35.4), Across = Vector3.new(12.6, 0, 0), Lit = { false, false } },
 }
 
 local function onPlaza(p: Vector3, margin: number): boolean
@@ -81,14 +85,15 @@ local function segments(s: Common.Strip): { { From: Vector3, To: Vector3 } }
 end
 
 -- Glowing chevrons on the south walkway, pointing north to the forge
--- (z of each double chevron's front tip).
+-- (z of each chevron's tip): one thin deep-orange chevron each, so they read
+-- as crisp arrows instead of a glowing plank.
 Roads.ChevronZ = { 40, 47.5 }
 
 local function chevrons(m: Model, s: Common.Strip)
 	for _, z in Roads.ChevronZ do
-		for _, d in { 0, 1.3 } do
-			local tip = Vector3.new(s.From.X, s.Lift + Common.WalkwayTop.Neon - 0.03, z + d)
-			Common.chevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.4, 0.7, Common.Colors.NeonOrange)
+		local tip = Vector3.new(s.From.X, s.Lift + Common.WalkwayTop.Neon - 0.03, z)
+		for _, part in Common.chevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.2, 0.45, Common.Colors.Chevron) do
+			part.Name = "Chevron"
 		end
 	end
 end
