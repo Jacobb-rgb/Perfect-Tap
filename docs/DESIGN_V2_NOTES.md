@@ -105,7 +105,7 @@ See the chat/answers section below.
   capsule options (also for in-game money).
 - **Story and artifacts:** Claude invents them, e.g. "a kingdom once stood here...", and artifacts you find while
   mining; built so new chapters/artifacts can come in later **updates**.
-- Offline earnings (question 8): still waiting for A/B/C.
+- Offline earnings (question 8): **decided, see below.**
 
 ### Compliance note for boosts
 Paid boosts that change the odds of random results (Triple/Hexa Lucky on capsules or mining) must show the **new odds
@@ -127,3 +127,19 @@ in numbers before purchase**, and everything random that can be paid for follows
   fragments...), grouped into **collections**. Completing a collection unlocks a **story chapter** (journal pages read
   at the Guild board) and a reward (title, podium skin, small bonus). Each update can add a new region + a new
   collection + the next chapter (e.g. "The Sunken Palace", "The Golemworks", "The Royal Depot").
+
+### Decision 8: offline earnings (owner, 2026-10-16)
+Option **A**, adjusted: podiums keep earning while the player is offline at **50% speed for up to 5 hours**. A
+purchasable **extension** raises it to **12 hours** for that player (payment type still to confirm). Show a
+"While you were away: +$X" popup on return.
+
+### Quality pillars (owner, 2026-10-16)
+The owner wants the game to beat the "12 bosses of gamedev" (meme: QA, Burnout, Marketing, Scope, VFX, UI, Sound,
+Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Music, Design, Code, and no Bugs (QA)**.
+- **Music must be calm and good, nothing hype**: cozy, relaxing background music (lo-fi/acoustic/ambient feel),
+  different calm tracks per area (town, mine, caves, base), soft crossfades, a music volume setting.
+  Roblox only allows audio the owner uploads or audio from Roblox's licensed Creator Store music library, so
+  the tracks are chosen by asset ID (placeholders in SoundConfig until the owner picks or uploads them).
+- Every feature gets polish: readable UI on phones, juicy but not noisy VFX, satisfying sounds, careful QA.
+- The owner also linked an Instagram reel (https://www.instagram.com/reel/DddJLuVBjnZ/), the source of the meme
+  screenshots; Claude could not open it (Instagram needs a login).
