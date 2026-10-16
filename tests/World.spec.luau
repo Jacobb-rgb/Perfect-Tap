@@ -120,4 +120,40 @@ return function(T, Loader)
 			T.eq(node:GetAttribute("Stage"), 2)
 		end
 	end)
+
+	T.test("every zone can build rocks with 1-3 ores and all crack stages", function()
+		for _, zone in WorldLayout.Zones do
+			local ids = {}
+			for oreId in zone.Ores do
+				table.insert(ids, oreId)
+			end
+			table.sort(ids)
+			for n = 1, math.min(3, #ids) do
+				local oreIds = table.move(ids, 1, n, 1, {})
+				for seed = 1, 5 do
+					local label = `{zone.Id} {n} ores seed {seed}`
+					local rock = OreNodeBuilder.buildRock(zone.Id, oreIds, roblox.CFrame.new(0, -12, 0), seed)
+					T.truthy(rock.PrimaryPart, label .. " primary part")
+					T.eq(rock:GetAttribute("Stage"), 0, label .. " stage 0")
+					local before = #rock:GetChildren()
+					OreNodeBuilder.applyStage(rock, 1, seed)
+					T.eq(rock:GetAttribute("Stage"), 1, label .. " stage 1")
+					local cracks = 0
+					for _, child in rock:GetChildren() do
+						if child.Name == "Crack" then
+							cracks += 1
+						end
+					end
+					T.truthy(cracks >= 2 and #rock:GetChildren() > before, label .. " stage 1 draws cracks")
+					local broken = OreNodeBuilder.applyStage(rock, 2, seed)
+					T.truthy(#broken >= 1, label .. " stage 2 breaks pieces off")
+					for _, piece in broken do
+						T.truthy(piece:IsA("BasePart") and piece.Parent == rock, label .. " broken pieces are rock parts")
+						T.truthy(piece ~= rock.PrimaryPart, label .. " the main boulder stays")
+					end
+					T.eq(rock:GetAttribute("Stage"), 2, label .. " stage 2")
+				end
+			end
+		end
+	end)
 end
