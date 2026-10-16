@@ -2,18 +2,18 @@
   "base_yard": {
     "scene": "yard",
     "position": [
-      -122,
-      26,
-      54
+      -192,
+      30,
+      80
     ],
     "target": [
-      -146,
+      -138,
       0,
       86
     ],
-    "fov": 60,
+    "fov": 58,
     "preset": "Surface",
-    "shadowExtent": 110,
+    "shadowExtent": 120,
     "ui": "hud_base"
   },
   "base_podiums": {
@@ -86,18 +86,18 @@
   "base_offline": {
     "scene": "yard",
     "position": [
-      -122,
-      26,
-      54
+      -192,
+      30,
+      80
     ],
     "target": [
-      -146,
+      -138,
       0,
       86
     ],
-    "fov": 60,
+    "fov": 58,
     "preset": "Surface",
-    "shadowExtent": 110,
+    "shadowExtent": 120,
     "ui": "ui_offline"
   },
   "base_walls": {
