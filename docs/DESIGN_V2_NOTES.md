@@ -41,5 +41,59 @@ Open questions are at the bottom; once answered, fold everything into GAME_DESIG
 ## Open questions (asked 2026-10-16; answers go here)
 See the chat/answers section below.
 
-### Answers
-(not answered yet)
+### Answers (owner, 2026-10-16)
+1. **Blasting:** hold the button, a laser beam fires, the rock cracks gradually; a stronger blaster breaks it faster. ✔
+2. **Drops:** physical ore chunks drop (as now); you pick them up and throw them into a cart at the mine's train
+   station; your train takes them to your base's ore pen. ✔
+3. **30 ores:** Claude invents original names and values (mix of real minerals like coal, copper, gold, diamond and
+   original fantasy ores), each with rarity, spawn weight and value per second. ✔
+4. **Trains:** every player has their **own** little train. ✔
+5. **Train upgrades:** yes, for in-game money; **also** a sign at the base offering an upgrade for about
+   **150–200 Robux** (one-time purchase).
+6. **Podium:** one ore piece per podium; better-cleaned ore earns more. ✔
+7. **Podiums:** 2 for free. Podiums 3 and 4: **100 Robux**, or included in a bigger **game pass (~560 Robux)** that
+   has more benefits.
+8. **Offline earnings:** owner undecided, asked for proposals (see "Proposals for 8" below).
+9. **Pen:** ore you don't display stays in the pen. Later, **automation (only with an upgrade):** on a billboard you
+   mark ore types to always keep in the pen; unmarked types are sent onto a conveyor (to machines).
+10. **Game pillars:** the game is mainly about **mining, earning money, automation and finding artifacts**, with a
+    **story**. Cleaning ore is "just work" that raises the ore's value, so the ore earns more on a podium, or clean
+    ore / ingots make a better blaster in the foundry. (The cleaning minigame stays, as a value-raising job.)
+11. **Blasters:** 10 levels; an 11th shown as "Coming soon".
+12. **Money comes only from podiums.** Ore you don't need is sold to the **miner NPC** in the middle of the town,
+    at a **"Sell" stall** next to the shop.
+13. **Lobby (the concept image) stays**, with:
+    - a **Sell** stall (the miner NPC);
+    - a **wheel of fortune**: one free spin **every day**, the timer keeps counting even while AFK;
+    - a **shop for upgrades bought with in-game money**: e.g. **miner's boots** (walk speed), **helmet with a head
+      lamp** (see more in the dark), and other gear upgrades;
+    - a **capsule stall**: like pet eggs, but capsules containing **pets that are colorful golems** (owner said
+      "iron golems like Minecraft" → we must design ORIGINAL ore/stone golems, not Minecraft's Iron Golem);
+    - the **8 plots** ("pens"/bases) for 8 players per server.
+
+### Notes for implementation (Claude)
+- **Original IP:** golem pets must be our own design (ore golems, crystal golems, lava golems...), no Minecraft look
+  or names.
+- **Capsules = random items.** If capsules can be bought with Robux, or with coins that can be bought with Robux,
+  Roblox treats them as **paid random items**: show the exact odds before buying, check
+  `PolicyService:GetPolicyInfoForPlayerAsync().ArePaidRandomItemsRestricted` and hide/disable them where restricted,
+  and answer the Maturity questionnaire accordingly (docs/COMPLIANCE.md must be updated). The free daily wheel must
+  show its odds too.
+- **Robux items:** train upgrade (~150–200 R$, one-time → game pass or one-time dev product saved in the profile),
+  podiums 3–4 (100 R$), big pass (~560 R$, includes podiums 3–4 + other perks). Keep MonetizationConfig placeholders.
+- **New systems to plan:** blasters (tool + laser VFX + rock HP), rocks with ore loot tables (30 ores), per-player
+  trains + mine station carts + base ore pen, podiums with income per second (+ "Remove" button on hover/tap,
+  also for touch and gamepad), offline earnings (decision 8), foundry → blaster tiers 1–10, pen sorting billboard
+  (upgrade), gear shop (boots, helmet lamp...), daily wheel, capsule pets (golems that follow you and maybe give a
+  bonus), artifacts + story, Sell stall NPC.
+- Existing work that still fits: world/lobby, physical chunks and carrying, cleaning minigame (now a value booster),
+  machines/build mode/conveyors (processing chain into the foundry), DataService/ProfileStore, Net/Guard.
+- Must change: pickaxes → blasters; ore nodes → rocks with multiple ores; OreData 10 → ~30; selling/economy flow
+  (income from podiums), Pell's trading post → miner NPC Sell stall; tutorial (mine → cart → train → pen → podium).
+
+### Proposals for 8 (offline earnings), waiting for the owner's choice
+- **A (recommended):** podiums keep earning while you're offline at **50%** speed for up to **3 hours**; the big game
+  pass raises it to 100% / 8 hours. A "While you were away: +$12,400" popup on return.
+- **B:** offline earnings at full speed but only up to **1 hour**; an in-game-money upgrade ("Night Shift") extends
+  it step by step (2 h, 4 h, 8 h).
+- **C:** no offline earnings, but a **"welcome back" chest** whose size grows with time away (max after 12 h).
