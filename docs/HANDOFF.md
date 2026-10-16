@@ -44,13 +44,12 @@ Nothing has been tested in real Roblox Studio yet: verification so far = luau-ls
 tests (tests/*.spec.luau) and three.js preview renders. Studio test lists are in docs/QA_REPORTS.md.
 
 ## 3. Branches
-- `claude/keen-wozniak-mx7azn`: main line, everything above merged. **Not pushed**: pushing to GitHub
-  (Jacobb-rgb/Perfect-Tap) failed with 403 because the Claude GitHub App was not installed for the repo. All commits
-  exist only in this copy; the owner received a zip. Push it first from the new setup (§7).
+- `claude/keen-wozniak-mx7azn`: main line, everything above merged. **Pushed to GitHub**
+  (https://github.com/Jacobb-rgb/Perfect-Tap, this branch). Continue on it (or merge it into `main` first).
 - `stepd/wp-storagesell-wip`: unfinished WP-StorageSell (EconomyService, SellService, StorageService,
   SellController, StorageController, StorageView). Never checked; continue from it or rebuild from the plan.
 - Already merged (kept for history): `stepd/wp-build`, `stepd/wp-process`, `lobby/art-direction`.
-- `worktree-*`, `lobby-*`: leftovers of agent worktrees; safe to delete (`git worktree prune` first).
+All branches above are on GitHub too.
 
 ## 4. Next steps, in order
 1. **Finish step d** from docs/plans/STEP_D_PLAN.md (contracts are in force; P0/P1 deviations and requests are listed
@@ -103,12 +102,11 @@ Preview renders (tools/preview, see CLAUDE.md) are three.js approximations of Ro
 Existing pictures: docs/screenshots/*.jpg; art references docs/art/*.
 
 ## 7. Moving to a new account / machine
-1. Get the code: either unzip the handoff folder's `projekt/` (it is the full git repo with all branches), or clone the
-   GitHub repo once it has been pushed.
-2. Push the unpushed commits so cloud sessions can use them: `git push -u origin claude/keen-wozniak-mx7azn` (and the
-   `stepd/wp-storagesell-wip` branch). For Claude Code on the web, the new account needs GitHub connected
-   (https://claude.ai/connect-github) and the Claude GitHub App installed on the repo
-   (https://github.com/apps/claude/installations/select_target).
+1. Get the code: clone https://github.com/Jacobb-rgb/Perfect-Tap and check out `claude/keen-wozniak-mx7azn`
+   (or use the handoff zip's `projekt/` folder, which is the same git repo with all branches).
+2. For Claude Code on the web, the new account needs GitHub connected (https://claude.ai/connect-github) and the
+   Claude GitHub App installed on the repo (https://github.com/apps/claude/installations/select_target).
+   For Claude Code on the owner's computer, just open the project folder.
 3. Tools: install Rokit (https://github.com/rojo-rbx/rokit) and run `rokit install` in the project; Node.js for the
    preview renderer (`cd tools/preview && npm install && npx playwright install chromium`).
 4. Run `bash tools/check.sh`: it must end with ALL CHECKS PASSED.
