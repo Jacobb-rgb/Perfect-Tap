@@ -113,3 +113,38 @@ print(
 		budget.LobbyLights
 	)
 )
+
+-- `lune run tools/lune/lobby_stats.luau pieces`: parts and lights per piece
+-- (each child model of a lobby package, plus one plot and its yard) for the
+-- per-piece budgets in the package specs.
+if table.find(process.args, "pieces") then
+	print("")
+	print(string.format("%-36s %7s %7s", "piece", "parts", "lights"))
+	local function count(m: any): (number, number)
+		local p, l = 0, 0
+		for _, d in m:GetDescendants() do
+			if d:IsA("BasePart") then
+				p += 1
+			elseif d:IsA("PointLight") or d:IsA("SpotLight") then
+				l += 1
+			end
+		end
+		return p, l
+	end
+	local lobby = map.Emberfall:FindFirstChild("Lobby")
+	for _, name in LobbyLayout.Packages do
+		local pkg = lobby and lobby:FindFirstChild(name)
+		if pkg then
+			for _, child in pkg:GetChildren() do
+				local p, l = count(child)
+				print(string.format("%-36s %7d %7d", name .. "/" .. child.Name, p, l))
+			end
+		end
+	end
+	local plot = map.Plots:FindFirstChild("Plot_1")
+	if plot then
+		local p, l = count(plot)
+		local yp = count(plot.Yard)
+		print(string.format("%-36s %7d %7d   (yard %d)", "Plots/Plot_1", p, l, yp))
+	end
+end

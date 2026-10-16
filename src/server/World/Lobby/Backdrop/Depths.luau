@@ -96,15 +96,15 @@ function Depths.buildPortal(parent: Instance, rng: Rng.Rng): Model
 		end
 	end
 	-- DEPTHS sign on the parapet
-	Style.sign(m, Kit.facing(Vector3.new(0, 19.2, -231.25), SOUTH), "DEPTHS", 18, 5.6, { Kind = "Stone", Depth = 0.7 })
+	Style.sign(m, Kit.facing(Vector3.new(0, 18.8, -231.25), SOUTH), "DEPTHS", 26, 7.4, { Kind = "Stone", Depth = 0.7 })
 	-- receding U-shaped iron frames inside the tunnel, ember inner edges
 	for _, z in { -238, -241, -244 } do
 		for _, side in { -1, 1 } do
 			Kit.box(m, Vector3.new(side * 9.8, FLOOR, z - 0.5), Vector3.new(side * 10.9, 5.6, z + 0.5), C.Iron, METAL, Style.decor())
-			Kit.box(m, Vector3.new(side * 9.55, FLOOR + 0.6, z - 0.25), Vector3.new(side * 9.8, 4.4, z + 0.25), C.Ember, NEON, Style.tiny())
+			Kit.box(m, Vector3.new(side * 9.3, FLOOR + 0.6, z - 0.3), Vector3.new(side * 9.8, 4.1, z + 0.3), C.Fire, NEON, Style.tiny())
 		end
 		Kit.box(m, Vector3.new(-10.9, 4.6, z - 0.5), Vector3.new(10.9, 5.8, z + 0.5), C.Iron, METAL, Style.decor())
-		Kit.box(m, Vector3.new(-9.8, 4.35, z - 0.25), Vector3.new(9.8, 4.6, z + 0.25), C.Ember, NEON, Style.tiny())
+		Kit.box(m, Vector3.new(-9.8, 4.1, z - 0.3), Vector3.new(9.8, 4.6, z + 0.3), C.Fire, NEON, Style.tiny())
 	end
 	-- pillar lanterns either side, the portal's one light on a hidden bulb at the keystone
 	for _, side in { -1, 1 } do
@@ -121,7 +121,7 @@ function Depths.buildRails(parent: Instance, rng: Rng.Rng): Model
 	local x = Depths.RailX
 	local z0, z1 = -238, -207.5
 	Style.rails(m, Vector3.new(x, FLOOR, z0), Vector3.new(x, FLOOR, z1), { SleeperEvery = 2.4 })
-	Style.mineCart(m, CFrame.lookAt(Vector3.new(x, FLOOR, -215.5), Vector3.new(x, FLOOR, -205)), rng, { Load = "Ore" })
+	Style.mineCart(m, CFrame.lookAt(Vector3.new(x, FLOOR, -215.5), Vector3.new(x, FLOOR, -205)), rng, { Load = "Gold" })
 	-- buffer stop
 	for _, side in { -1, 1 } do
 		Kit.box(

@@ -6,8 +6,9 @@
 	Read like the concept: a tall central nave whose steep red cross gable
 	faces the plaza (dark timber infill, a stone roundel with glowing
 	crossed hammers), flanked by two lower stone wings with red roofs and
-	lantern turrets; THE GREAT FORGE board across the nave front at the
-	wing eaves; under it the open entrance between stone pillars with the
+	lantern turrets; THE GREAT FORGE board mounted high on the gable (so it
+	reads above the fire crystal from the spawn), the hammer roundel at the
+	apex, two lit windows over the open entrance between stone pillars with the
 	glowing workshop inside (ForgeGlow hearth, furnaces, anvils, a molten
 	channel); two tall chimneys at the back corners (x +-17, z -72).
 
@@ -39,6 +40,8 @@ GreatForge.WingRoofHeight = 8.5
 GreatForge.NaveEave = 17.5
 GreatForge.NaveRoofHeight = 12.5
 GreatForge.ChimneyTop = 40
+GreatForge.SignY = 22 -- THE GREAT FORGE board center (on the nave gable)
+GreatForge.RoundelY = 26.9 -- the crossed-hammers roundel at the gable apex
 
 local PLINTH_TOP = GreatForge.PlinthTop
 local NAVE = 9 -- nave half width
@@ -242,11 +245,15 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 	Style.block(m, at(0, DOOR_TOP + 0.55, NAVE_FRONT - 0.7), Vector3.new(19.4, 1.3, 1.4), C.WoodDark, nil, Style.decor())
 
-	-- THE GREAT FORGE board with lanterns hanging from its ends
-	local sign = Style.sign(m, at(0, 15, NAVE_FRONT - 0.75), "THE GREAT FORGE", 24, 4.6, { Kind = "Wood" })
+	-- THE GREAT FORGE board, mounted high on the gable: from the spawn camera
+	-- (0, 9, 46) the sight line over the fire crystal's tip (y <= 14 at the
+	-- plaza center) reaches the nave front at y ~19.5, so the board starts above it
+	local sign = Style.sign(m, at(0, GreatForge.SignY, NAVE_FRONT - 1.05), "THE GREAT FORGE", 24, 4.4, { Kind = "Wood", Depth = 0.7 })
 	sign.Name = "ForgeSign"
+	-- two lit windows over the entrance, lantern brackets at the corners
 	for _, s in { -1, 1 } do
-		Style.block(m, at(s * 10.8, 15, -14.2), Vector3.new(1, 1, 2.5), C.WoodDark, nil, Style.tiny())
+		Style.window(m, at(s * 4.6, 14.6, NAVE_FRONT - 0.45), 2.6, 2.6)
+		Style.block(m, at(s * 10.8, 13.3, -14.2), Vector3.new(1, 1, 2.5), C.WoodDark, nil, Style.tiny())
 		Style.lantern(m, at(s * 11.2, 12.7, NAVE_FRONT - 1.1), { Kind = "Hanging" })
 	end
 
@@ -261,11 +268,11 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	local gz = NAVE_FRONT - 0.65
 	gableInfill(at(0, NAVE_EAVE, gz), infillHalf, infillH)
 	Style.block(m, at(0, NAVE_EAVE + 0.3, gz - 0.2), Vector3.new(infillHalf * 2, 0.6, 0.4), C.Wood, nil, Style.tiny())
-	-- stone roundel (a diamond) with the glowing crossed hammers
-	local ry = NAVE_EAVE + 4.3
-	Style.block(m, at(0, ry, gz - 0.3) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(6, 6, 0.4), C.StoneLight, nil, Style.tiny())
-	Style.block(m, at(0, ry, gz - 0.5) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(4.8, 4.8, 0.3), C.SignBoard, nil, Style.tiny())
-	Style.icon(m, at(0, ry, gz - 0.85), "CrossedHammers", 4.6, C.Gold, NEON)
+	-- stone roundel (a diamond) with the glowing crossed hammers at the apex
+	local ry = GreatForge.RoundelY
+	Style.block(m, at(0, ry, gz - 0.3) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(4.2, 4.2, 0.4), C.StoneLight, nil, Style.tiny())
+	Style.block(m, at(0, ry, gz - 0.5) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(3.4, 3.4, 0.3), C.SignBoard, nil, Style.tiny())
+	Style.icon(m, at(0, ry, gz - 0.85), "CrossedHammers", 3.6, C.Gold, NEON)
 
 	------------------------------------------------------------ interior (seen through the entrance)
 	-- the big furnace on the back wall (ForgeGlow pulses on the client)

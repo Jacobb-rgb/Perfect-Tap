@@ -41,11 +41,12 @@ Style.C = {
 	DirtDark = rgb(102, 72, 48),
 	DirtLight = rgb(176, 132, 86),
 	Sand = rgb(222, 196, 146),
-	-- stone (cool dark voxel stone for cliffs, warm flagstones for paving)
-	Stone = rgb(124, 118, 122),
-	StoneDark = rgb(86, 80, 88),
-	StoneDeep = rgb(60, 56, 66),
-	StoneLight = rgb(162, 156, 152),
+	-- stone (cool blue-grey voxel stone like the concept's cliffs and walls,
+	-- warm flagstones for paving)
+	Stone = rgb(114, 122, 140),
+	StoneDark = rgb(80, 87, 106),
+	StoneDeep = rgb(56, 61, 80),
+	StoneLight = rgb(160, 167, 180),
 	Flag = rgb(178, 152, 126),
 	FlagDark = rgb(146, 122, 102),
 	FlagLight = rgb(204, 180, 146),
@@ -93,7 +94,9 @@ Style.C = {
 	-- water
 	Water = rgb(62, 152, 196),
 	WaterDeep = rgb(34, 92, 140),
-	Falls = rgb(196, 232, 255),
+	Falls = rgb(132, 204, 248),
+	FallsLight = rgb(200, 236, 255),
+	FallsGlint = rgb(150, 226, 255),
 	Foam = rgb(242, 250, 255),
 	Sea = rgb(44, 112, 156),
 	-- foliage
@@ -119,12 +122,12 @@ Style.C = {
 	FlowerRed = rgb(240, 70, 60),
 	FlowerBlue = rgb(100, 160, 255),
 	-- sunset sky (clouds, sun glitter; the Sky package)
-	SkyTop = rgb(64, 72, 150),
-	SkyPurple = rgb(150, 98, 168),
+	SkyTop = rgb(50, 52, 138),
+	SkyPurple = rgb(156, 114, 198),
 	SkyHorizon = rgb(255, 162, 86),
 	Sun = rgb(255, 222, 150),
-	CloudPink = rgb(240, 150, 168),
-	CloudPurple = rgb(148, 108, 176),
+	CloudPink = rgb(246, 156, 178),
+	CloudPurple = rgb(132, 104, 184),
 	CloudOrange = rgb(255, 176, 112),
 	CloudLight = rgb(255, 216, 200),
 	-- factory accents (Kenney-style machines, see ART_DIRECTION "Machines")
@@ -954,9 +957,11 @@ function Style.water(parent: Instance, cf: CFrame, size: Vector3, color: Color3?
 end
 
 --[[
-	Waterfall sheet. `top` = center of the lip, LookVector = toward the
-	viewer (the side the water faces). opts: Foam (default true), Mist
-	(default true). About 10-12 parts.
+	Waterfall like the concept's: a light sky-blue sheet with a paler middle
+	band (two tones), two cyan glints, the lip on top and white foam at the
+	foot (a churned slab and a few cubes, mist on the slab). `top` = center
+	of the lip, LookVector = toward the viewer (the side the water faces).
+	opts: Foam (default true), Mist (default true). About 8-11 parts.
 ]]
 function Style.waterfall(parent: Instance, top: CFrame, height: number, width: number, rng: Rng.Rng, opts: Opts?): Model
 	local o: Opts = opts or {}
@@ -967,39 +972,49 @@ function Style.waterfall(parent: Instance, top: CFrame, height: number, width: n
 		Vector3.new(width, height, 0.6),
 		C.Falls,
 		SMOOTH,
-		Style.tiny({ Transparency = 0.12, Reflectance = 0.1 })
+		Style.tiny({ Transparency = 0.1, Reflectance = 0.1 })
 	)
 	sheet.Name = "Water"
+	Style.block(
+		m,
+		top * CFrame.new(rng:range(-0.08, 0.08) * width, -height / 2, -0.36),
+		Vector3.new(width * 0.42, height, 0.12),
+		C.FallsLight,
+		SMOOTH,
+		Style.tiny({ Transparency = 0.15 })
+	)
 	Style.block(m, top * CFrame.new(0, 0.2, 0.2), Vector3.new(width + 0.6, 0.9, 1.4), C.Water, SMOOTH, Style.tiny())
-	for _ = 1, 3 do
-		local x = rng:range(-width * 0.38, width * 0.38)
-		local h = height * rng:range(0.55, 0.95)
+	for _, side in { -1, 1 } do
+		local x = side * width * rng:range(0.22, 0.36)
+		local h = height * rng:range(0.6, 0.95)
 		Style.block(
 			m,
-			top * CFrame.new(x, -h / 2 - 0.4, -0.4),
-			Vector3.new(math.max(0.3, width * 0.09), h, 0.2),
-			C.Foam,
+			top * CFrame.new(x, -h / 2 - 0.4, -0.5),
+			Vector3.new(math.max(0.3, width * 0.07), h, 0.12),
+			C.FallsGlint,
 			NEON,
-			Style.tiny({ Transparency = 0.35 })
+			Style.tiny({ Transparency = 0.45 })
 		)
 	end
 	if o.Foam ~= false then
-		local foamTop: Part? = nil
-		for i = 1, math.max(3, math.floor(width / 1.6)) do
-			local s = rng:range(1.2, 2.4)
-			local x = -width / 2 + (i - 0.5) * (width / math.max(3, math.floor(width / 1.6)))
-			local f = Style.block(
+		local foot = top * CFrame.new(0, -height, -1)
+		local slab = Style.block(m, foot * CFrame.new(0, 0.5, 0), Vector3.new(width + 1.6, 1, 2.6), C.Foam, SMOOTH, Style.tiny())
+		slab.Name = "Foam"
+		local n = math.max(2, math.floor(width / 2.4))
+		for i = 1, n do
+			local s = rng:range(1.4, 2.6)
+			local x = -width / 2 + (i - 0.5) * (width / n) + rng:range(-0.4, 0.4)
+			Style.block(
 				m,
-				top * CFrame.new(x, -height + s * 0.3, -rng:range(0.2, 1.2)),
-				Vector3.new(s, s * 0.7, s),
+				foot * CFrame.new(x, 0.9 + s * 0.25, rng:range(-0.6, 0.6)),
+				Vector3.new(s, s * 0.75, s),
 				C.Foam,
 				SMOOTH,
 				Style.tiny()
 			)
-			foamTop = foamTop or f
 		end
-		if foamTop and o.Mist ~= false then
-			Style.emitter(foamTop, "Mist", C.Foam, 4)
+		if o.Mist ~= false then
+			Style.emitter(slab, "Mist", C.Foam, 4)
 		end
 	end
 	return m

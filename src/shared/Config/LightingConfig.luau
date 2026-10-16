@@ -5,8 +5,10 @@
 	and LightingController).
 
 	The town is always at golden hour (docs/ART_DIRECTION.md section 7): a low
-	sun over the west sea (LobbyLayout.SunDirection), orange haze, purple
-	distance, pink and purple clouds.
+	sun over the west sea (LobbyLayout.SunDirection), a warm glow toward the
+	sun and cool lavender distance away from it, pink and purple clouds. The
+	concept (docs/art/lobby_concept.webp) is crisp and saturated: light haze
+	only on the far horizon, cool purple-blue shadows against warm sunlight.
 ]]
 
 export type Preset = {
@@ -56,38 +58,39 @@ LightingConfig.Clouds = {
 -- SkyHorizon / Sun / CloudPink). MidAngle = degrees above the horizon where
 -- the sky turns purple.
 local SUNSET_SKY = {
-	Top = Color3.fromRGB(64, 72, 150),
-	Mid = Color3.fromRGB(150, 98, 168),
+	Top = Color3.fromRGB(50, 52, 138),
+	Mid = Color3.fromRGB(156, 114, 198),
 	Horizon = Color3.fromRGB(255, 162, 86),
-	HorizonAway = Color3.fromRGB(240, 150, 168),
+	HorizonAway = Color3.fromRGB(246, 156, 178),
 	Sun = Color3.fromRGB(255, 222, 150),
-	MidAngle = 22,
+	MidAngle = 26,
 }
 
 LightingConfig.Presets = {
-	-- Golden-hour town: low sun over the west sea, orange haze, purple distance.
+	-- Golden-hour town: low sun over the west sea, a light warm haze toward
+	-- the sun, lavender distance, cool purple-blue shadows, crisp colors.
 	Surface = {
 		Lighting = {
-			Brightness = 2.3,
-			Ambient = Color3.new(0.3, 0.22, 0.26),
-			OutdoorAmbient = Color3.new(0.58, 0.44, 0.48),
-			ExposureCompensation = 0.1,
+			Brightness = 2.4,
+			Ambient = Color3.new(0.27, 0.25, 0.35),
+			OutdoorAmbient = Color3.new(0.5, 0.48, 0.62),
+			ExposureCompensation = 0.15,
 			EnvironmentDiffuseScale = 0.5,
 			EnvironmentSpecularScale = 0.6,
 		},
 		Atmosphere = {
-			Density = 0.34,
-			Offset = 0.25,
-			Color = Color3.new(0.98, 0.64, 0.46),
-			Decay = Color3.new(0.5, 0.32, 0.56),
-			Glare = 0.6,
-			Haze = 1.8,
+			Density = 0.26,
+			Offset = 0.2,
+			Color = Color3.new(1, 0.74, 0.56),
+			Decay = Color3.new(0.52, 0.54, 0.8),
+			Glare = 0.5,
+			Haze = 0.9,
 		},
 		ColorCorrection = {
-			Brightness = 0.02,
-			Contrast = 0.14,
-			Saturation = 0.25,
-			TintColor = Color3.new(1, 0.95, 0.9),
+			Brightness = 0.01,
+			Contrast = 0.2,
+			Saturation = 0.28,
+			TintColor = Color3.new(1, 0.98, 0.97),
 		},
 		Bloom = { Intensity = 0.9, Size = 32, Threshold = 0.92 },
 		SunRays = { Intensity = 0.12, Spread = 0.7 },
@@ -97,25 +100,25 @@ LightingConfig.Presets = {
 	Quarry = {
 		Lighting = {
 			Brightness = 2.4,
-			Ambient = Color3.new(0.32, 0.24, 0.25),
-			OutdoorAmbient = Color3.new(0.6, 0.47, 0.46),
-			ExposureCompensation = 0.1,
+			Ambient = Color3.new(0.28, 0.25, 0.34),
+			OutdoorAmbient = Color3.new(0.5, 0.47, 0.6),
+			ExposureCompensation = 0.15,
 			EnvironmentDiffuseScale = 0.5,
 			EnvironmentSpecularScale = 0.55,
 		},
 		Atmosphere = {
-			Density = 0.4,
-			Offset = 0.25,
-			Color = Color3.new(0.96, 0.66, 0.48),
-			Decay = Color3.new(0.54, 0.36, 0.52),
-			Glare = 0.5,
-			Haze = 2.2,
+			Density = 0.32,
+			Offset = 0.2,
+			Color = Color3.new(0.98, 0.74, 0.58),
+			Decay = Color3.new(0.6, 0.5, 0.76),
+			Glare = 0.45,
+			Haze = 1.3,
 		},
 		ColorCorrection = {
-			Brightness = 0.02,
-			Contrast = 0.12,
-			Saturation = 0.2,
-			TintColor = Color3.new(1, 0.94, 0.88),
+			Brightness = 0.01,
+			Contrast = 0.18,
+			Saturation = 0.26,
+			TintColor = Color3.new(1, 0.97, 0.95),
 		},
 		Bloom = { Intensity = 0.85, Size = 30, Threshold = 0.93 },
 		SunRays = { Intensity = 0.1, Spread = 0.7 },

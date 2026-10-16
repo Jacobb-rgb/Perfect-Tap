@@ -59,24 +59,24 @@
         "Technology": "Future",
         "ClockTime": 17.6,
         "GeographicLatitude": 23.5,
-        "Brightness": 2.3,
-        "Ambient": [0.3, 0.22, 0.26],
-        "OutdoorAmbient": [0.58, 0.44, 0.48],
+        "Brightness": 2.4,
+        "Ambient": [0.27, 0.25, 0.35],
+        "OutdoorAmbient": [0.5, 0.48, 0.62],
         "EnvironmentDiffuseScale": 0.5,
         "EnvironmentSpecularScale": 0.6,
         "GlobalShadows": true,
         "ShadowSoftness": 0.3,
-        "ExposureCompensation": 0.1
+        "ExposureCompensation": 0.15
       },
       "Atmosphere": {
         "$className": "Atmosphere",
         "$properties": {
-          "Density": 0.34,
-          "Offset": 0.25,
-          "Color": [0.98, 0.64, 0.46],
-          "Decay": [0.5, 0.32, 0.56],
-          "Glare": 0.6,
-          "Haze": 1.8
+          "Density": 0.26,
+          "Offset": 0.2,
+          "Color": [1, 0.74, 0.56],
+          "Decay": [0.52, 0.54, 0.8],
+          "Glare": 0.5,
+          "Haze": 0.9
         }
       },
       "Sky": {
@@ -99,10 +99,10 @@
       "ColorCorrection": {
         "$className": "ColorCorrectionEffect",
         "$properties": {
-          "Brightness": 0.02,
-          "Contrast": 0.14,
-          "Saturation": 0.25,
-          "TintColor": [1, 0.95, 0.9]
+          "Brightness": 0.01,
+          "Contrast": 0.2,
+          "Saturation": 0.28,
+          "TintColor": [1, 0.98, 0.97]
         }
       },
       "SunRays": {

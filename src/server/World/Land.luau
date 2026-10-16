@@ -800,13 +800,14 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		end
 		return 62 - dx * 0.36
 	end
+	-- mid blue-grey low, darker high (never the deepest shade: the concept's
+	-- mountains read light against the evening sky)
 	local function stoneShade(top: number): Color3
 		local band = math.clamp((top - 8) / 44, 0, 1)
-		if band < 0.5 then
-			return C.Stone:Lerp(C.StoneDark, band * 2)
-		end
-		return C.StoneDark:Lerp(C.StoneDeep, (band - 0.5) * 2)
+		return C.Stone:Lerp(C.StoneDark, band * 0.85)
 	end
+	-- the concept's slopes mix green with yellow, orange, pink and red crowns
+	local treeKinds = { "Green", "Yellow", "Green", "Orange", "Pink", "Green", "Red" }
 	local function placeColumn(x: number, z: number, half: number, depth: number)
 		if x >= massifMin.X and x <= massifMax.X and z >= massifMin.Z and z <= massifMax.Z then
 			return -- the Backdrop massif stands here
@@ -902,7 +903,7 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			if depth <= 1 and treesLeft > 0 and trng:chance(if shelf then 0.4 else 0.12) then
 				local p = center + Vector3.new(trng:range(-half * 0.5, half * 0.5), size.Y / 2 + 0.8, trng:range(-half * 0.5, half * 0.5))
 				if not onBaseYard(p, 6) and not nearShelf(p, 6) then
-					Style.tree(mountains, CFrame.new(p), "Green", trng, trng:range(0.9, 1.25))
+					Style.tree(mountains, CFrame.new(p), treeKinds[treesLeft % #treeKinds + 1], trng, trng:range(0.9, 1.25))
 					treesLeft -= 1
 				end
 			end

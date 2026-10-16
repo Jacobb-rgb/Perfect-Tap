@@ -22,7 +22,7 @@ piece must contribute to them:
 2. **Three shades per material.** Each surface uses a light, mid and dark shade of one hue
    (top faces and caps lighter, undersides and recesses darker). That is what gives the
    "painted voxel" depth, not lighting alone.
-3. **Warm light against cool stone.** Dark blue-grey stone and deep shadows everywhere, with
+3. **Warm light against cool stone.** Blue-grey stone and deep shadows everywhere, with
    orange fire light (forge mouth, fire crystal, lanterns, molten carts) and cool purple/blue
    crystal glows punching through. The sunset adds orange rims and purple shadows.
 4. **Saturated accents on a calm base.** The base is grass green, flagstone beige and stone
@@ -53,10 +53,10 @@ adds a small value/saturation jitter so repeated blocks do not look copy-pasted 
 | DirtDark | 102, 72, 48 | dirt band under grass caps, pit floor |
 | DirtLight | 176, 132, 86 | dirt paths |
 | Sand | 222, 196, 146 | beach strips, pond shores |
-| Stone | 124, 118, 122 | walls, rings, pillars (mid) |
-| StoneDark | 86, 80, 88 | cliffs, curbs, plinths, caps |
-| StoneDeep | 60, 56, 66 | mountain shadows, tunnel mouths, sign boards (stone) |
-| StoneLight | 162, 156, 152 | accent bricks, lit edges, sign frames (stone) |
+| Stone | 114, 122, 140 | walls, rings, pillars (mid) - cool blue-grey like the concept |
+| StoneDark | 80, 87, 106 | cliffs, curbs, plinths, caps |
+| StoneDeep | 56, 61, 80 | mountain shadows, tunnel mouths, sign boards (stone) |
+| StoneLight | 160, 167, 180 | accent bricks, lit edges, sign frames (stone), huts |
 | Flag | 178, 152, 126 | plaza flagstones (mid) |
 | FlagDark | 146, 122, 102 | plaza seams and ring bands |
 | FlagLight | 204, 180, 146 | worn tiles, highlights |
@@ -112,7 +112,9 @@ adds a small value/saturation jitter so repeated blocks do not look copy-pasted 
 | AwningWhite | 250, 242, 236 | awning stripes |
 | Water | 62, 152, 196 | ponds, creek, pools |
 | WaterDeep | 34, 92, 140 | pond beds |
-| Falls | 196, 232, 255 | waterfall sheets |
+| Falls | 132, 204, 248 | waterfall sheets (light sky-blue) |
+| FallsLight | 200, 236, 255 | the paler middle band of a waterfall |
+| FallsGlint | 150, 226, 255 | neon glints on waterfalls |
 | Foam | 242, 250, 255 | foam, mist, falls highlights |
 | Sea | 44, 112, 156 | the sea |
 | LeafGreen / Light / Dark | 92, 176, 62 / 146, 206, 80 / 54, 130, 52 | green crowns |
@@ -122,11 +124,11 @@ adds a small value/saturation jitter so repeated blocks do not look copy-pasted 
 | LeafOrange / Dark | 242, 138, 40 / 204, 92, 30 | orange crowns |
 | Trunk / TrunkDark | 110, 72, 44 / 80, 52, 34 | trunks, roots |
 | FlowerYellow / White / Purple / Pink / Red / Blue | 255,222,80 / 250,250,244 / 182,112,255 / 255,124,176 / 240,70,60 / 100,160,255 | flower cubes |
-| SkyTop | 64, 72, 150 | zenith (preview sky, cloud shadows) |
-| SkyPurple | 150, 98, 168 | mid sky, cloud tops |
+| SkyTop | 50, 52, 138 | zenith (preview sky, cloud shadows) |
+| SkyPurple | 156, 114, 198 | mid sky, cloud tops |
 | SkyHorizon | 255, 162, 86 | horizon glow |
 | Sun | 255, 222, 150 | sun disc, sun glitter |
-| CloudPink / CloudPurple / CloudOrange / CloudLight | 240,150,168 / 148,108,176 / 255,176,112 / 255,216,200 | voxel clouds |
+| CloudPink / CloudPurple / CloudOrange / CloudLight | 246,156,178 / 132,104,184 / 255,176,112 / 255,216,200 | voxel clouds |
 | Hazard | 255, 150, 36 | machine base trims, crane, warning bands |
 | HazardDark | 40, 36, 40 | hazard chevrons |
 
@@ -216,8 +218,10 @@ you need a variant; propose additions to `Style.luau` to the art director.
   (`Style.streaming(model, "Lod")`).
 
 ### Waterfalls and water (`Style.waterfall`, `Style.pond`, `Style.water`)
-- A Falls sheet (0.6 thick, Transparency 0.12), a Water lip at the top, 3 neon Foam streaks
-  (Transparency 0.35), foam cubes and mist particles at the bottom, a pool below.
+- Wide and light like the concept's: a Falls sheet (0.6 thick, Transparency 0.1) with a
+  paler FallsLight middle band (two tones), a Water lip at the top, 2 neon FallsGlint
+  streaks (Transparency 0.45), a white Foam slab plus foam cubes and mist at the foot, a
+  pool below. Mountain falls 7.5-10 studs wide; never thin white neon lines.
 - Every waterfall ends in a pool or a pond; every pond gets a stone-cube rim, lily pads
   (LeafGreen discs with pink flower cubes) and, in town, koi (orange, white, red).
 - Water surfaces never replace ground: they are non-collide over solid ground ("wading"),
@@ -288,24 +292,33 @@ The lobby is always at golden hour, sun low over the west sea.
   `LobbyLayout.SunDirection = (-0.965, 0.225, 0.136)`. Preview shots pass it as `sunDir`.
   In Studio tune `Lighting.ClockTime` (start at 17.6) and `GeographicLatitude` until
   `Lighting:GetSunDirection()` matches it (X negative, Y about 0.2).
-- **Lighting (Surface preset)**: Brightness ~2.3; Ambient (0.30, 0.22, 0.26); OutdoorAmbient
-  (0.58, 0.44, 0.48) (warm with a purple lift in the shadows); ExposureCompensation ~0.1;
+- **Crisp, not hazy.** The concept is saturated with strong contrast: blue-grey stone,
+  vivid greens, blue water, cool purple-blue shadows against warm sun and lamp light. Haze
+  only softens the far horizon (polish pass 2026-10-16; the old orange haze washed
+  everything brown).
+- **Lighting (Surface preset)**: Brightness ~2.4; Ambient (0.27, 0.25, 0.35); OutdoorAmbient
+  (0.50, 0.48, 0.62) (cool purple-blue shadows); ExposureCompensation ~0.15;
   EnvironmentDiffuseScale 0.5; EnvironmentSpecularScale 0.6.
-- **Atmosphere**: Density ~0.34, Offset ~0.25, Color (0.98, 0.64, 0.46) (orange haze),
-  Decay (0.50, 0.32, 0.56) (purple distance), Glare ~0.6, Haze ~1.8.
-- **Color**: ColorCorrection Saturation +0.25, Contrast +0.14, Tint (1, 0.95, 0.9); Bloom
-  Intensity ~0.9, Size ~32, Threshold ~0.92; SunRays Intensity ~0.12, Spread ~0.7.
+- **Atmosphere**: Density ~0.26, Offset ~0.2, Color (1, 0.74, 0.56) (warm peach toward the
+  sun), Decay (0.52, 0.54, 0.80) (lavender-blue distance away from it), Glare ~0.5, Haze ~0.9.
+- **Color**: ColorCorrection Saturation +0.28, Contrast +0.2, Tint (1, 0.98, 0.97) (almost
+  neutral); Bloom Intensity ~0.9, Size ~32, Threshold ~0.92; SunRays Intensity ~0.12,
+  Spread ~0.7.
 - **Sky**: a `Sky` object with the default skybox, SunAngularSize ~16 (big sun),
   CelestialBodiesShown true, StarCount 0. Roblox `Clouds` (under Workspace.Terrain, created at
   runtime by the client or in the place file): Cover ~0.5, Density ~0.6, Color
   (255, 196, 176).
-- **Voxel clouds**: flat clusters of 3-7 big blocks (12-60 studs) at 120-240 high, mostly
-  W/NW/N (where the camera looks), tops CloudPurple/SkyPurple, sun-facing sides and
-  undersides CloudOrange/CloudPink/CloudLight. No collision, no shadow, Persistent streaming.
+- **Voxel clouds**: puffy banks (a lit base, a dome of 5-7 puffs, two crowns) at 90-240
+  high, mostly W/NW/N (where the camera looks): warm lower halves (CloudPink, CloudOrange
+  near the sun), purple tops (CloudPurple/SkyPurple), a SkyTop shadow flank, a neon
+  under-rim (pink/orange, the undersides the town looks up at) and a golden front rim
+  toward the sun. No collision, no shadow, Persistent streaming.
 - **Sea**: Sea color, Reflectance ~0.2; a broken path of neon sun glitter strips (Sun and
   CloudOrange) from the west shore toward the sun, wider and denser near the horizon.
 - **Preview**: the renderer's sky dome should match: zenith SkyTop, mid SkyPurple,
-  horizon SkyHorizon, plus a soft sun glow around `sunDir`.
+  horizon SkyHorizon (CloudPink away from the sun), plus a soft sun glow around `sunDir`.
+  Far parts fade toward Atmosphere Color toward the sun and Decay away from it; parts with
+  Reflectance mirror the sky dome.
 
 ## 8. Budgets and performance (mobile first)
 

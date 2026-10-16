@@ -64,6 +64,10 @@ const geometries = {
   [SHAPE_WEDGE]: wedgeGeometry(),
 };
 
+// Parts with Reflectance (water, the sea) mirror the sky in Roblox; they get
+// the preview sky dome as an environment map once it exists.
+const reflectiveMaterials = [];
+
 function materialFor(kind, transparency) {
   const opts = { flatShading: false };
   let m;
@@ -75,6 +79,7 @@ function materialFor(kind, transparency) {
     m = new THREE.MeshStandardMaterial({ roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.45, ...opts });
   } else if (kind === "reflective") {
     m = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.15, ...opts });
+    reflectiveMaterials.push(m);
   } else {
     m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0.0, ...opts });
   }
@@ -142,6 +147,65 @@ function textTexture(text, color, family, aspect) {
   return tex;
 }
 
+// Roblox's Atmosphere hazes far objects toward the sky color in their
+// direction: warm (Atmosphere.Color, with Glare) toward the sun and the Decay
+// color away from it. three's FogExp2 has one color, so the fog shader chunks
+// are patched to blend Color -> Decay by the horizontal angle to the sun (the
+// same falloff as the sky dome's horizon). Density sets how fast things fade;
+// Haze thickens it a little (calibrated so the old 0.34 / 1.8 settings keep
+// their old look).
+function fogDensity(atm) {
+  return (atm.Density ?? 0.3) * 0.0019 * (1 + 0.35 * (atm.Haze ?? 1));
+}
+
+function linear3(c) {
+  return `vec3(${c.r.toFixed(5)}, ${c.g.toFixed(5)}, ${c.b.toFixed(5)})`;
+}
+
+function directionalFog(atm, shot) {
+  const sun = new THREE.Vector2(...[(shot.sunDir || [-0.62, 0.48, 0.62])[0], (shot.sunDir || [-0.62, 0.48, 0.62])[2]]).normalize();
+  const away = fromArray3(atm.Decay || atm.Color || [0.6, 0.5, 0.8]);
+  THREE.ShaderChunk.fog_pars_vertex = `
+#ifdef USE_FOG
+  varying float vFogDepth;
+  varying vec3 vFogDir;
+#endif`;
+  THREE.ShaderChunk.fog_vertex = `
+#ifdef USE_FOG
+  vFogDepth = - mvPosition.z;
+  vec4 fogWorld = vec4( transformed, 1.0 );
+  #ifdef USE_INSTANCING
+    fogWorld = instanceMatrix * fogWorld;
+  #endif
+  fogWorld = modelMatrix * fogWorld;
+  vFogDir = fogWorld.xyz - cameraPosition;
+#endif`;
+  THREE.ShaderChunk.fog_pars_fragment = `
+#ifdef USE_FOG
+  uniform vec3 fogColor;
+  varying float vFogDepth;
+  varying vec3 vFogDir;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear;
+    uniform float fogFar;
+  #endif
+#endif`;
+  THREE.ShaderChunk.fog_fragment = `
+#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+  #else
+    float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+  #endif
+  vec2 fogFlat = normalize( vFogDir.xz + vec2( 1e-5 ) );
+  float fogWarm = pow( 0.5 + 0.5 * dot( fogFlat, vec2( ${sun.x.toFixed(5)}, ${sun.y.toFixed(5)} ) ), 1.6 );
+  vec3 fogTint = mix( ${linear3(away)}, fogColor, fogWarm );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogTint, fogFactor );
+#endif`;
+}
+
 // Sunset sky dome (the Lighting preset's "Sky" group, ART_DIRECTION section 7):
 // horizon SkyHorizon (pinker away from the sun, like Roblox's Atmosphere
 // Decay) -> SkyPurple at MidAngle -> SkyTop at the zenith, an additive sun
@@ -149,7 +213,7 @@ function textTexture(text, color, family, aspect) {
 // layer of Terrain-Clouds-like streaks (Cover ~0.5) lit pink/orange toward
 // the sun. Below the horizon it fades into the Atmosphere color so the far
 // sea edge disappears.
-function sunsetSky(preset, shot, camera, fogColor) {
+function sunsetSky(preset, shot, camera, fogColor, fogAway) {
   const S = preset.Sky || {};
   const col = (a, fallback) => fromArray3(a || fallback);
   const sunDir = new THREE.Vector3(...(shot.sunDir || [-0.62, 0.48, 0.62])).normalize();
@@ -160,6 +224,7 @@ function sunsetSky(preset, shot, camera, fogColor) {
     horizonAway: { value: col(S.HorizonAway, [240 / 255, 150 / 255, 168 / 255]) },
     sunColor: { value: col(S.Sun, [1.0, 222 / 255, 150 / 255]) },
     fogColor: { value: fogColor.clone() },
+    fogAway: { value: fogAway.clone() },
     sunDir: { value: sunDir },
     midSin: { value: Math.sin(((S.MidAngle ?? 25) * Math.PI) / 180) },
     cloudCover: { value: S.CloudCover ?? 0.5 },
@@ -172,7 +237,7 @@ function sunsetSky(preset, shot, camera, fogColor) {
     vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
     fragmentShader: `
       uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 horizonAway;
-      uniform vec3 sunColor; uniform vec3 fogColor; uniform vec3 sunDir;
+      uniform vec3 sunColor; uniform vec3 fogColor; uniform vec3 fogAway; uniform vec3 sunDir;
       uniform float midSin; uniform float cloudCover;
       varying vec3 vPos;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -185,16 +250,16 @@ function sunsetSky(preset, shot, camera, fogColor) {
         vec2 flatDir = normalize(d.xz + vec2(1e-5));
         vec2 flatSun = normalize(sunDir.xz + vec2(1e-5));
         float toward = 0.5 + 0.5 * dot(flatDir, flatSun);
-        float warm = pow(toward, 2.2);
+        float warm = pow(toward, 1.6);
         vec3 hor = mix(horizonAway, horizon, warm);
         // horizon -> purple at midSin -> deep blue-purple at the zenith
         float t1 = smoothstep(0.0, midSin, h);
         float t2 = smoothstep(midSin * 0.6, 1.0, h);
-        vec3 col = mix(hor, mid, pow(t1, 0.65));
+        vec3 col = mix(hor, mid, pow(t1, 0.9));
         col = mix(col, top, pow(t2, 0.7));
         // warm band hugging the horizon toward the sun
         col += horizon * 0.18 * warm * exp(-max(h, 0.0) * 9.0);
-        if (h < 0.0) col = mix(hor, fogColor, clamp(-h * 10.0, 0.0, 1.0));
+        if (h < 0.0) col = mix(hor, mix(fogAway, fogColor, warm), clamp(-h * 10.0, 0.0, 1.0));
         // Terrain-Clouds-like streaks, lit pink/orange toward the sun
         if (h > 0.0) {
           vec2 uv = d.xz / (h + 0.12);
@@ -233,6 +298,7 @@ async function main() {
   const preset = {};
   for (const group of Object.keys(base)) preset[group] = { ...base[group], ...(own[group] || {}) };
   const isCaveShot = !['Surface', 'Quarry', 'Workbench'].includes(shot.preset || 'Surface');
+  if (!isCaveShot) directionalFog(preset.Atmosphere || {}, shot);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(WIDTH, HEIGHT);
@@ -314,7 +380,10 @@ async function main() {
   const isCave = isCaveShot;
   const outdoor = fromArray3(L.OutdoorAmbient || [0.5, 0.45, 0.4]);
   const ambient = fromArray3(L.Ambient || [0.2, 0.2, 0.2]);
-  world.add(new THREE.HemisphereLight(outdoor.clone().multiplyScalar(isCave ? 1.2 : 1.6), ambient.clone().multiplyScalar(isCave ? 0.8 : 1.2), isCave ? 1.0 : 1.3));
+  // outdoors the hemisphere also stands in for EnvironmentDiffuseScale (Roblox
+  // lights shaded faces with the sky too): 1.3 + 0.6 * scale (1.6 at 0.5)
+  const hemi = isCave ? 1.0 : 1.3 + 0.6 * (L.EnvironmentDiffuseScale ?? 0);
+  world.add(new THREE.HemisphereLight(outdoor.clone().multiplyScalar(isCave ? 1.2 : 1.6), ambient.clone().multiplyScalar(isCave ? 0.8 : 1.2), hemi));
   world.add(new THREE.AmbientLight(ambient, isCave ? 5 : 0.8));
 
   const target = new THREE.Vector3(...shot.target);
@@ -353,8 +422,18 @@ async function main() {
   // ---- sky / fog ----
   const fogColor = fromArray3(atm.Color || [0.8, 0.7, 0.6]);
   if (!isCave) {
-    world.add(sunsetSky(preset, shot, camera, fogColor));
-    world.fog = new THREE.FogExp2(fogColor, (atm.Density ?? 0.3) * 0.0028 * (atm.Haze ?? 1) * 0.6);
+    const fogAway = fromArray3(atm.Decay || atm.Color || [0.6, 0.5, 0.8]);
+    const sky = sunsetSky(preset, shot, camera, fogColor, fogAway);
+    world.add(sky);
+    const envScene = new THREE.Scene();
+    envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), sky.material));
+    const env = new THREE.PMREMGenerator(renderer).fromScene(envScene, 0.02, 0.1, 200).texture;
+    for (const m of reflectiveMaterials) {
+      m.envMap = env;
+      m.envMapIntensity = 1.0;
+      m.needsUpdate = true;
+    }
+    world.fog = new THREE.FogExp2(fogColor, fogDensity(atm));
   } else {
     world.background = fogColor.clone().multiplyScalar(0.25);
     world.fog = new THREE.FogExp2(fogColor.clone().multiplyScalar(0.5), (atm.Density ?? 0.4) * 0.012);

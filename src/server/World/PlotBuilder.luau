@@ -1,6 +1,9 @@
 --[[
 	Player plots: a flat pad (12x12 grid of 4-stud cells plus a 1-stud
-	border), low border rails, a name sign at the front and a banner, and
+	border) that reads as a tidy garden from the lobby hero camera (a mown
+	lawn with a lighter stripe per other cell row and a paving band, all flat),
+	low blue-grey stone curbs with lamp caps on the corner posts, a name sign
+	at the front and a banner, and
 	behind it (plot-local +Z, the sea side) the yard from BaseLayout:
 	  Yard.Ground      lawn pad, gravel paths, a low fence, the YardGate
 	                   opening in the plot's back rail
@@ -46,6 +49,16 @@ local BANNER_COLORS = {
 
 local rgb = Color3.fromRGB
 local LAWN = rgb(160, 202, 96)
+-- the empty plot from above (lobby hero view): a mown lawn with subtle
+-- lighter stripes on every other cell row, framed by a band of light paving
+-- stones, a cobble edge, low blue-grey stone curbs (the lobby's Style stone)
+-- and lamp caps on the corner posts
+local PLOT_LAWN = rgb(112, 180, 66)
+local PLOT_LAWN_STRIPE = rgb(128, 192, 76)
+local PLOT_PAVING = rgb(196, 180, 152)
+local PLOT_EDGE = rgb(156, 142, 128)
+local CURB = rgb(114, 122, 140)
+local CURB_CAP = rgb(160, 167, 180)
 local GRAVEL = rgb(214, 192, 150)
 local PEN_FLOOR = rgb(156, 124, 94)
 local RIM_GOLD = rgb(255, 196, 72)
@@ -515,22 +528,47 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	m:SetAttribute("PlotId", plot.Id)
 	m:AddTag("Plot")
 
-	-- the pad has a 1-stud border around the grid for the rails and posts
-	local pad = Geo.block(m, cf * CFrame.new(0, -0.6, 0), Vector3.new(size + 2, 1.2, size + 2), Palette.PlotPad, nil, { CanTouch = false })
+	-- the pad has a 1-stud cobble border around the grid for the rails and posts
+	local pad = Geo.block(m, cf * CFrame.new(0, -0.6, 0), Vector3.new(size + 2, 1.2, size + 2), PLOT_EDGE, nil, { CanTouch = false })
 	pad.Name = "Pad"
-	-- slightly darker inner area that is exactly the build grid
-	local tile = Geo.block(m, cf * CFrame.new(0, -0.02, 0), Vector3.new(size, 0.06, size), Palette.PlotTile, nil, {
+	-- the build grid: a mown lawn exactly the size of the grid, with a lighter
+	-- stripe on every other row of cells (flat: tops at y <= 0.048, no
+	-- collision, not raycast, so building and placement see the pad only)
+	local flat = {
 		CanTouch = false,
 		CanQuery = false,
 		CanCollide = false,
 		CastShadow = false,
-	})
+	}
+	local tile = Geo.block(m, cf * CFrame.new(0, -0.02, 0), Vector3.new(size, 0.06, size), PLOT_LAWN, nil, flat)
 	tile.Name = "PlotTile"
+	local cell = GameConfig.CellSize
+	for row = 0, GameConfig.PlotCells - 1, 2 do
+		local stripe =
+			Geo.block(m, cf * CFrame.new(0, 0.015, -half + (row + 0.5) * cell), Vector3.new(size, 0.03, cell), PLOT_LAWN_STRIPE, nil, flat)
+		stripe.Name = "LawnStripe"
+	end
+	-- a band of paving stones just inside the curbs (flat, like the stripes)
+	local band = 1.6
+	for _, side in { -1, 1 } do
+		local alongX =
+			Geo.block(m, cf * CFrame.new(0, 0.028, side * (half - band / 2)), Vector3.new(size, 0.04, band), PLOT_PAVING, nil, flat)
+		alongX.Name = "Paving"
+		local alongZ = Geo.block(
+			m,
+			cf * CFrame.new(side * (half - band / 2), 0.028, 0),
+			Vector3.new(band, 0.04, size - 2 * band),
+			PLOT_PAVING,
+			nil,
+			flat
+		)
+		alongZ.Name = "Paving"
+	end
 
-	-- rails on the back and sides, on the border; the front (road side, -Z local)
-	-- stays open and the back rail has the YardGate opening
+	-- low stone curbs on the back and sides, on the border; the front (road
+	-- side, -Z local) stays open and the back curb has the YardGate opening
 	local edge = half + 0.5
-	local railColor = Palette.WoodDark
+	local railColor = CURB
 	local railProps = { CanTouch = false, CanQuery = false }
 	local gate = BaseLayout.YardGate
 	local gateMin, gateMax = gate.CenterX - gate.Width / 2, gate.CenterX + gate.Width / 2
@@ -540,7 +578,15 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	Geo.block(m, cf * CFrame.new(-edge, 0.35, 0), Vector3.new(1, 0.7, size + 2), railColor, nil, railProps)
 	Geo.block(m, cf * CFrame.new(edge, 0.35, 0), Vector3.new(1, 0.7, size + 2), railColor, nil, railProps)
 	for _, corner in { Vector3.new(-1, 0, -1), Vector3.new(1, 0, -1), Vector3.new(-1, 0, 1), Vector3.new(1, 0, 1) } do
-		Geo.block(m, cf * CFrame.new(corner.X * edge, 1, corner.Z * edge), Vector3.new(1, 2, 1), Palette.Wood, nil, railProps)
+		Geo.block(m, cf * CFrame.new(corner.X * edge, 1, corner.Z * edge), Vector3.new(1, 2, 1), CURB_CAP, nil, railProps)
+		Geo.block(
+			m,
+			cf * CFrame.new(corner.X * edge, 2.3, corner.Z * edge),
+			Vector3.new(0.7, 0.6, 0.7),
+			Palette.LampGlow,
+			Enum.Material.Neon,
+			flat
+		)
 	end
 
 	-- front lanterns

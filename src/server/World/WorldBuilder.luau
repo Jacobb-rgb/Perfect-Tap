@@ -21,7 +21,7 @@ local PlotBuilder = require(script.Parent.PlotBuilder)
 
 local WorldBuilder = {}
 
-WorldBuilder.Version = 5 -- 4: base yards behind the plots (pen, podiums, foundry, train stop)
+WorldBuilder.Version = 6 -- 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
 
 export type NodeSpawn = { Position: Vector3, Zone: string }
 

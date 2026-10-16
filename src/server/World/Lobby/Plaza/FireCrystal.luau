@@ -34,9 +34,11 @@ local RING_R = 11
 local RING_SEGMENTS = 18 -- one block centered on S (90 deg) and N (270 deg)
 local RING_H = 1.6
 local INNER = 12.4 -- side of the star base blocks
-local INNER_H = 1.6
+-- low base: the crystal tip stays under y 14 (with the bob), so THE GREAT
+-- FORGE board on the gable reads above it from the spawn
+local INNER_H = 1.2
 local PEDESTAL = 6.6
-local PEDESTAL_H = 1.4
+local PEDESTAL_H = 1.0
 local CRYSTAL_H = 10.5
 local CRYSTAL_W = 3.4
 

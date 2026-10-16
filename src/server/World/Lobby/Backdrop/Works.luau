@@ -112,16 +112,19 @@ function Works.buildForgeWorks(parent: Instance, rng: Rng.Rng): Model
 	end
 
 	---------------------------------------------------------------- THE FORGE sign
-	local signY, signZ = 42.6, -245.2
-	Style.sign(m, Kit.facing(Vector3.new(37.7, signY, signZ), SOUTH), "THE FORGE", 26, 7, { Kind = "Wood", Depth = 0.7 })
-	local iconBoard = Style.sign(m, Kit.facing(Vector3.new(21, signY, signZ), SOUTH), "", 7, 7, { Kind = "Wood", Depth = 0.7 })
+	-- big enough to read from the hero camera ~430 studs away (concept: one of
+	-- the landmark boards over the mountain)
+	local signY, signZ = 44.5, -245.2
+	-- (x 11.1..50.6: the massif's tier-1 columns east of the deck stand in front of x > 51)
+	Style.sign(m, Kit.facing(Vector3.new(35.5, signY, signZ), SOUTH), "THE FORGE", 30, 8.5, { Kind = "Wood", Depth = 0.8 })
+	local iconBoard = Style.sign(m, Kit.facing(Vector3.new(15.5, signY, signZ), SOUTH), "", 8.5, 8.5, { Kind = "Wood", Depth = 0.8 })
 	iconBoard.Name = "IconBoard"
-	Style.icon(m, Kit.facing(Vector3.new(21, signY, signZ + 0.6), SOUTH), "CrossedHammers", 5.4, C.SignText)
-	for _, x in { 17.9, 50.3 } do
-		Kit.box(m, Vector3.new(x - 0.45, DECK, signZ - 1.3), Vector3.new(x + 0.45, signY + 4, signZ - 0.4), C.WoodDark, nil, Style.decor())
+	Style.icon(m, Kit.facing(Vector3.new(15.5, signY, signZ + 0.65), SOUTH), "CrossedHammers", 6.6, C.SignText)
+	for _, x in { 11.9, 50.0 } do
+		Kit.box(m, Vector3.new(x - 0.5, DECK, signZ - 1.3), Vector3.new(x + 0.5, signY + 4.8, signZ - 0.4), C.WoodDark, nil, Style.decor())
 	end
-	Kit.box(m, Vector3.new(33.6, h.Max.Y + 0.8, signZ - 1.3), Vector3.new(34.4, signY + 4, signZ - 0.4), C.WoodDark, nil, Style.tiny())
-	Kit.box(m, Vector3.new(17.5, signY - 4.1, signZ - 1.2), Vector3.new(50.7, signY - 3.5, signZ - 0.4), C.WoodDark, nil, Style.tiny())
+	Kit.box(m, Vector3.new(33.6, h.Max.Y + 0.8, signZ - 1.3), Vector3.new(34.4, signY + 4.8, signZ - 0.4), C.WoodDark, nil, Style.tiny())
+	Kit.box(m, Vector3.new(11.2, signY - 4.9, signZ - 1.2), Vector3.new(50.3, signY - 4.3, signZ - 0.4), C.WoodDark, nil, Style.tiny())
 
 	---------------------------------------------------------------- derrick with beacon and the PWR board
 	local derrickBase = CFrame.new(31, h.Max.Y + 0.8, -251.5)
