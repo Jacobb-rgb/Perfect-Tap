@@ -1,8 +1,12 @@
 --[[
 	Lobby package "Sky" (src/server/World/Lobby/Sky, docs/plans/LOBBY_PLAN.md
-	6.1): every set piece is built inside its LobbyLayout footprint and part
-	budget, clouds stay out of the lobby area, the balloon and the ships are
-	tagged Spin, the build is deterministic, and the golden-hour Lighting in
+	6.1, docs/plans/VISUAL_UPGRADE_PLAN.md): every set piece is built inside
+	its LobbyLayout footprint and part budget, clouds stay out of the lobby
+	area and are puffy clusters with lit undersides, the three planets hang
+	1500-3000 studs out in the north-west..north-east sky (big, cheap,
+	two/three-tone, one ringed, never in front of the sun), the airship is a
+	cheap bobbing Spin model, the balloon and the ships are tagged Spin, the
+	build is deterministic, and the golden-hour Lighting in
 	default.project.json is identical to LightingConfig.Presets.Surface.
 ]]
 return function(T, Loader)
@@ -17,6 +21,8 @@ return function(T, Loader)
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local Style = Loader.requirePath("ServerScriptService.Server.World.Lobby.Style")
 	local Sky = Loader.requirePath("ServerScriptService.Server.World.Lobby.Sky")
+	local Planets = Loader.requirePath("ServerScriptService.Server.World.Lobby.Sky.Planets")
+	local Airship = Loader.requirePath("ServerScriptService.Server.World.Lobby.Sky.Airship")
 
 	-- part budgets per piece (LOBBY_PLAN 6.1) and the pieces that may own a light
 	local PIECE_PARTS = {
@@ -32,6 +38,8 @@ return function(T, Loader)
 		WestPier = 90,
 	}
 	local PIECE_LIGHTS = { Balloon = 1, NextIsland = 1, WestPier = 1 }
+	-- the sky pieces that are not LobbyLayout pieces (built after them)
+	local EXTRAS = { Planets = 3 * 40, Airship = 70 }
 
 	-- the same random stream Town.build gives the package
 	local function build(): any
@@ -129,6 +137,19 @@ return function(T, Loader)
 				end
 			end
 		end
+		for id, maxParts in EXTRAS do
+			local m = root:FindFirstChild(id)
+			T.truthy(m and m:IsA("Model"), "model " .. id)
+			local list = parts(m)
+			T.le(#list, maxParts, id .. " parts")
+			total += #list
+			for _, part in list do
+				if LobbyLayout.inArea(part.CFrame.Position) then
+					inLobby += 1
+				end
+			end
+			T.eq(#lights(m), 0, id .. " has no lights (neon glows)")
+		end
 		local budget = LobbyLayout.Budget.Packages.Sky
 		T.le(total, budget.Parts, "Sky parts")
 		T.le(inLobby, budget.LobbyParts, "Sky parts in the lobby area")
@@ -170,6 +191,7 @@ return function(T, Loader)
 			Balloon = { SpinSpeed = 0.05, BobHeight = 2, BobSpeed = 0.5 },
 			ShipA = { SpinSpeed = 0, BobHeight = 0.5, BobSpeed = 0.8 },
 			ShipB = { SpinSpeed = 0, BobHeight = 0.5, BobSpeed = 0.8 },
+			Airship = { SpinSpeed = 0, BobHeight = 3, BobSpeed = 0.35 },
 		}
 		for id, attrs in expected do
 			local m = root:FindFirstChild(id)
@@ -192,6 +214,123 @@ return function(T, Loader)
 				T.truthy(expected[d.Name], d:GetFullName() .. " is an expected spinner")
 			end
 		end
+	end)
+
+	T.test("sky: clouds are puffy stacked clusters with lit undersides", function()
+		local root = build()
+		local clusters = 0
+		for _, cloud in root.CloudBanks:GetChildren() do
+			if cloud:IsA("Model") then
+				clusters += 1
+				local list = parts(cloud)
+				T.truthy(#list >= 12, cloud:GetFullName() .. " is a stacked cluster, not a slab")
+				local minY, maxY = math.huge, -math.huge
+				local minX, maxX = math.huge, -math.huge
+				local lowestGlow = math.huge
+				for _, part in list do
+					local p = part.CFrame.Position
+					local half = part.Size.Y / 2
+					minY = math.min(minY, p.Y - half)
+					maxY = math.max(maxY, p.Y + half)
+					minX = math.min(minX, p.X)
+					maxX = math.max(maxX, p.X)
+					if part.Material == roblox.Enum.Material.Neon and part.Size.Y < 0.5 then
+						lowestGlow = math.min(lowestGlow, p.Y)
+					end
+				end
+				-- a heap, not a slab: the cluster is at least a third as tall as wide
+				-- (measured along the world X spread of its part centers)
+				local width = math.max(1, maxX - minX)
+				T.truthy((maxY - minY) / width > 0.3 or (maxY - minY) > 40, cloud:GetFullName() .. " is puffy")
+				-- a glowing sheet under the belly lights the underside
+				T.truthy(lowestGlow < minY + (maxY - minY) * 0.25, cloud:GetFullName() .. " has a lit underside")
+			end
+		end
+		T.truthy(clusters >= 12, "a dozen or more cloud clusters")
+	end)
+
+	T.test("sky: three big Kenney-style planets frame the mountain", function()
+		local root = build()
+		local planets = root:FindFirstChild("Planets")
+		T.truthy(planets and planets:IsA("Model"), "Planets model")
+		local sun = LobbyLayout.SunDirection
+		local ringed = 0
+		local count = 0
+		for _, spec in Planets.Specs do
+			count += 1
+			local m = planets:FindFirstChild(spec.Name)
+			T.truthy(m and m:IsA("Model"), "planet " .. spec.Name)
+			local list = parts(m)
+			T.le(#list, Planets.MaxParts, spec.Name .. " parts")
+			T.eq(m.LevelOfDetail, roblox.Enum.ModelLevelOfDetail.StreamingMesh, spec.Name .. " streams as a Lod mesh")
+			local body = m:FindFirstChild("Body")
+			T.truthy(body and body.Shape == roblox.Enum.PartType.Ball, spec.Name .. " has a Ball body")
+			T.truthy(
+				m:FindFirstChild("Rim") and m.Rim.Material == roblox.Enum.Material.Neon and m.Rim.Transparency > 0.5,
+				spec.Name .. " glowing rim"
+			)
+			local center = body.CFrame.Position
+			-- far away, high, from the north-west to the north-east, big on screen
+			local flat = Vector3.new(center.X, 0, center.Z)
+			T.truthy(flat.Magnitude >= 1500 and flat.Magnitude <= 3000, `{spec.Name} hangs 1500-3000 studs out ({flat.Magnitude})`)
+			local bearing = math.deg(math.atan2(center.X, -center.Z)) % 360
+			T.truthy(bearing >= 300 or bearing <= 60, `{spec.Name} is in the north-west..north-east sky ({bearing})`)
+			T.truthy(center.Y > body.Size.X / 2 * 0.5, spec.Name .. " is high in the sky")
+			local angular = math.deg(2 * math.atan(body.Size.X / 2 / center.Magnitude))
+			T.truthy(angular >= 6, `{spec.Name} is big on screen ({angular} degrees)`)
+			-- never in front of the sun: the whole planet (ring included) keeps clear of it
+			local reach = math.deg(math.atan(body.Size.X * (if spec.Rings then 1.0 else 0.55) / center.Magnitude))
+			local apart = math.deg(math.acos(math.clamp(center.Unit:Dot(sun), -1, 1)))
+			T.truthy(apart > reach + 15, `{spec.Name} keeps clear of the sun ({apart} vs {reach})`)
+			-- two/three-tone blotches: at least two colors besides the body
+			local colors: { [string]: boolean } = {}
+			local rings = 0
+			for _, part in list do
+				T.falsy(part.CanCollide, part:GetFullName() .. " never collides")
+				T.falsy(part.CanQuery, part:GetFullName() .. " is not raycast")
+				T.falsy(part.CanTouch, part:GetFullName() .. " is not touched")
+				T.falsy(part.CastShadow, part:GetFullName() .. " casts no shadow")
+				T.falsy(LobbyLayout.inArea(part.CFrame.Position), part:GetFullName() .. " is far outside the lobby")
+				if part.Name:sub(1, 5) == "Patch" then
+					colors[tostring(part.Color)] = true
+				elseif part.Name:sub(1, 4) == "Ring" then
+					rings += 1
+				end
+			end
+			local tones = 0
+			for color in colors do
+				if color ~= tostring(body.Color) then
+					tones += 1
+				end
+			end
+			T.truthy(tones >= 2, spec.Name .. " has two or more blotch colors")
+			if spec.Rings then
+				ringed += 1
+				T.truthy(rings >= 16, spec.Name .. " has a ring of flat segments")
+			end
+		end
+		T.truthy(count >= 2 and count <= 3, "two or three planets")
+		T.eq(ringed, 1, "one ringed gas giant")
+	end)
+
+	T.test("sky: the airship of concept v2", function()
+		local root = build()
+		local m = root:FindFirstChild("Airship")
+		T.truthy(m and m:IsA("Model"), "Airship model")
+		local list = parts(m)
+		T.le(#list, Airship.MaxParts, "airship parts")
+		T.eq(m.PrimaryPart and m.PrimaryPart.Name, "Envelope", "the airship bobs around its envelope")
+		T.truthy(m:FindFirstChild("Gondola"), "a gondola under the envelope")
+		local windows = 0
+		for _, part in list do
+			T.falsy(part.CanCollide, part:GetFullName() .. " never collides")
+			T.falsy(part.CastShadow, part:GetFullName() .. " casts no shadow")
+			T.falsy(LobbyLayout.inArea(part.CFrame.Position), part:GetFullName() .. " flies outside the lobby area")
+			if part.Material == roblox.Enum.Material.Neon and part.Color == Style.C.Lamp then
+				windows += 1
+			end
+		end
+		T.truthy(windows >= 8, "lit gondola windows")
 	end)
 
 	T.test("sky: the build is deterministic", function()

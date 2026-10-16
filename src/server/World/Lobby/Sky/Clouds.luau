@@ -1,13 +1,25 @@
 --[[
 	Sky package: voxel cloud banks (docs/plans/LOBBY_PLAN.md 6.1 item 3,
-	ART_DIRECTION section 7). Flat clusters of big blocks 450-900 studs out,
-	120-240 high, from the west (where the sun sets) through the north-west
-	to the north and a few in the north-east. Each block is a lit body
-	(CloudLight/CloudOrange near the sun, CloudPink further away) under a
-	purple cap (CloudPurple/SkyPurple), on a warm underside slab, so from
-	the town the clouds read pink and orange below and purple on top.
+	ART_DIRECTION section 7). Puffy stacked voxel cumulus clusters 450-780
+	studs out, from the west (where the sun sets) through the north-west to
+	the north-east, grouped into a few cloud masses: a low bank under the
+	sun, a big west-north-west mass, clusters between the planets and a few
+	high ones. They frame the three planets (Planets.luau) and the airship
+	instead of covering them: every cluster keeps clear of the planets'
+	middles, one low bank tucks under the violet giant's lower edge.
+
+	A cluster (19 parts) is a long belly of two blocks (a stepped
+	underside), three domes on it (big, middle, small; each a body block
+	under a narrower cap), a crown cube, lumps on the belly ends, front
+	puffs, cubes hanging under the belly, a warm glowing underside (the town
+	looks up at it; the concept paints it pink/orange in the sunset light),
+	warm lower parts and purple tops, a SkyTop shade flank on the side away
+	from the sun and a golden glowing rim on the side toward it. Each
+	cluster is turned 20-40 degrees away from the town so it shows a lit and
+	a shaded face.
+
 	No collision, no shadow, Persistent streaming; all of it stays outside
-	the lobby area box.
+	the lobby area box and inside the CloudBanks footprint.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,32 +37,36 @@ type Piece = LobbyLayout.Piece
 local Clouds = {}
 
 --[[
-	Cloud bank spots: Az = compass bearing from the plaza in degrees (0 =
-	north (-Z), 270 = west (-X)), Dist = studs from the plaza, Y = base
-	height, Scale. Three bands: big low banks on the horizon (far), a middle
-	band and a few high clusters (nearer). The sun sits at bearing ~262,
-	~13 degrees up: the bank under it stays low, the others leave it free.
+	Cluster spots: Az = compass bearing from the plaza in degrees (0 = north
+	(-Z), 270 = west (-X)), Dist = studs from the plaza, Y = base height,
+	Scale. The sun sits at bearing ~262, ~13 degrees up: no cluster in front
+	of it. The planets sit at bearings ~326 (violet, 0-20 degrees up), ~27
+	(teal, 5-20 up) and ~352 (ember, 15-23 up): the middle and high clusters
+	sit between and above them, the low banks below.
 ]]
 Clouds.Spots = {
-	-- horizon band
-	{ Az = 262, Dist = 720, Y = 90, Scale = 1.0 },
-	{ Az = 279, Dist = 700, Y = 112, Scale = 1.3 },
-	{ Az = 302, Dist = 720, Y = 122, Scale = 1.4 },
-	{ Az = 327, Dist = 700, Y = 110, Scale = 1.35 },
-	{ Az = 351, Dist = 720, Y = 124, Scale = 1.4 },
-	{ Az = 17, Dist = 700, Y = 116, Scale = 1.3 },
-	-- middle band
-	{ Az = 256, Dist = 560, Y = 190, Scale = 0.9 },
-	{ Az = 287, Dist = 580, Y = 176, Scale = 1.05 },
-	{ Az = 313, Dist = 620, Y = 204, Scale = 1.1 },
-	{ Az = 337, Dist = 560, Y = 168, Scale = 1.0 },
-	{ Az = 359, Dist = 600, Y = 198, Scale = 1.1 },
-	{ Az = 24, Dist = 560, Y = 172, Scale = 0.95 },
-	{ Az = 40, Dist = 520, Y = 194, Scale = 0.8 },
-	-- high clusters
-	{ Az = 296, Dist = 470, Y = 236, Scale = 0.8 },
-	{ Az = 341, Dist = 450, Y = 232, Scale = 0.75 },
-	{ Az = 8, Dist = 470, Y = 238, Scale = 0.8 },
+	-- low bank on the west horizon, under the sun
+	{ Az = 250, Dist = 780, Y = 40, Scale = 1.3 },
+	{ Az = 263, Dist = 740, Y = 22, Scale = 1.1 },
+	-- the big west-north-west mass
+	{ Az = 284, Dist = 620, Y = 150, Scale = 1.25 },
+	{ Az = 292, Dist = 570, Y = 118, Scale = 0.95 },
+	{ Az = 299, Dist = 650, Y = 178, Scale = 0.85 },
+	-- tucked under the violet giant's lower left edge
+	{ Az = 311, Dist = 760, Y = 18, Scale = 1.1 },
+	-- north, between the violet giant and the ember world
+	{ Az = 341, Dist = 610, Y = 150, Scale = 1.05 },
+	{ Az = 336, Dist = 560, Y = 204, Scale = 0.7 },
+	-- right of the peak, between the ember world and the teal world
+	{ Az = 14, Dist = 600, Y = 170, Scale = 0.85 },
+	-- north-east, behind the airship
+	{ Az = 41, Dist = 480, Y = 150, Scale = 0.85 },
+	{ Az = 47, Dist = 450, Y = 124, Scale = 0.7 },
+	-- high clusters (seen from the ground, above the planets)
+	{ Az = 302, Dist = 470, Y = 238, Scale = 0.9 },
+	{ Az = 322, Dist = 500, Y = 252, Scale = 0.75 },
+	{ Az = 2, Dist = 470, Y = 232, Scale = 0.8 },
+	{ Az = 26, Dist = 450, Y = 244, Scale = 0.75 },
 }
 
 local SUN_AZ = 262
@@ -66,97 +82,142 @@ local function sunward(az: number): number
 	return math.clamp(1 - diff / 70, 0, 1)
 end
 
+type Dome = { X: number, W: number, H: number, Cap: Color3 }
+
 --[[
-	One cloud bank, a puffy voxel cumulus with volume and two tones.
-	`frame` = bottom center, LookVector = toward the plaza. A flat lit base
-	(CloudLight/CloudOrange toward the sun, CloudPink away) with a glowing
-	under-rim, then a dome of 5-7 puffs, tallest in the middle, each split
-	into a warm lower half (CloudPink, or the lit tone near the sun) and a
-	purple upper half (CloudPurple/SkyPurple); puffs stick out toward the
-	town by different amounts so their faces catch different light. Two
-	small crowns on top, a SkyTop shadow flank on the side away from the
-	sun and, toward the sun, a golden glowing rim along the underside.
-	About 16-20 parts.
+	One puffy cumulus. `frame` = bottom center of the belly, LookVector = the
+	side the town sees (already turned). `away` = +1 or -1, the frame X side
+	that faces away from the sun.
+	A long belly of two blocks (the right one's bottom a little higher: a
+	stepped underside), three domes on it (a big one, a middle one, a small
+	one; each a body block under a narrower cap block), a crown cube on the
+	big dome, lumps on the belly ends, two puffs on the front, two cubes
+	hanging under the belly, a warm neon sheet under each belly block, a
+	SkyTop shade flank and a golden rim toward the sun. 19 parts.
 ]]
-local function bank(m: Model, frame: CFrame, scale: number, warm: number, rng: Rng.Rng)
-	local lit = if warm > 0.75 then C.CloudLight elseif warm > 0.45 then C.CloudOrange else C.CloudPink
-	-- warm lower halves everywhere (pink, orange toward the sun), purple tops
-	local lower = if warm > 0.75 then C.CloudOrange elseif warm > 0.45 then C.CloudLight else C.CloudPink
-	local top = if warm > 0.6 then C.CloudPurple elseif rng:chance(0.5) then C.SkyPurple else C.CloudPurple
-	local width = rng:range(100, 140) * scale
-	local depth = rng:range(36, 48) * scale
-	local half = width / 2
-	local baseH = 6 * scale
-	-- flat lit base and a glowing under-rim: the town looks up at the
-	-- undersides, which the concept paints pink/orange in the sunset light
-	-- (the low sun cannot reach them, so the rim glows on its own)
-	Kit.box(m, frame, Vector3.new(0, baseH / 2, 0), Vector3.new(width, baseH, depth), Style.vary(lit, rng, 0.04))
-	Kit.glow(
-		m,
-		frame * CFrame.new(rng:range(-0.06, 0.06) * width, -0.8 * scale, -depth * 0.08),
-		Vector3.new(width * rng:range(0.72, 0.88), 1.6 * scale, depth * 0.8),
-		if warm > 0.45 then C.CloudOrange else C.CloudPink,
-		0.45 + (1 - warm) * 0.2
-	)
-	-- the dome of puffs
-	local n = rng:int(5, 7)
-	local tallest = 0
-	local tallestX = 0
-	for i = 1, n do
-		local t = (i - 0.5) / n * 2 - 1
-		local dome = math.sqrt(math.max(0.12, 1 - t * t))
-		local w = width / n * rng:range(1.3, 1.7)
-		local h = (12 + 28 * dome) * scale * rng:range(0.85, 1.15)
-		local x = t * (half - w / 3)
-		local z = rng:range(-0.22, 0.12) * depth
-		local d = depth * rng:range(0.55, 0.85)
-		local lowH = h * rng:range(0.58, 0.72)
-		Kit.box(m, frame, Vector3.new(x, baseH + lowH / 2 - 0.5, z), Vector3.new(w, lowH, d), Style.vary(lower, rng, 0.04))
+local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, away: number, rng: Rng.Rng)
+	local width = rng:range(112, 140) * scale
+	local depth = rng:range(46, 58) * scale
+	local height = rng:range(48, 60) * scale
+	-- warm lower parts (lighter toward the sun), purple tops
+	local belly = if warm > 0.7 then C.CloudLight elseif warm > 0.4 then C.CloudOrange else C.CloudPink
+	local body = if warm > 0.55 then C.CloudPink else C.CloudPink:Lerp(C.CloudPurple, 0.16)
+	local shoulder = C.CloudPink:Lerp(C.CloudPurple, if warm > 0.55 then 0.5 else 0.62)
+	local crown = if warm > 0.55 then C.SkyPurple else C.CloudPurple
+	local mirror = if rng:chance(0.5) then 1 else -1
+
+	-- the belly: two long blocks, the second one's bottom raised a little
+	local bellyH = height * 0.24
+	local bellies = {
+		{ X = -0.2 * width, W = width * 0.64, H = bellyH, Lift = 0, D = depth },
+		{ X = 0.22 * width, W = width * 0.56, H = bellyH * 0.82, Lift = bellyH * 0.2, D = depth * 0.9 },
+	}
+	for i, b in bellies do
+		local x = b.X * mirror
 		Kit.box(
 			m,
 			frame,
-			Vector3.new(x + rng:range(-0.1, 0.1) * w, baseH + lowH + (h - lowH) / 2 - 1, z + d * 0.06),
-			Vector3.new(w * rng:range(0.75, 0.9), h - lowH, d * 0.86),
-			Style.vary(top, rng, 0.04)
+			Vector3.new(x, b.Lift + b.H / 2, (i - 1) * depth * 0.04),
+			Vector3.new(b.W, b.H, b.D),
+			Style.vary(belly, rng, 0.035)
 		)
-		if h > tallest then
-			tallest, tallestX = h, x
+		-- the warm glowing underside: a thin neon sheet just under the block,
+		-- inset from the sides (from the side it is only a thin line)
+		Kit.glow(
+			m,
+			frame * CFrame.new(x, b.Lift - 0.05, (i - 1) * depth * 0.04),
+			Vector3.new(b.W * 0.9, 0.3, b.D * 0.86),
+			if warm > 0.4 then C.CloudOrange else C.CloudPink,
+			0.55 + (1 - warm) * 0.1
+		)
+	end
+	-- lumps on the belly ends break the straight edges
+	for _, side in { -1, 1 } do
+		local s = bellyH * rng:range(0.9, 1.2)
+		Kit.box(
+			m,
+			frame,
+			Vector3.new(side * (width * 0.5 - s * 0.2), s * 0.42, rng:range(-0.2, 0.2) * depth),
+			Vector3.new(s * 1.2, s, s * 1.4),
+			Style.vary(belly, rng, 0.04)
+		)
+	end
+	-- three domes: big, middle, small
+	local domes: { Dome } = {
+		{ X = -0.08, W = 0.42, H = rng:range(0.74, 0.86), Cap = crown },
+		{ X = 0.25, W = 0.32, H = rng:range(0.5, 0.6), Cap = shoulder },
+		{ X = -0.35, W = 0.24, H = rng:range(0.36, 0.44), Cap = shoulder },
+	}
+	local bigTop = Vector3.zero
+	for i, dome in domes do
+		local x = dome.X * width * mirror + rng:range(-0.03, 0.03) * width
+		local w = dome.W * width
+		local h = dome.H * height
+		local bodyH = h * 0.58
+		local capH = h * 0.42
+		local z = rng:range(-0.08, 0.04) * depth
+		local y0 = bellyH * 0.9
+		Kit.box(m, frame, Vector3.new(x, y0 + bodyH / 2, z), Vector3.new(w, bodyH, depth * 0.84), Style.vary(body, rng, 0.035))
+		local capX = x + rng:range(-0.12, 0.12) * w
+		Kit.box(
+			m,
+			frame,
+			Vector3.new(capX, y0 + bodyH + capH / 2 - 0.4, z + depth * 0.04),
+			Vector3.new(w * rng:range(0.6, 0.72), capH, depth * 0.62),
+			Style.vary(dome.Cap, rng, 0.035)
+		)
+		if i == 1 then
+			bigTop = Vector3.new(capX, y0 + bodyH + capH, z)
+		end
+		-- a puff on the front of the two bigger domes (relief on the face the town sees)
+		if i <= 2 then
+			local s = h * rng:range(0.26, 0.32)
+			Kit.box(
+				m,
+				frame,
+				Vector3.new(x + rng:range(-0.25, 0.25) * w, y0 + s * 0.55, z - depth * 0.42 - s * 0.12),
+				Vector3.new(s * 1.4, s, s),
+				Style.vary(body, rng, 0.04)
+			)
 		end
 	end
-	-- two small crowns on the tallest part
-	for k = 1, 2 do
-		local w = width * rng:range(0.1, 0.16)
-		local h = rng:range(6, 10) * scale
-		Kit.box(
-			m,
-			frame,
-			Vector3.new(tallestX + (k - 1.5) * w * 1.1, baseH + tallest + h / 2 - 2, rng:range(-0.1, 0.1) * depth),
-			Vector3.new(w, h, depth * 0.45),
-			Style.vary(if k == 1 then top else C.SkyPurple, rng, 0.04)
-		)
-	end
-	-- SkyTop shadow flank on the side away from the sun
-	local away = frame:VectorToObjectSpace(Vector3.new(0.99, 0, -0.14))
-	local shadowSide = if away.X >= 0 then 1 else -1
+	-- a crown cube on the big dome
+	local cs = height * rng:range(0.14, 0.18)
 	Kit.box(
 		m,
 		frame,
-		Vector3.new(shadowSide * half * 0.82, baseH + tallest * 0.3, depth * 0.08),
-		Vector3.new(width * 0.18, tallest * 0.55, depth * 0.7),
-		Style.vary(C.SkyTop, rng, 0.05)
+		Vector3.new(bigTop.X + rng:range(-0.06, 0.06) * width, bigTop.Y + cs / 2 - 0.4, bigTop.Z),
+		Vector3.new(cs * 1.5, cs, cs * 1.3),
+		Style.vary(crown, rng, 0.04)
 	)
-	-- the concept's golden rims: a glowing band along the town-facing lower
-	-- edge of the base, strongest toward the sun (the faces the town sees
-	-- turn away from the low sun, so the rim carries the sunset light)
-	if warm > 0.2 then
-		Kit.glow(
+	-- cubes hanging under the belly: a lumpy underside, not a flat slab
+	for k = 1, 2 do
+		local s = height * rng:range(0.13, 0.17)
+		local x = (if k == 1 then -1 else 1) * width * rng:range(0.1, 0.3)
+		Kit.box(
 			m,
-			frame * CFrame.new(rng:range(-0.1, 0.1) * width, 1.1 * scale, -depth / 2 - 0.4),
-			Vector3.new(width * rng:range(0.6, 0.8), 2 * scale, 0.8),
-			C.CloudOrange,
-			0.25 + (1 - warm) * 0.45
+			frame,
+			Vector3.new(x, -s * 0.3, rng:range(-0.15, 0.15) * depth),
+			Vector3.new(s * 2.2, s, s * 1.6),
+			Style.vary(belly, rng, 0.04)
 		)
 	end
+	-- SkyTop shade flank on the side away from the sun
+	Kit.box(
+		m,
+		frame,
+		Vector3.new(away * (width * 0.36), height * 0.32, depth * 0.08),
+		Vector3.new(width * 0.2, height * 0.36, depth * 0.72),
+		Style.vary(C.SkyTop:Lerp(C.CloudPurple, 0.35), rng, 0.04)
+	)
+	-- the golden rim on the side toward the sun (strongest near the sun)
+	Kit.glow(
+		m,
+		frame * CFrame.new(-away * (width * 0.5 + 0.3), bellyH * 0.6, -depth * 0.1),
+		Vector3.new(0.6, bellyH * 0.9, depth * 0.66),
+		C.CloudOrange,
+		0.3 + (1 - warm) * 0.4
+	)
 end
 
 function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model
@@ -165,10 +226,11 @@ function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local minX, maxX = piece.Center.X - piece.Size.X / 2, piece.Center.X + piece.Size.X / 2
 	local minZ, maxZ = piece.Center.Z - piece.Size.Z / 2, piece.Center.Z + piece.Size.Z / 2
 	local area = LobbyLayout.Area
+	local toSun = Vector3.new(LobbyLayout.SunDirection.X, 0, LobbyLayout.SunDirection.Z).Unit
 	for _, spot in Clouds.Spots do
-		local dir = bearing(spot.Az + rng:range(-1.5, 1.5))
-		local p = dir * (spot.Dist + rng:range(-20, 20))
-		local margin = 105 * spot.Scale
+		local dir = bearing(spot.Az + rng:range(-1, 1))
+		local p = dir * (spot.Dist + rng:range(-12, 12))
+		local margin = 85 * spot.Scale
 		local x = math.clamp(p.X, minX + margin, maxX - margin)
 		local z = math.clamp(p.Z, minZ + margin, maxZ - margin)
 		-- never inside the lobby area box (all spots are far outside anyway)
@@ -176,10 +238,13 @@ function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 			x < area.Min.X - margin or x > area.Max.X + margin or z < area.Min.Z - margin or z > area.Max.Z + margin,
 			"cloud cluster inside the lobby area"
 		)
-		local center = Vector3.new(x, spot.Y + rng:range(-4, 4), z)
-		local frame = CFrame.lookAt(center, Vector3.new(0, center.Y, 0))
+		local center = Vector3.new(x, spot.Y + rng:range(-3, 3), z)
+		-- face the town, then turn 20-40 degrees so a side face shows too
+		local turn = math.rad(rng:range(20, 40)) * (if rng:chance(0.5) then 1 else -1)
+		local frame = CFrame.lookAt(center, Vector3.new(0, center.Y, 0)) * CFrame.Angles(0, turn, 0)
+		local away = if frame.RightVector:Dot(toSun) > 0 then -1 else 1
 		local c = Style.model("Cloud", m)
-		bank(c, frame, spot.Scale, sunward(spot.Az), rng)
+		cumulus(c, frame, spot.Scale, sunward(spot.Az), away, rng)
 	end
 	Style.streaming(m, "Persistent")
 	return m
