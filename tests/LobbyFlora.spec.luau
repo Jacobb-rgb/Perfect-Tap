@@ -1,6 +1,7 @@
 --[[
 	Lobby package Flora (src/server/World/Lobby/Flora): ponds, creek,
-	bridge, signpost, NEXT AREA + boardwalk, hero trees and the scatter.
+	bridge, signpost, NEXT AREA + boardwalk, hero trees, the scatter and the
+	town buildings (sites on free ground, inside their rectangles, no lights).
 	Checks that nothing lands on roads, paths, plots, the bases' yards or
 	the spawn, that the bridge, creek and boardwalk are walkable, the sight
 	lines of LOBBY_PLAN 6.5, the budgets and determinism.
@@ -15,6 +16,7 @@ return function(T, Loader)
 	local Flora = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora")
 	local Scatter = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Scatter")
 	local Signs = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Signs")
+	local Town = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Town")
 
 	local cachedMap = nil
 	local function world()
@@ -132,6 +134,7 @@ return function(T, Loader)
 				"Scatter",
 				"Fences",
 				"GardenLanterns",
+				"Town",
 			}
 		do
 			local node = f
@@ -351,6 +354,95 @@ return function(T, Loader)
 				end
 			end
 			T.truthy(trees >= 1, id .. " has trees")
+		end
+	end)
+
+	-- The XZ box of a part (world), as min/max Vector3s.
+	local function boxOf(part): (any, any)
+		local p, e = part.CFrame.Position, halfExtents(part)
+		return Vector3.new(p.X - e.X, 0, p.Z - e.Z), Vector3.new(p.X + e.X, 0, p.Z + e.Z)
+	end
+
+	T.test("flora: town buildings stand on free ground inside their sites", function()
+		local sites = Town.Sites
+		T.truthy(#sites >= 8 and #sites <= 14, `8-14 town buildings ({#sites})`)
+		local town = flora():FindFirstChild("Town")
+		T.truthy(town, "Flora has Town")
+		for i, site in sites do
+			T.truthy(site.Min.X < site.Max.X and site.Min.Y < site.Max.Y, site.Id .. " has a proper rectangle")
+			-- off the coastal rail line (world |x| 160..172) with room to spare
+			T.truthy(site.Max.X < Town.RailMinX - 1 and site.Min.X > -Town.RailMinX + 1, site.Id .. " stays off the rail line")
+			-- every point of the site is free ground (roads, paths, plots, yards, outcrops, keep-outs, pieces)
+			for x = site.Min.X, site.Max.X + 1e-6, 1 do
+				for z = site.Min.Y, site.Max.Y + 1e-6, 1 do
+					local q = Vector3.new(x, 0, z)
+					T.truthy(LobbyLayout.isFree(q, 1), `{site.Id}: ({x}, {z}) is not free ground`)
+					for _, plot in WorldLayout.Plots do
+						local localPos = WorldLayout.plotCFrame(plot):PointToObjectSpace(Vector3.new(x, plot.Center.Y, z))
+						local inYard = math.abs(localPos.X) < 28 and localPos.Z >= 25 and localPos.Z <= 66
+						T.falsy(inYard, `{site.Id}: ({x}, {z}) is in the yard of base {plot.Id}`)
+					end
+				end
+			end
+			-- sites never overlap each other
+			for j = i + 1, #sites do
+				local o = sites[j]
+				local apart = site.Max.X <= o.Min.X or o.Max.X <= site.Min.X or site.Max.Y <= o.Min.Y or o.Max.Y <= site.Min.Y
+				T.truthy(apart, `{site.Id} overlaps {o.Id}`)
+			end
+			-- the building stays inside its site, glows with Neon windows and has no lights
+			local m = town and town:FindFirstChild(site.Id)
+			T.truthy(m, "town building " .. site.Id)
+			if m then
+				local glows, count = 0, 0
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") then
+						count += 1
+						local lo, hi = boxOf(d)
+						local inside = lo.X >= site.Min.X - 0.05
+							and hi.X <= site.Max.X + 0.05
+							and lo.Z >= site.Min.Y - 0.05
+							and hi.Z <= site.Max.Y + 0.05
+						T.truthy(inside, `{d:GetFullName()} pokes out of its site ({lo} .. {hi})`)
+						if d.Name == "WindowGlow" then
+							glows += 1
+							T.truthy(d.Material == roblox.Enum.Material.Neon, d:GetFullName() .. " window glow is Neon")
+						end
+						-- small details (frames, panes, lamps, posts, bolts) cast no shadow
+						if math.max(d.Size.X, d.Size.Y, d.Size.Z) < 1.2 or d.Material == roblox.Enum.Material.Neon then
+							T.falsy(d.CastShadow, d:GetFullName() .. " small part casts no shadow")
+						end
+					elseif d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+						T.truthy(false, d:GetFullName() .. ": town buildings glow with Neon, no lights")
+					end
+				end
+				T.truthy(glows >= 3, `{site.Id} has lit windows ({glows})`)
+				T.truthy(count <= 80, `{site.Id} part count {count} <= 80`)
+			end
+		end
+	end)
+
+	T.test("flora: town signs and the scatter keeps off the buildings", function()
+		local town = flora().Town
+		local texts = {}
+		for _, d in town:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "TownSign" then
+				local gui = d:FindFirstChild("FrontText")
+				local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
+				if label then
+					texts[label.Text] = true
+				end
+			end
+		end
+		for _, text in { "TOOLS", "INN", "MAP", "GEMS" } do
+			T.truthy(texts[text], "town sign " .. text)
+		end
+		for _, part in parts(flora().Scatter) do
+			local lo, hi = boxOf(part)
+			for _, site in Town.Sites do
+				local apart = hi.X <= site.Min.X or lo.X >= site.Max.X or hi.Z <= site.Min.Y or lo.Z >= site.Max.Y
+				T.truthy(apart, `{part:GetFullName()} overlaps the town building {site.Id}`)
+			end
 		end
 	end)
 

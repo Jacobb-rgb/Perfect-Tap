@@ -250,8 +250,9 @@ local function lanterns(m: Instance, placer: Kit.Placer)
 	end
 end
 
-function Scatter.build(parent: Instance, rng: Rng.Rng)
-	local placer = Kit.newPlacer()
+-- `keepOut`: rectangles (the town building sites) the scatter must stay clear of.
+function Scatter.build(parent: Instance, rng: Rng.Rng, keepOut: { Kit.Box }?)
+	local placer = Kit.newPlacer(keepOut)
 	local fenceModel = Style.model("Fences", parent)
 	fences(fenceModel, placer)
 	local lanternModel = Style.model("GardenLanterns", parent)
