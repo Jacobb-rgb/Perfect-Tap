@@ -8,8 +8,8 @@ status=0
 
 defs=build/globalTypes.d.luau
 if [ ! -f "$defs" ]; then
-  echo "Downloading Roblox type definitions..."
-  curl -sSL -o "$defs" https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau || true
+  echo "Downloading Roblox type definitions (matching luau-lsp 1.53.0 from rokit.toml)..."
+  curl -sSL -o "$defs" https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/1.53.0/scripts/globalTypes.d.luau || true
 fi
 
 echo "== Type analysis (luau-lsp, strict mode)"
