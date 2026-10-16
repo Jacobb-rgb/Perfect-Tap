@@ -19,6 +19,7 @@ local Geo = require(script.Parent.Geo)
 local Rng = require(script.Parent.Parent.Util.Rng)
 local OreData = require(script.Parent.Parent.Config.OreData)
 local Geometry2D = require(script.Parent.Parent.Cleaning.Geometry2D)
+local ItemBuilder = require(script.Parent.ItemBuilder)
 
 local OreShellBuilder = {}
 
@@ -97,7 +98,10 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 	model.Name = "CleaningOre"
 
 	-- rock body: the irregular outline extruded backwards, plus lumps behind
-	local bodyColor = ore.Crust:Lerp(Color3.fromRGB(40, 32, 30), 0.25)
+	-- the crust is the Dirty Ore crust (same for every ore): the ore only shows once it is cut free
+	local crust = ItemBuilder.DirtyCrust
+	local glow = ItemBuilder.glowColor(ore.Glow)
+	local bodyColor = crust:Lerp(Color3.fromRGB(40, 32, 30), 0.25)
 	local backRock = prism(model, workCF, scale, pattern.Outline, -0.25, 1.15, bodyColor, Enum.Material.SmoothPlastic, { Name = "RockBody" })
 	for _ = 1, 3 do
 		local a = rng:range(0, math.pi * 2)
@@ -114,7 +118,7 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 		local b2 = pattern.Core[i % #pattern.Core + 1]
 		local a = workCF:PointToWorldSpace(Vector3.new(a2.X * scale, a2.Y * scale, OreShellBuilder.CoreFront - 0.05))
 		local b = workCF:PointToWorldSpace(Vector3.new(b2.X * scale, b2.Y * scale, OreShellBuilder.CoreFront - 0.05))
-		local edge = Geo.block(model, CFrame.lookAt((a + b) / 2, b), Vector3.new(0.09, 0.09, (b - a).Magnitude), ore.Glow, Enum.Material.Neon, props({ Name = "CoreRim", CastShadow = false, Transparency = 1 }))
+		local edge = Geo.block(model, CFrame.lookAt((a + b) / 2, b), Vector3.new(0.09, 0.09, (b - a).Magnitude), glow, Enum.Material.Neon, props({ Name = "CoreRim", CastShadow = false, Transparency = 1 }))
 		table.insert(rim, edge)
 	end
 
@@ -127,7 +131,7 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 			capModel.Name = `Cap_{cut.Index}_{j}`
 			capModel.Parent = model
 			-- crust reads as lighter, rough stone (clearly different from dirt and core)
-			local color = Geo.vary(ore.Crust:Lerp(Color3.fromRGB(176, 160, 142), 0.45), rng, 0.05)
+			local color = Geo.vary(crust:Lerp(Color3.fromRGB(176, 160, 142), 0.45), rng, 0.05)
 			local parts = prism(capModel, workCF, scale, cap, OreShellBuilder.CapFront, 0.55, color, Enum.Material.SmoothPlastic, { Name = "Crust" })
 			-- a few pebbles on the crust for a rough look
 			local centroid = Geometry2D.centroid(cap)
@@ -136,11 +140,23 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 					capModel,
 					workCF * CFrame.new(centroid.X * scale, centroid.Y * scale, OreShellBuilder.CapFront + 0.05) * CFrame.Angles(0, 0, rng:range(0, 3)),
 					Vector3.new(0.35, 0.3, 0.16) * rng:range(0.8, 1.3),
-					Geo.vary(ore.Crust, rng, 0.1),
+					Geo.vary(crust, rng, 0.1),
 					nil,
 					props({ CastShadow = false })
 				)
 				table.insert(parts, pebble)
+				if cut.Index == 1 and j == 1 then
+					-- the same tiny glint the Dirty Ore chunk shows; it falls away with the crust
+					local glint = Geo.block(
+						capModel,
+						workCF * CFrame.new(centroid.X * scale + 0.18, centroid.Y * scale + 0.12, OreShellBuilder.CapFront + 0.04) * CFrame.Angles(0.6, 0.7, 0.3),
+						Vector3.new(0.13, 0.13, 0.13),
+						glow,
+						Enum.Material.Neon,
+						props({ Name = "Glint", CastShadow = false })
+					)
+					table.insert(parts, glint)
+				end
 			end
 			weldAll(parts)
 			capModel.PrimaryPart = parts[1]
@@ -171,7 +187,7 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 			-- pale base: clearly not dirt, and smaller than the snap radius around it.
 			local lean = cf * CFrame.Angles(0, 0, rng:range(-0.6, 0.6)) * CFrame.Angles(math.rad(OreShellBuilder.CrystalLean), 0, 0)
 			-- (a darker Neon tone: the workbench bloom turns near-white Neon into a blob)
-			local shard = Geo.block(model, lean * CFrame.new(0, 0.11, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.1, 0.24, 0.1) * scale, ore.Glow:Lerp(Color3.new(0, 0, 0), 0.35), Enum.Material.Neon, props({ Name = "Fragile", CastShadow = false }))
+			local shard = Geo.block(model, lean * CFrame.new(0, 0.11, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.1, 0.24, 0.1) * scale, glow:Lerp(Color3.new(0, 0, 0), 0.2), Enum.Material.Neon, props({ Name = "Fragile", CastShadow = false }))
 			fragile[d.Index] = shard
 			local diameter = OreShellBuilder.CrystalBaseSize * scale
 			local baseProps = props({ Name = "CrystalBase", CastShadow = false })

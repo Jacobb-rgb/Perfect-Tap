@@ -4,7 +4,8 @@
 
 	  lune run tools/lune/export_scene.luau [scene]
 	Scenes: world (default), style (the lobby Style kit gallery), lobby_blockout
-	(world + a box per LobbyLayout set piece), gameplay, cleaning
+	(world + a box per LobbyLayout set piece), gameplay, cleaning, ores (the ore
+	gallery: clean, display, ingots, dirty ore, rocks per zone)
 ]]
 
 local fs = require("@lune/fs")
@@ -382,6 +383,155 @@ elseif sceneName == "cleaning" then
 		fov = camFov,
 		uiInset = insetTop,
 	}
+elseif sceneName == "ores" then
+	-- Ore gallery (shots in tools/preview/ore_shots.json): every ore clean, on display and as an
+	-- ingot, dirty ore chunks, and rocks with 1-3 ores in every zone.
+	local CF = Loader.CFrame
+	local V3 = roblox.Vector3
+	local C3 = roblox.Color3
+	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
+	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local gallery = roblox.Instance.new("Model")
+	gallery.Name = "OreGallery"
+	gallery.Parent = workspace
+	Geo.block(gallery, CF.new(60, -0.5, 0), V3.new(420, 1, 260), C3.fromRGB(70, 74, 88))
+
+	local function label(cf, width, height, text, color)
+		local board = Geo.block(gallery, cf, V3.new(width, height, 0.08), C3.fromRGB(44, 36, 46))
+		local gui = roblox.Instance.new("SurfaceGui")
+		gui.Face = roblox.Enum.NormalId.Back
+		gui.Parent = board
+		local textLabel = roblox.Instance.new("TextLabel")
+		textLabel.Text = text
+		textLabel.TextColor3 = color
+		textLabel.FontFace = roblox.Font.fromEnum(roblox.Enum.Font.FredokaOne)
+		textLabel.Parent = gui
+		return board
+	end
+	-- lays a built model on top of a surface at height `top`
+	local function settle(model, top)
+		local lowest = math.huge
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 1 then
+				local _, _, _, _, _, _, r10, r11, r12 = d.CFrame:GetComponents()
+				local h = d.Size / 2
+				lowest = math.min(lowest, d.CFrame.Position.Y - (math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z))
+			end
+		end
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CFrame = d.CFrame + V3.new(0, top - lowest, 0)
+			end
+		end
+	end
+
+	local byRarity = {}
+	for _, ore in OreData.List do
+		local order = Rarity.get(ore.Rarity).Order
+		byRarity[order] = byRarity[order] or {}
+		table.insert(byRarity[order], ore)
+	end
+	local COL, YAW = 3.8, 0.45
+	-- a 3-row grid of rarities (first..first+2) centered at x; cell(ore, x, top, z) builds one cell.
+	-- Low plinths get a tilted name plate in front, tall pedestals a plaque on their front face.
+	local function grid(x0, z0, first, plinthHeight, cell)
+		local row = if plinthHeight > 0.5 then 6.4 else 4.6
+		for r = first, first + 2 do
+			local ores = byRarity[r]
+			local rarity = Rarity.get(ores[1].Rarity)
+			local z = z0 - (r - first) * row
+			for i, ore in ores do
+				local x = x0 + (i - (#ores + 1) / 2) * COL
+				local shade = if (i + r) % 2 == 0 then C3.fromRGB(150, 146, 152) else C3.fromRGB(136, 132, 140)
+				Geo.block(gallery, CF.new(x, plinthHeight / 2, z), V3.new(2.9, plinthHeight, 2.9), shade)
+				cell(ore, x, plinthHeight, z)
+				if plinthHeight > 0.5 then
+					label(CF.new(x, plinthHeight * 0.5, z + 1.5), 2.7, 0.55, ore.Name, rarity.Color)
+				else
+					label(CF.new(x, 0.3, z + 1.62) * CF.Angles(-1.05, 0, 0), 2.9, 0.5, ore.Name, rarity.Color)
+				end
+			end
+			label(CF.new(x0 - 3 * COL - 1.6, 0.3, z + 0.6) * CF.Angles(-1.05, 0, 0), 3.0, 0.62, string.upper(rarity.Name), rarity.Color)
+		end
+	end
+	-- the preview draws every particle emitter as a fixed cloud: keep those on the display grid only
+	local function noEmitters(model)
+		for _, d in model:GetDescendants() do
+			if d:IsA("ParticleEmitter") then
+				d:Destroy()
+			end
+		end
+	end
+	local function cleanCell(ore, x, top, z)
+		local item = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id }, CF.new(x, 0, z) * CF.Angles(0, YAW, 0), ore.Id)
+		settle(item, top)
+		noEmitters(item)
+		item.Parent = gallery
+	end
+	local function displayCell(ore, x, top, z)
+		local item = ItemBuilder.display({ K = "Clean", O = ore.Id }, CF.new(x, top, z) * CF.Angles(0, YAW, 0), ore.Id)
+		item.Parent = gallery
+	end
+	local function ingotCell(ore, x, top, z)
+		local ingot = ItemBuilder.build({ Kind = "Ingot", OreId = ore.Id }, CF.new(x - 0.2, 0, z + 0.5) * CF.Angles(0, 0.25, 0), 1)
+		settle(ingot, top)
+		ingot.Parent = gallery
+		local pile = ItemBuilder.build({ Kind = "Crushed", OreId = ore.Id }, CF.new(x + 0.45, 0, z - 0.65), 2)
+		settle(pile, top)
+		pile.Parent = gallery
+	end
+	grid(0, 0, 1, 0.4, cleanCell) -- Clean: Common, Uncommon, Rare in front,
+	grid(0, -14, 4, 0.4, cleanCell) -- Epic, Legendary, Mythic behind them
+	grid(70, 0, 1, 1.1, displayCell) -- podium look
+	grid(100, 0, 4, 1.1, displayCell)
+	grid(-40, 0, 1, 0.4, ingotCell) -- ingots + crushed
+	grid(-70, 0, 4, 0.4, ingotCell)
+
+	-- dirty ore: the same chunk for every ore (same seed), only the glint differs
+	for i, oreId in { "Coal", "Copper", "Silver", "Gold", "Ruby", "Diamond", "Solarite", "Heartstone" } do
+		local x = -125 + (i - 4.5) * 3.2
+		Geo.block(gallery, CF.new(x, 0.2, 0), V3.new(2.6, 0.4, 2.6), C3.fromRGB(134, 128, 132))
+		local chunk = ItemBuilder.build({ Kind = "Raw", OreId = oreId }, CF.new(x, 0, 0) * CF.Angles(0, YAW, 0), 7)
+		settle(chunk, 0.4)
+		chunk.Parent = gallery
+		label(CF.new(x, 0.3, 1.45) * CF.Angles(-1.05, 0, 0), 2.6, 0.45, "(" .. OreData.get(oreId).Name .. ")", C3.fromRGB(200, 190, 180))
+		local shown = ItemBuilder.display({ K = "Raw", O = oreId }, CF.new(x, 0.4, -4) * CF.Angles(0, YAW, 0), 7)
+		Geo.block(gallery, CF.new(x, 0.2, -4), V3.new(2.6, 0.4, 2.6), C3.fromRGB(122, 116, 120))
+		shown.Parent = gallery
+	end
+
+	-- rocks: a row per zone with 1, 2 and 3 ores, then stage 1 and stage 2
+	local zones = { "Outcrops", "Quarry", "EmberCaves", "DeepHollow", "Grotto" }
+	for row, zoneId in zones do
+		local zone = WorldLayout.ZoneById[zoneId]
+		local ids = {}
+		for oreId in zone.Ores do
+			table.insert(ids, oreId)
+		end
+		table.sort(ids, function(a, b)
+			return OreData.get(a).Income < OreData.get(b).Income
+		end)
+		local low, mid, high = ids[1], ids[math.ceil(#ids / 2)], ids[#ids]
+		local sets = { { mid }, { low, high }, { low, mid, high }, { low, high }, { low, mid, high } }
+		local z = -(row - 1) * 11
+		for col, set in sets do
+			local x = 200 + (col - 3) * 10
+			local rock = OreNodeBuilder.buildRock(zoneId, set, CF.new(x, 0, z), row * 10 + col)
+			rock.Parent = gallery
+			if col >= 4 then
+				OreNodeBuilder.applyStage(rock, 1, col)
+			end
+			if col == 5 then
+				for _, piece in OreNodeBuilder.applyStage(rock, 2, col) do
+					piece:Destroy()
+				end
+			end
+			local text = if col <= 3 then zoneId .. " · " .. #set .. (if #set == 1 then " ore" else " ores") else zoneId .. " · stage " .. (col - 3)
+			label(CF.new(x, 0.4, z + 4.4) * CF.Angles(-1.05, 0, 0), 6.5, 0.8, text, C3.fromRGB(240, 226, 200))
+		end
+	end
 else
 	error("Unknown scene: " .. sceneName)
 end

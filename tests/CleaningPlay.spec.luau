@@ -89,7 +89,15 @@ return function(T, Loader)
 		T.eq(server.chips, recorder.tracker.chips, label .. ": chips")
 	end
 
-	local ORES = { "Copper", "Gold", "Solarite", "Heartstone" }
+	-- every ore (30): each one has its own pattern difficulty and close-up colors
+	local ORES = {}
+	local WITH_CRYSTALS = {} -- ores whose rarity puts fragile crystals in the dirt
+	for _, ore in OreData.List do
+		table.insert(ORES, ore.Id)
+		if Rarity.get(ore.Rarity).FragileSpots > 0 then
+			table.insert(WITH_CRYSTALS, ore.Id)
+		end
+	end
 
 	T.test("chisel: lifting at 25% and going on from the groove tip finishes the cut", function()
 		for _, input in { "Touch", "Gamepad", "Mouse" } do
@@ -207,7 +215,7 @@ return function(T, Loader)
 	end)
 
 	T.test("chisel: messy multi-stroke runs score the same on the server", function()
-		for _, oreId in { "Copper", "Silver", "Gold", "Azurium", "Solarite", "Heartstone" } do
+		for _, oreId in ORES do
 			for seed = 1, 10 do
 				local pattern = Patterns.generate(oreId, seed * 104729)
 				local tol = pattern.Tolerance * Scoring.InputLeniency.Touch
@@ -423,7 +431,7 @@ return function(T, Loader)
 
 	T.test("crystals: glowing, sticking out of the face, on a base smaller than the snap zone", function()
 		T.lt(OreShellBuilder.CrystalBaseSize, Scoring.FragileRadius * 2, "pale base smaller than the snap zone")
-		for _, oreId in { "Gold", "Stormcore", "Heartstone" } do
+		for _, oreId in WITH_CRYSTALS do
 			local pattern = Patterns.generate(oreId, 42)
 			local workCF = CF.new(0, 5, 0)
 			local shell = OreShellBuilder.build(pattern, workCF)
