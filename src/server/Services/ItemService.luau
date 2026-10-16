@@ -20,10 +20,14 @@
 	  Desc { K = kind, O = oreId, G = grade?, R = recipe? }. absorb() turns an
 	  item into a Desc, spawnDesc() turns a Desc back into an item.
 	- Performance: max GameConfig.MaxLooseItemsPerPlayer loose items per
-	  player; when exceeded the oldest one is moved into storage (data), so
-	  nothing is ever lost. Resting items sleep in Roblox physics by themselves.
+	  player; when exceeded the oldest one is moved into the Ore Pen (data),
+	  so nothing is ever lost. Resting items sleep in Roblox physics by themselves.
 	- Items that fall out of the world are put back next to their owner.
-	- Leaving players: loose and carried items go into storage.
+	- Leaving players: loose and carried items go into the Ore Pen.
+	- The Ore Pen (data.Storage) holds EconomyConfig.penCapacity items;
+	  storeDesc pays Tobin's price for anything beyond that.
+	- Dirty ore hides its rarity: the replicated Value attribute of a Raw
+	  item is 0 (the real price is only paid out by the server).
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -33,12 +37,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
+local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
+local EconomyService = require(script.Parent.EconomyService)
 
 local ItemService = {}
 
@@ -137,7 +144,9 @@ local function syncAttributes(record: ItemRecord)
 	m:SetAttribute("Recipe", record.Recipe)
 	m:SetAttribute("Owner", record.Owner)
 	m:SetAttribute("State", record.State)
-	m:SetAttribute("Value", ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe))
+	-- dirty ore keeps its secret until it is cleaned
+	local value = if record.Kind == "Raw" then 0 else ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe)
+	m:SetAttribute("Value", value)
 end
 
 local function markReleased(record: ItemRecord)
@@ -225,11 +234,19 @@ function ItemService.absorb(record: ItemRecord): Desc
 	return desc
 end
 
+-- How many items the Ore Pen of this save holds (pen upgrades, DataStore cap).
+function ItemService.penCapacity(data: { [string]: any }): number
+	local upgrades = data.Upgrades
+	local level = if type(upgrades) == "table" then upgrades.PenLevel else 0
+	return EconomyConfig.penCapacity(level, GameConfig.MaxStoredItems)
+end
+
 --[[
-	Puts an item descriptor into the player's storage (data.Storage), or
-	pays its full value when storage is full (MaxStoredItems), so nothing is
+	Puts an item descriptor into the player's Ore Pen (data.Storage), or
+	pays its full value (Tobin's price) when the pen is full, so nothing is
 	ever lost. 'Lost' only when the player's data isn't loaded or the
 	descriptor is junk. With a reason, the player gets a toast.
+	(Players filling the pen by hand are refused when it is full: PenService.)
 ]]
 function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): StoreResult
 	local data = DataService.get(player)
@@ -241,27 +258,29 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 		return "Lost"
 	end
 	local result: StoreResult
-	if #data.Storage < GameConfig.MaxStoredItems then
+	local value = 0
+	if #data.Storage < ItemService.penCapacity(data) then
 		table.insert(data.Storage, { K = desc.K, O = desc.O, G = desc.G, R = desc.R })
 		result = "Stored"
+		DataService.changed(player)
 	else
-		-- storage full: pay the full value instead of losing the item
-		local value = ItemData.value(desc.K, desc.O, desc.G, desc.R)
-		data.Coins += value
-		data.TotalEarned += value
+		-- pen full: pay the full value instead of losing the item
+		value = ItemData.value(desc.K, desc.O, desc.G, desc.R)
+		EconomyService.award(player, value, "PenFull")
 		result = "Sold"
 	end
-	DataService.changed(player)
 	if reason and player.Parent then
 		Net.fire("Notify", player, {
-			Text = if result == "Stored" then reason .. " (moved to your Storage Crate)" else reason .. " (storage full: sold it)",
+			Text = if result == "Stored"
+				then reason .. " (moved to your Ore Pen)"
+				else `{reason} (Ore Pen full: sold it for {Format.money(value)})`,
 			Kind = "Info",
 		})
 	end
 	return result
 end
 
--- Moves an item into the owner's storage data (or sells it if storage is full).
+-- Moves an item into the owner's Ore Pen (or sells it if the pen is full).
 -- Returns true when the item was kept (stored).
 function ItemService.stash(record: ItemRecord, reason: string?): boolean
 	local player = ownerPlayer(record)
@@ -471,7 +490,7 @@ local function rescueCFrame(userId: number): CFrame?
 	return nil
 end
 
--- Puts a lost item back next to its owner, or into storage when they have no character.
+-- Puts a lost item back next to its owner, or into the Ore Pen when they have no character.
 local function rescue(record: ItemRecord)
 	local cf = rescueCFrame(record.Owner)
 	if cf then
@@ -484,7 +503,7 @@ end
 
 local function maintainOne(record: ItemRecord, now: number)
 	if not record.Model.Parent or not record.Body.Parent then
-		-- destroyed by the engine (fell below FallenPartsDestroyHeight): keep it as storage
+		-- destroyed by the engine (fell below FallenPartsDestroyHeight): keep it in the pen
 		unindex(record)
 		if record.State ~= "Consumed" then
 			record.State = "Consumed"
@@ -575,7 +594,7 @@ function ItemService.init()
 	end
 	setupCollisionGroups()
 
-	-- Leaving players: keep their items in storage.
+	-- Leaving players: keep their items in the Ore Pen.
 	DataService.beforeRelease(function(player)
 		for _, record in ItemService.ownedBy(player.UserId) do
 			if record.State == "Loose" or record.State == "Carried" then

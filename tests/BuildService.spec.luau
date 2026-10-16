@@ -1,6 +1,7 @@
 -- BuildService under Lune: the build remotes' checks in contract order,
 -- BuildResult replies, effects for other players, lifting players and
--- items out of a new machine, the last-crate toast and the State provider.
+-- items out of a new machine, no crate rule (the Ore Pen holds stored items)
+-- and the State provider.
 -- MachineService runs for real; its Roblox-only neighbours are fakes.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -370,32 +371,18 @@ return function(T, Loader)
 		T.truthy(w.pivots[2].Player == w.other, "the neighbour")
 	end)
 
-	withWorld("BuildService: packing up the last crate says Storage is safe", function(w)
+	withWorld("BuildService: packing machines up never touches the Ore Pen or nags about crates", function(w)
 		local data = w.data
 		local a = placedOne(w, "StorageCrate", 0, 0, 0)
-		local b = placedOne(w, "StorageCrate", 4, 0, 0)
+		local b = placedOne(w, "ClayFurnace", 4, 0, 0)
 		data.Storage = { { K = "Raw", O = "Copper" } }
-		local function safeToasts(): number
-			local n = 0
-			for _, note in w.notes do
-				if note.Name == "Notify" and note.Payload.Text == "Your stored items are safe. Place a crate to reach them." then
-					n += 1
-				end
-			end
-			return n
-		end
+		local before = count(w, "Notify")
 		build.pickup(w.player, 1, a.Model)
-		T.truthy(result(w, 1, "Pickup").Ok, "first crate")
-		T.eq(safeToasts(), 0, "another crate is still placed")
+		T.truthy(result(w, 1, "Pickup").Ok, "a (retired) crate")
 		build.pickup(w.player, 2, b.Model)
-		T.truthy(result(w, 2, "Pickup").Ok, "last crate")
-		T.eq(safeToasts(), 1, "toast")
-		T.eq(#data.Storage, 1, "Storage untouched")
-		-- empty Storage: nothing to say
-		data.Storage = {}
-		local c = placedOne(w, "StorageCrate", 0, 0, 0)
-		build.pickup(w.player, 3, c.Model)
-		T.eq(safeToasts(), 1, "no toast with empty Storage")
+		T.truthy(result(w, 2, "Pickup").Ok, "the last machine")
+		T.eq(count(w, "Notify"), before, "no crate toast: the pen is on the yard")
+		T.eq(#data.Storage, 1, "Ore Pen untouched")
 	end)
 
 	withWorld("BuildService: the State provider sends the layout and slot usage", function(w)

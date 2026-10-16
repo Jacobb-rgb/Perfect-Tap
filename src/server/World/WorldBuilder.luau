@@ -21,7 +21,7 @@ local PlotBuilder = require(script.Parent.PlotBuilder)
 
 local WorldBuilder = {}
 
-WorldBuilder.Version = 3
+WorldBuilder.Version = 4 -- 4: base yards behind the plots (pen, podiums, foundry, train stop)
 
 export type NodeSpawn = { Position: Vector3, Zone: string }
 
@@ -42,7 +42,7 @@ function WorldBuilder.generateNodeSpawns(): { NodeSpawn }
 			while placed < zone.NodeCount and tries < 4000 do
 				tries += 1
 				local p = Vector3.new(rng:range(minX, maxX), zone.FloorY, rng:range(minZ, maxZ))
-				local ok = not WorldLayout.isKeepOut(p, 5)
+				local ok = not WorldLayout.isKeepOut(p, 5) and not PlotBuilder.isInYard(p, 6)
 				if ok then
 					for _, other in spawns do
 						if (other.Position - p).Magnitude < 12 then

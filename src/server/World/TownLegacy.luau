@@ -20,6 +20,7 @@ local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Palette = require(script.Parent.Palette)
+local PlotBuilder = require(script.Parent.PlotBuilder)
 local Props = require(script.Parent.Props)
 
 local TownLegacy = {}
@@ -455,6 +456,10 @@ local function isFree(p: Vector3, occupied: { Spot }, radius: number): boolean
 		if math.abs(d.X) < 28 + radius and math.abs(d.Z) < 28 + radius then
 			return false
 		end
+	end
+	-- the base yards behind the plots (pen, podiums, foundry, train stop)
+	if PlotBuilder.isInYard(p, radius + 1) then
+		return false
 	end
 	for _, road in WorldLayout.Roads do
 		local a, b, width = road.From, road.To, road.Width
