@@ -28,6 +28,7 @@ return function(T, Loader)
 	T.test("blasters: one Blaster tool per level, within budget, welded, with a Muzzle", function()
 		local skins = { "", "Coal", "Gold", "Quartz", "Heartstone", "NotAnOre" }
 		local counts = {}
+		local reach = {}
 		for level = 1, BlasterData.MaxLevel do
 			for _, oreId in skins do
 				local tool = BlasterBuilder.build(level, oreId)
@@ -42,16 +43,19 @@ return function(T, Loader)
 				local muzzle = handle:FindFirstChild("Muzzle")
 				T.truthy(muzzle and muzzle:IsA("Attachment"), label .. " muzzle")
 				local tip = handle.CFrame:PointToWorldSpace(muzzle.Position)
-				T.lt(tip.Z, -2.5, label .. " muzzle at the barrel tip (-Z)")
 				-- in the hand (the grip attachment frame) the barrel points straight forward
 				local hand = handle.CFrame * tool.Grip
 				T.near(hand.LookVector.Z, -1, 1e-4, label .. " barrel along the arm")
 				T.near(hand.UpVector.Y, 1, 1e-4, label .. " upright")
 				T.lt(hand.Position.Y, tip.Y, label .. " hand below the barrel")
+				-- the muzzle sits well ahead of the hand, at the very tip of the gun
+				T.lt(tip.Z, hand.Position.Z - 1.2, label .. " muzzle ahead of the hand (-Z)")
+				reach[level] = hand.Position.Z - tip.Z
 				local parts = 0
 				for _, d in tool:GetDescendants() do
 					if d:IsA("BasePart") then
 						parts += 1
+						T.lt(tip.Z, d.CFrame.Position.Z, label .. " " .. d.Name .. " behind the muzzle")
 						T.falsy(d.CanCollide, label .. " " .. d.Name .. " CanCollide")
 						T.truthy(d.Massless, label .. " " .. d.Name .. " Massless")
 						T.falsy(d.Anchored, label .. " " .. d.Name .. " Anchored")
@@ -67,6 +71,7 @@ return function(T, Loader)
 			end
 		end
 		T.lt(counts[1], counts[BlasterData.MaxLevel], "more detail at level 10")
+		T.lt(reach[1] * 2, reach[BlasterData.MaxLevel], "the level 10 rifle is much longer than the starter pistol")
 		for level = 2, BlasterData.MaxLevel do
 			T.le(counts[level - 1], counts[level], "detail never drops at level " .. level)
 		end

@@ -1,34 +1,40 @@
 {
   "blasters": {
     "scene": "blasters",
-    "position": [
-      0,
-      10.5,
-      19.5
-    ],
-    "target": [
-      0,
-      3.0,
-      -0.6
-    ],
-    "fov": 46,
-    "preset": "Surface",
-    "shadowExtent": 40
+    "position": [0, 10.4, 18.4],
+    "target": [0, 3.9, -2.6],
+    "fov": 40,
+    "preset": "Workbench",
+    "sunDir": [-0.4, 0.75, 0.55],
+    "exposure": 1.2,
+    "shadowExtent": 30
+  },
+  "blasters_side": {
+    "scene": "blasters",
+    "position": [100, 6.4, 24.5],
+    "target": [100, 6.2, 0],
+    "fov": 30,
+    "preset": "Workbench",
+    "sunDir": [-0.35, 0.7, 0.62],
+    "exposure": 1.1,
+    "shadowExtent": 30
+  },
+  "blaster_skins": {
+    "scene": "blasters",
+    "position": [160, 7.4, 24.5],
+    "target": [160, 6.2, 0],
+    "fov": 30,
+    "preset": "Workbench",
+    "sunDir": [-0.35, 0.7, 0.62],
+    "exposure": 1.1,
+    "shadowExtent": 30
   },
   "blaster_fire": {
     "scene": "blaster_fire",
-    "position": [
-      -14.0,
-      -6.0,
-      -170.4
-    ],
-    "target": [
-      -25.7,
-      -10.0,
-      -161.7
-    ],
-    "fov": 62,
+    "position": [-15.6, -6.3, -166.0],
+    "target": [-25.0, -9.2, -161.4],
+    "fov": 52,
     "preset": "Quarry",
-    "shadowExtent": 90
+    "shadowExtent": 60
   }
 }
