@@ -9,6 +9,33 @@ Layout data: [`src/shared/Config/LobbyLayout.luau`](../../src/shared/Config/Lobb
 The build is split into **exactly five packages** (Sky, Backdrop, Plaza, Districts, Flora)
 that work in parallel without touching the same files (section 6).
 
+> **Design v2 (2026-10-16) changes – read section 0 first.** They override the rows below where they differ.
+
+## 0. Design v2 changes (docs/DESIGN_V2_NOTES.md, docs/plans/V2_PLAN.md)
+- **SHOP** (`Shop`) is the **Gear shop** (boots, helmet with a head lamp, backpack, gloves, magnet): hook
+  `ShopCounter` only. Pell is gone.
+- **`ShopFront` is Tobin's Sell stall** next to the SHOP: an ore cart with a counter and a brass scale (hook
+  `SellCounter` moves here), the `SellBin` (+ child part `Intake`), the NPC **Tobin the Miner**
+  (`Props.npc`-style, named "Tobin"), a `SELL` sign (Wood or Glow, readable from the plaza). Height budget 10.
+- **UPGRADES** (`Upgrades`) is the **Tech shop** (automation machines and machine upgrades); the sign keeps saying
+  UPGRADES like the concept. `UpgradesFront` shows a glowing **laser blaster** on the pedestal (no pickaxe).
+- **SPIN & WIN** is the free daily wheel of fortune (`EmberChest` hook unchanged).
+- **ROCK SCANNER** = Ore Codex of the 30 ores; **FOSSIL DIG** = artifacts and the Kingdom of Kaldrum story corner.
+- New Districts pieces (LobbyLayout.Pieces): **`CapsuleStall`** (-40, 0, 36), left of the spawn next to the wheel:
+  a round stall with a big glass capsule machine (gumball-machine shape, capsules in many colors), little golem
+  figures on shelves (Kenney Mini Characters proportions, ore/metal colors, original), a `CAPSULES` Glow sign and an
+  odds board; tag **`CapsuleStall`** on the Model (PrimaryPart). **`EnchantShop`** (50, 0, -84), behind UPGRADES past
+  the pink trees: a small mystic workshop, purple rune table with a glowing top (BasePart tagged
+  **`EnchantCounter`**), floating crystals, `ENCHANT` sign. **`HallOfFame`** (30, 0, 36), right of the spawn: four
+  leaderboard boards in a gentle arc facing the spawn, BaseParts named `Board1`..`Board4` tagged **`Leaderboard`**
+  with attribute `Board` = 1..4 (a SurfaceGui is added at runtime later), a `HALL OF FAME` header and lanterns.
+- `RedTree` moved to (38, 0, 47).
+- Player bases grew a **yard** on their sea side (plot-local z 25..66, see src/shared/Config/BaseLayout.luau):
+  `LobbyLayout.isFree` keeps scatter off plots *and* yards; never build there.
+- Districts budget is now 1400 parts / 11 lights.
+- The legacy `tradingPost` in TownLegacy.luau is being renamed to Tobin by another package right now; Districts
+  replaces it anyway. Do not edit TownLegacy.luau, Land.luau, PlotBuilder.luau or WorldBuilder.luau.
+
 ---
 
 ## 1. How to look at it
@@ -153,8 +180,11 @@ piece's front (LookVector). Build inside your footprint and height budget.
 
 | Hook | What | Where | Package |
 |---|---|---|---|
-| `SellCounter` (tag) | BasePart: Pell's sell counter top | SHOP | Districts |
+| `SellCounter` (tag) | BasePart: Tobin's counter top (v2: at ShopFront) | ShopFront | Districts |
 | `SellBin` (tag) | Model with a child BasePart named `Intake` (non-collide, ~8x5x6) | ShopFront | Districts |
+| `CapsuleStall` (tag, v2) | Model with PrimaryPart | CapsuleStall | Districts |
+| `EnchantCounter` (tag, v2) | BasePart: the rune table top | EnchantShop | Districts |
+| `Leaderboard` (tag, v2) | BaseParts `Board1`..`Board4`, attribute `Board` | HallOfFame | Districts |
 | `ShopCounter` (tag) | BasePart: the tool shop counter | SHOP | Districts |
 | `UpgradeCounter` (tag, new) | BasePart: the upgrades counter | UPGRADES | Districts |
 | `EmberChest` (tag) | Model with PrimaryPart, inside the `SpinWheel` model (free daily reward) | SPIN & WIN | Districts |

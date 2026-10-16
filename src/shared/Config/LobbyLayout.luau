@@ -65,7 +65,7 @@ LobbyLayout.Budget = {
 		Sky = { Parts = 1400, LobbyParts = 150, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
 		Plaza = { Parts = 1100, LobbyParts = 1100, Lights = 10, LobbyLights = 10 },
-		Districts = { Parts = 1000, LobbyParts = 1000, Lights = 8, LobbyLights = 8 },
+		Districts = { Parts = 1400, LobbyParts = 1400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls
 		Flora = { Parts = 1500, LobbyParts = 1300, Lights = 8, LobbyLights = 8 },
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
@@ -141,15 +141,15 @@ LobbyLayout.Pieces = {
 		Center = SHOP,
 		Size = v(20, 20, 14),
 		Facing = SHOP_FACING,
-		Note = "SHOP = Pell's Trading Post: pink/white striped awning, glowing blue SHOP sign. Hooks ShopCounter + SellCounter.",
+		Note = "SHOP = the Gear shop (boots, helmet lamp, backpack, gloves, magnet): pink/white striped awning, glowing blue SHOP sign, gear on racks. Hook ShopCounter.",
 	},
 	{
 		Id = "ShopFront",
 		Package = "Districts",
 		Center = SHOP + SHOP_FACING * 11.5,
-		Size = v(14, 7, 8),
+		Size = v(14, 10, 8),
 		Facing = SHOP_FACING,
-		Note = "In front of the SHOP counter: the SellBin (tag SellBin, child part Intake) and a few crates.",
+		Note = "Tobin's Sell stall next to the SHOP: an ore cart with a counter and a scale (tag SellCounter), the SellBin (tag SellBin, child part Intake), Tobin the Miner (NPC), a SELL sign.",
 	},
 	{
 		Id = "Upgrades",
@@ -157,7 +157,7 @@ LobbyLayout.Pieces = {
 		Center = UPGRADES,
 		Size = v(20, 20, 14),
 		Facing = UPGRADES_FACING,
-		Note = "UPGRADES stall: purple/white striped awning, glowing blue UPGRADES sign, blue neon trims. Hook UpgradeCounter.",
+		Note = "UPGRADES stall = the Tech shop (automation machines, machine upgrades): purple/white striped awning, glowing blue UPGRADES sign, blue neon trims. Hook UpgradeCounter.",
 	},
 	{
 		Id = "UpgradesFront",
@@ -165,7 +165,7 @@ LobbyLayout.Pieces = {
 		Center = UPGRADES + UPGRADES_FACING * 11.5,
 		Size = v(14, 7, 8),
 		Facing = UPGRADES_FACING,
-		Note = "Display props in front of UPGRADES: pickaxe on a glowing pedestal, gear crates.",
+		Note = "Display props in front of UPGRADES: a glowing laser blaster on a pedestal, small machine models, gear crates.",
 	},
 	{
 		Id = "SpinWheel",
@@ -173,7 +173,7 @@ LobbyLayout.Pieces = {
 		Center = v(-48, 0, 18),
 		Size = v(18, 26, 10),
 		Facing = v(0.85, 0, 0.53).Unit,
-		Note = "SPIN & WIN prize wheel on a timber A-frame, 8 colored segments, gold pointer, bulbs. EmberChest on its platform.",
+		Note = "SPIN & WIN = the free daily wheel of fortune on a timber A-frame, 8 colored segments, gold pointer, bulbs. EmberChest (tag) on its platform.",
 	},
 	{
 		Id = "GuildBoard",
@@ -189,7 +189,7 @@ LobbyLayout.Pieces = {
 		Center = v(50, 0, 24),
 		Size = v(18, 8, 24),
 		Facing = v(-1, 0, 0),
-		Note = "Fenced sunken-look dirt pit with a dinosaur skeleton, tools, FOSSIL DIG sign. Tag FossilDig on the model.",
+		Note = "Fenced sunken-look dirt pit with a dinosaur skeleton, tools, FOSSIL DIG sign: the artifacts + Kingdom of Kaldrum story corner. Tag FossilDig on the model.",
 	},
 	{
 		Id = "RockScanner",
@@ -197,7 +197,31 @@ LobbyLayout.Pieces = {
 		Center = v(56, 0, 80),
 		Size = v(12, 10, 10),
 		Facing = v(-0.71, 0, 0.71).Unit,
-		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign. Tag OreCodex on the terminal.",
+		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign: the Ore Codex of all 30 ores. Tag OreCodex on the terminal.",
+	},
+	{
+		Id = "CapsuleStall",
+		Package = "Districts",
+		Center = v(-40, 0, 36),
+		Size = v(16, 16, 12),
+		Facing = toward(v(-40, 0, 36), WorldLayout.SpawnPoint),
+		Note = "Design v2: golem capsule stall left of the spawn, next to SPIN & WIN: a round stall with a big glass capsule machine, little golem figures on shelves, CAPSULES sign, odds board. Tag CapsuleStall (Model with PrimaryPart).",
+	},
+	{
+		Id = "EnchantShop",
+		Package = "Districts",
+		Center = v(50, 0, -84),
+		Size = v(16, 16, 12),
+		Facing = toward(v(50, 0, -84), v(0, 0, -20)),
+		Note = "Design v2: Enchant shop behind UPGRADES, past the pink trees: a small mystic workshop with a glowing purple rune table, floating crystals, ENCHANT sign. Tag EnchantCounter (BasePart: the table top).",
+	},
+	{
+		Id = "HallOfFame",
+		Package = "Districts",
+		Center = v(30, 0, 36),
+		Size = v(24, 14, 6),
+		Facing = toward(v(30, 0, 36), WorldLayout.SpawnPoint),
+		Note = "Design v2: four leaderboards in a gentle arc facing the spawn (Money per second, Total earned, Artifacts found, Hours played). Each board is a BasePart named Board1..Board4 with tag Leaderboard and attribute Board = 1..4; a header plank + lanterns.",
 	},
 	------------------------------------------------------------ Flora package
 	{
@@ -271,7 +295,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "RedTree",
 		Package = "Flora",
-		Center = v(28, 0, 40),
+		Center = v(38, 0, 47),
 		Size = v(12, 18, 12),
 		Radius = 6,
 		Facing = v(0, 0, 1),
@@ -570,6 +594,14 @@ function LobbyLayout.distanceToStrip(from: Vector3, to: Vector3, width: number, 
 	return math.sqrt(lx * lx + lz * lz)
 end
 
+-- Is a ground point on a player base: the plot pad (+-28) or its yard and
+-- train stop on the sea side (plot-local z up to BASE_BACK, docs BaseLayout)?
+local BASE_BACK = 66
+function LobbyLayout.onBase(plot: WorldLayout.Plot, p: Vector3, radius: number): boolean
+	local localPos = WorldLayout.plotCFrame(plot):PointToObjectSpace(Vector3.new(p.X, plot.Center.Y, p.Z))
+	return math.abs(localPos.X) < 28 + radius and localPos.Z > -28 - radius and localPos.Z < BASE_BACK + radius
+end
+
 --[[
 	Is a ground point free for scattered decoration (trees, rocks, flowers)?
 	`radius` = the decoration's own radius. Keeps off roads, lobby paths,
@@ -598,8 +630,7 @@ function LobbyLayout.isFree(p: Vector3, radius: number): boolean
 		end
 	end
 	for _, plot in WorldLayout.Plots do
-		local d = p - plot.Center
-		if math.abs(d.X) < 28 + radius and math.abs(d.Z) < 28 + radius then
+		if LobbyLayout.onBase(plot, p, radius) then
 			return false
 		end
 	end
