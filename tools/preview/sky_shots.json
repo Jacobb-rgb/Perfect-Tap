@@ -1,0 +1,13 @@
+{
+  "sky_hero": {"scene": "world", "position": [24, 96, 178], "target": [-2, 33, -46], "fov": 52, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 280, "maxLights": 32},
+  "sky_wide": {"scene": "world", "position": [-40, 40, 60], "target": [-400, 30, -60], "fov": 70, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 220, "maxLights": 24},
+  "sky_north": {"scene": "world", "position": [0, 24, 70], "target": [10, 70, -200], "fov": 75, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 220, "maxLights": 24},
+  "sky_pier": {"scene": "world", "position": [-240, 6, 8], "target": [-192, -12, -36], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 16},
+  "sky_balloon": {"scene": "world", "position": [-44, 86, -50], "target": [-72, 84, -84], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 16},
+  "sky_island_west": {"scene": "world", "position": [-110, 104, -184], "target": [-150, 82, -250], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 16},
+  "sky_island_east": {"scene": "world", "position": [112, 100, -118], "target": [150, 76, -185], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 16},
+  "sky_next": {"scene": "world", "position": [176, 34, -64], "target": [252, 36, -112], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 16},
+  "sky_ships": {"scene": "world", "position": [-180, 12, 40], "target": [-300, -10, -60], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 160, "maxLights": 16},
+  "sky_castle": {"scene": "world", "position": [-310, 20, -240], "target": [-430, 14, -380], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 160, "maxLights": 16},
+  "sky_bridge": {"scene": "world", "position": [222, 18, -140], "target": [246, 8, -114], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 100, "maxLights": 16}
+}

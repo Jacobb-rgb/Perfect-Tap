@@ -142,6 +142,84 @@ function textTexture(text, color, family, aspect) {
   return tex;
 }
 
+// Sunset sky dome (the Lighting preset's "Sky" group, ART_DIRECTION section 7):
+// horizon SkyHorizon (pinker away from the sun, like Roblox's Atmosphere
+// Decay) -> SkyPurple at MidAngle -> SkyTop at the zenith, an additive sun
+// (2 degree disc, 10 degree halo, wide glow) around shot.sunDir and a soft
+// layer of Terrain-Clouds-like streaks (Cover ~0.5) lit pink/orange toward
+// the sun. Below the horizon it fades into the Atmosphere color so the far
+// sea edge disappears.
+function sunsetSky(preset, shot, camera, fogColor) {
+  const S = preset.Sky || {};
+  const col = (a, fallback) => fromArray3(a || fallback);
+  const sunDir = new THREE.Vector3(...(shot.sunDir || [-0.62, 0.48, 0.62])).normalize();
+  const uniforms = {
+    top: { value: col(S.Top, [64 / 255, 72 / 255, 150 / 255]) },
+    mid: { value: col(S.Mid, [150 / 255, 98 / 255, 168 / 255]) },
+    horizon: { value: col(S.Horizon, [1.0, 162 / 255, 86 / 255]) },
+    horizonAway: { value: col(S.HorizonAway, [240 / 255, 150 / 255, 168 / 255]) },
+    sunColor: { value: col(S.Sun, [1.0, 222 / 255, 150 / 255]) },
+    fogColor: { value: fogColor.clone() },
+    sunDir: { value: sunDir },
+    midSin: { value: Math.sin(((S.MidAngle ?? 25) * Math.PI) / 180) },
+    cloudCover: { value: S.CloudCover ?? 0.5 },
+  };
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+    uniforms,
+    vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+    fragmentShader: `
+      uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 horizonAway;
+      uniform vec3 sunColor; uniform vec3 fogColor; uniform vec3 sunDir;
+      uniform float midSin; uniform float cloudCover;
+      varying vec3 vPos;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
+      float fbm(vec2 p){ float v = 0.0; float a = 0.5; for (int i = 0; i < 5; i++){ v += a * noise(p); p = p * 2.07 + vec2(3.1, 1.7); a *= 0.5; } return v; }
+      void main(){
+        vec3 d = normalize(vPos);
+        float h = d.y;
+        vec2 flatDir = normalize(d.xz + vec2(1e-5));
+        vec2 flatSun = normalize(sunDir.xz + vec2(1e-5));
+        float toward = 0.5 + 0.5 * dot(flatDir, flatSun);
+        float warm = pow(toward, 2.2);
+        vec3 hor = mix(horizonAway, horizon, warm);
+        // horizon -> purple at midSin -> deep blue-purple at the zenith
+        float t1 = smoothstep(0.0, midSin, h);
+        float t2 = smoothstep(midSin * 0.6, 1.0, h);
+        vec3 col = mix(hor, mid, pow(t1, 0.65));
+        col = mix(col, top, pow(t2, 0.7));
+        // warm band hugging the horizon toward the sun
+        col += horizon * 0.18 * warm * exp(-max(h, 0.0) * 9.0);
+        if (h < 0.0) col = mix(hor, fogColor, clamp(-h * 10.0, 0.0, 1.0));
+        // Terrain-Clouds-like streaks, lit pink/orange toward the sun
+        if (h > 0.0) {
+          vec2 uv = d.xz / (h + 0.12);
+          float n = fbm(uv * vec2(1.1, 2.6) + vec2(7.0, 3.0));
+          float m = smoothstep(1.0 - cloudCover - 0.02, 1.0 - cloudCover + 0.2, n) * smoothstep(0.02, 0.14, h) * (1.0 - smoothstep(0.55, 0.95, h));
+          vec3 lit = mix(vec3(0.86, 0.36, 0.42), vec3(1.0, 0.55, 0.32), warm);
+          vec3 shade = mix(mid * 0.85, lit, 0.35 + 0.4 * warm);
+          vec3 cloud = mix(lit, shade, smoothstep(0.1, 0.6, h));
+          col = mix(col, cloud, m * 0.75);
+        }
+        // the sun: disc, halo, broad glow
+        float ang = acos(clamp(dot(d, sunDir), -1.0, 1.0));
+        float disc = 1.0 - smoothstep(0.0165, 0.0195, ang);
+        float halo = exp(-pow(ang / 0.1745, 2.0));
+        float glow = exp(-ang / 0.6);
+        col = min(col, vec3(1.15));
+        col += sunColor * (disc * 3.5 + halo * 0.5 + glow * 0.1);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 64, 32), skyMat);
+  sky.position.copy(camera.position);
+  return sky;
+}
+
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
   await document.fonts.load('40px "Luckiest Guy"');
@@ -275,22 +353,7 @@ async function main() {
   // ---- sky / fog ----
   const fogColor = fromArray3(atm.Color || [0.8, 0.7, 0.6]);
   if (!isCave) {
-    const skyGeo = new THREE.SphereGeometry(3000, 32, 16);
-    const horizon = fogColor.clone().lerp(new THREE.Color(1.0, 0.72, 0.5), 0.35);
-    const zenith = new THREE.Color().setRGB(0.32, 0.52, 0.86, THREE.SRGBColorSpace);
-    const skyMat = new THREE.ShaderMaterial({
-      side: THREE.BackSide,
-      depthWrite: false,
-      fog: false,
-      uniforms: { horizon: { value: horizon }, zenith: { value: zenith } },
-      vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
-      fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; varying vec3 vPos;
-        void main(){ float h = clamp(normalize(vPos).y, -0.2, 1.0); float t = pow(max(h,0.0), 0.55);
-          gl_FragColor = vec4(mix(horizon, zenith, t), 1.0); }`,
-    });
-    const sky = new THREE.Mesh(skyGeo, skyMat);
-    sky.position.copy(camera.position);
-    world.add(sky);
+    world.add(sunsetSky(preset, shot, camera, fogColor));
     world.fog = new THREE.FogExp2(fogColor, (atm.Density ?? 0.3) * 0.0028 * (atm.Haze ?? 1) * 0.6);
   } else {
     world.background = fogColor.clone().multiplyScalar(0.25);
@@ -341,6 +404,19 @@ async function main() {
     composer.addPass(new BokehPass(world, camera, { focus, aperture: shot.dof.aperture ?? 0.004, maxblur: shot.dof.maxblur ?? 0.008 }));
   }
   const B = preset.Bloom || {};
+  if (!isCaveShot) {
+    // sun glow: cap the low sun's mirror highlight on the sea before bloom, so it
+    // blooms like Roblox's small sun glint instead of a screen-filling white blob
+    composer.addPass(
+      new ShaderPass({
+        uniforms: { tDiffuse: { value: null }, cap: { value: 2.6 } },
+        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+        fragmentShader: `uniform sampler2D tDiffuse; uniform float cap; varying vec2 vUv;
+          void main(){ vec4 c = texture2D(tDiffuse, vUv); float m = max(c.r, max(c.g, c.b));
+            gl_FragColor = vec4(m > cap ? c.rgb * (cap / m) : c.rgb, c.a); }`,
+      }),
+    );
+  }
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(WIDTH, HEIGHT), (B.Intensity ?? 0.8) * (isCaveShot ? 0.45 : 0.75), ((B.Size ?? 24) / 56) * 0.9, isCaveShot ? 0.9 : 0.82));
   composer.addPass(new OutputPass());
   const CC = preset.ColorCorrection || {};

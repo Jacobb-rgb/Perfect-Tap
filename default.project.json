@@ -57,58 +57,59 @@
       "$className": "Lighting",
       "$properties": {
         "Technology": "Future",
-        "ClockTime": 16.6,
-        "GeographicLatitude": 35,
-        "Brightness": 2.6,
-        "Ambient": [0.27, 0.2, 0.18],
-        "OutdoorAmbient": [0.55, 0.45, 0.4],
+        "ClockTime": 17.6,
+        "GeographicLatitude": 23.5,
+        "Brightness": 2.3,
+        "Ambient": [0.3, 0.22, 0.26],
+        "OutdoorAmbient": [0.58, 0.44, 0.48],
         "EnvironmentDiffuseScale": 0.5,
-        "EnvironmentSpecularScale": 0.7,
+        "EnvironmentSpecularScale": 0.6,
         "GlobalShadows": true,
         "ShadowSoftness": 0.3,
-        "ExposureCompensation": 0.15
+        "ExposureCompensation": 0.1
       },
       "Atmosphere": {
         "$className": "Atmosphere",
         "$properties": {
-          "Density": 0.32,
-          "Offset": 0.2,
-          "Color": [0.86, 0.68, 0.55],
-          "Decay": [0.55, 0.36, 0.3],
-          "Glare": 0.35,
-          "Haze": 1.6
+          "Density": 0.34,
+          "Offset": 0.25,
+          "Color": [0.98, 0.64, 0.46],
+          "Decay": [0.5, 0.32, 0.56],
+          "Glare": 0.6,
+          "Haze": 1.8
         }
       },
       "Sky": {
         "$className": "Sky",
         "$properties": {
-          "SunAngularSize": 14,
+          "SunAngularSize": 16,
           "MoonAngularSize": 11,
-          "StarCount": 3000
+          "StarCount": 0,
+          "CelestialBodiesShown": true
         }
       },
       "Bloom": {
         "$className": "BloomEffect",
         "$properties": {
-          "Intensity": 0.85,
-          "Size": 30,
-          "Threshold": 0.95
+          "Intensity": 0.9,
+          "Size": 32,
+          "Threshold": 0.92
         }
       },
       "ColorCorrection": {
         "$className": "ColorCorrectionEffect",
         "$properties": {
-          "Brightness": 0.03,
-          "Contrast": 0.12,
-          "Saturation": 0.2,
-          "TintColor": [1, 0.96, 0.9]
+          "Brightness": 0.02,
+          "Contrast": 0.14,
+          "Saturation": 0.25,
+          "TintColor": [1, 0.95, 0.9]
         }
       },
       "SunRays": {
         "$className": "SunRaysEffect",
         "$properties": {
-          "Intensity": 0.07,
-          "Spread": 0.6
+          "Intensity": 0.12,
+          "Spread": 0.7
         }
       },
       "DepthOfField": {
