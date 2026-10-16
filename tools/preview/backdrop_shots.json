@@ -1,0 +1,13 @@
+{
+  "bd_hero": { "scene": "world", "position": [22, 100, 206], "target": [-2, 22, -40], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 320, "maxLights": 32 },
+  "bd_hero_zoom": { "scene": "world", "position": [22, 100, 206], "target": [30, 60, -270], "fov": 20, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 320, "maxLights": 32 },
+  "bd_west_hero": { "scene": "world", "position": [22, 100, 206], "target": [-100, 30, -190], "fov": 18, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 160, "maxLights": 24 },
+  "bd_mine_hero": { "scene": "world", "position": [22, 100, 206], "target": [-36, 8, 88], "fov": 16, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 160, "maxLights": 24 },
+  "bd_massif": { "scene": "world", "position": [30, 70, -60], "target": [30, 50, -270], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 260, "maxLights": 24 },
+  "bd_portal": { "scene": "world", "position": [8, 2, -186], "target": [10, 10, -240], "fov": 60, "preset": "Quarry", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24 },
+  "bd_mine": { "scene": "world", "position": [4, 16, 104], "target": [-40, 7, 88], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 100, "maxLights": 24 },
+  "bd_minesign": { "scene": "world", "position": [-18, 14, 92], "target": [-37, 12, 88], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 160, "maxLights": 24 },
+  "bd_nw": { "scene": "world", "position": [-30, 14, -50], "target": [-48, 8, -96], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 100, "maxLights": 24 },
+  "bd_yards": { "scene": "world", "position": [100, 120, 40], "target": [150, 0, -20], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 200 },
+  "bd_top": { "scene": "world", "position": [20, 520, -150], "target": [20, 0, -151], "fov": 60, "preset": "Surface", "shadowExtent": 400 }
+}

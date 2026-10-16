@@ -53,7 +53,10 @@ LobbyLayout.Area = {
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
 	MapParts = 11000,
-	LobbyParts = 5000,
+	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
+	-- yards (design v2) + room for the coastal railway (step 2). Plots stream
+	-- in and out with StreamingEnabled like everything else.
+	LobbyParts = 6500,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
