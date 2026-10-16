@@ -334,7 +334,8 @@ function Kit.golem(parent: Instance, base: CFrame, s: number, opts: Opts): Model
 	local m = Style.model("Golem", parent)
 	local body: Color3 = opts.Body or C.IronLight
 	local accent: Color3 = opts.Accent or body:Lerp(Kit.Dark, 0.35)
-	local p = Style.tiny({ CastShadow = true })
+	-- only big golems cast shadows (small details: no shadow)
+	local p = Style.tiny({ CastShadow = s >= 1.2 })
 	for _, x in { -0.32, 0.32 } do
 		Style.block(m, base * CFrame.new(x * s, 0.3 * s, 0), Vector3.new(0.48, 0.6, 0.58) * s, accent, nil, p)
 	end

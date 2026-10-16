@@ -99,6 +99,33 @@ return function(T, Loader)
 		return nil
 	end
 
+	-- Every colliding part under `root` as a box in `frame` (min/max per axis).
+	type Box = { Name: string, MinX: number, MaxX: number, MinY: number, MaxY: number, MinZ: number, MaxZ: number }
+	local function solidBoxes(root, frame): { Box }
+		local out = {}
+		for _, d in root:GetDescendants() do
+			if d:IsA("BasePart") and d.CanCollide then
+				local b: Box = {
+					Name = d:GetFullName(),
+					MinX = math.huge,
+					MaxX = -math.huge,
+					MinY = math.huge,
+					MaxY = -math.huge,
+					MinZ = math.huge,
+					MaxZ = -math.huge,
+				}
+				for _, p in corners(d) do
+					local q = frame:PointToObjectSpace(p)
+					b.MinX, b.MaxX = math.min(b.MinX, q.X), math.max(b.MaxX, q.X)
+					b.MinY, b.MaxY = math.min(b.MinY, q.Y), math.max(b.MaxY, q.Y)
+					b.MinZ, b.MaxZ = math.min(b.MinZ, q.Z), math.max(b.MaxZ, q.Z)
+				end
+				table.insert(out, b)
+			end
+		end
+		return out
+	end
+
 	T.test("districts: the package builds every piece as a model under Lobby.Districts", function()
 		local _, pkg = districts()
 		T.truthy(pkg, "Map.Emberfall.Lobby.Districts exists")
@@ -271,6 +298,96 @@ return function(T, Loader)
 					local blocked = maxX > lane[2] and minX < lane[3] and maxY > 0.4 and minY < 6
 					T.falsy(blocked, `{d:GetFullName()} blocks the walk lane of {lane[1]}`)
 				end
+			end
+		end
+	end)
+
+	T.test("districts: the SPIN & WIN stairs climb in small steps up to the EmberChest", function()
+		local _, pkg = districts()
+		local piece = LobbyLayout.get("SpinWheel")
+		local frame = LobbyLayout.frame(piece)
+		local boxes = solidBoxes(pkg.SpinWheel, frame)
+		local chestFront = math.huge
+		for _, b in solidBoxes(pkg.SpinWheel.EmberChest, frame) do
+			chestFront = math.min(chestFront, b.MinZ)
+		end
+		T.truthy(chestFront < piece.Size.Z / 2, "the EmberChest stands on the platform")
+		-- walk the stairs' center line from the ground in front up to the chest
+		local floor = 0
+		local z = -piece.Size.Z / 2 - 0.5
+		while z < chestFront - 0.3 do
+			local top = 0
+			for _, b in boxes do
+				if b.MinX <= 0 and b.MaxX >= 0 and b.MinZ <= z and b.MaxZ >= z and b.MinY < floor + 1.1 then
+					top = math.max(top, b.MaxY)
+				end
+			end
+			T.truthy(top - floor <= 1.05, `the stairs rise {top - floor} at z {z}`)
+			floor = top
+			for _, b in boxes do
+				local overhead = b.MinX < 1 and b.MaxX > -1 and b.MinZ < z + 0.4 and b.MaxZ > z - 0.4
+				T.falsy(overhead and b.MinY > floor + 0.05 and b.MinY < floor + 5, `{b.Name} blocks the stairs at z {z}`)
+			end
+			z += 0.25
+		end
+		T.truthy(floor >= 2.0, "the stairs reach the platform in front of the chest")
+	end)
+
+	T.test("districts: the SHOP and UPGRADES doors stay open up to the counters", function()
+		local _, pkg = districts()
+		for _, pair in { { "Shop", "ShopCounter" }, { "Upgrades", "UpgradeCounter" } } do
+			local id, counterName = pair[1], pair[2]
+			local piece = LobbyLayout.get(id)
+			local frame = LobbyLayout.frame(piece)
+			local counter = pkg[id]:FindFirstChild(counterName)
+			T.truthy(counter and counter:IsA("BasePart"), `{id} counter part`)
+			local counterFront = frame:PointToObjectSpace(counter.CFrame.Position).Z - counter.Size.Z / 2
+			T.truthy(counterFront > -piece.Size.Z / 2 + 4, `{id} counter sits inside the module`)
+			for _, b in solidBoxes(pkg[id], frame) do
+				local blocked = b.MaxX > -2.2
+					and b.MinX < 2.2
+					and b.MaxZ > -piece.Size.Z / 2
+					and b.MinZ < counterFront - 0.3
+					and b.MaxY > 0.9
+					and b.MinY < 6
+				T.falsy(blocked, `{b.Name} blocks the way to the {id} counter`)
+			end
+		end
+	end)
+
+	T.test("districts: the big signs keep their words, the capsule stall its odds board", function()
+		local _, pkg = districts()
+		local want = {
+			Shop = "SHOP",
+			Upgrades = "UPGRADES",
+			SpinWheel = "SPIN & WIN",
+			CapsuleStall = "CAPSULES",
+			ShopFront = "SELL",
+			EnchantShop = "ENCHANT",
+			HallOfFame = "HALL OF FAME",
+			RockScanner = "ROCK SCANNER",
+			FossilDig = "FOSSIL DIG",
+			GuildBoard = "FORGEKEEPERS' GUILD",
+		}
+		for id, text in want do
+			local found = false
+			for _, d in pkg[id]:GetDescendants() do
+				if d:IsA("TextLabel") and d.Text == text then
+					found = true
+					break
+				end
+			end
+			T.truthy(found, `{id} shows "{text}"`)
+		end
+		local odds = pkg.CapsuleStall:FindFirstChild("OddsBoard", true)
+		T.truthy(odds and odds:IsA("BasePart"), "CapsuleStall has an OddsBoard part")
+	end)
+
+	T.test("districts: small details cast no shadow", function()
+		local _, pkg = districts()
+		for _, d in pkg:GetDescendants() do
+			if d:IsA("BasePart") and math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.5 then
+				T.falsy(d.CastShadow, d:GetFullName() .. " (small) casts a shadow")
 			end
 		end
 	end)

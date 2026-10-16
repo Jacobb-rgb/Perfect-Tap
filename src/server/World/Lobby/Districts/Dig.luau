@@ -1,10 +1,13 @@
 --[[
 	FOSSIL DIG: the artifacts and Kingdom of Kaldrum story corner east of
-	the plaza. A fenced dig site with lantern posts, a sunken-looking pit
-	(stone rim, dirt terrace, dark bed flush with the ground, no hole), a
-	half-buried dinosaur skeleton, a small second find, tools, a sieve, a
-	wheelbarrow, a canvas tent and the FOSSIL DIG sign with a bone icon at
-	the entrance (which faces the plaza and the ToFossil path).
+	the plaza. A dig site inside a metal barrier fence (light posts with
+	neon caps, orange round handrails) with dark lantern pillars, a
+	sunken-looking pit (stone rim, dirt terrace, dark bed flush with the
+	ground, no hole), a half-buried dinosaur skeleton, a small second find,
+	tools, a sieve, a wheelbarrow, a City Kit parasol over the finds, a
+	bone-scanning terminal and two glowing FOSSIL DIG sign boxes with a bone
+	icon: at the entrance (which faces the plaza and the ToFossil path) and
+	over the south fence.
 
 	Tag FossilDig on the model, PrimaryPart = the bed.
 	Local frame: 18 wide (+X = north), 8 tall, 24 deep, front = -Z (west).
@@ -16,6 +19,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
+local Tech = require(script.Parent.Tech)
 
 local Dig = {}
 
@@ -141,32 +145,23 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		Kit.bit(m, barrow * CFrame.new(x, 0.4, 0.8), Vector3.new(0.2, 0.8, 0.2), C.WoodDark)
 	end
 
-	-- the dig crew's canvas tent and a crate of finds with a lamp
-	local tent = at(-4.4, 0.2, 6.6)
-	for _, side in { -1, 1 } do
-		Kit.block(
-			m,
-			tent * CFrame.new(side * 0.85, 1.05, 0) * CFrame.Angles(0, 0, side * 0.9),
-			Vector3.new(2.6, 0.15, 3.4),
-			C.AwningWhite,
-			nil,
-			Style.ghost()
-		)
-		Kit.bit(m, tent * CFrame.new(0, 1.0, side * 1.6), Vector3.new(0.2, 2.0, 0.2), C.WoodDark)
-	end
-	Kit.bit(m, tent * CFrame.new(0, 2.05, 0), Vector3.new(0.25, 0.25, 3.7), C.WoodDark)
+	-- a City Kit parasol over the crew's table, a crate of finds with a lamp
+	-- and a computer-screen terminal that scans the bones
+	Tech.parasol(m, at(-4.4, 0.2, 6.6), 4.6, 4.4, Tech.Band)
 	Kit.crate(m, at(-1.8, 0.2, 7.4), 1.6, rng)
 	Kit.glow(m, at(-1.8, 2.1, 7.4), Vector3.new(0.55, 0.6, 0.55), C.Lamp)
+	Tech.computer(m, at(-5.6, 0.2, 0.6), 2.2, Tech.Screen, { Bars = C.FlowerWhite })
 
-	-- fence (posts and two long rails per side) with lantern posts at the corners and the gate
+	-- metal barrier fence: light posts with neon caps, a lower rail and an
+	-- orange round handrail, dark lantern pillars at the corners and the gate
 	local postH = 3
 	local function post(x: number, z: number)
-		Style.block(m, at(x, postH / 2, z), Vector3.new(0.8, postH, 0.8), C.WoodDark)
+		Style.block(m, at(x, postH / 2, z), Vector3.new(0.6, postH, 0.6), Tech.MetalLight)
+		Tech.glow(m, at(x, postH + 0.05, z), Vector3.new(0.66, 0.12, 0.66), Tech.Neon)
 	end
 	local function rails(x1: number, z1: number, x2: number, z2: number)
-		for _, y in { 1.05, 2.4 } do
-			Kit.beam(m, pos(x1, y, z1), pos(x2, y, z2), 0.35, 0.45, C.Wood, Style.decor({ CastShadow = false }))
-		end
+		Kit.beam(m, pos(x1, 1.05, z1), pos(x2, 1.05, z2), 0.3, 0.35, Tech.Metal, Style.decor({ CastShadow = false }))
+		Tech.rod(m, pos(x1, 2.5, z1), pos(x2, 2.5, z2), 0.42, Tech.Band, nil, Style.decor({ CastShadow = false }))
 	end
 	rails(-FENCE_X, FENCE_Z, FENCE_X, FENCE_Z)
 	rails(FENCE_X, FENCE_Z, FENCE_X, -FENCE_Z)
@@ -180,35 +175,32 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		post(-FENCE_X, z)
 	end
 	post(-3.6, -FENCE_Z)
-	for i, c in { { -FENCE_X, -FENCE_Z }, { GATE_FROM, -FENCE_Z }, { GATE_TO, -FENCE_Z }, { FENCE_X, FENCE_Z }, { -FENCE_X, FENCE_Z } } do
-		local glow = Kit.lampPost(m, at(c[1], 0, c[2]), 4.2)
-		if i == 1 then
-			Style.light(glow, C.Lamp, 18, 1.4)
-		end
+	for _, c in { { -FENCE_X, -FENCE_Z }, { GATE_FROM, -FENCE_Z }, { GATE_TO, -FENCE_Z }, { FENCE_X, FENCE_Z }, { -FENCE_X, FENCE_Z } } do
+		Tech.lanternPillar(m, at(c[1], 0, c[2]), 4.4, 1.0)
 	end
 
-	-- FOSSIL DIG sign with a bone icon, on two posts behind the front fence
-	local signZ = -10.8
-	for _, x in { -8.1, 0.9 } do
-		Style.block(m, at(x, 3.7, signZ), Vector3.new(0.7, 7.4, 0.7), C.WoodDark)
+	-- FOSSIL DIG sign box with a bone icon, on two posts behind the front fence
+	local signZ = -11.0
+	for _, x in { -7.6, -0.2 } do
+		Style.block(m, at(x, 2.1, signZ + 0.6), Vector3.new(0.6, 4.2, 0.6), Tech.MetalLight)
+		Tech.disc(m, at(x, 0.5, signZ + 0.6).Position, 1.0, 0.9, Tech.Band)
 	end
-	Kit.bit(m, at(-3.6, 7.1, signZ), Vector3.new(9.6, 0.5, 0.45), C.WoodDark)
-	Style.sign(m, at(-4.9, 5.7, signZ - 0.55), "FOSSIL DIG", 6.0, 2.4, { Depth = 0.4 })
-	local iconBoard = at(-0.4, 5.7, signZ - 0.55)
-	Style.block(m, iconBoard, Vector3.new(2.4, 2.4, 0.4), C.SignBoard)
-	Style.icon(m, iconBoard * CFrame.new(0, 0, -0.4), "Bone", 2.0, C.SignText)
+	local _, frontIcon = Tech.sign(m, at(-3.9, 5.7, signZ), "FOSSIL DIG", 8.4, 2.0, { Icon = 2.4, IconLeft = true })
+	if frontIcon then
+		Style.icon(m, frontIcon * CFrame.new(0, 0, -0.12), "Bone", 1.9, Tech.GoldGlow, Kit.NEON)
+	end
 
-	-- a second, bigger FOSSIL DIG sign on tall posts over the south fence,
-	-- facing the south road and the hero camera (the concept shows the dig's
-	-- board from the south); its frame turns local -Z (west) to local -X (south)
-	local south = at(-8.5, 0, 5.8) * CFrame.Angles(0, math.pi / 2, 0)
-	for _, dx in { -4.7, 4.7 } do
-		Style.block(m, south * CFrame.new(dx, 3.95, 0.2), Vector3.new(0.6, 7.9, 0.6), C.WoodDark)
+	-- a second, bigger FOSSIL DIG sign box over the south fence, facing the
+	-- south road and the hero camera (the concept shows the dig's board from
+	-- the south); its frame turns local -Z (west) to local -X (south)
+	local south = at(-8.5, 0, 5.6) * CFrame.Angles(0, math.pi / 2, 0)
+	for _, dx in { -4.0, 4.0 } do
+		Style.block(m, south * CFrame.new(dx, 2.15, 0.45), Vector3.new(0.6, 4.3, 0.6), Tech.MetalLight)
 	end
-	Style.sign(m, south * CFrame.new(-1.3, 6.25, 0), "FOSSIL DIG", 7.6, 2.9, { Depth = 0.4 })
-	local southIcon = south * CFrame.new(3.85, 6.25, 0)
-	Style.block(m, southIcon, Vector3.new(2.7, 2.7, 0.4), C.SignBoard)
-	Style.icon(m, southIcon * CFrame.new(0, 0, -0.35), "Bone", 2.2, C.SignText)
+	local _, southIcon = Tech.sign(m, south * CFrame.new(0, 5.9, 0), "FOSSIL DIG", 8.4, 2.2, { Icon = 2.6, IconLeft = true })
+	if southIcon then
+		Style.icon(m, southIcon * CFrame.new(0, 0, -0.12), "Bone", 2.1, Tech.GoldGlow, Kit.NEON)
+	end
 
 	m.PrimaryPart = bed
 	Kit.tag(m, "FossilDig")

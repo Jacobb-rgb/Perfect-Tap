@@ -23,10 +23,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Style)
 local Kit = require(script.Kit)
+local Tech = require(script.Tech)
 local Stalls = require(script.Stalls)
 local Fronts = require(script.Fronts)
 local Wheel = require(script.Wheel)
@@ -43,18 +43,30 @@ Districts.Replaces = { "tradingPost", "toolSmithy", "emberChest", "guildBoard" }
 
 local C = Kit.C
 
--- The Forgekeepers' notice board beside the forge porch (tag GuildBoard, PrimaryPart "Board").
+-- The Forgekeepers' notice board beside the forge porch (tag GuildBoard,
+-- PrimaryPart "Board"), in the concept v2 metal and neon language: a cork
+-- board in a gunmetal display-wall bezel with a blue neon edge between two
+-- round pillars, under a glowing FORGEKEEPERS' GUILD sign box.
 local function guildBoard(parent: Instance, rng: Rng.Rng)
 	local piece, cf = Kit.piece("GuildBoard")
 	local m = Style.model(piece.Id, parent)
 	local function at(x: number, y: number, z: number): CFrame
 		return cf * CFrame.new(x, y, z)
 	end
-	for _, x in { -3.9, 3.9 } do
-		Style.block(m, at(x, 4.0, 0.2), Vector3.new(0.8, 8.0, 0.8), C.WoodDark)
+	for _, x in { -3.85, 3.85 } do
+		Tech.roundPillar(m, at(x, 0, 0.2), 7.6, 0.9, { Neon = false })
 	end
-	local board = Style.block(m, at(0, 4.2, 0.1), Vector3.new(7.2, 3.6, 0.4), C.WoodLight, nil, Style.solid())
+	-- bezel (top, bottom, sides), back plate, the board and its neon edge
+	local by, bw, bh = 4.2, 7.0, 3.6
+	Style.block(m, at(0, by + bh / 2 + 0.3, 0.25), Vector3.new(bw + 1.0, 0.6, 0.9), Tech.MetalLight)
+	Style.block(m, at(0, by - bh / 2 - 0.3, 0.25), Vector3.new(bw + 1.0, 0.6, 0.9), Tech.Metal)
+	for _, x in { -1, 1 } do
+		Style.block(m, at(x * (bw / 2 + 0.25), by, 0.25), Vector3.new(0.5, bh, 0.9), Tech.Metal)
+	end
+	Kit.bit(m, at(0, by - bh / 2 - 0.3, -0.21), Vector3.new(bw + 1.0, 0.25, 0.06), Tech.Band)
+	local board = Style.block(m, at(0, by, 0.3), Vector3.new(bw, bh, 0.4), C.WoodLight, nil, Style.solid())
 	board.Name = "Board"
+	Tech.outline(m, at(0, by, 0.3), bw / 2 - 0.08, bh / 2 - 0.08, 0.35, 0.14, -0.22, Tech.Neon)
 	-- pinned notes (quests, story pages of the Kingdom of Kaldrum)
 	local notes = {
 		{ X = -2.4, Y = 4.7, Color = C.FlowerWhite },
@@ -65,27 +77,15 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 	}
 	for i, n in notes do
 		local x, y, color = n.X, n.Y, n.Color
-		local note = at(x, y, -0.15) * CFrame.Angles(0, 0, rng:range(-0.12, 0.12))
+		local note = at(x, y, 0.05) * CFrame.Angles(0, 0, rng:range(-0.12, 0.12))
 		Kit.bit(m, note, Vector3.new(1.3, 1.5, 0.06), color)
 		if i % 2 == 1 then
 			Kit.bit(m, note * CFrame.new(0, 0.6, -0.05), Vector3.new(0.18, 0.18, 0.08), C.AwningRed)
 		end
 		Kit.bit(m, note * CFrame.new(0, -0.1, -0.04), Vector3.new(0.9, 0.12, 0.03), C.SignBoard)
 	end
-	Style.sign(m, at(0, 6.65, 0.05), "FORGEKEEPERS' GUILD", 7.8, 1.2, { Kind = "Wood", Depth = 0.4 })
-	-- little red roof cap
-	local roof = at(0, 7.85, 0.15)
-	Geo.wedge(m, roof * CFrame.new(0, 0.45, -0.45), Vector3.new(9.0, 0.9, 0.9), C.Roof, Kit.SMOOTH, Style.decor())
-	Geo.wedge(
-		m,
-		roof * CFrame.new(0, 0.45, 0.45) * CFrame.Angles(0, math.pi, 0),
-		Vector3.new(9.0, 0.9, 0.9),
-		C.Roof,
-		Kit.SMOOTH,
-		Style.decor()
-	)
-	Kit.bit(m, roof * CFrame.new(0, 0.95, 0), Vector3.new(9.0, 0.3, 0.4), C.RoofTrim)
-	Kit.bit(m, roof * CFrame.new(0, -0.05, 0), Vector3.new(9.0, 0.25, 1.9), C.RoofTrim)
+	-- the glowing sign box on top
+	Tech.sign(m, at(0, 7.45, -0.1), "FORGEKEEPERS' GUILD", 7.4, 1.1, { Studs = false })
 	m.PrimaryPart = board
 	Kit.tag(m, "GuildBoard")
 end
