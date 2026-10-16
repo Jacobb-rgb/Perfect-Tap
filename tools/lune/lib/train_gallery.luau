@@ -2,15 +2,29 @@
 	Ore train preview (scene "trains" for tools/lune/export_scene.luau, shots in
 	tools/preview/train_shots.json): three trains (locomotive + 2 loaded ore
 	wagons) in plot banner colors on straight tracks, laid out like the Kenney
-	Train Kit preview, plus a forgekeeper for scale, an empty wagon and a spare
-	locomotive in another color on a short siding.
+	Train Kit preview, plus forgekeepers for scale (kept clear of the drive
+	wheels), sidings with an empty wagon (amber) and white / purple trains, and a
+	"studio" corner on a dark floor framed like the Kenney reference sheet with a
+	lineup of all eight plot banner colors.
 ]]
 
 local roblox = require("@lune/roblox") :: any
 
 local Gallery = {}
 
--- plot banner colors (PlotBuilder BANNER_COLORS) used in the gallery
+-- all eight plot banner colors (PlotBuilder BANNER_COLORS)
+Gallery.Banners = {
+	{ 220, 70, 50 },
+	{ 240, 170, 40 },
+	{ 80, 180, 90 },
+	{ 60, 140, 220 },
+	{ 160, 90, 220 },
+	{ 230, 110, 170 },
+	{ 60, 190, 190 },
+	{ 240, 230, 210 },
+}
+
+-- the three main trains in the yard
 Gallery.Trains = {
 	{ Color = { 220, 70, 50 }, Loads = { { "Copper", "Iron", "Coal" }, { "Copper", "Silver" } } },
 	{ Color = { 60, 140, 220 }, Loads = { { "Gold", "Silver" }, { "Azurium", "Iron", "Gold" } } },
@@ -48,8 +62,8 @@ function Gallery.consist(Loader: any, parent: any, front: any, color: any, loads
 		elseif d:IsA("BasePart") and d.Name == "LampGlass" then
 			local light = roblox.Instance.new("PointLight")
 			light.Color = d.Color
-			light.Range = 10
-			light.Brightness = 1
+			light.Range = 8
+			light.Brightness = 0.8
 			light.Parent = d
 		end
 	end
@@ -79,8 +93,16 @@ function Gallery.build(Loader: any, parent: any)
 	root.Name = "TrainGallery"
 	root.Parent = parent
 
-	-- a dusty quarry yard
-	Geo.block(root, CF.new(0, -0.5, 0), V3.new(700, 1, 700), C3.fromRGB(150, 128, 104), roblox.Enum.Material.Ground)
+	-- a neutral grey-brown gravel yard (no orange cast on the colors)
+	Geo.block(root, CF.new(0, -0.5, 0), V3.new(700, 1, 700), C3.fromRGB(118, 112, 106), roblox.Enum.Material.Slate)
+
+	local function oreColors(ids: { string }): { any }
+		local colors = {}
+		for _, id in ids do
+			table.insert(colors, OreData.ById[id].Color)
+		end
+		return colors
+	end
 
 	local spacing = 13
 	for i, info in Gallery.Trains do
@@ -90,11 +112,7 @@ function Gallery.build(Loader: any, parent: any)
 		track.Parent = root
 		local loads = {}
 		for _, ids in info.Loads do
-			local colors = {}
-			for _, id in ids do
-				table.insert(colors, OreData.ById[id].Color)
-			end
-			table.insert(loads, colors)
+			table.insert(loads, oreColors(ids))
 		end
 		local color = C3.fromRGB(info.Color[1], info.Color[2], info.Color[3])
 		Gallery.consist(Loader, root, CF.new(x, TrainBuilder.RailTop, -12), color, loads)
@@ -106,6 +124,17 @@ function Gallery.build(Loader: any, parent: any)
 	siding:PivotTo(CF.new(sidingX, 0, -6))
 	siding.Parent = root
 	Gallery.consist(Loader, root, CF.new(sidingX, TrainBuilder.RailTop, -16), C3.fromRGB(240, 170, 40), { {} })
+	-- two more sidings: a white and a purple train (the colors most likely to wash out / go dark)
+	local sidings = {
+		{ X = 3 * spacing, Color = C3.fromRGB(240, 230, 210), Load = { "Coal", "Copper", "Iron" } },
+		{ X = 4 * spacing, Color = C3.fromRGB(160, 90, 220), Load = { "Amethyst", "Silver", "Gold" } },
+	}
+	for _, info in sidings do
+		local track = TrainBuilder.track(36)
+		track:PivotTo(CF.new(info.X, 0, -6))
+		track.Parent = root
+		Gallery.consist(Loader, root, CF.new(info.X, TrainBuilder.RailTop, -16), info.Color, { oreColors(info.Load) })
+	end
 
 	-- a station sign at the back of the yard
 	for _, side in { -1, 1 } do
@@ -121,12 +150,13 @@ function Gallery.build(Loader: any, parent: any)
 	label.FontFace = roblox.Font.fromEnum(roblox.Enum.Font.FredokaOne)
 	label.Parent = gui
 
-	-- forgekeepers for scale next to the red and blue locomotives
-	Dummy.build(root, CF, CF.lookAt(V3.new(-spacing - 5.5, 0, -11), V3.new(-spacing - 14, 0, -31)), "idle")
+	-- forgekeepers for scale: behind the red cab beside the first wagon (clear of
+	-- the drive wheels) and between the blue and green trains
+	Dummy.build(root, CF, CF.lookAt(V3.new(-spacing - 5.8, 0, 1.2), V3.new(-spacing - 30, 0, 4)), "idle")
 	Dummy.build(
 		root,
 		CF,
-		CF.lookAt(V3.new(spacing - 5.4, 0, -2), V3.new(spacing, 0, -10)),
+		CF.lookAt(V3.new(spacing - 6.4, 0, 4), V3.new(spacing - 6.4, 0, -10)),
 		"idle",
 		{ shirt = C3.fromRGB(70, 120, 170), pants = C3.fromRGB(50, 50, 60) }
 	)
@@ -138,7 +168,7 @@ function Gallery.build(Loader: any, parent: any)
 	local loco = TrainBuilder.locomotive(C3.fromRGB(80, 180, 90))
 	loco:PivotTo(CF.new(studio + V3.new(-20, 0, 0)))
 	loco.Parent = root
-	local wagon = TrainBuilder.wagon(C3.fromRGB(150, 156, 170), { OreData.ById.Copper.Color })
+	local wagon = TrainBuilder.wagon(C3.fromRGB(80, 180, 90), { OreData.ById.Copper.Color })
 	wagon:PivotTo(CF.new(studio))
 	wagon.Parent = root
 	local empty = TrainBuilder.wagon(C3.fromRGB(60, 140, 220))
@@ -147,6 +177,15 @@ function Gallery.build(Loader: any, parent: any)
 	local piece = TrainBuilder.track(12)
 	piece:PivotTo(CF.new(studio + V3.new(40, 0, 0)))
 	piece.Parent = root
+
+	-- all eight banner colors in a row (an echelon so a 3/4 camera sees every cab)
+	for i, c in Gallery.Banners do
+		local color = C3.fromRGB(c[1], c[2], c[3])
+		local at = studio + V3.new((i - 4.5) * 12, 0, 71 + (i - 4.5) * 6)
+		local loco = TrainBuilder.locomotive(color)
+		loco:PivotTo(CF.new(at))
+		loco.Parent = root
+	end
 	return root
 end
 

@@ -225,8 +225,51 @@ return function(T, Loader)
 		T.eq(#find(wagon, "Attachment", "TipPivot"), 1, "TipPivot")
 		local hopper = wagon:FindFirstChild("Hopper")
 		T.truthy(hopper and hopper:IsA("Model") and hopper.PrimaryPart, "Hopper model with a PrimaryPart")
-		T.eq(#find(hopper, "BasePart", "Ore"), 4, "4 ore lumps in the hopper")
+		T.eq(#find(hopper, "BasePart", "Ore"), 5, "5 ore rocks in the hopper")
 		T.eq(#find(TrainBuilder.wagon(COLORS[4]), "BasePart", "Ore"), 0, "empty wagon has no ore")
+	end)
+
+	T.test("Train: hopper shape (open and deep when empty, rocks above the rim, narrower than the locomotive)", function()
+		local function top(p: any): number
+			return p.CFrame.Position.Y + p.Size.Y / 2
+		end
+		local empty = TrainBuilder.wagon(COLORS[2])
+		local rimTop = -math.huge
+		for _, rim in find(empty, "BasePart", "Rim") do
+			rimTop = math.max(rimTop, top(rim))
+		end
+		local inside = find(empty, "BasePart", "Inside")
+		T.eq(#inside, 1, "empty hopper has a floor plate")
+		T.truthy(rimTop - top(inside[1]) >= 2.5, `empty hopper is deep ({rimTop - top(inside[1])} studs)`)
+		-- loaded: the bed sits just under the rim, every rock peaks above it and stays
+		-- inside the hopper footprint
+		local loaded = TrainBuilder.wagon(COLORS[2], ORES)
+		local bed = find(loaded, "BasePart", "OreBed")
+		T.eq(#bed, 1, "loaded hopper has an ore bed")
+		T.truthy(top(bed[1]) < rimTop and top(bed[1]) > rimTop - 0.5, "ore bed just under the rim")
+		local lo, hi = bounds(loaded)
+		local round = 0
+		for _, ore in find(loaded, "BasePart", "Ore") do
+			local p = ore.CFrame.Position
+			-- a ball dome, or a chunk standing on a corner (its body diagonal points up)
+			local isBall = ore.Shape == roblox.Enum.PartType.Ball
+			if isBall then
+				round += 1
+			end
+			local peak = p.Y + (if isBall then ore.Size.X / 2 else ore.Size.X * math.sqrt(3) / 2)
+			T.truthy(peak > rimTop + 0.8, "rock peaks above the rim")
+			T.truthy(math.abs(p.X) < 2 and math.abs(p.Z) < 5.3, "rock inside the hopper")
+			if isBall then
+				-- the dome stays inside the opening where it rises above the rim
+				local r = math.sqrt(math.max(0, (ore.Size.X / 2) ^ 2 - (rimTop - p.Y) ^ 2))
+				T.truthy(math.abs(p.X) + r <= 2.05 + 1e-3, "dome inside the rim")
+			end
+		end
+		T.eq(round, 3, "three big rounded rocks")
+		T.truthy(math.abs(hi.Z - lo.Z) <= 12.01, "nothing sticks out past the couplers")
+		local llo, lhi = bounds(TrainBuilder.locomotive(COLORS[2]))
+		local ratio = (hi.X - lo.X) / (lhi.X - llo.X)
+		T.truthy(ratio >= 0.75 and ratio <= 0.92, `wagon about 85 % of the locomotive width ({ratio})`)
 	end)
 
 	T.test("Train: colors (body, trim, load colors cycle)", function()
