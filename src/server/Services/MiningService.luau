@@ -1,14 +1,26 @@
 --[[
-	MiningService: ore nodes, pickaxe swings and chunk drops.
+	MiningService: rocks, laser blasting and dirty ore drops (design v2).
 
-	- A node grows at every NodeSpawn marker (ore picked by the zone weights).
-	- Swing validation: the node is real and alive, the player is close,
-	  the swing cooldown of their pickaxe has passed, the pickaxe tier is high
-	  enough, and VIP zones need the VIP pass.
-	- Node HP falls in three visible stages: cracks (1), a chunk breaks off (2),
-	  shatter (3). Each stage crossed drops one physical raw ore chunk owned by
-	  the player who made the hit.
-	- Shattered nodes regrow after the rarity's RespawnTime.
+	- A rock grows at every NodeSpawn marker. It holds 1-3 ores
+	  (BlasterData.oreCount) rolled by the marker zone's ore weights. The ores
+	  stay on the server: clients only see the rock (OreNodeBuilder.buildRock)
+	  and its Zone/OreCount/MinBlaster/Health attributes.
+	- MineBlast(rock | nil): the client aims its held beam at a rock (or stops).
+	  It only sets the player's target; nothing is damaged by the remote itself.
+	- Every BlasterData.Beam.ServerTick the server damages each firing player's
+	  target by BlasterData.damage(level, ore) * dt (dt = time since that
+	  player's last tick, capped at Beam.MaxTickGap so lag never bursts), while
+	  the Blaster is in the character's hand, the rock is alive, the rock surface
+	  is within the blaster Range + Beam.RangeSlack, the zone's MinBlaster <= the
+	  level (else one "Needs a Level N blaster" toast per rock per 3 s + a
+	  MineBounce Fx) and VIP zones need the ForgeVip perk.
+	- HP falls in three stages (1/3, 2/3, 3/3 lost). Each stage crossed drops
+	  the next rolled ore as a Raw chunk owned by the player whose damage
+	  crossed it: 1 ore drops at the shatter, 2 ores at stages 2 and 3, 3 ores
+	  at every stage. Dirty ore is unknown until cleaned, so there are no
+	  "new ore" toasts here (CleaningService does that).
+	- A shattered rock grows back after the rarest contained ore's RespawnTime.
+	- Only players who are firing are looked at each tick (no loops over parts).
 ]]
 
 local Players = game:GetService("Players")
@@ -16,38 +28,67 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local GameConfig = require(Shared.Config.GameConfig)
+local BlasterData = require(Shared.Config.BlasterData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
-local ToolData = require(Shared.Config.ToolData)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local OreNodeBuilder = require(Shared.Builders.OreNodeBuilder)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
+local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
 local WorldService = require(script.Parent.WorldService)
-local Perks = require(script.Parent.Parent.Perks)
 
 local MiningService = {}
 
-type Node = {
+MiningService.RockTag = "Rock"
+
+local FX_RADIUS = 150 -- players this close see hits and cracks
+local SHATTER_RADIUS = 180
+local HIT_FX_GAP = 0.25 -- BlastHit at most 4 times a second per rock and shooter
+local TOAST_GAP = 3 -- seconds between "Needs a Level N blaster" toasts for the same rock
+local RESPAWN_CHECK = 1 -- seconds between respawn queue checks
+
+type Rock = {
 	Model: Model,
-	Marker: BasePart,
-	Zone: string,
-	OreId: string,
+	Marker: BasePart?,
+	Zone: WorldLayout.Zone,
+	Ores: { string }, -- server only, never sent to clients
 	Health: number,
 	MaxHealth: number,
 	Stage: number,
+	Dropped: number,
 	Seed: number,
 	Alive: boolean,
+	Center: Vector3,
+	Radius: number,
+	Crust: Color3,
+	HitFx: { [Player]: number },
 }
 
-local nodes: { [Model]: Node } = {}
--- token bucket per player: bursts from lag are fine, the average can't beat the cooldown
-local swingBuckets: { [Player]: { tokens: number, last: number } } = {}
-local random = Random.new()
-local nodesFolder: Folder
+type Shooter = {
+	Target: Rock?,
+	Last: number, -- clock() of this player's last damage tick (or target change)
+	Toasts: { [Model]: number }, -- last gate toast per rock
+}
+
+type Respawn = { At: number, Marker: BasePart }
+
+local rocks: { [Model]: Rock } = {}
+local shooters: { [Player]: Shooter } = {}
+local active: { [Player]: Shooter } = {} -- only players with a target
+local respawns: { Respawn } = {}
+local nextRespawnCheck = 0
+local rocksFolder: Instance? = nil
+local brokenStages = false -- warned once if OreNodeBuilder.applyStage fails
+
+-- Swappable for the Lune tests.
+local clock: () -> number = os.clock
+local random: () -> number = function()
+	return math.random()
+end
 
 -- Listeners for other services (tutorial, badges, analytics).
 local minedCallbacks: { (Player, string, number) -> () } = {}
@@ -55,96 +96,138 @@ function MiningService.onChunkMined(callback: (player: Player, oreId: string, co
 	table.insert(minedCallbacks, callback)
 end
 
-local function pickOre(zoneId: string): string?
-	local zone = WorldLayout.ZoneById[zoneId]
-	if not zone then
-		return nil
-	end
-	local total = 0
+---------------------------------------------------------------- rocks
+
+local function pickOre(zone: WorldLayout.Zone): string?
 	local keys = {}
+	local total = 0
 	for oreId, weight in zone.Ores do
-		if weight > 0 then
+		if weight > 0 and OreData.ById[oreId] then
 			total += weight
 			table.insert(keys, oreId)
 		end
 	end
+	if #keys == 0 then
+		return nil
+	end
 	table.sort(keys)
-	local roll = random:NextNumber() * total
+	local roll = random() * total
 	for _, oreId in keys do
 		roll -= zone.Ores[oreId]
-		if roll <= 0 then
+		if roll < 0 then
 			return oreId
 		end
 	end
 	return keys[#keys]
 end
 
-local function spawnNode(marker: BasePart)
-	local zoneId = marker:GetAttribute("Zone") :: string?
-	local oreId = zoneId and pickOre(zoneId)
-	if not oreId or not zoneId then
-		return
+-- Center and a generous horizontal radius of a rock (its surface for range checks).
+local function measure(model: Model): (Vector3, number)
+	local primary = model.PrimaryPart
+	local center = if primary then primary.CFrame.Position else model:GetPivot().Position
+	local radius = if primary then math.max(primary.Size.X, primary.Size.Z) / 2 else 2
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and d.CanCollide then
+			local flat = (d.CFrame.Position - center) * Vector3.new(1, 0, 1)
+			radius = math.max(radius, flat.Magnitude + math.max(d.Size.X, d.Size.Z) * 0.4)
+		end
 	end
-	local ore = OreData.get(oreId)
-	local seed = random:NextInteger(1, 1e9)
-	local ground = marker.Position - Vector3.new(0, marker.Size.Y / 2, 0)
-	local base = CFrame.new(ground) * CFrame.Angles(0, random:NextNumber(0, math.pi * 2), 0)
-	local model = OreNodeBuilder.build(oreId, base, seed)
+	return center, math.clamp(radius, 1.5, 9)
+end
+
+local function spawnRock(marker: BasePart): Rock?
+	local zoneId = marker:GetAttribute("Zone")
+	local zone = if type(zoneId) == "string" then WorldLayout.ZoneById[zoneId] else nil
+	local folder = rocksFolder
+	if not zone or not folder then
+		return nil
+	end
+	local ores = {}
+	for _ = 1, BlasterData.oreCount(random()) do
+		local oreId = pickOre(zone)
+		if oreId then
+			table.insert(ores, oreId)
+		end
+	end
+	if #ores == 0 then
+		return nil
+	end
+	local seed = math.floor(random() * 1e9) + 1
+	local ground = marker.CFrame.Position - Vector3.new(0, marker.Size.Y / 2, 0)
+	local base = CFrame.new(ground) * CFrame.Angles(0, random() * math.pi * 2, 0)
+	local model = OreNodeBuilder.buildRock(zone.Id, ores, base, seed)
+	model.Name = "Rock"
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
-	model:AddTag("OreNode")
-	model:SetAttribute("Zone", zoneId)
-	model:SetAttribute("Tier", ore.Tier)
-	model:SetAttribute("Health", ore.Hardness)
-	model:SetAttribute("MaxHealth", ore.Hardness)
+	model:AddTag(MiningService.RockTag)
+	local health = BlasterData.rockHealth(zone.RockHealth, ores)
+	-- what clients may know: never the ore ids
+	model:SetAttribute("OreId", nil)
+	model:SetAttribute("Zone", zone.Id)
+	model:SetAttribute("OreCount", #ores)
+	model:SetAttribute("MinBlaster", zone.MinBlaster)
+	model:SetAttribute("VipOnly", zone.VipOnly == true)
+	model:SetAttribute("Health", health)
+	model:SetAttribute("MaxHealth", health)
+	model:SetAttribute("Stage", 0)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = true
 		end
 	end
-	model.Parent = nodesFolder
-	nodes[model] = {
+	local center, radius = measure(model)
+	local primary = model.PrimaryPart
+	model.Parent = folder
+	local rock: Rock = {
 		Model = model,
 		Marker = marker,
-		Zone = zoneId,
-		OreId = oreId,
-		Health = ore.Hardness,
-		MaxHealth = ore.Hardness,
+		Zone = zone,
+		Ores = ores,
+		Health = health,
+		MaxHealth = health,
 		Stage = 0,
+		Dropped = 0,
 		Seed = seed,
 		Alive = true,
+		Center = center,
+		Radius = radius,
+		Crust = if primary then primary.Color else Color3.fromRGB(120, 110, 100),
+		HitFx = {},
 	}
+	rocks[model] = rock
+	return rock
 end
 
-local function nodeRadius(node: Node): number
-	local primary = node.Model.PrimaryPart
-	return if primary then primary.Size.Magnitude / 2 else 3
+-- The point on the rock that faces `from` (where the beam hits).
+local function hitPosition(rock: Rock, from: Vector3): Vector3
+	local away = (from - rock.Center) * Vector3.new(1, 0, 1)
+	local direction = if away.Magnitude > 0.1 then away.Unit else Vector3.new(0, 0, 1)
+	return rock.Center + direction * rock.Radius * 0.7 + Vector3.new(0, 0.5, 0)
 end
 
-local function dropChunks(player: Player, node: Node, count: number)
-	local origin = (node.Model.PrimaryPart :: BasePart).Position + Vector3.new(0, 3, 0)
-	for _ = 1, count do
-		local angle = random:NextNumber(0, math.pi * 2)
-		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
-		local cf = CFrame.new(origin + out * 1.5) * CFrame.Angles(random:NextNumber(0, 6), random:NextNumber(0, 6), 0)
-		ItemService.spawn({ Kind = "Raw", OreId = node.OreId }, player.UserId, cf, out * random:NextNumber(7, 11) + Vector3.new(0, 16, 0))
-	end
+-- The beam color of a player's blaster (rusty = orange).
+local function glowOf(data: { [string]: any }): Color3
+	local ore = data.BlasterOre
+	return BlasterBuilder.look(data.BlasterLevel, if type(ore) == "string" then ore else "").Glow
+end
+
+---------------------------------------------------------------- drops and stages
+
+local function dropChunk(player: Player, rock: Rock, oreId: string, from: Vector3)
+	local toward = (from - rock.Center) * Vector3.new(1, 0, 1)
+	local forward = if toward.Magnitude > 0.1 then toward.Unit else Vector3.new(0, 0, 1)
+	-- fly roughly toward the shooter, spread up to ~60 degrees to each side
+	local out = CFrame.Angles(0, (random() - 0.5) * 2.1, 0):VectorToWorldSpace(forward)
+	local origin = rock.Center + Vector3.new(0, rock.Radius * 0.5 + 1.5, 0) + out * 0.8
+	local cf = CFrame.new(origin) * CFrame.Angles(random() * 6, random() * 6, 0)
+	local velocity = out * (7 + random() * 4) + Vector3.new(0, 16, 0)
+	ItemService.spawn({ Kind = "Raw", OreId = oreId }, player.UserId, cf, velocity)
 	local data = DataService.get(player)
 	if data then
-		data.Stats.OresMined += count
-		local isNew = not data.Discovered[node.OreId]
-		if isNew then
-			data.Discovered[node.OreId] = true
-			local ore = OreData.get(node.OreId)
-			Net.fire("Notify", player, {
-				Text = "New ore discovered: " .. ore.Name .. "!",
-				Kind = "Discovery",
-				Rarity = ore.Rarity,
-			})
-		end
+		data.Stats.OresMined = (tonumber(data.Stats.OresMined) or 0) + 1
 		DataService.changed(player)
 	end
 	for _, callback in minedCallbacks do
-		task.spawn(callback, player, node.OreId, count)
+		task.spawn(callback, player, oreId, 1)
 	end
 end
 
@@ -157,148 +240,256 @@ local function breakOff(parts: { BasePart }, away: Vector3)
 		part.CanCollide = false
 		part.CanQuery = false
 		part.AssemblyLinearVelocity = away * 10 + Vector3.new(0, 14, 0)
-		part.AssemblyAngularVelocity = Vector3.new(random:NextNumber(-6, 6), random:NextNumber(-6, 6), random:NextNumber(-6, 6))
+		part.AssemblyAngularVelocity = Vector3.new(random() * 12 - 6, random() * 12 - 6, random() * 12 - 6)
 		task.delay(1.6, function()
 			part:Destroy()
 		end)
 	end
 end
 
-local function shatter(node: Node)
-	node.Alive = false
-	nodes[node.Model] = nil
-	local position = (node.Model.PrimaryPart :: BasePart).Position
-	Net.fireNear("Fx", position, 180, nil, "NodeShatter", position, node.OreId)
-	node.Model:Destroy()
-	local rarity = Rarity.get(OreData.get(node.OreId).Rarity)
-	task.delay(rarity.RespawnTime * random:NextNumber(0.85, 1.15), function()
-		if node.Marker.Parent then
-			spawnNode(node.Marker)
+-- Crack visuals of a stage (OreNodeBuilder belongs to the ore package: never let it break mining).
+local function crackVisual(rock: Rock, stage: number, from: Vector3)
+	local ok, result = pcall(OreNodeBuilder.applyStage, rock.Model, stage, rock.Seed)
+	if ok then
+		if type(result) == "table" and #result > 0 then
+			local away = (rock.Center - from) * Vector3.new(1, 0, 1)
+			breakOff(result, if away.Magnitude > 0.1 then away.Unit else Vector3.new(0, 0, 1))
 		end
-	end)
+	elseif not brokenStages then
+		brokenStages = true
+		warn("[MiningService] OreNodeBuilder.applyStage failed: " .. tostring(result))
+	end
+	rock.Model:SetAttribute("Stage", stage)
 end
 
-local function onSwing(player: Player, target: any)
-	local model = Guard.instance(target, "Model", nodesFolder) :: Model?
-	local node = model and nodes[model]
-	if not node or not node.Alive then
+local function stopShootersOf(rock: Rock)
+	for player, shooter in active do
+		if shooter.Target == rock then
+			shooter.Target = nil
+			active[player] = nil
+		end
+	end
+end
+
+local function shatter(player: Player, rock: Rock, glow: Color3)
+	rock.Alive = false
+	rocks[rock.Model] = nil
+	stopShootersOf(rock)
+	local data = DataService.get(player)
+	if data then
+		data.Stats.RocksBroken = (tonumber(data.Stats.RocksBroken) or 0) + 1
+		DataService.changed(player)
+	end
+	Net.fireNear("Fx", rock.Center, SHATTER_RADIUS, nil, "NodeShatter", rock.Center, rock.Crust, glow)
+	rock.Model:Destroy()
+	-- the rarest ore inside decides how long the rock takes to grow back
+	local slowest = 0
+	for _, oreId in rock.Ores do
+		local ore = OreData.ById[oreId]
+		if ore then
+			slowest = math.max(slowest, Rarity.get(ore.Rarity).RespawnTime)
+		end
+	end
+	local marker = rock.Marker
+	if marker then
+		table.insert(respawns, { At = clock() + slowest * (0.85 + random() * 0.3), Marker = marker })
+	end
+end
+
+-- A stage was crossed by `player`'s damage: drop the next ore, crack or shatter.
+local function crossStage(player: Player, rock: Rock, stage: number, from: Vector3, glow: Color3)
+	rock.Stage = stage
+	if stage > 3 - #rock.Ores then
+		rock.Dropped += 1
+		local oreId = rock.Ores[rock.Dropped]
+		if oreId then
+			dropChunk(player, rock, oreId, from)
+		end
+	end
+	if stage >= 3 then
+		shatter(player, rock, glow)
+	else
+		crackVisual(rock, stage, from)
+		local position = hitPosition(rock, from)
+		Net.fireNear("Fx", position, FX_RADIUS, nil, "NodeCrack", position, rock.Crust, stage)
+	end
+end
+
+local function damage(player: Player, data: { [string]: any }, rock: Rock, amount: number, from: Vector3, now: number)
+	rock.Health = math.max(0, rock.Health - amount)
+	rock.Model:SetAttribute("Health", rock.Health)
+	local lost = 1 - rock.Health / rock.MaxHealth
+	local newStage = math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
+	local glow = glowOf(data)
+	local last = rock.HitFx[player]
+	if not last or now - last >= HIT_FX_GAP then
+		rock.HitFx[player] = now
+		local position = hitPosition(rock, from)
+		Net.fireNear("Fx", position, FX_RADIUS, player, "BlastHit", position, glow, newStage, player)
+	end
+	for stage = rock.Stage + 1, newStage do
+		if not rock.Alive then
+			break
+		end
+		crossStage(player, rock, stage, from, glow)
+	end
+end
+
+---------------------------------------------------------------- blasting
+
+local function shooterOf(player: Player): Shooter
+	local shooter = shooters[player]
+	if not shooter then
+		shooter = { Target = nil, Last = clock(), Toasts = {} }
+		shooters[player] = shooter
+	end
+	return shooter
+end
+
+-- One toast per rock every TOAST_GAP seconds, plus a bounce effect.
+local function refuse(player: Player, shooter: Shooter, rock: Rock, text: string, from: Vector3, now: number)
+	local last = shooter.Toasts[rock.Model]
+	if last and now - last < TOAST_GAP then
 		return
 	end
-	local root = Guard.rootPart(player)
-	local character = player.Character
-	if not root or not character then
+	local count = 0
+	for model, at in shooter.Toasts do
+		count += 1
+		if count > 12 and now - at >= TOAST_GAP then
+			shooter.Toasts[model] = nil
+		end
+	end
+	shooter.Toasts[rock.Model] = now
+	Net.fire("Notify", player, { Text = text, Kind = "Deny" })
+	Net.fire("Fx", player, "MineBounce", hitPosition(rock, from))
+end
+
+-- MineBlast(rock | nil): aim the held beam at a rock, or stop firing.
+local function onBlast(player: Player, value: any)
+	local shooter = shooterOf(player)
+	local folder = rocksFolder
+	local model = if folder then Guard.instance(value, "Model", folder) :: Model? else nil
+	local rock = if model then rocks[model] else nil
+	if not rock or not rock.Alive then
+		-- nil, junk or a rock that is gone: the beam stops
+		shooter.Target = nil
+		active[player] = nil
 		return
 	end
-	local tool = character:FindFirstChild("Pickaxe")
-	if not tool or not tool:IsA("Tool") then
+	if shooter.Target ~= rock then
+		shooter.Target = rock
+		shooter.Last = clock()
+	end
+	active[player] = shooter
+end
+
+local function tickShooter(player: Player, shooter: Shooter, now: number)
+	local rock = shooter.Target
+	local dt = math.clamp(now - shooter.Last, 0, BlasterData.Beam.MaxTickGap)
+	shooter.Last = now
+	if not rock or not rock.Alive then
+		shooter.Target = nil
+		active[player] = nil
 		return
 	end
 	local data = DataService.get(player)
-	if not data then
+	local root = Guard.rootPart(player)
+	local character = player.Character
+	if dt <= 0 or not data or not root or not character then
 		return
 	end
-	local pickaxe = ToolData.PickaxeById[data.Pickaxe] or ToolData.PickaxeById[ToolData.DefaultPickaxe]
-
-	-- cooldown: 2-swing burst allowance refilled at 1 swing per cooldown
-	local now = os.clock()
-	local bucket = swingBuckets[player]
-	if not bucket then
-		bucket = { tokens = 2, last = now }
-		swingBuckets[player] = bucket
+	local tool = character:FindFirstChild(BlasterBuilder.ToolName)
+	if not tool or not tool:IsA("Tool") then
+		return -- the blaster must be in hand
 	end
-	bucket.tokens = math.min(2, bucket.tokens + (now - bucket.last) / pickaxe.Cooldown)
-	bucket.last = now
-	if bucket.tokens < 1 then
+	local blaster = BlasterData.get(data.BlasterLevel)
+	local from = root.Position
+	local distance = (from - rock.Center).Magnitude - rock.Radius
+	if distance > blaster.Range + BlasterData.Beam.RangeSlack then
 		return
 	end
-	bucket.tokens -= 1
-
-	-- distance from the character to the node surface
-	local primary = node.Model.PrimaryPart :: BasePart
-	local distance = (root.Position - primary.Position).Magnitude - nodeRadius(node)
-	if distance > GameConfig.MineRange then
+	local zone = rock.Zone
+	if zone.VipOnly and not Perks.has(player, "ForgeVip") then
+		refuse(player, shooter, rock, zone.Name .. " rocks are for Forge VIPs.", from, now)
 		return
 	end
-
-	local zone = WorldLayout.ZoneById[node.Zone]
-	if zone and zone.VipOnly and not Perks.has(player, "ForgeVip") then
-		Net.fire("Notify", player, { Text = "Glimmer Grotto ore is for Forge VIPs.", Kind = "Deny" })
+	if blaster.Level < zone.MinBlaster then
+		refuse(player, shooter, rock, "Needs a Level " .. zone.MinBlaster .. " blaster", from, now)
 		return
 	end
+	local ore = data.BlasterOre
+	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * dt
+	damage(player, data, rock, amount, from, now)
+end
 
-	local ore = OreData.get(node.OreId)
-	if pickaxe.Tier < ore.Tier then
-		local needed = "a better pickaxe"
-		for _, p in ToolData.Pickaxes do
-			if p.Tier == ore.Tier then
-				needed = "a " .. p.Name
-				break
-			end
+local function tick(now: number)
+	for player, shooter in active do
+		local ok, err = pcall(function()
+			tickShooter(player, shooter, now)
+		end)
+		if not ok then
+			warn("[MiningService] tick failed for " .. player.Name .. ": " .. tostring(err))
+			shooter.Target = nil
+			active[player] = nil
 		end
-		Net.fire("Notify", player, { Text = ore.Name .. " needs " .. needed .. "!", Kind = "Deny" })
-		Net.fire("Fx", player, "MineBounce", primary.Position, node.OreId)
-		return
 	end
-
-	node.Health = math.max(0, node.Health - pickaxe.Damage)
-	node.Model:SetAttribute("Health", node.Health)
-	local lost = 1 - node.Health / node.MaxHealth
-	local newStage = math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
-
-	local hitPos = primary.Position
-	Net.fireNear("Fx", hitPos, 150, player, "MineHit", hitPos, node.OreId, newStage)
-
-	if newStage > node.Stage then
-		local crossed = newStage - node.Stage
-		for stage = node.Stage + 1, math.min(newStage, 2) do
-			local broken = OreNodeBuilder.applyStage(node.Model, stage, node.Seed)
-			if #broken > 0 then
-				local away = (primary.Position - root.Position) * Vector3.new(1, 0, 1)
-				breakOff(broken, if away.Magnitude > 0.1 then away.Unit else Vector3.new(0, 0, 1))
+	if now >= nextRespawnCheck and #respawns > 0 then
+		nextRespawnCheck = now + RESPAWN_CHECK
+		for i = #respawns, 1, -1 do
+			local entry = respawns[i]
+			if now >= entry.At then
+				table.remove(respawns, i)
+				if entry.Marker.Parent then
+					spawnRock(entry.Marker)
+				end
 			end
-		end
-		node.Stage = newStage
-		local chunks = crossed
-		if newStage >= 3 then
-			if random:NextNumber() < Rarity.get(ore.Rarity).BonusChunkChance then
-				chunks += 1
-			end
-		end
-		dropChunks(player, node, chunks)
-		if newStage >= 3 then
-			shatter(node)
-		else
-			Net.fireNear("Fx", hitPos, 150, nil, "NodeCrack", hitPos, node.OreId, newStage)
 		end
 	end
 end
 
+local function forgetPlayer(player: Player)
+	shooters[player] = nil
+	active[player] = nil
+	for _, rock in rocks do
+		rock.HitFx[player] = nil
+	end
+end
+
+---------------------------------------------------------------- lifecycle
+
 function MiningService.init()
-	nodesFolder = Workspace:FindFirstChild("Nodes") :: Folder
-	Net.on("MineSwing", onSwing)
-	Players.PlayerRemoving:Connect(function(player)
-		swingBuckets[player] = nil
-	end)
+	rocksFolder = Workspace:FindFirstChild("Nodes")
+	Net.on("MineBlast", onBlast)
+	Players.PlayerRemoving:Connect(forgetPlayer)
 end
 
 function MiningService.start()
 	local markers = WorldService.NodeSpawns
-	if not markers then
-		return
+	if markers then
+		for _, marker in markers:GetChildren() do
+			if marker:IsA("BasePart") then
+				spawnRock(marker)
+			end
+		end
 	end
-	for _, marker in markers:GetChildren() do
-		if marker:IsA("BasePart") then
-			spawnNode(marker)
+	while true do
+		task.wait(BlasterData.Beam.ServerTick)
+		local ok, err = pcall(function()
+			tick(clock())
+		end)
+		if not ok then
+			warn("[MiningService] " .. tostring(err))
 		end
 	end
 end
 
--- For the tutorial arrow: nearest alive node of an ore to a position.
+-- For the tutorial arrow: nearest alive rock to a position (optionally one holding `oreId`).
 function MiningService.nearestNode(position: Vector3, oreId: string?): Model?
-	local best, bestDistance = nil, math.huge
-	for model, node in nodes do
-		if node.Alive and (not oreId or node.OreId == oreId) and model.PrimaryPart then
-			local d = (model.PrimaryPart.Position - position).Magnitude
+	local best: Model? = nil
+	local bestDistance = math.huge
+	for model, rock in rocks do
+		if rock.Alive and (not oreId or table.find(rock.Ores, oreId)) then
+			local d = (rock.Center - position).Magnitude
 			if d < bestDistance then
 				best, bestDistance = model, d
 			end
@@ -306,5 +497,45 @@ function MiningService.nearestNode(position: Vector3, oreId: string?): Model?
 	end
 	return best
 end
+
+-- Internals for the Lune tests only (tests/Mining.spec.luau).
+MiningService._test = {
+	-- forget every rock, shooter and respawn; `folder` holds the rocks
+	reset = function(folder: Instance?)
+		table.clear(rocks)
+		table.clear(shooters)
+		table.clear(active)
+		table.clear(respawns)
+		table.clear(minedCallbacks)
+		nextRespawnCheck = 0
+		brokenStages = false
+		rocksFolder = folder
+		clock = os.clock
+		random = function()
+			return math.random()
+		end
+	end,
+	setClock = function(fn: () -> number)
+		clock = fn
+	end,
+	setRandom = function(fn: () -> number)
+		random = fn
+	end,
+	spawnRock = spawnRock,
+	blast = onBlast,
+	tick = tick,
+	forget = forgetPlayer,
+	rock = function(model: Model): Rock?
+		return rocks[model]
+	end,
+	target = function(player: Player): Model?
+		local shooter = active[player]
+		local rock = shooter and shooter.Target
+		return if rock then rock.Model else nil
+	end,
+	respawns = function(): { Respawn }
+		return respawns
+	end,
+}
 
 return MiningService
