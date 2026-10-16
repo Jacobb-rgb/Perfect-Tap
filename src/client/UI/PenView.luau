@@ -37,6 +37,7 @@ export type Entry = {
 	Value: number, -- for sorting things that can't go on a podium
 	Color: Color3, -- icon colour
 	Mystery: boolean, -- dirty ore: "?" icon
+	Keys: { [string]: number }?, -- the merged Dirty Ore row: real key -> count
 }
 
 export type Row = {
@@ -96,21 +97,52 @@ end
 
 local KIND_ORDER = { Clean = 1, Ingot = 2, Gear = 3, Crushed = 4, Raw = 5 }
 
+-- Key of the one merged Dirty Ore row (not a storage key).
+PenView.DirtyKey = "Dirty"
+
 --[[
 	Rows for a State Storage summary ("K|O|G|R" -> count): unknown keys
 	are skipped, cleaned ore first by income (best first), then the other
-	kinds by value, dirty ore last. Pick mode keeps only podium ore.
+	kinds by value, dirty ore last as ONE row (PenView.DirtyKey; its Keys
+	map holds the real keys), so the list never shows which chunks are
+	the same ore. Pick mode keeps only podium ore.
 ]]
 function PenView.entries(summary: any, mode: Mode?): { Entry }
 	local list: { Entry } = {}
 	if type(summary) ~= "table" then
 		return list
 	end
+	local dirtyRow: Entry? = nil
 	for key, count in summary do
 		local desc = if type(key) == "string" then ItemData.parseKey(key) else nil
 		if desc and type(count) == "number" and count >= 1 and count == count then
 			local podiumOre = EconomyConfig.Podiums.Kinds[desc.K] == true
-			if mode ~= "Pick" or podiumOre then
+			if desc.K == "Raw" and mode ~= "Pick" then
+				local current = dirtyRow
+				if not current then
+					local newRow: Entry = {
+						Key = PenView.DirtyKey,
+						Kind = "Raw",
+						Name = ItemData.DirtyName,
+						Grade = nil,
+						Count = 0,
+						Income = 0,
+						Value = 0,
+						Color = PenView.DirtyColor,
+						Mystery = true,
+						Keys = {},
+					}
+					table.insert(list, newRow)
+					current = newRow
+					dirtyRow = newRow
+				end
+				local entry: Entry = current :: Entry
+				entry.Count += math.floor(count)
+				local keys = entry.Keys
+				if keys then
+					keys[key] = math.floor(count)
+				end
+			elseif mode ~= "Pick" or podiumOre then
 				local dirty = desc.K == "Raw"
 				local ore = OreData.ById[desc.O]
 				table.insert(list, {
@@ -123,7 +155,8 @@ function PenView.entries(summary: any, mode: Mode?): { Entry }
 					Value = if dirty then 0 else ItemData.value(desc.K, desc.O, desc.G, desc.R),
 					Color = if dirty or not ore then PenView.DirtyColor else ore.Color,
 					Mystery = dirty,
-				})
+					Keys = nil,
+				} :: Entry)
 			end
 		end
 	end
@@ -139,6 +172,30 @@ function PenView.entries(summary: any, mode: Mode?): { Entry }
 		return a.Key < b.Key
 	end)
 	return list
+end
+
+-- A real storage key for one item of an entry: the merged Dirty Ore row
+-- picks one of its keys, weighted by count (`roll` in [0, 1)).
+function PenView.keyFor(entry: Entry, roll: number): string?
+	local keys = entry.Keys
+	if not keys then
+		return entry.Key
+	end
+	local sorted = {}
+	local total = 0
+	for key, count in keys do
+		table.insert(sorted, key)
+		total += count
+	end
+	table.sort(sorted)
+	local target = math.clamp(roll, 0, 0.999999) * total
+	for _, key in sorted do
+		target -= keys[key]
+		if target < 0 then
+			return key
+		end
+	end
+	return sorted[#sorted]
 end
 
 -- The first podium slot that is unlocked and empty (nil when none).
@@ -160,7 +217,23 @@ end
 -- How many display copies of each key the pen pile shows (at most `max`):
 -- round-robin over the sorted rows, so a full pen still shows variety.
 function PenView.pileCounts(summary: any, max: number): { [string]: number }
-	local entries = PenView.entries(summary, "Pen")
+	-- the pile needs real keys: open the merged Dirty Ore row up again
+	local entries: { { Key: string, Count: number } } = {}
+	for _, entry in PenView.entries(summary, "Pen") do
+		local keys = entry.Keys
+		if keys then
+			local sorted = {}
+			for key in keys do
+				table.insert(sorted, key)
+			end
+			table.sort(sorted)
+			for _, key in sorted do
+				table.insert(entries, { Key = key, Count = keys[key] })
+			end
+		else
+			table.insert(entries, { Key = entry.Key, Count = entry.Count })
+		end
+	end
 	local counts: { [string]: number } = {}
 	local total = 0
 	local round = 1

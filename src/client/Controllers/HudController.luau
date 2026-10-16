@@ -186,9 +186,10 @@ end
 ---------------------------------------------------------------- coins and income
 
 -- What the counter should show right now: the snapshot's coins plus the
--- income earned since (never more than one income tick ahead of the server).
+-- income earned since (podium income alone sends a snapshot only every
+-- StatePushSeconds, so count up for that long and a little more).
 function HudController.predictedCoins(now: number): number
-	local ahead = math.clamp(now - snapshotAt, 0, EconomyConfig.IncomeTick)
+	local ahead = math.clamp(now - snapshotAt, 0, EconomyConfig.StatePushSeconds + EconomyConfig.IncomeTick)
 	return serverCoins + income * ahead
 end
 

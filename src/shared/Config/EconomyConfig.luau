@@ -9,6 +9,9 @@
 local EconomyConfig = {}
 
 EconomyConfig.IncomeTick = 1 -- seconds between podium payouts
+-- Podium income alone pushes a State snapshot at most this often; the HUD
+-- counts the coins up from Income in between (other changes push at once).
+EconomyConfig.StatePushSeconds = 10
 
 EconomyConfig.Podiums = {
 	Free = 2, -- every base

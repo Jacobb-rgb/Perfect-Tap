@@ -130,7 +130,7 @@ return function(T, Loader)
 		T.falsy(pcall(ItemService.absorb, record), "a consumed item can't be absorbed again")
 	end)
 
-	withWorld("ItemService: storeDesc fills the Ore Pen up to its capacity and pays beyond it", function(w)
+	withWorld("ItemService: storeDesc may overfill the pen up to the DataStore cap and pays beyond it", function(w)
 		local d = clean("Flawless")
 		T.eq(ItemService.storeDesc(w.player, d), "Stored", "stored")
 		T.eq(#w.data.Storage, 1, "in the pen")
@@ -145,17 +145,22 @@ return function(T, Loader)
 		for _ = #w.data.Storage + 1, capacity do
 			table.insert(w.data.Storage, clean())
 		end
+		-- system moves (leaving, the loose cap) still keep the item past the capacity
+		T.eq(ItemService.storeDesc(w.player, d, "Too many loose items"), "Stored", "kept past the pen capacity")
+		T.eq(#w.data.Storage, capacity + 1, "pen overfilled by one")
+		for _ = #w.data.Storage + 1, GameConfig.MaxStoredItems do
+			table.insert(w.data.Storage, clean())
+		end
 		local coins = w.data.Coins
-		T.eq(ItemService.storeDesc(w.player, d, "Too many loose items"), "Sold", "sold when full")
+		T.eq(ItemService.storeDesc(w.player, d, "Too many loose items"), "Sold", "sold at the DataStore cap")
 		local value = ItemData.value("Clean", "Copper", "Flawless")
 		T.eq(w.data.Coins, coins + value, "paid the full value")
 		T.eq(w.data.TotalEarned, value, "counted as earned")
-		T.eq(#w.data.Storage, capacity, "never over the capacity")
-		T.eq(w.notes[2].Payload.Text, `Too many loose items (Ore Pen full: sold it for {Format.money(value)})`, "sold toast")
-		-- a pen upgrade makes room; the DataStore cap always wins
+		T.eq(#w.data.Storage, GameConfig.MaxStoredItems, "never over the DataStore cap")
+		T.eq(w.notes[3].Payload.Text, `Too many loose items (no room left anywhere: sold it for {Format.money(value)})`, "sold toast")
+		-- a pen upgrade raises the capacity; the DataStore cap always wins
 		w.data.Upgrades.PenLevel = 2
 		T.eq(ItemService.penCapacity(w.data), capacity + 2 * EconomyConfig.Pen.PerLevel, "upgraded pen")
-		T.eq(ItemService.storeDesc(w.player, d), "Stored", "room again")
 		w.data.Upgrades.PenLevel = 999
 		T.le(ItemService.penCapacity(w.data), GameConfig.MaxStoredItems, "never above the DataStore cap")
 		w.data.Upgrades.PenLevel = 0 / 0
@@ -173,12 +178,18 @@ return function(T, Loader)
 		T.eq(raw.Model:GetAttribute("Kind"), "Raw", "kind")
 		local cleaned = ItemService.spawnDesc(clean("Clean"), USER, CFrame.new(2, 5, 0))
 		T.eq(cleaned.Model:GetAttribute("Value"), ItemData.value("Clean", "Copper", "Clean"), "clean ore shows its value")
-		-- the pen still pays the real raw price when it is full
+		-- a full pen keeps dirty ore (never sold behind the player's back) ...
 		for _ = 1, ItemService.penCapacity(w.data) do
 			table.insert(w.data.Storage, clean())
 		end
+		T.eq(ItemService.stash(raw, nil), true, "kept past the pen capacity")
+		-- ... and only the DataStore cap pays the real raw price
+		for _ = #w.data.Storage + 1, GameConfig.MaxStoredItems do
+			table.insert(w.data.Storage, clean())
+		end
+		local raw2 = ItemService.spawnDesc({ K = "Raw", O = "Diamond" }, USER, CFrame.new(0, 5, 0))
 		local coins = w.data.Coins
-		T.eq(ItemService.stash(raw, nil), false, "sold, not kept")
+		T.eq(ItemService.stash(raw2, nil), false, "sold, not kept")
 		T.eq(w.data.Coins, coins + ItemData.value("Raw", "Diamond"), "raw price")
 	end)
 

@@ -106,9 +106,17 @@ end
 
 ---------------------------------------------------------------- panel
 
-local function send(key: string, button: string)
+-- rows on screen by key (the merged Dirty Ore row holds its real keys)
+local shownEntries: { [string]: PenView.Entry } = {}
+
+local function send(rowKey: string, button: string)
 	local view = refs
 	if not view then
+		return
+	end
+	local entry = shownEntries[rowKey]
+	local key = if entry then PenView.keyFor(entry, math.random()) else rowKey
+	if not key then
 		return
 	end
 	Sfx.play("UIClick")
@@ -175,6 +183,10 @@ local function refresh(state: { [string]: any }?)
 		return
 	end
 	local entries = PenView.entries(state and state.Storage, view.Mode)
+	table.clear(shownEntries)
+	for _, entry in entries do
+		shownEntries[entry.Key] = entry
+	end
 	local canPodium = state ~= nil and PenView.freeSlot(state.Podiums, state.PodiumSlots) ~= nil
 	wire(PenView.setEntries(view, entries, canPodium))
 	local count = if state then tonumber(state.StorageCount) or 0 else 0

@@ -242,11 +242,14 @@ function ItemService.penCapacity(data: { [string]: any }): number
 end
 
 --[[
-	Puts an item descriptor into the player's Ore Pen (data.Storage), or
-	pays its full value (Tobin's price) when the pen is full, so nothing is
-	ever lost. 'Lost' only when the player's data isn't loaded or the
-	descriptor is junk. With a reason, the player gets a toast.
-	(Players filling the pen by hand are refused when it is full: PenService.)
+	Puts an item descriptor into the player's Ore Pen (data.Storage). These
+	are system moves (leaving, too many loose items, packing a machine up),
+	so they may fill the pen past its capacity, up to the DataStore cap
+	(GameConfig.MaxStoredItems); only beyond that is the item sold at
+	Tobin's price, so nothing is ever lost and a dirty Mythic is never sold
+	without the player choosing it. 'Lost' only when the player's data isn't
+	loaded or the descriptor is junk. With a reason, the player gets a toast.
+	(Players filling the pen by hand are refused at capacity: PenService.)
 ]]
 function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): StoreResult
 	local data = DataService.get(player)
@@ -259,12 +262,12 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 	end
 	local result: StoreResult
 	local value = 0
-	if #data.Storage < ItemService.penCapacity(data) then
+	if #data.Storage < GameConfig.MaxStoredItems then
 		table.insert(data.Storage, { K = desc.K, O = desc.O, G = desc.G, R = desc.R })
 		result = "Stored"
 		DataService.changed(player)
 	else
-		-- pen full: pay the full value instead of losing the item
+		-- DataStore cap reached: pay the full value instead of losing the item
 		value = ItemData.value(desc.K, desc.O, desc.G, desc.R)
 		EconomyService.award(player, value, "PenFull")
 		result = "Sold"
@@ -273,7 +276,7 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 		Net.fire("Notify", player, {
 			Text = if result == "Stored"
 				then reason .. " (moved to your Ore Pen)"
-				else `{reason} (Ore Pen full: sold it for {Format.money(value)})`,
+				else `{reason} (no room left anywhere: sold it for {Format.money(value)})`,
 			Kind = "Info",
 		})
 	end

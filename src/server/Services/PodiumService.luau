@@ -81,6 +81,8 @@ local clock: () -> number = os.time
 type Shown = { Key: string, Model: Model?, Tag: BillboardGui?, Text: string }
 local shown: { [number]: { [number]: Shown } } = {}
 local pendingOffline: { [Player]: number } = {} -- seconds away, paid after OfflineDelay
+-- when each player last got a State push from podium income alone
+local lastPush: { [Player]: number } = {}
 local perkConnections: { [Player]: RBXScriptConnection } = {}
 
 local function toast(player: Player, text: string, kind: string?)
@@ -586,22 +588,36 @@ end
 
 ---------------------------------------------------------------- income
 
+local function payOne(player: Player, now: number)
+	local data = DataService.get(player)
+	if not data then
+		return
+	end
+	data.LastSeen = now
+	local amount = PodiumService.incomeOf(player, data) * EconomyConfig.IncomeTick
+	if amount >= 0.001 and amount <= EconomyConfig.MaxAward then
+		EconomyService.award(player, amount, "Podium", true)
+		local stats = data.Stats
+		if type(stats) == "table" then
+			stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
+		end
+		-- the HUD counts up by itself; a full snapshot only every few seconds
+		local last = lastPush[player]
+		if not last or now - last >= EconomyConfig.StatePushSeconds or now < last then
+			lastPush[player] = now
+			DataService.changed(player)
+		end
+	end
+end
+
 -- One payout to every loaded player (EconomyConfig.IncomeTick seconds of income).
+-- One player's error never stops the others' income.
 function PodiumService.tick()
 	local now = clock()
 	for _, player in Players:GetPlayers() do
-		local data = DataService.get(player)
-		if data then
-			data.LastSeen = now
-			local amount = PodiumService.incomeOf(player, data) * EconomyConfig.IncomeTick
-			if amount >= 0.001 and amount <= EconomyConfig.MaxAward then
-				EconomyService.award(player, amount, "Podium", true)
-				local stats = data.Stats
-				if type(stats) == "table" then
-					stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + amount
-				end
-				DataService.changed(player)
-			end
+		local ok, err = pcall(payOne :: any, player, now)
+		if not ok then
+			warn(`[PodiumService] income for {player.Name} failed: {err}`)
 		end
 	end
 end
@@ -698,6 +714,7 @@ PodiumService._test = {
 			end
 		end
 		table.clear(shown)
+		table.clear(lastPush)
 		table.clear(pendingOffline)
 		clock = os.time
 	end,
@@ -753,7 +770,12 @@ function PodiumService.init()
 		watchPerks(player)
 	end
 	Players.PlayerRemoving:Connect(function(player)
-		pendingOffline[player] = nil
+		-- pendingOffline is cleared by payOffline (also run from beforeRelease,
+		-- whose order against this handler is not guaranteed); drop leftovers later
+		task.delay(10, function()
+			pendingOffline[player] = nil
+		end)
+		lastPush[player] = nil
 		local connection = perkConnections[player]
 		if connection then
 			connection:Disconnect()
@@ -771,7 +793,10 @@ function PodiumService.start()
 		if os.clock() - lastTags >= 5 then
 			lastTags = os.clock()
 			for plotId in shown do
-				PodiumService.refreshPlot(plotId)
+				local ok, err = pcall(PodiumService.refreshPlot :: any, plotId)
+				if not ok then
+					warn(`[PodiumService] refreshing plot {plotId} failed: {err}`)
+				end
 			end
 		end
 	end
