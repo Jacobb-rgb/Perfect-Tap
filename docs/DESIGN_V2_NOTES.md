@@ -130,7 +130,8 @@ in numbers before purchase**, and everything random that can be paid for follows
 
 ### Decision 8: offline earnings (owner, 2026-10-16)
 Option **A**, adjusted: podiums keep earning while the player is offline at **50% speed for up to 5 hours**. A
-purchasable **extension** raises it to **12 hours** for that player (payment type still to confirm). Show a
+purchasable **extension** raises it to **12 hours** for that player: included in the big game pass (~560 R$) and
+also sold separately for **99 Robux**. Show a
 "While you were away: +$X" popup on return.
 
 ### Quality pillars (owner, 2026-10-16)
@@ -143,3 +144,35 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 - Every feature gets polish: readable UI on phones, juicy but not noisy VFX, satisfying sounds, careful QA.
 - The owner also linked an Instagram reel (https://www.instagram.com/reel/DddJLuVBjnZ/), the source of the meme
   screenshots; Claude could not open it (Instagram needs a login).
+
+### Round 3 answers (owner, 2026-10-16)
+1. **Offline extension:** part of the big game pass, and separately for 99 Robux. ✔
+2. **Big numbers:** yes, abbreviations up to K, M, B, T (trillion), Qa, **Qi (quintillion)** and beyond. Prices must
+   **grow fast** (exponential cost curves) because podium income grows fast; players must not get everything at once.
+3. **Full automation of everything except mining** (owner's new idea, important):
+   - **Dirty ore hides its rarity.** Raw ore is dirty: you don't know what it is until it is cleaned (cleaning = the
+     reveal; fits the Cleaning Station reveal and the existing "???" idea).
+   - With a high enough **pen upgrade**, the **train dumps raw ore straight into the cleaner** instead of the pen.
+   - The **cleaner (cleaning plant)** is upgradeable: more upgrades = cleans **better** (higher grade cap) and
+     **faster**. Every machine has upgrades (speed etc.).
+   - From the cleaner the ore drops into an **iron box** where you now see what it is and choose what to **keep**
+     (pen → podium) and what to **send on**.
+   - In the pen you take out what you don't want and press **"Send"**: items move slowly onto the **conveyors**, then
+     ride to the cleaner / further machines. The route depends on how the player builds the factory.
+   - Smelted ore → **ingots** → the **foundry** makes **blasters**.
+   - New: an **Enchant shop** that sells **perks and upgrades for blasters**.
+4. **Rocks:** 1–3 ores per rock, rarer deeper, small artifact chance. ✔ **Every one of the 30 ores needs its own
+   unique, beautiful look** (shape, color, glow, particles), and **blaster looks follow the ore they're forged from**.
+5. **Golems:** as proposed: they follow you, each gives a bonus (e.g. +10% podium money or faster mining), 3 equipped
+   at once, rarities from Common to Mythic. ✔
+6. **Rebirth:** yes, optional (later update), permanent bonus (proposed +25% money per rebirth).
+7. **Trading:** yes, add trading between players (needs a safe two-step confirm screen and anti-scam checks).
+8. **Leaderboards:** yes, **3 boards** in the lobby with different focuses (proposal: Money per second, Total earned,
+   Artifacts / rarest ore found).
+9. **Gear shop:** boots (walk speed), helmet with head lamp (see more), **backpack** (carry more ore), **gloves**
+   (faster pickup), **magnet** (ore flies to you). ✔
+10. **Wheel of fortune:** Claude designs the rewards (proposal: coins, luck boosts, golem capsules, small chance of a
+    rare ore); odds shown on the wheel.
+11. **Artifacts:** collection book in the UI **and** a small **museum on your base** to display them. ✔
+12. **Music:** chosen from Roblox's free licensed library (Studio Toolbox → Audio), calm tracks; Claude writes what to
+    search for and where to paste the IDs.
