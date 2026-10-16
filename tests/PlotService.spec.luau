@@ -163,36 +163,162 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Yard: part budget, shadows and the gate in the back rail", function()
+	-- Plot-local axis-aligned bounds of a part: (min, max).
+	local function localBounds(plotCF: any, part: any): (any, any)
+		local cf = plotCF:ToObjectSpace(part.CFrame)
+		local size = part.Size
+		local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+		local half = Vector3.new(
+			math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2,
+			math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2,
+			math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
+		)
+		return cf.Position - half, cf.Position + half
+	end
+
+	T.test("Plot: part budget (pad + yard), one light, shadows", function()
+		for _, plot in WorldLayout.Plots do
+			local model = buildPlot(plot)
+			local parts, collide, lights = 0, 0, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					parts += 1
+					if d.CanCollide then
+						collide += 1
+					end
+					local s = d.Size
+					if s.X * s.Y * s.Z < 1 and d.Transparency < 1 then
+						T.falsy(d.CastShadow, `small part {d:GetFullName()} casts a shadow`)
+					end
+				elseif d:IsA("Light") then
+					lights += 1
+				end
+			end
+			-- mobile budget: 8 plots stream in with the lobby (LobbyLayout.Budget)
+			T.le(parts, 300, `plot {plot.Id} parts (pad + yard)`)
+			T.le(lights, 1, `plot {plot.Id} lights`)
+			T.lt(collide, parts, "decoration doesn't collide")
+		end
+	end)
+
+	T.test("Plot: the road entrance and the YardGate stay open", function()
 		local plot = WorldLayout.Plots[1]
 		local model = buildPlot(plot)
-		local parts, collide = 0, 0
-		for _, d in model.Yard:GetDescendants() do
-			if d:IsA("BasePart") then
-				parts += 1
-				if d.CanCollide then
-					collide += 1
-				end
-				local s = d.Size
-				if s.X * s.Y * s.Z < 1 and d.Transparency < 1 then
-					T.falsy(d.CastShadow, `small part {d:GetFullName()} casts a shadow`)
+		local plotCF = WorldLayout.plotCFrame(plot)
+		local line = PlotBuilder.WallLine
+		local gate = BaseLayout.YardGate
+		-- walkable corridors (plot-local x range, z range), from the ground to head height
+		local corridors = {
+			{ Name = "road entrance", X0 = -PlotBuilder.EntranceHalf, X1 = PlotBuilder.EntranceHalf, Z0 = -line - 3, Z1 = -line + 2 },
+			{ Name = "yard gate", X0 = gate.CenterX - gate.Width / 2, X1 = gate.CenterX + gate.Width / 2, Z0 = line - 2, Z1 = line + 2 },
+		}
+		T.lt(gate.Width - 0.1, PlotBuilder.EntranceHalf * 2, "the entrance is at least as wide as the yard gate")
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.CanCollide then
+				local min, max = localBounds(plotCF, d)
+				if max.Y > 0.05 and min.Y < 6 then
+					for _, c in corridors do
+						local blocks = min.X < c.X1 - 0.01 and max.X > c.X0 + 0.01 and min.Z < c.Z1 and max.Z > c.Z0
+						T.falsy(blocks, `{d:GetFullName()} blocks the {c.Name}`)
+					end
 				end
 			end
 		end
-		T.le(parts, 180, "yard parts")
-		T.lt(collide, parts, "decoration doesn't collide")
-		-- nothing of the back rail blocks the YardGate opening
-		local gate = BaseLayout.YardGate
-		local edge = GameConfig.PlotCells * GameConfig.CellSize / 2 + 0.5
+	end)
+
+	T.test("Plot: brick walls close the border of pad and yard, except the openings", function()
+		local plot = WorldLayout.Plots[2]
+		local model = buildPlot(plot)
 		local plotCF = WorldLayout.plotCFrame(plot)
-		for _, d in model:GetChildren() do
-			if d:IsA("BasePart") and d.CanCollide then
-				local p = plotCF:PointToObjectSpace(d.CFrame.Position)
-				if math.abs(p.Z - edge) < 0.6 and d.Size.Y < 3 then
-					local minX = p.X - d.Size.X / 2
-					local maxX = p.X + d.Size.X / 2
-					local blocks = minX < gate.CenterX + gate.Width / 2 - 0.01 and maxX > gate.CenterX - gate.Width / 2 + 0.01
-					T.falsy(blocks, "rail across the yard gate")
+		T.truthy(model:FindFirstChild("Walls"), "pad walls")
+		local solids = {}
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and d.CanCollide and d.Transparency < 1 then
+				table.insert(solids, d)
+			end
+		end
+		local function blocked(p: any): boolean
+			local world = plotCF:PointToWorldSpace(p)
+			for _, part in solids do
+				local q = part.CFrame:PointToObjectSpace(world)
+				local h = part.Size / 2
+				if math.abs(q.X) <= h.X + 0.01 and math.abs(q.Y) <= h.Y + 0.01 and math.abs(q.Z) <= h.Z + 0.01 then
+					return true
+				end
+			end
+			return false
+		end
+		local line = PlotBuilder.WallLine
+		local back = PlotBuilder.BackWallZ
+		local radius = PlotBuilder.CornerRadius
+		local gate = BaseLayout.YardGate
+		local stopHalf = BaseLayout.TrainStop.Size.X / 2
+		local samples = 0
+		local function check(x: number, z: number, label: string)
+			samples += 1
+			T.truthy(blocked(Vector3.new(x, 1, z)), `gap in the {label} wall at x {x}, z {z}`)
+		end
+		for _, s in { -1, 1 } do
+			for z = -line, back - radius, 1 do
+				check(s * line, z, "side")
+			end
+			for x = PlotBuilder.EntranceHalf + 0.6, line, 1 do
+				check(s * x, -line, "front")
+			end
+			for x = gate.Width / 2 + 0.6, line, 1 do
+				check(gate.CenterX + s * x, line, "pad/yard")
+			end
+			for x = stopHalf + 1, line - radius, 1 do
+				check(s * x, back, "back")
+			end
+			-- the rounded corner: the middle of the arc
+			local corner = Vector3.new(s * (line - radius), 0, back - radius)
+				+ Vector3.new(s * math.cos(math.pi / 4), 0, math.sin(math.pi / 4)) * (radius - 0.1)
+			check(corner.X, corner.Z, "corner")
+		end
+		T.lt(150, samples, "border samples")
+		-- every wall segment is brick: plinth, red band, rounded cap
+		local caps = 0
+		for _, d in model.Walls:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "Cap" then
+				caps += 1
+				T.eq(d.Shape, roblox.Enum.PartType.Cylinder, "rounded cap")
+			end
+		end
+		T.lt(9, caps, "pad wall segments")
+	end)
+
+	T.test("Podiums: showpiece pedestals keep what PodiumService and PodiumController read", function()
+		local plot = WorldLayout.Plots[1]
+		local model = buildPlot(plot)
+		for slot, rect in BaseLayout.Podiums do
+			local podium = model.Yard:FindFirstChild("Podium" .. slot)
+			T.eq(podium:GetAttribute("Slot"), slot, "Slot attribute")
+			T.truthy(podium.PrimaryPart and podium.PrimaryPart.Name == "Base", "PrimaryPart Base")
+			local rim = podium:FindFirstChild("Rim")
+			T.truthy(rim and rim:IsA("BasePart"), "Rim part")
+			local locked = slot > EconomyConfig.Podiums.Free
+			T.eq(rim.Material, if locked then roblox.Enum.Material.SmoothPlastic else roblox.Enum.Material.Neon, "rim look")
+			T.eq(rim.Color, if locked then PlotBuilder.RimLocked else PlotBuilder.RimGold, "rim color")
+			-- the dome floats over the top plate and holds the ore point; it never blocks
+			local top = podium.Top
+			local dome = podium:FindFirstChild("Dome")
+			T.truthy(dome and dome:IsA("BasePart"), "glass dome")
+			T.falsy(dome.CanCollide, "dome doesn't collide")
+			local orePoint = (top.CFrame * top.OrePoint.CFrame).Position
+			T.lt((dome.CFrame.Position - orePoint).Magnitude, dome.Size.X / 2, "ore point inside the dome")
+			T.lt(top.CFrame.Position.Y + top.Size.X / 2, dome.CFrame.Position.Y - dome.Size.X / 2, "dome floats above the top plate")
+			T.lt(top.CFrame.Position.Y + top.Size.X / 2, orePoint.Y, "ore floats above the top plate")
+			-- inside the slot's rect
+			local min, max = localBounds(WorldLayout.plotCFrame(plot), podium.PrimaryPart)
+			T.le(rect.Center.X - rect.Size.X / 2 - 0.01, min.X, "base inside the slot")
+			T.le(max.X, rect.Center.X + rect.Size.X / 2 + 0.01, "base inside the slot")
+			if locked then
+				-- PodiumService hides the lock by making it transparent: all of it starts opaque
+				for _, d in podium.Lock:GetDescendants() do
+					if d:IsA("BasePart") then
+						T.eq(d.Transparency, 0, "lock part opaque")
+					end
 				end
 			end
 		end

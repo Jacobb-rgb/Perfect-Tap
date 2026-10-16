@@ -99,5 +99,69 @@
     "preset": "Surface",
     "shadowExtent": 110,
     "ui": "ui_offline"
+  },
+  "base_walls": {
+    "scene": "yard",
+    "position": [
+      70,
+      12,
+      112
+    ],
+    "target": [
+      84,
+      1.5,
+      92
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 110
+  },
+  "base_lock": {
+    "scene": "yard",
+    "position": [
+      -127,
+      7,
+      104.5
+    ],
+    "target": [
+      -135,
+      4.6,
+      101
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 60
+  },
+  "base_train": {
+    "scene": "yard",
+    "position": [
+      -172,
+      7.5,
+      110
+    ],
+    "target": [
+      -161,
+      1.3,
+      90
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 80
+  },
+  "base_corner": {
+    "scene": "yard",
+    "position": [
+      -150,
+      9,
+      116
+    ],
+    "target": [
+      -159,
+      1,
+      105
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 70
   }
 }
