@@ -97,3 +97,33 @@ See the chat/answers section below.
 - **B:** offline earnings at full speed but only up to **1 hour**; an in-game-money upgrade ("Night Shift") extends
   it step by step (2 h, 4 h, 8 h).
 - **C:** no offline earnings, but a **"welcome back" chest** whose size grows with time away (max after 12 h).
+
+### Follow-up answers (owner, 2026-10-16)
+- **Capsules (golem pets):** buyable with **both** in-game money and Robux.
+- **Shop side menu (UI on the side of the screen, as in other games):** Robux/coin boosts such as **"Triple Lucky"**
+  for capsules/eggs and **"Hexa Lucky"** for mining (better odds of rare ores), plus **open x3** and **open x10**
+  capsule options (also for in-game money).
+- **Story and artifacts:** Claude invents them, e.g. "a kingdom once stood here...", and artifacts you find while
+  mining; built so new chapters/artifacts can come in later **updates**.
+- Offline earnings (question 8): still waiting for A/B/C.
+
+### Compliance note for boosts
+Paid boosts that change the odds of random results (Triple/Hexa Lucky on capsules or mining) must show the **new odds
+in numbers before purchase**, and everything random that can be paid for follows the paid-random-items rules
+(PolicyService check, odds shown). See docs/COMPLIANCE.md.
+
+### Story draft (proposed by Claude, extends the existing lore; owner may change it)
+- Long ago Terra was the **Kingdom of Kaldrum**, ruled by the **Ember Kings** from a city built around the
+  **Heartstone**, the living ember at the world's core (existing lore). Kaldrum's smiths built three wonders:
+  **Sunlance blasters** (laser tools that cut rock like butter), the **Royal Railway** that carried ore across the
+  kingdom, and **golems**, living stone helpers powered by Heartstone sparks.
+- One night the Heartstone **cracked** ("the Shattering"). Kaldrum sank into the rock; its shards became the glowing
+  ores, its railway was buried and its golems fell asleep as **dormant golem cores**.
+- Today the **Forgekeepers' Guild** has rekindled the Great Forge in **Emberfall** (existing hub). You arrive as an
+  apprentice with a rusty old blaster. You dig out ore, restore the railway to your base (your own train), earn money
+  by showing your best ores on podiums, rebuild better blasters in the foundry, and wake golems from capsules (each
+  capsule holds a dormant golem core, which explains the pets).
+- **Artifacts:** rare relics inside rocks (crowns, royal seals, rail lanterns, golem blueprints, star maps, Heartstone
+  fragments...), grouped into **collections**. Completing a collection unlocks a **story chapter** (journal pages read
+  at the Guild board) and a reward (title, podium skin, small bonus). Each update can add a new region + a new
+  collection + the next chapter (e.g. "The Sunken Palace", "The Golemworks", "The Royal Depot").
