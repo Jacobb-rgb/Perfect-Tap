@@ -52,11 +52,11 @@ LobbyLayout.Area = {
 -- Mobile budgets. Map = every BasePart in Workspace.Map; Lobby = parts and
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
-	MapParts = 11000,
+	MapParts = 14500, -- visual upgrade (concept v2): richer stalls, brick plot walls, town buildings
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2). Plots stream
 	-- in and out with StreamingEnabled like everything else.
-	LobbyParts = 6500,
+	LobbyParts = 9000,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
@@ -65,11 +65,11 @@ LobbyLayout.Budget = {
 	-- Everything else inside the lobby area today (ground, plots, ore
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
-		Sky = { Parts = 1400, LobbyParts = 150, Lights = 6, LobbyLights = 2 },
+		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
-		Plaza = { Parts = 1100, LobbyParts = 1100, Lights = 10, LobbyLights = 10 },
-		Districts = { Parts = 1400, LobbyParts = 1400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls
-		Flora = { Parts = 1500, LobbyParts = 1300, Lights = 8, LobbyLights = 8 },
+		Plaza = { Parts = 1500, LobbyParts = 1500, Lights = 10, LobbyLights = 10 },
+		Districts = { Parts = 2100, LobbyParts = 2100, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
+		Flora = { Parts = 2300, LobbyParts = 2100, Lights = 8, LobbyLights = 8 }, -- + town buildings
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
 	-- lobby pass and may grow by at most LandExtraParts.
