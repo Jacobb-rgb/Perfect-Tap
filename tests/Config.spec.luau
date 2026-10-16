@@ -67,6 +67,14 @@ return function(T, Loader)
 				end
 				T.le(parts, BlasterBuilder.MaxParts, label .. " part budget")
 				T.eq(tool:FindFirstChild("Barrel2") ~= nil, level >= 8, label .. " twin barrels from 8")
+				local barrel, barrel2 = tool:FindFirstChild("Barrel"), tool:FindFirstChild("Barrel2")
+				if barrel and barrel2 then
+					-- over-under, so the twin reads from the side and from behind the player
+					T.lt(0.15, math.abs(barrel.CFrame.Position.Y - barrel2.CFrame.Position.Y), label .. " twin barrels stacked")
+					T.near(barrel.CFrame.Position.X, barrel2.CFrame.Position.X, 1e-4, label .. " twin barrels in line")
+				end
+				T.truthy(tool:FindFirstChild("Pommel"), label .. " grip pad")
+				T.truthy(tool:FindFirstChild("MuzzleGlow"), label .. " glowing muzzle")
 				counts[level] = parts
 			end
 		end

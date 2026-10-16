@@ -11,11 +11,11 @@
   },
   "blasters_side": {
     "scene": "blasters",
-    "position": [100, 6.4, 24.5],
-    "target": [100, 6.2, 0],
+    "position": [100, 6.7, 24.5],
+    "target": [100, 6.6, 0],
     "fov": 30,
     "preset": "Workbench",
-    "sunDir": [-0.35, 0.7, 0.62],
+    "sunDir": [-0.3, 0.45, 0.85],
     "exposure": 1.1,
     "shadowExtent": 30
   },
@@ -25,15 +25,15 @@
     "target": [160, 6.2, 0],
     "fov": 30,
     "preset": "Workbench",
-    "sunDir": [-0.35, 0.7, 0.62],
+    "sunDir": [-0.3, 0.45, 0.85],
     "exposure": 1.1,
     "shadowExtent": 30
   },
   "blaster_fire": {
     "scene": "blaster_fire",
-    "position": [-15.6, -6.3, -166.0],
-    "target": [-25.0, -9.2, -161.4],
-    "fov": 52,
+    "position": [-16.2, -5.0, -166.8],
+    "target": [-25.0, -8.9, -161.0],
+    "fov": 50,
     "preset": "Quarry",
     "shadowExtent": 60
   }

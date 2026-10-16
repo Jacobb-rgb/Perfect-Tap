@@ -118,7 +118,8 @@ function Gallery.forgekeeper(Loader: any, parent: any, root: any, aim: any, leve
 	-- the blaster: its grip in the right hand, the barrel line on the target
 	local tool = BlasterBuilder.build(level, oreId)
 	local handDesign, muzzleDesign = Gallery.measure(tool)
-	local hand = root * CF.new(1.1, 3.75, -1.9)
+	-- the hand well forward and to the right, so long stocks end at the shoulder, not in the head
+	local hand = root * CF.new(1.25, 3.9, -2.6)
 	local barrelUp = muzzleDesign.Y - handDesign.Position.Y
 	local gunCf = CF.lookAt(hand.Position, aim - V3.new(0, barrelUp, 0)) * CF.new(-handDesign.Position)
 	-- arms: the right one points at the target, the left one steadies the blaster under the body
@@ -237,15 +238,8 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 					"Lv " .. level .. "  " .. name
 				)
 				-- like the Kenney sheet: the right side toward the camera, the barrel pointing right and a little away
-				local tool = showcase(Loader, root, level, oreId, V3.new(x, tier.top + 0.1, tier.z), -1.2)
-				-- the core's glow
-				if level >= 6 then
-					local light = roblox.Instance.new("PointLight")
-					light.Color = BlasterBuilder.look(level, oreId).Glow
-					light.Range = 5
-					light.Brightness = 0.6
-					light.Parent = tool:FindFirstChild("Handle")
-				end
+				-- (no PointLights in the guns: they painted glow blobs on the shelf)
+				showcase(Loader, root, level, oreId, V3.new(x, tier.top + 0.1, tier.z), -1.2)
 			end
 		end
 		-- two braziers with embers (warm light from the sides)
@@ -268,15 +262,15 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 		local wallZ = 0
 		Geo.block(root, CF.new(130, -0.5, 0), V3.new(120, 1, 90), C3.fromRGB(70, 64, 66), SLATE)
 		for _, wallX in { 100, 160 } do
-			Geo.block(root, CF.new(wallX, 7, wallZ - 0.6), V3.new(30, 15, 1), C3.fromRGB(58, 58, 70), SLATE)
+			Geo.block(root, CF.new(wallX, 7, wallZ - 0.6), V3.new(30, 15, 1), C3.fromRGB(70, 70, 84), SLATE)
 		end
 		-- rows of guns on a wall: { y, spacing, entries = { { level, oreId, label } } }
-		local function wallRows(centerX: number, rows: { any }, yaw: number)
+		local function wallRows(centerX: number, rows: { any }, yaw: number, depth: number)
 			for _, row in rows do
 				local n = #row.entries
 				for i, entry in row.entries do
 					local x = centerX + (i - (n + 1) / 2) * row.spacing
-					showcase(Loader, root, entry[1], entry[2], V3.new(x, row.y, wallZ + 1.5), yaw)
+					showcase(Loader, root, entry[1], entry[2], V3.new(x, row.y, wallZ + depth), yaw)
 					label(
 						Loader,
 						root,
@@ -289,12 +283,12 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 		end
 		-- the side-view wall: every level straight from the side, barrel to the right
 		local sideRows =
-			{ { y = 9.4, spacing = 5.2, entries = {} }, { y = 5.9, spacing = 7.2, entries = {} }, { y = 2.4, spacing = 7.4, entries = {} } }
+			{ { y = 9.6, spacing = 5.6, entries = {} }, { y = 6.0, spacing = 7.0, entries = {} }, { y = 2.4, spacing = 7.6, entries = {} } }
 		for level = 1, BlasterData.MaxLevel do
 			local row = sideRows[if level <= 4 then 1 elseif level <= 7 then 2 else 3]
 			table.insert(row.entries, { level, Gallery.Skins[level], "Lv " .. level .. "  " .. BlasterData.get(level).Name })
 		end
-		wallRows(100, sideRows, -math.pi / 2)
+		wallRows(100, sideRows, -math.pi / 2, 0.6)
 		-- the skins wall: a few levels in many ore skins, turned a little toward the camera
 		local skinRows = {}
 		for r, rowInfo in Gallery.SkinRows do
@@ -304,7 +298,7 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 			end
 			table.insert(skinRows, { y = 9.4 - (r - 1) * 3.5, spacing = rowInfo.Spacing, entries = entries })
 		end
-		wallRows(160, skinRows, -1.35)
+		wallRows(160, skinRows, -1.45, 1.0)
 	elseif sceneName == "blaster_fire" then
 		local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 		local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
