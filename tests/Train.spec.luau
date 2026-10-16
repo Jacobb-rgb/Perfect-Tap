@@ -225,51 +225,149 @@ return function(T, Loader)
 		T.eq(#find(wagon, "Attachment", "TipPivot"), 1, "TipPivot")
 		local hopper = wagon:FindFirstChild("Hopper")
 		T.truthy(hopper and hopper:IsA("Model") and hopper.PrimaryPart, "Hopper model with a PrimaryPart")
-		T.eq(#find(hopper, "BasePart", "Ore"), 5, "5 ore rocks in the hopper")
+		T.eq(#find(hopper, "BasePart", "Ore"), 4, "4 ore rocks in the hopper")
 		T.eq(#find(TrainBuilder.wagon(COLORS[4]), "BasePart", "Ore"), 0, "empty wagon has no ore")
 	end)
 
-	T.test("Train: hopper shape (open and deep when empty, rocks above the rim, narrower than the locomotive)", function()
+	T.test("Train: hopper shape (open and deep when empty, a faceted mound above the rim, narrower than the locomotive)", function()
 		local function top(p: any): number
 			return p.CFrame.Position.Y + p.Size.Y / 2
 		end
 		local empty = TrainBuilder.wagon(COLORS[2])
 		local rimTop = -math.huge
+		local rimX = 0
 		for _, rim in find(empty, "BasePart", "Rim") do
 			rimTop = math.max(rimTop, top(rim))
+			rimX = math.max(rimX, math.abs(rim.CFrame.Position.X) + rim.Size.X / 2)
 		end
 		local inside = find(empty, "BasePart", "Inside")
 		T.eq(#inside, 1, "empty hopper has a floor plate")
 		T.truthy(rimTop - top(inside[1]) >= 2.5, `empty hopper is deep ({rimTop - top(inside[1])} studs)`)
-		-- loaded: the bed sits just under the rim, every rock peaks above it and stays
-		-- inside the hopper footprint
+		-- the hopper walls: the flanks' inner faces (the opening) and their sloped
+		-- outer faces (bottom edge -> top edge)
+		local flank = find(empty, "BasePart", "Flank")[1]
+		local inner = math.abs(flank.CFrame.Position.X) - flank.Size.Z / 2
+		local outerTop = math.abs(flank.CFrame.Position.X) + flank.Size.Z / 2
+		local floorY = flank.CFrame.Position.Y - flank.Size.Y / 2
+		local brimY = flank.CFrame.Position.Y + flank.Size.Y / 2
+		local endZ = flank.Size.X / 2
+		local innerZ = 0
+		for _, rim in find(empty, "BasePart", "Rim") do
+			if rim.Size.X < rim.Size.Z then
+				continue -- a side rim
+			end
+			innerZ = math.max(innerZ, math.abs(rim.CFrame.Position.Z) - rim.Size.Z / 2)
+		end
+		local function wallX(y: number): number
+			return inner + (outerTop - inner) * (y - floorY) / (brimY - floorY)
+		end
+		-- loaded: the bed sits just under the rim; four blocks (no balls), each turned
+		-- its own way, stay inside the walls (no corner pokes through a flank or an
+		-- end), peak above the rim and make one mound that is highest in the middle
 		local loaded = TrainBuilder.wagon(COLORS[2], ORES)
 		local bed = find(loaded, "BasePart", "OreBed")
 		T.eq(#bed, 1, "loaded hopper has an ore bed")
 		T.truthy(top(bed[1]) < rimTop and top(bed[1]) > rimTop - 0.5, "ore bed just under the rim")
 		local lo, hi = bounds(loaded)
-		local round = 0
+		local peaks = {}
+		local turned = {}
 		for _, ore in find(loaded, "BasePart", "Ore") do
-			local p = ore.CFrame.Position
-			-- a ball dome, or a chunk standing on a corner (its body diagonal points up)
-			local isBall = ore.Shape == roblox.Enum.PartType.Ball
-			if isBall then
-				round += 1
+			T.eq(ore.ClassName, "Part", "ore rock is a Part")
+			T.eq(ore.Shape, roblox.Enum.PartType.Block, "ore rock is a faceted block, not a ball")
+			T.eq(ore.Material, roblox.Enum.Material.SmoothPlastic, "ore rock is SmoothPlastic")
+			local up = ore.CFrame.UpVector
+			T.truthy(math.abs(up.Y) < 0.97, "ore rock is tipped (several facets show)")
+			turned[string.format("%.2f,%.2f,%.2f", up.X, up.Y, up.Z)] = true
+			local half = ore.Size / 2
+			local peak = -math.huge
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local c = (ore.CFrame * roblox.CFrame.new(half.X * sx, half.Y * sy, half.Z * sz)).Position
+						peak = math.max(peak, c.Y)
+						T.truthy(c.Y >= floorY, "rock stays above the hopper floor")
+						if c.Y > rimTop then
+							-- above the rim: over the opening (may rest on the rim's inner edge)
+							T.truthy(math.abs(c.X) <= inner + 0.45, `rock above the rim stays over the opening (x {c.X})`)
+							T.truthy(math.abs(c.Z) <= innerZ + 0.45, `rock above the rim stays over the opening (z {c.Z})`)
+						else
+							T.truthy(math.abs(c.X) <= wallX(c.Y) + 1e-3, `rock corner inside the flank (x {c.X} at y {c.Y})`)
+							T.truthy(math.abs(c.Z) <= endZ + 1e-3, `rock corner inside the end wall (z {c.Z})`)
+						end
+					end
+				end
 			end
-			local peak = p.Y + (if isBall then ore.Size.X / 2 else ore.Size.X * math.sqrt(3) / 2)
 			T.truthy(peak > rimTop + 0.8, "rock peaks above the rim")
-			T.truthy(math.abs(p.X) < 2 and math.abs(p.Z) < 5.3, "rock inside the hopper")
-			if isBall then
-				-- the dome stays inside the opening where it rises above the rim
-				local r = math.sqrt(math.max(0, (ore.Size.X / 2) ^ 2 - (rimTop - p.Y) ^ 2))
-				T.truthy(math.abs(p.X) + r <= 2.05 + 1e-3, "dome inside the rim")
-			end
+			table.insert(peaks, { Z = ore.CFrame.Position.Z, Peak = peak })
 		end
-		T.eq(round, 3, "three big rounded rocks")
+		T.eq(#peaks, 4, "four ore rocks")
+		local distinct = 0
+		for _ in turned do
+			distinct += 1
+		end
+		T.eq(distinct, 4, "every rock is turned its own way")
+		table.sort(peaks, function(a, b)
+			return a.Peak > b.Peak
+		end)
+		T.truthy(math.abs(peaks[1].Z) < 1, "the mound peaks in the middle")
 		T.truthy(math.abs(hi.Z - lo.Z) <= 12.01, "nothing sticks out past the couplers")
 		local llo, lhi = bounds(TrainBuilder.locomotive(COLORS[2]))
 		local ratio = (hi.X - lo.X) / (lhi.X - llo.X)
 		T.truthy(ratio >= 0.75 and ratio <= 0.92, `wagon about 85 % of the locomotive width ({ratio})`)
+		T.truthy(rimX <= 2.9, "rim narrower than the locomotive")
+	end)
+
+	T.test("Train: wagons in a consist show a gap between the hoppers and under the middle", function()
+		for _, wagon in { TrainBuilder.wagon(COLORS[3], ORES), TrainBuilder.wagon(COLORS[3]) } do
+			local front = worldOf(find(wagon, "Attachment", "CouplerFront")[1])
+			local back = worldOf(find(wagon, "Attachment", "CouplerBack")[1])
+			-- rims are axis-aligned blocks; a flank wedge runs along Z with its length in Size.X
+			local hopperZ = 0
+			for _, rim in find(wagon, "BasePart", "Rim") do
+				hopperZ = math.max(hopperZ, math.abs(rim.CFrame.Position.Z) + rim.Size.Z / 2)
+			end
+			for _, flank in find(wagon, "BasePart", "Flank") do
+				hopperZ = math.max(hopperZ, math.abs(flank.CFrame.Position.Z) + flank.Size.X / 2)
+			end
+			T.truthy(hopperZ <= back.Z - 0.6 + 1e-4, `hopper rim ends 0.6 before CouplerBack ({hopperZ} vs {back.Z})`)
+			T.truthy(hopperZ <= -front.Z - 0.6 + 1e-4, `hopper rim ends 0.6 before CouplerFront ({hopperZ} vs {front.Z})`)
+			T.near(TrainBuilder.HopperEndZ, hopperZ, 1e-4, "HopperEndZ")
+			-- Kenney's end plates in the body color stand out of both end walls; the
+			-- loaded wagon's single through-plate stays hidden under the ore bed
+			local plates = find(wagon, "BasePart", "EndPlate")
+			T.truthy(#plates >= 1, "end plates")
+			local plateLo, plateHi = math.huge, -math.huge
+			for _, plate in plates do
+				T.eq(hex(plate.Color), hex(COLORS[3]), "end plate in the body color")
+				plateLo = math.min(plateLo, plate.CFrame.Position.Z - plate.Size.Z / 2)
+				plateHi = math.max(plateHi, plate.CFrame.Position.Z + plate.Size.Z / 2)
+				local bed = find(wagon, "BasePart", "OreBed")[1]
+				if bed then
+					T.truthy(
+						plate.CFrame.Position.Y + plate.Size.Y / 2 < bed.CFrame.Position.Y - bed.Size.Y / 2,
+						"through-plate under the bed"
+					)
+				end
+			end
+			T.truthy(plateHi >= hopperZ + 0.15 and plateHi < back.Z, "end plate on the back wall")
+			T.truthy(plateLo <= -hopperZ - 0.15 and plateLo > front.Z, "end plate on the front wall")
+			-- the two bogies are apart: the ground shows under the middle of the hopper
+			local frontBogie = find(wagon, "BasePart", "BogieFront")[1]
+			local backBogie = find(wagon, "BasePart", "BogieBack")[1]
+			local frontEnd = frontBogie.CFrame.Position.Z + frontBogie.Size.Z / 2
+			local backStart = backBogie.CFrame.Position.Z - backBogie.Size.Z / 2
+			T.truthy(backStart - frontEnd >= 2.5, `gap between the bogies ({backStart - frontEnd})`)
+			for _, p in parts(wagon) do
+				if p.Transparency < 1 and p.Name ~= "Wheel" then
+					local bottom = p.CFrame.Position.Y - p.Size.Y / 2
+					local z0 = p.CFrame.Position.Z - p.Size.Z / 2
+					local z1 = p.CFrame.Position.Z + p.Size.Z / 2
+					if z0 < 0.5 and z1 > -0.5 then
+						T.truthy(bottom >= 1.5, `{p.Name} leaves the middle under the hopper open`)
+					end
+				end
+			end
+		end
 	end)
 
 	T.test("Train: colors (body, trim, load colors cycle)", function()
@@ -279,16 +377,52 @@ return function(T, Loader)
 		T.eq(hex(find(loco, "BasePart", "Boiler")[1].Color), hex(red), "boiler in the body color")
 		local trimmed = TrainBuilder.locomotive(red, white)
 		T.eq(hex(find(trimmed, "BasePart", "CabBand")[1].Color), hex(white), "trim color")
-		T.truthy(hex(find(loco, "BasePart", "CabBand")[1].Color) ~= hex(white), "default brass trim")
+		local brass = TrainBuilder.Colors.Brass
+		T.eq(hex(find(loco, "BasePart", "CabBand")[1].Color), hex(brass), "default brass trim")
+		-- a brass-like body (the amber banner) gets a contrasting trim; every banner
+		-- color's trim stands apart from the body
+		local amber = TrainBuilder.locomotive(COLORS[2])
+		T.truthy(hex(find(amber, "BasePart", "CabBand")[1].Color) ~= hex(brass), "amber body: no brass trim")
+		T.eq(hex(TrainBuilder.locomotive(COLORS[8]):FindFirstChild("CabBand").Color), hex(brass), "cream body keeps brass")
+		for _, color in COLORS do
+			local band = TrainBuilder.locomotive(color):FindFirstChild("CabBand").Color
+			local diff = math.abs(band.R - color.R) + math.abs(band.G - color.G) + math.abs(band.B - color.B)
+			T.truthy(diff >= 0.3, `trim stands apart from the body {hex(color)} ({diff})`)
+		end
+		-- the slate roof is clearly darker than the light bodies (cream, amber, pink,
+		-- teal, green), so they keep a cab/roof edge
+		local function luma(c: any): number
+			return 0.3 * c.R + 0.59 * c.G + 0.11 * c.B
+		end
+		local roof = find(loco, "BasePart", "Roof")[1].Color
+		for _, color in COLORS do
+			if luma(color) > 0.54 then
+				T.truthy(luma(roof) < luma(color) - 0.15, `roof darker than {hex(color)}`)
+			end
+		end
 		local wagon = TrainBuilder.wagon(red, ORES)
-		T.eq(hex(find(wagon, "BasePart", "Body")[1].Color), hex(red), "hopper in the body color")
-		local seen = {}
-		for _, ore in find(wagon, "BasePart", "Ore") do
-			seen[hex(ore.Color)] = true
+		for _, flank in find(wagon, "BasePart", "Flank") do
+			T.eq(hex(flank.Color), hex(red), "hopper sides in the body color")
 		end
-		for _, c in ORES do
-			T.truthy(seen[hex(c)], "every load color shows")
+		for _, load in { ORES, { ORES[1], ORES[3] }, { ORES[2] } } do
+			local seen = {}
+			for _, ore in find(TrainBuilder.wagon(red, load), "BasePart", "Ore") do
+				seen[hex(ore.Color)] = (seen[hex(ore.Color)] or 0) + 1
+			end
+			for _, c in load do
+				T.truthy(seen[hex(c)], "every load color shows exactly")
+			end
 		end
+		-- one ore color: alternate rocks are a shade darker so the facets read
+		local shades = {}
+		for _, ore in find(TrainBuilder.wagon(red, { ORES[1] }), "BasePart", "Ore") do
+			shades[hex(ore.Color)] = true
+		end
+		local count = 0
+		for _ in shades do
+			count += 1
+		end
+		T.eq(count, 2, "a one-color load shows two shades")
 	end)
 
 	T.test("Train: client visuals (anchored, no collide/touch/query, neon only for the lamp)", function()

@@ -31,6 +31,44 @@ Gallery.Trains = {
 	{ Color = { 80, 180, 90 }, Loads = { { "Emerald", "Ruby", "Gold" }, { "Coal", "Copper" } } },
 }
 
+--[[
+	The steam the client will emit at the Smoke attachment: a ParticleEmitter with
+	Lifetime 1.5-2.5, Speed 3-5, SpreadAngle 8, Size 1.2 -> 4, Transparency
+	0.2 -> 1, drifting back as the train runs to -Z (Gallery.SteamEmitter). The
+	preview renderer draws every smoke emitter as the same 30-stud cloud and
+	ignores those properties, so the gallery shows that short plume as a few soft
+	puffs instead: growing, fading and drifting back over ~8 studs.
+]]
+Gallery.SteamEmitter = {
+	Lifetime = { 1.5, 2.5 },
+	Speed = { 3, 5 },
+	SpreadAngle = 8,
+	Size = { 1.2, 4 },
+	Transparency = { 0.2, 1 },
+}
+local PUFFS = {
+	{ Up = 0.7, Back = 0.1, Size = 1.4, Fade = 0.1 },
+	{ Up = 2.0, Back = 0.9, Size = 2.2, Fade = 0.2 },
+	{ Up = 3.6, Back = 2.3, Size = 3.0, Fade = 0.32 },
+	{ Up = 5.3, Back = 4.3, Size = 3.8, Fade = 0.46 },
+}
+function Gallery.steam(parent: any, top: any)
+	for _, puff in PUFFS do
+		local p = roblox.Instance.new("Part")
+		p.Name = "SteamPuff"
+		p.Shape = roblox.Enum.PartType.Ball
+		p.Anchored = true
+		p.CanCollide = false
+		p.CastShadow = false
+		p.Material = roblox.Enum.Material.SmoothPlastic
+		p.Color = roblox.Color3.fromRGB(236, 236, 242)
+		p.Transparency = puff.Fade
+		p.Size = roblox.Vector3.new(puff.Size, puff.Size, puff.Size)
+		p.CFrame = roblox.CFrame.new(top + roblox.Vector3.new(0, puff.Up, puff.Back))
+		p.Parent = parent
+	end
+end
+
 -- Model-space CFrame of a coupler attachment (the model is still at the origin).
 local function coupler(model: any, name: string): any
 	for _, d in model:GetDescendants() do
@@ -55,10 +93,7 @@ function Gallery.consist(Loader: any, parent: any, front: any, color: any, loads
 	-- what the client adds: steam at the Smoke attachment, a warm lamp light
 	for _, d in loco:GetDescendants() do
 		if d:IsA("Attachment") and d.Name == "Smoke" then
-			local steam = roblox.Instance.new("ParticleEmitter")
-			steam.Texture = "rbxasset://textures/particles/smoke_main.dds"
-			steam.Color = roblox.ColorSequence.new(roblox.Color3.fromRGB(205, 205, 212))
-			steam.Parent = d.Parent
+			Gallery.steam(parent, (d.Parent.CFrame * d.CFrame).Position)
 		elseif d:IsA("BasePart") and d.Name == "LampGlass" then
 			local light = roblox.Instance.new("PointLight")
 			light.Color = d.Color
@@ -136,6 +171,15 @@ function Gallery.build(Loader: any, parent: any)
 		Gallery.consist(Loader, root, CF.new(info.X, TrainBuilder.RailTop, -16), info.Color, { oreColors(info.Load) })
 	end
 
+	-- the scene JSON needs at least one emitter (an empty list encodes as {} and
+	-- the viewer stops): an invisible one far outside every shot (the viewer skips
+	-- emitters more than 260 studs from the camera)
+	local anchor = Geo.block(root, CF.new(0, -40, -3000), V3.new(1, 1, 1), C3.new(0, 0, 0))
+	anchor.Transparency = 1
+	local placeholder = roblox.Instance.new("ParticleEmitter")
+	placeholder.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	placeholder.Parent = anchor
+
 	-- a station sign at the back of the yard
 	for _, side in { -1, 1 } do
 		Geo.block(root, CF.new(side * 7, 3, 44), V3.new(0.6, 6, 0.6), C3.fromRGB(96, 70, 48), roblox.Enum.Material.Wood)
@@ -164,7 +208,8 @@ function Gallery.build(Loader: any, parent: any)
 	-- a "studio" corner far away on a dark floor, framed like the Kenney reference
 	-- sheet (docs/art/kenney_refs/train_kit.jpg): green locomotive, copper wagon, track
 	local studio = V3.new(300, 0, 0)
-	Geo.block(root, CF.new(studio + V3.new(0, -0.45, 0)), V3.new(200, 1, 200), C3.fromRGB(42, 42, 51))
+	-- (it reaches far behind the lineup, so the colors shot shows no yard horizon)
+	Geo.block(root, CF.new(studio + V3.new(50, -0.45, 200)), V3.new(400, 1, 600), C3.fromRGB(42, 42, 51))
 	local loco = TrainBuilder.locomotive(C3.fromRGB(80, 180, 90))
 	loco:PivotTo(CF.new(studio + V3.new(-20, 0, 0)))
 	loco.Parent = root
@@ -178,10 +223,15 @@ function Gallery.build(Loader: any, parent: any)
 	piece:PivotTo(CF.new(studio + V3.new(40, 0, 0)))
 	piece.Parent = root
 
-	-- all eight banner colors in a row (an echelon so a 3/4 camera sees every cab)
+	-- all eight banner colors in two rows of four, each row an echelon across the
+	-- view of a front-left 3/4 camera that looks away from the yard (only the dark
+	-- floor behind), like the Kenney preview grid
+	local view = V3.new(0.57, 0, 0.82) -- the train_colors camera's direction
+	local across = V3.new(0.82, 0, -0.57)
 	for i, c in Gallery.Banners do
 		local color = C3.fromRGB(c[1], c[2], c[3])
-		local at = studio + V3.new((i - 4.5) * 12, 0, 71 + (i - 4.5) * 6)
+		local row = (i - 1) // 4
+		local at = studio + V3.new(0, 0, 71) + across * (((i - 1) % 4 - 1.5) * 15) + view * (if row == 0 then 10.5 else -10.5)
 		local loco = TrainBuilder.locomotive(color)
 		loco:PivotTo(CF.new(at))
 		loco.Parent = root
