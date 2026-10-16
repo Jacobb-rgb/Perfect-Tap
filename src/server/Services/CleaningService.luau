@@ -31,6 +31,7 @@ local CleaningPatterns = require(Shared.Cleaning.CleaningPatterns)
 local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
+local Discovery = require(script.Parent.Parent.Discovery)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
 local MachineService = require(script.Parent.MachineService)
@@ -224,7 +225,9 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 	updatePrompts(machine)
 
 	local data = DataService.get(player)
+	local isNew = false
 	if data then
+		isNew = Discovery.mark(player, data, session.OreId)
 		data.Stats.OresCleaned += 1
 		if result.Grade == "Flawless" then
 			data.Stats.FlawlessCleans += 1
@@ -244,6 +247,7 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Value = value,
 		OreId = session.OreId,
 		ItemId = if clean then clean.Id else nil,
+		New = isNew,
 	})
 	for _, callback in cleanedCallbacks do
 		task.spawn(callback, player, session.OreId, result.Grade, result.Score)

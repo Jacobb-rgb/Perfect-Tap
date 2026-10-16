@@ -370,7 +370,7 @@ local function enter(ctx: any)
 	if hud then
 		hud.Gui.Enabled = false
 	end
-	-- the hotbar would cover the bottom hints (and could re-equip the pickaxe)
+	-- the hotbar would cover the bottom hints (and could re-equip the blaster)
 	local okBackpack, backpackEnabled = pcall(StarterGui.GetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack)
 	ctx.backpackWasEnabled = if okBackpack then backpackEnabled else nil
 	pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false)

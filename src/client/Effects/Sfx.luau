@@ -1,6 +1,6 @@
 --[[
 	Pooled sounds with random pitch (client only).
-	Sfx.play("PickHit")              -- 2D (UI / own actions)
+	Sfx.play("BlastHit")              -- 2D (UI / own actions)
 	Sfx.play("NodeShatter", position) -- 3D at a world position
 ]]
 

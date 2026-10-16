@@ -7,7 +7,7 @@
 	  (ConveyorLogic.feeders) hands over anything pressed against that face.
 	  The box reaches FeedReachBelt back onto the belt and FeedReachInto into
 	  the machine's cell, so it works wherever the item comes to rest.
-	- Town zones (Pell's SellBin) are added with addZone().
+	- Town zones (Tobin's SellBin, the Ore Pens) are added with addZone().
 	- Items on a belt that no box takes go to the belt handler (ConveyorService).
 	- Items lying on someone else's plot go back to their owner's Storage
 	  after ForeignItemReturn seconds.
@@ -179,7 +179,7 @@ end
 ---------------------------------------------------------------- public API
 
 -- A fixed box in the world (not on a plot) that takes trusted loose items,
--- e.g. Pell's SellBin. The handler owns the item from then on.
+-- e.g. Tobin's SellBin. The handler owns the item from then on.
 function IntakeService.addZone(name: string, part: BasePart, handler: (ItemRecord) -> ...any)
 	table.insert(staticZones, { Name = name, Part = part, Handler = handler })
 end

@@ -27,9 +27,6 @@ local GameConfig = {
 	PlotCells = 12, -- plot is PlotCells x PlotCells grid cells
 	CellSize = 4, -- studs per grid cell
 
-	-- Mining
-	MineRange = 13, -- max studs from character to the node surface
-
 	-- Physical items (performance)
 	MaxLooseItemsPerPlayer = 30, -- above this, the oldest loose item is moved to storage
 	ServerOwnershipAfter = 3, -- seconds after a drop/throw before the server takes back item physics

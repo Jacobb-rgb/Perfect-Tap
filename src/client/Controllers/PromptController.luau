@@ -6,7 +6,6 @@
 	- Prompts on other players' machines are hidden.
 	- 'LoadPrompt' (Put In) on your own machines shows only while you carry
 	  something. The server never changes its Enabled, so this local choice sticks.
-	- Pell's 'SellPrompt' shows what your carried items are worth.
 	- setSuppressed(reason, on) hides every prompt during close-ups (build
 	  mode, the anvil); prompts come back when no reason is left.
 	Keys: F / gamepad Y for machine prompts; the Cleaning Station's "Take Ore
@@ -19,10 +18,6 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Format = require(Shared.Util.Format)
 
 local PromptController = {}
 
@@ -30,7 +25,6 @@ local player = Players.LocalPlayer
 local suppressed: { [string]: boolean } = {}
 -- weak keys: prompts of machines that are gone drop out by themselves
 local loadPrompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
-local sellPrompts: { [ProximityPrompt]: string } = setmetatable({}, { __mode = "k" }) :: any -- prompt -> its own ObjectText
 local machineConnections: { [Instance]: RBXScriptConnection } = {}
 
 local function machineOwner(prompt: ProximityPrompt): number?
@@ -52,36 +46,10 @@ local function applyLoad(prompt: ProximityPrompt)
 	prompt.Enabled = machineOwner(prompt) == player.UserId and carryCount() > 0
 end
 
--- Coins your carried items would sell for (each item has a Value attribute).
-local function carriedValue(): number
-	local total = 0
-	for _, item in CollectionService:GetTagged("Item") do
-		if item:GetAttribute("CarriedBy") == player.UserId then
-			total += (item:GetAttribute("Value") :: number?) or 0
-		end
-	end
-	return total
-end
-
-local function applySell(prompt: ProximityPrompt)
-	local original = sellPrompts[prompt]
-	if original == nil then
-		original = prompt.ObjectText
-		sellPrompts[prompt] = original
-	end
-	local worth = carriedValue()
-	prompt.ObjectText = if worth > 0 then `Worth {Format.commas(worth)} coins` else original
-end
-
 local function refreshAll()
 	for prompt in loadPrompts do
 		if prompt.Parent then
 			applyLoad(prompt)
-		end
-	end
-	for prompt in sellPrompts do
-		if prompt.Parent then
-			applySell(prompt)
 		end
 	end
 end
@@ -129,9 +97,6 @@ function PromptController.start()
 			loadPrompts[prompt] = true
 			applyLoad(prompt)
 			return
-		end
-		if prompt.Name == "SellPrompt" then
-			applySell(prompt)
 		end
 		local owner = machineOwner(prompt)
 		if owner and owner ~= player.UserId then

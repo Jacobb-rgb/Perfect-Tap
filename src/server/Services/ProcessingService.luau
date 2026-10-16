@@ -30,6 +30,7 @@ local MachineLogic = require(Shared.Machines.MachineLogic)
 local Rng = require(Shared.Util.Rng)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
+local Discovery = require(script.Parent.Parent.Discovery)
 local MachineService = require(script.Parent.MachineService)
 local IntakeService = require(script.Parent.IntakeService)
 
@@ -49,7 +50,7 @@ type Job = {
 }
 
 local MACHINES = { "ClayFurnace", "BlastFurnace", "Crusher", "AutoCleaner" }
-local FIRST_INGOT = "Your first ingot! Sell it at Pell's Trading Post or forge it on an Anvil."
+local FIRST_INGOT = "Your first ingot! Ingots go into the Foundry (soon) to forge stronger blasters, or sell them to Tobin."
 
 local processedCallbacks: { (Player, string, Desc, { Desc }) -> ...any } = {}
 -- output grade rolls (Auto Cleaner); the seed only needs to differ per server
@@ -187,6 +188,15 @@ local function finishJob(machine: PlacedMachine, job: Job): boolean
 		local cycles = machine.Model:GetAttribute("Cycles")
 		MachineService.setAttrs(machine, { Cycles = (if type(cycles) == "number" then cycles else 0) + 1 })
 		countIngots(player, list)
+		-- dirty ore that comes out clean reveals what it was (design v2)
+		local data = DataService.get(player)
+		if data and job.Input.K == "Raw" then
+			for _, desc in list do
+				if desc.K == "Clean" then
+					Discovery.mark(player, data, desc.O)
+				end
+			end
+		end
 		announce(player, machine.Id, job.Input, list)
 	end
 	DataService.changed(player)
