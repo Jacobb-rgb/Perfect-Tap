@@ -576,8 +576,8 @@ function MachineService.pickup(machine: PlacedMachine): (boolean, string?)
 	if total > 0 then
 		local items = if total == 1 then "1 item" else `{total} items`
 		local text = if sold == 0
-			then `{items} from your {machine.Info.Name} went to Storage.`
-			else `{items} from your {machine.Info.Name}: {stored} went to Storage, {sold} sold (storage full).`
+			then `{items} from your {machine.Info.Name} went to your Ore Pen.`
+			else `{items} from your {machine.Info.Name}: {stored} went to your Ore Pen, {sold} sold (pen full).`
 		Net.fire("Notify", player, { Text = text, Kind = "Info" })
 	end
 	return true, nil

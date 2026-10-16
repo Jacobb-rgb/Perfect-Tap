@@ -338,7 +338,7 @@ return function(T, Loader)
 		T.eq(removed[3], "Pickup", "reason")
 		local note = w.notes[#w.notes]
 		T.eq(note.Name, "Notify", "toast")
-		T.eq(note.Payload.Text, "2 items from your Clay Furnace went to Storage.", "toast text")
+		T.eq(note.Payload.Text, "2 items from your Clay Furnace went to your Ore Pen.", "toast text")
 		local _, again = MachineService.pickup(m)
 		T.eq(again, "Invalid", "can't pick up twice")
 

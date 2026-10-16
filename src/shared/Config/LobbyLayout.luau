@@ -520,7 +520,7 @@ LobbyLayout.Paths = {
 	{ Id = "ToFossil", From = v(33, 0, 14), To = v(40, 0, 20), Width = 7, Kind = "Cobble" },
 	{ Id = "ToScanner", From = v(5, 0, 80), To = v(49, 0, 80), Width = 6, Kind = "Cobble" },
 	{ Id = "ToMine", From = v(-5, 0, 88), To = v(-34, 0, 88), Width = 10, Kind = "Dirt" },
-	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(160, 0, -115), Width = 6, Kind = "Cobble" },
+	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(160, 0, -115), Width = 6, Kind = "Dirt" },
 } :: { Path }
 
 LobbyLayout.ById = {} :: { [string]: Piece }

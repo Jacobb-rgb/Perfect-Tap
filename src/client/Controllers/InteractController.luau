@@ -152,7 +152,9 @@ local function updateHint()
 	local grade = target:GetAttribute("Grade") :: string?
 	local recipe = target:GetAttribute("Recipe") :: string?
 	local ore = OreData.ById[oreId]
-	local color = if ore then Rarity.get(ore.Rarity).Color else Theme.Text
+	-- dirty ore keeps its secret: no rarity color, no price (design v2)
+	local dirty = kind == "Raw"
+	local color = if ore and not dirty then Rarity.get(ore.Rarity).Color else Theme.Text
 	highlight.Adornee = target
 	highlight.OutlineColor = color
 	hint.Adornee = target.PrimaryPart :: any
@@ -161,7 +163,9 @@ local function updateHint()
 	hintName.TextColor3 = color
 	local value = (target:GetAttribute("Value") :: number?) or 0
 	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled then "X" elseif UserInputService.TouchEnabled then "Grab" else "E"
-	hintAction.Text = `[{key}] Pick up   •   {Format.commas(value)} coins`
+	hintAction.Text = if dirty
+		then `[{key}] Pick up   •   clean it to see what it is`
+		else `[{key}] Pick up   •   {Format.money(value)}`
 end
 
 local function grab(_: string, state: Enum.UserInputState): Enum.ContextActionResult

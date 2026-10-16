@@ -138,7 +138,8 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 	table.insert(list, record)
 	attach(player, root, record, #list)
 	updateWalkSpeed(player)
-	Net.fire("Fx", player, "Pickup", record.Body.Position, record.OreId)
+	-- dirty ore keeps its secret: no ore color for raw chunks (design v2)
+	Net.fire("Fx", player, "Pickup", record.Body.Position, if record.Kind == "Raw" then nil else record.OreId)
 	for _, callback in pickupCallbacks do
 		task.spawn(callback, player, record)
 	end

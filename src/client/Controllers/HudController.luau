@@ -351,7 +351,8 @@ function HudController.init()
 	end)
 
 	Net.listen("Earned", function(payload)
-		if type(payload) ~= "table" or payload.Source == "Offline" then
+		-- sales get their own popup at Tobin's stall (SellController)
+		if type(payload) ~= "table" or payload.Source == "Offline" or payload.Source == "Sell" then
 			return
 		end
 		HudController.earned(tonumber(payload.Amount) or 0)
