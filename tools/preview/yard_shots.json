@@ -1,0 +1,103 @@
+{
+  "base_yard": {
+    "scene": "yard",
+    "position": [
+      -122,
+      26,
+      54
+    ],
+    "target": [
+      -146,
+      0,
+      86
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 110,
+    "ui": "hud_base"
+  },
+  "base_podiums": {
+    "scene": "yard",
+    "position": [
+      -124,
+      7.5,
+      97
+    ],
+    "target": [
+      -135.5,
+      3.6,
+      91
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_pen": {
+    "scene": "yard",
+    "position": [
+      -122,
+      13,
+      66
+    ],
+    "target": [
+      -141,
+      0,
+      72
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 80
+  },
+  "base_pen_ui": {
+    "scene": "yard",
+    "position": [
+      -122,
+      13,
+      66
+    ],
+    "target": [
+      -141,
+      0,
+      72
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 80,
+    "ui": "ui_pen"
+  },
+  "base_pen_phone": {
+    "scene": "yard",
+    "position": [
+      -122,
+      13,
+      66
+    ],
+    "target": [
+      -141,
+      0,
+      72
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 80,
+    "ui": "ui_pen_phone",
+    "uiInset": 58
+  },
+  "base_offline": {
+    "scene": "yard",
+    "position": [
+      -122,
+      26,
+      54
+    ],
+    "target": [
+      -146,
+      0,
+      86
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 110,
+    "ui": "ui_offline"
+  }
+}

@@ -11,6 +11,7 @@ local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Palette = require(script.Parent.Palette)
+local PlotBuilder = require(script.Parent.PlotBuilder)
 local Props = require(script.Parent.Props)
 
 local Land = {}
@@ -242,20 +243,25 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	boxPart(land, Vector3.new(townMin.X, -18, -240), Vector3.new(-72, 0, -122), Palette.GrassDark).Name = "Ground"
 	boxPart(land, Vector3.new(72, -18, -150), Vector3.new(townMax.X, 0, -122), Palette.GrassDark).Name = "Ground"
 
-	-- soft color patches so the grass is not one flat color
+	-- soft color patches so the grass is not one flat color (none in the
+	-- base yards; every random value is still drawn so the rest stays put)
 	for _ = 1, 140 do
 		local x = rng:range(island.Min.X, island.Max.X)
 		local z = rng:range(-118, island.Max.Z)
 		local s = Vector3.new(rng:range(8, 22), 0.2, rng:range(8, 22))
 		local color = if rng:chance(0.5) then Palette.GrassLight else Palette.GrassDark
-		Geo.block(
-			land,
-			CFrame.new(x, 0.02, z) * CFrame.Angles(0, rng:range(0, 6.28), 0),
-			s,
-			Geo.vary(color, rng, 0.03),
-			nil,
-			decor({ CastShadow = false, CanCollide = false })
-		)
+		local turn = rng:range(0, 6.28)
+		local tint = Geo.vary(color, rng, 0.03)
+		if not PlotBuilder.isInYard(Vector3.new(x, 0, z), math.max(s.X, s.Z) * 0.7) then
+			Geo.block(
+				land,
+				CFrame.new(x, 0.02, z) * CFrame.Angles(0, turn, 0),
+				s,
+				tint,
+				nil,
+				decor({ CastShadow = false, CanCollide = false })
+			)
+		end
 	end
 
 	---------------------------------------------------------------- sea + cliffs

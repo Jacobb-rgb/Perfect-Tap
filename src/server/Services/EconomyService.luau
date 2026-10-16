@@ -5,9 +5,11 @@
 	  income is per second) to Coins and TotalEarned, tells the HUD and the
 	  onEarned listeners (tutorial, badges, analytics, leaderboards).
 	- spend(player, amount, reason): takes coins if the player has enough.
-	- Podium income, offline earnings and the per-second tick are added by
-	  the base package (PodiumService); selling by SellService. They all go
-	  through award, so nothing else ever writes data.Coins.
+	- Podium income, offline earnings and the per-second tick live in
+	  PodiumService; selling in SellService. They all go through award, so
+	  nothing else ever writes data.Coins.
+	- incomeMultiplier(player): EconomyConfig.multiplier over every bonus
+	  added with addIncomeBonus (golems, passes, rebirths in later steps).
 	Amounts that are not finite, below 0.001 or above EconomyConfig.MaxAward
 	are ignored (a bug, never a real payout).
 ]]
@@ -22,11 +24,13 @@ local EconomyService = {}
 
 export type EarnedCallback = (Player, number, string) -> ...any
 export type SpentCallback = (Player, number, string) -> ...any
+export type IncomeBonus = (Player) -> number
 
 local MIN_AMOUNT = 0.001
 
 local earnedCallbacks: { EarnedCallback } = {}
 local spentCallbacks: { SpentCallback } = {}
+local incomeBonuses: { IncomeBonus } = {}
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n > -math.huge and n < math.huge
@@ -94,5 +98,30 @@ end
 function EconomyService.canAfford(player: Player, amount: number): boolean
 	return finite(amount) and EconomyService.balance(player) >= amount
 end
+
+-- A source of extra podium income: returns a bonus share (0.1 = +10 %).
+function EconomyService.addIncomeBonus(bonus: IncomeBonus)
+	table.insert(incomeBonuses, bonus)
+end
+
+-- Total podium income multiplier for a player (1 = no bonus). A bonus that
+-- fails or is not a finite number >= 0 counts as 0.
+function EconomyService.incomeMultiplier(player: Player): number
+	local list: { number } = {}
+	for _, bonus in incomeBonuses do
+		local ok, value = pcall(bonus, player)
+		if ok and finite(value) and value >= 0 then
+			table.insert(list, value)
+		end
+	end
+	return EconomyConfig.multiplier(list)
+end
+
+-- Internals for the Lune tests only.
+EconomyService._test = {
+	reset = function()
+		table.clear(incomeBonuses)
+	end,
+}
 
 return EconomyService

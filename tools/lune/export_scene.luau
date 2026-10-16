@@ -409,3 +409,20 @@ for name, guis in uiExports do
 	print("Exported UI " .. name)
 end
 print(string.format("Exported %s: %d parts, %d lights, %d emitters, %d texts", sceneName, #scene.parts, #scene.lights, #scene.emitters, #scene.texts))
+
+---------------------------------------------------------------- scene "yard" (WP-Base)
+-- `lune run tools/lune/export_scene.luau world yard`: the world above plus ores on
+-- plot 1's podiums and in its Ore Pen -> build/preview/yard.json, and the HUD /
+-- Ore Pen / offline popup overlays (tools/lune/lib/yard_preview.luau,
+-- shots in tools/preview/yard_shots.json).
+if sceneName == "world" and process.args[2] == "yard" then
+	local yardUi = require("./lib/yard_preview").build(Loader, workspace)
+	local yardScene = Export.collect(workspace)
+	yardScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/yard.json", serde.encode("json", yardScene))
+	for name, guis in yardUi do
+		fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", guis))
+		print("Exported UI " .. name)
+	end
+	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
+end

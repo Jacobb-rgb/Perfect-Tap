@@ -1,12 +1,15 @@
--- ItemService under Lune: descriptors, the per-owner index, storage with
--- its 300 cap, the loose cap, the trust check and the snap-back of items a
--- client moved too far. Save data, players and Net are small fakes.
+-- ItemService under Lune: descriptors, the per-owner index, the Ore Pen
+-- with its capacity, the loose cap, the trust check, hidden dirty-ore values
+-- and the snap-back of items a client moved too far. Save data, players and
+-- Net are small fakes.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
+	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
@@ -127,16 +130,19 @@ return function(T, Loader)
 		T.falsy(pcall(ItemService.absorb, record), "a consumed item can't be absorbed again")
 	end)
 
-	withWorld("ItemService: storeDesc keeps the 300 cap and pays beyond it", function(w)
+	withWorld("ItemService: storeDesc fills the Ore Pen up to its capacity and pays beyond it", function(w)
 		local d = clean("Flawless")
 		T.eq(ItemService.storeDesc(w.player, d), "Stored", "stored")
-		T.eq(#w.data.Storage, 1, "in storage")
+		T.eq(#w.data.Storage, 1, "in the pen")
 		T.truthy(w.data.Storage[1] ~= d, "a copy is stored")
 		T.eq(w.data.Storage[1].G, "Flawless", "grade kept")
 		T.eq(#w.notes, 0, "no toast without a reason")
 		ItemService.storeDesc(w.player, d, "Packed up")
-		T.eq(w.notes[1].Payload.Text, "Packed up (moved to your Storage Crate)", "stored toast")
-		for _ = #w.data.Storage + 1, GameConfig.MaxStoredItems do
+		T.eq(w.notes[1].Payload.Text, "Packed up (moved to your Ore Pen)", "stored toast")
+		-- the starting pen holds EconomyConfig.Pen.BaseCapacity items
+		local capacity = ItemService.penCapacity(w.data)
+		T.eq(capacity, EconomyConfig.Pen.BaseCapacity, "starting pen")
+		for _ = #w.data.Storage + 1, capacity do
 			table.insert(w.data.Storage, clean())
 		end
 		local coins = w.data.Coins
@@ -144,11 +150,36 @@ return function(T, Loader)
 		local value = ItemData.value("Clean", "Copper", "Flawless")
 		T.eq(w.data.Coins, coins + value, "paid the full value")
 		T.eq(w.data.TotalEarned, value, "counted as earned")
-		T.eq(#w.data.Storage, GameConfig.MaxStoredItems, "never over the cap")
-		T.eq(w.notes[2].Payload.Text, "Too many loose items (storage full: sold it)", "sold toast")
+		T.eq(#w.data.Storage, capacity, "never over the capacity")
+		T.eq(w.notes[2].Payload.Text, `Too many loose items (Ore Pen full: sold it for {Format.money(value)})`, "sold toast")
+		-- a pen upgrade makes room; the DataStore cap always wins
+		w.data.Upgrades.PenLevel = 2
+		T.eq(ItemService.penCapacity(w.data), capacity + 2 * EconomyConfig.Pen.PerLevel, "upgraded pen")
+		T.eq(ItemService.storeDesc(w.player, d), "Stored", "room again")
+		w.data.Upgrades.PenLevel = 999
+		T.le(ItemService.penCapacity(w.data), GameConfig.MaxStoredItems, "never above the DataStore cap")
+		w.data.Upgrades.PenLevel = 0 / 0
+		T.eq(ItemService.penCapacity(w.data), capacity, "junk level = starting pen")
+		w.data.Upgrades = nil
+		T.eq(ItemService.penCapacity(w.data), capacity, "no upgrades table")
 		T.eq(ItemService.storeDesc(w.player, { K = 5 } :: any), "Lost", "junk")
 		w.online = false
 		T.eq(ItemService.storeDesc(w.player, d), "Lost", "no data loaded")
+	end)
+
+	withWorld("ItemService: dirty ore replicates no value (rarity stays hidden)", function(w)
+		local raw = ItemService.spawnDesc({ K = "Raw", O = "Diamond" }, USER, CFrame.new(0, 5, 0))
+		T.eq(raw.Model:GetAttribute("Value"), 0, "raw Value attribute")
+		T.eq(raw.Model:GetAttribute("Kind"), "Raw", "kind")
+		local cleaned = ItemService.spawnDesc(clean("Clean"), USER, CFrame.new(2, 5, 0))
+		T.eq(cleaned.Model:GetAttribute("Value"), ItemData.value("Clean", "Copper", "Clean"), "clean ore shows its value")
+		-- the pen still pays the real raw price when it is full
+		for _ = 1, ItemService.penCapacity(w.data) do
+			table.insert(w.data.Storage, clean())
+		end
+		local coins = w.data.Coins
+		T.eq(ItemService.stash(raw, nil), false, "sold, not kept")
+		T.eq(w.data.Coins, coins + ItemData.value("Raw", "Diamond"), "raw price")
 	end)
 
 	withWorld("ItemService: stash and the loose cap keep every item", function(w)
@@ -156,7 +187,7 @@ return function(T, Loader)
 		T.truthy(ItemService.stash(record, "Your item landed on another forge"), "stashed")
 		T.eq(record.State, "Consumed", "gone from the world")
 		T.eq(#w.data.Storage, 1, "in storage")
-		T.eq(w.notes[1].Payload.Text, "Your item landed on another forge (moved to your Storage Crate)", "toast")
+		T.eq(w.notes[1].Payload.Text, "Your item landed on another forge (moved to your Ore Pen)", "toast")
 
 		local cap = GameConfig.MaxLooseItemsPerPlayer
 		for i = 1, cap + 2 do
@@ -166,7 +197,7 @@ return function(T, Loader)
 		T.eq(#w.data.Storage, 3, "the oldest two went to storage")
 		local toasts = 0
 		for _, note in w.notes do
-			if note.Payload.Text == "Too many loose items (moved to your Storage Crate)" then
+			if note.Payload.Text == "Too many loose items (moved to your Ore Pen)" then
 				toasts += 1
 			end
 		end

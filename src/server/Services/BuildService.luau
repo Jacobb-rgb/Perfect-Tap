@@ -15,7 +15,8 @@
 	  loose items there are lifted too, so nothing ends up inside a machine.
 	- Other players nearby see dust (Fx 'Placed' / 'PackedUp'); the builder
 	  plays their own effects locally.
-	- Packing up your last crate never touches Storage; one toast says so.
+	- Stored items live in the Ore Pen on the base yard (design v2), so no
+	  machine is needed to reach them.
 	- StateService gets Placed {{Id,X,Z,R}} and Build {MachineSlots,
 	  ConveyorSlots, MachinesUsed, ConveyorsUsed} for the HUD and the
 	  build-mode ghost.
@@ -47,7 +48,6 @@ local MAX_ID_LENGTH = 32
 local FX_RANGE = 100 -- other players this close see the build dust
 local CHARACTER_LIFT = 3 -- studs above the machine's top for a lifted character's root
 local ITEM_LIFT = 2 -- studs above the machine's top for lifted loose items
-local SAFE_TEXT = "Your stored items are safe. Place a crate to reach them."
 
 local placedCallbacks: { (Player, string) -> ...any } = {}
 
@@ -213,20 +213,6 @@ local function onMove(player: Player, seqArg: any, modelArg: any, xArg: any, zAr
 	puff(player, "Placed", machine.Model:GetPivot().Position, machine.Id)
 end
 
--- No crate left on the plot while Storage still holds items?
-local function lostCrateAccess(player: Player): boolean
-	local data = DataService.get(player)
-	if not data or type(data.Storage) ~= "table" or #data.Storage == 0 then
-		return false
-	end
-	for _, entry in data.PlacedMachines do
-		if type(entry) == "table" and entry.Id == "StorageCrate" then
-			return false
-		end
-	end
-	return true
-end
-
 local function onPickup(player: Player, seqArg: any, modelArg: any)
 	local seq = Guard.integer(seqArg, 0, MAX_SEQ) or -1
 	if seq < 0 then
@@ -252,9 +238,6 @@ local function onPickup(player: Player, seqArg: any, modelArg: any)
 	end
 	reply(player, seq, "Pickup", true, nil, id, x, z, r)
 	puff(player, "PackedUp", position, id)
-	if id == "StorageCrate" and lostCrateAccess(player) then
-		Net.fire("Notify", player, { Text = SAFE_TEXT, Kind = "Info" })
-	end
 end
 
 ---------------------------------------------------------------- state for the client

@@ -1,15 +1,30 @@
 --[[
-	HudController: coins counter (with a pop when it changes), zone banner,
-	toast notifications, carry slots and UI scaling for small screens.
+	HudController: coins counter with the podium income under it, zone
+	banner, toast notifications, carry slots and UI scaling for small screens.
+
+	- Coins count up smoothly: between two State snapshots the counter keeps
+	  rising at the snapshot's Income (coins per second, at most one tick
+	  ahead), so podium money ticks up instead of jumping once a second.
+	  Bigger jumps (a sale) pop the panel.
+	- Earned { Amount, Source } shows a floating "+$X" under the coins;
+	  payouts closer together than EconomyConfig.Sell.ComboWindow add up
+	  into one popup. Offline earnings get the "While you were away" popup
+	  instead (OpenUI "Offline" { Amount, Seconds, Hours }): COLLECT, B or
+	  Backspace closes it; gamepads start on COLLECT.
+	- Dirty ore in your hands shows as a grey "?" slot (no rarity hint).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local ContextActionService = game:GetService("ContextActionService")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local EconomyConfig = require(Shared.Config.EconomyConfig)
 local Theme = require(Shared.Config.UITheme)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
@@ -24,9 +39,24 @@ local HudController = {}
 
 local player = Players.LocalPlayer
 local refs: HudView.Refs
+local offline: HudView.OfflineRefs? = nil
+local MAX_TOASTS = 3
+local OFFLINE_CLOSE = "TerraForgeOfflineClose"
+-- above the default controls, so B / Backspace close the popup first
+local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 20
+local FLOAT_TIME = 1.4
+
+-- coin counter: the server's coins at the last snapshot, the income then, and when it came
+local serverCoins = 0
+local income = 0
+local snapshotAt = 0
 local shownCoins = 0
-local targetCoins = 0
-local MAX_TOASTS = 4
+local hasState = false
+
+-- the floating "+$X" that is still collecting a combo
+local comboLabel: TextLabel? = nil
+local comboAmount = 0
+local comboAt = 0
 
 local TOAST_COLORS = {
 	Info = Theme.Info,
@@ -47,6 +77,9 @@ function HudController.toast(text: string, kind: string?, color: Color3?)
 		end
 	end
 	if #frames >= MAX_TOASTS then
+		table.sort(frames, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
 		frames[1]:Destroy()
 	end
 	local frame = HudView.toast(refs.Toasts, text, color or TOAST_COLORS[kind or "Info"] or Theme.Info)
@@ -113,7 +146,8 @@ local function refreshCarry()
 	end
 	for i = 1, capacity do
 		local item = carried[i]
-		HudView.slot(refs.CarrySlots, if item then rarityColorOfItem(item) else nil, i)
+		local dirty = item ~= nil and item:GetAttribute("Kind") == "Raw"
+		HudView.slot(refs.CarrySlots, if item and not dirty then rarityColorOfItem(item) else nil, i, dirty)
 	end
 	refs.CarryLabel.Text = `CARRYING {#carried}/{capacity}`
 	refs.CarryPanel.Size = UDim2.fromOffset(math.max(200, capacity * 40 + 24), 74)
@@ -149,6 +183,157 @@ local function zoneLoop()
 	end
 end
 
+---------------------------------------------------------------- coins and income
+
+-- What the counter should show right now: the snapshot's coins plus the
+-- income earned since (never more than one income tick ahead of the server).
+function HudController.predictedCoins(now: number): number
+	local ahead = math.clamp(now - snapshotAt, 0, EconomyConfig.IncomeTick)
+	return serverCoins + income * ahead
+end
+
+local function onState(state: { [string]: any })
+	local coins = tonumber(state.Coins) or 0
+	if coins ~= coins then
+		coins = 0
+	end
+	local newIncome = tonumber(state.Income) or 0
+	if newIncome ~= newIncome or newIncome < 0 then
+		newIncome = 0
+	end
+	-- only a change of coins restarts the count-up (other pushes in the
+	-- middle of a second must not pull the counter back)
+	if coins ~= serverCoins or not hasState then
+		serverCoins = coins
+		snapshotAt = os.clock()
+	end
+	income = newIncome
+	if not hasState then
+		hasState = true
+		shownCoins = coins
+	end
+	refs.Income.Text = Format.perSecond(newIncome)
+	refs.Income.TextColor3 = if newIncome > 0 then Theme.Good else Theme.TextDim
+end
+
+---------------------------------------------------------------- Earned popups
+
+local function floatAway(label: TextLabel)
+	local start = label.Position
+	TweenService:Create(label, TweenInfo.new(FLOAT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = start + UDim2.fromOffset(0, -34),
+		TextTransparency = 1,
+	}):Play()
+	local stroke = label:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		TweenService:Create(stroke, TweenInfo.new(FLOAT_TIME), { Transparency = 1 }):Play()
+	end
+	task.delay(FLOAT_TIME + 0.05, function()
+		if comboLabel == label then
+			comboLabel = nil
+		end
+		label:Destroy()
+	end)
+end
+
+-- A floating "+$X" under the coins; quick payouts add up in one label.
+function HudController.earned(amount: number)
+	if type(amount) ~= "number" or amount ~= amount or amount <= 0 or amount == math.huge then
+		return
+	end
+	local now = os.clock()
+	local label = comboLabel
+	if label and label.Parent and now - comboAt <= EconomyConfig.Sell.ComboWindow then
+		comboAmount += amount
+		comboAt = now
+		label.Text = "+" .. Format.money(comboAmount)
+		local pop = label:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
+		pop.Scale = 1.25
+		pop.Parent = label
+		TweenService:Create(pop, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		return
+	end
+	comboAmount = amount
+	comboAt = now
+	local fresh = HudView.floater(refs.Floaters, "+" .. Format.money(amount))
+	comboLabel = fresh
+	-- hold still while a combo may still grow, then float away
+	task.spawn(function()
+		while fresh.Parent and os.clock() - comboAt < EconomyConfig.Sell.ComboWindow do
+			task.wait(0.1)
+		end
+		if comboLabel == fresh then
+			comboLabel = nil
+		end
+		if fresh.Parent then
+			floatAway(fresh)
+		end
+	end)
+end
+
+---------------------------------------------------------------- offline popup
+
+local function closeOffline()
+	local view = offline
+	if not view or not view.Gui.Enabled then
+		return
+	end
+	view.Gui.Enabled = false
+	ContextActionService:UnbindAction(OFFLINE_CLOSE)
+	local selected = GuiService.SelectedObject
+	if selected and selected:IsDescendantOf(view.Gui) then
+		GuiService.SelectedObject = nil
+	end
+end
+
+-- "Away 7h 12m. Podiums pay 50% while you're offline, for up to 5 hours."
+function HudController.offlineDetail(seconds: number, hours: number): string
+	local o = EconomyConfig.Offline
+	local rate = math.floor(o.Rate * 100 + 0.5)
+	local text = `Away {Format.seconds(seconds)}. Podiums pay {rate}% while you're offline, for up to {hours} hours.`
+	if seconds > hours * 3600 and hours < o.ExtendedHours then
+		text ..= ` The Offline Extension makes it {o.ExtendedHours} hours.`
+	end
+	return text
+end
+
+function HudController.showOffline(amount: number, seconds: number, hours: number)
+	local view = offline
+	if not view then
+		local built = HudView.buildOffline()
+		built.Gui:SetAttribute("TerraForge", true)
+		built.Gui.Parent = player:WaitForChild("PlayerGui")
+		built.Collect.Activated:Connect(function()
+			Sfx.play("UIClick")
+			closeOffline()
+		end)
+		offline = built
+		view = built
+		updateScale()
+	end
+	local shown = view :: HudView.OfflineRefs
+	shown.Amount.Text = "+" .. Format.money(amount)
+	shown.Detail.Text = HudController.offlineDetail(seconds, hours)
+	shown.Gui.Enabled = true
+	local scale = shown.Panel:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
+	scale.Scale = 0.6
+	scale.Parent = shown.Panel
+	TweenService:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	Sfx.play("CoinBurst")
+	ContextActionService:BindActionAtPriority(OFFLINE_CLOSE, function(_, state)
+		if state == Enum.UserInputState.Begin then
+			closeOffline()
+			return Enum.ContextActionResult.Sink
+		end
+		return Enum.ContextActionResult.Pass
+	end, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
+	if UserInputService.GamepadEnabled then
+		GuiService.SelectedObject = shown.Collect
+	end
+end
+
+---------------------------------------------------------------- lifecycle
+
 function HudController.init()
 	refs = HudView.build()
 	refs.Gui:SetAttribute("TerraForge", true)
@@ -165,9 +350,26 @@ function HudController.init()
 		HudController.toast(message.Text, message.Kind, color)
 	end)
 
-	StateController.onChanged(function(state)
-		targetCoins = state.Coins or 0
+	Net.listen("Earned", function(payload)
+		if type(payload) ~= "table" or payload.Source == "Offline" then
+			return
+		end
+		HudController.earned(tonumber(payload.Amount) or 0)
 	end)
+
+	Net.listen("OpenUI", function(kind, payload)
+		if kind ~= "Offline" or type(payload) ~= "table" then
+			return
+		end
+		local amount = tonumber(payload.Amount) or 0
+		local seconds = tonumber(payload.Seconds) or 0
+		local hours = tonumber(payload.Hours) or EconomyConfig.Offline.BaseHours
+		if amount > 0 and amount == amount and amount < math.huge then
+			HudController.showOffline(amount, seconds, hours)
+		end
+	end)
+
+	StateController.onChanged(onState)
 end
 
 function HudController.start()
@@ -191,22 +393,32 @@ function HudController.start()
 
 	task.spawn(zoneLoop)
 
-	-- smooth coin counter
+	-- coin counter: glides toward the predicted coins; big jumps pop the panel
 	local coinScale = Instance.new("UIScale")
 	coinScale.Parent = refs.CoinsPanel
+	local shownText = ""
 	while true do
-		if shownCoins ~= targetCoins then
-			local diff = targetCoins - shownCoins
-			local step = if math.abs(diff) < 2 then diff else diff * 0.25
-			shownCoins += step
-			if math.abs(targetCoins - shownCoins) < 0.5 then
-				shownCoins = targetCoins
-			end
-			refs.Coins.Text = Format.commas(math.floor(shownCoins + 0.5))
-			if diff > 0 then
+		local target = HudController.predictedCoins(os.clock())
+		local diff = target - shownCoins
+		if diff ~= 0 then
+			-- a jump bigger than a few seconds of income is a sale or a reward
+			if diff > math.max(1, income * 3) then
 				coinScale.Scale = 1.12
 				TweenService:Create(coinScale, TweenInfo.new(0.2), { Scale = 1 }):Play()
+				shownCoins += diff * 0.35
+			elseif diff < 0 then
+				shownCoins = target -- spending: no counting down
+			else
+				shownCoins = target
 			end
+			if math.abs(target - shownCoins) < 0.01 then
+				shownCoins = target
+			end
+		end
+		local text = Format.money(math.max(0, shownCoins))
+		if text ~= shownText then
+			shownText = text
+			refs.Coins.Text = text
 		end
 		task.wait(0.05)
 	end
