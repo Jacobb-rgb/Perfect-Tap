@@ -1,0 +1,42 @@
+{
+  "plaza_forge": {
+    "scene": "world",
+    "position": [0, 15, -13],
+    "target": [0, 16, -52],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 120,
+    "maxLights": 24
+  },
+  "plaza_forge_side": {
+    "scene": "world",
+    "position": [34, 20, -24],
+    "target": [0, 12, -56],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 120,
+    "maxLights": 24
+  },
+  "plaza_crystal": {
+    "scene": "world",
+    "position": [14, 9, 24],
+    "target": [0, 6, 0],
+    "fov": 55,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 100,
+    "maxLights": 24
+  },
+  "plaza_top": {
+    "scene": "world",
+    "position": [0, 130, 30],
+    "target": [0, 0, -12],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 200,
+    "maxLights": 24
+  }
+}
