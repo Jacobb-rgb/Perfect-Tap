@@ -82,6 +82,8 @@ elseif sceneName == "lobby_blockout" then
 elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	-- laser blasters: the 10 levels in ore skins / a forgekeeper blasting a quarry rock
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
+elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)
+	require("./lib/train_gallery").build(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
