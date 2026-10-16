@@ -17,6 +17,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
+local OreData = require(Shared.Config.OreData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Palette = require(script.Parent.Palette)
@@ -278,30 +279,74 @@ local function stall(
 	return m, counter
 end
 
+-- Tobin the Miner: a blocky villager with a miner's helmet, head lamp and beard.
+local function tobin(parent: Instance, base: CFrame)
+	local helmet = Color3.fromRGB(242, 186, 46)
+	local npc = Props.npc(parent, base, "Tobin the Miner", Color3.fromRGB(176, 64, 48), Color3.fromRGB(58, 74, 112), helmet)
+	-- head lamp on the helmet front, a beard and a belt
+	Geo.block(
+		npc,
+		base * CFrame.new(0, 5.5, -0.78),
+		Vector3.new(0.5, 0.42, 0.18),
+		Palette.LampGlow,
+		Enum.Material.Neon,
+		decor({ CastShadow = false })
+	)
+	Geo.block(npc, base * CFrame.new(0, 4.22, -0.62), Vector3.new(1.05, 0.5, 0.14), Color3.fromRGB(150, 98, 62), nil, decor())
+	Geo.block(
+		npc,
+		base * CFrame.new(0, 3.3, -0.52),
+		Vector3.new(2.02, 0.22, 0.06),
+		Color3.fromRGB(120, 40, 32),
+		nil,
+		decor({ CastShadow = false })
+	)
+end
+
 local function tradingPost(parent: Instance, rng: Rng.Rng)
 	local cf = landmarkCFrame(WorldLayout.Landmarks.TradingPost)
-	local m, counter = stall(parent, "TradingPost", cf, Palette.Cloth, Palette.ClothCream, "PELL'S TRADING POST", rng)
+	local m, counter = stall(parent, "TradingPost", cf, Palette.LeafOrange, Palette.ClothCream, "TOBIN'S ORE STALL", rng)
 	counter.Name = "SellCounter"
 	counter:AddTag("SellCounter")
-	Props.npc(
-		m,
-		cf * CFrame.new(0, 1, 1) * CFrame.Angles(0, 0, 0),
-		"Pell the Trader",
-		Color3.fromRGB(60, 130, 170),
-		Color3.fromRGB(70, 60, 60),
-		Color3.fromRGB(120, 80, 50)
-	)
-	-- shelves with ore samples
-	for i = 0, 4 do
-		Geo.block(m, cf * CFrame.new(-6 + i * 3, 6.5, 7.6), Vector3.new(2.6, 0.3, 1.2), Palette.WoodDark, nil, decor())
-		Geo.block(
-			m,
-			cf * CFrame.new(-6 + i * 3, 7.2, 7.6),
-			Vector3.new(1, 1, 1),
-			Color3.fromHSV(i / 5, 0.7, 1),
-			Enum.Material.SmoothPlastic,
-			decor()
-		)
+	-- Tobin stands on a crate so you can see more than his helmet over the counter
+	Geo.block(m, cf * CFrame.new(0, 1.4, 1.2), Vector3.new(3.2, 0.8, 2.2), Palette.WoodLight, nil, solid())
+	tobin(m, cf * CFrame.new(0, 1.8, 1))
+	-- shelves with clean ore samples in the real ore colours
+	local samples = { "Coal", "Copper", "Silver", "Amethyst", "Gold" }
+	for i, oreId in samples do
+		local ore = OreData.ById[oreId]
+		local x = -6 + (i - 1) * 3
+		Geo.block(m, cf * CFrame.new(x, 6.5, 7.6), Vector3.new(2.6, 0.3, 1.2), Palette.WoodDark, nil, decor())
+		if ore then
+			local sample = cf * CFrame.new(x, 7.3, 7.5) * CFrame.Angles(0.3, i * 0.7, 0.2)
+			Geo.block(m, sample, Vector3.new(1.2, 1.2, 1.2), ore.Color, ore.Material, decor())
+		end
+	end
+	-- on the counter: a pile of dirty ore, a coin stack and Tobin's little scale
+	local top = cf * CFrame.new(0, 4.95, -3)
+	for i, offset in { Vector3.new(-5, 0.35, 0.2), Vector3.new(-4.2, 0.3, -0.4), Vector3.new(-4.6, 0.75, -0.05) } do
+		local lump = top * CFrame.new(offset) * CFrame.Angles(i * 0.5, i * 1.1, i * 0.3)
+		Geo.block(m, lump, Vector3.new(0.8, 0.7, 0.75), Color3.fromRGB(110, 98, 90), Enum.Material.Slate, decor())
+	end
+	Geo.cylinder(m, (top * CFrame.new(4.6, 0.3, 0)).Position, 0.6, 1.1, Palette.Gold, Enum.Material.Metal, decor())
+	Geo.cylinder(m, (top * CFrame.new(5.5, 0.2, 0.3)).Position, 0.4, 1, Palette.Gold, Enum.Material.Metal, decor())
+	Geo.block(m, top * CFrame.new(3.2, 0.6, 0.7), Vector3.new(0.3, 1.2, 0.3), Palette.Metal, Enum.Material.Metal, decor())
+	Geo.block(m, top * CFrame.new(3.2, 1.25, 0.7), Vector3.new(2.2, 0.15, 0.25), Palette.Metal, Enum.Material.Metal, decor())
+	for _, side in { -1, 1 } do
+		local pan = top * CFrame.new(3.2 + side * 1, 0.85, 0.7)
+		Geo.cylinder(m, pan.Position, 0.12, 0.9, Palette.Gold, Enum.Material.Metal, decor({ CastShadow = false }))
+	end
+	-- a mine cart full of dirty ore beside the stall
+	local cart = cf * CFrame.new(-12.5, 0, 3) * CFrame.Angles(0, 0.35, 0)
+	Geo.block(m, cart * CFrame.new(0, 1.9, 0), Vector3.new(3.2, 1.8, 4.4), Palette.Metal, Enum.Material.Metal, solid())
+	Geo.block(m, cart * CFrame.new(0, 2.9, 0), Vector3.new(3.4, 0.25, 4.6), Palette.MetalLight, Enum.Material.Metal, decor())
+	for _, wheel in { Vector3.new(-1.7, 0.7, 1.3), Vector3.new(1.7, 0.7, 1.3), Vector3.new(-1.7, 0.7, -1.3), Vector3.new(1.7, 0.7, -1.3) } do
+		local axle = cart * CFrame.new(wheel) * CFrame.Angles(0, 0, math.pi / 2)
+		Geo.block(m, axle, Vector3.new(0.3, 1.3, 1.3), Palette.WoodDark, nil, decor())
+	end
+	for i = 1, 3 do
+		local lump = cart * CFrame.new((i - 2) * 0.9, 3.15, (i - 2) * 1.1) * CFrame.Angles(i, i * 0.7, 0)
+		Geo.block(m, lump, Vector3.new(1.3, 1, 1.2), Color3.fromRGB(104, 94, 88), Enum.Material.Slate, decor())
 	end
 	-- the sell bin in front of the stall
 	local bin = model("SellBin", m)

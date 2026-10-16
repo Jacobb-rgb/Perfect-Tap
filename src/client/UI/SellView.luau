@@ -1,0 +1,837 @@
+--[[
+	Tobin's Sell view (pure builder + pure helpers; SellController fills it in).
+
+	  header    TOBIN'S ORE STALL, a short line about prices (or the last
+	            sale: HUD toasts are hidden behind the panel), X button
+	  list      "IN YOUR PEN" and "IN YOUR HANDS": one row per storage key
+	            (all Dirty Ore of a section merged into one row, grey "?"
+	            icon, price "?"): ore-colour icon, name, grade chip, count,
+	            Tobin's price each, "Sell 1" and "Sell all"
+	  footer    "Sell all Dirty Ore", "Sell all but best 4", control hint
+	  confirm   a dim layer with "Sell N items for $X?" and Sell / Cancel
+
+	Designed for 720 design units of height (HudController.uiScale); the
+	compact layout (phones) has bigger rows and buttons so touch targets stay
+	about 44 pt at the smallest scale. The panel fits the space it gets
+	(SellView.layout). Helpers: entries (a State summary as rows), plan
+	(what a Sell-all button would sell, the same rules as SellService),
+	needsConfirm and the confirm texts.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local EconomyConfig = require(Shared.Config.EconomyConfig)
+local ItemData = require(Shared.Config.ItemData)
+local OreData = require(Shared.Config.OreData)
+local Rarity = require(Shared.Config.Rarity)
+local Theme = require(Shared.Config.UITheme)
+local Format = require(Shared.Util.Format)
+local UIKit = require(script.Parent.UIKit)
+
+local SellView = {}
+
+export type Section = "Pen" | "Hands"
+
+export type Entry = {
+	Id: string, -- "Pen/<key>" or "Pen/Dirty"
+	Section: Section,
+	Keys: { [string]: number }, -- storage keys in this row -> count
+	Name: string,
+	Count: number,
+	Price: number?, -- nil = unknown (Dirty Ore)
+	Color: Color3, -- icon colour
+	Edge: Color3, -- icon outline (rarity colour, grey for Dirty Ore)
+	ChipText: string?,
+	ChipColor: Color3?,
+	RarityOrder: number, -- 0 for Dirty Ore (hidden)
+	Dirty: boolean,
+}
+
+export type Row = {
+	Id: string,
+	Frame: Frame,
+	Icon: Frame,
+	IconText: TextLabel,
+	Name: TextLabel,
+	Chip: TextLabel,
+	Count: TextLabel,
+	Price: TextLabel,
+	Each: TextLabel,
+	SellOne: TextButton,
+	SellAll: TextButton,
+	Entry: Entry,
+}
+
+export type Refs = {
+	Gui: ScreenGui,
+	Panel: Frame,
+	Title: TextLabel,
+	Subtitle: TextLabel,
+	Receipt: TextLabel, -- the last sale / message (toasts hide behind the panel)
+	Close: TextButton,
+	List: ScrollingFrame,
+	Headers: { [Section]: TextLabel },
+	Empty: { [Section]: TextLabel },
+	Rows: { [string]: Row },
+	Footer: Frame,
+	SellDirty: TextButton,
+	SellRest: TextButton,
+	Hint: TextLabel,
+	Confirm: TextButton, -- the dim layer (clicking it cancels)
+	ConfirmBox: Frame,
+	ConfirmText: TextLabel,
+	ConfirmYes: TextButton,
+	ConfirmNo: TextButton,
+	Compact: boolean,
+}
+
+export type Plan = {
+	Count: number, -- items one request would sell (at most MaxPerRequest)
+	Eligible: number, -- items the filter matches in total
+	Total: number, -- coins for the known items in Count
+	Dirty: number, -- Dirty Ore among Count (price unknown)
+	BestOrder: number, -- rarest known item sold (Rarity order, 0 = none)
+	Kept: number, -- clean ores kept by "AllButBest"
+}
+
+-- one item in a plan
+type Unit = { Section: Section, Desc: ItemData.Desc, Income: number, Price: number }
+
+SellView.MaxRows = 120 -- per section
+SellView.ConfirmCount = 10 -- selling more than this asks first
+SellView.ConfirmRarity = 4 -- ...and so does anything Epic or rarer
+SellView.KeepBest = 4 -- must match SellService.KeepBest
+SellView.DirtyColor = Color3.fromRGB(120, 112, 106)
+
+type Metrics = {
+	Width: number,
+	Height: number,
+	Header: number,
+	Footer: number,
+	Row: number,
+	Button: number,
+	SellOne: number,
+	SellAll: number,
+	PriceWidth: number,
+	Title: number,
+	Text: number,
+}
+
+local PAD = 16
+local SCROLLBAR = 10
+
+local METRICS: { [string]: Metrics } = {
+	Normal = {
+		Width = 720,
+		Height = 580,
+		Header = 84,
+		Footer = 100,
+		Row = 70,
+		Button = 54,
+		SellOne = 96,
+		SellAll = 108,
+		PriceWidth = 104,
+		Title = 34,
+		Text = 20,
+	},
+	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
+	Compact = {
+		Width = 900,
+		Height = 560,
+		Header = 58,
+		Footer = 106,
+		Row = 86,
+		Button = 72,
+		SellOne = 110,
+		SellAll = 124,
+		PriceWidth = 112,
+		Title = 30,
+		Text = 22,
+	},
+}
+
+local SECTION_ORDER: { [Section]: number } = { Pen = 0, Hands = 2000 }
+local SECTION_TITLE: { [Section]: string } = { Pen = "IN YOUR ORE PEN", Hands = "IN YOUR HANDS" }
+local SECTION_EMPTY: { [Section]: string } = {
+	Pen = "Your Ore Pen is empty.",
+	Hands = "You're not carrying anything. Carry ore here or throw it into the SELL bin.",
+}
+
+local function metrics(compact: boolean): Metrics
+	return if compact then METRICS.Compact else METRICS.Normal
+end
+
+---------------------------------------------------------------- pure helpers
+
+function SellView.priceText(price: number?): string
+	if price == nil then
+		return "?"
+	end
+	return Format.money(price)
+end
+
+local function rarityOf(oreId: string): (number, Color3)
+	local ore = OreData.ById[oreId]
+	local info = ore and Rarity.ById[ore.Rarity]
+	if info then
+		return info.Order, info.Color
+	end
+	return 0, Theme.TextDim
+end
+
+--[[
+	A State summary (storage key -> count) as rows: junk keys and zero counts
+	are skipped, all Dirty Ore is one row (first), the rest by price, then name.
+]]
+function SellView.entries(summary: any, section: Section): { Entry }
+	local list: { Entry } = {}
+	if type(summary) ~= "table" then
+		return list
+	end
+	local dirty: Entry? = nil
+	for key, rawCount in summary do
+		local desc = if type(key) == "string" then ItemData.parseKey(key) else nil
+		local count = if type(rawCount) == "number" and rawCount == rawCount then math.floor(rawCount) else 0
+		if desc and count >= 1 then
+			if desc.K == "Raw" then
+				local row = dirty
+				if not row then
+					row = {
+						Id = section .. "/Dirty",
+						Section = section,
+						Keys = {},
+						Name = ItemData.DirtyName,
+						Count = 0,
+						Price = nil,
+						Color = SellView.DirtyColor,
+						Edge = Theme.TextDim,
+						ChipText = "Unknown",
+						ChipColor = SellView.DirtyColor,
+						RarityOrder = 0,
+						Dirty = true,
+					}
+					dirty = row
+				end
+				local merged = row :: Entry
+				merged.Keys[key] = count
+				merged.Count += count
+			else
+				local order, edge = rarityOf(desc.O)
+				local ore = OreData.ById[desc.O]
+				local grade = desc.G and ItemData.GradeById[desc.G]
+				table.insert(list, {
+					Id = section .. "/" .. key,
+					Section = section,
+					Keys = { [key] = count },
+					Name = ItemData.displayName(desc.K, desc.O, desc.G, desc.R),
+					Count = count,
+					Price = ItemData.value(desc.K, desc.O, desc.G, desc.R),
+					Color = if ore then ore.Color else Theme.TextDim,
+					Edge = edge,
+					ChipText = if grade then grade.Name else nil,
+					ChipColor = if grade then grade.Color else nil,
+					RarityOrder = order,
+					Dirty = false,
+				})
+			end
+		end
+	end
+	table.sort(list, function(a, b)
+		local pa, pb = a.Price or 0, b.Price or 0
+		if pa ~= pb then
+			return pa > pb
+		elseif a.Name ~= b.Name then
+			return a.Name < b.Name
+		end
+		return a.Id < b.Id
+	end)
+	if dirty then
+		table.insert(list, 1, dirty)
+	end
+	return list
+end
+
+-- The key a "Sell 1" on this row sells: any of its keys, picked by `roll`
+-- in 0..1 weighted by count (Dirty Ore: a random one of the dirty chunks).
+function SellView.pickKey(entry: Entry, roll: number): string?
+	local keys = {}
+	for key in entry.Keys do
+		table.insert(keys, key)
+	end
+	table.sort(keys)
+	local total = 0
+	for _, key in keys do
+		total += entry.Keys[key]
+	end
+	local target = math.clamp(roll, 0, 0.999999) * total
+	for _, key in keys do
+		target -= entry.Keys[key]
+		if target < 0 then
+			return key
+		end
+	end
+	return keys[#keys]
+end
+
+--[[
+	What SellAll { Filter, From? } would sell from these summaries, with the
+	server's rules: "Dirty" = all Dirty Ore; "AllButBest" = everything else
+	except the KeepBest cleaned ores with the highest income. Hands first,
+	at most EconomyConfig.Sell.MaxPerRequest items.
+]]
+function SellView.plan(pen: any, hands: any, filter: string, from: Section?): Plan
+	local units: { Unit } = {}
+	local function add(summary: any, section: Section)
+		if type(summary) ~= "table" then
+			return
+		end
+		local keys = {}
+		for key in summary do
+			if type(key) == "string" then
+				table.insert(keys, key)
+			end
+		end
+		table.sort(keys)
+		for _, key in keys do
+			local desc = ItemData.parseKey(key)
+			local raw = summary[key]
+			local count = if type(raw) == "number" and raw == raw then math.floor(math.min(raw, 1000)) else 0
+			if desc then
+				for _ = 1, count do
+					table.insert(units, {
+						Section = section,
+						Desc = desc,
+						Income = ItemData.income(desc),
+						Price = ItemData.value(desc.K, desc.O, desc.G, desc.R),
+					})
+				end
+			end
+		end
+	end
+	add(hands, "Hands")
+	add(pen, "Pen")
+
+	local kept: { [Unit]: boolean } = {}
+	local keptCount = 0
+	if filter == "AllButBest" then
+		local clean: { Unit } = {}
+		for _, unit in units do
+			if unit.Income > 0 then
+				table.insert(clean, unit)
+			end
+		end
+		table.sort(clean, function(a, b)
+			if a.Income ~= b.Income then
+				return a.Income > b.Income
+			end
+			return a.Section == "Pen" and b.Section ~= "Pen"
+		end)
+		for i = 1, math.min(SellView.KeepBest, #clean) do
+			kept[clean[i]] = true
+			keptCount += 1
+		end
+	end
+
+	local plan: Plan = { Count = 0, Eligible = 0, Total = 0, Dirty = 0, BestOrder = 0, Kept = keptCount }
+	for _, unit in units do
+		local dirty = unit.Desc.K == "Raw"
+		local wanted = (from == nil or unit.Section == from)
+			and (if filter == "Dirty" then dirty elseif filter == "AllButBest" then not dirty and not kept[unit] else false)
+		if wanted then
+			plan.Eligible += 1
+			if plan.Count < EconomyConfig.Sell.MaxPerRequest then
+				plan.Count += 1
+				if dirty then
+					plan.Dirty += 1
+				else
+					plan.Total += unit.Price
+					plan.BestOrder = math.max(plan.BestOrder, (rarityOf(unit.Desc.O)))
+				end
+			end
+		end
+	end
+	return plan
+end
+
+-- Selling this many items (rarest known one: `rarityOrder`) asks first.
+function SellView.needsConfirm(count: number, rarityOrder: number): boolean
+	return count > SellView.ConfirmCount or rarityOrder >= SellView.ConfirmRarity
+end
+
+local function itemsText(count: number): string
+	return if count == 1 then "1 item" else `{Format.commas(count)} items`
+end
+
+-- "Sell 12 Clean Gold for $4.5K?" / "Sell 14 Dirty Ore?" (one row).
+function SellView.confirmRowText(entry: Entry, count: number): string
+	if entry.Dirty then
+		return `Sell {Format.commas(count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.`
+	end
+	local price = (entry.Price or 0) * count
+	local rarity = ""
+	if entry.RarityOrder >= SellView.ConfirmRarity then
+		local info = Rarity.List[entry.RarityOrder]
+		rarity = if info then ` ({info.Name})` else ""
+	end
+	return `Sell {Format.commas(count)} {entry.Name}{rarity} for {Format.money(price)}?`
+end
+
+-- Text for a Sell-all button's confirm step.
+function SellView.confirmPlanText(plan: Plan, filter: string): string
+	local capped = if plan.Eligible > plan.Count
+		then ` Tobin buys {EconomyConfig.Sell.MaxPerRequest} at a time ({Format.commas(plan.Eligible)} in total).`
+		else ""
+	if filter == "Dirty" then
+		return `Sell {Format.commas(plan.Count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.{capped}`
+	end
+	local price = if capped == "" then ` for {Format.money(plan.Total)}` else ""
+	return `Sell {itemsText(plan.Count)}{price}? You keep your {SellView.KeepBest} best clean ores and your {ItemData.DirtyName}.{capped}`
+end
+
+---------------------------------------------------------------- building
+
+local function sectionHeader(list: ScrollingFrame, section: Section): TextLabel
+	return UIKit.label(list, SECTION_TITLE[section], 20, {
+		Name = section .. "Header",
+		LayoutOrder = SECTION_ORDER[section],
+		Size = UDim2.new(1, -SCROLLBAR, 0, 32),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		FontFace = Theme.TitleFont,
+		TextColor3 = Theme.Accent,
+	})
+end
+
+local function emptyLabel(list: ScrollingFrame, section: Section): TextLabel
+	return UIKit.label(list, SECTION_EMPTY[section], 17, {
+		Name = section .. "Empty",
+		LayoutOrder = SECTION_ORDER[section] + 1000,
+		Size = UDim2.new(1, -SCROLLBAR, 0, 44),
+		TextColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+end
+
+function SellView.build(compact: boolean?): Refs
+	local gui = UIKit.screen("TerraForgeSell", 15)
+	gui.Enabled = false
+	gui:SetAttribute("TerraForge", true)
+
+	local panel = UIKit.panel(gui, {
+		Name = "Panel",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(METRICS.Normal.Width, METRICS.Normal.Height),
+		Active = true,
+	})
+
+	local title = UIKit.label(panel, "TOBIN'S ORE STALL", 34, {
+		Name = "Title",
+		Position = UDim2.fromOffset(PAD, 8),
+		Size = UDim2.new(1, -(PAD * 2 + 80), 0, 40),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		FontFace = Theme.TitleFont,
+		TextColor3 = Theme.Accent,
+	})
+	local subtitle = UIKit.label(panel, "Tobin buys any ore. Dirty Ore sells at the raw price; you see what it was after.", 16, {
+		Name = "Subtitle",
+		Position = UDim2.fromOffset(PAD, 48),
+		Size = UDim2.new(1, -(PAD * 2 + 80), 0, 22),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.TextDim,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+	local receipt = UIKit.label(panel, "", 17, {
+		Name = "Receipt",
+		Position = UDim2.fromOffset(PAD, 48),
+		Size = UDim2.new(1, -(PAD * 2 + 80), 0, 24),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.Good,
+		Visible = false,
+	})
+	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -PAD, 0, 14),
+		Size = UDim2.fromOffset(54, 54),
+		TextSize = 26,
+	})
+
+	local list = UIKit.new("ScrollingFrame", {
+		Name = "List",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 8,
+		ScrollBarImageColor3 = Theme.Accent,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		Selectable = false,
+	}, panel)
+	UIKit.list(list, Enum.FillDirection.Vertical, 8)
+	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10) }, list)
+
+	local footer = UIKit.new("Frame", {
+		Name = "Footer",
+		AnchorPoint = Vector2.new(0, 1),
+		BackgroundTransparency = 1,
+	}, panel)
+	local sellDirty = UIKit.button(footer, "Sell all Dirty Ore", Theme.Accent, Theme.AccentDark, {
+		Name = "SellDirty",
+		TextSize = 20,
+	})
+	local sellRest = UIKit.button(footer, `Sell all but best {SellView.KeepBest}`, Theme.Good, Theme.GoodDark, {
+		Name = "SellRest",
+		TextSize = 20,
+	})
+	local hint = UIKit.label(footer, "", 15, {
+		Name = "Hint",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(1, 0, 0, 20),
+		TextColor3 = Theme.TextDim,
+	})
+
+	-- confirm step: a dim layer over the panel (click outside the box = cancel)
+	local confirm = UIKit.new("TextButton", {
+		Name = "Confirm",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Selectable = false,
+		Text = "",
+		Visible = false,
+		ZIndex = 5,
+	}, panel)
+	UIKit.corner(confirm)
+	local box = UIKit.panel(confirm, {
+		Name = "Box",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(500, 230),
+		Active = true,
+		ZIndex = 6,
+	})
+	local confirmText = UIKit.label(box, "", 22, {
+		Name = "Text",
+		Position = UDim2.fromOffset(PAD, PAD),
+		Size = UDim2.new(1, -PAD * 2, 1, -(PAD * 3 + 72)),
+		ZIndex = 7,
+	})
+	local yes = UIKit.button(box, "Sell", Theme.Good, Theme.GoodDark, {
+		Name = "Yes",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, PAD, 1, -PAD),
+		Size = UDim2.new(0.5, -PAD * 1.5, 0, 66),
+		TextSize = 24,
+	})
+	local no = UIKit.button(box, "Cancel", Theme.Bad, Theme.BadDark, {
+		Name = "No",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -PAD, 1, -PAD),
+		Size = UDim2.new(0.5, -PAD * 1.5, 0, 66),
+		TextSize = 24,
+	})
+	for _, button in { yes, no } do
+		local holder = button.Parent :: Frame
+		holder.ZIndex = 7
+		button.ZIndex = 8
+	end
+	-- gamepads move between the two (SellController keeps them inside the box)
+	yes.NextSelectionRight = no
+	no.NextSelectionLeft = yes
+
+	local refs: Refs = {
+		Gui = gui,
+		Panel = panel,
+		Title = title,
+		Subtitle = subtitle,
+		Receipt = receipt,
+		Close = close,
+		List = list,
+		Headers = { Pen = sectionHeader(list, "Pen"), Hands = sectionHeader(list, "Hands") },
+		Empty = { Pen = emptyLabel(list, "Pen"), Hands = emptyLabel(list, "Hands") },
+		Rows = {},
+		Footer = footer,
+		SellDirty = sellDirty,
+		SellRest = sellRest,
+		Hint = hint,
+		Confirm = confirm,
+		ConfirmBox = box,
+		ConfirmText = confirmText,
+		ConfirmYes = yes,
+		ConfirmNo = no,
+		Compact = false,
+	}
+	SellView.layout(refs, compact == true, math.huge, math.huge)
+	return refs
+end
+
+local function holderOf(button: TextButton): Frame
+	return button.Parent :: Frame
+end
+
+local function placeRow(row: Row, m: Metrics)
+	local frame = row.Frame
+	frame.Size = UDim2.new(1, -SCROLLBAR, 0, m.Row)
+	local iconSize = m.Row - 16
+	row.Icon.Size = UDim2.fromOffset(iconSize, iconSize)
+	row.Icon.Position = UDim2.fromOffset(8, 8)
+	row.IconText.TextSize = math.floor(iconSize * 0.6)
+	local buttonTop = (m.Row - m.Button) / 2 + 2 -- the face sits 5 units above its lip
+	local sellAll = holderOf(row.SellAll)
+	sellAll.AnchorPoint = Vector2.new(1, 0)
+	sellAll.Position = UDim2.new(1, -8, 0, buttonTop)
+	sellAll.Size = UDim2.fromOffset(m.SellAll, m.Button)
+	local sellOne = holderOf(row.SellOne)
+	sellOne.AnchorPoint = Vector2.new(1, 0)
+	sellOne.Position = UDim2.new(1, -(16 + m.SellAll), 0, buttonTop)
+	sellOne.Size = UDim2.fromOffset(m.SellOne, m.Button)
+	local right = 24 + m.SellAll + m.SellOne
+	row.Price.AnchorPoint = Vector2.new(1, 0)
+	row.Price.Position = UDim2.new(1, -(right + 6), 0, m.Row / 2 - 22)
+	row.Price.Size = UDim2.fromOffset(m.PriceWidth, 26)
+	row.Price.TextSize = m.Text
+	row.Each.AnchorPoint = Vector2.new(1, 0)
+	row.Each.Position = UDim2.new(1, -(right + 6), 0, m.Row / 2 + 4)
+	row.Each.Size = UDim2.fromOffset(m.PriceWidth, 18)
+	local left = iconSize + 20
+	local middle = right + m.PriceWidth + 12
+	row.Name.Position = UDim2.fromOffset(left, m.Row / 2 - 25)
+	row.Name.Size = UDim2.new(1, -(left + middle), 0, 26)
+	row.Name.TextSize = m.Text
+	row.Chip.Position = UDim2.fromOffset(left, m.Row / 2 + 4)
+	row.Count.Position = UDim2.fromOffset(left + (if row.Chip.Visible then 96 else 0), m.Row / 2 + 2)
+	row.Count.Size = UDim2.fromOffset(90, 24)
+	row.Count.TextSize = m.Text
+	row.SellOne.TextSize = if m.Row > 70 then 21 else 19
+	row.SellAll.TextSize = if m.Row > 70 then 21 else 19
+end
+
+local function newRow(refs: Refs, entry: Entry): Row
+	local frame = UIKit.new("Frame", {
+		Name = "Row",
+		BackgroundColor3 = Theme.PanelLight,
+		BorderSizePixel = 0,
+	}, refs.List)
+	UIKit.corner(frame, 12)
+	UIKit.stroke(frame, 2.5)
+	local icon = UIKit.new("Frame", {
+		Name = "Icon",
+		BorderSizePixel = 0,
+	}, frame)
+	UIKit.corner(icon, 10)
+	UIKit.gradient(icon, Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 150))
+	UIKit.stroke(icon, 3)
+	local iconText = UIKit.label(icon, "", 30, {
+		Name = "Mark",
+		Size = UDim2.fromScale(1, 1),
+		FontFace = Theme.TitleFont,
+	})
+	local name = UIKit.label(frame, "", 20, {
+		Name = "ItemName",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextWrapped = false,
+	})
+	local chip = UIKit.chip(frame, "", Theme.PanelDark, {
+		Name = "Chip",
+		Size = UDim2.fromOffset(88, 22),
+		TextSize = 14,
+	})
+	local count = UIKit.label(frame, "x0", 20, {
+		Name = "Count",
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	local price = UIKit.label(frame, "", 20, {
+		Name = "Price",
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = Theme.Coin,
+	})
+	local each = UIKit.label(frame, "each", 14, {
+		Name = "Each",
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = Theme.TextDim,
+	})
+	local sellOne = UIKit.button(frame, "Sell 1", Theme.Accent, Theme.AccentDark, { Name = "SellOne" })
+	local sellAll = UIKit.button(frame, "Sell all", Theme.Good, Theme.GoodDark, { Name = "SellAll" })
+	local row: Row = {
+		Id = entry.Id,
+		Frame = frame,
+		Icon = icon,
+		IconText = iconText,
+		Name = name,
+		Chip = chip,
+		Count = count,
+		Price = price,
+		Each = each,
+		SellOne = sellOne,
+		SellAll = sellAll,
+		Entry = entry,
+	}
+	refs.Rows[entry.Id] = row
+	return row
+end
+
+local function fillRow(row: Row, entry: Entry, index: number, m: Metrics)
+	row.Entry = entry
+	row.Frame.LayoutOrder = SECTION_ORDER[entry.Section] + index
+	row.Icon.BackgroundColor3 = entry.Color
+	local stroke = row.Icon:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = entry.Edge
+	end
+	row.IconText.Text = if entry.Dirty then "?" else ""
+	row.Name.Text = entry.Name
+	row.Name.TextColor3 = if entry.Dirty or entry.RarityOrder <= 1 then Theme.Text else entry.Edge
+	row.Chip.Visible = entry.ChipText ~= nil
+	row.Chip.Text = entry.ChipText or ""
+	row.Chip.BackgroundColor3 = entry.ChipColor or Theme.PanelDark
+	row.Count.Text = "x" .. Format.commas(entry.Count)
+	row.Price.Text = SellView.priceText(entry.Price)
+	holderOf(row.SellAll).Visible = entry.Count > 1
+	placeRow(row, m)
+end
+
+--[[
+	Shows a section's entries in order (at most MaxRows). Rows are reused by
+	id; rows of that section that are gone are removed. Returns the rows
+	that were just created, so the controller can hook up their buttons.
+]]
+function SellView.setEntries(refs: Refs, section: Section, list: { Entry }): { Row }
+	local m = metrics(refs.Compact)
+	local created: { Row } = {}
+	local keep: { [string]: boolean } = {}
+	for index, entry in list do
+		if index > SellView.MaxRows then
+			break
+		end
+		keep[entry.Id] = true
+		local row: Row? = refs.Rows[entry.Id]
+		if not row then
+			local made = newRow(refs, entry)
+			table.insert(created, made)
+			row = made
+		end
+		fillRow(row :: Row, entry, index, m)
+	end
+	for id, row in refs.Rows do
+		if row.Entry.Section == section and not keep[id] then
+			row.Frame:Destroy()
+			refs.Rows[id] = nil
+		end
+	end
+	refs.Empty[section].Visible = next(keep) == nil
+	local total = 0
+	for _, entry in list do
+		total += entry.Count
+	end
+	refs.Headers[section].Text = if total > 0 then `{SECTION_TITLE[section]}  ({Format.commas(total)})` else SECTION_TITLE[section]
+	return created
+end
+
+-- The footer buttons: their labels, greyed out when they'd sell nothing.
+function SellView.setFooter(refs: Refs, dirty: Plan, rest: Plan)
+	local function style(button: TextButton, enabled: boolean, color: Color3, dark: Color3)
+		button.BackgroundColor3 = if enabled then color else Theme.PanelLight
+		holderOf(button).BackgroundColor3 = if enabled then dark else Theme.PanelDark
+		button.TextColor3 = if enabled then Theme.Text else Theme.TextDim
+	end
+	refs.SellDirty.Text = if dirty.Eligible > 0 then `Sell all Dirty Ore ({Format.commas(dirty.Eligible)})` else "Sell all Dirty Ore"
+	style(refs.SellDirty, dirty.Eligible > 0, Theme.Accent, Theme.AccentDark)
+	refs.SellRest.Text = `Sell all but best {SellView.KeepBest}`
+	style(refs.SellRest, rest.Eligible > 0, Theme.Good, Theme.GoodDark)
+end
+
+--[[
+	Sizes everything for the normal or compact (phone) layout and fits the
+	panel into `maxWidth` x `maxHeight` design units (the screen divided by
+	the UI scale; math.huge = no limit).
+]]
+function SellView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	refs.Compact = compact
+	local m = metrics(compact)
+	local width = math.max(560, math.min(m.Width, maxWidth - 24))
+	local height = math.max(400, math.min(m.Height, maxHeight - 16))
+	refs.Panel.Size = UDim2.fromOffset(width, height)
+	refs.Title.TextSize = m.Title
+	refs.Subtitle.Visible = not compact and not refs.Receipt.Visible
+	if compact then
+		-- next to the title, two short lines
+		local titleWidth = 330
+		refs.Title.Size = UDim2.fromOffset(titleWidth, 40)
+		refs.Receipt.Position = UDim2.fromOffset(PAD + titleWidth + 8, 6)
+		refs.Receipt.Size = UDim2.new(1, -(PAD * 2 + titleWidth + 8 + 76), 0, 48)
+		refs.Receipt.TextWrapped = true
+		refs.Receipt.TextTruncate = Enum.TextTruncate.None
+		refs.Receipt.TextSize = 18
+	else
+		refs.Title.Size = UDim2.new(1, -(PAD * 2 + 80), 0, 40)
+		refs.Receipt.Position = UDim2.fromOffset(PAD, 48)
+		refs.Receipt.Size = UDim2.new(1, -(PAD * 2 + 80), 0, 24)
+		refs.Receipt.TextWrapped = false
+		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
+		refs.Receipt.TextSize = 17
+	end
+	local closeSize = if compact then 64 else 54
+	local close = holderOf(refs.Close)
+	close.Size = UDim2.fromOffset(closeSize, closeSize)
+	close.Position = UDim2.new(1, -PAD, 0, if compact then 6 else 14)
+	refs.List.Position = UDim2.fromOffset(PAD, m.Header)
+	refs.List.Size = UDim2.new(1, -PAD, 1, -(m.Header + m.Footer))
+	refs.Footer.Position = UDim2.new(0, PAD, 1, -8)
+	refs.Footer.Size = UDim2.new(1, -PAD * 2, 0, m.Footer - 10)
+	local buttonTop = 10
+	for i, button in { refs.SellDirty, refs.SellRest } do
+		local holder = holderOf(button)
+		holder.Size = UDim2.new(0.5, -6, 0, m.Button)
+		holder.Position = UDim2.new(if i == 1 then 0 else 0.5, if i == 1 then 0 else 6, 0, buttonTop)
+		button.TextSize = if compact then 22 else 20
+	end
+	refs.Hint.Visible = not compact
+	refs.ConfirmText.TextSize = if compact then 24 else 22
+	refs.ConfirmBox.Size = UDim2.fromOffset(math.min(width - 40, if compact then 620 else 520), if compact then 260 else 230)
+	for _, button in { refs.ConfirmYes, refs.ConfirmNo } do
+		holderOf(button).Size = UDim2.new(0.5, -PAD * 1.5, 0, m.Button + 8)
+	end
+	for _, row in refs.Rows do
+		placeRow(row, m)
+	end
+end
+
+-- Shows a message in the header (instead of the subtitle).
+function SellView.showReceipt(refs: Refs, text: string, color: Color3)
+	refs.Receipt.Text = text
+	refs.Receipt.TextColor3 = color
+	refs.Receipt.Visible = true
+	refs.Subtitle.Visible = false
+end
+
+function SellView.hideReceipt(refs: Refs)
+	refs.Receipt.Visible = false
+	refs.Subtitle.Visible = not refs.Compact
+end
+
+function SellView.showConfirm(refs: Refs, text: string)
+	refs.ConfirmText.Text = text
+	refs.Confirm.Visible = true
+end
+
+function SellView.hideConfirm(refs: Refs)
+	refs.Confirm.Visible = false
+end
+
+-- The first row of a section (lowest LayoutOrder), for gamepad selection.
+function SellView.firstRow(refs: Refs): Row?
+	local first: Row? = nil
+	for _, row in refs.Rows do
+		if not first or row.Frame.LayoutOrder < first.Frame.LayoutOrder then
+			first = row
+		end
+	end
+	return first
+end
+
+return SellView
