@@ -487,7 +487,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "NextIsland",
 		Package = "Sky",
-		Center = v(255, 40, -112),
+		Center = v(255, 16, -112),
 		Size = v(46, 46, 40),
 		Facing = v(-1, 0, 0),
 		Note = "Floating island the NEXT AREA boardwalk points at: tower house with lit windows.",

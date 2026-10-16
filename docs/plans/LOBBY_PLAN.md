@@ -82,7 +82,7 @@ lines the plot roads with trees.
 
 | Shot | Camera -> target (fov) | Purpose |
 |---|---|---|
-| `lobby_hero` | (24, 96, 178) -> (-2, 8, -46) (40) | **The concept angle.** Elevated from the south, looking north over the bridge and plaza at the Great Forge with the mountain, DEPTHS and THE FORGE behind, sea and sunset glow on the left, islands and balloon in the sky. Compare it side by side with the concept. |
+| `lobby_hero` | (22, 100, 206) -> (-2, 22, -40) (50) | **The concept angle.** Elevated from the south, looking north over the bridge and plaza at the Great Forge with the mountain, DEPTHS and THE FORGE behind, sea and sunset glow on the left, islands and balloon in the sky. Compare it side by side with the concept. |
 | `lobby_spawn` | (0, 9, 46) -> (0, 12, -40) (70) | What a new player sees: fire crystal, Great Forge, SHOP left, UPGRADES right, mountain and portal above the roof. |
 | `lobby_west` | (18, 18, 26) -> (-70, 6, -14) (65) | Toward the sunset: SHOP, SPIN & WIN, NW cliff and waterfall, sea, ships, pier, sun glitter. |
 | `lobby_east` | (-14, 16, 36) -> (64, 6, -6) (65) | UPGRADES, FOSSIL DIG, ROCK SCANNER, pink grove, NEXT AREA in the distance. |
