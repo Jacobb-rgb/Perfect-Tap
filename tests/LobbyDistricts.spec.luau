@@ -1,0 +1,326 @@
+--[[
+	Lobby package "Districts" (src/server/World/Lobby/Districts): every
+	gameplay hook exists once under Lobby.Districts with the right class,
+	children and attributes, every piece stays inside its LobbyLayout
+	footprint and height budget (spinning models over their whole sweep),
+	the walk lanes to the shop counters stay open, the build is
+	deterministic and the package stays inside its budget.
+]]
+return function(T, Loader)
+	local roblox = require("@lune/roblox") :: any
+	local Vector3 = roblox.Vector3
+	local CFrame = roblox.CFrame
+	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+
+	local TOLERANCE = 0.25
+
+	local cachedMap = nil
+	local function districts()
+		if not cachedMap then
+			local game = roblox.Instance.new("DataModel")
+			cachedMap = WorldBuilder.build(game:GetService("Workspace"))
+		end
+		local lobby = cachedMap.Emberfall:FindFirstChild("Lobby")
+		return cachedMap, lobby and lobby:FindFirstChild("Districts")
+	end
+
+	local function hasTag(inst, tag: string): boolean
+		return table.find(inst:GetTags(), tag) ~= nil
+	end
+
+	local function tagged(root, tag: string): { any }
+		local out = {}
+		if hasTag(root, tag) then
+			table.insert(out, root)
+		end
+		for _, d in root:GetDescendants() do
+			if hasTag(d, tag) then
+				table.insert(out, d)
+			end
+		end
+		return out
+	end
+
+	-- Points on a part's surface hull: box corners, or rings/axis points for
+	-- cylinders and balls (their bounding boxes would overshoot when swept).
+	local function corners(part): { any }
+		local cf, s = part.CFrame, part.Size / 2
+		local out = {}
+		local shape = if part:IsA("Part") then part.Shape else nil
+		if shape == roblox.Enum.PartType.Cylinder then
+			local r = math.min(s.Y, s.Z)
+			for _, x in { -s.X, s.X } do
+				for k = 0, 15 do
+					local a = k * math.pi / 8
+					table.insert(out, cf * Vector3.new(x, r * math.cos(a), r * math.sin(a)))
+				end
+			end
+		elseif shape == roblox.Enum.PartType.Ball then
+			local r = math.min(s.X, s.Y, s.Z)
+			for _, v in { Vector3.new(1, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1) } do
+				table.insert(out, cf * (v * r))
+				table.insert(out, cf * (v * -r))
+			end
+			for _, x in { -1, 1 } do
+				for _, y in { -1, 1 } do
+					for _, z in { -1, 1 } do
+						table.insert(out, cf * (Vector3.new(x, y, z).Unit * r))
+					end
+				end
+			end
+		else
+			-- a WedgePart has no top-front edge (its tall side is +Z)
+			local wedge = part:IsA("WedgePart")
+			for _, x in { -1, 1 } do
+				for _, y in { -1, 1 } do
+					for _, z in { -1, 1 } do
+						if not (wedge and y > 0 and z < 0) then
+							table.insert(out, cf * Vector3.new(x * s.X, y * s.Y, z * s.Z))
+						end
+					end
+				end
+			end
+		end
+		return out
+	end
+
+	-- the Spin model (if any) a part turns with
+	local function spinnerOf(part, root)
+		local node = part.Parent
+		while node and node ~= root do
+			if node:IsA("Model") and hasTag(node, "Spin") then
+				return node
+			end
+			node = node.Parent
+		end
+		return nil
+	end
+
+	T.test("districts: the package builds every piece as a model under Lobby.Districts", function()
+		local _, pkg = districts()
+		T.truthy(pkg, "Map.Emberfall.Lobby.Districts exists")
+		for _, piece in LobbyLayout.ofPackage("Districts") do
+			local m = pkg:FindFirstChild(piece.Id)
+			T.truthy(m and m:IsA("Model"), "piece model " .. piece.Id)
+		end
+		-- the legacy pieces it replaces are gone
+		local map = districts()
+		for _, name in { "TradingPost", "ToolSmithy" } do
+			T.falsy(map.Emberfall:FindFirstChild(name), "legacy " .. name .. " replaced")
+		end
+	end)
+
+	T.test("districts: gameplay hooks exist once with the right shape", function()
+		local map, pkg = districts()
+		local function one(tag: string)
+			local list = tagged(map, tag)
+			T.eq(#list, 1, "exactly one " .. tag)
+			T.truthy(list[1]:IsDescendantOf(pkg), tag .. " is built by Districts")
+			return list[1]
+		end
+		local function inside(inst, pieceId: string)
+			T.truthy(inst:IsDescendantOf(pkg[pieceId]), inst.Name .. " sits in " .. pieceId)
+		end
+
+		local shop = one("ShopCounter")
+		T.truthy(shop:IsA("BasePart"), "ShopCounter is a part")
+		inside(shop, "Shop")
+
+		local sell = one("SellCounter")
+		T.truthy(sell:IsA("BasePart"), "SellCounter is a part")
+		inside(sell, "ShopFront")
+
+		local bin = one("SellBin")
+		T.truthy(bin:IsA("Model"), "SellBin is a model")
+		inside(bin, "ShopFront")
+		local intake = bin:FindFirstChild("Intake")
+		T.truthy(intake and intake:IsA("BasePart"), "SellBin has a child part Intake")
+		T.eq(intake.Transparency, 1, "Intake is invisible")
+		T.falsy(intake.CanCollide, "Intake does not collide")
+		T.falsy(intake.CanTouch, "Intake does not touch")
+		T.falsy(intake.CanQuery, "Intake is not queried")
+		for _, axis in { "X", "Y", "Z" } do
+			local v = intake.Size[axis]
+			T.truthy(v >= 4.5 and v <= 9, "Intake size " .. axis .. " ~8x5x6")
+		end
+
+		local upgrade = one("UpgradeCounter")
+		T.truthy(upgrade:IsA("BasePart"), "UpgradeCounter is a part")
+		inside(upgrade, "Upgrades")
+
+		local chest = one("EmberChest")
+		T.truthy(chest:IsA("Model") and chest.PrimaryPart and chest.PrimaryPart.Name == "Chest", "EmberChest model, PrimaryPart Chest")
+		T.truthy(chest:FindFirstAncestor("SpinWheel"), "EmberChest sits on the SpinWheel")
+		T.truthy(
+			chest.PrimaryPart:FindFirstChildWhichIsA("PointLight", true) or chest:FindFirstChildWhichIsA("PointLight", true),
+			"chest glows"
+		)
+
+		local guild = one("GuildBoard")
+		T.truthy(guild:IsA("Model") and guild.PrimaryPart and guild.PrimaryPart.Name == "Board", "GuildBoard model, PrimaryPart Board")
+
+		local codex = one("OreCodex")
+		T.truthy(codex:IsA("Model") and codex.PrimaryPart, "OreCodex terminal model with a PrimaryPart")
+		inside(codex, "RockScanner")
+
+		local dig = one("FossilDig")
+		T.truthy(dig:IsA("Model") and dig.PrimaryPart, "FossilDig model with a PrimaryPart")
+
+		local capsules = one("CapsuleStall")
+		T.truthy(capsules:IsA("Model") and capsules.PrimaryPart, "CapsuleStall model with a PrimaryPart")
+
+		local enchant = one("EnchantCounter")
+		T.truthy(enchant:IsA("BasePart"), "EnchantCounter is a part")
+		inside(enchant, "EnchantShop")
+
+		T.truthy(pkg.ShopFront:FindFirstChild("Tobin"), "Tobin the Miner stands at the Sell stall")
+	end)
+
+	T.test("districts: the SPIN & WIN wheel turns around its axle", function()
+		local _, pkg = districts()
+		local wheel = pkg.SpinWheel:FindFirstChild("Wheel")
+		T.truthy(wheel and wheel:IsA("Model"), "SpinWheel has a Wheel sub-model")
+		T.truthy(hasTag(wheel, "Spin"), "Wheel is tagged Spin")
+		T.truthy(wheel.PrimaryPart, "Wheel has a PrimaryPart (hub)")
+		T.eq(wheel.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, "Wheel streams atomically")
+		local speed = wheel:GetAttribute("SpinSpeed")
+		T.truthy(type(speed) == "number" and speed > 0, "Wheel SpinSpeed > 0")
+		T.eq(wheel:GetAttribute("BobHeight"), 0, "Wheel does not bob")
+		local frame = LobbyLayout.frame(LobbyLayout.get("SpinWheel"))
+		local axle = wheel.PrimaryPart.CFrame.UpVector
+		T.truthy(math.abs(axle:Dot(frame.LookVector)) > 0.999, "hub Y axis = the axle (facing the plaza)")
+	end)
+
+	T.test("districts: four leaderboards face the spawn", function()
+		local map, pkg = districts()
+		local boards = tagged(map, "Leaderboard")
+		T.eq(#boards, 4, "four Leaderboard parts")
+		local spawn = WorldLayout.SpawnPoint
+		for i = 1, 4 do
+			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
+			T.truthy(board and board:IsA("BasePart"), "Board" .. i .. " is a part")
+			T.truthy(hasTag(board, "Leaderboard"), "Board" .. i .. " tagged Leaderboard")
+			T.eq(board:GetAttribute("Board"), i, "Board" .. i .. " attribute")
+			T.truthy(board.Size.X >= 4 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
+			local at = board.CFrame.Position
+			local toSpawn = Vector3.new(spawn.X - at.X, 0, spawn.Z - at.Z).Unit
+			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the spawn")
+		end
+	end)
+
+	T.test("districts: every part stays inside its piece footprint and height", function()
+		local _, pkg = districts()
+		for _, piece in LobbyLayout.ofPackage("Districts") do
+			local frame = LobbyLayout.frame(piece)
+			local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
+			local root = pkg[piece.Id]
+			local bad = nil
+			for _, d in root:GetDescendants() do
+				if d:IsA("BasePart") then
+					local points = corners(d)
+					local spinner = spinnerOf(d, root)
+					if spinner then
+						-- check the whole sweep around the pivot's Y axis (plus the bob)
+						local pivot = spinner.PrimaryPart.CFrame
+						local bob = spinner:GetAttribute("BobHeight") or 0.4
+						local swept = {}
+						for _, p in points do
+							local localP = pivot:PointToObjectSpace(p)
+							for k = 0, 15 do
+								local a = k * math.pi / 8
+								for _, dy in { -bob, bob } do
+									table.insert(swept, pivot * (CFrame.Angles(0, a, 0) * localP + Vector3.new(0, dy, 0)))
+								end
+							end
+						end
+						points = swept
+					end
+					for _, p in points do
+						local q = frame:PointToObjectSpace(p)
+						if math.abs(q.X) > hx or math.abs(q.Z) > hz or q.Y < -0.3 or q.Y > h then
+							bad = `{d:GetFullName()} at {q}`
+							break
+						end
+					end
+				end
+				if bad then
+					break
+				end
+			end
+			T.falsy(bad, piece.Id .. " part outside its footprint/height")
+		end
+	end)
+
+	T.test("districts: walk lanes to the SHOP and UPGRADES counters stay open", function()
+		local _, pkg = districts()
+		for _, lane in { { "ShopFront", -0.4, 2.6 }, { "UpgradesFront", -1.7, 1.7 } } do
+			local piece = LobbyLayout.get(lane[1])
+			local frame = LobbyLayout.frame(piece)
+			for _, d in pkg[lane[1]]:GetDescendants() do
+				if d:IsA("BasePart") and d.CanCollide then
+					-- the part's box in the piece frame
+					local minX, maxX, minY, maxY = math.huge, -math.huge, math.huge, -math.huge
+					for _, p in corners(d) do
+						local q = frame:PointToObjectSpace(p)
+						minX, maxX = math.min(minX, q.X), math.max(maxX, q.X)
+						minY, maxY = math.min(minY, q.Y), math.max(maxY, q.Y)
+					end
+					local blocked = maxX > lane[2] and minX < lane[3] and maxY > 0.4 and minY < 6
+					T.falsy(blocked, `{d:GetFullName()} blocks the walk lane of {lane[1]}`)
+				end
+			end
+		end
+	end)
+
+	T.test("districts: inside the part and light budget, lights without shadows", function()
+		local _, pkg = districts()
+		local budget = LobbyLayout.Budget.Packages.Districts
+		local parts, lights = 0, 0
+		for _, d in pkg:GetDescendants() do
+			if d:IsA("BasePart") then
+				parts += 1
+				T.truthy(d.Anchored, d:GetFullName() .. " is anchored")
+				if d.Material == roblox.Enum.Material.Neon then
+					T.falsy(d.CastShadow, d:GetFullName() .. " neon casts no shadow")
+				end
+			elseif d:IsA("PointLight") or d:IsA("SpotLight") then
+				lights += 1
+				T.falsy(d.Shadows, "lights have shadows off")
+			end
+		end
+		T.lt(parts, budget.Parts + 1, "Districts parts")
+		T.lt(lights, budget.Lights + 1, "Districts lights")
+		T.truthy(parts > 600, "Districts is dressed (parts)")
+	end)
+
+	T.test("districts: the build is deterministic", function()
+		local Districts = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts")
+		T.truthy(type(Districts.build) == "function", "build() exported")
+		for _, name in { "tradingPost", "toolSmithy", "emberChest", "guildBoard" } do
+			T.truthy(table.find(Districts.Replaces, name), "Replaces " .. name)
+		end
+		local function snapshot(): { string }
+			local m = roblox.Instance.new("Model")
+			Districts.build(m, Rng.new("Lobby/Districts/test"))
+			local out = {}
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					local p = d.CFrame.Position
+					table.insert(out, string.format("%s %.3f %.3f %.3f", d.Name, p.X, p.Y, p.Z))
+				end
+			end
+			return out
+		end
+		local a, b = snapshot(), snapshot()
+		T.eq(#a, #b, "same part count")
+		for i = 1, #a do
+			if a[i] ~= b[i] then
+				T.eq(b[i], a[i], "part " .. i)
+				break
+			end
+		end
+	end)
+end

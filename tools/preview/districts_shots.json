@@ -1,0 +1,16 @@
+{
+  "d_hero": { "scene": "world", "position": [22, 100, 206], "target": [-2, 22, -40], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 280, "maxLights": 32 },
+  "d_shop": { "scene": "world", "position": [-14, 10, -6], "target": [-41, 6, -19], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_upgrades": { "scene": "world", "position": [14, 10, -6], "target": [41, 6, -19], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_wheel": { "scene": "world", "position": [-19, 12, 36], "target": [-47, 12, 18], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_capsules": { "scene": "world", "position": [-17, 9, 31], "target": [-40, 6, 36], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_hall": { "scene": "world", "position": [5, 7, 28], "target": [30, 7, 36], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_dig": { "scene": "world", "position": [30, 15, 8], "target": [50, 1, 25], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_dig_top": { "scene": "world", "position": [44, 34, 58], "target": [50, 0, 24], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_scanner": { "scene": "world", "position": [42, 8, 94], "target": [56, 5, 80], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_enchant": { "scene": "world", "position": [35, 9, -65], "target": [50, 6, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_guild": { "scene": "world", "position": [-15, 6, -15], "target": [-15, 5, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_sell": { "scene": "world", "position": [-20, 8, -6], "target": [-36, 4, -17], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_west_stalls": { "scene": "world", "position": [-6, 22, 40], "target": [-44, 6, 4], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 110, "maxLights": 24 },
+  "d_east_stalls": { "scene": "world", "position": [6, 22, 40], "target": [44, 4, 10], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 110, "maxLights": 24 }
+}
