@@ -14,13 +14,14 @@
 	  client turns the action into "Buy $500K" while the player doesn't own it).
 	  F / gamepad Y / tap. Triggering it opens the client's view:
 	  OpenUI "Elevator" { Stop, Floor, Owned }.
-	- ElevatorAction (Net, rate limited), only within Range studs of a stop:
+	- ElevatorAction (Net, rate limited), from anywhere (the HUD's side menu
+	  button opens the panel too, owner 2026-10-17):
 	    { Action = "Buy" }           spends the price (EconomyService), sets
 	                                 Upgrades.Elevator, saves, Notify
 	    { Action = "Go", Floor = n } owned, whole n in 1..#MineFloors.List,
-	                                 unlocked, not the floor of the stop you
-	                                 stand at, not within Cooldown of the last
-	                                 ride; then ElevatorRide "Depart" (the client
+	                                 unlocked, a living character, not the floor
+	                                 of a stop you stand at, not within Cooldown
+	                                 of the last ride; then ElevatorRide "Depart" (the client
 	                                 fades out), Fade seconds later the area
 	                                 around the target is streamed in, the
 	                                 character moves to the target stop (on its
@@ -65,7 +66,7 @@ export type Reason =
 	| "NoCoins"
 	| "NotOwned"
 	| "Locked"
-	| "TooFar"
+	| "NoCharacter"
 	| "Here"
 	| "Cooldown"
 	| "NoStop"
@@ -73,7 +74,8 @@ export type Reason =
 ElevatorService.Tag = "MineElevator"
 ElevatorService.CatcherTag = "VoidCatcher"
 ElevatorService.PromptName = "ElevatorPrompt"
--- studs from a stop's Base plate the server accepts (the prompt itself reaches less)
+-- studs from a stop's Base plate: its prompt opens the view within this, and a
+-- rider standing this close can't pick the stop's own floor (the prompt reaches less)
 ElevatorService.Range = 16
 ElevatorService.PromptDistance = 10
 -- seconds between two rides of one player
@@ -294,10 +296,6 @@ local function buy(player: Player, data: { [string]: any }): (boolean, Reason)
 		deny(player, "You already own the Elevator.")
 		return false, "Owned"
 	end
-	if not ElevatorService.stopNear(player, ElevatorService.Range) then
-		deny(player, "Walk up to an elevator to buy it.")
-		return false, "TooFar"
-	end
 	local price = MineFloors.Elevator.Price
 	local upgrades = data.Upgrades
 	if type(upgrades) ~= "table" then
@@ -330,12 +328,12 @@ local function go(player: Player, data: { [string]: any }, args: { [any]: any })
 		deny(player, `{floor.Name} needs Blaster {floor.MinBlaster}+.`)
 		return false, "Locked"
 	end
-	local here = ElevatorService.stopNear(player, ElevatorService.Range)
-	if not here then
-		deny(player, "Walk up to an elevator to ride it.")
-		return false, "TooFar"
+	if not Guard.rootPart(player) then
+		return false, "NoCharacter"
 	end
-	if ElevatorService.floorOf(here) == floorIndex then
+	-- rides start anywhere; standing at a stop, its own floor is no ride
+	local here = ElevatorService.stopNear(player, ElevatorService.Range)
+	if here and ElevatorService.floorOf(here) == floorIndex then
 		deny(player, `You're already on Floor {floorIndex}.`)
 		return false, "Here"
 	end
