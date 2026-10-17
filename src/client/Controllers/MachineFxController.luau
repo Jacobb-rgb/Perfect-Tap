@@ -21,18 +21,20 @@
 	- Water (Cleaning Station, Auto Cleaner: Base attachments WaterOut and
 	  WaterIn from MachineBuilder): the nearest WATER_MAX wet machines within
 	  WATER_RANGE borrow a pooled rig (an invisible anchor with two Beams for
-	  the stream - a see-through light blue ribbon and a faint highlight -
-	  soft round droplet / mist / ripple / spray emitters with built-in
-	  textures). It always runs gently and gets stronger while the machine
-	  works (Working, or Busy for a station someone is cleaning at); the
-	  basin's WaterPool shimmers. Emitter rates follow the graphics quality
-	  (half on low quality and on phones left on automatic). Leaving the range
-	  gives the rig back.
+	  a pour - a solid light blue ribbon without a texture and a thin white
+	  core whose soft texture scrolls down it - and droplet / mist / foam
+	  emitters with built-in textures; a shower instead rains thin streak
+	  particles from an invisible box the size of its shower head). It always
+	  runs gently and gets stronger while the machine works (Working, or Busy
+	  for a station someone is cleaning at); the basin's WaterPool shimmers.
+	  Emitter rates follow the graphics quality (half on low quality and on
+	  phones left on automatic). Leaving the range gives the rig back.
 	- Auto Cleaner: the bed rollers turn with the drum, the stacked light
 	  lights one lamp: green (working), amber (idle) or red (blocked), and the
 	  built look (MachineBuilder.Stack.Lit) out of range. Crusher: the side
-	  cogs turn with the rollers. Furnaces: the Molten parts (glass sections,
-	  mould) pulse with the Glow.
+	  cogs turn with the rollers. Furnaces: the Glow and the Molten parts
+	  (glass sections, trickle, mould) pulse from their deep built orange
+	  toward MachineBuilder.Glow.Hot (brightness, never a white blob).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -59,14 +61,15 @@ type Spinner = { Part: BasePart, Rest: CFrame, Axis: CFrame, Dir: number }
 type Emitter = { Emitter: ParticleEmitter, Idle: number, Busy: number }
 
 -- Pooled client water: Beams between Out and In, emitters at the landing
--- point (Splash) and the outlet (Nozzle). All attachments sit on Anchor,
--- which is moved onto the machine's Base.
+-- point (Splash) and a shower Head (an invisible box the size of the
+-- shower head, the spray streaks start anywhere in it). All of it sits on
+-- Anchor, which is moved onto the machine's Base.
 type WaterRig = {
 	Anchor: Part,
+	Head: Part,
 	Out: Attachment,
 	In: Attachment,
 	Splash: Attachment,
-	Nozzle: Attachment,
 	Stream: Beam,
 	Core: Beam,
 	Drops: ParticleEmitter,
@@ -153,6 +156,7 @@ local WATER_RANGE = 48 -- a stream is a few pixels wide beyond this
 local WATER_MAX = 4 -- rigs in use at once (nearest wet machines)
 local FLOW_RATE = 1.2 -- per second
 local SOFT = "rbxasset://textures/particles/smoke_main.dds"
+local GLOW_HOT = MachineBuilder.Glow.Hot
 local WATER = MachineBuilder.Water
 local STACK = MachineBuilder.Stack
 local SIGNALS = { "StackRed", "StackAmber", "StackGreen" }
@@ -423,7 +427,7 @@ local function waterBeam(anchor: Part, name: string, out: Attachment, into: Atta
 	return b
 end
 
-local function waterEmitter(parent: Attachment, name: string, texture: string, color: Color3): ParticleEmitter
+local function waterEmitter(parent: Instance, name: string, texture: string, color: Color3): ParticleEmitter
 	local e = Instance.new("ParticleEmitter")
 	e.Name = name
 	e.Texture = texture
@@ -435,38 +439,51 @@ local function waterEmitter(parent: Attachment, name: string, texture: string, c
 	return e
 end
 
+local function invisiblePart(name: string, size: Vector3): Part
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = size
+	return part
+end
+
 -- One rig (built once, then pooled): stream + core Beams, droplets, mist,
--- ripples on the pool and a shower spray. Soft round particles only (no
--- star glints): water, not magic.
+-- foam rings on the pool and a shower of streaks. Soft round particles only
+-- (no star glints): water, not magic.
 local function newRig(): WaterRig
-	local anchor = Instance.new("Part")
-	anchor.Name = "WaterRig"
-	anchor.Anchored = true
-	anchor.CanCollide = false
-	anchor.CanQuery = false
-	anchor.CanTouch = false
-	anchor.CastShadow = false
-	anchor.Transparency = 1
-	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
+	local anchor = invisiblePart("WaterRig", Vector3.new(0.2, 0.2, 0.2))
+	local head = invisiblePart("ShowerHead", Vector3.new(WATER.SprayWidth, 0.05, 0.35))
+	head.Parent = anchor
 	local out = waterAttachment(anchor, "Out")
 	local into = waterAttachment(anchor, "In")
 	local splash = waterAttachment(anchor, "Splash")
-	local nozzle = waterAttachment(anchor, "Nozzle")
 
-	-- the stream: see-through light blue, deeper blue where it lands, a long
-	-- soft texture scrolling down it
-	local stream = waterBeam(anchor, "Stream", out, into, ColorSequence.new(WATER.Stream, WATER.Deep), 0.1)
-	stream.Texture = SOFT
-	stream.TextureMode = Enum.TextureMode.Wrap
-	stream.TextureLength = 3.5
+	-- the stream: a solid ribbon (no texture, so it never reads as smoke),
+	-- light blue and fairly opaque at the outlet, deeper and thinner where
+	-- it lands
+	local stream = waterBeam(anchor, "Stream", out, into, ColorSequence.new(WATER.Stream, WATER.Deep), 0.15)
+	stream.Texture = ""
 	stream.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.38),
-		NumberSequenceKeypoint.new(0.75, 0.42),
-		NumberSequenceKeypoint.new(1, 0.62),
+		NumberSequenceKeypoint.new(0, WATER.StreamTransparency - 0.05),
+		NumberSequenceKeypoint.new(0.7, WATER.StreamTransparency),
+		NumberSequenceKeypoint.new(1, 0.5),
 	})
-	-- a faint highlight down the middle (stays see-through, tinted blue)
-	local core = waterBeam(anchor, "Core", out, into, ColorSequence.new(WATER.Core, WATER.Stream), 0.15)
-	core.Transparency = NumberSequence.new(0.6, 0.8)
+	-- a thin white core; its soft texture scrolls down it (the flow), almost
+	-- opaque near the outlet
+	local core = waterBeam(anchor, "Core", out, into, ColorSequence.new(WATER.Core), 0.3)
+	core.Texture = SOFT
+	core.TextureMode = Enum.TextureMode.Wrap
+	core.TextureLength = 1.6
+	core.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.15),
+		NumberSequenceKeypoint.new(0.7, 0.35),
+		NumberSequenceKeypoint.new(1, 0.6),
+	})
 
 	-- droplets jumping out where the water lands
 	local drops = waterEmitter(splash, "Drops", SOFT, WATER.Splash)
@@ -488,32 +505,45 @@ local function newRig(): WaterRig
 	mist.Speed = NumberRange.new(0.6, 1.4)
 	mist.SpreadAngle = Vector2.new(60, 60)
 	mist.LightInfluence = 0.8
-	-- ripples lying flat on the pool, growing and fading
-	local ripple = waterEmitter(splash, "Ripple", SOFT, WATER.Splash)
+	-- white foam rings lying flat on the pool, growing and fading
+	local ripple = waterEmitter(splash, "Ripple", SOFT, WATER.Foam)
 	ripple.EmissionDirection = Enum.NormalId.Top
 	ripple.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
-	ripple.Size = NumberSequence.new(0.3, 1.5)
-	ripple.Transparency = NumberSequence.new(0.5, 1)
-	ripple.Lifetime = NumberRange.new(0.8, 1)
+	ripple.Size = NumberSequence.new(0.35, 1.6)
+	ripple.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(0.5, 0.55),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	ripple.Lifetime = NumberRange.new(0.8, 1.1)
 	ripple.Speed = NumberRange.new(0.02, 0.02)
 	ripple.LightEmission = 0.1
-	-- shower spray out of a nozzle (Spray outlets)
-	local spray = waterEmitter(nozzle, "Spray", SOFT, WATER.Splash:Lerp(WATER.Stream, 0.4))
+	-- shower: thin falling streaks (soft dots stretched along their
+	-- velocity), born anywhere in the shower-head box, a narrow spread
+	local spray = waterEmitter(head, "Spray", SOFT, WATER.Splash:Lerp(WATER.Stream, 0.3))
 	spray.EmissionDirection = Enum.NormalId.Bottom
-	spray.Size = NumberSequence.new(0.12, 0.08)
-	spray.Transparency = NumberSequence.new(0.25, 1)
-	spray.Lifetime = NumberRange.new(0.3, 0.45)
-	spray.Speed = NumberRange.new(4, 7)
-	spray.SpreadAngle = Vector2.new(16, 16)
-	spray.Acceleration = Vector3.new(0, -20, 0)
-	spray.LightEmission = 0
+	spray.Shape = Enum.ParticleEmitterShape.Box
+	spray.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	spray.Orientation = Enum.ParticleOrientation.VelocityParallel
+	spray.Squash = NumberSequence.new(2.2)
+	spray.Size = NumberSequence.new(0.13, 0.1)
+	spray.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.15),
+		NumberSequenceKeypoint.new(0.8, 0.35),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	spray.Lifetime = NumberRange.new(0.22, 0.3)
+	spray.Speed = NumberRange.new(6, 8)
+	spray.SpreadAngle = Vector2.new(5, 3)
+	spray.Acceleration = Vector3.new(0, -24, 0)
+	spray.LightEmission = 0.1
 
 	return {
 		Anchor = anchor,
+		Head = head,
 		Out = out,
 		In = into,
 		Splash = splash,
-		Nozzle = nozzle,
 		Stream = stream,
 		Core = core,
 		Drops = drops,
@@ -525,9 +555,11 @@ local function newRig(): WaterRig
 	}
 end
 
+-- A pour shows the Beams; a shower only its streak particles (a wide Beam
+-- would read as a glass sheet).
 local function rigEnabled(rig: WaterRig, on: boolean, spray: boolean)
-	rig.Stream.Enabled = on
-	rig.Core.Enabled = on
+	rig.Stream.Enabled = on and not spray
+	rig.Core.Enabled = on and not spray
 	rig.Drops.Enabled = on
 	rig.Mist.Enabled = on
 	rig.Ripple.Enabled = on
@@ -550,7 +582,8 @@ local function placeRig(fx: Fx)
 	rig.Out.CFrame = out.CFrame
 	rig.In.CFrame = into.CFrame
 	rig.Splash.CFrame = CFrame.new(into.CFrame.Position)
-	rig.Nozzle.CFrame = CFrame.new(out.CFrame.Position)
+	-- the shower head box: level with the Base, just under the outlet
+	rig.Head.CFrame = base.CFrame * CFrame.new(out.CFrame.Position)
 	local c0, c1 = out:GetAttribute("Curve"), into:GetAttribute("Curve")
 	for _, beam in { rig.Stream, rig.Core } do
 		beam.CurveSize0 = if type(c0) == "number" then c0 else 0
@@ -569,21 +602,13 @@ local function applyFlow(fx: Fx)
 	fx.FlowApplied = f
 	local k = 0.55 + 0.45 * f
 	local q = quality
-	if fx.Spray then
-		rig.Stream.Width0 = WATER.SprayWidth * k
-		rig.Width1 = WATER.SprayWidthEnd * k
-		rig.Core.Width0 = 0.12 * k
-		rig.Core.Width1 = 0.5 * k
-		rig.Spray.Rate = (10 + 26 * f) * q
-	else
-		rig.Stream.Width0 = WATER.Width * k
-		rig.Width1 = WATER.WidthEnd * k
-		rig.Core.Width0 = WATER.Width * 0.3 * k
-		rig.Core.Width1 = WATER.WidthEnd * 0.3 * k
-		rig.Spray.Rate = 0
-	end
+	rig.Stream.Width0 = WATER.Width * k
+	rig.Width1 = WATER.WidthEnd * k
 	rig.Stream.Width1 = rig.Width1
-	rig.Stream.TextureSpeed = 1.2 + 1.8 * f
+	rig.Core.Width0 = WATER.Width * WATER.CoreWidth * k
+	rig.Core.Width1 = WATER.WidthEnd * WATER.CoreWidth * k
+	rig.Core.TextureSpeed = 1.5 + 2 * f
+	rig.Spray.Rate = if fx.Spray then (24 + 36 * f) * q else 0
 	rig.Drops.Rate = (8 + 18 * f) * q
 	rig.Mist.Rate = (1.5 + 3 * f) * q
 	rig.Ripple.Rate = if fx.Pool then (1.5 + 2.5 * f) * q else 0
@@ -1084,11 +1109,12 @@ local function step(dt: number)
 				light.Brightness = bright * (1 + 0.2 * pulse * fx.Heat)
 			end
 			local glow = fx.Glow
+			-- brightness pulses toward a warm hot orange (never white)
 			if glow then
-				glow.Color = fx.GlowColor:Lerp(Color3.new(1, 0.92, 0.7), 0.35 * pulse * fx.Heat)
+				glow.Color = fx.GlowColor:Lerp(GLOW_HOT, (0.35 + 0.45 * pulse) * fx.Heat)
 			end
 			for i, part in fx.Hot do
-				part.Color = fx.HotColors[i]:Lerp(Color3.new(1, 0.92, 0.7), 0.3 * pulse * fx.Heat)
+				part.Color = fx.HotColors[i]:Lerp(GLOW_HOT, (0.25 + 0.4 * pulse) * fx.Heat)
 			end
 			if base and #fx.Spinners > 0 then
 				fx.Angle = (fx.Angle + fx.SpinRate * fx.Heat * dt) % (math.pi * 2)

@@ -191,6 +191,29 @@ return function(T, Loader)
 		T.truthy(math.abs(landing.X - ore.X) > 3, "stream beside the vise")
 	end)
 
+	T.test("Machines: the Cleaning Station's stream stays out of the close-up view", function()
+		local model = MachineBuilder.build("CleaningStation")
+		local cam = attachment(model, "CamPoint").CFrame
+		local a, b = pos(model, "WaterOut"), pos(model, "WaterIn")
+		-- CameraFit.BaseFov (40 degrees) on a 16:9 screen
+		local tanHalfWidth = math.tan(math.rad(20)) * 16 / 9
+		for _, t in { 0, 0.5, 1 } do
+			local rel = cam:PointToObjectSpace(a:Lerp(b, t))
+			T.truthy(rel.Z < 0 and math.abs(rel.X) / -rel.Z > tanHalfWidth, `stream point {t} outside the close-up`)
+		end
+	end)
+
+	T.test("Machines: pipe bends are pipe pieces, not ball elbows", function()
+		-- every machine with pipes: no ball-shaped elbow parts bigger than a bolt
+		for _, id in { "CleaningStation", "ClayFurnace", "BlastFurnace", "AutoCleaner" } do
+			for _, part in parts(MachineBuilder.build(id)) do
+				if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball then
+					T.truthy(part.Size.X <= 0.4, `{id} has a ball bigger than a bolt ({part.Size.X})`)
+				end
+			end
+		end
+	end)
+
 	T.test("Machines: moving parts and glows the client animates are named", function()
 		local function count(model: any, name: string): number
 			local n = 0

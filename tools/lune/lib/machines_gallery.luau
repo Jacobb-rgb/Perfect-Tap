@@ -4,15 +4,16 @@
 	MachineBuilder on a plot-like pad, straight belt runs into and out of the
 	Auto Cleaner, and ore on the way.
 
-	The preview renderer can't draw Beams, particles or SurfaceGui frames, so
-	this file paints stand-ins with thin parts:
-	  - the water the client animates (MachineFxController): one smooth,
-	    tapering, see-through stream along the Beam curve between WaterOut and
-	    WaterIn, a few droplets and ripples on the pool; for a shower, fanned
-	    see-through sheets onto the ore. Same MachineBuilder.Water colours and
-	    widths as the client;
-	  - what the conveyor SurfaceGuis paint: the rollers / hazard edges on the
-	    belt, the cap strip and axle caps on the rails.
+	The preview renderer can't draw Beams, particle lifetimes or SurfaceGui
+	frames, so this file paints stand-ins with thin parts:
+	  - the water the client animates (MachineFxController): one tapered
+	    ribbon with a white core along the Beam curve between WaterOut and
+	    WaterIn, foam, ripple rings and droplets on the pool; for a shower,
+	    thin falling streaks onto the ore and a foam ring. Same
+	    MachineBuilder.Water colours and widths as the client;
+	  - the Auto Cleaner's short vent steam plume (three puffs);
+	  - what SurfaceGuis paint: the rollers / hazard edges on the belt, the cap
+	    strip and axle caps on the rails (conveyors, Auto Cleaner bed).
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -66,13 +67,15 @@ local function decor(transparency: number?): any
 end
 
 --[[
-	Stand-in for MachineFxController's water rig on a placed machine. A pour:
-	one smooth stream of 6 see-through glass segments along the Beam curve,
-	tapering from Width to WidthEnd, a few droplets and two faint ripples. A
-	shower (Spray): three thin see-through sheets fanned from the shower head
-	onto the ore, and a few droplets around it.
+	Stand-in for MachineFxController's water rig on a placed machine, seen
+	from `view` (a direction toward the camera; the client's Beams face the
+	camera). A pour: one tapered ribbon of thin glass strips along the Beam
+	curve (light blue, fairly opaque) with a white core strip, white foam and
+	two ripple rings where it lands, a few droplets. A shower (Spray): thin
+	falling streaks fanned from the shower head onto the ore, a foam ring on
+	the ore and droplets around it.
 ]]
-function Gallery.water(Loader: any, parent: any, model: any, flow: number, hitY: number?)
+function Gallery.water(Loader: any, parent: any, model: any, flow: number, view: any, hitY: number?, footY: number?)
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
 	local CF = Loader.CFrame
@@ -90,61 +93,103 @@ function Gallery.water(Loader: any, parent: any, model: any, flow: number, hitY:
 	local p1 = p0 + a0 * out:GetAttribute("Curve")
 	local p2 = p3 - a1 * into:GetAttribute("Curve")
 	local k = 0.55 + 0.45 * flow
+	local toView = view.Unit
 
+	-- a flat strip from a to b, its face turned toward the viewer
+	local function strip(a: any, b: any, width: number, depth: number, lift: number, color: any, material: any, transparency: number)
+		local dir = (b - a).Unit
+		local n = toView - dir * toView:Dot(dir)
+		n = if n.Magnitude > 1e-3 then n.Unit else V3.new(0, 0, -1)
+		local cf = CF.fromMatrix((a + b) / 2 + n * lift, dir:Cross(n), dir, n)
+		Geo.block(parent, cf, V3.new(width, (b - a).Magnitude, depth), color, material, decor(transparency))
+	end
+	-- a flat ring of short blocks lying on y = center.Y
+	local function ring(center: any, radius: number, width: number, color: any, transparency: number)
+		local n = 18
+		for i = 0, n - 1 do
+			local angle = (i + 0.5) / n * math.pi * 2
+			local at = center + V3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			local cf = CF.new(at) * CF.Angles(0, -angle, 0)
+			Geo.block(parent, cf, V3.new(width, 0.03, 2 * math.pi * radius / n + 0.02), color, nil, decor(transparency))
+		end
+	end
 	local function droplets(center: any, count: number, radius: number, height: number)
 		for i = 1, count do
 			local angle = i * 2.39996
-			local r = radius * (0.55 + (i % 3) * 0.25)
-			local p = center + V3.new(math.cos(angle) * r, 0.1 + (i % 3) * height, math.sin(angle) * r)
-			Geo.ball(parent, p, 0.08 + (i % 2) * 0.04, W.Splash:Lerp(W.Stream, 0.5), GLASS, decor(0.4))
+			local r = radius * (0.6 + (i % 3) * 0.25)
+			local p = center + V3.new(math.cos(angle) * r, 0.12 + (i % 3) * height, math.sin(angle) * r)
+			Geo.ball(parent, p, 0.09 + (i % 2) * 0.05, W.Splash, nil, decor(0.1))
 		end
 	end
 
 	if out:GetAttribute("Spray") == true then
-		-- three sheets fanned front / middle / back, each a trapezoid of two
-		-- triangles from the shower head down to where it hits (the ore top;
-		-- in game the Beam runs on into the ore, hidden by it)
+		-- streaks fanned across the shower head, landing on the ore top
 		local across = base.CFrame.RightVector
 		local ahead = base.CFrame.LookVector
 		local hit = V3.new(p3.X, hitY or p3.Y, p3.Z)
-		for _, fan in { -1, 0, 1 } do
-			local top = p0 + ahead * (fan * 0.1)
-			local bottom = hit + ahead * (fan * 0.45)
-			local halfTop = W.SprayWidth / 2 * k
-			local halfBottom = W.SprayWidthEnd / 2 * k * (1 - math.abs(fan) * 0.12)
-			local a, b = top - across * halfTop, top + across * halfTop
-			local c, d = bottom + across * halfBottom, bottom - across * halfBottom
-			local color = if fan == 0 then W.Stream else W.Stream:Lerp(W.Deep, 0.5)
-			local transparency = if fan == 0 then 0.58 else 0.68
-			local props = decor(transparency)
-			Geo.triangle(parent, a, b, c, 0.03, color, GLASS, nil, props)
-			Geo.triangle(parent, a, c, d, 0.03, color, GLASS, nil, props)
+		local count = 7
+		for i = 1, count do
+			local u = (i - (count + 1) / 2) / ((count - 1) / 2)
+			local wobble = if i % 2 == 0 then 0.1 else -0.1
+			local top = p0 + across * (u * W.SprayWidth / 2) + ahead * wobble
+			local bottom = hit + across * (u * W.SprayWidthEnd / 2 * k) + ahead * (wobble * 2) + V3.new(0, math.abs(u) * -0.25, 0)
+			strip(top, bottom, 0.09, 0.05, 0, W.Splash:Lerp(W.Stream, 0.3), GLASS, 0.3)
 		end
-		droplets(hit, 6, 0.75, 0.16)
+		-- foam where the water runs off the ore onto the rollers
+		local foot = V3.new(p3.X, footY or (hit.Y - 1), p3.Z)
+		ring(foot + V3.new(0, 0.03, 0), 0.75, 0.16, W.Foam, 0.15)
+		ring(foot + V3.new(0, 0.02, 0), 1.05, 0.08, W.Foam, 0.45)
+		droplets(hit, 8, 0.7, 0.14)
 		return
 	end
 
-	-- the stream: 6 segments end to end (no overlap), tapering, light blue
-	-- at the outlet, deeper blue where it lands
-	local steps = 6
+	-- the stream: strips end to end along the curve (no overlap, so no
+	-- darker joints), tapering, light blue at the outlet, deeper blue where
+	-- it lands, a white core strip down the middle
+	local steps = 16
 	local last = p0
 	for i = 1, steps do
 		local t = i / steps
 		local p = bezier(p0, p1, p2, p3, t)
-		local length = (p - last).Magnitude
-		if length > 1e-3 then
-			local mid = (t - 0.5 / steps)
+		if (p - last).Magnitude > 1e-3 then
+			local mid = t - 0.5 / steps
 			local width = (W.Width + (W.WidthEnd - W.Width) * mid) * k
-			local cf = CF.lookAt((last + p) / 2, p) * CF.Angles(0, math.pi / 2, 0)
-			local seg = Geo.block(parent, cf, V3.new(length, width, width), W.Stream:Lerp(W.Deep, mid), GLASS, decor(0.45 + 0.1 * mid))
-			seg.Shape = roblox.Enum.PartType.Cylinder
+			strip(last, p, width, 0.05, 0, W.Stream:Lerp(W.Deep, mid), GLASS, W.StreamTransparency)
+			strip(last, p, width * W.CoreWidth, 0.02, 0.04, W.Core, nil, 0.2)
 		end
 		last = p
 	end
-	-- splash: a few droplets and a faint ripple on the pool
-	droplets(p3, 6, 0.42, 0.16)
-	local ripple = Geo.block(parent, CF.new(p3 + V3.new(0, 0.005, 0)) * CF.Angles(0, 0, math.pi / 2), V3.new(0.02, 1.1, 1.1), W.Splash:Lerp(W.Stream, 0.5), nil, decor(0.86))
-	ripple.Shape = roblox.Enum.PartType.Cylinder
+	-- where it lands: white foam, two ripple rings, droplets
+	local foam = Geo.block(parent, CF.new(p3 + V3.new(0, 0.012, 0)) * CF.Angles(0, 0, math.pi / 2), V3.new(0.025, 0.55, 0.55), W.Foam, nil, decor(0.1))
+	foam.Shape = roblox.Enum.PartType.Cylinder
+	ring(p3 + V3.new(0, 0.008, 0), 0.45, 0.07, W.Foam, 0.3)
+	ring(p3 + V3.new(0, 0.006, 0), 0.72, 0.06, W.Foam, 0.5)
+	droplets(p3, 6, 0.38, 0.13)
+end
+
+--[[
+	Stand-in for a short steam plume (the client's vent emitter lives about a
+	second at 1.5-2.5 studs/s; the preview renderer would draw any smoke
+	texture as a 30-stud column): three white puffs growing as they rise.
+]]
+function Gallery.steam(Loader: any, parent: any, vent: any)
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local smoke = vent:FindFirstChild("Smoke")
+	if smoke then
+		smoke:Destroy()
+	end
+	local top = vent.CFrame.Position + V3.new(0, vent.Size.X / 2, 0)
+	-- { size, rise, x, z, transparency }: a low cluster drifting off
+	local puffs = {
+		{ 0.6, 0.3, 0.0, 0.0, 0.1 },
+		{ 0.75, 0.62, 0.3, 0.1, 0.15 },
+		{ 0.65, 0.7, -0.25, 0.05, 0.2 },
+		{ 0.95, 1.05, 0.15, 0.2, 0.3 },
+		{ 0.85, 1.2, 0.65, 0.3, 0.45 },
+	}
+	for _, puff in puffs do
+		Geo.ball(parent, top + V3.new(puff[3], puff[2], puff[4]), puff[1], C3.fromRGB(246, 247, 248), nil, decor(puff[5]))
+	end
 end
 
 -- Face frames of a SurfaceGui in part space: centre, normal, the GUI's x and
@@ -206,13 +251,13 @@ local function paintGui(Loader: any, parent: any, part: any, gui: any)
 	end
 end
 
--- Paints a conveyor's SurfaceGuis (belt top, rail sides).
-function Gallery.paintBelt(Loader: any, parent: any, model: any)
-	for _, name in { "Belt", "RailL", "RailR" } do
-		local part = model:FindFirstChild(name)
-		if part then
+-- Paints what a model's SurfaceGui frames show (conveyor belts and rails,
+-- the Auto Cleaner's axle caps); text signs are drawn by the renderer.
+function Gallery.paintGuis(Loader: any, parent: any, model: any)
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
 			for _, gui in part:GetChildren() do
-				if gui:IsA("SurfaceGui") then
+				if gui:IsA("SurfaceGui") and gui:FindFirstChildWhichIsA("Frame") then
 					paintGui(Loader, parent, part, gui)
 				end
 			end
@@ -262,8 +307,8 @@ function Gallery.build(Loader: any, parent: any)
 			end
 		end
 		counts[entry.Id] = n
+		Gallery.paintGuis(Loader, root, model)
 		if entry.Id == "Conveyor" then
-			Gallery.paintBelt(Loader, root, model)
 			table.insert(belts, model)
 		end
 	end
@@ -293,8 +338,10 @@ function Gallery.build(Loader: any, parent: any)
 	ore("Raw", "Copper", CF.new(shower.X, rollerTop + 1, shower.Z) * CF.Angles(0, 0.4, 0), rollerTop, 7)
 	-- water as the client shows it: the station idles gently, the cleaner
 	-- works and its shower hits the dirty ore (about 1.1 tall)
-	Gallery.water(Loader, root, placed.CleaningStation, 0.4)
-	Gallery.water(Loader, root, placed.AutoCleaner, 1, rollerTop + 1.05)
+	local view = V3.new(1, 0, -1.2).Unit -- toward the usual front-right cameras
+	Gallery.water(Loader, root, placed.CleaningStation, 0.4, view)
+	Gallery.water(Loader, root, placed.AutoCleaner, 1, view, rollerTop + 1.05, rollerTop)
+	Gallery.steam(Loader, root, placed.AutoCleaner:FindFirstChild("Vent"))
 	local function onBelt(belt: any, x: number, z: number): (any, number)
 		local cf = belt:GetPivot() * CF.new(x, 1.5, z)
 		return cf, belt:FindFirstChild("Belt").CFrame.Position.Y + 0.25
@@ -308,7 +355,7 @@ function Gallery.build(Loader: any, parent: any)
 
 	-- a forgekeeper at the Cleaning Station for scale
 	local station = placed.CleaningStation.PrimaryPart.CFrame
-	Dummy.build(root, CF, station * CF.new(-1.2, 0, -5.6) * CF.Angles(0, math.pi, 0), "idle")
+	Dummy.build(root, CF, station * CF.new(-5.2, 0, -4.6) * CF.Angles(0, math.pi * 0.85, 0), "idle")
 
 	local names = {}
 	for id in counts do
