@@ -147,6 +147,11 @@ elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays
 	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "enchants" then -- the world + the Enchant shop / luck boosts overlays (tools/lune/lib/enchant_boost_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/enchant_boost_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

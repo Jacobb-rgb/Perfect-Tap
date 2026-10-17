@@ -27,6 +27,8 @@ local ORDER = {
 	"TrainController",
 	"FoundryController",
 	"TechShopController",
+	"BoostController", -- luck boosts view + the boost chips under the HUD coins
+	"EnchantController", -- the Enchant shop at the rune table
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }

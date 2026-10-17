@@ -97,7 +97,8 @@ function styleElement(el, node, w, h) {
     span.style.fontSize = `${size}px`;
     span.style.lineHeight = "1.05";
     span.style.color = rgba(node.tc, 1 - node.tt);
-    span.style.whiteSpace = node.wrap ? "normal" : "nowrap";
+    // Roblox always breaks lines at "\n" (wrapped or not)
+    span.style.whiteSpace = node.wrap ? "pre-line" : "pre";
     const stroke = (node.ch || []).find((c) => c.c === "UIStroke" && c.mode === "Contextual");
     if (stroke && node.tt < 0.99 && stroke.t < 0.99) {
       span.style.webkitTextStroke = `${stroke.th * 2}px ${rgba(stroke.col, (1 - stroke.t) * (1 - node.tt))}`;

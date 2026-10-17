@@ -43,6 +43,8 @@ local ORDER = {
 	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
 	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
+	"BoostService", -- luck boosts (Triple / Hexa Lucky), purchase prompts, boost expiry pushes
+	"EnchantService", -- the Enchant shop at the rune table (EnchantCounter)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
