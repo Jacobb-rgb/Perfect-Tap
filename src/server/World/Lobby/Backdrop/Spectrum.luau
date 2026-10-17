@@ -19,7 +19,7 @@ local Rng = require(Shared.Util.Rng)
 
 local Spectrum = {}
 
-Spectrum.Theme = "Sunset"
+Spectrum.Theme = "Candy"
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
