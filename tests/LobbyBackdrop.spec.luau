@@ -68,8 +68,9 @@ return function(T, Loader)
 		MineYard = { 6, 1, 5 }, -- the lantern post
 	}
 	-- Sub-models that leave the footprint on purpose (plan 6.2: the ore chute
-	-- runs down to the quarry floor; the summit cascade falls down the massif).
-	local exempt = { Chute = true, Cascade = true }
+	-- runs down to the quarry floor; the summit cascade falls down the massif;
+	-- the Spectrum spires make the skyline behind and beside the massif).
+	local exempt = { Chute = true, Cascade = true, Spires = true }
 
 	T.test("backdrop builds every piece inside its footprint", function()
 		for _, piece in LobbyLayout.ofPackage("Backdrop") do
@@ -98,6 +99,18 @@ return function(T, Loader)
 					T.truthy(min.Y >= piece.Center.Y - s[2], `{part:GetFullName()} reaches below {piece.Id} ({min.Y})`)
 					T.truthy(max.Y <= piece.Center.Y + piece.Size.Y + s[3], `{part:GetFullName()} rises above {piece.Id} ({max.Y})`)
 				end
+			end
+		end
+		-- the exempt spires stay on the island, behind the quarry and above the caves
+		local spires = backdrop.ForgeMountain:FindFirstChild("Spires")
+		if spires then
+			local island = WorldLayout.Island
+			for _, part in parts(spires) do
+				local min, max = bounds(part)
+				T.truthy(
+					min.X >= island.Min.X and max.X <= island.Max.X and max.Z <= -240 and min.Z >= -440 and min.Y >= 23.9,
+					`{part:GetFullName()} stays in the spire zone ({min} {max})`
+				)
 			end
 		end
 		-- the exempt chute stays between the works deck and the quarry floor
@@ -129,7 +142,8 @@ return function(T, Loader)
 			-- raised from 700 by the 2026-10 polish pass (grass drips, big
 			-- crystals, huts, more trees); the massif stands outside the lobby
 			-- area and streams as a StreamingMesh LOD
-			ForgeMountain = { 1000, 2 },
+			-- 1500 with the Spectrum strata and spires (2026-10-17)
+			ForgeMountain = { 1500, 2 },
 			DepthsPortal = { 90, 1 },
 			ForgeWorks = { 160, 1 },
 			DepthsRails = { 60, 0 },

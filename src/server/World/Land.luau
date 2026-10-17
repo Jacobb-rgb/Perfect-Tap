@@ -21,6 +21,7 @@ local Palette = require(script.Parent.Palette)
 local PlotBuilder = require(script.Parent.PlotBuilder)
 local Props = require(script.Parent.Props)
 local Style = require(script.Parent.Lobby.Style)
+local Spectrum = require(script.Parent.Lobby.Backdrop.Spectrum)
 
 local C = Style.C
 
@@ -802,9 +803,22 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	end
 	-- mid blue-grey low, darker high (never the deepest shade: the concept's
 	-- mountains read light against the evening sky)
-	local function stoneShade(top: number): Color3
+	-- (Spectrum themes colour the range by height on their own stream, so the
+	-- column shapes never change with the theme)
+	local crng = Rng.new(WorldLayout.Seed * 7 + 7)
+	local function stoneShade(x: number, top: number): Color3
+		if Spectrum.colored() then
+			return Spectrum.color(x, top, crng)
+		end
 		local band = math.clamp((top - 8) / 44, 0, 1)
 		return C.Stone:Lerp(C.StoneDark, band * 0.85)
+	end
+	-- the stepped cap on high columns: light stone, or a pale tint of the theme
+	local function capShade(x: number, top: number, mix: number): Color3
+		if Spectrum.colored() then
+			return Spectrum.tint(Spectrum.color(x, top, crng))
+		end
+		return C.StoneLight:Lerp(C.StoneDark, mix)
 	end
 	-- the concept's slopes mix green with yellow, orange, pink and red crowns
 	local treeKinds = { "Green", "Yellow", "Green", "Orange", "Pink", "Green", "Red" }
@@ -863,18 +877,24 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			else math.floor(math.max((flankAt(x, z) or heightAt(x, z)) + mrng:range(-4, 4), bottom + 10))
 		local size = Vector3.new(half * 2 * mrng:range(0.97, 1.06), top - bottom, half * 2 * mrng:range(0.97, 1.06))
 		local center = Vector3.new(x, bottom + size.Y / 2, z)
-		Geo.block(mountains, CFrame.new(center), size, Geo.vary(stoneShade(top), mrng, 0.05), nil, solid())
+		local shade = Geo.vary(stoneShade(x, top), mrng, 0.05)
+		if Spectrum.colored() then
+			Spectrum.stack(mountains, center - size / 2, center + size / 2, crng, solid())
+		else
+			Geo.block(mountains, CFrame.new(center), size, shade, nil, solid())
+		end
 		if depth == 0 and ((flankAt(x, z) and z > massifMax.Z - 40) or z > -165) then
 			-- protruding stones on the town-facing walls of the flanks
 			for _ = 1, 2 do
 				local s = math.floor(mrng:range(3, 6))
 				local stone = center
 					+ Vector3.new(mrng:range(-half * 0.6, half * 0.6), mrng:range(-size.Y * 0.2, size.Y * 0.35), size.Z / 2 + 0.4)
+				local accent = if Spectrum.colored() then stoneShade(x, top):Lerp(Color3.new(1, 1, 1), 0.2) else C.Stone
 				Geo.block(
 					mountains,
 					CFrame.new(stone),
 					Vector3.new(s * 1.4, s, 1.2),
-					Geo.vary(C.Stone, mrng, 0.06),
+					Geo.vary(accent, mrng, 0.06),
 					nil,
 					decor({ CastShadow = false })
 				)
@@ -919,7 +939,7 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 				mountains,
 				CFrame.new(center + offset),
 				cap,
-				Geo.vary(C.StoneLight:Lerp(C.StoneDark, mrng:range(0.4, 0.7)), mrng, 0.04),
+				Geo.vary(capShade(x, top + cap.Y, mrng:range(0.4, 0.7)), mrng, 0.04),
 				nil,
 				solid()
 			)
