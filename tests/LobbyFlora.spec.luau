@@ -422,7 +422,8 @@ return function(T, Loader)
 
 	T.test("flora: town buildings stand on free ground inside their sites", function()
 		local sites = Town.Sites
-		T.truthy(#sites >= 8 and #sites <= 14, `8-14 town buildings ({#sites})`)
+		-- (2026-10-18: the owner had the town houses removed: none, or 8-14 if they come back)
+		T.truthy(#sites == 0 or (#sites >= 8 and #sites <= 14), `no town houses or 8-14 ({#sites})`)
 		local town = flora():FindFirstChild("Town")
 		T.truthy(town, "Flora has Town")
 		for i, site in sites do
@@ -522,9 +523,20 @@ return function(T, Loader)
 				T.truthy(found, `{site.Id} has its {site.Sign} sign`)
 			end
 		end
-		for _, text in { "TOOLS", "INN", "MAP", "ORE", "WORKS", "CARTS" } do
-			T.truthy(texts[text], "town sign " .. text)
+		-- (2026-10-18: the owner had the town houses removed; every sign of a
+		-- site that is added back must still be found above)
+		for _, site in Town.Sites do
+			if site.Sign then
+				T.truthy(texts[site.Sign], "town sign " .. site.Sign)
+			end
 		end
+		local houses = 0
+		for _, c in town:GetChildren() do
+			if c:GetAttribute("TownBuilding") then
+				houses += 1
+			end
+		end
+		T.eq(houses, #Town.Sites, "one house per town site (none now: the houses are gone)")
 		-- big glowing planes bloom to white in the renders: every Neon face stays small
 		for _, part in parts(town) do
 			if part.Material == roblox.Enum.Material.Neon then
