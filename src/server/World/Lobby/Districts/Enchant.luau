@@ -2,12 +2,15 @@
 	ENCHANT: the small mystic workshop behind UPGRADES, past the pink
 	trees, design v2: perks for blasters; in the concept v2 metal and neon
 	language: a gunmetal module (wall-banners with violet bands, a facade of
-	two violet-lit windows and a wide door frame, an overhang roof with
-	violet and blue neon edges), a big purple crystal in a bevelled holder on
-	the roof, the ENCHANT sign box over the door and, in front of it, the
-	rune table (table-display) with a glowing top (BasePart tag
-	EnchantCounter) under floating crystals (tag Spin), lantern pillars with
-	violet slots at the front corners.
+	two violet-lit windows and a wide door frame between chunky corner
+	pillars with light bevel caps, the orange band and blue neon edges, an
+	overhang roof with violet and blue neon edges over a light bevel cap,
+	the orange band on the floor plinth), a big deep purple crystal in a
+	bevelled holder on the roof, the ENCHANT sign box over the door and, in
+	front of it, the rune table (table-display) with a glowing top (BasePart
+	tag EnchantCounter) under floating crystals (tag Spin), lantern pillars
+	with violet slots at the front corners. The crystals use deep colors so
+	they glow purple, not pink-white.
 	Local frame: 16 wide, 16 tall, 12 deep, front = -Z.
 ]]
 
@@ -22,6 +25,13 @@ local Tech = require(script.Parent.Tech)
 local Enchant = {}
 
 local C = Kit.C
+local rgb = Color3.fromRGB
+
+-- Deep crystal colors with explicit tips: Style's pale tips and the light
+-- CrystalPurple/Pink bloom to pink-white blobs.
+local DEEP_PURPLE, DEEP_PURPLE_TIP = rgb(112, 40, 226), rgb(146, 84, 240)
+local DEEP_PINK, DEEP_PINK_TIP = rgb(206, 40, 150), rgb(226, 86, 176)
+local DEEP_BLUE, DEEP_BLUE_TIP = rgb(36, 88, 236), rgb(76, 128, 246)
 
 local FLOOR = 0.5
 local HUT_FRONT = -0.6 -- facade center
@@ -39,7 +49,8 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 
 	-- floor panel with a violet front edge
 	Style.block(m, at(0, FLOOR / 2, -0.2), Vector3.new(15.4, FLOOR, 11.4), Style.vary(Tech.MetalDark, rng, 0.03), nil, Style.solid())
-	Tech.glow(m, at(0, FLOOR - 0.15, -5.92), Vector3.new(15.0, 0.14, 0.1), violet)
+	Tech.glow(m, at(0, FLOOR - 0.12, -5.94), Vector3.new(15.0, 0.2, 0.12), violet)
+	Kit.bit(m, at(0, FLOOR - 0.36, -5.93), Vector3.new(15.4, 0.22, 0.1), Tech.Band)
 
 	-- the module: side and back wall-banners with violet bands
 	local h = WALL_TOP - FLOOR
@@ -68,6 +79,11 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 		Frame = C.AwningPurple,
 		Neon = Tech.Neon,
 	})
+	-- chunky corner pillars on the facade: light bevel caps, the orange band
+	-- and blue neon edges (the gunmetal frame of the other modules)
+	for _, side in { -1, 1 } do
+		Tech.pillar(m, at(side * 5.95, FLOOR, HUT_FRONT - 0.35), WALL_TOP - FLOOR, 1.3, { Studs = false })
+	end
 	-- inside: a glowing rune circle on the floor and a bookshelf
 	Tech.disc(m, at(0, FLOOR + 0.03, 2.2).Position, 0.06, 3.4, C.CrystalViolet, Kit.NEON)
 	Kit.bit(m, at(0, FLOOR + 4.2, HUT_BACK - 0.56), Vector3.new(10.0, 8.0, 0.1), Tech.MetalDeep)
@@ -100,13 +116,14 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 			Style.tiny({ CastShadow = true })
 		)
 	end
-	Tech.glow(m, at(0, (WALL_TOP + ROOF_TOP) / 2, roofZ - roofD / 2 - 0.05), Vector3.new(13.4, 0.22, 0.08), violet)
-	Tech.glow(m, at(0, ROOF_TOP + 0.36, roofZ - roofD / 2 - 0.02), Vector3.new(13.4, 0.14, 0.06), Tech.Neon)
+	Tech.glow(m, at(0, (WALL_TOP + ROOF_TOP) / 2, roofZ - roofD / 2 - 0.06), Vector3.new(13.4, 0.3, 0.12), violet)
+	Tech.glow(m, at(0, ROOF_TOP + 0.42, roofZ - roofD / 2 - 0.04), Vector3.new(13.4, Tech.TUBE, 0.16), Tech.Tube)
+	Tech.underBevel(m, at(0, WALL_TOP - 0.3, roofZ - roofD / 2 + 0.3), Vector3.new(13.4, 0.6, 0.6), Tech.MetalLight)
 
 	-- the big crystal in a bevelled holder on the roof
 	local holder = Tech.pedestal(m, at(0, ROOF_TOP, 3.0), 2.8, 1.1, { Neon = violet })
-	Style.crystal(m, holder, 3.6, 1.3, violet)
-	Style.crystal(m, holder * CFrame.new(0.8, 0, 0.3) * CFrame.Angles(0, 0, -0.4), 1.8, 0.7, C.CrystalPink)
+	Style.crystal(m, holder, 3.6, 1.3, DEEP_PURPLE, DEEP_PURPLE_TIP)
+	Style.crystal(m, holder * CFrame.new(0.8, 0, 0.3) * CFrame.Angles(0, 0, -0.4), 1.8, 0.7, DEEP_PINK, DEEP_PINK_TIP)
 
 	-- ENCHANT sign box over the door (white letters, violet studs)
 	Tech.sign(m, at(0, 11.5, HUT_FRONT - 1.1), "ENCHANT", 8.6, 2.1, { StudColor = violet })
@@ -137,9 +154,9 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 
 	-- floating crystals over the table (turn and bob on the client)
 	local float = Style.model("FloatingCrystals", m)
-	local mid = Style.crystal(float, at(0, 4.6, tz), 1.9, 0.7, C.CrystalPurple)
-	Style.crystal(float, at(1.2, 5.0, tz) * CFrame.Angles(0, 0, -0.35), 1.2, 0.5, C.CrystalPink)
-	Style.crystal(float, at(-1.2, 4.9, tz) * CFrame.Angles(0, 0, 0.35), 1.2, 0.5, C.CrystalBlue)
+	local mid = Style.crystal(float, at(0, 4.6, tz), 1.9, 0.7, DEEP_PURPLE, DEEP_PURPLE_TIP)
+	Style.crystal(float, at(1.2, 5.0, tz) * CFrame.Angles(0, 0, -0.35), 1.2, 0.5, DEEP_PINK, DEEP_PINK_TIP)
+	Style.crystal(float, at(-1.2, 4.9, tz) * CFrame.Angles(0, 0, 0.35), 1.2, 0.5, DEEP_BLUE, DEEP_BLUE_TIP)
 	local core = mid[1]
 	Style.emitter(core, "Sparkle", C.CrystalPink, 3)
 	float.PrimaryPart = core
@@ -158,12 +175,12 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 		Beard = C.FlowerWhite,
 	})
 
-	-- lantern pillars with violet slots at the front corners, a crystal cluster
+	-- lantern pillars with violet slots at the front corners, a deep purple crystal cluster
 	-- and a violet container beside the module
 	for _, side in { -1, 1 } do
 		Tech.lanternPillar(m, at(side * 6.6, FLOOR, -4.6), 5.4, 1.2, { Slot = violet })
 	end
-	Style.crystalCluster(m, at(4.5, FLOOR, -2.6), 2.6, C.CrystalPurple, rng, { Count = 3 })
+	Style.crystalCluster(m, at(4.5, FLOOR, -2.6), 2.6, DEEP_PURPLE, rng, { Count = 3 })
 	Tech.container(m, at(-6.5, FLOOR, -2.7), 2.6, 1.3, C.AwningPurple)
 end
 

@@ -3,8 +3,9 @@
 	gameplay hook exists once under Lobby.Districts with the right class,
 	children and attributes, every piece stays inside its LobbyLayout
 	footprint and height budget (spinning models over their whole sweep),
-	the walk lanes to the shop counters stay open, the build is
-	deterministic and the package stays inside its budget.
+	the SPIN & WIN frame grows with a bigger footprint, Tobin's Sell stall
+	stays low in front of the SHOP, the walk lanes to the shop counters stay
+	open, the build is deterministic and the package stays inside its budget.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -238,46 +239,90 @@ return function(T, Loader)
 		end
 	end)
 
+	-- The first part of `root` outside `piece`'s footprint and height (spinning
+	-- models are checked over their whole sweep), or nil.
+	local function outside(root, piece): string?
+		local frame = LobbyLayout.frame(piece)
+		local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
+		for _, d in root:GetDescendants() do
+			if d:IsA("BasePart") then
+				local points = corners(d)
+				local spinner = spinnerOf(d, root)
+				if spinner then
+					-- check the whole sweep around the pivot's Y axis (plus the bob)
+					local pivot = spinner.PrimaryPart.CFrame
+					local bob = spinner:GetAttribute("BobHeight") or 0.4
+					local swept = {}
+					for _, p in points do
+						local localP = pivot:PointToObjectSpace(p)
+						for k = 0, 15 do
+							local a = k * math.pi / 8
+							for _, dy in { -bob, bob } do
+								table.insert(swept, pivot * (CFrame.Angles(0, a, 0) * localP + Vector3.new(0, dy, 0)))
+							end
+						end
+					end
+					points = swept
+				end
+				for _, p in points do
+					local q = frame:PointToObjectSpace(p)
+					if math.abs(q.X) > hx or math.abs(q.Z) > hz or q.Y < -0.3 or q.Y > h then
+						return `{d:GetFullName()} at {q}`
+					end
+				end
+			end
+		end
+		return nil
+	end
+
 	T.test("districts: every part stays inside its piece footprint and height", function()
 		local _, pkg = districts()
 		for _, piece in LobbyLayout.ofPackage("Districts") do
+			T.falsy(outside(pkg[piece.Id], piece), piece.Id .. " part outside its footprint/height")
+		end
+	end)
+
+	T.test("districts: the SPIN & WIN frame grows with a bigger footprint and stays inside it", function()
+		local Wheel = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Wheel")
+		local piece = LobbyLayout.get("SpinWheel")
+		local size = piece.Size
+		local function build(): (any, number)
+			local m = roblox.Instance.new("Model")
+			Wheel.build(m, Rng.new("Lobby/Districts/wheel"))
 			local frame = LobbyLayout.frame(piece)
-			local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
-			local root = pkg[piece.Id]
-			local bad = nil
-			for _, d in root:GetDescendants() do
+			local top = 0
+			for _, d in m:GetDescendants() do
 				if d:IsA("BasePart") then
-					local points = corners(d)
-					local spinner = spinnerOf(d, root)
-					if spinner then
-						-- check the whole sweep around the pivot's Y axis (plus the bob)
-						local pivot = spinner.PrimaryPart.CFrame
-						local bob = spinner:GetAttribute("BobHeight") or 0.4
-						local swept = {}
-						for _, p in points do
-							local localP = pivot:PointToObjectSpace(p)
-							for k = 0, 15 do
-								local a = k * math.pi / 8
-								for _, dy in { -bob, bob } do
-									table.insert(swept, pivot * (CFrame.Angles(0, a, 0) * localP + Vector3.new(0, dy, 0)))
-								end
-							end
-						end
-						points = swept
-					end
-					for _, p in points do
-						local q = frame:PointToObjectSpace(p)
-						if math.abs(q.X) > hx or math.abs(q.Z) > hz or q.Y < -0.3 or q.Y > h then
-							bad = `{d:GetFullName()} at {q}`
-							break
-						end
-					end
-				end
-				if bad then
-					break
+					top = math.max(top, frame:PointToObjectSpace(d.CFrame.Position).Y)
 				end
 			end
-			T.falsy(bad, piece.Id .. " part outside its footprint/height")
+			return m, top
+		end
+		local _, baseTop = build()
+		local ok, err = pcall(function()
+			piece.Size = Vector3.new(26, 36, 12)
+			local big, bigTop = build()
+			T.falsy(outside(big.SpinWheel, piece), "the bigger wheel stays inside its footprint")
+			T.truthy(bigTop > baseTop * 1.3, `the wheel grows with the footprint ({baseTop} -> {bigTop})`)
+			T.truthy(big.SpinWheel:FindFirstChild("EmberChest", true), "the bigger wheel keeps its EmberChest")
+		end)
+		piece.Size = size
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("districts: Tobin's Sell stall stays low so the SHOP windows show", function()
+		local _, pkg = districts()
+		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
+		for _, d in pkg.ShopFront:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and d.Transparency < 1 then
+				local top = -math.huge
+				for _, p in corners(d) do
+					top = math.max(top, frame:PointToObjectSpace(p).Y)
+				end
+				T.truthy(top <= 5.0, `{d:GetFullName()} rises to {top} (keep the stall under 5 studs)`)
+			end
 		end
 	end)
 

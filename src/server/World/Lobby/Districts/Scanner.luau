@@ -4,9 +4,10 @@
 	with blue neon edges, a terminal (computer-screen look: cabinet, bezel,
 	glowing screen, slanted console with buttons; Model tag OreCodex,
 	PrimaryPart = the cabinet), a thick mechanical scanner ring (blue neon
-	inner edge, orange studs) on a housing with a sample rock and a scan
-	line, sample rocks on table-display-planet pedestals and the ROCK
-	SCANNER sign box with a target icon on a frame. One blue PointLight.
+	inner edge, orange studs) standing on clamp feet with a sample rock and
+	a scan line, sample rocks on table-display-planet pedestals and the ROCK
+	SCANNER sign box with a target icon on a frame, raised over the ring so
+	the words read from the terminal side. One blue PointLight.
 	Local frame: 12 wide, 10 tall, 10 deep, front = -Z (south-west).
 ]]
 
@@ -59,28 +60,28 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 		end
 	end
 	for _, side in { -1, 1 } do
-		Tech.glow(m, at(0, TOP - 0.1, side * 4.55), Vector3.new(11.1, 0.16, 0.16), Tech.Neon)
-		Tech.glow(m, at(side * 5.55, TOP - 0.1, 0), Vector3.new(0.16, 0.16, 9.1), Tech.Neon)
+		Tech.glow(m, at(0, TOP - 0.12, side * 4.56), Vector3.new(11.1, 0.24, 0.2), Tech.Tube)
+		Tech.glow(m, at(side * 5.56, TOP - 0.12, 0), Vector3.new(0.2, 0.24, 9.1), Tech.Tube)
 	end
 	Tech.glow(m, at(0, 0.45, -5.02), Vector3.new(11.6, 0.14, 0.08), Tech.Warm)
 
 	-- the Ore Codex terminal (viewer's left): cabinet, bezel, screen, console
 	local terminal = Style.model("Terminal", m)
 	local tx, tz = 3.1, 1.3
-	local cabinet = Style.block(terminal, at(tx, TOP + 3.0, tz), Vector3.new(4, 6, 2.5), Tech.Metal, nil, Style.solid())
+	local cabinet = Style.block(terminal, at(tx, TOP + 2.7, tz), Vector3.new(4, 5.4, 2.5), Tech.Metal, nil, Style.solid())
 	cabinet.Name = "Cabinet"
-	Kit.bit(terminal, at(tx, TOP + 6.2, tz), Vector3.new(4.3, 0.4, 2.8), Tech.MetalLight)
+	Kit.bit(terminal, at(tx, TOP + 5.6, tz), Vector3.new(4.3, 0.4, 2.8), Tech.MetalLight)
 	Kit.bit(terminal, at(tx, TOP + 0.3, tz), Vector3.new(4.3, 0.6, 2.8), Tech.MetalDark)
 	local front = tz - 1.25
-	Kit.bit(terminal, at(tx, TOP + 4.4, front - 0.12), Vector3.new(3.6, 2.7, 0.24), Tech.MetalDark)
-	local screen = Kit.glow(terminal, at(tx, TOP + 4.4, front - 0.27), Vector3.new(3.0, 2.1, 0.06), Tech.Screen)
+	Kit.bit(terminal, at(tx, TOP + 4.0, front - 0.12), Vector3.new(3.6, 2.5, 0.24), Tech.MetalDark)
+	local screen = Kit.glow(terminal, at(tx, TOP + 4.0, front - 0.27), Vector3.new(3.0, 1.9, 0.06), Tech.Screen)
 	screen.Name = "Screen"
 	for i, w in { 2.0, 1.4, 1.7 } do
-		Kit.bit(terminal, at(tx + 0.3, TOP + 5.0 - i * 0.45, front - 0.31), Vector3.new(w, 0.16, 0.03), C.GlowText)
+		Kit.bit(terminal, at(tx + 0.3, TOP + 4.6 - i * 0.42, front - 0.31), Vector3.new(w, 0.16, 0.03), C.GlowText)
 	end
 	Kit.glow(
 		terminal,
-		at(tx - 1.0, TOP + 4.1, front - 0.31) * CFrame.Angles(0, 0, math.pi / 4),
+		at(tx - 1.0, TOP + 3.75, front - 0.31) * CFrame.Angles(0, 0, math.pi / 4),
 		Vector3.new(0.6, 0.6, 0.03),
 		C.CrystalPurple
 	)
@@ -90,24 +91,29 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 	end
 	Kit.bit(terminal, at(tx, TOP + 1.3, front - 0.04), Vector3.new(4.0, 0.5, 0.1), Tech.Band)
 	for _, side in { -1, 1 } do
-		Tech.glow(terminal, at(tx + side * 2.03, TOP + 3.3, front - 0.03), Vector3.new(0.12, 4.6, 0.1), Tech.Neon)
+		Tech.glow(terminal, at(tx + side * 2.0, TOP + 3.0, front - 0.06), Vector3.new(0.3, 4.2, 0.14), Tech.Tube)
 	end
 	terminal.PrimaryPart = cabinet
 	Kit.tag(terminal, "OreCodex")
 
-	-- the scanner ring (viewer's right): a thick mechanical ring on a housing
-	local rx, rz = -2.4, 0.9
-	local ringY = TOP + 4.3
+	-- the scanner ring (viewer's right): a thick mechanical ring standing on
+	-- the platform in two clamp feet, low enough that it never covers the
+	-- sign from the terminal side
+	local rx, rz = -2.4, 1.4
+	local ringOut = 3.0
+	local ringY = TOP + ringOut / math.cos(math.pi / 8) + 0.05
 	local ringCf = at(rx, ringY, rz)
-	Tech.ring(m, ringCf, 2.35, 3.3, 8, { Depth = 1.0, Studs = C.Fire, Lip = false })
-	local topSeg = Kit.glow(m, ringCf * CFrame.new(0, 3.3 + 0.05, 0), Vector3.new(1.6, 0.14, 0.7), Tech.Neon)
+	Tech.ring(m, ringCf, 2.15, ringOut, 8, { Depth = 1.0, Studs = C.Fire, Lip = false })
+	local topSeg = Kit.glow(m, ringCf * CFrame.new(0, ringOut + 0.05, 0), Vector3.new(1.6, 0.14, 0.7), Tech.Tube)
 	Style.light(topSeg, C.CrystalBlue, 14, 1.5)
-	Style.block(m, at(rx, TOP + 0.55, rz), Vector3.new(3.2, 1.1, 1.6), Tech.MetalDark, nil, Style.solid())
-	Tech.glow(m, at(rx, TOP + 0.75, rz - 0.82), Vector3.new(2.4, 0.14, 0.06), C.Fire)
+	for _, side in { -1, 1 } do
+		Style.block(m, at(rx + side * 1.9, TOP + 0.45, rz), Vector3.new(1.2, 0.9, 1.5), Tech.MetalDark, nil, Style.solid())
+		Tech.glow(m, at(rx + side * 1.9, TOP + 0.6, rz - 0.77), Vector3.new(0.9, 0.2, 0.06), C.Fire)
+	end
 	-- sample rock on a little stand inside the ring, and the scan line
-	Kit.bit(m, at(rx, ringY - 1.9, rz), Vector3.new(1.0, 0.3, 0.8), Tech.MetalLight)
-	sampleRock(m, at(rx, ringY - 1.75, rz), 1.4, C.CrystalPurple, rng)
-	Kit.block(m, at(rx, ringY - 0.4, rz - 0.1), Vector3.new(4.4, 0.1, 0.4), C.CrystalCyan, Kit.NEON, Style.tiny({ Transparency = 0.35 }))
+	Kit.bit(m, at(rx, ringY - 2.0, rz), Vector3.new(1.0, 0.3, 0.8), Tech.MetalLight)
+	sampleRock(m, at(rx, ringY - 1.85, rz), 1.3, C.CrystalPurple, rng)
+	Kit.block(m, at(rx, ringY - 0.3, rz - 0.1), Vector3.new(4.0, 0.1, 0.4), C.CrystalCyan, Kit.NEON, Style.tiny({ Transparency = 0.35 }))
 
 	-- sample rocks on table-display-planet pedestals along the front
 	for i, ore in { C.Copper, C.Gold, C.CrystalBlue } do
@@ -117,14 +123,24 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	-- ROCK SCANNER sign box with a target icon on a frame at the back
+	-- (raised over the ring's top: seen from the front at eye height the ring
+	-- stays under the letters)
 	local sz = 3.9
+	local signY, signH = 8.75, 1.7
+	local postTop = signY - signH / 2 - 0.55
 	for _, x in { -5.1, 5.1 } do
-		Style.block(m, at(x, (TOP + 7.0) / 2, sz + 0.3), Vector3.new(0.6, 7.0 - TOP, 0.6), Tech.MetalLight)
+		Style.block(m, at(x, (TOP + postTop) / 2, sz + 0.3), Vector3.new(0.6, postTop - TOP, 0.6), Tech.MetalLight)
 		Tech.disc(m, at(x, TOP + 0.5, sz + 0.3).Position, 1.0, 0.9, Tech.Band)
 	end
-	local _, iconAt = Tech.sign(m, at(0, 8.3, sz - 0.4), "ROCK SCANNER", 9.2, 1.9, { Icon = 2.1, IconLeft = true })
+	local _, iconAt = Tech.sign(m, at(0, signY, sz - 0.4), "ROCK SCANNER", 9.4, signH, {
+		Icon = 2.0,
+		IconLeft = true,
+		Margin = 0.35,
+		Lip = 0.2,
+		Back = true,
+	})
 	if iconAt then
-		Style.icon(m, iconAt * CFrame.new(0, 0, -0.12), "Target", 1.6, Tech.Neon, Kit.NEON)
+		Style.icon(m, iconAt * CFrame.new(0, 0, -0.12), "Target", 1.5, Tech.Neon, Kit.NEON)
 	end
 end
 

@@ -310,7 +310,8 @@ function Kit.npc(parent: Instance, base: CFrame, opts: Opts): Model
 		Kit.bit(m, base * CFrame.new(0, 5.5, -0.15), Vector3.new(1.85, 0.16, 1.95), opts.Helmet:Lerp(Kit.Dark, 0.2))
 		if opts.HelmetLamp then
 			Kit.bit(m, base * CFrame.new(0, 5.72, -0.85), Vector3.new(0.62, 0.55, 0.15), C.Iron)
-			Kit.glow(m, base * CFrame.new(0, 5.72, -0.95), Vector3.new(0.42, 0.38, 0.08), C.Lamp)
+			-- a small deep-yellow lens (a bigger, paler one blooms to a white blob)
+			Kit.glow(m, base * CFrame.new(0, 5.72, -0.95), Vector3.new(0.3, 0.26, 0.06), Color3.fromRGB(255, 186, 60))
 		end
 	elseif opts.Hat then
 		Kit.bit(m, base * CFrame.new(0, 5.6, 0), Vector3.new(1.9, 0.22, 1.9), opts.Hat)

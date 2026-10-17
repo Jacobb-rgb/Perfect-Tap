@@ -2,12 +2,13 @@
 	FOSSIL DIG: the artifacts and Kingdom of Kaldrum story corner east of
 	the plaza. A dig site inside a metal barrier fence (light posts with
 	neon caps, orange round handrails) with dark lantern pillars, a
-	sunken-looking pit (stone rim, dirt terrace, dark bed flush with the
-	ground, no hole), a half-buried dinosaur skeleton, a small second find,
+	sunken-looking pit (stone rim, a dirt terrace, a darker inner step and
+	the darkest bed, flush with the ground, no hole), a half-buried dinosaur
+	skeleton (a long skull with a jaw, eye sockets and teeth), a small find,
 	tools, a sieve, a wheelbarrow, a City Kit parasol over the finds, a
 	bone-scanning terminal and two glowing FOSSIL DIG sign boxes with a bone
 	icon: at the entrance (which faces the plaza and the ToFossil path) and
-	over the south fence.
+	over the south fence (its back, seen from the plaza, repeats the words).
 
 	Tag FossilDig on the model, PrimaryPart = the bed.
 	Local frame: 18 wide (+X = north), 8 tall, 24 deep, front = -Z (west).
@@ -39,18 +40,26 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		return at(x, y, z).Position
 	end
 
-	-- the pit: dark bed, dirt terrace, stone rim (gap at the entrance)
-	local bed = Style.block(m, at(0, 0.1, 0), Vector3.new(2 * BED_X, 0.2, 2 * BED_Z), C.Dirt, nil, Style.solid())
+	-- the pit, stepping down toward the middle so it reads as sunken: stone
+	-- rim (gap at the entrance), a dirt terrace, a darker inner step and the
+	-- darkest bed
+	local bedColor = C.DirtDark:Lerp(Kit.Dark, 0.4)
+	local bed = Style.block(m, at(0, 0.1, 0), Vector3.new(2 * BED_X, 0.2, 2 * BED_Z), bedColor, nil, Style.solid())
 	bed.Name = "Bed"
-	for _ = 1, 5 do
+	for _ = 1, 4 do
 		local x, z = rng:range(-BED_X + 2, BED_X - 2), rng:range(-BED_Z + 2, BED_Z - 2)
-		Kit.bit(m, at(x, 0.22, z), Vector3.new(rng:range(1.6, 3), 0.06, rng:range(1.6, 3)), Style.vary(C.DirtLight, rng, 0.05))
+		Kit.bit(m, at(x, 0.22, z), Vector3.new(rng:range(1.6, 3), 0.06, rng:range(1.6, 3)), Style.vary(C.DirtDark, rng, 0.05))
+	end
+	local ix, iz = BED_X - 0.3, BED_Z - 0.3
+	for _, side in { -1, 1 } do
+		Style.block(m, at(side * ix, 0.16, 0), Vector3.new(0.6, 0.32, 2 * iz + 0.6), Style.vary(C.DirtDark, rng, 0.03), nil, Style.solid())
+		Style.block(m, at(0, 0.16, side * iz), Vector3.new(2 * ix - 0.6, 0.32, 0.6), Style.vary(C.DirtDark, rng, 0.03), nil, Style.solid())
 	end
 	local tx, tz = BED_X + 0.5, BED_Z + 0.5
 	for _, side in { -1, 1 } do
-		Style.block(m, at(side * tx, 0.2, 0), Vector3.new(1, 0.4, 2 * tz + 1), Style.vary(C.DirtDark, rng, 0.04), nil, Style.solid())
-		Style.block(m, at(0, 0.2, side * tz), Vector3.new(2 * BED_X, 0.4, 1), Style.vary(C.DirtDark, rng, 0.04), nil, Style.solid())
-		Kit.bit(m, at(side * tx, 0.42, side * 3), Vector3.new(0.8, 0.06, 4), C.Dirt)
+		Style.block(m, at(side * tx, 0.25, 0), Vector3.new(1, 0.5, 2 * tz + 1), Style.vary(C.Dirt, rng, 0.04), nil, Style.solid())
+		Style.block(m, at(0, 0.25, side * tz), Vector3.new(2 * BED_X, 0.5, 1), Style.vary(C.Dirt, rng, 0.04), nil, Style.solid())
+		Kit.bit(m, at(side * tx, 0.52, side * 3), Vector3.new(0.8, 0.06, 4), C.DirtLight)
 	end
 	local rx, rz = tx + 0.9, tz + 0.9
 	local rimColor = Style.vary(C.StoneDark, rng, 0.03)
@@ -82,12 +91,21 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		local s = 0.75 - i * 0.09
 		Kit.bit(m, at(spineX(z), 0.62 - i * 0.05, z), Vector3.new(s, s, 0.8), C.FlowerWhite)
 	end
+	-- the skull (pointing at the entrance): a cranium with a brow ridge and
+	-- dark eye sockets, a long snout sloping down to the nose, a lower jaw
+	-- hanging slightly open and a row of teeth
 	local sx = spineX(-7.2)
-	Kit.block(m, at(sx, 1.15, -7.2), Vector3.new(2.4, 1.8, 2.6), C.FlowerWhite, nil, Style.tiny({ CastShadow = true }))
-	Kit.block(m, at(sx, 0.9, -9.1), Vector3.new(1.7, 1.2, 1.9), C.FlowerWhite, nil, Style.tiny({ CastShadow = true }))
-	Kit.bit(m, at(sx, 0.35, -8.7), Vector3.new(1.6, 0.4, 2.8), C.Sand)
-	for _, x in { -0.6, 0.6 } do
-		Kit.bit(m, at(sx + x, 2.06, -7.0), Vector3.new(0.55, 0.06, 0.6), C.StoneDeep)
+	local shadow = Style.tiny({ CastShadow = true })
+	Kit.block(m, at(sx, 1.2, -6.9), Vector3.new(2.2, 1.6, 2.2), C.FlowerWhite, nil, shadow)
+	Kit.bit(m, at(sx, 2.08, -7.55), Vector3.new(2.4, 0.4, 0.7), C.Sand)
+	for _, x in { -0.8, 0.8 } do
+		Kit.bit(m, at(sx + x, 1.62, -7.88), Vector3.new(0.6, 0.55, 0.5), C.StoneDeep)
+	end
+	Kit.block(m, at(sx, 0.95, -9.15), Vector3.new(1.1, 0.7, 2.3), C.FlowerWhite, nil, shadow)
+	Tech.bevel(m, at(sx, 1.6, -9.0), Vector3.new(1.1, 0.6, 2.0), C.FlowerWhite)
+	Kit.block(m, at(sx, 0.32, -9.0) * CFrame.Angles(-0.1, 0, 0), Vector3.new(1.0, 0.32, 2.8), C.Sand, nil, shadow)
+	for _, q in { { -0.42, -8.5 }, { 0.42, -8.5 }, { -0.42, -9.6 }, { 0.42, -9.6 } } do
+		Kit.bit(m, at(sx + q[1], 0.5, q[2]), Vector3.new(0.2, 0.36, 0.2), C.FlowerWhite)
 	end
 	for i = 0, 5 do
 		local z = -4.6 + i * 1.0
@@ -175,7 +193,9 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		post(-FENCE_X, z)
 	end
 	post(-3.6, -FENCE_Z)
-	for _, c in { { -FENCE_X, -FENCE_Z }, { GATE_FROM, -FENCE_Z }, { GATE_TO, -FENCE_Z }, { FENCE_X, FENCE_Z }, { -FENCE_X, FENCE_Z } } do
+	post(-FENCE_X, -FENCE_Z)
+	post(FENCE_X, FENCE_Z)
+	for _, c in { { GATE_FROM, -FENCE_Z }, { GATE_TO, -FENCE_Z }, { -FENCE_X, FENCE_Z } } do
 		Tech.lanternPillar(m, at(c[1], 0, c[2]), 4.4, 1.0)
 	end
 
@@ -185,7 +205,7 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		Style.block(m, at(x, 2.1, signZ + 0.6), Vector3.new(0.6, 4.2, 0.6), Tech.MetalLight)
 		Tech.disc(m, at(x, 0.5, signZ + 0.6).Position, 1.0, 0.9, Tech.Band)
 	end
-	local _, frontIcon = Tech.sign(m, at(-3.9, 5.7, signZ), "FOSSIL DIG", 8.4, 2.0, { Icon = 2.4, IconLeft = true })
+	local _, frontIcon = Tech.sign(m, at(-3.9, 5.7, signZ), "FOSSIL DIG", 8.4, 2.0, { Icon = 2.4, IconLeft = true, Back = true })
 	if frontIcon then
 		Style.icon(m, frontIcon * CFrame.new(0, 0, -0.12), "Bone", 1.9, Tech.GoldGlow, Kit.NEON)
 	end
@@ -197,7 +217,11 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	for _, dx in { -4.0, 4.0 } do
 		Style.block(m, south * CFrame.new(dx, 2.15, 0.45), Vector3.new(0.6, 4.3, 0.6), Tech.MetalLight)
 	end
-	local _, southIcon = Tech.sign(m, south * CFrame.new(0, 5.9, 0), "FOSSIL DIG", 8.4, 2.2, { Icon = 2.6, IconLeft = true })
+	local _, southIcon = Tech.sign(m, south * CFrame.new(0, 5.9, 0), "FOSSIL DIG", 8.4, 2.2, {
+		Icon = 2.6,
+		IconLeft = true,
+		Back = "FOSSIL DIG",
+	})
 	if southIcon then
 		Style.icon(m, southIcon * CFrame.new(0, 0, -0.12), "Bone", 2.1, Tech.GoldGlow, Kit.NEON)
 	end

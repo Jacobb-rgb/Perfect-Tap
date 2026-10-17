@@ -85,7 +85,7 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 		Kit.bit(m, note * CFrame.new(0, -0.1, -0.04), Vector3.new(0.9, 0.12, 0.03), C.SignBoard)
 	end
 	-- the glowing sign box on top
-	Tech.sign(m, at(0, 7.45, -0.1), "FORGEKEEPERS' GUILD", 7.4, 1.1, { Studs = false })
+	Tech.sign(m, at(0, 7.45, -0.1), "FORGEKEEPERS' GUILD", 7.4, 1.1, { Studs = false, Back = true })
 	m.PrimaryPart = board
 	Kit.tag(m, "GuildBoard")
 end
