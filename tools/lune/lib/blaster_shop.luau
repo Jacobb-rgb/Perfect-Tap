@@ -350,6 +350,211 @@ end
 
 ---------------------------------------------------------------- B: Forge Vault
 
+local function lcg(seed: number): () -> number
+	local state = (seed * 7919 + 12345) % 2147483647
+	return function(): number
+		state = (state * 16807) % 2147483647
+		return state / 2147483647
+	end
+end
+
+--[[
+	A detailed stone wall: a dark mortar core with staggered bricks of varied
+	stone tones (some mossy) on its faces, a base course of big blocks, a
+	middle string course, a cornice with dentils and moss drips, and on the
+	outer face pilasters (fire sconces on every other one) with glowing rune
+	slits between them. cf = the wall's bottom center; its length runs along
+	local X and the outer face looks along local +Z.
+]]
+local function stoneWall(K: any, cf: any, length: number, height: number, thick: number, opts: any)
+	local rand = lcg(opts.seed or 1)
+	local half = length / 2
+	local STONE = C3.fromRGB(124, 120, 140)
+	local LIGHT = C3.fromRGB(150, 146, 166)
+	local DARKS = C3.fromRGB(92, 88, 108)
+	local MOSS = C3.fromRGB(86, 122, 78)
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local function box(x: number, y: number, z: number, sx: number, sy: number, sz: number, color: any, mat: any?)
+		return K.boxCF(cf * CF.new(x, y, z), V3.new(sx, sy, sz), color, mat)
+	end
+	local function tone(): any
+		local t = rand()
+		if t < 0.07 then
+			return MOSS:Lerp(STONE, rand() * 0.4)
+		elseif t < 0.11 then
+			return C3.fromRGB(80, 76, 92)
+		end
+		return if rand() < 0.5 then STONE:Lerp(LIGHT, rand() * 0.8) else STONE:Lerp(DARKS, rand() * 0.8)
+	end
+	box(0, height / 2, 0, length, height, thick, C3.fromRGB(62, 58, 72)) -- the mortar core
+	local faces = if opts.inner then { 1, -1 } else { 1 }
+	for _, f in faces do
+		local zf = f * thick / 2
+		-- base course: big dark blocks
+		local x = -half
+		while x < half - 0.2 do
+			local len = math.min(half - x, 3.6 + rand() * 2.2)
+			box(x + len / 2, 1.1, zf + f * 0.3, len - 0.22, 2.0, 0.9, DARKS:Lerp(STONE, rand() * 0.4))
+			x += len
+		end
+		-- staggered brick rows
+		local rows, y0, y1 = 13, 2.2, height - 1.4
+		local bh = (y1 - y0) / rows
+		for r = 0, rows - 1 do
+			local y = y0 + (r + 0.5) * bh
+			x = -half - (if r % 2 == 1 then 1.6 else 0)
+			while x < half do
+				local len = 2.6 + rand() * 1.6
+				local a, b = math.max(x, -half), math.min(x + len, half)
+				if b - a > 0.6 then
+					box((a + b) / 2, y, zf + f * 0.12, b - a - 0.16, bh - 0.16, 0.5, tone())
+				end
+				x += len
+			end
+		end
+		-- string course, cornice with dentils
+		box(0, y0 + bh * 6.5, zf + f * 0.3, length, 0.45, 0.8, LIGHT:Lerp(STONE, 0.4))
+		box(0, height - 0.45, f * 0.4, length + 1.0, 0.9, thick + 1.4, C3.fromRGB(110, 106, 126))
+		local n = math.floor(length / 1.4)
+		for i = 0, n - 1 do
+			box(-half + 0.7 + i * 1.4, height - 1.15, zf + f * 0.55, 0.6, 0.5, 0.6, C3.fromRGB(104, 100, 120))
+		end
+	end
+	box(0, height + 0.25, 0, length + 0.6, 0.5, thick + 0.8, C3.fromRGB(96, 92, 110))
+	-- outer face: pilasters, sconces, rune slits, moss drips
+	local zo = thick / 2
+	local bays = math.max(1, math.floor(length / 10 + 0.5))
+	local bay = length / bays
+	for k = 0, bays do
+		local x = -half + k * bay
+		box(x, height / 2, zo + 0.6, 1.8, height - 1, 1.2, C3.fromRGB(136, 132, 152))
+		box(x, 1.2, zo + 0.8, 2.6, 2.4, 1.8, DARKS)
+		box(x, height - 1.6, zo + 0.8, 2.6, 1.0, 1.8, C3.fromRGB(144, 140, 160))
+		if opts.sconces and k % 2 == 1 then
+			box(x, 11.8, zo + 1.6, 0.4, 0.4, 1.4, C3.fromRGB(40, 38, 44))
+			local flame = K.part("Part", cf * CF.new(x, 12.6, zo + 2.2), V3.new(1.1, 1.3, 1.1), FIRE, NEON)
+			flame.Shape = Enum.PartType.Ball
+		end
+		if opts.slits and k < bays then
+			local xs = x + bay / 2
+			box(xs, 14.6, zo + 0.35, 1.9, 6.4, 0.7, C3.fromRGB(70, 66, 80))
+			box(xs, 14.6, zo + 0.42, 0.55, 5.2, 0.7, FIRE, NEON)
+			box(xs, 18.1, zo + 0.5, 2.6, 0.6, 0.9, C3.fromRGB(144, 140, 160))
+		end
+	end
+	for _ = 1, math.floor(length / 6) do
+		local x = -half + rand() * length
+		local len = 1 + rand() * 3
+		box(x, height - 1.6 - len / 2, zo + 0.42, 0.5, len, 0.25, MOSS)
+	end
+end
+
+--[[
+	A big jungle tree in the blocky style of Minecraft's jungle trees: a thick
+	trunk of stacked bark blocks with grooves and flared roots, side branches
+	with leaf clumps, a wide layered canopy of leaf voxels in two greens,
+	hanging vines and a few cocoa pods. base = the trunk's foot.
+]]
+local function jungleTree(K: any, base: any, h: number, R: number, seed: number)
+	local rand = lcg(seed)
+	local BARK = C3.fromRGB(104, 76, 50)
+	local BARK_D = C3.fromRGB(74, 52, 36)
+	local LEAF = C3.fromRGB(48, 124, 42)
+	local LEAF_L = C3.fromRGB(78, 158, 56)
+	local VINE = C3.fromRGB(38, 102, 34)
+	local T = 5.6
+	local function at(x: number, y: number, z: number): any
+		return CF.new(base + V3.new(x, y, z))
+	end
+	-- flared roots, the trunk in bark blocks, vertical grooves
+	for i = 0, 3 do
+		local a = i * math.pi / 2 + 0.4
+		local d = V3.new(math.cos(a), 0, math.sin(a))
+		K.boxCF(
+			CF.new(base + d * (T / 2 + 0.9) + V3.new(0, 1.6, 0)) * CF.Angles(0, -a, 0) * CF.Angles(0, 0, 0.35),
+			V3.new(3.4, 3.6, 2.4),
+			BARK_D
+		)
+	end
+	local y = 0
+	while y < h do
+		local seg = math.min(4, h - y)
+		K.boxCF(at(0, y + seg / 2, 0), V3.new(T, seg, T), if math.floor(y / 4) % 2 == 0 then BARK else BARK:Lerp(BARK_D, 0.35))
+		y += seg
+	end
+	for _, f in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		for _, o in { -1.3, 1.1 } do
+			local x = f[1] * (T / 2 + 0.05) + (if f[1] == 0 then o else 0)
+			local z = f[2] * (T / 2 + 0.05) + (if f[2] == 0 then o else 0)
+			K.boxCF(at(x, h * 0.48, z), V3.new(if f[1] == 0 then 0.5 else 0.3, h * 0.9, if f[2] == 0 then 0.5 else 0.3), BARK_D)
+		end
+	end
+	-- leaf voxels: one layer of the canopy (rows merged into long blocks)
+	local u = 2.6
+	local function layer(cy: number, r: number, holes: number)
+		local n = math.ceil(r / u)
+		for gz = -n, n do
+			local run: number? = nil
+			local runTone = LEAF
+			local function flush(gx: number)
+				if run then
+					local x0, x1 = run * u, (gx - 1) * u
+					K.boxCF(at((x0 + x1) / 2, cy, gz * u), V3.new(x1 - x0 + u, u, u), runTone)
+					run = nil
+				end
+			end
+			for gx = -n, n + 1 do
+				local d = math.sqrt(gx * gx + gz * gz) * u
+				local inside = gx <= n and d <= r + (rand() - 0.5) * u * 1.4 and rand() > holes
+				local tone = if rand() < 0.35 then LEAF_L else LEAF
+				if inside and run and tone ~= runTone and rand() < 0.5 then
+					flush(gx)
+				end
+				if inside and not run then
+					run = gx
+					runTone = tone
+				elseif not inside then
+					flush(gx)
+				end
+			end
+		end
+	end
+	layer(h - 0.5, R, 0.06)
+	layer(h + u - 0.5, R * 0.86, 0.04)
+	layer(h + 2 * u - 0.5, R * 0.62, 0.02)
+	layer(h + 3 * u - 0.5, R * 0.3, 0)
+	-- side branches with leaf clumps
+	for i = 0, 2 do
+		local a = i * 2.1 + rand()
+		local d = V3.new(math.cos(a), 0, math.sin(a))
+		local by = h * (0.55 + 0.12 * i)
+		local tip = base + V3.new(0, by + 3, 0) + d * 8
+		local from = base + V3.new(0, by, 0)
+		K.boxCF(CF.lookAt((from + tip) / 2, tip), V3.new(1.8, 1.8, (tip - from).Magnitude), BARK)
+		for _, o in { V3.new(0, 0, 0), V3.new(u, 0, 0), V3.new(-u, 0, 0), V3.new(0, 0, u), V3.new(0, u, 0), V3.new(0, 0, -u) } do
+			K.boxCF(CF.new(tip + o), V3.new(u, u, u), if rand() < 0.4 then LEAF_L else LEAF)
+		end
+	end
+	-- vines hanging from the canopy edge, cocoa pods on the trunk
+	for _ = 1, 16 do
+		local a = rand() * math.pi * 2
+		local r = R * (0.7 + rand() * 0.3)
+		local len = 5 + rand() * 13
+		K.boxCF(at(math.cos(a) * r, h - 1.8 - len / 2, math.sin(a) * r), V3.new(0.5, len, 0.4), VINE)
+		if rand() < 0.5 then
+			K.boxCF(at(math.cos(a) * r, h - 1.8 - len, math.sin(a) * r), V3.new(1.2, 1.2, 1.2), LEAF)
+		end
+	end
+	for i = 0, 2 do
+		local a = i * 2.2
+		K.boxCF(
+			at(math.cos(a) * (T / 2 + 0.5), h * 0.8 - i * 1.5, math.sin(a) * (T / 2 + 0.5)),
+			V3.new(1.1, 1.5, 1.1),
+			C3.fromRGB(176, 104, 50)
+		)
+	end
+end
+
 --[[
 	The vault's "wow" layer (local frame of the vault: front +Z, 70 x 50 studs):
 	a slate roof with fire towers, a stone gable over the entrance with two big
@@ -448,7 +653,7 @@ local function vaultWow(K: any, parent: any, origin: any)
 	-- lava falls down both side walls into glowing pools
 	for _, sx in { -1, 1 } do
 		for _, z in { -12, 8 } do
-			local x = sx * (halfW + 0.4)
+			local x = sx * (halfW - 0.6)
 			neon(K, at(x, 11.5, z), V3.new(0.5, 21, 3.4), LAVA)
 			neon(K, at(x + sx * 0.12, 11.5, z), V3.new(0.4, 21, 1.4), C3.fromRGB(255, 200, 90))
 			K.boxCF(at(x + sx * 2.6, 0.4, z), V3.new(5.6, 0.8, 7), SLATE)
@@ -503,26 +708,36 @@ local function vault(K: any, parent: any, origin: any)
 	local W, D = 7, 5
 	local halfW, halfD = W * S / 2, D * S / 2
 	K.boxCF(origin * CF.new(0, -0.5, 4), V3.new(W * S + 8, 1, D * S + 18), C3.fromRGB(64, 60, 70))
-	-- stone walls (two rows) on three sides, columns and a beam across the open front
-	for i = 1, W do
-		local x = -halfW + (i - 0.5) * S
-		for row = 0, 1 do
-			piece("dungeon/wall", CF.new(x, row * 11, -halfD))
-		end
-	end
-	for j = 2, D do
-		local z = -halfD + (j - 1) * S
-		for _, sx in { -1, 1 } do
-			for row = 0, 1 do
-				piece("dungeon/wall", CF.new(sx * (halfW - S / 2), row * 11, z))
-			end
-		end
+	-- detailed stone walls on three sides (the outer faces look outward), columns in the open front
+	stoneWall(
+		K,
+		origin * CF.new(0, 0, -halfD) * CF.Angles(0, math.pi, 0),
+		2 * halfW - 2,
+		22,
+		6,
+		{ inner = true, slits = true, sconces = true, seed = 11 }
+	)
+	for _, sx in { -1, 1 } do
+		stoneWall(
+			K,
+			origin * CF.new(sx * (halfW - 4), 0, -1) * CF.Angles(0, sx * math.pi / 2, 0),
+			42,
+			22,
+			6,
+			{ inner = true, slits = true, sconces = true, seed = 20 + sx }
+		)
 	end
 	for _, x in { -halfW + S + 1, halfW - S - 1, -13, 13 } do
 		piece("dungeon/column", CF.new(x, 0, halfD - 2), 12)
 	end
-	for _, z in { -halfD + 12, 0, halfD - 2 } do
+	for _, z in { -halfD + 12, 0 } do
 		K.boxCF(origin * CF.new(0, 21.5, z), V3.new(W * S - 4, 2.4, 2.4), C3.fromRGB(150, 86, 56))
+	end
+	-- a carved stone lintel across the front: a band, dentils and a fire line
+	K.boxCF(origin * CF.new(0, 21.6, halfD - 2), V3.new(W * S - 2, 3.2, 3.2), C3.fromRGB(118, 114, 134))
+	K.boxCF(origin * CF.new(0, 23.4, halfD - 1.8), V3.new(W * S, 0.6, 3.8), C3.fromRGB(100, 96, 116))
+	for i = 0, 44 do
+		K.boxCF(origin * CF.new(-33 + i * 1.5, 19.75, halfD - 0.6), V3.new(0.6, 0.5, 0.6), C3.fromRGB(104, 100, 120))
 	end
 	for _, x in { -20, 0, 20 } do
 		K.boxCF(origin * CF.new(x, 22.8, -2), V3.new(2.4, 2.4, D * S - 2), C3.fromRGB(132, 74, 48))
@@ -533,7 +748,7 @@ local function vault(K: any, parent: any, origin: any)
 	-- ore banners on the back wall, fire bowls on the columns
 	for i, x in { -27, -14, 14, 27 } do
 		local body = oreGlow(({ 3, 6, 8, 10 })[i]).Body
-		piece("dungeon/banner", CF.new(x, 7, -halfD + 10.4), 16, function(region, c)
+		piece("dungeon/banner", CF.new(x, 7, -halfD + 11.5), 16, function(region, c)
 			local _, sat = c:ToHSV()
 			return if sat > 0.3 then body:Lerp(c, 0.2) else nil
 		end)
@@ -697,9 +912,34 @@ function Shop.buildLobby(Loader: any, parent: any)
 		end
 	end
 	print(string.format("lobby test: hid %d decoration parts in the vault footprint", removed))
+	-- big jungle trees behind the vault and two on each side (decorations under them are hidden too)
+	local trees = {
+		{ -29, 153, 48, 13, 1 },
+		{ 29, 155, 52, 14, 2 },
+		{ -45, 120, 40, 11, 3 },
+		{ -47, 140, 44, 12, 4 },
+		{ 45, 108, 40, 11, 5 },
+		{ 46, 136, 44, 12, 6 },
+	}
+	for _, d in parent:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			local p = d.CFrame.Position
+			local big = math.max(d.Size.X, d.Size.Y, d.Size.Z)
+			for _, t in trees do
+				if math.abs(p.X - t[1]) < 8 and math.abs(p.Z - t[2]) < 8 and p.Y + d.Size.Y / 2 > 0.45 and p.Y < 30 and big < 14 then
+					d.Transparency = 1
+					removed += 1
+				end
+			end
+		end
+	end
 	local root = roblox.Instance.new("Model")
 	root.Name = "BlasterVaultTest"
 	root.Parent = parent
+	local KT = Concepts.kit(root)
+	for _, t in trees do
+		jungleTree(KT, V3.new(t[1], 0, t[2]), t[3], t[4], t[5])
+	end
 	local holder = roblox.Instance.new("Model")
 	vault(Concepts.kit(holder), holder, CF.identity)
 	place(holder, CF.new(c.x, 0, c.z) * CF.Angles(0, math.pi, 0), c.scale, root)
