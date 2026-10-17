@@ -1,6 +1,20 @@
 --[[
 	Machine models (pure builders, used by the server and for build-mode ghosts).
 
+	Style: the Kenney Factory Kit (docs/KENNEY_FACTORY_KIT.md, ART_DIRECTION
+	section 9) rebuilt from parts in the forge palette: one matte forged-iron
+	body colour (mid-tone, so shaded sides stay readable) with lighter tops
+	and thick light frames around openings, sparse orange accents (base trims,
+	feet, handles), matte copper pipes with octagonal flanges and two-kink
+	bends (a pipe-wide ball joint in each kink), open hoppers on top as the
+	intake (square on the Crusher, round on the Clay Furnace and Auto Cleaner,
+	an octagonal connection pipe with a molten throat on the Blast Furnace),
+	piston-round tanks (light band, octagonal cap), cogs, glass pipe sections
+	with molten metal, and water that pours out of pipes (the client animates
+	the stream between WaterOut and WaterIn, see MachineFxController). Flat
+	details (hazard dashes, hatches, rivets) are painted with SurfaceGuis, so
+	they cost no parts.
+
 	Local space: origin = footprint center on the plot surface, front = -Z
 	(LookVector). Every model has a PrimaryPart "Base" with Attachments:
 	  Intake   center of the hopper's intake box (attribute IntakeSize: Vector3)
@@ -10,8 +24,18 @@
 	  Status   above the model (machine billboards)
 	  OrePoint / CamPoint   (Cleaning Station close-up; its Output is the tray)
 	  AnvilPoint / CamPoint / IngotSlot1..4   (Anvil)
-	Conveyors are 6 parts: Base, Belt (tag ConveyorBelt), RailL, RailR, 2x Arrow.
-	Moving parts are named so the client can animate them (Roller, Drum, Glow).
+	  WaterOut / WaterIn   pipe outlet and where its water lands (Cleaning
+	           Station, Auto Cleaner). Their Axis is the water's direction there,
+	           attribute Curve = the Beam curve size; WaterOut.Spray = a shower.
+	Conveyors are 6 parts: Base, Belt (tag ConveyorBelt), RailL, RailR, 2x Arrow;
+	the rollers and hazard edges are painted on the belt, the axle caps on the
+	rails (SurfaceGuis, no extra parts; the Auto Cleaner's bed rails too).
+	Moving parts are named so the client can animate them (Roller1/2 + their
+	Roller1Tooth/Roller2Tooth bars, the Crusher's side cogs Cog1/Cog2, Drum +
+	DrumRib, BedRoller, Glow, Molten, StackRed/Amber/Green, WaterPool). Balls
+	bigger than a bolt are only PipeJoint (in a bend's kink) and ArmJoint (the
+	Auto Cleaner's elbows); Chute / ChuteLip are the only parts that reach out
+	of the footprint (toward the Output).
 ]]
 
 local Geo = require(script.Parent.Geo)
@@ -21,28 +45,95 @@ local Grid = require(script.Parent.Parent.Machines.Grid)
 
 local MachineBuilder = {}
 
+type Props = { [string]: any }
+type Axis = "X" | "Y" | "Z"
+
 local rgb = Color3.fromRGB
 local C = {
-	Stone = rgb(120, 112, 108),
-	StoneDark = rgb(78, 72, 72),
+	-- forged iron (ART_DIRECTION section 9): one matte, slightly blue body
+	-- colour, lighter tops and frames so they catch the light, dark recesses
+	-- for openings
+	-- (mid-tone sides so shaded faces never go near-black at dusk)
+	Housing = rgb(122, 128, 146),
+	HousingTop = rgb(156, 162, 180),
+	HousingLight = rgb(184, 188, 200),
+	HousingDark = rgb(86, 90, 106),
+	Recess = rgb(40, 40, 50),
+	RecessLight = rgb(104, 108, 124), -- openings on the Cleaning Station (no black voids)
+	Floor = rgb(82, 86, 100),
+	Copper = rgb(198, 112, 62),
+	Brass = rgb(225, 185, 90),
+	Hazard = rgb(255, 150, 36),
+	HazardDark = rgb(40, 36, 40),
+	Molten = rgb(236, 96, 22), -- molten metal (glass cores, trickle, mould): deep orange
+	Glow = rgb(230, 90, 20), -- big furnace glows: deep orange, the client brightens it
+	Ember = rgb(120, 52, 30), -- chimney mouths (dark, warm)
+	Clay = rgb(150, 92, 76),
+	ClayTop = rgb(168, 106, 90),
+	ClayDark = rgb(100, 58, 46),
 	Wood = rgb(150, 100, 58),
 	WoodLight = rgb(196, 144, 92),
 	WoodDark = rgb(100, 64, 38),
-	Metal = rgb(80, 82, 92),
-	MetalLight = rgb(150, 154, 164),
-	Clay = rgb(196, 112, 70),
-	ClayDark = rgb(150, 80, 50),
-	Brick = rgb(150, 70, 50),
-	Glow = rgb(255, 130, 40),
 	Gold = rgb(255, 196, 72),
-	Teal = rgb(70, 160, 160),
-	Belt = rgb(46, 42, 44),
-	Arrow = rgb(255, 196, 80),
+	Coin = rgb(228, 178, 62),
+	Belt = rgb(40, 38, 44),
+	Roller = rgb(120, 124, 136),
+	Arrow = rgb(240, 160, 50),
 	Cloth = rgb(240, 222, 190),
+	Bristle = rgb(34, 92, 100), -- brush core (dark teal)
+	BristleTip = rgb(58, 146, 150), -- brush rings
+	Glass = rgb(176, 222, 240),
+	Screen = rgb(30, 40, 48),
+	Gauge = rgb(220, 132, 40),
+	Water = rgb(62, 152, 196),
+	Red = rgb(235, 70, 60),
+	Amber = rgb(255, 176, 40),
+	Green = rgb(80, 210, 110),
+	Smoke = rgb(150, 140, 135), -- chimney smoke: light warm grey
 }
 
-local function solid(extra: { [string]: any }?): { [string]: any }
-	local props = { CanTouch = false }
+-- Water look, shared by the client animation (MachineFxController) and the
+-- preview gallery, so both draw the same stream.
+MachineBuilder.Water = {
+	Stream = rgb(168, 222, 246), -- the stream (light, fairly opaque)
+	Deep = rgb(118, 190, 232), -- the stream's colour where it lands
+	Core = rgb(240, 250, 255), -- white highlight strip down the middle
+	Splash = rgb(236, 246, 255), -- droplets, spray streaks
+	Foam = rgb(246, 251, 255), -- foam where the water lands
+	Pool = C.Water, -- basin water (part WaterPool)
+	PoolTransparency = 0.22,
+	StreamTransparency = 0.3,
+	Width = 0.45, -- stream width at the outlet...
+	WidthEnd = 0.32, -- ...narrower where it lands (it speeds up while falling)
+	CoreWidth = 0.3, -- core strip, part of the stream width
+	SprayWidth = 1.1, -- shower: streaks leave the head this wide...
+	SprayWidthEnd = 1.4, -- ...and are this far apart where they hit the ore
+}
+
+-- Warning-traffic stack light on the Auto Cleaner: only one lamp is lit (Neon),
+-- the others are dimmed plastic. The built look lights `Lit`; the client
+-- lights the lamp for the machine's state (MachineFxController).
+MachineBuilder.Stack = {
+	Lamps = { StackRed = C.Red, StackAmber = C.Amber, StackGreen = C.Green },
+	Lit = "StackGreen",
+	Dim = 0.3, -- unlit lamps: colour lerped this far toward black (they keep their hue)
+	Glow = 0.3, -- the lit (Neon) lamp too, so it glows in its colour instead of blooming white
+}
+
+-- Furnace glow: the built (idle) colour is C.Glow; while working the client
+-- pulses it toward Hot (brightness animated, never a white blob).
+MachineBuilder.Glow = { Idle = C.Glow, Hot = rgb(255, 150, 60) }
+
+-- The Crusher's side cogs: the small one (Cog2) turns this much faster than
+-- the big one (Cog1) and the other way round.
+local COG_BIG, COG_SMALL = 2.8, 1.9
+MachineBuilder.CogRatio = COG_BIG / COG_SMALL
+
+local SMOOTH = Enum.Material.SmoothPlastic
+local NEON = Enum.Material.Neon
+local GLASS = Enum.Material.Glass
+
+local function merge(props: Props, extra: Props?): Props
 	if extra then
 		for k, v in extra do
 			props[k] = v
@@ -51,12 +142,25 @@ local function solid(extra: { [string]: any }?): { [string]: any }
 	return props
 end
 
-local function decor(extra: { [string]: any }?): { [string]: any }
-	local props = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
-	if extra then
-		for k, v in extra do
-			props[k] = v
-		end
+-- Collides (main bodies, hopper walls, anything players or items bump into).
+local function solid(extra: Props?): Props
+	return merge({ CanTouch = false }, extra)
+end
+
+-- No collision, still casts a shadow (bigger trims and pipes).
+local function prop(extra: Props?): Props
+	return merge({ CanTouch = false, CanQuery = false, CanCollide = false }, extra)
+end
+
+-- Small detail: no collision, no shadow.
+local function tiny(extra: Props?): Props
+	return merge({ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }, extra)
+end
+
+-- Coins get a little shine (everything else is matte and flat, like Kenney).
+local function shine(color: Color3, props: Props): Props
+	if props.Reflectance == nil and color == C.Coin then
+		props.Reflectance = 0.2
 	end
 	return props
 end
@@ -87,9 +191,14 @@ local function light(parent: Instance, color: Color3, range: number, brightness:
 	return l
 end
 
+--[[
+	Particle emitters with built-in textures. Kinds: Smoke (chimneys), Steam
+	(a short white plume that stays on its vent; named "Smoke" like the
+	chimney ones so the client and tests find it the same way), Embers.
+]]
 local function emitter(parent: Instance, kind: string, color: Color3, rate: number): ParticleEmitter
 	local e = Instance.new("ParticleEmitter")
-	e.Name = kind
+	e.Name = if kind == "Steam" then "Smoke" else kind
 	if kind == "Smoke" then
 		e.Texture = "rbxasset://textures/particles/smoke_main.dds"
 		e.Color = ColorSequence.new(color)
@@ -99,6 +208,20 @@ local function emitter(parent: Instance, kind: string, color: Color3, rate: numb
 		e.Speed = NumberRange.new(3, 5)
 		e.SpreadAngle = Vector2.new(10, 10)
 		e.LightInfluence = 1
+	elseif kind == "Steam" then
+		e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		e.Color = ColorSequence.new(color)
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1.8) })
+		e.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.45),
+			NumberSequenceKeypoint.new(0.6, 0.7),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		e.Lifetime = NumberRange.new(0.8, 1.4)
+		e.Speed = NumberRange.new(1.5, 2.5)
+		e.SpreadAngle = Vector2.new(12, 12)
+		e.Drag = 1
+		e.LightInfluence = 0.6
 	else -- Embers
 		e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 		e.Color = ColorSequence.new(color)
@@ -121,88 +244,733 @@ local function newModel(id: string): (Model, Part)
 	local model = Instance.new("Model")
 	model.Name = id
 	model:SetAttribute("MachineId", id)
-	local base = Geo.block(model, CFrame.new(0, 0.15, 0), Vector3.new(w - 0.3, 0.3, d - 0.3), C.StoneDark, nil, solid({ Name = "Base" }))
+	local base = Geo.block(model, CFrame.new(0, 0.15, 0), Vector3.new(w - 0.3, 0.3, d - 0.3), C.Floor, nil, solid({ Name = "Base" }))
 	base.Name = "Base"
 	model.PrimaryPart = base
 	return model, base
 end
 
-local function sign(parent: Instance, cf: CFrame, text: string, width: number)
-	local board = Geo.block(parent, cf, Vector3.new(width, 0.7, 0.15), C.WoodDark, nil, decor())
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 50
-	gui.LightInfluence = 0.4
-	gui.Parent = board
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.Size = UDim2.fromScale(0.94, 0.8)
-	label.Position = UDim2.fromScale(0.03, 0.1)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextScaled = true
-	label.TextColor3 = C.Gold
-	label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
-	label.Parent = gui
+-- Name plate: dark iron board, gold letters on its front (-Z) face, and on
+-- its back too when it stands free (seen from both sides).
+local function sign(parent: Instance, cf: CFrame, text: string, width: number, both: boolean?): Part
+	local board = Geo.block(parent, cf, Vector3.new(width, 0.7, 0.15), C.HousingDark, nil, tiny())
+	local faces: { Enum.NormalId } = { Enum.NormalId.Front }
+	if both then
+		table.insert(faces, Enum.NormalId.Back)
+	end
+	for _, face in faces do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = face
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 50
+		gui.LightInfluence = 0.4
+		gui.Parent = board
+		local label = Instance.new("TextLabel")
+		label.Name = "Text"
+		label.Size = UDim2.fromScale(0.94, 0.8)
+		label.Position = UDim2.fromScale(0.03, 0.1)
+		label.BackgroundTransparency = 1
+		label.Text = text
+		label.TextScaled = true
+		label.TextColor3 = C.Gold
+		label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+		label.Parent = gui
+	end
 	return board
 end
 
-local function funnel(parent: Instance, center: Vector3, topSize: number, height: number, color: Color3)
-	-- four wedges forming an open hopper (the opening is in the middle)
-	for i = 0, 3 do
-		local rot = CFrame.new(center) * CFrame.Angles(0, i * math.pi / 2, 0)
-		Geo.wedge(parent, rot * CFrame.new(0, 0, topSize / 2 - 0.4) * CFrame.Angles(0, math.pi, 0), Vector3.new(topSize, height, 0.8), color, nil, solid())
+---------------------------------------------------------------- paint
+-- Flat details painted on a face with a SurfaceGui (no parts): hazard
+-- dashes, rivets, hatches. Conveyors stay at 6 parts this way.
+
+local function surface(part: Part, name: string, face: Enum.NormalId, maxDistance: number): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = name
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 16
+	gui.LightInfluence = 1
+	gui.MaxDistance = maxDistance
+	gui.Parent = part
+	return gui
+end
+
+local function gradientStrip(gui: SurfaceGui, name: string, x: number, width: number, keys: { ColorSequenceKeypoint })
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.BorderSizePixel = 0
+	frame.BackgroundColor3 = Color3.new(1, 1, 1)
+	frame.Position = UDim2.fromScale(x, 0)
+	frame.Size = UDim2.fromScale(width, 1)
+	frame.Parent = gui
+	local gradient = Instance.new("UIGradient")
+	gradient.Rotation = 90
+	gradient.Color = ColorSequence.new(keys)
+	gradient.Parent = frame
+end
+
+-- `n` hazard dashes (orange / dark) as gradient keypoints.
+local function hazardKeys(n: number): { ColorSequenceKeypoint }
+	local keys = {}
+	for s = 0, n - 1 do
+		local color = if s % 2 == 0 then C.Hazard else C.HazardDark
+		table.insert(keys, ColorSequenceKeypoint.new(if s == 0 then 0 else s / n + 0.002, color))
+		table.insert(keys, ColorSequenceKeypoint.new((s + 1) / n, color))
 	end
+	return keys
+end
+
+-- A plain painted plate (x, y, w, h in face scale, 0..1 from the top left);
+-- `round` paints a disc (a rivet head).
+local function paintRect(gui: SurfaceGui, name: string, x: number, y: number, w: number, h: number, color: Color3, round: boolean?)
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.BorderSizePixel = 0
+	frame.BackgroundColor3 = color
+	frame.Position = UDim2.fromScale(x, y)
+	frame.Size = UDim2.fromScale(w, h)
+	frame.Parent = gui
+	if round then
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = frame
+	end
+end
+
+-- The back of a free-standing panel (tool board, screen): an inset iron
+-- plate with a light brace across it and brass rivets in its corners.
+local function panelBack(part: Part)
+	local gui = surface(part, "BackFace", Enum.NormalId.Back, 60)
+	paintRect(gui, "Inset", 0.1, 0.1, 0.8, 0.8, C.Housing)
+	paintRect(gui, "Brace", 0.1, 0.46, 0.8, 0.08, C.HousingLight)
+	for _, x in { 0.15, 0.85 } do
+		for _, y in { 0.15, 0.85 } do
+			paintRect(gui, "Rivet", x - 0.03, y - 0.03, 0.06, 0.06 * part.Size.X / part.Size.Y, C.Brass, true)
+		end
+	end
+end
+
+---------------------------------------------------------------- kit pieces
+
+local AXIS: { [Axis]: CFrame } = {
+	X = CFrame.new(),
+	Y = CFrame.Angles(0, 0, math.pi / 2),
+	Z = CFrame.Angles(0, math.pi / 2, 0),
+}
+
+-- Frame whose local Z is the world axis `axis` (a disc's normal).
+local FACING: { [Axis]: CFrame } = {
+	X = CFrame.Angles(0, math.pi / 2, 0),
+	Y = CFrame.Angles(math.pi / 2, 0, 0),
+	Z = CFrame.new(),
+}
+
+-- Frame whose local Z points straight down (an upright octagonal prism).
+local UPRIGHT = CFrame.Angles(math.pi / 2, 0, 0)
+
+-- Cylinder along a local axis (Roblox cylinders run along X).
+local function cyl(
+	m: Instance,
+	center: Vector3,
+	axis: Axis,
+	length: number,
+	diameter: number,
+	color: Color3,
+	material: Enum.Material?,
+	props: Props?
+): Part
+	return Geo.make(
+		"Part",
+		merge({
+			Shape = Enum.PartType.Cylinder,
+			CFrame = CFrame.new(center) * AXIS[axis],
+			Size = Vector3.new(length, diameter, diameter),
+			Color = color,
+			Material = material or SMOOTH,
+		}, shine(color, props or solid())),
+		m
+	)
+end
+
+local function ball(m: Instance, center: Vector3, diameter: number, color: Color3, props: Props?, material: Enum.Material?): Part
+	return Geo.ball(m, center, diameter, color, material, shine(color, props or tiny()))
+end
+
+local TAN8 = math.tan(math.pi / 8)
+
+-- A bend piece reaches JOINT x its diameter past a kink hidden in a wall
+-- (tan(22.5 deg) / 2: the outer edges just meet there).
+local JOINT = TAN8 / 2
+
+-- Cylinder from `a` to `b` (any direction). 1 part.
+local function pipeBetween(m: Instance, a: Vector3, b: Vector3, d: number, color: Color3, material: Enum.Material?, props: Props?): Part
+	return Geo.make(
+		"Part",
+		merge({
+			Shape = Enum.PartType.Cylinder,
+			CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.pi / 2, 0),
+			Size = Vector3.new((b - a).Magnitude, d, d),
+			Color = color,
+			Material = material or SMOOTH,
+		}, shine(color, props or prop())),
+		m
+	)
+end
+
+-- Block from `a` to `b` with a `w` x `h` cross-section (`a` -> `b` must not
+-- be vertical). 1 part.
+local function barBetween(m: Instance, a: Vector3, b: Vector3, w: number, h: number, color: Color3, props: Props?): Part
+	return Geo.block(m, CFrame.lookAt((a + b) / 2, b), Vector3.new(w, h, (b - a).Magnitude), color, nil, props or tiny())
+end
+
+--[[
+	Octagonal prism along `frame`'s local Z: four bars `across` long (the
+	width across the flats) and as wide as an octagon side, crossed at 45
+	degree steps - together exactly a regular octagon with flat top and
+	sides. 4 parts.
+]]
+local function octagon(m: Instance, frame: CFrame, across: number, thick: number, color: Color3, props: Props)
+	for k = 0, 3 do
+		Geo.block(m, frame * CFrame.Angles(0, 0, k * math.pi / 4), Vector3.new(across, across * TAN8, thick), color, nil, props)
+	end
+end
+
+--[[
+	Kenney octagonal pipe flange: an octagon 1.4x the pipe diameter across,
+	in the light frame colour. `bolts` (0 or 2) brass bolt heads sit on the
+	face toward `facing` (+1 / -1 along the axis), in two opposite corners of
+	the ring round the pipe. 4 parts + bolts.
+]]
+local function flange(m: Instance, center: Vector3, axis: Axis, d: number, bolts: number, facing: number?)
+	local s = d * 1.4
+	local t = math.clamp(d * 0.24, 0.16, 0.3)
+	local frame = CFrame.new(center) * FACING[axis]
+	octagon(m, frame, s, t, C.HousingLight, if d >= 0.9 then prop() else tiny())
+	if bolts > 0 then
+		local out = frame * CFrame.new(0, 0, (facing or 1) * (if axis == "Y" then -1 else 1) * t / 2)
+		for _, turn in { 0.39, 0.39 + math.pi } do
+			local spot = out * CFrame.new(math.cos(turn) * s * 0.455, math.sin(turn) * s * 0.455, 0)
+			ball(m, spot.Position, math.max(0.16, d * 0.2), C.Brass)
+		end
+	end
+end
+
+--[[
+	Pipe bend with two kinks (Kenney pipe-large-bend in low poly): a
+	diagonal pipe piece between the ends of the two legs at p1 = corner +
+	a * r and p2 = corner + b * r (`a`, `b` = unit directions from the
+	corner to each leg; the legs end exactly there). A ball as wide as the
+	pipe sits in each kink (PipeJoint): the cylinders meet it in great
+	circles, so the kink is a smooth knuckle with no mitre gap. `joints` = 1
+	when the second kink is inside a wall (the piece reaches into it
+	instead). 3 parts (2 with joints = 1).
+]]
+local function bend(m: Instance, corner: Vector3, a: Vector3, b: Vector3, d: number, r: number, color: Color3, joints: number?): Part
+	local p1, p2 = corner + a * r, corner + b * r
+	ball(m, p1, d, color, prop({ Name = "PipeJoint" }))
+	local tail = Vector3.zero
+	if (joints or 2) >= 2 then
+		ball(m, p2, d, color, prop({ Name = "PipeJoint" }))
+	else
+		tail = (p2 - p1).Unit * d * JOINT
+	end
+	return pipeBetween(m, p1, p2 + tail, d, color)
+end
+
+type HousingOptions = {
+	Name: string?,
+	FrontBevel: boolean?, -- bevel the top front edge too
+	Top: Color3?, -- top slab and bevels (default: a lighter body colour)
+	Skirt: boolean?, -- dark iron skirt with the orange trim on it
+}
+
+--[[
+	Kenney "machine" body standing on `cf` (bottom centre): body block, a
+	lighter top slab, bevelled left/right top edges and an orange base band
+	(or a dark iron skirt carrying a thinner orange trim). Returns the body.
+]]
+local function housing(m: Instance, cf: CFrame, size: Vector3, color: Color3, bevel: number, options: HousingOptions?): Part
+	local o: HousingOptions = options or {}
+	local w, h, d = size.X, size.Y, size.Z
+	local top = o.Top or (if color == C.Housing then C.HousingTop else color)
+	local body =
+		Geo.block(m, cf * CFrame.new(0, (h - bevel) / 2, 0), Vector3.new(w, h - bevel, d), color, nil, solid({ Name = o.Name or "Body" }))
+	local front = if o.FrontBevel then bevel else 0
+	Geo.block(m, cf * CFrame.new(0, h - bevel / 2, front / 2), Vector3.new(w - 2 * bevel, bevel, d - front), top, nil, solid())
+	if o.FrontBevel then
+		Geo.wedge(m, cf * CFrame.new(0, h - bevel / 2, -d / 2 + bevel / 2), Vector3.new(w - 2 * bevel, bevel, bevel), top, nil, solid())
+	end
+	for _, side in { -1, 1 } do
+		-- wedge: tall side inward, slope down to the outer edge
+		Geo.wedge(
+			m,
+			cf * CFrame.new(side * (w / 2 - bevel / 2), h - bevel / 2, 0) * CFrame.Angles(0, -side * math.pi / 2, 0),
+			Vector3.new(d, bevel, bevel),
+			top,
+			nil,
+			solid()
+		)
+	end
+	if o.Skirt then
+		Geo.block(m, cf * CFrame.new(0, 0.4, 0), Vector3.new(w + 0.16, 0.8, d + 0.16), C.HousingDark, nil, prop())
+		Geo.block(m, cf * CFrame.new(0, 0.42, 0), Vector3.new(w + 0.24, 0.3, d + 0.24), C.Hazard, nil, tiny())
+	else
+		Geo.block(m, cf * CFrame.new(0, 0.28, 0), Vector3.new(w + 0.12, 0.56, d + 0.12), C.Hazard, nil, prop())
+	end
+	return body
+end
+
+--[[
+	Thick light frame around an opening in a wall that faces -Z, standing
+	`depth` out of the wall, with a recess plate filling the opening (dark by
+	default). `cf` = bottom centre of the opening on the wall surface. `sill`
+	closes the frame at the bottom (a window). 4 parts (+1 with a sill).
+]]
+local function portal(m: Instance, cf: CFrame, w: number, h: number, t: number, depth: number, sill: boolean?, fill: Color3?)
+	local z = -depth / 2 + 0.05
+	local low = if sill then -t else 0
+	for _, side in { -1, 1 } do
+		Geo.block(
+			m,
+			cf * CFrame.new(side * (w / 2 + t / 2), (low + h + t) / 2, z),
+			Vector3.new(t, h + t - low, depth),
+			C.HousingLight,
+			nil,
+			prop()
+		)
+	end
+	Geo.block(m, cf * CFrame.new(0, h + t / 2, z), Vector3.new(w, t, depth), C.HousingLight, nil, prop())
+	if sill then
+		Geo.block(m, cf * CFrame.new(0, -t / 2, z), Vector3.new(w, t, depth), C.HousingLight, nil, prop())
+	end
+	Geo.block(m, cf * CFrame.new(0, h / 2, -0.04), Vector3.new(w, h, 0.1), fill or C.Recess, nil, tiny())
+end
+
+--[[
+	Short output chute out of a wall facing -Z: a dark iron plate sloping down
+	and away from `top` (the plate's top edge centre, on the wall) with two
+	thin light side lips (Chute, ChuteLip: the only parts that may reach out
+	of the footprint, toward the Output). 3 parts.
+]]
+local function chute(m: Instance, top: Vector3, w: number, length: number, drop: number)
+	local angle = math.atan2(drop, length)
+	local run = math.sqrt(length * length + drop * drop)
+	local cf = CFrame.new(top) * CFrame.Angles(-angle, 0, 0) * CFrame.new(0, -0.06, -run / 2)
+	Geo.block(m, cf, Vector3.new(w, 0.12, run), C.HousingDark, nil, solid({ Name = "Chute" }))
+	for _, side in { -1, 1 } do
+		Geo.block(
+			m,
+			cf * CFrame.new(side * (w / 2 + 0.05), 0.1, 0),
+			Vector3.new(0.1, 0.24, run),
+			C.HousingLight,
+			nil,
+			tiny({ Name = "ChuteLip" })
+		)
+	end
+end
+
+--[[
+	Kenney hopper-square: a tapered neck (4 wedges), a light collar band and an
+	open cup (4 walls) with a dark throat floor. `cf` = bottom centre of the
+	taper. Returns the height of the cup rim above `cf`. 10 parts.
+]]
+local function squareHopper(m: Instance, cf: CFrame, bottomW: number, topW: number, taperH: number, cupH: number, wall: number): number
+	local run = (topW - bottomW) / 2
+	for i = 0, 3 do
+		local side = cf * CFrame.Angles(0, i * math.pi / 2, 0)
+		-- upside-down wedge: flat face on top, slope down toward the middle
+		Geo.wedge(
+			m,
+			side * CFrame.new(0, taperH / 2, -(bottomW / 2 + run / 2)) * CFrame.Angles(0, 0, math.pi),
+			Vector3.new(topW, taperH, run),
+			C.Housing,
+			nil,
+			solid()
+		)
+	end
+	local collar = 0.45
+	Geo.block(m, cf * CFrame.new(0, taperH + collar / 2, 0), Vector3.new(topW + 0.3, collar, topW + 0.3), C.HousingLight, nil, solid())
+	local cupY = taperH + collar
+	for _, side in { -1, 1 } do
+		Geo.block(
+			m,
+			cf * CFrame.new(0, cupY + cupH / 2, side * (topW / 2 - wall / 2)),
+			Vector3.new(topW, cupH, wall),
+			C.Housing,
+			nil,
+			solid()
+		)
+		Geo.block(
+			m,
+			cf * CFrame.new(side * (topW / 2 - wall / 2), cupY + cupH / 2, 0),
+			Vector3.new(wall, cupH, topW - 2 * wall),
+			C.Housing,
+			nil,
+			solid()
+		)
+	end
+	Geo.block(m, cf * CFrame.new(0, cupY + 0.05, 0), Vector3.new(topW - 2 * wall, 0.1, topW - 2 * wall), C.Recess, nil, solid())
+	return cupY + cupH
+end
+
+-- Open octagonal cup: 8 wall blocks whose outer corners meet, `across` the
+-- flats, standing on `bottom`. 8 parts.
+local function octCup(m: Instance, bottom: Vector3, across: number, wall: number, height: number, color: Color3)
+	local apothem = across / 2
+	local side = 2 * apothem * TAN8 + 0.02
+	for i = 0, 7 do
+		Geo.block(
+			m,
+			CFrame.new(bottom) * CFrame.Angles(0, i * math.pi / 4, 0) * CFrame.new(0, height / 2, -(apothem - wall / 2)),
+			Vector3.new(side, height, wall),
+			color,
+			nil,
+			solid()
+		)
+	end
+end
+
+--[[
+	Kenney hopper-round: an open octagonal cup (8 wall blocks, the inner wall
+	shows) with a dark floor sunk 0.6 below the rim, a light collar band round
+	its foot, a funnel of `steps` (1 or 2) stepped rings and an optional neck.
+	`bottom` = bottom centre, `d` = cup width across the flats. Returns the
+	rim height. 10 parts + steps (+1 with a neck).
+]]
+local function roundHopper(m: Instance, bottom: Vector3, d: number, neck: number, steps: number?): number
+	local y = 0
+	if neck > 0 then
+		cyl(m, bottom + Vector3.new(0, neck / 2, 0), "Y", neck, d * 0.42, C.Housing, nil, solid())
+		y = neck
+	end
+	-- funnel: stepped rings narrowing down to the neck (wedges would show
+	-- fins at the corners of a round funnel)
+	local stepH = d * 0.15
+	local count = steps or 2
+	for i = 1, count do
+		local width = if count == 1 then 0.7 elseif i == 1 then 0.56 else 0.8
+		cyl(m, bottom + Vector3.new(0, y + stepH / 2, 0), "Y", stepH, d * width, C.Housing, nil, solid())
+		y += stepH
+	end
+	-- octagonal cup: 8 walls whose outer corners meet
+	local wall = 0.22
+	local cupH = d * 0.42
+	local apothem = d / 2
+	octCup(m, bottom + Vector3.new(0, y, 0), d, wall, cupH, C.Housing)
+	-- light collar band round the foot of the cup
+	local collarH = cupH * 0.42
+	cyl(m, bottom + Vector3.new(0, y + collarH / 2, 0), "Y", collarH, d * 1.16, C.HousingLight, nil, solid())
+	-- dark floor, reaching the inner corners
+	local rim = y + cupH
+	cyl(m, bottom + Vector3.new(0, rim - 0.6, 0), "Y", 0.1, (apothem - wall) * 2 * 1.08, C.Recess, nil, solid())
+	return bottom.Y + rim
+end
+
+--[[
+	Kenney piston-round as a fuel tank: a copper body on a narrower dark foot
+	ring (the body bulges out over it), a light band just under the cap, a
+	wide octagonal iron cap and a smaller dark disc on top of it (the
+	chamfered top). `bottom` = bottom centre. Returns the top of the cap.
+	8 parts.
+]]
+local function tank(m: Instance, bottom: Vector3, d: number, h: number, name: string?): number
+	local foot, band, capH = 0.26, 0.18, 0.46
+	local bodyTop = h - capH - band
+	cyl(m, bottom + Vector3.new(0, foot / 2, 0), "Y", foot, d - 0.3, C.HousingDark, nil, prop())
+	cyl(m, bottom + Vector3.new(0, (foot + bodyTop) / 2, 0), "Y", bodyTop - foot, d, C.Copper, nil, solid({ Name = name or "Tank" }))
+	cyl(m, bottom + Vector3.new(0, bodyTop + band / 2, 0), "Y", band, d + 0.12, C.HousingLight, nil, prop())
+	octagon(m, CFrame.new(bottom + Vector3.new(0, h - capH / 2, 0)) * UPRIGHT, d + 0.5, capH, C.Housing, solid())
+	cyl(m, bottom + Vector3.new(0, h + 0.04, 0), "Y", 0.08, d - 0.1, C.HousingDark, nil, tiny())
+	return bottom.Y + h
+end
+
+--[[
+	Valve hand wheel facing along `axis`: an orange hexagon rim, one spoke
+	and a brass hub axle reaching back to the valve body at `bodyAt` (on the
+	same axis line). 8 parts.
+]]
+local function wheel(m: Instance, center: Vector3, axis: Axis, d: number, bodyAt: Vector3)
+	local frame = CFrame.new(center) * FACING[axis]
+	local r = d / 2
+	local bar = 0.13
+	local apothem = r * math.cos(math.pi / 6)
+	for k = 0, 5 do
+		Geo.block(
+			m,
+			frame * CFrame.Angles(0, 0, k * math.pi / 3) * CFrame.new(apothem - bar / 2, 0, 0),
+			Vector3.new(bar, r + 0.03, bar),
+			C.Hazard,
+			nil,
+			tiny()
+		)
+	end
+	-- spoke corner to corner
+	Geo.block(m, frame, Vector3.new(0.1, 2 * r - 2 * bar, 0.1), C.Hazard, nil, tiny())
+	cyl(m, (center + bodyAt) / 2, axis, (center - bodyAt).Magnitude + 0.14, 0.24, C.Brass, nil, tiny())
+end
+
+--[[
+	Kenney pipe-large-valve: a light bulge 1.7x the pipe between two thin iron
+	collar rings, and a long orange T handle on top of the bulge, toward
+	`dir`. 4 parts.
+]]
+local function valve(m: Instance, center: Vector3, axis: Axis, pipeD: number, dir: Vector3)
+	local axisVector = if axis == "X" then Vector3.xAxis elseif axis == "Y" then Vector3.yAxis else Vector3.zAxis
+	cyl(m, center, axis, 0.5, pipeD * 1.7, C.HousingLight, nil, prop())
+	for _, s in { -1, 1 } do
+		cyl(m, center + axisVector * s * 0.33, axis, 0.12, pipeD * 1.3, C.Housing, nil, tiny())
+	end
+	local out = dir.Unit
+	local tip = center + out * (pipeD * 0.85 + 0.1)
+	Geo.block(m, CFrame.lookAt(tip, tip + axisVector:Cross(out)), Vector3.new(0.24, 0.24, 1.15), C.Hazard, nil, tiny())
+end
+
+--[[
+	Kenney cog: disc, `bars` tooth bars (2 teeth each) and, when `axle` > 0, a
+	hub axle that reaches `axle` studs back into the housing (toward -side on
+	X). Turns around X; every part carries `name` so the client spins them
+	together.
+]]
+local function cog(m: Instance, center: Vector3, d: number, thick: number, bars: number, side: number, axle: number, name: string)
+	cyl(m, center, "X", thick, d * 0.8, C.Brass, nil, tiny({ Name = name }))
+	for k = 0, bars - 1 do
+		Geo.block(
+			m,
+			CFrame.new(center) * CFrame.Angles(k * math.pi / bars, 0, 0),
+			Vector3.new(thick, d * 0.17, d),
+			C.Brass,
+			nil,
+			tiny({ Name = name })
+		)
+	end
+	if axle > 0 then
+		local inner = center.X - side * (thick / 2 + axle)
+		local outer = center.X + side * (thick / 2 + 0.08)
+		cyl(
+			m,
+			Vector3.new((inner + outer) / 2, center.Y, center.Z),
+			"X",
+			math.abs(outer - inner),
+			d * 0.3,
+			C.Housing,
+			nil,
+			tiny({ Name = name })
+		)
+	end
+end
+
+-- Round brass axle caps painted on a rail's side (a SurfaceGui, no parts),
+-- at `spots` (0..1 along the face) and `height` (0..1 from the top).
+local function axleCaps(rail: Part, face: Enum.NormalId, spots: { number }, height: number)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "RailFace"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 16
+	gui.LightInfluence = 1
+	gui.MaxDistance = 60
+	gui.Parent = rail
+	for _, x in spots do
+		local dot = Instance.new("Frame")
+		dot.Name = "Axle"
+		dot.BorderSizePixel = 0
+		dot.BackgroundColor3 = C.Brass
+		dot.AnchorPoint = Vector2.new(0.5, 0.5)
+		dot.Position = UDim2.fromScale(x, height)
+		dot.Size = UDim2.fromScale(0.3 / rail.Size.Z, 0.3 / rail.Size.Y)
+		dot.Parent = gui
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = dot
+	end
+end
+
+-- CFrame at `position` whose Axis (local X) points along `axis`.
+local function axisFrame(position: Vector3, axis: Vector3): CFrame
+	local x = axis.Unit
+	local ref = if math.abs(x.Y) > 0.9 then Vector3.zAxis else Vector3.yAxis
+	local z = x:Cross(ref).Unit
+	local y = z:Cross(x).Unit
+	return CFrame.fromMatrix(position, x, y, z)
+end
+
+--[[
+	WaterOut / WaterIn for a pipe whose outlet at `outlet` points along `dir`
+	and whose water lands at `landing`. The Beam curve imitates a falling jet:
+	the two control points sit on the tangents of a parabola (start tangent
+	= `dir`), so Beam (P1 = out + out.Axis * Curve, P2 = in - in.Axis * Curve)
+	draws the arc.
+]]
+local function water(base: BasePart, outlet: Vector3, dir: Vector3, landing: Vector3, spray: boolean?)
+	local flat = Vector3.new(landing.X - outlet.X, 0, landing.Z - outlet.Z)
+	local q = if flat.Magnitude < 0.05 or math.abs(dir.Unit.Y) > 0.9
+		then (outlet + landing) / 2
+		else outlet + dir.Unit * (flat.Magnitude / 2)
+	local p1 = outlet + (q - outlet) * (2 / 3)
+	local p2 = landing + (q - landing) * (2 / 3)
+	-- attachments live in the Base's space (its centre is 0.15 above the pad)
+	local out = attach(base, "WaterOut", axisFrame(base.CFrame:PointToObjectSpace(outlet), p1 - outlet))
+	out:SetAttribute("Curve", (p1 - outlet).Magnitude)
+	if spray then
+		out:SetAttribute("Spray", true)
+	end
+	local into = attach(base, "WaterIn", axisFrame(base.CFrame:PointToObjectSpace(landing), landing - p2))
+	into:SetAttribute("Curve", (landing - p2).Magnitude)
 end
 
 ---------------------------------------------------------------- machines
 
+--[[
+	Cleaning Station (3x2): Kenney machine-bed workbench: an iron cabinet
+	with a chunky light U frame round a shallow, light knee opening (a shelf
+	with a box-long inside, the name plate on the frame), light drawer fronts
+	with brass handles, a back panel with a light band and vent slats; the
+	work top in the light top colour with a chamfered front edge over a light
+	edge band. Vise at OrePoint (dark jaw faces, brass screw block), a copper
+	water pipe rising beside the wash tub (a two-kink bend with ball joints,
+	valve wheel, a bolted octagonal outlet flange) that pours into the tub
+	(WaterOut -> WaterIn), a light tool board, screen-panel-small (LampShade,
+	gauge LampBulb), lever-double, output tray open to the front. 70 parts.
+]]
 local function cleaningStation(): Model
 	local model, base = newModel("CleaningStation")
-	base.Color = C.Stone
-	local top = 3.4
-	-- bench
-	Geo.block(model, CFrame.new(0, top, 0.4), Vector3.new(10.4, 0.6, 5.2), C.WoodLight, nil, solid({ Name = "Bench" }))
-	Geo.block(model, CFrame.new(0, top - 0.45, 0.4), Vector3.new(10.6, 0.3, 5.4), C.WoodDark, nil, solid())
-	for _, x in { -4.7, 4.7 } do
-		for _, z in { -1.7, 2.5 } do
-			Geo.block(model, CFrame.new(x, top / 2, z), Vector3.new(0.7, top, 0.7), C.WoodDark, nil, solid())
-		end
+	local top = 3.4 -- bench reference height (the work top's surface is top + 0.3)
+	local benchZ = 0.4
+	local front, back = benchZ - 2.3, benchZ + 2.3 -- cabinet faces (z -1.9 / 2.7)
+	-- bench cabinet (y 0.3..3.3) with a shallow knee opening in a chunky U
+	-- frame, the name plate on its top bar, a shelf with a box inside
+	Geo.block(model, CFrame.new(0, 1.8, benchZ), Vector3.new(10, 3, 4.6), C.Housing, nil, solid({ Name = "Body" }))
+	Geo.block(model, CFrame.new(0, 0.58, benchZ), Vector3.new(10.12, 0.56, 4.72), C.Hazard, nil, prop())
+	local kneeH, kneeT, kneeDepth = 1.55, 0.5, 0.4
+	portal(model, CFrame.new(0, 0.86, front), 3.6, kneeH, kneeT, kneeDepth, false, C.RecessLight)
+	sign(model, CFrame.new(0, 0.86 + kneeH + kneeT / 2, front - kneeDepth + 0.05 - 0.085), "CLEANING STATION", 4.6)
+	Geo.block(model, CFrame.new(0, 1.55, front - 0.16), Vector3.new(3.6, 0.14, 0.32), C.HousingLight, nil, tiny())
+	Geo.block(model, CFrame.new(-0.85, 1.845, front - 0.17), Vector3.new(1.1, 0.45, 0.3), C.Copper, nil, tiny())
+	-- drawer fronts on both side panels: light plates, brass handles
+	for _, side in { -1, 1 } do
+		Geo.block(model, CFrame.new(side * 3.65, 1.95, front - 0.06), Vector3.new(2.2, 1.5, 0.12), C.HousingLight, nil, tiny())
+		Geo.block(model, CFrame.new(side * 3.65, 2.4, front - 0.17), Vector3.new(1.0, 0.2, 0.14), C.Brass, nil, tiny())
 	end
-	Geo.block(model, CFrame.new(0, 1, 2.5), Vector3.new(9.4, 0.3, 0.4), C.WoodDark, nil, solid())
-	-- stone work slab + vise
-	Geo.block(model, CFrame.new(0, top + 0.5, 0.3), Vector3.new(4.4, 0.4, 3.6), C.StoneDark, nil, solid({ Name = "WorkSlab" }))
-	for _, x in { -1.75, 1.75 } do
-		Geo.block(model, CFrame.new(x, top + 0.95, 0.3), Vector3.new(0.45, 0.5, 2), C.Metal, Enum.Material.Metal, solid({ Name = "Jaw" }))
+	-- back panel: a light band, a vent of two light slats
+	Geo.block(model, CFrame.new(0, 2.85, back + 0.05), Vector3.new(10.04, 0.34, 0.12), C.HousingLight, nil, tiny())
+	for i = 0, 1 do
+		Geo.block(model, CFrame.new(2.6, 1.35 + i * 0.5, back + 0.07), Vector3.new(2.6, 0.24, 0.14), C.HousingLight, nil, tiny())
 	end
-	Geo.cylinder(model, Vector3.new(-2.5, top + 0.95, 0.3), 0.4, 0.4, C.MetalLight, Enum.Material.Metal, decor())
-	Geo.block(model, CFrame.new(-2.8, top + 0.95, 0.3) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(0.16, 1.4, 0.16), C.MetalLight, Enum.Material.Metal, decor())
-	-- tool rack at the back left: chisel, hammer, brush, cloth
-	Geo.block(model, CFrame.new(-3.6, top + 1.8, 2.75), Vector3.new(3.4, 2.6, 0.25), C.WoodDark, nil, solid())
-	Geo.block(model, CFrame.new(-4.6, top + 1.9, 2.55), Vector3.new(0.2, 1.4, 0.2), C.MetalLight, Enum.Material.Metal, decor())
-	Geo.wedge(model, CFrame.new(-4.6, top + 1.05, 2.55) * CFrame.Angles(math.pi, 0, 0), Vector3.new(0.2, 0.3, 0.2), C.MetalLight, Enum.Material.Metal, decor())
-	Geo.block(model, CFrame.new(-3.7, top + 1.9, 2.55), Vector3.new(0.25, 1.6, 0.25), C.Wood, nil, decor())
-	Geo.block(model, CFrame.new(-3.7, top + 2.7, 2.55), Vector3.new(0.9, 0.45, 0.45), C.Metal, Enum.Material.Metal, decor())
-	Geo.block(model, CFrame.new(-2.8, top + 2.2, 2.55), Vector3.new(0.6, 0.9, 0.3), C.Wood, nil, decor())
-	Geo.block(model, CFrame.new(-2.8, top + 1.6, 2.55), Vector3.new(0.7, 0.4, 0.35), rgb(70, 50, 40), nil, decor())
-	-- lamp (upper right, out of the close-up camera's view)
-	Geo.block(model, CFrame.new(3.9, top + 2.5, 2.4), Vector3.new(0.35, 5, 0.35), C.Metal, Enum.Material.Metal, solid())
-	Geo.block(model, CFrame.new(3.3, top + 4.9, 1.9) * CFrame.Angles(0, math.rad(40), 0), Vector3.new(1.6, 0.25, 0.25), C.Metal, Enum.Material.Metal, decor())
-	local shade = Geo.block(model, CFrame.new(2.7, top + 4.5, 1.4), Vector3.new(1.3, 0.6, 1.3), rgb(60, 110, 90), nil, decor())
-	shade.Name = "LampShade"
-	local bulb = Geo.ball(model, Vector3.new(2.7, top + 4.1, 1.4), 0.55, rgb(255, 222, 150), Enum.Material.Neon, decor())
-	bulb.Name = "LampBulb"
-	light(bulb, rgb(255, 214, 160), 14, 1.6)
-	-- output tray on the right
-	Geo.block(model, CFrame.new(3.6, top + 0.45, -0.4), Vector3.new(2.6, 0.3, 2.6), C.WoodDark, nil, solid({ Name = "Tray" }))
-	for _, off in { Vector3.new(0, 0, 1.25), Vector3.new(0, 0, -1.25) } do
-		Geo.block(model, CFrame.new(Vector3.new(3.6, top + 0.8, -0.4) + off), Vector3.new(2.6, 0.5, 0.15), C.Wood, nil, solid())
+	-- work top: a light edge band standing out all round, the top in the
+	-- light top colour, its front edge chamfered (a wedge) like the bevels
+	-- of the Kenney housings
+	Geo.block(model, CFrame.new(0, top - 0.01, benchZ), Vector3.new(10.5, 0.18, 5.6), C.HousingLight, nil, prop())
+	local deck = top + 0.3
+	Geo.block(model, CFrame.new(0, deck - 0.12, benchZ + 0.2), Vector3.new(10.8, 0.24, 5.0), C.HousingTop, nil, solid({ Name = "Bench" }))
+	Geo.wedge(model, CFrame.new(0, deck - 0.12, front - 0.225), Vector3.new(10.8, 0.24, 0.45), C.HousingTop, nil, solid())
+	-- work slab + vise: jaws with dark faces, a brass screw block and an
+	-- orange T handle out to the front
+	Geo.block(model, CFrame.new(0, top + 0.5, 0.3), Vector3.new(4.4, 0.4, 3.6), C.HousingDark, nil, solid({ Name = "WorkSlab" }))
+	for _, side in { -1, 1 } do
+		Geo.block(model, CFrame.new(side * 1.75, top + 0.95, 0.3), Vector3.new(0.5, 0.5, 2.2), C.HousingTop, nil, solid({ Name = "Jaw" }))
+		Geo.block(model, CFrame.new(side * 1.46, top + 0.97, 0.3), Vector3.new(0.1, 0.44, 1.9), C.Recess, nil, tiny())
 	end
-	for _, off in { Vector3.new(1.25, 0, 0), Vector3.new(-1.25, 0, 0) } do
-		Geo.block(model, CFrame.new(Vector3.new(3.6, top + 0.8, -0.4) + off), Vector3.new(0.15, 0.5, 2.6), C.Wood, nil, solid())
+	Geo.block(model, CFrame.new(-1.75, top + 0.95, -0.98), Vector3.new(0.56, 0.44, 0.36), C.Brass, nil, tiny())
+	Geo.block(model, CFrame.new(-1.75, top + 0.95, -1.27), Vector3.new(1.2, 0.16, 0.16), C.Hazard, nil, tiny())
+
+	-- copper wash tub left of the vise on a dark foot plinth, a light lip
+	-- round its top, filled almost to the lip
+	local bx, bz, bw, bd, lip = -4.15, -0.5, 2.3, 2.6, 0.2
+	Geo.block(model, CFrame.new(bx, deck + 0.08, bz), Vector3.new(bw - 0.5, 0.16, bd - 0.5), C.HousingDark, nil, tiny())
+	local bodyTop = deck + 0.96
+	Geo.block(model, CFrame.new(bx, bodyTop - 0.4, bz), Vector3.new(bw, 0.8, bd), C.Copper, nil, solid({ Name = "Tub" }))
+	for _, side in { -1, 1 } do
+		Geo.block(
+			model,
+			CFrame.new(bx, bodyTop + 0.05, bz + side * (bd / 2 + 0.04 - lip / 2)),
+			Vector3.new(bw + 0.08, 0.3, lip),
+			C.HousingLight,
+			nil,
+			solid()
+		)
+		Geo.block(
+			model,
+			CFrame.new(bx + side * (bw / 2 + 0.04 - lip / 2), bodyTop + 0.05, bz),
+			Vector3.new(lip, 0.3, bd + 0.08 - 2 * lip),
+			C.HousingLight,
+			nil,
+			solid()
+		)
 	end
-	sign(model, CFrame.new(0, top - 0.75, -2.32), "CLEANING STATION", 4.6)
+	local poolTop = bodyTop + 0.1
+	Geo.block(
+		model,
+		CFrame.new(bx, poolTop - 0.06, bz),
+		Vector3.new(bw + 0.06 - 2 * lip, 0.12, bd + 0.06 - 2 * lip),
+		MachineBuilder.Water.Pool,
+		nil,
+		tiny({ Name = "WaterPool", Transparency = MachineBuilder.Water.PoolTransparency, Reflectance = 0.1 })
+	)
+
+	-- copper water pipe, all of it outside the close-up camera's view: it
+	-- comes up out of the plot beside the station's left end, bends over the
+	-- tub with two kinks, a valve (hand wheel facing the front) on the short
+	-- run, and pours out of a bolted octagonal flange
+	local pd, px, pipeY, outX = 0.6, -5.7, 6.6, -4.4
+	local r = pd * 0.8
+	local riserTop = pipeY - r
+	cyl(model, Vector3.new(px, (0.3 + riserTop) / 2, bz), "Y", riserTop - 0.3, pd, C.Copper, nil, solid())
+	bend(model, Vector3.new(px, pipeY, bz), Vector3.new(0, -1, 0), Vector3.new(1, 0, 0), pd, r, C.Copper)
+	local runFrom = px + r
+	cyl(model, Vector3.new((runFrom + outX) / 2, pipeY, bz), "X", outX - runFrom, pd, C.Copper, nil, prop())
+	local valveX = (runFrom + outX) / 2 - 0.05
+	cyl(model, Vector3.new(valveX, pipeY, bz), "X", 0.42, pd * 1.5, C.HousingLight, nil, prop())
+	wheel(model, Vector3.new(valveX, pipeY, bz - 0.72), "Z", 1.0, Vector3.new(valveX, pipeY, bz - 0.45))
+	flange(model, Vector3.new(outX + 0.07, pipeY, bz), "X", pd, 2, 1)
+	water(base, Vector3.new(outX + 0.2, pipeY - 0.04, bz), Vector3.new(1, 0, 0), Vector3.new(outX + 0.55, poolTop, bz))
+
+	-- tool board at the back (light on both sides): chisel, hammer, brush
+	local boardZ = 2.85
+	panelBack(Geo.block(model, CFrame.new(-0.6, top + 1.6, boardZ), Vector3.new(3.6, 2.6, 0.25), C.HousingLight, nil, solid()))
+	local toolZ = boardZ - 0.2
+	Geo.block(model, CFrame.new(-1.9, top + 1.75, toolZ), Vector3.new(0.24, 1.6, 0.16), C.Housing, nil, tiny())
+	Geo.block(model, CFrame.new(-0.7, top + 1.6, toolZ), Vector3.new(0.22, 1.6, 0.2), C.Wood, nil, tiny())
+	Geo.block(model, CFrame.new(-0.7, top + 2.45, toolZ), Vector3.new(0.95, 0.42, 0.42), C.HousingDark, nil, tiny())
+	Geo.block(model, CFrame.new(0.5, top + 1.75, toolZ), Vector3.new(0.7, 1.2, 0.3), C.Cloth, nil, tiny())
+
+	-- screen-panel-small: a chunky light panel standing on the top (light
+	-- on the back too), dark glass screen with an amber gauge bar (the old
+	-- lamp's names, so old lookups still find them)
+	panelBack(
+		Geo.block(model, CFrame.new(2.6, top + 1.45, 2.8), Vector3.new(1.8, 2.3, 0.3), C.HousingLight, nil, prop({ Name = "LampShade" }))
+	)
+	Geo.block(
+		model,
+		CFrame.new(2.6, top + 2.05, 2.63),
+		Vector3.new(1.4, 0.85, 0.06),
+		C.Screen,
+		nil,
+		tiny({ Name = "Screen", Reflectance = 0.25 })
+	)
+	Geo.block(model, CFrame.new(2.45, top + 1.92, 2.59), Vector3.new(0.85, 0.12, 0.03), C.Gauge, NEON, tiny({ Name = "LampBulb" }))
+
+	-- lever-double on the top, right behind the tray: a light base, two
+	-- slanted uprights holding an orange grip
+	local lx, lz = 4.7, 1.55
+	Geo.block(model, CFrame.new(lx, top + 0.45, lz), Vector3.new(1.0, 0.3, 1.0), C.HousingLight, nil, tiny())
+	for _, side in { -1, 1 } do
+		Geo.block(
+			model,
+			CFrame.new(lx + side * 0.24, top + 0.85, lz) * CFrame.Angles(math.rad(-22), 0, 0),
+			Vector3.new(0.12, 0.62, 0.16),
+			C.HousingDark,
+			nil,
+			tiny()
+		)
+	end
+	cyl(model, Vector3.new(lx, top + 1.15, lz - 0.12), "X", 0.66, 0.24, C.Hazard, nil, tiny())
+
+	-- output tray on the right: dark floor, iron rims (open to the front)
+	Geo.block(model, CFrame.new(3.6, top + 0.45, -0.4), Vector3.new(2.6, 0.3, 2.6), C.HousingDark, nil, solid({ Name = "Tray" }))
+	Geo.block(model, CFrame.new(3.6, top + 0.76, -0.4 + 1.22), Vector3.new(2.6, 0.32, 0.16), C.Housing, nil, solid())
+	for _, side in { -1, 1 } do
+		Geo.block(model, CFrame.new(3.6 + side * 1.22, top + 0.76, -0.4), Vector3.new(0.16, 0.32, 2.28), C.Housing, nil, solid())
+	end
 
 	local orePoint = CFrame.new(0, top + 1.95, 0.3)
 	attach(base, "OrePoint", orePoint)
@@ -215,112 +983,402 @@ local function cleaningStation(): Model
 	return model
 end
 
+-- Storage Crate (retired): a closed Kenney box-large with a tape band and a
+-- dark slot in the top (the intake), inside a structure-yellow-high frame.
 local function storageCrate(): Model
 	local model, base = newModel("StorageCrate")
-	base.Color = C.WoodDark
-	local body = Geo.block(model, CFrame.new(0, 2.3, 0.2), Vector3.new(6.2, 4, 6.2), C.Wood, nil, solid({ Name = "Body" }))
-	for _, y in { 0.9, 3.7 } do
-		Geo.block(model, CFrame.new(0, y, 0.2), Vector3.new(6.4, 0.45, 6.4), C.WoodDark, nil, solid())
-	end
-	for _, x in { -3, 3 } do
-		for _, z in { -2.8, 3.2 } do
-			Geo.block(model, CFrame.new(x, 2.3, z), Vector3.new(0.5, 4.2, 0.5), C.Metal, Enum.Material.Metal, decor())
+	Geo.block(model, CFrame.new(0, 2.1, 0.2), Vector3.new(5.6, 3.6, 5.6), C.WoodLight, nil, solid({ Name = "Body" }))
+	Geo.block(model, CFrame.new(0, 2.1, 0.2), Vector3.new(1.4, 3.64, 5.66), C.Cloth, nil, prop())
+	Geo.block(model, CFrame.new(0, 3.92, -0.6), Vector3.new(3.6, 0.06, 0.8), C.Recess, nil, tiny())
+	for _, x in { -3.1, 3.1 } do
+		for _, z in { -2.85, 3.25 } do
+			cyl(model, Vector3.new(x, 2.55, z), "Y", 4.5, 0.5, C.HousingLight, nil, prop())
+			cyl(model, Vector3.new(x, 3.4, z), "Y", 0.5, 0.78, C.Hazard, nil, tiny())
 		end
 	end
-	-- open lid leaning back
-	Geo.block(model, CFrame.new(0, 5.2, 3.6) * CFrame.Angles(math.rad(-65), 0, 0), Vector3.new(6.2, 0.4, 3), C.WoodLight, nil, solid())
-	-- dark inside
-	Geo.block(model, CFrame.new(0, 4.32, 0.2), Vector3.new(5.6, 0.05, 5.6), rgb(50, 34, 24), nil, decor())
-	local label = sign(model, CFrame.new(0, 2.6, -2.98), "0/60", 3)
+	for _, z in { -2.85, 3.25 } do
+		Geo.block(model, CFrame.new(0, 3.4, z), Vector3.new(6.2, 0.3, 0.3), C.Hazard, nil, tiny())
+	end
+	local label = sign(model, CFrame.new(0, 2.4, -2.68), "0/60", 2.4)
 	label.Name = "CountSign"
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
 	output(base, "StorageCrate")
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.2))
 	intake:SetAttribute("IntakeSize", Vector3.new(6, 2.4, 6))
-	local _ = body
 	return model
 end
 
-local function furnace(id: string, scale: number): Model
-	local model, base = newModel(id)
-	base.Color = C.StoneDark
-	local s = scale
-	local clay = if id == "BlastFurnace" then C.Brick else C.Clay
-	local clayDark = if id == "BlastFurnace" then rgb(110, 50, 36) else C.ClayDark
-	Geo.block(model, CFrame.new(0, 0.7 * s, 0.3), Vector3.new(6.6, 1.1, 6.6) * Vector3.new(s, 1, s), C.Stone, nil, solid())
-	Geo.block(model, CFrame.new(0, 2.6 * s, 0.4), Vector3.new(6, 3 * s, 6) * Vector3.new(s, 1, s), clay, nil, solid({ Name = "Body" }))
-	Geo.block(model, CFrame.new(0, 4.7 * s, 0.6), Vector3.new(4.8, 1.6 * s, 4.8) * Vector3.new(s, 1, s), clayDark, nil, solid())
-	Geo.block(model, CFrame.new(0, 5.9 * s, 0.8), Vector3.new(3.2, 1.2 * s, 3.2) * Vector3.new(s, 1, s), clay, nil, solid())
-	-- chimney
-	local chimney = Geo.block(model, CFrame.new(1.3 * s, 7.6 * s, 1.8 * s), Vector3.new(1.4, 3 * s, 1.4) * Vector3.new(s, 1, s), C.StoneDark, nil, solid())
-	local top = Geo.block(model, CFrame.new(1.3 * s, 9.15 * s, 1.8 * s), Vector3.new(1.5 * s, 0.15, 1.5 * s), C.Glow, Enum.Material.Neon, decor({ Name = "ChimneyTop" }))
-	emitter(top, "Smoke", rgb(110, 100, 96), if id == "BlastFurnace" then 5 else 2)
-	-- glowing mouth, moved toward the output column but kept on the body
-	local out = output(base, id)
-	local mouthX = math.clamp(out.X, -1.4 * s, 1.4 * s)
-	Geo.block(model, CFrame.new(mouthX, 2.3 * s, -2.65 * s), Vector3.new(3.2 * s, 2.6 * s, 0.4), C.StoneDark, nil, solid())
-	local glow = Geo.block(model, CFrame.new(mouthX, 2.2 * s, -2.75 * s), Vector3.new(2.4 * s, 1.8 * s, 0.25), C.Glow, Enum.Material.Neon, decor({ Name = "Glow" }))
-	light(glow, C.Glow, 12 * s, 1.2)
-	emitter(glow, "Embers", C.Glow, 2)
-	-- output lip leading to the Output point
-	Geo.block(model, CFrame.new(out.X, 1.15, out.Z + 1.4), Vector3.new(2.4 * s, 0.3, 1.8), C.Metal, Enum.Material.Metal, solid())
-	-- hopper on top
-	funnel(model, Vector3.new(0, 7.2 * s, 0.8), 3 * s, 1.2, C.Metal)
-	sign(model, CFrame.new(0, 4.1 * s, -2.62 * s), if id == "BlastFurnace" then "BLAST FURNACE" else "FURNACE", 3.6 * s)
-	attach(base, "Prompt", CFrame.new(0, 2.5, -3.6 * s))
-	local intake = attach(base, "Intake", CFrame.new(0, 4.5 * s, 1.2))
-	intake:SetAttribute("IntakeSize", Vector3.new(7 * s, 9 * s, 6 * s))
-	local _ = chimney
-	return model
-end
-
-local function crusher(): Model
-	local model, base = newModel("Crusher")
-	base.Color = C.StoneDark
-	Geo.block(model, CFrame.new(0, 2, 0.4), Vector3.new(6, 3.4, 5.6), C.Metal, Enum.Material.Metal, solid({ Name = "Body" }))
-	for _, x in { -3.05, 3.05 } do
-		Geo.block(model, CFrame.new(x, 2, 0.4), Vector3.new(0.3, 3.8, 6), rgb(210, 160, 50), nil, solid())
+--[[
+	Clay Furnace (2x2): Kenney machine-fortified in terracotta brick (dark
+	mortar courses, a dark iron skirt carrying the orange trim, a bolted iron
+	strap over the top), a mouth in a deep light frame with a dark border, a
+	set-back glow behind three grate bars and a latch, a short chute at the
+	output, an open round hopper on top (intake) with a hatch plate beside
+	it, and a large copper chimney in two sections between bolted octagonal
+	flanges. 64 parts.
+]]
+local function clayFurnace(): Model
+	local model, base = newModel("ClayFurnace")
+	local z0 = 0.6
+	housing(model, CFrame.new(0, 0.3, z0), Vector3.new(6.6, 5.0, 6.0), C.Clay, 0.8, { FrontBevel = true, Top = C.ClayTop, Skirt = true })
+	for _, y in { 1.9, 3.05, 4.2 } do
+		Geo.block(model, CFrame.new(0, y, z0), Vector3.new(6.66, 0.2, 6.06), C.ClayDark, nil, tiny())
 	end
-	-- rollers (client spins them while working)
-	for i, z in { -0.4, 1.2 } do
-		local roller = Geo.cylinder(model, Vector3.new(0, 4.1, z + 0.4), 5.2, 1.6, C.MetalLight, Enum.Material.Metal, decor({ Name = "Roller" .. i }))
-		roller.CFrame = CFrame.new(0, 4.1, z + 0.4)
-		-- teeth
-		for k = 0, 3 do
-			Geo.block(model, CFrame.new(0, 4.1, z + 0.4) * CFrame.Angles(k * math.pi / 4, 0, 0), Vector3.new(5.1, 1.9, 0.25), C.Metal, Enum.Material.Metal, decor({ Name = "Roller" .. i .. "Tooth" }))
+	-- fortified iron strap over the top, bolted at the front and the back
+	-- (front plate, a wedge over the rounded front edge, top plate, back plate)
+	local strapX = -1.9
+	Geo.block(model, CFrame.new(strapX, 2.53, z0 - 3.1), Vector3.new(1.2, 3.94, 0.2), C.HousingLight, nil, prop())
+	Geo.wedge(model, CFrame.new(strapX, 4.93, z0 - 2.63), Vector3.new(1.2, 0.86, 0.86), C.HousingLight, nil, prop())
+	Geo.block(model, CFrame.new(strapX, 5.38, z0 + 0.5), Vector3.new(1.2, 0.16, 5.4), C.HousingLight, nil, prop())
+	Geo.block(model, CFrame.new(strapX, 2.95, z0 + 3.1), Vector3.new(1.2, 4.9, 0.2), C.HousingLight, nil, prop())
+	for _, y in { 1.5, 3.7 } do
+		ball(model, Vector3.new(strapX, y, z0 - 3.22), 0.32, C.Brass)
+		ball(model, Vector3.new(strapX, y, z0 + 3.22), 0.32, C.Brass)
+	end
+	-- the mouth: a deep light frame, a dark recess, a smaller glow set back
+	-- inside a dark border, three grate bars in front, a latch
+	local out = output(base, "ClayFurnace")
+	local mouthX, mouthY, mouthW, mouthH = 1.45, 1.15, 2.2, 2.0
+	local wallZ = z0 - 3.0
+	portal(model, CFrame.new(mouthX, mouthY, wallZ), mouthW, mouthH, 0.45, 0.7)
+	local glow = Geo.block(
+		model,
+		CFrame.new(mouthX, mouthY + mouthH / 2 - 0.05, wallZ - 0.13),
+		Vector3.new(mouthW - 0.3, mouthH - 0.4, 0.08),
+		C.Glow,
+		NEON,
+		tiny({ Name = "Glow" })
+	)
+	light(glow, C.Glow, 12, 1.2)
+	emitter(glow, "Embers", C.Glow, 2)
+	for i = 1, 3 do
+		Geo.block(
+			model,
+			CFrame.new(mouthX, mouthY + i * mouthH / 4, wallZ - 0.32),
+			Vector3.new(mouthW + 0.1, 0.2, 0.18),
+			C.HousingDark,
+			nil,
+			tiny()
+		)
+	end
+	Geo.block(model, CFrame.new(mouthX + mouthW / 2 + 0.23, mouthY + 1.1, wallZ - 0.76), Vector3.new(0.22, 0.5, 0.14), C.Brass, nil, tiny())
+	-- short chute below the mouth, above the orange trim
+	chute(model, Vector3.new(out.X - 0.55, mouthY + 0.06, wallZ - 0.1), 1.6, 1.55, 0.32)
+	sign(model, CFrame.new(mouthX, 3.98, wallZ - 0.08), "CLAY FURNACE", 3.2)
+	-- large pipe chimney at the back left: bolted octagonal foot flange, two
+	-- copper sections split by a flange, a bolted top flange, a dark mouth
+	-- with a thin copper rim
+	local cx, cz, cd = -1.9, 2.15, 1.3
+	flange(model, Vector3.new(cx, 5.45, cz), "Y", cd, 2, 1)
+	cyl(model, Vector3.new(cx, 7.1, cz), "Y", 3.6, cd, C.Copper, nil, solid())
+	flange(model, Vector3.new(cx, 7.0, cz), "Y", cd, 0)
+	flange(model, Vector3.new(cx, 8.75, cz), "Y", cd, 2, 1)
+	local chimneyTop = cyl(model, Vector3.new(cx, 8.93, cz), "Y", 0.06, cd - 0.26, C.Ember, nil, tiny({ Name = "ChimneyTop" }))
+	emitter(chimneyTop, "Smoke", C.Smoke, 2)
+	-- open round hopper on top (the intake), a Kenney hatch plate beside it
+	roundHopper(model, Vector3.new(0.9, 5.3, 0.45), 2.8, 0.3)
+	Geo.block(model, CFrame.new(1.45, 5.375, 2.85), Vector3.new(1.2, 0.15, 0.9), C.HousingLight, nil, tiny())
+
+	attach(base, "Prompt", CFrame.new(0, 2.5, -3.6))
+	local intake = attach(base, "Intake", CFrame.new(0, 4.5, 1.2))
+	intake:SetAttribute("IntakeSize", Vector3.new(7, 9, 6))
+	return model
+end
+
+--[[
+	Blast Furnace (3x3): Kenney machine-connection-pipe on a plinth with
+	hazard dashes painted round its edge. A tall iron body with a barred
+	molten window (Glow set back in a deep frame with a dark border), a hatch
+	and rivet bands painted on its back. On the roof the connection pipe - a
+	light octagonal collar, a pipe neck and a wide open octagonal cup (the
+	intake) with molten metal glowing in its throat - and the dominant
+	vertical, a big copper chimney in two sections split by an octagonal
+	flange, under a light cap. A tap: a glass section showing the molten
+	metal, an octagonal flange, molten metal pouring from it into an ingot
+	mould at the output. Piston-round fuel tanks: the front right one feeds
+	the body through a riser with a valve and a two-kink bend, a spare one
+	stands at the back left; an orange box-long fills the front left
+	corner. 70 parts.
+]]
+local function blastFurnace(): Model
+	local model, base = newModel("BlastFurnace")
+	local plinth = Geo.block(model, CFrame.new(0, 0.6, 0.15), Vector3.new(11.6, 0.6, 10.9), C.Housing, nil, solid({ Name = "Plinth" }))
+	-- hazard dashes round the plinth's top edge (painted, no parts)
+	local pad = surface(plinth, "PlinthFace", Enum.NormalId.Top, 90)
+	local edgeX, edgeZ = 0.4 / plinth.Size.X, 0.4 / plinth.Size.Z
+	gradientStrip(pad, "HazardL", 0, edgeX, hazardKeys(12))
+	gradientStrip(pad, "HazardR", 1 - edgeX, edgeX, hazardKeys(12))
+	for _, y in { 0, 1 - edgeZ } do
+		local strip = Instance.new("Frame")
+		strip.Name = "HazardEnd"
+		strip.BorderSizePixel = 0
+		strip.BackgroundColor3 = Color3.new(1, 1, 1)
+		strip.Position = UDim2.fromScale(edgeX, y)
+		strip.Size = UDim2.fromScale(1 - 2 * edgeX, edgeZ)
+		strip.Parent = pad
+		local gradient = Instance.new("UIGradient")
+		gradient.Rotation = 0
+		gradient.Color = ColorSequence.new(hazardKeys(11))
+		gradient.Parent = strip
+	end
+
+	local bz = 0.8
+	local floor = 0.9 -- plinth top
+	local bodyH = 7.0
+	local body = housing(model, CFrame.new(0, floor, bz), Vector3.new(6.8, bodyH, 6.4), C.Housing, 0.9)
+	local front = bz - 3.2
+	local roof = floor + bodyH
+	-- the back: a painted hatch (light frame, dark panel, rivets, handle)
+	-- and two rivet bands
+	local back = surface(body, "BackFace", Enum.NormalId.Back, 70)
+	paintRect(back, "HatchFrame", 0.31, 0.34, 0.38, 0.46, C.HousingLight)
+	paintRect(back, "Hatch", 0.35, 0.38, 0.3, 0.38, C.HousingDark)
+	paintRect(back, "HatchHandle", 0.56, 0.55, 0.06, 0.05, C.Hazard)
+	for _, x in { 0.33, 0.67 } do
+		for _, y in { 0.36, 0.78 } do
+			paintRect(back, "Rivet", x - 0.012, y - 0.014, 0.024, 0.028, C.Brass, true)
 		end
 	end
-	funnel(model, Vector3.new(0, 5.6, 0.8), 5.4, 2, rgb(210, 160, 50))
-	-- warning stripes
-	for i = -2, 2 do
-		Geo.block(model, CFrame.new(i * 1.1, 0.6, -2.42) * CFrame.Angles(0, 0, math.rad(45)), Vector3.new(0.4, 1, 0.05), if i % 2 == 0 then C.Belt else rgb(240, 190, 40), nil, decor())
+	for _, y in { 0.14, 0.86 } do
+		for i = 0, 8 do
+			paintRect(back, "Rivet", 0.07 + i * 0.107, y, 0.024, 0.028, C.Brass, true)
+		end
 	end
-	-- output chute
+
+	-- molten window: deep light frame, dark recess, a smaller glow set back
+	-- inside a dark border, two thick grate bars
+	local winY, winW, winH = 3.8, 2.8, 2.0
+	portal(model, CFrame.new(0, winY, front), winW, winH, 0.45, 0.7, true)
+	local glow = Geo.block(
+		model,
+		CFrame.new(0, winY + winH / 2, front - 0.13),
+		Vector3.new(winW - 0.3, winH - 0.3, 0.08),
+		C.Glow,
+		NEON,
+		tiny({ Name = "Glow" })
+	)
+	light(glow, C.Glow, 17, 1.2)
+	emitter(glow, "Embers", C.Glow, 2)
+	for _, x in { -0.47, 0.47 } do
+		Geo.block(model, CFrame.new(x, winY + winH / 2, front - 0.3), Vector3.new(0.3, winH, 0.2), C.HousingDark, nil, tiny())
+	end
+	sign(model, CFrame.new(0, 6.75, front - 0.08), "BLAST FURNACE", 3.9)
+
+	-- the connection pipe on the roof (the intake): a light octagonal
+	-- collar, a pipe neck, a wide open octagonal cup with molten metal
+	-- glowing in its throat
+	local stack = Vector3.new(0.3, roof, 0.2)
+	local collarH, neckH, cupH, cupW = 0.5, 0.9, 1.6, 3.8
+	octagon(model, CFrame.new(stack + Vector3.new(0, collarH / 2, 0)) * UPRIGHT, 4.2, collarH, C.HousingLight, solid())
+	cyl(model, stack + Vector3.new(0, collarH + neckH / 2, 0), "Y", neckH, 2.9, C.Housing, nil, solid())
+	local cupY = collarH + neckH
+	octCup(model, stack + Vector3.new(0, cupY, 0), cupW, 0.42, cupH, C.Housing)
+	cyl(model, stack + Vector3.new(0, cupY + 0.7, 0), "Y", 0.12, (cupW - 0.84) * 1.08, C.Molten, NEON, tiny({ Name = "Molten" }))
+
+	-- the chimney: a big copper pipe out of the roof behind the cup, split
+	-- by an octagonal flange, a light cap, a dark mouth
+	local cx, cz, cd, chimneyTo = -1.75, 3.15, 1.5, 14.0
+	cyl(model, Vector3.new(cx, (roof + chimneyTo) / 2, cz), "Y", chimneyTo - roof, cd, C.Copper, nil, solid())
+	flange(model, Vector3.new(cx, 11.4, cz), "Y", cd, 0)
+	cyl(model, Vector3.new(cx, chimneyTo, cz), "Y", 0.4, cd + 0.45, C.HousingLight, nil, prop())
+	local chimneyTop = cyl(model, Vector3.new(cx, chimneyTo + 0.23, cz), "Y", 0.06, cd - 0.2, C.Ember, nil, tiny({ Name = "ChimneyTop" }))
+	emitter(chimneyTop, "Smoke", C.Smoke, 5)
+
+	-- tap: a big glass section with molten metal out of the wall, an
+	-- octagonal flange, the metal pouring from its mouth into an ingot mould
+	-- at the output
+	local out = output(base, "BlastFurnace")
+	local tapY, glassD = 2.55, 1.1
+	local glassFrom, glassTo = front + 0.05, front - 1.25
+	cyl(
+		model,
+		Vector3.new(out.X, tapY, (glassFrom + glassTo) / 2),
+		"Z",
+		glassFrom - glassTo,
+		glassD,
+		C.Glass,
+		GLASS,
+		tiny({ Transparency = 0.5 })
+	)
+	cyl(
+		model,
+		Vector3.new(out.X, tapY, (glassFrom + glassTo) / 2),
+		"Z",
+		glassFrom - glassTo + 0.02,
+		0.5,
+		C.Molten,
+		NEON,
+		tiny({ Name = "Molten" })
+	)
+	local lipZ = glassTo - 0.26
+	flange(model, Vector3.new(out.X, tapY, glassTo - 0.13), "Z", glassD, 0)
+	local mouldZ, mouldTop = lipZ - 0.55, floor + 0.17
+	pipeBetween(
+		model,
+		Vector3.new(out.X, tapY - 0.12, lipZ + 0.05),
+		Vector3.new(out.X, mouldTop, mouldZ),
+		0.3,
+		C.Molten,
+		NEON,
+		tiny({ Name = "Molten" })
+	)
+	Geo.block(model, CFrame.new(out.X, floor + 0.08, mouldZ), Vector3.new(1.6, 0.16, 1.1), C.HousingDark, nil, solid())
+	Geo.block(model, CFrame.new(out.X, mouldTop, mouldZ), Vector3.new(1.2, 0.04, 0.7), C.Glow, NEON, tiny({ Name = "Molten" }))
+
+	-- fuel tanks: the front right one feeds the body through a riser with a
+	-- valve and a two-kink bend into its side, a spare one stands at the
+	-- back left; an orange box-long in the front left corner
+	local side, tx, feedD, entry = 3.4, 4.65, 0.8, 6.0
+	local feedR = tx - side
+	local capTop = tank(model, Vector3.new(tx, floor, -1.2), 1.9, 2.7)
+	tank(model, Vector3.new(-tx, floor, 2.4), 1.9, 2.7)
+	local riserTop = entry - feedR
+	cyl(model, Vector3.new(tx, (capTop + riserTop) / 2, -1.2), "Y", riserTop - capTop, feedD, C.Copper, nil, prop())
+	valve(model, Vector3.new(tx, capTop + 0.55, -1.2), "Y", feedD, Vector3.new(0, 0, -1))
+	bend(model, Vector3.new(tx, entry, -1.2), Vector3.new(0, -1, 0), Vector3.new(-1, 0, 0), feedD, feedR, C.Copper, 1)
+	Geo.block(model, CFrame.new(-4.45, floor + 0.45, -3.85), Vector3.new(1.9, 0.9, 1.0), C.Copper, nil, solid({ Name = "Box" }))
+
+	attach(base, "Prompt", CFrame.new(0, 2.5, -3.6 * 1.45))
+	local intake = attach(base, "Intake", CFrame.new(0, 4.5 * 1.45, 1.2))
+	intake:SetAttribute("IntakeSize", Vector3.new(7 * 1.45, 9 * 1.45, 6 * 1.45))
+	return model
+end
+
+--[[
+	Crusher (2x2): Kenney machine-window housing (a window with a cog behind
+	the glass and a glint on it) with a high square hopper, the intake,
+	holding two dark rollers with light steel teeth standing proud, low in
+	its dark throat; a big cog-a and a smaller cog-c meshing on each side of
+	the housing (Cog1 / Cog2, they turn with the rollers), an output slot
+	with a short chute above the base trim, hazard chevrons, and a
+	piston-square drive mounted on the back (its rod showing, the cap
+	reaching into the housing). 69 parts.
+]]
+local function crusher(): Model
+	local model, base = newModel("Crusher")
+	local bz = 0.35
+	local body = housing(model, CFrame.new(0, 0.3, bz), Vector3.new(6.2, 4.0, 5.0), C.Housing, 0.6)
+	-- the back: a painted service hatch beside the piston and a rivet band
+	local back = surface(body, "BackFace", Enum.NormalId.Back, 60)
+	paintRect(back, "HatchFrame", 0.56, 0.3, 0.32, 0.46, C.HousingLight)
+	paintRect(back, "Hatch", 0.59, 0.34, 0.26, 0.38, C.HousingDark)
+	paintRect(back, "HatchHandle", 0.61, 0.5, 0.05, 0.06, C.Hazard)
+	for i = 0, 7 do
+		paintRect(back, "Rivet", 0.06 + i * 0.125, 0.12, 0.03, 0.044, C.Brass, true)
+	end
+	local front = bz - 2.5
+	-- window (front left): a dark recess with a brass cog inside, the glass
+	-- out at the frame's face with one diagonal glint
+	portal(model, CFrame.new(-1.4, 1.5, front), 1.8, 1.4, 0.35, 0.4, true)
+	cyl(model, Vector3.new(-1.75, 2.05, front - 0.13), "Z", 0.08, 1.2, C.Brass, nil, tiny())
+	Geo.block(model, CFrame.new(-1.4, 2.2, front - 0.28), Vector3.new(1.8, 1.4, 0.04), C.Glass, GLASS, tiny({ Transparency = 0.6 }))
+	Geo.block(
+		model,
+		CFrame.new(-1.05, 2.35, front - 0.31) * CFrame.Angles(0, 0, math.rad(-40)),
+		Vector3.new(0.13, 1.1, 0.02),
+		rgb(236, 248, 255),
+		nil,
+		tiny({ Transparency = 0.25 })
+	)
+	-- output slot (front right, at the output column) and a short chute
 	local out = output(base, "Crusher")
-	Geo.wedge(model, CFrame.new(out.X, 1.2, out.Z + 1.3) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.2, 0.8, 1.6), C.MetalLight, Enum.Material.Metal, solid())
-	sign(model, CFrame.new(0, 2.8, -2.42), "CRUSHER", 3)
+	portal(model, CFrame.new(out.X, 1.0, front), 1.5, 1.0, 0.3, 0.4)
+	chute(model, Vector3.new(out.X, 1.12, front - 0.35), 1.4, 0.9, 0.1)
+	-- hazard chevrons on the base band
+	for _, x in { -2.4, -1.6, -0.8 } do
+		Geo.block(
+			model,
+			CFrame.new(x, 0.58, front - 0.09) * CFrame.Angles(0, 0, math.rad(40)),
+			Vector3.new(0.24, 0.62, 0.04),
+			C.HazardDark,
+			nil,
+			tiny()
+		)
+	end
+	-- high square hopper (cup 5.85..7.1) with the rollers low in its throat:
+	-- dark drums with four light steel teeth each (two bars) standing well
+	-- proud, and brass cog discs on their ends
+	squareHopper(model, CFrame.new(0, 4.3, bz), 3.6, 5.8, 1.1, 1.25, 0.4)
+	local rollerY, rollerD = 5.8, 1.5
+	for i, dz in { -0.95, 0.95 } do
+		local c = Vector3.new(0, rollerY, bz + dz)
+		cyl(model, c, "X", 4.9, rollerD, C.HousingDark, nil, solid({ Name = "Roller" .. i }))
+		for k = 0, 1 do
+			Geo.block(
+				model,
+				CFrame.new(c) * CFrame.Angles(k * math.pi / 2 + i * math.pi / 4, 0, 0),
+				Vector3.new(4.3, rollerD + 0.7, 0.2),
+				C.HousingLight,
+				nil,
+				tiny({ Name = "Roller" .. i .. "Tooth" })
+			)
+		end
+		for _, x in { -2.3, 2.3 } do
+			cyl(model, c + Vector3.new(x, 0, 0), "X", 0.14, rollerD + 0.36, C.Brass, nil, tiny({ Name = "Roller" .. i .. "Tooth" }))
+		end
+	end
+	-- a big and a small cog meshing on both sides of the housing, on axle
+	-- stubs (both sides share the axis lines, so each pair turns as one)
+	local cogX = 3.1 + 0.22
+	local bigY, bigZ = 2.75, bz - 0.85
+	local reach = (COG_BIG + COG_SMALL) * 0.45
+	local smallY, smallZ = bigY + reach * math.sin(0.26), bigZ + reach * math.cos(0.26)
+	for _, s in { 1, -1 } do
+		cog(model, Vector3.new(s * cogX, bigY, bigZ), COG_BIG, 0.36, 4, s, 0.25, "Cog1")
+		cog(model, Vector3.new(s * cogX, smallY, smallZ), COG_SMALL, 0.36, 3, s, 0, "Cog2")
+	end
+	sign(model, CFrame.new(0, 6.42, bz - 2.98), "CRUSHER", 3.4)
+	-- piston-square drive mounted on the back wall (inside the footprint):
+	-- body, light band, the piston rod showing (extended), and the wide cap
+	-- whose back reaches into the housing
+	local px, pz = -1.4, 3.15
+	Geo.block(model, CFrame.new(px, 0.875, pz), Vector3.new(2.0, 1.15, 1.4), C.Housing, nil, solid())
+	Geo.block(model, CFrame.new(px, 1.56, pz), Vector3.new(2.12, 0.22, 1.52), C.HousingLight, nil, prop())
+	cyl(model, Vector3.new(px, 1.86, pz), "Y", 0.4, 0.62, C.Brass, nil, prop())
+	Geo.block(model, CFrame.new(px, 2.3, pz - 0.1), Vector3.new(2.6, 0.5, 1.8), C.HousingLight, nil, prop())
+
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.6))
 	intake:SetAttribute("IntakeSize", Vector3.new(6.6, 6, 6.2))
 	return model
 end
 
+-- Anvil (retired): chunky anvil on a machine-bed style pedestal - a foot, a
+-- waist flaring up into the face (two wedges), the face with a pointed horn
+-- at one end and a lower heel step with a dark hardy hole at the other -
+-- quench bucket, hammer. AnvilPoint / IngotSlots unchanged. 20 parts.
 local function anvil(): Model
 	local model, base = newModel("Anvil")
-	base.Color = C.Stone
-	Geo.cylinder(model, Vector3.new(0, 1.3, 0.3), 2.4, 3.6, C.WoodDark, nil, solid({ Name = "Stump" }))
-	Geo.cylinder(model, Vector3.new(0, 2.55, 0.3), 0.15, 3.7, C.Wood, nil, decor())
-	Geo.block(model, CFrame.new(0, 3, 0.3), Vector3.new(2.6, 0.7, 2), C.Metal, Enum.Material.Metal, solid())
-	Geo.block(model, CFrame.new(0, 3.65, 0.3), Vector3.new(1.4, 0.7, 1.3), C.Metal, Enum.Material.Metal, solid())
-	local face = Geo.block(model, CFrame.new(0, 4.35, 0.3), Vector3.new(3.6, 0.8, 1.8), C.Metal, Enum.Material.Metal, solid({ Name = "AnvilFace" }))
-	Geo.wedge(model, CFrame.new(-2.3, 4.35, 0.3) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(1.4, 0.8, 1.2), C.Metal, Enum.Material.Metal, decor())
-	-- hammer leaning on the stump
-	Geo.block(model, CFrame.new(1.9, 2.2, -1.1) * CFrame.Angles(0, 0, math.rad(20)), Vector3.new(0.25, 2.6, 0.25), C.Wood, nil, decor())
-	Geo.block(model, CFrame.new(2.3, 3.4, -1.1) * CFrame.Angles(0, 0, math.rad(20)), Vector3.new(1.1, 0.5, 0.5), C.MetalLight, Enum.Material.Metal, decor())
-	-- quench bucket
-	Geo.cylinder(model, Vector3.new(-2.4, 0.9, 2), 1.5, 1.6, C.Wood, nil, solid())
-	Geo.cylinder(model, Vector3.new(-2.4, 1.6, 2), 0.1, 1.4, rgb(70, 140, 180), nil, decor())
-	sign(model, CFrame.new(0, 1.6, -1.55), "ANVIL", 1.8)
+	housing(model, CFrame.new(0, 0.3, 0.3), Vector3.new(3.0, 2.2, 2.6), C.Housing, 0.4, { Name = "Stump" })
+	Geo.block(model, CFrame.new(0, 2.75, 0.3), Vector3.new(2.6, 0.5, 2.0), C.HousingDark, nil, solid())
+	Geo.block(model, CFrame.new(0, 3.48, 0.3), Vector3.new(1.4, 0.95, 1.3), C.HousingDark, nil, solid())
+	Geo.block(model, CFrame.new(0, 4.35, 0.3), Vector3.new(3.6, 0.8, 1.8), C.HousingLight, nil, solid({ Name = "AnvilFace" }))
+	-- the waist flares up into the face: an upside-down wedge on each side
+	for _, side in { -1, 1 } do
+		Geo.wedge(
+			model,
+			CFrame.new(side * 1.05, 3.525, 0.3) * CFrame.Angles(0, -side * math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi),
+			Vector3.new(1.3, 0.85, 0.7),
+			C.HousingDark,
+			nil,
+			solid()
+		)
+	end
+	-- heel step at the back end, a dark hardy hole in it
+	Geo.block(model, CFrame.new(2.15, 4.2, 0.3), Vector3.new(0.7, 0.5, 1.5), C.HousingLight, nil, solid())
+	Geo.block(model, CFrame.new(2.15, 4.46, 0.3), Vector3.new(0.34, 0.03, 0.34), C.Recess, nil, tiny())
+	-- horn: a sloping top wedge over an inverted wedge, meeting in a point
+	local horn = CFrame.new(-2.4, 4.35, 0.3) * CFrame.Angles(0, math.pi / 2, 0)
+	Geo.wedge(model, horn * CFrame.new(0, 0.2, 0), Vector3.new(1.1, 0.4, 1.2), C.HousingLight, nil, tiny())
+	Geo.wedge(model, horn * CFrame.new(0, -0.2, 0) * CFrame.Angles(0, 0, math.pi), Vector3.new(1.1, 0.4, 1.2), C.HousingLight, nil, tiny())
+	-- hammer leaning on the pedestal, its head on the handle tip
+	local handle = CFrame.new(1.9, 2.0, -1.3) * CFrame.Angles(0, 0, math.rad(20))
+	Geo.block(model, handle, Vector3.new(0.25, 2.6, 0.25), C.Wood, nil, tiny())
+	Geo.block(model, handle * CFrame.new(0, 1.3, 0), Vector3.new(1.1, 0.5, 0.5), C.HousingDark, nil, tiny())
+	-- quench bucket (copper, water)
+	cyl(model, Vector3.new(-2.4, 1.05, 2.1), "Y", 1.5, 1.6, C.Copper, nil, solid())
+	cyl(model, Vector3.new(-2.4, 1.72, 2.1), "Y", 0.08, 1.35, C.Water, nil, tiny())
+	sign(model, CFrame.new(0, 1.5, -1.15), "ANVIL", 1.8)
 	local anvilPoint = Vector3.new(0, 4.95, 0.3)
 	attach(base, "AnvilPoint", CFrame.new(anvilPoint))
 	-- forging close-up: in front and above, looking down at the face
@@ -334,69 +1392,249 @@ local function anvil(): Model
 	output(base, "Anvil")
 	local intake = attach(base, "Intake", CFrame.new(0, 5, 0.3))
 	intake:SetAttribute("IntakeSize", Vector3.new(4.4, 2.6, 3.4))
-	local _ = face
 	return model
 end
 
+--[[
+	Auto Cleaner (2x2): a Kenney scanner-high arch (name plate on top, gold
+	letters on both faces) over a short striped roller conveyor
+	(conveyor-bars-stripe-high: grey rollers named BedRoller between low
+	light rails with painted brass axle caps) with a shallow WaterPool tray
+	under the rollers at the shower. Two robot-arm-b arms (chunky segments,
+	an orange ball joint at the elbow) slant forward out of the arch and hold
+	a teal brush (Drum, bristle rings DrumRib) that rests on the ore's top
+	just behind the shower. A copper water riser comes up out of the plot
+	(floor plate, a valve), bends (ball joints) into a spray bar with an
+	octagonal end flange and a shower head with a dark nozzle face that sprays onto the ore
+	(WaterOut -> WaterIn). An open round hopper at the back, a steam Vent, a
+	warning-traffic stack light and a short output chute. 69 parts.
+]]
 local function autoCleaner(): Model
 	local model, base = newModel("AutoCleaner")
-	base.Color = C.StoneDark
-	for _, x in { -2.4, 2.4 } do
-		Geo.block(model, CFrame.new(x, 1.8, 0.4), Vector3.new(0.6, 3.6, 4.6), C.Metal, Enum.Material.Metal, solid())
+	local cx, z0, z1 = 0.9, -3.5, 3.3
+	local len, zc = z1 - z0, (z0 + z1) / 2
+	-- roller conveyor bed: low light rails just above the rollers
+	Geo.block(model, CFrame.new(cx, 0.9, zc), Vector3.new(3.0, 1.2, len), C.Housing, nil, solid({ Name = "Bed" }))
+	Geo.block(model, CFrame.new(cx, 0.58, zc), Vector3.new(3.12, 0.56, len + 0.12), C.Hazard, nil, prop())
+	local rollerY, rollers = 1.85, {}
+	for i = 0, 4 do
+		local z = z0 + 0.7 + i * 1.35
+		table.insert(rollers, (z - z0) / len)
+		cyl(model, Vector3.new(cx, rollerY, z), "X", 3.0, 0.62, C.Roller, nil, solid({ Name = "BedRoller" }))
 	end
-	local drum = Geo.cylinder(model, Vector3.new(0, 3.2, 0.4), 4.2, 4, C.Teal, nil, solid({ Name = "Drum" }))
-	drum.CFrame = CFrame.new(0, 3.2, 0.4)
-	for k = 0, 3 do
-		Geo.block(model, CFrame.new(0, 3.2, 0.4) * CFrame.Angles(k * math.pi / 4, 0, 0), Vector3.new(4.25, 4.1, 0.3), rgb(50, 120, 120), nil, decor({ Name = "DrumRib" }))
+	for _, s in { -1, 1 } do
+		local rail = Geo.block(model, CFrame.new(cx + s * 1.65, 1.875, zc), Vector3.new(0.3, 0.75, len), C.HousingLight, nil, solid())
+		axleCaps(rail, if s < 0 then Enum.NormalId.Left else Enum.NormalId.Right, rollers, (2.25 - rollerY) / 0.75)
 	end
-	funnel(model, Vector3.new(0, 5.9, 0.6), 3.2, 1.4, C.MetalLight)
-	-- dust vent
-	local vent = Geo.block(model, CFrame.new(2.2, 5.4, 2.2), Vector3.new(0.9, 1.4, 0.9), C.Metal, Enum.Material.Metal, decor({ Name = "Vent" }))
-	emitter(vent, "Smoke", rgb(190, 170, 150), 1)
-	local out = output(base, "AutoCleaner")
-	Geo.wedge(model, CFrame.new(out.X, 1.2, out.Z + 1.3) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.2, 0.8, 1.6), C.MetalLight, Enum.Material.Metal, solid())
-	sign(model, CFrame.new(0, 0.9, -1.85), "AUTO CLEANER", 3)
+	-- the shower's catch tray: water under the rollers (they dip into it)
+	local tx, tz = -2.75, -1.85
+	Geo.block(
+		model,
+		CFrame.new(cx, 1.56, tz),
+		Vector3.new(2.98, 0.1, 2.5),
+		MachineBuilder.Water.Pool,
+		nil,
+		tiny({ Name = "WaterPool", Transparency = MachineBuilder.Water.PoolTransparency, Reflectance = 0.1 })
+	)
+	-- scanner arch: orange feet, legs, light collars, rounded top corners
+	local az = 0.3
+	for _, s in { -1, 1 } do
+		local lx = cx + s * 2.35
+		Geo.block(model, CFrame.new(lx, 0.65, az), Vector3.new(1.1, 0.7, 1.15), C.Hazard, nil, solid())
+		Geo.block(model, CFrame.new(lx, 3.175, az), Vector3.new(0.9, 4.35, 0.9), C.Housing, nil, solid())
+		Geo.block(model, CFrame.new(lx, 4.25, az), Vector3.new(1.04, 0.3, 1.04), C.HousingLight, nil, tiny())
+		cyl(model, Vector3.new(lx, 5.35, az), "Z", 0.9, 0.9, C.Housing, nil, solid())
+	end
+	Geo.block(model, CFrame.new(cx, 5.35, az), Vector3.new(4.7, 0.9, 0.9), C.Housing, nil, solid({ Name = "Arch" }))
+	sign(model, CFrame.new(cx, 6.16, az), "AUTO CLEANER", 2.9, true)
+	-- the brush: a dark teal core with three bristle rings, resting on the
+	-- ore just behind the shower
+	local drumC = Vector3.new(cx, 3.8, -1.0)
+	cyl(model, drumC, "X", 2.4, 0.8, C.Bristle, nil, prop({ Name = "Drum" }))
+	for _, dx in { -0.78, 0, 0.78 } do
+		cyl(model, drumC + Vector3.new(dx, 0, 0), "X", 0.4, 1.15, C.BristleTip, nil, tiny({ Name = "DrumRib" }))
+	end
+	-- robot-arm-b arms out of the arch beam, slanting forward: a chunky
+	-- upper segment, an orange ball joint at the elbow, a lighter lower
+	-- segment down to the brush axle
+	for _, s in { -1, 1 } do
+		local ax = cx + s * 1.36
+		local shoulder = Vector3.new(ax, 5.05, az + 0.05)
+		local elbow = Vector3.new(ax, 4.45, -0.35)
+		local wrist = Vector3.new(ax, drumC.Y, drumC.Z)
+		barBetween(model, shoulder, elbow, 0.5, 0.5, C.Housing, prop())
+		ball(model, elbow, 0.64, C.Hazard, tiny({ Name = "ArmJoint" }))
+		barBetween(model, elbow, wrist + (wrist - elbow).Unit * 0.2, 0.44, 0.44, C.HousingLight)
+	end
+	-- water: a copper riser out of the plot (floor plate, valve), a two-kink
+	-- bend into the spray bar (octagonal end flange), a shower head with a
+	-- dark nozzle face over the bed
+	local barY, barD = 4.7, 0.6
+	local barR = barD * 0.85
+	Geo.block(model, CFrame.new(tx, 0.38, tz), Vector3.new(1.0, 0.16, 1.0), C.HousingLight, nil, prop())
+	local riserTop = barY - barR
+	cyl(model, Vector3.new(tx, (0.3 + riserTop) / 2, tz), "Y", riserTop - 0.3, barD, C.Copper, nil, prop())
+	valve(model, Vector3.new(tx, 2.4, tz), "Y", barD, Vector3.new(0, 0, -1))
+	bend(model, Vector3.new(tx, barY, tz), Vector3.new(0, -1, 0), Vector3.new(1, 0, 0), barD, barR, C.Copper)
+	local barFrom, barEnd = tx + barR, cx + 1.0
+	cyl(model, Vector3.new((barFrom + barEnd) / 2, barY, tz), "X", barEnd - barFrom, barD, C.Copper, nil, prop())
+	flange(model, Vector3.new(barEnd + 0.06, barY, tz), "X", barD, 0)
+	Geo.block(model, CFrame.new(cx, barY - 0.36, tz), Vector3.new(1.3, 0.2, 0.5), C.HousingLight, nil, tiny({ Name = "ShowerHead" }))
+	Geo.block(model, CFrame.new(cx, barY - 0.48, tz), Vector3.new(1.1, 0.04, 0.36), C.Recess, nil, tiny())
+	water(base, Vector3.new(cx, barY - 0.5, tz), Vector3.new(0, -1, 0), Vector3.new(cx, 2.3, tz), true)
+	-- open round hopper at the back on a bridge over the rails
+	Geo.block(model, CFrame.new(cx, 2.6, 2.45), Vector3.new(3.7, 0.35, 1.15), C.HousingLight, nil, solid())
+	roundHopper(model, Vector3.new(cx, 2.775, 2.45), 2.6, 0, 1)
+	-- exhaust vent: a short white steam plume (more while working)
+	cyl(model, Vector3.new(3.2, 2.25, 3.1), "Y", 3.9, 0.7, C.Housing, nil, prop())
+	local vent = cyl(model, Vector3.new(3.2, 4.37, 3.1), "Y", 0.35, 0.95, C.HousingLight, nil, tiny({ Name = "Vent" }))
+	emitter(vent, "Steam", rgb(236, 238, 240), 3)
+	-- warning-traffic light: green / amber / red on a post under a cap; one
+	-- lamp is lit (the client picks it by state), the others keep their hue
+	local sx, sz = -3.25, -3.6
+	cyl(model, Vector3.new(sx, 1.6, sz), "Y", 2.6, 0.3, C.HousingDark, nil, prop())
+	local lampY = 2.9
+	for _, name in { "StackGreen", "StackAmber", "StackRed" } do
+		local lit = name == MachineBuilder.Stack.Lit
+		local color = MachineBuilder.Stack.Lamps[name]
+		cyl(
+			model,
+			Vector3.new(sx, lampY + 0.16, sz),
+			"Y",
+			0.3,
+			0.55,
+			color:Lerp(Color3.new(0, 0, 0), if lit then MachineBuilder.Stack.Glow else MachineBuilder.Stack.Dim),
+			if lit then NEON else SMOOTH,
+			tiny({ Name = name })
+		)
+		lampY += 0.32
+	end
+	cyl(model, Vector3.new(sx, lampY + 0.1, sz), "Y", 0.2, 0.64, C.HousingLight, nil, tiny())
+	-- short output chute off the front of the bed
+	output(base, "AutoCleaner")
+	chute(model, Vector3.new(cx, 2.0, z0 - 0.02), 2.7, 1.0, 0.35)
+
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3))
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.6))
 	intake:SetAttribute("IntakeSize", Vector3.new(6, 6.6, 6))
 	return model
 end
 
+-- Sell Chute (retired): an open round hopper on a copper pipe that goes into
+-- the ground through an octagonal flange, a pile of gold coins (Coins, a
+-- small glowing centre) in its cup and a SELL plate.
 local function sellChute(): Model
 	local model, base = newModel("SellChute")
-	base.Color = C.WoodDark
-	Geo.block(model, CFrame.new(0, 1.4, 0), Vector3.new(1, 2.8, 1), C.WoodDark, nil, solid())
-	funnel(model, Vector3.new(0, 3.3, 0), 3.6, 1.4, C.Wood)
-	local coins = Geo.block(model, CFrame.new(0, 2.9, 0), Vector3.new(1.6, 0.3, 1.6), C.Gold, Enum.Material.Neon, decor({ Name = "Coins" }))
+	flange(model, Vector3.new(0, 0.42, 0), "Y", 1.1, 2, 1)
+	cyl(model, Vector3.new(0, 1.4, 0), "Y", 2.2, 1.1, C.Copper, nil, solid())
+	local rim = roundHopper(model, Vector3.new(0, 2.5, 0), 2.6, 0)
+	local coins = cyl(model, Vector3.new(0, rim - 0.48, 0), "Y", 0.14, 1.9, C.Coin, nil, tiny({ Name = "Coins" }))
 	light(coins, C.Gold, 8, 0.8)
-	sign(model, CFrame.new(0, 1.6, -0.6), "SELL", 1)
+	cyl(model, Vector3.new(0, rim - 0.4, 0), "Y", 0.04, 0.45, rgb(220, 130, 40), NEON, tiny({ Name = "CoinsGlow" }))
+	Geo.block(model, CFrame.new(0, 1.0, -1.45), Vector3.new(0.22, 1.4, 0.22), C.HousingDark, nil, tiny())
+	sign(model, CFrame.new(0, 1.75, -1.6), "SELL", 1.3, true)
 	attach(base, "Prompt", CFrame.new(0, 2, -1.2))
 	local intake = attach(base, "Intake", CFrame.new(0, 3.8, 0))
 	intake:SetAttribute("IntakeSize", Vector3.new(3.6, 2.4, 3.6))
 	return model
 end
 
+-- Rollers and hazard edges painted on the belt's top face (one SurfaceGui,
+-- no parts: a conveyor stays at 6 parts). Gradients run along the belt:
+-- 4 rollers, each dark crease -> mid -> light crown -> mid.
+local function beltFace(belt: Part)
+	local gui = surface(belt, "BeltFace", Enum.NormalId.Top, 90)
+	local rollers = {}
+	for i = 0, 3 do
+		local t0 = i / 4
+		table.insert(rollers, ColorSequenceKeypoint.new(t0, C.Belt))
+		table.insert(rollers, ColorSequenceKeypoint.new(t0 + 0.045, C.Roller))
+		table.insert(rollers, ColorSequenceKeypoint.new(t0 + 0.125, C.HousingLight))
+		table.insert(rollers, ColorSequenceKeypoint.new(t0 + 0.205, C.Roller))
+	end
+	table.insert(rollers, ColorSequenceKeypoint.new(1, C.Belt))
+	-- 6 hazard dashes along each edge
+	local dashes = hazardKeys(6)
+	gradientStrip(gui, "Rollers", 0.08, 0.84, rollers)
+	gradientStrip(gui, "HazardL", 0, 0.08, dashes)
+	gradientStrip(gui, "HazardR", 0.92, 0.08, dashes)
+end
+
+-- A rail's outer side: a darker top strip and the 4 rollers' axle caps.
+local function railFace(rail: Part, face: Enum.NormalId)
+	local gui = surface(rail, "RailFace", face, 60)
+	local cap = Instance.new("Frame")
+	cap.Name = "Cap"
+	cap.BorderSizePixel = 0
+	cap.BackgroundColor3 = C.Housing
+	cap.Size = UDim2.fromScale(1, 0.24)
+	cap.Parent = gui
+	for i = 0, 3 do
+		local dot = Instance.new("Frame")
+		dot.Name = "Axle"
+		dot.BorderSizePixel = 0
+		dot.BackgroundColor3 = C.HousingDark
+		dot.AnchorPoint = Vector2.new(0.5, 0.5)
+		dot.Position = UDim2.fromScale((i + 0.5) / 4, 0.55)
+		dot.Size = UDim2.fromScale(0.075, 0.27)
+		dot.Parent = gui
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = dot
+	end
+end
+
 local function conveyor(): Model
 	local model, base = newModel("Conveyor")
-	base.Transparency = 1
 	base.CanCollide = false
 	base.CanQuery = true
 	base.CastShadow = false
-	Geo.block(model, CFrame.new(-1.85, 0.55, 0), Vector3.new(0.3, 1.1, 4), C.Metal, Enum.Material.Metal, solid({ Name = "RailL", CastShadow = false }))
-	Geo.block(model, CFrame.new(1.85, 0.55, 0), Vector3.new(0.3, 1.1, 4), C.Metal, Enum.Material.Metal, solid({ Name = "RailR", CastShadow = false }))
+	local railL = Geo.block(
+		model,
+		CFrame.new(-1.85, 0.55, 0),
+		Vector3.new(0.3, 1.1, 4),
+		C.HousingLight,
+		nil,
+		solid({ Name = "RailL", CastShadow = false })
+	)
+	local railR = Geo.block(
+		model,
+		CFrame.new(1.85, 0.55, 0),
+		Vector3.new(0.3, 1.1, 4),
+		C.HousingLight,
+		nil,
+		solid({ Name = "RailR", CastShadow = false })
+	)
+	railFace(railL, Enum.NormalId.Left)
+	railFace(railR, Enum.NormalId.Right)
 	-- zero bounce and high friction so items ride the belt instead of hopping
-	local belt = Geo.block(model, CFrame.new(0, 0.6, 0), Vector3.new(3.4, 0.4, 4), C.Belt, nil, solid({
-		Name = "Belt",
-		CanTouch = true,
-		CastShadow = false,
-		CustomPhysicalProperties = PhysicalProperties.new(0.7, 1.2, 0, 100, 100),
-	}))
+	local belt = Geo.block(
+		model,
+		CFrame.new(0, 0.55, 0),
+		Vector3.new(3.4, 0.5, 4),
+		C.Belt,
+		nil,
+		solid({
+			Name = "Belt",
+			CanTouch = true,
+			CastShadow = false,
+			CustomPhysicalProperties = PhysicalProperties.new(0.7, 1.2, 0, 100, 100),
+		})
+	)
 	belt:AddTag("ConveyorBelt")
-	-- one flat chevron pointing to the front (-Z), the direction items move:
-	-- two wedges lying flat, mirrored around x = 0
-	local w, h = 1.8, 1.2
+	beltFace(belt)
+	-- one flat painted chevron pointing to the front (-Z), the direction items
+	-- move: two wedges lying flat, mirrored around x = 0
+	local w, h = 1.2, 0.8
 	for _, side in { -1, 1 } do
-		Geo.wedge(model, CFrame.new(side * w / 4, 0.82, 0) * CFrame.Angles(0, 0, -side * math.pi / 2), Vector3.new(0.04, w / 2, h), C.Arrow, Enum.Material.Neon, decor({ Name = "Arrow" }))
+		Geo.wedge(
+			model,
+			CFrame.new(side * w / 4, 0.82, 0) * CFrame.Angles(0, 0, -side * math.pi / 2),
+			Vector3.new(0.04, w / 2, h),
+			C.Arrow,
+			nil,
+			tiny({ Name = "Arrow" })
+		)
 	end
 	attach(base, "Prompt", CFrame.new(0, 1.5, 0))
 	return model
@@ -405,12 +1643,8 @@ end
 local BUILDERS: { [string]: () -> Model } = {
 	CleaningStation = cleaningStation,
 	StorageCrate = storageCrate,
-	ClayFurnace = function()
-		return furnace("ClayFurnace", 1)
-	end,
-	BlastFurnace = function()
-		return furnace("BlastFurnace", 1.45)
-	end,
+	ClayFurnace = clayFurnace,
+	BlastFurnace = blastFurnace,
 	Crusher = crusher,
 	Anvil = anvil,
 	AutoCleaner = autoCleaner,
