@@ -1,16 +1,18 @@
 --[[
 	The giant fire crystal in the middle of the plaza (LOBBY_PLAN 6.3.2,
-	restyled after concept v2): a chunky two-tier mechanical ring - 16 dark
-	metal housing segments with dark cap plates, big orange glowing slots on
-	their outer faces, a thin blue neon outer top edge and orange glows
-	facing the crystal, clamped by taller dark ribs with small blue / green /
-	amber status lights, and round it a low stepped outer lip with a blue
-	neon line at its foot - around a glowing ember bed, a stepped octagonal
-	metal base with a blue neon rim and a glowing fire bed, an octagonal
-	pedestal with an Ember seam on a molten hearth plate, and the crystal
-	cluster on top (pointed gem shards round the main crystal). The base is
-	low and the cluster short (tip under y 9.5 with the bob), so from the
-	spawn the Great Forge's raised, glowing doorway shows above it.
+	restyled after concept v2): a low, wide, stepped mechanical ring round a
+	glowing molten bowl, and the towering amber crystal crown rising out of
+	it.
+
+	The ring has three tiers (Kenney pipe-ring-colored, chunky): a wide low
+	dark metal base tier (walk-through) with deep-blue neon segments along
+	its rim; 12 armor segments on it - an angled armor plate leaning on the
+	outer face, a long narrow orange glow slit under a light metal cap lip,
+	a thin blue edge on the inner lip - clamped by 12 chamfered ribs (same
+	height everywhere, four with small status lights); and inside them the
+	round molten bowl: a dark metal bowl wall, a deep-orange neon ring at
+	its lip round a molten floor, and a dark inner pedestal with a glowing
+	seam under the crystal.
 
 	Hook: the crystal cluster is the Model "FireCrystal", tagged Spin
 	(SpinSpeed 0.25, BobHeight 0.5, BobSpeed 0.9), streamed Atomic, its
@@ -31,6 +33,7 @@ local C = Style.C
 local K = Common.Colors
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
+local rgb = Color3.fromRGB
 
 local FireCrystal = {}
 
@@ -38,48 +41,41 @@ FireCrystal.SpinSpeed = 0.25
 FireCrystal.BobHeight = 0.5
 FireCrystal.BobSpeed = 0.9
 
--- the mechanical housing ring (segments 8.8 .. 11.6 from the center)
+-- the armor ring (segments 9.0 .. 11.4 from the center), on the base tier
 FireCrystal.RingRadius = 10.2
-FireCrystal.RingWidth = 2.8
-FireCrystal.RingHeight = 2.0
-FireCrystal.LipRadius = 12.1 -- the low outer step (r 11.6 .. 12.6)
-FireCrystal.CrystalHeight = 7
-FireCrystal.Segments = 16
+FireCrystal.RingWidth = 2.4
+FireCrystal.RingHeight = 1.2 -- the armor tier over the base tier (cap lip included)
+FireCrystal.BaseRadius = 12.4 -- the wide low base tier
+FireCrystal.BaseHeight = 0.4
+FireCrystal.CrystalHeight = 9.2
+FireCrystal.Segments = 12
 local RING_R = FireCrystal.RingRadius
 local RING_W = FireCrystal.RingWidth
 local RING_H = FireCrystal.RingHeight
 local SEGMENTS = FireCrystal.Segments
-local MOAT_R = 8.9 -- the glowing ember bed inside the housing
-local INNER = 10.4 -- side of the star base blocks (points reach r 7.35)
--- low base and a short cluster: the crystal tip stays under y 9.5 (with the
--- bob), so from the spawn (eye y 9) the forge's glowing doorway, its
--- banners and THE GREAT FORGE board all read above the crystal
-local INNER_H = 0.4
-local PEDESTAL = 6.6
-local PEDESTAL_H = 0.6
+local BASE_R = FireCrystal.BaseRadius
+local BASE_H = FireCrystal.BaseHeight
+local CAP_H = 0.2
+local RING_OUT = RING_R + RING_W / 2 -- outer face of the armor segments (11.4)
+local RING_IN = RING_R - RING_W / 2 -- inner face (9.0)
+-- the molten bowl inside the ring and the pedestal under the crystal
+local BOWL_R = 8.6 -- the dark inner tier (its top is the bowl's rim)
+local BOWL_TOP = 0.7 -- over the base tier
+local GLOW_R = 5.5 -- the glowing ring at the bowl's lip
+local POOL_R = 4.9 -- the molten floor inside it
+local PEDESTAL_R = 2.5
+local PEDESTAL_TOP = 1.5 -- over the base tier
 local CRYSTAL_H = FireCrystal.CrystalHeight
-local CRYSTAL_W = 3.0
-local SIDE_SCALE = 0.68 -- the leaning side crystals
-local HOT_IRON = Color3.fromRGB(150, 54, 26) -- the glowing bowl round the pedestal
+local CRYSTAL_W = 3.6
+-- colors: lighter machine metal than the plaza's (it reads at game distance)
+local RING_METAL = rgb(84, 92, 116)
+local RING_BEVEL = rgb(124, 132, 154) -- the light cap lips (they catch the light, the segments read)
+local RING_METAL_DARK = rgb(54, 60, 78)
+local HOT_IRON = rgb(128, 40, 22) -- the bowl's molten crust (dark red, lit by the crystal)
+local CRYSTAL_GLOW = rgb(255, 120, 20) -- the inner glow (deep orange: no white-hot core)
+local CRYSTAL_TIP = rgb(255, 150, 40)
 -- turns a part's (1, 1, 1) corner straight up (a cube standing on a vertex)
 local VERTEX_UP = CFrame.fromAxisAngle(Vector3.new(-1, 0, 1).Unit, math.acos(1 / math.sqrt(3)))
-
--- Two square slabs turned 45 degrees to each other (an 8-point star).
-local function star(
-	parent: Instance,
-	cf: CFrame,
-	side: number,
-	height: number,
-	color: Color3,
-	material: Enum.Material?,
-	props: { [string]: any }?
-): { Part }
-	local p = props or Style.solid()
-	return {
-		Style.block(parent, cf, Vector3.new(side, height, side), color, material or SMOOTH, p),
-		Style.block(parent, cf * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(side, height, side), color, material or SMOOTH, p),
-	}
-end
 
 --[[
 	A leaning gem shard: a diamond-section body and a pointed tip (a cube
@@ -113,47 +109,50 @@ local function shard(
 end
 
 --[[
-	The main crystal: a see-through orange shell with a pointed tip
-	(Transparency 0.3, so its facets catch the sun and the lamps) around a
-	slim neon core, so the crystal reads as a sharp faceted gem that glows
-	from within instead of a flat neon blob. Returns the core body (the spin
-	pivot).
+	The main crystal: a see-through amber shell with a pointed tip
+	(Transparency 0.2, so its facets catch the sun and the lamps) round a
+	slim deep-orange neon core, so the crystal reads as a sharp faceted gem
+	that glows from within instead of a flat neon blob. Returns the core
+	body (the spin pivot).
 ]]
 local function mainCrystal(parent: Instance, base: CFrame): BasePart
 	local shell = shard(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, C.LeafOrange, SMOOTH, SMOOTH)
 	for i, part in shell do
-		part.Transparency = if i == 1 then 0.3 else 0.22
+		part.Transparency = if i == 1 then 0.2 else 0.12
 		part.Name = "CrystalShell"
 	end
-	local core = Style.crystal(parent, base * CFrame.new(0, 0.4, 0), CRYSTAL_H * 0.8, CRYSTAL_W * 0.46, C.Fire, C.FireCore)
+	local core = Style.crystal(parent, base * CFrame.new(0, 0.4, 0), CRYSTAL_H * 0.8, CRYSTAL_W * 0.44, CRYSTAL_GLOW, CRYSTAL_TIP)
 	core[1].Name = "CrystalBody"
 	return core[1]
 end
 
+--[[
+	The crystal crown (concept v2): the tall main crystal and six side
+	shards round it (about 2/3 of its height), big amber ones and smaller
+	glowing ones alternating, leaning out 20-25 degrees, so the cluster is
+	wide (about a third of the ring) and its points fan out like a crown.
+]]
+local SIDES = {
+	{ A = 20, H = 6.0, Lean = 0.36, Big = true },
+	{ A = 80, H = 4.2, Lean = 0.42, Big = false },
+	{ A = 140, H = 5.5, Lean = 0.4, Big = true },
+	{ A = 200, H = 4.6, Lean = 0.4, Big = false },
+	{ A = 260, H = 5.8, Lean = 0.36, Big = true },
+	{ A = 320, H = 4.0, Lean = 0.44, Big = false },
+}
 local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Model
 	local m = Style.model("FireCrystal", parent)
 	local body = mainCrystal(m, base)
-	-- leaning side crystals (shaded amber bodies, glowing Fire points) and small neon shards
-	local sides = {
-		{ A = 25, H = 7.2, Lean = 0.38, Color = C.Ember },
-		{ A = 115, H = 5.6, Lean = 0.46, Color = C.Ember },
-		{ A = 205, H = 6.6, Lean = 0.4, Color = C.Ember },
-		{ A = 295, H = 5.2, Lean = 0.5, Color = C.Ember },
-		{ A = 70, H = 3.4, Lean = 0.7, Color = C.Fire },
-		{ A = 160, H = 3.0, Lean = 0.75, Color = C.Ember },
-		{ A = 250, H = 3.6, Lean = 0.65, Color = C.Fire },
-	}
-	for i, s in sides do
-		local a = math.rad(s.A + rng:range(-6, 6))
-		local foot = base * CFrame.new(math.cos(a) * 1.4, 0.1, math.sin(a) * 1.4)
+	for i, s in SIDES do
+		local a = math.rad(s.A + rng:range(-5, 5))
+		local foot = base * CFrame.new(math.cos(a) * 1.7, 0.05, math.sin(a) * 1.7)
 		local tilt = CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, -s.Lean) * CFrame.Angles(0, a, 0)
-		local h = s.H * SIDE_SCALE
-		if i <= 4 then
-			-- the big side crystals: shaded amber bodies (facets read), glowing points
-			local parts = shard(m, foot * tilt, h, h * 0.3, if i % 2 == 0 then C.LeafOrange else C.Fire, C.Fire, SMOOTH)
+		if s.Big then
+			-- shaded amber bodies (the facets read) with glowing points
+			local parts = shard(m, foot * tilt, s.H, s.H * 0.3, if i % 4 == 1 then C.Fire else C.LeafOrange, CRYSTAL_TIP, SMOOTH)
 			parts[1].Transparency = 0.05
 		else
-			shard(m, foot * tilt, h, h * 0.3, s.Color, C.Fire, NEON)
+			shard(m, foot * tilt, s.H, s.H * 0.3, CRYSTAL_GLOW, CRYSTAL_TIP, NEON)
 		end
 	end
 	m.PrimaryPart = body
@@ -167,117 +166,196 @@ local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Mod
 	return m
 end
 
--- Status light colors on every fourth rib (concept v2: blue, green, orange).
-local STATUS = { K.NeonBlue, C.LeafGreenLight, K.NeonBlue, C.FireCore }
+-- Status lights on every third rib (concept v2: blue, green, blue, amber).
+local STATUS = { K.NeonBlueDeep, C.LeafGreenLight, K.NeonBlueDeep, K.SlotAmber }
 
 --[[
-	The chunky mechanical housing (concept v2, Kenney pipe-ring-colored):
-	16 dark metal segments, each with an inset dark cap plate, a thin blue
-	neon strip on the outer top edge, a big orange glowing slot on the outer
-	face and (every other one) an orange glow facing the crystal; between
-	them taller dark clamp ribs with dark bolt caps or small status lights.
-	Dark metal and orange dominate; blue is only a thin accent line.
+	The armor tier: 12 segments on the base tier, each a light machine
+	metal block with an angled armor plate leaning on its outer face, a
+	long narrow orange glow slit right under the overhanging light metal
+	cap lip, and a thin blue edge on the inner lip; between them chamfered
+	ribs (a block and a sloped buttress, all the same height) clamp the
+	segments, four with a small flush status light.
 ]]
-local function housing(m: Model, center: Vector3, y0: number, rng: Rng.Rng)
+local function armorRing(m: Model, center: Vector3, y0: number, rng: Rng.Rng)
 	local step = 2 * math.pi / SEGMENTS
-	local segLen = 2 * math.pi * RING_R / SEGMENTS * 0.8
+	local segLen = 2 * RING_R * math.tan(math.pi / SEGMENTS) -- meets the ribs at mid radius
+	local yb = y0 + BASE_H -- top of the base tier
+	local bodyH = RING_H - CAP_H
+	local plateH, plateD = 0.62, 0.55
 	for i = 0, SEGMENTS - 1 do
-		local frame = CFrame.new(center) * CFrame.Angles(0, -(i + 0.5) * step, 0) * CFrame.new(RING_R, y0, 0)
+		local frame = CFrame.new(center) * CFrame.Angles(0, -(i + 0.5) * step, 0) * CFrame.new(RING_R, yb, 0)
 		local seg = Style.block(
 			m,
-			frame * CFrame.new(0, RING_H / 2, 0),
-			Vector3.new(RING_W, RING_H, segLen),
-			Style.vary(K.Metal, rng, 0.04),
+			frame * CFrame.new(0, bodyH / 2, 0),
+			Vector3.new(RING_W, bodyH, segLen),
+			Style.vary(RING_METAL, rng, 0.03),
 			nil,
 			Style.solid()
 		)
 		seg.Name = "RingSegment"
-		Style.block(
+		-- the cap lip: light metal, overhanging outward (a bevel that catches the light)
+		local cap = Style.block(
 			m,
-			frame * CFrame.new(-0.15, RING_H + 0.08, 0),
-			Vector3.new(RING_W - 0.8, 0.16, segLen - 0.5),
-			Style.vary(K.MetalDark, rng, 0.04),
+			frame * CFrame.new(0.1, bodyH + CAP_H / 2, 0),
+			Vector3.new(RING_W + 0.45, CAP_H, segLen - 0.1),
+			RING_BEVEL,
 			nil,
 			Style.tiny()
 		)
-		local edge = Style.block(
+		cap.Name = "RingCap"
+		-- the angled armor plate leaning on the outer face (tall side at the face)
+		Geo.wedge(
 			m,
-			frame * CFrame.new(RING_W / 2 - 0.05, RING_H - 0.02, 0),
-			Vector3.new(0.1, 0.08, segLen + 0.02),
-			K.NeonBlue,
-			NEON,
+			frame * CFrame.new(RING_W / 2 + plateD / 2, plateH / 2, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+			Vector3.new(segLen - 0.5, plateH, plateD),
+			Style.vary(RING_METAL, rng, 0.03),
+			SMOOTH,
 			Style.tiny()
-		)
-		edge.Name = "RingEdgeGlow"
-		-- a deep-orange (Ember) slot, split in two short slots by a dark
-		-- divider, so it stays saturated orange under bloom
-		local slot = Style.block(
+		).Name =
+			"RingArmor"
+		-- one long narrow horizontal glow slit under the lip
+		local slit = Style.block(
 			m,
-			frame * CFrame.new(RING_W / 2 + 0.02, RING_H * 0.45, 0),
-			Vector3.new(0.12, 0.6, segLen * 0.8),
+			frame * CFrame.new(RING_W / 2 + 0.03, bodyH - 0.2, 0),
+			Vector3.new(0.08, 0.22, segLen * 0.74),
 			C.Ember,
 			NEON,
 			Style.tiny()
 		)
-		slot.Name = "RingSlot"
-		Style.block(
+		slit.Name = "RingSlot"
+		-- thin blue edge along the inner lip (faces the crystal)
+		local edge = Style.block(
 			m,
-			frame * CFrame.new(RING_W / 2 + 0.06, RING_H * 0.45, 0),
-			Vector3.new(0.14, 0.74, 0.24),
-			K.MetalDark,
-			nil,
+			frame * CFrame.new(-RING_W / 2 - 0.08, bodyH + CAP_H - 0.06, 0),
+			Vector3.new(0.12, 0.1, segLen - 0.3),
+			K.NeonBlueDeep,
+			NEON,
 			Style.tiny()
-		).Name =
-			"SlotDivider"
-		if i % 2 == 0 then
-			Style.block(
-				m,
-				frame * CFrame.new(-RING_W / 2 - 0.02, RING_H * 0.55, 0),
-				Vector3.new(0.12, 0.45, segLen * 0.5),
-				C.Ember,
-				NEON,
-				Style.tiny()
-			)
-		end
-		-- clamp rib between this segment and the next
-		local rib = CFrame.new(center) * CFrame.Angles(0, -(i + 1) * step, 0) * CFrame.new(RING_R + 0.1, y0, 0)
-		local ribH = RING_H + 0.5
+		)
+		edge.Name = "RingEdgeGlow"
+		-- the clamp rib between this segment and the next: a block and a chamfered buttress
+		local rib = CFrame.new(center) * CFrame.Angles(0, -(i + 1) * step, 0)
+		local ribH = RING_H + 0.08
+		local r0, r1 = RING_IN - 0.15, RING_OUT - 0.3
 		Style.block(
 			m,
-			rib * CFrame.new(0, ribH / 2, 0),
-			Vector3.new(RING_W + 0.5, ribH, 0.95),
-			Style.vary(K.MetalDark, rng, 0.04),
+			rib * CFrame.new((r0 + r1) / 2, yb + ribH / 2, 0),
+			Vector3.new(r1 - r0, ribH, 0.9),
+			Style.vary(RING_METAL_DARK, rng, 0.03),
 			nil,
 			Style.solid()
-		)
-		if i % 4 == 1 then
+		).Name =
+			"RingRib"
+		local bw = 0.95
+		Geo.wedge(
+			m,
+			rib * CFrame.new(r1 + bw / 2, yb + ribH / 2, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+			Vector3.new(0.9, ribH, bw),
+			Style.vary(RING_METAL_DARK, rng, 0.03),
+			SMOOTH,
+			Style.tiny()
+		).Name =
+			"RingRib"
+		if i % 3 == 1 then
 			local status = Style.block(
 				m,
-				rib * CFrame.new(0.9, ribH + 0.1, 0),
-				Vector3.new(0.4, 0.2, 0.4),
-				STATUS[(i - 1) // 4 + 1],
+				rib * CFrame.new((r0 + r1) / 2, yb + ribH + 0.02, 0),
+				Vector3.new(0.6, 0.06, 0.5),
+				STATUS[(i - 1) // 3 + 1],
 				NEON,
 				Style.tiny()
 			)
 			status.Name = "StatusLight"
-		else
-			Style.block(m, rib * CFrame.new(0, ribH + 0.08, 0), Vector3.new(RING_W - 0.2, 0.16, 0.7), K.Metal, nil, Style.tiny())
 		end
 	end
 end
 
 --[[
-	The low stepped outer lip of the two-tier ring (concept v2): a dark
-	metal disc step (r 12.6, 0.4 high, walk-through like the curb) right
-	round the housing, with a blue neon line glowing at its foot (the rim
-	of a slightly larger neon disc under it). 2 parts.
+	The wide low base tier (walk-through, like the curb): a dark metal disc
+	the armor ring stands on, with 12 deep-blue neon segments glowing along
+	its rim between the ribs (concept v2's blue base lights).
 ]]
-local function outerLip(m: Model, center: Vector3, y0: number)
-	local r = FireCrystal.LipRadius + 0.5
-	local glow = Geo.cylinder(m, center + Vector3.new(0, y0 + 0.06, 0), 0.12, (r + 0.16) * 2, K.NeonBlueDeep, NEON, Style.tiny())
-	glow.Name = "LipGlow"
-	local lip = Geo.cylinder(m, center + Vector3.new(0, y0 + 0.3, 0), 0.4, r * 2, K.MetalDark, SMOOTH, Style.ghost({ CastShadow = false }))
+local function baseTier(m: Model, center: Vector3, y0: number)
+	local lip = Geo.cylinder(
+		m,
+		center + Vector3.new(0, y0 + BASE_H / 2, 0),
+		BASE_H,
+		BASE_R * 2,
+		RING_METAL_DARK,
+		SMOOTH,
+		Style.ghost({ CastShadow = false })
+	)
 	lip.Name = "RingLip"
+	local step = 2 * math.pi / SEGMENTS
+	-- (each strip lies on the rim, its outer face just proud of the disc's edge)
+	local r = BASE_R - 0.2
+	local len = 2 * r * math.sin(math.pi / SEGMENTS) * 0.62
+	for i = 0, SEGMENTS - 1 do
+		local frame = CFrame.new(center) * CFrame.Angles(0, -(i + 0.5) * step, 0) * CFrame.new(r, y0 + BASE_H - 0.06, 0)
+		local glow = Style.block(m, frame, Vector3.new(0.5, 0.16, len), K.NeonBlueDeep, NEON, Style.tiny())
+		glow.Name = "LipGlow"
+	end
+end
+
+--[[
+	The round molten bowl inside the ring (concept v2: the crystal rises
+	from a glowing bowl): a dark metal inner tier with six blue and green
+	glow bands, a deep-orange neon ring at the bowl's lip round a molten
+	floor (lit by the crystal's light), and the dark pedestal with a
+	glowing seam the crystal stands on, in a glowing molten heart. Round
+	from every side (cylinders). 12 parts.
+]]
+local function moltenBowl(m: Model, center: Vector3, y0: number): number
+	local yb = y0 + BASE_H
+	local wall = Geo.cylinder(
+		m,
+		center + Vector3.new(0, yb + BOWL_TOP / 2, 0),
+		BOWL_TOP,
+		BOWL_R * 2,
+		RING_METAL_DARK,
+		SMOOTH,
+		Style.solid({ CastShadow = false })
+	)
+	wall.Name = "BowlWall"
+	local ring = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP - 0.02, 0), 0.12, GLOW_R * 2, C.Ember, NEON, Style.tiny())
+	ring.Name = "BowlGlow"
+	-- blue and green glow bands on the inner tier (concept v2's coloured lights)
+	for i = 0, 5 do
+		local a = (i + 0.5) / 6 * 2 * math.pi
+		local band = Style.block(
+			m,
+			CFrame.new(center) * CFrame.Angles(0, -a, 0) * CFrame.new(7.15, yb + BOWL_TOP + 0.01, 0),
+			Vector3.new(0.45, 0.06, 3.6),
+			if i % 2 == 0 then K.NeonBlueDeep else C.LeafGreenLight,
+			NEON,
+			Style.tiny()
+		)
+		band.Name = "InnerGlow"
+	end
+	local pool = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP + 0.02, 0), 0.12, POOL_R * 2, C.Molten, SMOOTH, Style.tiny())
+	pool.Name = "MoltenPool"
+	pool.Color = HOT_IRON
+	-- the white-hot heart round the pedestal (deep orange neon, not white)
+	local core = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP + 0.06, 0), 0.12, 3.3 * 2, C.Ember, NEON, Style.tiny())
+	core.Name = "MoltenCore"
+	Style.emitter(core, "Fire", C.Fire, 12)
+	Style.emitter(core, "Embers", C.Fire, 6)
+	local pedestalH = PEDESTAL_TOP - BOWL_TOP
+	Geo.cylinder(
+		m,
+		center + Vector3.new(0, yb + BOWL_TOP + pedestalH / 2, 0),
+		pedestalH,
+		PEDESTAL_R * 2,
+		Style.C.Iron,
+		SMOOTH,
+		Style.tiny()
+	).Name =
+		"Pedestal"
+	local seamD = 2 * PEDESTAL_R + 0.24
+	local seam = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP + pedestalH * 0.45, 0), 0.14, seamD, C.Ember, NEON, Style.tiny())
+	seam.Name = "PedestalSeam"
+	return yb + PEDESTAL_TOP
 end
 
 function FireCrystal.build(parent: Instance, rng: Rng.Rng)
@@ -285,59 +363,10 @@ function FireCrystal.build(parent: Instance, rng: Rng.Rng)
 	local center = piece.Center
 	local y0 = Common.TileTop
 	local m = Style.model("FireCrystalRing", parent)
-
-	-- glowing ember bed inside the housing
-	local moat = Geo.cylinder(m, center + Vector3.new(0, y0 - 0.01, 0), 0.1, MOAT_R * 2, C.Ember, NEON, Style.tiny())
-	moat.Name = "EmberMoat"
-
-	housing(m, center, y0, rng)
-	outerLip(m, center, y0)
-
-	-- stepped octagonal metal base with a blue neon rim under its cap, and the glowing fire bed
-	local yInner = y0 + INNER_H
-	star(m, CFrame.new(center + Vector3.new(0, y0 + INNER_H / 2, 0)), INNER, INNER_H, Style.vary(K.Metal, rng, 0.03))
-	local rim = star(m, CFrame.new(center + Vector3.new(0, yInner - 0.08, 0)), INNER + 0.2, 0.16, K.NeonBlue, NEON, Style.tiny())
-	rim[1].Name = "BaseGlow"
-	rim[2].Name = "BaseGlow"
-	-- the cap of the base is hot iron (lit by the crystal it glows like the
-	-- concept's fire bowl, without another neon part)
-	star(m, CFrame.new(center + Vector3.new(0, yInner + 0.2, 0)), INNER + 0.5, 0.4, Style.vary(HOT_IRON, rng, 0.03))
-	-- the molten hearth plate under the pedestal (same octagon, a little
-	-- larger: a thin glowing step round it, not a jagged neon star)
-	local bed = star(
-		m,
-		CFrame.new(center + Vector3.new(0, yInner + 0.4, 0)) * CFrame.Angles(0, math.pi / 8, 0),
-		PEDESTAL + 0.9,
-		0.2,
-		C.Molten,
-		SMOOTH,
-		Style.tiny()
-	)
-	bed[1].Name = "FireBed"
-	bed[2].Name = "FireBed"
-	Style.emitter(bed[1], "Fire", C.Fire, 12)
-	Style.emitter(bed[1], "Embers", C.Fire, 6)
-
-	-- octagonal pedestal with an Ember seam
-	local yPed = yInner + 0.4
-	star(
-		m,
-		CFrame.new(center + Vector3.new(0, yPed + PEDESTAL_H / 2, 0)) * CFrame.Angles(0, math.pi / 8, 0),
-		PEDESTAL,
-		PEDESTAL_H,
-		Style.vary(K.MetalDark, rng, 0.03)
-	)
-	star(
-		m,
-		CFrame.new(center + Vector3.new(0, yPed + PEDESTAL_H * 0.45, 0)) * CFrame.Angles(0, math.pi / 8, 0),
-		PEDESTAL + 0.25,
-		0.25,
-		C.Ember,
-		NEON,
-		Style.tiny()
-	)
-
-	crystalCluster(parent, CFrame.new(center + Vector3.new(0, yPed + PEDESTAL_H, 0)), rng)
+	baseTier(m, center, y0)
+	armorRing(m, center, y0, rng)
+	local top = moltenBowl(m, center, y0)
+	crystalCluster(parent, CFrame.new(center + Vector3.new(0, top, 0)), rng)
 end
 
 return FireCrystal

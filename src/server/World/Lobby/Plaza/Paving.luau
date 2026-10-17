@@ -1,23 +1,23 @@
 --[[
 	Plaza paving (LOBBY_PLAN 6.3.1 + 6.3.3, restyled after concept v2,
 	docs/art/lobby_concept_v2.webp): a round plaza of dark polished slate
-	with concentric neon rings, and the spawn pad dressed as four slate
-	tiles with an orange ring.
+	with concentric neon rings, and the spawn pad dressed as a slate slab
+	with a quiet ring of blue dashes and a bold double chevron to the forge.
 
 	One collidable dark disc (r 36, top y 0.4) is the floor; on it lie four
-	rings of dark charcoal slate tiles (SmoothPlastic, all with the same
-	little Reflectance: one polished floor) whose 0.32 gaps show the darker
-	disc as seams. The wider gaps between the tile rings carry flat neon
-	rings: a thin deep-orange ring round the crystal's housing (r 14.2), a
-	dashed blue ring (r 18.5), thin orange dashes (r 24.55) and the blue
-	outer ring (r 30.6), both blues a deep saturated blue that stays blue
-	under bloom. The rings and tiles run on through the spawn area (only what
-	TownSpawn would hide is left out). A low dark metal curb (walk-through,
-	at most 0.55 above the floor) with a blue neon top edge and orange
-	glowing slots runs at r 35.6 and opens wherever a road or path enters
-	and in front of the forge. Everything on the floor stays flat and below
-	TownSpawn's top (0.45) except the spawn pad cover (<= 0.5,
-	non-colliding).
+	rings of dark wet blue-grey slate tiles (SmoothPlastic, all with the
+	same little Reflectance: one polished floor, a few lighter accent slabs)
+	whose thin 0.14 gaps show the dark disc as seams. The wider gaps between
+	the tile rings carry bold flat neon rings (concept v2): a continuous
+	deep-orange ring round the crystal's housing (r 14.2), a second
+	continuous orange ring (r 24.6) and the blue outer ring of long dashes
+	(r 30.6), a deep saturated blue that stays blue under bloom. The rings
+	and tiles run on through the spawn area (only what TownSpawn would hide
+	is left out). A low dark metal curb (walk-through, at most 0.55 above
+	the floor) with a deep-blue neon top edge and orange glowing slots runs
+	at r 35.6 and opens wherever a road or path enters and in front of the
+	forge. Everything on the floor stays flat and below TownSpawn's top
+	(0.45) except the spawn pad cover (<= 0.5, non-colliding).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,7 +29,6 @@ local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 
-local C = Style.C
 local K = Common.Colors
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
@@ -38,18 +37,19 @@ local TAU = 2 * math.pi
 local Paving = {}
 
 -- Slate tile rings: inner/outer radius, tiles per ring, phase (fraction of a tile).
+-- (rings 1 and 2 only meet at a seam; the gaps after rings 2 and 3 carry neon rings)
 local RINGS = {
-	{ R0 = 14.6, R1 = 18.2, Count = 20, Phase = 0 },
-	{ R0 = 18.8, R1 = 24.3, Count = 26, Phase = 0.5 },
-	{ R0 = 24.8, R1 = 30, Count = 30, Phase = 0.25 },
-	{ R0 = 31.2, R1 = 35, Count = 34, Phase = 0.6 },
+	{ R0 = 14.62, R1 = 19.0, Count = 20, Phase = 0 },
+	{ R0 = 19.0, R1 = 24.12, Count = 26, Phase = 0.5 },
+	{ R0 = 24.98, R1 = 30.14, Count = 30, Phase = 0.25 },
+	{ R0 = 30.98, R1 = 35, Count = 34, Phase = 0.6 },
 }
--- Neon rings in the gaps: radius, width, segments, drawn fraction, color.
+-- Neon rings in the gaps: radius (polygon corners), width, segments, drawn
+-- fraction (> 1: the chords overlap, a continuous ring), color.
 Paving.NeonRings = {
-	{ Name = "InnerRing", R = 14.2, Width = 0.3, Segments = 30, Dash = 1.02, Color = C.Ember },
-	{ Name = "BlueDashRing", R = 18.5, Width = 0.26, Segments = 32, Dash = 0.72, Color = K.NeonBlueDeep },
-	{ Name = "OrangeDashRing", R = 24.55, Width = 0.18, Segments = 26, Dash = 0.4, Color = K.NeonOrange },
-	{ Name = "OuterRing", R = 30.6, Width = 0.42, Segments = 40, Dash = 1.02, Color = K.NeonBlueDeep },
+	{ Name = "InnerRing", R = 14.2, Width = 0.6, Segments = 24, Dash = 1.04, Color = K.RingOrange },
+	{ Name = "OrangeRing", R = 24.62, Width = 0.65, Segments = 30, Dash = 1.04, Color = K.RingOrange },
+	{ Name = "OuterRing", R = 30.62, Width = 0.5, Segments = 32, Dash = 0.8, Color = K.NeonBlueDeep },
 }
 Paving.CrystalFloorRadius = 13.8
 local TILE_H = 0.08
@@ -76,7 +76,7 @@ local function slateTiles(m: Model, center: Vector3, spawn: Vector3, rng: Rng.Rn
 				r1 = Common.PlazaRadius - 0.1
 			end
 			local rc = (ring.R0 + r1) / 2
-			local depth = r1 - ring.R0 - 0.32
+			local depth = r1 - ring.R0 - Common.Seam
 			local arc = TAU * rc / ring.Count
 			local p = center + Vector3.new(math.cos(a), 0, math.sin(a)) * rc
 			if not underPad(p, spawn, -0.8) then
@@ -84,14 +84,14 @@ local function slateTiles(m: Model, center: Vector3, spawn: Vector3, rng: Rng.Rn
 				-- now and then a slab is cut in two (more seams, less repetition)
 				if rng:chance(0.1) then
 					local k = rng:range(0.35, 0.65)
-					local l1 = arc * k - 0.32
-					local l2 = arc * (1 - k) - 0.32
+					local l1 = arc * k - Common.Seam
+					local l2 = arc * (1 - k) - Common.Seam
 					local z1 = -arc / 2 + arc * k / 2
 					local z2 = arc / 2 - arc * (1 - k) / 2
 					tile(m, frame * CFrame.new(0, 0, z1), Vector3.new(depth, TILE_H, l1), rng)
 					tile(m, frame * CFrame.new(0, 0, z2), Vector3.new(depth, TILE_H, l2), rng)
 				else
-					tile(m, frame, Vector3.new(depth, TILE_H, arc - 0.32), rng)
+					tile(m, frame, Vector3.new(depth, TILE_H, arc - Common.Seam), rng)
 				end
 			end
 		end
@@ -139,20 +139,13 @@ local function curb(m: Model, center: Vector3, rng: Rng.Rng)
 				m,
 				frame * CFrame.new(0.46, h / 2 - 0.05, 0),
 				Vector3.new(0.32, 0.14, arc + 0.06),
-				K.NeonBlue,
+				K.NeonBlueDeep,
 				NEON,
 				Style.tiny()
 			)
 			edge.Name = "CurbGlow"
 			if post then
-				Style.block(
-					m,
-					frame * CFrame.new(-0.62, h / 2 - 0.2, 0),
-					Vector3.new(0.1, 0.2, arc * 0.5),
-					K.NeonOrange,
-					NEON,
-					Style.tiny()
-				)
+				Style.block(m, frame * CFrame.new(-0.62, h / 2 - 0.2, 0), Vector3.new(0.1, 0.2, arc * 0.5), K.SlotAmber, NEON, Style.tiny())
 			end
 		end
 	end
@@ -161,23 +154,24 @@ end
 --[[
 	The spawn pad (Town.luau builds TownSpawn, 8 x 8, top 0.45, a light
 	flagstone color) dressed to match the plaza: a dark seam plate on it,
-	one big slate slab and a thin orange neon ring, and a glowing
-	double chevron north of it pointing to the Great Forge. All flat
-	(<= 0.5), no collision; the plaza tiles and rings run on around it.
+	one big slate slab with a quiet ring of short deep-blue dashes (it does
+	not compete with the crystal), and north of it the concept's bold
+	double chevron pointing to the Great Forge. All flat (<= 0.5), no
+	collision; the plaza tiles and rings run on around it.
 ]]
 local function spawnInlay(m: Model, spawn: Vector3, rng: Rng.Rng)
 	local c = Vector3.new(spawn.X, 0, spawn.Z)
-	local plate = Style.block(m, CFrame.new(c + Vector3.new(0, 0.46, 0)), Vector3.new(8.3, 0.02, 8.3), K.SlateDeep, nil, Style.tiny())
+	local plate = Style.block(m, CFrame.new(c + Vector3.new(0, 0.46, 0)), Vector3.new(8.3, 0.02, 8.3), K.SlateDark, nil, Style.tiny())
 	plate.Name = "SpawnInlay"
 	local tile = Style.block(m, CFrame.new(c + Vector3.new(0, 0.4825, 0)), Vector3.new(7.9, 0.025, 7.9), K.Slate, nil, Style.tiny())
 	tile.Reflectance = Common.TileReflectance
-	for _, part in Common.ring(m, c, 3.1, 0.22, 0.488, 0.02, 12, K.NeonOrange, { Phase = 0.5 }) do
+	for _, part in Common.ring(m, c, 3.1, 0.14, 0.488, 0.02, 12, K.NeonBlueDeep, { Phase = 0.5, Dash = 0.45 }) do
 		part.Name = "SpawnRing"
 	end
-	-- double chevron toward the forge (north, -Z), thin so it stays crisp
-	for _, d in { 8, 6.7 } do
-		local tip = c + Vector3.new(0, 0.44, -d)
-		Common.chevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 2.2, 0.4, K.Chevron)
+	-- the double chevron toward the forge (north, -Z), on the plaza tiles
+	local tip = c + Vector3.new(0, 0.44, -8.6)
+	for _, part in Common.doubleChevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.4, 0.8, 1.6, K.Chevron) do
+		part.Name = "SpawnChevron"
 	end
 end
 
@@ -193,7 +187,7 @@ local function forgeApron(m: Model, rng: Rng.Rng)
 		m,
 		CFrame.new(0, 0.24, (z0 + front) / 2),
 		Vector3.new(half * 2, 0.3, z0 - front),
-		K.SlateDeep,
+		K.SlateDark,
 		nil,
 		Style.tiny({ CanQuery = true })
 	)
@@ -212,7 +206,7 @@ local function forgeApron(m: Model, rng: Rng.Rng)
 			tile(
 				m,
 				CFrame.new((x0 + x1) / 2, Common.TileTop - TILE_H / 2, (zTop + zBottom) / 2),
-				Vector3.new(w - 0.32, TILE_H, zTop - zBottom),
+				Vector3.new(w - Common.Seam, TILE_H, zTop - zBottom),
 				rng
 			)
 		end
@@ -238,7 +232,7 @@ function Paving.build(parent: Instance, rng: Rng.Rng)
 		center + Vector3.new(0, Common.FloorTop - 0.3, 0),
 		0.6,
 		Common.PlazaRadius * 2,
-		K.SlateDeep,
+		K.SlateDark,
 		SMOOTH,
 		Style.solid({ CastShadow = false })
 	)

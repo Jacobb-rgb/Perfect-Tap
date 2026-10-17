@@ -6,8 +6,9 @@
 	over the solid ground. The walkways that leave the plaza (the south road
 	up to the creek bridge, the spurs, the forge paths and the four district
 	paths) are dark neon walkways (Common.walkway: polished slate panels,
-	dark metal borders with orange neon edge strips) and the south walkway
-	carries glowing chevrons pointing to the forge; the south road past the
+	dark metal borders with orange neon edge strips, a dark metal threshold
+	ramp at the plaza rim) and the south walkway carries bold glowing double
+	chevrons pointing to the forge; the south road past the
 	bridge and ToScanner stay cobble (Common.path), the plot roads, the rim
 	road, ToMine and ToNextArea dirt. The south road stops at the creek
 	bridge (Flora builds the bridge).
@@ -85,18 +86,35 @@ local function segments(s: Common.Strip): { { From: Vector3, To: Vector3 } }
 end
 
 -- Glowing chevrons on the south walkway, pointing north to the forge
--- (z of each chevron's tip): one thin deep-orange chevron each, so they read
--- as crisp arrows instead of a glowing plank.
-Roads.ChevronZ = { 40, 47.5 }
+-- (z of each arrow's front tip): the concept v2 arrow, two bold, wide
+-- deep-orange chevrons nested close together (on a dark backing chevron),
+-- so they stay orange under bloom and lead the eye to the crystal.
+Roads.ChevronZ = { 39.5, 47 }
+Roads.ChevronSize = 4.2
+Roads.ChevronThickness = 0.95
+Roads.ChevronGap = 1.9
 
 local function chevrons(m: Model, s: Common.Strip)
 	for _, z in Roads.ChevronZ do
-		local tip = Vector3.new(s.From.X, s.Lift + Common.WalkwayTop.Neon - 0.03, z)
-		for _, part in Common.chevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.2, 0.45, Common.Colors.Chevron) do
+		local y = s.Lift + Common.WalkwayTop.Neon - 0.03
+		local tip = Vector3.new(s.From.X, y, z)
+		local cf = CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1))
+		for _, part in Common.doubleChevron(m, cf, Roads.ChevronSize, Roads.ChevronThickness, Roads.ChevronGap, Common.Colors.Chevron) do
 			part.Name = "Chevron"
+		end
+		-- the dark backing: one wide chevron under both strokes (flush with the panels)
+		local back = cf * CFrame.new(0, -0.025, Roads.ChevronGap / 2)
+		local backThick = Roads.ChevronThickness + Roads.ChevronGap * math.sin(Common.ChevronSpread) + 0.7
+		for _, part in Common.chevron(m, back, Roads.ChevronSize + 1.4, backThick, Common.Colors.SlateDeep, 0.04, Common.ChevronSpread) do
+			part.Material = Enum.Material.SmoothPlastic
+			part.Name = "ChevronBacking"
 		end
 	end
 end
+
+-- Walkways that leave the plaza rim head-on: a threshold ramp bridges the
+-- step from the plaza floor down to their panels.
+local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true, ToFossil = true }
 
 local function paveAll(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("Roads", parent)
@@ -111,6 +129,9 @@ local function paveAll(parent: Instance, rng: Rng.Rng)
 					Lift = s.Lift,
 					Self = s.Id,
 					EdgeInset = if s.Id == "SouthRoad" then 0 else 0.5,
+					-- the long forge side paths get longer slabs (fewer parts)
+					RowScale = if s.Id == "ForgePathEast" or s.Id == "ForgePathWest" then 1.35 else nil,
+					Threshold = THRESHOLDS[s.Id] == true,
 				})
 				if s.Id == "SouthRoad" then
 					chevrons(walk, s)

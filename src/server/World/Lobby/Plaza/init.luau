@@ -1,13 +1,15 @@
 --[[
 	Lobby package "Plaza" (docs/plans/LOBBY_PLAN.md 6.3, restyled after
 	concept v2, docs/art/lobby_concept_v2.webp): the round plaza of dark
-	polished slate with concentric blue and orange neon rings (the spawn pad
-	dressed in slate with an orange ring), the giant fire crystal (tag Spin)
-	in a chunky two-tier mechanical ring, THE GREAT FORGE (dark slate roofs
-	with brick-red trim, warm timber, crimson banners, a glowing
-	crossed-hammers crest in the gable, a monumental flight of stairs up to a
-	glowing workshop), dark neon walkways with orange edge strips and
-	chevrons near the plaza, cobble and dirt roads further out, and dark
+	polished slate with bold concentric orange and blue neon rings (the
+	spawn pad dressed in slate, a glowing double chevron pointing to the
+	forge), the giant fire crystal crown (tag Spin) in a low stepped
+	mechanical ring round a molten bowl, THE GREAT FORGE (dark slate roofs
+	with brick-red trim, warm timber, long crimson banners on dark piers, a
+	glowing framed crossed-hammers crest in the gable, a monumental flight
+	of stairs up to a brightly glowing workshop), dark neon walkways with
+	orange edge strips and double chevrons near the plaza, cobble and dirt
+	roads further out, and dark
 	metal lantern pillars with glowing orange slots and amber lamps (wooden
 	post lanterns on the far roads).
 
