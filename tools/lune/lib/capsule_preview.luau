@@ -18,7 +18,9 @@
 	    ui_golems_phone         phone: the inventory
 	    ui_golems_delete        PC: delete mode, three golems picked
 	    ui_golems_confirm       PC: the confirm box before deleting
-	    ui_capsule_board        the stall's odds board as the game fills it (inset)
+	    ui_capsule_board        the stall's odds board as the game fills it: an
+	                            ENLARGED 2D overlay of the 1.9 x 3.9 stud board
+	                            (labelled so on the picture)
 	  scene "capsule_reveal"  the world dimmed (a dark see-through plane in
 	                          front of the camera stands in for the overlay's
 	                          dim) with a Mythic golem where the opening's hero
@@ -36,6 +38,7 @@ local Preview = {}
 local Color3 = roblox.Color3
 local Vector3 = roblox.Vector3
 local UDim2 = roblox.UDim2
+local Vector2 = roblox.Vector2
 
 -- The render (tools/preview/render.mjs) and its UI scales.
 Preview.Width = 1600
@@ -311,7 +314,9 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = uiScale
 		BuildView.menuButton(refs.Menu)
-		GolemView.menuButton(refs.Menu)
+		local golems = GolemView.menuButton(refs.Menu, "P")
+		-- (the phone shots: the HUD at the 0.62 floor, touch; PC: the P key)
+		GolemView.menuLayout(golems, if uiScale == phone then 0.62 else 1, if uiScale == phone then "Touch" else "Keyboard", nil)
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(186)
 		refs.Income.TextColor3 = Theme.Good
@@ -373,7 +378,7 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		GolemView.setCount(refs, GolemView.countText(state), false)
 		GolemView.setDetail(refs, cards[1])
 		GolemView.setDeleteMode(refs, deleting, if deleting then 3 else 0)
-		GolemView.setHint(refs, `Click a golem to see it{GolemView.Separator}Backspace: close`)
+		GolemView.setHint(refs, `Click a golem to see it{GolemView.Separator}P / Backspace: close`)
 		if deleting then
 			GolemView.setHint(refs, `Click the golems to delete{GolemView.Separator}Backspace: back`)
 		end
@@ -437,6 +442,13 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		}, gui)
 		UIKit.stroke(frame, 4, Color3.fromRGB(40, 150, 255))
 		CapsuleView.fillBoard(frame, "Stone", false)
+		UIKit.label(gui, "ENLARGED VIEW of the\n1.9 x 3.9 stud odds board", 17, {
+			Name = "OverlayNote",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromOffset(pcW - 300 + 19 * 7, 56),
+			Size = UDim2.fromOffset(19 * 14, 44),
+			TextColor3 = Color3.fromRGB(255, 230, 150),
+		})
 		exports.ui_capsule_board = UiExport.export({ gui })
 	elseif which == "capsule_reveal" then
 		local function reveal(uiScale: number, compact: boolean, w: number, h: number): any

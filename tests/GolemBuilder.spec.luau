@@ -1,8 +1,10 @@
 -- GolemBuilder (step 7): every golem kind builds within the part budget in
--- Mini Characters proportions (a big head on a short body), stands on its
--- base facing the base's LookVector, reports RootHeight / Height right at
--- every size, never collides / touches / is queried, welds onto its Body
--- for followers, survives unknown kinds; every accessory builds; the
+-- Mini Characters proportions (a big head on a short body) with its rock
+-- look (brow, rock fists, boulder, crystal, vein), stands on its base
+-- facing the base's LookVector (Legendary+ float over their aura),
+-- reports RootHeight / Height / Hover right at every size, never collides /
+-- touches / is queried, welds onto its Body for followers with every part
+-- created in place, survives unknown kinds; every accessory builds; the
 -- opening capsule has its halves and hidden cracks.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -98,7 +100,7 @@ return function(T, Loader)
 					lowest = math.min(lowest, lo)
 					highest = math.max(highest, hi)
 				end
-				T.near(lowest, 4, 0.02, `{golem.Id} x{size}: feet on the base`)
+				T.near(lowest, 4, 0.02, `{golem.Id} x{size}: on the base (feet, or the aura under floating feet)`)
 				local height = model:GetAttribute("Height")
 				T.truthy(highest <= 4 + height + 0.25, `{golem.Id} x{size}: Height covers the gear ({highest - 4} vs {height})`)
 				T.truthy(highest >= 4 + height - 0.3, `{golem.Id} x{size}: Height is the real top`)
@@ -133,16 +135,83 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("GolemBuilder: welded followers move with their Body", function()
-		local model = GolemBuilder.build("RubyKnight", CFrame.new(0, 0, 0), { Welded = true, Size = 0.85 })
-		local body = model.PrimaryPart
-		T.truthy(body.Anchored, "Body anchored")
-		for _, part in parts(model) do
-			if part ~= body then
-				T.falsy(part.Anchored, part.Name .. " unanchored")
-				T.truthy(part.Massless, part.Name .. " massless")
-				local weld = part:FindFirstChildOfClass("WeldConstraint")
-				T.truthy(weld and weld.Part0 == body and weld.Part1 == part, part.Name .. " welded to Body")
+	T.test("GolemBuilder: welded followers move with their Body (every part made in place)", function()
+		for _, kind in { "RubyKnight", "HeartstoneColossus" } do
+			local model = GolemBuilder.build(kind, CFrame.new(0, 0, 0), { Welded = true, Size = 0.85 })
+			local body = model.PrimaryPart
+			T.truthy(body.Anchored, "Body anchored")
+			for _, part in parts(model) do
+				if part ~= body then
+					T.falsy(part.Anchored, part.Name .. " unanchored")
+					T.truthy(part.Massless, part.Name .. " massless")
+					local weld = part:FindFirstChildOfClass("WeldConstraint")
+					T.truthy(weld and weld.Part0 == body and weld.Part1 == part, part.Name .. " welded to Body")
+				end
+			end
+			-- built at a follower's start CFrame, every part is already where the
+			-- welds keep it: the same offsets from Body as a golem built at the origin
+			local start = CFrame.new(140, 37, -60) * CFrame.Angles(0, 2.3, 0)
+			local placed = GolemBuilder.build(kind, start, { Welded = true, Size = 0.85 })
+			local a, b = parts(model), parts(placed)
+			T.eq(#a, #b)
+			for i, part in a do
+				local here = body.CFrame:ToObjectSpace(part.CFrame)
+				local there = placed.PrimaryPart.CFrame:ToObjectSpace(b[i].CFrame)
+				T.near((here.Position - there.Position).Magnitude, 0, 1e-3, `{kind} {part.Name} offset`)
+				T.near(here.LookVector:Dot(there.LookVector), 1, 1e-4, `{kind} {part.Name} turn`)
+			end
+			local feet = start:PointToObjectSpace(placed.PrimaryPart.CFrame.Position)
+			T.near(feet.Y, placed:GetAttribute("RootHeight"), 1e-3, "Body at RootHeight over the start")
+		end
+	end)
+
+	T.test("GolemBuilder: golems read as rock: brow, rock fists, boulder, crystal and an ore vein", function()
+		local veins = 0
+		for _, golem in GolemConfig.List do
+			local model = GolemBuilder.build(golem.Id)
+			local covered = golem.Accessory == "KnightHelm" or golem.Accessory == "Visor"
+			T.eq(model:FindFirstChild("Brow") ~= nil, not covered, golem.Id .. " stone brow (unless the face is covered)")
+			T.falsy(model:FindFirstChild("Face"), golem.Id .. " no robot face plate")
+			for _, name in { "Boulder", "Crystal", "Fist1", "Fist2" } do
+				T.truthy(model:FindFirstChild(name), golem.Id .. " " .. name)
+			end
+			local fist = model:FindFirstChild("Fist1")
+			T.eq(fist.Shape, roblox.Enum.PartType.Block, "a rock chunk, not a ball")
+			T.truthy(fist.Material ~= roblox.Enum.Material.SmoothPlastic, golem.Id .. " rough fists")
+			local bodyMaterial = model.PrimaryPart.Material
+			T.truthy(
+				bodyMaterial ~= roblox.Enum.Material.SmoothPlastic and bodyMaterial ~= roblox.Enum.Material.Glass,
+				golem.Id .. " body is no plastic or glass"
+			)
+			if model:FindFirstChild("Vein") then
+				veins += 1
+			end
+		end
+		T.truthy(veins >= #GolemConfig.List - 4, "nearly every golem has its ore vein (the budget allows)")
+	end)
+
+	T.test("GolemBuilder: Legendary and Mythic golems float on a glowing aura", function()
+		for _, golem in GolemConfig.List do
+			local model = GolemBuilder.build(golem.Id)
+			local order = GolemConfig.order(golem.Id)
+			local aura = model:FindFirstChild("Aura")
+			if order >= 5 then
+				T.truthy(GolemBuilder.premium(golem.Id), golem.Id .. " premium")
+				T.truthy(aura and aura.Material == roblox.Enum.Material.Neon, golem.Id .. " has its aura")
+				T.near(model:GetAttribute("Hover"), GolemBuilder.Hover * golem.Scale, 1e-6, golem.Id .. " hovers")
+				local _, auraTop = yExtent(aura)
+				local lowestLeg = math.huge
+				for _, name in { "Leg1", "Leg2" } do
+					local lo = yExtent(model:FindFirstChild(name))
+					lowestLeg = math.min(lowestLeg, lo)
+				end
+				T.truthy(lowestLeg > auraTop + 0.1, golem.Id .. " feet float over the aura")
+				T.truthy(aura.Size.Y > aura.Size.X * 10, golem.Id .. " the aura is a thin disc")
+				T.truthy(aura.Size.Y > model.PrimaryPart.Size.X * 1.5, golem.Id .. " wider than the golem")
+			else
+				T.falsy(GolemBuilder.premium(golem.Id), golem.Id)
+				T.falsy(aura, golem.Id .. " no aura")
+				T.eq(model:GetAttribute("Hover"), 0)
 			end
 		end
 	end)

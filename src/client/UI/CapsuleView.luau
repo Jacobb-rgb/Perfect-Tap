@@ -18,8 +18,12 @@
 	           name, rarity, bonus, chance (CapsuleConfig.odds; with Triple
 	           Lucky on, the boosted odds, the lucky golems marked "x3")
 	  footer   the control hint (not on phones)
-	cards(state, coins, restricted, now) says what each tab shows, from the
-	State snapshot, so the cards always match what the server quotes.
+	cards(state, coins, restricted, now, stateAt?) says what each tab shows,
+	from the State snapshot, so the cards always match what the server
+	quotes (luckyNow: the Triple Lucky odds the client shows and sends with
+	every open). layout() sets every size, position AND text size from the
+	normal or compact metrics, so a panel built for one layout and laid out
+	for the other looks exactly like one built for it.
 
 	Opening overlay (ScreenGui "TerraForgeCapsuleOpen", above everything):
 	  a dim backdrop, rotating rarity rays, the ViewportFrame "Hero" (the
@@ -28,8 +32,9 @@
 	  the result grid (x3: 3 cards, x10: 5 x 2) and SKIP / OK / OPEN AGAIN.
 
 	fillBoard(gui, capsuleId, lucky): the CapsuleStall's OddsBoard
-	SurfaceGui: the capsule's name and per rarity the total chance and each
-	golem's own chance, on the six rows the stall's rarity chips mark.
+	SurfaceGui (a 1.9 x 3.9 stud board): the capsule's name and, big, each
+	rarity's total chance on the six rows the stall's rarity chips mark;
+	each golem's own chance is in the capsule menu (the board says so).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,6 +58,7 @@ CapsuleView.PhoneScale = TechShopView.PhoneScale
 CapsuleView.Columns = { 0.41, 0.25 }
 CapsuleView.MinTouch = TechShopView.MinTouch
 CapsuleView.Separator = "  •  "
+CapsuleView.BoardAttribute = "CapsuleBoard" -- on every instance fillBoard adds (old labels don't have it)
 
 export type OddsLine = {
 	Golem: string,
@@ -281,10 +287,31 @@ function CapsuleView.oddsLines(capsuleId: string, lucky: boolean): { OddsLine }
 	return lines
 end
 
--- Is Triple Lucky running for the snapshot at `now` (server time)?
+-- Seconds left of the Triple Lucky boost in the snapshot at `now` (server time).
 function CapsuleView.luckySeconds(state: any, now: number): number
 	local boosts = if type(state) == "table" then state.Boosts else nil
 	return BoostConfig.remaining(boosts, "TripleLucky", now)
+end
+
+--[[
+	Does the player get the Triple Lucky odds at `now` (server time)? The
+	boost in the snapshot (Boosts.TripleLuckyUntil) or any other source the
+	server counts (State.Bonuses.TripleLucky, CapsuleService.oddsFor).
+	`stateAt`: when the snapshot came (server time). The Bonuses flag was
+	right then, so it is trusted only if the boost didn't run then (else it
+	may be the boost's own flag, stale once the boost ran out). nil: trusted.
+]]
+function CapsuleView.luckyNow(state: any, now: number, stateAt: number?): boolean
+	local boosts = if type(state) == "table" then state.Boosts else nil
+	local untilTime = BoostConfig.untilOf(boosts, "TripleLucky")
+	if untilTime > now then
+		return true
+	end
+	local bonuses = if type(state) == "table" then state.Bonuses else nil
+	if type(bonuses) ~= "table" or bonuses.TripleLucky ~= true then
+		return false
+	end
+	return stateAt == nil or untilTime <= stateAt
 end
 
 local function golemsOf(state: any): any
@@ -302,12 +329,13 @@ end
 
 -- What every capsule tab shows (see the header). `restricted`: paid random
 -- items are restricted for this player, or the policy isn't known yet.
-function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: number): { Card }
+-- `stateAt`: when the snapshot came (luckyNow).
+function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: number, stateAt: number?): { Card }
 	local level = if type(state) == "table" then state.BlasterLevel else nil
 	local room = GolemConfig.room(golemsOf(state))
 	local owned = GolemConfig.count(golemsOf(state))
 	local luckySeconds = CapsuleView.luckySeconds(state, now)
-	local lucky = luckySeconds > 0
+	local lucky = CapsuleView.luckyNow(state, now, stateAt)
 	local cash = num(coins)
 	local cards: { Card } = {}
 	for _, capsule in CapsuleConfig.List do
@@ -364,10 +392,15 @@ function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: 
 	return cards
 end
 
+-- Refusals CapsuleConfig.Reasons doesn't list yet (CapsuleService's own).
+CapsuleView.ExtraReasons = {
+	OddsChanged = "The odds just changed: check them and open again",
+} :: { [string]: string }
+
 -- The text for a refusal (CapsuleConfig.Reasons, MonetizationConfig.StatusText).
 function CapsuleView.reasonText(reason: any): string
 	if type(reason) == "string" then
-		local text = CapsuleConfig.Reasons[reason] or MonetizationConfig.StatusText[reason]
+		local text = CapsuleConfig.Reasons[reason] or CapsuleView.ExtraReasons[reason] or MonetizationConfig.StatusText[reason]
 		if text and text ~= "" then
 			return text
 		end
@@ -375,10 +408,12 @@ function CapsuleView.reasonText(reason: any): string
 	return "You can't open that right now"
 end
 
--- The Triple Lucky banner: "TRIPLE LUCKY 12:34  •  EPIC+ x3" (time left, the golems it triples).
+-- The Triple Lucky banner: "TRIPLE LUCKY 12:34  •  EPIC+ x3" (time left,
+-- when it comes from the boost; the golems it triples).
 function CapsuleView.luckyText(card: Card): string
 	local from = string.upper(card.LuckyFrom)
-	return `TRIPLE LUCKY {Format.seconds(card.LuckySeconds)}{CapsuleView.Separator}{from}+ x3`
+	local left = if card.LuckySeconds > 0 then ` {Format.seconds(card.LuckySeconds)}` else ""
+	return `TRIPLE LUCKY{left}{CapsuleView.Separator}{from}+ x3`
 end
 
 ---------------------------------------------------------------- the capsule drawn from frames
@@ -521,6 +556,9 @@ local function placeRow(row: Row, m: Metrics, width: number)
 	local rarityW = math.floor(rest * CapsuleView.Columns[2])
 	local bonusW = rest - nameW - rarityW
 	row.Frame.Size = UDim2.new(1, -10, 0, h)
+	row.Bar.Position = UDim2.new(0, 4, 0.5, -(h - 10) / 2)
+	row.Bar.Size = UDim2.fromOffset(8, h - 10)
+	row.Lucky.TextSize = m.Small - 1
 	row.Name.Position = UDim2.fromOffset(18, 0)
 	row.Name.Size = UDim2.fromOffset(nameW, h)
 	row.Rarity.Position = UDim2.fromOffset(18 + nameW, 0)
@@ -789,7 +827,34 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local width = math.max(math.min(m.Width, maxWidth - 16), m.Left + 420)
 	local height = math.max(math.min(m.Height, maxHeight - 12), 400)
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	if refs.Compact ~= compact then
+		-- the capsule art is drawn at the layout's size: draw it again
+		refs.ArtHolder:ClearAllChildren()
+		refs.ArtFor = nil
+	end
 	refs.Compact = compact
+
+	-- every text size from the metrics (the build's sizes are only a start)
+	for _, tab in refs.Tabs do
+		tab.TextSize = if compact then 24 else 21
+	end
+	for _, button in refs.Buttons do
+		button.TextSize = if compact then 21 else 18
+	end
+	refs.Golems.TextSize = if compact then 21 else 19
+	refs.Note.TextSize = m.Text + 4
+	refs.Status.TextSize = m.Small
+	refs.Room.TextSize = m.Small
+	refs.LuckyText.TextSize = m.Small
+	refs.OddsTitle.TextSize = m.Text
+	refs.OddsNote.TextSize = m.Small - 1
+	for _, child in refs.Heads:GetChildren() do
+		if child:IsA("TextLabel") then
+			child.TextSize = m.Small - (if compact then 1 else 2)
+		end
+	end
+	refs.Hint.TextSize = m.Small
+	refs.Empty.TextSize = m.Text + 2
 
 	-- header: title + subtitle left, coins / MY GOLEMS / X right
 	local h = m.Header
@@ -886,6 +951,9 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		row.Chance.TextSize = m.Text - 1
 		row.Rarity.TextSize = m.Small
 		row.Bonus.TextSize = m.Small
+		TechShopView.fitText(row.Name, row.Name.Size.X.Offset, m.Row, m.Text - 1, 11)
+		TechShopView.fitText(row.Rarity, row.Rarity.Size.X.Offset - 4, m.Row, m.Small, 10)
+		TechShopView.fitText(row.Bonus, row.Bonus.Size.X.Offset, m.Row, m.Small, 10)
 	end
 
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -4)
@@ -1261,6 +1329,12 @@ end
 function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: number, height: number)
 	refs.Compact = compact
 	local button = if compact then 76 else 60
+	-- every text size from the layout (the build's sizes are only a start)
+	refs.PlateName.TextSize = if compact then 48 else 44
+	refs.PlateBonus.TextSize = if compact then 26 else 24
+	refs.Counter.TextSize = if compact then 28 else 24
+	refs.Note.TextSize = if compact then 20 else 18
+	refs.Hint.TextSize = if compact then 20 else 17
 	local bottom = height - 18
 	-- the hero sits in the upper part, the plate under it, the buttons at the bottom
 	local hero = math.clamp(math.floor(height * 0.5), 220, 460)
@@ -1425,17 +1499,14 @@ end
 
 ---------------------------------------------------------------- the stall's odds board
 
--- The first word of a golem's name ("Pebble", "Copper"): the board is small.
-local function shortName(name: string): string
-	return name:match("^(%S+)") or name
-end
-
 --[[
 	Fills the CapsuleStall's OddsBoard SurfaceGui (`gui`, its old labels are
-	removed) with one capsule's odds: the title, then per rarity (the six
-	rows the stall's rarity chips mark, Rarity.List order) the rarity's total
-	chance and each golem's own chance. Rarities the capsule doesn't hold
-	show a dash. `lucky`: the viewer's Triple Lucky is on (the boosted odds).
+	removed) with one capsule's odds, big enough to read on the 1.9 x 3.9
+	stud board: the title, a line saying whose odds these are and where each
+	golem's own chance is (the capsule menu), then per rarity (the six rows
+	the stall's rarity chips mark, Rarity.List order) the rarity's total
+	chance. Rarities the capsule doesn't hold show a dash. `lucky`: the
+	viewer's Triple Lucky is on (the boosted odds).
 ]]
 function CapsuleView.fillBoard(gui: Instance, capsuleId: string, lucky: boolean)
 	gui:ClearAllChildren()
@@ -1454,67 +1525,60 @@ function CapsuleView.fillBoard(gui: Instance, capsuleId: string, lucky: boolean)
 		align: Enum.TextXAlignment?
 	): TextLabel
 		local l = Instance.new("TextLabel")
-		-- one line, shrunk to fit (only the golem lines wrap)
+		-- one line, as big as its box allows
 		l.Name = name
 		l.BackgroundTransparency = 1
 		l.Position = UDim2.fromScale(x, y)
 		l.Size = UDim2.fromScale(w, h)
 		l.Text = text
 		l.TextScaled = true
-		l.TextWrapped = name:sub(1, 6) == "Golems"
+		l.TextWrapped = false
 		l.TextColor3 = color
 		l.TextStrokeColor3 = DARK
 		l.TextStrokeTransparency = 0.2
 		l.TextXAlignment = align or Enum.TextXAlignment.Left
 		l.FontFace = Theme.Font
+		l:SetAttribute(CapsuleView.BoardAttribute, true)
 		l.Parent = gui
 		return l
 	end
-	label("Title", string.upper(capsule.Name), 0.06, 0.02, 0.88, 0.09, capsule.Color:Lerp(Color3.new(1, 1, 1), 0.45))
+	label("Title", string.upper(capsule.Name), 0.05, 0.012, 0.9, 0.075, capsule.Color:Lerp(Color3.new(1, 1, 1), 0.45))
 	label(
 		"Subtitle",
-		if lucky then "TRIPLE LUCKY ODDS" else "ODDS PER CAPSULE",
-		0.06,
-		0.105,
-		0.88,
+		if lucky then "TRIPLE LUCKY ODDS" else "ODDS PER RARITY",
 		0.05,
+		0.09,
+		0.9,
+		0.04,
 		if lucky then LUCKY else rgb(220, 210, 200)
 	)
-	local lines = CapsuleView.oddsLines(capsuleId, lucky)
+	label("Note", "Each golem's odds: capsule menu", 0.05, 0.13, 0.9, 0.032, rgb(190, 180, 172))
+	local odds = CapsuleConfig.rarityOdds(capsuleId, lucky)
 	local rows = #Rarity.List
 	local rowH = 0.8 / rows
 	for i, info in Rarity.List do
 		local y = 0.17 + (i - 1) * rowH
-		local total = 0
-		local parts = {}
-		for _, line in lines do
-			if line.Rarity == info.Id then
-				total += line.Chance
-				table.insert(parts, `{shortName(line.Name)} {line.Text}`)
-			end
-		end
+		local total = odds[info.Id]
 		local marker = Instance.new("Frame")
 		marker.Name = "Marker" .. i
 		marker.BorderSizePixel = 0
 		marker.BackgroundColor3 = info.Color
-		marker.Position = UDim2.fromScale(0.06, y + rowH * 0.12)
-		marker.Size = UDim2.fromScale(0.1, rowH * 0.36)
+		marker.Position = UDim2.fromScale(0.05, y + rowH * 0.2)
+		marker.Size = UDim2.fromScale(0.08, rowH * 0.6)
+		marker:SetAttribute(CapsuleView.BoardAttribute, true)
 		marker.Parent = gui
-		local white = Color3.new(1, 1, 1)
-		label("Row" .. i, info.Name, 0.2, y + rowH * 0.04, 0.42, rowH * 0.48, if #parts > 0 then white else rgb(150, 140, 136))
+		local held = total ~= nil and total > 0
+		label("Row" .. i, info.Name, 0.16, y + rowH * 0.22, 0.4, rowH * 0.56, if held then Color3.new(1, 1, 1) else rgb(150, 140, 136))
 		label(
 			"Total" .. i,
-			if #parts > 0 then CapsuleView.percent(total) else "-",
-			0.64,
-			y + rowH * 0.04,
-			0.3,
-			rowH * 0.48,
+			if held then CapsuleView.percent(total :: number) else "-",
+			0.57,
+			y + rowH * 0.1,
+			0.38,
+			rowH * 0.8,
 			info.Color,
 			Enum.TextXAlignment.Right
 		)
-		if #parts > 0 then
-			label("Golems" .. i, table.concat(parts, "  "), 0.06, y + rowH * 0.54, 0.88, rowH * 0.4, rgb(230, 222, 214))
-		end
 	end
 end
 

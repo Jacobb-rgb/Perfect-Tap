@@ -373,9 +373,17 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   (`CapsuleConfig.odds`, three significant digits, never rounded to 0),
   its rarity and its bonus, next to the OPEN x1 / x3 / x10 buttons. With
   Triple Lucky running, the list shows the boosted odds (marked "x3") and
-  says so; the opening screen says "TRIPLE LUCKY ODDS". The CapsuleStall's
-  odds board in town shows the same numbers per rarity and per golem
-  (filled on each player's screen with that player's odds).
+  says so; the opening screen says "TRIPLE LUCKY ODDS" (and, at its end,
+  "Triple Lucky ended: normal odds now" when OPEN AGAIN would use the
+  normal odds). The CapsuleStall's odds board in town shows each rarity's
+  total chance in big text and says that each golem's own odds are in the
+  capsule menu (filled on each player's screen with that player's odds).
+- **The odds shown are the odds rolled.** Every open sends which odds its
+  screen showed (normal or Triple Lucky); the server rolls exactly those,
+  or refuses with "The odds just changed: check them and open again" (and
+  sends the new state) when they no longer hold, for example when the boost
+  ended more than 3 seconds ago. A player never gets better or worse odds
+  than the ones on the screen.
 - **Royal capsules (Robux) are paid random items.** Their tab is hidden for
   players whose `ArePaidRandomItemsRestricted` is true, and while that
   answer isn't known yet (`Policy.prefetch` asks on join and retries); the
@@ -385,8 +393,10 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   server answers "ComingSoon". Nothing is ever granted outside
   ProcessReceipt (step 8: `CapsuleService.grantProduct`, which opens with
   the Triple Lucky state stored when the prompt was shown, so the odds the
-  player saw are the odds they get; golems bought with Robux are saved
-  with `Paid = true` for the trading rules).
+  player saw are the odds they get; a boosted prompt is kept at most 2
+  minutes past the boost's end, so a later purchase uses the odds of its
+  own moment; golems bought with Robux are saved with `Paid = true` for
+  the trading rules).
 - **Coin capsules: our choice.** Coins can't be bought with Robux while
   `MonetizationConfig.CoinPacksEnabled` is false, so coin capsules are
   **not** paid random items and are shown to every player (odds still
@@ -395,6 +405,15 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   tabs for restricted players (or players whose policy isn't known), the
   server refuses their opens ("Restricted"), and the questionnaire answer
   for paid random items (1.1 #12) must be Yes.
+  Robux items that only raise how fast a player earns coins (the income
+  and podium game passes, Royal golems with an Income or Sell value bonus)
+  are **not** treated as buying coins: the coins still have to be earned
+  by playing, as most games read the rule. This judgment call changes if
+  a Robux item ever pays out coins directly (a coin pack, a pass or
+  product that grants a lump of coins, a "skip" that converts Robux into
+  coins): then `MonetizationConfig.coinsBuyable()` must return true
+  (today it reads `CoinPacksEnabled`) so coin capsules count as paid
+  random items.
 - **Free capsules** (the daily wheel's prize) aren't paid and always open.
 - **No pressure:** a capsule only opens after the player presses OPEN; a
   full golem inventory (60) refuses the open before anything is spent (and

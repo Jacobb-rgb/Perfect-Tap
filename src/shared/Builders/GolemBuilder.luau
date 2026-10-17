@@ -1,23 +1,35 @@
 --[[
 	Golem pets (step 7) built from parts: original chunky ore and metal
 	golems in the proportions of Kenney's Mini Characters (a big head on a
-	short body, stubby arms with rock fists, short legs), dressed in the
-	colors and materials of their ore (GolemConfig: Body, Trim, Glow,
-	Material) with glowing eyes and a glowing chest core. Variants come from
-	the golem's Accessory (helmets, goggles, a visor, crowns, a halo, horns,
-	a leaf, a hood, crystals on the back). Pure: only creates Instances, so
-	the Lune tests and preview renders use it too.
+	short body, stubby arms, short legs), dressed in the colors of their ore
+	(GolemConfig: Body, Trim, Glow, Material) and built to read as living
+	rock: a heavy stone brow over glowing eyes, rough rock-chunk fists, a
+	boulder jutting from one shoulder, the ore's crystal growing from the
+	other, a glowing ore vein cracking across the chest from its core, and
+	rough stone where the ore's own material would look like plastic or
+	glass (rockMaterial). Variants come from the golem's Accessory (helmets,
+	goggles, a visor, crowns, a halo, horns, a leaf, a hood, crystals on the
+	back). Legendary and Mythic golems (Premium) hover on a glowing aura
+	disc in their glow color (the model's "Hover" attribute: how high the
+	feet float over its base), so the Royal capsule's chase golems stand
+	out in the reveal, the inventory and as followers. No lights (the
+	client's one real light is the player's lamp, GearConfig.LampBudget).
+	Pure: only creates Instances, so the Lune tests and preview renders use
+	it too.
 
 	  build(kind, base?, opts?)   a golem Model standing on `base` (its feet
 	                              center, front = the CFrame's LookVector =
 	                              local -Z, +Y up). At most MaxParts (20)
-	                              parts. PrimaryPart = "Body" (the torso);
-	                              the model's attribute "RootHeight" is the
-	                              Body center's height above the feet, so a
-	                              follower sets Body.CFrame = feet *
-	                              CFrame.new(0, RootHeight, 0). Attributes
-	                              "Golem" (kind) and "Height" (studs, feet to
-	                              the top of the head gear).
+	                              parts: the body, the accessory, the aura,
+	                              then the vein while the budget allows.
+	                              PrimaryPart = "Body" (the torso); the
+	                              model's attribute "RootHeight" is the Body
+	                              center's height above the base (the hover
+	                              included), so a follower sets Body.CFrame =
+	                              feet * CFrame.new(0, RootHeight, 0).
+	                              Attributes "Golem" (kind), "Height" (studs,
+	                              base to the top of the head gear) and
+	                              "Hover" (studs; 0 unless Premium).
 	    opts.Size     extra scale (1 = the golem's own Scale)
 	    opts.Welded   followers: every part but Body is unanchored, massless
 	                  and welded to the anchored Body (moving Body moves the
@@ -40,6 +52,7 @@
 
 local CapsuleConfig = require(script.Parent.Parent.Config.CapsuleConfig)
 local GolemConfig = require(script.Parent.Parent.Config.GolemConfig)
+local Rarity = require(script.Parent.Parent.Config.Rarity)
 
 local GolemBuilder = {}
 
@@ -47,6 +60,9 @@ export type Opts = { Size: number?, Welded: boolean? }
 
 GolemBuilder.MaxParts = 20
 GolemBuilder.CapsuleParts = 12 -- 9 visible + 3 invisible pivots
+GolemBuilder.PremiumFrom = "Legendary" -- golems this rare hover on an aura
+GolemBuilder.Hover = 0.25 -- how high a Premium golem's feet float (unscaled)
+GolemBuilder.AuraSize = 2.3 -- the aura disc's diameter (unscaled)
 -- the golem's own proportions at Scale 1 (studs): feet at 0
 GolemBuilder.LegHeight = 0.5
 GolemBuilder.BodySize = Vector3.new(1.2, 0.95, 0.85)
@@ -69,12 +85,20 @@ local LAMP_LIGHT = rgb(255, 244, 190)
 local GOLD = rgb(255, 196, 56)
 local DARK = rgb(26, 22, 26)
 
--- Ore materials that would look odd on a whole body (see-through or
--- blinding), by name: a gem golem's body is SmoothPlastic, its crystals glass.
-local CLEAR_MATERIALS: { [string]: boolean } = { Glass = true, Neon = true, ForceField = true }
+-- Ore materials that would look odd on a whole body (see-through,
+-- blinding or plain plastic), by name: such a golem is rough stone in its
+-- ore's color (a ruby golem is red rock), its crystals glass.
+local STONE_MATERIALS: { [string]: boolean } = { Glass = true, Neon = true, ForceField = true, SmoothPlastic = true, Plastic = true }
 
 local function bodyMaterial(material: Enum.Material): Enum.Material
-	return if CLEAR_MATERIALS[material.Name] then Enum.Material.SmoothPlastic else material
+	return if STONE_MATERIALS[material.Name] then Enum.Material.Slate else material
+end
+
+-- The rough bits (fists, brow, the shoulder boulder): stone, but metal
+-- golems keep their metal.
+local function rockMaterial(material: Enum.Material): Enum.Material
+	local name = material.Name
+	return if name == "Metal" or name == "Foil" or name == "DiamondPlate" then Enum.Material.Metal else Enum.Material.Slate
 end
 
 -- Neon in a near-white color blooms into a white blob: eyes and cores get
@@ -198,6 +222,7 @@ end
 
 type Ctx = {
 	Model: Model,
+	-- (positions are unscaled units from the feet: At / V scale them and add the hover)
 	At: (x: number, y: number, z: number) -> CFrame,
 	V: (x: number, y: number, z: number) -> Vector3,
 	Look: GolemConfig.Golem,
@@ -216,12 +241,13 @@ ACCESSORIES.None = function(c)
 end
 
 ACCESSORIES.Goggles = function(c)
-	part(c.Model, "Strap", c.At(0, 2.42, 0), c.V(1.56, 0.18, 1.36), darker(c.Look.Trim, 0.3))
+	-- pushed up onto the stone brow
+	part(c.Model, "Strap", c.At(0, 2.6, 0), c.V(1.56, 0.18, 1.36), darker(c.Look.Trim, 0.3))
 	for i, x in { -0.3, 0.3 } do
-		facing(c.Model, "Goggle" .. i, c.At(x, 2.47, -0.68), 0.16 * c.S, 0.46 * c.S, BRASS, Enum.Material.Metal)
-		facing(c.Model, "Lens" .. i, c.At(x, 2.47, -0.77), 0.04 * c.S, 0.32 * c.S, GLASS, Enum.Material.Glass)
+		facing(c.Model, "Goggle" .. i, c.At(x, 2.64, -0.76), 0.16 * c.S, 0.46 * c.S, BRASS, Enum.Material.Metal)
+		facing(c.Model, "Lens" .. i, c.At(x, 2.64, -0.85), 0.04 * c.S, 0.32 * c.S, GLASS, Enum.Material.Glass)
 	end
-	return 2.72
+	return 2.88
 end
 
 ACCESSORIES.PotHelmet = function(c)
@@ -253,7 +279,7 @@ end
 
 ACCESSORIES.SquireHelm = function(c)
 	part(c.Model, "Helm", c.At(0, 2.76, 0.02), c.V(1.62, 0.46, 1.4), STEEL, Enum.Material.Metal)
-	part(c.Model, "NoseGuard", c.At(0, 2.4, -0.71), c.V(0.14, 0.5, 0.08), darker(STEEL, 0.15), Enum.Material.Metal)
+	part(c.Model, "NoseGuard", c.At(0, 2.16, -0.8), c.V(0.14, 0.5, 0.08), darker(STEEL, 0.15), Enum.Material.Metal)
 	part(c.Model, "Plume", c.At(0, 3.18, 0.12), c.V(0.18, 0.46, 0.78), PLUME)
 	return 3.41
 end
@@ -312,10 +338,11 @@ ACCESSORIES.KnightHelm = function(c)
 end
 
 ACCESSORIES.Halo = function(c)
+	-- a pentagon of glowing bars (five parts: the budget)
 	local r = 0.55
-	local side = 2 * r * math.tan(math.pi / 6) + 0.04
-	for i = 1, 6 do
-		local a = (i - 0.5) * math.pi / 3
+	local side = 2 * r * math.tan(math.pi / 5) + 0.04
+	for i = 1, 5 do
+		local a = (i - 0.5) * 2 * math.pi / 5
 		part(
 			c.Model,
 			"Halo" .. i,
@@ -351,7 +378,11 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	local look = lookOf(kind)
 	local size = math.clamp(if opts and type(opts.Size) == "number" and opts.Size == opts.Size then opts.Size else 1, 0.05, 20)
 	local s = (look.Scale or 1) * size
-	local feet = base or CFrame.new()
+	local ground = base or CFrame.new()
+	local premium = GolemBuilder.premium(kind)
+	local hover = if premium then GolemBuilder.Hover else 0
+	-- the feet (Premium golems float `hover` over the base)
+	local feet = ground * CFrame.new(0, hover * s, 0)
 	local model = Instance.new("Model")
 	model.Name = "Golem"
 	local function at(x: number, y: number, z: number): CFrame
@@ -361,58 +392,77 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		return Vector3.new(x * s, y * s, z * s)
 	end
 	local material = bodyMaterial(look.Material)
+	local rock = rockMaterial(look.Material)
 	local body = look.Body
 	local trim = look.Trim
 	local glow = glowShade(look.Glow)
+	local crystalMaterial = if look.Material.Name == "Glass" then Enum.Material.Glass else Enum.Material.SmoothPlastic
 
 	-- legs
 	for i, x in { -0.3, 0.3 } do
-		part(model, "Leg" .. i, at(x, 0.25, 0.02), v(0.44, 0.5, 0.52), trim, material)
+		part(model, "Leg" .. i, at(x, 0.25, 0.02), v(0.44, 0.5, 0.52), trim, rock)
 	end
 	-- the torso (PrimaryPart) and its glowing core
 	local bodyY = GolemBuilder.LegHeight + GolemBuilder.BodySize.Y / 2
 	local torso = part(model, "Body", at(0, bodyY, 0), v(1.2, 0.95, 0.85), body, material)
 	torso.CastShadow = true
 	part(model, "Core", at(0, 0.98, -0.44) * CFrame.Angles(0, 0, math.pi / 4), v(0.26, 0.26, 0.06), glow, Enum.Material.Neon)
-	-- stubby arms with rock fists
+	-- stubby arms ending in rough rock-chunk fists (turned, so they read as stones)
 	local arm = body:Lerp(trim, 0.3)
 	for i, side in { -1, 1 } do
-		part(model, "Arm" .. i, at(side * 0.8, 1.12, 0) * CFrame.Angles(0, 0, side * 0.1), v(0.36, 0.62, 0.46), arm, material)
-		part(model, "Fist" .. i, at(side * 0.84, 0.68, -0.02), v(0.48, 0.48, 0.48), trim, material, Enum.PartType.Ball)
+		part(model, "Arm" .. i, at(side * 0.8, 1.12, 0) * CFrame.Angles(0, 0, side * 0.1), v(0.38, 0.62, 0.48), arm, material)
+		part(
+			model,
+			"Fist" .. i,
+			at(side * 0.86, 0.68, -0.03) * CFrame.Angles(0.3, side * 0.45, side * 0.2),
+			v(0.5, 0.46, 0.48),
+			trim,
+			rock
+		)
 	end
-	-- the big head, a dark face plate and two glowing eyes
+	-- the big head under a heavy stone brow, two glowing eyes in its shadow
 	local headY = GolemBuilder.HeadBottom + GolemBuilder.HeadSize.Y / 2
 	local head = part(model, "Head", at(0, headY, 0), v(1.5, 1.25, 1.3), lighter(body, 0.05), material)
 	head.CastShadow = true
+	-- (a closed helm or a diving visor covers the face: no brow under it)
 	local closed = look.Accessory == "KnightHelm"
-	if not closed then
-		part(model, "Face", at(0, 2.0, -0.63), v(1.16, 0.62, 0.08), darker(trim, 0.25))
+	if not closed and look.Accessory ~= "Visor" then
+		part(model, "Brow", at(0, 2.36, -0.6) * CFrame.Angles(-0.3, 0, 0), v(1.58, 0.3, 0.36), darker(trim, 0.1), rock)
 	end
 	local eyeZ = if closed then -0.75 else -0.68
-	for i, x in { -0.27, 0.27 } do
-		part(model, "Eye" .. i, at(x, 2.04, eyeZ), v(0.24, 0.22, 0.06), glow, Enum.Material.Neon)
+	for i, x in { -0.28, 0.28 } do
+		part(model, "Eye" .. i, at(x, 2.02, eyeZ), v(0.25, 0.2, 0.06), glow, Enum.Material.Neon)
 	end
-	-- ore nuggets on the shoulders
-	for i, side in { -1, 1 } do
-		part(
-			model,
-			"Nugget" .. i,
-			at(side * 0.52, 1.5, 0.2) * CFrame.Angles(0.4 * side, 0.7, 0.3 * side),
-			v(0.34, 0.3, 0.32),
-			lighter(look.Glow, 0.1),
-			if look.Material.Name == "Glass" then Enum.Material.Glass else Enum.Material.SmoothPlastic
-		)
-	end
+	-- a boulder jutting from the left shoulder, the ore's crystal growing from the right
+	part(model, "Boulder", at(-0.6, 1.52, 0.14) * CFrame.Angles(0.35, 0.6, 0.45), v(0.56, 0.44, 0.5), trim, rock)
+	part(
+		model,
+		"Crystal",
+		at(0.56, 1.66, 0.22) * CFrame.Angles(0.25, 0.785, -0.5) * CFrame.Angles(0, math.pi / 4, 0),
+		v(0.26, 0.66, 0.26),
+		lighter(look.Glow, 0.1),
+		crystalMaterial
+	)
 	-- the gear
 	local ctx: Ctx =
 		{ Model = model, At = at, V = v, Look = look, S = s, Glow = glow, Top = GolemBuilder.HeadBottom + GolemBuilder.HeadSize.Y }
 	local add = ACCESSORIES[look.Accessory] or ACCESSORIES.None
 	local top = math.max(ctx.Top, add(ctx))
+	-- Premium: the aura disc under the floating feet (on the base)
+	if premium then
+		local aura = upright(model, "Aura", ground * CFrame.new(0, 0.025 * s, 0), 0.05 * s, GolemBuilder.AuraSize * s, glow, Enum.Material.Neon)
+		aura.Transparency = 0.35
+	end
+	-- a glowing ore vein cracking the chest above the core, while the budget allows
+	if GolemBuilder.partCount(model) < GolemBuilder.MaxParts then
+		part(model, "Vein", at(-0.4, 1.27, -0.435) * CFrame.Angles(0, 0, 0.6), v(0.06, 0.3, 0.04), glow, Enum.Material.Neon)
+	end
 
 	model.PrimaryPart = torso
 	model:SetAttribute("Golem", kind)
-	model:SetAttribute("RootHeight", bodyY * s)
-	model:SetAttribute("Height", top * s)
+	model:SetAttribute("RootHeight", (bodyY + hover) * s)
+	model:SetAttribute("Height", (top + hover) * s)
+	model:SetAttribute("Hover", hover * s)
 	if opts and opts.Welded then
 		for _, child in model:GetChildren() do
 			if child:IsA("BasePart") and child ~= torso then
@@ -425,6 +475,16 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 		end
 	end
 	return model
+end
+
+-- Is `kind` a Premium golem (Legendary or rarer: it hovers on an aura)?
+function GolemBuilder.premium(kind: string): boolean
+	local golem = GolemConfig.ById[kind]
+	if not golem then
+		return false
+	end
+	local info = Rarity.ById[GolemBuilder.PremiumFrom]
+	return info ~= nil and GolemConfig.order(kind) >= info.Order
 end
 
 -- Parts in a golem model (the budget the tests check).

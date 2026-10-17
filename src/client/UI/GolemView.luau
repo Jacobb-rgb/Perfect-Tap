@@ -21,9 +21,11 @@
 	The compact layout (phones, TVs) has 44 pt buttons and drops the lore
 	when the screen is short. Cards are pooled per golem Id.
 
-	portrait(parent, kind, size): a golem drawn from frames, face on (big
-	head, glowing eyes, body, arms, legs, the kind's accessory), so cards and
-	the preview renders need no 3D.
+	portrait(parent, kind, size): a golem drawn from frames, face on, like
+	GolemBuilder's (big head under a stone brow, glowing eyes, body with its
+	core and ore vein, rock fists, the shoulder boulder and crystal, legs,
+	the kind's accessory; Legendary and Mythic float over a glowing aura),
+	so cards and the preview renders need no 3D.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -379,10 +381,10 @@ PORTRAIT_GEAR.None = function(p, c)
 end
 
 PORTRAIT_GEAR.Goggles = function(p, c)
-	rect(p, "Strap", 0.16, 0.18, 0.84, 0.25, shade(c.Trim, 0.3), 6)
+	rect(p, "Strap", 0.16, 0.14, 0.84, 0.21, shade(c.Trim, 0.3), 7)
 	for i, x in { 0.27, 0.57 } do
-		rect(p, "Goggle" .. i, x, 0.12, x + 0.16, 0.28, BRASS, 7, 0.5)
-		rect(p, "Lens" .. i, x + 0.03, 0.15, x + 0.13, 0.25, GLASS, 8, 0.5)
+		rect(p, "Goggle" .. i, x, 0.08, x + 0.16, 0.24, BRASS, 8, 0.5)
+		rect(p, "Lens" .. i, x + 0.03, 0.11, x + 0.13, 0.21, GLASS, 9, 0.5)
 	end
 end
 
@@ -401,7 +403,7 @@ end
 
 PORTRAIT_GEAR.SquireHelm = function(p, _c)
 	rect(p, "Helm", 0.15, 0.05, 0.85, 0.24, STEEL, 7, 0.14)
-	rect(p, "NoseGuard", 0.47, 0.22, 0.53, 0.36, shade(STEEL, 0.15), 8)
+	rect(p, "NoseGuard", 0.47, 0.22, 0.53, 0.4, shade(STEEL, 0.15), 8)
 	rect(p, "Plume", 0.45, -0.05, 0.55, 0.08, PLUME, 6, 0.4)
 end
 
@@ -475,10 +477,15 @@ function GolemView.portrait(parent: Instance, kind: string, size: number): Frame
 		else { Body = UNKNOWN, Trim = shade(UNKNOWN, 0.35), Glow = rgb(230, 230, 230) }
 	local gear = if golem then golem.Accessory else "None"
 	local closed = gear == "KnightHelm"
-	-- the shadow under the feet
+	local premium = golem ~= nil and GolemConfig.order(kind) >= Rarity.ById.Legendary.Order
+	-- the shadow under the feet (Legendary+: the glowing aura they float on)
 	local shadow = rect(p, "Shadow", 0.2, 0.9, 0.8, 0.98, DARK, 1, 0.5)
 	shadow.BackgroundTransparency = 0.55
-	-- legs, body, arms, fists, chest core
+	if premium then
+		local aura = rect(p, "Aura", 0.06, 0.88, 0.94, 1.0, c.Glow, 1, 0.5)
+		aura.BackgroundTransparency = 0.35
+	end
+	-- legs, body, arms, rock fists, chest core and its ore vein
 	rect(p, "Leg1", 0.33, 0.8, 0.46, 0.95, c.Trim, 2, 0.2)
 	rect(p, "Leg2", 0.54, 0.8, 0.67, 0.95, c.Trim, 2, 0.2)
 	local body = rect(p, "Body", 0.27, 0.56, 0.73, 0.86, c.Body, 3, 0.16)
@@ -486,20 +493,26 @@ function GolemView.portrait(parent: Instance, kind: string, size: number): Frame
 	local arm = c.Body:Lerp(c.Trim, 0.3)
 	rect(p, "Arm1", 0.15, 0.58, 0.28, 0.78, arm, 2, 0.3)
 	rect(p, "Arm2", 0.72, 0.58, 0.85, 0.78, arm, 2, 0.3)
-	rect(p, "Fist1", 0.13, 0.72, 0.29, 0.86, c.Trim, 3, 0.5)
-	rect(p, "Fist2", 0.71, 0.72, 0.87, 0.86, c.Trim, 3, 0.5)
+	rect(p, "Fist1", 0.12, 0.72, 0.29, 0.87, c.Trim, 3, 0.22).Rotation = -14
+	rect(p, "Fist2", 0.71, 0.72, 0.88, 0.87, c.Trim, 3, 0.22).Rotation = 14
 	diamond(p, "Core", 0.5, 0.7, 0.09, c.Glow, 4)
-	diamond(p, "Nugget1", 0.24, 0.53, 0.08, tint(c.Glow, 0.1), 3)
-	diamond(p, "Nugget2", 0.76, 0.53, 0.08, tint(c.Glow, 0.1), 3)
-	-- the big head, the face plate and the eyes
+	rect(p, "Vein", 0.37, 0.59, 0.395, 0.69, c.Glow, 4).Rotation = -32
+	-- a boulder on the left shoulder, the ore's crystal on the right
+	rect(p, "Boulder", 0.12, 0.49, 0.32, 0.62, c.Trim, 5, 0.25).Rotation = 24
+	rect(p, "Crystal", 0.75, 0.4, 0.83, 0.6, tint(c.Glow, 0.1), 5, 0.15).Rotation = 22
+	-- the big head under a heavy stone brow, the eyes in its shadow
 	local head = rect(p, "Head", 0.17, 0.12, 0.83, 0.6, tint(c.Body, 0.05), 4, 0.16)
 	UIKit.new("UIStroke", { Thickness = 1.5, Color = shade(c.Body, 0.45), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, head)
 	if not closed then
-		rect(p, "Face", 0.25, 0.27, 0.75, 0.5, shade(c.Trim, 0.25), 5, 0.2)
+		local under = rect(p, "BrowShadow", 0.22, 0.3, 0.78, 0.47, shade(c.Body, 0.4), 5, 0.4)
+		under.BackgroundTransparency = 0.2
+		if gear ~= "Visor" then
+			rect(p, "Brow", 0.14, 0.23, 0.86, 0.33, shade(c.Trim, 0.1), 6, 0.35)
+		end
 	end
 	if golem then
-		local eyeTop = if closed then 0.345 else 0.33
-		local eyeBottom = if closed then 0.415 else 0.43
+		local eyeTop = if closed then 0.345 else 0.35
+		local eyeBottom = if closed then 0.415 else 0.44
 		rect(p, "Eye1", 0.32, eyeTop, 0.44, eyeBottom, c.Glow, 7, 0.15)
 		rect(p, "Eye2", 0.56, eyeTop, 0.68, eyeBottom, c.Glow, 7, 0.15)
 	else
@@ -1217,14 +1230,60 @@ function GolemView.setHint(refs: Refs, text: string)
 	refs.Hint.Text = text
 end
 
--- The GOLEMS button for the HUD's right-side menu (HudController.refs().Menu, under BUILD).
-function GolemView.menuButton(menu: Instance): TextButton
-	return UIKit.button(menu, "GOLEMS", Theme.Info, rgb(50, 110, 170), {
+-- The HUD menu button's height (design units) at a HUD scale: at the
+-- phone floor (0.62) 72 units are 44 pt.
+GolemView.MenuWidth = 84
+function GolemView.menuHeight(uiScale: number): number
+	return if uiScale < 0.8 then 72 else 64
+end
+
+--[[
+	The GOLEMS button for the HUD's right-side menu (HudController.refs().Menu,
+	under BUILD), with the toggle key in its corner: a key chip ("Key", for
+	keyboards) and the gamepad glyph ("Glyph", an ImageLabel); menuLayout
+	shows the one that fits the input.
+]]
+function GolemView.menuButton(menu: Instance, key: string?): TextButton
+	local button = UIKit.button(menu, "GOLEMS", Theme.Info, rgb(50, 110, 170), {
 		Name = "Golems",
 		LayoutOrder = 30,
-		Size = UDim2.fromOffset(84, 64),
+		Size = UDim2.fromOffset(GolemView.MenuWidth, 64),
 		TextSize = 17,
 	})
+	UIKit.chip(button, key or "P", Theme.PanelDark, {
+		Name = "Key",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -3, 0, 3),
+		Size = UDim2.fromOffset(20, 18),
+		TextSize = 13,
+		ZIndex = 3,
+		Visible = false,
+	})
+	UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 6, 0, -8),
+		Size = UDim2.fromOffset(28, 28),
+		BackgroundTransparency = 1,
+		ZIndex = 4,
+		Visible = false,
+	}, button)
+	return button
+end
+
+-- The menu button for a HUD scale and the input in use ("Keyboard",
+-- "Gamepad" with the glyph image, or "Touch": no key shown).
+function GolemView.menuLayout(button: TextButton, uiScale: number, input: string, glyph: string?)
+	holderOf(button).Size = UDim2.fromOffset(GolemView.MenuWidth, GolemView.menuHeight(uiScale))
+	local key = button:FindFirstChild("Key")
+	if key and key:IsA("GuiObject") then
+		key.Visible = input == "Keyboard"
+	end
+	local image = button:FindFirstChild("Glyph")
+	if image and image:IsA("ImageLabel") then
+		image.Image = glyph or ""
+		image.Visible = input == "Gamepad" and image.Image ~= ""
+	end
 end
 
 -- Every button a finger or a gamepad uses (tests: 44 pt at the phone scale).

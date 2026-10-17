@@ -8,8 +8,9 @@
 	  big capsule at runtime; it opens the capsule view (OpenUI "Capsules"
 	  { Stall }). Opening works anywhere (the side menu too), so the server
 	  checks no range.
-	- CapsuleAction ("Open", { Capsule, Count }) (Net, rate limited; Count
-	  1, 3 or 10):
+	- CapsuleAction ("Open", { Capsule, Count, Lucky? }) (Net, rate limited;
+	  Count 1, 3 or 10; Lucky = whether the client showed the Triple Lucky
+	  odds, see below):
 	    coin capsules  price CapsuleConfig.price at the player's blaster
 	                   level; needs Count free golem places (GolemConfig.room).
 	                   Quote, roll, spend and grant happen in one step with no
@@ -21,12 +22,16 @@
 	    Royal (Robux)  never granted here: answered with PurchasePrompt
 	                   { Product, Status } (MonetizationConfig.promptStatus;
 	                   "Full" when the inventory can't take Count more). A
-	                   "Prompted" answer stores { Product, TripleLucky, At } for
-	                   the player (the latest prompt per product, kept
-	                   MonetizationConfig.PromptMemorySeconds): step 8's
-	                   ProcessReceipt opens the capsules with that Triple Lucky
-	                   state (grantProduct), so the odds the player saw are the
-	                   odds they get.
+	                   "Prompted" answer stores { Product, TripleLucky, At,
+	                   Until } for the player (the latest prompt per product):
+	                   step 8's ProcessReceipt opens the capsules with that
+	                   Triple Lucky state (grantProduct), so the odds the player
+	                   saw are the odds they get. Kept until Until =
+	                   At + MonetizationConfig.PromptMemorySeconds, and a
+	                   boosted one at most PurchaseGrace seconds past the end of
+	                   the boost it came from (a purchase finished later uses
+	                   the odds of that moment), so a prompt never stretches a
+	                   boost.
 	  Paid random items (CapsuleConfig.isPaidRandom: Royal always, coin
 	  capsules only while coins can be bought with Robux) are refused
 	  ("Restricted") where PolicyService ArePaidRandomItemsRestricted is true
@@ -34,12 +39,18 @@
 	  Every request the server reads gets one answer: a CapsuleResult, an
 	  ActionResult { Action = "Capsule", Op = "Open", Ok = false, Reason
 	  (CapsuleConfig.Reasons), Id = capsule } or a PurchasePrompt.
-	- Triple Lucky: Bonuses.tripleLucky (data.Boosts.TripleLuckyUntil and any
-	  later source), plus LuckyGrace seconds after it ran out: the client shows
-	  the boosted odds right up to the end, and a request sent in its last
-	  moment arrives a little later, so it still gets the odds it showed.
-	- Rolls: a fresh Random per call, seeded from the clock, the player and a
-	  counter (swappable for the tests).
+	- Triple Lucky (oddsFor): on while Bonuses.tripleLucky (data.Boosts.
+	  TripleLuckyUntil and any later source of CapsuleLuckMult). A request
+	  rolls exactly the odds its client showed (Lucky): shown boosted, it is
+	  granted while Triple Lucky runs or ran out at most LuckyGrace seconds
+	  ago (sent in its last moment); shown normal, it gets the normal odds,
+	  also in that grace. Otherwise (the boost ended long ago, or started a
+	  moment ago and the client didn't know yet) the request is refused
+	  "OddsChanged" and a fresh State is pushed, so the client shows the
+	  odds that hold now. A request without Lucky (an older client) and the
+	  wheel's free capsule get the server's view (on, or within the grace).
+	- Rolls: a fresh Random.new() per call (seeded by the engine; swappable
+	  for the tests).
 	- Data: golems through GolemConfig.add, Stats.CapsulesOpened counts every
 	  golem woken; DataService.changed after every grant (EconomyService.spend
 	  calls it too). The equipped golems' bonuses reach every system through
@@ -68,6 +79,7 @@ local Guard = require(script.Parent.Parent.Guard)
 local Policy = require(script.Parent.Parent.Policy)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local StateService = require(script.Parent.StateService)
 
 local CapsuleService = {}
 
@@ -82,13 +94,14 @@ export type Result = {
 }
 export type Opened = { Capsule: string, Count: number, Kinds: { string }, Lucky: boolean, Source: Source, Price: number? }
 export type OpenedCallback = (Player, Opened) -> ...any
-export type Prompt = { Product: string, TripleLucky: boolean, At: number }
+export type Prompt = { Product: string, TripleLucky: boolean, At: number, Until: number }
 type RandomLike = { NextNumber: (self: any) -> number }
 
 CapsuleService.Tag = "CapsuleStall"
 CapsuleService.PromptName = "CapsulePrompt"
 CapsuleService.PointName = "CapsulePromptPoint"
-CapsuleService.LuckyGrace = 3 -- seconds Triple Lucky still counts after it ran out (see the header)
+CapsuleService.LuckyGrace = 3 -- seconds a request that showed Triple Lucky still gets it after it ran out (see the header)
+CapsuleService.PurchaseGrace = 120 -- seconds a Royal prompt shown with Triple Lucky keeps it past the boost's end
 CapsuleService.AnnounceFrom = "Legendary" -- golems this rare are announced to the server
 CapsuleService.PromptDistance = 12
 
@@ -99,14 +112,14 @@ local callbacks: { OpenedCallback } = {}
 -- player -> product key -> the prompt the player saw (step 8 contract)
 local prompts: { [Player]: { [string]: Prompt } } = {}
 local hooked: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
-local seedCounter = 0
 
 -- Swappable for the Lune tests.
 local clock: () -> number = os.time
-local newRandom: (player: Player) -> RandomLike = function(player: Player): RandomLike
-	seedCounter = (seedCounter + 1) % 1e6
-	local seed = math.floor((os.clock() * 1e4) % 2e9) + seedCounter * 7919 + (player.UserId % 1e6) * 104729
-	return Random.new(seed % 2 ^ 31) :: any
+local newRandom: (player: Player) -> RandomLike = function(_player: Player): RandomLike
+	return Random.new() :: any
+end
+local pushState: (player: Player) -> () = function(player: Player)
+	StateService.push(player)
 end
 local listPlayers: () -> { Player } = function(): { Player }
 	return Players:GetPlayers()
@@ -122,12 +135,33 @@ end
 
 ---------------------------------------------------------------- rolls and grants
 
--- Is Triple Lucky on for this player's capsules now (see the header)?
+-- Does Triple Lucky run for this player right now (no grace)?
+local function luckyNow(player: Player, data: { [string]: any }, now: number): boolean
+	return Bonuses.tripleLucky(Bonuses.stats(player)) or BoostConfig.untilOf(data.Boosts, "TripleLucky") > now
+end
+
+-- The server's own view: Triple Lucky runs, or ran out at most LuckyGrace seconds ago.
 function CapsuleService.tripleLucky(player: Player, data: { [string]: any }, now: number): boolean
-	if Bonuses.tripleLucky(Bonuses.stats(player)) then
+	if luckyNow(player, data, now) then
 		return true
 	end
 	return BoostConfig.untilOf(data.Boosts, "TripleLucky") + CapsuleService.LuckyGrace > now
+end
+
+--[[
+	The odds a request rolls (true = Triple Lucky): exactly the ones its
+	client showed (`shown`, see the header), or nil when those no longer
+	hold (the request is refused "OddsChanged"). `shown` nil: the server's
+	view.
+]]
+function CapsuleService.oddsFor(player: Player, data: { [string]: any }, now: number, shown: boolean?): boolean?
+	if shown == nil then
+		return CapsuleService.tripleLucky(player, data, now)
+	end
+	if shown then
+		return if CapsuleService.tripleLucky(player, data, now) then true else nil
+	end
+	return if luckyNow(player, data, now) then nil else false
 end
 
 -- `count` golem kinds rolled from a capsule (CapsuleConfig.roll; opening order).
@@ -207,11 +241,12 @@ end
 
 --[[
 	Opens `count` coin capsules for the player: quote, roll, spend and grant
-	with no yield in between. Returns (true, nil, Result) or (false, reason)
-	with a CapsuleConfig.Reasons code. No policy check here (the request
-	handler asks Policy first).
+	with no yield in between. `shown`: the odds the client showed (oddsFor).
+	Returns (true, nil, Result) or (false, reason) with a CapsuleConfig.Reasons
+	code (or "OddsChanged"). No policy check here (the request handler asks
+	Policy first).
 ]]
-function CapsuleService.openCoins(player: Player, capsuleId: string, count: number): (boolean, string?, Result?)
+function CapsuleService.openCoins(player: Player, capsuleId: string, count: number, shown: boolean?): (boolean, string?, Result?)
 	local data = DataService.get(player)
 	local capsule = CapsuleConfig.ById[capsuleId]
 	if not data or not capsule or capsule.Currency ~= "Coins" then
@@ -230,7 +265,11 @@ function CapsuleService.openCoins(player: Player, capsuleId: string, count: numb
 	if not EconomyService.canAfford(player, price) then
 		return false, "NoCoins", nil
 	end
-	local lucky = CapsuleService.tripleLucky(player, data, clock())
+	local odds = CapsuleService.oddsFor(player, data, clock(), shown)
+	if odds == nil then
+		return false, "OddsChanged", nil
+	end
+	local lucky = odds == true
 	local kinds = CapsuleService.roll(capsuleId, count, lucky, newRandom(player))
 	if #kinds ~= count then
 		return false, "BadCapsule", nil -- a broken odds table: nothing is spent
@@ -280,14 +319,15 @@ end
 ---------------------------------------------------------------- Robux capsules (step 8 hooks)
 
 -- The Triple Lucky state the player saw when the server last prompted
--- `productKey` (nil: no prompt in the last PromptMemorySeconds).
+-- `productKey` (nil: no prompt, or it is past its Until; see the header).
 function CapsuleService.promptedLucky(player: Player, productKey: string, now: number?): boolean?
 	local list = prompts[player]
 	local prompt = if list then list[productKey] else nil
 	if not prompt then
 		return nil
 	end
-	if (now or clock()) - prompt.At > MonetizationConfig.PromptMemorySeconds then
+	local t = now or clock()
+	if t > prompt.Until or t - prompt.At > MonetizationConfig.PromptMemorySeconds then
 		list[productKey] = nil
 		return nil
 	end
@@ -326,17 +366,32 @@ function CapsuleService.grantProduct(player: Player, productKey: string): (Resul
 	return result, missing
 end
 
-local function remember(player: Player, productKey: string, lucky: boolean)
+local function remember(player: Player, productKey: string, lucky: boolean, data: { [string]: any })
 	local list = prompts[player]
 	if not list then
 		list = {}
 		prompts[player] = list
 	end
-	list[productKey] = { Product = productKey, TripleLucky = lucky, At = clock() }
+	local now = clock()
+	local untilTime = now + MonetizationConfig.PromptMemorySeconds
+	local boostEnd = BoostConfig.untilOf(data.Boosts, "TripleLucky")
+	if lucky and boostEnd + CapsuleService.LuckyGrace > now then
+		-- boosted by the coin-bought boost: never past its end + PurchaseGrace
+		untilTime = math.min(untilTime, boostEnd + CapsuleService.PurchaseGrace)
+	end
+	list[productKey] = { Product = productKey, TripleLucky = lucky, At = now, Until = untilTime }
 end
 
--- A Robux capsule request: PurchasePrompt { Product, Status } (see the header).
-local function promptRobux(player: Player, capsuleId: string, count: number, restricted: boolean)
+local function refuse(player: Player, reason: string, capsuleId: string?)
+	Net.fire("ActionResult", player, { Action = "Capsule", Op = "Open", Ok = false, Reason = reason, Id = capsuleId })
+	if reason == "OddsChanged" then
+		pushState(player) -- the client shows the odds that hold now
+	end
+end
+
+-- A Robux capsule request: PurchasePrompt { Product, Status } (see the
+-- header), or "OddsChanged" (ActionResult) when the shown odds no longer hold.
+local function promptRobux(player: Player, capsuleId: string, count: number, restricted: boolean, shown: boolean?)
 	local key = CapsuleConfig.product(capsuleId, count)
 	local product = if key then MonetizationConfig.get(key) else nil
 	if not key or not product then
@@ -346,14 +401,20 @@ local function promptRobux(player: Player, capsuleId: string, count: number, res
 	local data = DataService.get(player)
 	local full = data ~= nil and GolemConfig.room(data.Golems) < count
 	local status = MonetizationConfig.promptStatus(key, restricted, nil, full)
-	if status == "Prompt" then
-		local lucky = data ~= nil and CapsuleService.tripleLucky(player, data, clock())
+	if status == "Prompt" and not data then
+		status = "Unknown" -- the player left while Policy answered
+	elseif status == "Prompt" and data then
+		local odds = CapsuleService.oddsFor(player, data, clock(), shown)
+		if odds == nil then
+			refuse(player, "OddsChanged", capsuleId)
+			return
+		end
 		local ok, err = pcall(function(): boolean
 			prompter(player, product.Id)
 			return true
 		end)
 		if ok then
-			remember(player, key, lucky)
+			remember(player, key, odds == true, data)
 			status = "Prompted"
 		else
 			warn(`[CapsuleService] prompt for {key} failed: {err}`)
@@ -365,11 +426,7 @@ end
 
 ---------------------------------------------------------------- requests
 
-local function refuse(player: Player, reason: string, capsuleId: string?)
-	Net.fire("ActionResult", player, { Action = "Capsule", Op = "Open", Ok = false, Reason = reason, Id = capsuleId })
-end
-
--- CapsuleAction ("Open", { Capsule, Count }): see the header.
+-- CapsuleAction ("Open", { Capsule, Count, Lucky? }): see the header.
 local function onCapsuleAction(player: Player, action: any, arg: any)
 	if action ~= "Open" then
 		Net.fire("ActionResult", player, {
@@ -396,17 +453,19 @@ local function onCapsuleAction(player: Player, action: any, arg: any)
 		refuse(player, "BadCapsule", capsuleId)
 		return
 	end
+	-- the odds the client showed (junk = not sent)
+	local shown = if args then Guard.boolean(args.Lucky) else nil
 	-- the policy first (it may yield once): the quote / spend / grant below doesn't yield
 	local restricted = CapsuleConfig.isPaidRandom(capsuleId) and Policy.paidRandomRestricted(player)
 	if capsule.Currency == "Robux" then
-		promptRobux(player, capsuleId, count, restricted)
+		promptRobux(player, capsuleId, count, restricted, shown)
 		return
 	end
 	if restricted then
 		refuse(player, "Restricted", capsuleId)
 		return
 	end
-	local ok, reason, result = CapsuleService.openCoins(player, capsuleId, count)
+	local ok, reason, result = CapsuleService.openCoins(player, capsuleId, count, shown)
 	if not ok or not result then
 		refuse(player, reason or "BadCapsule", capsuleId)
 		return
@@ -497,6 +556,9 @@ CapsuleService._test = {
 	setPlayers = function(fn: () -> { Player })
 		listPlayers = fn
 	end,
+	setPushState = function(fn: (Player) -> ())
+		pushState = fn
+	end,
 	announce = announce,
 	prompts = function(player: Player): { [string]: Prompt }?
 		return prompts[player]
@@ -507,6 +569,9 @@ CapsuleService._test = {
 		clock = os.time
 		listPlayers = function(): { Player }
 			return Players:GetPlayers()
+		end
+		pushState = function(player: Player)
+			StateService.push(player)
 		end
 	end,
 }

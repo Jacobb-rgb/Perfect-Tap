@@ -2,38 +2,48 @@
 	GolemController: golem pets on the client (step 7).
 
 	Inventory (GolemView):
-	- Opens from the HUD's GOLEMS button (right-side menu, under BUILD), the
-	  capsule view's MY GOLEMS button (GolemController.open) or OpenUI
-	  "Golems". Cards come from the State snapshot and update live.
+	- Opens from the HUD's GOLEMS button (right-side menu, under BUILD; 44 pt
+	  tall at the phone scale), the toggle key P (keyboard) / L1 (gamepad,
+	  only while no other screen holds the selection or the controls; the
+	  button shows the key or the platform's glyph), the capsule view's MY
+	  GOLEMS button (GolemController.open) or OpenUI "Golems". Cards come
+	  from the State snapshot and update live.
 	- Select a golem (click / tap / A) to see it turn in 3D (a ViewportFrame
 	  over its portrait) with EQUIP / UNEQUIP, LOCK / UNLOCK and DELETE
 	  (asks first). EQUIP BEST equips the 3 best. DELETE... enters delete
 	  mode: pick golems (locked ones can't be picked), + ALL COMMON /
 	  + ALL UNCOMMON pick every unlocked, unequipped golem of that rarity,
-	  DELETE n asks, then sends one GolemAction "Delete".
+	  DELETE n asks, then sends one GolemAction "Delete" (at most
+	  GolemConfig.MaxDelete ids: the box says how many go now, the rest
+	  stay picked for the next press).
 	- Every request is a GolemAction; the server answers ActionResult
 	  { Action = "Golem" } and the State push redraws the cards. A button
 	  shows "..." until the answer (freed after a few seconds without one).
 	- Closes with X, B / Backspace (first the confirm box, then delete mode),
-	  respawning or another panel opening.
+	  P / L1, respawning or another panel opening. With a gamepad the
+	  selection never gets lost: when the selected button hides or its card
+	  goes (a delete), it moves to the first card (or EQUIP BEST / X).
 
 	Followers:
 	- Every player's equipped golems follow them (the player attribute
 	  GolemConfig.EquippedAttribute, kept by GolemService). Built here, on
 	  each client, only for players within GolemConfig.FollowerHideDistance
 	  of the camera (built again when they come back); nothing is replicated.
-	  Models: GolemBuilder.build(kind, nil, { Welded = true, Size =
-	  FollowerSize }) in a local folder: one anchored Body per golem moves
-	  the whole golem (one CFrame write per golem per frame), no part
-	  collides, touches or is queried.
+	  Models: GolemBuilder.build(kind, start, { Welded = true, Size =
+	  FollowerSize }) in a local folder, every part created in place at the
+	  start CFrame (so the welds hold the shape whenever they switch on):
+	  one anchored Body per golem moves the whole golem (one CFrame write
+	  per golem per frame), no part collides, touches or is queried.
 	- Movement: each golem eases toward its slot behind its owner (left,
 	  right, back), hopping as it walks (one hop per HopStride studs, a
-	  little forward tilt and side roll), faces where it walks, turns to its
-	  owner's facing when it stops, bobs gently while idle (only within
-	  GolemConfig.FollowerLodDistance), and jumps straight to its slot when
-	  it falls far behind (teleports, respawns). The ground height comes from
-	  a short downward raycast every GroundSeconds per golem (staggered),
-	  else the owner's feet.
+	  little forward tilt and side roll; a Premium golem, Legendary or
+	  Mythic, glides on its aura instead, bobbing), faces where it walks,
+	  turns to its owner's facing when it stops, bobs gently while idle
+	  (only within GolemConfig.FollowerLodDistance), and jumps straight to
+	  its slot when it falls far behind (teleports, respawns). The ground
+	  height comes from a short downward raycast every GroundSeconds per
+	  golem (staggered; only parts that collide, never characters: the
+	  filter is renewed when a character spawns), else the owner's feet.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -53,6 +63,8 @@ local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local GolemView = require(script.Parent.Parent.UI.GolemView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local CleaningController = require(script.Parent.CleaningController)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
@@ -69,11 +81,18 @@ GolemController.LookAround = 1.3 -- radians an idle golem may turn away from its
 GolemController.LookSeconds = { 2.5, 6 } -- how long it looks one way
 -- slots behind the owner (owner space: +X right, +Z behind)
 GolemController.Slots = { Vector3.new(-3.1, 0, 3.0), Vector3.new(3.1, 0, 3.0), Vector3.new(0, 0, 5.2) }
+-- open / close the inventory from anywhere (D-pad: Up BUILD, Down teleports,
+-- Left the side menu, Right the luck boosts; L1 is free outside panels)
+GolemController.ToggleKey = Enum.KeyCode.P
+GolemController.ToggleButton = Enum.KeyCode.ButtonL1
 
 local CLOSE_ACTION = "TerraForgeGolemsClose"
+local TOGGLE_ACTION = "TerraForgeGolemsToggle"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local PENDING_TIMEOUT = 3
 local STATUS_TIME = 3
+-- panels that own the middle of the screen: one at a time (the step 6-7
+-- packages' panels too; a name that isn't in the game is skipped)
 local OTHER_PANELS = {
 	"CapsuleController",
 	"TechShopController",
@@ -82,6 +101,15 @@ local OTHER_PANELS = {
 	"TrainController",
 	"IronBoxController",
 	"FoundryController",
+	"GearShopController",
+	"BoostController",
+	"EnchantController",
+	"WheelController",
+	"ArtifactController",
+	"CodexController",
+	"LeaderboardController",
+	"SettingsController",
+	"StoreController",
 }
 
 local player = Players.LocalPlayer
@@ -102,6 +130,7 @@ local others: { Panel }? = nil
 local viewModel: Model? = nil
 local viewKind: string? = nil
 local menuButton: TextButton? = nil
+local deleteSent: { number }? = nil -- the ids of the Delete waiting for its answer
 
 function GolemController.isOpen(): boolean
 	return shown
@@ -165,15 +194,63 @@ end
 
 local function updateHint(view: GolemView.Refs)
 	local sep = GolemView.Separator
+	local toggle = GolemController.ToggleKey.Name
 	if usingGamepad() then
-		GolemView.setHint(view, `{padName(Enum.KeyCode.ButtonA)}: pick / press{sep}{padName(Enum.KeyCode.ButtonB)}: back`)
+		GolemView.setHint(
+			view,
+			`{padName(Enum.KeyCode.ButtonA)}: pick / press{sep}{padName(Enum.KeyCode.ButtonB)}: back{sep}{padName(
+				GolemController.ToggleButton
+			)}: close`
+		)
 	elseif isTouch() then
 		GolemView.setHint(view, if deleting then "Tap the golems to delete" else "Tap a golem to see it")
 	elseif deleting then
 		GolemView.setHint(view, `Click the golems to delete{sep}Backspace: back`)
 	else
-		GolemView.setHint(view, `Click a golem to see it{sep}Backspace: close`)
+		GolemView.setHint(view, `Click a golem to see it{sep}{toggle} / Backspace: close`)
 	end
+end
+
+-- Is `object` shown (it and every frame above it up to the panel's gui)?
+local function onScreen(view: GolemView.Refs, object: Instance): boolean
+	local node: Instance? = object
+	while node and node ~= view.Gui do
+		if node:IsA("GuiObject") and not node.Visible then
+			return false
+		end
+		node = node.Parent
+	end
+	return node == view.Gui
+end
+
+-- Where a gamepad's selection goes when it has nowhere to be.
+local function homeSelection(view: GolemView.Refs): GuiObject
+	if confirmAction then
+		return view.ConfirmNo
+	end
+	for _, card in cards do
+		local c = view.Cards[card.Id]
+		if c and card.Order == 1 then
+			return c.Button
+		end
+	end
+	if deleting then
+		return view.DeleteCancel
+	end
+	return if onScreen(view, view.EquipBest) then view.EquipBest else view.Close
+end
+
+-- With a gamepad, keeps the selection on something shown in the panel
+-- (a deleted card or a hidden button would leave it nowhere).
+local function keepSelection(view: GolemView.Refs)
+	if not shown or not usingGamepad() then
+		return
+	end
+	local current = GuiService.SelectedObject
+	if current and current:IsDescendantOf(view.Gui) and onScreen(view, current) then
+		return
+	end
+	GuiService.SelectedObject = homeSelection(view)
 end
 
 local function cardOf(id: number?): GolemView.Card?
@@ -270,6 +347,7 @@ local function refresh()
 	GolemView.style(view.EquipBest, #cards > 0, Theme.Good, Theme.GoodDark)
 	updateHint(view)
 	hookCards(view)
+	keepSelection(view)
 end
 
 local function freePending()
@@ -383,12 +461,23 @@ local function deletePicked()
 		Sfx.play("UIDeny")
 		return
 	end
-	-- the server takes at most GolemConfig.MaxDelete ids per request
+	-- the server takes at most GolemConfig.MaxDelete ids per request: the
+	-- box names what goes now, the rest stay picked for the next press
+	local total = #ids
 	while #ids > GolemConfig.MaxDelete do
 		table.remove(ids)
 	end
-	askConfirm(GolemView.confirmText(cards, picked), function()
+	local now: { [number]: boolean } = {}
+	for _, id in ids do
+		now[id] = true
+	end
+	local text = GolemView.confirmText(cards, now)
+	if total > #ids then
+		text ..= ` {total - #ids} more stay picked: press DELETE again for them.`
+	end
+	askConfirm(text, function()
 		local view = refs
+		deleteSent = ids
 		send("Delete", { Ids = ids }, if view then view.DeleteConfirm else nil)
 	end)
 end
@@ -522,6 +611,7 @@ local function ensureView(): GolemView.Refs
 		end
 		local one = { [card.Id] = true }
 		askConfirm(GolemView.confirmText(cards, one), function()
+			deleteSent = { card.Id }
 			send("Delete", { Ids = { card.Id } }, view.Delete)
 		end)
 	end)
@@ -640,7 +730,10 @@ local function onActionResult(payload: any)
 	if type(payload) ~= "table" or payload.Action ~= "Golem" then
 		return
 	end
-	freePending()
+	local sent = deleteSent
+	if payload.Op == "Delete" then
+		deleteSent = nil
+	end
 	if payload.Ok == true then
 		local op = payload.Op
 		local text = DONE_TEXT[op]
@@ -650,16 +743,28 @@ local function onActionResult(payload: any)
 		elseif op == "Delete" then
 			local n = if type(payload.Count) == "number" then payload.Count else 0
 			text = `Deleted {n} golem{if n == 1 then "" else "s"}`
-			deleting = false
-			table.clear(picked)
+			-- the sent ones are gone; golems still picked (past MaxDelete) stay in delete mode
+			if sent then
+				for _, id in sent do
+					picked[id] = nil
+				end
+			end
+			if next(picked) == nil then
+				deleting = false
+			else
+				text ..= ": press DELETE again for the rest"
+			end
 			selected = nil
 		end
+		-- (the state above first: freePending redraws, and the selection moves to a card)
+		freePending()
 		if shown and text then
 			status(text, Theme.Good)
 		end
 		Sfx.play(if op == "Delete" then "Drop" else "CoinBurst")
 		return
 	end
+	freePending()
 	local reason = payload.Reason
 	local text = if type(reason) == "string" and GolemConfig.Reasons[reason]
 		then GolemConfig.Reasons[reason]
@@ -687,6 +792,7 @@ type Pet = {
 	Seed: number,
 	Look: number, -- idle: the turn away from the owner's facing (looking around)
 	NextLook: number,
+	Floats: boolean, -- a Premium golem (GolemBuilder "Hover"): glides, never hops
 }
 type Follower = { Player: Player, Kinds: string, Pets: { Pet } }
 
@@ -694,7 +800,7 @@ local followers: { [Player]: Follower } = {}
 local folder: Folder? = nil
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
-local nextFilter = 0
+rayParams.RespectCanCollide = true -- decor, glass, zones, trims and loose chunks don't carry golems
 
 local function followersFolder(): Folder
 	local existing = folder
@@ -750,11 +856,13 @@ local function buildPets(f: Follower)
 			local slot = GolemController.Slots[i]
 			local feet = (root.CFrame * CFrame.new(slot)).Position
 			local ground = feetY(f.Player, root)
-			local model = GolemBuilder.build(kind, nil, { Welded = true, Size = GolemController.FollowerSize })
+			local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
+			-- every part is created in place (the welds then hold this shape)
+			local start = CFrame.new(feet.X, ground, feet.Z) * CFrame.Angles(0, yaw, 0)
+			local model = GolemBuilder.build(kind, start, { Welded = true, Size = GolemController.FollowerSize })
 			local body = model.PrimaryPart :: BasePart
 			local rootHeight = (model:GetAttribute("RootHeight") :: number?) or 1
-			local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
-			body.CFrame = CFrame.new(feet.X, ground + rootHeight, feet.Z) * CFrame.Angles(0, yaw, 0)
+			local hover = (model:GetAttribute("Hover") :: number?) or 0
 			model.Name = `{f.Player.Name}_{kind}`
 			model.Parent = followersFolder()
 			table.insert(f.Pets, {
@@ -770,9 +878,21 @@ local function buildPets(f: Follower)
 				Seed = i * 1.7 + (f.Player.UserId % 97) * 0.13,
 				Look = 0,
 				NextLook = 0,
+				Floats = hover > 0,
 			})
 		end
 	end
+end
+
+-- The raycast skips every character and the followers (renewed when one spawns or leaves).
+local function refreshFilter()
+	local list: { Instance } = { followersFolder() }
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			table.insert(list, p.Character)
+		end
+	end
+	rayParams.FilterDescendantsInstances = list
 end
 
 local function track(owner: Player)
@@ -781,6 +901,12 @@ local function track(owner: Player)
 	end
 	local f: Follower = { Player = owner, Kinds = "", Pets = {} }
 	followers[owner] = f
+	owner.CharacterAdded:Connect(function()
+		task.defer(refreshFilter)
+	end)
+	if owner.Character then
+		task.defer(refreshFilter)
+	end
 	owner:GetAttributeChangedSignal(GolemConfig.EquippedAttribute):Connect(function()
 		local kinds = owner:GetAttribute(GolemConfig.EquippedAttribute)
 		f.Kinds = if type(kinds) == "string" then kinds else ""
@@ -799,6 +925,7 @@ local function untrack(owner: Player)
 		clearPets(f)
 		followers[owner] = nil
 	end
+	task.defer(refreshFilter)
 end
 
 -- Builds / removes followers by distance to the camera (every half second).
@@ -815,18 +942,6 @@ local function refreshVisibility()
 		elseif (far or f.Kinds == "" or not root) and #f.Pets > 0 then
 			clearPets(f)
 		end
-	end
-	-- the raycast skips characters and the followers
-	local now = os.clock()
-	if now >= nextFilter then
-		nextFilter = now + 1
-		local list: { Instance } = { followersFolder() }
-		for _, p in Players:GetPlayers() do
-			if p.Character then
-				table.insert(list, p.Character)
-			end
-		end
-		rayParams.FilterDescendantsInstances = list
 	end
 end
 
@@ -881,7 +996,14 @@ local function stepPets(dt: number): boolean
 				pet.Yaw = lerpAngle(pet.Yaw, wantYaw, 1 - math.exp(-dt * (if walking then 9 else 3)))
 				local y = pet.Pos.Y
 				local pitch, roll = 0, 0
-				if walking then
+				if pet.Floats then
+					-- glides on its aura: a slow bob, leaning into the glide
+					local k = if walking then math.clamp(speed / 10, 0, 1) else 0
+					if near then
+						y += math.sin(now * 2.2 + pet.Seed) * 0.08
+						pitch = -0.08 * k
+					end
+				elseif walking then
 					pet.Phase += moved / GolemController.HopStride * math.pi
 					local k = math.clamp(speed / 10, 0, 1)
 					y += math.abs(math.sin(pet.Phase)) * 0.55 * k
@@ -939,11 +1061,47 @@ function GolemController.init()
 	end
 end
 
+-- P (keyboard) toggles the inventory; L1 (gamepad) too, but opens it only
+-- while no other screen uses the selection or holds the controls.
+local function onToggle(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin then
+		return Enum.ContextActionResult.Pass
+	end
+	if shown then
+		GolemController.close()
+		Sfx.play("UIClick")
+		return Enum.ContextActionResult.Sink
+	end
+	local gamepad = input.KeyCode == GolemController.ToggleButton
+	if (gamepad and GuiService.SelectedObject ~= nil) or PlayerControls.owner() ~= nil or CleaningController.isActive() then
+		return Enum.ContextActionResult.Pass
+	end
+	GolemController.open()
+	return Enum.ContextActionResult.Sink
+end
+
+-- The HUD button: 44 pt tall on phones, the toggle key or glyph in its corner.
+local function updateMenu()
+	local button = menuButton
+	if not button then
+		return
+	end
+	local input = if usingGamepad() then "Gamepad" elseif isTouch() then "Touch" else "Keyboard"
+	local glyph = ""
+	if input == "Gamepad" then
+		local ok, image = pcall(function()
+			return UserInputService:GetImageForKeyCode(GolemController.ToggleButton)
+		end)
+		glyph = if ok and type(image) == "string" then image else ""
+	end
+	GolemView.menuLayout(button, HudController.uiScale(), input, glyph)
+end
+
 function GolemController.start()
 	-- the HUD's GOLEMS button
 	local hud = HudController.refs()
 	if hud and not menuButton then
-		local button = GolemView.menuButton(hud.Menu)
+		local button = GolemView.menuButton(hud.Menu, GolemController.ToggleKey.Name)
 		menuButton = button
 		button.Activated:Connect(function()
 			if shown then
@@ -952,7 +1110,14 @@ function GolemController.start()
 				GolemController.open()
 			end
 		end)
+		UserInputService.LastInputTypeChanged:Connect(updateMenu)
+		local scale = hud.Gui:FindFirstChild("Scale")
+		if scale and scale:IsA("UIScale") then
+			scale:GetPropertyChangedSignal("Scale"):Connect(updateMenu)
+		end
+		updateMenu()
 	end
+	ContextActionService:BindAction(TOGGLE_ACTION, onToggle, false, GolemController.ToggleKey, GolemController.ToggleButton)
 	-- followers
 	for _, p in Players:GetPlayers() do
 		track(p)

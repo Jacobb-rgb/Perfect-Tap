@@ -1,7 +1,8 @@
 -- Golem capsules and golem pets (step 7) under Lune: CapsuleService (coin
 -- opens: one atomic quote / roll / spend / grant, every refusal answered and
--- harmless, Triple Lucky with its grace, the Royal capsule's PurchasePrompt
--- and stored prompt state, paid-random-items policy, free wheel capsules,
+-- harmless, the odds the client showed are the odds rolled (Triple Lucky,
+-- its grace, "OddsChanged"), the Royal capsule's PurchasePrompt and stored
+-- prompt state (capped past the boost), paid-random-items policy, free wheel capsules,
 -- step 8 grants past the cap, the stall prompt, a fuzz run where coins and
 -- golems always add up), GolemService (equip / unequip / best / lock /
 -- delete, the followers attribute, junk input), and the views (exact odds
@@ -73,7 +74,7 @@ return function(T, Loader)
 	end
 
 	local function setup(opts: any?): any
-		local w: any = { notes = {}, changed = 0, opened = {}, prompted = {} }
+		local w: any = { notes = {}, changed = 0, opened = {}, prompted = {}, pushed = 0 }
 		w.player = fakePlayer(701)
 		w.other = fakePlayer(702)
 		w.data = deepCopy(DataTemplate)
@@ -111,6 +112,9 @@ return function(T, Loader)
 		end)
 		caps.setPlayers(function()
 			return { w.player, w.other }
+		end)
+		caps.setPushState(function(_p)
+			w.pushed += 1
 		end)
 		CapsuleService.onOpened(function(p, info)
 			table.insert(w.opened, { Player = p, Info = info })
@@ -180,7 +184,7 @@ return function(T, Loader)
 		T.eq(answer.Action, "Capsule", label)
 		T.eq(answer.Ok, false, label .. ": refused")
 		T.eq(answer.Reason, reason, label .. ": reason")
-		T.truthy(Reasons[reason], label .. ": the reason has a text")
+		T.truthy(Reasons[reason] or CapsuleView.ExtraReasons[reason], label .. ": the reason has a text")
 		T.eq(w.data.Coins, coins, label .. ": coins kept")
 		T.eq(GolemConfig.count(w.data.Golems), count, label .. ": no golem added")
 		T.eq(w.data.Golems.NextId, nextId, label .. ": no id used")
@@ -334,6 +338,58 @@ return function(T, Loader)
 		T.truthy(BoostConfig.Kinds.TripleLucky ~= nil)
 	end)
 
+	withWorld("Capsules: an open rolls exactly the odds its client showed (Lucky), else OddsChanged", function(w)
+		local roll: number? = nil
+		for r = 0, 0.9999, 0.0005 do
+			if CapsuleConfig.roll("Crystal", false, r) ~= CapsuleConfig.roll("Crystal", true, r) then
+				roll = r
+				break
+			end
+		end
+		local r = roll :: number
+		local function open(shown: any): (string, any)
+			w.values = { r }
+			Bonuses.invalidate(w.player)
+			return act(w, "Open", { Capsule = "Crystal", Count = 1, Lucky = shown })
+		end
+		-- the boost runs: shown boosted = boosted roll; shown normal = refused (better odds than shown)
+		w.data.Boosts.TripleLuckyUntil = NOW + 100
+		local _, on = open(true)
+		T.eq(on.Lucky, true)
+		T.eq(on.Golems[1].Kind, CapsuleConfig.roll("Crystal", true, r))
+		local pushed = w.pushed
+		refused(w, { Capsule = "Crystal", Count = 1, Lucky = false }, "OddsChanged", "shown normal while it runs")
+		T.eq(w.pushed, pushed + 1, "a fresh State goes to the client")
+		-- just ended (within the grace): each gets what it showed
+		w.data.Boosts.TripleLuckyUntil = NOW - 1
+		local _, late = open(true)
+		T.eq(late.Lucky, true, "shown boosted in its last moment")
+		local _, plain = open(false)
+		T.eq(plain.Lucky, false, "shown normal after the end: normal odds, never better")
+		T.eq(plain.Golems[1].Kind, CapsuleConfig.roll("Crystal", false, r))
+		-- long over: shown boosted is refused (never worse than shown)
+		w.data.Boosts.TripleLuckyUntil = NOW - (CapsuleService.LuckyGrace + 1)
+		refused(w, { Capsule = "Crystal", Count = 1, Lucky = true }, "OddsChanged", "shown boosted after the grace")
+		local _, normal = open(false)
+		T.eq(normal.Lucky, false)
+		-- junk or no flag: the server's view
+		local _, junk = open("yes")
+		T.eq(junk.Lucky, false)
+		-- another source of Triple Lucky (a provider, no boost) counts too
+		Bonuses.register("TestCapsuleLuck", function()
+			return { CapsuleLuckMult = 3 }
+		end)
+		local ok, err = pcall(function()
+			local _, provided = open(true)
+			T.eq(provided.Lucky, true, "a provider's Triple Lucky")
+			refused(w, { Capsule = "Crystal", Count = 1, Lucky = false }, "OddsChanged", "provider on, shown normal")
+		end)
+		Bonuses.unregister("TestCapsuleLuck")
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Capsules: Legendary and Mythic golems are announced to the other players", function(w)
 		local text = caps.announce(w.player, { "PebbleGolem", "StormcoreTitan", "EmberImp" })
 		T.eq(text, "Waker701 woke a Legendary Stormcore Titan!")
@@ -372,11 +428,24 @@ return function(T, Loader)
 			T.eq(w.prompted[1].Id, 123456)
 			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3"), true, "stored lucky")
 			T.eq(GolemConfig.count(w.data.Golems), 0, "still nothing granted before the receipt")
+			-- a boosted prompt never outlives its boost by more than PurchaseGrace
+			local stored = caps.prompts(w.player).RoyalCapsule3
+			T.eq(stored.Until, NOW + 60 + CapsuleService.PurchaseGrace, "capped at the boost's end + grace")
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3", NOW + 60 + CapsuleService.PurchaseGrace - 1), true)
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3", NOW + 60 + CapsuleService.PurchaseGrace + 1), nil, "forgotten after")
+			-- the odds shown no longer hold: no prompt, OddsChanged
+			local before = #w.prompted
+			local name2, mismatch = act(w, "Open", { Capsule = "Royal", Count = 3, Lucky = false })
+			T.eq(name2, "ActionResult")
+			T.eq(mismatch.Reason, "OddsChanged")
+			T.eq(#w.prompted, before, "not prompted")
+			local _, shown = act(w, "Open", { Capsule = "Royal", Count = 3, Lucky = true })
+			T.eq(shown.Status, "Prompted", "shown boosted while it runs")
 			-- full inventory: "Full", no prompt
 			fill(w.data, GolemConfig.InventoryCap - 2)
 			local _, full = act(w, "Open", { Capsule = "Royal", Count = 3 })
 			T.eq(full.Status, "Full")
-			T.eq(#w.prompted, 1, "no second prompt")
+			T.eq(#w.prompted, 2, "no prompt when full")
 		end)
 		product.Id = oldId
 		if not ok then
@@ -475,7 +544,8 @@ return function(T, Loader)
 			local capsule = rng:pick(capsules)
 			local count = rng:pick(counts)
 			local coins = w.data.Coins
-			local name, answer = act(w, if step % 37 == 0 then "Drop" else "Open", { Capsule = capsule, Count = count })
+			local lucky = rng:pick({ true, false, false, "junk" })
+			local name, answer = act(w, if step % 37 == 0 then "Drop" else "Open", { Capsule = capsule, Count = count, Lucky = lucky })
 			if name == "CapsuleResult" then
 				spent += coins - w.data.Coins
 				T.eq(coins - w.data.Coins, CapsuleConfig.price(answer.Capsule, answer.Count, 3), "paid the quote")
@@ -702,6 +772,26 @@ return function(T, Loader)
 		T.eq(off.Lucky, false, "ran out")
 	end)
 
+	T.test("Capsules view: luckyNow follows the boost and the server's other sources (State.Bonuses)", function()
+		local boost = state({ Boosts = { TripleLuckyUntil = NOW + 30, HexaLuckyUntil = 0 } })
+		T.eq(CapsuleView.luckyNow(boost, NOW, NOW - 5), true, "the boost runs")
+		T.eq(CapsuleView.luckyNow(boost, NOW + 31, NOW - 5), false, "the boost ran out")
+		-- the snapshot's Bonuses flag came while the boost ran: stale once it ends
+		boost.Bonuses.TripleLucky = true
+		T.eq(CapsuleView.luckyNow(boost, NOW + 31, NOW - 5), false, "the boost's own flag, stale")
+		T.eq(CapsuleView.luckyNow(boost, NOW + 40, NOW + 35), true, "a snapshot after the end still says on: another source")
+		-- another source with no boost at all
+		local provided = state({ Bonuses = { GolemBond = 0, TripleLucky = true } })
+		T.eq(CapsuleView.luckyNow(provided, NOW, NOW - 100), true)
+		T.eq(CapsuleView.luckyNow(provided, NOW, nil), true, "no snapshot time: trusted")
+		local card = cardOf(CapsuleView.cards(provided, 1e9, false, NOW, NOW - 1), "Stone")
+		T.eq(card.Lucky, true, "the cards show it")
+		T.eq(card.LuckySeconds, 0)
+		T.falsy(CapsuleView.luckyText(card):find(":"), "no timer without a boost")
+		T.eq(card.Odds[1].Chance, CapsuleConfig.odds("Stone", true)[1].Chance, "boosted odds")
+		T.eq(CapsuleView.reasonText("OddsChanged"), CapsuleView.ExtraReasons.OddsChanged)
+	end)
+
 	T.test("Capsules view: the shop panel fills, switches tabs and fits phones (44 pt buttons)", function()
 		for _, compact in { false, true } do
 			local refs = CapsuleView.build(compact)
@@ -755,6 +845,67 @@ return function(T, Loader)
 		end
 	end)
 
+	-- Every GuiObject of two built views, in build order (same structure).
+	local function guiList(root: any): { any }
+		local out = {}
+		for _, d in root:GetDescendants() do
+			if d:IsA("GuiObject") then
+				table.insert(out, d)
+			end
+		end
+		return out
+	end
+
+	local function sameLook(a: any, b: any, label: string)
+		local la, lb = guiList(a), guiList(b)
+		T.eq(#la, #lb, label .. ": same structure")
+		for i, x in la do
+			local y = lb[i]
+			local name = label .. " " .. x:GetFullName()
+			T.eq(x.Name, y.Name, name)
+			T.truthy(x.Size == y.Size, name .. " size")
+			T.truthy(x.Position == y.Position, name .. " position")
+			if x:IsA("TextLabel") or x:IsA("TextButton") then
+				T.eq(x.TextSize, y.TextSize, name .. " text size")
+			end
+		end
+	end
+
+	T.test("Capsules view: a view built for PC and laid out for a phone looks like one built for the phone", function()
+		local w, h = 916, 423
+		local cardsNow = CapsuleView.cards(state(), 1e9, false, NOW)
+		local pc = CapsuleView.build(false)
+		CapsuleView.setCards(pc, cardsNow) -- shown once in the PC layout first
+		CapsuleView.layout(pc, true, w, h)
+		CapsuleView.setCards(pc, cardsNow)
+		local phone = CapsuleView.build(true)
+		CapsuleView.layout(phone, true, w, h)
+		CapsuleView.setCards(phone, cardsNow)
+		sameLook(pc.Gui, phone.Gui, "shop")
+		-- no small text on phones: the fixed labels at 44 pt-scale sizes
+		for _, l in { phone.Status, phone.Room, phone.OddsNote, phone.Hint } do
+			T.truthy(l.TextSize >= 16, l.Name .. " readable on a phone")
+		end
+		T.truthy(phone.Heads:FindFirstChild("HeadGolem").TextSize >= 16, "odds heads readable")
+		for _, b in phone.Buttons do
+			T.eq(b.TextSize, 21, "OPEN buttons")
+		end
+		-- and back to PC
+		CapsuleView.layout(pc, false, 1280, 684)
+		local fresh = CapsuleView.build(false)
+		CapsuleView.layout(fresh, false, 1280, 684)
+		CapsuleView.setCards(pc, cardsNow)
+		CapsuleView.setCards(fresh, cardsNow)
+		sameLook(pc.Gui, fresh.Gui, "shop back to PC")
+		-- the opening overlay
+		local o1 = CapsuleView.buildOpening(false)
+		CapsuleView.layoutOpening(o1, true, w, h)
+		local o2 = CapsuleView.buildOpening(true)
+		CapsuleView.layoutOpening(o2, true, w, h)
+		sameLook(o1.Gui, o2.Gui, "opening")
+		T.truthy(o2.Hint.TextSize >= 20 and o2.Note.TextSize >= 20 and o2.Counter.TextSize >= 28, "opening texts on a phone")
+	end)
+
 	T.test("Capsules view: the opening overlay lays out on PC and phones", function()
 		for _, compact in { false, true } do
 			local o = CapsuleView.buildOpening(compact)
@@ -795,7 +946,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Capsules view: the stall's odds board shows the capsule's real odds per rarity", function()
+	T.test("Capsules view: the stall's odds board shows each rarity's real total, big", function()
 		local gui = Instance.new("SurfaceGui")
 		local old = Instance.new("TextLabel")
 		old.Name = "Title"
@@ -807,23 +958,26 @@ return function(T, Loader)
 				local title = gui:FindFirstChild("Title")
 				T.eq(title.Text, string.upper(capsule.Name), "the old labels are gone")
 				local odds = CapsuleConfig.rarityOdds(capsule.Id, lucky)
+				local sum = 0
 				for i, info in Rarity.List do
 					local total = gui:FindFirstChild("Total" .. i)
 					T.truthy(total, "row " .. i)
 					if odds[info.Id] then
 						T.eq(total.Text, CapsuleView.percent(odds[info.Id]), capsule.Id .. " " .. info.Id)
-						local golems = gui:FindFirstChild("Golems" .. i)
-						T.truthy(golems, "the golems of the rarity")
-						for _, line in CapsuleView.oddsLines(capsule.Id, lucky) do
-							if line.Rarity == info.Id then
-								T.truthy(golems.Text:find(line.Text, 1, true), line.Golem .. " chance on the board")
-							end
-						end
+						sum += odds[info.Id]
 					else
 						T.eq(total.Text, "-", "a rarity the capsule doesn't hold")
 					end
+					-- big: a row's total fills most of its row (about 0.4 stud on the 3.9 stud board)
+					T.truthy(total.Size.Y.Scale * 3.9 >= 0.38, "the total is big enough to read")
+					T.eq(total.TextWrapped, false)
 				end
-				T.eq(gui:FindFirstChild("Subtitle").Text, if lucky then "TRIPLE LUCKY ODDS" else "ODDS PER CAPSULE")
+				T.near(sum, 1, 1e-9, "the totals add up")
+				T.eq(gui:FindFirstChild("Subtitle").Text, if lucky then "TRIPLE LUCKY ODDS" else "ODDS PER RARITY")
+				T.truthy(gui:FindFirstChild("Note").Text:find("capsule menu"), "where each golem's odds are")
+				for _, child in gui:GetChildren() do
+					T.eq(child:GetAttribute(CapsuleView.BoardAttribute), true, child.Name .. " marked (streaming re-fill)")
+				end
 			end
 		end
 	end)
@@ -909,12 +1063,34 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("Golems view: the HUD's GOLEMS button is 44 pt on phones and shows its toggle key", function()
+		local menu = Instance.new("Frame")
+		local button = GolemView.menuButton(menu, "P")
+		local holder = button.Parent
+		GolemView.menuLayout(button, 0.62, "Touch", nil)
+		T.truthy(holder.Size.Y.Offset * 0.62 >= GolemView.MinTouch - 0.5, "44 pt tall at the phone scale")
+		T.truthy(holder.Size.X.Offset * 0.62 >= GolemView.MinTouch - 0.5, "44 pt wide")
+		T.falsy(button:FindFirstChild("Key").Visible, "no key on touch")
+		T.falsy(button:FindFirstChild("Glyph").Visible)
+		GolemView.menuLayout(button, 1, "Keyboard", nil)
+		T.eq(holder.Size.Y.Offset, 64, "PC size")
+		T.truthy(button:FindFirstChild("Key").Visible, "the P key on keyboards")
+		T.eq(button:FindFirstChild("Key").Text, "P")
+		GolemView.menuLayout(button, 1, "Gamepad", "rbxasset://textures/ui/Controls/DesignSystem/ButtonL1.png")
+		T.truthy(button:FindFirstChild("Glyph").Visible, "the platform glyph on a gamepad")
+		T.falsy(button:FindFirstChild("Key").Visible)
+		GolemView.menuLayout(button, 1, "Gamepad", "")
+		T.falsy(button:FindFirstChild("Glyph").Visible, "no glyph image: nothing shown")
+	end)
+
 	T.test("Golems view: every golem has a portrait (and an unknown one too)", function()
 		local holder = Instance.new("Frame")
 		for _, golem in GolemConfig.List do
 			local p = GolemView.portrait(holder, golem.Id, 100)
 			T.truthy(p:FindFirstChild("Head") and p:FindFirstChild("Body") and p:FindFirstChild("Eye1"), golem.Id)
 			T.truthy(#p:GetChildren() >= 14, golem.Id .. " has its gear")
+			T.truthy(p:FindFirstChild("Boulder") and p:FindFirstChild("Crystal") and p:FindFirstChild("Vein"), golem.Id .. " rock look")
+			T.eq(p:FindFirstChild("Aura") ~= nil, GolemConfig.order(golem.Id) >= 5, golem.Id .. " aura only on Legendary+")
 		end
 		local unknown = GolemView.portrait(holder, "FutureGolem", 100)
 		T.truthy(unknown:FindFirstChild("Unknown"), "a ? face")

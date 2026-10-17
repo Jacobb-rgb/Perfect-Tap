@@ -8,7 +8,12 @@
 	  Tabs (click / tap, LB / RB): the capsules this player may open. The
 	  cards come from the State snapshot and update live (coins count up,
 	  the Triple Lucky banner counts down).
-	- OPEN x1 / x3 / x10 sends CapsuleAction ("Open", { Capsule, Count }).
+	- The panel and the opening are built for the layout of the moment
+	  (phone / TV compact or PC) and laid out again, text sizes included,
+	  when the screen changes.
+	- OPEN x1 / x3 / x10 sends CapsuleAction ("Open", { Capsule, Count,
+	  Lucky }): Lucky = the odds the card shows (CapsuleView.luckyNow); the
+	  server rolls exactly those or refuses "OddsChanged".
 	  One open waits at a time; CapsuleConfig.ClientCooldown seconds between
 	  two; the buttons come back after CapsuleConfig.ResultTimeout with no
 	  answer (a CapsuleResult that still comes is shown anyway: the coins and
@@ -23,12 +28,19 @@
 	  NEW! when it is the first of its kind (x1 and x3 one by one, then x3 as
 	  a row of cards; x10 straight to a grid of 10 cards popping in). Click /
 	  tap / A / Space / Enter skips a step; B / Backspace skips to the end;
-	  at the end OK closes and OPEN AGAIN opens the same capsules again.
-	  Results that arrive while one plays wait their turn.
-	- The CapsuleStall's OddsBoard (SurfaceGui) shows the real odds: every
-	  BoardSeconds the next capsule the player may open (with the player's
-	  own Triple Lucky odds), filled locally by CapsuleView.fillBoard.
-	- Closes with X, B, Backspace, respawning or another panel opening.
+	  at the end OK closes and OPEN AGAIN opens the same capsules again (the
+	  note above says which odds it uses now: "TRIPLE LUCKY ODDS" or
+	  "Triple Lucky ended: normal odds"). Results that arrive while one
+	  plays wait their turn; a waiting one starts as soon as the end screen
+	  shows.
+	- The CapsuleStall's OddsBoard (SurfaceGui) shows the real odds per
+	  rarity: every BoardSeconds the next capsule the player may open (with
+	  the player's own Triple Lucky odds, refreshed within a second when it
+	  starts or ends), filled locally by CapsuleView.fillBoard as soon as
+	  the board streams in.
+	- Closes with X, B, Backspace, respawning or another panel opening
+	  (OTHER_PANELS: every panel controller known so far, also those of
+	  the step 6-7 packages; missing ones are skipped).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -62,6 +74,7 @@ type Panel = { isOpen: () -> boolean, close: () -> () }
 type Result = { Capsule: string, Count: number, Golems: { { Id: number, Kind: string } }, Lucky: boolean, Free: boolean? }
 
 CapsuleController.BoardSeconds = 6 -- seconds each capsule's odds stay on the stall's board
+CapsuleController.BoardTick = 1 -- seconds between two checks of the board (Triple Lucky starting / ending)
 CapsuleController.BoardPixels = 120 -- the board's SurfaceGui PixelsPerStud (sharper text)
 
 local CLOSE_ACTION = "TerraForgeCapsulesClose"
@@ -75,7 +88,9 @@ local TICK = 0.25
 local STATUS_TIME = 3.5
 local REVEAL_TIME = 1.7 -- seconds one golem stays before the next (or the end) when not skipped
 local SHAKE_TIME = 1.35
--- panels that own the middle of the screen: one at a time
+local LUCKY_COLOR = Color3.fromRGB(255, 206, 72)
+-- panels that own the middle of the screen: one at a time (the step 6-7
+-- packages' panels too; a name that isn't in the game is skipped)
 local OTHER_PANELS = {
 	"GolemController",
 	"TechShopController",
@@ -84,6 +99,15 @@ local OTHER_PANELS = {
 	"TrainController",
 	"IronBoxController",
 	"FoundryController",
+	"GearShopController",
+	"BoostController",
+	"EnchantController",
+	"WheelController",
+	"ArtifactController",
+	"CodexController",
+	"LeaderboardController",
+	"SettingsController",
+	"StoreController",
 }
 
 local player = Players.LocalPlayer
@@ -97,6 +121,7 @@ local lastSend = 0
 local statusToken = 0
 local openedAt = 0
 local others: { Panel }? = nil
+local stateAt: number? = nil -- server time the last State snapshot came (CapsuleView.luckyNow)
 
 -- the opening overlay
 local opening: CapsuleView.OpenRefs? = nil
@@ -105,7 +130,7 @@ local atEnd = false
 local queue: { Result } = {}
 local skipStep = false
 local skipAll = false
-local closeEnd: BindableEvent? = nil
+local endDone = false -- the end screen's OK / B / a click (play() polls it)
 local lastOpen: { Capsule: string, Count: number }? = nil
 local againPending = false
 local renderConnection: RBXScriptConnection? = nil
@@ -211,13 +236,36 @@ local function updateHint(view: CapsuleView.Refs)
 	end
 end
 
-local function fit(view: CapsuleView.Refs)
+-- Phones and TVs get the compact layout (the same rule as the tech shop).
+local function compactNow(): boolean
+	local camera = Workspace.CurrentCamera
+	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	return TechShopView.compactFor(isTouch(), GuiService:IsTenFootInterface(), HudController.uiScale(), size.Y)
+end
+
+-- The screen in design units (the HUD's scale, under the top bar).
+local function room(): (number, number)
 	local camera = Workspace.CurrentCamera
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
-	local compact = TechShopView.compactFor(isTouch(), GuiService:IsTenFootInterface(), scale, size.Y)
-	CapsuleView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
+	return size.X / scale, (size.Y - inset.Y) / scale
+end
+
+-- (layout sets every size and text size, so a layout change needs no rebuild)
+local function fit(view: CapsuleView.Refs)
+	local w, h = room()
+	CapsuleView.layout(view, compactNow(), w, h)
+end
+
+-- Every card as the player sees it now.
+local function currentCards(coins: number): { CapsuleView.Card }
+	return CapsuleView.cards(StateController.get(), coins, restricted(), serverNow(), stateAt)
+end
+
+-- The Triple Lucky odds the cards show now.
+local function luckyShown(): boolean
+	return CapsuleView.luckyNow(StateController.get(), serverNow(), stateAt)
 end
 
 local function refresh()
@@ -226,7 +274,7 @@ local function refresh()
 		return
 	end
 	local coins = HudController.predictedCoins(os.clock())
-	cards = CapsuleView.cards(StateController.get(), coins, restricted(), serverNow())
+	cards = currentCards(coins)
 	CapsuleView.setCoins(view, coins)
 	CapsuleView.setCards(view, cards)
 end
@@ -262,7 +310,7 @@ local function request(capsuleId: string, count: number, button: TextButton?): b
 		return false
 	end
 	local coins = HudController.predictedCoins(now)
-	cards = CapsuleView.cards(StateController.get(), coins, restricted(), serverNow())
+	cards = currentCards(coins)
 	local card = cardOf(capsuleId)
 	local buy: CapsuleView.Buy? = nil
 	if card then
@@ -289,7 +337,8 @@ local function request(capsuleId: string, count: number, button: TextButton?): b
 	end
 	lastOpen = { Capsule = capsuleId, Count = count }
 	Sfx.play("UIClick")
-	Net.send("CapsuleAction", "Open", { Capsule = capsuleId, Count = count })
+	-- the odds this card shows: the server rolls exactly these (or refuses)
+	Net.send("CapsuleAction", "Open", { Capsule = capsuleId, Count = count, Lucky = card.Lucky })
 	return true
 end
 
@@ -367,7 +416,7 @@ local function ensureView(): CapsuleView.Refs
 	if existing then
 		return existing
 	end
-	local view = CapsuleView.build(false)
+	local view = CapsuleView.build(compactNow())
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
 	view.Close.Activated:Connect(function()
 		CapsuleController.close()
@@ -463,12 +512,8 @@ end
 ---------------------------------------------------------------- the opening
 
 local function fitOpening(o: CapsuleView.OpenRefs)
-	local camera = Workspace.CurrentCamera
-	local scale = HudController.uiScale()
-	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
-	local inset = GuiService:GetGuiInset()
-	local compact = TechShopView.compactFor(isTouch(), GuiService:IsTenFootInterface(), scale, size.Y)
-	CapsuleView.layoutOpening(o, compact, size.X / scale, (size.Y - inset.Y) / scale)
+	local w, h = room()
+	CapsuleView.layoutOpening(o, compactNow(), w, h)
 end
 
 local function openingHint(o: CapsuleView.OpenRefs, ending: boolean)
@@ -692,11 +737,35 @@ local function showGrid(o: CapsuleView.OpenRefs, kinds: { string }, new: { [numb
 	skipStep = false
 end
 
+-- The end screen's note: which odds the result had, or (with OPEN AGAIN)
+-- which odds OPEN AGAIN uses now.
+local function endNote(o: CapsuleView.OpenRefs, result: Result, againShown: boolean)
+	local lucky = luckyShown()
+	if result.Free then
+		o.Note.Text = "A FREE CAPSULE!"
+		o.Note.TextColor3 = Theme.Accent
+	elseif againShown and result.Lucky and not lucky then
+		o.Note.Text = "Triple Lucky ended: normal odds now"
+		o.Note.TextColor3 = Theme.Text
+	elseif againShown and lucky and not result.Lucky then
+		o.Note.Text = "Triple Lucky is on: OPEN AGAIN uses its odds"
+		o.Note.TextColor3 = LUCKY_COLOR
+	elseif result.Lucky then
+		o.Note.Text = "TRIPLE LUCKY ODDS"
+		o.Note.TextColor3 = LUCKY_COLOR
+	else
+		o.Note.Text = ""
+	end
+end
+
 -- OPEN AGAIN: only after the player's own coin open (not a wheel prize or a Robux receipt).
 local function againText(o: CapsuleView.OpenRefs, result: Result?)
 	local again = lastOpen
 	if again and result and (result.Free or result.Capsule ~= again.Capsule or result.Count ~= again.Count) then
 		again = nil
+	end
+	if again then
+		cards = currentCards(HudController.predictedCoins(os.clock()))
 	end
 	local card = if again then cardOf(again.Capsule) else nil
 	local buy: CapsuleView.Buy? = nil
@@ -709,9 +778,12 @@ local function againText(o: CapsuleView.OpenRefs, result: Result?)
 	end
 	local visible = again ~= nil and buy ~= nil and card ~= nil and card.Visible and not card.Robux
 	holderOf(o.Again).Visible = visible
-	if visible and buy then
+	if visible and buy and not againPending then
 		o.Again.Text = `OPEN {buy.Count} AGAIN  {buy.PriceText}`
 		CapsuleView.style(o.Again, buy.CanBuy, Theme.Accent, Theme.AccentDark)
+	end
+	if result then
+		endNote(o, result, visible)
 	end
 end
 
@@ -720,10 +792,7 @@ local function onSkip(_: string, state: Enum.UserInputState): Enum.ContextAction
 		return Enum.ContextActionResult.Pass
 	end
 	if atEnd then
-		local done = closeEnd
-		if done then
-			done:Fire()
-		end
+		endDone = true
 	else
 		skipStep = true
 	end
@@ -735,22 +804,28 @@ local function onSkipAll(_: string, state: Enum.UserInputState): Enum.ContextAct
 		return Enum.ContextActionResult.Pass
 	end
 	if atEnd then
-		local done = closeEnd
-		if done then
-			done:Fire()
-		end
+		endDone = true
 	else
 		skipAll = true
 	end
 	return Enum.ContextActionResult.Sink
 end
 
+local openingCompact: boolean? = nil -- the layout the opening was built for
+
 local function ensureOpening(): CapsuleView.OpenRefs
+	local compact = compactNow()
 	local existing = opening
-	if existing then
+	if existing and openingCompact == compact then
 		return existing
 	end
-	local o = CapsuleView.buildOpening(false)
+	if existing then
+		-- (only between two openings: play() calls this before it starts)
+		existing.Gui:Destroy()
+		opening = nil
+	end
+	openingCompact = compact
+	local o = CapsuleView.buildOpening(compact)
 	o.Gui.Parent = player:WaitForChild("PlayerGui")
 	o.Dim.Activated:Connect(function()
 		if playing and not atEnd then
@@ -763,10 +838,9 @@ local function ensureOpening(): CapsuleView.OpenRefs
 		end
 	end)
 	o.Ok.Activated:Connect(function()
-		local done = closeEnd
-		if done then
+		if playing and atEnd then
 			Sfx.play("UIClick")
-			done:Fire()
+			endDone = true
 		end
 	end)
 	o.Again.Activated:Connect(function()
@@ -802,7 +876,7 @@ local function play(result: Result)
 	holderOf(o.Ok).Visible = false
 	holderOf(o.Again).Visible = false
 	o.Counter.Text = ""
-	o.Note.Text = if result.Free then "A FREE CAPSULE!" elseif result.Lucky then "TRIPLE LUCKY ODDS" else ""
+	endNote(o, result, false)
 	openingHint(o, false)
 	ContextActionService:BindActionAtPriority(SKIP_ACTION, onSkip, false, OPEN_PRIORITY, Enum.KeyCode.Space, Enum.KeyCode.Return)
 	ContextActionService:BindActionAtPriority(
@@ -854,6 +928,7 @@ local function play(result: Result)
 	end
 	-- the end: OK / OPEN AGAIN
 	atEnd = true
+	endDone = false
 	againPending = false
 	holderOf(o.Skip).Visible = false
 	holderOf(o.Ok).Visible = true
@@ -863,22 +938,18 @@ local function play(result: Result)
 	if usingGamepad() then
 		GuiService.SelectedObject = o.Ok
 	end
-	local done = Instance.new("BindableEvent")
-	closeEnd = done
-	-- a new result (OPEN AGAIN) ends this one too
-	local waiting = true
-	task.spawn(function()
-		while waiting and #queue == 0 do
-			task.wait(0.1)
+	-- until OK / B / a click, or a new result (OPEN AGAIN, one already
+	-- waiting, a wheel prize) starts at once; the note and OPEN AGAIN
+	-- follow the odds of the moment (Triple Lucky may end meanwhile)
+	local nextCheck = 0
+	while not endDone and #queue == 0 do
+		if os.clock() >= nextCheck then
+			nextCheck = os.clock() + TICK
+			againText(o, result)
 		end
-		if waiting then
-			done:Fire()
-		end
-	end)
-	done.Event:Wait()
-	waiting = false
-	closeEnd = nil
-	done:Destroy()
+		task.wait()
+	end
+	endDone = false
 	if renderConnection then
 		renderConnection:Disconnect()
 		renderConnection = nil
@@ -987,6 +1058,8 @@ end
 
 local boardPage = 0
 local boardSeen: { [Instance]: string } = setmetatable({}, { __mode = "k" }) :: any
+local boardWatched: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local boardQueued = false
 
 -- The capsule the board shows now (cycles through those the player may open).
 local function boardCapsule(): string?
@@ -1007,7 +1080,7 @@ local function updateBoards(): boolean
 	if not capsuleId then
 		return false
 	end
-	local lucky = CapsuleView.luckySeconds(StateController.get(), serverNow()) > 0
+	local lucky = luckyShown()
 	local key = `{capsuleId}|{lucky}`
 	for _, stall in CollectionService:GetTagged(STALL_TAG) do
 		local board = stall:FindFirstChild("OddsBoard", true)
@@ -1021,6 +1094,41 @@ local function updateBoards(): boolean
 	return true
 end
 
+-- One board update at the end of this frame (many parts may stream in at once).
+local function queueBoards()
+	if boardQueued then
+		return
+	end
+	boardQueued = true
+	task.defer(function()
+		boardQueued = false
+		local ok, err = pcall(updateBoards)
+		if not ok then
+			warn("[CapsuleController] odds board: " .. tostring(err))
+		end
+	end)
+end
+
+-- A stall streams in part by part: fill its board the moment it arrives
+-- (not at the next tick), and again if an old label arrives after that.
+local function watchStall(stall: Instance)
+	if boardWatched[stall] then
+		return
+	end
+	boardWatched[stall] = true
+	stall.DescendantAdded:Connect(function(d: Instance)
+		local gui = if d:IsA("SurfaceGui") then d else d:FindFirstAncestorWhichIsA("SurfaceGui")
+		if not gui or d:GetAttribute(CapsuleView.BoardAttribute) == true then
+			return
+		end
+		local board = gui.Parent
+		if board and board.Name == "OddsBoard" then
+			boardSeen[gui] = nil
+			queueBoards()
+		end
+	end)
+end
+
 ---------------------------------------------------------------- lifecycle
 
 function CapsuleController.init()
@@ -1032,7 +1140,11 @@ function CapsuleController.init()
 	Net.listen("CapsuleResult", onResult)
 	Net.listen("ActionResult", onActionResult)
 	Net.listen("PurchasePrompt", onPurchasePrompt)
+	if StateController.get() then
+		stateAt = serverNow()
+	end
 	StateController.onChanged(function()
+		stateAt = serverNow()
 		if shown then
 			refresh()
 		end
@@ -1042,7 +1154,7 @@ function CapsuleController.init()
 			refresh()
 		end
 		table.clear(boardSeen)
-		updateBoards()
+		queueBoards()
 	end)
 	player.CharacterRemoving:Connect(function()
 		CapsuleController.close()
@@ -1073,17 +1185,26 @@ function CapsuleController.init()
 end
 
 function CapsuleController.start()
-	-- the stall's odds board: the next capsule every BoardSeconds (and when it streams in)
-	CollectionService:GetInstanceAddedSignal(STALL_TAG):Connect(function()
-		task.defer(updateBoards)
+	-- the stall's odds board: the next capsule every BoardSeconds, the
+	-- Triple Lucky odds within BoardTick, and at once when it streams in
+	for _, stall in CollectionService:GetTagged(STALL_TAG) do
+		watchStall(stall)
+	end
+	CollectionService:GetInstanceAddedSignal(STALL_TAG):Connect(function(stall: Instance)
+		watchStall(stall)
+		queueBoards()
 	end)
+	local pageAt = os.clock()
 	while true do
 		local ok, err = pcall(updateBoards)
 		if not ok then
 			warn("[CapsuleController] odds board: " .. tostring(err))
 		end
-		task.wait(CapsuleController.BoardSeconds)
-		boardPage += 1
+		task.wait(CapsuleController.BoardTick)
+		if os.clock() - pageAt >= CapsuleController.BoardSeconds then
+			pageAt = os.clock()
+			boardPage += 1
+		end
 	end
 end
 
