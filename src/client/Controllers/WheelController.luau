@@ -3,29 +3,34 @@
 
 	- Opens on OpenUI "Wheel" (the "Spin & Win" prompt at the EmberChest,
 	  added by WheelService) or the HUD's FREE SPIN! chip (shown only while
-	  the free spin is ready, anywhere). The screen (WheelView) shows the
+	  the free spin is ready, anywhere; a click / tap, or D-pad left on a
+	  gamepad, its glyph on the chip). The screen (WheelView) shows the
 	  player's 8 segments with their exact odds, what each pays them, and
 	  the countdown from State.Wheel.NextSpinAt (os.time() seconds, compared
-	  with Workspace:GetServerTimeNow()).
+	  with Workspace:GetServerTimeNow()). A row opens its details card (the
+	  whole text, a capsule's chance of every golem); X, B or the row again
+	  close it.
 	- SPIN! sends WheelAction "Spin" (one request per WheelConfig.
 	  ClientCooldown; the button waits for the answer). WheelResult: the
 	  disc turns WheelView.Turns times and stops with the won segment under
 	  the pointer (WheelConfig.SpinSeconds, ticking past every segment),
-	  then the prize card, confetti and the row lights up. A refusal
-	  (ActionResult "NotReady") or no answer within WheelConfig.ResultTimeout
-	  gives the button back; a WheelResult that comes later is still shown
-	  (or, with the screen closed, a toast says what was won).
-	- The big lobby wheel (SpinWheel's "Wheel" sub-model, tag Spin) gets a
-	  celebration spin on THIS screen only while the screen wheel turns:
-	  fast, then slowing back to its idle turn, with confetti from its hub
-	  when the prize shows. It is decoration only (WheelConfig: 10 equal
-	  segments with made-up icons), so it never stops on purpose at a
-	  "result": the prize is shown on the 8-segment screen wheel alone. To
-	  turn it, its Spin tag is taken off locally (DecorController lets go)
-	  and this controller keeps turning it at its own SpinSpeed afterwards.
+	  then the prize card, confetti and the row lights up. Meanwhile the
+	  HUD's coin counter holds (HudController.holdCoins), so a coin prize
+	  doesn't show in the balance before the wheel stops. A capsule prize
+	  asks for its opening (WheelAction "Reveal") 1.5 s after the card,
+	  only while the screen is still open. A refusal (ActionResult
+	  "NotReady") or no answer within WheelConfig.ResultTimeout gives the
+	  button back; a WheelResult that comes later is still shown (or, with
+	  the screen closed, a toast says what was won).
+	- The big lobby wheel (SpinWheel's "Wheel" sub-model, tag Spin) keeps
+	  its idle turn (DecorController): it is decoration with 10 made-up
+	  segments (WheelConfig), so it must never look like it shows a result.
+	  Only confetti comes out of its hub when the prize shows. Asked of the
+	  lobby owner: rebuild its disc with WheelConfig's 8 segments; then it
+	  can turn with WheelView.spinTarget to land on result.Segment.
 	- Closes with the X, B (gamepad), Backspace, respawning or another big
 	  panel opening; it never locks movement. Gamepads start on SPIN! (or
-	  the X when the spin isn't ready); the odds list is selectable to scroll.
+	  the X when the spin isn't ready); the rows are selectable.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -54,7 +59,10 @@ local WheelController = {}
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
 local CLOSE_ACTION = "TerraForgeWheelClose"
+local CHIP_ACTION = "TerraForgeFreeSpin"
+local CHIP_KEY = Enum.KeyCode.DPadLeft -- the chip's gamepad shortcut (D-pad up is build mode)
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
+local REVEAL_DELAY = 1.5 -- seconds after the prize card before a capsule's opening
 local OTHER_PANELS = {
 	"PenController",
 	"SellController",
@@ -66,7 +74,6 @@ local OTHER_PANELS = {
 }
 local RESTRICTED_ATTRIBUTE = "PaidRandomRestricted" -- set by the server's Policy
 local SPIN_TAG = "Spin"
-local CELEBRATE_SPEED = 7 -- rad/s at the top of the lobby wheel's celebration
 
 local player = Players.LocalPlayer
 local refs: WheelView.Refs? = nil
@@ -83,11 +90,8 @@ local litId: string? = nil -- the odds row of the last prize
 local rowsKey = "" -- what the odds rows show now (rebuilt only when it changes)
 local current: { [string]: any }? = nil -- the WheelResult the disc is turning to
 local others: { Panel }? = nil
-
--- the lobby wheel(s) this controller turns: model -> spinner
-type Spinner = { Pivot: CFrame, Parts: { { Part: BasePart, Offset: CFrame } }, Angle: number, Idle: number, Boost: number }
-local wheels: { [Model]: Spinner } = {}
-local wheelLoop: RBXScriptConnection? = nil
+local chipReady = false -- the free spin was ready at the last chip update
+local chipBound = false
 
 function WheelController.isOpen(): boolean
 	return open
@@ -165,6 +169,8 @@ end
 
 ---------------------------------------------------------------- the lobby wheel
 
+-- The lobby wheel(s): SpinWheel's "Wheel" sub-model (tag Spin). They keep
+-- their idle turn; only confetti comes out of the hub.
 local function lobbyWheels(): { Model }
 	local list: { Model } = {}
 	for _, instance in CollectionService:GetTagged(SPIN_TAG) do
@@ -173,74 +179,15 @@ local function lobbyWheels(): { Model }
 			table.insert(list, instance)
 		end
 	end
-	for model in wheels do
-		if model.Parent and not table.find(list, model) then
-			table.insert(list, model)
-		end
-	end
 	return list
 end
 
-local function stepWheels(dt: number)
-	for model, spinner in wheels do
-		if not model.Parent then
-			wheels[model] = nil
-			continue
-		end
-		spinner.Boost = math.max(0, spinner.Boost - dt)
-		local speed = spinner.Idle
-		if spinner.Boost > 0 then
-			-- quick spin-up, then a long ease back down to the idle turn
-			local total = WheelConfig.SpinSeconds
-			local t = 1 - spinner.Boost / total
-			local k = if t < 0.08 then t / 0.08 else 1 - WheelView.ease((t - 0.08) / 0.92)
-			speed = spinner.Idle + (CELEBRATE_SPEED - spinner.Idle) * k
-		end
-		spinner.Angle += speed * dt
-		local cf = spinner.Pivot * CFrame.Angles(0, spinner.Angle, 0)
-		for _, entry in spinner.Parts do
-			entry.Part.CFrame = cf * entry.Offset
-		end
-	end
-	if next(wheels) == nil and wheelLoop then
-		wheelLoop:Disconnect()
-		wheelLoop = nil
-	end
-end
-
--- Takes a lobby wheel over from DecorController (its Spin tag off, locally).
-local function takeOver(model: Model): Spinner
-	model:RemoveTag(SPIN_TAG)
-	local pivot = model:GetPivot()
-	local parts = {}
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
-			table.insert(parts, { Part = d, Offset = pivot:ToObjectSpace(d.CFrame) })
-		end
-	end
-	local idle = model:GetAttribute("SpinSpeed")
-	local spinner: Spinner = { Pivot = pivot, Parts = parts, Angle = 0, Idle = if type(idle) == "number" then idle else 0.6, Boost = 0 }
-	wheels[model] = spinner
-	return spinner
-end
-
--- Gives the lobby wheel a celebration spin (it keeps its idle turn afterwards).
-local function celebrate()
-	for _, model in lobbyWheels() do
-		local spinner = wheels[model] or takeOver(model)
-		spinner.Boost = WheelConfig.SpinSeconds
-	end
-	if next(wheels) ~= nil and not wheelLoop then
-		wheelLoop = RunService.RenderStepped:Connect(stepWheels)
-	end
-end
-
--- Confetti out of the lobby wheel's hub (pooled bursts).
+-- Confetti out of the lobby wheel's hub (pooled bursts), when it is near.
 local function lobbyConfetti()
-	for model in wheels do
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	for _, model in lobbyWheels() do
 		local hub = model.PrimaryPart
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if hub and root and (hub.Position - root.Position).Magnitude < 160 then
 			for i, color in WheelView.ConfettiColors do
 				if i <= 4 then
@@ -263,12 +210,29 @@ end
 
 local function updateHint(view: WheelView.Refs)
 	if usingGamepad() then
-		view.Hint.Text = `{padName(Enum.KeyCode.ButtonA)}: spin  ·  {padName(Enum.KeyCode.ButtonB)}: close`
+		view.Hint.Text = `{padName(Enum.KeyCode.ButtonA)}: spin / details  ·  {padName(Enum.KeyCode.ButtonB)}: close`
 	elseif isTouch() then
-		view.Hint.Text = "Tap SPIN!"
+		view.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	else
-		view.Hint.Text = "Click SPIN!  ·  Backspace: close"
+		view.Hint.Text = "Click a row for details  ·  Backspace: close"
 	end
+end
+
+-- A row opens its details card (the same row again, X or B close it).
+local function toggleInfo(view: WheelView.Refs, id: string)
+	if view.InfoId == id then
+		WheelView.hideInfo(view)
+		if usingGamepad() then
+			GuiService.SelectedObject = view.Rows[id]
+		end
+	else
+		WheelView.showInfo(view, id)
+		if usingGamepad() then
+			GuiService.SelectedObject = view.InfoClose
+		end
+	end
+	WheelView.highlight(view, litId)
+	Sfx.play("UIClick")
 end
 
 local function refresh()
@@ -290,7 +254,24 @@ local function refresh()
 	local key = table.concat(parts, "|")
 	if key ~= rowsKey then
 		rowsKey = key
+		local selected = GuiService.SelectedObject
+		local selectedId = if selected and selected:IsDescendantOf(view.Odds) then selected.Name else nil
+		local infoId = view.InfoId
 		WheelView.setRows(view, rows)
+		for id, button in view.Rows do
+			button.Activated:Connect(function()
+				toggleInfo(view, id)
+			end)
+		end
+		-- an open card and a gamepad's selection stay on their row
+		if infoId and view.RowData[infoId] then
+			WheelView.showInfo(view, infoId)
+		elseif infoId then
+			WheelView.hideInfo(view)
+		end
+		if selectedId and view.Rows[selectedId] then
+			GuiService.SelectedObject = view.Rows[selectedId]
+		end
 	end
 	WheelView.highlight(view, litId)
 	if not animating then
@@ -347,6 +328,15 @@ local function ensureView(): WheelView.Refs
 		Sfx.play("UIClick")
 		selectDefault(view)
 	end)
+	view.InfoClose.Activated:Connect(function()
+		local id = view.InfoId
+		if id then
+			toggleInfo(view, id)
+		end
+	end)
+	view.Odds:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		WheelView.updateMore(view)
+	end)
 	refs = view
 	noCapsulesShown = nil
 	rowsKey = ""
@@ -364,10 +354,16 @@ local function dropConfetti(view: WheelView.Refs)
 	end
 end
 
+-- Does this prize change the coin balance (the HUD holds it while the disc turns)?
+local function paysCoins(result: { [string]: any }): boolean
+	return result.Kind == "Coins" or (tonumber(result.Coins) or 0) > 0
+end
+
 local function finish(view: WheelView.Refs, result: { [string]: any }, segmentColor: Color3)
 	animating = false
 	busy = false
 	current = nil
+	HudController.releaseCoins()
 	local prize, detail = WheelView.prizeText(result)
 	litId = tostring(result.Id)
 	WheelView.highlight(view, litId)
@@ -377,6 +373,15 @@ local function finish(view: WheelView.Refs, result: { [string]: any }, segmentCo
 	Sfx.play("Reveal")
 	refresh()
 	selectDefault(view)
+	-- a capsule prize: its opening, if the screen is still open by then
+	if result.Kind == "Capsule" and type(result.Golem) == "table" then
+		local token = animToken
+		task.delay(REVEAL_DELAY, function()
+			if open and token == animToken then
+				Net.send("WheelAction", "Reveal")
+			end
+		end)
+	end
 end
 
 -- Turns the screen disc to the won segment, then shows the prize.
@@ -395,12 +400,16 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 		WheelView.setSegments(view, WheelConfig.segments(substitute))
 	end
 	WheelView.hideResult(view)
+	WheelView.hideInfo(view)
 	litId = nil
 	WheelView.highlight(view, nil)
 	current = result
 	animating = true
 	busy = true
 	WheelView.setReady(view, false, 0, true)
+	if paysCoins(result) then
+		HudController.holdCoins(WheelConfig.SpinSeconds + 1)
+	end
 	animToken += 1
 	local token = animToken
 	local count = #view.SegmentIds
@@ -408,7 +417,6 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 	local target = WheelView.spinTarget(from, segment.Index, count, WheelView.Turns, math.random() - 0.5)
 	local started = os.clock()
 	local lastSegment = WheelView.segmentAt(from, count)
-	celebrate()
 	local connection: RBXScriptConnection
 	connection = RunService.RenderStepped:Connect(function()
 		if token ~= animToken or not open then
@@ -503,14 +511,16 @@ function WheelController.close()
 		-- the spin went through: a toast says what it was
 		animating = false
 		busy = false
-		animToken += 1
 		local result = current
 		current = nil
+		HudController.releaseCoins()
 		if result then
 			local prize, detail = WheelView.prizeText(result)
 			HudController.toast(`Daily wheel: {prize}. {detail}`, "Reward")
 		end
 	end
+	-- no capsule opening for a closed screen (the toast / card told it)
+	animToken += 1
 	ContextActionService:UnbindAction(CLOSE_ACTION)
 	local view = refs
 	if view then
@@ -519,6 +529,7 @@ function WheelController.close()
 			GuiService.SelectedObject = nil
 		end
 		WheelView.hideResult(view)
+		WheelView.hideInfo(view)
 		view.Gui.Enabled = false
 	end
 end
@@ -531,6 +542,9 @@ local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActio
 	if view and view.Result.Visible then
 		WheelView.hideResult(view)
 		selectDefault(view)
+	elseif view and view.InfoId then
+		toggleInfo(view, view.InfoId)
+		return Enum.ContextActionResult.Sink
 	else
 		WheelController.close()
 	end
@@ -579,16 +593,57 @@ end
 
 ---------------------------------------------------------------- the chip
 
+-- D-pad left while the chip shows: the wheel screen (not while a minigame,
+-- build mode or a menu with the gamepad selection has the controls).
+local function onChipKey(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+	local c = chip
+	if state ~= Enum.UserInputState.Begin or not c or not c.Gui.Enabled then
+		return Enum.ContextActionResult.Pass
+	end
+	if PlayerControls.owner() ~= nil or GuiService.SelectedObject ~= nil then
+		return Enum.ContextActionResult.Pass
+	end
+	WheelController.open()
+	return Enum.ContextActionResult.Sink
+end
+
+local function chipGlyph()
+	local c = chip
+	if not c then
+		return
+	end
+	local image = ""
+	if usingGamepad() then
+		local ok, found = pcall(function()
+			return UserInputService:GetImageForKeyCode(CHIP_KEY)
+		end)
+		image = if ok and type(found) == "string" then found else ""
+	end
+	WheelView.setChipGlyph(c, image)
+end
+
 local function updateChip()
 	local c = chip
 	if not c then
 		return
 	end
-	local show = isReady() and not open and not busy
+	local ready = isReady()
+	local show = ready and not open and not busy
 	if c.Gui.Enabled ~= show then
 		c.Gui.Enabled = show
+	end
+	-- the sound only when the spin BECOMES ready (not after every close)
+	if ready and not chipReady and not open then
+		Sfx.play("Discovery")
+	end
+	chipReady = ready
+	if show ~= chipBound then
+		chipBound = show
 		if show then
-			Sfx.play("Discovery")
+			ContextActionService:BindAction(CHIP_ACTION, onChipKey, false, CHIP_KEY)
+			chipGlyph()
+		else
+			ContextActionService:UnbindAction(CHIP_ACTION)
 		end
 	end
 end
@@ -606,6 +661,8 @@ local function buildChip()
 	pulse.Name = "Pulse"
 	pulse.Parent = holder
 	TweenService:Create(pulse, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.06 }):Play()
+	-- a spin that is already ready when the player joins doesn't chime at once
+	chipReady = isReady()
 end
 
 -- Every 0.25 s: the countdown, an unanswered spin, the chip, other panels.
@@ -661,6 +718,7 @@ function WheelController.init()
 		if view and open then
 			updateHint(view)
 		end
+		chipGlyph()
 	end)
 	local camera = Workspace.CurrentCamera
 	if camera then

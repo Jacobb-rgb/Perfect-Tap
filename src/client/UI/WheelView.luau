@@ -15,15 +15,21 @@
 	          at the top and a hub. The whole Disc frame turns (children turn
 	          with it); restAngle / spinTarget give the angle that puts a
 	          segment under the pointer.
-	  odds    one row per segment: its color, label, the exact chance and
-	          what it pays THIS player (coins at their income, the ore
-	          prize's own odds, the capsule's rarity odds with their Triple
-	          Lucky), from rows() (pure, tested)
+	  odds    one row per segment, all 8 in view: its color, label and the
+	          exact chance; on a PC also one line of what it pays THIS player
+	          (coins at their income, the ore prize's own odds, the capsule's
+	          rarity odds with their Triple Lucky), from rows() (pure,
+	          tested). Phones and TVs (compact) show the rows as a 2 x 4 grid
+	          of 72-unit tiles (label + chance). Every row is a button: a
+	          click / tap / A shows its details card over the odds column
+	          (the whole text and, for a capsule, the exact chance of EVERY
+	          golem in it); X / B / the row again close it. A "more below"
+	          note shows whenever the list is longer than its box.
 	  result  the prize card over the panel ("YOU WON!") with an OK button
 	          and confetti pieces the controller lets fall
 	  chip    its own ScreenGui: "FREE SPIN!" in the HUD's top row, right of
 	          the quick-teleport bar (TeleportView's width), only while the
-	          free spin is ready
+	          free spin is ready; a gamepad glyph shows its shortcut
 
 	Designed for 720 design units of height (HudController scales every
 	TerraForge gui); `compact` (phones, TVs) has 72-unit buttons (44 pt at
@@ -48,7 +54,9 @@ local WheelView = {}
 
 type Segment = WheelConfig.Segment
 
-export type Row = { Id: string, Label: string, Detail: string, Chance: string, Color: Color3 }
+-- One item of a row's own odds list (a capsule's golems).
+export type Line = { Name: string, Chance: string, Color: Color3 }
+export type Row = { Id: string, Label: string, Detail: string, Chance: string, Color: Color3, Lines: { Line }? }
 
 -- What rows() needs to know about the player (WheelController reads the State).
 export type Info = {
@@ -72,7 +80,17 @@ export type Refs = {
 	Status: TextLabel,
 	OddsTitle: TextLabel,
 	Odds: ScrollingFrame,
-	Rows: { [string]: Frame },
+	Rows: { [string]: TextButton },
+	RowData: { [string]: Row },
+	More: TextLabel,
+	Info: Frame,
+	InfoSwatch: Frame,
+	InfoTitle: TextLabel,
+	InfoChance: TextLabel,
+	InfoText: TextLabel,
+	InfoLines: Frame,
+	InfoClose: TextButton,
+	InfoId: string?,
 	Hint: TextLabel,
 	Result: Frame,
 	ResultTitle: TextLabel,
@@ -84,7 +102,7 @@ export type Refs = {
 	Compact: boolean,
 }
 
-export type ChipRefs = { Gui: ScreenGui, Button: TextButton }
+export type ChipRefs = { Gui: ScreenGui, Button: TextButton, Glyph: ImageLabel, Icon: TextLabel }
 
 type Metrics = {
 	Width: number,
@@ -97,8 +115,11 @@ type Metrics = {
 	Status: number,
 	Close: number,
 	Row: number,
+	RowGap: number,
 	RowLabel: number,
 	RowDetail: number,
+	Columns: number,
+	Line: number,
 	Title: number,
 	Hint: number,
 }
@@ -114,9 +135,12 @@ local METRICS: { [string]: Metrics } = {
 		ButtonWidth = 250,
 		Status = 26,
 		Close = 54,
-		Row = 66,
-		RowLabel = 20,
-		RowDetail = 15,
+		Row = 54,
+		RowGap = 4,
+		RowLabel = 19,
+		RowDetail = 14,
+		Columns = 1,
+		Line = 15,
 		Title = 40,
 		Hint = 16,
 	},
@@ -131,9 +155,12 @@ local METRICS: { [string]: Metrics } = {
 		ButtonWidth = 250,
 		Status = 26,
 		Close = 72,
-		Row = 82,
-		RowLabel = 24,
+		Row = 72,
+		RowGap = 6,
+		RowLabel = 20,
 		RowDetail = 18,
+		Columns = 2,
+		Line = 17,
 		Title = 36,
 		Hint = 18,
 	},
@@ -264,7 +291,8 @@ function WheelView.detail(segment: Segment, info: Info): string
 		local kind = BoostConfig.Kinds[segment.Boost or ""]
 		local name = if kind then kind.Name else "a boost"
 		local what = if kind and kind.Target == "Capsules" then "rarer golems from capsules" else "rarer ores from rocks"
-		return `+{WheelView.duration(segment.Seconds or 0)} of {name}: {what} (up to {WheelView.duration(BoostConfig.MaxStackSeconds)})`
+		local cap = WheelView.duration(BoostConfig.MaxStackSeconds)
+		return `+{WheelView.duration(segment.Seconds or 0)} of {name}: {what} (stacks up to {cap}; what doesn't fit is paid in coins)`
 	elseif segment.Kind == "Capsule" then
 		local capsule = CapsuleConfig.ById[segment.Capsule or ""]
 		local name = if capsule then capsule.Name else "capsule"
@@ -287,6 +315,20 @@ function WheelView.detail(segment: Segment, info: Info): string
 	return ""
 end
 
+-- The exact chance of every golem in a capsule (Triple Lucky as the player has it).
+function WheelView.capsuleLines(capsuleId: string, tripleLucky: boolean): { Line }
+	local lines: { Line } = {}
+	for _, line in CapsuleConfig.odds(capsuleId, tripleLucky) do
+		local golem = GolemConfig.ById[line.Golem]
+		table.insert(lines, {
+			Name = if golem then golem.Name else line.Golem,
+			Chance = WheelView.percent(line.Chance),
+			Color = if golem then Rarity.get(golem.Rarity).Color else Theme.Text,
+		})
+	end
+	return lines
+end
+
 -- The odds list for this player: one row per segment of their wheel.
 function WheelView.rows(info: Info): { Row }
 	local list: { Row } = {}
@@ -297,9 +339,24 @@ function WheelView.rows(info: Info): { Row }
 			Detail = WheelView.detail(segment, info),
 			Chance = WheelView.percent(segment.Odds),
 			Color = segment.Color,
+			Lines = if segment.Kind == "Capsule" then WheelView.capsuleLines(segment.Capsule or "", info.TripleLucky) else nil,
 		})
 	end
 	return list
+end
+
+-- `text` cut to fit one line of `width` design units at `size` (with "...").
+function WheelView.truncate(text: string, size: number, width: number): string
+	local fits = math.max(4, math.floor(width / (size * 0.56)))
+	if #text <= fits then
+		return text
+	end
+	local head = text:sub(1, fits - 3)
+	local cut = head:gsub("%s+%S*$", "")
+	if cut == "" then
+		cut = head
+	end
+	return cut .. "..."
 end
 
 -- The prize card's two lines for a WheelResult payload.
@@ -312,10 +369,14 @@ function WheelView.prizeText(result: { [string]: any }): (string, string)
 		local boost = BoostConfig.Kinds[tostring(result.Boost)]
 		local name = if boost then boost.Name else "Boost"
 		local seconds = tonumber(result.Seconds) or 0
+		local cap = WheelView.duration(BoostConfig.MaxStackSeconds)
 		if seconds <= 0 then
-			return name, `Already full: boosts stack up to {WheelView.duration(BoostConfig.MaxStackSeconds)}`
+			return `{Format.money(coins or 0)} coins`, `{name} is already full (up to {cap}): coins instead`
 		end
 		local what = if boost and boost.Target == "Capsules" then "Rarer golems from capsules" else "Rarer ores from rocks"
+		if coins and coins > 0 then
+			return `{name} +{WheelView.duration(seconds)}`, `Full at {cap}: +{Format.money(coins)} coins for the rest`
+		end
 		return `{name} +{WheelView.duration(seconds)}`, what
 	elseif kind == "Capsule" then
 		local capsule = CapsuleConfig.ById[tostring(result.Capsule)]
@@ -455,7 +516,9 @@ function WheelView.setSegments(refs: Refs, segments: { Segment })
 	})
 end
 
--- The odds rows (one per segment; the list scrolls).
+-- The odds rows (one per segment): buttons in a list (PC) or a 2-column
+-- grid of tiles (compact). The canvas follows; updateMore shows the "more
+-- below" note when they don't all fit.
 function WheelView.setRows(refs: Refs, rows: { Row })
 	local m = metrics(refs.Compact)
 	for _, child in refs.Odds:GetChildren() do
@@ -464,67 +527,204 @@ function WheelView.setRows(refs: Refs, rows: { Row })
 		end
 	end
 	table.clear(refs.Rows)
+	table.clear(refs.RowData)
 	for i, row in rows do
-		local frame = UIKit.new("Frame", {
+		local button = UIKit.new("TextButton", {
 			Name = row.Id,
 			LayoutOrder = i,
 			Size = UDim2.new(1, -12, 0, m.Row),
+			AutoButtonColor = false,
+			Text = "",
 			BackgroundColor3 = Theme.PanelDark,
 			BackgroundTransparency = 0.15,
 			BorderSizePixel = 0,
+			Selectable = true,
 		}, refs.Odds)
-		UIKit.corner(frame, 10)
+		UIKit.corner(button, 10)
 		local swatch = UIKit.new("Frame", {
 			Name = "Swatch",
 			Position = UDim2.fromOffset(10, 10),
 			Size = UDim2.new(0, 14, 1, -20),
 			BackgroundColor3 = row.Color:Lerp(Color3.new(1, 1, 1), 0.12),
 			BorderSizePixel = 0,
-		}, frame)
+		}, button)
 		UIKit.corner(swatch, 7)
-		UIKit.label(frame, row.Label, m.RowLabel, {
-			Name = "Label",
-			Position = UDim2.fromOffset(34, 6),
-			Size = UDim2.new(1, -120, 0, m.RowLabel + 4),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextWrapped = false,
-		})
-		UIKit.label(frame, row.Chance, m.RowLabel + 2, {
-			Name = "Chance",
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 5),
-			Size = UDim2.fromOffset(84, m.RowLabel + 6),
-			TextXAlignment = Enum.TextXAlignment.Right,
-			TextColor3 = GOLD,
-			FontFace = Theme.TitleFont,
-		})
-		UIKit.label(frame, row.Detail, m.RowDetail, {
-			Name = "Detail",
-			Position = UDim2.fromOffset(34, m.RowLabel + 10),
-			Size = UDim2.new(1, -46, 0, m.Row - m.RowLabel - 14),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top,
+		local chanceW = if refs.Compact then 78 else 72
+		if refs.Compact then
+			-- a tile: the label (up to two lines) and the chance beside it
+			UIKit.label(button, row.Label, m.RowLabel, {
+				Name = "Label",
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 32, 0.5, 0),
+				Size = UDim2.new(1, -(32 + chanceW + 8), 1, -8),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = true,
+			})
+			UIKit.label(button, row.Chance, m.RowLabel + 4, {
+				Name = "Chance",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(chanceW, m.RowLabel + 8),
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextColor3 = GOLD,
+				FontFace = Theme.TitleFont,
+				TextWrapped = false,
+			})
+		else
+			-- a row: the label and the chance, one line of what it pays, a "more" chevron
+			UIKit.label(button, row.Label, m.RowLabel, {
+				Name = "Label",
+				Position = UDim2.fromOffset(34, 5),
+				Size = UDim2.new(1, -(34 + chanceW + 30), 0, m.RowLabel + 4),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = false,
+			})
+			UIKit.label(button, row.Chance, m.RowLabel + 2, {
+				Name = "Chance",
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -30, 0, 4),
+				Size = UDim2.fromOffset(chanceW, m.RowLabel + 6),
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextColor3 = GOLD,
+				FontFace = Theme.TitleFont,
+				TextWrapped = false,
+			})
+			UIKit.label(button, row.Detail, m.RowDetail, {
+				Name = "Detail",
+				Position = UDim2.fromOffset(34, m.RowLabel + 10),
+				Size = UDim2.fromOffset(200, m.RowDetail + 6),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = Theme.TextDim,
+				TextWrapped = false,
+			})
+		end
+		UIKit.label(button, "›", 30, {
+			Name = "More",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -6, 0.5, 0),
+			Size = UDim2.fromOffset(18, 34),
 			TextColor3 = Theme.TextDim,
-			TextWrapped = true,
+			TextWrapped = false,
+			Visible = not refs.Compact,
 		})
-		refs.Rows[row.Id] = frame
+		refs.Rows[row.Id] = button
+		refs.RowData[row.Id] = row
 	end
-	refs.Odds.CanvasSize = UDim2.fromOffset(0, #rows * (m.Row + 8))
+	local lines = math.ceil(#rows / m.Columns)
+	refs.Odds.CanvasSize = UDim2.fromOffset(0, lines * m.Row + math.max(0, lines - 1) * m.RowGap)
+	WheelView.fitRows(refs)
+end
+
+-- The rows' one-line details follow the list's width (cut with "...": the
+-- details card has the whole text), and the "more below" note.
+function WheelView.fitRows(refs: Refs)
+	local m = metrics(refs.Compact)
+	local width = refs.Odds.Size.X.Offset
+	if width <= 0 then
+		width = math.floor(m.Width * 0.45)
+	end
+	local detailW = width - 12 - 34 - 34
+	for id, button in refs.Rows do
+		local detail = button:FindFirstChild("Detail")
+		local row = refs.RowData[id]
+		if detail and detail:IsA("TextLabel") and row then
+			detail.Size = UDim2.fromOffset(detailW, m.RowDetail + 6)
+			detail.Text = WheelView.truncate(row.Detail, m.RowDetail, detailW)
+		end
+	end
+	WheelView.updateMore(refs)
+end
+
+-- Shows the "more below" note while rows are hidden under the list's bottom.
+function WheelView.updateMore(refs: Refs)
+	local canvas = refs.Odds.CanvasSize.Y.Offset
+	local view = refs.Odds.Size.Y.Offset
+	local scrolled = refs.Odds.CanvasPosition.Y
+	refs.More.Visible = canvas - (scrolled + view) > 8
 end
 
 -- Lights a row (the segment the wheel stopped on), nil = none.
 function WheelView.highlight(refs: Refs, id: string?)
-	for rowId, frame in refs.Rows do
+	for rowId, button in refs.Rows do
 		local on = rowId == id
-		frame.BackgroundColor3 = if on then Theme.PanelLight else Theme.PanelDark
-		local stroke = frame:FindFirstChild("Lit")
+		local open = rowId == refs.InfoId
+		button.BackgroundColor3 = if on or open then Theme.PanelLight else Theme.PanelDark
+		local stroke = button:FindFirstChild("Lit")
 		if on and not stroke then
-			local s = UIKit.stroke(frame, 3, GOLD)
-			s.Name = "Lit"
+			local made = UIKit.stroke(button, 3, GOLD)
+			made.Name = "Lit"
 		elseif not on and stroke then
 			stroke:Destroy()
 		end
 	end
+end
+
+-- The details card of a row over the odds column: its whole text and, for
+-- a capsule, the exact chance of every golem (two columns).
+function WheelView.showInfo(refs: Refs, id: string)
+	local row = refs.RowData[id]
+	if not row then
+		return
+	end
+	local m = metrics(refs.Compact)
+	refs.InfoId = id
+	refs.InfoSwatch.BackgroundColor3 = row.Color:Lerp(Color3.new(1, 1, 1), 0.12)
+	refs.InfoTitle.Text = row.Label
+	refs.InfoChance.Text = row.Chance
+	refs.InfoText.Text = row.Detail
+	local width = refs.Info.Size.X.Offset - 32
+	local textSize = m.RowDetail + 2
+	local textY = refs.InfoText.Position.Y.Offset
+	local textH = math.ceil(WheelView.lines(row.Detail, textSize, width) * textSize * 1.25 + 4)
+	refs.InfoText.TextSize = textSize
+	refs.InfoText.Size = UDim2.fromOffset(width, textH)
+	for _, child in refs.InfoLines:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	local lines: { Line } = row.Lines or {}
+	refs.InfoLines.Visible = #lines > 0
+	refs.InfoLines.Position = UDim2.fromOffset(16, textY + textH + 6)
+	refs.InfoLines.Size = UDim2.fromOffset(width, refs.Info.Size.Y.Offset - (textY + textH + 6) - 10)
+	local cellW = math.floor((width - 8) / 2)
+	local grid = refs.InfoLines:FindFirstChildOfClass("UIGridLayout")
+	if grid then
+		grid.CellSize = UDim2.fromOffset(cellW, m.Line + 7)
+	end
+	for i, line in lines do
+		local text = `{line.Name}  {line.Chance}`
+		local size = math.min(m.Line, math.floor(cellW / (#text * 0.56)))
+		UIKit.label(refs.InfoLines, text, math.max(11, size), {
+			Name = "Line" .. i,
+			LayoutOrder = i,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = line.Color:Lerp(Color3.new(1, 1, 1), 0.3),
+			TextWrapped = false,
+		})
+	end
+	refs.Info.Visible = true
+end
+
+function WheelView.hideInfo(refs: Refs)
+	refs.InfoId = nil
+	refs.Info.Visible = false
+end
+
+-- Lines a text needs at `size` in `width` design units (a generous estimate).
+function WheelView.lines(text: string, size: number, width: number): number
+	local perLine = math.max(1, math.floor(width / (size * 0.56)))
+	local count, line = 1, 0
+	for word in text:gmatch("%S+") do
+		local need = if line == 0 then #word else line + 1 + #word
+		if need > perLine and line > 0 then
+			count += 1
+			line = #word
+		else
+			line = need
+		end
+	end
+	return count
 end
 
 local function styleButton(button: TextButton, color: Color3, dark: Color3)
@@ -720,9 +920,93 @@ function WheelView.build(compact: boolean): Refs
 		ScrollBarImageColor3 = Theme.Accent,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		CanvasSize = UDim2.new(),
-		Selectable = true,
+		Selectable = false,
 	}, panel)
-	UIKit.list(odds, Enum.FillDirection.Vertical, 8)
+	if m.Columns > 1 then
+		UIKit.new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(200, m.Row),
+			CellPadding = UDim2.fromOffset(m.RowGap, m.RowGap),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			FillDirectionMaxCells = m.Columns,
+		}, odds)
+	else
+		UIKit.list(odds, Enum.FillDirection.Vertical, m.RowGap)
+	end
+	-- "more below" over the bottom of the list while rows hide under it
+	local more = UIKit.label(panel, "▼ more odds below", m.Hint, {
+		Name = "More",
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundTransparency = 0.1,
+		BackgroundColor3 = Theme.PanelDark,
+		TextColor3 = GOLD,
+		TextWrapped = false,
+		Visible = false,
+		ZIndex = 8,
+	})
+	UIKit.corner(more, 8)
+	-- a row's details card over the odds column
+	local info = UIKit.panel(panel, {
+		Name = "Info",
+		BackgroundColor3 = Theme.PanelLight,
+		Visible = false,
+		Active = true,
+		ZIndex = 12,
+	})
+	local infoSwatch = UIKit.new("Frame", {
+		Name = "Swatch",
+		Position = UDim2.fromOffset(16, 14),
+		Size = UDim2.fromOffset(14, 32),
+		BorderSizePixel = 0,
+		ZIndex = 13,
+	}, info)
+	UIKit.corner(infoSwatch, 7)
+	local infoTitle = UIKit.label(info, "", m.RowLabel + 4, {
+		Name = "Title",
+		Position = UDim2.fromOffset(40, 12),
+		Size = UDim2.new(1, -(40 + m.Close + 110), 0, 36),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
+		ZIndex = 13,
+	})
+	local infoChance = UIKit.label(info, "", m.RowLabel + 6, {
+		Name = "Chance",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -(m.Close + 22), 0, 12),
+		Size = UDim2.fromOffset(100, 36),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = GOLD,
+		FontFace = Theme.TitleFont,
+		TextWrapped = false,
+		ZIndex = 13,
+	})
+	local infoClose = UIKit.button(info, "X", Theme.Bad, Theme.BadDark, {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 10),
+		Size = UDim2.fromOffset(m.Close, m.Close),
+		TextSize = 24,
+		ZIndex = 14,
+	})
+	local infoText = UIKit.label(info, "", m.RowDetail + 2, {
+		Name = "Text",
+		Position = UDim2.fromOffset(16, m.Close + 16),
+		Size = UDim2.new(1, -32, 0, 60),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 13,
+	})
+	local infoLines = UIKit.new("Frame", {
+		Name = "Lines",
+		BackgroundTransparency = 1,
+		ZIndex = 13,
+	}, info)
+	UIKit.new("UIGridLayout", {
+		CellSize = UDim2.fromOffset(200, m.Line + 7),
+		CellPadding = UDim2.fromOffset(8, 0),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		FillDirectionMaxCells = 2,
+	}, infoLines)
 	local hint = UIKit.label(panel, "", m.Hint, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(1, 1),
@@ -792,6 +1076,16 @@ function WheelView.build(compact: boolean): Refs
 		OddsTitle = oddsTitle,
 		Odds = odds,
 		Rows = {},
+		RowData = {},
+		More = more,
+		Info = info,
+		InfoSwatch = infoSwatch,
+		InfoTitle = infoTitle,
+		InfoChance = infoChance,
+		InfoText = infoText,
+		InfoLines = infoLines,
+		InfoClose = infoClose,
+		InfoId = nil,
 		Hint = hint,
 		Result = result,
 		ResultTitle = resultTitle,
@@ -826,12 +1120,42 @@ function WheelView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	local hintH = m.Hint + 10
 	local oddsX = leftWidth + 4
 	local oddsW = width - oddsX - pad
-	refs.OddsTitle.Position = UDim2.fromOffset(oddsX, m.Header - 6)
-	refs.OddsTitle.Size = UDim2.fromOffset(oddsW, 30)
-	refs.Odds.Position = UDim2.fromOffset(oddsX, m.Header + 28)
-	refs.Odds.Size = UDim2.fromOffset(oddsW, height - m.Header - 28 - hintH - 6)
-	refs.Hint.Position = UDim2.new(1, -pad, 1, -6)
-	refs.Hint.Size = UDim2.fromOffset(oddsW, m.Hint + 4)
+	-- compact: "ODDS" and the hint share the header row (left of the X) and
+	-- the tiles start under the X, down to the panel's bottom: all 8 fit
+	local titleY = if refs.Compact then math.floor((m.Header - 30) / 2) + 4 else m.Header - 6
+	local listTop = if refs.Compact then 10 + m.Close + 6 else m.Header + 28
+	refs.OddsTitle.Position = UDim2.fromOffset(oddsX, titleY)
+	refs.OddsTitle.Size = UDim2.fromOffset(if refs.Compact then 80 else oddsW, 30)
+	local oddsH = if refs.Compact then height - listTop - 10 else height - listTop - hintH - 6
+	refs.Odds.Position = UDim2.fromOffset(oddsX, listTop)
+	refs.Odds.Size = UDim2.fromOffset(oddsW, oddsH)
+	local grid = refs.Odds:FindFirstChildOfClass("UIGridLayout")
+	if grid then
+		grid.CellSize = UDim2.fromOffset(math.floor((oddsW - 12 - m.RowGap) / 2), m.Row)
+	end
+	refs.More.Position = UDim2.fromOffset(oddsX + math.floor((oddsW - 12) / 2), listTop + oddsH)
+	refs.More.Size = UDim2.fromOffset(math.min(oddsW - 12, 260), m.Hint + 10)
+	-- the details card covers the odds column (title included)
+	-- (compact: over the whole panel, its X where the panel's X is)
+	if refs.Compact then
+		refs.Info.Position = UDim2.fromOffset(0, 0)
+		refs.Info.Size = UDim2.fromOffset(width, height)
+	else
+		refs.Info.Position = UDim2.fromOffset(oddsX - 4, m.Header - 8)
+		refs.Info.Size = UDim2.fromOffset(oddsW + 4, height - (m.Header - 8) - hintH - 2)
+	end
+	WheelView.fitRows(refs)
+	if refs.Compact then
+		refs.Hint.AnchorPoint = Vector2.new(0, 0)
+		refs.Hint.TextXAlignment = Enum.TextXAlignment.Left
+		refs.Hint.Position = UDim2.fromOffset(oddsX + 86, titleY + 4)
+		refs.Hint.Size = UDim2.fromOffset(math.max(60, width - (oddsX + 86) - m.Close - 24), m.Hint + 4)
+	else
+		refs.Hint.AnchorPoint = Vector2.new(1, 1)
+		refs.Hint.TextXAlignment = Enum.TextXAlignment.Right
+		refs.Hint.Position = UDim2.new(1, -pad, 1, -6)
+		refs.Hint.Size = UDim2.fromOffset(oddsW, m.Hint + 4)
+	end
 	-- the prize card covers the odds column: the wheel stays in view, the
 	-- won segment under the pointer
 	local cardW = math.min(if refs.Compact then 560 else 500, oddsW)
@@ -867,13 +1191,22 @@ function WheelView.buildChip(uiScale: number): ChipRefs
 		Position = UDim2.new(0.5, offset.X, 0, offset.Y),
 		Size = UDim2.fromOffset(size.X, size.Y),
 	})
-	UIKit.label(button, "🎡", 30, {
+	local icon = UIKit.label(button, "🎡", 30, {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 8, 0.5, 0),
 		Size = UDim2.fromOffset(36, 36),
 		TextWrapped = false,
 	})
+	-- a gamepad's shortcut glyph in the icon's place (WheelController shows it)
+	local glyph = UIKit.new("ImageLabel", {
+		Name = "Glyph",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		Size = UDim2.fromOffset(34, 34),
+		BackgroundTransparency = 1,
+		Visible = false,
+	}, button)
 	UIKit.label(button, "FREE SPIN!", if compact then 24 else 22, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -883,7 +1216,14 @@ function WheelView.buildChip(uiScale: number): ChipRefs
 		FontFace = Theme.TitleFont,
 		TextWrapped = false,
 	})
-	return { Gui = gui, Button = button }
+	return { Gui = gui, Button = button, Glyph = glyph, Icon = icon }
+end
+
+-- The chip's gamepad glyph (an image) in place of its icon; "" = the icon.
+function WheelView.setChipGlyph(chip: ChipRefs, image: string)
+	chip.Glyph.Image = image
+	chip.Glyph.Visible = image ~= ""
+	chip.Icon.Visible = image == ""
 end
 
 -- Moves the chip for a new uiScale (phone <-> big screen).

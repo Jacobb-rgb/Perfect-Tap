@@ -137,9 +137,12 @@ Net.Events = {
 	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
 	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
 	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
-	--   WheelConfig.ClientCooldown / ResultTimeout)
+	--   WheelConfig.ClientCooldown / ResultTimeout) | ("Reveal"): the open wheel screen showed
+	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise)
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
-	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters)
+	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
+	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
+	--   podium skin show (data.Artifacts.Equipped); both answered by ActionResult
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialSkip = { Rate = 1, Burst = 2 },

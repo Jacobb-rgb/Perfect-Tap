@@ -8,17 +8,22 @@
 	finds.
 
 	  floor     a low stone platform (one step up) with a darker border
-	  back wall a brick wall with a stone cap on the pen side; the lean-to
-	            slate roof rests on it and on three stone columns, with a
-	            gold fascia and a warm neon strip (gallery lights, no Light
-	            objects: plots keep their one light) under its front edge
+	  back wall a brick wall with a stone cap on the pen side and a pale
+	            plaster panel behind the cases (it keeps the gallery bright
+	            under the roof); the lean-to slate roof rests on it and on
+	            three stone columns, with a gold fascia and a warm neon strip
+	            (gallery lights, no Light objects: plots keep their one
+	            light) under its front edge
 	  sign      "MUSEUM" on top of the roof, readable from both sides (the
 	            train stop and, over the pen, the yard gate)
 	  cases     one glass case per ArtifactConfig collection, left to right
 	            in collection order: a gunmetal pedestal like the podiums,
 	            a neon strip in the collection's color, a plaque with the
 	            collection's name and "3 / 6", a raised back shelf (the one
-	            plinth part shared by the back row), the glass and a cap.
+	            plinth part shared by the back row), the glass, a cap and a
+	            soft neon panel under the cap that lights the case (no Light
+	            object). The relics are built without their light
+	            (ArtifactBuilder noLight, also the Mythic's).
 	            The spots: the collection's artifacts in ArtifactConfig
 	            order, the first half in the front row, the rest on the shelf.
 	Visitors stand on the platform in front of the cases (the open +Z side,
@@ -63,6 +68,8 @@ local WARM = rgb(190, 110, 46) -- deep amber: no white bloom under the roof
 local SHELL = rgb(44, 48, 64) -- the podiums' gunmetal
 local SHELF = rgb(70, 76, 98)
 local SIGN_BOARD = rgb(58, 60, 72)
+local PLASTER = rgb(226, 212, 186) -- the pale panel behind the cases
+local CASE_LIGHT = rgb(255, 214, 160) -- the soft panel under each case's cap
 local SIGN_TEXT = rgb(255, 206, 72)
 
 local SOLID = { CanTouch = false }
@@ -235,6 +242,10 @@ local function buildCase(parent: Instance, plotCF: CFrame, case: CaseInfo, index
 	glass.Name = "Glass"
 	local cap = Geo.block(m, at(c.X, c.Y + GLASS_H + 0.1, c.Z), Vector3.new(w + 0.1, 0.2, CASE_DEPTH + 0.1), SHELL, nil, GHOST)
 	cap.Name = "Cap"
+	-- the case's light: a soft warm panel just under the cap (half see-through: no white bloom)
+	local light = Geo.block(m, at(c.X, c.Y + GLASS_H - 0.06, c.Z), Vector3.new(w - 0.5, 0.05, CASE_DEPTH - 0.6), CASE_LIGHT, NEON, GHOST)
+	light.Transparency = 0.35
+	light.Name = "CaseLight"
 end
 
 -- Builds the museum for a plot (plot frame from WorldLayout.plotCFrame). Not parented.
@@ -271,6 +282,18 @@ function MuseumBuilder.build(plotCF: CFrame): Model
 	local wallH = ROOF_Y - 0.2 - FLOOR
 	Geo.block(m, at(cx, FLOOR + wallH / 2, wallZ), Vector3.new(width - 0.6, wallH, 0.7), BRICK, Enum.Material.Brick, SOLID).Name = "Wall"
 	Geo.block(m, at(cx, FLOOR + 0.5, wallZ), Vector3.new(width - 0.5, 1.0, 1.0), PILLAR, nil, GHOST).Name = "Plinth"
+	-- the pale plaster panel on the wall's gallery side, above the plinth
+	local plasterBottom = FLOOR + 1.0
+	local plasterTop = ROOF_Y - 0.85
+	Geo.block(
+		m,
+		at(cx, (plasterBottom + plasterTop) / 2, wallZ + 0.37),
+		Vector3.new(width - 1.4, plasterTop - plasterBottom, 0.06),
+		PLASTER,
+		Enum.Material.Plaster,
+		GHOST
+	).Name =
+		"Backdrop"
 	Geo.block(m, at(cx, ROOF_Y - 0.55, wallZ), Vector3.new(width - 0.5, 0.5, 0.95), PILLAR_CAP, nil, GHOST).Name = "WallCap"
 	-- three stone columns carry the roof's front edge
 	local columnZ = ROOF_FRONT - 0.6
@@ -354,7 +377,8 @@ function MuseumBuilder.show(museum: Model, plotCF: CFrame, artifacts: any): numb
 			count += 1
 			if not piece then
 				local spot = MuseumBuilder.spot(plotCF, art.Id)
-				local model = spot and ArtifactBuilder.build(art.Id, spot, MuseumBuilder.ArtifactScale)
+				-- no light on any relic here (a plot keeps its one light)
+				local model = spot and ArtifactBuilder.build(art.Id, spot, MuseumBuilder.ArtifactScale, true)
 				if model then
 					model.Parent = pieces
 				end

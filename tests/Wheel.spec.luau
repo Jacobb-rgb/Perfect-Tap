@@ -68,7 +68,7 @@ return function(T, Loader)
 				table.insert(saved, { t, key, rawget(t, key) })
 				rawset(t, key, value)
 			end
-			local w: any = { replies = {}, rolls = {}, scheduled = {}, income = 0, restricted = false, now = NOW }
+			local w: any = { replies = {}, rolls = {}, income = 0, restricted = false, now = NOW, clock = 100 }
 			w.player = fakePlayer(901)
 			w.data = deepCopy(DataTemplate)
 			patch(DataService, "get", function(p)
@@ -93,9 +93,10 @@ return function(T, Loader)
 			WheelService._test.setRandom(function()
 				return if #w.rolls > 0 then table.remove(w.rolls, 1) else 0.5
 			end)
-			WheelService._test.setSchedule(function(seconds, fn)
-				table.insert(w.scheduled, { Seconds = seconds, Fn = fn })
+			WheelService._test.setTimer(function()
+				return w.clock
 			end)
+			WheelService._test.setCapsules(nil) -- no capsule package: the wheel opens it itself
 			Bonuses._test.reset()
 			Bonuses._test.setClock(function()
 				return w.now
@@ -106,6 +107,12 @@ return function(T, Loader)
 				WheelService._test.action(w.player, "Spin")
 				local reply = w.replies[#w.replies]
 				return if #w.replies > before then reply else nil
+			end
+			-- the client's "Reveal" (the screen showed a capsule prize): the reply, if any
+			w.reveal = function(): any
+				local before = #w.replies
+				WheelService._test.action(w.player, "Reveal")
+				return if #w.replies > before then w.replies[#w.replies] else nil
 			end
 			local ok, err = pcall(body, w)
 			WheelService._test.reset()
@@ -199,16 +206,32 @@ return function(T, Loader)
 		T.eq(result.Boost, "TripleLucky")
 		T.eq(result.Seconds, 600)
 		T.eq(w.data.Boosts.TripleLuckyUntil, NOW + 600)
-		-- already full: nothing is added (capped), the card says so
+		T.eq(result.Coins, nil, "all of it fit: no coins")
+		-- already full: nothing is added (capped), the Coins segment's prize instead
 		w.now += DAY
 		w.data.Boosts.HexaLuckyUntil = w.now + BoostConfig.MaxStackSeconds
+		local coinsBefore = w.data.Coins
 		local full = w.spin(rollFor(6)).A
 		T.eq(full.Boost, "HexaLucky")
 		T.eq(full.Seconds, 0)
 		T.eq(w.data.Boosts.HexaLuckyUntil, w.now + BoostConfig.MaxStackSeconds)
+		local whole = WheelConfig.coins(WheelConfig.ById.Coins, w.income)
+		T.eq(full.Coins, whole, "never an empty prize")
+		T.eq(w.data.Coins, coinsBefore + whole)
 		local prize, detail = WheelView.prizeText(full)
-		T.eq(prize, "Hexa Lucky")
+		T.truthy(prize:find("coins"), "the coins")
 		T.truthy(detail:find("full"), "explains the cap")
+		-- partly full: the seconds that fit, coins for the rest
+		w.now += DAY
+		w.data.Boosts.TripleLuckyUntil = w.now + BoostConfig.MaxStackSeconds - 240
+		local part = w.spin(rollFor(2)).A
+		T.eq(part.Seconds, 240)
+		T.eq(part.Coins, math.floor(whole * (600 - 240) / 600))
+		local prize2, detail2 = WheelView.prizeText(part)
+		T.truthy(prize2:find("4 min", 1, true), "the seconds added")
+		T.truthy(detail2:find("coins", 1, true), "and the coins")
+		T.eq(WheelService.boostFallbackCoins(WheelConfig.ById.TripleLucky, 600, 1000), 0)
+		T.eq(WheelService.boostFallbackCoins(WheelConfig.ById.TripleLucky, -5, 0), WheelConfig.ById.Coins.Min)
 	end)
 
 	withWheel("Wheel: a Capsule opens for free (Triple Lucky counts) and the opening follows", function(w)
@@ -223,15 +246,14 @@ return function(T, Loader)
 		T.falsy(w.data.Golems.Owned[1].Paid, "a wheel prize is not paid")
 		T.eq(w.data.Stats.CapsulesOpened, 1)
 		T.eq(result.Lucky, false)
-		-- the CapsuleResult waits until the screen wheel stopped
-		T.eq(#w.scheduled, 1)
-		T.truthy(w.scheduled[1].Seconds >= WheelConfig.SpinSeconds, "after the spin")
-		w.scheduled[1].Fn()
-		local opening = w.replies[#w.replies]
+		-- the opening waits for the open screen's "Reveal", and comes once
+		local opening = w.reveal()
 		T.eq(opening.Event, "CapsuleResult")
 		T.eq(opening.A.Free, true)
 		T.eq(opening.A.Count, 1)
 		T.eq(opening.A.Golems[1].Id, golem.Id)
+		T.eq(w.reveal(), nil, "only once")
+		T.eq(#w.data.Golems.Owned, 1, "Reveal grants nothing")
 		-- with Triple Lucky on, the lucky odds are used
 		w.now += DAY
 		w.data.Boosts.TripleLuckyUntil = w.now + 300
@@ -253,7 +275,55 @@ return function(T, Loader)
 		T.eq(result.Coins, share)
 		T.eq(w.data.Coins, share)
 		T.eq(#w.data.Golems.Owned, GolemConfig.InventoryCap, "no golem past the cap")
-		T.eq(#w.scheduled, 0, "no opening")
+		T.eq(w.reveal(), nil, "no opening")
+	end)
+
+	withWheel("Wheel: a capsule's opening is dropped for a closed screen (no Reveal in time)", function(w)
+		w.spin(rollFor(3), 0.0)
+		w.clock += WheelService.RevealSeconds + 1
+		T.eq(w.reveal(), nil, "too late: the golem is in the inventory, the toast told the player")
+		T.eq(#w.data.Golems.Owned, 1)
+		-- junk Reveals before any prize change nothing
+		w.now += DAY
+		w.spin(rollFor(4))
+		T.eq(w.reveal(), nil)
+	end)
+
+	withWheel("Wheel: the capsule package's grantFree opens the free capsule when it exists", function(w)
+		local calls = {}
+		local fake = {
+			grantFree = function(p: any, capsuleId: string, roll: number): (any, boolean?)
+				table.insert(calls, { Player = p, Capsule = capsuleId, Roll = roll })
+				return { Id = 77, Kind = GolemConfig.List[2].Id }, true
+			end,
+		}
+		WheelService._test.setCapsules(fake)
+		local result = w.spin(rollFor(8), 0.25).A
+		T.eq(#calls, 1)
+		T.eq(calls[1].Player, w.player)
+		T.eq(calls[1].Capsule, "Crystal")
+		T.eq(calls[1].Roll, 0.25, "the wheel's seeded roll")
+		T.eq(result.Golem.Id, 77)
+		T.eq(result.Golem.Kind, GolemConfig.List[2].Id)
+		T.eq(result.Lucky, true)
+		T.eq(#w.data.Golems.Owned, 0, "the service did the adding, not the wheel")
+		T.eq(w.reveal().A.Golems[1].Id, 77)
+		-- the service says the inventory is full: the coins share
+		w.now += DAY
+		fake.grantFree = function(): (any, boolean?)
+			return nil, false
+		end
+		local full = w.spin(rollFor(3)).A
+		T.falsy(full.Golem)
+		T.eq(full.Coins, WheelConfig.capsuleFallbackCoins("Stone", w.data.BlasterLevel))
+		-- the service fails: the wheel opens it itself
+		w.now += DAY
+		fake.grantFree = function(): (any, boolean?)
+			error("capsule package down")
+		end
+		local fallback = w.spin(rollFor(3), 0.0).A
+		T.truthy(fallback.Golem, "opened here instead")
+		T.eq(#w.data.Golems.Owned, 1)
 	end)
 
 	withWheel("Wheel: the Ore Prize puts a dirty Rare+ ore into the pen and keeps it secret", function(w)
@@ -432,6 +502,56 @@ return function(T, Loader)
 		restricted.NoCapsules = true
 		local subRows = WheelView.rows(restricted)
 		T.eq(subRows[2].Id, "TripleLuckyCoins")
+		T.eq(subRows[2].Label, "More Coins", "its own name next to Coins")
+		T.truthy(subRows[1].Label ~= subRows[2].Label)
+		-- a capsule lists the exact chance of EVERY golem in it (Triple Lucky as the player has it)
+		for _, segment in WheelConfig.Segments do
+			local row = rows[segment.Index]
+			if segment.Kind == "Capsule" then
+				local odds = CapsuleConfig.odds(segment.Capsule, false)
+				T.eq(#row.Lines, #odds, "every golem of " .. segment.Id)
+				for i, line in odds do
+					T.eq(row.Lines[i].Name, GolemConfig.ById[line.Golem].Name)
+					T.eq(row.Lines[i].Chance, WheelView.percent(line.Chance))
+				end
+			else
+				T.eq(row.Lines, nil)
+			end
+		end
+		local luckyLines = WheelView.rows(lucky)[WheelConfig.ById.CrystalCapsule.Index].Lines
+		local luckyOdds = CapsuleConfig.odds("Crystal", true)
+		T.eq(luckyLines[#luckyLines].Chance, WheelView.percent(luckyOdds[#luckyOdds].Chance), "Triple Lucky's odds")
+	end)
+
+	T.test("WheelView: one-line details are cut to fit, the card has the whole text", function()
+		local long = "A free Stone Capsule: Common 80% · Uncommon 16.5% · Rare 2.9% · Epic 0.5% · Legendary 0.05%"
+		local cut = WheelView.truncate(long, 14, 200)
+		T.truthy(#cut < #long and cut:sub(-3) == "...", "cut")
+		T.truthy(#cut * 14 * 0.56 <= 200 + 1e-6, "fits")
+		T.eq(WheelView.truncate("Short", 14, 200), "Short")
+		local refs = WheelView.build(false)
+		WheelView.layout(refs, 1280, 684)
+		local info = {
+			NoCapsules = false,
+			Income = 640,
+			Ore = { BlasterLevel = 4, BestIncome = 900, Vip = false },
+			TripleLucky = false,
+		}
+		WheelView.setRows(refs, WheelView.rows(info))
+		WheelView.showInfo(refs, "StoneCapsule")
+		T.truthy(refs.Info.Visible)
+		T.eq(refs.InfoId, "StoneCapsule")
+		T.eq(refs.InfoText.Text, refs.RowData.StoneCapsule.Detail, "the whole text")
+		local labels = 0
+		for _, child in refs.InfoLines:GetChildren() do
+			if child:IsA("TextLabel") then
+				labels += 1
+			end
+		end
+		T.eq(labels, #CapsuleConfig.odds("Stone", false))
+		WheelView.hideInfo(refs)
+		T.falsy(refs.Info.Visible)
+		T.eq(refs.InfoId, nil)
 	end)
 
 	T.test("WheelView: the prize card's text for every kind", function()
@@ -511,7 +631,36 @@ return function(T, Loader)
 			end
 			local odds = refs.Odds
 			T.truthy(odds.Position.X.Offset + odds.Size.X.Offset <= size.X.Offset, "the odds fit")
+			-- all 8 rows in view, no scrolling (phones: a 2 x 4 grid of 44 pt tiles)
+			local info = {
+				NoCapsules = false,
+				Income = 640,
+				Ore = { BlasterLevel = 4, BestIncome = 900, Vip = false },
+				TripleLucky = false,
+			}
+			WheelView.setRows(refs, WheelView.rows(info))
+			T.truthy(odds.CanvasSize.Y.Offset <= odds.Size.Y.Offset, "every row in view")
+			T.falsy(refs.More.Visible, "nothing hidden below")
+			if screen.Compact and screen.Scale <= 0.62 then
+				local cell = odds:FindFirstChildOfClass("UIGridLayout").CellSize
+				T.truthy(cell.Y.Offset * screen.Scale >= 44, "a row is 44 pt to tap")
+				T.truthy(refs.InfoClose.Parent.Size.Y.Offset * screen.Scale >= 44, "the card's X is 44 pt")
+			end
+			-- the biggest details card (a capsule's 14 golems) fits its card
+			WheelView.showInfo(refs, "StoneCapsule")
+			local lines = refs.InfoLines
+			T.truthy(lines.Position.Y.Offset + 7 * (lines:FindFirstChildOfClass("UIGridLayout").CellSize.Y.Offset) <= refs.Info.Size.Y.Offset, "the golem odds fit the card")
 		end
+		-- a list longer than its box says so
+		local short = WheelView.build(false)
+		WheelView.layout(short, 1280, 420)
+		WheelView.setRows(short, WheelView.rows({
+			NoCapsules = false,
+			Income = 0,
+			Ore = { BlasterLevel = 1, BestIncome = 0, Vip = false },
+			TripleLucky = false,
+		}))
+		T.truthy(short.More.Visible, "more below")
 	end)
 
 	T.test("WheelView: the FREE SPIN! chip sits right of the teleport bar", function()
@@ -521,6 +670,10 @@ return function(T, Loader)
 			local offset = WheelView.chipOffset(scale)
 			T.truthy(offset.X > barHalf, "clear of the bar at " .. scale)
 			local chip = WheelView.buildChip(scale)
+			WheelView.setChipGlyph(chip, "rbxasset://glyph.png")
+			T.truthy(chip.Glyph.Visible and not chip.Icon.Visible, "the gamepad glyph in the icon's place")
+			WheelView.setChipGlyph(chip, "")
+			T.truthy(chip.Icon.Visible and not chip.Glyph.Visible)
 			local holder = chip.Button.Parent
 			local width = holder.Size.X.Offset
 			local screenHalf = 568 / 0.62 / 2

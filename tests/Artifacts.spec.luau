@@ -12,6 +12,7 @@ return function(T, Loader)
 	local CFrame = Loader.CFrame
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local StoryConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StoryConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -113,6 +114,89 @@ return function(T, Loader)
 		local small = ArtifactBuilder.build("EmberCrown", CFrame.new(), 0.5)
 		local big = ArtifactBuilder.build("EmberCrown", CFrame.new(), 1)
 		T.near(small.PrimaryPart.Size.X * 2, big.PrimaryPart.Size.X, 1e-4)
+	end)
+
+	T.test("Artifacts: the museum's relics carry no light (a plot keeps its one light)", function()
+		local mythic = ArtifactConfig.List[#ArtifactConfig.List]
+		T.eq(mythic.Rarity, ArtifactConfig.LightRarity)
+		local lit = ArtifactBuilder.build(mythic.Id, CFrame.new())
+		local dark = ArtifactBuilder.build(mythic.Id, CFrame.new(), 1, true)
+		local function lights(model: any): number
+			local n = 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("Light") then
+					n += 1
+				end
+			end
+			return n
+		end
+		T.eq(lights(lit), 1, "the pop-out relic keeps its light")
+		T.eq(lights(dark), 0, "noLight")
+		local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[PLOT])
+		local museum = MuseumBuilder.build(plotCF)
+		MuseumBuilder.show(museum, plotCF, allFound())
+		T.eq(lights(museum), 0, "no Light object in a museum, the Mythic on show too")
+		local caseLights = 0
+		for _, d in museum:GetDescendants() do
+			if d.Name == "CaseLight" then
+				caseLights += 1
+				T.eq(d.Material, roblox.Enum.Material.Neon, "a neon panel lights the case")
+			end
+		end
+		T.eq(caseLights, #ArtifactConfig.Collections, "one per case")
+		T.truthy(museum:FindFirstChild("Backdrop"), "the pale panel behind the cases")
+	end)
+
+	---------------------------------------------------------------- the odds
+
+	T.test("Artifacts: in every zone one artifact's chance falls with its rarity", function()
+		local zones = { "SomeNewFloor" }
+		for zoneId in ArtifactConfig.ZoneRarity do
+			table.insert(zones, zoneId)
+		end
+		for _, zone in WorldLayout.Zones do
+			table.insert(zones, zone.Id)
+		end
+		for _, zoneId in zones do
+			local byRarity: { [number]: number } = {}
+			for _, line in ArtifactConfig.odds(zoneId) do
+				local order = Rarity.get(ArtifactConfig.ById[line.Artifact].Rarity).Order
+				local seen = byRarity[order]
+				T.truthy(seen == nil or math.abs(seen - line.Chance) < 1e-12, "the same chance within a rarity")
+				byRarity[order] = line.Chance
+			end
+			local last = math.huge
+			for order = 1, #Rarity.List do
+				local chance = byRarity[order]
+				if chance then
+					T.truthy(chance < last, `{zoneId}: rarity {order} is rarer per artifact than the one before`)
+					last = chance
+				end
+			end
+		end
+		-- the book's "1 in N" grows with rarity: a Mythic is the hardest of all to find
+		local best: { [number]: number } = {}
+		for _, art in ArtifactConfig.List do
+			local _, chance = CollectionView.bestZone(art.Id)
+			local order = Rarity.get(art.Rarity).Order
+			best[order] = math.max(best[order] or 0, chance)
+		end
+		local last = math.huge
+		for order = 1, #Rarity.List do
+			if best[order] then
+				T.truthy(best[order] < last, "the best chance falls with rarity: " .. order)
+				last = best[order]
+			end
+		end
+		-- the duplicate shards follow how rare a find is
+		local prev = 0
+		for _, info in Rarity.List do
+			local shards = ArtifactConfig.DuplicateShards[info.Id]
+			if shards then
+				T.truthy(shards > prev, "more shards for rarer copies")
+				prev = shards
+			end
+		end
 	end)
 
 	---------------------------------------------------------------- MuseumBuilder
@@ -357,12 +441,72 @@ return function(T, Loader)
 		local prompt = museum.PrimaryPart:FindFirstChild("BookPoint")
 		T.truthy(prompt and prompt:FindFirstChild("Prompt"), "Collection Book prompt")
 		T.eq(prompt.Prompt.ActionText, "Collection Book")
+		T.eq(prompt.Prompt.ObjectText, "Your Collection", "it opens the viewer's own book")
+		T.eq(prompt.Prompt.RequiresLineOfSight, true, "not through the back wall from the pen")
 		ArtifactService.find(w.player, "Quarry", nil, "GolemCog")
 		T.eq(#museum.Pieces:GetChildren(), 1, "a new find shows up at home")
 		ArtifactService.find(w.player, "Quarry", nil, "GolemCog")
 		T.eq(#museum.Pieces:GetChildren(), 1, "a copy adds nothing")
 		w.owner = nil
 		T.eq(ArtifactService.refreshMuseum(PLOT), 0, "a freed plot is empty")
+	end)
+
+	withFinds("Artifacts: a completed collection's title and podium skin show (Equip picks one)", function(w)
+		local railway = ArtifactConfig.CollectionById.RoyalRailway
+		T.eq(ArtifactService.applyRewards(w.player), nil, "nothing completed: nothing shows")
+		T.eq(w.player:GetAttribute("Title"), nil)
+		-- not complete yet: refused
+		local ok, reason = ArtifactService.equip(w.player, "RoyalRailway")
+		T.eq(ok, false)
+		T.eq(reason, "NotComplete")
+		T.eq(select(2, ArtifactService.equip(w.player, "Nope")), "BadCollection")
+		T.eq(select(2, ArtifactService.equip(w.player, 5)), "BadCollection")
+		-- completing it puts its title and skin on at once (the last completed one)
+		for _, art in ArtifactConfig.ByCollection.RoyalRailway do
+			ArtifactService.find(w.player, "Quarry", nil, art.Id)
+		end
+		T.eq(w.player:GetAttribute("Title"), railway.Reward.Title)
+		T.eq(w.player:GetAttribute("PodiumSkin"), railway.Reward.PodiumSkin)
+		T.eq(w.plotModel:GetAttribute("PodiumSkin"), railway.Reward.PodiumSkin)
+		local skin = ArtifactConfig.PodiumSkins[railway.Reward.PodiumSkin]
+		local podium = w.plotModel.Yard.Podium1
+		T.eq(podium.Base.Color, skin.Base, "the podium in the skin's colors")
+		T.eq(podium.Top.Color, skin.Trim)
+		T.truthy(podium.Rim.Color ~= skin.Base and podium.Rim:GetAttribute("SkinFrom") == nil, "the Rim stays PodiumService's")
+		for _, child in podium:GetChildren() do
+			if child.Name == "HoloRing" then
+				T.eq(child.Color, skin.Glow, "the holo-ring glows in the skin")
+			end
+		end
+		-- a second completed collection: the newest shows, Equip picks the other back
+		for _, art in ArtifactConfig.ByCollection.CrownOfKaldrum do
+			ArtifactService.find(w.player, "Quarry", nil, art.Id)
+		end
+		local crown = ArtifactConfig.CollectionById.CrownOfKaldrum
+		T.eq(w.player:GetAttribute("Title"), railway.Reward.Title, "the last completed in collection order is the Railway")
+		ArtifactService._test.action(w.player, "Equip", { Collection = "CrownOfKaldrum" })
+		local reply = w.last("ActionResult")
+		T.eq(reply.A.Op, "Equip")
+		T.eq(reply.A.Ok, true)
+		T.eq(w.data.Artifacts.Equipped, "CrownOfKaldrum")
+		T.eq(w.player:GetAttribute("Title"), crown.Reward.Title)
+		T.eq(podium.Base.Color, ArtifactConfig.PodiumSkins[crown.Reward.PodiumSkin].Base)
+		-- "" takes them off: the podiums get their own colors back
+		local before = podium.Column:GetAttribute("SkinFrom")
+		T.truthy(before, "the own color is kept while a skin is on")
+		ArtifactService._test.action(w.player, "Equip", { Collection = "" })
+		T.eq(w.player:GetAttribute("Title"), nil)
+		T.eq(w.plotModel:GetAttribute("PodiumSkin"), nil)
+		T.eq(podium.Column.Color, before, "its own color back")
+		T.eq(podium.Column:GetAttribute("SkinFrom"), nil)
+		T.eq(ArtifactConfig.equipped(w.data.Artifacts), nil)
+		-- a freed plot gets its own colors back too
+		ArtifactService._test.action(w.player, "Equip", { Collection = "RoyalRailway" })
+		T.truthy(ArtifactService.paintPodiums(PLOT, nil) > -1)
+		T.eq(podium.Column.Color, before)
+		-- the reward toast promises only what the game gives
+		local text = ArtifactService.completedText("RoyalRailway")
+		T.truthy(text:find(railway.Reward.Title, 1, true) and text:find(skin.Name, 1, true), "title and skin")
 	end)
 
 	withFinds("Artifacts: the FOSSIL DIG and the Guild board get their prompts", function(w)
@@ -445,6 +589,105 @@ return function(T, Loader)
 		local title3, _, extra3 = CollectionView.revealText({ Artifact = "EmberCrown", New = true, Completed = true }, allFound())
 		T.eq(title3, "COLLECTION COMPLETE!")
 		T.truthy(extra3:find("Chapter 1", 1, true))
+		-- the State push with the find hasn't arrived yet: the find still counts
+		local stale = allFound()
+		stale.Found.EmberCrown = nil
+		local _, progress4 = CollectionView.revealText({ Artifact = "EmberCrown", New = true, Completed = true }, stale)
+		T.truthy(progress4:find("6 / 6", 1, true), "not 5 / 6 under COLLECTION COMPLETE")
+		local _, progress5 = CollectionView.revealText({ Artifact = "RailLantern", New = true }, { Found = {}, Chapters = {} })
+		T.truthy(progress5:find("1 / 6", 1, true))
+		-- a copy is a toast
+		T.eq(CollectionView.copyText({ Artifact = "GolemCog", Shards = 1 }), "Golem Cog (copy) +1 Shard")
+		T.eq(CollectionView.copyText({ Artifact = "GolemCog", Shards = 4 }), "Golem Cog (copy) +4 Shards")
+		T.eq(CollectionView.copyText({ Artifact = "GolemCog" }), "Golem Cog (copy)")
+	end)
+
+	T.test("Artifacts: the NEW ARTIFACT! banner is small, not modal, clear of the controls", function()
+		local screens = {
+			{ Compact = true, Scale = 0.62, W = 568 / 0.62, H = (320 - 58) / 0.62 },
+			{ Compact = false, Scale = 1, W = 1280, H = 684 },
+		}
+		for _, screen in screens do
+			local banner = CollectionView.buildBanner(screen.Compact)
+			CollectionView.showBanner(banner, { Artifact = "QueensBrooch", New = true }, { Found = {}, Chapters = {} })
+			T.truthy(banner.Gui.Enabled)
+			T.eq(banner.Name.Text, "Queen's Amethyst Brooch")
+			T.eq(banner.Progress.Text, "1 / 6 found", "counts the find before the State push")
+			local card = banner.Card
+			T.falsy(card.Active, "not modal")
+			T.falsy(banner.Book.Selectable, "never takes a gamepad selection")
+			local w, h = card.Size.X.Offset, card.Size.Y.Offset
+			T.truthy(w <= screen.W * 0.6, "small: at most 60 % of the width")
+			T.truthy(card.Position.Y.Offset >= 96, "under the coins panel")
+			-- the bottom 40 % of the screen (thumbstick, jump, carry slots) stays free
+			T.truthy(card.Position.Y.Offset + h <= screen.H * 0.6, "clear of the thumbstick and jump areas")
+			if screen.Compact then
+				T.truthy(banner.Book.Parent.Size.Y.Offset * screen.Scale >= 44, "BOOK is 44 pt")
+			end
+			CollectionView.setBannerKeys(banner, "rbxasset://a.png", "Book", "rbxasset://b.png", "Close")
+			T.truthy(banner.BookGlyph.Visible and banner.CloseGlyph.Visible)
+			CollectionView.setBannerKeys(banner, "", "", "", "")
+			T.falsy(banner.Keys.Visible, "touch: no key row")
+		end
+	end)
+
+	T.test("Artifacts: the HUD's BOOK button, its NEW badge and the title board", function()
+		local menu = Instance.new("Frame")
+		local m = CollectionView.menuButton(menu)
+		T.eq(m.Button.Parent.Parent, menu)
+		T.falsy(CollectionView.anyChapterNew({ Found = {}, Chapters = {} }))
+		local all = allFound()
+		T.truthy(CollectionView.anyChapterNew(all), "a completed chapter waits")
+		for _, collection in ArtifactConfig.Collections do
+			all.Chapters[collection.Id] = true
+		end
+		T.falsy(CollectionView.anyChapterNew(all), "all read")
+		local board = CollectionView.titleBoard("Heir of Kaldrum")
+		T.eq(board.ClassName, "BillboardGui")
+		T.truthy(board.Text.Text:find("Heir of Kaldrum", 1, true))
+		T.truthy(board.MaxDistance > 0 and board.MaxDistance <= 100, "only near players")
+	end)
+
+	T.test("Artifacts: the book's USE button and the scrolling detail text", function()
+		local refs = CollectionView.build(true)
+		CollectionView.layout(refs, 568 / 0.62, (320 - 58) / 0.62)
+		refs.Collection = "CrownOfKaldrum"
+		refs.Selected = "EmberCrown"
+		CollectionView.fill(refs, { Found = { CrownCoin = 1 }, Chapters = {} })
+		T.falsy(refs.Use.Parent.Visible, "not before the collection is complete")
+		local all = allFound()
+		CollectionView.fill(refs, all)
+		T.truthy(refs.Use.Parent.Visible)
+		T.eq(refs.Use.Text, "USE TITLE + SKIN")
+		T.eq(refs.Use:GetAttribute("Equip"), "CrownOfKaldrum")
+		all.Equipped = "CrownOfKaldrum"
+		CollectionView.fill(refs, all)
+		T.eq(refs.Use.Text, "IN USE ✓")
+		T.eq(refs.Use:GetAttribute("Equip"), "", "a press takes it off")
+		-- the last completed collection shows by itself (nothing picked)
+		all.Equipped = nil
+		T.truthy(CollectionView.inUse(all, ArtifactConfig.Collections[#ArtifactConfig.Collections].Id))
+		-- a small phone scrolls the detail text instead of dropping the lore
+		T.truthy(refs.DetailLore.Visible and refs.DetailCount.Visible, "nothing dropped")
+		T.eq(refs.DetailLore.Text, ArtifactConfig.ById.EmberCrown.Lore)
+		local body = refs.DetailBody
+		T.truthy(body.CanvasSize.Y.Offset > body.Size.Y.Offset, "it scrolls on a small phone")
+		T.truthy(refs.DetailWhere.Position.Y.Offset >= refs.DetailLore.Position.Y.Offset + refs.DetailLore.Size.Y.Offset, "where under the lore")
+		-- the footer: reward, USE and the chapter button side by side, inside the panel
+		local footer = refs.Footer.Size.X.Offset
+		local used = refs.Reward.Size.X.Offset + refs.Use.Parent.Size.X.Offset + refs.Chapter.Parent.Size.X.Offset
+		T.truthy(used <= footer, "the footer fits")
+		T.truthy(refs.Use.Parent.Size.Y.Offset * 0.62 >= 44, "USE is 44 pt")
+		T.truthy(refs.Reward.TextSize >= 12, "the reward stays readable")
+		-- the journal is one tap away (the Prologue is always open), above the detail column
+		local journal = refs.Journal.Parent
+		T.truthy(journal.Size.Y.Offset * 0.62 >= 44, "JOURNAL is 44 pt")
+		local panelW = refs.Panel.Size.X.Offset
+		local journalLeft = panelW + journal.Position.X.Offset - journal.Size.X.Offset
+		T.truthy(journalLeft >= refs.Detail.Position.X.Offset - 1, "over the detail column, not the tiles")
+		T.truthy(journal.Position.Y.Offset + journal.Size.Y.Offset <= refs.Detail.Position.Y.Offset, "above it")
+		local totalRight = panelW + refs.Total.Position.X.Offset
+		T.truthy(totalRight <= journalLeft, "the count left of JOURNAL")
 	end)
 
 	T.test("Artifacts: glyphs draw every relic, silhouettes hide the colors", function()

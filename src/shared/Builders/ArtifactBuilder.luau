@@ -5,7 +5,9 @@
 	client (the relic that pops out of a rock) and the Lune tools build the
 	same models.
 
-	- build(id, cf, scale?) -> Model "Artifact" (nil for an unknown id).
+	- build(id, cf, scale?, noLight?) -> Model "Artifact" (nil for an unknown
+	  id). `noLight`: no PointLight even on a Mythic (the base museums: a
+	  plot keeps its one light; the client's pop-out relic keeps it).
 	  `cf` is the spot the relic stands on: the model's origin is the bottom
 	  centre, its front faces cf.LookVector (-Z). At scale 1 a relic is about
 	  Height studs tall and fits a Footprint x Footprint square.
@@ -369,7 +371,7 @@ end
 ArtifactBuilder.Builders = BUILDERS
 
 -- Builds the relic `id` standing on `cf` (see the header). nil for an unknown id.
-function ArtifactBuilder.build(id: string, cf: CFrame, scale: number?): Model?
+function ArtifactBuilder.build(id: string, cf: CFrame, scale: number?, noLight: boolean?): Model?
 	local art = ArtifactConfig.ById[id]
 	if not art then
 		return nil
@@ -390,7 +392,7 @@ function ArtifactBuilder.build(id: string, cf: CFrame, scale: number?): Model?
 	end
 	-- only the rarest relics carry a light, on their glow part
 	local glowColor = art.Glow
-	if art.Rarity == ArtifactConfig.LightRarity and glowColor then
+	if art.Rarity == ArtifactConfig.LightRarity and glowColor and not noLight then
 		for _, child in model:GetChildren() do
 			if child:IsA("BasePart") and child.Material == NEON then
 				local light = Instance.new("PointLight")

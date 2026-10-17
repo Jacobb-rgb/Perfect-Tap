@@ -3,7 +3,9 @@
 	  lune run tools/lune/export_scene.luau wheel_artifacts
 	The world with:
 	  plot 5    the museum (MuseumBuilder, as ArtifactService builds it) with a
-	            mid-game collection: the Crown complete, the others partly found
+	            mid-game collection: the Crown complete, the others partly found;
+	            the plot's podiums in the Crown's Royal Velvet skin
+	            (ArtifactService.paintYard, as for its owner)
 	  gallery   every relic (ArtifactBuilder) on a plinth row high above the sea
 	            (x 0, y 240), one row per collection, with its name on a tag
 	  quarry    a relic popping out of a broken rock (the client's found moment)
@@ -11,17 +13,22 @@
 	  ui_wheel            PC: the wheel screen, a free spin ready
 	  ui_wheel_won        PC: the wheel stopped, the prize card and confetti
 	  ui_wheel_wait       PC: spun today, the countdown
+	  ui_wheel_info       PC: a capsule row's details card (every golem's odds)
 	  ui_wheel_phone      667 x 375 pt phone: the compact wheel screen
-	  ui_wheel_phone_small 568 x 320 pt phone
-	  ui_chip             the HUD with the FREE SPIN! chip
+	  ui_wheel_phone_small 568 x 320 pt phone (all 8 odds tiles in view)
+	  ui_wheel_info_phone 568 x 320 pt phone: the details card
+	  ui_chip             the HUD with the FREE SPIN! chip (and the BOOK button)
 	  ui_chip_phone       the same on a phone
 	  ui_book             PC: the collection book, Railway tab (silhouettes)
-	  ui_book_done        PC: the Crown tab, complete, chapter waiting
+	  ui_book_done        PC: the Crown tab, complete, its title + skin IN USE
 	  ui_book_phone       phone: the collection book
+	  ui_book_phone_small 568 x 320 pt phone: the detail text scrolls
 	  ui_story            PC: the journal, chapter 1 page 2
 	  ui_story_phone      phone: the journal (a locked chapter selected)
-	  ui_reveal           the ARTIFACT FOUND card (a new one)
-	  ui_reveal_complete  the card for a find that completes a collection
+	  ui_banner           PC: the small NEW ARTIFACT! banner over the HUD
+	  ui_banner_phone     568 x 320 pt phone: the banner
+	  ui_reveal_complete  the COLLECTION COMPLETE card (the only big card)
+	  ui_reveal_phone     568 x 320 pt phone: that card
 	Shots: tools/preview/wheel_artifacts_shots.json (scene "wheel_artifacts").
 ]]
 
@@ -62,6 +69,7 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local ArtifactBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ArtifactBuilder")
 	local MuseumBuilder = Loader.requirePath("ServerScriptService.Server.World.MuseumBuilder")
+	local ArtifactService = Loader.requirePath("ServerScriptService.Server.Services.ArtifactService")
 
 	local artifacts = { Found = Preview.Found, Chapters = {} }
 
@@ -72,6 +80,12 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local museum = MuseumBuilder.build(plotCF)
 	museum.Parent = yard or workspace
 	local shown = MuseumBuilder.show(museum, plotCF, artifacts)
+	-- the owner's podium skin (the Crown is complete: Royal Velvet)
+	local equipped = ArtifactConfig.equipped(artifacts)
+	if yard and equipped then
+		local painted = ArtifactService.paintYard(yard, ArtifactConfig.CollectionById[equipped].Reward.PodiumSkin)
+		print(string.format("podium skin %s: %d parts", equipped, painted))
+	end
 	local structure = 0
 	for _, d in museum:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -140,6 +154,11 @@ local function hud(Loader: any, uiScale: number): any
 	end
 	refs.Toasts:ClearAllChildren()
 	TeleportView.build(refs.TopBar, refs.Menu, uiScale)
+	local CollectionView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CollectionView")
+	local BuildView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BuildView")
+	BuildView.menuButton(refs.Menu)
+	local book = CollectionView.menuButton(refs.Menu)
+	book.New.Visible = true -- the Crown's chapter waits unread
 	return refs
 end
 
@@ -173,7 +192,7 @@ function Preview.ui(Loader: any): { [string]: any }
 		WheelView.setRows(refs, WheelView.rows(Preview.wheelInfo()))
 		WheelView.layout(refs, maxW, maxH)
 		WheelView.setReady(refs, true, 0)
-		refs.Hint.Text = "Click SPIN!  ·  Backspace: close"
+		refs.Hint.Text = "Click a row for details  ·  Backspace: close"
 		return refs
 	end
 
@@ -201,15 +220,27 @@ function Preview.ui(Loader: any): { [string]: any }
 	w3.Disc.Rotation = WheelView.restAngle(WheelConfig.ById.Shards.Index, 8)
 	exports.ui_wheel_wait = UiExport.export({ h3.Gui, w3.Gui })
 
+	-- PC: a capsule row's details card
+	local h3b = hud(Loader, scale)
+	local w3b = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	WheelView.showInfo(w3b, "StoneCapsule")
+	WheelView.highlight(w3b, nil)
+	exports.ui_wheel_info = UiExport.export({ h3b.Gui, w3b.Gui })
+
 	-- phones
 	local h4 = hud(Loader, phoneScale)
 	local w4 = wheel(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale)
-	w4.Hint.Text = "Tap SPIN!"
+	w4.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	exports.ui_wheel_phone = UiExport.export({ h4.Gui, w4.Gui })
 	local h5 = hud(Loader, smallScale)
 	local w5 = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
-	w5.Hint.Text = "Tap SPIN!"
+	w5.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	exports.ui_wheel_phone_small = UiExport.export({ h5.Gui, w5.Gui })
+	local h5b = hud(Loader, smallScale)
+	local w5b = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
+	w5b.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
+	WheelView.showInfo(w5b, "CrystalCapsule")
+	exports.ui_wheel_info_phone = UiExport.export({ h5b.Gui, w5b.Gui })
 
 	-- the HUD chip
 	local h6 = hud(Loader, scale)
@@ -227,6 +258,8 @@ function Preview.ui(Loader: any): { [string]: any }
 	local CollectionView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CollectionView")
 	local StoryView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoryView")
 	local artifacts = { Found = Preview.Found, Chapters = {} }
+	-- the newest find (the State push hasn't brought it yet)
+	local newFind = { Artifact = "LastTicket", Count = 1, New = true, Collection = "RoyalRailway", Completed = false }
 
 	local function bookView(uiScale: number, compact: boolean, maxW: number, maxH: number, collection: string, selected: string?): any
 		local refs = CollectionView.build(compact)
@@ -273,23 +306,30 @@ function Preview.ui(Loader: any): { [string]: any }
 	local j2 = journalView(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale, "Golemworks", 1)
 	exports.ui_story_phone = UiExport.export({ h12.Gui, j2.Gui })
 
+	-- the NEW ARTIFACT! banner (not modal) over the HUD
 	local h13 = hud(Loader, scale)
-	local card = CollectionView.buildReveal(false)
-	card.Gui.Scale.Scale = scale
-	CollectionView.showReveal(
-		card,
-		{ Artifact = "RailLantern", Count = 1, New = true, Collection = "RoyalRailway", Completed = false },
-		artifacts
-	)
-	CollectionView.fitReveal(card, 1600 / scale, (900 - 36) / scale)
-	exports.ui_reveal = UiExport.export({ h13.Gui, card.Gui })
+	local banner = CollectionView.buildBanner(false)
+	banner.Gui.Scale.Scale = scale
+	CollectionView.showBanner(banner, newFind, artifacts)
+	CollectionView.setBannerKeys(banner, "", "J: book", "", "Backspace: close")
+	exports.ui_banner = UiExport.export({ h13.Gui, banner.Gui })
+	local h13b = hud(Loader, smallScale)
+	local banner2 = CollectionView.buildBanner(true)
+	banner2.Gui.Scale.Scale = smallScale
+	CollectionView.showBanner(banner2, newFind, artifacts)
+	CollectionView.setBannerKeys(banner2, "", "", "", "")
+	exports.ui_banner_phone = UiExport.export({ h13b.Gui, banner2.Gui })
+
+	-- the COLLECTION COMPLETE card (the State push with the find not there yet: 6 / 6 all the same)
+	local stale = { Found = table.clone(Preview.Found), Chapters = {} }
+	stale.Found.EmberCrown = nil
 	local h14 = hud(Loader, scale)
 	local card2 = CollectionView.buildReveal(false)
 	card2.Gui.Scale.Scale = scale
 	CollectionView.showReveal(
 		card2,
 		{ Artifact = "EmberCrown", Count = 1, New = true, Collection = "CrownOfKaldrum", Completed = true },
-		artifacts
+		stale
 	)
 	CollectionView.fitReveal(card2, 1600 / scale, (900 - 36) / scale)
 	exports.ui_reveal_complete = UiExport.export({ h14.Gui, card2.Gui })
@@ -298,8 +338,8 @@ function Preview.ui(Loader: any): { [string]: any }
 	card3.Gui.Scale.Scale = smallScale
 	CollectionView.showReveal(
 		card3,
-		{ Artifact = "GolemCog", Count = 4, New = false, Collection = "Golemworks", Completed = false, Shards = 1 },
-		artifacts
+		{ Artifact = "EmberCrown", Count = 1, New = true, Collection = "CrownOfKaldrum", Completed = true },
+		stale
 	)
 	CollectionView.fitReveal(card3, 1600 / smallScale, (900 - smallInset) / smallScale)
 	exports.ui_reveal_phone = UiExport.export({ h15.Gui, card3.Gui })

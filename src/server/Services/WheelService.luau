@@ -22,19 +22,29 @@
 	  Spins can't both pass: the check and the write happen in one step.
 	  The cooldown and the prize live in the same save, so a crash before the
 	  next autosave loses both together (never a prize without the cooldown).
+	- WheelAction ("Reveal"): the wheel screen showed a capsule prize's card
+	  (the client sends it only while the screen is open): the server sends
+	  that spin's CapsuleResult { Free = true } once, so the capsule opening
+	  (capsule package) plays after the wheel, and never for a player who
+	  closed the screen (the golem is in their inventory either way; the
+	  toast told them). It grants nothing. Kept RevealSeconds, then dropped.
 	- Prizes (WheelConfig):
 	    Coins    EconomyService.award(WheelConfig.coins(segment, podium income))
 	    Boost    BoostConfig.extend(data.Boosts, kind, Seconds, now, capped)
 	             (the save is the boosts' only state: whatever runs the
 	             boosts reads data.Boosts; Bonuses drops its cache on the
-	             data change); WheelResult.Seconds = the seconds really added
-	    Capsule  one capsule of that kind opened for free right away
-	             (CapsuleConfig.roll with the player's Triple Lucky +
-	             GolemConfig.add, Stats.CapsulesOpened + 1); WheelResult.Golem.
-	             A CapsuleResult { Free = true } follows when the screen wheel
-	             has stopped, so the capsule opening (capsule package) plays
-	             after the wheel. Full golem inventory: FallbackShare coins
-	             (WheelConfig.capsuleFallbackCoins), WheelResult.Coins
+	             data change); WheelResult.Seconds = the seconds really added.
+	             A boost already near its MaxStackSeconds cap: the seconds
+	             that didn't fit are paid as coins (boostFallbackCoins: that
+	             share of the Coins segment's prize), WheelResult.Coins
+	    Capsule  one capsule of that kind opened for free right away: through
+	             CapsuleService.grantFree when the capsule package has it (its
+	             own side effects then run too), else here (CapsuleConfig.roll
+	             with the player's Triple Lucky + GolemConfig.add,
+	             Stats.CapsulesOpened + 1); WheelResult.Golem. The opening
+	             plays on "Reveal" (above). Full golem inventory:
+	             FallbackShare coins (WheelConfig.capsuleFallbackCoins),
+	             WheelResult.Coins
 	    Ore      a dirty (Raw) Rare+ ore (WheelConfig.pickOre) into the Ore
 	             Pen (PenService.store); WheelResult.DirtyOre = true only, WHICH
 	             ore stays secret until cleaned. Full pen: the expected raw
@@ -69,9 +79,22 @@ local WheelService = {}
 WheelService.PromptName = "WheelPrompt"
 WheelService.PointName = "WheelPromptPoint"
 WheelService.PromptDistance = 12
--- seconds after the WheelResult before the CapsuleResult of a capsule prize
--- (the screen wheel spins WheelConfig.SpinSeconds, then shows the prize card)
-WheelService.CapsuleDelay = WheelConfig.SpinSeconds + 1.5
+-- seconds a capsule prize's opening waits for the client's "Reveal"
+WheelService.RevealSeconds = 60
+
+--[[
+	The capsule package's free opening, when this place has it:
+	CapsuleService.grantFree(player, capsuleId, roll) opens one capsule of
+	that kind for free into the player's golems with no yield (no price, not
+	paid; the player's Triple Lucky counts; Stats.CapsulesOpened and its own
+	side effects such as the codex / seen list) and returns the golem added
+	({ Id, Kind }, nil when the inventory is full) and whether Triple Lucky
+	counted. It sends no CapsuleResult and doesn't call DataService.changed
+	(the wheel does both).
+]]
+export type FreeCapsules = {
+	grantFree: (player: Player, capsuleId: string, roll: number) -> ({ Id: number, Kind: string }?, boolean?),
+}
 
 export type Result = {
 	Segment: number,
@@ -97,11 +120,13 @@ local function nextRoll(): number
 	return r:NextNumber()
 end
 local random: () -> number = nextRoll
-local schedule: (seconds: number, fn: () -> ()) -> () = function(seconds: number, fn: () -> ())
-	task.delay(seconds, fn)
-end
+local timer: () -> number = os.clock
+local capsules: FreeCapsules? = nil
+local capsulesKnown = false -- looked up (capsules nil then: this place has none)
 
 local hooked: { [Instance]: boolean } = {}
+-- player -> the CapsuleResult waiting for "Reveal" and when it was won (timer())
+local openings: { [Player]: { Payload: { [string]: any }, At: number } } = {}
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n > -math.huge and n < math.huge
@@ -145,6 +170,68 @@ function WheelService.oreContext(player: Player, data: { [string]: any }): Wheel
 	}
 end
 
+-- Coins for the boost seconds that didn't fit under BoostConfig.MaxStackSeconds:
+-- that share of the Coins segment's prize at this income (0 when all fit).
+function WheelService.boostFallbackCoins(segment: WheelConfig.Segment, added: number, incomePerSecond: number): number
+	local wanted = segment.Seconds or 0
+	if wanted <= 0 then
+		return 0
+	end
+	local missing = math.clamp(wanted - math.max(0, added), 0, wanted)
+	if missing <= 0 then
+		return 0
+	end
+	local full = WheelConfig.coins(WheelConfig.ById.Coins, incomePerSecond)
+	return math.floor(full * missing / wanted)
+end
+
+-- The capsule package's service with grantFree, when there is one (looked up once).
+local function freeCapsules(): FreeCapsules?
+	if capsulesKnown then
+		return capsules
+	end
+	local module = script.Parent:FindFirstChild("CapsuleService")
+	local found: FreeCapsules? = nil
+	if module and module:IsA("ModuleScript") then
+		local ok, service = pcall(require, module :: any)
+		if ok and type(service) == "table" and type((service :: any).grantFree) == "function" then
+			found = service :: any
+		end
+	end
+	capsules = found
+	capsulesKnown = true
+	return found
+end
+
+-- Opens the free capsule (CapsuleService.grantFree, else here): the golem
+-- added (nil: the inventory is full) and whether Triple Lucky counted.
+local function openFree(player: Player, data: { [string]: any }, capsuleId: string): ({ Id: number, Kind: string }?, boolean)
+	local service = freeCapsules()
+	if service then
+		local ok, golem, lucky = pcall(service.grantFree, player, capsuleId, random())
+		if ok then
+			local g: any = golem
+			if type(g) == "table" and type(g.Id) == "number" and type(g.Kind) == "string" then
+				return { Id = g.Id, Kind = g.Kind }, lucky == true
+			end
+			return nil, false
+		end
+		warn("[WheelService] CapsuleService.grantFree: " .. tostring(golem))
+	end
+	local golems = record(data, "Golems")
+	if GolemConfig.room(golems) < 1 then
+		return nil, false
+	end
+	local lucky = Bonuses.tripleLucky(Bonuses.stats(player))
+	local golemKind = CapsuleConfig.roll(capsuleId, lucky, random())
+	local entry = if golemKind then GolemConfig.add(golems, golemKind) else nil
+	if not entry then
+		return nil, false
+	end
+	bump(data, "CapsulesOpened")
+	return { Id = entry.Id, Kind = entry.Kind }, lucky
+end
+
 -- Grants a segment's prize into the save (no yield) and fills `result`.
 local function grant(player: Player, data: { [string]: any }, segment: WheelConfig.Segment, result: Result, now: number)
 	local kind = segment.Kind
@@ -157,36 +244,26 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 		local boosts = record(data, "Boosts")
 		local before = math.max(now, BoostConfig.untilOf(boosts, boostKind))
 		local untilTime = BoostConfig.extend(boosts, boostKind, segment.Seconds or 0, now, true)
+		local added = math.max(0, untilTime - before)
 		result.Boost = boostKind
-		result.Seconds = math.max(0, untilTime - before)
+		result.Seconds = added
 		Bonuses.invalidate(player)
+		-- the seconds past the stack cap: coins instead (never an empty prize)
+		local coins = WheelService.boostFallbackCoins(segment, added, incomeOf(player, data))
+		if coins > 0 then
+			award(player, coins, result)
+		end
 	elseif kind == "Capsule" then
 		local capsuleId = segment.Capsule or ""
 		result.Capsule = capsuleId
-		local golems = record(data, "Golems")
-		local entry: GolemConfig.Owned? = nil
-		local lucky = false
-		if GolemConfig.room(golems) >= 1 then
-			lucky = Bonuses.tripleLucky(Bonuses.stats(player))
-			local golemKind = CapsuleConfig.roll(capsuleId, lucky, random())
-			entry = if golemKind then GolemConfig.add(golems, golemKind) else nil
-		end
-		if entry then
-			bump(data, "CapsulesOpened")
-			local golem = { Id = entry.Id, Kind = entry.Kind }
+		local golem, lucky = openFree(player, data, capsuleId)
+		if golem then
 			result.Golem = golem
 			result.Lucky = lucky
-			schedule(WheelService.CapsuleDelay, function()
-				if player.Parent then
-					Net.fire("CapsuleResult", player, {
-						Capsule = capsuleId,
-						Count = 1,
-						Golems = { golem },
-						Lucky = lucky,
-						Free = true,
-					})
-				end
-			end)
+			openings[player] = {
+				Payload = { Capsule = capsuleId, Count = 1, Golems = { golem }, Lucky = lucky, Free = true },
+				At = timer(),
+			}
 		else
 			award(player, WheelConfig.capsuleFallbackCoins(capsuleId, data.BlasterLevel), result)
 		end
@@ -238,7 +315,20 @@ function WheelService.spin(player: Player): (Result?, string?)
 	return result, nil
 end
 
+-- "Reveal": the waiting CapsuleResult of this player's capsule prize, once.
+local function reveal(player: Player)
+	local opening = openings[player]
+	openings[player] = nil
+	if opening and timer() - opening.At <= WheelService.RevealSeconds and player.Parent then
+		Net.fire("CapsuleResult", player, opening.Payload)
+	end
+end
+
 local function onAction(player: Player, action: any)
+	if action == "Reveal" then
+		reveal(player)
+		return
+	end
 	if action ~= "Spin" then
 		return
 	end
@@ -331,17 +421,22 @@ WheelService._test = {
 	setRandom = function(fn: () -> number)
 		random = fn
 	end,
-	setSchedule = function(fn: (number, () -> ()) -> ())
-		schedule = fn
+	setTimer = function(fn: () -> number)
+		timer = fn
+	end,
+	setCapsules = function(service: FreeCapsules?)
+		capsules = service
+		capsulesKnown = true
 	end,
 	reset = function()
 		table.clear(hooked)
+		table.clear(openings)
 		clock = os.time
 		rng = nil
 		random = nextRoll
-		schedule = function(seconds: number, fn: () -> ())
-			task.delay(seconds, fn)
-		end
+		timer = os.clock
+		capsules = nil
+		capsulesKnown = false
 	end,
 }
 
@@ -352,6 +447,9 @@ end
 function WheelService.start()
 	-- the wheel screen hides the paid-random substitutes only once the policy is known
 	Players.PlayerAdded:Connect(Policy.prefetch)
+	Players.PlayerRemoving:Connect(function(player: Player)
+		openings[player] = nil
+	end)
 	for _, player in Players:GetPlayers() do
 		Policy.prefetch(player)
 	end
