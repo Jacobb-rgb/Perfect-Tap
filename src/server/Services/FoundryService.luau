@@ -17,10 +17,15 @@
 	    provides it. CONTRACT for ConveyorService:
 	      handler(plotId: number, record: ItemRecord) -> (taken: boolean, reason: string?)
 	      (the handler also accepts the two the other way round, a Player
-	      instead of the plot id, or the item's Model)
+	      instead of the plot id, or the item's Model; a number counts as the
+	      plot id only when WorldLayout.Plots has it, otherwise the plot comes
+	      from the item's position)
 	      true            the item is gone (absorbed): an ingot the next level
 	                      can use went into the stock, anything else into the
-	                      Ore Pen; the owner sees it fly into the hood (Fx FoundryIn)
+	                      Ore Pen; the owner sees it fly into the hood (Fx
+	                      FoundryIn, only to the owner, with its destination
+	                      "Stock" | "Pen") and, for the pen, a throttled toast
+	                      saying why
 	      false, "Full"   the stock and the pen are both full: leave the item
 	                      waiting on the cell; the receiver shows "Ore Pen full"
 	      false, "Foreign" not the plot owner's item: push it off (as at machines)
@@ -56,8 +61,9 @@
 	           { Id, Ok = true, Level, Ore, Name } (or Reason "NotEnough").
 	           ToolService swaps the blaster on the data change.
 	  "Cancel" { SessionId }  ends the session ("Cancelled"); nothing is taken.
-	  "Take"   { Key, Count }  stock ingots of one type back into the Ore Pen
-	           (as many as fit; refused while a session runs).
+	  "Take"   { Key, Count, All? }  stock ingots of one type back into the Ore
+	           Pen (as many as fit; refused while a session runs). All = true
+	           takes ingots of the key's ore in any grade (the panel's TAKE ALL).
 	Sessions end on Timeout (GameConfig.AnvilTimeout), walking away from the
 	anvil past AnvilWalkAway ("TooFar"), death ("Cancelled"), leaving and
 	losing the plot. Fail or cancel never takes anything.
@@ -117,12 +123,14 @@ local MONITOR_TICK = 0.5
 local MAX_PUT_IN = 64 -- more than any carry stack
 local MAX_KEY_LENGTH = 80
 local FX_RANGE = 90
+local PEN_TOAST_COOLDOWN = 30 -- "sent to your Ore Pen" toasts (a busy chute line)
 
 local sessions: { [Player]: Session } = {}
 local lastToast: { [Player]: { [string]: number } } = {}
 local penFullAt: { [number]: number } = {}
 local rackLevel: { [number]: number } = {}
 local sinkRegistered = false
+local warnedNoPlot = false
 local clock: () -> number = os.clock
 
 ---------------------------------------------------------------- data helpers
@@ -193,7 +201,7 @@ end
 
 ---------------------------------------------------------------- the world
 
-local function toast(player: Player, text: string, kind: string?, key: string?)
+local function toast(player: Player, text: string, kind: string?, key: string?, cooldown: number?)
 	if key then
 		local times = lastToast[player]
 		if not times then
@@ -201,7 +209,7 @@ local function toast(player: Player, text: string, kind: string?, key: string?)
 			lastToast[player] = times
 		end
 		local now = clock()
-		if now - (times[key] or -math.huge) < TOAST_COOLDOWN then
+		if now - (times[key] or -math.huge) < (cooldown or TOAST_COOLDOWN) then
 			return
 		end
 		times[key] = now
@@ -285,10 +293,28 @@ local function showPenFull(plotId: number, on: boolean)
 	end
 end
 
-local function fireIn(plotId: number, from: Vector3, to: Vector3, desc: Desc)
+-- The owner sees the item fly in (only the owner: a busy line next door
+-- costs other phones nothing). destination: "Stock" | "Pen".
+local function fireIn(owner: Player, from: Vector3, to: Vector3, desc: Desc, destination: Destination)
 	-- dirty ore keeps its secret: no ore id for raw chunks
 	local oreId = if desc.K == "Raw" then "" else desc.O
-	Net.fireNear("Fx", to, FX_RANGE, nil, "FoundryIn", from, to, desc.K, oreId)
+	Net.fire("Fx", owner, "FoundryIn", from, to, desc.K, oreId, destination)
+end
+
+-- Why the chute sent an item to the Ore Pen instead of the stock.
+function FoundryService.penText(data: { [string]: any }, desc: Desc, reason: StockRefusal): string
+	if reason == "TooCommon" then
+		local ore = OreData.ById[desc.O]
+		local nextBlaster = FoundryLogic.nextBlaster(data.BlasterLevel)
+		local recipe = FoundryLogic.recipe(data.BlasterLevel)
+		local rarity = if recipe then recipe.MinRarity else "Common"
+		return `{if ore then ore.Name else "Those"} ingots aren't needed for the {nextBlaster.Name} ({rarity}+): sent to your Ore Pen.`
+	elseif reason == "Full" then
+		return `Your Foundry is full ({GameConfig.MaxFoundryStock} ingots): more ingots go to your Ore Pen.`
+	elseif reason == "MaxLevel" then
+		return "Your blaster is at the top level: the Foundry sends ingots to your Ore Pen."
+	end
+	return "Only ingots go into the Foundry: the chute sent that to your Ore Pen."
 end
 
 ---------------------------------------------------------------- ingots in
@@ -311,22 +337,27 @@ function FoundryService.sink(plotId: number, record: ItemRecord): (boolean, stri
 		return false, "Full"
 	end
 	local desc = ItemService.descOf(record)
-	local destination = FoundryService.destination(data, desc)
-	if not destination then
+	local destination: Destination? = FoundryService.destination(data, desc)
+	if destination == nil then
 		penFullAt[plotId] = clock()
 		showPenFull(plotId, true)
 		toast(owner, "Your Ore Pen is full: items wait at the Foundry chute. Sell ore or put some on a podium.", "Info", "PenFull")
 		return false, "Full"
 	end
+	local where: Destination = destination :: Destination
+	local refusal: StockRefusal? = if where == "Pen" then FoundryService.stockRefusal(data, desc) else nil
 	local from = record.Body.CFrame.Position
 	local item = copy(ItemService.absorb(record))
-	if destination == "Stock" then
+	if where == "Stock" then
 		table.insert(FoundryService.stockOf(data), item)
 	else
 		table.insert(data.Storage, item)
 	end
 	DataService.changed(owner)
-	fireIn(plotId, from, mouthPosition(plotId), item)
+	fireIn(owner, from, mouthPosition(plotId), item, where)
+	if refusal ~= nil then
+		toast(owner, FoundryService.penText(data, item, refusal), "Info", "Pen" .. refusal, PEN_TOAST_COOLDOWN)
+	end
 	return true, nil
 end
 
@@ -337,8 +368,11 @@ local function sinkAdapter(...: any): (boolean, string?)
 	local record: ItemRecord? = nil
 	for i = 1, select("#", ...) do
 		local value = select(i, ...)
-		if type(value) == "number" and plotId == nil then
-			plotId = value
+		if type(value) == "number" then
+			-- only a real plot id (never a clock value or a count)
+			if plotId == nil and WorldLayout.Plots[value] ~= nil then
+				plotId = value
+			end
 		elseif type(value) == "table" and record == nil and value.Body ~= nil and value.Owner ~= nil then
 			record = value :: ItemRecord
 		elseif typeof(value) == "Instance" then
@@ -357,6 +391,10 @@ local function sinkAdapter(...: any): (boolean, string?)
 		plotId = PlotService.plotAt(found.Body.CFrame.Position)
 	end
 	if not plotId or not WorldLayout.Plots[plotId] then
+		if not warnedNoPlot then
+			warnedNoPlot = true
+			warn("[FoundryService] the FOUNDRY sink got an item without a plot (check the ConveyorService.setSink call)")
+		end
 		return false, "Wrong"
 	end
 	return FoundryService.sink(plotId :: number, found)
@@ -405,7 +443,7 @@ local function onHopper(plotId: number, record: ItemRecord)
 	table.insert(FoundryService.stockOf(data), item)
 	DataService.changed(owner)
 	local hopper = attachmentWorld(FoundryService.building(plotId), "HopperIn")
-	fireIn(plotId, from, if hopper then hopper.Position else from, item)
+	fireIn(owner, from, if hopper then hopper.Position else from, item, "Stock")
 end
 
 -- "Put In": the carried ingots the next level can use.
@@ -628,11 +666,12 @@ local function strike(player: Player, idArg: any, timesArg: any)
 	Net.fireNear("Fx", anvil, FX_RANGE, player, "FoundryForged", anvil, session.Ore)
 end
 
-local function take(player: Player, plotId: number, data: { [string]: any }, keyArg: any, countArg: any)
+local function take(player: Player, plotId: number, data: { [string]: any }, keyArg: any, countArg: any, allArg: any)
 	local keyText = Guard.string(keyArg, MAX_KEY_LENGTH)
 	local desc = if keyText then ItemData.parseKey(keyText) else nil
 	local count = Guard.integer(countArg, 1, GameConfig.MaxFoundryStock)
-	if not desc or desc.K ~= "Ingot" or not count then
+	local anyGrade = if allArg == nil then false else Guard.boolean(allArg)
+	if not desc or desc.K ~= "Ingot" or not count or anyGrade == nil then
 		return
 	end
 	if sessions[player] then
@@ -652,7 +691,11 @@ local function take(player: Player, plotId: number, data: { [string]: any }, key
 			break
 		end
 		local entry = stock[i]
-		if type(entry) == "table" and type(entry.K) == "string" and type(entry.O) == "string" and ItemData.storageKey(entry) == key then
+		local same = type(entry) == "table"
+			and type(entry.K) == "string"
+			and type(entry.O) == "string"
+			and (if anyGrade then entry.K == "Ingot" and entry.O == desc.O else ItemData.storageKey(entry) == key)
+		if same then
 			table.insert(data.Storage, table.remove(stock, i) :: Desc)
 			moved += 1
 		end
@@ -692,7 +735,7 @@ local function onAction(player: Player, actionArg: any, argArg: any)
 			endSession(player, "Cancelled")
 		end
 	elseif action == "Take" then
-		take(player, plotId, data, arg.Key, arg.Count)
+		take(player, plotId, data, arg.Key, arg.Count, arg.All)
 	end
 end
 
@@ -859,6 +902,7 @@ FoundryService._test = {
 		table.clear(lastToast)
 		table.clear(penFullAt)
 		table.clear(rackLevel)
+		warnedNoPlot = false
 		clock = os.clock
 	end,
 }

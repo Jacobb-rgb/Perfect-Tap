@@ -74,7 +74,7 @@ local C = {
 	Glass = rgb(176, 222, 240),
 	Iron = rgb(70, 72, 82),
 	Steel = rgb(104, 108, 122),
-	AnvilSteel = rgb(150, 156, 172), -- the anvil's face and horn (light, so it reads at dusk)
+	AnvilSteel = rgb(178, 184, 198), -- the anvil's face and horn (light, so it reads from the yard at dusk)
 	Concrete = rgb(166, 158, 148),
 	ConcreteDark = rgb(132, 124, 116),
 	Board = rgb(236, 220, 190), -- the shadow board behind the silhouette
@@ -96,7 +96,7 @@ local WIDTH, DEPTH = 16, 11
 
 -- Building-frame positions (also used by FoundryService and the tests).
 local ANVIL = Vector3.new(-3.8, 0, 3.0)
-local ANVIL_TOP = 2.45
+local ANVIL_TOP = 2.6
 local FURNACE = Vector3.new(4.6, 0, 6.6)
 local FURNACE_ACROSS = 4.6
 local FURNACE_TOP = 5.1
@@ -483,28 +483,48 @@ local function casting(m: Model, F: CFrame)
 	)
 	Geo.block(m, table_ * CFrame.new(0, FLOOR + 0.25, 0), Vector3.new(3.7, 0.3, 2.5), C.Hazard, nil, prop())
 	Geo.block(m, table_ * CFrame.new(0, mouldTop - 0.1, 0), Vector3.new(3.3, 0.2, 2.1), C.Iron, METAL, solid({ Name = "Mould" }))
+	-- the cavity: a blaster lying on its side, seen from above (muzzle block,
+	-- barrel, body with a sight, rear block, the grip slanting toward the yard)
 	local y = mouldTop + 0.005
-	for _, piece in { { 0.35, 0.05, 1.6, 0.55 }, { -0.95, 0.12, 1.1, 0.24 }, { 0.75, -0.42, 0.34, 0.6 } } do
-		local cavity =
-			Geo.block(m, table_ * CFrame.new(piece[1], y, piece[2]), Vector3.new(piece[3], 0.03, piece[4]), C.Molten, NEON, glow())
-		cavity.Name = "Molten"
+	local cavity = {
+		{ -1.36, 0.26, 0.24, 0.5, 0 }, -- muzzle
+		{ -0.85, 0.26, 0.85, 0.28, 0 }, -- barrel
+		{ 0.3, 0.2, 1.5, 0.62, 0 }, -- body
+		{ 0.15, 0.58, 0.5, 0.16, 0 }, -- sight
+		{ 1.2, 0.2, 0.32, 0.46, 0 }, -- rear block
+		{ 0.6, -0.5, 0.42, 0.82, -0.3 }, -- grip
+		{ 0.1, -0.26, 0.12, 0.26, 0.3 }, -- trigger
+	}
+	for _, piece in cavity do
+		local part = Geo.block(
+			m,
+			table_ * CFrame.new(piece[1], y, piece[2]) * CFrame.Angles(0, piece[5], 0),
+			Vector3.new(piece[3], 0.03, piece[4]),
+			C.Molten,
+			NEON,
+			glow()
+		)
+		part.Name = "Molten"
 	end
 end
 
 local function anvil(m: Model, F: CFrame)
 	local at = F * CFrame.new(ANVIL.X, 0, ANVIL.Z)
-	-- a stout iron stand with an orange band, the waist, the light steel face
-	Geo.block(m, at * CFrame.new(0, FLOOR + 0.5, 0), Vector3.new(1.5, 1.0, 1.25), C.HousingDark, nil, solid({ Name = "AnvilBase" }))
-	Geo.block(m, at * CFrame.new(0, FLOOR + 0.25, 0), Vector3.new(1.58, 0.3, 1.33), C.Hazard, nil, prop())
-	Geo.block(m, at * CFrame.new(0, FLOOR + 1.0 + 0.3, 0), Vector3.new(0.75, 0.6, 0.7), C.Iron, nil, solid())
-	local top =
-		Geo.block(m, at * CFrame.new(0, ANVIL_TOP - 0.275, 0), Vector3.new(2.0, 0.55, 0.95), C.AnvilSteel, nil, solid({ Name = "Anvil" }))
+	-- a stout iron stand with an orange band, the waist, the big light steel
+	-- face and horn (they read from the yard next to the mould table)
+	local face, faceH = Vector3.new(2.6, 0.6, 1.2), 0.6
+	Geo.block(m, at * CFrame.new(0, FLOOR + 0.45, 0), Vector3.new(1.9, 0.9, 1.5), C.HousingDark, nil, solid({ Name = "AnvilBase" }))
+	Geo.block(m, at * CFrame.new(0, FLOOR + 0.25, 0), Vector3.new(1.98, 0.3, 1.58), C.Hazard, nil, prop())
+	local waistBottom = FLOOR + 0.9
+	local waistTop = ANVIL_TOP - faceH
+	Geo.block(m, at * CFrame.new(0, (waistBottom + waistTop) / 2, 0), Vector3.new(0.95, waistTop - waistBottom, 0.85), C.Iron, nil, solid())
+	local top = Geo.block(m, at * CFrame.new(0, ANVIL_TOP - faceH / 2, 0), face, C.AnvilSteel, nil, solid({ Name = "Anvil" }))
 	top.Name = "Anvil"
 	-- the horn: a wedge with its flat side on top, tapering to the left (-X)
 	Geo.wedge(
 		m,
-		at * CFrame.new(-1.0 - 0.45, ANVIL_TOP - 0.275, 0) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi),
-		Vector3.new(0.95, 0.55, 0.9),
+		at * CFrame.new(-face.X / 2 - 0.55, ANVIL_TOP - faceH / 2, 0) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi),
+		Vector3.new(face.Z, faceH, 1.1),
 		C.AnvilSteel,
 		nil,
 		solid()

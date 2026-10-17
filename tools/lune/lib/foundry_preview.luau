@@ -1,12 +1,15 @@
 --[[
 	Preview-only setup for the Foundry (WP-Foundry, step 3).
-	  lune run tools/lune/export_scene.luau foundry
+	  lune run tools/lune/export_scene.luau foundry          the buildings (overview shots)
+	  lune run tools/lune/export_scene.luau foundry_moment   + the hammer moment and the reveal
 	The world with plot 5's and plot 6's yard placeholders replaced by the
 	real FoundryBuilder building (as FoundryService does at server start),
 	the FOUNDRY chute receivers, and:
 	  plot 5  a Clay Furnace whose output belt runs off the FOUNDRY chute into
-	          the receiver (ingots riding it, one flying into the hood), and
-	          the hammer moment on the anvil: the glowing billet, the hammer up
+	          the receiver (ingots riding it, one flying into the hood)
+	Only in "foundry_moment" (the props exist only while forging, so the
+	overview shots never show them):
+	  plot 5  the hammer moment on the anvil: the glowing billet, the hammer up
 	  plot 6  the reveal: the new blaster floating over the anvil with rays
 	UI overlays (FoundryView, the HUD):
 	  ui_foundry          the panel, ready to forge (PC)
@@ -33,7 +36,7 @@ local STOCK = {
 	["Ingot|Coal||"] = 4,
 }
 
-function FoundryPreview.build(Loader: any, workspace: any): { [string]: any }
+function FoundryPreview.build(Loader: any, workspace: any, moment: boolean?): { [string]: any }
 	local roblox = Loader.roblox
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
@@ -100,73 +103,82 @@ function FoundryPreview.build(Loader: any, workspace: any): { [string]: any }
 	)
 	flying.Parent = folder
 
-	-- the hammer moment on plot 5's anvil (FoundryController's billet and hammer)
 	local function attachmentWorld(model: any, name: string): any
 		local base = model.PrimaryPart
 		return base.CFrame * base:FindFirstChild(name).CFrame
 	end
-	local props = { Anchored = true, CanCollide = false, CastShadow = false }
-	local anvil = attachmentWorld(building, "AnvilPoint")
-	local ore = OreData.ById.Gold
-	local billet = Geo.block(
-		folder,
-		anvil * CF.new(0, 0.16, 0),
-		V3.new(1.3, 0.32, 0.6),
-		ore.Color:Lerp(C3.fromRGB(255, 140, 50), 0.45),
-		roblox.Enum.Material.Neon,
-		props
-	)
-	billet.Name = "Billet"
-	local pivot = anvil * CF.new(1.75, 0.8, 0.1) * CF.Angles(0, 0, -1.0)
-	Geo.block(folder, pivot * CF.new(-0.85, 0, 0), V3.new(1.7, 0.18, 0.18), C3.fromRGB(120, 80, 48), nil, props)
-	Geo.block(folder, pivot * CF.new(-1.75, 0, 0), V3.new(0.5, 0.75, 0.45), C3.fromRGB(70, 72, 82), roblox.Enum.Material.Metal, props)
-	for i = 1, 7 do
-		local a = i * 0.9
-		local p = anvil.Position + V3.new(math.cos(a) * (0.6 + i * 0.12), 0.4 + (i % 3) * 0.35, math.sin(a) * 0.5)
-		Geo.ball(folder, p, 0.12, C3.fromRGB(255, 210, 120), roblox.Enum.Material.Neon, props)
-	end
-
-	-- the reveal on plot 6: a level 4 blaster in the Gold look over the anvil
-	local revealAnvil = attachmentWorld(revealBuilding, "AnvilPoint")
 	local revealCam = attachmentWorld(revealBuilding, "CamPoint")
-	local center = revealAnvil.Position + V3.new(0, 1.6, 0)
-	local tool = BlasterBuilder.build(4, "Gold")
-	local facing = CF.lookAt(center, revealCam.Position)
-	local at = CF.new(center) * facing.Rotation * CF.Angles(0, 0.5, 0) * CF.Angles(0, math.pi / 2, 0)
-	local parts = {}
-	local sum = V3.new(0, 0, 0)
-	for _, d in tool:GetDescendants() do
-		if d:IsA("BasePart") then
-			table.insert(parts, d)
-			sum += d.CFrame.Position
+	if moment then
+		-- the hammer moment on plot 5's anvil (FoundryController's billet and hammer)
+		local props = { Anchored = true, CanCollide = false, CastShadow = false }
+		local anvil = attachmentWorld(building, "AnvilPoint")
+		local ore = OreData.ById.Gold
+		local billet = Geo.block(
+			folder,
+			anvil * CF.new(0, 0.21, 0),
+			V3.new(1.3, 0.42, 0.6),
+			ore.Color:Lerp(C3.fromRGB(255, 140, 50), 0.45),
+			roblox.Enum.Material.Neon,
+			props
+		)
+		billet.Name = "Billet"
+		local pivot = anvil * CF.new(1.75, 0.8, 0.1) * CF.Angles(0, 0, -1.0)
+		Geo.block(folder, pivot * CF.new(-0.85, 0, 0), V3.new(1.7, 0.18, 0.18), C3.fromRGB(120, 80, 48), nil, props)
+		Geo.block(folder, pivot * CF.new(-1.75, 0, 0), V3.new(0.5, 0.75, 0.45), C3.fromRGB(70, 72, 82), roblox.Enum.Material.Metal, props)
+		for i = 1, 7 do
+			local a = i * 0.9
+			local p = anvil.Position + V3.new(math.cos(a) * (0.6 + i * 0.12), 0.4 + (i % 3) * 0.35, math.sin(a) * 0.5)
+			Geo.ball(folder, p, 0.12, C3.fromRGB(255, 210, 120), roblox.Enum.Material.Neon, props)
 		end
-	end
-	local middle = sum / math.max(1, #parts)
-	for _, d in parts do
-		for _, child in d:GetChildren() do
-			child:Destroy()
+
+		-- the reveal on plot 6: a level 4 blaster in the Gold look over the anvil
+		local revealAnvil = attachmentWorld(revealBuilding, "AnvilPoint")
+		local center = revealAnvil.Position + V3.new(0, 1.6, 0)
+		local tool = BlasterBuilder.build(4, "Gold")
+		local facing = CF.lookAt(center, revealCam.Position)
+		local at = CF.new(center) * facing.Rotation * CF.Angles(0, 0.5, 0) * CF.Angles(0, math.pi / 2, 0)
+		local parts = {}
+		local sum = V3.new(0, 0, 0)
+		for _, d in tool:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+				sum += d.CFrame.Position
+			end
 		end
-		d.Anchored = true
-		d.CFrame = at * CF.new(d.CFrame.Position - middle) * d.CFrame.Rotation
-		d.Parent = folder
+		local middle = sum / math.max(1, #parts)
+		for _, d in parts do
+			for _, child in d:GetChildren() do
+				child:Destroy()
+			end
+			d.Anchored = true
+			d.CFrame = at * CF.new(d.CFrame.Position - middle) * d.CFrame.Rotation
+			d.Parent = folder
+		end
+		local rarity = Rarity.ById[ore.Rarity]
+		for i = 1, 8 do
+			local a = i / 8 * math.pi * 2 + 0.3
+			local dir = facing:VectorToWorldSpace(V3.new(math.cos(a), math.sin(a), -0.2))
+			Geo.block(
+				folder,
+				CF.lookAt(center + dir * 2.9, center + dir * 4),
+				V3.new(0.14, 0.14, 5),
+				rarity.Color,
+				roblox.Enum.Material.Neon,
+				{
+					Anchored = true,
+					CanCollide = false,
+					CastShadow = false,
+					Transparency = 0.45,
+				}
+			)
+		end
+		local glow = Geo.ball(folder, center, 0.1, ore.Glow, nil, { Anchored = true, Transparency = 1 })
+		local light = roblox.Instance.new("PointLight")
+		light.Color = ore.Glow
+		light.Range = 14
+		light.Brightness = 2
+		light.Parent = glow
 	end
-	local rarity = Rarity.ById[ore.Rarity]
-	for i = 1, 8 do
-		local a = i / 8 * math.pi * 2 + 0.3
-		local dir = facing:VectorToWorldSpace(V3.new(math.cos(a), math.sin(a), -0.2))
-		Geo.block(folder, CF.lookAt(center + dir * 2.9, center + dir * 4), V3.new(0.14, 0.14, 5), rarity.Color, roblox.Enum.Material.Neon, {
-			Anchored = true,
-			CanCollide = false,
-			CastShadow = false,
-			Transparency = 0.45,
-		})
-	end
-	local glow = Geo.ball(folder, center, 0.1, ore.Glow, nil, { Anchored = true, Transparency = 1 })
-	local light = roblox.Instance.new("PointLight")
-	light.Color = ore.Glow
-	light.Range = 14
-	light.Brightness = 2
-	light.Parent = glow
 
 	-- camera points for the shots json
 	local function show(name: string, cf: any)
@@ -205,8 +217,8 @@ function FoundryPreview.build(Loader: any, workspace: any): { [string]: any }
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
 		return refs
 	end
-	local function panel(scale: number, compact: boolean, coins: number): any
-		local state = { FoundryStock = STOCK, FoundryCount = 12, BlasterLevel = 2, BlasterOre = "Copper", Coins = coins }
+	local function panel(scale: number, compact: boolean, coins: number, level: number, look: string): any
+		local state = { FoundryStock = STOCK, FoundryCount = 12, BlasterLevel = level, BlasterOre = look, Coins = coins }
 		local refs = FoundryView.build()
 		refs.Gui.Scale.Scale = scale
 		refs.Gui.Enabled = true
@@ -223,9 +235,11 @@ function FoundryPreview.build(Loader: any, workspace: any): { [string]: any }
 		)
 		return refs
 	end
-	local function forge(scale: number, touch: boolean, done: number, feedback: string?): any
+	-- gameScale: the in-game UI scale (the top bar inset is 58 pt)
+	local function forge(scale: number, gameScale: number, touch: boolean, done: number, feedback: string?): any
 		local refs = FoundryView.buildForge(touch)
 		refs.Gui.Scale.Scale = scale
+		FoundryView.placeTop(refs, 58, gameScale)
 		refs.Banner.Text = "FORGE: GOLD SPARK BLASTER"
 		FoundryView.setPips(refs, 5, done)
 		refs.Ring.Size = roblox.UDim2.fromScale(1.45, 1.45)
@@ -240,12 +254,14 @@ function FoundryPreview.build(Loader: any, workspace: any): { [string]: any }
 
 	local exports: { [string]: any } = {}
 	local pcHud = hud(pcScale)
-	exports.ui_foundry = UiExport.export({ pcHud.Gui, panel(pcScale, false, 3450).Gui })
+	-- PC: level 2 -> 3 (Common+), ready; phone: level 3 -> 4 needs Uncommon+, so
+	-- Copper and Coal are too common (TAKE ALL) and one ingot is missing
+	exports.ui_foundry = UiExport.export({ pcHud.Gui, panel(pcScale, false, 3450, 2, "Copper").Gui })
 	local phoneHud = hud(phoneScale)
-	exports.ui_foundry_phone = UiExport.export({ phoneHud.Gui, panel(phoneScale, true, 1200).Gui })
-	exports.ui_forge = UiExport.export({ forge(pcScale, false, 3, "PERFECT!").Gui })
-	exports.ui_forge_phone = UiExport.export({ forge(phoneScale, true, 2, "GOOD!").Gui })
-	local reveal = forge(pcScale, false, 5, nil)
+	exports.ui_foundry_phone = UiExport.export({ phoneHud.Gui, panel(phoneScale, true, 1200, 3, "Silver").Gui })
+	exports.ui_forge = UiExport.export({ forge(pcScale, 1, false, 3, "PERFECT!").Gui })
+	exports.ui_forge_phone = UiExport.export({ forge(phoneScale, 0.62, true, 2, "GOOD!").Gui })
+	local reveal = forge(pcScale, 1, false, 5, nil)
 	FoundryView.showCard(reveal, 4, "Gold", 3, "Copper")
 	reveal.Banner.Text = "FORGE: GOLD EMBER BLASTER"
 	exports.ui_forge_reveal = UiExport.export({ reveal.Gui })

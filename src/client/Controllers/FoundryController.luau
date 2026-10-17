@@ -7,6 +7,8 @@
 	  BLASTER card come from the State snapshot (FoundryStock, BlasterLevel,
 	  BlasterOre, Coins) and update live.
 	    TAKE   FoundryAction "Take" { Key, Count = 1 } (the ore's cheapest ingot)
+	    TAKE ALL (rows the next level can't use) { Key, Count = the row's
+	           count, All = true }: every ingot of that ore
 	    < >    pick the look among the ores of the usable ingots
 	    FORGE  FoundryAction "Forge" { Ore = the look } (when it isn't ready
 	           it only says why)
@@ -21,11 +23,16 @@
 	  After Hits taps the times go to the server (FoundryAction "Strike");
 	  FoundryResult then shows the new blaster rising off the anvil with the
 	  NEW BLASTER card (AWESOME: click, E, Enter or A), or why it failed.
-	  LEAVE / B / Backspace cancel (nothing is taken).
+	  LEAVE / B / Backspace cancel (nothing is taken; not during the reveal).
+	  Dying, respawning or the building streaming out end it at once, even
+	  during the reveal. Your own character (and anyone standing between the
+	  camera and the anvil) is hidden for the close-up
+	  (LocalTransparencyModifier, put back when it ends).
 	- Building: Molten / Glow parts pulse, the warning lights blink while its
-	  owner forges (attribute Forging). Fx: FoundryIn (an item flies into the
-	  chute's hood or the hopper), FoundryPut, FoundryForged (someone else's
-	  new blaster).
+	  owner forges (attribute Forging). Fx: FoundryIn (yours only: an item
+	  flies into the chute's hood or the hopper, at most MAX_FLYING at once,
+	  none off-screen; "Pen" adds a TO ORE PEN tag), FoundryPut,
+	  FoundryForged (someone else's new blaster).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -41,6 +48,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local GameConfig = require(Shared.Config.GameConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
@@ -80,6 +88,10 @@ local MAX_QUEUED = 1
 local RESULT_WAIT = 8
 local PROMPT_TAG = "FoundryPrompt"
 local BUILDING_TAG = "FoundryBuilding"
+local SIGHT_RADIUS = 3 -- studs: other characters this close to the camera -> anvil line are hidden
+local SIGHT_CHECK = 0.3
+local MAX_FLYING = 4 -- FoundryIn fly-ins at once
+local FLY_MAX_DISTANCE = 90 -- no fly-in farther than this from the camera
 
 local REASONS: { [string]: string } = {
 	NotEnough = "Not enough ingots or coins for that blaster.",
@@ -100,6 +112,10 @@ local chosenSkin: string? = nil
 local forgePending = 0 -- os.clock() of the last Forge request (FORGE waits for the answer)
 local lastStatus: any = nil
 local session: any = nil
+local flying = 0
+local penTag: BillboardGui? = nil
+-- parts hidden for the close-up -> their LocalTransparencyModifier before
+local hiddenParts: { [Instance]: number } = {}
 
 ---------------------------------------------------------------- helpers
 
@@ -195,8 +211,14 @@ local function refresh(state: { [string]: any }?)
 		local ore = row.Ore
 		row.Take.Activated:Connect(function()
 			local current = view.Rows[ore]
-			if current and current.TakeKey ~= "" then
-				Sfx.play("UIClick")
+			if not current or current.TakeKey == "" then
+				return
+			end
+			Sfx.play("UIClick")
+			if current.TakeAll then
+				local amount = math.clamp(current.Amount, 1, GameConfig.MaxFoundryStock)
+				Net.send("FoundryAction", "Take", { Key = current.TakeKey, Count = amount, All = true })
+			else
 				Net.send("FoundryAction", "Take", { Key = current.TakeKey, Count = 1 })
 			end
 		end)
@@ -438,6 +460,67 @@ local function feedback(view: FoundryView.ForgeRefs, text: string, color: Color3
 		:Play()
 end
 
+-- Hides one part or decal for the close-up (keeps its old value once).
+local function hidePart(d: Instance)
+	if hiddenParts[d] == nil and (d:IsA("BasePart") or d:IsA("Decal")) then
+		local item: any = d
+		hiddenParts[d] = item.LocalTransparencyModifier
+		item.LocalTransparencyModifier = 1
+	end
+end
+
+local function hideCharacter(character: Instance?)
+	if character then
+		for _, d in character:GetDescendants() do
+			hidePart(d)
+		end
+	end
+end
+
+-- The camera scripts may set them back: keep them hidden every frame.
+local function keepHidden()
+	for d in hiddenParts do
+		local item: any = d
+		if item.LocalTransparencyModifier ~= 1 then
+			item.LocalTransparencyModifier = 1
+		end
+	end
+end
+
+local function restoreHidden()
+	for d, value in hiddenParts do
+		if d.Parent then
+			local item: any = d
+			item.LocalTransparencyModifier = value
+		end
+	end
+	table.clear(hiddenParts)
+end
+
+-- Is `position` close to the line from the close-up camera to the anvil?
+local function blocksView(s: any, position: Vector3): boolean
+	local a: Vector3 = s.camPos
+	local ab: Vector3 = (s.anvil :: CFrame).Position - a
+	local t = math.clamp((position - a):Dot(ab) / math.max(ab:Dot(ab), 1e-6), 0, 1)
+	return (a + ab * t - position).Magnitude < SIGHT_RADIUS
+end
+
+-- Other players standing in the shot are hidden too (until the end).
+local function hideBlockers(s: any)
+	for _, other in Players:GetPlayers() do
+		local character = other.Character
+		if other ~= player and character then
+			for _, name in { "HumanoidRootPart", "Head" } do
+				local part = character:FindFirstChild(name)
+				if part and part:IsA("BasePart") and blocksView(s, part.Position) then
+					hideCharacter(character)
+					break
+				end
+			end
+		end
+	end
+end
+
 local function exit(s: any)
 	if s.exited then
 		return
@@ -458,6 +541,7 @@ local function exit(s: any)
 		if session == nil or session == s then
 			camera.CameraType = Enum.CameraType.Custom
 			camera.FieldOfView = s.savedFov
+			restoreHidden() -- the camera is back behind the player
 		end
 		s.folder:Destroy()
 		s.view.Gui:Destroy()
@@ -485,6 +569,7 @@ local function exit(s: any)
 	end
 end
 
+-- LEAVE / B / Backspace (not during the reveal: AWESOME ends that).
 local function leave(s: any)
 	if s.exited or s.revealing then
 		return
@@ -492,6 +577,19 @@ local function leave(s: any)
 	if not s.sent then
 		Net.send("FoundryAction", "Cancel", { SessionId = s.Id })
 	end
+	exit(s)
+end
+
+-- Death, a respawn or the building streaming out: end at once, even during
+-- the reveal (the new blaster is saved already).
+local function abort(s: any)
+	if s.exited then
+		return
+	end
+	if not s.sent then
+		Net.send("FoundryAction", "Cancel", { SessionId = s.Id })
+	end
+	s.revealing = false
 	exit(s)
 end
 
@@ -721,10 +819,14 @@ local function begin(payload: { [string]: any })
 	folder.Parent = Workspace
 	local view = FoundryView.buildForge(touch)
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
+	local uiScale = HudController.uiScale()
 	local scaler = view.Gui:FindFirstChild("Scale")
 	if scaler and scaler:IsA("UIScale") then
-		scaler.Scale = HudController.uiScale()
+		scaler.Scale = uiScale
 	end
+	-- the gui ignores the inset: keep LEAVE and the banner below the top bar
+	local inset = GuiService:GetGuiInset()
+	FoundryView.placeTop(view, inset.Y, uiScale)
 	view.Banner.Text = "FORGE: " .. string.upper(BlasterData.displayName(level, ore))
 	FoundryView.setPips(view, hits, 0)
 	local s: any = {
@@ -744,6 +846,7 @@ local function begin(payload: { [string]: any })
 		view = view,
 		camera = camera,
 		anvil = anvil,
+		camPos = camPoint.Position,
 		glow = info.Glow,
 		savedCF = camera.CFrame,
 		savedFov = camera.FieldOfView,
@@ -765,6 +868,10 @@ local function begin(payload: { [string]: any })
 		GuiService.TouchControlsEnabled = false
 	end)
 	s.popLighting = LightingController.push("Workbench", 0.5)
+	-- your own character stands between the camera and the anvil: hide it
+	-- (and anyone else in the shot); a Scriptable camera never fades it
+	hideCharacter(player.Character)
+	hideBlockers(s)
 	camera.CameraType = Enum.CameraType.Scriptable
 	TweenService:Create(camera, TweenInfo.new(INTRO, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 		CFrame = camPoint,
@@ -858,21 +965,32 @@ local function begin(payload: { [string]: any })
 		table.insert(
 			s.connections,
 			humanoid.Died:Connect(function()
-				leave(s)
+				abort(s)
 			end)
 		)
+	end
+	if character then
+		-- a tool or accessory added during the close-up stays hidden too
+		table.insert(s.connections, character.DescendantAdded:Connect(hidePart))
 	end
 	table.insert(
 		s.connections,
 		player.CharacterRemoving:Connect(function()
-			leave(s)
+			abort(s)
 		end)
 	)
-	-- the ring, queued taps, the building streaming out
+	-- the ring, queued taps, hidden characters, the building streaming out
+	local sinceSight = 0
 	table.insert(
 		s.connections,
-		RunService.RenderStepped:Connect(function()
+		RunService.RenderStepped:Connect(function(dt: number)
 			local now = os.clock()
+			sinceSight += dt
+			if sinceSight >= SIGHT_CHECK then
+				sinceSight = 0
+				hideBlockers(s)
+			end
+			keepHidden()
 			if not s.sent then
 				local scale = FoundryView.ringScale(math.max(0, now - s.beatStart))
 				view.Ring.Size = UDim2.fromScale(scale, scale)
@@ -884,7 +1002,7 @@ local function begin(payload: { [string]: any })
 				end
 			end
 			if not anvil or not building or not building.Parent then
-				leave(s)
+				abort(s)
 			end
 		end)
 	)
@@ -911,6 +1029,9 @@ local function onResult(result: any)
 		HudController.toast(reasonText(result.Reason), "Deny")
 		Sfx.play("UIDeny")
 		refresh(StateController.get())
+	elseif result.Ok == true and type(result.Name) == "string" then
+		-- the close-up ended early (death, respawn) after the last strike
+		HudController.toast(`New blaster: {result.Name}!`, "Reward")
 	end
 end
 
@@ -1002,8 +1123,73 @@ local function rewatchBuildings()
 	end
 end
 
--- A small copy of an item flies along an arc from `from` into `to`.
-local function flyIn(from: Vector3, to: Vector3, kind: string, oreId: string)
+-- "TO ORE PEN" rises over the chute's mouth (one reused tag).
+local function showPenTag(position: Vector3)
+	local tag = penTag
+	if not tag then
+		local anchor = Instance.new("Attachment")
+		anchor.Name = "FoundryPenTag"
+		anchor.Parent = Workspace.Terrain
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "FoundryPenTag"
+		gui.Adornee = anchor
+		gui.Size = UDim2.fromOffset(150, 32)
+		gui.LightInfluence = 0
+		gui.MaxDistance = FLY_MAX_DISTANCE
+		gui.ResetOnSpawn = false
+		local label = Instance.new("TextLabel")
+		label.Name = "Text"
+		label.BackgroundColor3 = Theme.PanelDark
+		label.BackgroundTransparency = 0.2
+		label.Size = UDim2.fromScale(1, 1)
+		label.Text = "TO ORE PEN"
+		label.TextScaled = true
+		label.TextColor3 = Theme.Info
+		label.FontFace = Theme.Font
+		label.Parent = gui
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.4, 0)
+		corner.Parent = label
+		gui.Parent = player:WaitForChild("PlayerGui")
+		penTag = gui
+		tag = gui
+	end
+	local gui = tag :: BillboardGui
+	local anchor = gui.Adornee
+	local label = gui:FindFirstChild("Text")
+	if not anchor or not anchor:IsA("Attachment") or not label or not label:IsA("TextLabel") then
+		return
+	end
+	anchor.WorldPosition = position + Vector3.new(0, 1.4, 0)
+	gui.StudsOffsetWorldSpace = Vector3.zero
+	label.TextTransparency = 0
+	label.BackgroundTransparency = 0.2
+	gui.Enabled = true
+	local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.7)
+	TweenService:Create(gui, TweenInfo.new(1.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		StudsOffsetWorldSpace = Vector3.new(0, 1.6, 0),
+	}):Play()
+	TweenService:Create(label, info, { TextTransparency = 1, BackgroundTransparency = 1 }):Play()
+end
+
+-- A small copy of an item flies along an arc from `from` into `to` (only
+-- MAX_FLYING at once, none when `to` is off-screen or far away).
+local function flyIn(from: Vector3, to: Vector3, kind: string, oreId: string, toPen: boolean)
+	local camera = Workspace.CurrentCamera
+	if not camera or (camera.CFrame.Position - to).Magnitude > FLY_MAX_DISTANCE then
+		return
+	end
+	local _, onScreen = camera:WorldToViewportPoint(to)
+	if not onScreen then
+		return
+	end
+	if flying >= MAX_FLYING then
+		if toPen then
+			showPenTag(to)
+		end
+		return
+	end
+	flying += 1
 	local model: Model? = nil
 	if kind ~= "Raw" and OreData.ById[oreId] then
 		local ok, built = pcall(ItemBuilder.display, { K = kind, O = oreId }, CFrame.new(from), "fly")
@@ -1041,8 +1227,12 @@ local function flyIn(from: Vector3, to: Vector3, kind: string, oreId: string)
 		if p >= 1 then
 			connection:Disconnect()
 			folder:Destroy()
+			flying = math.max(0, flying - 1)
 			Vfx.burst("Sparks", to, 6)
 			Sfx.play("Gulp", to)
+			if toPen then
+				showPenTag(to)
+			end
 		end
 	end)
 end
@@ -1065,9 +1255,9 @@ function FoundryController.init()
 	StateController.onChanged(function(state)
 		refresh(state)
 	end)
-	FxController.register("FoundryIn", function(from: any, to: any, kind: any, oreId: any)
+	FxController.register("FoundryIn", function(from: any, to: any, kind: any, oreId: any, destination: any)
 		if typeof(from) == "Vector3" and typeof(to) == "Vector3" and type(kind) == "string" then
-			flyIn(from, to, kind, if type(oreId) == "string" then oreId else "")
+			flyIn(from, to, kind, if type(oreId) == "string" then oreId else "", destination == "Pen")
 		end
 	end)
 	FxController.register("FoundryPut", function(position: any)

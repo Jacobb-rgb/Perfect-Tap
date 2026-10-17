@@ -7,7 +7,8 @@
 	           icon in the ore's colour framed in its rarity colour, the name,
 	           a rarity chip, the grades ("2 Pristine, 1 Rough") or why the
 	           next level can't use it, the count and TAKE (one ingot back to
-	           the Ore Pen, the cheapest of that ore first)
+	           the Ore Pen, the cheapest of that ore first; TAKE ALL on the
+	           rows the next level can't use: all of that ore at once)
 	  right    NEXT BLASTER: level badge, the name the new blaster would get
 	           in the chosen look's colour, damage now -> next, the LOOK
 	           picker (< ore >, only ores among the usable ingots), the recipe
@@ -21,9 +22,11 @@
 	the shrinking ring over the target circle (PERFECT / GOOD are cosmetic,
 	every tap counts), a big STRIKE button (bottom right on touch), LEAVE,
 	the feedback text, a white flash and the reveal card (NEW BLASTER!).
+	placeTop keeps LEAVE and the banner below the Roblox top bar (the gui
+	ignores the inset so the flash covers the whole screen).
 
 	Pure helpers (tested): oreRows, status, reasonText, usesText, damageText,
-	grade, ringScale.
+	grade, ringScale, topShift.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -56,6 +59,8 @@ export type OreRow = {
 export type Row = {
 	Ore: string,
 	TakeKey: string,
+	TakeAll: boolean, -- TAKE ALL (the next level can't use this ore)
+	Amount: number,
 	Frame: Frame,
 	Icon: Frame,
 	IconStroke: UIStroke,
@@ -192,7 +197,7 @@ function FoundryView.oreRows(summary: any, level: any): { OreRow }
 		end
 		local detail = table.concat(parts, ", ")
 		if not usable then
-			detail = if recipe then `Too common: the next blaster needs {recipe.MinRarity}+` else "Not needed any more"
+			detail = if recipe then `Too common: needs {recipe.MinRarity}+` else "Not needed any more"
 		end
 		table.insert(rows, {
 			Ore = oreId,
@@ -648,6 +653,8 @@ local function newRow(refs: Refs, oreId: string): Row
 	local row: Row = {
 		Ore = oreId,
 		TakeKey = "",
+		TakeAll = false,
+		Amount = 0,
 		Frame = frame,
 		Icon = icon,
 		IconStroke = iconStroke,
@@ -680,6 +687,10 @@ function FoundryView.setRows(refs: Refs, rows: { OreRow }, total: number): { Row
 			table.insert(created, row)
 		end
 		row.TakeKey = info.TakeKey
+		row.TakeAll = not info.Usable
+		row.Amount = info.Count
+		row.Take.Text = if row.TakeAll then "TAKE ALL" else "TAKE"
+		row.Take.TextSize = if row.TakeAll then (if refs.Compact then 17 else 14) else 18
 		row.Frame.LayoutOrder = index
 		row.Frame.BackgroundColor3 = if info.Usable then Theme.PanelLight else Theme.Panel
 		row.Icon.BackgroundColor3 = info.Color
@@ -705,9 +716,10 @@ function FoundryView.setRows(refs: Refs, rows: { OreRow }, total: number): { Row
 	return created
 end
 
--- The ingots a forge would use (status.Uses into `stock`), as squares in
--- their ore colours; the look's ingot first with a gold frame. Faded empty
--- squares stand for the ingots still missing.
+-- The ingots a forge would use (status.Uses into `stock`), as little ingots
+-- in their ore colours with a rarity-coloured rim and a shine (so dark ores
+-- like Coal still read as ingots); the look's ingot first with a gold frame.
+-- The ingots still missing are see-through slots with a "?".
 function FoundryView.setUses(refs: Refs, status: FoundryLogic.Status, stock: { FoundryLogic.Desc })
 	for _, child in refs.UsesRow:GetChildren() do
 		if child:IsA("Frame") then
@@ -731,13 +743,29 @@ function FoundryView.setUses(refs: Refs, status: FoundryLogic.Status, stock: { F
 			Name = "Ingot" .. i,
 			LayoutOrder = i,
 			Size = UDim2.fromOffset(22, 22),
-			BackgroundColor3 = if ore then ore.Color else Theme.PanelLight,
-			BackgroundTransparency = if ore then 0 else 0.5,
+			BackgroundColor3 = if ore then ore.Color else Theme.PanelDark,
+			BackgroundTransparency = if ore then 0 else 1,
 			BorderSizePixel = 0,
 		}, refs.UsesRow)
+		square:SetAttribute("Filled", ore ~= nil)
 		UIKit.corner(square, 5)
-		local skin = framed and i == 1
-		UIKit.stroke(square, if skin then 3 else 2, if skin then Theme.Coin else Theme.Outline)
+		if ore then
+			local skin = framed and i == 1
+			local rarity = Rarity.ById[ore.Rarity]
+			UIKit.stroke(square, if skin then 3 else 2, if skin then Theme.Coin elseif rarity then rarity.Color else Theme.Text)
+			local shine = UIKit.new("Frame", {
+				Name = "Shine",
+				Position = UDim2.fromOffset(4, 4),
+				Size = UDim2.fromOffset(8, 4),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.35,
+				BorderSizePixel = 0,
+			}, square)
+			UIKit.corner(shine, 2)
+		else
+			UIKit.stroke(square, 2, Theme.TextDim, 0.35)
+			UIKit.label(square, "?", 15, { Name = "Missing", Size = UDim2.fromScale(1, 1), TextColor3 = Theme.TextDim })
+		end
 	end
 end
 
@@ -901,10 +929,11 @@ function FoundryView.buildForge(touch: boolean): ForgeRefs
 	}, holder)
 	UIKit.corner(ring, 999)
 	local ringStroke = UIKit.stroke(ring, 4, Color3.new(1, 1, 1))
+	-- just above the ring (clear of the banner rows on short phone screens)
 	local feedback = UIKit.label(gui, "", 44, {
 		Name = "Feedback",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.33),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0.56, -66),
 		Size = UDim2.fromOffset(520, 60),
 		FontFace = Theme.TitleFont,
 		TextTransparency = 1,
@@ -930,7 +959,7 @@ function FoundryView.buildForge(touch: boolean): ForgeRefs
 	})
 	local leave = UIKit.button(gui, "LEAVE", Theme.Bad, Theme.BadDark, {
 		Name = "Leave",
-		Position = UDim2.fromOffset(24, 76), -- below the Roblox top bar buttons
+		Position = UDim2.fromOffset(24, 76), -- placeTop moves it below the Roblox top bar
 		Size = if touch then UDim2.fromOffset(140, 72) else UDim2.fromOffset(120, 50),
 		TextSize = 20,
 	})
@@ -999,6 +1028,24 @@ function FoundryView.buildForge(touch: boolean): ForgeRefs
 		CardDamage = cardDamage,
 		Collect = collect,
 	}
+end
+
+-- How far (in design pixels) the hammer HUD's top row moves down so it starts
+-- below the Roblox top bar: `insetY` screen pixels (GuiService:GetGuiInset)
+-- at UI scale `scale`. The top row starts at 52 (the banner).
+function FoundryView.topShift(insetY: number, scale: number): number
+	local s = if scale > 0 then scale else 1
+	return math.max(0, math.ceil((math.max(0, insetY) + 8) / s - 52))
+end
+
+-- Moves the banner, the hint, the pips and LEAVE below the top bar.
+function FoundryView.placeTop(refs: ForgeRefs, insetY: number, scale: number)
+	local shift = FoundryView.topShift(insetY, scale)
+	refs.Banner.Position = UDim2.new(0.5, 0, 0, 52 + shift)
+	refs.Sub.Position = UDim2.new(0.5, 0, 0, 98 + shift)
+	refs.Pips.Position = UDim2.new(0.5, 0, 0, 132 + shift)
+	local leaveHolder = refs.Leave.Parent :: Frame
+	leaveHolder.Position = UDim2.fromOffset(24, 76 + shift)
 end
 
 -- `hits` empty pips (rebuilt), `done` of them filled.

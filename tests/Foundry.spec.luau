@@ -358,8 +358,8 @@ return function(T, Loader)
 		patch(DataService, "changed", function()
 			w.changed += 1
 		end)
-		patch(Net, "fire", function(name, p, a, b, c)
-			table.insert(w.notes, { Name = name, Player = p, A = a, B = b, C = c })
+		patch(Net, "fire", function(name, p, a, b, c, d, e, f)
+			table.insert(w.notes, { Name = name, Player = p, A = a, B = b, C = c, D = d, E = e, F = f })
 		end)
 		patch(Net, "fireNear", function(name, _, _, _, a, b, c, d)
 			table.insert(w.notes, { Name = name, Near = true, A = a, B = b, C = c, D = d })
@@ -513,17 +513,35 @@ return function(T, Loader)
 		T.eq(#stock(w), 1, "in the stock")
 		local fx = lastNote(w, "Fx")
 		T.eq(fx.A, "FoundryIn", "flies into the hood")
+		T.eq(fx.Player, w.player, "only the owner sees it")
 		T.eq(fx.D, "Ingot")
+		T.eq(fx.E, "Gold")
+		T.eq(fx.F, "Stock", "into the stock")
+		T.eq(#notes(w, "Notify"), 0, "no toast for the stock")
 		-- dirty ore -> pen, and its ore stays secret
 		local raw = onChute(USER, { K = "Raw", O = "Heartstone" })
 		T.truthy(FoundryService.sink(PLOT, raw))
 		T.eq(countKey(w.data.Storage, "Raw|Heartstone||"), 1, "dirty ore to the pen")
 		local rawFx = notes(w, "Fx")[2]
 		T.eq(rawFx.D, "Raw")
+		T.eq(rawFx.E, "", "the dirty ore's secret is kept")
+		T.eq(rawFx.F, "Pen", "the client tags it TO ORE PEN")
+		T.truthy(lastNote(w, "Notify").A.Text:find("Only ingots", 1, true), "the owner is told why")
+		T.eq(lastNote(w, "Notify").A.Kind, "Info")
+		-- the same reason again soon: no second toast (a busy line)
+		local toasts = #notes(w, "Notify")
+		T.truthy(FoundryService.sink(PLOT, onChute(USER, { K = "Raw", O = "Coal" })))
+		T.eq(#notes(w, "Notify"), toasts, "throttled")
 		-- level 3 needs Uncommon+ for level 4: a Common ingot goes to the pen
 		w.data.BlasterLevel = 3
 		T.truthy(FoundryService.sink(PLOT, onChute(USER, ingot("Coal"))))
 		T.eq(countKey(w.data.Storage, "Ingot|Coal||"), 1, "too common: the pen")
+		T.eq(lastNote(w, "Fx").F, "Pen")
+		local why = lastNote(w, "Notify").A.Text
+		T.truthy(why:find("Coal ingots aren't needed", 1, true) and why:find("Ore Pen", 1, true), why)
+		for _, note in notes(w, "Fx") do
+			T.falsy(note.Near, "no FoundryIn to everyone near")
+		end
 		T.truthy(FoundryService.sink(PLOT, onChute(USER, ingot("Silver"))))
 		T.eq(#stock(w), 2, "Uncommon into the stock")
 		-- stock full: usable ingots go to the pen
@@ -571,9 +589,19 @@ return function(T, Loader)
 		local ok, reason = handler(PLOT)
 		T.falsy(ok)
 		T.eq(reason, "Wrong", "no item")
+		-- a number that isn't a plot id (a clock, a count) is never taken for one
+		T.truthy(handler(onChute(USER, ingot("Coal")), 1234.5), "(record, clock): the plot from its position")
+		T.truthy(handler(99, onChute(USER, ingot("Coal"))), "(99, record): not a plot, the position decides")
+		T.eq(#stock(w), 6)
+		local lost = ItemService.spawnDesc(ingot("Coal"), USER, CFrame.new(0, 200, 0), nil, true)
+		local okLost, whyLost = handler(4321, lost)
+		T.falsy(okLost)
+		T.eq(whyLost, "Wrong", "no plot anywhere")
+		T.eq(lost.State, "Loose", "left alone")
 		-- max level: everything goes to the pen
 		w.data.BlasterLevel = BlasterData.MaxLevel
 		T.truthy(handler(PLOT, onChute(USER, ingot("Heartstone"))))
+		T.truthy(lastNote(w, "Notify").A.Text:find("top level", 1, true), "says why")
 		T.eq(countKey(w.data.Storage, "Ingot|Heartstone||"), 1, "top level: the pen")
 	end)
 
@@ -672,6 +700,26 @@ return function(T, Loader)
 			fs.action(w.player, "Take", arg)
 		end
 		T.eq(#stock(w), 2, "nothing else moved")
+		-- TAKE ALL: every ingot of the ore, any grade
+		table.insert(stock(w), ingot("Gold", "Rough"))
+		table.insert(stock(w), ingot("Gold", "Pristine"))
+		fs.action(w.player, "Take", { Key = "Ingot|Gold|Rough|", Count = 5, All = "yes" })
+		T.eq(#stock(w), 4, "a bad All is ignored")
+		fs.action(w.player, "Take", { Key = "Ingot|Gold|Rough|", Count = 5, All = true })
+		T.eq(#stock(w), 1, "all three Gold out")
+		T.eq(countKey(stock(w), "Ingot|Iron||"), 1, "the Iron stays")
+		T.eq(countKey(w.data.Storage, "Ingot|Gold|Pristine|"), 1, "into the pen")
+		T.eq(#w.data.Storage, 5)
+		fs.action(w.player, "Take", { Key = "Ingot|Iron||", Count = 1, All = false })
+		T.eq(#stock(w), 0, "All = false is one key")
+		-- back to the state before TAKE ALL
+		table.clear(stock(w))
+		table.clear(w.data.Storage)
+		table.insert(stock(w), ingot("Gold", "Clean"))
+		table.insert(stock(w), ingot("Iron"))
+		for _ = 1, 2 do
+			table.insert(w.data.Storage, ingot("Gold", "Clean"))
+		end
 		-- as many as fit in the pen
 		local capacity = ItemService.penCapacity(w.data)
 		for _ = #w.data.Storage + 1, capacity - 1 do
@@ -1070,6 +1118,37 @@ return function(T, Loader)
 		T.eq(refs.Badge.Text, "LV 2")
 		T.eq(refs.BlasterName.Text, BlasterData.displayName(2, "Gold"))
 		T.truthy(refs.Forge:GetAttribute("Ready"))
+		T.eq(refs.Rows.Gold.Take.Text, "TAKE", "usable rows take one")
+		-- the uses row: real ingots have a rim and a shine, missing ones a "?"
+		local filled, missing = 0, 0
+		for _, square in refs.UsesRow:GetChildren() do
+			if square:IsA("Frame") then
+				if square:GetAttribute("Filled") then
+					filled += 1
+					T.truthy(square:FindFirstChild("Shine"), "a shine on a real ingot")
+				else
+					missing += 1
+					T.truthy(square:FindFirstChild("Missing"), "a ? slot")
+				end
+			end
+		end
+		T.eq(filled, 3, "Gold + 2 Coal")
+		T.eq(missing, 0)
+		local short = { FoundryStock = { ["Ingot|Gold|Clean|"] = 1 }, BlasterLevel = 1, Coins = 0, BlasterOre = "" }
+		FoundryView.setCard(refs, FoundryView.status(short, nil), short)
+		missing = 0
+		for _, square in refs.UsesRow:GetChildren() do
+			if square:IsA("Frame") and not square:GetAttribute("Filled") then
+				missing += 1
+			end
+		end
+		T.eq(missing, 2, "two missing slots")
+		-- rows the next level can't use say TAKE ALL
+		FoundryView.setRows(refs, FoundryView.oreRows(state.FoundryStock, 3), 7)
+		T.eq(refs.Rows.Coal.Take.Text, "TAKE ALL")
+		T.truthy(refs.Rows.Coal.TakeAll)
+		T.eq(refs.Rows.Coal.Amount, 5)
+		T.falsy(refs.Rows.Gold.TakeAll)
 		FoundryView.setCompact(refs, true)
 		T.eq(#FoundryView.setRows(refs, FoundryView.oreRows({ ["Ingot|Coal||"] = 1 }, 1), 1), 0, "rows reused")
 		T.eq(refs.Rows.Gold, nil, "gone rows removed")
@@ -1077,6 +1156,14 @@ return function(T, Loader)
 		T.truthy(refs.Soon.Visible, "coming soon")
 		T.eq(refs.Badge.Text, "LV 11")
 		local forge = FoundryView.buildForge(true)
+		-- LEAVE and the banner start below the Roblox top bar (58 pt) at any UI scale
+		for _, scale in { 0.62, 0.75, 1, 1.4 } do
+			FoundryView.placeTop(forge, 58, scale)
+			local leaveHolder = forge.Leave.Parent
+			T.le(58, (leaveHolder.Position.Y.Offset - 5) * scale, "LEAVE below the top bar at " .. scale)
+			T.le(58, forge.Banner.Position.Y.Offset * scale, "banner below the top bar at " .. scale)
+		end
+		T.eq(FoundryView.topShift(0, 1), 0, "no top bar: no shift")
 		FoundryView.setPips(forge, 6, 2)
 		T.eq(#forge.PipList, 6)
 		FoundryView.showCard(forge, 3, "Gold", 2, "Coal")
