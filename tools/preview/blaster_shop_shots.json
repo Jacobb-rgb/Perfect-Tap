@@ -217,19 +217,19 @@
    0.225,
    0.136
   ],
-  "shadowExtent": 160,
+  "shadowExtent": 200,
   "maxLights": 32,
   "position": [
    6,
    11,
-   32
+   30
   ],
   "target": [
    0,
-   9,
+   12,
    112
   ],
-  "fov": 55
+  "fov": 58
  },
  "lobby_vault_aerial": {
   "scene": "blaster_shop_lobby",
@@ -294,6 +294,28 @@
    0,
    4,
    96
+  ],
+  "fov": 55
+ },
+ "lobby_vault_side": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   40,
+   22,
+   72
+  ],
+  "target": [
+   20,
+   8,
+   118
   ],
   "fov": 55
  }

@@ -350,6 +350,150 @@ end
 
 ---------------------------------------------------------------- B: Forge Vault
 
+--[[
+	The vault's "wow" layer (local frame of the vault: front +Z, 70 x 50 studs):
+	a slate roof with fire towers, a stone gable over the entrance with two big
+	crossed blasters and a glowing crystal, a big turning hologram blaster over
+	the roof with floating crystals around it, giant ore crystals flanking the
+	entrance, lava falls down both side walls into glowing pools, a rune circle
+	on the forecourt and two searchlights.
+]]
+local function vaultWow(K: any, parent: any, origin: any)
+	local Geo = L.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local LAVA = C3.fromRGB(255, 96, 30)
+	local SLATE = C3.fromRGB(52, 48, 60)
+	local STONE = C3.fromRGB(104, 100, 120)
+	local halfW, halfD = 35, 25
+	local function at(x: number, y: number, z: number): any
+		return origin * CF.new(x, y, z)
+	end
+	local function embers(part: any, color: any)
+		local e = roblox.Instance.new("ParticleEmitter")
+		e.Name = "Embers"
+		e.Color = roblox.ColorSequence.new(color)
+		e.Parent = part
+	end
+	-- a slate roof with a glowing edge, over the beams
+	K.boxCF(at(0, 24.6, -1), V3.new(2 * halfW + 2, 1.2, 2 * halfD + 2), SLATE)
+	neon(K, at(0, 24.05, halfD), V3.new(2 * halfW + 2.2, 0.25, 0.3), FIRE)
+	-- fire towers on the back corners
+	for _, sx in { -1, 1 } do
+		local x, z = sx * (halfW - 3), -halfD + 3
+		K.boxCF(at(x, 16, z), V3.new(7, 32, 7), STONE)
+		K.boxCF(at(x, 32.4, z), V3.new(8.4, 1.2, 8.4), SLATE)
+		for _, y in { 10, 20, 30 } do
+			neon(K, at(x, y, z), V3.new(7.2, 0.3, 7.2), FIRE)
+		end
+		local flame = K.part("Part", at(x, 34.4, z), V3.new(4.6, 3.2, 4.6), FIRE, NEON)
+		flame.Shape = Enum.PartType.Ball
+		embers(flame, FIRE)
+		light(K, (at(x, 36, z)).Position, FIRE, 24, 1.2)
+	end
+	-- the stone gable over the entrance: two triangles, a fire trim, crossed blasters, a crystal
+	local zG = halfD - 1.2
+	local base, peak = 24.0, 40
+	for _, sx in { -1, 1 } do
+		local a = (at(sx * 36, base, zG)).Position
+		local b = (at(0, base, zG)).Position
+		local c = (at(0, peak, zG)).Position
+		Geo.triangle(parent, a, b, c, 2.6, STONE, nil, nil, { CanCollide = false })
+		local rake = (c - a)
+		local mid = (a + c) / 2
+		K.boxCF(CF.lookAt(mid + V3.new(0, 0, 1.4), mid + V3.new(0, 0, 1.4) + rake), V3.new(0.35, 0.35, rake.Magnitude), FIRE, NEON)
+	end
+	for _, roll in { 0.55, -0.55 } do
+		local gun = Kenney.gun(L, 10, "Magmacore")
+		Concepts.present(gun, at(0, 30.6, zG + 2.4) * CF.Angles(0, 0, roll) * CF.Angles(0, -math.pi / 2, 0), 3.0, parent)
+	end
+	K.cluster(
+		(at(0, 33.6, zG + 1.6)).Position,
+		V3.new(0, 1, 0.35).Unit,
+		V3.new(1, 0, 0),
+		4.2,
+		C3.fromRGB(230, 90, 40),
+		C3.fromRGB(255, 190, 90)
+	)
+	light(K, (at(0, 33, zG + 6)).Position, FIRE, 22, 1.2)
+	-- a big hologram blaster turning over the roof, its projector, floating crystals around it
+	local holoGlow = C3.fromRGB(255, 120, 160)
+	K.cylCF(at(0, 25.6, -6) * CF.Angles(0, 0, math.pi / 2), 0.8, 8, SLATE)
+	K.cylCF(at(0, 26.05, -6) * CF.Angles(0, 0, math.pi / 2), 0.12, 7, holoGlow, NEON)
+	local beam = K.cylCF(at(0, 37.5, -6) * CF.Angles(0, 0, math.pi / 2), 23, 6.4, holoGlow, NEON)
+	beam.Transparency = 0.9
+	local holo = Kenney.gun(L, 10, "Heartstone")
+	Concepts.present(holo, at(0, 56, -6) * CF.Angles(0, math.pi / 2 + 0.25, 0) * CF.Angles(0.12, 0, 0), 4.2, parent)
+	for i = 0, 7 do
+		local a = i / 8 * math.pi * 2
+		local p = (at(math.cos(a) * 16, 56 + math.sin(a * 2) * 2.5, -6 + math.sin(a) * 16)).Position
+		K.gem(p, V3.new(math.cos(a) * 0.3, 1, math.sin(a) * 0.3).Unit, 0.7, 2.6, C3.fromRGB(220, 70, 130), holoGlow)
+	end
+	-- giant ore crystals on plinths beside the entrance
+	for _, side in { { -1, "Heartstone" }, { 1, "Stormcore" } } do
+		local sx = side[1]
+		local look = oreGlow(if side[2] == "Heartstone" then 10 else 9)
+		local x, z = sx * 30, halfD + 7
+		K.boxCF(at(x, 0.9, z), V3.new(7, 1.8, 7), STONE)
+		neon(K, at(x, 1.85, z), V3.new(7.2, 0.12, 7.2), look.Glow)
+		K.cluster(
+			(at(x, 1.8, z)).Position,
+			V3.new(0, 1, 0),
+			V3.new(sx, 0, 0),
+			11,
+			look.Body:Lerp(C3.new(0, 0, 0), 0.25),
+			look.Body:Lerp(look.Glow, 0.3)
+		)
+		light(K, (at(x, 7, z + 2)).Position, look.Glow, 20, 1.3)
+	end
+	-- lava falls down both side walls into glowing pools
+	for _, sx in { -1, 1 } do
+		for _, z in { -12, 8 } do
+			local x = sx * (halfW + 0.4)
+			neon(K, at(x, 11.5, z), V3.new(0.5, 21, 3.4), LAVA)
+			neon(K, at(x + sx * 0.12, 11.5, z), V3.new(0.4, 21, 1.4), C3.fromRGB(255, 200, 90))
+			K.boxCF(at(x + sx * 2.6, 0.4, z), V3.new(5.6, 0.8, 7), SLATE)
+			local pool = neon(K, at(x + sx * 2.6, 0.82, z), V3.new(4.6, 0.12, 6), LAVA)
+			embers(pool, FIRE)
+			light(K, (at(x + sx * 3, 3, z)).Position, LAVA, 16, 1.2)
+		end
+	end
+	-- a rune circle on the forecourt in front of the entrance
+	local cz = halfD + 8
+	for ring, r in { 5.6, 4.2 } do
+		local n = 28
+		for i = 0, n - 1 do
+			local a = i / n * math.pi * 2
+			neon(
+				K,
+				at(math.cos(a) * r, 0.08, cz + math.sin(a) * r) * CF.Angles(0, -a, 0),
+				V3.new(0.18, 0.05, 2 * math.pi * r / n * (ring == 1 and 0.85 or 0.6)),
+				FIRE
+			)
+		end
+	end
+	for i = 0, 5 do
+		local a = i / 6 * math.pi * 2
+		neon(
+			K,
+			at(math.cos(a) * 4.9, 0.09, cz + math.sin(a) * 4.9) * CF.Angles(0, a + math.pi / 4, 0),
+			V3.new(0.6, 0.06, 0.6),
+			C3.fromRGB(255, 200, 110)
+		)
+	end
+	neon(K, at(0, 0.1, cz) * CF.Angles(0, math.pi / 4, 0), V3.new(2.2, 0.06, 2.2), FIRE)
+	-- two searchlights crossing over the roof
+	for _, sx in { -1, 1 } do
+		local base = at(sx * (halfW - 3), 33.2, halfD - 6)
+		neon(
+			K,
+			base * CF.Angles(0, 0, -sx * 0.38) * CF.Angles(0.18, 0, 0) * CF.new(0, 32, 0),
+			V3.new(2.2, 64, 2.2),
+			C3.fromRGB(255, 220, 170),
+			0.9
+		)
+	end
+end
+
 local function vault(K: any, parent: any, origin: any)
 	local S = 10
 	local FIRE = C3.fromRGB(255, 140, 50)
@@ -440,6 +584,7 @@ local function vault(K: any, parent: any, origin: any)
 		piece("dungeon/barrel", CF.new(x, 0, halfD - 7), 8)
 	end
 	light(K, (origin * CF.new(0, 16, -4)).Position, C3.fromRGB(255, 210, 160), 40, 1.1)
+	vaultWow(K, parent, origin)
 end
 
 ---------------------------------------------------------------- C: Neon Stall
