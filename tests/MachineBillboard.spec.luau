@@ -160,4 +160,207 @@ return function(T, Loader)
 		T.eq(refs.Status.Text, "Ore Pen full")
 		MachineBillboard.detach(refs)
 	end)
+
+	---------------------------------------------------------------- power and Detail lines (WP-Power)
+
+	-- A generous width estimate for the info lines: like glyph() above, but
+	-- every other character (⚡, ▶, …, punctuation) counts as a full em.
+	local function lineWidth(text: string, size: number): number
+		local em = 0
+		for _, code in utf8.codes(text) do
+			local char = utf8.char(code)
+			if char == " " then
+				em += 0.32
+			elseif char:match("%l") then
+				em += 0.52
+			elseif char:match("[%u%d%%]") then
+				em += 0.66
+			else
+				em += 1
+			end
+		end
+		return em * size
+	end
+
+	local function withAttrs(model: any, attrs: { [string]: any })
+		for _, name in { "PowerSpeed", "Powered", "PowerOut", "Network", "PowerSupply", "PowerDemand", "Detail" } do
+			model:SetAttribute(name, nil)
+		end
+		for name, value in attrs do
+			model:SetAttribute(name, value)
+		end
+	end
+
+	T.test("MachineBillboard: the power line of machines, generators and poles", function()
+		local model = MachineBuilder.build("Crusher")
+		local function line(attrs: { [string]: any }): (string, any)
+			withAttrs(model, attrs)
+			return MachineBillboard.powerLine(model)
+		end
+		local text, color = line({ PowerSpeed = 1, Powered = true })
+		T.eq(text, "⚡ 100%", "full speed")
+		T.truthy(color == Theme.Good, "green")
+		text, color = line({ PowerSpeed = 0.8, Powered = true })
+		T.eq(text, "Low power 80%", "slowed")
+		T.truthy(color == Theme.Accent, "amber")
+		text = line({ PowerSpeed = 0.99, Powered = true })
+		T.eq(text, "Low power 99%", "almost full is still low")
+		text, color = line({ PowerSpeed = 0.6, Powered = false })
+		T.eq(text, "No power 60%", "no power")
+		T.truthy(color == Theme.Bad, "red")
+		T.eq((line({ PowerSpeed = 0.6 })), "No power 60%", "Powered missing counts as no")
+		-- generators
+		text, color = line({ PowerOut = 40, Network = "5,5" })
+		T.eq(text, "⚡ +40 power", "generator")
+		T.truthy(color == Theme.Good)
+		T.eq((line({ PowerOut = 18.75, Network = "5,5" })), "⚡ +19 power", "whole numbers")
+		T.eq((line({ PowerOut = 450, Network = "5,5" })), "⚡ +450 power")
+		T.eq((line({ PowerOut = 1500, Network = "5,5" })), "⚡ +1.5K power", "big numbers formatter")
+		text, color = line({ PowerOut = 40, Network = "" })
+		T.eq(text, "⚡ +40 power, no pole", "no pole reaches it")
+		T.truthy(color == Theme.Accent)
+		-- poles
+		text, color = line({ PowerSupply = 35, PowerDemand = 50, Network = "5,5" })
+		T.eq(text, "Network 35/50", "supply/demand")
+		T.truthy(color == Theme.Accent, "short of power")
+		text, color = line({ PowerSupply = 60, PowerDemand = 50 })
+		T.truthy(color == Theme.Good, "enough")
+		text, color = line({ PowerSupply = 0, PowerDemand = 50 })
+		T.truthy(color == Theme.Bad, "nothing")
+		text, color = line({ PowerSupply = 0, PowerDemand = 0 })
+		T.eq(text, "Network 0/0")
+		T.truthy(color == Theme.TextDim, "an empty network is grey")
+		T.eq((line({ PowerSupply = 18.75, PowerDemand = 2500 })), "Network 19/2.5K")
+		-- nothing / junk
+		T.eq((line({})), "", "no power attributes")
+		T.eq((line({ PowerSpeed = "fast" })), "", "junk")
+		T.eq((line({ PowerSpeed = 0 / 0 })), "", "NaN")
+	end)
+
+	T.test("MachineBillboard: the Detail line", function()
+		local model = MachineBuilder.build("Sorter")
+		withAttrs(model, { Detail = "Rare+ ▶ right" })
+		T.eq(MachineBillboard.detailLine(model), "Rare+ ▶ right")
+		withAttrs(model, { Detail = string.rep("ab", 30) })
+		local cut = MachineBillboard.detailLine(model)
+		T.eq(utf8.len(cut), MachineBillboard.DetailMax, "cut to DetailMax characters")
+		T.eq(cut:sub(-3), "…", "with an ellipsis")
+		withAttrs(model, { Detail = string.rep("▶", 30) })
+		T.eq(utf8.len(MachineBillboard.detailLine(model)), MachineBillboard.DetailMax, "cut on whole characters")
+		withAttrs(model, { Detail = "" })
+		T.eq(MachineBillboard.detailLine(model), "")
+		withAttrs(model, { Detail = 5 })
+		T.eq(MachineBillboard.detailLine(model), "", "not a string")
+		withAttrs(model, {})
+		T.eq(MachineBillboard.detailLine(model), "")
+	end)
+
+	T.test("MachineBillboard: info lines on the sign, the note under them", function()
+		local model = MachineBuilder.build("Sorter")
+		local refs = MachineBillboard.attach(model)
+		local base = refs.Gui.Size.Y.Offset
+		local line = MachineBillboard.InfoSize.Y
+		T.falsy(refs.Power.Visible, "no power line at first")
+		T.falsy(refs.Detail.Visible, "no detail line at first")
+		-- update() reads the attributes the first time it runs
+		withAttrs(model, { PowerSpeed = 0.8, Powered = true })
+		MachineBillboard.update(refs, 0.5, 1, 4, 0, "", nil)
+		T.truthy(refs.Power.Visible, "power line shown")
+		T.eq(refs.Power.Text, "Low power 80%")
+		T.truthy(refs.Power.TextColor3 == Theme.Accent)
+		T.eq(refs.Power.Position.Y.Offset, base, "under the queue")
+		T.eq(refs.Gui.Size.Y.Offset, base + line, "the sign grows by one line")
+		T.eq(refs.Fill.Size.X.Offset, 75, "the bar still works")
+		-- ...then at most every INFO_INTERVAL: refreshInfo reads them now
+		withAttrs(model, { PowerSpeed = 1, Powered = true, Detail = "Rare+ ▶ right" })
+		MachineBillboard.refreshInfo(refs)
+		T.eq(refs.Power.Text, "⚡ 100%")
+		T.truthy(refs.Power.TextColor3 == Theme.Good)
+		T.truthy(refs.Detail.Visible, "detail line")
+		T.eq(refs.Detail.Text, "Rare+ ▶ right")
+		T.eq(refs.Detail.Position.Y.Offset, base + line, "under the power line")
+		T.eq(refs.Gui.Size.Y.Offset, base + 2 * line)
+		MachineBillboard.setNote(refs, "A note")
+		T.eq(refs.Note.Position.Y.Offset, base + 2 * line, "the note under the info lines")
+		T.eq(refs.Gui.Size.Y.Offset, base + 2 * line + MachineBillboard.NoteSize.Y)
+		-- the power attributes go (e.g. a machine that needs none): the line goes
+		withAttrs(model, { Detail = "Rare+ ▶ right" })
+		MachineBillboard.refreshInfo(refs)
+		T.falsy(refs.Power.Visible, "power line hidden")
+		T.eq(refs.Detail.Position.Y.Offset, base, "detail moves up")
+		withAttrs(model, {})
+		MachineBillboard.refreshInfo(refs)
+		T.eq(refs.Note.Position.Y.Offset, base, "the note moves up")
+		MachineBillboard.setNote(refs, "")
+		T.eq(refs.Gui.Size.Y.Offset, base, "back to its size")
+		T.eq(refs.Gui.SizeOffset.Y, 0.5, "the sign grows upward, never into the machine")
+		MachineBillboard.detach(refs)
+	end)
+
+	T.test("MachineBillboard: an Alloy Furnace waiting for another ore says so", function()
+		local model = MachineBuilder.build("AlloyFurnace")
+		local refs = MachineBillboard.attach(model)
+		MachineBillboard.update(refs, 0, 1, 4, 0, "NeedsOtherOre", nil)
+		T.truthy(refs.Status.Visible, "status shown")
+		T.eq(refs.Status.Text, "Needs an ingot of another ore")
+		T.truthy(
+			lineWidth(refs.Status.Text, refs.Status.TextSize) <= refs.Status.Size.X.Offset,
+			"one line in the (centred, wider) status label"
+		)
+		T.eq(refs.Status.AnchorPoint.X, 0.5, "centred")
+		MachineBillboard.detach(refs)
+	end)
+
+	T.test("MachineBillboard: the compact info sign of poles and generators", function()
+		local pole = MachineBuilder.build("PowerPole")
+		withAttrs(pole, { PowerSupply = 35, PowerDemand = 50, Network = "5,5" })
+		local refs = MachineBillboard.attachInfo(pole)
+		local status = pole.PrimaryPart:FindFirstChild("Status")
+		T.truthy(refs.Gui.Parent == status, "on the Status attachment")
+		T.eq(refs.Gui.Name, MachineBillboard.InfoName, "not the progress sign's name")
+		T.eq(status:FindFirstChild(MachineBillboard.Name), nil, "no progress sign")
+		T.falsy(refs.Bar.Visible, "no bar")
+		T.falsy(refs.PipRow.Visible, "no queue")
+		T.falsy(refs.Status.Visible, "no status")
+		T.eq(refs.Power.Text, "Network 35/50", "filled at once")
+		T.eq(refs.Power.Position.Y.Offset, 0, "the first row")
+		T.eq(refs.Gui.Size.Y.Offset, MachineBillboard.InfoSize.Y, "one line high")
+		T.truthy(refs.Gui.Enabled, "shown")
+		T.eq(refs.Gui.MaxDistance, 45)
+		withAttrs(pole, { PowerSupply = 60, PowerDemand = 50 })
+		MachineBillboard.refreshInfo(refs)
+		T.eq(refs.Power.Text, "Network 60/50")
+		withAttrs(pole, {})
+		MachineBillboard.refreshInfo(refs)
+		T.falsy(refs.Gui.Enabled, "nothing to say: hidden")
+		MachineBillboard.detach(refs)
+		T.eq(status:FindFirstChild(MachineBillboard.InfoName), nil, "detached")
+
+		local turbine = MachineBuilder.build("WindTurbine")
+		withAttrs(turbine, { PowerOut = 40, Network = "5,5" })
+		local sign = MachineBillboard.attachInfo(turbine)
+		T.eq(sign.Power.Text, "⚡ +40 power")
+		T.truthy(MachineBillboard.anchorOf(turbine) == sign.Gui.Parent, "anchorOf: where signs hang")
+		MachineBillboard.detach(sign)
+	end)
+
+	T.test("MachineBillboard: every info line fits one line of the sign (phones)", function()
+		local width = MachineBillboard.InfoSize.X
+		local size = MachineBillboard.InfoTextSize
+		T.truthy(size >= 14, "readable text")
+		local samples = {
+			"⚡ 100%",
+			"Low power 99%",
+			"No power 60%",
+			"⚡ +1.23K power, no pole",
+			"⚡ +450 power",
+			"Network 999/999",
+			"Network 1.23K/4.56K",
+			"Legendary+ ▶ right",
+			string.rep("W", MachineBillboard.DetailMax - 1) .. "…",
+		}
+		for _, text in samples do
+			T.truthy(lineWidth(text, size) <= width, `"{text}" fits {width} px`)
+		end
+	end)
 end
