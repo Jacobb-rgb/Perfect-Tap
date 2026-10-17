@@ -1,0 +1,21 @@
+{
+  "golem_gallery": {"scene": "golems", "position": [0, 13, -21], "target": [0, 2.5, 9], "fov": 50, "preset": "Surface", "sunDir": [0.4, 0.8, -0.45], "shadowExtent": 50},
+  "golem_close": {"scene": "golems", "position": [-3, 4.5, -7.5], "target": [-1, 2.2, 3], "fov": 50, "preset": "Surface", "sunDir": [0.4, 0.8, -0.45], "shadowExtent": 30},
+  "golem_capsules": {"scene": "golems", "position": [27.5, 7, -10], "target": [27.5, 2.2, 4], "fov": 50, "preset": "Surface", "sunDir": [0.4, 0.8, -0.45], "shadowExtent": 30},
+  "golem_scale": {"scene": "golems", "position": [-31, 6, -8], "target": [-24, 2.5, 5], "fov": 50, "preset": "Surface", "sunDir": [0.4, 0.8, -0.45], "shadowExtent": 30},
+  "capsule_stall": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [0.6, 0.6, 0.2], "shadowExtent": 80, "maxLights": 24},
+  "capsule_followers": {"scene": "capsules", "position": [-21, 3.0, 20.5], "target": [-30, 1.7, 18.0], "fov": 50, "preset": "Surface", "sunDir": [0.75, 0.55, 0.35], "shadowExtent": 50, "maxLights": 24},
+  "capsule_board": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_board"},
+  "capsule_ui_shop": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsules_shop"},
+  "capsule_ui_lucky": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsules_lucky"},
+  "capsule_ui_phone": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsules_phone", "uiInset": 58},
+  "capsule_ui_grid": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsules_grid"},
+  "capsule_ui_grid_phone": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsules_grid_phone", "uiInset": 58},
+  "golem_ui_inventory": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_golems"},
+  "golem_ui_phone": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_golems_phone", "uiInset": 58},
+  "golem_ui_delete": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_golems_delete"},
+  "golem_ui_confirm": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_golems_confirm"},
+  "capsule_reveal": {"scene": "capsule_reveal", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_reveal"},
+  "capsule_reveal_phone": {"scene": "capsule_reveal", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_reveal_phone", "uiInset": 58},
+  "capsule_crack": {"scene": "capsule_crack", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_crack"}
+}

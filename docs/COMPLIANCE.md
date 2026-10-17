@@ -361,6 +361,45 @@ choices marked *(ours)*):
   the wheel's stairs now opens the wheel). The big lobby wheel is
   decoration only and must not look like it shows the prizes or odds.
 
+### 2.6a Golem capsules: what the game does (step 7)
+
+Three capsules wake random golems (`CapsuleConfig`): **Stone** and
+**Crystal** for coins, **Royal** for Robux (`RoyalCapsule1/3/10`, still
+placeholder ids). The code (`CapsuleService`, `CapsuleController`,
+`CapsuleView`) follows these rules:
+
+- **Exact odds before every open.** The capsule screen lists every golem
+  of the selected capsule with its own chance in percent
+  (`CapsuleConfig.odds`, three significant digits, never rounded to 0),
+  its rarity and its bonus, next to the OPEN x1 / x3 / x10 buttons. With
+  Triple Lucky running, the list shows the boosted odds (marked "x3") and
+  says so; the opening screen says "TRIPLE LUCKY ODDS". The CapsuleStall's
+  odds board in town shows the same numbers per rarity and per golem
+  (filled on each player's screen with that player's odds).
+- **Royal capsules (Robux) are paid random items.** Their tab is hidden for
+  players whose `ArePaidRandomItemsRestricted` is true, and while that
+  answer isn't known yet (`Policy.prefetch` asks on join and retries); the
+  server answers a request from such a player with PurchasePrompt
+  "Restricted" and never prompts. While a product id is a placeholder (0)
+  the tab shows the odds and "Coming soon!" instead of buttons, and the
+  server answers "ComingSoon". Nothing is ever granted outside
+  ProcessReceipt (step 8: `CapsuleService.grantProduct`, which opens with
+  the Triple Lucky state stored when the prompt was shown, so the odds the
+  player saw are the odds they get; golems bought with Robux are saved
+  with `Paid = true` for the trading rules).
+- **Coin capsules: our choice.** Coins can't be bought with Robux while
+  `MonetizationConfig.CoinPacksEnabled` is false, so coin capsules are
+  **not** paid random items and are shown to every player (odds still
+  shown). If the owner turns coin packs on, `CapsuleConfig.isPaidRandom`
+  becomes true for them at once: the client hides the Stone and Crystal
+  tabs for restricted players (or players whose policy isn't known), the
+  server refuses their opens ("Restricted"), and the questionnaire answer
+  for paid random items (1.1 #12) must be Yes.
+- **Free capsules** (the daily wheel's prize) aren't paid and always open.
+- **No pressure:** a capsule only opens after the player presses OPEN; a
+  full golem inventory (60) refuses the open before anything is spent (and
+  a Royal prompt says "Full"); every refusal names the reason.
+
 ### 2.7 Group join and like rewards: what is safe
 
 What we could verify:

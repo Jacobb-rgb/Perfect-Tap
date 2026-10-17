@@ -147,6 +147,11 @@ elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays
 	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "golems" or sceneName == "capsules" or sceneName == "capsule_reveal" or sceneName == "capsule_crack" then
+	-- step 7: golem pets, capsules and their UI (tools/lune/lib/capsule_preview.luau)
+	for name, guis in require("./lib/capsule_preview").build(Loader, workspace, sceneName) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

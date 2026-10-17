@@ -27,6 +27,8 @@ local ORDER = {
 	"TrainController",
 	"FoundryController",
 	"TechShopController",
+	"GolemController", -- golem inventory + followers, the HUD's GOLEMS button (step 7)
+	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }
