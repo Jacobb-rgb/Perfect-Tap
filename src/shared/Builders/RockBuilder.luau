@@ -1,7 +1,8 @@
 --[[
 	Rocks of the mine floors (MineFloors), v2 after the owner's ore-shelf
-	reference (2026-10-17): broken, faceted rock chunks with a glowing core
-	peeking through the gaps (lava, ice, gold, heart glow per floor) and
+	reference and The Forge's basalt rocks (2026-10-17): tall faceted stone
+	shards with slanted or ridged tops, a glowing core peeking through the gaps
+	between them (lava, ice, gold, heart glow per floor) and
 	dense clusters of slim, two-tone faceted crystals with glowing tips and
 	twinkles. The crystals get clearer and brighter the deeper the floor
 	(matte -> glowing tips -> glassy shells with a glowing core -> pure glow).
@@ -14,10 +15,10 @@
 	    base    CFrame on the ground (bottom center)
 
 	  Rock (Model, PrimaryPart = Rock1)
-	    Rock1           the central chunk
-	    Rock2..RockN    chunks around it (one breaks off per crack stage)
-	    Core            glowing heart between the chunks (most floors)
-	    Cap, Skirt/Keel top and foot chunks
+	    Rock1           the central shard (Facet, Cap = its top)
+	    Rock2..RockN    ring shards, each a Model (Body, Facet, Top); one breaks off per crack stage
+	    Core            glowing heart between the shards (most floors)
+	    Pebble, Skirt/Keel  rubble and the foot
 	    CrystalGroup    one crystal (Crystal body, CrystalFacet, CrystalCore, CrystalTip...)
 	    Glint           one per ore
 	    Twinkle         little light stars at crystal tips
@@ -36,13 +37,13 @@ local RockBuilder = {}
 
 -- Part budgets per kind (a floor streams in on its own; ~26 rocks per floor).
 RockBuilder.Budget = {
-	Small = 52,
-	Big = 60,
-	Crystal = 80,
-	Golden = 60,
+	Small = 66,
+	Big = 74,
+	Crystal = 92,
+	Golden = 68,
 	Geode = 60,
-	Artifact = 56,
-	Giant = 160, -- one per floor
+	Artifact = 64,
+	Giant = 170, -- one per floor
 } :: { [string]: number }
 
 -- Colors every floor shares for the special rocks, so players learn them once.
@@ -67,6 +68,10 @@ type Ctx = {
 	mainCf: CFrame,
 	mainSize: Vector3,
 	start: number,
+	foot: CFrame, -- the rock's foot (lifted for floating rocks)
+	ring: number, -- radius of the ring of shards
+	top: number, -- half width of the central shard's top
+	gaps: { number }, -- yaw of the gaps between ring shards
 }
 
 local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
@@ -250,10 +255,10 @@ end
 type BodyOpts = {
 	Scale: number?,
 	Float: number?,
-	Carved: boolean?,
-	Core: Color3?, -- glowing heart color (nil = solid rock)
-	Chunks: number?,
-	Flat: number?,
+	Carved: boolean?, -- upright pillar shards with flat gold-trimmed tops (Sunken Palace)
+	Core: Color3?, -- glowing heart color between the shards (nil = solid rock)
+	Chunks: number?, -- shards in the ring
+	Flat: number?, -- height multiplier
 	Colors: { Color3 }?, -- override Mid, Light, Dark
 }
 
@@ -263,69 +268,123 @@ local function surface(c: Ctx, a: number, up: number, out: number?): CFrame
 	return c.mainCf * CFrame.new(math.cos(a) * (s.X * 0.5 + (out or 0)), up * s.Y * 0.5, math.sin(a) * (s.Z * 0.5 + (out or 0)))
 end
 
--- A crystal root on top of the rock toward yaw `a`, at fraction `r` of the radius, leaning out by `lean`.
+-- A crystal root on top of the central shard toward yaw `a`, at fraction `r` of its half width, leaning out by `lean`.
 local function topRoot(c: Ctx, a: number, r: number, lean: number): CFrame
-	local s = c.mainSize
-	local foot = c.mainCf * CFrame.new(math.cos(a) * r * s.X * 0.5, s.Y * 0.5 - 0.15, math.sin(a) * r * s.Z * 0.5)
+	local foot = c.mainCf * CFrame.new(math.cos(a) * r * c.top, c.mainSize.Y * 0.5 - 0.2, math.sin(a) * r * c.top)
 	return tilt(CFrame.new(foot.Position), a, lean)
 end
 
+-- A crystal root in the gap between two ring shards (gap `i`), at fraction `up` of the rock height.
+local function gapRoot(c: Ctx, i: number, up: number, lean: number): CFrame
+	local a = c.gaps[(i - 1) % #c.gaps + 1]
+	local p = c.foot * CFrame.new(math.cos(a) * c.ring * 0.62, up * c.mainSize.Y, math.sin(a) * c.ring * 0.62)
+	return tilt(CFrame.new(p.Position), a, lean)
+end
+
 --[[
-	Broken, faceted rock: a central chunk, a ring of tilted chunks around it
-	(gaps between them show the glowing core), a top chunk and a foot.
+	One stone shard: a tall prism with a turned block through it (more,
+	alternating light/dark facets, like a basalt column) and a slanted or
+	ridged top that catches the light; carved shards get a flat top with a
+	gold trim. Returns the body.
+]]
+local function shard(parent: Instance, foot: CFrame, w: number, d: number, h: number, colors: { Color3 }, rng: Rng.Rng, carved: boolean, accent: Color3?, name: string): BasePart
+	local mid, lite, dark = colors[1], colors[2], colors[3]
+	local body = Geo.block(parent, foot * CFrame.new(0, h / 2, 0), Vector3.new(w, h, d), Geo.vary(mid, rng, 0.04), SMOOTH, SOLID)
+	body.Name = name
+	local m = math.min(w, d)
+	local facet = Geo.block(parent, foot * CFrame.new(0, h * 0.47, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(m * 0.86, h * 0.94, m * 0.86), Geo.vary(mid:Lerp(dark, 0.45), rng, 0.04), SMOOTH, SOLID)
+	facet.Name = "Facet"
+	local topColor = Geo.vary(lite, rng, 0.04)
+	if carved then
+		local cap = Geo.block(parent, foot * CFrame.new(0, h + 0.12, 0), Vector3.new(w + 0.16, 0.24, d + 0.16), topColor, SMOOTH, SOLID)
+		cap.Name = "Top"
+		if accent then
+			local trim = Geo.block(parent, foot * CFrame.new(0, h - 0.25, 0), Vector3.new(w + 0.08, 0.2, d + 0.08), accent, FOIL, GLOW)
+			trim.Name = "Trim"
+		end
+	elseif rng:chance(0.55) then
+		-- slanted top: one wedge over the whole footprint, sloping toward a random side
+		local t = m * rng:range(0.5, 0.85)
+		local quarter = rng:int(0, 3)
+		local size = if quarter % 2 == 0 then Vector3.new(w, t, d) else Vector3.new(d, t, w)
+		local cap = Geo.wedge(parent, foot * CFrame.new(0, h + t / 2, 0) * CFrame.Angles(0, quarter * math.pi / 2, 0), size, topColor, SMOOTH, SOLID)
+		cap.Name = "Top"
+	else
+		-- ridged top: two wedges meeting along the long side, a sharp shard tip
+		local t = m * rng:range(0.6, 1.0)
+		local long, short = math.max(w, d), math.min(w, d)
+		local spin = if w >= d then CFrame.new() else CFrame.Angles(0, math.pi / 2, 0)
+		local at = foot * CFrame.new(0, h + t / 2, 0) * spin
+		local a = Geo.wedge(parent, at * CFrame.new(0, 0, -short / 4), Vector3.new(long, t, short / 2), topColor, SMOOTH, SOLID)
+		a.Name = "Top"
+		local b = Geo.wedge(parent, at * CFrame.new(0, 0, short / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(long, t, short / 2), Geo.vary(lite:Lerp(mid, 0.35), rng, 0.04), SMOOTH, SOLID)
+		b.Name = "Top"
+	end
+	return body
+end
+
+--[[
+	A shard rock (after The Forge's basalt rocks, in our colors): one tall
+	central shard (Rock1), a ring of shorter shards leaning outward (Rock2..,
+	each a group so a crack stage breaks a whole shard off), a glowing core
+	showing through the narrow gaps, two small rubble shards and a foot.
 ]]
 local function body(c: Ctx, opts: BodyOpts): BasePart
 	local rng, pal, base = c.rng, c.pal, c.base
 	local colors = opts.Colors or { pal.Mid, pal.Light, pal.Dark }
-	local mid, lite, dark = colors[1], colors[2], colors[3]
 	local scale = opts.Scale or (if c.big then 1.3 else 1)
 	local float = opts.Float or 0
-	local size = Vector3.new(rng:range(4.4, 4.8), rng:range(3.2, 3.6) * (opts.Flat or 1), rng:range(4.1, 4.5)) * scale
-	c.mainSize = size
-	c.mainCf = base * CFrame.new(0, size.Y * 0.44 + float, 0)
-	local tiltMax = if opts.Carved then 0.04 else 0.3
-	local glowing = opts.Core ~= nil
+	local tall = opts.Flat or 1
+	local carved = opts.Carved == true
+	local accent = if carved then pal.Accent else nil
+	local foot = base * CFrame.new(0, float, 0)
+	c.foot = foot
+	local h1 = rng:range(3.2, 3.8) * scale * tall
+	local w1, d1 = 2.1 * scale, 1.85 * scale
+	c.top = math.min(w1, d1) * 0.5
+	c.ring = rng:range(1.5, 1.65) * scale
+	c.mainSize = Vector3.new(5.2 * scale, h1, 5.0 * scale)
+	c.mainCf = foot * CFrame.new(0, h1 / 2, 0)
 	if opts.Core then
-		local core = Geo.block(c.model, c.mainCf * CFrame.Angles(0, math.pi / 4, 0), size * Vector3.new(0.78, 0.8, 0.78), glow(opts.Core), NEON, GLOW)
+		local core = Geo.block(c.model, foot * CFrame.new(0, h1 * 0.36, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(2.9 * scale, h1 * 0.6, 2.9 * scale), glow(opts.Core), NEON, GLOW)
 		core.Name = "Core"
 	end
-	-- natural rock: chunks tumbled in every direction (a cube seen along its diagonal is a
-	-- hexagon, so the outline reads as broken stone, not boxes); carved floors stay upright
-	local function turn(): CFrame
-		if opts.Carved then
-			return CFrame.Angles(rng:range(-tiltMax, tiltMax), rng:range(0, math.pi * 2), rng:range(-tiltMax, tiltMax))
-		end
-		return CFrame.fromEulerAnglesYXZ(rng:range(-0.9, 0.9), rng:range(0, math.pi * 2), rng:range(-0.9, 0.9))
-	end
-	local rock1 = Geo.block(
-		c.model,
-		c.mainCf * turn(),
-		size * (if glowing then Vector3.new(0.58, 0.72, 0.56) else Vector3.new(0.7, 0.8, 0.68)),
-		Geo.vary(mid, rng, 0.03),
-		SMOOTH,
-		SOLID
-	)
-	rock1.Name = "Rock1"
+	local rock1 = shard(c.model, foot * CFrame.Angles(rng:range(-0.05, 0.05), c.start, rng:range(-0.05, 0.05)), w1, d1, h1, colors, rng, carved, accent, "Rock1")
 	local n = opts.Chunks or (if c.big then 6 else 5)
+	c.gaps = {}
 	for i = 1, n do
-		local a = c.start + (i / n) * math.pi * 2 + rng:range(-0.2, 0.2)
-		local up = rng:range(-0.25, 0.3)
-		local k = rng:range(0.44, 0.56)
-		local s = Vector3.new(size.X * k, size.Y * k * rng:range(0.95, 1.2), size.Z * k)
-		local cf = c.mainCf * CFrame.new(math.cos(a) * size.X * 0.3, up * size.Y * 0.5, math.sin(a) * size.Z * 0.3) * turn()
-		local tone = if i % 3 == 0 then lite elseif i % 3 == 1 then mid:Lerp(dark, 0.35) else mid
-		local chunk = Geo.block(c.model, cf, s, Geo.vary(tone, rng, 0.04), SMOOTH, SOLID)
-		chunk.Name = "Rock" .. (i + 1)
+		local a = c.start + (i / n) * math.pi * 2 + rng:range(-0.12, 0.12)
+		table.insert(c.gaps, a + math.pi / n)
+		local at = foot * CFrame.new(math.cos(a) * c.ring, -0.15, math.sin(a) * c.ring)
+		local lean = if carved then rng:range(0, 0.06) else rng:range(0.1, 0.28)
+		local h = h1 * rng:range(0.45, 0.82)
+		local group = Instance.new("Model")
+		group.Name = "Rock" .. (i + 1)
+		group.Parent = c.model
+		local tone = if i % 3 == 0 then { colors[1]:Lerp(colors[2], 0.3), colors[2], colors[3] } else colors
+		shard(group, tilt(CFrame.new(at.Position), a, lean) * CFrame.Angles(0, a + rng:range(-0.3, 0.3), 0), rng:range(1.4, 1.9) * scale, rng:range(1.2, 1.6) * scale, h, tone, rng, carved, accent, "Body")
 	end
-	local cap = Geo.block(c.model, c.mainCf * CFrame.new(rng:range(-0.3, 0.3), size.Y * 0.4, rng:range(-0.3, 0.3)) * randomTilt(rng, tiltMax * 0.7), size * Vector3.new(0.52, 0.3, 0.48), Geo.vary(lite, rng, 0.03), SMOOTH, SOLID)
-	cap.Name = "Cap"
+	for i = 1, 2 do
+		local a = c.start + 0.7 + i * 2.6
+		local at = foot * CFrame.new(math.cos(a) * c.ring * 1.75, -0.1, math.sin(a) * c.ring * 1.75)
+		local s = rng:range(0.6, 0.85) * scale
+		local rubble = Geo.block(c.model, tilt(CFrame.new(at.Position), a, rng:range(0.2, 0.5)) * CFrame.new(0, s * 0.5, 0) * CFrame.Angles(0, rng:range(0, 3), 0), Vector3.new(s, s * rng:range(1.1, 1.7), s * 0.85), Geo.vary(colors[3]:Lerp(colors[1], 0.4), rng, 0.05), SMOOTH, SMALL)
+		rubble.Name = "Pebble"
+	end
 	if float > 0 then
-		local k = math.min(size.X, size.Z) * 0.6
-		local keel = Geo.block(c.model, base * CFrame.new(0, float + 0.2, 0) * CFrame.Angles(0, c.start, 0) * VERTEX_UP, Vector3.new(k, k, k), Geo.vary(dark, rng, 0.03), SMOOTH, SOLID)
+		local k = 2.4 * scale
+		local keel = Geo.block(c.model, foot * CFrame.new(0, 0.2, 0) * CFrame.Angles(0, c.start, 0) * VERTEX_UP, Vector3.new(k, k, k), Geo.vary(colors[3], rng, 0.03), SMOOTH, SOLID)
 		keel.Name = "Keel"
 	else
-		local skirt = Geo.block(c.model, base * CFrame.new(0, 0.3, 0) * CFrame.Angles(0, c.start + 0.4, 0), Vector3.new(size.X * 1.02, 0.7, size.Z * 0.98), Geo.vary(dark, rng, 0.03), SMOOTH, SOLID)
+		local skirt = Geo.block(c.model, foot * CFrame.new(0, 0.2, 0) * CFrame.Angles(0, c.start + 0.4, 0), Vector3.new(4.6 * scale, 0.45, 4.4 * scale), Geo.vary(colors[3], rng, 0.03), SMOOTH, SOLID)
 		skirt.Name = "Skirt"
+	end
+	-- the central shard's top is the "Cap" (moss sits on it on the lagoon floor)
+	for _, child in c.model:GetChildren() do
+		if child.Name == "Top" and child:IsA("BasePart") then
+			child.Name = "Cap"
+			break
+		end
 	end
 	return rock1
 end
@@ -337,17 +396,17 @@ local function glints(c: Ctx, oreIds: { string })
 		local ore = OreData.ById[oreId]
 		local color = glow(if ore then ore.Glow else c.pal.Accent)
 		local a = c.start + 0.5 + (i - 1) * (math.pi * 2 / math.max(count, 1)) + c.rng:range(-0.15, 0.15)
-		local g = Geo.block(c.model, surface(c, a, c.rng:range(-0.2, 0.3), 0.15) * CFrame.Angles(0, -a, 0) * VERTEX_UP, Vector3.new(0.55, 0.55, 0.55), color, NEON, GLOW)
+		local g = Geo.block(c.model, surface(c, a, c.rng:range(-0.5, -0.1), -0.25) * CFrame.Angles(0, -a, 0) * VERTEX_UP, Vector3.new(0.55, 0.55, 0.55), color, NEON, GLOW)
 		g.Name = "Glint"
 	end
 end
 
--- The two floor crystal clusters on a normal rock; returns the tallest crystal.
+-- The two floor crystal clusters on a normal rock: one crowning the central shard, one out of a gap.
 local function rockClusters(c: Ctx, look: Look, height: number, colorsA: { Color3 }, colorsB: { Color3 }): BasePart
-	local a = c.start + 2.2
 	local mainCount = if c.big then 6 else 5
-	local tallest = cluster(c, topRoot(c, a, 0.3, 0.25), mainCount, height * (if c.big then 1.2 else 1), look, colorsA)
-	cluster(c, topRoot(c, a + math.pi * 0.95, 0.55, 0.55), 3, height * 0.62, look, colorsB)
+	local tallest = cluster(c, topRoot(c, c.start + 2.2, 0.3, 0.15), mainCount, height * (if c.big then 1.15 else 1), look, colorsA)
+	local root = gapRoot(c, 3, 0.4, 0.55)
+	cluster(c, root, 3, height * 0.62, look, colorsB)
 	return tallest
 end
 
@@ -371,9 +430,11 @@ end
 -- Floor 3, Deep Hollow (crystal lagoon): wet blue stone around an icy glow, moss, a mushroom, glassy crystals.
 local function lagoon(c: Ctx, oreIds: { string })
 	body(c, { Core = c.pal.Crystal })
-	local cap = c.model:FindFirstChild("Cap")
-	if cap and cap:IsA("BasePart") then
-		local moss = Geo.block(c.model, cap.CFrame * CFrame.new(0, cap.Size.Y * 0.5, 0), Vector3.new(cap.Size.X * 0.9, 0.3, cap.Size.Z * 0.85), c.pal.Accent, SMOOTH, SMALL)
+	-- wet moss patches around the foot
+	for i = 1, 3 do
+		local a = c.start + 1.1 + i * 2.05
+		local at = c.foot * CFrame.new(math.cos(a) * c.ring * 1.25, 0.46, math.sin(a) * c.ring * 1.25) * CFrame.Angles(0, a, 0)
+		local moss = Geo.block(c.model, at, Vector3.new(c.rng:range(1.0, 1.5), 0.16, c.rng:range(0.7, 1.1)), c.pal.Accent, SMOOTH, SMALL)
 		moss.Name = "Moss"
 	end
 	local tallest = rockClusters(c, "Shell", 2.9, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
@@ -462,10 +523,10 @@ end
 local function crystalRock(c: Ctx)
 	local index = c.floor.Index
 	local look: Look = lookFor(c.floor, true)
-	body(c, { Scale = 0.82, Flat = 0.7, Chunks = 4, Float = if index == 5 then 0.8 else 0, Carved = index == 4, Core = coreColor(c) or c.pal.Crystal })
+	body(c, { Scale = 0.8, Flat = 0.45, Chunks = 4, Float = if index == 5 then 0.8 else 0, Carved = index == 4, Core = coreColor(c) or c.pal.Crystal })
 	local mainH = 5 + index * 0.5
 	local main = cluster(c, topRoot(c, c.start, 0.05, 0), 9, mainH, look, { c.pal.Crystal, c.pal.Crystal2, c.pal.Crystal:Lerp(WHITE, 0.2) }, true)
-	cluster(c, topRoot(c, c.start + 2.6, 0.6, 0.6), 4, mainH * 0.45, look, { c.pal.Crystal2, c.pal.Crystal })
+	cluster(c, gapRoot(c, 2, 0.35, 0.6), 4, mainH * 0.45, look, { c.pal.Crystal2, c.pal.Crystal })
 	light(main, glow(c.pal.Crystal), 14 + index, 1 + index * 0.12)
 	sparkle(main, glow(c.pal.Crystal:Lerp(WHITE, 0.3)), 2 + index * 0.5, 0.6)
 	twinkle(c, tipOf(main), 1.2, glow(c.pal.Crystal2:Lerp(WHITE, 0.4)))
@@ -578,12 +639,11 @@ local function giantRock(c: Ctx)
 	local rng, pal = c.rng, c.pal
 	local index = c.floor.Index
 	local look: Look = if index <= 1 then "Tipped" elseif index >= 5 then "Glow" else "Shell"
-	body(c, { Scale = 2.3, Flat = 0.55, Chunks = 6, Carved = index == 4, Core = coreColor(c) or pal.Crystal })
+	body(c, { Scale = 2.3, Flat = 0.4, Chunks = 6, Carved = index == 4, Core = coreColor(c) or pal.Crystal })
 	local mainH = 15 + index
 	local main = cluster(c, topRoot(c, c.start, 0.0, 0), 11, mainH, look, { pal.Crystal, pal.Crystal2, pal.Crystal:Lerp(WHITE, 0.2) }, true)
-	for i = 1, 6 do
-		local a = (i / 6) * math.pi * 2 + 0.5 + rng:range(-0.2, 0.2)
-		cluster(c, topRoot(c, a, 0.8, 0.7), 3, rng:range(3, 4.4), "Glow", { if i % 2 == 0 then pal.Crystal2 else pal.Crystal, pal.Crystal })
+	for i = 1, #c.gaps do
+		cluster(c, gapRoot(c, i, 0.45, 0.7), 3, rng:range(3, 4.4), "Glow", { if i % 2 == 0 then pal.Crystal2 else pal.Crystal, pal.Crystal })
 	end
 	light(main, glow(pal.Crystal), 40, 2)
 	sparkle(main, glow(pal.Crystal:Lerp(WHITE, 0.3)), 8, 1.2)
@@ -609,6 +669,10 @@ function RockBuilder.build(floorKey: number | string, kind: MineFloors.RockKind,
 		mainCf = base,
 		mainSize = Vector3.new(1, 1, 1),
 		start = rng:range(0, math.pi * 2),
+		foot = base,
+		ring = 1,
+		top = 1,
+		gaps = {},
 	}
 	if kind == "Crystal" then
 		crystalRock(c)
@@ -695,8 +759,13 @@ function RockBuilder.applyStage(model: Model, stage: number, seed: number | stri
 		if child:IsA("BasePart") then
 			if child.Name == "Glint" then
 				table.insert(glintColors, child.Color)
-			elseif string.match(child.Name, "^Rock%d+$") or child.Name == "Cap" then
+			elseif string.match(child.Name, "^Rock%d+$") then
 				table.insert(chunks, child)
+			end
+		elseif child:IsA("Model") and string.match(child.Name, "^Rock%d+$") then
+			local shardBody = child:FindFirstChild("Body")
+			if shardBody and shardBody:IsA("BasePart") then
+				table.insert(chunks, shardBody)
 			end
 		end
 	end
@@ -714,10 +783,18 @@ function RockBuilder.applyStage(model: Model, stage: number, seed: number | stri
 		end
 		crackOn(model, part, outward.Unit, color, rng)
 	end
-	-- one chunk and one crystal break off
+	-- one shard (or chunk) and one crystal break off
 	local lump = model:FindFirstChild("Rock" .. (stage + 1))
 	if lump and lump:IsA("BasePart") then
 		table.insert(broken, lump)
+	elseif lump and lump:IsA("Model") then
+		for _, d in lump:GetChildren() do
+			if d:IsA("BasePart") then
+				d.Parent = model
+				table.insert(broken, d)
+			end
+		end
+		lump:Destroy()
 	end
 	local groups: { Instance } = {}
 	for _, child in model:GetChildren() do
