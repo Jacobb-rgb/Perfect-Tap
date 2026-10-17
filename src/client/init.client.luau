@@ -27,6 +27,8 @@ local ORDER = {
 	"TrainController",
 	"FoundryController",
 	"TechShopController",
+	"GearShopController", -- the Gear shop at the SHOP stall
+	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }

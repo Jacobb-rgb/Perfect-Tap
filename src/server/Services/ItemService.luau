@@ -28,6 +28,19 @@
 	  storeDesc pays Tobin's price for anything beyond that.
 	- Dirty ore hides its rarity: the replicated Value attribute of a Raw
 	  item is 0 (the real price is only paid out by the server).
+	- The Ore Magnet (gear, ItemService.Magnet): every 0.25 s, for each
+	  player whose Bonuses.magnetRadius is above 0, their OWN loose items
+	  within that radius slide to them (never another player's). Server
+	  physics: the item gets a LinearVelocity in the ground plane (gravity
+	  and walls still act, so nothing passes through a wall), and a ray from
+	  the owner to the item must be clear before (and every CheckEvery
+	  seconds while) it is pulled. Left alone: items you dropped or threw
+	  yourself (HandDropped, until you pick them up again), items for
+	  Magnet.Delay seconds after they appear, items on or around a base
+	  (belts, chutes, the Ore Pen's intake), items far above or below you,
+	  and items already at your feet (StopDistance). At most MaxPulls items
+	  per magnet at once, the nearest first. A pulled item's model carries
+	  the attribute Magnet.Attribute = the owner's UserId (client visuals).
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -37,13 +50,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BaseLayout = require(Shared.Config.BaseLayout)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 
@@ -70,6 +86,11 @@ export type ItemRecord = {
 	LastNearOwner: number, -- os.clock() when the item was last near its owner or a machine
 	ReleasePos: Vector3, -- where it was last spawned or released (trust and snap-back)
 	ReleasedAt: number, -- os.clock() of that release
+	-- the Ore Magnet (see the header): dropped / thrown by the owner's hand
+	-- (CarryService sets it, picking it up clears it), the pull while it slides
+	HandDropped: boolean?,
+	Pull: LinearVelocity?,
+	PullCheckedAt: number?, -- os.clock() of the last clear line-of-sight check
 }
 
 local records: { [Model]: ItemRecord } = {}
@@ -78,6 +99,45 @@ local byId: { [string]: ItemRecord } = {}
 local byOwner: { [number]: { [ItemRecord]: boolean } } = {}
 local folder: Folder
 local lastCapToast: { [number]: number } = {}
+
+---------------------------------------------------------------- the Ore Magnet (settings, letting go)
+
+ItemService.Magnet = {
+	Delay = 0.75, -- seconds after an item appears or is released before a magnet takes it
+	StopDistance = 4.5, -- flat studs from the owner where a pulled item is let go (at your feet)
+	Speed = 18, -- top pull speed (studs/s)
+	MinSpeed = 7,
+	SpeedPerStud = 1.6, -- pull speed per stud of distance (between MinSpeed and Speed)
+	MaxPulls = 8, -- items one magnet pulls at once (the nearest)
+	MaxRise = 10, -- items further above or below the owner's root are left alone
+	CheckEvery = 1, -- seconds between the line-of-sight checks of a pulled item
+	BaseMargin = 4, -- studs around a base (machine grid + yard) where the magnet never pulls
+	ForcePerMass = 400, -- the pull's MaxForce per unit of the item's mass (beats ground friction)
+	Attribute = "MagnetTo", -- on a pulled item's model: the owner's UserId (client visuals)
+	PullName = "MagnetPull", -- the LinearVelocity (and its Attachment) in the item's Body
+}
+
+-- items being pulled right now (so a magnet that went away lets go of them)
+local pulling: { [ItemRecord]: boolean } = {}
+
+-- Lets go of an item the magnet pulls (no-op when it isn't pulled).
+local function stopPull(record: ItemRecord)
+	pulling[record] = nil
+	local pull = record.Pull
+	if not pull then
+		return
+	end
+	record.Pull = nil
+	record.PullCheckedAt = nil
+	local attachment = pull.Attachment0
+	pull:Destroy()
+	if attachment then
+		attachment:Destroy()
+	end
+	if record.Model.Parent then
+		record.Model:SetAttribute(ItemService.Magnet.Attribute, nil)
+	end
+end
 
 local function ownerPlayer(record: ItemRecord): Player?
 	return Players:GetPlayerByUserId(record.Owner)
@@ -179,6 +239,12 @@ end
 
 function ItemService.setState(record: ItemRecord, state: string)
 	record.State = state
+	if state ~= "Loose" then
+		-- carried, in a machine...: the magnet lets go, and a hand-dropped
+		-- item counts as new again once it was picked up
+		stopPull(record)
+		record.HandDropped = nil
+	end
 	if record.Model.Parent then
 		record.Model:SetAttribute("State", state)
 	end
@@ -215,6 +281,7 @@ end
 
 function ItemService.destroy(record: ItemRecord)
 	record.State = "Consumed"
+	stopPull(record)
 	unindex(record)
 	record.Model:Destroy()
 end
@@ -507,6 +574,8 @@ end
 local function maintainOne(record: ItemRecord, now: number)
 	if not record.Model.Parent or not record.Body.Parent then
 		-- destroyed by the engine (fell below FallenPartsDestroyHeight): keep it in the pen
+		pulling[record] = nil
+		record.Pull = nil
 		unindex(record)
 		if record.State ~= "Consumed" then
 			record.State = "Consumed"
@@ -575,7 +644,219 @@ local function setupCollisionGroups()
 	end
 end
 
--- Internals for the Lune tests only (tests/ItemService.spec.luau).
+---------------------------------------------------------------- the Ore Magnet (pulling)
+
+-- The player's magnet radius (0 = none). Swappable for the Lune tests.
+local function defaultMagnetRadius(player: Player): number
+	return Bonuses.magnetRadius(Bonuses.stats(player))
+end
+local magnetRadiusOf: (Player) -> number = defaultMagnetRadius
+
+local rayParams: RaycastParams? = nil
+
+-- Nothing solid between `from` and `to` (items and the owner's character don't count).
+local function defaultClearPath(from: Vector3, to: Vector3, character: Model?): boolean
+	local params = rayParams
+	if not params then
+		local made = RaycastParams.new()
+		made.FilterType = Enum.RaycastFilterType.Exclude
+		made.RespectCanCollide = true
+		rayParams = made
+		params = made
+	end
+	local p = params :: RaycastParams
+	local ignore: { Instance } = { folder }
+	if character then
+		table.insert(ignore, character)
+	end
+	p.FilterDescendantsInstances = ignore
+	return Workspace:Raycast(from, to - from, p) == nil
+end
+local clearPath: (Vector3, Vector3, Model?) -> boolean = defaultClearPath
+
+-- A base in plot-local studs: the 12 x 12 machine grid and the yard behind it.
+local BASE_HALF_X = math.max(GameConfig.PlotCells * GameConfig.CellSize / 2, BaseLayout.Yard.Size.X / 2)
+local BASE_MIN_Z = -GameConfig.PlotCells * GameConfig.CellSize / 2
+local BASE_MAX_Z = BaseLayout.Yard.Center.Z + BaseLayout.Yard.Size.Z / 2
+local BASE_REACH = math.sqrt(BASE_HALF_X * BASE_HALF_X + math.max(-BASE_MIN_Z, BASE_MAX_Z) ^ 2) + 16
+local baseFrames: { CFrame } = {}
+
+-- Is a world position on or around any base (grid + yard, plus Magnet.BaseMargin)?
+-- The magnet never pulls there: belts, chutes and the Ore Pen's intake work with loose items.
+function ItemService.onBase(position: Vector3): boolean
+	if #baseFrames == 0 then
+		for _, plot in WorldLayout.Plots do
+			table.insert(baseFrames, WorldLayout.plotCFrame(plot))
+		end
+	end
+	local margin = ItemService.Magnet.BaseMargin
+	for _, frame in baseFrames do
+		local offset = position - frame.Position
+		if offset.X * offset.X + offset.Z * offset.Z <= BASE_REACH * BASE_REACH then
+			local p = frame:PointToObjectSpace(position)
+			if
+				math.abs(p.X) <= BASE_HALF_X + margin
+				and p.Z >= BASE_MIN_Z - margin
+				and p.Z <= BASE_MAX_Z + margin
+				and p.Y >= -10
+				and p.Y <= 40
+			then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+--[[
+	Does a magnet of `radius` studs whose owner's root is at `rootPos` want
+	this item now (`now` = os.clock())? The line of sight is checked
+	separately (magnetStep). Also returns the flat distance to the owner.
+]]
+function ItemService.magnetWants(record: ItemRecord, rootPos: Vector3, radius: number, now: number): (boolean, number)
+	local m = ItemService.Magnet
+	if record.State ~= "Loose" or record.HandDropped or radius <= 0 or not record.Model.Parent then
+		return false, 0
+	end
+	if now - record.ReleasedAt < m.Delay then
+		return false, 0
+	end
+	local position = positionOf(record)
+	local dx, dz = rootPos.X - position.X, rootPos.Z - position.Z
+	local flat = math.sqrt(dx * dx + dz * dz)
+	if flat > radius or flat <= m.StopDistance or math.abs(rootPos.Y - position.Y) > m.MaxRise then
+		return false, flat
+	end
+	if ItemService.onBase(position) then
+		return false, flat
+	end
+	return true, flat
+end
+
+-- The pull speed (studs/s) for an item `flat` studs away.
+function ItemService.pullSpeed(flat: number): number
+	local m = ItemService.Magnet
+	return math.clamp(flat * m.SpeedPerStud, m.MinSpeed, m.Speed)
+end
+
+local function itemMass(record: ItemRecord): number
+	local ok, mass = pcall(function()
+		return record.Body.AssemblyMass
+	end)
+	if ok and type(mass) == "number" and mass > 0 and mass < math.huge then
+		return mass
+	end
+	return 2
+end
+
+-- Starts or steers the pull of one item toward `rootPos` (flat: the ground plane).
+local function pullToward(record: ItemRecord, rootPos: Vector3, flat: number)
+	local m = ItemService.Magnet
+	local position = positionOf(record)
+	local dir = Vector3.new(rootPos.X - position.X, 0, rootPos.Z - position.Z)
+	local velocity = if dir.Magnitude > 1e-3 then dir.Unit * ItemService.pullSpeed(flat) else Vector3.zero
+	local pull = record.Pull
+	if not pull then
+		-- the server simulates it from now on (an owner's client can't hold it back)
+		keepServerPhysics(record)
+		local attachment = Instance.new("Attachment")
+		attachment.Name = m.PullName
+		attachment.Parent = record.Body
+		local made = Instance.new("LinearVelocity")
+		made.Name = m.PullName
+		made.Attachment0 = attachment
+		made.RelativeTo = Enum.ActuatorRelativeTo.World
+		made.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+		made.PrimaryTangentAxis = Vector3.new(1, 0, 0)
+		made.SecondaryTangentAxis = Vector3.new(0, 0, 1)
+		made.MaxForce = itemMass(record) * m.ForcePerMass
+		made.Parent = record.Body
+		record.Pull = made
+		pulling[record] = true
+		record.Model:SetAttribute(m.Attribute, record.Owner)
+		-- wake a resting item up
+		record.Body.AssemblyLinearVelocity = velocity + Vector3.new(0, 2, 0)
+		pull = made
+	end
+	local current = pull :: LinearVelocity
+	current.PlaneVelocity = Vector2.new(velocity.X, velocity.Z)
+end
+
+-- A living character's root part (nil when dead or not spawned).
+local function aliveRoot(player: Player): BasePart?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+type Wanted = { Record: ItemRecord, Flat: number }
+
+--[[
+	One magnet pass (every 0.25 s from start; `now` = os.clock()): for each
+	player with a magnet, the nearest wanted items (magnetWants, at most
+	Magnet.MaxPulls) with a clear line of sight slide toward them; every
+	other pull lets go. Only that player's own items are looked at.
+]]
+function ItemService.magnetStep(now: number)
+	local m = ItemService.Magnet
+	local active: { [number]: boolean } = {}
+	for _, player in Players:GetPlayers() do
+		local set = byOwner[player.UserId]
+		local root = if set then aliveRoot(player) else nil
+		local radius = if root then magnetRadiusOf(player) else 0
+		if set and root and radius > 0 then
+			active[player.UserId] = true
+			local rootPos = root.Position
+			local wanted: { Wanted } = {}
+			for record in set do
+				local wants, flat = ItemService.magnetWants(record, rootPos, radius, now)
+				if wants then
+					table.insert(wanted, { Record = record, Flat = flat })
+				elseif record.Pull then
+					stopPull(record)
+				end
+			end
+			table.sort(wanted, function(a, b)
+				return a.Flat < b.Flat
+			end)
+			for i, entry in wanted do
+				local record = entry.Record
+				if i > m.MaxPulls then
+					stopPull(record)
+				else
+					local checked = record.PullCheckedAt
+					local clear = true
+					if not record.Pull or not checked or now - checked >= m.CheckEvery then
+						clear = clearPath(rootPos, positionOf(record) + Vector3.new(0, 0.5, 0), player.Character)
+					end
+					if clear then
+						local fresh = record.Pull == nil
+						pullToward(record, rootPos, entry.Flat)
+						if fresh or not checked or now - checked >= m.CheckEvery then
+							record.PullCheckedAt = now
+						end
+					else
+						stopPull(record)
+					end
+				end
+			end
+		end
+	end
+	-- a magnet that went away (unequipped, dead, left) lets go of its items
+	for record in pulling do
+		if not active[record.Owner] then
+			stopPull(record)
+		end
+	end
+end
+
+-- Internals for the Lune tests only (tests/ItemService.spec.luau, tests/GearService.spec.luau).
 ItemService._test = {
 	maintain = maintainOne,
 	-- forget every item record (the models are left alone)
@@ -584,6 +865,21 @@ ItemService._test = {
 		table.clear(byId)
 		table.clear(byOwner)
 		table.clear(lastCapToast)
+		table.clear(pulling)
+		magnetRadiusOf = defaultMagnetRadius
+		clearPath = defaultClearPath
+	end,
+	-- the magnet's radius per player and its line-of-sight check (nil = the real one)
+	setMagnet = function(radius: ((Player) -> number)?, path: ((Vector3, Vector3, Model?) -> boolean)?)
+		magnetRadiusOf = radius or defaultMagnetRadius
+		clearPath = path or defaultClearPath
+	end,
+	pulling = function(): { ItemRecord }
+		local list = {}
+		for record in pulling do
+			table.insert(list, record)
+		end
+		return list
 	end,
 }
 
@@ -619,6 +915,13 @@ function ItemService.start()
 			if not ok then
 				warn("[ItemService] maintenance error: " .. tostring(err))
 			end
+		end
+		-- the Ore Magnet (gear): own loose items slide to their owner
+		local magnetOk, magnetErr = pcall(function()
+			ItemService.magnetStep(now)
+		end)
+		if not magnetOk then
+			warn("[ItemService] magnet error: " .. tostring(magnetErr))
 		end
 	end
 end

@@ -43,6 +43,7 @@ local ORDER = {
 	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
 	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
+	"GearService", -- the Gear shop at the SHOP stall (boots, lamp, backpack, gloves, magnet)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)

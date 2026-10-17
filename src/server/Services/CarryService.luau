@@ -22,6 +22,12 @@
 	throw power (Gloves: x Bonuses.throwMult). The player attributes
 	CarryCount, CarryCapacity and PickupRange mirror them for the client
 	(InteractController's highlight uses PickupRange).
+
+	Gear (GearService buys it): every effect is read from the bonuses when
+	it acts, so a buy works at once and after a respawn (hookCharacter sets
+	the walk speed and the attributes again). An item dropped or thrown by
+	hand is marked HandDropped: the Ore Magnet (ItemService) never pulls
+	it back to you; picking it up again clears the mark.
 ]]
 
 local Players = game:GetService("Players")
@@ -200,6 +206,8 @@ local function dropTop(player: Player, velocity: Vector3?)
 	local record = table.remove(list) :: ItemService.ItemRecord
 	detach(record)
 	ItemService.release(record, dropCFrame(player, root), velocity or (root.AssemblyLinearVelocity + root.CFrame.LookVector * 4))
+	-- put down on purpose: the Ore Magnet leaves it alone until it is picked up again
+	record.HandDropped = true
 	updateWalkSpeed(player)
 end
 
