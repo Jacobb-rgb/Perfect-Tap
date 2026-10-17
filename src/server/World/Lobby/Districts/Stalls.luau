@@ -65,18 +65,22 @@ local HEAD_Z0, HEAD_Z1 = -6.2, -3.2 -- header front and back faces
 local HEAD_CHAMFER = 1.6
 -- the header frame: a dark gunmetal (between Tech.Metal and MetalLight) that
 -- stays dark in full sun, the light lip keeps the bevel readable
-local HEADER = rgb(70, 76, 98)
-local HEADER_LIP = rgb(150, 158, 182)
--- the facade face panels (walls, pylons, lintel): a lighter gunmetal, so the
--- panels, bevels and seams still read on the shaded front (concept v2: light
--- panel faces, dark recesses); MetalDark and MetalDeep stay for recesses
-local FACE = rgb(86, 94, 120)
+local HEADER = rgb(36, 39, 54)
+local HEADER_LIP = Tech.MetalLight -- (light metal only for lips, bolts and trims)
+-- the facade face panels (walls, pylons, lintel, cornice): dark gunmetal
+-- (concept v2: dark frames, glowing neon outlines; light plastic panels
+-- read as toy boxes in the sun), MetalDeep for the recesses
+local FACE = Tech.MetalDark
+-- the opaque dark glass of the display bays behind the porch showcases
+local DARK_GLASS = rgb(16, 24, 44)
 local SIGN_Y, SIGN_H = 13.55, 4.6
 local COUNTER_Z = 0.9
 local COUNTER_TOP = FLOOR + 3.3
 local SHELF_Z = 5.05
 local SHELVES = { FLOOR + 2.8, FLOOR + 5.2 }
-local CASE_Z = -5.85 -- porch showcases (in front of the pylons)
+local CASE_Z = -5.82 -- porch showcases (in front of the pylons)
+-- (lobby fix round 3: the porch showcases about 1.4 times as big)
+local CASE_W, CASE_D, CASE_H, CASE_GLASS = 4.2, 2.4, 2.2, 3.0
 local TWO_BAYS = 13.5 -- half width from which every side gets a second display bay
 -- the open display bays: the opening (heights above the floor), the glass
 -- case on its plinth (the plinth top level with the sill top) and the
@@ -88,15 +92,16 @@ local BAY_Z = 0.1 -- case center (the facade's back face is at -1.2)
 local BAY_D = 2.4 -- plinth depth
 local BAY_BACK_Z = 1.5
 -- screen glyph colors: deep enough to stay colored under bloom
-local GLYPH_WARM = rgb(255, 170, 40)
 local GLYPH_BLUE = rgb(20, 150, 255)
-local GEAR_PURPLE = rgb(120, 50, 255)
+local GEAR_PURPLE = rgb(116, 46, 153) -- neon at ~60% value: a saturated violet gear, no starburst
+local UPG_TUBE = rgb(170, 80, 255) -- UPGRADES' violet tubes (its own identity, not SHOP's blue; round 2: bright enough to glow)
+local UPG_NEON = rgb(150, 50, 220)
+local UPG_PINK = rgb(255, 70, 200) -- (round 3) the pink neon plates under UPGRADES' showcase items
 -- saturated goods that read at plaza distance
 local HELMET = rgb(255, 196, 18)
 local BOOTS = rgb(222, 38, 38)
 local PACK = rgb(36, 178, 72)
 local MAGNET = rgb(226, 30, 40)
-local GLOVES = rgb(255, 130, 20)
 local LENS = rgb(255, 226, 160) -- the helmet's warm white lamp lens (small: no white blob)
 
 export type House = {
@@ -151,6 +156,10 @@ end
 	  BayGlow                     the glowing back panel of the open bays
 	  Plinth                      the small neon plinths under the items
 	  CaseBack                    the glowing back panel inside the showcases
+	  Tube, Neon                  the thick neon tubes and the thin neon lines
+	                              (default Tech.Tube / Tech.Neon: blue)
+	  FrameNeon                   a thin neon line inside the bay window frames
+	  Header                      the header frame color (default HEADER)
 ]]
 local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts): House
 	local function at(x: number, y: number, z: number): CFrame
@@ -158,6 +167,9 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	end
 	local frame: Color3 = opts.Frame
 	local accent: Color3 = opts.Accent
+	local tube: Color3 = opts.Tube or Tech.Tube
+	local neonLine: Color3 = opts.Neon or Tech.Neon
+	local header: Color3 = opts.Header or HEADER
 	local windowBays, pylons = bays(hw)
 	local outerPylon = pylons[#pylons]
 	local sideX = hw - 0.75 -- side wall centers (outer faces at +-hw - 0.25)
@@ -169,7 +181,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	Kit.bit(m, at(0, FLOOR + 0.02, -4.4), Vector3.new(W - 7.6, 0.04, 4.0), Tech.Metal)
 	Tech.glow(m, at(0, FLOOR - 0.15, -6.92), Vector3.new(W - 0.6, 0.2, 0.12), accent)
 	for _, side in { -1, 1 } do
-		Tech.glow(m, at(side * (hw - 0.08), FLOOR - 0.15, -0.1), Vector3.new(0.12, 0.2, 13.4), Tech.Neon)
+		Tech.glow(m, at(side * (hw - 0.08), FLOOR - 0.15, -0.1), Vector3.new(0.12, 0.2, 13.4), neonLine)
 	end
 
 	-- facade: the open display bays (window walls without glass) and the
@@ -183,6 +195,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 				WindowTop = BAY_Y1,
 				Frame = frame,
 				Glass = false,
+				FrameNeon = opts.FrameNeon,
 			})
 		end
 	end
@@ -191,7 +204,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		OpeningWidth = DOOR_W,
 		OpeningHeight = DOOR_H,
 		Frame = frame,
-		Neon = Tech.Tube,
+		Neon = tube,
 	})
 	-- chamfered upper corners make the door read as the concept's bevelled
 	-- opening (a frame turned upside down: its "up" points down the jambs)
@@ -210,7 +223,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		Style.solid()
 	)
 	Kit.bit(m, at(0, FLOOR + DOOR_H + lintelH * 0.6, FACADE_Z - 0.56), Vector3.new(lintelW, 0.6, 0.12), Tech.Band)
-	Tech.glow(m, at(0, FLOOR + DOOR_H + 0.22, FACADE_Z - 0.58), Vector3.new(lintelW, 0.3, 0.14), Tech.Tube)
+	Tech.glow(m, at(0, FLOOR + DOOR_H + 0.22, FACADE_Z - 0.58), Vector3.new(lintelW, 0.3, 0.14), tube)
 
 	-- side wall-banners (the roof covers their tops)
 	local wallTall = WALL_TOP - FLOOR
@@ -246,7 +259,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		Style.tiny({ CastShadow = true })
 	)
 	for _, side in { -1, 1 } do
-		Tech.glow(m, at(side * (hw - 0.27), FLOOR + wallTall / 2, backZ + 0.02), Vector3.new(Tech.TUBE, wallTall, Tech.TUBE), Tech.Tube)
+		Tech.glow(m, at(side * (hw - 0.27), FLOOR + wallTall / 2, backZ + 0.02), Vector3.new(Tech.TUBE, wallTall, Tech.TUBE), tube)
 	end
 	local wx = 0.36 * hw
 	local wy = FLOOR + 6.3
@@ -257,8 +270,8 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	-- the shop's name on the screen (seen from the road behind)
 	Tech.label(m, at(wx, wy, backZ + 0.4) * CFrame.Angles(0, math.pi, 0), opts.Sign, sw - 0.8, sh - 0.9, C.GlowText)
 	for _, sy in { -1, 1 } do
-		Tech.glow(m, at(wx, wy + sy * (sh / 2 + 0.2), backZ + 0.33), Vector3.new(sw + 0.4, 0.14, 0.08), Tech.Neon)
-		Tech.glow(m, at(wx + sy * (sw / 2 + 0.2), wy, backZ + 0.33), Vector3.new(0.14, sh + 0.54, 0.08), Tech.Neon)
+		Tech.glow(m, at(wx, wy + sy * (sh / 2 + 0.2), backZ + 0.33), Vector3.new(sw + 0.4, 0.14, 0.08), neonLine)
+		Tech.glow(m, at(wx + sy * (sw / 2 + 0.2), wy, backZ + 0.33), Vector3.new(0.14, sh + 0.54, 0.08), neonLine)
 	end
 	local ventY = FLOOR + bandY[2] * wallTall
 	for _, f in { 0.26, 0.62 } do
@@ -276,9 +289,9 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	-- inside: dark lining with a neon strip, the warm ceiling panel (one light)
 	Kit.bit(m, at(0, FLOOR + 4.6, BACK_Z - 0.56), Vector3.new(W - 2.6, 8.6, 0.1), Tech.MetalDark)
 	Tech.glow(m, at(0, FLOOR + 8.4, BACK_Z - 0.63), Vector3.new(W - 2.6, 0.2, 0.08), accent)
-	local lamp = Tech.glow(m, at(0, WALL_TOP - 0.09, 2.4), Vector3.new(W - 11, 0.16, 2.6), C.Lamp)
+	local lamp = Tech.glow(m, at(0, WALL_TOP - 0.09, 2.4), Vector3.new(W - 11, 0.16, 2.6), C.LampAmber)
 	lamp.Name = "CeilingLamp"
-	Style.light(lamp, C.Lamp, 20, 1.6)
+	Style.light(lamp, C.LampAmber, 20, 0.9)
 
 	-- roof slab behind the header with a light back rim; thick neon roof-edge
 	-- tubes in dark channels along its back and sides
@@ -288,7 +301,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		m,
 		at(0, (WALL_TOP + ROOF_TOP) / 2, roofZ0 + roofD / 2),
 		Vector3.new(W - 0.2, ROOF_TOP - WALL_TOP, roofD),
-		Style.vary(Tech.Metal, rng, 0.02),
+		Style.vary(Tech.MetalDark, rng, 0.02),
 		nil,
 		Style.solid()
 	)
@@ -301,13 +314,14 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		Style.tiny({ CastShadow = true })
 	)
 	local edgeY = WALL_TOP + 0.4
-	Tech.channel(m, at(0, edgeY, backZ + 0.24) * CFrame.Angles(0, math.pi, 0), W - 0.2, Tech.EDGE)
+	Tech.channel(m, at(0, edgeY, backZ + 0.24) * CFrame.Angles(0, math.pi, 0), W - 0.2, Tech.EDGE, tube)
 	for _, side in { -1, 1 } do
 		Tech.channel(
 			m,
 			at(side * (hw + 0.02), edgeY, roofZ0 + roofD / 2) * CFrame.Angles(0, -side * math.pi / 2, 0),
 			roofD,
-			Tech.EDGE
+			Tech.EDGE,
+			tube
 		)
 	end
 
@@ -334,9 +348,16 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 				table.insert(pylonScreens, sc * CFrame.new(0, 0, -0.14))
 			end
 			for _, ex in { -1, 1 } do
-				Tech.glow(m, at(x + ex * (pw / 2 - 0.02), 5.5, PYLON_Z0 - 0.02), Vector3.new(0.34, 8.8, 0.34), Tech.Tube)
+				Tech.glow(m, at(x + ex * (pw / 2 - 0.02), 5.5, PYLON_Z0 - 0.02), Vector3.new(0.34, 8.8, 0.34), tube)
 			end
 			Tech.underBevel(m, at(x, HEAD_Y0 - 0.7, PYLON_Z0 - 0.7), Vector3.new(pw, 1.4, 1.4), Tech.MetalLight)
+			if py.Outer then
+				-- (round 3) the armored corner: a 45 degree chamfer block on the
+				-- pylon's outer front edge with a vertical neon strip on its face
+				local corner = at(side * (hw - 0.82), HEAD_Y0 / 2, PYLON_Z0 + 0.5) * CFrame.Angles(0, -side * math.pi / 4, 0)
+				Style.block(m, corner, Vector3.new(1.5, HEAD_Y0, 1.5), Style.vary(header, rng, 0.02), nil, Style.decor())
+				Tech.glow(m, corner * CFrame.new(0, 0.3, -0.78), Vector3.new(0.3, HEAD_Y0 - 2.4, 0.08), tube).Name = "CornerGlow"
+			end
 		end
 	end
 
@@ -347,17 +368,21 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	local hz = (HEAD_Z0 + HEAD_Z1) / 2
 	local mainTop = HEAD_Y1 - HEAD_CHAMFER
 	local topW = W - 2 * HEAD_CHAMFER
-	Style.block(m, at(0, (HEAD_Y0 + mainTop) / 2, hz), Vector3.new(W, mainTop - HEAD_Y0, hd), HEADER, nil, Style.decor())
-	Style.block(m, at(0, (mainTop + HEAD_Y1) / 2, hz), Vector3.new(topW, HEAD_CHAMFER, hd), HEADER, nil, Style.decor())
+	Style.block(m, at(0, (HEAD_Y0 + mainTop) / 2, hz), Vector3.new(W, mainTop - HEAD_Y0, hd), header, nil, Style.decor())
+	Style.block(m, at(0, (mainTop + HEAD_Y1) / 2, hz), Vector3.new(topW, HEAD_CHAMFER, hd), header, nil, Style.decor())
 	local hcf = at(0, 0, hz)
 	for _, side in { -1, 1 } do
 		-- the 45 degree chamfer: a right triangle with its vertical leg at the top block's end
-		Tech.flatTri(m, hcf, side * topW / 2, mainTop, side, HEAD_CHAMFER, HEAD_CHAMFER, hd, HEADER, nil, Style.decor())
+		Tech.flatTri(m, hcf, side * topW / 2, mainTop, side, HEAD_CHAMFER, HEAD_CHAMFER, hd, header, nil, Style.decor())
 	end
 	Kit.bit(m, at(0, HEAD_Y1 + 0.15, hz), Vector3.new(topW + 0.2, 0.3, hd + 0.3), HEADER_LIP)
 	Kit.block(m, at(0, HEAD_Y0 + 0.25, HEAD_Z0 - 0.15), Vector3.new(W + 0.2, 0.5, 0.5), HEADER_LIP, nil, Style.tiny({ CastShadow = true }))
 	-- a light bevel lip under the header's front edge, between the end pylons
 	Tech.underBevel(m, at(0, HEAD_Y0 - 0.2, HEAD_Z0 + 0.3), Vector3.new(lintelW, 0.4, 0.6), Tech.MetalLight)
+	-- (round 3) an angled cornice overhanging the header's top front edge,
+	-- a neon line along its nose
+	Tech.underBevel(m, at(0, HEAD_Y1 - 0.45, HEAD_Z0 - 0.35), Vector3.new(topW, 0.9, 0.7), header)
+	Tech.glow(m, at(0, HEAD_Y1 - 0.08, HEAD_Z0 - 0.66), Vector3.new(topW, 0.14, 0.1), tube).Name = "CorniceGlow"
 	-- thick neon tube along the outline (sides, chamfers, top), each line in
 	-- a dark MetalDeep channel a little wider than the tube
 	local face = at(0, 0, HEAD_Z0)
@@ -371,7 +396,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	}
 	for _, q in outline do
 		Tech.line(m, face, q[1], q[2], q[3], q[4], t + 0.3, -0.06, Tech.MetalDeep, Enum.Material.SmoothPlastic, 0.12)
-		Tech.line(m, face, q[1], q[2], q[3], q[4], t, -0.16, Tech.Tube, nil, 0.2)
+		Tech.line(m, face, q[1], q[2], q[3], q[4], t, -0.16, tube, nil, 0.2)
 	end
 	-- the back face (seen over the roof from behind): a light panel with a band
 	Kit.bit(m, at(0, (WALL_TOP + ROOF_TOP) / 2 + 3.2, HEAD_Z1 + 0.07), Vector3.new(W - 4.4, 4.2, 0.14), Tech.MetalLight)
@@ -379,24 +404,34 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	-- the porch light strip under the header
 	local under = Tech.glow(m, at(0, HEAD_Y0 - 0.08, HEAD_Z0 + 0.85), Vector3.new(W - 6, 0.16, 0.3), accent)
 	if not opts.SignLight then
-		Style.light(under, C.Lamp, 16, 1.2)
+		Style.light(under, C.LampAmber, 16, 0.9)
 	end
 
 	-- the big glowing sign box set into the header face (it grows with a
 	-- wider module so the header never looks empty)
 	local signW: number = opts.SignWidth + math.max(0, hw - 10) * 0.8
-	local _, iconAt = Tech.sign(m, at(0, SIGN_Y, HEAD_Z0 - 0.02), opts.Sign, signW, SIGN_H, {
+	-- (round 3: a protruding sign casing 1.25 deep, a deep neon frame with a
+	-- bright core strip: the frame reads as a glowing tube)
+	local _, iconAt = Tech.sign(m, at(0, SIGN_Y, HEAD_Z0 - 0.55), opts.Sign, signW, SIGN_H, {
 		Icon = opts.IconWidth or 4.6,
 		IconLeft = opts.IconLeft,
-		Casing = false,
+		CasingDepth = 1.25,
 		Studs = false,
 		Margin = 0.35,
+		Lip = 0.3,
 		Light = if opts.SignLight == true then 16 else nil,
+		Frame = opts.SignFrame or tube,
+		Core = opts.SignCore,
 		LightColor = C.GlowText,
-		LightDist = 0.8, -- the footprint ends 1 stud in front of the header
+		LightDist = 0.4, -- the footprint ends 1 stud in front of the header
 	})
 
-	-- roof clutter behind the header: an orange container-tall and a gunmetal one
+	-- roof clutter behind the header: a dark roof box, two vent blocks, an
+	-- orange container-tall and a gunmetal one (depth over the roof line)
+	Kit.block(m, at(0.08 * hw, ROOF_TOP + 1.0, 1.4), Vector3.new(0.34 * W, 2.0, 3.2), Tech.MetalDeep, nil, Style.decor())
+	for _, f in { -0.3, 0.42 } do
+		Kit.block(m, at(f * hw, ROOF_TOP + 0.45, 5.0), Vector3.new(1.6, 0.9, 1.4), Tech.MetalDark, nil, Style.tiny({ CastShadow = true }))
+	end
 	Tech.container(m, at(-0.66 * hw, ROOF_TOP, 3.6), 2.8, 1.7, Tech.Band)
 	Tech.container(m, at(0.56 * hw, ROOF_TOP, 3.9), 2.4, 1.5, Tech.Metal)
 
@@ -406,15 +441,15 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	for _, x in { -2.6, 2.6 } do
 		Kit.bit(m, at(x, FLOOR + 1.6, COUNTER_Z - 0.72), Vector3.new(0.4, 2.4, 0.08), frame)
 	end
-	Tech.glow(m, at(0, FLOOR + 1.6, COUNTER_Z - 0.73), Vector3.new(3.4, 0.24, 0.08), Tech.Neon)
+	Tech.glow(m, at(0, FLOOR + 1.6, COUNTER_Z - 0.73), Vector3.new(3.4, 0.24, 0.08), neonLine)
 	local counter =
 		Style.block(m, at(0, COUNTER_TOP - 0.15, COUNTER_Z - 0.05), Vector3.new(6.9, 0.3, 1.9), Tech.MetalLight, nil, Style.solid())
-	Tech.glow(m, at(0, COUNTER_TOP - 0.17, COUNTER_Z - 1.04), Vector3.new(6.9, 0.2, 0.1), Tech.Neon)
+	Tech.glow(m, at(0, COUNTER_TOP - 0.17, COUNTER_Z - 1.04), Vector3.new(6.9, 0.2, 0.1), neonLine)
 
 	-- shelves on the back wall with neon edges
 	for _, y in SHELVES do
 		Kit.bit(m, at(0, y - 0.15, SHELF_Z), Vector3.new(W - 3.2, 0.3, 1.1), Tech.MetalLight)
-		Tech.glow(m, at(0, y - 0.2, SHELF_Z - 0.58), Vector3.new(W - 3.2, 0.12, 0.08), Tech.Neon)
+		Tech.glow(m, at(0, y - 0.2, SHELF_Z - 0.58), Vector3.new(W - 3.2, 0.12, 0.08), neonLine)
 	end
 
 	-- the open lit bays: a glass case on a plinth with a neon front edge, a
@@ -422,15 +457,24 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	-- under the case lid, and a glowing back panel behind the case
 	local windows: { CFrame } = {}
 	local inner: { CFrame }, outer: { CFrame } = {}, {}
-	local plinthColor: Color3 = opts.Plinth or Tech.Neon
+	local plinthColor: Color3 = opts.Plinth or neonLine
 	for bi, bay in windowBays do
 		for _, side in { 1, -1 } do
 			local x = side * bay.X
 			local cw = bay.W - 1.0 -- plinth width
 			local caseTop = FLOOR + BAY_PLINTH + BAY_CASE
-			Tech.glow(m, at(x, FLOOR + 4.15, BAY_BACK_Z), Vector3.new(bay.W - 0.7, 4.9, 0.1), opts.BayGlow or Tech.CaseLight)
+			-- opaque dark glass behind the case (the lit item is the light)
+			Kit.block(
+				m,
+				at(x, FLOOR + 4.15, BAY_BACK_Z),
+				Vector3.new(bay.W - 0.7, 4.9, 0.1),
+				DARK_GLASS,
+				nil,
+				Style.tiny({ Reflectance = 0.18 })
+			).Name =
+				"BayGlass"
 			Kit.bit(m, at(x, FLOOR + BAY_PLINTH / 2, BAY_Z), Vector3.new(cw, BAY_PLINTH, BAY_D), Tech.MetalDark)
-			Tech.glow(m, at(x, FLOOR + BAY_PLINTH - 0.12, BAY_Z - BAY_D / 2 - 0.03), Vector3.new(cw, 0.14, 0.08), Tech.Neon)
+			Tech.glow(m, at(x, FLOOR + BAY_PLINTH - 0.12, BAY_Z - BAY_D / 2 - 0.03), Vector3.new(cw, 0.14, 0.08), neonLine)
 			Tech.glow(m, at(x, FLOOR + BAY_PLINTH + 0.03, BAY_Z), Vector3.new(cw - 0.4, 0.06, BAY_D - 0.4), Tech.CaseLight)
 			Tech.glow(m, at(x, FLOOR + BAY_PLINTH + 0.16, BAY_Z), Vector3.new(math.min(1.9, cw - 1.0), 0.2, 1.3), plinthColor)
 			local glass = Kit.block(
@@ -462,12 +506,12 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	for pass = 1, 2 do
 		for _, py in pylons do
 			if py.Outer == (pass == 1) then
-				local x = if py.Outer then hw - 2.1 else py.X
+				local x = if py.Outer then hw - CASE_W / 2 else py.X
 				for _, side in { 1, -1 } do
 					table.insert(
 						cases,
-						Tech.showcase(m, at(side * x, FLOOR, CASE_Z), 3.0, 2.0, 2.0, {
-							Case = 2.2,
+						Tech.showcase(m, at(side * x, FLOOR, CASE_Z), CASE_W, CASE_D, CASE_H, {
+							Case = CASE_GLASS,
 							Stripe = frame,
 							Plinth = plinthColor,
 							Backlight = opts.CaseBack,
@@ -496,6 +540,31 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		IconAt = iconAt,
 		HalfWidth = hw,
 	}
+end
+
+---------------------------------------------------------------- neon showcase items
+
+-- (round 3) one bright neon item per porch showcase: a crystal, a pickaxe
+-- head or a coin, chosen by the case index. `base` = the display floor.
+local SHOP_ITEM = { rgb(60, 220, 255), rgb(255, 180, 40), rgb(255, 196, 64) }
+local UPG_ITEM = { rgb(255, 90, 220), rgb(170, 90, 255), rgb(255, 196, 64) }
+local function neonItem(parent: Instance, base: CFrame, index: number, colors: { Color3 })
+	local kind = (index - 1) % 3 + 1
+	if kind == 1 then
+		-- a glowing crystal with two small side shards
+		Style.crystal(parent, base * CFrame.new(0, 0.05, 0.1), 2.0, 0.75, colors[1], nil, 0.15)
+		Style.crystal(parent, base * CFrame.new(0.55, 0.05, 0.2) * CFrame.Angles(0, 0, -0.35), 1.1, 0.42, colors[1], nil, 0.15)
+	elseif kind == 2 then
+		-- a pickaxe head: a curved glowing head on a short dark haft
+		Kit.bit(parent, base * CFrame.new(0, 0.7, 0.1), Vector3.new(0.24, 1.4, 0.24), C.WoodDark)
+		for _, side in { -1, 1 } do
+			Kit.glow(parent, base * CFrame.new(side * 0.55, 1.35, 0.1) * CFrame.Angles(0, 0, side * 0.35), Vector3.new(1.0, 0.3, 0.3), colors[2])
+		end
+	else
+		-- a big gold coin standing on edge, a light star on its face
+		Tech.faceDisc(parent, base * CFrame.new(0, 0.85, 0.05), 0.24, 1.5, colors[3], Kit.NEON)
+		Kit.bit(parent, base * CFrame.new(0, 0.85, -0.1) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.5, 0.5, 0.06), rgb(255, 236, 150))
+	end
 end
 
 ---------------------------------------------------------------- gear (SHOP)
@@ -564,7 +633,8 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 		Sign = "SHOP",
 		SignWidth = 14.4,
 		IconLeft = false,
-		Frame = Tech.Band,
+		Frame = Tech.MetalDeep,
+		FrameNeon = Tech.Neon,
 		Accent = Tech.Warm,
 		-- the sign faces away from the sun: a floodlight on Tobin's stall in
 		-- front (Fronts) lights its letters evenly (white, not lavender grey)
@@ -572,8 +642,10 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 		ScreenSide = 1,
 		Screen = rgb(22, 66, 205),
 		BayGlow = rgb(16, 48, 150),
-		Plinth = Tech.Neon,
-		CaseBack = rgb(60, 140, 255),
+		Plinth = C.GlowEdgeDeep,
+		CaseBack = rgb(40, 110, 255),
+		SignFrame = C.GlowEdgeDeep,
+		SignCore = C.GlowCore,
 	})
 	h.Counter.Name = "ShopCounter"
 	Kit.tag(h.Counter, "ShopCounter")
@@ -583,7 +655,7 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 	-- the shopping cart on the header sign (viewer's right)
 	local iconAt = h.IconAt
 	if iconAt then
-		Tech.cartIcon(m, iconAt, 4.0, C.GlowEdge)
+		Tech.cartIcon(m, iconAt, 4.0, Tech.Neon)
 	end
 
 	-- one big saturated item per lit bay and per porch showcase (about 70%
@@ -595,12 +667,12 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 	magnet(m, at(-2.2, top, COUNTER_Z - 0.1), 1.2)
 	helmet(m, h.Windows[1] * CFrame.new(0, 0, 0.05), HELMET, k, true)
 	boots(m, h.Windows[2] * CFrame.new(0, 0, 0.1), BOOTS, k * 1.05)
-	backpack(m, h.Cases[1] * CFrame.new(0, 0, 0.1), PACK, 1.45)
-	magnet(m, h.Cases[2], 1.65)
-	-- the second display bays (wide module only)
-	if h.Cases[3] then
-		glove(m, h.Cases[3] * CFrame.new(-0.2, 0, 0.1), GLOVES, 1.7)
-		helmet(m, h.Cases[4] * CFrame.new(0, 0, 0.1), C.IronLight, 1.1)
+	-- (round 3) one bright neon item per porch showcase: a crystal, a
+	-- pickaxe head, a coin
+	for i, c in h.Cases do
+		neonItem(m, c, i, SHOP_ITEM)
+	end
+	if h.Windows[3] then
 		backpack(m, h.Windows[3], PACK, k)
 		boots(m, h.Windows[4] * CFrame.new(0, 0, 0.1), BOOTS, k)
 	end
@@ -613,32 +685,35 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 	glove(m, at(-3.0, high, SHELF_Z), C.Copper, 1.2)
 	magnet(m, at(-5.4, high, SHELF_Z), 1.2)
 
-	-- the side screen shows a helmet with a shining lamp; the end pylon
-	-- screens show a helmet icon (the pylon that faces the spawn) and a boot
-	-- icon (deep glyph colors: no white blobs)
-	local sc = h.ScreenAt * CFrame.new(0, -0.2, -0.08)
-	Kit.glow(m, sc * CFrame.new(0, 0.2, 0), Vector3.new(2.0, 1.3, 0.06), GLYPH_WARM)
-	Kit.glow(m, sc * CFrame.new(0, -0.5, -0.02), Vector3.new(2.6, 0.3, 0.06), C.Ember)
-	Tech.faceDisc(m, sc * CFrame.new(0, 0.3, -0.05), 0.06, 0.5, Tech.Lens, Kit.NEON)
+	-- the side screen shows a whole gold coin; the end pylon screens show a
+	-- coin (the pylon that faces the spawn) and a boot icon (deep glyph
+	-- colors: no white blobs)
+	local sc = h.ScreenAt * CFrame.new(0, 0, -0.1)
+	Tech.faceDisc(m, sc, 0.08, 2.4, C.Gold)
+	Tech.faceDisc(m, sc * CFrame.new(0, 0, -0.06), 0.06, 1.5, C.Brass)
+	Kit.bit(m, sc * CFrame.new(0, 0, -0.11), Vector3.new(0.3, 1.0, 0.04), C.Gold)
 	for i, ps in h.PylonScreens do
 		if i == 1 then
-			Kit.glow(m, ps * CFrame.new(0, 0.55, 0), Vector3.new(0.95, 0.75, 0.04), GLYPH_WARM)
-			Kit.glow(m, ps * CFrame.new(0, 0.12, -0.02), Vector3.new(1.15, 0.18, 0.04), C.Ember)
-			Tech.faceDisc(m, ps * CFrame.new(0, 0.5, -0.05), 0.04, 0.32, Tech.Lens, Kit.NEON)
+			-- a whole gold coin (a helmet glyph read as an orange "L" from afar)
+			Tech.faceDisc(m, ps * CFrame.new(0, 0.45, -0.02), 0.06, 0.95, C.Gold)
+			Tech.faceDisc(m, ps * CFrame.new(0, 0.45, -0.06), 0.05, 0.6, C.Brass)
 		else
-			Kit.glow(m, ps * CFrame.new(0.12, 0.65, 0), Vector3.new(0.5, 0.95, 0.04), C.AwningRed)
-			Kit.glow(m, ps * CFrame.new(-0.05, 0.05, -0.01), Vector3.new(0.95, 0.4, 0.04), C.AwningRed)
+			-- (round 3: a gold pickaxe, the old boot glyph read as a lone orange "L")
+			Style.icon(m, ps * CFrame.new(0, 0.35, -0.04), "Pickaxe", 1.5, Tech.GoldGlow, Kit.NEON)
 		end
 		Kit.glow(m, ps * CFrame.new(0, -1.15, 0), Vector3.new(0.8, 0.8, 0.04), GLYPH_BLUE)
 	end
 
 	-- the outfitter behind the counter
+	-- (round 3: teal and navy, tan skin, dark hair: he reads under the warm light)
 	Kit.npc(m, h.Interior * CFrame.new(-1.4, 0, 0), {
 		Name = "Outfitter",
-		Shirt = C.LeafOrangeDark,
-		Pants = C.WoodDark,
-		Apron = C.Wood,
-		Hair = C.TrunkDark,
+		Shirt = rgb(40, 140, 150),
+		Pants = rgb(44, 58, 96),
+		Apron = rgb(230, 226, 214),
+		Hair = rgb(40, 28, 22),
+		Skin = rgb(234, 186, 148),
+		Boots = rgb(24, 24, 28),
 	})
 end
 
@@ -710,13 +785,18 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 		SignWidth = 15.6,
 		IconWidth = 4.2,
 		IconLeft = true,
-		Frame = C.AwningPurple,
-		Accent = C.CrystalPurple,
+		Frame = Tech.MetalDeep,
+		FrameNeon = UPG_NEON,
+		Accent = UPG_NEON,
+		Tube = UPG_TUBE,
+		Neon = UPG_NEON,
+		Header = rgb(30, 26, 44),
 		ScreenSide = -1,
 		Screen = rgb(70, 50, 210),
 		BayGlow = rgb(64, 28, 160),
-		Plinth = rgb(150, 70, 255),
+		Plinth = UPG_PINK,
 		CaseBack = rgb(120, 80, 255),
+		SignCore = rgb(255, 200, 245),
 	})
 	h.Counter.Name = "UpgradeCounter"
 	Kit.tag(h.Counter, "UpgradeCounter")
@@ -729,6 +809,18 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 	if iconAt then
 		Tech.gearIcon(m, iconAt, 3.6, GEAR_PURPLE)
 	end
+	-- (round 3) UPGRADES' own crest: two exhaust stacks on the roof behind
+	-- the header, a band, a light rim, a violet neon ring and smoke
+	for _, side in { -1, 1 } do
+		local sx = side * (h.HalfWidth - 3.2)
+		local stackH = 7.8
+		local base = at(sx, ROOF_TOP, -1.7)
+		Tech.disc(m, (base * CFrame.new(0, stackH / 2, 0)).Position, stackH, 1.5, Tech.MetalDark, nil, Style.decor())
+		Tech.disc(m, (base * CFrame.new(0, stackH * 0.35, 0)).Position, 0.6, 1.7, Tech.Band)
+		Tech.disc(m, (base * CFrame.new(0, stackH - 0.9, 0)).Position, 0.3, 1.65, UPG_TUBE, Kit.NEON).Name = "StackGlow"
+		local rim = Tech.disc(m, (base * CFrame.new(0, stackH + 0.15, 0)).Position, 0.3, 1.8, Tech.MetalLight)
+		Style.emitter(rim, "Smoke", nil, 2)
+	end
 
 	-- machines for sale: one big machine per bay and showcase, small ones
 	-- on the counter and the shelves
@@ -738,12 +830,11 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 	miniTank(m, at(-1.8, top, COUNTER_Z - 0.1), 1.1)
 	miniFurnace(m, h.Windows[1] * CFrame.new(0, 0, 0.05), k * 0.72)
 	miniCleaner(m, h.Windows[2] * CFrame.new(0, 0, 0.05), k * 0.78)
-	miniTank(m, h.Cases[1] * CFrame.new(0, 0, 0.05), 1.3)
-	miniConveyor(m, h.Cases[2] * CFrame.new(0, 0, 0.05), 1.15)
-	-- the second display bays (wide module only)
-	if h.Cases[3] then
-		miniFurnace(m, h.Cases[3] * CFrame.new(0, 0, 0.05), 1.05)
-		miniCleaner(m, h.Cases[4] * CFrame.new(0, 0, 0.05), 1.2)
+	-- (round 3) one bright neon item per porch showcase on a pink plate
+	for i, c in h.Cases do
+		neonItem(m, c, i, UPG_ITEM)
+	end
+	if h.Windows[3] then
 		miniTank(m, h.Windows[3], k * 0.9)
 		miniConveyor(m, h.Windows[4] * CFrame.new(0, 0, 0.05), k * 0.8)
 	end

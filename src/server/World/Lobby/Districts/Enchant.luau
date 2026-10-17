@@ -146,8 +146,10 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Style.crystal(m, holder * CFrame.new(0.9, 0.2, 0.2) * CFrame.Angles(0, 0, -0.4), 2.6, 0.9, ROOF_VIOLET, ROOF_VIOLET_TIP)
 	Style.crystal(m, holder * CFrame.new(-1.0, 0.2, 0.3) * CFrame.Angles(0, 0, 0.4), 2.4, 0.9, DEEP_BLUE, DEEP_BLUE_TIP)
 
-	-- ENCHANT sign box over the door (white letters, violet studs)
-	Tech.sign(m, at(0, 11.5, HUT_FRONT - 1.1), "ENCHANT", 8.6, 2.1, { StudColor = violet })
+	-- ENCHANT sign box over the door (white letters, violet studs); round 2:
+	-- raised a stud so the whole box clears UPGRADES' roofline from the hero
+	-- camera (no cut "...NT" fragment over the roof)
+	Tech.sign(m, at(0, 12.6, HUT_FRONT - 1.1), "ENCHANT", 8.6, 2.1, { StudColor = violet })
 
 	-- the rune table: a table-display with violet stripes and a glowing top (the counter)
 	local tz = -3.6
@@ -201,7 +203,7 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	for _, side in { -1, 1 } do
 		Tech.lanternPillar(m, at(side * 6.6, FLOOR, -4.6), 5.4, 1.2, { Slot = violet })
 	end
-	Style.crystalCluster(m, at(4.5, FLOOR, -2.6), 2.6, DEEP_PURPLE, rng, { Count = 3 })
+	Style.crystalCluster(m, at(4.5, FLOOR, -2.6), 2.6, DEEP_PURPLE, rng, { Count = 3, TipLerp = 0.12 })
 	Tech.container(m, at(-6.5, FLOOR, -2.7), 2.6, 1.3, C.AwningPurple)
 end
 

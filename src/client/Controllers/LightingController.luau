@@ -10,6 +10,7 @@
 	  (LobbyLayout.SunDirection, low over the west sea)
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -231,13 +232,34 @@ function LightingController.init()
 	end
 end
 
+--[[
+	A part tagged "LightingZone" with a string attribute Preset (a
+	LightingConfig preset) overrides the world zone while the player stands
+	inside its box (e.g. the inside of the Blaster Vault).
+]]
+local function taggedZonePreset(position: Vector3): string?
+	for _, zone in CollectionService:GetTagged("LightingZone") do
+		if zone:IsA("BasePart") then
+			local preset = zone:GetAttribute("Preset")
+			if type(preset) == "string" and LightingConfig.Presets[preset] then
+				local p = zone.CFrame:PointToObjectSpace(position)
+				local half = zone.Size / 2
+				if math.abs(p.X) <= half.X and math.abs(p.Y) <= half.Y and math.abs(p.Z) <= half.Z then
+					return preset
+				end
+			end
+		end
+	end
+	return nil
+end
+
 function LightingController.start()
 	while true do
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if root then
 			local zone = WorldLayout.zoneAt(root.Position)
-			local preset = if zone then zone.Lighting else "Surface"
+			local preset = taggedZonePreset(root.Position) or (if zone then zone.Lighting else "Surface")
 			if preset ~= currentZonePreset then
 				currentZonePreset = preset
 				refresh()

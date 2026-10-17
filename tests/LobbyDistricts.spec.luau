@@ -225,11 +225,14 @@ return function(T, Loader)
 		T.truthy(math.abs(axle:Dot(frame.LookVector)) > 0.999, "hub Y axis = the axle (facing the plaza)")
 	end)
 
-	T.test("districts: four leaderboards face the spawn", function()
+	T.test("districts: four leaderboards in an arc face the Hall of Fame's front", function()
 		local map, pkg = districts()
 		local boards = tagged(map, "Leaderboard")
 		T.eq(#boards, 4, "four Leaderboard parts")
-		local spawn = WorldLayout.SpawnPoint
+		-- (round 2: the hall turned toward the koi pond lane and the hero camera;
+		-- its boards face the point 30 studs in front of it, the arc's center)
+		local hall = LobbyLayout.get("HallOfFame")
+		local spawn = hall.Center + hall.Facing.Unit * 30
 		for i = 1, 4 do
 			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
 			T.truthy(board and board:IsA("BasePart"), "Board" .. i .. " is a part")
@@ -238,7 +241,7 @@ return function(T, Loader)
 			T.truthy(board.Size.X >= 4 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
 			local at = board.CFrame.Position
 			local toSpawn = Vector3.new(spawn.X - at.X, 0, spawn.Z - at.Z).Unit
-			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the spawn")
+			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the arc's center")
 		end
 	end)
 
@@ -351,6 +354,68 @@ return function(T, Loader)
 		T.truthy(half >= disc * 1.35, `the frame (half width {half}) is about 1.5 times the disc (radius {disc})`)
 	end)
 
+	-- (lobby fix round 3) the giant wheel stands free: from the spawn camera
+	-- (lobby_spawn, 0, 13, 58) no ray to the disc's rim passes through the
+	-- SHOP (its built parts' box in the SHOP's frame)
+	T.test("districts: from the spawn camera the SPIN & WIN disc clears the SHOP", function()
+		local _, pkg = districts()
+		local shopFrame = LobbyLayout.frame(LobbyLayout.get("Shop"))
+		local lo = Vector3.new(math.huge, math.huge, math.huge)
+		local hi = Vector3.new(-math.huge, -math.huge, -math.huge)
+		for _, d in pkg.Shop:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 0.9 then
+				for _, p in corners(d) do
+					local q = shopFrame:PointToObjectSpace(p)
+					lo = Vector3.new(math.min(lo.X, q.X), math.min(lo.Y, q.Y), math.min(lo.Z, q.Z))
+					hi = Vector3.new(math.max(hi.X, q.X), math.max(hi.Y, q.Y), math.max(hi.Z, q.Z))
+				end
+			end
+		end
+		local function hitsShop(a: any, b: any): boolean
+			local p0 = shopFrame:PointToObjectSpace(a)
+			local p1 = shopFrame:PointToObjectSpace(b)
+			local t0, t1 = 0, 1
+			for _, axis in { "X", "Y", "Z" } do
+				local d = p1[axis] - p0[axis]
+				if math.abs(d) < 1e-9 then
+					if p0[axis] < lo[axis] or p0[axis] > hi[axis] then
+						return false
+					end
+				else
+					local u0, u1 = (lo[axis] - p0[axis]) / d, (hi[axis] - p0[axis]) / d
+					if u0 > u1 then
+						u0, u1 = u1, u0
+					end
+					t0, t1 = math.max(t0, u0), math.min(t1, u1)
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		local piece = LobbyLayout.get("SpinWheel")
+		local frame = LobbyLayout.frame(piece)
+		local wheel = pkg.SpinWheel.Wheel
+		local axle = wheel.PrimaryPart.CFrame.Position
+		local disc = 0
+		for _, d in wheel:GetDescendants() do
+			if d:IsA("BasePart") then
+				for _, p in corners(d) do
+					local q = frame:PointToObjectSpace(p) - frame:PointToObjectSpace(axle)
+					disc = math.max(disc, math.sqrt(q.X * q.X + q.Y * q.Y))
+				end
+			end
+		end
+		T.truthy(disc > 10, `a giant disc ({disc})`)
+		local cam = Vector3.new(0, 13, 58)
+		for k = 0, 23 do
+			local a = k * math.pi / 12
+			local p = axle + frame.RightVector * (disc * 0.97 * math.cos(a)) + frame.UpVector * (disc * 0.97 * math.sin(a))
+			T.falsy(hitsShop(cam, p), `the SHOP hides the disc's rim at {math.deg(a)} degrees from the spawn camera`)
+		end
+	end)
+
 	T.test("districts: the SHOP and UPGRADES modules get a second display bay when wider", function()
 		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
 		local function showcases(m): number
@@ -402,15 +467,24 @@ return function(T, Loader)
 			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
 			local ph = board and board:FindFirstChild("Placeholder")
 			T.truthy(ph and ph:IsA("Model"), "Board" .. i .. " has a Placeholder model")
-			T.truthy(#ph:GetChildren() >= 5, "Board" .. i .. " placeholder has rank rows")
+			-- (round 3: the rank rows are SurfaceGui labels, no parts)
+			local rows = 0
+			for _, d in ph:GetDescendants() do
+				if d:IsA("TextLabel") then
+					rows += 1
+				end
+			end
+			T.truthy(rows >= 5, "Board" .. i .. " placeholder has rank rows")
 		end
 	end)
 
-	T.test("districts: Tobin's Sell stall stays low so the SHOP windows show", function()
+	T.test("districts: Tobin's Sell stall stays low and off the SHOP's door lane, Tobin clear of his cart", function()
 		local _, pkg = districts()
 		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
 		for _, d in pkg.ShopFront:GetDescendants() do
-			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and d.Transparency < 1 then
+			-- (round 2: the big SELL sign stands high on its own arch, model SellSign)
+			local sign = pkg.ShopFront:FindFirstChild("SellSign")
+			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and not (sign and d:IsDescendantOf(sign)) and d.Transparency < 1 then
 				local top = -math.huge
 				for _, p in corners(d) do
 					top = math.max(top, frame:PointToObjectSpace(p).Y)
@@ -418,25 +492,56 @@ return function(T, Loader)
 				T.truthy(top <= 5.0, `{d:GetFullName()} rises to {top} (keep the stall under 5 studs)`)
 			end
 		end
+		-- the stall keeps the SHOP's 6-stud door lane open
+		local shop = LobbyLayout.get("Shop")
+		local shopFrame = LobbyLayout.frame(shop)
+		for _, d in pkg.ShopFront:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 1 then
+				for _, p in corners(d) do
+					T.truthy(math.abs(shopFrame:PointToObjectSpace(p).X) >= 3, `{d:GetFullName()} stands in the SHOP's door lane`)
+				end
+			end
+		end
+		-- Tobin stands a stud clear of his cart
+		local cart = nil
+		for _, d in pkg.ShopFront:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "SellCounter" then
+				cart = d
+			end
+		end
+		local gap = math.huge
+		for _, d in pkg.ShopFront.Tobin:GetDescendants() do
+			if d:IsA("BasePart") then
+				for _, p in corners(d) do
+					local q = cart.CFrame:PointToObjectSpace(p)
+					local dx = math.max(math.abs(q.X) - cart.Size.X / 2, 0)
+					local dz = math.max(math.abs(q.Z) - cart.Size.Z / 2, 0)
+					gap = math.min(gap, math.sqrt(dx * dx + dz * dz))
+				end
+			end
+		end
+		T.truthy(gap >= 0.9, `Tobin stands {gap} studs from his counter`)
 	end)
 
-	T.test("districts: walk lanes to the SHOP and UPGRADES counters stay open", function()
-		local _, pkg = districts()
-		for _, lane in { { "ShopFront", -1.6, 1.8 }, { "UpgradesFront", -1.7, 1.7 } } do
-			local piece = LobbyLayout.get(lane[1])
+	T.test("districts: a lane at least 4 studs wide runs clear from the plaza to the SHOP and UPGRADES counters", function()
+		local map = districts()
+		for _, pair in { { "Shop", "ShopCounter" }, { "Upgrades", "UpgradeCounter" } } do
+			local id, counterName = pair[1], pair[2]
+			local piece = LobbyLayout.get(id)
 			local frame = LobbyLayout.frame(piece)
-			for _, d in pkg[lane[1]]:GetDescendants() do
-				if d:IsA("BasePart") and d.CanCollide then
-					-- the part's box in the piece frame
-					local minX, maxX, minY, maxY = math.huge, -math.huge, math.huge, -math.huge
-					for _, p in corners(d) do
-						local q = frame:PointToObjectSpace(p)
-						minX, maxX = math.min(minX, q.X), math.max(maxX, q.X)
-						minY, maxY = math.min(minY, q.Y), math.max(maxY, q.Y)
-					end
-					local blocked = maxX > lane[2] and minX < lane[3] and maxY > 0.4 and minY < 6
-					T.falsy(blocked, `{d:GetFullName()} blocks the walk lane of {lane[1]}`)
-				end
+			local counter = map:FindFirstChild(counterName, true)
+			local counterFront = frame:PointToObjectSpace(counter.CFrame.Position).Z - counter.Size.Z / 2
+			-- from the plaza rim (the module's front is about 44 studs from the plaza
+			-- center: the lane starts 9 studs further out) to the counter
+			local laneFront = -piece.Size.Z / 2 - 9
+			for _, b in solidBoxes(map.Emberfall, frame) do
+				local blocked = b.MaxX > -2
+					and b.MinX < 2
+					and b.MaxZ > laneFront
+					and b.MinZ < counterFront - 0.3
+					and b.MaxY > 0.9
+					and b.MinY < 6
+				T.falsy(blocked, `{b.Name} blocks the lane to the {id} counter`)
 			end
 		end
 	end)
@@ -511,7 +616,7 @@ return function(T, Loader)
 		for id, text in want do
 			local found = false
 			for _, d in pkg[id]:GetDescendants() do
-				if d:IsA("TextLabel") and d.Text == text then
+				if d:IsA("TextLabel") and string.gsub(d.Text, "\n", " ") == text then
 					found = true
 					break
 				end

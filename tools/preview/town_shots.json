@@ -68,16 +68,16 @@
   "town_map_close": {
     "scene": "world",
     "position": [
-      -42,
-      15,
-      52
+      44,
+      14,
+      108
     ],
     "target": [
-      -58,
-      12,
-      33
+      58.5,
+      10,
+      95
     ],
-    "fov": 56,
+    "fov": 62,
     "preset": "Surface",
     "sunDir": [
       -0.965,
@@ -112,14 +112,14 @@
   "town_cartshop": {
     "scene": "world",
     "position": [
-      -50,
-      11,
-      6
+      -48,
+      10,
+      -6
     ],
     "target": [
-      -59.25,
-      9,
-      -10
+      -59,
+      8,
+      10
     ],
     "fov": 62,
     "preset": "Surface",
@@ -241,19 +241,19 @@
     "shadowExtent": 140,
     "maxLights": 24
   },
-  "town_ore_spur": {
+  "town_ore": {
     "scene": "world",
     "position": [
-      30,
-      12,
-      24
+      52,
+      14,
+      -50
     ],
     "target": [
-      56,
-      9,
-      -2
+      59,
+      10,
+      -68
     ],
-    "fov": 60,
+    "fov": 62,
     "preset": "Surface",
     "sunDir": [
       -0.965,
@@ -288,14 +288,14 @@
   "town_east_row": {
     "scene": "world",
     "position": [
-      50,
-      15,
-      78
+      38,
+      16,
+      64
     ],
     "target": [
-      60.5,
-      12,
-      58
+      60,
+      9,
+      90
     ],
     "fov": 60,
     "preset": "Surface",

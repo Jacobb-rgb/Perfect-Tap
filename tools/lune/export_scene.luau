@@ -100,6 +100,8 @@ elseif sceneName == "blaster_kenney" then -- the ten levels: Kenney shapes with 
 	require("./lib/blaster_kenney").build(Loader, workspace)
 elseif sceneName == "kit_check" then -- Space Station / Mini Dungeon / City pieces rebuilt from parts (tools/lune/lib/kenney_kit.luau)
 	require("./lib/kenney_kit").buildCheck(Loader, workspace)
+elseif sceneName == "vault_game" then -- the in-game Vault lobby package at its place (tools/lune/lib/vault_game.luau)
+	require("./lib/vault_game").build(Loader, workspace)
 elseif sceneName == "blaster_shop_lobby" then -- TEST: the Forge Vault placed in the lobby (preview only)
 	require("./lib/blaster_shop").buildLobby(Loader, workspace)
 elseif sceneName == "blaster_shop" then -- the blaster shop proposals (tools/lune/lib/blaster_shop.luau)
