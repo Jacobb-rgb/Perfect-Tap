@@ -36,25 +36,36 @@
 	  owner (or into the pen) by the maintenance pass.
 	- The Ore Magnet (gear, ItemService.Magnet): every 0.25 s, for each
 	  player whose Bonuses.magnetRadius is above 0, their OWN loose items
-	  within that radius slide to them (never another player's). Server
-	  physics: the item gets a LinearVelocity in the ground plane (gravity
-	  and walls still act, so nothing passes through a wall), and a ray from
-	  the owner to the item must be clear before (and every CheckEvery
-	  seconds while) it is pulled; a blocked item isn't tried again for
-	  CheckEvery seconds and doesn't take a pull slot (at most RayBudget rays
-	  per magnet per pass). It FETCHES, it doesn't herd: an item that reached
-	  your feet (StopDistance) is done (MagnetDone) until it is picked up, so
-	  nothing follows you around. Left alone: items you dropped or threw
-	  yourself (HandDropped, until you pick them up again), items for
-	  Magnet.Delay seconds after they appear, items a client still simulates
-	  whose travel isn't plausible (isTrusted + MaxItemTravel: the magnet
-	  never launders a client-moved item), items on or around a base (belts,
-	  chutes, the Ore Pen's intake), items whose way to you passes an intake
-	  zone (IntakeService.addZone registers every zone with magnetAvoid: the
-	  SellBin, train hoppers..., so the magnet never pushes ore into a sale),
-	  items far above or below you, items that aren't at a finite position,
-	  and items already near your feet (a pull starts beyond StartDistance and
-	  ends at StopDistance). At most MaxPulls items per magnet at once, the
+	  within that radius fly to them (never another player's) and INTO
+	  THEIR HANDS: an item that reaches your feet (StopDistance), or lands
+	  there (within StartDistance), is picked up (setMagnetHands:
+	  CarryService's room and a quiet pickup). Only as many items as your
+	  hands still take are pulled at once, so with full hands nothing
+	  moves and nothing herds after you.
+	  Server physics: the item gets a LinearVelocity in the ground plane
+	  (gravity and walls still act, so nothing passes through a wall), and
+	  a low ray (RayHeight above the owner's feet, to the item) must be
+	  clear before (and every CheckEvery seconds while) it is pulled, so
+	  curbs and railings count; a blocked item isn't tried again for
+	  CheckEvery seconds and doesn't take a pull slot (at most RayBudget
+	  rays per magnet per pass). Every CheckEvery a pull must have come
+	  MinProgress studs closer, and a short ground probe ahead of it (one
+	  ray per pulled item per pass) must find a floor within ProbeDrop, so
+	  nothing is pushed forever against an obstacle or over a ledge.
+	  The magnet GIVES UP on an item (MagnetDone) that got stuck, ran to a
+	  ledge, or arrived when your hands were full; it tries again after
+	  RetryAfter seconds, or once you went out of its range and came back
+	  (picking it up clears it too).
+	  Left alone: items you dropped or threw yourself (HandDropped, until
+	  you pick them up again), items for Magnet.Delay seconds after they
+	  appear, items a client still simulates whose travel isn't plausible
+	  (isTrusted + MaxItemTravel: the magnet never launders a client-moved
+	  item), items on or around a base (belts, chutes, the Ore Pen's
+	  intake), items whose way to you passes an intake zone
+	  (IntakeService.addZone registers every zone with magnetAvoid: the
+	  SellBin, train hoppers..., so the magnet never pushes ore into a
+	  sale), items far above or below you and items that aren't at a
+	  finite position. At most MaxPulls items per magnet at once, the
 	  nearest first. Replication stays small: one constraint per item, kept
 	  and switched on / off (Enabled), its velocity rewritten only when it
 	  changes by more than SteerChange; a pulled item's model carries the
@@ -109,14 +120,16 @@ export type ItemRecord = {
 	-- throw, allowSpeed); nil = GameConfig.MaxItemSpeed. Reset by every release.
 	MaxSpeed: number?,
 	-- the Ore Magnet (see the header): dropped / thrown by the owner's hand
-	-- (CarryService sets it, picking it up clears it), already pulled to the
-	-- owner's feet once (picking it up clears it), the pull constraint (kept
-	-- once made, Enabled while pulled) and its last velocity
+	-- (CarryService sets it, picking it up clears it), given up on (stuck, a
+	-- ledge, full hands: tried again later, picking it up clears it), the
+	-- pull constraint (kept once made, Enabled while pulled) and its last velocity
 	HandDropped: boolean?,
 	MagnetDone: boolean?,
+	MagnetDoneAt: number?, -- os.clock() when the magnet gave up on it
 	Pull: LinearVelocity?,
 	PullVelocity: Vector2?,
 	PullCheckedAt: number?, -- os.clock() of the last clear line-of-sight check
+	PullFlat: number?, -- the flat distance to the owner at that check (progress)
 	BlockedUntil: number?, -- a wall was in the way: not tried again before this os.clock()
 }
 
@@ -140,6 +153,12 @@ ItemService.Magnet = {
 	RayBudget = 12, -- line-of-sight raycasts per magnet per pass
 	MaxRise = 10, -- items further above or below the owner's root are left alone
 	CheckEvery = 1, -- seconds between the line-of-sight checks of a pulled (or blocked) item
+	MinProgress = 1, -- studs a pull must come closer per CheckEvery (else it is stuck: given up)
+	RayHeight = 1.5, -- the line-of-sight ray runs this high above the owner's feet (curbs block it)
+	ProbeAhead = 0.25, -- seconds of pull ahead of an item where its floor is probed
+	ProbeDrop = 3, -- more floor than this below that point missing = a ledge (given up)
+	ProbeUp = 2.5, -- the probe starts this high above it (a ramp up to you still has floor)
+	RetryAfter = 10, -- seconds before an item the magnet gave up on is tried again
 	BaseMargin = 4, -- studs around a base (machine grid + yard) where the magnet never pulls
 	ZoneMargin = 5, -- studs around an intake zone (magnetAvoid) a pull's way keeps clear of
 	ForcePerMass = 400, -- the pull's MaxForce per unit of the item's mass (beats ground friction)
@@ -159,6 +178,7 @@ local function stopPull(record: ItemRecord, destroy: boolean?)
 	local wasPulling = pulling[record] == true
 	pulling[record] = nil
 	record.PullCheckedAt = nil
+	record.PullFlat = nil
 	record.PullVelocity = nil
 	local pull = record.Pull
 	if pull then
@@ -300,6 +320,7 @@ function ItemService.setState(record: ItemRecord, state: string)
 		stopPull(record, true)
 		record.HandDropped = nil
 		record.MagnetDone = nil
+		record.MagnetDoneAt = nil
 		record.BlockedUntil = nil
 	end
 	if record.Model.Parent then
@@ -750,8 +771,8 @@ local magnetRadiusOf: (Player) -> number = defaultMagnetRadius
 
 local rayParams: RaycastParams? = nil
 
--- Nothing solid between `from` and `to` (items and the owner's character don't count).
-local function defaultClearPath(from: Vector3, to: Vector3, character: Model?): boolean
+-- The magnet's raycast filter: items and the owner's character never count.
+local function magnetRayParams(character: Model?): RaycastParams
 	local params = rayParams
 	if not params then
 		local made = RaycastParams.new()
@@ -766,9 +787,40 @@ local function defaultClearPath(from: Vector3, to: Vector3, character: Model?): 
 		table.insert(ignore, character)
 	end
 	p.FilterDescendantsInstances = ignore
-	return Workspace:Raycast(from, to - from, p) == nil
+	return p
+end
+
+-- Nothing solid between `from` and `to` (items and the owner's character don't count).
+local function defaultClearPath(from: Vector3, to: Vector3, character: Model?): boolean
+	return Workspace:Raycast(from, to - from, magnetRayParams(character)) == nil
 end
 local clearPath: (Vector3, Vector3, Model?) -> boolean = defaultClearPath
+
+-- Is there floor under `point` (an item's bottom at a spot ahead of it),
+-- at most Magnet.ProbeDrop below it? No floor = a ledge or a pit. The ray
+-- starts ProbeUp above it, so a ramp rising toward you still counts.
+local function defaultFloorAhead(point: Vector3, character: Model?): boolean
+	local m = ItemService.Magnet
+	local origin = point + Vector3.new(0, m.ProbeUp, 0)
+	local down = Vector3.new(0, -(m.ProbeUp + m.ProbeDrop), 0)
+	return Workspace:Raycast(origin, down, magnetRayParams(character)) ~= nil
+end
+local floorAhead: (Vector3, Model?) -> boolean = defaultFloorAhead
+
+--[[
+	The owner's hands (CarryService.init sets them with setMagnetHands;
+	ItemService can't require CarryService): how many more items they take
+	right now, and taking an item that arrived at the owner's feet into
+	them (true = carried now). Without them (the Lune tests) the magnet
+	pulls up to MaxPulls and an arriving item stays at your feet.
+]]
+local handsRoom: ((Player) -> number)? = nil
+local handsCatch: ((Player, ItemRecord) -> boolean)? = nil
+
+function ItemService.setMagnetHands(room: ((Player) -> number)?, catch: ((Player, ItemRecord) -> boolean)?)
+	handsRoom = room
+	handsCatch = catch
+end
 
 -- A base in plot-local studs: the 12 x 12 machine grid and the yard behind it.
 local BASE_HALF_X = math.max(GameConfig.PlotCells * GameConfig.CellSize / 2, BaseLayout.Yard.Size.X / 2)
@@ -880,33 +932,39 @@ end
 
 --[[
 	Does a magnet of `radius` studs whose owner's root is at `rootPos` want
-	this item now (`now` = os.clock())? The line of sight and the intake
-	zones are checked separately (magnetStep). Also returns the flat
-	distance to the owner (0 when the item was turned down before that).
+	to pull this item now (`now` = os.clock())? The line of sight and the
+	intake zones are checked separately (magnetStep). Also returns the flat
+	distance to the owner (0 when the item was turned down before that)
+	and whether it is an item the magnet would take but that already lies
+	at the owner's feet (within StartDistance, or StopDistance while it is
+	pulled): the hands may take that one (magnetFor).
 ]]
-function ItemService.magnetWants(record: ItemRecord, rootPos: Vector3, radius: number, now: number): (boolean, number)
+function ItemService.magnetWants(record: ItemRecord, rootPos: Vector3, radius: number, now: number): (boolean, number, boolean)
 	local m = ItemService.Magnet
 	if record.State ~= "Loose" or record.HandDropped or record.MagnetDone or not (radius > 0) or not record.Model.Parent then
-		return false, 0
+		return false, 0, false
 	end
 	if now - record.ReleasedAt < m.Delay then
-		return false, 0
+		return false, 0, false
 	end
 	local position = positionOf(record)
 	if not finiteVector(position) or not finiteVector(rootPos) then
-		return false, 0
+		return false, 0, false
 	end
 	local dx, dz = rootPos.X - position.X, rootPos.Z - position.Z
 	local flat = math.sqrt(dx * dx + dz * dz)
-	-- hysteresis: a pull starts beyond StartDistance and goes on down to StopDistance
-	local near = if pulling[record] then m.StopDistance else m.StartDistance
-	if not (flat <= radius) or flat <= near or math.abs(rootPos.Y - position.Y) > m.MaxRise then
-		return false, flat
+	if not (flat <= radius) or math.abs(rootPos.Y - position.Y) > m.MaxRise then
+		return false, flat, false
 	end
 	if not plausible(record, now, position) or ItemService.onBase(position) then
-		return false, flat
+		return false, flat, false
 	end
-	return true, flat
+	-- hysteresis: a pull starts beyond StartDistance and goes on down to StopDistance
+	local near = if pulling[record] then m.StopDistance else m.StartDistance
+	if flat <= near then
+		return false, flat, true
+	end
+	return true, flat, false
 end
 
 -- The pull speed (studs/s) for an item `flat` studs away.
@@ -978,23 +1036,74 @@ local function pullToward(record: ItemRecord, rootPos: Vector3, flat: number)
 	end
 end
 
--- A living character's root part (nil when dead or not spawned).
-local function aliveRoot(player: Player): BasePart?
+-- A living character's root part and humanoid (nil when dead or not spawned).
+local function aliveRoot(player: Player): (BasePart?, Humanoid?)
 	local character = player.Character
 	if not character then
-		return nil
+		return nil, nil
 	end
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then
-		return nil
+		return nil, nil
 	end
-	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	return character:FindFirstChild("HumanoidRootPart") :: BasePart?, humanoid
+end
+
+-- How high a character's root is above its feet (R15: HipHeight + half
+-- the root; R6: half the root + 2 studs of legs); 3 when unknown.
+local function rootHeight(humanoid: Humanoid?, root: BasePart): number
+	if not humanoid then
+		return 3
+	end
+	local ok, height = pcall(function(): number
+		local half = root.Size.Y / 2
+		if humanoid.RigType == Enum.HumanoidRigType.R6 then
+			return half + 2
+		end
+		return humanoid.HipHeight + half
+	end)
+	if ok and type(height) == "number" and height == height and height > 0.5 and height < 20 then
+		return height
+	end
+	return 3
 end
 
 type Wanted = { Record: ItemRecord, Flat: number, Position: Vector3 }
 
+-- Half an item's height (its bottom is that far below its centre).
+local function halfHeight(record: ItemRecord): number
+	local y = record.Body.Size.Y
+	return if y > 0 and y < 20 then y / 2 else 0.5
+end
+
+-- The magnet gives up on an item for now (stuck, a ledge, full hands):
+-- tried again after RetryAfter or once the owner left its range (see magnetFor).
+local function giveUp(record: ItemRecord, now: number)
+	stopPull(record)
+	record.MagnetDone = true
+	record.MagnetDoneAt = now
+end
+
+-- Steers one pull toward the owner, unless the floor ends just ahead of
+-- the item (a ledge, a pit): then the magnet gives up on it. True = pulled.
+local function steer(record: ItemRecord, entry: Wanted, rootPos: Vector3, character: Model?, now: number): boolean
+	local m = ItemService.Magnet
+	local position = entry.Position
+	local dir = Vector3.new(rootPos.X - position.X, 0, rootPos.Z - position.Z)
+	if dir.Magnitude > 1e-3 then
+		local ahead = math.max(1, ItemService.pullSpeed(entry.Flat) * m.ProbeAhead)
+		local point = position + dir.Unit * ahead - Vector3.new(0, halfHeight(record), 0)
+		if not floorAhead(point, character) then
+			giveUp(record, now)
+			return false
+		end
+	end
+	pullToward(record, rootPos, entry.Flat)
+	return true
+end
+
 -- One player's part of a magnet pass (see magnetStep).
-local function magnetFor(player: Player, set: { [ItemRecord]: boolean }, root: BasePart, radius: number, now: number)
+local function magnetFor(player: Player, set: { [ItemRecord]: boolean }, root: BasePart, humanoid: Humanoid?, radius: number, now: number)
 	local m = ItemService.Magnet
 	local rootPos = root.Position
 	if not finiteVector(rootPos) then
@@ -1003,59 +1112,91 @@ local function magnetFor(player: Player, set: { [ItemRecord]: boolean }, root: B
 		end
 		return
 	end
+	local character = player.Character
+	local catch = handsCatch
+	-- what the hands still take (one less after every catch); without hands: MaxPulls
+	local room = if handsRoom then handsRoom(player) else m.MaxPulls
+	room = if room == room then math.max(0, math.floor(room)) else 0
 	local wanted: { Wanted } = {}
 	for record in set do
-		local wants, flat = ItemService.magnetWants(record, rootPos, radius, now)
+		if record.MagnetDone and record.State == "Loose" then
+			-- given up on: tried again after RetryAfter, or once you went out of
+			-- range (you come back for it)
+			local position = positionOf(record)
+			local dx, dz = rootPos.X - position.X, rootPos.Z - position.Z
+			local since = record.MagnetDoneAt
+			if not since or now - since >= m.RetryAfter or not (dx * dx + dz * dz <= radius * radius) then
+				record.MagnetDone = nil
+				record.MagnetDoneAt = nil
+			end
+		end
+		local wants, flat, atFeet = ItemService.magnetWants(record, rootPos, radius, now)
 		if wants then
 			table.insert(wanted, { Record = record, Flat = flat, Position = positionOf(record) })
-		elseif pulling[record] then
-			stopPull(record)
-			-- it reached your feet: fetched, not pulled again until picked up
-			if record.State == "Loose" and flat > 0 and flat <= m.StopDistance then
-				record.MagnetDone = true
+		else
+			local was = pulling[record] == true
+			if was then
+				stopPull(record)
+			end
+			if atFeet then
+				-- at your feet (pulled here, or it landed here): into your hands
+				if catch and room > 0 and catch(player, record) then
+					room -= 1
+				elseif was then
+					-- arrived with full hands: left there, given up on for now
+					giveUp(record, now)
+				end
 			end
 		end
 	end
 	table.sort(wanted, function(a, b)
 		return a.Flat < b.Flat
 	end)
+	-- only as many pulls as the hands still take: with full hands nothing
+	-- moves, nothing herds after you
+	local slots = math.min(m.MaxPulls, room)
 	local zones = zonesNear(rootPos, radius)
+	-- the line of sight runs low (RayHeight above the feet): curbs and railings count
+	local eye = Vector3.new(rootPos.X, rootPos.Y - rootHeight(humanoid, root) + m.RayHeight, rootPos.Z)
 	local pulled, rays = 0, 0
 	for _, entry in wanted do
 		local record = entry.Record
 		local was = pulling[record] == true
 		local blocked = record.BlockedUntil
-		if pulled >= m.MaxPulls then
+		local checked = record.PullCheckedAt
+		local due = not was or not checked or now - checked >= m.CheckEvery
+		local last = record.PullFlat
+		if pulled >= slots then
 			stopPull(record)
 		elseif #zones > 0 and ItemService.wayNearZone(entry.Position, rootPos, zones) then
 			-- never push ore into a sale or a hopper
 			stopPull(record)
 		elseif not was and blocked and now < blocked then
 			-- a wall was in the way a moment ago: not tried again yet
-		else
-			local checked = record.PullCheckedAt
-			local due = not was or not checked or now - checked >= m.CheckEvery
-			if due and rays >= m.RayBudget then
-				-- no rays left this pass: a pull goes on and is checked next time
-				if was then
-					pullToward(record, rootPos, entry.Flat)
-					pulled += 1
-				end
-			elseif due then
-				rays += 1
-				if clearPath(rootPos, entry.Position + Vector3.new(0, 0.5, 0), player.Character) then
-					record.BlockedUntil = nil
-					pullToward(record, rootPos, entry.Flat)
-					record.PullCheckedAt = now
-					pulled += 1
-				else
-					record.BlockedUntil = now + m.CheckEvery
-					stopPull(record)
-				end
-			else
-				pullToward(record, rootPos, entry.Flat)
+		elseif was and due and last and last - entry.Flat < m.MinProgress then
+			-- no closer than a CheckEvery ago: stuck on something low, or you
+			-- walk away faster than it slides
+			giveUp(record, now)
+		elseif due and rays >= m.RayBudget then
+			-- no rays left this pass: a pull goes on and is checked next time
+			if was and steer(record, entry, rootPos, character, now) then
 				pulled += 1
 			end
+		elseif due then
+			rays += 1
+			if clearPath(eye, entry.Position + Vector3.new(0, 0.5, 0), character) then
+				record.BlockedUntil = nil
+				if steer(record, entry, rootPos, character, now) then
+					record.PullCheckedAt = now
+					record.PullFlat = entry.Flat
+					pulled += 1
+				end
+			else
+				record.BlockedUntil = now + m.CheckEvery
+				stopPull(record)
+			end
+		elseif steer(record, entry, rootPos, character, now) then
+			pulled += 1
 		end
 	end
 end
@@ -1063,21 +1204,26 @@ end
 --[[
 	One magnet pass (every 0.25 s from start; `now` = os.clock()): for each
 	player with a magnet, the nearest wanted items (magnetWants) whose way
-	is clear (no wall: line of sight; no intake zone) slide toward them, at
-	most Magnet.MaxPulls; every other pull lets go. Only that player's own
-	items are looked at. Each player's part runs on its own (an error in one
-	never stops the others).
+	is clear (no wall: line of sight; no intake zone; floor ahead) slide
+	toward them, at most Magnet.MaxPulls and no more than their hands still
+	take; every other pull lets go. An item that arrives goes into the
+	owner's hands (setMagnetHands). Only that player's own items are looked
+	at. Each player's part runs on its own (an error in one never stops the
+	others).
 ]]
 function ItemService.magnetStep(now: number)
 	local active: { [number]: boolean } = {}
 	for _, player in Players:GetPlayers() do
 		local ok, err = pcall(function()
 			local set = byOwner[player.UserId]
-			local root = if set then aliveRoot(player) else nil
+			local root, humanoid = nil, nil
+			if set then
+				root, humanoid = aliveRoot(player)
+			end
 			local radius = if root then magnetRadiusOf(player) else 0
 			if set and root and radius > 0 then
 				active[player.UserId] = true
-				magnetFor(player, set, root, radius, now)
+				magnetFor(player, set, root, humanoid, radius, now)
 			end
 		end)
 		if not ok then
@@ -1105,11 +1251,23 @@ ItemService._test = {
 		table.clear(avoidParts)
 		magnetRadiusOf = defaultMagnetRadius
 		clearPath = defaultClearPath
+		floorAhead = defaultFloorAhead
+		handsRoom = nil
+		handsCatch = nil
 	end,
-	-- the magnet's radius per player and its line-of-sight check (nil = the real one)
-	setMagnet = function(radius: ((Player) -> number)?, path: ((Vector3, Vector3, Model?) -> boolean)?)
+	-- the magnet's radius per player and its line-of-sight check (nil = the
+	-- real one), and its floor probe (nil = there is always a floor: the
+	-- tests' world has nothing to raycast)
+	setMagnet = function(
+		radius: ((Player) -> number)?,
+		path: ((Vector3, Vector3, Model?) -> boolean)?,
+		floor: ((Vector3, Model?) -> boolean)?
+	)
 		magnetRadiusOf = radius or defaultMagnetRadius
 		clearPath = path or defaultClearPath
+		floorAhead = floor or function(_point: Vector3, _character: Model?): boolean
+			return true
+		end
 	end,
 	pulling = function(): { ItemRecord }
 		local list = {}

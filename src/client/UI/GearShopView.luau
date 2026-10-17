@@ -13,15 +13,20 @@
 	             box: what you have now -> what the next level gives (big),
 	             its unit, a second stat (lamp brightness, throw power); the
 	             price (Format.money, red when you can't afford it); BUY
-	  footer   the control hint (not on phones); with a gamepad the
-	           platform's own button glyphs (GearShopView.setHint)
+	  footer   the control hint (GearShopView.hintText; "All gear at the
+	           top level" once every line is MAX); with a gamepad the
+	           platform's own button glyphs (GearShopView.setHint). The
+	           compact layout shows it only for a gamepad (TVs, a pad on
+	           a phone): A buy, B close
 
 	A card shows the server's answer for a moment in its effect box
 	(GearShopView.setStatus). Designed for 720 design units of height
 	(HudController.uiScale). The compact layout (phones, TVs) makes every
 	button at least 44 pt at the phone scale (GearShopView.touchTargets);
 	on a short screen a card drops, in this order, its description, its
-	level pips and its second stat line, so the showcase keeps its size.
+	level pips and its second stat line, so the showcase keeps its size;
+	on a tall one the description gets the lines its text needs (top
+	aligned, right under the pips) and the showcase the rest (rows).
 	Texts fit their boxes (TechShopView.fitText shrinks a long one). Five
 	cards that don't fit side by side scroll sideways.
 	Prices and levels come from GearConfig (nextPrice / quote rules) and the
@@ -123,8 +128,13 @@ export type Refs = {
 	Hint: TextLabel,
 	PadHint: Frame, -- gamepad hint: [A] buy  [B] close, the platform's glyphs
 	PadGlyphs: { ImageLabel }, -- A, B
-	PadMode: boolean,
+	PadMode: boolean, -- the hint is the glyph row (PadHint)
+	Gamepad: boolean, -- a gamepad plays (the compact layout shows the footer then)
+	HintDone: boolean, -- every line is at the top level (no "buy" in the hint)
 	Compact: boolean,
+	-- the bounds of the last layout (setHint lays out again when the footer comes or goes)
+	LayoutWidth: number,
+	LayoutHeight: number,
 	-- which optional rows the cards show (layout)
 	ShowDescription: boolean,
 	ShowPips: boolean,
@@ -141,6 +151,7 @@ GearShopView.MinHeight = 360
 GearShopView.CloseRange = 24
 GearShopView.Separator = TechShopView.Separator
 GearShopView.Subtitle = "Gear works right away and stays after you respawn."
+GearShopView.DoneHint = "All gear at the top level"
 
 -- Status lines the controller shows on a card (here so the tests can check they fit).
 GearShopView.StatusText = {
@@ -190,6 +201,7 @@ type Metrics = {
 	MaxCard: number,
 	IconMax: number,
 	IconMin: number, -- the showcase never gets smaller while an optional row can go
+	IconTall: number, -- a tall card's showcase grows up to this (no empty band under the pips)
 	Title: number,
 	Description: number,
 	DescriptionMin: number,
@@ -202,6 +214,8 @@ type Metrics = {
 }
 
 local PAD = 16
+-- the compact layout's footer while a gamepad plays (the glyph row fits in it)
+local PAD_FOOTER = 34
 
 local METRICS: { [string]: Metrics } = {
 	Normal = {
@@ -216,6 +230,7 @@ local METRICS: { [string]: Metrics } = {
 		MaxCard = 210,
 		IconMax = 124,
 		IconMin = 92,
+		IconTall = 160,
 		Title = 21,
 		Description = 15,
 		DescriptionMin = 12,
@@ -240,6 +255,7 @@ local METRICS: { [string]: Metrics } = {
 		MaxCard = 220,
 		IconMax = 118,
 		IconMin = 78,
+		IconTall = 180,
 		Title = 22,
 		Description = 16,
 		DescriptionMin = 13,
@@ -654,7 +670,7 @@ local function newSlot(refs: Refs, line: GearConfig.GearLine, order: number, m: 
 	end
 	local description = UIKit.label(frame, "", m.Description, {
 		Name = "Description",
-		TextYAlignment = Enum.TextYAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Theme.TextDim,
 		ClipsDescendants = true,
 	})
@@ -841,21 +857,24 @@ function GearShopView.build(compact: boolean?): Refs
 			}, padHint)
 		)
 	end
-	local function padWord(text: string, width: number)
+	local function padWord(name: string, text: string, width: number, visible: boolean?)
 		order += 1
 		UIKit.label(padHint, text, 15, {
-			Name = "Word",
+			Name = name,
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(width, 24),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = Theme.TextDim,
 			TextWrapped = false,
+			Visible = visible ~= false,
 		})
 	end
+	-- (every line at the top level: "All gear at the top level  [B] close")
+	padWord("WordDone", GearShopView.DoneHint, 196, false)
 	padGlyph("A")
-	padWord("buy", 44)
+	padWord("WordBuy", "buy", 44)
 	padGlyph("B")
-	padWord("close", 52)
+	padWord("WordClose", "close", 52)
 
 	local refs: Refs = {
 		Gui = gui,
@@ -873,7 +892,11 @@ function GearShopView.build(compact: boolean?): Refs
 		PadHint = padHint,
 		PadGlyphs = padGlyphs,
 		PadMode = false,
+		Gamepad = false,
+		HintDone = false,
 		Compact = compact == true,
+		LayoutWidth = math.huge,
+		LayoutHeight = math.huge,
 		ShowDescription = true,
 		ShowPips = true,
 		ShowExtra = true,
@@ -947,10 +970,15 @@ export type Rows = {
 function GearShopView.rows(compact: boolean, height: number): Rows
 	local m = metrics(compact)
 	local descriptionMin = 2 * m.Description * TechShopView.LineHeight + 4
+	local descriptionWant = 3 * m.Description * TechShopView.LineHeight + 4
 	local pips, extra, priceRow = true, true, true
 	local avail = height - stackHeight(m, pips, extra, priceRow) - 6
 	if avail >= m.IconMin + descriptionMin then
-		local icon = math.min(m.IconMax, avail - descriptionMin)
+		-- the showcase first (up to IconMax), then the description its lines
+		-- (two, three when there is room), then the showcase grows on (up
+		-- to IconTall): no empty band between the pips and the text
+		local text = math.clamp(avail - m.IconMax, descriptionMin, descriptionWant)
+		local icon = math.min(m.IconTall, avail - text)
 		return {
 			Description = true,
 			Pips = true,
@@ -1093,6 +1121,30 @@ local function placeSlot(
 	fitSlot(slot)
 end
 
+-- Does the footer (the control hint) show? Always on PC; in the compact
+-- layout only while a gamepad plays (TVs: A buy, B close), never under a thumb.
+local function footerShown(refs: Refs): boolean
+	return not refs.Compact or refs.Gamepad
+end
+
+-- The hint's rows: the text or the glyph row, and in the glyph row "buy"
+-- or "All gear at the top level".
+local function showFooter(refs: Refs)
+	local shown = footerShown(refs)
+	refs.Hint.Visible = shown and not refs.PadMode
+	refs.PadHint.Visible = shown and refs.PadMode
+	local done = refs.HintDone
+	local word = refs.PadHint:FindFirstChild("WordDone") :: GuiObject?
+	local buy = refs.PadHint:FindFirstChild("WordBuy") :: GuiObject?
+	if word then
+		word.Visible = done
+	end
+	if buy then
+		buy.Visible = not done
+	end
+	refs.PadGlyphs[1].Visible = not done
+end
+
 --[[
 	Sizes everything for the normal or compact (phone / TV) layout and fits
 	the panel into `maxWidth` x `maxHeight` design units (the screen divided
@@ -1153,8 +1205,11 @@ function GearShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 	end
 
 	-- the cards
+	refs.LayoutWidth = maxWidth
+	refs.LayoutHeight = maxHeight
+	local footer = if compact and refs.Gamepad then PAD_FOOTER else m.Footer
 	local listTop = m.Header
-	local listHeight = height - listTop - m.Footer - 6
+	local listHeight = height - listTop - footer - 6
 	local listWidth = width - 2 * PAD
 	refs.List.Position = UDim2.fromOffset(PAD, listTop)
 	refs.List.Size = UDim2.fromOffset(listWidth, listHeight)
@@ -1184,11 +1239,11 @@ function GearShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		end
 	end
 
-	refs.Hint.Visible = not compact and not refs.PadMode
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -6)
-	refs.Hint.Size = UDim2.new(1, -PAD * 2, 0, 20)
-	refs.PadHint.Visible = not compact and refs.PadMode
-	refs.PadHint.Position = UDim2.new(0.5, 0, 1, -4)
+	refs.Hint.Size = UDim2.new(1, -PAD * 2, 0, if compact then 24 else 20)
+	refs.Hint.TextSize = if compact then 18 else 15
+	refs.PadHint.Position = UDim2.new(0.5, 0, 1, if compact then -5 else -4)
+	showFooter(refs)
 end
 
 ---------------------------------------------------------------- filling in
@@ -1258,20 +1313,59 @@ function GearShopView.setStatus(refs: Refs, lineId: string, text: string?, color
 end
 
 --[[
-	The footer hint: `text` (mouse), or with `glyphs` (the images of the
-	platform's A and B buttons, from GetImageForKeyCode) the gamepad hint
-	"[A] buy  [B] close". The compact layout shows no footer.
+	The footer's text (GearShopController.updateHint) for an input ("Mouse",
+	"Touch", "Pad": a gamepad whose buttons have no glyph image, named
+	`buyName` / `closeName`); `done` = every line is at the top level, so
+	there is nothing to buy.
 ]]
-function GearShopView.setHint(refs: Refs, text: string, glyphs: { string }?)
+function GearShopView.hintText(input: string, done: boolean, buyName: string?, closeName: string?): string
+	local sep = GearShopView.Separator
+	if input == "Pad" then
+		local close = `{closeName or "B"}: close`
+		return if done then `{GearShopView.DoneHint}{sep}{close}` else `{buyName or "A"}: buy{sep}{close}`
+	elseif input == "Touch" then
+		return if done then GearShopView.DoneHint else "Tap BUY to upgrade"
+	end
+	return if done then `{GearShopView.DoneHint}{sep}Backspace: close` else `Click BUY to upgrade{sep}Backspace: close`
+end
+
+-- Is every card at the top level?
+function GearShopView.allDone(cards: { Card }): boolean
+	for _, card in cards do
+		if not card.Done then
+			return false
+		end
+	end
+	return #cards > 0
+end
+
+--[[
+	The footer hint: `text` (mouse, touch, or a gamepad without glyph
+	images), or with `glyphs` (the images of the platform's A and B
+	buttons, from GetImageForKeyCode) the glyph row "[A] buy  [B] close"
+	("All gear at the top level  [B] close" when `done`). `gamepad`: a
+	gamepad plays (implied by glyphs). The compact layout shows the footer
+	only for a gamepad, and lays the cards out again when it comes or goes.
+]]
+function GearShopView.setHint(refs: Refs, text: string, glyphs: { string }?, gamepad: boolean?, done: boolean?)
 	refs.Hint.Text = text
 	refs.PadMode = glyphs ~= nil
+	refs.HintDone = done == true
 	if glyphs then
 		for i, image in refs.PadGlyphs do
 			image.Image = glyphs[i] or ""
 		end
 	end
-	refs.Hint.Visible = not refs.Compact and not refs.PadMode
-	refs.PadHint.Visible = not refs.Compact and refs.PadMode
+	local pad = gamepad == true or glyphs ~= nil
+	if pad ~= refs.Gamepad then
+		refs.Gamepad = pad
+		if refs.Compact then
+			-- the footer comes or goes: the cards get its room
+			GearShopView.layout(refs, true, refs.LayoutWidth, refs.LayoutHeight)
+			return
+		end
+	end
+	showFooter(refs)
 end
 
 -- Shows a message in the header (instead of the subtitle).

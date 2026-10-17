@@ -216,7 +216,7 @@ return function(T, Loader)
 			HelmetLamp = { 0, 18, 26, 34, 44, 56 },
 			Backpack = { 1, 2, 3, 5, 8, 12 },
 			Gloves = { 11, 13, 15, 17, 20, 24 },
-			Magnet = { 0, 8, 12, 16, 22, 30 },
+			Magnet = { 0, 14, 18, 24, 30, 38 },
 		}
 		for lineId, values in expected do
 			for level = 0, 5 do
@@ -1921,7 +1921,7 @@ return function(T, Loader)
 		local bond = 1 + 0.25 + 0.1 -- Golem Bond II + the Golemworks collection
 		T.near(Bonuses.damageMult(stats, false), 1 + 0.35 + 0.1 * bond, EPS, "Power III + Ember Imp")
 		T.near(Bonuses.walkSpeed(stats), (26 + 2) * (1 + 0.03 * bond), EPS, "Boots 5 + Swift II, Tin Tumbler")
-		T.eq(Bonuses.magnetRadius(stats), 8 + 3, "Magnet 1 + Magnetism I")
+		T.eq(Bonuses.magnetRadius(stats), 14 + 3, "Magnet 1 + Magnetism I")
 		T.eq(Bonuses.pickupRange(stats), 24)
 		T.near(Bonuses.throwMult(stats), 1.4, EPS)
 		T.eq(Bonuses.carryCapacity(stats, p), 3)
@@ -2029,7 +2029,7 @@ return function(T, Loader)
 		T.eq(Bonuses.magnetRadius(Bonuses.stats(p)), 0, "no Ore Magnet: no pull, whatever the enchant")
 		data.Gear.Magnet = 2
 		Bonuses.invalidate(p)
-		T.eq(Bonuses.magnetRadius(Bonuses.stats(p)), 12 + 10, "Magnet II + Magnetism III")
+		T.eq(Bonuses.magnetRadius(Bonuses.stats(p)), 18 + 10, "Magnet II + Magnetism III")
 		T.eq(Bonuses.magnetRadius({ MagnetRadius = 55, MagnetBonus = 20 }), 60, "capped")
 		-- sell value: whole coins
 		T.eq(Bonuses.sellAmount({ SellPct = 0.2 }, 101), 121)

@@ -20,7 +20,10 @@
 	  (Notify); while the shop is open messages also show in its header.
 	  A refused buy with the shop closed shows a HUD toast.
 	- Gamepads get a selected BUY button on open; the selection stays inside
-	  the panel (SelectionGroup). The footer shows the platform's glyphs.
+	  the panel (SelectionGroup). The footer shows the platform's glyphs
+	  (A buy, B close), on TVs too (the compact layout makes room for it).
+	  Once every line is at the top level the hint says "All gear at the
+	  top level" instead of asking to buy.
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
 	  counter, the counter streaming out, respawning or another panel (Pen,
 	  Sell, Train, Tech shop...) opening. Other prompts are hidden while it
@@ -102,6 +105,8 @@ local openedAt = 0
 local others: { Panel }? = nil
 -- the server's numbers for the cards (GearService.preview), from OpenUI and every ActionResult
 local preview: { [string]: any }? = nil
+-- every line at the top level: the hint says so instead of "BUY"
+local allDone = false
 
 function GearShopController.isOpen(): boolean
 	return counter ~= nil
@@ -191,16 +196,6 @@ end
 
 ---------------------------------------------------------------- refreshing
 
-local function refresh()
-	local view = refs
-	if not view or not counter then
-		return
-	end
-	local cash = coins()
-	GearShopView.setCoins(view, cash)
-	GearShopView.setCards(view, GearShopView.cards(StateController.get(), cash, preview))
-end
-
 local function selectDefault(view: GearShopView.Refs, force: boolean)
 	if not usingGamepad() then
 		return
@@ -221,7 +216,9 @@ local function padName(key: Enum.KeyCode): string
 	return name
 end
 
--- The footer hint: the platform's own glyphs on a gamepad (Xbox or PlayStation).
+-- The footer hint: the platform's own glyphs on a gamepad (Xbox or
+-- PlayStation; the compact TV layout shows it too), and no "buy" once
+-- every line is at the top level (allDone, set by refresh).
 local function updateHint(view: GearShopView.Refs)
 	if usingGamepad() then
 		local keys = { Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonB }
@@ -232,15 +229,31 @@ local function updateHint(view: GearShopView.Refs)
 			complete = complete and images[i] ~= ""
 		end
 		if complete then
-			GearShopView.setHint(view, "", images)
+			GearShopView.setHint(view, "", images, true, allDone)
 		else
-			local text = `{padName(keys[1])}: buy{GearShopView.Separator}{padName(keys[2])}: close`
-			GearShopView.setHint(view, text, nil)
+			local text = GearShopView.hintText("Pad", allDone, padName(keys[1]), padName(keys[2]))
+			GearShopView.setHint(view, text, nil, true, allDone)
 		end
 	elseif isTouch() then
-		GearShopView.setHint(view, "Tap BUY to upgrade", nil)
+		GearShopView.setHint(view, GearShopView.hintText("Touch", allDone), nil, false, allDone)
 	else
-		GearShopView.setHint(view, `Click BUY to upgrade{GearShopView.Separator}Backspace: close`, nil)
+		GearShopView.setHint(view, GearShopView.hintText("Mouse", allDone), nil, false, allDone)
+	end
+end
+
+local function refresh()
+	local view = refs
+	if not view or not counter then
+		return
+	end
+	local cash = coins()
+	GearShopView.setCoins(view, cash)
+	local cards = GearShopView.cards(StateController.get(), cash, preview)
+	GearShopView.setCards(view, cards)
+	local done = GearShopView.allDone(cards)
+	if done ~= allDone then
+		allDone = done
+		updateHint(view)
 	end
 end
 

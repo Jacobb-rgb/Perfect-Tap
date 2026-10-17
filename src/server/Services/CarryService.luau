@@ -21,7 +21,10 @@
 	range (Gloves: Bonuses.pickupRange, plus PICKUP_SLACK for lag) and the
 	throw power (Gloves: x Bonuses.throwMult). The player attributes
 	CarryCount, CarryCapacity and PickupRange mirror them for the client
-	(InteractController's highlight uses PickupRange).
+	(InteractController's highlight uses PickupRange). Beyond the base reach
+	(GearConfig Gloves level 0) a grab needs a clear line from the root to
+	the item (hasReach): long Gloves never reach through a wall, a floor or
+	into the next mine floor.
 
 	Gear (GearService buys it): every effect is read from the bonuses when
 	it acts, so a buy works at once and after a respawn (hookCharacter sets
@@ -29,11 +32,14 @@
 	hand is marked HandDropped: the Ore Magnet (ItemService) never pulls
 	it back to you; picking it up again clears the mark. A Gloves throw
 	may be faster than GameConfig.MaxItemSpeed: ItemService.allowSpeed
-	lets the anti-teleport checks accept that one release.
+	lets the anti-teleport checks accept that one release. The Ore Magnet
+	puts what it fetched into your hands: init gives ItemService the
+	hands' free room and a quiet pickup (ItemService.setMagnetHands).
 
 	The carried stack (stackOffset, Stack) stays the same size whatever the
-	capacity: 9 in front of the chest, 6 on the back, every further item
-	joins the back bundle (24 with Backpack V and Strong Back).
+	capacity: 6 in front of the chest (below the chin, so the view and the
+	aim stay free), 6 on the back, every further item joins the back
+	bundle (24 with Backpack V and Strong Back).
 ]]
 
 local Players = game:GetService("Players")
@@ -42,6 +48,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
+local GearConfig = require(Shared.Config.GearConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -52,6 +59,8 @@ local CarryService = {}
 
 -- studs of lag slack on top of the pickup range the client checks
 local PICKUP_SLACK = 2
+-- everyone's reach without Gloves: further grabs need a clear line (hasReach)
+local BASE_REACH = GearConfig.value("Gloves", 0)
 
 local carried: { [Player]: { ItemService.ItemRecord } } = {}
 local pickupCallbacks: { (Player, ItemService.ItemRecord) -> () } = {}
@@ -82,7 +91,8 @@ end
 	clips through tunnel ceilings or hides the view, so the stack is
 	bounded whatever the count:
 	  front  Stack.FrontColumns x Stack.FrontRows in front of the chest
-	         (the first item in the middle), rows rising up to about the chin
+	         (the first item in the middle), two rows that stay below the
+	         chin, so the view over the shoulder and the aim stay free
 	  back   Stack.BackColumns x Stack.BackRows as a bundle on the back,
 	         below the shoulders; every further item joins that bundle
 	         (a little further out and turned, the same slots again), so
@@ -90,7 +100,7 @@ end
 ]]
 CarryService.Stack = {
 	FrontColumns = 3,
-	FrontRows = 3,
+	FrontRows = 2,
 	BackColumns = 3,
 	BackRows = 2,
 	FrontZ = -2.1,
@@ -198,6 +208,49 @@ function CarryService.takeTop(player: Player, predicate: ((ItemService.ItemRecor
 	return nil
 end
 
+local reachParams: RaycastParams? = nil
+
+-- Nothing solid between the root and the item (items and your own character don't count).
+local function defaultReachClear(player: Player, from: Vector3, record: ItemService.ItemRecord): boolean
+	local params = reachParams
+	if not params then
+		local made = RaycastParams.new()
+		made.FilterType = Enum.RaycastFilterType.Exclude
+		made.RespectCanCollide = true
+		reachParams = made
+		params = made
+	end
+	local p = params :: RaycastParams
+	local ignore: { Instance } = {}
+	local items = Workspace:FindFirstChild("Items")
+	if items then
+		table.insert(ignore, items)
+	end
+	if player.Character then
+		table.insert(ignore, player.Character)
+	end
+	p.FilterDescendantsInstances = ignore
+	return Workspace:Raycast(from, record.Body.CFrame.Position - from, p) == nil
+end
+local reachClear: (Player, Vector3, ItemService.ItemRecord) -> boolean = defaultReachClear
+
+-- Can the player at `root` grab this item from where they stand? Within
+-- the pickup range (+ PICKUP_SLACK); beyond the base reach (no Gloves)
+-- only with a clear line, never through a wall or a floor.
+function CarryService.hasReach(player: Player, root: BasePart, record: ItemService.ItemRecord): boolean
+	-- (Body.CFrame.Position = Body.Position; the Lune tests can read it)
+	local distance = (record.Body.CFrame.Position - root.Position).Magnitude
+	if not (distance <= CarryService.pickupRange(player) + PICKUP_SLACK) then
+		return false
+	end
+	return distance <= BASE_REACH + PICKUP_SLACK or reachClear(player, root.Position, record)
+end
+
+-- How many more items the player's hands take right now.
+function CarryService.room(player: Player): number
+	return math.max(0, CarryService.capacity(player) - #(carried[player] or {}))
+end
+
 function CarryService.pickup(player: Player, record: ItemService.ItemRecord): boolean
 	local root = Guard.rootPart(player)
 	if not root or not DataService.get(player) then
@@ -206,7 +259,7 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 	if record.Owner ~= player.UserId or record.State ~= "Loose" then
 		return false
 	end
-	if (record.Body.Position - root.Position).Magnitude > CarryService.pickupRange(player) + PICKUP_SLACK then
+	if not CarryService.hasReach(player, root, record) then
 		return false
 	end
 	local list = carried[player]
@@ -321,10 +374,29 @@ local function onThrow(player: Player, direction: any, power: any)
 	Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
 end
 
+-- The Ore Magnet's catch: an item that flew to the player's feet goes into
+-- their hands when they have room (quietly: no "hands full" toast).
+function CarryService.magnetCatch(player: Player, record: ItemService.ItemRecord): boolean
+	if CarryService.room(player) <= 0 then
+		return false
+	end
+	return CarryService.pickup(player, record)
+end
+
+-- Internals for the Lune tests only (tests/GearService.spec.luau).
+CarryService._test = {
+	-- the line-of-sight check of long grabs (nil = the real raycast)
+	setReach = function(check: ((Player, Vector3, ItemService.ItemRecord) -> boolean)?)
+		reachClear = check or defaultReachClear
+	end,
+}
+
 function CarryService.init()
 	Net.on("CarryPickup", onPickup)
 	Net.on("CarryDrop", onDrop)
 	Net.on("CarryThrow", onThrow)
+	-- the Ore Magnet puts what it fetched into your hands
+	ItemService.setMagnetHands(CarryService.room, CarryService.magnetCatch)
 
 	local function hookCharacter(player: Player, character: Model)
 		local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?

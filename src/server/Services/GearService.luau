@@ -163,7 +163,7 @@ function GearService.boughtText(lineId: string, level: number, strongBack: boole
 		local throw = extra(GearConfig.value("Gloves", level, "ThrowMult"))
 		return `{name}: grab from {reach} studs, throw x{throw}!`
 	elseif lineId == "Magnet" then
-		return `{name}: mined ore flies to your feet from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
+		return `{name}: mined ore flies into your hands from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
 	end
 	return `{name} bought!`
 end

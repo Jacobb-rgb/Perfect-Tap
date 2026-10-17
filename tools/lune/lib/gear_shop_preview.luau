@@ -13,10 +13,11 @@
 	                       ("BOUGHT!", the server's toast in the header)
 	  ui_gear_new          PC, a new player with $1,200: what they can buy
 	  ui_gear_status       PC, a card says why it can't buy (effect box)
-	  ui_gear_max          PC, everything at the top level
+	  ui_gear_max          PC, everything at the top level (the footer says so)
 	  ui_gear_phone        667 x 375 pt phone (compact layout)
 	  ui_gear_phone_small  568 x 320 pt phone (rows dropped to fit)
-	  ui_gear_tv           1080p TV (console): compact, a BUY waits for its answer
+	  ui_gear_tv           1080p TV (console): compact, the gamepad footer
+	                       (A buy, B close), a BUY waits for its answer
 	  ui_gear_carry_phone  667 x 375 pt phone HUD carrying 24 of 24 ("+17")
 ]]
 
@@ -152,15 +153,19 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		return refs
 	end
 
-	-- the shop as GearShopController shows it
-	local function view(uiScale: number, compact: boolean, maxWidth: number, maxHeight: number, state: any, coins: number): any
+	-- the shop as GearShopController shows it (`pad`: a gamepad plays; the
+	-- renderer draws no images, so the glyphs' text fallback "A: buy")
+	local function view(uiScale: number, compact: boolean, maxWidth: number, maxHeight: number, state: any, coins: number, pad: boolean?): any
 		local refs = GearShopView.build(compact)
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
 		GearShopView.layout(refs, compact, maxWidth, maxHeight)
 		GearShopView.setCoins(refs, coins)
-		GearShopView.setCards(refs, GearShopView.cards(state, coins))
-		GearShopView.setHint(refs, `Click BUY to upgrade{GearShopView.Separator}Backspace: close`, nil)
+		local cards = GearShopView.cards(state, coins)
+		GearShopView.setCards(refs, cards)
+		local done = GearShopView.allDone(cards)
+		local input = if pad then "Pad" elseif compact then "Touch" else "Mouse"
+		GearShopView.setHint(refs, GearShopView.hintText(input, done, "A", "B"), nil, pad == true, done)
 		return refs
 	end
 
@@ -210,7 +215,7 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	-- a console on a 1080p TV: compact, the gamepad hint, a BUY waiting for its answer
 	local tvScale = 1.25 * 900 / 1080
 	local hud7 = hud(tvScale, Preview.Coins, 5)
-	local tv = view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, Preview.State, Preview.Coins)
+	local tv = view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, Preview.State, Preview.Coins, true)
 	local boots = tv.Slots.Boots.Button
 	boots:SetAttribute("Busy", true)
 	boots.Text = "..."

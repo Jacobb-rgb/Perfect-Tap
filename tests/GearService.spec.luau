@@ -6,16 +6,21 @@
 -- speed on the humanoid, carry capacity, pickup range, throw power,
 -- magnet radius, the LampLevel attribute), a fuzz run where coins and
 -- levels always add up, the cards' real numbers (the server's preview with
--- every bonus); the magnet (own items only, the nearest clear ones first
--- within a ray budget, not through walls, not hand-dropped items, not on
--- bases, never into an intake zone, never a client-moved item, fetches
--- once and never herds, lets go at your feet or when the magnet goes away,
--- survives broken items, small replication); fast Gloves throws and the
--- anti-teleport checks; a bounded carry stack and HUD panel for 24 items;
--- the head lamp (band, light only in the dark); and that the view's cards
--- offer exactly what the server quotes, fit every screen, keep 44 pt touch
--- targets and never overlap. Save data, players and Net are small fakes;
--- EconomyService, Bonuses and CarryService run for real.
+-- every bonus); the magnet (every level reaches beyond the grab reach,
+-- own items only, the nearest clear ones first within a ray budget, a low
+-- line of sight, not through walls, never over a ledge, not hand-dropped
+-- items, not on bases, never into an intake zone, never a client-moved
+-- item, fetched ore goes into your hands and full hands pull nothing,
+-- stuck pulls are given up on and tried again later, lets go when the
+-- magnet goes away, survives broken items, small replication); long
+-- Gloves never reach through a wall; fast Gloves throws and the
+-- anti-teleport checks; a bounded carry stack (two rows in front) and HUD
+-- panel for 24 items; old saves keep their walk speed (Boots I); the head
+-- lamp (band, light only in the dark); and that the view's cards offer
+-- exactly what the server quotes, fit every screen, keep 44 pt touch
+-- targets and never overlap, the TV's gamepad footer and the all-MAX
+-- hint. Save data, players and Net are small fakes; EconomyService,
+-- Bonuses and CarryService run for real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
@@ -280,7 +285,7 @@ return function(T, Loader)
 		T.eq(CarryService.pickupRange(w.player), 13, "Gloves I reach")
 		T.eq(w.player.attrs.PickupRange, 13, "the client's PickupRange")
 		T.near(Bonuses.throwMult(stats), 1.08, 1e-9, "Gloves I throw")
-		T.eq(Bonuses.magnetRadius(stats), 8, "Magnet I")
+		T.eq(Bonuses.magnetRadius(stats), 14, "Magnet I")
 		T.eq(w.player.attrs[GearConfig.LampAttribute], 1, "LampLevel for the head lamps")
 		local range, brightness = Bonuses.lamp(stats)
 		T.eq(range, 18)
@@ -290,16 +295,16 @@ return function(T, Loader)
 		T.eq(GearService.boughtText("Backpack", 2, true), "Ore Backpack II: you can carry 6 items!")
 		T.eq(GearService.boughtText("Gloves", 1, false), "Grip Gloves I: grab from 13 studs, throw x1.08!")
 		T.eq(GearService.boughtText("HelmetLamp", 5, false), "Helmet Lamp V: your lamp lights 56 studs in dark caves!")
-		T.eq(GearService.boughtText("Magnet", 2, false), "Ore Magnet II: mined ore flies to your feet from 12 studs (not on bases)!")
+		T.eq(GearService.boughtText("Magnet", 2, false), "Ore Magnet II: mined ore flies into your hands from 18 studs (not on bases)!")
 		-- with the server's preview: the real numbers
-		local values = { Level = 2, Now = 15, ExtraNow = nil }
+		local values = { Level = 2, Now = 21, ExtraNow = nil }
 		T.eq(
 			GearService.boughtText("Magnet", 2, false, values),
-			"Ore Magnet II: mined ore flies to your feet from 15 studs (not on bases)!"
+			"Ore Magnet II: mined ore flies into your hands from 21 studs (not on bases)!"
 		)
 		T.eq(
 			GearService.boughtText("Magnet", 3, false, values),
-			"Ore Magnet III: mined ore flies to your feet from 16 studs (not on bases)!",
+			"Ore Magnet III: mined ore flies into your hands from 24 studs (not on bases)!",
 			"another level's preview is ignored"
 		)
 		T.eq(
@@ -321,8 +326,8 @@ return function(T, Loader)
 			T.truthy(preview, "a preview")
 			local magnet = preview.Magnet
 			T.eq(magnet.Level, 1)
-			T.eq(magnet.Now, 8 + 3, "Magnet I with Magnetism")
-			T.eq(magnet.Next, 12 + 3, "Magnet II with Magnetism")
+			T.eq(magnet.Now, 14 + 3, "Magnet I with Magnetism")
+			T.eq(magnet.Next, 18 + 3, "Magnet II with Magnetism")
 			T.eq(preview.Boots.Now, 16 * 1.25, "the golems speed up the boots")
 			T.eq(preview.Boots.Next, 18 * 1.25)
 			T.eq(preview.Backpack.Now, 16, "Backpack IV with Strong Back")
@@ -347,7 +352,7 @@ return function(T, Loader)
 					card = c
 				end
 			end
-			T.eq(card.Effect, "11 → 15", "the magnet card counts Magnetism")
+			T.eq(card.Effect, "17 → 21", "the magnet card counts Magnetism")
 			local bootsCard = nil
 			for _, c in cards do
 				if c.Line == "Boots" then
@@ -359,30 +364,30 @@ return function(T, Loader)
 			local stale = GearShopView.cards({ Gear = { Magnet = 2 }, Perks = {} }, 0, preview)
 			for _, c in stale do
 				if c.Line == "Magnet" then
-					T.eq(c.Effect, "12 → 16", "an old preview is never shown on a newer level")
+					T.eq(c.Effect, "18 → 24", "an old preview is never shown on a newer level")
 				end
 			end
 			-- junk previews fall back too
 			for _, junk in { "x", { Magnet = "x" }, { Magnet = { Level = 1, Now = 0 / 0 } }, { Magnet = { Level = 1, Now = -4 } } } do
 				for _, c in GearShopView.cards({ Gear = { Magnet = 1 }, Perks = {} }, 0, junk) do
 					if c.Line == "Magnet" then
-						T.eq(c.Effect, "8 → 12", "junk preview: the gear table")
+						T.eq(c.Effect, "14 → 18", "junk preview: the gear table")
 					end
 				end
 			end
 			-- it rides along with OpenUI and every ActionResult
 			gear.open(w.player, w.counter)
 			local opened = notes(w, "OpenUI")
-			T.eq(opened[#opened].B.Preview.Magnet.Now, 11, "OpenUI carries the preview")
+			T.eq(opened[#opened].B.Preview.Magnet.Now, 17, "OpenUI carries the preview")
 			w.data.Coins = 1e9
 			local result = buy(w, "Magnet", 2)
 			T.eq(result.Ok, true)
 			T.eq(result.Preview.Magnet.Level, 2, "the preview after the buy")
-			T.eq(result.Preview.Magnet.Now, 15)
+			T.eq(result.Preview.Magnet.Now, 21)
 			local toasts = notes(w, "Notify")
 			T.eq(
 				toasts[#toasts].A.Text,
-				"Ore Magnet II: mined ore flies to your feet from 15 studs (not on bases)!",
+				"Ore Magnet II: mined ore flies into your hands from 21 studs (not on bases)!",
 				"the toast's real number"
 			)
 			local refusedResult = act(w, "Buy", { Line = "Magnet", Level = 2 })
@@ -597,10 +602,18 @@ return function(T, Loader)
 		T.falsy(ItemService.magnetWants(near, root, 0, 0), "no magnet")
 		T.falsy(ItemService.magnetWants(near, root, 0 / 0, 0), "a broken radius")
 		local feet = chunk(w, USER, root + Vector3.new(m.StopDistance - 0.5, -2, 0))
-		T.falsy(ItemService.magnetWants(feet, root, 12, 0), "already at your feet")
+		local feetWants, _, atFeet = ItemService.magnetWants(feet, root, 12, 0)
+		T.falsy(feetWants, "already at your feet: nothing to pull")
+		T.truthy(atFeet, "but the hands may take it")
 		T.truthy(m.StartDistance > m.StopDistance, "a pull starts further out than it ends")
 		local between = chunk(w, USER, root + Vector3.new((m.StopDistance + m.StartDistance) / 2, -2, 0))
-		T.falsy(ItemService.magnetWants(between, root, 12, 0), "not started that close")
+		local betweenWants, _, betweenFeet = ItemService.magnetWants(between, root, 12, 0)
+		T.falsy(betweenWants, "not started that close")
+		T.truthy(betweenFeet, "within StartDistance counts as at your feet")
+		T.falsy(select(3, ItemService.magnetWants(near, root, 12, 0)), "8 studs away is not at your feet")
+		feet.HandDropped = true
+		T.falsy(select(3, ItemService.magnetWants(feet, root, 12, 0)), "dropped by hand: never taken")
+		feet.HandDropped = nil
 		local high = chunk(w, USER, root + Vector3.new(6, m.MaxRise + 2, 0))
 		T.falsy(ItemService.magnetWants(high, root, 12, 0), "far above")
 		local fresh = chunk(w, USER, root + Vector3.new(0, -2, 8))
@@ -735,9 +748,11 @@ return function(T, Loader)
 		w.clear = false
 		ItemService.magnetStep(m.CheckEvery * 1.5)
 		T.truthy(pulled(item), "not checked again yet")
+		-- (it slid closer meanwhile: progress)
+		item.Body.CFrame = CFrame.new(root + Vector3.new(10 - 2 * m.MinProgress, -2, 0))
 		ItemService.magnetStep(m.CheckEvery * 2 + 0.01)
 		T.falsy(pulled(item), "a wall now: let go")
-		T.falsy(item.MagnetDone, "blocked is not fetched")
+		T.falsy(item.MagnetDone, "blocked is not given up on")
 	end)
 
 	withWorld("Ore Magnet: the nearest clear items get the slots, within a ray budget", function(w)
@@ -997,7 +1012,8 @@ return function(T, Loader)
 		end)
 		w.player.root.Position = Vector3.new(0, 3, -200)
 		local root = w.player.root.Position
-		local item = chunk(w, USER, root + Vector3.new(7, -2, 0))
+		-- beyond the grab reach without Gloves (11 studs)
+		local item = chunk(w, USER, root + Vector3.new(12, -2, 0))
 		ItemService.magnetStep(0)
 		T.eq(item.Pull, nil, "no Ore Magnet: no pull")
 		w.data.Coins = 1e9
@@ -1005,7 +1021,214 @@ return function(T, Loader)
 		T.eq(buy(w, "Magnet", 1).Ok, true)
 		w.player.root.Position = root
 		ItemService.magnetStep(0.25)
-		T.truthy(item.Pull, "Ore Magnet I (8 studs) pulls an item 7 studs away")
+		T.truthy(item.Pull, "Ore Magnet I (14 studs) fetches an item 12 studs away, out of reach")
+	end)
+
+	T.test("Ore Magnet: every level fetches ore from beyond your grab reach (no dead levels)", function()
+		local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+		-- E grabs within the Gloves reach (11 without Gloves) + 2 studs of lag slack
+		local grab = GearConfig.value("Gloves", 0) + 2
+		for level = 1, GearConfig.MaxLevel do
+			local radius = GearConfig.value("Magnet", level)
+			T.truthy(radius > grab, `Magnet {level} ({radius}) reaches beyond the grab reach ({grab})`)
+			T.truthy(radius > GearConfig.value("Gloves", level), `Magnet {level} beyond Gloves {level}`)
+			if level > 1 then
+				T.truthy(radius > GearConfig.value("Magnet", level - 1), `Magnet {level} reaches further than {level - 1}`)
+			end
+		end
+		T.truthy(GearConfig.value("Magnet", 3) >= BlasterData.Levels[1].Range, "from Magnet III on: ore mined at a blaster's range")
+		T.truthy(
+			GearConfig.value("Magnet", GearConfig.MaxLevel) + 20 <= 60,
+			"Magnet V + the Magnetism cap stays inside the MagnetRadius cap"
+		)
+	end)
+
+	withWorld("Ore Magnet: fetched ore goes into your hands, only as many as they take", function(w)
+		magnetWorld(w, 30)
+		local m = ItemService.Magnet
+		local root = w.player.root.Position
+		local room = 2
+		local refuse = false
+		local caught = {}
+		ItemService.setMagnetHands(function(p)
+			return if p == w.player then room else 0
+		end, function(p, record)
+			if refuse or room <= 0 or p ~= w.player then
+				return false
+			end
+			room -= 1
+			table.insert(caught, record)
+			ItemService.setState(record, "Carried")
+			return true
+		end)
+		local items = {}
+		for i = 1, 4 do
+			table.insert(items, chunk(w, USER, root + Vector3.new(0, -2, 8 + 2 * i)))
+		end
+		ItemService.magnetStep(0)
+		T.eq(#ItemService._test.pulling(), 2, "only as many pulls as the hands take")
+		T.truthy(pulled(items[1]) and pulled(items[2]), "the nearest two")
+		-- the first one arrives: into your hands
+		items[1].Body.CFrame = CFrame.new(root + Vector3.new(0, -2, m.StopDistance - 1))
+		ItemService.magnetStep(0.25)
+		T.eq(caught[1], items[1], "caught")
+		T.eq(items[1].State, "Carried", "carried now")
+		T.falsy(items[1].MagnetDone)
+		T.eq(#ItemService._test.pulling(), 1, "one more fits: one pull")
+		-- full hands: nothing moves, nothing follows you around
+		room = 0
+		ItemService.magnetStep(0.5)
+		T.eq(#ItemService._test.pulling(), 0, "full hands: no pulls")
+		for step = 1, 4 do
+			local at = root + Vector3.new(-2 * step, 0, 0)
+			w.player.root.Position = at
+			ItemService.magnetStep(0.5 + step * 0.25)
+			T.eq(#ItemService._test.pulling(), 0, "full hands while walking: still none")
+		end
+		w.player.root.Position = root
+		-- room again (sold): the nearest is fetched
+		room = 1
+		ItemService.magnetStep(2)
+		T.truthy(pulled(items[2]), "fetched again")
+		-- it arrives just when the hands got full (an E grab): left at your feet, given up on
+		refuse = true
+		items[2].Body.CFrame = CFrame.new(root + Vector3.new(0, -2, m.StopDistance - 1))
+		ItemService.magnetStep(2.25)
+		T.falsy(pulled(items[2]), "let go")
+		T.eq(items[2].State, "Loose", "still on the ground")
+		T.truthy(items[2].MagnetDone, "given up on for now")
+		-- without hands (no CarryService) an arriving item stays at your feet
+		ItemService.setMagnetHands(nil, nil)
+		items[3].Body.CFrame = CFrame.new(root + Vector3.new(0, -2, 9))
+		ItemService.magnetStep(2.5)
+		T.truthy(pulled(items[3]), "pulled without hands")
+		items[3].Body.CFrame = CFrame.new(root + Vector3.new(0, -2, m.StopDistance - 1))
+		ItemService.magnetStep(2.75)
+		T.eq(items[3].State, "Loose")
+		T.truthy(items[3].MagnetDone)
+	end)
+
+	withWorld("Ore Magnet: ore that lands at your feet goes straight into your hands", function(w)
+		magnetWorld(w, 30)
+		local m = ItemService.Magnet
+		local root = w.player.root.Position
+		local room = 1
+		local caught = {}
+		ItemService.setMagnetHands(function()
+			return room
+		end, function(_, record)
+			room -= 1
+			table.insert(caught, record)
+			ItemService.setState(record, "Carried")
+			return true
+		end)
+		local landed = chunk(w, USER, root + Vector3.new(m.StartDistance - 0.5, -2, 0))
+		local closer = chunk(w, USER, root + Vector3.new(0, -2, m.StopDistance - 1))
+		local dropped = chunk(w, USER, root + Vector3.new(-3, -2, 0))
+		dropped.HandDropped = true
+		local fresh = chunk(w, USER, root + Vector3.new(0, -2, -3))
+		fresh.ReleasedAt = 5
+		ItemService.magnetStep(5.1)
+		T.eq(#caught, 1, "the hands had room for one")
+		T.eq(#ItemService._test.pulling(), 0, "nothing pulled: they were at your feet already")
+		T.falsy(landed.MagnetDone or closer.MagnetDone, "never pulled: never given up on")
+		T.eq(fresh.State, "Loose", "just appeared: waits for the Delay")
+		room = 5
+		ItemService.magnetStep(6)
+		T.eq(#caught, 3, "the rest, once there is room")
+		T.eq(landed.State, "Carried")
+		T.eq(closer.State, "Carried")
+		T.eq(fresh.State, "Carried", "after the Delay")
+		T.eq(dropped.State, "Loose", "what you dropped stays on the ground")
+		T.eq(room, 3, "one room per catch")
+	end)
+
+	withWorld("Ore Magnet: a stuck pull is given up on and tried again later (no endless pushing)", function(w)
+		magnetWorld(w, 30)
+		local m = ItemService.Magnet
+		local root = w.player.root.Position
+		local item = chunk(w, USER, root + Vector3.new(12, -2, 0))
+		ItemService.magnetStep(0)
+		T.truthy(pulled(item), "pulled")
+		-- a second later it is still 12 studs away: caught on a curb or a railing
+		ItemService.magnetStep(m.CheckEvery)
+		T.falsy(pulled(item), "no progress: let go")
+		T.truthy(item.MagnetDone, "given up on")
+		T.falsy(item.Model:HasTag(m.Tag), "no beam")
+		ItemService.magnetStep(m.CheckEvery + 1)
+		T.falsy(pulled(item), "not pushed again at once")
+		-- tried again after RetryAfter
+		ItemService.magnetStep(m.CheckEvery + m.RetryAfter)
+		T.truthy(pulled(item), "tried again later")
+		ItemService.magnetStep(m.CheckEvery * 2 + m.RetryAfter)
+		T.truthy(item.MagnetDone, "still stuck: given up again")
+		-- or when you went out of its range and came back
+		local t = m.CheckEvery * 2 + m.RetryAfter + 0.25
+		w.player.root.Position = root + Vector3.new(-40, 0, 0)
+		ItemService.magnetStep(t)
+		T.falsy(item.MagnetDone, "you went away: it will be fetched when you are back")
+		T.falsy(pulled(item), "out of range: no pull")
+		w.player.root.Position = root
+		ItemService.magnetStep(t + 0.25)
+		T.truthy(pulled(item), "back: fetched")
+		-- a pull that comes closer goes on
+		local moving = chunk(w, USER, root + Vector3.new(0, -2, -14))
+		local t0 = t + 1
+		ItemService.magnetStep(t0)
+		T.truthy(pulled(moving))
+		moving.Body.CFrame = CFrame.new(root + Vector3.new(0, -2, -14 + m.MinProgress + 0.5))
+		ItemService.magnetStep(t0 + m.CheckEvery)
+		T.truthy(pulled(moving), "closer: still pulled")
+		T.falsy(moving.MagnetDone)
+		-- you walk away faster than it slides: it doesn't chase you
+		w.player.root.Position = root + Vector3.new(0, 0, 6)
+		ItemService.magnetStep(t0 + m.CheckEvery * 2)
+		T.falsy(pulled(moving), "falling behind: let go")
+		T.truthy(moving.MagnetDone)
+	end)
+
+	withWorld("Ore Magnet: never over a ledge, the line of sight runs low", function(w)
+		magnetWorld(w, 30)
+		local m = ItemService.Magnet
+		local root = w.player.root.Position
+		local probes, rays = {}, {}
+		local floor = false
+		ItemService._test.setMagnet(function(p)
+			return if p == w.player then w.radius else 0
+		end, function(from, to)
+			table.insert(rays, { From = from, To = to })
+			return true
+		end, function(point)
+			table.insert(probes, point)
+			return floor
+		end)
+		local item = chunk(w, USER, root + Vector3.new(10, -2, 0))
+		local at = item.Body.CFrame.Position
+		ItemService.magnetStep(0)
+		T.falsy(pulled(item), "no floor ahead: never pushed off the edge")
+		T.truthy(item.MagnetDone, "given up on")
+		T.eq(#probes, 1, "one probe")
+		local probe = probes[1]
+		T.truthy(probe.X < at.X - 0.9, "ahead of it, toward you")
+		T.truthy(probe.Y < at.Y, "at its bottom")
+		-- the ray: from low above your feet (curbs and railings block it) to the item
+		local ray = rays[1]
+		T.near(ray.From.Y, root.Y - 3 + m.RayHeight, 1e-6, "from RayHeight above the feet")
+		T.near(ray.From.X, root.X, 1e-6)
+		T.near(ray.To.Y, at.Y + 0.5, 1e-6, "to the item")
+		-- floor all the way: pulled, and every pass probes again
+		floor = true
+		item.MagnetDone = nil
+		ItemService.magnetStep(0.25)
+		T.truthy(pulled(item), "a floor: pulled")
+		local before = #probes
+		ItemService.magnetStep(0.5)
+		T.eq(#probes, before + 1, "probed every pass")
+		-- the floor ends under way: let go
+		floor = false
+		ItemService.magnetStep(0.75)
+		T.falsy(pulled(item), "a ledge ahead: let go")
+		T.truthy(item.MagnetDone)
 	end)
 
 	---------------------------------------------------------------- the view
@@ -1055,7 +1278,7 @@ return function(T, Loader)
 		local lamp = cardOf(cards, "HelmetLamp")
 		T.eq(lamp.Effect, "Off → 18")
 		T.eq(lamp.Extra, "Brightness 1.2")
-		T.eq(cardOf(cards, "Magnet").Effect, "Off → 8")
+		T.eq(cardOf(cards, "Magnet").Effect, "Off → 14")
 		T.eq(cardOf(cards, "Gloves").Extra, "Throw x1 → x1.08")
 		T.eq(cardOf(cards, "Backpack").Effect, "1 → 2")
 		-- level 1 lamp, Strong Back, affordable
@@ -1385,6 +1608,14 @@ return function(T, Loader)
 		GearShopView.setHint(refs, "", { "a", "b" })
 		T.truthy(refs.PadHint.Visible and not refs.Hint.Visible, "pad hint")
 		T.eq(refs.PadGlyphs[1].Image, "a")
+		T.truthy(refs.PadGlyphs[1].Visible and refs.PadHint:FindFirstChild("WordBuy").Visible, "A buy")
+		T.falsy(refs.PadHint:FindFirstChild("WordDone").Visible)
+		-- every line at the top level: no "buy" in the glyph row
+		GearShopView.setHint(refs, "", { "a", "b" }, true, true)
+		T.falsy(refs.PadGlyphs[1].Visible, "no A")
+		T.falsy(refs.PadHint:FindFirstChild("WordBuy").Visible, "no buy")
+		T.truthy(refs.PadHint:FindFirstChild("WordDone").Visible, "all gear at the top")
+		T.truthy(refs.PadGlyphs[2].Visible, "B close stays")
 		GearShopView.setHint(refs, "Click BUY", nil)
 		T.truthy(refs.Hint.Visible and not refs.PadHint.Visible, "text hint")
 	end)
@@ -1453,8 +1684,15 @@ return function(T, Loader)
 		end
 		T.eq(CarryService.stackOffset(1).Position.X, 0, "one item: in the middle")
 		T.truthy(CarryService.stackOffset(1).Position.Z < 0, "in front")
-		T.truthy(CarryService.stackOffset(9).Position.Z < 0, "nine in front")
-		T.truthy(CarryService.stackOffset(10).Position.Z > 0, "then on the back")
+		T.truthy(CarryService.stackOffset(6).Position.Z < 0, "six in front")
+		T.truthy(CarryService.stackOffset(7).Position.Z > 0, "then on the back")
+		-- the front never becomes a wall in front of the camera: two rows, below the chin
+		for i = 1, 100 do
+			local p = CarryService.stackOffset(i).Position
+			if p.Z < 0 then
+				T.truthy(p.Y <= 1.4, "front item " .. i .. " below the chin: " .. p.Y)
+			end
+		end
 		T.truthy(CarryService.stackOffset(top).Position.Y <= 1, "the back bundle stays below the shoulders")
 		-- the HUD: at most MaxCarrySlots squares, "+N" on the last one
 		for count = 0, top do
@@ -1480,5 +1718,177 @@ return function(T, Loader)
 		local more = HudView.moreSlot(refs.CarrySlots, 17, 8)
 		local label = more:FindFirstChild("More")
 		T.truthy(label and label.Text == "+17", "the +N square")
+	end)
+
+	T.test("GearShopView: the TV shows A buy / B close, all MAX says so, the description sits under the pips", function()
+		local sep = GearShopView.Separator
+		-- the footer's words
+		T.eq(GearShopView.hintText("Mouse", false), `Click BUY to upgrade{sep}Backspace: close`)
+		T.eq(GearShopView.hintText("Touch", false), "Tap BUY to upgrade")
+		T.eq(GearShopView.hintText("Pad", false, "Cross", "Circle"), `Cross: buy{sep}Circle: close`)
+		for _, input in { "Mouse", "Touch", "Pad" } do
+			local text = GearShopView.hintText(input, true)
+			T.truthy(text:find(GearShopView.DoneHint, 1, true), input .. ": all gear at the top")
+			T.falsy(text:lower():find("buy", 1, true), input .. ": nothing left to buy")
+		end
+		local top = state()
+		for _, line in LINES do
+			top.Gear[line] = GearConfig.MaxLevel
+		end
+		T.truthy(GearShopView.allDone(GearShopView.cards(top, 0)), "every line MAX")
+		local almost = state()
+		for _, line in LINES do
+			almost.Gear[line] = GearConfig.MaxLevel
+		end
+		almost.Gear.Magnet = GearConfig.MaxLevel - 1
+		T.falsy(GearShopView.allDone(GearShopView.cards(almost, 0)), "one line left")
+		T.falsy(GearShopView.allDone({}), "no cards")
+		-- a TV: the compact layout; a gamepad brings the footer, the cards make room
+		local tv = SCREENS[8]
+		T.eq(tv.Label, "TV 1080p")
+		local refs = GearShopView.build(true)
+		GearShopView.layout(refs, true, tv.Width, tv.Height)
+		T.falsy(refs.Hint.Visible or refs.PadHint.Visible, "compact without a gamepad: no footer")
+		local listBefore = refs.List.Size.Y.Offset
+		GearShopView.setHint(refs, "", { "a", "b" }, true, false)
+		T.truthy(refs.PadHint.Visible, "TV: [A] buy [B] close")
+		T.truthy(refs.List.Size.Y.Offset < listBefore, "the cards make room")
+		local panel = { 0, 0, refs.Panel.Size.X.Offset, refs.Panel.Size.Y.Offset }
+		local list = boxIn(refs.List, panel)
+		local hintBox = boxIn(refs.PadHint, panel)
+		T.falsy(overlaps(list, hintBox), "the glyph row under the cards")
+		T.truthy(inside(hintBox, panel), "inside the panel")
+		for _, slot in refs.SlotList do
+			local cards = { 0, 0, math.max(list[3], refs.List.CanvasSize.X.Offset), list[4] }
+			local card = boxIn(slot.Frame, cards)
+			T.truthy(inside(card, cards), slot.Line .. ": the card still fits")
+			T.truthy(inside(boxIn(slot.Button.Parent, { 0, 0, card[3], card[4] }), { 0, 0, card[3], card[4] }), slot.Line .. ": BUY inside")
+		end
+		-- every line MAX: "All gear at the top level  [B] close"
+		GearShopView.setHint(refs, "", { "a", "b" }, true, true)
+		T.truthy(refs.PadHint:FindFirstChild("WordDone").Visible and not refs.PadGlyphs[1].Visible, "no A buy")
+		-- a pad without glyph images: the text footer
+		GearShopView.setHint(refs, GearShopView.hintText("Pad", false, "A", "B"), nil, true, false)
+		T.truthy(refs.Hint.Visible and not refs.PadHint.Visible, "the text footer")
+		T.truthy(boxIn(refs.Hint, panel)[2] >= list[2] + list[4] - 0.01, "under the cards")
+		-- back to touch: no footer, the room goes back to the cards
+		GearShopView.setHint(refs, GearShopView.hintText("Touch", false), nil, false, false)
+		T.falsy(refs.Hint.Visible or refs.PadHint.Visible, "no footer")
+		T.eq(refs.List.Size.Y.Offset, listBefore, "the room is back")
+		-- the description: top aligned right under the pips, as tall as its
+		-- lines (at most three) while the showcase can still grow
+		local tallIcon = { [false] = GearShopView.rows(false, 5000).Icon, [true] = GearShopView.rows(true, 5000).Icon }
+		for _, screen in SCREENS do
+			local r = laidOut(screen)
+			if r.ShowDescription then
+				for _, slot in r.SlotList do
+					local d = slot.Description
+					T.eq(d.TextYAlignment, roblox.Enum.TextYAlignment.Top, screen.Label .. ": top aligned")
+					local lines3 = 3 * slot.Boxes.Description * TechShopView.LineHeight + 4
+					if slot.Showcase.Size.Y.Offset < tallIcon[screen.Compact] - 0.01 then
+						T.truthy(d.Size.Y.Offset <= lines3 + 0.01, `{screen.Label} {slot.Line}: no empty band ({d.Size.Y.Offset})`)
+					end
+				end
+			end
+		end
+		local tvRefs = laidOut(tv)
+		local boots = tvRefs.Slots.Boots
+		T.truthy(tvRefs.ShowDescription, "TV: the description shows")
+		T.truthy(boots.Showcase.Size.Y.Offset > GearShopView.rows(true, 0).Icon, "TV: the showcase takes the spare room")
+		T.truthy(
+			boots.Description.Size.Y.Offset <= 3 * boots.Boxes.Description * TechShopView.LineHeight + 4 + 0.01,
+			"TV: the description box is as tall as its text"
+		)
+	end)
+
+	withWorld("Carry: long Gloves never reach through a wall; the magnet's catch is quiet", function(w)
+		magnetWorld(w, 0)
+		local root = w.player.root.Position
+		w.data.Gear.Gloves = GearConfig.MaxLevel
+		Bonuses.invalidate(w.player)
+		local clear = true
+		local asked = 0
+		CarryService._test.setReach(function(_, from, _record)
+			asked += 1
+			T.truthy(from == w.player.root.Position, "from the root")
+			return clear
+		end)
+		local ok, err = pcall(function()
+			T.eq(CarryService.pickupRange(w.player), 24, "Gloves V")
+			local near = chunk(w, USER, root + Vector3.new(9, -2, 0))
+			local far = chunk(w, USER, root + Vector3.new(20, -2, 0))
+			local tooFar = chunk(w, USER, root + Vector3.new(27, -2, 0))
+			clear = false
+			T.truthy(CarryService.hasReach(w.player, w.player.root, near), "within the reach without Gloves: no ray")
+			T.eq(asked, 0, "no ray needed")
+			T.falsy(CarryService.hasReach(w.player, w.player.root, far), "a wall: Gloves never reach through it")
+			T.eq(asked, 1)
+			clear = true
+			T.truthy(CarryService.hasReach(w.player, w.player.root, far), "a clear line: Gloves V reach 20 studs")
+			T.falsy(CarryService.hasReach(w.player, w.player.root, tooFar), "past Gloves V + slack")
+			far.Body.CFrame = CFrame.new(0 / 0, 0, 0)
+			T.falsy(CarryService.hasReach(w.player, w.player.root, far), "a broken position never counts")
+			-- the server refuses a grab through a wall before anything changes
+			clear = false
+			far.Body.CFrame = CFrame.new(root + Vector3.new(20, -2, 0))
+			T.falsy(CarryService.pickup(w.player, far), "refused")
+			T.eq(far.State, "Loose", "still on the ground")
+			-- the hands' room (Backpack, nothing carried)
+			T.eq(CarryService.room(w.player), 1, "Backpack 0: one item")
+			w.data.Gear.Backpack = 2
+			Bonuses.invalidate(w.player)
+			T.eq(CarryService.room(w.player), 3, "Backpack II: three")
+			-- the magnet's catch: a pickup when there is room, nothing (and no toast) when full
+			local picked = {}
+			local pickup = rawget(CarryService, "pickup")
+			local room = rawget(CarryService, "room")
+			rawset(CarryService, "pickup", function(_, record)
+				table.insert(picked, record)
+				return true
+			end)
+			local ok2, err2 = pcall(function()
+				T.truthy(CarryService.magnetCatch(w.player, near), "room: picked up")
+				T.eq(picked[1], near)
+				rawset(CarryService, "room", function()
+					return 0
+				end)
+				local toasts = #notes(w, "Notify")
+				T.falsy(CarryService.magnetCatch(w.player, far), "full hands: not picked up")
+				T.eq(#picked, 1, "no pickup tried")
+				T.eq(#notes(w, "Notify"), toasts, "and no 'hands full' toast")
+			end)
+			rawset(CarryService, "pickup", pickup)
+			rawset(CarryService, "room", room)
+			if not ok2 then
+				error(err2, 0)
+			end
+		end)
+		CarryService._test.setReach(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("Migrations: saves from before the Gear shop keep their walk speed (Boots I)", function()
+		local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
+		local NOW = 1_800_000_000
+		local new = deepCopy(DataTemplate)
+		Migrations.run(new, NOW)
+		T.eq(new.Gear.Boots, 0, "a new player starts at Roblox's 16")
+		for _, carry in { 1, 3, 5, "junk" } do
+			local old = deepCopy(DataTemplate)
+			old.CarryLevel = carry
+			Migrations.run(old, NOW)
+			T.eq(old.Gear.Boots, 1, `an old save (CarryLevel {carry}): Boots I`)
+			T.eq(GearConfig.value("Boots", old.Gear.Boots), 18, "the 18 everyone walked at before")
+			T.eq(old.CarryLevel, nil)
+			Migrations.run(old, NOW)
+			T.eq(old.Gear.Boots, 1, "idempotent")
+		end
+		local bought = deepCopy(DataTemplate)
+		bought.CarryLevel = 2
+		bought.Gear.Boots = 3
+		Migrations.run(bought, NOW)
+		T.eq(bought.Gear.Boots, 3, "a higher level is never lowered")
 	end)
 end
