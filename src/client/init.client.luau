@@ -22,6 +22,7 @@ local ORDER = {
 	"PenController",
 	"PodiumController",
 	"SellController",
+	"TrainController",
 	"PlacementController",
 }
 

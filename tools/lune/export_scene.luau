@@ -100,6 +100,11 @@ elseif sceneName == "blaster_hold_tool" or sceneName == "blaster_hold_aim" then 
 	require("./lib/blaster_concepts").buildHold(Loader, workspace, if sceneName == "blaster_hold_aim" then "aim" else "tool")
 elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)
 	require("./lib/train_gallery").build(Loader, workspace)
+elseif sceneName == "train_trip" then -- trains on their trips + the train HUD and panel (tools/lune/lib/train_trip_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/train_trip_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

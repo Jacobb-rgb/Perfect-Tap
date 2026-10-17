@@ -43,6 +43,9 @@ local SoundConfig: { [string]: SoundDef } = {
 	UIClick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.4, Pitch = { 1.0, 1.1 } },
 	UIDeny = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.6, 0.7 } },
 	Discovery = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.55, Pitch = { 0.9, 0.9 } },
+	-- ore trains (placeholders: paste a steam chuff and a soft whistle from the Creator Store here)
+	TrainChuff = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.2, Pitch = { 0.34, 0.4 } },
+	TrainWhistle = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.28, Pitch = { 0.6, 0.64 } },
 }
 
 return SoundConfig
