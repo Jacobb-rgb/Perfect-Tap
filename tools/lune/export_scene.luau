@@ -90,6 +90,10 @@ elseif sceneName == "kenney_check" then -- the Kenney Blaster Kit shapes rebuilt
 	require("./lib/blaster_kenney").buildCheck(Loader, workspace)
 elseif sceneName == "blaster_kenney" then -- the ten levels: Kenney shapes with the Ore Glow skins
 	require("./lib/blaster_kenney").build(Loader, workspace)
+elseif sceneName == "kit_check" then -- Space Station / Mini Dungeon / City pieces rebuilt from parts (tools/lune/lib/kenney_kit.luau)
+	require("./lib/kenney_kit").buildCheck(Loader, workspace)
+elseif sceneName == "blaster_shop" then -- the blaster shop proposals (tools/lune/lib/blaster_shop.luau)
+	require("./lib/blaster_shop").build(Loader, workspace)
 elseif sceneName == "crate_gallery" then -- the weapon cases in the ore skins (tools/lune/lib/blaster_kenney.luau)
 	require("./lib/blaster_kenney").buildCrates(Loader, workspace)
 elseif sceneName == "blaster_glow" then -- proposal D "Ore Glow" floating in the sky (tools/lune/lib/blaster_glow.luau)
