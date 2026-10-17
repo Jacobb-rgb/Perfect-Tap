@@ -6,7 +6,10 @@
 -- boosters, the range, slots (Locked, NotOwned, BadSlot, moving, emptying),
 -- the bonuses the slotted enchants give, a fuzz run, and that the view
 -- offers exactly what the server quotes, shows the new odds in numbers
--- before any buy of an odds booster, and fits phones (44 pt targets).
+-- before any buy of an odds booster (the lasting odds: Hexa Lucky left
+-- out; "IN A SLOT" when the buy doesn't slot it), "Coming soon" for an
+-- enchant whose package isn't in the game yet, and fits phones (44 pt
+-- targets, the gamepad row on phones / TVs).
 -- Save data, players and Net are small fakes; EconomyService runs for real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -99,6 +102,10 @@ return function(T, Loader)
 		BoostService._test.reset()
 		BoostService._test.setPrompter(function(p, product)
 			table.insert(w.prompts, { Player = p, Product = product })
+		end)
+		-- every package that reads an enchant is in the game (the coming-soon test turns one off)
+		BoostService._test.setHasService(function()
+			return true
 		end)
 		shop.reset()
 		EnchantService.onBought(function(p, id, tier, currency)
@@ -484,6 +491,43 @@ return function(T, Loader)
 		T.eq(#w.prompts, 0)
 	end)
 
+	withWorld("EnchantService: an enchant nothing reads yet is coming soon (shown, refused, nothing taken)", function(w)
+		BoostService._test.setHasService(function(name: string): boolean
+			return name ~= "ArtifactService"
+		end)
+		w.data.Coins = 1e12
+		Shards.add(w.data, 10000)
+		local r = buy(w, "Prospector", "Coins", 1)
+		T.eq(r.Ok, false)
+		T.eq(r.Reason, "ComingSoon", "no artifacts yet: Prospector is coming soon")
+		T.eq(w.data.Coins, 1e12, "no coins taken")
+		T.eq(EnchantConfig.tierOf(w.data.Enchants, "Prospector"), 0, "not granted")
+		T.eq(buy(w, "Prospector", "Shards", 1).Reason, "ComingSoon", "shards too")
+		T.eq(buy(w, "Power", "Coins", 1).Ok, true, "the others still sell")
+		local s = {
+			BlasterLevel = 5,
+			Shards = 500,
+			Enchants = { Owned = {}, Slots = { "", "", "", "" } },
+			Bonuses = {},
+			Boosts = {},
+		}
+		local soon = BoostView.soonSet("Prospector")
+		for _, card in EnchantView.cards(s, 1e12, false, soon) do
+			if card.Id == "Prospector" then
+				T.eq(#card.Buys, 1, "one button")
+				T.eq(card.Buys[1].Text, "COMING SOON")
+				T.falsy(card.Buys[1].CanBuy)
+				T.eq(card.Buys[1].Reason, "ComingSoon")
+				T.eq(card.ListLine, EnchantView.SoonText.Prospector)
+			else
+				for _, option in card.Buys do
+					T.truthy(option.Reason ~= "ComingSoon" or option.Currency == "Robux", card.Id .. " sells")
+				end
+			end
+		end
+		T.eq(EnchantView.reasonText("ComingSoon"), MonetizationConfig.StatusText.ComingSoon)
+	end)
+
 	---------------------------------------------------------------- the view
 
 	local NOW = 1_800_000_000
@@ -545,7 +589,7 @@ return function(T, Loader)
 		T.eq(byId.Swift.TierText, "NEW")
 		T.eq(byId.Swift.Next, "Buy: +1 walk speed")
 		T.eq(byId.TwinDrop.ListLine, `Owned: not in a slot{EnchantView.Separator}next $30M`)
-		T.eq(byId.Heartfire.ListLine, "$1T or 20 R$")
+		T.eq(byId.Heartfire.ListLine, "$1T or 20 R$ (soon)", "the pass isn't on sale yet")
 		T.truthy(byId.Lucky.Odds and byId.Prospector.Odds and byId.Starbreaker.Odds, "odds boosters marked")
 		T.falsy(byId.Power.Odds)
 		-- where paid random items are restricted: Starbreaker's pass goes, Heartfire's stays
@@ -573,6 +617,7 @@ return function(T, Loader)
 			if card.Id == "Heartfire" then
 				T.eq(card.Buys[2].Text, "20 R$")
 				T.truthy(card.Buys[2].CanBuy)
+				T.eq(card.ListLine, "$1T or 20 R$", "a live pass: its price")
 			end
 		end
 		-- the slots
@@ -630,6 +675,26 @@ return function(T, Loader)
 		T.truthy(c.Note:find("cap"), "at the cap")
 		T.eq(c.Summary.Before, c.Summary.After, "no change")
 		T.truthy(StatConfig.MaxOreLuck == 4)
+		-- the lasting odds: a running Hexa Lucky is left out (Lucky I + Hexa: Starbreaker
+		-- shows x1.15 -> x1.9, not the temporary x2.88 -> x4)
+		local hexa = state({ Bonuses = { OreLuckPct = 0.15, OreLuckMult = 2.5, ArtifactPct = 0 }, Boosts = { HexaLuckyUntil = NOW + 600 } })
+		local withHexa = EnchantView.odds(hexa, "Starbreaker", "DeepHollow", NOW) :: any
+		local without = EnchantView.odds(state(), "Starbreaker", "DeepHollow", NOW) :: any
+		T.eq(withHexa.Summary.Before, without.Summary.Before, "NOW without Hexa Lucky")
+		T.eq(withHexa.Summary.After, without.Summary.After, "AFTER without Hexa Lucky")
+		T.truthy(withHexa.Note:find("Hexa Lucky isn't counted"), "says so")
+		T.falsy(without.Note:find("Hexa"), "no note without it")
+		-- where the buy's luck lands: AFTER BUY in a slot, else IN A SLOT
+		T.eq((EnchantView.odds(state(), "Lucky", "DeepHollow", NOW) :: any).AfterHeader, "AFTER BUY", "slotted")
+		local full = EnchantView.odds(state(), "Starbreaker", "DeepHollow", NOW) :: any
+		T.eq(full.AfterHeader, "IN A SLOT", "both open slots full: the buy doesn't slot it")
+		T.truthy(full.Note:find("slots is full") or full.Note:find("slot is full") or full.Note:find("open slot"), "says so")
+		local free = state({ Enchants = { Owned = { Power = 2 }, Slots = { "Power", "", "", "" } } })
+		T.eq((EnchantView.odds(free, "Prospector", nil, NOW) :: any).AfterHeader, "AFTER BUY", "a free slot: it goes in")
+		local unslotted = state({ Enchants = { Owned = { Lucky = 1 }, Slots = { "", "", "", "" } } })
+		local u = EnchantView.odds(unslotted, "Lucky", "DeepHollow", NOW) :: any
+		T.eq(u.AfterHeader, "IN A SLOT", "owned but not equipped: an upgrade counts once equipped")
+		T.truthy(u.Note:find("equip it"), "says so")
 		-- the zone list follows the blaster level (VIP zones with the pass)
 		T.eq(#EnchantView.zoneIds(state({ BlasterLevel = 1 })), 2, "Outcrops and the Quarry at level 1")
 		local vip = state({ BlasterLevel = 5, Perks = { ForgeVip = true } })
@@ -750,6 +815,20 @@ return function(T, Loader)
 					)
 				end
 			end
+		end
+		-- a gamepad: the glyph row shows on every screen (phones / TVs: bigger, in a footer of its own)
+		for _, screen in SCREENS do
+			local refs = EnchantView.build(screen.Compact)
+			EnchantView.layout(refs, screen.Compact, screen.Width, screen.Height)
+			EnchantView.setHint(refs, "", { "a", "b", "c" })
+			local panel = { 0, 0, refs.Panel.Size.X.Offset, refs.Panel.Size.Y.Offset }
+			local pad = boxIn(refs.PadHint, panel)
+			T.truthy(refs.PadHint.Visible, screen.Label .. " gamepad row")
+			T.truthy(pad[2] + pad[4] <= panel[4] and pad[1] >= 0 and pad[1] + pad[3] <= panel[3], screen.Label .. " inside")
+			T.falsy(overlaps(boxIn(refs.Detail.Frame, panel), pad), screen.Label .. " under the detail")
+			T.falsy(overlaps(boxIn(refs.List, panel), pad), screen.Label .. " under the list")
+			EnchantView.setHint(refs, "Tap an enchant", nil)
+			T.falsy(refs.PadHint.Visible)
 		end
 		-- every status text fits the status line on the smallest layout
 		local refs = EnchantView.build(true)

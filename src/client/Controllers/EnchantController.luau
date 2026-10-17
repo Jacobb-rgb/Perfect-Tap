@@ -16,7 +16,9 @@
 	  "BOUGHT!" or the reason on the status line. One request waits at a
 	  time; with no answer the button is freed after a while (a repeat is
 	  safe: the server refuses it as Stale). Greyed-out buttons (not
-	  enough coins / shards, Coming soon, top tier) answer locally.
+	  enough coins / shards, Coming soon, top tier) answer locally. An
+	  enchant whose package isn't in the game yet (the ReplicatedStorage
+	  attribute BoostView.SoonAttribute) shows COMING SOON.
 	- EQUIP puts an owned enchant into the first free open slot; with every
 	  open slot full it asks you to pick a slot on the left (the open slots
 	  light up). UNEQUIP empties its slot. A tap on a filled slot shows that
@@ -73,6 +75,8 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 	Info = Theme.Info,
 	Discovery = Theme.Accent,
 }
+-- panels that own the middle of the screen: one at a time (a name that
+-- isn't in the game yet is skipped: the step 6-7 panels are built in parallel)
 local OTHER_PANELS = {
 	"TechShopController",
 	"BoostController",
@@ -81,6 +85,14 @@ local OTHER_PANELS = {
 	"TrainController",
 	"IronBoxController",
 	"FoundryController",
+	"GearShopController",
+	"CapsuleController",
+	"GolemController",
+	"ArtifactController",
+	"WheelController",
+	"CodexController",
+	"LeaderboardController",
+	"SettingsController",
 }
 
 local player = Players.LocalPlayer
@@ -115,6 +127,11 @@ end
 
 local function restricted(): boolean
 	return BoostView.restricted(player:GetAttribute(BoostView.RestrictedAttribute))
+end
+
+-- The enchants that are coming soon (their package isn't in the game yet).
+local function soon(): { [string]: boolean }
+	return BoostView.soonSet(ReplicatedStorage:GetAttribute(BoostView.SoonAttribute))
 end
 
 local function coins(): number
@@ -216,7 +233,7 @@ local function refresh()
 	local cash = coins()
 	EnchantView.setBalances(view, cash, EnchantView.shards(state))
 	table.clear(cardById)
-	local cards = EnchantView.cards(state, cash, restricted())
+	local cards = EnchantView.cards(state, cash, restricted(), soon())
 	for _, card in cards do
 		cardById[card.Id] = card
 	end
@@ -752,6 +769,11 @@ function EnchantController.init()
 		end
 	end)
 	player:GetAttributeChangedSignal(BoostView.RestrictedAttribute):Connect(function()
+		if counter then
+			refresh()
+		end
+	end)
+	ReplicatedStorage:GetAttributeChangedSignal(BoostView.SoonAttribute):Connect(function()
 		if counter then
 			refresh()
 		end

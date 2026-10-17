@@ -40,6 +40,13 @@
 	- The effects reach the game through src/server/Bonuses.luau (the
 	  built-in "Boosts" provider reads data.Boosts; this service registers
 	  the same provider under the same name, so it is counted once).
+	- Coming soon: an effect only another package reads (Triple Lucky: the
+	  capsules; the Prospector / Golem Bond / Magnetism enchants: artifacts,
+	  golems, the Ore Magnet) can't be bought until that package's service
+	  is in the game (BoostService.Consumers, comingSoon): the server answers
+	  "ComingSoon" and the views show it (the ReplicatedStorage attribute
+	  BoostService.SoonAttribute lists those ids), so nobody pays for an
+	  effect nothing uses yet. Rewards (add) are never held back.
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -79,8 +86,31 @@ local prompter: (player: Player, product: MonetizationConfig.Product) -> () = fu
 	end
 end
 
--- player -> the expiry (os.time() second) the pending timer is for
-local planned: { [Player]: number } = {}
+-- player -> the expiry (os.time() second) the pending timer is for (weak
+-- keys: a player who left is never kept by a late plan)
+local planned: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+--[[
+	The boosts (BoostConfig kinds) and enchants (EnchantConfig ids) whose
+	effect only another package's service reads (steps 6 and 7 are built in
+	parallel), and that service's module name in Services. Until it is in
+	the game they are coming soon (see the header).
+]]
+BoostService.Consumers = {
+	TripleLucky = "CapsuleService", -- reads Bonuses.tripleLucky when a capsule opens
+	Prospector = "ArtifactService", -- listens to MiningService.onArtifactRoll
+	GolemBond = "GolemService", -- the equipped golems' bonuses
+	Magnetism = "GearService", -- the Ore Magnet gear it adds to
+} :: { [string]: string }
+-- ReplicatedStorage attribute: the coming-soon ids, comma-separated (BoostView.soonSet reads it)
+BoostService.SoonAttribute = "TerraForgeComingSoon"
+
+-- Swappable for the Lune tests: is the service module `name` in the game?
+local function realHasService(name: string): boolean
+	local services = script.Parent
+	return services ~= nil and services:FindFirstChild(name) ~= nil
+end
+local hasService: (name: string) -> boolean = realHasService
 
 ---------------------------------------------------------------- answers
 
@@ -125,12 +155,35 @@ function BoostService.promptPurchase(player: Player, key: string, owned: boolean
 	return status
 end
 
+-- Is boost kind / enchant `id` coming soon (its consumer isn't in the game yet)?
+function BoostService.comingSoon(id: any): boolean
+	local service = if type(id) == "string" then BoostService.Consumers[id] else nil
+	return service ~= nil and not hasService(service)
+end
+
+-- The coming-soon ids, sorted.
+function BoostService.soonIds(): { string }
+	local list: { string } = {}
+	for id in BoostService.Consumers do
+		if BoostService.comingSoon(id) then
+			table.insert(list, id)
+		end
+	end
+	table.sort(list)
+	return list
+end
+
 ---------------------------------------------------------------- expiry
 
 -- Plans the State push for the player's soonest boost expiry (re-planned
 -- on every save change; a timer whose expiry is no longer the planned one
 -- does nothing).
 local function plan(player: Player)
+	-- a save change after the player left (a beforeRelease callback) plans nothing
+	if not player.Parent then
+		planned[player] = nil
+		return
+	end
 	local data = DataService.get(player)
 	local now = clock()
 	local expiry = if data then BoostConfig.nextExpiry(data.Boosts, now) else nil
@@ -204,6 +257,10 @@ local function buyCoins(player: Player, id: string)
 		answer(player, "BuyCoins", false, "BadOffer", id)
 		return
 	end
+	if BoostService.comingSoon(offer.Boost) then
+		answer(player, "BuyCoins", false, "ComingSoon", id)
+		return
+	end
 	-- the policy (may yield) is read before the quote / spend / write step
 	if BoostConfig.isPaidRandom(id) and Policy.paidRandomRestricted(player) then
 		answer(player, "BuyCoins", false, "Restricted", id)
@@ -251,6 +308,10 @@ local function buyRobux(player: Player, id: string)
 		answer(player, "BuyRobux", false, "BadOffer", id)
 		return
 	end
+	if BoostService.comingSoon(offer.Boost) then
+		answer(player, "BuyRobux", false, "ComingSoon", id)
+		return
+	end
 	if not BoostConfig.hasEffect(offer.Boost, data.BlasterLevel, Perks.has(player, "ForgeVip")) then
 		answer(player, "BuyRobux", false, "NoEffect", id)
 		return
@@ -288,6 +349,9 @@ BoostService._test = {
 	planned = function(player: any): number?
 		return planned[player]
 	end,
+	setHasService = function(fn: (string) -> boolean)
+		hasService = fn
+	end,
 	reset = function()
 		clock = os.time
 		delay = function(seconds: number, fn: () -> ())
@@ -301,10 +365,13 @@ BoostService._test = {
 			end
 		end
 		table.clear(planned)
+		hasService = realHasService
 	end,
 }
 
 function BoostService.init()
+	-- what is coming soon is known once the services are loaded (the client reads it)
+	ReplicatedStorage:SetAttribute(BoostService.SoonAttribute, table.concat(BoostService.soonIds(), ","))
 	Net.on("BoostAction", onBoostAction)
 	-- the running boosts' stats (the same provider as Bonuses' built-in one,
 	-- under the same name: counted once)

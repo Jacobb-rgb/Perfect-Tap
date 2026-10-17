@@ -40,6 +40,9 @@
 	  built-in "Enchants" provider (EnchantConfig.stats of the open slots);
 	  this service registers the same provider under the same name (counted
 	  once).
+	- Coming soon: Prospector, Golem Bond and Magnetism are refused with
+	  "ComingSoon" while the package that reads their effect (artifacts,
+	  golems, the Ore Magnet) isn't in the game (BoostService.comingSoon).
 	- EnchantService.onBought(callback): stats / analytics / tutorial hooks,
 	  (player, enchantId, tier, currency) after every paid buy.
 ]]
@@ -180,6 +183,10 @@ function EnchantService.buy(player: Player, id: any, currency: any, tier: any): 
 	end
 	if type(currency) ~= "string" or not EnchantConfig.Currencies[currency] then
 		return false, "BadCurrency", nil, nil
+	end
+	-- an enchant whose effect only a package that isn't in the game yet reads
+	if BoostService.comingSoon(id) then
+		return false, "ComingSoon", nil, nil
 	end
 	local restricted = false
 	if EnchantConfig.isPaidRandom(id, currency) then

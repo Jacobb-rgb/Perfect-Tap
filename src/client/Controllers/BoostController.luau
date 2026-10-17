@@ -5,14 +5,20 @@
 	- BoostController.open(kind?) opens the view (the side menu calls it
 	  later); also a tap on a chip, the BOOSTS launcher chip (shown while no
 	  boost runs; setLauncher(false) hides it once the side menu has a
-	  Boosts button), or the keys in BoostController.OpenKeys (L, D-pad
-	  right) which toggle it.
+	  Boosts button), or the keys in BoostController.OpenKeys: L toggles
+	  it, D-pad right only opens it (inside the view the D-pad moves the
+	  gamepad selection; B closes).
+	- The chips sit in the left column under the TRAIN chip (read from its
+	  ScreenGui, so they follow its phone / PC size) and hide with the HUD
+	  (the cleaning close-up turns the HUD off) and while a panel is open.
 	- The cards and THE ODDS come from the State snapshot (Boosts, Bonuses,
 	  BlasterLevel, Perks), the coins on screen (counted up like the HUD)
 	  and workspace:GetServerTimeNow() for the timers, refreshed every
 	  quarter second while open. Hexa Lucky's table starts on the zone you
 	  stand in (or the hardest one you can mine); Triple Lucky's on the
 	  Crystal capsule; < > switch (also on a gamepad: select them).
+	  A boost whose package isn't in the game yet (the ReplicatedStorage
+	  attribute BoostView.SoonAttribute) shows COMING SOON.
 	- An offer sends BoostAction "BuyCoins" / "BuyRobux" { Id }; the button
 	  shows "..." until the ActionResult (coins) or PurchasePrompt (Robux)
 	  arrives, then "BOUGHT!" or the reason on the card's note line. One buy
@@ -24,8 +30,8 @@
 	  known yet = restricted).
 	- Tabs: click / tap, or LB / RB on a gamepad; gamepads get a selected
 	  button on open (the selection stays inside the panel).
-	- Closes with the X button, B, Backspace, the open key again,
-	  respawning or another panel (shops, pen, train...) opening.
+	- Closes with the X button, B, Backspace, L again, respawning, the HUD
+	  going away or another panel (shops, pen, train...) opening.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -56,7 +62,7 @@ local BoostController = {}
 type Pending = { Op: string, Id: string, Product: string?, Button: number, Until: number }
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
--- keys that open / close the view (keyboard, gamepad)
+-- keys that open the view (keyboard, gamepad); L also closes it, D-pad right never does
 BoostController.OpenKeys = { Enum.KeyCode.L, Enum.KeyCode.DPadRight }
 
 local CLOSE_ACTION = "TerraForgeBoostsClose"
@@ -78,7 +84,8 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 	Info = Theme.Info,
 	Discovery = Theme.Accent,
 }
--- panels that own the middle of the screen: one at a time
+-- panels that own the middle of the screen: one at a time (a name that
+-- isn't in the game yet is skipped: the step 6-7 panels are built in parallel)
 local OTHER_PANELS = {
 	"TechShopController",
 	"EnchantController",
@@ -87,6 +94,14 @@ local OTHER_PANELS = {
 	"TrainController",
 	"IronBoxController",
 	"FoundryController",
+	"GearShopController",
+	"CapsuleController",
+	"GolemController",
+	"ArtifactController",
+	"WheelController",
+	"CodexController",
+	"LeaderboardController",
+	"SettingsController",
 }
 
 local player = Players.LocalPlayer
@@ -128,6 +143,32 @@ end
 
 local function restricted(): boolean
 	return BoostView.restricted(player:GetAttribute(BoostView.RestrictedAttribute))
+end
+
+-- The boosts that are coming soon (their package isn't in the game yet).
+local function soon(): { [string]: boolean }
+	return BoostView.soonSet(ReplicatedStorage:GetAttribute(BoostView.SoonAttribute))
+end
+
+-- Is the HUD on screen (the cleaning close-up and other takeovers turn it off)?
+local function hudShown(): boolean
+	local hud = HudController.refs()
+	return hud == nil or hud.Gui.Enabled
+end
+
+-- The HUD's layout for the train chip (as TrainController picks it).
+local function compactHud(): boolean
+	local camera = Workspace.CurrentCamera
+	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	return isTouch() or HudController.uiScale() <= 0.75 or size.Y < 520
+end
+
+-- The train chip's frame (TrainView: ScreenGui "TerraForgeTrain", frame "TrainChip").
+local function trainChip(): GuiObject?
+	local playerGui = player:FindFirstChildOfClass("PlayerGui")
+	local gui = if playerGui then playerGui:FindFirstChild("TerraForgeTrain") else nil
+	local frame = if gui then gui:FindFirstChild("TrainChip") else nil
+	return if frame and frame:IsA("GuiObject") then frame else nil
 end
 
 local function coins(): number
@@ -225,14 +266,16 @@ local function panelOpen(): boolean
 	return false
 end
 
--- The chips hide while a panel is open (a wide panel would cut them off;
--- the Boosts panel shows the same timers).
+-- The chips hide with the HUD and while a panel is open (a wide panel would
+-- cut them off; the Boosts panel shows the same timers). They stay under the
+-- train chip, whatever size it has.
 local function refreshChips()
 	local chips = chipRefs
 	if not chips then
 		return
 	end
-	chips.Gui.Enabled = not panelOpen()
+	chips.Gui.Enabled = hudShown() and not panelOpen()
+	BoostView.placeChips(chips, BoostView.chipsTop(trainChip(), compactHud()))
 	BoostView.setChips(chips, BoostView.chips(StateController.get(), serverNow()), launcherOn)
 end
 
@@ -245,7 +288,7 @@ local function refresh()
 	local cash = coins()
 	BoostView.setCoins(view, cash)
 	table.clear(cards)
-	for _, card in BoostView.cards(state, cash, serverNow(), restricted()) do
+	for _, card in BoostView.cards(state, cash, serverNow(), restricted(), soon()) do
 		cards[card.Kind] = card
 	end
 	local card = cards[view.Tab]
@@ -701,11 +744,15 @@ function BoostController.setLauncher(visible: boolean)
 	refreshChips()
 end
 
-local function onOpenKey(_: string, state: Enum.UserInputState): Enum.ContextActionResult
+local function onOpenKey(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
 	if state ~= Enum.UserInputState.Begin then
 		return Enum.ContextActionResult.Pass
 	end
 	if isOpen then
+		-- L closes; the D-pad moves the gamepad selection inside the view (B closes)
+		if input.KeyCode == Enum.KeyCode.DPadRight then
+			return Enum.ContextActionResult.Pass
+		end
 		BoostController.close()
 		return Enum.ContextActionResult.Sink
 	end
@@ -752,6 +799,11 @@ function BoostController.init()
 			refresh()
 		end
 	end)
+	ReplicatedStorage:GetAttributeChangedSignal(BoostView.SoonAttribute):Connect(function()
+		if isOpen then
+			refresh()
+		end
+	end)
 	player.CharacterRemoving:Connect(function()
 		BoostController.close()
 	end)
@@ -778,6 +830,16 @@ end
 function BoostController.start()
 	ContextActionService:BindAction(OPEN_ACTION, onOpenKey, false, table.unpack(BoostController.OpenKeys))
 	updateChipGlyph()
+	-- the chips follow the HUD (the cleaning close-up hides it), and the view closes with it
+	local hud = HudController.refs()
+	if hud then
+		hud.Gui:GetPropertyChangedSignal("Enabled"):Connect(function()
+			if not hud.Gui.Enabled then
+				BoostController.close()
+			end
+			refreshChips()
+		end)
+	end
 	-- the chips' timers count down between snapshots
 	while true do
 		refreshChips()

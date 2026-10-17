@@ -6,15 +6,19 @@
 -- fuzz run (one answer per request, coins never below 0, boosts never past
 -- the cap), and that the view offers exactly what the server quotes and
 -- shows the boosted odds in numbers (Hexa: every ore of a zone, Triple:
--- every golem of a capsule), its layouts (phone buttons >= 44 pt, no
--- overlaps) and the HUD chips. Save data, players and Net are small fakes;
--- EconomyService runs for real.
+-- every golem of a capsule; rarest first), its layouts (phone buttons
+-- >= 44 pt, no overlaps, the gamepad row on phones / TVs), the HUD chips
+-- (under the train chip and the "+$X" popups) and "Coming soon" for a boost
+-- whose package isn't in the game yet. Save data, players and Net are small
+-- fakes; EconomyService runs for real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
@@ -28,6 +32,7 @@ return function(T, Loader)
 	local BoostService = Loader.requirePath("ServerScriptService.Server.Services.BoostService")
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 
 	local NOW = 1_800_000_000
 	local boost = BoostService._test
@@ -106,6 +111,10 @@ return function(T, Loader)
 		end)
 		boost.setPrompter(function(p, product)
 			table.insert(w.prompts, { Player = p, Product = product })
+		end)
+		-- every package that reads a boost is in the game (the coming-soon test turns one off)
+		boost.setHasService(function()
+			return true
 		end)
 		w.restore = function()
 			boost.reset()
@@ -391,6 +400,65 @@ return function(T, Loader)
 		local pushed = w.pushed
 		w.delays[#w.delays].Fn()
 		T.eq(w.pushed, pushed, "no push for a player who left")
+		-- a save change after leaving (a beforeRelease callback) plans nothing and keeps no timer
+		local timers = #w.delays
+		w.data.Boosts.HexaLuckyUntil = w.now + 3600
+		BoostService.plan(w.player)
+		T.eq(boost.planned(w.player), nil, "nothing planned for a player who left")
+		T.eq(#w.delays, timers, "no timer kept")
+	end)
+
+	---------------------------------------------------------------- coming soon
+
+	withWorld("BoostService: a boost nothing reads yet is coming soon (shown, refused, nothing taken)", function(w)
+		boost.setHasService(function(name: string): boolean
+			return name ~= "CapsuleService"
+		end)
+		T.eq(BoostService.comingSoon("TripleLucky"), true, "no capsules: Triple Lucky has no effect yet")
+		T.eq(BoostService.comingSoon("HexaLucky"), false, "mining reads Hexa Lucky")
+		T.eq(BoostService.comingSoon(nil), false)
+		T.eq(table.concat(BoostService.soonIds(), ","), "TripleLucky")
+		for id, service in BoostService.Consumers do
+			T.truthy(
+				BoostConfig.Kinds[id] or Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig").ById[id],
+				id .. " is a boost or an enchant"
+			)
+			T.truthy(service:match("Service$"), id .. ": a service module name")
+		end
+		w.data.Coins = 1e12
+		local before = deepCopy(w.data.Boosts)
+		local r = result(w, "BuyCoins", "TripleLucky5")
+		T.eq(r.Ok, false)
+		T.eq(r.Reason, "ComingSoon", "coins: coming soon")
+		MonetizationConfig.Products.TripleLucky15.Id = 99
+		local r2 = result(w, "BuyRobux", "TripleLucky15")
+		T.eq(r2.Reason, "ComingSoon", "Robux: coming soon even with a live id")
+		T.eq(#w.prompts, 0, "no prompt")
+		T.eq(w.data.Coins, 1e12, "no coins taken")
+		for key, value in before do
+			T.eq(w.data.Boosts[key], value, "no time added " .. key)
+		end
+		T.eq(result(w, "BuyCoins", "HexaLucky5").Ok, true, "Hexa Lucky still sells")
+		-- rewards and receipts are never held back
+		T.truthy(BoostService.add(w.player, "TripleLucky", 60, true), "add() still works")
+		-- the view: the attribute's ids, every Triple offer greyed with the reason
+		local soon = BoostView.soonSet("TripleLucky, Prospector")
+		T.truthy(soon.TripleLucky and soon.Prospector, "parsed")
+		T.eq(next(BoostView.soonSet(nil)), nil, "no attribute: nothing")
+		T.eq(next(BoostView.soonSet("")), nil)
+		local cards = BoostView.cards({ BlasterLevel = 5, Boosts = {}, Bonuses = {} }, 1e12, NOW, false, soon)
+		T.eq(cards[1].Kind, "TripleLucky")
+		T.truthy(#cards[1].Offers > 0, "the offers stay in view")
+		for _, offer in cards[1].Offers do
+			T.falsy(offer.CanBuy, offer.Id)
+			T.eq(offer.Reason, "ComingSoon")
+			T.truthy(offer.Text:find("COMING SOON"), offer.Id .. ": says so")
+		end
+		T.eq(cards[1].KeyLine, BoostView.SoonText.TripleLucky)
+		T.eq(BoostView.reasonText("ComingSoon"), MonetizationConfig.StatusText.ComingSoon)
+		for _, offer in cards[2].Offers do
+			T.falsy(offer.Reason == "ComingSoon" and not offer.Robux, "Hexa Lucky's coin offer sells")
+		end
 	end)
 
 	withWorld("BoostService: add() caps coin / wheel time and never loses paid time", function(w)
@@ -548,10 +616,25 @@ return function(T, Loader)
 				local before = BoostConfig.oreOdds(zone.Ores, without)
 				local after = BoostConfig.oreOdds(zone.Ores, with)
 				T.eq(#t.Rows, #before, zone.Id .. ": every ore")
+				local byName = {}
+				local order = math.huge
+				for _, row in t.Rows do
+					byName[row.Name] = row
+				end
+				for _, line in before do
+					local ore = OreData.ById[line.Ore]
+					byName[ore.Name].Order = Rarity.get(ore.Rarity).Order
+				end
+				for _, row in t.Rows do
+					T.truthy(row.Order <= order, zone.Id .. ": rarest first")
+					order = row.Order
+				end
 				for i, line in before do
-					T.eq(t.Rows[i].Name, OreData.ById[line.Ore].Name)
-					T.eq(t.Rows[i].Before, BoostView.pct(line.Chance), zone.Id .. " " .. line.Ore .. " before")
-					T.eq(t.Rows[i].After, BoostView.pct(after[i].Chance), zone.Id .. " " .. line.Ore .. " after")
+					local row = byName[OreData.ById[line.Ore].Name]
+					T.truthy(row, zone.Id .. " " .. line.Ore .. " has a row")
+					T.eq(row.Before, BoostView.pct(line.Chance), zone.Id .. " " .. line.Ore .. " before")
+					T.eq(after[i].Ore, line.Ore)
+					T.eq(row.After, BoostView.pct(after[i].Chance), zone.Id .. " " .. line.Ore .. " after")
 				end
 				local rare = BoostConfig.rareShare(zone.Ores, without)
 				if rare > 0 then
@@ -570,10 +653,25 @@ return function(T, Loader)
 			local before = CapsuleConfig.odds(capsule.Id, false)
 			local after = CapsuleConfig.odds(capsule.Id, true)
 			T.eq(#t.Rows, #before, capsule.Id .. ": every golem")
+			local byName = {}
+			for _, row in t.Rows do
+				byName[row.Name] = row
+			end
+			local orders = {}
+			for _, line in before do
+				local golem = GolemConfig.ById[line.Golem]
+				orders[golem.Name] = Rarity.get(golem.Rarity).Order
+			end
+			for i = 2, #t.Rows do
+				T.truthy(orders[t.Rows[i].Name] <= orders[t.Rows[i - 1].Name], capsule.Id .. ": rarest first")
+			end
+			T.truthy(t.Rows[1].Change > 0, capsule.Id .. ": the top row is one Triple Lucky raises")
 			local sumBefore, sumAfter = 0, 0
 			for i, line in before do
-				T.eq(t.Rows[i].Before, BoostView.pct(line.Chance))
-				T.eq(t.Rows[i].After, BoostView.pct(after[i].Chance))
+				local row = byName[GolemConfig.ById[line.Golem].Name]
+				T.eq(after[i].Golem, line.Golem)
+				T.eq(row.Before, BoostView.pct(line.Chance))
+				T.eq(row.After, BoostView.pct(after[i].Chance))
 				sumBefore += line.Chance
 				sumAfter += after[i].Chance
 			end
@@ -616,11 +714,31 @@ return function(T, Loader)
 		T.truthy(refs.Launcher.Visible, "the BOOSTS launcher when none runs")
 		BoostView.setChips(refs, {}, false)
 		T.falsy(refs.Launcher.Visible, "the side menu can turn it off")
-		-- the touch area is 72 units (44 pt on a phone), under the HUD coins (16..90)
+		-- the touch area is 72 units (44 pt on a phone)
 		T.eq(refs.Launcher.Size.Y.Offset, BoostView.ChipHit)
 		T.truthy(BoostView.ChipHit * 0.62 >= 44, "44 pt")
-		T.truthy(BoostView.ChipsY >= 90, "under the coins")
 		T.eq(refs.Gui:GetAttribute("TerraForge"), true, "scaled with the HUD")
+		-- in the left column under the train chip (PC and phone sizes), which sits
+		-- under the coins (16..90) and their "+$X" popups (96..156)
+		for _, compact in { false, true } do
+			local train = TrainView.build(compact)
+			TrainView.layout(train, compact, 1600, 800)
+			local chip = train.ChipFrame
+			local bottom = chip.Position.Y.Offset + chip.Size.Y.Offset
+			T.eq(chip.Size.Y.Offset, BoostView.TrainChipHeight[if compact then "Compact" else "Normal"], "TrainView's chip height")
+			local top = BoostView.chipsTop(chip, compact)
+			T.eq(top, BoostView.chipsTop(nil, compact), "the fallback is where TrainView puts it")
+			T.truthy(top >= bottom + BoostView.ChipGap, "under the train chip")
+			T.truthy(top >= BoostView.FloatersBottom, "under the +$X popups")
+			T.truthy(BoostView.ChipLeft == TrainView.ChipLeft, "lined up with the train chip")
+		end
+		BoostView.placeChips(refs, 240)
+		T.eq(refs.Row.Position.Y.Offset, 240)
+		-- the pill sits at the top of its touch area: the touch area only reaches down
+		local pill = refs.Launcher:FindFirstChild("Pill") :: any
+		T.eq(pill.Position.Y.Scale, 0)
+		T.eq(pill.Position.Y.Offset, 0)
+		T.eq(pill.AnchorPoint.Y, 0)
 	end)
 
 	-- the screens the layouts must fit (design units: the screen / the HUD scale)
@@ -697,13 +815,37 @@ return function(T, Loader)
 						T.truthy(target.Size.Y.Offset * 0.62 >= 44 - 0.5, `{label}: {target.Name} tall enough`)
 					end
 				end
-				-- the odds list shows at least three rows
+				-- the summary row stays, with at least two rows under it (rarest first)
 				local list = refs.Odds.List
+				T.truthy(refs.Odds.ShowSummary and refs.Odds.Summary.Frame.Visible, label .. " the summary row stays")
 				T.truthy(
-					list.Size.Y.Offset >= 3 * (BoostView.tableMetrics(screen.Compact).Row + 2) - 0.5,
-					label .. " three odds rows in view"
+					list.Size.Y.Offset >= 2 * (BoostView.tableMetrics(screen.Compact).Row + 2) - 0.5,
+					label .. " two odds rows in view under the summary"
 				)
+				-- a gamepad: the glyph row shows, also on phones and TVs (bigger, in a footer of its own)
+				BoostView.setHint(refs, "", { "a", "b", "c", "d", "e" })
+				T.truthy(refs.PadHint.Visible, label .. " gamepad row shown")
+				T.falsy(refs.Hint.Visible, label .. " no text hint with a gamepad")
+				local pad = boxIn(refs.PadHint, panel)
+				T.truthy(pad[3] <= panel[3] and pad[1] >= 0, label .. " gamepad row inside the panel")
+				T.truthy(pad[2] + pad[4] <= panel[4], label .. " gamepad row inside the panel (y)")
+				for _, frame in { refs.Card.Frame, refs.Odds.Frame } do
+					T.falsy(overlaps(boxIn(frame, panel), pad), label .. " gamepad row under the body")
+				end
+				if screen.Compact then
+					T.eq(refs.PadHint.Size.Y.Offset, 24 * BoostView.PadHintScale, label .. " bigger glyphs on phones / TVs")
+				end
+				BoostView.setHint(refs, "Click an offer", nil)
+				T.falsy(refs.PadHint.Visible)
+				T.eq(refs.Hint.Visible, not screen.Compact, label .. " text hint only on PC")
 			end
 		end
+		-- the subtitle fits its line
+		local refs = BoostView.build(false)
+		BoostView.layout(refs, false, 1280, 684)
+		T.truthy(
+			TechShopView.fits(refs.Subtitle.Text, refs.Panel.Size.X.Offset - 16 * 2 - 54, 22, refs.Subtitle.TextSize, false),
+			"the subtitle fits"
+		)
 	end)
 end

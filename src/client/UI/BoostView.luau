@@ -9,8 +9,10 @@
 	  left     the boost: icon, name, ACTIVE + time left (or Not active),
 	           what it does, the luck it gives, the offers (coins: "+5 MIN ·
 	           $12K", Robux: "+15 MIN · 39 R$", "COMING SOON" while the
-	           product id is 0; Robux packs are hidden where paid random
-	           items are restricted) and a note about the coin top-up rule
+	           product id is 0, or while the package that uses the boost
+	           isn't in the game: soonSet; Robux packs are hidden where
+	           paid random items are restricted) and a note about the
+	           coin top-up rule
 	  right    THE ODDS in numbers, before you buy (Roblox rule):
 	             Hexa Lucky   every ore of a zone you can mine (your current
 	                          zone, < > to see the others) without and with
@@ -18,14 +20,20 @@
 	             Triple Lucky every golem of a capsule (< > for the other
 	                          capsules) without and with the boost, the
 	                          lucky golems' total on top
-	  footer   the control hint (not on phones); gamepads get the
-	           platform's own glyphs (setHint)
+	           Rows go rarest first, so the numbers the boost raises are
+	           in view even on a small phone (the summary row stays while
+	           two rows fit under it; the note goes first).
+	  footer   the control hint; gamepads get the platform's own glyphs
+	           (setHint; on phones and TVs only the gamepad row, bigger)
 	The odds table (buildTable / setTable) is shared with EnchantView (the
 	odds-boosting enchants show their new odds the same way).
 
-	Chips (buildChips / setChips, their own small ScreenGui, scaled with
-	the HUD): one pill per running boost under the coins ("x3 4:59"), or a
-	BOOSTS launcher when none runs; a tap opens the view.
+	Chips (buildChips / setChips / placeChips, their own small ScreenGui,
+	scaled with the HUD): one pill per running boost ("x3 4:59"), or a
+	BOOSTS launcher when none runs; a tap opens the view. They sit in the
+	left column under the TRAIN chip (chipsTop), which sits under the
+	coins and their "+$X" popups; the 72-unit touch area grows down from
+	the pill only, so it never reaches over the train chip.
 
 	Designed for 720 design units of height (HudController.uiScale). The
 	compact layout (phones, TVs) makes every button at least 72 units
@@ -49,6 +57,7 @@ local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local HudView = require(script.Parent.HudView)
 local TechShopView = require(script.Parent.TechShopView)
+local TrainView = require(script.Parent.TrainView)
 
 local BoostView = {}
 
@@ -156,6 +165,8 @@ export type Refs = {
 	PadMode: boolean,
 	Tab: string,
 	Compact: boolean,
+	MaxWidth: number, -- the last layout's room (setHint lays out again when the gamepad row comes or goes)
+	MaxHeight: number,
 }
 
 export type ChipRefs = {
@@ -170,12 +181,25 @@ BoostView.Tabs = BoostConfig.KindIds
 BoostView.TabTitles = { TripleLucky = "TRIPLE LUCKY", HexaLucky = "HEXA LUCKY" } :: { [string]: string }
 BoostView.MinHeight = 380
 BoostView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap
-BoostView.ChipsY = 98 -- the chips' row top, under the coins panel (design units)
+BoostView.FloatersBottom = 96 + 60 -- HudView's "+$X" popups (Floaters at 16, 96, 60 tall)
+-- TrainView's chip (at TrainView.ChipTop) is this tall (its CHIP metrics); the boost chips go under it
+BoostView.TrainChipHeight = { Normal = 66, Compact = 84 } :: { [string]: number }
+BoostView.ChipGap = 8 -- between the train chip and the boost chips
+BoostView.ChipLeft = 16 -- lines up with the coins and the train chip
 BoostView.ChipHeight = 40 -- the visible pill
-BoostView.ChipHit = 72 -- the touch area around it (44 pt at the phone scale)
+BoostView.ChipHit = 72 -- the touch area: the pill and below it (44 pt at the phone scale)
 BoostView.Separator = TechShopView.Separator
 -- the paid-random policy attribute Policy sets (nil = not known yet = restricted)
 BoostView.RestrictedAttribute = "PaidRandomRestricted"
+-- ReplicatedStorage attribute BoostService sets: the boost kinds / enchant ids
+-- that are coming soon (the package that uses them isn't in the game yet)
+BoostView.SoonAttribute = "TerraForgeComingSoon"
+BoostView.SoonText = {
+	TripleLucky = "Coming soon, with the golem capsules",
+} :: { [string]: string }
+-- the gamepad hint row on phones and TVs: bigger, with a footer of its own
+BoostView.PadHintScale = 1.25
+BoostView.PadFooter = 34
 
 local SEP = TechShopView.Separator
 local PAD = 16
@@ -245,6 +269,17 @@ end
 -- sets; nil = not known yet = restricted, the strict answer)
 function BoostView.restricted(attribute: any): boolean
 	return attribute ~= false
+end
+
+-- The coming-soon ids from the ReplicatedStorage attribute ("A,B"; anything else: none).
+function BoostView.soonSet(attribute: any): { [string]: boolean }
+	local set: { [string]: boolean } = {}
+	if type(attribute) == "string" then
+		for id in string.gmatch(attribute, "[^,%s]+") do
+			set[id] = true
+		end
+	end
+	return set
 end
 
 local function safeState(state: any): { [string]: any }
@@ -349,13 +384,24 @@ function BoostView.reasonText(reason: string?): string
 	return text or "You can't buy that right now"
 end
 
-local function offerOf(offer: BoostConfig.Offer, state: { [string]: any }, coins: number, now: number, effect: boolean): Offer
+local function offerOf(
+	offer: BoostConfig.Offer,
+	state: { [string]: any },
+	coins: number,
+	now: number,
+	effect: boolean,
+	soon: boolean
+): Offer
 	local boosts = state.Boosts
 	local robux = offer.Product ~= nil
 	local reason: string? = nil
 	local price: number? = nil
 	local priceText: string
-	if robux then
+	if soon then
+		-- nothing in the game uses this boost yet
+		priceText = "COMING SOON"
+		reason = "ComingSoon"
+	elseif robux then
 		local product = MonetizationConfig.get(offer.Product)
 		local live = MonetizationConfig.keyLive(offer.Product)
 		priceText = if live and product then `{product.Robux} R$` else "COMING SOON"
@@ -394,10 +440,12 @@ end
 	The two boost cards (BoostConfig.KindIds order) from a State snapshot,
 	the coins on screen, the server time `now` and the player's paid-random
 	policy. Offers that are paid random items are left out where they are
-	restricted (BoostConfig.isPaidRandom).
+	restricted (BoostConfig.isPaidRandom). A kind in `soon` (soonSet) is
+	shown with every offer "COMING SOON" (the server refuses it too).
 ]]
-function BoostView.cards(rawState: any, coins: number, now: number, restricted: boolean): { Card }
+function BoostView.cards(rawState: any, coins: number, now: number, restricted: boolean, soon: { [string]: boolean }?): { Card }
 	local state = safeState(rawState)
+	local soonSet: { [string]: boolean } = soon or {}
 	local cash = num(coins, 0)
 	local ctx = BoostView.context(state, now)
 	local list: { Card } = {}
@@ -409,7 +457,7 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 		for _, group in { BoostConfig.CoinOffers, BoostConfig.RobuxOffers } do
 			for _, offer in group do
 				if offer.Boost == kindId and not (restricted and BoostConfig.isPaidRandom(offer.Id)) then
-					table.insert(offers, offerOf(offer, state, cash, now, effect))
+					table.insert(offers, offerOf(offer, state, cash, now, effect, soonSet[kindId] == true))
 				end
 			end
 		end
@@ -422,6 +470,9 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 			end
 		else
 			keyLine = `Lucky golems in every capsule: {BoostView.mult(kind.Mult)} as likely`
+		end
+		if soonSet[kindId] then
+			keyLine = BoostView.SoonText[kindId] or MonetizationConfig.StatusText.ComingSoon
 		end
 		local minutes = math.floor(BoostConfig.CoinBuyBelow / 60)
 		local hours = math.floor(BoostConfig.MaxStackSeconds / 3600)
@@ -455,11 +506,32 @@ function BoostView.row(name: string, color: Color3, before: number, after: numbe
 	return { Name = name, Color = color, Before = BoostView.pct(before), After = BoostView.pct(after), Change = change(before, after) }
 end
 
+-- The rows rarest first (`orders[i]`: row i's Rarity order; the same
+-- rarity keeps its order), so a short table shows what luck raises.
+function BoostView.rarestFirst(rows: { OddsRow }, orders: { number }): { OddsRow }
+	local index: { number } = {}
+	for i in rows do
+		table.insert(index, i)
+	end
+	table.sort(index, function(a: number, b: number): boolean
+		local oa, ob = orders[a] or 0, orders[b] or 0
+		if oa ~= ob then
+			return oa > ob
+		end
+		return a < b
+	end)
+	local out: { OddsRow } = {}
+	for _, i in index do
+		table.insert(out, rows[i])
+	end
+	return out
+end
+
 --[[
 	Hexa Lucky's table for a zone: the chance of every ore of the zone in
 	one ore roll without and with the boost (BoostConfig.oreOdds at the
-	player's luck from BoostConfig.hexaLuck), "Rare or better" on top. An
-	unknown zone gives an empty table.
+	player's luck from BoostConfig.hexaLuck), rarest first, "Rare or
+	better" on top. An unknown zone gives an empty table.
 ]]
 function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local ctx = BoostView.context(rawState, nil)
@@ -473,10 +545,14 @@ function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 		for _, line in BoostConfig.oreOdds(zone.Ores, with) do
 			after[line.Ore] = line.Chance
 		end
+		local orders: { number } = {}
 		for _, line in BoostConfig.oreOdds(zone.Ores, without) do
 			local ore = OreData.ById[line.Ore]
-			table.insert(rows, BoostView.row(ore.Name, Rarity.get(ore.Rarity).Color, line.Chance, after[line.Ore] or 0))
+			local info = Rarity.get(ore.Rarity)
+			table.insert(rows, BoostView.row(ore.Name, info.Color, line.Chance, after[line.Ore] or 0))
+			table.insert(orders, info.Order)
 		end
+		rows = BoostView.rarestFirst(rows, orders)
 		local before = BoostConfig.rareShare(zone.Ores, without)
 		if before > 0 then
 			summary = BoostView.row("Rare or better", Rarity.get("Rare").Color, before, BoostConfig.rareShare(zone.Ores, with))
@@ -497,7 +573,8 @@ end
 
 --[[
 	Triple Lucky's table for a capsule: the chance of every golem without
-	and with the boost (CapsuleConfig.odds), the lucky golems' total on top.
+	and with the boost (CapsuleConfig.odds), rarest first, the lucky
+	golems' total on top.
 ]]
 function BoostView.tripleOdds(capsuleId: string?): OddsTable
 	local capsule = if capsuleId then CapsuleConfig.ById[capsuleId] else nil
@@ -510,16 +587,19 @@ function BoostView.tripleOdds(capsuleId: string?): OddsTable
 		end
 		local from = Rarity.get(capsule.LuckyFrom)
 		local luckyBefore, luckyAfter = 0, 0
+		local orders: { number } = {}
 		for _, line in CapsuleConfig.odds(capsule.Id, false) do
 			local golem = GolemConfig.ById[line.Golem]
 			local info = Rarity.get(golem.Rarity)
 			local a = after[line.Golem] or 0
 			table.insert(rows, BoostView.row(golem.Name, info.Color, line.Chance, a))
+			table.insert(orders, info.Order)
 			if info.Order >= from.Order then
 				luckyBefore += line.Chance
 				luckyAfter += a
 			end
 		end
+		rows = BoostView.rarestFirst(rows, orders)
 		summary = BoostView.row(`{from.Name} or better`, from.Color, luckyBefore, luckyAfter)
 	end
 	local price = if capsule and capsule.Currency == "Robux" then "Robux" else "coins"
@@ -875,7 +955,9 @@ function BoostView.layoutTable(t: TableRefs, width: number, height: number, comp
 	t.Frame:SetAttribute("Col", col)
 	BoostView.fitHeads(t)
 	y += m.Head
-	-- a short table keeps at least three rows in view: the note goes first, then the summary row
+	-- a short table keeps rows in view: the note goes first (it needs room
+	-- for the summary and three rows), the summary row stays while two rows
+	-- fit under it (rows go rarest first: the ones luck raises are in view)
 	local rows = 3 * (m.Row + 2)
 	local note = m.Note
 	t.ShowNote = withNote ~= false and height - y - m.Row - 6 - note - 12 >= rows
@@ -885,7 +967,7 @@ function BoostView.layoutTable(t: TableRefs, width: number, height: number, comp
 	end
 	local data = t.Data
 	-- (a table whose data has no summary row gives its room to the rows)
-	t.ShowSummary = height - y - m.Row - 6 - note - 12 >= rows and (data == nil or data.Summary ~= nil)
+	t.ShowSummary = height - y - m.Row - 6 - note - 12 >= 2 * (m.Row + 2) and (data == nil or data.Summary ~= nil)
 	t.Summary.Frame.Position = UDim2.fromOffset(10, y)
 	placeRow(t.Summary, inner - SCROLLBAR, m)
 	t.Summary.Frame.Size = UDim2.new(1, -(20 + SCROLLBAR), 0, m.Row)
@@ -1039,6 +1121,7 @@ function BoostView.padHint(parent: Instance, parts: { { Glyphs: number, Word: st
 		BackgroundTransparency = 1,
 		Visible = false,
 	}, parent)
+	frame:SetAttribute("BaseWidth", 520)
 	UIKit.list(frame, Enum.FillDirection.Horizontal, 6, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -1059,7 +1142,7 @@ function BoostView.padHint(parent: Instance, parts: { { Glyphs: number, Word: st
 			)
 		end
 		order += 1
-		UIKit.label(frame, part.Word, 15, {
+		local word = UIKit.label(frame, part.Word, 15, {
 			Name = "Word",
 			LayoutOrder = order,
 			Size = UDim2.fromOffset(part.Width, 24),
@@ -1067,8 +1150,36 @@ function BoostView.padHint(parent: Instance, parts: { { Glyphs: number, Word: st
 			TextColor3 = Theme.TextDim,
 			TextWrapped = false,
 		})
+		word:SetAttribute("BaseWidth", part.Width)
 	end
 	return frame, glyphs
+end
+
+-- Sizes a padHint row at `scale` (1 = 24-unit glyphs, 15-unit words; phones and TVs: PadHintScale).
+function BoostView.scalePadHint(frame: Frame, scale: number)
+	local base = tonumber(frame:GetAttribute("BaseWidth")) or 520
+	frame.Size = UDim2.fromOffset(base * scale, 24 * scale)
+	for _, child in frame:GetChildren() do
+		if child:IsA("ImageLabel") then
+			child.Size = UDim2.fromOffset(24 * scale, 24 * scale)
+		elseif child:IsA("TextLabel") then
+			local width = tonumber(child:GetAttribute("BaseWidth")) or 60
+			child.Size = UDim2.fromOffset(width * scale, 24 * scale)
+			child.TextSize = math.floor(15 * scale + 0.5)
+		end
+	end
+end
+
+-- The footer's height: the layout's own, or room for the bigger gamepad row (phones and TVs with a gamepad).
+function BoostView.footerHeight(compact: boolean, padMode: boolean, footer: number): number
+	return if compact and padMode then BoostView.PadFooter else footer
+end
+
+-- Shows the footer hint for the mode: the text (mouse / keyboard, not on phones and TVs) or the gamepad row.
+function BoostView.showHint(hint: TextLabel, padHint: Frame, compact: boolean, padMode: boolean)
+	hint.Visible = not compact and not padMode
+	padHint.Visible = padMode
+	BoostView.scalePadHint(padHint, if compact then BoostView.PadHintScale else 1)
 end
 
 -- A coins chip like the HUD's (icon + amount) for a panel header.
@@ -1118,7 +1229,7 @@ function BoostView.build(compact: boolean?): Refs
 		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 	})
-	local subtitle = UIKit.label(panel, "Better odds for a while. Every number changes before you buy, see the odds on the right.", 16, {
+	local subtitle = UIKit.label(panel, "Better odds for a while. See exactly how the odds change (on the right) before you buy.", 16, {
 		Name = "Subtitle",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = Theme.TextDim,
@@ -1246,6 +1357,8 @@ function BoostView.build(compact: boolean?): Refs
 		PadMode = false,
 		Tab = BoostView.Tabs[1],
 		Compact = compact == true,
+		MaxWidth = math.huge,
+		MaxHeight = math.huge,
 	}
 	BoostView.setTab(refs, refs.Tab)
 	BoostView.layout(refs, refs.Compact, math.huge, math.huge)
@@ -1259,7 +1372,10 @@ end
 ]]
 function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
+	refs.MaxWidth = maxWidth
+	refs.MaxHeight = maxHeight
 	local m = metrics(compact)
+	local footer = BoostView.footerHeight(compact, refs.PadMode, m.Footer)
 	local width = math.max(640, math.min(m.Width, maxWidth - 24))
 	local height = math.max(BoostView.MinHeight, math.min(m.Height, maxHeight - 16))
 	if maxWidth < 1e6 and maxHeight < 1e6 then
@@ -1328,7 +1444,7 @@ function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 
 	-- body: the card (left) and the odds (right)
 	local top = m.Header + m.TabBar
-	local bodyHeight = height - top - m.Footer - 8
+	local bodyHeight = height - top - footer - 8
 	local left = math.min(m.Left, math.floor((width - PAD * 2 - 12) * 0.45))
 	local card = refs.Card
 	card.Frame.Position = UDim2.fromOffset(PAD, top)
@@ -1375,11 +1491,10 @@ function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	refs.Odds.Frame.Position = UDim2.fromOffset(PAD + left + 12, top)
 	BoostView.layoutTable(refs.Odds, oddsWidth, bodyHeight, compact)
 
-	refs.Hint.Visible = not compact and not refs.PadMode
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -6)
 	refs.Hint.Size = UDim2.new(1, -PAD * 2, 0, 20)
-	refs.PadHint.Visible = not compact and refs.PadMode
 	refs.PadHint.Position = UDim2.new(0.5, 0, 1, -4)
+	BoostView.showHint(refs.Hint, refs.PadHint, compact, refs.PadMode)
 end
 
 --[[
@@ -1527,8 +1642,11 @@ function BoostView.setCoins(refs: Refs, coins: number)
 	refs.BalanceAmount.Text = Format.money(math.max(0, num(coins, 0)))
 end
 
--- The footer hint: `text`, or with `glyphs` (LB, RB, A, B, right stick images) the gamepad row.
+-- The footer hint: `text`, or with `glyphs` (LB, RB, A, B, right stick images)
+-- the gamepad row (also on phones and TVs: it gets a footer of its own there,
+-- so the panel is laid out again when the row comes or goes).
 function BoostView.setHint(refs: Refs, text: string, glyphs: { string }?)
+	local was = refs.PadMode
 	refs.Hint.Text = text
 	refs.PadMode = glyphs ~= nil
 	if glyphs then
@@ -1536,8 +1654,10 @@ function BoostView.setHint(refs: Refs, text: string, glyphs: { string }?)
 			image.Image = glyphs[i] or ""
 		end
 	end
-	refs.Hint.Visible = not refs.Compact and not refs.PadMode
-	refs.PadHint.Visible = not refs.Compact and refs.PadMode
+	if refs.Compact and was ~= refs.PadMode then
+		BoostView.layout(refs, true, refs.MaxWidth, refs.MaxHeight)
+	end
+	BoostView.showHint(refs.Hint, refs.PadHint, refs.Compact, refs.PadMode)
 end
 
 function BoostView.showReceipt(refs: Refs, text: string, color: Color3)
@@ -1585,10 +1705,10 @@ local function chipPill(button: TextButton, color: Color3, text: string, mult: s
 	button.Size = UDim2.fromOffset(width, BoostView.ChipHit)
 	local pill = button:FindFirstChild("Pill") :: Frame?
 	if not pill then
+		-- the pill at the top of its touch area (which grows down only)
 		local made = UIKit.new("Frame", {
 			Name = "Pill",
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.fromScale(0, 0.5),
+			Position = UDim2.fromScale(0, 0),
 			BackgroundColor3 = Theme.Panel,
 			BorderSizePixel = 0,
 		}, button)
@@ -1629,20 +1749,41 @@ local function chipPill(button: TextButton, color: Color3, text: string, mult: s
 end
 
 --[[
+	The top of the chips' row (design units): under the train chip
+	(`trainChip`: its frame, else where TrainView puts it on this layout),
+	and never above the coins' "+$X" popups.
+]]
+function BoostView.chipsTop(trainChip: GuiObject?, compact: boolean): number
+	local bottom: number
+	if trainChip then
+		bottom = trainChip.Position.Y.Offset + trainChip.Size.Y.Offset * (1 - trainChip.AnchorPoint.Y)
+	else
+		bottom = TrainView.ChipTop + (if compact then BoostView.TrainChipHeight.Compact else BoostView.TrainChipHeight.Normal)
+	end
+	return math.max(bottom, BoostView.FloatersBottom) + BoostView.ChipGap
+end
+
+-- Moves the chips' row to `top` (BoostView.chipsTop).
+function BoostView.placeChips(refs: ChipRefs, top: number)
+	refs.Row.Position = UDim2.fromOffset(BoostView.ChipLeft, top)
+end
+
+--[[
 	The chips' own ScreenGui (attribute TerraForge: HudController scales
-	it with the HUD): a row under the HUD coins. Each chip is a TextButton
-	72 units tall (the touch area) with a 40-unit pill in its middle.
+	it with the HUD): a row in the left column under the train chip
+	(placeChips). Each chip is a TextButton 72 units tall (the touch area)
+	with the 40-unit pill at its top: the touch area grows down only.
 ]]
 function BoostView.buildChips(): ChipRefs
 	local gui = UIKit.screen("TerraForgeBoostChips", 6)
 	gui:SetAttribute("TerraForge", true)
 	local row = UIKit.new("Frame", {
 		Name = "Row",
-		Position = UDim2.fromOffset(16, BoostView.ChipsY + BoostView.ChipHeight / 2 - BoostView.ChipHit / 2),
+		Position = UDim2.fromOffset(BoostView.ChipLeft, BoostView.chipsTop(nil, false)),
 		Size = UDim2.fromOffset(HudView.CoinsWidth + 160, BoostView.ChipHit),
 		BackgroundTransparency = 1,
 	}, gui)
-	UIKit.list(row, Enum.FillDirection.Horizontal, 8, { VerticalAlignment = Enum.VerticalAlignment.Center })
+	UIKit.list(row, Enum.FillDirection.Horizontal, 8, { VerticalAlignment = Enum.VerticalAlignment.Top })
 	local function chipButton(name: string, order: number): TextButton
 		return UIKit.new("TextButton", {
 			Name = name,
@@ -1663,13 +1804,21 @@ function BoostView.buildChips(): ChipRefs
 	end
 	local launcher = chipButton("Launcher", 0)
 	chipPill(launcher, rgb(90, 220, 120), "BOOSTS", "+", 146)
+	-- the gamepad key's glyph, centred on the pills
+	local glyphHolder = UIKit.new("Frame", {
+		Name = "GlyphHolder",
+		LayoutOrder = 99,
+		Size = UDim2.fromOffset(30, BoostView.ChipHeight),
+		BackgroundTransparency = 1,
+	}, row)
 	local glyph = UIKit.new("ImageLabel", {
 		Name = "Glyph",
-		LayoutOrder = 99,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
 		Size = UDim2.fromOffset(30, 30),
 		BackgroundTransparency = 1,
 		Visible = false,
-	}, row)
+	}, glyphHolder)
 	return { Gui = gui, Row = row, Chips = chips, Launcher = launcher, Glyph = glyph }
 end
 

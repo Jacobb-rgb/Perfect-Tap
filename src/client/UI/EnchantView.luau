@@ -21,9 +21,15 @@
 	           (coins), N SHARDS (Epic and Legendary), 20 R$ (the two
 	           Mythics; COMING SOON while the pass id is 0; hidden where paid
 	           random items are restricted for an odds booster), EQUIP /
-	           UNEQUIP (owned enchants)
-	  footer   the control hint (not on phones); gamepads get the
-	           platform's own glyphs
+	           UNEQUIP (owned enchants); one COMING SOON button for an
+	           enchant whose effect only a package that isn't in the game
+	           yet reads (BoostView.soonSet)
+	           The odds are the lasting ones: a running Hexa Lucky is left
+	           out, and the AFTER column says "IN A SLOT" when the buy
+	           doesn't put the enchant in a slot (no free open slot, or
+	           owned but not equipped).
+	  footer   the control hint; gamepads get the platform's own glyphs
+	           (on phones and TVs only the gamepad row, bigger)
 	The right pane's middle scrolls when a small screen can't show it all
 	(the buttons always stay in view). Designed for 720 design units of
 	height (HudController.uiScale); the compact layout (phones, TVs) makes
@@ -144,6 +150,8 @@ export type Refs = {
 	Wide: boolean, -- the detail has two columns: info left, odds / tiers right
 	RightWidth: number, -- the right column's box (wide)
 	RightHeight: number,
+	MaxWidth: number, -- the last layout's room (setHint lays out again when the gamepad row comes or goes)
+	MaxHeight: number,
 }
 
 EnchantView.MinHeight = 380
@@ -155,6 +163,13 @@ EnchantView.ShardColor = Color3.fromRGB(110, 230, 255)
 -- the detail pane gets two columns (info | odds or tiers) from this width (design units)
 EnchantView.WideDetail = 640
 EnchantView.Separator = TechShopView.Separator
+
+-- What a coming-soon enchant waits for (BoostView.soonSet; the server refuses it until then).
+EnchantView.SoonText = {
+	Prospector = "Coming soon, with artifacts",
+	GolemBond = "Coming soon, with golems",
+	Magnetism = "Coming soon, with the Ore Magnet",
+} :: { [string]: string }
 
 -- Status lines the controller shows (here so the tests can check they fit).
 EnchantView.StatusText = {
@@ -228,12 +243,23 @@ function EnchantView.tiersText(id: string, owned: number): string
 	return table.concat(lines, "\n")
 end
 
--- The buttons of a card (see Buy). Paid random buys are left out where they are restricted.
-local function buysOf(enchant: EnchantConfig.Enchant, tier: number, coins: number, shards: number, restricted: boolean): { Buy }
+-- The buttons of a card (see Buy). Paid random buys are left out where they
+-- are restricted; a coming-soon enchant gets one greyed COMING SOON button.
+local function buysOf(
+	enchant: EnchantConfig.Enchant,
+	tier: number,
+	coins: number,
+	shards: number,
+	restricted: boolean,
+	soon: boolean
+): { Buy }
 	local coinPrice, shardPrice, product = EnchantConfig.nextPrice(enchant.Id, tier)
 	local nextTier = tier + 1
 	if coinPrice == nil then
 		return { { Currency = "Max", Text = "TOP TIER", Tier = tier, CanBuy = false, Reason = "Max" } }
+	end
+	if soon then
+		return { { Currency = "Soon", Text = "COMING SOON", Tier = nextTier, CanBuy = false, Reason = "ComingSoon" } }
 	end
 	local list: { Buy } = {}
 	if not (restricted and EnchantConfig.isPaidRandom(enchant.Id, "Coins")) then
@@ -276,9 +302,11 @@ end
 	last) from a State snapshot, the coins on screen and the player's
 	paid-random policy (`restricted`: the Robux option of an odds booster
 	is left out; coins and shards too while coins can be bought with Robux).
+	An id in `soon` (BoostView.soonSet) can't be bought yet: COMING SOON.
 ]]
-function EnchantView.cards(rawState: any, coins: number, restricted: boolean): { Card }
+function EnchantView.cards(rawState: any, coins: number, restricted: boolean, soon: { [string]: boolean }?): { Card }
 	local state = safeState(rawState)
+	local soonSet: { [string]: boolean } = soon or {}
 	local cash = num(coins, 0)
 	local shards = EnchantView.shards(state)
 	local enchants = state.Enchants
@@ -291,7 +319,8 @@ function EnchantView.cards(rawState: any, coins: number, restricted: boolean): {
 		local done = tier >= max
 		local slot = EnchantView.slotOf(enchants, level, id)
 		local info = Rarity.get(enchant.Rarity)
-		local buys = buysOf(enchant, tier, cash, shards, restricted)
+		local isSoon = soonSet[id] == true
+		local buys = buysOf(enchant, tier, cash, shards, restricted, isSoon)
 		local tierText: string
 		if tier == 0 then
 			tierText = "NEW"
@@ -309,12 +338,15 @@ function EnchantView.cards(rawState: any, coins: number, restricted: boolean): {
 			priceText ..= ` or {Format.big(shardPrice)} shards`
 		end
 		local robux = if product then MonetizationConfig.get(product) else nil
-		if robux and not (restricted and EnchantConfig.isPaidRandom(id, "Robux")) then
-			priceText ..= ` or {robux.Robux} R$`
+		if product and robux and not (restricted and EnchantConfig.isPaidRandom(id, "Robux")) then
+			-- the pass id is 0 until it's on sale: the Robux price is only a promise
+			priceText ..= if MonetizationConfig.keyLive(product) then ` or {robux.Robux} R$` else ` or {robux.Robux} R$ (soon)`
 		end
 		local line: string
 		local lineColor: Color3
-		if tier == 0 then
+		if isSoon and tier == 0 then
+			line, lineColor = EnchantView.SoonText[id] or MonetizationConfig.StatusText.ComingSoon, Theme.Info
+		elseif tier == 0 then
 			line, lineColor = priceText, Theme.Coin
 		else
 			line = if slot then `In slot {slot}` else "Owned: not in a slot"
@@ -406,6 +438,11 @@ end
 	  luck: "Rare or better" on top, then each lucky rarity of the zone,
 	        and the artifact chance per rock when the buy changes it
 	  artifacts only (Prospector): one row per zone (no switching)
+	The odds are the lasting ones: a running Hexa Lucky (it runs out) is
+	left out of NOW and AFTER, and the note says so. The AFTER column is
+	"AFTER BUY" when the enchant is in a slot or the buy puts it in one (a
+	new enchant goes into the first free open slot), else "IN A SLOT" with
+	a note: the luck only counts once it is equipped.
 	Returns the table and whether the zone can be switched.
 ]]
 function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: number?): (BoostView.OddsTable?, boolean)
@@ -414,11 +451,27 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 		return nil, false
 	end
 	local state = safeState(rawState)
-	local delta = EnchantConfig.nextDelta(state.Enchants, levelOf(state), id)
+	local level = levelOf(state)
+	local delta = EnchantConfig.nextDelta(state.Enchants, level, id)
 	if next(delta) == nil then
 		return nil, false
 	end
+	-- the lasting odds: without a running Hexa Lucky
 	local ctx = BoostView.context(state, now)
+	local hexa = ctx.OreLuckMult > 1
+	ctx.OreLuckMult = 1
+	-- does the buy's effect count right away (in a slot)?
+	local tier = EnchantConfig.tierOf(state.Enchants, id)
+	local slotted = EnchantView.slotOf(state.Enchants, level, id) ~= nil
+	local inSlot = slotted or (tier == 0 and EnchantConfig.firstFreeSlot(state.Enchants, level) ~= nil)
+	local afterHeader = if inSlot then "AFTER BUY" else "IN A SLOT"
+	local slotNote = ""
+	if not inSlot then
+		slotNote = if tier > 0
+			then " It isn't in a slot: equip it to get these odds."
+			else " Every open slot is full: put it in a slot to get these odds."
+	end
+	local hexaNote = if hexa then " Hexa Lucky isn't counted (it runs out)." else ""
 	local preview = BoostConfig.preview(ctx, delta)
 	local luck = (delta.OreLuckPct or 0) > 0 or (delta.OreLuckMult or 1) > 1
 	local artifacts = (delta.ArtifactPct or 0) > 0
@@ -434,10 +487,10 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 			Title = "ARTIFACT CHANCE",
 			Header = "PER ROCK YOU BREAK",
 			BeforeHeader = "NOW",
-			AfterHeader = "AFTER BUY",
+			AfterHeader = afterHeader,
 			Summary = nil,
 			Rows = rows,
-			Note = `Your artifact bonus now: +{art}%. Every zone you can mine.`,
+			Note = `Your artifact bonus now: +{art}%. Every zone you can mine.{slotNote}`,
 		},
 			false
 	end
@@ -473,7 +526,9 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 	local note =
 		`Ore luck {BoostView.mult(preview.LuckBefore)} → {BoostView.mult(preview.LuckAfter)}: chance per ore in a rock you break.`
 	if preview.LuckAfter <= preview.LuckBefore then
-		note = `Your ore luck is at its cap ({BoostView.mult(StatConfig.MaxOreLuck)}): this buy doesn't change it.`
+		note = if preview.LuckBefore >= StatConfig.MaxOreLuck - 1e-9
+			then `Your ore luck is at its cap ({BoostView.mult(StatConfig.MaxOreLuck)}): this buy doesn't change it.`
+			else "Your ore luck from enchants and golems is at its cap: this buy doesn't change it."
 	elseif effect and effect.NoEffect then
 		note = "No Rare ores in this zone: ore luck changes nothing here."
 	end
@@ -481,10 +536,10 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 		Title = title,
 		Header = "CHANCE",
 		BeforeHeader = "NOW",
-		AfterHeader = "AFTER BUY",
+		AfterHeader = afterHeader,
 		Summary = summary,
 		Rows = rows,
-		Note = note,
+		Note = note .. slotNote .. hexaNote,
 	},
 		true
 end
@@ -995,6 +1050,8 @@ function EnchantView.build(compact: boolean?): Refs
 		Wide = false,
 		RightWidth = 0,
 		RightHeight = 0,
+		MaxWidth = math.huge,
+		MaxHeight = math.huge,
 	}
 	EnchantView.layout(refs, refs.Compact, math.huge, math.huge)
 	return refs
@@ -1009,6 +1066,8 @@ end
 ]]
 function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
+	refs.MaxWidth = maxWidth
+	refs.MaxHeight = maxHeight
 	local m = metrics(compact)
 	local width = math.max(720, math.min(m.Width, maxWidth - 24))
 	local height = math.max(EnchantView.MinHeight, math.min(m.Height, maxHeight - 16))
@@ -1065,7 +1124,7 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 
 	-- left column: YOUR BLASTER + the 2 x 2 slots, then the catalog
 	local top = m.Header
-	local bodyHeight = height - top - m.Footer - 8
+	local bodyHeight = height - top - BoostView.footerHeight(compact, refs.PadMode, m.Footer) - 8
 	local left = math.min(m.Left, math.floor((width - PAD * 2 - 12) * 0.42))
 	refs.SlotLabel.TextSize = if compact then 20 else 18
 	refs.SlotLabel.Position = UDim2.fromOffset(PAD + 2, top)
@@ -1168,6 +1227,8 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		end
 	end
 	d.Odds.Frame.LayoutOrder = if wide then 5 else 0
+	-- narrow: what the buy gives comes first (one short line), then the new odds
+	d.Next.LayoutOrder = if wide then 3 else -1
 	d.Description.TextSize = m.Description
 	d.Now.TextSize = m.Line
 	d.Next.TextSize = m.Line
@@ -1177,11 +1238,10 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	EnchantView.placeButtons(refs)
 	EnchantView.placeBody(refs)
 
-	refs.Hint.Visible = not compact and not refs.PadMode
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -6)
 	refs.Hint.Size = UDim2.new(1, -PAD * 2, 0, 20)
-	refs.PadHint.Visible = not compact and refs.PadMode
 	refs.PadHint.Position = UDim2.new(0.5, 0, 1, -4)
+	BoostView.showHint(refs.Hint, refs.PadHint, compact, refs.PadMode)
 end
 
 -- Spreads the shown buttons (buys, then EQUIP) over the bottom row.
@@ -1402,7 +1462,11 @@ function EnchantView.setBalances(refs: Refs, coins: number, shards: number)
 	refs.ShardAmount.Text = Format.big(math.max(0, math.floor(num(shards, 0))))
 end
 
+-- The footer hint: `text`, or with `glyphs` (A, B, right stick images) the
+-- gamepad row (also on phones and TVs: it gets a footer of its own there, so
+-- the panel is laid out again when the row comes or goes).
 function EnchantView.setHint(refs: Refs, text: string, glyphs: { string }?)
+	local was = refs.PadMode
 	refs.Hint.Text = text
 	refs.PadMode = glyphs ~= nil
 	if glyphs then
@@ -1410,8 +1474,10 @@ function EnchantView.setHint(refs: Refs, text: string, glyphs: { string }?)
 			image.Image = glyphs[i] or ""
 		end
 	end
-	refs.Hint.Visible = not refs.Compact and not refs.PadMode
-	refs.PadHint.Visible = not refs.Compact and refs.PadMode
+	if refs.Compact and was ~= refs.PadMode then
+		EnchantView.layout(refs, true, refs.MaxWidth, refs.MaxHeight)
+	end
+	BoostView.showHint(refs.Hint, refs.PadHint, refs.Compact, refs.PadMode)
 end
 
 function EnchantView.showReceipt(refs: Refs, text: string, color: Color3)
