@@ -81,6 +81,8 @@ elseif sceneName == "lobby_blockout" then
 	require("./lib/lobby_blockout").build(Loader, workspace)
 elseif sceneName == "machines" then
 	require("./lib/machines_gallery").build(Loader, workspace) -- every machine on a plot pad (Kenney Factory Kit style)
+elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
+	require("./lib/cute_styles_gallery").build(Loader, workspace)
 elseif sceneName == "kit_machines" then -- the Factory Kit machines + upgrade crystal levels (tools/lune/lib/kit_machines_gallery.luau)
 	require("./lib/kit_machines_gallery").build(Loader, workspace)
 elseif sceneName == "blasters" or sceneName == "blaster_fire" then
