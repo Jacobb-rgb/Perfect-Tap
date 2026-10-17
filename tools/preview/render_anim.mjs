@@ -1,5 +1,5 @@
 // Renders the crate opening animation (anim.html) frame by frame and encodes an MP4.
-//   node tools/preview/render_anim.mjs [fps=30] [width=1920] [height=1080] [frames=all] [stills=t1,t2,...]
+//   node tools/preview/render_anim.mjs [fps=30] [width=1920] [height=1080] [frames=all] [stills=t1,t2,...] [still prefix]
 // Needs build/preview/anim_crate.json (lune run tools/lune/export_anim.luau).
 // Frames go to build/preview/anim_frames/, the video to build/preview/crate_opening.mp4
 // (encoded with AVFoundation through tools/preview/encode_mp4.swift, macOS only).
@@ -17,7 +17,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../..");
 const scenesDir = path.join(repo, "build/preview");
 const framesDir = path.join(scenesDir, "anim_frames");
-const [fps = 30, width = 1920, height = 1080, maxFrames = 0, stills = ""] = process.argv.slice(2).map((v, i) => (i < 4 ? Number(v) : v));
+const [fps = 30, width = 1920, height = 1080, maxFrames = 0, stills = "", prefix = "anim"] = process.argv.slice(2).map((v, i) => (i < 4 ? Number(v) : v));
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2" };
 const server = http.createServer((req, res) => {
@@ -50,7 +50,7 @@ if (stills) {
   fs.mkdirSync(path.join(scenesDir, "shots"), { recursive: true });
   for (const t of String(stills).split(",").map(Number)) {
     await page.evaluate((t) => window.renderFrame(t), t);
-    const file = path.join(scenesDir, "shots", `anim_${t.toFixed(2)}.jpg`);
+    const file = path.join(scenesDir, "shots", `${prefix}_${t.toFixed(2)}.jpg`);
     await page.screenshot({ path: file, type: "jpeg", quality: 90 });
     console.log("still", t, "->", path.relative(repo, file));
   }
