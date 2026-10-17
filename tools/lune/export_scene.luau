@@ -114,6 +114,11 @@ elseif sceneName == "train_trip" then -- trains on their trips + the train HUD a
 	for name, guis in require("./lib/train_trip_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "foundry" then -- the Foundry buildings, the chute line, the hammer moment and its UI (tools/lune/lib/foundry_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/foundry_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

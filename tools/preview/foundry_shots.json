@@ -1,0 +1,11 @@
+{
+  "foundry_hero": {"scene": "foundry", "position": [124, 17, 90], "target": [150, 3.3, 72], "fov": 58, "preset": "Surface", "shadowExtent": 110},
+  "foundry_front": {"scene": "foundry", "position": [136, 7, 80], "target": [151, 3.8, 72], "fov": 60, "preset": "Surface", "shadowExtent": 80},
+  "foundry_side": {"scene": "foundry", "position": [141, 9, 92], "target": [151, 3.3, 72], "fov": 58, "preset": "Surface", "shadowExtent": 80},
+  "foundry_chute": {"scene": "foundry", "position": [119.5, 4.5, 70.4], "target": [127.6, 1.5, 70.4], "fov": 60, "preset": "Surface", "shadowExtent": 60},
+  "foundry_forge": {"scene": "foundry", "position": [142.1, 6.5, 73.1], "target": [147.28, 3.79, 74.45], "fov": 50, "preset": "Surface", "shadowExtent": 60, "ui": "ui_forge"},
+  "foundry_forge_phone": {"scene": "foundry", "position": [142.1, 6.5, 73.1], "target": [147.28, 3.79, 74.45], "fov": 50, "preset": "Surface", "shadowExtent": 60, "ui": "ui_forge_phone", "uiInset": 58},
+  "foundry_reveal": {"scene": "foundry", "position": [142.1, 6.5, 17.1], "target": [147.28, 3.79, 18.45], "fov": 50, "preset": "Surface", "shadowExtent": 60, "ui": "ui_forge_reveal"},
+  "foundry_ui": {"scene": "foundry", "position": [136, 7, 80], "target": [151, 3.8, 72], "fov": 60, "preset": "Surface", "shadowExtent": 80, "ui": "ui_foundry"},
+  "foundry_ui_phone": {"scene": "foundry", "position": [136, 7, 80], "target": [151, 3.8, 72], "fov": 60, "preset": "Surface", "shadowExtent": 80, "ui": "ui_foundry_phone", "uiInset": 58}
+}
