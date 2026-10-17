@@ -27,7 +27,8 @@ local Grid = require(script.Parent.Grid)
 local Placement = {}
 
 export type Desc = ItemData.Desc
-export type Entry = { Id: string, X: number, Z: number, R: number, In: { Desc }?, Out: { Desc }? }
+-- C: the machine's own setting (a whole number 1..9, e.g. a Sorter's threshold rarity)
+export type Entry = { Id: string, X: number, Z: number, R: number, In: { Desc }?, Out: { Desc }?, C: number? }
 export type Limits = { Machines: number, Conveyors: number }
 
 -- Reason code -> text for the player (BuildResult.Reason is the code).

@@ -105,6 +105,7 @@ LogisticsService.SellPopup = 2 -- seconds of a Sell Box's sales that make one co
 LogisticsService.SellToast = 6 -- ... and one toast
 LogisticsService.SellSource = "SellBox" -- EconomyService.award source
 LogisticsService.DefaultThreshold = Rarity.get("Rare").Order
+LogisticsService.SortPromptName = "SortPrompt"
 
 -- Machine ids by MachineData Behaviour.
 local SPLITTER = "Splitter"
@@ -161,7 +162,7 @@ end
 
 -- A Sorter's threshold: its saved C when that is a Rarity Order, else DefaultThreshold.
 function LogisticsService.threshold(machine: PlacedMachine): number
-	local saved = (machine.Entry :: any).C
+	local saved = machine.Entry.C
 	if type(saved) == "number" and saved == saved and rarityAt(math.floor(saved)) then
 		return math.floor(saved)
 	end
@@ -182,7 +183,12 @@ end
 
 local function showThreshold(machine: PlacedMachine)
 	local order = LogisticsService.threshold(machine)
-	MachineService.setAttrs(machine, { Threshold = order, Detail = LogisticsService.sorterText(order) })
+	local text = LogisticsService.sorterText(order)
+	MachineService.setAttrs(machine, { Threshold = order, Detail = text })
+	local prompt = machine.Model:FindFirstChild(LogisticsService.SortPromptName, true)
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.ObjectText = text
+	end
 end
 
 ---------------------------------------------------------------- Splitter and Sorter
@@ -288,6 +294,40 @@ local function sorterPick(machine: PlacedMachine, desc: Desc): number
 	return if oreOrder(desc.O) >= LogisticsService.threshold(machine) then 1 else -1
 end
 
+-- MachineAction "SorterCycle" (the dispatcher checked owner and range; `arg` is raw).
+local function onSorterCycle(player: Player, machine: PlacedMachine, arg: any)
+	if machine.Info.Behaviour ~= SORTER or machine.Removed then
+		return
+	end
+	local step = if arg == -1 then -1 else 1
+	local order = LogisticsService.nextThreshold(LogisticsService.threshold(machine), step)
+	machine.Entry.C = order
+	showThreshold(machine)
+	DataService.changed(player)
+end
+
+-- The Sorter's own button (PC G, gamepad ButtonB, touch tap): steps the
+-- threshold like SorterCycle. Owner only; the prompt's range is the check.
+local function addSortPrompt(machine: PlacedMachine)
+	local base = machine.Model.PrimaryPart :: BasePart
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = LogisticsService.SortPromptName
+	prompt.ActionText = "Change Sort"
+	prompt.ObjectText = LogisticsService.sorterText(LogisticsService.threshold(machine))
+	prompt.KeyboardKeyCode = Enum.KeyCode.G
+	prompt.GamepadKeyCode = Enum.KeyCode.ButtonB
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.UIOffset = Vector2.new(0, 72)
+	prompt.Parent = base:FindFirstChild("Prompt") or base
+	prompt.Triggered:Connect(function(player: Player)
+		if player == machine.Owner then
+			onSorterCycle(player, machine, 1)
+		end
+	end)
+end
+
 local splitterBehaviour: MachineService.Behaviour = {
 	spawned = routerSpawned,
 	canAccept = routerCanAccept,
@@ -301,6 +341,7 @@ local sorterBehaviour: MachineService.Behaviour = {
 	spawned = function(machine: PlacedMachine)
 		routerSpawned(machine)
 		showThreshold(machine)
+		addSortPrompt(machine)
 	end,
 	canAccept = routerCanAccept,
 	insert = routerInsert,
@@ -308,19 +349,6 @@ local sorterBehaviour: MachineService.Behaviour = {
 		route(machine, now, LogisticsService.SortInterval, sorterPick, false)
 	end,
 }
-
--- MachineAction "SorterCycle" (the dispatcher checked owner and range; `arg` is raw).
-local function onSorterCycle(player: Player, machine: PlacedMachine, arg: any)
-	if machine.Info.Behaviour ~= SORTER or machine.Removed then
-		return
-	end
-	local step = if arg == -1 then -1 else 1
-	local order = LogisticsService.nextThreshold(LogisticsService.threshold(machine), step)
-	local entry = machine.Entry :: any
-	entry.C = order
-	showThreshold(machine)
-	DataService.changed(player)
-end
 
 ---------------------------------------------------------------- Robot Arm
 
