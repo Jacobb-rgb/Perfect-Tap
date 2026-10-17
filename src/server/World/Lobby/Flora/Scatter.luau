@@ -23,8 +23,8 @@ local C = Style.C
 
 local Scatter = {}
 
--- (flowers and bushes were cut for the town buildings' part budget)
-Scatter.Limits = { Trees = 45, Bushes = 26, Flowers = 26, Boulders = 8 }
+-- (flowers, bushes and boulders were cut to pay for the town buildings' parts)
+Scatter.Limits = { Trees = 45, Bushes = 20, Flowers = 8, Boulders = 3 }
 
 -- No scattered trees here: they would hide the ponds, the creek and the
 -- bridge, the corridor from the plaza to the bridge, or the LAB shopfront
@@ -56,11 +56,11 @@ type Zone = {
 Scatter.Zones = {
 	-- foreground and the strips along the plot roads (the hero view)
 	{ Name = "Front", Min = Vector2.new(-66, 20), Max = Vector2.new(66, 82), Trees = 9, Full = true },
-	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6, Full = true },
+	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6 },
 	-- behind the forge and the stalls
 	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 12 },
 	-- south foreground (lobby_south view)
-	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 10 },
+	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 7 },
 	-- the island's south corners beyond the bases
 	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 5 },
 } :: { Zone }
@@ -138,15 +138,11 @@ local function trees(m: Instance, placer: Kit.Placer, counts: Counts, rng: Rng.R
 				end
 				placed += 1
 				counts.Trees += 1
-				-- a bush and flowers at its feet
+				-- a bush at its feet
 				local a = rng:range(0, math.pi * 2)
 				local d = reach + rng:range(0.5, 2.5)
-				if rng:chance(0.7) then
+				if rng:chance(0.45) then
 					bush(m, placer, counts, p + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d), rng)
-				end
-				if rng:chance(0.6) then
-					local b = a + rng:range(1.4, 2.6)
-					flowers(m, placer, counts, p + Vector3.new(math.cos(b) * d, 0, math.sin(b) * d), rng)
 				end
 			end
 		end
@@ -160,10 +156,10 @@ local function groundCover(m: Instance, placer: Kit.Placer, counts: Counts, rng:
 	local middle = { Name = "Cover", Min = Vector2.new(-64, -110), Max = Vector2.new(64, 24), Trees = 0 }
 	local south = { Name = "Cover", Min = Vector2.new(-150, 84), Max = Vector2.new(150, 146), Trees = 0 }
 	local plan = {
-		{ zone = banks, flowers = 7, bushes = 6, boulders = 3 },
-		{ zone = front, flowers = 10, bushes = 8, boulders = 2 },
-		{ zone = middle, flowers = 3, bushes = 4, boulders = 1 },
-		{ zone = south, flowers = 26, bushes = 26, boulders = 8 },
+		{ zone = banks, flowers = 6, bushes = 4, boulders = 2 },
+		{ zone = front, flowers = 2, bushes = 4, boulders = 1 },
+		{ zone = middle, flowers = 0, bushes = 2, boulders = 0 },
+		{ zone = south, flowers = 0, bushes = 6, boulders = 0 },
 	}
 	for _, step in plan do
 		local zone = step.zone :: Zone
@@ -222,7 +218,7 @@ local function fences(m: Instance, placer: Kit.Placer)
 	local lx = lily.Center.X - lily.Size.X / 2 - 1.8
 	fence(m, Vector3.new(lx, 0, lily.Center.Z - 5.5), Vector3.new(lx, 0, lily.Center.Z + 5.5))
 	local kx = koi.Center.X + koi.Size.X / 2 + 1.8
-	fence(m, Vector3.new(kx, 0, koi.Center.Z - 4), Vector3.new(kx, 0, koi.Center.Z + 5.5))
+	fence(m, Vector3.new(kx, 0, koi.Center.Z - 4), Vector3.new(kx, 0, koi.Center.Z + 3.4)) -- ends before the LAB
 	-- one side of ToScanner (north) and of ToMine (north)
 	fence(m, Vector3.new(9.5, 0, 75.4), Vector3.new(38, 0, 75.4)) -- ends before the LAB shopfront
 	fence(m, Vector3.new(-33, 0, 80.4), Vector3.new(-9.5, 0, 80.4))

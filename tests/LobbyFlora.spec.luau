@@ -561,13 +561,18 @@ return function(T, Loader)
 		for _, site in Town.Sites do
 			local m = town:FindFirstChild(site.Id)
 			if m then
-				-- the main sign is big and hangs at the first parapet (8-12 studs), not on the top floor
+				local front = Town.footprint(site).w
+				-- the main sign is big (about the facade's width, boards >= 3.2 tall) and hangs on the first
+				-- storey (the MAP tower's on its top storey, over CAPSULES and the trees)
 				for _, d in m:GetDescendants() do
 					if d:IsA("BasePart") and d.Name == "TownSign" then
 						local y = d.CFrame.Position.Y
-						T.truthy(y >= 7 and y <= 12.5, `{site.Id} sign at the first parapet (y {y})`)
-						local minW = if site.Id == "Inn" then 3.4 else 5
-						T.truthy(d.Size.X >= minW - 1e-3 and d.Size.Y >= 2.2 - 1e-3, `{site.Id} sign is big ({d.Size})`)
+						local top = if site.Id == "MapTower" then 17.5 else 12.5
+						T.truthy(y >= 9 and y <= top, `{site.Id} sign on the first storey (y {y})`)
+						T.truthy(d.Size.Y >= 3.2 - 1e-3, `{site.Id} sign board is at least 3.2 tall ({d.Size})`)
+						local span = d:GetAttribute("Span") or d.Size.X
+						local want = if site.Id == "Inn" then 6.5 else 0.7 * front
+						T.truthy(span >= want - 1e-3, `{site.Id} sign spans {span} of a {front} wide site (>= {want})`)
 					end
 				end
 				-- double-sided blade signs turned to the hero (south) / the street, perpendicular to the facade
@@ -583,6 +588,7 @@ return function(T, Loader)
 						local look = blade.CFrame.LookVector
 						T.truthy(math.abs(look:Dot(LOOK[site.Facing])) < 0.3, `{site.Id} blade sign is perpendicular to the facade`)
 						T.truthy(look:Dot(LOOK.S) > 0.7 or look:Dot(LOOK.W) > 0.7, `{site.Id} blade sign faces south or west`)
+						T.truthy(blade.Size.X >= 6.5 - 1e-3 and blade.Size.Y >= 3 - 1e-3, `{site.Id} blade sign is at least 6.5 x 3 ({blade.Size})`)
 					end
 				end
 				-- windows: lit panes glow, at most one unlit pane in six, unlit glass is light blue (never a black hole)
@@ -599,6 +605,9 @@ return function(T, Loader)
 							-- caged deep-amber lamps: small, no white blob
 							T.truthy(math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.6, `{d:GetFullName()} lantern cube is small`)
 							T.truthy(d.Color.G < 0.7 and d.Color.B < 0.35, `{d:GetFullName()} lantern is deep amber`)
+						elseif d.Material == roblox.Enum.Material.Neon and d.Size.X <= 0.45 and d.Size.Y <= 0.45 and d.Size.Z <= 0.45 then
+							-- rooftop beacons are small dots, never a white cube
+							T.truthy(math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.35, `{d:GetFullName()} beacon is a small dot`)
 						end
 					end
 				end
@@ -607,25 +616,25 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("flora: one landmark tower, chunky town buildings", function()
-		local tall = {}
+	T.test("flora: town buildings are 2-3 storeys at avatar scale", function()
 		for _, site in Town.Sites do
 			local m = flora().Town:FindFirstChild(site.Id)
-			local top = 0
+			local top, doors = 0, 0
 			for _, d in m:GetDescendants() do
-				if d:IsA("BasePart") and d.CanCollide then
-					top = math.max(top, d.CFrame.Position.Y + halfExtents(d).Y)
+				if d:IsA("BasePart") then
+					if d.CanCollide then
+						top = math.max(top, d.CFrame.Position.Y + halfExtents(d).Y)
+					end
+					-- street doors fit an R15 avatar (~5.2 studs): at least 6 tall and 3 wide
+					if d.Name == "Door" then
+						doors += 1
+						T.truthy(d.Size.Y >= 6 - 1e-3 and d.Size.X >= 3 - 1e-3, `{d:GetFullName()} door is at least 3 x 6 ({d.Size})`)
+					end
 				end
 			end
-			T.truthy(top <= 23, `{site.Id} is {top} studs tall (<= 23)`)
-			if top > 19 then
-				table.insert(tall, site.Id)
-			end
+			T.truthy(top >= 14 and top <= 27, `{site.Id} is {top} studs tall (2-3 storeys: 14-27)`)
+			T.truthy(doors >= 1, `{site.Id} has a street door`)
 		end
-		T.truthy(
-			#tall <= 1 and (tall[1] == nil or tall[1] == "MapTower"),
-			`only the MAP lookout rises above 19 studs ({table.concat(tall, ", ")})`
-		)
 	end)
 
 	-- The six faces of a block part: outward normal, center, the two in-plane axes and half sizes.
