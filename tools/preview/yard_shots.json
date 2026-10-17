@@ -323,5 +323,22 @@
   ],
   "fov": 56,
   "shadowExtent": 60
+ },
+ "base_hud_phone": {
+  "scene": "yard",
+  "position": [
+   112,
+   26,
+   106
+  ],
+  "target": [
+   146,
+   0,
+   76
+  ],
+  "fov": 58,
+  "preset": "Surface",
+  "shadowExtent": 120,
+  "ui": "hud_phone"
  }
 }
