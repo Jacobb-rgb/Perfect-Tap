@@ -278,29 +278,61 @@ return function(T, Loader)
 			end
 		end
 		T.lt(150, samples, "border samples")
-		-- every wall run is brick: plinth, red band, a cap slab overhanging both
-		-- faces; long runs go on under the pillars that stand on them
-		local caps = 0
+		-- every wall run is brick: plinth, red band, a rounded cap (a low slab
+		-- overhanging both faces with a bullnose cylinder along it); long runs
+		-- go on under the pillars that stand on them
+		local caps, rounds = 0, 0
 		for _, d in model.Walls:GetDescendants() do
 			if d:IsA("BasePart") and d.Name == "Cap" then
 				caps += 1
 				T.lt(PlotBuilder.WallBand + 0.2, d.Size.X, "cap overhangs the brick band")
 				T.lt(d.Size.Y, d.Size.X, "cap is a low slab")
+			elseif d:IsA("BasePart") and d.Name == "CapRound" then
+				rounds += 1
+				T.eq(d.Shape, roblox.Enum.PartType.Cylinder, "the cap's bullnose is round")
+				T.lt(PlotBuilder.WallBand * 0.8, d.Size.Y, "a chunky bullnose")
 			end
 		end
 		T.le(6, caps, "pad wall runs: two front, two sides, two pad/yard")
-		-- raised bricks on every run of the border (pad and yard)
+		T.eq(rounds, caps, "every cap slab has its bullnose")
+		for _, folder in { model.Yard.Fence, model.Yard.Pen } do
+			local n = 0
+			for _, d in folder:GetChildren() do
+				if d:IsA("BasePart") and d.Name == "CapRound" then
+					n += 1
+				end
+			end
+			T.le(4, n, `rounded caps on the {folder.Name} runs`)
+		end
+		-- raised bricks on the border (pad and yard) and the pen
 		for _, folder in { model.Walls, model.Yard.Fence, model.Yard.Pen } do
 			local bricks = 0
 			for _, d in folder:GetChildren() do
 				if d:IsA("BasePart") and d.Name == "Brick" then
 					bricks += 1
 					T.falsy(d.CastShadow, "raised bricks cast no shadow")
+					T.lt(PlotBuilder.WallBand * 0.7, d.Size.X, "a raised brick shows on both faces")
 				end
 			end
 			T.lt(1, bricks, `raised bricks in {folder.Name}`)
 		end
-		-- a pillar about every 12.5 studs along the pillared side, the front and the pad/yard wall
+		-- the road-facing front walls show a staggered pair (lower and upper row) in their bay
+		local front: { [number]: { any } } = { [-1] = {}, [1] = {} }
+		for _, d in model.Walls:GetChildren() do
+			if d:IsA("BasePart") and d.Name == "Brick" then
+				local p = plotCF:PointToObjectSpace(d.CFrame.Position)
+				if math.abs(p.Z + line) < 0.2 then
+					table.insert(front[if p.X < 0 then -1 else 1], p)
+				end
+			end
+		end
+		for _, s in { -1, 1 } do
+			local pair = front[s]
+			T.eq(#pair, 2, "a brick pair on the front wall")
+			T.lt(0.3, math.abs(pair[1].Y - pair[2].Y), "the pair is on two rows")
+			T.lt(0.3, math.abs(pair[1].X - pair[2].X), "the pair is staggered")
+		end
+		-- a pillar about every 12.5 studs along the pillared side and the pad/yard wall
 		local pillars = {}
 		for _, d in model.Walls:GetChildren() do
 			if d:IsA("BasePart") and d.Name == "Pillar" then
@@ -330,6 +362,7 @@ return function(T, Loader)
 	T.test("Podiums: showpiece pedestals keep what PodiumService and PodiumController read", function()
 		local plot = WorldLayout.Plots[1]
 		local model = buildPlot(plot)
+		local plotY = WorldLayout.plotCFrame(plot).Position.Y
 		for slot, rect in BaseLayout.Podiums do
 			local podium = model.Yard:FindFirstChild("Podium" .. slot)
 			T.eq(podium:GetAttribute("Slot"), slot, "Slot attribute")
@@ -339,6 +372,23 @@ return function(T, Loader)
 			local locked = slot > EconomyConfig.Podiums.Free
 			T.eq(rim.Material, if locked then roblox.Enum.Material.SmoothPlastic else roblox.Enum.Material.Neon, "rim look")
 			T.eq(rim.Color, if locked then PlotBuilder.RimLocked else PlotBuilder.RimGold, "rim color")
+			-- the glowing rim is the top plate's edge, and nothing else on the top glows
+			-- gold (a locked slot's top is plain, with its dull rim)
+			T.lt(podium.Top.Size.Y + 0.3, rim.Size.Y, "rim reaches past the top plate")
+			T.falsy(podium:FindFirstChild("Inlay"), "no gold inlay on the top plate")
+			for _, d in podium:GetChildren() do
+				if d:IsA("BasePart") and d ~= rim and d.Material == roblox.Enum.Material.Neon then
+					T.falsy(d.Color == PlotBuilder.RimGold, `{d.Name} glows gold beside the rim`)
+				end
+			end
+			-- a two-tier bevelled octagon pedestal: two octagons of four strips each below the column
+			local strips = 0
+			for _, d in podium:GetChildren() do
+				if d:IsA("BasePart") and d.Material ~= roblox.Enum.Material.Neon and d.CFrame.Position.Y - plotY < 1.1 and d.Size.X > 3 then
+					strips += 1
+				end
+			end
+			T.eq(strips, 8, "two octagon tiers")
 			-- no glass case any more: a holo-ring around the ore that never blocks or
 			-- catches the mouse, and an invisible hover box over the ore that does
 			local top = podium.Top
@@ -351,6 +401,9 @@ return function(T, Loader)
 					T.falsy(d.CanCollide, "ring doesn't collide")
 					T.falsy(d.CanQuery, "ring doesn't catch the mouse")
 					T.eq(d.Material, roblox.Enum.Material.Neon, "ring glows")
+					-- level: every bar lies flat at the ring's height, the same on every slot
+					T.near(d.CFrame.UpVector.Y, 1, 1e-4, "ring is level")
+					T.near(d.CFrame.Position.Y - plotY, PlotBuilder.HoloRing.Y, 1e-3, "ring height")
 				end
 			end
 			T.eq(bars, PlotBuilder.HoloRing.Sides, "a closed holo-ring")
@@ -381,7 +434,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Podiums: every ore and the lock fit inside the holo-ring, below the income tag", function()
+	T.test("Podiums: the level holo-ring hugs the rim, clears every ore and the lock, below the income tag", function()
 		local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 		local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 		local plot = WorldLayout.Plots[1]
@@ -424,20 +477,29 @@ return function(T, Loader)
 				local q = axis:PointToObjectSpace(p)
 				return math.sqrt(q.X * q.X + q.Z * q.Z), q.Y
 			end
-			-- the ring's inner edge (nearest point to the podium's axis) and its top
-			local bars, size = PlotBuilder.holoRingBars(axis, slot)
-			local inner, ringTop = math.huge, -math.huge
+			-- the ring's inner and outer edge (nearest / farthest point to the podium's
+			-- axis) and its height band
+			local bars, size = PlotBuilder.holoRingBars(axis)
+			local inner, outer, ringTop, ringBottom = math.huge, 0, -math.huge, math.huge
 			for _, bar in bars do
 				for i = 0, 20 do
 					local p = (bar * CFrame.new((i / 20 - 0.5) * size.X, 0, 0)).Position
 					local r, y = flat(p)
 					inner = math.min(inner, r - size.Y / 2)
+					outer = math.max(outer, r + size.Y / 2)
 					ringTop = math.max(ringTop, y + size.Y / 2)
+					ringBottom = math.min(ringBottom, y - size.Y / 2)
 				end
 			end
 			T.lt(ringTop, tagBottom, "holo-ring stays below the income tag")
-			T.lt(BaseLayout.PodiumOreHeight, ringTop, "holo-ring goes round the ore")
-			-- every ore as PodiumService shows it (it turns about the axis, so only its radius counts)
+			T.lt(BaseLayout.PodiumOreHeight, ringBottom, "holo-ring goes round the ore, not the top plate")
+			-- a tidy ring about the size of the glowing rim, not a gizmo over the neighbours
+			local podium = built.Yard:FindFirstChild("Podium" .. slot)
+			T.lt(outer, podium.Rim.Size.Y / 2 + 0.65, "the ring is barely wider than the rim")
+			local spacing = BaseLayout.Podiums[2].Center.X - BaseLayout.Podiums[1].Center.X
+			T.lt(outer, spacing / 2 - 0.5, "neighbouring rings keep apart")
+			-- every ore as PodiumService shows it (it turns about the axis, so only its
+			-- radius counts): no part that reaches the ring's height reaches the ring
 			local widest, widestId = 0, ""
 			for _, ore in OreData.List do
 				for _, grade in { "Clean", "Flawless" } do
@@ -448,18 +510,21 @@ return function(T, Loader)
 					)
 					for _, d in display:GetDescendants() do
 						if d:IsA("BasePart") and d.Transparency < 1 then
+							local reach, low, high = 0, math.huge, -math.huge
 							for _, p in points(d) do
-								local r = flat(p)
-								if r > widest then
-									widest, widestId = r, ore.Id
-								end
+								local r, y = flat(p)
+								reach = math.max(reach, r)
+								low, high = math.min(low, y), math.max(high, y)
+							end
+							if high > ringBottom - 0.05 and low < ringTop + 0.05 and reach > widest then
+								widest, widestId = reach, ore.Id
 							end
 						end
 					end
 				end
 			end
+			T.lt(1, widest, "ores were measured at the ring's height")
 			T.lt(widest + 0.05, inner, `{widestId} fits inside the holo-ring of podium {slot}`)
-			local podium = built.Yard:FindFirstChild("Podium" .. slot)
 			local lockModel = podium:FindFirstChild("Lock")
 			if lockModel then
 				for _, d in lockModel:GetDescendants() do

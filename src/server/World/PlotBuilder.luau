@@ -3,48 +3,51 @@
 	border) that reads as a tidy garden from the lobby hero camera (a mown
 	lawn with a lighter stripe per other cell row and a paving band, all flat),
 	framed with the yard by low brick walls after the Kenney Graveyard Kit:
-	brick-wall (stone plinth, red brick band with raised bricks on every run,
-	a stone cap slab that overhangs both faces), brick-wall-end pillars (a
-	stone foot and a lantern under a roof plate on the road entrance posts,
-	little lanterns on the corner and YardGate caps) and 45-degree back
-	corners (brick-wall-curve-small). A name sign at the front and a banner,
-	and behind it (plot-local +Z, the sea side) the yard from BaseLayout:
+	brick-wall (stone plinth, red brick band with staggered raised brick
+	pairs, a rounded stone cap: a slab overhanging both faces under a
+	bullnose cylinder), brick-wall-end pillars (a stone foot and a lantern
+	tucked under a dark roof plate on the road entrance posts) and mitred
+	45-degree back corners (brick-wall-curve-small). The name sign hangs on
+	the left front wall, a banner pole stands at the back right corner, and
+	behind the pad (plot-local +Z, the sea side) lies the yard from
+	BaseLayout:
 	  Walls            the pad's border and the long side walls: front walls
 	                   with the road entrance between two lantern posts, the
 	                   side walls from the road to the yard's back corners
-	                   (pillars every ~12.5 studs on the left side only, so two
-	                   neighbours never face each other with two pillared
-	                   walls), the wall between pad and yard with the YardGate
+	                   (pillars every ~12.5 studs on the left side only, see
+	                   padWalls), the wall between pad and yard with the
+	                   YardGate between two posts
 	  Yard.Ground      lawn pad, gravel paths
 	  Yard.Fence       the yard's cut back corners and the back walls up to
 	                   the train stop opening
-	  Yard.Pen         the Ore Pen: low brick walls with a gate (the yard's
-	                   side wall closes it on the outside, a dirt bank there
-	                   rolls ore back in), an invisible `Intake` part
-	                   (BaseLayout.Pen.Intake) with a `Prompt` attachment at
-	                   Pen.PromptPoint, an "ORE PEN" sign
-	  Yard.Podium1..4  showpiece pedestals (Space Station table-display-planet,
-	                   tapering upward: a pale octagon base with blue corner
-	                   lights, a navy bevel step, a hexagonal pipe-ring column
-	                   with an orange collar and two glowing slots, an amber
-	                   neon `Rim` under the pale top plate with an amber inlay,
-	                   a tilted cyan holo-ring around the floating ore and an
+	  Yard.Pen         the Ore Pen: lower brick walls with a bullnose cap and
+	                   a gate (the yard's side wall closes it on the outside, a
+	                   dirt bank there rolls ore back in), an invisible
+	                   `Intake` part (BaseLayout.Pen.Intake) with a `Prompt`
+	                   attachment at Pen.PromptPoint, an "ORE PEN" sign
+	  Yard.Podium1..4  showpiece pedestals (Space Station table-display-planet:
+	                   a two-tier bevelled octagon with blue light slits, a
+	                   hexagonal pipe-ring-colored column with an orange
+	                   collar, a pale top plate edged by the amber neon `Rim`,
+	                   a level cyan holo-ring around the floating ore and an
 	                   invisible `Hover` box for the mouse); the `Top` part
 	                   holds the `OrePoint` at BaseLayout.PodiumOreHeight and
 	                   the `Prompt` attachment; slots 3 and 4 have a `Lock`
 	                   model where the ore floats and a "100 R$" `PricePlate`
 	                   (PodiumService hides them for players with the Podiums
-	                   perk; the plate's neon frame lives in the lock)
+	                   perk and lights the rim; the plate's neon frame lives in
+	                   the lock)
 	  Yard.Foundry     Factory Kit placeholder ("FOUNDRY - coming soon"):
-	                   machine-fortified housing with a rib and copper eaves,
-	                   hopper, chimney, an ember furnace mouth with a grate
-	  Yard.TrainStop   platform with the TRAIN STOP sign and a lamp post, and
-	                   the `Track` placeholder (a short track piece with a
-	                   `BufferStop`) that the railway step replaces
-Everything decorative stays outside the 48x48 build grid, so every cell
-is free for machines. Machines are added at runtime into the plot's
-"Machines" folder by MachineService. A plot with its yard is <= 300 parts
-(about 293, 13 of them in the Track placeholder) and one light (8 plots).
+	                   machine-fortified housing with a rib and copper eaves, a
+	                   deep furnace portal (ember core, molten surround, grate),
+	                   a hollow hopper-square, a chimney
+	  Yard.TrainStop   platform with the TRAIN STOP sign on stone posts and a
+	                   lantern post, and the `Track` placeholder (a short track
+	                   piece with a `BufferStop`) that the railway step replaces
+	Everything decorative stays outside the 48x48 build grid, so every cell
+	is free for machines. Machines are added at runtime into the plot's
+	"Machines" folder by MachineService. A plot with its yard is <= 300 parts
+	(300, 13 of them in the Track placeholder) and one light (8 plots).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -95,25 +98,25 @@ local ROBUX_GREEN = rgb(110, 255, 140)
 -- brick light enough to stay red (not maroon) on the shaded side
 local WALL_STONE = rgb(208, 200, 188) -- plinths, pillar shafts
 local WALL_CAP = rgb(228, 221, 208) -- cap slabs, pillar caps and feet
-local BRICK = rgb(200, 94, 72)
-local BRICK_RAISED = rgb(250, 172, 140)
-local LAMP_AMBER = rgb(255, 120, 30) -- lanterns on the posts (small and deep: no white bloom)
+-- (the renderer and Roblox both push a saturated red to orange in full sun and to
+-- maroon in shade: a dusty brick red stays brick in both)
+local BRICK = rgb(180, 100, 90)
+local BRICK_RAISED = rgb(208, 128, 110) -- raised bricks: a close, lighter tone of the band
+local LAMP_AMBER = rgb(220, 90, 20) -- lanterns on the posts (small and deep: no white bloom)
 -- Factory / Space Station metals (docs/ART_DIRECTION.md section 9)
 local HOUSING = rgb(122, 130, 184) -- the Factory Kit's periwinkle machine blue
 local HOUSING_LIGHT = rgb(150, 158, 204)
 local HOUSING_DARK = rgb(58, 60, 72)
-local NAVY = rgb(62, 70, 112) -- the podium's bevel step
+local NAVY = rgb(62, 70, 112) -- the podium's octagon step
 local SHELL = rgb(188, 194, 212) -- pale Space Station panels (podium base and top, foundry frame)
 local HOLO = rgb(36, 140, 235) -- the podium's holo-ring (deep enough to stay cyan, not bloom white)
 local BASE_LIGHT = rgb(40, 140, 255) -- the podium base's corner lights
-local SLOT_ORANGE = rgb(255, 110, 24) -- glowing slots on the podium column
 local LOCK_GOLD = rgb(255, 200, 40)
-local LOCK_EDGE = rgb(255, 176, 30)
 local LOCK_STEEL = rgb(230, 232, 240)
 local LOCKED_RED = rgb(190, 16, 16) -- deep: a bright red neon tone-maps to salmon
 local RAIL_STEEL = rgb(196, 200, 214)
 local SLEEPER = rgb(196, 112, 62)
-local FURNACE = rgb(240, 70, 18) -- the furnace mouth: deep molten orange (C.Ember tone-maps to yellow)
+local FURNACE = rgb(196, 50, 12) -- the furnace mouth's surround: dark molten orange (C.Ember, the core, tone-maps to yellow)
 
 -- the foundry's front wall stands this far behind the front of its BaseLayout rect
 local FOUNDRY_INSET = 3.5
@@ -223,14 +226,19 @@ end
 
 --[[
 	A low wall like Kenney's brick-wall: a pale stone plinth (about a quarter
-	of the height), a red brick band (about half) and a chunky stone cap
-	slab that overhangs both faces (about a quarter), 3 parts per straight
-	run, plus raised bricks (one part pokes out of both faces), staggered
-	over two rows. Pillars like brick-wall-end: a square stone shaft with a
-	wider cap, 2 parts (+1 for a stone foot, +2 for a lantern under a roof
-	plate on the gate posts, +1 for a little lantern on the corner caps).
-	A straight run goes on under the pillars that stand on it (their shafts
-	are wider than the wall), so a long wall costs 3 parts plus its pillars.
+	of the height), a red brick band (about half) and a rounded stone cap (a
+	thin slab that overhangs both faces with a cylinder along its centre
+	line, so its section reads as a bullnose; the lower pen walls have the
+	bullnose alone), 4 parts per straight run (3 on the pen),
+	plus raised bricks (one part pokes out of both faces): a staggered pair
+	(lower and upper row, half a brick apart) or a single brick per bay.
+	Pillars like brick-wall-end: a square stone shaft with a wider cap, 2
+	parts (+1 for a stone foot, +2 for a lantern under a roof plate on the
+	road entrance posts). A straight run goes on under the pillars that
+	stand on it (their shafts are wider than the wall), so a long wall costs
+	4 parts plus its pillars and bricks. Runs that meet without a pillar are
+	mitred: every layer grows by its own half width * tan(turn / 2), so the
+	outer faces of plinth, band, cap and bullnose meet exactly.
 ]]
 type WallKit = {
 	Plinth: number, -- plinth thickness
@@ -239,14 +247,16 @@ type WallKit = {
 	PlinthTop: number,
 	BandTop: number,
 	Cap: number, -- cap slab width (overhangs the band on both faces)
-	CapH: number, -- cap slab height
+	CapH: number, -- cap slab height (0: no slab, the bullnose alone is the cap)
+	Round: number, -- diameter of the bullnose cylinder on the cap
+	RoundY: number, -- its axis above the band's top (the slab's centre when there is a slab)
 	Pillar: number, -- pillar shaft width
 	PillarTop: number,
 	PillarCap: number, -- pillar cap width
 	PillarCapH: number,
 }
 
--- proportions of brick-wall: plinth ~1/4, brick band ~1/2, cap ~1/4 of the height
+-- proportions of brick-wall: plinth ~1/4, brick band ~1/2, rounded cap ~1/4 of the height
 local PLOT_WALL: WallKit = {
 	Plinth = 1.3,
 	Band = 1.0,
@@ -254,7 +264,9 @@ local PLOT_WALL: WallKit = {
 	PlinthTop = 0.6,
 	BandTop = 1.95,
 	Cap = 1.4,
-	CapH = 0.55,
+	CapH = 0.3,
+	Round = 1.0,
+	RoundY = 0.15,
 	Pillar = 1.6,
 	PillarTop = 3.0,
 	PillarCap = 2.05,
@@ -270,7 +282,9 @@ local PEN_WALL: WallKit = {
 	PlinthTop = 0.42,
 	BandTop = 1.32,
 	Cap = 1.0,
-	CapH = 0.4,
+	CapH = 0,
+	Round = 1.0,
+	RoundY = 0.12,
 	Pillar = 1.15,
 	PillarTop = 2.1,
 	PillarCap = 1.45,
@@ -281,9 +295,12 @@ type WallOpts = {
 	-- distances from `a` where pillars stand on the run: the bays between
 	-- them (and the run's ends) get the raised bricks
 	Stops: { number }?,
-	Spacing: number?, -- about one raised brick per this many studs of a bay (nil: none)
-	ExtendA: number?, -- grow the run past `a` / `b` (corner joints without a pillar)
-	ExtendB: number?,
+	-- raised bricks per bay, bay by bay from `a` (the last entry repeats):
+	-- 2 = a staggered pair, 1 = one brick (rows alternate), 0 = none; nil: none
+	Bricks: { number }?,
+	-- the turn (radians) to the run that meets this one at `a` / `b` without a pillar
+	TurnA: number?,
+	TurnB: number?,
 }
 
 -- One straight wall from a to b (plot-local, y ignored).
@@ -294,53 +311,74 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 	if length < 0.05 then
 		return
 	end
-	local dir = (flatB - flatA) / length
-	local extA, extB = o.ExtendA or 0, o.ExtendB or 0
-	local runA, runB = flatA - dir * extA, flatB + dir * extB
-	local frame = cf * CFrame.lookAt((runA + runB) / 2, runB) -- the wall runs along the frame's -Z
-	local full = length + extA + extB
+	local frame = cf * CFrame.lookAt(flatA, flatB) -- `a` at the origin, the run along the frame's -Z
+	local tanA, tanB = math.tan((o.TurnA or 0) / 2), math.tan((o.TurnB or 0) / 2)
+	-- one layer of the run, mitred at both ends for its own half width
+	local function layer(width: number, y: number, height: number, color: Color3, round: boolean?): Part
+		local extA, extB = width / 2 * tanA, width / 2 * tanB
+		local at = frame * CFrame.new(0, y, -(length + extB - extA) / 2)
+		local full = length + extA + extB
+		if round then
+			-- a cylinder along the run (a Roblox cylinder's axis is its X)
+			local part = Geo.block(parent, at * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(full, width, width), color, nil, FENCE)
+			part.Shape = Enum.PartType.Cylinder
+			return part
+		end
+		return Geo.block(parent, at, Vector3.new(width, height, full), color, nil, FENCE)
+	end
 	local plinthH = kit.PlinthTop - kit.Bottom
-	Geo.block(parent, frame * CFrame.new(0, kit.Bottom + plinthH / 2, 0), Vector3.new(kit.Plinth, plinthH, full), WALL_STONE, nil, FENCE)
+	layer(kit.Plinth, kit.Bottom + plinthH / 2, plinthH, WALL_STONE)
 	local bandH = kit.BandTop - kit.PlinthTop
-	Geo.block(parent, frame * CFrame.new(0, kit.PlinthTop + bandH / 2, 0), Vector3.new(kit.Band, bandH, full), BRICK, nil, FENCE)
-	local cap =
-		Geo.block(parent, frame * CFrame.new(0, kit.BandTop + kit.CapH / 2, 0), Vector3.new(kit.Cap, kit.CapH, full), WALL_CAP, nil, FENCE)
-	cap.Name = "Cap"
-	local spacing = o.Spacing
-	if not spacing then
+	layer(kit.Band, kit.PlinthTop + bandH / 2, bandH, BRICK)
+	if kit.CapH > 0 then
+		local cap = layer(kit.Cap, kit.BandTop + kit.CapH / 2, kit.CapH, WALL_CAP)
+		cap.Name = "Cap"
+	end
+	-- the bullnose along the run's centre line
+	local round = layer(kit.Round, kit.BandTop + kit.RoundY, kit.Round, WALL_CAP, true)
+	round.Name = "CapRound"
+	local perBay = o.Bricks
+	if not perBay or #perBay == 0 then
 		return
 	end
-	-- raised bricks, bay by bay, alternating between the lower and the upper row
+	-- raised bricks, bay by bay
 	local stops = { 0, length }
 	local extra: { number } = o.Stops or {}
 	for _, d in extra do
 		table.insert(stops, d)
 	end
 	table.sort(stops)
-	local size = Vector3.new(kit.Band + 0.28, math.min(0.32, bandH * 0.24), math.min(1.6, kit.Band * 1.6))
+	local brickH = math.min(0.42, bandH * 0.36)
+	local brickL = math.min(1.3, kit.Band * 1.6)
+	local size = Vector3.new(kit.Band + 0.24, brickH, brickL)
+	local lowY, highY = kit.PlinthTop + bandH * 0.3, kit.PlinthTop + bandH * 0.7
+	local function brick(d: number, y: number)
+		local raised = Geo.block(parent, frame * CFrame.new(0, y, -d), size, BRICK_RAISED, nil, GHOST)
+		raised.Name = "Brick"
+	end
 	local count = 0
 	for i = 1, #stops - 1 do
 		local d0, d1 = stops[i], stops[i + 1]
-		local bay = d1 - d0
-		if bay >= 3.5 then
-			local n = math.max(1, math.floor(bay / spacing + 0.5))
-			for j = 1, n do
-				count += 1
-				local upper = count % 2 == 0
-				local d = d0 + bay * (j - 0.5) / n
-				local y = kit.PlinthTop + bandH * (if upper then 0.72 else 0.3)
-				-- from the frame's centre (the run's middle) toward a (+Z)
-				local z = (full / 2 - extA) - d
-				local raised = Geo.block(parent, frame * CFrame.new(0, y, z), size, BRICK_RAISED, nil, GHOST)
-				raised.Name = "Brick"
+		local n = perBay[math.min(i, #perBay)]
+		if d1 - d0 >= 3.5 and n > 0 then
+			local mid = (d0 + d1) / 2
+			count += 1
+			if n >= 2 then
+				-- a little running bond: lower and upper brick half a brick apart
+				local flip = if count % 2 == 0 then 1 else -1
+				brick(mid - flip * brickL / 2, lowY)
+				brick(mid + flip * brickL / 2, highY)
+			else
+				brick(mid, if count % 2 == 0 then highY else lowY)
 			end
 		end
 	end
 end
 
-type PillarOpts = { Width: number?, Cap: number?, Top: number?, Lamp: boolean?, Lantern: boolean?, Foot: boolean? }
+type PillarOpts = { Width: number?, Cap: number?, Top: number?, Lamp: boolean?, Foot: boolean? }
 
--- A square stone pillar with a cap; returns the lantern's glow on top, if any.
+-- A square stone pillar with a cap; returns the lantern's roof plate on top, if any
+-- (it carries the light: from there it doesn't burn the pale cap white).
 local function pillar(parent: Instance, cf: CFrame, kit: WallKit, at: Vector3, opts: PillarOpts?): Part?
 	local o: PillarOpts = opts or {}
 	local width = o.Width or kit.Pillar
@@ -370,19 +408,15 @@ local function pillar(parent: Instance, cf: CFrame, kit: WallKit, at: Vector3, o
 			FENCE
 		)
 	end
-	local capTop = top + kit.PillarCapH
 	if o.Lamp then
-		-- a little lantern (Graveyard lightpost): a small deep-amber glow under a dark roof plate
-		local lamp = Geo.block(parent, cf * CFrame.new(at.X, capTop + 0.24, at.Z), Vector3.new(0.36, 0.48, 0.36), LAMP_AMBER, NEON, GHOST)
+		-- a little lantern (Graveyard lightpost): a small deep-amber glow tucked
+		-- 0.15 under a dark roof plate, so it never blooms into a white blob
+		local capTop = top + kit.PillarCapH
+		local lamp = Geo.block(parent, cf * CFrame.new(at.X, capTop + 0.3, at.Z), Vector3.new(0.36, 0.6, 0.36), LAMP_AMBER, NEON, GHOST)
 		lamp.Name = "Lamp"
-		Geo.block(parent, cf * CFrame.new(at.X, capTop + 0.56, at.Z), Vector3.new(0.9, 0.16, 0.9), HOUSING_DARK, nil, GHOST)
-		return lamp
-	elseif o.Lantern then
-		-- a warm glow point on a corner cap (no light object)
-		local lantern =
-			Geo.block(parent, cf * CFrame.new(at.X, capTop + 0.24, at.Z), Vector3.new(0.48, 0.48, 0.48), LAMP_AMBER, NEON, GHOST)
-		lantern.Name = "Lamp"
-		return lantern
+		local roof = Geo.block(parent, cf * CFrame.new(at.X, capTop + 0.55, at.Z), Vector3.new(0.9, 0.2, 0.9), HOUSING_DARK, nil, GHOST)
+		roof.Name = "LampRoof"
+		return roof
 	end
 	return nil
 end
@@ -391,16 +425,21 @@ end
 -- this far along both walls; the long side walls end there.
 PlotBuilder.YardChamfer = 2.5
 local CHAMFER = PlotBuilder.YardChamfer
--- runs meeting at 135 degrees grow by half a cap times tan(22.5) to close the outer corner
-local MITER = PLOT_WALL.Cap / 2 * math.tan(math.pi / 8)
+local TURN = math.pi / 4 -- the turn between a side or back wall and its cut corner
 
--- The pad's border and the long side walls: front walls with the road
--- entrance between two lantern posts, the side walls from the road corner
--- to the yard's back corner (the left side with a pillar every ~12.5
--- studs; the right side only at the corners, so two neighbouring plots
--- don't put two pillared walls face to face across the alley), the wall
--- between pad and yard with the YardGate. Returns the left entrance lamp
--- (it carries the plot's only light).
+--[[
+	The pad's border and the long side walls: front walls with the road
+	entrance between two lantern posts, the side walls from the road corner
+	to the yard's back corner, the wall between pad and yard with the
+	YardGate. Returns the left entrance lantern's roof (it carries the
+	plot's only light).
+	Pillars stand every ~12.5 studs on the left side wall only (on purpose):
+	neighbouring plots share a 5.8-stud alley, so every alley has one
+	pillared wall (this plot's left side) facing a plain one (the
+	neighbour's right side, with its corner pillars and brick pairs).
+	Pillars on both walls would double the rhythm across the alley and cost
+	8 more parts per plot, which the 300-part plot budget doesn't have.
+]]
 local function padWalls(plot: Model, cf: CFrame): Part?
 	local m = model("Walls", plot)
 	local k = PLOT_WALL
@@ -412,9 +451,9 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 	local sideEnd = PlotBuilder.BackWallZ - CHAMFER
 	local leftLamp: Part? = nil
 	for _, s in { -1, 1 } do
-		-- corner pillars with a lantern: the road corner and the pad/yard junction
-		pillar(m, cf, k, Vector3.new(s * P, 0, -P), { Lantern = true })
-		pillar(m, cf, k, Vector3.new(s * P, 0, P), { Lantern = true })
+		-- corner pillars: the road corner and the pad/yard junction
+		pillar(m, cf, k, Vector3.new(s * P, 0, -P))
+		pillar(m, cf, k, Vector3.new(s * P, 0, P))
 		-- the long side wall, road corner .. the yard's back corner
 		local stops = { P + P }
 		if s < 0 then
@@ -425,8 +464,9 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 		end
 		wall(m, cf, k, Vector3.new(s * L, 0, -P), Vector3.new(s * L, 0, sideEnd), {
 			Stops = stops,
-			Spacing = if s < 0 then 13 else 18,
-			ExtendB = MITER,
+			-- pairs on the pad's bays, single bricks beside the yard (none behind the foundry)
+			Bricks = if s < 0 then { 2, 2, 2, 2, 1 } else { 2, 0 },
+			TurnB = TURN,
 		})
 		-- front: corner .. the entrance post
 		local ex = PlotBuilder.EntranceHalf + postCap / 2
@@ -434,13 +474,13 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 		if s < 0 then
 			leftLamp = lamp
 		end
-		wall(m, cf, k, Vector3.new(s * P, 0, -L), Vector3.new(s * ex, 0, -L), { Spacing = 6 })
+		wall(m, cf, k, Vector3.new(s * P, 0, -L), Vector3.new(s * ex, 0, -L), { Bricks = { 2 } })
 		-- back: the YardGate post, a pillar half way and the wall to the junction
 		local gx = gate.CenterX + s * (gate.Width / 2 + postCap / 2)
-		pillar(m, cf, k, Vector3.new(gx, 0, P), { Width = postWidth, Cap = postCap, Top = postTop, Lantern = true })
+		pillar(m, cf, k, Vector3.new(gx, 0, P), { Width = postWidth, Cap = postCap, Top = postTop })
 		local midX = (math.abs(gx) + P) / 2
 		pillar(m, cf, k, Vector3.new(s * midX, 0, P))
-		wall(m, cf, k, Vector3.new(gx, 0, L), Vector3.new(s * P, 0, L), { Stops = { midX - math.abs(gx) }, Spacing = 9.5 })
+		wall(m, cf, k, Vector3.new(gx, 0, L), Vector3.new(s * P, 0, L), { Stops = { midX - math.abs(gx) }, Bricks = { 1 } })
 	end
 	return leftLamp
 end
@@ -505,8 +545,8 @@ local function fence(yard: Model, cf: CFrame)
 	for _, s in { -1, 1 } do
 		local turnA = Vector3.new(s * L, 0, backZ - CHAMFER)
 		local turnB = Vector3.new(s * (L - CHAMFER), 0, backZ)
-		wall(f, cf, k, turnA, turnB, { ExtendA = MITER, ExtendB = MITER })
-		wall(f, cf, k, turnB, Vector3.new(s * gapX, 0, backZ), { ExtendA = MITER, Spacing = 4 })
+		wall(f, cf, k, turnA, turnB, { TurnA = TURN, TurnB = TURN })
+		wall(f, cf, k, turnB, Vector3.new(s * gapX, 0, backZ), { TurnA = TURN, Bricks = { 1 } })
 		pillar(f, cf, k, Vector3.new(s * gapX, 0, backZ))
 	end
 end
@@ -561,7 +601,7 @@ local function pen(yard: Model, cf: CFrame)
 	-- low brick walls on the pen's edge (inset half a wall), split by the gate
 	wall(m, cf, k, Vector3.new(wallX0, 0, z1), Vector3.new(x1, 0, z1))
 	-- the inner side wall reaches over both corners (square corners like stone-wall)
-	wall(m, cf, k, Vector3.new(x1, 0, z0), Vector3.new(x1, 0, z1), { ExtendA = k.Cap / 2, ExtendB = k.Cap / 2 })
+	wall(m, cf, k, Vector3.new(x1, 0, z0), Vector3.new(x1, 0, z1), { TurnA = math.pi / 2, TurnB = math.pi / 2 })
 	-- the gate: two taller posts with the sign across them
 	local postX = gateHalf + 0.8
 	local gateTop = area.Size.Y + 0.4
@@ -569,7 +609,7 @@ local function pen(yard: Model, cf: CFrame)
 		local px = gateX + side * postX
 		pillar(m, cf, k, Vector3.new(px, 0, z0), { Width = 1.3, Cap = 1.65, Top = gateTop })
 		local cornerX = if side < 0 then wallX0 else x1
-		wall(m, cf, k, Vector3.new(cornerX, 0, z0), Vector3.new(px, 0, z0), { Spacing = 4.5 })
+		wall(m, cf, k, Vector3.new(cornerX, 0, z0), Vector3.new(px, 0, z0), { Bricks = { 1 } })
 	end
 	board(
 		m,
@@ -602,18 +642,18 @@ local function pen(yard: Model, cf: CFrame)
 end
 
 -- A padlock floating where the ore would be, facing the yard gate (-Z):
--- a bright gold body with a gold neon edge along its top, a pale steel
--- shackle, a dark keyhole slot and a red "locked" light. Every part is
--- opaque: PodiumService hides the lock by making its parts transparent.
+-- a bright gold body, a pale steel shackle, a dark keyhole slot and a red
+-- "locked" light, its only glow (a neon top edge bloomed white from above).
+-- Every part is opaque: PodiumService hides the lock by making its parts
+-- transparent.
 local function lock(parent: Instance, cf: CFrame): Model
 	local m = model("Lock", parent)
 	local body = Geo.block(m, cf, Vector3.new(1.5, 1.2, 0.62), LOCK_GOLD, nil, GHOST)
 	body.Name = "Body"
-	Geo.block(m, cf * CFrame.new(0, 0.6, 0), Vector3.new(1.56, 0.1, 0.68), LOCK_EDGE, NEON, GHOST)
 	for _, side in { -1, 1 } do
-		Geo.block(m, cf * CFrame.new(side * 0.46, 0.92, 0), Vector3.new(0.32, 0.56, 0.32), LOCK_STEEL, nil, GHOST)
+		Geo.block(m, cf * CFrame.new(side * 0.46, 0.88, 0), Vector3.new(0.32, 0.56, 0.32), LOCK_STEEL, nil, GHOST)
 	end
-	local bow = Geo.block(m, cf * CFrame.new(0, 1.2, 0), Vector3.new(1.24, 0.32, 0.32), LOCK_STEEL, nil, GHOST)
+	local bow = Geo.block(m, cf * CFrame.new(0, 1.16, 0), Vector3.new(1.24, 0.32, 0.32), LOCK_STEEL, nil, GHOST)
 	bow.Shape = Enum.PartType.Cylinder
 	Geo.block(m, cf * CFrame.new(0, 0.1, -0.32), Vector3.new(0.2, 0.46, 0.06), HOUSING_DARK, nil, GHOST)
 	-- the red "locked" light along the bottom of the body
@@ -622,41 +662,39 @@ local function lock(parent: Instance, cf: CFrame): Model
 	return m
 end
 
--- The podium's holo-ring (plot-local, around the ore): centre height,
--- radius of the bar centre lines, tilt (radians: the gate side dips toward
--- the player's camera, so the ring shows as an open ellipse), bar
--- thickness, and per podium a turn of the tilt toward the yard gate (Yaw,
--- per slot) and of the polygon in its plane (Spin), so neighbouring rings
--- never line up into one line.
-PlotBuilder.HoloRing = { Y = 5.2, Radius = 2.3, Tilt = math.rad(21), Bar = 0.18, Sides = 6, Yaw = 0.16, Spin = 0.45 }
+-- The podium's holo-ring (plot-local, around the ore): a level octagon of
+-- thin cyan neon bars, the same on every slot and turned like the
+-- pedestal's octagons (a flat faces the yard gate). Centre height, radius
+-- of the bar centre lines and bar thickness: the inner edge clears the
+-- widest ore at the ring's height (Prismite, 1.82 studs from the axis) and
+-- the top stays below PodiumService's income tag.
+PlotBuilder.HoloRing = { Y = 5.1, Radius = 2.0, Bar = 0.2, Sides = 8 }
 
--- The holo-ring of podium `index` as a closed polygon of thin bars on a
--- tilted circle (`Sides` bars, each tangent to the circle at its middle):
--- returns the bar CFrames and the bar size (around the podium's `base` frame).
-function PlotBuilder.holoRingBars(base: CFrame, index: number): ({ CFrame }, Vector3)
+-- The holo-ring as a closed polygon of bars (`Sides` bars, each tangent to
+-- the circle at its middle): returns the bar CFrames and the bar size
+-- (around the podium's `base` frame, on the ground at the podium's axis).
+function PlotBuilder.holoRingBars(base: CFrame): ({ CFrame }, Vector3)
 	local ring = PlotBuilder.HoloRing
-	local center = base
-		* CFrame.new(0, ring.Y, 0)
-		* CFrame.Angles(0, (index - 1) * ring.Yaw, 0)
-		* CFrame.Angles(-ring.Tilt, 0, 0)
-		* CFrame.Angles(0, index * ring.Spin, 0)
+	local center = base * CFrame.new(0, ring.Y, 0)
 	local n = ring.Sides
-	local length = 2 * ring.Radius * math.tan(math.pi / n) + ring.Bar * math.tan(math.pi / n)
+	-- long enough for the outer corners to meet
+	local length = 2 * (ring.Radius + ring.Bar / 2) * math.tan(math.pi / n)
 	local list = {}
 	for i = 0, n - 1 do
-		local angle = (i + 0.5) * 2 * math.pi / n
-		table.insert(list, center * CFrame.Angles(0, angle, 0) * CFrame.new(0, 0, -ring.Radius))
+		table.insert(list, center * CFrame.Angles(0, i * 2 * math.pi / n, 0) * CFrame.new(0, 0, -ring.Radius))
 	end
 	return list, Vector3.new(length, ring.Bar, ring.Bar)
 end
 
 --[[
-	Showpiece ore podium after Space Station table-display-planet, tapering
-	upward: a wide pale octagon base with blue corner lights, a navy bevel
-	step, a hexagonal column (pipe-ring-colored) with an orange ring and two
-	orange neon slots, an amber neon `Rim` under the pale top plate with an
-	amber neon inlay, and the ore floating above it inside a tilted cyan
-	holo-ring. An invisible `Hover` box around the ore catches the mouse for
+	Showpiece ore podium after Space Station table-display-planet: a
+	two-tier bevelled octagon pedestal (a wide pale octagon with blue light
+	slits on its diagonal faces under a narrower dark navy octagon step), a
+	hexagonal column (pipe-ring-colored) with an orange collar, a
+	pale top plate edged by the amber neon `Rim` (it reaches 0.2 past the
+	plate, so the glowing ring is the top's edge; dull on locked slots),
+	and the ore floating above it inside a level cyan holo-ring. An
+	invisible `Hover` box around the ore catches the mouse for
 	PodiumController (the ore itself is not queryable).
 ]]
 local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.Rect)
@@ -665,50 +703,37 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	local locked = index > EconomyConfig.Podiums.Free
 	local base = cf * CFrame.new(rect.Center.X, 0, rect.Center.Z)
 	local width = math.min(rect.Size.X, rect.Size.Z) - 0.1
-	-- the wide pale base (its top at 0.6) with blue lights on its four diagonal faces
-	local lowTop, lowH = 0.6, 0.75
+	-- tier 1: the wide pale octagon (its top at 0.55) with blue light slits on its four diagonal faces
+	local lowTop, lowH = 0.55, 0.7
 	local strips = prism(m, base * CFrame.new(0, lowTop - lowH / 2, 0), 8, width, lowH, SHELL, nil, SOLID)
 	local plinth = strips[1]
 	plinth.Name = "Base"
 	for i = 0, 1 do
-		local bar = base * CFrame.Angles(0, math.pi / 4 + i * math.pi / 2, 0) * CFrame.new(0, 0.28, 0)
-		Geo.block(m, bar, Vector3.new(0.8, 0.18, width + 0.08), BASE_LIGHT, NEON, GHOST)
+		local bar = base * CFrame.Angles(0, math.pi / 4 + i * math.pi / 2, 0) * CFrame.new(0, 0.26, 0)
+		Geo.block(m, bar, Vector3.new(0.7, 0.16, width + 0.08), BASE_LIGHT, NEON, GHOST)
 	end
-	-- the navy bevel step
-	local stepH, stepW = 0.45, 3.3
+	-- tier 2: the narrower octagon step in the darker metal
+	local stepH, stepW = 0.5, 3.3
 	local bevelTop = lowTop + stepH
-	cylinder(m, base * CFrame.new(0, lowTop + stepH / 2, 0), stepH, stepW, NAVY, nil, SOLID)
-	-- pale top plate over the amber rim, an amber inlay under the ore
+	prism(m, base * CFrame.new(0, lowTop + stepH / 2, 0), 8, stepW, stepH, NAVY, nil, SOLID)
+	-- the pale top plate on the amber rim
 	local topH, topW = 0.35, 2.9
 	local topY = 3.35 -- top plate centre
-	local rimH = 0.22
-	local rimTop = topY - topH / 2
-	-- hexagonal column (a flat faces the yard gate) with the orange ring low on it
+	local rimH = 0.24
+	local rimTop = topY - topH / 2 + 0.02
+	-- hexagonal column (a flat faces the yard gate) with the orange collar low on it
 	local hex = base * CFrame.Angles(0, math.pi / 6, 0)
 	local columnBottom, columnTop = bevelTop, rimTop - rimH
 	local shaft =
 		prism(m, hex * CFrame.new(0, (columnBottom + columnTop) / 2, 0), 6, 2.0, columnTop - columnBottom, HOUSING_LIGHT, nil, SOLID)
 	shaft[1].Name = "Column"
-	local ringBottom, ringH = columnBottom + 0.06, 0.42
-	cylinder(m, base * CFrame.new(0, ringBottom + ringH / 2, 0), ringH, 2.5, C.Hazard, nil, FENCE)
-	-- two glowing slots on the column's front flat, above the orange ring
-	local slotBottom = ringBottom + ringH + 0.14
-	local slotTop = columnTop - 0.14
-	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			base * CFrame.new(side * 0.34, (slotBottom + slotTop) / 2, -1.0 - 0.02),
-			Vector3.new(0.12, slotTop - slotBottom, 0.06),
-			SLOT_ORANGE,
-			NEON,
-			GHOST
-		)
-	end
+	local collarBottom, collarH = columnBottom + 0.06, 0.42
+	cylinder(m, base * CFrame.new(0, collarBottom + collarH / 2, 0), collarH, 2.5, C.Hazard, nil, FENCE)
 	local rim = cylinder(
 		m,
 		base * CFrame.new(0, rimTop - rimH / 2, 0),
 		rimH,
-		3.1,
+		topW + 0.4,
 		if locked then RIM_LOCKED else RIM_GOLD,
 		if locked then Enum.Material.SmoothPlastic else NEON,
 		GHOST
@@ -718,10 +743,8 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	top.Name = "Top"
 	attachment(top, "OrePoint", top.CFrame:ToObjectSpace(base * CFrame.new(0, BaseLayout.PodiumOreHeight, 0)))
 	attachment(top, "Prompt", top.CFrame:ToObjectSpace(base * CFrame.new(0, 2.6, -rect.Size.Z / 2 - 0.3)))
-	local inlay = cylinder(m, base * CFrame.new(0, topY + topH / 2 + 0.005, 0), 0.05, 2.2, RIM_GOLD, NEON, GHOST)
-	inlay.Name = "Inlay"
-	-- the holo-ring around the floating ore (wide enough for every ore, below the income tag)
-	local bars, barSize = PlotBuilder.holoRingBars(base, index)
+	-- the holo-ring around the floating ore
+	local bars, barSize = PlotBuilder.holoRingBars(base)
 	for _, barCF in bars do
 		local bar = Geo.block(m, barCF, barSize, HOLO, NEON, GHOST)
 		bar.Name = "HoloRing"
@@ -760,12 +783,15 @@ end
 --[[
 	Foundry placeholder in the Factory Kit look (machine-fortified): an iron
 	housing on a thick hazard-striped base, copper eaves and a pale rib that
-	wraps over the roof and down both sides, a thick frame around the ember
-	furnace mouth (an arched top, a grate; ForgeGlow pulses on the client),
-	a square hopper on the roof, a round chimney with a copper flange and an
-	ember top, and a copper pipe up the back wall.
+	wraps over the roof and down both sides; a deep portal frame around the
+	furnace mouth (a molten-orange surround set back 0.8 behind the frame
+	front, a smaller bright ember inside it, two dark grate bars in front;
+	ForgeGlow pulses on the client) with the COMING SOON plank hung across
+	the lintel above it; a hopper-square on the roof (dark inset inside the
+	copper rim, so its top reads hollow) and a round chimney with a copper
+	flange and an ember glowing in its mouth.
 ]]
-local function foundry(yard: Model, cf: CFrame, rng: Rng.Rng)
+local function foundry(yard: Model, cf: CFrame)
 	local rect = BaseLayout.Foundry
 	local m = model("Foundry", yard)
 	local c = rect.Center
@@ -787,19 +813,10 @@ local function foundry(yard: Model, cf: CFrame, rng: Rng.Rng)
 	walls.Name = "Walls"
 	-- copper eaves around the top of the walls (the warm accent from the hero camera)
 	Geo.block(m, base * CFrame.new(0, bodyTop - 0.3, 0), Vector3.new(width + 0.4, 0.6, depth + 0.4), C.Copper, nil, FENCE)
-	-- bevelled roof: a slab with sloped front and back edges
+	-- the pale roof slab, inset from the copper eaves
 	local roofH = 0.9
 	local roofTop = bodyTop + roofH
-	Geo.block(m, base * CFrame.new(0, bodyTop + roofH / 2, 0), Vector3.new(width, roofH, depth - 2), SHELL, nil, SOLID)
-	Geo.wedge(m, base * CFrame.new(0, bodyTop + roofH / 2, -depth / 2 + 0.5), Vector3.new(width, roofH, 1), SHELL, nil, FENCE)
-	Geo.wedge(
-		m,
-		base * CFrame.new(0, bodyTop + roofH / 2, depth / 2 - 0.5) * CFrame.Angles(0, math.pi, 0),
-		Vector3.new(width, roofH, 1),
-		SHELL,
-		nil,
-		FENCE
-	)
+	Geo.block(m, base * CFrame.new(0, bodyTop + roofH / 2, 0), Vector3.new(width - 0.6, roofH, depth - 0.6), SHELL, nil, SOLID)
 	-- machine-fortified rib: over the roof and down both sides, in the middle
 	local ribTop = roofTop + 0.4
 	Geo.block(
@@ -810,86 +827,95 @@ local function foundry(yard: Model, cf: CFrame, rng: Rng.Rng)
 		nil,
 		FENCE
 	)
-	-- the furnace mouth: a thick frame, a dark recess, the ember glow with an arched top and a grate
+	-- the furnace mouth: a deep portal frame (1 stud proud of the wall), a dark
+	-- recess, the molten surround and the ember inside it, a grate in front
 	local face = base * CFrame.new(0, 0, -depth / 2)
-	local mouthW, mouthTop = 5.2, 5.5
+	local mouthW, mouthTop, frameTop, frameD = 5.2, 4.9, 6.4, 1.0
 	for _, side in { -1, 1 } do
 		Geo.block(
 			m,
-			face * CFrame.new(side * (mouthW / 2 + 0.45), (bodyBottom + 6.4) / 2, -0.2),
-			Vector3.new(0.9, 6.4 - bodyBottom, 0.8),
+			face * CFrame.new(side * (mouthW / 2 + 0.45), (bodyBottom + frameTop) / 2, -frameD / 2),
+			Vector3.new(0.9, frameTop - bodyBottom, frameD),
 			SHELL,
 			nil,
 			FENCE
 		)
 	end
-	Geo.block(m, face * CFrame.new(0, (mouthTop + 6.4) / 2, -0.2), Vector3.new(mouthW + 1.8, 6.4 - mouthTop, 0.8), SHELL, nil, FENCE)
 	Geo.block(
 		m,
-		face * CFrame.new(0, (bodyBottom + mouthTop) / 2, -0.06),
-		Vector3.new(mouthW, mouthTop - bodyBottom, 0.2),
+		face * CFrame.new(0, (mouthTop + frameTop) / 2, -frameD / 2),
+		Vector3.new(mouthW + 1.8, frameTop - mouthTop, frameD),
+		SHELL,
+		nil,
+		FENCE
+	)
+	Geo.block(
+		m,
+		face * CFrame.new(0, (bodyBottom + mouthTop) / 2, -0.05),
+		Vector3.new(mouthW, mouthTop - bodyBottom, 0.1),
 		HOUSING_DARK,
 		nil,
 		GHOST
 	)
-	local glowW, glowH = 3.6, 2.3
-	local glowBottom = bodyBottom + 0.15
-	local glowMid = glowBottom + glowH / 2
-	local glow = Geo.block(m, face * CFrame.new(0, glowMid, -0.2), Vector3.new(glowW, glowH, 0.2), FURNACE, NEON, GHOST)
+	local glowW, glowH = 3.8, 2.4
+	local glowBottom = bodyBottom + 0.1
+	local glow = Geo.block(m, face * CFrame.new(0, glowBottom + glowH / 2, -0.15), Vector3.new(glowW, glowH, 0.1), FURNACE, NEON, GHOST)
 	glow.Name = "ForgeGlow"
-	Geo.block(m, face * CFrame.new(0, glowBottom + 0.55, -0.38), Vector3.new(glowW + 0.2, 0.24, 0.16), HOUSING_DARK, nil, GHOST)
-	-- sign over the frame, and a plank across the mouth: not open yet
-	board(m, face * CFrame.new(0, 7.25, -0.95), Vector3.new(8.4, 1.6, 0.2), HOUSING_DARK, "FOUNDRY", C.Fire)
+	local ember = Geo.block(m, face * CFrame.new(0, glowBottom + 0.85, -0.25), Vector3.new(2.6, 1.4, 0.1), C.Ember, NEON, GHOST)
+	ember.Name = "ForgeGlow"
+	for _, side in { -1, 1 } do
+		Geo.block(
+			m,
+			face * CFrame.new(side * 0.7, glowBottom + glowH / 2, -0.45),
+			Vector3.new(0.18, glowH + 0.2, 0.18),
+			HOUSING_DARK,
+			nil,
+			THIN
+		)
+	end
+	-- the sign over the frame, and the plank hung across the lintel above the mouth: not open yet
+	board(m, face * CFrame.new(0, 7.25, -frameD - 0.15), Vector3.new(8.4, 1.6, 0.2), HOUSING_DARK, "FOUNDRY", C.Fire)
 	local plank = board(
 		m,
-		face * CFrame.new(0, 4.65, -0.75) * CFrame.Angles(0, 0, 0.08),
-		Vector3.new(6.4, 1.1, 0.2),
+		face * CFrame.new(0, (mouthTop + frameTop) / 2, -frameD - 0.12) * CFrame.Angles(0, 0, 0.05),
+		Vector3.new(6.2, 1.15, 0.2),
 		Palette.WoodLight,
 		"COMING SOON",
 		Palette.WoodDark
 	)
 	plank.Name = "ComingSoon"
-	-- square hopper on the roof (front left): neck, funnel, copper rim
+	-- hopper-square on the roof (front left): a funnel standing on its tip, the
+	-- copper rim around a dark inset (so the top reads hollow)
 	local hopper = base * CFrame.new(-width / 2 + 3, roofTop, -2.1)
-	Geo.block(m, hopper * CFrame.new(0, 0.4, 0), Vector3.new(1.4, 0.8, 1.4), HOUSING_DARK, nil, FENCE)
 	for _, side in { -1, 1 } do
 		-- upside-down wedges, their tall sides meeting in the middle
 		Geo.wedge(
 			m,
-			hopper * CFrame.new(0, 1.4, side * 0.85) * CFrame.Angles(0, if side > 0 then math.pi else 0, math.pi),
-			Vector3.new(3.2, 1.2, 1.7),
+			hopper * CFrame.new(0, 0.7, side * 0.85) * CFrame.Angles(0, if side > 0 then math.pi else 0, math.pi),
+			Vector3.new(3.2, 1.4, 1.7),
 			HOUSING_LIGHT,
 			nil,
 			FENCE
 		)
 	end
-	Geo.block(m, hopper * CFrame.new(0, 2.35, 0), Vector3.new(3.5, 0.7, 3.5), C.Copper, nil, FENCE)
+	Geo.block(m, hopper * CFrame.new(0, 1.7, 0), Vector3.new(3.5, 0.6, 3.5), C.Copper, nil, FENCE)
+	Geo.block(m, hopper * CFrame.new(0, 2.01, 0), Vector3.new(2.7, 0.04, 2.7), HOUSING_DARK, nil, GHOST)
 	-- round chimney (back right) with a copper flange and an ember top
 	local stack = base * CFrame.new(width / 2 - 2.6, 0, depth / 2 - 1.9)
 	cylinder(m, stack * CFrame.new(0, 10.9, 0), 7.2, 2.4, HOUSING_LIGHT, nil, SOLID)
 	cylinder(m, stack * CFrame.new(0, 9.4, 0), 0.5, 2.9, C.Copper, nil, FENCE)
-	cylinder(m, stack * CFrame.new(0, 14.3, 0), 0.5, 2.9, SHELL, nil, FENCE)
-	local ember = cylinder(m, stack * CFrame.new(0, 14.6, 0), 0.2, 1.9, C.Ember, NEON, GHOST)
-	ember.Name = "ForgeGlow"
-	-- a copper pipe up the back wall into the eaves
-	cylinder(
-		m,
-		base * CFrame.new(-width / 2 + 2.6, (bodyBottom + bodyTop) / 2, depth / 2 + 0.55),
-		bodyTop - bodyBottom,
-		1.1,
-		C.Copper,
-		nil,
-		FENCE
-	)
-	local _ = rng
+	local top = cylinder(m, stack * CFrame.new(0, 14.52, 0), 0.06, 1.9, C.Ember, NEON, GHOST)
+	top.Name = "ForgeGlow"
 end
 
 --[[
 	Train stop: a paved platform with a yellow safety edge, the TRAIN STOP
-	sign on two posts beside its ends and a lamp post, and a short track
-	piece on the rail line (track-detailed: ballast, orange sleepers, pale
-	steel rails) ending in an open buffer stop (two sloped struts, a red
-	beam, two buffers down the rails, a red lamp) with an end block at the
+	sign between two square stone posts beside its ends and a
+	lantern post (Graveyard lightpost-single: a stone foot, a post, an arm
+	and a lantern under a cap), and a short track piece on the rail line at
+	the platform's far end (track-detailed: dense orange sleepers under
+	pale steel rails) ending in an open buffer stop (two sloped struts, a
+	red beam, two buffers down the rails).
 	The track piece is the `Track` model with the attribute
 	`RailwayPlaceholder`: the railway step replaces it with the through line
 	(its `BufferStop` would stand in the trains' way).
@@ -920,18 +946,13 @@ local function trainStop(yard: Model, cf: CFrame)
 		GHOST
 	)
 	Geo.block(m, cf * CFrame.new(0.7, 0.25, c.Z - rect.Size.Z / 2 - 0.5), Vector3.new(5, 0.5, 1), WALL_STONE, nil, SOLID)
-	-- sign on two posts just beyond the board's ends (they never cut into its faces)
+	-- sign on two square stone posts (the walls' stone) just beyond the board's
+	-- ends (they never cut into its faces), a little taller than the board
 	local signZ = c.Z + 0.3
 	local signW = 7.4
 	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			cf * CFrame.new(c.X + 5 + side * (signW / 2 + 0.25), platformH + 2.5, signZ),
-			Vector3.new(0.45, 5, 0.45),
-			HOUSING_DARK,
-			nil,
-			THIN
-		)
+		local x = c.X + 5 + side * (signW / 2 + 0.4)
+		Geo.block(m, cf * CFrame.new(x, platformH + 2.65, signZ), Vector3.new(0.75, 5.3, 0.75), WALL_STONE, nil, FENCE)
 	end
 	local stopSign =
 		board(m, cf * CFrame.new(c.X + 5, platformH + 4.2, signZ), Vector3.new(signW, 1.6, 0.22), HOUSING_DARK, "TRAIN STOP", Palette.Gold)
@@ -942,29 +963,36 @@ local function trainStop(yard: Model, cf: CFrame)
 		back.Face = Enum.NormalId.Back
 		back.Parent = stopSign
 	end
-	-- lamp post with a lantern (no light: neon only, lights are budgeted on mobile)
-	local lamp = cf * CFrame.new(c.X - rect.Size.X / 2 + 1.2, platformH, signZ) * CFrame.Angles(0, math.pi / 2, 0)
-	Geo.block(m, lamp * CFrame.new(0, 3.5, 0), Vector3.new(0.5, 7, 0.5), HOUSING_DARK, nil, FENCE)
-	Geo.block(m, lamp * CFrame.new(0, 7.3, 0), Vector3.new(0.6, 0.6, 0.6), LAMP_AMBER, NEON, GHOST)
-	-- the track piece on the rail line: ballast, four sleepers, two rails
+	-- lantern post (Graveyard lightpost-single; neon only, lights are budgeted on mobile):
+	-- a stone foot, a dark post and its arm toward the rails, which widens into the
+	-- cap of the lantern hanging under it
+	local lamp = cf * CFrame.new(c.X - rect.Size.X / 2 + 1.2, platformH, signZ)
+	local postH = 5.6
+	Geo.block(m, lamp * CFrame.new(0, 0.3, 0), Vector3.new(0.9, 0.6, 0.9), WALL_CAP, nil, THIN)
+	Geo.block(m, lamp * CFrame.new(0, postH / 2, 0), Vector3.new(0.36, postH, 0.36), HOUSING_DARK, nil, THIN)
+	Geo.block(m, lamp * CFrame.new(0, postH - 0.1, 0.55), Vector3.new(0.66, 0.18, 1.5), HOUSING_DARK, nil, GHOST)
+	Geo.block(m, lamp * CFrame.new(0, postH - 0.52, 0.9), Vector3.new(0.44, 0.66, 0.44), LAMP_AMBER, NEON, GHOST)
+	-- the track piece at the platform's +X end (track-detailed has no ballast): six sleepers, two rails
 	local track = model("Track", m)
 	track:SetAttribute("RailwayPlaceholder", true)
 	local railZ = BaseLayout.RailZ
-	local half = rect.Size.X / 2 + 2
+	local stopX = c.X + rect.Size.X / 2 + 2 -- the buffer stop, just past the platform's end
+	local trackL = 14
+	local trackX = stopX - trackL / 2
 	local gauge = 2.5
-	Geo.block(track, cf * CFrame.new(c.X, -0.2, railZ), Vector3.new(half * 2, 0.4, 5.2), C.CobbleDark, nil, SOLID)
-	local sleepers = 4
+	local sleepers = 6
+	local pitch = 2.3
 	for i = 0, sleepers - 1 do
-		local x = -half + (i + 0.5) * (half * 2 / sleepers)
-		Geo.block(track, cf * CFrame.new(c.X + x, 0.12, railZ), Vector3.new(1.6, 0.24, 4.4), SLEEPER, nil, THIN)
+		local x = stopX - 1.4 - i * pitch
+		Geo.block(track, cf * CFrame.new(x, 0.12, railZ), Vector3.new(1.1, 0.24, 4.4), SLEEPER, nil, THIN)
 	end
 	for _, side in { -1, 1 } do
-		Geo.block(track, cf * CFrame.new(c.X, 0.42, railZ + side * gauge / 2), Vector3.new(half * 2, 0.36, 0.36), RAIL_STEEL, nil, THIN)
+		Geo.block(track, cf * CFrame.new(trackX, 0.42, railZ + side * gauge / 2), Vector3.new(trackL, 0.36, 0.36), RAIL_STEEL, nil, THIN)
 	end
 	-- open buffer stop at the +X end: two sloped struts, a red beam facing the track,
-	-- two buffers pointing down the rails and a red lamp on top
+	-- two buffers pointing down the rails
 	local buffer = model("BufferStop", track)
-	local stop = cf * CFrame.new(c.X + half, 0, railZ)
+	local stop = cf * CFrame.new(stopX, 0, railZ)
 	local beamH, beamY = 0.8, 1.25
 	for _, side in { -1, 1 } do
 		-- wedge: tall side at the beam, sloping down away from the track
@@ -982,11 +1010,10 @@ local function trainStop(yard: Model, cf: CFrame)
 		local pad = Geo.block(buffer, stop * CFrame.new(-0.35, beamY, side * gauge / 2), Vector3.new(0.5, 0.8, 0.8), RAIL_STEEL, nil, THIN)
 		pad.Shape = Enum.PartType.Cylinder
 	end
-	Geo.block(buffer, stop * CFrame.new(0.2, beamY + beamH / 2 + 0.22, 0), Vector3.new(0.45, 0.44, 0.45), C.AwningRed, NEON, GHOST)
 end
 
 -- The yard behind a plot (plot-local +Z side), from BaseLayout.
-function PlotBuilder.buildYard(parent: Instance, cf: CFrame, rng: Rng.Rng): Model
+function PlotBuilder.buildYard(parent: Instance, cf: CFrame): Model
 	local yard = model("Yard", parent)
 	ground(yard, cf)
 	fence(yard, cf)
@@ -994,7 +1021,7 @@ function PlotBuilder.buildYard(parent: Instance, cf: CFrame, rng: Rng.Rng): Mode
 	for index, rect in BaseLayout.Podiums do
 		podium(yard, cf, index, rect)
 	end
-	foundry(yard, cf, rng)
+	foundry(yard, cf)
 	trainStop(yard, cf)
 	return yard
 end
@@ -1085,18 +1112,19 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	end
 
 	-- brick walls on the border: the road entrance at the front (-Z local)
-	-- between two lamp posts, the YardGate in the back wall
+	-- between two lamp posts, the YardGate in the back wall; the plot's one light
+	-- hangs in the left entrance lantern's roof plate
 	local entranceLamp = padWalls(m, cf)
 	if entranceLamp then
-		Props.pointLight(entranceLamp, Palette.LampGlow, 16, 1.2)
+		Props.pointLight(entranceLamp, Palette.LampGlow, 16, 0.8)
 	end
 
-	-- name sign at the front, facing the road, before the left front wall (posts behind the board)
+	-- name sign at the front, facing the road: mounted on the road face of the
+	-- left front wall, standing up over its rounded cap
 	local railProps = { CanTouch = false, CanQuery = false }
-	local signBase = cf * CFrame.new(-(PlotBuilder.EntranceHalf + WALL_LINE) / 2, 0, -half - 2.6)
-	Geo.block(m, signBase * CFrame.new(-2.6, 2.6, 0.45), Vector3.new(0.5, 5.2, 0.5), Palette.WoodDark, nil, railProps)
-	Geo.block(m, signBase * CFrame.new(2.6, 2.6, 0.45), Vector3.new(0.5, 5.2, 0.5), Palette.WoodDark, nil, railProps)
-	local sign = Props.sign(m, signBase * CFrame.new(0, 4, 0), "Free Plot", 6.4, 2.2, Palette.WoodLight, Palette.WoodDark)
+	local signZ = -WALL_LINE - PLOT_WALL.Cap / 2 - 0.27
+	local signBase = cf * CFrame.new(-(PlotBuilder.EntranceHalf + WALL_LINE) / 2, 0, signZ)
+	local sign = Props.sign(m, signBase * CFrame.new(0, 3.45, 0), "Free Plot", 6.4, 2.2, Palette.WoodLight, Palette.WoodDark)
 	sign.Name = "PlotSign"
 
 	-- banner pole rising out of the back right wall pillar (owner color); it
@@ -1111,7 +1139,7 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 		})
 	banner.Name = "Banner"
 
-	PlotBuilder.buildYard(m, cf, Rng.new(`Yard/{plot.Id}`))
+	PlotBuilder.buildYard(m, cf)
 
 	local machines = Instance.new("Folder")
 	machines.Name = "Machines"
