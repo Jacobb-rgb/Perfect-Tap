@@ -1,0 +1,116 @@
+--[[
+	The Tech shop panel over the game (scene "tech_shop" for
+	tools/lune/export_scene.luau: the world, shots in
+	tools/preview/tech_shop_shots.json at the UPGRADES stall).
+	Everything is drawn with the game's own code (TechShopView.build /
+	layout / cards / setCards, HudView) from a mid-game State snapshot.
+	UI overlays (build/preview/<name>.json):
+	  ui_tech_machines     PC, MACHINES tab: 5 belts just bought ("BOUGHT!"
+	                       on BUY 5, the server's toast in the header)
+	  ui_tech_upgrades     PC, UPGRADES tab: one card says why it can't buy
+	  ui_tech_automation   PC, AUTOMATION tab: billboard owned, Direct Unload next
+	  ui_tech_phone        667 x 375 pt phone (compact layout), MACHINES tab
+	  ui_tech_phone_small  568 x 320 pt phone, UPGRADES tab
+]]
+
+local roblox = require("@lune/roblox") :: any
+local UiExport = require("./uiexport")
+
+local Preview = {}
+
+Preview.Coins = 48250
+
+-- A mid-game player: a few belts and a Cleaning Plant waiting, some upgrades bought.
+Preview.State = {
+	Coins = Preview.Coins,
+	MachineInventory = { Conveyor = 12, AutoCleaner = 1 },
+	Placed = {
+		{ Id = "CleaningStation" },
+		{ Id = "ClayFurnace" },
+		{ Id = "Crusher" },
+		{ Id = "Conveyor" },
+		{ Id = "Conveyor" },
+		{ Id = "Conveyor" },
+		{ Id = "Conveyor" },
+		{ Id = "Conveyor" },
+		{ Id = "Conveyor" },
+	},
+	MachineUpgrades = { AutoCleaner = { Speed = 1, Quality = 2 }, ClayFurnace = { Speed = 2 } },
+	Upgrades = { Bellows = 2, ExtraSlots = 1, PenLevel = 1, PenAutomation = 1 },
+	Perks = { Workshop = false },
+}
+
+function Preview.build(Loader: any): { [string]: any }
+	local C3 = roblox.Color3
+	local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
+	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+
+	local scale = 1.25 -- 900 px tall render / 720 design height
+	local phoneScale = TechShopView.PhoneScale * 900 / 375 -- a 667 x 375 pt phone scaled up to the render
+	local smallScale = TechShopView.PhoneScale * 900 / 320 -- a 568 x 320 pt phone
+	local smallInset = math.floor(58 * 900 / 320) -- its 58 pt top bar, in render pixels
+
+	local function hud(uiScale: number): any
+		local refs = HudView.build()
+		refs.Gui.Scale.Scale = uiScale
+		refs.Coins.Text = Format.money(Preview.Coins)
+		refs.Income.Text = Format.perSecond(64)
+		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
+		refs.CarryLabel.Text = "CARRYING 0/3"
+		for i = 1, 3 do
+			HudView.slot(refs.CarrySlots, nil, i)
+		end
+		refs.Toasts:ClearAllChildren()
+		return refs
+	end
+
+	-- the shop as TechShopController shows it
+	local function view(uiScale: number, compact: boolean, maxWidth: number, maxHeight: number, tab: string): any
+		local refs = TechShopView.build(compact)
+		refs.Gui.Scale.Scale = uiScale
+		refs.Gui.Enabled = true
+		TechShopView.layout(refs, compact, maxWidth, maxHeight)
+		TechShopView.setTab(refs, tab)
+		TechShopView.setCoins(refs, Preview.Coins)
+		TechShopView.setCards(refs, TechShopView.cards(Preview.State, Preview.Coins))
+		refs.Hint.Text = "Click a tab, then BUY   •   Backspace: close"
+		return refs
+	end
+
+	local exports: { [string]: any } = {}
+	local pcWidth, pcHeight = 1600 / scale, (900 - 36) / scale
+
+	-- MACHINES: 5 belts just bought
+	local hud1 = hud(scale)
+	local machines = view(scale, false, pcWidth, pcHeight, "Machines")
+	local belt = machines.Rows.Conveyor
+	local five = belt.Buttons[2]
+	five.Text = "BOUGHT!"
+	TechShopView.style(five, true, Theme.Good, Theme.GoodDark)
+	TechShopView.showReceipt(machines, "Bought 5 Conveyors! Place them in Build mode.", Theme.Good)
+	exports.ui_tech_machines = UiExport.export({ hud1.Gui, machines.Gui })
+
+	-- UPGRADES: a card that can't be bought says why
+	local hud2 = hud(scale)
+	local upgrades = view(scale, false, pcWidth, pcHeight, "Upgrades")
+	TechShopView.setStatus(upgrades, "Upgrade:AutoCleaner:Quality", "Not enough coins", Theme.Bad)
+	exports.ui_tech_upgrades = UiExport.export({ hud2.Gui, upgrades.Gui })
+
+	-- AUTOMATION
+	local hud3 = hud(scale)
+	local automation = view(scale, false, pcWidth, pcHeight, "Automation")
+	exports.ui_tech_automation = UiExport.export({ hud3.Gui, automation.Gui })
+
+	-- phones: the compact layout
+	local hud4 = hud(phoneScale)
+	local phone = view(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, "Machines")
+	exports.ui_tech_phone = UiExport.export({ hud4.Gui, phone.Gui })
+	local hud5 = hud(smallScale)
+	local small = view(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, "Upgrades")
+	exports.ui_tech_phone_small = UiExport.export({ hud5.Gui, small.Gui })
+	return exports
+end
+
+return Preview
