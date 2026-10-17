@@ -90,6 +90,8 @@ elseif sceneName == "kenney_check" then -- the Kenney Blaster Kit shapes rebuilt
 	require("./lib/blaster_kenney").buildCheck(Loader, workspace)
 elseif sceneName == "blaster_kenney" then -- the ten levels: Kenney shapes with the Ore Glow skins
 	require("./lib/blaster_kenney").build(Loader, workspace)
+elseif sceneName == "horizon_kenney" then -- Kenney kit models rebuilt from boxes for the horizon (tools/lune/lib/horizon_gallery.luau)
+	require("./lib/horizon_gallery").build(Loader, workspace)
 elseif sceneName == "kit_check" then -- Space Station / Mini Dungeon / City pieces rebuilt from parts (tools/lune/lib/kenney_kit.luau)
 	require("./lib/kenney_kit").buildCheck(Loader, workspace)
 elseif sceneName == "blaster_shop_lobby" then -- TEST: the Forge Vault placed in the lobby (preview only)

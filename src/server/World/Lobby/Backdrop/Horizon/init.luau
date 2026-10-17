@@ -3,9 +3,14 @@
 	out on empty sea or the void.
 
 	  Ring      the outer sea out to ~3000 studs and low cloud banks on the horizon
-	  Isles     far islands all around (Kenney Pirate Kit shapes + Candy sea stacks)
-	  Pirates   big pirate ships and a merchant galleon, bobbing
-	  SkyLife   two more balloons, three floating islets, circling bird flocks
+	  Isles     far islands all around: Kenney Hexagon Kit tiles and buildings,
+	            Survival / Fantasy Town props, two lighthouses, Candy stacks
+	  Fleet     Kenney Watercraft Kit ships: the ocean liner, a pirate galleon,
+	            a container ship, a tug, a houseboat, sailing boats; bobbing
+	  Heavens   five more Kenney Planets worlds, four constellations, clouds
+
+	The Kenney models are the CC0 kits the owner sent, turned into boxes by
+	tools/kenney/voxelize.mjs (Kenney/*) and rebuilt from parts (Blocks).
 
 	Everything is unreachable decoration far outside the lobby (no
 	collision, no raycasts, no shadows, no lights). StreamingTargetRadius is
@@ -20,8 +25,8 @@ local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Ring = require(script.Ring)
 local Isles = require(script.Isles)
-local Pirates = require(script.Pirates)
-local SkyLife = require(script.SkyLife)
+local Fleet = require(script.Fleet)
+local Heavens = require(script.Heavens)
 
 local Horizon = {}
 
@@ -29,8 +34,8 @@ type Step = { Name: string, Build: (Instance, Rng.Rng) -> Model }
 local STEPS: { Step } = {
 	{ Name = "Ring", Build = Ring.build },
 	{ Name = "Isles", Build = Isles.build },
-	{ Name = "Pirates", Build = Pirates.build },
-	{ Name = "SkyLife", Build = SkyLife.build },
+	{ Name = "Fleet", Build = Fleet.build },
+	{ Name = "Heavens", Build = Heavens.build },
 }
 
 function Horizon.build(parent: Instance, rng: Rng.Rng): Model

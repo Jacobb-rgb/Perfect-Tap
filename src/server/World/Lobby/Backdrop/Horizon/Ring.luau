@@ -64,14 +64,7 @@ local function outerSea(parent: Instance)
 	local m = Style.model("OuterSea", parent)
 	for _, strip in Ring.seaStrips() do
 		local a, b = strip[1], strip[2]
-		local sea = Style.block(
-			m,
-			CFrame.new((a + b) / 2),
-			b - a,
-			C.Sea,
-			Enum.Material.SmoothPlastic,
-			Kit.far({ Reflectance = 0.2 })
-		)
+		local sea = Style.block(m, CFrame.new((a + b) / 2), b - a, C.Sea, Enum.Material.SmoothPlastic, Kit.far({ Reflectance = 0.2 }))
 		sea.Name = "Sea"
 	end
 end
@@ -87,7 +80,14 @@ end
 local function puff(m: Model, frame: CFrame, at: Vector3, w: number, h: number, color: Color3, rng: Rng.Rng)
 	local cf = frame * CFrame.new(at)
 	Style.block(m, cf, Vector3.new(w, h, w), Style.vary(color, rng, 0.03), nil, Kit.far())
-	Style.block(m, cf * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.92, h * 0.94, w * 0.92), Style.vary(color, rng, 0.03), nil, Kit.far())
+	Style.block(
+		m,
+		cf * CFrame.Angles(0, math.pi / 4, 0),
+		Vector3.new(w * 0.92, h * 0.94, w * 0.92),
+		Style.vary(color, rng, 0.03),
+		nil,
+		Kit.far()
+	)
 end
 
 -- One low cumulus bank on the water: a wide rounded base, three mounds and

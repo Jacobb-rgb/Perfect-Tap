@@ -40,9 +40,9 @@ return function(T, Loader)
 		return Vector3.new(p.X - hx, p.Y - hy, p.Z - hz), Vector3.new(p.X + hx, p.Y + hy, p.Z + hz)
 	end
 
-	T.test("horizon builds its ring, isles, ships and sky life", function()
+	T.test("horizon builds its ring, isles, fleet and heavens", function()
 		T.truthy(horizon, "Backdrop builds Horizon")
-		for _, name in { "Ring", "Isles", "Pirates", "SkyLife" } do
+		for _, name in { "Ring", "Isles", "Fleet", "Heavens" } do
 			T.truthy(horizon:FindFirstChild(name), "Horizon." .. name)
 		end
 	end)
@@ -100,8 +100,8 @@ return function(T, Loader)
 		for _, part in parts(horizon) do
 			local min, max = bounds(part)
 			local sea = part.Parent and part.Parent.Name == "OuterSea"
-			-- sky life may hang over the town, everything else stays far out
-			local inSky = part:FindFirstAncestor("SkyLife") ~= nil and min.Y > 50
+			-- the heavens may hang over the town, everything else stays far out
+			local inSky = part:FindFirstAncestor("Heavens") ~= nil and min.Y > 50
 			if not sea and not inSky then
 				local over = min.X < keepMax.X and max.X > keepMin.X and min.Z < keepMax.Z and max.Z > keepMin.Z
 				T.falsy(over, `{part:GetFullName()} comes close to the island ({min} {max})`)
@@ -113,7 +113,11 @@ return function(T, Loader)
 					for i = 0, 2 do
 						for j = 0, 2 do
 							for k = 0, 2 do
-								local p = Vector3.new(min.X + (max.X - min.X) * i / 2, min.Y + (max.Y - min.Y) * j / 2, min.Z + (max.Z - min.Z) * k / 2)
+								local p = Vector3.new(
+									min.X + (max.X - min.X) * i / 2,
+									min.Y + (max.Y - min.Y) * j / 2,
+									min.Z + (max.Z - min.Z) * k / 2
+								)
 								local lp = frame:PointToObjectSpace(Vector3.new(p.X, piece.Center.Y, p.Z))
 								hit = hit
 									or (
@@ -131,6 +135,35 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("the generated Kenney models are well formed", function()
+		local Blocks = Loader.requirePath("ServerScriptService.Server.World.Lobby.Backdrop.Horizon.Blocks")
+		local fs = require("@lune/fs")
+		local dir = "src/server/World/Lobby/Backdrop/Horizon/Kenney"
+		local count = 0
+		for _, file in fs.readDir(dir) do
+			local name = string.match(file, "^(.-)%.luau$")
+			if name then
+				count += 1
+				local data = Loader.requirePath("ServerScriptService.Server.World.Lobby.Backdrop.Horizon.Kenney." .. name)
+				T.truthy(data.Voxel > 0 and #data.Colors > 0, name .. " has a grid and colours")
+				T.eq(#data.Boxes % 7, 0, name .. " boxes come in sevens")
+				for i = 1, #data.Boxes, 7 do
+					local c = data.Boxes[i + 6]
+					T.truthy(c >= 1 and c <= #data.Colors, `{name} box {i // 7 + 1} colour`)
+					T.truthy(
+						data.Boxes[i + 3] > data.Boxes[i]
+							and data.Boxes[i + 4] > data.Boxes[i + 1]
+							and data.Boxes[i + 5] > data.Boxes[i + 2],
+						`{name} box {i // 7 + 1} size`
+					)
+				end
+				local m = Blocks.build(roblox.Instance.new("Model"), data, roblox.CFrame.new(), 30)
+				T.eq(#parts(m), #data.Boxes // 7, name .. " builds one part per box")
+			end
+		end
+		T.truthy(count >= 15, "the Kenney models are generated")
+	end)
+
 	T.test("the horizon build is deterministic and inside its budget", function()
 		local a = roblox.Instance.new("Model")
 		local b = roblox.Instance.new("Model")
@@ -143,6 +176,6 @@ return function(T, Loader)
 			sum += (part.CFrame.Position - pb[i].CFrame.Position).Magnitude
 		end
 		T.near(sum, 0, 1e-6, "same positions")
-		T.le(#parts(horizon), 1150, "Horizon parts")
+		T.le(#parts(horizon), 2600, "Horizon parts")
 	end)
 end
