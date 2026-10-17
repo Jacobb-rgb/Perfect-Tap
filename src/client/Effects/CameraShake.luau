@@ -2,6 +2,7 @@
 	Small, juicy camera shake (trauma model). Applied after the default
 	camera each frame, so it works with any camera mode.
 	CameraShake.add(0.3) -- light hit; 0.6 big crack; 1.0 explosion
+	CameraShake.setEnabled(false) turns it off (the player's Settings).
 ]]
 
 local RunService = game:GetService("RunService")
@@ -16,6 +17,7 @@ local DECAY = 2.4 -- trauma lost per second
 local t = 0
 local bound = false
 local applied = CFrame.identity -- offset added last frame, removed before the camera updates
+local enabled = true
 
 local function noise(seed: number): number
 	return math.noise(t * 22, seed) * 2
@@ -52,8 +54,19 @@ local function bind()
 end
 
 function CameraShake.add(amount: number)
+	if not enabled then
+		return
+	end
 	bind()
 	trauma = math.min(1, trauma + amount)
+end
+
+-- Off: no new shake, and any shake in progress stops at once.
+function CameraShake.setEnabled(on: boolean)
+	enabled = on
+	if not on then
+		trauma = 0
+	end
 end
 
 return CameraShake

@@ -1,0 +1,17 @@
+{
+  "menus_plaza": {"scene": "menus", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24},
+  "menus_hall": {"scene": "menus", "position": [10.6, 7.2, -16.5], "target": [14, 6.2, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "menus_scanner": {"scene": "menus", "position": [33, 7.5, 82], "target": [43, 4, 69], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "menus_ui_hud": {"scene": "menus", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_menu_hud"},
+  "menus_ui_phone": {"scene": "menus", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_menu_phone", "uiInset": 139},
+  "menus_ui_phone_small": {"scene": "menus", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_menu_phone_small", "uiInset": 163},
+  "menus_ui_codex": {"scene": "menus", "position": [33, 7.5, 82], "target": [43, 4, 69], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_codex"},
+  "menus_ui_codex_hidden": {"scene": "menus", "position": [33, 7.5, 82], "target": [43, 4, 69], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_codex_hidden"},
+  "menus_ui_codex_phone": {"scene": "menus", "position": [33, 7.5, 82], "target": [43, 4, 69], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_codex_phone", "uiInset": 139},
+  "menus_ui_settings": {"scene": "menus", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_settings"},
+  "menus_ui_settings_phone": {"scene": "menus", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_settings_phone", "uiInset": 139},
+  "menus_ui_boards": {"scene": "menus", "position": [10.6, 7.2, -16.5], "target": [14, 6.2, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_boards"},
+  "menus_ui_boards_phone": {"scene": "menus", "position": [10.6, 7.2, -16.5], "target": [14, 6.2, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_boards_phone", "uiInset": 139},
+  "menus_ui_board_closeup": {"scene": "menus", "position": [10.6, 7.2, -16.5], "target": [14, 6.2, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_board_closeup", "uiInset": 0},
+  "menus_ui_board_studio": {"scene": "menus", "position": [10.6, 7.2, -16.5], "target": [14, 6.2, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_board_studio", "uiInset": 0}
+}

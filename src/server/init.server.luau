@@ -46,6 +46,8 @@ local ORDER = {
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
+	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
+	"SettingsService", -- the side menu's SETTINGS record
 }
 
 local loaded = {}

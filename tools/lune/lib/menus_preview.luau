@@ -1,0 +1,284 @@
+--[[
+	The side menu, the ORE CODEX, SETTINGS and the leaderboards over the game
+	(scene "menus" for tools/lune/export_scene.luau: the world; shots in
+	tools/preview/menus_shots.json). Everything is drawn with the game's own
+	builders (SideMenuView, CodexView, SettingsView, LeaderboardView,
+	HudView, TeleportView, BuildView) from sample data.
+	UI overlays (build/preview/<name>.json):
+	  ui_menu_hud        PC: the HUD with the side menu (CODEX badge, SOON chips)
+	  ui_menu_phone      667 x 375 pt phone: the side menu in two columns
+	  ui_menu_phone_small 568 x 320 pt phone
+	  ui_codex           PC: the codex, 14 of 30 found, Ruby selected (NEW)
+	  ui_codex_hidden    PC: an undiscovered ore selected
+	  ui_codex_phone     667 x 375 pt phone (compact)
+	  ui_settings        PC: SETTINGS
+	  ui_settings_phone  667 x 375 pt phone
+	  ui_boards          PC: HALL OF FAME panel, TOTAL EARNED tab
+	  ui_boards_phone    667 x 375 pt phone, MONEY/S tab
+	  ui_board_closeup   the four lobby boards as the SurfaceGuis draw them
+	                     (navy board, the hall's title strip, 5 rows, YOUR line)
+	  ui_board_studio    one board in Studio without DataStores
+	(the 3D renderer draws one text per SurfaceGui, so the lobby boards are
+	shown as a close-up overlay)
+]]
+
+local roblox = require("@lune/roblox") :: any
+local UiExport = require("./uiexport")
+
+local Preview = {}
+
+Preview.Discovered = {
+	"Coal",
+	"Copper",
+	"Tin",
+	"Iron",
+	"Quartz",
+	"Silver",
+	"Amethyst",
+	"Jade",
+	"Emberite",
+	"Cobalt",
+	"Gold",
+	"Ruby",
+	"Azurium",
+	"Sapphire",
+}
+Preview.Fresh = { Ruby = true, Sapphire = true }
+Preview.Me = 9001
+
+local NAMES = {
+	"EmberQueen",
+	"RockyMiner77",
+	"Forgekeeper_Ola",
+	"CrystalKid",
+	"DeepHollowDan",
+	"Pickaxe_Pat",
+	"You_TerraFan",
+	"GolemWhisperer",
+	"SparkyStone",
+	"QuarryQuinn",
+}
+
+-- A sample Leaderboards payload: 10 rows per board, you at rank 7 on TOTAL EARNED.
+function Preview.payload(): any
+	local boards = {}
+	local bases = { MoneyPerSec = 4.2e9, TotalEarned = 8.2e15, Artifacts = 412, HoursPlayed = 380 * 3600 }
+	for id, base in bases do
+		local rows = {}
+		for i, name in NAMES do
+			local value = if id == "Artifacts" or id == "HoursPlayed" then math.floor(base / (1 + (i - 1) * 0.35)) else base / 3.1 ^ (i - 1)
+			table.insert(rows, { Rank = i, UserId = if i == 7 then Preview.Me else 1000 + i, Name = name, Value = value })
+		end
+		boards[id] = { Rows = rows, Ready = true }
+	end
+	return {
+		Live = true,
+		Boards = boards,
+		Own = {
+			MoneyPerSec = { Value = 1840 },
+			TotalEarned = { Value = boards.TotalEarned.Rows[7].Value, Rank = 7 },
+			Artifacts = { Value = 18 },
+			HoursPlayed = { Value = 12.5 * 3600 },
+		},
+	}
+end
+
+function Preview.build(Loader: any): { [string]: any }
+	local C3 = roblox.Color3
+	local UDim2 = roblox.UDim2
+	local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+	local LeaderboardConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LeaderboardConfig")
+	local SettingsConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SettingsConfig")
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+	local UI = "StarterPlayer.StarterPlayerScripts.Client.UI."
+	local UIKit = Loader.requirePath(UI .. "UIKit")
+	local HudView = Loader.requirePath(UI .. "HudView")
+	local TeleportView = Loader.requirePath(UI .. "TeleportView")
+	local BuildView = Loader.requirePath(UI .. "BuildView")
+	local MenuPanel = Loader.requirePath(UI .. "MenuPanel")
+	local SideMenuView = Loader.requirePath(UI .. "SideMenuView")
+	local CodexView = Loader.requirePath(UI .. "CodexView")
+	local SettingsView = Loader.requirePath(UI .. "SettingsView")
+	local LeaderboardView = Loader.requirePath(UI .. "LeaderboardView")
+
+	local PC = 1.25 -- 900 px tall render / 720 design height
+	local PHONE = MenuPanel.PhoneScale
+	-- a 667 x 375 pt phone scaled up to the 1600 x 900 render; its 58 pt top bar
+	local phoneScale = PHONE * 900 / 375
+	local phoneInset = 58 * 900 / 375
+	local smallScale = PHONE * 900 / 320
+	local smallInset = 58 * 900 / 320
+	local pcW, pcH = 1600 / PC, (900 - 36) / PC
+
+	local discovered = {}
+	for _, id in Preview.Discovered do
+		discovered[id] = true
+	end
+
+	local function hud(renderScale: number, uiScale: number): any
+		local refs = HudView.build()
+		refs.Gui.Scale.Scale = renderScale
+		BuildView.menuButton(refs.Menu)
+		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale)
+		TeleportView.relayout(teleport, refs.TopBar, uiScale)
+		refs.Coins.Text = Format.money(4.82e6)
+		refs.Income.Text = Format.perSecond(1840)
+		refs.Income.TextColor3 = Theme.Good
+		refs.CarryLabel.Text = "CARRYING 0/3"
+		for i = 1, 3 do
+			HudView.slot(refs.CarrySlots, nil, i)
+		end
+		refs.Toasts:ClearAllChildren()
+		return refs
+	end
+
+	local function menu(renderScale: number, uiScale: number, designH: number): any
+		local refs = SideMenuView.build()
+		refs.Gui.Scale.Scale = renderScale
+		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH))
+		SideMenuView.setBadge(refs, "Codex", 2)
+		for _, id in { "Golems", "Collection", "Store" } do
+			SideMenuView.setSoon(refs, id, true)
+		end
+		return refs
+	end
+
+	local exports: { [string]: any } = {}
+
+	-- the HUD with the side menu
+	exports.ui_menu_hud = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui })
+	local phoneDesignH = (900 - phoneInset) / phoneScale
+	exports.ui_menu_phone = UiExport.export({ hud(phoneScale, PHONE).Gui, menu(phoneScale, PHONE, phoneDesignH).Gui })
+	local smallDesignH = (900 - smallInset) / smallScale
+	exports.ui_menu_phone_small = UiExport.export({ hud(smallScale, PHONE).Gui, menu(smallScale, PHONE, smallDesignH).Gui })
+
+	-- the codex
+	local function codex(renderScale: number, compact: boolean, maxW: number, maxH: number, select: string): any
+		local refs = CodexView.build(compact)
+		refs.Gui.Scale.Scale = renderScale
+		refs.Gui.Enabled = true
+		CodexView.layout(refs, compact, maxW, maxH)
+		local entries = CodexView.entries(discovered, Preview.Fresh)
+		CodexView.setEntries(refs, entries)
+		for _, entry in entries do
+			if entry.Ore.Id == select then
+				CodexView.select(refs, entry)
+			end
+		end
+		MenuPanel.setHint(refs.Frame, "Click an ore to read about it · Backspace: close", nil)
+		return refs
+	end
+	exports.ui_codex = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Ruby").Gui })
+	exports.ui_codex_hidden = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Heartstone").Gui })
+	exports.ui_codex_phone = UiExport.export({
+		hud(phoneScale, PHONE).Gui,
+		menu(phoneScale, PHONE, phoneDesignH).Gui,
+		codex(phoneScale, true, 1600 / phoneScale, phoneDesignH, "Sapphire").Gui,
+	})
+
+	-- settings
+	local function settings(renderScale: number, compact: boolean, maxW: number, maxH: number): any
+		local refs = SettingsView.build(compact)
+		refs.Gui.Scale.Scale = renderScale
+		refs.Gui.Enabled = true
+		SettingsView.layout(refs, compact, maxW, maxH)
+		SettingsView.set(refs, SettingsConfig.sanitize({ Music = 0.6, Sfx = 0.8, Shake = true, Rumble = false }))
+		MenuPanel.setHint(refs.Frame, "Drag a bar or use - and + · Backspace: close", nil)
+		return refs
+	end
+	exports.ui_settings = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, settings(PC, false, pcW, pcH).Gui })
+	exports.ui_settings_phone = UiExport.export({
+		hud(phoneScale, PHONE).Gui,
+		menu(phoneScale, PHONE, phoneDesignH).Gui,
+		settings(phoneScale, true, 1600 / phoneScale, phoneDesignH).Gui,
+	})
+
+	-- the HALL OF FAME panel
+	local payload = LeaderboardView.sanitize(Preview.payload())
+	local function boards(renderScale: number, compact: boolean, maxW: number, maxH: number, tab: string): any
+		local panel = LeaderboardView.buildPanel(compact)
+		panel.Gui.Scale.Scale = renderScale
+		panel.Gui.Enabled = true
+		LeaderboardView.layoutPanel(panel, compact, maxW, maxH)
+		LeaderboardView.setTab(panel, tab)
+		for id, canvas in panel.Canvases do
+			local lines =
+				LeaderboardView.lines(id, payload.Boards[id], payload.Own[id], Preview.Me, LeaderboardConfig.TopCount, payload.Live)
+			LeaderboardView.fill(canvas, lines)
+		end
+		MenuPanel.setHint(panel.Frame, "Click a tab to see a board · Backspace: close", nil)
+		return panel
+	end
+	exports.ui_boards = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, boards(PC, false, pcW, pcH, "TotalEarned").Gui })
+	exports.ui_boards_phone = UiExport.export({
+		hud(phoneScale, PHONE).Gui,
+		menu(phoneScale, PHONE, phoneDesignH).Gui,
+		boards(phoneScale, true, 1600 / phoneScale, phoneDesignH, "MoneyPerSec").Gui,
+	})
+
+	-- the lobby boards as their SurfaceGuis draw them (270 x 250 px each at 50 px / stud)
+	local function closeup(live: boolean, only: number?): any
+		local gui = UIKit.screen("BoardCloseup", 1)
+		gui.Scale.Scale = 1
+		local dim = UIKit.new("Frame", {
+			Name = "Dim",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = C3.fromRGB(12, 10, 16),
+			BackgroundTransparency = 0.35,
+			BorderSizePixel = 0,
+		}, gui)
+		local k = 1.45 -- close-up zoom
+		local w, h = 270 * k, 250 * k
+		for _, board in LeaderboardConfig.Boards do
+			if only == nil or only == board.Index then
+				local col = (board.Index - 1) % 2
+				local row = (board.Index - 1) // 2
+				local x = if only then 800 - w / 2 else 800 + (if col == 0 then -w - 24 else 24)
+				local y = if only then 450 - h / 2 else 60 + row * (h + 36)
+				-- the light bezel and the navy board
+				local bezel = UIKit.new("Frame", {
+					Name = "Bezel" .. board.Index,
+					Position = UDim2.fromOffset(x - 12, y - 12),
+					Size = UDim2.fromOffset(w + 24, h + 24),
+					BackgroundColor3 = C3.fromRGB(196, 202, 214),
+					BorderSizePixel = 0,
+				}, dim)
+				UIKit.corner(bezel, 6)
+				local face = UIKit.new("Frame", {
+					Name = "Board" .. board.Index,
+					Position = UDim2.fromOffset(12, 12),
+					Size = UDim2.fromOffset(w, h),
+					BackgroundColor3 = LeaderboardView.Board,
+					BorderSizePixel = 0,
+				}, bezel)
+				local canvas = LeaderboardView.canvas(face, board, LeaderboardConfig.BoardRows, true, math.floor(20 * k), w)
+				local data = if live then payload.Boards[board.Id] else { Rows = { { Rank = 1, UserId = -1, Name = "Player1", Value = payload.Own[board.Id].Value } }, Ready = true }
+				local own = if live then payload.Own[board.Id] else { Value = payload.Own[board.Id].Value, Rank = 1 }
+				LeaderboardView.fill(canvas, LeaderboardView.lines(board.Id, data, own, if live then Preview.Me else -1, LeaderboardConfig.BoardRows, live))
+				-- the hall's own title strip in front of the board's top
+				local strip = UIKit.new("Frame", {
+					Name = "TitleStrip",
+					Position = UDim2.new(0, 4, 0, 0),
+					Size = UDim2.new(1, -8, 0.19, 0),
+					BackgroundColor3 = C3.fromRGB(22, 28, 52),
+					BorderSizePixel = 0,
+					ZIndex = 5,
+				}, face)
+				UIKit.label(strip, board.Title, math.floor(26 * k), {
+					Name = "Title",
+					Size = UDim2.fromScale(1, 1),
+					FontFace = Theme.TitleFont,
+					TextColor3 = C3.new(1, 1, 1),
+					TextWrapped = false,
+					ZIndex = 6,
+				})
+			end
+		end
+		return gui
+	end
+	exports.ui_board_closeup = UiExport.export({ closeup(true, nil) })
+	exports.ui_board_studio = UiExport.export({ closeup(false, 2) })
+	return exports
+end
+
+return Preview

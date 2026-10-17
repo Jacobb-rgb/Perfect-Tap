@@ -115,6 +115,8 @@ local DataTemplate = {
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
+	-- the side menu's SETTINGS (SettingsConfig; SettingsService repairs it on load)
+	Settings = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true },
 	Badges = {}, -- [badgeKey] = true (local cache, Roblox is the source of truth)
 	GroupRewardClaimed = false,
 	ForgeName = "", -- raw text, always filtered by TextService before showing

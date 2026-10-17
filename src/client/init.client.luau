@@ -29,6 +29,10 @@ local ORDER = {
 	"TechShopController",
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
+	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
+	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
+	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
+	"SideMenuController", -- the button column on the left (after the panels it opens)
 }
 
 local loaded = {}
