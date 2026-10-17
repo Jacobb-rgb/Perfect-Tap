@@ -1,7 +1,8 @@
 --[[
 	Player plots: a flat pad (12x12 grid of 4-stud cells plus a 1-stud
-	border) that reads as a tidy garden from the lobby hero camera (a mown
-	lawn with a lighter stripe per other cell row and a paving band, all flat),
+	border) with a metal floor (owner 2026-10-17, like the machine pictures:
+	a light metal plate with painted tile seams and a soft checker inside a
+	slate band with glowing orange strips, all flat),
 	framed with the yard by low brick walls after the Kenney Graveyard Kit:
 	brick-wall (stone plinth, red brick band with staggered raised brick
 	pairs, a rounded stone cap: a slab overhanging both faces under a
@@ -86,12 +87,15 @@ local LAWN = rgb(96, 150, 66) -- a deep warm lawn (no bright lime pitch in the h
 -- stones and a cobble edge
 -- (lobby fix round 3: the island's own grass, faint stripes: no lime pitch
 -- with bold mower stripes in the hero view)
-local PLOT_LAWN = rgb(90, 156, 56)
-local PLOT_LAWN_STRIPE = rgb(84, 148, 53) -- mower stripes (low contrast)
+-- the metal plot floor (machine style "Soft": slate frame, light metal plate, orange glow)
+local PLOT_PLATE = rgb(150, 156, 174)
+local PLOT_PLATE_ALT = rgb(142, 148, 166) -- the soft checker on every other cell
+local PLOT_SEAM = rgb(112, 118, 138) -- painted tile seams
+local PLOT_FRAME = rgb(68, 76, 104) -- the slate band round the plate
+local PLOT_GLOW = rgb(255, 150, 50) -- glowing strips on the band
 local HEDGE = rgb(54, 122, 48) -- the front hedge strip along the road
 local MORTAR = rgb(86, 42, 36) -- darker mortar lines in the brick band
 local POST_HEAD = rgb(255, 140, 48) -- the front lamp posts' neon heads (deep amber)
-local PLOT_PAVING = rgb(196, 180, 152)
 local PLOT_EDGE = rgb(156, 142, 128)
 local GRAVEL = rgb(214, 192, 150)
 local PEN_FLOOR = rgb(156, 124, 94)
@@ -1128,8 +1132,10 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	-- the pad has a 1-stud cobble border around the grid for the walls
 	local pad = Geo.block(m, cf * CFrame.new(0, -0.6, 0), Vector3.new(size + 2, 1.2, size + 2), PLOT_EDGE, nil, { CanTouch = false })
 	pad.Name = "Pad"
-	-- the build grid: a mown lawn exactly the size of the grid, with a lighter
-	-- stripe on every other row of cells (flat: tops at y <= 0.048, no
+	-- the build grid (owner 2026-10-17: a metal floor like the machine
+	-- pictures): a dark gunmetal band exactly the grid's size shows round a
+	-- light metal plate with painted tile seams and a soft checker, glowing
+	-- orange strips lie on the band (all flat: tops at y <= 0.05, no
 	-- collision, not raycast, so building and placement see the pad only)
 	local flat = {
 		CanTouch = false,
@@ -1137,21 +1143,54 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 		CanCollide = false,
 		CastShadow = false,
 	}
-	-- the tile (paving stones, exactly the grid) shows as a band just inside the
-	-- walls around the lawn and its stripes, which lie on top of it
 	local band = 1.6
-	local tile = Geo.block(m, cf * CFrame.new(0, -0.025, 0), Vector3.new(size, 0.07, size), PLOT_PAVING, nil, flat)
+	local tile = Geo.block(m, cf * CFrame.new(0, -0.025, 0), Vector3.new(size, 0.07, size), PLOT_FRAME, nil, flat)
 	tile.Name = "PlotTile"
 	local inner = half - band
-	local lawn = Geo.block(m, cf * CFrame.new(0, 0.0, 0), Vector3.new(inner * 2, 0.06, inner * 2), PLOT_LAWN, nil, flat)
-	lawn.Name = "Lawn"
+	local plate = Geo.block(m, cf * CFrame.new(0, 0.0, 0), Vector3.new(inner * 2, 0.06, inner * 2), PLOT_PLATE, nil, flat)
+	plate.Name = "Plate"
+	plate.Reflectance = 0.04
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Tiles"
+	gui.Face = Enum.NormalId.Top
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 12
+	gui.LightInfluence = 1
+	gui.MaxDistance = 260
+	gui.Parent = plate
 	local cell = GameConfig.CellSize
-	for row = 0, GameConfig.PlotCells - 1, 2 do
-		local z0 = math.max(-half + row * cell, -inner)
-		local z1 = math.min(-half + (row + 1) * cell, inner)
-		local stripe =
-			Geo.block(m, cf * CFrame.new(0, 0.024, (z0 + z1) / 2), Vector3.new(inner * 2, 0.04, z1 - z0), PLOT_LAWN_STRIPE, nil, flat)
-		stripe.Name = "LawnStripe"
+	local n = GameConfig.PlotCells
+	local function frame(x: number, y: number, w: number, h: number, color: Color3)
+		local f = Instance.new("Frame")
+		f.BorderSizePixel = 0
+		f.BackgroundColor3 = color
+		f.Position = UDim2.fromScale(x, y)
+		f.Size = UDim2.fromScale(w, h)
+		f.Parent = gui
+	end
+	-- cell edges in the plate's 0..1 space (the plate is the grid minus the band)
+	local function at(k: number): number
+		return math.clamp((-half + k * cell + inner) / (inner * 2), 0, 1)
+	end
+	for row = 0, n - 1 do
+		for col = 0, n - 1 do
+			if (row + col) % 2 == 0 then
+				frame(at(col), at(row), at(col + 1) - at(col), at(row + 1) - at(row), PLOT_PLATE_ALT)
+			end
+		end
+	end
+	for k = 1, n - 1 do
+		local u = at(k)
+		frame(u - 0.0015, 0, 0.003, 1, PLOT_SEAM)
+		frame(0, u - 0.0015, 1, 0.003, PLOT_SEAM)
+	end
+	-- glowing strips on the band, a little in from the walls
+	local edge = half - band / 2
+	for _, s in { -1, 1 } do
+		local strip = Geo.block(m, cf * CFrame.new(0, 0.02, s * edge), Vector3.new(size - 6, 0.04, 0.22), PLOT_GLOW, NEON, flat)
+		strip.Name = "FloorGlow"
+		strip = Geo.block(m, cf * CFrame.new(s * edge, 0.02, 0), Vector3.new(0.22, 0.04, size - 6), PLOT_GLOW, NEON, flat)
+		strip.Name = "FloorGlow"
 	end
 
 	-- brick walls on the border: the road entrance at the front (-Z local)

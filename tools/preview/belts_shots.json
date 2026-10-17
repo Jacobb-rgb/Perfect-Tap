@@ -1,0 +1,13 @@
+{
+  "belts_overview": {"scene": "belts", "position": [78, 38, 96], "target": [118, 0, 82], "fov": 55, "preset": "Surface", "shadowExtent": 90},
+  "belts_chutes": {"scene": "belts", "position": [110, 9.5, 82], "target": [127, 2.5, 82], "fov": 62, "preset": "Surface", "shadowExtent": 60},
+  "belts_pen_chute": {"scene": "belts", "position": [117, 6.5, 99], "target": [126, 1.5, 93], "fov": 55, "preset": "Surface", "shadowExtent": 50},
+  "belts_foundry": {"scene": "belts", "position": [117, 6.5, 64], "target": [127, 1.5, 70], "fov": 55, "preset": "Surface", "shadowExtent": 50},
+  "belts_yard": {"scene": "belts", "position": [140, 9, 66], "target": [128, 3, 86], "fov": 58, "preset": "Surface", "shadowExtent": 70},
+  "belts_board": {"scene": "belts", "position": [124, 6.5, 85], "target": [132.5, 4.3, 88.6], "fov": 52, "preset": "Surface", "shadowExtent": 50},
+  "belts_build": {"scene": "belts_build", "position": [62, 52, 28], "target": [106, 0, 28], "fov": 50, "preset": "Surface", "shadowExtent": 90},
+  "belts_pen_ui": {"scene": "belts", "position": [122, 13, 102], "target": [141, 0, 96], "fov": 60, "preset": "Surface", "shadowExtent": 80, "ui": "ui_belts_pen"},
+  "belts_pen_phone": {"scene": "belts", "position": [122, 13, 102], "target": [141, 0, 96], "fov": 60, "preset": "Surface", "shadowExtent": 80, "ui": "ui_belts_pen_phone", "uiInset": 58},
+  "belts_train_ui": {"scene": "belts", "position": [110, 9.5, 82], "target": [127, 2.5, 82], "fov": 62, "preset": "Surface", "shadowExtent": 60, "ui": "ui_belts_train"},
+  "belts_train_phone": {"scene": "belts", "position": [110, 9.5, 82], "target": [127, 2.5, 82], "fov": 62, "preset": "Surface", "shadowExtent": 60, "ui": "ui_belts_train_phone", "uiInset": 58}
+}

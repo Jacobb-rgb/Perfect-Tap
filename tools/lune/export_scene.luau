@@ -81,6 +81,14 @@ elseif sceneName == "lobby_blockout" then
 	require("./lib/lobby_blockout").build(Loader, workspace)
 elseif sceneName == "machines" then
 	require("./lib/machines_gallery").build(Loader, workspace) -- every machine on a plot pad (Kenney Factory Kit style)
+elseif sceneName == "kit_showroom" then -- every roster machine in rows (tools/lune/lib/kit_showroom.luau)
+	require("./lib/kit_showroom").build(Loader, workspace)
+elseif sceneName == "kit_showroom_max" then -- the same at the max upgrade level (crystal)
+	require("./lib/kit_showroom").build(Loader, workspace, 4)
+elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
+	require("./lib/cute_styles_gallery").build(Loader, workspace)
+elseif sceneName == "kit_machines" then -- the Factory Kit machines + upgrade crystal levels (tools/lune/lib/kit_machines_gallery.luau)
+	require("./lib/kit_machines_gallery").build(Loader, workspace)
 elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	-- laser blasters: the 10 levels in ore skins / a forgekeeper blasting a quarry rock
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
@@ -114,6 +122,25 @@ elseif sceneName == "railway" then -- the world with parked preview trains on th
 elseif sceneName == "train_trip" then -- trains on their trips + the train HUD and panel (tools/lune/lib/train_trip_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/train_trip_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "belts" then -- step 3 belts, chutes, sorting board, pen send toolbar (tools/lune/lib/belts_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/belts_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list overlays (tools/lune/lib/ironbox_preview.luau)
+	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Foundry buildings and the chute line (+ the hammer moment and the reveal) and their UI (tools/lune/lib/foundry_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
+		uiExports[name] = guis
+	end
+elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays (tools/lune/lib/tech_shop_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "gameplay" then
@@ -662,4 +689,16 @@ if sceneName == "world" and process.args[2] == "yard" then
 		print("Exported UI " .. name)
 	end
 	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
+end
+
+---------------------------------------------------------------- scene "penboard" (WP-CleanerBox)
+-- `lune run tools/lune/export_scene.luau world penboard`: the world above plus the
+-- Pen Automation sorting board at plot 5's Ore Pen gate -> build/preview/penboard.json
+-- (tools/lune/lib/ironbox_preview.luau buildBoard, shots in tools/preview/ironbox_shots.json).
+if sceneName == "world" and process.args[2] == "penboard" then
+	require("./lib/ironbox_preview").buildBoard(Loader, workspace)
+	local boardScene = Export.collect(workspace)
+	boardScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/penboard.json", serde.encode("json", boardScene))
+	print(string.format("Exported penboard: %d parts, %d lights", #boardScene.parts, #boardScene.lights))
 end

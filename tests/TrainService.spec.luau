@@ -4,9 +4,13 @@
 -- auto-depart timer, the arrival timer, delivery into the pen (capacity,
 -- retry, one toast, Waiting), the return trip as the client reads it,
 -- joining (quiet delivery and retries, re-announcing, the Express grace),
--- banner colors, upgrades, Express, junk input, one broken train and no
--- duplication. The railway hooks follow the WORLD contract; players, saves,
--- carrying, plots and Net are small fakes, items and coins are real.
+-- banner colors, upgrades, Express, junk input, one broken train, no
+-- duplication, and Direct Unload (dirty ore straight off the train onto the
+-- TRAIN chute's belt through PenService's Train lane, a full pen, why it
+-- waits on the train's line, a belt that goes away, leaving, a failing
+-- chute). The railway hooks follow the WORLD
+-- contract; players, saves, carrying, plots and Net are small fakes, items
+-- and coins are real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local task = require("@lune/task") :: any
@@ -1480,5 +1484,218 @@ return function(T, Loader)
 			check(label)
 		end
 		T.truthy(w.data.Stats.TrainTrips > 3, "trains really ran")
+	end)
+
+	---------------------------------------------------------------- Direct Unload (step 3, WP-Belts)
+
+	-- A world with real belts and PenService's send queue wired to this train.
+	local function withBelts(name: string, fn: (any, any) -> ())
+		withWorld(name, function(w)
+			local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+			local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
+			local ConveyorService = Loader.requirePath("ServerScriptService.Server.Services.ConveyorService")
+			local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
+			MachineService._test.reset()
+			ConveyorService._test.reset()
+			PenService._test.reset()
+			PenService.setTrainCargo(train.cargo)
+			local gap = ConveyorService.SourceGap
+			ConveyorService.SourceGap = 0
+			local ok, err = pcall(function()
+				w.data.StarterKitGiven = true
+				w.data.MachineInventory = { Conveyor = 2 }
+				MachineService._test.spawnAll(w.player, PLOT)
+				local tx, tz = BaseLayout.chuteCell("Train")
+				local belt = MachineService.place(w.player, "Conveyor", tx, tz, 0)
+				assert(belt, "belt on the TRAIN chute")
+				local b: any = { Belt = belt, Pen = PenService, Machines = MachineService }
+				-- the items on the chute's belt
+				b.onBelt = function(): { any }
+					local list = {}
+					for _, record in ItemService.looseList() do
+						local p = belt.Model:GetPivot():PointToObjectSpace(record.Body.CFrame.Position)
+						if math.abs(p.X) <= 2 and math.abs(p.Z) <= 2.5 then
+							table.insert(list, record)
+						end
+					end
+					return list
+				end
+				-- they ride on along the line
+				b.rideAway = function()
+					for i, record in b.onBelt() do
+						record.Model:PivotTo(belt.Model:GetPivot() * CFrame.new(0, 1.5, -8 - i * 2))
+					end
+				end
+				fn(w, b)
+			end)
+			MachineService._test.reset()
+			ConveyorService._test.reset()
+			PenService._test.reset()
+			ConveyorService.SourceGap = gap
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end
+
+	withBelts("TrainService: Direct Unload pours the dirty ore straight off the train at 2/s, even into a full pen", function(w, b)
+		local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+		-- without the upgrade: into the pen as before
+		drop(w.station, USER, COAL)
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		T.eq(#w.data.Storage, 1, "unloaded into the pen")
+		T.eq(b.Pen._test.queue(w.player), nil, "no Direct Unload yet")
+		advance(w, TrainConfig.ReturnSeconds + 1)
+		-- with it, into a FULL pen (the late-game normal)
+		w.data.Upgrades.PenAutomation = 2
+		fillPen(w, ItemService.penCapacity(w.data) - #w.data.Storage)
+		local full = #w.data.Storage
+		dropMany(w.station, USER, COAL, 4)
+		drop(w.station, USER, DIRTY_GOLD)
+		drop(w.station, USER, GOLD)
+		local total = census(w, USER, w.data)
+		local tripsBefore = w.data.Stats.TrainTrips
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		T.eq(#w.data.Storage, full, "nothing went into the pen")
+		T.eq(#w.data.Train.TripCargo, 6, "all of it still on the train (saved there)")
+		T.eq(#unloads(w), 1, "no unload effect yet (only the first trip's)")
+		local list = trips(w, USER)
+		T.eq(list[#list].Waiting, true, "everyone sees it standing at the stop")
+		local s = snapshot(w, w.player)
+		T.eq(s.Unloading, true, "the owner's snapshot: unloading")
+		T.eq(s.Waiting, true, "and the clean gold waits for room in the pen")
+		T.eq(census(w, USER, w.data), total, "nothing lost")
+		-- 2 items per second onto the belt, straight from the train
+		local t = 100
+		local poured = 0
+		for step = 1, 12 do
+			b.Pen.tickSend(t)
+			local now = #b.onBelt()
+			if now > 0 then
+				poured += 1
+				T.eq(b.onBelt()[1].Kind, "Raw", "dirty ore " .. step)
+			end
+			T.eq(census(w, USER, w.data), total, "moved, not copied " .. step)
+			b.rideAway()
+			t += b.Pen.SendInterval / 2
+			if step == 2 then
+				T.eq(poured, 1, "not faster than one per SendInterval")
+			end
+		end
+		T.eq(poured, 5, "all five dirty ores poured out in 2.5 s")
+		T.eq(#w.data.Storage, full, "never through the pen")
+		T.eq(#w.data.Train.TripCargo, 1, "the clean gold is left on board")
+		T.eq(w.data.Train.TripCargo[1].K, "Clean", "the gold")
+		s = snapshot(w, w.player)
+		T.eq(s.Unloading, false, "nothing left to pour")
+		T.eq(s.Waiting, true, "the gold waits for the pen")
+		T.eq(w.data.Stats.TrainTrips, tripsBefore, "the trip isn't over")
+		-- room in the pen: the gold goes in, the trip ends
+		table.remove(w.data.Storage, 1)
+		total -= 1
+		advance(w, TrainConfig.DeliveryRetry)
+		T.eq(#w.data.Train.TripCargo, 0, "train empty")
+		T.eq(w.data.Stats.TrainTrips, tripsBefore + 1, "trip done")
+		T.eq(census(w, USER, w.data), total, "every item in exactly one place")
+		local last = unloads(w)[#unloads(w)]
+		T.eq(last.C, 1, "the pen's unload effect counts only what went into the pen")
+		advance(w, TrainConfig.ReturnSeconds + 1)
+		-- only dirty ore and room: it stands there pouring, Unloading, not Waiting
+		table.clear(w.data.Storage)
+		dropMany(w.station, USER, COAL, 3)
+		total = census(w, USER, w.data)
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		s = snapshot(w, w.player)
+		T.eq(s.Unloading, true, "unloading")
+		T.eq(s.Waiting, false, "not waiting for the pen")
+		local view = TrainView.read(s)
+		T.falsy(TrainView.waiting(view, serverTime(w) + 60), "the chip doesn't say Pen full")
+		T.eq(TrainView.status(view, serverTime(w) + 60, nil).Phase, "Unloading", "it says unloading")
+		T.eq(TrainView.status(view, serverTime(w) + 60, nil).Line, "Unloading onto your belt", "onto your belt")
+		T.eq(s.UnloadWait, nil, "nothing to wait for")
+		-- the belt at the TRAIN chute is full: the train's line says why it stands there
+		local ConveyorService = Loader.requirePath("ServerScriptService.Server.Services.ConveyorService")
+		local blocker = ItemService.spawnDesc(COAL, USER, b.Belt.Model:GetPivot() * CFrame.new(0, 1.5, 0), nil, true)
+		b.Pen.tickSend(150)
+		T.eq(#w.data.Train.TripCargo, 3, "nothing poured onto a full belt")
+		s = snapshot(w, w.player)
+		T.eq(s.UnloadWait, "Jammed", "the snapshot says why (PenService's TRAIN lane)")
+		local status = TrainView.status(TrainView.read(s), serverTime(w) + 60, nil)
+		T.eq(status.Phase, "Unloading", "still unloading, not Pen full")
+		T.eq(status.Line, TrainView.UnloadWaitText.Jammed, "Belt full – waiting")
+		-- too many of the owner's items lie loose: the train says that too
+		blocker.Model:PivotTo(CFrame.new(0, 5, 900))
+		local extra: { any } = {}
+		for i = 1, ConveyorService.sourceCeiling() - ItemService.looseCount(USER) do
+			table.insert(extra, ItemService.spawnDesc(COAL, USER, CFrame.new(i * 3, 5, 900), nil, true))
+		end
+		b.Pen.tickSend(151)
+		s = snapshot(w, w.player)
+		T.eq(s.UnloadWait, "TooMany", "too many loose items")
+		T.eq(TrainView.status(TrainView.read(s), serverTime(w) + 60, nil).Line, TrainView.UnloadWaitText.TooMany, "the line says so")
+		T.eq(TrainView.read({ Moving = 3, Unloading = true, UnloadWait = "Bogus" }).UnloadWait, nil, "junk reasons are ignored")
+		for _, record in extra do
+			ItemService.destroy(record)
+		end
+		ItemService.destroy(blocker)
+		T.eq(census(w, USER, w.data), total, "the test's own items are gone again")
+		-- you can't load it meanwhile, and you're told why
+		local held = drop(w.station, USER, COAL)
+		T.eq(lastToast(w, w.player).Text, TrainService.ChuteText, "unloading at the TRAIN chute")
+		total += 1
+		T.eq(held.State, "Loose", "bounced")
+		b.Pen.tickSend(200)
+		T.eq(#w.data.Train.TripCargo, 2, "one out")
+		-- the belt goes away mid-unload: the rest goes into the pen as without the upgrade
+		b.rideAway()
+		b.Machines.pickup(b.Belt)
+		advance(w, 1)
+		T.eq(#w.data.Train.TripCargo, 0, "the rest unloaded")
+		T.eq(#w.data.Storage, 2, "into the pen")
+		T.eq(census(w, USER, w.data), total, "nothing lost")
+		b.Pen.tickSend(201)
+		T.eq(b.Pen._test.queue(w.player), nil, "the TRAIN lane let go")
+		-- no belt at all: the pen as before
+		advance(w, TrainConfig.ReturnSeconds + 1)
+		drop(w.station, USER, COAL)
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		T.eq(#w.data.Storage, 3, "delivered into the pen")
+		T.eq(b.Pen._test.queue(w.player), nil, "nothing for the chute without a belt")
+	end)
+
+	withBelts("TrainService: leaving mid Direct Unload keeps the dirty ore on the train; a failing chute falls back", function(w, b)
+		w.data.Upgrades.PenAutomation = 2
+		dropMany(w.station, USER, COAL, 4)
+		local total = census(w, USER, w.data)
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		b.Pen.tickSend(1)
+		b.rideAway()
+		T.eq(#w.data.Train.TripCargo, 3, "one out")
+		-- leaving: the queue just stops, the cargo is saved on the train
+		w.online[w.player] = nil
+		b.Pen.tickSend(2)
+		T.eq(b.Pen._test.queue(w.player), nil, "queue dropped")
+		T.eq(#w.data.Train.TripCargo, 3, "the rest still on board, saved")
+		T.eq(census(w, USER, w.data), total, "nothing lost")
+		w.online[w.player] = true
+		-- spawning breaks for good: the rest goes into the pen
+		local original = ItemService.spawnDesc
+		local ok, err = pcall(function()
+			rawset(ItemService, "spawnDesc", function()
+				error("broken")
+			end)
+			b.Pen.unloadTrain(w.player)
+			b.Pen.tickSend(3)
+		end)
+		rawset(ItemService, "spawnDesc", original)
+		assert(ok, err)
+		T.eq(#w.data.Train.TripCargo, 0, "unloaded the old way")
+		T.eq(#w.data.Storage, 3, "into the pen")
+		T.eq(census(w, USER, w.data), total, "every item once")
 	end)
 end

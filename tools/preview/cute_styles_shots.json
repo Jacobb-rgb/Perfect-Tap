@@ -1,0 +1,86 @@
+{
+ "cute_all": {
+  "scene": "cute_styles",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   11,
+   -30
+  ],
+  "target": [
+   0,
+   4,
+   2
+  ],
+  "fov": 58,
+  "shadowExtent": 50
+ },
+ "cute_a": {
+  "scene": "cute_styles",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   20,
+   8,
+   -12
+  ],
+  "target": [
+   14,
+   4,
+   2
+  ],
+  "fov": 52,
+  "shadowExtent": 30
+ },
+ "cute_b": {
+  "scene": "cute_styles",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   5,
+   7.5,
+   -12
+  ],
+  "target": [
+   0,
+   4,
+   2
+  ],
+  "fov": 52,
+  "shadowExtent": 30
+ },
+ "cute_c": {
+  "scene": "cute_styles",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -8,
+   8,
+   -12
+  ],
+  "target": [
+   -14,
+   4,
+   2
+  ],
+  "fov": 52,
+  "shadowExtent": 30
+ }
+}
