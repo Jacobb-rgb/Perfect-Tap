@@ -32,12 +32,28 @@ Net.Events = {
 	AnvilSubmit = { Rate = 2, Burst = 3 }, -- (sessionId, recipeId, strikes)
 	AnvilCancel = { Rate = 2, Burst = 3 }, -- (sessionId)
 	-- base: Ore Pen, podiums, Sell stall (design v2)
-	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium", arg: { Key, Count?, Slot? })
+	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium" | "Send", arg)
+	--   "Take"     { Key, Count }  items to your hands at the pen gate
+	--   "ToPodium" { Key, Slot }   one cleaned ore onto a podium
+	--   "Send"     { Key?, Count?, Filter? }  queue pen items for the PEN chute cell
+	--              (BaseLayout.Chutes.Pen), one every 0.5 s: Key ("K|O|G|R") + Count
+	--              = that many of one item type (default 1), or no Key and
+	--              Filter = "Dirty" (all dirty ore) | "All" (everything in the pen)
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
 	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed" }?)
+	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
+	IronBoxAction = { Rate = 4, Burst = 6 }, -- ("SetKeep", { Ore: oreId, Keep: boolean }) edits data.KeepList
+	FoundryAction = { Rate = 4, Burst = 8 }, -- (action, arg?):
+	--   "Open"                                   open your Foundry's panel (server answers OpenUI "Foundry")
+	--   "Forge"  { Ore: oreId? }                 start forging the next blaster level from data.Foundry.Stock;
+	--                                            Ore = the skin (default: the best ore among the used ingots)
+	--   "Strike" { SessionId, Times: { number } } the hammer taps, seconds since FoundryBegin, oldest first
+	--   "Cancel" { SessionId }
 	-- economy / meta
-	ShopBuy = { Rate = 3, Burst = 5 },
+	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number? }), Item:
+	--   <machineId> (Count 1..EconomyConfig.TechShop.MaxCount) | "Upgrade:<machineId>:Speed" |
+	--   "Upgrade:<machineId>:Quality" | "PenAutomation" | "Bellows" | "Slots" (EconomyConfig.techItem)
 	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
@@ -55,6 +71,13 @@ Net.Events = {
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
+	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
+	--   Ore: skin oreId, Hits: taps needed, Timeout: seconds, Ingots: number used, Coins: number paid on success }
+	FoundryBegin = false,
+	-- { Id: SessionId ("" when "Forge" is refused before a session starts), Ok,
+	--   Reason?: "NotEnough" (ingots or coins missing) | "MaxLevel" | "Cancelled" | "Timeout" | "BadStrikes",
+	--   Level?: new BlasterLevel, Ore?: new BlasterOre, Name?: BlasterData.displayName }
+	FoundryResult = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

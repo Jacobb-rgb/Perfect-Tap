@@ -4,7 +4,9 @@
 	conservation (nothing appears or disappears).
 
 	entry.In  = input queue. In[1] is being worked; at most queueSize(id)
-	            (MachineIntakeQueue = 4). Anvil ingots wait here too.
+	            (MachineIntakeQueue = 4). Anvil ingots wait here too, and so
+	            do the items the Iron Box shows and sorts (it has a Time but
+	            no Output: its service decides where each item goes).
 	entry.Out = finished items waiting to leave; at most MachineData.MaxOutBuffer.
 	Empty queues are set to nil to keep saves small.
 
@@ -57,11 +59,12 @@ function MachineLogic.isValidDesc(desc: any): boolean
 	return recipeId == nil
 end
 
--- How many items wait in In (the one being worked included). 0 for
+-- How many items wait in In (the one being worked included): processors,
+-- the Anvil and every other machine with a job Time (Iron Box). 0 for
 -- machines that take items straight away (crate, chute) or never queue.
 function MachineLogic.queueSize(id: string): number
 	local info = MachineData.ById[id]
-	if info and (isProcessor(info) or id == ANVIL) then
+	if info and (isProcessor(info) or id == ANVIL or (info.Time ~= nil and info.Accepts ~= nil)) then
 		return GameConfig.MachineIntakeQueue
 	end
 	return 0
@@ -97,7 +100,7 @@ function MachineLogic.accepts(id: string, desc: Desc, entry: Entry, sameOwner: b
 		if queued >= MachineLogic.queueSize(id) then
 			return false, "Full"
 		end
-	elseif isProcessor(info) then
+	elseif MachineLogic.queueSize(id) > 0 then
 		if queued >= MachineLogic.queueSize(id) then
 			return false, "Full"
 		end
@@ -139,8 +142,9 @@ function MachineLogic.rollGrade(chances: { [string]: number }, maxGrade: string,
 end
 
 -- What one finished job turns `input` into. `roll` in [0, 1) is only used
--- by machines with GradeChances (Auto Cleaner).
-function MachineLogic.outputs(id: string, input: Desc, roll: number): { Desc }
+-- by machines with GradeChances (Cleaning Plant); `odds` replaces their
+-- GradeChances (the Cleaning Plant's Quality level: MachineData.gradeOdds).
+function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [string]: number }?): { Desc }
 	local info = MachineData.ById[id]
 	local list: { Desc } = {}
 	if not info or not isProcessor(info) then
@@ -148,8 +152,9 @@ function MachineLogic.outputs(id: string, input: Desc, roll: number): { Desc }
 	end
 	local kind = info.Output :: string
 	local grade: string
-	if info.GradeChances then
-		grade = MachineLogic.rollGrade(info.GradeChances, info.MaxGrade or "Flawless", roll)
+	local chances = if info.GradeChances then odds or info.GradeChances else nil
+	if chances then
+		grade = MachineLogic.rollGrade(chances, info.MaxGrade or "Flawless", roll)
 	else
 		grade = input.G or "Rough"
 	end

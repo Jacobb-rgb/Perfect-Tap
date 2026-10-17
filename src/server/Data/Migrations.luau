@@ -30,16 +30,31 @@
 	  well-formed items of known kinds/ores (unknown ones go to the pen),
 	  together at most TrainConfig.MaxCargoSaved (the rest goes to the pen);
 	  trip times are finite and >= 0, and 0 when nothing is on the move.
+
+	Machines + automation (step 3, same Version 3; DataTemplate fills the
+	records in):
+	- MachineUpgrades: only known machine types that have upgrades stay; each
+	  level is a whole number 0..MachineData.upgradeMax (unknown upgrade
+	  kinds and non-number levels are dropped, empty records removed).
+	- KeepList: only known ore ids mapped to true.
+	- Foundry.Stock: well-formed ingots (kind Ingot, known ore and grade, no
+	  recipe), at most GameConfig.MaxFoundryStock; other well-formed items
+	  and the overflow go to the pen, junk is dropped.
+	- Upgrades is a record and Upgrades.PenAutomation a whole number
+	  0..#EconomyConfig.PenAutomation.Prices.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local EconomyConfig = require(Shared.Config.EconomyConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local OreData = require(Shared.Config.OreData)
+local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
@@ -92,6 +107,15 @@ local function wellFormed(item: any): boolean
 		and type(item.O) == "string"
 		and (item.G == nil or type(item.G) == "string")
 		and (item.R == nil or type(item.R) == "string")
+end
+
+-- A well-formed ingot the Foundry can hold: known ore and grade, no recipe.
+local function foundryIngot(item: any): boolean
+	return wellFormed(item)
+		and item.K == "Ingot"
+		and OreData.ById[item.O] ~= nil
+		and (item.G == nil or ItemData.GradeById[item.G] ~= nil)
+		and item.R == nil
 end
 
 -- Cleans one machine queue. Returns the kept items, or nil when none are left.
@@ -318,6 +342,112 @@ function Migrations.run(data: { [string]: any }): Report
 		train.TripDepartAt = 0
 		train.TripArriveAt = 0
 	end
+
+	-- step 3: machine upgrades of known machine types, whole levels in range
+	local machineUpgrades = data.MachineUpgrades
+	if type(machineUpgrades) ~= "table" then
+		if machineUpgrades ~= nil then
+			report.Dropped += 1
+		end
+		machineUpgrades = {}
+		data.MachineUpgrades = machineUpgrades
+	end
+	local upgradeIds = {}
+	for id in machineUpgrades do
+		table.insert(upgradeIds, id)
+	end
+	for _, id in upgradeIds do
+		local record = machineUpgrades[id]
+		local info = if type(id) == "string" then MachineData.ById[id] else nil
+		if not info or not info.Upgrades or type(record) ~= "table" then
+			machineUpgrades[id] = nil
+			report.Dropped += 1
+			continue
+		end
+		local kinds = {}
+		for kind in record do
+			table.insert(kinds, kind)
+		end
+		for _, kind in kinds do
+			local max = if type(kind) == "string" then MachineData.upgradeMax(id, kind) else 0
+			local upgradeLevel = record[kind]
+			if max == 0 or not isFinite(upgradeLevel) then
+				record[kind] = nil
+				report.Dropped += 1
+			else
+				local whole = math.clamp(math.floor(upgradeLevel), 0, max)
+				if whole ~= upgradeLevel then
+					record[kind] = whole
+				end
+			end
+		end
+		if next(record) == nil then
+			machineUpgrades[id] = nil
+		end
+	end
+
+	-- step 3: the keep list holds known ore ids mapped to true
+	local keepList = data.KeepList
+	if type(keepList) ~= "table" then
+		if keepList ~= nil then
+			report.Dropped += 1
+		end
+		keepList = {}
+		data.KeepList = keepList
+	end
+	local keepKeys = {}
+	for oreId in keepList do
+		table.insert(keepKeys, oreId)
+	end
+	for _, oreId in keepKeys do
+		if type(oreId) ~= "string" or not OreData.ById[oreId] or keepList[oreId] ~= true then
+			keepList[oreId] = nil
+			report.Dropped += 1
+		end
+	end
+
+	-- step 3: the Foundry's ingot stock (other items and the overflow go to the pen)
+	local foundry = data.Foundry
+	if type(foundry) ~= "table" then
+		if foundry ~= nil then
+			report.Dropped += 1
+		end
+		foundry = {}
+		data.Foundry = foundry
+	end
+	local stock = foundry.Stock
+	local stockKept = {}
+	if type(stock) == "table" then
+		for _, item in values(stock) do
+			if not wellFormed(item) then
+				report.Dropped += 1
+			elseif foundryIngot(item) and #stockKept < GameConfig.MaxFoundryStock then
+				table.insert(stockKept, item)
+			else
+				table.insert(storage, item)
+				report.Moved += 1
+			end
+		end
+		refill(stock, stockKept)
+	else
+		if stock ~= nil then
+			report.Dropped += 1
+		end
+		foundry.Stock = stockKept
+	end
+
+	-- step 3: pen automation level (sorting billboard, Direct Unload)
+	local bought = data.Upgrades
+	if type(bought) ~= "table" then
+		if bought ~= nil then
+			report.Dropped += 1
+		end
+		bought = table.clone(DataTemplate.Upgrades)
+		data.Upgrades = bought
+	end
+	local automation = bought.PenAutomation
+	local maxAutomation = #EconomyConfig.PenAutomation.Prices
+	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, maxAutomation) else 0
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

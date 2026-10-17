@@ -77,6 +77,9 @@ local GameConfig = {
 	SellOthersRadius = 60, -- other players this close see the sell puff
 	StorageTakeMax = 5, -- items per Take request
 
+	-- Foundry (step 3): ingots wait in data.Foundry.Stock until a blaster is forged
+	MaxFoundryStock = 60, -- DataStore safety cap; more ingots stay out (Migrations moves extras to the pen)
+
 	-- Anvil
 	AnvilTimeout = 60, -- seconds before a forging session is cancelled
 	AnvilWalkAway = 20, -- studs from the anvil that cancel a session

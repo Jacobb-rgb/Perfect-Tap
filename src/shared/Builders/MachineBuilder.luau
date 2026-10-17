@@ -1520,6 +1520,47 @@ local function autoCleaner(): Model
 	return model
 end
 
+--[[
+	Iron Box (2x2, step 3; a first look that WP-CleanerBox may restyle): a
+	Kenney machine housing on a dark iron skirt with a square hopper on top
+	(the intake), a framed dark screen on the front left (Screen: the box's
+	service shows the last item and a counter on it) and an output slot with
+	a short chute at the output column, a riveted back. 32 parts.
+]]
+local function ironBox(): Model
+	local model, base = newModel("IronBox")
+	local bz = 0.35
+	local body = housing(model, CFrame.new(0, 0.3, bz), Vector3.new(6.2, 3.4, 5.0), C.Housing, 0.5, { Skirt = true })
+	local back = surface(body, "BackFace", Enum.NormalId.Back, 60)
+	for row, y in { 0.14, 0.8 } do
+		for i = 0, 7 do
+			paintRect(back, "Rivet" .. row, 0.06 + i * 0.125, y, 0.03, 0.044, C.Brass, true)
+		end
+	end
+	local front = bz - 2.5
+	-- screen (front left): light frame, dark glass
+	portal(model, CFrame.new(-1.4, 1.5, front), 1.9, 1.2, 0.3, 0.35, true, C.HousingDark)
+	Geo.block(
+		model,
+		CFrame.new(-1.4, 2.1, front - 0.22),
+		Vector3.new(1.9, 1.2, 0.06),
+		C.Screen,
+		nil,
+		tiny({ Name = "Screen", Reflectance = 0.25 })
+	)
+	-- output slot and chute at the output column
+	local out = output(base, "IronBox")
+	portal(model, CFrame.new(out.X, 0.9, front), 1.5, 1.0, 0.3, 0.4)
+	chute(model, Vector3.new(out.X, 1.02, front - 0.35), 1.4, 0.9, 0.1)
+	-- square hopper on top (cup rim at 6.05) with a name plate on its front
+	squareHopper(model, CFrame.new(0, 3.7, bz), 3.4, 5.4, 0.9, 1.0, 0.35)
+	sign(model, CFrame.new(0, 5.55, bz - 2.78), "IRON BOX", 3.2)
+	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
+	local intake = attach(base, "Intake", CFrame.new(0, 4.8, bz))
+	intake:SetAttribute("IntakeSize", Vector3.new(6.2, 5, 6))
+	return model
+end
+
 -- Sell Chute (retired): an open round hopper on a copper pipe that goes into
 -- the ground through an octagonal flange, a pile of gold coins (Coins, a
 -- small glowing centre) in its cup and a SELL plate.
@@ -1648,6 +1689,7 @@ local BUILDERS: { [string]: () -> Model } = {
 	Crusher = crusher,
 	Anvil = anvil,
 	AutoCleaner = autoCleaner,
+	IronBox = ironBox,
 	SellChute = sellChute,
 	Conveyor = conveyor,
 }

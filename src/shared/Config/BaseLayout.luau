@@ -7,10 +7,15 @@
 	The 12x12 machine grid covers x, z in -24..24. Behind it, on the sea
 	side, lies the yard (z 25..56): the Ore Pen, the podiums, the Foundry
 	and the train stop on the coastal railway (z ~62, world |x| ~165).
-	Nothing here may overlap the machine grid.
+	Nothing here may overlap the machine grid (pieces()); only the three
+	chute cells (Chutes) are fixtures on the grid itself.
 ]]
 
+local GameConfig = require(script.Parent.GameConfig)
+
 export type Rect = { Center: Vector3, Size: Vector3 } -- Size.Y = height budget
+export type ChuteKind = "Source" | "Sink"
+export type Chute = { X: number, Z: number, Kind: ChuteKind }
 
 local BaseLayout = {}
 
@@ -69,6 +74,74 @@ end
 -- A world CFrame for a plot-local point (plotCF from WorldLayout.plotCFrame).
 function BaseLayout.toWorld(plotCF: CFrame, localPos: Vector3): CFrame
 	return plotCF * CFrame.new(localPos)
+end
+
+---------------------------------------------------------------- chutes
+
+--[[
+	Chute cells (step 3, docs/plans/STEP3_PLAN.md): three fixed cells on the
+	back row of the machine grid (gz = PlotCells - 1, next to the yard; cell
+	numbers as in Machines/Grid). Only belts may stand on them: Placement
+	refuses every other machine there (reason "Chute") and moves one off
+	when a saved layout has it there.
+	  Pen      Source  items sent from the Ore Pen (PenAction "Send") appear here
+	  Train    Source  Direct Unload (Upgrades.PenAutomation 2): the train drops
+	                   raw ore here instead of into the pen
+	  Foundry  Sink    a belt on this cell whose front faces +Z (SinkRotation,
+	                   off the grid edge toward the yard) delivers into the
+	                   Foundry; items that come to rest on the cell go in too
+	A Source spawns its items on top of whatever belt stands on the cell
+	(the belt's direction decides the route); with no belt they just lie there.
+]]
+local BACK_ROW = GameConfig.PlotCells - 1
+local CELL = GameConfig.CellSize
+local GRID_HALF = GameConfig.PlotCells * CELL / 2
+
+BaseLayout.Chutes = {
+	Pen = { X = 3, Z = BACK_ROW, Kind = "Source" },
+	Train = { X = 6, Z = BACK_ROW, Kind = "Source" },
+	Foundry = { X = 9, Z = BACK_ROW, Kind = "Sink" },
+} :: { [string]: Chute }
+
+-- The chute names in a fixed order (loops, UI).
+BaseLayout.ChuteNames = { "Pen", "Train", "Foundry" }
+
+-- Grid rotation of a belt that delivers into a Sink chute: Grid.dir(2) = (0, 1), +Z.
+BaseLayout.SinkRotation = 2
+
+local function chuteOf(name: string): Chute
+	local chute = BaseLayout.Chutes[name]
+	assert(chute, "Unknown chute " .. tostring(name))
+	return chute
+end
+
+-- Grid cell (gx, gz) of a chute.
+function BaseLayout.chuteCell(name: string): (number, number)
+	local chute = chuteOf(name)
+	return chute.X, chute.Z
+end
+
+-- Name of the chute on grid cell (gx, gz), or nil.
+function BaseLayout.chuteAt(gx: number, gz: number): string?
+	for _, name in BaseLayout.ChuteNames do
+		local chute = BaseLayout.Chutes[name]
+		if chute.X == gx and chute.Z == gz then
+			return name
+		end
+	end
+	return nil
+end
+
+-- Plot-local centre of a chute cell, on top of the pad (y = 0).
+function BaseLayout.chuteLocal(name: string): Vector3
+	local chute = chuteOf(name)
+	return Vector3.new(-GRID_HALF + (chute.X + 0.5) * CELL, 0, -GRID_HALF + (chute.Z + 0.5) * CELL)
+end
+
+-- World CFrame of a chute cell's centre on top of the pad, turned like the
+-- plot (plotCF from WorldLayout.plotCFrame / PlotService.plotCFrame).
+function BaseLayout.chuteWorld(plotCF: CFrame, name: string): CFrame
+	return plotCF * CFrame.new(BaseLayout.chuteLocal(name))
 end
 
 return BaseLayout

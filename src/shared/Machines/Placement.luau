@@ -9,8 +9,13 @@
 	Ledger rule: for every machine id, placed + MachineInventory stays the
 	same across place, move and pickup. Nothing here yields, and a commit
 	that fails changes nothing.
+
+	Chute cells (BaseLayout.Chutes, step 3) take belts only: any other
+	machine whose footprint covers one is refused ("Chute") and moved off by
+	sanitize like any other machine that doesn't fit.
 ]]
 
+local BaseLayout = require(script.Parent.Parent.Config.BaseLayout)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local ItemData = require(script.Parent.Parent.Config.ItemData)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
@@ -25,6 +30,7 @@ export type Limits = { Machines: number, Conveyors: number }
 -- Reason code -> text for the player (BuildResult.Reason is the code).
 Placement.Reasons = {
 	OutOfBounds = "Doesn't fit on your plot",
+	Chute = "Only belts can go on a chute",
 	Overlap = "Something is already there",
 	NoMachineSlots = "All machine slots are used",
 	NoConveyorSlots = "All belt slots are used",
@@ -71,6 +77,24 @@ function Placement.inBounds(id: string, x: number, z: number, r: number): boolea
 	return x >= 0 and z >= 0 and x + w <= CELLS and z + d <= CELLS
 end
 
+-- Name of a chute cell (BaseLayout.Chutes) the footprint covers, or nil.
+function Placement.chuteUnder(id: string, x: number, z: number, r: number): string?
+	local w, d = Grid.footprint(id, r)
+	for _, name in BaseLayout.ChuteNames do
+		local cx, cz = BaseLayout.chuteCell(name)
+		if cx >= x and cx < x + w and cz >= z and cz < z + d then
+			return name
+		end
+	end
+	return nil
+end
+
+-- May `id` stand at (x, z, r) as far as the chute cells go? (Belts may.)
+function Placement.chuteAllows(id: string, x: number, z: number, r: number): boolean
+	local info = known(id)
+	return info ~= nil and (info.IsConveyor == true or Placement.chuteUnder(id, x, z, r) == nil)
+end
+
 -- Cell key -> entry covering it. Entries with an unknown Id are skipped;
 -- `ignore` (a machine being moved) is left out. If saved entries overlap,
 -- the earlier one keeps the cell.
@@ -113,8 +137,9 @@ function Placement.counts(entries: { Entry }): (number, number)
 end
 
 -- Can `id` go at (x, z, r)? Checks, in order: UnknownMachine, BadInput,
--- OutOfBounds, Overlap, then slots. Slots are skipped when `limits` is nil
--- or when moving (`ignore` set), so a move never fails on slots.
+-- OutOfBounds, Chute (only belts on chute cells), Overlap, then slots.
+-- Slots are skipped when `limits` is nil or when moving (`ignore` set), so
+-- a move never fails on slots.
 function Placement.validate(entries: { Entry }, id: string, x: number, z: number, r: number, limits: Limits?, ignore: Entry?): (boolean, string?)
 	local info = known(id)
 	if not info then
@@ -125,6 +150,9 @@ function Placement.validate(entries: { Entry }, id: string, x: number, z: number
 	end
 	if not Placement.inBounds(id, x, z, r) then
 		return false, "OutOfBounds"
+	end
+	if not Placement.chuteAllows(id, x, z, r) then
+		return false, "Chute"
 	end
 	local occupied = Placement.occupancy(entries, ignore)
 	for _, k in Placement.cells(id, x, z, r) do
@@ -248,9 +276,10 @@ end
 
 -- Repairs a loaded layout (MachineService runs it before spawning).
 -- In saved order: an unknown Id is kept and skipped. A machine that is off
--- the plot or overlaps an earlier one goes back to the inventory and its
--- In/Out spill into Storage. Queues longer than allowed are trimmed the same
--- way. Slot limits are never enforced here. Returns the displaced ids.
+-- the plot, stands on a chute cell (anything but a belt) or overlaps an
+-- earlier one goes back to the inventory and its In/Out spill into Storage.
+-- Queues longer than allowed are trimmed the same way. Slot limits are
+-- never enforced here. Returns the displaced ids.
 function Placement.sanitize(data: { [string]: any }): { string }
 	local displaced = {}
 	local list = data.PlacedMachines
@@ -268,6 +297,7 @@ function Placement.sanitize(data: { [string]: any }): { string }
 		end
 		local fits = isInt(entry.X) and isInt(entry.Z) and isInt(entry.R) and entry.R >= 0 and entry.R <= 3
 		fits = fits and Placement.inBounds(entry.Id, entry.X, entry.Z, entry.R)
+		fits = fits and Placement.chuteAllows(entry.Id, entry.X, entry.Z, entry.R)
 		local cells: { number } = if fits then Placement.cells(entry.Id, entry.X, entry.Z, entry.R) else {}
 		if fits then
 			for _, k in cells do

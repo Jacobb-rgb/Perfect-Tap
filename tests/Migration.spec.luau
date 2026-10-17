@@ -232,4 +232,113 @@ return function(T, Loader)
 		T.eq(type(broken.Train), "table")
 		T.eq(#broken.Train.Cargo, 0)
 	end)
+
+	T.test("Migration step 3: machine upgrades, keep list, foundry stock, pen automation", function()
+		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Storage = { { K = "Raw", O = "Coal" } }
+		data.MachineUpgrades = {
+			AutoCleaner = { Speed = 2.9, Quality = 99, Luck = 3 },
+			Crusher = { Speed = -4, Quality = 2 },
+			ClayFurnace = { Speed = 0 / 0 },
+			Conveyor = { Speed = 1 }, -- a known machine without upgrades
+			StorageCrate = { Speed = 1 }, -- retired
+			FutureMachine = { Speed = 1 },
+			BlastFurnace = "fast",
+			IronBox = { Speed = 1 },
+			[7] = { Speed = 1 },
+		}
+		data.KeepList = { Gold = true, Ruby = "yes", Unobtainium = true, Diamond = false, [3] = true, Heartstone = true }
+		local stock = {}
+		for _ = 1, GameConfig.MaxFoundryStock + 3 do
+			table.insert(stock, { K = "Ingot", O = "Iron", G = "Clean" })
+		end
+		table.insert(stock, 1, { K = "Clean", O = "Gold", G = "Rough" }) -- not an ingot: to the pen
+		table.insert(stock, 2, "junk")
+		table.insert(stock, 3, { K = "Ingot", O = "Unobtainium" }) -- unknown ore: to the pen
+		table.insert(stock, 4, { K = "Ingot", O = "Gold", G = "Shiny" }) -- unknown grade: to the pen
+		table.insert(stock, 5, { K = "Ingot", O = "Gold", R = "Dagger" }) -- a recipe on an ingot: to the pen
+		table.insert(stock, 6, { K = "Ingot", O = "Ruby" })
+		data.Foundry = { Stock = stock, Extra = "kept" }
+		data.Upgrades.PenAutomation = 7.5
+		local report = Migrations.run(data)
+
+		local up = data.MachineUpgrades
+		T.eq(up.AutoCleaner.Speed, 2, "floored")
+		T.eq(up.AutoCleaner.Quality, 5, "clamped to the top level")
+		T.eq(up.AutoCleaner.Luck, nil, "unknown upgrade kind dropped")
+		T.eq(up.Crusher.Speed, 0, "negative becomes 0")
+		T.eq(up.Crusher.Quality, nil, "the Crusher has no Quality upgrade")
+		T.eq(up.ClayFurnace, nil, "NaN level dropped, empty record removed")
+		T.eq(up.Conveyor, nil, "no upgrades on belts")
+		T.eq(up.StorageCrate, nil, "retired")
+		T.eq(up.FutureMachine, nil, "unknown machine")
+		T.eq(up.BlastFurnace, nil, "not a record")
+		T.eq(up.IronBox.Speed, 1, "a good record stays")
+		T.eq(up[7], nil, "number key")
+
+		local keep = data.KeepList
+		T.eq(keep.Gold, true)
+		T.eq(keep.Heartstone, true)
+		T.eq(keep.Ruby, nil, "only true counts")
+		T.eq(keep.Diamond, nil)
+		T.eq(keep.Unobtainium, nil, "unknown ore")
+		T.eq(keep[3], nil)
+
+		local kept = data.Foundry.Stock
+		T.truthy(kept == stock, "same Stock table")
+		T.eq(#kept, GameConfig.MaxFoundryStock, "capped")
+		T.eq(kept[1].O, "Ruby", "the first good ingot (no grade is fine)")
+		for _, item in kept do
+			T.eq(item.K, "Ingot")
+		end
+		T.eq(data.Foundry.Extra, "kept", "other Foundry fields are left alone")
+		-- pen: coal + 4 bad stock items + 4 overflow ingots
+		T.eq(#data.Storage, 1 + 4 + 4, "pen got the rest")
+		T.eq(data.Storage[2].K, "Clean", "the clean gold, in stock order")
+		T.eq(data.Storage[#data.Storage].O, "Iron", "overflow ingots")
+
+		T.eq(data.Upgrades.PenAutomation, 2, "clamped to the top level")
+		T.truthy(report.Dropped > 0 and report.Moved > 0)
+
+		local copy = ProfileStore.deepCopy(data)
+		report = Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		T.eq(report.Moved + report.Dropped, 0)
+	end)
+
+	T.test("Migration step 3: broken records become clean ones", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.MachineUpgrades = "x"
+		data.KeepList = 5
+		data.Foundry = "forge"
+		data.Upgrades = "none"
+		Migrations.run(data)
+		T.eq(type(data.MachineUpgrades), "table")
+		T.eq(next(data.MachineUpgrades), nil)
+		T.eq(type(data.KeepList), "table")
+		T.eq(type(data.Foundry), "table")
+		T.eq(type(data.Foundry.Stock), "table")
+		T.eq(#data.Foundry.Stock, 0)
+		T.eq(type(data.Upgrades), "table")
+		T.eq(data.Upgrades.PenAutomation, 0)
+		T.eq(data.Upgrades.Bellows, 0, "the other upgrade fields come back at 0")
+		T.eq(data.Upgrades.PenLevel, 0)
+		local stockless = ProfileStore.deepCopy(DataTemplate)
+		stockless.Foundry = { Stock = "x" }
+		stockless.Upgrades.PenAutomation = 0 / 0
+		Migrations.run(stockless)
+		T.eq(type(stockless.Foundry.Stock), "table")
+		T.eq(stockless.Upgrades.PenAutomation, 0, "NaN")
+		-- an old step 2 save gets the new records from reconcile, and they survive the migration
+		local old = ProfileStore.deepCopy(DataTemplate)
+		old.MachineUpgrades = nil
+		old.KeepList = nil
+		old.Foundry = nil
+		old.Upgrades.PenAutomation = nil
+		ProfileStore.reconcile(old, DataTemplate)
+		local report = Migrations.run(old)
+		T.eq(report.Moved + report.Dropped, 0, "nothing to repair")
+		T.truthy(deepEqual(old, DataTemplate), "same as a fresh save")
+	end)
 end

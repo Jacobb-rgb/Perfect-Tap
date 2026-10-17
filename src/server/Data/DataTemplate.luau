@@ -21,6 +21,20 @@ local DataTemplate = {
 		Bellows = 0, -- machine speed level
 		ExtraSlots = 0, -- machine slot upgrades bought
 		PenLevel = 0, -- Ore Pen capacity level (EconomyConfig.Pen)
+		-- pen automation (EconomyConfig.PenAutomation): 0 none, 1 the sorting
+		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
+		PenAutomation = 0,
+	},
+	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
+	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)
+	MachineUpgrades = {},
+	-- ore ids the Iron Box (and the pen's sorting billboard) keep: { [oreId] = true }.
+	-- Empty = keep everything.
+	KeepList = {},
+	-- the Foundry on the base: ingots waiting to be forged into blasters,
+	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock)
+	Foundry = {
+		Stock = {},
 	},
 
 	-- machines: bought but not placed { [machineId] = count 1..999 } (no zero keys)

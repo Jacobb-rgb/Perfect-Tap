@@ -4,7 +4,11 @@
 	holds your ore (data.Storage). Unwanted ore is sold at the Sell stall in
 	town (Tobin the miner).
 	Income formula: ItemData.income(desc) * EconomyConfig.multiplier(...).
+	The Tech shop (step 3) sells machines, machine upgrades, Bellows, slot
+	upgrades and pen automation (TechShop, techItem, techPrice below).
 ]]
+
+local MachineData = require(script.Parent.MachineData)
 
 local EconomyConfig = {}
 
@@ -38,6 +42,16 @@ EconomyConfig.Sell = {
 	ComboWindow = 0.8, -- sales closer together than this count as one combo (popups)
 }
 
+-- Pen automation (Tech shop, data.Upgrades.PenAutomation): level 1 = the sorting
+-- billboard at the pen (marks the ore types to keep, data.KeepList), level 2 =
+-- also the train's Direct Unload (raw cargo goes onto the TRAIN chute cell,
+-- BaseLayout.Chutes.Train, instead of into the pen).
+EconomyConfig.PenAutomation = {
+	Prices = { 25000, 250000 }, -- levels 1..2
+	Billboard = 1, -- the level that brings the sorting billboard
+	DirectUnload = 2, -- the level that brings Direct Unload
+}
+
 -- Big numbers: one award can never be bigger than this (a bug, never a real payout).
 EconomyConfig.MaxAward = 1e30
 
@@ -57,6 +71,123 @@ function EconomyConfig.penCapacity(level: any, hardCap: number): number
 	local n = if type(level) == "number" and level == level then math.floor(level) else 0
 	n = math.clamp(n, 0, #EconomyConfig.Pen.Prices)
 	return math.min(hardCap, EconomyConfig.Pen.BaseCapacity + EconomyConfig.Pen.PerLevel * n)
+end
+
+---------------------------------------------------------------- Tech shop
+
+--[[
+	Tech shop catalog (the UPGRADES stall in town; ShopBuy { Shop = "Tech",
+	Item, Count? }). Item strings:
+	  <machineId>                      a machine into data.MachineInventory
+	                                   (MachineData.Buildable; Count 1..MaxCount,
+	                                   price MachineData.Price each)
+	  "Upgrade:<machineId>:Speed"      the next Speed level of a machine type
+	  "Upgrade:<machineId>:Quality"    the next Quality level (Cleaning Plant)
+	                                   (prices: MachineData Upgrades, saved in
+	                                   data.MachineUpgrades[machineId])
+	  "Bellows"                        data.Upgrades.Bellows (MachineData.Bellows)
+	  "Slots"                          data.Upgrades.ExtraSlots (MachineData.SlotUpgrade)
+	  "PenAutomation"                  data.Upgrades.PenAutomation (EconomyConfig.PenAutomation)
+	Levelled items always buy exactly one level (Count is ignored).
+]]
+export type TechKind = "Machine" | "Upgrade" | "Bellows" | "Slots" | "PenAutomation"
+export type TechItem = {
+	Item: string, -- the ShopBuy Item string
+	Kind: TechKind,
+	Section: "Machines" | "Upgrades" | "Base", -- tab in the shop view
+	Machine: string?, -- machine id (Machine and Upgrade items)
+	Upgrade: string?, -- "Speed" | "Quality" (Upgrade items)
+	Prices: { number }?, -- price of each level, level 1 first (levelled items)
+}
+
+EconomyConfig.TechShop = {
+	Shop = "Tech", -- ShopBuy.Shop
+	MaxCount = 20, -- machines per ShopBuy
+	MaxOwned = 999, -- a machine type in the inventory (as Migrations keeps it)
+	Items = {} :: { TechItem }, -- in shop order
+	ById = {} :: { [string]: TechItem }, -- Item string -> entry
+}
+
+local function addTech(entry: TechItem)
+	table.insert(EconomyConfig.TechShop.Items, entry)
+	EconomyConfig.TechShop.ById[entry.Item] = entry
+end
+
+for _, machine in MachineData.Buildable do
+	addTech({ Item = machine.Id, Kind = "Machine", Section = "Machines", Machine = machine.Id })
+end
+for _, machine in MachineData.Buildable do
+	for _, kind in MachineData.UpgradeKinds do
+		local prices = MachineData.upgradePrices(machine.Id, kind)
+		if prices then
+			addTech({
+				Item = `Upgrade:{machine.Id}:{kind}`,
+				Kind = "Upgrade",
+				Section = "Upgrades",
+				Machine = machine.Id,
+				Upgrade = kind,
+				Prices = prices,
+			})
+		end
+	end
+end
+addTech({ Item = "Bellows", Kind = "Bellows", Section = "Base", Prices = MachineData.Bellows.Prices })
+addTech({ Item = "Slots", Kind = "Slots", Section = "Base", Prices = MachineData.SlotUpgrade.Prices })
+addTech({ Item = "PenAutomation", Kind = "PenAutomation", Section = "Base", Prices = EconomyConfig.PenAutomation.Prices })
+
+-- The catalog entry for a ShopBuy Item string, or nil when it isn't sold.
+function EconomyConfig.techItem(item: any): TechItem?
+	if type(item) ~= "string" or #item > 64 then
+		return nil
+	end
+	return EconomyConfig.TechShop.ById[item]
+end
+
+local function wholeLevel(value: any, max: number): number
+	local n = if type(value) == "number" and value == value then math.floor(value) else 0
+	return math.clamp(n, 0, max)
+end
+
+-- A machine type's upgrade level in a save (0..MachineData.upgradeMax; broken values count as 0).
+function EconomyConfig.upgradeLevel(data: { [string]: any }, machineId: string, kind: string): number
+	local all = data.MachineUpgrades
+	local record = if type(all) == "table" then all[machineId] else nil
+	local level = if type(record) == "table" then record[kind] else nil
+	return wholeLevel(level, MachineData.upgradeMax(machineId, kind))
+end
+
+-- Current level and top level of a levelled item in a save (machines: 0, 0).
+function EconomyConfig.techLevel(entry: TechItem, data: { [string]: any }): (number, number)
+	local prices = entry.Prices
+	if not prices then
+		return 0, 0
+	end
+	local max = #prices
+	if entry.Kind == "Upgrade" then
+		return EconomyConfig.upgradeLevel(data, entry.Machine :: string, entry.Upgrade :: string), max
+	end
+	local bought = data.Upgrades
+	local field = if entry.Kind == "Bellows" then "Bellows" elseif entry.Kind == "Slots" then "ExtraSlots" else "PenAutomation"
+	return wholeLevel(if type(bought) == "table" then bought[field] else nil, max), max
+end
+
+-- What buying `entry` costs now: a machine times `count` (whole 1..MaxCount,
+-- default 1), or the next level of a levelled item. nil + "BadCount" | "Max".
+function EconomyConfig.techPrice(entry: TechItem, data: { [string]: any }, count: any?): (number?, string?)
+	if entry.Kind == "Machine" then
+		local n = if count == nil then 1 else count
+		if type(n) ~= "number" or n ~= math.floor(n) or n < 1 or n > EconomyConfig.TechShop.MaxCount then
+			return nil, "BadCount"
+		end
+		local machine = MachineData.ById[entry.Machine :: string]
+		return machine.Price * n, nil
+	end
+	local level, max = EconomyConfig.techLevel(entry, data)
+	if level >= max then
+		return nil, "Max"
+	end
+	local prices = entry.Prices :: { number }
+	return prices[level + 1], nil
 end
 
 -- Coins earned offline: `seconds` away at `incomePerSecond`, capped by hours.
