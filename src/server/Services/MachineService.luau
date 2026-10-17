@@ -21,6 +21,8 @@
 	  when it takes them, otherwise as a loose item. Output pauses when the
 	  front machine refuses or the owner has too many loose items.
 	- MachineAction remote: actions on your own machines (onAction).
+	- emitSide: the same hand-over or loose pop toward a side output cell
+	  (Splitter, Sorter: LogisticsService); the tick never uses it.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -790,6 +792,59 @@ function MachineService.emit(machine: PlacedMachine, desc: Desc): (EmitResult, I
 	local pivot = machine.Model:GetPivot()
 	local cf = MachineService.point(machine, "Output") or pivot
 	local velocity = pivot.LookVector * GameConfig.OutputPop.Forward + Vector3.new(0, GameConfig.OutputPop.Up, 0)
+	-- the server keeps output physics, so belts and hoppers never wait on a client
+	local record = ItemService.spawnDesc(desc, owner, cf, velocity, true)
+	if not record then
+		return "Blocked", nil
+	end
+	return "Spawned", record
+end
+
+-- How an item leaves a side output when nothing takes it: sideways onto the
+-- belt in the side cell (studs per second out of the side, and up).
+MachineService.SidePop = { Out = 3, Up = 1.5 }
+
+--[[
+	Sends one item out of a side output (MachineData SideOutputs: Splitter,
+	Sorter), like emit() but toward Grid.sideOutputCell: `side` -1 = the
+	machine's left (OutputL), 1 = its right (OutputR, Grid.right).
+	- 'Handed': the non-belt machine in the side cell took it (its face must
+	  take items from the side the item comes from: the source's own cell
+	  on that side of its front row).
+	- 'Spawned': it popped out as a loose item at the OutputL / OutputR
+	  attachment, moving sideways onto the belt there (SidePop).
+	- 'Blocked': the machine in the side cell refused it ('OutputBlocked'),
+	  or the owner has too many loose items ('TooManyItems'). The caller
+	  keeps the item.
+]]
+function MachineService.emitSide(machine: PlacedMachine, desc: Desc, side: number): (EmitResult, ItemService.ItemRecord?)
+	if machine.Removed then
+		return "Blocked", nil
+	end
+	local s = if side < 0 then -1 else 1
+	local owner = machine.Owner.UserId
+	local sx, sz = Grid.sideOutputCell(machine.Id, machine.X, machine.Z, machine.R, s)
+	local target = MachineService.atCell(machine.PlotId, sx, sz)
+	if target and target ~= machine and not target.Info.IsConveyor then
+		-- the item comes from the source's own cell beside the side cell
+		local rx, rz = Grid.right(machine.R)
+		if ConveyorLogic.faceAllowed(target.Entry, sx - s * rx, sz - s * rz) then
+			if MachineService.insertDesc(target, desc, owner, "Machine") then
+				return "Handed", nil
+			end
+			MachineService.setAttrs(machine, { Status = "OutputBlocked" })
+			return "Blocked", nil
+		end
+	end
+	if ItemService.looseCount(owner) >= GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom then
+		MachineService.setAttrs(machine, { Status = "TooManyItems" })
+		return "Blocked", nil
+	end
+	local pivot = machine.Model:GetPivot()
+	local cf = MachineService.point(machine, if s < 0 then "OutputL" else "OutputR")
+		or pivot * CFrame.new(Grid.sideOutputLocal(machine.Id, s))
+	local pop = MachineService.SidePop
+	local velocity = pivot.RightVector * (s * pop.Out) + Vector3.new(0, pop.Up, 0)
 	-- the server keeps output physics, so belts and hoppers never wait on a client
 	local record = ItemService.spawnDesc(desc, owner, cf, velocity, true)
 	if not record then

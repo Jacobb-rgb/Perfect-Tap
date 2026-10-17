@@ -2,11 +2,14 @@
 	ConveyorService: belts and the chute cells (step d "WP-Conveyor",
 	step 3 "WP-Belts", docs/plans/STEP3_PLAN.md).
 
-	Belts (MachineService.register "Conveyor")
+	Belts (MachineService.register for every MachineData entry with
+	IsConveyor: the Conveyor and the Express Conveyor)
 	- A belt's Belt part is an anchored conveyor surface: its
-	  AssemblyLinearVelocity = LookVector * GameConfig.ConveyorSpeed, set when
-	  it spawns and after every move. Anchored-part velocity replicates, so
-	  there is no client code and nothing runs per frame per part.
+	  AssemblyLinearVelocity = LookVector * beltSpeed(belt), set when it
+	  spawns and after every move. beltSpeed = GameConfig.ConveyorSpeed *
+	  the belt's SpeedMult (MachineData; the Express Conveyor runs at 2x).
+	  Anchored-part velocity replicates, so there is no client code and
+	  nothing runs per frame per part.
 	- Every part of a belt is in the "Conveyors" collision group, which does
 	  not collide with "Characters": players walk through belts, items ride.
 	- Rails: on every layout change ConveyorLogic.openSides opens the side
@@ -15,7 +18,7 @@
 	- Jams (IntakeService.setBeltHandler, 5 Hz, only for items riding a belt
 	  that no hopper or belt end took): a server-simulated item slower than
 	  ConveyorStuckSpeed for ConveyorStuckSeconds gets a nudge along the belt
-	  (dir * ConveyorSpeed + 1 up), which also wakes items that fell asleep;
+	  (dir * beltSpeed + 1 up), which also wakes items that fell asleep;
 	  ConveyorMaxNudges nudges within ConveyorNudgeWindow push it off the
 	  belt's side (BeltRejectPop). An item that waits behind another item of
 	  the same line (a queue in front of a full machine or a sink) is not
@@ -236,11 +239,27 @@ local function beltPart(machine: PlacedMachine): BasePart?
 	return if belt and belt:IsA("BasePart") then belt else nil
 end
 
+-- Studs per second a belt of this type moves items: GameConfig.ConveyorSpeed
+-- times its MachineData SpeedMult (the Express Conveyor: 2). A broken
+-- multiplier counts as 1.
+function ConveyorService.speedOf(info: MachineData.Machine): number
+	local mult = info.SpeedMult
+	if type(mult) ~= "number" or mult ~= mult or mult <= 0 or mult == math.huge then
+		mult = 1
+	end
+	return GameConfig.ConveyorSpeed * (mult :: number)
+end
+
+-- How fast this belt moves items (speedOf its type).
+function ConveyorService.beltSpeed(machine: PlacedMachine): number
+	return ConveyorService.speedOf(machine.Info)
+end
+
 -- The belt surface moves items toward the front, and players walk through every part.
 local function applyBelt(machine: PlacedMachine)
 	local belt = beltPart(machine)
 	if belt then
-		belt.AssemblyLinearVelocity = belt.CFrame.LookVector * GameConfig.ConveyorSpeed
+		belt.AssemblyLinearVelocity = belt.CFrame.LookVector * ConveyorService.beltSpeed(machine)
 	end
 	for _, part in machine.Model:GetDescendants() do
 		if part:IsA("BasePart") then
@@ -458,7 +477,7 @@ function ConveyorService.spawnAtSource(
 	end
 	local pivot = belt.Model:GetPivot()
 	local spot = pivot * CFrame.new(0, ConveyorService.SpawnUp, ConveyorService.SpawnBack)
-	local record = spawnSafely(desc, ownerUserId, spot, pivot.LookVector * GameConfig.ConveyorSpeed)
+	local record = spawnSafely(desc, ownerUserId, spot, pivot.LookVector * ConveyorService.beltSpeed(belt))
 	if not record then
 		return nil, "Bad"
 	end
@@ -703,7 +722,7 @@ local function unjam(belt: PlacedMachine, record: ItemRecord, now: number)
 		end
 		return
 	end
-	record.Body.AssemblyLinearVelocity = dir * GameConfig.ConveyorSpeed + Vector3.new(0, 1, 0)
+	record.Body.AssemblyLinearVelocity = dir * ConveyorService.beltSpeed(belt) + Vector3.new(0, 1, 0)
 end
 
 -- IntakeService calls this for every trusted loose item riding a belt that no
@@ -995,12 +1014,25 @@ ConveyorService._test = {
 	end,
 }
 
+-- Every belt type (MachineData IsConveyor: Conveyor, ExpressConveyor), in List order.
+function ConveyorService.beltIds(): { string }
+	local list = {}
+	for _, info in MachineData.List do
+		if info.IsConveyor then
+			table.insert(list, info.Id)
+		end
+	end
+	return list
+end
+
 function ConveyorService.init()
 	setupCollisionGroup()
-	MachineService.register("Conveyor", {
-		spawned = applyBelt,
-		moved = applyBelt,
-	})
+	for _, id in ConveyorService.beltIds() do
+		MachineService.register(id, {
+			spawned = applyBelt,
+			moved = applyBelt,
+		})
+	end
 	MachineService.onLayoutChanged(onLayout)
 	IntakeService.setBeltHandler(onBelt)
 end
