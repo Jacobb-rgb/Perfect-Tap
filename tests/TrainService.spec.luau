@@ -1,16 +1,23 @@
--- TrainService under Lune: hooks found under the railway, intake (owner only,
--- capacity, bounce when full / away), Load Train, Send, the auto-depart timer,
--- delivery into the pen (capacity, retry, one toast), the return trip, joining
--- (delivery and re-announcing), upgrades, Express, junk input and no
+-- TrainService under Lune: hooks found under the railway (also added later,
+-- from the station / lift root), intake (owner only, capacity, bounce when
+-- full / away with the right toast, Reject throttle), Load Train, Send, the
+-- auto-depart timer, the arrival timer, delivery into the pen (capacity,
+-- retry, one toast, Waiting), the return trip as the client reads it,
+-- joining (quiet delivery and retries, re-announcing, the Express grace),
+-- banner colors, upgrades, Express, junk input, one broken train and no
 -- duplication. The railway hooks follow the WORLD contract; players, saves,
 -- carrying, plots and Net are small fakes, items and coins are real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local task = require("@lune/task") :: any
 	local Vector3 = roblox.Vector3
+	local Vector2 = roblox.Vector2
+	local Color3 = roblox.Color3
 	local Instance = roblox.Instance
 	local Enum = roblox.Enum
 	local CFrame = Loader.CFrame
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
@@ -141,7 +148,7 @@ return function(T, Loader)
 	---------------------------------------------------------------- world
 
 	local function setup(): any
-		local w: any = { notes = {}, all = {}, changed = {}, zones = {}, now = NOW }
+		local w: any = { notes = {}, all = {}, near = {}, wakes = {}, changed = {}, zones = {}, now = NOW }
 		w.player = fakePlayer(USER, "Owner")
 		w.other = fakePlayer(OTHER, "Neighbour")
 		w.data = deepCopy(DataTemplate)
@@ -168,6 +175,9 @@ return function(T, Loader)
 		end)
 		patch(Net, "fireAll", function(name, a, b, c)
 			table.insert(w.all, { Name = name, A = a, B = b, C = c })
+		end)
+		patch(Net, "fireNear", function(name, position, radius, except, a, b)
+			table.insert(w.near, { Name = name, Position = position, Radius = radius, Except = except, A = a, B = b })
 		end)
 		patch(PlotService, "plotOf", function(p)
 			return w.plots[p]
@@ -213,10 +223,13 @@ return function(T, Loader)
 		ItemService._test.reset()
 		EconomyService._test.reset()
 		train.reset()
+		-- os.time(), the server clock and the arrival timer (kept until a test runs it)
 		train.setClock(function()
 			return w.now
 		end, function()
 			return w.now + OFFSET
+		end, function(seconds, fn)
+			table.insert(w.wakes, { At = w.now + OFFSET + seconds, Fn = fn })
 		end)
 		w.railway = buildRailway()
 		train.watch(w.railway)
@@ -341,6 +354,37 @@ return function(T, Loader)
 		TrainService.tick()
 	end
 
+	local function serverTime(w: any): number
+		return w.now + OFFSET
+	end
+
+	-- Runs the arrival timers that are due (or the next one, moving the clock to it).
+	local function runWakes(w: any, jump: boolean?)
+		if jump and w.wakes[1] then
+			w.now = math.max(w.now, w.wakes[1].At - OFFSET)
+		end
+		local i = 1
+		while i <= #w.wakes do
+			local wake = w.wakes[i]
+			if wake.At <= serverTime(w) + 1e-9 then
+				table.remove(w.wakes, i)
+				wake.Fn()
+			else
+				i += 1
+			end
+		end
+	end
+
+	local function count(list: { any }, name: string, a: any): number
+		local n = 0
+		for _, note in list do
+			if note.Name == name and note.A == a then
+				n += 1
+			end
+		end
+		return n
+	end
+
 	local function fillPen(w: any, n: number)
 		for _ = 1, n do
 			table.insert(w.data.Storage, { K = "Raw", O = "Coal" })
@@ -377,6 +421,11 @@ return function(T, Loader)
 		T.truthy(load:HasTag(TrainService.PromptTag) and send:HasTag(TrainService.PromptTag), "tagged for the client")
 		T.eq(load:GetAttribute("Action"), "Load", "load action")
 		T.eq(send:GetAttribute("Action"), "Send", "send action")
+		-- UIOffset slots: Load 0, Send 1, the client's "Train" panel prompt 2
+		T.eq(load.UIOffset, Vector2.new(0, 0), "load in slot 0")
+		T.eq(send.UIOffset, Vector2.new(0, TrainService.PromptSlotHeight), "send in slot 1")
+		T.eq(TrainService.PromptSlots.Panel * TrainService.PromptSlotHeight, 144, "slot 2 for the client")
+		T.truthy(load.Enabled and send.Enabled, "enabled (the client hides Load with empty hands)")
 		local liftPoint = w.railway.Lift_EmberCaves.Cage.PromptPoint
 		T.eq(liftPoint.TrainLoadPrompt.ObjectText, "Mine Lift", "lift prompts")
 		-- a hook without a PromptPoint keeps its prompts on itself and bounces along its LookVector
@@ -388,6 +437,112 @@ return function(T, Loader)
 		T.near(hook.Out.Y, 0, 1e-6, "flat out vector")
 	end)
 
+	withWorld("TrainService: the prompt point comes from the station or lift, also for a hopper in its own model", function(w)
+		local s = TrainConfig.Station
+		local map = Instance.new("Model")
+		map.Name = "Map"
+		local railway = Instance.new("Folder")
+		railway.Name = "Railway"
+		railway.Parent = map
+		-- a PromptPoint somewhere else in the map is never used
+		local elsewhere = newPart(map, "Elsewhere", CFrame.new(0, 0, 900), Vector3.new(2, 2, 2))
+		newAttachment(elsewhere, "PromptPoint", Vector3.new(0, 3, 900))
+		local station = Instance.new("Model")
+		station.Name = "MineStation"
+		station:AddTag("TrainStation")
+		station.Parent = railway
+		local platform = newPart(station, "Platform", CFrame.new(s.Platform.Center), s.Platform.Size)
+		newAttachment(platform, "PromptPoint", s.PromptPoint)
+		local hopperModel = Instance.new("Model") -- a Kenney-style hopper built as its own model
+		hopperModel.Name = "Hopper"
+		hopperModel.Parent = station
+		local intake = hopper(hopperModel, s.Hopper, s.HopperSize)
+		local hook = train.setupHook(intake)
+		T.eq(hook.Name, "Mine Station", "station")
+		T.lt((hook.Point - s.PromptPoint).Magnitude, 1e-4, "the station's prompt point")
+		T.truthy(platform.PromptPoint:FindFirstChild("TrainLoadPrompt"), "prompts at the station's PromptPoint")
+		T.falsy(intake:FindFirstChild("TrainLoadPrompt"), "not on the invisible intake")
+		local toward = flat(s.PromptPoint - intake.CFrame.Position).Unit
+		T.lt(0.99, hook.Out:Dot(toward), "bounces toward the prompts")
+		-- a lift whose LiftId is only on its model, the intake in a sub-model
+		local lift = Instance.new("Model")
+		lift.Name = "Lift_Annex"
+		lift:SetAttribute("LiftId", "Annex")
+		lift:AddTag("MineLift")
+		lift.Parent = railway
+		local box = Instance.new("Model")
+		box.Name = "Box"
+		box.Parent = lift
+		local liftIntake = hopper(box, Vector3.new(60, -12, -300), Vector3.new(6, 5, 6))
+		local cage = newPart(lift, "Cage", CFrame.new(60, -11.5, -300), Vector3.new(8, 1, 8))
+		newAttachment(cage, "PromptPoint", Vector3.new(60, -9, -294))
+		local liftHook = train.setupHook(liftIntake)
+		T.eq(liftHook.LiftId, "Annex", "lift id from the model")
+		T.eq(liftHook.Name, "Mine Lift", "lift")
+		T.eq(cage.PromptPoint.TrainSendPrompt.ObjectText, "Mine Lift", "prompts at the lift's PromptPoint")
+		T.eq(#w.zones, 1 + #TrainConfig.Lifts + 2, "zones for both")
+		T.eq(w.zones[#w.zones].Name, "TrainAnnex", "lift zone name")
+		-- a hopper straight in the railway: no search above the railway (the map model)
+		local bare = hopper(railway, Vector3.new(0, 0, 700), Vector3.new(4, 4, 4))
+		train.setupHook(bare)
+		T.truthy(bare:FindFirstChild("TrainLoadPrompt"), "prompts on the part")
+		T.falsy(elsewhere.PromptPoint:FindFirstChild("TrainLoadPrompt"), "never the map's other PromptPoint")
+	end)
+
+	withWorld("TrainService: hoppers added to the railway later get their zone and prompts", function(w)
+		-- the railway's DescendantAdded (the loader's instances have no live signals)
+		local handlers = {}
+		local added = {
+			Connect = function(_, fn)
+				table.insert(handlers, fn)
+				return { Disconnect = function() end, Connected = true }
+			end,
+		}
+		train.watch(w.railway, added)
+		local before = #w.zones
+		T.eq(before, 1 + #TrainConfig.Lifts, "the hooks are set up once")
+		local lift = Instance.new("Model")
+		lift.Name = "Lift_Third"
+		lift:SetAttribute("LiftId", "Third")
+		lift:AddTag("MineLift")
+		local box = hopper(lift, Vector3.new(30, -40, -500), Vector3.new(6, 5, 6))
+		box:SetAttribute("LiftId", "Third")
+		local cage = newPart(lift, "Cage", CFrame.new(30, -39.5, -500), Vector3.new(8, 1, 8))
+		newAttachment(cage, "PromptPoint", Vector3.new(30, -37, -494))
+		lift.Parent = w.railway
+		local parts = { lift :: any }
+		for _, d in lift:GetDescendants() do
+			table.insert(parts, d)
+		end
+		T.eq(#handlers, 1, "listening")
+		for _, d in parts do
+			handlers[1](d)
+		end
+		T.eq(#w.zones, before, "deferred: the model finishes building first")
+		task.wait()
+		T.eq(#w.zones, before + 1, "the new lift's zone")
+		T.eq(w.zones[#w.zones].Name, "TrainThird", "zone name")
+		T.eq(w.zones[#w.zones].Part, box, "its intake")
+		T.truthy(cage.PromptPoint:FindFirstChild("TrainLoadPrompt"), "load prompt at its PromptPoint")
+		T.truthy(cage.PromptPoint:FindFirstChild("TrainSendPrompt"), "send prompt")
+		-- items go into the train through it
+		drop(w.zones[#w.zones], USER, COAL)
+		T.eq(#w.data.Train.Cargo, 1, "loads")
+		-- a part tagged later (CollectionService): only under the railway
+		local late = newPart(w.railway.MineStation, "Annex", CFrame.new(40, -10, -147), Vector3.new(3, 3, 3))
+		late:SetAttribute("LiftId", "Late")
+		late:AddTag("TrainHopper")
+		train.tagged(late)
+		local outside = hopper(Instance.new("Folder"), Vector3.new(0, 0, 800), Vector3.new(3, 3, 3))
+		train.tagged(outside)
+		task.wait()
+		T.eq(#w.zones, before + 2, "the tagged part under the railway, not the one outside")
+		T.eq(w.zones[#w.zones].Part, late, "the late hopper")
+		train.tagged(late)
+		task.wait()
+		T.eq(#w.zones, before + 2, "never twice")
+	end)
+
 	---------------------------------------------------------------- intake
 
 	withWorld("TrainService: items in a hopper go into their owner's own train", function(w)
@@ -396,9 +551,14 @@ return function(T, Loader)
 		T.eq(#w.data.Train.Cargo, 1, "in my cargo")
 		T.eq(w.data.Train.Cargo[1].O, "Coal", "the right item")
 		T.eq(#w.otherData.Train.Cargo, 0, "not in the neighbour's train")
-		local fx = lastNote(w, "Fx")
-		T.truthy(fx and fx.A == "TrainLoad" and fx.Player == w.player, "TrainLoad effect for the owner")
+		-- the station is shared: everyone close by sees the load puff
+		local fx = w.near[#w.near]
+		T.truthy(fx and fx.Name == "Fx" and fx.A == "TrainLoad", "TrainLoad effect")
 		T.eq(typeof(fx.B), "Vector3", "at a position")
+		T.eq(fx.Position, fx.B, "around the hopper")
+		T.le(80, fx.Radius, "for everyone near the station")
+		T.eq(fx.Except, nil, "the owner too")
+		T.eq(count(w.notes, "Fx", "TrainLoad"), 0, "not only for the owner")
 		T.truthy((w.changed[w.player] or 0) > 0, "data changed")
 		drop(w.station, OTHER, GOLD)
 		T.eq(#w.otherData.Train.Cargo, 1, "the neighbour's item goes into the neighbour's train")
@@ -472,6 +632,26 @@ return function(T, Loader)
 		T.eq(#t.Cargo, 0, "nothing waits at the station")
 		-- dirty ore never shows its ore color on the wagon
 		T.eq(TrainService.loadColors({ DIRTY_GOLD, DIRTY_GOLD })[1], ItemBuilder.DirtyCrust, "dirty gold is dirt")
+	end)
+
+	withWorld("TrainService: an item that rolls back into the hopper gets the Reject effect once per cooldown", function(w)
+		dropMany(w.station, USER, COAL, 2)
+		TrainService.send(w.player)
+		local item = drop(w.station, USER, COAL)
+		T.eq(count(w.notes, "Fx", "Reject"), 1, "rejected")
+		for _ = 1, 4 do
+			w.now += 0.2
+			w.station.Handler(item) -- it rolled back in
+			T.eq(item.State, "Loose", "still refused")
+			T.falsy(inside(w.station.Part, item.Body.CFrame.Position), "popped out again")
+		end
+		T.eq(count(w.notes, "Fx", "Reject"), 1, "no effect spam for the same item")
+		w.now += GameConfig.RejectCooldown
+		w.station.Handler(item)
+		T.eq(count(w.notes, "Fx", "Reject"), 2, "again after the cooldown")
+		drop(w.station, USER, COAL)
+		T.eq(count(w.notes, "Fx", "Reject"), 3, "another item has its own effect")
+		T.eq(toasts(w, w.player, TrainService.AwayText), 1, "one toast for all of it")
 	end)
 
 	withWorld("TrainService: a full cargo that could not leave yet bounces items with 'press Send'", function(w)
@@ -555,9 +735,11 @@ return function(T, Loader)
 		drop(w.station, USER, GOLD)
 		drop(w.TrainEmberCaves, USER, IRON)
 		TrainService.send(w.player)
+		local trip = trips(w, USER)[1]
 		advance(w, TRIP - 1)
 		T.eq(#w.data.Train.TripCargo, 3, "still on the way")
 		T.eq(#w.data.Storage, 0, "pen untouched")
+		T.eq(snapshot(w, w.player).Waiting, false, "not waiting on the way")
 		advance(w, 1)
 		local t = w.data.Train
 		T.eq(#w.data.Storage, 3, "unloaded into the pen")
@@ -569,24 +751,69 @@ return function(T, Loader)
 		T.eq(#fx, 1, "TrainUnload for everyone")
 		T.eq(fx[1].B, PLOT, "at my plot")
 		T.eq(fx[1].C, 3, "count")
+		-- rolling back, as the client reads it: the trip times stay, back at ArriveAt + ReturnSeconds
 		local s = snapshot(w, w.player)
 		T.eq(s.Moving, 0, "nothing moving")
-		T.eq(s.ArriveAt, nil, "no trip times")
-		T.near(s.ReturnAt, w.now + OFFSET + TrainConfig.ReturnSeconds, 1e-6, "rolling back")
-		-- rolling back: no loading yet
+		T.eq(s.Waiting, false, "not waiting")
+		T.near(s.DepartAt, trip.DepartAt, 1e-6, "the trip's departure")
+		T.near(s.ArriveAt, trip.ArriveAt, 1e-6, "unloaded on time: the arrival clients animate")
+		T.eq(s.ReturnAt, nil, "no field outside the contract")
+		T.eq(s.AutoDepartIn, nil, "no countdown")
 		local bounced = drop(w.station, USER, COAL)
 		T.eq(bounced.State, "Loose", "still away")
-		advance(w, TrainConfig.ReturnSeconds)
-		T.eq(snapshot(w, w.player).ReturnAt, nil, "back at the station")
+		T.eq(lastToast(w, w.player).Text, TrainService.ReturnText, "coming back")
+		train.action(w.player, "Send")
+		T.eq(lastToast(w, w.player).Text, TrainService.ReturnText, "Send says the same")
+		T.eq(toasts(w, w.player, TrainService.AwayText), 0, "never 'on its way' while it comes back")
+		w.now = s.ArriveAt + TrainConfig.ReturnSeconds - 0.25 - OFFSET
+		T.eq(drop(w.station, USER, COAL).State, "Loose", "a moment before it is back")
+		w.now += 0.25
 		drop(w.station, USER, COAL)
-		T.eq(#w.data.Train.Cargo, 1, "loading again")
+		T.eq(#t.Cargo, 1, "loading again exactly when the client shows it back")
+		TrainService.tick()
+		s = snapshot(w, w.player)
+		T.eq(s.ArriveAt, nil, "back at the station: no trip times")
+		T.eq(s.DepartAt, nil, "no trip times")
+		T.eq(s.Cargo, 1, "the new load")
 	end)
 
-	withWorld("TrainService: a full pen keeps the rest on the train and retries with one toast", function(w)
+	withWorld("TrainService: a timer unloads the train right at its arrival (server time)", function(w)
+		w.player.attributes.Perk_TrainExpress = true
+		drop(w.station, USER, GOLD)
+		w.now += 0.4 -- between two whole seconds
+		TrainService.send(w.player)
+		local trip = trips(w, USER)[1]
+		T.near(trip.ArriveAt - trip.DepartAt, TrainConfig.tripSeconds(0, true), 1e-6, "an Express trip")
+		T.eq(#w.wakes, 1, "one arrival timer")
+		T.lt(trip.ArriveAt, w.wakes[1].At, "never before the arrival")
+		T.lt(w.wakes[1].At, trip.ArriveAt + 0.1, "within a tenth of a second")
+		w.now = trip.ArriveAt - 0.3 - OFFSET
+		TrainService.tick()
+		T.eq(#w.data.Storage, 0, "not before the arrival")
+		runWakes(w, true)
+		T.eq(#w.data.Storage, 1, "unloaded by the timer")
+		T.eq(#unloads(w), 1, "the unload effect at the arrival")
+		T.lt(serverTime(w) - trip.ArriveAt, 0.1, "right on time")
+		T.near(snapshot(w, w.player).ArriveAt, trip.ArriveAt, 1e-6, "on time: the arrival clients animate")
+		advance(w, 0.5)
+		T.eq(#unloads(w), 1, "the loop never unloads it again")
+		-- a running trip found on joining gets its timer too
+		local o = w.otherData.Train
+		table.insert(o.TripCargo, { K = "Raw", O = "Coal" })
+		o.TripDepartAt = w.now - 5
+		o.TripArriveAt = w.now + 7
+		train.loaded(w.other, w.otherData)
+		T.eq(#w.wakes, 1, "the joiner's arrival timer")
+		runWakes(w, true)
+		T.eq(#w.otherData.Storage, 1, "unloaded at its arrival")
+	end)
+
+	withWorld("TrainService: a full pen keeps the rest on the train (Waiting) and retries with one toast", function(w)
 		local capacity = ItemService.penCapacity(w.data)
 		fillPen(w, capacity - 2)
 		dropMany(w.station, USER, GOLD, 5)
 		TrainService.send(w.player)
+		local trip = trips(w, USER)[1]
 		advance(w, TRIP)
 		local t = w.data.Train
 		T.eq(#w.data.Storage, capacity, "pen filled up")
@@ -594,30 +821,56 @@ return function(T, Loader)
 		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "one toast")
 		T.eq(#unloads(w), 0, "not unloaded yet")
 		T.truthy(t.TripArriveAt > 0, "the trip is not over")
+		-- the snapshot as the client reads it: waiting at the stop
+		local s = snapshot(w, w.player)
+		T.eq(s.Waiting, true, "waiting")
+		T.eq(s.Moving, 3, "on the train")
+		T.near(s.ArriveAt, trip.ArriveAt, 1e-6, "it did arrive")
+		-- every refusal says why
+		T.eq(drop(w.station, USER, COAL).State, "Loose", "the train is not back: no loading")
+		T.eq(toasts(w, w.player, TrainService.AwayText), 0, "not 'on its way'")
+		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "shares the throttle with the arrival toast")
+		train.action(w.player, "Send")
+		T.eq(lastToast(w, w.player).Text, TrainService.PenFullText, "Send: make room")
+		local said = toasts(w, w.player, TrainService.PenFullText)
 		TrainService.tick()
 		advance(w, TrainConfig.DeliveryRetry)
 		T.eq(#t.TripCargo, 3, "still full")
-		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "still one toast")
-		T.eq(drop(w.station, USER, COAL).State, "Loose", "the train is not back: no loading")
+		T.eq(snapshot(w, w.player).Waiting, true, "still waiting")
+		T.eq(toasts(w, w.player, TrainService.PenFullText), said, "the retries don't repeat it")
 		for _ = 1, 3 do
 			table.remove(w.data.Storage)
 		end
 		advance(w, TrainConfig.DeliveryRetry - 1)
 		T.eq(#t.TripCargo, 3, "waits for the next try")
 		advance(w, 1)
+		local unloadAt = serverTime(w)
 		T.eq(#t.TripCargo, 0, "delivered")
 		T.eq(#w.data.Storage, capacity, "pen full again, nothing over")
 		T.eq(w.data.Stats.TrainTrips, 1, "one trip")
 		local fx = unloads(w)
 		T.eq(#fx, 1, "unloaded once")
 		T.eq(fx[1].C, 5, "the whole load counts")
-		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "never repeated")
-		-- the next trip may warn again
-		advance(w, TrainConfig.ReturnSeconds)
+		T.eq(toasts(w, w.player, TrainService.PenFullText), said, "never repeated")
+		-- unloaded late: ArriveAt moves to the unload, ArriveAt + ReturnSeconds is when it is back
+		s = snapshot(w, w.player)
+		T.eq(s.Waiting, false, "not waiting any more")
+		T.near(s.DepartAt, trip.DepartAt, 1e-6, "same departure")
+		T.near(s.ArriveAt, unloadAt, 1e-6, "the late unload")
+		advance(w, TrainConfig.ReturnSeconds - 1)
+		T.eq(drop(w.station, USER, COAL).State, "Loose", "rolling back")
+		T.eq(lastToast(w, w.player).Text, TrainService.ReturnText, "coming back")
+		-- the next trip may warn again; nothing fits at all: the HUD still learns it waits
+		advance(w, 1)
 		drop(w.station, USER, GOLD)
+		T.eq(#t.Cargo, 1, "loading again")
 		TrainService.send(w.player)
+		local before = w.changed[w.player]
 		advance(w, TRIP)
-		T.eq(toasts(w, w.player, TrainService.PenFullText), 2, "a new trip, a new toast")
+		T.eq(#t.TripCargo, 1, "nothing fit")
+		T.eq(toasts(w, w.player, TrainService.PenFullText), said + 1, "a new trip, a new toast")
+		T.lt(before, w.changed[w.player], "snapshot pushed")
+		T.eq(snapshot(w, w.player).Waiting, true, "waiting")
 	end)
 
 	---------------------------------------------------------------- joining
@@ -638,17 +891,19 @@ return function(T, Loader)
 		T.eq(w.data.Stats.TrainTrips, 1, "counted")
 		T.eq(#unloads(w), 0, "no unload animation")
 		T.eq(#trips(w), 0, "no trip to animate")
-		T.truthy(lastToast(w, w.player).Text:find("while you were away", 1, true), "told")
+		T.eq(#w.wakes, 0, "no arrival timer")
+		T.eq(lastToast(w, w.player).Text, "Your train brought 4 ore to your Ore Pen while you were away.", "told")
 		local list = lastNote(w, "TrainTrip")
 		T.truthy(list and list.Player == w.player and #list.A == 0, "an (empty) list of trips for the joiner")
 		local s = snapshot(w, w.player)
-		T.eq(s.ReturnAt, nil, "no return trip after a delivery while away")
+		T.eq(s.ArriveAt, nil, "no return trip after a delivery while away")
+		T.eq(s.Waiting, false, "not waiting")
 		T.eq(s.AutoDepartIn, TrainConfig.AutoDepartSeconds, "the waiting cargo counts down again")
 		drop(w.station, USER, COAL)
 		T.eq(#t.Cargo, 3, "loading right away")
 	end)
 
-	withWorld("TrainService: joining with a full pen keeps the rest on the train and retries", function(w)
+	withWorld("TrainService: joining with a full pen keeps the rest on the train and retries quietly", function(w)
 		local t = w.data.Train
 		fillPen(w, ItemService.penCapacity(w.data) - 1)
 		for _ = 1, 3 do
@@ -659,11 +914,44 @@ return function(T, Loader)
 		train.loaded(w.player, w.data)
 		T.eq(#t.TripCargo, 2, "two wait on the train")
 		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "pen full toast")
+		T.eq(#trips(w, USER), 0, "nothing to animate")
+		local s = snapshot(w, w.player)
+		T.eq(s.Waiting, true, "waiting at the stop")
+		T.eq(s.Moving, 2, "two on the train")
+		T.le(s.ArriveAt, serverTime(w), "it arrived long ago")
+		T.eq(drop(w.station, USER, COAL).State, "Loose", "no loading while it waits")
+		T.eq(toasts(w, w.player, TrainService.AwayText), 0, "not 'on its way'")
 		table.remove(w.data.Storage)
 		table.remove(w.data.Storage)
 		advance(w, TrainConfig.DeliveryRetry)
 		T.eq(#t.TripCargo, 0, "delivered on the retry")
 		T.eq(w.data.Stats.TrainTrips, 1, "counted once")
+		T.eq(#unloads(w), 0, "no unload effect for a train nobody saw arrive")
+		T.eq(lastToast(w, w.player).Text, "Your train brought 3 ore to your Ore Pen while you were away.", "the whole load, once")
+		s = snapshot(w, w.player)
+		T.eq(s.ArriveAt, nil, "no return trip")
+		T.eq(s.Waiting, false, "done")
+		drop(w.station, USER, COAL)
+		T.eq(#t.Cargo, 1, "loading right away")
+	end)
+
+	withWorld("TrainService: right after joining a full cargo waits a moment for perks such as Express", function(w)
+		local t, o = w.data.Train, w.otherData.Train
+		for _ = 1, CAP + 2 do
+			table.insert(t.Cargo, { K = "Raw", O = "Coal" })
+			table.insert(o.Cargo, { K = "Raw", O = "Coal" })
+		end
+		train.loaded(w.player, w.data)
+		train.loaded(w.other, w.otherData)
+		advance(w, 1)
+		T.eq(#t.TripCargo + #o.TripCargo, 0, "nobody's train leaves in the first tick")
+		w.player.attributes.Perk_TrainExpress = true -- the game pass check came back
+		advance(w, TrainService.JoinGrace)
+		T.eq(#t.TripCargo, 0, "Express: room for more, still loading")
+		T.eq(#t.Cargo, CAP + 2, "kept")
+		T.truthy(snapshot(w, w.player).AutoDepartIn, "counting down")
+		T.eq(#o.TripCargo, CAP + 2, "without the perk the full train leaves after the grace")
+		T.eq(#trips(w, OTHER), 1, "announced")
 	end)
 
 	withWorld("TrainService: joining mid-trip announces the trip again; the joiner gets everyone's trips", function(w)
@@ -685,6 +973,8 @@ return function(T, Loader)
 		T.eq(#list.A, 1, "the neighbour's trip")
 		T.eq(list.A[1].UserId, OTHER, "whose")
 		T.eq(list.A[1].Count, 2, "count")
+		T.eq(list.A[1].Color, TrainService.BannerColors[OTHER_PLOT], "no plot model here: PlotBuilder's banner color")
+		T.eq(#w.wakes, 2, "arrival timers for both trains")
 		w.plots[w.player] = PLOT
 		train.announce(w.player) -- PlotService.onAssigned
 		local mine = trips(w, USER)
@@ -718,6 +1008,24 @@ return function(T, Loader)
 		T.eq(#w.data.Storage, 1, "delivered in time")
 	end)
 
+	withWorld("TrainService: the train color is the plot banner, found anywhere in the plot", function(w)
+		local plot = Instance.new("Model")
+		local decor = Instance.new("Folder")
+		decor.Name = "Decor"
+		decor.Parent = plot
+		local banner = Instance.new("Part")
+		banner.Name = "Banner"
+		banner.Color = Color3.fromRGB(12, 34, 56)
+		banner.Parent = decor
+		PlotService.model = function(id)
+			return if id == PLOT then plot else nil
+		end
+		T.eq(TrainService.bannerColor(PLOT), banner.Color, "a banner in a sub-folder")
+		T.eq(TrainService.bannerColor(OTHER_PLOT), TrainService.BannerColors[OTHER_PLOT], "no plot model: the plot's color")
+		T.eq(TrainService.bannerColor(#TrainService.BannerColors + 1), TrainService.BannerColors[1], "the colors repeat")
+		T.eq(getPlotModel().Banner.Color, TrainService.BannerColors[PLOT], "the same list as PlotBuilder")
+	end)
+
 	---------------------------------------------------------------- Load Train
 
 	withWorld("TrainService: Load Train loads what you carry while there is room", function(w)
@@ -730,7 +1038,7 @@ return function(T, Loader)
 		train.load(w.player, hook)
 		T.eq(#w.data.Train.Cargo, 5, "loaded")
 		T.eq(#w.carried[w.player], 0, "hands empty")
-		T.eq(lastNote(w, "Fx").A, "TrainLoad", "load effect")
+		T.eq(w.near[#w.near].A, "TrainLoad", "load effect")
 		for _ = 1, 6 do
 			carry(w, w.player, IRON)
 		end
@@ -846,6 +1154,22 @@ return function(T, Loader)
 		T.eq(#trips(w), 0, "stranger: nothing")
 	end)
 
+	withWorld("TrainService: one broken train never stops the others", function(w)
+		dropMany(w.station, OTHER, COAL, 2)
+		TrainService.send(w.other)
+		-- the owner's save is broken: reading the train throws (the owner comes first in the loop)
+		w.data.Train = setmetatable({}, {
+			__index = function()
+				error("corrupt save")
+			end,
+		})
+		advance(w, TRIP)
+		T.eq(#w.otherData.Storage, 2, "the neighbour's train still arrives")
+		T.eq(#unloads(w), 1, "and unloads")
+		runWakes(w)
+		T.eq(#unloads(w), 1, "its timer is harmless afterwards")
+	end)
+
 	---------------------------------------------------------------- duplication
 
 	withWorld("TrainService: no duplication: every item is in exactly one place at all times", function(w)
@@ -898,6 +1222,7 @@ return function(T, Loader)
 				label ..= " express"
 			else
 				advance(w, rng:int(1, 9))
+				runWakes(w)
 				label ..= " time"
 			end
 			check(label)
