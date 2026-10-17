@@ -87,11 +87,11 @@ Net.Events = {
 	--   one step with no yield (FoundryResult "NotEnough" if either is gone by
 	--   then); in that same step the stock ingots the new next level can't use
 	--   move to the pen (as many as fit). Cancel, Timeout and BadStrikes cost nothing.
-	-- mine elevator (ElevatorService): ({ Action = "Buy" }) buys it once for
-	--   MineFloors.Elevator.Price coins (data.Upgrades.Elevator); ({ Action = "Go", Floor })
-	--   rides to that floor's stop: owned, whole Floor 1..#MineFloors.List, unlocked
-	--   (BlasterLevel >= MinBlaster), standing at a stop, not right after the last ride.
-	--   Refusals answer with a "Deny" Notify; a ride with ElevatorRide.
+	-- mine elevator (ElevatorService), only within ElevatorService.Range of a stop:
+	--   ({ Action = "Buy" }) buys it once for MineFloors.Elevator.Price coins (data.Upgrades.Elevator);
+	--   ({ Action = "Go", Floor }) rides to that floor's stop: owned, whole Floor 1..#MineFloors.List,
+	--   unlocked (BlasterLevel >= MinBlaster), not that stop's own floor, not while cleaning,
+	--   not right after the last ride. Refusals answer with a "Deny" Notify; a ride with ElevatorRide.
 	ElevatorAction = { Rate = 3, Burst = 5 },
 	-- economy / meta
 	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number?, Level: number? }), Item:
@@ -136,9 +136,11 @@ Net.Events = {
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,
 	--   Count?: machines bought }; a State push follows a successful buy
 	ShopResult = false,
-	-- an elevator ride (ElevatorService): { Phase = "Depart", Floor, Name, Fade: seconds }
-	--   (fade the screen out), then { Phase = "Arrive", Floor, Name } once the character
-	--   stands at the target stop (fade back in); also "Arrive" after a VoidCatcher rescue
+	-- an elevator ride (ElevatorService): { Phase = "Depart", Floor, From?, Name, Duration, DoorsClose }
+	--   starts the client's full-screen ride (the doors shut within DoorsClose seconds, the
+	--   counter runs at least Duration seconds); { Phase = "Arrive", Floor, Name, Ok } once the
+	--   character stands at the target stop (the doors open); { Phase = "Arrive", Rescue = true }
+	--   after a VoidCatcher rescue (a short fade, no ride)
 	ElevatorRide = false,
 	-- the answer to a Teleport: { Destination, Ok, Reason?: a TeleportConfig.Reasons code }
 	TeleportResult = false,

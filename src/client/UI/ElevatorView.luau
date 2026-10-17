@@ -541,8 +541,8 @@ end
 
 --[[
 	The six cards: MineFloors.List in order, then the "Coming soon" floor.
-	`level` = the player's blaster level, `here` = the floor the player is on
-	(nil = none of them).
+	`level` = the player's blaster level, `here` = the floor of the stop the
+	panel was opened at (nil = none of them).
 ]]
 function ElevatorView.entries(level: any, here: number?): { FloorEntry }
 	local blaster = if type(level) == "number" and level == level then level else 1
@@ -614,22 +614,6 @@ function ElevatorView.buttonText(state: FloorState): string
 		return "COMING SOON"
 	end
 	return "LOCKED"
-end
-
--- Half-sizes (x, z) of the floor areas around MineFloors.Placement (docs/plans/MINE_STEP_PLAN.md).
-local FLOOR_HALF = { Vector2.new(70, 60), Vector2.new(68, 60), Vector2.new(68, 58), Vector2.new(66, 56), Vector2.new(80, 70) }
-
--- The floor whose area holds `position` (nil = town or elsewhere); only for "YOU ARE HERE".
-function ElevatorView.floorAt(position: Vector3): number?
-	for index, origin in MineFloors.Placement do
-		local half = FLOOR_HALF[index] or Vector2.new(70, 60)
-		local p = origin.Position
-		local dy = position.Y - p.Y
-		if math.abs(position.X - p.X) <= half.X and math.abs(position.Z - p.Z) <= half.Y and dy >= -30 and dy <= 60 then
-			return index
-		end
-	end
-	return nil
 end
 
 ---------------------------------------------------------------- drawing kit

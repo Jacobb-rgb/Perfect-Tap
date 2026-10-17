@@ -1,8 +1,8 @@
 --[[
 	TeleportController: the quick-teleport buttons (TeleportView) in the HUD.
 
-	  - BASE / LOBBY / VAULT at the top centre, the ELEVATOR icon on the side
-	    (only while Workspace attribute TeleportConfig.ElevatorAttribute is true)
+	  - BASE / LOBBY / VAULT at the top centre; the elevator's button is
+	    ElevatorController's (left side menu), which calls request("Elevator")
 	  - mouse click / touch tap on a button; gamepad: D-pad down jumps into the
 	    bar (GuiService selection, left / right to move, A to go, B or D-pad
 	    down again to leave); the D-pad glyph shows next to the bar while a
@@ -20,7 +20,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TeleportConfig = require(Shared.Config.TeleportConfig)
@@ -184,16 +183,9 @@ local function updateHint()
 	r.Hint.Visible = gamepad and r.Hint.Image ~= ""
 end
 
-local function updateSide()
-	local r = refs
-	if r then
-		TeleportView.setSideVisible(r, Workspace:GetAttribute(TeleportConfig.ElevatorAttribute) == true)
-	end
-end
-
 function TeleportController.init()
 	local hud = HudController.refs()
-	local built = TeleportView.build(hud.TopBar, hud.Menu, HudController.uiScale())
+	local built = TeleportView.build(hud.TopBar, HudController.uiScale())
 	refs = built
 	for id, button in built.Buttons do
 		button.Activated:Connect(function()
@@ -224,8 +216,6 @@ function TeleportController.start()
 	ContextActionService:BindAction("TerraForgeTeleportBar", onGamepadKey, false, GAMEPAD_KEY)
 	UserInputService.LastInputTypeChanged:Connect(updateHint)
 	updateHint()
-	Workspace:GetAttributeChangedSignal(TeleportConfig.ElevatorAttribute):Connect(updateSide)
-	updateSide()
 end
 
 return TeleportController

@@ -1,34 +1,45 @@
 --[[
-	ElevatorController: the mine elevator's panel, the left side menu button
-	that opens it, its prompt text and the screen fade of a ride (the server
-	decides everything: ElevatorService).
+	ElevatorController: the mine elevator on the client (the server decides
+	everything: ElevatorService, TeleportService). Owner's flow (2026-10-18):
+	the elevator button takes you TO the elevator, E at the elevator opens
+	the floor picker, and the ride between floors is a short animation.
 
 	- Side menu: a "SideMenu" ScreenGui at the left edge with the elevator icon
 	  button (ElevatorView.buildSideMenu; other buttons can join the stack via
-	  ElevatorController.sideMenu()). Its chevrons pulse upward while idle; it
-	  bounces on hover, press and gamepad selection. Pressing it (or D-pad
-	  Left on a gamepad) opens the panel from anywhere: the floor cards when
-	  you own the elevator, the Buy page when you don't.
+	  ElevatorController.sideMenu()), shown only while the world has a stop
+	  (Workspace attribute TeleportConfig.ElevatorAttribute). Its chevrons
+	  pulse upward while idle; it bounces on hover, press and gamepad
+	  selection. Pressing it (or D-pad Left on a gamepad) asks for the
+	  "Elevator" teleport (TeleportController.request: same fade, cooldown and
+	  refusal toasts as the top bar): the server puts you at the stop of the
+	  floor you are on, else floor 1's.
 	- Prompt: every "ElevatorPrompt" shows "Use" when you own the elevator and
-	  "Buy $500K" when you don't (a local text change; refreshed on every State).
-	  The stop's prompt opens the panel too (OpenUI "Elevator" { Stop, Floor, Owned }).
+	  "Buy $500K" when you don't (a local text change; refreshed on every
+	  State). Triggering it is the only way to open the panel (OpenUI
+	  "Elevator" { Stop, Floor, Owned }): the Buy page or the floor cards.
 	- Panel: BUY is greyed out while you can't afford it (pressing it says how
 	  much is missing); GO sends ElevatorAction { Action = "Go", Floor },
 	  LOCKED says which blaster the floor needs. Buying switches to the floor
-	  cards as soon as the next State says ElevatorOwned. "YOU ARE HERE": the
-	  stop's floor, or the floor area you stand in (ElevatorView.floorAt).
+	  cards as soon as the next State says ElevatorOwned. "YOU ARE HERE" =
+	  the stop's floor.
 	- Opening: the doors slide apart, the panel pops, the cards drop in
 	  (ElevatorView.pose driven by one tween, about 0.56 s); any click, tap or
-	  key skips to the end. Closing plays it backwards (0.24 s). Reduced
-	  motion (Roblox's setting, or ElevatorController.ReducedMotion) shows and
-	  hides it at once and stops the idle pulse.
+	  key skips to the end. Closing plays it backwards (0.24 s).
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
-	  stop it was opened at, respawning or a ride starting. Other prompts are
-	  hidden while it is open; gamepads get a selected button on open and
-	  after every refresh.
-	- ElevatorRide "Depart": the screen fades to black with "FLOOR N" and the
-	  floor's name; "Arrive": it fades back in (also after a void rescue). If
-	  no "Arrive" comes, the screen comes back by itself after RIDE_TIMEOUT.
+	  stop, respawning or a ride starting. Other prompts are hidden while it
+	  is open; gamepads get a selected button on open and after every refresh.
+	- The ride (ElevatorRideView): ElevatorRide "Depart" { Floor, From, Name,
+	  Duration, DoorsClose } closes the panel and plays the full-screen ride
+	  (doors slam shut with a thud, the floor counter ticks with a click per
+	  floor, light sweeps, rumble and hum); the character's controls are
+	  frozen. "Arrive" (and at least Duration seconds of ride) ding, the doors
+	  open on the new floor and the floor banner slides through; the controls
+	  come back when the doors are open. Without "Arrive" the doors open by
+	  themselves (ElevatorRideView.Timing.FailSafe). A void rescue ("Arrive"
+	  with Rescue) only dips the screen to black.
+	- Reduced motion (Roblox's setting, or ElevatorController.ReducedMotion):
+	  no opening animation, no idle pulse, and the ride shows the doors and
+	  the numbers without shake or sweeps.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -44,12 +55,16 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MineFloors = require(Shared.Config.MineFloors)
+local TeleportConfig = require(Shared.Config.TeleportConfig)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local ElevatorView = require(script.Parent.Parent.UI.ElevatorView)
+local ElevatorRideView = require(script.Parent.Parent.UI.ElevatorRideView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
+local TeleportController = require(script.Parent.TeleportController)
 local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
 
@@ -71,11 +86,9 @@ local CLOSE_RANGE = 22
 local SEND_LOCK = 1
 -- seconds a message stays in the header
 local MESSAGE_TIME = 5
-local FADE_OUT = 0.35
+-- the void rescue's dip to black
 local FADE_HOLD = 0.2
 local FADE_IN = 0.5
--- the screen comes back by itself if no "Arrive" comes
-local RIDE_TIMEOUT = 8
 local MESSAGE_COLORS: { [string]: Color3 } = {
 	Reward = Theme.Good,
 	Deny = Theme.Bad,
@@ -148,13 +161,6 @@ local function blasterLevel(): number
 	local state = StateController.get()
 	local value = state and state.BlasterLevel
 	return if type(value) == "number" and value == value then value else 1
-end
-
--- The floor area the character stands in (nil = town or elsewhere).
-local function floorHere(): number?
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	return if root then ElevatorView.floorAt(root.Position) else nil
 end
 
 ---------------------------------------------------------------- prompts
@@ -550,13 +556,12 @@ function ElevatorController.open(model: Model?, floorIndex: number?)
 	playOpen(view)
 end
 
--- The side menu button / D-pad Left: open (or close) the panel from anywhere.
-function ElevatorController.toggle()
+-- The side menu button / D-pad Left: a teleport to the elevator (the floor picker opens from its prompt).
+function ElevatorController.goToElevator()
 	if isOpen then
 		ElevatorController.close()
-	else
-		ElevatorController.open(nil, floorHere())
 	end
+	TeleportController.request("Elevator")
 end
 
 ---------------------------------------------------------------- the side menu
@@ -614,10 +619,12 @@ local function onMenuKey(_: string, state: Enum.UserInputState): Enum.ContextAct
 		return Enum.ContextActionResult.Pass
 	end
 	-- while a menu has the gamepad selection the D-pad moves it: leave it alone
-	if isOpen or GuiService.SelectedObject ~= nil then
+	local menu = side
+	local shown = menu ~= nil and menu.Elevator.Holder.Visible
+	if not shown or isOpen or GuiService.SelectedObject ~= nil then
 		return Enum.ContextActionResult.Pass
 	end
-	ElevatorController.toggle()
+	ElevatorController.goToElevator()
 	return Enum.ContextActionResult.Sink
 end
 
@@ -648,15 +655,141 @@ local function buildSide()
 	button.Activated:Connect(function()
 		bounce(icon, 0.9, 0.06, Enum.EasingStyle.Quad)
 		task.delay(0.07, bounce, icon, 1, 0.3)
-		Sfx.play("UIClick")
-		ElevatorController.toggle()
+		ElevatorController.goToElevator()
 	end)
 	startIdle(icon)
 	updateSideGlyph()
 	ContextActionService:BindAction(MENU_ACTION, onMenuKey, false, MENU_KEY)
 end
 
----------------------------------------------------------------- the ride fade
+-- The button shows only while the world has an elevator stop.
+local function updateSideVisible()
+	local menu = side
+	if menu then
+		menu.Elevator.Holder.Visible = Workspace:GetAttribute(TeleportConfig.ElevatorAttribute) == true
+	end
+end
+
+---------------------------------------------------------------- the ride
+
+type Driving = {
+	Ride: ElevatorRideView.Ride,
+	T: number, -- seconds since "Depart"
+	Arrived: boolean,
+	Number: number, -- the floor the indicator shows (a click when it changes)
+	Thud: boolean,
+	Restored: boolean,
+	Frozen: boolean, -- we hold the controls lock
+	Connection: RBXScriptConnection?,
+}
+
+local RIDE_LOCK = "Elevator"
+local rideRefs: ElevatorRideView.Refs? = nil
+local driving: Driving? = nil
+
+local function ensureRide(): ElevatorRideView.Refs
+	local existing = rideRefs
+	if existing then
+		return existing
+	end
+	local made = ElevatorRideView.build()
+	made.Gui.Parent = player:WaitForChild("PlayerGui")
+	rideRefs = made
+	return made
+end
+
+local function unfreeze(state: Driving)
+	if state.Frozen then
+		state.Frozen = false
+		task.spawn(PlayerControls.set, true)
+		PlayerControls.release(RIDE_LOCK)
+	end
+end
+
+local function endRide()
+	local state = driving
+	driving = nil
+	if not state then
+		return
+	end
+	local connection = state.Connection
+	if connection then
+		connection:Disconnect()
+	end
+	Sfx.loop("MachineHum", false)
+	unfreeze(state)
+	local view = rideRefs
+	if view then
+		view.Gui.Enabled = false
+	end
+end
+
+local function stepRide(dt: number)
+	local state = driving
+	local view = rideRefs
+	if not state or not view then
+		return
+	end
+	state.T += dt
+	local ride = state.Ride
+	local t = state.T
+	if not state.Thud and t >= ride.Close then
+		state.Thud = true
+		Sfx.play("Place", nil, 0.8)
+		Sfx.loop("MachineHum", true)
+	end
+	if ElevatorRideView.shouldOpen(ride, t, state.Arrived) then
+		ride.OpenAt = t
+		Sfx.loop("MachineHum", false)
+		Sfx.play("Discovery")
+	end
+	local number = ElevatorRideView.numberAt(ride, t)
+	if number ~= state.Number then
+		state.Number = number
+		Sfx.play("BuildRotate")
+	end
+	ElevatorRideView.pose(view, ride, t)
+	if not state.Restored and t >= ElevatorRideView.openedAt(ride) then
+		state.Restored = true
+		unfreeze(state)
+	end
+	if t >= ElevatorRideView.doneAt(ride) then
+		endRide()
+	end
+end
+
+local function startRide(payload: { [string]: any })
+	ElevatorController.close(true)
+	endRide()
+	local to = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then math.floor(payload.Floor) else 1
+	local name = if type(payload.Name) == "string" then payload.Name else MineFloors.get(to).Name
+	local ride = ElevatorRideView.newRide(payload.From, to, name, payload.Duration, payload.DoorsClose, reducedMotion())
+	local view = ensureRide()
+	local inset = GuiService:GetGuiInset()
+	ElevatorRideView.layout(view, HudController.uiScale(), inset.Y)
+	ElevatorRideView.setRide(view, ride)
+	local state: Driving = {
+		Ride = ride,
+		T = 0,
+		Arrived = false,
+		Number = ride.From,
+		Thud = false,
+		Restored = false,
+		Frozen = false,
+		Connection = nil,
+	}
+	-- the character stands still while the doors are shut
+	if PlayerControls.claim(RIDE_LOCK) then
+		state.Frozen = true
+		task.spawn(PlayerControls.set, false)
+	end
+	driving = state
+	ElevatorRideView.pose(view, ride, 0)
+	view.Gui.Enabled = true
+	state.Connection = RunService.Heartbeat:Connect(stepRide)
+end
+
+---------------------------------------------------------------- the void rescue fade
 
 local function ensureFade(): ElevatorView.Fade
 	local existing = fade
@@ -678,58 +811,35 @@ local function tweenText(label: TextLabel, transparency: number, seconds: number
 	end
 end
 
-local function fadeIn(screen: ElevatorView.Fade, token: number)
-	local info = TweenInfo.new(FADE_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	TweenService:Create(screen.Black, info, { BackgroundTransparency = 1 }):Play()
-	tweenText(screen.Title, 1, FADE_IN)
-	tweenText(screen.Name, 1, FADE_IN)
-	task.delay(FADE_IN + 0.05, function()
-		if rideToken == token then
-			screen.Gui.Enabled = false
-		end
-	end)
-end
-
-local function depart(floorIndex: number, name: string, seconds: number)
-	ElevatorController.close(true)
+-- A void rescue: a quick dip to black with the floor's name, then back.
+local function rescued(floorIndex: number)
 	local screen = ensureFade()
 	rideToken += 1
 	local token = rideToken
-	ElevatorView.setFadeText(screen, floorIndex, name)
+	ElevatorView.setFadeText(screen, floorIndex, "Back to safety")
 	screen.Gui.Enabled = true
-	local info = TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	TweenService:Create(screen.Black, info, { BackgroundTransparency = 0 }):Play()
-	tweenText(screen.Title, 0, seconds)
-	tweenText(screen.Name, 0, seconds)
-	task.delay(RIDE_TIMEOUT, function()
-		if rideToken == token and screen.Gui.Enabled then
-			fadeIn(screen, token)
-		end
-	end)
-end
-
-local function arrive(floorIndex: number, name: string, rescue: boolean)
-	local screen = ensureFade()
-	rideToken += 1
-	local token = rideToken
-	ElevatorView.setFadeText(screen, floorIndex, if rescue then "Back to safety" else name)
-	if rescue or not screen.Gui.Enabled then
-		-- a void rescue: a quick dip to black
-		screen.Gui.Enabled = true
-		screen.Black.BackgroundTransparency = 0
-		for _, label in { screen.Title, screen.Name } do
-			label.TextTransparency = 0
-			local stroke = label:FindFirstChildOfClass("UIStroke")
-			if stroke then
-				stroke.Transparency = 0
-			end
+	screen.Black.BackgroundTransparency = 0
+	for _, label in { screen.Title, screen.Name } do
+		label.TextTransparency = 0
+		local stroke = label:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Transparency = 0
 		end
 	end
 	Sfx.play("MachineDone")
 	task.delay(FADE_HOLD, function()
-		if rideToken == token then
-			fadeIn(screen, token)
+		if rideToken ~= token then
+			return
 		end
+		local info = TweenInfo.new(FADE_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		TweenService:Create(screen.Black, info, { BackgroundTransparency = 1 }):Play()
+		tweenText(screen.Title, 1, FADE_IN)
+		tweenText(screen.Name, 1, FADE_IN)
+		task.delay(FADE_IN + 0.05, function()
+			if rideToken == token then
+				screen.Gui.Enabled = false
+			end
+		end)
 	end)
 end
 
@@ -737,15 +847,17 @@ local function onRide(payload: any)
 	if type(payload) ~= "table" then
 		return
 	end
-	local floorIndex = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then math.floor(payload.Floor) else 1
-	local name = if type(payload.Name) == "string" then payload.Name else ""
 	if payload.Phase == "Depart" then
-		local seconds = if type(payload.Fade) == "number" and payload.Fade == payload.Fade
-			then math.clamp(payload.Fade, 0.05, 1.5)
-			else FADE_OUT
-		depart(floorIndex, name, seconds)
+		startRide(payload)
 	elseif payload.Phase == "Arrive" then
-		arrive(floorIndex, name, payload.Rescue == true)
+		local state = driving
+		if payload.Rescue == true then
+			local floorIndex = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then math.floor(payload.Floor) else 1
+			rescued(floorIndex)
+		elseif state then
+			-- the character stands at the target stop: the doors may open
+			state.Arrived = true
+		end
 	end
 end
 
@@ -761,13 +873,13 @@ function ElevatorController.init()
 		if kind ~= "Elevator" or type(payload) ~= "table" then
 			return
 		end
+		-- only the stop's prompt opens the panel (the server checked the range)
 		local model = payload.Stop
 		local floorIndex = if type(payload.Floor) == "number" and payload.Floor == payload.Floor then payload.Floor else nil
-		if typeof(model) == "Instance" and model:IsA("Model") then
-			ElevatorController.open(model, floorIndex)
-		else
-			ElevatorController.open(nil, floorIndex or floorHere())
+		if driving then
+			return
 		end
+		ElevatorController.open(if typeof(model) == "Instance" and model:IsA("Model") then model else nil, floorIndex)
 	end)
 	Net.listen("ElevatorRide", onRide)
 	Net.listen("Notify", function(message)
@@ -783,6 +895,7 @@ function ElevatorController.init()
 	end)
 	player.CharacterRemoving:Connect(function()
 		ElevatorController.close(true)
+		endRide()
 	end)
 	UserInputService.LastInputTypeChanged:Connect(function()
 		updateSideGlyph()
@@ -803,6 +916,8 @@ function ElevatorController.start()
 		end
 	end)
 	buildSide()
+	Workspace:GetAttributeChangedSignal(TeleportConfig.ElevatorAttribute):Connect(updateSideVisible)
+	updateSideVisible()
 end
 
 return ElevatorController

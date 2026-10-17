@@ -123,12 +123,11 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = scale
 		-- the quick-teleport bar (layout for the real uiScale: 0.62 on phones) and
-		-- the side menu: BUILD and the elevator icon (shown here; in game only once
-		-- the world has a mine elevator)
+		-- the right side menu with BUILD (the elevator button lives in its own left
+		-- side menu: ElevatorController / ElevatorView.buildSideMenu)
 		BuildView.menuButton(refs.Menu)
-		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale or 1)
+		local teleport = TeleportView.build(refs.TopBar, uiScale or 1)
 		TeleportView.relayout(teleport, refs.TopBar, uiScale or 1)
-		TeleportView.setSideVisible(teleport, true)
 		refs.Coins.Text = Format.money(12480)
 		refs.Income.Text = Format.perSecond(income)
 		refs.Income.TextColor3 = Loader.roblox.Color3.fromRGB(110, 214, 92)

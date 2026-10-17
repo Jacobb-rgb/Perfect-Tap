@@ -1,9 +1,10 @@
 -- ElevatorService under Lune: the save field (and that old saves get it),
 -- the prompt on every stop, buying (afford / can't afford / owned / too far /
 -- double tap), Go validation (not owned, locked floors, bad floor values,
--- range, same floor, cooldown), where a ride puts you (the stop's plate in
--- front of the cage, facing out; the floor's Entrance when it has no stop)
--- and the void catcher. Stops are built by the real MineKit.elevator; save
+-- range, same floor, cleaning, dead, cooldown), the ride's messages (Depart
+-- with From / Duration / DoorsClose, then Arrive), where a ride puts you (the
+-- stop's plate in front of the cage, facing out; the floor's Entrance when
+-- it has no stop) and the void catcher. Stops are built by the real MineKit.elevator; save
 -- data, players, characters and Net are small fakes; EconomyService runs
 -- for real.
 return function(T, Loader)
@@ -53,7 +54,7 @@ return function(T, Loader)
 	end
 
 	local function setup(): any
-		local w: any = { notes = {}, changed = 0, pushes = 0, now = 1000 }
+		local w: any = { notes = {}, changed = 0, pushes = 0, now = 1000, cleaning = false }
 		w.player = fakePlayer(501, "Rider")
 		w.data = ProfileStore.deepCopy(DataTemplate)
 		w.data.BlasterLevel = 10
@@ -80,7 +81,10 @@ return function(T, Loader)
 		patch(Players, "GetPlayers", function()
 			return { w.player }
 		end)
-		patch(ElevatorService, "Fade", 0)
+		patch(ElevatorService, "DoorsClose", 0)
+		patch(ElevatorService, "isCleaning", function(p)
+			return p == w.player and w.cleaning
+		end)
 		elevator.reset()
 		elevator.setClock(function()
 			return w.now
@@ -268,15 +272,17 @@ return function(T, Loader)
 		T.eq(w.data.Coins, PRICE, "charged once")
 	end)
 
-	withWorld("elevator: buying works away from a stop (the side menu button)", function(w)
+	withWorld("elevator: buying needs a stop nearby", function(w)
 		w.hookAll()
-		w.standAt(1, 400)
+		w.standAt(1, 40)
 		w.data.Coins = PRICE
 		local ok, reason = w.act({ Action = "Buy" })
-		T.truthy(ok, "bought from anywhere")
-		T.eq(reason, "Ok")
-		T.eq(w.data.Coins, 0, "price taken")
-		T.eq(w.data.Upgrades.Elevator, true, "owned")
+		T.falsy(ok)
+		T.eq(reason, "TooFar")
+		T.eq(w.data.Coins, PRICE, "coins kept")
+		T.eq(w.data.Upgrades.Elevator, false, "not owned")
+		w.standAt(1)
+		T.truthy(w.act({ Action = "Buy" }), "at the stop it works")
 	end)
 
 	---------------------------------------------------------------- Go validation
@@ -335,20 +341,30 @@ return function(T, Loader)
 		T.eq(#w.notesNamed("ElevatorRide"), 0, "no ride")
 	end)
 
-	withWorld("elevator: Go works from anywhere (the side menu button)", function(w)
+	withWorld("elevator: Go needs a stop within range", function(w)
 		w.hookAll()
 		w.data.Upgrades.Elevator = true
-		w.standAt(1, 500)
+		w.standAt(1, ElevatorService.Range + 2)
 		local ok, reason = w.act({ Action = "Go", Floor = 2 })
-		T.truthy(ok, "far from every stop")
-		T.eq(reason, "Ok")
-		T.eq(#w.player.pivots, 1, "moved")
-		local target = ElevatorService.arrivalCFrame(w.stops[2])
-		T.near((w.player.root.Position - target.Position).Magnitude, 0, 1e-4, "at floor 2's stop")
-		-- away from a stop even the floor you are on is a ride (back to its stop)
-		w.now += ElevatorService.Cooldown
-		w.standAt(2, 300)
-		T.truthy(w.act({ Action = "Go", Floor = 2 }), "back to floor 2's stop")
+		T.falsy(ok, "too far")
+		T.eq(reason, "TooFar")
+		T.eq(#w.player.pivots, 0, "not moved")
+		w.standAt(1, ElevatorService.Range - 2)
+		T.truthy(w.act({ Action = "Go", Floor = 2 }), "close enough")
+	end)
+
+	withWorld("elevator: no ride during a cleaning session", function(w)
+		w.hookAll()
+		w.standAt(1)
+		w.data.Upgrades.Elevator = true
+		w.cleaning = true
+		local ok, reason = w.act({ Action = "Go", Floor = 2 })
+		T.falsy(ok)
+		T.eq(reason, "Cleaning")
+		T.eq(w.lastNotify().Kind, "Deny", "told")
+		T.eq(#w.player.pivots, 0, "not moved")
+		w.cleaning = false
+		T.truthy(w.act({ Action = "Go", Floor = 2 }), "after cleaning")
 	end)
 
 	withWorld("elevator: Go to the floor you are on is refused", function(w)
@@ -400,14 +416,29 @@ return function(T, Loader)
 		local look = cf.LookVector
 		T.near(look.Y, 0, 1e-4, "level")
 		T.near(look:Dot(stopCFrame(5).LookVector), 1, 1e-4, "faces the stop's front")
-		-- the client's fade: Depart, then Arrive
+		-- the client's ride: Depart (from, to, how long, when the doors are shut), then Arrive
 		local rides = w.notesNamed("ElevatorRide")
 		T.eq(#rides, 2, "two ride messages")
-		T.eq(rides[1].A.Phase, "Depart")
-		T.eq(rides[1].A.Floor, 5)
-		T.eq(rides[1].A.Name, MineFloors.get(5).Name)
+		local depart = rides[1].A
+		T.eq(depart.Phase, "Depart")
+		T.eq(depart.Floor, 5)
+		T.eq(depart.From, 1, "from the stop the rider stood at")
+		T.eq(depart.Name, MineFloors.get(5).Name)
+		T.eq(depart.Duration, ElevatorService.rideTime(1, 5), "ride time")
+		T.eq(depart.DoorsClose, ElevatorService.DoorsClose, "doors-shut time")
 		T.eq(rides[2].A.Phase, "Arrive")
 		T.eq(rides[2].A.Ok, true)
+	end)
+
+	T.test("elevator: ride times grow with the floors travelled, within about 2-2.5 s", function()
+		local one = ElevatorService.rideTime(1, 2)
+		local four = ElevatorService.rideTime(1, 5)
+		T.lt(one, four, "longer for more floors")
+		T.eq(ElevatorService.rideTime(5, 1), four, "the same up and down")
+		T.le(four, ElevatorService.RideMax, "capped")
+		T.truthy(one >= 1.8 and four <= 2.6, "about 2-2.5 s of ride (+ the doors: 2.5-3 s)")
+		T.eq(ElevatorService.rideTime(nil, 3), ElevatorService.rideTime(2, 3), "unknown start = one floor")
+		T.truthy(ElevatorService.DoorsClose > 0.3 and ElevatorService.DoorsClose < 1, "moves behind shut doors, soon")
 	end)
 
 	withWorld("elevator: targetFor picks the floor's stop, else its Entrance", function(w)

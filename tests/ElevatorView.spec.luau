@@ -9,7 +9,6 @@ return function(T, Loader)
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local ElevatorView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ElevatorView")
 	local roblox = require("@lune/roblox") :: any
-	local Vector3 = roblox.Vector3
 
 	local PRICE = MineFloors.Elevator.Price
 
@@ -283,15 +282,6 @@ return function(T, Loader)
 		ElevatorView.layout(refs, false, 1280, 690)
 		T.near(refs.PoseTime, 0.1, 1e-6, "pose kept")
 		T.truthy(refs.Doors.Visible, "doors still shown")
-	end)
-
-	T.test("ElevatorView: floorAt finds the floor area you stand in", function()
-		for index, origin in MineFloors.Placement do
-			T.eq(ElevatorView.floorAt(origin.Position + Vector3.new(5, 3, 5)), index, "floor " .. index)
-		end
-		T.eq(ElevatorView.floorAt(Vector3.new(0, 3, 0)), nil, "town")
-		T.eq(ElevatorView.floorAt(Vector3.new(0, 3, -100)), nil, "the quarry ramp's top is town")
-		T.eq(ElevatorView.floorAt(Vector3.new(0, -100, -300)), nil, "between floors 2 and 4")
 	end)
 
 	T.test("ElevatorView: the side menu button sits at the left edge and is big enough to tap", function()

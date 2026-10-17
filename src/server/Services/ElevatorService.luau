@@ -13,20 +13,28 @@
 	  ProximityPrompt "ElevatorPrompt" (Object "Elevator", Action "Use"; the
 	  client turns the action into "Buy $500K" while the player doesn't own it).
 	  F / gamepad Y / tap. Triggering it opens the client's view:
-	  OpenUI "Elevator" { Stop, Floor, Owned }.
-	- ElevatorAction (Net, rate limited), from anywhere (the HUD's side menu
-	  button opens the panel too, owner 2026-10-17):
+	  OpenUI "Elevator" { Stop, Floor, Owned }. This prompt is the only way in
+	  (owner 2026-10-18): the HUD's elevator button teleports you to a stop
+	  first (TeleportService "Elevator").
+	- ElevatorAction (Net, rate limited), only within Range studs of a stop:
 	    { Action = "Buy" }           spends the price (EconomyService), sets
 	                                 Upgrades.Elevator, saves, Notify
 	    { Action = "Go", Floor = n } owned, whole n in 1..#MineFloors.List,
-	                                 unlocked, a living character, not the floor
-	                                 of a stop you stand at, not within Cooldown
-	                                 of the last ride; then ElevatorRide "Depart" (the client
-	                                 fades out), Fade seconds later the area
-	                                 around the target is streamed in, the
-	                                 character moves to the target stop (on its
-	                                 plate in front of the cage, facing out) and
-	                                 ElevatorRide "Arrive" fades back in.
+	                                 unlocked, a living character, not in a
+	                                 running cleaning session, at a stop but not
+	                                 that stop's own floor, not within Cooldown
+	                                 of the last ride. Then the ride:
+	                                 ElevatorRide "Depart" { Floor, From, Name,
+	                                 Duration, DoorsClose } starts the client's
+	                                 full-screen ride (doors slam shut, floor
+	                                 counter, ding, doors open); DoorsClose
+	                                 seconds later (the doors are shut by then)
+	                                 the area round the target is streamed in
+	                                 (StreamTimeout), the character moves to the
+	                                 target stop (on its plate in front of the
+	                                 cage, facing out) and ElevatorRide "Arrive"
+	                                 lets the client open the doors (after at
+	                                 least Duration seconds of ride).
 	  Refusals answer with a "Deny" Notify (bad input is ignored silently).
 	  Buying never yields between the coin check and the flag, so a double tap
 	  buys once.
@@ -67,6 +75,8 @@ export type Reason =
 	| "NotOwned"
 	| "Locked"
 	| "NoCharacter"
+	| "Cleaning"
+	| "TooFar"
 	| "Here"
 	| "Cooldown"
 	| "NoStop"
@@ -80,8 +90,14 @@ ElevatorService.Range = 16
 ElevatorService.PromptDistance = 10
 -- seconds between two rides of one player
 ElevatorService.Cooldown = 3
--- seconds the client's screen takes to go dark before the character moves
-ElevatorService.Fade = 0.35
+-- seconds from "Depart" until the character moves: the client's doors are shut by then
+-- (ElevatorRideView closes them in DoorsClose - 0.05 at most)
+ElevatorService.DoorsClose = 0.5
+-- the client's ride lasts at least RideTime + RidePerFloor per floor travelled (at most RideMax)
+-- before the doors open again; about 2.5-3 s with the doors
+ElevatorService.RideTime = 1.9
+ElevatorService.RidePerFloor = 0.15
+ElevatorService.RideMax = 2.5
 -- seconds the server waits at most for the target area to stream in
 ElevatorService.StreamTimeout = 3
 -- seconds between two void rescues of one player
@@ -259,19 +275,40 @@ local function teleport(player: Player, target: CFrame): boolean
 	return true
 end
 
+-- Is the player in the middle of the cleaning minigame? (CleaningService is loaded
+-- on first use, like TeleportService does: it needs the whole game around it)
+function ElevatorService.isCleaning(player: Player): boolean
+	local CleaningService = require(script.Parent.CleaningService) :: any
+	return CleaningService.inSession(player) == true
+end
+
 local function deny(player: Player, text: string)
 	Net.fire("Notify", player, { Text = text, Kind = "Deny" })
 	-- the view may be out of date: send a fresh snapshot
 	StateService.push(player)
 end
 
-local function ride(player: Player, floorIndex: number, target: CFrame)
+-- Seconds of ride (doors shut) the client shows from one floor to another.
+function ElevatorService.rideTime(from: number?, to: number): number
+	local floors = if from then math.abs(to - from) else 1
+	return math.min(ElevatorService.RideMax, ElevatorService.RideTime + ElevatorService.RidePerFloor * floors)
+end
+
+local function ride(player: Player, from: number?, floorIndex: number, target: CFrame)
 	local floor = MineFloors.ByIndex[floorIndex]
 	riding[player] = true
-	Net.fire("ElevatorRide", player, { Phase = "Depart", Floor = floorIndex, Name = floor.Name, Fade = ElevatorService.Fade })
+	Net.fire("ElevatorRide", player, {
+		Phase = "Depart",
+		Floor = floorIndex,
+		From = from,
+		Name = floor.Name,
+		Duration = ElevatorService.rideTime(from, floorIndex),
+		DoorsClose = ElevatorService.DoorsClose,
+	})
 	task.spawn(function()
-		if ElevatorService.Fade > 0 then
-			task.wait(ElevatorService.Fade)
+		-- only behind closed doors
+		if ElevatorService.DoorsClose > 0 then
+			task.wait(ElevatorService.DoorsClose)
 		end
 		-- StreamingEnabled: load the target area first so the rider never falls through it
 		pcall(function()
@@ -295,6 +332,10 @@ local function buy(player: Player, data: { [string]: any }): (boolean, Reason)
 	if ElevatorService.owns(data) then
 		deny(player, "You already own the Elevator.")
 		return false, "Owned"
+	end
+	if not ElevatorService.stopNear(player, ElevatorService.Range) then
+		deny(player, "Walk up to an elevator to buy it.")
+		return false, "TooFar"
 	end
 	local price = MineFloors.Elevator.Price
 	local upgrades = data.Upgrades
@@ -331,9 +372,16 @@ local function go(player: Player, data: { [string]: any }, args: { [any]: any })
 	if not Guard.rootPart(player) then
 		return false, "NoCharacter"
 	end
-	-- rides start anywhere; standing at a stop, its own floor is no ride
+	if ElevatorService.isCleaning(player) then
+		deny(player, "Finish cleaning first.")
+		return false, "Cleaning"
+	end
 	local here = ElevatorService.stopNear(player, ElevatorService.Range)
-	if here and ElevatorService.floorOf(here) == floorIndex then
+	if not here then
+		deny(player, "Walk up to an elevator to ride it.")
+		return false, "TooFar"
+	end
+	if ElevatorService.floorOf(here) == floorIndex then
 		deny(player, `You're already on Floor {floorIndex}.`)
 		return false, "Here"
 	end
@@ -348,7 +396,7 @@ local function go(player: Player, data: { [string]: any }, args: { [any]: any })
 		return false, "NoStop"
 	end
 	lastRide[player] = now
-	ride(player, floorIndex, target)
+	ride(player, ElevatorService.floorOf(here), floorIndex, target)
 	return true, "Ok"
 end
 
