@@ -45,7 +45,23 @@ return function(T, Loader)
 	end
 
 	T.test("Placement: every reason code has a text", function()
-		for _, code in { "NoPlot", "TooFar", "NotYours", "Invalid", "UnknownMachine", "BadInput", "OutOfBounds", "Chute", "Overlap", "NoMachineSlots", "NoConveyorSlots", "NoneOwned", "Busy" } do
+		for _, code in
+			{
+				"NoPlot",
+				"TooFar",
+				"NotYours",
+				"Invalid",
+				"UnknownMachine",
+				"BadInput",
+				"OutOfBounds",
+				"Chute",
+				"Overlap",
+				"NoMachineSlots",
+				"NoConveyorSlots",
+				"NoneOwned",
+				"Busy",
+			}
+		do
 			T.truthy(type(Placement.Reasons[code]) == "string" and #Placement.Reasons[code] > 0, code)
 		end
 	end)

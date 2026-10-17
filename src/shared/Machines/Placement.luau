@@ -27,7 +27,8 @@ local Grid = require(script.Parent.Grid)
 local Placement = {}
 
 export type Desc = ItemData.Desc
-export type Entry = { Id: string, X: number, Z: number, R: number, In: { Desc }?, Out: { Desc }? }
+-- C: the machine's own setting (a whole number 1..9, e.g. a Sorter's threshold rarity)
+export type Entry = { Id: string, X: number, Z: number, R: number, In: { Desc }?, Out: { Desc }?, C: number? }
 export type Limits = { Machines: number, Conveyors: number }
 
 -- Reason code -> text for the player (BuildResult.Reason is the code).
@@ -129,8 +130,8 @@ function Placement.counts(entries: { Entry }): (number, number)
 	for _, entry in entries do
 		local info = known(entry.Id)
 		if info then
-			if info.IsConveyor then
-				conveyors += 1
+			if info.IsConveyor or info.IsPole then
+				conveyors += 1 -- power poles use belt slots
 			elseif not info.SlotFree then
 				machines += 1
 			end
@@ -143,7 +144,15 @@ end
 -- OutOfBounds, Chute (only belts on chute cells), Overlap, then slots.
 -- Slots are skipped when `limits` is nil or when moving (`ignore` set), so
 -- a move never fails on slots.
-function Placement.validate(entries: { Entry }, id: string, x: number, z: number, r: number, limits: Limits?, ignore: Entry?): (boolean, string?)
+function Placement.validate(
+	entries: { Entry },
+	id: string,
+	x: number,
+	z: number,
+	r: number,
+	limits: Limits?,
+	ignore: Entry?
+): (boolean, string?)
 	local info = known(id)
 	if not info then
 		return false, "UnknownMachine"
@@ -165,7 +174,7 @@ function Placement.validate(entries: { Entry }, id: string, x: number, z: number
 	end
 	if limits and not ignore then
 		local machines, conveyors = Placement.counts(entries)
-		if info.IsConveyor then
+		if info.IsConveyor or info.IsPole then
 			if conveyors >= limits.Conveyors then
 				return false, "NoConveyorSlots"
 			end

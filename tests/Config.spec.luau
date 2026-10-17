@@ -275,13 +275,39 @@ return function(T, Loader)
 	end)
 
 	T.test("step d tuning, sounds and remotes are declared", function()
-		for _, key in {
-			"MachineTick", "IntakeTick", "IntakeMargin", "FeedReachBelt", "FeedReachInto", "OutputRetry", "LooseHeadroom",
-			"MinProcessTime", "RejectCooldown", "WrongHintCooldown", "MachineUseRange", "BuildRange", "AntiTeleportRange",
-			"MaxItemSpeed", "PlausibleSlack", "MaxItemTravel", "ClientPhysicsRange", "ForeignItemReturn", "ConveyorStuckSpeed",
-			"ConveyorStuckSeconds", "ConveyorMaxNudges", "ConveyorNudgeWindow", "SellComboWindow", "SellOthersRadius",
-			"StorageTakeMax", "AnvilTimeout", "AnvilWalkAway", "AnvilMinStrikeGap", "AnvilMinSecondsPerHit",
-		} do
+		for _, key in
+			{
+				"MachineTick",
+				"IntakeTick",
+				"IntakeMargin",
+				"FeedReachBelt",
+				"FeedReachInto",
+				"OutputRetry",
+				"LooseHeadroom",
+				"MinProcessTime",
+				"RejectCooldown",
+				"WrongHintCooldown",
+				"MachineUseRange",
+				"BuildRange",
+				"AntiTeleportRange",
+				"MaxItemSpeed",
+				"PlausibleSlack",
+				"MaxItemTravel",
+				"ClientPhysicsRange",
+				"ForeignItemReturn",
+				"ConveyorStuckSpeed",
+				"ConveyorStuckSeconds",
+				"ConveyorMaxNudges",
+				"ConveyorNudgeWindow",
+				"SellComboWindow",
+				"SellOthersRadius",
+				"StorageTakeMax",
+				"AnvilTimeout",
+				"AnvilWalkAway",
+				"AnvilMinStrikeGap",
+				"AnvilMinSecondsPerHit",
+			}
+		do
 			T.eq(type(GameConfig[key]), "number", "GameConfig." .. key)
 		end
 		T.eq(GameConfig.OutputPop.Forward, 6)

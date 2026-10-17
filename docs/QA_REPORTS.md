@@ -289,3 +289,19 @@ What to test in Studio:
    is capped and the card shows Polish ≤ 75%.
 10. A line running from bottom-left to top-right: while you hold the button the chisel is
     see-through and the dots ahead stay visible.
+
+## Quick teleports (2026-10-17, branch feature/teleport-bar)
+Owner: "at the top in the middle an instant spawn to base, next to it the lobby, third the weapon vault; the
+elevator by the icon on the side". TeleportService / TeleportController / TeleportView, TeleportConfig.
+What to test in Studio:
+1. PC: click BASE, LOBBY, VAULT. The screen goes dark for a moment and you land at the front of your plot,
+   at the town spawn, and in front of the Blaster Vault's steps, facing them. Carried ore comes along.
+2. Click again within 3 s: the buttons show a countdown and a "Wait a moment" toast; nothing moves.
+3. Phone (Studio device emulator, iPhone SE): the three buttons are tall (icon over the name), easy to tap,
+   and don't touch the coins panel.
+4. Controller: D-pad down selects BASE; left / right moves; A teleports; B or D-pad down again leaves the bar.
+   The D-pad glyph shows next to the bar only while you use a controller (Xbox and PlayStation glyphs).
+5. Start cleaning ore and press a button: "Finish cleaning first", no teleport. Build mode hides the bar.
+6. Sit on a seat (the train, a bench) and press LOBBY: you get up and land in the lobby.
+7. The LIFT icon under BUILD stays hidden until the world has a mine elevator (art/mine-floors); with it,
+   LIFT puts you in front of the lowest elevator stop.

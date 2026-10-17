@@ -40,10 +40,13 @@ local ORDER = {
 	"ProcessingService",
 	"IronBoxService",
 	"SellService",
+	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
+	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
 	"ElevatorService", -- the mine elevator (after EconomyService, StateService and WorldService)
 	"BuildService",
 	"AccessService",
+	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
 }
 
 local loaded = {}

@@ -229,7 +229,12 @@ function CleaningView.build(options: Options?): Refs
 		Size = UDim2.fromOffset(340, 42),
 		Visible = false,
 	})
-	UIKit.label(gauge, "SPEED", if touch then 17 else 13, { Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(60, 42), TextColor3 = Theme.TextDim })
+	UIKit.label(
+		gauge,
+		"SPEED",
+		if touch then 17 else 13,
+		{ Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(60, 42), TextColor3 = Theme.TextDim }
+	)
 	local gaugeTrack = UIKit.new("Frame", {
 		Name = "Track",
 		Position = UDim2.fromOffset(72, 13),

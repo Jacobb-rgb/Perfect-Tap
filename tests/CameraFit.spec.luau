@@ -50,8 +50,18 @@ return function(T, Loader)
 					for _, p in pattern.Outline do
 						local world = workCF:PointToWorldSpace(Vector3.new(p.X * OreShellBuilder.Scale, p.Y * OreShellBuilder.Scale, 0))
 						local x, y = CameraFit.screenPoint(cam, fov, screen.width, screen.height, world)
-						T.truthy(y >= upper - 1 and y <= lower + 1, `{screen.name} {ore.Id} seed {seed}: ore point at y={math.floor(y)} outside {math.floor(upper)}..{math.floor(lower)}`)
-						T.truthy(x >= left and x <= right, `{screen.name} {ore.Id} seed {seed}: ore point at x={math.floor(x)} outside {math.floor(left)}..{math.floor(right)}`)
+						T.truthy(
+							y >= upper - 1 and y <= lower + 1,
+							`{screen.name} {ore.Id} seed {seed}: ore point at y={math.floor(y)} outside {math.floor(upper)}..{math.floor(
+								lower
+							)}`
+						)
+						T.truthy(
+							x >= left and x <= right,
+							`{screen.name} {ore.Id} seed {seed}: ore point at x={math.floor(x)} outside {math.floor(left)}..{math.floor(
+								right
+							)}`
+						)
 					end
 				end
 			end

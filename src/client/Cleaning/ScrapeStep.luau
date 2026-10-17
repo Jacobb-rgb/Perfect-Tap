@@ -44,7 +44,11 @@ function ScrapeStep.new(ctx: any)
 		local sparkle = Instance.new("ParticleEmitter")
 		sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 		sparkle.Color = ColorSequence.new(Color3.new(1, 1, 1))
-		sparkle.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.25), NumberSequenceKeypoint.new(1, 0) })
+		sparkle.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.5, 0.25),
+			NumberSequenceKeypoint.new(1, 0),
+		})
 		sparkle.Lifetime = NumberRange.new(0.4, 0.7)
 		sparkle.Speed = NumberRange.new(0.1, 0.3)
 		sparkle.Rate = 4

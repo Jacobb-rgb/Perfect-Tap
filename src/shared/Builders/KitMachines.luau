@@ -1507,6 +1507,14 @@ local function outputChute(m: Instance, id: string, x: number, bodyY: number, fr
 	chute(m, Vector3.new(x, bodyY + 0.4, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.1)
 end
 
+-- OutputL / OutputR at the shared side output points (MachineData SideOutputs).
+local function sideOutputs(ctx: Ctx, id: string)
+	if MachineData.ById[id] then
+		attach(ctx.base, "OutputL", CFrame.new(Grid.sideOutputLocal(id, -1)))
+		attach(ctx.base, "OutputR", CFrame.new(Grid.sideOutputLocal(id, 1)))
+	end
+end
+
 -- Item machine attachments: Output (when it has one), Prompt, a generous Intake box.
 local function itemPoints(ctx: Ctx, id: string, intake: Vector3, intakeSize: Vector3)
 	local outPos = outputFor(id)
@@ -1560,10 +1568,36 @@ local function star(m: Instance, center: Vector3, s: number, role: string)
 	block(m, CFrame.new(center) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(s, s, 0.06), role, TINY)
 end
 
+-- A label on a flap's front face (SurfaceGui "FlapText", TextLabel "Text").
+local function flapLabel(flap: BasePart, text: string, color: Color3)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "FlapText"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0.6
+	gui.MaxDistance = 60
+	gui.Parent = flap
+	local label = Instance.new("TextLabel")
+	label.Name = "Text"
+	label.Size = UDim2.fromScale(0.86, 0.62)
+	label.Position = UDim2.fromScale(0.07, 0.19)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+	label.Parent = gui
+end
+
 --[[
-	Iron Box (2x2): a sturdy soft box with a slate iron band and rivets, a
-	round screen showing the revealed ore (a glowing gem), keep / send lamps,
-	a bowl intake on the lid, the output slot and chute.
+	Iron Box (2x2): a sturdy soft box with a slate iron band and rivets; on
+	the front a glass inspection bay (ShowPoint: the client stands a copy of
+	the last sorted item there), a lit screen (Screen / ScreenGui with the
+	Item and Counter labels), and two flaps hinged at their top edge (FlapKeep
+	over a slide into a floor port to the Ore Pen, FlapSend over the chute to
+	the output); a bowl intake on the lid. The client swings the flaps and
+	fills the screen (MachineFxController, IronBoxService attributes).
 ]]
 local function ironBox(): Ctx
 	local ctx = newModel("IronBox")
@@ -1582,17 +1616,84 @@ local function ironBox(): Ctx
 	pillSlab(m, Vector3.new(hx, top - 0.15, hz), w - 1.6, 0.45, d - 1.6, 0.6, "Frame")
 	local lidTop = top + 0.3
 	local front = hz - d / 2
-	-- round screen with the revealed ore
-	local sc = Vector3.new(hx - 0.9, bodyY + 1.75, front - 0.05)
-	cyl(m, sc + Vector3.new(0, 0, 0.05), ZA, 0.26, 1.75, "Trim", TINY)
-	cyl(m, sc + Vector3.new(0, 0, -0.1), ZA, 0.06, 1.45, "Screen", TINY, "Screen")
-	gem(m, sc + Vector3.new(0, 0, -0.35), 0.9, rgb(80, 220, 200))
-	-- keep (green) and send (amber) lamps over the slot
-	local keep = ball(m, Vector3.new(1.05, bodyY + 2.2, front - 0.1), 0.42, "Lamp", TINY, "KeepLamp")
-	keep.Color, keep.Material = P.Green, NEON
-	local send = ball(m, Vector3.new(1.75, bodyY + 2.2, front - 0.1), 0.42, "Lamp", TINY, "SendLamp")
-	send.Color, send.Material = P.Amber, NEON
-	outputChute(m, "IronBox", 1.4, bodyY, front)
+	-- glass inspection bay (front left): a slate frame standing out, dark inside, a warm lamp strip
+	-- (high enough that its floor never hides the KEEP flap's label from in front)
+	local wx, ww, wy0, wy1, dd, t = -0.95, 1.7, bodyY + 1.6, bodyY + 2.78, 0.8, 0.2
+	local wh = wy1 - wy0
+	local bayZ = front - dd / 2
+	block(m, CFrame.new(wx, (wy0 + wy1) / 2, front - 0.03), Vector3.new(ww, wh, 0.06), "Dark", TINY, "BayBack")
+	block(m, CFrame.new(wx, wy0 - t / 2, bayZ), Vector3.new(ww + 2 * t, t, dd), "Frame", SOLID, "BayFloor")
+	block(m, CFrame.new(wx, wy1 + t / 2, bayZ), Vector3.new(ww + 2 * t, t, dd), "Frame", SOLID)
+	for _, s in { -1, 1 } do
+		block(m, CFrame.new(wx + s * (ww / 2 + t / 2), (wy0 + wy1) / 2, bayZ), Vector3.new(t, wh, dd), "Frame", SOLID)
+	end
+	block(m, CFrame.new(wx, wy1 - 0.05, front - dd * 0.4), Vector3.new(ww - 0.3, 0.06, 0.16), "Hot", TINY, "InspectLamp")
+	block(m, CFrame.new(wx, (wy0 + wy1) / 2, front - dd + 0.03), Vector3.new(ww, wh, 0.05), "Glass", TINY, "BayGlass")
+	attach(ctx.base, "ShowPoint", CFrame.new(wx, wy0 - FLOOR / 2, bayZ + 0.05))
+	-- the lit screen (front right) in a round-sided slate frame
+	local sx, sw, sy, sh = 1.05, 1.5, bodyY + 2.15, 0.95
+	block(m, CFrame.new(sx, sy, front - 0.12), Vector3.new(sw + 0.1, sh + 0.3, 0.24), "Frame", TINY)
+	for _, s in { -1, 1 } do
+		cyl(m, Vector3.new(sx + s * (sw / 2 + 0.05), sy, front - 0.12), UP, sh + 0.3, 0.3, "Frame", TINY)
+	end
+	local screen = block(m, CFrame.new(sx, sy, front - 0.26), Vector3.new(sw, sh, 0.05), "ScreenGlow", TINY, "Screen")
+	screen.Color = rgb(30, 70, 70)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "ScreenGui"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0
+	gui.MaxDistance = 80
+	gui.Parent = screen
+	type ScreenLine = { Name: string, Text: string, Y: number, H: number }
+	local lines: { ScreenLine } = {
+		{ Name = "Item", Text = "READY", Y = 0.1, H = 0.5 },
+		{ Name = "Counter", Text = "KEPT 0 · SENT 0", Y = 0.62, H = 0.28 },
+	}
+	for _, spec in lines do
+		local label = Instance.new("TextLabel")
+		label.Name = spec.Name
+		label.Text = spec.Text
+		label.Position = UDim2.fromScale(0.06, spec.Y)
+		label.Size = UDim2.fromScale(0.88, spec.H)
+		label.BackgroundTransparency = 1
+		label.TextScaled = true
+		label.TextColor3 = P.ScreenGlow
+		label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+		label.Parent = gui
+	end
+	-- two flaps hinged at their top edge over dark openings: KEEP (to the pen) and SEND (to the output)
+	local outPos = outputFor("IronBox") :: Vector3
+	local flapY0, flapH, flapW = bodyY + 0.12, 0.8, 1.3
+	local flapZ = front - 0.12
+	local flaps: { { x: number, name: string, text: string, role: string, color: Color3 } } = {
+		{ x = wx, name = "FlapKeep", text = "KEEP", role = "Lamp", color = rgb(255, 255, 255) },
+		{ x = 1.2, name = "FlapSend", text = "SEND", role = "Trim", color = P.Dark },
+	}
+	for _, f in flaps do
+		block(m, CFrame.new(f.x, flapY0 + flapH / 2, front - 0.03), Vector3.new(flapW + 0.1, flapH + 0.1, 0.08), "Dark", TINY)
+		cyl(m, Vector3.new(f.x, flapY0 + flapH + 0.08, flapZ), XA, flapW + 0.2, 0.2, "Frame", TINY)
+		local flap = block(m, CFrame.new(f.x, flapY0 + flapH / 2, flapZ), Vector3.new(flapW - 0.06, flapH, 0.1), f.role, TINY, f.name)
+		if f.role == "Lamp" then
+			flap.Color = rgb(70, 170, 110)
+		end
+		flapLabel(flap, f.text, f.color)
+	end
+	chute(m, Vector3.new(1.2, flapY0 + 0.05, front - 0.45), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.1)
+	-- the keep slide down into a round port in front of the plinth
+	local portZ = front - 0.95
+	local slideTop, slideEnd = Vector3.new(wx, flapY0 + 0.02, front - 0.35), Vector3.new(wx, FLOOR + 0.12, portZ + 0.15)
+	block(
+		m,
+		CFrame.lookAt((slideTop + slideEnd) / 2, slideEnd),
+		Vector3.new(1.1, 0.12, (slideEnd - slideTop).Magnitude),
+		"Dark",
+		PROP,
+		"KeepSlide"
+	)
+	cyl(m, Vector3.new(wx, FLOOR + 0.06, portZ), UP, 0.12, 1.15, "Trim", PROP, "PenPort")
+	cyl(m, Vector3.new(wx, FLOOR + 0.13, portZ), UP, 0.04, 0.8, "Dark", TINY)
 	local rim = bowl(m, Vector3.new(hx, lidTop, hz + 0.4), 2.4, 0.4)
 
 	boxSockets(ctx, hx, hz, w, d, top, 1.0)
@@ -1614,11 +1715,11 @@ local function sorter(): Ctx
 	glowStrips(m, Vector3.new(0, FLOOR + 0.15, 0), 3.7, 3.7, 0.7, 0.1)
 	local belt = block(m, CFrame.new(0, BELT_TOP - 0.12, 0), Vector3.new(BELT_W, 0.24, 3.6), "Rubber", SOLID, "Belt")
 	beltPaint(belt, 3.6, false)
-	local gz, gateY = 0.7, 3.0
+	local gz, gateY = 1.25, 3.0
 	for _, side in { -1, 1 } do
 		pillSlab(m, Vector3.new(side * 1.6, FLOOR, gz), 0.75, gateY - FLOOR, 1.1, 0.3, "Body")
-		cyl(m, Vector3.new(side * 1.6, FLOOR + 0.3, gz), UP, 0.3, 1.2, "Trim", TINY)
-		chute(m, Vector3.new(side * 1.3, BELT_TOP + 0.05, -1.0), Vector3.new(side * 2.5, BELT_TOP - 0.25, -1.0), 1.1)
+		cyl(m, Vector3.new(side * 1.6, FLOOR + 0.3, gz), UP, 0.3, 0.9, "Trim", TINY)
+		chute(m, Vector3.new(side * 1.3, BELT_TOP + 0.05, 0), Vector3.new(side * 2.5, BELT_TOP - 0.25, 0), 1.1)
 		wedge(
 			m,
 			CFrame.new(side * 0.85, BELT_TOP + 0.02, -1.0) * CFrame.Angles(0, -side * math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
@@ -1638,7 +1739,7 @@ local function sorter(): Ctx
 		local dot = ball(m, Vector3.new(-1.0 + (i - 1) * 0.5, gateY + 0.6, gz), 0.3, "Lamp", TINY, "RarityLamp")
 		dot.Color, dot.Material = c, NEON
 	end
-	cyl(m, Vector3.new(0, BELT_TOP + 0.3, -1.0), UP, 0.6, 0.45, "Frame", TINY)
+	cyl(m, Vector3.new(0, BELT_TOP + 0.3, 0), UP, 0.6, 0.45, "Frame", TINY)
 	block(
 		m,
 		CFrame.new(0, BELT_TOP + 0.3, -1.0) * CFrame.Angles(0, math.rad(35), 0) * CFrame.new(0, 0, -0.6),
@@ -1652,6 +1753,7 @@ local function sorter(): Ctx
 		socket(ctx, Vector3.new(sx * 1.6, FLOOR + 0.3, 1.65), out(sx, 1, 0.7), 0.7)
 	end
 	socket(ctx, Vector3.new(0, gateY + 0.5, gz + 0.45), out(0, 1, 0.3), 0.7, true)
+	sideOutputs(ctx, "Sorter")
 	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
 	local a = attach(ctx.base, "Intake", CFrame.new(0, 1.2, 1.2))
 	a:SetAttribute("IntakeSize", Vector3.new(3, 1.6, 1.4))
@@ -2085,6 +2187,7 @@ local function splitter(): Ctx
 	for _, sz in { -1, 1 } do
 		socket(ctx, Vector3.new(1.7, FLOOR, sz * 1.7), out(1, sz, 0.8), 0.7)
 	end
+	sideOutputs(ctx, "Splitter")
 	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
 	local a = attach(ctx.base, "Intake", CFrame.new(0, 1.2, 1.4))
 	a:SetAttribute("IntakeSize", Vector3.new(3, 1.6, 1.2))
@@ -2180,9 +2283,9 @@ local function windTurbine(): Ctx
 	for k = 0, 2 do
 		local a = k * math.pi * 2 / 3 + 0.3
 		local dir = Vector3.new(math.cos(a), math.sin(a), 0)
-		local cf = CFrame.fromMatrix(hub + dir * 2.3, dir:Cross(ZA), dir, ZA) * CFrame.Angles(0, math.rad(12), 0)
-		block(m, cf, Vector3.new(0.7, 3.8, 0.16), "Body", PROP, "Blade")
-		block(m, cf * CFrame.new(0, 1.65, 0), Vector3.new(0.72, 0.5, 0.18), "Trim", TINY, "Blade")
+		local cf = CFrame.fromMatrix(hub + dir * 2.0, dir:Cross(ZA), dir, ZA) * CFrame.Angles(0, math.rad(12), 0)
+		block(m, cf, Vector3.new(0.7, 3.2, 0.16), "Body", PROP, "Blade")
+		block(m, cf * CFrame.new(0, 1.35, 0), Vector3.new(0.72, 0.5, 0.18), "Trim", TINY, "Blade")
 	end
 	pillSlab(m, Vector3.new(-1.9, y0, -1.9), 1.5, 1.1, 1.1, 0.3, "Body")
 	local bar = block(m, CFrame.new(-1.9, y0 + 0.6, -1.9 - 0.58), Vector3.new(0.9, 0.2, 0.05), "ScreenGlow", TINY, "Charge")

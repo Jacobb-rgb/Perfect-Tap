@@ -218,6 +218,10 @@ function Migrations.run(data: { [string]: any }): Report
 		end
 		entry.In = cleanQueue(entry.In, storage, report)
 		entry.Out = cleanQueue(entry.Out, storage, report)
+		-- the machine's own setting (Sorter threshold): a whole number 1..9 or nothing
+		if entry.C ~= nil then
+			entry.C = if isFinite(entry.C) then math.clamp(math.floor(entry.C), 1, 9) else nil
+		end
 		if isFinite(entry.X) and isFinite(entry.Z) then
 			entry.X = math.floor(entry.X)
 			entry.Z = math.floor(entry.Z)
@@ -279,6 +283,9 @@ function Migrations.run(data: { [string]: any }): Report
 			report.Moved += 1
 		end
 	end
+
+	-- crystal shards: a whole number >= 0
+	data.Shards = if isFinite(data.Shards) and data.Shards > 0 then math.floor(data.Shards) else 0
 
 	-- v3: blasters instead of pickaxes
 	data.Pickaxe = nil

@@ -1026,36 +1026,62 @@ local function rawChunk(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 	local glint = ItemBuilder.glowColor(ore.Glow)
 	local b = body(model, cf, Vector3.new(1.5, 1.15, 1.3), Geo.vary(ItemBuilder.DirtyCrust, rng, 0.04))
 	-- the same block turned 45 degrees adds facets: it reads as a stone, not a box
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(0, -0.04, 0) * CFrame.Angles(rng:range(-0.12, 0.12), math.pi / 4, rng:range(-0.12, 0.12)),
-		Size = Vector3.new(1.3, 1.02, 1.2),
-		Color = Geo.vary(ItemBuilder.DirtyCrust:Lerp(ItemBuilder.DirtyCrustDark, 0.35), rng, 0.03),
-		Material = SMOOTH,
-	})))
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(rng:range(-0.25, 0.05), 0.42, rng:range(-0.1, 0.2)) * CFrame.Angles(rng:range(0.3, 0.55), rng:range(0, math.pi * 2), rng:range(-0.55, -0.3)),
-		Size = Vector3.new(0.9, 0.7, 0.8),
-		Color = Geo.vary(ItemBuilder.DirtyCrustLight, rng, 0.04),
-		Material = SMOOTH,
-	})))
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(0, -0.04, 0) * CFrame.Angles(rng:range(-0.12, 0.12), math.pi / 4, rng:range(-0.12, 0.12)),
+				Size = Vector3.new(1.3, 1.02, 1.2),
+				Color = Geo.vary(ItemBuilder.DirtyCrust:Lerp(ItemBuilder.DirtyCrustDark, 0.35), rng, 0.03),
+				Material = SMOOTH,
+			})
+		)
+	)
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf
+					* CFrame.new(rng:range(-0.25, 0.05), 0.42, rng:range(-0.1, 0.2))
+					* CFrame.Angles(rng:range(0.3, 0.55), rng:range(0, math.pi * 2), rng:range(-0.55, -0.3)),
+				Size = Vector3.new(0.9, 0.7, 0.8),
+				Color = Geo.vary(ItemBuilder.DirtyCrustLight, rng, 0.04),
+				Material = SMOOTH,
+			})
+		)
+	)
 	-- a smear of mud
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(-0.25, -0.08, -0.66) * CFrame.Angles(0, 0, rng:range(-0.4, 0.4)),
-		Size = Vector3.new(0.72, 0.5, 0.08),
-		Color = ItemBuilder.DirtyMud,
-		Material = SMOOTH,
-	})))
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(-0.25, -0.08, -0.66) * CFrame.Angles(0, 0, rng:range(-0.4, 0.4)),
+				Size = Vector3.new(0.72, 0.5, 0.08),
+				Color = ItemBuilder.DirtyMud,
+				Material = SMOOTH,
+			})
+		)
+	)
 	-- the tiny glint: the only thing that differs between ores
 	local glintSpots = { CFrame.new(0.42, 0.42, -0.62), CFrame.new(-0.5, 0.5, 0.52) }
 	local glintSizes = { 0.26, 0.18 }
 	for i, spot in glintSpots do
-		local glintPart = Geo.make("Part", decorProps({
-			Name = "Glint",
-			CFrame = cf * spot * CFrame.Angles(0, i * 0.8, 0) * VERTEX_UP,
-			Size = Vector3.one * glintSizes[i],
-			Color = glint,
-			Material = NEON,
-		}))
+		local glintPart = Geo.make(
+			"Part",
+			decorProps({
+				Name = "Glint",
+				CFrame = cf * spot * CFrame.Angles(0, i * 0.8, 0) * VERTEX_UP,
+				Size = Vector3.one * glintSizes[i],
+				Color = glint,
+				Material = NEON,
+			})
+		)
 		addDecor(model, b, glintPart)
 	end
 end
@@ -1104,31 +1130,52 @@ local function crushed(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 	-- a low heap: a wide base, the same base turned 45 degrees, chunks on top
 	local grit = Color3.fromRGB(90, 80, 74)
 	local b = body(model, cf, Vector3.new(1.5, 0.45, 1.5), pal.Dark:Lerp(grit, 0.35))
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(0, 0.08, 0) * CFrame.Angles(0, math.pi / 4, 0),
-		Size = Vector3.new(1.25, 0.5, 1.25),
-		Color = pal.Main:Lerp(grit, 0.25),
-		Material = SMOOTH,
-	})))
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(0, 0.08, 0) * CFrame.Angles(0, math.pi / 4, 0),
+				Size = Vector3.new(1.25, 0.5, 1.25),
+				Color = pal.Main:Lerp(grit, 0.25),
+				Material = SMOOTH,
+			})
+		)
+	)
 	for i, tone in { "Main", "Light", "Dark" } do
 		local color, material, reflectance = resolve(c, tone)
 		local a = i * 2.1 + rng:range(-0.3, 0.3)
-		addDecor(model, b, Geo.make("Part", decorProps({
-			CFrame = cf * CFrame.new(math.cos(a) * 0.3, rng:range(0.36, 0.44), math.sin(a) * 0.3) * Geo.randomTilt(rng, 0.7),
-			Size = Vector3.new(0.46, 0.36, 0.42),
-			Color = color,
-			Material = material,
-			Reflectance = reflectance,
-		})))
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(math.cos(a) * 0.3, rng:range(0.36, 0.44), math.sin(a) * 0.3) * Geo.randomTilt(rng, 0.7),
+					Size = Vector3.new(0.46, 0.36, 0.42),
+					Color = color,
+					Material = material,
+					Reflectance = reflectance,
+				})
+			)
+		)
 	end
 	local veinColor, veinMaterial, _, veinT = resolve(c, "Vein")
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(rng:range(-0.15, 0.15), 0.52, rng:range(-0.15, 0.15)) * VERTEX_UP,
-		Size = Vector3.new(0.2, 0.2, 0.2),
-		Color = veinColor,
-		Material = veinMaterial,
-		Transparency = veinT,
-	})))
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(rng:range(-0.15, 0.15), 0.52, rng:range(-0.15, 0.15)) * VERTEX_UP,
+				Size = Vector3.new(0.2, 0.2, 0.2),
+				Color = veinColor,
+				Material = veinMaterial,
+				Transparency = veinT,
+			})
+		)
+	)
 end
 
 -- Ingot: three stepped metal layers and a stamp in the ore's glow (4 parts).
@@ -1137,27 +1184,48 @@ local function ingot(model: Model, cf: CFrame, info: ItemInfo, _rng: Rng.Rng)
 	local c = makeCtx(ore, 1, false)
 	local pal = c.Pal
 	local b = body(model, cf, Vector3.new(1.9, 0.5, 0.92), pal.Main, Enum.Material.Metal)
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(0, -0.21, 0),
-		Size = Vector3.new(1.96, 0.1, 0.98),
-		Color = pal.Dark,
-		Material = Enum.Material.Metal,
-	})))
-	addDecor(model, b, Geo.make("Part", decorProps({
-		CFrame = cf * CFrame.new(0, 0.3, 0),
-		Size = Vector3.new(1.6, 0.12, 0.66),
-		Color = pal.Light,
-		Material = Enum.Material.Metal,
-	})))
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(0, -0.21, 0),
+				Size = Vector3.new(1.96, 0.1, 0.98),
+				Color = pal.Dark,
+				Material = Enum.Material.Metal,
+			})
+		)
+	)
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(0, 0.3, 0),
+				Size = Vector3.new(1.6, 0.12, 0.66),
+				Color = pal.Light,
+				Material = Enum.Material.Metal,
+			})
+		)
+	)
 	local stampColor, stampMaterial, _, stampT = resolve(c, "Vein")
-	addDecor(model, b, Geo.make("Part", decorProps({
-		Name = "Stamp",
-		CFrame = cf * CFrame.new(0, 0.37, 0),
-		Size = Vector3.new(0.52, 0.04, 0.26),
-		Color = if c.Order <= 1 then pal.Dark else stampColor,
-		Material = stampMaterial,
-		Transparency = stampT,
-	})))
+	addDecor(
+		model,
+		b,
+		Geo.make(
+			"Part",
+			decorProps({
+				Name = "Stamp",
+				CFrame = cf * CFrame.new(0, 0.37, 0),
+				Size = Vector3.new(0.52, 0.04, 0.26),
+				Color = if c.Order <= 1 then pal.Dark else stampColor,
+				Material = stampMaterial,
+				Transparency = stampT,
+			})
+		)
+	)
 	if info.Grade == "Flawless" then
 		sparkle(b, "GradeSparkle", Color3.fromRGB(255, 236, 140), 2, 0.3)
 	end
@@ -1173,30 +1241,155 @@ local function gear(model: Model, cf: CFrame, info: ItemInfo, _rng: Rng.Rng)
 		local bladeLength = if long then 3.4 else 1.6
 		local b = body(model, cf, Vector3.new(bladeLength + 1, 0.35, 0.6), metal, Enum.Material.Metal)
 		b.Transparency = 1 -- the collider is invisible; visible parts are decor
-		addDecor(model, b, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0.4, 0, 0), Size = Vector3.new(bladeLength, 0.14, if long then 0.55 else 0.42), Color = metal, Material = Enum.Material.Metal })))
-		addDecor(model, b, Geo.make("WedgePart", decorProps({ CFrame = cf * CFrame.new(0.4 + bladeLength / 2 + 0.25, 0, 0) * CFrame.Angles(0, -math.pi / 2, 0), Size = Vector3.new(if long then 0.55 else 0.42, 0.14, 0.5), Color = metal, Material = Enum.Material.Metal })))
-		addDecor(model, b, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0.4 - bladeLength / 2 - 0.1, 0, 0), Size = Vector3.new(0.2, 0.24, if long then 1.4 else 1), Color = Color3.fromRGB(220, 180, 80), Material = Enum.Material.Metal })))
-		addDecor(model, b, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0.4 - bladeLength / 2 - 0.55, 0, 0), Size = Vector3.new(0.7, 0.22, 0.22), Color = grip, Material = Enum.Material.SmoothPlastic })))
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(0.4, 0, 0),
+					Size = Vector3.new(bladeLength, 0.14, if long then 0.55 else 0.42),
+					Color = metal,
+					Material = Enum.Material.Metal,
+				})
+			)
+		)
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"WedgePart",
+				decorProps({
+					CFrame = cf * CFrame.new(0.4 + bladeLength / 2 + 0.25, 0, 0) * CFrame.Angles(0, -math.pi / 2, 0),
+					Size = Vector3.new(if long then 0.55 else 0.42, 0.14, 0.5),
+					Color = metal,
+					Material = Enum.Material.Metal,
+				})
+			)
+		)
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(0.4 - bladeLength / 2 - 0.1, 0, 0),
+					Size = Vector3.new(0.2, 0.24, if long then 1.4 else 1),
+					Color = Color3.fromRGB(220, 180, 80),
+					Material = Enum.Material.Metal,
+				})
+			)
+		)
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(0.4 - bladeLength / 2 - 0.55, 0, 0),
+					Size = Vector3.new(0.7, 0.22, 0.22),
+					Color = grip,
+					Material = Enum.Material.SmoothPlastic,
+				})
+			)
+		)
 	elseif recipeId == "ToolHead" then
 		local b = body(model, cf, Vector3.new(2.4, 0.5, 0.5), metal, Enum.Material.Metal)
 		for _, side in { -1, 1 } do
-			addDecor(model, b, Geo.make("WedgePart", decorProps({
-				CFrame = cf * CFrame.new(side * 1.45, 0, 0) * CFrame.Angles(0, side * math.pi / 2, 0),
-				Size = Vector3.new(0.5, 0.5, 0.6),
-				Color = metal,
-				Material = Enum.Material.Metal,
-			})))
+			addDecor(
+				model,
+				b,
+				Geo.make(
+					"WedgePart",
+					decorProps({
+						CFrame = cf * CFrame.new(side * 1.45, 0, 0) * CFrame.Angles(0, side * math.pi / 2, 0),
+						Size = Vector3.new(0.5, 0.5, 0.6),
+						Color = metal,
+						Material = Enum.Material.Metal,
+					})
+				)
+			)
 		end
-		addDecor(model, b, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0, 0, 0), Size = Vector3.new(0.6, 0.62, 0.62), Color = metal:Lerp(Color3.new(0, 0, 0), 0.2), Material = Enum.Material.Metal })))
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(0, 0, 0),
+					Size = Vector3.new(0.6, 0.62, 0.62),
+					Color = metal:Lerp(Color3.new(0, 0, 0), 0.2),
+					Material = Enum.Material.Metal,
+				})
+			)
+		)
 	else -- Helm
 		local b = body(model, cf, Vector3.new(1.6, 1.3, 1.6), metal, Enum.Material.Metal, Enum.PartType.Ball)
 		b.Size = Vector3.new(1.6, 1.6, 1.6)
-		addDecor(model, b, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0, -0.45, 0), Size = Vector3.new(1.8, 0.25, 1.8), Color = metal:Lerp(Color3.new(0, 0, 0), 0.15), Material = Enum.Material.Metal })))
-		addDecor(model, b, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0, 0.85, 0), Size = Vector3.new(0.25, 0.45, 1.2), Color = Color3.fromRGB(200, 60, 50), Material = Enum.Material.SmoothPlastic })))
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(0, -0.45, 0),
+					Size = Vector3.new(1.8, 0.25, 1.8),
+					Color = metal:Lerp(Color3.new(0, 0, 0), 0.15),
+					Material = Enum.Material.Metal,
+				})
+			)
+		)
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					CFrame = cf * CFrame.new(0, 0.85, 0),
+					Size = Vector3.new(0.25, 0.45, 1.2),
+					Color = Color3.fromRGB(200, 60, 50),
+					Material = Enum.Material.SmoothPlastic,
+				})
+			)
+		)
 	end
 	-- every gear piece gets a small glowing ore inlay
 	local primary = model.PrimaryPart :: BasePart
-	addDecor(model, primary, Geo.make("Part", decorProps({ CFrame = cf * CFrame.new(0, 0.2, 0), Size = Vector3.new(0.2, 0.2, 0.2), Color = ItemBuilder.glowColor(ore.Glow), Material = Enum.Material.Neon })))
+	addDecor(
+		model,
+		primary,
+		Geo.make(
+			"Part",
+			decorProps({
+				CFrame = cf * CFrame.new(0, 0.2, 0),
+				Size = Vector3.new(0.2, 0.2, 0.2),
+				Color = ItemBuilder.glowColor(ore.Glow),
+				Material = Enum.Material.Neon,
+			})
+		)
+	)
+end
+
+-- An alloy: the ore's ingot with a gold and a cyan band round its middle (two metals in one).
+local function alloy(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	ingot(model, cf, info, rng)
+	local b = model.PrimaryPart :: BasePart
+	for i, color in { Color3.fromRGB(255, 196, 60), Color3.fromRGB(70, 228, 255) } do
+		addDecor(
+			model,
+			b,
+			Geo.make(
+				"Part",
+				decorProps({
+					Name = "AlloyBand",
+					CFrame = cf * CFrame.new((i - 1.5) * 0.36, 0.02, 0),
+					Size = Vector3.new(0.2, 0.56, 0.98),
+					Color = color,
+					Material = Enum.Material.Metal,
+				})
+			)
+		)
+	end
 end
 
 local BUILDERS = {
@@ -1205,6 +1398,7 @@ local BUILDERS = {
 	Crushed = crushed,
 	Ingot = ingot,
 	Gear = gear,
+	Alloy = alloy,
 }
 
 -- Returns a Model (not parented). `seed` only changes the random details.

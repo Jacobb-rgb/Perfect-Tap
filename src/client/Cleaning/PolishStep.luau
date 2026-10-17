@@ -114,7 +114,8 @@ function PolishStep.new(ctx: any)
 	local sparkle = Instance.new("ParticleEmitter")
 	sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 	sparkle.Color = ColorSequence.new(ctx.ore.Glow:Lerp(Color3.new(1, 1, 1), 0.5))
-	sparkle.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.35), NumberSequenceKeypoint.new(1, 0) })
+	sparkle.Size =
+		NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.35), NumberSequenceKeypoint.new(1, 0) })
 	sparkle.Lifetime = NumberRange.new(0.4, 0.8)
 	sparkle.Speed = NumberRange.new(0.2, 0.8)
 	sparkle.SpreadAngle = Vector2.new(60, 60)

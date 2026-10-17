@@ -18,6 +18,9 @@ ItemData.Kinds = {
 	Crushed = { Id = "Crushed", Name = "Crushed", ValueMult = 0.75 },
 	Ingot = { Id = "Ingot", Name = "Ingot", ValueMult = 1.25 },
 	Gear = { Id = "Gear", Name = "Gear", ValueMult = 1.25 }, -- per ingot used, times recipe bonus
+	-- Alloy Furnace: two ingots of different ores -> one alloy of the more
+	-- valuable ore, worth more than both ingots (2 x 1.25)
+	Alloy = { Id = "Alloy", Name = "Alloy", ValueMult = 3.2 },
 }
 
 -- Quality grades from the cleaning minigame (index = grade level).
@@ -160,6 +163,8 @@ function ItemData.displayName(kind: string, oreId: string, gradeId: string?, rec
 	elseif kind == "Gear" then
 		local recipe = recipeId and ItemData.RecipeById[recipeId]
 		return oreName .. " " .. (recipe and recipe.Name or "Gear")
+	elseif kind == "Alloy" then
+		return oreName .. " Alloy"
 	end
 	return oreName
 end

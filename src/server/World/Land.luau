@@ -406,14 +406,7 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		local color = if rng:chance(0.5) then C.GrassLight else C.GrassDark
 		local tint = Geo.vary(color, rng, 0.03)
 		if not PlotBuilder.isInYard(Vector3.new(x, 0, z), math.max(s.X, s.Z) * 0.7) then
-			Geo.block(
-				land,
-				CFrame.new(math.floor(x), 0.02, math.floor(z)),
-				s,
-				tint,
-				nil,
-				decor({ CastShadow = false, CanCollide = false })
-			)
+			Geo.block(land, CFrame.new(math.floor(x), 0.02, math.floor(z)), s, tint, nil, decor({ CastShadow = false, CanCollide = false }))
 		end
 	end
 

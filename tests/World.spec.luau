@@ -106,9 +106,12 @@ return function(T, Loader)
 					if not insideModel(d, room.name, room.model) then
 						local min = room.box.Min + roblox.Vector3.new(14, 2, 14)
 						local max = room.box.Max - roblox.Vector3.new(14, 6, 14)
-						local overlaps = p.X - hx < max.X and p.X + hx > min.X
-							and p.Y - hy < max.Y and p.Y + hy > min.Y
-							and p.Z - hz < max.Z and p.Z + hz > min.Z
+						local overlaps = p.X - hx < max.X
+							and p.X + hx > min.X
+							and p.Y - hy < max.Y
+							and p.Y + hy > min.Y
+							and p.Z - hz < max.Z
+							and p.Z + hz > min.Z
 						T.falsy(overlaps, d:GetFullName() .. " intrudes into " .. room.name)
 					end
 				end

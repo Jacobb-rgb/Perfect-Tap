@@ -106,6 +106,8 @@ Net.Events = {
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialSkip = { Rate = 1, Burst = 2 },
+	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
+	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
 	-- server -> client
 	Notify = false,
 	Fx = false,
@@ -138,6 +140,8 @@ Net.Events = {
 	--   (fade the screen out), then { Phase = "Arrive", Floor, Name } once the character
 	--   stands at the target stop (fade back in); also "Arrive" after a VoidCatcher rescue
 	ElevatorRide = false,
+	-- the answer to a Teleport: { Destination, Ok, Reason?: a TeleportConfig.Reasons code }
+	TeleportResult = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

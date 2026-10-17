@@ -1,5 +1,5 @@
 --[[
-	Lobby layout and budget checks. The lobby is built by five parallel
+	Lobby layout and budget checks. The lobby is built by six parallel
 	packages (src/server/World/Lobby/*); these tests keep their set pieces
 	off the roads, plots and ore outcrops, apart from each other, and inside
 	the mobile part/light budgets.
@@ -38,8 +38,10 @@ return function(T, Loader)
 		return points
 	end
 
+	-- (reservations, like the Vault's jungle trees, only keep the scatter
+	-- away: they overlap their own package's pieces on purpose)
 	local function solidGround(piece): boolean
-		return LobbyLayout.isGroundPiece(piece) and not piece.Walkable
+		return LobbyLayout.isGroundPiece(piece) and not piece.Walkable and not piece.Reserve
 	end
 
 	T.test("lobby pieces belong to a package and have sane frames", function()
@@ -47,7 +49,7 @@ return function(T, Loader)
 		for _, name in LobbyLayout.Packages do
 			packages[name] = true
 		end
-		T.eq(#LobbyLayout.Packages, 5, "exactly five lobby packages")
+		T.eq(#LobbyLayout.Packages, 6, "exactly six lobby packages")
 		for _, piece in LobbyLayout.Pieces do
 			T.truthy(packages[piece.Package], piece.Id .. " has a known package")
 			T.truthy(math.abs(piece.Facing.Y) < 1e-6, piece.Id .. " faces horizontally")
@@ -147,7 +149,12 @@ return function(T, Loader)
 		T.falsy(LobbyLayout.isFree(Vector3.new(-104, 0, 28), 2), "plot")
 		T.falsy(LobbyLayout.isFree(LobbyLayout.get("FossilDig").Center, 2), "fossil dig")
 		T.falsy(LobbyLayout.isFree(Vector3.new(-150, 0, 40), 3), "a plot's yard (design v2) is not free")
-		T.truthy(LobbyLayout.isFree(Vector3.new(36, 0, 120), 3), "south meadow is free")
+		T.truthy(LobbyLayout.isFree(Vector3.new(-36, 0, 70), 3), "the lawn west of the south road is free")
+		-- the Blaster Vault, its statues and its jungle trees (reservations, even past the area's edge)
+		T.falsy(LobbyLayout.isFree(Vector3.new(0, 0, 112), 2), "blaster vault")
+		T.falsy(LobbyLayout.isFree(Vector3.new(43, 0, 92), 2), "east statue")
+		T.falsy(LobbyLayout.isFree(Vector3.new(36, 0, 120), 3), "the jungle tree east of the vault")
+		T.falsy(LobbyLayout.isFree(Vector3.new(-40, 0, 147), 1), "the jungle trees behind the vault")
 	end)
 
 	T.test("world stays inside the mobile part and light budgets", function()
@@ -189,7 +196,11 @@ return function(T, Loader)
 							if LobbyLayout.inArea(d.CFrame.Position) then
 								inParts += 1
 							end
-						elseif (d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight")) and d.Parent and d.Parent:IsA("BasePart") then
+						elseif
+							(d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight"))
+							and d.Parent
+							and d.Parent:IsA("BasePart")
+						then
 							lights += 1
 							if LobbyLayout.inArea(d.Parent.CFrame.Position) then
 								inLights += 1

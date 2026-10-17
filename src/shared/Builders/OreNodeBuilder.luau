@@ -47,7 +47,9 @@ function OreNodeBuilder.build(oreId: string, base: CFrame, seed: number | string
 
 	-- Main crust block, slightly sunk into the ground.
 	local mainSize = Vector3.new(rng:range(4.4, 5.2), rng:range(3.4, 4.2), rng:range(4.2, 5)) * scale
-	local mainCf = base * CFrame.new(0, mainSize.Y * 0.42, 0) * CFrame.Angles(rng:range(-0.18, 0.18), rng:range(0, math.pi * 2), rng:range(-0.18, 0.18))
+	local mainCf = base
+		* CFrame.new(0, mainSize.Y * 0.42, 0)
+		* CFrame.Angles(rng:range(-0.18, 0.18), rng:range(0, math.pi * 2), rng:range(-0.18, 0.18))
 	local rock1 = Geo.block(model, mainCf, mainSize, Geo.vary(ore.Crust, rng, 0.05), Enum.Material.SmoothPlastic, partProps())
 	rock1.Name = "Rock1"
 
@@ -70,7 +72,8 @@ function OreNodeBuilder.build(oreId: string, base: CFrame, seed: number | string
 		local tilt = rng:range(0.35, 0.8)
 		local length = rng:range(1.6, 2.6) * scale
 		local width = rng:range(0.75, 1.1) * scale
-		local origin = mainCf.Position + Vector3.new(math.cos(yaw) * mainSize.X * 0.22, mainSize.Y * rng:range(0.05, 0.3), math.sin(yaw) * mainSize.Z * 0.22)
+		local origin = mainCf.Position
+			+ Vector3.new(math.cos(yaw) * mainSize.X * 0.22, mainSize.Y * rng:range(0.05, 0.3), math.sin(yaw) * mainSize.Z * 0.22)
 		local dir = CFrame.fromAxisAngle(Vector3.new(-math.sin(yaw), 0, math.cos(yaw)), tilt)
 		-- diamond-prism body: a block turned 45 degrees around its long axis
 		local bodyCf = CFrame.new(origin) * dir * CFrame.new(0, length * 0.5, 0) * CFrame.Angles(0, math.pi / 4 + rng:range(-0.2, 0.2), 0)
@@ -209,7 +212,9 @@ function OreNodeBuilder.buildRock(zoneId: string, oreIds: { string }, base: CFra
 	local bulkSize = Vector3.new(mainSize.X * 0.86, mainSize.Y * 0.92, mainSize.Z * 0.9)
 	local bulk = Geo.block(
 		model,
-		base * CFrame.new(0, mainSize.Y * 0.4, 0) * CFrame.Angles(rng:range(-0.08, 0.08), math.pi / 4 + rng:range(-0.15, 0.15), rng:range(-0.08, 0.08)),
+		base
+			* CFrame.new(0, mainSize.Y * 0.4, 0)
+			* CFrame.Angles(rng:range(-0.08, 0.08), math.pi / 4 + rng:range(-0.15, 0.15), rng:range(-0.08, 0.08)),
 		bulkSize,
 		Geo.vary(style.Mid:Lerp(style.Dark, 0.3), rng, 0.03),
 		Enum.Material.SmoothPlastic,
@@ -219,14 +224,23 @@ function OreNodeBuilder.buildRock(zoneId: string, oreIds: { string }, base: CFra
 	-- lighter cap and darker foot: the three-shade voxel look
 	local cap = Geo.block(
 		model,
-		mainCf * CFrame.new(rng:range(-0.25, 0.25), mainSize.Y / 2 + 0.1, rng:range(-0.25, 0.25)) * CFrame.Angles(rng:range(-0.08, 0.08), math.pi / 4 + rng:range(-0.3, 0.3), rng:range(-0.08, 0.08)),
+		mainCf
+			* CFrame.new(rng:range(-0.25, 0.25), mainSize.Y / 2 + 0.1, rng:range(-0.25, 0.25))
+			* CFrame.Angles(rng:range(-0.08, 0.08), math.pi / 4 + rng:range(-0.3, 0.3), rng:range(-0.08, 0.08)),
 		Vector3.new(mainSize.X * 0.66, 0.6, mainSize.Z * 0.62),
 		Geo.vary(style.Light, rng, 0.03),
 		Enum.Material.SmoothPlastic,
 		SOLID
 	)
 	cap.Name = "Cap"
-	local skirt = Geo.block(model, base * CFrame.new(0, 0.35, 0) * CFrame.Angles(0, math.pi / 8 + rng:range(-0.2, 0.2), 0), Vector3.new(mainSize.X * 1.06, 0.8, mainSize.Z * 1.04), Geo.vary(style.Dark, rng, 0.03), Enum.Material.SmoothPlastic, SOLID)
+	local skirt = Geo.block(
+		model,
+		base * CFrame.new(0, 0.35, 0) * CFrame.Angles(0, math.pi / 8 + rng:range(-0.2, 0.2), 0),
+		Vector3.new(mainSize.X * 1.06, 0.8, mainSize.Z * 1.04),
+		Geo.vary(style.Dark, rng, 0.03),
+		Enum.Material.SmoothPlastic,
+		SOLID
+	)
 	skirt.Name = "Skirt"
 
 	-- side lumps; more ores = more lumps
@@ -244,20 +258,37 @@ function OreNodeBuilder.buildRock(zoneId: string, oreIds: { string }, base: CFra
 			-- a lump on top of the boulder (bigger rocks are taller)
 			local angle = start + 1.2 + i
 			s = mainSize * rng:range(0.36, 0.44)
-			cf = mainCf * CFrame.new(math.cos(angle) * mainSize.X * 0.18, mainSize.Y * 0.5 + s.Y * 0.3, math.sin(angle) * mainSize.Z * 0.18) * Geo.randomTilt(rng, 0.35)
+			cf = mainCf
+				* CFrame.new(math.cos(angle) * mainSize.X * 0.18, mainSize.Y * 0.5 + s.Y * 0.3, math.sin(angle) * mainSize.Z * 0.18)
+				* Geo.randomTilt(rng, 0.35)
 		end
-		local lump = Geo.block(model, cf, s, Geo.vary(if i % 2 == 0 then style.Light else style.Mid, rng, 0.05), Enum.Material.SmoothPlastic, SOLID)
+		local lump =
+			Geo.block(model, cf, s, Geo.vary(if i % 2 == 0 then style.Light else style.Mid, rng, 0.05), Enum.Material.SmoothPlastic, SOLID)
 		lump.Name = "Rock" .. (i + 1)
 	end
 	for i = 1, 2 do
 		local angle = start + 1.2 + i * 2.1
 		local dist = mainSize.X * rng:range(0.62, 0.72)
 		local size = rng:range(0.7, 1.0) * scale
-		local pebble = Geo.block(model, base * CFrame.new(math.cos(angle) * dist, size * 0.3, math.sin(angle) * dist) * Geo.randomTilt(rng, 0.4), Vector3.new(size, size * 0.7, size * 0.9), Geo.vary(style.Dark, rng, 0.06), Enum.Material.SmoothPlastic, SMALL)
+		local pebble = Geo.block(
+			model,
+			base * CFrame.new(math.cos(angle) * dist, size * 0.3, math.sin(angle) * dist) * Geo.randomTilt(rng, 0.4),
+			Vector3.new(size, size * 0.7, size * 0.9),
+			Geo.vary(style.Dark, rng, 0.06),
+			Enum.Material.SmoothPlastic,
+			SMALL
+		)
 		pebble.Name = "Pebble"
 	end
 	if style.Moss then
-		local moss = Geo.block(model, cap.CFrame * CFrame.new(rng:range(-0.5, 0.5), 0.4, rng:range(-0.5, 0.5)) * CFrame.Angles(0, rng:range(0, 3), 0), Vector3.new(mainSize.X * 0.36, 0.42, mainSize.Z * 0.32), style.Moss, Enum.Material.SmoothPlastic, SMALL)
+		local moss = Geo.block(
+			model,
+			cap.CFrame * CFrame.new(rng:range(-0.5, 0.5), 0.4, rng:range(-0.5, 0.5)) * CFrame.Angles(0, rng:range(0, 3), 0),
+			Vector3.new(mainSize.X * 0.36, 0.42, mainSize.Z * 0.32),
+			style.Moss,
+			Enum.Material.SmoothPlastic,
+			SMALL
+		)
 		moss.Name = "Moss"
 	end
 
@@ -322,7 +353,9 @@ function OreNodeBuilder.applyStage(model: Model, stage: number, seed: number | s
 		local face = rng:int(1, 5)
 		local cf: CFrame
 		if face == 5 then
-			cf = rock1.CFrame * CFrame.new(rng:range(-0.25, 0.25) * size.X, size.Y / 2, rng:range(-0.25, 0.25) * size.Z) * CFrame.Angles(0, rng:range(0, 3.14), 0)
+			cf = rock1.CFrame
+				* CFrame.new(rng:range(-0.25, 0.25) * size.X, size.Y / 2, rng:range(-0.25, 0.25) * size.Z)
+				* CFrame.Angles(0, rng:range(0, 3.14), 0)
 		else
 			local xAxis = face <= 2
 			local sign = if face % 2 == 0 then 1 else -1

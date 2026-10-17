@@ -387,7 +387,12 @@ return function(T, Loader)
 			local solids = list
 			for _, part in list do
 				-- opaque bodies (no pink glass), soft glowing skirts, matte, unreachable
-				T.near(part.Transparency, if part.Name == "Underside" then Clouds.SkirtTransparency else 0, 1e-4, name .. " block transparency")
+				T.near(
+					part.Transparency,
+					if part.Name == "Underside" then Clouds.SkirtTransparency else 0,
+					1e-4,
+					name .. " block transparency"
+				)
 				T.eq(part.Material, roblox.Enum.Material.SmoothPlastic, name .. " block is SmoothPlastic")
 				T.falsy(part.CastShadow or part.CanCollide or part.CanQuery or part.CanTouch, name .. " block is unreachable decor")
 			end

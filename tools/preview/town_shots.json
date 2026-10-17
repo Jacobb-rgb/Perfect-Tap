@@ -2,9 +2,9 @@
   "town_hero_left": {
     "scene": "world",
     "position": [
-      6,
-      62,
-      168
+      -40,
+      122,
+      252
     ],
     "target": [
       -46,
@@ -24,9 +24,9 @@
   "town_hero_right": {
     "scene": "world",
     "position": [
-      6,
-      62,
-      168
+      -40,
+      122,
+      252
     ],
     "target": [
       50,
@@ -46,9 +46,9 @@
   "town_hero_back": {
     "scene": "world",
     "position": [
-      6,
-      62,
-      168
+      -40,
+      122,
+      252
     ],
     "target": [
       0,
@@ -68,14 +68,14 @@
   "town_map_close": {
     "scene": "world",
     "position": [
-      44,
+      80,
       14,
-      108
+      104
     ],
     "target": [
-      58.5,
+      97,
       10,
-      95
+      120
     ],
     "fov": 62,
     "preset": "Surface",
@@ -266,9 +266,9 @@
   "town_lab": {
     "scene": "world",
     "position": [
-      32,
-      13,
-      92
+      26,
+      12,
+      60
     ],
     "target": [
       44.5,
@@ -288,14 +288,14 @@
   "town_east_row": {
     "scene": "world",
     "position": [
-      38,
-      16,
-      64
+      64,
+      20,
+      100
     ],
     "target": [
-      60,
-      9,
-      90
+      112,
+      8,
+      124
     ],
     "fov": 60,
     "preset": "Surface",
@@ -310,14 +310,14 @@
   "town_depot": {
     "scene": "world",
     "position": [
-      42,
-      15,
-      110
+      102,
+      12,
+      133
     ],
     "target": [
-      59,
-      12,
-      96
+      114,
+      8,
+      119
     ],
     "fov": 60,
     "preset": "Surface",
@@ -329,7 +329,7 @@
     "shadowExtent": 140,
     "maxLights": 24
   },
-  "town_mine_cottage": {
+  "town_row_cottage": {
     "scene": "world",
     "position": [
       -73,
@@ -354,14 +354,14 @@
   "town_garden": {
     "scene": "world",
     "position": [
-      4,
-      10,
-      94
+      116,
+      11,
+      124
     ],
     "target": [
-      17,
+      135,
       5,
-      104
+      129
     ],
     "fov": 64,
     "preset": "Surface",

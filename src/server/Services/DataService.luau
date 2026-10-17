@@ -84,11 +84,7 @@ end
 
 local function waitForBudget()
 	local waited = 0
-	while
-		not inMemory
-		and DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.UpdateAsync) < 1
-		and waited < 20
-	do
+	while not inMemory and DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.UpdateAsync) < 1 and waited < 20 do
 		task.wait(0.5)
 		waited += 0.5
 	end
@@ -273,7 +269,9 @@ function DataService.init()
 	end
 	if inMemory then
 		store = MemoryStore.new()
-		warn("[DataService] DataStores unavailable: progress is NOT saved in this session. (Studio: Game Settings > Security > Enable Studio Access to API Services)")
+		warn(
+			"[DataService] DataStores unavailable: progress is NOT saved in this session. (Studio: Game Settings > Security > Enable Studio Access to API Services)"
+		)
 	end
 
 	profileStore = ProfileStore.new({

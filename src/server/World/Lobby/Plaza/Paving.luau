@@ -384,8 +384,22 @@ local function planterBox(m: Model, base: CFrame, rng: Rng.Rng)
 		Style.tiny()
 	).Name =
 		"PlanterLip"
-	Style.block(planter, base * CFrame.new(0, size.Y + 0.1, 0), Vector3.new(size.X + 0.3, 0.2, size.Z + 0.3), C.StoneLight, nil, Style.tiny())
-	Style.block(planter, base * CFrame.new(0, size.Y + 0.22, 0), Vector3.new(size.X - 0.5, 0.1, size.Z - 0.5), C.DirtDark, nil, Style.tiny())
+	Style.block(
+		planter,
+		base * CFrame.new(0, size.Y + 0.1, 0),
+		Vector3.new(size.X + 0.3, 0.2, size.Z + 0.3),
+		C.StoneLight,
+		nil,
+		Style.tiny()
+	)
+	Style.block(
+		planter,
+		base * CFrame.new(0, size.Y + 0.22, 0),
+		Vector3.new(size.X - 0.5, 0.1, size.Z - 0.5),
+		C.DirtDark,
+		nil,
+		Style.tiny()
+	)
 	-- the small voxel tree: a trunk, a leafy cube, two side lumps and a lighter cap
 	local top = size.Y + 0.27
 	Style.block(planter, base * CFrame.new(0, top + 1.1, 0), Vector3.new(0.5, 2.2, 0.5), C.Trunk, nil, Style.tiny())
@@ -459,7 +473,14 @@ local function benches(m: Model)
 			Style.block(bench, base * CFrame.new(x, 0.6, 0.05), Vector3.new(0.3, 1.2, 1.3), K.MetalDark, nil, Style.decor())
 		end
 		Style.block(bench, base * CFrame.new(0, 1.0, 0), Vector3.new(3.5, 0.24, 1.2), Style.C.Wood, nil, Style.decor()).Name = "BenchSeat"
-		Style.block(bench, base * CFrame.new(0, 1.62, 0.6) * CFrame.Angles(0.2, 0, 0), Vector3.new(3.5, 0.8, 0.18), Style.C.WoodLight, nil, Style.tiny())
+		Style.block(
+			bench,
+			base * CFrame.new(0, 1.62, 0.6) * CFrame.Angles(0.2, 0, 0),
+			Vector3.new(3.5, 0.8, 0.18),
+			Style.C.WoodLight,
+			nil,
+			Style.tiny()
+		)
 		Style.block(bench, base * CFrame.new(0, 1.15, 0.62), Vector3.new(3.1, 0.2, 0.2), K.MetalDark, nil, Style.tiny())
 	end
 end

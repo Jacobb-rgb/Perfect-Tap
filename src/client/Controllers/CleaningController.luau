@@ -100,7 +100,14 @@ local function buildTools(folder: Instance): { [string]: Model }
 		return m
 	end
 	local chisel = newTool("Chisel")
-	Geo.wedge(chisel, CFrame.new(0, 0.12, 0) * CFrame.Angles(math.pi, 0, 0), Vector3.new(0.16, 0.24, 0.12), Color3.fromRGB(200, 205, 215), Enum.Material.Metal, toolProps())
+	Geo.wedge(
+		chisel,
+		CFrame.new(0, 0.12, 0) * CFrame.Angles(math.pi, 0, 0),
+		Vector3.new(0.16, 0.24, 0.12),
+		Color3.fromRGB(200, 205, 215),
+		Enum.Material.Metal,
+		toolProps()
+	)
 	Geo.block(chisel, CFrame.new(0, 0.5, 0), Vector3.new(0.16, 0.55, 0.12), Color3.fromRGB(170, 176, 188), Enum.Material.Metal, toolProps())
 	Geo.block(chisel, CFrame.new(0, 1.1, 0), Vector3.new(0.24, 0.7, 0.24), Color3.fromRGB(150, 98, 56), nil, toolProps())
 	local brush = newTool("Brush")
@@ -111,7 +118,14 @@ local function buildTools(folder: Instance): { [string]: Model }
 	Geo.block(brush, CFrame.new(0, 0.75, 0.05), Vector3.new(0.16, 0.8, 0.16), Color3.fromRGB(120, 80, 48), nil, toolProps())
 	local cloth = newTool("Cloth")
 	Geo.block(cloth, CFrame.new(0, 0.1, 0), Vector3.new(0.6, 0.18, 0.5), Color3.fromRGB(240, 222, 190), nil, toolProps())
-	Geo.block(cloth, CFrame.new(0.05, 0.25, 0.02) * CFrame.Angles(0, 0, 0.3), Vector3.new(0.45, 0.15, 0.4), Color3.fromRGB(226, 206, 170), nil, toolProps())
+	Geo.block(
+		cloth,
+		CFrame.new(0.05, 0.25, 0.02) * CFrame.Angles(0, 0, 0.3),
+		Vector3.new(0.45, 0.15, 0.4),
+		Color3.fromRGB(226, 206, 170),
+		nil,
+		toolProps()
+	)
 	for _, m in tools do
 		for _, d in m:GetDescendants() do
 			if d:IsA("BasePart") then
@@ -166,7 +180,12 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		camPoint = camPoint,
 		orePoint = orePoint,
 		tolerance = pattern.Tolerance * (CleaningScoring.InputLeniency[pointer.Kind] or 1),
-		submission = { Cuts = {}, Scrape = { Removed = {}, Fragile = {} }, Polish = { Samples = {}, Mode = "Circle" }, Input = pointer.Kind },
+		submission = {
+			Cuts = {},
+			Scrape = { Removed = {}, Fragile = {} },
+			Polish = { Samples = {}, Mode = "Circle" },
+			Input = pointer.Kind,
+		},
 		startClock = os.clock(),
 		lastFineDust = 0,
 		hintKind = pointer.Kind,
@@ -584,7 +603,13 @@ local function reveal(ctx: any)
 		TweenService:Create(light, TweenInfo.new(1.2), { Brightness = 2 }):Play()
 	end)
 	local burst = Geo.ball(ctx.folder, center, 0.6, ctx.rarity.Color, Enum.Material.Neon, toolProps({ Transparency = 0.2 }))
-	TweenService:Create(burst, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(7, 7, 7), Transparency = 1 }):Play()
+	TweenService
+		:Create(
+			burst,
+			TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Size = Vector3.new(7, 7, 7), Transparency = 1 }
+		)
+		:Play()
 	Vfx.burst("Burst", center, 20 + order * 10, ctx.rarity.Color)
 	Vfx.burst("Glint", center, 12 + order * 4, ctx.ore.Glow)
 	Sfx.play("Reveal")
@@ -595,7 +620,14 @@ local function reveal(ctx: any)
 	if order >= 5 then
 		local count = if order >= 6 then 12 else 8
 		for i = 1, count do
-			local ray = Geo.block(ctx.folder, CFrame.new(center), Vector3.new(0.12, 0.12, 6), ctx.rarity.Color, Enum.Material.Neon, toolProps({ Transparency = 0.3 }))
+			local ray = Geo.block(
+				ctx.folder,
+				CFrame.new(center),
+				Vector3.new(0.12, 0.12, 6),
+				ctx.rarity.Color,
+				Enum.Material.Neon,
+				toolProps({ Transparency = 0.3 })
+			)
 			table.insert(rays, { part = ray, angle = i / count * math.pi * 2 })
 		end
 	end
@@ -661,9 +693,12 @@ end
 
 local function run(ctx: any)
 	enter(ctx)
-	table.insert(ctx.connections, ctx.view.Leave.Activated:Connect(function()
-		requestLeave(ctx)
-	end))
+	table.insert(
+		ctx.connections,
+		ctx.view.Leave.Activated:Connect(function()
+			requestLeave(ctx)
+		end)
+	)
 	ContextActionService:BindAction("TerraForgeCleanBack", function(_, state)
 		if state == Enum.UserInputState.Begin then
 			requestLeave(ctx)
@@ -673,43 +708,49 @@ local function run(ctx: any)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		table.insert(ctx.connections, humanoid.Died:Connect(function()
-			cancel(ctx)
-		end))
-	end
-	table.insert(ctx.connections, RunService.RenderStepped:Connect(function(dt)
-		ctx.pointer:update(dt)
-		local view = ctx.view
-		if ctx.pointer.Kind ~= ctx.hintKind then
-			ctx.hintKind = ctx.pointer.Kind
-			if not ctx.revealing and not leaveConfirming(ctx) then
-				view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
-			end
-			updateButtonLabels(ctx)
-		end
-		if ctx.pointer.Kind == "Gamepad" then
-			view.Cursor.Visible = true
-			local inset = GuiService:GetGuiInset()
-			local p = ctx.pointer.Position - inset
-			local scale = (view.Gui:FindFirstChild("Scale") :: UIScale).Scale
-			view.Cursor.Position = UDim2.fromOffset(p.X / scale, p.Y / scale)
-		else
-			view.Cursor.Visible = false
-		end
-		if ctx.step and not ctx.revealing then
-			local ok, err = pcall(function()
-				if ctx.step:update(dt) then
-					ctx.stepDone = true
-				end
+		table.insert(
+			ctx.connections,
+			humanoid.Died:Connect(function()
+				cancel(ctx)
 			end)
-			if not ok then
-				warn("[Cleaning] step error: " .. tostring(err))
+		)
+	end
+	table.insert(
+		ctx.connections,
+		RunService.RenderStepped:Connect(function(dt)
+			ctx.pointer:update(dt)
+			local view = ctx.view
+			if ctx.pointer.Kind ~= ctx.hintKind then
+				ctx.hintKind = ctx.pointer.Kind
+				if not ctx.revealing and not leaveConfirming(ctx) then
+					view.Hint.Text = HINTS[ctx.pointer.Kind] or HINTS.Mouse
+				end
+				updateButtonLabels(ctx)
 			end
-		end
-		if not ctx.station.Parent then
-			cancel(ctx)
-		end
-	end))
+			if ctx.pointer.Kind == "Gamepad" then
+				view.Cursor.Visible = true
+				local inset = GuiService:GetGuiInset()
+				local p = ctx.pointer.Position - inset
+				local scale = (view.Gui:FindFirstChild("Scale") :: UIScale).Scale
+				view.Cursor.Position = UDim2.fromOffset(p.X / scale, p.Y / scale)
+			else
+				view.Cursor.Visible = false
+			end
+			if ctx.step and not ctx.revealing then
+				local ok, err = pcall(function()
+					if ctx.step:update(dt) then
+						ctx.stepDone = true
+					end
+				end)
+				if not ok then
+					warn("[Cleaning] step error: " .. tostring(err))
+				end
+			end
+			if not ctx.station.Parent then
+				cancel(ctx)
+			end
+		end)
+	)
 	-- every wait in this flow is a ClientPauses value: the server's timeline check expects them
 	task.wait(pauses.Intro)
 	CleaningView.setMeter(ctx.view, 1)

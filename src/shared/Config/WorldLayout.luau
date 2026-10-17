@@ -59,7 +59,9 @@ export type Road = { From: Vector3, To: Vector3, Width: number }
 
 -- Roads (flat dirt strips)
 WorldLayout.Roads = {
-	{ From = Vector3.new(0, 0, 36), To = Vector3.new(0, 0, 140), Width = 10 }, -- south road
+	-- south road: from the plaza over the koi pond bridge to the Blaster Vault's
+	-- steps (the strip ends at z 79, the vault's podium starts at z 79.6)
+	{ From = Vector3.new(0, 0, 36), To = Vector3.new(0, 0, 74), Width = 10 },
 	{ From = Vector3.new(36, 0, 0), To = Vector3.new(70, 0, 0), Width = 10 }, -- east spur
 	{ From = Vector3.new(-36, 0, 0), To = Vector3.new(-70, 0, 0), Width = 10 }, -- west spur
 	{ From = Vector3.new(70, 0, -112), To = Vector3.new(70, 0, 116), Width = 9 }, -- east plot road

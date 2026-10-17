@@ -12,23 +12,27 @@
 	Where they stand (each site checked against the lobby cameras):
 	  west strip    a street wall along the west plot road, the hero's left
 	                side: two narrow three-storey row houses (the Lodge and
-	                the mine cottage) either side of TOOLS (two storeys and a
-	                setback third storey with the TOOLS blade sign over the
-	                mine hill; lit windows, timber framing and a blade sign
-	                on its street side), and the wide two-storey CARTS shop
-	                under a slate gable roof facing the west spur
+	                the row cottage) either side of TOOLS (two storeys and a
+	                setback third storey with the TOOLS blade sign; lit
+	                windows, timber framing and a blade sign on its street
+	                side), and the wide two-storey CARTS shop under a slate
+	                gable roof facing the west spur
 	  behind SHOP   nothing: the SPIN & WIN wheel stands free there (the
 	                Smithy is gone, its red roof hid the wheel's stairs)
 	  behind UPGR.  the INN (a street parasol), front to the forge east
 	                path, and the two-storey ORE workshop east of the pink
 	                grove under a low module roof
-	  east strip    the two-storey MAP house with a steep slate roof in the
-	                east tree belt and the WORKS workshop south of it under a
-	                shingle roof (a little street along the east plot road;
-	                every ridge under SHOP's 20 studs: the stalls and the
-	                forge lead the skyline)
-	  south lane    the garden cottage by the south road, with a fence,
-	                flower beds, a stepping-stone path, a shed and barrels
+	  south-east    a hamlet past the east plot road's end (the Blaster
+	  hamlet        Vault, its east statue and jungle trees took the old east
+	                strip and the south lane): the two-storey MAP house with
+	                a steep slate roof facing west to the town (the
+	                HamletLane / ToMap dirt lane leads from the plot road to
+	                its door, south of the ore outcrop), the WORKS workshop
+	                east of it facing south under a shingle roof, and the
+	                garden cottage behind them facing west, with a fence,
+	                flower beds, stepping stones, a shed and barrels (every
+	                ridge under SHOP's 20 studs: the stalls, the forge and the
+	                vault lead the skyline)
 
 	Every building stays inside its site rectangle (`Town.Sites`, world XZ,
 	axis-aligned), every point of a site is LobbyLayout.isFree(p, 1) (off
@@ -80,17 +84,24 @@ Town.Sites = {
 		Recipe = "ToolShop",
 		Sign = "TOOLS",
 	},
-	{ Id = "MineCottage", Min = Vector2.new(-63, 74), Max = Vector2.new(-58.5, 88), Facing = "W", Recipe = "MineCottage" },
+	{ Id = "RowCottage", Min = Vector2.new(-63, 74), Max = Vector2.new(-58.5, 88), Facing = "W", Recipe = "RowCottage" },
 	-- behind UPGRADES, beside the forge east path (the pink grove behind it), and ORE east of the grove
 	{ Id = "Inn", Min = Vector2.new(33, -54), Max = Vector2.new(44, -43), Facing = "W", Recipe = "Inn", Sign = "INN" },
 	{ Id = "OreWorks", Min = Vector2.new(55.5, -71), Max = Vector2.new(63, -66), Facing = "S", Recipe = "OreWorks", Sign = "ORE" },
-	-- the east strip: the MAP house in the east tree belt, south of the red
-	-- tree, and the WORKS workshop south of it (a little street; the FOSSIL
-	-- DIG turned toward the hero camera took WORKS' old spot on the east spur)
-	{ Id = "MapTower", Min = Vector2.new(54, 90), Max = Vector2.new(63, 100), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
-	{ Id = "SpurWorkshop", Min = Vector2.new(48.5, 103), Max = Vector2.new(63, 107.5), Facing = "S", Recipe = "SpurWorkshop", Sign = "WORKS" },
-	-- the south lane, beside the south road
-	{ Id = "GardenCottage", Min = Vector2.new(9, 96), Max = Vector2.new(26, 112), Facing = "N", Recipe = "GardenCottage" },
+	-- the south-east hamlet past the east plot road's end (the Blaster Vault,
+	-- its east statue and jungle trees took the east strip and the south
+	-- lane): the MAP tower and the WORKS workshop turned to the town and the
+	-- hero camera, the garden cottage behind them
+	{ Id = "MapTower", Min = Vector2.new(93, 115), Max = Vector2.new(102, 125), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
+	{
+		Id = "SpurWorkshop",
+		Min = Vector2.new(107, 116),
+		Max = Vector2.new(121.5, 120.5),
+		Facing = "S",
+		Recipe = "SpurWorkshop",
+		Sign = "WORKS",
+	},
+	{ Id = "GardenCottage", Min = Vector2.new(127, 120), Max = Vector2.new(143, 137), Facing = "W", Recipe = "GardenCottage" },
 } :: { Site }
 
 local DIRS: { [string]: Vector3 } = {
@@ -188,7 +199,7 @@ end
 local Recipes: { [string]: (m: Model, fp: Buildings.Body, site: Site, rng: Rng.Rng) -> () } = {}
 
 --[[
-	MAP: the cartographer's house in the east tree belt: two two-tone
+	MAP: the cartographer's house in the south-east hamlet: two two-tone
 	storeys (gunmetal frame, light steel panels, a red band, blue neon on
 	the street and hero sides), a door with a glowing map screen, the big
 	MAP sign across the first storey, window rows on the long sides, and a
@@ -221,13 +232,14 @@ Recipes.MapTower = function(m, fp, site, rng)
 end
 
 --[[
-	TOOLS: City Kit building-d by the mine. Two two-tone storeys with a
-	door under an orange awning-wide bar, the big TOOLS sign across the
-	first storey, a lit display case with a pickaxe and a glowing crossed
-	hammers emblem on the south side (the hero), and a setback third storey
-	on the north half of the roof that carries the TOOLS blade sign, so the
-	building and its sign rise clearly above the mine hill in the hero
-	view. Facing east: local +X is south.
+	TOOLS: City Kit building-d on the west plot road. Two two-tone storeys
+	with a door under an orange awning-wide bar, the big TOOLS sign across
+	the first storey, a lit display case with a pickaxe and a glowing
+	crossed hammers emblem on the south side (the hero), and a setback
+	third storey on the north half of the roof that carries the TOOLS blade
+	sign, so the building and its sign rise clearly above the lawn and the
+	Blaster Vault's west statue in the hero view. Facing east: local +X is
+	south.
 ]]
 Recipes.ToolShop = function(m, fp, site, rng)
 	local b = part(fp, -2.95, 2.95, -1.75, 2.2)
@@ -281,7 +293,7 @@ Recipes.Lodge = function(m, fp, _site, rng)
 	local upper, uw = face(jetty, "Front")
 	Buildings.windowRow(m, upper, floorY(2), 2, uw - 2.6, 1.8, { Frame = C.WoodDark, Sill = false })
 	Buildings.windowRow(m, upper, floorY(3), 2, uw - 2.6, 1.8, { Frame = C.WoodDark, Sill = false })
-	-- the east side (the hero camera, the mine)
+	-- the east side (the hero camera, the south lawn)
 	local back, bw = face(jetty, "Back")
 	Buildings.windowRow(m, back, floorY(2), 3, bw - 2.2, 1.8, { Frame = C.WoodDark })
 	Buildings.windowRow(m, back, floorY(3), 3, bw - 2.2, 1.8, { Frame = C.WoodDark, Mullion = false })
@@ -296,15 +308,16 @@ Recipes.Lodge = function(m, fp, _site, rng)
 end
 
 --[[
-	The mine cottage: a long three-storey row house on the west plot road
-	south of TOOLS (concept v1), the bottom-left corner of the hero view:
+	The row cottage (once the mine cottage, before the MINE moved to the
+	south-west corner): a long three-storey row house on the west plot road
+	south of TOOLS (concept v1), beside the Blaster Vault's west statue:
 	cobble ground floor with stone blocks and quoins, a jettied plaster
 	upper part with half-timbering, rows of lit windows on the long east
-	side (the hero, the mine), window boxes, a caged lantern by the door, a
-	brown shingle roof with its gables to the north and the south and two
-	chimneys. Facing west (the plot road): local +X is north.
+	side (the south lawn, the vault), window boxes, a caged lantern by the
+	door, a brown shingle roof with its gables to the north and the south
+	and two chimneys. Facing west (the plot road): local +X is north.
 ]]
-Recipes.MineCottage = function(m, fp, _site, rng)
+Recipes.RowCottage = function(m, fp, _site, rng)
 	local b = part(fp, -6.2, 6.2, -1.5, 1.5)
 	local H = Buildings.cozyShell(m, b, { Floors = 3, Plaster = K.Plaster, Timbering = 4, StoneFaces = { "Front", "Back", "Left" } }, rng)
 	local front = face(b, "Front")
@@ -315,7 +328,7 @@ Recipes.MineCottage = function(m, fp, _site, rng)
 	local upper, uw = face(jetty, "Front")
 	Buildings.windowRow(m, upper, floorY(2), 3, uw - 4.4, 1.8, { Frame = C.WoodDark, Sill = false })
 	Buildings.windowRow(m, upper, floorY(3), 3, uw - 4.4, 1.8, { Frame = C.WoodDark, Sill = false, Mullion = false })
-	-- the long east side (the hero camera, the mine)
+	-- the long east side (the south lawn, the vault)
 	local back, bw = face(jetty, "Back")
 	Buildings.windowRow(m, back, floorY(2), 4, bw - 3.0, 1.8, { Frame = C.WoodDark, Sill = false })
 	Buildings.windowRow(m, back, floorY(3), 4, bw - 3.0, 1.8, { Frame = C.WoodDark, Mullion = false, Dark = 3 })
@@ -479,12 +492,13 @@ Recipes.SpurWorkshop = function(m, fp, site, rng)
 end
 
 --[[
-	A cozy garden cottage beside the south road (concept v1): warm cobble
-	with stone blocks and quoins, jettied plaster upper floor with
-	half-timbering, window boxes, a caged lantern, a terracotta roof with
-	the ridge along the front; a garden fence and flower beds in front, a
-	stepping-stone path to the road, a small shed and barrels.
-	Facing north (the town): local +X is east.
+	A cozy garden cottage at the back of the south-east hamlet (concept
+	v1): warm cobble with stone blocks and quoins, jettied plaster upper
+	floor with half-timbering, window boxes, a caged lantern, a terracotta
+	roof with the ridge along the front; a garden fence and flower beds in
+	front, a stepping-stone path from the gate to the site's south-west
+	corner, a small shed and barrels. Facing west (the WORKS and the MAP
+	house): local +X is north.
 ]]
 Recipes.GardenCottage = function(m, fp, _site, rng)
 	local b = part(fp, -2.1, 5.9, 1.8, 7.0)
@@ -513,10 +527,10 @@ Recipes.GardenCottage = function(m, fp, _site, rng)
 	Style.fence(m, p2, p3, { Height = 1.8, PostEvery = 4.5, Rails = 1 })
 	flowerBed(m, fp.cf * CFrame.new(-0.6, 0, 0.5), C.FlowerYellow)
 	flowerBed(m, fp.cf * CFrame.new(5.9, 0, 0.5), C.FlowerRed)
-	-- the lane: a stepping-stone path from the gate to the south road
+	-- the lane: a stepping-stone path from the gate to the site's south-west corner
 	local gate = (fp.cf * CFrame.new(3.1, 0, fy - 1)).Position
 	stones(m, gate, (fp.cf * CFrame.new(-fp.w / 2 + 0.8, 0, -fp.d / 2 + 2.4)).Position, 4, rng)
-	-- a small garden shed and barrels west of the house
+	-- a small garden shed and barrels south of the house
 	local shed = fp.cf * CFrame.new(-6, 0, 4.8)
 	Style.block(m, shed * CFrame.new(0, 1.6, 0), Vector3.new(3, 3.2, 2.6), Style.vary(C.Plank, rng, 0.04), nil, Style.decor())
 	trim(m, shed * CFrame.new(0, 1.3, -1.32), Vector3.new(1.2, 2.4, 0.1), C.WoodDark)

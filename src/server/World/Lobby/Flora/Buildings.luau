@@ -461,7 +461,14 @@ function Buildings.techShell(parent: Instance, body: Body, o: TechOpts, rng: Rng
 	local faces: { string } = o.NeonFaces or { "Front" }
 	local neon = o.Neon or K.EdgeNeon
 	Style.block(parent, cf * CFrame.new(0, 0.45, 0), Vector3.new(w + 2 * out + 0.3, 0.9, d + 2 * out + 0.3), K.Gun, nil, Style.solid())
-	Style.block(parent, cf * CFrame.new(0, G / 2, 0), Vector3.new(w, G, d), Style.vary(o.Ground or K.PanelDark, rng, 0.02), nil, Style.solid())
+	Style.block(
+		parent,
+		cf * CFrame.new(0, G / 2, 0),
+		Vector3.new(w, G, d),
+		Style.vary(o.Ground or K.PanelDark, rng, 0.02),
+		nil,
+		Style.solid()
+	)
 	if o.Floors > 1 then
 		Style.block(
 			parent,
@@ -513,12 +520,7 @@ function Buildings.techShell(parent: Instance, body: Body, o: TechOpts, rng: Rng
 			end
 			if lit(sx, sz) then
 				-- the contour: a neon strip up the pillar's outer edge, from the plinth to the cornice
-				glow(
-					parent,
-					cf * CFrame.new(sx * (w / 2 + edge), (H + 0.9) / 2, sz * (d / 2 + edge)),
-					Vector3.new(t, H - 0.9, t),
-					neon
-				)
+				glow(parent, cf * CFrame.new(sx * (w / 2 + edge), (H + 0.9) / 2, sz * (d / 2 + edge)), Vector3.new(t, H - 0.9, t), neon)
 			end
 		end
 	end
@@ -607,7 +609,14 @@ function Buildings.cozyShell(parent: Instance, body: Body, o: CozyOpts, rng: Rng
 		nil,
 		Style.solid()
 	)
-	Style.block(parent, cf * CFrame.new(0, G / 2, 0), Vector3.new(w, G, d), Style.vary(o.Stone or K.StoneWarm, rng, 0.03), nil, Style.solid())
+	Style.block(
+		parent,
+		cf * CFrame.new(0, G / 2, 0),
+		Vector3.new(w, G, d),
+		Style.vary(o.Stone or K.StoneWarm, rng, 0.03),
+		nil,
+		Style.solid()
+	)
 	-- chunky staggered stone blocks near the corners (two low, one high)
 	local stoneFaces: { string } = o.StoneFaces or { "Front", "Left", "Right" }
 	for _, side in stoneFaces do
@@ -1087,7 +1096,12 @@ local function gemIcon(parent: Instance, cf: CFrame, s: number, color: Color3)
 		NEON,
 		p
 	)
-	trim(parent, cf * CFrame.new(-table_ * 0.12, crownY + crownH * 0.18, -d / 2 - 0.04), Vector3.new(table_ * 0.5, crownH * 0.28, 0.06), C.FlowerWhite)
+	trim(
+		parent,
+		cf * CFrame.new(-table_ * 0.12, crownY + crownH * 0.18, -d / 2 - 0.04),
+		Vector3.new(table_ * 0.5, crownH * 0.28, 0.06),
+		C.FlowerWhite
+	)
 end
 
 --[[

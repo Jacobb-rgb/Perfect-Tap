@@ -21,6 +21,8 @@
 	  when it takes them, otherwise as a loose item. Output pauses when the
 	  front machine refuses or the owner has too many loose items.
 	- MachineAction remote: actions on your own machines (onAction).
+	- emitSide: the same hand-over or loose pop toward a side output cell
+	  (Splitter, Sorter: LogisticsService); the tick never uses it.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -51,7 +53,7 @@ export type Limits = Placement.Limits
 -- how an item arrives: dropped/thrown into the hopper, fed by a belt,
 -- loaded from your hands (Put In prompt), or handed over by another machine
 export type Via = "Drop" | "Belt" | "Hand" | "Machine"
-export type RemoveReason = "Unload" | "Pickup"
+export type RemoveReason = "Unload" | "Pickup" | "Refresh" -- Refresh: the model is rebuilt (upgrade look), the data stays
 export type EmitResult = "Handed" | "Spawned" | "Blocked"
 
 export type PlacedMachine = {
@@ -366,7 +368,12 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 		warn(`[MachineService] plot {plotId} has no Machines folder`)
 		return nil
 	end
-	local model = MachineBuilder.build(entry.Id)
+	-- the upgrade look follows the machine type's Speed level (KitMachines crystals)
+	local data = DataService.get(player)
+	local upgrades = data and data.MachineUpgrades
+	local own = if type(upgrades) == "table" then upgrades[entry.Id] else nil
+	local level = MachineData.lookLevel(if type(own) == "table" then own.Speed else 0)
+	local model = MachineBuilder.build(entry.Id, level)
 	model:PivotTo(PlotService.footprintCFrame(plotId, entry.Id, entry.X, entry.Z, entry.R))
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("Owner", player.UserId)
@@ -409,6 +416,48 @@ local function detach(machine: PlacedMachine, reason: RemoveReason)
 	machine.Removed = true
 	placed[machine.Model] = nil
 	machine.Model:Destroy()
+end
+
+--[[
+	Rebuilds the models of every placed machine of type `machineId` the
+	player owns (after a Tech shop upgrade: the upgrade look). Hooks see a
+	"Refresh" removal and a fresh spawn; queues and settings stay in the
+	save (a job in progress starts over).
+]]
+function MachineService.refreshType(player: Player, machineId: string)
+	local plotId = PlotService.plotOf(player)
+	if not plotId then
+		return
+	end
+	for _, machine in MachineService.ofPlayer(player) do
+		if machine.Id == machineId then
+			detach(machine, "Refresh")
+			spawnMachine(player, plotId, machine.Entry)
+		end
+	end
+	rebuildPlot(plotId)
+	-- hoppers, belt feeds and cables point at the new models
+	fireLayout(player, plotId)
+end
+
+-- Speed modifiers (PowerService): each returns a multiplier for a machine (1 = normal).
+local speedModifiers: { (PlacedMachine) -> number } = {}
+
+function MachineService.addSpeedModifier(modifier: (PlacedMachine) -> number)
+	table.insert(speedModifiers, modifier)
+end
+
+-- How fast this machine works right now (1 = normal, below 1 = slower).
+-- Job times are divided by it.
+function MachineService.speedFactor(machine: PlacedMachine): number
+	local factor = 1
+	for _, modifier in speedModifiers do
+		local ok, value = pcall(modifier, machine)
+		if ok and type(value) == "number" and value == value and value > 0 then
+			factor *= value
+		end
+	end
+	return factor
 end
 
 local function devKit(): GameConfig.DevKit?
@@ -497,9 +546,15 @@ local function spawnAll(player: Player, plotId: number)
 		notifyLater(player, `{#didntFit} machines didn't fit and are waiting in your Build menu.`)
 	end
 	if #offChute == 1 then
-		notifyLater(player, `A chute now sits where your {nameOf(offChute[1])} stood (only belts can go on it). It is waiting in your Build menu.`)
+		notifyLater(
+			player,
+			`A chute now sits where your {nameOf(offChute[1])} stood (only belts can go on it). It is waiting in your Build menu.`
+		)
 	elseif #offChute > 1 then
-		notifyLater(player, `{#offChute} machines stood where the new chutes are (only belts can go on them). They are waiting in your Build menu.`)
+		notifyLater(
+			player,
+			`{#offChute} machines stood where the new chutes are (only belts can go on them). They are waiting in your Build menu.`
+		)
 	end
 end
 
@@ -747,6 +802,59 @@ function MachineService.emit(machine: PlacedMachine, desc: Desc): (EmitResult, I
 	return "Spawned", record
 end
 
+-- How an item leaves a side output when nothing takes it: sideways onto the
+-- belt in the side cell (studs per second out of the side, and up).
+MachineService.SidePop = { Out = 3, Up = 1.5 }
+
+--[[
+	Sends one item out of a side output (MachineData SideOutputs: Splitter,
+	Sorter), like emit() but toward Grid.sideOutputCell: `side` -1 = the
+	machine's left (OutputL), 1 = its right (OutputR, Grid.right).
+	- 'Handed': the non-belt machine in the side cell took it (its face must
+	  take items from the side the item comes from: the source's own cell
+	  on that side of its front row).
+	- 'Spawned': it popped out as a loose item at the OutputL / OutputR
+	  attachment, moving sideways onto the belt there (SidePop).
+	- 'Blocked': the machine in the side cell refused it ('OutputBlocked'),
+	  or the owner has too many loose items ('TooManyItems'). The caller
+	  keeps the item.
+]]
+function MachineService.emitSide(machine: PlacedMachine, desc: Desc, side: number): (EmitResult, ItemService.ItemRecord?)
+	if machine.Removed then
+		return "Blocked", nil
+	end
+	local s = if side < 0 then -1 else 1
+	local owner = machine.Owner.UserId
+	local sx, sz = Grid.sideOutputCell(machine.Id, machine.X, machine.Z, machine.R, s)
+	local target = MachineService.atCell(machine.PlotId, sx, sz)
+	if target and target ~= machine and not target.Info.IsConveyor then
+		-- the item comes from the source's own cell beside the side cell
+		local rx, rz = Grid.right(machine.R)
+		if ConveyorLogic.faceAllowed(target.Entry, sx - s * rx, sz - s * rz) then
+			if MachineService.insertDesc(target, desc, owner, "Machine") then
+				return "Handed", nil
+			end
+			MachineService.setAttrs(machine, { Status = "OutputBlocked" })
+			return "Blocked", nil
+		end
+	end
+	if ItemService.looseCount(owner) >= GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom then
+		MachineService.setAttrs(machine, { Status = "TooManyItems" })
+		return "Blocked", nil
+	end
+	local pivot = machine.Model:GetPivot()
+	local cf = MachineService.point(machine, if s < 0 then "OutputL" else "OutputR")
+		or pivot * CFrame.new(Grid.sideOutputLocal(machine.Id, s))
+	local pop = MachineService.SidePop
+	local velocity = pivot.RightVector * (s * pop.Out) + Vector3.new(0, pop.Up, 0)
+	-- the server keeps output physics, so belts and hoppers never wait on a client
+	local record = ItemService.spawnDesc(desc, owner, cf, velocity, true)
+	if not record then
+		return "Blocked", nil
+	end
+	return "Spawned", record
+end
+
 ---------------------------------------------------------------- tick
 
 local function tickAll()
@@ -837,6 +945,7 @@ MachineService._test = {
 		table.clear(layoutCallbacks)
 		table.clear(layoutPending)
 		table.clear(actions)
+		table.clear(speedModifiers)
 	end,
 }
 

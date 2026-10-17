@@ -152,13 +152,18 @@ local function release(player: Player)
 	PlotService.setSignText(plotId, "Free Plot")
 end
 
+-- Where a character stands at the front of a plot, facing it (joining, the BASE teleport).
+function PlotService.homeCFrame(plotId: number): CFrame
+	local cf = PlotService.plotCFrame(plotId) * CFrame.new(0, 3, -GameConfig.PlotCells * GameConfig.CellSize / 2 - 6)
+	return CFrame.lookAt(cf.Position, PlotService.plotCFrame(plotId).Position + Vector3.new(0, 3, 0))
+end
+
 -- Teleports a character to the front of their plot (used after joining).
 function PlotService.sendHome(player: Player)
 	local plotId = plotOfPlayer[player]
 	local character = player.Character
 	if plotId and character then
-		local cf = PlotService.plotCFrame(plotId) * CFrame.new(0, 3, -GameConfig.PlotCells * GameConfig.CellSize / 2 - 6)
-		character:PivotTo(CFrame.lookAt(cf.Position, PlotService.plotCFrame(plotId).Position + Vector3.new(0, 3, 0)))
+		character:PivotTo(PlotService.homeCFrame(plotId))
 	end
 end
 

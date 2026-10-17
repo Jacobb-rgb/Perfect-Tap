@@ -18,6 +18,7 @@ return function(T, Loader)
 	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
 	local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
 	local ProcessingService = Loader.requirePath("ServerScriptService.Server.Services.ProcessingService")
+	local ShopService = Loader.requirePath("ServerScriptService.Server.Services.ShopService")
 	local Workspace = Loader.game:GetService("Workspace")
 
 	local PLOT = 3
@@ -98,6 +99,12 @@ return function(T, Loader)
 		patch(Workspace, "GetServerTimeNow", function()
 			return w.serverNow
 		end)
+		-- power: full speed unless a test says otherwise (speed modifiers other
+		-- services registered never leak into these job times)
+		w.speed = 1
+		patch(MachineService, "speedFactor", function()
+			return w.speed
+		end)
 		internals.reset()
 		processing.reset()
 		processing.reseed(12345)
@@ -136,6 +143,13 @@ return function(T, Loader)
 	end
 	local function count(list: any): number
 		return if list then #list else 0
+	end
+	-- puts roster machines into the Build menu so the test can place them
+	local ROSTER = { "BrickFurnace", "Polisher", "CrystalExtractor", "PlasmaFurnace", "AlloyFurnace" }
+	local function stock(w: any, ids: { string })
+		for _, id in ids do
+			w.data.MachineInventory[id] = (w.data.MachineInventory[id] or 0) + 2
+		end
 	end
 
 	withWorld("ProcessingService: processors spawn with their attributes and a Put In prompt", function(w)
@@ -515,5 +529,432 @@ return function(T, Loader)
 				T.truthy(ItemData.Kinds[d.K] and MachineLogic.isValidDesc(d), m.Id .. " valid output")
 			end
 		end
+	end)
+
+	---------------------------------------------------------------- roster processors
+
+	withWorld("ProcessingService: the roster processors spawn with their attributes and a Put In prompt", function(w)
+		stock(w, ROSTER)
+		local spots = { { 0, 0 }, { 3, 0 }, { 6, 0 }, { 9, 0 }, { 0, 4 } }
+		for i, id in ROSTER do
+			local m = place(w, id, spots[i][1], spots[i][2])
+			T.eq(attr(m, "Queue"), 0, id .. " Queue")
+			T.eq(attr(m, "QueueMax"), MAX_IN, id .. " QueueMax")
+			T.eq(attr(m, "Working"), false, id .. " Working")
+			T.eq(attr(m, "Status"), "", id .. " Status")
+			T.truthy(MachineService.hasIntake(m), id .. " takes items")
+			local prompt = m.Model.PrimaryPart.Prompt:FindFirstChild("LoadPrompt")
+			T.truthy(prompt, id .. " LoadPrompt")
+			T.eq(prompt.ActionText, MachineData.ById[id].LoadText, id .. " prompt text")
+		end
+	end)
+
+	withWorld("ProcessingService: job time is divided by MachineService.speedFactor (power)", function(w)
+		stock(w, { "BrickFurnace" })
+		local brick = place(w, "BrickFurnace", 0, 0)
+		local clay = place(w, "ClayFurnace", 4, 0)
+		MachineService.insertDesc(brick, item("Clean", "Iron", "Pristine"), USER, "Hand")
+		tick(brick, 10)
+		T.eq(attr(brick, "WorkTime"), 4, "the Brick Furnace takes 4 s at full power")
+		tick(brick, 14)
+		local ingot = brick.Entry.Out[1]
+		T.truthy(ingot.K == "Ingot" and ingot.O == "Iron" and ingot.G == "Pristine", "an iron ingot, same grade")
+		-- too little power slows the next job down
+		w.speed = 0.6
+		MachineService.insertDesc(brick, item("Crushed", "Copper", "Rough"), USER, "Hand")
+		tick(brick, 20)
+		T.near(attr(brick, "WorkTime"), 4 / 0.6, 1e-9, "60% speed: the job takes longer")
+		tick(brick, 24)
+		T.eq(count(brick.Entry.Out), 1, "not done after the full-power time")
+		tick(brick, 20 + 4 / 0.6 + 1e-6)
+		T.eq(count(brick.Entry.Out), 2, "done after the slowed time")
+		-- Bellows, Speed and power all multiply
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 2 } }
+		w.data.Upgrades.Bellows = 5
+		local upgraded = 6 * 0.5 * MachineData.speedMult(2)
+		w.speed = 0.5
+		T.near(processing.jobTime(clay), upgraded / 0.5, 1e-9, "Bellows, Speed and power")
+		w.speed = 20
+		T.eq(processing.jobTime(clay), GameConfig.MinProcessTime, "never below MinProcessTime")
+		for _, broken in { 0 / 0, 0, -1, math.huge, "fast" } do
+			w.speed = broken
+			T.near(processing.jobTime(clay), upgraded, 1e-9, `a broken factor ({broken}) counts as 1`)
+		end
+		w.speed = 1e-9
+		T.truthy(processing.jobTime(clay) < math.huge, "a tiny factor never stops a machine")
+	end)
+
+	withWorld("ProcessingService: the Plasma Furnace smelts 2 queued items per job", function(w)
+		stock(w, { "PlasmaFurnace" })
+		local m = place(w, "PlasmaFurnace", 0, 0)
+		local seen = {}
+		ProcessingService.onProcessed(function(_, id, input, outputs)
+			table.insert(seen, { Id = id, Input = input, Outputs = outputs })
+		end)
+		for _, ore in { "Copper", "Iron", "Gold" } do
+			T.truthy(MachineService.insertDesc(m, item("Crushed", ore, "Clean"), USER, "Belt"), ore .. " in")
+		end
+		tick(m, 10)
+		T.eq(attr(m, "WorkTime"), 2.5, "2.5 s")
+		T.eq(#m.State.Job.Inputs, 2, "two items in one job")
+		T.eq(attr(m, "WorkOre"), "Copper", "In[1] shows")
+		tick(m, 12.5)
+		T.eq(#m.Entry.Out, 2, "one ingot per item")
+		T.eq(m.Entry.Out[1].O .. "," .. m.Entry.Out[2].O, "Copper,Iron", "in queue order")
+		for _, out in m.Entry.Out do
+			T.truthy(out.K == "Ingot" and out.G == "Clean", "ingots keep the grade")
+		end
+		T.eq(count(m.Entry.In), 1, "gold waits")
+		T.eq(attr(m, "Cycles"), 1, "one job")
+		T.eq(w.data.Stats.IngotsSmelted, 2, "both count as smelted")
+		T.eq(#seen, 2, "listeners hear each item")
+		T.eq(seen[2].Input.O, "Iron", "with its own input")
+		T.eq(seen[2].Outputs[1].O, "Iron", "and its own output")
+		-- the next job takes what is left, chained from the end of the first
+		T.eq(#m.State.Job.Inputs, 1, "gold alone")
+		T.eq(m.State.Job.EndsAt, 15, "chained")
+		tick(m, 15)
+		T.eq(#m.Entry.Out, 3, "gold ingot")
+		-- never more results than fit in Out
+		for _ = 1, 2 do
+			MachineService.insertDesc(m, item("Clean", "Silver", "Rough"), USER, "Belt")
+		end
+		tick(m, 20)
+		T.eq(#m.State.Job.Inputs, 1, "Out holds 3 of 4: only one result fits")
+		tick(m, 22.5)
+		T.eq(#m.Entry.Out, MAX_OUT, "Out full")
+		for _ = 1, MAX_OUT do
+			MachineLogic.popOut(m.Entry)
+		end
+		tick(m, 25)
+		for _ = 1, 3 do
+			MachineService.insertDesc(m, item("Clean", "Silver", "Rough"), USER, "Belt")
+		end
+		tick(m, 30)
+		T.eq(#m.State.Job.Inputs, 2, "room again: Batch caps it at 2")
+		T.eq(count(m.Entry.In), 3, "the items stay queued while worked")
+		tick(m, 32.5)
+		T.eq(count(m.Entry.In), 1, "both used")
+		T.eq(attr(m, "Queue"), 1, "Queue attribute")
+	end)
+
+	withWorld("ProcessingService: the Polisher makes about half its ore one grade better", function(w)
+		stock(w, { "Polisher" })
+		local m = place(w, "Polisher", 0, 0)
+		local ok, reason = MachineService.insertDesc(m, item("Raw", "Gold"), USER, "Hand")
+		T.falsy(ok, "dirty ore")
+		T.eq(reason, "Wrong", "refused")
+		local ups, jobs, now = 0, 400, 0
+		local better = { Rough = "Clean", Pristine = "Flawless" }
+		for i = 1, jobs do
+			local grade = if i % 2 == 0 then "Rough" else "Pristine"
+			T.truthy(MachineService.insertDesc(m, item("Clean", "Gold", grade), USER, "Belt"), "clean in")
+			tick(m, now)
+			now += MachineData.ById.Polisher.Time
+			tick(m, now)
+			local out = MachineLogic.popOut(m.Entry)
+			T.truthy(out and out.K == "Clean" and out.O == "Gold", "clean gold out")
+			T.truthy(out.G == grade or out.G == better[grade], `{grade} -> {out.G}`)
+			if out.G ~= grade then
+				ups += 1
+			end
+		end
+		T.near(ups / jobs, MachineData.ById.Polisher.GradeUpChance, 0.08, "share one grade better")
+		for _ = 1, 20 do
+			MachineService.insertDesc(m, item("Clean", "Gold", "Flawless"), USER, "Belt")
+			tick(m, now)
+			now += MachineData.ById.Polisher.Time
+			tick(m, now)
+			T.eq(MachineLogic.popOut(m.Entry).G, "Flawless", "Flawless stays Flawless")
+		end
+		T.eq(attr(m, "Cycles"), jobs + 20, "Cycles")
+		T.eq(w.data.Stats.IngotsSmelted, 0, "polishing is not smelting")
+	end)
+
+	withWorld("ProcessingService: the Crystal Extractor passes crushed ore on and sometimes gives a shard", function(w)
+		stock(w, { "CrystalExtractor" })
+		local m = place(w, "CrystalExtractor", 0, 0)
+		local info = MachineData.ById.CrystalExtractor
+		local real = info.ShardChance
+		T.eq(select(2, MachineService.insertDesc(m, item("Clean"), USER, "Hand")), "Wrong", "only crushed ore")
+		local now = 0
+		-- one whole job; its item is taken out of Out, so Out never fills up
+		local function job()
+			T.truthy(MachineService.insertDesc(m, item("Crushed", "Iron", "Rough"), USER, "Belt"), "crushed in")
+			tick(m, now)
+			now += info.Time
+			tick(m, now)
+			local out = MachineLogic.popOut(m.Entry)
+			T.truthy(out and out.K == "Crushed" and out.O == "Iron", "passed through")
+		end
+		local function toasts(): number
+			local n = 0
+			for _, note in w.notes do
+				if note.Name == "Notify" and note.Payload.Text == "+1 Crystal Shard!" then
+					n += 1
+				end
+			end
+			return n
+		end
+		-- a sure shard: Shards + 1, a toast, the save marked changed
+		w.patch(info, "ShardChance", 1)
+		w.data.Shards = 0
+		MachineService.insertDesc(m, item("Crushed", "Silver", "Pristine"), USER, "Belt")
+		tick(m, now)
+		T.eq(attr(m, "WorkTime"), info.Time, "a timed job")
+		local before = w.changed
+		now += info.Time
+		tick(m, now)
+		local out = MachineLogic.popOut(m.Entry)
+		T.truthy(out and out.K == "Crushed" and out.O == "Silver" and out.G == "Pristine", "the same item comes out")
+		T.eq(w.data.Shards, 1, "+1 shard")
+		T.truthy(w.changed > before, "save marked changed")
+		local toast = w.notes[#w.notes]
+		T.eq(toast.Name, "Notify", "a toast")
+		T.eq(toast.Player, w.player, "to the owner")
+		T.eq(toast.Payload.Text, "+1 Crystal Shard!", "toast text")
+		T.eq(toast.Payload.Kind, "Reward", "toast kind")
+		-- a broken or negative count starts again from 0: never negative
+		for _, broken in { -5, 0 / 0, "lots", math.huge } do
+			w.data.Shards = broken
+			job()
+			T.eq(w.data.Shards, 1, `from {broken}`)
+		end
+		w.data.Shards = 2.7
+		job()
+		T.eq(w.data.Shards, 3, "whole shards")
+		-- no chance: never a shard
+		w.patch(info, "ShardChance", 0)
+		local shown = toasts()
+		for _ = 1, 20 do
+			job()
+		end
+		T.eq(w.data.Shards, 3, "no shards at 0%")
+		T.eq(toasts(), shown, "no toasts")
+		-- the real odds
+		w.patch(info, "ShardChance", real)
+		w.data.Shards = 0
+		shown = toasts()
+		local jobs = 1000
+		for _ = 1, jobs do
+			job()
+		end
+		T.near(w.data.Shards / jobs, real, 0.04, "share of jobs with a shard")
+		T.eq(toasts() - shown, w.data.Shards, "one toast per shard")
+		T.eq(w.data.Stats.IngotsSmelted, 0, "no ingots")
+	end)
+
+	withWorld("ProcessingService: the Alloy Furnace waits for a second ore, then makes one alloy", function(w)
+		stock(w, { "AlloyFurnace" })
+		local m = place(w, "AlloyFurnace", 0, 0)
+		local seen = {}
+		ProcessingService.onProcessed(function(_, id, input, outputs)
+			table.insert(seen, { Id = id, Input = input, Outputs = outputs })
+		end)
+		T.eq(select(2, MachineService.insertDesc(m, item("Clean", "Gold"), USER, "Hand")), "Wrong", "ingots only")
+		T.truthy(MachineService.insertDesc(m, item("Ingot", "Copper", "Flawless"), USER, "Belt"), "1st copper")
+		tick(m, 0)
+		T.eq(attr(m, "Working"), false, "one ore: no job")
+		T.eq(attr(m, "Status"), "NeedsOtherOre", "says why")
+		T.eq(m.State.Job, nil, "no job")
+		T.truthy(MachineService.insertDesc(m, item("Ingot", "Copper", "Rough"), USER, "Belt"), "2nd copper")
+		T.truthy(MachineService.insertDesc(m, item("Ingot", "Copper", "Clean"), USER, "Belt"), "3rd copper")
+		tick(m, 1)
+		T.eq(attr(m, "Status"), "NeedsOtherOre", "still one ore")
+		local ok, reason = MachineService.insertDesc(m, item("Ingot", "Copper"), USER, "Belt")
+		T.falsy(ok, "a 4th copper")
+		T.eq(reason, "Full", "waits: the last place is kept for another ore")
+		T.truthy(MachineService.insertDesc(m, item("Ingot", "Gold", "Pristine"), USER, "Belt"), "gold takes it")
+		T.eq(attr(m, "Queue"), MAX_IN, "queue full")
+		tick(m, 2)
+		T.eq(attr(m, "Status"), "", "cleared once a job can start")
+		T.eq(attr(m, "Working"), true, "working")
+		T.eq(attr(m, "WorkTime"), MachineData.ById.AlloyFurnace.Time, "its job time")
+		T.eq(attr(m, "WorkOre"), "Copper", "In[1] shows")
+		tick(m, 2 + MachineData.ById.AlloyFurnace.Time)
+		T.eq(#m.Entry.Out, 1, "ONE alloy for two ingots")
+		local alloy = m.Entry.Out[1]
+		T.eq(alloy.K, "Alloy", "an alloy")
+		T.eq(alloy.O, "Gold", "of the more valuable ore")
+		T.eq(alloy.G, "Pristine", "with the lower grade (Flawless + Pristine)")
+		T.truthy(MachineLogic.isValidDesc(alloy), "a valid item")
+		T.eq(count(m.Entry.In), 2, "two coppers wait")
+		T.eq(m.Entry.In[1].G, "Rough", "the first copper and the gold went")
+		T.eq(attr(m, "Queue"), 2, "Queue attribute")
+		T.eq(attr(m, "Cycles"), 1, "one job")
+		T.eq(w.data.Stats.IngotsSmelted, 0, "an alloy is no ingot")
+		T.eq(#seen, 1, "listeners hear one job")
+		T.truthy(seen[1].Id == "AlloyFurnace" and seen[1].Input.O == "Copper", "with its first ingot")
+		T.eq(seen[1].Outputs[1].K, "Alloy", "and the alloy")
+		T.eq(attr(m, "Status"), "NeedsOtherOre", "only copper left")
+		T.eq(attr(m, "Working"), false, "idle")
+		-- iron is worth more than copper; an ingot without a grade counts as Rough
+		MachineService.insertDesc(m, item("Ingot", "Iron"), USER, "Hand")
+		tick(m, 10)
+		T.eq(attr(m, "Status"), "", "a pair again")
+		tick(m, 10 + MachineData.ById.AlloyFurnace.Time)
+		T.eq(m.Entry.Out[2].O, "Iron", "iron alloy")
+		T.eq(m.Entry.Out[2].G, "Rough", "Rough")
+		T.eq(m.Entry.In[1].G, "Clean", "the clean copper waits")
+		-- a status MachineService shows is never replaced
+		MachineService.setAttrs(m, { Status = "OutputBlocked" })
+		tick(m, 20)
+		T.eq(attr(m, "Status"), "OutputBlocked", "kept")
+		MachineService.setAttrs(m, { Status = "" })
+		tick(m, 21)
+		T.eq(attr(m, "Status"), "NeedsOtherOre", "back once it is clear")
+		-- an empty queue clears it
+		m.Entry.In = nil
+		tick(m, 22)
+		T.eq(attr(m, "Status"), "", "nothing waits")
+	end)
+
+	withWorld("ProcessingService: a Speed buy rebuilds that machine type with its new look, queues kept", function(w)
+		local hooked: any = nil
+		w.patch(ShopService, "onBought", function(callback)
+			hooked = callback
+		end)
+		ProcessingService.start()
+		T.truthy(hooked == processing.onBought, "start() listens to Tech shop buys")
+		local furnace = place(w, "ClayFurnace", 0, 0)
+		local crusher = place(w, "Crusher", 4, 0)
+		MachineService.insertDesc(furnace, item("Clean", "Iron", "Clean"), USER, "Hand")
+		MachineService.insertDesc(furnace, item("Crushed", "Gold", "Rough"), USER, "Hand")
+		furnace.Entry.Out = { item("Ingot", "Copper", "Rough") }
+		tick(furnace, 10)
+		T.eq(attr(furnace, "Working"), true, "a job is running")
+		local entry = furnace.Entry
+		T.eq(furnace.Model:GetAttribute("Level"), 0, "plain look")
+		local function buy(machineId: any, upgrade: string, level: number?, kind: string?)
+			hooked(w.player, {
+				Item = `{machineId}:{upgrade}`,
+				Kind = kind or "Upgrade",
+				Machine = machineId,
+				Upgrade = upgrade,
+				Level = level,
+				Count = 1,
+				Price = 1000,
+			})
+		end
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 1 } }
+		buy("ClayFurnace", "Speed", 1)
+		T.truthy(furnace.Removed, "the old model went")
+		local new = MachineService.atCell(PLOT, 0, 0)
+		T.truthy(new and new ~= furnace, "a new machine stands there")
+		T.eq(new.Model:GetAttribute("Level"), MachineData.lookLevel(1), "with the level 1 look")
+		T.truthy(new.Entry == entry, "on the same saved entry")
+		T.eq(count(entry.In), 2, "the queue stays")
+		T.eq(count(entry.Out), 1, "the finished item stays")
+		T.eq(attr(new, "Queue"), 2, "Queue shown")
+		T.eq(attr(new, "OutCount"), 1, "OutCount shown")
+		T.eq(attr(new, "QueueMax"), MAX_IN, "spawned hook ran")
+		T.truthy(new.Model.PrimaryPart.Prompt:FindFirstChild("LoadPrompt"), "Put In prompt")
+		T.eq(new.State.Job, nil, "the job in progress...")
+		tick(new, 11)
+		T.eq(new.State.Job.Input, entry.In[1], "...starts over on In[1]")
+		T.near(new.State.Job.EndsAt, 11 + 6 * MachineData.speedMult(1), 1e-9, "with the new speed")
+		T.falsy(crusher.Removed, "other machine types stay")
+		T.eq(MachineService.atCell(PLOT, 4, 0), crusher, "the crusher is untouched")
+		-- buys that don't change the look rebuild nothing
+		local function unchanged(label: string)
+			T.eq(MachineService.atCell(PLOT, 0, 0), new, label)
+			T.falsy(new.Removed, label)
+		end
+		buy("ClayFurnace", "Quality", 1)
+		unchanged("a Quality buy")
+		buy("ClayFurnace", "Speed", nil, "Machine")
+		unchanged("a machine buy")
+		buy("Nope", "Speed", 1)
+		unchanged("an unknown machine")
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 5 } }
+		buy("ClayFurnace", "Speed", 5)
+		unchanged("level 5 looks like level 4")
+		hooked({ UserId = STRANGER, Name = "Nobody", Parent = true }, {
+			Item = "x",
+			Kind = "Upgrade",
+			Machine = "ClayFurnace",
+			Upgrade = "Speed",
+			Level = 2,
+			Count = 1,
+			Price = 1,
+		})
+		unchanged("a player without a plot")
+		-- the next look level does rebuild
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 4 } }
+		buy("ClayFurnace", "Speed", 4)
+		local latest = MachineService.atCell(PLOT, 0, 0)
+		T.truthy(latest ~= new and new.Removed, "rebuilt again")
+		T.eq(latest.Model:GetAttribute("Level"), MachineData.lookLevel(4), "level 4 look")
+		T.truthy(latest.Entry == entry, "same entry")
+	end)
+
+	withWorld("ProcessingService: roster processors conserve items over random jobs", function(w)
+		stock(w, ROSTER)
+		local rng = Rng.new(4242)
+		local machines = {
+			place(w, "BrickFurnace", 0, 0),
+			place(w, "Polisher", 3, 0),
+			place(w, "CrystalExtractor", 6, 0),
+			place(w, "PlasmaFurnace", 9, 0),
+			place(w, "AlloyFurnace", 0, 4),
+		}
+		local feed = {
+			BrickFurnace = { "Clean", "Crushed" },
+			Polisher = { "Clean" },
+			CrystalExtractor = { "Crushed" },
+			PlasmaFurnace = { "Clean", "Crushed" },
+			AlloyFurnace = { "Ingot" },
+		}
+		local ores = { "Copper", "Iron", "Silver", "Gold" }
+		local grades = { "Rough", "Clean", "Pristine", "Flawless" }
+		local pushed, popped = {}, {}
+		local alloy = machines[5]
+		local now = 0
+		for step = 1, 4000 do
+			local m = machines[rng:int(1, #machines)]
+			local roll = rng:next()
+			if roll < 0.45 then
+				local kinds = feed[m.Id]
+				local d = item(kinds[rng:int(1, #kinds)], ores[rng:int(1, #ores)], grades[rng:int(1, #grades)])
+				if MachineService.insertDesc(m, d, USER, "Drop") then
+					pushed[m] = (pushed[m] or 0) + 1
+				end
+			elseif roll < 0.7 then
+				if MachineLogic.popOut(m.Entry) then
+					popped[m] = (popped[m] or 0) + 1
+				end
+			else
+				now += rng:range(0, 4)
+				for _, x in machines do
+					tick(x, now)
+				end
+			end
+			for _, x in machines do
+				T.le(count(x.Entry.In), MAX_IN, `In cap at step {step}`)
+				T.le(count(x.Entry.Out), MAX_OUT, `Out cap at step {step}`)
+			end
+			if count(alloy.Entry.In) == MAX_IN then
+				T.truthy(MachineLogic.alloyPair(alloy.Entry.In), `step {step}: a full alloy queue always holds a pair`)
+			end
+		end
+		for _, m in machines do
+			local consumed = (pushed[m] or 0) - count(m.Entry.In)
+			local produced = count(m.Entry.Out) + (popped[m] or 0)
+			local cycles = attr(m, "Cycles")
+			if m == alloy then
+				T.eq(consumed, 2 * produced, "two ingots per alloy")
+				T.eq(produced, cycles, "one alloy per job")
+			else
+				T.eq(produced, consumed, m.Id .. ": one result per item")
+			end
+			T.eq(attr(m, "Queue"), count(m.Entry.In), m.Id .. " Queue attribute")
+			T.truthy(cycles > 20, `{m.Id} did real work ({cycles})`)
+			for _, d in m.Entry.Out or {} do
+				T.truthy(MachineLogic.isValidDesc(d), m.Id .. " valid output")
+				T.eq(d.K, MachineData.ById[m.Id].Output, m.Id .. " output kind")
+			end
+		end
+		local shards = w.data.Shards
+		T.truthy(shards > 0 and shards == math.floor(shards), `whole shards ({shards})`)
 	end)
 end

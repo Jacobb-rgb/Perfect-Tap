@@ -408,7 +408,14 @@ local function scorePolish(pattern: CleaningPatterns.Pattern, polish: any): (boo
 	local lastT = -1
 	for i = 1, #samples, 2 do
 		local t, a = samples[i], samples[i + 1]
-		if not finite(t) or not finite(a) or t < lastT - 1e-6 or t < 0 or t > CleaningScoring.MaxSampleTime or math.abs(a) > math.pi + 1e-3 then
+		if
+			not finite(t)
+			or not finite(a)
+			or t < lastT - 1e-6
+			or t < 0
+			or t > CleaningScoring.MaxSampleTime
+			or math.abs(a) > math.pi + 1e-3
+		then
 			return false, "bad polish sample", 0, 0
 		end
 		lastT = t

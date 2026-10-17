@@ -219,18 +219,21 @@ function PenView.entries(summary: any, mode: Mode?): { Entry }
 			elseif mode ~= "Pick" or podiumOre then
 				local dirty = desc.K == "Raw"
 				local ore = OreData.ById[desc.O]
-				table.insert(list, {
-					Key = key,
-					Kind = desc.K,
-					Name = ItemData.displayName(desc.K, desc.O, desc.G, desc.R),
-					Grade = if dirty then nil else desc.G,
-					Count = math.floor(count),
-					Income = if podiumOre then ItemData.income(desc) else 0,
-					Value = if dirty then 0 else ItemData.value(desc.K, desc.O, desc.G, desc.R),
-					Color = if dirty or not ore then PenView.DirtyColor else ore.Color,
-					Mystery = dirty,
-					Keys = nil,
-				} :: Entry)
+				table.insert(
+					list,
+					{
+						Key = key,
+						Kind = desc.K,
+						Name = ItemData.displayName(desc.K, desc.O, desc.G, desc.R),
+						Grade = if dirty then nil else desc.G,
+						Count = math.floor(count),
+						Income = if podiumOre then ItemData.income(desc) else 0,
+						Value = if dirty then 0 else ItemData.value(desc.K, desc.O, desc.G, desc.R),
+						Color = if dirty or not ore then PenView.DirtyColor else ore.Color,
+						Mystery = dirty,
+						Keys = nil,
+					} :: Entry
+				)
 			end
 		end
 	end

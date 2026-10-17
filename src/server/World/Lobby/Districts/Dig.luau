@@ -109,7 +109,12 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	for i = 0, 9 do
 		local z = -5.6 + i * 0.9
 		local sz = (1.15 - i * 0.02) * k
-		Kit.bit(m, bone(spineX(z), 0.45, z) * CFrame.Angles(0, 0.2 * math.cos(z), 0), Vector3.new(sz, sz, 0.72 * k), if i % 2 == 0 then BONE else BONE_SHADE)
+		Kit.bit(
+			m,
+			bone(spineX(z), 0.45, z) * CFrame.Angles(0, 0.2 * math.cos(z), 0),
+			Vector3.new(sz, sz, 0.72 * k),
+			if i % 2 == 0 then BONE else BONE_SHADE
+		)
 	end
 	for i = 1, 5 do
 		local z = 2.5 + i * 0.95
@@ -144,7 +149,14 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	for _, leg in { { -3.6, -1, 3.2 }, { 2.0, 1, 3.6 } } do
 		local z, dir, reach = leg[1], leg[2], leg[3]
 		for _, side in { -1, 1 } do
-			Kit.beam(m, bpos(spineX(z) + side * 0.6, 0.25, z), bpos(spineX(z) + side * reach, -0.12, z + dir * 1.4), 0.42 * k, 0.42 * k, BONE)
+			Kit.beam(
+				m,
+				bpos(spineX(z) + side * 0.6, 0.25, z),
+				bpos(spineX(z) + side * reach, -0.12, z + dir * 1.4),
+				0.42 * k,
+				0.42 * k,
+				BONE
+			)
 		end
 	end
 

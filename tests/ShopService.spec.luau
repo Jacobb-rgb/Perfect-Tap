@@ -402,7 +402,14 @@ return function(T, Loader)
 				T.truthy(notes(w, "Notify")[n].A.Text:find("Speed level 1", 1, true), "toast " .. entry.Item)
 			end
 		end
-		T.eq(n, 5, "furnaces, crusher, cleaning plant, iron box")
+		local speedTypes = 0
+		for _, machine in MachineData.Buildable do
+			if machine.Upgrades and machine.Upgrades.Speed then
+				speedTypes += 1
+			end
+		end
+		T.eq(n, speedTypes, "every buildable machine type with a Speed upgrade")
+		T.truthy(n >= 5, "furnaces, crusher, cleaning plant, iron box and the roster")
 	end)
 
 	withWorld("ShopService: Bellows, machine Slots and pen automation", function(w)

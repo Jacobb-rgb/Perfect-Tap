@@ -79,7 +79,15 @@ function Geo.wedge(parent: Instance, cf: CFrame, size: Vector3, color: Color3, m
 end
 
 -- Cylinder standing upright (Roblox cylinders run along X, so rotate).
-function Geo.cylinder(parent: Instance, position: Vector3, height: number, diameter: number, color: Color3, material: Enum.Material?, extra: PartProps?): Part
+function Geo.cylinder(
+	parent: Instance,
+	position: Vector3,
+	height: number,
+	diameter: number,
+	color: Color3,
+	material: Enum.Material?,
+	extra: PartProps?
+): Part
 	local props: PartProps = {
 		Shape = Enum.PartType.Cylinder,
 		CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.pi / 2),
@@ -197,7 +205,8 @@ function Geo.rock(
 	local count = if size.Magnitude > 14 then 4 elseif size.Magnitude > 6 then 3 else 2
 	for i = 1, count do
 		local scale = if i == 1 then 1 else rng:range(0.45, 0.75)
-		local s = Vector3.new(size.X * scale * rng:range(0.8, 1.05), size.Y * scale * rng:range(0.75, 1.0), size.Z * scale * rng:range(0.8, 1.05))
+		local s =
+			Vector3.new(size.X * scale * rng:range(0.8, 1.05), size.Y * scale * rng:range(0.75, 1.0), size.Z * scale * rng:range(0.8, 1.05))
 		local offset = if i == 1
 			then Vector3.new(0, s.Y * 0.38, 0)
 			else Vector3.new(rng:range(-0.35, 0.35) * size.X, s.Y * 0.3, rng:range(-0.35, 0.35) * size.Z)

@@ -9,6 +9,8 @@ local DataTemplate = {
 	Version = 3, -- Data/Migrations brings older saves up to this
 
 	Coins = 0, -- may hold fractions (podium income per second)
+	-- crystal shards (the Crystal Extractor finds them; the Enchant shop spends them)
+	Shards = 0,
 	TotalEarned = 0,
 
 	-- blaster (design v2): level 1..10 and the ore it was forged from ("" = rusty starter)
@@ -49,9 +51,10 @@ local DataTemplate = {
 
 	-- machines: bought but not placed { [machineId] = count 1..MachineData.MaxInventory (999) } (no zero keys)
 	MachineInventory = {},
-	-- placed machines on the plot: { { Id, X, Z, R, In?, Out? } } (min grid cell +
+	-- placed machines on the plot: { { Id, X, Z, R, In?, Out?, C? } } (min grid cell +
 	-- rotation 0-3). In = input queue (In[1] is being worked, max 4), Out = finished
 	-- items waiting to leave (max 4); both are lists of { K, O, G?, R? }, nil when empty.
+	-- C = the machine's own setting (Sorter: the lowest rarity sent right, a Rarity Order).
 	PlacedMachines = {},
 	StarterKitGiven = false,
 

@@ -179,7 +179,12 @@ local function icon(m: Instance, at: CFrame, kind: string, s: number)
 		local sprinkles = { C.CrystalCyan, C.LeafYellowLight, C.FlowerWhite }
 		local spots = { Vector2.new(0.45, 0.2), Vector2.new(-0.35, 0.42), Vector2.new(-0.2, -0.48) }
 		for i, q in spots do
-			Kit.bit(m, at * CFrame.new(q.X * s, q.Y * s, -0.5 * s) * CFrame.Angles(0, 0, i * 0.9), Vector3.new(0.3, 0.1, 0.06) * s, sprinkles[i])
+			Kit.bit(
+				m,
+				at * CFrame.new(q.X * s, q.Y * s, -0.5 * s) * CFrame.Angles(0, 0, i * 0.9),
+				Vector3.new(0.3, 0.1, 0.06) * s,
+				sprinkles[i]
+			)
 		end
 	elseif kind == "Crate" then
 		-- a gold treasure chest with a light lid and a dark lid stripe
@@ -187,7 +192,12 @@ local function icon(m: Instance, at: CFrame, kind: string, s: number)
 	elseif kind == "Gem" then
 		-- a big cut gem: a blue diamond with a glowing cyan facet
 		Kit.bit(m, at * CFrame.new(0, 0, -0.55 * s) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(1.25, 1.25, 0.7) * s, GEM_BODY)
-		Kit.glow(m, at * CFrame.new(0.12 * s, 0.12 * s, -0.92 * s) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.55, 0.55, 0.06) * s, GEM_GLOW)
+		Kit.glow(
+			m,
+			at * CFrame.new(0.12 * s, 0.12 * s, -0.92 * s) * CFrame.Angles(0, 0, math.pi / 4),
+			Vector3.new(0.55, 0.55, 0.06) * s,
+			GEM_GLOW
+		)
 	elseif kind == "Capsule" then
 		-- a two-tone pill standing outward: red lower half, white upper half,
 		-- round ends
@@ -424,12 +434,7 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 			Kit.bit(m, plate * CFrame.new(0, hIn + 0.3 * s, hFront - 0.08), Vector3.new(2 * hIn * hTan, 0.5 * s, 0.24), Tech.MetalLight)
 			-- (round 3) the neon arc on the plates' very outer edge, its chords
 			-- covering the joints: the slabs end inside the neon outline
-			Tech.glow(
-				m,
-				plate * CFrame.new(0, hOut - 0.19 * s, hFront - 0.1),
-				Vector3.new(2 * hOut * hTan + 0.12, 0.38 * s, 0.2),
-				RIM
-			)
+			Tech.glow(m, plate * CFrame.new(0, hOut - 0.19 * s, hFront - 0.1), Vector3.new(2 * hOut * hTan + 0.12, 0.38 * s, 0.2), RIM)
 			if k == 1 then
 				Tech.glow(m, plate * CFrame.new(0, (hIn + hOut) / 2 + 0.1 * s, hFront - 0.06), Vector3.new(1.5, 0.55, 0.12) * s, Tech.Warm)
 			end

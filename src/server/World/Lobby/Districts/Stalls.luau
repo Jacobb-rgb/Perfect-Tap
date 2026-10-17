@@ -558,12 +558,22 @@ local function neonItem(parent: Instance, base: CFrame, index: number, colors: {
 		-- a pickaxe head: a curved glowing head on a short dark haft
 		Kit.bit(parent, base * CFrame.new(0, 0.7, 0.1), Vector3.new(0.24, 1.4, 0.24), C.WoodDark)
 		for _, side in { -1, 1 } do
-			Kit.glow(parent, base * CFrame.new(side * 0.55, 1.35, 0.1) * CFrame.Angles(0, 0, side * 0.35), Vector3.new(1.0, 0.3, 0.3), colors[2])
+			Kit.glow(
+				parent,
+				base * CFrame.new(side * 0.55, 1.35, 0.1) * CFrame.Angles(0, 0, side * 0.35),
+				Vector3.new(1.0, 0.3, 0.3),
+				colors[2]
+			)
 		end
 	else
 		-- a big gold coin standing on edge, a light star on its face
 		Tech.faceDisc(parent, base * CFrame.new(0, 0.85, 0.05), 0.24, 1.5, colors[3], Kit.NEON)
-		Kit.bit(parent, base * CFrame.new(0, 0.85, -0.1) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.5, 0.5, 0.06), rgb(255, 236, 150))
+		Kit.bit(
+			parent,
+			base * CFrame.new(0, 0.85, -0.1) * CFrame.Angles(0, 0, math.pi / 4),
+			Vector3.new(0.5, 0.5, 0.06),
+			rgb(255, 236, 150)
+		)
 	end
 end
 

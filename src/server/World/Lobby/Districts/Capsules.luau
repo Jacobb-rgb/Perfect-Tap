@@ -327,12 +327,7 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 		local r = EGG_R - 0.55
 		local y = bodyBottom + 0.4 + (bodyTop - bodyBottom - 0.8) * chips[i][2]
 		local chip = 0.5 + 0.05 * (i % 3)
-		Kit.glow(
-			m,
-			at(math.cos(a) * r, y, EGG_Z + math.sin(a) * r) * CFrame.Angles(0.6, a, 0.785),
-			Vector3.new(chip, chip, chip),
-			color
-		).Name =
+		Kit.glow(m, at(math.cos(a) * r, y, EGG_Z + math.sin(a) * r) * CFrame.Angles(0.6, a, 0.785), Vector3.new(chip, chip, chip), color).Name =
 			"GemChip"
 	end
 	-- the dark metal top cap with a bright cyan neon ring

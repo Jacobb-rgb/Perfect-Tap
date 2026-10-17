@@ -484,7 +484,12 @@ return function(T, Loader)
 		for _, d in pkg.ShopFront:GetDescendants() do
 			-- (round 2: the big SELL sign stands high on its own arch, model SellSign)
 			local sign = pkg.ShopFront:FindFirstChild("SellSign")
-			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and not (sign and d:IsDescendantOf(sign)) and d.Transparency < 1 then
+			if
+				d:IsA("BasePart")
+				and not d:IsDescendantOf(pkg.ShopFront.Tobin)
+				and not (sign and d:IsDescendantOf(sign))
+				and d.Transparency < 1
+			then
 				local top = -math.huge
 				for _, p in corners(d) do
 					top = math.max(top, frame:PointToObjectSpace(p).Y)

@@ -86,7 +86,10 @@ return function(T, Loader)
 		end
 		-- sell chute takes anything valid, refuses junk
 		for _, kind in { "Raw", "Clean", "Crushed", "Ingot" } do
-			T.truthy(MachineLogic.accepts("SellChute", { K = kind, O = "Silver", G = "Clean" }, entry("SellChute"), false), "chute " .. kind)
+			T.truthy(
+				MachineLogic.accepts("SellChute", { K = kind, O = "Silver", G = "Clean" }, entry("SellChute"), false),
+				"chute " .. kind
+			)
 		end
 		T.truthy(MachineLogic.accepts("SellChute", { K = "Gear", O = "Silver", G = "Clean", R = "Dagger" }, entry("SellChute"), true))
 		T.eq(select(2, MachineLogic.accepts("SellChute", { K = "Gear", O = "Silver" }, entry("SellChute"), true)), "Wrong")
@@ -252,6 +255,164 @@ return function(T, Loader)
 		end
 	end)
 
+	---------------------------------------------------------------- roster processors
+
+	local ROSTER = { "BrickFurnace", "Polisher", "CrystalExtractor", "PlasmaFurnace", "AlloyFurnace" }
+	local function crushed(ore: string, grade: string?): any
+		return { K = "Crushed", O = ore, G = grade or "Rough" }
+	end
+
+	T.test("MachineLogic: roster processors queue and accept by their rules", function()
+		for _, id in ROSTER do
+			T.eq(MachineLogic.queueSize(id), MAX_IN, id)
+		end
+		T.truthy(MachineLogic.accepts("BrickFurnace", crushed("Iron"), entry("BrickFurnace"), true), "brick crushed")
+		T.truthy(MachineLogic.accepts("PlasmaFurnace", clean("Iron"), entry("PlasmaFurnace"), true), "plasma clean")
+		T.truthy(MachineLogic.accepts("Polisher", clean("Iron"), entry("Polisher"), true), "polisher clean")
+		T.eq(select(2, MachineLogic.accepts("Polisher", crushed("Iron"), entry("Polisher"), true)), "Wrong", "polisher crushed")
+		T.truthy(MachineLogic.accepts("CrystalExtractor", crushed("Iron"), entry("CrystalExtractor"), true), "extractor crushed")
+		T.eq(select(2, MachineLogic.accepts("CrystalExtractor", clean("Iron"), entry("CrystalExtractor"), true)), "Wrong")
+		-- Alloy Furnace: ingots only, and the last place waits for another ore
+		local alloy = entry("AlloyFurnace")
+		T.eq(select(2, MachineLogic.accepts("AlloyFurnace", clean("Copper"), alloy, true)), "Wrong", "alloy clean")
+		for i = 1, MAX_IN - 1 do
+			T.truthy(MachineLogic.accepts("AlloyFurnace", ingot("Copper"), alloy, true), "copper " .. i)
+			MachineLogic.push(alloy, ingot("Copper", "Clean"))
+		end
+		local ok, reason = MachineLogic.accepts("AlloyFurnace", ingot("Copper"), alloy, true)
+		T.falsy(ok, "a 4th copper")
+		T.eq(reason, "Full", "it waits: the last place is kept for another ore")
+		T.truthy(MachineLogic.accepts("AlloyFurnace", ingot("Iron"), alloy, true), "another ore takes it")
+		MachineLogic.push(alloy, ingot("Iron"))
+		T.eq(select(2, MachineLogic.accepts("AlloyFurnace", ingot("Gold"), alloy, true)), "Full", "now full")
+		-- with another ore already waiting, the last place may go to either
+		local mixed = entry("AlloyFurnace")
+		for _, ore in { "Copper", "Iron", "Copper" } do
+			MachineLogic.push(mixed, ingot(ore))
+		end
+		T.truthy(MachineLogic.accepts("AlloyFurnace", ingot("Copper"), mixed, true), "a pair is already there")
+		T.truthy(MachineLogic.hasOtherOre(mixed.In, "Copper"), "iron waits")
+		T.falsy(MachineLogic.hasOtherOre(alloy.In and { alloy.In[1] }, "Copper"), "copper only")
+		T.falsy(MachineLogic.hasOtherOre(nil, "Copper"), "no queue")
+	end)
+
+	T.test("MachineLogic: grade up (Polisher) with a fixed roll", function()
+		T.eq(MachineLogic.nextGrade("Rough"), "Clean")
+		T.eq(MachineLogic.nextGrade("Clean"), "Pristine")
+		T.eq(MachineLogic.nextGrade("Pristine"), "Flawless")
+		T.eq(MachineLogic.nextGrade("Flawless"), "Flawless", "Flawless stays")
+		T.eq(MachineLogic.nextGrade(nil), "Clean", "nil counts as Rough")
+		T.eq(MachineLogic.nextGrade("Shiny"), "Clean", "unknown counts as Rough")
+		T.eq(MachineLogic.gradeUp("Rough", 0.5, 0.49), "Clean", "roll under the chance")
+		T.eq(MachineLogic.gradeUp("Rough", 0.5, 0.5), "Rough", "roll at the chance: no luck")
+		T.eq(MachineLogic.gradeUp("Pristine", 0.5, 0.1), "Flawless")
+		T.eq(MachineLogic.gradeUp("Flawless", 0.5, 0), "Flawless", "Flawless stays Flawless")
+		T.eq(MachineLogic.gradeUp(nil, 0.5, 0.9), "Rough", "nil grade counts as Rough")
+		T.eq(MachineLogic.gradeUp("Shiny", 0.5, 0.1), "Clean", "unknown grade counts as Rough")
+		T.eq(MachineLogic.gradeUp("Clean", 0 / 0, 0), "Clean", "broken chance never upgrades")
+		T.eq(MachineLogic.gradeUp("Clean", nil, 0), "Clean", "no chance")
+		T.eq(MachineLogic.gradeUp("Clean", -1, 0), "Clean", "negative chance")
+		T.eq(MachineLogic.gradeUp("Clean", 0.5, 0 / 0), "Clean", "broken roll")
+		T.eq(MachineLogic.gradeUp("Clean", 3, 0.999), "Pristine", "a chance above 1 counts as 1")
+		-- the Polisher's outputs use the roll; other machines never grade up
+		local chance = MachineData.ById.Polisher.GradeUpChance
+		T.truthy(type(chance) == "number" and chance > 0 and chance < 1, "Polisher GradeUpChance")
+		local up = MachineLogic.outputs("Polisher", clean("Gold", "Pristine"), chance - 0.01)
+		T.eq(#up, 1, "one item out")
+		T.truthy(up[1].K == "Clean" and up[1].O == "Gold" and up[1].G == "Flawless", "one grade better")
+		T.eq(MachineLogic.outputs("Polisher", clean("Gold", "Pristine"), chance)[1].G, "Pristine", "no luck: unchanged")
+		T.eq(MachineLogic.outputs("Polisher", clean("Gold", "Flawless"), 0)[1].G, "Flawless", "Flawless stays")
+		T.eq(MachineLogic.outputs("BrickFurnace", clean("Gold", "Clean"), 0)[1].G, "Clean", "furnaces keep the grade")
+		local rng = Rng.new(99)
+		local ups, n = 0, 10000
+		for _ = 1, n do
+			if MachineLogic.outputs("Polisher", clean("Iron", "Rough"), rng:next())[1].G == "Clean" then
+				ups += 1
+			end
+		end
+		T.near(ups / n, chance, 0.02, "share of grade-ups")
+	end)
+
+	T.test("MachineLogic: shard rolls (Crystal Extractor)", function()
+		T.truthy(MachineLogic.rollShard(0.15, 0.1), "under the chance")
+		T.falsy(MachineLogic.rollShard(0.15, 0.15), "at the chance")
+		T.falsy(MachineLogic.rollShard(0.15, 0.9), "over the chance")
+		T.falsy(MachineLogic.rollShard(nil, 0), "no chance")
+		T.falsy(MachineLogic.rollShard(0 / 0, 0), "broken chance")
+		T.falsy(MachineLogic.rollShard(0.5, 0 / 0), "broken roll")
+		T.falsy(MachineLogic.rollShard(0, 0), "zero chance")
+		T.truthy(MachineLogic.rollShard(2, 0.99), "a chance above 1 counts as 1")
+		-- the item passes through: Crushed -> the same Crushed
+		local out = MachineLogic.outputs("CrystalExtractor", crushed("Ruby", "Pristine"), 0)
+		T.eq(#out, 1, "one item out")
+		T.truthy(out[1].K == "Crushed" and out[1].O == "Ruby" and out[1].G == "Pristine", "unchanged")
+		local chance = MachineData.ById.CrystalExtractor.ShardChance
+		local rng = Rng.new(7)
+		local shards, n = 0, 10000
+		for _ = 1, n do
+			if MachineLogic.rollShard(chance, rng:next()) then
+				shards += 1
+			end
+		end
+		T.near(shards / n, chance, 0.02, "share of shards")
+	end)
+
+	T.test("MachineLogic: alloy pairs and the alloy they make", function()
+		T.eq(MachineLogic.alloyPair(nil), nil, "no queue")
+		T.eq(MachineLogic.alloyPair({ ingot("Copper") }), nil, "one ingot")
+		T.eq(MachineLogic.alloyPair({ ingot("Copper"), ingot("Copper", "Flawless") }), nil, "one ore, whatever the grades")
+		local i, j = MachineLogic.alloyPair({ ingot("Copper"), ingot("Copper"), ingot("Iron"), ingot("Gold") })
+		T.eq(i, 1, "In[1]")
+		T.eq(j, 3, "and the first ingot of another ore")
+		T.eq(MachineLogic.alloyPair({ clean("Copper"), ingot("Iron") }), nil, "In[1] must be an ingot")
+		T.eq(MachineLogic.alloyPair({ { K = "Ingot", O = "Plastic" }, ingot("Iron") }), nil, "a broken In[1]")
+		i, j = MachineLogic.alloyPair({ ingot("Copper"), { K = "Bogus", O = "Iron" }, clean("Iron"), ingot("Silver") })
+		T.eq(j, 4, "junk and other kinds are skipped")
+		local alloy = MachineLogic.alloyDesc(ingot("Copper", "Flawless"), ingot("Gold", "Clean"))
+		T.eq(alloy.K, "Alloy")
+		T.eq(alloy.O, "Gold", "the more valuable ore")
+		T.eq(alloy.G, "Clean", "the lower grade")
+		local swapped = MachineLogic.alloyDesc(ingot("Gold", "Clean"), ingot("Copper", "Flawless"))
+		T.truthy(swapped.O == "Gold" and swapped.G == "Clean", "the order doesn't matter")
+		T.eq(MachineLogic.alloyDesc(ingot("Iron", nil), ingot("Copper", "Pristine")).G, "Rough", "nil grade counts as Rough")
+		T.eq(MachineLogic.alloyDesc(ingot("Iron", "Pristine"), ingot("Silver", "Pristine")).O, "Silver")
+		T.truthy(MachineLogic.isValidDesc(alloy), "a valid item")
+		T.truthy(ItemData.value(alloy.K, alloy.O, alloy.G) > ItemData.value("Ingot", "Gold", "Clean"), "worth more than its best ingot")
+		T.eq(#MachineLogic.outputs("AlloyFurnace", ingot("Copper"), 0), 0, "no single-ingot outputs")
+	end)
+
+	T.test("MachineLogic: batch jobs (Plasma Furnace) and consume", function()
+		T.eq(MachineData.ById.PlasmaFurnace.Batch, 2, "Plasma Furnace Batch")
+		local q = { clean("Copper"), crushed("Iron"), clean("Gold") }
+		local list = MachineLogic.batch("PlasmaFurnace", q, 0)
+		T.eq(#list, 2, "two at once")
+		T.truthy(list[1] == q[1] and list[2] == q[2], "the very queued tables, in order")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", q, MAX_OUT - 1), 1, "only one result fits in Out")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", q, MAX_OUT), 1, "In[1] always goes (it waits for room like any job)")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", q, 0 / 0), 2, "a broken Out count counts as 0")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", { clean("Copper") }, 0), 1, "one queued")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", { clean("Copper"), { K = "Raw", O = "Iron" } }, 0), 1, "only accepted items join")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", nil, 0), 0, "no queue")
+		T.eq(#MachineLogic.batch("PlasmaFurnace", {}, 0), 0, "empty queue")
+		T.eq(#MachineLogic.batch("BrickFurnace", q, 0), 1, "no Batch: one at a time")
+		T.eq(#MachineLogic.batch("Nope", q, 0), 0, "unknown machine")
+		-- consume takes the very tables out of In, wherever they are
+		local e = entry("AlloyFurnace")
+		local a, b, c = ingot("Copper"), ingot("Copper"), ingot("Iron")
+		for _, d in { a, b, c } do
+			MachineLogic.push(e, d)
+		end
+		MachineLogic.consume(e, { a, c }, { { K = "Alloy", O = "Iron", G = "Rough" } })
+		T.eq(#e.In, 1, "two taken")
+		T.truthy(e.In[1] == b, "the other copper waits")
+		T.eq(#e.Out, 1, "one alloy out")
+		MachineLogic.consume(e, { clean("Gold") }, {})
+		T.eq(#e.In, 1, "a table that isn't queued takes nothing")
+		MachineLogic.consume(e, { b }, {})
+		T.eq(e.In, nil, "empty In is nil")
+		T.eq(#e.Out, 1, "Out untouched")
+	end)
+
 	T.test("MachineLogic: CONSERVATION FUZZ (20,000 random steps)", function()
 		local rng = Rng.new(31337)
 		local kinds = { "Raw", "Clean", "Crushed", "Ingot", "Gear" }
@@ -313,7 +474,10 @@ return function(T, Loader)
 					add(m.L.Pushed, desc.O, 1)
 					stats.push += 1
 				else
-					T.truthy(reason == "Wrong" or reason == "Foreign" or reason == "Mixed" or reason == "Full", "reason " .. tostring(reason))
+					T.truthy(
+						reason == "Wrong" or reason == "Foreign" or reason == "Mixed" or reason == "Full",
+						"reason " .. tostring(reason)
+					)
 					stats.refused += 1
 				end
 			elseif op <= 7 and id ~= "Anvil" then
@@ -394,7 +558,11 @@ return function(T, Loader)
 					local consumed = L.Consumed[ore] or 0
 					local produced = L.Produced[ore] or 0
 					T.eq(pushed, countIn(oe.In, ore) + consumed + (L.DrainedIn[ore] or 0), `step {step}: {oe.Id} {ore} inputs`)
-					T.eq(produced, countIn(oe.Out, ore) + (L.Popped[ore] or 0) + (L.DrainedOut[ore] or 0), `step {step}: {oe.Id} {ore} outputs`)
+					T.eq(
+						produced,
+						countIn(oe.Out, ore) + (L.Popped[ore] or 0) + (L.DrainedOut[ore] or 0),
+						`step {step}: {oe.Id} {ore} outputs`
+					)
 					if oe.Id ~= "Anvil" then
 						T.eq(produced, consumed * (other.Info.OutputCount or 1), `step {step}: {oe.Id} {ore} ratio`)
 					end

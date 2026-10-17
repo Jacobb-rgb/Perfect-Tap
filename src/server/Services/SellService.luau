@@ -86,6 +86,14 @@ function SellService.onSold(callback: SoldCallback)
 	table.insert(soldCallbacks, callback)
 end
 
+-- Tells the onSold listeners about an item sold somewhere else (the Sell Box
+-- machine pays by itself and calls this after paying).
+function SellService.notifySold(player: Player, desc: Desc, value: number)
+	for _, callback in soldCallbacks do
+		task.spawn(callback, player, desc, value)
+	end
+end
+
 ---------------------------------------------------------------- prices
 
 -- Coins Tobin pays for one item (0 = not a real item).
