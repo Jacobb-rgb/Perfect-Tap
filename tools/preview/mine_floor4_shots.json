@@ -1,0 +1,7 @@
+{
+ "mine_floor4_overview": {"scene": "mine_floor_4", "position": [0, 45, 90], "target": [0, 0, -10], "fov": 55, "preset": "Palace", "shadowExtent": 160, "maxLights": 24},
+ "mine_floor4_entrance": {"scene": "mine_floor_4", "position": [0, 8.4, 44.4], "target": [0, 6, -30], "fov": 72, "preset": "Palace", "shadowExtent": 160, "maxLights": 24},
+ "mine_floor4_throne": {"scene": "mine_floor_4", "position": [0, 13, -14], "target": [0, 12.5, -46], "fov": 58, "preset": "Palace", "shadowExtent": 120, "maxLights": 24},
+ "mine_floor4_aisle": {"scene": "mine_floor_4", "position": [40, 14, 33], "target": [42, 3, -30], "fov": 66, "preset": "Palace", "shadowExtent": 160, "maxLights": 24},
+ "mine_floor4_deep": {"scene": "mine_floor_4", "position": [22, 16, -12], "target": [-46, 3, -44], "fov": 62, "preset": "Palace", "shadowExtent": 160, "maxLights": 24}
+}
