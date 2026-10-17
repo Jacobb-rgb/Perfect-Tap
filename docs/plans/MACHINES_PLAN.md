@@ -62,10 +62,22 @@ dragging. Machine speed = min(1, supply / demand) for the whole connected networ
 Foundry (ingots → blasters), Ore Pen, Podiums.
 
 ## Looks
-- **Upgrades change the look** every few levels (owner: yes). Proposal: L1 base model, L3 extra pipes and lights,
-  L5 gold or neon trim.
-- Style direction per tier: to be chosen by the owner from pictures (Claude's proposal: early machines stone, brick and
-  wood, mid game Factory Kit iron with pipes, end game sci-fi neon like docs/art/lobby_concept_v2.webp).
+Owner (2026-10-17): build the machines **from the Kenney Factory Kit** (the pipes with water into the cleaner too:
+"everything in the kit looks great"), **iron first**, and upgrades grow crystals: small shards first, after 3-4 upgrades
+the whole machine is crystal.
+- Concept: src/shared/Builders/KitMachines.luau (part-built kit pieces: machine housings, pipe-large + bends + valves +
+  glass pipes with water / molten metal, hoppers, piston tanks, cogs, stack lights, screen panels, robot arm, scanner
+  arch), same contract as MachineBuilder so it can replace it. Cleaning Station, Clay Furnace, Crusher, Cleaning
+  Plant (Auto Cleaner) and Blast Furnace are done; the conveyor still uses MachineBuilder.
+- Upgrade looks (KitMachines.build(id, level, theme)): L0 iron · L1 two small crystal clusters · L2 four clusters, the
+  orange trims turn crystal · L3 six bigger clusters, frames / flanges / pipes turn crystal, a soft light · L4 (max) the
+  whole machine is crystal (see-through body, glowing inside), a hero crystal on top, sparkles. Crystal colour themes:
+  Aqua, Amethyst, Rose (owner to pick).
+- Preview: scene `kit_machines` (tools/lune/lib/kit_machines_gallery.luau, shots tools/preview/kit_machines_shots.json),
+  pictures docs/screenshots/kit_*.jpg. Tests: tests/KitMachines.spec.luau (contract at every level, footprints, FX
+  part names, part budgets: 140 at L0, 240 at max, 280 for 3x3).
+- Not decided yet: how the look level maps to the planned upgrades (MachineUpgrades Speed/Quality), the crystal theme,
+  whether the kit's blue-purple colour is wanted instead of iron.
 
 ## Open questions
 - The owner also ticked "Something else" under special machines without saying what; ask.

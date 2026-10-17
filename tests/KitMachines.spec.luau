@@ -1,0 +1,145 @@
+-- Kit machines (KitMachines.luau): the MachineBuilder contract at every
+-- upgrade level, footprints, named moving parts and part budgets.
+return function(T, Loader)
+	local roblox = require("@lune/roblox") :: any
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+	local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
+	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
+
+	local CELL = GameConfig.CellSize
+	local IDS = { "CleaningStation", "ClayFurnace", "Crusher", "AutoCleaner", "BlastFurnace" }
+
+	local function parts(model: any): { any }
+		local list = {}
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(list, d)
+			end
+		end
+		return list
+	end
+
+	local function attachment(model: any, name: string): any
+		local a = model.PrimaryPart:FindFirstChild(name)
+		return if a and a:IsA("Attachment") then a else nil
+	end
+
+	local function find(model: any, name: string): any
+		return model:FindFirstChild(name, true)
+	end
+
+	T.test("KitMachines: every level builds with Base, Prompt, Status, Intake and Output", function()
+		for _, id in IDS do
+			T.truthy(KitMachines.has(id), id)
+			for level = 0, KitMachines.MaxLevel do
+				local model = KitMachines.build(id, level)
+				local tag = id .. " L" .. level
+				T.eq(model.PrimaryPart.Name, "Base", tag)
+				T.eq(model:GetAttribute("MachineId"), id, tag)
+				T.eq(model:GetAttribute("Level"), level, tag)
+				for _, name in { "Prompt", "Status", "Intake", "Output" } do
+					T.truthy(attachment(model, name), tag .. " " .. name)
+				end
+				T.eq(typeof(attachment(model, "Intake"):GetAttribute("IntakeSize")), "Vector3", tag)
+				for _, part in parts(model) do
+					T.truthy(part.Anchored, tag .. " " .. part.Name .. " anchored")
+					T.truthy(part:GetAttribute("Kit") ~= nil, tag .. " " .. part.Name .. " has a Kit role")
+				end
+			end
+		end
+	end)
+
+	T.test("KitMachines: outputs sit on the shared grid positions (the station uses its tray)", function()
+		for _, id in IDS do
+			if id ~= "CleaningStation" then
+				local model = KitMachines.build(id, 0)
+				local expected = Grid.outputLocal(id)
+				T.truthy((attachment(model, "Output").CFrame.Position - expected).Magnitude < 1e-4, id)
+			end
+		end
+	end)
+
+	T.test("KitMachines: machine parts stay inside the footprint (chutes may reach the output)", function()
+		for _, id in IDS do
+			local info = MachineData.ById[id]
+			local hw, hd = info.Size[1] * CELL / 2, info.Size[2] * CELL / 2
+			local model = KitMachines.build(id, 0)
+			for _, part in parts(model) do
+				if part.Name ~= "Chute" and part.Name ~= "ChuteLip" and part.Name ~= "Molten" then
+					local cf, size = part.CFrame, part.Size
+					local r = { cf:GetComponents() }
+					local ex = math.abs(r[4]) * size.X / 2 + math.abs(r[5]) * size.Y / 2 + math.abs(r[6]) * size.Z / 2
+					local ez = math.abs(r[10]) * size.X / 2 + math.abs(r[11]) * size.Y / 2 + math.abs(r[12]) * size.Z / 2
+					local p = cf.Position
+					T.truthy(math.abs(p.X) + ex <= hw + 0.35, id .. " " .. part.Name .. " x " .. (math.abs(p.X) + ex))
+					T.truthy(math.abs(p.Z) + ez <= hd + 0.35, id .. " " .. part.Name .. " z " .. (math.abs(p.Z) + ez))
+				end
+			end
+		end
+	end)
+
+	T.test("KitMachines: named parts for the client effects", function()
+		local furnace = KitMachines.build("ClayFurnace", 0)
+		T.truthy(find(furnace, "Glow"), "ClayFurnace Glow")
+		T.truthy(find(furnace, "ChimneyTop"), "ClayFurnace ChimneyTop")
+		local blast = KitMachines.build("BlastFurnace", 0)
+		T.truthy(find(blast, "Glow"), "BlastFurnace Glow")
+		T.truthy(find(blast, "Molten"), "BlastFurnace Molten")
+		local crusher = KitMachines.build("Crusher", 0)
+		for _, name in { "Cog1", "Cog2", "Roller1", "Roller2", "Roller1Tooth", "StackGreen" } do
+			T.truthy(find(crusher, name), "Crusher " .. name)
+		end
+		local cleaner = KitMachines.build("AutoCleaner", 0)
+		for _, name in { "Drum", "DrumRib", "BedRoller", "WaterPool", "Vent", "StackRed", "StackAmber", "StackGreen" } do
+			T.truthy(find(cleaner, name), "AutoCleaner " .. name)
+		end
+		for _, id in { "AutoCleaner", "CleaningStation" } do
+			local model = KitMachines.build(id, 0)
+			T.truthy(attachment(model, "WaterOut"), id .. " WaterOut")
+			T.truthy(attachment(model, "WaterIn"), id .. " WaterIn")
+			T.eq(typeof(attachment(model, "WaterOut"):GetAttribute("Curve")), "number", id .. " Curve")
+		end
+		local station = KitMachines.build("CleaningStation", 0)
+		T.truthy(attachment(station, "OrePoint"), "OrePoint")
+		T.truthy(attachment(station, "CamPoint"), "CamPoint")
+		T.truthy(find(station, "WaterPool"), "station WaterPool")
+	end)
+
+	T.test("KitMachines: crystals grow with the level and the max level turns the body to crystal", function()
+		for _, id in IDS do
+			local previous = -1
+			for level = 0, KitMachines.MaxLevel do
+				local model = KitMachines.build(id, level)
+				local crystals = 0
+				for _, part in parts(model) do
+					if part:GetAttribute("Kit") == "Crystal" then
+						crystals += 1
+					end
+				end
+				if level == 0 then
+					T.eq(crystals, 0, id .. " L0 is plain iron")
+				else
+					T.truthy(crystals > previous, id .. " L" .. level .. " has more crystals")
+				end
+				previous = crystals
+			end
+			local top = KitMachines.build(id, KitMachines.MaxLevel)
+			local body = top:FindFirstChild("Body", true)
+			if body then
+				T.eq(body.Material, roblox.Enum.Material.Glass, id .. " max level body is crystal")
+			end
+		end
+	end)
+
+	T.test("KitMachines: part budgets for phones", function()
+		for _, id in IDS do
+			local size = MachineData.ById[id].Size
+			local big = size[1] * size[2] >= 9 -- the 3x3 Blast Furnace gets more
+			local iron = #parts(KitMachines.build(id, 0))
+			local crystal = #parts(KitMachines.build(id, KitMachines.MaxLevel))
+			T.truthy(iron <= 140, id .. " level 0: " .. iron .. " parts")
+			T.truthy(crystal <= (if big then 280 else 240), id .. " max level: " .. crystal .. " parts")
+		end
+	end)
+end
