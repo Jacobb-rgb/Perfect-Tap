@@ -769,7 +769,7 @@ function RockBuilder.build(floorKey: number | string, kind: MineFloors.RockKind,
 	end
 	model:SetAttribute("Floor", floor.Index)
 	model:SetAttribute("Kind", kind)
-	model:SetAttribute("Zone", floor.ZoneId or floor.Id)
+	model:SetAttribute("Zone", floor.ZoneId)
 	model:SetAttribute("OreCount", #oreIds)
 	model:SetAttribute("Stage", 0)
 	if kind == "Artifact" then

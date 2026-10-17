@@ -38,7 +38,7 @@ export type Floor = {
 	Index: number,
 	Id: string,
 	Name: string,
-	ZoneId: string?, -- the WorldLayout zone this floor re-themes (floors 1-3)
+	ZoneId: string, -- the WorldLayout zone of the floor's area (lighting, rocks)
 	MinBlaster: number,
 	ViaElevator: boolean, -- only reachable with the elevator
 	Lighting: string, -- LightingConfig preset
@@ -170,7 +170,7 @@ MineFloors.List = {
 		RockName = "Palace Stone",
 		CrystalName = "Royal Shard",
 		Name = "Sunken Palace",
-		ZoneId = nil,
+		ZoneId = "SunkenPalace",
 		MinBlaster = 7,
 		ViaElevator = true,
 		Lighting = "Palace",
@@ -192,7 +192,7 @@ MineFloors.List = {
 		RockName = "Void Rock",
 		CrystalName = "Heart Shard",
 		Name = "Heartstone Core",
-		ZoneId = nil,
+		ZoneId = "HeartstoneCore",
 		MinBlaster = 9,
 		ViaElevator = true,
 		Lighting = "Core",
@@ -210,11 +210,34 @@ MineFloors.List = {
 	},
 } :: { Floor }
 
+-- Where each floor area stands in the world (ground center; +Z = front/entrance), see
+-- docs/plans/MINE_STEP_PLAN.md: floors 1-3 replace the old quarry and caves, 4-5 lie deep below.
+MineFloors.Placement = {
+	CFrame.new(0, -12, -180),
+	CFrame.new(0, -12, -300),
+	CFrame.new(0, -40, -444),
+	CFrame.new(0, -170, -300),
+	CFrame.new(0, -330, -300),
+} :: { CFrame }
+
 MineFloors.ByIndex = {} :: { [number]: Floor }
 MineFloors.ById = {} :: { [string]: Floor }
 for _, floor in MineFloors.List do
 	MineFloors.ByIndex[floor.Index] = floor
 	MineFloors.ById[floor.Id] = floor
+end
+
+MineFloors.ByZone = {} :: { [string]: Floor }
+for _, floor in MineFloors.List do
+	MineFloors.ByZone[floor.ZoneId] = floor
+end
+
+-- The floor whose area is the WorldLayout zone `zoneId` (the town's starter outcrops count as floor 1).
+function MineFloors.floorForZone(zoneId: string): Floor?
+	if zoneId == "Outcrops" then
+		return MineFloors.List[1]
+	end
+	return MineFloors.ByZone[zoneId]
 end
 
 -- The floor for an index or id (floor 1 when unknown).
