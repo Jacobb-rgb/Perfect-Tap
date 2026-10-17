@@ -556,6 +556,147 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("flora: town blade signs, sign sizes, lanterns and windows", function()
+		local town = flora().Town
+		for _, site in Town.Sites do
+			local m = town:FindFirstChild(site.Id)
+			if m then
+				-- the main sign is big and hangs at the first parapet (8-12 studs), not on the top floor
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") and d.Name == "TownSign" then
+						local y = d.CFrame.Position.Y
+						T.truthy(y >= 7 and y <= 12.5, `{site.Id} sign at the first parapet (y {y})`)
+						local minW = if site.Id == "Inn" then 3.4 else 5
+						T.truthy(d.Size.X >= minW - 1e-3 and d.Size.Y >= 2.2 - 1e-3, `{site.Id} sign is big ({d.Size})`)
+					end
+				end
+				-- double-sided blade signs turned to the hero (south) / the street, perpendicular to the facade
+				if site.Blade then
+					local blade = m:FindFirstChild("BladeSign", true)
+					T.truthy(blade, `{site.Id} has a blade sign`)
+					if blade then
+						for _, faceName in { "FrontText", "BackText" } do
+							local gui = blade:FindFirstChild(faceName)
+							local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
+							T.truthy(label and label.Text == site.Sign, `{site.Id} blade sign reads {site.Sign} on {faceName}`)
+						end
+						local look = blade.CFrame.LookVector
+						T.truthy(math.abs(look:Dot(LOOK[site.Facing])) < 0.3, `{site.Id} blade sign is perpendicular to the facade`)
+						T.truthy(look:Dot(LOOK.S) > 0.7 or look:Dot(LOOK.W) > 0.7, `{site.Id} blade sign faces south or west`)
+					end
+				end
+				-- windows: lit panes glow, at most one unlit pane in six, unlit glass is light blue (never a black hole)
+				local lit, dark = 0, 0
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") then
+						if d.Name == "WindowGlow" then
+							lit += 1
+						elseif d.Name == "Window" then
+							dark += 1
+							local c = d.Color
+							T.truthy(c.R + c.G + c.B > 0.95, `{d:GetFullName()} unlit glass is not black`)
+						elseif d.Name == "LanternGlow" then
+							-- caged deep-amber lamps: small, no white blob
+							T.truthy(math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.6, `{d:GetFullName()} lantern cube is small`)
+							T.truthy(d.Color.G < 0.7 and d.Color.B < 0.35, `{d:GetFullName()} lantern is deep amber`)
+						end
+					end
+				end
+				T.truthy(dark * 5 <= lit, `{site.Id}: {dark} unlit panes for {lit} lit ones (at most 1 in 6)`)
+			end
+		end
+	end)
+
+	T.test("flora: one landmark tower, chunky town buildings", function()
+		local tall = {}
+		for _, site in Town.Sites do
+			local m = flora().Town:FindFirstChild(site.Id)
+			local top = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.CanCollide then
+					top = math.max(top, d.CFrame.Position.Y + halfExtents(d).Y)
+				end
+			end
+			T.truthy(top <= 23, `{site.Id} is {top} studs tall (<= 23)`)
+			if top > 19 then
+				table.insert(tall, site.Id)
+			end
+		end
+		T.truthy(
+			#tall <= 1 and (tall[1] == nil or tall[1] == "MapTower"),
+			`only the MAP lookout rises above 19 studs ({table.concat(tall, ", ")})`
+		)
+	end)
+
+	-- The six faces of a block part: outward normal, center, the two in-plane axes and half sizes.
+	local function blockFaces(part): { any }
+		local cf, size = part.CFrame, part.Size
+		local axes = { cf.RightVector, cf.UpVector, -cf.LookVector }
+		local half = { size.X / 2, size.Y / 2, size.Z / 2 }
+		local out = {}
+		for i = 1, 3 do
+			for _, sign in { -1, 1 } do
+				local n = axes[i] * sign
+				table.insert(out, {
+					n = n,
+					c = cf.Position + n * half[i],
+					u = axes[i % 3 + 1],
+					v = axes[(i + 1) % 3 + 1],
+					hu = half[i % 3 + 1],
+					hv = half[(i + 1) % 3 + 1],
+				})
+			end
+		end
+		return out
+	end
+
+	-- Overlap area of two coplanar face rectangles (b projected into a's axes; exact when aligned).
+	local function faceOverlap(a, b): number
+		local d = b.c - a.c
+		local cu, cv = d:Dot(a.u), d:Dot(a.v)
+		local eu = math.abs(b.u:Dot(a.u)) * b.hu + math.abs(b.v:Dot(a.u)) * b.hv
+		local ev = math.abs(b.u:Dot(a.v)) * b.hu + math.abs(b.v:Dot(a.v)) * b.hv
+		local ou = math.min(a.hu, cu + eu) - math.max(-a.hu, cu - eu)
+		local ov = math.min(a.hv, cv + ev) - math.max(-a.hv, cv - ev)
+		if ou <= 0 or ov <= 0 then
+			return 0
+		end
+		return ou * ov
+	end
+
+	T.test("flora: no z-fighting in the town (same-facing coplanar faces of different colours)", function()
+		for _, building in flora().Town:GetChildren() do
+			local blocks = {}
+			for _, d in building:GetDescendants() do
+				if d:IsA("Part") and d.Shape == roblox.Enum.PartType.Block then
+					table.insert(blocks, d)
+				end
+			end
+			local faces = {}
+			for i, part in blocks do
+				faces[i] = blockFaces(part)
+			end
+			for i = 1, #blocks do
+				for j = i + 1, #blocks do
+					local a, b = blocks[i], blocks[j]
+					local reach = (a.Size.Magnitude + b.Size.Magnitude) / 2
+					if (a.Color ~= b.Color or a.Material ~= b.Material) and (a.CFrame.Position - b.CFrame.Position).Magnitude <= reach then
+						for _, fa in faces[i] do
+							for _, fb in faces[j] do
+								-- downward faces at ground level face the terrain and never show
+								local ground = fa.n.Y < -0.99 and fa.c.Y < 0.1
+								if not ground and fa.n:Dot(fb.n) > 0.999 and math.abs(fa.n:Dot(fb.c - fa.c)) < 0.01 then
+									local area = faceOverlap(fa, fb)
+									T.truthy(area <= 0.004, `{a:GetFullName()} and {b.Name} share a face plane at {fa.c} ({area} studs^2)`)
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end)
+
 	T.test("flora: deterministic build", function()
 		local function signature(): (number, number)
 			local m = roblox.Instance.new("Model")

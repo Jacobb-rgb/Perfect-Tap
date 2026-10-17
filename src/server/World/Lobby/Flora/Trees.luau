@@ -53,9 +53,14 @@ function Trees.pinkGrove(parent: Instance, rng: Rng.Rng)
 	return m
 end
 
+-- The red tree stands 4 studs west and 2 south of its piece center (inside
+-- the footprint), so it no longer covers the spur workshop and the ORE
+-- workshop from the hero camera.
+Trees.RedTreeOffset = Vector3.new(-4, 0, 2)
+
 function Trees.redTree(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("RedTree")
-	local c = piece.Center
+	local c = piece.Center + Trees.RedTreeOffset
 	local m = Style.model("RedTree", parent)
 	-- side crown east, away from the Hall of Fame boards
 	Kit.bigTree(m, CFrame.new(c), "Red", rng, 1.4, 1)

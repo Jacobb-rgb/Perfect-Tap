@@ -65,17 +65,61 @@
     "shadowExtent": 220,
     "maxLights": 32
   },
-  "town_tools_map": {
+  "town_map_close": {
     "scene": "world",
     "position": [
-      -30,
+      -52,
       16,
-      50
+      56
     ],
     "target": [
-      -60,
-      12,
-      40
+      -58,
+      10,
+      33
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_tools_close": {
+    "scene": "world",
+    "position": [
+      -42,
+      14,
+      66
+    ],
+    "target": [
+      -59,
+      9,
+      68
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_cartshop": {
+    "scene": "world",
+    "position": [
+      -50,
+      10,
+      6
+    ],
+    "target": [
+      -59.6,
+      6,
+      -10
     ],
     "fov": 62,
     "preset": "Surface",
@@ -87,19 +131,19 @@
     "shadowExtent": 140,
     "maxLights": 24
   },
-  "town_map_close": {
+  "town_lodge": {
     "scene": "world",
     "position": [
-      -40,
-      14,
-      70
+      -57,
+      11,
+      25
     ],
     "target": [
-      -60,
-      14,
-      58
+      -59.7,
+      6,
+      12
     ],
-    "fov": 55,
+    "fov": 70,
     "preset": "Surface",
     "sunDir": [
       -0.965,
@@ -175,138 +219,6 @@
     "shadowExtent": 140,
     "maxLights": 24
   },
-  "town_ore_spur": {
-    "scene": "world",
-    "position": [
-      30,
-      12,
-      24
-    ],
-    "target": [
-      58,
-      12,
-      -2
-    ],
-    "fov": 60,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 140,
-    "maxLights": 24
-  },
-  "town_city_depot": {
-    "scene": "world",
-    "position": [
-      30,
-      14,
-      110
-    ],
-    "target": [
-      54,
-      8,
-      80
-    ],
-    "fov": 60,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 140,
-    "maxLights": 24
-  },
-  "town_depot": {
-    "scene": "world",
-    "position": [
-      40,
-      10,
-      118
-    ],
-    "target": [
-      59,
-      8,
-      102
-    ],
-    "fov": 60,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 140,
-    "maxLights": 24
-  },
-  "town_cottages": {
-    "scene": "world",
-    "position": [
-      0,
-      14,
-      84
-    ],
-    "target": [
-      -10,
-      6,
-      108
-    ],
-    "fov": 70,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 140,
-    "maxLights": 24
-  },
-  "town_mine_cottage": {
-    "scene": "world",
-    "position": [
-      -8,
-      10,
-      96
-    ],
-    "target": [
-      -22,
-      5,
-      108
-    ],
-    "fov": 60,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 140,
-    "maxLights": 24
-  },
-  "town_garden": {
-    "scene": "world",
-    "position": [
-      10,
-      10,
-      94
-    ],
-    "target": [
-      20,
-      5,
-      107
-    ],
-    "fov": 62,
-    "preset": "Surface",
-    "sunDir": [
-      -0.965,
-      0.225,
-      0.136
-    ],
-    "shadowExtent": 140,
-    "maxLights": 24
-  },
   "town_inn_sign": {
     "scene": "world",
     "position": [
@@ -327,6 +239,160 @@
       0.136
     ],
     "shadowExtent": 100,
+    "maxLights": 24
+  },
+  "town_ore_spur": {
+    "scene": "world",
+    "position": [
+      30,
+      12,
+      24
+    ],
+    "target": [
+      56,
+      9,
+      -2
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_lab": {
+    "scene": "world",
+    "position": [
+      32,
+      13,
+      92
+    ],
+    "target": [
+      46,
+      8,
+      70
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_east_row": {
+    "scene": "world",
+    "position": [
+      36,
+      16,
+      64
+    ],
+    "target": [
+      60,
+      8,
+      60
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_depot": {
+    "scene": "world",
+    "position": [
+      42,
+      15,
+      90
+    ],
+    "target": [
+      59,
+      9,
+      102
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_cottages": {
+    "scene": "world",
+    "position": [
+      0,
+      14,
+      84
+    ],
+    "target": [
+      0,
+      5,
+      106
+    ],
+    "fov": 78,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_mine_cottage": {
+    "scene": "world",
+    "position": [
+      -8,
+      10,
+      96
+    ],
+    "target": [
+      -22,
+      5,
+      106
+    ],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24
+  },
+  "town_garden": {
+    "scene": "world",
+    "position": [
+      4,
+      10,
+      94
+    ],
+    "target": [
+      17,
+      5,
+      104
+    ],
+    "fov": 64,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
     "maxLights": 24
   }
 }
