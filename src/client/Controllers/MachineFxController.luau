@@ -7,10 +7,16 @@
 	  works. Every 0.5 s the machines within 80 studs become active; only
 	  those get per-frame work and one-off effects. A machine that leaves
 	  the range is put back to its idle look.
-	- Working: furnaces pulse their glow, light, embers and chimney smoke;
-	  Crusher rollers and the Auto Cleaner drum spin (easing in and out) and
-	  the cleaner's vent smokes more. One hum loop plays on the nearest 4
-	  working machines within 60 studs (4 pooled sounds).
+	- Working: furnaces (Clay, Brick, Blast, Plasma, Alloy: FURNACES) pulse
+	  their glow, light, embers and chimney smoke (the Plasma Furnace has no
+	  chimney and pulses toward a pale violet, not orange); Crusher rollers,
+	  the Auto Cleaner drum and the Polisher's felt Wheel spin (easing in and
+	  out), the cleaner's vent smokes more and the Polisher's turntable
+	  sparkles more. The Wind Turbine's Rotor and Blades turn slowly all the
+	  time (SpinIdle, around the hub along the Nacelle's axis). Every part is
+	  optional: a model without it just skips that effect. One hum loop
+	  plays on the nearest 4 working machines within 60 studs (4 pooled
+	  sounds).
 	- Queue goes up: gulp + dust at the hopper. Cycles goes up: a done click
 	  and a glint in the ore's colour at the output (and a tiny shake for
 	  your own machine up close); a crate gulps, a Sell Chute flashes coins.
@@ -125,11 +131,13 @@ type Fx = {
 	Applied: number, -- heat last written to lights and emitters
 	Phase: number,
 	Angle: number,
-	SpinRate: number,
+	SpinRate: number, -- rad/s at full heat (working)
+	SpinIdle: number, -- rad/s always, working or not (Wind Turbine)
 	Spinners: { Spinner },
 	Emitters: { Emitter },
 	Glow: BasePart?,
 	GlowColor: Color3,
+	HotTo: Color3, -- the colour the Glow and Hot parts pulse toward
 	Light: PointLight?,
 	LightIdle: number,
 	LightBusy: number,
@@ -190,10 +198,17 @@ local BILLBOARD_RANGE = 50 -- MachineBillboard hides itself beyond 45
 local MAX_BILLBOARDS = 12
 local HEAT_RATE = 1.6 -- per second: how fast glow and spin ease in and out
 local FLASH_DECAY = 2.5
-local SPIN_RATE: { [string]: number } = { Crusher = 6, AutoCleaner = 3 } -- rad/s
+local SPIN_RATE: { [string]: number } = { Crusher = 6, AutoCleaner = 3, Polisher = 9 } -- rad/s
+local TURBINE_SPIN = 1.3 -- rad/s, all the time...
+local IDLE_SPIN_RANGE = 60 -- ...for turbines this close (cheap on phones)
+-- machines with a glowing furnace door (Glow), embers and (most) a chimney (ChimneyTop)
+local FURNACES: { [string]: boolean } =
+	{ ClayFurnace = true, BlastFurnace = true, BrickFurnace = true, PlasmaFurnace = true, AlloyFurnace = true }
 -- working looks: emitter rates and light brightness at full heat
 local EMBERS_BUSY = 14
-local SMOKE_BUSY: { [string]: number } = { ClayFurnace = 6, BlastFurnace = 12 }
+local SPARKLE_BUSY = 16
+local SMOKE_BUSY: { [string]: number } = { ClayFurnace = 6, BlastFurnace = 12, BrickFurnace = 8, AlloyFurnace = 10 }
+local PLASMA_HOT = Color3.fromRGB(236, 205, 255) -- the Plasma Furnace glows toward this pale violet
 local VENT_FACTOR = 3
 local LIGHT_BUSY = 2.8
 local STUB_SIZE = Vector3.new(1.5, 0.45, 0.75)
@@ -330,6 +345,29 @@ local function addSelfSpinners(fx: Fx, base: BasePart, partName: string, dir: nu
 	end
 end
 
+--[[
+	Parts that turn around the line through the hub part's centre along the
+	X axis of `alongName` (a cylinder's length: the Wind Turbine's Nacelle
+	points where its rotor faces), or the Base's front-back line without it.
+	A ball hub has no useful axis of its own, so addSpinners can't do this.
+]]
+local function addHubSpinners(fx: Fx, base: BasePart, hubName: string, alongName: string, partNames: { string }, dir: number)
+	local hub = fx.Model:FindFirstChild(hubName)
+	if not hub or not hub:IsA("BasePart") then
+		return
+	end
+	local along = fx.Model:FindFirstChild(alongName)
+	local direction = if along and along:IsA("BasePart") then along.CFrame.RightVector else base.CFrame.LookVector
+	-- a frame at the hub whose X axis is the turning axis
+	local axisWorld = CFrame.lookAt(hub.Position, hub.Position + direction) * CFrame.Angles(0, math.pi / 2, 0)
+	local axis = base.CFrame:ToObjectSpace(axisWorld)
+	for _, child in fx.Model:GetChildren() do
+		if child:IsA("BasePart") and table.find(partNames, child.Name) then
+			table.insert(fx.Spinners, { Part = child, Rest = base.CFrame:ToObjectSpace(child.CFrame), Axis = axis, Dir = dir })
+		end
+	end
+end
+
 -- The machine's water hooks (Base attachments WaterOut / WaterIn, a basin
 -- part WaterPool).
 local function captureWater(fx: Fx)
@@ -353,9 +391,20 @@ end
 local function capture(fx: Fx)
 	local model, base = fx.Model, fx.Base
 	local id = fx.Id
-	if id == "ClayFurnace" or id == "BlastFurnace" then
-		local glow = model:FindFirstChild("Glow")
-		if glow and glow:IsA("BasePart") then
+	if FURNACES[id] then
+		-- the door glow may be built from several "Glow" parts (an arch's
+		-- block and round top): the one holding the light leads
+		local glow: BasePart? = nil
+		for _, child in model:GetChildren() do
+			if child:IsA("BasePart") and child.Name == "Glow" then
+				if child:FindFirstChildOfClass("PointLight") then
+					glow = child
+					break
+				end
+				glow = glow or child
+			end
+		end
+		if glow then
 			fx.Glow = glow
 			fx.GlowColor = glow.Color
 			local light = glow:FindFirstChildOfClass("PointLight")
@@ -367,9 +416,12 @@ local function capture(fx: Fx)
 		end
 		emitterOn(fx, glow, "Embers", EMBERS_BUSY)
 		emitterOn(fx, model:FindFirstChild("ChimneyTop"), "Smoke", SMOKE_BUSY[id])
+		-- the Plasma Furnace glows violet: it pulses paler, never orange
+		fx.HotTo = if id == "PlasmaFurnace" then PLASMA_HOT else GLOW_HOT
 		for _, child in model:GetChildren() do
-			-- molten parts, and the rest of a door glow built from several parts (the arch's round top)
-			if child:IsA("BasePart") and (child.Name == "Molten" or (child.Name == "Glow" and child ~= fx.Glow)) then
+			-- molten parts, the plasma ball, and the rest of a door glow built from several parts
+			local hot = child.Name == "Molten" or child.Name == "PlasmaBall" or (child.Name == "Glow" and child ~= fx.Glow)
+			if child:IsA("BasePart") and hot then
 				table.insert(fx.Hot, child)
 				table.insert(fx.HotColors, child.Color)
 			end
@@ -405,6 +457,18 @@ local function capture(fx: Fx)
 			addSpinners(fx, base, "Cog1", { "Cog1" }, 1)
 			addSpinners(fx, base, "Cog2", { "Cog2" }, -MachineBuilder.CogRatio)
 		end
+	elseif id == "Polisher" then
+		-- the felt wheel turns round its own (upright) axis; the turntable sparkles more
+		if base then
+			addSelfSpinners(fx, base, "Wheel", 1)
+		end
+		emitterOn(fx, model:FindFirstChild("Turntable"), "Sparkle", SPARKLE_BUSY)
+	elseif id == "WindTurbine" then
+		-- hub and blades turn slowly all the time (a generator never "works")
+		if base then
+			addHubSpinners(fx, base, "Rotor", "Nacelle", { "Rotor", "Blade" }, 1)
+		end
+		fx.SpinIdle = if #fx.Spinners > 0 then TURBINE_SPIN else 0
 	elseif id == "IronBox" then
 		if base then
 			local flaps: { [string]: Flap } = {}
@@ -1101,7 +1165,7 @@ end
 
 local function onWorkStart(fx: Fx)
 	local id = fx.Id
-	if id == "ClayFurnace" or id == "BlastFurnace" then
+	if FURNACES[id] then
 		local glow = fx.Glow
 		Sfx.play("Furnace", if glow then glow.Position else pointOf(fx, "Prompt"))
 	elseif id == "Crusher" then
@@ -1224,10 +1288,12 @@ local function register(instance: Instance)
 		Phase = math.random() * 6,
 		Angle = 0,
 		SpinRate = 0,
+		SpinIdle = 0,
 		Spinners = {},
 		Emitters = {},
 		Glow = nil,
 		GlowColor = Color3.new(1, 1, 1),
+		HotTo = GLOW_HOT,
 		Light = nil,
 		LightIdle = 0,
 		LightBusy = 0,
@@ -1483,21 +1549,25 @@ local function step(dt: number)
 				light.Brightness = bright * (1 + 0.2 * pulse * fx.Heat)
 			end
 			local glow = fx.Glow
-			-- brightness pulses toward a warm hot orange (never white)
+			-- brightness pulses toward a warm hot orange (never white; the
+			-- Plasma Furnace toward a pale violet)
 			if glow then
-				glow.Color = fx.GlowColor:Lerp(GLOW_HOT, (0.35 + 0.45 * pulse) * fx.Heat)
+				glow.Color = fx.GlowColor:Lerp(fx.HotTo, (0.35 + 0.45 * pulse) * fx.Heat)
 			end
 			for i, part in fx.Hot do
-				part.Color = fx.HotColors[i]:Lerp(GLOW_HOT, (0.25 + 0.4 * pulse) * fx.Heat)
+				part.Color = fx.HotColors[i]:Lerp(fx.HotTo, (0.25 + 0.4 * pulse) * fx.Heat)
 			end
-			if base and #fx.Spinners > 0 then
-				fx.Angle = (fx.Angle + fx.SpinRate * fx.Heat * dt) % (math.pi * 2)
-				local origin = base.CFrame
-				for _, spinner in fx.Spinners do
-					local turn = spinner.Axis * CFrame.Angles(fx.Angle * spinner.Dir, 0, 0) * spinner.Axis:Inverse()
-					table.insert(spinParts, spinner.Part)
-					table.insert(spinFrames, origin * turn * spinner.Rest)
-				end
+		end
+		-- spinning parts: faster with the heat, plus the always-on idle turn
+		-- (Wind Turbine) for machines within IDLE_SPIN_RANGE
+		local spin = fx.SpinRate * fx.Heat + (if fx.Distance <= IDLE_SPIN_RANGE then fx.SpinIdle else 0)
+		if spin > 0 and base and #fx.Spinners > 0 then
+			fx.Angle = (fx.Angle + spin * dt) % (math.pi * 2)
+			local origin = base.CFrame
+			for _, spinner in fx.Spinners do
+				local turn = spinner.Axis * CFrame.Angles(fx.Angle * spinner.Dir, 0, 0) * spinner.Axis:Inverse()
+				table.insert(spinParts, spinner.Part)
+				table.insert(spinFrames, origin * turn * spinner.Rest)
 			end
 		end
 		-- Sell Chute coin flash

@@ -16,6 +16,21 @@
 	entry.Out = finished items waiting to leave; at most MachineData.MaxOutBuffer.
 	Empty queues are set to nil to keep saves small.
 
+	The roster processors (docs/plans/MACHINES_GAME_PLAN.md):
+	  Batch          one job works up to Batch queued items from In[1] at
+	                 once, one result each (Plasma Furnace: batch), never more
+	                 results than fit in Out
+	  GradeUpChance  each output is one grade better with that chance
+	                 (Polisher: gradeUp; Flawless stays Flawless)
+	  ShardChance    a job also gives a crystal shard with that chance
+	                 (Crystal Extractor: rollShard; the item passes through)
+	  "Alloy"        a job takes In[1] and the first queued ingot of another
+	                 ore (alloyPair) and gives ONE alloy of the more valuable
+	                 ore with the lower grade (alloyDesc). The last queue place
+	                 is kept for an ingot of another ore, so a queue full of
+	                 one ore can never jam the furnace (accepts: 'Full').
+	consume() finishes a job on any set of queued items.
+
 	Refusal reasons: 'Full' and 'Busy' mean the item waits; 'Wrong',
 	'Foreign' and 'Mixed' mean it is pushed back out.
 ]]
@@ -33,6 +48,7 @@ export type Reason = "Wrong" | "Foreign" | "Mixed" | "Full" | "Busy"
 type Entry = Placement.Entry
 
 local ANVIL = "Anvil"
+local ALLOY = "Alloy" -- MachineData Behaviour of the Alloy Furnace
 
 -- Machines that turn one input into outputs on a timer (furnaces, Crusher, Auto Cleaner).
 local function isProcessor(info: MachineData.Machine): boolean
@@ -112,7 +128,13 @@ function MachineLogic.accepts(id: string, desc: Desc, entry: Entry, sameOwner: b
 			return false, "Full"
 		end
 	elseif MachineLogic.queueSize(id) > 0 then
-		if queued >= MachineLogic.queueSize(id) then
+		local size = MachineLogic.queueSize(id)
+		if queued >= size then
+			return false, "Full"
+		end
+		if info.Behaviour == ALLOY and queued + 1 >= size and not MachineLogic.hasOtherOre(queue, desc.O) then
+			-- the last place waits for an ingot of another ore (else the queue
+			-- could fill up with one ore and never make an alloy)
 			return false, "Full"
 		end
 	end
@@ -153,9 +175,11 @@ function MachineLogic.rollGrade(chances: { [string]: number }, maxGrade: string,
 end
 
 -- What one finished job turns `input` into. `roll` in [0, 1) is only used
--- by machines with GradeChances (Cleaning Plant); `odds` replaces their
+-- by machines with GradeChances (Cleaning Plant) or GradeUpChance
+-- (Polisher: roll < chance = one grade better); `odds` replaces their
 -- GradeChances (the Cleaning Plant's Quality level: MachineData.gradeOdds).
 -- A sorter (Iron Box) gives back a copy of `input`, so no item is ever lost.
+-- An Alloy Furnace job needs two ingots: alloyDesc makes its output.
 function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [string]: number }?): { Desc }
 	local info = MachineData.ById[id]
 	local list: { Desc } = {}
@@ -166,7 +190,7 @@ function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [st
 		table.insert(list, { K = input.K, O = input.O, G = input.G, R = input.R })
 		return list
 	end
-	if not isProcessor(info) then
+	if not isProcessor(info) or info.Behaviour == ALLOY then
 		return list
 	end
 	local kind = info.Output :: string
@@ -177,8 +201,127 @@ function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [st
 	else
 		grade = input.G or "Rough"
 	end
+	if info.GradeUpChance then
+		grade = MachineLogic.gradeUp(grade, info.GradeUpChance, roll)
+	end
 	for _ = 1, info.OutputCount or 1 do
 		table.insert(list, { K = kind, O = input.O, G = grade })
+	end
+	return list
+end
+
+---------------------------------------------------------------- roster processors
+
+-- The grade one better (Rough -> Clean -> Pristine -> Flawless; Flawless
+-- stays; nil or unknown counts as Rough).
+function MachineLogic.nextGrade(gradeId: string?): string
+	local level = ItemData.gradeLevel(gradeId)
+	local grade = ItemData.Grades[math.clamp(level + 1, 1, #ItemData.Grades)]
+	return grade.Id
+end
+
+-- Polisher: `gradeId` one grade better when roll < chance, else as it is
+-- (nil or unknown counts as Rough). A broken chance or roll never
+-- upgrades; a chance above 1 counts as 1.
+function MachineLogic.gradeUp(gradeId: string?, chance: number?, roll: number): string
+	local grade = if gradeId and ItemData.GradeById[gradeId] then gradeId else "Rough"
+	local odds = if isFinite(chance) then math.clamp(chance :: number, 0, 1) else 0
+	if isFinite(roll) and roll < odds then
+		return MachineLogic.nextGrade(grade)
+	end
+	return grade
+end
+
+-- Crystal Extractor: does a job with this roll in [0, 1) give a shard?
+function MachineLogic.rollShard(chance: number?, roll: number): boolean
+	local odds = if isFinite(chance) then math.clamp(chance :: number, 0, 1) else 0
+	return isFinite(roll) and roll < odds
+end
+
+-- Does the queue hold a valid ingot of an ore other than `oreId`?
+function MachineLogic.hasOtherOre(queue: { Desc }?, oreId: string): boolean
+	if not queue then
+		return false
+	end
+	for _, desc in queue do
+		if MachineLogic.isValidDesc(desc) and desc.K == "Ingot" and desc.O ~= oreId then
+			return true
+		end
+	end
+	return false
+end
+
+-- The two queued items an Alloy Furnace job takes: In[1] (an ingot) and
+-- the first queued ingot of another ore. Returns (1, j), or (nil, nil)
+-- while every queued ingot is of In[1]'s ore or In[1] is no valid ingot.
+function MachineLogic.alloyPair(queue: { Desc }?): (number?, number?)
+	if not queue then
+		return nil, nil
+	end
+	local first = queue[1]
+	if not MachineLogic.isValidDesc(first) or first.K ~= "Ingot" then
+		return nil, nil
+	end
+	for j = 2, #queue do
+		local desc = queue[j]
+		if MachineLogic.isValidDesc(desc) and desc.K == "Ingot" and desc.O ~= first.O then
+			return 1, j
+		end
+	end
+	return nil, nil
+end
+
+-- What one Rough item of an ore sells for, then its podium income (which
+-- of two ores is worth more). Unknown ores are worth nothing.
+local function oreWorth(oreId: string): (number, number)
+	local ore = OreData.ById[oreId]
+	if not ore then
+		return -1, -1
+	end
+	return ore.Value, ore.Income
+end
+
+-- The alloy two ingots make: ONE item of the more valuable ore (OreData
+-- Value, then Income; a tie keeps `a`'s ore) with the lower of the two
+-- grades (nil counts as Rough).
+function MachineLogic.alloyDesc(a: Desc, b: Desc): Desc
+	local valueA, incomeA = oreWorth(a.O)
+	local valueB, incomeB = oreWorth(b.O)
+	local oreId = if valueB > valueA or (valueB == valueA and incomeB > incomeA) then b.O else a.O
+	local gradeA = if a.G and ItemData.GradeById[a.G] then a.G else "Rough"
+	local gradeB = if b.G and ItemData.GradeById[b.G] then b.G else "Rough"
+	local grade = if ItemData.gradeLevel(gradeB) < ItemData.gradeLevel(gradeA) then gradeB else gradeA
+	return { K = "Alloy", O = oreId, G = grade }
+end
+
+--[[
+	The queued items one job of machine `id` takes, in order from In[1]:
+	just In[1] for most machines; up to Batch items for a batch machine
+	(Plasma Furnace), but never more results than fit in Out
+	(MaxOutBuffer - outCount; In[1] always goes), and only items the
+	machine accepts join In[1]. Empty without a queue. (Alloy: alloyPair.)
+]]
+function MachineLogic.batch(id: string, queue: { Desc }?, outCount: number): { Desc }
+	local list: { Desc } = {}
+	local info = MachineData.ById[id]
+	if not info or not queue or #queue == 0 then
+		return list
+	end
+	table.insert(list, queue[1])
+	local size = if isFinite(info.Batch) then math.floor(info.Batch :: number) else 1
+	if size <= 1 then
+		return list
+	end
+	local per = math.max(1, info.OutputCount or 1)
+	local used = if isFinite(outCount) then outCount else 0
+	local room = math.floor((MachineData.MaxOutBuffer - used) / per)
+	local accepts = info.Accepts
+	for i = 2, math.min(size, room, #queue) do
+		local desc = queue[i]
+		if not accepts or not MachineLogic.isValidDesc(desc) or not accepts[desc.K] then
+			break
+		end
+		table.insert(list, desc)
 	end
 	return list
 end
@@ -196,6 +339,31 @@ function MachineLogic.complete(entry: Entry, outputs: { Desc })
 	local queue = entry.In
 	if queue and #queue > 0 then
 		table.remove(queue, 1)
+		if #queue == 0 then
+			entry.In = nil
+		end
+	end
+	if #outputs > 0 then
+		local out: { Desc } = entry.Out or {}
+		entry.Out = out
+		for _, desc in outputs do
+			table.insert(out, desc)
+		end
+	end
+end
+
+-- Finishes a job on several queued items (Batch, Alloy): takes each of
+-- `inputs` (the very tables in In, found by identity) out of In and
+-- appends the outputs to Out. (Check #Out + #outputs <= MaxOutBuffer first.)
+function MachineLogic.consume(entry: Entry, inputs: { Desc }, outputs: { Desc })
+	local queue = entry.In
+	if queue then
+		for _, input in inputs do
+			local index = table.find(queue, input)
+			if index then
+				table.remove(queue, index)
+			end
+		end
 		if #queue == 0 then
 			entry.In = nil
 		end
