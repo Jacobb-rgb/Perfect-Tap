@@ -1,6 +1,7 @@
 --[[
 	Preview-only setup for the base yard (WP-Base). Puts sample ores on the
-	podiums of plot 1 and a pile into its Ore Pen (the same builders and
+	podiums of plot 5 (an east plot: the sun lights its yard from the pad
+	side) and a pile into its Ore Pen (the same builders and
 	spots the game uses) and builds the UI overlays:
 	  hud_base       the HUD: coins, "+$X/s" income, a "+$X" popup, carry slots
 	  ui_pen         HUD + the Ore Pen panel (PC layout)
@@ -14,10 +15,10 @@ local UiExport = require("./uiexport")
 
 local YardPreview = {}
 
-YardPreview.Plot = 1
+YardPreview.Plot = 5 -- an east plot: the sun lights the yard from the pad side
 YardPreview.Podiums = {
 	{ K = "Clean", O = "Emerald", G = "Flawless" },
-	{ K = "Clean", O = "Gold", G = "Pristine" },
+	{ K = "Clean", O = "Stormcore", G = "Pristine" }, -- a wide Epic ore inside the holo-ring
 }
 YardPreview.Pen = {
 	["Raw|Copper||"] = 9,
@@ -52,7 +53,7 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 		local model = ItemBuilder.display(
 			desc,
 			plotCF * CF.new(rect.Center.X, BaseLayout.PodiumOreHeight, rect.Center.Z) * CF.Angles(0, 0.5, 0),
-			`preview/{slot}`
+			`{YardPreview.Plot}/{slot}/{desc.O}` -- the seed PodiumService uses
 		)
 		model.Parent = folder
 		income += ItemData.income(desc)
