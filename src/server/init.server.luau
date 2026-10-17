@@ -40,6 +40,7 @@ local ORDER = {
 	"ProcessingService",
 	"IronBoxService",
 	"SellService",
+	"ShopService",
 	"BuildService",
 	"AccessService",
 }

@@ -138,6 +138,11 @@ elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Found
 	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
 		uiExports[name] = guis
 	end
+elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays (tools/lune/lib/tech_shop_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
