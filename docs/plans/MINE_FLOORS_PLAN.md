@@ -7,13 +7,15 @@ Goal: the deeper the floor, the harder the rocks, the better the ores, and the c
 | File | What |
 |---|---|
 | src/shared/Config/MineFloors.luau | 5 floors: blaster gate 1/3/5/7/9, 6 home ores each (all 30 ores), better `CrystalOres`, palettes, lighting preset, elevator flag; rock kinds, ore counts (3/4/3), `Seconds` per kind (4/5/6 s with the floor's weakest blaster), spawn chances (Big 30 %, Crystal 10 %, Golden 2 %, Geode 1.5 %, Artifact 1 %), Giant Crystal (every 600 s), elevator price; `rockHealth(floor, kind)` |
-| src/shared/Builders/RockBuilder.luau | `build(floor, kind, oreIds, base, seed)` for Small, Big, Crystal, Golden, Geode, Artifact, Giant; floor looks (quarry strata + matte crystals → ember lava cracks + glowing tips → lagoon moss, mushroom, glassy crystals → palace carved stone, gold trim, column → core floating rock, debris, glowing crystals); `applyStage(model, stage, seed)`: cracks glowing in the stage's ore color, one lump + one crystal break off |
+| src/shared/Builders/RockBuilder.luau | v2 after the owner's ore-shelf reference: tumbled rock chunks with a glowing core in the gaps (lava, ice, gold, heart glow) and dense clusters of slim two-tone faceted crystals (glowing tips, twinkles, pointed hero crystals made of exact triangles). `build(floor, kind, oreIds, base, seed)` for Small, Big, Crystal, Golden, Geode, Artifact, Giant; floor looks (quarry matte copper/quartz → ember lava seams + fire tips → lagoon moss, mushroom, glassy crystals → palace carved stone, gold trim, column → core floating rock, debris, pure glow); `applyStage(model, stage, seed)`: cracks glowing in the stage's ore color on the outer chunks, one chunk + one crystal break off. Budgets 52–80 parts (Giant 160) |
 | src/shared/Config/LightingConfig.luau | presets `Lagoon`, `Palace`, `Core` |
 | tests/MineFloors.spec.luau | floors, ore coverage, HP ≈ seconds, budgets, crystals grow with depth, crack stages |
-| tools/lune/lib/mine_concepts.luau, tools/preview/mine_shots.json | scene `mine_rocks`: rock rows per floor, Giant Crystals, breaking storyboard |
+| tools/lune/lib/mine_concepts.luau, tools/preview/mine_shots.json | scene `mine_rocks`: rock rows per floor, Giant Crystals, breaking storyboard; scene `mine_showcase`: the stepped neon ore shelf like the owner's reference |
 
-Render: `lune run tools/lune/export_scene.luau mine_rocks` then
-`SHOTS_EXTRA=tools/preview/mine_shots.json node tools/preview/render.mjs mine_rocks`.
+Render: `lune run tools/lune/export_scene.luau mine_rocks` (or `mine_showcase`) then
+`SHOTS_EXTRA=tools/preview/mine_shots.json node tools/preview/render.mjs mine_rocks` (or `mine_showcase`).
+Performance note: rocks are now 40–60 parts; when wiring them in, consider building the crystal clusters on the
+client only (decoration) and keeping the server rock to the chunks.
 Pictures: docs/screenshots/mine_concepts/.
 
 ## Next (after the owner approves the rock look)

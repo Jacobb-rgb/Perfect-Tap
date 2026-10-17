@@ -224,4 +224,99 @@ function MineConcepts.buildRocks(Loader, workspace)
 	end
 end
 
+
+--[[
+	The ore-shelf showcase (after the owner's reference picture): a stepped
+	display in a dark hall, one shelf per floor with a neon edge in the floor's
+	color, floor 1 at the top back and floor 5 at the front, the six rock kinds
+	of each floor on it with name plates. Scene "mine_showcase".
+]]
+local SHELF_COLORS = {
+	C3.fromRGB(255, 196, 130),
+	C3.fromRGB(255, 96, 40),
+	C3.fromRGB(70, 214, 255),
+	C3.fromRGB(196, 130, 255),
+	C3.fromRGB(255, 70, 160),
+}
+local PLATE_TEXT = {
+	Small = "SMALL ROCK",
+	Big = "BIG ROCK",
+	Crystal = "CRYSTAL 10%",
+	Golden = "GOLDEN ROCK",
+	Geode = "GEODE",
+	Artifact = "ARTIFACT ROCK",
+}
+
+-- shrinks a built model around `origin` (display copies on the shelf)
+local function scaleModel(model, origin, k)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local rel = origin:ToObjectSpace(d.CFrame)
+			d.Size = d.Size * k
+			d.CFrame = origin * (rel - rel.Position + rel.Position * k)
+		elseif d:IsA("PointLight") then
+			d.Range = d.Range * k
+		end
+	end
+end
+
+function MineConcepts.buildShowcase(Loader, workspace)
+	local CF = Loader.CFrame
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
+	local NEON = Enum.Material.Neon
+	local root = roblox.Instance.new("Model")
+	root.Name = "MineShowcase"
+	root.Parent = workspace
+	local H, D, W, GAP, K = 7, 13, 72, 11, 0.78
+	local SHELF = C3.fromRGB(34, 34, 44)
+	local EDGE = C3.fromRGB(24, 24, 32)
+
+	-- hall: polished dark floor, back wall, light pillars
+	Geo.block(root, CF.new(0, -0.5, -20), V3.new(200, 1, 160), C3.fromRGB(46, 46, 58), nil, { Reflectance = 0.12 })
+	Geo.block(root, CF.new(0, 30, -64), V3.new(200, 60, 2), C3.fromRGB(30, 30, 40))
+	for _, x in { -60, 60 } do
+		Geo.block(root, CF.new(x, 26, -54), V3.new(5, 52, 5), C3.fromRGB(36, 36, 48))
+		Geo.block(root, CF.new(x + (if x < 0 then 2.6 else -2.6), 26, -54), V3.new(0.3, 50, 0.6), C3.fromRGB(200, 230, 255), NEON)
+		lamp(Geo, CF, root, V3.new(x * 0.8, 20, -40), C3.fromRGB(190, 210, 255), 50, 0.8)
+	end
+	label(Geo, CF, root, CF.new(0, 47, -62.9), 52, 6.5, "TERRA FORGE  ·  MINE FLOORS", C3.fromRGB(255, 190, 90))
+
+	for _, floor in MineFloors.List do
+		local r = 5 - floor.Index -- floor 5 in front (r = 0), floor 1 at the top back (r = 4)
+		local top = (r + 1) * H
+		local front = -r * D
+		local color = SHELF_COLORS[floor.Index]
+		Geo.block(root, CF.new(0, top / 2, front - D / 2), V3.new(W, top, D), SHELF)
+		Geo.block(root, CF.new(0, top - 0.2, front - D / 2), V3.new(W + 0.4, 0.4, D + 0.1), EDGE)
+		-- neon edges along the shelf front, top and bottom of the face
+		Geo.block(root, CF.new(0, top - 0.15, front + 0.08), V3.new(W, 0.24, 0.2), color, NEON, { CastShadow = false })
+		Geo.block(root, CF.new(0, top - H + 0.5, front + 0.08), V3.new(W, 0.16, 0.2), color:Lerp(C3.new(0, 0, 0), 0.3), NEON, { CastShadow = false })
+		-- floor banner straddling the top edge, with a neon frame
+		local banner = string.format("FLOOR %d  ·  %s", floor.Index, string.upper(floor.Name))
+		Geo.block(root, CF.new(0, top - 1.3, front + 0.06), V3.new(27, 2.1, 0.1), color, NEON, { CastShadow = false })
+		label(Geo, CF, root, CF.new(0, top - 1.3, front + 0.14), 26.4, 1.75, banner, color:Lerp(C3.new(1, 1, 1), 0.55))
+		local rng = Rng.new("shelf" .. floor.Index)
+		for col, kind in KINDS do
+			local x = (col - 3.5) * GAP
+			local count = MineFloors.OreCount[kind]
+			local weights = if kind == "Crystal" or kind == "Golden" then floor.CrystalOres else floor.Ores
+			local ores = rollOres(Rng, weights, count, floor.Index * 100 + col)
+			local origin = CF.new(x, top, front - D * 0.55) * CF.Angles(0, rng:range(-0.3, 0.3), 0)
+			local rock = RockBuilder.build(floor.Index, kind, ores, origin, floor.Index * 31 + col * 7)
+			scaleModel(rock, origin, K)
+			rock.Parent = root
+			-- a small dark pedestal plate and the name plate in front of it
+			Geo.block(root, CF.new(x, top + 0.08, front - D * 0.55), V3.new(7, 0.16, 7), C3.fromRGB(22, 22, 30))
+			Geo.block(root, CF.new(x, top + 0.1, front - D * 0.55 + 3.55), V3.new(7, 0.12, 0.14), color, NEON, { CastShadow = false })
+			label(Geo, CF, root, CF.new(x, top + 0.45, front - 1.9) * CF.Angles(-1.0, 0, 0), 8.6, 0.95, PLATE_TEXT[kind], C3.fromRGB(236, 236, 246))
+		end
+		for _, lx in { -24, 0, 24 } do
+			lamp(Geo, CF, root, V3.new(lx, top + 6, front + 3), C3.fromRGB(255, 244, 232), 20, 1.6)
+		end
+	end
+end
+
 return MineConcepts

@@ -178,5 +178,73 @@
   "fov": 55,
   "preset": "EmberCaves",
   "shadowExtent": 50
+ },
+ "showcase_front": {
+  "scene": "mine_showcase",
+  "position": [
+   0,
+   36,
+   46
+  ],
+  "target": [
+   0,
+   20,
+   -30
+  ],
+  "fov": 48,
+  "preset": "Palace",
+  "shadowExtent": 120,
+  "maxLights": 48
+ },
+ "showcase_top": {
+  "scene": "mine_showcase",
+  "position": [
+   0,
+   44,
+   -20
+  ],
+  "target": [
+   0,
+   34,
+   -52
+  ],
+  "fov": 50,
+  "preset": "Palace",
+  "shadowExtent": 60,
+  "maxLights": 32
+ },
+ "showcase_low": {
+  "scene": "mine_showcase",
+  "position": [
+   -6,
+   17,
+   24
+  ],
+  "target": [
+   0,
+   11,
+   -14
+  ],
+  "fov": 50,
+  "preset": "Palace",
+  "shadowExtent": 60,
+  "maxLights": 32
+ },
+ "showcase_mid": {
+  "scene": "mine_showcase",
+  "position": [
+   0,
+   30,
+   4
+  ],
+  "target": [
+   0,
+   22,
+   -30
+  ],
+  "fov": 50,
+  "preset": "Palace",
+  "shadowExtent": 60,
+  "maxLights": 32
  }
 }

@@ -127,9 +127,9 @@ MineFloors.List = {
 		Ores = { Amethyst = 30, Jade = 25, Emberite = 18, Cobalt = 13, Gold = 9, Ruby = 5 },
 		CrystalOres = { Cobalt = 20, Gold = 30, Ruby = 30, Azurium = 14, Sapphire = 6 },
 		Palette = {
-			Mid = rgb(124, 68, 54),
-			Light = rgb(164, 96, 70),
-			Dark = rgb(70, 38, 34),
+			Mid = rgb(86, 58, 54),
+			Light = rgb(124, 88, 76),
+			Dark = rgb(52, 34, 34),
 			Crystal = rgb(255, 106, 36),
 			Crystal2 = rgb(236, 44, 70),
 			Accent = rgb(255, 120, 40),
