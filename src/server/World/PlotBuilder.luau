@@ -84,8 +84,13 @@ local LAWN = rgb(96, 150, 66) -- a deep warm lawn (no bright lime pitch in the h
 -- the empty plot from above (lobby hero view): a mown lawn with subtle
 -- lighter stripes on every other cell row, framed by a band of light paving
 -- stones and a cobble edge
-local PLOT_LAWN = rgb(70, 140, 50) -- (round 2: a deeper green, no lime)
-local PLOT_LAWN_STRIPE = rgb(84, 156, 58) -- mower stripes
+-- (lobby fix round 3: the island's own grass, faint stripes: no lime pitch
+-- with bold mower stripes in the hero view)
+local PLOT_LAWN = rgb(90, 156, 56)
+local PLOT_LAWN_STRIPE = rgb(84, 148, 53) -- mower stripes (low contrast)
+local HEDGE = rgb(54, 122, 48) -- the front hedge strip along the road
+local MORTAR = rgb(86, 42, 36) -- darker mortar lines in the brick band
+local POST_HEAD = rgb(255, 140, 48) -- the front lamp posts' neon heads (deep amber)
 local PLOT_PAVING = rgb(196, 180, 152)
 local PLOT_EDGE = rgb(156, 142, 128)
 local GRAVEL = rgb(214, 192, 150)
@@ -304,6 +309,8 @@ type WallOpts = {
 	-- the turn (radians) to the run that meets this one at `a` / `b` without a pillar
 	TurnA: number?,
 	TurnB: number?,
+	-- (round 3) two darker mortar lines along the brick band (both faces)
+	Mortar: boolean?,
 }
 
 -- One straight wall from a to b (plot-local, y ignored).
@@ -337,9 +344,20 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 		local cap = layer(kit.Cap, kit.BandTop + kit.CapH / 2, kit.CapH, WALL_CAP)
 		cap.Name = "Cap"
 	end
-	-- the bullnose along the run's centre line
-	local round = layer(kit.Round, kit.BandTop + kit.RoundY, kit.Round, WALL_CAP, true)
+	-- (round 3) a square stone coping along the run's centre line (the round
+	-- grey bullnose read as a plastic pipe)
+	local copingH = kit.Round * 0.55
+	local copingY = kit.BandTop + math.max(kit.CapH, 0) + copingH / 2 - 0.02
+	local round = layer(kit.Round + 0.1, copingY, copingH, WALL_CAP)
 	round.Name = "CapRound"
+	if o.Mortar then
+		for _, f in { 0.36, 0.68 } do
+			local line = layer(kit.Band + 0.05, kit.PlinthTop + bandH * f, 0.09, MORTAR)
+			line.Name = "Mortar"
+			line.CanCollide = false
+			line.CastShadow = false
+		end
+	end
 	local perBay = o.Bricks
 	if not perBay or #perBay == 0 then
 		return
@@ -477,7 +495,7 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 		if s < 0 then
 			leftLamp = lamp
 		end
-		wall(m, cf, k, Vector3.new(s * P, 0, -L), Vector3.new(s * ex, 0, -L), { Bricks = { 2 } })
+		wall(m, cf, k, Vector3.new(s * P, 0, -L), Vector3.new(s * ex, 0, -L), { Bricks = { 2 }, Mortar = true })
 		-- back: the YardGate post, a pillar half way and the wall to the junction
 		local gx = gate.CenterX + s * (gate.Width / 2 + postCap / 2)
 		pillar(m, cf, k, Vector3.new(gx, 0, P), { Width = postWidth, Cap = postCap, Top = postTop })
@@ -534,6 +552,20 @@ local function ground(yard: Model, cf: CFrame)
 		GHOST
 	)
 	foundryApron.Name = "Path"
+	-- (round 3) a gravel walk along the podium row to the foundry's apron
+	local podiumBack = lastPodium.Center.Z + lastPodium.Size.Z / 2
+	local walkZ0, walkZ1 = podiumBack + 0.2, slabFront - 5.2
+	if walkZ1 - walkZ0 > 0.6 then
+		local walk = Geo.block(
+			yard,
+			cf * CFrame.new((1.9 + apronMaxX) / 2, 0.03, (walkZ0 + walkZ1) / 2),
+			Vector3.new(apronMaxX - 1.9, 0.06, walkZ1 - walkZ0),
+			GRAVEL,
+			nil,
+			GHOST
+		)
+		walk.Name = "Path"
+	end
 end
 
 -- The yard's back border (its long side walls belong to the pad's Walls):
@@ -676,7 +708,9 @@ end
 -- the top stays below PodiumService's income tag.
 -- (round 2: thinner, a little higher and tighter: it hugs the ore instead of
 -- reading as a debug outline over the neighbours)
-PlotBuilder.HoloRing = { Y = 5.2, Radius = 1.94, Bar = 0.12, Sides = 6 }
+-- (round 3: thinner, tighter and see-through: the big hexagons read as
+-- gizmos over the yard)
+PlotBuilder.HoloRing = { Y = 5.2, Radius = 1.88, Bar = 0.09, Sides = 6, Transparency = 0.4 }
 
 -- The holo-ring as a closed polygon of bars (`Sides` bars, each tangent to
 -- the circle at its middle): returns the bar CFrames and the bar size
@@ -756,6 +790,7 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	for _, barCF in bars do
 		local bar = Geo.block(m, barCF, barSize, HOLO, NEON, GHOST)
 		bar.Name = "HoloRing"
+		bar.Transparency = PlotBuilder.HoloRing.Transparency
 	end
 	-- invisible hover box around the ore: the mouse over the ore finds the podium
 	local hoverH = 3
@@ -1125,6 +1160,42 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 	local entranceLamp = padWalls(m, cf)
 	if entranceLamp then
 		Props.pointLight(entranceLamp, Palette.LampGlow, 16, 0.8)
+	end
+
+	-- (round 3) the road-facing front: a hedge strip with flower tufts on
+	-- both sides of the entrance and three lamp posts with neon heads (no
+	-- lights), so the plots read as gardens of the town from the hero camera
+	local frontZ = -WALL_LINE - PLOT_WALL.Plinth / 2 - 0.75
+	local hedgeFrom = PlotBuilder.EntranceHalf + 2.6
+	local flowers = { C.FlowerPink, C.FlowerYellow, C.FlowerWhite, C.FlowerPurple }
+	for _, s in { -1, 1 } do
+		local x0, x1 = hedgeFrom, half
+		local hedge = Geo.block(
+			m,
+			cf * CFrame.new(s * (x0 + x1) / 2, 0.55, frontZ),
+			Vector3.new(x1 - x0, 1.1, 1.1),
+			HEDGE,
+			nil,
+			{ CanTouch = false, CanQuery = false, CastShadow = false }
+		)
+		hedge.Name = "Hedge"
+		for i, f in { 0.55 } do
+			local tuft = Geo.block(
+				m,
+				cf * CFrame.new(s * (x0 + (x1 - x0) * f), 1.25, frontZ - 0.1),
+				Vector3.new(0.9, 0.35, 0.8),
+				flowers[(plot.Id + i + (if s > 0 then 1 else 0)) % #flowers + 1],
+				nil,
+				GHOST
+			)
+			tuft.Name = "Flowers"
+		end
+	end
+	for _, x in { -(half - 0.6), (hedgeFrom + half) / 2 - 3, half - 0.6 } do
+		local post = Geo.block(m, cf * CFrame.new(x, 1.6, frontZ - 0.9), Vector3.new(0.4, 3.2, 0.4), Palette.WoodDark, nil, THIN)
+		post.Name = "LampPost"
+		local head = Geo.block(m, cf * CFrame.new(x, 3.45, frontZ - 0.9), Vector3.new(0.6, 0.5, 0.6), POST_HEAD, NEON, GHOST)
+		head.Name = "LampHead"
 	end
 
 	-- name sign at the front, facing the road: mounted on the road face of the

@@ -109,6 +109,17 @@ local P = {
 	TealBody = rgb(36, 124, 200), -- a saturated teal-blue body (it stays blue through the haze)
 	TealBand = rgb(32, 109, 176), -- 12% darker
 	TealDeep = rgb(29, 101, 164), -- 18% darker
+	-- (round 3) a real teal / seafoam world with darker deep-blue bands and
+	-- one ice highlight band; a saturated orange ember world with crimson
+	-- bands and small glowing flame spots
+	Seafoam3 = rgb(0, 170, 175),
+	SeaBand = rgb(0, 120, 150), -- deep blue-teal, darker
+	SeaDeep = rgb(0, 104, 140), -- deep blue, darker still
+	IceBand = rgb(150, 230, 240),
+	EmberOrange = rgb(245, 72, 6),
+	EmberCrimson = rgb(170, 30, 36),
+	EmberCrimsonDark = rgb(140, 22, 30),
+	EmberFlame = rgb(255, 170, 60),
 }
 
 export type Patch = {
@@ -183,7 +194,11 @@ Planets.MinCrease = 20
 -- Caps: the largest angular radius (degrees) and how far a cap pokes out of the body (fraction of
 -- the radius; <= 0.04 keeps the outline round, the creases stay >= MinCrease up to MaxCap).
 Planets.MaxCap = 12
-Planets.CapLift = 0.04
+-- (round 3: 0.06, fewer and larger caps: the streaks read)
+Planets.CapLift = 0.06
+-- (round 3) a band disc never reaches more than this past the body (x R): no
+-- band edge sticks out past the silhouette
+Planets.BandReach = 1.02
 --[[
 	Camouflage rows: along a row, the caps of one streak sit RunSpacing x the smaller cap radius
 	apart (well under half a cap diameter, so they merge into one elongated streak), a streak of
@@ -300,9 +315,12 @@ Planets.Specs = {
 		-- (round 2: lower and further east: in the hero frame's top-right sky
 		-- right of the massif, and clear of the east island's waterfall from
 		-- the spawn)
-		Az = 35,
+		-- (round 3: higher and a little further east: the east cliff cut its
+		-- lower half and the east island's fall crossed its face; from the
+		-- town and the spawn its centre and bottom now show over everything)
+		Az = 38,
 		Dist = 700,
-		Elev = 8,
+		Elev = 10,
 		Size = 4.6,
 		Roll = 18,
 		Lean = 26,
@@ -312,14 +330,14 @@ Planets.Specs = {
 		-- clean latitude bands (planet09), deep and lilac by turns
 		Bands = {
 			{ Lat = 30, Width = 0.07, Color = P.VioletDeep },
-			{ Lat = 14, Width = 0.08, Color = P.Lilac },
-			{ Lat = -14, Width = 0.1, Color = P.VioletDeep },
-			{ Lat = -30, Width = 0.08, Color = P.Lilac },
+			{ Lat = 14, Width = 0.07, Color = P.Lilac },
+			{ Lat = -14, Width = 0.09, Color = P.VioletDeep },
+			{ Lat = -30, Width = 0.07, Color = P.Lilac },
 		},
 		-- a wavy lilac streak along the equator
 		Patches = rows({
-			{ Lat = 2, Offset = -8, Runs = { { Count = 4, Color = P.Lilac } } },
-		}, 8),
+			{ Lat = 2, Offset = -8, Runs = { { Count = 3, Color = P.Lilac } } },
+		}, 10),
 		Ring = { Inner = 1.3, Outer = 1.72, Segments = Planets.RingSegments, Color = P.Ring },
 	},
 	{
@@ -329,26 +347,27 @@ Planets.Specs = {
 		Name = "PlanetEmber",
 		-- (round 2: up in the spawn's empty top-centre sky, 14 degrees higher:
 		-- clear of SHOP, the wheel and the terraces, wholly above the hero frame)
-		Az = 352,
-		Dist = 800,
-		Elev = 21,
-		Size = 5.6,
+		-- (round 3: higher and farther (the same apparent size): clear sky
+		-- between it, the teal world and the balloon, no beads on a string)
+		Az = 358,
+		Dist = 780,
+		Elev = 26,
+		Size = 5.75,
 		Roll = -26,
 		Lean = 18,
-		Body = P.EmberBody,
+		Body = P.EmberOrange,
 		Rim = P.RimOrange,
 		RimTransparency = 0.66,
 		Bands = {
-			{ Lat = 42, Width = 0.1, Color = P.EmberBand },
-			{ Lat = 20, Width = 0.12, Color = P.EmberBandDark },
-			{ Lat = -16, Width = 0.12, Color = P.EmberBand },
-			{ Lat = -38, Width = 0.1, Color = P.EmberBandDark },
+			{ Lat = 40, Width = 0.1, Color = P.EmberCrimson },
+			{ Lat = -18, Width = 0.12, Color = P.EmberCrimsonDark },
+			{ Lat = -40, Width = 0.1, Color = P.EmberCrimson },
 		},
-		-- bright Flame streaks across the crimson face
+		-- small glowing flame spots across the orange face
 		Patches = rows({
-			{ Lat = 8, Offset = -6, Runs = { { Count = 4, Color = P.Flame } } },
-			{ Lat = -28, Offset = 10, Runs = { { Count = 3, Color = P.Flame } } },
-		}, 8),
+			{ Lat = 10, Offset = -6, Runs = { { Count = 3, Color = P.EmberFlame } } },
+			{ Lat = -28, Offset = 12, Runs = { { Count = 2, Color = P.EmberFlame } } },
+		}, 10),
 		Terminator = true,
 	},
 	{
@@ -357,25 +376,27 @@ Planets.Specs = {
 		Name = "PlanetTeal",
 		-- (round 2: up-left of the balloon from the spawn, more than a
 		-- diameter clear of it; above the hero frame)
-		Az = 325,
+		-- (round 3: farther out to the left and farther (the same apparent
+		-- size): 20 degrees of clear sky between it and the balloon; the
+		-- spawn frame's top edge drops toward its left side, so it stays at
+		-- the balloon's height there)
+		Az = 316,
 		Dist = 760,
-		Elev = 22,
+		Elev = 20,
 		Size = 4.65,
 		Roll = -14,
 		Lean = 16,
-		Body = P.TealBody,
+		Body = P.Seafoam3,
 		Rim = P.RimCyan,
 		RimTransparency = 0.66,
+		-- darker deep-blue bands, ice only as one highlight band
 		Bands = {
-			{ Lat = 34, Width = 0.12, Color = P.TealDeep },
-			{ Lat = 12, Width = 0.1, Color = P.TealBand },
-			{ Lat = -12, Width = 0.12, Color = P.TealDeep },
-			{ Lat = -32, Width = 0.1, Color = P.TealBand },
+			{ Lat = 34, Width = 0.12, Color = P.SeaDeep },
+			{ Lat = 12, Width = 0.1, Color = P.IceBand },
+			{ Lat = -14, Width = 0.12, Color = P.SeaBand },
+			{ Lat = -34, Width = 0.1, Color = P.SeaDeep },
 		},
-		-- ice only as a polar cap streak
-		Patches = rows({
-			{ Lat = 62, Offset = 0, Runs = { { Count = 3, Color = P.Ice } } },
-		}, 8),
+		Patches = {},
 		Terminator = true,
 	},
 } :: { Spec }
@@ -469,6 +490,9 @@ function Planets.bandDiscs(spec: Spec): { Disc }
 		local edge = (mid - band.Width / 2) * radius -- where the rim comes out of the surface
 		local thickness = (band.Width + Planets.BandInside) * radius
 		local discRadius = math.sqrt(radius * radius - edge * edge) * 1.004
+		-- (round 3) its outermost corner (the pole-side face) stays within BandReach x R
+		local reach = Planets.BandReach * radius
+		discRadius = math.min(discRadius, math.sqrt(math.max(0, reach * reach - pole * pole)))
 		table.insert(out, {
 			Name = `Band{i}`,
 			-- a Roblox cylinder's axis is its X axis: turn it onto the spin axis (Y)

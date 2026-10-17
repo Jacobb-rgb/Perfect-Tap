@@ -51,19 +51,24 @@ local Clouds = {}
 -- the warm undersides: deep sunset orange toward the sun, a warmer rose
 -- away from it (opaque SmoothPlastic, a touch of CloudPink so they read
 -- as lit cloud, not as orange bricks)
-local GLOW_WARM = Color3.fromRGB(255, 104, 34)
-local GLOW_ROSE = Color3.fromRGB(255, 96, 64)
+-- (lobby fix round 3: the rust-brown undersides read as roof bricks: a
+-- peach / coral pink glow at 0.6, the shade blocks a light lilac instead of
+-- Style's CloudPurple (a local override, Style stays as it is))
+local GLOW_WARM = Color3.fromRGB(255, 160, 140)
+local GLOW_ROSE = Color3.fromRGB(255, 150, 160)
 Clouds.Underside = {
-	Warm = GLOW_WARM:Lerp(C.CloudPink, 0.25),
-	Rose = GLOW_ROSE:Lerp(C.CloudPink, 0.3),
+	Warm = GLOW_WARM,
+	Rose = GLOW_ROSE,
 }
--- opaque bodies and undersides (round 1's 0.2 / 0.4 showed dirty pink glass)
+Clouds.Shade = Color3.fromRGB(186, 150, 226)
+-- opaque bodies (round 1's 0.2 / 0.4 showed dirty pink glass), soft
+-- see-through glowing skirts (round 3)
 Clouds.Transparency = 0
-Clouds.SkirtTransparency = 0
+Clouds.SkirtTransparency = 0.6
 Clouds.Material = Enum.Material.SmoothPlastic
 Clouds.PartsPerCloud = 11
 
-export type Spot = { Az: number, Dist: number, Y: number, Scale: number }
+export type Spot = { Az: number, Dist: number, Y: number, Scale: number, Skirts: boolean? }
 
 --[[
 	Cluster spots: Az = compass bearing from the plaza in degrees (0 = north
@@ -73,27 +78,25 @@ export type Spot = { Az: number, Dist: number, Y: number, Scale: number }
 	Specs), the airship flies at ~20 degrees bearing ~17 degrees up over the
 	mountain and the balloon hangs at ~-27 bearing from the spawn.
 ]]
+-- (lobby fix round 3: 8 clusters instead of 11, higher and farther out; no
+-- glowing skirts on the high banks the spawn and plaza cameras look up at;
+-- the spawn's upper right stays clear for the airship)
 Clouds.Spots = {
 	-- the sunset bank on the west horizon, beside and under the sun, and a
-	-- big low mass in the north-west
-	{ Az = 268, Dist = 780, Y = 30, Scale = 1.2 },
-	{ Az = 282, Dist = 760, Y = 64, Scale = 1.0 },
-	{ Az = 296, Dist = 720, Y = 96, Scale = 1.55 },
-	-- the north-west horizon: a big far mound left of the hero frame and a
-	-- smaller one inside it, between the planets and the massif
-	{ Az = 326, Dist = 1000, Y = 5, Scale = 1.0 },
-	{ Az = 340, Dist = 950, Y = 6, Scale = 0.75 },
-	-- the north-east horizon right of the massif (in the hero frame, under the gas giant)
-	{ Az = 36, Dist = 600, Y = 5, Scale = 0.6 },
-	-- high bank, upper left of the spawn's sky
-	{ Az = 300, Dist = 600, Y = 250, Scale = 0.6 },
-	-- high bank, top centre over the massif
-	{ Az = 4, Dist = 570, Y = 246, Scale = 0.64 },
-	-- high bank, upper right over the east island
-	{ Az = 26, Dist = 520, Y = 266, Scale = 0.5 },
-	{ Az = 35, Dist = 500, Y = 240, Scale = 0.6 },
+	-- big mass in the north-west
+	{ Az = 268, Dist = 900, Y = 46, Scale = 1.2 },
+	{ Az = 294, Dist = 860, Y = 120, Scale = 1.4 },
+	-- the north-west horizon: a big far mound left of the hero frame
+	{ Az = 330, Dist = 1100, Y = 30, Scale = 1.0 },
+	-- the north-east horizon right of the massif
+	{ Az = 41, Dist = 760, Y = 30, Scale = 0.6 },
+	-- high banks of the spawn's sky: upper left (the top centre stays clear
+	-- for the ember world)
+	{ Az = 300, Dist = 760, Y = 330, Scale = 0.6, Skirts = false },
+	-- one high bank far over the east (right of the airship)
+	{ Az = 62, Dist = 640, Y = 300, Scale = 0.5, Skirts = false },
 	-- the distant bank on the south horizon (lobby_south's empty sky)
-	{ Az = 196, Dist = 620, Y = 24, Scale = 0.95 },
+	{ Az = 196, Dist = 700, Y = 40, Scale = 0.95 },
 }
 
 local SUN_AZ = 262
@@ -116,10 +119,11 @@ type Block = { X: number, Y: number, Z: number, W: number, H: number, D: number 
 	= the side the town sees (already turned). All sizes in studs. 11 opaque
 	parts: 3 warm underside puffs, 4 mid domes, 3 top domes, 1 shoulder cube.
 ]]
-local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, rng: Rng.Rng)
+local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, rng: Rng.Rng, skirts: boolean)
 	local w = rng:range(120, 146) * scale
 	local d = w * rng:range(0.74, 0.86)
-	local h = w * rng:range(0.66, 0.74)
+	-- (round 3: thinner, flatter layers)
+	local h = w * rng:range(0.46, 0.54)
 	local mirror = if rng:chance(0.5) then 1 else -1
 
 	-- the two tones: a warm glowing underside, light pink domes (lighter on top)
@@ -152,9 +156,12 @@ local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, rng
 		{ X = 0.2, Y = 0.06, Z = -0.04, W = 0.48, H = 0.28, D = 0.72 },
 		{ X = 0.02, Y = 0.12, Z = 0.12, W = 0.84, H = 0.24, D = 0.5 },
 	}
-	for _, puff in puffs do
-		local b = box(jitter(puff), under, 0.03)
-		b.Name = "Underside"
+	if skirts then
+		for _, puff in puffs do
+			local b = box(jitter(puff), under, 0.03)
+			b.Name = "Underside"
+			b.Transparency = Clouds.SkirtTransparency
+		end
 	end
 
 	-- four mid domes and three top domes stepped inward like a pyramid; a
@@ -169,7 +176,8 @@ local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, rng
 		{ X = -0.02, Y = 0.66, Z = 0.03, W = 0.22, H = 0.16, D = 0.3 },
 	}
 	for i, dome in domes do
-		box(jitter(dome), if i <= 4 then mid else top)
+		-- (round 3: the lowest dome in the light lilac shade, no dark purple)
+		box(jitter(dome), if i == 4 then Clouds.Shade elseif i <= 3 then mid else top)
 	end
 	local s = rng:range(10, 16) * scale
 	box({ X = 0.3, Y = 0.46, Z = rng:range(-0.15, 0.15), W = s * 1.3 / w, H = s / h, D = s * 1.2 / d }, top, 0.04)
@@ -199,7 +207,7 @@ function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 		local turn = math.rad(rng:range(20, 40)) * (if rng:chance(0.5) then 1 else -1)
 		local frame = CFrame.lookAt(center, Vector3.new(0, center.Y, 0)) * CFrame.Angles(0, turn, 0)
 		local c = Style.model("Cloud", m)
-		cumulus(c, frame, spot.Scale, sunward(spot.Az), rng)
+		cumulus(c, frame, spot.Scale, sunward(spot.Az), rng, spot.Skirts ~= false)
 	end
 	Style.streaming(m, "Persistent")
 	return m

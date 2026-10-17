@@ -370,6 +370,8 @@ return function(T, Loader)
 		return out
 	end
 
+	-- (round 3: opaque bodies with soft see-through glowing skirts, flatter
+	-- layers, fewer clusters; the high banks over the plaza have no skirts)
 	T.test("sky: clouds are opaque two-tone cumulus mounds of a dozen blocks, no planks", function()
 		local root = build()
 		local clusters = 0
@@ -379,20 +381,20 @@ return function(T, Loader)
 			T.eq(cloud.Name, "Cloud", name .. " is a cumulus cluster (no stratus planks)")
 			clusters += 1
 			local list = parts(cloud)
-			T.truthy(#list >= 10 and #list <= 12, name .. " is 10-12 merged blocks")
+			T.truthy(#list >= 7 and #list <= 12, name .. " is 7-12 merged blocks")
 			-- the cluster frame: every block shares its yaw
 			local frame = list[1].CFrame - list[1].CFrame.Position
 			local solids = list
 			for _, part in list do
-				-- opaque (no pink glass, no transparent overdraw), matte, unreachable
-				T.eq(part.Transparency, 0, name .. " block is opaque")
+				-- opaque bodies (no pink glass), soft glowing skirts, matte, unreachable
+				T.near(part.Transparency, if part.Name == "Underside" then Clouds.SkirtTransparency else 0, 1e-4, name .. " block transparency")
 				T.eq(part.Material, roblox.Enum.Material.SmoothPlastic, name .. " block is SmoothPlastic")
 				T.falsy(part.CastShadow or part.CanCollide or part.CanQuery or part.CanTouch, name .. " block is unreachable decor")
 			end
-			-- no plank: every block at most 6x as long as it is tall
+			-- no plank: every block at most 8x as long as it is tall (round 3: flatter layers)
 			for _, part in solids do
 				local long = math.max(part.Size.X, part.Size.Z)
-				T.truthy(long <= 6 * part.Size.Y, `{name} block {part.Size} is a plank`)
+				T.truthy(long <= 8 * part.Size.Y, `{name} block {part.Size} is a plank`)
 			end
 			local minY, maxY = math.huge, -math.huge
 			local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
@@ -409,7 +411,7 @@ return function(T, Loader)
 			lowBase, highBase = math.min(lowBase, minY), math.max(highBase, minY)
 			smallest, largest = math.min(smallest, width), math.max(largest, width)
 			-- a mound, not a slab: tall and deep for its width
-			T.truthy(height > 0.45 * width, `{name} is puffy ({height} tall, {width} wide)`)
+			T.truthy(height > 0.3 * width, `{name} is a mound ({height} tall, {width} wide)`)
 			T.truthy(depth > 0.6 * width, `{name} has a deep footprint ({depth} deep, {width} wide)`)
 			-- a stepped, lumpy underside: the low blocks sit at several heights
 			local bottoms: { [number]: boolean } = {}
@@ -422,7 +424,7 @@ return function(T, Loader)
 					steps += 1
 				end
 			end
-			T.truthy(steps >= 3, `{name} has a stepped underside ({steps} levels)`)
+			T.truthy(steps >= 2, `{name} has a stepped underside ({steps} levels)`)
 			-- two tones: the top is the lightest pink, the underside a warm sunset glow
 			local topPart = solids[1]
 			for _, part in solids do
@@ -436,13 +438,13 @@ return function(T, Loader)
 				if part.Name == "Underside" then
 					under += 1
 					T.truthy(part.Color.R > part.Color.G + 0.15 and part.Color.G > part.Color.B * 0.6, `{name} underside is warm`)
-					T.truthy(luminance(part.Color) < luminance(topPart.Color) - 0.15, `{name} underside is darker than its top`)
+					T.truthy(luminance(part.Color) < luminance(topPart.Color) - 0.08, `{name} underside is darker than its top`)
 				end
 			end
-			T.eq(under, 3, name .. " has three warm underside puffs")
+			T.truthy(under == 3 or under == 0, name .. " has three warm underside puffs or none")
 		end
 		T.eq(clusters, #Clouds.Spots, "one cluster per spot")
-		T.truthy(clusters >= 10, "ten or more cloud clusters")
+		T.truthy(clusters >= 7 and clusters <= 9, "about 30% fewer cloud clusters (7-9)")
 		-- many heights and sizes, not one row of look-alike piles
 		T.truthy(highBase - lowBase >= 200, `cloud bases spread over {highBase - lowBase} studs of height`)
 		T.truthy(largest >= 2.5 * smallest, `cloud sizes vary ({smallest}..{largest} wide)`)
@@ -787,6 +789,32 @@ return function(T, Loader)
 		T.truthy(math.abs(tealBearing) >= 25, `the teal world is {tealBearing} degrees off the spawn-to-forge axis`)
 	end)
 
+	-- (lobby fix round 3) the violet gas giant shows whole from town height:
+	-- from the town point and the spawn camera, nothing (a cliff, an island,
+	-- a waterfall, its mist) lies on the rays to its centre and its bottom
+	T.test("sky: the violet gas giant's centre and bottom show from the town and the spawn", function()
+		build()
+		local game = roblox.Instance.new("DataModel")
+		local map = WorldBuilder.build(game:GetService("Workspace"))
+		local planets = map:FindFirstChild("Planets", true)
+		local boxes = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 0.9 and not (planets and d:IsDescendantOf(planets)) then
+				table.insert(boxes, d)
+			end
+		end
+		local spec = specOf("PlanetViolet")
+		local center = Planets.center(spec)
+		local radius = Planets.diameter(spec) / 2
+		for _, eye in { Planets.Town, Vector3.new(0, 13, 58) } do
+			for _, p in { center, center - Vector3.new(0, radius * 0.95, 0) } do
+				for _, b in boxes do
+					T.falsy(rayHitsBox(eye, p, b.CFrame, b.Size), `{b:GetFullName()} hides the gas giant from {eye}`)
+				end
+			end
+		end
+	end)
+
 	T.test("sky: from the spawn every planet is in frame, the gas giant and the teal world at most a quarter hidden", function()
 		build()
 		for _, spec in Planets.Specs do
@@ -838,8 +866,9 @@ return function(T, Loader)
 		-- ember (planet02/08): a saturated orange body; its bands are the same
 		-- hue, only 8-20% darker (soft latitude bands, no pepperoni spots)
 		-- (round 2: a crimson-rust body with bright Flame streaks)
-		local h, s, v = look("PlanetEmber", P.EmberBody)
-		T.truthy((h >= 0 and h <= 30 or h >= 350) and s >= 0.45, `ember crimson hazes to h{h} s{s}`)
+		-- (round 3: a saturated orange body with crimson bands)
+		local h, s, v = look("PlanetEmber", specOf("PlanetEmber").Body)
+		T.truthy((h >= 0 and h <= 30 or h >= 350) and s >= 0.45, `ember orange hazes to h{h} s{s}`)
 		local function raw(c: any): (number, number, number)
 			return hsv({ c.R, c.G, c.B })
 		end
@@ -849,16 +878,27 @@ return function(T, Loader)
 			T.truthy(spec.Bands and #spec.Bands >= 3, name .. " has soft latitude bands")
 			-- (round 2: ember has Flame streaks, teal an ice polar cap: merged-cap streaks, no round blotches)
 			T.truthy(#spec.Patches <= 8, name .. " has a few streaks, no round blotch field")
+			-- (round 3) bands of a related hue (crimson on orange, deep blue on
+			-- teal), clearly darker; at most one lighter highlight band (ice)
+			local highlights = 0
 			for _, band in spec.Bands do
 				local bandH, _, bandV = raw(band.Color)
-				T.truthy(math.abs(bandH - bodyH) <= 3, `{name} band hue {bandH} = body hue {bodyH}`)
+				local dh = math.abs(bandH - bodyH)
+				dh = math.min(dh, 360 - dh)
+				T.truthy(dh <= 25, `{name} band hue {bandH} near the body hue {bodyH}`)
 				local ratio = bandV / bodyV
-				T.truthy(ratio >= 0.8 and ratio <= 0.92, `{name} band is {ratio} of the body's value (8-20% darker)`)
+				if ratio > 1 then
+					highlights += 1
+				else
+					T.truthy(ratio >= 0.55 and ratio <= 0.95, `{name} band is {ratio} of the body's value (darker)`)
+				end
 			end
+			T.le(highlights, 1, name .. " has at most one highlight band")
 		end
 		-- teal (planet00/03): a teal-blue body that never turns violet or near-white
-		h, s, v = look("PlanetTeal", P.TealBody)
-		T.truthy(h >= 190 and h <= 225 and s >= 0.25, `teal body hazes to h{h} s{s} v{v}`)
+		-- (round 3: a real teal / seafoam body)
+		h, s, v = look("PlanetTeal", specOf("PlanetTeal").Body)
+		T.truthy(h >= 165 and h <= 225 and s >= 0.25, `teal body hazes to h{h} s{s} v{v}`)
 		-- violet (planet09/01): saturated violet body, deep bands darker, lilac
 		-- bands and the ring lighter
 		local bh, bs, bv, body = look("PlanetViolet", P.Violet)
@@ -895,7 +935,7 @@ return function(T, Loader)
 			-- outline stays round), steep creases (no z-fighting)
 			for _, patch in spec.Patches do
 				T.truthy(patch.Size >= 4 and patch.Size <= Planets.MaxCap, `{spec.Name} cap size {patch.Size}`)
-				T.truthy(patch.Lift <= 0.04 + 1e-9, `{spec.Name} cap lift {patch.Lift} <= 0.04`)
+				T.truthy(patch.Lift <= 0.06 + 1e-9, `{spec.Name} cap lift {patch.Lift} <= 0.06`)
 			end
 			-- streaks: consecutive caps of one color along a row sit at most
 			-- one cap radius apart (half a cap diameter), so they merge into an

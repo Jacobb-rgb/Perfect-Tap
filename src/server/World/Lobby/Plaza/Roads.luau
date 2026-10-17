@@ -65,12 +65,14 @@ local LIT_POSTS = {
 -- lantern pillars (GreatForge.luau), clear of the banners.
 -- (the south pair stands at the plaza rim beside the bridge's foot, 2 studs
 -- off the koi pond and well clear of the spawn pad and the default camera)
-local ENTRANCES = {
+type Entrance = { Center: Vector3, Across: Vector3, Lit: { boolean }, Height: number, Sides: { number }? }
+local ENTRANCES: { Entrance } = {
 	{ Center = Vector3.new(0, 0, 37.4), Across = Vector3.new(9, 0, 0), Lit = { false, false }, Height = 6.4 },
 	{ Center = Vector3.new(37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { true, false }, Height = 4.8 },
 	-- (the west pair stands a little further out: Tobin's Sell stall sits
-	-- south of the SHOP's door lane at the plaza rim)
-	{ Center = Vector3.new(-40.5, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { false, true }, Height = 4.8 },
+	-- south of the SHOP's door lane at the plaza rim; round 3: only its north
+	-- lantern, CAPSULES' front stands where the south one was)
+	{ Center = Vector3.new(-40.5, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { true, false }, Height = 4.8, Sides = { -1 } },
 }
 -- (round 2: the koi pond took the entry planters' spot; the plaza's own
 -- planters flank the chevron path instead, Paving.luau)
@@ -237,6 +239,9 @@ local function entranceLanterns(parent: Instance)
 	local m = Style.model("EntranceLanterns", parent)
 	for _, e in ENTRANCES do
 		for i, side in { -1, 1 } do
+			if e.Sides and not table.find(e.Sides, side) then
+				continue
+			end
 			local p = e.Center + e.Across * side
 			local lit = e.Lit[i]
 			Common.pillarLantern(m, CFrame.lookAt(p, Vector3.new(0, 0, 0)), {

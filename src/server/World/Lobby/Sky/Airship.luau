@@ -60,7 +60,8 @@ local Airship = {}
 -- Where it flies: over the mountain's right shoulder, behind its back edge,
 -- between the peak and the east floating island in the hero and spawn shots
 -- (not a LobbyLayout piece: it hangs outside the lobby area box).
-Airship.Center = Vector3.new(232, 186, -336) -- the spawn view's top right
+-- (lobby fix round 3: 13 studs higher, its gondola well clear of the east island)
+Airship.Center = Vector3.new(232, 199, -336) -- the spawn view's top right
 -- the nose points west-south-west: the town sees it three-quarter from the
 -- front-left like concept v2 (nose to the left, tail and exhaust to the right)
 Airship.Heading = 252

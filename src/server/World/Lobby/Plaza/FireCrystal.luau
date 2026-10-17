@@ -47,7 +47,9 @@ FireCrystal.RingWidth = 2.4
 FireCrystal.RingHeight = 1.2 -- the armor tier over the base tier (cap lip included)
 FireCrystal.BaseRadius = 12.4 -- the wide low base tier
 FireCrystal.BaseHeight = 0.4
-FireCrystal.CrystalHeight = 7.6 -- (round 2: +17%) low enough that the raised forge door shows over it from the spawn
+-- (lobby fix round 3: the cluster 15% smaller, so the forge door reads over
+-- it from eye height, 5.5 studs, on the plaza)
+FireCrystal.CrystalHeight = 6.5
 FireCrystal.Segments = 12
 local RING_R = FireCrystal.RingRadius
 local RING_W = FireCrystal.RingWidth
@@ -66,7 +68,7 @@ local POOL_R = 5.05 -- the dark bowl floor inside it (a thin orange band shows r
 local PEDESTAL_R = 2.5
 local PEDESTAL_TOP = 1.5 -- over the base tier
 local CRYSTAL_H = FireCrystal.CrystalHeight
-local CRYSTAL_W = 4.2
+local CRYSTAL_W = 3.6
 -- colors: the dark machine metal of the plaza kit (the armor never reads
 -- lighter than the slate floor), a mid bevel on the cap lips
 local RING_METAL = K.Metal
@@ -76,8 +78,9 @@ local RING_METAL_DARK = K.MetalDark
 -- lip: the red, orange and yellow discs read as a dartboard)
 local BOWL_FLOOR = K.MetalDark
 local CRYSTAL_GLOW = rgb(255, 120, 20) -- the inner glow (deep orange: no white-hot core)
--- the top facets lightened toward FireCore (the points catch the light)
-local CRYSTAL_TIP = C.FireCore:Lerp(rgb(255, 150, 40), 0.35)
+-- the top facets a little lighter than the body (round 3: a warm amber,
+-- the round-2 FireCore tint bloomed to white)
+local CRYSTAL_TIP = rgb(255, 170, 60)
 -- turns a part's (1, 1, 1) corner straight up (a cube standing on a vertex)
 local VERTEX_UP = CFrame.fromAxisAngle(Vector3.new(-1, 0, 1).Unit, math.acos(1 / math.sqrt(3)))
 
@@ -120,7 +123,7 @@ end
 	body (the spin pivot).
 ]]
 local function mainCrystal(parent: Instance, base: CFrame): BasePart
-	local shell = shard(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, C.FireCore:Lerp(C.Fire, 0.3), SMOOTH, SMOOTH)
+	local shell = shard(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, CRYSTAL_TIP, SMOOTH, SMOOTH)
 	for i, part in shell do
 		part.Transparency = if i == 1 then 0.2 else 0.12
 		part.Name = "CrystalShell"
@@ -158,7 +161,9 @@ local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Mod
 			local parts = shard(m, foot * tilt, s.H, s.H * 0.3, if i % 4 == 1 then C.Fire else C.LeafOrange, CRYSTAL_TIP, SMOOTH)
 			parts[1].Transparency = 0.05
 		else
-			shard(m, foot * tilt, s.H, s.H * 0.3, CRYSTAL_GLOW, CRYSTAL_TIP, NEON)
+			-- (round 3: the small glowing shards' points stay Fire orange: their
+			-- tips bloomed to white orbs round the crystal's foot)
+			shard(m, foot * tilt, s.H, s.H * 0.3, CRYSTAL_GLOW, C.Fire, NEON)
 		end
 	end
 	m.PrimaryPart = body
@@ -242,7 +247,8 @@ local function armorRing(m: Model, center: Vector3, y0: number, rng: Rng.Rng)
 		edge.Name = "RingEdgeGlow"
 		-- the clamp rib between this segment and the next: a block and a chamfered buttress
 		local rib = CFrame.new(center) * CFrame.Angles(0, -(i + 1) * step, 0)
-		local ribH = RING_H + 0.08
+		-- (round 3: the ribs end flush with the cap lips: one even ring height)
+		local ribH = RING_H
 		local r0, r1 = RING_IN - 0.15, RING_OUT - 0.3
 		Style.block(
 			m,

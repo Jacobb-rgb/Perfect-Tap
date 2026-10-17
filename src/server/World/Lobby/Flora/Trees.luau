@@ -13,6 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local Geo = require(Shared.Builders.Geo)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -104,19 +105,22 @@ end
 	road, never over a base). The plot entrances and the spur roads stay
 	open.
 ]]
-Trees.BeltZ = { -60, 112 }
+-- (lobby fix round 3: the belts run the whole length of the plot roads, from
+-- the quarry rim to the south shore: a continuous town edge in the hero view)
+Trees.BeltZ = { -104, 112 }
 -- Lift: extra trunk height of the road-side rows (crowns over head height).
 -- Inner: the third, inner row (z -60..40 only, the hero's mid-depth
 -- flanks), staggered against the town-side row, mixed autumn, cherry and
 -- green.
 type BeltRow = { X: number, Every: number, Phase: number, Scale: { number }, Lean: boolean, Lift: number?, Inner: boolean? }
 Trees.BeltRows = {
-	{ X = 62.9, Every = 7, Phase = 0, Scale = { 1.05, 1.3 }, Lean = false, Lift = 2.5 },
+	{ X = 62.9, Every = 6, Phase = 0, Scale = { 1.05, 1.3 }, Lean = false, Lift = 2.5 },
 	{ X = 75.5, Every = 7, Phase = 3.5, Scale = { 1.0, 1.15 }, Lean = true, Lift = 2.5 },
 	{ X = 58.6, Every = 6, Phase = 2, Scale = { 0.95, 1.2 }, Lean = false, Inner = true },
 } :: { BeltRow }
 Trees.InnerZ = { -60, 40 }
-local INNER_KINDS = { Green = 34, Cherry = 22, Yellow = 22, Orange = 22 }
+-- (round 3: no pink in the belts: UPGRADES' and the INN's pink neon own that colour)
+local INNER_KINDS = { Green = 40, Red = 22, Yellow = 16, Orange = 22 }
 Trees.BeltLanternEvery = 16
 Trees.BeltLanternColor = C.LampAmber
 
@@ -186,7 +190,7 @@ local function beltClear(p: Vector3, r: number, reach: number, sites: { Kit.Box 
 	return true
 end
 
-local BELT_KINDS = { Green = 60, Pink = 12, Yellow = 12, Orange = 8, Red = 8 }
+local BELT_KINDS = { Green = 52, Red = 24, Orange = 24 }
 
 -- A belt lantern post: a dark timber post, a small deep-amber glow under an
 -- iron hat (neon only, no light). 4 parts.
@@ -208,11 +212,64 @@ local function beltLantern(parent: Instance, foot: Vector3, h: number)
 end
 
 --[[
+	(lobby fix round 3) A small timber shed in the belt: plank walls on a
+	stone foot, a terracotta gable roof (two wedges), a dark door and a
+	small warm window on the side the hero camera sees (south), a crate.
+	`base` = ground center, LookVector = the door side. 8 parts.
+]]
+Trees.ShedSpots = { -96, -74, -18, 14, 22, 34, 101, 108 }
+Trees.ShedX = 61.6
+local function shed(parent: Instance, base: CFrame, side: number, rng: Rng.Rng)
+	local m = Style.model("Shed", parent)
+	local w, d, h = 4.4, 3.6, 3.0
+	Style.block(m, base * CFrame.new(0, 0.2, 0), Vector3.new(w + 0.4, 0.4, d + 0.4), C.StoneDark, nil, Style.solid())
+	Style.block(m, base * CFrame.new(0, 0.4 + h / 2, 0), Vector3.new(w, h, d), Style.vary(C.Plank, rng, 0.05), nil, Style.solid())
+	local roofH = 1.6
+	for _, side in { -1, 1 } do
+		-- two wedges, their tall sides meeting over the ridge (ridge along the door's axis)
+		Geo.wedge(
+			m,
+			base * CFrame.new(side * (w / 4 + 0.15), 0.4 + h + roofH / 2, 0) * CFrame.Angles(0, -side * math.pi / 2, 0),
+			Vector3.new(d + 0.6, roofH, w / 2 + 0.3),
+			Style.vary(C.RoofTerracotta, rng, 0.04),
+			Enum.Material.SmoothPlastic,
+			Style.ghost()
+		)
+	end
+	Style.block(m, base * CFrame.new(0, 0.4 + h + roofH + 0.05, 0), Vector3.new(0.4, 0.3, d + 0.7), C.RoofTerracottaDark, nil, Style.tiny())
+	Style.block(m, base * CFrame.new(0, 0.4 + 1.0, -d / 2 - 0.06), Vector3.new(1.3, 2.0, 0.12), C.WoodDark, nil, Style.tiny())
+	-- (local +X points south on the east side, north on the west side)
+	Style.block(
+		m,
+		base * CFrame.new(side * (w / 2 + 0.06), 0.4 + 1.9, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		Vector3.new(1.0, 0.8, 0.1),
+		Color3.fromRGB(255, 130, 40),
+		Enum.Material.Neon,
+		Style.tiny()
+	)
+	Style.crate(m, base * CFrame.new(-side * (w / 2 + 1.1), 0, -0.6), rng, 1.4)
+	return m
+end
+
+--[[
 	The two town-edge belts. `sites`: the town building rectangles (the
 	belt keeps its crowns off them). Returns the model.
 ]]
 function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 	local m = Style.model("TownBelt", parent)
+	-- (round 3) a few timber sheds in the belt on each side (the trees keep off them)
+	for _, side in { -1, 1 } do
+		local count = 0
+		for _, z in Trees.ShedSpots do
+			local p = Vector3.new(side * Trees.ShedX, 0, z)
+			if count < 3 and beltClear(p, 3.4, 3.4, sites) then
+				-- the door faces the plot road, the window the south (hero camera)
+				shed(m, CFrame.lookAt(p, p + Vector3.new(side, 0, 0)), side, rng)
+				count += 1
+				table.insert(sites, { Min = Vector2.new(p.X - 3.4, p.Z - 3.4), Max = Vector2.new(p.X + 3.4, p.Z + 3.4) })
+			end
+		end
+	end
 	for _, side in { -1, 1 } do
 		local townSide: { number } = {}
 		for _, row in Trees.BeltRows do
@@ -286,11 +343,42 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 	return m
 end
 
+--[[
+	(lobby fix round 3) The gap between CAPSULES and the SHOP opened straight
+	onto the plot fences: a green tree, a stone planter with flowers and a
+	lamp post (neon, no light) on the strip north of the west spur, beside
+	the SHOP's south end.
+]]
+Trees.GapTree = Vector3.new(-61, 0, -7.0)
+Trees.GapPlanter = Vector3.new(-54.6, 0, -7.0)
+Trees.GapLamp = Vector3.new(-51.2, 0, -6.6)
+function Trees.gapCloser(parent: Instance, rng: Rng.Rng): Model
+	local m = Style.model("SpurGap", parent)
+	Kit.beltTree(m, CFrame.new(Trees.GapTree), "Green", rng, 0.95, nil, 1.5)
+	local p = Trees.GapPlanter
+	Style.block(m, CFrame.new(p + Vector3.new(0, 0.5, 0)), Vector3.new(2.4, 1.0, 2.4), C.StoneDark, nil, Style.decor())
+	Style.block(m, CFrame.new(p + Vector3.new(0, 1.05, 0)), Vector3.new(2.0, 0.12, 2.0), C.DirtDark, nil, Style.tiny())
+	for i, color in { C.FlowerPink, C.FlowerYellow, C.FlowerWhite } do
+		local a = i * 2.1
+		Style.block(
+			m,
+			CFrame.new(p + Vector3.new(math.cos(a) * 0.5, 1.3, math.sin(a) * 0.5)),
+			Vector3.new(0.6, 0.45, 0.6),
+			color,
+			nil,
+			Style.tiny()
+		)
+	end
+	beltLantern(m, Trees.GapLamp, 4.6)
+	return m
+end
+
 function Trees.build(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }?)
 	Trees.pinkGrove(parent, Kit.sub(rng))
 	Trees.redTree(parent, Kit.sub(rng))
 	Trees.autumnCorner(parent, Kit.sub(rng))
 	Trees.belt(parent, Kit.sub(rng), sites or {})
+	Trees.gapCloser(parent, Kit.sub(rng))
 end
 
 return Trees

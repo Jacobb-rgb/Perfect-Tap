@@ -144,6 +144,11 @@ Style.C = {
 	CrystalPurpleDeep = rgb(120, 50, 210),
 	CrystalBlueDeep = rgb(40, 110, 230),
 	CrystalPinkDeep = rgb(220, 60, 150),
+	-- lobby fix round 3: a deep electric blue that keeps its hue under bloom
+	-- (C.GlowEdge blooms to pastel) and a bright cyan-white core strip laid
+	-- inside it, so blue neon frames read as glowing tubes
+	GlowEdgeDeep = rgb(20, 110, 255),
+	GlowCore = rgb(140, 210, 255),
 }
 
 local C = Style.C
@@ -508,7 +513,7 @@ end
 --[[
 	Part-built icon for signs (no decals). `cf` = icon center, front = LookVector;
 	place it just in front of a board (board.CFrame * CFrame.new(0, 0, -depth/2 - 0.2)).
-	kind: "Hammer", "CrossedHammers", "Pickaxe", "CrossedPickaxes", "Gear",
+	kind: "Hammer", "CrossedHammers", "CrossedHammersV2", "Pickaxe", "CrossedPickaxes", "Gear",
 	"House", "Compass", "Arrow" (points to the VIEWER's right when seen from
 	the front), "ArrowLeft", "ArrowDown", "Coin", "Bone", "Target".
 	Note: seen from the front, a frame's local +X is on the viewer's LEFT, so
@@ -536,6 +541,25 @@ function Style.icon(parent: Instance, cf: CFrame, kind: string, size: number, co
 	elseif kind == "CrossedHammers" then
 		hammer(cf * CFrame.Angles(0, 0, 0.7))
 		hammer(cf * CFrame.Angles(0, 0, -0.7))
+	elseif kind == "CrossedHammersV2" then
+		-- (lobby fix round 3) chunky crossed hammers that read at a distance:
+		-- the handles cross at 40% of their length, the heads (1.7x the
+		-- handle's width, a peen block on the inner side) keep a gap of about
+		-- 0.15 x size between them, so the icon never reads as a chevron over an X
+		local len = s * 0.9
+		local hw = s * 0.12
+		local hh = hw * 1.7
+		local tilt = 0.7
+		local cross = Vector3.new(0, -s * 0.11, 0)
+		for _, k in { -1, 1 } do
+			-- local +Y runs up the handle; k * local +X points away from the other hammer
+			local at = cf * CFrame.new(cross) * CFrame.Angles(0, 0, -k * tilt)
+			add(bar(parent, at * CFrame.new(0, len * 0.1, 0), hw, len, d, color, mat))
+			local headY = len * 0.6 - hh / 2
+			-- the face block (outward) and the narrower peen (inward)
+			add(bar(parent, at * CFrame.new(k * s * 0.03, headY, 0), s * 0.28, hh, d * 1.3, color, mat))
+			add(bar(parent, at * CFrame.new(-k * s * 0.165, headY, 0), s * 0.11, hh * 0.65, d * 1.15, color, mat))
+		end
 	elseif kind == "Pickaxe" then
 		pickaxe(cf * CFrame.Angles(0, 0, -0.5))
 	elseif kind == "CrossedPickaxes" then

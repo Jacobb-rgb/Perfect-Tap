@@ -132,10 +132,11 @@ function Kit.skyFall(parent: Instance, top: CFrame, height: number, width: numbe
 	local m = Style.model("Waterfall", parent)
 	Style.block(m, top * CFrame.new(0, 0.1, 0.4), Vector3.new(width + 0.8, 1, 1.6), C.Water, nil, Kit.far())
 	local y = 0
-	local steps = { { 0.5, 0.1 }, { 0.3, 0.3 }, { 0.2, 0.55 } }
+	-- (lobby fix round 3: the fall ends in two fading sheets, no stepped stub)
+	local steps = { { 0.55, 0.1 }, { 0.25, 0.5 }, { 0.2, 0.8 } }
 	for i, step in steps do
 		local h = height * step[1]
-		local w = width * (1 - (i - 1) * 0.12)
+		local w = width * (1 - (i - 1) * 0.04)
 		local sheet = Style.block(
 			m,
 			top * CFrame.new(0, y - h / 2, 0),
@@ -153,17 +154,18 @@ function Kit.skyFall(parent: Instance, top: CFrame, height: number, width: numbe
 		local color = if i == 2 then C.CrystalCyan else C.Foam
 		Kit.glow(m, top * CFrame.new(x, -h / 2 - 0.3, -0.4), Vector3.new(math.max(0.4, width * 0.1), h, 0.2), color, 0.3)
 	end
-	-- mist where the water breaks up
+	-- mist where the water breaks up (round 3: small, staggered, faint: no
+	-- hard-edged block over the planets)
 	local mist: Part? = nil
 	for i = 1, 3 do
-		local s = width * rng:range(0.5, 0.8)
+		local s = width * rng:range(0.28, 0.42)
 		local p = Style.block(
 			m,
-			top * CFrame.new(rng:range(-width * 0.35, width * 0.35), -height + i * 1.2, rng:range(-1, 1)),
+			top * CFrame.new((i - 2) * width * 0.3 + rng:range(-0.3, 0.3), -height * 0.8 - i * 1.8, rng:range(-0.6, 0.6)),
 			Vector3.new(s, s * 0.6, s * 0.7),
 			C.Foam,
 			nil,
-			Kit.far({ Transparency = 0.55 + i * 0.1 })
+			Kit.far({ Transparency = 0.75 + i * 0.05 })
 		)
 		mist = mist or p
 	end

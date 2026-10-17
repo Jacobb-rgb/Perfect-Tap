@@ -14,9 +14,15 @@
 	hero camera and the spawn see it over the pit), with the Kingdom of
 	Kaldrum story screen hung under it on the same posts.
 
+	Lobby fix round 3: a big open dig (the piece grew to 26 x 30 and moved
+	toward the plaza; every measure follows the footprint): dark soil in
+	the pit, the skeleton 1.5 times as big and bone white on a low dirt
+	mound, and one FOSSIL DIG header (the tall back board facing the hero
+	and the plaza); the small entrance sign box is gone.
+
 	Tag FossilDig on the model, PrimaryPart = the bed.
-	Local frame: 18 wide, 14 tall, 22 deep, front = -Z (turned south-west
-	toward the hero camera and the spawn).
+	Local frame: Size.X wide, 14 tall, Size.Z deep, front = -Z (turned
+	south-west toward the hero camera and the spawn).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,15 +37,14 @@ local Dig = {}
 
 local C = Kit.C
 
-local BED_X, BED_Z = 6.6, 7.9 -- half sizes of the sand bed
--- light tan sand (concept v1) with darker dug patches, a tan inner step;
--- bones in a light bone white so they keep their contrast on the sand
-local SAND = Color3.fromRGB(196, 160, 110)
-local DUG = Color3.fromRGB(150, 112, 72)
-local STEP = Color3.fromRGB(162, 124, 82)
-local BONE = Color3.fromRGB(240, 230, 204)
-local FENCE_X, FENCE_Z = 8.3, 10.25
-local GATE_FROM, GATE_TO = 1.4, FENCE_X -- entrance gap on the front fence (local x)
+-- (round 3) dark soil with lighter dug patches and a tan inner step; the
+-- bones bone white, they read on the dark soil from the hero camera
+local SAND = C.DirtDark
+local DUG = Color3.fromRGB(140, 100, 66)
+local STEP = Color3.fromRGB(150, 112, 74)
+local BONE = Color3.fromRGB(240, 232, 210)
+local BONE_SHADE = Color3.fromRGB(214, 204, 178) -- every other vertebra, the jaw
+Dig.SkeletonScale = 1.4
 
 function Dig.build(parent: Instance, rng: Rng.Rng)
 	local piece, cf = Kit.piece("FossilDig")
@@ -50,6 +55,9 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	local function pos(x: number, y: number, z: number): Vector3
 		return at(x, y, z).Position
 	end
+	local FENCE_X, FENCE_Z = piece.Size.X / 2 - 0.7, piece.Size.Z / 2 - 0.75
+	local BED_X, BED_Z = FENCE_X - 1.7, FENCE_Z - 2.35 -- half sizes of the bed
+	local GATE_FROM, GATE_TO = 1.4, 7.2 -- entrance gap on the front fence (local x)
 
 	-- the pit, stepping down toward the middle so it reads as sunken: stone
 	-- rim (gap at the entrance), a dirt terrace, a darker inner step and the
@@ -78,84 +86,90 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		Kit.bit(m, at(side * rx, 0.8, side * 4), Vector3.new(0.9, 0.12, 3), C.Stone)
 	end
 	Style.block(m, at(0, 0.38, rz), Vector3.new(2 * rx, 0.75, 0.8), rimColor, nil, Style.solid())
-	-- front rim with the entrance gap (x 2.4 .. 6.8)
+	-- front rim with the entrance gap (x 2.4 .. 6.2)
 	Style.block(m, at((-rx + 2.4) / 2, 0.38, -rz), Vector3.new(2.4 + rx, 0.75, 0.8), rimColor, nil, Style.solid())
-	Style.block(m, at((6.8 + rx) / 2, 0.38, -rz), Vector3.new(rx - 6.8, 0.75, 0.8), rimColor, nil, Style.solid())
+	Style.block(m, at((6.2 + rx) / 2, 0.38, -rz), Vector3.new(rx - 6.2, 0.75, 0.8), rimColor, nil, Style.solid())
 
-	-- the dinosaur: skull at the front, spine in a gentle S, ribs, legs, tapering tail
+	-- the dinosaur (round 3: 1.5 times as big, bone white, on a low dirt
+	-- mound): skull at the front, spine in a gentle S, ribs, legs, tapering tail
+	local k = Dig.SkeletonScale
+	local y0 = 0.45 -- the mound's top
+	local dz = 1.6 -- (the skull stays on the front terrace)
+	Style.block(m, at(0, 0.32, dz - 0.5), Vector3.new(6.4 * k, 0.24, 15 * k), Style.vary(C.Dirt, rng, 0.04), nil, Style.solid()).Name =
+		"Mound"
+	local function bone(x: number, y: number, z: number): CFrame
+		return at(x * k, y0 + y * k, z * k + dz)
+	end
+	local function bpos(x: number, y: number, z: number): Vector3
+		return bone(x, y, z).Position
+	end
 	local function spineX(z: number): number
 		return 1.0 * math.sin(z / 3.2)
 	end
 	for i = 0, 9 do
 		local z = -5.6 + i * 0.9
-		local s = 1.15 - i * 0.02
-		Kit.bit(
-			m,
-			at(spineX(z), 0.85, z) * CFrame.Angles(0, 0.2 * math.cos(z), 0),
-			Vector3.new(s, s, 0.72),
-			if i % 2 == 0 then C.FlowerWhite else BONE
-		)
+		local sz = (1.15 - i * 0.02) * k
+		Kit.bit(m, bone(spineX(z), 0.45, z) * CFrame.Angles(0, 0.2 * math.cos(z), 0), Vector3.new(sz, sz, 0.72 * k), if i % 2 == 0 then BONE else BONE_SHADE)
 	end
 	for i = 1, 5 do
 		local z = 2.5 + i * 0.95
-		local s = 0.75 - i * 0.09
-		Kit.bit(m, at(spineX(z), 0.62 - i * 0.05, z), Vector3.new(s, s, 0.8), C.FlowerWhite)
+		local sz = (0.75 - i * 0.09) * k
+		Kit.bit(m, bone(spineX(z), 0.22 - i * 0.05, z), Vector3.new(sz, sz, 0.8 * k), BONE)
 	end
 	-- the skull (pointing at the entrance): a cranium with a brow ridge and
 	-- dark eye sockets, a long snout sloping down to the nose, a lower jaw
 	-- hanging slightly open and a row of teeth
 	local sx = spineX(-7.2)
 	local shadow = Style.tiny({ CastShadow = true })
-	Kit.block(m, at(sx, 1.2, -6.9), Vector3.new(2.2, 1.6, 2.2), C.FlowerWhite, nil, shadow)
-	Kit.bit(m, at(sx, 2.08, -7.55), Vector3.new(2.4, 0.4, 0.7), C.Sand)
+	Kit.block(m, bone(sx, 0.8, -6.9), Vector3.new(2.2, 1.6, 2.2) * k, BONE, nil, shadow)
+	Kit.bit(m, bone(sx, 1.68, -7.55), Vector3.new(2.4, 0.4, 0.7) * k, BONE_SHADE)
 	for _, x in { -0.8, 0.8 } do
-		Kit.bit(m, at(sx + x, 1.62, -7.88), Vector3.new(0.6, 0.55, 0.5), C.StoneDeep)
+		Kit.bit(m, bone(sx + x, 1.22, -7.88), Vector3.new(0.6, 0.55, 0.5) * k, C.StoneDeep)
 	end
-	Kit.block(m, at(sx, 0.95, -9.15), Vector3.new(1.1, 0.7, 2.3), C.FlowerWhite, nil, shadow)
-	Tech.bevel(m, at(sx, 1.6, -9.0), Vector3.new(1.1, 0.6, 2.0), C.FlowerWhite)
-	Kit.block(m, at(sx, 0.32, -9.0) * CFrame.Angles(-0.1, 0, 0), Vector3.new(1.0, 0.32, 2.8), C.Sand, nil, shadow)
+	Kit.block(m, bone(sx, 0.55, -9.15), Vector3.new(1.1, 0.7, 2.3) * k, BONE, nil, shadow)
+	Tech.bevel(m, bone(sx, 1.2, -9.0), Vector3.new(1.1, 0.6, 2.0) * k, BONE)
+	Kit.block(m, bone(sx, -0.08, -9.0) * CFrame.Angles(-0.1, 0, 0), Vector3.new(1.0, 0.32, 2.8) * k, BONE_SHADE, nil, shadow)
 	for _, q in { { -0.42, -8.5 }, { 0.42, -8.5 }, { -0.42, -9.6 }, { 0.42, -9.6 } } do
-		Kit.bit(m, at(sx + q[1], 0.5, q[2]), Vector3.new(0.2, 0.36, 0.2), C.FlowerWhite)
+		Kit.bit(m, bone(sx + q[1], 0.1, q[2]), Vector3.new(0.2, 0.36, 0.2) * k, BONE)
 	end
 	for i = 0, 5 do
 		local z = -4.6 + i * 1.0
-		local h = 3.0 - i * 0.2
+		local h = 2.6 - i * 0.2
 		local x0 = spineX(z)
-		local top = pos(x0, h, z)
+		local top = bpos(x0, h, z)
 		for _, side in { -1, 1 } do
-			Kit.beam(m, top, pos(x0 + side * (2.2 - i * 0.1), 0.25, z + 0.35), 0.4, 0.4, BONE, Style.tiny({ CastShadow = true }))
+			Kit.beam(m, top, bpos(x0 + side * (2.2 - i * 0.1), -0.15, z + 0.35), 0.4 * k, 0.4 * k, BONE, Style.tiny({ CastShadow = true }))
 		end
 	end
 	for _, leg in { { -3.6, -1, 3.2 }, { 2.0, 1, 3.6 } } do
-		local z, dz, reach = leg[1], leg[2], leg[3]
+		local z, dir, reach = leg[1], leg[2], leg[3]
 		for _, side in { -1, 1 } do
-			Kit.beam(m, pos(spineX(z) + side * 0.6, 0.65, z), pos(spineX(z) + side * reach, 0.28, z + dz * 1.4), 0.42, 0.42, C.FlowerWhite)
+			Kit.beam(m, bpos(spineX(z) + side * 0.6, 0.25, z), bpos(spineX(z) + side * reach, -0.12, z + dir * 1.4), 0.42 * k, 0.42 * k, BONE)
 		end
 	end
-	Kit.bit(m, at(spineX(2.2), 0.7, 2.2), Vector3.new(1.8, 0.7, 1.3), C.Sand)
 
 	-- a small second find (a little lizard skeleton) and survey stakes
-	local lx, lz = -4.2, 4.4
+	local lx, lz = -BED_X + 2.4, BED_Z - 2.2
 	Kit.bit(m, at(lx, 0.4, lz - 1.4), Vector3.new(0.8, 0.6, 1.0), C.FlowerWhite)
 	for i = 0, 3 do
 		Kit.bit(m, at(lx + 0.25 * i, 0.32, lz - 0.6 + i * 0.6), Vector3.new(0.45, 0.4, 0.45), C.Sand)
 	end
-	for _, s in { { 3.4, -6.2 }, { -3.4, -6.2 }, { 3.6, 3.8 } } do
+	for _, s in { { BED_X - 2.2, -BED_Z + 1.2 }, { -BED_X + 2.2, -BED_Z + 1.2 }, { BED_X - 1.8, BED_Z - 3.6 } } do
 		Kit.bit(m, at(s[1], 0.85, s[2]), Vector3.new(0.18, 1.3, 0.18), C.WoodLight)
 		Kit.bit(m, at(s[1] + 0.25, 1.35, s[2]), Vector3.new(0.4, 0.3, 0.06), C.AwningRed)
 	end
 
 	-- tools: a shovel stuck in the terrace and a brush by the skull
-	local shovel = at(5.8, 0.4, 7.6) * CFrame.Angles(0.15, 0.4, 0.25)
+	local shovel = at(BED_X - 0.8, 0.4, BED_Z - 0.3) * CFrame.Angles(0.15, 0.4, 0.25)
 	Kit.bit(m, shovel * CFrame.new(0, 1.6, 0), Vector3.new(0.25, 2.6, 0.25), C.WoodLight)
 	Kit.bit(m, shovel * CFrame.new(0, 2.95, 0), Vector3.new(0.7, 0.2, 0.25), C.WoodDark)
 	Kit.bit(m, shovel * CFrame.new(0, 0.1, 0), Vector3.new(0.9, 1.0, 0.15), C.IronLight)
-	local brush = at(2.0, 0.3, -7.6) * CFrame.Angles(0, 0.7, 0)
+	local brush = at(2.6, 0.3, -BED_Z + 0.6) * CFrame.Angles(0, 0.7, 0)
 	Kit.bit(m, brush, Vector3.new(1.1, 0.18, 0.2), C.WoodLight)
 	Kit.bit(m, brush * CFrame.new(0.65, 0, 0), Vector3.new(0.35, 0.3, 0.35), C.LeafYellow)
 
 	-- a sieve on legs and a wheelbarrow of dirt
-	local sieve = at(4.4, 0.2, -3.8)
+	local sieve = at(BED_X - 2.4, 0.2, -4.6)
 	for _, side in { -1, 1 } do
 		Kit.bit(m, sieve * CFrame.new(side * 1.2, 1.5, 0), Vector3.new(0.25, 0.25, 2.6), C.WoodLight)
 		Kit.bit(m, sieve * CFrame.new(0, 1.5, side * 1.2), Vector3.new(2.6, 0.25, 0.25), C.WoodLight)
@@ -164,7 +178,7 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		Kit.beam(m, legTop, legFoot, 0.2, 0.2, C.WoodDark)
 	end
 	Kit.block(m, sieve * CFrame.new(0, 1.5, 0), Vector3.new(2.3, 0.06, 2.3), C.StoneLight, nil, Style.tiny({ Transparency = 0.3 }))
-	local barrow = at(-4.6, 0.2, -5.4) * CFrame.Angles(0, -0.5, 0)
+	local barrow = at(-BED_X + 2.0, 0.2, -BED_Z + 3.0) * CFrame.Angles(0, -0.5, 0)
 	Kit.block(m, barrow * CFrame.new(0, 1.0, 0), Vector3.new(1.8, 0.8, 2.4), C.Iron, nil, Style.decor())
 	Kit.bit(m, barrow * CFrame.new(0, 1.5, 0), Vector3.new(1.6, 0.35, 2.1), C.Dirt)
 	Kit.faceDisc(m, barrow * CFrame.new(0, 0.55, -1.5) * CFrame.Angles(0, math.pi / 2, 0), 0.3, 1.1, C.StoneDeep)
@@ -175,10 +189,10 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 
 	-- a City Kit parasol over the crew's table, a crate of finds with a lamp
 	-- and a computer-screen terminal that scans the bones
-	Tech.parasol(m, at(-4.4, 0.2, 6.6), 4.6, 4.4, Tech.Band)
-	Kit.crate(m, at(-1.8, 0.2, 7.4), 1.6, rng)
-	Kit.glow(m, at(-1.8, 2.1, 7.4), Vector3.new(0.55, 0.6, 0.55), C.LampAmber)
-	Tech.computer(m, at(-5.6, 0.2, 0.6), 2.2, Tech.Screen, { Bars = C.FlowerWhite })
+	Tech.parasol(m, at(-BED_X + 2.4, 0.2, BED_Z - 1.3), 4.6, 4.4, Tech.Band)
+	Kit.crate(m, at(-BED_X + 5.0, 0.2, BED_Z - 0.5), 1.6, rng)
+	Kit.glow(m, at(-BED_X + 5.0, 2.1, BED_Z - 0.5), Vector3.new(0.55, 0.6, 0.55), C.LampAmber)
+	Tech.computer(m, at(-BED_X + 1.2, 0.2, 0.6), 2.2, Tech.Screen, { Bars = C.FlowerWhite })
 
 	-- metal barrier fence: light posts with neon caps, a lower rail and an
 	-- orange round handrail, dark lantern pillars at the corners and the gate
@@ -195,29 +209,18 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	rails(FENCE_X, FENCE_Z, FENCE_X, -FENCE_Z)
 	rails(-FENCE_X, -FENCE_Z, -FENCE_X, FENCE_Z)
 	rails(-FENCE_X, -FENCE_Z, GATE_FROM, -FENCE_Z)
-	for _, x in { -2.9, 2.9 } do
+	for _, x in { -FENCE_X / 3, FENCE_X / 3 } do
 		post(x, FENCE_Z)
 	end
-	for _, z in { -5.8, 0, 5.8 } do
+	for _, z in { -FENCE_Z / 2, 0, FENCE_Z / 2 } do
 		post(FENCE_X, z)
 		post(-FENCE_X, z)
 	end
-	post(-3.6, -FENCE_Z)
+	post(-FENCE_X / 2, -FENCE_Z)
 	post(-FENCE_X, -FENCE_Z)
 	post(FENCE_X, FENCE_Z)
 	for _, c in { { GATE_FROM, -FENCE_Z }, { GATE_TO, -FENCE_Z }, { -FENCE_X, FENCE_Z } } do
 		Tech.lanternPillar(m, at(c[1], 0, c[2]), 4.4, 1.0)
-	end
-
-	-- FOSSIL DIG sign box with a bone icon, on two posts behind the front fence
-	local signZ = -9.95
-	for _, x in { -7.6, -0.2 } do
-		Style.block(m, at(x, 2.3, signZ + 0.6), Vector3.new(0.6, 4.6, 0.6), Tech.MetalLight)
-		Tech.disc(m, at(x, 0.5, signZ + 0.6).Position, 1.0, 0.9, Tech.Band)
-	end
-	local _, frontIcon = Tech.sign(m, at(-3.9, 6.1, signZ), "FOSSIL DIG", 8.4, 2.8, { Icon = 2.8, IconLeft = true, Back = true })
-	if frontIcon then
-		Style.icon(m, frontIcon * CFrame.new(0, 0, -0.12), "Bone", 2.3, Tech.GoldGlow, Kit.NEON)
 	end
 
 	-- the tall FOSSIL DIG back board over the back fence, facing the front
@@ -225,17 +228,18 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	-- dark wood with a dark outline on two timber posts, a bone over it, and
 	-- the Kingdom of Kaldrum story screen hung under it on the same posts
 	local back = at(0, 0, FENCE_Z - 0.6)
-	for _, dx in { -5.9, 5.9 } do
-		Style.block(m, back * CFrame.new(dx, 5.5, 0.25), Vector3.new(0.8, 11, 0.8), C.WoodDark)
-		Kit.bit(m, back * CFrame.new(dx, 11.15, 0.25), Vector3.new(1.1, 0.3, 1.1), C.Wood)
+	-- (round 3: the one FOSSIL DIG header, bigger: 15 x 3.6)
+	for _, dx in { -7.6, 7.6 } do
+		Style.block(m, back * CFrame.new(dx, 5.6, 0.25), Vector3.new(0.9, 11.2, 0.9), C.WoodDark)
+		Kit.bit(m, back * CFrame.new(dx, 11.35, 0.25), Vector3.new(1.2, 0.3, 1.2), C.Wood)
 	end
-	Style.sign(m, back * CFrame.new(0, 9.0, -0.25), "FOSSIL DIG", 11.2, 3.0, {
+	Style.sign(m, back * CFrame.new(0, 9.0, -0.25), "FOSSIL DIG", 15, 3.6, {
 		Kind = "Wood",
 		Depth = 0.5,
 		StrokeColor = C.TextShadow,
 		StrokeTransparency = 0,
 	})
-	Style.icon(m, back * CFrame.new(0, 11.3, -0.3), "Bone", 1.8, C.SignText)
+	Style.icon(m, back * CFrame.new(0, 11.6, -0.3), "Bone", 2.2, C.SignText)
 	local story = back * CFrame.new(0, 5.2, -0.2)
 	Tech.screen(m, story, 6.4, 2.4, Tech.Screen)
 	-- the kingdom's name on two lines, filling most of the screen's height

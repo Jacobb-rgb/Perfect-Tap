@@ -78,7 +78,9 @@ local COUNTER_Z = 0.9
 local COUNTER_TOP = FLOOR + 3.3
 local SHELF_Z = 5.05
 local SHELVES = { FLOOR + 2.8, FLOOR + 5.2 }
-local CASE_Z = -5.85 -- porch showcases (in front of the pylons)
+local CASE_Z = -5.82 -- porch showcases (in front of the pylons)
+-- (lobby fix round 3: the porch showcases about 1.4 times as big)
+local CASE_W, CASE_D, CASE_H, CASE_GLASS = 4.2, 2.4, 2.2, 3.0
 local TWO_BAYS = 13.5 -- half width from which every side gets a second display bay
 -- the open display bays: the opening (heights above the floor), the glass
 -- case on its plinth (the plinth top level with the sill top) and the
@@ -94,12 +96,12 @@ local GLYPH_BLUE = rgb(20, 150, 255)
 local GEAR_PURPLE = rgb(116, 46, 153) -- neon at ~60% value: a saturated violet gear, no starburst
 local UPG_TUBE = rgb(170, 80, 255) -- UPGRADES' violet tubes (its own identity, not SHOP's blue; round 2: bright enough to glow)
 local UPG_NEON = rgb(150, 50, 220)
+local UPG_PINK = rgb(255, 70, 200) -- (round 3) the pink neon plates under UPGRADES' showcase items
 -- saturated goods that read at plaza distance
 local HELMET = rgb(255, 196, 18)
 local BOOTS = rgb(222, 38, 38)
 local PACK = rgb(36, 178, 72)
 local MAGNET = rgb(226, 30, 40)
-local GLOVES = rgb(255, 130, 20)
 local LENS = rgb(255, 226, 160) -- the helmet's warm white lamp lens (small: no white blob)
 
 export type House = {
@@ -349,6 +351,13 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 				Tech.glow(m, at(x + ex * (pw / 2 - 0.02), 5.5, PYLON_Z0 - 0.02), Vector3.new(0.34, 8.8, 0.34), tube)
 			end
 			Tech.underBevel(m, at(x, HEAD_Y0 - 0.7, PYLON_Z0 - 0.7), Vector3.new(pw, 1.4, 1.4), Tech.MetalLight)
+			if py.Outer then
+				-- (round 3) the armored corner: a 45 degree chamfer block on the
+				-- pylon's outer front edge with a vertical neon strip on its face
+				local corner = at(side * (hw - 0.82), HEAD_Y0 / 2, PYLON_Z0 + 0.5) * CFrame.Angles(0, -side * math.pi / 4, 0)
+				Style.block(m, corner, Vector3.new(1.5, HEAD_Y0, 1.5), Style.vary(header, rng, 0.02), nil, Style.decor())
+				Tech.glow(m, corner * CFrame.new(0, 0.3, -0.78), Vector3.new(0.3, HEAD_Y0 - 2.4, 0.08), tube).Name = "CornerGlow"
+			end
 		end
 	end
 
@@ -370,6 +379,10 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	Kit.block(m, at(0, HEAD_Y0 + 0.25, HEAD_Z0 - 0.15), Vector3.new(W + 0.2, 0.5, 0.5), HEADER_LIP, nil, Style.tiny({ CastShadow = true }))
 	-- a light bevel lip under the header's front edge, between the end pylons
 	Tech.underBevel(m, at(0, HEAD_Y0 - 0.2, HEAD_Z0 + 0.3), Vector3.new(lintelW, 0.4, 0.6), Tech.MetalLight)
+	-- (round 3) an angled cornice overhanging the header's top front edge,
+	-- a neon line along its nose
+	Tech.underBevel(m, at(0, HEAD_Y1 - 0.45, HEAD_Z0 - 0.35), Vector3.new(topW, 0.9, 0.7), header)
+	Tech.glow(m, at(0, HEAD_Y1 - 0.08, HEAD_Z0 - 0.66), Vector3.new(topW, 0.14, 0.1), tube).Name = "CorniceGlow"
 	-- thick neon tube along the outline (sides, chamfers, top), each line in
 	-- a dark MetalDeep channel a little wider than the tube
 	local face = at(0, 0, HEAD_Z0)
@@ -397,16 +410,20 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	-- the big glowing sign box set into the header face (it grows with a
 	-- wider module so the header never looks empty)
 	local signW: number = opts.SignWidth + math.max(0, hw - 10) * 0.8
-	local _, iconAt = Tech.sign(m, at(0, SIGN_Y, HEAD_Z0 - 0.02), opts.Sign, signW, SIGN_H, {
+	-- (round 3: a protruding sign casing 1.25 deep, a deep neon frame with a
+	-- bright core strip: the frame reads as a glowing tube)
+	local _, iconAt = Tech.sign(m, at(0, SIGN_Y, HEAD_Z0 - 0.55), opts.Sign, signW, SIGN_H, {
 		Icon = opts.IconWidth or 4.6,
 		IconLeft = opts.IconLeft,
-		Casing = false,
+		CasingDepth = 1.25,
 		Studs = false,
 		Margin = 0.35,
+		Lip = 0.3,
 		Light = if opts.SignLight == true then 16 else nil,
-		Frame = tube,
+		Frame = opts.SignFrame or tube,
+		Core = opts.SignCore,
 		LightColor = C.GlowText,
-		LightDist = 0.8, -- the footprint ends 1 stud in front of the header
+		LightDist = 0.4, -- the footprint ends 1 stud in front of the header
 	})
 
 	-- roof clutter behind the header: a dark roof box, two vent blocks, an
@@ -489,12 +506,12 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	for pass = 1, 2 do
 		for _, py in pylons do
 			if py.Outer == (pass == 1) then
-				local x = if py.Outer then hw - 2.1 else py.X
+				local x = if py.Outer then hw - CASE_W / 2 else py.X
 				for _, side in { 1, -1 } do
 					table.insert(
 						cases,
-						Tech.showcase(m, at(side * x, FLOOR, CASE_Z), 3.0, 2.0, 2.0, {
-							Case = 2.2,
+						Tech.showcase(m, at(side * x, FLOOR, CASE_Z), CASE_W, CASE_D, CASE_H, {
+							Case = CASE_GLASS,
 							Stripe = frame,
 							Plinth = plinthColor,
 							Backlight = opts.CaseBack,
@@ -523,6 +540,31 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		IconAt = iconAt,
 		HalfWidth = hw,
 	}
+end
+
+---------------------------------------------------------------- neon showcase items
+
+-- (round 3) one bright neon item per porch showcase: a crystal, a pickaxe
+-- head or a coin, chosen by the case index. `base` = the display floor.
+local SHOP_ITEM = { rgb(60, 220, 255), rgb(255, 180, 40), rgb(255, 196, 64) }
+local UPG_ITEM = { rgb(255, 90, 220), rgb(170, 90, 255), rgb(255, 196, 64) }
+local function neonItem(parent: Instance, base: CFrame, index: number, colors: { Color3 })
+	local kind = (index - 1) % 3 + 1
+	if kind == 1 then
+		-- a glowing crystal with two small side shards
+		Style.crystal(parent, base * CFrame.new(0, 0.05, 0.1), 2.0, 0.75, colors[1], nil, 0.15)
+		Style.crystal(parent, base * CFrame.new(0.55, 0.05, 0.2) * CFrame.Angles(0, 0, -0.35), 1.1, 0.42, colors[1], nil, 0.15)
+	elseif kind == 2 then
+		-- a pickaxe head: a curved glowing head on a short dark haft
+		Kit.bit(parent, base * CFrame.new(0, 0.7, 0.1), Vector3.new(0.24, 1.4, 0.24), C.WoodDark)
+		for _, side in { -1, 1 } do
+			Kit.glow(parent, base * CFrame.new(side * 0.55, 1.35, 0.1) * CFrame.Angles(0, 0, side * 0.35), Vector3.new(1.0, 0.3, 0.3), colors[2])
+		end
+	else
+		-- a big gold coin standing on edge, a light star on its face
+		Tech.faceDisc(parent, base * CFrame.new(0, 0.85, 0.05), 0.24, 1.5, colors[3], Kit.NEON)
+		Kit.bit(parent, base * CFrame.new(0, 0.85, -0.1) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.5, 0.5, 0.06), rgb(255, 236, 150))
+	end
 end
 
 ---------------------------------------------------------------- gear (SHOP)
@@ -600,8 +642,10 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 		ScreenSide = 1,
 		Screen = rgb(22, 66, 205),
 		BayGlow = rgb(16, 48, 150),
-		Plinth = Tech.Neon,
-		CaseBack = rgb(60, 140, 255),
+		Plinth = C.GlowEdgeDeep,
+		CaseBack = rgb(40, 110, 255),
+		SignFrame = C.GlowEdgeDeep,
+		SignCore = C.GlowCore,
 	})
 	h.Counter.Name = "ShopCounter"
 	Kit.tag(h.Counter, "ShopCounter")
@@ -623,12 +667,12 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 	magnet(m, at(-2.2, top, COUNTER_Z - 0.1), 1.2)
 	helmet(m, h.Windows[1] * CFrame.new(0, 0, 0.05), HELMET, k, true)
 	boots(m, h.Windows[2] * CFrame.new(0, 0, 0.1), BOOTS, k * 1.05)
-	backpack(m, h.Cases[1] * CFrame.new(0, 0, 0.1), PACK, 1.45)
-	magnet(m, h.Cases[2], 1.65)
-	-- the second display bays (wide module only)
-	if h.Cases[3] then
-		glove(m, h.Cases[3] * CFrame.new(-0.2, 0, 0.1), GLOVES, 1.7)
-		helmet(m, h.Cases[4] * CFrame.new(0, 0, 0.1), C.IronLight, 1.1)
+	-- (round 3) one bright neon item per porch showcase: a crystal, a
+	-- pickaxe head, a coin
+	for i, c in h.Cases do
+		neonItem(m, c, i, SHOP_ITEM)
+	end
+	if h.Windows[3] then
 		backpack(m, h.Windows[3], PACK, k)
 		boots(m, h.Windows[4] * CFrame.new(0, 0, 0.1), BOOTS, k)
 	end
@@ -654,19 +698,22 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 			Tech.faceDisc(m, ps * CFrame.new(0, 0.45, -0.02), 0.06, 0.95, C.Gold)
 			Tech.faceDisc(m, ps * CFrame.new(0, 0.45, -0.06), 0.05, 0.6, C.Brass)
 		else
-			Kit.glow(m, ps * CFrame.new(0.12, 0.65, 0), Vector3.new(0.5, 0.95, 0.04), C.AwningRed)
-			Kit.glow(m, ps * CFrame.new(-0.05, 0.05, -0.01), Vector3.new(0.95, 0.4, 0.04), C.AwningRed)
+			-- (round 3: a gold pickaxe, the old boot glyph read as a lone orange "L")
+			Style.icon(m, ps * CFrame.new(0, 0.35, -0.04), "Pickaxe", 1.5, Tech.GoldGlow, Kit.NEON)
 		end
 		Kit.glow(m, ps * CFrame.new(0, -1.15, 0), Vector3.new(0.8, 0.8, 0.04), GLYPH_BLUE)
 	end
 
 	-- the outfitter behind the counter
+	-- (round 3: teal and navy, tan skin, dark hair: he reads under the warm light)
 	Kit.npc(m, h.Interior * CFrame.new(-1.4, 0, 0), {
 		Name = "Outfitter",
-		Shirt = C.LeafOrangeDark,
-		Pants = C.WoodDark,
-		Apron = C.Wood,
-		Hair = C.TrunkDark,
+		Shirt = rgb(40, 140, 150),
+		Pants = rgb(44, 58, 96),
+		Apron = rgb(230, 226, 214),
+		Hair = rgb(40, 28, 22),
+		Skin = rgb(234, 186, 148),
+		Boots = rgb(24, 24, 28),
 	})
 end
 
@@ -747,8 +794,9 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 		ScreenSide = -1,
 		Screen = rgb(70, 50, 210),
 		BayGlow = rgb(64, 28, 160),
-		Plinth = rgb(150, 70, 255),
+		Plinth = UPG_PINK,
 		CaseBack = rgb(120, 80, 255),
+		SignCore = rgb(255, 200, 245),
 	})
 	h.Counter.Name = "UpgradeCounter"
 	Kit.tag(h.Counter, "UpgradeCounter")
@@ -761,8 +809,18 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 	if iconAt then
 		Tech.gearIcon(m, iconAt, 3.6, GEAR_PURPLE)
 	end
-	-- (round 2: no roof crest: its violet post and box read as a stray
-	-- magenta part sticking up over the UPGRADES sign)
+	-- (round 3) UPGRADES' own crest: two exhaust stacks on the roof behind
+	-- the header, a band, a light rim, a violet neon ring and smoke
+	for _, side in { -1, 1 } do
+		local sx = side * (h.HalfWidth - 3.2)
+		local stackH = 7.8
+		local base = at(sx, ROOF_TOP, -1.7)
+		Tech.disc(m, (base * CFrame.new(0, stackH / 2, 0)).Position, stackH, 1.5, Tech.MetalDark, nil, Style.decor())
+		Tech.disc(m, (base * CFrame.new(0, stackH * 0.35, 0)).Position, 0.6, 1.7, Tech.Band)
+		Tech.disc(m, (base * CFrame.new(0, stackH - 0.9, 0)).Position, 0.3, 1.65, UPG_TUBE, Kit.NEON).Name = "StackGlow"
+		local rim = Tech.disc(m, (base * CFrame.new(0, stackH + 0.15, 0)).Position, 0.3, 1.8, Tech.MetalLight)
+		Style.emitter(rim, "Smoke", nil, 2)
+	end
 
 	-- machines for sale: one big machine per bay and showcase, small ones
 	-- on the counter and the shelves
@@ -772,12 +830,11 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 	miniTank(m, at(-1.8, top, COUNTER_Z - 0.1), 1.1)
 	miniFurnace(m, h.Windows[1] * CFrame.new(0, 0, 0.05), k * 0.72)
 	miniCleaner(m, h.Windows[2] * CFrame.new(0, 0, 0.05), k * 0.78)
-	miniTank(m, h.Cases[1] * CFrame.new(0, 0, 0.05), 1.3)
-	miniConveyor(m, h.Cases[2] * CFrame.new(0, 0, 0.05), 1.15)
-	-- the second display bays (wide module only)
-	if h.Cases[3] then
-		miniFurnace(m, h.Cases[3] * CFrame.new(0, 0, 0.05), 1.05)
-		miniCleaner(m, h.Cases[4] * CFrame.new(0, 0, 0.05), 1.2)
+	-- (round 3) one bright neon item per porch showcase on a pink plate
+	for i, c in h.Cases do
+		neonItem(m, c, i, UPG_ITEM)
+	end
+	if h.Windows[3] then
 		miniTank(m, h.Windows[3], k * 0.9)
 		miniConveyor(m, h.Windows[4] * CFrame.new(0, 0, 0.05), k * 0.8)
 	end

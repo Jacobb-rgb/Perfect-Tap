@@ -354,6 +354,68 @@ return function(T, Loader)
 		T.truthy(half >= disc * 1.35, `the frame (half width {half}) is about 1.5 times the disc (radius {disc})`)
 	end)
 
+	-- (lobby fix round 3) the giant wheel stands free: from the spawn camera
+	-- (lobby_spawn, 0, 13, 58) no ray to the disc's rim passes through the
+	-- SHOP (its built parts' box in the SHOP's frame)
+	T.test("districts: from the spawn camera the SPIN & WIN disc clears the SHOP", function()
+		local _, pkg = districts()
+		local shopFrame = LobbyLayout.frame(LobbyLayout.get("Shop"))
+		local lo = Vector3.new(math.huge, math.huge, math.huge)
+		local hi = Vector3.new(-math.huge, -math.huge, -math.huge)
+		for _, d in pkg.Shop:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 0.9 then
+				for _, p in corners(d) do
+					local q = shopFrame:PointToObjectSpace(p)
+					lo = Vector3.new(math.min(lo.X, q.X), math.min(lo.Y, q.Y), math.min(lo.Z, q.Z))
+					hi = Vector3.new(math.max(hi.X, q.X), math.max(hi.Y, q.Y), math.max(hi.Z, q.Z))
+				end
+			end
+		end
+		local function hitsShop(a: any, b: any): boolean
+			local p0 = shopFrame:PointToObjectSpace(a)
+			local p1 = shopFrame:PointToObjectSpace(b)
+			local t0, t1 = 0, 1
+			for _, axis in { "X", "Y", "Z" } do
+				local d = p1[axis] - p0[axis]
+				if math.abs(d) < 1e-9 then
+					if p0[axis] < lo[axis] or p0[axis] > hi[axis] then
+						return false
+					end
+				else
+					local u0, u1 = (lo[axis] - p0[axis]) / d, (hi[axis] - p0[axis]) / d
+					if u0 > u1 then
+						u0, u1 = u1, u0
+					end
+					t0, t1 = math.max(t0, u0), math.min(t1, u1)
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		local piece = LobbyLayout.get("SpinWheel")
+		local frame = LobbyLayout.frame(piece)
+		local wheel = pkg.SpinWheel.Wheel
+		local axle = wheel.PrimaryPart.CFrame.Position
+		local disc = 0
+		for _, d in wheel:GetDescendants() do
+			if d:IsA("BasePart") then
+				for _, p in corners(d) do
+					local q = frame:PointToObjectSpace(p) - frame:PointToObjectSpace(axle)
+					disc = math.max(disc, math.sqrt(q.X * q.X + q.Y * q.Y))
+				end
+			end
+		end
+		T.truthy(disc > 10, `a giant disc ({disc})`)
+		local cam = Vector3.new(0, 13, 58)
+		for k = 0, 23 do
+			local a = k * math.pi / 12
+			local p = axle + frame.RightVector * (disc * 0.97 * math.cos(a)) + frame.UpVector * (disc * 0.97 * math.sin(a))
+			T.falsy(hitsShop(cam, p), `the SHOP hides the disc's rim at {math.deg(a)} degrees from the spawn camera`)
+		end
+	end)
+
 	T.test("districts: the SHOP and UPGRADES modules get a second display bay when wider", function()
 		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
 		local function showcases(m): number
@@ -405,7 +467,14 @@ return function(T, Loader)
 			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
 			local ph = board and board:FindFirstChild("Placeholder")
 			T.truthy(ph and ph:IsA("Model"), "Board" .. i .. " has a Placeholder model")
-			T.truthy(#ph:GetChildren() >= 5, "Board" .. i .. " placeholder has rank rows")
+			-- (round 3: the rank rows are SurfaceGui labels, no parts)
+			local rows = 0
+			for _, d in ph:GetDescendants() do
+				if d:IsA("TextLabel") then
+					rows += 1
+				end
+			end
+			T.truthy(rows >= 5, "Board" .. i .. " placeholder has rank rows")
 		end
 	end)
 

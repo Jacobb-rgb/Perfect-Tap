@@ -55,7 +55,7 @@ Tech.MetalLight = rgb(112, 120, 144)
 Tech.Band = C.Hazard
 -- a deeper neon blue than Style.C.GlowEdge: thin neon lines stay blue under
 -- bloom instead of washing out to white
-Tech.Neon = rgb(40, 130, 255)
+Tech.Neon = rgb(15, 95, 255) -- (lobby fix round 3: deeper, it stays blue under bloom)
 -- the thick neon tubes (frames, roof edges, ring edges): a deep electric
 -- blue, so a 0.3-0.45 stud tube stays saturated blue under the neon boost
 -- and bloom instead of washing out to pastel periwinkle in daylight
@@ -954,6 +954,7 @@ end
 	              "&" between orange words; the widths keep the letters the
 	              same height
 	  Frame       neon frame color (default the thick tube blue)
+	  Core        a thin bright core strip in the frame (Color3): a glowing tube
 	  Icon        icon panel width: the letters take the rest; the panel
 	              sits on the viewer's right (IconLeft = true: left)
 	  Casing      false: no casing (the sign is set into a header that is
@@ -1058,6 +1059,11 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 	local t = math.clamp(math.min(width, height) * 0.08, 0.3, 0.45)
 	local hw, hh = width / 2 - t / 2 + 0.05, height / 2 - t / 2 + 0.05
 	Tech.outline(parent, cf, hw, hh, math.min(hh * 0.45, 0.9), t, -0.32, o.Frame or Tech.Tube)
+	if o.Core then
+		-- (lobby fix round 3) a thin bright core strip just in front of the
+		-- middle of the deep band: the frame reads as a glowing tube
+		Tech.outline(parent, cf, hw, hh, math.min(hh * 0.45, 0.9), t * 0.32, -0.4, o.Core)
+	end
 	if o.Studs ~= false then
 		for _, sx in { -1, 1 } do
 			for _, sy in { -1, 1 } do

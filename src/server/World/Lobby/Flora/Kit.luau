@@ -600,7 +600,8 @@ function Kit.flowerPatch(parent: Instance, center: Vector3, color: Color3, rng: 
 	local base = CFrame.new(center) * yaw
 	local w, d = rng:range(1.8, 2.4), rng:range(1.5, 2.1)
 	Style.block(parent, base * CFrame.new(0, 0.25, 0), Vector3.new(w, 0.5, d), Style.vary(C.LeafGreenDark, rng, 0.05), nil, Style.tiny())
-	for i = 1, count or 3 do
+	-- (round 3: half as many loose flower cubes)
+	for i = 1, math.max(1, math.ceil((count or 3) / 2)) do
 		local s = rng:range(0.6, 0.85)
 		local on = i <= 2
 		local q = if on

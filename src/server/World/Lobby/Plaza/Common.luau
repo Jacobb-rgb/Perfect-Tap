@@ -32,8 +32,13 @@ Common.CurbRadius = 35.6
 Common.FloorTop = 0.4 -- top of the collidable plaza disc
 Common.TileTop = 0.43 -- top of the slate tiles (TownSpawn's top is 0.45, the spawn inlay 0.445)
 Common.ForgeApproach = 11 -- half width of the open plaza edge in front of the forge
-Common.TileReflectance = 0.03 -- a faint polish: more would mirror the pink sky and lift the dark slate to lilac
-Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
+-- (lobby fix round 3: concept v2's polished blue-grey slate, a visible
+-- tile grid; the red channel stays low so the sky's pink never turns the
+-- floor lilac)
+-- (Reflectance: 0.05 is a soft sheen in Roblox; above it the preview, and
+-- at 0.15 Roblox too, mirrors the pink sky and the slate turns lilac)
+Common.TileReflectance = 0.05 -- polished slate
+Common.Seam = 0.28 -- gap between floor tiles (the dark disc shows as a grid)
 
 --[[
 	Concept v2 colors of this package (three shades per material, like
@@ -45,14 +50,15 @@ Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
 	that stay colored under bloom instead of turning white.
 ]]
 Common.Colors = {
-	-- (lobby fix round 2: concept v2's dark wet slate; the round-1 blue-grey
-	-- slate rendered lilac under the pink sky)
-	Slate = rgb(26, 30, 44), -- polished floor tiles (mid)
-	SlateLight = rgb(34, 38, 54), -- lit / worn tiles
-	SlateAccent = rgb(42, 47, 64), -- a few lighter accent slabs (about 4%)
+	-- (lobby fix round 3: the round-2 near-black slate read as asphalt; a
+	-- polished blue-grey slate with a low red channel, so the pink sky
+	-- does not turn it lilac)
+	Slate = rgb(60, 68, 92), -- polished floor tiles (mid)
+	SlateLight = rgb(76, 84, 110), -- lit / worn tiles
+	SlateAccent = rgb(94, 102, 130), -- a few lighter accent slabs (about 4%)
 	SlateDark = rgb(14, 16, 24), -- the thin seams between the tiles (only seams and recesses)
 	SlateDeep = rgb(9, 10, 16), -- the deepest recesses
-	WalkPanel = rgb(22, 25, 36), -- walkway floor panels (matte, darker than the plaza)
+	WalkPanel = rgb(50, 57, 78), -- walkway floor panels (a little darker than the plaza)
 	Metal = rgb(56, 60, 76), -- machine metal (mid)
 	MetalLight = rgb(92, 100, 122), -- small bolts and collars
 	MetalDark = rgb(34, 37, 48), -- ribs, plinths, recesses, cap plates
@@ -72,7 +78,7 @@ Common.Colors = {
 	NeonBlue = C.GlowEdge,
 	-- a deeper, more saturated blue for the wide floor rings: it stays blue
 	-- at the player's feet instead of blooming to a white-cyan hoop
-	NeonBlueDeep = rgb(40, 124, 255),
+	NeonBlueDeep = rgb(10, 90, 255), -- (round 3: deep electric blue, never pastel)
 }
 local K = Common.Colors
 
@@ -614,13 +620,13 @@ export type LanternOpts = {
 
 --[[
 	Dark metal lantern pillar (concept v2 foreground, Kenney pipe-ring /
-	structure look): a dark plinth, a square metal shaft with two glowing
-	orange slots on its front and back faces, a blue neon band under a dark
+	structure look): a dark plinth, a square metal shaft with a glowing
+	orange slot on its front and back faces, a blue neon band under a dark
 	collar, and the lamp: a small amber neon core inside orange glass panes
 	(SmoothPlastic, Transparency 0.25) held by four thick dark corner bars,
 	under a dark cap. Only the small core is neon, so the lamp glows amber
 	inside a visible dark cage instead of blooming into a white block.
-	`base` = ground point, LookVector = the slotted front. 13 parts; the
+	`base` = ground point, LookVector = the slotted front. 12 parts; the
 	plinth is the lowest part, the core ("LanternGlow") the PrimaryPart.
 	opts.Light adds a PointLight (count it against the package budget).
 ]]
@@ -634,31 +640,32 @@ function Common.pillarLantern(parent: Instance, base: CFrame, opts: LanternOpts?
 	local shaftH = h - 0.6
 	Style.block(m, base * CFrame.new(0, 0.6 + shaftH / 2, 0), Vector3.new(1.5, shaftH, 1.5), K.Metal, nil, Style.decor())
 	-- the slot panel: a dark metal plate through the shaft (front and back
-	-- faces, 0.06 proud) framing two thin deep-orange neon slots, so they read
-	-- as glowing slits set in dark metal, not as yellow paint stripes
+	-- faces, 0.06 proud) framing one deep-orange neon slot, so it reads as
+	-- a glowing slit set in dark metal, not as a yellow paint stripe
+	-- (lobby fix round 3: one slot instead of two)
 	local slotH = math.max(0.6, shaftH - 1.5)
-	Style.block(m, base * CFrame.new(0, 1.2 + slotH / 2, 0), Vector3.new(0.98, slotH + 0.36, 1.62), K.MetalDark, nil, Style.tiny()).Name =
+	Style.block(m, base * CFrame.new(0, 1.2 + slotH / 2, 0), Vector3.new(0.7, slotH + 0.36, 1.62), K.MetalDark, nil, Style.tiny()).Name =
 		"SlotPanel"
-	for _, x in { -0.24, 0.24 } do
-		local slot =
-			Style.block(m, base * CFrame.new(x, 1.2 + slotH / 2, 0), Vector3.new(0.12, slotH, 1.66), K.SlotAmber, NEON, Style.tiny())
-		slot.Name = "LanternSlot"
-	end
+	local slot = Style.block(m, base * CFrame.new(0, 1.2 + slotH / 2, 0), Vector3.new(0.2, slotH, 1.66), K.SlotAmber, NEON, Style.tiny())
+	slot.Name = "LanternSlot"
 	Style.block(m, base * CFrame.new(0, h - 0.32, 0), Vector3.new(1.58, 0.14, 1.58), K.NeonBlueDeep, NEON, Style.tiny())
 	Style.block(m, base * CFrame.new(0, h + 0.12, 0), Vector3.new(1.9, 0.24, 1.9), K.MetalDark, nil, Style.tiny())
+	-- the lamp (lobby fix round 3: no bare glowing cube): a small amber neon
+	-- core inside amber glass panes (not neon: they read as glass, the core
+	-- shines through), four thin dark corner bars and a dark cap plate that
+	-- overhangs the cage by 0.2
 	local glowY = h + 0.84
 	local glow = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(0.6, 0.72, 0.6), glowColor, NEON, Style.tiny())
 	glow.Name = "LanternGlow"
-	local glass = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(1.12, 1.2, 1.12), K.AmberGlass, NEON, Style.tiny())
-	glass.Transparency = 0.35
+	local glass = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(1.1, 1.16, 1.1), K.AmberGlass, nil, Style.tiny())
+	glass.Transparency = 0.3
 	glass.Name = "LanternGlass"
-	-- the cage: four thick dark corner bars
-	for _, x in { -0.62, 0.62 } do
-		for _, z in { -0.62, 0.62 } do
-			Style.block(m, base * CFrame.new(x, glowY, z), Vector3.new(0.3, 1.3, 0.3), K.MetalDark, nil, Style.tiny())
+	for _, x in { -0.6, 0.6 } do
+		for _, z in { -0.6, 0.6 } do
+			Style.block(m, base * CFrame.new(x, glowY, z), Vector3.new(0.18, 1.3, 0.18), K.MetalDark, nil, Style.tiny())
 		end
 	end
-	Style.block(m, base * CFrame.new(0, glowY + 0.75, 0), Vector3.new(1.75, 0.32, 1.75), K.MetalDark, nil, Style.tiny())
+	Style.block(m, base * CFrame.new(0, glowY + 0.75, 0), Vector3.new(1.98, 0.24, 1.98), K.MetalDark, nil, Style.tiny()).Name = "LanternCap"
 	if o.Light then
 		Style.light(glow, glowColor, o.Range or 16, o.Brightness or 1.3)
 	end

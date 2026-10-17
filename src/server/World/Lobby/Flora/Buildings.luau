@@ -76,13 +76,14 @@ Buildings.Colors = {
 	Shingle = rgb(150, 92, 64), -- warm brown wooden shingles (concept v1)
 	Deck = rgb(70, 76, 96), -- flat roof decks
 	Glass = rgb(58, 112, 186), -- display glass (SmoothPlastic: no bloom)
-	Window = rgb(255, 150, 58), -- warm lit window panes (Neon K.WindowGlow of the plaza: amber, not pale lemon)
+	-- (lobby fix round 3: a deep amber, the panes no longer blow out to white-yellow)
+	Window = rgb(255, 130, 40), -- warm lit window panes
 	WindowDark = rgb(70, 95, 140), -- unlit glass (reads as glass, not as a hole)
 	Glare = rgb(176, 206, 240), -- glare strips on glass
 	EdgeNeon = rgb(48, 150, 255), -- concept v2 contours (deeper than GlowEdge: no white bloom)
 	SignNeon = rgb(40, 128, 240), -- sign frames
 	Amber = rgb(230, 120, 30), -- sign icons (deep amber: the core stays orange, no white blob)
-	LampAmber = rgb(255, 165, 70), -- lantern cubes (deep amber, small: no white blob)
+	LampAmber = rgb(255, 150, 62), -- lantern cubes (round 3: the plaza's amber glass tone, no white blob)
 	Shelf = rgb(255, 176, 92), -- display shelf lights
 	DoorLeaf = rgb(44, 48, 66),
 	SignBoard = rgb(16, 24, 56), -- dark navy sign boards
@@ -212,7 +213,8 @@ function Buildings.windowRow(
 		table.insert(parts, pane(parent, wall * CFrame.new(px, y, -0.33), Vector3.new(paneW, paneH, 0.1), opts.Dark == i, opts.Color))
 	end
 	if opts.Mullion ~= false then
-		table.insert(parts, trim(parent, wall * CFrame.new(cx, y + paneH * 0.18, -0.44), Vector3.new(span - 0.4, 0.14, 0.12), frame))
+		-- (round 3: a dark transom across the panes)
+		table.insert(parts, trim(parent, wall * CFrame.new(cx, y + paneH * 0.12, -0.44), Vector3.new(span - 0.4, 0.16, 0.12), C.WoodDark))
 	end
 	if opts.Sill ~= false then
 		local bottom = y - paneH / 2 - gap
@@ -234,9 +236,11 @@ function Buildings.window(parent: Instance, wall: CFrame, x: number, y: number, 
 	local opts: WindowOpts = o or {}
 	local frame = opts.Frame or K.PanelLight
 	trim(parent, wall * CFrame.new(x, y, -0.15), Vector3.new(w + 0.8, h + 0.8, 0.3), frame)
-	local p = pane(parent, wall * CFrame.new(x, y, -0.33), Vector3.new(w, h, 0.1), opts.Dark == 1, opts.Color)
-	if opts.Mullion ~= false and h >= 1.6 then
-		trim(parent, wall * CFrame.new(x, y + h * 0.18, -0.44), Vector3.new(w + 0.2, 0.14, 0.12), frame)
+	-- (round 3) a smaller glowing pane behind a dark mullion cross
+	local p = pane(parent, wall * CFrame.new(x, y, -0.33), Vector3.new(w * 0.88, h * 0.88, 0.1), opts.Dark == 1, opts.Color)
+	if opts.Mullion ~= false and h >= 1.0 then
+		trim(parent, wall * CFrame.new(x, y + h * 0.1, -0.44), Vector3.new(w * 0.9, 0.16, 0.12), C.WoodDark)
+		trim(parent, wall * CFrame.new(x, y, -0.44), Vector3.new(0.16, h * 0.9, 0.12), C.WoodDark)
 	end
 	if opts.Sill ~= false then
 		trim(

@@ -26,6 +26,10 @@ local Tech = require(script.Parent.Tech)
 
 local Fronts = {}
 
+-- (round 3) the SELL sign box: center height and height
+Fronts.SellY = 9.0
+Fronts.SellH = 2.0
+
 local C = Kit.C
 
 -- Deep glowing ore (orange-gold, never near-white under bloom).
@@ -138,7 +142,11 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 			Tech.faceDisc(m, at(cx + x, 0.65, cz + z), 0.3, 1.1, Tech.MetalDeep)
 		end
 	end
-	oreHeap(m, at(cx + 0.3, 2.45, cz + 0.4), 0.8, 0.35, 4, rng)
+	-- (round 3) colourful glowing ore chunks on the counter cart
+	for i, color in { C.CrystalCyan, C.CrystalPink, C.LeafGreenLight, C.Gold } do
+		local q = Vector3.new(-0.55 + (i - 1) * 0.42, 2.62 + (i % 2) * 0.1, 0.35 + (i % 2) * 0.25)
+		Kit.glow(m, at(cx + q.X, q.Y, cz + q.Z) * Geo.randomTilt(rng, 0.5), Vector3.new(0.5, 0.42, 0.5), color)
+	end
 	local counter = Style.block(m, at(cx, 2.55, cz - 0.85), Vector3.new(3.0, 0.3, 1.1), Tech.MetalLight, nil, Style.solid())
 	counter.Name = "SellCounter"
 	Kit.tag(counter, "SellCounter")
@@ -153,18 +161,21 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 	end
 	local nugget = Kit.glow(m, at(sx - 0.6, 3.52, sz), Vector3.new(0.26, 0.2, 0.26), C.Molten)
 	nugget.Name = "StallLamp"
-	Style.light(nugget, C.LampAmber, 12, 0.9)
+	-- (round 3: an amber-white light, so Tobin's colours stay apart)
+	Style.light(nugget, Color3.fromRGB(255, 200, 150), 12, 0.9)
 	Kit.disc(m, at(cx + 0.9, 2.9, sz).Position, 0.4, 0.5, C.Gold, nil, Style.tiny())
 
-	-- the big two-faced SELL sign box high on a gunmetal arch over the
-	-- stall's front (round 2: 6 x 2.4, a gold neon frame, not the SHOP's
-	-- blue), facing the plaza on both faces
+	-- the two-faced SELL sign box high on a gunmetal arch over the stall's
+	-- front (a gold neon frame, not the SHOP's blue), facing the plaza on
+	-- both faces (round 3: 4.6 x 2.0 at y 9, its bottom 1.9 studs over
+	-- Tobin's hard hat and its top under the SHOP sign's casing)
 	local arch = Style.model("SellSign", m)
 	local mz = -3.35
+	local postH = Fronts.SellY - Fronts.SellH / 2 - 0.2
 	for _, x in { -2.85, 2.85 } do
-		Style.block(arch, at(x, 2.9, mz + 0.35), Vector3.new(0.45, 5.8, 0.45), Tech.MetalDark, nil, Style.decor())
+		Style.block(arch, at(x, postH / 2, mz + 0.35), Vector3.new(0.45, postH, 0.45), Tech.MetalDark, nil, Style.decor())
 	end
-	Tech.sign(arch, at(0, 7.0, mz), "SELL", 5.6, 2.4, {
+	Tech.sign(arch, at(0, Fronts.SellY, mz), "SELL", 4.6, Fronts.SellH, {
 		CasingDepth = 0.6,
 		Margin = 0.22,
 		Lip = 0.16,
@@ -176,16 +187,18 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 
 	-- Tobin the Miner behind his cart beside the bin, facing the plaza (the
 	-- sign's direction; customers stand at the counter on the plaza side):
-	-- hard hat with a small amber head lamp, a ginger beard, copper shirt and
-	-- brown overalls
+	-- (round 3: colours that stay apart under the warm stall light) a clean
+	-- yellow hard hat with a small amber head lamp, a dark auburn beard, a
+	-- denim-teal shirt, navy overalls, tan skin and black boots
 	Kit.npc(m, at(0.9, 0, -0.4), {
 		Name = "Tobin",
 		Tag = "Tobin the Miner",
-		Shirt = C.Copper,
-		Overalls = C.DirtDark,
-		Boots = C.WoodDark,
-		Beard = Color3.fromRGB(196, 120, 60), -- ginger
-		Helmet = C.LeafYellow,
+		Shirt = Color3.fromRGB(52, 92, 140),
+		Overalls = Color3.fromRGB(44, 58, 96),
+		Boots = Color3.fromRGB(22, 22, 26),
+		Skin = Color3.fromRGB(234, 186, 148),
+		Beard = Color3.fromRGB(140, 64, 28),
+		Helmet = Color3.fromRGB(255, 214, 40),
 		HelmetLamp = true,
 		HeadScale = 0.85,
 		Lens = Color3.fromRGB(255, 150, 50),
@@ -232,19 +245,24 @@ local function blasterDisplay(parent: Instance, rng: Rng.Rng)
 	local pivot = at(px, 4.1, pz)
 	local orb = Kit.ball(blaster, pivot.Position + Vector3.new(0, -0.95, 0), 0.5, C.CrystalCyan, Kit.NEON)
 	orb.Name = "HoverOrb"
+	-- (round 3) a cyan hologram (see-through neon body) with a bright neon barrel
 	local bf = pivot * CFrame.Angles(0, 0.5, 0)
-	Kit.bit(blaster, bf, Vector3.new(2.1, 0.95, 0.95), C.IronLight)
-	Kit.glow(blaster, bf * CFrame.new(0.1, 0.42, 0), Vector3.new(1.0, 0.3, 1.0), C.CrystalBlue)
-	Kit.bit(blaster, bf * CFrame.new(-1.55, 0.05, 0), Vector3.new(1.1, 0.55, 0.55), C.Iron)
-	for _, x in { -1.25, -1.9 } do
-		Kit.bit(blaster, bf * CFrame.new(x, 0.05, 0), Vector3.new(0.25, 0.8, 0.8), C.Brass)
+	local holo = Color3.fromRGB(90, 220, 255)
+	local function shell(cf: CFrame, size: Vector3)
+		Style.block(blaster, cf, size, holo, Kit.NEON, Style.tiny({ Transparency = 0.45 }))
 	end
-	Kit.glow(blaster, bf * CFrame.new(-2.15, 0.05, 0), Vector3.new(0.18, 0.42, 0.42), C.CrystalCyan)
-	Kit.bit(blaster, bf * CFrame.new(0.55, -0.8, 0) * CFrame.Angles(0, 0, -0.3), Vector3.new(0.55, 1.1, 0.6), C.WoodDark)
-	Kit.bit(blaster, bf * CFrame.new(1.2, 0.25, 0), Vector3.new(0.45, 0.85, 0.3), C.Iron)
-	Kit.bit(blaster, bf * CFrame.new(-0.2, 0.75, 0), Vector3.new(1.0, 0.3, 0.3), C.Iron)
+	shell(bf, Vector3.new(2.1, 0.95, 0.95))
+	Kit.glow(blaster, bf * CFrame.new(0.1, 0.42, 0), Vector3.new(1.0, 0.3, 1.0), C.CrystalBlue)
+	Kit.glow(blaster, bf * CFrame.new(-1.55, 0.05, 0), Vector3.new(1.1, 0.5, 0.5), Color3.fromRGB(40, 160, 255)).Name = "Barrel"
+	for _, x in { -1.25, -1.9 } do
+		Kit.glow(blaster, bf * CFrame.new(x, 0.05, 0), Vector3.new(0.2, 0.75, 0.75), C.CrystalCyan)
+	end
+	Kit.glow(blaster, bf * CFrame.new(-2.15, 0.05, 0), Vector3.new(0.18, 0.42, 0.42), C.FlowerWhite)
+	shell(bf * CFrame.new(0.55, -0.8, 0) * CFrame.Angles(0, 0, -0.3), Vector3.new(0.55, 1.1, 0.6))
+	shell(bf * CFrame.new(1.2, 0.25, 0), Vector3.new(0.45, 0.85, 0.3))
+	shell(bf * CFrame.new(-0.2, 0.75, 0), Vector3.new(1.0, 0.3, 0.3))
 	for _, z in { -0.55, 0.55 } do
-		Kit.bit(blaster, bf * CFrame.new(0.3, -0.1, z), Vector3.new(0.9, 0.12, 0.35), C.Copper)
+		Kit.glow(blaster, bf * CFrame.new(0.3, -0.1, z), Vector3.new(0.9, 0.12, 0.35), C.CrystalCyan)
 	end
 	Style.emitter(orb, "Sparkle", C.CrystalCyan, 2)
 	blaster.PrimaryPart = orb
@@ -257,7 +275,8 @@ local function blasterDisplay(parent: Instance, rng: Rng.Rng)
 	-- viewer's right: a computer-screen kiosk on the outer front corner (it
 	-- stands beside the window instead of in front of it), a purple loot
 	-- chest and a crate at the back
-	Tech.computer(m, at(-6.0, 0, -2.6), 2.4, Tech.Screen, { Bars = C.FlowerWhite })
+	-- (round 3: 1.5 studs further from the door, turned to the plaza's east rim)
+	Tech.computer(m, at(-6.1, 0, -2.5) * CFrame.Angles(0, -0.35, 0), 2.0, Tech.Screen, { Bars = C.FlowerWhite })
 	local chest = at(-4.6, 0, 1.9)
 	Style.block(m, chest * CFrame.new(0, 0.75, 0), Vector3.new(2.6, 1.5, 1.7), Tech.Metal)
 	Style.block(m, chest * CFrame.new(0, 1.75, 0), Vector3.new(2.7, 0.5, 1.8), Tech.MetalLight)

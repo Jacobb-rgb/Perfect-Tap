@@ -28,6 +28,47 @@ local function bridgeGap(c: Vector3, sizeZ: number): Kit.Gap
 	}
 end
 
+-- The koi pond's surface: deep teal (the light Water colour only shows as a
+-- band of shallows along the rim).
+Water.DeepTeal = Color3.fromRGB(20, 110, 150)
+-- (lobby fix round 3) the ponds' water: teal-blue shallows over a deep
+-- centre, a light polish (the round-2 water mirrored the sky into flat
+-- blue puddles), a few neon glints and koi
+Water.Shallows = Color3.fromRGB(40, 150, 200)
+Water.Reflectance = 0.08
+Water.Glint = Color3.fromRGB(170, 235, 255)
+
+-- Retint a pond's water, then 3-4 thin neon glints on it and `koi` more koi.
+local function dress(pond: Instance, c: Vector3, sizeX: number, sizeZ: number, koi: number, rng: Rng.Rng)
+	for _, d in pond:GetChildren() do
+		if d:IsA("BasePart") and d.Name == "Water" then
+			if d.Color ~= Water.DeepTeal then
+				d.Color = Water.Shallows
+			end
+			d.Reflectance = Water.Reflectance
+		end
+	end
+	for _ = 1, 4 do
+		local q = c + Vector3.new(rng:range(-sizeX * 0.3, sizeX * 0.3), 0.69, rng:range(-sizeZ * 0.25, sizeZ * 0.25))
+		Style.block(
+			pond,
+			CFrame.new(q) * CFrame.Angles(0, rng:range(-0.4, 0.4), 0),
+			Vector3.new(rng:range(1.0, 1.8), 0.04, 0.16),
+			Water.Glint,
+			Enum.Material.Neon,
+			Style.tiny({ Transparency = 0.3 })
+		).Name =
+			"Glint"
+	end
+	for i = 1, koi do
+		local q = c + Vector3.new(rng:range(-sizeX * 0.3, sizeX * 0.3), 0.66, rng:range(-sizeZ * 0.22, sizeZ * 0.22))
+		local fish = CFrame.new(q) * CFrame.Angles(0, rng:range(0, math.pi * 2), 0)
+		Style.block(pond, fish, Vector3.new(0.55, 0.3, 1.4), if i % 2 == 0 then C.FlowerWhite else C.LeafOrange, nil, Style.tiny()).Name =
+			"Koi"
+		Style.block(pond, fish * CFrame.new(0, 0, 0.85), Vector3.new(0.7, 0.12, 0.45), C.FlowerWhite, nil, Style.tiny())
+	end
+end
+
 function Water.lilyPond(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("LilyPond")
 	local c = piece.Center
@@ -35,6 +76,7 @@ function Water.lilyPond(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("LilyPond", parent)
 	local pond = Style.pond(m, c, piece.Size.X, piece.Size.Z, rng, { LilyPads = 4, Rim = false })
 	pond.Name = "Pond"
+	dress(pond, c, piece.Size.X, piece.Size.Z, 3, rng)
 	Kit.rim(m, c, piece.Size.X, piece.Size.Z, rng, {})
 	-- cattails in the shallow corners
 	Kit.cattails(m, c + Vector3.new(-hx + 2.6, 0, -hz + 2.4), rng, 3)
@@ -45,10 +87,6 @@ function Water.lilyPond(parent: Instance, rng: Rng.Rng)
 	Kit.flowerRing(m, c + Vector3.new(-hx + 1.6, 0, hz + 0.4), 0.9, { C.FlowerPink, C.LeafPinkLight, C.FlowerWhite }, rng, 3)
 	return m
 end
-
--- The koi pond's surface: deep teal (the light Water colour only shows as a
--- band of shallows along the rim).
-Water.DeepTeal = Color3.fromRGB(20, 110, 150)
 
 function Water.koiPond(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("KoiPond")
@@ -64,6 +102,7 @@ function Water.koiPond(parent: Instance, rng: Rng.Rng)
 		local deep = Style.water(pond, CFrame.new(c + Vector3.new(0, 0.42, 0)), size, Water.DeepTeal)
 		deep.Name = "Water"
 	end
+	dress(pond, c, piece.Size.X, piece.Size.Z, 0, rng)
 	-- the stone rim opens under the bridge (the south road crosses there)
 	Kit.rim(m, c, piece.Size.X, piece.Size.Z, rng, { bridgeGap(c, piece.Size.Z) })
 	-- stepping stones across the east end (walkable, just above the water)

@@ -51,13 +51,14 @@ local RINGS = {
 -- fraction (> 1: the chords overlap, a continuous ring), color. Bold and
 -- wide (concept v2), the blue one in long dashes: they read as neon rings,
 -- not as lane markings.
--- (round 2: 24 long segments per ring; the blue ring as wide as the
--- orange one, a saturated blue that glows as strongly as the orange)
-Paving.OuterBlue = Color3.fromRGB(30, 100, 255)
+-- (lobby fix round 3: thin glowing tubes, not roundabout lane paint:
+-- about half as wide, fewer segments, every ring drawn as one tube; the
+-- outer ring a deep electric blue that stays blue under bloom)
+Paving.OuterBlue = C.GlowEdgeDeep
 Paving.NeonRings = {
-	{ Name = "InnerRing", R = 14.35, Width = 1.0, Segments = 24, Dash = 1.04, Color = K.RingOrange },
-	{ Name = "OrangeRing", R = 24.62, Width = 1.3, Segments = 24, Dash = 1.04, Color = K.RingOrange },
-	{ Name = "OuterRing", R = 30.62, Width = 1.3, Segments = 24, Dash = 0.82, Color = Paving.OuterBlue },
+	{ Name = "InnerRing", R = 14.35, Width = 0.45, Segments = 16, Dash = 1.03, Color = K.RingOrange },
+	{ Name = "OrangeRing", R = 24.62, Width = 0.55, Segments = 20, Dash = 1.03, Color = K.RingOrange },
+	{ Name = "OuterRing", R = 30.62, Width = 0.5, Segments = 24, Dash = 0.97, Color = Paving.OuterBlue },
 }
 Paving.CrystalFloorRadius = 13.65
 local TILE_H = 0.08
@@ -357,34 +358,70 @@ local function facadeAprons(m: Model, rng: Rng.Rng)
 end
 
 --[[
-	Concept v2 planters on the outer slate course (r 33.2), at the NE, NW,
-	SE and SW ring gaps (the south pair flanks the chevron path from the
-	spawn): a dark metal tub with an orange neon lip round a dark soil top
-	and three voxel bush cubes. On the paving between the blue ring and the
-	curb (never on a neon line), clear of every road, path and stall. 6
-	parts each.
+	Concept v2 planters (lobby fix round 3: the round-2 dark metal tubs read
+	as crates on the walking ring): four raised stone planters on the outer
+	slate course (r 33.2) at the diagonals, each a stone tub with a light
+	stone coping over a thin deep-blue neon lip, dark soil, a small voxel
+	tree and three flower tufts. On the paving between the blue ring and
+	the curb (never on a neon line), clear of every road, path, stall and
+	lantern pillar. 12 parts each.
 ]]
 Paving.PlanterRadius = 33.2
 Paving.PlanterAngles = { 45, 135, 225, 315 }
+Paving.PlanterSize = Vector3.new(2.8, 1.3, 4.0) -- radial x height x along the ring
+local FLOWERS = { C.FlowerPink, C.FlowerYellow, C.FlowerWhite, C.FlowerPurple }
 local function planterBox(m: Model, base: CFrame, rng: Rng.Rng)
-	local size = Vector3.new(2.6, 1.5, 4.0)
-	local box = Style.block(m, base * CFrame.new(0, size.Y / 2, 0), size, K.MetalDark, nil, Style.decor())
-	box.Name = "Planter"
-	Style.block(m, base * CFrame.new(0, size.Y + 0.04, 0), Vector3.new(size.X + 0.12, 0.08, size.Z + 0.12), K.NeonOrange, NEON, Style.tiny()).Name =
+	local size = Paving.PlanterSize
+	local planter = Style.model("Planter", m)
+	local box = Style.block(planter, base * CFrame.new(0, size.Y / 2, 0), size, Style.vary(C.StoneDark, rng, 0.03), nil, Style.decor())
+	box.Name = "PlanterTub"
+	Style.block(
+		planter,
+		base * CFrame.new(0, size.Y - 0.12, 0),
+		Vector3.new(size.X + 0.14, 0.12, size.Z + 0.14),
+		C.GlowEdgeDeep,
+		NEON,
+		Style.tiny()
+	).Name =
 		"PlanterLip"
-	Style.block(m, base * CFrame.new(0, size.Y + 0.1, 0), Vector3.new(size.X - 0.4, 0.08, size.Z - 0.4), C.DirtDark, nil, Style.tiny())
-	local shades = { C.LeafGreen, C.LeafGreenDark, C.LeafGreenLight }
-	for i = 1, 3 do
-		local k = rng:range(1.1, 1.5)
-		local z = (i - 2) * size.Z * 0.28 + rng:range(-0.15, 0.15)
+	Style.block(planter, base * CFrame.new(0, size.Y + 0.1, 0), Vector3.new(size.X + 0.3, 0.2, size.Z + 0.3), C.StoneLight, nil, Style.tiny())
+	Style.block(planter, base * CFrame.new(0, size.Y + 0.22, 0), Vector3.new(size.X - 0.5, 0.1, size.Z - 0.5), C.DirtDark, nil, Style.tiny())
+	-- the small voxel tree: a trunk, a leafy cube, two side lumps and a lighter cap
+	local top = size.Y + 0.27
+	Style.block(planter, base * CFrame.new(0, top + 1.1, 0), Vector3.new(0.5, 2.2, 0.5), C.Trunk, nil, Style.tiny())
+	local k = rng:range(2.5, 2.8)
+	local cy = top + 2.2 + k * 0.35
+	Style.block(planter, base * CFrame.new(0, cy, 0), Vector3.new(k, k * 0.8, k), Style.vary(C.LeafGreen, rng, 0.04), nil, Style.ghost())
+	for _, side in { -1, 1 } do
 		Style.block(
-			m,
-			base * CFrame.new(rng:range(-0.12, 0.12), size.Y + 0.14 + k * 0.4, z),
-			Vector3.new(k, k * 0.8, k),
-			Style.vary(shades[i], rng, 0.05),
+			planter,
+			base * CFrame.new(rng:range(-0.2, 0.2), cy - k * 0.12, side * k * 0.5),
+			Vector3.new(k * 0.6, k * 0.5, k * 0.5),
+			Style.vary(C.LeafGreenDark, rng, 0.04),
 			nil,
 			Style.tiny()
 		)
+	end
+	Style.block(
+		planter,
+		base * CFrame.new(rng:range(-0.15, 0.15), cy + k * 0.48, rng:range(-0.15, 0.15)),
+		Vector3.new(k * 0.66, k * 0.3, k * 0.66),
+		Style.vary(C.LeafGreenLight, rng, 0.04),
+		nil,
+		Style.tiny()
+	)
+	-- flower tufts round the trunk
+	for i, z in { -1.3, 1.25, 0.15 } do
+		local x = if i == 3 then 0.75 else rng:range(-0.5, 0.5)
+		Style.block(
+			planter,
+			base * CFrame.new(x, top + 0.2, z),
+			Vector3.new(0.55, 0.4, 0.55),
+			FLOWERS[(i + rng:int(0, 3)) % #FLOWERS + 1],
+			nil,
+			Style.tiny()
+		).Name =
+			"Flowers"
 	end
 end
 
@@ -392,9 +429,38 @@ local function planters(m: Model, rng: Rng.Rng)
 	for _, deg in Paving.PlanterAngles do
 		local a = math.rad(deg)
 		local p = Vector3.new(math.cos(a), 0, math.sin(a)) * Paving.PlanterRadius
-		if not Common.isEntrance(a, 3) and Common.isClear(p, 2.2) and Common.offStrips(p, 2.2) then
+		if not Common.isEntrance(a, 3) and Common.isClear(p, 2.4) and Common.offStrips(p, 2.4) then
 			planterBox(m, CFrame.new(p) * CFrame.Angles(0, -a, 0), rng)
 		end
+	end
+end
+
+--[[
+	Two benches on the outer slate course south-east and south-west of the
+	crystal (lobby fix round 3), their backs to the crystal: the spawn sees
+	their seats. A dark metal end frame at each end, a warm wood seat and a
+	wood back on a dark rail. 5 parts each.
+]]
+Paving.BenchAngles = { 62, 118 }
+Paving.BenchRadius = 33.5
+local function benches(m: Model)
+	for _, deg in Paving.BenchAngles do
+		local a = math.rad(deg)
+		local p = Vector3.new(math.cos(a), 0, math.sin(a)) * Paving.BenchRadius
+		if Common.isEntrance(a, 2.5) or not Common.isClear(p, 2) or not Common.offStrips(p, 2) then
+			continue
+		end
+		-- LookVector = outward (the way a sitter looks): the back toward the crystal
+		local out = Vector3.new(math.cos(a), 0, math.sin(a))
+		local at = p + Vector3.new(0, Common.TileTop, 0)
+		local base = CFrame.lookAt(at, at + out)
+		local bench = Style.model("Bench", m)
+		for _, x in { -1.55, 1.55 } do
+			Style.block(bench, base * CFrame.new(x, 0.6, 0.05), Vector3.new(0.3, 1.2, 1.3), K.MetalDark, nil, Style.decor())
+		end
+		Style.block(bench, base * CFrame.new(0, 1.0, 0), Vector3.new(3.5, 0.24, 1.2), Style.C.Wood, nil, Style.decor()).Name = "BenchSeat"
+		Style.block(bench, base * CFrame.new(0, 1.62, 0.6) * CFrame.Angles(0.2, 0, 0), Vector3.new(3.5, 0.8, 0.18), Style.C.WoodLight, nil, Style.tiny())
+		Style.block(bench, base * CFrame.new(0, 1.15, 0.62), Vector3.new(3.1, 0.2, 0.2), K.MetalDark, nil, Style.tiny())
 	end
 end
 
@@ -404,40 +470,6 @@ local function matteGold(cart: Instance, rng: Rng.Rng)
 		if d:IsA("BasePart") and d.Material == NEON then
 			d.Material = SMOOTH
 			d.Color = Style.vary(C.Gold, rng, 0.05)
-		end
-	end
-end
-
--- Two small gold ore carts on the plaza's outer slate course (concept v2's
--- mine carts), turned along the ring, off the paths.
-Paving.RingCartAngles = { 20, 160 }
-local function ringCarts(m: Model, rng: Rng.Rng)
-	for _, deg in Paving.RingCartAngles do
-		local a = math.rad(deg)
-		local p = Vector3.new(math.cos(a), 0, math.sin(a)) * Paving.PlanterRadius
-		if not Common.isEntrance(a, 3) and Common.isClear(p, 2) and Common.offStrips(p, 2) then
-			local tangent = Vector3.new(-math.sin(a), 0, math.cos(a))
-			local at = p + Vector3.new(0, Common.TileTop, 0)
-			-- a small cart (7 parts): dark tub, copper rim, a matte gold load
-			-- with two nuggets on top, two axles
-			local cart = Style.model("OreCart", m)
-			local base = CFrame.lookAt(at, at + tangent)
-			Style.block(cart, base * CFrame.new(0, 1.05, 0), Vector3.new(1.9, 1.1, 2.7), K.MetalDark, nil, Style.decor())
-			Style.block(cart, base * CFrame.new(0, 1.62, 0), Vector3.new(2.05, 0.18, 2.85), C.Copper, nil, Style.tiny())
-			Style.block(cart, base * CFrame.new(0, 1.78, 0), Vector3.new(1.6, 0.36, 2.3), Style.vary(C.Gold, rng, 0.05), nil, Style.tiny())
-			for _, q in { Vector3.new(-0.3, 2.08, -0.5), Vector3.new(0.35, 2.05, 0.45) } do
-				Style.block(
-					cart,
-					base * CFrame.new(q) * CFrame.Angles(rng:range(-0.4, 0.4), rng:range(0, 1.5), 0),
-					Vector3.new(0.6, 0.45, 0.6),
-					Style.vary(C.Gold, rng, 0.06),
-					Enum.Material.Metal,
-					Style.tiny()
-				)
-			end
-			for _, z in { -0.8, 0.8 } do
-				Style.block(cart, base * CFrame.new(0, 0.38, z), Vector3.new(2.3, 0.6, 0.6), K.Metal, nil, Style.tiny())
-			end
 		end
 	end
 end
@@ -494,7 +526,7 @@ function Paving.build(parent: Instance, rng: Rng.Rng)
 	planters(Style.model("Planters", parent), rng)
 	local carts = Style.model("OreCarts", parent)
 	oreCarts(carts, rng)
-	ringCarts(carts, rng)
+	benches(Style.model("Benches", parent))
 end
 
 return Paving

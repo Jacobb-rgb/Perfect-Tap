@@ -323,7 +323,10 @@ return function(T, Loader)
 				T.eq(part.Material, SMOOTH, "slate tiles are SmoothPlastic")
 				T.lt(luma(part.Color), 0.46, "slate tiles are blue-grey slate (light enough that the tile grid reads)")
 				T.truthy(part.Color.B > part.Color.R, "slate tiles are cool (blue over red)")
-				T.le(part.Reflectance, 0.1 + 1e-6, "a polished sheen, no mirror")
+				T.le(part.Reflectance, 0.2 + 1e-6, "a polished sheen, no mirror")
+				-- (round 3: polished blue-grey slate, not black asphalt)
+				T.truthy(luma(part.Color) > 0.2, "slate tiles light enough to read as slate (not asphalt)")
+				T.lt(part.Color.R, part.Color.B * 0.75, "a low red channel (the pink sky never turns it lilac)")
 				if math.abs(part.Reflectance - Common.TileReflectance) < 1e-4 and part.Reflectance > 0 then
 					polished += 1
 				end
@@ -346,19 +349,18 @@ return function(T, Loader)
 				blue[part.Name] = (blue[part.Name] or 0) + 1
 			end
 		end
-		T.truthy((orange.InnerRing or 0) >= 20, "an orange neon ring round the crystal")
-		T.truthy((orange.OrangeRing or 0) >= 20, "a second orange ring in the middle of the plaza")
-		T.truthy((blue.OuterRing or 0) >= 12, "a blue neon outer ring of long dashes")
-		-- bold rings (concept v2): the orange ones continuous, the blue one long dashes
+		T.truthy((orange.InnerRing or 0) >= 14, "an orange neon ring round the crystal")
+		T.truthy((orange.OrangeRing or 0) >= 16, "a second orange ring in the middle of the plaza")
+		T.truthy((blue.OuterRing or 0) >= 12, "a blue neon outer ring")
+		-- (round 3) thin glowing tubes (concept v2), not wide roundabout lane
+		-- paint: each ring reads as one tube (no visible dashes)
 		local Paving = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.Paving")
 		for _, spec in Paving.NeonRings do
-			T.truthy(spec.Width >= 0.95, spec.Name .. " is a bold neon ring, not a lane marking")
-			if spec.Name == "OuterRing" then
-				T.truthy(spec.Dash >= 0.7 and spec.Dash < 1, "the blue outer ring: long dashes, short gaps")
-			else
-				T.truthy(spec.Dash > 1, spec.Name .. " is continuous (the chords overlap)")
-			end
+			T.truthy(spec.Width >= 0.35 and spec.Width <= 0.6, spec.Name .. " is a thin neon tube, not a lane marking")
+			T.truthy(spec.Dash >= 0.95, spec.Name .. " reads as one tube")
 		end
+		-- the outer ring: a deep electric blue (pastel blue blooms to white)
+		T.truthy(Paving.NeonRings[3].Color.R < 0.15 and Paving.NeonRings[3].Color.G < 0.5, "a deep electric blue outer ring")
 		local curbGlow = 0
 		for _, part in parts(paving.Curb) do
 			T.falsy(part.CanCollide, "the curb is walk-through")
@@ -566,7 +568,7 @@ return function(T, Loader)
 				local p = lantern.PrimaryPart.CFrame.Position
 				local near = Vector3.new(p.X, 0, p.Z).Magnitude < 50
 				if group == plaza.EntranceLanterns or near then
-					T.eq(slots, 2, lantern:GetFullName() .. " is a slotted lantern pillar")
+					T.eq(slots, 1, lantern:GetFullName() .. " is a slotted lantern pillar")
 				end
 				if slots > 0 then
 					pillars += 1
@@ -574,8 +576,11 @@ return function(T, Loader)
 					T.eq(core.Name, "LanternGlow", "the lamp glows")
 					T.truthy(core.Color.G < 0.65 and core.Color.B < 0.25, "an amber lamp core (not white)")
 					T.truthy(core.Size.X <= 0.7, "a small neon core")
+					-- (round 3) amber glass panes round the core (not neon: no bare glowing cube) under an overhanging cap
 					local glass = lantern:FindFirstChild("LanternGlass")
-					T.truthy(glass and glass.Transparency > 0 and glass.Material == NEON, "glowing orange glass panes round the core")
+					T.truthy(glass and glass.Transparency > 0 and glass.Material ~= NEON, "amber glass panes round the core")
+					local cap = lantern:FindFirstChild("LanternCap")
+					T.truthy(cap and cap.Size.X >= glass.Size.X + 0.4 + 0.18, "a dark cap plate overhanging the cage")
 				end
 			end
 		end
@@ -860,7 +865,8 @@ return function(T, Loader)
 				if d.Material == roblox.Enum.Material.Neon then
 					T.falsy(d.CastShadow, d:GetFullName() .. " (neon) casts no shadow")
 				end
-			elseif d:IsA("PointLight") or d:IsA("SpotLight") then
+			elseif d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+				-- (round 3: the hall's SurfaceLight counts like any light)
 				lights += 1
 				T.falsy(d.Shadows, "lights have shadows off")
 			end

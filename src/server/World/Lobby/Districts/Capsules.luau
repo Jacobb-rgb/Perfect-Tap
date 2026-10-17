@@ -24,13 +24,21 @@
 	SurfaceGui (colour squares as row markers); there is no capsule odds
 	table in Shared.Config yet, so it shows no percentages (paid random
 	items: the real odds are added with the live table, docs/COMPLIANCE.md).
-	A second, double-sided CAPSULES sign on a post at the front-left corner
-	faces south (the hero camera).
+	Lobby fix round 3: the stall is 14 wide (it moved into the spawn view)
+	and every x measure follows the footprint's width. The hero capsule is a
+	rounded glass pod: one see-through glass shell (a body cylinder and two
+	shrinking discs at each end, none overlapping) with two white highlight
+	strips, round an opaque core of four stacked neon bands (deep blue,
+	indigo, violet, magenta) with a bright cyan-white column, a gold golem
+	with a glowing chest gem, five floating gem chips, bright cyan neon
+	rings at both dark caps, on the ringed pedestal; well under the sign.
+	The back wall carries a light panel and a neon strip; the small side
+	blade sign is gone.
 
 	Tag CapsuleStall on the Model, PrimaryPart = the pedestal base named
 	"CapsuleMachine".
-	Local frame: 16 wide, 16 tall, 12 deep, front = -Z (toward the spawn),
-	+X = the viewer's left (south).
+	Local frame: 14 wide (piece Size.X), 16 tall, 12 deep, front = -Z
+	(toward the plaza and the spawn), +X = the viewer's left (south).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -48,13 +56,23 @@ local C = Kit.C
 local rgb = Color3.fromRGB
 
 local FLOOR = 0.6
-local TOWER_X = 6.5 -- shelving tower centers (narrow towers: the pill is the hero)
 local TOWER_W = 2.4
 local TOWER_Z0, TOWER_Z1 = -1.2, 2.4
 local TOP = 10.4 -- tower and back wall top (the beam sits on it)
-local EGG_Z = -2.9 -- the jar stands at the stall's front line, out of the module's recess
-local EGG_R = 3.0 -- jar radius (round 2: a wide egg-like jar, concept v2)
-local EGG_MID = 3.5 -- with the two cap allowances the jar is 2 * EGG_R + EGG_MID = 9.5 studs tall
+local EGG_Z = -2.9 -- the pod stands at the stall's front line, out of the module's recess
+local EGG_R = 2.8 -- pod radius
+-- (round 3: 3.5 -> 2.6 plus the rounded ends: the pod's cap stays 2 studs under the sign box)
+local EGG_MID = 2.6
+-- the rounded ends: shrinking glass discs { radius share, height } outward from the body
+local EGG_ENDS = { { 0.84, 0.55 }, { 0.52, 0.42 } }
+Capsules.PodClearance = 0.5 -- at least this much air between the pod's cap and the sign box
+Capsules.SignY = TOP + 3.45 -- the CAPSULES sign box center
+Capsules.SignH = 2.8
+local POD_BOTTOM = FLOOR + 1.6
+local END_H = EGG_ENDS[1][2] + EGG_ENDS[2][2]
+local BODY_BOTTOM = POD_BOTTOM + END_H
+local BODY_TOP = BODY_BOTTOM + EGG_MID + 2
+Capsules.PodTop = BODY_TOP + END_H + 0.61 -- the top cap's ring
 
 -- Saturated capsule colors (deep enough that none blooms to white).
 local CAPSULE_COLORS = {
@@ -68,13 +86,19 @@ local CAPSULE_COLORS = {
 	rgb(20, 160, 230), -- cyan
 }
 
--- The hero jar (concept v2): pale glass round a violet-to-blue glow, the
--- brightest thing in the stall
-local GLASS = rgb(206, 226, 255)
-local CORE_LOW, CORE_HIGH = rgb(20, 60, 255), rgb(130, 60, 255) -- deep blue under violet
+-- The hero pod (concept v2): light cyan glass round a blue-violet glow,
+-- the brightest thing in the stall
+local GLASS = rgb(190, 238, 255)
+-- the core bands, bottom to top (round 3: a blend, no hard two-tone seam)
+local CORE_BANDS = { rgb(12, 36, 200), rgb(44, 30, 210), rgb(84, 28, 214), rgb(132, 26, 196) }
+local CORE_COLUMN = rgb(170, 240, 255) -- the bright cyan-white energy column
+local CAP_RING = rgb(60, 230, 255) -- bright cyan neon rings at both caps
 local PINK = Tech.Neon -- the pedestal's neon rings (round 2: blue, the stall's colour)
--- the golem inside the jar: a near-black silhouette (its cyan eyes glow)
-local EGG_GOLEM = rgb(22, 22, 30)
+-- the golem inside the pod: a glowing gold figure (neon at mid value: it
+-- reads in the stall's shade, no white bloom) with a cyan chest gem
+local EGG_GOLEM = rgb(230, 150, 30)
+local EGG_GOLEM_DARK = rgb(170, 96, 16)
+local CHIP_COLORS = { rgb(60, 230, 255), rgb(255, 90, 200), rgb(255, 196, 64), rgb(150, 90, 255), rgb(90, 255, 170) }
 
 -- Ore-tone golem figures with a small glowing crystal core (readable next
 -- to the dark module, unlike dark stone golems)
@@ -112,28 +136,36 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	local function pos(x: number, y: number, z: number): Vector3
 		return at(x, y, z).Position
 	end
+	-- (round 3) every x measure follows the footprint's width
+	local W = piece.Size.X - 0.4 -- floor, back wall and beam width
+	local HALF = piece.Size.X / 2
+	local TOWER_X = HALF - 1.4 -- shelving tower centers (narrow towers: the pod is the hero)
 
 	-- floor panel with an orange front edge and blue side edges
-	Style.block(m, at(0, FLOOR / 2, 0), Vector3.new(15.6, FLOOR, 11.6), Style.vary(Tech.MetalDark, rng, 0.03), nil, Style.solid())
-	Kit.bit(m, at(0, FLOOR + 0.05, -0.4), Vector3.new(9.0, 0.04, 9.4), Tech.MetalDeep)
-	Tech.glow(m, at(0, FLOOR - 0.16, -5.84), Vector3.new(15.2, 0.24, 0.12), Tech.Warm)
+	Style.block(m, at(0, FLOOR / 2, 0), Vector3.new(W, FLOOR, 11.6), Style.vary(Tech.MetalDark, rng, 0.03), nil, Style.solid())
+	Kit.bit(m, at(0, FLOOR + 0.05, -0.4), Vector3.new(W - 6.6, 0.04, 9.4), Tech.MetalDeep)
+	Tech.glow(m, at(0, FLOOR - 0.16, -5.84), Vector3.new(W - 0.4, 0.24, 0.12), Tech.Warm)
 	-- a blue neon trim line along the floor's front lip (round 2)
-	Tech.glow(m, at(0, FLOOR + 0.04, -5.62), Vector3.new(15.0, 0.08, 0.3), Tech.Neon)
+	Tech.glow(m, at(0, FLOOR + 0.04, -5.62), Vector3.new(W - 0.6, 0.08, 0.3), Tech.Neon)
 	for _, side in { -1, 1 } do
-		Tech.glow(m, at(side * 7.84, FLOOR - 0.16, 0), Vector3.new(0.12, 0.24, 11.2), Tech.Neon)
+		Tech.glow(m, at(side * (HALF - 0.16), FLOOR - 0.16, 0), Vector3.new(0.12, 0.24, 11.2), Tech.Neon)
 	end
 
-	-- dark gunmetal back wall with a dark recess panel (the pill is the light)
+	-- dark gunmetal back wall with a dark recess panel (the pod is the light)
 	Tech.wall(
 		m,
 		at(0, FLOOR, 4.9) * CFrame.Angles(0, math.pi, 0),
-		15.6,
+		W,
 		TOP - FLOOR,
 		1.0,
 		{ Cap = false, BandY = 0.2, Color = Tech.MetalDark }
 	)
-	Kit.bit(m, at(0, FLOOR + 4.9, 4.36), Vector3.new(9.4, 9.6, 0.1), Tech.MetalDeep)
-	Tech.glow(m, at(0, FLOOR + 9.5, 4.28), Vector3.new(9.0, 0.16, 0.08), Tech.Neon)
+	Kit.bit(m, at(0, FLOOR + 4.9, 4.36), Vector3.new(W - 6.2, 9.6, 0.1), Tech.MetalDeep)
+	Tech.glow(m, at(0, FLOOR + 9.5, 4.28), Vector3.new(W - 6.6, 0.16, 0.08), Tech.Neon)
+	-- (round 3) the back toward the pond and the town: a light steel panel
+	-- and a blue neon strip, no blank dark slab
+	Kit.bit(m, at(0, FLOOR + 5.6, 5.45), Vector3.new(W - 2.4, 5.2, 0.1), Tech.MetalLight)
+	Tech.glow(m, at(0, FLOOR + 8.7, 5.52), Vector3.new(W - 2.4, 0.3, 0.08), Tech.Neon)
 
 	-- two shelving towers with columns of glowing capsules
 	local towerD = TOWER_Z1 - TOWER_Z0
@@ -169,98 +201,160 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	-- the beam across the towers and the CAPSULES sign box on it
-	Style.block(m, at(0, TOP + 0.8, towerZ), Vector3.new(15.6, 1.6, towerD), Style.vary(Tech.MetalDark, rng, 0.03), nil, Style.solid())
-	Tech.glow(m, at(0, TOP + 0.2, TOWER_Z0 - 0.08), Vector3.new(15.6, Tech.TUBE, 0.16), Tech.Tube)
+	Style.block(m, at(0, TOP + 0.8, towerZ), Vector3.new(W, 1.6, towerD), Style.vary(Tech.MetalDark, rng, 0.03), nil, Style.solid())
+	Tech.glow(m, at(0, TOP + 0.2, TOWER_Z0 - 0.08), Vector3.new(W, Tech.TUBE, 0.16), Tech.Tube)
 	-- a dark gunmetal band with a thin warm neon strip (no rust-brown band)
-	Kit.bit(m, at(0, TOP + 0.95, TOWER_Z0 - 0.05), Vector3.new(15.6, 0.55, 0.1), Tech.MetalDark)
-	Tech.glow(m, at(0, TOP + 0.95, TOWER_Z0 - 0.12), Vector3.new(15.2, 0.14, 0.06), Tech.Warm)
+	Kit.bit(m, at(0, TOP + 0.95, TOWER_Z0 - 0.05), Vector3.new(W, 0.55, 0.1), Tech.MetalDark)
+	Tech.glow(m, at(0, TOP + 0.95, TOWER_Z0 - 0.12), Vector3.new(W - 0.4, 0.14, 0.06), Tech.Warm)
 	-- (the floodlight is a warm lens colour: no white light bar over the glass)
-	Tech.sign(m, at(0, TOP + 3.45, -0.6), "CAPSULES", 11.6, 2.8, { Light = 14, LightColor = Tech.Lens, LightDist = 4.0, Back = true })
+	-- (round 3: a deep electric blue frame with a bright core strip: a glowing tube)
+	local signW = math.min(11.6, W - 2.0)
+	Tech.sign(m, at(0, Capsules.SignY, -0.6), "CAPSULES", signW, Capsules.SignH, {
+		Light = 14,
+		LightColor = Tech.Lens,
+		LightDist = 4.0,
+		Back = true,
+		Frame = C.GlowEdgeDeep,
+		Core = C.GlowCore,
+	})
 	-- golem mascots on the beam ends
-	Kit.golem(m, at(7.0, TOP + 1.6, towerZ), 0.8, ORE_GOLEMS[4])
-	Kit.golem(m, at(-7.0, TOP + 1.6, towerZ), 0.8, ORE_GOLEMS[5])
+	Kit.golem(m, at(HALF - 1.0, TOP + 1.6, towerZ), 0.8, ORE_GOLEMS[4])
+	Kit.golem(m, at(-(HALF - 1.0), TOP + 1.6, towerZ), 0.8, ORE_GOLEMS[5])
 
-	-- the pink pedestal at the stall's front line: dark discs with deep pink
+	-- the ringed pedestal at the stall's front line: dark discs with blue
 	-- neon rings (PrimaryPart)
-	local base = Tech.disc(m, pos(0, FLOOR + 0.25, EGG_Z), 0.5, 6.4, Tech.MetalDark, nil, Style.solid())
+	local base = Tech.disc(m, pos(0, FLOOR + 0.25, EGG_Z), 0.5, 2 * EGG_R + 0.4, Tech.MetalDark, nil, Style.solid())
 	base.Name = "CapsuleMachine"
-	Tech.disc(m, pos(0, FLOOR + 0.45, EGG_Z), 0.14, 6.6, PINK, Kit.NEON)
-	Tech.disc(m, pos(0, FLOOR + 0.75, EGG_Z), 0.5, 6.2, Tech.Metal, nil, Style.solid())
-	Tech.disc(m, pos(0, FLOOR + 0.95, EGG_Z), 0.14, 6.4, PINK, Kit.NEON)
-	-- the dark metal bottom end cap the pill stands in
-	Tech.disc(m, pos(0, FLOOR + 1.3, EGG_Z), 0.6, 2 * EGG_R + 0.5, Tech.MetalDeep, nil, Style.solid())
-	local eggBottom = FLOOR + 1.6
+	Tech.disc(m, pos(0, FLOOR + 0.45, EGG_Z), 0.14, 2 * EGG_R + 0.6, PINK, Kit.NEON)
+	Tech.disc(m, pos(0, FLOOR + 0.75, EGG_Z), 0.5, 2 * EGG_R + 0.2, Tech.Metal, nil, Style.solid())
+	Tech.disc(m, pos(0, FLOOR + 0.95, EGG_Z), 0.14, 2 * EGG_R + 0.4, PINK, Kit.NEON)
+	-- the dark metal bottom cap the pod stands in, a bright cyan ring on it
+	Tech.disc(m, pos(0, FLOOR + 1.3, EGG_Z), 0.6, 2 * EGG_R * EGG_ENDS[1][1] + 0.5, Tech.MetalDeep, nil, Style.solid())
+	Tech.disc(m, pos(0, FLOOR + 1.62, EGG_Z), 0.1, 2 * EGG_R * EGG_ENDS[1][1] + 0.3, CAP_RING, Kit.NEON).Name = "CapRing"
 
-	-- the giant glass jar: ONE wide glass shell (no nested domes: no
-	-- clipping, little transparent overdraw on phones) filled by two stacked
-	-- opaque neon cores (deep blue under violet), a near-black golem
-	-- silhouette with cyan eyes in front of them, a dark metal top cap with a
-	-- blue neon ring
-	local jarH = 2 * EGG_R + EGG_MID
-	local midY = eggBottom + jarH / 2
-	local pill = Tech.disc(
-		m,
-		pos(0, midY, EGG_Z),
-		jarH,
-		2 * EGG_R,
-		GLASS,
-		Kit.GLASS,
-		Style.decor({ Transparency = 0.62, CastShadow = false })
-	)
+	-- the rounded glass pod (round 3): ONE see-through shell built from a
+	-- body cylinder and two shrinking discs at each end (no part overlaps
+	-- another: one transparent layer, little overdraw on phones)
+	local function glass(y: number, h: number, d: number): Part
+		local part = Tech.disc(
+			m,
+			pos(0, y, EGG_Z),
+			h,
+			d,
+			GLASS,
+			Kit.GLASS,
+			Style.decor({ Transparency = 0.45, Reflectance = 0.2, CastShadow = false })
+		)
+		part.Name = "CapsuleGlass"
+		return part
+	end
+	local bodyBottom = BODY_BOTTOM
+	local bodyTop = BODY_TOP
+	local pill = glass((bodyBottom + bodyTop) / 2, bodyTop - bodyBottom, 2 * EGG_R)
 	pill.Name = "CapsulePill"
-	local coreZ = EGG_Z + 0.4
-	local coreH = (jarH - 0.6) / 2
+	local yLo, yHi = bodyBottom, bodyTop
+	for _, e in EGG_ENDS do
+		glass(yLo - e[2] / 2, e[2], 2 * EGG_R * e[1])
+		glass(yHi + e[2] / 2, e[2], 2 * EGG_R * e[1])
+		yLo -= e[2]
+		yHi += e[2]
+	end
+	local podTop = yHi
+	-- two thin white highlight strips down the glass (front-left)
+	for i, a in { -0.55, -0.32 } do
+		local hx, hz = math.sin(a) * (EGG_R + 0.02), -math.cos(a) * (EGG_R + 0.02)
+		Style.block(
+			m,
+			at(hx, (bodyBottom + bodyTop) / 2, EGG_Z + hz) * CFrame.Angles(0, -a, 0),
+			Vector3.new(0.14, (bodyTop - bodyBottom) * (if i == 1 then 0.8 else 0.55), 0.06),
+			C.FlowerWhite,
+			nil,
+			Style.tiny({ Transparency = 0.2 })
+		).Name =
+			"GlassHighlight"
+	end
+	-- the opaque glowing core: four stacked bands blending deep blue to
+	-- magenta, a bright cyan-white column in front of them
+	local coreZ = EGG_Z + 0.35
+	local coreD = 2 * EGG_R - 1.3
+	local bandH = (bodyTop - bodyBottom - 0.3) / #CORE_BANDS
 	local coreMid: BasePart? = nil
-	for i, color in { CORE_LOW, CORE_HIGH } do
-		local y = eggBottom + 0.3 + coreH * (i - 0.5)
-		local core = Tech.disc(m, pos(0, y, coreZ), coreH - 0.04, 2 * EGG_R - 1.0, color, Kit.NEON, Style.tiny())
-		if i == 2 then
-			core.Name = "CapsuleCore"
-			coreMid = core
+	for i, color in CORE_BANDS do
+		local y = bodyBottom + 0.15 + bandH * (i - 0.5)
+		-- (each band tilted a little the other way: a swirl, not a paint can)
+		local tilt = CFrame.Angles((i % 2 - 0.5) * 0.24, 0, ((i + 1) % 2 - 0.5) * 0.2)
+		local band = Tech.disc(m, pos(0, y, coreZ), bandH, coreD - (i % 2) * 0.35, color, Kit.NEON, Style.tiny())
+		local bandAt = band.CFrame.Position
+		band.CFrame = CFrame.new(bandAt) * tilt * (band.CFrame - bandAt)
+		if i == 3 then
+			band.Name = "CapsuleCore"
+			coreMid = band
 		end
 	end
 	if coreMid then
 		Style.light(coreMid, C.CrystalViolet, 18, 1.5)
-		Style.emitter(coreMid, "Sparkle", C.CrystalViolet, 2)
+		Style.emitter(coreMid, "Sparkle", C.CrystalCyan, 2)
 	end
-	-- the golem inside, in front of the cores: a near-black silhouette, cyan eyes
-	local gz = EGG_Z - EGG_R + 0.75
-	local gy = eggBottom + 1.2
-	for _, x in { -0.35, 0.35 } do
-		Kit.bit(m, at(x, gy + 0.45, gz), Vector3.new(0.55, 0.9, 0.5), EGG_GOLEM)
+	Kit.glow(
+		m,
+		at(0, (bodyBottom + bodyTop) / 2, coreZ - coreD / 2 - 0.05),
+		Vector3.new(0.45, bodyTop - bodyBottom - 0.6, 0.12),
+		CORE_COLUMN
+	).Name =
+		"CoreColumn"
+	-- the gold golem inside, in front of the core, a glowing chest gem
+	local gz = EGG_Z - EGG_R + 0.7
+	local gy = bodyBottom + 0.1
+	local gs = 0.8
+	for _, x in { -0.3, 0.3 } do
+		Kit.glow(m, at(x * gs, gy + 0.4 * gs, gz), Vector3.new(0.5, 0.8, 0.45) * gs, EGG_GOLEM_DARK)
 	end
-	Kit.bit(m, at(0, gy + 1.5, gz), Vector3.new(1.4, 1.2, 0.55), EGG_GOLEM)
-	for _, x in { -0.95, 0.95 } do
-		Kit.bit(m, at(x, gy + 1.55, gz), Vector3.new(0.45, 1.15, 0.45), EGG_GOLEM)
+	Kit.glow(m, at(0, gy + 1.35 * gs, gz), Vector3.new(1.3, 1.1, 0.5) * gs, EGG_GOLEM)
+	for _, x in { -0.9, 0.9 } do
+		Kit.glow(m, at(x * gs, gy + 1.35 * gs, gz), Vector3.new(0.42, 1.05, 0.42) * gs, EGG_GOLEM_DARK)
 	end
-	Kit.ball(m, pos(0, gy + 2.85, gz), 1.4, EGG_GOLEM)
-	for _, x in { -0.28, 0.28 } do
-		Kit.glow(m, at(x, gy + 2.9, gz - 0.66), Vector3.new(0.24, 0.2, 0.08), C.CrystalCyan)
+	Kit.ball(m, pos(0, gy + 2.5 * gs, gz), 1.25 * gs, EGG_GOLEM, Kit.NEON)
+	Kit.glow(m, at(0, gy + 1.4 * gs, gz - 0.27 * gs) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.42, 0.42, 0.08) * gs, C.CrystalCyan).Name =
+		"GolemGem"
+	for _, x in { -0.25, 0.25 } do
+		Kit.bit(m, at(x * gs, gy + 2.55 * gs, gz - 0.6 * gs), Vector3.new(0.22, 0.18, 0.06) * gs, Kit.Dark)
 	end
-	-- the dark metal top cap with a blue neon ring
-	local capY = eggBottom + jarH
-	Tech.disc(m, pos(0, capY + 0.3, EGG_Z), 0.6, 2 * EGG_R + 0.3, Tech.MetalDeep)
-	Tech.disc(m, pos(0, capY + 0.7, EGG_Z), 0.2, 2 * EGG_R - 0.6, Tech.Neon, Kit.NEON)
+	-- floating gem chips in the glass's front half round the core (angle
+	-- from local +X toward +Z, height share of the body)
+	local chips = { { 200, 0.25 }, { 228, 0.7 }, { 312, 0.45 }, { 338, 0.15 }, { 262, 0.92 } }
+	for i, color in CHIP_COLORS do
+		local a = math.rad(chips[i][1])
+		local r = EGG_R - 0.55
+		local y = bodyBottom + 0.4 + (bodyTop - bodyBottom - 0.8) * chips[i][2]
+		local chip = 0.5 + 0.05 * (i % 3)
+		Kit.glow(
+			m,
+			at(math.cos(a) * r, y, EGG_Z + math.sin(a) * r) * CFrame.Angles(0.6, a, 0.785),
+			Vector3.new(chip, chip, chip),
+			color
+		).Name =
+			"GemChip"
+	end
+	-- the dark metal top cap with a bright cyan neon ring
+	local capD = 2 * EGG_R * EGG_ENDS[#EGG_ENDS][1] + 0.6
+	Tech.disc(m, pos(0, podTop + 0.25, EGG_Z), 0.5, capD, Tech.MetalDeep)
+	Tech.disc(m, pos(0, podTop + 0.55, EGG_Z), 0.12, capD - 0.3, CAP_RING, Kit.NEON).Name = "CapRing"
 
 	-- viewer's left (+X, south): stepped golem display in front of the tower
-	local gx = TOWER_X + 0.6
+	-- (round 3: 1.3 studs per step, the golems no longer clip into each other)
+	local gx = HALF - 1.3
 	for k = 0, 2 do
 		local h = 0.8 * (k + 1)
-		local z = -5.0 + 1.0 * k
-		Style.block(m, at(gx, FLOOR + h / 2, z), Vector3.new(2.2, h, 1.0), Style.vary(Tech.Metal, rng, 0.04), nil, Style.solid())
-		Tech.glow(m, at(gx, FLOOR + h - 0.08, z - 0.52), Vector3.new(2.2, 0.12, 0.08), Tech.Neon)
+		local z = -5.15 + 1.3 * k
+		Style.block(m, at(gx, FLOOR + h / 2, z), Vector3.new(2.2, h, 1.3), Style.vary(Tech.Metal, rng, 0.04), nil, Style.solid())
+		Tech.glow(m, at(gx, FLOOR + h - 0.08, z - 0.67), Vector3.new(2.2, 0.12, 0.08), Tech.Neon)
 		Kit.golem(m, at(gx, FLOOR + h, z), 0.7, ORE_GOLEMS[k + 1])
 	end
-	-- the second, double-sided CAPSULES sign on a post at the front-left
-	-- corner, turned to face south (the hero camera sees it past the jar)
-	local corner = at(5.7, 0, -3.9) * CFrame.Angles(0, math.rad(-45), 0)
-	Style.block(m, corner * CFrame.new(0, 3.6, 0.7), Vector3.new(0.5, 7.2, 0.5), Tech.MetalDark, nil, Style.decor())
-	Tech.sign(m, corner * CFrame.new(0, 8.4, 0), "CAPSULES", 4.0, 1.3, { DoubleSided = true, Margin = 0.3, Studs = false })
 
 	-- viewer's right (-X): the RARITIES board on a stand at the front edge,
 	-- clear of the right tower's capsule column: one SurfaceGui lists the
 	-- rarity names (white, unlit) with the colour squares as row markers
-	local ox, oz = -7.0, -5.2
+	local ox, oz = -(HALF - 1.3), -5.2
 	Style.block(m, at(ox, FLOOR + 1.0, oz + 0.3), Vector3.new(0.5, 2.0, 0.5), Tech.MetalDark)
 	Style.block(m, at(ox, FLOOR + 3.9, oz + 0.3), Vector3.new(2.3, 4.3, 0.5), Tech.MetalDark)
 	local odds = Style.block(m, at(ox, FLOOR + 3.85, oz + 0.02), Vector3.new(1.9, 3.9, 0.1), Tech.Board, nil, Style.decor())
@@ -303,11 +397,18 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 		marker.Size = UDim2.fromScale(0.13, rowH * 0.56)
 		marker.Parent = gui
 		label("Row" .. i, info.Name, y + rowH * 0.12, rowH * 0.76, 0.27, 0.68, Color3.new(1, 1, 1))
+		-- (round 3) a small rarity-coloured chip beside each row, so the
+		-- colours read from afar (and in the preview, which draws no frames)
+		if i <= 6 then
+			local boardH = 3.9
+			local cy = FLOOR + 3.85 + boardH / 2 - (y + rowH * 0.5) * boardH
+			Kit.glow(m, at(ox + 0.62, cy, oz - 0.05), Vector3.new(0.3, rowH * boardH * 0.55, 0.05), info.Color).Name = "RarityChip"
+		end
 	end
 
 	-- the south side of the left tower: a screen with a capsule
-	local sideAt = at(TOWER_X + TOWER_W / 2 + 0.35, FLOOR + 5.4, towerZ) * CFrame.Angles(0, -math.pi / 2, 0)
-	Tech.screen(m, sideAt, 2.2, 3.0, C.GlowBoard)
+	local sideAt = at(TOWER_X + TOWER_W / 2 + 0.06, FLOOR + 5.4, towerZ) * CFrame.Angles(0, -math.pi / 2, 0)
+	Tech.screen(m, sideAt, 2.2, 3.0, C.GlowBoard, { Tabs = false })
 	Kit.glow(m, sideAt * CFrame.new(0, 0.35, -0.08), Vector3.new(1.2, 0.8, 0.06), rgb(20, 150, 255))
 	Kit.glow(m, sideAt * CFrame.new(0, -0.45, -0.08), Vector3.new(1.2, 0.8, 0.06), rgb(230, 60, 170))
 
