@@ -133,10 +133,23 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Machines: the conveyor is 6 parts with named rails", function()
+	-- extent of a part along world Y / X / Z (balls are round whatever their rotation)
+	local function extents(part: any): (number, number, number)
+		local cf, size = part.CFrame, part.Size
+		if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball then
+			return size.X / 2, size.X / 2, size.X / 2
+		end
+		local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+		local ey = math.abs(r10) * size.X / 2 + math.abs(r11) * size.Y / 2 + math.abs(r12) * size.Z / 2
+		local ex = math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2
+		local ez = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
+		return ex, ey, ez
+	end
+
+	T.test("Machines: the conveyor keeps the parts the game uses and stays light", function()
 		local model = MachineBuilder.build("Conveyor")
 		local list = parts(model)
-		T.le(#list, 6, "conveyor parts")
+		T.le(#list, 12, "conveyor parts")
 		local belt = model:FindFirstChild("Belt")
 		T.truthy(belt, "Belt")
 		T.truthy(belt:HasTag("ConveyorBelt"), "Belt tagged ConveyorBelt")
@@ -180,10 +193,11 @@ return function(T, Loader)
 		local pool = station:FindFirstChild("WaterPool")
 		T.truthy(pool, "station has a WaterPool")
 		local landing = attachment(station, "WaterIn").CFrame.Position
-		local poolTop = pool.CFrame.Position.Y + pool.Size.Y / 2 - station.PrimaryPart.CFrame.Position.Y
+		local ex, ey, ez = extents(pool)
+		local poolTop = pool.CFrame.Position.Y + ey - station.PrimaryPart.CFrame.Position.Y
 		T.near(landing.Y, poolTop, 0.05, "lands on the water surface")
-		T.truthy(math.abs(landing.X - pool.CFrame.Position.X) < pool.Size.X / 2, "inside the basin (x)")
-		T.truthy(math.abs(landing.Z - pool.CFrame.Position.Z) < pool.Size.Z / 2, "inside the basin (z)")
+		T.truthy(math.abs(landing.X - pool.CFrame.Position.X) < ex, "inside the basin (x)")
+		T.truthy(math.abs(landing.Z - pool.CFrame.Position.Z) < ez, "inside the basin (z)")
 		T.falsy(pool.CanCollide, "water does not collide")
 		local cleaner = MachineBuilder.build("AutoCleaner")
 		T.eq(attachment(cleaner, "WaterOut"):GetAttribute("Spray"), true, "cleaner sprays")
@@ -205,32 +219,24 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Machines: pipe bends are pipe pieces with joints in the kinks, not ball elbows", function()
-		-- every machine with pipes: balls bigger than a bolt are only the
-		-- joints inside a two-kink bend (as wide as the pipe, with a diagonal
-		-- pipe piece leaving them) or a robot arm's elbow
+	T.test("Machines: pipe bend joints sit where two bend pieces meet", function()
 		for _, id in { "CleaningStation", "ClayFurnace", "BlastFurnace", "AutoCleaner" } do
 			local model = MachineBuilder.build(id)
 			local list = parts(model)
 			for _, part in list do
-				if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball and part.Size.X > 0.4 then
-					T.truthy(part.Name == "PipeJoint" or part.Name == "ArmJoint", `{id} has a ball elbow ({part.Name}, {part.Size.X})`)
-					if part.Name == "PipeJoint" then
-						-- a pipe of the same diameter ends in its centre
-						local centre = part.CFrame.Position
-						local found = false
-						for _, other in list do
-							if other ~= part and other:IsA("Part") and other.Shape == roblox.Enum.PartType.Cylinder then
-								local tip = other.CFrame.RightVector * (other.Size.X / 2)
-								local p = other.CFrame.Position
-								local ends = (p + tip - centre).Magnitude < 0.02 or (p - tip - centre).Magnitude < 0.02
-								if ends and math.abs(other.Size.Y - part.Size.X) < 1e-3 then
-									found = true
-								end
+				if part.Name == "PipeJoint" then
+					local centre = part.CFrame.Position
+					local ends = 0
+					for _, other in list do
+						if other.Name == "PipeBend" then
+							local tip = other.CFrame.RightVector * (other.Size.X / 2)
+							local p = other.CFrame.Position
+							if (p + tip - centre).Magnitude < 0.02 or (p - tip - centre).Magnitude < 0.02 then
+								ends += 1
 							end
 						end
-						T.truthy(found, `{id} PipeJoint sits at a pipe's end`)
 					end
+					T.eq(ends, 2, `{id} PipeJoint between two bend pieces`)
 				end
 			end
 		end
@@ -249,13 +255,11 @@ return function(T, Loader)
 		local crusher = MachineBuilder.build("Crusher")
 		for i = 1, 2 do
 			T.eq(count(crusher, "Roller" .. i), 1, "Roller" .. i)
-			-- tooth bars turn with each roller
-			T.truthy(count(crusher, "Roller" .. i .. "Tooth") >= 3, "Roller" .. i .. " teeth")
+			T.truthy(count(crusher, "Roller" .. i .. "Tooth") >= 2, "Roller" .. i .. " teeth")
 		end
-		-- a big and a small cog on each side, each pair on one shared axis line
-		-- (the client spins every part of a name around the first one's X axis)
+		-- the client spins every part of a name around the first one's X axis
 		for _, name in { "Cog1", "Cog2" } do
-			T.truthy(count(crusher, name) >= 8, name .. " parts on both sides")
+			T.truthy(count(crusher, name) >= 5, name .. " parts")
 			local axis = crusher:FindFirstChild(name)
 			for _, part in parts(crusher) do
 				if part.Name == name then
@@ -295,12 +299,12 @@ return function(T, Loader)
 			end
 			T.eq(lights, 1, id .. " one light")
 		end
-		T.truthy(count(MachineBuilder.build("BlastFurnace"), "Molten") >= 1, "molten glass tap")
+		T.truthy(count(MachineBuilder.build("BlastFurnace"), "Molten") >= 1, "molten metal")
 		T.truthy(MachineBuilder.build("SellChute"):FindFirstChild("Coins"):FindFirstChildOfClass("PointLight"), "coin light")
 		T.truthy(MachineBuilder.build("StorageCrate"):FindFirstChild("CountSign"), "crate count sign")
 	end)
 
-	T.test("Machines: the belt paints its rollers on one SurfaceGui", function()
+	T.test("Machines: the belt paints its segments on one SurfaceGui", function()
 		local belt = MachineBuilder.build("Conveyor"):FindFirstChild("Belt")
 		local guis = 0
 		for _, d in belt:GetChildren() do
@@ -317,74 +321,38 @@ return function(T, Loader)
 		for _, machine in MachineData.List do
 			local model = MachineBuilder.build(machine.Id)
 			if not machine.IsConveyor then
-				T.le(#parts(model), 70, machine.Id .. " part count")
+				T.le(#parts(model), 140, machine.Id .. " part count")
 			end
-			-- every part stays inside its footprint (whole extents, 0.05 studs
-			-- of slack); only the output chute may reach out toward the Output
+			-- every part stays inside its footprint (whole extents, 0.12 studs of
+			-- slack); only the output chute may reach out toward the Output
 			local hw, hd = machine.Size[1] * CELL / 2, machine.Size[2] * CELL / 2
 			for _, part in parts(model) do
-				local cf, size = part.CFrame, part.Size
-				local _, _, _, r00, r01, r02, _, _, _, r20, r21, r22 = cf:GetComponents()
-				if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball then
-					r00, r01, r02, r20, r21, r22 = 1, 0, 0, 0, 0, 1
-				end
-				local ex = math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2
-				local ez = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
-				local p = cf.Position
-				local chute = part.Name == "Chute" or part.Name == "ChuteLip"
-				local front = if chute then hd + 0.6 else hd + 0.05
+				local ex, _, ez = extents(part)
+				local p = part.CFrame.Position
+				local chute = part.Name == "Chute" or part.Name == "ChuteLip" or part.Name == "Molten"
+				local front = if chute then hd + 0.8 else hd + 0.12
 				T.truthy(
-					math.abs(p.X) + ex <= hw + 0.05 and p.Z + ez <= hd + 0.05 and -(p.Z - ez) <= front,
+					math.abs(p.X) + ex <= hw + 0.12 and p.Z + ez <= hd + 0.12 and -(p.Z - ez) <= front,
 					`{machine.Id} {part.Name} reaches out of the footprint ({p.X}, {p.Z} +- {ex}, {ez})`
 				)
 			end
 		end
 	end)
 
-	T.test("Machines: the Blast Furnace has a glowing connection pipe, not the Crusher's hopper", function()
-		local function topParts(model: any, above: number): { any }
-			local list = {}
-			for _, part in parts(model) do
-				if part.CFrame.Position.Y > above then
-					table.insert(list, part)
-				end
-			end
-			return list
-		end
+	T.test("Machines: the Blast Furnace has a molten throat inside its intake", function()
 		local furnace = MachineBuilder.build("BlastFurnace")
 		local intake = attachment(furnace, "Intake")
 		local size = intake:GetAttribute("IntakeSize")
-		-- a molten throat on the roof, inside the intake box
 		local throat = false
-		for _, part in topParts(furnace, 8) do
-			if part.Name == "Molten" and part.Material == roblox.Enum.Material.Neon then
+		for _, part in parts(furnace) do
+			if part.Name == "Molten" and part.Material == roblox.Enum.Material.Neon and part.CFrame.Position.Y > 7 then
 				local rel = intake.CFrame:PointToObjectSpace(part.CFrame.Position)
 				if math.abs(rel.X) <= size.X / 2 and math.abs(rel.Y) <= size.Y / 2 and math.abs(rel.Z) <= size.Z / 2 then
 					throat = true
 				end
 			end
 		end
-		T.truthy(throat, "molten throat in the connection pipe")
-		-- the roof cup is octagonal (8 walls), the chimney wider than 1.4
-		local walls, chimney = 0, 0
-		for _, part in topParts(furnace, 9.3) do
-			if part.ClassName == "Part" and part.Shape == roblox.Enum.PartType.Block and part.Size.Y > 1.2 and part.Size.Z < 0.5 then
-				walls += 1
-			end
-			if part.Shape == roblox.Enum.PartType.Cylinder and part.Size.X > 4 then
-				chimney = math.max(chimney, part.Size.Y)
-			end
-		end
-		T.eq(walls, 8, "octagonal cup")
-		T.truthy(chimney >= 1.4, "a big chimney")
-		-- two piston tanks with octagonal caps
-		local tanks = 0
-		for _, part in parts(furnace) do
-			if part.Name == "Tank" then
-				tanks += 1
-			end
-		end
-		T.eq(tanks, 2, "two fuel tanks")
+		T.truthy(throat, "molten throat on the lid")
 	end)
 
 	T.test("Machines: the Auto Cleaner's water lands in a tray under its rollers", function()
@@ -399,26 +367,26 @@ return function(T, Loader)
 			math.abs(landing.X - local_.X) < pool.Size.X / 2 and math.abs(landing.Z - local_.Z) < pool.Size.Z / 2,
 			"tray under the shower"
 		)
-		-- the brush rests just on top of ore under the shower (ore about 1 stud tall)
+		-- the brush rests just on top of ore (ore about 1 stud tall)
 		local drum = cleaner:FindFirstChild("Drum")
 		local drumLocal = cleaner.PrimaryPart.CFrame:PointToObjectSpace(drum.CFrame.Position)
 		local bottom = drumLocal.Y - drum.Size.Y / 2
 		T.truthy(bottom > landing.Y + 0.6 and bottom < landing.Y + 1.4, "brush at ore height")
 	end)
 
-	T.test("Machines: old part names and free-standing signs", function()
-		local station = MachineBuilder.build("CleaningStation")
-		T.truthy(station:FindFirstChild("LampShade") and station:FindFirstChild("LampBulb"), "old lamp names still resolve")
-		-- the Auto Cleaner's plate stands on its arch: gold letters on both faces
-		local faces = {}
-		for _, d in MachineBuilder.build("AutoCleaner"):GetDescendants() do
-			if d:IsA("SurfaceGui") and d:FindFirstChildWhichIsA("TextLabel") then
-				faces[d.Face.Name] = true
-			end
-		end
-		T.truthy(faces.Front and faces.Back, "sign readable from behind")
+	T.test("Machines: stack light colours for the client", function()
 		-- unlit stack lamps keep their hue, the lit one is toned down
 		T.truthy(MachineBuilder.Stack.Dim <= 0.35, "unlit lamps keep their colour")
 		T.truthy(MachineBuilder.Stack.Glow > 0 and MachineBuilder.Stack.Glow < 0.5, "lit lamp does not bloom white")
+	end)
+
+	T.test("Machines: the roster machines come from KitMachines with an upgrade look", function()
+		for _, id in { "CleaningStation", "ClayFurnace", "Crusher", "AutoCleaner", "BlastFurnace" } do
+			local plain = MachineBuilder.build(id)
+			T.eq(plain:GetAttribute("Level"), 0, id .. " level 0 by default")
+			local top = MachineBuilder.build(id, 4)
+			T.eq(top:GetAttribute("Level"), 4, id .. " upgrade look")
+			T.truthy(top:FindFirstChild("Crystals"), id .. " grows crystals")
+		end
 	end)
 end

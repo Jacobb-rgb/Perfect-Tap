@@ -30,6 +30,18 @@ YardPreview.Pen = {
 	["Ingot|Iron|Clean|"] = 2,
 }
 
+-- A small factory on the preview plot's pad (the machines the game places, in the KitMachines look).
+YardPreview.Machines = {
+	{ Id = "CleaningStation", X = 1, Z = 8, R = 0 },
+	{ Id = "AutoCleaner", X = 5, Z = 8, R = 0 },
+	{ Id = "ClayFurnace", X = 8, Z = 8, R = 0 },
+	{ Id = "Crusher", X = 8, Z = 4, R = 0 },
+	{ Id = "BlastFurnace", X = 1, Z = 3, R = 0 },
+	{ Id = "Conveyor", X = 6, Z = 7, R = 0 },
+	{ Id = "Conveyor", X = 6, Z = 6, R = 0 },
+	{ Id = "Conveyor", X = 6, Z = 5, R = 0 },
+}
+
 function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
@@ -42,6 +54,29 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	local CF = Loader.CFrame
 
 	local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[YardPreview.Plot])
+	do
+		local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+		local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
+		local Old = require("./machines_gallery")
+		local folder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Plots", true)
+		local parent = folder or workspace
+		-- paint the metal floor's tile seams (SurfaceGui) on every plot plate for the renderer
+		for _, plate in workspace:GetDescendants() do
+			if plate:IsA("BasePart") and plate.Name == "Plate" and plate:FindFirstChild("Tiles") then
+				Old.paintGuis(Loader, workspace, plate.Parent)
+			end
+		end
+		for _, entry in YardPreview.Machines do
+			local model = MachineBuilder.build(entry.Id)
+			model:PivotTo(plotCF * Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
+			model.Parent = parent
+			Old.paintGuis(Loader, workspace, model)
+			local top = model:FindFirstChild("ChimneyTop", true)
+			if top then
+				Old.smoke(Loader, workspace, top, 1.0)
+			end
+		end
+	end
 	local folder = Loader.roblox.Instance.new("Folder")
 	folder.Name = "YardPreview"
 	folder.Parent = workspace

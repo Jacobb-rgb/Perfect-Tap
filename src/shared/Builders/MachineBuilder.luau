@@ -39,6 +39,7 @@
 ]]
 
 local Geo = require(script.Parent.Geo)
+local KitMachines = require(script.Parent.KitMachines)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local Grid = require(script.Parent.Parent.Machines.Grid)
@@ -1652,11 +1653,25 @@ local BUILDERS: { [string]: () -> Model } = {
 	Conveyor = conveyor,
 }
 
--- Builds a machine model at the local origin (place it with :PivotTo()).
-function MachineBuilder.build(id: string): Model
-	local builder = BUILDERS[id]
-	assert(builder, "No model for machine " .. tostring(id))
-	local model = builder()
+--[[
+	Builds a machine model at the local origin (place it with :PivotTo()).
+	The machines in the roster look (KitMachines: the owner's chosen "Soft"
+	style, 2026-10-17) come from KitMachines, `level` = their upgrade look
+	(0 plain ... KitMachines.MaxLevel crystal); the retired machines (Storage
+	Crate, Anvil, Sell Chute) keep their old builders below.
+]]
+function MachineBuilder.build(id: string, level: number?): Model
+	if KitMachines.has(id) then
+		return KitMachines.build(id, level)
+	end
+	local model: Model
+	if id == "Conveyor" then
+		model = KitMachines.conveyor()
+	else
+		local builder = BUILDERS[id]
+		assert(builder, "No model for machine " .. tostring(id))
+		model = builder()
+	end
 	local base = model.PrimaryPart :: BasePart
 	local top = 0
 	for _, d in model:GetDescendants() do

@@ -867,7 +867,7 @@ local function clayFurnace(): Ctx
 	pipe(m, p2, Vector3.new(hx - w / 2 + 0.3, p2.Y, tz), pd, { a = false })
 	-- chute from the door to the shared output cell
 	local outPos = Grid.outputLocal("ClayFurnace") :: Vector3
-	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.3)
+	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.3)
 	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, bodyY, hz + 1.2) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.6)
 
 	socket(ctx, Vector3.new(hx - w / 2 + 0.7, top - 0.3, front + 0.7), out(-1, -1), 1.3)
@@ -906,7 +906,7 @@ local function crusher(): Ctx
 	local front = hz - d / 2
 	local doorX = 1.1
 	door(m, doorX, bodyY + 0.1, front, 1.3, 0.8, "Dark")
-	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.2)
+	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.2)
 	-- hopper: a slate tray with round corners sitting in the round top, glowing
 	-- strips round it, a dark floor with the two toothed rollers on it
 	local topW = 4.8
@@ -1005,16 +1005,16 @@ local function autoCleaner(): Ctx
 	end
 	local outlet = Vector3.new(bx, headY - 0.3, az)
 	local landing = Vector3.new(bx, FLOOR + 1.9, az)
-	local wo = attach(ctx.base, "WaterOut", CFrame.lookAt(outlet, outlet - UP))
+	local wo = attach(ctx.base, "WaterOut", ctx.base.CFrame:ToObjectSpace(CFrame.lookAt(outlet, outlet - UP)))
 	wo.Axis = -UP
 	wo:SetAttribute("Curve", 0.6)
 	wo:SetAttribute("Spray", true)
-	local wi = attach(ctx.base, "WaterIn", CFrame.new(landing))
+	local wi = attach(ctx.base, "WaterIn", CFrame.new(ctx.base.CFrame:PointToObjectSpace(landing)))
 	wi.Axis = -UP
 	wi:SetAttribute("Curve", 0.3)
 	-- brush drum on two arms in front of the gantry
 	local drumZ = az - 1.35
-	local drumY = FLOOR + 2.45
+	local drumY = FLOOR + 3.3 -- the brush rests on top of ore riding the bed
 	for _, lx in legX do
 		block(m, CFrame.new(lx, drumY + 0.25, (az + drumZ) / 2), Vector3.new(0.3, 0.3, az - drumZ), "Frame", PROP)
 		ball(m, Vector3.new(lx, drumY + 0.25, drumZ), 0.45, "Frame", TINY)
@@ -1110,10 +1110,7 @@ local function blastFurnace(): Ctx
 	end
 	-- molten throat on the lid
 	local rim = bowl(m, Vector3.new(1.6, lidTop, hz - 0.9), 2.9, 0.5, "Molten")
-	local throat = m:FindFirstChild("Molten")
-	if throat then
-		light(throat, P.Glow, 9, 0.8)
-	end
+	-- (one light per machine on phones: the door's)
 	-- the pipe arching off the top into the molten glass drop and the tank on the right
 	local pd, pr = 0.95, 0.8
 	local tx, tz = 5.05, 2.7
@@ -1205,7 +1202,7 @@ local function cleaningStation(): Ctx
 	pool.Material = SMOOTH
 	pool.Transparency = POOL_TRANSPARENCY
 	-- the water pipe: riser out of the plot, glass section, bend over the tub, valve, open end
-	local pd, px, pipeY, outX = 0.62, -5.75, 6.6, -4.35
+	local pd, px, pipeY, outX = 0.62, -5.62, 6.6, -4.35
 	local pr = 0.55
 	pipe(m, Vector3.new(px, FLOOR, tz), Vector3.new(px, pipeY - pr - 1.8, tz), pd)
 	pipe(m, Vector3.new(px, pipeY - pr - 1.8, tz), Vector3.new(px, pipeY - pr, tz), pd, { fluid = "Water" })
@@ -1215,10 +1212,10 @@ local function cleaningStation(): Ctx
 	cyl(m, Vector3.new(outX + 0.02, pipeY, tz), XA, 0.04, pd * 0.7, "Dark", TINY)
 	local outlet = Vector3.new(outX + 0.2, pipeY - 0.04, tz)
 	local landing = Vector3.new(outX + 0.55, poolTop, tz)
-	local wo = attach(ctx.base, "WaterOut", CFrame.lookAt(outlet, outlet + XA))
+	local wo = attach(ctx.base, "WaterOut", ctx.base.CFrame:ToObjectSpace(CFrame.lookAt(outlet, outlet + XA)))
 	wo.Axis = XA
 	wo:SetAttribute("Curve", 0.4)
-	local wi = attach(ctx.base, "WaterIn", CFrame.new(landing))
+	local wi = attach(ctx.base, "WaterIn", CFrame.new(ctx.base.CFrame:PointToObjectSpace(landing)))
 	wi.Axis = -UP
 	wi:SetAttribute("Curve", 0.6)
 	-- tool board at the back: chisel, hammer, brush
@@ -1384,7 +1381,7 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, expr
 			if side < 0 then "RailL" else "RailR",
 			{ CanTouch = false, CastShadow = false }
 		)
-		block(model, CFrame.new(side * RAIL_X, 0.1, 0), Vector3.new(0.75, 0.2, 1.0), "Trim", TINY, "Foot")
+		block(model, CFrame.new(side * RAIL_X, 0.1, 0), Vector3.new(0.7, 0.2, 1.0), "Trim", TINY, "Foot")
 	end
 	local belt = block(model, CFrame.new(0, BELT_TOP - 0.25, 0), Vector3.new(BELT_W, 0.5, 4), "Rubber", {
 		CanTouch = true,
@@ -1507,7 +1504,7 @@ local function outputChute(m: Instance, id: string, x: number, bodyY: number, fr
 		return
 	end
 	door(m, x, bodyY + 0.1, front, 1.2, 0.5, "Dark")
-	chute(m, Vector3.new(x, bodyY + 0.4, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.1)
+	chute(m, Vector3.new(x, bodyY + 0.4, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.1)
 end
 
 -- Item machine attachments: Output (when it has one), Prompt, a generous Intake box.
@@ -1728,7 +1725,7 @@ local function brickFurnace(): Ctx
 	local doorX = 0.3
 	door(m, doorX, bodyY + 0.15, front, 2.1, 0.9, "Glow", "Glow")
 	local outPos = outputFor("BrickFurnace") :: Vector3
-	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.3)
+	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.3)
 	-- side shelf with the bowl intake on the left
 	pillSlab(m, Vector3.new(hx - w / 2 - 0.2, bodyY + 1.6, hz + 0.6), 1.4, 0.3, 2.4, 0.4, "Frame")
 	local rim = bowl(m, Vector3.new(hx - w / 2 - 0.2, bodyY + 1.9, hz + 0.6), 1.6, 0.3)
@@ -1771,7 +1768,7 @@ local function plasmaFurnace(): Ctx
 	core.Color = P.Plasma:Lerp(WHITE, 0.45)
 	light(glow, P.Plasma, 8, 0.8)
 	local outPos = outputFor("PlasmaFurnace") :: Vector3
-	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.3)
+	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.3)
 	-- glass sphere with the plasma ball
 	local sx, sz = hx - 0.6, hz + 0.2
 	cyl(m, Vector3.new(sx, lidTop + 0.25, sz), UP, 0.5, 2.6, "Frame", SOLID)
@@ -1828,7 +1825,7 @@ local function alloyFurnace(): Ctx
 	local front = hz - d / 2
 	door(m, 0, bodyY + 0.15, front, 2.8, 1.0, "Glow", "Glow")
 	local outPos = outputFor("AlloyFurnace") :: Vector3
-	chute(m, Vector3.new(0, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.4)
+	chute(m, Vector3.new(0, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.4)
 	-- two hoppers, the mixing column between them
 	local rims = {}
 	for i, bx in { -3.0, 3.0 } do

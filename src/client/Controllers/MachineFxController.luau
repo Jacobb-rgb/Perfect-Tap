@@ -308,7 +308,8 @@ local function capture(fx: Fx)
 		emitterOn(fx, glow, "Embers", EMBERS_BUSY)
 		emitterOn(fx, model:FindFirstChild("ChimneyTop"), "Smoke", SMOKE_BUSY[id])
 		for _, child in model:GetChildren() do
-			if child:IsA("BasePart") and child.Name == "Molten" then
+			-- molten parts, and the rest of a door glow built from several parts (the arch's round top)
+			if child:IsA("BasePart") and (child.Name == "Molten" or (child.Name == "Glow" and child ~= fx.Glow)) then
 				table.insert(fx.Hot, child)
 				table.insert(fx.HotColors, child.Color)
 			end
