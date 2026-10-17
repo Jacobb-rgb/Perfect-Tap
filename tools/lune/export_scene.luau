@@ -86,6 +86,10 @@ elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
 elseif sceneName == "blaster_concepts" then -- blaster style proposals (tools/lune/lib/blaster_concepts.luau)
 	require("./lib/blaster_concepts").build(Loader, workspace)
+elseif sceneName == "blaster_glow" then -- proposal D "Ore Glow" floating in the sky (tools/lune/lib/blaster_glow.luau)
+	require("./lib/blaster_glow").build(Loader, workspace)
+elseif sceneName == "blaster_glow_hold" then -- proposal D held on the plaza
+	require("./lib/blaster_glow").buildHold(Loader, workspace)
 elseif sceneName == "blaster_hold_tool" or sceneName == "blaster_hold_aim" then -- avatars holding the blaster proposals
 	require("./lib/blaster_concepts").buildHold(Loader, workspace, if sceneName == "blaster_hold_aim" then "aim" else "tool")
 elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)

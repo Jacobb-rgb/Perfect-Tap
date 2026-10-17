@@ -1071,13 +1071,17 @@ function Concepts.holder(
 	pose: string,
 	outfit: Outfit
 )
+	local model, a = Concepts.gun(Loader, style, level, oreId)
+	return Concepts.holdModel(K, parent, feet, aim, model, a, archetype(level), pose, outfit)
+end
+
+-- Like Concepts.holder, for an already built gun (design frame) of an archetype ("pistol", ...).
+function Concepts.holdModel(K: any, parent: any, feet: any, aim: any, model: any, a: Anchors, kind: string, pose: string, outfit: Outfit)
 	local F = (aim * V3.new(1, 0, 1)).Unit
 	local face = CF.lookAt(feet, feet + F)
-	local kind = archetype(level)
 	local long = kind ~= "pistol"
 	local body = if pose == "aim" and long then face * CF.Angles(0, -0.85, 0) else face
 	local sR, sL = avatar(K, body, face, outfit)
-	local model, a = Concepts.gun(Loader, style, level, oreId)
 	local s = Concepts.HoldScale[kind]
 	local DOWN = V3.new(0, -1, 0)
 	local gunCf
@@ -1104,7 +1108,7 @@ function Concepts.holder(
 		end
 	end
 	model.Parent = parent
-	return gunCf * (a.muzzle * s)
+	return gunCf * (a.muzzle * s), gunCf, s
 end
 
 Concepts.Outfits = {
@@ -1156,5 +1160,15 @@ function Concepts.buildHold(Loader: any, parent: any, pose: string)
 	end
 	return root
 end
+
+-- Shared with the other proposal galleries (tools/lune/lib/blaster_glow.luau).
+function Concepts.init(Loader: any)
+	CF = Loader.CFrame
+	Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+end
+Concepts.kit = kit
+Concepts.present = present
+Concepts.decorate = decorate
+Concepts.tierOf = tierOf
 
 return Concepts

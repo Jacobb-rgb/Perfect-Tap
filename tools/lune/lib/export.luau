@@ -19,7 +19,20 @@ end
 
 local function cframeList(cf): { number }
 	local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
-	return { round(x), round(y), round(z), round(r00), round(r01), round(r02), round(r10), round(r11), round(r12), round(r20), round(r21), round(r22) }
+	return {
+		round(x),
+		round(y),
+		round(z),
+		round(r00),
+		round(r01),
+		round(r02),
+		round(r10),
+		round(r11),
+		round(r12),
+		round(r20),
+		round(r21),
+		round(r22),
+	}
 end
 
 local FACE_INDEX = { Front = 0, Back = 1, Top = 2, Bottom = 3, Left = 4, Right = 5 }
@@ -76,7 +89,9 @@ function Export.collect(root: any, scene: any?)
 			local p = d.Parent.CFrame.Position
 			local kind = "Sparkle"
 			local tex = tostring(d.Texture)
-			if tex:find("smoke") then
+			if d.Name:sub(1, 3) == "Gun" then
+				kind = d.Name -- small blaster effects (GunFlame / GunSpark)
+			elseif tex:find("smoke") then
 				kind = "Smoke"
 			elseif tex:find("fire") then
 				kind = "Fire"
@@ -85,7 +100,19 @@ function Export.collect(root: any, scene: any?)
 			end
 			local color = d.Color.Keypoints[1].Value
 			local size = d.Parent.Size
-			table.insert(scene.emitters, { round(p.X), round(p.Y), round(p.Z), kind, hex(color), round(math.max(size.X, size.Z)) })
+			local entry = { round(p.X), round(p.Y), round(p.Z), kind, hex(color), round(math.max(size.X, size.Z)) }
+			if kind:sub(1, 3) == "Gun" then
+				-- the emission box: world-axis half extents of the (rotated) part
+				local r = d.Parent.CFrame
+				local s = size / 2
+				local function ext(axis: string): number
+					return round(
+						math.abs(r.RightVector[axis]) * s.X + math.abs(r.UpVector[axis]) * s.Y + math.abs(r.LookVector[axis]) * s.Z
+					)
+				end
+				entry[7] = { ext("X"), ext("Y"), ext("Z") }
+			end
+			table.insert(scene.emitters, entry)
 		end
 	end
 	return scene

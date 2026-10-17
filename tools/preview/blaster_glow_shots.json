@@ -1,0 +1,200 @@
+{
+ "glow_lineup": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_glow",
+  "position": [
+   0.5,
+   203.6,
+   21.0
+  ],
+  "target": [
+   0.5,
+   203.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "glow_magmacore": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_glow",
+  "position": [
+   140.8,
+   200.6,
+   8.6
+  ],
+  "target": [
+   140,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "glow_stormcore": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_glow",
+  "position": [
+   180.8,
+   200.6,
+   8.6
+  ],
+  "target": [
+   180,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "glow_emberite": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_glow",
+  "position": [
+   220.8,
+   200.6,
+   8.6
+  ],
+  "target": [
+   220,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "glow_amethyst": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_glow",
+  "position": [
+   260.8,
+   200.6,
+   8.6
+  ],
+  "target": [
+   260,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "glow_hold": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_glow_hold",
+  "position": [
+   -0.5,
+   6.2,
+   45.0
+  ],
+  "target": [
+   -0.5,
+   3.0,
+   22.0
+  ],
+  "fov": 50
+ },
+ "glow_hold_1": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_glow_hold",
+  "position": [
+   -10.4,
+   4.7,
+   29.0
+  ],
+  "target": [
+   -11.3,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "glow_hold_2": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_glow_hold",
+  "position": [
+   0.6000000000000001,
+   4.7,
+   29.0
+  ],
+  "target": [
+   -0.30000000000000004,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "glow_hold_3": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_glow_hold",
+  "position": [
+   11.6,
+   4.7,
+   29.0
+  ],
+  "target": [
+   10.7,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ }
+}

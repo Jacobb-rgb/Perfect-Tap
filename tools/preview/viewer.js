@@ -443,8 +443,28 @@ async function main() {
 
   // ---- particles ----
   const sprite = softSprite();
-  for (const [x, y, z, kind, color, size] of scene.emitters) {
+  for (const [x, y, z, kind, color, size, ext] of scene.emitters) {
     if (new THREE.Vector3(x, y, z).distanceTo(camera.position) > 260) continue;
+    // small effects on a blaster (GunFlame / GunSpark): spread over the emitter part's box
+    if (kind.startsWith("Gun")) {
+      const [ex, ey, ez] = ext || [0.5, 0.5, 0.5];
+      const flame = kind === "GunFlame";
+      for (const [count, px] of flame ? [[18, 0.42], [26, 0.2]] : [[12, 0.26], [30, 0.11]]) {
+        const pos = [];
+        for (let i = 0; i < count; i++) {
+          const rise = flame ? Math.random() * 0.6 : 0;
+          pos.push(x + (Math.random() * 2 - 1) * ex * 1.15, y + (Math.random() * 2 - 1) * ey * 1.2 + rise, z + (Math.random() * 2 - 1) * ez * 1.15);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        const pm = new THREE.PointsMaterial({
+          map: sprite, color: srgb(color, 2.0), size: px, sizeAttenuation: true, transparent: true,
+          opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending,
+        });
+        world.add(new THREE.Points(g, pm));
+      }
+      continue;
+    }
     const count = kind === "Smoke" ? 10 : kind === "Fire" ? 24 : kind === "Embers" ? 26 : 14;
     const pos = [];
     for (let i = 0; i < count; i++) {
