@@ -208,7 +208,7 @@ elseif sceneName == "gameplay" then
 		{ "Gear", "Clean", "Dagger" },
 		{ "Gear", "Clean", "Helm" },
 	}
-	local ores = { "Copper", "Silver", "Gold", "Azurium", "Stormcore", "Heartstone" }
+	local ores = { "Copper", "Silver", "Gold", "DragonEgg", "StormPearl", "Heartstone" }
 	for r, row in rows do
 		for c, oreId in ores do
 			local cf = base * CF.new((c - 3.5) * 3.2, 0.4, (r - 4) * 3.2) * CF.Angles(0, 0.35, 0)
@@ -604,7 +604,7 @@ elseif sceneName == "ores" then
 	grid(-70, 0, 4, 0.4, ingotCell)
 
 	-- dirty ore: the same chunk for every ore (same seed), only the glint differs
-	for i, oreId in { "Coal", "Copper", "Silver", "Gold", "Ruby", "Diamond", "Solarite", "Heartstone" } do
+	for i, oreId in { "Coal", "Copper", "Silver", "Gold", "Bronze", "Diamond", "Sunstone", "Heartstone" } do
 		local x = -125 + (i - 4.5) * 3.2
 		Geo.block(gallery, CF.new(x, 0.2, 0), V3.new(2.6, 0.4, 2.6), C3.fromRGB(134, 128, 132))
 		local chunk = ItemBuilder.build({ Kind = "Raw", OreId = oreId }, CF.new(x, 0, 0) * CF.Angles(0, YAW, 0), 7)

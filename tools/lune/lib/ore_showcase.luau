@@ -28,8 +28,10 @@ function Showcase.build(Loader: any, parent: any)
 	root.Name = "OreShowcase"
 	root.Parent = parent
 
+	-- a dark name plate with a glowing frame in the rarity colour (like the owner's picture)
 	local function label(cf: any, width: number, height: number, text: string, color: any)
-		local board = Geo.block(root, cf, V3.new(width, height, 0.08), C3.fromRGB(34, 28, 40))
+		Geo.block(root, cf * CF.new(0, 0, -0.03), V3.new(width + 0.14, height + 0.14, 0.06), color, NEON)
+		local board = Geo.block(root, cf, V3.new(width, height, 0.08), C3.fromRGB(26, 24, 34))
 		local gui = roblox.Instance.new("SurfaceGui")
 		gui.Face = roblox.Enum.NormalId.Back
 		gui.Parent = board
@@ -51,10 +53,10 @@ function Showcase.build(Loader: any, parent: any)
 	end
 	local width = most * Showcase.Column + 7
 	-- the room: a dark floor and a back wall
-	Geo.block(root, CF.new(0, -0.5, -10), V3.new(200, 1, 160), C3.fromRGB(40, 38, 52))
+	Geo.block(root, CF.new(0, -0.5, -10), V3.new(200, 1, 160), C3.fromRGB(22, 22, 30))
 	local rows = #Rarity.List
 	local backZ = -(rows - 1) * Showcase.Depth - Showcase.Depth / 2 - 0.5
-	Geo.block(root, CF.new(0, 20, backZ - 0.5), V3.new(200, 42, 1), C3.fromRGB(32, 30, 44))
+	Geo.block(root, CF.new(0, 20, backZ - 0.5), V3.new(200, 42, 1), C3.fromRGB(16, 16, 22))
 
 	local count = 0
 	for r = 1, rows do
@@ -66,7 +68,7 @@ function Showcase.build(Loader: any, parent: any)
 		local z = -(r - 1) * Showcase.Depth
 		local top = 0.4 + (r - 1) * Showcase.Rise
 		-- the step (down to the floor) and its glowing front edge
-		Geo.block(root, CF.new(0, top / 2, z), V3.new(width, top, Showcase.Depth), C3.fromRGB(96, 92, 116))
+		Geo.block(root, CF.new(0, top / 2, z), V3.new(width, top, Showcase.Depth), C3.fromRGB(70, 72, 88))
 		Geo.block(root, CF.new(0, top - 0.06, z + Showcase.Depth / 2 - 0.08), V3.new(width - 0.4, 0.12, 0.12), rarity.Color, NEON)
 		label(
 			CF.new(-width / 2 + 2.3, top + 0.32, z + Showcase.Depth / 2 - 0.9) * CF.Angles(-1.0, 0, 0),
@@ -78,7 +80,7 @@ function Showcase.build(Loader: any, parent: any)
 		for i, ore in ores do
 			local x = (i - (#ores + 1) / 2) * Showcase.Column + 1.2
 			local plinthTop = top + 0.45
-			Geo.block(root, CF.new(x, top + 0.225, z - 0.5), V3.new(3.0, 0.45, 3.0), C3.fromRGB(176, 172, 188))
+			Geo.block(root, CF.new(x, top + 0.225, z - 0.5), V3.new(3.0, 0.45, 3.0), C3.fromRGB(96, 100, 118))
 			local item = ItemBuilder.display({ K = "Clean", O = ore.Id }, CF.new(x, plinthTop, z - 0.5) * CF.Angles(0, 0.45, 0), ore.Id)
 			item.Parent = root
 			label(CF.new(x, top + 0.3, z + 1.45) * CF.Angles(-1.0, 0, 0), 3.8, 0.6, ore.Name, rarity.Color)

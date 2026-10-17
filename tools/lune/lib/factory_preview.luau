@@ -58,7 +58,7 @@ Factory.Items = {
 	{ X = 5, Z = 10, D = { K = "Clean", O = "Copper", G = "Clean" }, T = -0.2 },
 	{ X = 5, Z = 9, D = { K = "Clean", O = "Gold", G = "Clean" }, T = 0.2 },
 	{ X = 3, Z = 8, D = { K = "Clean", O = "Silver", G = "Rough" }, T = 0 },
-	{ X = 7, Z = 7, D = { K = "Clean", O = "Ruby", G = "Clean" }, T = 0.1 },
+	{ X = 7, Z = 7, D = { K = "Clean", O = "Bronze", G = "Clean" }, T = 0.1 },
 	{ X = 4, Z = 4, D = { K = "Ingot", O = "Silver", G = "Rough" }, T = 0 },
 	{ X = 7, Z = 4, D = { K = "Ingot", O = "Gold", G = "Clean" }, T = 0.1 },
 	{ X = 3, Z = 1, D = { K = "Alloy", O = "Gold", G = "Clean" }, T = 0 },
