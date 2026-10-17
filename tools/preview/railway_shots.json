@@ -1,0 +1,12 @@
+{
+  "rail_station": { "scene": "railway", "position": [-4, 4, -126], "target": [27, -8, -151], "fov": 50, "preset": "Quarry", "shadowExtent": 90 },
+  "rail_station_close": { "scene": "railway", "position": [14, -3, -133], "target": [27, -7.5, -150], "fov": 55, "preset": "Quarry", "shadowExtent": 60 },
+  "rail_station_north": { "scene": "railway", "position": [6, 0, -176], "target": [26, -6, -152], "fov": 55, "preset": "Quarry", "shadowExtent": 80 },
+  "rail_station_top": { "scene": "railway", "position": [30, 22, -118], "target": [28, -10, -152], "fov": 50, "preset": "Quarry", "shadowExtent": 90 },
+  "rail_portal": { "scene": "railway", "position": [146, 16, 92], "target": [166, 6, 126], "fov": 55, "preset": "Surface", "shadowExtent": 90 },
+  "rail_portal_quarry": { "scene": "railway", "position": [-42, -3, -138], "target": [-66, -5, -156], "fov": 55, "preset": "Quarry", "shadowExtent": 70 },
+  "rail_coast": { "scene": "railway", "position": [128, 30, 6], "target": [166, 0, 74], "fov": 55, "preset": "Surface", "shadowExtent": 130 },
+  "rail_coast_low": { "scene": "railway", "position": [154, 9, 56], "target": [167, 3, 84], "fov": 55, "preset": "Surface", "shadowExtent": 80 },
+  "rail_lift": { "scene": "railway", "position": [6, -4, -248], "target": [22, -4, -258], "fov": 60, "preset": "EmberCaves", "maxLights": 14 },
+  "rail_lift_deep": { "scene": "railway", "position": [0, -32, -392], "target": [16, -32, -402], "fov": 60, "preset": "DeepHollow", "maxLights": 14 }
+}

@@ -18,10 +18,11 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Land = require(script.Parent.Land)
 local Town = require(script.Parent.Town)
 local PlotBuilder = require(script.Parent.PlotBuilder)
+local Railway = require(script.Parent.Railway)
 
 local WorldBuilder = {}
 
-WorldBuilder.Version = 8 -- 8: visual upgrade (concept v2 stalls, plaza, planets, brick plot walls, town); 7: rocks keep off the train station, track and lifts; 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
+WorldBuilder.Version = 9 -- 9: railway (quarry line, Mine Station, tunnel portals, coastal lines, Mine Lifts); 8: visual upgrade (concept v2 stalls, plaza, planets, brick plot walls, town); 7: rocks keep off the train station, track and lifts; 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
 
 export type NodeSpawn = { Position: Vector3, Zone: string }
 
@@ -76,6 +77,7 @@ function WorldBuilder.build(parent: Instance): Model
 	Land.build(map, Rng.new(WorldLayout.Seed + 1), avoid)
 	Town.build(map, Rng.new(WorldLayout.Seed + 2))
 	PlotBuilder.build(map, Rng.new(WorldLayout.Seed + 3))
+	Railway.build(map) -- after the plots: it replaces their placeholder tracks
 
 	-- Invisible markers. Move/duplicate them in Studio to change where ore grows.
 	local markers = Instance.new("Folder")
