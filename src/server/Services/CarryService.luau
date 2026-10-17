@@ -7,7 +7,21 @@
 	from the client are clamped.
 
 	Carried items are welded to the HumanoidRootPart (massless, no collision),
-	so the character owns their physics. Walk speed drops a little per item.
+	so the character owns their physics.
+
+	Walk speed: this service is the ONLY writer of Humanoid.WalkSpeed. It is
+	Bonuses.carryWalkSpeed (Boots, Swift and WalkSpeed golems minus a capped
+	slowdown per carried item, GearConfig). It is set again on every pickup
+	or drop, on spawn, after every save change (DataService.onChanged: a gear
+	buy, a golem equipped...) and whenever refreshWalkSpeed(player) is called.
+
+	Bonuses (src/server/Bonuses.luau) also give: the carry capacity
+	(Bonuses.carryCapacity: the Backpack gear, any later provider, doubled by
+	StrongBack; the only source, StateService shows the same), the pickup
+	range (Gloves: Bonuses.pickupRange, plus PICKUP_SLACK for lag) and the
+	throw power (Gloves: x Bonuses.throwMult). The player attributes
+	CarryCount, CarryCapacity and PickupRange mirror them for the client
+	(InteractController's highlight uses PickupRange).
 ]]
 
 local Players = game:GetService("Players")
@@ -16,18 +30,16 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
-local ToolData = require(Shared.Config.ToolData)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
-local Perks = require(script.Parent.Parent.Perks)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
 
 local CarryService = {}
 
-local BASE_WALK_SPEED = 18
-local SLOW_PER_ITEM = 0.5
-local MIN_WALK_SPEED = 13
+-- studs of lag slack on top of the pickup range the client checks
+local PICKUP_SLACK = 2
 
 local carried: { [Player]: { ItemService.ItemRecord } } = {}
 local pickupCallbacks: { (Player, ItemService.ItemRecord) -> () } = {}
@@ -36,10 +48,16 @@ function CarryService.onPickup(callback: (Player, ItemService.ItemRecord) -> ())
 	table.insert(pickupCallbacks, callback)
 end
 
+-- Items the player can carry: Bonuses.carryCapacity (the Backpack gear line,
+-- the old CarryLevel folded into it by Migrations, and any later provider),
+-- doubled by StrongBack.
 function CarryService.capacity(player: Player): number
-	local data = DataService.get(player)
-	local level = if data then data.CarryLevel else 1
-	return ToolData.carryCapacity(level, Perks.has(player, "StrongBack"))
+	return Bonuses.carryCapacity(Bonuses.stats(player), player)
+end
+
+-- Studs the player can grab an item from (Gloves; the server allows PICKUP_SLACK more).
+function CarryService.pickupRange(player: Player): number
+	return Bonuses.pickupRange(Bonuses.stats(player))
 end
 
 function CarryService.list(player: Player): { ItemService.ItemRecord }
@@ -54,14 +72,25 @@ local function stackOffset(index: number): CFrame
 end
 
 local function updateWalkSpeed(player: Player)
+	local count = #(carried[player] or {})
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		local count = #(carried[player] or {})
-		humanoid.WalkSpeed = math.max(MIN_WALK_SPEED, BASE_WALK_SPEED - count * SLOW_PER_ITEM)
+		local speed = Bonuses.carryWalkSpeed(Bonuses.stats(player), count)
+		if humanoid.WalkSpeed ~= speed then
+			humanoid.WalkSpeed = speed
+		end
 	end
-	player:SetAttribute("CarryCount", #(carried[player] or {}))
+	player:SetAttribute("CarryCount", count)
 	player:SetAttribute("CarryCapacity", CarryService.capacity(player))
+	player:SetAttribute("PickupRange", CarryService.pickupRange(player))
+end
+
+-- Sets the player's walk speed (and carry attributes) from their bonuses now.
+-- The gear / golem / enchant packages call it after a change (a save change
+-- does it too, see the header).
+function CarryService.refreshWalkSpeed(player: Player)
+	updateWalkSpeed(player)
 end
 
 local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
@@ -123,7 +152,7 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 	if record.Owner ~= player.UserId or record.State ~= "Loose" then
 		return false
 	end
-	if (record.Body.Position - root.Position).Magnitude > GameConfig.PickupRange + 2 then
+	if (record.Body.Position - root.Position).Magnitude > CarryService.pickupRange(player) + PICKUP_SLACK then
 		return false
 	end
 	local list = carried[player]
@@ -132,7 +161,7 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 		carried[player] = list
 	end
 	if #list >= CarryService.capacity(player) then
-		Net.fire("Notify", player, { Text = "Your hands are full! Upgrade your carry gear at the Tool Smithy.", Kind = "Deny" })
+		Net.fire("Notify", player, { Text = "Your hands are full! A bigger Ore Backpack from the SHOP holds more.", Kind = "Deny" })
 		return false
 	end
 	table.insert(list, record)
@@ -222,7 +251,8 @@ local function onThrow(player: Player, direction: any, power: any)
 	end
 	local pitch = math.clamp(dir.Y, -0.3, 0.85)
 	local throwDir = (flat.Unit * math.sqrt(1 - pitch * pitch) + Vector3.new(0, pitch, 0)).Unit
-	local speed = GameConfig.ThrowSpeedMin + (GameConfig.ThrowSpeedMax - GameConfig.ThrowSpeedMin) * charge
+	local speed = (GameConfig.ThrowSpeedMin + (GameConfig.ThrowSpeedMax - GameConfig.ThrowSpeedMin) * charge)
+		* Bonuses.throwMult(Bonuses.stats(player))
 	local velocity = throwDir * speed + Vector3.new(0, 8, 0) + root.AssemblyLinearVelocity * 0.5
 	dropTop(player, velocity)
 	Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
@@ -264,6 +294,13 @@ function CarryService.init()
 	end)
 	DataService.onLoaded(function(player)
 		updateWalkSpeed(player)
+	end)
+	-- gear, golems, enchants live in the save: a change may change the speed
+	DataService.onChanged(function(player)
+		Bonuses.invalidate(player)
+		if player.Parent then
+			updateWalkSpeed(player)
+		end
 	end)
 end
 
