@@ -39,6 +39,16 @@
 	  cogs turn with the rollers. Furnaces: the Glow and the Molten parts
 	  (glass sections, trickle, mould) pulse from their deep built orange
 	  toward MachineBuilder.Glow.Hot (brightness, never a white blob).
+	- Iron Box (IronBoxService attributes): its little screen shows the last
+	  item (Dirty Ore, or the cleaned ore's grade and name in its rarity
+	  colour) and KEPT / SENT counts; the flap of each item's way (FlapKeep
+	  when Kept goes up, FlapSend when Sent goes up) swings open on its top
+	  edge and falls shut. Within SHOW_RANGE a display copy of the last
+	  item (ItemBuilder.display, scaled to MachineBuilder.IronBox.Window)
+	  stands behind the glass of its inspection bay (ShowPoint).
+	- Cleaning Plant: your own plant within ODDS_RANGE shows its billboard
+	  even when idle, with the grade odds of its Quality level
+	  (attribute QualityOdds, MachineBillboard.setNote).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -49,19 +59,25 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local Rarity = require(Shared.Config.Rarity)
 local SoundConfig = require(Shared.Config.SoundConfig)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local MachineBillboard = require(script.Parent.Parent.UI.MachineBillboard)
 local MachineBuilder = require(Shared.Builders.MachineBuilder)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local FxController = require(script.Parent.FxController)
 
 local MachineFxController = {}
 
 -- Rest pose of a spinning part, both relative to the machine's Base.
 type Spinner = { Part: BasePart, Rest: CFrame, Axis: CFrame, Dir: number }
+-- An Iron Box flap: rest pose and hinge line (its top edge), both relative
+-- to the machine's Base; T = seconds since it last swung open (nil = shut).
+type Flap = { Part: BasePart, Rest: CFrame, Hinge: CFrame, T: number? }
 type Emitter = { Emitter: ParticleEmitter, Idle: number, Busy: number }
 
 -- Pooled client water: Beams between Out and In, emitters at the landing
@@ -132,6 +148,14 @@ type Fx = {
 	-- stacked status light (Auto Cleaner)
 	Signals: { [string]: BasePart }?,
 	SignalState: string?,
+	-- Iron Box: flaps by way ("Keep" / "Send"), screen labels, the item
+	-- behind the glass (ShownKey = what it shows)
+	Flaps: { [string]: Flap }?,
+	ScreenItem: TextLabel?,
+	ScreenCounter: TextLabel?,
+	Shown: Model?,
+	ShownKey: string?,
+	BoxDirty: boolean,
 }
 
 type Hum = { Part: Part, Sound: Sound, Target: Fx? }
@@ -166,6 +190,13 @@ local GLOW_HOT = MachineBuilder.Glow.Hot
 local WATER = MachineBuilder.Water
 local STACK = MachineBuilder.Stack
 local SIGNALS = { "StackRed", "StackAmber", "StackGreen" }
+-- Iron Box
+local IRON_BOX = MachineBuilder.IronBox
+local FLAP_OPEN, FLAP_HOLD, FLAP_CLOSE = 0.12, 0.18, 0.45 -- seconds: swing open, stay, fall shut
+local SHOW_RANGE = 40 -- the item behind the glass only for boxes this close
+local SCREEN_TEXT = Color3.fromRGB(196, 255, 236)
+-- Cleaning Plant odds on your own plant's billboard, idle too, this close
+local ODDS_RANGE = 24
 
 local player = Players.LocalPlayer
 local machines: { [Model]: Fx } = {}
@@ -344,6 +375,26 @@ local function capture(fx: Fx)
 			addSpinners(fx, base, "Cog1", { "Cog1" }, 1)
 			addSpinners(fx, base, "Cog2", { "Cog2" }, -MachineBuilder.CogRatio)
 		end
+	elseif id == "IronBox" then
+		if base then
+			local flaps: { [string]: Flap } = {}
+			local names: { [string]: string } = { Keep = "FlapKeep", Send = "FlapSend" }
+			for way, name in names do
+				local part = model:FindFirstChild(name)
+				if part and part:IsA("BasePart") then
+					local rest = base.CFrame:ToObjectSpace(part.CFrame)
+					flaps[way] = { Part = part, Rest = rest, Hinge = rest * CFrame.new(0, part.Size.Y / 2, 0), T = nil }
+				end
+			end
+			fx.Flaps = flaps
+		end
+		local screen = model:FindFirstChild("Screen")
+		local gui = screen and screen:FindFirstChild("ScreenGui")
+		local item = gui and gui:FindFirstChild("Item")
+		local counter = gui and gui:FindFirstChild("Counter")
+		fx.ScreenItem = if item and item:IsA("TextLabel") then item else nil
+		fx.ScreenCounter = if counter and counter:IsA("TextLabel") then counter else nil
+		fx.BoxDirty = true
 	elseif id == "SellChute" then
 		local coins = model:FindFirstChild("Coins")
 		if coins and coins:IsA("BasePart") then
@@ -773,6 +824,145 @@ local function refreshStubs(fx: Fx)
 	end
 end
 
+---------------------------------------------------------------- Iron Box
+
+-- The last sorted item from the box's attributes (nil before the first).
+local function lastItem(fx: Fx): ItemData.Desc?
+	local kind = fx.Attr.LastKind
+	if type(kind) ~= "string" or not ItemData.Kinds[kind] then
+		return nil
+	end
+	local oreId = fx.Attr.LastOre
+	local grade = fx.Attr.LastGrade
+	return {
+		K = kind,
+		O = if type(oreId) == "string" then oreId else "",
+		G = if type(grade) == "string" and ItemData.GradeById[grade] then grade else nil,
+	}
+end
+
+-- The little screen: the last item and the kept / sent counts.
+local function drawScreen(fx: Fx)
+	local item, counter = fx.ScreenItem, fx.ScreenCounter
+	local desc = lastItem(fx)
+	if item then
+		local ore = desc and OreData.ById[desc.O]
+		local rarity: Rarity.RarityInfo? = if ore and desc and desc.K ~= "Raw" then Rarity.ById[ore.Rarity] else nil
+		if not desc then
+			item.Text = IRON_BOX.ScreenIdle
+		elseif desc.K == "Raw" or not ore then
+			item.Text = string.upper(ItemData.DirtyName)
+		else
+			item.Text = string.upper(ItemData.displayName(desc.K, desc.O, desc.G, nil))
+		end
+		item.TextColor3 = if rarity then SCREEN_TEXT:Lerp(rarity.Color, 0.75) else SCREEN_TEXT
+	end
+	if counter then
+		counter.Text = `KEPT {number(fx, "Kept")} · SENT {number(fx, "Sent")}`
+	end
+end
+
+local function clearShown(fx: Fx)
+	local shown = fx.Shown
+	if shown then
+		shown:Destroy()
+	end
+	fx.Shown = nil
+	fx.ShownKey = nil
+end
+
+-- A display copy of the last item behind the bay's glass (client-only, no
+-- collision), scaled to fit the window, standing on ShowPoint.
+local function drawShown(fx: Fx)
+	local desc = lastItem(fx)
+	local base = fx.Base
+	local point = base and base:FindFirstChild("ShowPoint")
+	local key = if desc then ItemData.storageKey(desc) else nil
+	if not desc or not base or not point or not point:IsA("Attachment") or fx.Distance > SHOW_RANGE then
+		clearShown(fx)
+		return
+	end
+	if key == fx.ShownKey and fx.Shown and fx.Shown.Parent then
+		return
+	end
+	clearShown(fx)
+	local ok, built = pcall(ItemBuilder.display, desc, CFrame.new(), key)
+	if not ok or typeof(built) ~= "Instance" then
+		return
+	end
+	local model = built :: Model
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+		elseif d:IsA("Light") or d:IsA("ParticleEmitter") then
+			d:Destroy()
+		end
+	end
+	local _, size = model:GetBoundingBox()
+	local biggest = math.max(size.X, size.Y, size.Z)
+	if biggest > IRON_BOX.Window then
+		model:ScaleTo(IRON_BOX.Window / biggest)
+	end
+	-- stand it on the bay floor (its bottom centre on ShowPoint), turned a
+	-- little toward the viewer; it was built upright at the origin
+	local box, boxSize = model:GetBoundingBox()
+	local floor = (base.CFrame * point.CFrame) * CFrame.Angles(0, math.rad(25), 0)
+	local bottom = box.Position - Vector3.new(0, boxSize.Y / 2, 0)
+	model:PivotTo(floor * CFrame.new(-bottom) * model:GetPivot())
+	model.Parent = folder()
+	fx.Shown = model
+	fx.ShownKey = key
+end
+
+-- Flap angle t seconds after it swung open (nil = shut).
+local function flapAngle(t: number?): number
+	if not t then
+		return 0
+	end
+	local open: number
+	if t < FLAP_OPEN then
+		open = t / FLAP_OPEN
+	elseif t < FLAP_OPEN + FLAP_HOLD then
+		open = 1
+	else
+		open = math.max(0, 1 - (t - FLAP_OPEN - FLAP_HOLD) / FLAP_CLOSE)
+	end
+	-- ease out, so it snaps open and settles shut
+	return IRON_BOX.FlapOpen * (1 - (1 - open) ^ 2)
+end
+
+-- Every flap back in its rest pose (out of range, moved).
+local function restFlaps(fx: Fx)
+	local flaps, base = fx.Flaps, fx.Base
+	if not flaps or not base then
+		return
+	end
+	for _, flap in flaps do
+		flap.T = nil
+		flap.Part.CFrame = base.CFrame * flap.Rest
+	end
+end
+
+local function swingFlap(fx: Fx, way: string)
+	local flaps = fx.Flaps
+	local flap = flaps and flaps[way]
+	if not flap then
+		return
+	end
+	flap.T = 0
+	local position = flap.Part.Position
+	if way == "Keep" then
+		Sfx.play("Gulp", position)
+		Vfx.burst("Glint", position, 6, Color3.fromRGB(120, 230, 140))
+	else
+		Sfx.play("MachineDone", position)
+	end
+end
+
 ---------------------------------------------------------------- one-off effects
 
 local function onQueueUp(fx: Fx)
@@ -786,6 +976,9 @@ local function onCyclesUp(fx: Fx)
 	if id == "StorageCrate" then
 		Sfx.play("Gulp", pointOf(fx, "Intake"))
 		return
+	end
+	if id == "IronBox" then
+		return -- the flap of the item's way swings instead (Kept / Sent)
 	end
 	if id == "SellChute" then
 		fx.Flash = 1
@@ -837,8 +1030,21 @@ local function onAttribute(fx: Fx, name: string)
 		-- moved: the server put every part back in its rest pose
 		fx.Angle = 0
 		fx.StubsDirty = true
+		if fx.Flaps then
+			for _, flap in fx.Flaps do
+				flap.T = nil
+			end
+			fx.BoxDirty = true
+		end
 	elseif name == "Ingots" or name == "IngotOre" or name == "Forging" then
 		fx.StubsDirty = true
+	elseif name == "Kept" or name == "Sent" then
+		fx.BoxDirty = true
+		if fx.Active and type(value) == "number" and type(before) == "number" and value > before then
+			swingFlap(fx, if name == "Kept" then "Keep" else "Send")
+		end
+	elseif name == "LastKind" or name == "LastOre" or name == "LastGrade" then
+		fx.BoxDirty = true
 	end
 end
 
@@ -854,6 +1060,7 @@ local function setActive(fx: Fx, on: boolean)
 		fx.Heat = if fx.Attr.Working == true then 1 else 0
 		applyHeat(fx)
 		fx.StubsDirty = true
+		fx.BoxDirty = true
 		applySignal(fx)
 		return
 	end
@@ -872,6 +1079,8 @@ local function setActive(fx: Fx, on: boolean)
 		coinsLight.Brightness = fx.CoinsIdle
 	end
 	clearStubs(fx)
+	restFlaps(fx)
+	clearShown(fx)
 	local refs = fx.Billboard
 	if refs then
 		MachineBillboard.detach(refs)
@@ -934,8 +1143,17 @@ local function register(instance: Instance)
 		PoolTransparency = 0,
 		Signals = nil,
 		SignalState = nil,
+		Flaps = nil,
+		ScreenItem = nil,
+		ScreenCounter = nil,
+		Shown = nil,
+		ShownKey = nil,
+		BoxDirty = false,
 	}
 	capture(fx)
+	if fx.ScreenItem or fx.ScreenCounter then
+		drawScreen(fx)
+	end
 	table.insert(
 		fx.Connections,
 		model.AttributeChanged:Connect(function(name)
@@ -1021,6 +1239,10 @@ local function wantsBillboard(fx: Fx): boolean
 	if not isOwn(fx) or fx.Distance > BILLBOARD_RANGE then
 		return false
 	end
+	local odds = fx.Attr.QualityOdds
+	if fx.Distance <= ODDS_RANGE and type(odds) == "string" and odds ~= "" then
+		return true
+	end
 	local status = fx.Attr.Status
 	return number(fx, "Queue") > 0 or fx.Attr.Working == true or (type(status) == "string" and status ~= "")
 end
@@ -1046,6 +1268,13 @@ local function pickActive()
 		end
 	end
 	table.sort(active, byDistance)
+	-- an Iron Box walked into / out of SHOW_RANGE shows / drops its item
+	for _, fx in active do
+		local sorted = type(fx.Attr.LastKind) == "string" and fx.Attr.LastKind ~= ""
+		if fx.Flaps and sorted and (fx.Distance > SHOW_RANGE) ~= (fx.Shown == nil) then
+			fx.BoxDirty = true
+		end
+	end
 
 	-- graphics quality changed: re-apply the water rates
 	local q = qualityScale()
@@ -1159,6 +1388,26 @@ local function step(dt: number)
 		if fx.Water then
 			stepWater(fx, dt)
 		end
+		-- Iron Box: screen, shown item, flaps
+		if fx.BoxDirty then
+			fx.BoxDirty = false
+			drawScreen(fx)
+			drawShown(fx)
+		end
+		local flaps = fx.Flaps
+		if flaps and base then
+			for _, flap in flaps do
+				local t = flap.T
+				if t then
+					t += dt
+					local total = FLAP_OPEN + FLAP_HOLD + FLAP_CLOSE
+					flap.T = if t >= total then nil else t
+					local turn = flap.Hinge * CFrame.Angles(flapAngle(flap.T), 0, 0) * flap.Hinge:Inverse()
+					table.insert(spinParts, flap.Part)
+					table.insert(spinFrames, base.CFrame * turn * flap.Rest)
+				end
+			end
+		end
 		-- anvil
 		if fx.StubsDirty then
 			refreshStubs(fx)
@@ -1182,6 +1431,8 @@ local function step(dt: number)
 				progress = 1
 			end
 			local ore = oreOf(fx.Attr.WorkOre)
+			local odds = fx.Attr.QualityOdds
+			MachineBillboard.setNote(refs, if type(odds) == "string" and odds ~= "" then `Quality {number(fx, "Quality")}: {odds}` else "")
 			MachineBillboard.update(
 				refs,
 				progress,

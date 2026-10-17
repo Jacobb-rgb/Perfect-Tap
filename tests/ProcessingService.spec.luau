@@ -337,6 +337,73 @@ return function(T, Loader)
 		T.eq(w.data.Stats.IngotsSmelted, 0, "no ingots")
 	end)
 
+	withWorld("ProcessingService: the Cleaning Plant's Quality level sets its grade odds", function(w)
+		local m = place(w, "AutoCleaner", 0, 0)
+		local prompt = m.Model.PrimaryPart.Prompt:FindFirstChild("LoadPrompt")
+		T.eq(attr(m, "Quality"), 0, "level 0 shown")
+		T.eq(attr(m, "QualityOdds"), "60% Rough · 40% Clean", "level 0 odds")
+		T.truthy(prompt.ObjectText:find("60% Rough", 1, true), "odds on the prompt")
+		-- the Tech shop writes the level; the plant shows it within a second
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 5 } }
+		tick(m, 0.5)
+		T.eq(attr(m, "Quality"), 5, "level 5 shown")
+		T.eq(attr(m, "QualityOdds"), "20% Clean · 50% Pristine · 30% Flawless", "level 5 odds")
+		T.truthy(prompt.ObjectText:find("Quality 5", 1, true), "prompt names the level")
+		local grades = {}
+		local now = 10
+		local jobs = 600
+		for _ = 1, jobs do
+			MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Belt")
+			tick(m, now)
+			now += 8
+			tick(m, now)
+			local out = MachineLogic.popOut(m.Entry)
+			T.truthy(out and out.K == "Clean", "clean ore out")
+			grades[out.G] = (grades[out.G] or 0) + 1
+		end
+		T.eq(grades.Rough, nil, "no Rough at level 5")
+		T.near((grades.Flawless or 0) / jobs, 0.3, 0.07, "Flawless share")
+		T.near((grades.Pristine or 0) / jobs, 0.5, 0.07, "Pristine share")
+		-- a broken or too high level counts as the nearest real one
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 99 } }
+		tick(m, now + 2)
+		T.eq(attr(m, "Quality"), 5, "clamped to what is sold")
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 0 / 0 } }
+		tick(m, now + 4)
+		T.eq(attr(m, "Quality"), 0, "NaN counts as 0")
+		-- the level is read when a job starts
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 0 } }
+		MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Belt")
+		tick(m, now + 10)
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 5 } }
+		T.truthy(m.State.Job.Odds == MachineData.gradeOdds(0), "the running job keeps its odds")
+	end)
+
+	withWorld("ProcessingService: Speed upgrades shorten jobs, per machine type", function(w)
+		local furnace = place(w, "ClayFurnace", 0, 0)
+		local crusher = place(w, "Crusher", 4, 0)
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 2 } }
+		MachineService.insertDesc(furnace, item("Clean"), USER, "Hand")
+		MachineService.insertDesc(crusher, item("Clean"), USER, "Hand")
+		tick(furnace, 1)
+		tick(crusher, 1)
+		T.near(attr(furnace, "WorkTime"), 6 * MachineData.speedMult(2), 1e-9, "Clay Furnace Speed 2")
+		T.eq(attr(crusher, "WorkTime"), 3, "the Crusher has its own level")
+		-- Speed and Bellows multiply
+		w.data.Upgrades.Bellows = 5
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 5 } }
+		T.near(processing.jobTime(furnace), math.max(GameConfig.MinProcessTime, 6 * 0.5 * MachineData.speedMult(5)), 1e-9, "both")
+		w.data.MachineUpgrades = { ClayFurnace = "broken" }
+		T.near(processing.jobTime(furnace), 3, 1e-9, "a broken record counts as level 0")
+	end)
+
+	T.test("ProcessingService: grade odds as text", function()
+		T.eq(ProcessingService.oddsText(MachineData.gradeOdds(0)), "60% Rough · 40% Clean")
+		T.eq(ProcessingService.oddsText(MachineData.gradeOdds(3)), "15% Rough · 45% Clean · 35% Pristine · 5% Flawless")
+		T.eq(ProcessingService.oddsText({ Flawless = 1, Bogus = 2, Rough = 0 / 0 }), "100% Flawless", "unknown and broken entries left out")
+		T.eq(ProcessingService.oddsText({}), "")
+	end)
+
 	withWorld("ProcessingService: damaged saves don't jam a machine", function(w)
 		local m = place(w, "ClayFurnace", 0, 0)
 		m.Entry.In = { { K = "Bogus", O = "Copper" }, item("Raw", "Iron"), item("Clean", "Iron", "Rough") }

@@ -406,6 +406,63 @@ return function(T, Loader)
 		T.truthy(bottom > landing.Y + 0.6 and bottom < landing.Y + 1.4, "brush at ore height")
 	end)
 
+	T.test("Machines: the Iron Box has its window, screen, two flaps and hopper", function()
+		local model = MachineBuilder.build("IronBox")
+		local base = model.PrimaryPart
+		local CELLS = MachineData.ById.IronBox.Size
+		local front = -(CELLS[2] * CELL / 2)
+		local function part(name: string): any
+			local found = model:FindFirstChild(name)
+			T.truthy(found and found:IsA("BasePart"), "part " .. name)
+			return found
+		end
+		local function localPos(p: any): any
+			return base.CFrame:PointToObjectSpace(p.CFrame.Position)
+		end
+		-- the screen with the two labels the client fills in
+		local screen = part("Screen")
+		T.truthy(screen.Material == roblox.Enum.Material.Neon, "lit screen")
+		local gui = screen:FindFirstChild("ScreenGui")
+		T.truthy(gui and gui:FindFirstChild("Item") and gui:FindFirstChild("Counter"), "Item and Counter labels")
+		T.eq(gui.Item.Text, MachineBuilder.IronBox.ScreenIdle)
+		-- the glass inspection bay and the spot for the shown item inside it
+		local glass = part("BayGlass")
+		T.truthy(glass.Material == roblox.Enum.Material.Glass and glass.Transparency > 0.3, "see-through glass")
+		local show = attachment(model, "ShowPoint")
+		T.truthy(show, "ShowPoint")
+		local floor = localPos(part("BayFloor"))
+		local glassAt = localPos(glass)
+		local spot = show.CFrame.Position
+		local backAt = localPos(part("BayBack"))
+		T.truthy(spot.Z > glassAt.Z and spot.Z < backAt.Z, "between the glass and the dark back of the bay")
+		T.truthy(math.abs(spot.X - glassAt.X) < 0.2, "in the middle of the window")
+		T.near(spot.Y, floor.Y + part("BayFloor").Size.Y / 2, 0.05, "on the bay floor")
+		local window = glass.Size
+		T.truthy(window.X > MachineBuilder.IronBox.Window and window.Y > MachineBuilder.IronBox.Window, "the shown item fits the window")
+		-- two flaps on the front, SEND at the output column, both under the screen / window
+		local keep, send = part("FlapKeep"), part("FlapSend")
+		local out = attachment(model, "Output").CFrame.Position
+		T.near(localPos(send).X, out.X, 1e-4, "SEND at the output column")
+		T.truthy(localPos(keep).X < 0 and localPos(send).X > 0, "KEEP left, SEND right")
+		for _, flap in { keep, send } do
+			local p = localPos(flap)
+			T.truthy(p.Z < front + 2, flap.Name .. " on the front")
+			T.truthy(p.Y + flap.Size.Y / 2 < localPos(screen).Y - screen.Size.Y / 2, flap.Name .. " under the screen")
+			T.falsy(flap.CanCollide, flap.Name .. " swings freely")
+			T.truthy(flap:FindFirstChild("FlapText"), flap.Name .. " label")
+		end
+		T.truthy(keep.Color ~= send.Color, "the two ways look different")
+		-- the floor port the kept ore drops into stays inside the footprint
+		T.truthy(model:FindFirstChild("PenPort"), "pen port")
+		-- the hopper intake covers the roof cup, not the front
+		local intake = attachment(model, "Intake")
+		T.truthy(intake.CFrame.Position.Y > localPos(screen).Y, "intake on the roof")
+		-- the old strongbox pieces are gone
+		T.eq(model:FindFirstChild("Strap"), nil)
+		T.eq(model:FindFirstChild("Flap"), nil)
+		T.le(#parts(model), 70, "part budget")
+	end)
+
 	T.test("Machines: old part names and free-standing signs", function()
 		local station = MachineBuilder.build("CleaningStation")
 		T.truthy(station:FindFirstChild("LampShade") and station:FindFirstChild("LampBulb"), "old lamp names still resolve")

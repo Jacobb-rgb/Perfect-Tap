@@ -5,6 +5,8 @@
 	  [==========-----]          job progress, in the ore's colour
 	   o o o .  FULL  2 ready    queue (the item being worked counts), a red
 	                             FULL chip, finished items waiting to leave
+	   Quality 2: 30% Rough ...  an optional note under it (setNote: the
+	                             Cleaning Plant's grade odds)
 
 	It hangs on the machine's Status attachment and hides itself beyond
 	45 studs. MachineFxController decides which machines get one (at most
@@ -28,6 +30,7 @@ export type Refs = {
 	Full: TextLabel,
 	Ready: TextLabel,
 	Status: TextLabel,
+	Note: TextLabel, -- optional line under the queue (setNote)
 	-- what is on screen now (update() skips unchanged values)
 	Shown: {
 		Pixels: number,
@@ -45,6 +48,8 @@ local BAR_WIDTH = 150
 local MAX_PIPS = 8
 local PIP = 10
 local PIP_STEP = 13
+local HEIGHT = 58
+local NOTE_HEIGHT = 18
 
 local STATUS_TEXT: { [string]: string } = {
 	OutputBlocked = "Output blocked",
@@ -58,7 +63,7 @@ function MachineBillboard.attach(model: Model): Refs
 	local anchor: Instance = if status and status:IsA("Attachment") then status else (base or model)
 	local gui = UIKit.new("BillboardGui", {
 		Name = "MachineBillboard",
-		Size = UDim2.fromOffset(WIDTH, 58),
+		Size = UDim2.fromOffset(WIDTH, HEIGHT),
 		StudsOffset = Vector3.new(0, 0.6, 0),
 		MaxDistance = MAX_DISTANCE,
 		AlwaysOnTop = false,
@@ -121,6 +126,16 @@ function MachineBillboard.attach(model: Model): Refs
 		Visible = false,
 	})
 
+	local note = UIKit.label(gui, "", 12, {
+		Name = "Note",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, HEIGHT),
+		Size = UDim2.fromOffset(WIDTH + 80, NOTE_HEIGHT),
+		TextColor3 = Theme.Text,
+		TextWrapped = false,
+		Visible = false,
+	})
+
 	gui.Parent = anchor
 	return {
 		Gui = gui,
@@ -131,6 +146,7 @@ function MachineBillboard.attach(model: Model): Refs
 		Full = full,
 		Ready = ready,
 		Status = statusLabel,
+		Note = note,
 		Shown = { Pixels = 0, Queue = -1, QueueMax = -1, OutCount = -1, Status = "", Color = Theme.Accent },
 	}
 end
@@ -201,6 +217,22 @@ function MachineBillboard.update(
 		refs.Status.Text = text
 		refs.Status.Visible = text ~= ""
 	end
+end
+
+-- A short line under the queue ("" hides it); the sign grows to make room.
+function MachineBillboard.setNote(refs: Refs, text: string)
+	if refs.Note.Text == text then
+		return
+	end
+	refs.Note.Text = text
+	local on = text ~= ""
+	refs.Note.Visible = on
+	refs.Gui.Size = UDim2.fromOffset(if on then WIDTH + 80 else WIDTH, if on then HEIGHT + NOTE_HEIGHT else HEIGHT)
+	-- keep the bar and queue where they were (centred in the wider sign)
+	local shift = if on then 40 else 0
+	refs.Status.Position = UDim2.fromOffset(shift, 0)
+	refs.Bar.Position = UDim2.fromOffset((WIDTH - BAR_WIDTH) / 2 + shift, 20)
+	refs.PipRow.Position = UDim2.fromOffset((WIDTH - BAR_WIDTH) / 2 + shift, 39)
 end
 
 function MachineBillboard.detach(refs: Refs)

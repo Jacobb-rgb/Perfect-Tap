@@ -20,6 +20,7 @@ local ORDER = {
 	"CleaningController",
 	"MachineFxController",
 	"PenController",
+	"IronBoxController",
 	"PodiumController",
 	"SellController",
 	"TrainController",
