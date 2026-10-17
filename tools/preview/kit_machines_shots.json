@@ -250,5 +250,68 @@
   ],
   "fov": 60,
   "shadowExtent": 50
+ },
+ "kit_belts": {
+  "scene": "kit_machines",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   204,
+   16,
+   -38
+  ],
+  "target": [
+   204,
+   3,
+   -4
+  ],
+  "fov": 58,
+  "shadowExtent": 60
+ },
+ "kit_belt_close": {
+  "scene": "kit_machines",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   198,
+   6.5,
+   -24
+  ],
+  "target": [
+   204,
+   1.5,
+   -14
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "kit_slopes": {
+  "scene": "kit_machines",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   204,
+   11,
+   -17
+  ],
+  "target": [
+   204,
+   4,
+   6
+  ],
+  "fov": 62,
+  "shadowExtent": 40
  }
 }

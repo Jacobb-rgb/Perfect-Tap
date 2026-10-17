@@ -1,35 +1,35 @@
 --[[
-	Kenney Factory Kit machines (the v2 machine look, owner 2026-10-17:
-	"make the machines with this kit, the pipes with water too, everything in
-	the kit looks great"). Every machine is put together from part-built
-	copies of the kit's pieces (docs/KENNEY_FACTORY_KIT.md):
-	  housing   "machine": chunky body, chamfered top edges, a light arch
-	            frame round the front opening, an orange base band, an
-	            optional side window (machine-window) or wrap band
-	            (machine-fortified)
-	  pipes     pipe-large with octagonal flanges and bolts, pipe-large-bend
-	            (a smooth quarter circle), pipe-large-valve (light sleeve,
-	            orange hand wheel), pipe-glass-large (water or molten metal
-	            inside), machine-connection-pipe (octagonal neck on a lid)
-	  hoppers   hopper-round / hopper-square: the intake on top
-	  tanks     piston-round
-	  details   cog-a, warning-traffic, screen-panel-small, robot-arm-a,
-	            scanner-high (the cleaner's arch), conveyor-bars-stripe-high
-	Colours: the kit's shapes in iron (owner: "iron first"), the kit's orange.
+	Terra Forge machines, v2 look (owner 2026-10-17): the Kenney Factory Kit
+	pieces "upgraded" to the owner's reference picture of a neon factory
+	(docs/art/machines_reference.webp, belts: docs/art/conveyors_reference.webp):
+	  - chunky housings with 45 degree chamfered corners, light silver
+	    panels on a dark gunmetal plinth and lid, painted seams and bolts;
+	  - glowing orange strips round the plinths, rails and chimney rings;
+	  - glowing furnace doors (thick frame, orange neon outline, hot core);
+	  - dark pipes with orange sleeves, glass sections with glowing water
+	    (a coil inside) or molten metal, valves with orange wheels;
+	  - tanks with glowing windows, a hollow hopper (the crusher's rollers
+	    show inside), screens, stack lights, a yellow robot arm;
+	  - conveyors: black segmented belts between gunmetal rails with an
+	    orange top edge and a glowing strip, orange feet; optional end caps
+	    (drum with orange plates, control box with an arrow screen and an
+	    amber beacon); slopes up (Belt Lift) and down (Slide).
+	Flat details (seams, bolts, hazard stripes, screen content, belt
+	segments) are SurfaceGui frames, so they cost no parts.
 
-	Upgrades change the look (owner): level 0 is plain iron; levels 1 and 2
-	grow small crystal shards; level 3 turns the light frames, flanges and
-	pipes into crystal with bigger clusters; level 4 (max) is a whole crystal
-	machine with a hero crystal on top. Themes = the crystal colours.
+	Upgrades change the look (owner): level 0 = iron; 1-2 small crystal
+	clusters (level 2 also turns the orange glow to crystal colour); 3 bigger
+	clusters, the gunmetal frames and pipes turn crystal; 4 (max) = the whole
+	machine is crystal with a hero crystal on top. Themes = crystal colours.
 
 	Same contract as MachineBuilder (Base + attachments Intake (IntakeSize),
 	Output, Prompt, Status, OrePoint/CamPoint, WaterOut/WaterIn; the named
-	moving parts MachineFxController animates: Glow, Molten, Cog1/Cog2,
-	Roller1/2 (+Tooth), Drum/DrumRib, BedRoller, WaterPool, StackRed/Amber/
-	Green, Vent, ChimneyTop) so it can replace it once the owner approves.
-	Every part carries the attribute Kit = its colour role (Body, Light, Dark,
-	Trim, Pipe, Glass, Water, Molten, Glow, Screen, ScreenGlow, Lamp, Floor,
-	Crystal), which is how the crystal levels repaint a machine.
+	parts MachineFxController animates: Glow, Molten, Cog1/Cog2, Roller1/2
+	(+Tooth), Drum/DrumRib, BedRoller, WaterPool, StackRed/Amber/Green, Vent,
+	ChimneyTop) so it can replace it once the owner approves. Every part has
+	the attribute Kit = its colour role (Body, Frame, Dark, Trim, Neon, Pipe,
+	Glass, Water, Molten, Glow, Hot, Screen, ScreenGlow, Lamp, Rubber, Yellow,
+	Floor, Crystal); the crystal levels repaint by role.
 
 	Local space: origin = footprint centre on the plot surface, front = -Z.
 ]]
@@ -46,11 +46,14 @@ type Props = { [string]: any }
 export type Theme = { Main: Color3, Deep: Color3, Pale: Color3 }
 type Socket = { cf: CFrame, size: number, hero: boolean? }
 type Ctx = { model: Model, base: BasePart, sockets: { Socket } }
+type Paint = { x: number, y: number, w: number, h: number, color: Color3, round: boolean?, stripes: number? }
 
 local rgb = Color3.fromRGB
 local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new(0, 0, 0)
 local UP = Vector3.yAxis
+local XA = Vector3.xAxis
+local ZA = Vector3.zAxis
 local SMOOTH = Enum.Material.SmoothPlastic
 local NEON = Enum.Material.Neon
 local GLASS = Enum.Material.Glass
@@ -59,31 +62,33 @@ local FLOOR = 0.3 -- top of the Base plate
 
 KitMachines.MaxLevel = 4
 
--- The kit's shapes in iron: one mid body colour, light frames and flanges,
--- darker pipes and recesses, the kit's orange for base bands and handles.
 KitMachines.Palette = {
-	Body = rgb(122, 128, 146),
-	Light = rgb(180, 186, 202),
-	Dark = rgb(58, 62, 76),
-	Pipe = rgb(96, 102, 120),
-	Trim = rgb(255, 166, 58),
-	Glass = rgb(200, 232, 246),
-	Water = rgb(60, 170, 232),
-	Molten = rgb(255, 120, 28),
-	Glow = rgb(240, 100, 24),
-	Screen = rgb(28, 36, 46),
-	ScreenGlow = rgb(96, 232, 150),
-	Floor = rgb(84, 88, 102),
+	Body = rgb(188, 194, 206), -- light silver panels
+	Frame = rgb(74, 78, 92), -- gunmetal plinths, lids, rails
+	Dark = rgb(36, 38, 48), -- recesses, mouths
+	Trim = rgb(248, 142, 36), -- orange metal: sleeves, feet, handles
+	Neon = rgb(255, 128, 20), -- glowing strips
+	Pipe = rgb(60, 64, 76),
+	Glass = rgb(206, 238, 252),
+	Water = rgb(70, 196, 255), -- glowing water
+	Molten = rgb(255, 124, 26),
+	Glow = rgb(255, 128, 24), -- furnace fire
+	Hot = rgb(255, 214, 96), -- hottest core of the fire
+	Screen = rgb(18, 28, 36),
+	ScreenGlow = rgb(90, 240, 140),
+	Floor = rgb(60, 64, 76),
+	Rubber = rgb(30, 30, 36),
+	Yellow = rgb(255, 190, 36),
 	Red = rgb(235, 70, 60),
 	Amber = rgb(255, 176, 40),
 	Green = rgb(80, 210, 110),
-	Rubber = rgb(42, 42, 50),
-	Bristle = rgb(40, 110, 120),
-	Smoke = rgb(150, 140, 135),
+	Bristle = rgb(36, 132, 150),
+	Smoke = rgb(220, 220, 226),
+	Seam = rgb(150, 156, 170), -- painted panel lines on the silver
+	Bolt = rgb(120, 126, 140),
 }
 local P = KitMachines.Palette
 
--- Crystal colours for the upgrade levels.
 KitMachines.Themes = {
 	Aqua = { Main = rgb(90, 214, 255), Deep = rgb(36, 120, 226), Pale = rgb(204, 246, 255) },
 	Amethyst = { Main = rgb(178, 122, 255), Deep = rgb(98, 52, 206), Pale = rgb(232, 212, 255) },
@@ -91,16 +96,17 @@ KitMachines.Themes = {
 } :: { [string]: Theme }
 KitMachines.DefaultTheme = "Aqua"
 
--- Same water look as MachineBuilder.Water (the client animates the stream).
-local WATER_POOL_TRANSPARENCY = 0.22
-
 local MATERIAL: { [string]: Enum.Material } = {
+	Neon = NEON,
 	Molten = NEON,
 	Glow = NEON,
+	Hot = NEON,
 	ScreenGlow = NEON,
 	Glass = GLASS,
+	Water = NEON,
 }
-local TRANSPARENCY: { [string]: number } = { Glass = 0.55, Water = 0.2 }
+local TRANSPARENCY: { [string]: number } = { Glass = 0.6 }
+local POOL_TRANSPARENCY = 0.2
 
 local SOLID: Props = { CanTouch = false }
 local PROP: Props = { CanTouch = false, CanQuery = false, CanCollide = false }
@@ -136,7 +142,7 @@ end
 -- A frame at `pos` whose X axis points along `dir` (Roblox cylinders run along X).
 local function along(pos: Vector3, dir: Vector3): CFrame
 	local x = dir.Unit
-	local ref = if math.abs(x.Y) < 0.95 then UP else Vector3.zAxis
+	local ref = if math.abs(x.Y) < 0.95 then UP else ZA
 	local z = x:Cross(ref).Unit
 	local y = z:Cross(x)
 	return CFrame.fromMatrix(pos, x, y, z)
@@ -161,15 +167,16 @@ local function ball(m: Instance, center: Vector3, d: number, role: string, flags
 	return style(part, role, flags or TINY, name)
 end
 
--- Cylinder from `a` to `b`.
 local function rod(m: Instance, a: Vector3, b: Vector3, d: number, role: string, flags: Props?, name: string?): BasePart
 	return cyl(m, (a + b) / 2, b - a, (b - a).Magnitude, d, role, flags, name)
 end
 
---[[
-	Octagonal prism along `frame`'s X axis, `across` the flats: four bars as
-	wide as an octagon side crossed at 45 degree steps. 4 parts.
-]]
+-- Block from `a` to `b` with a `w` x `h` cross-section.
+local function bar(m: Instance, a: Vector3, b: Vector3, w: number, h: number, role: string, flags: Props?, name: string?): BasePart
+	return block(m, CFrame.lookAt((a + b) / 2, b), Vector3.new(w, h, (b - a).Magnitude), role, flags, name)
+end
+
+-- Octagonal prism along `frame`'s X axis, `across` the flats. 4 parts.
 local function octagon(m: Instance, frame: CFrame, across: number, thick: number, role: string, flags: Props?, name: string?)
 	for k = 0, 3 do
 		block(m, frame * CFrame.Angles(k * math.pi / 4, 0, 0), Vector3.new(thick, across, across * TAN8), role, flags, name)
@@ -178,9 +185,8 @@ end
 
 --[[
 	Wedge whose slope faces `up` and `out` (perpendicular unit vectors): full
-	height on the inner side, `length` along the edge, `rise` along `up`,
-	`run` along `out`; `center` = centre of its bounding box. With up = -Y
-	it is a funnel side.
+	height on the inner side, `length` along out x up, `rise` along `up`,
+	`run` along `out`; `center` = centre of its bounding box.
 ]]
 local function slope(
 	m: Instance,
@@ -195,6 +201,127 @@ local function slope(
 	name: string?
 ): BasePart
 	return wedge(m, CFrame.fromMatrix(center, out:Cross(up), up, -out), Vector3.new(length, rise, run), role, flags, name)
+end
+
+--[[
+	Box with its four vertical edges cut at 45 degrees (`c` = the cut).
+	`cf` = centre. Returns the main block. 6 parts (1 when c = 0).
+]]
+local function cbox(
+	m: Instance,
+	cf: CFrame,
+	w: number,
+	h: number,
+	d: number,
+	c: number,
+	role: string,
+	flags: Props?,
+	name: string?
+): BasePart
+	if c <= 0.01 then
+		return block(m, cf, Vector3.new(w, h, d), role, flags, name)
+	end
+	local main = block(m, cf, Vector3.new(w, h, d - 2 * c), role, flags, name)
+	block(m, cf, Vector3.new(w - 2 * c, h, d), role, flags)
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			local up = cf:VectorToWorldSpace(Vector3.new(0, 0, sz))
+			local out = cf:VectorToWorldSpace(Vector3.new(sx, 0, 0))
+			slope(m, cf:PointToWorldSpace(Vector3.new(sx * (w / 2 - c / 2), 0, sz * (d / 2 - c / 2))), up, out, h, c, c, role, flags)
+		end
+	end
+	return main
+end
+
+--[[
+	A thin strip round a chamfered box (centre `cf`) at height `y` above
+	the centre: one per face and one on each cut corner. `sides` limits it
+	to some faces ("F", "B", "L", "R"; no corners then). Neon by default.
+]]
+local function band(m: Instance, cf: CFrame, w: number, d: number, c: number, y: number, thick: number, role: string?, sides: string?)
+	local r = role or "Neon"
+	local e = 0.08
+	local only = sides or "FBLR"
+	local function on(s: string): boolean
+		return string.find(only, s, 1, true) ~= nil
+	end
+	if on("F") then
+		block(m, cf * CFrame.new(0, y, -(d / 2 + e / 2)), Vector3.new(w - 2 * c, thick, e), r, TINY)
+	end
+	if on("B") then
+		block(m, cf * CFrame.new(0, y, d / 2 + e / 2), Vector3.new(w - 2 * c, thick, e), r, TINY)
+	end
+	if on("L") then
+		block(m, cf * CFrame.new(-(w / 2 + e / 2), y, 0), Vector3.new(e, thick, d - 2 * c), r, TINY)
+	end
+	if on("R") then
+		block(m, cf * CFrame.new(w / 2 + e / 2, y, 0), Vector3.new(e, thick, d - 2 * c), r, TINY)
+	end
+	if c > 0.01 and only == "FBLR" then
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				local n = Vector3.new(sx, 0, sz).Unit
+				local at = Vector3.new(sx * (w / 2 - c / 2), y, sz * (d / 2 - c / 2)) + n * (e / 2)
+				block(m, cf * CFrame.lookAt(at, at + n), Vector3.new(c * math.sqrt(2) + 0.02, thick, e), r, TINY)
+			end
+		end
+	end
+end
+
+-- Painted details on one face (SurfaceGui frames, no parts). Scale coordinates, y down.
+local function paint(part: BasePart, face: Enum.NormalId, items: { Paint }, name: string?): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = name or "Paint"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 24
+	gui.LightInfluence = 1
+	gui.MaxDistance = 140
+	gui.Parent = part
+	for _, it in items do
+		local frame = Instance.new("Frame")
+		frame.BorderSizePixel = 0
+		frame.BackgroundColor3 = it.color
+		frame.Position = UDim2.fromScale(it.x, it.y)
+		frame.Size = UDim2.fromScale(it.w, it.h)
+		if it.round then
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0.5, 0)
+			corner.Parent = frame
+		end
+		if it.stripes then
+			-- hazard stripes: hard orange / dark steps
+			local keys = {}
+			local n = it.stripes
+			for i = 0, n - 1 do
+				local color = if i % 2 == 0 then P.Trim else P.Dark
+				local t0, t1 = i / n, (i + 1) / n
+				table.insert(keys, ColorSequenceKeypoint.new(t0, color))
+				table.insert(keys, ColorSequenceKeypoint.new(math.max(t0, t1 - 0.001), color))
+			end
+			local gradient = Instance.new("UIGradient")
+			gradient.Color = ColorSequence.new(keys)
+			gradient.Parent = frame
+			frame.BackgroundColor3 = WHITE
+		end
+		frame.Parent = gui
+	end
+	return gui
+end
+
+-- Panel seams (vertical lines), a top line and four corner bolts on a silver face.
+local function panelFace(part: BasePart, face: Enum.NormalId, seams: number)
+	local items: { Paint } = {}
+	for i = 1, seams do
+		table.insert(items, { x = i / (seams + 1) - 0.004, y = 0.06, w = 0.008, h = 0.88, color = P.Seam })
+	end
+	table.insert(items, { x = 0.02, y = 0.02, w = 0.96, h = 0.012, color = P.Seam })
+	for _, bx in { 0.04, 0.93 } do
+		for _, by in { 0.08, 0.86 } do
+			table.insert(items, { x = bx, y = by, w = 0.03, h = 0.06, color = P.Bolt, round = true })
+		end
+	end
+	paint(part, face, items)
 end
 
 local function attach(base: BasePart, name: string, cf: CFrame): Attachment
@@ -219,9 +346,9 @@ local function smoke(parent: Instance, rate: number)
 	e.Name = "Smoke"
 	e.Texture = "rbxasset://textures/particles/smoke_main.dds"
 	e.Color = ColorSequence.new(P.Smoke)
-	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 4) })
-	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1) })
-	e.Lifetime = NumberRange.new(2, 3.5)
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 5) })
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+	e.Lifetime = NumberRange.new(2.5, 4)
 	e.Speed = NumberRange.new(3, 5)
 	e.SpreadAngle = Vector2.new(10, 10)
 	e.Rate = rate
@@ -240,71 +367,120 @@ local function embers(parent: Instance, color: Color3)
 	e.Acceleration = Vector3.new(0, 3, 0)
 	e.LightEmission = 1
 	e.LightInfluence = 0
-	e.Rate = 2
+	e.Rate = 3
 	e.Parent = parent
 end
 
----------------------------------------------------------------- kit pieces
+---------------------------------------------------------------- pieces
+
+type BodyOpts = { lid: number?, plinth: number?, seams: number?, name: string?, faces: { Enum.NormalId }? }
 
 --[[
-	pipe-large flange: an octagon 1.45x the pipe across, light; an open end
-	shows a dark hole. `center` = middle of the flange ring.
+	Machine housing at `cf` (bottom centre, front = -Z): a dark plinth with a
+	glowing band, a light silver chamfered body with painted seams, a dark
+	lid and a silver top plate (stepped top). Returns the top plate's height.
 ]]
-local function flange(m: Instance, center: Vector3, dir: Vector3, d: number, open: boolean?)
-	local t = math.max(0.16, d * 0.22)
-	octagon(m, along(center, dir), d * 1.45, t, "Light", if d >= 0.9 then PROP else TINY)
-	if open then
-		cyl(m, center + dir.Unit * (t / 2 + 0.02), dir, 0.04, d * 0.78, "Dark", TINY)
+local function housing(m: Instance, cf: CFrame, w: number, h: number, d: number, c: number, o: BodyOpts?): number
+	local opts: BodyOpts = o or {}
+	local plinth = opts.plinth or 0.6
+	local lid = opts.lid or 0.7
+	cbox(m, cf * CFrame.new(0, plinth / 2, 0), w + 0.3, plinth, d + 0.3, c + 0.12, "Frame", SOLID)
+	band(m, cf * CFrame.new(0, plinth / 2, 0), w + 0.3, d + 0.3, c + 0.12, 0.05, 0.16)
+	local bodyH = h - plinth - lid
+	local body = cbox(m, cf * CFrame.new(0, plinth + bodyH / 2, 0), w, bodyH, d, c, "Body", SOLID, opts.name or "Body")
+	local faces: { Enum.NormalId } = opts.faces or { Enum.NormalId.Left, Enum.NormalId.Right, Enum.NormalId.Back }
+	for _, face in faces do
+		panelFace(body, face, opts.seams or 2)
 	end
+	cbox(m, cf * CFrame.new(0, h - lid / 2, 0), w + 0.12, lid, d + 0.12, c + 0.05, "Frame", SOLID)
+	cbox(m, cf * CFrame.new(0, h + 0.1, 0), w - 1.1, 0.2, d - 1.1, math.max(0, c - 0.3), "Body", SOLID)
+	return h + 0.2
 end
 
-type PipeOpts = {
-	role: string?, -- body role (default Pipe)
-	fluid: string?, -- glass pipe with this inside (Water / Molten)
-	a: boolean?, -- flange at a (default true)
-	b: boolean?, -- flange at b (default true)
-	openA: boolean?,
-	openB: boolean?,
-	bolts: boolean?, -- default true
-	name: string?,
-	flags: Props?,
-}
+type DoorOpts = { fill: string?, name: string?, depth: number? }
 
 --[[
-	pipe-large (or pipe-glass-large with `fluid` inside) from `a` to `b`,
-	octagonal flanges at the ends, two bolt heads on the body.
+	A doorway on a front face: `cf` = bottom centre on the face (front = -Z).
+	Thick silver frame with cut top corners, an orange neon outline inside,
+	what shows inside (`fill`: Glow = a fire with a hot core and a grate;
+	Dark = an opening). Returns the inside part.
 ]]
+local function doorway(m: Instance, cf: CFrame, w: number, h: number, o: DoorOpts?): BasePart
+	local opts: DoorOpts = o or {}
+	local t = math.clamp(w * 0.17, 0.35, 0.6)
+	local depth = opts.depth or 0.55
+	local z = -depth / 2 + 0.12
+	for _, side in { -1, 1 } do
+		block(m, cf * CFrame.new(side * (w / 2 + t / 2), (h + t) / 2, z), Vector3.new(t, h + t, depth), "Body", SOLID)
+		-- the frame's cut top corner
+		slope(
+			m,
+			cf:PointToWorldSpace(Vector3.new(side * (w / 2 + t / 2), h + t * 1.25, z)),
+			cf.UpVector,
+			cf:VectorToWorldSpace(Vector3.new(side, 0, 0)),
+			depth,
+			t / 2,
+			t,
+			"Body",
+			SOLID
+		)
+		block(m, cf * CFrame.new(side * (w / 2 - 0.05), h / 2, -depth + 0.1), Vector3.new(0.1, h, 0.06), "Neon", TINY)
+	end
+	block(m, cf * CFrame.new(0, h + t * 0.75, z), Vector3.new(w, t * 1.5, depth), "Body", SOLID)
+	block(m, cf * CFrame.new(0, h - 0.05, -depth + 0.1), Vector3.new(w, 0.1, 0.06), "Neon", TINY)
+	local fill = opts.fill or "Dark"
+	local inside = block(m, cf * CFrame.new(0, h / 2, 0.02), Vector3.new(w, h, 0.2), fill, TINY, opts.name)
+	if fill == "Glow" then
+		block(m, cf * CFrame.new(0, h * 0.42, -0.06), Vector3.new(w * 0.6, h * 0.5, 0.06), "Hot", TINY, "GlowCore")
+		for i = -1, 1 do
+			block(m, cf * CFrame.new(i * w * 0.3, 0.22, -0.14), Vector3.new(0.18, 0.44, 0.16), "Dark", TINY)
+		end
+		block(m, cf * CFrame.new(0, 0.42, -0.14), Vector3.new(w, 0.14, 0.16), "Dark", TINY)
+		light(inside, P.Glow, 10, 1.4)
+		embers(inside, P.Glow)
+	end
+	return inside
+end
+
+type PipeOpts = { fluid: string?, a: boolean?, b: boolean?, name: string?, role: string? }
+
+-- A pipe from `a` to `b` with orange sleeves at the ends; `fluid` = a glass pipe with glowing Water (+ coil) or Molten.
 local function pipe(m: Instance, a: Vector3, b: Vector3, d: number, o: PipeOpts?)
 	local opts: PipeOpts = o or {}
 	local dir = (b - a).Unit
-	local t = math.max(0.16, d * 0.22)
+	local s = math.max(0.22, d * 0.36)
 	if opts.fluid then
-		rod(m, a, b, d * 0.98, "Glass", TINY, opts.name)
-		rod(m, a + dir * t, b - dir * t, d * 0.56, opts.fluid, TINY, if opts.fluid == "Molten" then "Molten" else "Fluid")
+		rod(m, a, b, d * 1.02, "Glass", TINY, opts.name)
+		rod(m, a + dir * s, b - dir * s, d * 0.5, opts.fluid, TINY, if opts.fluid == "Molten" then "Molten" else "Fluid")
+		if opts.fluid == "Water" then
+			local len = (b - a).Magnitude - 2 * s
+			local turns = math.max(2, math.floor(len / 0.55))
+			for i = 1, turns do
+				local at = a + dir * (s + (i - 0.5) * len / turns)
+				local ring = Geo.make("Part", {
+					Shape = Enum.PartType.Cylinder,
+					CFrame = along(at, dir) * CFrame.Angles(0, 0, math.rad(22)),
+					Size = Vector3.new(0.08, d * 0.84, d * 0.84),
+				}, m)
+				style(ring, "Water", TINY, "Coil")
+			end
+		end
 	else
-		rod(m, a, b, d, opts.role or "Pipe", opts.flags or PROP, opts.name)
+		rod(m, a, b, d, opts.role or "Pipe", PROP, opts.name)
 	end
 	if opts.a ~= false then
-		flange(m, a + dir * (t / 2), dir, d, opts.openA)
+		cyl(m, a + dir * (s / 2), dir, s, d * 1.28, "Trim", TINY)
 	end
 	if opts.b ~= false then
-		flange(m, b - dir * (t / 2), dir, d, opts.openB)
-	end
-	if opts.bolts ~= false and not opts.fluid and (b - a).Magnitude > d * 1.6 then
-		local side = along(a, dir).YVector
-		for _, f in { 0.0, 1.0 } do
-			local p = a:Lerp(b, f) + dir * (if f == 0 then t + d * 0.32 else -(t + d * 0.32)) + side * (d / 2)
-			ball(m, p, math.max(0.14, d * 0.2), "Light")
-		end
+		cyl(m, b - dir * (s / 2), dir, s, d * 1.28, "Trim", TINY)
 	end
 end
 
 --[[
-	pipe-large-bend: a quarter circle of radius `r` starting at `p0` heading
-	`da`, ending heading `db` (3 segments, ball joints so it stays round).
-	Returns the end point.
+	A smooth quarter bend of radius `r` from `p0` heading `da` to heading `db`
+	(3 segments with ball joints). Returns the end point.
 ]]
-local function bend(m: Instance, p0: Vector3, da: Vector3, db: Vector3, d: number, r: number, role: string?, flanges: boolean?): Vector3
+local function bend(m: Instance, p0: Vector3, da: Vector3, db: Vector3, d: number, r: number, role: string?): Vector3
 	local center = p0 + db * r
 	local points = {}
 	for i = 0, 3 do
@@ -317,279 +493,186 @@ local function bend(m: Instance, p0: Vector3, da: Vector3, db: Vector3, d: numbe
 	for i = 2, 3 do
 		ball(m, points[i], d, role or "Pipe", PROP, "PipeJoint")
 	end
-	local p1 = points[4]
-	if flanges then
-		local t = math.max(0.16, d * 0.22)
-		flange(m, p0 + da * (t / 2), da, d)
-		flange(m, p1 - db * (t / 2), db, d)
-	end
-	return p1
+	return points[4]
 end
 
--- pipe-large-valve: a light sleeve round the pipe and an orange hand wheel toward `up`.
+-- A valve: a dark sleeve and an orange hand wheel toward `up`.
 local function valve(m: Instance, center: Vector3, dir: Vector3, d: number, up: Vector3)
-	cyl(m, center, dir, d * 0.9, d * 1.3, "Light", PROP)
-	local stemTop = center + up * (d * 0.65 + 0.35)
+	cyl(m, center, dir, d * 0.9, d * 1.35, "Frame", PROP)
+	local stemTop = center + up * (d * 0.68 + 0.32)
 	rod(m, center + up * (d * 0.6), stemTop, d * 0.22, "Dark", TINY)
-	cyl(m, stemTop, up, 0.14, d * 1.05, "Trim", TINY, "Wheel")
-	cyl(m, stemTop + up * 0.08, up, 0.1, d * 0.32, "Light", TINY)
+	cyl(m, stemTop, up, 0.16, d * 1.1, "Trim", TINY, "Wheel")
+	cyl(m, stemTop + up * 0.09, up, 0.1, d * 0.34, "Frame", TINY)
 end
 
-type HousingOpts = {
-	bevel: number?,
-	trim: number?,
-	arch: { w: number, h: number, x: number?, bottom: number?, fill: string?, name: string? }?,
-	window: { side: number, w: number, h: number, y: number, z: number? }?,
-	band: { z: number, w: number }?, -- machine-fortified wrap band
-	cap: boolean?,
-	name: string?,
-}
-
 --[[
-	Kenney "machine" housing at `cf` (bottom centre, front = -Z): orange base
-	band, body, chamfered long top edges, a light arch frame round the front
-	opening (`fill` = what shows inside: Dark, Glow...), an optional side
-	window and wrap band. Returns the top height above `cf`.
+	Chimney on `base` (bottom centre): a dark octagonal collar with a
+	glowing ring, a wide first tier, the stack with glowing rings, a cap with
+	a dark mouth (ChimneyTop, smoke). Returns the mouth.
 ]]
-local function housing(m: Instance, cf: CFrame, w: number, h: number, d: number, o: HousingOpts?): number
-	local opts: HousingOpts = o or {}
-	local bevel = opts.bevel or math.min(w, d) * 0.13
-	local trim = opts.trim or 0.5
-	block(m, cf * CFrame.new(0, trim / 2, 0), Vector3.new(w + 0.14, trim, d + 0.14), "Trim", SOLID)
-	local bodyH = h - trim - bevel
-	block(m, cf * CFrame.new(0, trim + bodyH / 2, 0), Vector3.new(w, bodyH, d), "Body", SOLID, opts.name or "Body")
-	block(m, cf * CFrame.new(0, h - bevel / 2, 0), Vector3.new(w - 2 * bevel, bevel, d), "Body", SOLID)
-	for _, side in { -1, 1 } do
-		local out = cf:VectorToWorldSpace(Vector3.new(side, 0, 0))
-		slope(
-			m,
-			cf:PointToWorldSpace(Vector3.new(side * (w / 2 - bevel / 2), h - bevel / 2, 0)),
-			cf.UpVector,
-			out,
-			d,
-			bevel,
-			bevel,
-			"Body",
-			SOLID
-		)
+local function chimney(m: Instance, base: Vector3, d: number, h: number, rate: number): BasePart
+	local x, z = base.X, base.Z
+	local y = base.Y
+	octagon(m, along(Vector3.new(x, y + 0.35, z), UP), d * 1.75, 0.7, "Frame", SOLID)
+	cyl(m, Vector3.new(x, y + 0.72, z), UP, 0.14, d * 1.62, "Neon", TINY)
+	local t1 = h * 0.3
+	cyl(m, Vector3.new(x, y + 0.7 + t1 / 2, z), UP, t1, d * 1.3, "Frame", SOLID)
+	cyl(m, Vector3.new(x, y + 0.7 + t1 - 0.25, z), UP, 0.16, d * 1.34, "Neon", TINY)
+	local stackFrom, stackTo = y + 0.7 + t1, y + h - 0.45
+	cyl(m, Vector3.new(x, (stackFrom + stackTo) / 2, z), UP, stackTo - stackFrom, d, "Pipe", SOLID)
+	for _, f in { 0.35, 0.75 } do
+		local ry = stackFrom + (stackTo - stackFrom) * f
+		cyl(m, Vector3.new(x, ry, z), UP, 0.3, d * 1.14, "Frame", TINY)
+		cyl(m, Vector3.new(x, ry, z), UP, 0.12, d * 1.17, "Neon", TINY)
 	end
-	if opts.arch then
-		local a = opts.arch
-		local ax = a.x or 0
-		local bottom = a.bottom or trim
-		local t = math.clamp(a.w * 0.18, 0.4, 0.75)
-		local depth = 0.6
-		local fz = -d / 2 - depth / 2 + 0.25
-		local top = bottom + a.h + t
-		for _, side in { -1, 1 } do
-			block(m, cf * CFrame.new(ax + side * (a.w / 2 + t / 2), top / 2, fz), Vector3.new(t, top, depth), "Light", SOLID)
-		end
-		block(m, cf * CFrame.new(ax, top - t / 2, fz), Vector3.new(a.w + 2 * t, t, depth), "Light", SOLID)
-		-- sill under the opening, then what shows inside it
-		block(m, cf * CFrame.new(ax, bottom / 2, fz + 0.05), Vector3.new(a.w, bottom, depth - 0.1), "Light", SOLID)
-		local inside =
-			block(m, cf * CFrame.new(ax, bottom + a.h / 2, -d / 2 + 0.02), Vector3.new(a.w, a.h, 0.2), a.fill or "Dark", TINY, a.name)
-		if a.fill == "Glow" then
-			-- a darker throat round the glow so it reads as an opening
-			block(m, cf * CFrame.new(ax, bottom + a.h - 0.15, -d / 2 - 0.06), Vector3.new(a.w, 0.3, 0.1), "Dark", TINY)
-			light(inside, P.Glow, 9, 1.1)
-			embers(inside, P.Glow)
-		end
-	end
-	if opts.window then
-		local win = opts.window
-		local x = win.side * (w / 2 + 0.06)
-		local z = win.z or 0
-		local t = 0.32
-		for _, s in { -1, 1 } do
-			block(m, cf * CFrame.new(x, win.y + s * (win.h / 2 + t / 2), z), Vector3.new(0.3, t, win.w + 2 * t), "Light", TINY)
-			block(m, cf * CFrame.new(x, win.y, z + s * (win.w / 2 + t / 2)), Vector3.new(0.3, win.h, t), "Light", TINY)
-		end
-		block(m, cf * CFrame.new(x - win.side * 0.02, win.y, z), Vector3.new(0.12, win.h, win.w), "Glass", TINY, "Window")
-		block(m, cf * CFrame.new(win.side * (w / 2 - 0.9), win.y, z), Vector3.new(0.1, win.h, win.w), "Dark", TINY)
-	end
-	if opts.band then
-		local b = opts.band
-		local bw = w + 0.24
-		for _, side in { -1, 1 } do
-			block(
-				m,
-				cf * CFrame.new(side * (bw / 2 - 0.06), (h - bevel) / 2 + trim / 2, b.z),
-				Vector3.new(0.12, h - bevel - trim, b.w),
-				"Light",
-				SOLID
-			)
-			local out = cf:VectorToWorldSpace(Vector3.new(side, 0, 0))
-			slope(
-				m,
-				cf:PointToWorldSpace(Vector3.new(side * (bw / 2 - bevel / 2), h - bevel / 2 + 0.06, b.z)),
-				cf.UpVector,
-				out,
-				b.w,
-				bevel + 0.12,
-				bevel + 0.06,
-				"Light",
-				TINY
-			)
-		end
-		block(m, cf * CFrame.new(0, h - bevel / 2 + 0.06, b.z), Vector3.new(bw - 2 * bevel - 0.12, bevel + 0.12, b.w), "Light", SOLID)
-	end
-	if opts.cap ~= false then
-		block(m, cf * CFrame.new(0, h + 0.1, d * 0.22), Vector3.new(w * 0.32, 0.2, d * 0.2), "Light", TINY)
-	end
-	return h
+	cyl(m, Vector3.new(x, y + h - 0.22, z), UP, 0.45, d * 1.22, "Frame", SOLID)
+	cyl(m, Vector3.new(x, y + h - 0.32, z), UP, 0.1, d * 1.25, "Neon", TINY)
+	local mouth = cyl(m, Vector3.new(x, y + h + 0.02, z), UP, 0.04, d * 0.8, "Dark", TINY, "ChimneyTop")
+	smoke(mouth, rate)
+	return mouth
 end
 
---[[
-	hopper-round: an octagonal funnel from `neckD` up to an octagonal cup `d`
-	across with a light band round its foot and a dark mouth; an optional
-	neck below. `bottom` = where the neck (or funnel) starts. Returns the rim
-	height (world Y).
-]]
-local function hopperRound(m: Instance, bottom: Vector3, d: number, neckD: number, neckH: number): number
-	local x, z = bottom.X, bottom.Z
-	local y = bottom.Y
-	if neckH > 0 then
-		cyl(m, Vector3.new(x, y + neckH / 2, z), UP, neckH, neckD, "Body", SOLID)
-		cyl(m, Vector3.new(x, y + 0.15, z), UP, 0.3, neckD * 1.18, "Light", TINY)
-		y += neckH
-	end
-	local funnelH = (d - neckD) * 0.42
-	local topA, botA = d * 0.48, neckD * 0.5
-	local sideW = (topA + botA) * TAN8 * 1.04
-	for i = 0, 7 do
-		local a = i * math.pi / 4
-		local out = Vector3.new(math.sin(a), 0, -math.cos(a))
-		slope(m, Vector3.new(x, y + funnelH / 2, z) + out * ((topA + botA) / 2), -UP, out, sideW, funnelH, topA - botA, "Body", SOLID)
-	end
-	cyl(m, Vector3.new(x, y + funnelH / 2, z), UP, funnelH, neckD, "Body", SOLID)
-	y += funnelH
-	local cupH = d * 0.34
-	octagon(m, along(Vector3.new(x, y + cupH / 2, z), UP), d, cupH, "Body", SOLID)
-	local bandH = cupH * 0.46
-	octagon(m, along(Vector3.new(x, y + bandH / 2, z), UP), d * 1.1, bandH, "Light", SOLID)
-	local rim = y + cupH
-	octagon(m, along(Vector3.new(x, rim + 0.02, z), UP), d * 0.76, 0.06, "Dark", TINY)
-	return rim
-end
+type TankOpts = { window: Vector3?, glow: string?, name: string? }
 
 --[[
-	hopper-square: a square funnel `bottomW` -> `topW` on `cf` (bottom
-	centre), a light band, a square cup with a dark mouth. Returns the rim
-	height above `cf`.
-]]
-local function hopperSquare(m: Instance, cf: CFrame, bottomW: number, topW: number, funnelH: number, cupH: number): number
-	local run = (topW - bottomW) / 2
-	local sideW = topW * 0.78 + bottomW * 0.22
-	for i = 0, 3 do
-		local out = cf:VectorToWorldSpace(Vector3.new(math.sin(i * math.pi / 2), 0, -math.cos(i * math.pi / 2)))
-		local center = cf:PointToWorldSpace(Vector3.new(0, funnelH / 2, 0)) + out * (bottomW / 2 + run / 2)
-		slope(m, center, -cf.UpVector, out, sideW, funnelH, run, "Body", SOLID)
-	end
-	block(m, cf * CFrame.new(0, funnelH / 2, 0), Vector3.new(bottomW, funnelH, bottomW), "Body", SOLID)
-	local band = cupH * 0.45
-	block(m, cf * CFrame.new(0, funnelH + band / 2, 0), Vector3.new(topW + 0.3, band, topW + 0.3), "Light", SOLID)
-	block(m, cf * CFrame.new(0, funnelH + cupH / 2, 0), Vector3.new(topW, cupH, topW), "Body", SOLID)
-	local rim = funnelH + cupH
-	block(m, cf * CFrame.new(0, rim + 0.02, 0), Vector3.new(topW - 0.6, 0.06, topW - 0.6), "Dark", TINY)
-	return rim
-end
-
-type TankOpts = { role: string?, window: Vector3?, name: string? }
-
---[[
-	piston-round: a body on a narrower dark foot, a light band, a wide dark
-	octagonal cap. `window` (a horizontal direction) adds a glass gauge strip
-	with water behind it on that side. Returns the cap's top (world Y).
+	A tank: gunmetal body with orange bands, a lid, and a glowing window
+	strip toward `window` (`glow` = Water / Neon). Returns the lid top.
 ]]
 local function tank(m: Instance, bottom: Vector3, d: number, h: number, o: TankOpts?): number
 	local opts: TankOpts = o or {}
-	local foot, band = 0.28, 0.24
-	local capH = math.max(0.45, d * 0.2)
-	local bodyTop = h - capH - band
-	cyl(m, bottom + Vector3.new(0, foot / 2, 0), UP, foot, d * 0.86, "Dark", PROP)
-	cyl(m, bottom + Vector3.new(0, (foot + bodyTop) / 2, 0), UP, bodyTop - foot, d, opts.role or "Body", SOLID, opts.name or "Tank")
-	cyl(m, bottom + Vector3.new(0, bodyTop + band / 2, 0), UP, band, d * 0.9, "Light", PROP)
-	octagon(m, along(bottom + Vector3.new(0, h - capH / 2, 0), UP), d * 1.08, capH, "Pipe", SOLID)
-	cyl(m, bottom + Vector3.new(0, h + 0.03, 0), UP, 0.06, d * 0.62, "Light", TINY)
+	cyl(m, bottom + Vector3.new(0, 0.2, 0), UP, 0.4, d * 1.08, "Frame", PROP)
+	cyl(m, bottom + Vector3.new(0, h / 2, 0), UP, h - 0.4, d, "Pipe", SOLID, opts.name or "Tank")
+	for _, f in { 0.22, 0.86 } do
+		cyl(m, bottom + Vector3.new(0, h * f, 0), UP, 0.28, d * 1.05, "Trim", TINY)
+	end
+	cyl(m, bottom + Vector3.new(0, h - 0.1, 0), UP, 0.3, d * 0.92, "Frame", SOLID)
+	cyl(m, bottom + Vector3.new(0, h + 0.1, 0), UP, 0.16, d * 0.6, "Frame", TINY)
 	if opts.window then
 		local out = opts.window.Unit
-		local gh = (bodyTop - foot) * 0.72
-		local gy = foot + (bodyTop - foot) * 0.5
-		local cf = CFrame.lookAt(bottom + Vector3.new(0, gy, 0) + out * (d / 2), bottom + Vector3.new(0, gy, 0) + out * (d / 2 + 1))
-		block(m, cf * CFrame.new(0, 0, -0.02), Vector3.new(d * 0.3, gh, 0.22), "Light", TINY)
-		block(m, cf * CFrame.new(0, -gh * 0.12, -0.16), Vector3.new(d * 0.18, gh * 0.72, 0.06), "Water", TINY, "TankWater")
-		block(m, cf * CFrame.new(0, 0, -0.19), Vector3.new(d * 0.2, gh * 0.94, 0.04), "Glass", TINY)
+		local gy0, gy1 = h * 0.32, h * 0.76
+		local at = bottom + Vector3.new(0, (gy0 + gy1) / 2, 0) + out * (d / 2)
+		local cf = CFrame.lookAt(at, at + out)
+		block(m, cf * CFrame.new(0, 0, -0.02), Vector3.new(d * 0.34, gy1 - gy0 + 0.3, 0.2), "Frame", TINY)
+		block(m, cf * CFrame.new(0, 0, -0.12), Vector3.new(d * 0.2, gy1 - gy0, 0.08), opts.glow or "Neon", TINY, "TankGlow")
 	end
-	return bottom.Y + h
+	return bottom.Y + h + 0.18
 end
 
--- cog-a: a light gear (8 teeth = 4 crossed bars) round a dark octagonal hole. All parts take `name`.
+-- Round intake funnel on `bottom`: dark neck, silver steps, an octagonal cup with a dark band and a glowing ring, the mouth (`inside`). Returns the rim height.
+local function funnel(m: Instance, bottom: Vector3, d: number, neckH: number, inside: string?): number
+	local x, z = bottom.X, bottom.Z
+	local y = bottom.Y
+	if neckH > 0 then
+		cyl(m, Vector3.new(x, y + neckH / 2, z), UP, neckH, d * 0.42, "Frame", SOLID)
+		y += neckH
+	end
+	local coneH = d * 0.32
+	for i, f in { 0.55, 0.78 } do
+		cyl(m, Vector3.new(x, y + coneH * (i - 0.5) / 2, z), UP, coneH / 2, d * f, "Body", SOLID)
+	end
+	y += coneH
+	local cupH = d * 0.3
+	octagon(m, along(Vector3.new(x, y + cupH / 2, z), UP), d, cupH, "Body", SOLID)
+	octagon(m, along(Vector3.new(x, y + cupH * 0.28, z), UP), d * 1.08, cupH * 0.42, "Frame", SOLID)
+	cyl(m, Vector3.new(x, y + cupH * 0.28, z), UP, 0.12, d * 1.12, "Neon", TINY)
+	local rim = y + cupH
+	octagon(
+		m,
+		along(Vector3.new(x, rim + 0.02, z), UP),
+		d * 0.8,
+		0.06,
+		inside or "Dark",
+		TINY,
+		if inside == "Molten" then "Molten" else nil
+	)
+	return rim
+end
+
+-- A cog (8 teeth) with an orange hub; every part takes `name`.
 local function cog(m: Instance, center: Vector3, axis: Vector3, d: number, thick: number, name: string)
 	local frame = along(center, axis)
-	cyl(m, center, axis, thick, d * 0.8, "Light", PROP, name)
+	cyl(m, center, axis, thick, d * 0.8, "Body", PROP, name)
 	for k = 0, 3 do
-		block(m, frame * CFrame.Angles(k * math.pi / 4 + math.pi / 8, 0, 0), Vector3.new(thick, d, d * 0.17), "Light", TINY, name)
+		block(m, frame * CFrame.Angles(k * math.pi / 4 + math.pi / 8, 0, 0), Vector3.new(thick, d, d * 0.17), "Body", TINY, name)
 	end
-	octagon(m, frame, d * 0.3, thick + 0.06, "Dark", TINY, name)
+	cyl(m, center, axis, thick + 0.08, d * 0.34, "Trim", TINY, name)
 end
 
--- warning-traffic: foot, pole, red / amber / green lamps (green lit), cap. `s` = scale.
+-- Stack light: base box, pole, red / amber / green lamps (green lit), cap.
 local function stackLight(m: Instance, bottom: Vector3, s: number)
-	octagon(m, along(bottom + Vector3.new(0, 0.1 * s, 0), UP), 0.75 * s, 0.2 * s, "Light", TINY)
-	local poleTop = bottom.Y + 2.0 * s
-	cyl(m, Vector3.new(bottom.X, (bottom.Y + poleTop) / 2, bottom.Z), UP, poleTop - bottom.Y, 0.24 * s, "Pipe", PROP)
-	cyl(m, Vector3.new(bottom.X, poleTop, bottom.Z), UP, 0.2 * s, 0.56 * s, "Light", TINY)
+	cbox(m, CFrame.new(bottom + Vector3.new(0, 0.15 * s, 0)), 0.7 * s, 0.3 * s, 0.7 * s, 0.12 * s, "Frame", TINY)
+	local poleTop = bottom.Y + 1.9 * s
+	cyl(m, Vector3.new(bottom.X, (bottom.Y + poleTop) / 2, bottom.Z), UP, poleTop - bottom.Y, 0.22 * s, "Frame", PROP)
 	local lamps: { { name: string, color: Color3 } } = {
 		{ name = "StackGreen", color = P.Green },
 		{ name = "StackAmber", color = P.Amber },
 		{ name = "StackRed", color = P.Red },
 	}
 	for i, lamp in lamps do
-		local part =
-			cyl(m, Vector3.new(bottom.X, poleTop + (0.1 + (i - 0.5) * 0.34) * s, bottom.Z), UP, 0.32 * s, 0.5 * s, "Lamp", TINY, lamp.name)
-		local lit = lamp.name == "StackGreen"
+		local part = cyl(m, Vector3.new(bottom.X, poleTop + (i - 0.5) * 0.34 * s, bottom.Z), UP, 0.3 * s, 0.48 * s, "Lamp", TINY, lamp.name)
 		part.Color = lamp.color:Lerp(BLACK, 0.3)
-		part.Material = if lit then NEON else SMOOTH
+		part.Material = if lamp.name == "StackGreen" then NEON else SMOOTH
 	end
-	cyl(m, Vector3.new(bottom.X, poleTop + 1.2 * s, bottom.Z), UP, 0.18 * s, 0.56 * s, "Light", TINY)
+	cyl(m, Vector3.new(bottom.X, poleTop + 1.1 * s, bottom.Z), UP, 0.16 * s, 0.54 * s, "Frame", TINY)
 end
 
--- screen-panel-small standing on `cf` (bottom centre, screen toward -Z): light frame, dark screen, a green bar.
-local function screenPanel(m: Instance, cf: CFrame, w: number, h: number)
-	block(m, cf * CFrame.new(0, h / 2, 0), Vector3.new(w, h, 0.4), "Light", PROP)
-	block(m, cf * CFrame.new(0, h * 0.55, -0.21), Vector3.new(w - 0.36, h * 0.6, 0.05), "Screen", TINY, "Screen")
-	block(m, cf * CFrame.new(-w * 0.12, h * 0.47, -0.245), Vector3.new((w - 0.36) * 0.55, 0.14, 0.03), "ScreenGlow", TINY, "LampBulb")
-	block(m, cf * CFrame.new(w * 0.2, h * 0.68, -0.245), Vector3.new(0.18, 0.18, 0.03), "ScreenGlow", TINY)
+--[[
+	Screen panel on `cf` (bottom centre, screen toward -Z): a gunmetal box,
+	the screen painted with a bright chart, a glowing bar under it.
+]]
+local function screenPanel(m: Instance, cf: CFrame, w: number, h: number, color: Color3?)
+	cbox(m, cf * CFrame.new(0, h / 2, 0), w, h, 0.45, 0.12, "Frame", PROP)
+	local glow = color or P.ScreenGlow
+	local screen = block(m, cf * CFrame.new(0, h * 0.56, -0.24), Vector3.new(w - 0.34, h * 0.56, 0.05), "Screen", TINY, "Screen")
+	paint(screen, Enum.NormalId.Front, {
+		{ x = 0.08, y = 0.14, w = 0.5, h = 0.07, color = glow },
+		{ x = 0.08, y = 0.34, w = 0.32, h = 0.07, color = glow },
+		{ x = 0.08, y = 0.6, w = 0.14, h = 0.26, color = glow },
+		{ x = 0.28, y = 0.48, w = 0.14, h = 0.38, color = glow },
+		{ x = 0.48, y = 0.68, w = 0.14, h = 0.18, color = glow },
+		{ x = 0.72, y = 0.14, w = 0.18, h = 0.3, color = glow, round = true },
+	})
+	local bulb = block(m, cf * CFrame.new(0, h * 0.18, -0.24), Vector3.new(w * 0.5, 0.1, 0.04), "ScreenGlow", TINY, "LampBulb")
+	bulb.Color = glow
 end
 
--- Output chute: a dark slide with light lips from the housing face toward the Output.
-local function chute(m: Instance, x: number, fromZ: number, toZ: number, fromY: number, toY: number, w: number)
-	local a, b = Vector3.new(x, fromY, fromZ), Vector3.new(x, toY, toZ)
+-- Output chute from `a` to `b`: a dark slide with silver lips and glowing edges.
+local function chute(m: Instance, a: Vector3, b: Vector3, w: number)
 	local cf = CFrame.lookAt((a + b) / 2, b)
 	local len = (b - a).Magnitude
 	block(m, cf, Vector3.new(w, 0.2, len), "Dark", PROP, "Chute")
 	for _, side in { -1, 1 } do
-		block(m, cf * CFrame.new(side * (w / 2 + 0.06), 0.14, 0), Vector3.new(0.14, 0.42, len), "Light", TINY, "ChuteLip")
+		block(m, cf * CFrame.new(side * (w / 2 + 0.07), 0.14, 0), Vector3.new(0.14, 0.44, len), "Body", TINY, "ChuteLip")
+		block(m, cf * CFrame.new(side * (w / 2 + 0.15), 0.12, 0), Vector3.new(0.03, 0.08, len - 0.2), "Neon", TINY, "ChuteLip")
+	end
+end
+
+-- Yellow robot arm from `base` (standing on it) through `elbow` to `hand` (claw pointing down).
+local function robotArm(m: Instance, base: Vector3, elbow: Vector3, hand: Vector3, s: number)
+	cbox(m, CFrame.new(base + Vector3.new(0, 0.2 * s, 0)), 1.2 * s, 0.4 * s, 1.2 * s, 0.25 * s, "Frame", SOLID)
+	cyl(m, base + Vector3.new(0, 0.62 * s, 0), UP, 0.45 * s, 0.85 * s, "Yellow", SOLID)
+	local shoulder = base + Vector3.new(0, 1.0 * s, 0)
+	ball(m, shoulder, 0.62 * s, "Frame", PROP)
+	bar(m, shoulder, elbow, 0.42 * s, 0.42 * s, "Yellow", PROP)
+	ball(m, elbow, 0.56 * s, "Frame", PROP)
+	bar(m, elbow, hand, 0.36 * s, 0.36 * s, "Yellow", PROP)
+	cyl(m, hand, UP, 0.32 * s, 0.5 * s, "Frame", TINY)
+	for _, side in { -1, 1 } do
+		block(m, CFrame.new(hand + Vector3.new(side * 0.16 * s, -0.36 * s, 0)), Vector3.new(0.09 * s, 0.42 * s, 0.24 * s), "Dark", TINY)
 	end
 end
 
 ---------------------------------------------------------------- crystals
 
---[[
-	One crystal (like the mine's crystals): a diamond-section body, a darker
-	facet block through it (alternating light and dark faces), a ridge tip.
-	`base` = bottom centre, up = growth. 3-4 parts.
-]]
 local function shard(m: Instance, base: CFrame, height: number, width: number, color: Color3, glowTip: boolean, clear: boolean)
 	local bodyH = height * 0.72
 	local tipH = height - bodyH
-	local light, dark = color:Lerp(WHITE, 0.2), color:Lerp(BLACK, 0.26)
+	local lightC, darkC = color:Lerp(WHITE, 0.2), color:Lerp(BLACK, 0.26)
 	local material = if clear then GLASS else SMOOTH
 	local transparency = if clear then 0.18 else 0
 	local cf = base * CFrame.Angles(0, math.pi / 4, 0)
 	local body = block(m, cf * CFrame.new(0, bodyH / 2, 0), Vector3.new(width, bodyH, width), "Crystal", TINY, "Crystal")
-	body.Color, body.Material, body.Transparency = light, material, transparency
+	body.Color, body.Material, body.Transparency = lightC, material, transparency
 	if width >= 0.55 then
 		local facet = block(
 			m,
@@ -599,7 +682,7 @@ local function shard(m: Instance, base: CFrame, height: number, width: number, c
 			TINY,
 			"CrystalFacet"
 		)
-		facet.Color, facet.Material, facet.Transparency = dark, material, transparency * 0.5
+		facet.Color, facet.Material, facet.Transparency = darkC, material, transparency * 0.5
 	end
 	local tipAt = cf * CFrame.new(0, bodyH + tipH / 2, 0)
 	-- glowing tips stay close to the crystal colour (a white Neon blooms into a blob)
@@ -675,10 +758,10 @@ local GROWTH = {
 }
 
 --[[
-	Upgrade look: crystal clusters on the machine's sockets (more and bigger
-	per level), then the machine itself turns to crystal by colour role:
-	level 2 the orange trims, level 3 the light frames, flanges and pipes,
-	level 4 the body (see-through crystal with a glowing inside).
+	Upgrade look: crystal clusters on the sockets (more and bigger per level),
+	then the machine turns to crystal by colour role: level 2 the orange glow
+	and trims, level 3 the gunmetal frames and pipes, level 4 the silver body
+	(see-through crystal, glowing inside).
 ]]
 local function crystalize(ctx: Ctx, level: number, theme: Theme)
 	if level <= 0 then
@@ -702,23 +785,23 @@ local function crystalize(ctx: Ctx, level: number, theme: Theme)
 	if level >= 4 and top then
 		cluster(crystals, top.cf, 5, top.size * 2.3, theme, rng, true, true)
 	end
-	-- repaint by role; frames stay opaque and lighter than the body so the
-	-- shapes keep reading, only the inside (Dark) glows
 	for _, d in ctx.model:GetDescendants() do
 		if d:IsA("BasePart") then
 			local role = d:GetAttribute("Kit")
-			if role == "Trim" and level >= 2 then
+			if role == "Neon" and level >= 2 then
+				d.Color = theme.Main
+			elseif role == "Trim" and level >= 2 then
 				d.Color = if level >= 4 then theme.Deep else theme.Main
-			elseif role == "Light" and level >= 3 then
-				d.Color = theme.Pale
+			elseif role == "Frame" and level >= 3 then
+				d.Color = theme.Deep:Lerp(theme.Main, 0.25)
 				d.Material = GLASS
-				d.Transparency = 0.04
+				d.Transparency = 0.05
 			elseif role == "Pipe" and level >= 3 then
 				d.Color = theme.Main:Lerp(theme.Deep, 0.4)
 				d.Material = GLASS
 				d.Transparency = 0.06
 			elseif role == "Body" and level >= 4 then
-				d.Color = theme.Main
+				d.Color = theme.Main:Lerp(theme.Pale, 0.3)
 				d.Material = GLASS
 				d.Transparency = 0.1
 			elseif role == "Dark" and level >= 4 then
@@ -735,10 +818,10 @@ local function crystalize(ctx: Ctx, level: number, theme: Theme)
 	end
 end
 
--- A crystal socket at `pos` growing along `up` (tilted outward a bit).
+-- A crystal socket at `pos` growing along `up`.
 local function socket(ctx: Ctx, pos: Vector3, up: Vector3, size: number, hero: boolean?)
 	local u = up.Unit
-	local ref = if math.abs(u.Y) < 0.95 then UP else Vector3.zAxis
+	local ref = if math.abs(u.Y) < 0.95 then UP else ZA
 	local x = ref:Cross(u).Unit
 	local z = x:Cross(u)
 	table.insert(ctx.sockets, { cf = CFrame.fromMatrix(pos, x, u, z), size = size, hero = hero })
@@ -758,58 +841,53 @@ local function newModel(id: string): Ctx
 	model.Name = id
 	model:SetAttribute("MachineId", id)
 	local base = block(model, CFrame.new(0, FLOOR / 2, 0), Vector3.new(w - 0.3, FLOOR, d - 0.3), "Floor", SOLID, "Base")
+	paint(base, Enum.NormalId.Top, {
+		{ x = 0, y = 0, w = 1, h = 0.04, color = P.Trim, stripes = 16 },
+		{ x = 0, y = 0.96, w = 1, h = 0.04, color = P.Trim, stripes = 16 },
+	})
 	model.PrimaryPart = base :: any
 	return { model = model, base = base, sockets = {} }
 end
 
 --[[
-	Clay Furnace (2x2): a machine-connection-pipe housing with the glowing
-	furnace mouth in its arch, a round hopper on the lid (the intake), a
-	flanged chimney, a fuel tank whose pipe bends into the side, the output
-	chute at the front right.
+	Clay Furnace (2x2): a chamfered silver housing with a glowing furnace
+	door, a round intake funnel on the lid, a chimney with glowing rings, a
+	fuel tank with a glowing window whose pipe bends into the chimney, a
+	chute from the door to the output, a side screen.
 ]]
 local function clayFurnace(): Ctx
 	local ctx = newModel("ClayFurnace")
 	local m = ctx.model
-	local hx, hz, w, h, d = -0.4, -0.2, 5.6, 4.6, 5.6
-	housing(
-		m,
-		CFrame.new(hx, FLOOR, hz),
-		w,
-		h,
-		d,
-		{ arch = { w = 2.4, h = 2.0, x = -0.9, bottom = 0.8, fill = "Glow", name = "Glow" }, cap = false }
-	)
-	local top = FLOOR + h
-	local rim = hopperRound(m, Vector3.new(-1.3, top, -0.9), 2.9, 1.3, 0.3)
-	-- chimney: connection-pipe neck on the lid, a long flanged pipe, a dark mouth with smoke
-	local cx, cz = 1.15, 1.25
-	octagon(m, along(Vector3.new(cx, top + 0.3, cz), UP), 2.0, 0.6, "Light", SOLID)
-	pipe(m, Vector3.new(cx, top + 0.6, cz), Vector3.new(cx, top + 2.4, cz), 1.15, { b = true })
-	pipe(m, Vector3.new(cx, top + 2.4, cz), Vector3.new(cx, top + 4.2, cz), 1.15, { a = false, openB = true })
-	local mouth = cyl(m, Vector3.new(cx, top + 4.25, cz), UP, 0.05, 0.85, "Dark", TINY, "ChimneyTop")
-	smoke(mouth, 2)
-	-- fuel tank on the right; its pipe climbs and bends into the housing side
-	local tx, tz = 3.05, 1.6
-	local tankTop = tank(m, Vector3.new(tx, FLOOR, tz), 1.5, 3.1)
-	local p0 = Vector3.new(tx, tankTop + 0.35, tz)
-	rod(m, Vector3.new(tx, tankTop, tz), p0, 0.6, "Pipe", PROP)
-	local p1 = bend(m, p0, UP, -Vector3.xAxis, 0.6, 0.55)
-	pipe(m, p1, Vector3.new(hx + w / 2 - 0.05, p1.Y, tz), 0.6, { a = false })
-	-- output chute toward the shared output cell
+	local hx, hz, w, h, d, c = 0.2, -0.15, 5.8, 5.0, 5.6, 0.8
+	local top = FLOOR + housing(m, CFrame.new(hx, FLOOR, hz), w, h, d, c)
+	local front = hz - d / 2
+	local doorX = 0.75
+	doorway(m, CFrame.new(doorX, FLOOR + 0.6, front), 2.2, 2.3, { fill = "Glow", name = "Glow" })
+	local rim = funnel(m, Vector3.new(1.35, top, -0.75), 2.3, 0)
+	-- chimney at the back left; the tank's pipe climbs and bends into it
+	local cx, cz = -0.95, 1.45
+	chimney(m, Vector3.new(cx, top - 0.2, cz), 1.05, 4.6, 2)
+	local tx, tz = -3.15, cz
+	local tankTop = tank(m, Vector3.new(tx, FLOOR, tz), 1.25, 3.4, { window = -ZA })
+	local pd, r = 0.55, 0.5
+	local p0 = Vector3.new(tx, top + 0.45, tz)
+	pipe(m, Vector3.new(tx, tankTop, tz), p0, pd, { b = false })
+	local p1 = bend(m, p0, UP, XA, pd, r)
+	pipe(m, p1, Vector3.new(cx - 0.6, p1.Y, tz), pd, { a = false })
+	-- chute from the door sill to the shared output cell
 	local outPos = Grid.outputLocal("ClayFurnace") :: Vector3
-	chute(m, outPos.X, hz - d / 2 + 0.1, outPos.Z + 0.3, 2.0, outPos.Y - 0.25, 1.5)
-	block(m, CFrame.new(outPos.X, 2.45, hz - d / 2 - 0.05), Vector3.new(1.6, 0.9, 0.2), "Dark", TINY)
+	chute(m, Vector3.new(doorX, FLOOR + 0.75, front - 0.35), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.3)
+	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, FLOOR + 0.6, 1.0) * CFrame.Angles(0, math.pi / 2, 0), 1.3, 1.6)
 
-	socket(ctx, Vector3.new(hx - w / 2 + 0.5, top, hz - d / 2 + 0.6), out(-1, -1), 1.3)
-	socket(ctx, Vector3.new(tx, tankTop + 0.05, tz + 0.3), out(1, 0.4, 0.3), 1.0)
-	socket(ctx, Vector3.new(hx - w / 2 + 0.5, top, hz + d / 2 - 0.5), out(-1, 1), 1.2)
+	socket(ctx, Vector3.new(hx - w / 2 + 0.6, top - 0.2, front + 0.6), out(-1, -1), 1.3)
+	socket(ctx, Vector3.new(tx, tankTop, tz + 0.2), out(-0.4, 1, 0.3), 1.0)
+	socket(ctx, Vector3.new(hx + w / 2 - 0.6, top - 0.2, hz + d / 2 - 0.6), out(1, 1), 1.2)
 	socket(ctx, Vector3.new(-3.4, FLOOR, -3.3), out(-1, -1, 0.8), 1.1)
-	socket(ctx, Vector3.new(cx + 0.8, top, cz + 1.0), out(1, 1), 1.0)
 	socket(ctx, Vector3.new(3.4, FLOOR, 3.3), out(1, 1, 0.8), 1.0)
-	socket(ctx, Vector3.new(-1.3 - 1.5, rim - 0.6, -0.9), out(-1, 0, 0.9), 0.9)
-	socket(ctx, Vector3.new(hx + w / 2, FLOOR + 3.0, hz - 1.6), Vector3.new(1, 0.6, 0), 0.9)
-	socket(ctx, Vector3.new(cx, top + 4.3, cz), UP, 1.0, true)
+	socket(ctx, Vector3.new(hx + w / 2 - 0.6, top - 0.2, front + 0.6), out(1, -1), 1.0)
+	socket(ctx, Vector3.new(1.35 + 1.1, rim - 0.5, -0.75), out(1, 0, 0.9), 0.9)
+	socket(ctx, Vector3.new(hx - w / 2, FLOOR + 3.2, hz - 1.4), Vector3.new(-1, 0.6, 0), 0.9)
+	socket(ctx, Vector3.new(cx, top + 4.45, cz), UP, 1.0, true)
 
 	attach(ctx.base, "Output", CFrame.new(outPos))
 	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.6))
@@ -819,53 +897,74 @@ local function clayFurnace(): Ctx
 end
 
 --[[
-	Crusher (2x2): a machine-window housing (the toothed rollers show
-	through the side window), a square hopper on top (the intake), two cogs
-	on the right side, the output coming out of the front arch, a stack light.
+	Crusher (2x2): a chamfered housing under a big hollow hopper (dark rim
+	with a glowing band) with the two toothed rollers turning inside it, the
+	output on a chute out of the front opening, cogs on the left side, a
+	screen on the right, a stack light.
 ]]
 local function crusher(): Ctx
 	local ctx = newModel("Crusher")
 	local m = ctx.model
-	local hx, hz, w, h, d = -0.35, -0.1, 5.6, 4.1, 5.4
+	local hx, hz, w, h, d, c = 0.2, 0.3, 5.6, 3.7, 5.0, 0.65
+	local top = FLOOR + housing(m, CFrame.new(hx, FLOOR, hz), w, h, d, c, { lid = 0.5 })
 	local outPos = Grid.outputLocal("Crusher") :: Vector3
-	housing(m, CFrame.new(hx, FLOOR, hz), w, h, d, {
-		arch = { w = 1.9, h = 1.5, x = outPos.X - hx, bottom = 0.7, fill = "Dark" },
-		window = { side = -1, w = 2.8, h = 1.9, y = 2.2, z = 0.2 },
-		cap = false,
-	})
-	local top = FLOOR + h
-	-- rollers behind the window: dark drums with brass-less light teeth, seen end-on
-	for i, zc in { -0.5, 0.9 } do
-		local c = Vector3.new(hx - w / 2 + 0.55, FLOOR + 2.2, hz + zc)
-		cyl(m, c, Vector3.xAxis, 0.6, 1.15, "Dark", TINY, "Roller" .. i)
+	local front = hz - d / 2
+	local doorX = 1.45
+	doorway(m, CFrame.new(doorX, FLOOR + 0.6, front), 1.4, 1.4, { fill = "Dark" })
+	chute(m, Vector3.new(doorX, FLOOR + 0.75, front - 0.3), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.2)
+	-- hopper: a solid silver funnel, then a dark rim box with a glowing band;
+	-- inside the rim a dark floor with the two toothed rollers half sunk in it
+	local hy = top
+	local bottomW, topW, fh = 2.8, 4.9, 1.3
+	local run = (topW - bottomW) / 2
+	local sideW = topW * 0.78 + bottomW * 0.22
+	for i = 0, 3 do
+		local a = i * math.pi / 2
+		local outDir = Vector3.new(math.sin(a), 0, -math.cos(a))
+		slope(m, Vector3.new(hx, hy + fh / 2, hz) + outDir * (bottomW / 2 + run / 2), -UP, outDir, sideW, fh, run, "Body", SOLID)
+	end
+	block(m, CFrame.new(hx, hy + fh / 2, hz), Vector3.new(bottomW, fh, bottomW), "Body", SOLID)
+	local rimH = 1.0
+	local rimY = hy + fh
+	for i = 0, 3 do
+		local a = i * math.pi / 2
+		local outDir = Vector3.new(math.sin(a), 0, -math.cos(a))
+		local at = Vector3.new(hx, rimY + rimH / 2, hz) + outDir * (topW / 2 - 0.2)
+		local cf = CFrame.lookAt(at, at + outDir)
+		block(m, cf, Vector3.new(topW + 0.4, rimH, 0.4), "Frame", SOLID)
+		block(m, cf * CFrame.new(0, 0.05, -0.22), Vector3.new(topW - 0.2, 0.14, 0.05), "Neon", TINY)
+	end
+	block(m, CFrame.new(hx, rimY + 0.1, hz), Vector3.new(topW - 0.4, 0.2, topW - 0.4), "Dark", SOLID)
+	for i, zc in { -0.55, 0.55 } do
+		local center = Vector3.new(hx, rimY + 0.35, hz + zc)
+		cyl(m, center, XA, topW - 0.9, 0.9, "Frame", TINY, "Roller" .. i)
 		for k = 0, 1 do
 			block(
 				m,
-				along(c, Vector3.xAxis) * CFrame.Angles(k * math.pi / 2 + i * 0.4, 0, 0),
-				Vector3.new(0.5, 1.45, 0.26),
-				"Light",
+				along(center, XA) * CFrame.Angles(k * math.pi / 2 + i * 0.4, 0, 0),
+				Vector3.new(topW - 1.1, 1.15, 0.2),
+				"Trim",
 				TINY,
 				"Roller" .. i .. "Tooth"
 			)
 		end
 	end
-	local rim = top + hopperSquare(m, CFrame.new(hx, top, hz + 0.1), 2.4, 4.4, 1.2, 1.4)
-	-- cogs on the right side
-	local sx = hx + w / 2 + 0.24
-	cog(m, Vector3.new(sx, FLOOR + 2.15, hz + 0.75), Vector3.xAxis, 2.7, 0.36, "Cog1")
-	cog(m, Vector3.new(sx + 0.02, FLOOR + 3.05, hz - 1.1), Vector3.xAxis, 1.85, 0.36, "Cog2")
-	stackLight(m, Vector3.new(-3.3, FLOOR, 3.25), 1.0)
-	chute(m, outPos.X, hz - d / 2 + 0.2, outPos.Z + 0.3, 1.25, outPos.Y - 0.25, 1.4)
+	rimY += rimH - 0.6
+	local sx = hx - w / 2 - 0.24
+	cog(m, Vector3.new(sx, FLOOR + 2.1, hz + 0.8), XA, 2.3, 0.36, "Cog1")
+	cog(m, Vector3.new(sx - 0.02, FLOOR + 2.85, hz - 0.95), XA, 1.6, 0.36, "Cog2")
+	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, FLOOR + 0.6, hz + 0.6) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.8, P.Water)
+	stackLight(m, Vector3.new(-3.3, FLOOR, 3.3), 1.0)
 
-	socket(ctx, Vector3.new(hx + w / 2 - 0.5, top, hz - d / 2 + 0.5), out(1, -1), 1.2)
-	socket(ctx, Vector3.new(hx - w / 2 + 0.5, top, hz + d / 2 - 0.5), out(-1, 1), 1.2)
+	socket(ctx, Vector3.new(hx + w / 2 - 0.5, top - 0.2, front + 0.5), out(1, -1), 1.2)
+	socket(ctx, Vector3.new(hx - w / 2 + 0.5, top - 0.2, hz + d / 2 - 0.5), out(-1, 1), 1.2)
 	socket(ctx, Vector3.new(-3.4, FLOOR, -3.3), out(-1, -1, 0.8), 1.1)
-	socket(ctx, Vector3.new(hx - 2.3, rim - 1.0, hz + 0.1 - 2.3), out(-1, -1, 0.9), 0.9)
-	socket(ctx, Vector3.new(3.4, FLOOR, 3.2), out(1, 1, 0.8), 1.0)
-	socket(ctx, Vector3.new(hx + w / 2 - 0.5, top, hz + d / 2 - 0.5), out(1, 1), 1.0)
-	socket(ctx, Vector3.new(hx + 2.3, rim - 1.0, hz + 0.1 + 2.3), out(1, 1, 0.9), 0.9)
-	socket(ctx, Vector3.new(hx - w / 2, FLOOR + 3.5, hz - 1.8), Vector3.new(-1, 0.6, 0), 0.8)
-	socket(ctx, Vector3.new(hx, rim + 0.05, hz + 0.1), UP, 1.0, true)
+	socket(ctx, Vector3.new(hx - topW / 2, rimY + 0.6, hz - topW / 2), out(-1, -1, 0.9), 0.9)
+	socket(ctx, Vector3.new(3.4, FLOOR, 3.3), out(1, 1, 0.8), 1.0)
+	socket(ctx, Vector3.new(hx + topW / 2, rimY + 0.6, hz + topW / 2), out(1, 1, 0.9), 0.9)
+	socket(ctx, Vector3.new(hx + w / 2 - 0.5, top - 0.2, hz + d / 2 - 0.5), out(1, 1), 1.0)
+	socket(ctx, Vector3.new(hx - w / 2, FLOOR + 3.4, hz - 2.0), Vector3.new(-1, 0.6, 0), 0.8)
+	socket(ctx, Vector3.new(hx + topW / 2, rimY + 0.6, hz - topW / 2), out(1, -1, 0.5), 1.0, true)
 
 	attach(ctx.base, "Output", CFrame.new(outPos))
 	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.2))
@@ -875,11 +974,12 @@ local function crusher(): Ctx
 end
 
 --[[
-	Cleaning Plant / Auto Cleaner (2x2): a conveyor-bars-stripe-high bed
-	runs through a scanner-high arch; a water tank (glass gauge) feeds a
-	pipe that climbs, runs through a glass section and a valve and bends
-	down into the arch's shower head; a robot arm scrubs with a brush drum; a
-	round hopper over the back of the bed is the intake; a stack light.
+	Cleaning Plant / Auto Cleaner (2x2): a roller bed (gunmetal, silver
+	rails with hazard stripes, glowing strips, a glowing water tray) through
+	a gantry whose beam holds the shower head; a brush drum in front of it;
+	a water tank with a glowing glass column feeds a pipe over the top: glass
+	section with glowing water and a coil, a valve, down into the beam; a
+	round intake funnel over the back of the bed; a stack light; a vent.
 ]]
 local function autoCleaner(): Ctx
 	local ctx = newModel("AutoCleaner")
@@ -889,33 +989,36 @@ local function autoCleaner(): Ctx
 	local z0, z1 = -3.85, 3.7
 	local len = z1 - z0
 	local bz = (z0 + z1) / 2
-	-- bed: body, light rails with an orange stripe, rollers over a shallow water tray
-	block(m, CFrame.new(bx, FLOOR + 0.5, bz), Vector3.new(bw - 0.4, 1.0, len), "Body", SOLID, "Bed")
+	block(m, CFrame.new(bx, FLOOR + 0.5, bz), Vector3.new(bw - 0.4, 1.0, len), "Frame", SOLID, "Bed")
 	for _, side in { -1, 1 } do
-		block(m, CFrame.new(bx + side * (bw / 2 - 0.2), FLOOR + 0.85, bz), Vector3.new(0.4, 1.7, len), "Light", SOLID)
-		block(m, CFrame.new(bx + side * (bw / 2 + 0.01), FLOOR + 1.2, bz), Vector3.new(0.04, 0.24, len), "Trim", TINY)
+		local railPart = block(m, CFrame.new(bx + side * (bw / 2 - 0.2), FLOOR + 0.85, bz), Vector3.new(0.4, 1.7, len), "Body", SOLID)
+		paint(railPart, if side > 0 then Enum.NormalId.Right else Enum.NormalId.Left, {
+			{ x = 0, y = 0.82, w = 1, h = 0.18, color = P.Trim, stripes = 24 },
+		})
+		block(m, CFrame.new(bx + side * (bw / 2 + 0.02), FLOOR + 1.15, bz), Vector3.new(0.05, 0.16, len - 0.8), "Neon", TINY)
 	end
-	block(m, CFrame.new(bx, FLOOR + 1.05, bz), Vector3.new(bw - 0.8, 0.1, len - 0.2), "Water", TINY, "WaterPool").Transparency =
-		WATER_POOL_TRANSPARENCY
+	local pool = block(m, CFrame.new(bx, FLOOR + 1.05, bz), Vector3.new(bw - 0.8, 0.1, len - 0.2), "Water", TINY, "WaterPool")
+	pool.Material = SMOOTH
+	pool.Transparency = POOL_TRANSPARENCY
 	for i = 0, 5 do
-		cyl(m, Vector3.new(bx, FLOOR + 1.35, z0 + 0.6 + i * (len - 1.2) / 5), Vector3.xAxis, bw - 0.8, 0.66, "Light", SOLID, "BedRoller")
+		cyl(m, Vector3.new(bx, FLOOR + 1.35, z0 + 0.6 + i * (len - 1.2) / 5), XA, bw - 0.8, 0.66, "Body", SOLID, "BedRoller")
 	end
-	-- scanner-high arch over the bed with the shower head
-	local az = -0.5
-	local legX = { bx - bw / 2 - 0.15, bx + bw / 2 + 0.05 }
-	local archTop = FLOOR + 5.0
+	-- gantry: two chamfered silver pillars with glowing strips, a gunmetal beam
+	local az = -0.4
+	local legX = { bx - bw / 2 - 0.25, bx + bw / 2 - 0.15 }
+	local beamY = FLOOR + 5.0
 	for _, lx in legX do
-		block(m, CFrame.new(lx, FLOOR + 0.3, az), Vector3.new(0.85, 0.6, 0.85), "Trim", SOLID)
-		block(m, CFrame.new(lx, (FLOOR + 0.6 + archTop) / 2, az), Vector3.new(0.6, archTop - FLOOR - 0.6, 0.6), "Body", SOLID)
-		block(m, CFrame.new(lx, archTop - 0.9, az), Vector3.new(0.72, 0.3, 0.72), "Light", TINY)
-		ball(m, Vector3.new(lx, archTop, az), 0.85, "Body", PROP)
+		cbox(m, CFrame.new(lx, (FLOOR + beamY) / 2, az), 0.75, beamY - FLOOR, 0.75, 0.18, "Body", SOLID)
+		block(m, CFrame.new(lx, FLOOR + 0.3, az), Vector3.new(0.95, 0.6, 0.95), "Trim", SOLID)
+		block(m, CFrame.new(lx, (FLOOR + beamY) / 2 + 0.3, az - 0.4), Vector3.new(0.16, beamY - FLOOR - 2.0, 0.05), "Neon", TINY)
 	end
-	rod(m, Vector3.new(legX[1], archTop, az), Vector3.new(legX[2], archTop, az), 0.85, "Body", SOLID, "Arch")
-	local head = block(m, CFrame.new(bx, archTop - 0.6, az), Vector3.new(1.5, 0.3, 0.6), "Light", TINY, "ShowerHead")
+	cbox(m, CFrame.new(bx, beamY, az), legX[2] - legX[1] + 0.75, 0.8, 0.85, 0.15, "Frame", SOLID, "Arch")
+	block(m, CFrame.new(bx, beamY - 0.42, az - 0.43), Vector3.new(legX[2] - legX[1] - 0.6, 0.1, 0.05), "Neon", TINY)
+	local head = block(m, CFrame.new(bx, beamY - 0.55, az), Vector3.new(1.6, 0.3, 0.6), "Body", TINY, "ShowerHead")
 	for i = -1, 1 do
-		block(m, head.CFrame * CFrame.new(i * 0.45, -0.18, 0), Vector3.new(0.18, 0.08, 0.3), "Dark", TINY)
+		block(m, head.CFrame * CFrame.new(i * 0.45, -0.18, 0), Vector3.new(0.2, 0.08, 0.32), "Water", TINY)
 	end
-	local outlet = Vector3.new(bx, archTop - 0.8, az)
+	local outlet = Vector3.new(bx, beamY - 0.75, az)
 	local landing = Vector3.new(bx, FLOOR + 1.9, az)
 	local wo = attach(ctx.base, "WaterOut", CFrame.lookAt(outlet, outlet - UP))
 	wo.Axis = -UP
@@ -924,58 +1027,59 @@ local function autoCleaner(): Ctx
 	local wi = attach(ctx.base, "WaterIn", CFrame.new(landing))
 	wi.Axis = -UP
 	wi:SetAttribute("Curve", 0.3)
-	-- water tank (glass gauge to the front) and its pipe: up, over, glass run, valve, down into the arch
-	local tx, tz, td = -2.15, az, 2.6
-	local tankTop = tank(m, Vector3.new(tx, FLOOR, tz), td, 4.0, { window = -Vector3.zAxis, name = "WaterTank" })
-	local pd, r = 0.75, 0.6
-	local runY = archTop + 1.35
-	local p0 = Vector3.new(tx, runY - r, tz)
-	pipe(m, Vector3.new(tx, tankTop, tz), p0, pd, { b = false, bolts = false })
-	local p1 = bend(m, p0, UP, Vector3.xAxis, pd, r)
-	local endX = bx - r
-	local glassFrom, glassTo = p1.X + 0.35, endX - 1.1
-	pipe(m, p1, Vector3.new(glassFrom, runY, tz), pd, { a = false, bolts = false })
-	pipe(m, Vector3.new(glassFrom, runY, tz), Vector3.new(glassTo, runY, tz), pd, { fluid = "Water" })
-	pipe(m, Vector3.new(glassTo, runY, tz), Vector3.new(endX, runY, tz), pd, { b = false, bolts = false })
-	valve(m, Vector3.new((glassTo + endX) / 2 + 0.05, runY, tz), Vector3.xAxis, pd, -Vector3.zAxis)
-	local p2 = bend(m, Vector3.new(endX, runY, tz), Vector3.xAxis, -UP, pd, r)
-	pipe(m, p2, Vector3.new(bx, archTop + 0.3, tz), pd, { a = false, bolts = false })
-	-- robot arm with the brush drum, front left
-	local ax, azArm = -1.75, -2.55
-	octagon(m, along(Vector3.new(ax, FLOOR + 0.18, azArm), UP), 1.5, 0.36, "Light", SOLID)
-	cyl(m, Vector3.new(ax, FLOOR + 0.75, azArm), UP, 0.8, 1.0, "Body", SOLID)
-	local shoulder = Vector3.new(ax, FLOOR + 1.45, azArm)
-	cyl(m, shoulder, -Vector3.zAxis, 0.9, 0.75, "Trim", TINY, "ArmJoint")
-	local elbow = Vector3.new(ax + 0.85, FLOOR + 3.45, azArm)
-	local wrist = Vector3.new(bx - 0.95, FLOOR + 2.65, azArm)
-	block(m, CFrame.lookAt((shoulder + elbow) / 2, elbow), Vector3.new(0.55, 0.55, (elbow - shoulder).Magnitude), "Body", PROP)
-	cyl(m, elbow, -Vector3.zAxis, 0.8, 0.68, "Trim", TINY, "ArmJoint")
-	block(m, CFrame.lookAt((elbow + wrist) / 2, wrist), Vector3.new(0.48, 0.48, (wrist - elbow).Magnitude), "Body", PROP)
-	cyl(m, wrist, Vector3.xAxis, 0.5, 0.6, "Light", TINY)
-	local drumC = Vector3.new(bx - 0.1, FLOOR + 2.35, azArm)
-	cyl(m, drumC, Vector3.xAxis, 1.7, 0.8, "Body", PROP, "Drum").Color = P.Bristle
-	for _, dx in { -0.55, 0, 0.55 } do
-		cyl(m, drumC + Vector3.new(dx, 0, 0), Vector3.xAxis, 0.22, 1.05, "Body", TINY, "DrumRib").Color = P.Bristle:Lerp(WHITE, 0.25)
+	-- brush drum on two arms in front of the gantry
+	local drumZ = az - 1.35
+	local drumY = FLOOR + 2.45
+	for _, lx in legX do
+		block(m, CFrame.new(lx, drumY + 0.25, (az + drumZ) / 2), Vector3.new(0.3, 0.3, az - drumZ), "Frame", PROP)
 	end
-	-- intake: round hopper on a neck over the back of the bed
-	local rim = hopperRound(m, Vector3.new(bx, FLOOR + 1.9, 2.35), 2.7, 1.0, 1.1)
+	local drumC = Vector3.new(bx, drumY, drumZ)
+	local drum = cyl(m, drumC, XA, bw - 0.6, 0.8, "Body", PROP, "Drum")
+	drum.Color = P.Bristle
+	for _, dx in { -0.85, 0, 0.85 } do
+		local rib = cyl(m, drumC + Vector3.new(dx, 0, 0), XA, 0.22, 1.05, "Body", TINY, "DrumRib")
+		rib.Color = P.Bristle:Lerp(WHITE, 0.25)
+	end
+	cyl(m, drumC, XA, bw - 0.4, 0.3, "Trim", TINY)
+	-- water tank with the glowing glass column, the pipe over the top
+	local tx, tz, td = -2.35, az, 2.2
+	local tankTop = tank(m, Vector3.new(tx, FLOOR, tz), td, 4.2, { name = "WaterTank" })
+	local colZ = tz - td / 2 - 0.45
+	cbox(m, CFrame.new(tx, FLOOR + 0.35, colZ), 0.9, 0.7, 0.9, 0.2, "Frame", SOLID)
+	pipe(m, Vector3.new(tx, FLOOR + 0.7, colZ), Vector3.new(tx, FLOOR + 3.9, colZ), 0.6, { fluid = "Water" })
+	cbox(m, CFrame.new(tx, FLOOR + 4.05, colZ), 0.8, 0.3, 0.8, 0.18, "Frame", TINY)
+	local pd, r = 0.75, 0.6
+	local runY = beamY + 1.3
+	local p0 = Vector3.new(tx, runY - r, tz)
+	pipe(m, Vector3.new(tx, tankTop, tz), p0, pd, { b = false })
+	local p1 = bend(m, p0, UP, XA, pd, r)
+	local endX = bx - r
+	local glassFrom, glassTo = p1.X + 0.3, endX - 1.0
+	pipe(m, p1, Vector3.new(glassFrom, runY, tz), pd, { a = false })
+	pipe(m, Vector3.new(glassFrom, runY, tz), Vector3.new(glassTo, runY, tz), pd, { fluid = "Water" })
+	pipe(m, Vector3.new(glassTo, runY, tz), Vector3.new(endX, runY, tz), pd, { b = false })
+	valve(m, Vector3.new((glassTo + endX) / 2 + 0.05, runY, tz), XA, pd, -ZA)
+	local p2 = bend(m, Vector3.new(endX, runY, tz), XA, -UP, pd, r)
+	pipe(m, p2, Vector3.new(bx, beamY + 0.4, tz), pd, { a = false })
+	-- intake funnel over the back of the bed
+	local rim = funnel(m, Vector3.new(bx, FLOOR + 1.9, 2.35), 2.6, 1.0)
 	local vent = cyl(m, Vector3.new(-3.2, FLOOR + 0.6, 3.1), UP, 1.2, 0.7, "Pipe", PROP, "Vent")
-	cyl(m, Vector3.new(-3.2, FLOOR + 1.25, 3.1), UP, 0.12, 0.95, "Light", TINY)
-	stackLight(m, Vector3.new(-3.3, FLOOR, -3.3), 0.95)
+	cyl(m, Vector3.new(-3.2, FLOOR + 1.0, 3.1), UP, 0.2, 0.86, "Trim", TINY)
 	local steam = Instance.new("ParticleEmitter")
 	steam.Name = "Smoke"
 	steam.Texture = "rbxasset://textures/particles/smoke_main.dds"
 	steam.Rate = 3
 	steam.Parent = vent
+	stackLight(m, Vector3.new(-3.3, FLOOR, -3.3), 0.95)
 
-	socket(ctx, Vector3.new(tx - 0.8, tankTop + 0.05, tz + 0.7), out(-1, 1, 0.4), 1.1)
-	socket(ctx, Vector3.new(legX[2] + 0.1, FLOOR + 0.6, az + 0.5), out(1, 0.6, 0.8), 1.0)
+	socket(ctx, Vector3.new(tx - 0.7, tankTop, tz + 0.6), out(-1, 1, 0.4), 1.1)
+	socket(ctx, Vector3.new(legX[2] + 0.2, FLOOR + 0.6, az + 0.6), out(1, 0.6, 0.8), 1.0)
 	socket(ctx, Vector3.new(-3.4, FLOOR, 3.3), out(-1, 1, 0.8), 1.0)
-	socket(ctx, Vector3.new(bx + 1.2, rim - 0.5, 2.35 + 1.0), out(1, 1, 0.8), 0.9)
-	socket(ctx, Vector3.new(legX[1] - 0.1, archTop, az), out(-1, 0, 0.6), 0.8)
+	socket(ctx, Vector3.new(bx + 1.1, rim - 0.5, 2.35 + 0.9), out(1, 1, 0.8), 0.9)
+	socket(ctx, Vector3.new(legX[1] - 0.2, beamY + 0.3, az), out(-1, 0, 0.6), 0.8)
 	socket(ctx, Vector3.new(3.5, FLOOR, -3.4), out(1, -1, 0.9), 0.9)
 	socket(ctx, Vector3.new(bx + bw / 2, FLOOR + 1.7, 3.0), Vector3.new(1, 0.7, 0), 0.8)
-	socket(ctx, Vector3.new(bx, archTop + 0.4, az - 0.2), out(0, -1, 0.3), 0.9, true)
+	socket(ctx, Vector3.new(bx, beamY + 0.45, az + 0.25), out(0, 1, 0.3), 0.9, true)
 
 	attach(ctx.base, "Output", CFrame.new(outPos))
 	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3))
@@ -985,67 +1089,66 @@ local function autoCleaner(): Ctx
 end
 
 --[[
-	Blast Furnace (3x3): a big machine-fortified housing with a wide glowing
-	mouth, an octagonal connection-pipe throat on the lid full of molten
-	metal (the intake), a pipe arching from the lid over into a glass pipe of
-	molten metal that drops into a tank on the right, a tall flanged chimney,
-	a molten pour channel to the output, a stack light and a screen.
+	Blast Furnace (3x3): a big chamfered housing with a wide glowing door and
+	a glowing double-peak mountain emblem above it, a molten intake throat on
+	the lid, a tall chimney with glowing rings, a pipe arching off the lid
+	into a glass drop of molten metal and a tank, a molten pour channel to
+	the output, a stack light and a screen.
 ]]
 local function blastFurnace(): Ctx
 	local ctx = newModel("BlastFurnace")
 	local m = ctx.model
-	local hx, hz, w, h, d = 0, 0.2, 8.4, 6.4, 7.8
-	housing(m, CFrame.new(hx, FLOOR, hz), w, h, d, {
-		arch = { w = 3.4, h = 2.8, bottom = 0.8, fill = "Glow", name = "Glow" },
-		band = { z = hz + 1.2, w = 1.1 },
-		cap = false,
-		bevel = 1.0,
-	})
-	local top = FLOOR + h
-	-- throat: a light neck ring and an octagonal cup with molten metal
-	octagon(m, along(Vector3.new(0, top + 0.35, hz - 0.6), UP), 4.2, 0.7, "Light", SOLID)
-	octagon(m, along(Vector3.new(0, top + 1.25, hz - 0.6), UP), 3.6, 1.2, "Body", SOLID)
-	local rim = top + 1.85
-	octagon(m, along(Vector3.new(0, rim + 0.02, hz - 0.6), UP), 2.9, 0.06, "Dark", TINY)
-	local molten = cyl(m, Vector3.new(0, rim + 0.06, hz - 0.6), UP, 0.06, 2.3, "Molten", TINY, "Molten")
-	light(molten, P.Glow, 10, 0.8)
-	-- the pipe arching off the lid into the glass drop and the tank on the right
+	local hx, hz, w, h, d, c = 0, 0.2, 8.6, 6.6, 7.8, 1.15
+	local top = FLOOR + housing(m, CFrame.new(hx, FLOOR, hz), w, h, d, c, { lid = 0.8, seams = 3 })
+	local front = hz - d / 2
+	doorway(m, CFrame.new(0, FLOOR + 0.6, front), 3.4, 3.2, { fill = "Glow", name = "Glow", depth = 0.7 })
+	-- emblem: a gunmetal plate with a glowing double mountain peak
+	local ey = FLOOR + 5.45
+	cbox(m, CFrame.new(0, ey, front - 0.08), 2.4, 1.1, 0.16, 0.25, "Frame", TINY)
+	for _, peak in { { -0.18, 0.4, 0.36 }, { 0.42, 0.26, 0.24 } } do
+		local px, ph, pw = peak[1], peak[2], peak[3]
+		for _, side in { -1, 1 } do
+			local a = Vector3.new(px + side * pw * 1.6, ey - ph * 0.9, front - 0.19)
+			local b = Vector3.new(px, ey + ph * 0.7, front - 0.19)
+			local mid = (a + b) / 2
+			local angle = math.atan2(b.Y - a.Y, b.X - a.X)
+			block(m, CFrame.new(mid) * CFrame.Angles(0, 0, angle), Vector3.new((b - a).Magnitude + 0.1, 0.13, 0.05), "Neon", TINY)
+		end
+	end
+	-- molten throat on the lid
+	local rim = funnel(m, Vector3.new(1.4, top, hz - 1.0), 3.0, 0, "Molten")
+	local throat = m:FindFirstChild("Molten")
+	if throat then
+		light(throat, P.Glow, 9, 0.8)
+	end
+	-- the pipe arching off the lid into the molten glass drop and the tank on the right
 	local pd, r = 1.0, 0.85
-	local tx, tz = 5.0, 2.7
-	local tankTop = tank(m, Vector3.new(tx, FLOOR, tz), 1.6, 4.2, { name = "MoltenTank" })
+	local tx, tz = 5.05, 2.7
+	local tankTop = tank(m, Vector3.new(tx, FLOOR, tz), 1.5, 4.0, { name = "MoltenTank", window = -ZA })
 	local sx = tx - 2 * r
-	local up0 = Vector3.new(sx, top, tz)
-	local up1 = Vector3.new(sx, top + 1.2, tz)
+	local up0, up1 = Vector3.new(sx, top - 0.2, tz), Vector3.new(sx, top + 1.0, tz)
 	pipe(m, up0, up1, pd, { b = false })
-	local over = bend(m, up1, UP, Vector3.xAxis, pd, r)
-	local down0 = bend(m, over, Vector3.xAxis, -UP, pd, r)
-	pipe(m, down0, Vector3.new(tx, tankTop + 0.1, tz), pd, { fluid = "Molten" })
-	-- chimney at the back left
-	local cx, cz = -2.6, hz + 2.4
-	octagon(m, along(Vector3.new(cx, top + 0.3, cz), UP), 2.3, 0.6, "Light", SOLID)
-	pipe(m, Vector3.new(cx, top + 0.6, cz), Vector3.new(cx, top + 3.4, cz), 1.35)
-	pipe(m, Vector3.new(cx, top + 3.4, cz), Vector3.new(cx, top + 6.6, cz), 1.35, { a = false, openB = true })
-	local mouth = cyl(m, Vector3.new(cx, top + 6.65, cz), UP, 0.05, 1.0, "Dark", TINY, "ChimneyTop")
-	smoke(mouth, 5)
-	-- pour channel from the mouth to the output, molten metal in it
+	local over = bend(m, up1, UP, XA, pd, r)
+	local down0 = bend(m, over, XA, -UP, pd, r)
+	pipe(m, down0, Vector3.new(tx, tankTop, tz), pd, { fluid = "Molten" })
+	chimney(m, Vector3.new(-2.6, top - 0.2, hz + 2.3), 1.35, 7.0, 5)
+	-- pour channel from the door to the output, molten metal in it
 	local outPos = Grid.outputLocal("BlastFurnace") :: Vector3
-	local mouthZ = hz - d / 2
-	chute(m, outPos.X, mouthZ - 0.2, outPos.Z + 0.35, FLOOR + 0.95, outPos.Y - 0.4, 1.6)
-	local a, b = Vector3.new(outPos.X, FLOOR + 1.08, mouthZ - 0.25), Vector3.new(outPos.X, outPos.Y - 0.27, outPos.Z + 0.6)
+	chute(m, Vector3.new(0, FLOOR + 0.75, front - 0.45), Vector3.new(outPos.X, outPos.Y - 0.4, outPos.Z + 0.35), 1.6)
+	local a, b = Vector3.new(0, FLOOR + 0.88, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.27, outPos.Z + 0.6)
 	block(m, CFrame.lookAt((a + b) / 2, b), Vector3.new(0.7, 0.06, (b - a).Magnitude), "Molten", TINY, "Molten")
-	stackLight(m, Vector3.new(-5.2, FLOOR, -5.0), 1.2)
-	screenPanel(m, CFrame.new(-5.15, FLOOR, -1.4) * CFrame.Angles(0, -math.pi / 2, 0), 1.9, 2.1)
+	stackLight(m, Vector3.new(-5.3, FLOOR, -5.1), 1.2)
+	screenPanel(m, CFrame.new(-w / 2 - 0.25, FLOOR + 0.6, hz - 0.6) * CFrame.Angles(0, -math.pi / 2, 0), 2.0, 2.2)
 
-	socket(ctx, Vector3.new(-w / 2 + 0.7, top, hz - d / 2 + 0.7), out(-1, -1), 1.6)
-	socket(ctx, Vector3.new(tx, tankTop + 0.05, tz + 0.5), out(1, 1, 0.4), 1.1)
-	socket(ctx, Vector3.new(w / 2 - 0.7, top, hz - d / 2 + 0.7), out(1, -1), 1.5)
+	socket(ctx, Vector3.new(-w / 2 + 0.8, top - 0.2, front + 0.8), out(-1, -1), 1.6)
+	socket(ctx, Vector3.new(tx, tankTop, tz + 0.4), out(1, 1, 0.4), 1.1)
+	socket(ctx, Vector3.new(w / 2 - 0.8, top - 0.2, front + 0.8), out(1, -1), 1.5)
 	socket(ctx, Vector3.new(-5.4, FLOOR, 5.3), out(-1, 1, 0.8), 1.4)
 	socket(ctx, Vector3.new(5.4, FLOOR, -5.3), out(1, -1, 0.8), 1.3)
-	socket(ctx, Vector3.new(-w / 2 + 0.7, top, hz + d / 2 - 0.7), out(-1, 1), 1.3)
-	socket(ctx, Vector3.new(cx, top + 3.4, cz - 0.9), Vector3.new(-0.4, 0.5, -1), 1.0)
-	socket(ctx, Vector3.new(-w / 2, FLOOR + 4.2, hz + 2.6), Vector3.new(-1, 0.6, 0), 1.0)
-	socket(ctx, Vector3.new(1.9, rim - 0.6, hz - 0.6 + 1.4), out(1, 1, 0.6), 1.0)
-	socket(ctx, Vector3.new(0, rim + 0.1, hz - 0.6), UP, 1.4, true)
+	socket(ctx, Vector3.new(-w / 2 + 0.8, top - 0.2, hz + d / 2 - 0.8), out(-1, 1), 1.3)
+	socket(ctx, Vector3.new(-w / 2, FLOOR + 4.3, hz + 2.6), Vector3.new(-1, 0.6, 0), 1.0)
+	socket(ctx, Vector3.new(1.4 + 1.5, rim - 0.4, hz - 1.0), out(1, 0, 0.8), 1.0)
+	socket(ctx, Vector3.new(1.4, rim + 0.1, hz - 1.0), UP, 1.3, true)
 
 	attach(ctx.base, "Output", CFrame.new(outPos))
 	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.6 * 1.45))
@@ -1055,11 +1158,12 @@ local function blastFurnace(): Ctx
 end
 
 --[[
-	Cleaning Station (3x2): a machine-bed workbench (orange base band, light
-	knee arch, light work top) with the vise in the middle, the wash tub on
-	the left fed by a kit pipe (riser, bend, glass section, valve, open
-	flange pouring into the tub), a screen panel, a lever, a tool board and the
-	output tray on the right. Same minigame points as MachineBuilder.
+	Cleaning Station (3x2): a chamfered silver workbench on a glowing plinth
+	(painted drawers), a gunmetal work top, the vise in the middle, a wash
+	tub of glowing blue water on the left fed by a dark pipe (glass section
+	with a coil, valve, open end), a yellow robot arm over the output tray,
+	a screen panel, a lever and a tool board. Same minigame points as
+	MachineBuilder.
 ]]
 local function cleaningStation(): Ctx
 	local ctx = newModel("CleaningStation")
@@ -1067,64 +1171,73 @@ local function cleaningStation(): Ctx
 	local top = 3.4
 	local benchZ = 0.4
 	local front = benchZ - 2.3
-	housing(m, CFrame.new(0, FLOOR, benchZ), 10, top - FLOOR, 4.6, {
-		arch = { w = 3.6, h = 1.5, bottom = 0.55, fill = "Dark" },
-		bevel = 0.25,
-		cap = false,
+	local bw, bd, c = 10, 4.6, 0.5
+	cbox(m, CFrame.new(0, FLOOR + 0.3, benchZ), bw + 0.3, 0.6, bd + 0.3, c + 0.12, "Frame", SOLID)
+	band(m, CFrame.new(0, FLOOR + 0.3, benchZ), bw + 0.3, bd + 0.3, c + 0.12, 0.05, 0.16)
+	local bodyH = top - FLOOR - 0.6
+	local body = cbox(m, CFrame.new(0, FLOOR + 0.6 + bodyH / 2, benchZ), bw, bodyH, bd, c, "Body", SOLID, "Body")
+	paint(body, Enum.NormalId.Front, {
+		{ x = 0.07, y = 0.2, w = 0.2, h = 0.6, color = P.Seam },
+		{ x = 0.075, y = 0.21, w = 0.19, h = 0.58, color = P.Body },
+		{ x = 0.13, y = 0.3, w = 0.08, h = 0.06, color = P.Trim },
+		{ x = 0.73, y = 0.2, w = 0.2, h = 0.6, color = P.Seam },
+		{ x = 0.735, y = 0.21, w = 0.19, h = 0.58, color = P.Body },
+		{ x = 0.79, y = 0.3, w = 0.08, h = 0.06, color = P.Trim },
 	})
+	panelFace(body, Enum.NormalId.Back, 3)
+	-- knee recess with a glowing line over it
+	block(m, CFrame.new(0, FLOOR + 0.6 + 0.8, front - 0.02), Vector3.new(3.4, 1.4, 0.1), "Dark", TINY)
+	block(m, CFrame.new(0, FLOOR + 0.6 + 1.55, front - 0.06), Vector3.new(3.6, 0.1, 0.05), "Neon", TINY)
+	-- work top: a gunmetal slab on a silver edge
 	local deck = top + 0.3
-	block(m, CFrame.new(0, top + 0.08, benchZ), Vector3.new(10.5, 0.2, 5.4), "Light", SOLID)
-	block(m, CFrame.new(0, deck - 0.1, benchZ + 0.15), Vector3.new(10.7, 0.22, 5.0), "Body", SOLID, "Bench")
-	slope(m, Vector3.new(0, deck - 0.1, front - 0.25 + 0.15), UP, -Vector3.zAxis, 10.7, 0.22, 0.4, "Body", SOLID)
-	-- drawers
-	for _, side in { -1, 1 } do
-		block(m, CFrame.new(side * 3.6, 1.9, front - 0.06), Vector3.new(2.2, 1.4, 0.12), "Light", TINY)
-		block(m, CFrame.new(side * 3.6, 2.35, front - 0.16), Vector3.new(1.0, 0.18, 0.12), "Trim", TINY)
-	end
+	block(m, CFrame.new(0, top + 0.06, benchZ), Vector3.new(bw + 0.5, 0.16, bd + 0.6), "Body", SOLID)
+	block(m, CFrame.new(0, deck - 0.1, benchZ + 0.15), Vector3.new(bw + 0.6, 0.24, bd + 0.3), "Frame", SOLID, "Bench")
 	-- work slab + vise
 	block(m, CFrame.new(0, top + 0.5, 0.3), Vector3.new(4.4, 0.4, 3.6), "Dark", SOLID, "WorkSlab")
 	for _, side in { -1, 1 } do
-		block(m, CFrame.new(side * 1.75, top + 0.95, 0.3), Vector3.new(0.5, 0.5, 2.2), "Light", SOLID, "Jaw")
+		block(m, CFrame.new(side * 1.75, top + 0.95, 0.3), Vector3.new(0.5, 0.5, 2.2), "Body", SOLID, "Jaw")
 	end
-	block(m, CFrame.new(-1.75, top + 0.95, -0.98), Vector3.new(0.56, 0.44, 0.36), "Pipe", TINY)
+	block(m, CFrame.new(-1.75, top + 0.95, -0.98), Vector3.new(0.56, 0.44, 0.36), "Frame", TINY)
 	block(m, CFrame.new(-1.75, top + 0.95, -1.27), Vector3.new(1.2, 0.16, 0.16), "Trim", TINY)
-	-- wash tub: a hopper-square-like basin with a light rim, filled almost to the lip
-	local bx, bz, bw, bd = -4.15, -0.5, 2.3, 2.6
+	-- wash tub with glowing water and a glowing rim
+	local tx, tz, tw, td = -4.15, -0.5, 2.3, 2.6
 	local tubTop = deck + 0.96
-	block(m, CFrame.new(bx, deck + 0.4, bz), Vector3.new(bw, 0.8, bd), "Body", SOLID, "Tub")
-	block(m, CFrame.new(bx, tubTop - 0.08, bz), Vector3.new(bw + 0.2, 0.3, bd + 0.2), "Light", SOLID)
+	cbox(m, CFrame.new(tx, deck + 0.4, tz), tw, 0.8, td, 0.3, "Body", SOLID, "Tub")
+	cbox(m, CFrame.new(tx, tubTop - 0.08, tz), tw + 0.2, 0.3, td + 0.2, 0.35, "Frame", SOLID)
+	band(m, CFrame.new(tx, tubTop - 0.08, tz), tw + 0.2, td + 0.2, 0.35, 0, 0.1, "Water")
 	local poolTop = tubTop + 0.1
-	block(m, CFrame.new(bx, poolTop - 0.06, bz), Vector3.new(bw - 0.3, 0.12, bd - 0.3), "Water", TINY, "WaterPool").Transparency =
-		WATER_POOL_TRANSPARENCY
-	-- the kit water pipe: riser out of the plot, bend over the tub, glass run, valve, open flange
+	local pool = block(m, CFrame.new(tx, poolTop - 0.06, tz), Vector3.new(tw - 0.3, 0.12, td - 0.3), "Water", TINY, "WaterPool")
+	pool.Material = SMOOTH
+	pool.Transparency = POOL_TRANSPARENCY
+	-- the water pipe: riser out of the plot, glass section, bend over the tub, valve, open end
 	local pd, px, pipeY, outX = 0.62, -5.75, 6.6, -4.35
 	local r = 0.55
-	pipe(m, Vector3.new(px, FLOOR, bz), Vector3.new(px, pipeY - r - 1.6, bz), pd)
-	pipe(m, Vector3.new(px, pipeY - r - 1.6, bz), Vector3.new(px, pipeY - r, bz), pd, { fluid = "Water" })
-	local p1 = bend(m, Vector3.new(px, pipeY - r, bz), UP, Vector3.xAxis, pd, r)
-	pipe(m, p1, Vector3.new(outX, pipeY, bz), pd, { a = false, openB = true, bolts = false })
-	valve(m, Vector3.new((p1.X + outX) / 2, pipeY, bz), Vector3.xAxis, pd, -Vector3.zAxis)
-	local outlet = Vector3.new(outX + 0.2, pipeY - 0.04, bz)
-	local landing = Vector3.new(outX + 0.55, poolTop, bz)
-	local p1c, p2c = outlet + Vector3.xAxis * 0.4, landing + UP * 0.6
-	local wo = attach(ctx.base, "WaterOut", CFrame.lookAt(outlet, outlet + Vector3.xAxis))
-	wo.Axis = Vector3.xAxis
-	wo:SetAttribute("Curve", (p1c - outlet).Magnitude)
+	pipe(m, Vector3.new(px, FLOOR, tz), Vector3.new(px, pipeY - r - 1.8, tz), pd)
+	pipe(m, Vector3.new(px, pipeY - r - 1.8, tz), Vector3.new(px, pipeY - r, tz), pd, { fluid = "Water" })
+	local p1 = bend(m, Vector3.new(px, pipeY - r, tz), UP, XA, pd, r)
+	pipe(m, p1, Vector3.new(outX, pipeY, tz), pd, { a = false })
+	valve(m, Vector3.new((p1.X + outX) / 2, pipeY, tz), XA, pd, -ZA)
+	cyl(m, Vector3.new(outX + 0.02, pipeY, tz), XA, 0.04, pd * 0.7, "Dark", TINY)
+	local outlet = Vector3.new(outX + 0.2, pipeY - 0.04, tz)
+	local landing = Vector3.new(outX + 0.55, poolTop, tz)
+	local wo = attach(ctx.base, "WaterOut", CFrame.lookAt(outlet, outlet + XA))
+	wo.Axis = XA
+	wo:SetAttribute("Curve", 0.4)
 	local wi = attach(ctx.base, "WaterIn", CFrame.new(landing))
 	wi.Axis = -UP
-	wi:SetAttribute("Curve", (landing - p2c).Magnitude)
+	wi:SetAttribute("Curve", 0.6)
 	-- tool board at the back: chisel, hammer, brush
 	local boardZ = 2.85
-	block(m, CFrame.new(-0.6, top + 1.6, boardZ), Vector3.new(3.6, 2.6, 0.25), "Light", SOLID)
+	cbox(m, CFrame.new(-0.6, top + 1.6, boardZ), 3.6, 2.6, 0.25, 0.05, "Frame", SOLID)
 	local toolZ = boardZ - 0.2
 	block(m, CFrame.new(-1.9, top + 1.75, toolZ), Vector3.new(0.24, 1.6, 0.16), "Body", TINY)
 	block(m, CFrame.new(-0.7, top + 1.6, toolZ), Vector3.new(0.22, 1.6, 0.2), "Trim", TINY)
-	block(m, CFrame.new(-0.7, top + 2.45, toolZ), Vector3.new(0.95, 0.42, 0.42), "Dark", TINY)
-	block(m, CFrame.new(0.5, top + 1.75, toolZ), Vector3.new(0.7, 1.2, 0.3), "Light", TINY)
-	screenPanel(m, CFrame.new(2.6, deck, 2.8), 1.8, 2.3)
-	-- lever-double
+	block(m, CFrame.new(-0.7, top + 2.45, toolZ), Vector3.new(0.95, 0.42, 0.42), "Body", TINY)
+	block(m, CFrame.new(0.5, top + 1.75, toolZ), Vector3.new(0.7, 1.2, 0.3), "Yellow", TINY)
+	screenPanel(m, CFrame.new(2.2, deck, 2.8), 1.8, 2.3)
+	-- lever
 	local lx, lz = 4.7, 1.55
-	octagon(m, along(Vector3.new(lx, deck + 0.12, lz), UP), 1.0, 0.24, "Light", TINY)
+	cbox(m, CFrame.new(lx, deck + 0.12, lz), 1.0, 0.24, 1.0, 0.2, "Frame", TINY)
 	for _, side in { -1, 1 } do
 		block(
 			m,
@@ -1134,23 +1247,25 @@ local function cleaningStation(): Ctx
 			TINY
 		)
 	end
-	cyl(m, Vector3.new(lx, deck + 0.8, lz - 0.12), Vector3.xAxis, 0.66, 0.26, "Trim", TINY)
-	-- output tray on the right
+	cyl(m, Vector3.new(lx, deck + 0.8, lz - 0.12), XA, 0.66, 0.26, "Trim", TINY)
+	-- output tray on the right, the robot arm over it
 	block(m, CFrame.new(3.6, top + 0.45, -0.4), Vector3.new(2.6, 0.3, 2.6), "Dark", SOLID, "Tray")
-	block(m, CFrame.new(3.6, top + 0.76, -0.4 + 1.22), Vector3.new(2.6, 0.32, 0.16), "Light", SOLID)
 	for _, side in { -1, 1 } do
-		block(m, CFrame.new(3.6 + side * 1.22, top + 0.76, -0.4), Vector3.new(0.16, 0.32, 2.28), "Light", SOLID)
+		block(m, CFrame.new(3.6 + side * 1.22, top + 0.76, -0.4), Vector3.new(0.16, 0.32, 2.28), "Body", SOLID)
 	end
+	block(m, CFrame.new(3.6, top + 0.76, -0.4 + 1.22), Vector3.new(2.6, 0.32, 0.16), "Body", SOLID)
+	block(m, CFrame.new(3.6, top + 0.62, -0.4 - 1.25), Vector3.new(2.6, 0.06, 0.05), "Neon", TINY)
+	robotArm(m, Vector3.new(4.55, deck, 2.6), Vector3.new(4.2, deck + 2.6, 1.6), Vector3.new(3.7, deck + 2.2, 0.2), 0.9)
 
 	socket(ctx, Vector3.new(-5.0, deck, 2.2), out(-1, 1), 1.1)
-	socket(ctx, Vector3.new(5.0, deck, 2.3), out(1, 1), 1.1)
-	socket(ctx, Vector3.new(-5.6, FLOOR, -1.7), out(-1, -1, 0.8), 1.1)
 	socket(ctx, Vector3.new(5.6, FLOOR, -1.6), out(1, -1, 0.8), 1.1)
+	socket(ctx, Vector3.new(-5.6, FLOOR, -1.7), out(-1, -1, 0.8), 1.1)
+	socket(ctx, Vector3.new(5.0, deck, 2.4), out(1, 1), 1.0)
 	socket(ctx, Vector3.new(1.3, top + 2.9, boardZ), out(0.6, 1, 0.5), 0.8)
 	socket(ctx, Vector3.new(-5.6, FLOOR, 3.5), out(-1, 1, 0.8), 1.0)
 	socket(ctx, Vector3.new(5.6, FLOOR, 3.5), out(1, 1, 0.8), 1.0)
-	socket(ctx, Vector3.new(px, pipeY - r - 1.6, bz - 0.5), Vector3.new(-0.5, 0.4, -1), 0.7)
-	socket(ctx, Vector3.new(2.6, deck + 2.35, 2.9), UP, 0.8, true)
+	socket(ctx, Vector3.new(px, pipeY - r - 1.8, tz - 0.5), Vector3.new(-0.5, 0.4, -1), 0.7)
+	socket(ctx, Vector3.new(2.2, deck + 2.35, 2.9), UP, 0.8, true)
 
 	local orePoint = CFrame.new(0, top + 1.95, 0.3)
 	attach(ctx.base, "OrePoint", orePoint)
@@ -1160,6 +1275,221 @@ local function cleaningStation(): Ctx
 	local intake = attach(ctx.base, "Intake", orePoint)
 	intake:SetAttribute("IntakeSize", Vector3.new(3.4, 2.6, 3.4))
 	return ctx
+end
+
+---------------------------------------------------------------- conveyors
+
+local BELT_TOP = 0.8 -- the belt surface items ride on (same as MachineBuilder's belts)
+local BELT_W = 3.0
+local RAIL_X = 1.75
+
+-- Black belt with painted segments (lines across) and optional orange markers.
+local function beltPaint(belt: BasePart, length: number, markers: boolean)
+	local items: { Paint } = {}
+	local n = math.max(2, math.floor(length / 0.8 + 0.5))
+	for i = 1, n - 1 do
+		table.insert(items, { x = 0, y = i / n - 0.008, w = 1, h = 0.016, color = rgb(58, 60, 70) })
+	end
+	if markers then
+		local count = math.max(1, math.floor(length / 2.4))
+		for i = 0, count - 1 do
+			table.insert(items, { x = 0.38, y = (i + 0.4) / count, w = 0.24, h = 0.7 / length, color = P.Trim })
+		end
+	end
+	paint(belt, Enum.NormalId.Top, items, "BeltPaint")
+end
+
+-- Gunmetal rail: orange and silver top strips painted, bolts on the outer face, a glowing strip.
+local function rail(m: Instance, cf: CFrame, length: number, side: number, name: string?, flags: Props?): BasePart
+	local part = block(m, cf, Vector3.new(0.5, 1.1, length), "Frame", flags or SOLID, name)
+	paint(part, Enum.NormalId.Top, {
+		{ x = if side > 0 then 0.55 else 0, y = 0, w = 0.45, h = 1, color = P.Trim },
+		{ x = if side > 0 then 0 else 0.55, y = 0, w = 0.45, h = 1, color = P.Body },
+	}, "RailTop")
+	local bolts: { Paint } = {}
+	local n = math.max(1, math.floor(length / 2))
+	for i = 0, n - 1 do
+		table.insert(bolts, { x = (i + 0.5) / n - 0.02, y = 0.14, w = 0.04, h = 0.12, color = P.Bolt, round = true })
+	end
+	table.insert(bolts, { x = 0, y = 0.82, w = 1, h = 0.04, color = P.Dark })
+	paint(part, if side > 0 then Enum.NormalId.Right else Enum.NormalId.Left, bolts, "RailFace")
+	block(m, cf * CFrame.new(side * 0.27, 0.05, 0), Vector3.new(0.05, 0.16, length * 0.62), "Neon", TINY, "RailGlow")
+	return part
+end
+
+type CapOpts = { arrow: string?, beacon: boolean? }
+
+--[[
+	A belt end cap at `cf` (centre of the belt end on the belt surface; the
+	belt lies toward -Z of `cf`, the cap sticks out toward +Z): a black drum
+	with orange octagonal side plates and hubs, and (with `arrow` = "right" /
+	"up" / "down") a control box beside it with an arrow screen and an amber
+	beacon.
+]]
+local function beltCap(m: Instance, cf: CFrame, o: CapOpts?)
+	local opts: CapOpts = o or {}
+	local drumC = cf * CFrame.new(0, -0.38, 0.15)
+	cyl(m, drumC.Position, cf.RightVector, BELT_W + 0.1, 0.86, "Rubber", PROP, "Drum")
+	for _, side in { -1, 1 } do
+		local at = (drumC * CFrame.new(side * RAIL_X, 0, 0)).Position
+		octagon(m, along(at, cf.RightVector), 1.2, 0.5, "Trim", PROP)
+		cyl(m, at + cf.RightVector * side * 0.27, cf.RightVector, 0.1, 0.5, "Dark", TINY)
+		cyl(m, at + cf.RightVector * side * 0.32, cf.RightVector, 0.06, 0.26, "Trim", TINY)
+	end
+	if opts.arrow then
+		local box = cf * CFrame.new(-(RAIL_X + 0.95), 0.2, 0.2)
+		cbox(m, box, 1.2, 1.5, 1.1, 0.18, "Frame", SOLID)
+		block(m, box * CFrame.new(0, -0.66, 0), Vector3.new(1.3, 0.26, 1.2), "Trim", TINY)
+		local screen = block(m, box * CFrame.new(0, 0.12, -0.57), Vector3.new(0.8, 0.8, 0.05), "Screen", TINY, "ArrowScreen")
+		local color = if opts.arrow == "down" then P.Red else P.Green
+		local items: { Paint }
+		if opts.arrow == "right" then
+			items = {
+				{ x = 0.18, y = 0.44, w = 0.44, h = 0.12, color = color },
+				{ x = 0.56, y = 0.28, w = 0.1, h = 0.44, color = color },
+				{ x = 0.66, y = 0.38, w = 0.1, h = 0.24, color = color },
+			}
+		else
+			local upArrow = opts.arrow == "up"
+			items = {
+				{ x = 0.44, y = 0.22, w = 0.12, h = 0.56, color = color },
+				{ x = 0.28, y = if upArrow then 0.26 else 0.64, w = 0.44, h = 0.1, color = color },
+				{ x = 0.38, y = if upArrow then 0.16 else 0.74, w = 0.24, h = 0.1, color = color },
+			}
+		end
+		paint(screen, Enum.NormalId.Front, items)
+		local lamp = block(m, box * CFrame.new(0, 0.62, -0.58), Vector3.new(0.6, 0.06, 0.04), "ScreenGlow", TINY)
+		lamp.Color = color
+		if opts.beacon ~= false then
+			local bt = box * CFrame.new(0, 0.75, 0)
+			cyl(m, (bt * CFrame.new(0, 0.1, 0)).Position, cf.UpVector, 0.2, 0.5, "Dark", TINY)
+			local beacon = cyl(m, (bt * CFrame.new(0, 0.38, 0)).Position, cf.UpVector, 0.36, 0.4, "Lamp", TINY, "Beacon")
+			beacon.Color = P.Amber
+			beacon.Material = NEON
+		end
+	end
+end
+
+--[[
+	1x1 conveyor (the parts the game uses: Base, Belt (tag ConveyorBelt),
+	RailL, RailR, Arrow x2) in the reference style: black segmented belt,
+	gunmetal rails with an orange top edge and a glowing strip, orange feet.
+	`caps` = { start = CapOpts?, finish = CapOpts? } adds end caps (back /
+	front end of the cell).
+]]
+function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?): Model
+	local model = Instance.new("Model")
+	model.Name = "Conveyor"
+	model:SetAttribute("MachineId", "Conveyor")
+	local base = block(
+		model,
+		CFrame.new(0, 0.15, 0),
+		Vector3.new(3.7, 0.3, 3.9),
+		"Frame",
+		{ CanTouch = false, CanCollide = false, CastShadow = false },
+		"Base"
+	)
+	model.PrimaryPart = base :: any
+	for _, side in { -1, 1 } do
+		rail(
+			model,
+			CFrame.new(side * RAIL_X, 0.55, 0),
+			4,
+			side,
+			if side < 0 then "RailL" else "RailR",
+			{ CanTouch = false, CastShadow = false }
+		)
+		block(model, CFrame.new(side * RAIL_X, 0.1, 0), Vector3.new(0.7, 0.2, 1.0), "Trim", TINY, "Foot")
+	end
+	local belt = block(model, CFrame.new(0, BELT_TOP - 0.25, 0), Vector3.new(BELT_W, 0.5, 4), "Rubber", {
+		CanTouch = true,
+		CastShadow = false,
+		CustomPhysicalProperties = PhysicalProperties.new(0.7, 1.2, 0, 100, 100),
+	}, "Belt")
+	belt:AddTag("ConveyorBelt")
+	beltPaint(belt, 4, false)
+	local w, h = 0.9, 0.6
+	for _, side in { -1, 1 } do
+		wedge(
+			model,
+			CFrame.new(side * w / 4, BELT_TOP + 0.02, 0) * CFrame.Angles(0, 0, -side * math.pi / 2),
+			Vector3.new(0.04, w / 2, h),
+			"Trim",
+			TINY,
+			"Arrow"
+		)
+	end
+	if caps then
+		if caps.start then
+			beltCap(model, CFrame.new(0, BELT_TOP, 2), caps.start)
+		end
+		if caps.finish then
+			beltCap(model, CFrame.new(0, BELT_TOP, -2) * CFrame.Angles(0, math.pi, 0), caps.finish)
+		end
+	end
+	attach(base, "Prompt", CFrame.new(0, 1.5, 0))
+	return model
+end
+
+--[[
+	A belt slope `length` long rising `rise` (the Belt Lift carries items up,
+	the Slide down; preview models, not in MachineData yet): a tilted
+	segmented belt with orange markers between tilted rails, a braced
+	gunmetal support with orange feet under the high end, drums at both
+	ends and the control box where the run starts (green up arrow at the
+	bottom of the lift, red down arrow at the top of the slide). Items
+	travel toward -Z.
+]]
+function KitMachines.slope(up: boolean, length: number?, rise: number?): Model
+	local L = length or 12
+	local H = rise or 5
+	local model = Instance.new("Model")
+	model.Name = if up then "BeltLift" else "Slide"
+	local base = block(model, CFrame.new(0, 0.05, 0), Vector3.new(0.1, 0.1, 0.1), "Frame", TINY, "Base")
+	base.Transparency = 1
+	model.PrimaryPart = base :: any
+	local startZ, finishZ = L / 2 - 1, -L / 2 + 1
+	local startY = if up then BELT_TOP else BELT_TOP + H
+	local finishY = if up then BELT_TOP + H else BELT_TOP
+	local a = Vector3.new(0, startY, startZ)
+	local b = Vector3.new(0, finishY, finishZ)
+	local len = (b - a).Magnitude
+	local frame = CFrame.lookAt((a + b) / 2, b)
+	local belt = block(model, frame * CFrame.new(0, -0.25, 0), Vector3.new(BELT_W, 0.5, len), "Rubber", SOLID, "Belt")
+	beltPaint(belt, len, true)
+	for _, side in { -1, 1 } do
+		rail(model, frame * CFrame.new(side * RAIL_X, -0.25, 0), len, side, nil, SOLID)
+	end
+	-- support under the high end: two legs, a cross brace, orange feet
+	local highZ = if up then finishZ else startZ
+	local highY = BELT_TOP + H
+	local legZ = highZ + (if up then 1.0 else -1.0)
+	for _, side in { -1, 1 } do
+		local topP = Vector3.new(side * RAIL_X, highY - 1.0, legZ)
+		local foot = Vector3.new(side * RAIL_X, 0.4, legZ)
+		block(model, CFrame.new((topP + foot) / 2), Vector3.new(0.5, topP.Y - foot.Y, 0.5), "Frame", SOLID)
+		block(model, CFrame.new(foot + Vector3.new(0, -0.2, 0)), Vector3.new(0.95, 0.4, 0.95), "Trim", SOLID)
+		block(model, CFrame.new(foot + Vector3.new(side * 0.5, -0.2, 0)), Vector3.new(0.05, 0.12, 0.6), "Neon", TINY)
+	end
+	local yb = (highY - 1.0 + 0.4) / 2
+	local span = (highY - 1.0 - 0.4) * 0.38
+	for _, s in { -1, 1 } do
+		local p1 = Vector3.new(-RAIL_X, yb - s * span, legZ + 0.3)
+		local p2 = Vector3.new(RAIL_X, yb + s * span, legZ + 0.3)
+		local mid = (p1 + p2) / 2
+		block(
+			model,
+			CFrame.new(mid) * CFrame.Angles(0, 0, math.atan2(p2.Y - p1.Y, p2.X - p1.X)),
+			Vector3.new((p2 - p1).Magnitude, 0.22, 0.22),
+			"Frame",
+			PROP
+		)
+	end
+	block(model, CFrame.new(0, highY - 1.0, legZ), Vector3.new(RAIL_X * 2 + 0.5, 0.4, 0.5), "Frame", SOLID)
+	-- drums at both ends, the control box where items get on
+	beltCap(model, CFrame.new(a), { arrow = if up then "up" else "down" })
+	beltCap(model, CFrame.new(b) * CFrame.Angles(0, math.pi, 0), nil)
+	return model
 end
 
 local BUILDERS: { [string]: () -> Ctx } = {

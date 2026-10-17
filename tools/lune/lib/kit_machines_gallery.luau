@@ -1,12 +1,15 @@
 --[[
 	Kit machines preview (scene "kit_machines" in tools/lune/export_scene.luau,
-	shots in tools/preview/kit_machines_shots.json): the Kenney Factory Kit
-	machines from src/shared/Builders/KitMachines.luau.
-	  - a plot pad with every kit machine in iron (level 0), belts into and
-	    out of the Cleaning Plant, ore on the way, water and smoke stand-ins;
-	  - the upgrade ladder: the same machine at levels 0..4 (iron -> shards
-	    -> crystal frames -> whole crystal), with level signs;
-	  - the crystal themes: a level 4 machine in each theme.
+	shots in tools/preview/kit_machines_shots.json): the machines and belts
+	from src/shared/Builders/KitMachines.luau.
+	  - a plot with every machine at level 0, belts with end caps into and
+	    out of the Cleaning Plant, ore on the way, water and smoke stand-ins
+	    (the pads are metal plates with glowing edges like the owner's
+	    reference, docs/art/machines_reference.webp);
+	  - the same plot with every machine at the max level;
+	  - the upgrade ladder: one machine at levels 0..4, with level signs;
+	  - the crystal themes: a max level machine in each theme;
+	  - the belts: a long straight run with end caps, a Belt Lift and a Slide.
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -16,19 +19,21 @@ local Gallery = {}
 local V3 = roblox.Vector3
 local C3 = roblox.Color3
 
+-- Caps: "start" / "finish" add an end cap on that end of the belt cell.
 Gallery.Layout = {
 	{ Id = "CleaningStation", X = 0, Z = 1, R = 0 },
 	{ Id = "ClayFurnace", X = 4, Z = 1, R = 0 },
 	{ Id = "Crusher", X = 7, Z = 1, R = 0 },
 	{ Id = "AutoCleaner", X = 10, Z = 1, R = 0 },
 	{ Id = "BlastFurnace", X = 0, Z = 5, R = 0 },
-	{ Id = "Conveyor", X = 11, Z = 4, R = 0 },
+	{ Id = "Conveyor", X = 11, Z = 4, R = 0, Caps = "start" },
 	{ Id = "Conveyor", X = 11, Z = 3, R = 0 },
-	{ Id = "Conveyor", X = 11, Z = 0, R = 0 },
+	{ Id = "Conveyor", X = 11, Z = 0, R = 0, Caps = "finish" },
 }
 
 Gallery.LadderX = 70 -- centre of the ladder pad
 Gallery.ThemeX = 136 -- centre of the theme pad
+Gallery.BeltX = 204 -- centre of the belt pad
 Gallery.MaxX = -70 -- centre of the max level plot (every machine at the last level)
 Gallery.LadderMachine = "ClayFurnace"
 Gallery.ThemeMachine = "Crusher"
@@ -43,7 +48,7 @@ local function count(model: any): number
 	return n
 end
 
--- A level sign: a dark board with light text, standing in front of a machine.
+-- A sign: a dark board with gold text, standing in front of a machine.
 local function sign(parent: any, cf: any, text: string, width: number)
 	local board = roblox.Instance.new("Part")
 	board.Anchored = true
@@ -73,7 +78,6 @@ function Gallery.build(Loader: any, parent: any)
 	local CF = Loader.CFrame
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
-	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
 	local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
 	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
 	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
@@ -84,42 +88,79 @@ function Gallery.build(Loader: any, parent: any)
 	root.Parent = parent
 	local CELL = GameConfig.CellSize
 	local half = GameConfig.PlotCells * CELL / 2
+	local NEON = roblox.Enum.Material.Neon
 
-	-- lawn and plot pads (gravel with faint cell lines and a low kerb)
-	Geo.block(root, CF.new(30, -1.06, 0), V3.new(320, 2, 260), C3.fromRGB(150, 196, 92))
-	local function pad(cx: number, w: number, d: number, lines: boolean)
-		Geo.block(root, CF.new(cx, -0.5, 0), V3.new(w, 1, d), C3.fromRGB(214, 192, 150))
-		if lines then
-			for i = 1, GameConfig.PlotCells - 1 do
-				local p = -half + i * CELL
-				Geo.block(root, CF.new(cx + p, 0.005, 0), V3.new(0.08, 0.01, d), C3.fromRGB(196, 174, 134))
-				Geo.block(root, CF.new(cx, 0.005, p), V3.new(w, 0.01, 0.08), C3.fromRGB(196, 174, 134))
-			end
+	-- lawn and metal pads: dark plates, lighter tile seams, a glowing orange edge
+	Geo.block(root, CF.new(60, -1.06, 0), V3.new(480, 2, 260), C3.fromRGB(130, 186, 82))
+	local function pad(cx: number, w: number, d: number)
+		Geo.block(root, CF.new(cx, -0.6, 0), V3.new(w + 2.4, 1.2, d + 2.4), C3.fromRGB(46, 48, 58))
+		Geo.block(root, CF.new(cx, -0.5, 0), V3.new(w, 1, d), C3.fromRGB(104, 108, 120))
+		for i = 1, math.floor(w / CELL) - 1 do
+			local x = cx - w / 2 + i * CELL
+			Geo.block(root, CF.new(x, 0.005, 0), V3.new(0.1, 0.01, d), C3.fromRGB(82, 86, 98))
+		end
+		for i = 1, math.floor(d / CELL) - 1 do
+			local z = -d / 2 + i * CELL
+			Geo.block(root, CF.new(cx, 0.005, z), V3.new(w, 0.01, 0.1), C3.fromRGB(82, 86, 98))
 		end
 		for _, side in { -1, 1 } do
-			Geo.block(root, CF.new(cx + side * (w / 2 + 0.4), 0.2, 0), V3.new(0.8, 0.8, d + 1.6), C3.fromRGB(120, 112, 108))
-			Geo.block(root, CF.new(cx, 0.2, side * (d / 2 + 0.4)), V3.new(w + 1.6, 0.8, 0.8), C3.fromRGB(120, 112, 108))
+			for k = 0, 2 do
+				local glowZ = -d / 2 + d * (k + 0.5) / 3
+				Geo.block(
+					root,
+					CF.new(cx + side * (w / 2 + 1.21), -0.4, glowZ),
+					V3.new(0.05, 0.25, d / 3 * 0.55),
+					C3.fromRGB(255, 128, 20),
+					NEON
+				)
+				local glowX = cx - w / 2 + w * (k + 0.5) / 3
+				Geo.block(
+					root,
+					CF.new(glowX, -0.4, side * (d / 2 + 1.21)),
+					V3.new(w / 3 * 0.55, 0.25, 0.05),
+					C3.fromRGB(255, 128, 20),
+					NEON
+				)
+			end
 		end
 	end
-	pad(0, half * 2, half * 2, true)
-	pad(Gallery.LadderX, 64, half * 2, false)
-	pad(Gallery.ThemeX, 50, half * 2, false)
-	pad(Gallery.MaxX, half * 2, half * 2, true)
+	pad(0, half * 2, half * 2)
+	pad(Gallery.MaxX, half * 2, half * 2)
+	pad(Gallery.LadderX, 64, half * 2)
+	pad(Gallery.ThemeX, 52, half * 2)
+	pad(Gallery.BeltX, 64, half * 2)
 
-	local placed = {}
-	local belts = {}
-	local counts = {}
-	for _, entry in Gallery.Layout do
-		local model = if KitMachines.has(entry.Id) then KitMachines.build(entry.Id, 0) else MachineBuilder.build(entry.Id)
-		model:PivotTo(Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
-		model.Parent = root
-		placed[entry.Id] = model
-		counts[entry.Id] = count(model)
-		Old.paintGuis(Loader, root, model)
-		if entry.Id == "Conveyor" then
-			table.insert(belts, model)
+	local function capsFor(entry: any): any
+		if entry.Caps == "start" then
+			return { start = { arrow = "right" } }
+		elseif entry.Caps == "finish" then
+			return { finish = {} }
 		end
+		return nil
 	end
+
+	local function placePlot(offset: any, level: number): { [string]: any }
+		local placed = {}
+		for _, entry in Gallery.Layout do
+			local model = if entry.Id == "Conveyor" then KitMachines.conveyor(capsFor(entry)) else KitMachines.build(entry.Id, level)
+			model:PivotTo(offset * Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
+			model.Parent = root
+			Old.paintGuis(Loader, root, model)
+			if entry.Id ~= "Conveyor" then
+				placed[entry.Id] = model
+			end
+		end
+		return placed
+	end
+
+	local counts = {}
+	local placed = placePlot(CF.new(0, 0, 0), 0)
+	for id, model in placed do
+		counts[id] = count(model)
+	end
+	counts.Conveyor = count(KitMachines.conveyor())
+	counts["Conveyor + caps"] = count(KitMachines.conveyor({ start = { arrow = "right" }, finish = {} }))
+	placePlot(CF.new(Gallery.MaxX, 0, 0), KitMachines.MaxLevel)
 
 	-- ore on the way (dropped so its lowest point rests on `surface`)
 	local function ore(kind: string, oreId: string, cf: any, surface: number, seed: number)
@@ -141,58 +182,72 @@ function Gallery.build(Loader: any, parent: any)
 	end
 	local cleaner = placed.AutoCleaner.PrimaryPart
 	local shower = cleaner.CFrame:PointToWorldSpace(cleaner:FindFirstChild("WaterIn").CFrame.Position)
-	local rollerTop = cleaner.CFrame.Position.Y + 0.15 + 1.35 + 0.31
+	local rollerTop = cleaner.CFrame.Position.Y + 0.15 + 1.35 + 0.33
 	ore("Raw", "Copper", CF.new(shower.X, rollerTop + 1, shower.Z) * CF.Angles(0, 0.4, 0), rollerTop, 7)
 	local view = V3.new(1, 0, -1.2).Unit
 	Old.water(Loader, root, placed.CleaningStation, 0.4, view)
 	Old.water(Loader, root, placed.AutoCleaner, 1, view, rollerTop + 1.05)
 	Old.steam(Loader, root, placed.AutoCleaner:FindFirstChild("Vent", true))
-	Old.smoke(Loader, root, placed.ClayFurnace:FindFirstChild("ChimneyTop", true), 0.8)
-	Old.smoke(Loader, root, placed.BlastFurnace:FindFirstChild("ChimneyTop", true), 1)
-	local function onBelt(belt: any, x: number, z: number): (any, number)
-		local cf = belt:GetPivot() * CF.new(x, 1.5, z)
-		return cf, belt:FindFirstChild("Belt").CFrame.Position.Y + 0.25
+	Old.smoke(Loader, root, placed.ClayFurnace:FindFirstChild("ChimneyTop", true), 1.1)
+	Old.smoke(Loader, root, placed.BlastFurnace:FindFirstChild("ChimneyTop", true), 1.4)
+	local beltTop = 0.8
+	local function cell(x: number, z: number): any
+		return Grid.localCFrame("Conveyor", x, z, 0)
 	end
-	local cf1, top1 = onBelt(belts[1], 0.1, 0.6)
-	ore("Raw", "Iron", cf1 * CF.Angles(0, 1.1, 0), top1, 11)
-	local cf3, top3 = onBelt(belts[3], -0.1, -0.4)
-	ore("Clean", "Copper", cf3 * CF.Angles(0, 0.7, 0), top3, 5)
+	ore("Raw", "Iron", cell(11, 4) * CF.new(0.1, 1.5, 0.6) * CF.Angles(0, 1.1, 0), beltTop, 11)
+	ore("Clean", "Copper", cell(11, 0) * CF.new(-0.1, 1.5, -0.4) * CF.Angles(0, 0.7, 0), beltTop, 5)
 	local station = placed.CleaningStation.PrimaryPart.CFrame
 	Dummy.build(root, CF, station * CF.new(-5.2, 0, -4.6) * CF.Angles(0, math.pi * 0.85, 0), "idle")
 
-	-- the same plot with every machine at the max level
-	for _, entry in Gallery.Layout do
-		local model = if KitMachines.has(entry.Id)
-			then KitMachines.build(entry.Id, KitMachines.MaxLevel)
-			else MachineBuilder.build(entry.Id)
-		model:PivotTo(CF.new(Gallery.MaxX, 0, 0) * Grid.localCFrame(entry.Id, entry.X, entry.Z, entry.R))
-		model.Parent = root
-		Old.paintGuis(Loader, root, model)
-	end
-
-	-- the upgrade ladder: levels 0..4 left to right
+	-- the upgrade ladder: levels 0..4 left to right (+X shows on the left of a camera looking +Z)
 	local lx = Gallery.LadderX
 	for level = 0, KitMachines.MaxLevel do
-		local x = lx + 24 - level * 12 -- +X shows on the left of a camera looking +Z
+		local x = lx + 24 - level * 12
 		local model = KitMachines.build(Gallery.LadderMachine, level)
 		model:PivotTo(CF.new(x, 0, -8))
 		model.Parent = root
+		Old.paintGuis(Loader, root, model)
 		counts[Gallery.LadderMachine .. " L" .. level] = count(model)
 		sign(root, CF.new(x, 0.75, -14.2) * CF.Angles(0.3, 0, 0), "LV " .. level, 3.2)
 		if level == 0 then
-			Old.smoke(Loader, root, model:FindFirstChild("ChimneyTop", true), 0.8)
+			Old.smoke(Loader, root, model:FindFirstChild("ChimneyTop", true), 1.1)
 		end
 	end
 	-- the crystal themes at the max level
-	local themes = { "Aqua", "Amethyst", "Rose" }
-	for i, theme in themes do
+	for i, theme in { "Aqua", "Amethyst", "Rose" } do
 		local x = Gallery.ThemeX + 14 - (i - 1) * 14
 		local model = KitMachines.build(Gallery.ThemeMachine, KitMachines.MaxLevel, theme)
 		model:PivotTo(CF.new(x, 0, -8))
 		model.Parent = root
+		Old.paintGuis(Loader, root, model)
 		counts[Gallery.ThemeMachine .. " " .. theme] = count(model)
 		sign(root, CF.new(x, 0.75, -14.2) * CF.Angles(0.3, 0, 0), string.upper(theme), 4.2)
 	end
+
+	-- the belts: a straight run of six cells along X (items move toward -X), a lift and a slide
+	local bx = Gallery.BeltX
+	for i = 0, 5 do
+		-- items move toward +X here, so the run starts at the last cell (i = 5)
+		local caps = if i == 5 then { start = { arrow = "right" } } elseif i == 0 then { finish = {} } else nil
+		local model = KitMachines.conveyor(caps)
+		model:PivotTo(CF.new(bx + 10 - i * 4, 0, -14) * CF.Angles(0, -math.pi / 2, 0))
+		model.Parent = root
+		Old.paintGuis(Loader, root, model)
+		if i % 2 == 1 then
+			ore("Clean", if i == 1 then "Gold" else "Copper", CF.new(bx + 10 - i * 4, 1.5, -14) * CF.Angles(0, 0.5 * i, 0), beltTop, 20 + i)
+		end
+	end
+	local lift = KitMachines.slope(true)
+	lift:PivotTo(CF.new(bx + 12, 0, 6) * CF.Angles(0, math.pi / 2, 0)) -- rises toward -X (the right of the camera)
+	lift.Parent = root
+	Old.paintGuis(Loader, root, lift)
+	local slide = KitMachines.slope(false)
+	slide:PivotTo(CF.new(bx - 12, 0, 6) * CF.Angles(0, math.pi / 2, 0))
+	slide.Parent = root
+	Old.paintGuis(Loader, root, slide)
+	counts.BeltLift = count(lift)
+	sign(root, CF.new(bx + 12, 0.75, 1.0) * CF.Angles(0.3, 0, 0), "BELT LIFT", 4.4)
+	sign(root, CF.new(bx - 12, 0.75, 1.0) * CF.Angles(0.3, 0, 0), "SLIDE", 3.4)
 
 	local names = {}
 	for id in counts do

@@ -142,4 +142,29 @@ return function(T, Loader)
 			T.truthy(crystal <= (if big then 280 else 240), id .. " max level: " .. crystal .. " parts")
 		end
 	end)
+
+	T.test("KitMachines: belts keep the game's belt parts and stay light", function()
+		local belt = KitMachines.conveyor()
+		T.eq(belt.PrimaryPart.Name, "Base")
+		for _, name in { "Belt", "RailL", "RailR" } do
+			T.truthy(belt:FindFirstChild(name), "belt " .. name)
+		end
+		T.truthy(belt:FindFirstChild("Belt"):HasTag("ConveyorBelt"), "belt tag")
+		local arrows = 0
+		for _, part in parts(belt) do
+			if part.Name == "Arrow" then
+				arrows += 1
+			end
+		end
+		T.eq(arrows, 2, "two arrow wedges")
+		T.truthy(#parts(belt) <= 12, "belt parts: " .. #parts(belt))
+		T.truthy(attachment(belt, "Prompt"), "belt Prompt")
+		local capped = KitMachines.conveyor({ start = { arrow = "right" }, finish = {} })
+		T.truthy(capped:FindFirstChild("Beacon", true), "start cap beacon")
+		for _, up in { true, false } do
+			local slope = KitMachines.slope(up)
+			T.truthy(slope:FindFirstChild("Belt"), "slope belt")
+			T.truthy(#parts(slope) <= 80, "slope parts: " .. #parts(slope))
+		end
+	end)
 end
