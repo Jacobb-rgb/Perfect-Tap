@@ -7,7 +7,7 @@
   "d_hall": { "scene": "world", "position": [5, 7, 28], "target": [30, 7, 36], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
   "d_dig": { "scene": "world", "position": [30, 15, 8], "target": [50, 1, 25], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
   "d_dig_top": { "scene": "world", "position": [44, 34, 58], "target": [50, 0, 24], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
-  "d_scanner": { "scene": "world", "position": [42, 8, 94], "target": [56, 5, 80], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
+  "d_scanner": { "scene": "world", "position": [18, 20, 48], "target": [48, 6, 78], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
   "d_enchant": { "scene": "world", "position": [35, 9, -65], "target": [50, 6, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
   "d_guild": { "scene": "world", "position": [-15, 6, -15], "target": [-15, 5, -30], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },
   "d_sell": { "scene": "world", "position": [-20, 8, -6], "target": [-36, 4, -17], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24 },

@@ -6,12 +6,35 @@ and feel like it from the ground. Style rules: [`docs/ART_DIRECTION.md`](../ART_
 Layout data: [`src/shared/Config/LobbyLayout.luau`](../../src/shared/Config/LobbyLayout.luau)
 (the single source of truth for every set piece below; only the art director edits it).
 
-The build is split into **exactly five packages** (Sky, Backdrop, Plaza, Districts, Flora)
-that work in parallel without touching the same files (section 6).
+The build is split into **six packages** (Sky, Backdrop, Plaza, Districts, Flora, and since
+2026-10-17 Vault, see section 0 and 6.6) that work in parallel without touching the same files (section 6).
 
 > **Design v2 (2026-10-16) changes – read section 0 first.** They override the rows below where they differ.
 
 ## 0. Design v2 changes (docs/DESIGN_V2_NOTES.md, docs/plans/V2_PLAN.md)
+- **Package Vault (2026-10-17, owner-approved spot)**: `src/server/World/Lobby/Vault/**` (the blaster session owns
+  it; `init` returns `{ Replaces = {}, build }`, tests/LobbyVault.spec.luau) builds the **BLASTER VAULT** (the
+  blaster shop, hook `VaultCounter`, a `LightingZone` inside, the spinning hologram blaster) at the end of the
+  south road, its two giant stone king statues and six jungle trees. LobbyLayout pieces (package `Vault`):
+  `BlasterVault` (0, 0, 112.4) 67.2 x 76 x 65.6 facing the plaza (N; podium 1.3, eaves ~20, ridge ~34, fire towers
+  ~31, hologram ~55, searchlight beams ~76), `VaultStatueWest` (-43, 0, 92) / `VaultStatueEast` (43, 0, 92)
+  15.4 x 45 x 13.4 (the pedestals) turned (+-0.296, 0, -0.955) to the plaza, and the reservations `VaultTree1..6`
+  (`Reserve = true`, Radius = the canopy: they keep the scatter and the town buildings away, may overlap their own
+  package's pieces; the package places the trees as offsets from the vault). Budget 3500 parts / 6 lights
+  (~2970 / 5 built); lobby lights 40 / 45. MapParts 17500 (tests/LobbyBudget.spec.luau: the built map, ~15,790
+  parts, + one ore node on every node spawn, ~1,320, must stay 200 under it; ~190 parts of headroom), LobbyParts
+  11400 (~11,200 built: ~200 parts of deliberate buffer for small merges from the parallel package sessions).
+  Moved for it: the south road (WorldLayout) now ends at the vault's steps (z 74, its strip at z 79); the **MINE**
+  (`MineEntrance` + `MineYard`, Backdrop) went to the south-west corner past the west plot road's end, at
+  (-100, 0, 134) facing E (Lowlands still builds them at their design spot; `DesignCenter`/`DesignFacing` on the
+  pieces let Town.relocate move the built models); `AutumnCorner` behind the mine hill (-139, 0, 130); the paths
+  `ToMine` (dirt under the rails), `MineLane` (west plot road's end -> yard) and `ToScanner` (north of the vault's
+  steps); Flora's `MapTower`, `SpurWorkshop` and `GardenCottage` became a small hamlet in the south-east corner
+  past the east plot road's end, reached by the dirt lane `HamletLane` + `ToMap` (east plot road's end -> the MAP
+  door, south of the ore outcrop at (82, 118)); the west street's `MineCottage` was renamed `RowCottage` (it stands
+  by the vault's west statue, far from the MINE); the junction lanterns flank the vault's steps. The ROCK SCANNER
+  (43, 0, 69) keeps 5+ studs from the east statue's pedestal. A Flora tree-free box keeps the scatter's autumn
+  trees off the MINE hill (they frame it from the west and the south).
 - **SHOP** (`Shop`) is the **Gear shop** (boots, helmet with a head lamp, backpack, gloves, magnet): hook
   `ShopCounter` only. Pell is gone.
 - **`ShopFront` is Tobin's Sell stall** next to the SHOP: an ore cart with a counter and a brass scale (hook
@@ -89,7 +112,7 @@ next to the concept to see where each concept element lands.
 - Plaza center (0, 0, 0), radius 36. Spawn `TownSpawn` at (0, 0, 26) (Town.luau builds it).
 - Great Forge landmark at (0, 0, -52), facing south (+Z) toward the plaza.
 - Plots (can't move): 8 pads 56x56 centered at x = +-104, z = 84, 28, -28, -84.
-- Roads (can't move): south road x=0 z 36..140; spurs z=0 x +-36..70; plot roads x = +-70
+- Roads (can't move): south road x=0 z 36..74 (its strip ends at z 79, the Blaster Vault's steps); spurs z=0 x +-36..70; plot roads x = +-70
   z -112..116; forge paths x = +-26 z -28..-112; quarry rim road z=-112 x -70..70.
 - Quarry pit x -72..72, z -236..-122, floor Y -12, ramp at x=0 from z -112 to -140.
 - Ember Caves entrance (0, -12, -240) (18 wide x 16 tall), caves behind it under a roof
@@ -108,11 +131,12 @@ lines the plot roads with trees.
 
 | Shot | Camera -> target (fov) | Purpose |
 |---|---|---|
-| `lobby_hero` | (6, 62, 168) -> (0, 12, -46) (48) | **The concept angle** (polish pass). From the south over the bridge and ponds, MINE bottom left, ROCK SCANNER bottom right, the plaza with the fire crystal, SHOP / SPIN & WIN left, UPGRADES / FOSSIL DIG right, THE GREAT FORGE in the middle, the massif with DEPTHS, THE FORGE, waterfalls and crystals filling the upper middle, sky, islands and balloon in the top corners. Compare it side by side with the concept (docs/screenshots/lobby_compare.jpg). |
-| `lobby_spawn` | (0, 9, 46) -> (0, 12, -40) (70) | What a new player sees: fire crystal, Great Forge, SHOP left, UPGRADES right, mountain and portal above the roof. |
-| `lobby_west` | (18, 18, 26) -> (-70, 6, -14) (65) | Toward the sunset: SHOP, SPIN & WIN, NW cliff and waterfall, sea, ships, pier, sun glitter. |
+| `lobby_hero` | (0, 135, 255) -> (4, 12, -28) (50) | **The concept angle** (Blaster Vault, 2026-10-17): elevated from far south, a symmetric view over the vault's back gable (rose window, lit windows, the hologram over the ridge) centred between the two back jungle trees, the searchlight beams forming a V around the plaza; the **MINE** portal, both MINE boards and the glowing gold carts bottom left with the autumn woods west of it, the MAP / WORKS hamlet bottom right, the plaza with the fire crystal, SHOP / SPIN & WIN left, UPGRADES / FOSSIL DIG right, THE GREAT FORGE in the middle, the massif with DEPTHS, THE FORGE, waterfalls and crystals filling the upper middle, the violet gas giant wholly in the top-right sky and both horizon cloud banks whole (tests/LobbySky.spec.luau). **No longer in the hero, on purpose:** the ROCK SCANNER, the creek bridge and the koi pond stand north of the vault, hidden by the vault, `VaultTree5` and the east statue from every camera south of the island; do not move the hero camera to bring them back (`lobby_south`, `lobby_vault` and `d_scanner` show them). |
+| `lobby_vault` | (0, 27, 32) -> (0, 18, 112) (64) | From the plaza's south rim over the bridge to the BLASTER VAULT (like the owner's render): the glass front with its sign, the hologram, both statues whole with their raised blasters and the jungle trees, the signpost (on the koi pond's south-west bank, clear of the steps) bottom right, the MINE board right, the MAP house left; nothing in front of the doors. |
+| `lobby_spawn` | (0, 13, 58) -> (-4, 7, -50) (62) | What a new player sees: fire crystal, Great Forge, SHOP left, UPGRADES right, mountain and portal above the roof. |
+| `lobby_west` | (14, 20, 26) -> (-62, 8, -40) (65) | Toward the sunset: SHOP, SPIN & WIN, NW cliff and waterfall, sea, ships, pier, sun glitter. |
 | `lobby_east` | (-14, 16, 36) -> (64, 6, -6) (65) | UPGRADES, FOSSIL DIG, ROCK SCANNER, pink grove, NEXT AREA in the distance. |
-| `lobby_south` | (6, 34, -28) -> (-4, 0, 78) (65) | From the forge porch over the plaza to the bridge, ponds, signpost, mine and the autumn corner. |
+| `lobby_south` | (6, 34, -28) -> (-4, 0, 78) (65) | From the forge porch over the plaza to the bridge, ponds, signpost and the Blaster Vault between its statues. |
 | `lobby_backdrop` | (26, 24, -96) -> (4, 16, -240) (62) | From the quarry rim: DEPTHS portal, ForgeWorks, waterfalls, crane, the massif. |
 
 All shots use `sunDir` = SunDirection. Packages render the shots listed in their section
@@ -151,8 +175,8 @@ piece's front (LookVector). Build inside your footprint and height budget.
 | crane | Crane | (104, 64, -268) | 40 x 40 x 12 | SW | jib over the quarry, hanging crate |
 | tower on the peak | Beacon | (60, 104, -300) | 10 x 30 x 10 | S | red beacon |
 | waterfall left of the forge | NWCliff + NWPool | (-48, 0, -98) / (-48, 0, -88) | 32 x 22 x 10 / 18 x 2 x 8 | S | cliff, falls, purple crystals |
-| MINE entrance | MineEntrance | (-46, 0, 88) | 26 x 20 x 20 | E | rock hill, timber portal, MINE sign |
-| rails with gold carts | MineYard | (-20, 0, 88) | 12 x 4 x 30 | E | 2 gold carts, buffer stop |
+| MINE entrance | MineEntrance | (-100, 0, 134) (designed at (-46, 0, 88)) | 26 x 20 x 20 | E | rock hill, timber portal, MINE sign; south-west corner since the Blaster Vault |
+| rails with gold carts | MineYard | (-74, 0, 134) (designed at (-20, 0, 88)) | 12 x 4 x 30 | E | 2 gold carts, buffer stop |
 | cliff edges, sea color, ground color | rule (Land.luau) | - | - | - | dark voxel rim cliffs, Style colors |
 
 ### Plaza and Great Forge (package Plaza)
@@ -174,7 +198,7 @@ piece's front (LookVector). Build inside your footprint and height budget.
 | SPIN & WIN wheel | SpinWheel | (-48, 0, 18) | 18 x 26 x 10 | (0.85, 0, 0.53) | wheel spins (Spin), EmberChest on its platform |
 | guild notice board | GuildBoard | (-15, 0, -30) | 9 x 10 x 3 | S | tag GuildBoard |
 | FOSSIL DIG with dinosaur skeleton | FossilDig | (50, 0, 24) | 18 x 8 x 24 | W | tag FossilDig |
-| ROCK SCANNER terminal | RockScanner | (56, 0, 80) | 12 x 10 x 10 | (-0.71, 0, 0.71) | tag OreCodex on the terminal |
+| ROCK SCANNER terminal | RockScanner | (43, 0, 69) | 12 x 11 x 10 | (-0.6, 0, 0.8) | tag OreCodex on the terminal; north-west of the vault's east statue |
 
 ### Water, trees, wayfinding (package Flora)
 | Concept element | Id | Center | Size | Facing | Notes |
@@ -183,24 +207,38 @@ piece's front (LookVector). Build inside your footprint and height budget.
 | koi pond (center front) | KoiPond | (26, 0, 62) | 24 x 2 x 14 | S | koi, stepping stones |
 | creek under the bridge | Creek | (0, 0, 62) | 28 x 1 x 6 | S | joins the ponds |
 | arched wooden bridge | CreekBridge | (0, 0, 62) | 12 x 5 x 16 | S | carries the south road |
-| MINE / UPGRADE / EXPLORE / BUILD signpost | Signpost | (-14, 0, 46) | 7 x 10 x 3 | (0.52, 0, 0.86) | double-sided, icons |
+| MINE / UPGRADE / EXPLORE / BUILD signpost | Signpost | (-20, 0, 62) | 14 x 17 x 4 | (0.16, 0, 0.99) | double-sided, icons; the koi pond's south-west bank, west of the bridge (clear of the plaza-to-vault view of the steps) |
 | NEXT AREA sign | NextArea | (150, 0, -120) | 14 x 12 x 4 | S | arrow east, closed gate |
 | boardwalk to the next area | NextAreaBoardwalk | (205, 0, -112) | 8 x 3 x 70 | E | out over the sea to NextIsland |
 | pink cherry trees (right of forge) | PinkGrove | (41, 0, -66) | r 9, h 22 | - | two hero trees |
-| big red tree (foreground right) | RedTree | (28, 0, 40) | r 6, h 18 | - | hero tree |
-| yellow/orange trees (foreground left) | AutumnCorner | (-50, 0, 118) | r 12, h 18 | - | cluster |
+| big red tree (east town edge) | RedTree | (59, 0, 80) | r 6, h 18 | - | joins the east tree belt, off the camera-to-dig line |
+| yellow/orange trees (foreground left) | AutumnCorner | (-139, 0, 130) | r 12, h 18 | - | cluster behind the MINE hill |
 | colorful voxel trees, flowers, fences, lanterns | rule | - | - | - | scatter with `LobbyLayout.isFree` |
+| town buildings | rule (Flora/Town.luau `Sites`) | - | - | - | west street (CARTS, Lodge, TOOLS, RowCottage), INN and ORE behind UPGRADES, the south-east hamlet (MAP, WORKS, garden cottage) |
+
+### Blaster Vault (package Vault)
+| Concept element | Id | Center | Size | Facing | Notes |
+|---|---|---|---|---|---|
+| BLASTER VAULT (the blaster shop, owner's render) | BlasterVault | (0, 0, 112.4) | 67.2 x 76 x 65.6 | N (to the plaza) | podium 1.3, eaves ~20, ridge ~34, fire towers ~31, hologram ~55, searchlights ~76; hook `VaultCounter`, a `LightingZone` inside; closes the south road (its steps at z 79.6) |
+| giant stone king statue (left) | VaultStatueWest | (-43, 0, 92) | 15.4 x 45 x 13.4 | (0.296, 0, -0.955) | the pedestal; lava cracks, the blaster arm on the outer side |
+| giant stone king statue (right) | VaultStatueEast | (43, 0, 92) | 15.4 x 45 x 13.4 | (-0.296, 0, -0.955) | mirrored |
+| jungle trees behind the vault | VaultTree1 / VaultTree2 | (-29, 0, 153) / (29, 0, 155) | r 15 / 16, top 57 / 61 | - | reservations (`Reserve`), on the south cliff top |
+| jungle trees west of the vault | VaultTree3 / VaultTree4 | (-45, 0, 120) / (-47, 0, 140) | r 13 / 14, top 49 / 53 | - | reservations |
+| jungle trees east of the vault | VaultTree5 / VaultTree6 | (45, 0, 108) / (46, 0, 136) | r 13 / 14, top 49 / 53 | - | reservations (VaultTree5 stands behind the east statue) |
 
 ### Paths (`LobbyLayout.Paths`, rendered by Plaza)
 | Id | From -> To | Width | Kind |
 |---|---|---|---|
 | ToShop | (-28, -13) -> (-40, -19) | 12 | Cobble |
 | ToUpgrades | (28, -13) -> (40, -19) | 12 | Cobble |
-| ToWheel | (-31, 17) -> (-41, 22) | 7 | Cobble |
-| ToFossil | (33, 14) -> (40, 20) | 7 | Cobble |
-| ToScanner | (5, 80) -> (49, 80) | 6 | Cobble |
-| ToMine | (-5, 88) -> (-34, 88) | 10 | Dirt |
-| ToNextArea | (75, -115) -> (160, -115) | 6 | Cobble |
+| ToWheel | (-30.9, -59.6) -> (-44.5, -58.5) | 6 | Cobble |
+| ToFossil | (17.5, 32.5) -> (30.5, 45.5) | 5 | Cobble |
+| ToScanner | (5, 71) -> (37, 74) | 6 | Cobble |
+| MineLane | (-70, 118) -> (-70, 125) | 9 | Dirt |
+| ToMine | (-67, 134) -> (-88, 134) | 9 | Dirt |
+| HamletLane | (70, 119) -> (80, 127.5) | 5 | Dirt |
+| ToMap | (80, 127.5) -> (88, 125) | 5 | Dirt |
+| ToNextArea | (75, -115) -> (160, -115) | 6 | Dirt |
 
 ## 5. Gameplay hooks (other services depend on these)
 
@@ -216,6 +254,8 @@ piece's front (LookVector). Build inside your footprint and height budget.
 | `EmberChest` (tag) | Model with PrimaryPart, inside the `SpinWheel` model (free daily reward) | SPIN & WIN | Districts |
 | `GuildBoard` (tag) | Model with PrimaryPart | GuildBoard | Districts |
 | `OreCodex` (tag, new) | Model (terminal) with PrimaryPart | ROCK SCANNER | Districts |
+| `VaultCounter` (tag) | BasePart: the blaster shop counter top | BlasterVault | Vault |
+| `LightingZone` (tag) | invisible zone over the vault's inside, attribute `Preset` (VaultInterior) | BlasterVault | Vault |
 | `FossilDig` (tag, new) | Model (dig site) with PrimaryPart | FOSSIL DIG | Districts |
 | `Spin` (tag) | Model with PrimaryPart and Atomic streaming; attributes SpinSpeed, BobHeight, BobSpeed | fire crystal (Plaza), wheel disc (Districts), balloon (Sky), ships bob (Sky) | several |
 | `TownSpawn` (name) | SpawnLocation at (0, 0.25, 26) | built by Town.luau | none (keep clear) |
@@ -223,7 +263,7 @@ piece's front (LookVector). Build inside your footprint and height budget.
 Until a package lands, `TownLegacy.luau` keeps building the old piece that provides the
 hook (see 7.2), so every hook exists at every commit.
 
-## 6. The five packages
+## 6. The six packages
 
 Common rules for all packages:
 - You own the files listed for you and nothing else. Never edit `LobbyLayout.luau`,
@@ -243,11 +283,15 @@ Common rules for all packages:
 
   | Package | Parts | Parts in lobby area | Lights | Lights in lobby area |
   |---|---|---|---|---|
-  | Sky | 1400 | 150 | 6 | 2 |
-  | Backdrop | 1800 (+300 in Land.luau) | 500 | 10 | 3 |
-  | Plaza | 1100 | 1100 | 10 | 10 |
-  | Districts | 1000 | 1000 | 8 | 8 |
-  | Flora | 1500 | 1300 | 8 | 8 |
+  | Sky | 1800 | 200 | 6 | 2 |
+  | Backdrop | 1800 (+ LandExtraParts in Land.luau) | 500 | 10 | 3 |
+  | Plaza | 1600 | 1600 | 10 | 10 |
+  | Districts | 2400 | 2400 | 11 | 11 |
+  | Flora | 2550 | 2350 | 8 | 8 |
+  | Vault | 3500 | 3500 | 6 | 6 |
+
+  (the values in `LobbyLayout.Budget.Packages` win where they differ; whole map 17500 parts, lobby area 11400
+  parts and 45 lights, see section 0)
 - Add your own spec `tests/Lobby<Package>.spec.luau` (hooks, footprints, walkability of
   your walkable pieces). `tools/check.sh` must pass. Render your shots and look at them.
 - Commit without `build/TerraForge.rbxl` (`git checkout -- build/TerraForge.rbxl`).
@@ -526,6 +570,27 @@ Build:
 Shots: `lobby_hero`, `lobby_south`, `lobby_spawn`, `lobby_east`. Done when the hero
 shot's foreground matches the concept: bridge over the creek between two ponds, the
 signpost, the red tree, the autumn corner, pink trees behind UPGRADES, and no bare lawn.
+(Since the Blaster Vault the bridge and the ponds read in `lobby_south` and `lobby_vault`,
+not in the hero, see section 3.)
+
+### 6.6 Package Vault
+
+**Owner:** the blaster session (the blaster shop and its interior belong to the blasters work).
+**Owns:** `src/server/World/Lobby/Vault/**` (`init.luau` returns `{ Replaces = {}, build }`;
+Building, Interior, Statue, Tree, Kit), `tests/LobbyVault.spec.luau`; the owner's reference
+renders come from `tools/lune/lib/vault_game.luau` (scene `vault_game`).
+**Replaces:** nothing.
+
+Pieces (section 4, "Blaster Vault"): `BlasterVault`, `VaultStatueWest`, `VaultStatueEast` and
+the reservations `VaultTree1..6`. The package reads its frames from `LobbyLayout.ById` and
+places the jungle trees as offsets from the vault, so they move with it (keep the
+reservations in LobbyLayout in step when the trees move). Hooks: `VaultCounter` (the shop
+counter top), `LightingZone` (Preset VaultInterior) over the inside.
+
+Budget: 3500 parts, 6 lights (both in the lobby area), <= 12 particle emitters (~2970 parts
+and 5 lights built). Shots: `lobby_vault`, `lobby_south` (and `lobby_hero` for the symmetric
+view over its back gable). Done when the vault reads like the owner's render from the plaza: both statues
+whole with their blasters, the sign and the glass front, nothing in front of the doors.
 
 ## 7. Integration
 
@@ -546,9 +611,9 @@ exists (`LobbyLayout.Packages` order) into `Emberfall.Lobby.<Package>` with
 | guildBoard | `GuildBoard` | Districts |
 | scatter | old trees, rocks, flowers | Flora |
 
-When all five packages have landed, the art director deletes TownLegacy.luau.
+When all six packages have landed, the art director deletes TownLegacy.luau.
 
 ### 7.3 Merge order
 Any order works (no shared files). Suggested: Backdrop and Sky first (they change the
-whole mood), then Plaza, Districts, Flora. After each merge: `tools/check.sh`,
+whole mood), then Plaza, Districts, Flora, Vault. After each merge: `tools/check.sh`,
 `lune run tools/lune/lobby_stats.luau`, render `lobby_hero` and compare with the concept.

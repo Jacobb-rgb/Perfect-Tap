@@ -13,8 +13,8 @@
 	road, ToMine and ToNextArea dirt. The south road stops at the creek
 	bridge (Flora builds the bridge).
 
-	Lanterns every ~19 studs, alternating sides, along the south road, the
-	spurs, the forge paths and the rim road: dark metal lantern pillars with
+	Lanterns every ~32 studs, alternating sides, along the spurs, the forge
+	paths, the ROCK SCANNER path and the MINE lane: dark metal lantern pillars with
 	glowing orange slots along the neon walkways, wooden Post lanterns on
 	the far roads; a pair of lantern pillars at the south, east and west
 	plaza entrances (the forge's stair cheeks carry the north pair). Five of
@@ -36,9 +36,13 @@ local Roads = {}
 local LANTERN_EVERY = 32 -- (lobby fix round 2: 19 -> 32, fewer parts, the walkways still lit)
 -- Roads that get Post lanterns, with the distance of the first one from the road start.
 local LANTERN_ROADS = {
-	-- the gate pillars stand at the road start (z 44); Flora lights the bridge
-	-- and the ToScanner/ToMine junctions (z 75-80), so the posts start at z 95
-	SouthRoad = 59,
+	-- (the south road ends at the Blaster Vault's steps, z 79: the gate
+	-- pillars stand at its start, Flora lights the bridge and the vault's
+	-- approach, so it has no posts)
+	-- one post half way to the ROCK SCANNER, one where the MINE lane leaves
+	-- the west plot road
+	ToScanner = 14,
+	MineLane = 3,
 	EastSpur = 9,
 	-- (the west spur's first lantern stands on the SHOP's side: it starts past
 	-- the SHOP's south end, 2+ studs clear of its porch showcases)
@@ -53,7 +57,7 @@ local LANTERN_ROADS = {
 Roads.SouthRoadDarkZ = { 36, 66 }
 -- Post lanterns that carry a light: the one nearest to this point on each road.
 local LIT_POSTS = {
-	SouthRoad = Vector3.new(0, 0, 100),
+	MineLane = Vector3.new(-64, 0, 121),
 	EastSpur = Vector3.new(44, 0, 0),
 	WestSpur = Vector3.new(-44, 0, 0),
 }
