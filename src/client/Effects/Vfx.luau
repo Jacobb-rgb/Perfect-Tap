@@ -4,6 +4,8 @@
 	instances are created per hit (mobile friendly).
 	Also small local rock chips (real parts, max ChipLimit alive) and pooled
 	laser beams (one per key, e.g. "local" or a Player, max BEAM_LIMIT).
+	Vfx.flash is a big soft glow (rock cracks and shatters); Vfx.folder() is
+	the ClientFx folder other effects (RockFx debris) put their parts in.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -97,6 +99,17 @@ local function createHolder(index: number): BasePart
 		e.SpreadAngle = Vector2.new(180, 180)
 		e.Drag = 2.5
 	end)
+	-- a big soft glow for a split second (rock cracks and shatters); Vfx.flash sets its size
+	makeEmitter(part, "Flash", function(e)
+		e.Texture = SPARKLE
+		e.LightEmission = 1
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 4), NumberSequenceKeypoint.new(1, 6) })
+		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(1, 1) })
+		e.Lifetime = NumberRange.new(0.14, 0.2)
+		e.Speed = NumberRange.new(0, 0)
+		e.Rotation = NumberRange.new(0, 360)
+		e.ZOffset = 1
+	end)
 	-- laser impact: a short hot flash where the beam touches the rock
 	makeEmitter(part, "Impact", function(e)
 		e.Texture = SPARKLE
@@ -126,7 +139,13 @@ local function ensure()
 	end
 end
 
--- kind: "Sparks" | "Dust" | "FineDust" | "Glint" | "Burst" | "Impact"
+-- The ClientFx folder (created on first use): parent for client-only effect parts.
+function Vfx.folder(): Folder
+	ensure()
+	return folder :: Folder
+end
+
+-- kind: "Sparks" | "Dust" | "FineDust" | "Glint" | "Burst" | "Impact" | "Flash"
 function Vfx.burst(kind: string, position: Vector3, count: number, color: Color3?, direction: Vector3?)
 	ensure()
 	local holder = holders[nextHolder]
@@ -327,6 +346,21 @@ function Vfx.releaseBeam(key: any)
 		beamCount -= 1
 		handle.Anchor:Destroy()
 	end
+end
+
+-- A big soft glow at `position`, `size` studs across (cracks ~4, shatters ~8, Giant Crystal ~14).
+function Vfx.flash(position: Vector3, color: Color3, size: number)
+	ensure()
+	local holder = holders[nextHolder]
+	nextHolder = nextHolder % #holders + 1
+	holder.CFrame = CFrame.new(position)
+	local emitter = holder:FindFirstChild("Flash") :: ParticleEmitter?
+	if not emitter then
+		return
+	end
+	emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size * 0.7), NumberSequenceKeypoint.new(1, size) })
+	emitter.Color = ColorSequence.new(color)
+	emitter:Emit(1)
 end
 
 -- Where a beam hits: a hot flash and sparks bouncing back toward the shooter.

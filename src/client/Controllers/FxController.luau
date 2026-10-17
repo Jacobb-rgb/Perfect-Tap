@@ -5,26 +5,28 @@
 	Feature controllers add their own Fx kinds with FxController.register.
 
 	Rock effects never name the ores inside (they stay secret until cleaned):
-	they carry the rock's crust color and the beam's glow color instead.
+	they carry the rock's crust color and the beam's / dropped ore's glow
+	color instead. Cracks and shatters play the breaking animation of
+	Effects/RockFx (debris, flash, ring, sound, camera shake); the newer
+	payloads add the stage count and the rock's floor, kind and radius, the
+	old 3-value payloads still work.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local OreData = require(Shared.Config.OreData)
 local Net = require(Shared.Net)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
-local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
+local RockFx = require(script.Parent.Parent.Effects.RockFx)
 
 local FxController = {}
 
 local DEFAULT_CRUST = Color3.fromRGB(150, 130, 110)
 local DEFAULT_GLOW = Color3.fromRGB(255, 150, 70)
 local OTHER_BEAM_HOLD = 0.35 -- seconds an other player's beam stays without a new BlastHit
-local SHAKE_RANGE = 30 -- cracks farther from the camera than this don't shake it
 
 local function isVector(value: any): boolean
 	return typeof(value) == "Vector3" and value.X == value.X and value.Y == value.Y and value.Z == value.Z
@@ -42,17 +44,15 @@ local function colorOf(value: any, fallback: Color3, glow: boolean?): Color3
 	return fallback
 end
 
--- Shake the camera only for things happening close to it.
-local function shakeNear(position: Vector3, amount: number)
-	local camera = Workspace.CurrentCamera
-	if not camera then
-		return
+-- A whole number in [low, high] from the payload, else nil.
+local function countOf(value: any, low: number, high: number): number?
+	if type(value) ~= "number" or value ~= value then
+		return nil
 	end
-	local distance = (camera.CFrame.Position - position).Magnitude
-	if distance < SHAKE_RANGE then
-		CameraShake.add(amount * (1 - distance / SHAKE_RANGE * 0.6))
-	end
+	return math.clamp(math.floor(value + 0.5), low, high)
 end
+
+local ROCK_KINDS = { Small = true, Big = true, Crystal = true, Golden = true, Geode = true, Artifact = true, Giant = true }
 
 -- The Muzzle attachment of a player's blaster, if they hold it.
 local function muzzleOf(shooter: any): (Attachment?, Vector3?)
@@ -101,30 +101,29 @@ handlers.MineBounce = function(position: any)
 	Sfx.play("BlastBounce", position)
 end
 
--- (position, crustColor, stage)
-handlers.NodeCrack = function(position: any, crust: any, stage: any)
+-- A crack stage: (position, crustColor, stage, glowColor?, stages?)
+handlers.NodeCrack = function(position: any, crust: any, stage: any, glow: any, stages: any)
 	if not isVector(position) then
 		return
 	end
-	local color = colorOf(crust, DEFAULT_CRUST)
-	Vfx.burst("Dust", position, 6, color)
-	Vfx.burst("Glint", position + Vector3.new(0, 1, 0), 5, color:Lerp(Color3.new(1, 1, 1), 0.5))
-	Vfx.chips(position + Vector3.new(0, 1.5, 0), if stage == 2 then 6 else 3, color)
-	Sfx.play("NodeCrack", position)
-	shakeNear(position, if stage == 2 then 0.32 else 0.2)
+	local glowColor = if glow ~= nil then colorOf(glow, DEFAULT_GLOW, true) else nil
+	RockFx.crack(position, colorOf(crust, DEFAULT_CRUST), countOf(stage, 1, 20) or 1, glowColor, countOf(stages, 1, 20))
 end
 
--- (position, crustColor, glowColor)
-handlers.NodeShatter = function(position: any, crust: any, glow: any)
+-- The rock breaks: (position, crustColor, glowColor, floor?, kind?, radius?)
+handlers.NodeShatter = function(position: any, crust: any, glow: any, floor: any, kind: any, radius: any)
 	if not isVector(position) then
 		return
 	end
-	local color = colorOf(crust, DEFAULT_CRUST)
-	Vfx.burst("Dust", position, 14, color)
-	Vfx.burst("Burst", position + Vector3.new(0, 1, 0), 18, colorOf(glow, DEFAULT_GLOW, true))
-	Vfx.chips(position + Vector3.new(0, 2, 0), 10, color, 1.3)
-	Sfx.play("NodeShatter", position)
-	shakeNear(position, 0.45)
+	local size = if type(radius) == "number" and radius == radius then math.clamp(radius, 0.5, 30) else nil
+	RockFx.shatter(
+		position,
+		colorOf(crust, DEFAULT_CRUST),
+		colorOf(glow, DEFAULT_GLOW, true),
+		countOf(floor, 1, 99),
+		if type(kind) == "string" and ROCK_KINDS[kind] then kind else nil,
+		size
+	)
 end
 
 handlers.Pickup = function(position: Vector3, oreId: any)
