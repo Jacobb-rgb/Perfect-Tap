@@ -15,11 +15,9 @@
 	    gold royal banners) with cave rock pushing in through two bays and
 	    growing over every cornice, a rough rock ceiling with stalactites
 	  - at the back a stepped dais under a grand arch with the Ember King: the
-	    vault's giant stone king statue (Lobby/Vault/Statue, smaller) on its pedestal
-	    (owner, 2026-10-17), replacing the earlier broken golden throne
-	    and a huge cracked statue of an Ember King (crowned, a Heartstone on his
-	    chest, the scepter in one hand, the other arm broken off) in front of a
-	    golden halo, braziers with warm fire on both sides
+	    vault's giant stone king statue (Lobby/Vault/Statue, built smaller) on
+	    its pedestal in front of a golden halo, braziers with warm fire on both
+	    sides (owner, 2026-10-17: it replaced the broken throne and the first statue)
 	  - gold and lavender crystals (MineKit.crystals "Shell") growing through
 	    the floor and walls, richest in the deep back corners
 	  - a gold rune circle in the middle of the hall (the Giant Crystal's spot)
@@ -106,6 +104,8 @@ local COL_X = 22
 local COL_Z = { 26, 10, -6, -22, -38 }
 local COL_H = 30 -- top of a full column's capital
 local GIANT = Vector2.new(0, 4)
+-- the train's Mine Lift on the terrace (Railway builds it there from TrainConfig in the game)
+local LIFT_SPOT: Vector3 = MineFloors.LiftSpots[4] or Vector3.new(26, TERRACE_Y, 45)
 
 -- rock spawns (x, z) at ground height: front half, then the deep back third
 local SPAWNS = {
@@ -1098,16 +1098,17 @@ local function buildTerrace(parent: Instance, c: Ctx)
 	Style.mineCart(m, at(c, 35, TERRACE_Y, 46.6), rng, { Load = "Gold" })
 	Style.crate(m, at(c, 35, TERRACE_Y, 50.4), rng, 2.2)
 	-- a steel crane beam from the right wall holds the ore lift's cable
-	local beamY = TERRACE_Y + 30.7
-	local beamX0, beamX1 = 23.4, IN_X - 0.2
-	Geo.block(m, at(c, (beamX0 + beamX1) / 2, beamY, 45), Vector3.new(beamX1 - beamX0, 0.9, 0.9), LIFT_STEEL_DARK, nil, DECOR)
-	Geo.block(m, at(c, (beamX0 + beamX1) / 2, beamY - 0.5, 45), Vector3.new(beamX1 - beamX0, 0.2, 1.3), LIFT_STEEL, nil, TINY)
-	Geo.block(m, at(c, beamX0 + 0.4, beamY, 45), Vector3.new(0.8, 2.2, 2.2), LIFT_STEEL_DARK, nil, TINY)
-	Geo.block(m, at(c, IN_X - 0.6, beamY - 2.5, 45), Vector3.new(1.0, 6, 2.6), LIFT_STEEL_DARK, nil, DECOR)
-	local braceFrom, braceTo = Vector3.new(IN_X - 1, beamY - 6.5, 45), Vector3.new(IN_X - 9, beamY - 0.6, 45)
+	local beamY = LIFT_SPOT.Y + 30.7
+	local beamZ = LIFT_SPOT.Z
+	local beamX0, beamX1 = LIFT_SPOT.X - 2.6, IN_X - 0.2
+	Geo.block(m, at(c, (beamX0 + beamX1) / 2, beamY, beamZ), Vector3.new(beamX1 - beamX0, 0.9, 0.9), LIFT_STEEL_DARK, nil, DECOR)
+	Geo.block(m, at(c, (beamX0 + beamX1) / 2, beamY - 0.5, beamZ), Vector3.new(beamX1 - beamX0, 0.2, 1.3), LIFT_STEEL, nil, TINY)
+	Geo.block(m, at(c, beamX0 + 0.4, beamY, beamZ), Vector3.new(0.8, 2.2, 2.2), LIFT_STEEL_DARK, nil, TINY)
+	Geo.block(m, at(c, IN_X - 0.6, beamY - 2.5, beamZ), Vector3.new(1.0, 6, 2.6), LIFT_STEEL_DARK, nil, DECOR)
+	local braceFrom, braceTo = Vector3.new(IN_X - 1, beamY - 6.5, beamZ), Vector3.new(IN_X - 9, beamY - 0.6, beamZ)
 	Geo.block(
 		m,
-		CFrame.lookAt(pt(c, (braceFrom.X + braceTo.X) / 2, (braceFrom.Y + braceTo.Y) / 2, 45), pt(c, braceTo.X, braceTo.Y, 45)),
+		CFrame.lookAt(pt(c, (braceFrom.X + braceTo.X) / 2, (braceFrom.Y + braceTo.Y) / 2, beamZ), pt(c, braceTo.X, braceTo.Y, beamZ)),
 		Vector3.new(0.8, 0.8, (braceTo - braceFrom).Magnitude),
 		LIFT_STEEL,
 		nil,
@@ -1259,7 +1260,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		MineFloors.get(4).MinBlaster,
 		{ MARBLE, GOLD, WALL_DARK }
 	)
-	MineKit.oreLift(model, pt(c, 26, TERRACE_Y, 45), "SunkenPalace")
+	-- the ore lift: in the game only its spot (Railway builds it from TrainConfig), the preview shows it
+	MineKit.oreLift(model, pt(c, LIFT_SPOT.X, LIFT_SPOT.Y, LIFT_SPOT.Z), "SunkenPalace")
 
 	-- markers and rock spawns
 	MineKit.marker(model, "Entrance", at(c, 0, TERRACE_Y, 46))
