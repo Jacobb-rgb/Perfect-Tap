@@ -26,8 +26,17 @@ local SEA_TOP = -21
 --[[
 	Broken neon strips on the sea along the sun path: thin (0.2), 1-3 studs
 	along the path, 4-24 across it, spread +-6 near the shore to +-18 at the
-	horizon, denser far out (perspective squeezes them there).
+	horizon, denser far out (perspective squeezes them there). Deep gold in
+	the middle of the path and deep orange at its edges, translucent
+	(Glitter.Transparency): under the low sun and the bloom they stay a gold
+	path instead of burning to a white blob at the horizon.
 ]]
+local Glitter = {
+	Gold = Color3.fromRGB(255, 150, 40),
+	Edge = Color3.fromRGB(240, 104, 40),
+	Transparency = { 0.5, 0.62 },
+}
+Sea.Glitter = Glitter
 function Sea.sunGlitter(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local m = Style.model(piece.Id, parent)
 	local frame = LobbyLayout.frame(piece)
@@ -43,8 +52,8 @@ function Sea.sunGlitter(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 		local across = (4 + 20 * s) * rng:range(0.45, 1)
 		across = math.min(across, 2 * (halfW - math.abs(x)))
 		local along = rng:range(1, 3) * (0.8 + 0.5 * s)
-		local color = if math.abs(x) < spread * 0.4 or rng:chance(0.35) then C.Sun else C.CloudOrange
-		local transparency = rng:range(0.25, 0.5)
+		local color = if math.abs(x) < spread * 0.4 or rng:chance(0.35) then Glitter.Gold else Glitter.Edge
+		local transparency = rng:range(Glitter.Transparency[1], Glitter.Transparency[2])
 		if across > 9 and rng:chance(0.3) then
 			-- broken strip: two pieces with a gap
 			local gap = rng:range(1, 2.5)

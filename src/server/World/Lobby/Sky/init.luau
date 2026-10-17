@@ -13,6 +13,12 @@
 	  NextIsland          tower house past NEXT AREA (Islands)
 	  Balloon             striped hot air balloon, slowly turning (Balloon)
 
+	Plus two sky pieces that are not LobbyLayout pieces (they hang far
+	outside every footprint; positions live in their modules):
+
+	  Planets             three big Kenney-Planets-style planets in the north sky (Planets)
+	  Airship             the concept v2 airship over the east island, bobbing (Airship)
+
 	Positions come from LobbyLayout (one Model per piece, named after its
 	Id). Lighting/sky settings live in LightingConfig, default.project.json
 	and LightingController. Pure builder: Instance creation only, the same
@@ -25,9 +31,11 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
+local Airship = require(script.Airship)
 local Balloon = require(script.Balloon)
 local Clouds = require(script.Clouds)
 local Islands = require(script.Islands)
+local Planets = require(script.Planets)
 local Sea = require(script.Sea)
 
 type Builder = (parent: Instance, piece: LobbyLayout.Piece, rng: Rng.Rng) -> Model
@@ -58,6 +66,10 @@ function Sky.build(parent: Model, rng: Rng.Rng)
 		local model = builder(parent, piece, Rng.new(`Sky/{piece.Id}/{seed}`))
 		model.Name = piece.Id
 	end
+	-- the extra sky pieces draw after the layout pieces, so they never
+	-- reshuffle the streams of the pieces above
+	Planets.build(parent, Rng.new(`Sky/Planets/{rng:int(1, 2147483646)}`))
+	Airship.build(parent, Rng.new(`Sky/Airship/{rng:int(1, 2147483646)}`))
 end
 
 return Sky

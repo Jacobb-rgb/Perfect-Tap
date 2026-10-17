@@ -46,3 +46,19 @@ After the packages merge: a panel of critics compares the renders with concept v
 lobby), and the Kenney reference sheets (machines, blasters, train, fences), lists concrete differences, a fixer per
 package fixes them, and the loop repeats until no major difference is left (at most 3 rounds). Then QA (budgets,
 mobile performance, hooks), rebake, commit, push, pictures for the owner.
+
+## Package notes: Sky (deviations awaiting the lead's sign-off)
+- **Streaming Persistent instead of Lod** for the planets (114 parts), the airship (69) and the cloud banks (336):
+  519 always-replicated parts. With `LevelOfDetail = StreamingMesh` anything past the 384-stud
+  StreamingTargetRadius only ever shows its imposter mesh (no Neon glow, no translucent rim, smeared camouflage),
+  and the airship (~400 studs) would pop in and out at the radius. Caps kept: <= 40 parts per planet (120 for the
+  three), CloudBanks <= 350, airship <= 70; the cloud count did not grow.
+- **Planets at 700-800 studs instead of 1500-3000.** The Atmosphere haze grows with the square of the distance: at
+  1500 studs only ~40% of a Neon color survives (the round-2 planets came out salmon, periwinkle and flat lavender).
+  At 700-800 studs ~75% survives, and the planets still hang 2x beyond the massif and the floating islands.
+- **The small teal world shows only from the plaza (lobby_spawn), not in lobby_hero.** The hero frame's sky ends
+  below the massif's top; every spot there is behind the mountain from the spawn. The hero frames the mountain with
+  the ember world (top left) and the ringed gas giant (bleeding off the right edge).
+- **Request to the Lighting owner:** `LightingConfig.Presets.Surface.Atmosphere` Density 0.26 -> ~0.19 and Haze
+  0.9 -> ~0.5 (and the same in the `Lighting.Atmosphere` of default.project.json). The planet palette is solved for
+  the current haze and holds up under the thinner one (docs/screenshots/sky_lighting_whatif.jpg).
