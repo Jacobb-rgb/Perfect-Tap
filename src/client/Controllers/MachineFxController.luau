@@ -73,6 +73,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ItemData = require(Shared.Config.ItemData)
+local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local SoundConfig = require(Shared.Config.SoundConfig)
@@ -1272,8 +1273,12 @@ local function register(instance: Instance)
 	end
 	local model = instance :: Model
 	local id = model:GetAttribute("MachineId")
-	if type(id) ~= "string" or id == "Conveyor" then
+	if type(id) ~= "string" then
 		return
+	end
+	local info = MachineData.ById[id]
+	if info and info.IsConveyor then
+		return -- belts (also the Express belt) have no effects
 	end
 	local base = model.PrimaryPart or model:FindFirstChild("Base")
 	local fx: Fx = {

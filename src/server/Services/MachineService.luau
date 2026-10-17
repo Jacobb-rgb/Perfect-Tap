@@ -436,6 +436,8 @@ function MachineService.refreshType(player: Player, machineId: string)
 		end
 	end
 	rebuildPlot(plotId)
+	-- hoppers, belt feeds and cables point at the new models
+	fireLayout(player, plotId)
 end
 
 -- Speed modifiers (PowerService): each returns a multiplier for a machine (1 = normal).
