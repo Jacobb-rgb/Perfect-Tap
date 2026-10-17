@@ -12,8 +12,10 @@
 	  plot 5  the hammer moment on the anvil: the glowing billet, the hammer up
 	  plot 6  the reveal: the new blaster floating over the anvil with rays
 	UI overlays (FoundryView, the HUD):
-	  ui_foundry          the panel, ready to forge (PC)
-	  ui_foundry_phone    the panel on a 667 x 375 pt phone (compact), coins missing
+	  ui_foundry          the panel, ready to forge (PC), usable ingots waiting
+	                      in the Ore Pen (the note under the rows)
+	  ui_foundry_phone    the panel on a 667 x 375 pt phone (compact, shrunk to
+	                      fit below the top bar), coins missing
 	  ui_forge            the hammer HUD mid-forge (PC)
 	  ui_forge_phone      the hammer HUD on a phone (STRIKE bottom right)
 	  ui_forge_reveal     the NEW BLASTER card
@@ -123,8 +125,10 @@ function FoundryPreview.build(Loader: any, workspace: any, moment: boolean?): { 
 		)
 		billet.Name = "Billet"
 		local pivot = anvil * CF.new(1.75, 0.8, 0.1) * CF.Angles(0, 0, -1.0)
-		Geo.block(folder, pivot * CF.new(-0.85, 0, 0), V3.new(1.7, 0.18, 0.18), C3.fromRGB(120, 80, 48), nil, props)
-		Geo.block(folder, pivot * CF.new(-1.75, 0, 0), V3.new(0.5, 0.75, 0.45), C3.fromRGB(70, 72, 82), roblox.Enum.Material.Metal, props)
+		local metal = roblox.Enum.Material.Metal
+		Geo.block(folder, pivot * CF.new(-0.85, 0, 0), V3.new(1.7, 0.18, 0.18), C3.fromRGB(150, 98, 56), nil, props)
+		Geo.block(folder, pivot * CF.new(-1.75, 0, 0), V3.new(0.5, 0.75, 0.45), C3.fromRGB(196, 202, 216), metal, props)
+		Geo.block(folder, pivot * CF.new(-1.75, 0, 0), V3.new(0.54, 0.24, 0.49), C3.fromRGB(52, 54, 64), metal, props)
 		for i = 1, 7 do
 			local a = i * 0.9
 			local p = anvil.Position + V3.new(math.cos(a) * (0.6 + i * 0.12), 0.4 + (i % 3) * 0.35, math.sin(a) * 0.5)
@@ -217,22 +221,25 @@ function FoundryPreview.build(Loader: any, workspace: any, moment: boolean?): { 
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
 		return refs
 	end
-	local function panel(scale: number, compact: boolean, coins: number, level: number, look: string): any
-		local state = { FoundryStock = STOCK, FoundryCount = 12, BlasterLevel = level, BlasterOre = look, Coins = coins }
+	-- screen: { width, height, UI scale } of the gui's area (for fit)
+	local function panel(scale: number, compact: boolean, coins: number, level: number, look: string, pen: any, screen: { number }): any
+		local state = { FoundryStock = STOCK, FoundryCount = 12, BlasterLevel = level, BlasterOre = look, Coins = coins, Storage = pen }
 		local refs = FoundryView.build()
 		refs.Gui.Scale.Scale = scale
 		refs.Gui.Enabled = true
 		FoundryView.setCompact(refs, compact)
 		FoundryView.setRows(refs, FoundryView.oreRows(state.FoundryStock, state.BlasterLevel), state.FoundryCount)
+		FoundryView.setPen(refs, FoundryView.penUsable(state.Storage, state.BlasterLevel))
 		FoundryView.setCard(refs, FoundryView.status(state, nil), state)
 		FoundryView.setHint(
 			refs,
 			if compact
-				then "FORGE makes your next blaster  -  TAKE moves an ingot to the Ore Pen"
-				else "FORGE makes your next blaster  -  TAKE moves an ingot to the Ore Pen  -  Backspace: close",
+				then "FORGE makes your next blaster  -  TAKE moves ingots to the Ore Pen"
+				else "FORGE makes your next blaster  -  TAKE moves ingots to the Ore Pen  -  Backspace: close",
 			nil,
 			nil
 		)
+		FoundryView.fit(refs, screen[1], screen[2], screen[3])
 		return refs
 	end
 	-- gameScale: the in-game UI scale (the top bar inset is 58 pt)
@@ -256,9 +263,12 @@ function FoundryPreview.build(Loader: any, workspace: any, moment: boolean?): { 
 	local pcHud = hud(pcScale)
 	-- PC: level 2 -> 3 (Common+), ready; phone: level 3 -> 4 needs Uncommon+, so
 	-- Copper and Coal are too common (TAKE ALL) and one ingot is missing
-	exports.ui_foundry = UiExport.export({ pcHud.Gui, panel(pcScale, false, 3450, 2, "Copper").Gui })
+	local pcPen = { ["Ingot|Tin|Clean|"] = 2, ["Ingot|Iron||"] = 1, ["Raw|Coal||"] = 6 }
+	exports.ui_foundry = UiExport.export({ pcHud.Gui, panel(pcScale, false, 3450, 2, "Copper", pcPen, { 1600, 900, pcScale }).Gui })
 	local phoneHud = hud(phoneScale)
-	exports.ui_foundry_phone = UiExport.export({ phoneHud.Gui, panel(phoneScale, true, 1200, 3, "Silver").Gui })
+	-- the 667 x 375 pt phone: 317 pt below the 58 pt top bar, UI scale 0.62
+	exports.ui_foundry_phone =
+		UiExport.export({ phoneHud.Gui, panel(phoneScale, true, 1200, 3, "Silver", {}, { 667, 375 - 58, 0.62 }).Gui })
 	exports.ui_forge = UiExport.export({ forge(pcScale, 1, false, 3, "PERFECT!").Gui })
 	exports.ui_forge_phone = UiExport.export({ forge(phoneScale, 0.62, true, 2, "GOOD!").Gui })
 	local reveal = forge(pcScale, 1, false, 5, nil)

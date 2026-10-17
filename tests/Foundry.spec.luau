@@ -18,6 +18,7 @@ return function(T, Loader)
 	local FoundryLogic = Loader.requirePath("ReplicatedStorage.Shared.Machines.FoundryLogic")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+	local MachineLogic = Loader.requirePath("ReplicatedStorage.Shared.Machines.MachineLogic")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
 	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
@@ -738,6 +739,39 @@ return function(T, Loader)
 		T.eq(countKey(stock(w), "Ingot|Iron||"), 1, "not from afar")
 	end)
 
+	withWorld("FoundryService: quick Takes share one toast", function(w)
+		local function moved(): { any }
+			local list = {}
+			for _, note in notes(w, "Notify") do
+				if note.A.Text:find("Moved", 1, true) then
+					table.insert(list, note)
+				end
+			end
+			return list
+		end
+		for _ = 1, 4 do
+			table.insert(stock(w), ingot("Gold", "Clean"))
+		end
+		for _ = 1, 3 do
+			fs.action(w.player, "Take", { Key = "Ingot|Gold|Clean|", Count = 1 })
+			w.now += 0.2
+		end
+		T.eq(countKey(w.data.Storage, "Ingot|Gold|Clean|"), 3, "three moved")
+		T.eq(#moved(), 0, "no toast per click")
+		fs.monitor(w.now + 0.2)
+		T.eq(#moved(), 0, "still clicking: wait")
+		fs.monitor(w.now + 1)
+		T.eq(#moved(), 1, "one toast")
+		T.eq(moved()[1].A.Text, "Moved 3 ingots to your Ore Pen.")
+		T.eq(moved()[1].Player, w.player)
+		fs.monitor(w.now + 5)
+		T.eq(#moved(), 1, "sent once")
+		w.now += 10
+		fs.action(w.player, "Take", { Key = "Ingot|Gold|Clean|", Count = 1 })
+		fs.monitor(w.now + 1)
+		T.eq(moved()[2].A.Text, "Moved 1 ingot to your Ore Pen.")
+	end)
+
 	---------------------------------------------------------------- forging
 
 	-- Valid tap times for a session (0.6 s intro, 0.32 s apart).
@@ -1099,6 +1133,96 @@ return function(T, Loader)
 		T.near(FoundryView.ringScale(FoundryView.Beat), 1, 1e-6, "on the target at the beat")
 		T.near(FoundryView.ringScale(0), FoundryView.RingStart, 1e-6)
 		T.le(0.6, FoundryView.ringScale(FoundryView.Beat + 0.17))
+	end)
+
+	T.test("FoundryView: every tap counts and a fast burst still passes the server's check", function()
+		for level = 2, BlasterData.MaxLevel do
+			local hits = FoundryLogic.hits(level)
+			-- a player tapping 12 times a second from the start: the taps wait
+			-- their turn (FoundryController counts one when tapTime allows)
+			local times: { number } = {}
+			local queued, last, t = 0, nil, 0
+			while #times < hits and t < 30 do
+				if t < 3 then
+					queued += 1 -- a tap this frame (every 1/12 s)
+				end
+				while queued > 0 and #times < hits and t >= FoundryView.tapTime(#times + 1, last) do
+					queued -= 1
+					table.insert(times, math.floor(t * 1000 + 0.5) / 1000)
+					last = t
+				end
+				t += 1 / 12
+			end
+			T.eq(#times, hits, "every tap up to Hits counted at level " .. level)
+			local ok, why = MachineLogic.validateStrikes(times, hits, times[#times] + 0.05)
+			T.truthy(ok, `a burst passes at level {level}: {why}`)
+			T.le(times[1], FoundryView.Intro + 0.1, "the first tap counts once the camera is there")
+		end
+		-- the gap is shorter than before (0.3) but never under the server's
+		T.lt(FoundryView.MinGap, 0.3)
+		T.le(GameConfig.AnvilMinStrikeGap + 0.01, FoundryView.MinGap)
+		T.eq(FoundryView.tapTime(1, nil), FoundryView.Intro, "the first after the intro")
+		T.near(FoundryView.tapTime(2, 0.6), 0.8, 1e-9, "the gap")
+		T.near(FoundryView.tapTime(8, 2.0), 8 * FoundryView.Pace, 1e-9, "the pace for the last ones")
+	end)
+
+	T.test("FoundryView: the panel fits short landscape phones below the top bar", function()
+		-- a 667 x 375 and an 844 x 390 phone at the 0.62 UI floor, 58 pt top bar
+		for _, screen in { { 667, 375 }, { 844, 390 }, { 568, 320 } } do
+			local w, h = screen[1], screen[2] - 58
+			local fit = FoundryView.fitScale(w, h, 0.62, true)
+			T.le(510 * 0.62 * fit, h - 11.9, `compact panel height fits {screen[1]}x{screen[2]}`)
+			T.le(980 * 0.62 * fit, w - 31.9, `compact panel width fits {screen[1]}x{screen[2]}`)
+			T.le(0.5, fit)
+		end
+		T.near(FoundryView.fitScale(844, 332, 0.62, true), 1, 1e-9, "a 390 pt phone needs no shrink")
+		T.eq(FoundryView.fitScale(1920, 1022, 1.25, false), 1, "desktop: no shrink")
+		T.eq(FoundryView.fitScale(0, 0, 1, false), 1, "no size yet")
+		local refs = FoundryView.build()
+		FoundryView.setCompact(refs, true)
+		FoundryView.fit(refs, 667, 317, 0.62)
+		T.lt(refs.Fit.Scale, 1, "the panel's Fit scale")
+		T.eq(refs.Panel.Size.Y.Offset, 510)
+	end)
+
+	T.test("FoundryView: the TAKE switch and the Ore Pen note", function()
+		local refs = FoundryView.build()
+		local summary = { ["Ingot|Gold|Clean|"] = 2, ["Ingot|Coal||"] = 5 }
+		T.falsy(refs.TakeAllMode, "starts on ONE")
+		T.truthy(refs.TakeOne:GetAttribute("On"))
+		FoundryView.setRows(refs, FoundryView.oreRows(summary, 3), 7)
+		T.eq(refs.Rows.Gold.Take.Text, "TAKE", "usable: one")
+		T.eq(refs.Rows.Coal.Take.Text, "TAKE ALL", "too common: all")
+		FoundryView.setTakeMode(refs, true)
+		T.truthy(refs.TakeEvery:GetAttribute("On"))
+		T.falsy(refs.TakeOne:GetAttribute("On"))
+		FoundryView.setRows(refs, FoundryView.oreRows(summary, 3), 7)
+		T.eq(refs.Rows.Gold.Take.Text, "TAKE ALL", "ALL: usable rows take all too")
+		T.truthy(refs.Rows.Gold.TakeAll)
+		T.eq(refs.Rows.Gold.Amount, 2)
+		FoundryView.setTakeMode(refs, false)
+		FoundryView.setRows(refs, FoundryView.oreRows(summary, 3), 7)
+		T.falsy(refs.Rows.Gold.TakeAll, "back to ONE")
+		-- usable ingots in the Ore Pen: Silver (Uncommon) counts for level 4, Coal and raw ore don't
+		local pen = { ["Ingot|Silver|Pristine|"] = 3, ["Ingot|Silver||"] = 1, ["Ingot|Coal||"] = 9, ["Raw|Gold||"] = 4, junk = 2 }
+		T.eq(FoundryView.penUsable(pen, 3), 4)
+		T.eq(FoundryView.penUsable(pen, 1), 13, "level 2 takes Common too")
+		T.eq(FoundryView.penUsable(nil, 1), 0)
+		T.eq(FoundryView.penUsable({ ["Ingot|Gold||"] = 0 / 0 }, 1), 0, "NaN counts nothing")
+		FoundryView.setPen(refs, 4)
+		T.truthy(refs.PenNote.Visible, "note under the rows")
+		T.truthy(refs.PenNote.Text:find("FOUNDRY chute", 1, true), "says how they come back")
+		T.truthy(refs.PenNote.Text:find("Put In", 1, true))
+		T.truthy(FoundryView.penText(1):find("1 ingot for your next blaster waits", 1, true))
+		FoundryView.setPen(refs, 0)
+		T.falsy(refs.PenNote.Visible)
+		FoundryView.setRows(refs, {}, 0)
+		FoundryView.setPen(refs, 2)
+		T.falsy(refs.PenNote.Visible, "empty stock: in the empty text instead")
+		T.truthy(refs.Empty.Visible)
+		T.truthy(refs.Empty.Text:find("Ore Pen", 1, true))
+		FoundryView.setPen(refs, 0)
+		T.truthy(refs.Empty.Text:find("No ingots yet", 1, true))
 	end)
 
 	T.test("FoundryView: the panel and the hammer HUD build and fill in", function()

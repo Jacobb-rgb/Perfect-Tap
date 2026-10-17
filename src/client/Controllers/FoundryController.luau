@@ -2,32 +2,41 @@
 	FoundryController: your Foundry on the client (FoundryService is the truth).
 
 	- Prompts: "Open Foundry" (G / gamepad B) only on your own Foundry,
-	  "Put In" (F / gamepad Y) only while you carry something.
+	  "Put In" (F / gamepad Y) only while you carry an ingot (Open moves up
+	  into its place when Put In is hidden).
 	- Panel (FoundryView): opens on OpenUI "Foundry". Rows and the NEXT
 	  BLASTER card come from the State snapshot (FoundryStock, BlasterLevel,
 	  BlasterOre, Coins) and update live.
 	    TAKE   FoundryAction "Take" { Key, Count = 1 } (the ore's cheapest ingot)
-	    TAKE ALL (rows the next level can't use) { Key, Count = the row's
-	           count, All = true }: every ingot of that ore
+	    TAKE ALL (rows the next level can't use, or any row while the
+	           TAKE switch says ALL) { Key, Count = the row's count,
+	           All = true }: every ingot of that ore (the switch starts on
+	           ONE each time the panel opens)
 	    < >    pick the look among the ores of the usable ingots
 	    FORGE  FoundryAction "Forge" { Ore = the look } (when it isn't ready
 	           it only says why)
 	  Closes with X, B, Backspace, walking away (FoundryService.Range from the
-	  anvil) or respawning. Gamepads start on FORGE. Phones get the compact layout.
+	  anvil) or respawning. Gamepads start on FORGE. Phones get the compact
+	  layout; a panel taller than the screen below the top bar shrinks to fit.
+	  A note says when usable ingots wait in the Ore Pen and how they come back.
 	- The hammer moment (FoundryBegin { Id, Level, Ore, Hits, Timeout }): a
 	  close-up on the anvil, a glowing billet in the look's colour and a
 	  hammer. STRIKE: the big button, a click or tap anywhere on the scene,
-	  Space, gamepad A or R2. Every tap counts: taps during the camera move or
-	  closer than MIN_GAP to the last one wait their turn (one queued). The
-	  shrinking ring only decides PERFECT / GOOD / HIT (sparks, clang, shake).
-	  After Hits taps the times go to the server (FoundryAction "Strike");
-	  FoundryResult then shows the new blaster rising off the anvil with the
-	  NEW BLASTER card (AWESOME: click, E, Enter or A), or why it failed.
-	  LEAVE / B / Backspace cancel (nothing is taken; not during the reveal).
-	  Dying, respawning or the building streaming out end it at once, even
-	  during the reveal. Your own character (and anyone standing between the
-	  camera and the anvil) is hidden for the close-up
-	  (LocalTransparencyModifier, put back when it ends).
+	  Space, gamepad A or R2. Every tap counts: taps that come too soon
+	  (during the camera move, or before FoundryView.tapTime allows) wait
+	  their turn, up to the taps still missing. The shrinking ring only
+	  decides PERFECT / GOOD / HIT (sparks, clang, shake). After Hits taps the
+	  times go to the server (FoundryAction "Strike") and LEAVE goes away
+	  (the server finishes the forge now); FoundryResult then shows the new
+	  blaster rising off the anvil with the NEW BLASTER card, or why it
+	  failed. AWESOME (click, E, Enter, Space, A, B, Backspace) shows up and
+	  works only REVEAL_LOCK seconds into the reveal, so the last mashed
+	  strikes never skip it. Before the strikes go out LEAVE / B / Backspace
+	  cancel (nothing is taken). Dying, respawning or the building streaming
+	  out end it at once, even during the reveal. Your own character and the
+	  items you carry (and anyone standing between the camera and the anvil,
+	  with their carried items) are hidden for the close-up
+	  (LocalTransparencyModifier, emitters paused, put back when it ends).
 	- Building: Molten / Glow parts pulse, the warning lights blink while its
 	  owner forges (attribute Forging). Fx: FoundryIn (yours only: an item
 	  flies into the chute's hood or the hopper, at most MAX_FLYING at once,
@@ -82,9 +91,9 @@ local LEAVE_ACTION = "TerraForgeFoundryLeave"
 local COLLECT_ACTION = "TerraForgeFoundryCollect"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local RANGE_CHECK = 0.25
-local INTRO = 0.6 -- the camera flies in; taps wait until it is there
-local MIN_GAP = 0.3 -- client gap between counted taps (the server needs >= AnvilMinStrikeGap)
-local MAX_QUEUED = 1
+local INTRO = FoundryView.Intro -- the camera flies in; taps wait until it is there
+local REVEAL_LOCK = 1.2 -- seconds into the reveal before AWESOME / its keys work
+local OPEN_OFFSET = 72 -- "Open Foundry" sits this far below "Put In" (pixels)
 local RESULT_WAIT = 8
 local PROMPT_TAG = "FoundryPrompt"
 local BUILDING_TAG = "FoundryBuilding"
@@ -92,6 +101,9 @@ local SIGHT_RADIUS = 3 -- studs: other characters this close to the camera -> an
 local SIGHT_CHECK = 0.3
 local MAX_FLYING = 4 -- FoundryIn fly-ins at once
 local FLY_MAX_DISTANCE = 90 -- no fly-in farther than this from the camera
+local HAMMER_WOOD = Color3.fromRGB(150, 98, 56)
+local HAMMER_STEEL = Color3.fromRGB(196, 202, 216) -- FoundryBuilder's AnvilSteel, a touch lighter
+local HAMMER_BAND = Color3.fromRGB(52, 54, 64)
 
 local REASONS: { [string]: string } = {
 	NotEnough = "Not enough ingots or coins for that blaster.",
@@ -116,6 +128,8 @@ local flying = 0
 local penTag: BillboardGui? = nil
 -- parts hidden for the close-up -> their LocalTransparencyModifier before
 local hiddenParts: { [Instance]: number } = {}
+-- particle emitters paused for the close-up -> Enabled before
+local pausedFx: { [ParticleEmitter]: boolean } = {}
 
 ---------------------------------------------------------------- helpers
 
@@ -165,21 +179,37 @@ end
 
 ---------------------------------------------------------------- prompts
 
-local function applyPrompt(prompt: Instance)
+-- Do you carry an ingot? ("Put In" only takes ingots)
+local function carriesIngot(): boolean
+	if carryCount() <= 0 then
+		return false
+	end
+	for _, item in CollectionService:GetTagged("Item") do
+		if item:GetAttribute("CarriedBy") == player.UserId and item:GetAttribute("Kind") == "Ingot" then
+			return true
+		end
+	end
+	return false
+end
+
+local function applyPrompt(prompt: Instance, ingot: boolean)
 	if not prompt:IsA("ProximityPrompt") then
 		return
 	end
 	local mine = prompt:GetAttribute("PlotId") == myPlotId()
 	if prompt.Name == "FoundryPutIn" then
-		prompt.Enabled = mine and carryCount() > 0
+		prompt.Enabled = mine and ingot
 	else
 		prompt.Enabled = mine
+		-- below "Put In" while it shows, else in its place
+		prompt.UIOffset = Vector2.new(0, if mine and ingot then OPEN_OFFSET else 0)
 	end
 end
 
 local function refreshPrompts()
+	local ingot = carriesIngot()
 	for _, prompt in CollectionService:GetTagged(PROMPT_TAG) do
-		applyPrompt(prompt)
+		applyPrompt(prompt, ingot)
 	end
 end
 
@@ -207,6 +237,7 @@ local function refresh(state: { [string]: any }?)
 	end
 	local s: { [string]: any } = state or {}
 	local created = FoundryView.setRows(view, FoundryView.oreRows(s.FoundryStock, s.BlasterLevel), tonumber(s.FoundryCount) or 0)
+	FoundryView.setPen(view, FoundryView.penUsable(s.Storage, s.BlasterLevel))
 	for _, row in created do
 		local ore = row.Ore
 		row.Take.Activated:Connect(function()
@@ -230,6 +261,28 @@ local function refresh(state: { [string]: any }?)
 		FoundryView.setForgeEnabled(view, false)
 	end
 	keepSelection(view)
+end
+
+-- The TAKE switch: ONE or ALL.
+local function setTakeAll(all: boolean)
+	local view = refs
+	if not view then
+		return
+	end
+	FoundryView.setTakeMode(view, all)
+	refresh(StateController.get())
+end
+
+-- The panel fits the screen below the top bar (short landscape phones).
+local function fitPanel(view: FoundryView.Refs)
+	local size = view.Gui.AbsoluteSize
+	local w, h = size.X, size.Y
+	local camera = Workspace.CurrentCamera
+	if (w <= 0 or h <= 0) and camera then
+		w = camera.ViewportSize.X
+		h = camera.ViewportSize.Y - GuiService:GetGuiInset().Y
+	end
+	FoundryView.fit(view, w, h, HudController.uiScale())
 end
 
 local function cycleSkin(step: number)
@@ -273,9 +326,9 @@ local function updateHint(view: FoundryView.Refs)
 			UserInputService:GetImageForKeyCode(Enum.KeyCode.ButtonB)
 		)
 	elseif isTouch() then
-		FoundryView.setHint(view, "FORGE makes your next blaster  -  TAKE moves an ingot to the Ore Pen", nil, nil)
+		FoundryView.setHint(view, "FORGE makes your next blaster  -  TAKE moves ingots to the Ore Pen", nil, nil)
 	else
-		FoundryView.setHint(view, "FORGE makes your next blaster  -  TAKE moves an ingot to the Ore Pen  -  Backspace: close", nil, nil)
+		FoundryView.setHint(view, "FORGE makes your next blaster  -  TAKE moves ingots to the Ore Pen  -  Backspace: close", nil, nil)
 	end
 end
 
@@ -331,6 +384,14 @@ local function ensureView(): FoundryView.Refs
 	built.LookNext.Activated:Connect(function()
 		cycleSkin(1)
 	end)
+	built.TakeOne.Activated:Connect(function()
+		Sfx.play("UIClick")
+		setTakeAll(false)
+	end)
+	built.TakeEvery.Activated:Connect(function()
+		Sfx.play("UIClick")
+		setTakeAll(true)
+	end)
 	refs = built
 	return built
 end
@@ -343,6 +404,10 @@ local function watchRange()
 			return
 		end
 		elapsed = 0
+		local view = refs
+		if view then
+			fitPanel(view) -- the screen may turn or resize
+		end
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		local anvil = attachmentWorld(myBuilding(), "AnvilPoint")
@@ -364,9 +429,11 @@ function FoundryController.open()
 	FoundryController.close()
 	local view = ensureView()
 	FoundryView.setCompact(view, HudController.uiScale() <= 0.75)
+	FoundryView.setTakeMode(view, false) -- ONE each time
 	updateHint(view)
 	view.List.CanvasPosition = Vector2.zero
 	view.Gui.Enabled = true
+	fitPanel(view)
 	isOpen = true
 	forgePending = 0
 	PromptController.setSuppressed("FoundryPanel", true)
@@ -460,12 +527,16 @@ local function feedback(view: FoundryView.ForgeRefs, text: string, color: Color3
 		:Play()
 end
 
--- Hides one part or decal for the close-up (keeps its old value once).
+-- Hides one part or decal (or pauses an emitter) for the close-up (keeps
+-- its old value once).
 local function hidePart(d: Instance)
 	if hiddenParts[d] == nil and (d:IsA("BasePart") or d:IsA("Decal")) then
 		local item: any = d
 		hiddenParts[d] = item.LocalTransparencyModifier
 		item.LocalTransparencyModifier = 1
+	elseif d:IsA("ParticleEmitter") and pausedFx[d] == nil then
+		pausedFx[d] = d.Enabled
+		d.Enabled = false
 	end
 end
 
@@ -473,6 +544,20 @@ local function hideCharacter(character: Instance?)
 	if character then
 		for _, d in character:GetDescendants() do
 			hidePart(d)
+		end
+	end
+end
+
+-- The items these players carry (separate models welded to them, tagged
+-- "Item" with attribute CarriedBy = their UserId) are hidden with them.
+local function hideCarried(users: { [number]: boolean })
+	for _, item in CollectionService:GetTagged("Item") do
+		local by = item:GetAttribute("CarriedBy")
+		if type(by) == "number" and users[by] then
+			hidePart(item)
+			for _, d in item:GetDescendants() do
+				hidePart(d)
+			end
 		end
 	end
 end
@@ -495,6 +580,12 @@ local function restoreHidden()
 		end
 	end
 	table.clear(hiddenParts)
+	for emitter, enabled in pausedFx do
+		if emitter.Parent then
+			emitter.Enabled = enabled
+		end
+	end
+	table.clear(pausedFx)
 end
 
 -- Is `position` close to the line from the close-up camera to the anvil?
@@ -505,8 +596,10 @@ local function blocksView(s: any, position: Vector3): boolean
 	return (a + ab * t - position).Magnitude < SIGHT_RADIUS
 end
 
--- Other players standing in the shot are hidden too (until the end).
+-- Other players standing in the shot are hidden too (until the end), and
+-- so are the items they (and you) carry.
 local function hideBlockers(s: any)
+	local users: { [number]: boolean } = s.hiddenUsers
 	for _, other in Players:GetPlayers() do
 		local character = other.Character
 		if other ~= player and character then
@@ -514,11 +607,13 @@ local function hideBlockers(s: any)
 				local part = character:FindFirstChild(name)
 				if part and part:IsA("BasePart") and blocksView(s, part.Position) then
 					hideCharacter(character)
+					users[other.UserId] = true
 					break
 				end
 			end
 		end
 	end
+	hideCarried(users)
 end
 
 local function exit(s: any)
@@ -569,14 +664,13 @@ local function exit(s: any)
 	end
 end
 
--- LEAVE / B / Backspace (not during the reveal: AWESOME ends that).
+-- LEAVE / B / Backspace: only before the strikes go out (after that the
+-- server finishes the forge, and AWESOME ends the reveal).
 local function leave(s: any)
-	if s.exited or s.revealing then
+	if s.exited or s.revealing or s.sent then
 		return
 	end
-	if not s.sent then
-		Net.send("FoundryAction", "Cancel", { SessionId = s.Id })
-	end
+	Net.send("FoundryAction", "Cancel", { SessionId = s.Id })
 	exit(s)
 end
 
@@ -710,10 +804,27 @@ local function reveal(s: any, result: { [string]: any })
 		end)
 	)
 	FoundryView.showCard(s.view, level, ore, s.previousLevel, s.previousOre)
-	-- A / B / Space no longer strike or leave: they collect
+	-- A / B / Space no longer strike or leave: they collect, but only
+	-- REVEAL_LOCK seconds in (the last mashed strikes must not skip the reveal)
 	ContextActionService:UnbindAction(STRIKE_ACTION)
 	ContextActionService:UnbindAction(LEAVE_ACTION)
+	s.revealAt = os.clock()
+	local collectHolder = s.view.Collect.Parent :: GuiObject
+	collectHolder.Visible = false
+	task.delay(REVEAL_LOCK, function()
+		if s.exited or not s.revealing then
+			return
+		end
+		collectHolder.Visible = true
+		local pop = collectHolder:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
+		pop.Scale = 0.6
+		pop.Parent = collectHolder
+		TweenService:Create(pop, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	end)
 	local function collect()
+		if not s.revealing or os.clock() - s.revealAt < REVEAL_LOCK then
+			return
+		end
 		Sfx.play("UIClick")
 		s.revealing = false
 		exit(s)
@@ -743,6 +854,9 @@ local function sendStrikes(s: any)
 	Net.send("FoundryAction", "Strike", { SessionId = s.Id, Times = s.times })
 	s.view.Sub.Text = "Forging..."
 	s.view.RingHolder.Visible = false
+	-- the server finishes the forge now: no LEAVE that looks like a free cancel
+	local leaveHolder = s.view.Leave.Parent :: GuiObject
+	leaveHolder.Visible = false
 	task.delay(RESULT_WAIT, function()
 		if not s.exited and not s.result then
 			fail(s, "Lost")
@@ -750,13 +864,18 @@ local function sendStrikes(s: any)
 	end)
 end
 
--- Counts one tap now (the caller checked the gap).
+-- May the next tap count now? (FoundryView.tapTime: the intro, the gap and the pace)
+local function tapReady(s: any, now: number): boolean
+	return now - s.started >= FoundryView.tapTime(#s.times + 1, s.lastT)
+end
+
+-- Counts one tap now (the caller checked tapReady).
 local function count(s: any, now: number)
 	local t = now - s.started
 	local grade = FoundryView.grade(math.max(0, now - s.beatStart))
 	s.beatStart = now
 	table.insert(s.times, math.floor(t * 1000 + 0.5) / 1000)
-	s.last = now
+	s.lastT = t
 	FoundryView.setPips(s.view, s.Hits, #s.times)
 	hit(s, grade)
 	if #s.times >= s.Hits then
@@ -772,10 +891,10 @@ local function tap(s: any)
 		return
 	end
 	local now = os.clock()
-	if now - s.started >= INTRO and now - s.last >= MIN_GAP and s.queued == 0 then
+	if s.queued == 0 and tapReady(s, now) then
 		count(s, now)
-	elseif s.queued < MAX_QUEUED then
-		s.queued += 1 -- counted as soon as the gap allows (every tap counts)
+	elseif #s.times + s.queued < s.Hits then
+		s.queued += 1 -- counted as soon as tapTime allows (every tap counts)
 	end
 end
 
@@ -838,8 +957,9 @@ local function begin(payload: { [string]: any })
 		previousOre = if type(state.BlasterOre) == "string" then state.BlasterOre else "",
 		started = os.clock(),
 		beatStart = os.clock() + INTRO - FoundryView.Beat * 0.4,
-		last = -math.huge,
+		lastT = nil, -- seconds since started of the last counted tap
 		queued = 0,
+		hiddenUsers = { [player.UserId] = true }, -- characters (and carried items) hidden
 		times = {},
 		connections = {},
 		folder = folder,
@@ -869,7 +989,8 @@ local function begin(payload: { [string]: any })
 	end)
 	s.popLighting = LightingController.push("Workbench", 0.5)
 	-- your own character stands between the camera and the anvil: hide it
-	-- (and anyone else in the shot); a Scriptable camera never fades it
+	-- and what you carry (and anyone else in the shot); a Scriptable camera
+	-- never fades it
 	hideCharacter(player.Character)
 	hideBlockers(s)
 	camera.CameraType = Enum.CameraType.Scriptable
@@ -898,15 +1019,11 @@ local function begin(payload: { [string]: any })
 	hammer.Name = "Hammer"
 	-- the hand end of the handle; the head comes down onto the billet's top
 	local pivot = anvil * CFrame.new(1.75, 0.8, 0.1)
-	Geo.block(hammer, pivot * CFrame.new(-0.85, 0, 0), Vector3.new(1.7, 0.18, 0.18), Color3.fromRGB(120, 80, 48), nil, localProps())
-	Geo.block(
-		hammer,
-		pivot * CFrame.new(-1.75, 0, 0),
-		Vector3.new(0.5, 0.75, 0.45),
-		Color3.fromRGB(70, 72, 82),
-		Enum.Material.Metal,
-		localProps()
-	)
+	Geo.block(hammer, pivot * CFrame.new(-0.85, 0, 0), Vector3.new(1.7, 0.18, 0.18), HAMMER_WOOD, nil, localProps())
+	-- a light steel head with a dark band: it reads against the dark rack
+	-- silhouette behind it when raised and against the light anvil when down
+	Geo.block(hammer, pivot * CFrame.new(-1.75, 0, 0), Vector3.new(0.5, 0.75, 0.45), HAMMER_STEEL, Enum.Material.Metal, localProps())
+	Geo.block(hammer, pivot * CFrame.new(-1.75, 0, 0), Vector3.new(0.54, 0.24, 0.49), HAMMER_BAND, Enum.Material.Metal, localProps())
 	local grip = Geo.block(hammer, pivot, Vector3.new(0.1, 0.1, 0.1), Color3.new(), nil, localProps({ Transparency = 1 }))
 	hammer.PrimaryPart = grip
 	hammer.Parent = folder
@@ -996,7 +1113,7 @@ local function begin(payload: { [string]: any })
 				view.Ring.Size = UDim2.fromScale(scale, scale)
 				local close = math.abs(scale - 1) < 0.12
 				view.RingStroke.Color = if close then Theme.Coin else Color3.new(1, 1, 1)
-				if s.queued > 0 and now - s.started >= INTRO and now - s.last >= MIN_GAP then
+				if s.queued > 0 and tapReady(s, now) then
 					s.queued -= 1
 					count(s, now)
 				end
@@ -1289,9 +1406,15 @@ function FoundryController.init()
 end
 
 function FoundryController.start()
-	CollectionService:GetInstanceAddedSignal(PROMPT_TAG):Connect(applyPrompt)
+	CollectionService:GetInstanceAddedSignal(PROMPT_TAG):Connect(function(prompt)
+		applyPrompt(prompt, carriesIngot())
+	end)
 	refreshPrompts()
-	player:GetAttributeChangedSignal("CarryCount"):Connect(refreshPrompts)
+	-- an item's CarriedBy attribute may arrive a moment after CarryCount, so refresh twice
+	player:GetAttributeChangedSignal("CarryCount"):Connect(function()
+		refreshPrompts()
+		task.delay(0.25, refreshPrompts)
+	end)
 	player:GetAttributeChangedSignal("PlotId"):Connect(function()
 		refreshPrompts()
 		rewatchBuildings()

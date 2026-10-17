@@ -2,13 +2,16 @@
 	Foundry UI (pure builders; FoundryController fills them in and wires them).
 
 	The panel (build), opened at your Foundry:
-	  header   FOUNDRY title, X button
+	  header   FOUNDRY title, the TAKE [ONE | ALL] switch, X button
 	  left     INGOTS "12 / 60": one row per ore (grouped over grades): an
 	           icon in the ore's colour framed in its rarity colour, the name,
 	           a rarity chip, the grades ("2 Pristine, 1 Rough") or why the
 	           next level can't use it, the count and TAKE (one ingot back to
 	           the Ore Pen, the cheapest of that ore first; TAKE ALL on the
-	           rows the next level can't use: all of that ore at once)
+	           rows the next level can't use, and on every row while the
+	           switch says ALL: all of that ore at once). Below the rows (or
+	           in the empty text) a note when usable ingots wait in the Ore
+	           Pen, saying how they come back.
 	  right    NEXT BLASTER: level badge, the name the new blaster would get
 	           in the chosen look's colour, damage now -> next, the LOOK
 	           picker (< ore >, only ores among the usable ingots), the recipe
@@ -16,7 +19,9 @@
 	           uses, and FORGE (grey with the reason when it can't); after
 	           level 10: "COMING SOON"
 	  footer   control hint (gamepads: the platform's glyphs)
-	Compact layout for phones (uiScale <= 0.75): taller rows and buttons.
+	Compact layout for phones (uiScale <= 0.75): taller rows and buttons. fit
+	shrinks the panel (an extra UIScale) when it would be taller or wider
+	than the screen below the Roblox top bar (short landscape phones).
 
 	The hammer moment (buildForge): banner with the blaster's name, tap pips,
 	the shrinking ring over the target circle (PERFECT / GOOD are cosmetic,
@@ -26,7 +31,8 @@
 	ignores the inset so the flash covers the whole screen).
 
 	Pure helpers (tested): oreRows, status, reasonText, usesText, damageText,
-	grade, ringScale, topShift.
+	grade, ringScale, topShift, tapTime (when a tap may count), fitScale,
+	penUsable, penText.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -98,6 +104,12 @@ export type Refs = {
 	PadHint: Frame,
 	PadA: ImageLabel,
 	PadB: ImageLabel,
+	TakeMode: Frame,
+	TakeOne: TextButton,
+	TakeEvery: TextButton,
+	TakeAllMode: boolean, -- the switch says ALL: every row's TAKE moves all of its ore
+	PenNote: TextLabel,
+	Fit: UIScale,
 	Rows: { [string]: Row },
 	Compact: boolean,
 }
@@ -130,6 +142,11 @@ FoundryView.Beat = 0.75 -- seconds for the ring to shrink onto the target
 FoundryView.PerfectWindow = 0.08
 FoundryView.GoodWindow = 0.18
 FoundryView.RingStart = 2.6 -- the ring's size (x the target) when a beat starts
+FoundryView.Intro = 0.6 -- the camera flies in; taps wait until it is there
+FoundryView.MinGap = 0.2 -- seconds between counted taps (the server needs GameConfig.AnvilMinStrikeGap)
+-- the k-th tap counts no earlier than k x this after FoundryBegin, so the last
+-- one always passes the server's Hits x AnvilMinSecondsPerHit rule
+FoundryView.Pace = GameConfig.AnvilMinSecondsPerHit + 0.005
 
 local PAD = 16
 local HEADER = 60
@@ -137,9 +154,48 @@ local FOOTER = 34
 local GAP = 8
 local SCROLLBAR = 10
 
+local EMPTY_TEXT =
+	"No ingots yet. Smelt ore in a furnace, then run a belt off the FOUNDRY chute, throw them into the hopper or carry them here and press Put In."
+local FIT_MARGIN_X = 16 -- screen pixels kept free around the panel (fit)
+local FIT_MARGIN_Y = 6
+
+-- Mode*: the TAKE [ONE | ALL] switch; Note*: the Ore Pen note under the rows
 local LAYOUTS = {
-	Normal = { Width = 920, Height = 500, Left = 470, RowH = 62, ButtonH = 46, TakeW = 88, Name = 19, Forge = 62, Close = 50, Arrow = 46 },
-	Compact = { Width = 980, Height = 560, Left = 500, RowH = 86, ButtonH = 72, TakeW = 112, Name = 21, Forge = 78, Close = 72, Arrow = 72 },
+	Normal = {
+		Width = 920,
+		Height = 500,
+		Left = 470,
+		RowH = 62,
+		ButtonH = 46,
+		TakeW = 88,
+		Name = 19,
+		Forge = 62,
+		Close = 50,
+		Arrow = 46,
+		ModeH = 40,
+		ModeW = 74,
+		ModeLabel = 58,
+		Note = 58,
+		NoteText = 15,
+	},
+	-- 510 tall: at the 0.62 UI floor it fits a 375 pt landscape phone below the top bar
+	Compact = {
+		Width = 980,
+		Height = 510,
+		Left = 500,
+		RowH = 86,
+		ButtonH = 72,
+		TakeW = 112,
+		Name = 21,
+		Forge = 78,
+		Close = 72,
+		Arrow = 72,
+		ModeH = 52,
+		ModeW = 96,
+		ModeLabel = 64,
+		Note = 66,
+		NoteText = 17,
+	},
 }
 
 local function layoutOf(refs: Refs): typeof(LAYOUTS.Normal)
@@ -297,6 +353,56 @@ function FoundryView.ringScale(t: number): number
 	return math.max(0.6, FoundryView.RingStart - (FoundryView.RingStart - 1) * p)
 end
 
+--[[
+	The earliest time (seconds since FoundryBegin) the k-th tap may count when
+	the one before counted at `last` (nil: none yet). Every tap counts: taps
+	that come sooner wait their turn, so a burst of fast taps fills the pips
+	at this pace and the times always pass MachineLogic.validateStrikes.
+]]
+function FoundryView.tapTime(k: number, last: number?): number
+	local after = if last then last + FoundryView.MinGap else 0
+	return math.max(FoundryView.Intro, after, k * FoundryView.Pace)
+end
+
+--[[
+	The panel's extra scale so it fits an `areaW` x `areaH` screen area (the
+	ScreenGui's size below the top bar) at UI scale `guiScale`: 1 when it
+	fits, smaller on short landscape phones.
+]]
+function FoundryView.fitScale(areaW: number, areaH: number, guiScale: number, compact: boolean): number
+	if areaW <= 0 or areaH <= 0 then
+		return 1
+	end
+	local l = if compact then LAYOUTS.Compact else LAYOUTS.Normal
+	local scale = if guiScale > 0 then guiScale else 1
+	local w = (areaW - FIT_MARGIN_X * 2) / (l.Width * scale)
+	local h = (areaH - FIT_MARGIN_Y * 2) / (l.Height * scale)
+	return math.clamp(math.min(w, h), 0.5, 1)
+end
+
+-- How many ingots in the Ore Pen (a State Storage summary) the next level can use.
+function FoundryView.penUsable(storage: any, level: any): number
+	local n = 0
+	if type(storage) ~= "table" then
+		return 0
+	end
+	for key, count in storage do
+		if type(key) == "string" and type(count) == "number" and count >= 1 and count == count and count < math.huge then
+			local desc = ItemData.parseKey(key)
+			if desc and FoundryLogic.usable(desc, level) then
+				n += math.floor(count)
+			end
+		end
+	end
+	return n
+end
+
+-- The note for usable ingots waiting in the Ore Pen (how they come back).
+function FoundryView.penText(n: number): string
+	local what = if n == 1 then "1 ingot for your next blaster waits" else `{Format.commas(n)} ingots for your next blaster wait`
+	return `{what} in your Ore Pen: take them out there and Put In here, or Send them on a belt into the FOUNDRY chute.`
+end
+
 ---------------------------------------------------------------- the panel
 
 local function labelProps(extra: { [string]: any }?): { [string]: any }
@@ -340,6 +446,45 @@ function FoundryView.build(): Refs
 		Size = UDim2.fromOffset(l.Close, l.Close),
 		TextSize = 26,
 	})
+	-- shrinks the panel on screens too short for it (fit)
+	local fitScale = UIKit.new("UIScale", { Name = "Fit", Scale = 1 }, panel)
+
+	-- the TAKE [ONE | ALL] switch, right-aligned over the ingot list
+	local mode = UIKit.new("Frame", {
+		Name = "TakeMode",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromOffset(PAD + l.Left, (HEADER - l.ModeH) // 2),
+		Size = UDim2.fromOffset(l.ModeLabel + l.ModeW * 2 + 12, l.ModeH),
+	}, panel)
+	UIKit.list(mode, Enum.FillDirection.Horizontal, 6, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+	})
+	UIKit.label(
+		mode,
+		"TAKE",
+		17,
+		labelProps({
+			Name = "Label",
+			LayoutOrder = 1,
+			Size = UDim2.fromOffset(l.ModeLabel, l.ModeH - 5),
+			TextColor3 = Theme.TextDim,
+			TextXAlignment = Enum.TextXAlignment.Right,
+		})
+	)
+	local takeOne = UIKit.button(mode, "ONE", Theme.Accent, Theme.AccentDark, {
+		Name = "TakeOne",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(l.ModeW, l.ModeH - 5),
+		TextSize = 18,
+	})
+	local takeEvery = UIKit.button(mode, "ALL", Theme.PanelLight, Theme.Panel, {
+		Name = "TakeEvery",
+		LayoutOrder = 3,
+		Size = UDim2.fromOffset(l.ModeW, l.ModeH - 5),
+		TextSize = 18,
+	})
 
 	-- left: the ingot stock
 	local left = UIKit.new("Frame", {
@@ -373,19 +518,23 @@ function FoundryView.build(): Refs
 	}, left)
 	UIKit.list(list, Enum.FillDirection.Vertical, GAP)
 	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2) }, list)
-	local empty = UIKit.label(
-		left,
-		"No ingots yet. Smelt ore in a furnace, then run a belt off the FOUNDRY chute, throw them into the hopper or carry them here and press Put In.",
-		18,
-		{
-			Name = "Empty",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.new(1, -24, 0, 110),
-			TextColor3 = Theme.TextDim,
-			Visible = false,
-		}
-	)
+	-- usable ingots in the Ore Pen: how they come back (after the rows)
+	local penNote = UIKit.label(list, "", l.NoteText, {
+		Name = "PenNote",
+		LayoutOrder = FoundryView.MaxRows + 1,
+		Size = UDim2.fromOffset(l.Left - SCROLLBAR - 6, l.Note),
+		TextColor3 = Theme.Info,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Visible = false,
+	})
+	local empty = UIKit.label(left, EMPTY_TEXT, 18, {
+		Name = "Empty",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -24, 0, 110),
+		TextColor3 = Theme.TextDim,
+		Visible = false,
+	})
 
 	-- right: the next blaster
 	local card = UIKit.new("Frame", {
@@ -606,9 +755,16 @@ function FoundryView.build(): Refs
 		PadHint = padHint,
 		PadA = padA,
 		PadB = padB,
+		TakeMode = mode,
+		TakeOne = takeOne,
+		TakeEvery = takeEvery,
+		TakeAllMode = false,
+		PenNote = penNote,
+		Fit = fitScale,
 		Rows = {},
 		Compact = false,
 	}
+	FoundryView.setTakeMode(refs, false)
 	return refs
 end
 
@@ -687,7 +843,7 @@ function FoundryView.setRows(refs: Refs, rows: { OreRow }, total: number): { Row
 			table.insert(created, row)
 		end
 		row.TakeKey = info.TakeKey
-		row.TakeAll = not info.Usable
+		row.TakeAll = not info.Usable or refs.TakeAllMode
 		row.Amount = info.Count
 		row.Take.Text = if row.TakeAll then "TAKE ALL" else "TAKE"
 		row.Take.TextSize = if row.TakeAll then (if refs.Compact then 17 else 14) else 18
@@ -857,8 +1013,53 @@ function FoundryView.setCompact(refs: Refs, compact: boolean)
 	refs.UsesRow.Position = UDim2.fromOffset(14, 186 + l.Arrow)
 	local forgeHolder = refs.Forge.Parent :: Frame
 	forgeHolder.Size = UDim2.new(1, -28, 0, l.Forge)
+	refs.TakeMode.Position = UDim2.fromOffset(PAD + l.Left, (HEADER - l.ModeH) // 2)
+	refs.TakeMode.Size = UDim2.fromOffset(l.ModeLabel + l.ModeW * 2 + 12, l.ModeH)
+	local modeLabel = refs.TakeMode:FindFirstChild("Label")
+	if modeLabel and modeLabel:IsA("TextLabel") then
+		modeLabel.Size = UDim2.fromOffset(l.ModeLabel, l.ModeH - 5)
+	end
+	for _, button in { refs.TakeOne, refs.TakeEvery } do
+		local holder = button.Parent :: Frame
+		holder.Size = UDim2.fromOffset(l.ModeW, l.ModeH - 5)
+	end
+	refs.PenNote.Size = UDim2.fromOffset(l.Left - SCROLLBAR - 6, l.Note)
+	refs.PenNote.TextSize = l.NoteText
 	for _, row in refs.Rows do
 		layoutRow(refs, row)
+	end
+end
+
+-- The TAKE switch: ONE (usable rows take one ingot) or ALL (every row takes
+-- all of its ore). Call setRows again to relabel the rows.
+local function paintSwitch(button: TextButton, on: boolean)
+	local holder = button.Parent :: Frame
+	button.BackgroundColor3 = if on then Theme.Accent else Theme.PanelLight
+	holder.BackgroundColor3 = if on then Theme.AccentDark else Theme.Panel
+	button.TextColor3 = if on then Theme.Text else Theme.TextDim
+	button:SetAttribute("On", on)
+end
+
+function FoundryView.setTakeMode(refs: Refs, all: boolean)
+	refs.TakeAllMode = all
+	paintSwitch(refs.TakeOne, not all)
+	paintSwitch(refs.TakeEvery, all)
+end
+
+-- The Ore Pen note: `n` ingots there the next level can use (0 hides it).
+-- With an empty stock it goes into the empty text instead.
+function FoundryView.setPen(refs: Refs, n: number)
+	local text = if n > 0 then FoundryView.penText(n) else ""
+	refs.PenNote.Text = text
+	refs.PenNote.Visible = n > 0 and next(refs.Rows) ~= nil
+	refs.Empty.Text = if n > 0 then "No ingots here yet. " .. text else EMPTY_TEXT
+end
+
+-- Shrinks the panel to fit an `areaW` x `areaH` screen area (fitScale).
+function FoundryView.fit(refs: Refs, areaW: number, areaH: number, guiScale: number)
+	local scale = FoundryView.fitScale(areaW, areaH, guiScale, refs.Compact)
+	if math.abs(refs.Fit.Scale - scale) > 0.001 then
+		refs.Fit.Scale = scale
 	end
 end
 

@@ -64,6 +64,8 @@
 	  "Take"   { Key, Count, All? }  stock ingots of one type back into the Ore
 	           Pen (as many as fit; refused while a session runs). All = true
 	           takes ingots of the key's ore in any grade (the panel's TAKE ALL).
+	           Quick Takes share one toast ("Moved 7 ingots to your Ore Pen."),
+	           sent by the monitor TAKE_TOAST_WINDOW after the last one.
 	Sessions end on Timeout (GameConfig.AnvilTimeout), walking away from the
 	anvil past AnvilWalkAway ("TooFar"), death ("Cancelled"), leaving and
 	losing the plot. Fail or cancel never takes anything.
@@ -124,9 +126,12 @@ local MAX_PUT_IN = 64 -- more than any carry stack
 local MAX_KEY_LENGTH = 80
 local FX_RANGE = 90
 local PEN_TOAST_COOLDOWN = 30 -- "sent to your Ore Pen" toasts (a busy chute line)
+local TAKE_TOAST_WINDOW = 0.6 -- Takes this close together share one toast
 
 local sessions: { [Player]: Session } = {}
 local lastToast: { [Player]: { [string]: number } } = {}
+-- ingots moved by Take that the player hasn't been told about yet
+local takeMoved: { [Player]: { Count: number, At: number } } = {}
 local penFullAt: { [number]: number } = {}
 local rackLevel: { [number]: number } = {}
 local sinkRegistered = false
@@ -702,7 +707,14 @@ local function take(player: Player, plotId: number, data: { [string]: any }, key
 	end
 	if moved > 0 then
 		DataService.changed(player)
-		toast(player, if moved == 1 then "Moved 1 ingot to your Ore Pen." else `Moved {moved} ingots to your Ore Pen.`, "Info")
+		-- one toast for a run of quick Takes (the monitor sends it)
+		local pending = takeMoved[player]
+		if pending then
+			pending.Count += moved
+			pending.At = clock()
+		else
+			takeMoved[player] = { Count = moved, At = clock() }
+		end
 	elseif room <= 0 then
 		toast(player, "Your Ore Pen is full. Sell ore or put some on a podium first.")
 	end
@@ -739,8 +751,8 @@ local function onAction(player: Player, actionArg: any, argArg: any)
 	end
 end
 
--- Timeouts, walking away, death, leaving (every MONITOR_TICK) and the
--- "Ore Pen full" signs.
+-- Timeouts, walking away, death, leaving (every MONITOR_TICK), the merged
+-- Take toasts and the "Ore Pen full" signs.
 local function monitor(now: number)
 	for player, session in sessions do
 		if not player.Parent then
@@ -754,6 +766,15 @@ local function monitor(now: number)
 			PlotService.plotOf(player) ~= session.PlotId or not FoundryService.isNear(player, session.PlotId, GameConfig.AnvilWalkAway)
 		then
 			endSession(player, "TooFar")
+		end
+	end
+	for player, pending in takeMoved do
+		if not player.Parent then
+			takeMoved[player] = nil
+		elseif now - pending.At >= TAKE_TOAST_WINDOW then
+			takeMoved[player] = nil
+			local n = pending.Count
+			toast(player, if n == 1 then "Moved 1 ingot to your Ore Pen." else `Moved {n} ingots to your Ore Pen.`, "Info")
 		end
 	end
 	for plotId, at in penFullAt do
@@ -900,6 +921,7 @@ FoundryService._test = {
 	reset = function()
 		table.clear(sessions)
 		table.clear(lastToast)
+		table.clear(takeMoved)
 		table.clear(penFullAt)
 		table.clear(rackLevel)
 		warnedNoPlot = false
@@ -945,6 +967,7 @@ function FoundryService.init()
 			setForging(session.PlotId, false)
 		end
 		lastToast[player] = nil
+		takeMoved[player] = nil
 	end)
 end
 
