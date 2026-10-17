@@ -1,22 +1,41 @@
 --[[
-	ProcessingService: the machines that work on their own. Clay Furnace and
-	Blast Furnace smelt clean or crushed ore into ingots, the Crusher turns 1
-	clean ore into 2 crushed piles, the Cleaning Plant (Id AutoCleaner)
-	cleans raw ore with the grade odds of its Quality level
+	ProcessingService: the machines that work on their own. Clay, Brick,
+	Blast and Plasma Furnace smelt clean or crushed ore into ingots, the
+	Crusher turns 1 clean ore into 2 crushed piles, the Cleaning Plant (Id
+	AutoCleaner) cleans raw ore with the grade odds of its Quality level
 	(MachineData.QualityLevels / gradeOdds: 60% Rough / 40% Clean at level
 	0, up to 30% Flawless at level 5; MachineLogic.outputs takes the odds).
+	The roster processors (docs/plans/MACHINES_GAME_PLAN.md, MachineData):
+	  Plasma Furnace     Batch = 2: one job works up to 2 queued items at
+	                     once, one ingot each (MachineLogic.batch: never more
+	                     results than fit in Out)
+	  Polisher           Clean -> Clean, GradeUpChance: one grade better
+	                     (MachineLogic.gradeUp; Flawless stays)
+	  Crystal Extractor  Crushed -> Crushed (the same item), ShardChance: the
+	                     owner's data.Shards + 1 and a "+1 Crystal Shard!" toast
+	  Alloy Furnace      Behaviour "Alloy": a job starts once the queue holds
+	                     ingots of two DIFFERENT ores and takes In[1] and the
+	                     first ingot of another ore (MachineLogic.alloyPair);
+	                     it gives ONE alloy of the more valuable ore with the
+	                     lower grade (MachineLogic.alloyDesc). While only one
+	                     ore waits, the Status attribute says "NeedsOtherOre"
+	                     (only when no other status is shown; cleared when a
+	                     job starts). The last queue place is kept for another
+	                     ore (MachineLogic.accepts).
 
 	- Items arrive through MachineService (hopper, belt, Put In prompt or a
 	  machine in front): canAccept = MachineLogic.accepts, insert = push onto
 	  the saved queue (Entry.In, at most 4; In[1] is being worked).
 	- The 10 Hz MachineService tick runs one job at a time per machine. A
-	  finished job moves In[1] out and its results into Entry.Out (at most
-	  MachineData.MaxOutBuffer); MachineService then sends Out through the
-	  machine's front. If Out has no room, the job waits ('OutputBlocked').
+	  finished job moves its inputs out of In and its results into Entry.Out
+	  (at most MachineData.MaxOutBuffer); MachineService then sends Out
+	  through the machine's front. If Out has no room, the job waits
+	  ('OutputBlocked'). Cycles counts finished jobs (a batch is one job).
 	- Job time = MachineData.processTime with the owner's Bellows level and
 	  the machine type's Speed level (Tech shop, data.MachineUpgrades, read
-	  through EconomyConfig.upgradeLevel), both read when each job starts,
-	  never below GameConfig.MinProcessTime.
+	  through EconomyConfig.upgradeLevel), divided by
+	  MachineService.speedFactor (power: 1 when nothing slows the machine),
+	  all read when each job starts, never below GameConfig.MinProcessTime.
 	- Grade odds (Cleaning Plant) = MachineData.gradeOdds of the machine
 	  type's Quality level, read when each job starts. The plant shows them:
 	  attributes Quality (level) and QualityOdds ("30% Rough · 50% Clean ·
@@ -24,9 +43,14 @@
 	  In prompt's ObjectText ("Cleaning Plant · Quality 2": short, so the
 	  prompt stays narrow on phones); refreshed every QUALITY_CHECK seconds,
 	  so a level bought in the Tech shop shows at once.
+	- Random rolls (grades, grade-ups, shards) happen once, when a job
+	  finishes; a job waiting for room in Out keeps its roll.
 	- Queue and Out live in the save (Entry.In / Entry.Out), so leaving,
 	  autosaves and shutdowns keep them. Job progress is not saved: after a
-	  rejoin the job on In[1] starts over.
+	  rejoin the job on In[1] starts over. A Speed buy in the Tech shop
+	  (ShopService.onBought) rebuilds the player's machines of that type with
+	  the new upgrade look (MachineService.refreshType: a "Refresh" removal,
+	  like "Unload": the queues stay, a job in progress starts over).
 	- Clients animate everything from model attributes (MachineFxController):
 	  Queue, QueueMax, OutCount, Working, WorkStart, WorkTime, WorkOre, Cycles.
 	  WorkOre is "" while dirty ore is worked: nobody can see through the
@@ -54,12 +78,14 @@ local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
 local MachineService = require(script.Parent.MachineService)
 local IntakeService = require(script.Parent.IntakeService)
+local ShopService = require(script.Parent.ShopService)
 
 local ProcessingService = {}
 
 type PlacedMachine = MachineService.PlacedMachine
 type Desc = MachineLogic.Desc
 type Via = MachineService.Via
+type Bought = ShopService.Bought
 
 --[[
 	What a sorter does with an item whose sort job finished.
@@ -78,24 +104,48 @@ export type Sorter = {
 	spawned: ((machine: PlacedMachine) -> ...any)?,
 }
 
+-- What one worked item gave (an alloy job: its first ingot gives the alloy).
+type Result = {
+	Input: Desc,
+	Outputs: { Desc },
+	Shard: boolean, -- Crystal Extractor: this item also gave a crystal shard
+}
+
 -- Runtime job state, kept in machine.State.Job (never saved).
 type Job = {
 	Input: Desc, -- the In[1] table being worked
+	Inputs: { Desc }, -- every queued table the job works, In[1] first (Batch: a few; Alloy: the pair)
 	EndsAt: number, -- os.clock() time the job finishes
 	Odds: { [string]: number }?, -- grade odds of the Quality level when it started (Cleaning Plant)
-	Outputs: { Desc }?, -- rolled once when it finishes (a blocked job keeps its roll)
+	Results: { Result }?, -- rolled once when it finishes (a blocked job keeps its roll)
+	Outputs: { Desc }?, -- every result's outputs, in order
 	PassThrough: boolean, -- the input doesn't belong here and comes back out as is
 	Blocked: boolean, -- finished but Out had no room
 }
 
-local MACHINES = { "ClayFurnace", "BlastFurnace", "Crusher", "AutoCleaner" }
+local MACHINES = {
+	"ClayFurnace",
+	"BlastFurnace",
+	"Crusher",
+	"AutoCleaner",
+	"BrickFurnace",
+	"Polisher",
+	"CrystalExtractor",
+	"PlasmaFurnace",
+	"AlloyFurnace",
+}
 local FIRST_INGOT = "Your first ingot! Ingots go into the Foundry (soon) to forge stronger blasters, or sell them to Tobin."
+local SHARD_TOAST = "+1 Crystal Shard!"
+local ALLOY = "Alloy" -- MachineData Behaviour of the Alloy Furnace
+local NEEDS_OTHER_ORE = "NeedsOtherOre" -- Status while an Alloy Furnace waits for a second ore
+-- speedFactor outside this range is a broken modifier (power never goes there)
+local MIN_SPEED, MAX_SPEED = 0.05, 20
 -- seconds between checks of the Cleaning Plant's Quality level (shown odds)
 local QUALITY_CHECK = 1
 local WARN_COOLDOWN = 10
 
 local processedCallbacks: { (Player, string, Desc, { Desc }) -> ...any } = {}
--- output grade rolls (Auto Cleaner); the seed only needs to differ per server
+-- output grade rolls (Auto Cleaner, Polisher) and shard rolls; the seed only needs to differ per server
 local rng = Rng.new((os.time() * 1000 + math.floor(os.clock() * 1000)) % 2147483647)
 local lastWarn: { [string]: number } = {}
 
@@ -108,7 +158,8 @@ local function warnThrottled(key: string, message: string)
 end
 
 -- Listeners (tutorial, quests, analytics): (player, machineId, input, outputs).
--- They get copies, so changing them can't touch the machine's queues.
+-- They get copies, so changing them can't touch the machine's queues. A
+-- batch job calls them once per item; an alloy job once, with its first ingot.
 function ProcessingService.onProcessed(callback: (Player, string, Desc, { Desc }) -> ...any)
 	table.insert(processedCallbacks, callback)
 end
@@ -125,6 +176,10 @@ local function serverNow(): number
 	return Workspace:GetServerTimeNow()
 end
 
+local function isAlloy(machine: PlacedMachine): boolean
+	return machine.Info.Behaviour == ALLOY
+end
+
 ---------------------------------------------------------------- upgrades
 
 -- The owner's level of an upgrade of this machine type (0 without a save).
@@ -133,7 +188,18 @@ local function upgradeLevel(machine: PlacedMachine, kind: string): number
 	return if data then EconomyConfig.upgradeLevel(data, machine.Id, kind) else 0
 end
 
--- Seconds one job takes for this machine's owner right now (Bellows + Speed).
+-- How fast power (MachineService.speedFactor) lets the machine work now;
+-- a broken value counts as 1.
+local function speedOf(machine: PlacedMachine): number
+	local factor = MachineService.speedFactor(machine)
+	if type(factor) ~= "number" or factor ~= factor or factor <= 0 or factor == math.huge then
+		return 1
+	end
+	return math.clamp(factor, MIN_SPEED, MAX_SPEED)
+end
+
+-- Seconds one job takes for this machine's owner right now (Bellows +
+-- Speed, then divided by the power speed factor).
 local function jobTime(machine: PlacedMachine): number
 	local data = DataService.get(machine.Owner)
 	local upgrades = data and data.Upgrades
@@ -145,7 +211,7 @@ local function jobTime(machine: PlacedMachine): number
 	if seconds ~= seconds or seconds == math.huge then
 		seconds = machine.Info.Time or GameConfig.MinProcessTime
 	end
-	return math.max(GameConfig.MinProcessTime, seconds)
+	return math.max(GameConfig.MinProcessTime, seconds / speedOf(machine))
 end
 
 -- Grade odds for the next job (machines with QualityLevels), else nil.
@@ -191,6 +257,28 @@ local function showQuality(machine: PlacedMachine)
 	end
 end
 
+--[[
+	After a Tech shop buy (ShopService.onBought): a Speed level changes the
+	machine type's upgrade look (MachineData.lookLevel), so the player's
+	placed machines of that type are rebuilt (MachineService.refreshType;
+	queues stay, a job in progress starts over). A level that keeps the look
+	(level 5 looks like level 4) rebuilds nothing.
+]]
+local function onBought(player: Player, bought: Bought)
+	if bought.Kind ~= "Upgrade" or bought.Upgrade ~= "Speed" then
+		return
+	end
+	local machineId = bought.Machine
+	if type(machineId) ~= "string" or not MachineData.ById[machineId] then
+		return
+	end
+	local level = bought.Level
+	if type(level) == "number" and MachineData.lookLevel(level) == MachineData.lookLevel(level - 1) then
+		return
+	end
+	MachineService.refreshType(player, machineId)
+end
+
 ---------------------------------------------------------------- jobs
 
 local function syncCounts(machine: PlacedMachine)
@@ -200,19 +288,49 @@ local function syncCounts(machine: PlacedMachine)
 	})
 end
 
-local function startJob(machine: PlacedMachine, startedAt: number, now: number)
-	local queue = machine.Entry.In
-	local input = queue and queue[1]
-	if not input then
-		return
+-- Alloy Furnace: shows "NeedsOtherOre" while it waits for a second ore. A
+-- status MachineService set (OutputBlocked, TooManyItems) is never replaced.
+local function showWaiting(machine: PlacedMachine, waiting: boolean)
+	local status = machine.Model:GetAttribute("Status")
+	if waiting then
+		if status == nil or status == "" then
+			MachineService.setAttrs(machine, { Status = NEEDS_OTHER_ORE })
+		end
+	elseif status == NEEDS_OTHER_ORE then
+		MachineService.setAttrs(machine, { Status = "" })
 	end
+end
+
+-- The queued items the next job takes (In[1] first; In[1] is a valid
+-- item), and whether In[1] only passes through (it doesn't belong here:
+-- a damaged save). nil while an Alloy Furnace waits for another ore.
+local function jobInputs(machine: PlacedMachine, queue: { Desc }): ({ Desc }?, boolean)
+	local first = queue[1]
+	local accepts = machine.Info.Accepts
+	if not accepts or not accepts[first.K] then
+		return { first }, true
+	end
+	if isAlloy(machine) then
+		local i, j = MachineLogic.alloyPair(queue)
+		if not i or not j then
+			return nil, false
+		end
+		return { queue[i], queue[j] }, false
+	end
+	return MachineLogic.batch(machine.Id, queue, count(machine.Entry.Out)), false
+end
+
+local function startJob(machine: PlacedMachine, inputs: { Desc }, passThrough: boolean, startedAt: number, now: number)
+	local input = inputs[1]
 	local seconds = jobTime(machine)
 	machine.State.Job = {
 		Input = input,
+		Inputs = inputs,
 		EndsAt = startedAt + seconds,
 		Odds = jobOdds(machine),
+		Results = nil,
 		Outputs = nil,
-		PassThrough = false,
+		PassThrough = passThrough,
 		Blocked = false,
 	} :: Job
 	MachineService.setAttrs(machine, {
@@ -223,6 +341,19 @@ local function startJob(machine: PlacedMachine, startedAt: number, now: number)
 		-- dirty ore hides what it is (its colour would give it away)
 		WorkOre = if input.K == "Raw" then "" else input.O,
 	})
+end
+
+-- Are all of the job's items still where it found them (In[1] first)?
+local function stillQueued(queue: { Desc }?, job: Job): boolean
+	if not queue or queue[1] ~= job.Input then
+		return false
+	end
+	for _, input in job.Inputs do
+		if not table.find(queue, input) then
+			return false
+		end
+	end
+	return true
 end
 
 -- Stats and the first-ingot toast for furnace output.
@@ -244,6 +375,25 @@ local function countIngots(player: Player, outputs: { Desc })
 	end
 end
 
+-- Crystal Extractor: whole shards into the owner's save (a broken or
+-- negative count starts again from 0) and a toast. The caller marks the
+-- save changed.
+local function giveShards(player: Player, shards: number)
+	local data = DataService.get(player)
+	if shards <= 0 or not data then
+		return
+	end
+	local before = tonumber(data.Shards)
+	if before == nil or before ~= before or before < 0 or before == math.huge then
+		before = 0
+	end
+	data.Shards = math.floor(before :: number) + shards
+	if player.Parent then
+		local text = if shards == 1 then SHARD_TOAST else `+{shards} Crystal Shards!`
+		Net.fire("Notify", player, { Text = text, Kind = "Reward" })
+	end
+end
+
 local function announce(player: Player, machineId: string, input: Desc, outputs: { Desc })
 	for _, callback in processedCallbacks do
 		local copies = {}
@@ -254,15 +404,24 @@ local function announce(player: Player, machineId: string, input: Desc, outputs:
 	end
 end
 
--- What a finished job on `input` gives. Items that don't belong in this
--- machine (only possible in a damaged save) come back out unchanged.
-local function rollOutputs(machine: PlacedMachine, job: Job): { Desc }
-	local accepts = machine.Info.Accepts
-	if not accepts or not accepts[job.Input.K] then
-		job.PassThrough = true
-		return { copyDesc(job.Input) }
+-- What a finished job gives. Items that don't belong in this machine (only
+-- possible in a damaged save) come back out unchanged.
+local function rollResults(machine: PlacedMachine, job: Job): { Result }
+	if job.PassThrough then
+		return { { Input = job.Input, Outputs = { copyDesc(job.Input) }, Shard = false } }
 	end
-	return MachineLogic.outputs(machine.Id, job.Input, rng:next(), job.Odds)
+	local second = job.Inputs[2]
+	if isAlloy(machine) and second then
+		return { { Input = job.Input, Outputs = { MachineLogic.alloyDesc(job.Input, second) }, Shard = false } }
+	end
+	local shardChance = machine.Info.ShardChance
+	local results: { Result } = {}
+	for _, input in job.Inputs do
+		local outputs = MachineLogic.outputs(machine.Id, input, rng:next(), job.Odds)
+		local shard = if shardChance then MachineLogic.rollShard(shardChance, rng:next()) else false
+		table.insert(results, { Input = input, Outputs = outputs, Shard = shard })
+	end
+	return results
 end
 
 -- Does the sorter take the finished item (into the pen) right now?
@@ -284,11 +443,19 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 	local entry = machine.Entry
 	local outputs = job.Outputs
 	if not outputs then
-		outputs = rollOutputs(machine, job)
-		job.Outputs = outputs
+		local results = rollResults(machine, job)
+		local all: { Desc } = {}
+		for _, result in results do
+			for _, desc in result.Outputs do
+				table.insert(all, desc)
+			end
+		end
+		job.Results = results
+		job.Outputs = all
+		outputs = all
 	end
 	local list = outputs :: { Desc }
-	-- the sorter's take and complete() below run with no yield between them,
+	-- the sorter's take and consume() below run with no yield between them,
 	-- so a kept item is in the pen and gone from In in one step
 	local kept = sorterTakes(machine, job, sorter)
 	if kept then
@@ -305,7 +472,7 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 		end
 		return false
 	end
-	MachineLogic.complete(entry, list)
+	MachineLogic.consume(entry, job.Inputs, list)
 	machine.State.Job = nil
 	syncCounts(machine)
 	local player = machine.Owner
@@ -323,16 +490,24 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 		-- smelted, cleaned or discovered, so no stats, toasts or listeners
 		if machine.Info.Output ~= nil then
 			countIngots(player, list)
-			-- dirty ore that comes out clean reveals what it was (design v2)
 			local data = DataService.get(player)
-			if data and job.Input.K == "Raw" then
-				for _, desc in list do
-					if desc.K == "Clean" then
-						Discovery.mark(player, data, desc.O)
+			local shards = 0
+			local results: { Result } = job.Results or {}
+			for _, result in results do
+				-- dirty ore that comes out clean reveals what it was (design v2)
+				if data and result.Input.K == "Raw" then
+					for _, desc in result.Outputs do
+						if desc.K == "Clean" then
+							Discovery.mark(player, data, desc.O)
+						end
 					end
 				end
+				if result.Shard then
+					shards += 1
+				end
+				announce(player, machine.Id, result.Input, result.Outputs)
 			end
-			announce(player, machine.Id, job.Input, list)
+			giveShards(player, shards)
 		end
 	end
 	DataService.changed(player)
@@ -348,8 +523,7 @@ local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
 	local job = machine.State.Job :: Job?
 	local startedAt = now
 	if job then
-		local queue = entry.In
-		if not queue or queue[1] ~= job.Input then
+		if not stillQueued(entry.In, job) then
 			-- the queue changed under the job (repaired save): start over
 			machine.State.Job = nil
 			job = nil
@@ -368,6 +542,9 @@ local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
 	local input = queue and queue[1]
 	if input == nil then
 		MachineService.setAttrs(machine, { Working = false })
+		if isAlloy(machine) then
+			showWaiting(machine, false)
+		end
 		return
 	end
 	if not MachineLogic.isValidDesc(input) then
@@ -381,7 +558,15 @@ local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
 		DataService.changed(machine.Owner)
 		return
 	end
-	startJob(machine, startedAt, now)
+	local inputs, passThrough = jobInputs(machine, queue :: { Desc })
+	if isAlloy(machine) then
+		showWaiting(machine, inputs == nil)
+	end
+	if not inputs then
+		MachineService.setAttrs(machine, { Working = false })
+		return
+	end
+	startJob(machine, inputs, passThrough, startedAt, now)
 end
 
 local function spawned(machine: PlacedMachine)
@@ -399,6 +584,14 @@ local function spawned(machine: PlacedMachine)
 	showQuality(machine)
 end
 
+-- The model goes. "Unload" (the player left) and "Refresh" (rebuilt with a
+-- new upgrade look) keep the queues in the save: only the job in progress
+-- is dropped, and the next model starts it over. "Pickup": MachineService
+-- drains the queues into storage after this.
+local function removed(machine: PlacedMachine, _reason: MachineService.RemoveReason)
+	machine.State.Job = nil
+end
+
 local function canAccept(machine: PlacedMachine, desc: Desc, ownerUserId: number, _via: Via)
 	return MachineLogic.accepts(machine.Id, desc, machine.Entry, ownerUserId == machine.Owner.UserId)
 end
@@ -411,6 +604,7 @@ end
 
 local behaviour: MachineService.Behaviour = {
 	spawned = spawned,
+	removed = removed,
 	canAccept = canAccept,
 	insert = insert,
 	tick = function(machine: PlacedMachine, now: number)
@@ -433,6 +627,7 @@ function ProcessingService.sorterBehaviour(sorter: Sorter): MachineService.Behav
 				hook(machine)
 			end
 		end,
+		removed = removed,
 		canAccept = canAccept,
 		insert = insert,
 		tick = function(machine: PlacedMachine, now: number)
@@ -445,6 +640,7 @@ end
 ProcessingService._test = {
 	behaviour = behaviour,
 	jobTime = jobTime,
+	onBought = onBought,
 	reseed = function(seed: number)
 		rng = Rng.new(seed)
 	end,
@@ -458,6 +654,11 @@ function ProcessingService.init()
 		assert(MachineData.ById[id], "unknown processing machine " .. id)
 		MachineService.register(id, behaviour)
 	end
+end
+
+function ProcessingService.start()
+	-- in start(), not init(): the Lune specs call init() again for every test
+	ShopService.onBought(onBought)
 end
 
 return ProcessingService
