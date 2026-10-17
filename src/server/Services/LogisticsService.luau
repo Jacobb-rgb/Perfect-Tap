@@ -534,6 +534,7 @@ local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: numb
 	end
 	EconomyService.award(player, price, LogisticsService.SellSource, true)
 	DataService.changed(player)
+	SellService.notifySold(player, sold, price)
 	MachineService.setAttrs(machine, { Cycles = bump(machine) })
 	local now = os.clock()
 	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)
