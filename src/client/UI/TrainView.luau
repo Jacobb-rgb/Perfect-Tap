@@ -65,7 +65,7 @@ export type Snapshot = {
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
 }
 
-export type Phase = "Empty" | "Loading" | "Full" | "Moving" | "Unloading" | "PenFull" | "Returning"
+export type Phase = "Empty" | "Loading" | "Full" | "Moving" | "Unloading" | "Waiting" | "Returning"
 
 export type Status = {
 	Phase: Phase,
@@ -265,13 +265,28 @@ function TrainView.seconds(value: number): string
 end
 
 --[[
+	Is your train standing at your stop because the Ore Pen is full? The
+	server says so (Waiting), or it still has ore on board (Moving > 0)
+	UnloadGrace seconds after its ArriveAt (the arrival itself unloads, the
+	grace covers the snapshot that is still on its way). `now` is server time.
+]]
+function TrainView.waiting(train: Snapshot, now: number): boolean
+	if train.Waiting then
+		return true
+	end
+	local arrive = train.ArriveAt
+	return train.Moving > 0 and arrive ~= nil and now >= arrive + TrainView.UnloadGrace
+end
+
+--[[
 	What the chip and the panel say. `now` is server time
 	(workspace:GetServerTimeNow(), like DepartAt / ArriveAt); `autoLeft` the
 	seconds until the train leaves by itself (counted down by the controller,
 	nil = use the snapshot's AutoDepartIn). While the train is away the count
-	is the ore on board (Moving): on its way, unloading at your stop, waiting
-	there because the Ore Pen is full (Waiting, or still loaded UnloadGrace
-	seconds after the arrival), then rolling back empty.
+	is the ore on board (Moving): on its way, unloading at your stop, the
+	phase "Waiting" there because the Ore Pen is full ("Pen full – make
+	room", TrainView.waiting), then rolling back empty. Nothing can be sent
+	while it is away.
 ]]
 function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Status
 	local capacity = train.Capacity
@@ -291,15 +306,15 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 	end
 	local moving = train.Moving
 	local arrive = train.ArriveAt
-	if (arrive and now < arrive) or (moving > 0 and not arrive and not train.Waiting) then
+	if TrainView.waiting(train, now) then
+		return make("Waiting", moving, "ore waiting at your pen", "Pen full – make room", Theme.Bad, false)
+	elseif (arrive and now < arrive) or (moving > 0 and not arrive) then
 		local depart = train.DepartAt
 		local progress = if depart and arrive and arrive > depart then math.clamp((now - depart) / (arrive - depart), 0, 1) else nil
 		local line = if arrive then "On its way " .. Format.seconds(math.max(0, math.ceil(arrive - now))) else "On its way"
 		return make("Moving", moving, "ore on the way", line, Theme.Info, false, progress)
-	elseif moving > 0 or train.Waiting then
-		if train.Waiting or not arrive or now >= arrive + TrainView.UnloadGrace then
-			return make("PenFull", moving, "ore waiting at your pen", "Pen full – make room", Theme.Bad, false)
-		end
+	elseif moving > 0 then
+		-- just arrived (UnloadGrace): the server is unloading it
 		return make("Unloading", moving, "ore on the way", "Unloading…", Theme.Info, false, 1)
 	elseif arrive and now < arrive + TrainConfig.ReturnSeconds then
 		return make("Returning", 0, "ore on board", "Returning", Theme.TextDim, false)
@@ -929,7 +944,7 @@ function TrainView.setStatus(refs: Refs, status: Status)
 	-- the chip's bar: the trip while it runs, else the cargo
 	local progress = status.Progress
 	refs.ChipFill.Size = UDim2.fromScale(progress or status.Fill, 1)
-	refs.ChipFill.BackgroundColor3 = if status.Phase == "PenFull"
+	refs.ChipFill.BackgroundColor3 = if status.Phase == "Waiting"
 		then Theme.Bad
 		elseif progress then Theme.Info
 		elseif status.Phase == "Full" then Theme.Good
@@ -939,7 +954,7 @@ function TrainView.setStatus(refs: Refs, status: Status)
 	refs.Cargo.Text = `{status.Cargo} / {status.Capacity}`
 	refs.CargoUnit.Text = status.Unit
 	refs.CargoFill.Size = UDim2.fromScale(status.Fill, 1)
-	refs.CargoFill.BackgroundColor3 = if status.Phase == "PenFull"
+	refs.CargoFill.BackgroundColor3 = if status.Phase == "Waiting"
 		then Theme.Bad
 		elseif status.Phase == "Full" then Theme.Good
 		else Theme.Accent
