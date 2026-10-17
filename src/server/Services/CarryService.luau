@@ -27,7 +27,13 @@
 	it acts, so a buy works at once and after a respawn (hookCharacter sets
 	the walk speed and the attributes again). An item dropped or thrown by
 	hand is marked HandDropped: the Ore Magnet (ItemService) never pulls
-	it back to you; picking it up again clears the mark.
+	it back to you; picking it up again clears the mark. A Gloves throw
+	may be faster than GameConfig.MaxItemSpeed: ItemService.allowSpeed
+	lets the anti-teleport checks accept that one release.
+
+	The carried stack (stackOffset, Stack) stays the same size whatever the
+	capacity: 9 in front of the chest, 6 on the back, every further item
+	joins the back bundle (24 with Backpack V and Strong Back).
 ]]
 
 local Players = game:GetService("Players")
@@ -70,12 +76,54 @@ function CarryService.list(player: Player): { ItemService.ItemRecord }
 	return carried[player] or {}
 end
 
-local function stackOffset(index: number): CFrame
-	-- two columns in front of the chest, rising up
-	local column = (index - 1) % 2
-	local row = math.floor((index - 1) / 2)
-	return CFrame.new((column - 0.5) * 1.3, 0.2 + row * 1.15, -2.1)
+--[[
+	Where the index-th carried item sits (root space). A big backpack
+	(Backpack V with Strong Back: 24 items) must not build a tower that
+	clips through tunnel ceilings or hides the view, so the stack is
+	bounded whatever the count:
+	  front  Stack.FrontColumns x Stack.FrontRows in front of the chest
+	         (the first item in the middle), rows rising up to about the chin
+	  back   Stack.BackColumns x Stack.BackRows as a bundle on the back,
+	         below the shoulders; every further item joins that bundle
+	         (a little further out and turned, the same slots again), so
+	         it gets fuller, never taller.
+]]
+CarryService.Stack = {
+	FrontColumns = 3,
+	FrontRows = 3,
+	BackColumns = 3,
+	BackRows = 2,
+	FrontZ = -2.1,
+	BackZ = 1.6,
+	ColumnStep = 1.3,
+	RowStep = 1.12,
+	FrontY = 0.2,
+	BackY = -0.3,
+}
+
+-- the columns from the middle out
+local COLUMN_ORDER = { 0, -1, 1, -2, 2 }
+
+function CarryService.stackOffset(index: number): CFrame
+	local stack = CarryService.Stack
+	local i = math.max(0, math.floor(index) - 1)
+	local front = stack.FrontColumns * stack.FrontRows
+	if i < front then
+		local column = COLUMN_ORDER[i % stack.FrontColumns + 1] or 0
+		local row = math.floor(i / stack.FrontColumns)
+		return CFrame.new(column * stack.ColumnStep, stack.FrontY + row * stack.RowStep, stack.FrontZ)
+	end
+	local j = i - front
+	local slots = stack.BackColumns * stack.BackRows
+	local layer = math.floor(j / slots)
+	local k = j % slots
+	local column = COLUMN_ORDER[k % stack.BackColumns + 1] or 0
+	local row = math.floor(k / stack.BackColumns)
+	local out = (layer % 3) * 0.3
+	return CFrame.new(column * (stack.ColumnStep - 0.1), stack.BackY + row * (stack.RowStep - 0.07), stack.BackZ + out)
+		* CFrame.Angles(0, layer * 0.6, 0)
 end
+local stackOffset = CarryService.stackOffset
 
 local function updateWalkSpeed(player: Player)
 	local count = #(carried[player] or {})
@@ -197,11 +245,11 @@ local function dropCFrame(player: Player, root: BasePart): CFrame
 	return CFrame.new(position)
 end
 
-local function dropTop(player: Player, velocity: Vector3?)
+local function dropTop(player: Player, velocity: Vector3?): ItemService.ItemRecord?
 	local root = Guard.rootPart(player)
 	local list = carried[player]
 	if not root or not list or #list == 0 then
-		return
+		return nil
 	end
 	local record = table.remove(list) :: ItemService.ItemRecord
 	detach(record)
@@ -209,6 +257,7 @@ local function dropTop(player: Player, velocity: Vector3?)
 	-- put down on purpose: the Ore Magnet leaves it alone until it is picked up again
 	record.HandDropped = true
 	updateWalkSpeed(player)
+	return record
 end
 
 -- Drops everything (death, leaving, teleport).
@@ -259,10 +308,16 @@ local function onThrow(player: Player, direction: any, power: any)
 	end
 	local pitch = math.clamp(dir.Y, -0.3, 0.85)
 	local throwDir = (flat.Unit * math.sqrt(1 - pitch * pitch) + Vector3.new(0, pitch, 0)).Unit
-	local speed = (GameConfig.ThrowSpeedMin + (GameConfig.ThrowSpeedMax - GameConfig.ThrowSpeedMin) * charge)
-		* Bonuses.throwMult(Bonuses.stats(player))
+	local stats = Bonuses.stats(player)
+	local speed = (GameConfig.ThrowSpeedMin + (GameConfig.ThrowSpeedMax - GameConfig.ThrowSpeedMin) * charge) * Bonuses.throwMult(stats)
 	local velocity = throwDir * speed + Vector3.new(0, 8, 0) + root.AssemblyLinearVelocity * 0.5
-	dropTop(player, velocity)
+	local record = dropTop(player, velocity)
+	if record then
+		-- Grip Gloves throw harder than GameConfig.MaxItemSpeed allows: this
+		-- release may fly as fast as the throw plus half a legal run (the
+		-- anti-teleport checks still hold a spoofed run speed to that)
+		ItemService.allowSpeed(record, speed + 0.5 * Bonuses.walkSpeed(stats))
+	end
 	Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
 end
 

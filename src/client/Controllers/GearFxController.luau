@@ -4,57 +4,69 @@
 
 	Head lamps (Helmet Lamp gear, GearConfig.LampBudget)
 	- Every player whose attribute GearConfig.LampAttribute ("LampLevel",
-	  set by GearService) is above 0 wears a small lamp on the forehead: a
-	  dark housing and a Neon lens (two client-side parts welded to the
-	  Head: no collision, no queries, massless, no shadows). The lens gets
-	  whiter with the level.
+	  set by GearService) is above 0 wears a helmet lamp: a thin yellow
+	  helmet band around the head with a dark housing and a Neon lens on
+	  the forehead (three client-side parts welded to the Head: no
+	  collision, no queries, massless, no shadows). The lens gets whiter
+	  with the level.
 	- Only the LOCAL player's lamp casts light: ONE SpotLight (Shadows off)
 	  with the range and brightness from State.Bonuses (LampRange /
 	  LampBrightness, the capped totals the server computed), aimed a little
-	  down. Other players' lamps are Neon only (LampBudget.OthersNeon).
-	- A 1 s sync (at most 8 players) builds missing lamps (respawns,
-	  characters streaming in), removes them when the level drops to 0 and
-	  keeps the light in step with the snapshot; the level attribute and
-	  CharacterAdded rebuild at once.
+	  down, and only where it is dark: the lighting zone you stand in
+	  (LightingController.currentZone, the mine's caves and hollows) has a
+	  LightingConfig preset Brightness under DarkBelow. In the sunny town
+	  and the open quarry the light is off (Enabled), so it costs nothing.
+	  Other players' lamps are Neon only (LampBudget.OthersNeon).
+	- A sync every LAMP_TICK (at most 8 players) builds missing lamps
+	  (respawns, characters streaming in), removes them when the level drops
+	  to 0 and keeps the light in step with the snapshot and the zone; the
+	  level attribute and CharacterAdded rebuild at once.
 
 	Ore Magnet (the pull itself is server physics, ItemService.magnetStep)
-	- An item the server pulls toward YOU carries the model attribute
-	  MAGNET_ATTRIBUTE (= your UserId): it gets a soft glowing Beam to your
-	  character (at most MAX_BEAMS, pooled), checked 5 times a second and
-	  only while you have a magnet (State.Bonuses.MagnetRadius) or beams are
-	  still out. Other players' pulls show nothing (no cost).
+	- The server tags a pulled item's model MAGNET_TAG (CollectionService,
+	  ItemService.Magnet.Tag) while it slides; when its Owner attribute is
+	  YOU it gets a soft glowing Beam to your character (at most MAX_BEAMS,
+	  pooled; more wait for a free one). Event-driven: the tag's added /
+	  removed signals, no polling of Workspace.Items. Other players' pulls
+	  show nothing (no cost).
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GearConfig = require(Shared.Config.GearConfig)
+local LightingConfig = require(Shared.Config.LightingConfig)
 local StateController = require(script.Parent.StateController)
 
 local GearFxController = {}
 
 local LAMP_NAME = "TerraForgeLamp"
-local MAGNET_ATTRIBUTE = "MagnetTo" -- ItemService.Magnet.Attribute (server)
+local MAGNET_TAG = "MagnetPulled" -- ItemService.Magnet.Tag (server)
 local ANCHOR_NAME = "TerraForgeMagnetAnchor"
 local BEAM_NAME = "TerraForgeMagnetBeam"
 local MAX_BEAMS = 8
-local BEAM_TICK = 0.2
-local LAMP_TICK = 1
+local LAMP_TICK = 0.5
 
 local rgb = Color3.fromRGB
 local HOUSING_COLOR = rgb(58, 60, 72)
+local BAND_COLOR = rgb(255, 196, 18) -- the SHOP stall's yellow helmet (GearShopView)
 local LIGHT_COLOR = rgb(255, 242, 214)
 local BEAM_COLOR = ColorSequence.new(rgb(120, 200, 255), rgb(255, 255, 255))
 
 GearFxController.LampName = LAMP_NAME
+GearFxController.MagnetTag = MAGNET_TAG
 GearFxController.LightAngle = 70 -- degrees of the SpotLight cone
 GearFxController.LightTilt = 12 -- degrees the lamp looks down
--- the lamp's two parts (cylinders along their X axis = forward)
+-- the lamp's parts (cylinders along their X axis = forward)
 GearFxController.HousingSize = Vector3.new(0.28, 0.44, 0.44)
 GearFxController.LensSize = Vector3.new(0.08, 0.32, 0.32)
 GearFxController.LensOffset = 0.16
+GearFxController.BandHeight = 0.2
+-- a lighting zone whose preset Brightness is below this is dark: the lamp lights
+GearFxController.DarkBelow = 1.2
 
 type Lamp = {
 	Character: Model,
@@ -67,7 +79,9 @@ type Lamp = {
 local localPlayer = Players.LocalPlayer
 local lamps: { [Player]: Lamp } = {}
 local beams: { [Model]: Beam } = {}
+local waiting: { [Model]: boolean } = {} -- pulled toward you, no free beam yet
 local pool: { Beam } = {}
+local lighting: any = nil -- LightingController (required on first use)
 
 ---------------------------------------------------------------- pure helpers
 
@@ -84,6 +98,24 @@ function GearFxController.lampOffset(size: Vector3): CFrame
 		* CFrame.Angles(0, 0, math.rad(-GearFxController.LightTilt))
 end
 
+-- The helmet band around a head of `size` (head space; a thin block just
+-- outside the head's box, so it shows on blocky and round heads alike) and
+-- its size: at the lamp's height, the lamp sits on its front.
+function GearFxController.band(size: Vector3): (CFrame, Vector3)
+	local at = CFrame.new(0, size.Y * 0.36, 0)
+	return at, Vector3.new(size.X + 0.1, GearFxController.BandHeight, size.Z + 0.1)
+end
+
+-- The size a head looks (an R6 head is a 2 x 1 x 1 part drawn by its mesh).
+function GearFxController.headSize(head: BasePart): Vector3
+	local mesh = head:FindFirstChildOfClass("SpecialMesh")
+	if mesh and mesh.MeshType == Enum.MeshType.Head then
+		local s = mesh.Scale
+		return Vector3.new(math.min(head.Size.X, s.X), math.min(head.Size.Y, s.Y), math.min(head.Size.Z * 1.25, s.Z))
+	end
+	return head.Size
+end
+
 -- The local player's lamp light (range, brightness) from a State snapshot (0, 0 = none).
 function GearFxController.lightOf(state: any, level: number): (number, number)
 	local bonuses = if type(state) == "table" then state.Bonuses else nil
@@ -98,10 +130,39 @@ function GearFxController.lightOf(state: any, level: number): (number, number)
 	return math.clamp(range :: number, 0, 60), math.clamp(brightness :: number, 0, 5)
 end
 
+-- Is a lighting preset (LightingConfig.Presets name) dark enough for the lamp to light?
+function GearFxController.isDark(presetName: any): boolean
+	local presets: any = LightingConfig.Presets
+	local preset = if type(presetName) == "string" then presets[presetName] else nil
+	local settings = if type(preset) == "table" then preset.Lighting else nil
+	local brightness = if type(settings) == "table" then settings.Brightness else nil
+	return type(brightness) == "number" and brightness < GearFxController.DarkBelow
+end
+
 ---------------------------------------------------------------- head lamps
 
 local function levelOf(player: Player): number
 	return GearConfig.clampLevel(player:GetAttribute(GearConfig.LampAttribute))
+end
+
+-- The lighting zone the local player stands in (LightingController), "Surface" if unknown.
+local function currentPreset(): string
+	if lighting == nil then
+		local module = script.Parent:FindFirstChild("LightingController")
+		local ok, controller = false, nil
+		if module and module:IsA("ModuleScript") then
+			ok, controller = pcall(require, module :: any)
+		end
+		lighting = if ok and type(controller) == "table" then controller else false
+	end
+	local controller = lighting
+	if type(controller) == "table" and type(controller.currentZone) == "function" then
+		local ok, zone = pcall(controller.currentZone)
+		if ok and type(zone) == "string" then
+			return zone
+		end
+	end
+	return "Surface"
 end
 
 local function removeLamp(player: Player)
@@ -112,10 +173,10 @@ local function removeLamp(player: Player)
 	end
 end
 
-local function part(name: string, size: Vector3, color: Color3, material: Enum.Material, parent: Instance): Part
+local function part(name: string, size: Vector3, color: Color3, material: Enum.Material, parent: Instance, shape: Enum.PartType?): Part
 	local p = Instance.new("Part")
 	p.Name = name
-	p.Shape = Enum.PartType.Cylinder
+	p.Shape = shape or Enum.PartType.Cylinder
 	p.Size = size
 	p.Color = color
 	p.Material = material
@@ -134,9 +195,11 @@ local function updateLight(player: Player, lamp: Lamp)
 		return
 	end
 	local range, brightness = GearFxController.lightOf(StateController.get(), lamp.Level)
+	local dark = GearFxController.isDark(currentPreset())
 	local light = lamp.Light
 	if not light then
-		if GearConfig.LampBudget.MaxLights < 1 then
+		-- made the first time it is needed (never in the sunny town)
+		if GearConfig.LampBudget.MaxLights < 1 or not dark then
 			return
 		end
 		local made = Instance.new("SpotLight")
@@ -150,12 +213,22 @@ local function updateLight(player: Player, lamp: Lamp)
 		light = made
 	end
 	local current = light :: SpotLight
+	if current.Enabled ~= dark then
+		current.Enabled = dark
+	end
 	if current.Range ~= range then
 		current.Range = range
 	end
 	if current.Brightness ~= brightness then
 		current.Brightness = brightness
 	end
+end
+
+local function weld(a: BasePart, b: BasePart)
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = a
+	w.Part1 = b
+	w.Parent = b
 end
 
 local function buildLamp(player: Player, character: Model, level: number)
@@ -166,19 +239,18 @@ local function buildLamp(player: Player, character: Model, level: number)
 	removeLamp(player)
 	local model = Instance.new("Model")
 	model.Name = LAMP_NAME
-	local at = head.CFrame * GearFxController.lampOffset(head.Size)
+	local size = GearFxController.headSize(head)
+	local bandAt, bandSize = GearFxController.band(size)
+	local band = part("Band", bandSize, BAND_COLOR, Enum.Material.SmoothPlastic, model, Enum.PartType.Block)
+	band.CFrame = head.CFrame * bandAt
+	local at = head.CFrame * GearFxController.lampOffset(size)
 	local housing = part("Housing", GearFxController.HousingSize, HOUSING_COLOR, Enum.Material.SmoothPlastic, model)
 	housing.CFrame = at
 	local lens = part("Lens", GearFxController.LensSize, GearFxController.lensColor(level), Enum.Material.Neon, model)
 	lens.CFrame = at * CFrame.new(GearFxController.LensOffset, 0, 0)
-	local toHead = Instance.new("WeldConstraint")
-	toHead.Part0 = head
-	toHead.Part1 = housing
-	toHead.Parent = housing
-	local toHousing = Instance.new("WeldConstraint")
-	toHousing.Part0 = housing
-	toHousing.Part1 = lens
-	toHousing.Parent = lens
+	weld(head, band)
+	weld(head, housing)
+	weld(housing, lens)
 	model.Parent = character
 	local lamp: Lamp = { Character = character, Level = level, Model = model, Housing = housing, Light = nil }
 	lamps[player] = lamp
@@ -273,7 +345,52 @@ local function beamFolder(): Instance?
 	return folder
 end
 
+local function beamCount(): number
+	local count = 0
+	for _ in beams do
+		count += 1
+	end
+	return count
+end
+
+-- Is this tagged model an item pulled toward the local player?
+local function mine(model: Instance): boolean
+	return model:IsA("Model") and model:GetAttribute("Owner") == localPlayer.UserId
+end
+
+local function attachBeam(model: Model): boolean
+	local body = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+	local target = anchor()
+	local folder = beamFolder()
+	if not body or not target or not folder or beamCount() >= MAX_BEAMS then
+		return false
+	end
+	local start = Instance.new("Attachment")
+	start.Name = BEAM_NAME
+	start.Parent = body
+	local beam = table.remove(pool) or newBeam()
+	beam.Attachment0 = start
+	beam.Attachment1 = target
+	beam.Parent = folder
+	beams[model] = beam
+	return true
+end
+
+-- A model waiting for a free beam gets one (beams are freed or the character came back).
+local function fillWaiting()
+	for model in waiting do
+		if not model.Parent or not model:HasTag(MAGNET_TAG) then
+			waiting[model] = nil
+		elseif beamCount() >= MAX_BEAMS then
+			return
+		elseif attachBeam(model) then
+			waiting[model] = nil
+		end
+	end
+end
+
 local function releaseBeam(model: Model)
+	waiting[model] = nil
 	local beam = beams[model]
 	beams[model] = nil
 	if not beam then
@@ -294,62 +411,44 @@ local function releaseBeam(model: Model)
 	end
 end
 
-local function attachBeam(model: Model, body: BasePart, target: Attachment)
-	local count = 0
-	for _ in beams do
-		count += 1
-	end
-	local folder = beamFolder()
-	if count >= MAX_BEAMS or not folder then
+local function onPulled(instance: Instance)
+	if not mine(instance) then
 		return
 	end
-	local start = Instance.new("Attachment")
-	start.Name = BEAM_NAME
-	start.Parent = body
-	local beam = table.remove(pool) or newBeam()
-	beam.Attachment0 = start
-	beam.Attachment1 = target
-	beam.Parent = folder
-	beams[model] = beam
-end
-
-local function hasMagnet(): boolean
-	local state = StateController.get()
-	local bonuses = if state then state.Bonuses else nil
-	local radius = if type(bonuses) == "table" then tonumber(bonuses.MagnetRadius) else nil
-	return radius ~= nil and radius > 0
-end
-
-local function syncBeams()
-	local items = Workspace:FindFirstChild("Items")
-	if not items or (not hasMagnet() and next(beams) == nil) then
+	local model = instance :: Model
+	if beams[model] then
 		return
 	end
-	local me = localPlayer.UserId
+	if not attachBeam(model) then
+		waiting[model] = true
+	end
+end
+
+local function onReleased(instance: Instance)
+	if instance:IsA("Model") then
+		releaseBeam(instance)
+		fillWaiting()
+	end
+end
+
+-- A new character: the beams point at its root again.
+local function retarget()
 	local target = anchor()
-	local seen: { [Model]: boolean } = {}
-	if target then
-		for _, child in items:GetChildren() do
-			if child:IsA("Model") and child:GetAttribute(MAGNET_ATTRIBUTE) == me then
-				local body = child.PrimaryPart
-				if body then
-					seen[child] = true
-					local beam = beams[child]
-					if beam and beam.Attachment1 ~= target then
-						releaseBeam(child)
-					end
-					if not beams[child] then
-						attachBeam(child, body, target)
-					end
-				end
-			end
+	local lost: { Model } = {}
+	for model, beam in beams do
+		if target and model.Parent then
+			beam.Attachment1 = target
+		else
+			table.insert(lost, model)
 		end
 	end
-	for model in beams do
-		if not seen[model] or not model.Parent then
-			releaseBeam(model)
+	for _, model in lost do
+		releaseBeam(model)
+		if model.Parent and model:HasTag(MAGNET_TAG) then
+			waiting[model] = true
 		end
 	end
+	fillWaiting()
 end
 
 ---------------------------------------------------------------- lifecycle
@@ -366,26 +465,27 @@ function GearFxController.start()
 			updateLight(localPlayer, lamp)
 		end
 	end)
-	task.spawn(function()
-		while true do
-			task.wait(LAMP_TICK)
-			for _, player in Players:GetPlayers() do
-				local ok, err = pcall(function()
-					syncLamp(player)
-				end)
-				if not ok then
-					warn("[GearFx] lamp: " .. tostring(err))
-				end
-			end
-		end
+	-- magnet beams: only the tag's signals (items streaming in arrive tagged)
+	CollectionService:GetInstanceAddedSignal(MAGNET_TAG):Connect(onPulled)
+	CollectionService:GetInstanceRemovedSignal(MAGNET_TAG):Connect(onReleased)
+	for _, instance in CollectionService:GetTagged(MAGNET_TAG) do
+		onPulled(instance)
+	end
+	localPlayer.CharacterAdded:Connect(function(character)
+		task.spawn(function()
+			character:WaitForChild("HumanoidRootPart", 10)
+			retarget()
+		end)
 	end)
 	while true do
-		task.wait(BEAM_TICK)
-		local ok, err = pcall(function()
-			syncBeams()
-		end)
-		if not ok then
-			warn("[GearFx] magnet: " .. tostring(err))
+		task.wait(LAMP_TICK)
+		for _, player in Players:GetPlayers() do
+			local ok, err = pcall(function()
+				syncLamp(player)
+			end)
+			if not ok then
+				warn("[GearFx] lamp: " .. tostring(err))
+			end
 		end
 	end
 end

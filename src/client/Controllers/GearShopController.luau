@@ -1,10 +1,12 @@
 --[[
 	GearShopController: the Gear shop at the SHOP stall (client side).
 
-	- Opens on OpenUI "Gear" { Counter } (the stall's "Gear Shop" prompt,
-	  added by GearService). The five cards come from the State snapshot
-	  (GearShopView.cards with your coins, counted up between snapshots like
-	  the HUD) and update live while it is open.
+	- Opens on OpenUI "Gear" { Counter, Preview } (the stall's "Gear Shop"
+	  prompt, added by GearService). The five cards come from the State
+	  snapshot (GearShopView.cards with your coins, counted up between
+	  snapshots like the HUD) and the server's Preview (the real numbers
+	  with every bonus; every Gear ActionResult brings a fresh one) and
+	  update live while it is open.
 	- BUY sends GearAction ("Buy", { Line, Level }) with Level = the level
 	  the card shows being bought. The button shows "..." until the server's
 	  ActionResult (Action "Gear") arrives, then "BOUGHT!" for a moment, or
@@ -68,9 +70,26 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 	Info = Theme.Info,
 	Discovery = Theme.Accent,
 }
--- panels that own the middle of the screen: one at a time
-local OTHER_PANELS =
-	{ "PenController", "SellController", "TrainController", "IronBoxController", "FoundryController", "TechShopController" }
+-- panels that own the middle of the screen: one at a time (names that
+-- don't exist yet are skipped; the steps 6-7 shops and menus are listed so
+-- they close each other once they are merged in)
+local OTHER_PANELS = {
+	"PenController",
+	"SellController",
+	"TrainController",
+	"IronBoxController",
+	"FoundryController",
+	"TechShopController",
+	"EnchantController",
+	"BoostController",
+	"CapsuleController",
+	"GolemController",
+	"WheelController",
+	"ArtifactController",
+	"CodexController",
+	"LeaderboardController",
+	"SettingsController",
+}
 
 local player = Players.LocalPlayer
 local refs: GearShopView.Refs? = nil
@@ -81,6 +100,8 @@ local statusTokens: { [string]: number } = {}
 local receiptToken = 0
 local openedAt = 0
 local others: { Panel }? = nil
+-- the server's numbers for the cards (GearService.preview), from OpenUI and every ActionResult
+local preview: { [string]: any }? = nil
 
 function GearShopController.isOpen(): boolean
 	return counter ~= nil
@@ -177,7 +198,7 @@ local function refresh()
 	end
 	local cash = coins()
 	GearShopView.setCoins(view, cash)
-	GearShopView.setCards(view, GearShopView.cards(StateController.get(), cash))
+	GearShopView.setCards(view, GearShopView.cards(StateController.get(), cash, preview))
 end
 
 local function selectDefault(view: GearShopView.Refs, force: boolean)
@@ -303,10 +324,13 @@ local function pop(frame: GuiObject)
 	TweenService:Create(s, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 end
 
--- ActionResult { Action = "Gear", Op, Ok, Reason?, Id: line, Level? }.
+-- ActionResult { Action = "Gear", Op, Ok, Reason?, Id: line, Level?, Preview? }.
 local function onResult(payload: any)
 	if type(payload) ~= "table" or payload.Action ~= "Gear" then
 		return
+	end
+	if type(payload.Preview) == "table" then
+		preview = payload.Preview
 	end
 	local lineId = if type(payload.Id) == "string" then payload.Id else nil
 	local wait = if lineId then pending[lineId] else nil
@@ -528,6 +552,9 @@ function GearShopController.init()
 		end
 		local part = payload.Counter
 		if typeof(part) == "Instance" and part:IsA("BasePart") then
+			if type(payload.Preview) == "table" then
+				preview = payload.Preview
+			end
 			GearShopController.open(part)
 		end
 	end)

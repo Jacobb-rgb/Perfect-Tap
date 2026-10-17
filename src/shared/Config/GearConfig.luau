@@ -13,7 +13,8 @@
 	  Gloves      pickup range (studs)               11 -> 13, 15, 17, 20, 24
 	              and throw power (x)               1.0 -> 1.08 ... 1.4
 	  Magnet      radius (studs) in which your own    0 -> 8, 12, 16, 22, 30
-	              loose items fly to you
+	              loose items fly to your feet (once; not on or near
+	              bases, not what you dropped: ItemService.Magnet)
 
 	Walk speed: Boots level 0 is 16 studs/s, Roblox's default, on purpose
 	(Boots I, 500 coins, gives the 18 everyone walked at before). CarryService
@@ -48,6 +49,25 @@ export type GearLine = {
 	Unit: string, -- how the primary value reads in the UI
 	Icon: string, -- UI icon key
 }
+
+--[[
+	What one gear line gives this player right now and at the next level,
+	with EVERY bonus counted (Magnetism enchant, WalkSpeed golems, Swift,
+	Strong Back...), as the server computes it (GearService.preview): the
+	Gear shop's cards show these instead of the bare gear table. Main value:
+	walk speed (Boots), lamp range (HelmetLamp), items (Backpack), pickup
+	range (Gloves), magnet radius (Magnet); Extra: lamp brightness, throw
+	power. Next / ExtraNext are nil at the top level. A card uses the
+	numbers only while its level is `Level`.
+]]
+export type LinePreview = {
+	Level: number,
+	Now: number,
+	Next: number?,
+	ExtraNow: number?,
+	ExtraNext: number?,
+}
+export type Preview = { [string]: LinePreview }
 
 local GearConfig = {}
 
@@ -126,7 +146,8 @@ GearConfig.Lines = {
 	{
 		Id = "Magnet",
 		Name = "Ore Magnet",
-		Description = "Your own loose ore flies to you.",
+		-- (ItemService: off bases, never what you dropped or threw, once per drop)
+		Description = "Mined ore flies to your feet. Not on bases or ore you dropped.",
 		Primary = "MagnetRadius",
 		Stats = { MagnetRadius = { 0, 8, 12, 16, 22, 30 } },
 		Prices = { 1500, 9000, 55000, 330000, 2000000 },

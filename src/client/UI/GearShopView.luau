@@ -24,9 +24,11 @@
 	level pips and its second stat line, so the showcase keeps its size.
 	Texts fit their boxes (TechShopView.fitText shrinks a long one). Five
 	cards that don't fit side by side scroll sideways.
-	Values come from GearConfig (value / nextPrice / quote rules) and the
-	State snapshot (Gear: the save's levels; Perks.StrongBack doubles the
-	backpack), so a card always offers what the server will quote.
+	Prices and levels come from GearConfig (nextPrice / quote rules) and the
+	State snapshot (Gear: the save's levels), so a card always offers what
+	the server will quote. The effect numbers are the server's preview
+	(GearService.preview: walk speed, magnet radius... with every bonus
+	counted, e.g. the Magnetism enchant), or the gear table until it came.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -138,7 +140,7 @@ GearShopView.MinHeight = 360
 -- server's GearConfig.Range (30), so lag never gets an open shop's BUY refused
 GearShopView.CloseRange = 24
 GearShopView.Separator = TechShopView.Separator
-GearShopView.Subtitle = "Gear works right away, everywhere, and stays after you respawn."
+GearShopView.Subtitle = "Gear works right away and stays after you respawn."
 
 -- Status lines the controller shows on a card (here so the tests can check they fit).
 GearShopView.StatusText = {
@@ -291,51 +293,78 @@ local function fromTo(now: string, nextValue: string?): string
 	return `{now} → {nextValue}`
 end
 
+-- the second stat of a line (the card's Extra row)
+local EXTRA_STAT: { [string]: string } = { HelmetLamp = "LampBrightness", Gloves = "ThrowMult" }
+
+-- A line's preview when it is for `level` and its numbers are sane (else nil:
+-- the card falls back to the gear table).
+local function livePreview(values: any, level: number): GearConfig.LinePreview?
+	if type(values) ~= "table" or values.Level ~= level then
+		return nil
+	end
+	local now = values.Now
+	if type(now) ~= "number" or now ~= now or now < 0 or now == math.huge then
+		return nil
+	end
+	return values :: GearConfig.LinePreview
+end
+
 --[[
 	What a line gives at `level` and (below the top level) at the next one,
 	as the card's effect box says it: the big text, its unit and a second
 	stat ("" when the line has none). Level 0 of the lamp and the magnet
-	reads "Off". The backpack counts the Strong Back pass (x2), like the
-	server (Bonuses.carryCapacity).
+	reads "Off". `values` (GearService.preview for this line, from the
+	server) makes every number the real total with every bonus counted (the
+	Magnetism enchant, golems, Swift, Strong Back); without it, or when it
+	is for another level, the numbers are the gear table's (the backpack
+	still counts Strong Back, x2, like Bonuses.carryCapacity).
 ]]
-function GearShopView.effect(lineId: string, level: number, hasStrongBack: boolean?): (string, string, string)
+function GearShopView.effect(lineId: string, level: number, hasStrongBack: boolean?, values: any?): (string, string, string)
 	local line = GearConfig.ById[lineId]
 	if not line then
 		return "", "", ""
 	end
 	local current = GearConfig.clampLevel(level)
 	local nextLevel: number? = if current < GearConfig.MaxLevel then current + 1 else nil
-	local function value(at: number, stat: string?): number
-		return GearConfig.value(lineId, at, stat)
+	local x2 = hasStrongBack == true
+	local live = livePreview(values, current)
+	local function value(at: number, extra: boolean): number
+		if live then
+			local v: number? = if at == current
+				then (if extra then live.ExtraNow else live.Now)
+				else (if extra then live.ExtraNext else live.Next)
+			if type(v) == "number" and v == v and v >= 0 and v < math.huge then
+				return v
+			end
+		end
+		if extra then
+			return GearConfig.value(lineId, at, EXTRA_STAT[lineId])
+		elseif lineId == "Backpack" then
+			return GearConfig.carryCapacity({ Backpack = at }, x2)
+		end
+		return GearConfig.value(lineId, at)
 	end
-	local function show(at: number, stat: string?): string
-		local v = value(at, stat)
+	local function show(at: number, extra: boolean): string
+		local v = value(at, extra)
 		if v <= 0 and (lineId == "HelmetLamp" or lineId == "Magnet") then
 			return "Off"
 		end
-		return GearShopView.number(v)
+		return GearShopView.number(math.floor(v * 100 + 0.5) / 100)
 	end
-	local function pair(stat: string?, prefix: string?): string
-		local now = (prefix or "") .. show(current, stat)
-		local after = if nextLevel then (prefix or "") .. show(nextLevel, stat) else nil
+	local function pair(extra: boolean, prefix: string?): string
+		local now = (prefix or "") .. show(current, extra)
+		local after = if nextLevel then (prefix or "") .. show(nextLevel, extra) else nil
 		return fromTo(now, after)
 	end
 	if lineId == "Backpack" then
-		local x2 = hasStrongBack == true
-		local function items(at: number): string
-			return GearShopView.number(GearConfig.carryCapacity({ Backpack = at }, x2))
-		end
-		local text = fromTo(items(current), if nextLevel then items(nextLevel) else nil)
-		return text, if x2 then "items (Strong Back)" else "items you can carry", ""
+		return pair(false), if x2 then "items (Strong Back)" else "items you can carry", ""
 	elseif lineId == "HelmetLamp" then
-		local extra = if current == 0 and nextLevel
-			then `Brightness {GearShopView.number(value(nextLevel, "LampBrightness"))}`
-			else `Brightness {pair("LampBrightness")}`
-		return pair(), line.Unit, extra
+		local extra = if current == 0 and nextLevel then `Brightness {show(nextLevel, true)}` else `Brightness {pair(true)}`
+		return pair(false), line.Unit, extra
 	elseif lineId == "Gloves" then
-		return pair(), line.Unit, `Throw {pair("ThrowMult", "x")}`
+		return pair(false), line.Unit, `Throw {pair(true, "x")}`
 	end
-	return pair(), line.Unit, ""
+	return pair(false), line.Unit, ""
 end
 
 -- The chip of a level: "LV 2/5", or "MAX" at the top.
@@ -348,20 +377,22 @@ function GearShopView.chipText(level: number): string
 end
 
 --[[
-	Every card of the shop from a State snapshot (Gear, Perks) and your
-	coins, in GearConfig.Lines order. The BUY offers exactly what the server
-	quotes (GearConfig.quote): the next level, at nextPrice.
+	Every card of the shop from a State snapshot (Gear, Perks), your coins
+	and the server's preview (GearService.preview: the real totals, nil =
+	the gear table), in GearConfig.Lines order. The BUY offers exactly what
+	the server quotes (GearConfig.quote): the next level, at nextPrice.
 ]]
-function GearShopView.cards(rawState: any, coins: number): { Card }
+function GearShopView.cards(rawState: any, coins: number, preview: any?): { Card }
 	local state = safeState(rawState)
 	local cash = num(coins)
 	local x2 = strongBack(state)
+	local values: { [string]: any } = if type(preview) == "table" then preview else {}
 	local list: { Card } = {}
 	for order, line in GearConfig.Lines do
 		local level = GearConfig.level(state.Gear, line.Id)
 		local price = GearConfig.nextPrice(line.Id, level)
 		local done = price == nil
-		local effect, unit, extra = GearShopView.effect(line.Id, level, x2)
+		local effect, unit, extra = GearShopView.effect(line.Id, level, x2, values[line.Id])
 		local buy: Buy
 		if price == nil then
 			buy = { Text = "MAX", Level = nil, Price = nil, Reason = "Max", CanBuy = false }
@@ -961,7 +992,16 @@ function GearShopView.buttonText(refs: Refs, card: Card): string
 end
 
 -- One card (`width` x `height` design units) at x = `left` in the list.
-local function placeSlot(refs: Refs, slot: Slot, m: Metrics, left: number, width: number, height: number, iconSize: number, descriptionHeight: number)
+local function placeSlot(
+	refs: Refs,
+	slot: Slot,
+	m: Metrics,
+	left: number,
+	width: number,
+	height: number,
+	iconSize: number,
+	descriptionHeight: number
+)
 	local compact = refs.Compact
 	slot.Frame.Position = UDim2.fromOffset(left, 0)
 	slot.Frame.Size = UDim2.fromOffset(width, height)

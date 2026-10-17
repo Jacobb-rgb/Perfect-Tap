@@ -144,13 +144,20 @@ local function refreshCarry()
 			child:Destroy()
 		end
 	end
-	for i = 1, capacity do
-		local item = carried[i]
-		local dirty = item ~= nil and item:GetAttribute("Kind") == "Raw"
-		HudView.slot(refs.CarrySlots, if item and not dirty then rarityColorOfItem(item) else nil, i, dirty)
+	-- at most HudView.MaxCarrySlots squares (the last one says "+N"): a big
+	-- backpack never covers the phone's thumbstick and jump button
+	local squares, shown, more, width = HudView.carryLayout(capacity, #carried)
+	for i = 1, squares do
+		if more > 0 and i == squares then
+			HudView.moreSlot(refs.CarrySlots, more, i)
+		else
+			local item = if i <= shown then carried[i] else nil
+			local dirty = item ~= nil and item:GetAttribute("Kind") == "Raw"
+			HudView.slot(refs.CarrySlots, if item and not dirty then rarityColorOfItem(item) else nil, i, dirty)
+		end
 	end
 	refs.CarryLabel.Text = `CARRYING {#carried}/{capacity}`
-	refs.CarryPanel.Size = UDim2.fromOffset(math.max(200, capacity * 40 + 24), 74)
+	refs.CarryPanel.Size = UDim2.fromOffset(width, HudView.CarryPanelHeight)
 end
 
 local currentZone = ""

@@ -6,17 +6,18 @@
 	- ShopCounter (tag GearConfig.Tag, a BasePart of the lobby's SHOP stall):
 	  this service adds a "Gear Shop" prompt at runtime on the customer side
 	  (-Z) of the counter top; it opens the Gear shop view (OpenUI "Gear"
-	  { Counter }).
+	  { Counter, Preview }).
 	- GearAction (Net, rate limited) ("Buy", { Line, Level }): Level must be
 	  the level being bought (current + 1, the one the card shows), else
 	  "Stale" (GearConfig.quote), so a double tap or a lagging card never
 	  buys two levels. Only within GearConfig.Range of a ShopCounter
 	  ("TooFar"; the client closes the shop nearer than that).
 	- Every GearAction the server reads gets one ActionResult { Action =
-	  "Gear", Op, Ok, Reason?, Id?: the line, Level?: the new level } (Reason:
-	  a GearConfig.Reasons code), also one from a player whose save isn't
-	  loaded: "BadItem", nothing changes. A successful buy also sends a
-	  "Reward" toast (the client shows refusals on the card).
+	  "Gear", Op, Ok, Reason?, Id?: the line, Level?: the new level,
+	  Preview? } (Reason: a GearConfig.Reasons code; Preview:
+	  GearService.preview), also one from a player whose save isn't loaded:
+	  "BadItem", nothing changes. A successful buy also sends a "Reward"
+	  toast (the client shows refusals on the card).
 	- Atomic: quote, EconomyService.spend and the level write happen in one
 	  step with no yield in between; data.Gear is made a table before the
 	  coins are taken, so nothing can fail after the spend. Levels a newer
@@ -32,6 +33,11 @@
 	  build the head lamps from it (GearFxController).
 	- GearService.onBought(callback): stats / analytics / tutorial hooks,
 	  (player, Bought) after every successful buy.
+	- The cards show what the player really gets (GearConfig.LinePreview:
+	  every bonus counted, the Magnetism enchant on the magnet, golems on
+	  the boots...): GearService.preview(player) rides along with OpenUI
+	  "Gear" { Counter, Preview } and every Gear ActionResult (Preview), and
+	  the success toast says the real numbers too.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -130,24 +136,86 @@ local function number(value: number): string
 	return text
 end
 
--- The toast after a successful buy: what the new level gives.
-function GearService.boughtText(lineId: string, level: number, strongBack: boolean?): string
+--[[
+	The toast after a successful buy: what the new level gives. With
+	`values` (the line's preview after the buy) the numbers count every
+	bonus, else they are the gear table's.
+]]
+function GearService.boughtText(lineId: string, level: number, strongBack: boolean?, values: GearConfig.LinePreview?): string
 	local name = GearService.levelName(lineId, level)
+	local live = if values and values.Level == level then values else nil
+	local function main(fallback: number): string
+		return number(if live then live.Now else fallback)
+	end
+	local function extra(fallback: number): string
+		local value = if live then live.ExtraNow else nil
+		return number(value or fallback)
+	end
 	if lineId == "Boots" then
-		return `{name}: walk speed {number(GearConfig.value("Boots", level))}!`
+		return `{name}: walk speed {main(GearConfig.value("Boots", level))}!`
 	elseif lineId == "HelmetLamp" then
-		return `{name}: your lamp lights {number(GearConfig.value("HelmetLamp", level))} studs!`
+		return `{name}: your lamp lights {main(GearConfig.value("HelmetLamp", level))} studs in dark caves!`
 	elseif lineId == "Backpack" then
 		local gear = { Backpack = level }
-		return `{name}: you can carry {GearConfig.carryCapacity(gear, strongBack == true)} items!`
+		return `{name}: you can carry {main(GearConfig.carryCapacity(gear, strongBack == true))} items!`
 	elseif lineId == "Gloves" then
-		local reach = number(GearConfig.value("Gloves", level))
-		local throw = number(GearConfig.value("Gloves", level, "ThrowMult"))
+		local reach = main(GearConfig.value("Gloves", level))
+		local throw = extra(GearConfig.value("Gloves", level, "ThrowMult"))
 		return `{name}: grab from {reach} studs, throw x{throw}!`
 	elseif lineId == "Magnet" then
-		return `{name}: your ore flies to you from {number(GearConfig.value("Magnet", level))} studs!`
+		return `{name}: mined ore flies to your feet from {main(GearConfig.value("Magnet", level))} studs (not on bases)!`
 	end
 	return `{name} bought!`
+end
+
+---------------------------------------------------------------- what the cards show
+
+-- A line's main and extra value from bonus totals (see GearConfig.LinePreview).
+local function lineValues(lineId: string, stats: Bonuses.Stats, player: Player): (number, number?)
+	if lineId == "Boots" then
+		return Bonuses.walkSpeed(stats), nil
+	elseif lineId == "HelmetLamp" then
+		local range, brightness = Bonuses.lamp(stats)
+		return range, brightness
+	elseif lineId == "Backpack" then
+		return Bonuses.carryCapacity(stats, player), nil
+	elseif lineId == "Gloves" then
+		return Bonuses.pickupRange(stats), Bonuses.throwMult(stats)
+	elseif lineId == "Magnet" then
+		return Bonuses.magnetRadius(stats), nil
+	end
+	return 0, nil
+end
+
+--[[
+	What every gear line gives the player now and at its next level, every
+	bonus counted (Bonuses: the save as it is, and the save with that one
+	line a level higher). nil when the save isn't loaded. Pure reads.
+]]
+function GearService.preview(player: Player): GearConfig.Preview?
+	local data = DataService.get(player)
+	if not data then
+		return nil
+	end
+	local now = os.time()
+	local stats = Bonuses.compute(data, now, player)
+	local out: GearConfig.Preview = {}
+	for _, line in GearConfig.Lines do
+		local level = GearConfig.level(data.Gear, line.Id)
+		local mainNow, extraNow = lineValues(line.Id, stats, player)
+		local entry: GearConfig.LinePreview = { Level = level, Now = mainNow, ExtraNow = extraNow }
+		if level < GearConfig.MaxLevel then
+			local gear: { [string]: any } = if type(data.Gear) == "table" then table.clone(data.Gear) else {}
+			gear[line.Id] = level + 1
+			local after = table.clone(data)
+			after.Gear = gear
+			local mainNext, extraNext = lineValues(line.Id, Bonuses.compute(after, now, player), player)
+			entry.Next = mainNext
+			entry.ExtraNext = extraNext
+		end
+		out[line.Id] = entry
+	end
+	return out
 end
 
 ---------------------------------------------------------------- effects
@@ -206,7 +274,7 @@ end
 
 ---------------------------------------------------------------- requests
 
-local function answer(player: Player, op: string, ok: boolean, reason: string?, id: string?, level: number?)
+local function answer(player: Player, op: string, ok: boolean, reason: string?, id: string?, level: number?, preview: GearConfig.Preview?)
 	Net.fire("ActionResult", player, {
 		Action = GearService.Action,
 		Op = op,
@@ -214,6 +282,8 @@ local function answer(player: Player, op: string, ok: boolean, reason: string?, 
 		Reason = reason,
 		Id = id,
 		Level = level,
+		-- what the cards show from now on (nil when the save isn't loaded)
+		Preview = preview or GearService.preview(player),
 	})
 end
 
@@ -242,9 +312,10 @@ local function onGearAction(player: Player, action: any, payload: any)
 		answer(player, op, false, if reason == "NoData" or reason == nil then "BadItem" else reason, line)
 		return
 	end
-	answer(player, op, true, nil, line, bought.Level)
+	local preview = GearService.preview(player)
+	answer(player, op, true, nil, line, bought.Level, preview)
 	Net.fire("Notify", player, {
-		Text = GearService.boughtText(line, bought.Level, Perks.has(player, "StrongBack")),
+		Text = GearService.boughtText(line, bought.Level, Perks.has(player, "StrongBack"), if preview then preview[line] else nil),
 		Kind = "Reward",
 	})
 end
@@ -255,7 +326,7 @@ local function openView(player: Player, counter: BasePart)
 	if not DataService.get(player) or not GearService.counterNear(player, GearService.Range) then
 		return
 	end
-	Net.fire("OpenUI", player, "Gear", { Counter = counter })
+	Net.fire("OpenUI", player, "Gear", { Counter = counter, Preview = GearService.preview(player) })
 end
 
 -- Forgets counters that left the game (the lobby was rebuilt), so the list never only grows.

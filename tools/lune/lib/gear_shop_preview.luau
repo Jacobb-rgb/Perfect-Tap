@@ -2,9 +2,10 @@
 	The Gear shop panel over the game (scene "gear_shop" for
 	tools/lune/export_scene.luau: the world, shots in
 	tools/preview/gear_shop_shots.json at the SHOP stall), plus two miners in
-	front of the stall wearing the Helmet Lamp (the lamp parts as
+	front of the stall wearing the Helmet Lamp (the band and lamp parts as
 	GearFxController builds them; the preview has no SpotLights, so only the
-	Neon lens glows).
+	Neon lens glows; in town the real light is off anyway) and a miner
+	carrying 24 chunks (Backpack V + Strong Back) in CarryService's stack.
 	Everything is drawn with the game's own code (GearShopView.build /
 	layout / cards / setCards, HudView) from State snapshots.
 	UI overlays (build/preview/<name>.json):
@@ -16,6 +17,7 @@
 	  ui_gear_phone        667 x 375 pt phone (compact layout)
 	  ui_gear_phone_small  568 x 320 pt phone (rows dropped to fit)
 	  ui_gear_tv           1080p TV (console): compact, a BUY waits for its answer
+	  ui_gear_carry_phone  667 x 375 pt phone HUD carrying 24 of 24 ("+17")
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -65,13 +67,15 @@ local function miners(Loader: any, workspace: any)
 		local look = front.LookVector
 		local root = CFrame.lookAt(at, at + Vector3.new(look.X, 0, look.Z)) * CFrame.Angles(0, math.rad(yaw), 0)
 		Dummy.build(folder, CFrame, root, "idle", colors)
-		-- the head lamp as GearFxController builds it (housing + Neon lens)
+		-- the head lamp as GearFxController builds it (band + housing + Neon lens)
 		local head = root * CFrame.new(0, 4.65, 0)
-		local lampAt = head * GearFx.lampOffset(Vector3.new(1.2, 1.2, 1.2))
-		local function cyl(name: string, size: any, cf: any, color: any, material: any)
+		local headSize = Vector3.new(1.2, 1.2, 1.2)
+		local lampAt = head * GearFx.lampOffset(headSize)
+		local bandAt, bandSize = GearFx.band(headSize)
+		local function cyl(name: string, size: any, cf: any, color: any, material: any, shape: any?)
 			local p = roblox.Instance.new("Part")
 			p.Name = name
-			p.Shape = roblox.Enum.PartType.Cylinder
+			p.Shape = shape or roblox.Enum.PartType.Cylinder
 			p.Size = size
 			p.CFrame = cf
 			p.Color = color
@@ -79,6 +83,7 @@ local function miners(Loader: any, workspace: any)
 			p.Anchored = true
 			p.Parent = folder
 		end
+		cyl("Band", bandSize, head * bandAt, Color3.fromRGB(255, 196, 18), roblox.Enum.Material.SmoothPlastic, roblox.Enum.PartType.Block)
 		cyl("Housing", GearFx.HousingSize, lampAt, Color3.fromRGB(58, 60, 72), roblox.Enum.Material.SmoothPlastic)
 		cyl("Lens", GearFx.LensSize, lampAt * CFrame.new(GearFx.LensOffset, 0, 0), GearFx.lensColor(level), roblox.Enum.Material.Neon)
 	end
@@ -90,6 +95,24 @@ local function miners(Loader: any, workspace: any)
 		skin = Color3.fromRGB(150, 104, 76),
 		hair = Color3.fromRGB(30, 24, 20),
 	})
+	-- a miner with Backpack V + Strong Back carrying all 24 chunks across the
+	-- plaza: the stack as CarryService builds it (root = feet + 3)
+	local CarryService = Loader.requirePath("ServerScriptService.Server.Services.CarryService")
+	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
+	-- (behind the stall and miners cameras, out on the plaza)
+	local at = Vector3.new(front.Position.X, ground, front.Position.Z) + front.LookVector * 24
+	local carrier = CFrame.lookAt(at, at + right)
+	Dummy.build(folder, CFrame, carrier, "carry", {
+		shirt = Color3.fromRGB(64, 150, 92),
+		pants = Color3.fromRGB(56, 50, 66),
+	})
+	local ores = { "Copper", "Iron", "Silver", "Coal", "Tin", "Gold" }
+	local capacity = GearConfig.carryCapacity({ Backpack = GearConfig.MaxLevel }, true)
+	for i = 1, capacity do
+		local cf = carrier * CFrame.new(0, 3, 0) * CarryService.stackOffset(i)
+		local item = ItemBuilder.build({ Kind = "Raw", OreId = ores[(i - 1) % #ores + 1] }, cf, 200 + i)
+		item.Parent = folder
+	end
 end
 
 function Preview.build(Loader: any, workspace: any): { [string]: any }
@@ -107,16 +130,24 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local smallScale = GearShopView.PhoneScale * 900 / 320 -- a 568 x 320 pt phone
 	local smallInset = math.floor(58 * 900 / 320) -- its 58 pt top bar, in render pixels
 
-	local function hud(uiScale: number, coins: number, carry: number): any
+	-- the HUD as HudController draws it (carryLayout: at most 8 squares, "+N")
+	local function hud(uiScale: number, coins: number, carry: number, carried: number?): any
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(64)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
-		refs.CarryLabel.Text = `CARRYING 0/{carry}`
-		for i = 1, carry do
-			HudView.slot(refs.CarrySlots, nil, i)
+		local count = carried or 0
+		local squares, shown, more, width = HudView.carryLayout(carry, count)
+		refs.CarryLabel.Text = `CARRYING {count}/{carry}`
+		for i = 1, squares do
+			if more > 0 and i == squares then
+				HudView.moreSlot(refs.CarrySlots, more, i)
+			else
+				HudView.slot(refs.CarrySlots, nil, i, i <= shown)
+			end
 		end
+		refs.CarryPanel.Size = roblox.UDim2.fromOffset(width, HudView.CarryPanelHeight)
 		refs.Toasts:ClearAllChildren()
 		return refs
 	end
@@ -185,6 +216,10 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	boots.Text = "..."
 	GearShopView.setStatus(tv, "Gloves", GearShopView.StatusText.Waiting, Theme.Info)
 	exports.ui_gear_tv = UiExport.export({ hud7.Gui, tv.Gui })
+
+	-- a phone HUD carrying 24 of 24 (Backpack V + Strong Back): 8 squares, "+17"
+	local hud8 = hud(phoneScale, Preview.Coins, 24, 24)
+	exports.ui_gear_carry_phone = UiExport.export({ hud8.Gui })
 	return exports
 end
 

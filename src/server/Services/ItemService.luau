@@ -28,19 +28,38 @@
 	  storeDesc pays Tobin's price for anything beyond that.
 	- Dirty ore hides its rarity: the replicated Value attribute of a Raw
 	  item is 0 (the real price is only paid out by the server).
+	- Fast throws (Grip Gloves): CarryService.onThrow raises the item's
+	  plausible speed for that one release (allowSpeed), so isTrusted and
+	  the MaxItemTravel snap-back scale with it instead of refusing a legal
+	  long throw. Any other release goes back to GameConfig.MaxItemSpeed.
+	- Items whose position isn't a finite number are put back next to their
+	  owner (or into the pen) by the maintenance pass.
 	- The Ore Magnet (gear, ItemService.Magnet): every 0.25 s, for each
 	  player whose Bonuses.magnetRadius is above 0, their OWN loose items
 	  within that radius slide to them (never another player's). Server
 	  physics: the item gets a LinearVelocity in the ground plane (gravity
 	  and walls still act, so nothing passes through a wall), and a ray from
 	  the owner to the item must be clear before (and every CheckEvery
-	  seconds while) it is pulled. Left alone: items you dropped or threw
+	  seconds while) it is pulled; a blocked item isn't tried again for
+	  CheckEvery seconds and doesn't take a pull slot (at most RayBudget rays
+	  per magnet per pass). It FETCHES, it doesn't herd: an item that reached
+	  your feet (StopDistance) is done (MagnetDone) until it is picked up, so
+	  nothing follows you around. Left alone: items you dropped or threw
 	  yourself (HandDropped, until you pick them up again), items for
-	  Magnet.Delay seconds after they appear, items on or around a base
-	  (belts, chutes, the Ore Pen's intake), items far above or below you,
-	  and items already at your feet (StopDistance). At most MaxPulls items
-	  per magnet at once, the nearest first. A pulled item's model carries
-	  the attribute Magnet.Attribute = the owner's UserId (client visuals).
+	  Magnet.Delay seconds after they appear, items a client still simulates
+	  whose travel isn't plausible (isTrusted + MaxItemTravel: the magnet
+	  never launders a client-moved item), items on or around a base (belts,
+	  chutes, the Ore Pen's intake), items whose way to you passes an intake
+	  zone (IntakeService.addZone registers every zone with magnetAvoid: the
+	  SellBin, train hoppers..., so the magnet never pushes ore into a sale),
+	  items far above or below you, items that aren't at a finite position,
+	  and items already near your feet (a pull starts beyond StartDistance and
+	  ends at StopDistance). At most MaxPulls items per magnet at once, the
+	  nearest first. Replication stays small: one constraint per item, kept
+	  and switched on / off (Enabled), its velocity rewritten only when it
+	  changes by more than SteerChange; a pulled item's model carries the
+	  CollectionService tag Magnet.Tag (clients draw a beam when its Owner
+	  attribute is them).
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -86,11 +105,19 @@ export type ItemRecord = {
 	LastNearOwner: number, -- os.clock() when the item was last near its owner or a machine
 	ReleasePos: Vector3, -- where it was last spawned or released (trust and snap-back)
 	ReleasedAt: number, -- os.clock() of that release
+	-- the flat speed (studs/s) this release may plausibly reach (a strong
+	-- throw, allowSpeed); nil = GameConfig.MaxItemSpeed. Reset by every release.
+	MaxSpeed: number?,
 	-- the Ore Magnet (see the header): dropped / thrown by the owner's hand
-	-- (CarryService sets it, picking it up clears it), the pull while it slides
+	-- (CarryService sets it, picking it up clears it), already pulled to the
+	-- owner's feet once (picking it up clears it), the pull constraint (kept
+	-- once made, Enabled while pulled) and its last velocity
 	HandDropped: boolean?,
+	MagnetDone: boolean?,
 	Pull: LinearVelocity?,
+	PullVelocity: Vector2?,
 	PullCheckedAt: number?, -- os.clock() of the last clear line-of-sight check
+	BlockedUntil: number?, -- a wall was in the way: not tried again before this os.clock()
 }
 
 local records: { [Model]: ItemRecord } = {}
@@ -105,38 +132,64 @@ local lastCapToast: { [number]: number } = {}
 ItemService.Magnet = {
 	Delay = 0.75, -- seconds after an item appears or is released before a magnet takes it
 	StopDistance = 4.5, -- flat studs from the owner where a pulled item is let go (at your feet)
+	StartDistance = 6, -- a pull only starts further away than this (StopDistance + 1.5: no flicker)
 	Speed = 18, -- top pull speed (studs/s)
 	MinSpeed = 7,
 	SpeedPerStud = 1.6, -- pull speed per stud of distance (between MinSpeed and Speed)
-	MaxPulls = 8, -- items one magnet pulls at once (the nearest)
+	MaxPulls = 8, -- items one magnet pulls at once (the nearest with a clear way)
+	RayBudget = 12, -- line-of-sight raycasts per magnet per pass
 	MaxRise = 10, -- items further above or below the owner's root are left alone
-	CheckEvery = 1, -- seconds between the line-of-sight checks of a pulled item
+	CheckEvery = 1, -- seconds between the line-of-sight checks of a pulled (or blocked) item
 	BaseMargin = 4, -- studs around a base (machine grid + yard) where the magnet never pulls
+	ZoneMargin = 5, -- studs around an intake zone (magnetAvoid) a pull's way keeps clear of
 	ForcePerMass = 400, -- the pull's MaxForce per unit of the item's mass (beats ground friction)
-	Attribute = "MagnetTo", -- on a pulled item's model: the owner's UserId (client visuals)
+	SteerChange = 0.1, -- the pull velocity is rewritten only when it changes by more than this share
+	Tag = "MagnetPulled", -- CollectionService tag of a pulled item's model (client visuals)
 	PullName = "MagnetPull", -- the LinearVelocity (and its Attachment) in the item's Body
 }
 
 -- items being pulled right now (so a magnet that went away lets go of them)
 local pulling: { [ItemRecord]: boolean } = {}
+-- intake zones the magnet keeps away from (magnetAvoid)
+local avoidParts: { BasePart } = {}
 
--- Lets go of an item the magnet pulls (no-op when it isn't pulled).
-local function stopPull(record: ItemRecord)
+-- Lets go of an item the magnet pulls. The constraint stays in the body,
+-- switched off, for the next pull; `destroy` removes it (picked up, gone).
+local function stopPull(record: ItemRecord, destroy: boolean?)
+	local wasPulling = pulling[record] == true
 	pulling[record] = nil
-	local pull = record.Pull
-	if not pull then
-		return
-	end
-	record.Pull = nil
 	record.PullCheckedAt = nil
-	local attachment = pull.Attachment0
-	pull:Destroy()
-	if attachment then
-		attachment:Destroy()
+	record.PullVelocity = nil
+	local pull = record.Pull
+	if pull then
+		if destroy then
+			record.Pull = nil
+			local attachment = pull.Attachment0
+			pull:Destroy()
+			if attachment then
+				attachment:Destroy()
+			end
+		elseif pull.Enabled then
+			pull.Enabled = false
+		end
 	end
-	if record.Model.Parent then
-		record.Model:SetAttribute(ItemService.Magnet.Attribute, nil)
+	if wasPulling and record.Model.Parent then
+		record.Model:RemoveTag(ItemService.Magnet.Tag)
 	end
+end
+
+-- Keeps the Ore Magnet's pulls away from an intake zone (a part whose box
+-- takes loose items: the SellBin, train hoppers, pens...). IntakeService.addZone
+-- calls it for every zone it registers.
+function ItemService.magnetAvoid(part: BasePart)
+	if not table.find(avoidParts, part) then
+		table.insert(avoidParts, part)
+	end
+end
+
+local function finiteVector(v: Vector3): boolean
+	local s = v.X + v.Y + v.Z
+	return s == s and s > -math.huge and s < math.huge
 end
 
 local function ownerPlayer(record: ItemRecord): Player?
@@ -212,6 +265,7 @@ end
 local function markReleased(record: ItemRecord)
 	record.ReleasePos = positionOf(record)
 	record.ReleasedAt = os.clock()
+	record.MaxSpeed = nil
 end
 
 function ItemService.get(model: Instance?): ItemRecord?
@@ -240,10 +294,13 @@ end
 function ItemService.setState(record: ItemRecord, state: string)
 	record.State = state
 	if state ~= "Loose" then
-		-- carried, in a machine...: the magnet lets go, and a hand-dropped
-		-- item counts as new again once it was picked up
-		stopPull(record)
+		-- carried, in a machine...: the magnet lets go (and its constraint
+		-- goes), and a hand-dropped or already fetched item counts as new
+		-- again once it was picked up
+		stopPull(record, true)
 		record.HandDropped = nil
+		record.MagnetDone = nil
+		record.BlockedUntil = nil
 	end
 	if record.Model.Parent then
 		record.Model:SetAttribute("State", state)
@@ -281,7 +338,7 @@ end
 
 function ItemService.destroy(record: ItemRecord)
 	record.State = "Consumed"
-	stopPull(record)
+	stopPull(record, true)
 	unindex(record)
 	record.Model:Destroy()
 end
@@ -518,11 +575,42 @@ function ItemService.mount(record: ItemRecord, cf: CFrame)
 	ItemService.setState(record, "Machine")
 end
 
+-- The flat speed (studs/s) the item's current release can plausibly reach.
+local function maxSpeedOf(record: ItemRecord): number
+	local speed = record.MaxSpeed
+	if speed and speed == speed and speed > GameConfig.MaxItemSpeed then
+		return speed
+	end
+	return GameConfig.MaxItemSpeed
+end
+
+--[[
+	A strong throw (Grip Gloves): the item just released may plausibly fly at
+	`flatSpeed` studs/s, so isTrusted and the MaxItemTravel snap-back allow
+	that much for this release (never less than GameConfig.MaxItemSpeed, at
+	most ItemService.MaxSpeedScale times it). The next release resets it.
+]]
+ItemService.MaxSpeedScale = 2
+function ItemService.allowSpeed(record: ItemRecord, flatSpeed: number)
+	if type(flatSpeed) ~= "number" or flatSpeed ~= flatSpeed then
+		return
+	end
+	local base = GameConfig.MaxItemSpeed
+	record.MaxSpeed = math.clamp(flatSpeed, base, base * ItemService.MaxSpeedScale)
+end
+
+-- How far (studs) the item may be from its release point when the server
+-- takes its physics back: MaxItemTravel, scaled with a strong throw's speed.
+function ItemService.travelLimit(record: ItemRecord): number
+	return GameConfig.MaxItemTravel * maxSpeedOf(record) / GameConfig.MaxItemSpeed
+end
+
 --[[
 	Can a machine believe where this item is? Always, while the server
 	simulates it. While the owner's client does, the owner must be close
 	(AntiTeleportRange) and the item can't have travelled further since its
-	release than MaxItemSpeed allows (plus PlausibleSlack). `now` = os.clock().
+	release than its release's speed allows (MaxItemSpeed, or a strong
+	throw's allowSpeed, plus PlausibleSlack). `now` = os.clock().
 ]]
 function ItemService.isTrusted(record: ItemRecord, now: number): boolean
 	if record.ClientOwnedUntil == nil then
@@ -537,7 +625,7 @@ function ItemService.isTrusted(record: ItemRecord, now: number): boolean
 		return false
 	end
 	local flat = Vector3.new(position.X - record.ReleasePos.X, 0, position.Z - record.ReleasePos.Z).Magnitude
-	return flat <= math.max(0, now - record.ReleasedAt) * GameConfig.MaxItemSpeed + GameConfig.PlausibleSlack
+	return flat <= math.max(0, now - record.ReleasedAt) * maxSpeedOf(record) + GameConfig.PlausibleSlack
 end
 
 -- All items (any state) owned by a user.
@@ -562,9 +650,15 @@ end
 
 -- Puts a lost item back next to its owner, or into the Ore Pen when they have no character.
 local function rescue(record: ItemRecord)
+	stopPull(record)
 	local cf = rescueCFrame(record.Owner)
 	if cf then
+		if not finiteVector(positionOf(record)) then
+			-- a broken pivot can't be moved from: place the body itself
+			record.Body.CFrame = cf
+		end
 		record.Body.AssemblyLinearVelocity = Vector3.zero
+		record.Body.AssemblyAngularVelocity = Vector3.zero
 		ItemService.release(record, cf)
 	else
 		ItemService.stash(record, nil)
@@ -576,6 +670,7 @@ local function maintainOne(record: ItemRecord, now: number)
 		-- destroyed by the engine (fell below FallenPartsDestroyHeight): keep it in the pen
 		pulling[record] = nil
 		record.Pull = nil
+		record.PullVelocity = nil
 		unindex(record)
 		if record.State ~= "Consumed" then
 			record.State = "Consumed"
@@ -590,7 +685,8 @@ local function maintainOne(record: ItemRecord, now: number)
 		return
 	end
 	local position = positionOf(record)
-	if position.Y < GameConfig.ItemFallKillY then
+	-- fell out of the world, or physics broke (NaN / inf): put it back
+	if not finiteVector(position) or position.Y < GameConfig.ItemFallKillY then
 		rescue(record)
 		return
 	end
@@ -598,7 +694,7 @@ local function maintainOne(record: ItemRecord, now: number)
 		record.ClientOwnedUntil = nil
 		setNetworkOwner(record, nil)
 		-- a client moved it implausibly far while it simulated it: put it back
-		if (position - record.ReleasePos).Magnitude > GameConfig.MaxItemTravel then
+		if (position - record.ReleasePos).Magnitude > ItemService.travelLimit(record) then
 			warn(`[ItemService] item {record.Id} of user {record.Owner} travelled too far, returning it`)
 			rescue(record)
 			return
@@ -708,26 +804,106 @@ function ItemService.onBase(position: Vector3): boolean
 	return false
 end
 
+-- Does the straight way from `a` to `b` pass within `margin` studs of the
+-- box of `part` (its CFrame and Size)? A slab test in the part's space.
+local function wayNearBox(part: BasePart, a: Vector3, b: Vector3, margin: number): boolean
+	local cf = part.CFrame
+	local half = part.Size / 2
+	local p0 = cf:PointToObjectSpace(a)
+	local p1 = cf:PointToObjectSpace(b)
+	local d = p1 - p0
+	local tMin, tMax = 0, 1
+	local starts = { p0.X, p0.Y, p0.Z }
+	local deltas = { d.X, d.Y, d.Z }
+	local halves = { half.X + margin, half.Y + margin, half.Z + margin }
+	for axis = 1, 3 do
+		local o, dd, h = starts[axis], deltas[axis], halves[axis]
+		if math.abs(dd) < 1e-9 then
+			if math.abs(o) > h then
+				return false
+			end
+		else
+			local t1, t2 = (-h - o) / dd, (h - o) / dd
+			if t1 > t2 then
+				t1, t2 = t2, t1
+			end
+			tMin = math.max(tMin, t1)
+			tMax = math.min(tMax, t2)
+			if tMin > tMax then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+-- The intake zones (magnetAvoid) a magnet at `rootPos` with `radius` could reach.
+local function zonesNear(rootPos: Vector3, radius: number): { BasePart }
+	local near: { BasePart } = {}
+	for i = #avoidParts, 1, -1 do
+		local part = avoidParts[i]
+		if not part.Parent then
+			table.remove(avoidParts, i)
+		else
+			local reach = radius + part.Size.Magnitude / 2 + ItemService.Magnet.ZoneMargin
+			local offset = part.CFrame.Position - rootPos
+			if offset.X * offset.X + offset.Z * offset.Z <= reach * reach then
+				table.insert(near, part)
+			end
+		end
+	end
+	return near
+end
+
+-- Would pulling from `from` to the owner at `to` pass an intake zone?
+function ItemService.wayNearZone(from: Vector3, to: Vector3, zones: { BasePart }?): boolean
+	local margin = ItemService.Magnet.ZoneMargin
+	local list: { BasePart } = zones or avoidParts
+	for _, part in list do
+		if part.Parent and wayNearBox(part, from, to, margin) then
+			return true
+		end
+	end
+	return false
+end
+
+-- May the server take this item's physics now? Always when it already has
+-- them; while a client simulates it, only when its travel is plausible (the
+-- same checks as isTrusted and the maintenance snap-back), so the magnet
+-- never turns a client-moved item into a trusted one.
+local function plausible(record: ItemRecord, now: number, position: Vector3): boolean
+	if record.ClientOwnedUntil == nil then
+		return true
+	end
+	return ItemService.isTrusted(record, now) and (position - record.ReleasePos).Magnitude <= ItemService.travelLimit(record)
+end
+
 --[[
 	Does a magnet of `radius` studs whose owner's root is at `rootPos` want
-	this item now (`now` = os.clock())? The line of sight is checked
-	separately (magnetStep). Also returns the flat distance to the owner.
+	this item now (`now` = os.clock())? The line of sight and the intake
+	zones are checked separately (magnetStep). Also returns the flat
+	distance to the owner (0 when the item was turned down before that).
 ]]
 function ItemService.magnetWants(record: ItemRecord, rootPos: Vector3, radius: number, now: number): (boolean, number)
 	local m = ItemService.Magnet
-	if record.State ~= "Loose" or record.HandDropped or radius <= 0 or not record.Model.Parent then
+	if record.State ~= "Loose" or record.HandDropped or record.MagnetDone or not (radius > 0) or not record.Model.Parent then
 		return false, 0
 	end
 	if now - record.ReleasedAt < m.Delay then
 		return false, 0
 	end
 	local position = positionOf(record)
+	if not finiteVector(position) or not finiteVector(rootPos) then
+		return false, 0
+	end
 	local dx, dz = rootPos.X - position.X, rootPos.Z - position.Z
 	local flat = math.sqrt(dx * dx + dz * dz)
-	if flat > radius or flat <= m.StopDistance or math.abs(rootPos.Y - position.Y) > m.MaxRise then
+	-- hysteresis: a pull starts beyond StartDistance and goes on down to StopDistance
+	local near = if pulling[record] then m.StopDistance else m.StartDistance
+	if not (flat <= radius) or flat <= near or math.abs(rootPos.Y - position.Y) > m.MaxRise then
 		return false, flat
 	end
-	if ItemService.onBase(position) then
+	if not plausible(record, now, position) or ItemService.onBase(position) then
 		return false, flat
 	end
 	return true, flat
@@ -749,37 +925,57 @@ local function itemMass(record: ItemRecord): number
 	return 2
 end
 
--- Starts or steers the pull of one item toward `rootPos` (flat: the ground plane).
+-- Starts or steers the pull of one item toward `rootPos` (flat: the ground
+-- plane). The constraint is made once and switched on / off; its velocity
+-- is only rewritten when it changed by more than SteerChange.
 local function pullToward(record: ItemRecord, rootPos: Vector3, flat: number)
 	local m = ItemService.Magnet
 	local position = positionOf(record)
 	local dir = Vector3.new(rootPos.X - position.X, 0, rootPos.Z - position.Z)
 	local velocity = if dir.Magnitude > 1e-3 then dir.Unit * ItemService.pullSpeed(flat) else Vector3.zero
+	local plane = Vector2.new(velocity.X, velocity.Z)
 	local pull = record.Pull
-	if not pull then
-		-- the server simulates it from now on (an owner's client can't hold it back)
+	if pull and pull.Parent ~= record.Body then
+		-- the old one went away with a rebuilt body: make a new one
+		record.Pull = nil
+		pull = nil
+	end
+	if not pulling[record] then
+		-- the server simulates it from now on (magnetWants checked it is plausible)
 		keepServerPhysics(record)
-		local attachment = Instance.new("Attachment")
-		attachment.Name = m.PullName
-		attachment.Parent = record.Body
-		local made = Instance.new("LinearVelocity")
-		made.Name = m.PullName
-		made.Attachment0 = attachment
-		made.RelativeTo = Enum.ActuatorRelativeTo.World
-		made.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
-		made.PrimaryTangentAxis = Vector3.new(1, 0, 0)
-		made.SecondaryTangentAxis = Vector3.new(0, 0, 1)
-		made.MaxForce = itemMass(record) * m.ForcePerMass
-		made.Parent = record.Body
-		record.Pull = made
+		if not pull then
+			local attachment = Instance.new("Attachment")
+			attachment.Name = m.PullName
+			attachment.Parent = record.Body
+			local made = Instance.new("LinearVelocity")
+			made.Name = m.PullName
+			made.Attachment0 = attachment
+			made.RelativeTo = Enum.ActuatorRelativeTo.World
+			made.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+			made.PrimaryTangentAxis = Vector3.new(1, 0, 0)
+			made.SecondaryTangentAxis = Vector3.new(0, 0, 1)
+			made.MaxForce = itemMass(record) * m.ForcePerMass
+			made.PlaneVelocity = plane
+			made.Parent = record.Body
+			record.Pull = made
+		else
+			local existing = pull :: LinearVelocity
+			existing.PlaneVelocity = plane
+			existing.Enabled = true
+		end
+		record.PullVelocity = plane
 		pulling[record] = true
-		record.Model:SetAttribute(m.Attribute, record.Owner)
+		record.Model:AddTag(m.Tag)
 		-- wake a resting item up
 		record.Body.AssemblyLinearVelocity = velocity + Vector3.new(0, 2, 0)
-		pull = made
+		return
 	end
-	local current = pull :: LinearVelocity
-	current.PlaneVelocity = Vector2.new(velocity.X, velocity.Z)
+	local current = record.Pull
+	local last = record.PullVelocity
+	if current and (not last or (plane - last).Magnitude > m.SteerChange * math.max(last.Magnitude, 1)) then
+		current.PlaneVelocity = plane
+		record.PullVelocity = plane
+	end
 end
 
 -- A living character's root part (nil when dead or not spawned).
@@ -795,57 +991,97 @@ local function aliveRoot(player: Player): BasePart?
 	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
 
-type Wanted = { Record: ItemRecord, Flat: number }
+type Wanted = { Record: ItemRecord, Flat: number, Position: Vector3 }
+
+-- One player's part of a magnet pass (see magnetStep).
+local function magnetFor(player: Player, set: { [ItemRecord]: boolean }, root: BasePart, radius: number, now: number)
+	local m = ItemService.Magnet
+	local rootPos = root.Position
+	if not finiteVector(rootPos) then
+		for record in set do
+			stopPull(record)
+		end
+		return
+	end
+	local wanted: { Wanted } = {}
+	for record in set do
+		local wants, flat = ItemService.magnetWants(record, rootPos, radius, now)
+		if wants then
+			table.insert(wanted, { Record = record, Flat = flat, Position = positionOf(record) })
+		elseif pulling[record] then
+			stopPull(record)
+			-- it reached your feet: fetched, not pulled again until picked up
+			if record.State == "Loose" and flat > 0 and flat <= m.StopDistance then
+				record.MagnetDone = true
+			end
+		end
+	end
+	table.sort(wanted, function(a, b)
+		return a.Flat < b.Flat
+	end)
+	local zones = zonesNear(rootPos, radius)
+	local pulled, rays = 0, 0
+	for _, entry in wanted do
+		local record = entry.Record
+		local was = pulling[record] == true
+		local blocked = record.BlockedUntil
+		if pulled >= m.MaxPulls then
+			stopPull(record)
+		elseif #zones > 0 and ItemService.wayNearZone(entry.Position, rootPos, zones) then
+			-- never push ore into a sale or a hopper
+			stopPull(record)
+		elseif not was and blocked and now < blocked then
+			-- a wall was in the way a moment ago: not tried again yet
+		else
+			local checked = record.PullCheckedAt
+			local due = not was or not checked or now - checked >= m.CheckEvery
+			if due and rays >= m.RayBudget then
+				-- no rays left this pass: a pull goes on and is checked next time
+				if was then
+					pullToward(record, rootPos, entry.Flat)
+					pulled += 1
+				end
+			elseif due then
+				rays += 1
+				if clearPath(rootPos, entry.Position + Vector3.new(0, 0.5, 0), player.Character) then
+					record.BlockedUntil = nil
+					pullToward(record, rootPos, entry.Flat)
+					record.PullCheckedAt = now
+					pulled += 1
+				else
+					record.BlockedUntil = now + m.CheckEvery
+					stopPull(record)
+				end
+			else
+				pullToward(record, rootPos, entry.Flat)
+				pulled += 1
+			end
+		end
+	end
+end
 
 --[[
 	One magnet pass (every 0.25 s from start; `now` = os.clock()): for each
-	player with a magnet, the nearest wanted items (magnetWants, at most
-	Magnet.MaxPulls) with a clear line of sight slide toward them; every
-	other pull lets go. Only that player's own items are looked at.
+	player with a magnet, the nearest wanted items (magnetWants) whose way
+	is clear (no wall: line of sight; no intake zone) slide toward them, at
+	most Magnet.MaxPulls; every other pull lets go. Only that player's own
+	items are looked at. Each player's part runs on its own (an error in one
+	never stops the others).
 ]]
 function ItemService.magnetStep(now: number)
-	local m = ItemService.Magnet
 	local active: { [number]: boolean } = {}
 	for _, player in Players:GetPlayers() do
-		local set = byOwner[player.UserId]
-		local root = if set then aliveRoot(player) else nil
-		local radius = if root then magnetRadiusOf(player) else 0
-		if set and root and radius > 0 then
-			active[player.UserId] = true
-			local rootPos = root.Position
-			local wanted: { Wanted } = {}
-			for record in set do
-				local wants, flat = ItemService.magnetWants(record, rootPos, radius, now)
-				if wants then
-					table.insert(wanted, { Record = record, Flat = flat })
-				elseif record.Pull then
-					stopPull(record)
-				end
+		local ok, err = pcall(function()
+			local set = byOwner[player.UserId]
+			local root = if set then aliveRoot(player) else nil
+			local radius = if root then magnetRadiusOf(player) else 0
+			if set and root and radius > 0 then
+				active[player.UserId] = true
+				magnetFor(player, set, root, radius, now)
 			end
-			table.sort(wanted, function(a, b)
-				return a.Flat < b.Flat
-			end)
-			for i, entry in wanted do
-				local record = entry.Record
-				if i > m.MaxPulls then
-					stopPull(record)
-				else
-					local checked = record.PullCheckedAt
-					local clear = true
-					if not record.Pull or not checked or now - checked >= m.CheckEvery then
-						clear = clearPath(rootPos, positionOf(record) + Vector3.new(0, 0.5, 0), player.Character)
-					end
-					if clear then
-						local fresh = record.Pull == nil
-						pullToward(record, rootPos, entry.Flat)
-						if fresh or not checked or now - checked >= m.CheckEvery then
-							record.PullCheckedAt = now
-						end
-					else
-						stopPull(record)
-					end
-				end
-			end
+		end)
+		if not ok then
+			warn(`[ItemService] magnet error for user {player.UserId}: {err}`)
 		end
 	end
 	-- a magnet that went away (unequipped, dead, left) lets go of its items
@@ -866,6 +1102,7 @@ ItemService._test = {
 		table.clear(byOwner)
 		table.clear(lastCapToast)
 		table.clear(pulling)
+		table.clear(avoidParts)
 		magnetRadiusOf = defaultMagnetRadius
 		clearPath = defaultClearPath
 	end,
