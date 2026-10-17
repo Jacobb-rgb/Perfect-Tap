@@ -14,7 +14,9 @@
 	  - carved violet walls (dado, pilasters, cornice, blind niches, red and
 	    gold royal banners) with cave rock pushing in through two bays and
 	    growing over every cornice, a rough rock ceiling with stalactites
-	  - at the back a stepped dais under a grand arch: the broken golden throne
+	  - at the back a stepped dais under a grand arch with the Ember King: the
+	    vault's giant stone king statue (Lobby/Vault/Statue, smaller) on its pedestal
+	    (owner, 2026-10-17), replacing the earlier broken golden throne
 	    and a huge cracked statue of an Ember King (crowned, a Heartstone on his
 	    chest, the scepter in one hand, the other arm broken off) in front of a
 	    golden halo, braziers with warm fire on both sides
@@ -39,6 +41,7 @@ local MineFloors = require(Shared:WaitForChild("Config"):WaitForChild("MineFloor
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
+local VaultStatue = require(World:WaitForChild("Lobby"):WaitForChild("Vault"):WaitForChild("Statue"))
 
 local Floor = {}
 
@@ -691,7 +694,7 @@ local function buildWalls(parent: Instance, c: Ctx)
 	arc(apse, at(c, 0, 26, IN_BACK + 1), 13, 0, math.pi, 9, 1.8, 2, STONE_LIGHT, GOLD)
 	arc(apse, at(c, 0, 26, IN_BACK + 1.05), 12, 0, math.pi, 9, 0.35, 2.05, GOLD)
 	-- the golden halo behind the statue's head
-	local halo = at(c, 0, 22.5, IN_BACK + 0.35)
+	local halo = at(c, 0, 27.5, IN_BACK + 0.35)
 	for k = 0, 10 do
 		local a = math.rad(-22 + k * 22.4)
 		Geo.block(
@@ -704,7 +707,7 @@ local function buildWalls(parent: Instance, c: Ctx)
 		)
 	end
 	arc(apse, halo, 4.2, math.rad(-30), math.rad(210), 10, 0.35, 0.14, GOLD_GLOW)
-	lightAt(apse, at(c, 0, 27, IN_BACK + 11), GOLD_GLOW, 30, 1.4)
+	lightAt(apse, at(c, 0, 26, IN_BACK + 13), GOLD_GLOW, 32, 1.5)
 
 	-- front wall (left out for the cutaway pictures): a grand door choked with rubble
 	if not c.cutaway then
@@ -923,129 +926,22 @@ local function brazier(parent: Instance, c: Ctx, x: number, y: number, z: number
 	Style.emitter(flame, "Fire", FIRE, 16)
 end
 
-local function buildThrone(parent: Instance, c: Ctx)
-	local m = group("Throne", parent)
-	local t = at(c, 0, 3.2, -43.5)
-	Geo.block(m, t * CFrame.new(0, 0.5, 0), Vector3.new(8, 1, 7), STONE_DARK, nil, SOLID)
-	Geo.block(m, t * CFrame.new(0, 0.95, 3.45), Vector3.new(8.2, 0.3, 0.3), GOLD, nil, TINY)
-	-- the seat with its red cushion and front panel
-	Geo.block(m, t * CFrame.new(0, 2.3, 0.2), Vector3.new(6.4, 2.6, 5.6), GOLD_DARK, nil, SOLID)
-	Geo.block(m, t * CFrame.new(0, 2.2, 3.02), Vector3.new(4.6, 1.6, 0.1), RED, nil, TINY)
-	Geo.block(m, t * CFrame.new(0, 3.9, 0.4), Vector3.new(5.4, 0.6, 4.9), RED, nil, DECOR)
-	for _, sx in { -1, 1 } do
-		Geo.block(m, t * CFrame.new(sx * 3.1, 4.4, 0.2), Vector3.new(1.2, 1.6, 5.6), GOLD, nil, DECOR)
-		Geo.block(m, t * CFrame.new(sx * 3.1, 5.4, 2.7), Vector3.new(1.5, 1.4, 1.5), GOLD, nil, DECOR)
-	end
-	-- the back: the lower half whole, the upper left half broken off
-	Geo.block(m, t * CFrame.new(0, 6.1, -2.4), Vector3.new(6.4, 5, 1.2), GOLD_DARK, nil, SOLID)
-	Geo.block(m, t * CFrame.new(1.6, 10.6, -2.4), Vector3.new(3.2, 4, 1.2), GOLD_DARK, nil, DECOR)
-	Geo.wedge(m, t * CFrame.new(-0.9, 9.2, -2.4) * CFrame.Angles(0, -math.pi / 2, 0), Vector3.new(1.2, 1.2, 1.8), GOLD_DARK, nil, DECOR)
-	Geo.block(m, t * CFrame.new(0, 6.3, -1.75), Vector3.new(4.8, 4.0, 0.2), RED, nil, TINY)
-	Geo.block(m, t * CFrame.new(1.6, 10.3, -1.75), Vector3.new(2.2, 3.0, 0.2), RED, nil, TINY)
-	Geo.block(m, t * CFrame.new(1.6, 12.75, -2.4), Vector3.new(3.6, 0.3, 1.5), GOLD, nil, TINY)
-	for _, px in { 0.6, 2.6 } do
-		Geo.block(m, t * CFrame.new(px, 13.4, -2.4) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.9, 0.9, 0.9), GOLD, nil, TINY)
-	end
-	-- the broken-off piece lies on the dais, its Heartstone gem still glowing
-	local piece = at(c, -6.6, 3.85, -42.6) * CFrame.Angles(0, 0.55, 0) * CFrame.Angles(-math.pi / 2 + 0.22, 0, 0.1)
-	Geo.block(m, piece, Vector3.new(3.2, 4, 1.2), GOLD_DARK, nil, DECOR)
-	Geo.block(m, piece * CFrame.new(0, -0.3, -0.62), Vector3.new(2.2, 2.6, 0.15), RED, nil, TINY)
-	Geo.block(m, piece * CFrame.new(0, 2.15, 0), Vector3.new(3.6, 0.3, 1.5), GOLD, nil, TINY)
-	Geo.block(m, piece * CFrame.new(-0.6, 2.7, 0) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.9, 0.9, 0.9), GOLD, nil, TINY)
-	Geo.block(m, piece * CFrame.new(0.4, 1.2, -0.75) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.8, 0.8, 0.25), EMBER, NEON, TINY)
-end
+-- The Ember King: the same giant stone king statue as at the Blaster Vault in the lobby
+-- (owner, 2026-10-17: "make the king like the statues at the vault"), smaller to fit under
+-- the apse arch: stone blocks veined with glowing cracks, crown, purple tabard, raised
+-- blaster, on its own pedestal at the back of the top tier, facing the hall (+Z).
+local KING_SCALE = 1.35 -- studs per body unit (the vault's statues use 1.85)
+local KING_PEDESTAL = 5.5
 
 local function buildStatue(parent: Instance, c: Ctx)
-	local m = group("EmberKingStatue", parent)
-	local s = at(c, 0, 3.2, -50)
-	local function part(
-		x: number,
-		y: number,
-		z: number,
-		size: Vector3,
-		color: Color3,
-		props: { [string]: any }?,
-		roll: number?,
-		material: Enum.Material?
-	): Part
-		return Geo.block(m, s * CFrame.new(x, y, z) * CFrame.Angles(0, 0, roll or 0), size, color, material, props or DECOR)
+	-- the vault builder reads its size from these module fields: set them for this call only
+	local oldK, oldPedestal = VaultStatue.K, VaultStatue.PedestalHeight
+	VaultStatue.K, VaultStatue.PedestalHeight = KING_SCALE, KING_PEDESTAL
+	local ok, result = pcall(VaultStatue.build, parent, at(c, 0, 3.2, IN_BACK + 6.9), 1, "EmberKingStatue")
+	VaultStatue.K, VaultStatue.PedestalHeight = oldK, oldPedestal
+	if not ok then
+		error(result)
 	end
-	local marbleShade = MARBLE:Lerp(MARBLE_DARK, 0.3)
-	part(0, 0.8, 0, Vector3.new(11, 1.6, 4), STONE_DARK, SOLID)
-	part(0, 1.65, 0, Vector3.new(11.3, 0.3, 4.3), GOLD, TINY)
-	-- the robe, belt and torso
-	part(0, 3.7, 0, Vector3.new(8.6, 4.2, 3.6), marbleShade, BUMP)
-	part(0, 2.05, 0, Vector3.new(8.9, 0.5, 3.9), GOLD, TINY)
-	part(0, 8.0, 0, Vector3.new(7.8, 4.4, 3.4), MARBLE, BUMP)
-	part(0, 5.6, 1.75, Vector3.new(0.35, 7.6, 0.2), MARBLE_DARK, TINY)
-	part(0, 10.4, 0, Vector3.new(7.6, 0.8, 3.6), GOLD)
-	part(0, 13.8, 0, Vector3.new(7.2, 6, 3.2), MARBLE)
-	part(0, 16.6, 0, Vector3.new(5, 0.6, 3.4), GOLD)
-	-- the Heartstone on his chest, cracked, light leaking down the crack
-	local chest = s * CFrame.new(0, 14, 1.65)
-	Geo.block(m, chest * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(2.6, 2.6, 0.3), GOLD, nil, TINY)
-	local heart =
-		Geo.block(m, chest * CFrame.new(0, 0, 0.08) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(1.8, 1.8, 0.3), EMBER, NEON, TINY)
-	heart.Name = "Heartstone"
-	Geo.block(m, chest * CFrame.new(0.1, 0, 0.3) * CFrame.Angles(0, 0, 0.35), Vector3.new(0.18, 3.0, 0.1), WALL_DEEP, nil, TINY)
-	Geo.block(m, s * CFrame.new(0.9, 11.6, 1.66) * CFrame.Angles(0, 0, 0.25), Vector3.new(0.16, 3.2, 0.1), GOLD_GLOW, NEON, TINY)
-	-- cracks across the stone
-	part(2.3, 14.4, 1.63, Vector3.new(0.18, 2.6, 0.1), CRACK, TINY, -0.5)
-	part(-2.4, 7.4, 1.73, Vector3.new(0.18, 3.4, 0.1), CRACK, TINY, 0.3)
-	part(2.8, 3.6, 1.83, Vector3.new(0.18, 2.2, 0.1), CRACK, TINY, -0.2)
-	-- shoulders
-	for _, sx in { -1, 1 } do
-		part(sx * 4.6, 16.0, 0, Vector3.new(2.8, 1.8, 3.8), marbleShade)
-		part(sx * 4.6, 15.05, 0, Vector3.new(2.9, 0.3, 3.9), GOLD, TINY)
-	end
-	-- the head: stern face, big beard, the crown of the Ember Kings
-	part(0, 16.95, 0, Vector3.new(2.4, 0.6, 2.4), MARBLE)
-	part(0, 19.3, 0.1, Vector3.new(4, 4.2, 3.8), MARBLE)
-	part(0, 20.15, 2.1, Vector3.new(4.1, 0.5, 0.4), MARBLE_DARK, TINY)
-	for _, sx in { -1, 1 } do
-		part(sx * 0.95, 19.6, 2.02, Vector3.new(0.8, 0.35, 0.1), WALL_DEEP, TINY)
-	end
-	part(0, 19.0, 2.15, Vector3.new(0.6, 1.2, 0.5), MARBLE, TINY)
-	part(0, 17.7, 2.05, Vector3.new(3.8, 2.4, 1.0), marbleShade)
-	part(0, 16.2, 2.15, Vector3.new(2.0, 1.2, 0.9), marbleShade)
-	part(0, 21.95, 0.1, Vector3.new(4.4, 1.1, 4.2), GOLD)
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			part(sx * 1.8, 23.2, 0.1 + sz * 1.7, Vector3.new(0.8, 1.6, 0.8), GOLD, TINY)
-		end
-	end
-	part(0, 23.5, 1.9, Vector3.new(1.0, 2.2, 0.8), GOLD, TINY)
-	part(0, 23.4, -1.7, Vector3.new(1.0, 2.0, 0.8), GOLD, TINY)
-	for _, gx in { -1.2, 0, 1.2 } do
-		part(gx, 21.95, 2.25, Vector3.new(0.6, 0.6, 0.15), if gx == 0 then EMBER else RED, TINY, 0, NEON)
-	end
-	-- the right arm holds the scepter with a glowing Heartstone orb
-	part(4.7, 13.6, 0, Vector3.new(2.2, 5, 2.4), MARBLE)
-	part(4.7, 11.4, 1.6, Vector3.new(2.1, 2.1, 4.4), MARBLE)
-	part(4.7, 11.5, 3.9, Vector3.new(2.3, 2.3, 2.0), marbleShade)
-	part(4.7, 12.5, 4.0, Vector3.new(0.6, 11, 0.6), GOLD, TINY)
-	part(4.7, 18.3, 4.0, Vector3.new(1.6, 0.8, 1.6), GOLD, TINY)
-	local orb = Geo.ball(m, (s * CFrame.new(4.7, 19.5, 4.0)).Position, 2.0, EMBER, NEON, TINY)
-	orb.Name = "ScepterOrb"
-	pointLight(orb, FIRE, 22, 1.3)
-	-- the left arm broke off at the elbow; crystals grow out of the break
-	part(-4.7, 14.6, 0, Vector3.new(2.2, 3.0, 2.4), MARBLE)
-	part(-4.7, 13.0, 0, Vector3.new(2.0, 0.3, 2.2), MARBLE_DARK, TINY)
-	MineKit.crystals(
-		m,
-		s * CFrame.new(-4.7, 13.1, 0.3) * CFrame.Angles(math.pi - 0.4, 0, -0.5),
-		4,
-		2.4,
-		"Shell",
-		CRYSTALS_LAVENDER,
-		"palace-arm"
-	)
-	-- the broken forearm and hand lie on the dais
-	local arm = at(c, -12.4, 3.05, -40.6) * CFrame.Angles(0, 0.75, 0.12)
-	Geo.block(m, arm, Vector3.new(2.1, 2.1, 4.4), MARBLE, nil, BUMP)
-	Geo.block(m, arm * CFrame.new(0, 0.05, 3.1), Vector3.new(2.3, 2.3, 2.0), marbleShade, nil, BUMP)
-	Geo.block(m, arm * CFrame.new(0, 0, -2.25), Vector3.new(1.9, 1.9, 0.12), MARBLE_DARK, nil, TINY)
-	rubble(m, c, -10.5, 2, -44, 4, { MARBLE, marbleShade }, 0.8)
 end
 
 local function buildDais(parent: Instance, c: Ctx)
@@ -1083,7 +979,6 @@ local function buildDais(parent: Instance, c: Ctx)
 	brazier(m, c, 21, 0, -30, false)
 	brazier(m, c, -12, 2, -46, true)
 	brazier(m, c, 12, 2, -46, true)
-	buildThrone(m, c)
 	buildStatue(m, c)
 end
 
