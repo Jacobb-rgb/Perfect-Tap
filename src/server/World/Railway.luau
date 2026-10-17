@@ -8,46 +8,52 @@
 	               floor, from the west to the east wall portal
 	  MineStation  model tagged "TrainStation" at TrainConfig.Station: a
 	               flagstone platform with a safety edge and an access ramp,
-	               a red pitched canopy on periwinkle posts with a rooftop
-	               "MINE STATION" sign, the big funnel hopper (Kenney
-	               hopper-square: tub, light band, funnel, throat, legs) over
-	               the invisible `Intake` (tag "TrainHopper", HopperSize, its
-	               bottom at Station.Hopper), a bucket elevator beside it whose
-	               head feeds a loading chute over the track (the spout sits
-	               above the wagons at QuarryStop), a lever console at the
-	               `PromptPoint` attachment, the `TrainPoint` attachment at
-	               QuarryStop, neon lamps and one PointLight (the pendant over
-	               the hopper), crates and a short siding off the main line
-	               that ends in a buffer stop
+	               a red pitched canopy on periwinkle posts (open over the
+	               hopper) with a rooftop "MINE STATION" sign, the big funnel
+	               hopper (Kenney hopper-square: tub with a warm neon rim
+	               strip, light band, funnel, throat, legs) over the invisible
+	               `Intake` (tag "TrainHopper", HopperSize, its bottom at
+	               Station.Hopper), a bucket elevator beside it on the track
+	               side whose head feeds an angled loading chute (the spout
+	               sits above the wagons at QuarryStop), a lever console at
+	               the `PromptPoint` attachment, the `TrainPoint` attachment
+	               at QuarryStop, neon lamps and one PointLight (the pendant
+	               over the hopper), crates and a short siding off the main
+	               line that ends in a buffer stop beside the platform's end
 	  Portals      four tunnel portals with a dark mouth (black neon) in a
 	               timber frame (lanterns on the posts, knee braces) under a
-	               steel lintel with an orange plate and a signal lamp:
+	               steel lintel with an orange plate and a signal lamp
+	               (Railway.portalMouths: the mouth planes):
 	               West/East where the quarry line meets the quarry walls, on
 	               a light stone buttress (the mouth stands PortalInset in
 	               front of the wall, so the wall's foot boulders stay behind
 	               it), SouthWest/SouthEast at (+-166, 0, SouthPortalZ) facing
-	               north in a narrow rock hill (a grass slope over the lintel,
-	               a crest, two lower steps with bushes) that keeps between the
-	               town's rail strip (x 160) and the island rim (x 171.7)
+	               north in a low rock mound (cheek rocks, a stone brow under a
+	               grass crest, a long grass slope down to the south with
+	               rough rocks along its flanks, grass wing slopes beside the
+	               track) that keeps between the town's rail strip (x 160) and
+	               the island rim (x 171.7)
 	  CoastWest    the coastal lines (TrainConfig.CoastWest/CoastEast) from the
 	  CoastEast    south portal north to a buffer stop just past BufferZ,
-	               behind every plot's yard train stop: the near rail and the
-	               sleeper ends give way under each stop's platform
-	               (BaseLayout.TrainStop), so nothing cuts into a yard
+	               behind every plot's yard train stop: the sleeper ends (and
+	               a rail, while a stop's platform reaches over it) give way
+	               under each stop's platform (BaseLayout.TrainStop), so
+	               nothing cuts into a yard
 	  EmberCaves   the Mine Lifts (TrainConfig.Lifts, named by their LiftId,
-	  DeepHollow   tagged "MineLift"): a periwinkle headframe with orange
-	               collars on a steel base, a funnel hopper with a warm glowing
-	               floor over the invisible `Intake` (tag "TrainHopper",
-	               attribute LiftId), a cage hanging above it on a cable that
-	               runs up into the cave ceiling with a lamp under it (the
-	               lift's one PointLight), a "LIFT" sign, a warning lamp and
-	               the `PromptPoint` attachment in front
+	  DeepHollow   tagged "MineLift", attribute LiftId): a periwinkle headframe with orange
+	               collars on a steel base, a low funnel hopper (rim LiftRim)
+	               with a warm glowing floor over the invisible `Intake` (tag
+	               "TrainHopper", attribute LiftId), the cage parked under the
+	               crossbeams on a cable that runs up into the cave ceiling
+	               with a lamp under it (the lift's one PointLight), a "LIFT"
+	               sign under a front header beam, a warning lamp and the
+	               `PromptPoint` attachment in front
 
 	The yards' `RailwayPlaceholder` track pieces (PlotBuilder) are removed:
 	the through line replaces them (their buffer stops stood on the line).
 
 	Track: straight runs of at most RunLength studs (two rail parts per run,
-	split where a platform covers a rail) and a sleeper every ~6 studs; all
+	split only where a platform covers a rail) and a sleeper every ~6 studs; all
 	track parts are anchored, non-colliding and cast no shadow (players walk
 	over the line on the ground). Trains stand on the rails when their Root
 	is TrainBuilder.RailTop above the line point. Nothing but the rails,
@@ -69,18 +75,21 @@ local Rng = require(Shared.Util.Rng)
 local BaseLayout = require(Shared.Config.BaseLayout)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
-local Style = require(script.Parent.Lobby.Style)
 
 local Railway = {}
 
 Railway.MaxParts = 600 -- the whole railway (tests/Railway.spec.luau)
 Railway.RunLength = 24 -- longest rail part
-Railway.PortalInset = 6 -- quarry portals: the mouth stands this far in front of the line's end
+-- Quarry portals: the mouth stands this far in front of the line's end
+-- (TrainConfig.PortalInset when the shared config publishes it, so the
+-- client hides the trains at the same plane; see Railway.portalMouths).
+Railway.PortalInset = (TrainConfig :: any).PortalInset or 6
 Railway.BufferGap = 1.7 -- the coastal buffer stops' face, past the line's end (clear of the last platform)
 -- The space the trains need around a line (TrainBuilder: steam cylinders
 -- +-3.43, chimney top 9.31 above the line point); only rails, sleepers and
 -- the portal mouths may enter it.
 Railway.Clearance = { HalfWidth = 3.6, Bottom = 1.5, Top = 9.6 }
+Railway.LiftRim = 3.2 -- the Mine Lifts' tub rim above the cave floor (the intake box reaches higher)
 Railway.StationTag = "TrainStation"
 Railway.HopperTag = "TrainHopper"
 Railway.LiftTag = "MineLift"
@@ -89,28 +98,33 @@ export type Rect = { Min: Vector3, Max: Vector3 } -- world XZ (Y ignored)
 type Props = { [string]: any }
 
 local rgb = Color3.fromRGB
-local SC = Style.C
 local TC = TrainBuilder.Colors
 
+-- (the lobby's stone, grass, flagstone, roof and wood colours are copied
+-- from Lobby/Style's palette, so the railway does not depend on the lobby)
 local C = {
 	Steel = rgb(122, 130, 184), -- the Factory Kit's periwinkle (as PlotBuilder's machine housings)
 	SteelLight = rgb(160, 168, 212),
 	SteelDark = rgb(58, 60, 72),
 	Orange = TC.Corner, -- Kenney's orange collars and buffers
 	Hazard = rgb(250, 206, 64), -- the safety edge of the yards' train stops
-	Deck = SC.Flag,
-	DeckDark = SC.FlagDark,
-	Roof = SC.Roof,
-	RoofTrim = SC.RoofTrim,
+	Deck = rgb(178, 152, 126), -- flagstone
+	DeckDark = rgb(146, 122, 102),
+	Roof = rgb(198, 54, 42),
+	RoofTrim = rgb(104, 30, 26),
+	Stone = rgb(114, 122, 140),
+	StoneLight = rgb(160, 167, 180),
+	Grass = rgb(104, 178, 62),
+	GrassDark = rgb(66, 138, 52),
 	Interior = TC.Interior,
 	Lamp = rgb(255, 184, 96),
 	Mouth = rgb(6, 6, 9),
-	Timber = SC.Wood,
-	TimberDark = SC.WoodDark,
+	Timber = rgb(138, 90, 54),
+	TimberDark = rgb(88, 56, 36),
 	Crate = rgb(232, 140, 90), -- Kenney box-large
 	Tape = rgb(244, 200, 150),
 	Board = rgb(58, 60, 72),
-	Text = SC.SignText,
+	Text = rgb(255, 210, 96),
 	Screen = rgb(40, 150, 110), -- deep, so the neon stays a screen and not a lamp
 	Glow = rgb(214, 110, 28), -- the lifts' hopper floor: a warm "drop it here" glow in the dark caves
 	Lever = rgb(214, 56, 50),
@@ -257,7 +271,7 @@ local function sign(parent: Instance, name: string, cf: CFrame, size: Vector3, t
 end
 
 -- Streams in as one piece; `lod` keeps a low-detail mesh in view when far away.
--- (pcall'd like Style.streaming: a runtime rebuild may not write these.)
+-- (pcall'd: a runtime rebuild may not write these.)
 local function streaming(m: Model, lod: boolean)
 	local target: any = m
 	pcall(function()
@@ -472,16 +486,16 @@ end
 --[[
 	Timber portal frame with a black mouth. `cf` = the mouth face's ground
 	center, looking out of the tunnel (local +Z runs into the hill).
-	`half` = the frame's outer half width. Returns the lintel's top height.
+	`half` = the frame's outer half width, `mouthW` = the mouth's width.
+	Returns the lintel's top height.
 ]]
 local MOUTH_W, MOUTH_H, MOUTH_D = 8.6, 11.4, 1.2
 local LINTEL = 1.5
-local function portalFrame(m: Model, cf: CFrame, half: number): number
-	local mouth =
-		box(m, "Mouth", cf, Vector3.new(-MOUTH_W / 2, 0, 0), Vector3.new(MOUTH_W / 2, MOUTH_H, MOUTH_D), C.Mouth, NEON, SOLID_SMALL)
+local function portalFrame(m: Model, cf: CFrame, half: number, mouthW: number): number
+	local mouth = box(m, "Mouth", cf, Vector3.new(-mouthW / 2, 0, 0), Vector3.new(mouthW / 2, MOUTH_H, MOUTH_D), C.Mouth, NEON, SOLID_SMALL)
 	m.PrimaryPart = mouth
-	local postW = half - MOUTH_W / 2
-	local postX = MOUTH_W / 2 + postW / 2
+	local postW = half - mouthW / 2
+	local postX = mouthW / 2 + postW / 2
 	local top = MOUTH_H
 	for _, side in { -1, 1 } do
 		box(
@@ -511,7 +525,7 @@ local function portalFrame(m: Model, cf: CFrame, half: number): number
 			m,
 			"Brace",
 			cf,
-			Vector3.new(side * MOUTH_W / 2, top, -0.3),
+			Vector3.new(side * mouthW / 2, top, -0.3),
 			Vector3.new(0, -1.7, 0),
 			Vector3.new(-side * 1.7, 0, 0),
 			0.7,
@@ -520,10 +534,11 @@ local function portalFrame(m: Model, cf: CFrame, half: number): number
 			GHOST
 		)
 	end
-	-- steel lintel with an orange plate and a signal lamp on its front edge
-	-- (the rock above the lintel starts behind the lamp)
+	-- steel lintel (a little wider than the frame, so no rock face lines up
+	-- with its ends) with an orange plate and a signal lamp on its front edge;
+	-- the rock above it starts behind it (local z >= 0.55)
 	local lintelTop = top + LINTEL
-	box(m, "Lintel", cf, Vector3.new(-half - 0.2, top, -1.1), Vector3.new(half + 0.2, lintelTop, 0.5), C.Steel, nil, BUMP)
+	box(m, "Lintel", cf, Vector3.new(-half - 0.25, top, -1.1), Vector3.new(half + 0.25, lintelTop, 0.5), C.Steel, nil, BUMP)
 	box(m, "Plate", cf, Vector3.new(-half + 1.6, top + 0.35, -1.22), Vector3.new(half - 1.6, top + 1.15, -1.1), C.Orange, nil, GHOST)
 	box(m, "Lamp", cf, Vector3.new(-0.4, lintelTop, -1.0), Vector3.new(0.4, lintelTop + 0.6, -0.4), C.Lamp, NEON, GHOST)
 	return lintelTop
@@ -533,70 +548,115 @@ end
 local function quarryPortal(parent: Instance, name: string, cf: CFrame, rng: Rng.Rng)
 	local m = portalModel(parent, name)
 	local half = 5.55
-	local top = portalFrame(m, cf, half)
+	local top = portalFrame(m, cf, half, MOUTH_W)
 	-- (a lighter stone than the wall's, so the portal stands out of its shadow)
 	local function stone(): Color3
-		return Geo.vary(rng:pick({ SC.Stone, SC.Stone, SC.StoneLight }), rng, 0.05)
+		return Geo.vary(rng:pick({ C.Stone, C.Stone, C.StoneLight }), rng, 0.05)
 	end
 	box(m, "Rock", cf, Vector3.new(-8, 0, MOUTH_D), Vector3.new(8, top + 3.2, 7.5), stone(), nil, SOLID)
 	for _, side in { -1, 1 } do
 		box(m, "Rock", cf, Vector3.new(side * (half - 0.1), 0, -1.4), Vector3.new(side * 9.2, 8.6, 3), stone(), nil, SOLID)
 		box(m, "Rock", cf, Vector3.new(side * (half + 0.6), 8.6, -0.4), Vector3.new(side * 8.4, top - 0.6, 2.6), stone(), nil, SOLID)
 	end
-	box(m, "Rock", cf, Vector3.new(-7.4, top, -0.3), Vector3.new(7.4, top + 3.2, 3), stone(), nil, SOLID)
+	-- the rock over the lintel: behind it, a step under the buttress top
+	box(m, "Rock", cf, Vector3.new(-7.4, top + 0.06, 0.55), Vector3.new(7.4, top + 2.8, 3), stone(), nil, SOLID)
 end
 
 --[[
-	South portal: the frame in a narrow stepped rock hill with grass caps
-	(it must keep between the town's rail strip and the island rim).
+	South portal: the frame set into a low rock mound that keeps between the
+	town's rail strip (|x| 160) and the island rim (|x| 171.7): cheek rocks
+	either side of the frame, a stone brow over the lintel under a grass
+	crest, a long grass slope down to the south coast with rough rock blocks
+	along both flanks, and grass wing slopes beside the track in front.
 ]]
+Railway.SouthHill = { HalfWidth = 5.65, Depth = 23.4 } -- local x / z extent of the mound behind the mouth
 local function southPortal(parent: Instance, name: string, cf: CFrame, rng: Rng.Rng)
 	local m = portalModel(parent, name)
-	local half = 5.6
-	local top = portalFrame(m, cf, half - 0.2)
-	-- light stone (its north face is in the evening shadow) under grass caps
+	local half = 4.95
+	local top = portalFrame(m, cf, half, 8.2)
+	local W = Railway.SouthHill.HalfWidth
+	-- light stone (the north face is in the evening shadow), one grass shade
 	local function stone(): Color3
-		return Geo.vary(rng:pick({ SC.Stone, SC.StoneLight, SC.Stone }), rng, 0.05)
+		return Geo.vary(rng:pick({ C.StoneLight, C.StoneLight, C.Stone:Lerp(C.StoneLight, 0.6) }), rng, 0.04)
 	end
-	local function grass(x: number, z0: number, z1: number, y: number)
-		box(m, "Grass", cf, Vector3.new(-x, y, z0), Vector3.new(x, y + 0.8, z1), Geo.vary(SC.Grass, rng, 0.04), nil, SOLID_SMALL)
+	local grass = Geo.vary(C.Grass, rng, 0.03)
+	local crest = top + 1.5
+	local slopeZ = 3.2 -- the back slope starts here (local z)
+	local depth = Railway.SouthHill.Depth -- where it meets the ground
+	-- core behind the mouth and the brow over the lintel, under a grass crest
+	box(m, "Rock", cf, Vector3.new(-5.45, 0, MOUTH_D), Vector3.new(5.45, top + 0.06, slopeZ), stone(), nil, SOLID)
+	box(m, "Brow", cf, Vector3.new(-W, top + 0.06, 0.55), Vector3.new(W, crest, slopeZ), stone(), nil, SOLID)
+	box(m, "Crest", cf, Vector3.new(-5.3, crest, 0.7), Vector3.new(5.3, crest + 0.6, slopeZ), grass, nil, SOLID_SMALL)
+	-- the grass slope from the crest down to the south coast (its sides grass too)
+	local high = crest + 0.6
+	triangle(m, "Slope", cf, Vector3.new(0, 0, slopeZ), Vector3.new(0, high, 0), Vector3.new(0, 0, depth - slopeZ), 10.2, grass, nil, SOLID)
+	local function slopeAt(z: number): number
+		return high * math.clamp((depth - z) / (depth - slopeZ), 0, 1)
 	end
-	-- the hill: a grass slope rising from the lintel to a mound with a
-	-- narrower crest (the slope faces the sky, so it stays bright while the
-	-- north face is in the evening shadow), then two lower steps down to the
-	-- south coast
-	local h1, crest, h2, h3 = top + 2.4, top + 5, 9.5, 4.5
-	local slopeZ = 3.4
-	box(m, "Rock", cf, Vector3.new(-half, 0, MOUTH_D), Vector3.new(half, top, slopeZ), stone(), nil, SOLID)
-	triangle(
-		m,
-		"Slope",
-		cf,
-		Vector3.new(0, top, slopeZ),
-		Vector3.new(0, h1 + 0.8 - top, 0),
-		Vector3.new(0, 0, -slopeZ - 0.3),
-		half * 2,
-		Geo.vary(SC.Grass, rng, 0.04),
-		nil,
-		SOLID
-	)
-	box(m, "Rock", cf, Vector3.new(-half, 0, slopeZ), Vector3.new(half, h1, 9), stone(), nil, SOLID)
-	grass(half, slopeZ, 9.2, h1)
-	box(m, "Rock", cf, Vector3.new(-4, h1 + 0.8, slopeZ), Vector3.new(4, crest, 8.4), stone(), nil, SOLID)
-	grass(4.2, slopeZ - 0.2, 8.6, crest)
-	box(m, "Rock", cf, Vector3.new(-half, 0, 9), Vector3.new(half, h2, 16), stone(), nil, SOLID)
-	grass(half, 9, 16.2, h2)
-	box(m, "Rock", cf, Vector3.new(-half, 0, 16), Vector3.new(half, h3, 23.4), stone(), nil, SOLID)
-	grass(half, 16, 23.4, h3)
-	-- bushes on the steps and a boulder on the crest for a rougher silhouette
-	local bushes = { { -3, h2 + 0.8, 12.6, 2.6 }, { 2.6, h2 + 0.8, 14.4, 2.0 }, { 2.4, h3 + 0.8, 20, 2.2 } }
+	for _, side in { -1, 1 } do
+		-- cheek rocks either side of the frame, set a little forward
+		local cheekTop = if side > 0 then 10.4 else 9.6
+		box(m, "Cheek", cf, Vector3.new(side * 4.85, 0, -1.6), Vector3.new(side * W, cheekTop, slopeZ), stone(), nil, SOLID)
+		-- a grass wing slope beside the track, down from the cheek to the ground
+		triangle(
+			m,
+			"Wing",
+			cf,
+			Vector3.new(side * 5.075, 0, -1.6),
+			Vector3.new(0, 7.6, 0),
+			Vector3.new(0, 0, -7),
+			1.15,
+			grass,
+			nil,
+			SOLID_SMALL
+		)
+		-- a rough skirt of rock blocks along the flank (standing half a stud
+		-- out of the grass side; the last one pokes out of the slope)
+		local rocks = {
+			{ z = 7, depth = 6, height = 7.4 + side * 0.6, yaw = 0.06 * side, roll = -0.04 * side },
+			{ z = 13, depth = 5.4, height = 4.6 - side * 0.4, yaw = -0.07 * side, roll = 0.05 * side },
+			{ z = 18.2, depth = 5, height = 3.3, yaw = 0.09 * side, roll = 0.04 * side },
+		}
+		for _, r in rocks do
+			local size = Vector3.new(1.8, r.height, r.depth)
+			local at = cf * CFrame.new(side * 4.3, r.height / 2 - 0.1, r.z) * CFrame.Angles(0, r.yaw, r.roll)
+			block(m, "Rock", at, size, stone(), nil, SOLID)
+		end
+	end
+	-- bushes on the grass slope
+	local bushes = { { -2.4, 9.6, 2.4 }, { 2.2, 14.6, 2.0 }, { -1.2, 19.4, 1.8 } }
 	for i, b in bushes do
-		local s = Vector3.new(b[4], b[4] * 0.75, b[4] * 0.9)
-		local at = cf * CFrame.new(b[1], b[2] + s.Y / 2 - 0.1, b[3]) * CFrame.Angles(0, 0.4 * i, 0)
-		block(m, "Bush", at, s, Geo.vary(SC.GrassDark, rng, 0.05), nil, GHOST)
+		local s = Vector3.new(b[3], b[3] * 0.7, b[3] * 0.85)
+		block(
+			m,
+			"Bush",
+			cf * CFrame.new(b[1], slopeAt(b[2]) + s.Y / 2 - 0.35, b[2]) * CFrame.Angles(0, 0.5 * i, 0),
+			s,
+			Geo.vary(C.GrassDark, rng, 0.05),
+			nil,
+			GHOST
+		)
 	end
-	local s = Vector3.new(2.8, 2.0, 2.4)
-	block(m, "Boulder", cf * CFrame.new(-1.6, crest + 0.8 + s.Y / 2 - 0.3, 5.6) * CFrame.Angles(0, 0.5, 0.1), s, stone(), nil, SOLID_SMALL)
+end
+
+-- The four tunnel mouths: the mouth face's ground center, looking out of the
+-- tunnel (the client hides a car once it passes this plane going in).
+function Railway.portalMouths(): { [string]: CFrame }
+	local q = TrainConfig.QuarryLine
+	local inwardWest = (q[2] - q[1]).Unit
+	local inwardEast = (q[#q - 1] - q[#q]).Unit
+	local west = q[1] + inwardWest * Railway.PortalInset
+	local east = q[#q] + inwardEast * Railway.PortalInset
+	local mouths: { [string]: CFrame } = {
+		West = CFrame.lookAt(west, west + inwardWest),
+		East = CFrame.lookAt(east, east + inwardEast),
+	}
+	local coasts: { [string]: { Vector3 } } = { SouthWest = TrainConfig.CoastWest, SouthEast = TrainConfig.CoastEast }
+	for name, line in coasts do
+		local out = (line[2] - line[1]).Unit
+		mouths[name] = CFrame.lookAt(line[1], line[1] + out)
+	end
+	return mouths
 end
 
 ---------------------------------------------------------------- Mine Station
@@ -607,10 +667,15 @@ end
 	four-sided funnel and a throat. `cf` = the ground under the hopper (the
 	deck top), openX/openZ = the tub's inner half size (the intake box's), `rim`
 	= the rim height above `cf`. The tub collides (items fall into it).
+	opts: Throat (half size), Tub/Band/Funnel heights (a low hopper squats),
+	Glow (a neon floor), RimGlow (a thin neon strip along the rim, so the
+	opening reads from afar).
 ]]
-local function hopper(m: Model, cf: CFrame, openX: number, openZ: number, rim: number, throat: number, glow: Color3?)
+type HopperOpts = { Throat: number, Tub: number?, Band: number?, Funnel: number?, Glow: Color3?, RimGlow: Color3? }
+local function hopper(m: Model, cf: CFrame, openX: number, openZ: number, rim: number, opts: HopperOpts)
 	local wall = 0.4
-	local tubH, bandH, funnelH = 1.4, 0.6, 1.4
+	local tubH, bandH, funnelH = opts.Tub or 1.4, opts.Band or 0.6, opts.Funnel or 1.4
+	local throat, glow = opts.Throat, opts.Glow
 	local tub0 = rim - tubH
 	local band0 = tub0 - bandH
 	local funnel0 = band0 - funnelH
@@ -644,7 +709,7 @@ local function hopper(m: Model, cf: CFrame, openX: number, openZ: number, rim: n
 		"Inside",
 		cf,
 		Vector3.new(-ox + wall / 2, tub0, -oz + wall / 2),
-		Vector3.new(ox - wall / 2, tub0 + 0.05, oz - wall / 2),
+		Vector3.new(ox - wall / 2, tub0 + 0.08, oz - wall / 2),
 		glow or C.Interior,
 		if glow then NEON else nil,
 		GHOST
@@ -664,6 +729,32 @@ local function hopper(m: Model, cf: CFrame, openX: number, openZ: number, rim: n
 			nil,
 			GHOST
 		)
+	end
+	if opts.RimGlow then
+		-- a thin neon strip along the middle of each tub wall's top
+		local w = 0.16
+		for _, side in { -1, 1 } do
+			box(
+				m,
+				"RimGlow",
+				cf,
+				Vector3.new(-ox - w / 2, rim, side * oz - w / 2),
+				Vector3.new(ox + w / 2, rim + 0.08, side * oz + w / 2),
+				opts.RimGlow,
+				NEON,
+				GHOST
+			)
+			box(
+				m,
+				"RimGlow",
+				cf,
+				Vector3.new(side * ox - w / 2, rim, -oz + w / 2),
+				Vector3.new(side * ox + w / 2, rim + 0.08, oz - w / 2),
+				opts.RimGlow,
+				NEON,
+				GHOST
+			)
+		end
 	end
 	-- funnel: one wedge per side, flat on top, its slope running in to the throat
 	local fx, fz = bx - 0.2, bz - 0.2
@@ -729,7 +820,10 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	triangle(m, "Ramp", S, Vector3.new(0, 0, half.Z), Vector3.new(0, deck, 0), Vector3.new(0, 0, 2.6), half.X * 2, C.DeckDark, nil, SOLID)
 
 	-- canopy: posts (the middle ones on the track side only, the players' side
-	-- stays open), beams, eave plate and a red pitched roof
+	-- stays open), beams, eave plates and a red pitched roof with an opening
+	-- over the hopper (so the hopper reads from the ramp and from high
+	-- cameras; a cross beam over the opening carries the pendant lamp)
+	local hopperAt = cfg.Hopper - center
 	local postX, postZ = half.X - 0.4, half.Z - 0.4
 	local eave = deck + 6.9
 	local posts = {
@@ -737,8 +831,8 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 		Vector3.new(postX, 0, -postZ),
 		Vector3.new(-postX, 0, postZ),
 		Vector3.new(postX, 0, postZ),
-		Vector3.new(-5.4, 0, -postZ),
-		Vector3.new(5.4, 0, -postZ),
+		Vector3.new(-6.8, 0, -postZ),
+		Vector3.new(6.8, 0, -postZ),
 	}
 	for i, p in posts do
 		box(
@@ -765,23 +859,40 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	for _, z in { -postZ, postZ } do
 		box(m, "Beam", S, Vector3.new(-half.X, eave, z - 0.35), Vector3.new(half.X, eave + 0.6, z + 0.35), C.Steel, nil, DECOR)
 	end
+	box(
+		m,
+		"CrossBeam",
+		S,
+		Vector3.new(hopperAt.X - 0.25, eave + 0.1, -postZ + 0.35),
+		Vector3.new(hopperAt.X + 0.25, eave + 0.5, postZ - 0.35),
+		C.Steel,
+		nil,
+		GHOST
+	)
+	-- the roof: its track side ends over the platform edge (the elevator stands
+	-- just beyond it), the players' side overhangs the ramp
 	local roofL = half.X + 0.7
-	local roofZ = half.Z + 0.7
+	local roofZ0, roofZ1 = -half.Z, half.Z + 0.7
+	local ridgeZ = (roofZ0 + roofZ1) / 2
 	local plate = eave + 0.6
-	box(m, "Eave", S, Vector3.new(-roofL, plate, -roofZ), Vector3.new(roofL, plate + 0.35, roofZ), C.RoofTrim, nil, DECOR)
-	for _, side in { -1, 1 } do
-		triangle(
-			m,
-			"Roof",
-			S,
-			Vector3.new(0, plate + 0.35, 0),
-			Vector3.new(0, 1.4, 0),
-			Vector3.new(0, 0, side * (roofZ - 0.1)),
-			roofL * 2 - 0.2,
-			C.Roof,
-			nil,
-			DECOR
-		)
+	local gap = 4.3 -- the opening's half width (the hopper's band is 4.1)
+	for _, span in { { -roofL, hopperAt.X - gap }, { hopperAt.X + gap, roofL } } do
+		local x0, x1 = span[1], span[2]
+		box(m, "Eave", S, Vector3.new(x0, plate, roofZ0), Vector3.new(x1, plate + 0.35, roofZ1), C.RoofTrim, nil, DECOR)
+		for _, edge in { roofZ0 + 0.1, roofZ1 - 0.1 } do
+			triangle(
+				m,
+				"Roof",
+				S,
+				Vector3.new((x0 + x1) / 2, plate + 0.35, ridgeZ),
+				Vector3.new(0, 1.4, 0),
+				Vector3.new(0, 0, edge - ridgeZ),
+				x1 - x0 - 0.2,
+				C.Roof,
+				nil,
+				DECOR
+			)
+		end
 	end
 	-- rooftop sign on two posts (both faces: the ramp and the track side)
 	local ridge = plate + 0.35 + 1.4
@@ -790,33 +901,58 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 			m,
 			"SignPost",
 			S,
-			Vector3.new(side * 5 - 0.2, ridge - 0.6, -0.2),
-			Vector3.new(side * 5 + 0.2, ridge + 0.5, 0.2),
+			Vector3.new(side * 5.8 - 0.2, ridge - 0.6, ridgeZ - 0.2),
+			Vector3.new(side * 5.8 + 0.2, ridge + 0.5, ridgeZ + 0.2),
 			C.SteelDark,
 			nil,
 			GHOST
 		)
 	end
-	local stationSign =
-		sign(m, "Sign", S * CFrame.new(0, ridge + 1.6, 0) * CFrame.Angles(0, math.pi, 0), Vector3.new(14, 2.4, 0.35), "MINE STATION", true)
+	local stationSign = sign(
+		m,
+		"Sign",
+		S * CFrame.new(0, ridge + 1.6, ridgeZ) * CFrame.Angles(0, math.pi, 0),
+		Vector3.new(12, 2.4, 0.35),
+		"MINE STATION",
+		true
+	)
 	stationSign.CastShadow = true
 
-	-- the hopper over the intake (its rim = the top of the intake box)
+	-- the hopper over the intake (its rim = the top of the intake box), a
+	-- warm neon strip along its rim
 	local intakeSize = cfg.HopperSize
-	local hopperAt = cfg.Hopper - center
-	hopper(m, S * CFrame.new(hopperAt.X, deck, hopperAt.Z), intakeSize.X / 2, intakeSize.Z / 2, intakeSize.Y - deck, 1.3)
+	hopper(
+		m,
+		S * CFrame.new(hopperAt.X, deck, hopperAt.Z),
+		intakeSize.X / 2,
+		intakeSize.Z / 2,
+		intakeSize.Y - deck,
+		{ Throat = 1.3, RimGlow = C.Lamp }
+	)
 	local intake = block(m, "Intake", CFrame.new(cfg.Hopper + Vector3.new(0, intakeSize.Y / 2, 0)), intakeSize, C.Steel, nil, GHOST)
 	intake.Transparency = 1
 	intake:AddTag(Railway.HopperTag)
 
-	-- bucket elevator between the platform and the track: the casing (its
-	-- track-side face just outside the trains' clearance), a duct from the
-	-- hopper's throat, the head with a round hood, and the loading chute
-	-- from the head down to a spout over the wagons at QuarryStop
-	local towerX = hopperAt.X
+	-- bucket elevator on the track side east of the hopper (its track-side
+	-- face just outside the trains' clearance, its head beside the sign's end
+	-- so the sign reads from both sides, under no roof), fed by a duct from
+	-- the hopper's band, the head with a round hood, and the loading chute
+	-- angled from the head down to a spout over the wagons at QuarryStop
+	local towerX = hopperAt.X + 7.4
 	local casingZ0, casingZ1 = -half.Z - 2.3, -half.Z - 0.1
 	local headY = 12.6
 	box(m, "Elevator", S, Vector3.new(towerX - 1.2, 0, casingZ0), Vector3.new(towerX + 1.2, headY, casingZ1), C.Steel, nil, SOLID)
+	local bandY = deck + intakeSize.Y - deck - 1.4 -- the hopper band's top (the tub floor)
+	box(
+		m,
+		"Duct",
+		S,
+		Vector3.new(hopperAt.X + intakeSize.X / 2 + 0.6, bandY - 1.0, -half.Z - 0.7),
+		Vector3.new(towerX - 1.2, bandY - 0.2, -half.Z + 0.2),
+		C.SteelDark,
+		nil,
+		GHOST
+	)
 	box(
 		m,
 		"ElevatorBand",
@@ -827,44 +963,28 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 		nil,
 		BUMP_SMALL
 	)
-	box(
-		m,
-		"Duct",
-		S,
-		Vector3.new(towerX - 0.8, deck, casingZ1 - 0.1),
-		Vector3.new(towerX + 0.8, deck + 0.9, hopperAt.Z - 1.2),
-		C.SteelDark,
-		nil,
-		BUMP_SMALL
-	)
 	local headZ0 = casingZ0 - 1.3
 	box(m, "Head", S, Vector3.new(towerX - 1.6, headY, headZ0), Vector3.new(towerX + 1.6, headY + 1.6, casingZ1 + 0.3), C.Steel, nil, SOLID)
 	cyl(m, "Hood", S * CFrame.new(towerX, headY + 1.6, (headZ0 + casingZ1 + 0.3) / 2), ALONG_X, 3.2, 3.4, C.SteelLight, nil, DECOR)
 	local spoutBottom = 9.8 -- above every train (chimney top 9.31)
-	local chuteFrom = Vector3.new(towerX, headY + 0.6, headZ0 + 0.3)
-	local chuteTo = Vector3.new(towerX, spoutBottom + 1.1, trackZ)
+	local spout = Vector3.new(hopperAt.X, spoutBottom, trackZ)
+	local chuteFrom = Vector3.new(towerX - 1.1, headY + 0.5, headZ0 + 0.5)
+	local chuteTo = spout + Vector3.new(0, 1.1, 0)
 	local chuteLen = (chuteTo - chuteFrom).Magnitude
 	local chute = S * CFrame.lookAt((chuteFrom + chuteTo) / 2, chuteTo)
 	block(m, "Chute", chute, Vector3.new(1.6, 0.25, chuteLen), C.SteelDark, nil, DECOR)
 	for _, side in { -1, 1 } do
 		block(m, "ChuteSide", chute * CFrame.new(side * 0.9, 0.35, 0), Vector3.new(0.2, 0.95, chuteLen), C.Steel, nil, GHOST)
 	end
-	box(
-		m,
-		"Spout",
-		S,
-		Vector3.new(towerX - 0.75, spoutBottom, trackZ - 0.75),
-		Vector3.new(towerX + 0.75, spoutBottom + 1.1, trackZ + 0.75),
-		C.Orange,
-		nil,
-		GHOST
-	)
-	box(
+	box(m, "Spout", S, spout - Vector3.new(0.75, 0, 0.75), spout + Vector3.new(0.75, 1.1, 0.75), C.Orange, nil, GHOST)
+	-- a strut from the casing's face to the spout
+	local strutFrom = Vector3.new(towerX - 0.6, spoutBottom + 0.2, casingZ0)
+	local strutTo = spout + Vector3.new(0.75, 0.2, 0)
+	block(
 		m,
 		"Strut",
-		S,
-		Vector3.new(towerX - 0.2, spoutBottom, casingZ0),
-		Vector3.new(towerX + 0.2, spoutBottom + 0.4, trackZ + 0.75),
+		S * CFrame.lookAt((strutFrom + strutTo) / 2, strutTo),
+		Vector3.new(0.4, 0.4, (strutTo - strutFrom).Magnitude),
 		C.SteelDark,
 		nil,
 		GHOST
@@ -899,7 +1019,7 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	ball(m, "Knob", console * CFrame.new(0.6, 2.5, 0.07), 0.42, C.Lever, nil, GHOST)
 
 	-- lamps under the eave at the corner posts, and the pendant over the hopper
-	-- (the station's one PointLight)
+	-- (the station's one PointLight) under the cross beam
 	for i = 1, 4 do
 		local p = posts[i]
 		local inward = -math.sign(p.Z)
@@ -914,7 +1034,7 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 			GHOST
 		)
 	end
-	local pendant = S * CFrame.new(hopperAt.X, eave - 0.35, hopperAt.Z)
+	local pendant = S * CFrame.new(hopperAt.X, eave - 0.15, hopperAt.Z)
 	cyl(m, "Shade", pendant, ALONG_Y, 0.5, 1.4, C.SteelDark, nil, GHOST)
 	local bulb = ball(m, "Bulb", pendant * CFrame.new(0, -0.45, 0), 0.7, C.Lamp, NEON, GHOST)
 	light(bulb, C.Lamp, 16, 1.3)
@@ -931,11 +1051,12 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	end
 
 	-- a short siding that leaves the main line at a shallow angle east of the
-	-- platform and ends in a buffer stop (2 hundredths under the main line, so
-	-- crossing faces never fight; its first timbers lie under the main line's)
+	-- platform and ends in a buffer stop beside the platform's end, well short
+	-- of the east portal (2 hundredths under the main line, so crossing faces
+	-- never fight; its first timbers lie under the main line's)
 	local fork = TrainConfig.QuarryStop + Vector3.new(half.X - 4, 0, 0)
-	local bend = fork + Vector3.new(19, 0, 8.6)
-	local stub = bend + Vector3.new(3.5, 0, 0)
+	local bend = fork + Vector3.new(12, 0, 7) -- (7 off the main line: the buffer beam keeps out of its clearance)
+	local stub = bend + Vector3.new(2.3, 0, 0)
 	track(m, "Siding", { fork, bend, stub }, 0, -(0.3 + BUFFER_DEPTH), { Drop = 0.02, SleepersFrom = 4 })
 	bufferStop(m, CFrame.lookAt(stub + Vector3.new(0.3, 0, 0), stub - Vector3.new(1, 0, 0)))
 
@@ -953,6 +1074,9 @@ end
 	its bottom on the floor.
 ]]
 local function buildLift(parent: Instance, info: { Id: string, Position: Vector3, Size: Vector3 }): Model
+	-- (named by its LiftId: tests/World.spec.luau lets only a model named
+	-- like the cave stand in the cave's walkable space; find lifts by the
+	-- MineLift tag and LiftId)
 	local m = model(info.Id, parent)
 	m:AddTag(Railway.LiftTag)
 	m:SetAttribute("LiftId", info.Id)
@@ -1017,15 +1141,24 @@ local function buildLift(parent: Instance, info: { Id: string, Position: Vector3
 		DECOR
 	)
 
-	-- the hopper over the intake (rim = the top of the intake box)
-	hopper(m, F * CFrame.new(0, 0.4, 0), size.X / 2, size.Z / 2, size.Y - 0.4, 1.2, C.Glow)
+	-- the hopper: a low tub (its rim LiftRim above the floor, so a soft throw
+	-- from the floor clears it) inside the taller intake box
+	hopper(
+		m,
+		F * CFrame.new(0, 0.4, 0),
+		size.X / 2,
+		size.Z / 2,
+		Railway.LiftRim - 0.4,
+		{ Throat = 0.9, Tub = 1.2, Band = 0.4, Funnel = 0.8, Glow = C.Glow }
+	)
 	local intake = block(m, "Intake", CFrame.new(pos + Vector3.new(0, size.Y / 2, 0)), size, C.Steel, nil, GHOST)
 	intake.Transparency = 1
 	intake:AddTag(Railway.HopperTag)
 	intake:SetAttribute("LiftId", info.Id)
 
-	-- the cage hanging above the hopper, its cable up into the ceiling
-	local cage0, cage1 = 6.4, 10.2
+	-- the cage parked up under the crossbeams (high above the throws into
+	-- the hopper), its cable up into the ceiling
+	local cage0, cage1 = 10.5, 14
 	local ch = 2.8
 	box(m, "CageFloor", F, Vector3.new(-ch, cage0, -ch), Vector3.new(ch, cage0 + 0.3, ch), C.Steel, nil, DECOR)
 	box(m, "CageRoof", F, Vector3.new(-ch - 0.2, cage1 - 0.4, -ch - 0.2), Vector3.new(ch + 0.2, cage1, ch + 0.2), C.Orange, nil, DECOR)
@@ -1052,8 +1185,21 @@ local function buildLift(parent: Instance, info: { Id: string, Position: Vector3
 	light(cageLamp, C.Lamp, 16, 1.4)
 	box(m, "Anchor", F, Vector3.new(-1.1, ceiling - 0.8, -1.1), Vector3.new(1.1, ceiling, 1.1), C.SteelDark, nil, GHOST)
 
-	-- the LIFT sign on the front crossbeam, a warning lamp on its end
-	sign(m, "Sign", F * CFrame.new(0, postTop + 1.6, -frameHalf), Vector3.new(4.6, 1.6, 0.3), "LIFT", false)
+	-- a header beam across the front posts with the LIFT sign hanging under it
+	-- in view of a player at the hopper (both faces), a warning lamp on the
+	-- front crossbeam's end
+	local headerY = 11.6
+	box(
+		m,
+		"Header",
+		F,
+		Vector3.new(-frameHalf, headerY, -frameHalf - 0.3),
+		Vector3.new(frameHalf, headerY + 0.5, -frameHalf + 0.3),
+		C.Steel,
+		nil,
+		DECOR
+	)
+	sign(m, "Sign", F * CFrame.new(0, headerY - 0.85, -frameHalf - 0.05), Vector3.new(4.6, 1.6, 0.3), "LIFT", true)
 	box(
 		m,
 		"LampBase",
@@ -1137,11 +1283,9 @@ function Railway.build(map: Instance): Folder
 	local portals = Instance.new("Folder")
 	portals.Name = "Portals"
 	portals.Parent = root
-	for i, name in { "West", "East" } do
-		local endPoint = if i == 1 then quarry[1] else quarry[#quarry]
-		local inward = if i == 1 then (quarry[2] - quarry[1]).Unit else (quarry[#quarry - 1] - quarry[#quarry]).Unit
-		local mouth = endPoint + inward * Railway.PortalInset
-		quarryPortal(portals, name, CFrame.lookAt(mouth, mouth + inward), rng)
+	local mouths = Railway.portalMouths()
+	for _, name in { "West", "East" } do
+		quarryPortal(portals, name, mouths[name], rng)
 	end
 	buildStation(root, rng)
 
@@ -1158,8 +1302,7 @@ function Railway.build(map: Instance): Folder
 		local m = track(root, coast.Name, line, -MOUTH_D / 2, -(Railway.BufferGap + BUFFER_DEPTH), { Clips = clips })
 		local face = line[n] + dir * Railway.BufferGap
 		bufferStop(m, CFrame.lookAt(face, face - dir))
-		local out = (line[2] - line[1]).Unit
-		southPortal(portals, coast.Portal, CFrame.lookAt(line[1], line[1] + out), rng)
+		southPortal(portals, coast.Portal, mouths[coast.Portal], rng)
 	end
 
 	-- the Mine Lifts down in the caves

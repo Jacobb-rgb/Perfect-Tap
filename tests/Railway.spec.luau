@@ -1,21 +1,38 @@
 --[[
 	The ore trains' railway (src/server/World/Railway.luau): the hooks of the
 	shared contract (TrainService finds the hoppers and prompts, the client
-	animates trains along TrainConfig's lines), the coastal lines passing
-	every plot's train stop, nothing of the railway in the base yards, roads,
-	island rim, NEXT AREA boardwalk or town sites, the trains' clearance, the
-	part budget and determinism.
+	animates trains along TrainConfig's lines and hides them at the portal
+	mouths), the coastal lines passing every plot's train stop, nothing of the
+	railway in the base yards, roads, island rim, NEXT AREA boardwalk, town
+	sites or any other package's pieces, the wheels clear of the yards'
+	train stops, the trains' clearance, the part budget and determinism.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local TrainBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.TrainBuilder")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 	local Railway = Loader.requirePath("ServerScriptService.Server.World.Railway")
-	local Town = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Town")
+	-- The town's strip limit and sites live with the lobby (being reworked
+	-- elsewhere): read them when the module is there, else fall back to the
+	-- brief's limit (town buildings stop at |x| 160); the geometric check
+	-- against every other package's parts below does not depend on it.
+	local okTown, Town = pcall(Loader.requirePath, "ServerScriptService.Server.World.Lobby.Flora.Town")
+	local townEdgeX: number = if okTown and type(Town) == "table" and Town.RailMinX then Town.RailMinX else 160
+	local townSites: { any } = if okTown and type(Town) == "table" and Town.Sites then Town.Sites else {}
+
+	-- The wheels' envelope across a line (TrainBuilder: the locomotive's wheel
+	-- hubs reach +-2.8), from the rail top up: nothing of a yard may enter it.
+	local WHEEL_HALF = 2.95
+	-- The yards' train stop platforms reach this close to the rail centerline
+	-- (BaseLayout); until they keep out of the wheels' envelope the coastal
+	-- line's platform-side rail gives way under them.
+	local stopEdgeGap = BaseLayout.RailZ - (BaseLayout.TrainStop.Center.Z + BaseLayout.TrainStop.Size.Z / 2)
+	local stopsClear = stopEdgeGap >= WHEEL_HALF
 
 	local game = roblox.Instance.new("DataModel")
 	local map = WorldBuilder.build(game:GetService("Workspace"))
@@ -83,6 +100,17 @@ return function(T, Loader)
 
 	local rail = partsOf(railway)
 
+	-- The Mine Lift model of a TrainConfig lift (found by tag and LiftId, as
+	-- TrainService does).
+	local function liftModel(id: string): any
+		for _, d in railway:GetDescendants() do
+			if d:HasTag("MineLift") and d:GetAttribute("LiftId") == id then
+				return d
+			end
+		end
+		return nil
+	end
+
 	T.test("railway: Map.Railway holds the lines, the station, four portals and the lifts", function()
 		T.truthy(railway, "Map.Railway exists")
 		for _, name in { "QuarryLine", "CoastWest", "CoastEast", "MineStation", "Portals" } do
@@ -94,7 +122,8 @@ return function(T, Loader)
 			T.truthy(portal:FindFirstChild("Mouth"), name .. " has a dark mouth")
 		end
 		for _, lift in TrainConfig.Lifts do
-			T.truthy(railway:FindFirstChild(lift.Id), "lift " .. lift.Id)
+			local m = liftModel(lift.Id)
+			T.truthy(m and m.Parent == railway, "lift " .. lift.Id .. " under Map.Railway")
 		end
 		for _, d in map.Plots:GetDescendants() do
 			T.falsy(d:GetAttribute("RailwayPlaceholder"), d:GetFullName() .. " (placeholder track) is gone")
@@ -152,8 +181,8 @@ return function(T, Loader)
 		T.eq(#tagged, #TrainConfig.Lifts, "one MineLift per TrainConfig lift")
 		T.eq(hoppers, 1 + #TrainConfig.Lifts, "station + lift hoppers")
 		for _, cfg in TrainConfig.Lifts do
-			local lift = railway:FindFirstChild(cfg.Id)
-			T.truthy(lift:IsA("Model") and lift:HasTag("MineLift"), cfg.Id .. " is a MineLift model")
+			local lift = liftModel(cfg.Id)
+			T.truthy(lift and lift:IsA("Model") and lift:HasTag("MineLift"), cfg.Id .. " is a MineLift model")
 			T.eq(lift:GetAttribute("LiftId"), cfg.Id, cfg.Id .. " LiftId")
 			local intake = lift:FindFirstChild("Intake")
 			T.truthy(intake and intake:IsA("BasePart"), cfg.Id .. " Intake part")
@@ -197,6 +226,78 @@ return function(T, Loader)
 					T.falsy(overlaps(a, b, colMin, colMax, 0.01), part:GetFullName() .. " blocks " .. intake:GetFullName())
 				end
 			end
+			-- an item resting on the tub floor (the band's top) is inside the
+			-- intake box, its centre well under the box top
+			local band = intake.Parent:FindFirstChild("Band")
+			T.truthy(band and band:IsA("BasePart"), intake:GetFullName() .. " has a hopper band")
+			local _, bandTop = bounds(band)
+			T.truthy(
+				bandTop.Y >= lo.Y and bandTop.Y <= hi.Y - 1.0,
+				`{intake:GetFullName()}: tub floor {bandTop.Y} inside {lo.Y}..{hi.Y - 1}`
+			)
+		end
+		-- the lifts: a low rim (a soft throw from the cave floor clears it) and
+		-- nothing hanging over the opening down to head height (the cage is
+		-- parked up under the crossbeams)
+		for _, cfg in TrainConfig.Lifts do
+			local lift = liftModel(cfg.Id)
+			local rim = -math.huge
+			for _, part in partsOf(lift) do
+				if part.Name == "Tub" then
+					local _, top = bounds(part)
+					rim = math.max(rim, top.Y - cfg.Position.Y)
+				end
+			end
+			T.truthy(math.abs(rim - Railway.LiftRim) < 1e-3 and rim <= 3.5, `{cfg.Id}: tub rim {rim} above the floor`)
+			local half = cfg.Size / 2
+			local colMin = cfg.Position + Vector3.new(-half.X + 0.3, rim + 0.1, -half.Z + 0.3)
+			local colMax = cfg.Position + Vector3.new(half.X - 0.3, rim + 6.5, half.Z - 0.3)
+			for _, part in partsOf(lift) do
+				if part.Transparency < 1 then
+					local a, b = bounds(part)
+					T.falsy(overlaps(a, b, colMin, colMax, 0.01), part:GetFullName() .. " hangs over the lift's opening")
+				end
+			end
+		end
+	end)
+
+	T.test("railway: the four tunnel mouths face out of their tunnels at the line ends", function()
+		local mouths = Railway.portalMouths()
+		local q = TrainConfig.QuarryLine
+		local inWest, inEast = (q[2] - q[1]).Unit, (q[#q - 1] - q[#q]).Unit
+		local expected = {
+			West = { At = q[1] + inWest * Railway.PortalInset, Look = inWest },
+			East = { At = q[#q] + inEast * Railway.PortalInset, Look = inEast },
+			SouthWest = { At = TrainConfig.CoastWest[1], Look = Vector3.new(0, 0, -1) },
+			SouthEast = { At = TrainConfig.CoastEast[1], Look = Vector3.new(0, 0, -1) },
+		}
+		-- (today: the quarry mouths at x -+66 on z -156 facing into the quarry,
+		-- the south ones at (-+166, 0, 126) facing north)
+		T.truthy(near(expected.West.At, Vector3.new(-66, -12, -156), 1e-3), "West mouth at (-66, -12, -156)")
+		T.truthy(near(expected.East.At, Vector3.new(66, -12, -156), 1e-3), "East mouth at (66, -12, -156)")
+		T.truthy(near(expected.SouthWest.At, Vector3.new(-166, 0, 126), 1e-3), "SouthWest mouth at (-166, 0, 126)")
+		T.truthy(near(expected.SouthEast.At, Vector3.new(166, 0, 126), 1e-3), "SouthEast mouth at (166, 0, 126)")
+		for name, e in expected do
+			local cf = mouths[name]
+			T.truthy(cf, "mouth " .. name)
+			T.truthy(near(cf.Position, e.At, 1e-3), name .. " mouth position")
+			T.truthy(near(cf.LookVector, e.Look, 1e-4), name .. " mouth looks out of the tunnel")
+			-- the built portal: the black mouth's front face on that plane
+			local mouth = railway.Portals[name]:FindFirstChild("Mouth")
+			local face = mouth.CFrame.Position + mouth.CFrame.LookVector * mouth.Size.Z / 2
+			T.truthy(near(mouth.CFrame.LookVector, e.Look, 1e-4), name .. " Mouth part faces out")
+			T.truthy(near(face, e.At + Vector3.new(0, mouth.Size.Y / 2, 0), 1e-3), name .. " Mouth face on the mouth plane")
+			-- a train hidden past the mouth stays inside the portal's rock: the
+			-- client never needs to animate deeper than this
+			local deepest = -math.huge
+			for _, part in partsOf(railway.Portals[name]) do
+				local lo, hi = bounds(part)
+				for _, corner in { lo, hi } do
+					deepest = math.max(deepest, -(corner - e.At):Dot(e.Look))
+				end
+			end
+			local depth = if name:sub(1, 5) == "South" then Railway.SouthHill.Depth else 7.5
+			T.truthy(math.abs(deepest - depth) < 0.06, `{name}: the rock reaches {deepest} behind the mouth (expected {depth})`)
 		end
 	end)
 
@@ -248,11 +349,13 @@ return function(T, Loader)
 	end)
 
 	T.test("railway: the rails run unbroken between the portal mouths and the buffers", function()
-		-- (on the coast the platform-side rail gives way to the stops, so the sea-side one is checked)
+		-- (on the coast the platform-side rail gives way to the yards' train stop
+		-- platforms while they reach into the wheels' envelope: then only the
+		-- sea-side one is checked)
 		local checks = {
 			{ Line = "QuarryLine", Axis = "X", Offsets = { -1, 1 } },
-			{ Line = "CoastWest", Axis = "Z", Offsets = { -1 } },
-			{ Line = "CoastEast", Axis = "Z", Offsets = { 1 } },
+			{ Line = "CoastWest", Axis = "Z", Offsets = if stopsClear then { -1, 1 } else { -1 } },
+			{ Line = "CoastEast", Axis = "Z", Offsets = if stopsClear then { -1, 1 } else { 1 } },
 		}
 		local visible = Railway.visibleLines()
 		for _, check in checks do
@@ -328,10 +431,10 @@ return function(T, Loader)
 			T.falsy(s.hi.X > 140 and s.lo.Z < -112 and s.hi.Z > -118, name .. " is on the NEXT AREA boardwalk strip")
 			if s.hi.Z > LobbyLayout.Area.Min.Z then
 				T.truthy(math.max(math.abs(s.lo.X), math.abs(s.hi.X)) <= 171.7, name .. " reaches into the island rim")
-				-- the town keeps west/east of Town.RailMinX, the railway outside it
-				T.truthy(math.min(math.abs(s.lo.X), math.abs(s.hi.X)) >= Town.RailMinX, name .. " is in the town's ground")
+				-- the town keeps west/east of its rail strip limit, the railway outside it
+				T.truthy(math.min(math.abs(s.lo.X), math.abs(s.hi.X)) >= townEdgeX, name .. " is in the town's ground")
 			end
-			for _, site in Town.Sites do
+			for _, site in townSites do
 				T.falsy(
 					s.lo.X < site.Max.X and s.hi.X > site.Min.X and s.lo.Z < site.Max.Y and s.hi.Z > site.Min.Y,
 					`{name} is on the town site {site.Id}`
@@ -350,6 +453,96 @@ return function(T, Loader)
 					T.truthy(LobbyLayout.distanceToStrip(path.From, path.To, path.Width, mid) >= radius, `{name} is on the path {path.Id}`)
 				end
 			end
+		end
+	end)
+
+	T.test("railway: no other package's piece stands in the railway on the surface", function()
+		-- every part outside the railway and the yards (checked above) that
+		-- stands up from the ground (flat ground patches lie under the track)
+		local surfaceMin, surfaceMax = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+		local surface = {}
+		for _, part in rail do
+			local lo, hi = bounds(part)
+			-- (by its bottom, without the lifts: the quarry portals reach into the
+			-- quarry walls and the lifts' cables into the cave ceilings on purpose)
+			local lift = part:FindFirstAncestorWhichIsA("Model")
+			if lo.Y > -2 and not (lift and lift:HasTag("MineLift")) then
+				table.insert(surface, { part = part, lo = lo, hi = hi })
+				surfaceMin = Vector3.new(math.min(surfaceMin.X, lo.X), math.min(surfaceMin.Y, lo.Y), math.min(surfaceMin.Z, lo.Z))
+				surfaceMax = Vector3.new(math.max(surfaceMax.X, hi.X), math.max(surfaceMax.Y, hi.Y), math.max(surfaceMax.Z, hi.Z))
+			end
+		end
+		local checked = 0
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(railway) and not d:IsDescendantOf(map.Plots) then
+				local a, b = bounds(d)
+				if b.Y >= 0.3 and overlaps(a, b, surfaceMin, surfaceMax, 0) then
+					checked += 1
+					for _, s in surface do
+						if overlaps(s.lo, s.hi, a, b, 0.01) then
+							T.truthy(false, `{s.part:GetFullName()} intersects {d:GetFullName()}`)
+						end
+					end
+				end
+			end
+		end
+		T.truthy(checked > 0, "other packages' parts near the railway were checked")
+	end)
+
+	T.test("railway: the trains pass every yard's train stop", function()
+		-- the trains' cross-section (x across, y above the rail top) and their wheels
+		local profile = {}
+		local wheels = 0
+		for _, model in { TrainBuilder.locomotive(roblox.Color3.new(1, 0, 0)), TrainBuilder.wagon(roblox.Color3.new(1, 0, 0)) } do
+			for _, part in partsOf(model) do
+				local lo, hi = bounds(part)
+				table.insert(profile, { lo = lo, hi = hi, name = model.Name .. "." .. part.Name })
+				if part.Name == "Wheel" then
+					wheels += 1
+					T.truthy(math.max(math.abs(lo.X), math.abs(hi.X)) <= WHEEL_HALF, `{model.Name} wheel within +-{WHEEL_HALF}`)
+				end
+			end
+		end
+		T.truthy(wheels > 0, "the trains have wheels")
+		local inside = 0
+		for _, plot in WorldLayout.Plots do
+			local stop = TrainConfig.stopFor(plot)
+			local plotModel = map.Plots:FindFirstChild("Plot_" .. plot.Id)
+			local trainStop = plotModel and plotModel:FindFirstChild("TrainStop", true)
+			T.truthy(trainStop, `plot {plot.Id} has a TrainStop`)
+			local railTop = stop.Y + TrainBuilder.RailTop
+			for _, part in partsOf(trainStop) do
+				local lo, hi = bounds(part)
+				local name = part:GetFullName()
+				-- (x across the line from its centerline, y above the rail top)
+				local x0, x1, y0, y1 = lo.X - stop.X, hi.X - stop.X, lo.Y - railTop, hi.Y - railTop
+				-- the wheels' envelope: from the rail top up, +-WHEEL_HALF
+				if x0 < WHEEL_HALF - 0.01 and x1 > -WHEEL_HALF + 0.01 and y1 > 0.01 then
+					T.falsy(stopsClear, `{name} reaches into the wheels' envelope`)
+					inside += 1
+				end
+				-- the trains' real shape (either way round) above the platform level
+				-- (the platform and its safety edge: by the envelope above)
+				if y1 > 0.2 then
+					for _, p in profile do
+						for _, sign in { 1, -1 } do
+							local px0, px1 = math.min(sign * p.lo.X, sign * p.hi.X), math.max(sign * p.lo.X, sign * p.hi.X)
+							if px0 < x1 - 0.01 and px1 > x0 + 0.01 and p.lo.Y < y1 - 0.01 and p.hi.Y > y0 + 0.01 then
+								T.truthy(false, `{name} is in the way of the {p.name}`)
+							end
+						end
+					end
+				end
+			end
+		end
+		if not stopsClear then
+			-- (BaseLayout is shared config: the integrator moves the platforms;
+			-- then this test checks them strictly and the rails run unbroken)
+			print(
+				`  NOTE railway: the yards' train stop platforms end {stopEdgeGap} studs from the rail centerline, `
+					.. `inside the wheels' envelope (+-{WHEEL_HALF}): {inside} stop parts reach in, the platform-side `
+					.. `rail gives way under the platforms. BaseLayout.TrainStop = rect(0, 57, 34, 6, 4) fixes it.`
+			)
 		end
 	end)
 
@@ -437,7 +630,7 @@ return function(T, Loader)
 		end
 		T.eq(railway.MineStation.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, "station streams atomically")
 		for _, cfg in TrainConfig.Lifts do
-			T.eq(railway[cfg.Id].ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, cfg.Id .. " streams atomically")
+			T.eq(liftModel(cfg.Id).ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, cfg.Id .. " streams atomically")
 		end
 	end)
 
