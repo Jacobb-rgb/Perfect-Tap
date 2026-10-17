@@ -109,7 +109,6 @@ local function display(K: any, parent: any, level: number, cf: any, s: number)
 	local w, d = 7.6 * s, 4.4 * s
 	K.boxCF(cf * CF.new(0, 0.35, 0), V3.new(w, 0.7, d), DARK)
 	neon(K, cf * CF.new(0, 0.72, 0), V3.new(w + 0.1, 0.06, d + 0.1), look.Glow)
-	neon(K, cf * CF.new(0, 0.72 + 2.2 * s, 0), V3.new(w * 0.8, 4.4 * s, d * 0.7), look.Glow, 0.95) -- a soft glow over the case
 	crate(parent, level, cf * CF.new(0, 0.76, 0) * CF.Angles(0, -math.pi / 2, 0), s)
 	label(K, cf * CF.new(0, 0.35, d / 2 + 0.03), V3.new(1.7, 0.5, 0.04), "LV " .. level, DARK, look.Glow)
 	light(K, (cf * CF.new(0, 3, 2)).Position, look.Glow, 8, 0.8)
@@ -538,6 +537,17 @@ local function jungleTree(K: any, base: any, h: number, R: number, seed: number)
 			K.boxCF(CF.new(tip + o), V3.new(u, u, u), if rand() < 0.4 then LEAF_L else LEAF)
 		end
 	end
+	-- ferns around the foot of the trunk
+	for i = 0, 9 do
+		local a = i / 10 * math.pi * 2 + rand() * 0.3
+		local d = V3.new(math.cos(a), 0, math.sin(a))
+		local p = base + d * (T / 2 + 1.6 + rand() * 1.2)
+		K.boxCF(
+			CF.lookAt(p + V3.new(0, 0.7, 0), p + V3.new(0, 0.7, 0) + d + V3.new(0, 0.55, 0)),
+			V3.new(0.9, 0.2, 3.2),
+			if i % 2 == 0 then LEAF else LEAF_L
+		)
+	end
 	-- vines hanging from the canopy edge, cocoa pods on the trunk
 	for _ = 1, 16 do
 		local a = rand() * math.pi * 2
@@ -555,6 +565,377 @@ local function jungleTree(K: any, base: any, h: number, R: number, seed: number)
 			V3.new(1.1, 1.5, 1.1),
 			C3.fromRGB(176, 104, 50)
 		)
+	end
+end
+
+---------------------------------------------------------------- Forge Vault detail kit
+
+-- The vault's stone tones.
+local VS = {
+	core = C3.fromRGB(54, 50, 64), -- grout, mortar
+	tiles = { C3.fromRGB(118, 114, 134), C3.fromRGB(104, 100, 120), C3.fromRGB(130, 126, 146), C3.fromRGB(94, 90, 110) },
+	moss = C3.fromRGB(88, 120, 80),
+	light = C3.fromRGB(148, 144, 164),
+	dark = C3.fromRGB(80, 76, 94),
+	wood = C3.fromRGB(122, 74, 48),
+	roof = { C3.fromRGB(62, 56, 78), C3.fromRGB(74, 66, 90), C3.fromRGB(54, 48, 68) },
+}
+local SLATEM = Enum.Material.Slate
+local MARBLE = Enum.Material.Marble
+local PODIUM_H = 1.6
+
+--[[
+	Staggered flagstones filling x0..x1, z0..z1 of cf's frame, their tops at
+	y = top (a few a little higher). opts: seed, tones, depth, minLen, lenVar,
+	gap, moss (chance), material.
+]]
+local function flagstones(K: any, cf: any, x0: number, x1: number, z0: number, z1: number, top: number, opts: any)
+	local rand = lcg(opts.seed or 3)
+	local depth = opts.depth or 3.2
+	local gap = opts.gap or 0.16
+	local z, row = z0, 0
+	while z < z1 - 0.05 do
+		local d = math.min(depth, z1 - z)
+		local x = x0 - (if row % 2 == 1 then depth * 0.6 else 0)
+		while x < x1 - 0.05 do
+			local len = (opts.minLen or 2.8) + rand() * (opts.lenVar or 2.4)
+			local a, b = math.max(x, x0), math.min(x + len, x1)
+			if b - a > 0.5 then
+				local tone = opts.tones[1 + math.floor(rand() * #opts.tones)]
+				if opts.moss and rand() < opts.moss then
+					tone = tone:Lerp(VS.moss, 0.5)
+				end
+				local h = 0.3 + (if rand() < 0.2 then 0.06 else 0)
+				K.boxCF(cf * CF.new((a + b) / 2, top - 0.3 + h / 2, z + d / 2), V3.new(b - a - gap, h, d - gap), tone, opts.material)
+			end
+			x += len
+		end
+		z += d
+		row += 1
+	end
+end
+
+-- A row of face blocks (a podium side, a step): cf = the strip's bottom center, X along it, +Z outward.
+local function blockRow(K: any, cf: any, length: number, height: number, seed: number, rune: any?)
+	local rand = lcg(seed)
+	local x, i = -length / 2, 0
+	while x < length / 2 - 0.05 do
+		local len = math.min(length / 2 - x, 3 + rand() * 2)
+		local tone = VS.tiles[1 + math.floor(rand() * #VS.tiles)]:Lerp(VS.dark, 0.25)
+		K.boxCF(cf * CF.new(x + len / 2, height / 2, 0), V3.new(len - 0.14, height - 0.14, 0.6), tone, SLATEM)
+		if rune and i % 3 == 1 and len > 2.4 then
+			neon(K, cf * CF.new(x + len / 2, height / 2, 0.31), V3.new(0.9, 0.18, 0.04), rune)
+		end
+		x += len
+		i += 1
+	end
+end
+
+--[[
+	The stone podium the vault stands on (ground frame, front +Z): a grout core,
+	block faces with small rune inlays, a lighter coping rim, flagstones on top
+	around the building, three wide front steps between two cheek walls with
+	braziers.
+]]
+local function podium(K: any, ground: any)
+	local X0, X1, Z0, Z1 = -42, 42, -34, 42
+	local H = PODIUM_H
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local function at(x: number, y: number, z: number): any
+		return ground * CF.new(x, y, z)
+	end
+	K.boxCF(at(0, (H - 0.3) / 2, (Z0 + Z1) / 2), V3.new(X1 - X0, H - 0.3, Z1 - Z0), VS.core)
+	-- faces: front (split by the steps), back, sides
+	local SW = 15.6
+	for _, seg in { { X0, -SW }, { SW, X1 } } do
+		blockRow(K, at((seg[1] + seg[2]) / 2, 0, Z1 - 0.2), seg[2] - seg[1], H, 5 + seg[1], FIRE)
+	end
+	blockRow(K, at(0, 0, Z0 + 0.2) * CF.Angles(0, math.pi, 0), X1 - X0, H, 7, FIRE)
+	for _, sx in { -1, 1 } do
+		blockRow(K, at(sx * (X1 - 0.2), 0, (Z0 + Z1) / 2) * CF.Angles(0, sx * math.pi / 2, 0), Z1 - Z0, H, 9 + sx, FIRE)
+	end
+	-- coping rim (a gap for the steps)
+	local RIM = VS.light
+	for _, seg in { { X0, -SW }, { SW, X1 } } do
+		K.boxCF(at((seg[1] + seg[2]) / 2, H - 0.1, Z1 - 0.3), V3.new(seg[2] - seg[1] + 0.6, 0.4, 1.4), RIM, SLATEM)
+	end
+	K.boxCF(at(0, H - 0.1, Z0 + 0.3), V3.new(X1 - X0 + 0.6, 0.4, 1.4), RIM, SLATEM)
+	for _, sx in { -1, 1 } do
+		K.boxCF(at(sx * (X1 - 0.3), H - 0.1, (Z0 + Z1) / 2), V3.new(1.4, 0.4, Z1 - Z0 + 0.6), RIM, SLATEM)
+	end
+	-- flagstones around the building (the inside gets its own floor)
+	local o = { tones = VS.tiles, moss = 0.08, material = SLATEM }
+	local function fill(x0: number, x1: number, z0: number, z1: number, seed: number)
+		o.seed = seed
+		flagstones(K, ground, x0, x1, z0, z1, H, o)
+	end
+	fill(X0 + 0.8, X1 - 0.8, 24, Z1 - 0.8, 31)
+	fill(X0 + 0.8, -28, Z0 + 0.8, 24, 32)
+	fill(28, X1 - 0.8, Z0 + 0.8, 24, 33)
+	fill(-28, 28, Z0 + 0.8, -22, 34)
+	-- the front steps: three rows of blocks, a fire line on the top nose, cheek walls with braziers
+	for k = 1, 3 do
+		local top = H * (3 - k + 1) / 3
+		local z0 = Z1 + (k - 1) * 2
+		K.boxCF(at(0, top / 2, z0 + 1), V3.new(2 * SW - 1, top, 2), VS.core)
+		blockRow(K, at(0, 0, z0 + 1.8), 2 * SW - 1, top, 40 + k)
+		K.boxCF(at(0, top - 0.12, z0 + 1), V3.new(2 * SW - 1.2, 0.3, 1.9), VS.light, SLATEM)
+	end
+	neon(K, at(0, H + 0.03, Z1 + 0.15), V3.new(2 * SW - 1.2, 0.06, 0.2), FIRE)
+	for _, sx in { -1, 1 } do
+		local x = sx * SW
+		K.boxCF(at(x, (H + 1.2) / 2, Z1 + 3), V3.new(2.4, H + 1.2, 6), VS.dark, SLATEM)
+		K.boxCF(at(x, H + 1.35, Z1 + 3), V3.new(2.8, 0.3, 6.4), VS.light, SLATEM)
+		-- a brazier on the front end
+		K.boxCF(at(x, H + 2.1, Z1 + 4.6), V3.new(1.6, 1.2, 1.6), VS.dark, SLATEM)
+		K.cylCF(at(x, H + 3.1, Z1 + 4.6) * CF.Angles(0, 0, math.pi / 2), 0.9, 2.6, C3.fromRGB(46, 42, 48), Enum.Material.Metal)
+		local flame = K.part("Part", at(x, H + 3.9, Z1 + 4.6), V3.new(1.9, 1.7, 1.9), FIRE, NEON)
+		flame.Shape = Enum.PartType.Ball
+		local embers = roblox.Instance.new("ParticleEmitter")
+		embers.Name = "Embers"
+		embers.Color = roblox.ColorSequence.new(FIRE)
+		embers.Parent = flame
+		light(K, (at(x, H + 5, Z1 + 5)).Position, FIRE, 16, 1)
+	end
+end
+
+--[[
+	A glass crystal shard with a glowing core (the big decorative crystals: a
+	whole neon cluster blooms into a blob in Roblox). base = its foot, up =
+	its direction, s = thickness, length.
+]]
+local function glassShard(K: any, base: any, up: any, s: number, length: number, color: any, core: any)
+	local hint = if math.abs(up.X) > 0.9 then V3.new(0, 0, 1) else V3.new(1, 0, 0)
+	local right = (hint - up * hint:Dot(up)).Unit
+	local cf = CF.fromMatrix(base, right, up) * CF.Angles(0, math.pi / 4, 0)
+	local colL = length * 0.66
+	local tipL = length - colL
+	local function glass(p: any)
+		p.Material = Enum.Material.Glass
+		p.Transparency = 0.3
+		p.Reflectance = 0.15
+		return p
+	end
+	glass(K.boxCF(cf * CF.new(0, colL / 2, 0), V3.new(s, colL, s), color))
+	glass(K.part("WedgePart", cf * CF.new(0, colL + tipL / 2, -s / 4), V3.new(s, tipL, s / 2), color))
+	glass(K.part("WedgePart", cf * CF.new(0, colL + tipL / 2, s / 4) * CF.Angles(0, math.pi, 0), V3.new(s, tipL, s / 2), color))
+	K.boxCF(cf * CF.new(0, colL * 0.5, 0), V3.new(s * 0.42, colL * 0.82, s * 0.42), core, NEON)
+end
+
+local function gemCluster(K: any, base: any, up: any, side: any, size: number, color: any, core: any)
+	glassShard(K, base - up * 0.04, up, size * 0.3, size, color, core)
+	glassShard(K, base + side * size * 0.2 - up * 0.04, (up + side * 0.75).Unit, size * 0.24, size * 0.66, color, core)
+	glassShard(K, base - side * size * 0.18 - up * 0.04, (up - side * 0.6).Unit, size * 0.2, size * 0.5, color, core)
+	local back = up:Cross(side).Unit
+	glassShard(K, base + back * size * 0.16, (up + back * 0.55).Unit, size * 0.18, size * 0.45, color, core)
+end
+
+--[[
+	The giant round vault door set into the back wall (cf = its center, facing
+	+Z): a stone frame of voussoirs, a steel door with a glowing ring, bolts, a
+	hub with a three-spoke wheel and a fire diamond.
+]]
+local function vaultDoor(K: any, cf: any, r: number)
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local STEELD = C3.fromRGB(58, 60, 72)
+	local STEELL = C3.fromRGB(96, 100, 116)
+	local ALONG_Z = CF.Angles(0, math.pi / 2, 0)
+	local n = 16
+	for i = 0, n - 1 do
+		local a = i / n * math.pi * 2
+		K.boxCF(
+			cf * CF.Angles(0, 0, a) * CF.new(r + 1.1, 0, 0.2),
+			V3.new(2.2, 2 * math.pi * (r + 1.1) / n - 0.18, 1.6),
+			if i % 2 == 0 then VS.light else VS.tiles[1],
+			SLATEM
+		)
+	end
+	K.boxCF(cf * CF.new(0, r + 2.6, 0.5) * CF.Angles(0, 0, math.pi / 4), V3.new(1.8, 1.8, 1.8), VS.light, SLATEM) -- keystone
+	K.cylCF(cf * ALONG_Z, 0.8, 2 * r, STEELD, Enum.Material.Metal)
+	K.cylCF(cf * CF.new(0, 0, 0.45) * ALONG_Z, 0.12, 2 * r - 1.2, FIRE, NEON)
+	K.cylCF(cf * CF.new(0, 0, 0.5) * ALONG_Z, 0.14, 2 * r - 1.8, STEELL, Enum.Material.Metal)
+	K.cylCF(cf * CF.new(0, 0, 0.56) * ALONG_Z, 0.1, 2 * r - 4, STEELD, Enum.Material.Metal)
+	for i = 0, 11 do
+		local a = i / 12 * math.pi * 2
+		K.cylCF(cf * CF.Angles(0, 0, a) * CF.new(r - 1.4, 0, 0.62) * ALONG_Z, 0.3, 0.55, C3.fromRGB(150, 154, 170), Enum.Material.Metal)
+	end
+	-- the hub and the wheel
+	K.cylCF(cf * CF.new(0, 0, 0.75) * ALONG_Z, 0.5, 3, STEELL, Enum.Material.Metal)
+	for i = 0, 2 do
+		local a = i * math.pi / 3
+		K.boxCF(
+			cf * CF.Angles(0, 0, a) * CF.new(0, 0, 1.15),
+			V3.new(2 * r - 4.6, 0.45, 0.45),
+			C3.fromRGB(140, 110, 70),
+			Enum.Material.Metal
+		)
+		for _, sx in { -1, 1 } do
+			K.boxCF(
+				cf * CF.Angles(0, 0, a) * CF.new(sx * (r - 2.3), 0, 1.15),
+				V3.new(0.7, 0.7, 0.7),
+				C3.fromRGB(170, 136, 80),
+				Enum.Material.Metal
+			)
+		end
+	end
+	neon(K, cf * CF.new(0, 0, 1.05) * CF.Angles(0, 0, math.pi / 4), V3.new(1.2, 1.2, 0.2), FIRE)
+	light(K, (cf * CF.new(0, 0, 4)).Position, FIRE, 18, 0.9)
+end
+
+-- An iron ring chandelier with candles, hung from (top) by a chain.
+local function chandelier(K: any, top: any, drop: number)
+	local IRON = C3.fromRGB(40, 38, 44)
+	local FLAME = C3.fromRGB(255, 176, 80)
+	K.boxCF(top * CF.new(0, -drop / 2, 0), V3.new(0.25, drop, 0.25), IRON)
+	local ring = top * CF.new(0, -drop, 0)
+	local n, r = 10, 2.6
+	for i = 0, n - 1 do
+		local a = i / n * math.pi * 2
+		K.boxCF(ring * CF.Angles(0, a, 0) * CF.new(r, 0, 0), V3.new(0.35, 0.35, 2 * math.pi * r / n + 0.1), IRON)
+		local p = ring * CF.Angles(0, a + math.pi / n, 0) * CF.new(r, 0, 0)
+		K.cylCF(p * CF.new(0, 0.55, 0) * CF.Angles(0, 0, math.pi / 2), 0.9, 0.3, C3.fromRGB(236, 224, 200))
+		local f = K.part("Part", p * CF.new(0, 1.15, 0), V3.new(0.32, 0.45, 0.32), FLAME, NEON)
+		f.Shape = Enum.PartType.Ball
+	end
+	for _, a in { 0, math.pi / 2 } do
+		K.boxCF(ring * CF.Angles(0, a, 0), V3.new(2 * r, 0.25, 0.25), IRON)
+	end
+	light(K, (ring * CF.new(0, 0.8, 0)).Position, FLAME, 20, 1)
+end
+
+--[[
+	The pitched roof (vault frame): two slopes of slate tiles on an underlay from
+	the eaves (x = +-37, y = 23.6) to the ridge (x = 0, y = 40), z from -29.5 to
+	26; a ridge cap with a fire line, eave fascias, rafters underneath, friezes
+	closing the gaps over the side walls, and the back gable with a rose window.
+]]
+local function pitchedRoof(K: any, parent: any, origin: any)
+	local Geo = L.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local EX, EY, RY = 37, 23.6, 40
+	local ZB, ZF = -29.5, 26
+	local len = ZF - ZB
+	local zc = (ZB + ZF) / 2
+	local slope = math.sqrt(EX * EX + (RY - EY) ^ 2)
+	local rand = lcg(77)
+	for _, sx in { -1, 1 } do
+		local eave = V3.new(sx * EX, EY, 0)
+		local d = V3.new(-sx * EX, RY - EY, 0).Unit -- up the slope
+		local nrm = V3.new(sx * (RY - EY), EX, 0).Unit -- out of the roof
+		local back = d:Cross(nrm)
+		local function frame(s: number, out: number, z: number): any
+			return origin * CF.fromMatrix(eave + d * s + nrm * out + V3.new(0, 0, z), d, nrm, back)
+		end
+		K.boxCF(frame(slope / 2, -0.25, zc), V3.new(slope + 0.4, 0.5, len), VS.core, SLATEM)
+		local rows = 9
+		local rowW = slope / rows
+		local seg = 3.5
+		for r = 0, rows - 1 do
+			local z = ZB - (if r % 2 == 1 then seg / 2 else 0)
+			while z < ZF - 0.05 do
+				local a, b = math.max(z, ZB), math.min(z + seg, ZF)
+				if b - a > 0.6 then
+					local tone = VS.roof[1 + math.floor(rand() * #VS.roof)]
+					K.boxCF(frame((r + 0.5) * rowW, 0.22 + r * 0.02, (a + b) / 2), V3.new(rowW - 0.14, 0.44, b - a - 0.14), tone, SLATEM)
+				end
+				z += seg
+			end
+		end
+		-- the eave fascia with a fire line, rafters under the slope
+		K.boxCF(origin * CF.new(sx * (EX + 0.3), EY - 0.4, zc), V3.new(0.6, 1.2, len + 0.4), C3.fromRGB(46, 42, 56), SLATEM)
+		neon(K, origin * CF.new(sx * (EX + 0.62), EY - 0.85, zc), V3.new(0.06, 0.18, len + 0.4), FIRE)
+		for _, z in { -24, -13, -2, 9, 20 } do
+			K.boxCF(frame(slope / 2 - 1.5, -0.95, z), V3.new(slope - 4, 0.9, 1.0), VS.wood)
+		end
+		-- a frieze over the side wall (closes the gap under the eaves) with a fire line
+		K.boxCF(origin * CF.new(sx * 31, 23.45, -1.5), V3.new(6.2, 1.7, 51), VS.dark, SLATEM)
+		neon(K, origin * CF.new(sx * 34.15, 23.6, -1.5), V3.new(0.08, 0.22, 51), FIRE)
+	end
+	-- the ridge cap, its fire line, a crystal finial at the back
+	K.boxCF(origin * CF.new(0, RY + 0.35, zc), V3.new(2.4, 1.0, len + 0.6), C3.fromRGB(46, 42, 56), SLATEM)
+	neon(K, origin * CF.new(0, RY + 0.9, zc), V3.new(0.3, 0.12, len + 0.6), FIRE)
+	gemCluster(
+		K,
+		(origin * CF.new(0, RY + 0.8, ZB + 0.6)).Position,
+		V3.new(0, 1, -0.3).Unit,
+		V3.new(1, 0, 0),
+		3.2,
+		C3.fromRGB(240, 110, 50),
+		C3.fromRGB(200, 70, 20)
+	)
+	-- the back gable: a stone band, two stone triangles, fire rakes, a rose window
+	local zG = -27.4
+	K.boxCF(origin * CF.new(0, 23.3, zG), V3.new(69, 1.0, 2.6), VS.light, SLATEM)
+	for _, sx in { -1, 1 } do
+		local a = (origin * CF.new(sx * 34.4, 23.4, zG)).Position
+		local b = (origin * CF.new(0, 23.4, zG)).Position
+		local c = (origin * CF.new(0, 39.3, zG)).Position
+		Geo.triangle(parent, a, b, c, 2.4, VS.tiles[2], SLATEM, nil, { CanCollide = false })
+		local rake = c - a
+		local mid = (a + c) / 2 + (origin.Rotation * V3.new(0, 0, -1.3))
+		K.boxCF(CF.lookAt(mid, mid + rake), V3.new(0.35, 0.35, rake.Magnitude), FIRE, NEON)
+	end
+	local rose = origin * CF.new(0, 30.5, zG - 1.25) * CF.Angles(0, math.pi, 0) -- facing -Z
+	neon(K, rose * CF.new(0, 0, -0.05), V3.new(6.6, 6.6, 0.1), C3.fromRGB(200, 80, 30))
+	for i = 0, 11 do
+		local a = i / 12 * math.pi * 2
+		K.boxCF(rose * CF.Angles(0, 0, a) * CF.new(3.7, 0, 0.1), V3.new(1.0, 2.1, 0.7), VS.light, SLATEM)
+	end
+	for i = 0, 5 do
+		K.boxCF(rose * CF.Angles(0, 0, i * math.pi / 6) * CF.new(0, 0, 0.12), V3.new(6.4, 0.35, 0.35), VS.dark, SLATEM)
+	end
+	K.cylCF(rose * CF.new(0, 0, 0.15) * CF.Angles(0, math.pi / 2, 0), 0.4, 1.6, VS.light, SLATEM)
+	light(K, (rose * CF.new(0, 0, 3)).Position, FIRE, 14, 0.8)
+end
+
+-- One of the case steps: a grout core, block rows on its front, a polished top slab, end pilasters.
+local function caseStep(K: any, origin: any, z: number, top: number, seed: number)
+	local FIRE = C3.fromRGB(255, 140, 50)
+	K.boxCF(origin * CF.new(0, top / 2, z - 4), V3.new(50, top, 8), VS.core)
+	local rows = math.max(1, math.floor(top / 1.55 + 0.5))
+	local rh = top / rows
+	for r = 0, rows - 1 do
+		blockRow(K, origin * CF.new(0, r * rh, z - 0.2 + 0.0) * CF.new(0, 0, 0), 50, rh, seed + r)
+	end
+	K.boxCF(origin * CF.new(0, top - 0.15, z - 3.9), V3.new(50.4, 0.4, 8.4), VS.light, MARBLE)
+	neon(K, origin * CF.new(0, top + 0.06, z + 0.1), V3.new(50.2, 0.08, 0.2), FIRE)
+	for _, sx in { -1, 1 } do
+		K.boxCF(origin * CF.new(sx * 25.6, (top + 0.8) / 2, z - 4), V3.new(1.6, top + 0.8, 8.6), VS.dark, SLATEM)
+		K.boxCF(origin * CF.new(sx * 25.6, top + 0.9, z - 4), V3.new(2.0, 0.3, 9.0), VS.light, SLATEM)
+	end
+end
+
+-- The inside floor: a two-tone marble checker, a fire inlay border, and a red runner to the counter.
+local function vaultFloor(K: any, origin: any)
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local A, B = C3.fromRGB(70, 64, 84), C3.fromRGB(104, 98, 120)
+	local size = 4
+	for ix = 0, 13 do
+		for iz = 0, 11 do
+			local x = -28 + (ix + 0.5) * size
+			local z = -22 + (iz + 0.5) * size
+			if z < 24.5 then
+				K.boxCF(origin * CF.new(x, -0.15, z), V3.new(size - 0.12, 0.3, size - 0.12), if (ix + iz) % 2 == 0 then A else B, MARBLE)
+			end
+		end
+	end
+	K.boxCF(origin * CF.new(0, -0.35, 1.25), V3.new(56, 0.3, 46.5), VS.core)
+	for _, sx in { -1, 1 } do
+		neon(K, origin * CF.new(sx * 26.6, 0.02, 11), V3.new(0.16, 0.06, 24), FIRE)
+	end
+	neon(K, origin * CF.new(0, 0.02, 23.2), V3.new(53.4, 0.06, 0.16), FIRE)
+	-- the runner from the entrance to the counter
+	local RED, GOLD = C3.fromRGB(128, 30, 40), C3.fromRGB(214, 168, 70)
+	local z0, z1 = 7.4, 24
+	K.boxCF(origin * CF.new(0, 0.06, (z0 + z1) / 2), V3.new(7, 0.12, z1 - z0), RED)
+	for _, sx in { -1, 1 } do
+		K.boxCF(origin * CF.new(sx * 3.1, 0.08, (z0 + z1) / 2), V3.new(0.4, 0.13, z1 - z0), GOLD)
+	end
+	for z = z0 + 2, z1 - 1.5, 3.4 do
+		K.boxCF(origin * CF.new(0, 0.08, z) * CF.Angles(0, math.pi / 4, 0), V3.new(1.0, 0.13, 1.0), GOLD)
+	end
+	for i = 0, 13 do
+		K.boxCF(origin * CF.new(-3.25 + i * 0.5, 0.06, z1 + 0.25), V3.new(0.18, 0.08, 0.5), GOLD)
 	end
 end
 
@@ -582,14 +963,12 @@ local function vaultWow(K: any, parent: any, origin: any)
 		e.Color = roblox.ColorSequence.new(color)
 		e.Parent = part
 	end
-	-- a slate roof with a glowing edge, over the beams
-	K.boxCF(at(0, 24.6, -1), V3.new(2 * halfW + 2, 1.2, 2 * halfD + 2), SLATE)
-	neon(K, at(0, 24.05, halfD), V3.new(2 * halfW + 2.2, 0.25, 0.3), FIRE)
+	pitchedRoof(K, parent, origin)
 	-- fire towers on the back corners
 	for _, sx in { -1, 1 } do
 		local x, z = sx * (halfW - 3), -halfD + 3
-		K.boxCF(at(x, 16, z), V3.new(7, 32, 7), STONE)
-		K.boxCF(at(x, 32.4, z), V3.new(8.4, 1.2, 8.4), SLATE)
+		K.boxCF(at(x, 16, z), V3.new(7, 32, 7), STONE, SLATEM)
+		K.boxCF(at(x, 32.4, z), V3.new(8.4, 1.2, 8.4), SLATE, SLATEM)
 		for _, y in { 10, 20, 30 } do
 			neon(K, at(x, y, z), V3.new(7.2, 0.3, 7.2), FIRE)
 		end
@@ -614,31 +993,32 @@ local function vaultWow(K: any, parent: any, origin: any)
 		local gun = Kenney.gun(L, 10, "Magmacore")
 		Concepts.present(gun, at(0, 30.6, zG + 2.4) * CF.Angles(0, 0, roll) * CF.Angles(0, -math.pi / 2, 0), 3.0, parent)
 	end
-	K.cluster(
+	gemCluster(
+		K,
 		(at(0, 33.6, zG + 1.6)).Position,
 		V3.new(0, 1, 0.35).Unit,
 		V3.new(1, 0, 0),
 		4.2,
-		C3.fromRGB(230, 90, 40),
-		C3.fromRGB(255, 190, 90)
+		C3.fromRGB(240, 110, 50),
+		C3.fromRGB(200, 70, 20)
 	)
 	light(K, (at(0, 33, zG + 6)).Position, FIRE, 22, 1.2)
 	-- a big hologram blaster turning over the roof, its projector, floating crystals around it
 	local holoGlow = C3.fromRGB(255, 120, 160)
-	K.cylCF(at(0, 25.6, -6) * CF.Angles(0, 0, math.pi / 2), 0.8, 8, SLATE)
-	K.cylCF(at(0, 26.05, -6) * CF.Angles(0, 0, math.pi / 2), 0.12, 7, holoGlow, NEON)
-	local beam = K.cylCF(at(0, 37.5, -6) * CF.Angles(0, 0, math.pi / 2), 23, 6.4, holoGlow, NEON)
+	K.cylCF(at(0, 41.3, -6) * CF.Angles(0, 0, math.pi / 2), 0.8, 7, SLATE)
+	K.cylCF(at(0, 41.75, -6) * CF.Angles(0, 0, math.pi / 2), 0.12, 6, holoGlow, NEON)
+	local beam = K.cylCF(at(0, 50, -6) * CF.Angles(0, 0, math.pi / 2), 16.4, 5.6, holoGlow, NEON)
 	beam.Transparency = 0.9
 	local holo = Kenney.gun(L, 10, "Heartstone")
 	holo.Name = "VaultHologram" -- turned by a script in the Studio test
-	Concepts.present(holo, at(0, 56, -6) * CF.Angles(0, math.pi / 2 + 0.25, 0) * CF.Angles(0.12, 0, 0), 4.2, parent)
+	Concepts.present(holo, at(0, 63, -6) * CF.Angles(0, math.pi / 2 + 0.25, 0) * CF.Angles(0.12, 0, 0), 4.2, parent)
 	local gems = roblox.Instance.new("Model")
 	gems.Name = "VaultGems"
 	gems.Parent = parent
 	local KG = Concepts.kit(gems)
 	for i = 0, 7 do
 		local a = i / 8 * math.pi * 2
-		local p = (at(math.cos(a) * 16, 56 + math.sin(a * 2) * 2.5, -6 + math.sin(a) * 16)).Position
+		local p = (at(math.cos(a) * 16, 63 + math.sin(a * 2) * 2.5, -6 + math.sin(a) * 16)).Position
 		KG.gem(p, V3.new(math.cos(a) * 0.3, 1, math.sin(a) * 0.3).Unit, 0.7, 2.6, C3.fromRGB(220, 70, 130), holoGlow)
 	end
 	-- giant ore crystals on plinths beside the entrance
@@ -646,16 +1026,10 @@ local function vaultWow(K: any, parent: any, origin: any)
 		local sx = side[1]
 		local look = oreGlow(if side[2] == "Heartstone" then 10 else 9)
 		local x, z = sx * 30, halfD + 7
-		K.boxCF(at(x, 0.9, z), V3.new(7, 1.8, 7), STONE)
-		neon(K, at(x, 1.85, z), V3.new(7.2, 0.12, 7.2), look.Glow)
-		K.cluster(
-			(at(x, 1.8, z)).Position,
-			V3.new(0, 1, 0),
-			V3.new(sx, 0, 0),
-			11,
-			look.Body:Lerp(C3.new(0, 0, 0), 0.25),
-			look.Body:Lerp(look.Glow, 0.3)
-		)
+		K.boxCF(at(x, 0.9, z), V3.new(7, 1.8, 7), VS.dark, SLATEM)
+		K.boxCF(at(x, 1.95, z), V3.new(7.6, 0.3, 7.6), VS.light, SLATEM)
+		neon(K, at(x, 1.75, z), V3.new(7.2, 0.12, 7.2), look.Glow)
+		gemCluster(K, (at(x, 2.1, z)).Position, V3.new(0, 1, 0), V3.new(sx, 0, 0), 11, look.Body, look.Body:Lerp(C3.new(0, 0, 0), 0.35))
 		light(K, (at(x, 7, z + 2)).Position, look.Glow, 20, 1.3)
 	end
 	-- lava falls down both side walls into glowing pools
@@ -664,14 +1038,15 @@ local function vaultWow(K: any, parent: any, origin: any)
 			local x = sx * (halfW - 0.6)
 			neon(K, at(x, 11.5, z), V3.new(0.5, 21, 3.4), LAVA)
 			neon(K, at(x + sx * 0.12, 11.5, z), V3.new(0.4, 21, 1.4), C3.fromRGB(255, 200, 90))
-			K.boxCF(at(x + sx * 2.6, 0.4, z), V3.new(5.6, 0.8, 7), SLATE)
+			K.boxCF(at(x + sx * 2.6, 0.4, z), V3.new(5.6, 0.8, 7), SLATE, SLATEM)
 			local pool = neon(K, at(x + sx * 2.6, 0.82, z), V3.new(4.6, 0.12, 6), LAVA)
 			embers(pool, FIRE)
 			light(K, (at(x + sx * 3, 3, z)).Position, LAVA, 16, 1.2)
 		end
 	end
-	-- a rune circle on the forecourt in front of the entrance
+	-- a rune circle on the forecourt in front of the entrance, on a dark stone disc
 	local cz = halfD + 8
+	K.cylCF(at(0, 0.02, cz) * CF.Angles(0, 0, math.pi / 2), 0.08, 13, C3.fromRGB(46, 42, 56), SLATEM)
 	for ring, r in { 5.6, 4.2 } do
 		local n = 28
 		for i = 0, n - 1 do
@@ -707,7 +1082,9 @@ local function vaultWow(K: any, parent: any, origin: any)
 	end
 end
 
-local function vault(K: any, parent: any, origin: any)
+local function vault(K: any, parent: any, ground: any)
+	podium(K, ground)
+	local origin = ground * CF.new(0, PODIUM_H, 0)
 	local S = 10
 	local FIRE = C3.fromRGB(255, 140, 50)
 	local function piece(key: string, cf: any, scale: number?, paint: any?)
@@ -715,7 +1092,7 @@ local function vault(K: any, parent: any, origin: any)
 	end
 	local W, D = 7, 5
 	local halfW, halfD = W * S / 2, D * S / 2
-	K.boxCF(origin * CF.new(0, -0.5, 4), V3.new(W * S + 8, 1, D * S + 18), C3.fromRGB(64, 60, 70))
+	vaultFloor(K, origin)
 	-- detailed stone walls on three sides (the outer faces look outward), columns in the open front
 	stoneWall(
 		K,
@@ -738,17 +1115,18 @@ local function vault(K: any, parent: any, origin: any)
 	for _, x in { -halfW + S + 1, halfW - S - 1, -13, 13 } do
 		piece("dungeon/column", CF.new(x, 0, halfD - 2), 12)
 	end
-	for _, z in { -halfD + 12, 0 } do
-		K.boxCF(origin * CF.new(0, 21.5, z), V3.new(W * S - 4, 2.4, 2.4), C3.fromRGB(150, 86, 56))
+	-- two tie beams with iron chandeliers (they stay clear of the vault door's top in the view from the entrance)
+	for _, z in { -6, 12 } do
+		K.boxCF(origin * CF.new(0, 22.5, z), V3.new(W * S - 4, 2.4, 2.4), VS.wood)
+		for _, x in { -14, 14 } do
+			chandelier(K, origin * CF.new(x, 21.3, z), 5.5)
+		end
 	end
 	-- a carved stone lintel across the front: a band, dentils and a fire line
 	K.boxCF(origin * CF.new(0, 21.6, halfD - 2), V3.new(W * S - 2, 3.2, 3.2), C3.fromRGB(118, 114, 134))
 	K.boxCF(origin * CF.new(0, 23.4, halfD - 1.8), V3.new(W * S, 0.6, 3.8), C3.fromRGB(100, 96, 116))
 	for i = 0, 44 do
 		K.boxCF(origin * CF.new(-33 + i * 1.5, 19.75, halfD - 0.6), V3.new(0.6, 0.5, 0.6), C3.fromRGB(104, 100, 120))
-	end
-	for _, x in { -20, 0, 20 } do
-		K.boxCF(origin * CF.new(x, 22.8, -2), V3.new(2.4, 2.4, D * S - 2), C3.fromRGB(132, 74, 48))
 	end
 	label(K, origin * CF.new(0, 17.6, halfD - 0.2), V3.new(26, 5, 0.8), "BLASTER VAULT", C3.fromRGB(58, 34, 26), C3.fromRGB(255, 200, 110))
 	neon(K, origin * CF.new(0, 20.3, halfD - 0.2), V3.new(27, 0.4, 0.9), FIRE)
@@ -778,9 +1156,8 @@ local function vault(K: any, parent: any, origin: any)
 		{ y = 3.2, z = -halfD + 17, levels = { 5, 6, 7 } },
 		{ y = 6.4, z = -halfD + 10, levels = { 8, 9, 10 } },
 	}
-	for _, st in steps do
-		K.boxCF(origin * CF.new(0, (st.y + 3) / 2, st.z - 4), V3.new(50, st.y + 3, 8), STONE)
-		neon(K, origin * CF.new(0, st.y + 3.02, st.z - 0.02), V3.new(50.2, 0.08, 0.2), FIRE)
+	for k, st in steps do
+		caseStep(K, origin, st.z, st.y + 3, 60 + k * 10)
 		local n = #st.levels
 		for k, level in st.levels do
 			local x = (k - (n + 1) / 2) * 12
@@ -789,8 +1166,13 @@ local function vault(K: any, parent: any, origin: any)
 	end
 	neon(K, origin * CF.new(0, 0.05, -halfD + 27), V3.new(44, 0.12, 1.6), FIRE)
 	K.boxCF(origin * CF.new(0, 0.1, -halfD + 27), V3.new(46, 0.1, 2.6), C3.fromRGB(40, 34, 36))
+	-- the giant round vault door in the back wall, over the top step
+	vaultDoor(K, origin * CF.new(0, 18.2, -halfD + 3.4), 6.6)
 	-- a stone counter with a space console and a chest, the keeper and the prompt
-	K.boxCF(origin * CF.new(0, 2, 5), V3.new(16, 4, 4), STONE)
+	K.boxCF(origin * CF.new(0, 2, 5), V3.new(16, 4, 4), STONE, SLATEM)
+	for i = 0, 3 do
+		K.boxCF(origin * CF.new(-6 + i * 4, 2, 7.05), V3.new(3.4, 3, 0.2), VS.tiles[2 + i % 2], SLATEM)
+	end
 	K.boxCF(origin * CF.new(0, 4.05, 5), V3.new(16.4, 0.3, 4.4), C3.fromRGB(150, 86, 56))
 	neon(K, origin * CF.new(0, 3.85, 7.25), V3.new(16.4, 0.12, 0.08), FIRE)
 	monitor(K, origin * CF.new(-5, 4.2, 4.6), C3.fromRGB(255, 170, 80))
@@ -922,7 +1304,7 @@ function Shop.buildLobby(Loader: any, parent: any)
 		if d:IsA("BasePart") then
 			local p = d.CFrame.Position
 			local top = p.Y + d.Size.Y / 2
-			if math.abs(p.X - c.x) < 33 and p.Z > 85 and p.Z < 145 and top > 0.45 and p.Y < 40 and d.Size.X < 60 and d.Size.Z < 60 then
+			if math.abs(p.X - c.x) < 36 and p.Z > 78 and p.Z < 147 and top > 0.45 and p.Y < 40 and d.Size.X < 60 and d.Size.Z < 60 then
 				d.Transparency = 1
 				removed += 1
 			end
@@ -957,6 +1339,148 @@ function Shop.buildLobby(Loader: any, parent: any)
 end
 
 --[[
+	The ground around the vault in the Studio test (the lobby has its own): blocky
+	grass cells in the lobby's voxel style (a few raised steps away from the
+	vault), a cobbled path with curbs and lanterns from the podium steps, and
+	flowers, grass tufts, rocks and bushes. s = the vault's scale.
+]]
+local function studioGround(K: any, s: number)
+	local rand = lcg(404)
+	local podX, podZ0, podZ1 = 42 * s + 1, -34 * s - 1, 48 * s
+	local pathW = 10
+	local GREENS = { C3.fromRGB(98, 170, 68), C3.fromRGB(88, 158, 60), C3.fromRGB(108, 180, 76), C3.fromRGB(82, 150, 58) }
+	local function onPath(x: number, z: number, m: number): boolean
+		return math.abs(x) < pathW / 2 + m and z > podZ1 - 2 and z < 100
+	end
+	local function onPodium(x: number, z: number, m: number): boolean
+		return math.abs(x) < podX + m and z > podZ0 - m and z < podZ1 + m
+	end
+	local function level(x: number, z: number): number
+		if onPath(x, z, 10) or onPodium(x, z, 10) then
+			return 0
+		end
+		local f = math.sin(x * 0.045) + math.cos(z * 0.05) + math.sin((x + z) * 0.027)
+		return if f > 1.3 then 0.9 elseif f > 0.55 then 0.45 else 0
+	end
+	local cell = 8
+	for x = -124, 124 - cell, cell do
+		for z = -100, 136 - cell, cell do
+			local cx, cz = x + cell / 2, z + cell / 2
+			-- skip only the cells the podium (or the path bed) covers completely
+			local underPodium = math.abs(cx) + cell / 2 <= 42 * s and cz - cell / 2 >= -34 * s and cz + cell / 2 <= 42 * s
+			local underPath = math.abs(cx) + cell / 2 <= pathW / 2 and cz - cell / 2 >= podZ1 - 2
+			if not underPodium and not underPath then
+				local h = level(cx, cz)
+				local tone = GREENS[1 + math.floor(rand() * #GREENS)]:Lerp(C3.new(1, 1, 0.8), h * 0.08)
+				K.boxCF(CF.new(cx, h - 1.5, cz), V3.new(cell, 3, cell), tone)
+			end
+		end
+	end
+	-- the cobbled path with a dark bed, curbs and lanterns
+	K.boxCF(CF.new(0, -1.5, (podZ1 + 100) / 2), V3.new(pathW, 3, 100 - podZ1), C3.fromRGB(70, 64, 70))
+	flagstones(K, CF.identity, -pathW / 2 + 0.6, pathW / 2 - 0.6, podZ1, 100, 0.12, {
+		seed = 91,
+		depth = 1.7,
+		minLen = 1.4,
+		lenVar = 1.3,
+		gap = 0.14,
+		tones = { C3.fromRGB(150, 140, 136), C3.fromRGB(132, 124, 122), C3.fromRGB(164, 154, 148), C3.fromRGB(120, 112, 112) },
+		material = SLATEM,
+	})
+	for _, sx in { -1, 1 } do
+		local z = podZ1
+		while z < 100 do
+			local len = 2 + rand() * 1.2
+			K.boxCF(CF.new(sx * (pathW / 2 - 0.3), 0.15, z + len / 2), V3.new(0.7, 0.7, len - 0.12), VS.tiles[2], SLATEM)
+			z += len
+		end
+		for _, lz in { podZ1 + 8, podZ1 + 22, podZ1 + 36 } do
+			local base = CF.new(sx * (pathW / 2 + 1.4), 0, lz)
+			K.boxCF(base * CF.new(0, 0.3, 0), V3.new(1.4, 0.6, 1.4), VS.dark, SLATEM)
+			K.boxCF(base * CF.new(0, 3.3, 0), V3.new(0.6, 6, 0.6), C3.fromRGB(70, 46, 32))
+			K.boxCF(base * CF.new(0, 6.5, 0), V3.new(1.5, 0.3, 1.5), C3.fromRGB(46, 40, 44))
+			K.boxCF(base * CF.new(0, 7.3, 0), V3.new(1.2, 1.4, 1.2), C3.fromRGB(46, 40, 44))
+			neon(K, base * CF.new(0, 7.3, 0), V3.new(0.9, 1.1, 1.3), C3.fromRGB(255, 196, 110))
+			neon(K, base * CF.new(0, 7.3, 0), V3.new(1.3, 1.1, 0.9), C3.fromRGB(255, 196, 110))
+			K.boxCF(base * CF.new(0, 8.15, 0), V3.new(1.7, 0.3, 1.7), C3.fromRGB(46, 40, 44))
+			light(K, (base * CF.new(0, 7.3, 0)).Position, C3.fromRGB(255, 196, 110), 16, 0.9)
+		end
+	end
+	-- flowers, grass tufts, rocks and bushes away from the vault and the path
+	local function spot(): (number?, number?, number?)
+		for _ = 1, 30 do
+			local x, z = -110 + rand() * 220, -90 + rand() * 215
+			if not onPodium(x, z, 4) and not onPath(x, z, 3) and (x * x + (z - 5) ^ 2) > 46 * 46 * s then
+				return x, z, level(x, z)
+			end
+		end
+		return nil, nil, nil
+	end
+	local PETALS = {
+		C3.fromRGB(255, 120, 170),
+		C3.fromRGB(255, 220, 90),
+		C3.fromRGB(245, 245, 255),
+		C3.fromRGB(180, 120, 255),
+		C3.fromRGB(255, 90, 80),
+	}
+	for _ = 1, 70 do
+		local x, z, h = spot()
+		if x then
+			local petal = PETALS[1 + math.floor(rand() * #PETALS)]
+			for k = 0, 2 do
+				local ox, oz = (rand() - 0.5) * 2.4, (rand() - 0.5) * 2.4
+				K.boxCF(CF.new(x + ox, h + 0.45, z + oz), V3.new(0.2, 0.9, 0.2), C3.fromRGB(70, 140, 50))
+				K.boxCF(CF.new(x + ox, h + 1.0, z + oz) * CF.Angles(0, rand() * 3, 0), V3.new(0.6, 0.35, 0.6), petal)
+				if k == 0 then
+					K.boxCF(CF.new(x, h + 0.12, z), V3.new(1.4, 0.24, 1.4), C3.fromRGB(76, 150, 56))
+				end
+			end
+		end
+	end
+	for _ = 1, 110 do
+		local x, z, h = spot()
+		if x then
+			local a = rand() * 3
+			for k = 0, 1 do
+				K.boxCF(
+					CF.new(x, h + 0.6, z) * CF.Angles(0, a + k * 1.57, 0.2 - k * 0.4),
+					V3.new(0.18, 1.3, 0.5),
+					C3.fromRGB(86 + k * 12, 164, 60)
+				)
+			end
+		end
+	end
+	for _ = 1, 26 do
+		local x, z, h = spot()
+		if x then
+			local r = 1 + rand() * 1.8
+			for k = 0, math.floor(rand() * 3) do
+				local tone = C3.fromRGB(120, 118, 128):Lerp(C3.fromRGB(90, 88, 98), rand())
+				K.boxCF(
+					CF.new(x + (rand() - 0.5) * r, h + r * 0.25, z + (rand() - 0.5) * r) * CF.Angles(rand() * 0.4, rand() * 3, rand() * 0.4),
+					V3.new(r * (1 + rand()), r * 0.8, r),
+					tone,
+					SLATEM
+				)
+			end
+		end
+	end
+	for _ = 1, 22 do
+		local x, z, h = spot()
+		if x then
+			for k = 0, 4 + math.floor(rand() * 3) do
+				local o = V3.new((rand() - 0.5) * 3.2, rand() * 1.6, (rand() - 0.5) * 3.2)
+				K.boxCF(
+					CF.new(V3.new(x, h + 1.1, z) + o),
+					V3.new(2.2, 2.2, 2.2),
+					if rand() < 0.4 then C3.fromRGB(78, 158, 56) else C3.fromRGB(52, 128, 44)
+				)
+			end
+		end
+	end
+end
+
+--[[
 	The Forge Vault alone for a Roblox Studio test place
 	(tools/lune/export_vault_place.luau): the vault at 80 % size at the origin
 	facing +Z, its six jungle trees, a grass ground and a stone path. Fixed up
@@ -987,11 +1511,7 @@ function Shop.buildStudio(Loader: any, parent: any)
 	local ground = roblox.Instance.new("Model")
 	ground.Name = "Ground"
 	ground.Parent = root
-	local KGr = Concepts.kit(ground)
-	local grass = KGr.boxCF(CF.new(0, -1, 30), V3.new(400, 2, 400), C3.fromRGB(98, 168, 70))
-	grass.Material = Enum.Material.Grass
-	local path = KGr.boxCF(CF.new(0, 0.05, 52), V3.new(9, 0.1, 44), C3.fromRGB(150, 138, 128))
-	path.Material = Enum.Material.Cobblestone
+	studioGround(Concepts.kit(ground), c.scale)
 
 	-- the real engine: texts, particles, collisions, the prompt, the hologram pivot
 	for _, d in root:GetDescendants() do
@@ -1028,7 +1548,11 @@ function Shop.buildStudio(Loader: any, parent: any)
 		elseif d:IsA("BasePart") then
 			if d.Name == "FakePrompt" then
 				d.Parent = nil
-			elseif d.Transparency < 0.5 and d.Material ~= Enum.Material.Neon and math.max(d.Size.X, d.Size.Y, d.Size.Z) >= 4 then
+			elseif
+				d.Transparency < 0.5
+				and d.Material ~= Enum.Material.Neon
+				and (math.max(d.Size.X, d.Size.Y, d.Size.Z) >= 4 or (d.Size.Y <= 0.7 and d.Size.X >= 1.2 and d.Size.Z >= 1.2))
+			then
 				d.CanCollide = true
 			end
 		end

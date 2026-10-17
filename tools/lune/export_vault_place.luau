@@ -47,6 +47,15 @@ do
 	effect.Parent = lighting
 end
 
+-- the game's sky and shadows (default.project.json)
+local sky = roblox.Instance.new("Sky")
+sky.SunAngularSize = 16
+sky.MoonAngularSize = 11
+sky.StarCount = 0
+sky.Parent = lighting
+lighting.GlobalShadows = true
+lighting.ShadowSoftness = 0.3
+
 local vault = Shop.buildStudio(Loader, workspace)
 local parts = 0
 for _, d in vault:GetDescendants() do
@@ -61,7 +70,7 @@ spawn.Anchored = true
 spawn.Neutral = true
 spawn.Duration = 0
 spawn.Size = roblox.Vector3.new(6, 1, 6)
-spawn.CFrame = Loader.CFrame.new(0, 0.5, 74)
+spawn.CFrame = Loader.CFrame.new(0, 0.5, 78)
 spawn.Color = roblox.Color3.fromRGB(150, 138, 128)
 spawn.Parent = workspace
 
