@@ -85,6 +85,13 @@ local C = {
 	BristleTip = rgb(58, 146, 150), -- brush rings
 	Glass = rgb(176, 222, 240),
 	Screen = rgb(30, 40, 48),
+	-- the Iron Box: a gunmetal strongbox with bright steel straps (not the
+	-- blue machine housing, so it never reads as a Crusher) and a lit screen
+	Iron = rgb(96, 100, 106),
+	IronTop = rgb(134, 138, 144),
+	Steel = rgb(196, 200, 206),
+	ScreenLit = rgb(26, 112, 100),
+	ScreenText = rgb(196, 255, 236),
 	Gauge = rgb(220, 132, 40),
 	Water = rgb(62, 152, 196),
 	Red = rgb(235, 70, 60),
@@ -1397,7 +1404,7 @@ local function anvil(): Model
 end
 
 --[[
-	Auto Cleaner (2x2): a Kenney scanner-high arch (name plate on top, gold
+	Cleaning Plant (AutoCleaner, 2x2): a Kenney scanner-high arch (name plate on top, gold
 	letters on both faces) over a short striped roller conveyor
 	(conveyor-bars-stripe-high: grey rollers named BedRoller between low
 	light rails with painted brass axle caps) with a shallow WaterPool tray
@@ -1447,7 +1454,7 @@ local function autoCleaner(): Model
 		cyl(model, Vector3.new(lx, 5.35, az), "Z", 0.9, 0.9, C.Housing, nil, solid())
 	end
 	Geo.block(model, CFrame.new(cx, 5.35, az), Vector3.new(4.7, 0.9, 0.9), C.Housing, nil, solid({ Name = "Arch" }))
-	sign(model, CFrame.new(cx, 6.16, az), "AUTO CLEANER", 2.9, true)
+	sign(model, CFrame.new(cx, 6.16, az), "CLEANING PLANT", 3.9, true)
 	-- the brush: a dark teal core with three bristle rings, resting on the
 	-- ore just behind the shower
 	local drumC = Vector3.new(cx, 3.8, -1.0)
@@ -1518,6 +1525,109 @@ local function autoCleaner(): Model
 	attach(base, "Prompt", CFrame.new(0, 2.5, -3))
 	local intake = attach(base, "Intake", CFrame.new(0, 4.6, 0.6))
 	intake:SetAttribute("IntakeSize", Vector3.new(6, 6.6, 6))
+	return model
+end
+
+--[[
+	Iron Box (2x2, step 3): a gunmetal strongbox (Iron palette, not the
+	Crusher's blue housing) on a dark iron skirt, wrapped in bright steel
+	straps. On top a low open intake with a hazard-orange sorting flap on a
+	hinge rod (Flap). Framed belt intake slots at belt height on the left,
+	right and back (it takes belts on every side but the front). On the front
+	left a big lit screen (Screen, Neon) with a SurfaceGui (ScreenGui: Item =
+	the last item's name, Counter = items sorted) the box's service updates,
+	and the output slot with a short chute at the output column. Riveted
+	back. About 50 parts.
+]]
+local function ironBox(): Model
+	local model, base = newModel("IronBox")
+	local bz, h = 0.35, 3.6
+	local body = housing(model, CFrame.new(0, 0.3, bz), Vector3.new(6.2, h, 5.0), C.Iron, 0.5, { Skirt = true, Top = C.IronTop })
+	local back = surface(body, "BackFace", Enum.NormalId.Back, 60)
+	for row, y in { 0.14, 0.86 } do
+		for i = 0, 7 do
+			paintRect(back, "Rivet" .. row, 0.06 + i * 0.125, y, 0.03, 0.044, C.Brass, true)
+		end
+	end
+	local front, rear, side = bz - 2.5, bz + 2.5, 3.1
+	local top = 0.3 + h
+	-- steel straps up the sides and the back, standing a little proud
+	local strapH = h - 0.5 - 0.8
+	local strapY = 0.8 + strapH / 2 + 0.3
+	for _, s in { -1, 1 } do
+		for _, dz in { -1.75, 1.75 } do
+			Geo.block(model, CFrame.new(s * (side + 0.04), strapY, bz + dz), Vector3.new(0.12, strapH, 0.4), C.Steel, nil, tiny({ Name = "Strap" }))
+		end
+		Geo.block(model, CFrame.new(s * 2.05, strapY, rear + 0.04), Vector3.new(0.4, strapH, 0.12), C.Steel, nil, tiny({ Name = "Strap" }))
+	end
+	-- belt intake slots just over the skirt: left, right, back (portals face -Z, so turn them)
+	local slotY = 1.1
+	portal(model, CFrame.new(-side, slotY, bz) * CFrame.Angles(0, math.pi / 2, 0), 2.0, 1.1, 0.25, 0.3)
+	portal(model, CFrame.new(side, slotY, bz) * CFrame.Angles(0, -math.pi / 2, 0), 2.0, 1.1, 0.25, 0.3)
+	portal(model, CFrame.new(0, slotY, rear) * CFrame.Angles(0, math.pi, 0), 2.0, 1.1, 0.25, 0.3)
+	-- the big lit screen (front left) in a dark frame
+	local screenX, screenY, screenW, screenH = -1.3, 1.4, 2.4, 1.6
+	portal(model, CFrame.new(screenX, screenY, front), screenW, screenH, 0.28, 0.35, true, C.HousingDark)
+	local screen = Geo.block(
+		model,
+		CFrame.new(screenX, screenY + screenH / 2, front - 0.22),
+		Vector3.new(screenW, screenH, 0.06),
+		C.ScreenLit,
+		NEON,
+		tiny({ Name = "Screen" })
+	)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "ScreenGui"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0
+	gui.MaxDistance = 80
+	gui.Parent = screen
+	type ScreenLine = { Name: string, Text: string, Y: number, H: number }
+	local lines: { ScreenLine } = {
+		{ Name = "Item", Text = "READY", Y = 0.1, H = 0.5 },
+		{ Name = "Counter", Text = "0", Y = 0.6, H = 0.32 },
+	}
+	for _, spec in lines do
+		local label = Instance.new("TextLabel")
+		label.Name = spec.Name
+		label.Text = spec.Text
+		label.Position = UDim2.fromScale(0.06, spec.Y)
+		label.Size = UDim2.fromScale(0.88, spec.H)
+		label.BackgroundTransparency = 1
+		label.TextScaled = true
+		label.TextColor3 = C.ScreenText
+		label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+		label.Parent = gui
+	end
+	-- output slot and chute at the output column
+	local out = output(base, "IronBox")
+	portal(model, CFrame.new(out.X, 0.9, front), 1.5, 1.0, 0.3, 0.4)
+	chute(model, Vector3.new(out.X, 1.02, front - 0.35), 1.4, 0.9, 0.1)
+	-- low open intake on the roof: a steel rim, a dark throat and the sorting
+	-- flap tilted on its hinge rod
+	local rimW, rimD, rimH, wall = 4.6, 4.2, 0.8, 0.3
+	local rimY = top + rimH / 2
+	for _, s in { -1, 1 } do
+		Geo.block(model, CFrame.new(0, rimY, bz + s * (rimD / 2 - wall / 2)), Vector3.new(rimW, rimH, wall), C.IronTop, nil, solid())
+		Geo.block(model, CFrame.new(s * (rimW / 2 - wall / 2), rimY, bz), Vector3.new(wall, rimH, rimD - 2 * wall), C.IronTop, nil, solid())
+	end
+	Geo.block(model, CFrame.new(0, top + 0.05, bz), Vector3.new(rimW - 2 * wall, 0.1, rimD - 2 * wall), C.Recess, nil, solid())
+	local hinge = Vector3.new(0, top + rimH, bz + 1.2)
+	cyl(model, hinge, "X", rimW - 2 * wall, 0.22, C.Steel, nil, tiny({ Name = "FlapHinge" }))
+	Geo.block(
+		model,
+		CFrame.new(hinge) * CFrame.Angles(math.rad(-18), 0, 0) * CFrame.new(0, 0, -1.15),
+		Vector3.new(rimW - 2 * wall - 0.2, 0.12, 2.3),
+		C.Hazard,
+		nil,
+		tiny({ Name = "Flap" })
+	)
+	sign(model, CFrame.new(0, rimY, bz - rimD / 2 - 0.08), "IRON BOX", 3.2)
+	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
+	local intake = attach(base, "Intake", CFrame.new(0, top + 1.2, bz))
+	intake:SetAttribute("IntakeSize", Vector3.new(6.2, 4, 6))
 	return model
 end
 
@@ -1649,6 +1759,7 @@ local BUILDERS: { [string]: () -> Model } = {
 	Crusher = crusher,
 	Anvil = anvil,
 	AutoCleaner = autoCleaner,
+	IronBox = ironBox,
 	SellChute = sellChute,
 	Conveyor = conveyor,
 }

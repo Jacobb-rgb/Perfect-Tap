@@ -1,6 +1,7 @@
 --[[
 	StateService: sends each player a small snapshot of their own data for
-	the HUD and menus (coins, blaster, carry, machines, pen, podiums, codex...).
+	the HUD and menus (coins, blaster, carry, machines, pen, podiums, codex,
+	machine upgrades, keep settings, Foundry stock...).
 	Pushes are coalesced: at most one every 0.2 s per player.
 	Other services add fields with StateService.addProvider().
 ]]
@@ -42,6 +43,8 @@ function StateService.snapshot(player: Player): { [string]: any }?
 	if not data then
 		return nil
 	end
+	local foundry = data.Foundry
+	local foundryStock: { ItemData.Desc } = if type(foundry) == "table" and type(foundry.Stock) == "table" then foundry.Stock else {}
 	local snapshot: { [string]: any } = {
 		Coins = data.Coins,
 		TotalEarned = data.TotalEarned,
@@ -55,6 +58,12 @@ function StateService.snapshot(player: Player): { [string]: any }?
 		PlacedCount = #data.PlacedMachines,
 		StorageCount = #data.Storage,
 		Storage = storageSummary(data.Storage),
+		-- step 3: Tech shop levels, the Iron Box / billboard keep settings, the Foundry's ingots
+		MachineUpgrades = data.MachineUpgrades,
+		KeepMode = data.KeepMode,
+		KeepList = data.KeepList,
+		FoundryStock = storageSummary(foundryStock),
+		FoundryCount = #foundryStock,
 		Discovered = data.Discovered,
 		Stats = data.Stats,
 		Tutorial = data.Tutorial,
