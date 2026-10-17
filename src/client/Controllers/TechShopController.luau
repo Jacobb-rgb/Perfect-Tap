@@ -7,13 +7,18 @@
 	  the HUD) and update live while it is open.
 	- BUY sends ShopBuy { Shop = "Tech", Item, Count?, Level? } (Level = the
 	  level the card shows being bought). The button shows "..." until the
-	  server's ShopResult arrives (or PENDING_TIMEOUT passes), then "BOUGHT!"
-	  for a moment, or the reason (EconomyConfig.TechShop.Reasons) on the
-	  card's status line. A greyed-out button (can't afford, top level,
-	  locked) answers locally with the same texts and sends nothing. The
-	  success toast comes from the server (Notify); while the shop is open
-	  messages also show in its header (HUD toasts hide behind the panel).
-	  A refused buy with the shop closed shows a HUD toast.
+	  server's ShopResult arrives, then "BOUGHT!" for a moment, or the reason
+	  (EconomyConfig.TechShop.Reasons) on the card's status line. One BUY per
+	  item waits at a time: the card's other button says so. With no answer
+	  (the rate limit dropped it, or a slow link) the button is freed after
+	  a while (machines wait longer, and their card says to check the Build
+	  menu: a repeat would buy again; levelled items are safe, the server
+	  refuses a repeat as Stale); an answer that still comes marks the card
+	  "Bought!" and refreshes it. A greyed-out button (can't afford, top
+	  level, locked) answers locally with the same texts and sends nothing.
+	  The success toast comes from the server (Notify); while the shop is
+	  open messages also show in its header (HUD toasts hide behind the
+	  panel). A refused buy with the shop closed shows a HUD toast.
 	- Tabs: click / tap a tab, or LB / RB on a gamepad. Gamepads get a
 	  selected button on open and on every tab switch; the selection stays
 	  inside the panel (SelectionGroup).
@@ -45,7 +50,7 @@ local StateController = require(script.Parent.StateController)
 
 local TechShopController = {}
 
-type Pending = { Row: string, Button: number, Until: number }
+type Pending = { Row: string, Button: number, Until: number, Machine: boolean }
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
 local CLOSE_ACTION = "TerraForgeTechShopClose"
@@ -56,10 +61,14 @@ local TICK = 0.25
 -- less than the server's ShopService.Range: the shop closes before the server
 -- would refuse a BUY as "TooFar", with room for lag (TechShopView.CloseRange)
 local CLOSE_RANGE = TechShopView.CloseRange
-local PENDING_TIMEOUT = 3 -- seconds a BUY waits for its ShopResult
+-- seconds a BUY waits for its ShopResult before its button is freed: a
+-- levelled item can be tried again safely (a repeat is refused as Stale), a
+-- machine BUY that went through slowly would buy again, so it waits longer
+local PENDING_TIMEOUT = 3
+local PENDING_TIMEOUT_MACHINE = 6
 local FLASH_TIME = 0.9 -- "BOUGHT!" on the button
 local STATUS_TIME = 3.5 -- a reason on the card's status line
-local NO_ANSWER = "No answer, try again" -- a BUY whose ShopResult never came (the rate limit dropped it)
+local STATUS = TechShopView.StatusText
 local RECEIPT_TIME = 5 -- a message in the header
 local RECEIPT_COLORS: { [string]: Color3 } = {
 	Reward = Theme.Good,
@@ -263,13 +272,13 @@ local function updateGlyphs(view: TechShopView.Refs)
 	updateHint(view)
 end
 
--- Fits the panel to the screen (phones get the compact layout).
+-- Fits the panel to the screen (phones and TVs get the compact layout's bigger texts).
 local function fit(view: TechShopView.Refs)
 	local camera = Workspace.CurrentCamera
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
-	local compact = isTouch() or scale <= 0.75 or size.Y < 520
+	local compact = TechShopView.compactFor(isTouch(), GuiService:IsTenFootInterface(), scale, size.Y)
 	TechShopView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
 end
 
@@ -290,6 +299,9 @@ local function buy(row: TechShopView.Row, index: number)
 		return
 	end
 	if pending[card.Item] then
+		-- the other button of a card whose BUY waits for its answer
+		status(row.Id, STATUS.Waiting, Theme.Info)
+		Sfx.play("UIDeny")
 		return
 	end
 	if not offer.CanBuy then
@@ -300,7 +312,13 @@ local function buy(row: TechShopView.Row, index: number)
 		Sfx.play("UIDeny")
 		return
 	end
-	pending[card.Item] = { Row = row.Id, Button = index, Until = os.clock() + PENDING_TIMEOUT }
+	local machine = card.Tab == "Machines"
+	pending[card.Item] = {
+		Row = row.Id,
+		Button = index,
+		Until = os.clock() + (if machine then PENDING_TIMEOUT_MACHINE else PENDING_TIMEOUT),
+		Machine = machine,
+	}
 	setBusy(button, "...")
 	Sfx.play("UIClick")
 	Net.send("ShopBuy", { Shop = EconomyConfig.TechShop.Shop, Item = card.Item, Count = offer.Count, Level = offer.Level })
@@ -355,6 +373,10 @@ local function onResult(payload: any)
 					setBusy(button, nil)
 					refresh()
 				end)
+			elseif not wait then
+				-- an answer after the BUY was given up on: it went through after all
+				status(row.Id, STATUS.LateBought, Theme.Good)
+				refresh()
 			end
 			Sfx.play("CoinBurst")
 		elseif button then
@@ -376,8 +398,9 @@ local function onResult(payload: any)
 	end
 end
 
--- Buys that never got an answer (the rate limit dropped them) free their
--- button; with the shop open the card says so (nothing was bought).
+-- Buys with no answer yet (the rate limit dropped them, or the link is slow)
+-- free their button; with the shop open the card says so (a machine card:
+-- check the Build menu, the buy may still go through; onResult marks it).
 local function expirePending(force: boolean?)
 	local now = os.clock()
 	local view = refs
@@ -392,7 +415,7 @@ local function expirePending(force: boolean?)
 				setBusy(button, nil)
 			end
 			if row and not force and counter then
-				status(row.Id, NO_ANSWER, Theme.Bad)
+				status(row.Id, if wait.Machine then STATUS.NoAnswerMachine else STATUS.NoAnswer, Theme.Bad)
 			end
 		end
 	end

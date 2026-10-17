@@ -164,9 +164,12 @@ function ShopService.boughtText(player: Player?, bought: Bought): string
 		local workshop = player ~= nil and Perks.has(player, "Workshop")
 		return `More room: {MachineData.machineSlots(level, workshop)} machine slots on your plot!`
 	end
+	-- as PenService runs them (and TechShopView.Automation says)
 	local step = ShopService.AutomationNames[level] or "Pen automation"
 	if level == EconomyConfig.PenAutomation.DirectUnload then
-		return `{step} unlocked: your train now unloads onto the TRAIN chute belt!`
+		return `{step} unlocked: your train's dirty ore now pours out of the TRAIN chute!`
+	elseif level == EconomyConfig.PenAutomation.Billboard then
+		return `{step} unlocked: what you don't keep now rides out of your PEN chute!`
 	end
 	return `{step} unlocked at your Ore Pen!`
 end

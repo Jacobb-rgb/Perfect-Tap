@@ -425,10 +425,10 @@ return function(T, Loader)
 		T.eq(buy(w, req("PenAutomation", nil, 1)).Ok, true, "billboard")
 		T.eq(paid - w.data.Coins, EconomyConfig.PenAutomation.Prices[1])
 		T.eq(w.data.Upgrades.PenAutomation, 1)
-		T.eq(notes(w, "Notify")[4].A.Text, "Auto-Sort Billboard unlocked at your Ore Pen!")
+		T.eq(notes(w, "Notify")[4].A.Text, "Auto-Sort Billboard unlocked: what you don't keep now rides out of your PEN chute!")
 		T.eq(buy(w, req("PenAutomation", nil, 2)).Ok, true, "Direct Unload")
 		T.eq(w.data.Upgrades.PenAutomation, 2)
-		T.truthy(notes(w, "Notify")[5].A.Text:find("Train Direct Unload unlocked", 1, true), "toast")
+		T.eq(notes(w, "Notify")[5].A.Text, "Train Direct Unload unlocked: your train's dirty ore now pours out of the TRAIN chute!")
 		refused(w, req("PenAutomation", nil, 3), "Max", "top")
 		-- other Upgrades fields untouched
 		T.eq(w.data.Upgrades.PenLevel, 0)
@@ -643,6 +643,58 @@ return function(T, Loader)
 		T.eq(#TechShopView.cards(nil, 0 / 0), #TechShopView.cards(s, 0), "nil state")
 	end)
 
+	T.test("TechShopView: machine prices are the server's quote (EconomyConfig.techPrice)", function()
+		-- a pricing rule other than Price * n (e.g. copies getting dearer): the card follows the quote
+		local real = EconomyConfig.techPrice
+		EconomyConfig.techPrice = function(entry: any, data: any, count: number?): (number?, string?)
+			local price, reason = real(entry, data, count)
+			if price and entry.Kind == "Machine" then
+				return price * 2 + 1, nil
+			end
+			return price, reason
+		end
+		local ok, err = pcall(function()
+			local belt = MachineData.ById.Conveyor
+			local furnace = MachineData.ById.ClayFurnace
+			local cards = TechShopView.cards(state(), belt.Price * 2 + 1)
+			local conveyor = cardById(cards, "Conveyor")
+			T.eq(conveyor.PriceText, Format.money(belt.Price * 2 + 1), "one belt as quoted")
+			T.eq(conveyor.PriceSub, "5 for " .. Format.money(belt.Price * 10 + 1), "five as quoted")
+			T.eq(conveyor.PriceColor, Theme.Coin, "affordable at the quote")
+			T.eq(conveyor.Buys[1].Price, belt.Price * 2 + 1, "the button agrees")
+			local plant = cardById(TechShopView.cards(state(), furnace.Price * 2), "ClayFurnace")
+			T.eq(plant.PriceText, Format.money(furnace.Price * 2 + 1))
+			T.eq(plant.PriceColor, Theme.Bad, "one short of the quote: red")
+		end)
+		EconomyConfig.techPrice = real
+		T.truthy(ok, tostring(err))
+		-- a refused quote (999 owned): the list price, the BUY greyed out
+		local full =
+			cardById(TechShopView.cards(state({ MachineInventory = { Conveyor = EconomyConfig.TechShop.MaxOwned } }), 1e6), "Conveyor")
+		T.eq(full.PriceText, Format.money(MachineData.ById.Conveyor.Price))
+		T.eq(full.PriceSub, "5 for " .. Format.money(MachineData.ById.Conveyor.Price * 5))
+		T.falsy(full.Buys[1].CanBuy or full.Buys[2].CanBuy, "nothing for sale at the cap")
+	end)
+
+	T.test("TechShopView: phones and TVs get the compact layout (bigger texts)", function()
+		T.truthy(TechShopView.compactFor(true, false, 0.62, 375), "phone")
+		T.truthy(TechShopView.compactFor(false, true, 1.25, 1080), "console on a 1080p TV")
+		T.truthy(TechShopView.compactFor(false, false, 0.7, 600), "small window")
+		T.truthy(TechShopView.compactFor(false, false, 1, 500), "low window")
+		T.falsy(TechShopView.compactFor(false, false, 1, 720), "PC 1280x720")
+		T.falsy(TechShopView.compactFor(false, false, 1.25, 1080), "PC 1080p")
+		-- on a 1080p TV (scale 1.25) every card text is at least 18 px, read from a sofa
+		local scale = 1.25
+		local refs = TechShopView.build(true)
+		TechShopView.layout(refs, true, 1920 / scale, (1080 - 36) / scale)
+		TechShopView.setCards(refs, TechShopView.cards(state(), 1234567))
+		for _, row in refs.RowList do
+			for _, label in { row.Title, row.Description, row.Detail, row.PriceSub, row.Price } do
+				T.truthy(label.TextSize * scale >= 18, `{row.Id} {label.Name}: {label.TextSize * scale} px`)
+			end
+		end
+	end)
+
 	T.test("TechShopView: machine cards show the slot use and warn when it is full", function()
 		-- the snapshot's Build field (BuildService) wins
 		local function detail(build: any, inventory: any, id: string): (string, any)
@@ -826,6 +878,8 @@ return function(T, Loader)
 		{ Label = "phone", Compact = true, Width = 1600 / (0.62 * 900 / 375), Height = (900 - 58) / (0.62 * 900 / 375) },
 		{ Label = "small phone", Compact = true, Width = 1600 / (0.62 * 900 / 320), Height = (900 - 163) / (0.62 * 900 / 320) },
 		{ Label = "tablet", Compact = true, Width = 1024 / 0.62, Height = (768 - 36) / 0.62 },
+		-- consoles: a 1080p TV at the HUD's top scale (1.25), compact for its bigger texts
+		{ Label = "TV 1080p", Compact = true, Width = 1920 / 1.25, Height = (1080 - 36) / 1.25 },
 	}
 
 	-- A GuiObject's box { x, y, w, h } inside its parent's box (Position / Size / AnchorPoint).
@@ -987,14 +1041,20 @@ return function(T, Loader)
 	end
 
 	T.test("TechShopView: every card's texts fit their boxes on every screen", function()
-		local reasons = { "No answer, try again", "You have this already", "Needs the Auto-Sort Billboard first" }
+		local reasons = { "You have this already", "Needs the Auto-Sort Billboard first" }
+		for _, text in TechShopView.StatusText do
+			table.insert(reasons, text)
+		end
 		for _, text in Reasons do
 			table.insert(reasons, text)
 		end
 		for _, screen in SCREENS do
 			local refs = laidOut(screen)
 			-- the usual screens show every description at full size (three lines)
-			local fullSize = screen.Label == "PC 1280x720" or screen.Label == "PC 1600x900" or screen.Label == "phone"
+			local fullSize = screen.Label == "PC 1280x720"
+				or screen.Label == "PC 1600x900"
+				or screen.Label == "phone"
+				or screen.Label == "TV 1080p"
 			for _, s in textStates() do
 				TechShopView.setCards(refs, TechShopView.cards(s, 1234567))
 				for _, row in refs.RowList do

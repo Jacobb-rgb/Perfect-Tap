@@ -172,22 +172,44 @@ TechShopView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a pan
 -- server's ShopService.Range (30), so lag never gets an open shop's BUY refused
 TechShopView.CloseRange = 24
 
--- Pen automation steps (EconomyConfig.PenAutomation levels).
+--[[
+	Pen automation steps (EconomyConfig.PenAutomation levels), as PenService
+	runs them (WP-Belts): level 1 sends everything MachineData.keeps doesn't
+	keep (dirty and crushed ore, ingots, clean ore off the Keep List) out of
+	the PEN chute as it lands in the pen, while a belt feeds from there, and
+	unlocks "Send unkept"; level 2 sends the train's dirty ore out of the
+	TRAIN chute after it unloaded into the pen as before (same capacity rule).
+	Where the Keep List is set: the pen's board (WP-CleanerBox's sorting
+	board has a "Keep List" prompt) or an Iron Box. ShopService.boughtText
+	says the same.
+]]
 TechShopView.Automation = {
 	{
 		Name = "Auto-Sort Billboard",
 		Icon = "Billboard",
-		Description = 'A sorting billboard at your Ore Pen: mark the ore types you always keep. "Send unkept" puts the rest on your belts.',
-		Next = 'Unlocks "Send unkept" at your Ore Pen',
-		Active = "Active: mark ores to keep at your Ore Pen or Iron Box",
+		Description = 'Everything you don\'t keep rides out of your PEN chute by itself (when a belt is there): dirty ore, ingots and clean ore off your Keep List. Unlocks "Send unkept".',
+		Next = "Mark what to keep at the pen board or an Iron Box",
+		Active = "Active: mark what to keep at the pen board or an Iron Box",
 	},
 	{
 		Name = "Train Direct Unload",
 		Icon = "Train",
-		Description = "Your train unloads dirty ore onto your TRAIN chute belt, straight to your Cleaning Plant (no belt there: into the Ore Pen).",
+		Description = "Your train's dirty ore pours out of the TRAIN chute onto your belts (it still unloads into the pen first; no belt there: it stays in the pen).",
 		Next = "Put a belt on your TRAIN chute to use it",
-		Active = "Active: your train feeds the TRAIN chute belt",
+		Active = "Active: train ore pours out of the TRAIN chute",
 	},
+}
+
+-- Status lines the controller shows on a card (here so the tests can check they fit).
+TechShopView.StatusText = {
+	-- a levelled BUY with no answer: safe to try again (the server refuses a repeat as Stale)
+	NoAnswer = "No answer, try again",
+	-- a machine BUY with no answer: it may still have gone through (a repeat buys again)
+	NoAnswerMachine = "No answer yet: check your Build menu",
+	-- an answer that came after the BUY was given up on
+	LateBought = "Bought!",
+	-- the card's other button while one BUY waits for its answer
+	Waiting = "Wait for your last buy",
 }
 
 local rgb = Color3.fromRGB
@@ -308,6 +330,15 @@ local METRICS: { [string]: Metrics } = {
 
 local function metrics(compact: boolean): Metrics
 	return if compact then METRICS.Compact else METRICS.Normal
+end
+
+--[[
+	Which layout a screen gets (TechShopController.fit): the compact one,
+	with its bigger texts and buttons, on touch screens, on TVs (consoles:
+	read from a sofa) and on small or low screens; the normal one on PC.
+]]
+function TechShopView.compactFor(touch: boolean, tenFoot: boolean, scale: number, viewportHeight: number): boolean
+	return touch or tenFoot or scale <= 0.75 or viewportHeight < 520
 end
 
 ---------------------------------------------------------------- measuring text
@@ -611,9 +642,13 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		detail ..= SEP .. slotText
 	end
 	local full = owned >= EconomyConfig.TechShop.MaxOwned
+	-- the price column shows what the server charges (EconomyConfig.techPrice,
+	-- as the BUY buttons); only a refused quote (MaxOwned) falls back to the list price
+	local first = buys[1]
+	local unitPrice = first.Price or machine.Price
 	-- two buttons (belts): the price column says what BUY 5 costs in all
 	local pack = if #counts > 1 then counts[#counts] else nil
-	local packTotal = if pack then machine.Price * pack else nil
+	local packTotal = if pack then buys[#buys].Price or machine.Price * pack else nil
 	return {
 		Id = entry.Item,
 		Item = entry.Item,
@@ -625,9 +660,9 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		DetailColor = if full or slotsFull then Theme.Bad elseif owned > 0 or placed > 0 then Theme.Text else Theme.TextDim,
 		Chip = `{machine.Size[1]}x{machine.Size[2]}`,
 		ChipColor = TechShopView.CategoryColors[machine.Category] or Theme.PanelDark,
-		PriceText = Format.money(machine.Price),
+		PriceText = Format.money(unitPrice),
 		PriceSub = if pack and packTotal then `{pack} for {Format.money(packTotal)}` else "each",
-		PriceColor = if coins >= machine.Price then Theme.Coin else Theme.Bad,
+		PriceColor = if coins >= unitPrice then Theme.Coin else Theme.Bad,
 		PriceSubColor = if packTotal and coins < packTotal then Theme.Bad else Theme.TextDim,
 		Done = false,
 		Buys = buys,

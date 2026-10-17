@@ -16,6 +16,9 @@
 	  ui_tech_upgrades_more  PC, UPGRADES scrolled down (an upgrade for a
 	                       machine you don't have; Bellows / Slots)
 	  ui_tech_phone_more   568 x 320 pt phone, AUTOMATION tab
+	  ui_tech_tv           1080p TV (console, HUD scale 1.25): the compact
+	                       layout's bigger texts; BUY 1 waits for its answer
+	                       and BUY 5 on the same card says to wait
 	(the renderer has no scrolling: "scrolled" hides the rows above)
 ]]
 
@@ -148,6 +151,16 @@ function Preview.build(Loader: any): { [string]: any }
 	local hud8 = hud(smallScale)
 	local smallAuto = view(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, "Automation")
 	exports.ui_tech_phone_more = UiExport.export({ hud8.Gui, smallAuto.Gui })
+
+	-- a console on a 1080p TV (TechShopView.compactFor): 1920 x 1080 drawn at 1600 x 900
+	local tvScale = 1.25 * 900 / 1080
+	local hud9 = hud(tvScale)
+	local tv = view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, "Machines")
+	local tvBelt = tv.Rows.Conveyor
+	tvBelt.Buttons[1]:SetAttribute("Busy", true)
+	tvBelt.Buttons[1].Text = "..."
+	TechShopView.setStatus(tv, "Conveyor", TechShopView.StatusText.Waiting, Theme.Info)
+	exports.ui_tech_tv = UiExport.export({ hud9.Gui, tv.Gui })
 	return exports
 end
 
