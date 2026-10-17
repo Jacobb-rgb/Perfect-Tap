@@ -208,5 +208,93 @@
    -2.5
   ],
   "fov": 46
+ },
+ "lobby_vault_road": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 160,
+  "maxLights": 32,
+  "position": [
+   6,
+   11,
+   32
+  ],
+  "target": [
+   0,
+   9,
+   112
+  ],
+  "fov": 55
+ },
+ "lobby_vault_aerial": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 160,
+  "maxLights": 32,
+  "position": [
+   75,
+   70,
+   30
+  ],
+  "target": [
+   0,
+   4,
+   100
+  ],
+  "fov": 52
+ },
+ "lobby_vault_front": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 160,
+  "maxLights": 32,
+  "position": [
+   16,
+   9,
+   66
+  ],
+  "target": [
+   0,
+   8,
+   112
+  ],
+  "fov": 58
+ },
+ "lobby_vault_hero": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   -36,
+   62,
+   -34
+  ],
+  "target": [
+   0,
+   4,
+   96
+  ],
+  "fov": 55
  }
 }

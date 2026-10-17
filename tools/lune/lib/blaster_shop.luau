@@ -523,4 +523,42 @@ function Shop.build(Loader: any, parent: any)
 	return root
 end
 
+--[[
+	Scene "blaster_shop_lobby": a TEST placement of the Forge Vault in the lobby
+	(preview only, nothing in the game changes). The vault, at 80 % size,
+	stands at the end of the south road (z ~ 88..142, facing the plaza); the
+	decorations inside its footprint (trees, flowers, lamps) are left out of
+	the picture here and would be moved if the vault stays.
+]]
+Shop.LobbyCenter = { x = 0, z = 118, scale = 0.8 }
+
+function Shop.buildLobby(Loader: any, parent: any)
+	Concepts.init(Loader)
+	CF = Loader.CFrame
+	L = Loader
+	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+	WorldBuilder.build(parent)
+	local c = Shop.LobbyCenter
+	-- leave out what stands inside the footprint (not the ground, roads or water)
+	local removed = 0
+	for _, d in parent:GetDescendants() do
+		if d:IsA("BasePart") then
+			local p = d.CFrame.Position
+			local top = p.Y + d.Size.Y / 2
+			if math.abs(p.X - c.x) < 33 and p.Z > 85 and p.Z < 145 and top > 0.45 and p.Y < 40 and d.Size.X < 60 and d.Size.Z < 60 then
+				d.Transparency = 1
+				removed += 1
+			end
+		end
+	end
+	print(string.format("lobby test: hid %d decoration parts in the vault footprint", removed))
+	local root = roblox.Instance.new("Model")
+	root.Name = "BlasterVaultTest"
+	root.Parent = parent
+	local holder = roblox.Instance.new("Model")
+	vault(Concepts.kit(holder), holder, CF.identity)
+	place(holder, CF.new(c.x, 0, c.z) * CF.Angles(0, math.pi, 0), c.scale, root)
+	return root
+end
+
 return Shop
