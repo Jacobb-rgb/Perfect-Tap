@@ -109,6 +109,11 @@ elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train
 elseif sceneName == "railway" then -- the world with parked preview trains on the railway (tools/lune/lib/railway_gallery.luau)
 	require("./lib/railway_gallery").build(Loader, workspace)
 	addNodes(workspace)
+elseif sceneName == "train_trip" then -- trains on their trips + the train HUD and panel (tools/lune/lib/train_trip_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/train_trip_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
