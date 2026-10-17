@@ -64,11 +64,13 @@ LobbyLayout.Budget = {
 	-- visual upgrade (concept v2): richer stalls, brick plot walls, town
 	-- buildings; + the owner-approved Blaster Vault package (~2970 parts);
 	-- + the owner-approved Candy mountains (~570 parts: Spectrum strata on
-	-- the massif and the Land range, the spire skyline).
-	-- tests/LobbyBudget.spec.luau: the built map (~16,350 parts with the
-	-- vault and the mountains) + one ore node on every node spawn (~1,320)
-	-- must stay 200 under it (the podium and pen ores): ~120 parts of headroom.
-	MapParts = 18000,
+	-- the massif and the Land range, the spire skyline); + the owner-approved
+	-- Horizon (~2,450 parts far out at sea and in the sky, Persistent: the
+	-- outer sea, Kenney kit isles and ships, planets, constellations).
+	-- tests/LobbyBudget.spec.luau: the built map (~18,800 parts with the
+	-- vault, the mountains and the horizon) + one ore node on every node
+	-- spawn (~1,320) must stay 200 under it (the podium and pen ores): ~580 parts of headroom.
+	MapParts = 21000,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -86,7 +88,7 @@ LobbyLayout.Budget = {
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
-		Backdrop = { Parts = 2350, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains)
+		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 2550, LobbyParts = 2350, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts

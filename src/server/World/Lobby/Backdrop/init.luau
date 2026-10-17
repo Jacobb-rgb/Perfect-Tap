@@ -8,6 +8,7 @@
 	  ForgeWorks, Crane, Beacon   THE FORGE works, the crane, the peak tower (Works)
 	  ScaffoldWest/2       timber derricks on the west shelf (Scaffolds)
 	  NWCliff/Pool, MineEntrance/Yard   the pieces inside the town (Lowlands)
+	  Horizon      far sea, cloud banks, isles, pirate ships, sky life (Horizon)
 
 	Each piece is a Model named by its LobbyLayout Id under
 	Emberfall.Lobby.Backdrop and gets its own random stream, so changing one
@@ -26,6 +27,7 @@ local Falls = require(script.Falls)
 local Works = require(script.Works)
 local Scaffolds = require(script.Scaffolds)
 local Lowlands = require(script.Lowlands)
+local Horizon = require(script.Horizon)
 
 local Backdrop = {}
 
@@ -73,6 +75,12 @@ local STEPS: { Step } = {
 	},
 	{ Name = "Scaffolds", Build = Scaffolds.build },
 	{ Name = "Lowlands", Build = Lowlands.build },
+	{
+		Name = "Horizon",
+		Build = function(parent: Instance, rng: Rng.Rng)
+			Horizon.build(parent, rng)
+		end,
+	},
 }
 
 function Backdrop.build(parent: Model, rng: Rng.Rng)

@@ -127,14 +127,7 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 				local h = math.min(rng:range(2.4, 6), top + 0.7 - (CAVE_ROOF + 0.5))
 				local x = rng:range(x0 + w / 2 + 0.4, x1 - w / 2 - 0.4)
 				local moss = Style.vary(if rng:chance(0.55) then C.Grass else C.GrassDark, rng, 0.05)
-				Style.block(
-					decor,
-					CFrame.new(x, top + 0.7 - h / 2, front + 0.55),
-					Vector3.new(w, h, 0.9),
-					tint or moss,
-					nil,
-					Style.tiny()
-				)
+				Style.block(decor, CFrame.new(x, top + 0.7 - h / 2, front + 0.55), Vector3.new(w, h, 0.9), tint or moss, nil, Style.tiny())
 			end
 		end
 	end

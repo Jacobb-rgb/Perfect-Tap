@@ -114,10 +114,35 @@ function LightingController.currentZone(): string
 	return currentZonePreset
 end
 
--- The Sky object (default skybox, big low sun, no stars) if the place has none.
+-- The space skybox (LightingConfig.Skybox) once all six faces are uploaded.
+function LightingController.applySkybox(sky: Sky): boolean
+	local cfg = LightingConfig.Skybox
+	local ids = {
+		Bk = LightingConfig.skyboxId(cfg.Bk),
+		Dn = LightingConfig.skyboxId(cfg.Dn),
+		Ft = LightingConfig.skyboxId(cfg.Ft),
+		Lf = LightingConfig.skyboxId(cfg.Lf),
+		Rt = LightingConfig.skyboxId(cfg.Rt),
+		Up = LightingConfig.skyboxId(cfg.Up),
+	}
+	if not (ids.Bk and ids.Dn and ids.Ft and ids.Lf and ids.Rt and ids.Up) then
+		return false
+	end
+	sky.SkyboxBk = ids.Bk
+	sky.SkyboxDn = ids.Dn
+	sky.SkyboxFt = ids.Ft
+	sky.SkyboxLf = ids.Lf
+	sky.SkyboxRt = ids.Rt
+	sky.SkyboxUp = ids.Up
+	return true
+end
+
+-- The Sky object (default skybox, big low sun, no stars) if the place has
+-- none, with the space skybox when it is uploaded.
 function LightingController.ensureSky(): Sky
 	local sky = Lighting:FindFirstChildOfClass("Sky")
 	if sky then
+		LightingController.applySkybox(sky)
 		return sky
 	end
 	local created = Instance.new("Sky")
@@ -126,6 +151,7 @@ function LightingController.ensureSky(): Sky
 	created.MoonAngularSize = LightingConfig.Sky.MoonAngularSize
 	created.StarCount = LightingConfig.Sky.StarCount
 	created.CelestialBodiesShown = LightingConfig.Sky.CelestialBodiesShown
+	LightingController.applySkybox(created)
 	created.Parent = Lighting
 	return created
 end
