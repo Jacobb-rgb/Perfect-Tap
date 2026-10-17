@@ -75,6 +75,37 @@ BlasterData.Rocks = {
 	ArtifactChance = 0.01, -- per rock (artifacts arrive in step 7)
 }
 
+--[[
+	The Blaster Vault (the blaster shop at the end of the lobby's south road):
+	it sells your NEXT blaster level for coins only (no ingots), in the look of
+	that level's weapon case, and opens the case in the crate-opening
+	cinematic. Levels go in order (no skipping). The Foundry stays the cheaper
+	way (ingots + coins) and lets you pick the ore look.
+]]
+BlasterData.Vault = {
+	PriceMultiplier = 4, -- x the level's Foundry coin price (Recipe.Coins)
+	-- the ore look of each level's case (ores kept in the 36-ore roster too)
+	Ores = { "", "Copper", "Cobalt", "Amethyst", "Gold", "Emberite", "Sapphire", "Obsidian", "RoyalAurum", "Heartstone" },
+}
+
+-- The coin price of a level's case in the Blaster Vault (nil for level 1 and unknown levels).
+function BlasterData.vaultPrice(level: any): number?
+	if type(level) ~= "number" or level ~= math.floor(level) then
+		return nil
+	end
+	local blaster = BlasterData.ByLevel[level]
+	if not blaster or not blaster.Recipe or blaster.ComingSoon then
+		return nil
+	end
+	return blaster.Recipe.Coins * BlasterData.Vault.PriceMultiplier
+end
+
+-- The ore look of a level's case ("" = the rusty starter look).
+function BlasterData.vaultOre(level: any): string
+	local n = if type(level) == "number" and level == level then math.floor(level) else 1
+	return BlasterData.Vault.Ores[math.clamp(n, 1, #BlasterData.Vault.Ores)] or ""
+end
+
 BlasterData.ByLevel = {} :: { [number]: Blaster }
 for _, blaster in BlasterData.Levels do
 	BlasterData.ByLevel[blaster.Level] = blaster

@@ -266,6 +266,35 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.85 },
 		SunRays = {},
 	},
+	-- The crate-opening cinematic's dark round room (VaultController,
+	-- Builders/CrateOpeningStage): almost no sun or sky light, so the case's
+	-- glow, the light pillar and the blaster carry the scene; strong bloom.
+	CrateOpening = {
+		Lighting = {
+			Brightness = 0.2,
+			Ambient = Color3.new(0.16, 0.14, 0.22),
+			OutdoorAmbient = Color3.new(0.06, 0.06, 0.1),
+			ExposureCompensation = 0.25,
+			EnvironmentDiffuseScale = 0.1,
+			EnvironmentSpecularScale = 0.8,
+		},
+		Atmosphere = {
+			Density = 0.3,
+			Offset = 0,
+			Color = Color3.new(0.1, 0.08, 0.18),
+			Decay = Color3.new(0.05, 0.04, 0.1),
+			Glare = 0,
+			Haze = 1.5,
+		},
+		ColorCorrection = {
+			Brightness = 0.02,
+			Contrast = 0.24,
+			Saturation = 0.3,
+			TintColor = Color3.new(0.96, 0.95, 1),
+		},
+		Bloom = { Intensity = 1.35, Size = 40, Threshold = 0.82 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
+	},
 } :: { [string]: Preset }
 
 return LightingConfig

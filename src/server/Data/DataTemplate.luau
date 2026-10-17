@@ -88,6 +88,7 @@ local DataTemplate = {
 		FlawlessCleans = 0,
 		IngotsSmelted = 0,
 		BlastersForged = 0,
+		BlastersBought = 0, -- blaster cases bought at the Blaster Vault (VaultService)
 		ItemsSold = 0,
 		PodiumEarned = 0,
 		TrainTrips = 0, -- trains unloaded into the Ore Pen (TrainService)

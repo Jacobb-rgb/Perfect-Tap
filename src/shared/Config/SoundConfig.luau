@@ -43,6 +43,11 @@ local SoundConfig: { [string]: SoundDef } = {
 	UIClick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.4, Pitch = { 1.0, 1.1 } },
 	UIDeny = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.6, 0.7 } },
 	Discovery = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.55, Pitch = { 0.9, 0.9 } },
+	-- the Blaster Vault's crate opening (VaultController): the case lands, hums while it charges, bursts, the blaster rises
+	CaseLand = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.75, Pitch = { 0.5, 0.55 } },
+	CaseCharge = { Id = "rbxasset://sounds/action_falling.mp3", Volume = 0.3, Pitch = { 1.5, 1.6 }, Looped = true },
+	CaseBurst = { Id = "rbxasset://sounds/glassbreak.wav", Volume = 0.75, Pitch = { 0.42, 0.48 } },
+	CaseRise = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.5, Pitch = { 0.55, 0.62 } },
 	-- ore trains: TrainController plays both on its own looping sounds (never the shared pool):
 	-- the chuff pulses with the wheels (Pitch = slow..fast), the whistle is a short double toot.
 	-- TODO(owner): both are the built-in falling-wind loop as a quiet, short-range stand-in (the
