@@ -25,6 +25,9 @@ local DataTemplate = {
 		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
 		-- (readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
+		-- the mine elevator (ElevatorService), bought once for MineFloors.Elevator.Price:
+		-- rides to every unlocked floor (floors 4-5 are reachable only this way)
+		Elevator = false,
 	},
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
 	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)

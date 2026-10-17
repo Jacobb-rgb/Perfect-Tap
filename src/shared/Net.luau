@@ -87,6 +87,12 @@ Net.Events = {
 	--   one step with no yield (FoundryResult "NotEnough" if either is gone by
 	--   then); in that same step the stock ingots the new next level can't use
 	--   move to the pen (as many as fit). Cancel, Timeout and BadStrikes cost nothing.
+	-- mine elevator (ElevatorService): ({ Action = "Buy" }) buys it once for
+	--   MineFloors.Elevator.Price coins (data.Upgrades.Elevator); ({ Action = "Go", Floor })
+	--   rides to that floor's stop: owned, whole Floor 1..#MineFloors.List, unlocked
+	--   (BlasterLevel >= MinBlaster), standing at a stop, not right after the last ride.
+	--   Refusals answer with a "Deny" Notify; a ride with ElevatorRide.
+	ElevatorAction = { Rate = 3, Burst = 5 },
 	-- economy / meta
 	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number?, Level: number? }), Item:
 	--   <machineId> (Count 1..EconomyConfig.TechShop.MaxCount; at most TechShop.MaxOwned of a type
@@ -128,6 +134,10 @@ Net.Events = {
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,
 	--   Count?: machines bought }; a State push follows a successful buy
 	ShopResult = false,
+	-- an elevator ride (ElevatorService): { Phase = "Depart", Floor, Name, Fade: seconds }
+	--   (fade the screen out), then { Phase = "Arrive", Floor, Name } once the character
+	--   stands at the target stop (fade back in); also "Arrive" after a VoidCatcher rescue
+	ElevatorRide = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

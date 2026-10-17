@@ -41,6 +41,7 @@ local ORDER = {
 	"IronBoxService",
 	"SellService",
 	"ShopService",
+	"ElevatorService", -- the mine elevator (after EconomyService, StateService and WorldService)
 	"BuildService",
 	"AccessService",
 }
