@@ -96,6 +96,11 @@ end
 	  Color    stone shade (default StoneDark)
 	  Cap      "Grass" (default: dirt band + grass slab), "Stone" (a stepped
 	           light cap block), "None"
+	  Tint     paints the cap in this colour instead of grass / light stone
+	           (no dirt band); the random stream stays the same
+	  AccentColors  the two shades of the accent stones (default Stone / StoneDeep)
+	  Layers   builds the stone itself (parent, min, max) -> top block, e.g.
+	           Spectrum strata; Color then only feeds the caps
 	  Band     false: no dirt band under the grass
 	  Front    Vector3 direction of the face that gets accent stones (or nil)
 	  Accents  number of accent stones on that face (default 2)
@@ -116,25 +121,33 @@ function Kit.column(
 	local minX, maxX = math.min(x0, x1), math.max(x0, x1)
 	local minZ, maxZ = math.min(z0, z1), math.max(z0, z1)
 	local color = o.Color or C.StoneDark
-	local main =
-		Kit.box(parent, Vector3.new(minX, bottom, minZ), Vector3.new(maxX, top, maxZ), Style.vary(color, rng, 0.05), nil, Style.solid())
+	local tone = Style.vary(color, rng, 0.05)
+	local layers: ((Instance, Vector3, Vector3) -> Part)? = o.Layers
+	local main = if layers
+		then layers(parent, Vector3.new(minX, bottom, minZ), Vector3.new(maxX, top, maxZ))
+		else Kit.box(parent, Vector3.new(minX, bottom, minZ), Vector3.new(maxX, top, maxZ), tone, nil, Style.solid())
 	local cap = o.Cap or "Grass"
+	local tint: Color3? = o.Tint
 	if cap == "Grass" then
 		if o.Band ~= false then
-			Kit.box(
-				parent,
-				Vector3.new(minX - 0.2, top - 1.6, minZ - 0.2),
-				Vector3.new(maxX + 0.2, top - 0.1, maxZ + 0.2),
-				Style.vary(C.DirtDark, rng, 0.04),
-				nil,
-				Style.tiny()
-			)
+			local dirt = Style.vary(C.DirtDark, rng, 0.04)
+			if not tint then
+				Kit.box(
+					parent,
+					Vector3.new(minX - 0.2, top - 1.6, minZ - 0.2),
+					Vector3.new(maxX + 0.2, top - 0.1, maxZ + 0.2),
+					dirt,
+					nil,
+					Style.tiny()
+				)
+			end
 		end
+		local grass = Style.vary(if rng:chance(0.3) then C.GrassLight else C.Grass, rng, 0.04)
 		Kit.box(
 			parent,
 			Vector3.new(minX - 0.35, top - 0.1, minZ - 0.35),
 			Vector3.new(maxX + 0.35, top + 0.8, maxZ + 0.35),
-			Style.vary(if rng:chance(0.3) then C.GrassLight else C.Grass, rng, 0.04),
+			tint or grass,
 			nil,
 			Style.solid()
 		)
@@ -144,11 +157,12 @@ function Kit.column(
 		local h = math.floor(rng:range(2, 4))
 		local cx = (minX + maxX) / 2 + rng:range(-(w - cw) / 2, (w - cw) / 2)
 		local cz = (minZ + maxZ) / 2 + rng:range(-(d - cd) / 2, (d - cd) / 2)
+		local stone = Style.vary(C.Stone, rng, 0.05)
 		Kit.box(
 			parent,
 			Vector3.new(cx - cw / 2, top, cz - cd / 2),
 			Vector3.new(cx + cw / 2, top + h, cz + cd / 2),
-			Style.vary(C.Stone, rng, 0.05),
+			tint or stone,
 			nil,
 			Style.solid()
 		)
@@ -173,7 +187,8 @@ function Kit.column(
 					center = Vector3.new((minX + maxX) / 2 + along, y, z)
 					size = Vector3.new(s * 1.3, s, 0.8)
 				end
-				local shade = if rng:chance(0.5) then C.Stone else C.StoneDeep
+				local accents: { Color3 } = o.AccentColors or { C.Stone, C.StoneDeep }
+				local shade = if rng:chance(0.5) then accents[1] else accents[2]
 				Style.block(parent, CFrame.new(center), size, Style.vary(shade, rng, 0.05), nil, Style.tiny())
 			end
 		end

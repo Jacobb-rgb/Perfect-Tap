@@ -62,11 +62,13 @@ LobbyLayout.Area = {
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
 	-- visual upgrade (concept v2): richer stalls, brick plot walls, town
-	-- buildings; + the owner-approved Blaster Vault package (~2970 parts).
-	-- tests/LobbyBudget.spec.luau: the built map (~15,800 parts with the
-	-- vault) + one ore node on every node spawn (~1,320) must stay 200 under
-	-- it (the podium and pen ores): ~170 parts of headroom.
-	MapParts = 17500,
+	-- buildings; + the owner-approved Blaster Vault package (~2970 parts);
+	-- + the owner-approved Candy mountains (~570 parts: Spectrum strata on
+	-- the massif and the Land range, the spire skyline).
+	-- tests/LobbyBudget.spec.luau: the built map (~16,350 parts with the
+	-- vault and the mountains) + one ore node on every node spawn (~1,320)
+	-- must stay 200 under it (the podium and pen ores): ~120 parts of headroom.
+	MapParts = 18000,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -84,7 +86,7 @@ LobbyLayout.Budget = {
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
-		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
+		Backdrop = { Parts = 2350, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains)
 		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 2550, LobbyParts = 2350, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts
@@ -93,7 +95,7 @@ LobbyLayout.Budget = {
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
 	-- lobby pass and may grow by at most LandExtraParts.
 	LandBaselineParts = 1775,
-	LandExtraParts = 300,
+	LandExtraParts = 450, -- + Spectrum strata on the mountain columns
 }
 
 -- Where the low evening sun should sit (unit vector toward the sun):
