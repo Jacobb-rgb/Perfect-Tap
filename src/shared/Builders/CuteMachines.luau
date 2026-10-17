@@ -257,7 +257,6 @@ end
 function CuteMachines.furnace(key: string): Model
 	local s = CuteMachines.Styles[key] or CuteMachines.Styles.A
 	local ctx = newModel("ClayFurnace", s)
-	local pal = ctx.pal
 	local hx, hz, w, h, d = 0.25, -0.1, 5.8, 4.4, 5.4
 	local plinthH = 0.7
 	pillSlab(ctx, Vector3.new(hx, FLOOR, hz), w + 0.6, plinthH, d + 0.6, 0.7, "Frame")
