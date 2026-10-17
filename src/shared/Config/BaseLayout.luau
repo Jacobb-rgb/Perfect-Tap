@@ -44,8 +44,9 @@ BaseLayout.PodiumOreHeight = 4.6 -- where the ore floats above the podium base
 -- The Foundry (step 3): ingots in, stronger blasters out.
 BaseLayout.Foundry = rect(13, 46, 18, 16, 14)
 
--- Train stop on the coastal railway (step 2).
-BaseLayout.TrainStop = rect(0, 57.5, 34, 6, 5)
+-- Train stop on the coastal railway (step 2). Its rail-side edge (z 59) keeps
+-- 3 studs from the rail centerline, out of the trains' wheels (+-2.95).
+BaseLayout.TrainStop = rect(0, 57, 34, 6, 4)
 BaseLayout.RailZ = 62 -- rail centerline, plot-local (runs along X)
 
 -- Reserved for the artifact museum (step 7).
