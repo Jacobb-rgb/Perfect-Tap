@@ -1,0 +1,156 @@
+{
+ "vg_road": {
+  "scene": "vault_game",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   6,
+   11,
+   30
+  ],
+  "target": [
+   0,
+   12,
+   112
+  ],
+  "fov": 58
+ },
+ "vg_hero": {
+  "scene": "vault_game",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   -36,
+   62,
+   -34
+  ],
+  "target": [
+   0,
+   4,
+   96
+  ],
+  "fov": 55
+ },
+ "vg_front": {
+  "scene": "vault_game",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   12,
+   8,
+   70
+  ],
+  "target": [
+   0,
+   10,
+   110
+  ],
+  "fov": 60
+ },
+ "vg_inside": {
+  "scene": "vault_game",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   2,
+   6.8,
+   100
+  ],
+  "target": [
+   0,
+   8,
+   134
+  ],
+  "fov": 66
+ },
+ "vg_statue": {
+  "scene": "vault_game",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   26,
+   14,
+   66
+  ],
+  "target": [
+   43,
+   18,
+   94
+  ],
+  "fov": 55
+ },
+ "vg_back": {
+  "scene": "vault_game",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   48,
+   32,
+   190
+  ],
+  "target": [
+   0,
+   14,
+   120
+  ],
+  "fov": 55
+ },
+ "vg_lobby_hero": {
+  "scene": "vault_game",
+  "position": [
+   6,
+   62,
+   168
+  ],
+  "target": [
+   0,
+   12,
+   -46
+  ],
+  "fov": 48,
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 280,
+  "maxLights": 32
+ }
+}
