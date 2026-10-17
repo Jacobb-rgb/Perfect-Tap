@@ -307,6 +307,26 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.9 },
 		SunRays = {},
 	},
+	-- Inside the Blaster Vault (a part tagged LightingZone with Preset =
+	-- "VaultInterior", src/server/World/Lobby/Vault): darker and moodier, so
+	-- the glowing cases, the vault door and the candles stand out.
+	VaultInterior = {
+		Lighting = {
+			Ambient = Color3.new(0.05, 0.04, 0.07),
+			OutdoorAmbient = Color3.new(0.2, 0.18, 0.26),
+			ExposureCompensation = -0.45,
+			EnvironmentDiffuseScale = 0.15,
+		},
+		Atmosphere = {},
+		ColorCorrection = {
+			Brightness = -0.02,
+			Contrast = 0.32,
+			Saturation = 0.34,
+			TintColor = Color3.new(1, 0.95, 0.9),
+		},
+		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.85 },
+		SunRays = {},
+	},
 } :: { [string]: Preset }
 
 return LightingConfig

@@ -253,6 +253,35 @@ return function(T, Loader)
 		T.eq(attr(m, "WorkTime"), GameConfig.MinProcessTime, "MinProcessTime")
 	end)
 
+	withWorld("ProcessingService: a sorter job (Iron Box) passes items on and counts toward nothing", function(w)
+		-- the Iron Box may run on these jobs (WP-CleanerBox); this pins the contract
+		MachineService.register("IronBox", processing.behaviour)
+		w.data.MachineInventory.IronBox = 1
+		local m = place(w, "IronBox", 0, 0)
+		local seen = 0
+		ProcessingService.onProcessed(function()
+			seen += 1
+		end)
+		local ingot = item("Ingot", "Gold", "Pristine")
+		MachineService.insertDesc(m, ingot, USER, "Hand")
+		MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Hand")
+		tick(m, 10)
+		T.eq(attr(m, "WorkTime"), MachineData.ById.IronBox.Time, "a timed job")
+		tick(m, 10 + MachineData.ById.IronBox.Time)
+		T.eq(#m.Entry.Out, 1, "the ingot waits in Out")
+		local out = m.Entry.Out[1]
+		T.truthy(out.K == "Ingot" and out.O == "Gold" and out.G == "Pristine", "unchanged")
+		tick(m, 10 + 2 * MachineData.ById.IronBox.Time)
+		T.eq(#m.Entry.Out, 2)
+		T.eq(m.Entry.Out[2].K, "Raw", "dirty ore stays dirty")
+		T.eq(m.Entry.In, nil)
+		T.eq(attr(m, "Cycles"), 2, "the box still animates its cycles")
+		T.eq(w.data.Stats.IngotsSmelted, 0, "passing an ingot on is not smelting")
+		T.eq(#w.notes, 0, "no first-ingot toast")
+		T.eq(seen, 0, "no onProcessed")
+		T.eq((w.data.Discovered or {}).Silver, nil, "nothing discovered")
+	end)
+
 	withWorld("ProcessingService: the Crusher makes 2 piles and waits for room in Out", function(w)
 		local m = place(w, "Crusher", 0, 0)
 		m.Entry.Out = { item("Crushed"), item("Crushed"), item("Crushed") }
@@ -308,6 +337,77 @@ return function(T, Loader)
 		T.eq(w.data.Stats.IngotsSmelted, 0, "no ingots")
 	end)
 
+	withWorld("ProcessingService: the Cleaning Plant's Quality level sets its grade odds", function(w)
+		local m = place(w, "AutoCleaner", 0, 0)
+		local prompt = m.Model.PrimaryPart.Prompt:FindFirstChild("LoadPrompt")
+		T.eq(attr(m, "Quality"), 0, "level 0 shown")
+		T.eq(attr(m, "QualityOdds"), "60% Rough · 40% Clean", "level 0 odds")
+		T.eq(prompt.ObjectText, "Cleaning Plant · Quality 0", "the level on the prompt (the odds are on the billboard)")
+		-- the Tech shop writes the level; the plant shows it within a second
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 5 } }
+		tick(m, 0.5)
+		T.eq(attr(m, "Quality"), 5, "level 5 shown")
+		T.eq(attr(m, "QualityOdds"), "20% Clean · 50% Pristine · 30% Flawless", "level 5 odds")
+		T.eq(prompt.ObjectText, "Cleaning Plant · Quality 5", "prompt names the level")
+		T.truthy(#prompt.ObjectText <= 32, "short enough for a phone's prompt")
+		local grades = {}
+		local now = 10
+		local jobs = 600
+		for i = 1, jobs do
+			MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Belt")
+			tick(m, now)
+			if i == 1 then
+				T.eq(attr(m, "WorkOre"), "", "dirty ore doesn't show its ore while it is cleaned")
+			end
+			now += 8
+			tick(m, now)
+			local out = MachineLogic.popOut(m.Entry)
+			T.truthy(out and out.K == "Clean", "clean ore out")
+			grades[out.G] = (grades[out.G] or 0) + 1
+		end
+		T.eq(grades.Rough, nil, "no Rough at level 5")
+		T.near((grades.Flawless or 0) / jobs, 0.3, 0.07, "Flawless share")
+		T.near((grades.Pristine or 0) / jobs, 0.5, 0.07, "Pristine share")
+		-- a broken or too high level counts as the nearest real one
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 99 } }
+		tick(m, now + 2)
+		T.eq(attr(m, "Quality"), 5, "clamped to what is sold")
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 0 / 0 } }
+		tick(m, now + 4)
+		T.eq(attr(m, "Quality"), 0, "NaN counts as 0")
+		-- the level is read when a job starts
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 0 } }
+		MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Belt")
+		tick(m, now + 10)
+		w.data.MachineUpgrades = { AutoCleaner = { Quality = 5 } }
+		T.truthy(m.State.Job.Odds == MachineData.gradeOdds(0), "the running job keeps its odds")
+	end)
+
+	withWorld("ProcessingService: Speed upgrades shorten jobs, per machine type", function(w)
+		local furnace = place(w, "ClayFurnace", 0, 0)
+		local crusher = place(w, "Crusher", 4, 0)
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 2 } }
+		MachineService.insertDesc(furnace, item("Clean"), USER, "Hand")
+		MachineService.insertDesc(crusher, item("Clean"), USER, "Hand")
+		tick(furnace, 1)
+		tick(crusher, 1)
+		T.near(attr(furnace, "WorkTime"), 6 * MachineData.speedMult(2), 1e-9, "Clay Furnace Speed 2")
+		T.eq(attr(crusher, "WorkTime"), 3, "the Crusher has its own level")
+		-- Speed and Bellows multiply
+		w.data.Upgrades.Bellows = 5
+		w.data.MachineUpgrades = { ClayFurnace = { Speed = 5 } }
+		T.near(processing.jobTime(furnace), math.max(GameConfig.MinProcessTime, 6 * 0.5 * MachineData.speedMult(5)), 1e-9, "both")
+		w.data.MachineUpgrades = { ClayFurnace = "broken" }
+		T.near(processing.jobTime(furnace), 3, 1e-9, "a broken record counts as level 0")
+	end)
+
+	T.test("ProcessingService: grade odds as text", function()
+		T.eq(ProcessingService.oddsText(MachineData.gradeOdds(0)), "60% Rough · 40% Clean")
+		T.eq(ProcessingService.oddsText(MachineData.gradeOdds(3)), "15% Rough · 45% Clean · 35% Pristine · 5% Flawless")
+		T.eq(ProcessingService.oddsText({ Flawless = 1, Bogus = 2, Rough = 0 / 0 }), "100% Flawless", "unknown and broken entries left out")
+		T.eq(ProcessingService.oddsText({}), "")
+	end)
+
 	withWorld("ProcessingService: damaged saves don't jam a machine", function(w)
 		local m = place(w, "ClayFurnace", 0, 0)
 		m.Entry.In = { { K = "Bogus", O = "Copper" }, item("Raw", "Iron"), item("Clean", "Iron", "Rough") }
@@ -315,7 +415,7 @@ return function(T, Loader)
 		T.eq(#m.Entry.In, 2, "junk dropped")
 		T.eq(attr(m, "Queue"), 2, "Queue")
 		tick(m, 1)
-		T.eq(attr(m, "WorkOre"), "Iron", "the stray raw ore is worked")
+		T.eq(attr(m, "WorkOre"), "", "the stray raw ore is worked (dirty: no ore shown)")
 		tick(m, 7)
 		T.eq(#m.Entry.Out, 1, "it comes out")
 		T.eq(m.Entry.Out[1].K, "Raw", "unchanged")

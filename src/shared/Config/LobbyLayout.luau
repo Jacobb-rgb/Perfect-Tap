@@ -67,9 +67,9 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
-		Plaza = { Parts = 1500, LobbyParts = 1500, Lights = 10, LobbyLights = 10 },
-		Districts = { Parts = 2300, LobbyParts = 2300, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
-		Flora = { Parts = 2300, LobbyParts = 2100, Lights = 8, LobbyLights = 8 }, -- + town buildings
+		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
+		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
+		Flora = { Parts = 2550, LobbyParts = 2350, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
 	-- lobby pass and may grow by at most LandExtraParts.
@@ -97,6 +97,16 @@ local SHOP = v(-46, 0, -22)
 local UPGRADES = v(46, 0, -22)
 local SHOP_FACING = toward(SHOP, PLAZA)
 local UPGRADES_FACING = toward(UPGRADES, PLAZA)
+-- the SHOP's local +X (its south end, toward the spawn)
+local SHOP_RIGHT = Vector3.new(-SHOP_FACING.Z, 0, SHOP_FACING.X)
+-- (lobby fix round 3: the giant wheel stands free north of the SHOP, square
+-- to the plaza, so its disc clears the SHOP's roof from the spawn; the
+-- forge west path and the west plot road leave 34 studs between them, the
+-- NW pool and the outcrop at (-52, -52) bound it north and south)
+local WHEEL = v(-47.5, 0, -72.5)
+-- (round 3: CAPSULES moved south-east into the spawn view, between the west
+-- spur and the lily pond, turned half to the plaza, half to the spawn)
+local CAPSULES = v(-41.9, 0, 12.4)
 
 LobbyLayout.Pieces = {
 	------------------------------------------------------------ Plaza package
@@ -132,33 +142,38 @@ LobbyLayout.Pieces = {
 	{
 		Id = "GreatForge",
 		Package = "Plaza",
-		Center = v(0, 0, -58),
-		Size = v(42, 44, 40),
+		-- front at z -38; 42 wide (the forge paths at x +-26 are 9 wide: x +-21.5),
+		-- grown upward and deeper instead of wider
+		Center = v(0, 0, -62),
+		Size = v(42, 54, 48),
 		Facing = v(0, 0, 1),
-		Note = "Stone hall, red stepped gable roofs (ridge <= 32 so the DEPTHS portal shows above it in the hero shot), chimneys <= 44 at (x +-17, z -72), crossed-hammers gable sign, THE GREAT FORGE board, open glowing interior.",
+		Note = "Stone hall on a raised plinth with a long stair, dark slate gable roof with shingle courses and a red ridge trim (ridge <= 38 so the DEPTHS sign still shows above it from the hero camera), short chimneys, crossed-hammers gable emblem, banners hung from gold rods, THE GREAT FORGE board, open glowing interior.",
 	},
 	------------------------------------------------------------ Districts package
 	{
 		Id = "Shop",
 		Package = "Districts",
 		Center = SHOP,
-		Size = v(20, 20, 14),
+		Size = v(28, 20, 14),
 		Facing = SHOP_FACING,
 		Note = "SHOP = the Gear shop (boots, helmet lamp, backpack, gloves, magnet): pink/white striped awning, glowing blue SHOP sign, gear on racks. Hook ShopCounter.",
 	},
 	{
 		Id = "ShopFront",
 		Package = "Districts",
-		Center = SHOP + SHOP_FACING * 11.5,
-		Size = v(14, 10, 8),
+		-- south of the SHOP's door lane, out at the plaza rim (the 6.6 wide door
+		-- lane stays open; the west spur road leaves no room beside the SHOP's
+		-- south end): a narrow stall reaching from the SHOP's porch to the rim
+		Center = SHOP + SHOP_FACING * 12.5 + SHOP_RIGHT * 6.6,
+		Size = v(6.6, 10.6, 8), -- (round 3: the SELL box rides higher, over Tobin's head)
 		Facing = SHOP_FACING,
-		Note = "Tobin's Sell stall next to the SHOP: an ore cart with a counter and a scale (tag SellCounter), the SellBin (tag SellBin, child part Intake), Tobin the Miner (NPC), a SELL sign.",
+		Note = "Tobin's Sell stall south of the SHOP's door lane: an ore cart with a counter and a scale (tag SellCounter), the SellBin (tag SellBin, child part Intake), Tobin the Miner (NPC) facing the lane, a SELL sign.",
 	},
 	{
 		Id = "Upgrades",
 		Package = "Districts",
 		Center = UPGRADES,
-		Size = v(20, 20, 14),
+		Size = v(28, 20, 14),
 		Facing = UPGRADES_FACING,
 		Note = "UPGRADES stall = the Tech shop (automation machines, machine upgrades): purple/white striped awning, glowing blue UPGRADES sign, blue neon trims. Hook UpgradeCounter.",
 	},
@@ -173,42 +188,52 @@ LobbyLayout.Pieces = {
 	{
 		Id = "SpinWheel",
 		Package = "Districts",
-		Center = v(-48, 0, 18),
-		Size = v(18, 26, 10),
-		Facing = v(0.85, 0, 0.53).Unit,
-		Note = "SPIN & WIN = the free daily wheel of fortune on a timber A-frame, 8 colored segments, gold pointer, bulbs. EmberChest (tag) on its platform.",
+		Center = WHEEL,
+		-- (round 3: 33 wide (the roads either side allow no more), 58 tall:
+		-- the frame at scale 2 on a platform 4 studs higher, the disc clears
+		-- the SHOP from the spawn; 22 deep for a longer stair run)
+		Size = v(33, 58, 22),
+		Facing = v(0, 0, 1),
+		Note = "SPIN & WIN = the free daily wheel of fortune, the giant free-standing landmark behind and left of the SHOP (nothing hides its disc and stairs from the spawn), square to the plaza. EmberChest (tag) on the side of its top landing.",
 	},
 	{
 		Id = "GuildBoard",
 		Package = "Districts",
 		Center = v(-15, 0, -30),
-		Size = v(9, 10, 3),
-		Facing = v(0, 0, 1),
+		Size = v(9, 11, 3),
+		-- (round 3: turned 20 degrees to the plaza: it no longer stacks on the wheel)
+		Facing = v(math.sin(math.rad(20)), 0, math.cos(math.rad(20))),
 		Note = "Forgekeepers' notice board beside the forge porch (tag GuildBoard on the model).",
 	},
 	{
 		Id = "FossilDig",
 		Package = "Districts",
-		Center = v(50, 0, 24),
-		Size = v(18, 8, 24),
-		Facing = v(-1, 0, 0),
+		-- turned toward the hero camera and the spawn (its gate faces south-west)
+		-- (round 3: a big open dig pulled toward the plaza, between the plaza
+		-- rim and the outcrops at (56, 46) and (50, 58))
+		Center = v(43, 0, 29),
+		Size = v(26, 14, 30),
+		Facing = v(-0.5, 0, 0.87).Unit,
 		Note = "Fenced sunken-look dirt pit with a dinosaur skeleton, tools, FOSSIL DIG sign: the artifacts + Kingdom of Kaldrum story corner. Tag FossilDig on the model.",
 	},
 	{
 		Id = "RockScanner",
 		Package = "Districts",
-		Center = v(56, 0, 80),
-		Size = v(12, 10, 10),
-		Facing = v(-0.71, 0, 0.71).Unit,
+		Center = v(43, 0, 69),
+		Size = v(12, 11, 10),
+		Facing = v(-0.6, 0, 0.8).Unit,
 		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign: the Ore Codex of all 30 ores. Tag OreCodex on the terminal.",
 	},
 	{
 		Id = "CapsuleStall",
 		Package = "Districts",
-		Center = v(-40, 0, 36),
-		Size = v(16, 16, 12),
-		Facing = toward(v(-40, 0, 36), WorldLayout.SpawnPoint),
-		Note = "Design v2: golem capsule stall left of the spawn, next to SPIN & WIN: a round stall with a big glass capsule machine, little golem figures on shelves, CAPSULES sign, odds board. Tag CapsuleStall (Model with PrimaryPart).",
+		-- front-left anchor (concept v2): its front reads from the spawn camera
+		-- and from the hero camera (round 3: wholly inside the spawn view, its
+		-- front corners outside the plaza curb, r 36)
+		Center = CAPSULES,
+		Size = v(14, 16, 12),
+		Facing = (toward(CAPSULES, PLAZA) + toward(CAPSULES, WorldLayout.SpawnPoint)).Unit,
+		Note = "Design v2: golem capsule stall left of the spawn: a round stall with a big glass capsule machine, little golem figures on shelves, CAPSULES sign, odds board. Tag CapsuleStall (Model with PrimaryPart).",
 	},
 	{
 		Id = "EnchantShop",
@@ -221,59 +246,55 @@ LobbyLayout.Pieces = {
 	{
 		Id = "HallOfFame",
 		Package = "Districts",
-		Center = v(30, 0, 36),
-		Size = v(24, 14, 6),
-		Facing = toward(v(30, 0, 36), WorldLayout.SpawnPoint),
-		Note = "Design v2: four leaderboards in a gentle arc facing the spawn (Money per second, Total earned, Artifacts found, Hours played). Each board is a BasePart named Board1..Board4 with tag Leaderboard and attribute Board = 1..4; a header plank + lanterns.",
+		-- (round 3: off the south-east rim, where it hid the FOSSIL DIG and the
+		-- ROCK SCANNER; the outcrops leave no room by the east plot road, so a
+		-- compact board stands beside the forge porch opposite the guild board)
+		Center = v(14, 0, -30),
+		Size = v(13.6, 16, 3.5),
+		Facing = v(-math.sin(math.rad(15)), 0, math.cos(math.rad(15))),
+		Note = "Design v2: four leaderboards (Money per second, Total earned, Artifacts found, Hours played) in a compact 2 x 2 display wall beside the forge porch, mirroring the guild board. Each board is a BasePart named Board1..Board4 with tag Leaderboard and attribute Board = 1..4; a HALL OF FAME header.",
 	},
 	------------------------------------------------------------ Flora package
 	{
 		Id = "LilyPond",
 		Package = "Flora",
-		Center = v(-26, 0, 62),
-		Size = v(24, 2, 14),
+		Center = v(-37, 0, 41.5),
+		Size = v(24, 2, 16),
 		Facing = v(0, 0, 1),
-		Note = "Blocky stone-rimmed pond with lily pads, pink flowers, a few purple crystals on the bank.",
+		Note = "Big blocky stone-rimmed pond left of the plaza, south of CAPSULES (concept v1: the hero sees it past the stall) with lily pads, pink flowers, a few purple crystals on the bank.",
 	},
 	{
 		Id = "KoiPond",
 		Package = "Flora",
-		Center = v(26, 0, 62),
-		Size = v(24, 2, 14),
-		Facing = v(0, 0, 1),
-		Note = "Koi pond: orange/white koi under the surface, lily pads, stepping stones, lanterns.",
-	},
-	{
-		Id = "Creek",
-		Package = "Flora",
-		Center = v(0, 0, 62),
-		Size = v(28, 1, 6),
+		Center = v(0, 0, 50),
+		Size = v(44, 2, 18),
 		Facing = v(0, 0, 1),
 		Walkable = true,
-		Note = "Shallow creek joining the two ponds, flowing under the bridge (water is non-collide over solid ground).",
+		Note = "The big front koi pond under the arched bridge (concept v1): orange/white koi, lily pads, stepping stones, lanterns. Walkable: the bridge carries the south road over it (water is non-collide over solid ground).",
 	},
 	{
 		Id = "CreekBridge",
 		Package = "Flora",
-		Center = v(0, 0, 62),
-		Size = v(12, 5, 16),
+		Center = v(0, 0, 50),
+		Size = v(12, 8, 23),
 		Facing = v(0, 0, 1),
 		Walkable = true,
-		Note = "Arched wooden bridge carrying the south road over the creek, railings, two lanterns.",
+		Note = "Humped wooden bridge carrying the south road over the koi pond, stepped arched railings, a lantern post at each end.",
 	},
 	{
 		Id = "Signpost",
 		Package = "Flora",
-		Center = v(-14, 0, 46),
-		Size = v(7, 10, 3),
-		Facing = v(0.52, 0, 0.86).Unit,
+		-- on the koi pond's south-west bank by the bridge's south end, facing the hero camera
+		Center = v(-15, 0, 65),
+		Size = v(14, 17, 4),
+		Facing = v(0.16, 0, 0.99).Unit,
 		Note = "Big double-sided signpost: MINE / UPGRADE / EXPLORE / BUILD with part-built icons.",
 	},
 	{
 		Id = "NextArea",
 		Package = "Flora",
 		Center = v(150, 0, -120),
-		Size = v(14, 12, 4),
+		Size = v(22, 16, 4),
 		Facing = v(0, 0, 1),
 		Note = "NEXT AREA -> sign (arrow points east along the boardwalk), lantern posts, a closed rope gate.",
 	},
@@ -290,19 +311,19 @@ LobbyLayout.Pieces = {
 		Id = "PinkGrove",
 		Package = "Flora",
 		Center = v(41, 0, -66),
-		Size = v(18, 22, 18),
-		Radius = 9,
+		Size = v(22, 30, 22),
+		Radius = 10,
 		Facing = v(0, 0, 1),
-		Note = "Two big pink voxel cherry trees behind UPGRADES (hero trees).",
+		Note = "Two big pink voxel cherry trees towering behind UPGRADES (hero trees).",
 	},
 	{
 		Id = "RedTree",
 		Package = "Flora",
-		Center = v(38, 0, 47),
+		Center = v(59, 0, 80),
 		Size = v(12, 18, 12),
 		Radius = 6,
 		Facing = v(0, 0, 1),
-		Note = "One big red voxel tree in the south-east foreground (hero tree).",
+		Note = "One big red voxel tree at the east town edge (it joins the east tree belt, off the camera-to-dig line).",
 	},
 	{
 		Id = "AutumnCorner",
@@ -474,7 +495,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "FloatingIslandWest",
 		Package = "Sky",
-		Center = v(-150, 95, -250),
+		Center = v(-150, 77, -232),
 		Size = v(40, 50, 34),
 		Facing = v(0.5, 0, 0.87).Unit,
 		Note = "Floating voxel island: grass top, hanging stone underside, cottage, tree, small waterfall.",
@@ -482,7 +503,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "FloatingIslandEast",
 		Package = "Sky",
-		Center = v(150, 92, -185),
+		Center = v(150, 105, -220),
 		Size = v(44, 50, 36),
 		Facing = v(-0.5, 0, 0.87).Unit,
 		Note = "Bigger floating island with trees and a long waterfall falling into the mountains below.",
@@ -498,7 +519,7 @@ LobbyLayout.Pieces = {
 	{
 		Id = "Balloon",
 		Package = "Sky",
-		Center = v(-72, 74, -84),
+		Center = v(-60, 70, -120),
 		Size = v(16, 26, 16),
 		Facing = v(0.5, 0, 0.87).Unit,
 		Note = "Hot air balloon (red/yellow stripes) with a little airship gondola; tag Spin with SpinSpeed 0.05, BobHeight 2.",
@@ -506,11 +527,22 @@ LobbyLayout.Pieces = {
 	{
 		Id = "CloudBanks",
 		Package = "Sky",
-		Center = v(-300, 160, -500),
-		Size = v(1400, 160, 1400),
+		-- (reaches the south horizon too: one distant bank for lobby_south)
+		Center = v(-250, 160, -300),
+		Size = v(1500, 300, 1800), -- (round 3: the high banks moved up)
 		Facing = v(0, 0, 1),
 		Walkable = true,
-		Note = "Voxel cloud clusters near the horizon (W/NW/N), pink-orange lit undersides, purple tops.",
+		Note = "Opaque two-tone voxel cloud clusters near the horizon (W/NW/N/NE, one far south bank): warm sunset undersides, light pink tops.",
+	},
+	-- (last: its random stream never reshuffles the other Sky pieces)
+	{
+		Id = "NearSea",
+		Package = "Sky",
+		Center = v(-250, -21, -20),
+		Size = v(160, 12, 560), -- (12 tall: a small far sail on its south end)
+		Facing = v(0, 0, 1),
+		Walkable = true,
+		Note = "Decor only: the near west sea deepened toward WaterDeep in soft bands out from the cliff (the sun glitter runs on over it), and a small far sail on the south horizon.",
 	},
 } :: { Piece }
 
@@ -519,9 +551,11 @@ LobbyLayout.Pieces = {
 LobbyLayout.Paths = {
 	{ Id = "ToShop", From = v(-28, 0, -13), To = v(-40, 0, -19), Width = 12, Kind = "Cobble" },
 	{ Id = "ToUpgrades", From = v(28, 0, -13), To = v(40, 0, -19), Width = 12, Kind = "Cobble" },
-	{ Id = "ToWheel", From = v(-31, 0, 17), To = v(-41, 0, 22), Width = 7, Kind = "Cobble" },
-	{ Id = "ToFossil", From = v(33, 0, 14), To = v(40, 0, 20), Width = 7, Kind = "Cobble" },
-	{ Id = "ToScanner", From = v(5, 0, 80), To = v(49, 0, 80), Width = 6, Kind = "Cobble" },
+	-- from the forge west path to the wheel's stair foot: a 6-stud clear corridor
+	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
+	-- from the plaza rim round the dig's west corner to its gate (its south-west front)
+	{ Id = "ToFossil", From = v(17.5, 0, 32.5), To = v(30.5, 0, 45.5), Width = 5, Kind = "Cobble" },
+	{ Id = "ToScanner", From = v(5, 0, 79), To = v(37, 0, 75.5), Width = 6, Kind = "Cobble" },
 	{ Id = "ToMine", From = v(-5, 0, 88), To = v(-34, 0, 88), Width = 10, Kind = "Dirt" },
 	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(160, 0, -115), Width = 6, Kind = "Dirt" },
 } :: { Path }

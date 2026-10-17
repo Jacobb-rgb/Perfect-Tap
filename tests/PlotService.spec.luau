@@ -195,7 +195,8 @@ return function(T, Loader)
 				end
 			end
 			-- mobile budget: 8 plots stream in with the lobby (LobbyLayout.Budget)
-			T.le(parts, 300, `plot {plot.Id} parts (pad + yard)`)
+			-- (round 3: 310, the front hedge, lamp posts and mortar lines)
+			T.le(parts, 310, `plot {plot.Id} parts (pad + yard)`)
 			T.le(lights, 1, `plot {plot.Id} lights`)
 			T.lt(collide, parts, "decoration doesn't collide")
 		end
@@ -289,8 +290,9 @@ return function(T, Loader)
 				T.lt(d.Size.Y, d.Size.X, "cap is a low slab")
 			elseif d:IsA("BasePart") and d.Name == "CapRound" then
 				rounds += 1
-				T.eq(d.Shape, roblox.Enum.PartType.Cylinder, "the cap's bullnose is round")
-				T.lt(PlotBuilder.WallBand * 0.8, d.Size.Y, "a chunky bullnose")
+				-- (round 3: a square stone coping, no round grey rail)
+				T.truthy(d.Shape == roblox.Enum.PartType.Block, "the cap's coping is square stone")
+				T.lt(PlotBuilder.WallBand * 0.8, d.Size.X, "a chunky coping")
 			end
 		end
 		T.le(6, caps, "pad wall runs: two front, two sides, two pad/yard")

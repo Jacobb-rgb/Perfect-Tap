@@ -5,9 +5,10 @@
 	glowing screen, slanted console with buttons; Model tag OreCodex,
 	PrimaryPart = the cabinet), a thick mechanical scanner ring (blue neon
 	inner edge, orange studs) standing on clamp feet with a sample rock and
-	a scan line, sample rocks on table-display-planet pedestals and the ROCK
-	SCANNER sign box with a scan-ring icon on a frame, raised over the ring so
-	the words read from the terminal side. One blue PointLight.
+	a scan line, sample rocks on table-display-planet pedestals and (round
+	3) a big double-sided wood ROCK SCANNER board with gold letters on two
+	posts over the terminal, turned toward the plaza and the hero camera.
+	One blue PointLight.
 	Local frame: 12 wide, 10 tall, 10 deep, front = -Z (south-west).
 ]]
 
@@ -123,27 +124,23 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 		sampleRock(m, top, rng:range(0.95, 1.2), ore, rng)
 	end
 
-	-- ROCK SCANNER sign box with a scan-ring icon on a frame at the back
-	-- (raised over the ring's top: seen from the front at eye height the ring
-	-- stays under the letters)
-	local sz = 3.9
-	local signY, signH = 8.75, 1.7
-	local postTop = signY - signH / 2 - 0.55
-	for _, x in { -5.1, 5.1 } do
-		Style.block(m, at(x, (TOP + postTop) / 2, sz + 0.3), Vector3.new(0.6, postTop - TOP, 0.6), Tech.MetalLight)
-		Tech.disc(m, at(x, TOP + 0.5, sz + 0.3).Position, 1.0, 0.9, Tech.Band)
+	-- (lobby fix round 3) the ROCK SCANNER board: a big double-sided wood
+	-- board with gold letters on two timber posts over the terminal, turned
+	-- 30 degrees toward the plaza so the plaza and the hero camera both
+	-- read it (the blue sign box was unreadable at hero scale)
+	local board = at(1.4, 0, 2.2) * CFrame.Angles(0, math.rad(30), 0)
+	local signY, signH, signW = 8.9, 2.6, 9.4
+	local postTop = signY - signH / 2
+	for _, x in { -signW / 2 + 0.8, signW / 2 - 0.8 } do
+		Style.block(m, board * CFrame.new(x, (TOP + postTop) / 2 + 0.2, 0.45), Vector3.new(0.55, postTop - TOP + 0.4, 0.55), C.WoodDark)
 	end
-	local _, iconAt = Tech.sign(m, at(0, signY, sz - 0.4), "ROCK SCANNER", 9.4, signH, {
-		Icon = 2.0,
-		IconLeft = true,
-		Margin = 0.35,
-		Lip = 0.2,
-		Back = true,
+	Style.sign(m, board * CFrame.new(0, signY, 0), "ROCK SCANNER", signW, signH, {
+		Kind = "Wood",
+		Depth = 0.5,
+		DoubleSided = true,
+		StrokeColor = C.TextShadow,
+		StrokeTransparency = 0,
 	})
-	if iconAt then
-		-- a scan ring with a crosshair (the machine's octagon ring) in blue neon
-		Tech.scanIcon(m, iconAt, 1.65, Tech.Tube)
-	end
 end
 
 return Scanner

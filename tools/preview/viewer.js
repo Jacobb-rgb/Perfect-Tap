@@ -357,16 +357,29 @@ async function main() {
   }
 
   // ---- sign text (SurfaceGui on Front/Back faces) ----
-  for (const [partIndex, face, text, color, family] of scene.texts) {
+  for (const [partIndex, face, text, color, family, lightInfluence = 1] of scene.texts) {
     const part = scene.parts[partIndex];
     const base = partMatrices[partIndex];
     if (!base) continue;
     const [, sx, sy, sz] = part;
     const tex = textTexture(text, color, family, sx / sy);
-    const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(sx, sy),
-      new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9 }),
-    );
+    // SurfaceGui.LightInfluence like Roblox: 0 = the letters ignore the lighting (full
+    // brightness), 1 = lit like the part, in between = that much lit, the rest self-lit.
+    // Self-lit letters stay just under the bloom threshold (0.82): crisp, not a white blob.
+    const li = Math.min(1, Math.max(0, lightInfluence));
+    const selfLit = (1 - li) * 0.78;
+    const textMaterial =
+      li <= 0.01
+        ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: new THREE.Color(selfLit, selfLit, selfLit) })
+        : new THREE.MeshStandardMaterial({
+            map: tex,
+            transparent: true,
+            roughness: 0.9,
+            color: new THREE.Color(li, li, li),
+            emissive: new THREE.Color(selfLit, selfLit, selfLit),
+            emissiveMap: tex,
+          });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(sx, sy), textMaterial);
     const local = new THREE.Matrix4();
     if (face === 0) {
       local.makeRotationY(Math.PI).setPosition(0, 0, -sz / 2 - 0.02);

@@ -76,13 +76,14 @@ Buildings.Colors = {
 	Shingle = rgb(150, 92, 64), -- warm brown wooden shingles (concept v1)
 	Deck = rgb(70, 76, 96), -- flat roof decks
 	Glass = rgb(58, 112, 186), -- display glass (SmoothPlastic: no bloom)
-	Window = rgb(236, 138, 52), -- warm lit window panes (Neon, deep amber: no white bloom)
+	-- (lobby fix round 3: a deep amber, the panes no longer blow out to white-yellow)
+	Window = rgb(255, 130, 40), -- warm lit window panes
 	WindowDark = rgb(70, 95, 140), -- unlit glass (reads as glass, not as a hole)
 	Glare = rgb(176, 206, 240), -- glare strips on glass
 	EdgeNeon = rgb(48, 150, 255), -- concept v2 contours (deeper than GlowEdge: no white bloom)
 	SignNeon = rgb(40, 128, 240), -- sign frames
 	Amber = rgb(230, 120, 30), -- sign icons (deep amber: the core stays orange, no white blob)
-	LampAmber = rgb(255, 165, 70), -- lantern cubes (deep amber, small: no white blob)
+	LampAmber = rgb(255, 150, 62), -- lantern cubes (round 3: the plaza's amber glass tone, no white blob)
 	Shelf = rgb(255, 176, 92), -- display shelf lights
 	DoorLeaf = rgb(44, 48, 66),
 	SignBoard = rgb(16, 24, 56), -- dark navy sign boards
@@ -212,7 +213,8 @@ function Buildings.windowRow(
 		table.insert(parts, pane(parent, wall * CFrame.new(px, y, -0.33), Vector3.new(paneW, paneH, 0.1), opts.Dark == i, opts.Color))
 	end
 	if opts.Mullion ~= false then
-		table.insert(parts, trim(parent, wall * CFrame.new(cx, y + paneH * 0.18, -0.44), Vector3.new(span - 0.4, 0.14, 0.12), frame))
+		-- (round 3: a dark transom across the panes)
+		table.insert(parts, trim(parent, wall * CFrame.new(cx, y + paneH * 0.12, -0.44), Vector3.new(span - 0.4, 0.16, 0.12), C.WoodDark))
 	end
 	if opts.Sill ~= false then
 		local bottom = y - paneH / 2 - gap
@@ -234,9 +236,11 @@ function Buildings.window(parent: Instance, wall: CFrame, x: number, y: number, 
 	local opts: WindowOpts = o or {}
 	local frame = opts.Frame or K.PanelLight
 	trim(parent, wall * CFrame.new(x, y, -0.15), Vector3.new(w + 0.8, h + 0.8, 0.3), frame)
-	local p = pane(parent, wall * CFrame.new(x, y, -0.33), Vector3.new(w, h, 0.1), opts.Dark == 1, opts.Color)
-	if opts.Mullion ~= false and h >= 1.6 then
-		trim(parent, wall * CFrame.new(x, y + h * 0.18, -0.44), Vector3.new(w + 0.2, 0.14, 0.12), frame)
+	-- (round 3) a smaller glowing pane behind a dark mullion cross
+	local p = pane(parent, wall * CFrame.new(x, y, -0.33), Vector3.new(w * 0.88, h * 0.88, 0.1), opts.Dark == 1, opts.Color)
+	if opts.Mullion ~= false and h >= 1.0 then
+		trim(parent, wall * CFrame.new(x, y + h * 0.1, -0.44), Vector3.new(w * 0.9, 0.16, 0.12), C.WoodDark)
+		trim(parent, wall * CFrame.new(x, y, -0.44), Vector3.new(0.16, h * 0.9, 0.12), C.WoodDark)
 	end
 	if opts.Sill ~= false then
 		trim(
@@ -951,10 +955,14 @@ end
 function Buildings.parasol(parent: Instance, at: CFrame, color: Color3, size: number?)
 	local s = size or 3.4
 	Geo.cylinder(parent, (at * CFrame.new(0, 0.1, 0)).Position, 0.2, 1.1, K.Gun, SMOOTH, Style.tiny())
-	Geo.cylinder(parent, (at * CFrame.new(0, 1.6, 0)).Position, 0.2, 2.0, C.AwningWhite, SMOOTH, Style.tiny())
-	trim(parent, at * CFrame.new(0, 2.6, 0), Vector3.new(0.22, 5.0, 0.22), K.Metal)
-	Style.block(parent, at * CFrame.new(0, 5.0, 0), Vector3.new(s, 0.4, s), color, nil, Style.tiny({ CastShadow = true }))
-	trim(parent, at * CFrame.new(0, 5.3, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(s * 0.68, 0.35, s * 0.68), color)
+	Geo.cylinder(parent, (at * CFrame.new(0, 1.6, 0)).Position, 0.2, 2.0, C.AwningWhite, SMOOTH, Style.tiny()).Name = "CafeTable"
+	trim(parent, at * CFrame.new(0, 2.85, 0), Vector3.new(0.22, 5.5, 0.22), K.Metal)
+	-- the canopy: a low pyramid of four wedges (one per side), tips meeting at the pole
+	local h = s * 0.32
+	for i = 0, 3 do
+		local turn = at * CFrame.new(0, 4.9 + h / 2, 0) * CFrame.Angles(0, i * math.pi / 2, 0)
+		Geo.wedge(parent, turn * CFrame.new(0, 0, -s / 4), Vector3.new(s, h, s / 2), color, SMOOTH, Style.tiny({ CastShadow = i == 0 }))
+	end
 end
 
 -- A little stool by a cafe table. 1 part.
@@ -1090,7 +1098,7 @@ end
 local function mugIcon(parent: Instance, cf: CFrame, s: number, color: Color3)
 	local bw, bh = s * 0.44, s * 0.5
 	local body = cf * CFrame.new(s * 0.1, -s * 0.1, 0)
-	trim(parent, body, Vector3.new(bw, bh, 0.34), K.MugBody)
+	glow(parent, body, Vector3.new(bw, bh, 0.34), color)
 	glow(parent, body * CFrame.new(0, bh / 2 - 0.1, -0.04), Vector3.new(bw + 0.06, 0.16, 0.38), color)
 	glow(parent, body * CFrame.new(0, -bh / 2 + 0.1, -0.04), Vector3.new(bw + 0.06, 0.12, 0.38), color)
 	-- the handle on the viewer's right (a frame's local -X)
@@ -1161,9 +1169,10 @@ function Buildings.sign(parent: Instance, at: CFrame, text: string, textW: numbe
 		local iconAt = at * CFrame.new(total / 2 - iconW / 2, 0, 0)
 		trim(parent, iconAt, Vector3.new(iconW - 0.02, h - 0.02, depth), K.SignBoard)
 		glow(parent, at * CFrame.new(total / 2 - iconW, 0, z), Vector3.new(t, h - t, 0.2), K.SignNeon)
-		local front = iconAt * CFrame.new(0, 0, -depth / 2 - 0.15)
+		-- (the big mug stands a little further out: it overlaps the neon frame)
+		local front = iconAt * CFrame.new(0, 0, -depth / 2 - (if icon == "Mug" then 0.2 else 0.15))
 		local color = iconColor or K.Amber
-		local s = iconW * 0.94
+		local s = if icon == "Mug" then iconW * 1.5 else iconW * 0.94
 		if icon == "Gem" then
 			gemIcon(parent, front, s, color)
 		elseif icon == "Mug" then

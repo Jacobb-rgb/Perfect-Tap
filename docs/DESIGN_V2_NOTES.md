@@ -190,6 +190,13 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 3. **Trading:** golems and ores only (no blasters, no money). ✔
 4. **Leaderboards: 4 boards:** Money per second, Total earned, Artifacts found, and **Most hours played**.
 
+### Machine roster (owner, 2026-10-17)
+The owner accepted every proposed machine and asked for more: 24 placeable machines (cleaning/sorting, a furnace
+ladder Clay → Brick → Blast → Plasma + Alloy Furnace, Crusher, Crystal Extractor, Restoration Table, Sell Box,
+6 transport machines incl. Robot Arm) and a **power system** (Solar Panel, Wind Turbine, Fusion Reactor, **cables and
+poles**, too little power **slows** machines down). **Upgraded machines look different** every few levels.
+Full list and open questions: docs/plans/MACHINES_PLAN.md.
+
 ### Platforms (owner, 2026-10-16)
 The game must play **perfectly on PC, mobile, Xbox and PlayStation** (mouse+keyboard, touch, gamepad, TV).
 See the project skill .claude/skills/all-platforms/SKILL.md.

@@ -21,9 +21,30 @@ local DataTemplate = {
 		Bellows = 0, -- machine speed level
 		ExtraSlots = 0, -- machine slot upgrades bought
 		PenLevel = 0, -- Ore Pen capacity level (EconomyConfig.Pen)
+		-- pen automation (EconomyConfig.PenAutomation): 0 none, 1 the sorting
+		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
+		-- (readers use >= levels: a newer server may add more)
+		PenAutomation = 0,
+	},
+	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
+	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)
+	MachineUpgrades = {},
+	-- what clean ore the Iron Box keeps (into the pen) and the pen's sorting
+	-- billboard marks as kept (MachineData.Keep / keeps / keepsOre): "RarePlus"
+	-- (Rare and better), "List" (the player's choices on KeepList; ores not on
+	-- it follow the Rare+ rule) or "All". Dirty ore, crushed ore and ingots are
+	-- never kept, they always pass on.
+	KeepMode = "RarePlus",
+	-- the player's choices for "List" mode: { [oreId] = true (keep) | false (send on) }
+	KeepList = {},
+	-- the Foundry on the base: ingots waiting to be forged into blasters,
+	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock;
+	-- FoundryAction "Take" moves them back to the pen)
+	Foundry = {
+		Stock = {},
 	},
 
-	-- machines: bought but not placed { [machineId] = count 1..999 } (no zero keys)
+	-- machines: bought but not placed { [machineId] = count 1..MachineData.MaxInventory (999) } (no zero keys)
 	MachineInventory = {},
 	-- placed machines on the plot: { { Id, X, Z, R, In?, Out? } } (min grid cell +
 	-- rotation 0-3). In = input queue (In[1] is being worked, max 4), Out = finished
@@ -34,6 +55,10 @@ local DataTemplate = {
 	-- the Ore Pen on the base: every stored item, one list
 	-- { { K = kind, O = oreId, G = grade?, R = recipe? } }
 	Storage = {},
+	-- the pen's sorting billboard (Upgrades.PenAutomation >= 1) sends unkept
+	-- arrivals out of the PEN chute while this is on (PenAction "AutoSort";
+	-- readers treat anything but false as on)
+	AutoSort = true,
 	-- what stands on each podium: an ItemData.storageKey ("Clean|Gold|Pristine|") or ""
 	Podiums = { "", "", "", "" },
 	-- os.time() of the last moment the podiums were paying (offline earnings)

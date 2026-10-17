@@ -7,8 +7,23 @@
 	  PodiumSlots, PenCapacity) and update live.
 	    TAKE    PenAction "Take" { Key, Count = 1 }: the ore comes out at the
 	            pen gate, into your hands
+	    SEND    PenAction "Send" { Key, Count = 1 } (like TAKE, one per
+	            press; the merged Dirty Ore row: { Filter = "Dirty", Count
+	            = 1 }): the server sends it onto your belts at the PEN
+	            chute. For SendAllWindow seconds after, the button reads
+	            "ALL xN?" (N = the stack, the one just sent included) and a
+	            second press sends exactly that: { Key, All = true } (the
+	            Dirty Ore row: { Filter = "Dirty" }), "all of this key",
+	            which the server counts with the one already queued, so the
+	            number shown is the number sent and nothing extra stays
+	            queued. A mis-tap never sends a whole stack of podium ore
 	    PODIUM  PenAction "ToPodium" { Key, Slot = first free unlocked slot }
 	    PLACE   (pick mode) PodiumAction(slot, "Place", { Key }), then closes
+	  The toolbar: SEND ALL DIRTY ({ Filter = "Dirty" }), SEND UNKEPT
+	  ({ Filter = "Unkept" }, only with Upgrades.PenAutomation >= 1), STOP
+	  (PenAction "StopSend") and the status from the State's PenSend. The
+	  header's AUTO-SORT switch (with the billboard) sends PenAction
+	  "AutoSort" { On } (State AutoSort).
 	  Closes with X, B (gamepad), Backspace, walking away (pen: Range from
 	  the gate; pick mode: from the podium) or respawning. Gamepads start on
 	  the first button; other prompts are hidden while it is open. Phones
@@ -32,6 +47,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
@@ -49,6 +65,7 @@ local PenController = {}
 -- keep in sync with PenService.Range / PodiumService.Range (server)
 PenController.PenRange = 24
 PenController.PodiumRange = 30
+PenController.SendAllWindow = 3 -- seconds a row's SEND reads "ALL xN?" after a press
 
 local CLOSE_ACTION = "TerraForgePenClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
@@ -108,6 +125,52 @@ end
 
 -- rows on screen by key (the merged Dirty Ore row holds its real keys)
 local shownEntries: { [string]: PenView.Entry } = {}
+-- rows whose SEND reads "ALL xN?" until this os.clock()
+local armedUntil: { [string]: number } = {}
+
+local function disarm(view: PenView.Refs, rowKey: string)
+	armedUntil[rowKey] = nil
+	local row = view.Rows[rowKey]
+	if row then
+		row.Send.Text = PenView.sendButtonText(nil)
+	end
+end
+
+--[[
+	SEND: one item; pressed again while it reads "ALL xN?" (N = the stack):
+	all of it. The server counts "all" with the one already queued, so N is
+	exactly what goes out, whether that one has left yet or not.
+]]
+local function sendRow(view: PenView.Refs, rowKey: string, entry: PenView.Entry?, key: string)
+	local deadline = armedUntil[rowKey]
+	if entry and deadline and os.clock() < deadline then
+		disarm(view, rowKey)
+		if entry.Keys then
+			Net.send("PenAction", "Send", { Filter = "Dirty" })
+		else
+			Net.send("PenAction", "Send", { Key = entry.Key, All = true })
+		end
+		return
+	end
+	if entry and entry.Keys then
+		Net.send("PenAction", "Send", { Filter = "Dirty", Count = 1 })
+	else
+		Net.send("PenAction", "Send", { Key = key, Count = 1 })
+	end
+	local all = if entry then entry.Count else 0
+	local row = view.Rows[rowKey]
+	if all <= 1 or not row then
+		return
+	end
+	local stamp = os.clock() + PenController.SendAllWindow
+	armedUntil[rowKey] = stamp
+	row.Send.Text = PenView.sendButtonText(all)
+	task.delay(PenController.SendAllWindow, function()
+		if armedUntil[rowKey] == stamp then
+			disarm(view, rowKey)
+		end
+	end)
+end
 
 local function send(rowKey: string, button: string)
 	local view = refs
@@ -120,7 +183,9 @@ local function send(rowKey: string, button: string)
 		return
 	end
 	Sfx.play("UIClick")
-	if view.Mode == "Pick" then
+	if button == "Send" then
+		sendRow(view, rowKey, entry, key)
+	elseif view.Mode == "Pick" then
 		local slot = view.Slot
 		if slot then
 			Net.send("PodiumAction", slot, "Place", { Key = key })
@@ -144,6 +209,9 @@ local function wire(rows: { PenView.Row })
 		local key = row.Key
 		row.Take.Activated:Connect(function()
 			send(key, "Take")
+		end)
+		row.Send.Activated:Connect(function()
+			send(key, "Send")
 		end)
 		row.Podium.Activated:Connect(function()
 			send(key, "Podium")
@@ -189,6 +257,28 @@ local function refresh(state: { [string]: any }?)
 	end
 	local canPodium = state ~= nil and PenView.freeSlot(state.Podiums, state.PodiumSlots) ~= nil
 	wire(PenView.setEntries(view, entries, canPodium))
+	-- an armed SEND follows the stack: "ALL xN?" is always what a press sends
+	-- (back to SEND when it is gone)
+	local now = os.clock()
+	for rowKey, deadline in armedUntil do
+		local entry = shownEntries[rowKey]
+		local row = view.Rows[rowKey]
+		if not entry or not row or now >= deadline then
+			disarm(view, rowKey)
+		else
+			row.Send.Text = PenView.sendButtonText(entry.Count)
+		end
+	end
+	local upgrades = state and state.Upgrades
+	local automation = if type(upgrades) == "table" then tonumber(upgrades.PenAutomation) or 0 else 0
+	PenView.setAutoSort(view, automation >= EconomyConfig.PenAutomation.Billboard, state == nil or state.AutoSort ~= false)
+	local dirty = 0
+	for _, entry in entries do
+		if entry.Keys then
+			dirty += entry.Count
+		end
+	end
+	PenView.setSending(view, state and state.PenSend, automation >= EconomyConfig.PenAutomation.Billboard, dirty)
 	local count = if state then tonumber(state.StorageCount) or 0 else 0
 	local capacity = if state then tonumber(state.PenCapacity) or 0 else 0
 	PenView.setHeader(view, count, capacity)
@@ -204,9 +294,9 @@ local function updateHint(view: PenView.Refs)
 	elseif view.Mode == "Pick" then
 		PenView.setHint(view, "Pick the ore this podium shows off", nil, nil)
 	elseif isTouch() then
-		PenView.setHint(view, "TAKE: carry it  -  PODIUM: earn money every second", nil, nil)
+		PenView.setHint(view, "TAKE: carry it  -  SEND: onto your belts (twice: all)  -  PODIUM: money every second", nil, nil)
 	else
-		PenView.setHint(view, "TAKE puts ore in your hands  -  PODIUM earns money every second  -  Backspace: close", nil, nil)
+		PenView.setHint(view, "TAKE: to your hands  -  SEND: to your belts (twice: all)  -  PODIUM: money/s  -  Backspace: close", nil, nil)
 	end
 end
 
@@ -226,6 +316,9 @@ function PenController.close()
 	ContextActionService:UnbindAction(CLOSE_ACTION)
 	local view = refs
 	if view then
+		for rowKey in armedUntil do
+			disarm(view, rowKey)
+		end
 		local selected = GuiService.SelectedObject
 		if selected and selected:IsDescendantOf(view.Gui) then
 			GuiService.SelectedObject = nil
@@ -255,8 +348,37 @@ local function ensureView(): PenView.Refs
 		PenController.close()
 		Sfx.play("UIClick")
 	end)
+	built.SendDirty.Activated:Connect(function()
+		Sfx.play("UIClick")
+		Net.send("PenAction", "Send", { Filter = "Dirty" })
+	end)
+	built.SendUnkept.Activated:Connect(function()
+		Sfx.play("UIClick")
+		Net.send("PenAction", "Send", { Filter = "Unkept" })
+	end)
+	built.StopSend.Activated:Connect(function()
+		Sfx.play("UIClick")
+		Net.send("PenAction", "StopSend", {})
+	end)
+	built.AutoSort.Activated:Connect(function()
+		Sfx.play("UIClick")
+		local state = StateController.get()
+		local on = state == nil or state.AutoSort ~= false
+		Net.send("PenAction", "AutoSort", { On = not on })
+	end)
 	refs = built
 	return built
+end
+
+-- The screen in design units (what the panel's UIScale sees), below the top bar.
+local function screenRoom(scale: number): Vector2?
+	local camera = Workspace.CurrentCamera
+	if not camera or scale <= 0 then
+		return nil
+	end
+	local topLeft, bottomRight = GuiService:GetGuiInset()
+	local size = camera.ViewportSize - topLeft - bottomRight
+	return Vector2.new(size.X / scale, size.Y / scale)
 end
 
 -- Where the panel belongs: the pen gate, or the podium in pick mode.
@@ -299,7 +421,8 @@ function PenController.open(slot: number?)
 	end
 	PenController.close()
 	local view = ensureView()
-	PenView.setCompact(view, HudController.uiScale() <= 0.75)
+	local scale = HudController.uiScale()
+	PenView.setCompact(view, scale <= 0.75, screenRoom(scale))
 	PenView.setMode(view, if slot then "Pick" else "Pen", slot)
 	updateHint(view)
 	view.List.CanvasPosition = Vector2.zero

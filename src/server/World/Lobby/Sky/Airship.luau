@@ -51,15 +51,17 @@ local TopStrip = rgb(236, 182, 112)
 local NavRed = rgb(255, 64, 64)
 local NavGreen = rgb(80, 255, 140)
 local Screen = rgb(255, 170, 90)
--- the exhaust jet: saturated magenta like the concept's
-local Trail = rgb(255, 80, 200)
+-- the exhaust: a short deep-orange glow (round 2: the long magenta beam read
+-- as a stray line across the sky)
+local Trail = rgb(255, 110, 30)
 
 local Airship = {}
 
 -- Where it flies: over the mountain's right shoulder, behind its back edge,
 -- between the peak and the east floating island in the hero and spawn shots
 -- (not a LobbyLayout piece: it hangs outside the lobby area box).
-Airship.Center = Vector3.new(139, 147, -371)
+-- (lobby fix round 3: 13 studs higher, its gondola well clear of the east island)
+Airship.Center = Vector3.new(232, 199, -336) -- the spawn view's top right
 -- the nose points west-south-west: the town sees it three-quarter from the
 -- front-left like concept v2 (nose to the left, tail and exhaust to the right)
 Airship.Heading = 252
@@ -160,7 +162,7 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	local bandZ = NOSE[2] - 1.6
 	drum(at(0, 0, bandZ), 2 * math.sqrt((NOSE[1] / 2) ^ 2 - 1.6 ^ 2) + 0.3, 0.9, Band)
 	orb(at(0, 0, TIP[2]), TIP[1], C.Copper)
-	glow(at(0, 0, TIP[2] - TIP[1] / 2 - 0.1), size(1.8, 1.8, 0.6), C.Lamp)
+	glow(at(0, 0, TIP[2] - TIP[1] / 2 - 0.1), size(1.8, 1.8, 0.6), C.LampAmber)
 	local tail = orb(at(0, 0, TAIL[2]), TAIL[1], bronze)
 	tail.Name = "Tail"
 	for _, t in CONE do
@@ -193,7 +195,7 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	local portX = math.sqrt(radiusAt(-12) ^ 2 - portY ^ 2) + 0.05
 	for _, side in { -1, 1 } do
 		for _, pz in { -15, -9 } do
-			glow(at(side * portX, portY, pz), size(0.3, 1.1, 1.1), C.Lamp)
+			glow(at(side * portX, portY, pz), size(0.3, 1.1, 1.1), C.LampAmber)
 		end
 	end
 
@@ -222,17 +224,17 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 		glow(at(side * (finR + 6.2), 0, finZ + 3.2), size(0.8, 0.8, 0.8), if side < 0 then NavRed else NavGreen)
 	end
 
-	-- stern propeller and the thin bright magenta jet behind it: three Neon
-	-- cylinders, each longer, thinner and fainter
+	-- stern propeller and a short orange exhaust glow behind it: three Neon
+	-- cylinders, each thinner and fainter
 	local last = CONE[#CONE]
 	local sternZ = last[2] + last[3] / 2 + 0.5
 	propeller(at(0, 0, sternZ), 12)
 	local z = sternZ + 1
 	type Segment = { Width: number, Length: number, Transparency: number }
 	local trail: { Segment } = {
-		{ Width = 2.2, Length = 6, Transparency = 0.2 },
-		{ Width = 1.4, Length = 10, Transparency = 0.45 },
-		{ Width = 0.8, Length = 14, Transparency = 0.7 },
+		{ Width = 2.0, Length = 2.4, Transparency = 0.2 },
+		{ Width = 1.4, Length = 2.0, Transparency = 0.45 },
+		{ Width = 0.8, Length = 1.6, Transparency = 0.7 },
 	}
 	for _, seg in trail do
 		local jet = drum(at(0, 0, z + seg.Length / 2), seg.Width, seg.Length, Trail, Enum.Material.Neon)
@@ -269,7 +271,7 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	box(at(0, gy - 0.2, gz + 8.9), size(4, 3, 1.8), C.Wood)
 	for _, side in { -1, 1 } do
 		for k = 0, 2 do
-			glow(at(side * 2.55, gy + 0.3, gz - 5 + k * 4.6), size(0.2, 1.3, 2.4), C.Lamp)
+			glow(at(side * 2.55, gy + 0.3, gz - 5 + k * 4.6), size(0.2, 1.3, 2.4), C.LampAmber)
 		end
 	end
 	-- struts from the cabin roof up into the envelope

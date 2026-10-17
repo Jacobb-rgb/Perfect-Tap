@@ -61,6 +61,10 @@ Style.C = {
 	Roof = rgb(198, 54, 42),
 	RoofDark = rgb(150, 38, 32),
 	RoofTrim = rgb(104, 30, 26),
+	-- muted terracotta for the town houses (lobby fix round 2: C.Roof read
+	-- as fire-engine red next to the stalls; C.Roof stays for the others)
+	RoofTerracotta = rgb(160, 58, 44),
+	RoofTerracottaDark = rgb(120, 40, 32),
 	-- metals
 	Iron = rgb(64, 64, 72),
 	IronLight = rgb(116, 118, 128),
@@ -133,6 +137,18 @@ Style.C = {
 	-- factory accents (Kenney-style machines, see ART_DIRECTION "Machines")
 	Hazard = rgb(255, 150, 36),
 	HazardDark = rgb(40, 36, 40),
+	-- deep glows that stay colored under bloom (lobby polish): a deep amber
+	-- for lamps (Lamp blooms to a white blob) and deep crystal bodies for
+	-- Neon crystals with a small TipLerp (the pale tints bloom to pastel)
+	LampAmber = rgb(255, 140, 48),
+	CrystalPurpleDeep = rgb(120, 50, 210),
+	CrystalBlueDeep = rgb(40, 110, 230),
+	CrystalPinkDeep = rgb(220, 60, 150),
+	-- lobby fix round 3: a deep electric blue that keeps its hue under bloom
+	-- (C.GlowEdge blooms to pastel) and a bright cyan-white core strip laid
+	-- inside it, so blue neon frames read as glowing tubes
+	GlowEdgeDeep = rgb(20, 110, 255),
+	GlowCore = rgb(140, 210, 255),
 }
 
 local C = Style.C
@@ -432,7 +448,10 @@ end
 	           "Glow" (deep blue board, neon blue frame, white letters, unlit),
 	           "Stone" (dark stone, light stone frame, gold letters)
 	opts.DoubleSided, opts.TextColor, opts.Font, opts.Frame (default true),
-	opts.Depth (board thickness, default 0.6). Returns the board ("Sign").
+	opts.Depth (board thickness, default 0.6), opts.StrokeColor and
+	opts.StrokeTransparency (the letter outline, default the kind's edge
+	color at 0.4; small labels read best with a dark stroke at 0).
+	Returns the board ("Sign").
 ]]
 function Style.sign(parent: Instance, cf: CFrame, text: string, width: number, height: number, opts: Opts?): Part
 	local o: Opts = opts or {}
@@ -479,8 +498,8 @@ function Style.sign(parent: Instance, cf: CFrame, text: string, width: number, h
 		label.Text = text
 		label.TextScaled = true
 		label.TextColor3 = textColor
-		label.TextStrokeColor3 = if kind == "Glow" then C.GlowEdge else C.TextShadow
-		label.TextStrokeTransparency = 0.4
+		label.TextStrokeColor3 = o.StrokeColor or (if kind == "Glow" then C.GlowEdge else C.TextShadow)
+		label.TextStrokeTransparency = o.StrokeTransparency or 0.4
 		label.FontFace = Font.fromEnum(o.Font or Style.SignFont)
 		label.Parent = gui
 	end
@@ -494,7 +513,7 @@ end
 --[[
 	Part-built icon for signs (no decals). `cf` = icon center, front = LookVector;
 	place it just in front of a board (board.CFrame * CFrame.new(0, 0, -depth/2 - 0.2)).
-	kind: "Hammer", "CrossedHammers", "Pickaxe", "CrossedPickaxes", "Gear",
+	kind: "Hammer", "CrossedHammers", "CrossedHammersV2", "Pickaxe", "CrossedPickaxes", "Gear",
 	"House", "Compass", "Arrow" (points to the VIEWER's right when seen from
 	the front), "ArrowLeft", "ArrowDown", "Coin", "Bone", "Target".
 	Note: seen from the front, a frame's local +X is on the viewer's LEFT, so
@@ -522,6 +541,25 @@ function Style.icon(parent: Instance, cf: CFrame, kind: string, size: number, co
 	elseif kind == "CrossedHammers" then
 		hammer(cf * CFrame.Angles(0, 0, 0.7))
 		hammer(cf * CFrame.Angles(0, 0, -0.7))
+	elseif kind == "CrossedHammersV2" then
+		-- (lobby fix round 3) chunky crossed hammers that read at a distance:
+		-- the handles cross at 40% of their length, the heads (1.7x the
+		-- handle's width, a peen block on the inner side) keep a gap of about
+		-- 0.15 x size between them, so the icon never reads as a chevron over an X
+		local len = s * 0.9
+		local hw = s * 0.12
+		local hh = hw * 1.7
+		local tilt = 0.7
+		local cross = Vector3.new(0, -s * 0.11, 0)
+		for _, k in { -1, 1 } do
+			-- local +Y runs up the handle; k * local +X points away from the other hammer
+			local at = cf * CFrame.new(cross) * CFrame.Angles(0, 0, -k * tilt)
+			add(bar(parent, at * CFrame.new(0, len * 0.1, 0), hw, len, d, color, mat))
+			local headY = len * 0.6 - hh / 2
+			-- the face block (outward) and the narrower peen (inward)
+			add(bar(parent, at * CFrame.new(k * s * 0.03, headY, 0), s * 0.28, hh, d * 1.3, color, mat))
+			add(bar(parent, at * CFrame.new(-k * s * 0.165, headY, 0), s * 0.11, hh * 0.65, d * 1.15, color, mat))
+		end
 	elseif kind == "Pickaxe" then
 		pickaxe(cf * CFrame.Angles(0, 0, -0.5))
 	elseif kind == "CrossedPickaxes" then
@@ -883,9 +921,19 @@ end
 --[[
 	One crystal: a diamond-section prism with a ridge tip. `base` = bottom
 	center, up = growth direction. Neon; the tip is a lighter tint so the
-	facets still read under bloom (pass `tip` to override). 3 parts.
+	facets still read under bloom (pass `tip` to override, or `tipLerp`:
+	how far the tip goes toward white, default 0.35; ~0.12 with a deep body
+	color keeps a saturated crystal instead of a pastel/white one). 3 parts.
 ]]
-function Style.crystal(parent: Instance, base: CFrame, height: number, width: number, color: Color3, tip: Color3?): { BasePart }
+function Style.crystal(
+	parent: Instance,
+	base: CFrame,
+	height: number,
+	width: number,
+	color: Color3,
+	tip: Color3?,
+	tipLerp: number?
+): { BasePart }
 	local body = base * CFrame.Angles(0, math.pi / 4, 0)
 	local bodyH = height * 0.78
 	local tipH = height - bodyH
@@ -893,7 +941,7 @@ function Style.crystal(parent: Instance, base: CFrame, height: number, width: nu
 	local parts: { BasePart } = {}
 	table.insert(parts, Style.block(parent, body * CFrame.new(0, bodyH / 2, 0), Vector3.new(width, bodyH, width), color, NEON, p))
 	local tipAt = body * CFrame.new(0, bodyH + tipH / 2, 0)
-	local tipColor = tip or color:Lerp(Color3.new(1, 1, 1), 0.35)
+	local tipColor = tip or color:Lerp(Color3.new(1, 1, 1), tipLerp or 0.35)
 	table.insert(parts, Geo.wedge(parent, tipAt * CFrame.new(0, 0, -width / 4), Vector3.new(width, tipH, width / 2), tipColor, NEON, p))
 	table.insert(
 		parts,
@@ -911,7 +959,9 @@ end
 
 --[[
 	Glowing crystal cluster: one tall crystal and 3-5 smaller ones leaning
-	outward, on a dark rock. opts: Count, Light (adds one PointLight).
+	outward, on a dark rock. opts: Count, Light (adds one PointLight),
+	TipLerp (how far the tips and the lighter side crystals go toward
+	white; default 0.35 for the tips, 0.3 for the side tint).
 ]]
 function Style.crystalCluster(parent: Instance, base: CFrame, size: number, color: Color3, rng: Rng.Rng, opts: Opts?): Model
 	local o: Opts = opts or {}
@@ -924,13 +974,16 @@ function Style.crystalCluster(parent: Instance, base: CFrame, size: number, colo
 		nil,
 		Style.decor()
 	)
-	local tint = color:Lerp(Color3.new(1, 1, 1), 0.3)
+	local tipLerp: number? = o.TipLerp
+	local tint = color:Lerp(Color3.new(1, 1, 1), tipLerp or 0.3)
 	local main = Style.crystal(
 		m,
 		base * CFrame.new(0, size * 0.1, 0) * CFrame.Angles(rng:range(-0.12, 0.12), 0, rng:range(-0.12, 0.12)),
 		size,
 		size * 0.24,
-		color
+		color,
+		nil,
+		tipLerp
 	)
 	local count = o.Count or rng:int(3, 5)
 	for i = 1, count do
@@ -939,7 +992,7 @@ function Style.crystalCluster(parent: Instance, base: CFrame, size: number, colo
 		local h = size * rng:range(0.35, 0.7)
 		local foot = base * CFrame.new(math.cos(a) * size * 0.16, size * 0.06, math.sin(a) * size * 0.16)
 		local tilt = CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, -lean) * CFrame.Angles(0, a, 0)
-		Style.crystal(m, foot * tilt, h, h * 0.26, if i % 2 == 0 then tint else color)
+		Style.crystal(m, foot * tilt, h, h * 0.26, if i % 2 == 0 then tint else color, nil, tipLerp)
 	end
 	if o.Light then
 		Style.light(main[1], color, o.Range or math.clamp(size * 2.4, 12, 26), o.Brightness or 1.4)

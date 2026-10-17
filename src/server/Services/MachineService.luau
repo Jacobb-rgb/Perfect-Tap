@@ -35,6 +35,7 @@ local Placement = require(Shared.Machines.Placement)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
 local MachineLogic = require(Shared.Machines.MachineLogic)
 local Net = require(Shared.Net)
+local Format = require(Shared.Util.Format)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
@@ -456,8 +457,8 @@ local function spawnAll(player: Player, plotId: number)
 			print(`[MachineService] Studio dev kit added for {player.Name}`)
 		end
 	end
-	-- repair the saved layout (off the plot, overlapping); never enforces slot limits
-	local displaced = Placement.sanitize(data)
+	-- repair the saved layout (off the plot, on a chute, overlapping); never enforces slot limits
+	local displaced, reasons = Placement.sanitize(data)
 	if next(spawned) then
 		-- a machine whose entry was just sent back to the inventory goes too
 		local kept: { [any]: boolean } = {}
@@ -481,11 +482,24 @@ local function spawnAll(player: Player, plotId: number)
 		end
 	end
 	layoutChanged(player, plotId)
-	if #displaced == 1 then
-		local info = MachineData.ById[displaced[1]]
-		notifyLater(player, `{if info then info.Name else displaced[1]} didn't fit and is waiting in your Build menu.`)
-	elseif #displaced > 1 then
-		notifyLater(player, `{#displaced} machines didn't fit and are waiting in your Build menu.`)
+	-- machines that stood where a chute now is (step 3) get their own toast
+	local offChute, didntFit = {}, {}
+	for i, id in displaced do
+		table.insert(if reasons[i] == "Chute" then offChute else didntFit, id)
+	end
+	local function nameOf(id: string): string
+		local info = MachineData.ById[id]
+		return if info then info.Name else id
+	end
+	if #didntFit == 1 then
+		notifyLater(player, `{nameOf(didntFit[1])} didn't fit and is waiting in your Build menu.`)
+	elseif #didntFit > 1 then
+		notifyLater(player, `{#didntFit} machines didn't fit and are waiting in your Build menu.`)
+	end
+	if #offChute == 1 then
+		notifyLater(player, `A chute now sits where your {nameOf(offChute[1])} stood (only belts can go on it). It is waiting in your Build menu.`)
+	elseif #offChute > 1 then
+		notifyLater(player, `{#offChute} machines stood where the new chutes are (only belts can go on them). They are waiting in your Build menu.`)
 	end
 end
 
@@ -570,8 +584,15 @@ function MachineService.pickup(machine: PlacedMachine): (boolean, string?)
 			sold += 1
 		end
 	end
-	Placement.commitPickup(data, machine.Entry)
+	local _, refunded = Placement.commitPickup(data, machine.Entry)
 	layoutChanged(player, machine.PlotId)
+	if refunded > 0 then
+		-- the Build menu already held MachineData.MaxInventory of these
+		Net.fire("Notify", player, {
+			Text = `Your Build menu is full of {machine.Info.Name}s: this one was refunded ({Format.money(machine.Info.Price)}).`,
+			Kind = "Info",
+		})
+	end
 	local total = stored + sold
 	if total > 0 then
 		local items = if total == 1 then "1 item" else `{total} items`

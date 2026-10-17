@@ -12,27 +12,36 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
-local Water = require(script.Parent.Water)
 local Buildings = require(script.Parent.Buildings)
 
 local C = Style.C
 
 local Scatter = {}
 
--- (flowers, bushes and boulders were cut to pay for the town buildings' parts)
-Scatter.Limits = { Trees = 45, Bushes = 20, Flowers = 8, Boulders = 3 }
+-- (plain bushes and boulders were cut: they read as loose cubes; the lawn
+-- gaps get garden beds, short fence runs and crates instead, see gardens)
+-- (round 2: 38 trees: the town-edge belts got an inner row, the budget went there)
+Scatter.Limits = { Trees = 34, Bushes = 8, Flowers = 8, Boulders = 0 }
 
 -- No scattered trees here: they would hide the ponds, the creek and the
--- bridge, the corridor from the plaza to the bridge, or the LAB shopfront
--- and the ROCK SCANNER (hero camera views).
+-- bridge, the corridor from the plaza to the bridge, the CAPSULES module
+-- (the ground between it and the lily pond, so it shows from lobby_hero
+-- like in concept v2), or the LAB shopfront and the ROCK SCANNER (hero
+-- camera views).
 Scatter.TreeFreeBoxes = {
 	{ Min = Vector2.new(-44, 52), Max = Vector2.new(44, 92) },
-	{ Min = Vector2.new(-12, 28), Max = Vector2.new(32, 52) },
-	{ Min = Vector2.new(26, 84), Max = Vector2.new(58, 100) },
+	{ Min = Vector2.new(-26, 28), Max = Vector2.new(26, 52) }, -- the koi pond and the bridge
+	{ Min = Vector2.new(-58, 4), Max = Vector2.new(-12, 52) }, -- CAPSULES, its front and the lily pond
+	{ Min = Vector2.new(28, 60), Max = Vector2.new(58, 86) },
+	-- the FOSSIL DIG's keep-out strip: between the pit and the hero camera
+	-- (and the HALL OF FAME beside it)
+	{ Min = Vector2.new(20, 18), Max = Vector2.new(66, 64) },
+	-- the SPIN & WIN wheel's silhouette (behind the ring and beside its sign)
+	-- and its stair base (the Smithy's old spot behind the SHOP stays open)
+	{ Min = Vector2.new(-72, -112), Max = Vector2.new(-24, -38) },
 }
 
 local function treeFree(p: Vector3): boolean
@@ -52,17 +61,19 @@ type Zone = {
 	Full: boolean?, -- full Style.tree (near the hero camera) instead of lean trees
 }
 
--- Where trees go, in order (each zone gets up to `Trees`).
+-- Where trees go, in order (each zone gets up to `Trees`). The wide
+-- concept v2 stalls leave little free ground in the Front and Middle
+-- zones, so the Back, South and Corners zones carry more of the trees.
 Scatter.Zones = {
 	-- foreground and the strips along the plot roads (the hero view)
 	{ Name = "Front", Min = Vector2.new(-66, 20), Max = Vector2.new(66, 82), Trees = 9, Full = true },
 	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6 },
 	-- behind the forge and the stalls
-	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 12 },
+	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 15 },
 	-- south foreground (lobby_south view)
-	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 7 },
+	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 10 },
 	-- the island's south corners beyond the bases
-	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 5 },
+	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 10 },
 } :: { Zone }
 
 local KIND_WEIGHTS = { Green = 45, Pink = 15, Red = 12, Yellow = 14, Orange = 14 }
@@ -94,7 +105,7 @@ end
 type Counts = { Trees: number, Bushes: number, Flowers: number, Boulders: number }
 
 local function bush(m: Instance, placer: Kit.Placer, counts: Counts, p: Vector3, rng: Rng.Rng, color: Color3?): boolean
-	if counts.Bushes >= Scatter.Limits.Bushes or not Kit.free(placer, p, 1.8) then
+	if counts.Bushes >= Scatter.Limits.Bushes or not Kit.free(placer, p, 2.3) then
 		return false
 	end
 	Kit.take(placer, p, 1.8)
@@ -104,7 +115,7 @@ local function bush(m: Instance, placer: Kit.Placer, counts: Counts, p: Vector3,
 end
 
 local function flowers(m: Instance, placer: Kit.Placer, counts: Counts, p: Vector3, rng: Rng.Rng): boolean
-	if counts.Flowers >= Scatter.Limits.Flowers or not Kit.free(placer, p, 2) then
+	if counts.Flowers >= Scatter.Limits.Flowers or not Kit.free(placer, p, 2.5) then
 		return false
 	end
 	Kit.take(placer, p, 1.6)
@@ -128,14 +139,15 @@ local function trees(m: Instance, placer: Kit.Placer, counts: Counts, rng: Rng.R
 				reach = Kit.treeReach(scale)
 			end
 			if treeFree(p) and Kit.treeAllowed(p, reach, Kit.treeHeight(scale)) and Kit.free(placer, p, 3.6 * scale, reach) then
-				Kit.take(placer, p, reach * 0.8)
 				local kind = treeKind(rng, p)
 				local base = CFrame.new(p)
-				if zone.Full then
-					Style.tree(m, base, kind, rng, scale)
-				else
-					Kit.leanTree(m, base, kind, rng, scale)
+				local tree = if zone.Full then Style.tree(m, base, kind, rng, scale) else Kit.leanTree(m, base, kind, rng, scale)
+				-- the whole tree keeps off the stalls (fences, walls, signs) and their clear aprons
+				if not Kit.clearOfStalls(tree) then
+					tree:Destroy()
+					continue
 				end
+				Kit.take(placer, p, reach * 0.8)
 				placed += 1
 				counts.Trees += 1
 				-- a bush at its feet
@@ -156,10 +168,10 @@ local function groundCover(m: Instance, placer: Kit.Placer, counts: Counts, rng:
 	local middle = { Name = "Cover", Min = Vector2.new(-64, -110), Max = Vector2.new(64, 24), Trees = 0 }
 	local south = { Name = "Cover", Min = Vector2.new(-150, 84), Max = Vector2.new(150, 146), Trees = 0 }
 	local plan = {
-		{ zone = banks, flowers = 6, bushes = 4, boulders = 2 },
-		{ zone = front, flowers = 2, bushes = 4, boulders = 1 },
-		{ zone = middle, flowers = 0, bushes = 2, boulders = 0 },
-		{ zone = south, flowers = 0, bushes = 6, boulders = 0 },
+		{ zone = banks, flowers = 6, bushes = 2, boulders = 0 },
+		{ zone = front, flowers = 2, bushes = 1, boulders = 0 },
+		{ zone = middle, flowers = 0, bushes = 1, boulders = 0 },
+		{ zone = south, flowers = 0, bushes = 3, boulders = 0 },
 	}
 	for _, step in plan do
 		local zone = step.zone :: Zone
@@ -202,44 +214,107 @@ local function fence(m: Instance, from: Vector3, to: Vector3, lampFrom: boolean?
 	end
 end
 
+-- The fence runs: the koi pond's banks either side of the bridge, the north
+-- side of the ToMine path (clear of the signpost). Every
+-- run marks its line taken, so the scatter keeps half a stud off it.
+Scatter.FenceRuns = {
+	{ From = Vector3.new(7.8, 0, 63.6), To = Vector3.new(18.5, 0, 63.6), LampFrom = true },
+	{ From = Vector3.new(-33, 0, 80.6), To = Vector3.new(-22.5, 0, 80.6) },
+} :: { { From: Vector3, To: Vector3, LampFrom: boolean?, LampTo: boolean? } }
+
 local function fences(m: Instance, placer: Kit.Placer)
-	local lily = LobbyLayout.get("LilyPond")
-	local koi = LobbyLayout.get("KoiPond")
-	-- creek banks between the bridge and the ponds (gap at the bridge), lamps by the bridge
-	local zs = { Water.CreekMinZ - 1.8, Water.CreekMaxZ + 1.8 }
-	for _, z in zs do
-		for _, side in { -1, 1 } do
-			local inner = Vector3.new(side * 6.9, 0, z)
-			local outer = Vector3.new(side * 13.2, 0, z)
-			fence(m, inner, outer, true, false)
+	for _, run in Scatter.FenceRuns do
+		fence(m, run.From, run.To, run.LampFrom, run.LampTo)
+		local length = (run.To - run.From).Magnitude
+		for t = 0, length, 2 do
+			Kit.take(placer, run.From:Lerp(run.To, t / length), 1.3)
 		end
+		Kit.take(placer, run.To, 1.3)
 	end
-	-- the ponds' outer ends
-	local lx = lily.Center.X - lily.Size.X / 2 - 1.8
-	fence(m, Vector3.new(lx, 0, lily.Center.Z - 5.5), Vector3.new(lx, 0, lily.Center.Z + 5.5))
-	local kx = koi.Center.X + koi.Size.X / 2 + 1.8
-	fence(m, Vector3.new(kx, 0, koi.Center.Z - 4), Vector3.new(kx, 0, koi.Center.Z + 3.4)) -- ends before the LAB
-	-- one side of ToScanner (north) and of ToMine (north)
-	fence(m, Vector3.new(9.5, 0, 75.4), Vector3.new(38, 0, 75.4)) -- ends before the LAB shopfront
-	fence(m, Vector3.new(-33, 0, 80.4), Vector3.new(-9.5, 0, 80.4))
-	-- keep the scatter off the fence lines
-	for x = 9.5, 38, 3 do
-		Kit.take(placer, Vector3.new(x, 0, 75.4), 1)
-	end
-	for x = -33, -9.5, 3 do
-		Kit.take(placer, Vector3.new(x, 0, 80.4), 1)
-	end
-	for z = lily.Center.Z - 6, lily.Center.Z + 6, 3 do
-		Kit.take(placer, Vector3.new(lx, 0, z), 1)
-		Kit.take(placer, Vector3.new(kx, 0, z), 1)
+end
+
+--[[
+	Garden corners for the bare lawn gaps (concept v1: the town is full of
+	little gardens): south of the HALL OF FAME, between CAPSULES and the
+	plaza, and on the lawns either side of the koi pond: flower beds (a
+	leafy box with three flower cubes), short capped fence runs, crates and
+	dark bushes. Each item only where the ground is free (Kit.free).
+]]
+export type GardenItem = { Kind: string, At: Vector3, Color: Color3?, To: Vector3? }
+Scatter.Gardens = {
+	-- the lawn between the lily pond and the MINE hill
+	{ Kind = "Bed", At = Vector3.new(-31, 0, 56), Color = C.FlowerYellow },
+	{ Kind = "Bed", At = Vector3.new(-36, 0, 62), Color = C.FlowerWhite },
+	{ Kind = "Bush", At = Vector3.new(-28, 0, 63), Color = C.LeafGreenDark },
+	{ Kind = "Fence", At = Vector3.new(-46, 0, 53.5), To = Vector3.new(-33, 0, 53.5) },
+	-- the lawn south of the koi pond, east of the bridge
+	{ Kind = "Bed", At = Vector3.new(13, 0, 67.5), Color = C.FlowerPink },
+	{ Kind = "Crate", At = Vector3.new(19.5, 0, 68.5) },
+	-- beside the HALL OF FAME
+	{ Kind = "Bed", At = Vector3.new(36.5, 0, 63), Color = C.FlowerYellow },
+	{ Kind = "Bush", At = Vector3.new(19.5, 0, 38), Color = C.LeafGreenDark },
+} :: { GardenItem }
+
+local function gardens(m: Instance, placer: Kit.Placer, rng: Rng.Rng)
+	for _, item in Scatter.Gardens do
+		local p = item.At
+		if item.Kind == "Fence" then
+			local to = item.To or p
+			local length = (to - p).Magnitude
+			local free = true
+			for t = 0, length, 1.5 do
+				free = free and Kit.free(placer, p:Lerp(to, t / length), 0.9)
+			end
+			if free and Kit.free(placer, to, 0.9) then
+				Style.fence(m, p, to, { Caps = true, Height = 2.4, PostEvery = 4, Rails = 2 })
+				for t = 0, length, 2 do
+					Kit.take(placer, p:Lerp(to, t / length), 1.3)
+				end
+			end
+		elseif item.Kind == "Bed" then
+			if Kit.free(placer, p, 2) then
+				Kit.take(placer, p, 2)
+				local at = CFrame.new(p) * CFrame.Angles(0, rng:range(-0.2, 0.2), 0)
+				Style.block(
+					m,
+					at * CFrame.new(0, 0.25, 0),
+					Vector3.new(3.0, 0.5, 1.4),
+					Style.vary(C.LeafGreenDark, rng, 0.04),
+					nil,
+					Style.tiny()
+				)
+				Style.block(m, at * CFrame.new(0, 0.12, 0), Vector3.new(3.3, 0.24, 1.7), C.WoodDark, nil, Style.tiny())
+				for i = -1, 1 do
+					local k = rng:range(0.55, 0.7)
+					Style.block(
+						m,
+						at * CFrame.new(i * 0.95, 0.5 + k / 2, rng:range(-0.2, 0.2)),
+						Vector3.new(k, k, k),
+						Style.vary(item.Color or C.FlowerYellow, rng, 0.05),
+						nil,
+						Style.tiny()
+					)
+				end
+			end
+		elseif item.Kind == "Bush" then
+			if Kit.free(placer, p, 2) then
+				Kit.take(placer, p, 2)
+				Style.bush(m, p, item.Color or C.LeafGreenDark, rng, 2.2)
+			end
+		elseif item.Kind == "Crate" then
+			if Kit.free(placer, p, 1.6) then
+				Kit.take(placer, p, 1.6)
+				Style.crate(m, CFrame.new(p), rng, 1.6)
+			end
+		end
 	end
 end
 
 -- Post lanterns at the path junctions (lights where people gather); a
 -- deeper amber than C.Lamp so they glow warm and never blow out white.
-Scatter.LanternColor = Color3.fromRGB(255, 165, 70)
+Scatter.LanternColor = C.LampAmber
 Scatter.Lanterns = {
-	{ At = Vector3.new(7.6, 0, 75.4), Yaw = math.pi / 2, Light = true }, -- ToScanner meets the south road
+	{ At = Vector3.new(7.6, 0, 73.4), Yaw = math.pi / 2, Light = true }, -- ToScanner meets the south road
 	{ At = Vector3.new(-7.6, 0, 80.4), Yaw = -math.pi / 2, Light = true }, -- ToMine meets the south road
 	{ At = Vector3.new(78, 0, -120.2), Yaw = math.pi / 2, Light = false }, -- ToNextArea leaves the plot road
 	{ At = Vector3.new(-35, 0, 111), Yaw = -math.pi / 2, Light = true }, -- by the autumn corner
@@ -277,6 +352,7 @@ function Scatter.build(parent: Instance, rng: Rng.Rng, keepOut: { Kit.Box }?)
 	fences(fenceModel, placer)
 	local lanternModel = Style.model("GardenLanterns", parent)
 	lanterns(lanternModel, placer)
+	gardens(Style.model("Gardens", parent), placer, Kit.sub(rng))
 	local m = Style.model("Scatter", parent)
 	local counts: Counts = { Trees = 0, Bushes = 0, Flowers = 0, Boulders = 0 }
 	trees(m, placer, counts, Kit.sub(rng))
