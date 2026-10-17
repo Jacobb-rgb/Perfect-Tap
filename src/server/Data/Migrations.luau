@@ -53,22 +53,30 @@
 	  server may sell more levels).
 
 	Steps 6-7 (same Version 3; DataTemplate fills the records in; `now` =
-	os.time() unless the caller passes one, for the time caps):
-	- Gear: whole levels 0..GearConfig.MaxLevel for the five lines, other keys
-	  dropped. The old CarryLevel N (1..5) folds into Backpack level N - 1
-	  (same capacity; the higher of the two wins) and CarryLevel is removed.
-	- Enchants.Owned: known enchant ids -> whole tiers 1..their tier count.
+	os.time() unless the caller passes one, for the time caps). As with
+	MachineInventory and MachineUpgrades, well-formed entries this server
+	doesn't know are KEPT (Roblox keeps old servers running after an update:
+	a player who joins one must not lose the golems, enchants, artifacts or
+	gear levels a newer server gave them, paid ones included). Only junk
+	types are dropped; the config readers clamp or ignore what they don't
+	know (GearConfig.level, EnchantConfig.tierOf, GolemConfig.stats/equip,
+	ArtifactConfig.countOf).
+	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the five lines
+	  this server sells always exist, broken = 0; other junk keys dropped).
+	  The old CarryLevel N (1..5) folds into Backpack level N - 1 (same
+	  capacity; the higher of the two wins) and CarryLevel is removed.
+	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
 	  Enchants.Slots: exactly EnchantConfig.MaxSlots strings; a slot keeps an
 	  owned id only once, and only when the blaster level has opened it.
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
 	  BoostConfig.MaxSavedSeconds.
 	- Golems.Owned: entries { Id, Kind } with a whole unique Id 1..MAX_GOLEM_ID
-	  and a known kind, at most GolemConfig.MaxSaved (extra fields are cut).
-	  Equipped: at most GolemConfig.EquipSlots unique owned ids. NextId is a
-	  whole number above every owned Id.
+	  and a string Kind (unknown kinds too), at most GolemConfig.MaxSaved
+	  (extra fields are cut). Equipped: at most GolemConfig.EquipSlots unique
+	  owned ids of known kinds. NextId is a whole number above every owned Id.
 	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
-	- Artifacts.Found: known artifact ids -> whole counts 1..ArtifactConfig.MaxCount;
-	  Chapters: known collection ids -> true.
+	- Artifacts.Found: string ids -> whole counts 1..ArtifactConfig.MaxCount;
+	  Chapters: string ids -> true.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins are
 	  whole numbers >= 0.
 ]]
@@ -203,22 +211,33 @@ local function subTable(t: { [any]: any }, field: string, report: Report): { [an
 	return sub
 end
 
+-- A whole number in lo..hi from a finite number (floored, clamped); nil for junk.
+local function wholeIn(v: any, lo: number, hi: number): number?
+	if not isFinite(v) then
+		return nil
+	end
+	return math.clamp(math.floor(v), lo, hi)
+end
+
 -- Steps 6-7: gear, enchants, boosts, golems, wheel, artifacts, new stats.
 local function migrateSteps67(data: { [string]: any }, now: number, report: Report)
-	-- gear levels; the old CarryLevel N becomes Backpack level N - 1
+	-- gear levels (unknown lines and levels kept); the old CarryLevel N becomes Backpack level N - 1
 	local gear = record(data, "Gear", report)
 	for _, key in keysOf(gear) do
-		if type(key) ~= "string" or not GearConfig.ById[key] then
-			gear[key] = nil
+		local v = gear[key]
+		local level = if type(key) == "string" then wholeIn(v, 0, MAX_LEVEL_KEPT) else nil
+		if level == nil then
+			-- junk (a known line comes back as 0 below)
 			report.Dropped += 1
+			gear[key] = nil
+		elseif level ~= v then
+			gear[key] = level
 		end
 	end
 	for _, lineId in GearConfig.LineIds do
-		local v = gear[lineId]
-		if v ~= nil and not isFinite(v) then
-			report.Dropped += 1
+		if gear[lineId] == nil then
+			gear[lineId] = 0
 		end
-		gear[lineId] = if isFinite(v) then math.clamp(math.floor(v), 0, GearConfig.MaxLevel) else 0
 	end
 	local carry = data.CarryLevel
 	if carry ~= nil then
@@ -230,20 +249,17 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		data.CarryLevel = nil
 	end
 
-	-- enchants: owned tiers, then slots (owned, unique, opened by the blaster level)
+	-- enchants: owned tiers (unknown ids and tiers kept), then slots (owned, unique, opened by the blaster level)
 	local enchants = record(data, "Enchants", report)
 	local owned = subTable(enchants, "Owned", report)
 	for _, id in keysOf(owned) do
 		local tier = owned[id]
-		local max = if type(id) == "string" then EnchantConfig.tiers(id) else 0
-		if max == 0 or not isFinite(tier) or tier < 1 then
+		local whole = if type(id) == "string" and isFinite(tier) and tier >= 1 then wholeIn(tier, 1, MAX_LEVEL_KEPT) else nil
+		if whole == nil then
 			owned[id] = nil
 			report.Dropped += 1
-		else
-			local whole = math.clamp(math.floor(tier), 1, max)
-			if whole ~= tier then
-				owned[id] = whole
-			end
+		elseif whole ~= tier then
+			owned[id] = whole
 		end
 	end
 	local slots = enchants.Slots
@@ -282,10 +298,11 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		end
 	end
 
-	-- golems: well-formed unique entries, equipped ids that exist, NextId above them all
+	-- golems: well-formed unique entries (unknown kinds kept), equipped ids of
+	-- known kinds that exist, NextId above them all
 	local golems = record(data, "Golems", report)
 	local ownedGolems = {}
-	local ids: { [number]: boolean } = {}
+	local kinds: { [number]: string } = {}
 	local maxId = 0
 	local list = golems.Owned
 	if type(list) == "table" then
@@ -297,12 +314,12 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 				and id >= 1
 				and id <= MAX_GOLEM_ID
 				and id == math.floor(id)
-				and not ids[id]
+				and not kinds[id]
 				and type(kind) == "string"
-				and GolemConfig.ById[kind] ~= nil
+				and kind ~= ""
 				and #ownedGolems < GolemConfig.MaxSaved
 			then
-				ids[id] = true
+				kinds[id] = kind
 				maxId = math.max(maxId, id)
 				table.insert(ownedGolems, { Id = id, Kind = kind })
 			else
@@ -317,7 +334,8 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	local wearing = golems.Equipped
 	if type(wearing) == "table" then
 		for _, id in values(wearing) do
-			if type(id) == "number" and ids[id] and not table.find(equipped, id) and #equipped < GolemConfig.EquipSlots then
+			local kind = if type(id) == "number" then kinds[id] else nil
+			if kind and GolemConfig.ById[kind] and not table.find(equipped, id) and #equipped < GolemConfig.EquipSlots then
 				table.insert(equipped, id)
 			else
 				report.Dropped += 1
@@ -343,24 +361,22 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		wheel.NextSpinAt = math.min(math.floor(spinAt), now + WheelConfig.CooldownSeconds)
 	end
 
-	-- artifacts: known ids with whole counts, chapters of known collections
+	-- artifacts: string ids with whole counts, chapters read (unknown ids kept)
 	local artifacts = record(data, "Artifacts", report)
 	local found = subTable(artifacts, "Found", report)
 	for _, id in keysOf(found) do
 		local n = found[id]
-		if type(id) ~= "string" or not ArtifactConfig.ById[id] or not isFinite(n) or n < 1 then
+		local whole = if type(id) == "string" and isFinite(n) and n >= 1 then wholeIn(n, 1, ArtifactConfig.MaxCount) else nil
+		if whole == nil then
 			found[id] = nil
 			report.Dropped += 1
-		else
-			local whole = math.min(math.floor(n), ArtifactConfig.MaxCount)
-			if whole ~= n then
-				found[id] = whole
-			end
+		elseif whole ~= n then
+			found[id] = whole
 		end
 	end
 	local chapters = subTable(artifacts, "Chapters", report)
 	for _, id in keysOf(chapters) do
-		if type(id) ~= "string" or not ArtifactConfig.CollectionById[id] or chapters[id] ~= true then
+		if type(id) ~= "string" or chapters[id] ~= true then
 			chapters[id] = nil
 			report.Dropped += 1
 		end

@@ -7,7 +7,13 @@
 	from the client are clamped.
 
 	Carried items are welded to the HumanoidRootPart (massless, no collision),
-	so the character owns their physics. Walk speed drops a little per item.
+	so the character owns their physics.
+
+	Walk speed: this service is the ONLY writer of Humanoid.WalkSpeed. It is
+	Bonuses.carryWalkSpeed (Boots, Swift and WalkSpeed golems minus a capped
+	slowdown per carried item, GearConfig). It is set again on every pickup
+	or drop, on spawn, after every save change (DataService.onChanged: a gear
+	buy, a golem equipped...) and whenever refreshWalkSpeed(player) is called.
 ]]
 
 local Players = game:GetService("Players")
@@ -20,14 +26,11 @@ local GearConfig = require(Shared.Config.GearConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
 
 local CarryService = {}
-
-local BASE_WALK_SPEED = 18
-local SLOW_PER_ITEM = 0.5
-local MIN_WALK_SPEED = 13
 
 local carried: { [Player]: { ItemService.ItemRecord } } = {}
 local pickupCallbacks: { (Player, ItemService.ItemRecord) -> () } = {}
@@ -55,14 +58,24 @@ local function stackOffset(index: number): CFrame
 end
 
 local function updateWalkSpeed(player: Player)
+	local count = #(carried[player] or {})
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		local count = #(carried[player] or {})
-		humanoid.WalkSpeed = math.max(MIN_WALK_SPEED, BASE_WALK_SPEED - count * SLOW_PER_ITEM)
+		local speed = Bonuses.carryWalkSpeed(Bonuses.stats(player), count)
+		if humanoid.WalkSpeed ~= speed then
+			humanoid.WalkSpeed = speed
+		end
 	end
-	player:SetAttribute("CarryCount", #(carried[player] or {}))
+	player:SetAttribute("CarryCount", count)
 	player:SetAttribute("CarryCapacity", CarryService.capacity(player))
+end
+
+-- Sets the player's walk speed (and carry attributes) from their bonuses now.
+-- The gear / golem / enchant packages call it after a change (a save change
+-- does it too, see the header).
+function CarryService.refreshWalkSpeed(player: Player)
+	updateWalkSpeed(player)
 end
 
 local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
@@ -265,6 +278,13 @@ function CarryService.init()
 	end)
 	DataService.onLoaded(function(player)
 		updateWalkSpeed(player)
+	end)
+	-- gear, golems, enchants live in the save: a change may change the speed
+	DataService.onChanged(function(player)
+		Bonuses.invalidate(player)
+		if player.Parent then
+			updateWalkSpeed(player)
+		end
 	end)
 end
 

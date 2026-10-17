@@ -11,8 +11,14 @@
 	- Prices grow with rarity (about x10-x20 per rarity) and x6 per tier.
 	  Epic and Legendary enchants can also be paid with crystal shards
 	  (data.Shards). The two Mythics ("Heartfire", "Starbreaker") cost an
-	  enormous amount of coins OR 20 Robux (MonetizationConfig products
-	  EnchantHeartfire / EnchantStarbreaker; "Coming soon" while the id is 0).
+	  enormous amount of coins OR 20 Robux (MonetizationConfig GAME PASSES
+	  EnchantHeartfire / EnchantStarbreaker, one-time by design; "Coming soon"
+	  while the id is 0; step 8 grants the enchant to pass owners on join and
+	  after the purchase). The Robux option is hidden once the enchant is
+	  owned (quote answers "Max").
+	- Unknown enchant ids and tiers above today's count stay in the save (a
+	  newer server may sell them, Migrations); every reader here ignores or
+	  clamps them, and grant() never lowers a saved tier.
 
 	Saved as data.Enchants = {
 	  Owned = { [enchantId] = tier (whole 1..#tiers) },
@@ -36,7 +42,7 @@ export type Enchant = {
 	Effects: { [string]: { number } }, -- StatConfig id -> value per tier
 	Coins: { number }, -- coin price per tier
 	Shards: { number }?, -- shard price per tier (Epic and Legendary)
-	Product: string?, -- MonetizationConfig key (the two Mythics: 20 Robux)
+	Product: string?, -- MonetizationConfig key (the two Mythics: a 20 Robux game pass)
 	Color: Color3, -- rune color on cards and the blaster
 }
 
@@ -306,21 +312,25 @@ function EnchantConfig.quote(enchants: any, id: any, currency: any, tier: any): 
 	return nil, "Robux"
 end
 
--- Gives the next tier of `id` (after a paid buy or a Robux receipt). Returns
--- the new tier (unchanged at the top tier; 0 for an unknown id). Makes the
--- record's tables when they are missing.
+-- Gives the next tier of `id` (after a paid buy or a game pass). Returns
+-- the new tier; at the top tier nothing is written (a higher tier saved by a
+-- newer server is never lowered); 0 for an unknown id. Makes the record's
+-- tables when they are missing.
 function EnchantConfig.grant(enchants: { [string]: any }, id: string): number
 	if not EnchantConfig.ById[id] then
 		return 0
+	end
+	local current = EnchantConfig.tierOf(enchants, id)
+	if current >= EnchantConfig.tiers(id) then
+		return current
 	end
 	local owned = enchants.Owned
 	if type(owned) ~= "table" then
 		owned = {}
 		enchants.Owned = owned
 	end
-	local tier = math.min(EnchantConfig.tierOf(enchants, id) + 1, EnchantConfig.tiers(id))
-	owned[id] = tier
-	return tier
+	owned[id] = current + 1
+	return current + 1
 end
 
 -- The first open, empty slot for this blaster level (nil when none).

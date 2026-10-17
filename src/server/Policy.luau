@@ -14,6 +14,13 @@
 	  prefetch(player) when the player joins (several services may: it only
 	  asks once). Handlers must check it BEFORE the quote / spend / write step
 	  (that step must not yield).
+	- prefetch keeps trying while the answer isn't known: after a failed call
+	  it tries again after RetrySeconds (10, 30, 120 s, then every 300 s) as
+	  long as the player is in the game, and updates the attributes when a
+	  call succeeds. (The client hides paid random items while it thinks the
+	  player is restricted, so it would never send the request that triggers
+	  a fetch: without these retries one failed call on join would restrict
+	  the player for the whole session.)
 ]]
 
 local Players = game:GetService("Players")
@@ -27,12 +34,21 @@ export type Info = { PaidRandomRestricted: boolean, PaidTradingAllowed: boolean,
 
 local cache: { [Player]: Info } = {}
 local pending: { [Player]: boolean } = {}
+local retrying: { [Player]: boolean } = {}
+
+-- Seconds to wait before each retry after a failed call (the last repeats).
+Policy.RetrySeconds = { 10, 30, 120, 300 }
 
 local STRICT: Info = { PaidRandomRestricted = true, PaidTradingAllowed = false, Known = false }
 
 -- Swappable for the Lune tests: returns the PolicyService info table.
 local fetcher: (Player) -> any = function(player: Player): any
 	return game:GetService("PolicyService"):GetPolicyInfoForPlayerAsync(player)
+end
+
+-- Swappable for the Lune tests: runs `fn` after `seconds`.
+local schedule: (seconds: number, fn: () -> ()) -> () = function(seconds: number, fn: () -> ())
+	task.delay(seconds, fn)
 end
 
 -- Forget a leaving player (connected on the first fetch).
@@ -46,6 +62,7 @@ local function hookLeaving()
 		Players.PlayerRemoving:Connect(function(player: Player)
 			cache[player] = nil
 			pending[player] = nil
+			retrying[player] = nil
 		end)
 	end)
 end
@@ -91,12 +108,30 @@ function Policy.fetch(player: Player): Info
 	return info
 end
 
--- Starts a fetch without waiting (call on join).
-function Policy.prefetch(player: Player)
-	if cache[player] and cache[player].Known then
+-- One try of a prefetch; after a failure the next one is scheduled (see the header).
+local function attempt(player: Player, tries: number)
+	if not player.Parent then
+		retrying[player] = nil
 		return
 	end
-	task.spawn(Policy.fetch, player)
+	if Policy.fetch(player).Known then
+		retrying[player] = nil
+		return
+	end
+	local delays = Policy.RetrySeconds
+	local seconds = delays[math.min(tries + 1, #delays)]
+	schedule(seconds, function()
+		attempt(player, tries + 1)
+	end)
+end
+
+-- Starts a fetch without waiting (call on join); retried until it is known.
+function Policy.prefetch(player: Player)
+	if (cache[player] and cache[player].Known) or retrying[player] then
+		return
+	end
+	retrying[player] = true
+	task.spawn(attempt, player, 0)
 end
 
 -- May this player NOT use paid random items? Yields on the first call.
@@ -109,9 +144,16 @@ Policy._test = {
 	setFetcher = function(fn: (Player) -> any)
 		fetcher = fn
 	end,
+	setSchedule = function(fn: (number, () -> ()) -> ())
+		schedule = fn
+	end,
 	reset = function()
 		table.clear(cache)
 		table.clear(pending)
+		table.clear(retrying)
+		schedule = function(seconds: number, fn: () -> ())
+			task.delay(seconds, fn)
+		end
 	end,
 }
 

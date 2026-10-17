@@ -9,6 +9,11 @@
 
 	- Exact odds per golem (each capsule's Odds sum to 1). Open 1, 3 or 10 at
 	  once; x10 costs 10 x Price x TenDiscount (a small discount).
+	- Coin prices grow with the player's blaster level (LevelScale, x1 at
+	  levels 1-3 up to x1500 at level 10): income grows exponentially, so a
+	  fixed price would be pocket change late in the game. The blaster level
+	  never goes down and can't be gamed (income could: take the ores off the
+	  podiums, buy, put them back), so no price here reads the income.
 	- Triple Lucky (BoostConfig, data.Boosts.TripleLuckyUntil) on a capsule:
 	  every golem whose rarity is at least the capsule's LuckyFrom (Stone:
 	  Rare, Crystal: Epic, Royal: Legendary) becomes exactly 3 times as likely;
@@ -16,13 +21,18 @@
 	  all scaled by (1 - 3 L) / (1 - L), L = the lucky golems' total chance).
 	  The odds still sum to 1. odds(capsuleId, true) gives the new numbers for
 	  the UI, which must show them before a Triple Lucky purchase.
-	- Roblox rules: coins can be bought with Robux (coin packs), so EVERY
-	  capsule is a paid random item: show odds() before buying, and hide /
-	  disable buying where PolicyService ArePaidRandomItemsRestricted is true
-	  (src/server/Policy.luau). Capsules given free by the daily wheel are not
-	  paid and may still be opened.
+	- Roblox rules: the Royal capsule (Robux) is a paid random item. Coin
+	  capsules are one too exactly when coins can be bought with Robux
+	  (MonetizationConfig.coinsBuyable(): the coin packs, off until the owner
+	  decides). isPaidRandom() says which; those are hidden / disabled where
+	  PolicyService ArePaidRandomItemsRestricted is true (src/server/Policy.luau).
+	  Odds are shown before every open, paid or not. Capsules given free by the
+	  daily wheel are not paid and may always be opened.
 	CapsuleAction ("Open", { Capsule, Count }) opens coin capsules; Royal
 	capsules are Robux products (the server answers with PurchasePrompt).
+	A rate-limited "Open" is dropped without an answer (Net): the client keeps
+	its own ClientCooldown between opens and stops waiting for CapsuleResult
+	after ResultTimeout seconds (the buttons come back, nothing was spent).
 ]]
 
 local GolemConfig = require(script.Parent.GolemConfig)
@@ -33,7 +43,7 @@ export type Capsule = {
 	Id: string,
 	Name: string,
 	Currency: "Coins" | "Robux",
-	Price: number?, -- coins for one (Coins capsules)
+	Price: number?, -- coins for one at blaster levels 1-3 (Coins capsules; x LevelScale)
 	Products: { [number]: string }?, -- count -> MonetizationConfig key (Robux capsules)
 	LuckyFrom: string, -- Triple Lucky triples every golem at least this rare
 	Odds: { [string]: number }, -- golem id -> chance (sum 1)
@@ -49,6 +59,11 @@ local CapsuleConfig = {}
 CapsuleConfig.Counts = { 1, 3, 10 }
 CapsuleConfig.TenDiscount = 0.9 -- x10 pays 9 capsules' price
 CapsuleConfig.TripleLucky = 3
+CapsuleConfig.ClientCooldown = 1 -- seconds between two "Open" requests from the client
+CapsuleConfig.ResultTimeout = 5 -- seconds the client waits for CapsuleResult
+
+-- Coin price multiplier per blaster level (index = level 1..10; see the header).
+CapsuleConfig.LevelScale = { 1, 1, 1, 2, 5, 15, 50, 150, 500, 1500 }
 
 -- CapsuleAction / ActionResult reason codes -> text for the player
 CapsuleConfig.Reasons = {
@@ -155,22 +170,52 @@ for _, capsule in CapsuleConfig.List do
 	end
 end
 
--- Every capsule is a paid random item (see the header).
-function CapsuleConfig.isPaidRandom(_capsuleId: string): boolean
+-- Is opening this capsule a paid random item? Robux capsules always; coin
+-- capsules only while coins can be bought with Robux (see the header).
+-- Unknown capsule: true (the strict answer).
+function CapsuleConfig.isPaidRandom(capsuleId: string): boolean
+	local capsule = CapsuleConfig.ById[capsuleId]
+	if not capsule or capsule.Currency == "Robux" then
+		return true
+	end
+	return MonetizationConfig.coinsBuyable()
+end
+
+-- Can't a player whose paid-random policy is `restricted` buy ANY capsule?
+-- (Then Triple Lucky is worth nothing to them: WheelConfig swaps that prize.)
+function CapsuleConfig.allRestricted(restricted: boolean): boolean
+	if not restricted then
+		return false
+	end
+	for _, capsule in CapsuleConfig.List do
+		if not CapsuleConfig.isPaidRandom(capsule.Id) then
+			return false
+		end
+	end
 	return true
+end
+
+-- The coin price multiplier for a blaster level (broken = level 1; above the
+-- table = its last entry).
+function CapsuleConfig.levelScale(blasterLevel: any): number
+	local scale = CapsuleConfig.LevelScale
+	local level = if type(blasterLevel) == "number" and blasterLevel == blasterLevel then math.floor(blasterLevel) else 1
+	return scale[math.clamp(level, 1, #scale)]
 end
 
 function CapsuleConfig.validCount(count: any): boolean
 	return table.find(CapsuleConfig.Counts, count) ~= nil
 end
 
--- Coins for opening `count` (1, 3 or 10) coin capsules (nil for Robux capsules or a bad count).
-function CapsuleConfig.price(capsuleId: string, count: any): number?
+-- Coins for opening `count` (1, 3 or 10) coin capsules at a blaster level
+-- (nil = level 1): Price x LevelScale per capsule, x10 with TenDiscount.
+-- nil for Robux capsules or a bad count.
+function CapsuleConfig.price(capsuleId: string, count: any, blasterLevel: any?): number?
 	local capsule = CapsuleConfig.ById[capsuleId]
 	if not capsule or capsule.Currency ~= "Coins" or not CapsuleConfig.validCount(count) then
 		return nil
 	end
-	local each = capsule.Price :: number
+	local each = (capsule.Price :: number) * CapsuleConfig.levelScale(blasterLevel)
 	if count == 10 then
 		return math.floor(each * 10 * CapsuleConfig.TenDiscount + 0.5)
 	end

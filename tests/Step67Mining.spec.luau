@@ -1,6 +1,8 @@
 -- MiningService with the steps 6-7 bonuses (src/server/Bonuses.luau): enchant
--- damage and Overcharge, Reach, ore luck re-rolls (Hexa Lucky), Twin Drop and
--- the artifact roll hook (Prospector). Without bonuses nothing extra is rolled.
+-- damage and Overcharge, Reach, ore luck upgrades (Hexa Lucky: never a
+-- downgrade), Twin Drop and the artifact roll hook (Prospector). Without
+-- bonuses nothing extra is rolled. Bonuses caches totals until the save
+-- changes: the tests call Bonuses.invalidate where DataService.changed would.
 -- Same small fakes as tests/Mining.spec.luau.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -16,6 +18,9 @@ return function(T, Loader)
 	local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 	local MiningService = Loader.requirePath("ServerScriptService.Server.Services.MiningService")
 	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
+	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 
 	local mining = MiningService._test
 	local TICK = BlasterData.Beam.ServerTick
@@ -155,6 +160,7 @@ return function(T, Loader)
 	local function slot(p: any, owned: { [string]: number }, slots: { string }, level: number?)
 		p.data.BlasterLevel = level or p.data.BlasterLevel
 		p.data.Enchants = { Owned = owned, Slots = { slots[1] or "", slots[2] or "", slots[3] or "", slots[4] or "" } }
+		Bonuses.invalidate(p)
 	end
 
 	withWorld("Step67 Mining: Power multiplies the beam, Overcharge only in the last third", function(w)
@@ -171,6 +177,7 @@ return function(T, Loader)
 		T.near(before - rock.Health, dps * TICK * 1.1 * 1.25, 1e-6, "Overcharge I: +25% on top")
 		-- the enchants only count in open slots: level 1 opens one
 		p.data.BlasterLevel = 1
+		Bonuses.invalidate(p)
 		before = rock.Health
 		w.step()
 		T.near(before - rock.Health, BlasterData.damage(1, "") * TICK * 1.1, 1e-6, "slot 2 closed")
@@ -188,25 +195,50 @@ return function(T, Loader)
 		T.truthy(rock.Health < 1e6, "Reach III (+6 studs) reaches")
 	end)
 
-	withWorld("Step67 Mining: ore luck re-rolls a dropped ore with Rare+ weights x luck", function(w)
+	withWorld("Step67 Mining: ore luck upgrades a lower ore, never a rare one", function(w)
 		local p = w.player
 		-- no luck: the rock's own ore, and no extra roll
 		local rock = w.rock("Quarry", { "Coal" }, 0.01)
-		w.rolls = { 0.9999 }
+		w.rolls = { 0.0001 }
 		mining.blast(p, rock.Model)
 		w.step()
 		T.eq(#w.spawned, 1)
 		T.eq(w.spawned[1].Info.OreId, "Coal", "no luck: the rolled ore stays")
-		-- Hexa Lucky: the first roll of the drop re-picks from the quarry weights (Gold is last)
+		local plainCalls = w.calls
+		-- Hexa Lucky in the Quarry: Coal becomes Gold with chance 1 - T/T' (about 1 %)
 		p.data.Boosts.HexaLuckyUntil = NOW + 600
+		Bonuses.invalidate(p)
+		local quarry = WorldLayout.ZoneById.Quarry.Ores
+		local chance = BoostConfig.upgradeChance(quarry, 2.5)
+		T.truthy(chance > 0.005 and chance < 0.02, "a small chance in the Quarry")
 		w.spawned = {}
 		local lucky = w.rock("Quarry", { "Coal" }, 0.01)
-		w.rolls = { 0.9999 }
+		w.rolls = { chance * 0.5, 0.5 } -- the upgrade roll, then the Rare+ pick
 		mining.blast(p, lucky.Model)
 		w.step()
 		T.eq(#w.spawned, 1)
-		T.eq(w.spawned[1].Info.OreId, "Gold", "re-rolled with luck")
+		T.eq(w.spawned[1].Info.OreId, "Gold", "upgraded with luck")
 		T.eq(w.mined[#w.mined].OreId, "Gold", "onChunkMined sees the real ore")
+		w.spawned = {}
+		local unlucky = w.rock("Quarry", { "Coal" }, 0.01)
+		w.rolls = { chance * 1.5 }
+		mining.blast(p, unlucky.Model)
+		w.step()
+		T.eq(w.spawned[1].Info.OreId, "Coal", "above the chance: the rock's ore")
+		-- a rare rock keeps its ore whatever the luck, and costs no extra roll
+		slot(p, { Lucky = 3 }, { "Lucky" })
+		T.eq(Bonuses.oreLuck(Bonuses.stats(p)), StatConfig.oreLuck(0.5, 2.5))
+		w.spawned = {}
+		w.calls = 0
+		local diamond = w.rock("EmberCaves", { "Diamond" }, 0.01)
+		p.data.BlasterLevel = 3
+		Bonuses.invalidate(p)
+		w.rolls = { 0, 0, 0, 0, 0, 0 }
+		mining.blast(p, diamond.Model)
+		w.step()
+		T.eq(#w.spawned, 1)
+		T.eq(w.spawned[1].Info.OreId, "Diamond", "a Diamond rock gives its Diamond")
+		T.eq(w.calls, plainCalls, "no luck roll for a Rare+ ore")
 	end)
 
 	withWorld("Step67 Mining: Twin Drop drops a second chunk of the same ore", function(w)

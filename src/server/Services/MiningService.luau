@@ -23,9 +23,11 @@
 	- Only players who are firing are looked at each tick (no loops over parts).
 	- Bonuses (steps 6-7, src/server/Bonuses.luau) of the player whose damage
 	  counts: damage x Bonuses.damageMult (Overcharge in the last third), range
-	  + Bonuses.reach; a dropped ore is rolled again from the zone's weights
-	  with Bonuses.oreLuck when that is above 1 (Lucky enchant, Luck golems,
-	  Hexa Lucky: Rare+ weights x luck), and drops a twin chunk with chance
+	  + Bonuses.reach; ore luck (Lucky enchant, Luck golems, Hexa Lucky:
+	  Bonuses.oreLuck above 1) only UPGRADES a dropped ore: the rock's own
+	  Rare+ ores always stay, a lower ore may become a Rare+ ore of the zone
+	  (BoostConfig.upgradeOre: every chunk then has exactly the chances
+	  BoostConfig.oreOdds shows); a chunk drops a twin with chance
 	  Bonuses.twinDrop. When a rock shatters and an onArtifactRoll listener is
 	  registered, one roll against Bonuses.artifactChance (zone chance x
 	  Prospector) calls the listeners (player, zoneId, position) on success.
@@ -249,7 +251,7 @@ local function spawnChunk(player: Player, rock: Rock, oreId: string, from: Vecto
 	end
 end
 
--- Bonuses: ore luck may re-roll the rock's ore, Twin Drop may add a second chunk.
+-- Bonuses: ore luck may upgrade the rock's ore, Twin Drop may add a second chunk.
 local function dropChunk(player: Player, rock: Rock, rolled: string, from: Vector3)
 	local stats = Bonuses.stats(player)
 	local oreId = Bonuses.rollOre(stats, rock.Zone.Ores, rolled, random)

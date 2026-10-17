@@ -107,24 +107,32 @@ Net.Events = {
 	EnchantAction = { Rate = 4, Burst = 8 }, -- (action, arg):
 	--   "Buy"  { Id: EnchantConfig id, Currency: "Coins" | "Shards" | "Robux", Tier: the tier
 	--          being bought, = current + 1 } (EnchantConfig.quote; within EnchantConfig.Range
-	--          of an EnchantCounter; "Robux" -> PurchasePrompt, never granted here)
+	--          of an EnchantCounter; "Robux" -> PurchasePrompt for the Mythic's game pass,
+	--          never granted here)
 	--   "Slot" { Slot: 1..EnchantConfig.MaxSlots, Id: an owned enchant id, or nil / "" to empty
 	--          the slot } (EnchantConfig.setSlot; free, anywhere)
 	BoostAction = { Rate = 2, Burst = 4 }, -- (action, arg):
 	--   "BuyCoins" { Id: BoostConfig.CoinOffers id } (BoostConfig.coinPrice at the player's
-	--              podium income; refused "Full" past BoostConfig.MaxStackSeconds)
+	--              blaster level; refused "Full" past BoostConfig.MaxStackSeconds, "NoEffect"
+	--              when BoostConfig.hasEffect is false)
 	--   "BuyRobux" { Id: BoostConfig.RobuxOffers id } -> PurchasePrompt
-	--   both refused ("Restricted") where paid random items are restricted (src/server/Policy.luau)
+	--   refused ("Restricted") where paid random items are restricted (src/server/Policy.luau)
+	--   and the offer is one (BoostConfig.isPaidRandom)
 	CapsuleAction = { Rate = 1, Burst = 2 }, -- ("Open", { Capsule: CapsuleConfig id, Count: 1 | 3 | 10 }):
-	--   coin capsules: price CapsuleConfig.price, needs Count free golem places
-	--   (GolemConfig.room), Triple Lucky counts when active; Royal (Robux) -> PurchasePrompt;
-	--   "Restricted" where paid random items are restricted. Answer: CapsuleResult (or an
-	--   ActionResult when refused). Anywhere (side menu or the CapsuleStall).
+	--   coin capsules: price CapsuleConfig.price at the player's blaster level, needs Count
+	--   free golem places (GolemConfig.room), Triple Lucky counts when active; Royal (Robux)
+	--   -> PurchasePrompt; "Restricted" where paid random items are restricted and the
+	--   capsule is one (CapsuleConfig.isPaidRandom). Answer: CapsuleResult (or an
+	--   ActionResult when refused). Anywhere (side menu or the CapsuleStall). A request the
+	--   rate limit drops gets NO answer: the client waits CapsuleConfig.ClientCooldown between
+	--   opens and gives up after CapsuleConfig.ResultTimeout (same for WheelAction).
 	GolemAction = { Rate = 4, Burst = 8 }, -- (action, arg):
 	--   "Equip" { Id } | "Unequip" { Id } | "EquipBest" (no arg) |
 	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers) } (GolemConfig helpers)
 	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
-	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult
+	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
+	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
+	--   WheelConfig.ClientCooldown / ResultTimeout)
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
 	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters)
 	DailyClaim = { Rate = 1, Burst = 2 },
@@ -172,7 +180,8 @@ Net.Events = {
 	--   Kind: WheelConfig PrizeKind, Amount?: coins or shards, Boost?, Seconds?,
 	--   Capsule?, Golem?: { Id, Kind } (a capsule prize), Ore?: oreId (the dirty ore went to
 	--   the pen), Coins?: coins paid instead (full pen / full golem inventory),
-	--   NextSpinAt: os.time() of the next free spin }
+	--   NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
+	--   WheelConfig.segments(noCapsules): "TripleLuckyCoins" replaces "TripleLucky" there)
 	WheelResult = false,
 	-- an artifact turned up: { Artifact: id, Count: copies now, New: boolean,
 	--   Collection: id, Completed: boolean (this find completed it), Shards?: a duplicate's

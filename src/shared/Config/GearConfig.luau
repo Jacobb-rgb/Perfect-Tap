@@ -15,8 +15,17 @@
 	  Magnet      radius (studs) in which your own    0 -> 8, 12, 16, 22, 30
 	              loose items fly to you
 
+	Walk speed: Boots level 0 is 16 studs/s, Roblox's default, on purpose
+	(Boots I, 500 coins, gives the 18 everyone walked at before). CarryService
+	is the ONLY writer of Humanoid.WalkSpeed: Bonuses.walkSpeed (Boots, Swift,
+	WalkSpeed golems) minus the carry slowdown, CarrySlowPerItem per carried
+	item but at most CarrySlowMax, never below MinWalkSpeed - so a big
+	backpack never cancels the boots. Anything that changes walk speed calls
+	CarryService.refreshWalkSpeed(player) (a data change does it too).
+
 	Saved as data.Gear = { Boots, HelmetLamp, Backpack, Gloves, Magnet }
-	(whole levels 0..MaxLevel). GearAction ("Buy", { Line, Level }) buys
+	(whole levels 0..MaxLevel; Migrations keeps higher levels and other
+	lines a newer server may sell, every reader here clamps to MaxLevel). GearAction ("Buy", { Line, Level }) buys
 	exactly the next level: Level must be the one the card shows (quote,
 	"Stale" otherwise), so a double tap never buys two levels.
 	The effects reach the game through src/server/Bonuses.luau (stats below).
@@ -39,6 +48,10 @@ GearConfig.MaxLevel = 5
 -- studs from a ShopCounter's surface the server accepts a buy (like the Tech shop)
 GearConfig.Range = 30
 GearConfig.Tag = "ShopCounter"
+-- carrying slows you down a little (see the header)
+GearConfig.CarrySlowPerItem = 0.5
+GearConfig.CarrySlowMax = 3
+GearConfig.MinWalkSpeed = 10
 
 -- GearAction / ActionResult reason codes -> text for the player
 GearConfig.Reasons = {

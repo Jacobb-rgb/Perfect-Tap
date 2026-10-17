@@ -15,7 +15,11 @@
 	  Luau, but money grows past Qi (1e18). So:
 	    "Log" boards store floor(log10(1 + value) * LogScale): order-preserving
 	          for every value >= 0, 1e300 still fits, and decode() gives the value
-	          back within ~1e-11 of it (relative) - plenty for 3-digit display.
+	          back within ~1e-11 of it (relative). The floor makes it a hair
+	          low (25 -> 24.99999999994, 1e12 -> 999999999999), so decode
+	          snaps a value that close onto a number with at most 6 significant
+	          digits, or else onto a whole number (25, 1000, 1e12 and 3.2M
+	          show as themselves; Format floors, so a hair low would show 24).
 	    "Int" boards store floor(value / Scale), capped at MaxStored.
 	  encode / decode / format below; the Lune tests check round-trips and order.
 ]]
@@ -108,15 +112,41 @@ function LeaderboardConfig.encode(boardId: string, value: any): number
 	return math.clamp(stored, 0, LeaderboardConfig.MaxStored)
 end
 
--- The value back from a stored number (Log: within ~1e-11 relative; Int: the
--- stored unit, e.g. whole minutes as seconds).
+-- How close (relative) a decoded Log value must be to a whole number to snap onto it.
+LeaderboardConfig.SnapTolerance = 1e-10 -- ~40x the encoding error
+
+-- The value back from a stored number (Log: within ~1e-11 relative, snapped
+-- onto a whole number that close; Int: the stored unit, e.g. whole minutes
+-- as seconds).
 function LeaderboardConfig.decode(boardId: string, stored: any): number
 	local board = LeaderboardConfig.ById[boardId]
 	if not board or type(stored) ~= "number" or stored ~= stored or stored <= 0 then
 		return 0
 	end
 	if board.Encoding == "Log" then
-		return 10 ^ (stored / LeaderboardConfig.LogScale) - 1
+		local v = 10 ^ (stored / LeaderboardConfig.LogScale) - 1
+		local tolerance = LeaderboardConfig.SnapTolerance * math.max(1, v)
+		if v > 0 then
+			-- a number with at most 6 significant digits that close (1e12, 2.5e15)
+			local digits = math.floor(math.log10(v)) - 5
+			local nice
+			if digits < 0 then
+				local scale = 10 ^ -digits -- divide whole numbers: 700000 / 1e5 is exactly 7
+				nice = math.floor(v * scale + 0.5) / scale
+			else
+				local step = 10 ^ digits
+				nice = math.floor(v / step + 0.5) * step
+			end
+			if math.abs(v - nice) <= tolerance then
+				return nice
+			end
+		end
+		-- or a whole number that close (25, 1234567)
+		local whole = math.floor(v + 0.5)
+		if math.abs(v - whole) <= tolerance then
+			return whole
+		end
+		return v
 	end
 	return math.floor(stored) * (board.Scale or 1)
 end

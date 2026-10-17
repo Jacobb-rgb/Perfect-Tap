@@ -14,9 +14,17 @@
 	- Completing a collection (every artifact found at least once) unlocks its
 	  story chapter (StoryConfig, read at the Guild board / collection book)
 	  and its reward: a title, a podium skin and a small permanent bonus
-	  (Bonuses "Collections"; IncomePct through EconomyService.addIncomeBonus).
+	  (Bonuses "Collections"; its IncomePct reaches the podiums through the one
+	  income bonus Bonuses adds to EconomyService).
 	- New collections come with later updates: add a collection, its 6
-	  artifacts and a StoryConfig chapter.
+	  artifacts and a StoryConfig chapter. Saves keep artifact and chapter
+	  ids this server doesn't know (Migrations); every reader here ignores them.
+	- Budgets (mobile, 8 base museums x 24 artifacts): an artifact model has
+	  at most MaxParts parts, all anchored, CanCollide/CanTouch/CanQuery off,
+	  no lights except the Mythic ones (one small PointLight, LightRarity);
+	  the Glow is a Neon part. Museum shelves are built once per base (no
+	  per-frame animation on the server; a slow spin, if any, runs on clients
+	  within MuseumAnimateDistance studs).
 
 	Saved as data.Artifacts = {
 	  Found = { [artifactId] = count (whole 1..MaxCount) },
@@ -60,6 +68,9 @@ export type OddsLine = { Artifact: string, Chance: number }
 local ArtifactConfig = {}
 
 ArtifactConfig.MaxCount = 9999 -- copies of one artifact a save keeps count of
+ArtifactConfig.MaxParts = 12 -- parts in one artifact model (see the header)
+ArtifactConfig.LightRarity = "Mythic" -- only this rarity may carry a light
+ArtifactConfig.MuseumAnimateDistance = 60 -- studs: clients animate museum pieces only this close
 
 -- ArtifactAction / ActionResult reason codes -> text for the player
 ArtifactConfig.Reasons = {
@@ -509,8 +520,12 @@ function ArtifactConfig.pick(zoneId: string, roll: number): string?
 	return if last then last.Artifact else nil
 end
 
--- How many of an artifact a data.Artifacts record holds (0 = never found).
+-- How many of an artifact a data.Artifacts record holds (0 = never found,
+-- and 0 for an id this server doesn't know: a newer update's artifact).
 function ArtifactConfig.countOf(artifacts: any, id: string): number
+	if not ArtifactConfig.ById[id] then
+		return 0
+	end
 	local found = if type(artifacts) == "table" then artifacts.Found else nil
 	local n = if type(found) == "table" then found[id] else nil
 	if type(n) ~= "number" or n ~= n or n < 1 then

@@ -13,6 +13,16 @@
 	  inventory (capsule opens that would pass it are refused). Saves keep up
 	  to MaxSaved (a Robux receipt in step 8 may pass the cap: paid golems are
 	  never lost).
+	- Golems of a kind this server doesn't know (added by a newer update) stay
+	  in the save (Migrations), count toward InventoryCap, give nothing, can't
+	  be equipped, and are never deleted here (they may be paid ones).
+	- Budgets (mobile, 8 players x 3 followers): a golem model has at most
+	  MaxParts parts, no lights (the Glow is a Neon part; Mythics may add one
+	  small PointLight). Followers are BUILT AND ANIMATED ON EACH CLIENT from
+	  the player attribute EquippedAttribute ("PebbleGolem,EmberImp,..."): the
+	  server replicates no golem parts or CFrames. Clients hide followers
+	  further than FollowerHideDistance studs away and skip the idle bobbing
+	  beyond FollowerLodDistance.
 
 	Saved as data.Golems = {
 	  Owned = { { Id = number, Kind = golemId } }, -- Id: whole, unique, >= 1
@@ -53,6 +63,10 @@ GolemConfig.EquipSlots = 3
 GolemConfig.InventoryCap = 60
 GolemConfig.MaxSaved = 80 -- Migrations hard cap (see above)
 GolemConfig.MaxDelete = 60 -- ids per "Delete"
+GolemConfig.MaxParts = 25 -- parts in one golem model (see the header)
+GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server
+GolemConfig.FollowerHideDistance = 120 -- studs: other players' followers vanish beyond this
+GolemConfig.FollowerLodDistance = 60 -- studs: no idle animation beyond this
 
 -- Bonus type -> StatConfig stat + card label
 GolemConfig.BonusTypes = {
@@ -422,9 +436,11 @@ function GolemConfig.add(golems: { [string]: any }, kind: string, overCap: boole
 end
 
 -- GolemAction "Equip": into the first free slot. true, or false + "BadGolem" | "SlotsFull".
--- Equipping an equipped golem again is a no-op success.
+-- Equipping an equipped golem again is a no-op success. A golem of an
+-- unknown kind (a newer update's) can't be equipped ("BadGolem").
 function GolemConfig.equip(golems: { [string]: any }, id: any): (boolean, string?)
-	if not GolemConfig.find(golems, id) then
+	local entry = GolemConfig.find(golems, id)
+	if not entry or not GolemConfig.ById[entry.Kind] then
 		return false, "BadGolem"
 	end
 	ensure(golems)
@@ -449,11 +465,16 @@ function GolemConfig.unequip(golems: { [string]: any }, id: any): (boolean, stri
 	return true, nil
 end
 
--- GolemAction "EquipBest": the EquipSlots best owned golems (GolemConfig.score,
--- then the oldest Id). Returns the new Equipped list.
+-- GolemAction "EquipBest": the EquipSlots best owned golems of known kinds
+-- (GolemConfig.score, then the oldest Id). Returns the new Equipped list.
 function GolemConfig.equipBest(golems: { [string]: any }): { number }
 	ensure(golems)
-	local list = table.clone(golems.Owned)
+	local list = {}
+	for _, entry in golems.Owned do
+		if type(entry) == "table" and GolemConfig.ById[entry.Kind] then
+			table.insert(list, entry)
+		end
+	end
 	table.sort(list, function(a: any, b: any): boolean
 		local sa, sb = GolemConfig.score(a.Kind), GolemConfig.score(b.Kind)
 		if sa ~= sb then
@@ -470,17 +491,29 @@ function GolemConfig.equipBest(golems: { [string]: any }): { number }
 end
 
 -- GolemAction "Delete": removes the owned golems with these ids (also from
--- Equipped). `ids` must be a list of at most MaxDelete whole numbers.
--- Returns how many were deleted (0 + "BadIds" for a bad list).
+-- Equipped). `ids` must be a plain list of 1..MaxDelete whole numbers (the
+-- check walks at most MaxDelete + 1 entries, whatever the client sent).
+-- Golems of unknown kinds are never deleted (they may be paid ones from a
+-- newer update). Returns how many were deleted (0 + "BadIds" for a bad list).
 function GolemConfig.delete(golems: { [string]: any }, ids: any): (number, string?)
-	if type(ids) ~= "table" or #ids < 1 or #ids > GolemConfig.MaxDelete then
+	if type(ids) ~= "table" then
+		return 0, "BadIds"
+	end
+	local count = 0
+	for key in ids do
+		count += 1
+		if count > GolemConfig.MaxDelete or type(key) ~= "number" then
+			return 0, "BadIds"
+		end
+	end
+	if count < 1 then
 		return 0, "BadIds"
 	end
 	local wanted: { [number]: boolean } = {}
-	for _, id in ids do
-		local n = whole(id)
+	for i = 1, count do
+		local n = whole(ids[i])
 		if n == nil then
-			return 0, "BadIds"
+			return 0, "BadIds" -- not 1..count, or not a whole number
 		end
 		wanted[n] = true
 	end
@@ -488,10 +521,13 @@ function GolemConfig.delete(golems: { [string]: any }, ids: any): (number, strin
 	local kept = {}
 	local removed = 0
 	for _, entry in golems.Owned do
-		if wanted[entry.Id] then
+		if type(entry) == "table" and wanted[entry.Id] and GolemConfig.ById[entry.Kind] then
 			removed += 1
 		else
 			table.insert(kept, entry)
+			if type(entry) == "table" and type(entry.Id) == "number" then
+				wanted[entry.Id] = nil -- kept (an unknown kind): stays equipped too
+			end
 		end
 	end
 	golems.Owned = kept
@@ -526,6 +562,19 @@ function GolemConfig.stats(golems: any, bondPct: number?): { [string]: number }
 		end
 	end
 	return out
+end
+
+-- The EquippedAttribute value for a record: the equipped known kinds in slot
+-- order, comma-separated ("" when none). Clients build followers from it.
+function GolemConfig.equippedKinds(golems: any): string
+	local kinds = {}
+	for _, id in equippedList(golems) do
+		local entry = GolemConfig.find(golems, id)
+		if entry and GolemConfig.ById[entry.Kind] and #kinds < GolemConfig.EquipSlots then
+			table.insert(kinds, entry.Kind)
+		end
+	end
+	return table.concat(kinds, ",")
 end
 
 -- Sanity: every kind's colors, accessory and bonus stat exist.

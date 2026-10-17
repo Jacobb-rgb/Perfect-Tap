@@ -8,15 +8,33 @@
 	               at least as rare as the capsule's LuckyFrom (Stone: Rare+,
 	               Crystal: Epic+, Royal: Legendary+) is exactly 3 times as
 	               likely; the other golems share the rest (CapsuleConfig.odds).
-	  HexaLucky    (data.Boosts.HexaLuckyUntil) mining: in every ore roll of a
-	               rock the weight of each Rare or rarer ore is multiplied by
-	               2.5, then the chances are recomputed so they add up to 100 %
-	               (oreOdds). It stacks with the Lucky enchant and Luck golems
-	               (their +% multiply the same weights: Bonuses.oreLuck).
+	  HexaLucky    (data.Boosts.HexaLuckyUntil) mining: the weight of each Rare
+	               or rarer ore in a rock's ore roll is multiplied by 2.5, then
+	               the chances are recomputed so they add up to 100 % (oreOdds).
+	               It stacks with the Lucky enchant and Luck golems: the total
+	               luck is StatConfig.oreLuck = (1 + their +%) x 2.5, at most x5.
+	               OWNER: the name came from the brief; "Hexa" sounds like x6
+	               while the effect is x2.5 - rename it or change Mult.
+
+	How luck works in a rock (upgradeOre, exact): a rock's ores are rolled
+	from the zone's plain weights when it grows, and the rock shows them
+	(glints, health). When a chunk drops, luck only ever UPGRADES it: a Rare+
+	ore stays what it is; a lower ore turns into a Rare+ ore of that zone with
+	chance 1 - T/T' (T = the zone's total weight, T' = the total with luck),
+	picked in proportion to the zone weights. Every chunk then has exactly
+	the chances oreOdds(zone weights, luck) shows on the boost card.
+	A zone without Rare+ ores (Outcrops) gets nothing from ore luck: the
+	boost card shows each zone's before/after Rare+ chance (zoneEffects) and
+	"No effect here" for those; a coin buy is refused ("NoEffect") when no
+	zone the player can mine has a Rare+ ore (hasEffect).
 
 	Where they come from: small coin versions (5 min, CoinOffers, BoostAction
 	"BuyCoins" { Id }), Robux packs (15 min / 1 h, RobuxOffers, BoostAction
 	"BuyRobux" { Id } -> PurchasePrompt) and the daily wheel (10 min).
+	Coin prices: BasePrice x CapsuleConfig.levelScale(blaster level), so they
+	grow with the game like the capsules (Triple Lucky 5 min = 10 Stone
+	capsules at every level). They never read the income (it can be gamed by
+	emptying the podiums before buying).
 	Stacking: every new boost of the same kind adds its time to what is left;
 	at most MaxStackSeconds (2 h) may be left after a coin buy or a wheel
 	prize (a coin buy that would pass it is refused, "Full"; the wheel caps).
@@ -25,16 +43,20 @@
 	MaxSavedSeconds.
 
 	Roblox rules: paid boosts that change the odds of random results must show
-	the NEW odds in numbers before purchase: the boost card shows oreOdds()
-	(the zone the player is in, or a zone picker) / CapsuleConfig.odds(id, true).
-	Both kinds count as paid random items (PaidRandom): hidden where
-	PolicyService ArePaidRandomItemsRestricted is true.
+	the NEW odds in numbers before purchase: the boost card shows zoneOdds()
+	per zone (zoneEffects for the summary) / CapsuleConfig.odds(id, true).
+	Robux packs are paid random items; coin offers are too only while coins
+	can be bought with Robux (isPaidRandom, MonetizationConfig.coinsBuyable).
+	Paid random items are hidden where PolicyService
+	ArePaidRandomItemsRestricted is true.
 ]]
 
 local OreData = require(script.Parent.OreData)
 local Rarity = require(script.Parent.Rarity)
 local WorldLayout = require(script.Parent.WorldLayout)
+local CapsuleConfig = require(script.Parent.CapsuleConfig)
 local MonetizationConfig = require(script.Parent.MonetizationConfig)
+local StatConfig = require(script.Parent.StatConfig)
 
 export type Kind = {
 	Id: string,
@@ -52,12 +74,17 @@ export type Offer = {
 	Id: string,
 	Boost: string, -- Kind id
 	Seconds: number,
-	PriceSeconds: number?, -- coin offers: costs this many seconds of podium income...
-	MinPrice: number?, -- ...but at least this many coins
+	BasePrice: number?, -- coin offers: coins at blaster levels 1-3 (x CapsuleConfig.levelScale)
 	Product: string?, -- Robux offers: MonetizationConfig key
 }
 
 export type OddsLine = { Ore: string, Chance: number }
+export type ZoneEffect = {
+	Zone: string,
+	Before: number, -- chance that a chunk is Rare or rarer now
+	After: number, -- the same with the boost
+	NoEffect: boolean, -- the zone has no Rare+ ore
+}
 
 local BoostConfig = {}
 
@@ -69,6 +96,7 @@ BoostConfig.Reasons = {
 	BadOffer = "That boost isn't sold here",
 	Full = "That boost already has 2 hours left",
 	NoCoins = "Not enough coins",
+	NoEffect = "No effect yet: none of your mines has Rare ores",
 	Restricted = "Boosts aren't available where you play",
 	Robux = "Robux purchase", -- the server answers with PurchasePrompt instead
 } :: { [string]: string }
@@ -103,8 +131,9 @@ BoostConfig.KindIds = { "TripleLucky", "HexaLucky" }
 BoostConfig.OreLuckFrom = Rarity.ById[BoostConfig.Kinds.HexaLucky.MinRarity or "Rare"].Order
 
 BoostConfig.CoinOffers = {
-	{ Id = "TripleLucky5", Boost = "TripleLucky", Seconds = 300, PriceSeconds = 240, MinPrice = 2500 },
-	{ Id = "HexaLucky5", Boost = "HexaLucky", Seconds = 300, PriceSeconds = 240, MinPrice = 2500 },
+	-- 10 Stone capsules' worth at every blaster level
+	{ Id = "TripleLucky5", Boost = "TripleLucky", Seconds = 300, BasePrice = 25000 },
+	{ Id = "HexaLucky5", Boost = "HexaLucky", Seconds = 300, BasePrice = 5000 },
 } :: { Offer }
 
 BoostConfig.RobuxOffers = {
@@ -147,6 +176,18 @@ function BoostConfig.active(boosts: any, kindId: string, now: number): boolean
 	return BoostConfig.remaining(boosts, kindId, now) > 0
 end
 
+-- The next moment after `now` a running boost runs out (nil when none runs).
+function BoostConfig.nextExpiry(boosts: any, now: number): number?
+	local soonest: number? = nil
+	for _, kindId in BoostConfig.KindIds do
+		local untilTime = BoostConfig.untilOf(boosts, kindId)
+		if untilTime > now and (soonest == nil or untilTime < soonest) then
+			soonest = untilTime
+		end
+	end
+	return soonest
+end
+
 -- Can `seconds` more be added without passing MaxStackSeconds?
 function BoostConfig.canExtend(boosts: any, kindId: string, seconds: number, now: number): boolean
 	return BoostConfig.Kinds[kindId] ~= nil and BoostConfig.remaining(boosts, kindId, now) + seconds <= BoostConfig.MaxStackSeconds
@@ -172,14 +213,24 @@ function BoostConfig.extend(boosts: { [string]: any }, kindId: string, seconds: 
 	return boosts[kind.Field]
 end
 
--- Coins a coin offer costs at this podium income (nil for other offers).
-function BoostConfig.coinPrice(offerId: any, incomePerSecond: number): number?
+-- Coins a coin offer costs at this blaster level (nil for other offers).
+function BoostConfig.coinPrice(offerId: any, blasterLevel: any): number?
 	local offer = if type(offerId) == "string" then BoostConfig.OfferById[offerId] else nil
-	if not offer or not offer.PriceSeconds then
+	local base = if offer then offer.BasePrice else nil
+	if base == nil then
 		return nil
 	end
-	local income = if finite(incomePerSecond) and incomePerSecond > 0 then math.min(incomePerSecond, 1e27) else 0
-	return math.max(offer.MinPrice or 0, math.ceil(income * offer.PriceSeconds))
+	return base * CapsuleConfig.levelScale(blasterLevel)
+end
+
+-- Is buying this offer a paid random item? Robux packs always; coin offers
+-- only while coins can be bought with Robux. Unknown offer: true (strict).
+function BoostConfig.isPaidRandom(offerId: any): boolean
+	local offer = if type(offerId) == "string" then BoostConfig.OfferById[offerId] else nil
+	if not offer or offer.Product ~= nil then
+		return true
+	end
+	return MonetizationConfig.coinsBuyable()
 end
 
 -- What the running boosts give (Bonuses stats).
@@ -201,6 +252,14 @@ function BoostConfig.isLuckyOre(oreId: string): boolean
 	local ore = OreData.ById[oreId]
 	local info = if ore then Rarity.ById[ore.Rarity] else nil
 	return info ~= nil and info.Order >= BoostConfig.OreLuckFrom
+end
+
+-- The ore luck with and without Hexa Lucky for a player whose other luck is
+-- `oreLuckPct` (Lucky enchant + Luck golems, capped): what a Hexa Lucky card
+-- compares. Both are StatConfig.oreLuck (at most StatConfig.MaxOreLuck).
+function BoostConfig.hexaLuck(oreLuckPct: number): (number, number)
+	local hexa = BoostConfig.Kinds.HexaLucky.Mult
+	return StatConfig.oreLuck(oreLuckPct, 1), StatConfig.oreLuck(oreLuckPct, hexa)
 end
 
 -- Ore weights with luck: every Rare or rarer ore's weight x `luck`
@@ -247,7 +306,8 @@ function BoostConfig.zoneOdds(zoneId: string, luck: number): { OddsLine }
 	return BoostConfig.oreOdds(zone.Ores, luck)
 end
 
--- Picks an ore for a roll in [0, 1) from weights with luck (nil for no weights).
+-- Picks an ore for a roll in [0, 1) straight from the weights with luck (nil
+-- for no weights). A fresh roll: MiningService uses upgradeOre instead.
 function BoostConfig.rollOre(weights: { [string]: number }, luck: number, roll: number): string?
 	local list = BoostConfig.oreOdds(weights, luck)
 	local acc = 0
@@ -259,6 +319,125 @@ function BoostConfig.rollOre(weights: { [string]: number }, luck: number, roll: 
 	end
 	local last = list[#list]
 	return if last then last.Ore else nil
+end
+
+-- The plain totals of the weights: (lower ores, Rare and rarer ores).
+local function totals(weights: { [string]: number }): (number, number)
+	local low, rare = 0, 0
+	for oreId, weight in BoostConfig.oreWeights(weights, 1) do
+		if BoostConfig.isLuckyOre(oreId) then
+			rare += weight
+		else
+			low += weight
+		end
+	end
+	return low, rare
+end
+
+-- Chance that a chunk whose rock rolled a lower ore is upgraded (1 - T/T',
+-- see the header). 0 without luck, without Rare+ ores or without lower ores.
+function BoostConfig.upgradeChance(weights: { [string]: number }, luck: number): number
+	if not finite(luck) or luck <= 1 then
+		return 0
+	end
+	local low, rare = totals(weights)
+	if low <= 0 or rare <= 0 then
+		return 0
+	end
+	local plain = low + rare
+	return 1 - plain / (low + rare * luck)
+end
+
+-- Chance that a chunk is Rare or rarer with these weights and luck.
+function BoostConfig.rareShare(weights: { [string]: number }, luck: number): number
+	local low, rare = totals(weights)
+	local mult = if finite(luck) and luck > 1 then luck else 1
+	local total = low + rare * mult
+	return if total > 0 then rare * mult / total else 0
+end
+
+-- The ore a dropped chunk really is (exact coupling, see the header): the
+-- rock's `rolled` ore stays when there is no luck, when it is Rare or rarer,
+-- or when it isn't one of `weights`; else with upgradeChance it becomes a
+-- Rare+ ore of `weights` picked in proportion to its weight. `random` is
+-- called only when an upgrade is possible (once, plus once for the pick).
+function BoostConfig.upgradeOre(weights: { [string]: number }, luck: number, rolled: string, random: () -> number): string
+	if BoostConfig.isLuckyOre(rolled) then
+		return rolled
+	end
+	local plain = BoostConfig.oreWeights(weights, 1)
+	if plain[rolled] == nil then
+		return rolled
+	end
+	local chance = BoostConfig.upgradeChance(weights, luck)
+	if chance <= 0 or random() >= chance then
+		return rolled
+	end
+	local rare = {}
+	local total = 0
+	for _, ore in OreData.List do
+		local weight = plain[ore.Id]
+		if weight and BoostConfig.isLuckyOre(ore.Id) then
+			table.insert(rare, ore.Id)
+			total += weight
+		end
+	end
+	local target = random() * total
+	for _, oreId in rare do
+		target -= plain[oreId]
+		if target < 0 then
+			return oreId
+		end
+	end
+	return rare[#rare] or rolled
+end
+
+-- The zones a player can mine at this blaster level (VIP zones with `vip`), in
+-- WorldLayout order (zones without ores are left out).
+function BoostConfig.minableZones(blasterLevel: any, vip: boolean?): { WorldLayout.Zone }
+	local level = if finite(blasterLevel) then blasterLevel else 1
+	local list = {}
+	for _, zone in WorldLayout.Zones do
+		if next(zone.Ores) ~= nil and zone.MinBlaster <= level and (vip or not zone.VipOnly) then
+			table.insert(list, zone)
+		end
+	end
+	return list
+end
+
+-- A Hexa Lucky card's summary: per minable zone the Rare+ chance now and with
+-- the boost (luck values from hexaLuck), NoEffect for zones without Rare+ ores.
+function BoostConfig.zoneEffects(blasterLevel: any, vip: boolean?, luckNow: number, luckWith: number): { ZoneEffect }
+	local list: { ZoneEffect } = {}
+	for _, zone in BoostConfig.minableZones(blasterLevel, vip) do
+		local _, rare = totals(zone.Ores)
+		table.insert(list, {
+			Zone = zone.Id,
+			Before = BoostConfig.rareShare(zone.Ores, luckNow),
+			After = BoostConfig.rareShare(zone.Ores, luckWith),
+			NoEffect = rare <= 0,
+		})
+	end
+	return list
+end
+
+-- Does a boost do anything for this player? Triple Lucky: always (capsules);
+-- Hexa Lucky: when a zone they can mine has a Rare+ ore. Unknown kind: false.
+function BoostConfig.hasEffect(kindId: string, blasterLevel: any, vip: boolean?): boolean
+	local kind = BoostConfig.Kinds[kindId]
+	if not kind then
+		return false
+	end
+	if kind.Target ~= "Mining" then
+		return true
+	end
+	for _, zone in BoostConfig.minableZones(blasterLevel, vip) do
+		local _, rare = totals(zone.Ores)
+		if rare > 0 then
+			return true
+		end
+	end
+	return false
 end
 
 return BoostConfig

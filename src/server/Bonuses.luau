@@ -1,9 +1,9 @@
 --[[
 	Bonuses (steps 6-7): one place the services ask for a player's bonuses
 	(MiningService: damage, reach, ore luck, twin drops, artifact chance;
-	SellService: sell value; CarryService / the gear package: walk speed,
-	magnet, pickup range, throw power, carry capacity, head lamp; capsules:
-	Triple Lucky).
+	SellService: sell value; CarryService: walk speed and carry capacity; the
+	gear package: magnet, pickup range, throw power, head lamp; capsules:
+	Triple Lucky; EconomyService: podium income).
 
 	- Providers: functions (player, data, now) -> a partial stat table
 	  (StatConfig names). stats(player) sums every registered provider with
@@ -18,10 +18,18 @@
 	    "Collections" ArtifactConfig.stats(data.Artifacts)
 	  register(name, provider) replaces a provider of the same name (so a
 	  package can never count one source twice) or adds a new source (passes,
-	  rebirth, events).
-	- Podium income is NOT applied here: each package registers its own
-	  income share with EconomyService.addIncomeBonus(Bonuses.incomeBonus("Golems"))
-	  (and "Collections", ...), which reads the IncomePct of that one source.
+	  rebirth, events). Packages ONLY call register: they never add income
+	  bonuses to EconomyService themselves.
+	- Podium income: this module adds ONE EconomyService income bonus, keyed
+	  "Bonuses", that returns the capped IncomePct total of every provider
+	  (incomePct). So golems, enchants, collections and any later provider
+	  reach the podiums exactly once.
+	- Cache: stats(player) is kept per player until the save changes
+	  (DataService.onChanged -> invalidate), the next running boost runs out,
+	  or MaxCacheSeconds pass, whichever comes first; register / unregister
+	  clear every cache. A provider that depends on something outside the
+	  save (a game pass bought mid-session, an event) calls invalidate(player)
+	  when that changes. The returned table is shared: read it, never write it.
 	- The getters below turn totals into the numbers the services use.
 	  summary(player) is the same as a flat table for the State snapshot.
 ]]
@@ -37,6 +45,7 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local StatConfig = require(Shared.Config.StatConfig)
 local Perks = require(script.Parent.Perks)
 local DataService = require(script.Parent.Services.DataService)
+local EconomyService = require(script.Parent.Services.EconomyService)
 
 local Bonuses = {}
 
@@ -44,15 +53,31 @@ export type Stats = { [string]: number }
 export type Provider = (player: Player?, data: { [string]: any }, now: number) -> ...any
 
 type Entry = { Name: string, Provider: Provider }
+type Cached = { Stats: Stats, At: number, ValidUntil: number }
+
+Bonuses.MaxCacheSeconds = 30
+Bonuses.IncomeKey = "Bonuses" -- the EconomyService.addIncomeBonus key
 
 local providers: { Entry } = {}
 local warned: { [string]: boolean } = {}
+-- weak keys: a player who left is forgotten with their Player object
+local cache: { [any]: Cached } = setmetatable({}, { __mode = "k" }) :: any
 
 -- Swappable for the Lune tests.
 local clock: () -> number = os.time
 
+-- Forgets a player's cached totals (the next stats() call recomputes them).
+function Bonuses.invalidate(player: Player)
+	cache[player] = nil
+end
+
+local function invalidateAll()
+	table.clear(cache)
+end
+
 -- Adds a bonus source, or replaces the one with the same name.
 function Bonuses.register(name: string, provider: Provider)
+	invalidateAll()
 	for _, entry in providers do
 		if entry.Name == name then
 			entry.Provider = provider
@@ -64,6 +89,7 @@ end
 
 -- Removes a bonus source (tests, a feature switched off).
 function Bonuses.unregister(name: string)
+	invalidateAll()
 	for i, entry in providers do
 		if entry.Name == name then
 			table.remove(providers, i)
@@ -116,6 +142,7 @@ local BUILT_IN: { { Name: string, Provider: Provider } } = {
 function Bonuses.resetProviders()
 	table.clear(providers)
 	table.clear(warned)
+	invalidateAll()
 	for _, entry in BUILT_IN do
 		Bonuses.register(entry.Name, entry.Provider)
 	end
@@ -135,8 +162,8 @@ local function run(entry: Entry, player: Player?, data: { [string]: any }, now: 
 	return nil
 end
 
--- Totals of every provider for a save (pure: the tests and the State snapshot).
--- `data` may be nil (not loaded): the providers see an empty save.
+-- Totals of every provider for a save (pure, never cached: the tests and
+-- the cards). `data` may be nil (not loaded): the providers see an empty save.
 function Bonuses.compute(data: { [string]: any }?, now: number, player: Player?): Stats
 	local save = data or {}
 	local partials = {}
@@ -149,7 +176,8 @@ function Bonuses.compute(data: { [string]: any }?, now: number, player: Player?)
 	return StatConfig.combine(partials)
 end
 
--- The partial stats of one source for a player (nil when the source isn't registered).
+-- The partial stats of one source for a player (nil when the source isn't
+-- registered). Not cached: for breakdowns on the bonus screen.
 function Bonuses.source(player: Player, name: string): Stats?
 	for _, entry in providers do
 		if entry.Name == name then
@@ -160,18 +188,37 @@ function Bonuses.source(player: Player, name: string): Stats?
 	return nil
 end
 
--- Totals for a player (their save as it is now).
+-- Totals for a player (their save as it is now; cached, see the header).
 function Bonuses.stats(player: Player): Stats
-	return Bonuses.compute(DataService.get(player), clock(), player)
+	local now = clock()
+	local hit = cache[player]
+	if hit and now >= hit.At and now < hit.ValidUntil then
+		return hit.Stats
+	end
+	local data = DataService.get(player)
+	local stats = Bonuses.compute(data, now, player)
+	if data then
+		local validUntil = now + Bonuses.MaxCacheSeconds
+		local expiry = BoostConfig.nextExpiry(data.Boosts, now)
+		if expiry and expiry < validUntil then
+			validUntil = expiry
+		end
+		cache[player] = { Stats = stats, At = now, ValidUntil = validUntil }
+	else
+		cache[player] = nil
+	end
+	return stats
 end
 
--- An EconomyService.addIncomeBonus function for one source's IncomePct
--- (the packages register their own: Bonuses.incomeBonus("Golems"), ...).
-function Bonuses.incomeBonus(name: string): (Player) -> number
-	return function(player: Player): number
-		local stats = Bonuses.source(player, name)
-		return if stats then math.max(0, stats.IncomePct or 0) else 0
-	end
+-- The player's capped podium income bonus share (0.1 = +10 %): the one
+-- EconomyService income bonus this module adds (see the header).
+function Bonuses.incomePct(player: Player): number
+	return math.max(0, Bonuses.stats(player).IncomePct or 0)
+end
+
+-- Adds incomePct to EconomyService once (keyed: calling it again replaces it).
+function Bonuses.attachIncome()
+	EconomyService.addIncomeBonus(Bonuses.incomePct, Bonuses.IncomeKey)
 end
 
 ---------------------------------------------------------------- getters (from totals)
@@ -190,9 +237,10 @@ function Bonuses.reach(stats: Stats): number
 	return math.max(0, stats.ReachStuds or 0)
 end
 
--- The multiplier on Rare and rarer ore weights (1 = no luck).
+-- The multiplier on Rare and rarer ore weights (1 = no luck, at most
+-- StatConfig.MaxOreLuck).
 function Bonuses.oreLuck(stats: Stats): number
-	return math.max(1, (1 + math.max(0, stats.OreLuckPct or 0)) * (stats.OreLuckMult or 1))
+	return StatConfig.oreLuck(stats.OreLuckPct, stats.OreLuckMult)
 end
 
 -- Is Triple Lucky on (golem capsules)?
@@ -215,13 +263,22 @@ function Bonuses.sellMult(stats: Stats): number
 	return 1 + math.max(0, stats.SellPct or 0)
 end
 
--- Walk speed in studs/s (Boots base and Swift, times the WalkSpeed golems).
+-- Walk speed in studs/s with nothing carried (Boots base and Swift, times the
+-- WalkSpeed golems).
 function Bonuses.walkSpeed(stats: Stats): number
 	local base = stats.WalkSpeed or 0
 	if base <= 0 then
 		base = GearConfig.value("Boots", 0)
 	end
 	return math.clamp(base * (1 + math.max(0, stats.WalkSpeedPct or 0)), 8, 50)
+end
+
+-- Walk speed while carrying `count` items (GearConfig: the slowdown is
+-- capped, so a big backpack never cancels the boots). CarryService uses it.
+function Bonuses.carryWalkSpeed(stats: Stats, count: number): number
+	local items = if type(count) == "number" and count > 0 then count else 0
+	local slow = math.min(items * GearConfig.CarrySlowPerItem, GearConfig.CarrySlowMax)
+	return math.max(GearConfig.MinWalkSpeed, Bonuses.walkSpeed(stats) - slow)
 end
 
 -- Studs in which your own loose items fly to you (0 = no magnet).
@@ -250,28 +307,33 @@ function Bonuses.lamp(stats: Stats): (number, number)
 	return math.max(0, stats.LampRange or 0), math.max(0, stats.LampBrightness or 0)
 end
 
--- Picks the ore a dropped chunk really is: with ore luck above 1 the ore is
--- rolled again from the zone's weights with luck (BoostConfig.rollOre: Rare
--- and rarer ores x luck), otherwise `rolled` (the rock's own ore) stays and
--- `random` is not called.
+-- The ore a dropped chunk really is: ore luck only ever upgrades the rock's
+-- own `rolled` ore (BoostConfig.upgradeOre: a Rare+ ore stays, a lower one
+-- may become a Rare+ ore of `weights`, exactly matching BoostConfig.oreOdds
+-- with this luck). Without luck `random` is not called.
 function Bonuses.rollOre(stats: Stats, weights: { [string]: number }, rolled: string, random: () -> number): string
 	local luck = Bonuses.oreLuck(stats)
 	if luck <= 1 then
 		return rolled
 	end
-	return BoostConfig.rollOre(weights, luck, random()) or rolled
+	return BoostConfig.upgradeOre(weights, luck, rolled, random)
 end
 
 -- The flat table the State snapshot sends (State.Bonuses): the numbers the
 -- client shows and uses (lamp, magnet ring, walk speed, luck on boost cards).
+-- Every value is the capped total the server applies.
 function Bonuses.summary(player: Player): { [string]: any }
 	local stats = Bonuses.stats(player)
 	local lampRange, lampBrightness = Bonuses.lamp(stats)
+	local luckPct = math.max(0, stats.OreLuckPct or 0)
+	local _, luckWithHexa = BoostConfig.hexaLuck(luckPct)
 	return {
 		DamageMult = Bonuses.damageMult(stats, false),
 		OverchargeMult = 1 + math.max(0, stats.OverchargePct or 0),
 		Reach = Bonuses.reach(stats),
 		OreLuck = Bonuses.oreLuck(stats),
+		OreLuckPct = luckPct, -- the Lucky enchant + Luck golems part (capped)
+		OreLuckWithHexa = luckWithHexa, -- what OreLuck becomes with Hexa Lucky (boost cards)
 		TripleLucky = Bonuses.tripleLucky(stats),
 		HexaLucky = (stats.OreLuckMult or 1) > 1,
 		TwinDrop = Bonuses.twinDrop(stats),
@@ -289,14 +351,24 @@ function Bonuses.summary(player: Player): { [string]: any }
 	}
 end
 
+-- A save change may change any bonus: drop the cached totals.
+DataService.onChanged(function(player: Player)
+	Bonuses.invalidate(player)
+end)
+Bonuses.attachIncome()
+
 -- Internals for the Lune tests only.
 Bonuses._test = {
 	setClock = function(fn: () -> number)
 		clock = fn
+		invalidateAll()
 	end,
 	reset = function()
 		clock = os.time
 		Bonuses.resetProviders()
+	end,
+	cached = function(player: any): boolean
+		return cache[player] ~= nil
 	end,
 	names = function(): { string }
 		local list = {}

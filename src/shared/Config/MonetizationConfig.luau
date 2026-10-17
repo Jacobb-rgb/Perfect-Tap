@@ -15,11 +15,37 @@
 	- PaidRandom = true: buying it gives a random result (or changes the odds
 	  of one), so it is hidden/disabled for players whose
 	  PolicyService ArePaidRandomItemsRestricted is true (src/server/Policy.luau),
-	  and the exact odds are shown before buying. Because coins can be bought
-	  with Robux (the coin packs), the coin capsules count as paid random items
-	  too (CapsuleConfig).
+	  and the exact odds are shown before buying.
+	- Coin packs (CoinsSmall/Medium/Large) wait for the owner: the design notes
+	  say "Money comes only from podiums", so CoinPacksEnabled is false. While
+	  it is false the packs are never offered (promptStatus "Unknown") and
+	  coins can't be bought with Robux, so coin capsules and coin boosts are
+	  NOT paid random items (CapsuleConfig.isPaidRandom, BoostConfig.isPaidRandom
+	  read coinsBuyable()). Turning it on makes every coin capsule and coin
+	  boost a paid random item at once (hidden where restricted).
+	- One-time things are game passes, never developer products: the two
+	  Mythic enchants (EnchantHeartfire / EnchantStarbreaker) are passes, so
+	  Roblox itself never sells them twice. Step 8 grants a pass's Enchant /
+	  Perks when the player joins owning it (UserOwnsGamePassAsync) and on
+	  PromptGamePassPurchaseFinished.
 	- Prices (Robux) are for display; the Dashboard price is the real one:
 	  keep them equal.
+
+	Contract for step 8 (ProcessReceipt, developer products):
+	- A receipt is never stranded: it is granted (on the server that holds the
+	  session lock, saved first, then PurchaseGranted), or, when the item truly
+	  can't be given, compensated with something of equal worth, and the
+	  receipt is still answered PurchaseGranted. Paid golems may pass the
+	  inventory cap (GolemConfig.add overCap, up to MaxSaved); paid boost time
+	  is added uncapped (BoostConfig.extend capped = false). Past MaxSaved a
+	  capsule is refunded as coins (CapsuleConfig.price of a Crystal capsule
+	  at the player's blaster level per golem).
+	- Receipts that arrive "off policy" (a paid random product for a player
+	  whose policy restricts it, a product whose id is 0 here, an unknown
+	  product id) are still granted or compensated, never dropped, and logged
+	  with the player id, product id and purchase id for review.
+	- Clients can prompt any product themselves (exploiters, restricted
+	  regions): the server never trusts that a prompt came from its own UI.
 ]]
 
 export type Kind = "GamePass" | "Product"
@@ -33,13 +59,13 @@ export type Product = {
 	Description: string,
 	Perks: { string }?, -- game passes: Perks ids the pass grants (src/server/Perks.luau)
 	PaidRandom: boolean?, -- random result / changes odds: PolicyService rules
-	OneTime: boolean?, -- a developer product a player can own only once (rare enchants)
+	CoinPack: boolean?, -- coins for Robux (off while CoinPacksEnabled is false)
 	-- what a product gives (read by the step 8 receipt handler and the UI)
 	Capsule: string?, -- CapsuleConfig id
 	Count: number?, -- capsules opened
 	Boost: string?, -- BoostConfig kind
 	Seconds: number?, -- boost seconds
-	Enchant: string?, -- EnchantConfig id
+	Enchant: string?, -- EnchantConfig id (a game pass that grants the enchant)
 	CoinSeconds: number?, -- coin packs: seconds of the player's podium income...
 	MinCoins: number?, -- ...but at least this many coins
 }
@@ -163,31 +189,30 @@ local LIST: { Product } = {
 		Boost = "HexaLucky",
 		Seconds = 3600,
 	},
-	---------------------------------------------------------------- the two rarest enchants
+	---------------------------------------------------------------- the two rarest enchants (one-time: game passes)
 	{
 		Key = "EnchantHeartfire",
-		Kind = "Product",
+		Kind = "GamePass",
 		Id = 0,
 		Robux = 20,
 		Name = "Heartfire Enchant",
 		Description = "The Mythic Heartfire enchant for your blaster, yours forever.",
-		OneTime = true,
 		Enchant = "Heartfire",
 	},
 	{
 		Key = "EnchantStarbreaker",
-		Kind = "Product",
+		Kind = "GamePass",
 		Id = 0,
 		Robux = 20,
 		Name = "Starbreaker Enchant",
 		Description = "The Mythic Starbreaker enchant for your blaster, yours forever.",
-		OneTime = true,
 		Enchant = "Starbreaker",
 	},
 	---------------------------------------------------------------- coin packs
 	{
 		Key = "CoinsSmall",
 		Kind = "Product",
+		CoinPack = true,
 		Id = 0,
 		Robux = 49,
 		Name = "Pouch of Coins",
@@ -198,6 +223,7 @@ local LIST: { Product } = {
 	{
 		Key = "CoinsMedium",
 		Kind = "Product",
+		CoinPack = true,
 		Id = 0,
 		Robux = 149,
 		Name = "Chest of Coins",
@@ -208,6 +234,7 @@ local LIST: { Product } = {
 	{
 		Key = "CoinsLarge",
 		Kind = "Product",
+		CoinPack = true,
 		Id = 0,
 		Robux = 399,
 		Name = "Vault of Coins",
@@ -216,6 +243,10 @@ local LIST: { Product } = {
 		MinCoins = 100000,
 	},
 }
+
+-- Coin packs wait for the owner's decision (see the header). Keep false
+-- until the owner confirms them; it decides the paid-random-items rules.
+MonetizationConfig.CoinPacksEnabled = false
 
 MonetizationConfig.List = LIST
 MonetizationConfig.Products = {} :: { [string]: Product }
@@ -242,6 +273,12 @@ function MonetizationConfig.get(key: any): Product?
 	return if type(key) == "string" then MonetizationConfig.Products[key] else nil
 end
 
+-- Can coins be bought with Robux? (coin packs on). When true, everything
+-- random that costs coins is a paid random item too.
+function MonetizationConfig.coinsBuyable(): boolean
+	return MonetizationConfig.CoinPacksEnabled == true
+end
+
 -- Is the product behind `key` live?
 function MonetizationConfig.keyLive(key: any): boolean
 	local product = MonetizationConfig.get(key)
@@ -249,14 +286,16 @@ function MonetizationConfig.keyLive(key: any): boolean
 end
 
 -- What to answer when a player asks to buy `key` (PurchasePrompt.Status):
--- "Unknown" (no such product), "Restricted" (paid random item and the player's
--- policy restricts them; also when the policy is not known yet), "Owned" (a
--- one-time item or pass they have), "Full" (the feature can't take it now:
+-- "Unknown" (no such product, or a coin pack while coin packs are off),
+-- "Restricted" (paid random item and the player's policy restricts them;
+-- also when the policy is not known yet), "Owned" (a pass they own, or a
+-- Mythic enchant they already have), "Full" (the feature can't take it now:
 -- boost at its cap, golem inventory full), "ComingSoon" (placeholder id),
--- else "Prompt" (the caller prompts MarketplaceService and sends "Prompted").
+-- else "Prompt" (the caller prompts MarketplaceService - PromptGamePassPurchase
+-- for a GamePass, PromptProductPurchase for a Product - and sends "Prompted").
 function MonetizationConfig.promptStatus(key: any, restricted: boolean, owned: boolean?, full: boolean?): string
 	local product = MonetizationConfig.get(key)
-	if not product then
+	if not product or (product.CoinPack and not MonetizationConfig.coinsBuyable()) then
 		return "Unknown"
 	end
 	if product.PaidRandom and restricted then

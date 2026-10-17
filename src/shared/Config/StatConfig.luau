@@ -14,8 +14,8 @@
 	  TwinDropChance   chance that a dropped ore drops a twin chunk too
 	  ArtifactPct      + share of the artifact chance of every rock
 	  SellPct          + share of what Tobin pays
-	  IncomePct        + share of podium income (applied through
-	                   EconomyService.addIncomeBonus, see Bonuses.incomeBonus)
+	  IncomePct        + share of podium income (Bonuses adds the capped total
+	                   to EconomyService once, see Bonuses.incomePct)
 	  GolemBondPct     + share of every equipped golem's bonus
 	  WalkSpeed        walk speed in studs/s (Boots give the base, Swift adds)
 	  WalkSpeedPct     + share of walk speed
@@ -25,6 +25,15 @@
 	  CarryCapacity    items you can carry (the StrongBack perk doubles it)
 	  LampRange        head lamp range (studs, 0 = no lamp)
 	  LampBrightness   head lamp brightness
+
+	Caps (Max, applied to each total by combine): they are real limits the
+	best gear can reach, so the numbers on the cards are what the game
+	applies (the UI shows the capped totals from State.Bonuses). Ore luck has
+	one more cap on the product: oreLuck() = (1 + OreLuckPct) x OreLuckMult,
+	at most MaxOreLuck (x5), so the odds on a Hexa Lucky card match the rolls.
+	Today's highest sums (3 equipped golems with Golem Bond III + Golemworks):
+	DamagePct ~3.0, OreLuckPct ~2.45 (capped 1.5), IncomePct ~2.1, SellPct ~1.3,
+	WalkSpeedPct ~0.24, ArtifactPct 1.5, OverchargePct 1.3.
 ]]
 
 export type StatKind = "Add" | "Mult"
@@ -40,19 +49,19 @@ export type Stat = {
 local StatConfig = {}
 
 StatConfig.List = {
-	{ Id = "DamagePct", Kind = "Add", Label = "blaster damage", Format = "Percent", Max = 20 },
-	{ Id = "OverchargePct", Kind = "Add", Label = "damage on a cracked rock's last third", Format = "Percent", Max = 20 },
-	{ Id = "ReachStuds", Kind = "Add", Label = "blaster range", Format = "Studs", Max = 30 },
-	{ Id = "OreLuckPct", Kind = "Add", Label = "rare ore luck", Format = "Percent", Max = 20 },
-	{ Id = "OreLuckMult", Kind = "Mult", Label = "rare ore luck", Format = "Times", Max = 50 },
+	{ Id = "DamagePct", Kind = "Add", Label = "blaster damage", Format = "Percent", Max = 3 },
+	{ Id = "OverchargePct", Kind = "Add", Label = "damage on a cracked rock's last third", Format = "Percent", Max = 3 },
+	{ Id = "ReachStuds", Kind = "Add", Label = "blaster range", Format = "Studs", Max = 12 },
+	{ Id = "OreLuckPct", Kind = "Add", Label = "rare ore luck", Format = "Percent", Max = 1.5 },
+	{ Id = "OreLuckMult", Kind = "Mult", Label = "rare ore luck", Format = "Times", Max = 2.5 },
 	{ Id = "CapsuleLuckMult", Kind = "Mult", Label = "capsule luck", Format = "Times", Max = 3 },
 	{ Id = "TwinDropChance", Kind = "Add", Label = "chance of a twin chunk", Format = "Percent", Max = 0.5 },
-	{ Id = "ArtifactPct", Kind = "Add", Label = "artifact chance", Format = "Percent", Max = 20 },
-	{ Id = "SellPct", Kind = "Add", Label = "sell value", Format = "Percent", Max = 20 },
-	{ Id = "IncomePct", Kind = "Add", Label = "podium income", Format = "Percent", Max = 100 },
-	{ Id = "GolemBondPct", Kind = "Add", Label = "golem bonuses", Format = "Percent", Max = 10 },
+	{ Id = "ArtifactPct", Kind = "Add", Label = "artifact chance", Format = "Percent", Max = 3 },
+	{ Id = "SellPct", Kind = "Add", Label = "sell value", Format = "Percent", Max = 3 },
+	{ Id = "IncomePct", Kind = "Add", Label = "podium income", Format = "Percent", Max = 3 },
+	{ Id = "GolemBondPct", Kind = "Add", Label = "golem bonuses", Format = "Percent", Max = 1 },
 	{ Id = "WalkSpeed", Kind = "Add", Label = "walk speed", Format = "Speed", Max = 40 },
-	{ Id = "WalkSpeedPct", Kind = "Add", Label = "walk speed", Format = "Percent", Max = 1 },
+	{ Id = "WalkSpeedPct", Kind = "Add", Label = "walk speed", Format = "Percent", Max = 0.5 },
 	{ Id = "MagnetRadius", Kind = "Add", Label = "magnet radius", Format = "Studs", Max = 60 },
 	{ Id = "PickupRange", Kind = "Add", Label = "pickup range", Format = "Studs", Max = 40 },
 	{ Id = "ThrowMult", Kind = "Mult", Label = "throw power", Format = "Times", Max = 3 },
@@ -60,6 +69,9 @@ StatConfig.List = {
 	{ Id = "LampRange", Kind = "Add", Label = "lamp range", Format = "Studs", Max = 120 },
 	{ Id = "LampBrightness", Kind = "Add", Label = "lamp brightness", Format = "Number", Max = 10 },
 } :: { Stat }
+
+-- The highest total rare ore luck (the product, see the header).
+StatConfig.MaxOreLuck = 5
 
 StatConfig.ById = {} :: { [string]: Stat }
 for _, stat in StatConfig.List do
@@ -98,6 +110,15 @@ function StatConfig.add(totals: { [string]: number }, partial: any): { [string]:
 		end
 	end
 	return totals
+end
+
+-- The multiplier on Rare and rarer ore weights from the two luck totals:
+-- (1 + pct) x mult, between 1 (no luck) and MaxOreLuck. Broken values count
+-- as no luck. Bonuses.oreLuck and the boost cards both use this.
+function StatConfig.oreLuck(pct: any, mult: any): number
+	local p = if finite(pct) and pct > 0 then pct else 0
+	local m = if finite(mult) and mult > 0 then mult else 1
+	return math.clamp((1 + p) * m, 1, StatConfig.MaxOreLuck)
 end
 
 -- Sums partial stat tables and clamps every total to its Max.

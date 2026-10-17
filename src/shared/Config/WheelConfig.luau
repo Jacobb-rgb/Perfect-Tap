@@ -5,24 +5,45 @@
 	- One free spin every 24 h. data.Wheel.NextSpinAt is the os.time() second
 	  the next free spin is ready (0 = ready now), so the timer keeps running
 	  while the player is offline. A spin sets it to now + CooldownSeconds.
-	- 8 segments with exact odds (sum 1), shown on the wheel screen before
-	  spinning (odds()). Colors match the lobby wheel's rainbow segments
-	  (src/server/World/Lobby/Districts/Wheel.luau SEGMENTS; the lobby wheel has
-	  10 decorative segments, the wheel screen uses these 8 of its colors).
+	- 8 segments with exact odds (sum 1), shown on the wheel SCREEN before
+	  spinning (odds()), and the result is shown on that 8-segment screen
+	  wheel. Colors are 8 of the lobby wheel's rainbow colors
+	  (src/server/World/Lobby/Districts/Wheel.luau SEGMENTS). The big lobby
+	  wheel is DECORATIVE ONLY: it has 10 equal segments with made-up icons
+	  (a donut, crates) and must never be used to show a result or the odds.
 	- Prizes:
 	    Coins       Seconds x the player's podium income per second, at least Min
 	    Boost       adds Seconds to that boost (BoostConfig.extend, capped)
 	    Capsule     opens one capsule of that kind for free right away
 	                (CapsuleConfig.roll + GolemConfig.add; the player's Triple
 	                Lucky counts); with a full golem inventory the player gets
-	                the capsule's coin price instead
-	    Ore         one dirty (Raw) ore of Rare or better (OreWeights) into the
-	                Ore Pen; with a full pen the player gets what Tobin pays
-	                for it (ItemData.value("Raw", ore)) instead
+	                FallbackShare (25 %) of the capsule's coin price at their
+	                blaster level instead (capsuleFallbackCoins)
+	    Ore         one dirty (Raw) ore into the Ore Pen, a step up from the
+	                best ore the player has found (see "Ore prize"); with a full
+	                pen the player gets what Tobin pays for it
+	                (ItemData.value("Raw", ore)) instead
 	    Shards      Amount crystal shards (data.Shards)
+	- Ore prize: from the ores of the zones the player's blaster can mine
+	  (BoostConfig.minableZones; VIP zones only for VIP players), those with an
+	  Income of at most max(OrePrize.MinIncome, best found ore's Income x
+	  OrePrize.IncomeMult), the OrePrize.Picks best of them, weighted
+	  OrePrize.Weights (the best one is the least likely). oreOdds(context) is
+	  the exact nested list the wheel screen shows under the segment. A day-1
+	  player (Copper found, blaster 1) wins Tin / Iron / Quartz; late players
+	  their top ores. No candidate at all (never with today's map): the Coins
+	  segment's prize instead.
+	- Players who can't buy ANY capsule (paid random items restricted and
+	  every capsule is a paid random item: CapsuleConfig.allRestricted) would
+	  get nothing from Triple Lucky, so for them that segment pays coins
+	  (Substitutes); segments(noCapsules) / odds(noCapsules) / pick(roll,
+	  noCapsules) give the wheel they see and spin.
 	- The spin is free and can't be bought, so it isn't a paid random item;
 	  its odds are still shown (Roblox: odds for any random reward). There are
 	  no paid spins and no rewards for likes or favorites.
+	- A rate-limited "Spin" is dropped without an answer (Net): the client
+	  keeps ClientCooldown between requests and stops waiting for WheelResult
+	  after ResultTimeout seconds (the button comes back).
 	WheelResult { Segment, Id, Kind, Amount?, Boost?, Seconds?, Capsule?,
 	Golem?, Ore?, Coins?, NextSpinAt } tells the client where the wheel stops.
 ]]
@@ -31,7 +52,6 @@ local CapsuleConfig = require(script.Parent.CapsuleConfig)
 local BoostConfig = require(script.Parent.BoostConfig)
 local ItemData = require(script.Parent.ItemData)
 local OreData = require(script.Parent.OreData)
-local Rarity = require(script.Parent.Rarity)
 
 export type PrizeKind = "Coins" | "Boost" | "Capsule" | "Ore" | "Shards"
 
@@ -49,13 +69,29 @@ export type Segment = {
 	Amount: number?, -- Shards
 }
 
+-- What the ore prize needs to know about the player (the service builds it:
+-- BlasterLevel = data.BlasterLevel, BestIncome = bestIncome(data.Discovered),
+-- Vip = the ForgeVip perk).
+export type OreContext = { BlasterLevel: number, BestIncome: number, Vip: boolean? }
+export type OreLine = { Ore: string, Chance: number }
+
 local WheelConfig = {}
 
 WheelConfig.CooldownSeconds = 24 * 3600
 WheelConfig.SpinSeconds = 5 -- how long the wheel screen spins before showing the prize
+WheelConfig.ClientCooldown = 1 -- seconds between two "Spin" requests from the client
+WheelConfig.ResultTimeout = 5 -- seconds the client waits for WheelResult
+WheelConfig.FallbackShare = 0.25 -- share of a capsule's price paid when the golem inventory is full
 -- the lobby hooks that open the wheel screen (the spin itself works from the side menu too)
 WheelConfig.Tag = "EmberChest" -- the free daily chest at the top of the SPIN & WIN stairs
 WheelConfig.ModelName = "SpinWheel"
+
+WheelConfig.OrePrize = {
+	IncomeMult = 3, -- at most this many times the best found ore's income
+	MinIncome = 8, -- ...but always up to this (a new player: Quartz)
+	Picks = 3, -- the best few candidates
+	Weights = { 1, 2, 3 }, -- best first: the best ore is the least likely
+}
 
 -- WheelAction / ActionResult reason codes -> text for the player
 WheelConfig.Reasons = {
@@ -89,7 +125,7 @@ WheelConfig.Segments = {
 		Boost = "HexaLucky",
 		Seconds = 600,
 	},
-	{ Index = 7, Id = "RareOre", Kind = "Ore", Label = "Rare Ore", Odds = 0.08, Color = rgb(100, 24, 140) },
+	{ Index = 7, Id = "OrePrize", Kind = "Ore", Label = "Ore Prize", Odds = 0.08, Color = rgb(100, 24, 140) },
 	{
 		Index = 8,
 		Id = "CrystalCapsule",
@@ -101,17 +137,20 @@ WheelConfig.Segments = {
 	},
 } :: { Segment }
 
--- The dirty ore the RareOre segment gives (weights; all Rare or better).
-WheelConfig.OreWeights = {
-	Gold = 30,
-	Ruby = 25,
-	Azurium = 18,
-	Sapphire = 12,
-	Emerald = 8,
-	Diamond = 4,
-	Verdantine = 2,
-	Obsidian = 1,
-} :: { [string]: number }
+-- Segment id -> what that segment pays players who can't buy any capsule
+-- (same place, odds and color on their wheel).
+WheelConfig.Substitutes = {
+	TripleLucky = {
+		Index = 2,
+		Id = "TripleLuckyCoins",
+		Kind = "Coins",
+		Label = "Coins",
+		Odds = 0.12,
+		Color = rgb(150, 70, 8),
+		Seconds = 180,
+		Min = 750,
+	},
+} :: { [string]: Segment }
 
 WheelConfig.ById = {} :: { [string]: Segment }
 for _, segment in WheelConfig.Segments do
@@ -121,34 +160,47 @@ for _, segment in WheelConfig.Segments do
 	local boost = segment.Boost
 	assert(boost == nil or BoostConfig.Kinds[boost], "WheelConfig: unknown boost")
 end
-for oreId in WheelConfig.OreWeights do
-	local ore = OreData.ById[oreId]
-	assert(ore and Rarity.ById[ore.Rarity].Order >= Rarity.ById.Rare.Order, "WheelConfig: ore prize must be Rare+ " .. oreId)
+for id, substitute in WheelConfig.Substitutes do
+	local original = WheelConfig.ById[id]
+	assert(original and original.Index == substitute.Index and original.Odds == substitute.Odds, "WheelConfig: bad substitute " .. id)
+	WheelConfig.ById[substitute.Id] = substitute
 end
 
 local function finite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
 end
 
--- The segment odds for the wheel screen: { { Segment, Chance } } (sum 1).
-function WheelConfig.odds(): { { Segment: Segment, Chance: number } }
+-- The 8 segments a player sees and spins (`noCapsules`: the player can't buy
+-- any capsule, CapsuleConfig.allRestricted; then Substitutes apply).
+function WheelConfig.segments(noCapsules: boolean?): { Segment }
 	local list = {}
 	for _, segment in WheelConfig.Segments do
+		local substitute = if noCapsules then WheelConfig.Substitutes[segment.Id] else nil
+		table.insert(list, substitute or segment)
+	end
+	return list
+end
+
+-- The segment odds for the wheel screen: { { Segment, Chance } } (sum 1).
+function WheelConfig.odds(noCapsules: boolean?): { { Segment: Segment, Chance: number } }
+	local list = {}
+	for _, segment in WheelConfig.segments(noCapsules) do
 		table.insert(list, { Segment = segment, Chance = segment.Odds })
 	end
 	return list
 end
 
 -- The segment for a roll in [0, 1).
-function WheelConfig.pick(roll: number): Segment
+function WheelConfig.pick(roll: number, noCapsules: boolean?): Segment
+	local list = WheelConfig.segments(noCapsules)
 	local acc = 0
-	for _, segment in WheelConfig.Segments do
+	for _, segment in list do
 		acc += segment.Odds
 		if roll < acc then
 			return segment
 		end
 	end
-	return WheelConfig.Segments[#WheelConfig.Segments]
+	return list[#list]
 end
 
 -- Is the free spin ready? (`nextSpinAt` from data.Wheel; broken = ready)
@@ -173,25 +225,81 @@ function WheelConfig.coins(segment: Segment, incomePerSecond: number): number
 	return math.max(segment.Min or 0, math.floor(income * (segment.Seconds or 0)))
 end
 
--- The RareOre segment's ore for a roll in [0, 1).
-function WheelConfig.pickOre(roll: number): string
-	local keys = {}
-	local total = 0
-	for oreId, weight in WheelConfig.OreWeights do
-		table.insert(keys, oreId)
-		total += weight
+---------------------------------------------------------------- the ore prize
+
+-- The Income of the best ore in a data.Discovered record ({ [oreId] = true };
+-- unknown ids and broken records count as nothing: 0).
+function WheelConfig.bestIncome(discovered: any): number
+	local best = 0
+	if type(discovered) ~= "table" then
+		return best
 	end
-	table.sort(keys, function(a: string, b: string): boolean
-		return OreData.ById[a].Income < OreData.ById[b].Income
-	end)
-	local target = roll * total
-	for _, oreId in keys do
-		target -= WheelConfig.OreWeights[oreId]
-		if target < 0 then
-			return oreId
+	for oreId, found in discovered do
+		local ore = if type(oreId) == "string" and found then OreData.ById[oreId] else nil
+		if ore and ore.Income > best then
+			best = ore.Income
 		end
 	end
-	return keys[#keys]
+	return best
+end
+
+-- Exact odds of the ore prize for this player (see the header), in OreData
+-- order (better last); sums to 1. Empty when no ore qualifies.
+function WheelConfig.oreOdds(context: OreContext): { OreLine }
+	local prize = WheelConfig.OrePrize
+	local best = if finite(context.BestIncome) and context.BestIncome > 0 then context.BestIncome else 0
+	local cap = math.max(prize.MinIncome, best * prize.IncomeMult)
+	local seen: { [string]: boolean } = {}
+	local candidates: { string } = {}
+	for _, zone in BoostConfig.minableZones(context.BlasterLevel, context.Vip) do
+		for oreId, weight in zone.Ores do
+			local ore = OreData.ById[oreId]
+			if ore and weight > 0 and ore.Income <= cap and not seen[oreId] then
+				seen[oreId] = true
+				table.insert(candidates, oreId)
+			end
+		end
+	end
+	-- the best first (ties: OreData order)
+	table.sort(candidates, function(a: string, b: string): boolean
+		local ia, ib = OreData.ById[a].Income, OreData.ById[b].Income
+		if ia ~= ib then
+			return ia > ib
+		end
+		return a < b
+	end)
+	local weights: { [string]: number } = {}
+	local total = 0
+	for i = 1, math.min(prize.Picks, #candidates, #prize.Weights) do
+		weights[candidates[i]] = prize.Weights[i]
+		total += prize.Weights[i]
+	end
+	local list: { OreLine } = {}
+	if total <= 0 then
+		return list
+	end
+	for _, ore in OreData.List do
+		local weight = weights[ore.Id]
+		if weight then
+			table.insert(list, { Ore = ore.Id, Chance = weight / total })
+		end
+	end
+	return list
+end
+
+-- The ore prize for a roll in [0, 1) (nil: no ore qualifies, pay the Coins
+-- segment's coins instead).
+function WheelConfig.pickOre(roll: number, context: OreContext): string?
+	local list = WheelConfig.oreOdds(context)
+	local acc = 0
+	for _, line in list do
+		acc += line.Chance
+		if roll < acc then
+			return line.Ore
+		end
+	end
+	local last = list[#list]
+	return if last then last.Ore else nil
 end
 
 -- Coins instead of the ore when the pen is full: what Tobin pays for it dirty.
@@ -199,10 +307,12 @@ function WheelConfig.oreFallbackCoins(oreId: string): number
 	return ItemData.value("Raw", oreId)
 end
 
--- Coins instead of a capsule when the golem inventory is full: its coin price
--- (a Robux capsule pays the Crystal capsule's price).
-function WheelConfig.capsuleFallbackCoins(capsuleId: string): number
-	return CapsuleConfig.price(capsuleId, 1) or CapsuleConfig.price("Crystal", 1) or 0
+-- Coins instead of a capsule when the golem inventory is full: FallbackShare
+-- of its coin price at the player's blaster level (a Robux capsule counts as
+-- a Crystal capsule). A share, so a full inventory is never the better deal.
+function WheelConfig.capsuleFallbackCoins(capsuleId: string, blasterLevel: any): number
+	local price = CapsuleConfig.price(capsuleId, 1, blasterLevel) or CapsuleConfig.price("Crystal", 1, blasterLevel) or 0
+	return math.floor(price * WheelConfig.FallbackShare)
 end
 
 return WheelConfig
