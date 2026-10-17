@@ -110,6 +110,8 @@ elseif sceneName == "mine_rocks" then -- mine floor rocks, giant crystals, break
 	require("./lib/mine_concepts").buildRocks(Loader, workspace)
 elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine floor rocks
 	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
+elseif sceneName == "mine_floor" then -- one mine floor area with rocks (tools/lune/lib/mine_floor_scene.luau)
+	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or 1)
 elseif sceneName == "railway" then -- the world with parked preview trains on the railway (tools/lune/lib/railway_gallery.luau)
 	require("./lib/railway_gallery").build(Loader, workspace)
 	addNodes(workspace)
@@ -630,7 +632,9 @@ if scene_extra then
 end
 
 fs.writeDir(root .. "/build/preview")
-local outName = if sceneName == "cleaning"
+local outName = if sceneName == "mine_floor"
+	then "mine_floor_" .. (process.args[2] or "1")
+	elseif sceneName == "cleaning"
 	then "cleaning_" .. (process.args[3] or "chisel") .. (if process.args[4] == "phone" then "_phone" else "")
 	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))

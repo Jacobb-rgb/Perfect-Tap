@@ -694,6 +694,39 @@ local function giantRock(c: Ctx)
 	twinkle(c, (main.CFrame * CFrame.new(2.4, -2, 0)).Position, 1.4, glow(pal.Crystal:Lerp(WHITE, 0.5)))
 end
 
+---------------------------------------------------------------- decoration
+
+-- A crystal cluster on its own, for cave decorations that match the rocks (MineKit.crystals).
+-- look: "Matte" | "Tipped" | "Shell" | "Glow"; tall clusters (height >= 4) get a pointed hero crystal.
+function RockBuilder.decorCluster(parent: Instance, root: CFrame, count: number, height: number, look: string, colors: { Color3 }, seed: number | string): Model
+	local model = Instance.new("Model")
+	model.Name = "CrystalCluster"
+	model.Parent = parent
+	local floor = MineFloors.List[1]
+	local c: Ctx = {
+		model = model,
+		rng = Rng.new(seed),
+		floor = floor,
+		pal = floor.Palette,
+		base = root,
+		kind = "Decor",
+		big = false,
+		mainCf = root,
+		mainSize = Vector3.new(1, 1, 1),
+		start = 0,
+		foot = root,
+		ring = 1,
+		top = 1,
+		gaps = {},
+	}
+	local l: Look = if look == "Matte" then "Matte" elseif look == "Tipped" then "Tipped" elseif look == "Glow" then "Glow" else "Shell"
+	local tallest = cluster(c, root, math.max(1, count), height, l, colors, height >= 4)
+	if l ~= "Matte" then
+		twinkle(c, tipOf(tallest), math.clamp(height * 0.28, 0.6, 2.4), glow(colors[1]:Lerp(WHITE, 0.4)))
+	end
+	return model
+end
+
 ---------------------------------------------------------------- build
 
 function RockBuilder.build(floorKey: number | string, kind: MineFloors.RockKind, oreIds: { string }, base: CFrame, seed: number | string): Model
