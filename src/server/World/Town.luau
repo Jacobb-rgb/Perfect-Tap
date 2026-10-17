@@ -2,8 +2,8 @@
 	Emberfall: the hub town lobby (target look: docs/art/lobby_concept.webp,
 	style bible: docs/ART_DIRECTION.md, layout: docs/plans/LOBBY_PLAN.md).
 
-	The lobby is built by five modules in World/Lobby/, one per art package:
-	Sky, Backdrop, Plaza, Districts, Flora. Each module exports
+	The lobby is built by six modules in World/Lobby/, one per art package:
+	Sky, Backdrop, Plaza, Districts, Flora, Vault. Each module exports
 
 	    Replaces: { string }?                   legacy pieces it takes over
 	    build(parent: Model, rng: Rng.Rng): ()  builds into Emberfall.Lobby.<Name>
@@ -61,6 +61,35 @@ function Town.lobbyModules(): { { Name: string, Module: LobbyModule } }
 	return found
 end
 
+--[[
+	Pieces whose builder still works in fixed world coordinates (LobbyLayout
+	DesignCenter/DesignFacing, e.g. the Backdrop's MINE hill and yard): the
+	built model (the package's child named like the piece) moves rigidly from
+	that design frame to the piece's Center/Facing.
+]]
+function Town.relocate(parent: Instance, package: string)
+	for _, piece in LobbyLayout.ofPackage(package) do
+		local designCenter, designFacing = piece.DesignCenter, piece.DesignFacing
+		local built = parent:FindFirstChild(piece.Id)
+		if designCenter and built then
+			local design = LobbyLayout.frame({
+				Id = piece.Id,
+				Package = piece.Package,
+				Center = designCenter,
+				Size = piece.Size,
+				Facing = designFacing or piece.Facing,
+				Note = piece.Note,
+			})
+			local delta = LobbyLayout.frame(piece) * design:Inverse()
+			for _, d in built:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.CFrame = delta * d.CFrame
+				end
+			end
+		end
+	end
+end
+
 function Town.build(map: Model, rng: Rng.Rng)
 	local town = model("Emberfall", map)
 	local modules = Town.lobbyModules()
@@ -83,6 +112,7 @@ function Town.build(map: Model, rng: Rng.Rng)
 	for _, entry in modules do
 		local parent = model(entry.Name, lobby)
 		entry.Module.build(parent, Rng.new(`Lobby/{entry.Name}/{WorldLayout.Seed}`))
+		Town.relocate(parent, entry.Name)
 	end
 
 	local spawn = Instance.new("SpawnLocation")

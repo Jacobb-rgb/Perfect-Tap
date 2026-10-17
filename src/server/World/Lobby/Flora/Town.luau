@@ -84,13 +84,20 @@ Town.Sites = {
 	-- behind UPGRADES, beside the forge east path (the pink grove behind it), and ORE east of the grove
 	{ Id = "Inn", Min = Vector2.new(33, -54), Max = Vector2.new(44, -43), Facing = "W", Recipe = "Inn", Sign = "INN" },
 	{ Id = "OreWorks", Min = Vector2.new(55.5, -71), Max = Vector2.new(63, -66), Facing = "S", Recipe = "OreWorks", Sign = "ORE" },
-	-- the east strip: the MAP house in the east tree belt, south of the red
-	-- tree, and the WORKS workshop south of it (a little street; the FOSSIL
-	-- DIG turned toward the hero camera took WORKS' old spot on the east spur)
-	{ Id = "MapTower", Min = Vector2.new(54, 90), Max = Vector2.new(63, 100), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
-	{ Id = "SpurWorkshop", Min = Vector2.new(48.5, 103), Max = Vector2.new(63, 107.5), Facing = "S", Recipe = "SpurWorkshop", Sign = "WORKS" },
-	-- the south lane, beside the south road
-	{ Id = "GardenCottage", Min = Vector2.new(9, 96), Max = Vector2.new(26, 112), Facing = "N", Recipe = "GardenCottage" },
+	-- the south-east hamlet past the east plot road's end (the Blaster Vault,
+	-- its east statue and jungle trees took the east strip and the south
+	-- lane): the MAP tower and the WORKS workshop turned to the town and the
+	-- hero camera, the garden cottage behind them
+	{ Id = "MapTower", Min = Vector2.new(93, 115), Max = Vector2.new(102, 125), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
+	{
+		Id = "SpurWorkshop",
+		Min = Vector2.new(107, 116),
+		Max = Vector2.new(121.5, 120.5),
+		Facing = "S",
+		Recipe = "SpurWorkshop",
+		Sign = "WORKS",
+	},
+	{ Id = "GardenCottage", Min = Vector2.new(127, 120), Max = Vector2.new(143, 137), Facing = "W", Recipe = "GardenCottage" },
 } :: { Site }
 
 local DIRS: { [string]: Vector3 } = {

@@ -173,8 +173,9 @@ return function(T, Loader)
 		T.lt(scatter:GetAttribute("Bushes"), 36, "at most 35 bushes")
 		T.lt(scatter:GetAttribute("Flowers"), 51, "at most 50 flower patches")
 		T.lt(scatter:GetAttribute("Boulders"), 16, "at most 15 boulders")
-		-- (round 3: the bigger dig, wheel and stalls and the continuous belts take ground: 24+)
-		T.truthy(scatter:GetAttribute("Trees") >= 24, "the scatter plants its trees")
+		-- (round 3: the bigger dig, wheel and stalls and the continuous belts take ground: 24+;
+		-- the Blaster Vault: its statues and six jungle trees took the south meadow: 18+)
+		T.truthy(scatter:GetAttribute("Trees") >= 18, "the scatter plants its trees")
 		T.lt(#parts(scatter), 751, "scatter parts")
 	end)
 

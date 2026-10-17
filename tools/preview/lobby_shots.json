@@ -1,13 +1,23 @@
 {
   "lobby_hero": {
     "scene": "world",
-    "position": [5.1, 70.1, 151.3],
-    "target": [9, 23, -40],
-    "fov": 42,
+    "position": [-8, 128, 262],
+    "target": [2, 6, -22],
+    "fov": 50,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],
-    "shadowExtent": 280,
+    "shadowExtent": 300,
     "maxLights": 32
+  },
+  "lobby_vault": {
+    "scene": "world",
+    "position": [0, 28, 40],
+    "target": [0, 20, 112],
+    "fov": 64,
+    "preset": "Surface",
+    "sunDir": [-0.965, 0.225, 0.136],
+    "shadowExtent": 160,
+    "maxLights": 24
   },
   "lobby_spawn": {
     "scene": "world",

@@ -42,6 +42,12 @@ Scatter.TreeFreeBoxes = {
 	-- the SPIN & WIN wheel's silhouette (behind the ring and beside its sign)
 	-- and its stair base (the Smithy's old spot behind the SHOP stays open)
 	{ Min = Vector2.new(-72, -112), Max = Vector2.new(-24, -38) },
+	-- the MINE's portal, its yard and lane in the south-west corner (seen
+	-- from the hero camera over the Blaster Vault)
+	{ Min = Vector2.new(-92, 116), Max = Vector2.new(-58, 149) },
+	-- the MAP tower's and the WORKS' fronts in the south-east hamlet (the hero
+	-- camera sees them from the south-west)
+	{ Min = Vector2.new(76, 113), Max = Vector2.new(112, 149) },
 }
 
 local function treeFree(p: Vector3): boolean
@@ -70,10 +76,14 @@ Scatter.Zones = {
 	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6 },
 	-- behind the forge and the stalls
 	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 15 },
-	-- south foreground (lobby_south view)
-	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 10 },
-	-- the island's south corners beyond the bases
-	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 10 },
+	-- south foreground (lobby_south view; the Blaster Vault and its jungle
+	-- trees fill most of it now)
+	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 4 },
+	-- the island's south corners beyond the bases: the autumn woods round the
+	-- MINE in the west, the MAP hamlet in the east (off the coastal railway's
+	-- portal hills at |x| 160+)
+	{ Name = "SouthWest", Min = Vector2.new(-150, 112), Max = Vector2.new(-60, 146), Trees = 12 },
+	{ Name = "SouthEast", Min = Vector2.new(60, 112), Max = Vector2.new(150, 146), Trees = 10 },
 } :: { Zone }
 
 local KIND_WEIGHTS = { Green = 45, Pink = 15, Red = 12, Yellow = 14, Orange = 14 }
@@ -214,12 +224,11 @@ local function fence(m: Instance, from: Vector3, to: Vector3, lampFrom: boolean?
 	end
 end
 
--- The fence runs: the koi pond's banks either side of the bridge, the north
--- side of the ToMine path (clear of the signpost). Every
+-- The fence runs: the koi pond's bank east of the bridge (the run along the
+-- old ToMine path went with the MINE; the Blaster Vault stands there). Every
 -- run marks its line taken, so the scatter keeps half a stud off it.
 Scatter.FenceRuns = {
 	{ From = Vector3.new(7.8, 0, 63.6), To = Vector3.new(18.5, 0, 63.6), LampFrom = true },
-	{ From = Vector3.new(-33, 0, 80.6), To = Vector3.new(-22.5, 0, 80.6) },
 } :: { { From: Vector3, To: Vector3, LampFrom: boolean?, LampTo: boolean? } }
 
 local function fences(m: Instance, placer: Kit.Placer)
@@ -242,7 +251,7 @@ end
 ]]
 export type GardenItem = { Kind: string, At: Vector3, Color: Color3?, To: Vector3? }
 Scatter.Gardens = {
-	-- the lawn between the lily pond and the MINE hill
+	-- the lawn between the lily pond and the west statue of the Blaster Vault
 	{ Kind = "Bed", At = Vector3.new(-31, 0, 56), Color = C.FlowerYellow },
 	{ Kind = "Bed", At = Vector3.new(-36, 0, 62), Color = C.FlowerWhite },
 	{ Kind = "Bush", At = Vector3.new(-28, 0, 63), Color = C.LeafGreenDark },
@@ -314,10 +323,13 @@ end
 -- deeper amber than C.Lamp so they glow warm and never blow out white.
 Scatter.LanternColor = C.LampAmber
 Scatter.Lanterns = {
-	{ At = Vector3.new(7.6, 0, 73.4), Yaw = math.pi / 2, Light = true }, -- ToScanner meets the south road
-	{ At = Vector3.new(-7.6, 0, 80.4), Yaw = -math.pi / 2, Light = true }, -- ToMine meets the south road
+	-- (the Blaster Vault: a pair at the end of the south road, either side of
+	-- the vault's steps, the east one where ToScanner leaves the road)
+	{ At = Vector3.new(7.4, 0, 77.0), Yaw = math.pi / 2, Light = true },
+	{ At = Vector3.new(-7.4, 0, 77.0), Yaw = -math.pi / 2, Light = true },
 	{ At = Vector3.new(78, 0, -120.2), Yaw = math.pi / 2, Light = false }, -- ToNextArea leaves the plot road
-	{ At = Vector3.new(-35, 0, 111), Yaw = -math.pi / 2, Light = true }, -- by the autumn corner
+	-- (the Plaza lights the MINE lane where it leaves the west plot road)
+	{ At = Vector3.new(63.5, 0, 125.5), Yaw = math.pi / 2, Light = false }, -- the way past the east plot road's end to the MAP hamlet
 }
 
 --[[

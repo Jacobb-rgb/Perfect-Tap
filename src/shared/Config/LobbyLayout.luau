@@ -2,7 +2,7 @@
 	Lobby layout: where every set piece of the town lobby goes (see
 	docs/plans/LOBBY_PLAN.md and docs/ART_DIRECTION.md).
 
-	The lobby is built by five parallel packages (src/server/World/Lobby/*).
+	The lobby is built by six parallel packages (src/server/World/Lobby/*).
 	Each set piece here belongs to exactly one package. A piece is an
 	oriented box on the ground:
 	  Center  bottom center (ground point, Y = base height)
@@ -10,6 +10,12 @@
 	  Facing  the piece's front (LookVector), horizontal
 	  Radius  optional: the footprint is a circle instead of a box
 	  Walkable  flat walk-over decor (paths, rails, bridges): may sit on roads
+	  Reserve   a reservation only (the Vault's jungle trees): nothing is built
+	            from it, it keeps the scatter and the town buildings away
+	            (isFree) and may overlap its own package's pieces
+	  DesignCenter/DesignFacing  the frame the piece's builder was written
+	            for (fixed world coordinates); Town.luau moves the built
+	            model from there to Center/Facing
 	Build inside your footprint. tests/Lobby.spec.luau checks that the solid
 	lobby footprints stay off roads, plots, ore outcrops, the spawn and each
 	other, so packages can work in parallel without colliding.
@@ -28,6 +34,9 @@ export type Piece = {
 	Facing: Vector3,
 	Radius: number?,
 	Walkable: boolean?,
+	Reserve: boolean?,
+	DesignCenter: Vector3?,
+	DesignFacing: Vector3?,
 	Note: string,
 }
 
@@ -41,7 +50,7 @@ export type Path = {
 
 local LobbyLayout = {}
 
-LobbyLayout.Packages = { "Sky", "Backdrop", "Plaza", "Districts", "Flora" }
+LobbyLayout.Packages = { "Sky", "Backdrop", "Plaza", "Districts", "Flora", "Vault" }
 
 -- The lobby budget area (same box as the Emberfall zone, any height).
 LobbyLayout.Area = {
@@ -52,11 +61,13 @@ LobbyLayout.Area = {
 -- Mobile budgets. Map = every BasePart in Workspace.Map; Lobby = parts and
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
-	MapParts = 14500, -- visual upgrade (concept v2): richer stalls, brick plot walls, town buildings
+	-- visual upgrade (concept v2): richer stalls, brick plot walls, town
+	-- buildings; + the owner-approved Blaster Vault package (~2970 parts)
+	MapParts = 17350,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
-	-- yards (design v2) + room for the coastal railway (step 2). Plots stream
-	-- in and out with StreamingEnabled like everything else.
-	LobbyParts = 9000,
+	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
+	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
+	LobbyParts = 11250,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
@@ -70,6 +81,7 @@ LobbyLayout.Budget = {
 		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 2550, LobbyParts = 2350, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts
+		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
 	-- lobby pass and may grow by at most LandExtraParts.
@@ -107,6 +119,18 @@ local WHEEL = v(-47.5, 0, -72.5)
 -- (round 3: CAPSULES moved south-east into the spawn view, between the west
 -- spur and the lily pond, turned half to the plaza, half to the spawn)
 local CAPSULES = v(-41.9, 0, 12.4)
+-- the Blaster Vault closes the south road (its steps at z ~79.6)
+local VAULT = v(0, 0, 112.4)
+-- the MINE (Backdrop: hill + yard): designed at MINE_DESIGN facing east,
+-- built in the south-west corner (see the MineEntrance piece)
+local MINE_DESIGN = v(-46, 0, 88)
+local MINE = v(-100, 0, 134)
+local MINE_FACING = v(1, 0, 0)
+local function mineMoved(p: Vector3): Vector3
+	local from = CFrame.lookAt(MINE_DESIGN, MINE_DESIGN + v(1, 0, 0))
+	local to = CFrame.lookAt(MINE, MINE + MINE_FACING)
+	return (to * from:Inverse()) * p
+end
 
 LobbyLayout.Pieces = {
 	------------------------------------------------------------ Plaza package
@@ -328,29 +352,39 @@ LobbyLayout.Pieces = {
 	{
 		Id = "AutumnCorner",
 		Package = "Flora",
-		Center = v(-50, 0, 118),
+		-- (behind the MINE hill in the south-west corner: the Vault's jungle
+		-- trees took its old spot)
+		Center = v(-139, 0, 130),
 		Size = v(24, 18, 24),
 		Radius = 12,
 		Facing = v(0, 0, 1),
-		Note = "Cluster of yellow and orange voxel trees and bushes in the south-west foreground.",
+		Note = "Cluster of yellow and orange voxel trees and bushes in the south-west corner, behind the MINE hill.",
 	},
 	------------------------------------------------------------ Backdrop package
+	-- (the Blaster Vault took the MINE's old spot west of the south road: the
+	-- hill and its yard moved to the south-west corner past the west plot
+	-- road's end, the front-left of the hero view; Lowlands.luau still builds
+	-- them at their design spot and Town.relocate moves them here)
 	{
 		Id = "MineEntrance",
 		Package = "Backdrop",
-		Center = v(-46, 0, 88),
+		Center = MINE,
 		Size = v(26, 20, 20),
-		Facing = v(1, 0, 0),
+		Facing = MINE_FACING,
+		DesignCenter = MINE_DESIGN,
+		DesignFacing = v(1, 0, 0),
 		Note = "Voxel rock hill with a timber mine portal (MINE sign, crossed pickaxes), dark tunnel mouth, lanterns.",
 	},
 	{
 		Id = "MineYard",
 		Package = "Backdrop",
-		Center = v(-20, 0, 88),
+		Center = mineMoved(v(-20, 0, 88)),
 		Size = v(12, 4, 30),
-		Facing = v(1, 0, 0),
+		Facing = MINE_FACING,
+		DesignCenter = v(-20, 0, 88),
+		DesignFacing = v(1, 0, 0),
 		Walkable = true,
-		Note = "Rails from the portal toward the south road, buffer stop, two carts heaped with glowing gold.",
+		Note = "Rails from the portal toward the west plot road's end, buffer stop, two carts heaped with glowing gold.",
 	},
 	{
 		Id = "NWCliff",
@@ -448,6 +482,98 @@ LobbyLayout.Pieces = {
 		Size = v(10, 30, 10),
 		Facing = v(0, 0, 1),
 		Note = "Derrick/radio tower on the peak with a red neon beacon.",
+	},
+	------------------------------------------------------------ Vault package
+	-- (owner-approved spot: the Blaster Vault closes the south road, facing
+	-- the plaza; Vault.luau places its jungle trees relative to the vault)
+	{
+		Id = "BlasterVault",
+		Package = "Vault",
+		Center = VAULT,
+		-- podium 1.3, eaves ~20, ridge ~34, fire towers ~31, the hologram
+		-- blaster ~55, the searchlight beams ~76
+		Size = v(67.2, 76, 65.6),
+		Facing = v(0, 0, -1),
+		Note = "BLASTER VAULT = the blaster shop at the end of the south road: stone hall on a podium, glass front, lava-lit gables, fire towers, a spinning hologram blaster, searchlights, the cases and the counter inside (tag VaultCounter), a LightingZone over the inside.",
+	},
+	{
+		Id = "VaultStatueWest",
+		Package = "Vault",
+		Center = v(-43, 0, 92),
+		Size = v(15.4, 45, 13.4), -- the pedestal (the statue's arms reach ~2 studs past it up high)
+		Facing = v(0.296, 0, -0.955).Unit,
+		Note = "Giant stone king statue with glowing lava cracks on a pedestal, turned to the plaza, the blaster arm on the outer side.",
+	},
+	{
+		Id = "VaultStatueEast",
+		Package = "Vault",
+		Center = v(43, 0, 92),
+		Size = v(15.4, 45, 13.4),
+		Facing = v(-0.296, 0, -0.955).Unit,
+		Note = "The second giant statue, mirrored.",
+	},
+	-- the six jungle trees around the vault (reservations: the Vault package
+	-- builds them as offsets from the vault, so they move with it); Radius =
+	-- the canopy, Size.Y = the top
+	{
+		Id = "VaultTree1",
+		Package = "Vault",
+		Center = v(-29, 0, 153),
+		Size = v(30, 57, 30),
+		Radius = 15,
+		Reserve = true,
+		Facing = v(0, 0, 1),
+		Note = "Jungle tree behind the vault (west).",
+	},
+	{
+		Id = "VaultTree2",
+		Package = "Vault",
+		Center = v(29, 0, 155),
+		Size = v(32, 61, 32),
+		Radius = 16,
+		Reserve = true,
+		Facing = v(0, 0, 1),
+		Note = "Jungle tree behind the vault (east).",
+	},
+	{
+		Id = "VaultTree3",
+		Package = "Vault",
+		Center = v(-45, 0, 120),
+		Size = v(26, 49, 26),
+		Radius = 13,
+		Reserve = true,
+		Facing = v(0, 0, 1),
+		Note = "Jungle tree west of the vault.",
+	},
+	{
+		Id = "VaultTree4",
+		Package = "Vault",
+		Center = v(-47, 0, 140),
+		Size = v(28, 53, 28),
+		Radius = 14,
+		Reserve = true,
+		Facing = v(0, 0, 1),
+		Note = "Jungle tree west of the vault, further back.",
+	},
+	{
+		Id = "VaultTree5",
+		Package = "Vault",
+		Center = v(45, 0, 108),
+		Size = v(26, 49, 26),
+		Radius = 13,
+		Reserve = true,
+		Facing = v(0, 0, 1),
+		Note = "Jungle tree east of the vault, behind the east statue.",
+	},
+	{
+		Id = "VaultTree6",
+		Package = "Vault",
+		Center = v(46, 0, 136),
+		Size = v(28, 53, 28),
+		Radius = 14,
+		Reserve = true,
+		Facing = v(0, 0, 1),
+		Note = "Jungle tree east of the vault, further back.",
 	},
 	------------------------------------------------------------ Sky package
 	{
@@ -555,8 +681,13 @@ LobbyLayout.Paths = {
 	{ Id = "ToWheel", From = v(-30.9, 0, -59.6), To = v(-44.5, 0, -58.5), Width = 6, Kind = "Cobble" },
 	-- from the plaza rim round the dig's west corner to its gate (its south-west front)
 	{ Id = "ToFossil", From = v(17.5, 0, 32.5), To = v(30.5, 0, 45.5), Width = 5, Kind = "Cobble" },
-	{ Id = "ToScanner", From = v(5, 0, 79), To = v(37, 0, 75.5), Width = 6, Kind = "Cobble" },
-	{ Id = "ToMine", From = v(-5, 0, 88), To = v(-34, 0, 88), Width = 10, Kind = "Dirt" },
+	-- (the Blaster Vault's podium starts at z 79.6: the scanner path leaves the
+	-- south road north of the vault's steps)
+	{ Id = "ToScanner", From = v(5, 0, 71), To = v(37, 0, 74), Width = 6, Kind = "Cobble" },
+	-- the MINE in the south-west corner: a dirt lane from the west plot road's
+	-- end to the yard, a dirt track under the rails to the portal
+	{ Id = "MineLane", From = v(-70, 0, 118), To = v(-70, 0, 125), Width = 9, Kind = "Dirt" },
+	{ Id = "ToMine", From = mineMoved(v(-13, 0, 88)), To = mineMoved(v(-34, 0, 88)), Width = 9, Kind = "Dirt" },
 	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(160, 0, -115), Width = 6, Kind = "Dirt" },
 } :: { Path }
 
@@ -680,7 +811,10 @@ function LobbyLayout.isFree(p: Vector3, radius: number): boolean
 		return false
 	end
 	for _, piece in LobbyLayout.Pieces do
-		if LobbyLayout.isGroundPiece(piece) and LobbyLayout.distanceTo(piece, p) < radius + 1 then
+		-- (reservations count even when their center lies past the area's edge:
+		-- the jungle trees behind the vault stand on the south cliff top)
+		local ground = LobbyLayout.isGroundPiece(piece) or piece.Reserve == true
+		if ground and LobbyLayout.distanceTo(piece, p) < radius + 1 then
 			return false
 		end
 	end
