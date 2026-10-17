@@ -1,6 +1,7 @@
 --[[
 	Lobby package Flora (src/server/World/Lobby/Flora): ponds, creek,
-	bridge, signpost, NEXT AREA + boardwalk, hero trees and the scatter.
+	bridge, signpost, NEXT AREA + boardwalk, hero trees, the scatter and the
+	town buildings (sites on free ground, inside their rectangles, no lights).
 	Checks that nothing lands on roads, paths, plots, the bases' yards or
 	the spawn, that the bridge, creek and boardwalk are walkable, the sight
 	lines of LOBBY_PLAN 6.5, the budgets and determinism.
@@ -15,6 +16,7 @@ return function(T, Loader)
 	local Flora = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora")
 	local Scatter = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Scatter")
 	local Signs = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Signs")
+	local Town = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Town")
 
 	local cachedMap = nil
 	local function world()
@@ -132,6 +134,7 @@ return function(T, Loader)
 				"Scatter",
 				"Fences",
 				"GardenLanterns",
+				"Town",
 			}
 		do
 			local node = f
@@ -351,6 +354,355 @@ return function(T, Loader)
 				end
 			end
 			T.truthy(trees >= 1, id .. " has trees")
+		end
+	end)
+
+	-- The XZ box of a part (world), as min/max Vector3s.
+	local function boxOf(part): (any, any)
+		local p, e = part.CFrame.Position, halfExtents(part)
+		return Vector3.new(p.X - e.X, 0, p.Z - e.Z), Vector3.new(p.X + e.X, 0, p.Z + e.Z)
+	end
+
+	T.test("flora: town buildings stand on free ground inside their sites", function()
+		local sites = Town.Sites
+		T.truthy(#sites >= 8 and #sites <= 14, `8-14 town buildings ({#sites})`)
+		local town = flora():FindFirstChild("Town")
+		T.truthy(town, "Flora has Town")
+		for i, site in sites do
+			T.truthy(site.Min.X < site.Max.X and site.Min.Y < site.Max.Y, site.Id .. " has a proper rectangle")
+			-- off the coastal rail line (world |x| 160..172) with room to spare
+			T.truthy(site.Max.X < Town.RailMinX - 1 and site.Min.X > -Town.RailMinX + 1, site.Id .. " stays off the rail line")
+			-- every point of the site is free ground (roads, paths, plots, yards, outcrops, keep-outs, pieces)
+			for x = site.Min.X, site.Max.X + 1e-6, 1 do
+				for z = site.Min.Y, site.Max.Y + 1e-6, 1 do
+					local q = Vector3.new(x, 0, z)
+					T.truthy(LobbyLayout.isFree(q, 1), `{site.Id}: ({x}, {z}) is not free ground`)
+					for _, plot in WorldLayout.Plots do
+						local localPos = WorldLayout.plotCFrame(plot):PointToObjectSpace(Vector3.new(x, plot.Center.Y, z))
+						local inYard = math.abs(localPos.X) < 28 and localPos.Z >= 25 and localPos.Z <= 66
+						T.falsy(inYard, `{site.Id}: ({x}, {z}) is in the yard of base {plot.Id}`)
+					end
+				end
+			end
+			-- sites never overlap each other
+			for j = i + 1, #sites do
+				local o = sites[j]
+				local apart = site.Max.X <= o.Min.X or o.Max.X <= site.Min.X or site.Max.Y <= o.Min.Y or o.Max.Y <= site.Min.Y
+				T.truthy(apart, `{site.Id} overlaps {o.Id}`)
+			end
+			-- the building stays inside its site, glows with Neon windows and has no lights
+			local m = town and town:FindFirstChild(site.Id)
+			T.truthy(m, "town building " .. site.Id)
+			if m then
+				local glows, count = 0, 0
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") then
+						count += 1
+						local lo, hi = boxOf(d)
+						local inside = lo.X >= site.Min.X - 0.05
+							and hi.X <= site.Max.X + 0.05
+							and lo.Z >= site.Min.Y - 0.05
+							and hi.Z <= site.Max.Y + 0.05
+						T.truthy(inside, `{d:GetFullName()} pokes out of its site ({lo} .. {hi})`)
+						if d.Name == "WindowGlow" then
+							glows += 1
+							T.truthy(d.Material == roblox.Enum.Material.Neon, d:GetFullName() .. " window glow is Neon")
+						end
+						-- small details (frames, panes, lamps, posts, bolts) cast no shadow
+						if math.max(d.Size.X, d.Size.Y, d.Size.Z) < 1.2 or d.Material == roblox.Enum.Material.Neon then
+							T.falsy(d.CastShadow, d:GetFullName() .. " small part casts no shadow")
+						end
+					elseif d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+						T.truthy(false, d:GetFullName() .. ": town buildings glow with Neon, no lights")
+					end
+				end
+				T.truthy(glows >= 3, `{site.Id} has lit windows ({glows})`)
+				T.truthy(count <= 100, `{site.Id} part count {count} <= 100`)
+			end
+		end
+	end)
+
+	-- Is a world point inside a part's box (conservative for cylinders, balls and wedges)?
+	local function contains(part, p): boolean
+		local q = part.CFrame:PointToObjectSpace(p)
+		local size = part.Size
+		return math.abs(q.X) <= size.X / 2 and math.abs(q.Y) <= size.Y / 2 and math.abs(q.Z) <= size.Z / 2
+	end
+
+	local LOOK = {
+		N = Vector3.new(0, 0, -1),
+		S = Vector3.new(0, 0, 1),
+		E = Vector3.new(1, 0, 0),
+		W = Vector3.new(-1, 0, 0),
+	}
+
+	T.test("flora: town signs are readable and face the town", function()
+		local town = flora().Town
+		local texts = {}
+		for _, site in Town.Sites do
+			local m = town:FindFirstChild(site.Id)
+			if site.Sign and m then
+				local found = false
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") and d.Name == "TownSign" then
+						local gui = d:FindFirstChild("FrontText")
+						local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
+						if label and label.Text == site.Sign then
+							found = true
+							texts[label.Text] = true
+							-- dark navy board, white letters (high contrast like TOOLS / UPGRADES)
+							local b = d.Color
+							T.truthy(b.R + b.G + b.B < 0.6, `{site.Sign} board is dark`)
+							local c = label.TextColor3
+							T.truthy(c.R + c.G + c.B > 2.7, `{site.Sign} text is white`)
+							T.truthy(d.Material ~= roblox.Enum.Material.Neon, `{site.Sign} board does not glow`)
+							-- the sign looks out of the facade (toward the town, not into a wall)
+							local look = d.CFrame.LookVector
+							T.truthy(look:Dot(LOOK[site.Facing]) > 0.7, `{site.Sign} sign faces {site.Facing}`)
+						end
+					end
+				end
+				T.truthy(found, `{site.Id} has its {site.Sign} sign`)
+			end
+		end
+		for _, text in { "TOOLS", "INN", "MAP", "GEMS", "ORE" } do
+			T.truthy(texts[text], "town sign " .. text)
+		end
+		-- big glowing planes bloom to white in the renders: every Neon face stays small
+		for _, part in parts(town) do
+			if part.Material == roblox.Enum.Material.Neon then
+				local x, y, z = part.Size.X, part.Size.Y, part.Size.Z
+				local face = math.max(x * y, y * z, x * z)
+				T.truthy(face <= 6.5, `{part:GetFullName()} neon face {face} <= 6.5 studs^2`)
+			end
+		end
+	end)
+
+	T.test("flora: every Flora section keeps off the town buildings", function()
+		local f = flora()
+		for _, section in f:GetChildren() do
+			if section.Name ~= "Town" then
+				for _, part in parts(section) do
+					local lo, hi = boxOf(part)
+					for _, site in Town.Sites do
+						local apart = hi.X <= site.Min.X or lo.X >= site.Max.X or hi.Z <= site.Min.Y or lo.Z >= site.Max.Y
+						T.truthy(apart, `{part:GetFullName()} overlaps the town building {site.Id}`)
+					end
+				end
+			end
+		end
+		-- the scatter keeps the ground in front of every facade clear too
+		for _, part in parts(f.Scatter) do
+			local lo, hi = boxOf(part)
+			for _, site in Town.Sites do
+				local strip = Town.frontStrip(site, Town.FrontClearance)
+				local apart = hi.X <= strip.Min.X or lo.X >= strip.Max.X or hi.Z <= strip.Min.Y or lo.Z >= strip.Max.Y
+				T.truthy(apart, `{part:GetFullName()} stands in front of the town building {site.Id}`)
+			end
+		end
+	end)
+
+	T.test("flora: the ground in front of every town facade is clear", function()
+		local map = world()
+		local f = flora()
+		-- other packages' parts that rise above the ground (y > 1) near the town
+		local others = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(f) then
+				local p, e = d.CFrame.Position, halfExtents(d)
+				if p.Y + e.Y > 1 and p.Y - e.Y < 14 and math.abs(p.X) < 120 then
+					table.insert(others, d)
+				end
+			end
+		end
+		for _, site in Town.Sites do
+			local strip = Town.frontStrip(site, Town.FrontClearance)
+			local near = {}
+			for _, d in others do
+				local p, e = d.CFrame.Position, halfExtents(d)
+				if p.X + e.X >= strip.Min.X and p.X - e.X <= strip.Max.X and p.Z + e.Z >= strip.Min.Y and p.Z - e.Z <= strip.Max.Y then
+					table.insert(near, d)
+				end
+			end
+			for x = strip.Min.X + 0.25, strip.Max.X - 0.24, 0.5 do
+				for z = strip.Min.Y + 0.25, strip.Max.Y - 0.24, 0.5 do
+					for _, y in { 1.25, 2.5, 4, 6, 9, 12 } do
+						local q = Vector3.new(x, y, z)
+						for _, d in near do
+							T.falsy(contains(d, q), `{d:GetFullName()} stands in front of {site.Id} at {q}`)
+						end
+					end
+				end
+			end
+		end
+		-- and every site keeps 2.5 studs from the stalls and set pieces (no 1-2 stud alleys)
+		for _, site in Town.Sites do
+			for _, piece in LobbyLayout.Pieces do
+				if piece.Package ~= "Flora" and LobbyLayout.isGroundPiece(piece) then
+					local gap = math.huge
+					for x = site.Min.X, site.Max.X + 1e-6, 0.5 do
+						for _, z in { site.Min.Y, site.Max.Y } do
+							gap = math.min(gap, LobbyLayout.distanceTo(piece, Vector3.new(x, 0, z)))
+						end
+					end
+					for z = site.Min.Y, site.Max.Y + 1e-6, 0.5 do
+						for _, x in { site.Min.X, site.Max.X } do
+							gap = math.min(gap, LobbyLayout.distanceTo(piece, Vector3.new(x, 0, z)))
+						end
+					end
+					T.truthy(gap >= 2.5, `{site.Id} is {gap} studs from {piece.Id} (>= 2.5)`)
+				end
+			end
+		end
+	end)
+
+	T.test("flora: town blade signs, sign sizes, lanterns and windows", function()
+		local town = flora().Town
+		for _, site in Town.Sites do
+			local m = town:FindFirstChild(site.Id)
+			if m then
+				local front = Town.footprint(site).w
+				-- the main sign is big (about the facade's width, boards >= 3.2 tall) and hangs on the first
+				-- storey (the MAP tower's on its top storey, over CAPSULES and the trees)
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") and d.Name == "TownSign" then
+						local y = d.CFrame.Position.Y
+						local top = if site.Id == "MapTower" then 17.5 else 12.5
+						T.truthy(y >= 9 and y <= top, `{site.Id} sign on the first storey (y {y})`)
+						T.truthy(d.Size.Y >= 3.2 - 1e-3, `{site.Id} sign board is at least 3.2 tall ({d.Size})`)
+						local span = d:GetAttribute("Span") or d.Size.X
+						local want = if site.Id == "Inn" then 6.5 else 0.7 * front
+						T.truthy(span >= want - 1e-3, `{site.Id} sign spans {span} of a {front} wide site (>= {want})`)
+					end
+				end
+				-- double-sided blade signs turned to the hero (south) / the street, perpendicular to the facade
+				if site.Blade then
+					local blade = m:FindFirstChild("BladeSign", true)
+					T.truthy(blade, `{site.Id} has a blade sign`)
+					if blade then
+						for _, faceName in { "FrontText", "BackText" } do
+							local gui = blade:FindFirstChild(faceName)
+							local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
+							T.truthy(label and label.Text == site.Sign, `{site.Id} blade sign reads {site.Sign} on {faceName}`)
+						end
+						local look = blade.CFrame.LookVector
+						T.truthy(math.abs(look:Dot(LOOK[site.Facing])) < 0.3, `{site.Id} blade sign is perpendicular to the facade`)
+						T.truthy(look:Dot(LOOK.S) > 0.7 or look:Dot(LOOK.W) > 0.7, `{site.Id} blade sign faces south or west`)
+						T.truthy(blade.Size.X >= 6.5 - 1e-3 and blade.Size.Y >= 3 - 1e-3, `{site.Id} blade sign is at least 6.5 x 3 ({blade.Size})`)
+					end
+				end
+				-- windows: lit panes glow, at most one unlit pane in six, unlit glass is light blue (never a black hole)
+				local lit, dark = 0, 0
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") then
+						if d.Name == "WindowGlow" then
+							lit += 1
+						elseif d.Name == "Window" then
+							dark += 1
+							local c = d.Color
+							T.truthy(c.R + c.G + c.B > 0.95, `{d:GetFullName()} unlit glass is not black`)
+						elseif d.Name == "LanternGlow" then
+							-- caged deep-amber lamps: small, no white blob
+							T.truthy(math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.6, `{d:GetFullName()} lantern cube is small`)
+							T.truthy(d.Color.G < 0.7 and d.Color.B < 0.35, `{d:GetFullName()} lantern is deep amber`)
+						elseif d.Material == roblox.Enum.Material.Neon and d.Size.X <= 0.45 and d.Size.Y <= 0.45 and d.Size.Z <= 0.45 then
+							-- rooftop beacons are small dots, never a white cube
+							T.truthy(math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.35, `{d:GetFullName()} beacon is a small dot`)
+						end
+					end
+				end
+				T.truthy(dark * 5 <= lit, `{site.Id}: {dark} unlit panes for {lit} lit ones (at most 1 in 6)`)
+			end
+		end
+	end)
+
+	T.test("flora: town buildings are 2-3 storeys at avatar scale", function()
+		for _, site in Town.Sites do
+			local m = flora().Town:FindFirstChild(site.Id)
+			local top, doors = 0, 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					if d.CanCollide then
+						top = math.max(top, d.CFrame.Position.Y + halfExtents(d).Y)
+					end
+					-- street doors fit an R15 avatar (~5.2 studs): at least 6 tall and 3 wide
+					if d.Name == "Door" then
+						doors += 1
+						T.truthy(d.Size.Y >= 6 - 1e-3 and d.Size.X >= 3 - 1e-3, `{d:GetFullName()} door is at least 3 x 6 ({d.Size})`)
+					end
+				end
+			end
+			T.truthy(top >= 14 and top <= 27, `{site.Id} is {top} studs tall (2-3 storeys: 14-27)`)
+			T.truthy(doors >= 1, `{site.Id} has a street door`)
+		end
+	end)
+
+	-- The six faces of a block part: outward normal, center, the two in-plane axes and half sizes.
+	local function blockFaces(part): { any }
+		local cf, size = part.CFrame, part.Size
+		local axes = { cf.RightVector, cf.UpVector, -cf.LookVector }
+		local half = { size.X / 2, size.Y / 2, size.Z / 2 }
+		local out = {}
+		for i = 1, 3 do
+			for _, sign in { -1, 1 } do
+				local n = axes[i] * sign
+				table.insert(out, {
+					n = n,
+					c = cf.Position + n * half[i],
+					u = axes[i % 3 + 1],
+					v = axes[(i + 1) % 3 + 1],
+					hu = half[i % 3 + 1],
+					hv = half[(i + 1) % 3 + 1],
+				})
+			end
+		end
+		return out
+	end
+
+	-- Overlap area of two coplanar face rectangles (b projected into a's axes; exact when aligned).
+	local function faceOverlap(a, b): number
+		local d = b.c - a.c
+		local cu, cv = d:Dot(a.u), d:Dot(a.v)
+		local eu = math.abs(b.u:Dot(a.u)) * b.hu + math.abs(b.v:Dot(a.u)) * b.hv
+		local ev = math.abs(b.u:Dot(a.v)) * b.hu + math.abs(b.v:Dot(a.v)) * b.hv
+		local ou = math.min(a.hu, cu + eu) - math.max(-a.hu, cu - eu)
+		local ov = math.min(a.hv, cv + ev) - math.max(-a.hv, cv - ev)
+		if ou <= 0 or ov <= 0 then
+			return 0
+		end
+		return ou * ov
+	end
+
+	T.test("flora: no z-fighting in the town (same-facing coplanar faces of different colours)", function()
+		for _, building in flora().Town:GetChildren() do
+			local blocks = {}
+			for _, d in building:GetDescendants() do
+				if d:IsA("Part") and d.Shape == roblox.Enum.PartType.Block then
+					table.insert(blocks, d)
+				end
+			end
+			local faces = {}
+			for i, part in blocks do
+				faces[i] = blockFaces(part)
+			end
+			for i = 1, #blocks do
+				for j = i + 1, #blocks do
+					local a, b = blocks[i], blocks[j]
+					local reach = (a.Size.Magnitude + b.Size.Magnitude) / 2
+					if (a.Color ~= b.Color or a.Material ~= b.Material) and (a.CFrame.Position - b.CFrame.Position).Magnitude <= reach then
+						for _, fa in faces[i] do
+							for _, fb in faces[j] do
+								-- downward faces at ground level face the terrain and never show
+								local ground = fa.n.Y < -0.99 and fa.c.Y < 0.1
+								if not ground and fa.n:Dot(fb.n) > 0.999 and math.abs(fa.n:Dot(fb.c - fa.c)) < 0.01 then
+									local area = faceOverlap(fa, fb)
+									T.truthy(area <= 0.004, `{a:GetFullName()} and {b.Name} share a face plane at {fa.c} ({area} studs^2)`)
+								end
+							end
+						end
+					end
+				end
+			end
 		end
 	end)
 
