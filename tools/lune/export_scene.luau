@@ -129,6 +129,10 @@ elseif sceneName == "belts" then -- step 3 belts, chutes, sorting board, pen sen
 	for name, guis in require("./lib/belts_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list overlays (tools/lune/lib/ironbox_preview.luau)
+	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
@@ -675,4 +679,16 @@ if sceneName == "world" and process.args[2] == "yard" then
 		print("Exported UI " .. name)
 	end
 	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
+end
+
+---------------------------------------------------------------- scene "penboard" (WP-CleanerBox)
+-- `lune run tools/lune/export_scene.luau world penboard`: the world above plus the
+-- Pen Automation sorting board at plot 5's Ore Pen gate -> build/preview/penboard.json
+-- (tools/lune/lib/ironbox_preview.luau buildBoard, shots in tools/preview/ironbox_shots.json).
+if sceneName == "world" and process.args[2] == "penboard" then
+	require("./lib/ironbox_preview").buildBoard(Loader, workspace)
+	local boardScene = Export.collect(workspace)
+	boardScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/penboard.json", serde.encode("json", boardScene))
+	print(string.format("Exported penboard: %d parts, %d lights", #boardScene.parts, #boardScene.lights))
 end

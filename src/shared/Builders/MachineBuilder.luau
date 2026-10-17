@@ -90,8 +90,9 @@ local C = {
 	Iron = rgb(96, 100, 106),
 	IronTop = rgb(134, 138, 144),
 	Steel = rgb(196, 200, 206),
-	ScreenLit = rgb(26, 112, 100),
+	ScreenLit = rgb(16, 70, 64), -- dark teal glow, so the bright text reads
 	ScreenText = rgb(196, 255, 236),
+	Keep = rgb(70, 164, 92), -- the Iron Box's KEEP flap (green: into the pen)
 	Gauge = rgb(220, 132, 40),
 	Water = rgb(62, 152, 196),
 	Red = rgb(235, 70, 60),
@@ -580,9 +581,21 @@ end
 --[[
 	Kenney hopper-square: a tapered neck (4 wedges), a light collar band and an
 	open cup (4 walls) with a dark throat floor. `cf` = bottom centre of the
-	taper. Returns the height of the cup rim above `cf`. 10 parts.
+	taper. `color` / `collarColor` default to the machine housing and its
+	light frame colour. Returns the height of the cup rim above `cf`. 10 parts.
 ]]
-local function squareHopper(m: Instance, cf: CFrame, bottomW: number, topW: number, taperH: number, cupH: number, wall: number): number
+local function squareHopper(
+	m: Instance,
+	cf: CFrame,
+	bottomW: number,
+	topW: number,
+	taperH: number,
+	cupH: number,
+	wall: number,
+	color: Color3?,
+	collarColor: Color3?
+): number
+	local body = color or C.Housing
 	local run = (topW - bottomW) / 2
 	for i = 0, 3 do
 		local side = cf * CFrame.Angles(0, i * math.pi / 2, 0)
@@ -591,28 +604,28 @@ local function squareHopper(m: Instance, cf: CFrame, bottomW: number, topW: numb
 			m,
 			side * CFrame.new(0, taperH / 2, -(bottomW / 2 + run / 2)) * CFrame.Angles(0, 0, math.pi),
 			Vector3.new(topW, taperH, run),
-			C.Housing,
+			body,
 			nil,
 			solid()
 		)
 	end
 	local collar = 0.45
-	Geo.block(m, cf * CFrame.new(0, taperH + collar / 2, 0), Vector3.new(topW + 0.3, collar, topW + 0.3), C.HousingLight, nil, solid())
+	Geo.block(
+		m,
+		cf * CFrame.new(0, taperH + collar / 2, 0),
+		Vector3.new(topW + 0.3, collar, topW + 0.3),
+		collarColor or C.HousingLight,
+		nil,
+		solid()
+	)
 	local cupY = taperH + collar
 	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			cf * CFrame.new(0, cupY + cupH / 2, side * (topW / 2 - wall / 2)),
-			Vector3.new(topW, cupH, wall),
-			C.Housing,
-			nil,
-			solid()
-		)
+		Geo.block(m, cf * CFrame.new(0, cupY + cupH / 2, side * (topW / 2 - wall / 2)), Vector3.new(topW, cupH, wall), body, nil, solid())
 		Geo.block(
 			m,
 			cf * CFrame.new(side * (topW / 2 - wall / 2), cupY + cupH / 2, 0),
 			Vector3.new(wall, cupH, topW - 2 * wall),
-			C.Housing,
+			body,
 			nil,
 			solid()
 		)
@@ -1529,53 +1542,140 @@ local function autoCleaner(): Model
 end
 
 --[[
-	Iron Box (2x2, step 3): a gunmetal strongbox (Iron palette, not the
-	Crusher's blue housing) on a dark iron skirt, wrapped in bright steel
-	straps. On top a low open intake with a hazard-orange sorting flap on a
-	hinge rod (Flap). Framed belt intake slots at belt height on the left,
-	right and back (it takes belts on every side but the front). On the front
-	left a big lit screen (Screen, Neon) with a SurfaceGui (ScreenGui: Item =
-	the last item's name, Counter = items sorted) the box's service updates,
-	and the output slot with a short chute at the output column. Riveted
-	back. About 50 parts.
+	Iron Box (2x2, step 3): a sturdy gunmetal sorting box (Iron palette, not
+	the blue machine housing, so it never reads as a Crusher) on a dark iron
+	skirt, with bright steel corner guards and a riveted back. Kenney Factory
+	Kit pieces, rebuilt in parts:
+	  - an iron hopper-square on the roof (the intake, IRON BOX plate on its
+	    front wall);
+	  - a glass inspection bay on the front left (steel frame, dark inside,
+	    a warm lamp strip InspectLamp under its roof): the client shows the
+	    last sorted item standing on its floor (attachment ShowPoint). It
+	    sits high and stands out only 0.9 studs, so its floor never hides
+	    the KEEP flap's label under it, even from a camera well above;
+	  - a little lit screen on the front right (Screen, Neon; SurfaceGui
+	    ScreenGui with Item = the last item, Counter = kept / sent) that the
+	    client fills in from the box's attributes;
+	  - two output flaps under them, hinged at their top edge: FlapKeep
+	    (green, KEEP) over a short slide into a copper-rimmed floor port
+	    (PenPort: kept ore goes down to the Ore Pen) and FlapSend (orange,
+	    SEND) over the output chute at the output column (everything else
+	    rolls out onto your belts). The client swings the flap of each item's
+	    way open;
+	  - framed belt slots on the left, right and back (belts feed every side
+	    but the front).
+	The screen, the flaps and the shown item are drawn by MachineFxController
+	from the attributes IronBoxService sets (LastKind / LastOre / LastGrade /
+	LastRoute / Kept / Sent). 64 parts.
 ]]
+
+-- The Iron Box's flaps, screen and window, shared with the client animation.
+MachineBuilder.IronBox = {
+	FlapOpen = math.rad(62), -- how far a flap swings out (about its top edge)
+	ScreenIdle = "READY",
+	ScreenText = C.ScreenText, -- the screen's text colour...
+	RarityTint = 0.3, -- ...tinted this much toward a cleaned ore's rarity colour
+	Window = 1.1, -- the shown item is scaled to fit a cube this big
+}
+
+local function flapLabel(flap: Part, text: string, color: Color3)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "FlapText"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0.6
+	gui.MaxDistance = 60
+	gui.Parent = flap
+	local label = Instance.new("TextLabel")
+	label.Name = "Text"
+	label.Size = UDim2.fromScale(0.86, 0.62)
+	label.Position = UDim2.fromScale(0.07, 0.19)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+	label.Parent = gui
+end
+
 local function ironBox(): Model
 	local model, base = newModel("IronBox")
-	local bz, h = 0.35, 3.6
-	local body = housing(model, CFrame.new(0, 0.3, bz), Vector3.new(6.2, h, 5.0), C.Iron, 0.5, { Skirt = true, Top = C.IronTop })
+	local bz, w, h, d = 0.5, 6.4, 3.9, 5.4
+	local body = housing(model, CFrame.new(0, 0.3, bz), Vector3.new(w, h, d), C.Iron, 0.5, { Skirt = true, Top = C.IronTop })
 	local back = surface(body, "BackFace", Enum.NormalId.Back, 60)
 	for row, y in { 0.14, 0.86 } do
 		for i = 0, 7 do
 			paintRect(back, "Rivet" .. row, 0.06 + i * 0.125, y, 0.03, 0.044, C.Brass, true)
 		end
 	end
-	local front, rear, side = bz - 2.5, bz + 2.5, 3.1
+	local front, rear, side = bz - d / 2, bz + d / 2, w / 2
 	local top = 0.3 + h
-	-- steel straps up the sides and the back, standing a little proud
-	local strapH = h - 0.5 - 0.8
-	local strapY = 0.8 + strapH / 2 + 0.3
-	for _, s in { -1, 1 } do
-		for _, dz in { -1.75, 1.75 } do
-			Geo.block(model, CFrame.new(s * (side + 0.04), strapY, bz + dz), Vector3.new(0.12, strapH, 0.4), C.Steel, nil, tiny({ Name = "Strap" }))
+	local skirtTop = 1.1
+	-- steel corner guards from the skirt up to the bevels
+	local guardH = top - 0.5 - skirtTop
+	for _, x in { -side, side } do
+		for _, z in { front, rear } do
+			Geo.block(
+				model,
+				CFrame.new(x, skirtTop + guardH / 2, z),
+				Vector3.new(0.42, guardH, 0.42),
+				C.Steel,
+				nil,
+				prop({ Name = "Guard" })
+			)
 		end
-		Geo.block(model, CFrame.new(s * 2.05, strapY, rear + 0.04), Vector3.new(0.4, strapH, 0.12), C.Steel, nil, tiny({ Name = "Strap" }))
 	end
-	-- belt intake slots just over the skirt: left, right, back (portals face -Z, so turn them)
-	local slotY = 1.1
-	portal(model, CFrame.new(-side, slotY, bz) * CFrame.Angles(0, math.pi / 2, 0), 2.0, 1.1, 0.25, 0.3)
-	portal(model, CFrame.new(side, slotY, bz) * CFrame.Angles(0, -math.pi / 2, 0), 2.0, 1.1, 0.25, 0.3)
-	portal(model, CFrame.new(0, slotY, rear) * CFrame.Angles(0, math.pi, 0), 2.0, 1.1, 0.25, 0.3)
-	-- the big lit screen (front left) in a dark frame
-	local screenX, screenY, screenW, screenH = -1.3, 1.4, 2.4, 1.6
-	portal(model, CFrame.new(screenX, screenY, front), screenW, screenH, 0.28, 0.35, true, C.HousingDark)
-	local screen = Geo.block(
+	-- belt slots just over the skirt: left, right, back (portals face -Z, so turn them)
+	local slotY = skirtTop + 0.05
+	portal(model, CFrame.new(-side, slotY, bz) * CFrame.Angles(0, math.pi / 2, 0), 2.0, 0.9, 0.22, 0.3)
+	portal(model, CFrame.new(side, slotY, bz) * CFrame.Angles(0, -math.pi / 2, 0), 2.0, 0.9, 0.22, 0.3)
+	portal(model, CFrame.new(0, slotY, rear) * CFrame.Angles(0, math.pi, 0), 2.0, 0.9, 0.22, 0.3)
+
+	-- glass inspection bay (front left): a steel frame standing out of the
+	-- wall, dark inside, a warm lamp strip, glass with one glint
+	local wx, ww, wy0, wy1, dd, t = -1.45, 2.5, 2.8, 4.0, 0.9, 0.2
+	local wh = wy1 - wy0
+	local bayZ = front - dd / 2
+	Geo.block(model, CFrame.new(wx, (wy0 + wy1) / 2, front - 0.03), Vector3.new(ww, wh, 0.06), C.Recess, nil, tiny({ Name = "BayBack" }))
+	Geo.block(model, CFrame.new(wx, wy0 - t / 2, bayZ), Vector3.new(ww + 2 * t, t, dd), C.Steel, nil, solid({ Name = "BayFloor" }))
+	Geo.block(model, CFrame.new(wx, wy1 + t / 2, bayZ), Vector3.new(ww + 2 * t, t, dd), C.Steel, nil, solid())
+	for _, s in { -1, 1 } do
+		Geo.block(model, CFrame.new(wx + s * (ww / 2 + t / 2), (wy0 + wy1) / 2, bayZ), Vector3.new(t, wh, dd), C.Steel, nil, solid())
+	end
+	Geo.block(
 		model,
-		CFrame.new(screenX, screenY + screenH / 2, front - 0.22),
-		Vector3.new(screenW, screenH, 0.06),
-		C.ScreenLit,
+		CFrame.new(wx, wy1 - 0.05, front - dd * 0.4),
+		Vector3.new(ww - 0.4, 0.06, 0.16),
+		rgb(255, 232, 196),
 		NEON,
-		tiny({ Name = "Screen" })
+		tiny({ Name = "InspectLamp" })
 	)
+	local glassZ = front - dd + 0.03
+	Geo.block(
+		model,
+		CFrame.new(wx, (wy0 + wy1) / 2, glassZ),
+		Vector3.new(ww, wh, 0.05),
+		C.Glass,
+		GLASS,
+		tiny({ Name = "BayGlass", Transparency = 0.6 })
+	)
+	Geo.block(
+		model,
+		CFrame.new(wx + 0.55, (wy0 + wy1) / 2 + 0.2, glassZ - 0.03) * CFrame.Angles(0, 0, math.rad(-40)),
+		Vector3.new(0.13, 1.2, 0.02),
+		rgb(236, 248, 255),
+		nil,
+		tiny({ Transparency = 0.3 })
+	)
+	-- where the client stands the last sorted item: on the bay floor
+	attach(base, "ShowPoint", CFrame.new(wx, wy0 - 0.15, bayZ + 0.05))
+
+	-- the little lit screen (front right) in a dark frame
+	local sx, sw, sy, sh = 1.8, 2.0, 2.8, 1.15
+	portal(model, CFrame.new(sx, sy, front), sw, sh, 0.22, 0.3, true, C.HousingDark)
+	local screen =
+		Geo.block(model, CFrame.new(sx, sy + sh / 2, front - 0.2), Vector3.new(sw, sh, 0.06), C.ScreenLit, NEON, tiny({ Name = "Screen" }))
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "ScreenGui"
 	gui.Face = Enum.NormalId.Front
@@ -1586,8 +1686,8 @@ local function ironBox(): Model
 	gui.Parent = screen
 	type ScreenLine = { Name: string, Text: string, Y: number, H: number }
 	local lines: { ScreenLine } = {
-		{ Name = "Item", Text = "READY", Y = 0.1, H = 0.5 },
-		{ Name = "Counter", Text = "0", Y = 0.6, H = 0.32 },
+		{ Name = "Item", Text = MachineBuilder.IronBox.ScreenIdle, Y = 0.1, H = 0.5 },
+		{ Name = "Counter", Text = "KEPT 0 · SENT 0", Y = 0.62, H = 0.28 },
 	}
 	for _, spec in lines do
 		local label = Instance.new("TextLabel")
@@ -1601,34 +1701,255 @@ local function ironBox(): Model
 		label.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
 		label.Parent = gui
 	end
-	-- output slot and chute at the output column
+
+	-- two output flaps hinged at their top edge: KEEP over a slide into the
+	-- floor port (to the Ore Pen), SEND over the chute at the output column
 	local out = output(base, "IronBox")
-	portal(model, CFrame.new(out.X, 0.9, front), 1.5, 1.0, 0.3, 0.4)
-	chute(model, Vector3.new(out.X, 1.02, front - 0.35), 1.4, 0.9, 0.1)
-	-- low open intake on the roof: a steel rim, a dark throat and the sorting
-	-- flap tilted on its hinge rod
-	local rimW, rimD, rimH, wall = 4.6, 4.2, 0.8, 0.3
-	local rimY = top + rimH / 2
-	for _, s in { -1, 1 } do
-		Geo.block(model, CFrame.new(0, rimY, bz + s * (rimD / 2 - wall / 2)), Vector3.new(rimW, rimH, wall), C.IronTop, nil, solid())
-		Geo.block(model, CFrame.new(s * (rimW / 2 - wall / 2), rimY, bz), Vector3.new(wall, rimH, rimD - 2 * wall), C.IronTop, nil, solid())
-	end
-	Geo.block(model, CFrame.new(0, top + 0.05, bz), Vector3.new(rimW - 2 * wall, 0.1, rimD - 2 * wall), C.Recess, nil, solid())
-	local hinge = Vector3.new(0, top + rimH, bz + 1.2)
-	cyl(model, hinge, "X", rimW - 2 * wall, 0.22, C.Steel, nil, tiny({ Name = "FlapHinge" }))
-	Geo.block(
+	local flapY0, flapH, flapW = skirtTop + 0.05, 0.8, 1.4
+	local flapZ = front - 0.22
+	portal(model, CFrame.new(out.X, flapY0, front), flapW, flapH, 0.2, 0.35)
+	local send = Geo.block(
 		model,
-		CFrame.new(hinge) * CFrame.Angles(math.rad(-18), 0, 0) * CFrame.new(0, 0, -1.15),
-		Vector3.new(rimW - 2 * wall - 0.2, 0.12, 2.3),
+		CFrame.new(out.X, flapY0 + flapH / 2, flapZ),
+		Vector3.new(flapW - 0.06, flapH, 0.1),
 		C.Hazard,
 		nil,
-		tiny({ Name = "Flap" })
+		tiny({ Name = "FlapSend" })
 	)
-	sign(model, CFrame.new(0, rimY, bz - rimD / 2 - 0.08), "IRON BOX", 3.2)
-	attach(base, "Prompt", CFrame.new(0, 2.5, -3.2))
-	local intake = attach(base, "Intake", CFrame.new(0, top + 1.2, bz))
-	intake:SetAttribute("IntakeSize", Vector3.new(6.2, 4, 6))
+	flapLabel(send, "SEND", C.HazardDark)
+	chute(model, Vector3.new(out.X, flapY0 + 0.02, front - 0.35), 1.3, 1.0, 0.15)
+	portal(model, CFrame.new(wx, flapY0, front), flapW, flapH, 0.2, 0.35)
+	local keep = Geo.block(
+		model,
+		CFrame.new(wx, flapY0 + flapH / 2, flapZ),
+		Vector3.new(flapW - 0.06, flapH, 0.1),
+		C.Keep,
+		nil,
+		tiny({ Name = "FlapKeep" })
+	)
+	flapLabel(keep, "KEEP", C.ScreenText)
+	-- the slide down into a copper-rimmed port in the floor
+	local portZ, portD = front - 1.1, 1.4
+	local slideTop = Vector3.new(wx, flapY0 + 0.02, front - 0.35)
+	local slideEnd = Vector3.new(wx, 0.46, portZ + 0.1)
+	barBetween(model, slideTop, slideEnd, 1.2, 0.12, C.HousingDark, prop({ Name = "KeepSlide" }))
+	cyl(model, Vector3.new(wx, 0.36, portZ), "Y", 0.12, portD, C.Copper, nil, prop({ Name = "PenPort" }))
+	cyl(model, Vector3.new(wx, 0.43, portZ), "Y", 0.04, portD - 0.36, C.Recess, nil, tiny())
+
+	-- iron hopper on the roof with the name plate on its front wall
+	local hopperW = 4.6
+	local rim = squareHopper(model, CFrame.new(0, top, bz), 3.0, hopperW, 0.9, 0.8, 0.28, C.Iron, C.Steel)
+	sign(model, CFrame.new(0, top + rim - 0.4, bz - hopperW / 2 - 0.08), "IRON BOX", 3.4)
+
+	attach(base, "Prompt", CFrame.new(0, 2.6, -3.3))
+	local intake = attach(base, "Intake", CFrame.new(0, top + 1.4, bz))
+	intake:SetAttribute("IntakeSize", Vector3.new(5.4, 3.2, 5.4))
 	return model
+end
+
+--[[
+	Sorting board (Pen Automation level 1, IronBoxService builds one at the
+	pen gate): the Iron Box's keep list shown at your Ore Pen. Two gunmetal
+	posts on dark footings with brass caps, a riveted iron frame holding a
+	lit teal display (Display, Neon; SurfaceGui BoardGui: Mode line,
+	Swatches = the kept ores in their colours, Empty text), a warm lamp
+	strip over it, steel rails top and bottom (a hazard band on the lower
+	one) and a gold KEEP LIST plate on top. Not a machine (no MachineId);
+	Base is an invisible anchor on the ground, Prompt where its "Keep List"
+	prompt goes. paintSortingBoard fills the display in. 13 parts.
+]]
+MachineBuilder.SortingBoard = {
+	MaxSwatches = 12, -- 2 rows of 6; more kept ores show "+N" on the last one
+	Columns = 6,
+}
+
+function MachineBuilder.sortingBoard(): Model
+	local model = Instance.new("Model")
+	model.Name = "SortingBoard"
+	-- the pivot: centred on the ground line, so PivotTo puts the posts on the ground
+	local base = Geo.block(model, CFrame.new(), Vector3.new(4.2, 0.2, 0.7), C.Floor, nil, tiny({ Name = "Base", Transparency = 1 }))
+	base.Name = "Base"
+	model.PrimaryPart = base
+	local postX, postTop = 1.85, 4.75
+	for _, s in { -1, 1 } do
+		Geo.block(model, CFrame.new(s * postX, 0.15, 0), Vector3.new(0.7, 0.3, 0.7), C.HousingDark, nil, prop({ Name = "Footing" }))
+		Geo.block(model, CFrame.new(s * postX, postTop / 2, 0), Vector3.new(0.34, postTop, 0.34), C.Iron, nil, solid({ Name = "Post" }))
+		ball(model, Vector3.new(s * postX, postTop + 0.12, 0), 0.5, C.Brass)
+	end
+	-- the iron frame between the posts, the display set into its front
+	local y0, y1 = 1.6, 4.35
+	local frame = Geo.block(
+		model,
+		CFrame.new(0, (y0 + y1) / 2, 0.02),
+		Vector3.new(postX * 2 - 0.1, y1 - y0, 0.22),
+		C.Iron,
+		nil,
+		solid({ Name = "Frame" })
+	)
+	local back = surface(frame, "BackFace", Enum.NormalId.Back, 60)
+	for row, y in { 0.1, 0.9 } do
+		for i = 0, 5 do
+			paintRect(back, "Rivet" .. row, 0.08 + i * 0.165, y - 0.03, 0.025, 0.06, C.Brass, true)
+		end
+	end
+	local display = Geo.block(
+		model,
+		CFrame.new(0, (y0 + y1) / 2 - 0.05, -0.12),
+		Vector3.new(postX * 2 - 0.5, y1 - y0 - 0.5, 0.06),
+		C.ScreenLit,
+		NEON,
+		tiny({ Name = "Display" })
+	)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "BoardGui"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0
+	gui.MaxDistance = 80
+	gui.Parent = display
+	local mode = Instance.new("TextLabel")
+	mode.Name = "Mode"
+	mode.Text = "KEEPS RARE+"
+	mode.Position = UDim2.fromScale(0.05, 0.05)
+	mode.Size = UDim2.fromScale(0.9, 0.26)
+	mode.BackgroundTransparency = 1
+	mode.TextScaled = true
+	mode.TextColor3 = C.ScreenText
+	mode.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+	mode.Parent = gui
+	local swatches = Instance.new("Frame")
+	swatches.Name = "Swatches"
+	swatches.BackgroundTransparency = 1
+	swatches.Position = UDim2.fromScale(0.06, 0.38)
+	swatches.Size = UDim2.fromScale(0.88, 0.56)
+	swatches.Parent = gui
+	local grid = Instance.new("UIGridLayout")
+	local columns = MachineBuilder.SortingBoard.Columns
+	grid.CellSize = UDim2.new(1 / columns, -6, 0.5, -6)
+	grid.CellPadding = UDim2.fromOffset(6, 6)
+	grid.FillDirectionMaxCells = columns
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	grid.Parent = swatches
+	local empty = Instance.new("TextLabel")
+	empty.Name = "Empty"
+	empty.Text = ""
+	empty.Position = UDim2.fromScale(0.06, 0.45)
+	empty.Size = UDim2.fromScale(0.88, 0.3)
+	empty.BackgroundTransparency = 1
+	empty.TextScaled = true
+	empty.TextColor3 = C.ScreenText
+	empty.TextTransparency = 0.25
+	empty.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+	empty.Visible = false
+	empty.Parent = gui
+	-- a warm lamp over the display, steel rails top and bottom
+	Geo.block(
+		model,
+		CFrame.new(0, y1 - 0.08, -0.19),
+		Vector3.new(postX * 2 - 0.7, 0.06, 0.1),
+		rgb(255, 232, 196),
+		NEON,
+		tiny({ Name = "Lamp" })
+	)
+	Geo.block(model, CFrame.new(0, y1 + 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
+	local low =
+		Geo.block(model, CFrame.new(0, y0 - 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
+	local band = surface(low, "Hazard", Enum.NormalId.Front, 60)
+	gradientStrip(band, "Dashes", 0.06, 0.88, hazardKeys(11))
+	-- the name plate on top, between the brass caps
+	sign(model, CFrame.new(0, y1 + 0.55, -0.02), "KEEP LIST", 2.7, true)
+	attach(base, "Prompt", CFrame.new(0, 2.5, -1.0))
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	return model
+end
+
+export type BoardInfo = {
+	Mode: string, -- the line on top ("KEEPS RARE+")
+	Colors: { Color3 }, -- kept ores' colours, best first
+	Empty: string, -- shown when Colors is empty
+}
+
+--[[
+	Fills a sorting board's display in: the Mode line, one swatch per kept
+	ore (at most MaxSwatches; the last one says "+N" when there are more),
+	or the Empty text. Reuses its swatches. Pure (only Instances).
+]]
+function MachineBuilder.paintSortingBoard(model: Model, info: BoardInfo)
+	local display = model:FindFirstChild("Display")
+	local gui = display and display:FindFirstChild("BoardGui")
+	if not gui then
+		return
+	end
+	local mode = gui:FindFirstChild("Mode")
+	local swatches = gui:FindFirstChild("Swatches")
+	local empty = gui:FindFirstChild("Empty")
+	if mode and mode:IsA("TextLabel") then
+		mode.Text = info.Mode
+	end
+	local max = MachineBuilder.SortingBoard.MaxSwatches
+	local shown = math.min(#info.Colors, max)
+	if swatches then
+		for i = 1, max do
+			local swatch = swatches:FindFirstChild("Swatch" .. i)
+			if i > shown then
+				if swatch then
+					swatch:Destroy()
+				end
+				continue
+			end
+			local frame: Frame
+			if swatch and swatch:IsA("Frame") then
+				frame = swatch
+			else
+				frame = Instance.new("Frame")
+				frame.Name = "Swatch" .. i
+				frame.LayoutOrder = i
+				frame.BorderSizePixel = 0
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0.3, 0)
+				corner.Parent = frame
+				local stroke = Instance.new("UIStroke")
+				stroke.Color = C.ScreenText
+				stroke.Thickness = 2
+				stroke.Transparency = 0.4
+				stroke.Parent = frame
+				frame.Parent = swatches
+			end
+			frame.BackgroundColor3 = info.Colors[i]
+			-- the last swatch stands for itself and every ore after it
+			local more = #info.Colors - max + 1
+			local existing = frame:FindFirstChild("More")
+			if i == max and more > 1 then
+				local text: TextLabel
+				if existing and existing:IsA("TextLabel") then
+					text = existing
+				else
+					text = Instance.new("TextLabel")
+					text.Name = "More"
+					text.Size = UDim2.fromScale(1, 1)
+					text.BackgroundTransparency = 1
+					text.TextScaled = true
+					text.TextColor3 = C.ScreenText
+					text.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+					text.Parent = frame
+				end
+				text.Text = `+{more}`
+				frame.BackgroundColor3 = C.HousingDark
+			elseif existing then
+				existing:Destroy()
+			end
+		end
+	end
+	if empty and empty:IsA("TextLabel") then
+		empty.Text = info.Empty
+		empty.Visible = shown == 0
+	end
 end
 
 -- Sell Chute (retired): an open round hopper on a copper pipe that goes into

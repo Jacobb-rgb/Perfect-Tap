@@ -374,6 +374,155 @@ return function(T, Loader)
 		T.truthy(bottom > landing.Y + 0.6 and bottom < landing.Y + 1.4, "brush at ore height")
 	end)
 
+	T.test("Machines: the Iron Box has its window, screen, two flaps and hopper", function()
+		local model = MachineBuilder.build("IronBox")
+		local base = model.PrimaryPart
+		local CELLS = MachineData.ById.IronBox.Size
+		local front = -(CELLS[2] * CELL / 2)
+		local function part(name: string): any
+			local found = model:FindFirstChild(name)
+			T.truthy(found and found:IsA("BasePart"), "part " .. name)
+			return found
+		end
+		local function localPos(p: any): any
+			return base.CFrame:PointToObjectSpace(p.CFrame.Position)
+		end
+		-- the screen with the two labels the client fills in
+		local screen = part("Screen")
+		T.truthy(screen.Material == roblox.Enum.Material.Neon, "lit screen")
+		local gui = screen:FindFirstChild("ScreenGui")
+		T.truthy(gui and gui:FindFirstChild("Item") and gui:FindFirstChild("Counter"), "Item and Counter labels")
+		T.eq(gui.Item.Text, MachineBuilder.IronBox.ScreenIdle)
+		-- the glass inspection bay and the spot for the shown item inside it
+		local glass = part("BayGlass")
+		T.truthy(glass.Material == roblox.Enum.Material.Glass and glass.Transparency > 0.3, "see-through glass")
+		local show = attachment(model, "ShowPoint")
+		T.truthy(show, "ShowPoint")
+		local floor = localPos(part("BayFloor"))
+		local glassAt = localPos(glass)
+		local spot = show.CFrame.Position
+		local backAt = localPos(part("BayBack"))
+		T.truthy(spot.Z > glassAt.Z and spot.Z < backAt.Z, "between the glass and the dark back of the bay")
+		T.truthy(math.abs(spot.X - glassAt.X) < 0.2, "in the middle of the window")
+		T.near(spot.Y, floor.Y + part("BayFloor").Size.Y / 2, 0.05, "on the bay floor")
+		local window = glass.Size
+		T.truthy(window.X > MachineBuilder.IronBox.Window and window.Y > MachineBuilder.IronBox.Window, "the shown item fits the window")
+		-- two flaps on the front, SEND at the output column, both under the screen / window
+		local keep, send = part("FlapKeep"), part("FlapSend")
+		local out = attachment(model, "Output").CFrame.Position
+		T.near(localPos(send).X, out.X, 1e-4, "SEND at the output column")
+		T.truthy(localPos(keep).X < 0 and localPos(send).X > 0, "KEEP left, SEND right")
+		for _, flap in { keep, send } do
+			local p = localPos(flap)
+			T.truthy(p.Z < front + 2, flap.Name .. " on the front")
+			T.truthy(p.Y + flap.Size.Y / 2 < localPos(screen).Y - screen.Size.Y / 2, flap.Name .. " under the screen")
+			T.falsy(flap.CanCollide, flap.Name .. " swings freely")
+			T.truthy(flap:FindFirstChild("FlapText"), flap.Name .. " label")
+		end
+		T.truthy(keep.Color ~= send.Color, "the two ways look different")
+		-- both flap labels read from the usual eye and camera heights in front
+		-- of the box: the inspection bay's floor never hides their top edge
+		local bayFloor = part("BayFloor")
+		local floorAt = localPos(bayFloor)
+		local lo, hi = floorAt - bayFloor.Size / 2, floorAt + bayFloor.Size / 2
+		-- does the segment a -> b pass through the floor's box (slab test)?
+		local function hits(a: any, b: any): boolean
+			local t0, t1 = 0, 1
+			for _, axis in { "X", "Y", "Z" } do
+				local from, delta = a[axis], b[axis] - a[axis]
+				if math.abs(delta) < 1e-9 then
+					if from < lo[axis] or from > hi[axis] then
+						return false
+					end
+				else
+					local ta, tb = (lo[axis] - from) / delta, (hi[axis] - from) / delta
+					t0 = math.max(t0, math.min(ta, tb))
+					t1 = math.min(t1, math.max(ta, tb))
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		for _, flap in { keep, send } do
+			local p = localPos(flap)
+			local label = flap.FlapText:FindFirstChild("Text")
+			-- the label's top edge on the flap's front face
+			local top = roblox.Vector3.new(p.X, p.Y + flap.Size.Y / 2 - label.Position.Y.Scale * flap.Size.Y, p.Z - flap.Size.Z / 2 - 0.01)
+			-- standing in front, stepped back, and the camera up behind you
+			for _, eye in { { 6, 4.5 }, { 12, 6 }, { 9, 10 }, { 16, 12 } } do
+				local from = roblox.Vector3.new(p.X, eye[2], front - eye[1])
+				T.falsy(hits(from, top), `{flap.Name} label seen from {eye[1]} studs out, {eye[2]} up`)
+			end
+		end
+		-- the floor port the kept ore drops into stays inside the footprint
+		T.truthy(model:FindFirstChild("PenPort"), "pen port")
+		-- the hopper intake covers the roof cup, not the front
+		local intake = attachment(model, "Intake")
+		T.truthy(intake.CFrame.Position.Y > localPos(screen).Y, "intake on the roof")
+		-- the old strongbox pieces are gone
+		T.eq(model:FindFirstChild("Strap"), nil)
+		T.eq(model:FindFirstChild("Flap"), nil)
+		T.le(#parts(model), 70, "part budget")
+	end)
+
+	T.test("Machines: the pen's sorting board (Pen Automation) is a small lit board on two posts", function()
+		local board = MachineBuilder.sortingBoard()
+		local base = board.PrimaryPart
+		T.truthy(base and base.Name == "Base", "Base is the PrimaryPart")
+		T.eq(base.Transparency, 1, "an invisible anchor")
+		T.falsy(base.CanCollide, "nothing to trip over")
+		T.eq(board:GetAttribute("MachineId"), nil, "not a machine")
+		T.truthy(attachment(board, "Prompt"), "Prompt attachment")
+		T.truthy(attachment(board, "Prompt").CFrame.Position.Z < 0, "the prompt in front of the board")
+		T.le(#parts(board), 15, "decor prop budget")
+		local display = board:FindFirstChild("Display")
+		T.truthy(display and display.Material == roblox.Enum.Material.Neon, "a lit display")
+		local gui = display:FindFirstChild("BoardGui")
+		T.truthy(gui and gui.Face == roblox.Enum.NormalId.Front, "drawn on its front (-Z)")
+		T.truthy(gui:FindFirstChild("Mode") and gui:FindFirstChild("Swatches") and gui:FindFirstChild("Empty"), "its labels")
+		for _, d in board:GetDescendants() do
+			if d:IsA("BasePart") then
+				T.truthy(d.Anchored, d.Name .. " anchored")
+				T.falsy(d.CanTouch, d.Name .. " no touch events")
+			end
+		end
+		-- no wider than the space between the pen gate's post and the pen's corner
+		local lo, hi = math.huge, -math.huge
+		local top = 0
+		for _, p in parts(board) do
+			if p.Transparency < 1 then
+				local at = p.CFrame.Position
+				lo = math.min(lo, at.X - p.Size.X / 2)
+				hi = math.max(hi, at.X + p.Size.X / 2)
+				top = math.max(top, at.Y + p.Size.Y / 2)
+			end
+		end
+		T.truthy(hi - lo <= 4.5, "about 4.4 studs wide (footings)")
+		T.truthy(top > 4 and top < 6, "taller than a player's waist, under the gate sign")
+		-- painting: one swatch per kept ore, "+N" past the limit, the empty text
+		local red, blue = roblox.Color3.fromRGB(220, 40, 40), roblox.Color3.fromRGB(40, 80, 220)
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS MY LIST", Colors = { red, blue }, Empty = "NOTHING" })
+		T.eq(gui.Mode.Text, "KEEPS MY LIST")
+		T.truthy(gui.Swatches.Swatch1.BackgroundColor3 == red and gui.Swatches.Swatch2.BackgroundColor3 == blue, "in order")
+		T.falsy(gui.Empty.Visible, "no empty text")
+		local many = {}
+		for i = 1, MachineBuilder.SortingBoard.MaxSwatches + 3 do
+			many[i] = if i % 2 == 0 then red else blue
+		end
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS EVERYTHING", Colors = many, Empty = "" })
+		local max = MachineBuilder.SortingBoard.MaxSwatches
+		T.truthy(gui.Swatches:FindFirstChild("Swatch" .. max), "full board")
+		T.eq(gui.Swatches:FindFirstChild("Swatch" .. (max + 1)), nil, "never more than MaxSwatches")
+		T.eq(gui.Swatches["Swatch" .. max].More.Text, "+4", "the last one counts itself and the rest")
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS MY LIST", Colors = { red }, Empty = "" })
+		T.eq(gui.Swatches:FindFirstChild("Swatch2"), nil, "extra swatches removed")
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS MY LIST", Colors = {}, Empty = "SENDS EVERYTHING ON" })
+		T.eq(gui.Swatches:FindFirstChild("Swatch1"), nil)
+		T.truthy(gui.Empty.Visible and gui.Empty.Text == "SENDS EVERYTHING ON", "empty text")
+	end)
+
 	T.test("Machines: stack light colours for the client", function()
 		-- unlit stack lamps keep their hue, the lit one is toned down
 		T.truthy(MachineBuilder.Stack.Dim <= 0.35, "unlit lamps keep their colour")
