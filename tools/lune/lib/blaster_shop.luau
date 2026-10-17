@@ -207,8 +207,11 @@ end
 
 -- The "[E] BLASTER SHOP" prompt over the keeper (a ProximityPrompt in the game).
 local function prompt(K: any, at: any)
-	label(K, CF.new(at + V3.new(-2.5, 0, 0)), V3.new(1.4, 1.4, 0.12), "E", C3.fromRGB(245, 245, 250), C3.fromRGB(30, 30, 40))
-	label(K, CF.new(at + V3.new(0.95, 0, 0)), V3.new(5.2, 1.4, 0.12), "BLASTER SHOP", C3.fromRGB(22, 22, 32), C3.fromRGB(255, 255, 255))
+	local key = label(K, CF.new(at + V3.new(-2.5, 0, 0)), V3.new(1.4, 1.4, 0.12), "E", C3.fromRGB(245, 245, 250), C3.fromRGB(30, 30, 40))
+	local text =
+		label(K, CF.new(at + V3.new(0.95, 0, 0)), V3.new(5.2, 1.4, 0.12), "BLASTER SHOP", C3.fromRGB(22, 22, 32), C3.fromRGB(255, 255, 255))
+	key.Name = "FakePrompt" -- the Studio test uses a real ProximityPrompt instead
+	text.Name = "FakePrompt"
 end
 
 -- A metal frame post with a neon line (stalls, shop fronts).
@@ -627,11 +630,16 @@ local function vaultWow(K: any, parent: any, origin: any)
 	local beam = K.cylCF(at(0, 37.5, -6) * CF.Angles(0, 0, math.pi / 2), 23, 6.4, holoGlow, NEON)
 	beam.Transparency = 0.9
 	local holo = Kenney.gun(L, 10, "Heartstone")
+	holo.Name = "VaultHologram" -- turned by a script in the Studio test
 	Concepts.present(holo, at(0, 56, -6) * CF.Angles(0, math.pi / 2 + 0.25, 0) * CF.Angles(0.12, 0, 0), 4.2, parent)
+	local gems = roblox.Instance.new("Model")
+	gems.Name = "VaultGems"
+	gems.Parent = parent
+	local KG = Concepts.kit(gems)
 	for i = 0, 7 do
 		local a = i / 8 * math.pi * 2
 		local p = (at(math.cos(a) * 16, 56 + math.sin(a * 2) * 2.5, -6 + math.sin(a) * 16)).Position
-		K.gem(p, V3.new(math.cos(a) * 0.3, 1, math.sin(a) * 0.3).Unit, 0.7, 2.6, C3.fromRGB(220, 70, 130), holoGlow)
+		KG.gem(p, V3.new(math.cos(a) * 0.3, 1, math.sin(a) * 0.3).Unit, 0.7, 2.6, C3.fromRGB(220, 70, 130), holoGlow)
 	end
 	-- giant ore crystals on plinths beside the entrance
 	for _, side in { { -1, "Heartstone" }, { 1, "Stormcore" } } do
@@ -891,6 +899,15 @@ end
 	the picture here and would be moved if the vault stays.
 ]]
 Shop.LobbyCenter = { x = 0, z = 118, scale = 0.8 }
+-- The jungle trees around it in lobby coordinates: { x, z, height, canopy radius, seed }.
+Shop.Trees = {
+	{ -29, 153, 48, 13, 1 },
+	{ 29, 155, 52, 14, 2 },
+	{ -45, 120, 40, 11, 3 },
+	{ -47, 140, 44, 12, 4 },
+	{ 45, 108, 40, 11, 5 },
+	{ 46, 136, 44, 12, 6 },
+}
 
 function Shop.buildLobby(Loader: any, parent: any)
 	Concepts.init(Loader)
@@ -913,14 +930,7 @@ function Shop.buildLobby(Loader: any, parent: any)
 	end
 	print(string.format("lobby test: hid %d decoration parts in the vault footprint", removed))
 	-- big jungle trees behind the vault and two on each side (decorations under them are hidden too)
-	local trees = {
-		{ -29, 153, 48, 13, 1 },
-		{ 29, 155, 52, 14, 2 },
-		{ -45, 120, 40, 11, 3 },
-		{ -47, 140, 44, 12, 4 },
-		{ 45, 108, 40, 11, 5 },
-		{ 46, 136, 44, 12, 6 },
-	}
+	local trees = Shop.Trees
 	for _, d in parent:GetDescendants() do
 		if d:IsA("BasePart") and d.Transparency < 1 then
 			local p = d.CFrame.Position
@@ -943,6 +953,126 @@ function Shop.buildLobby(Loader: any, parent: any)
 	local holder = roblox.Instance.new("Model")
 	vault(Concepts.kit(holder), holder, CF.identity)
 	place(holder, CF.new(c.x, 0, c.z) * CF.Angles(0, math.pi, 0), c.scale, root)
+	return root
+end
+
+--[[
+	The Forge Vault alone for a Roblox Studio test place
+	(tools/lune/export_vault_place.luau): the vault at 80 % size at the origin
+	facing +Z, its six jungle trees, a grass ground and a stone path. Fixed up
+	for the real engine: sign texts fill their plates, the particle emitters
+	get real settings, solid parts collide, a real ProximityPrompt replaces the
+	painted [E] sign, and the hologram gets a pivot at its center.
+]]
+function Shop.buildStudio(Loader: any, parent: any)
+	Concepts.init(Loader)
+	CF = Loader.CFrame
+	L = Loader
+	local c = Shop.LobbyCenter
+	local root = roblox.Instance.new("Model")
+	root.Name = "BlasterVault"
+	root.Parent = parent
+	local holder = roblox.Instance.new("Model")
+	holder.Name = "Vault"
+	vault(Concepts.kit(holder), holder, CF.identity)
+	place(holder, CF.identity, c.scale, root)
+	local trees = roblox.Instance.new("Model")
+	trees.Name = "JungleTrees"
+	trees.Parent = root
+	local KT = Concepts.kit(trees)
+	for _, t in Shop.Trees do
+		-- lobby coordinates -> the vault's frame (the lobby turns it to face the plaza)
+		jungleTree(KT, V3.new(-(t[1] - c.x), 0, c.z - t[2]), t[3], t[4], t[5])
+	end
+	local ground = roblox.Instance.new("Model")
+	ground.Name = "Ground"
+	ground.Parent = root
+	local KGr = Concepts.kit(ground)
+	local grass = KGr.boxCF(CF.new(0, -1, 30), V3.new(400, 2, 400), C3.fromRGB(98, 168, 70))
+	grass.Material = Enum.Material.Grass
+	local path = KGr.boxCF(CF.new(0, 0.05, 52), V3.new(9, 0.1, 44), C3.fromRGB(150, 138, 128))
+	path.Material = Enum.Material.Cobblestone
+
+	-- the real engine: texts, particles, collisions, the prompt, the hologram pivot
+	for _, d in root:GetDescendants() do
+		if d:IsA("SurfaceGui") then
+			d.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			d.PixelsPerStud = 40
+			d.LightInfluence = 0
+			local t = d:FindFirstChildWhichIsA("TextLabel")
+			if t then
+				t.Size = roblox.UDim2.fromScale(1, 1)
+				t.BackgroundTransparency = 1
+				t.TextScaled = true
+			end
+		elseif d:IsA("ParticleEmitter") then
+			local hot = d.Name ~= "GunSpark"
+			d.Rate = if d.Name == "Embers" then 14 else 10
+			d.Lifetime = roblox.NumberRange.new(0.8, 2)
+			d.Speed = roblox.NumberRange.new(if hot then 2 else 0.3, if hot then 5 else 1)
+			d.SpreadAngle = roblox.Vector2.new(25, 25)
+			d.Acceleration = roblox.Vector3.new(0, if hot then 3 else 0.5, 0)
+			d.LightEmission = 1
+			d.Size = roblox.NumberSequence.new({
+				roblox.NumberSequenceKeypoint.new(0, if hot then 0.35 else 0.25),
+				roblox.NumberSequenceKeypoint.new(1, 0),
+			})
+			d.Transparency = roblox.NumberSequence.new({
+				roblox.NumberSequenceKeypoint.new(0, 0.1),
+				roblox.NumberSequenceKeypoint.new(1, 1),
+			})
+			pcall(function()
+				d.Shape = Enum.ParticleEmitterShape.Box
+				d.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+			end)
+		elseif d:IsA("BasePart") then
+			if d.Name == "FakePrompt" then
+				d.Parent = nil
+			elseif d.Transparency < 0.5 and d.Material ~= Enum.Material.Neon and math.max(d.Size.X, d.Size.Y, d.Size.Z) >= 4 then
+				d.CanCollide = true
+			end
+		end
+	end
+	-- the shop prompt on the counter
+	local promptPart = roblox.Instance.new("Part")
+	promptPart.Name = "ShopPrompt"
+	promptPart.Anchored = true
+	promptPart.CanCollide = false
+	promptPart.Transparency = 1
+	promptPart.Size = V3.new(2, 2, 2)
+	promptPart.CFrame = CF.new(0, 4.4, 4.4)
+	promptPart.Parent = root
+	local pp = roblox.Instance.new("ProximityPrompt")
+	pp.ActionText = "Open Shop"
+	pp.ObjectText = "Blaster Vault"
+	pp.KeyboardKeyCode = Enum.KeyCode.E
+	pp.HoldDuration = 0
+	pp.MaxActivationDistance = 14
+	pp.RequiresLineOfSight = false
+	pp.Parent = promptPart
+	-- the hologram and its gems turn around their own middle
+	for _, name in { "VaultHologram", "VaultGems" } do
+		local m = root:FindFirstChild(name, true)
+		if m then
+			local lo, hi = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					lo = lo:Min(d.CFrame.Position)
+					hi = hi:Max(d.CFrame.Position)
+				end
+			end
+			-- an invisible center part as PrimaryPart, so GetPivot() turns it around its middle
+			local center = roblox.Instance.new("Part")
+			center.Name = "Pivot"
+			center.Anchored = true
+			center.CanCollide = false
+			center.Transparency = 1
+			center.Size = V3.new(0.2, 0.2, 0.2)
+			center.CFrame = CF.new((lo + hi) / 2)
+			center.Parent = m
+			m.PrimaryPart = center
+		end
+	end
 	return root
 end
 
