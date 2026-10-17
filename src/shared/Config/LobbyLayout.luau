@@ -66,19 +66,22 @@ LobbyLayout.Budget = {
 	-- + the owner-approved Candy mountains (~570 parts: Spectrum strata on
 	-- the massif and the Land range, the spire skyline); + the owner-approved
 	-- Horizon (~2,450 parts far out at sea and in the sky, Persistent: the
-	-- outer sea, Kenney kit isles and ships, planets, constellations).
-	-- tests/LobbyBudget.spec.luau: the built map (~18,800 parts with the
-	-- vault, the mountains and the horizon) + one ore node on every node
-	-- spawn (~1,320) must stay 200 under it (the podium and pen ores): ~580 parts of headroom.
-	MapParts = 21000,
+	-- outer sea, Kenney kit isles and ships, planets, constellations); + the
+	-- owner-approved meadow and road look (~1,330 parts: grass tufts, grass
+	-- patches and flower beds on the free lawns, fences along the roads, the
+	-- main roads paved with kerbs and glowing studs).
+	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
+	-- node on every node spawn (~1,320) must stay 200 under it (the podium
+	-- and pen ores): ~250 parts of headroom.
+	MapParts = 22000,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
-	-- The lobby has ~11,200 parts with the vault: the ~200 parts of headroom
-	-- are a deliberate buffer, so a small merge from a parallel package session
-	-- (Backdrop, Districts, Plaza, Flora) does not break this budget; spend it
-	-- on purpose, not by accident.
-	LobbyParts = 11400,
+	-- The lobby has ~12,500 parts with the vault and the meadow: the ~300
+	-- parts of headroom are a deliberate buffer, so a small merge from a
+	-- parallel package session (Backdrop, Districts, Plaza, Flora) does not
+	-- break this budget; spend it on purpose, not by accident.
+	LobbyParts = 12800,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
@@ -91,7 +94,7 @@ LobbyLayout.Budget = {
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
-		Flora = { Parts = 2550, LobbyParts = 2350, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts
+		Flora = { Parts = 3200, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts, the Meadow (~1,060)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the

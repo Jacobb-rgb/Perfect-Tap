@@ -19,6 +19,7 @@ local Land = require(script.Parent.Land)
 local Town = require(script.Parent.Town)
 local PlotBuilder = require(script.Parent.PlotBuilder)
 local Railway = require(script.Parent.Railway)
+local Meadow = require(script.Parent.Lobby.Flora.Meadow)
 
 local WorldBuilder = {}
 
@@ -78,6 +79,8 @@ function WorldBuilder.build(parent: Instance): Model
 	Town.build(map, Rng.new(WorldLayout.Seed + 2))
 	PlotBuilder.build(map, Rng.new(WorldLayout.Seed + 3))
 	Railway.build(map) -- after the plots: it replaces their placeholder tracks
+	-- last: grass, flowers, fences and trees only where nothing else stands
+	Meadow.build(map, Rng.new(WorldLayout.Seed + 4))
 
 	-- Invisible markers. Move/duplicate them in Studio to change where ore grows.
 	local markers = Instance.new("Folder")
