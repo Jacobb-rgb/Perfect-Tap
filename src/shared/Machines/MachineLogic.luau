@@ -9,7 +9,10 @@
 	            no Output). A sorter's outputs are a copy of its input, so a
 	            generic complete() passes the item on unchanged; its service
 	            may instead complete with {} and put the item into the pen in
-	            the same step (kept ore), never both.
+	            the same step (kept ore), never both. A sorter job processes
+	            nothing: it never counts toward Stats (IngotsSmelted, the
+	            first-ingot toast), Discovery or ProcessingService.onProcessed
+	            (ProcessingService only runs those for machines with an Output).
 	entry.Out = finished items waiting to leave; at most MachineData.MaxOutBuffer.
 	Empty queues are set to nil to keep saves small.
 

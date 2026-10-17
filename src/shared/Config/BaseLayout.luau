@@ -91,26 +91,36 @@ end
 	back row of the machine grid (gz = PlotCells - 1, next to the yard; cell
 	numbers as in Machines/Grid). Only belts may stand on them: Placement
 	refuses every other machine there (reason "Chute") and moves one off
-	when a saved layout has it there.
+	when a saved layout has it there (sanitize reason "Chute": its own toast).
 	  Pen      Source  items sent from the Ore Pen (PenAction "Send") come out here
 	  Train    Source  Direct Unload (Upgrades.PenAutomation 2): the train puts its
 	                   dirty ore here instead of into the pen
-	  Foundry  Sink    a belt on this cell whose front faces +Z (SinkRotation,
-	                   off the grid edge toward the yard) delivers into the
-	                   Foundry: ingots the next blaster level can use go into
-	                   data.Foundry.Stock, every other item that reaches the end
-	                   of that belt goes into the Ore Pen (GameConfig, Foundry);
-	                   when the target is full the item waits on the belt. Items
-	                   just lying on the cell (no belt) are not taken.
-	A Source only spawns an item onto a belt standing on its cell, and only
-	while that belt has room (the belt's direction decides the route). With
-	no belt, or a jammed one, nothing comes out: the pen's send queue waits,
-	Direct Unload cargo goes into the pen as without the upgrade. Nothing is
-	ever dropped loose on a chute cell (the Train chute is in the yard gate's
-	walkway).
-	Players must see the chutes (WP-Belts): a colored plate with the Label in
-	build mode (GridOverlay) and a small floor plate + sign per chute in the
-	world (ConveyorService, per plot), both in the chute's Color.
+	  Foundry  Sink    delivers into the Foundry (GameConfig, Foundry): ingots the
+	                   next blaster level can use go into data.Foundry.Stock, every
+	                   other item into the Ore Pen
+	Sinks take only the plot owner's items. Another player's item is refused
+	as at a machine ("Foreign": pushed off, back to its owner after
+	GameConfig.ForeignItemReturn); it never lands in this player's pen or
+	Foundry. A Sink takes:
+	  - an item reaching the end of a belt on its cell whose front faces +Z
+	    (SinkRotation, off the grid edge toward the yard);
+	  - with NO belt on the cell, an item lying or rolling onto the cell (a
+	    cheap box scan of the cell each GameConfig.IntakeTick, e.g. a furnace
+	    whose output lands there). A belt on the cell facing any other way
+	    just carries items across; nothing is taken from it.
+	A Source only spawns an item onto a belt standing on its cell whose front
+	is NOT SinkRotation (sourceFeeds: a belt running off the grid edge would
+	drop the item loose in the yard), and only while that belt has room (the
+	belt's direction decides the route). With no such belt, or a jammed one,
+	nothing comes out: the pen's send queue waits, Direct Unload cargo goes
+	into the pen as without the upgrade. A Source never drops an item loose
+	(the Train chute is in the yard gate's walkway).
+	Players must see the chutes (WP-Belts, shipped in the same merge as these
+	contracts so the "Chute" refusal and toast always point at something
+	visible): a colored plate with the Label in build mode (GridOverlay) and a
+	small floor plate + sign per chute in the world (ConveyorService, per
+	plot), both in the chute's Color; a Source's plate shows "Turn the belt
+	away from the yard" while its belt faces SinkRotation.
 ]]
 local BACK_ROW = GameConfig.PlotCells - 1
 local CELL = GameConfig.CellSize
@@ -139,7 +149,7 @@ BaseLayout.Chutes = {
 		Kind = "Sink",
 		Label = "FOUNDRY",
 		Color = Color3.fromRGB(255, 120, 40),
-		Hint = "Run a belt off this edge to send ingots to your Foundry.",
+		Hint = "Run a belt off this edge (or drop ingots here) to feed your Foundry.",
 	},
 } :: { [string]: Chute }
 
@@ -148,6 +158,13 @@ BaseLayout.ChuteNames = { "Pen", "Train", "Foundry" }
 
 -- Grid rotation of a belt that delivers into a Sink chute: Grid.dir(2) = (0, 1), +Z.
 BaseLayout.SinkRotation = 2
+
+-- May a Source chute spawn onto a belt turned `r` on its cell? Not when the
+-- belt runs off the grid edge into the yard (SinkRotation): the item would
+-- fall off loose. Broken rotations count as no.
+function BaseLayout.sourceFeeds(r: any): boolean
+	return type(r) == "number" and r == math.floor(r) and r >= 0 and r <= 3 and r ~= BaseLayout.SinkRotation
+end
 
 local function chuteOf(name: string): Chute
 	local chute = BaseLayout.Chutes[name]

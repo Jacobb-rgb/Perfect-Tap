@@ -99,7 +99,7 @@ return function(T, Loader)
 			{ Id = 12, X = 0, Z = 0, R = 0 },
 			{ Id = "ClayFurnace", X = 9, Z = 9 },
 		}
-		data.MachineInventory = { [1] = 3, Conveyor = "5", StorageCrate = 1000, SellChute = 0 / 0, FutureMachine = 2 }
+		data.MachineInventory = { [1] = 3, Conveyor = "5", IronBox = 1015, FutureMachine2 = 5000.5, SellChute = 0 / 0, FutureMachine = 2, Crusher = 0.5 }
 		local report = Migrations.run(data)
 		T.eq(#data.Storage, 5, "2 good entries + 3 rescued items")
 		T.eq(data.Storage[1].K, "Raw")
@@ -125,10 +125,11 @@ return function(T, Loader)
 		T.eq(furnace.Id, "ClayFurnace")
 		T.eq(furnace.R, 0, "missing rotation becomes 0")
 		T.eq(#data.PlacedMachines, 4)
-		T.eq(data.MachineInventory.Crusher, 1, "crusher without a usable Z went to the inventory")
+		T.eq(data.MachineInventory.Crusher, 1, "crusher without a usable Z went to the inventory (a count under 1 was dropped first)")
 		T.eq(data.MachineInventory.FutureMachine, 2, "unknown inventory ids are kept")
 		T.eq(data.MachineInventory.Conveyor, nil, "string count dropped")
-		T.eq(data.MachineInventory.StorageCrate, nil, "over 999 dropped")
+		T.eq(data.MachineInventory.IronBox, 999, "over 999 capped, never dropped")
+		T.eq(data.MachineInventory.FutureMachine2, 999, "unknown ids are capped too")
 		T.eq(data.MachineInventory.SellChute, nil, "NaN dropped")
 		T.eq(data.MachineInventory[1], nil, "number key dropped")
 		T.truthy(report.Dropped > 0 and report.Moved > 0)
@@ -235,6 +236,28 @@ return function(T, Loader)
 		T.eq(#broken.Train.Cargo, 0)
 	end)
 
+	T.test("Migration: a machine at the inventory cap is refunded, never lost", function()
+		local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+		local cap = MachineData.MaxInventory
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Coins = 100
+		data.MachineInventory = { Conveyor = 1015, Crusher = cap }
+		data.PlacedMachines = {
+			{ Id = "Crusher", X = "lost", Z = 0, R = 0 }, -- nowhere to put it, the Crusher stack is full
+			{ Id = "ClayFurnace", X = 0 / 0, Z = 0, R = 0 }, -- nowhere to put it, room in the inventory
+		}
+		Migrations.run(data)
+		T.eq(data.MachineInventory.Conveyor, cap, "capped")
+		T.eq(data.MachineInventory.Crusher, cap, "still at the cap")
+		T.eq(data.Coins, 100 + MachineData.ById.Crusher.Price, "the Crusher was refunded")
+		T.eq(data.MachineInventory.ClayFurnace, 1, "the furnace went to the inventory")
+		T.eq(#data.PlacedMachines, 0)
+		local copy = ProfileStore.deepCopy(data)
+		local report = Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		T.eq(report.Moved + report.Dropped, 0)
+	end)
+
 	T.test("Migration step 3: machine upgrades, keep list, foundry stock, pen automation", function()
 		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 		local data = ProfileStore.deepCopy(DataTemplate)
@@ -287,8 +310,8 @@ return function(T, Loader)
 		local keep = data.KeepList
 		T.eq(keep.Gold, true)
 		T.eq(keep.Heartstone, true)
-		T.eq(keep.Ruby, nil, "only true counts")
-		T.eq(keep.Diamond, nil)
+		T.eq(keep.Ruby, nil, "only booleans count")
+		T.eq(keep.Diamond, false, "an explicit 'send on' choice is kept")
 		T.eq(keep.Unobtainium, nil, "unknown ore")
 		T.eq(keep[3], nil)
 		T.eq(data.KeepMode, MachineData.Keep.Default, "unknown keep mode")

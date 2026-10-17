@@ -5,12 +5,14 @@
 	run it.
 
 	Version 2 (step d): PlacedMachines entries may carry In/Out queues.
-	- MachineInventory: only string ids with whole counts 1..999 stay.
+	- MachineInventory: only string ids with whole counts >= 1 stay; a count
+	  above MachineData.MaxInventory (999) is capped to it, never dropped.
 	  Unknown ids are kept (a newer server may know them).
 	- PlacedMachines: junk entries are dropped. X/Z are floored and R
 	  becomes 0-3. A known machine without usable X/Z goes back to the
-	  inventory. In/Out items need a string K and O; well-formed items of an
-	  unknown kind or ore move to Storage instead of being lost.
+	  inventory (refunded at its Price when that type is at the cap).
+	  In/Out items need a string K and O; well-formed items of an unknown
+	  kind or ore move to Storage instead of being lost.
 	- Storage: entries that aren't tables are dropped.
 	Layout repair (off the plot, overlapping) is NOT done here:
 	Placement.sanitize does it when the plot spawns, so the player gets a toast.
@@ -41,7 +43,8 @@
 	  Retired machines, non-string keys and non-number levels are dropped,
 	  empty records removed.
 	- KeepMode is one of MachineData.Keep.Modes (else the default);
-	  KeepList keeps only known ore ids mapped to true.
+	  KeepList keeps only known ore ids mapped to a boolean (true keep,
+	  false send on; MachineData.keepsOre).
 	- Foundry.Stock: well-formed ingots (kind Ingot, known ore and grade, no
 	  recipe), at most GameConfig.MaxFoundryStock; other well-formed items
 	  and the overflow go to the pen, junk is dropped.
@@ -67,7 +70,7 @@ Migrations.Latest = 3
 
 export type Report = { Moved: number, Dropped: number }
 
-local MAX_INVENTORY = 999
+local MAX_INVENTORY = MachineData.MaxInventory
 -- Highest saved level of a step 3 upgrade (readers clamp to what is sold).
 local MAX_LEVEL_KEPT = 99
 local PODIUM_SLOTS = 4
@@ -167,9 +170,12 @@ function Migrations.run(data: { [string]: any }): Report
 	for _, key in keys do
 		local count = inventory[key]
 		local whole = if type(count) == "number" then math.floor(count) else nil
-		if type(key) ~= "string" or whole == nil or whole ~= whole or whole < 1 or whole > MAX_INVENTORY then
+		if type(key) ~= "string" or whole == nil or whole ~= whole or whole < 1 then
 			inventory[key] = nil
 			report.Dropped += 1
+		elseif whole > MAX_INVENTORY then
+			-- capped, never dropped: the cap is a DataStore guard, not a penalty
+			inventory[key] = MAX_INVENTORY
 		elseif whole ~= count then
 			inventory[key] = whole
 		end
@@ -227,8 +233,15 @@ function Migrations.run(data: { [string]: any }): Report
 					end
 				end
 			end
-			if MachineData.ById[entry.Id] then
-				inventory[entry.Id] = math.min(MAX_INVENTORY, (inventory[entry.Id] or 0) + 1)
+			local info = MachineData.ById[entry.Id]
+			if info then
+				local have = inventory[entry.Id] or 0
+				if have < MAX_INVENTORY then
+					inventory[entry.Id] = have + 1
+				else
+					-- that type is at the cap: refunded, never lost
+					data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + info.Price
+				end
 				report.Moved += 1
 			else
 				warn(`[Migrations] dropped unknown machine {entry.Id} without a position`)
@@ -391,7 +404,7 @@ function Migrations.run(data: { [string]: any }): Report
 		end
 	end
 
-	-- step 3: the keep mode is a known mode, the keep list holds known ore ids mapped to true
+	-- step 3: the keep mode is a known mode, the keep list maps known ore ids to booleans
 	if not MachineData.isKeepMode(data.KeepMode) then
 		if data.KeepMode ~= nil then
 			report.Dropped += 1
@@ -411,7 +424,7 @@ function Migrations.run(data: { [string]: any }): Report
 		table.insert(keepKeys, oreId)
 	end
 	for _, oreId in keepKeys do
-		if type(oreId) ~= "string" or not OreData.ById[oreId] or keepList[oreId] ~= true then
+		if type(oreId) ~= "string" or not OreData.ById[oreId] or type(keepList[oreId]) ~= "boolean" then
 			keepList[oreId] = nil
 			report.Dropped += 1
 		end

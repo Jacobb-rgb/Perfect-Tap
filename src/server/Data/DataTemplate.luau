@@ -29,12 +29,13 @@ local DataTemplate = {
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
 	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)
 	MachineUpgrades = {},
-	-- what the Iron Box keeps (into the pen) and the pen's sorting billboard
-	-- marks as kept (MachineData.Keep / MachineData.keeps): "RarePlus" (Rare and
-	-- better), "List" (only the ores on KeepList; an empty list keeps nothing)
-	-- or "All". Dirty ore is never kept, it always passes on.
+	-- what clean ore the Iron Box keeps (into the pen) and the pen's sorting
+	-- billboard marks as kept (MachineData.Keep / keeps / keepsOre): "RarePlus"
+	-- (Rare and better), "List" (the player's choices on KeepList; ores not on
+	-- it follow the Rare+ rule) or "All". Dirty ore, crushed ore and ingots are
+	-- never kept, they always pass on.
 	KeepMode = "RarePlus",
-	-- ore ids kept in "List" mode: { [oreId] = true }
+	-- the player's choices for "List" mode: { [oreId] = true (keep) | false (send on) }
 	KeepList = {},
 	-- the Foundry on the base: ingots waiting to be forged into blasters,
 	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock;
@@ -43,7 +44,7 @@ local DataTemplate = {
 		Stock = {},
 	},
 
-	-- machines: bought but not placed { [machineId] = count 1..999 } (no zero keys)
+	-- machines: bought but not placed { [machineId] = count 1..MachineData.MaxInventory (999) } (no zero keys)
 	MachineInventory = {},
 	-- placed machines on the plot: { { Id, X, Z, R, In?, Out? } } (min grid cell +
 	-- rotation 0-3). In = input queue (In[1] is being worked, max 4), Out = finished

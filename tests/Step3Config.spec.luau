@@ -55,6 +55,13 @@ return function(T, Loader)
 		local dx, dz = Grid.dir(BaseLayout.SinkRotation)
 		T.eq(dx, 0)
 		T.eq(dz, 1, "a sink belt faces +Z, toward the yard")
+		-- a Source never spawns onto a belt that runs off the grid into the yard
+		for r = 0, 3 do
+			T.eq(BaseLayout.sourceFeeds(r), r ~= BaseLayout.SinkRotation, "sourceFeeds r" .. r)
+		end
+		for _, bad in { -1, 4, 1.5, 0 / 0, "0" :: any, nil :: any } do
+			T.falsy(BaseLayout.sourceFeeds(bad), "sourceFeeds " .. tostring(bad))
+		end
 		T.eq(BaseLayout.chuteAt(0, 0), nil)
 		T.eq(BaseLayout.chuteAt(3, 10), nil)
 		T.falsy(pcall(BaseLayout.chuteCell, "Nope"), "unknown chute names error")
@@ -183,9 +190,10 @@ return function(T, Loader)
 			Coins = 0,
 			TotalEarned = 0,
 		}
-		local displaced = Placement.sanitize(data)
+		local displaced, reasons = Placement.sanitize(data)
 		T.eq(#displaced, 1)
 		T.eq(displaced[1], "Crusher")
+		T.eq(reasons[1], "Chute", "moved off a chute (its own toast)")
 		T.eq(data.MachineInventory.Crusher, 1, "back to the inventory")
 		T.eq(#data.PlacedMachines, 3)
 		T.eq(data.PlacedMachines[1], belt, "belts stay on chutes")
@@ -195,6 +203,65 @@ return function(T, Loader)
 		T.eq(blocker.In, nil)
 		T.eq(blocker.Out, nil)
 		T.eq(#Placement.sanitize(data), 0, "idempotent")
+		-- every reason has a code the client can show
+		local mixed = {
+			PlacedMachines = {
+				entry("Crusher", 0, 0),
+				entry("ClayFurnace", 1, 1), -- overlaps the Crusher
+				entry("BlastFurnace", 10, 10), -- off the plot
+				entry("IronBox", 8, 10), -- on the FOUNDRY chute
+				{ Id = "Crusher", X = 4, Z = 4, R = 7 }, -- broken rotation
+			},
+			MachineInventory = {},
+			Storage = {},
+			Coins = 0,
+		}
+		local ids, why = Placement.sanitize(mixed)
+		T.eq(#ids, 4)
+		T.eq(#why, 4, "a reason per displaced machine")
+		local expected = { "Overlap", "OutOfBounds", "Chute", "BadInput" }
+		for i, code in expected do
+			T.eq(why[i], code, ids[i] .. " reason")
+			T.truthy(Placement.Reasons[code], code .. " has a text")
+		end
+	end)
+
+	T.test("Step 3: a machine is never lost to the inventory cap", function()
+		local cap = MachineData.MaxInventory
+		T.eq(cap, 999)
+		T.eq(EconomyConfig.TechShop.MaxOwned, cap, "the shop uses the same cap")
+		-- picking up past the cap refunds the machine at its Price
+		local belt = entry("Conveyor", 0, 0)
+		local data = { PlacedMachines = { belt }, MachineInventory = { Conveyor = cap }, Storage = {}, Coins = 10, TotalEarned = 5 }
+		local ok, refunded = Placement.commitPickup(data, belt)
+		T.truthy(ok)
+		T.eq(refunded, 1)
+		T.eq(data.MachineInventory.Conveyor, cap, "stays at the cap")
+		T.eq(data.Coins, 10 + MachineData.ById.Conveyor.Price, "refunded")
+		T.eq(data.TotalEarned, 5, "a refund isn't income")
+		T.eq(#data.PlacedMachines, 0)
+		-- below the cap: a normal pickup
+		local furnace = entry("ClayFurnace", 4, 4)
+		local normal = { PlacedMachines = { furnace }, MachineInventory = { ClayFurnace = cap - 1 }, Storage = {}, Coins = 0 }
+		ok, refunded = Placement.commitPickup(normal, furnace)
+		T.truthy(ok)
+		T.eq(refunded, 0)
+		T.eq(normal.MachineInventory.ClayFurnace, cap)
+		T.eq(normal.Coins, 0)
+		-- addInventory splits a batch at the cap
+		local batch = { MachineInventory = { Crusher = cap - 2 }, Coins = 0 / 0 }
+		T.eq(Placement.addInventory(batch, "Crusher", 5), 3)
+		T.eq(batch.MachineInventory.Crusher, cap)
+		T.eq(batch.Coins, 3 * MachineData.ById.Crusher.Price, "a broken Coins value counts as 0")
+		for _, bad in { 0, -2, 1.5, 0 / 0 } do
+			T.eq(Placement.addInventory(batch, "Crusher", bad), 0, "bad count " .. tostring(bad))
+		end
+		T.eq(batch.MachineInventory.Crusher, cap)
+		-- sanitize moving a machine off a chute at the cap refunds it too
+		local onChute = { PlacedMachines = { entry("IronBox", 8, 10) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
+		Placement.sanitize(onChute)
+		T.eq(onChute.MachineInventory.IronBox, cap)
+		T.eq(onChute.Coins, MachineData.ById.IronBox.Price)
 	end)
 
 	T.test("Step 3: the starter kit and the Studio dev kit stay off the chutes", function()
@@ -399,19 +466,31 @@ return function(T, Loader)
 				T.falsy(MachineData.keeps(mode, { [ore] = true }, item("Raw", ore)), `{mode}: dirty {ore} passes`)
 			end
 		end
-		-- RarePlus: Rare and better
-		local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+		-- crushed ore and ingots always pass on too (on to a furnace, on to the Foundry)
 		local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+		for _, mode in Keep.Modes do
+			for _, ore in OreData.List do
+				for _, kind in { "Crushed", "Ingot" } do
+					T.falsy(MachineData.keeps(mode, { [ore.Id] = true }, item(kind, ore.Id)), `{mode}: {kind} {ore.Id} passes`)
+				end
+			end
+		end
+		-- RarePlus: clean ore of Rare and better
+		local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 		local rareFrom = Rarity.get(Keep.RareFrom).Order
 		local kept, sent = 0, 0
 		for _, ore in OreData.List do
 			local want = Rarity.get(ore.Rarity).Order >= rareFrom
-			for _, kind in { "Clean", "Crushed", "Ingot" } do
-				T.eq(MachineData.keeps("RarePlus", {}, item(kind, ore.Id)), want, `RarePlus {kind} {ore.Id}`)
-				T.eq(MachineData.keeps(nil, {}, item(kind, ore.Id)), want, `no mode = default ({ore.Id})`)
-				T.eq(MachineData.keeps("All", {}, item(kind, ore.Id)), true, `All keeps {ore.Id}`)
-				T.eq(MachineData.keeps("List", {}, item(kind, ore.Id)), false, `an empty List keeps nothing ({ore.Id})`)
-			end
+			local clean = item("Clean", ore.Id)
+			T.eq(MachineData.keeps("RarePlus", {}, clean), want, `RarePlus {ore.Id}`)
+			T.eq(MachineData.keeps(nil, {}, clean), want, `no mode = default ({ore.Id})`)
+			T.eq(MachineData.keeps("All", {}, clean), true, `All keeps {ore.Id}`)
+			T.eq(MachineData.keeps("List", {}, clean), want, `an empty List keeps like Rare+ ({ore.Id})`)
+			T.eq(MachineData.keepsOre("List", {}, ore.Id), want, `keepsOre {ore.Id}`)
+			-- the player's explicit choice wins in List mode, and only there
+			T.eq(MachineData.keeps("List", { [ore.Id] = true }, clean), true, `List keeps {ore.Id}`)
+			T.eq(MachineData.keeps("List", { [ore.Id] = false }, clean), false, `List sends {ore.Id} on`)
+			T.eq(MachineData.keeps("RarePlus", { [ore.Id] = not want }, clean), want, `RarePlus ignores the list ({ore.Id})`)
 			if want then
 				kept += 1
 			else
@@ -419,18 +498,32 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(kept > 0 and sent > 0, "RarePlus splits the ores")
-		-- List: only the listed ores
-		local list = { Gold = true, Copper = true }
-		T.truthy(MachineData.keeps("List", list, item("Clean", "Gold")))
-		T.truthy(MachineData.keeps("List", list, item("Ingot", "Copper")))
-		T.falsy(MachineData.keeps("List", list, item("Clean", "Coal")))
-		T.falsy(MachineData.keeps("List", "junk", item("Clean", "Gold")), "a broken list keeps nothing")
-		T.falsy(MachineData.keeps("List", { Gold = "yes" }, item("Clean", "Gold")), "only true counts")
+		-- an ore the player never set follows Rare+: a first-ever top ore is kept, never smelted by surprise
+		local top = OreData.List[1]
+		for _, ore in OreData.List do
+			if Rarity.get(ore.Rarity).Order > Rarity.get(top.Rarity).Order then
+				top = ore
+			end
+		end
+		T.truthy(MachineData.keeps("List", { Coal = false, Copper = true }, item("Clean", top.Id)), "unset top ore kept")
+		T.falsy(MachineData.keeps("List", { Coal = false }, item("Clean", "Coal")))
+		T.truthy(MachineData.keeps("List", { Coal = true }, item("Clean", "Coal")))
+		T.eq(MachineData.keeps("List", "junk", item("Clean", "Coal")), MachineData.keeps("RarePlus", {}, item("Clean", "Coal")), "a broken list = Rare+")
+		T.eq(MachineData.keeps("List", { Coal = "yes" }, item("Clean", "Coal")), MachineData.keeps("RarePlus", {}, item("Clean", "Coal")), "only booleans count")
 		-- junk and odd items
 		T.falsy(MachineData.keeps("All", {}, item("Clean", "Unobtainium")), "unknown ore")
+		T.falsy(MachineData.keepsOre("All", {}, "Unobtainium"), "unknown ore")
+		T.falsy(MachineData.keepsOre("All", {}, 5), "not an ore id")
 		T.falsy(MachineData.keeps("All", {}, nil), "nil")
 		T.falsy(MachineData.keeps("All", {}, "Gold"), "not a table")
 		T.truthy(MachineData.keeps("List", {}, { K = "Gear", O = "Gold", G = "Clean", R = "Dagger" }), "old gear stays in the pen")
+		-- only clean ore can be shown on podiums, which is why only clean ore is sorted
+		local podiumKinds = 0
+		for kind in EconomyConfig.Podiums.Kinds do
+			T.eq(kind, "Clean", "podium kind " .. kind)
+			podiumKinds += 1
+		end
+		T.eq(podiumKinds, 1)
 	end)
 
 	T.test("Step 3: the Tech shop order is sensible", function()
@@ -600,6 +693,37 @@ return function(T, Loader)
 		T.eq(select(2, EconomyConfig.techQuote(belt, data, 0)), "BadCount")
 	end)
 
+	T.test("Step 3: the Tech shop stops at MaxOwned machines of a type", function()
+		local cap = EconomyConfig.TechShop.MaxOwned
+		local belt = EconomyConfig.techItem("Conveyor")
+		local price = MachineData.ById.Conveyor.Price
+		local data: any = { MachineInventory = { Conveyor = 995 }, MachineUpgrades = {}, Upgrades = {} }
+		local quote, reason = EconomyConfig.techQuote(belt, data, 20)
+		T.eq(quote, nil, "995 + 20 is past the cap")
+		T.eq(reason, "MaxOwned")
+		T.eq(EconomyConfig.techQuote(belt, data, 4), price * 4, "up to the cap is fine")
+		T.eq(select(2, EconomyConfig.techQuote(belt, data, 5)), "MaxOwned")
+		data.MachineInventory.Conveyor = cap
+		T.eq(select(2, EconomyConfig.techPrice(belt, data)), "MaxOwned", "a full stack buys nothing")
+		-- other types and broken counts
+		T.eq(EconomyConfig.techQuote(EconomyConfig.techItem("Crusher"), data, 20), MachineData.ById.Crusher.Price * 20)
+		for _, broken in { "999" :: any, 0 / 0, -5, {} } do
+			data.MachineInventory.Conveyor = broken
+			T.eq(EconomyConfig.inventoryCount(data, "Conveyor"), 0, "broken count " .. tostring(broken))
+			T.eq(EconomyConfig.techQuote(belt, data, 20), price * 20)
+		end
+		T.eq(EconomyConfig.inventoryCount({}, "Conveyor"), 0, "no inventory")
+		T.eq(EconomyConfig.inventoryCount({ MachineInventory = { Conveyor = 12.7 } }, "Conveyor"), 12)
+		-- BadCount is checked first
+		data.MachineInventory.Conveyor = cap
+		T.eq(select(2, EconomyConfig.techQuote(belt, data, 0)), "BadCount")
+		-- every refusal code has a text for the shop card
+		for _, code in { "BadItem", "BadCount", "MaxOwned", "Max", "Stale", "NoCoins", "TooFar" } do
+			local text = EconomyConfig.TechShop.Reasons[code]
+			T.truthy(type(text) == "string" and #text > 5, "reason text " .. code)
+		end
+	end)
+
 	---------------------------------------------------------------- remotes and save
 
 	T.test("Step 3: remotes", function()
@@ -617,6 +741,7 @@ return function(T, Loader)
 		end
 		T.eq(Net.Events.FoundryBegin, false, "server -> client")
 		T.eq(Net.Events.FoundryResult, false, "server -> client")
+		T.eq(Net.Events.ShopResult, false, "every ShopBuy gets an answer (server -> client)")
 	end)
 
 	T.test("Step 3: new save fields", function()

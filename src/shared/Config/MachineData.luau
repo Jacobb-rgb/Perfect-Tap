@@ -14,8 +14,8 @@
 	  Speed    every level takes SpeedPerLevel off the job time (speedMult)
 	  Quality  Cleaning Plant only: the grade odds of QualityLevels[level + 1]
 	The Auto Cleaner is shown as "Cleaning Plant" (its Id stays "AutoCleaner").
-	The Iron Box and the pen's sorting billboard sort by data.KeepMode and
-	data.KeepList (MachineData.Keep, MachineData.keeps).
+	The Iron Box and the pen's sorting billboard sort clean ore by
+	data.KeepMode and data.KeepList (MachineData.Keep, MachineData.keeps).
 ]]
 
 local GameConfig = require(script.Parent.GameConfig)
@@ -170,12 +170,13 @@ MachineData.List = {
 	{
 		Id = "IronBox",
 		Name = "Iron Box",
-		Description = "Shows what comes out of your Cleaning Plant. Ore you keep goes to your Ore Pen, everything else rolls out the front onto your belts.",
+		Description = "Shows what comes out of your Cleaning Plant. Clean ore you keep goes to your Ore Pen, everything else rolls out the front onto your belts.",
 		Size = { 2, 2 },
 		Price = 12000,
 		Category = "Processing",
 		Order = 6,
-		-- dirty ore is never kept (the box can't see through the dirt): it always passes on
+		-- only clean ore is kept or sent on by the player's setting; dirty ore,
+		-- crushed ore and ingots always pass on (MachineData.keeps)
 		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true },
 		-- seconds to show and sort one item before upgrades: long enough that every
 		-- Speed level still counts with full Bellows (0.2 x 4 s = 0.8 s > MinProcessTime)
@@ -263,6 +264,12 @@ MachineData.WorkshopPassConveyors = 20
 -- Finished items a machine holds while its front is blocked.
 MachineData.MaxOutBuffer = 4
 
+-- Most machines of one type data.MachineInventory holds (DataStore safety).
+-- The Tech shop refuses a buy past it ("MaxOwned"), Placement refunds a
+-- machine packed up past it (Placement.addInventory) and Migrations caps
+-- a bigger saved count to it: a machine is never lost to the cap.
+MachineData.MaxInventory = 999
+
 -- Machine slots: 10 base, +3 per slot upgrade bought (2 exist), +6 with the
 -- Workshop pass. Gives 10 / 13 / 16, or 22 with everything.
 function MachineData.machineSlots(extraBought: number, workshop: boolean): number
@@ -339,52 +346,71 @@ end
 --[[
 	What the Iron Box keeps (into the Ore Pen) and what it sends on (out of
 	its front), and what the pen's sorting billboard marks as kept (PenAction
-	"Send" Filter "Unkept" sends the rest). One setting per player:
+	"Send" Filter "Unkept" sends the rest). Only CLEAN ore is ever sorted,
+	because only clean ore can go on a podium (EconomyConfig.Podiums.Kinds):
+	  Raw      dirty ore is never kept: it always passes on (the box can't see
+	           through the dirt, so nobody peeks at rare dirty ore)
+	  Crushed  never kept: always passes on (on to a furnace)
+	  Ingot    never kept: always passes on (on to the Foundry, which needs the
+	           rare ones for blaster levels 6-10)
+	  Clean    kept or sent on by the player's setting (below)
+	  other    (old Gear) always counts as kept (it stays in the pen)
+	One setting per player:
 	  data.KeepMode  "RarePlus"  keep ores of rarity Keep.RareFrom and better (the default)
-	                 "List"      keep the ores on data.KeepList; an empty list keeps nothing
-	                 "All"       keep every ore
-	  data.KeepList  { [oreId] = true }, only read in "List" mode
-	Dirty ore (Raw) is never kept in any mode: it always passes on, so the
-	box never tells you which dirty ore is rare before it is cleaned. Items
-	that aren't ore, crushed ore or ingots (old Gear) always count as kept.
+	                 "List"      the player's own choices: data.KeepList[oreId] = true
+	                             (keep) or false (send on); an ore the player never
+	                             set follows the RarePlus rule, so a first-ever
+	                             Mythic is kept, never smelted by surprise. An
+	                             empty list keeps the same as "RarePlus".
+	                 "All"       keep every clean ore
+	  data.KeepList  { [oreId] = boolean }, only read in "List" mode
 ]]
 export type KeepMode = "RarePlus" | "List" | "All"
 
 MachineData.Keep = {
 	Modes = { "RarePlus", "List", "All" } :: { KeepMode }, -- in UI order
 	Default = "RarePlus" :: KeepMode, -- a new player's mode (DataTemplate.KeepMode)
-	RareFrom = "Rare", -- the lowest rarity "RarePlus" keeps
+	RareFrom = "Rare", -- the lowest rarity "RarePlus" keeps (and "List" for ores not on the list)
 }
 
-local SORTED_KINDS = { Clean = true, Crushed = true, Ingot = true }
+-- Item kinds that always pass on (never kept), see above.
+local PASSING_KINDS = { Raw = true, Crushed = true, Ingot = true }
 
 -- Is `mode` one of Keep.Modes?
 function MachineData.isKeepMode(mode: any): boolean
 	return type(mode) == "string" and table.find(MachineData.Keep.Modes, mode :: KeepMode) ~= nil
 end
 
--- Does the player keep this item (Iron Box: to the pen; pen: stays)?
--- `mode` and `keepList` are data.KeepMode and data.KeepList; an unknown mode
--- counts as Keep.Default, an unknown ore is never kept.
-function MachineData.keeps(mode: any, keepList: any, desc: any): boolean
-	if type(desc) ~= "table" or type(desc.K) ~= "string" or desc.K == "Raw" then
-		return false
-	end
-	if not SORTED_KINDS[desc.K] then
-		return true
-	end
-	local ore = if type(desc.O) == "string" then OreData.ById[desc.O] else nil
+-- Does the player keep CLEAN ore of this ore id (the Iron Box view's toggles
+-- show this)? An unknown mode counts as Keep.Default, an unknown ore is never kept.
+function MachineData.keepsOre(mode: any, keepList: any, oreId: any): boolean
+	local ore = if type(oreId) == "string" then OreData.ById[oreId] else nil
 	if not ore then
 		return false
 	end
 	local m: KeepMode = if MachineData.isKeepMode(mode) then mode else MachineData.Keep.Default
 	if m == "All" then
 		return true
-	elseif m == "List" then
-		return type(keepList) == "table" and keepList[ore.Id] == true
+	elseif m == "List" and type(keepList) == "table" then
+		local choice = keepList[ore.Id]
+		if type(choice) == "boolean" then
+			return choice
+		end
 	end
 	local rarity = Rarity.ById[ore.Rarity]
 	return rarity ~= nil and rarity.Order >= Rarity.get(MachineData.Keep.RareFrom).Order
+end
+
+-- Does the player keep this item (Iron Box: to the pen; pen: stays)?
+-- `mode` and `keepList` are data.KeepMode and data.KeepList.
+function MachineData.keeps(mode: any, keepList: any, desc: any): boolean
+	if type(desc) ~= "table" or type(desc.K) ~= "string" or PASSING_KINDS[desc.K] then
+		return false
+	end
+	if desc.K ~= "Clean" then
+		return true
+	end
+	return MachineData.keepsOre(mode, keepList, desc.O)
 end
 
 ---------------------------------------------------------------- job time

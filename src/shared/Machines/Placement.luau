@@ -8,11 +8,14 @@
 
 	Ledger rule: for every machine id, placed + MachineInventory stays the
 	same across place, move and pickup. Nothing here yields, and a commit
-	that fails changes nothing.
+	that fails changes nothing. The one exception is the inventory cap
+	(MachineData.MaxInventory): a machine packed up past it is refunded at
+	its Price instead (addInventory), so it is never lost.
 
 	Chute cells (BaseLayout.Chutes, step 3) take belts only: any other
 	machine whose footprint covers one is refused ("Chute") and moved off by
-	sanitize like any other machine that doesn't fit.
+	sanitize like any other machine that doesn't fit (with the reason
+	"Chute", so the player gets a chute toast).
 ]]
 
 local BaseLayout = require(script.Parent.Parent.Config.BaseLayout)
@@ -194,6 +197,31 @@ local function inventoryOf(data: { [string]: any }): { [string]: number }
 	return inventory
 end
 
+-- Puts `n` machines of `id` into the inventory, at most MachineData.MaxInventory
+-- of one type. Any above the cap are refunded at their Price into Coins (not
+-- TotalEarned: it isn't income), so a machine is never lost. Returns how many
+-- were refunded.
+function Placement.addInventory(data: { [string]: any }, id: string, n: number): number
+	if not (isInt(n) and n > 0) then
+		return 0
+	end
+	local inventory = inventoryOf(data)
+	local have = inventory[id]
+	local current = if type(have) == "number" and have == have and have > 0 then math.floor(have) else 0
+	local room = math.max(0, MachineData.MaxInventory - current)
+	local added = math.min(n, room)
+	local refunded = n - added
+	if added > 0 then
+		inventory[id] = current + added
+	end
+	if refunded > 0 then
+		local info = known(id)
+		local coins = tonumber(data.Coins) or 0
+		data.Coins = (if coins == coins then coins else 0) + (if info then info.Price else 0) * refunded
+	end
+	return refunded
+end
+
 -- Place one machine from the inventory. Returns the new saved entry.
 function Placement.commitPlace(data: { [string]: any }, id: string, x: number, z: number, r: number, limits: Limits): (Entry?, string?)
 	local inventory = data.MachineInventory
@@ -225,16 +253,16 @@ function Placement.commitMove(data: { [string]: any }, entry: Entry, x: number, 
 end
 
 -- Pack a placed machine back into the inventory. Drain its In/Out first
--- (MachineLogic.drain); this only moves the machine itself.
-function Placement.commitPickup(data: { [string]: any }, entry: Entry): boolean
+-- (MachineLogic.drain); this only moves the machine itself. The second
+-- result is 1 when the inventory already held MachineData.MaxInventory of
+-- that type and the machine was refunded at its Price instead (addInventory).
+function Placement.commitPickup(data: { [string]: any }, entry: Entry): (boolean, number)
 	local index = table.find(data.PlacedMachines, entry)
 	if not index then
-		return false
+		return false, 0
 	end
 	table.remove(data.PlacedMachines, index)
-	local inventory = inventoryOf(data)
-	inventory[entry.Id] = (inventory[entry.Id] or 0) + 1
-	return true
+	return true, Placement.addInventory(data, entry.Id, 1)
 end
 
 -- An item that has to leave a machine during layout repair goes to Storage,
@@ -277,15 +305,18 @@ end
 -- Repairs a loaded layout (MachineService runs it before spawning).
 -- In saved order: an unknown Id is kept and skipped. A machine that is off
 -- the plot, stands on a chute cell (anything but a belt) or overlaps an
--- earlier one goes back to the inventory and its In/Out spill into Storage.
--- Queues longer than allowed are trimmed the same way. Slot limits are
--- never enforced here. Returns the displaced ids.
-function Placement.sanitize(data: { [string]: any }): { string }
-	local displaced = {}
+-- earlier one goes back to the inventory (addInventory: refunded past the
+-- cap) and its In/Out spill into Storage. Queues longer than allowed are
+-- trimmed the same way. Slot limits are never enforced here.
+-- Returns the displaced ids and, at the same index, why each one moved:
+-- "BadInput" | "OutOfBounds" | "Chute" | "Overlap" (Reasons codes).
+function Placement.sanitize(data: { [string]: any }): ({ string }, { string })
+	local displaced: { string } = {}
+	local reasons: { string } = {}
 	local list = data.PlacedMachines
 	if type(list) ~= "table" then
 		data.PlacedMachines = {}
-		return displaced
+		return displaced, reasons
 	end
 	local kept: { Entry } = {}
 	local occupied: { [number]: boolean } = {}
@@ -295,19 +326,22 @@ function Placement.sanitize(data: { [string]: any }): { string }
 			table.insert(kept, entry)
 			continue
 		end
-		local fits = isInt(entry.X) and isInt(entry.Z) and isInt(entry.R) and entry.R >= 0 and entry.R <= 3
-		fits = fits and Placement.inBounds(entry.Id, entry.X, entry.Z, entry.R)
-		fits = fits and Placement.chuteAllows(entry.Id, entry.X, entry.Z, entry.R)
-		local cells: { number } = if fits then Placement.cells(entry.Id, entry.X, entry.Z, entry.R) else {}
-		if fits then
-			for _, k in cells do
-				if occupied[k] then
-					fits = false
-					break
-				end
+		local reason: string? = nil
+		if not (isInt(entry.X) and isInt(entry.Z) and isInt(entry.R) and entry.R >= 0 and entry.R <= 3) then
+			reason = "BadInput"
+		elseif not Placement.inBounds(entry.Id, entry.X, entry.Z, entry.R) then
+			reason = "OutOfBounds"
+		elseif not Placement.chuteAllows(entry.Id, entry.X, entry.Z, entry.R) then
+			reason = "Chute"
+		end
+		local cells: { number } = if reason == nil then Placement.cells(entry.Id, entry.X, entry.Z, entry.R) else {}
+		for _, k in cells do
+			if occupied[k] then
+				reason = "Overlap"
+				break
 			end
 		end
-		if fits then
+		if reason == nil then
 			for _, k in cells do
 				occupied[k] = true
 			end
@@ -323,9 +357,9 @@ function Placement.sanitize(data: { [string]: any }): { string }
 				end
 			end
 			entry.In, entry.Out = nil, nil
-			local inventory = inventoryOf(data)
-			inventory[entry.Id] = (inventory[entry.Id] or 0) + 1
+			Placement.addInventory(data, entry.Id, 1)
 			table.insert(displaced, entry.Id)
+			table.insert(reasons, reason)
 		end
 	end
 	-- rewrite the list in place so references to kept entries stay valid
@@ -333,7 +367,7 @@ function Placement.sanitize(data: { [string]: any }): { string }
 	for i, entry in kept do
 		list[i] = entry
 	end
-	return displaced
+	return displaced, reasons
 end
 
 return Placement

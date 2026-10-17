@@ -90,7 +90,13 @@ end
 	  "PenAutomation"                  data.Upgrades.PenAutomation (EconomyConfig.PenAutomation)
 	Levelled items always buy exactly one level (Count is ignored), and only
 	the Level the request names, which must be the next one (techQuote): a
-	double tap or a lagging card never buys two levels in a row.
+	double tap or a lagging card never buys two levels in a row. Machines
+	stop at MaxOwned of one type in the inventory ("MaxOwned").
+	The server answers every ShopBuy with ShopResult { Item, Ok, Reason?,
+	Level?, Count? } (Reason = a TechShop.Reasons code). It quotes
+	(techQuote), spends the coins and writes the level / inventory in one
+	step with no yield in between, so two requests can never both pass the
+	quote before either writes.
 ]]
 export type TechKind = "Machine" | "Upgrade" | "Bellows" | "Slots" | "PenAutomation"
 export type TechItem = {
@@ -105,9 +111,21 @@ export type TechItem = {
 EconomyConfig.TechShop = {
 	Shop = "Tech", -- ShopBuy.Shop
 	MaxCount = 20, -- machines per ShopBuy
-	MaxOwned = 999, -- a machine type in the inventory (as Migrations keeps it)
+	-- most of one machine type in data.MachineInventory (MachineData.MaxInventory;
+	-- placed machines don't count, slots limit those)
+	MaxOwned = MachineData.MaxInventory,
 	Items = {} :: { TechItem }, -- in shop order
 	ById = {} :: { [string]: TechItem }, -- Item string -> entry
+	-- ShopResult.Reason code -> text for the player (the card shows it)
+	Reasons = {
+		BadItem = "That isn't sold here",
+		BadCount = "You can't buy that many",
+		MaxOwned = "Your Build menu can't hold more of these",
+		Max = "Already at the top level",
+		Stale = "The card was out of date, try again",
+		NoCoins = "Not enough coins",
+		TooFar = "Go to the UPGRADES stall to buy",
+	} :: { [string]: string },
 }
 
 local function addTech(entry: TechItem)
@@ -173,15 +191,27 @@ function EconomyConfig.techLevel(entry: TechItem, data: { [string]: any }): (num
 	return wholeLevel(if type(bought) == "table" then bought[field] else nil, max), max
 end
 
+-- How many machines of a type the save's inventory holds (broken values count as 0).
+function EconomyConfig.inventoryCount(data: { [string]: any }, machineId: string): number
+	local inventory = data.MachineInventory
+	local n = if type(inventory) == "table" then inventory[machineId] else nil
+	return if type(n) == "number" and n == n and n >= 0 then math.floor(math.min(n, 1e9)) else 0
+end
+
 -- What buying `entry` costs now: a machine times `count` (whole 1..MaxCount,
--- default 1), or the next level of a levelled item. nil + "BadCount" | "Max".
+-- default 1; the inventory may not go past MaxOwned of that type), or the
+-- next level of a levelled item. nil + "BadCount" | "MaxOwned" | "Max".
 function EconomyConfig.techPrice(entry: TechItem, data: { [string]: any }, count: any?): (number?, string?)
 	if entry.Kind == "Machine" then
 		local n = if count == nil then 1 else count
 		if type(n) ~= "number" or n ~= math.floor(n) or n < 1 or n > EconomyConfig.TechShop.MaxCount then
 			return nil, "BadCount"
 		end
-		local machine = MachineData.ById[entry.Machine :: string]
+		local id = entry.Machine :: string
+		if EconomyConfig.inventoryCount(data, id) + n > EconomyConfig.TechShop.MaxOwned then
+			return nil, "MaxOwned"
+		end
+		local machine = MachineData.ById[id]
 		return machine.Price * n, nil
 	end
 	local level, max = EconomyConfig.techLevel(entry, data)
@@ -195,7 +225,7 @@ end
 -- The server's check of a ShopBuy: techPrice, and for levelled items the
 -- payload's `level` (the level being bought, as shown on the card) must be
 -- exactly the current level + 1 (missing or any other value: nil, "Stale").
--- nil + "BadCount" | "Max" | "Stale".
+-- nil + "BadCount" | "MaxOwned" | "Max" | "Stale" (all in TechShop.Reasons).
 function EconomyConfig.techQuote(entry: TechItem, data: { [string]: any }, count: any?, level: any?): (number?, string?)
 	local price, reason = EconomyConfig.techPrice(entry, data, count)
 	if price == nil or entry.Prices == nil then
