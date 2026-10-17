@@ -62,6 +62,7 @@ local DataTemplate = {
 		BlastersForged = 0,
 		ItemsSold = 0,
 		PodiumEarned = 0,
+		TrainTrips = 0, -- trains unloaded into the Ore Pen (TrainService)
 		PlaySeconds = 0,
 	},
 	Tutorial = { Step = 1, Done = false },
