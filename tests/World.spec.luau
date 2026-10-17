@@ -79,10 +79,11 @@ return function(T, Loader)
 			{ name = "DeepHollow", box = caves.DeepHollow },
 			{ name = "Grotto", box = caves.Grotto },
 		}
+		-- (a cave's own model, or a Mine Lift standing in its cave: Railway)
 		local function insideModel(part, name)
 			local node = part.Parent
 			while node do
-				if node.Name == name then
+				if node.Name == name or (node:HasTag("MineLift") and node:GetAttribute("LiftId") == name) then
 					return true
 				end
 				node = node.Parent

@@ -28,11 +28,9 @@ return function(T, Loader)
 	-- The wheels' envelope across a line (TrainBuilder: the locomotive's wheel
 	-- hubs reach +-2.8), from the rail top up: nothing of a yard may enter it.
 	local WHEEL_HALF = 2.95
-	-- The yards' train stop platforms reach this close to the rail centerline
-	-- (BaseLayout); until they keep out of the wheels' envelope the coastal
-	-- line's platform-side rail gives way under them.
+	-- The yards' train stop platforms (BaseLayout) end this far from the rail
+	-- centerline: outside the wheels' envelope and both rails.
 	local stopEdgeGap = BaseLayout.RailZ - (BaseLayout.TrainStop.Center.Z + BaseLayout.TrainStop.Size.Z / 2)
-	local stopsClear = stopEdgeGap >= WHEEL_HALF
 
 	local game = roblox.Instance.new("DataModel")
 	local map = WorldBuilder.build(game:GetService("Workspace"))
@@ -124,7 +122,23 @@ return function(T, Loader)
 		for _, lift in TrainConfig.Lifts do
 			local m = liftModel(lift.Id)
 			T.truthy(m and m.Parent == railway, "lift " .. lift.Id .. " under Map.Railway")
+			T.eq(m.Name, "MineLift_" .. lift.Id, lift.Id .. " lift name")
+			-- (a search for the cave by name never finds the lift)
+			for _, d in map:GetDescendants() do
+				if d.Name == lift.Id then
+					T.falsy(d:IsDescendantOf(railway), d:GetFullName() .. " shares the cave's name")
+				end
+			end
 		end
+		-- the visible line ends the client shares (TrainConfig)
+		T.eq(Railway.PortalInset, TrainConfig.PortalInset, "PortalInset from TrainConfig")
+		T.eq(Railway.BufferGap, TrainConfig.BufferGap, "BufferGap from TrainConfig")
+		local mouths = Railway.portalMouths()
+		local visible = Railway.visibleLines()
+		local q = visible.QuarryLine
+		T.eq(#q, #TrainConfig.QuarryLine, "the quarry line keeps its points")
+		T.truthy(near(q[1], mouths.West.Position, 1e-4), "the quarry line's visible west end is the West mouth")
+		T.truthy(near(q[#q], mouths.East.Position, 1e-4), "the quarry line's visible east end is the East mouth")
 		for _, d in map.Plots:GetDescendants() do
 			T.falsy(d:GetAttribute("RailwayPlaceholder"), d:GetFullName() .. " (placeholder track) is gone")
 		end
@@ -164,6 +178,37 @@ return function(T, Loader)
 		T.truthy(near(worldPoint(trainPoint), TrainConfig.QuarryStop, 1e-3), "TrainPoint at QuarryStop")
 		T.truthy(hasText(station, "MINE STATION"), "MINE STATION sign")
 		T.lt(lightsIn(station), 2, "at most one PointLight at the station")
+		-- the main line's track keeps out of the station's solid parts (its
+		-- sleepers give way to the elevator's foot)
+		for _, track in partsOf(railway.QuarryLine) do
+			local a, b = bounds(track)
+			for _, part in partsOf(station) do
+				if part.CanCollide and part:FindFirstAncestor("Siding") == nil then
+					local c, d = bounds(part)
+					T.falsy(overlaps(a, b, c, d, 0.01), `{track:GetFullName()} runs into {part:GetFullName()}`)
+				end
+			end
+		end
+		-- the siding: one straight piece under the main line where they cross
+		local siding = station:FindFirstChild("Siding")
+		T.truthy(siding, "the station has a siding")
+		local mainTop = -math.huge
+		for _, part in partsOf(railway.QuarryLine) do
+			if part.Name == "Rail" then
+				local _, hi = bounds(part)
+				mainTop = math.max(mainTop, hi.Y)
+			end
+		end
+		local look = nil
+		for _, part in partsOf(siding) do
+			if part.Name == "Rail" then
+				look = look or part.CFrame.LookVector
+				T.truthy(near(part.CFrame.LookVector, look, 1e-4), part:GetFullName() .. " runs straight")
+				local _, hi = bounds(part)
+				T.truthy(hi.Y <= mainTop - 0.05 + 1e-4, `{part:GetFullName()} top {hi.Y} under the main rails' {mainTop}`)
+			end
+		end
+		T.truthy(look ~= nil, "the siding has rails")
 	end)
 
 	T.test("railway: Mine Lift hooks match the contract", function()
@@ -324,18 +369,21 @@ return function(T, Loader)
 			local a, b = points[1], points[#points]
 			local t = math.clamp((stop - a):Dot(b - a) / (b - a):Dot(b - a), 0, 1)
 			T.truthy((a + (b - a) * t - stop).Magnitude <= 1, `plot {plot.Id}: the {name} polyline passes its stop`)
-			-- the built rails: the sea-side rail runs past the stop at the gauge, its
-			-- top where the trains' wheels are (the platform side gives way to the stop)
+			-- the built rails: both rails run past the stop at the gauge, their tops
+			-- where the trains' wheels are
 			local outward = if stop.X < 0 then -1 else 1
-			local found = false
-			for _, part in railsAt(railway[name], stop) do
-				local center = part.CFrame.Position.X - outward * TrainBuilder.Gauge / 2
-				local _, hi = bounds(part)
-				if math.abs(center - stop.X) <= 1 and math.abs(hi.Y - (stop.Y + TrainBuilder.RailTop)) < 0.01 then
-					found = true
+			for _, side in { -1, 1 } do
+				local found = false
+				for _, part in railsAt(railway[name], stop) do
+					local center = part.CFrame.Position.X - side * outward * TrainBuilder.Gauge / 2
+					local _, hi = bounds(part)
+					if math.abs(center - stop.X) <= 1 and math.abs(hi.Y - (stop.Y + TrainBuilder.RailTop)) < 0.01 then
+						found = true
+					end
 				end
+				local which = if side > 0 then "sea-side" else "platform-side"
+				T.truthy(found, `plot {plot.Id}: the {name} {which} rail runs past the stop within 1 stud`)
 			end
-			T.truthy(found, `plot {plot.Id}: a {name} rail runs past the stop within 1 stud`)
 			local sleeper = false
 			for _, part in partsOf(railway[name]) do
 				if part.Name == "Sleeper" and math.abs(part.CFrame.Position.Z - stop.Z) <= TrainBuilder.SleeperSpacing then
@@ -349,13 +397,10 @@ return function(T, Loader)
 	end)
 
 	T.test("railway: the rails run unbroken between the portal mouths and the buffers", function()
-		-- (on the coast the platform-side rail gives way to the yards' train stop
-		-- platforms while they reach into the wheels' envelope: then only the
-		-- sea-side one is checked)
 		local checks = {
 			{ Line = "QuarryLine", Axis = "X", Offsets = { -1, 1 } },
-			{ Line = "CoastWest", Axis = "Z", Offsets = if stopsClear then { -1, 1 } else { -1 } },
-			{ Line = "CoastEast", Axis = "Z", Offsets = if stopsClear then { -1, 1 } else { 1 } },
+			{ Line = "CoastWest", Axis = "Z", Offsets = { -1, 1 } },
+			{ Line = "CoastEast", Axis = "Z", Offsets = { -1, 1 } },
 		}
 		local visible = Railway.visibleLines()
 		for _, check in checks do
@@ -490,6 +535,11 @@ return function(T, Loader)
 	end)
 
 	T.test("railway: the trains pass every yard's train stop", function()
+		-- (BaseLayout.TrainStop: its rail-side edge outside the wheels' envelope)
+		T.truthy(
+			stopEdgeGap >= WHEEL_HALF,
+			`the yards' train stop platforms end {stopEdgeGap} studs from the rail centerline, inside the wheels' +-{WHEEL_HALF}`
+		)
 		-- the trains' cross-section (x across, y above the rail top) and their wheels
 		local profile = {}
 		local wheels = 0
@@ -504,7 +554,6 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(wheels > 0, "the trains have wheels")
-		local inside = 0
 		for _, plot in WorldLayout.Plots do
 			local stop = TrainConfig.stopFor(plot)
 			local plotModel = map.Plots:FindFirstChild("Plot_" .. plot.Id)
@@ -518,8 +567,7 @@ return function(T, Loader)
 				local x0, x1, y0, y1 = lo.X - stop.X, hi.X - stop.X, lo.Y - railTop, hi.Y - railTop
 				-- the wheels' envelope: from the rail top up, +-WHEEL_HALF
 				if x0 < WHEEL_HALF - 0.01 and x1 > -WHEEL_HALF + 0.01 and y1 > 0.01 then
-					T.falsy(stopsClear, `{name} reaches into the wheels' envelope`)
-					inside += 1
+					T.truthy(false, `{name} reaches into the wheels' envelope`)
 				end
 				-- the trains' real shape (either way round) above the platform level
 				-- (the platform and its safety edge: by the envelope above)
@@ -534,15 +582,6 @@ return function(T, Loader)
 					end
 				end
 			end
-		end
-		if not stopsClear then
-			-- (BaseLayout is shared config: the integrator moves the platforms;
-			-- then this test checks them strictly and the rails run unbroken)
-			print(
-				`  NOTE railway: the yards' train stop platforms end {stopEdgeGap} studs from the rail centerline, `
-					.. `inside the wheels' envelope (+-{WHEEL_HALF}): {inside} stop parts reach in, the platform-side `
-					.. `rail gives way under the platforms. BaseLayout.TrainStop = rect(0, 57, 34, 6, 4) fixes it.`
-			)
 		end
 	end)
 

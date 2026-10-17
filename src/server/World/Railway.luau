@@ -18,8 +18,9 @@
 	               sits above the wagons at QuarryStop), a lever console at
 	               the `PromptPoint` attachment, the `TrainPoint` attachment
 	               at QuarryStop, neon lamps and one PointLight (the pendant
-	               over the hopper), crates and a short siding off the main
-	               line that ends in a buffer stop beside the platform's end
+	               over the hopper), crates and a short straight siding off
+	               the main line that ends in a buffer stop past the
+	               platform's end
 	  Portals      four tunnel portals with a dark mouth (black neon) in a
 	               timber frame (lanterns on the posts, knee braces) under a
 	               steel lintel with an orange plate and a signal lamp
@@ -28,32 +29,35 @@
 	               a light stone buttress (the mouth stands PortalInset in
 	               front of the wall, so the wall's foot boulders stay behind
 	               it), SouthWest/SouthEast at (+-166, 0, SouthPortalZ) facing
-	               north in a low rock mound (cheek rocks, a stone brow under a
-	               grass crest, a long grass slope down to the south with
-	               rough rocks along its flanks, grass wing slopes beside the
-	               track) that keeps between the town's rail strip (x 160) and
-	               the island rim (x 171.7)
+	               north in a rock hill (cheek rocks, a stone brow under a
+	               grass crest with rock outcrops, three stone tiers stepping
+	               down to the south, each under a grass slope with a stone
+	               ledge between them, grass wing slopes beside the track)
+	               that keeps between the town's rail strip (x 160) and the
+	               island rim (x 171.7)
 	  CoastWest    the coastal lines (TrainConfig.CoastWest/CoastEast) from the
 	  CoastEast    south portal north to a buffer stop just past BufferZ,
-	               behind every plot's yard train stop: the sleeper ends (and
-	               a rail, while a stop's platform reaches over it) give way
-	               under each stop's platform (BaseLayout.TrainStop), so
-	               nothing cuts into a yard
-	  EmberCaves   the Mine Lifts (TrainConfig.Lifts, named by their LiftId,
-	  DeepHollow   tagged "MineLift", attribute LiftId): a periwinkle headframe with orange
+	               behind every plot's yard train stop: both rails run past
+	               each stop's platform (BaseLayout.TrainStop keeps 3 studs
+	               from the centerline), the sleeper ends on the platform side
+	               give way under it, so nothing cuts into a yard
+	  MineLift_*   the Mine Lifts (TrainConfig.Lifts: "MineLift_" .. Id,
+	               tagged "MineLift", attribute LiftId): a periwinkle headframe with orange
 	               collars on a steel base, a low funnel hopper (rim LiftRim)
 	               with a warm glowing floor over the invisible `Intake` (tag
 	               "TrainHopper", attribute LiftId), the cage parked under the
 	               crossbeams on a cable that runs up into the cave ceiling
 	               with a lamp under it (the lift's one PointLight), a "LIFT"
-	               sign under a front header beam, a warning lamp and the
-	               `PromptPoint` attachment in front
+	               sign (self-lit text) under a front header beam with a lamp
+	               strip, a warning lamp and the `PromptPoint` attachment in
+	               front
 
 	The yards' `RailwayPlaceholder` track pieces (PlotBuilder) are removed:
 	the through line replaces them (their buffer stops stood on the line).
 
 	Track: straight runs of at most RunLength studs (two rail parts per run,
-	split only where a platform covers a rail) and a sleeper every ~6 studs; all
+	split only where a platform would cover a rail) and a sleeper every ~6 studs
+	(shortened where a platform or the station's elevator stands beside it); all
 	track parts are anchored, non-colliding and cast no shadow (players walk
 	over the line on the ground). Trains stand on the rails when their Root
 	is TrainBuilder.RailTop above the line point. Nothing but the rails,
@@ -80,11 +84,11 @@ local Railway = {}
 
 Railway.MaxParts = 600 -- the whole railway (tests/Railway.spec.luau)
 Railway.RunLength = 24 -- longest rail part
--- Quarry portals: the mouth stands this far in front of the line's end
--- (TrainConfig.PortalInset when the shared config publishes it, so the
--- client hides the trains at the same plane; see Railway.portalMouths).
-Railway.PortalInset = (TrainConfig :: any).PortalInset or 6
-Railway.BufferGap = 1.7 -- the coastal buffer stops' face, past the line's end (clear of the last platform)
+-- Quarry portals: the mouth stands this far in front of the line's end, and
+-- the coastal buffer stops' face this far past theirs (shared with the
+-- client, which hides and stops the trains there; see Railway.portalMouths).
+Railway.PortalInset = TrainConfig.PortalInset
+Railway.BufferGap = TrainConfig.BufferGap
 -- The space the trains need around a line (TrainBuilder: steam cylinders
 -- +-3.43, chimney top 9.31 above the line point); only rails, sleepers and
 -- the portal mouths may enter it.
@@ -242,8 +246,17 @@ local function attach(part: BasePart, name: string, world: Vector3): Attachment
 end
 
 -- A sign board: the text on its front face (the frame's look direction), and
--- on the back too when `twoSided`.
-local function sign(parent: Instance, name: string, cf: CFrame, size: Vector3, text: string, twoSided: boolean): Part
+-- on the back too when `twoSided`. `lightInfluence` (default 0.3): 0 keeps
+-- the text its own colour under a cave's tinted ambient.
+local function sign(
+	parent: Instance,
+	name: string,
+	cf: CFrame,
+	size: Vector3,
+	text: string,
+	twoSided: boolean,
+	lightInfluence: number?
+): Part
 	local p = block(parent, name, cf, size, C.Board, nil, GHOST)
 	local faces: { Enum.NormalId } = { Enum.NormalId.Front }
 	if twoSided then
@@ -254,7 +267,7 @@ local function sign(parent: Instance, name: string, cf: CFrame, size: Vector3, t
 		gui.Face = face
 		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		gui.PixelsPerStud = 40
-		gui.LightInfluence = 0.3
+		gui.LightInfluence = lightInfluence or 0.3
 		gui.Parent = p
 		local label = Instance.new("TextLabel")
 		label.Name = "Text"
@@ -453,10 +466,12 @@ end
 	height on two sloped steel struts along the rails, two orange buffers.
 ]]
 local BUFFER_DEPTH = 3.4 -- from the beam's face to the struts' feet (the track runs on under them)
+local BUFFER_HALF = 2.9 -- the beam's half length across the track
+local SIDING_DROP = 0.06 -- a siding's track under its main line's where they cross
 local function bufferStop(parent: Instance, cf: CFrame): Model
 	local m = model("BufferStop", parent)
 	local y = RAIL_TOP + TrainBuilder.CouplerHeight
-	box(m, "Beam", cf, Vector3.new(-2.9, y - 0.6, 0), Vector3.new(2.9, y + 0.6, 0.8), TC.Beam, nil, BUMP)
+	box(m, "Beam", cf, Vector3.new(-BUFFER_HALF, y - 0.6, 0), Vector3.new(BUFFER_HALF, y + 0.6, 0.8), TC.Beam, nil, BUMP)
 	for _, side in { -1, 1 } do
 		cyl(m, "Buffer", cf * CFrame.new(side * 2, y, -0.3), ALONG_Z, 0.6, 0.95, C.Orange, nil, GHOST)
 		triangle(
@@ -563,13 +578,16 @@ local function quarryPortal(parent: Instance, name: string, cf: CFrame, rng: Rng
 end
 
 --[[
-	South portal: the frame set into a low rock mound that keeps between the
-	town's rail strip (|x| 160) and the island rim (|x| 171.7): cheek rocks
-	either side of the frame, a stone brow over the lintel under a grass
-	crest, a long grass slope down to the south coast with rough rock blocks
-	along both flanks, and grass wing slopes beside the track in front.
+	South portal: the frame set into a rock hill that keeps between the town's
+	rail strip (|x| 160) and the island rim (|x| 171.7), so it gains its mass
+	in height: cheek rocks either side of the frame, a stone brow over the
+	lintel under a grass crest with rock outcrops, then three stone tiers
+	stepping down to the south coast, each under a grass slope, with a stone
+	ledge (a lip a little proud of the tier) where one tier steps down to the
+	next, a rough rock block on each flank and grass wing slopes beside the
+	track in front (low enough to leave the post lanterns in view).
 ]]
-Railway.SouthHill = { HalfWidth = 5.65, Depth = 23.4 } -- local x / z extent of the mound behind the mouth
+Railway.SouthHill = { HalfWidth = 5.65, Depth = 23.4 } -- local x / z extent of the hill behind the mouth
 local function southPortal(parent: Instance, name: string, cf: CFrame, rng: Rng.Rng)
 	local m = portalModel(parent, name)
 	local half = 4.95
@@ -581,56 +599,103 @@ local function southPortal(parent: Instance, name: string, cf: CFrame, rng: Rng.
 	end
 	local grass = Geo.vary(C.Grass, rng, 0.03)
 	local crest = top + 1.5
-	local slopeZ = 3.2 -- the back slope starts here (local z)
-	local depth = Railway.SouthHill.Depth -- where it meets the ground
+	local slopeZ = 3.2 -- the tiers start here (local z)
+	local depth = Railway.SouthHill.Depth -- where the last slope meets the ground
 	-- core behind the mouth and the brow over the lintel, under a grass crest
 	box(m, "Rock", cf, Vector3.new(-5.45, 0, MOUTH_D), Vector3.new(5.45, top + 0.06, slopeZ), stone(), nil, SOLID)
 	box(m, "Brow", cf, Vector3.new(-W, top + 0.06, 0.55), Vector3.new(W, crest, slopeZ), stone(), nil, SOLID)
 	box(m, "Crest", cf, Vector3.new(-5.3, crest, 0.7), Vector3.new(5.3, crest + 0.6, slopeZ), grass, nil, SOLID_SMALL)
-	-- the grass slope from the crest down to the south coast (its sides grass too)
 	local high = crest + 0.6
-	triangle(m, "Slope", cf, Vector3.new(0, 0, slopeZ), Vector3.new(0, high, 0), Vector3.new(0, 0, depth - slopeZ), 10.2, grass, nil, SOLID)
-	local function slopeAt(z: number): number
-		return high * math.clamp((depth - z) / (depth - slopeZ), 0, 1)
+	-- three tiers: a stone body (its top = the ledge it steps down to) under a
+	-- grass slope from `y0` at its front down to `y1`, which leaves the
+	-- ledge's flat stone strip (`ledge` deep) before the next tier's slope
+	-- starts below it; each tier a little narrower than the one in front
+	type Tier = { z0: number, z1: number, y0: number, y1: number, ledge: number, w: number }
+	local tiers: { Tier } = {
+		{ z0 = slopeZ, z1 = 10, y0 = high, y1 = 10, ledge = 1.8, w = 5.45 },
+		{ z0 = 10, z1 = 16.6, y0 = 8.4, y1 = 5.6, ledge = 2, w = 5.15 },
+		{ z0 = 16.6, z1 = depth, y0 = 4.2, y1 = 0, ledge = 0, w = 4.85 },
+	}
+	for i, t in tiers do
+		local slopeEnd = t.z1 - t.ledge
+		if t.y1 > 0 then
+			box(m, "Tier", cf, Vector3.new(-t.w, 0, t.z0), Vector3.new(t.w, t.y1, t.z1), stone(), nil, SOLID)
+			-- the ledge's lip, proud of the tier at its sides and back
+			box(
+				m,
+				"Ledge",
+				cf,
+				Vector3.new(-t.w - 0.15, t.y1 - 0.4, slopeEnd - 0.2),
+				Vector3.new(t.w + 0.15, t.y1 + 0.15, t.z1 + 0.25),
+				Geo.vary(C.StoneLight, rng, 0.03),
+				nil,
+				SOLID
+			)
+		end
+		triangle(
+			m,
+			"Slope",
+			cf,
+			Vector3.new(0, t.y1, t.z0),
+			Vector3.new(0, t.y0 - t.y1, 0),
+			Vector3.new(0, 0, slopeEnd - t.z0),
+			(t.w - 0.15) * 2,
+			if i == 2 then Geo.vary(C.Grass:Lerp(C.GrassDark, 0.35), rng, 0.03) else grass,
+			nil,
+			SOLID
+		)
+	end
+	local function groundAt(z: number): number
+		for _, t in tiers do
+			local slopeEnd = t.z1 - t.ledge
+			if z <= slopeEnd then
+				return t.y1 + (t.y0 - t.y1) * math.clamp((slopeEnd - z) / (slopeEnd - t.z0), 0, 1)
+			elseif z <= t.z1 then
+				return t.y1
+			end
+		end
+		return 0
+	end
+	-- rock outcrops on the crest, the first ledge and the lowest slope
+	local outcrops = {
+		{ x = -2.2, z = 2.4, size = Vector3.new(3.8, 1.7, 2.6) },
+		{ x = 2.2, z = 9.1, size = Vector3.new(2.8, 2.3, 2.2) },
+		{ x = -1.6, z = 18.8, size = Vector3.new(2.6, 2, 2.4) },
+	}
+	for _, o in outcrops do
+		Geo.rock(m, cf * CFrame.new(o.x, groundAt(o.z) - 0.4, o.z), o.size, stone(), rng, nil, SOLID_SMALL)
 	end
 	for _, side in { -1, 1 } do
 		-- cheek rocks either side of the frame, set a little forward
 		local cheekTop = if side > 0 then 10.4 else 9.6
 		box(m, "Cheek", cf, Vector3.new(side * 4.85, 0, -1.6), Vector3.new(side * W, cheekTop, slopeZ), stone(), nil, SOLID)
-		-- a grass wing slope beside the track, down from the cheek to the ground
+		-- a grass wing slope beside the track, down from the cheek to the
+		-- ground (under the post lanterns, y 6.6)
 		triangle(
 			m,
 			"Wing",
 			cf,
 			Vector3.new(side * 5.075, 0, -1.6),
-			Vector3.new(0, 7.6, 0),
-			Vector3.new(0, 0, -7),
+			Vector3.new(0, 6.2, 0),
+			Vector3.new(0, 0, -6),
 			1.15,
 			grass,
 			nil,
 			SOLID_SMALL
 		)
-		-- a rough skirt of rock blocks along the flank (standing half a stud
-		-- out of the grass side; the last one pokes out of the slope)
-		local rocks = {
-			{ z = 7, depth = 6, height = 7.4 + side * 0.6, yaw = 0.06 * side, roll = -0.04 * side },
-			{ z = 13, depth = 5.4, height = 4.6 - side * 0.4, yaw = -0.07 * side, roll = 0.05 * side },
-			{ z = 18.2, depth = 5, height = 3.3, yaw = 0.09 * side, roll = 0.04 * side },
-		}
-		for _, r in rocks do
-			local size = Vector3.new(1.8, r.height, r.depth)
-			local at = cf * CFrame.new(side * 4.3, r.height / 2 - 0.1, r.z) * CFrame.Angles(0, r.yaw, r.roll)
-			block(m, "Rock", at, size, stone(), nil, SOLID)
-		end
+		-- a rough rock block on the flank of the second tier
+		local size = Vector3.new(1.6, 6.6 + side * 0.4, 4.4)
+		local at = cf * CFrame.new(side * 4.45, size.Y / 2 - 0.1, 12.4 + side * 0.6) * CFrame.Angles(0, 0.06 * side, -0.04 * side)
+		block(m, "Rock", at, size, stone(), nil, SOLID)
 	end
-	-- bushes on the grass slope
-	local bushes = { { -2.4, 9.6, 2.4 }, { 2.2, 14.6, 2.0 }, { -1.2, 19.4, 1.8 } }
+	-- bushes on the slopes
+	local bushes = { { 2.6, 5.4, 1.9 }, { -2.2, 12.2, 2.2 }, { 2.0, 20.4, 1.8 } }
 	for i, b in bushes do
 		local s = Vector3.new(b[3], b[3] * 0.7, b[3] * 0.85)
 		block(
 			m,
 			"Bush",
-			cf * CFrame.new(b[1], slopeAt(b[2]) + s.Y / 2 - 0.35, b[2]) * CFrame.Angles(0, 0.5 * i, 0),
+			cf * CFrame.new(b[1], groundAt(b[2]) + s.Y / 2 - 0.35, b[2]) * CFrame.Angles(0, 0.5 * i, 0),
 			s,
 			Geo.vary(C.GrassDark, rng, 0.05),
 			nil,
@@ -800,6 +865,28 @@ local function crate(m: Model, cf: CFrame)
 	block(m, "Tape", cf * CFrame.new(0, size.Y / 2 + 0.03, 0), Vector3.new(0.7, size.Y, size.Z + 0.06), C.Tape, nil, GHOST)
 end
 
+--[[
+	The bucket elevator beside the hopper (station frame: its x, and the
+	casing's z from the track side to the platform), and its world footprint
+	with the orange foot band, which the quarry line's sleepers give way to.
+]]
+local ELEVATOR_HALF, ELEVATOR_BAND = 1.2, 0.15
+local function elevatorAt(): (number, number, number)
+	local cfg = TrainConfig.Station
+	local halfZ = cfg.Platform.Size.Z / 2
+	return cfg.Hopper.X - cfg.Platform.Center.X + 7.4, -halfZ - 2.3, -halfZ - 0.1
+end
+
+local function elevatorRect(): Rect
+	local x, z0, z1 = elevatorAt()
+	local c = TrainConfig.Station.Platform.Center
+	local h = ELEVATOR_HALF + ELEVATOR_BAND
+	return {
+		Min = Vector3.new(c.X + x - h, 0, c.Z + z0 - ELEVATOR_BAND),
+		Max = Vector3.new(c.X + x + h, 0, c.Z + z1 + ELEVATOR_BAND),
+	}
+end
+
 local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	local cfg = TrainConfig.Station
 	local m = model("MineStation", parent)
@@ -938,10 +1025,18 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 	-- so the sign reads from both sides, under no roof), fed by a duct from
 	-- the hopper's band, the head with a round hood, and the loading chute
 	-- angled from the head down to a spout over the wagons at QuarryStop
-	local towerX = hopperAt.X + 7.4
-	local casingZ0, casingZ1 = -half.Z - 2.3, -half.Z - 0.1
+	local towerX, casingZ0, casingZ1 = elevatorAt()
 	local headY = 12.6
-	box(m, "Elevator", S, Vector3.new(towerX - 1.2, 0, casingZ0), Vector3.new(towerX + 1.2, headY, casingZ1), C.Steel, nil, SOLID)
+	box(
+		m,
+		"Elevator",
+		S,
+		Vector3.new(towerX - ELEVATOR_HALF, 0, casingZ0),
+		Vector3.new(towerX + ELEVATOR_HALF, headY, casingZ1),
+		C.Steel,
+		nil,
+		SOLID
+	)
 	local bandY = deck + intakeSize.Y - deck - 1.4 -- the hopper band's top (the tub floor)
 	box(
 		m,
@@ -957,8 +1052,8 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 		m,
 		"ElevatorBand",
 		S,
-		Vector3.new(towerX - 1.35, 0, casingZ0 - 0.15),
-		Vector3.new(towerX + 1.35, 0.9, casingZ1 + 0.15),
+		Vector3.new(towerX - ELEVATOR_HALF - ELEVATOR_BAND, 0, casingZ0 - ELEVATOR_BAND),
+		Vector3.new(towerX + ELEVATOR_HALF + ELEVATOR_BAND, 0.9, casingZ1 + ELEVATOR_BAND),
 		C.Orange,
 		nil,
 		BUMP_SMALL
@@ -1050,15 +1145,20 @@ local function buildStation(parent: Instance, rng: Rng.Rng): Model
 		crate(m, S * CFrame.new(c[1], deck + c[2], c[3]) * CFrame.Angles(0, c[4], 0))
 	end
 
-	-- a short siding that leaves the main line at a shallow angle east of the
-	-- platform and ends in a buffer stop beside the platform's end, well short
-	-- of the east portal (2 hundredths under the main line, so crossing faces
-	-- never fight; its first timbers lie under the main line's)
+	-- a short straight siding that leaves the main line at a shallow angle
+	-- east of the platform and ends in a buffer stop past the platform's end,
+	-- well short of the east portal: the buffer's face just far enough out
+	-- that its beam keeps out of the main line's clearance, the track running
+	-- on under the buffer's struts (SidingDrop under the main line, so the
+	-- crossing rails' and timbers' top faces never fight; its first timbers
+	-- lie under the main line's)
 	local fork = TrainConfig.QuarryStop + Vector3.new(half.X - 4, 0, 0)
-	local bend = fork + Vector3.new(12, 0, 7) -- (7 off the main line: the buffer beam keeps out of its clearance)
-	local stub = bend + Vector3.new(2.3, 0, 0)
-	track(m, "Siding", { fork, bend, stub }, 0, -(0.3 + BUFFER_DEPTH), { Drop = 0.02, SleepersFrom = 4 })
-	bufferStop(m, CFrame.lookAt(stub + Vector3.new(0.3, 0, 0), stub - Vector3.new(1, 0, 0)))
+	local angle = math.rad(26)
+	local out = Vector3.new(math.cos(angle), 0, math.sin(angle)) -- toward the platform side
+	local reach = (Railway.Clearance.HalfWidth + 0.15 + BUFFER_HALF * math.cos(angle)) / math.sin(angle)
+	local face = fork + out * reach
+	track(m, "Siding", { fork, face + out * BUFFER_DEPTH }, 0, 0, { Drop = SIDING_DROP, SleepersFrom = 4 })
+	bufferStop(m, CFrame.lookAt(face, face - out))
 
 	-- attachments for the prompts and the waiting train
 	attach(platform, "PromptPoint", cfg.PromptPoint)
@@ -1074,10 +1174,9 @@ end
 	its bottom on the floor.
 ]]
 local function buildLift(parent: Instance, info: { Id: string, Position: Vector3, Size: Vector3 }): Model
-	-- (named by its LiftId: tests/World.spec.luau lets only a model named
-	-- like the cave stand in the cave's walkable space; find lifts by the
-	-- MineLift tag and LiftId)
-	local m = model(info.Id, parent)
+	-- (find lifts by the MineLift tag and LiftId; tests/World.spec.luau lets a
+	-- lift stand in its own cave's walkable space by the same tag)
+	local m = model("MineLift_" .. info.Id, parent)
 	m:AddTag(Railway.LiftTag)
 	m:SetAttribute("LiftId", info.Id)
 	streaming(m, false)
@@ -1199,7 +1298,19 @@ local function buildLift(parent: Instance, info: { Id: string, Position: Vector3
 		nil,
 		DECOR
 	)
-	sign(m, "Sign", F * CFrame.new(0, headerY - 0.85, -frameHalf - 0.05), Vector3.new(4.6, 1.6, 0.3), "LIFT", true)
+	-- (self-lit text: the caves' tinted ambient would turn it red or olive; a
+	-- warm lamp strip along the header's front edge over it)
+	sign(m, "Sign", F * CFrame.new(0, headerY - 0.85, -frameHalf - 0.05), Vector3.new(4.6, 1.6, 0.3), "LIFT", true, 0)
+	box(
+		m,
+		"SignLamp",
+		F,
+		Vector3.new(-1.9, headerY - 0.02, -frameHalf - 0.48),
+		Vector3.new(1.9, headerY + 0.16, -frameHalf - 0.3),
+		C.Lamp,
+		NEON,
+		GHOST
+	)
 	box(
 		m,
 		"LampBase",
@@ -1238,12 +1349,16 @@ function Railway.platformRects(): { Rect }
 	return rects
 end
 
--- Where the visible part of each line ends: the portal mouths (and the buffer).
+-- Where the visible part of each line ends: the portal mouths (and the
+-- buffer); each quarry end moves in along its own end segment (as
+-- portalMouths), the interior points stay.
 function Railway.visibleLines(): { [string]: { Vector3 } }
-	local q = TrainConfig.QuarryLine
-	local inset = (q[2] - q[1]).Unit * Railway.PortalInset
+	local q = table.clone(TrainConfig.QuarryLine)
+	local n = #q
+	q[1] = q[1] + (q[2] - q[1]).Unit * Railway.PortalInset
+	q[n] = q[n] + (q[n - 1] - q[n]).Unit * Railway.PortalInset
 	return {
-		QuarryLine = { q[1] + inset, q[#q] - inset },
+		QuarryLine = q,
 		CoastWest = table.clone(TrainConfig.CoastWest),
 		CoastEast = table.clone(TrainConfig.CoastEast),
 	}
@@ -1276,10 +1391,11 @@ function Railway.build(map: Instance): Folder
 	root.Name = "Railway"
 	local rng = Rng.new(WorldLayout.Seed * 13 + 7)
 
-	-- the quarry line, its wall portals and the Mine Station
+	-- the quarry line (its sleepers give way to the station's elevator), its
+	-- wall portals and the Mine Station
 	local quarry = TrainConfig.QuarryLine
 	local trim = Railway.PortalInset - MOUTH_D / 2
-	track(root, "QuarryLine", quarry, trim, trim, {})
+	track(root, "QuarryLine", quarry, trim, trim, { Clips = { elevatorRect() } })
 	local portals = Instance.new("Folder")
 	portals.Name = "Portals"
 	portals.Parent = root

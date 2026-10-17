@@ -81,6 +81,11 @@ TrainConfig.BufferZ = -100
 TrainConfig.CoastWest = { Vector3.new(-RAIL_X, 0, 126), Vector3.new(-RAIL_X, 0, -100) }
 TrainConfig.CoastEast = { Vector3.new(RAIL_X, 0, 126), Vector3.new(RAIL_X, 0, -100) }
 
+-- Where the lines' visible parts end (Railway builds them there, the client
+-- hides the trains at the same planes and stops them short of the buffers).
+TrainConfig.PortalInset = 6 -- the quarry tunnel mouths stand this far in front of the quarry line's ends
+TrainConfig.BufferGap = 1.7 -- the coastal buffer stops' face, past the coastal lines' ends
+
 -- Mine Lifts: throw ore in down in the caves, it goes into your train's cargo.
 TrainConfig.Lifts = {
 	{ Id = "EmberCaves", Position = Vector3.new(22, QUARRY_Y, -258), Size = Vector3.new(6, 5, 6) },
