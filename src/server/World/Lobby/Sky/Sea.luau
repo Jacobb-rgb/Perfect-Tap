@@ -24,34 +24,14 @@ local SEA_TOP = -21
 ---------------------------------------------------------------- near sea
 
 --[[
-	The near west sea, deepened: three flat bands just over the sea surface
-	(Land's sea parts) from the island's cliff outward, WaterDeep near the
-	shore fading through the sea color to a see-through outer band, so the
-	near sea reads as deep blue water instead of a flat lavender band of
-	haze. The sun glitter strips lie on top (0.05 higher). 3 parts.
+	The near west sea: only a small far sail on the south horizon now. The
+	three deep-water bands that used to lie here (WaterDeep fading to the sea
+	color, 160 x 560 studs) read as a hard-edged dark rectangle once the
+	horizon's outer sea surrounded the island (lobby_hero, bd_top), so the
+	plain sea shows there again.
 ]]
-Sea.NearSeaBands = {
-	{ From = 0, To = 0.3, Mix = 0, Transparency = 0 },
-	{ From = 0.3, To = 0.72, Mix = 0.45, Transparency = 0.15 },
-	{ From = 0.72, To = 1, Mix = 0.8, Transparency = 0.45 },
-}
 function Sea.nearSea(parent: Instance, piece: Piece, _rng: Rng.Rng): Model
 	local m = Style.model(piece.Id, parent)
-	local x0 = piece.Center.X + piece.Size.X / 2 -- the shore side (east)
-	local width = piece.Size.X
-	for _, band in Sea.NearSeaBands do
-		local a, b = x0 - width * band.From, x0 - width * band.To
-		local part = Kit.box(
-			m,
-			CFrame.new((a + b) / 2, SEA_TOP + 0.1, piece.Center.Z),
-			Vector3.new(0, 0, 0),
-			Vector3.new(a - b, 0.1, piece.Size.Z),
-			C.WaterDeep:Lerp(C.Sea, band.Mix)
-		)
-		part.Transparency = band.Transparency
-		part.Reflectance = 0.05
-		part.Name = "NearSea"
-	end
 	-- (round 2) a small far sail on the south horizon (lobby_south's empty
 	-- sea): a dark hull, a mast and a lit cream sail, 4 parts
 	local boat = CFrame.new(piece.Center.X + piece.Size.X * 0.3, SEA_TOP, piece.Center.Z + piece.Size.Z / 2 - 8)

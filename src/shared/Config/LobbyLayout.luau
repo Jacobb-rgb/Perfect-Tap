@@ -681,7 +681,7 @@ LobbyLayout.Pieces = {
 		Size = v(160, 12, 560), -- (12 tall: a small far sail on its south end)
 		Facing = v(0, 0, 1),
 		Walkable = true,
-		Note = "Decor only: the near west sea deepened toward WaterDeep in soft bands out from the cliff (the sun glitter runs on over it), and a small far sail on the south horizon.",
+		Note = "Decor only: a small far sail on the south horizon (the deep-water bands were removed: they read as a dark rectangle next to the horizon sea).",
 	},
 } :: { Piece }
 
