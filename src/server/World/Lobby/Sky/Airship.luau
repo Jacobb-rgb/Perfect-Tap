@@ -1,18 +1,25 @@
 --[[
 	Sky package: the airship of concept v2 (docs/art/lobby_concept_v2.webp,
-	top right), cruising over the sea right of the east floating island.
+	top right): a long tapered dark-bronze cigar cruising over the mountain's
+	right shoulder, between the peak and the east floating island, pitched a
+	little nose-down like the concept.
 
-	A long rounded copper envelope (a capsule: a fat cylinder with a ball
-	nose, a narrower tail cylinder with a ball end and a brass tail cap),
-	a brass nose tip with a lamp, brass ribs around the belly, a red stripe
-	along the spine, a row of lit portholes on each flank, a small top
-	engine with a glowing exhaust, four tail fins with red/green navigation
-	lamps, a stern propeller with a glowing exhaust, two engine pods on
-	pylons with propellers and glowing exhausts, and a timber gondola under
-	the belly with a row of lit windows on each side and a lit windscreen.
+	The envelope is a long bronze cylinder with a steel nose (four shrinking
+	cylinders and a brass cap with the lamp) and a steel tail (four
+	shrinking cylinders into the stern propeller), so the silhouette tapers
+	at both ends; brass ribs hide the steps at the nose and the tail and band
+	the belly, four thin dark gore strips run along it, two portholes glow on
+	each flank. On top a small engine (a cylinder housing with a brass cap
+	and a glowing exhaust), at the tail four wedge fins with red/green
+	navigation lamps, behind the stern a three-blade propeller and a pink-
+	ember exhaust trail. Two engine pods hang on pylons with three-blade
+	propellers and glowing exhausts, and under the belly a timber gondola
+	with a thin windscreen strip and lit windows.
 
-	Tagged Spin with SpinSpeed 0 (it never turns) and a slow bob; Atomic
-	streaming, PrimaryPart = the main envelope cylinder. <= 70 parts, no
+	Tagged Spin with SpinSpeed 0 (it never turns) and a slow bob. Persistent
+	streaming: it hangs ~400 studs from the plaza, right at the 384-stud
+	StreamingTargetRadius, so an Atomic model would pop in and out as players
+	walk around. PrimaryPart = the main envelope cylinder. <= 70 parts, no
 	lights (neon windows and exhausts glow on their own). Pure builder.
 ]]
 
@@ -32,38 +39,46 @@ local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
 end
 
--- local tones (Style.C has no darker copper)
-local CopperDark = rgb(150, 78, 44)
+-- local tones: dark bronze body, steel nose/tail and pods, dark gores
+local Bronze = rgb(150, 92, 60)
+local Steel = rgb(150, 140, 136)
+local Gore = rgb(52, 38, 34)
 local NavRed = rgb(255, 64, 64)
 local NavGreen = rgb(80, 255, 140)
+local Screen = rgb(255, 170, 90)
+local Trail = rgb(255, 120, 150)
 
 local Airship = {}
 
--- Where it flies: right of the east floating island, seen from the spawn
--- and the hero camera (not a LobbyLayout piece: it hangs outside the lobby
--- area box, x 244 / z -236, so it never touches a footprint).
-Airship.Center = Vector3.new(244, 104, -236)
--- the nose points west: the town sees it three-quarter from the front-left
--- like concept v2 (nose to the left, tail and exhaust to the right)
-Airship.Heading = 268
--- the design below is in "ship units" (envelope ~54 long, 14 wide); Scale
+-- Where it flies: over the mountain's right shoulder, behind its back edge,
+-- between the peak and the east floating island in the hero and spawn shots
+-- (not a LobbyLayout piece: it hangs outside the lobby area box).
+Airship.Center = Vector3.new(139, 147, -371)
+-- the nose points west-south-west: the town sees it three-quarter from the
+-- front-left like concept v2 (nose to the left, tail and exhaust to the right)
+Airship.Heading = 252
+-- nose down (degrees), like the concept
+Airship.Pitch = 7
+-- the design below is in "ship units" (envelope ~66 long, 14 wide); Scale
 -- turns them into studs
 Airship.Scale = 1.25
 Airship.MaxParts = 70
 
 -- envelope (ship units, the nose toward -Z)
 local BODY_D = 14 -- main cylinder diameter
-local BODY_LEN = 30 -- main cylinder length (z -15 .. 15)
-local TAIL_D = 11 -- tail cylinder diameter
-local TAIL_LEN = 8 -- tail cylinder length (z 15 .. 23)
+local BODY_LEN = 40 -- main cylinder length (z -20 .. 20)
+-- nose and tail tapers: { diameter, center z, length } (each overlaps the
+-- last; small steps read as one smooth taper at a distance)
+local NOSE = { { 12.6, -21.8, 4.4 }, { 10.8, -24.8, 3.6 }, { 8.6, -27.4, 3.2 }, { 6, -29.6, 2.8 } }
+local TAIL = { { 12.4, 22, 5 }, { 10.2, 25.4, 4 }, { 7.6, 28.4, 3.6 }, { 4.8, 31, 3.2 } }
 
 function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	local m = Style.model("Airship", parent)
 	local S = Airship.Scale
 	local a = math.rad(Airship.Heading)
 	local forward = Vector3.new(math.sin(a), 0, -math.cos(a))
-	-- frame: envelope center, LookVector = the nose
-	local frame = CFrame.lookAt(Airship.Center, Airship.Center + forward)
+	-- frame: envelope center, LookVector = the nose, pitched nose-down
+	local frame = CFrame.lookAt(Airship.Center, Airship.Center + forward) * CFrame.Angles(math.rad(-Airship.Pitch), 0, 0)
 
 	-- ship units -> studs
 	local function at(x: number, y: number, z: number): CFrame
@@ -72,122 +87,134 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	local function size(x: number, y: number, z: number): Vector3
 		return Vector3.new(x * S, y * S, z * S)
 	end
-	local function box(cf: CFrame, s: Vector3, color: Color3): Part
-		return Style.block(m, cf, s, color, nil, Kit.far())
+	local function box(cf: CFrame, s: Vector3, color: Color3, material: Enum.Material?): Part
+		return Style.block(m, cf, s, color, material, Kit.far())
 	end
 	local function glow(cf: CFrame, s: Vector3, color: Color3, transparency: number?): Part
 		return Kit.glow(m, cf, s, color, transparency)
 	end
 	-- a cylinder along the ship's axis (Roblox cylinders run along X)
-	local function drum(z: number, diameter: number, length: number, color: Color3): Part
+	local function drum(cf: CFrame, diameter: number, length: number, color: Color3, material: Enum.Material?): Part
 		return Style.block(
 			m,
-			at(0, 0, z) * CFrame.Angles(0, math.pi / 2, 0),
+			cf * CFrame.Angles(0, math.pi / 2, 0),
 			size(length, diameter, diameter),
 			color,
-			nil,
+			material,
 			Kit.far({ Shape = CYLINDER })
 		)
 	end
-	local function ball(z: number, diameter: number, color: Color3): Part
-		return Style.block(m, at(0, 0, z), size(diameter, diameter, diameter), color, nil, Kit.far({ Shape = BALL }))
-	end
-	-- a propeller: hub + two crossed blades, facing along the ship's axis
+	-- a three-blade propeller facing along the ship's axis; `span` = tip to tip
 	local function propeller(cf: CFrame, span: number)
-		box(cf, size(0.9, 0.9, 0.8), C.Iron)
-		local twist = rng:range(0, math.pi / 2)
-		for k = 0, 1 do
-			box(cf * CFrame.Angles(0, 0, twist + k * math.pi / 2), size(0.45, span, 0.25), C.WoodLight)
+		box(cf, size(1.1, 1.1, 0.9), C.Iron)
+		local twist = rng:range(0, math.pi * 2 / 3)
+		for k = 0, 2 do
+			local spin = cf * CFrame.Angles(0, 0, twist + k * math.pi * 2 / 3)
+			box(spin * CFrame.new(0, span / 4 * S, 0) * CFrame.Angles(0, math.rad(18), 0), size(0.7, span / 2, 0.2), C.WoodLight)
 		end
 	end
 
-	-- the envelope: a capsule that narrows into the tail
-	local copper = Style.vary(C.Copper, rng, 0.03)
-	local body = drum(0, BODY_D, BODY_LEN, copper)
+	-- the envelope: bronze body, steel nose and tail tapers, a brass nose cap
+	local bronze = Style.vary(Bronze, rng, 0.03)
+	local body = drum(at(0, 0, 0), BODY_D, BODY_LEN, bronze)
 	body.Name = "Envelope"
-	ball(-BODY_LEN / 2, BODY_D, copper)
-	local tailZ0 = BODY_LEN / 2
-	local tailEnd = tailZ0 + TAIL_LEN
-	drum(tailZ0 + TAIL_LEN / 2, TAIL_D, TAIL_LEN, Style.vary(CopperDark, rng, 0.03))
-	ball(tailEnd, TAIL_D, Style.vary(CopperDark, rng, 0.03))
-	drum(tailEnd + TAIL_D / 2 - 0.4, 4, 2.4, C.Brass)
-	-- brass nose tip with the lamp
-	local noseZ = -BODY_LEN / 2 - BODY_D / 2
-	ball(noseZ + 1.2, 4.6, C.Brass)
-	glow(at(0, 0, noseZ - 1.15), size(1.6, 1.6, 0.6), C.Lamp)
-
-	-- brass ribs around the belly and over the step into the tail
-	for _, rz in { -9, 0, 9 } do
-		drum(rz, BODY_D + 0.5, 0.8, C.Brass)
+	for _, t in NOSE do
+		drum(at(0, 0, t[2]), t[1], t[3], Steel)
 	end
-	drum(tailZ0, TAIL_D + 0.6, 1, C.Brass)
-	-- red stripe along the spine
-	box(at(0, BODY_D / 2, 0), size(1.6, 0.4, BODY_LEN), C.AwningRed)
-	-- lit portholes along both flanks
-	local portY = 1.6
+	for _, t in TAIL do
+		drum(at(0, 0, t[2]), t[1], t[3], Steel)
+	end
+	local tip = NOSE[4][2] - NOSE[4][3] / 2
+	Style.block(m, at(0, 0, tip + 0.6), size(4.6, 4.6, 4.6), C.Brass, nil, Kit.far({ Shape = BALL }))
+	glow(at(0, 0, tip - 1.4), size(1.8, 1.8, 0.6), C.Lamp)
+
+	-- brass ribs: over the nose and tail steps (no visible seam) and around the belly
+	drum(at(0, 0, -BODY_LEN / 2 + 0.4), BODY_D + 0.6, 1.2, C.Brass)
+	drum(at(0, 0, BODY_LEN / 2 - 0.4), BODY_D + 0.6, 1.2, C.Brass)
+	for _, rz in { -7, 7 } do
+		drum(at(0, 0, rz), BODY_D + 0.5, 0.8, C.Brass)
+	end
+	-- four thin dark gore strips along the envelope
+	for k = 0, 3 do
+		local angle = math.rad(45 + k * 90)
+		local r = BODY_D / 2 + 0.1
+		-- local X points outward: 0.5 thick (0.35 above the skin), 0.9 wide
+		box(at(math.cos(angle) * r, math.sin(angle) * r, 0) * CFrame.Angles(0, 0, angle), size(0.5, 0.9, BODY_LEN - 2), Gore)
+	end
+	-- lit portholes on both flanks
+	local portY = 1.4
 	local portX = math.sqrt((BODY_D / 2) ^ 2 - portY ^ 2) + 0.05
 	for _, side in { -1, 1 } do
-		for k = -1, 1 do
-			glow(at(side * portX, portY, k * 6 - 2), size(0.3, 1, 1), C.Lamp)
+		for _, pz in { -12, -2 } do
+			glow(at(side * portX, portY, pz), size(0.3, 1.1, 1.1), C.Lamp)
 		end
 	end
-	-- small top engine with a glowing exhaust (concept v2)
-	box(at(0, BODY_D / 2 + 0.9, 6), size(2.4, 1.8, 5), C.IronLight)
-	glow(at(0, BODY_D / 2 + 0.9, 8.9), size(1.6, 1.2, 0.8), C.Fire, 0.1)
 
-	-- tail fins (top, bottom, sides) on the tail cylinder (a wedge's tall
-	-- face is its +Z side: the slope faces forward and up, which sweeps the
-	-- top fin's leading edge back)
-	local finZ = tailZ0 + TAIL_LEN / 2 + 1
-	local finR = TAIL_D / 2
-	box(at(0, finR + 2.8, finZ), size(0.6, 6, 7), C.AwningRed)
-	Geo.wedge(m, at(0, finR + 2.8, finZ - 5), size(0.6, 6, 3), C.AwningRed, nil, Kit.far())
-	box(at(0, -finR - 2.2, finZ + 0.5), size(0.6, 5, 6), C.RoofTrim)
+	-- small top engine: a cylinder housing with a brass cap and a glowing exhaust
+	local topY = BODY_D / 2 + 1.2
+	drum(at(0, topY, 9), 3.4, 7, Steel)
+	drum(at(0, topY, 5.2), 2.6, 0.8, C.Brass)
+	glow(at(0, topY, 12.9), size(2, 2, 0.8), C.Fire, 0.1)
+
+	-- wedge fins on the tail: the slope faces forward (a wedge's tall face is
+	-- its +Z side), so every fin's leading edge sweeps back
+	local finZ = 25
+	local finR = 5
+	Geo.wedge(m, at(0, finR + 3, finZ), size(0.8, 6, 8), C.AwningRed, nil, Kit.far())
+	Geo.wedge(m, at(0, -finR - 2.5, finZ) * CFrame.Angles(0, 0, math.pi), size(0.8, 5, 7), C.RoofTrim, nil, Kit.far())
 	for _, side in { -1, 1 } do
-		box(at(side * (finR + 2.8), 0, finZ), size(6, 0.6, 7), C.AwningRed)
+		Geo.wedge(
+			m,
+			at(side * (finR + 3), 0, finZ) * CFrame.Angles(0, 0, -side * math.pi / 2),
+			size(0.8, 6, 8),
+			C.AwningRed,
+			nil,
+			Kit.far()
+		)
 		-- navigation lamps on the fin tips (red to port, green to starboard)
-		glow(at(side * (finR + 6.1), 0, finZ + 1), size(0.7, 0.7, 0.7), if side < 0 then NavRed else NavGreen)
+		glow(at(side * (finR + 6.2), 0, finZ + 3.2), size(0.8, 0.8, 0.8), if side < 0 then NavRed else NavGreen)
 	end
 
-	-- stern propeller and the glowing exhaust behind it
-	local sternZ = tailEnd + TAIL_D / 2 + 0.8
-	propeller(at(0, 0, sternZ + 0.6), 6.5)
-	glow(at(0, 0, sternZ + 2.4), size(1.4, 1.4, 2.4), C.Ember, 0.15)
+	-- stern propeller and the exhaust trail behind it (pink-ember, fading)
+	local sternZ = TAIL[4][2] + TAIL[4][3] / 2 + 0.6
+	propeller(at(0, 0, sternZ), 9)
+	glow(at(0, 0, sternZ + 3.4), size(1.6, 1.6, 4), C.Ember, 0.2)
+	glow(at(0, 0.3, sternZ + 9), size(1.2, 1.2, 8), Trail, 0.55)
 
 	-- engine pods on pylons, low on both flanks
 	for _, side in { -1, 1 } do
-		local podX = side * (BODY_D / 2 + 3.2)
-		local podY = -3.2
-		local podZ = 3
-		box(at(side * (BODY_D / 2 + 0.9), -2.2, podZ), size(3.6, 0.6, 2.4), C.Iron)
-		box(at(podX, podY, podZ), size(2.8, 2.8, 7), C.IronLight)
-		box(at(podX, podY, podZ - 3.9), size(2, 2, 0.8), C.Brass)
-		propeller(at(podX, podY, podZ - 4.7), 5)
-		glow(at(podX, podY, podZ + 3.9), size(1.6, 1.6, 0.8), C.Fire, 0.1)
+		local podX = side * (BODY_D / 2 + 3.6)
+		local podY = -3.4
+		local podZ = 2
+		box(at(side * (BODY_D / 2 + 1.1), -2.6, podZ), size(4.2, 0.7, 2.6), C.Iron)
+		drum(at(podX, podY, podZ), 3.4, 8, Steel)
+		drum(at(podX, podY, podZ - 4.2), 2.6, 0.8, C.Brass)
+		propeller(at(podX, podY, podZ - 5), 9)
+		glow(at(podX, podY, podZ + 4.4), size(1.8, 1.8, 0.8), C.Fire, 0.1)
 	end
 
 	-- gondola under the belly: timber cabin, brass roof trim, iron keel,
-	-- slanted windscreen, a row of lit windows on each side
-	local gy = -BODY_D / 2 - 2.6
-	local gz = -3
-	local cabin = box(at(0, gy, gz), size(5, 3.6, 15), Style.vary(C.WoodDark, rng, 0.03))
+	-- slanted nose with a thin windscreen strip, a row of lit windows a side
+	local gy = -BODY_D / 2 - 2.4
+	local gz = -2
+	local cabin = box(at(0, gy, gz), size(5, 3.6, 16), Style.vary(C.WoodDark, rng, 0.03))
 	cabin.Name = "Gondola"
-	box(at(0, gy + 2, gz), size(5.4, 0.5, 15.4), C.Brass)
-	box(at(0, gy - 2.1, gz + 0.5), size(3.6, 0.7, 13), C.Iron)
+	box(at(0, gy + 2, gz), size(5.4, 0.5, 16.4), C.Brass)
+	box(at(0, gy - 2.1, gz + 0.5), size(3.6, 0.7, 14), C.Iron)
 	-- slanted nose: the wedge's slope faces forward and up
-	Geo.wedge(m, at(0, gy, gz - 9), size(5, 3.6, 3), Style.vary(C.WoodDark, rng, 0.03), nil, Kit.far())
-	-- windscreen glow lying on that slope (upper part)
+	Geo.wedge(m, at(0, gy, gz - 9.5), size(5, 3.6, 3), Style.vary(C.WoodDark, rng, 0.03), nil, Kit.far())
+	-- a thin windscreen strip lying on that slope
 	local tilt = -math.atan2(3.6, 3)
-	glow(at(0, gy, gz - 9) * CFrame.Angles(tilt, 0, 0) * CFrame.new(0, 0.12 * S, 0.7 * S), size(3.8, 0.2, 2.4), C.Lamp)
-	box(at(0, gy - 0.2, gz + 8.4), size(4, 3, 1.8), C.Wood)
+	glow(at(0, gy, gz - 9.5) * CFrame.Angles(tilt, 0, 0) * CFrame.new(0, 0.12 * S, 0.5 * S), size(4, 0.2, 0.9), Screen, 0.35)
+	box(at(0, gy - 0.2, gz + 8.9), size(4, 3, 1.8), C.Wood)
 	for _, side in { -1, 1 } do
-		for k = 0, 3 do
-			glow(at(side * 2.55, gy + 0.3, gz - 5.4 + k * 3.6), size(0.2, 1.3, 2.2), C.Lamp)
+		for k = 0, 2 do
+			glow(at(side * 2.55, gy + 0.3, gz - 5 + k * 4.6), size(0.2, 1.3, 2.4), C.Lamp)
 		end
 	end
 	-- struts from the cabin roof up into the envelope
-	for _, sz in { -6, 3 } do
-		box(at(0, gy + 3.5, gz + sz), size(0.6, 2.4, 0.6), C.Iron)
+	for _, sz in { -6, 4 } do
+		box(at(0, gy + 3.4, gz + sz), size(0.6, 2.4, 0.6), C.Iron)
 	end
 
 	m.PrimaryPart = body
@@ -195,7 +222,7 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	m:SetAttribute("SpinSpeed", 0)
 	m:SetAttribute("BobHeight", 3)
 	m:SetAttribute("BobSpeed", 0.35)
-	Style.streaming(m, "Atomic")
+	Style.streaming(m, "Persistent")
 	return m
 end
 

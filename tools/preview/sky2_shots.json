@@ -1,8 +1,8 @@
 {
   "sky2_wide": {"scene": "world", "position": [0, 24, 70], "target": [0, 190, -700], "fov": 74, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 220, "maxLights": 24},
-  "sky2_violet": {"scene": "world", "position": [0, 40, 30], "target": [-838.8, 264.5, -1243.5], "fov": 34, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
-  "sky2_teal": {"scene": "world", "position": [0, 40, 30], "target": [681.0, 332.5, -1336.5], "fov": 20, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
-  "sky2_ember": {"scene": "world", "position": [0, 40, 30], "target": [-215.7, 533.7, -1534.9], "fov": 12, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
-  "sky2_airship": {"scene": "world", "position": [194, 114, -190], "target": [244, 103, -236], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
-  "sky2_airship_low": {"scene": "world", "position": [150, 60, -150], "target": [244, 104, -236], "fov": 40, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8}
+  "sky2_violet": {"scene": "world", "position": [0, 40, 30], "target": [860.4, 224.2, -1228.7], "fov": 22, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
+  "sky2_teal": {"scene": "world", "position": [0, 40, 30], "target": [-574.0, 318.8, -1385.8], "fov": 9, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
+  "sky2_ember": {"scene": "world", "position": [0, 40, 30], "target": [-913.1, 251.0, -1190.0], "fov": 12, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
+  "sky2_airship": {"scene": "world", "position": [95, 152, -250], "target": [139, 147, -371], "fov": 42, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
+  "sky2_airship_low": {"scene": "world", "position": [30, 96, -212], "target": [139, 147, -371], "fov": 30, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8}
 }

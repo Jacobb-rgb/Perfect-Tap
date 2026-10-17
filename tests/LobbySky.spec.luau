@@ -185,7 +185,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("sky: balloon and ships are tagged Spin and stream as one piece", function()
+	T.test("sky: balloon, ships and airship are tagged Spin and stream as one piece", function()
 		local root = build()
 		local expected = {
 			Balloon = { SpinSpeed = 0.05, BobHeight = 2, BobSpeed = 0.5 },
@@ -193,11 +193,19 @@ return function(T, Loader)
 			ShipB = { SpinSpeed = 0, BobHeight = 0.5, BobSpeed = 0.8 },
 			Airship = { SpinSpeed = 0, BobHeight = 3, BobSpeed = 0.35 },
 		}
+		-- the airship hangs ~400 studs out, at the 384-stud StreamingTargetRadius:
+		-- Persistent, so it never pops in and out (still one piece)
+		local mode = {
+			Balloon = roblox.Enum.ModelStreamingMode.Atomic,
+			ShipA = roblox.Enum.ModelStreamingMode.Atomic,
+			ShipB = roblox.Enum.ModelStreamingMode.Atomic,
+			Airship = roblox.Enum.ModelStreamingMode.Persistent,
+		}
 		for id, attrs in expected do
 			local m = root:FindFirstChild(id)
 			T.truthy(table.find(m:GetTags(), "Spin"), id .. " is tagged Spin")
 			T.truthy(m.PrimaryPart and m.PrimaryPart:IsDescendantOf(m), id .. " has a PrimaryPart")
-			T.eq(m.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, id .. " streams atomically")
+			T.eq(m.ModelStreamingMode, mode[id], id .. " streaming mode")
 			for name, value in attrs do
 				T.near(m:GetAttribute(name), value, 1e-6, `{id} {name}`)
 			end
@@ -216,38 +224,148 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("sky: clouds are puffy stacked clusters with lit undersides", function()
+	local function luminance(c: any): number
+		return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B
+	end
+
+	T.test("sky: clouds are rounded mounds with lit tops and a faint lit underside", function()
 		local root = build()
 		local clusters = 0
 		for _, cloud in root.CloudBanks:GetChildren() do
 			if cloud:IsA("Model") then
 				clusters += 1
+				local name = cloud:GetFullName()
 				local list = parts(cloud)
-				T.truthy(#list >= 12, cloud:GetFullName() .. " is a stacked cluster, not a slab")
+				T.truthy(#list >= 16, name .. " is a stacked cluster, not a slab")
+				-- the cluster frame: every block shares its yaw
+				local frame = list[1].CFrame - list[1].CFrame.Position
 				local minY, maxY = math.huge, -math.huge
-				local minX, maxX = math.huge, -math.huge
-				local lowestGlow = math.huge
+				local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+				local sheets, solids = {}, {}
 				for _, part in list do
 					local p = part.CFrame.Position
 					local half = part.Size.Y / 2
-					minY = math.min(minY, p.Y - half)
-					maxY = math.max(maxY, p.Y + half)
-					minX = math.min(minX, p.X)
-					maxX = math.max(maxX, p.X)
 					if part.Material == roblox.Enum.Material.Neon and part.Size.Y < 0.5 then
-						lowestGlow = math.min(lowestGlow, p.Y)
+						table.insert(sheets, part)
+					else
+						table.insert(solids, part)
+						minY = math.min(minY, p.Y - half)
+						maxY = math.max(maxY, p.Y + half)
+						local l = frame:PointToObjectSpace(p)
+						minX, maxX = math.min(minX, l.X - part.Size.X / 2), math.max(maxX, l.X + part.Size.X / 2)
+						minZ, maxZ = math.min(minZ, l.Z - part.Size.Z / 2), math.max(maxZ, l.Z + part.Size.Z / 2)
 					end
 				end
-				-- a heap, not a slab: the cluster is at least a third as tall as wide
-				-- (measured along the world X spread of its part centers)
-				local width = math.max(1, maxX - minX)
-				T.truthy((maxY - minY) / width > 0.3 or (maxY - minY) > 40, cloud:GetFullName() .. " is puffy")
-				-- a glowing sheet under the belly lights the underside
-				T.truthy(lowestGlow < minY + (maxY - minY) * 0.25, cloud:GetFullName() .. " has a lit underside")
+				local height, width, depth = maxY - minY, maxX - minX, maxZ - minZ
+				-- a mound, not a slab: tall and deep for its width
+				T.truthy(height > 0.45 * width, `{name} is puffy ({height} tall, {width} wide)`)
+				T.truthy(depth > 0.6 * width, `{name} has a deep footprint ({depth} deep, {width} wide)`)
+				-- a stepped, lumpy underside: the low blocks sit at several heights
+				local bottoms: { [number]: boolean } = {}
+				local steps = 0
+				for _, part in solids do
+					local bottom = part.CFrame.Position.Y - part.Size.Y / 2
+					local key = math.floor(bottom + 0.5)
+					if bottom < minY + height * 0.2 and not bottoms[key] then
+						bottoms[key] = true
+						steps += 1
+					end
+				end
+				T.truthy(steps >= 3, `{name} has a stepped underside ({steps} levels)`)
+				-- the top is the lightest tone (lit by the sky), never the purple shade
+				local topPart = solids[1]
+				for _, part in solids do
+					if part.CFrame.Position.Y + part.Size.Y / 2 > topPart.CFrame.Position.Y + topPart.Size.Y / 2 then
+						topPart = part
+					end
+				end
+				T.truthy(luminance(topPart.Color) > 0.7, `{name} has a lit top ({tostring(topPart.Color)})`)
+				-- a faint warm glow under it, a clear stud below the lowest block (no shared face)
+				T.truthy(#sheets >= 1, name .. " has a lit underside")
+				for _, sheet in sheets do
+					T.truthy(sheet.Transparency >= 0.7, name .. " underside glow is faint")
+					local top = sheet.CFrame.Position.Y + sheet.Size.Y / 2
+					T.truthy(top < minY + height * 0.25, name .. " glow sits under the cloud")
+					T.truthy(minY - top >= 1, `{name} glow is {minY - top} studs under the lowest block`)
+				end
 			end
 		end
 		T.truthy(clusters >= 12, "a dozen or more cloud clusters")
 	end)
+
+	-- Preview cameras (tools/preview/lobby_shots.json, rendered 1600 x 900).
+	local shots = serde.decode("json", fs.readFile(process.cwd .. "/tools/preview/lobby_shots.json"))
+	local ASPECT = 1600 / 900
+	local function camera(name: string): (any, number)
+		local s = shots[name]
+		local position = Vector3.new(s.position[1], s.position[2], s.position[3])
+		local target = Vector3.new(s.target[1], s.target[2], s.target[3])
+		-- Loader.CFrame: the shim with the Roblox lookAt (Lune 0.8.9 negates its Z)
+		return Loader.CFrame.lookAt(position, target), math.tan(math.rad(s.fov / 2))
+	end
+	-- normalized screen position (-1..1 inside the frame), or nil behind the camera
+	local function project(cf: any, tanY: number, p: any): (number?, number?)
+		local l = cf:PointToObjectSpace(p)
+		if l.Z >= -0.1 then
+			return nil, nil
+		end
+		return l.X / -l.Z / (tanY * ASPECT), l.Y / -l.Z / tanY
+	end
+	-- fraction of a sphere's disc (as seen from `cf`) inside the frame
+	local function inFrame(cf: any, tanY: number, center: any, radius: number): number
+		local view = (center - cf.Position).Unit
+		local e1 = view:Cross(Vector3.new(0, 1, 0)).Unit
+		local e2 = e1:Cross(view).Unit
+		local inside, total = 0, 0
+		for i = -10, 10 do
+			for j = -10, 10 do
+				local u, v = i / 10, j / 10
+				if u * u + v * v <= 1 then
+					total += 1
+					local x, y = project(cf, tanY, center + (e1 * u + e2 * v) * radius)
+					if x and y and math.abs(x) <= 1 and math.abs(y) <= 1 then
+						inside += 1
+					end
+				end
+			end
+		end
+		return inside / total
+	end
+
+	-- A crease between two intersecting balls (offsets from the planet center)
+	-- is visible if part of their intersection circle faces the town and is
+	-- not buried inside a third ball.
+	local function creaseVisible(balls: { any }, i: number, j: number, toTown: any): boolean
+		local a, b = balls[i], balls[j]
+		local dvec = b.Offset - a.Offset
+		local dist = dvec.Magnitude
+		local u = dvec.Unit
+		local x = (dist * dist + a.Radius * a.Radius - b.Radius * b.Radius) / (2 * dist)
+		local h = math.sqrt(math.max(0, a.Radius * a.Radius - x * x))
+		local e1 = u:Cross(Vector3.new(0, 1, 0))
+		if e1.Magnitude < 1e-3 then
+			e1 = u:Cross(Vector3.new(1, 0, 0))
+		end
+		e1 = e1.Unit
+		local e2 = u:Cross(e1).Unit
+		for k = 0, 23 do
+			local t = k / 24 * 2 * math.pi
+			local q = a.Offset + u * x + (e1 * math.cos(t) + e2 * math.sin(t)) * h
+			if q:Dot(toTown) > 0 then
+				local buried = false
+				for n, c in balls do
+					if n ~= i and n ~= j and (q - c.Offset).Magnitude < c.Radius - 0.5 then
+						buried = true
+						break
+					end
+				end
+				if not buried then
+					return true
+				end
+			end
+		end
+		return false
+	end
 
 	T.test("sky: three big Kenney-style planets frame the mountain", function()
 		local root = build()
@@ -262,28 +380,77 @@ return function(T, Loader)
 			T.truthy(m and m:IsA("Model"), "planet " .. spec.Name)
 			local list = parts(m)
 			T.le(#list, Planets.MaxParts, spec.Name .. " parts")
-			T.eq(m.LevelOfDetail, roblox.Enum.ModelLevelOfDetail.StreamingMesh, spec.Name .. " streams as a Lod mesh")
+			-- 1500 studs out is far past the 384-stud StreamingTargetRadius: Lod
+			-- would only ever show the imposter mesh, so the planets stay streamed in
+			T.eq(m.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Persistent, spec.Name .. " is always streamed")
 			local body = m:FindFirstChild("Body")
 			T.truthy(body and body.Shape == roblox.Enum.PartType.Ball, spec.Name .. " has a Ball body")
-			T.truthy(
-				m:FindFirstChild("Rim") and m.Rim.Material == roblox.Enum.Material.Neon and m.Rim.Transparency > 0.5,
-				spec.Name .. " glowing rim"
-			)
+			local radius = body.Size.X / 2
 			local center = body.CFrame.Position
+			local toTown = (Planets.Town - center).Unit
+			-- the glowing rim is set back: its front stays inside the body (it never veils the face)
+			local rim = m:FindFirstChild("Rim")
+			T.truthy(rim and rim.Material == roblox.Enum.Material.Neon and rim.Transparency > 0.5, spec.Name .. " glowing rim")
+			local rimFront = rim.CFrame.Position + toTown * rim.Size.X / 2
+			T.truthy((rimFront - center).Magnitude < radius, spec.Name .. " rim stays behind the face")
 			-- far away, high, from the north-west to the north-east, big on screen
 			local flat = Vector3.new(center.X, 0, center.Z)
 			T.truthy(flat.Magnitude >= 1500 and flat.Magnitude <= 3000, `{spec.Name} hangs 1500-3000 studs out ({flat.Magnitude})`)
 			local bearing = math.deg(math.atan2(center.X, -center.Z)) % 360
 			T.truthy(bearing >= 300 or bearing <= 60, `{spec.Name} is in the north-west..north-east sky ({bearing})`)
-			T.truthy(center.Y > body.Size.X / 2 * 0.5, spec.Name .. " is high in the sky")
-			local angular = math.deg(2 * math.atan(body.Size.X / 2 / center.Magnitude))
+			T.truthy(center.Y > radius * 0.5, spec.Name .. " is high in the sky")
+			local angular = math.deg(2 * math.atan(radius / center.Magnitude))
 			T.truthy(angular >= 6, `{spec.Name} is big on screen ({angular} degrees)`)
 			-- never in front of the sun: the whole planet (ring included) keeps clear of it
-			local reach = math.deg(math.atan(body.Size.X * (if spec.Rings then 1.0 else 0.55) / center.Magnitude))
+			local reach = math.deg(math.atan(radius * (if spec.Ring then spec.Ring.Outer else 1.1) / center.Magnitude))
 			local apart = math.deg(math.acos(math.clamp(center.Unit:Dot(sun), -1, 1)))
 			T.truthy(apart > reach + 15, `{spec.Name} keeps clear of the sun ({apart} vs {reach})`)
+			-- at least 75% of it inside the hero frame
+			local heroCf, heroTan = camera("lobby_hero")
+			local frac = inFrame(heroCf, heroTan, center, radius)
+			T.truthy(frac >= 0.75, `{spec.Name} is {math.floor(frac * 100)}% inside the lobby_hero frame`)
+			-- from the spawn camera its middle is clear of the massif (at most an
+			-- edge tucks behind the mountain's shoulder)
+			local spawnCf = camera("lobby_spawn")
+			local mountain = LobbyLayout.get("ForgeMountain")
+			local lo, hi = math.huge, -math.huge
+			for _, sx in { -1, 1 } do
+				for _, sz in { -1, 1 } do
+					local c = mountain.Center + Vector3.new(sx * mountain.Size.X / 2, 0, sz * mountain.Size.Z / 2)
+					local l = spawnCf:PointToObjectSpace(c)
+					local b = math.deg(math.atan2(l.X, -l.Z))
+					lo, hi = math.min(lo, b), math.max(hi, b)
+				end
+			end
+			local lc = spawnCf:PointToObjectSpace(center)
+			local b = math.deg(math.atan2(lc.X, -lc.Z))
+			T.truthy(b < lo or b > hi, `{spec.Name} is not behind the massif from the spawn ({b} vs {lo}..{hi})`)
+			-- every cap is much smaller than the body and pokes out steeply: no two
+			-- differently colored surfaces ever meet at a grazing angle (z-fighting)
+			local balls = Planets.balls(spec)
+			for i, a in balls do
+				if i > 1 then
+					T.le(a.Radius, radius * Planets.MaxPatchRadius + 1e-6, `{spec.Name} {a.Name} radius`)
+				end
+				for j = i + 1, #balls do
+					local o = balls[j]
+					local dist = (o.Offset - a.Offset).Magnitude
+					if a.Color ~= o.Color and dist < a.Radius + o.Radius and dist > math.abs(a.Radius - o.Radius) then
+						if creaseVisible(balls, i, j, toTown) then
+							local angle = Planets.crease(a.Radius, o.Radius, dist)
+							T.truthy(angle >= Planets.MinCrease, `{spec.Name} {a.Name}/{o.Name} crease {angle} degrees`)
+						end
+					end
+				end
+			end
+			-- the built balls are the balls of the spec
+			for _, ball in balls do
+				local part = m:FindFirstChild(ball.Name)
+				T.truthy(part and (part.CFrame.Position - (center + ball.Offset)).Magnitude < 0.01, `{spec.Name} {ball.Name} built`)
+			end
 			-- two/three-tone blotches: at least two colors besides the body
 			local colors: { [string]: boolean } = {}
+			local ringColors: { [string]: boolean } = {}
 			local rings = 0
 			for _, part in list do
 				T.falsy(part.CanCollide, part:GetFullName() .. " never collides")
@@ -293,8 +460,9 @@ return function(T, Loader)
 				T.falsy(LobbyLayout.inArea(part.CFrame.Position), part:GetFullName() .. " is far outside the lobby")
 				if part.Name:sub(1, 5) == "Patch" then
 					colors[tostring(part.Color)] = true
-				elseif part.Name:sub(1, 4) == "Ring" then
+				elseif part.Name == "Ring" then
 					rings += 1
+					ringColors[tostring(part.Color)] = true
 				end
 			end
 			local tones = 0
@@ -304,13 +472,63 @@ return function(T, Loader)
 				end
 			end
 			T.truthy(tones >= 2, spec.Name .. " has two or more blotch colors")
-			if spec.Rings then
+			if spec.Ring then
 				ringed += 1
-				T.truthy(rings >= 16, spec.Name .. " has a ring of flat segments")
+				T.truthy(rings >= 16, spec.Name .. " has a ring of 16+ flat segments")
+				local ringTones = 0
+				for _ in ringColors do
+					ringTones += 1
+				end
+				-- overlapping coplanar segments must share one color (no z-fight flicker)
+				T.eq(ringTones, 1, spec.Name .. " ring is one color")
+				T.truthy(spec.Lean >= 24 and spec.Lean <= 30, spec.Name .. " ring is open (Lean 24-30)")
 			end
 		end
 		T.truthy(count >= 2 and count <= 3, "two or three planets")
 		T.eq(ringed, 1, "one ringed gas giant")
+	end)
+
+	T.test("sky: clouds and the airship keep clear of the planets in the hero and spawn shots", function()
+		local root = build()
+		for _, shot in { "lobby_hero", "lobby_spawn" } do
+			local cf, tanY = camera(shot)
+			-- the planets' discs (with the rim) on screen
+			local discs = {}
+			for _, spec in Planets.Specs do
+				local body = root.Planets[spec.Name].Body
+				local center = body.CFrame.Position
+				local x, y = project(cf, tanY, center)
+				local edge = center + cf.UpVector * body.Size.X / 2 * Planets.RimScale
+				local _, ey = project(cf, tanY, edge)
+				if x and y and ey then
+					table.insert(discs, { Name = spec.Name, X = x * ASPECT, Y = y, R = math.abs(ey - y) })
+				end
+			end
+			local function box(m: any): (number, number, number, number)
+				local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+				for _, part in parts(m) do
+					for _, p in corners(part) do
+						local x, y = project(cf, tanY, p)
+						if x and y then
+							x0, y0, x1, y1 = math.min(x0, x * ASPECT), math.min(y0, y), math.max(x1, x * ASPECT), math.max(y1, y)
+						end
+					end
+				end
+				return x0, y0, x1, y1
+			end
+			local things = { root.Airship }
+			for _, cloud in root.CloudBanks:GetChildren() do
+				table.insert(things, cloud)
+			end
+			for _, m in things do
+				local x0, y0, x1, y1 = box(m)
+				for _, d in if x0 <= x1 then discs else {} do
+					local nx, ny = math.clamp(d.X, x0, x1), math.clamp(d.Y, y0, y1)
+					local hit = math.sqrt((nx - d.X) ^ 2 + (ny - d.Y) ^ 2) < d.R
+					T.falsy(hit, `{shot}: {m:GetFullName()} covers {d.Name}`)
+				end
+			end
+		end
 	end)
 
 	T.test("sky: the airship of concept v2", function()
@@ -321,6 +539,18 @@ return function(T, Loader)
 		T.le(#list, Airship.MaxParts, "airship parts")
 		T.eq(m.PrimaryPart and m.PrimaryPart.Name, "Envelope", "the airship bobs around its envelope")
 		T.truthy(m:FindFirstChild("Gondola"), "a gondola under the envelope")
+		-- a long cigar pitched a little nose-down like the concept
+		local envelope = m.PrimaryPart
+		local axis = envelope.CFrame.RightVector -- a Roblox cylinder runs along its X axis
+		local pitch = math.deg(math.asin(math.abs(axis.Y)))
+		T.truthy(pitch >= 6 and pitch <= 8, `airship pitch {pitch} degrees`)
+		local diameter = envelope.Size.Y
+		local lo, hi = math.huge, -math.huge
+		for _, part in list do
+			local along = (part.CFrame.Position - envelope.CFrame.Position):Dot(axis)
+			lo, hi = math.min(lo, along), math.max(hi, along)
+		end
+		T.truthy(hi - lo >= 4 * diameter, `airship is long ({hi - lo} vs {diameter} wide)`)
 		local windows = 0
 		for _, part in list do
 			T.falsy(part.CanCollide, part:GetFullName() .. " never collides")
