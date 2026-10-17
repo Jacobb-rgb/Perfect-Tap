@@ -5,8 +5,11 @@
 
 	entry.In  = input queue. In[1] is being worked; at most queueSize(id)
 	            (MachineIntakeQueue = 4). Anvil ingots wait here too, and so
-	            do the items the Iron Box shows and sorts (it has a Time but
-	            no Output: its service decides where each item goes).
+	            do the items a sorter shows and sorts (Iron Box: a Time but
+	            no Output). A sorter's outputs are a copy of its input, so a
+	            generic complete() passes the item on unchanged; its service
+	            may instead complete with {} and put the item into the pen in
+	            the same step (kept ore), never both.
 	entry.Out = finished items waiting to leave; at most MachineData.MaxOutBuffer.
 	Empty queues are set to nil to keep saves small.
 
@@ -31,6 +34,11 @@ local ANVIL = "Anvil"
 -- Machines that turn one input into outputs on a timer (furnaces, Crusher, Auto Cleaner).
 local function isProcessor(info: MachineData.Machine): boolean
 	return info.Output ~= nil and info.Time ~= nil
+end
+
+-- Machines that hold each item for a timed job and pass it on unchanged (Iron Box).
+local function isSorter(info: MachineData.Machine): boolean
+	return info.Output == nil and info.Time ~= nil and info.Accepts ~= nil
 end
 
 local function isFinite(v: any): boolean
@@ -64,7 +72,7 @@ end
 -- machines that take items straight away (crate, chute) or never queue.
 function MachineLogic.queueSize(id: string): number
 	local info = MachineData.ById[id]
-	if info and (isProcessor(info) or id == ANVIL or (info.Time ~= nil and info.Accepts ~= nil)) then
+	if info and (isProcessor(info) or isSorter(info) or id == ANVIL) then
 		return GameConfig.MachineIntakeQueue
 	end
 	return 0
@@ -144,10 +152,18 @@ end
 -- What one finished job turns `input` into. `roll` in [0, 1) is only used
 -- by machines with GradeChances (Cleaning Plant); `odds` replaces their
 -- GradeChances (the Cleaning Plant's Quality level: MachineData.gradeOdds).
+-- A sorter (Iron Box) gives back a copy of `input`, so no item is ever lost.
 function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [string]: number }?): { Desc }
 	local info = MachineData.ById[id]
 	local list: { Desc } = {}
-	if not info or not isProcessor(info) then
+	if not info then
+		return list
+	end
+	if isSorter(info) then
+		table.insert(list, { K = input.K, O = input.O, G = input.G, R = input.R })
+		return list
+	end
+	if not isProcessor(info) then
 		return list
 	end
 	local kind = info.Output :: string

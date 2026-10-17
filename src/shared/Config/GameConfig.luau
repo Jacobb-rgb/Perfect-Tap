@@ -77,8 +77,14 @@ local GameConfig = {
 	SellOthersRadius = 60, -- other players this close see the sell puff
 	StorageTakeMax = 5, -- items per Take request
 
-	-- Foundry (step 3): ingots wait in data.Foundry.Stock until a blaster is forged
-	MaxFoundryStock = 60, -- DataStore safety cap; more ingots stay out (Migrations moves extras to the pen)
+	-- Foundry (step 3): ingots wait in data.Foundry.Stock until a blaster is forged.
+	-- The FOUNDRY chute (BaseLayout.Chutes.Foundry) takes in only ingots that can
+	-- be used for the next blaster level (rarity >= that level's Recipe.MinRarity)
+	-- while the stock is below MaxFoundryStock; every other item that reaches it
+	-- (other ingots, ore, any ingot once the blaster is at its top level) goes
+	-- into the Ore Pen instead. When its target (stock or pen) is full the item
+	-- waits on the cell. FoundryAction "Take" moves stock ingots back to the pen.
+	MaxFoundryStock = 60, -- DataStore safety cap (Migrations moves extras to the pen)
 
 	-- Anvil
 	AnvilTimeout = 60, -- seconds before a forging session is cancelled

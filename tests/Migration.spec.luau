@@ -5,6 +5,8 @@ return function(T, Loader)
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
+	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
+	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 
 	local function deepEqual(a: any, b: any): boolean
 		if type(a) ~= type(b) then
@@ -238,17 +240,18 @@ return function(T, Loader)
 		local data = ProfileStore.deepCopy(DataTemplate)
 		data.Storage = { { K = "Raw", O = "Coal" } }
 		data.MachineUpgrades = {
-			AutoCleaner = { Speed = 2.9, Quality = 99, Luck = 3 },
+			AutoCleaner = { Speed = 2.9, Quality = 99, Luck = 3.5, [2] = 1 },
 			Crusher = { Speed = -4, Quality = 2 },
 			ClayFurnace = { Speed = 0 / 0 },
-			Conveyor = { Speed = 1 }, -- a known machine without upgrades
+			Conveyor = { Speed = 1 }, -- a known machine this server sells no upgrade for
 			StorageCrate = { Speed = 1 }, -- retired
-			FutureMachine = { Speed = 1 },
+			FutureMachine = { Speed = 1, Warp = 250 }, -- a newer server's machine
 			BlastFurnace = "fast",
 			IronBox = { Speed = 1 },
 			[7] = { Speed = 1 },
 		}
 		data.KeepList = { Gold = true, Ruby = "yes", Unobtainium = true, Diamond = false, [3] = true, Heartstone = true }
+		data.KeepMode = "Everything"
 		local stock = {}
 		for _ = 1, GameConfig.MaxFoundryStock + 3 do
 			table.insert(stock, { K = "Ingot", O = "Iron", G = "Clean" })
@@ -265,14 +268,18 @@ return function(T, Loader)
 
 		local up = data.MachineUpgrades
 		T.eq(up.AutoCleaner.Speed, 2, "floored")
-		T.eq(up.AutoCleaner.Quality, 5, "clamped to the top level")
-		T.eq(up.AutoCleaner.Luck, nil, "unknown upgrade kind dropped")
+		T.eq(up.AutoCleaner.Quality, 99, "kept up to 99 (a newer server may sell more levels)")
+		T.eq(EconomyConfig.upgradeLevel(data, "AutoCleaner", "Quality"), 5, "read as the top level this server sells")
+		T.eq(up.AutoCleaner.Luck, 3, "an upgrade kind a newer server may sell is kept, floored")
+		T.eq(up.AutoCleaner[2], nil, "number kind dropped")
 		T.eq(up.Crusher.Speed, 0, "negative becomes 0")
-		T.eq(up.Crusher.Quality, nil, "the Crusher has no Quality upgrade")
+		T.eq(up.Crusher.Quality, 2, "kept for a newer server (the Crusher has no Quality here)")
 		T.eq(up.ClayFurnace, nil, "NaN level dropped, empty record removed")
-		T.eq(up.Conveyor, nil, "no upgrades on belts")
-		T.eq(up.StorageCrate, nil, "retired")
-		T.eq(up.FutureMachine, nil, "unknown machine")
+		T.eq(up.Conveyor.Speed, 1, "kept for a newer server")
+		T.eq(up.StorageCrate, nil, "retired machines are gone for good")
+		T.eq(up.FutureMachine.Speed, 1, "unknown machine kept (rolling updates)")
+		T.eq(up.FutureMachine.Warp, 99, "unknown levels clamped to 0..99")
+		T.eq(EconomyConfig.upgradeLevel(data, "Crusher", "Quality"), 0, "readers clamp to what is sold")
 		T.eq(up.BlastFurnace, nil, "not a record")
 		T.eq(up.IronBox.Speed, 1, "a good record stays")
 		T.eq(up[7], nil, "number key")
@@ -284,6 +291,7 @@ return function(T, Loader)
 		T.eq(keep.Diamond, nil)
 		T.eq(keep.Unobtainium, nil, "unknown ore")
 		T.eq(keep[3], nil)
+		T.eq(data.KeepMode, MachineData.Keep.Default, "unknown keep mode")
 
 		local kept = data.Foundry.Stock
 		T.truthy(kept == stock, "same Stock table")
@@ -298,7 +306,8 @@ return function(T, Loader)
 		T.eq(data.Storage[2].K, "Clean", "the clean gold, in stock order")
 		T.eq(data.Storage[#data.Storage].O, "Iron", "overflow ingots")
 
-		T.eq(data.Upgrades.PenAutomation, 2, "clamped to the top level")
+		T.eq(data.Upgrades.PenAutomation, 7, "floored, kept for a newer server (readers clamp)")
+		T.eq(select(1, EconomyConfig.techLevel(EconomyConfig.techItem("PenAutomation"), data)), 2, "read as the top level")
 		T.truthy(report.Dropped > 0 and report.Moved > 0)
 
 		local copy = ProfileStore.deepCopy(data)
@@ -313,6 +322,7 @@ return function(T, Loader)
 		data.KeepList = 5
 		data.Foundry = "forge"
 		data.Upgrades = "none"
+		data.KeepMode = 3
 		Migrations.run(data)
 		T.eq(type(data.MachineUpgrades), "table")
 		T.eq(next(data.MachineUpgrades), nil)
@@ -324,6 +334,15 @@ return function(T, Loader)
 		T.eq(data.Upgrades.PenAutomation, 0)
 		T.eq(data.Upgrades.Bellows, 0, "the other upgrade fields come back at 0")
 		T.eq(data.Upgrades.PenLevel, 0)
+		T.eq(data.KeepMode, "RarePlus", "keep mode back to the default")
+		for _, mode in MachineData.Keep.Modes do
+			local chosen = ProfileStore.deepCopy(DataTemplate)
+			chosen.KeepMode = mode
+			chosen.Upgrades.PenAutomation = 999
+			Migrations.run(chosen)
+			T.eq(chosen.KeepMode, mode, "keeps mode " .. mode)
+			T.eq(chosen.Upgrades.PenAutomation, 99, "clamped to 99")
+		end
 		local stockless = ProfileStore.deepCopy(DataTemplate)
 		stockless.Foundry = { Stock = "x" }
 		stockless.Upgrades.PenAutomation = 0 / 0
@@ -336,6 +355,7 @@ return function(T, Loader)
 		old.KeepList = nil
 		old.Foundry = nil
 		old.Upgrades.PenAutomation = nil
+		old.KeepMode = nil
 		ProfileStore.reconcile(old, DataTemplate)
 		local report = Migrations.run(old)
 		T.eq(report.Moved + report.Dropped, 0, "nothing to repair")

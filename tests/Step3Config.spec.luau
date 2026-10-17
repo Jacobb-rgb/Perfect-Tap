@@ -58,6 +58,45 @@ return function(T, Loader)
 		T.eq(BaseLayout.chuteAt(0, 0), nil)
 		T.eq(BaseLayout.chuteAt(3, 10), nil)
 		T.falsy(pcall(BaseLayout.chuteCell, "Nope"), "unknown chute names error")
+		-- every chute can be drawn: a label, a color and a hint, all different
+		local labels, colors = {}, {}
+		for _, name in BaseLayout.ChuteNames do
+			local chute = BaseLayout.Chutes[name]
+			T.truthy(type(chute.Label) == "string" and #chute.Label > 0 and #chute.Label <= 8, name .. " label")
+			T.eq(chute.Label, string.upper(chute.Label), name .. " label in capitals")
+			T.truthy(type(chute.Hint) == "string" and #chute.Hint > 10, name .. " hint")
+			T.falsy(labels[chute.Label], name .. " label shared")
+			labels[chute.Label] = true
+			local key = string.format("%.3f,%.3f,%.3f", chute.Color.R, chute.Color.G, chute.Color.B)
+			T.falsy(colors[key], name .. " color shared")
+			colors[key] = true
+		end
+	end)
+
+	T.test("Step 3: the Foundry's receiver sits at the FOUNDRY chute", function()
+		local intake = BaseLayout.FoundryIntake
+		local cell = BaseLayout.chuteLocal("Foundry")
+		local zone, mouth = intake.Zone, intake.Mouth
+		local function inside(p: any, r: any): boolean
+			return math.abs(p.X - r.Center.X) <= r.Size.X / 2 and math.abs(p.Z - r.Center.Z) <= r.Size.Z / 2
+		end
+		T.truthy(inside(mouth, zone), "mouth inside the zone")
+		T.near(mouth.X, cell.X, 1e-6, "mouth over the chute's belt")
+		T.truthy(mouth.Z > HALF - CELL / 2 and mouth.Z < HALF, "mouth at the cell's back edge")
+		T.truthy(mouth.Y > 0.5 and mouth.Y < zone.Size.Y, "mouth at belt height")
+		-- the zone covers only the chute's column (no other cell) and the wall behind it
+		T.truthy(zone.Center.X - zone.Size.X / 2 >= cell.X - CELL / 2, "zone within the chute column (left)")
+		T.truthy(zone.Center.X + zone.Size.X / 2 <= cell.X + CELL / 2, "zone within the chute column (right)")
+		T.truthy(zone.Center.Z - zone.Size.Z / 2 >= HALF - CELL / 2, "zone reaches into the last half of the cell at most")
+		T.truthy(zone.Center.Z + zone.Size.Z / 2 <= HALF + 2, "zone stays at the wall")
+		-- clear of the yard gate and of every yard piece
+		local gate = BaseLayout.YardGate
+		T.truthy(zone.Center.X - zone.Size.X / 2 >= gate.CenterX + gate.Width / 2, "off the yard gate")
+		for name, piece in BaseLayout.pieces() do
+			local overlapX = math.abs(zone.Center.X - piece.Center.X) < (zone.Size.X + piece.Size.X) / 2
+			local overlapZ = math.abs(zone.Center.Z - piece.Center.Z) < (zone.Size.Z + piece.Size.Z) / 2
+			T.falsy(overlapX and overlapZ, "receiver overlaps " .. name)
+		end
 	end)
 
 	T.test("Step 3: chute points are cell centres on top of the pad", function()
@@ -200,7 +239,20 @@ return function(T, Loader)
 		end
 		T.eq(select(2, MachineLogic.accepts("IronBox", { K = "Ingot", O = "Gold" }, e, true)), "Full")
 		T.eq(select(2, MachineLogic.accepts("IronBox", { K = "Raw", O = "Gold" }, entry("IronBox", 0, 0), false)), "Foreign")
-		T.eq(#MachineLogic.outputs("IronBox", { K = "Clean", O = "Gold" }, 0.5), 0, "no timed outputs")
+		-- a finished job passes the item on unchanged (a copy), so a generic complete() never loses it
+		local shown = { K = "Clean", O = "Gold", G = "Pristine" }
+		local passed = MachineLogic.outputs("IronBox", shown, 0.5)
+		T.eq(#passed, 1, "one item out")
+		T.truthy(passed[1] ~= shown, "a copy")
+		T.eq(passed[1].K, "Clean")
+		T.eq(passed[1].O, "Gold")
+		T.eq(passed[1].G, "Pristine")
+		T.eq(MachineLogic.outputs("IronBox", { K = "Raw", O = "Gold" }, 0.5)[1].G, nil, "dirty stays dirty")
+		local job = entry("IronBox", 0, 0)
+		MachineLogic.push(job, shown)
+		MachineLogic.complete(job, MachineLogic.outputs("IronBox", shown, 0.5))
+		T.eq(job.In, nil)
+		T.eq(#job.Out, 1, "the item waits in Out to leave the front")
 		-- a front output on the shared grid position
 		T.truthy(Grid.outputLocal("IronBox"), "front output")
 	end)
@@ -308,6 +360,77 @@ return function(T, Loader)
 			end
 		end
 		T.eq(MachineData.processTime(MachineData.ById.BlastFurnace, 5, 5), GameConfig.MinProcessTime, "2.5 s * 0.2 hits the floor")
+	end)
+
+	T.test("Step 3: every Speed level still counts with full Bellows", function()
+		local bellows = #MachineData.Bellows.Prices
+		local checked = 0
+		for _, machine in MachineData.List do
+			local top = MachineData.upgradeMax(machine.Id, "Speed")
+			for level = 1, top do
+				local now = MachineData.processTime(machine, bellows, level)
+				local before = MachineData.processTime(machine, bellows, level - 1)
+				T.lt(now, before, `{machine.Id} Speed {level} is faster than {level - 1} with Bellows {bellows}`)
+				checked += 1
+			end
+		end
+		T.truthy(checked >= 25, "five machines, five levels")
+	end)
+
+	---------------------------------------------------------------- keeping
+
+	T.test("Step 3: what the Iron Box and the billboard keep", function()
+		local Keep = MachineData.Keep
+		T.eq(Keep.Default, "RarePlus")
+		T.eq(DataTemplate.KeepMode, Keep.Default, "new players start on the default")
+		for _, mode in Keep.Modes do
+			T.truthy(MachineData.isKeepMode(mode), mode)
+		end
+		for _, bad in { "", "all", "None", 3, {} :: any } do
+			T.falsy(MachineData.isKeepMode(bad), "not a mode: " .. tostring(bad))
+		end
+		T.falsy(MachineData.isKeepMode(nil), "nil is not a mode")
+		local function item(kind: string, ore: string): any
+			return { K = kind, O = ore, G = if kind == "Raw" then nil else "Clean" }
+		end
+		-- dirty ore always passes on, in every mode (no peeking through the dirt)
+		for _, mode in Keep.Modes do
+			for _, ore in { "Coal", "Gold", "Heartstone" } do
+				T.falsy(MachineData.keeps(mode, { [ore] = true }, item("Raw", ore)), `{mode}: dirty {ore} passes`)
+			end
+		end
+		-- RarePlus: Rare and better
+		local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+		local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+		local rareFrom = Rarity.get(Keep.RareFrom).Order
+		local kept, sent = 0, 0
+		for _, ore in OreData.List do
+			local want = Rarity.get(ore.Rarity).Order >= rareFrom
+			for _, kind in { "Clean", "Crushed", "Ingot" } do
+				T.eq(MachineData.keeps("RarePlus", {}, item(kind, ore.Id)), want, `RarePlus {kind} {ore.Id}`)
+				T.eq(MachineData.keeps(nil, {}, item(kind, ore.Id)), want, `no mode = default ({ore.Id})`)
+				T.eq(MachineData.keeps("All", {}, item(kind, ore.Id)), true, `All keeps {ore.Id}`)
+				T.eq(MachineData.keeps("List", {}, item(kind, ore.Id)), false, `an empty List keeps nothing ({ore.Id})`)
+			end
+			if want then
+				kept += 1
+			else
+				sent += 1
+			end
+		end
+		T.truthy(kept > 0 and sent > 0, "RarePlus splits the ores")
+		-- List: only the listed ores
+		local list = { Gold = true, Copper = true }
+		T.truthy(MachineData.keeps("List", list, item("Clean", "Gold")))
+		T.truthy(MachineData.keeps("List", list, item("Ingot", "Copper")))
+		T.falsy(MachineData.keeps("List", list, item("Clean", "Coal")))
+		T.falsy(MachineData.keeps("List", "junk", item("Clean", "Gold")), "a broken list keeps nothing")
+		T.falsy(MachineData.keeps("List", { Gold = "yes" }, item("Clean", "Gold")), "only true counts")
+		-- junk and odd items
+		T.falsy(MachineData.keeps("All", {}, item("Clean", "Unobtainium")), "unknown ore")
+		T.falsy(MachineData.keeps("All", {}, nil), "nil")
+		T.falsy(MachineData.keeps("All", {}, "Gold"), "not a table")
+		T.truthy(MachineData.keeps("List", {}, { K = "Gear", O = "Gold", G = "Clean", R = "Dagger" }), "old gear stays in the pen")
 	end)
 
 	T.test("Step 3: the Tech shop order is sensible", function()
@@ -449,12 +572,40 @@ return function(T, Loader)
 		T.eq(EconomyConfig.techPrice(slots, { Upgrades = "junk" }), MachineData.SlotUpgrade.Prices[1], "broken Upgrades count as 0")
 	end)
 
+	T.test("Step 3: a ShopBuy names the level it buys (no double buys)", function()
+		local data = { MachineUpgrades = { AutoCleaner = { Quality = 3 } }, Upgrades = { Bellows = 0, ExtraSlots = 0, PenAutomation = 0 } }
+		local quality = EconomyConfig.techItem("Upgrade:AutoCleaner:Quality")
+		local prices = MachineData.ById.AutoCleaner.Upgrades.Quality
+		T.eq(EconomyConfig.techQuote(quality, data, nil, 4), prices[4], "the next level")
+		for _, bad in { 3, 5, 6, 0, -1, 4.5, "4" :: any, 0 / 0 } do
+			local price, reason = EconomyConfig.techQuote(quality, data, nil, bad)
+			T.eq(price, nil, "level " .. tostring(bad))
+			T.eq(reason, "Stale", "level " .. tostring(bad))
+		end
+		T.eq(select(2, EconomyConfig.techQuote(quality, data)), "Stale", "a missing Level is refused")
+		-- a double tap: the second request still names level 4 after it was bought
+		data.MachineUpgrades.AutoCleaner.Quality = 4
+		T.eq(select(2, EconomyConfig.techQuote(quality, data, nil, 4)), "Stale", "the repeat buys nothing")
+		T.eq(EconomyConfig.techQuote(quality, data, nil, 5), prices[5])
+		data.MachineUpgrades.AutoCleaner.Quality = 5
+		T.eq(select(2, EconomyConfig.techQuote(quality, data, nil, 6)), "Max", "Max wins over Stale")
+		-- base upgrades too
+		local pen = EconomyConfig.techItem("PenAutomation")
+		T.eq(EconomyConfig.techQuote(pen, data, nil, 1), 25000)
+		T.eq(select(2, EconomyConfig.techQuote(pen, data, nil, 2)), "Stale")
+		-- machines ignore Level and check Count
+		local belt = EconomyConfig.techItem("Conveyor")
+		T.eq(EconomyConfig.techQuote(belt, data, 4), MachineData.ById.Conveyor.Price * 4)
+		T.eq(EconomyConfig.techQuote(belt, data, 4, 99), MachineData.ById.Conveyor.Price * 4)
+		T.eq(select(2, EconomyConfig.techQuote(belt, data, 0)), "BadCount")
+	end)
+
 	---------------------------------------------------------------- remotes and save
 
 	T.test("Step 3: remotes", function()
 		local limits = {
 			PenAction = { 8, 12 },
-			IronBoxAction = { 4, 6 },
+			IronBoxAction = { 4, 12 },
 			FoundryAction = { 4, 8 },
 			ShopBuy = { 3, 5 },
 		}
@@ -473,7 +624,8 @@ return function(T, Loader)
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")
 		T.eq(type(DataTemplate.KeepList), "table")
-		T.eq(next(DataTemplate.KeepList), nil, "empty keep list = keep everything")
+		T.eq(next(DataTemplate.KeepList), nil, "nothing on the list at first")
+		T.eq(DataTemplate.KeepMode, "RarePlus", "keep Rare and better by default")
 		T.eq(type(DataTemplate.Foundry), "table")
 		T.eq(type(DataTemplate.Foundry.Stock), "table")
 		T.eq(#DataTemplate.Foundry.Stock, 0)

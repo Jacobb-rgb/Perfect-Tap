@@ -77,7 +77,7 @@ end
 
 --[[
 	Tech shop catalog (the UPGRADES stall in town; ShopBuy { Shop = "Tech",
-	Item, Count? }). Item strings:
+	Item, Count?, Level? }). Item strings:
 	  <machineId>                      a machine into data.MachineInventory
 	                                   (MachineData.Buildable; Count 1..MaxCount,
 	                                   price MachineData.Price each)
@@ -88,7 +88,9 @@ end
 	  "Bellows"                        data.Upgrades.Bellows (MachineData.Bellows)
 	  "Slots"                          data.Upgrades.ExtraSlots (MachineData.SlotUpgrade)
 	  "PenAutomation"                  data.Upgrades.PenAutomation (EconomyConfig.PenAutomation)
-	Levelled items always buy exactly one level (Count is ignored).
+	Levelled items always buy exactly one level (Count is ignored), and only
+	the Level the request names, which must be the next one (techQuote): a
+	double tap or a lagging card never buys two levels in a row.
 ]]
 export type TechKind = "Machine" | "Upgrade" | "Bellows" | "Slots" | "PenAutomation"
 export type TechItem = {
@@ -188,6 +190,22 @@ function EconomyConfig.techPrice(entry: TechItem, data: { [string]: any }, count
 	end
 	local prices = entry.Prices :: { number }
 	return prices[level + 1], nil
+end
+
+-- The server's check of a ShopBuy: techPrice, and for levelled items the
+-- payload's `level` (the level being bought, as shown on the card) must be
+-- exactly the current level + 1 (missing or any other value: nil, "Stale").
+-- nil + "BadCount" | "Max" | "Stale".
+function EconomyConfig.techQuote(entry: TechItem, data: { [string]: any }, count: any?, level: any?): (number?, string?)
+	local price, reason = EconomyConfig.techPrice(entry, data, count)
+	if price == nil or entry.Prices == nil then
+		return price, reason
+	end
+	local current = EconomyConfig.techLevel(entry, data)
+	if level ~= current + 1 then
+		return nil, "Stale"
+	end
+	return price, nil
 end
 
 -- Coins earned offline: `seconds` away at `incomePerSecond`, capped by hours.

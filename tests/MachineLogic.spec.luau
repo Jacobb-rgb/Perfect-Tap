@@ -36,7 +36,7 @@ return function(T, Loader)
 	end)
 
 	T.test("MachineLogic: queue sizes", function()
-		for _, id in { "ClayFurnace", "BlastFurnace", "Crusher", "AutoCleaner", "Anvil" } do
+		for _, id in { "ClayFurnace", "BlastFurnace", "Crusher", "AutoCleaner", "Anvil", "IronBox" } do
 			T.eq(MachineLogic.queueSize(id), MAX_IN, id)
 		end
 		for _, id in { "StorageCrate", "SellChute", "CleaningStation", "Conveyor", "Nope" } do
@@ -273,7 +273,7 @@ return function(T, Loader)
 
 		type Ledger = { [string]: { [string]: number } }
 		local machines = {}
-		for _, id in { "ClayFurnace", "BlastFurnace", "Crusher", "AutoCleaner", "Anvil", "ClayFurnace", "Anvil" } do
+		for _, id in { "ClayFurnace", "BlastFurnace", "Crusher", "AutoCleaner", "Anvil", "ClayFurnace", "Anvil", "IronBox" } do
 			table.insert(machines, {
 				Entry = entry(id),
 				Info = MachineData.ById[id],
@@ -320,14 +320,19 @@ return function(T, Loader)
 				if e.In then
 					local input = e.In[1]
 					local outputs = MachineLogic.outputs(id, input, rng:next())
-					T.eq(#outputs, m.Info.OutputCount, `step {step}: output count`)
+					T.eq(#outputs, m.Info.OutputCount or 1, `step {step}: output count`)
 					local outCount = if e.Out then #e.Out else 0
 					if outCount + #outputs <= MAX_OUT then
 						for _, d in outputs do
-							T.eq(d.K, m.Info.Output, "output kind")
+							T.eq(d.K, m.Info.Output or input.K, "output kind")
 							T.eq(d.O, input.O, "output ore")
 							if m.Info.GradeChances then
 								T.truthy(d.G == "Rough" or d.G == "Clean", "auto-cleaned grade")
+							elseif m.Info.Output == nil then
+								-- a sorter (Iron Box) passes the item on unchanged, as a copy
+								T.eq(d.G, input.G, "sorted grade")
+								T.eq(d.R, input.R, "sorted recipe")
+								T.truthy(d ~= input, "a copy, not the queued table")
 							else
 								T.eq(d.G, input.G or "Rough", "grade kept")
 							end

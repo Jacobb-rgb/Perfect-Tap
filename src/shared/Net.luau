@@ -32,28 +32,50 @@ Net.Events = {
 	AnvilSubmit = { Rate = 2, Burst = 3 }, -- (sessionId, recipeId, strikes)
 	AnvilCancel = { Rate = 2, Burst = 3 }, -- (sessionId)
 	-- base: Ore Pen, podiums, Sell stall (design v2)
-	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium" | "Send", arg)
+	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium" | "Send" | "StopSend", arg)
 	--   "Take"     { Key, Count }  items to your hands at the pen gate
 	--   "ToPodium" { Key, Slot }   one cleaned ore onto a podium
-	--   "Send"     { Key?, Count?, Filter? }  queue pen items for the PEN chute cell
-	--              (BaseLayout.Chutes.Pen), one every 0.5 s: Key ("K|O|G|R") + Count
-	--              = that many of one item type (default 1), or no Key and
-	--              Filter = "Dirty" (all dirty ore) | "All" (everything in the pen)
+	--   "Send"     { Key?, Count?, Filter? }  add pen items to your send queue for the
+	--              PEN chute cell (BaseLayout.Chutes.Pen): one every 0.5 s spawns on
+	--              the belt standing on that cell; with no belt there, or no room on
+	--              it, the queue waits. Key ("K|O|G|R") + Count (whole number
+	--              1..GameConfig.MaxStoredItems, default 1) = that many of one item
+	--              type; or no Key and Filter = "Dirty" (all dirty ore) | "Unkept"
+	--              (everything MachineData.keeps doesn't keep: all dirty ore and the
+	--              unkept clean ore and ingots; needs Upgrades.PenAutomation >= 1) |
+	--              "All" (everything in the pen)
+	--   "StopSend" (no arg)        empties your send queue (unsent items stay in, or go back to, the pen)
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
 	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed" }?)
 	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
-	IronBoxAction = { Rate = 4, Burst = 6 }, -- ("SetKeep", { Ore: oreId, Keep: boolean }) edits data.KeepList
+	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what the Iron Box and the pen's
+	--   sorting billboard keep (MachineData.Keep / keeps; State: KeepMode, KeepList):
+	--   "SetMode"     { Mode: "RarePlus" | "List" | "All" }  data.KeepMode
+	--   "SetKeep"     { Ore: oreId, Keep: boolean }            one ore on data.KeepList ("List" mode)
+	--   "SetKeepMany" { Ores: { oreId }, Keep: boolean }       up to #OreData.List ores at once (presets)
+	--   The client redraws from the next State snapshot, so a dropped event never
+	--   leaves it out of step with the save.
 	FoundryAction = { Rate = 4, Burst = 8 }, -- (action, arg?):
-	--   "Open"                                   open your Foundry's panel (server answers OpenUI "Foundry")
-	--   "Forge"  { Ore: oreId? }                 start forging the next blaster level from data.Foundry.Stock;
-	--                                            Ore = the skin (default: the best ore among the used ingots)
+	--   "Open"                                    open your Foundry's panel (server answers OpenUI "Foundry")
+	--   "Forge"  { Ore: oreId? }                  start forging the next blaster level from data.Foundry.Stock;
+	--                                             Ore = the skin (default: the best ore among the used ingots)
 	--   "Strike" { SessionId, Times: { number } } the hammer taps, seconds since FoundryBegin, oldest first
 	--   "Cancel" { SessionId }
+	--   "Take"   { Key, Count }                   stock ingots of one type ("Ingot|O|G|", whole Count
+	--                                             1..GameConfig.MaxFoundryStock) back into the Ore Pen, as
+	--                                             many as fit (checked and moved with no yield; refused
+	--                                             while a forge session runs)
+	--   Nothing is taken when forging starts: on the Strike that finishes the
+	--   session the server checks the ingots and coins again and takes both in
+	--   one step with no yield (FoundryResult "NotEnough" if either is gone by
+	--   then). Cancel, Timeout and BadStrikes cost nothing.
 	-- economy / meta
-	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number? }), Item:
+	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number?, Level: number? }), Item:
 	--   <machineId> (Count 1..EconomyConfig.TechShop.MaxCount) | "Upgrade:<machineId>:Speed" |
-	--   "Upgrade:<machineId>:Quality" | "PenAutomation" | "Bellows" | "Slots" (EconomyConfig.techItem)
+	--   "Upgrade:<machineId>:Quality" | "PenAutomation" | "Bellows" | "Slots" (EconomyConfig.techItem).
+	--   Levelled items need Level = the level being bought (the one on the card); the server
+	--   refuses any other ("Stale", EconomyConfig.techQuote), so a double tap buys one level.
 	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
@@ -72,10 +94,13 @@ Net.Events = {
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
 	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
-	--   Ore: skin oreId, Hits: taps needed, Timeout: seconds, Ingots: number used, Coins: number paid on success }
+	--   Ore: skin oreId, Hits: taps needed, Timeout: seconds, Ingots: number to be used,
+	--   Coins: the price, taken only on success (see FoundryAction) }
 	FoundryBegin = false,
 	-- { Id: SessionId ("" when "Forge" is refused before a session starts), Ok,
-	--   Reason?: "NotEnough" (ingots or coins missing) | "MaxLevel" | "Cancelled" | "Timeout" | "BadStrikes",
+	--   Reason?: "NotEnough" (ingots or coins missing, at Forge or at the final Strike) | "MaxLevel" |
+	--   "Busy" (a session already runs) | "TooFar" (not at your Foundry) | "BadOre" (the skin isn't
+	--   a known ore among the usable ingots) | "Cancelled" | "Timeout" | "BadStrikes",
 	--   Level?: new BlasterLevel, Ore?: new BlasterOre, Name?: BlasterData.displayName }
 	FoundryResult = false,
 } :: { [string]: Limit | false }

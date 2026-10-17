@@ -14,9 +14,13 @@
 	  Speed    every level takes SpeedPerLevel off the job time (speedMult)
 	  Quality  Cleaning Plant only: the grade odds of QualityLevels[level + 1]
 	The Auto Cleaner is shown as "Cleaning Plant" (its Id stays "AutoCleaner").
+	The Iron Box and the pen's sorting billboard sort by data.KeepMode and
+	data.KeepList (MachineData.Keep, MachineData.keeps).
 ]]
 
 local GameConfig = require(script.Parent.GameConfig)
+local OreData = require(script.Parent.OreData)
+local Rarity = require(script.Parent.Rarity)
 
 -- Machine upgrade prices, level 1 first (index = the level you buy).
 export type UpgradePrices = { Speed: { number }?, Quality: { number }? }
@@ -166,13 +170,16 @@ MachineData.List = {
 	{
 		Id = "IronBox",
 		Name = "Iron Box",
-		Description = "Shows what comes out of your Cleaning Plant. Ore on your keep list goes to your Ore Pen, everything else rolls out the front onto your belts.",
+		Description = "Shows what comes out of your Cleaning Plant. Ore you keep goes to your Ore Pen, everything else rolls out the front onto your belts.",
 		Size = { 2, 2 },
 		Price = 12000,
 		Category = "Processing",
 		Order = 6,
+		-- dirty ore is never kept (the box can't see through the dirt): it always passes on
 		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true },
-		Time = 1.5, -- seconds to show and sort one item (before Speed upgrades)
+		-- seconds to show and sort one item before upgrades: long enough that every
+		-- Speed level still counts with full Bellows (0.2 x 4 s = 0.8 s > MinProcessTime)
+		Time = 4,
 		LoadText = "Sort",
 		WrongHint = "The Iron Box sorts ore, crushed ore and ingots.",
 		ConveyorFaces = "NoFront",
@@ -326,6 +333,61 @@ end
 function MachineData.gradeOdds(level: any): { [string]: number }
 	return QUALITY_LEVELS[wholeLevel(level, #QUALITY_LEVELS - 1) + 1]
 end
+
+---------------------------------------------------------------- keeping
+
+--[[
+	What the Iron Box keeps (into the Ore Pen) and what it sends on (out of
+	its front), and what the pen's sorting billboard marks as kept (PenAction
+	"Send" Filter "Unkept" sends the rest). One setting per player:
+	  data.KeepMode  "RarePlus"  keep ores of rarity Keep.RareFrom and better (the default)
+	                 "List"      keep the ores on data.KeepList; an empty list keeps nothing
+	                 "All"       keep every ore
+	  data.KeepList  { [oreId] = true }, only read in "List" mode
+	Dirty ore (Raw) is never kept in any mode: it always passes on, so the
+	box never tells you which dirty ore is rare before it is cleaned. Items
+	that aren't ore, crushed ore or ingots (old Gear) always count as kept.
+]]
+export type KeepMode = "RarePlus" | "List" | "All"
+
+MachineData.Keep = {
+	Modes = { "RarePlus", "List", "All" } :: { KeepMode }, -- in UI order
+	Default = "RarePlus" :: KeepMode, -- a new player's mode (DataTemplate.KeepMode)
+	RareFrom = "Rare", -- the lowest rarity "RarePlus" keeps
+}
+
+local SORTED_KINDS = { Clean = true, Crushed = true, Ingot = true }
+
+-- Is `mode` one of Keep.Modes?
+function MachineData.isKeepMode(mode: any): boolean
+	return type(mode) == "string" and table.find(MachineData.Keep.Modes, mode :: KeepMode) ~= nil
+end
+
+-- Does the player keep this item (Iron Box: to the pen; pen: stays)?
+-- `mode` and `keepList` are data.KeepMode and data.KeepList; an unknown mode
+-- counts as Keep.Default, an unknown ore is never kept.
+function MachineData.keeps(mode: any, keepList: any, desc: any): boolean
+	if type(desc) ~= "table" or type(desc.K) ~= "string" or desc.K == "Raw" then
+		return false
+	end
+	if not SORTED_KINDS[desc.K] then
+		return true
+	end
+	local ore = if type(desc.O) == "string" then OreData.ById[desc.O] else nil
+	if not ore then
+		return false
+	end
+	local m: KeepMode = if MachineData.isKeepMode(mode) then mode else MachineData.Keep.Default
+	if m == "All" then
+		return true
+	elseif m == "List" then
+		return type(keepList) == "table" and keepList[ore.Id] == true
+	end
+	local rarity = Rarity.ById[ore.Rarity]
+	return rarity ~= nil and rarity.Order >= Rarity.get(MachineData.Keep.RareFrom).Order
+end
+
+---------------------------------------------------------------- job time
 
 -- Seconds one job takes with the owner's Bellows level and the machine
 -- type's Speed level, never below GameConfig.MinProcessTime (0 for

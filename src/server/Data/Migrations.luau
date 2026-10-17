@@ -33,22 +33,27 @@
 
 	Machines + automation (step 3, same Version 3; DataTemplate fills the
 	records in):
-	- MachineUpgrades: only known machine types that have upgrades stay; each
-	  level is a whole number 0..MachineData.upgradeMax (unknown upgrade
-	  kinds and non-number levels are dropped, empty records removed).
-	- KeepList: only known ore ids mapped to true.
+	- MachineUpgrades: { [string machine id] = { [string kind] = level } }
+	  with whole levels 0..MAX_LEVEL_KEPT. Unknown machines, upgrade kinds
+	  and levels above what this server sells are kept (a newer server may
+	  sell them, as with MachineInventory); readers clamp to what is sold
+	  (EconomyConfig.upgradeLevel, MachineData.speedMult / gradeOdds).
+	  Retired machines, non-string keys and non-number levels are dropped,
+	  empty records removed.
+	- KeepMode is one of MachineData.Keep.Modes (else the default);
+	  KeepList keeps only known ore ids mapped to true.
 	- Foundry.Stock: well-formed ingots (kind Ingot, known ore and grade, no
 	  recipe), at most GameConfig.MaxFoundryStock; other well-formed items
 	  and the overflow go to the pen, junk is dropped.
 	- Upgrades is a record and Upgrades.PenAutomation a whole number
-	  0..#EconomyConfig.PenAutomation.Prices.
+	  0..MAX_LEVEL_KEPT (readers clamp to EconomyConfig.PenAutomation; a newer
+	  server may sell more levels).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
-local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
@@ -63,6 +68,8 @@ Migrations.Latest = 3
 export type Report = { Moved: number, Dropped: number }
 
 local MAX_INVENTORY = 999
+-- Highest saved level of a step 3 upgrade (readers clamp to what is sold).
+local MAX_LEVEL_KEPT = 99
 local PODIUM_SLOTS = 4
 
 local function isFinite(v: any): boolean
@@ -343,7 +350,7 @@ function Migrations.run(data: { [string]: any }): Report
 		train.TripArriveAt = 0
 	end
 
-	-- step 3: machine upgrades of known machine types, whole levels in range
+	-- step 3: machine upgrades, whole levels in range (unknown ones kept for newer servers)
 	local machineUpgrades = data.MachineUpgrades
 	if type(machineUpgrades) ~= "table" then
 		if machineUpgrades ~= nil then
@@ -358,8 +365,7 @@ function Migrations.run(data: { [string]: any }): Report
 	end
 	for _, id in upgradeIds do
 		local record = machineUpgrades[id]
-		local info = if type(id) == "string" then MachineData.ById[id] else nil
-		if not info or not info.Upgrades or type(record) ~= "table" then
+		if type(id) ~= "string" or MachineData.Retired[id] or type(record) ~= "table" then
 			machineUpgrades[id] = nil
 			report.Dropped += 1
 			continue
@@ -369,16 +375,15 @@ function Migrations.run(data: { [string]: any }): Report
 			table.insert(kinds, kind)
 		end
 		for _, kind in kinds do
-			local max = if type(kind) == "string" then MachineData.upgradeMax(id, kind) else 0
 			local upgradeLevel = record[kind]
-			if max == 0 or not isFinite(upgradeLevel) then
+			if type(kind) ~= "string" or not isFinite(upgradeLevel) then
 				record[kind] = nil
 				report.Dropped += 1
-			else
-				local whole = math.clamp(math.floor(upgradeLevel), 0, max)
-				if whole ~= upgradeLevel then
-					record[kind] = whole
-				end
+				continue
+			end
+			local whole = math.clamp(math.floor(upgradeLevel), 0, MAX_LEVEL_KEPT)
+			if whole ~= upgradeLevel then
+				record[kind] = whole
 			end
 		end
 		if next(record) == nil then
@@ -386,7 +391,13 @@ function Migrations.run(data: { [string]: any }): Report
 		end
 	end
 
-	-- step 3: the keep list holds known ore ids mapped to true
+	-- step 3: the keep mode is a known mode, the keep list holds known ore ids mapped to true
+	if not MachineData.isKeepMode(data.KeepMode) then
+		if data.KeepMode ~= nil then
+			report.Dropped += 1
+		end
+		data.KeepMode = MachineData.Keep.Default
+	end
 	local keepList = data.KeepList
 	if type(keepList) ~= "table" then
 		if keepList ~= nil then
@@ -446,8 +457,7 @@ function Migrations.run(data: { [string]: any }): Report
 		data.Upgrades = bought
 	end
 	local automation = bought.PenAutomation
-	local maxAutomation = #EconomyConfig.PenAutomation.Prices
-	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, maxAutomation) else 0
+	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, MAX_LEVEL_KEPT) else 0
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

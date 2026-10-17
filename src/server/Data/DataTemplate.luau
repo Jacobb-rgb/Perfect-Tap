@@ -23,16 +23,22 @@ local DataTemplate = {
 		PenLevel = 0, -- Ore Pen capacity level (EconomyConfig.Pen)
 		-- pen automation (EconomyConfig.PenAutomation): 0 none, 1 the sorting
 		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
+		-- (readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
 	},
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
 	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)
 	MachineUpgrades = {},
-	-- ore ids the Iron Box (and the pen's sorting billboard) keep: { [oreId] = true }.
-	-- Empty = keep everything.
+	-- what the Iron Box keeps (into the pen) and the pen's sorting billboard
+	-- marks as kept (MachineData.Keep / MachineData.keeps): "RarePlus" (Rare and
+	-- better), "List" (only the ores on KeepList; an empty list keeps nothing)
+	-- or "All". Dirty ore is never kept, it always passes on.
+	KeepMode = "RarePlus",
+	-- ore ids kept in "List" mode: { [oreId] = true }
 	KeepList = {},
 	-- the Foundry on the base: ingots waiting to be forged into blasters,
-	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock)
+	-- a list of { K = "Ingot", O = oreId, G = grade? } (at most GameConfig.MaxFoundryStock;
+	-- FoundryAction "Take" moves them back to the pen)
 	Foundry = {
 		Stock = {},
 	},

@@ -1,8 +1,10 @@
 --[[
 	ProcessingService: the machines that work on their own. Clay Furnace and
 	Blast Furnace smelt clean or crushed ore into ingots, the Crusher turns 1
-	clean ore into 2 crushed piles, the Auto Cleaner cleans raw ore (60%
-	Rough, 40% Clean, never better).
+	clean ore into 2 crushed piles, the Cleaning Plant (Id AutoCleaner)
+	cleans raw ore with the grade odds of its Quality level
+	(MachineData.QualityLevels / gradeOdds: 60% Rough / 40% Clean at level
+	0, up to 30% Flawless at level 5; MachineLogic.outputs takes the odds).
 
 	- Items arrive through MachineService (hopper, belt, Put In prompt or a
 	  machine in front): canAccept = MachineLogic.accepts, insert = push onto

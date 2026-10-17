@@ -8,14 +8,22 @@
 	side, lies the yard (z 25..56): the Ore Pen, the podiums, the Foundry
 	and the train stop on the coastal railway (z ~62, world |x| ~165).
 	Nothing here may overlap the machine grid (pieces()); only the three
-	chute cells (Chutes) are fixtures on the grid itself.
+	chute cells (Chutes) are fixtures on the grid itself, and the Foundry's
+	receiver (FoundryIntake) reaches over the end of the FOUNDRY chute cell.
 ]]
 
 local GameConfig = require(script.Parent.GameConfig)
 
 export type Rect = { Center: Vector3, Size: Vector3 } -- Size.Y = height budget
 export type ChuteKind = "Source" | "Sink"
-export type Chute = { X: number, Z: number, Kind: ChuteKind }
+export type Chute = {
+	X: number,
+	Z: number,
+	Kind: ChuteKind,
+	Label: string, -- short sign text (build-mode plate, in-world sign)
+	Color: Color3, -- plate / sign color
+	Hint: string, -- one line for the player (tooltips, the refused-placement toast)
+}
 
 local BaseLayout = {}
 
@@ -84,23 +92,55 @@ end
 	numbers as in Machines/Grid). Only belts may stand on them: Placement
 	refuses every other machine there (reason "Chute") and moves one off
 	when a saved layout has it there.
-	  Pen      Source  items sent from the Ore Pen (PenAction "Send") appear here
-	  Train    Source  Direct Unload (Upgrades.PenAutomation 2): the train drops
-	                   raw ore here instead of into the pen
+	  Pen      Source  items sent from the Ore Pen (PenAction "Send") come out here
+	  Train    Source  Direct Unload (Upgrades.PenAutomation 2): the train puts its
+	                   dirty ore here instead of into the pen
 	  Foundry  Sink    a belt on this cell whose front faces +Z (SinkRotation,
 	                   off the grid edge toward the yard) delivers into the
-	                   Foundry; items that come to rest on the cell go in too
-	A Source spawns its items on top of whatever belt stands on the cell
-	(the belt's direction decides the route); with no belt they just lie there.
+	                   Foundry: ingots the next blaster level can use go into
+	                   data.Foundry.Stock, every other item that reaches the end
+	                   of that belt goes into the Ore Pen (GameConfig, Foundry);
+	                   when the target is full the item waits on the belt. Items
+	                   just lying on the cell (no belt) are not taken.
+	A Source only spawns an item onto a belt standing on its cell, and only
+	while that belt has room (the belt's direction decides the route). With
+	no belt, or a jammed one, nothing comes out: the pen's send queue waits,
+	Direct Unload cargo goes into the pen as without the upgrade. Nothing is
+	ever dropped loose on a chute cell (the Train chute is in the yard gate's
+	walkway).
+	Players must see the chutes (WP-Belts): a colored plate with the Label in
+	build mode (GridOverlay) and a small floor plate + sign per chute in the
+	world (ConveyorService, per plot), both in the chute's Color.
 ]]
 local BACK_ROW = GameConfig.PlotCells - 1
 local CELL = GameConfig.CellSize
 local GRID_HALF = GameConfig.PlotCells * CELL / 2
 
 BaseLayout.Chutes = {
-	Pen = { X = 3, Z = BACK_ROW, Kind = "Source" },
-	Train = { X = 6, Z = BACK_ROW, Kind = "Source" },
-	Foundry = { X = 9, Z = BACK_ROW, Kind = "Sink" },
+	Pen = {
+		X = 3,
+		Z = BACK_ROW,
+		Kind = "Source",
+		Label = "PEN",
+		Color = Color3.fromRGB(72, 160, 255),
+		Hint = "Items you send from your Ore Pen come out here.",
+	},
+	Train = {
+		X = 6,
+		Z = BACK_ROW,
+		Kind = "Source",
+		Label = "TRAIN",
+		Color = Color3.fromRGB(96, 200, 110),
+		Hint = "With Direct Unload, your train puts its dirty ore here.",
+	},
+	Foundry = {
+		X = 9,
+		Z = BACK_ROW,
+		Kind = "Sink",
+		Label = "FOUNDRY",
+		Color = Color3.fromRGB(255, 120, 40),
+		Hint = "Run a belt off this edge to send ingots to your Foundry.",
+	},
 } :: { [string]: Chute }
 
 -- The chute names in a fixed order (loops, UI).
@@ -143,5 +183,21 @@ end
 function BaseLayout.chuteWorld(plotCF: CFrame, name: string): CFrame
 	return plotCF * CFrame.new(BaseLayout.chuteLocal(name))
 end
+
+--[[
+	The Foundry's visible receiver at the FOUNDRY chute (FoundryService
+	builds it per plot; PlotBuilder stays untouched): a hood over the end of
+	the sink belt, leaning on the plot's back wall, with a pipe that goes
+	down into the ground (the Foundry shows it coming back up). An ingot the
+	chute takes flies into Mouth (a short client tween) instead of vanishing
+	at the wall. Zone is the room the hood may use: the last stud of the
+	chute cell (the belt still runs under it) up to the wall, kept left of
+	the wall pillar at x ~15-17 (no other piece overlaps it).
+]]
+local foundryCell = BaseLayout.chuteLocal("Foundry")
+BaseLayout.FoundryIntake = {
+	Mouth = Vector3.new(foundryCell.X, 1.2, GRID_HALF - 0.4),
+	Zone = rect(foundryCell.X - 0.4, GRID_HALF, 2.8, 3.5, 1.8),
+}
 
 return BaseLayout
