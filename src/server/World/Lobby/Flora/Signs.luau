@@ -227,7 +227,7 @@ function Signs.boardwalk(parent: Instance, rng: Rng.Rng)
 			end
 		end
 		Style.block(m, CFrame.new(px, high - 1.1, z), Vector3.new(0.7, 0.7, w + 1.2), C.WoodDark, nil, Style.tiny())
-		px += 5
+		px += 7
 		i += 1
 	end
 	-- entrance posts with lamps at the foot of the steps, rails along the deck

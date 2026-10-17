@@ -33,7 +33,7 @@ local Common = require(script.Parent.Common)
 
 local Roads = {}
 
-local LANTERN_EVERY = 19
+local LANTERN_EVERY = 32 -- (lobby fix round 2: 19 -> 32, fewer parts, the walkways still lit)
 -- Roads that get Post lanterns, with the distance of the first one from the road start.
 local LANTERN_ROADS = {
 	-- the gate pillars stand at the road start (z 44); Flora lights the bridge
@@ -45,11 +45,12 @@ local LANTERN_ROADS = {
 	WestSpur = 15,
 	ForgePathEast = 13,
 	ForgePathWest = 13,
-	RimRoad = 10,
+	-- (round 2: no posts along the quarry rim road: the Backdrop's lamps
+	-- light the rim, the parts went into the town)
 }
 -- No road lanterns along the south road over the creek: Flora's arched bridge
 -- has lamp boxes on its end posts and lamp fences at x +-5.3..13 there.
-Roads.SouthRoadDarkZ = { 52, 72 }
+Roads.SouthRoadDarkZ = { 36, 66 }
 -- Post lanterns that carry a light: the one nearest to this point on each road.
 local LIT_POSTS = {
 	SouthRoad = Vector3.new(0, 0, 100),
@@ -62,16 +63,18 @@ local LIT_POSTS = {
 -- stays unlit (glow only), so the dark walkway is not washed out; the forge
 -- side has no pair here: the Great Forge's stair cheeks carry two lit
 -- lantern pillars (GreatForge.luau), clear of the banners.
+-- (the south pair stands at the plaza rim beside the bridge's foot, 2 studs
+-- off the koi pond and well clear of the spawn pad and the default camera)
 local ENTRANCES = {
-	{ Center = Vector3.new(0, 0, 44), Across = Vector3.new(7.3, 0, 0), Lit = { false, false }, Height = 6.4 },
+	{ Center = Vector3.new(0, 0, 37.4), Across = Vector3.new(9, 0, 0), Lit = { false, false }, Height = 6.4 },
 	{ Center = Vector3.new(37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { true, false }, Height = 4.8 },
 	-- (the west pair stands a little further out: Tobin's Sell stall sits
 	-- south of the SHOP's door lane at the plaza rim)
 	{ Center = Vector3.new(-40.5, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { false, true }, Height = 4.8 },
 }
--- The south road's "road into the plaza" framing (concept v2): two dark
--- metal planters with small voxel trees just past the tall entry pillars.
-Roads.EntryPlanters = { Vector3.new(-8.4, 0, 49.6), Vector3.new(8.4, 0, 49.6) }
+-- (round 2: the koi pond took the entry planters' spot; the plaza's own
+-- planters flank the chevron path instead, Paving.luau)
+Roads.EntryPlanters = {} :: { Vector3 }
 
 local function onPlaza(p: Vector3, margin: number): boolean
 	return Vector3.new(p.X, 0, p.Z).Magnitude < Common.PlazaRadius + margin
@@ -86,8 +89,10 @@ local function segments(s: Common.Strip): { { From: Vector3, To: Vector3 } }
 	local z0 = bridge.Center.Z - bridge.Size.Z / 2 + 1 -- the road reaches 1 stud under each bridge end
 	local z1 = bridge.Center.Z + bridge.Size.Z / 2 - 1
 	local half = s.Width / 2
+	-- (the koi pond sits right at the plaza rim: the walkway reaches at least
+	-- 2.5 studs past the rim, under the bridge's foot)
 	return {
-		{ From = s.From, To = Vector3.new(s.From.X, 0, z0 - half) },
+		{ From = s.From, To = Vector3.new(s.From.X, 0, math.max(z0 - half, s.From.Z + 2.5)) },
 		{ From = Vector3.new(s.To.X, 0, z1 + half), To = s.To },
 	}
 end
@@ -96,10 +101,10 @@ end
 -- (z of each arrow's front tip): the concept v2 arrow, two bold, wide
 -- deep-orange chevrons nested close together (on a dark backing chevron),
 -- so they stay orange under bloom and lead the eye to the crystal.
-Roads.ChevronZ = { 39.5, 47 }
-Roads.ChevronSize = 4.2
+Roads.ChevronZ = { 36.6 } -- (between the plaza rim and the bridge's foot)
+Roads.ChevronSize = 2.8
 Roads.ChevronThickness = 0.66 -- bold but not a road marking (30% thinner than round 1)
-Roads.ChevronGap = 1.9
+Roads.ChevronGap = 1.1
 
 local function chevrons(m: Model, s: Common.Strip)
 	for _, z in Roads.ChevronZ do
@@ -149,7 +154,8 @@ local function paveAll(parent: Instance, rng: Rng.Rng)
 				Kind = s.Kind,
 				Name = s.Id,
 				Lift = s.Lift,
-				TileEvery = if cobble then 4.5 elseif s.Main then 10 else 8,
+				-- (dirt plot roads and the rim road: one clean strip, no loose plates)
+				TileEvery = if cobble then 4.5 elseif s.Main then 1e6 else 8,
 				CurbUntil = if cobble and nearPlaza and seg.From == s.From then 20 + s.Width / 2 + 6 else 0,
 				CurbSkip = function(p: Vector3): boolean
 					return onPlaza(p, 1.2)
@@ -170,7 +176,9 @@ local function lanternSpot(s: Common.Strip, t: number, side: number, length: num
 			if tt > 1 and tt < length - 1 then
 				local p = Vector3.new(s.From.X, 0, s.From.Z) + dir * tt + right * sd * offset
 				local bridge = s.Id == "SouthRoad" and p.Z >= Roads.SouthRoadDarkZ[1] and p.Z <= Roads.SouthRoadDarkZ[2]
-				if not bridge and not onPlaza(p, 3) and Common.isClear(p, 1.3) and Common.offStrips(p, 0.9) then
+				-- (round 2: never inside the Great Forge's own footprint either)
+				local forge = LobbyLayout.distanceTo(LobbyLayout.get("GreatForge"), p) < 1.5
+				if not bridge and not forge and not onPlaza(p, 3) and Common.isClear(p, 1.3) and Common.offStrips(p, 0.9) then
 					return p, sd
 				end
 			end

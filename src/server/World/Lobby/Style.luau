@@ -61,6 +61,10 @@ Style.C = {
 	Roof = rgb(198, 54, 42),
 	RoofDark = rgb(150, 38, 32),
 	RoofTrim = rgb(104, 30, 26),
+	-- muted terracotta for the town houses (lobby fix round 2: C.Roof read
+	-- as fire-engine red next to the stalls; C.Roof stays for the others)
+	RoofTerracotta = rgb(160, 58, 44),
+	RoofTerracottaDark = rgb(120, 40, 32),
 	-- metals
 	Iron = rgb(64, 64, 72),
 	IronLight = rgb(116, 118, 128),

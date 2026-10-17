@@ -84,8 +84,8 @@ local LAWN = rgb(96, 150, 66) -- a deep warm lawn (no bright lime pitch in the h
 -- the empty plot from above (lobby hero view): a mown lawn with subtle
 -- lighter stripes on every other cell row, framed by a band of light paving
 -- stones and a cobble edge
-local PLOT_LAWN = rgb(78, 140, 58)
-local PLOT_LAWN_STRIPE = rgb(86, 150, 62) -- barely visible mower stripes
+local PLOT_LAWN = rgb(70, 140, 50) -- (round 2: a deeper green, no lime)
+local PLOT_LAWN_STRIPE = rgb(84, 156, 58) -- mower stripes
 local PLOT_PAVING = rgb(196, 180, 152)
 local PLOT_EDGE = rgb(156, 142, 128)
 local GRAVEL = rgb(214, 192, 150)
@@ -100,8 +100,9 @@ local WALL_STONE = rgb(160, 150, 140) -- plinths, pillar shafts: warm grey stone
 local WALL_CAP = rgb(180, 170, 158) -- cap slabs, pillar caps and feet
 -- (the renderer and Roblox both push a saturated red to orange in full sun and to
 -- maroon in shade: a dusty brick red stays brick in both)
-local BRICK = rgb(150, 72, 60) -- a deep brick red (Brick material), no salmon rails
-local BRICK_RAISED = rgb(172, 90, 74) -- raised bricks: a close, lighter tone of the band
+local BRICK = rgb(132, 64, 54) -- a muted deep brick red (Brick material), no salmon rails
+local BRICK_RAISED = rgb(150, 78, 66) -- raised bricks: a close, lighter tone of the band
+local PILLAR_CAP = rgb(112, 106, 100) -- (round 2) a darker stone cap on the posts
 local LAMP_AMBER = rgb(220, 90, 20) -- lanterns on the posts (small and deep: no white bloom)
 -- Factory / Space Station metals (docs/ART_DIRECTION.md section 9)
 local HOUSING = rgb(66, 72, 92) -- the foundry's gunmetal housing (concept v2 dark metal)
@@ -109,9 +110,9 @@ local HOUSING_LIGHT = rgb(90, 98, 122)
 local HOUSING_DARK = rgb(58, 60, 72)
 local NAVY = rgb(27, 29, 41) -- the podium's octagon step (deep gunmetal)
 local SHELL = rgb(44, 48, 64) -- gunmetal Space Station panels (podium base, foundry frame)
-local PODIUM_TOP = rgb(112, 120, 144) -- the podium's top plate (a lighter metal under the ore)
+local PODIUM_TOP = rgb(70, 76, 98) -- the podium's top plate: a dark inset in the thin glowing rim (round 2)
 local PODIUM_COLUMN = rgb(66, 72, 92)
-local HOLO = rgb(36, 140, 235) -- the podium's holo-ring (deep enough to stay cyan, not bloom white)
+local HOLO = rgb(40, 130, 255) -- the podium's holo-ring (the lobby's Tech blue: no debug-cyan outline)
 local BASE_LIGHT = rgb(40, 140, 255) -- the podium base's corner lights
 local LOCK_GOLD = rgb(255, 200, 40)
 local LOCK_STEEL = rgb(230, 232, 240)
@@ -394,7 +395,7 @@ local function pillar(parent: Instance, cf: CFrame, kit: WallKit, at: Vector3, o
 		parent,
 		cf * CFrame.new(at.X, top + kit.PillarCapH / 2, at.Z),
 		Vector3.new(capWidth, kit.PillarCapH, capWidth),
-		WALL_CAP,
+		PILLAR_CAP,
 		nil,
 		if capWidth * capWidth * kit.PillarCapH < 1 then THIN else FENCE
 	)
@@ -614,10 +615,12 @@ local function pen(yard: Model, cf: CFrame)
 		local cornerX = if side < 0 then wallX0 else x1
 		wall(m, cf, k, Vector3.new(cornerX, 0, z0), Vector3.new(px, 0, z0), { Bricks = { 1 } })
 	end
+	-- (round 2) the ORE PEN board stands upright on the two gate posts, high
+	-- over the ores, facing the yard path
 	board(
 		m,
-		cf * CFrame.new(gateX, gateTop + k.PillarCapH + 0.55, z0 - 0.1),
-		Vector3.new(postX * 2 + 1.6, 1.1, 0.3),
+		cf * CFrame.new(gateX, gateTop + k.PillarCapH + 0.85, z0 - 0.1),
+		Vector3.new(postX * 2 + 1.2, 1.5, 0.3),
 		C.StoneDeep,
 		"ORE PEN",
 		Palette.Gold
@@ -671,7 +674,9 @@ end
 -- of the bar centre lines and bar thickness: the inner edge clears the
 -- widest ore at the ring's height (Prismite, 1.82 studs from the axis) and
 -- the top stays below PodiumService's income tag.
-PlotBuilder.HoloRing = { Y = 5.1, Radius = 2.0, Bar = 0.2, Sides = 8 }
+-- (round 2: thinner, a little higher and tighter: it hugs the ore instead of
+-- reading as a debug outline over the neighbours)
+PlotBuilder.HoloRing = { Y = 5.2, Radius = 1.94, Bar = 0.12, Sides = 6 }
 
 -- The holo-ring as a closed polygon of bars (`Sides` bars, each tangent to
 -- the circle at its middle): returns the bar CFrames and the bar size

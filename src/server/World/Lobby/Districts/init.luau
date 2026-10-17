@@ -88,15 +88,16 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 	-- the glowing sign box on top: the words at 80% of the board width (not
 	-- edge to edge), orange studs in the casing corners, a thick blue neon
 	-- line along the casing's top edge (the module's roof line)
-	local title = "FORGEKEEPERS' GUILD"
-	Tech.sign(m, at(0, 8.35, -0.1), title, 7.6, 1.6, {
+	-- (round 2: a plate 1.5x taller, the title on two lines: bigger letters)
+	local title = "FORGEKEEPERS'\nGUILD"
+	Tech.sign(m, at(0, 8.75, -0.1), title, 7.6, 2.4, {
 		Back = true,
 		Words = { { Text = title, Width = 7.6 * 0.86 } },
 		StudColor = Tech.Warm,
 		Margin = 0.4,
 		Lip = 0.25,
 	})
-	Tech.channel(m, at(0, 9.95, -0.5), 8.8, Tech.EDGE)
+	Tech.channel(m, at(0, 10.75, -0.5), 8.8, Tech.EDGE)
 	m.PrimaryPart = board
 	Kit.tag(m, "GuildBoard")
 end

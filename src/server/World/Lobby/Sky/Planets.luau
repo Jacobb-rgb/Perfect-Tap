@@ -93,13 +93,22 @@ local P = {
 	Rust = rgb(112, 54, 0), -- 15% darker bands
 	Flame = rgb(255, 100, 25), -- (the light orange streaks of round 1)
 	RimOrange = rgb(255, 70, 0),
+	-- (round 2) the ember body leans crimson-rust with bright Flame streaks
+	EmberBody = rgb(122, 46, 6), -- crimson-rust body
+	EmberBand = rgb(104, 39, 5), -- 15% darker bands
+	EmberBandDark = rgb(98, 37, 5), -- 20% darker bands
 	-- planet00 / planet03: ice-blue world (north, half-warm haze, 760 studs): every blue stays
 	-- cyan-blue through the haze (no deep navy that turns lavender)
 	Ice = rgb(100, 170, 255), -- -> #D0EEFF (ice #CFEFFF)
 	Teal = rgb(87, 148, 222), -- the ice world's bands: its own hue, 13% darker
 	Seafoam = rgb(92, 156, 234), -- 8% darker
 	DeepBlue = rgb(84, 143, 214), -- 16% darker
-	RimCyan = rgb(0, 150, 220),
+	RimCyan = rgb(0, 110, 170), -- (round 2: darker, the world no longer reads near-white)
+	-- (round 2) the teal world: a teal body, darker deep-blue bands, ice
+	-- only as polar caps
+	TealBody = rgb(36, 124, 200), -- a saturated teal-blue body (it stays blue through the haze)
+	TealBand = rgb(32, 109, 176), -- 12% darker
+	TealDeep = rgb(29, 101, 164), -- 18% darker
 }
 
 export type Patch = {
@@ -288,9 +297,12 @@ Planets.Specs = {
 		-- east island and its waterfall (above the hero frame's top edge: the
 		-- hero's sky right of the massif is too narrow for it)
 		Name = "PlanetViolet",
-		Az = 32,
+		-- (round 2: lower and further east: in the hero frame's top-right sky
+		-- right of the massif, and clear of the east island's waterfall from
+		-- the spawn)
+		Az = 35,
 		Dist = 700,
-		Elev = 15,
+		Elev = 8,
 		Size = 4.6,
 		Roll = 18,
 		Lean = 26,
@@ -315,43 +327,55 @@ Planets.Specs = {
 		-- the sunset sector): one hue with soft darker latitude bands, a darker
 		-- terminator on the side away from the sun and a thin glowing rim shell
 		Name = "PlanetEmber",
-		Az = 330,
+		-- (round 2: up in the spawn's empty top-centre sky, 14 degrees higher:
+		-- clear of SHOP, the wheel and the terraces, wholly above the hero frame)
+		Az = 352,
 		Dist = 800,
-		Elev = 6.8,
+		Elev = 21,
 		Size = 5.6,
 		Roll = -26,
 		Lean = 18,
-		Body = P.Orange,
+		Body = P.EmberBody,
 		Rim = P.RimOrange,
-		RimTransparency = 0.7,
+		RimTransparency = 0.66,
 		Bands = {
-			{ Lat = 42, Width = 0.1, Color = P.Rust },
-			{ Lat = 20, Width = 0.12, Color = P.Crimson },
-			{ Lat = -16, Width = 0.12, Color = P.Rust },
-			{ Lat = -38, Width = 0.1, Color = P.Crimson },
+			{ Lat = 42, Width = 0.1, Color = P.EmberBand },
+			{ Lat = 20, Width = 0.12, Color = P.EmberBandDark },
+			{ Lat = -16, Width = 0.12, Color = P.EmberBand },
+			{ Lat = -38, Width = 0.1, Color = P.EmberBandDark },
 		},
-		Patches = {},
+		-- bright Flame streaks across the crimson face
+		Patches = rows({
+			{ Lat = 8, Offset = -6, Runs = { { Count = 4, Color = P.Flame } } },
+			{ Lat = -28, Offset = 10, Runs = { { Count = 3, Color = P.Flame } } },
+		}, 8),
 		Terminator = true,
 	},
 	{
 		-- the small ice-blue world high in the spawn's upper-left sky, well off the
 		-- spawn-to-forge axis, with soft single-hue bands
 		Name = "PlanetTeal",
-		Az = 332,
+		-- (round 2: up-left of the balloon from the spawn, more than a
+		-- diameter clear of it; above the hero frame)
+		Az = 325,
 		Dist = 760,
-		Elev = 19,
+		Elev = 22,
 		Size = 4.65,
 		Roll = -14,
 		Lean = 16,
-		Body = P.Ice,
+		Body = P.TealBody,
 		Rim = P.RimCyan,
-		RimTransparency = 0.7,
+		RimTransparency = 0.66,
 		Bands = {
-			{ Lat = 36, Width = 0.12, Color = P.Teal },
-			{ Lat = 14, Width = 0.1, Color = P.Seafoam },
-			{ Lat = -20, Width = 0.12, Color = P.DeepBlue },
+			{ Lat = 34, Width = 0.12, Color = P.TealDeep },
+			{ Lat = 12, Width = 0.1, Color = P.TealBand },
+			{ Lat = -12, Width = 0.12, Color = P.TealDeep },
+			{ Lat = -32, Width = 0.1, Color = P.TealBand },
 		},
-		Patches = {},
+		-- ice only as a polar cap streak
+		Patches = rows({
+			{ Lat = 62, Offset = 0, Runs = { { Count = 3, Color = P.Ice } } },
+		}, 8),
 		Terminator = true,
 	},
 } :: { Spec }

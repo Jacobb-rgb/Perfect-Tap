@@ -19,7 +19,7 @@ local C = Style.C
 local Water = {}
 
 -- The bridge's deck band (world x): the koi pond's rim opens under it.
-Water.BridgeHalf = 6.6
+Water.BridgeHalf = 5.6
 
 local function bridgeGap(c: Vector3, sizeZ: number): Kit.Gap
 	return {
@@ -46,6 +46,10 @@ function Water.lilyPond(parent: Instance, rng: Rng.Rng)
 	return m
 end
 
+-- The koi pond's surface: deep teal (the light Water colour only shows as a
+-- band of shallows along the rim).
+Water.DeepTeal = Color3.fromRGB(20, 110, 150)
+
 function Water.koiPond(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("KoiPond")
 	local c = piece.Center
@@ -53,6 +57,13 @@ function Water.koiPond(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("KoiPond", parent)
 	local pond = Style.pond(m, c, piece.Size.X, piece.Size.Z, rng, { LilyPads = 6, Koi = 8, Rim = false })
 	pond.Name = "Pond"
+	-- the deep teal surface inset 1.2 studs inside the light shallows (the same
+	-- cross shape as Style.pond's water, 0.02 higher)
+	local inX, inZ = piece.Size.X - 2, piece.Size.Z - 2
+	for _, size in { Vector3.new(inX - 2.4, 0.5, inZ * 0.7 - 2.4), Vector3.new(inX * 0.78 - 2.4, 0.5, inZ - 2.4) } do
+		local deep = Style.water(pond, CFrame.new(c + Vector3.new(0, 0.42, 0)), size, Water.DeepTeal)
+		deep.Name = "Water"
+	end
 	-- the stone rim opens under the bridge (the south road crosses there)
 	Kit.rim(m, c, piece.Size.X, piece.Size.Z, rng, { bridgeGap(c, piece.Size.Z) })
 	-- stepping stones across the east end (walkable, just above the water)
@@ -73,10 +84,11 @@ function Water.koiPond(parent: Instance, rng: Rng.Rng)
 	Kit.cattails(m, c + Vector3.new(-hx + 2.4, 0, -hz + 2.2), rng, 3)
 	Kit.cattails(m, c + Vector3.new(hx - 1.8, 0, hz - 1.6), rng, 2)
 	Kit.smallCrystals(m, CFrame.new(c + Vector3.new(-hx + 1.2, 0, hz + 1.2)) * CFrame.Angles(0, -0.6, 0), C.CrystalPurpleDeep, rng, 2.2)
-	-- two ground lanterns on the south bank and a post lantern with the pond's light
-	Style.lantern(m, CFrame.new(c + Vector3.new(-11, 0, hz + 1.4)), { Kind = "Ground", Color = C.LampAmber })
-	Style.lantern(m, CFrame.new(c + Vector3.new(11, 0, hz + 1.4)), { Kind = "Ground", Color = C.LampAmber })
-	Style.lantern(m, CFrame.new(c + Vector3.new(hx + 1.6, 0, -hz + 1.4)) * CFrame.Angles(0, math.pi * 0.75, 0), {
+	-- two ground lanterns and a post lantern with the pond's light on the
+	-- south bank, each 2.6 studs off the pond's bounds (never on the rim)
+	Style.lantern(m, CFrame.new(c + Vector3.new(-13, 0, hz + 2.9)), { Kind = "Ground", Color = C.LampAmber })
+	Style.lantern(m, CFrame.new(c + Vector3.new(9, 0, hz + 2.9)), { Kind = "Ground", Color = C.LampAmber })
+	Style.lantern(m, CFrame.new(c + Vector3.new(hx - 4.5, 0, hz + 2.9)) * CFrame.Angles(0, math.pi, 0), {
 		Kind = "Post",
 		Height = 7,
 		Light = true,
@@ -111,22 +123,25 @@ end
 
 --[[
 	The humped bridge over the koi pond (concept v1): a deck of plank
-	segments rising to a real hump (Water.BridgeRise over the water, each
-	segment a gentle step), dark timber side beams under it and an arched
-	dark-timber railing on each side (posts at every segment joint, a rail
-	that follows the hump and a lighter cap rail), a tall post with a caged
-	amber lamp at each end (neon, no light). The water shows on both sides
-	of the deck and under its arched side beams.
+	segments rising to a real crown (Water.BridgeRise over the water, each
+	segment a gentle step), a dark arched stringer under each deck edge that
+	follows the hump and reaches down to the water at the ends (so the arch
+	reads from the high hero camera too, against the deep teal water),
+	stepped railings (a post at every joint, a dark rail and a lighter cap
+	rail that step up with the deck) and a tall post with a caged amber lamp
+	at each end (neon, no light). Narrower than the road (8.4): the water
+	shows wide on both sides of the deck.
 ]]
 Water.BridgeRise = 3.6
-Water.BridgeSegments = 6
+Water.BridgeSegments = 8
+Water.BridgeWidth = 8.4
 function Water.bridge(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("CreekBridge")
 	local c = piece.Center
 	local half = piece.Size.Z / 2
 	local from = c - Vector3.new(0, 0, half)
 	local to = c + Vector3.new(0, 0, half)
-	local width = 10
+	local width = Water.BridgeWidth
 	local m = Style.model("CreekBridge", parent)
 	local n = Water.BridgeSegments
 	local rise = Water.BridgeRise
@@ -148,36 +163,40 @@ function Water.bridge(parent: Instance, rng: Rng.Rng)
 		local frame = CFrame.fromMatrix((a + b) / 2 - up * (thickness / 2), right, up, -dir)
 		local color = if i % 2 == 0 then C.Plank else C.WoodLight
 		Style.block(m, frame, Vector3.new(width, thickness, seg.Magnitude + 0.35), Style.vary(color, rng, 0.03), nil, Style.solid())
-		-- dark arched side beams under the deck edges
+		-- the arched stringers: dark timber under both deck edges, deeper toward
+		-- the ends (the arch springs from the banks)
+		local mid = (i + 0.5) / n
+		local depth = 1.0 + 1.4 * (2 * mid - 1) ^ 2
 		for _, side in { -1, 1 } do
 			Style.block(
 				m,
-				frame * CFrame.new(side * (width / 2 + 0.2), -0.45, 0),
-				Vector3.new(0.6, 1.2, seg.Magnitude + 0.3),
+				frame * CFrame.new(side * (width / 2 + 0.25), -depth / 2 + 0.2, 0),
+				Vector3.new(0.7, depth, seg.Magnitude + 0.3),
 				C.WoodDark,
 				nil,
 				Style.tiny()
 			)
 		end
 	end
-	-- arched dark timber railings: a post at every joint, a rail along the
-	-- hump and a lighter cap rail on it
+	-- stepped railings: a post at every joint (rising with the deck), a dark
+	-- rail and a lighter cap rail from post to post
 	for i = 0, n do
 		local p = point(i / n)
 		local tall = i == 0 or i == n
 		for _, side in { -1, 1 } do
 			local base = p + right * side * (width / 2 + 0.3)
 			if tall then
-				bridgeLantern(m, base, 4.4)
+				-- (the end lanterns stand just past the deck's ends, 2 studs off the pond)
+				bridgeLantern(m, base + Vector3.new(0, 0, if i == 0 then -0.4 else 0.4), 4.4)
 			else
-				Style.block(m, CFrame.new(base + Vector3.new(0, 1.35, 0)), Vector3.new(0.6, 2.7, 0.6), C.WoodDark)
+				Style.block(m, CFrame.new(base + Vector3.new(0, 1.45, 0)), Vector3.new(0.6, 2.9, 0.6), C.WoodDark)
 			end
 		end
 	end
 	for i = 0, n - 1 do
 		local a, b = point(i / n), point((i + 1) / n)
 		for _, side in { -1, 1 } do
-			for _, rail in { { Y = 2.3, W = 0.45, H = 0.4, Color = C.WoodDark }, { Y = 2.65, W = 0.6, H = 0.22, Color = C.Wood } } do
+			for _, rail in { { Y = 2.5, W = 0.6, H = 0.5, Color = C.Wood } } do
 				local pa = a + right * side * (width / 2 + 0.3) + Vector3.new(0, rail.Y, 0)
 				local pb = b + right * side * (width / 2 + 0.3) + Vector3.new(0, rail.Y, 0)
 				local seg = pb - pa

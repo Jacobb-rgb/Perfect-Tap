@@ -23,7 +23,8 @@ local Scatter = {}
 
 -- (plain bushes and boulders were cut: they read as loose cubes; the lawn
 -- gaps get garden beds, short fence runs and crates instead, see gardens)
-Scatter.Limits = { Trees = 45, Bushes = 8, Flowers = 8, Boulders = 0 }
+-- (round 2: 38 trees: the town-edge belts got an inner row, the budget went there)
+Scatter.Limits = { Trees = 34, Bushes = 8, Flowers = 8, Boulders = 0 }
 
 -- No scattered trees here: they would hide the ponds, the creek and the
 -- bridge, the corridor from the plaza to the bridge, the CAPSULES module
@@ -32,9 +33,15 @@ Scatter.Limits = { Trees = 45, Bushes = 8, Flowers = 8, Boulders = 0 }
 -- camera views).
 Scatter.TreeFreeBoxes = {
 	{ Min = Vector2.new(-44, 52), Max = Vector2.new(44, 92) },
-	{ Min = Vector2.new(-12, 28), Max = Vector2.new(32, 52) },
-	{ Min = Vector2.new(-58, 22), Max = Vector2.new(-12, 52) }, -- CAPSULES and the lawn between it and the plaza
+	{ Min = Vector2.new(-26, 28), Max = Vector2.new(26, 52) }, -- the koi pond and the bridge
+	{ Min = Vector2.new(-58, 4), Max = Vector2.new(-12, 52) }, -- CAPSULES, its front and the lily pond
 	{ Min = Vector2.new(28, 60), Max = Vector2.new(58, 86) },
+	-- the FOSSIL DIG's keep-out strip: between the pit and the hero camera
+	-- (and the HALL OF FAME beside it)
+	{ Min = Vector2.new(20, 18), Max = Vector2.new(66, 64) },
+	-- the SPIN & WIN wheel's silhouette (behind the ring and beside its sign)
+	-- and its stair base (the Smithy's old spot behind the SHOP stays open)
+	{ Min = Vector2.new(-72, -112), Max = Vector2.new(-24, -38) },
 }
 
 local function treeFree(p: Vector3): boolean
@@ -211,9 +218,7 @@ end
 -- side of the ToMine path (clear of the signpost). Every
 -- run marks its line taken, so the scatter keeps half a stud off it.
 Scatter.FenceRuns = {
-	{ From = Vector3.new(-16.5, 0, 53.2), To = Vector3.new(-7.8, 0, 53.2), LampTo = true },
-	{ From = Vector3.new(7.8, 0, 53.2), To = Vector3.new(16.5, 0, 53.2), LampFrom = true },
-	{ From = Vector3.new(7.8, 0, 70.8), To = Vector3.new(16.5, 0, 70.8), LampFrom = true },
+	{ From = Vector3.new(7.8, 0, 63.6), To = Vector3.new(18.5, 0, 63.6), LampFrom = true },
 	{ From = Vector3.new(-33, 0, 80.6), To = Vector3.new(-22.5, 0, 80.6) },
 } :: { { From: Vector3, To: Vector3, LampFrom: boolean?, LampTo: boolean? } }
 
@@ -237,26 +242,17 @@ end
 ]]
 export type GardenItem = { Kind: string, At: Vector3, Color: Color3?, To: Vector3? }
 Scatter.Gardens = {
-	-- south of the HALL OF FAME
-	{ Kind = "Bed", At = Vector3.new(26, 0, 47), Color = C.FlowerYellow },
-	{ Kind = "Bed", At = Vector3.new(33, 0, 49.5), Color = C.FlowerPink },
-	{ Kind = "Bush", At = Vector3.new(39.5, 0, 47.5), Color = C.LeafGreenDark },
-	{ Kind = "Crate", At = Vector3.new(21.5, 0, 50) },
-	{ Kind = "Fence", At = Vector3.new(24, 0, 52), To = Vector3.new(36, 0, 52) },
-	-- between CAPSULES and the plaza
-	{ Kind = "Bed", At = Vector3.new(-22, 0, 45), Color = C.FlowerPurple },
-	{ Kind = "Bed", At = Vector3.new(-16, 0, 49), Color = C.FlowerRed },
-	{ Kind = "Bush", At = Vector3.new(-26.5, 0, 50), Color = C.LeafGreenDark },
-	{ Kind = "Crate", At = Vector3.new(-11.5, 0, 46) },
-	-- the lawns either side of the koi pond
-	{ Kind = "Bed", At = Vector3.new(-25, 0, 59), Color = C.FlowerYellow },
-	{ Kind = "Bed", At = Vector3.new(-30, 0, 65), Color = C.FlowerWhite },
-	{ Kind = "Bush", At = Vector3.new(-23, 0, 66.5), Color = C.LeafGreenDark },
-	{ Kind = "Fence", At = Vector3.new(-33, 0, 57), To = Vector3.new(-21, 0, 57) },
-	{ Kind = "Bed", At = Vector3.new(25, 0, 59), Color = C.FlowerPink },
-	{ Kind = "Bed", At = Vector3.new(30, 0, 64.5), Color = C.FlowerYellow },
-	{ Kind = "Crate", At = Vector3.new(21.5, 0, 63.5) },
-	{ Kind = "Fence", At = Vector3.new(20.5, 0, 69), To = Vector3.new(30, 0, 69) },
+	-- the lawn between the lily pond and the MINE hill
+	{ Kind = "Bed", At = Vector3.new(-31, 0, 56), Color = C.FlowerYellow },
+	{ Kind = "Bed", At = Vector3.new(-36, 0, 62), Color = C.FlowerWhite },
+	{ Kind = "Bush", At = Vector3.new(-28, 0, 63), Color = C.LeafGreenDark },
+	{ Kind = "Fence", At = Vector3.new(-46, 0, 53.5), To = Vector3.new(-33, 0, 53.5) },
+	-- the lawn south of the koi pond, east of the bridge
+	{ Kind = "Bed", At = Vector3.new(13, 0, 67.5), Color = C.FlowerPink },
+	{ Kind = "Crate", At = Vector3.new(19.5, 0, 68.5) },
+	-- beside the HALL OF FAME
+	{ Kind = "Bed", At = Vector3.new(36.5, 0, 63), Color = C.FlowerYellow },
+	{ Kind = "Bush", At = Vector3.new(19.5, 0, 38), Color = C.LeafGreenDark },
 } :: { GardenItem }
 
 local function gardens(m: Instance, placer: Kit.Placer, rng: Rng.Rng)

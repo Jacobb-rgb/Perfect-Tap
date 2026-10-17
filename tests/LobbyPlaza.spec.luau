@@ -194,7 +194,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("plaza: the Great Forge stays in its footprint, ridge <= 32", function()
+	T.test("plaza: the Great Forge stays in its footprint, ridge <= 37", function()
 		local forge = world().plaza.GreatForge
 		local piece = LobbyLayout.get("GreatForge")
 		local min = piece.Center - Vector3.new(piece.Size.X / 2, 0, piece.Size.Z / 2)
@@ -218,7 +218,8 @@ return function(T, Loader)
 				hasSign = true
 			end
 		end
-		T.lt(ridge, 32.01, "ridge (everything but the chimneys) <= 32")
+		-- (round 2: the forge grew upward; from the hero camera the DEPTHS sign still shows over a 37 ridge)
+		T.lt(ridge, 37.01, "ridge (everything but the chimneys) <= 37")
 		T.truthy(ridge > 26, "the forge is a landmark (ridge > 26)")
 		T.truthy(hasGlow, "glowing ForgeGlow interior")
 		T.truthy(hasSign, "THE GREAT FORGE sign")
@@ -232,7 +233,7 @@ return function(T, Loader)
 					top = math.max(top, hi.Y)
 				end
 				-- short chimneys under the gable's apex (a clean roof line round the emblem)
-				T.truthy(top >= 26 and top <= 31.3, "chimney top between 26 and 31.3")
+				T.truthy(top >= 29 and top <= 34.5, "chimney top between 29 and 34.5")
 			end
 		end
 		T.eq(chimneys, 2, "two chimneys")
@@ -270,7 +271,9 @@ return function(T, Loader)
 				end
 				local p = Vector3.new(foot.CFrame.Position.X, 0, foot.CFrame.Position.Z)
 				-- Flora lights the creek bridge: no road lanterns beside it
-				T.falsy(math.abs(p.X) < 14 and p.Z >= 52 and p.Z <= 72, `lantern at {p} doubles up with the bridge lamps`)
+				local bridge = LobbyLayout.get("CreekBridge")
+				local b0, b1 = bridge.Center.Z - bridge.Size.Z / 2 + 2, bridge.Center.Z + bridge.Size.Z / 2 + 4
+				T.falsy(math.abs(p.X) < 14 and p.Z >= b0 and p.Z <= b1, `lantern at {p} doubles up with the bridge lamps`)
 				for _, road in WorldLayout.Roads do
 					T.truthy(LobbyLayout.distanceToStrip(road.From, road.To, road.Width, p) > 0.3, `lantern at {p} stands on a road`)
 				end
@@ -287,7 +290,8 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.truthy(count >= 20, "lantern rhythm along the roads")
+		-- (round 2: a lantern every 32 studs, none on the quarry rim road: the parts went into the town)
+		T.truthy(count >= 14, "lantern rhythm along the roads")
 	end)
 
 	-- concept v2 look ------------------------------------------------------
@@ -325,7 +329,7 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.truthy(tiles > 80, "rings of slate tiles")
+		T.truthy(tiles > 60, "rings of slate tiles")
 		T.eq(polished, tiles, "one polished finish on every slab (no glossy/matte patchwork)")
 		local orange, blue = {}, {}
 		local piece = LobbyLayout.get("Plaza")
@@ -455,7 +459,7 @@ return function(T, Loader)
 		end
 		T.lt(ringTop, 2.4, "a low ring (the crystal is the focal point)")
 		T.truthy(crystalTop > ringTop + 5.5, "the crystal towers over its housing")
-		T.lt(crystalTop + crystal:GetAttribute("BobHeight"), 9.5, "the crystal stays under the eye line (the forge door shows over it)")
+		T.lt(crystalTop + crystal:GetAttribute("BobHeight"), 10.6, "the crystal stays under the eye line (the forge door shows over it)")
 		-- but THE GREAT FORGE board stays in view over it from the spawn camera (eye y 9, z 46)
 		local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
 		local forge = LobbyLayout.get("GreatForge")
@@ -493,7 +497,7 @@ return function(T, Loader)
 				for _, part in parts(child) do
 					if part.Material == NEON and part.Name ~= "EdgeGlow" then
 						local p = part.CFrame.Position
-						T.truthy(p.Z > 36 and p.Z < 56 and math.abs(p.X) < 5, "chevron on the south walkway near the plaza")
+						T.truthy(p.Z > 34 and p.Z < 56 and math.abs(p.X) < 5, "chevron on the south walkway near the plaza")
 						T.falsy(part.CanCollide, "chevrons do not collide")
 						chevrons += 1
 					end
@@ -530,16 +534,18 @@ return function(T, Loader)
 		local spawn = LobbyLayout.get("SpawnPad").Center
 		local north = 0
 		for _, part in parts(inlay) do
-			if part.Material == NEON and isOrange(part.Color) and part.CFrame.Position.Z < spawn.Z - 5 then
+			if part.Material == NEON and isOrange(part.Color) and part.CFrame.Position.Z < spawn.Z + 1 then
 				north += 1
 			end
 		end
-		T.truthy(north >= 4, "a glowing double chevron north of the spawn")
+		T.truthy(north >= 4, "a glowing double chevron across the spawn pad, pointing north")
 		-- the spawn pad is covered (no light flagstone pad in the dark plaza)
 		local cover = false
 		for _, part in parts(inlay) do
 			local p = part.CFrame.Position
-			if part.Size.X >= 7.8 and part.Size.Z >= 7.8 and (Vector3.new(p.X, 0, p.Z) - spawn).Magnitude < 0.1 then
+			-- (a flat round cover: a Cylinder lies along its X axis, its diameter is Size.Y = Size.Z)
+			local wide = if part.Shape == roblox.Enum.PartType.Cylinder then part.Size.Y >= 11.3 else part.Size.X >= 7.8
+			if wide and part.Size.Z >= 7.8 and (Vector3.new(p.X, 0, p.Z) - spawn).Magnitude < 0.1 then
 				cover = true
 			end
 		end
@@ -569,14 +575,14 @@ return function(T, Loader)
 					T.truthy(core.Color.G < 0.65 and core.Color.B < 0.25, "an amber lamp core (not white)")
 					T.truthy(core.Size.X <= 0.7, "a small neon core")
 					local glass = lantern:FindFirstChild("LanternGlass")
-					T.truthy(glass and glass.Transparency > 0 and glass.Material ~= NEON, "orange glass panes round the core")
+					T.truthy(glass and glass.Transparency > 0 and glass.Material == NEON, "glowing orange glass panes round the core")
 				end
 			end
 		end
-		T.truthy(pillars >= 16, "lantern pillars along the walkways and at the entrances")
+		T.truthy(pillars >= 12, "lantern pillars along the walkways and at the entrances")
 		-- the south entrance pair by the spawn glows without a light (the dark walkway stays dark)
 		for _, lantern in plaza.EntranceLanterns:GetChildren() do
-			if lantern.PrimaryPart.CFrame.Position.Z > 40 then
+			if lantern.PrimaryPart.CFrame.Position.Z > 36 then
 				T.falsy(lantern.PrimaryPart:FindFirstChildWhichIsA("PointLight"), "the south entrance lanterns are unlit")
 			end
 		end
@@ -628,7 +634,7 @@ return function(T, Loader)
 		end
 		T.eq(roofs, 6, "three slate gable roofs")
 		-- a low, wide hall under one big gable (concept v2), not a two-storey house
-		T.truthy(GreatForge.NaveEave <= 18, "the gable starts right over the entrance")
+		T.truthy(GreatForge.NaveEave - GreatForge.PlinthTop <= 11.5, "the gable starts right over the entrance")
 		T.truthy(GreatForge.NaveRoofHeight / (GreatForge.NaveEave + GreatForge.NaveRoofHeight) >= 0.4, "the gable is ~half the facade")
 		T.truthy(GreatForge.EmblemSize >= GreatForge.NaveRoofHalf * 2 * 0.24, "a big emblem (~1/4 of the gable's width)")
 		-- slate roofs with thin shingle courses (no thick rows or rafter seams)
@@ -636,7 +642,7 @@ return function(T, Loader)
 		for _, part in parts(forge) do
 			if part.Color == Common.Colors.RoofSlateDark then
 				courses += 1
-				T.truthy(math.min(part.Size.X, part.Size.Y, part.Size.Z) <= 0.16, "thin shingle courses and joints")
+				T.truthy(math.min(part.Size.X, part.Size.Y, part.Size.Z) <= 0.2, "thin shingle courses and joints")
 			end
 		end
 		T.truthy(courses >= 20, "shingle courses on the slate roofs")

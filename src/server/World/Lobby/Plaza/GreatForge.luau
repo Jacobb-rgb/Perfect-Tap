@@ -53,33 +53,36 @@ local GreatForge = {}
 -- Main measures (local frame, studs). Exposed for the spec.
 -- (the forge paths, WorldLayout roads at x +-26, 9 wide, run along both
 -- sides: the hall fills its footprint up to them, x -21..21)
+-- (lobby fix round 2: grown upward and deeper, not wider: a plinth 3.5
+-- higher with a longer stair, so the lit door stays above the fire crystal,
+-- eaves, gable, ridge and emblem about 1.1-1.2x, the hall 4 studs deeper)
 GreatForge.HalfWidth = 21
-GreatForge.PlinthTop = 6.5 -- the raised porch and hall floor (the door shows over the fire crystal)
-GreatForge.WingEave = 16
-GreatForge.WingRoofHeight = 5.2 -- wing ridge 21.2: it dies into the nave roof's slope
-GreatForge.NaveEave = 17.6 -- the gable starts right over the entrance's beam band
-GreatForge.NaveRoofHeight = 13.9 -- gable apex 31.5 (44% of the facade)
-GreatForge.NaveRoofHalf = 13.5 -- the cross gable spans x -13.5..13.5: slate shows both sides of the gable
-GreatForge.ChimneyTop = 30 -- short chimneys behind the wing ridges (under the gable's apex)
-GreatForge.SignY = 19.3 -- THE GREAT FORGE board center (at the foot of the gable)
+GreatForge.PlinthTop = 10 -- the raised porch and hall floor (the door shows over the fire crystal)
+GreatForge.WingEave = 19.5
+GreatForge.WingRoofHeight = 6.2 -- wing ridge 25.7: it dies into the nave roof's slope
+GreatForge.NaveEave = 21.1 -- the gable starts right over the entrance's beam band
+GreatForge.NaveRoofHeight = 15.4 -- gable apex 36.5 (the DEPTHS sign still shows over it from the hero camera)
+GreatForge.NaveRoofHalf = 14.6 -- the cross gable spans x -14.6..14.6: slate shows both sides of the gable
+GreatForge.ChimneyTop = 33 -- short chimneys behind the wing ridges (under the gable's apex)
+GreatForge.SignY = 22.8 -- THE GREAT FORGE board center (at the foot of the gable)
 GreatForge.SignWidth = 20.5 -- (the nave walls span x -9..9: the ends hang on iron straps)
-GreatForge.SignHeight = 4
-GreatForge.EmblemY = 25.75 -- center of the gold crossed hammers inside the gable
-GreatForge.EmblemSize = 6.6 -- ~a quarter of the gable's width
+GreatForge.SignHeight = 4.2
+GreatForge.EmblemY = 30.1 -- center of the gold crossed hammers inside the gable
+GreatForge.EmblemSize = 7.9 -- ~a quarter of the gable's width
 GreatForge.StairHalfWidth = 8 -- the flight runs x -8..8 (the door width)
-GreatForge.StairSteps = 13 -- risers of 0.47 from the plaza apron (y 0.4) to the porch
-GreatForge.DoorTop = 14.2
+GreatForge.StairSteps = 20 -- risers of 0.48 from the plaza apron (y 0.4) to the porch
+GreatForge.DoorTop = 17.7
 GreatForge.DoorHalf = 7
 GreatForge.BannerX = 11.7 -- banner centers (local x = +-11.7), just outside the stair cheeks (x +-9.75)
-GreatForge.BannerWidth = 3.4 -- the gold border plate (the crimson cloth is 0.4 narrower)
-GreatForge.BannerTop = 20.3 -- the cloth hangs from the sign's level ...
-GreatForge.BannerBottom = 10.4 -- ... down to the door's middle (about 60% of a full-height banner), a swallow-tail foot
+GreatForge.BannerWidth = 3.4 -- the border plate (the crimson cloth is 0.4 narrower)
+GreatForge.BannerTop = 23.8 -- the cloth hangs from the sign's level ...
+GreatForge.BannerBottom = 13.9 -- ... down to the door's middle (about 60% of a full-height banner), a V-notched foot
 
 local PLINTH_TOP = GreatForge.PlinthTop
 local NAVE = 9 -- nave wall half width
 local NAVE_FRONT = -9
 local WING_FRONT = -7
-local WALL_BACK = 16
+local WALL_BACK = 20
 local PORCH_FRONT = -11 -- the plinth front (top of the stairs)
 local WING_EAVE = GreatForge.WingEave
 local NAVE_EAVE = GreatForge.NaveEave
@@ -92,7 +95,7 @@ local WING_ROOF_Z0 = WING_FRONT - 0.5 -- wing roofs: front eave .. back eave
 local WING_ROOF_Z1 = WALL_BACK + 1.5
 local WING_ROOF_X0 = NAVE -- wing roofs: x 9..20.6 (the inner end hides under the nave roof)
 local WING_ROOF_X1 = 20.6
-local NAVE_ROOF_Z0 = NAVE_FRONT - 1 -- nave roof: front gable .. back
+local NAVE_ROOF_Z0 = NAVE_FRONT - 2.2 -- nave roof: front gable (the slopes reach forward over the sign) .. back
 local NAVE_ROOF_Z1 = WALL_BACK + 1.5
 local DOOR_HALF = GreatForge.DoorHalf
 local DOOR_TOP = GreatForge.DoorTop
@@ -135,7 +138,7 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 				return cf * CFrame.new(x, height * (1 - t) + 0.05, side * half * t) * rot
 			end
 			for r = 1, rows do
-				Style.block(m, onSlope(0, r / (rows + 1)), Vector3.new(width - 0.1, 0.15, 0.16), K.RoofSlateDark, nil, Style.tiny())
+				Style.block(m, onSlope(0, r / (rows + 1)), Vector3.new(width - 0.1, 0.2, 0.32), K.RoofSlateDark, nil, Style.tiny())
 			end
 			if stubs then
 				for r = 0, rows do
@@ -173,8 +176,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	------------------------------------------------------------ plinth and the monumental stairs
 	Style.block(
 		m,
-		at(0, PLINTH_TOP / 2, (PORCH_FRONT + 20) / 2),
-		Vector3.new(WIDTH, PLINTH_TOP, 20 - PORCH_FRONT),
+		at(0, PLINTH_TOP / 2, (PORCH_FRONT + 23.5) / 2),
+		Vector3.new(WIDTH, PLINTH_TOP, 23.5 - PORCH_FRONT),
 		Style.vary(C.StoneDark, rng, 0.03),
 		nil,
 		Style.solid()
@@ -404,9 +407,11 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		local clothMid = (clothTop + clothBottom) / 2
 		local clothH = clothTop - clothBottom
 		local tail = 1.2
-		local pierW = width + 0.4
+		-- a slim dark pier (narrower than the banner: the cloth hangs free in
+		-- front of it, it does not read as paint on a pillar)
+		local pierW = 1.4
 		local pierTop = clothTop + 0.9
-		local bz = PIER_FRONT - 0.3 -- the cloth plane (0.3 off the pier)
+		local bz = PIER_FRONT - 0.45 -- the cloth plane (0.45 off the pier)
 		-- the dark pier and its cap with a small amber lamp
 		Style.block(
 			banner,
@@ -434,23 +439,24 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 			Style.tiny()
 		).Name =
 			"PierLamp"
-		-- the rod (a dark bar reaching back to the pier) with gold finials
+		-- the gold rod across the cloth's top, on a dark bracket from the pier, gold finials
 		local rodY = clothTop + 0.3
+		Style.block(banner, at(bx, rodY, bz - 0.05), Vector3.new(width + 0.7, 0.3, 0.3), C.Gold, nil, Style.tiny()).Name = "BannerRod"
 		Style.block(
 			banner,
-			at(bx, rodY, (bz + PIER_FRONT) / 2 - 0.05),
-			Vector3.new(width + 0.7, 0.32, PIER_FRONT - bz + 0.3),
+			at(bx, rodY + 0.02, (bz + PIER_FRONT) / 2 - 0.1),
+			Vector3.new(0.34, 0.34, PIER_FRONT - bz + 0.1),
 			K.MetalDark,
 			nil,
 			Style.tiny()
 		).Name =
-			"BannerRod"
+			"BannerBracket"
 		for _, t in { -1, 1 } do
 			Style.block(banner, at(bx + t * (width / 2 + 0.45), rodY, bz - 0.05), Vector3.new(0.5, 0.5, 0.5), C.Gold, nil, Style.tiny()).Name =
 				"BannerFinial"
 		end
-		-- the gold border plate behind the cloth (also behind its pointed foot)
-		Style.block(banner, at(bx, clothMid, bz + 0.06), Vector3.new(width, clothH + 0.3, 0.1), C.Gold, nil, Style.tiny()).Name =
+		-- the dark crimson border plate behind the cloth (also behind its notched foot)
+		Style.block(banner, at(bx, clothMid, bz + 0.06), Vector3.new(width, clothH + 0.3, 0.1), K.BannerDark, nil, Style.tiny()).Name =
 			"BannerBorder"
 		local cloth = Style.block(banner, at(bx, clothMid, bz - 0.03), Vector3.new(clothW, clothH, 0.12), K.Banner, nil, Style.tiny())
 		cloth.Name = "BannerCloth"
@@ -458,7 +464,7 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		-- outer edges: two tails with a notch between them) on slightly larger
 		-- gold wedges: a gold edge round the tails
 		for _, spec in
-			{ { W = clothW, T = tail, Z = bz - 0.03, Color = K.Banner }, { W = width, T = tail + 0.3, Z = bz + 0.06, Color = C.Gold } }
+			{ { W = clothW, T = tail, Z = bz - 0.03, Color = K.Banner }, { W = width, T = tail + 0.3, Z = bz + 0.06, Color = K.BannerDark } }
 		do
 			for _, t in { -1, 1 } do
 				Geo.wedge(
@@ -586,7 +592,17 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	local naveRoof = at(0, NAVE_EAVE, (NAVE_ROOF_Z0 + NAVE_ROOF_Z1) / 2) * CFrame.Angles(0, math.pi / 2, 0)
 	local naveLen = NAVE_ROOF_Z1 - NAVE_ROOF_Z0
 	Style.gableRoof(m, naveRoof, naveLen, NAVE_HALF * 2, NAVE_ROOF_H, NAVE_ROOF)
-	roofCourses(naveRoof, naveLen, NAVE_HALF * 2, NAVE_ROOF_H, { -1, 1 }, 6)
+	roofCourses(naveRoof, naveLen, NAVE_HALF * 2, NAVE_ROOF_H, { -1, 1 }, 7)
+	-- a brick-red ridge trim along the nave's ridge (from the gable's apex back)
+	Style.block(
+		m,
+		at(0, APEX + 0.05, (NAVE_ROOF_Z0 + NAVE_ROOF_Z1) / 2 + 0.6),
+		Vector3.new(0.9, 0.5, naveLen - 1.4),
+		K.BrickRed,
+		nil,
+		Style.tiny()
+	).Name =
+		"RidgeTrim"
 	-- dark timber gable infill just in front of the roof's end face, inset so
 	-- a band of slate and the bargeboards frame it
 	local gz = NAVE_ROOF_Z0 - 0.2
@@ -618,7 +634,7 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	Style.block(m, at(0, collarY, gz - 0.24), Vector3.new(collarHalf * 2, 0.9, 0.2), TIMBER, nil, Style.tiny()).Name = "GableBeam"
 	for _, s in { -1, 1 } do
 		local x0, y0 = s * (collarHalf - 0.9), collarY + 0.2
-		local x1, y1 = s * 4.9, collarY + 3.6
+		local x1, y1 = s * 5.8, collarY + 4.3
 		local len = math.sqrt((x1 - x0) ^ 2 + (y1 - y0) ^ 2)
 		Style.block(
 			m,
@@ -635,7 +651,7 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	-- larger glowing orange border, carrying the big glowing deep-gold
 	-- crossed hammers
 	local crestFoot = GreatForge.SignY + GreatForge.SignHeight / 2 + 0.5
-	local crestHalf = 4.3
+	local crestHalf = 5.2
 	local crestApex = APEX - 0.45
 	local shoulder = crestApex - crestHalf * NAVE_PITCH
 	for i, spec in

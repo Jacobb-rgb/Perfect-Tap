@@ -51,8 +51,9 @@ local TopStrip = rgb(236, 182, 112)
 local NavRed = rgb(255, 64, 64)
 local NavGreen = rgb(80, 255, 140)
 local Screen = rgb(255, 170, 90)
--- the exhaust jet: saturated magenta like the concept's
-local Trail = rgb(255, 80, 200)
+-- the exhaust: a short deep-orange glow (round 2: the long magenta beam read
+-- as a stray line across the sky)
+local Trail = rgb(255, 110, 30)
 
 local Airship = {}
 
@@ -222,17 +223,17 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 		glow(at(side * (finR + 6.2), 0, finZ + 3.2), size(0.8, 0.8, 0.8), if side < 0 then NavRed else NavGreen)
 	end
 
-	-- stern propeller and the thin bright magenta jet behind it: three Neon
-	-- cylinders, each longer, thinner and fainter
+	-- stern propeller and a short orange exhaust glow behind it: three Neon
+	-- cylinders, each thinner and fainter
 	local last = CONE[#CONE]
 	local sternZ = last[2] + last[3] / 2 + 0.5
 	propeller(at(0, 0, sternZ), 12)
 	local z = sternZ + 1
 	type Segment = { Width: number, Length: number, Transparency: number }
 	local trail: { Segment } = {
-		{ Width = 2.2, Length = 6, Transparency = 0.2 },
-		{ Width = 1.4, Length = 10, Transparency = 0.45 },
-		{ Width = 0.8, Length = 14, Transparency = 0.7 },
+		{ Width = 2.0, Length = 2.4, Transparency = 0.2 },
+		{ Width = 1.4, Length = 2.0, Transparency = 0.45 },
+		{ Width = 0.8, Length = 1.6, Transparency = 0.7 },
 	}
 	for _, seg in trail do
 		local jet = drum(at(0, 0, z + seg.Length / 2), seg.Width, seg.Length, Trail, Enum.Material.Neon)

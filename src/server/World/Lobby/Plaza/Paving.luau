@@ -39,20 +39,25 @@ local Paving = {}
 
 -- Slate tile rings: inner/outer radius, tiles per ring, phase (fraction of a tile).
 -- (rings 1 and 2 only meet at a seam; the gaps after rings 2 and 3 carry neon rings)
+-- (lobby fix round 2: longer slabs, 80 instead of ~120: the dark slate
+-- needs fewer seams, and the plaza paid for its planters with them)
 local RINGS = {
-	{ R0 = 14.8, R1 = 19.0, Count = 20, Phase = 0 },
-	{ R0 = 19.0, R1 = 23.9, Count = 26, Phase = 0.5 },
-	{ R0 = 25.35, R1 = 29.45, Count = 30, Phase = 0.25 },
-	{ R0 = 31.1, R1 = 35, Count = 34, Phase = 0.6 },
+	{ R0 = 14.8, R1 = 19.0, Count = 12, Phase = 0 },
+	{ R0 = 19.0, R1 = 23.9, Count = 16, Phase = 0.5 },
+	{ R0 = 25.35, R1 = 29.45, Count = 20, Phase = 0.25 },
+	{ R0 = 31.1, R1 = 35, Count = 24, Phase = 0.6 },
 }
 -- Neon rings in the gaps: radius (polygon corners), width, segments, drawn
 -- fraction (> 1: the chords overlap, a continuous ring), color. Bold and
 -- wide (concept v2), the blue one in long dashes: they read as neon rings,
 -- not as lane markings.
+-- (round 2: 24 long segments per ring; the blue ring as wide as the
+-- orange one, a saturated blue that glows as strongly as the orange)
+Paving.OuterBlue = Color3.fromRGB(30, 100, 255)
 Paving.NeonRings = {
 	{ Name = "InnerRing", R = 14.35, Width = 1.0, Segments = 24, Dash = 1.04, Color = K.RingOrange },
-	{ Name = "OrangeRing", R = 24.62, Width = 1.3, Segments = 30, Dash = 1.04, Color = K.RingOrange },
-	{ Name = "OuterRing", R = 30.62, Width = 1.0, Segments = 16, Dash = 0.92, Color = K.NeonBlueDeep },
+	{ Name = "OrangeRing", R = 24.62, Width = 1.3, Segments = 24, Dash = 1.04, Color = K.RingOrange },
+	{ Name = "OuterRing", R = 30.62, Width = 1.3, Segments = 24, Dash = 0.82, Color = Paving.OuterBlue },
 }
 Paving.CrystalFloorRadius = 13.65
 local TILE_H = 0.08
@@ -84,18 +89,7 @@ local function slateTiles(m: Model, center: Vector3, spawn: Vector3, rng: Rng.Rn
 			local p = center + Vector3.new(math.cos(a), 0, math.sin(a)) * rc
 			if not underPad(p, spawn, -0.8) then
 				local frame = CFrame.new(p.X, Common.TileTop - TILE_H / 2, p.Z) * CFrame.Angles(0, -a, 0)
-				-- now and then a slab is cut in two (more seams, less repetition)
-				if rng:chance(0.1) then
-					local k = rng:range(0.35, 0.65)
-					local l1 = arc * k - Common.Seam
-					local l2 = arc * (1 - k) - Common.Seam
-					local z1 = -arc / 2 + arc * k / 2
-					local z2 = arc / 2 - arc * (1 - k) / 2
-					tile(m, frame * CFrame.new(0, 0, z1), Vector3.new(depth, TILE_H, l1), rng, Common.courseSlate(ringIndex, i, rng))
-					tile(m, frame * CFrame.new(0, 0, z2), Vector3.new(depth, TILE_H, l2), rng, Common.courseSlate(ringIndex, i + 1, rng))
-				else
-					tile(m, frame, Vector3.new(depth, TILE_H, arc - Common.Seam), rng, Common.courseSlate(ringIndex, i, rng))
-				end
+				tile(m, frame, Vector3.new(depth, TILE_H, arc - Common.Seam), rng, Common.courseSlate(ringIndex, i, rng))
 			end
 		end
 	end
@@ -188,7 +182,7 @@ local function curb(m: Model, center: Vector3, rng: Rng.Rng)
 				Vector3.new(Paving.CurbDepth, h, arc + 0.05),
 				Style.vary(if post then K.MetalDark else K.Metal, rng, 0.04),
 				nil,
-				Style.ghost()
+				Style.ghost({ CastShadow = false })
 			)
 			if post then
 				block.Name = "CurbPost"
@@ -219,25 +213,26 @@ end
 
 --[[
 	The spawn pad (Town.luau builds TownSpawn, 8 x 8, top 0.45, a light
-	flagstone color) dressed to match the plaza: a dark seam plate on it,
-	one big slate slab with a quiet ring of short deep-blue dashes (it does
-	not compete with the crystal), and north of it the concept's bold
-	double chevron pointing to the Great Forge. All flat (<= 0.5), no
-	collision; the plaza tiles and rings run on around it.
+	flagstone color) dressed to match the plaza: one round dark slate cover
+	over it (wide enough to hide the pad's corners) on a thin blue neon rim,
+	and the concept's bold double chevron running across it toward the
+	Great Forge in the plaza neon colours. All flat (< 0.5), no collision;
+	the plaza tiles and rings run on around it.
 ]]
-local function spawnInlay(m: Model, spawn: Vector3, rng: Rng.Rng)
+Paving.SpawnCoverDiameter = 11.6
+local function spawnInlay(m: Model, spawn: Vector3, _rng: Rng.Rng)
 	local c = Vector3.new(spawn.X, 0, spawn.Z)
-	local plate = Style.block(m, CFrame.new(c + Vector3.new(0, 0.46, 0)), Vector3.new(8.3, 0.02, 8.3), K.SlateDark, nil, Style.tiny())
+	local d = Paving.SpawnCoverDiameter
+	local plate = Geo.cylinder(m, c + Vector3.new(0, 0.454, 0), 0.006, d + 0.4, K.SlateDark, SMOOTH, Style.tiny())
 	plate.Name = "SpawnInlay"
-	local tile = Style.block(m, CFrame.new(c + Vector3.new(0, 0.4825, 0)), Vector3.new(7.9, 0.025, 7.9), K.Slate, nil, Style.tiny())
+	local rim = Geo.cylinder(m, c + Vector3.new(0, 0.46, 0), 0.006, d, Paving.OuterBlue, NEON, Style.tiny())
+	rim.Name = "SpawnRing"
+	local tile = Geo.cylinder(m, c + Vector3.new(0, 0.466, 0), 0.006, d - 0.5, K.Slate, SMOOTH, Style.tiny())
+	tile.Name = "SpawnCover"
 	tile.Reflectance = Common.TileReflectance
-	-- six quiet arcs (not a dashed lane marking round the spawn)
-	for _, part in Common.ring(m, c, 3.1, 0.07, 0.488, 0.02, 6, K.NeonBlueDeep, { Phase = 0.5, Dash = 0.5 }) do
-		part.Name = "SpawnRing"
-	end
-	-- the double chevron toward the forge (north, -Z), on the plaza tiles
-	local tip = c + Vector3.new(0, 0.44, -8.6)
-	for _, part in Common.doubleChevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.4, 0.8, 1.6, K.Chevron) do
+	-- the double chevron across the pad toward the forge (north, -Z)
+	local tip = c + Vector3.new(0, 0.477, -3.3)
+	for _, part in Common.doubleChevron(m, CFrame.lookAt(tip, tip + Vector3.new(0, 0, -1)), 3.2, 0.7, 1.5, K.Chevron, 0.01) do
 		part.Name = "SpawnChevron"
 	end
 end
@@ -300,8 +295,8 @@ end
 ]]
 Paving.ApronTop = 0.24
 Paving.Aprons = { "Shop", "Upgrades", "CapsuleStall", "HallOfFame" }
-local function apronLength(front: Vector3, look: Vector3, right: Vector3, halfW: number): number
-	local best = 16
+local function apronLength(front: Vector3, look: Vector3, right: Vector3, halfW: number): number?
+	local best: number? = nil
 	for _, side in { -1, 1 } do
 		local corner = front + right * side * halfW
 		-- smallest L with |corner + look L| <= r
@@ -310,8 +305,8 @@ local function apronLength(front: Vector3, look: Vector3, right: Vector3, halfW:
 		local disc = b * b - (corner:Dot(corner) - r * r)
 		if disc >= 0 then
 			local l = -b - math.sqrt(disc)
-			if l > 0 then
-				best = math.min(best, l + 1)
+			if l > 0 and l <= 15 then
+				best = math.min(best or 16, l + 1)
 			end
 		end
 	end
@@ -325,7 +320,13 @@ local function facadeAprons(m: Model, rng: Rng.Rng)
 		local right = Vector3.new(-look.Z, 0, look.X)
 		local front = Vector3.new(piece.Center.X, 0, piece.Center.Z) + look * (piece.Size.Z / 2)
 		local halfW = piece.Size.X / 2
-		local length = apronLength(front, look, right, halfW)
+		-- (a stall that does not face the plaza gets no apron: CAPSULES faces
+		-- the spawn and the hero camera, the HALL OF FAME the koi pond lane)
+		local reach = apronLength(front, look, right, halfW)
+		if not reach then
+			continue
+		end
+		local length: number = reach
 		local mid = front + look * (length / 2)
 		local frame = CFrame.fromMatrix(Vector3.new(mid.X, Paving.ApronTop - 0.1, mid.Z), right, Vector3.new(0, 1, 0), -look)
 		local slab = Style.block(m, frame, Vector3.new(halfW * 2, 0.2, length), Style.vary(K.Slate, rng, 0.02), nil, Style.tiny())
@@ -356,25 +357,29 @@ local function facadeAprons(m: Model, rng: Rng.Rng)
 end
 
 --[[
-	Dark metal planter boxes round the plaza rim between the entrances
-	(concept v2's planters): a dark box with a blue neon lip and two or
-	three voxel bush blocks on it. Out of the walking ring (r 33.6),
-	clear of every road, path and stall. 5 parts each.
+	Concept v2 planters on the outer slate course (r 33.2), at the NE, NW,
+	SE and SW ring gaps (the south pair flanks the chevron path from the
+	spawn): a dark metal tub with an orange neon lip round a dark soil top
+	and three voxel bush cubes. On the paving between the blue ring and the
+	curb (never on a neon line), clear of every road, path and stall. 6
+	parts each.
 ]]
-Paving.PlanterRadius = 33.6
-Paving.PlanterAngles = { 48, 68, 118, 145, 165, 300 }
-local function planterBox(m: Model, base: CFrame, rng: Rng.Rng, length: number)
-	local box = Style.block(m, base * CFrame.new(0, 0.7, 0), Vector3.new(1.5, 1.4, length), K.MetalDark, nil, Style.solid())
+Paving.PlanterRadius = 33.2
+Paving.PlanterAngles = { 45, 135, 225, 315 }
+local function planterBox(m: Model, base: CFrame, rng: Rng.Rng)
+	local size = Vector3.new(2.6, 1.5, 4.0)
+	local box = Style.block(m, base * CFrame.new(0, size.Y / 2, 0), size, K.MetalDark, nil, Style.decor())
 	box.Name = "Planter"
-	Style.block(m, base * CFrame.new(0, 1.42, 0), Vector3.new(1.62, 0.1, length + 0.12), K.NeonBlueDeep, NEON, Style.tiny()).Name =
+	Style.block(m, base * CFrame.new(0, size.Y + 0.04, 0), Vector3.new(size.X + 0.12, 0.08, size.Z + 0.12), K.NeonOrange, NEON, Style.tiny()).Name =
 		"PlanterLip"
+	Style.block(m, base * CFrame.new(0, size.Y + 0.1, 0), Vector3.new(size.X - 0.4, 0.08, size.Z - 0.4), C.DirtDark, nil, Style.tiny())
 	local shades = { C.LeafGreen, C.LeafGreenDark, C.LeafGreenLight }
 	for i = 1, 3 do
-		local k = rng:range(0.9, 1.3)
-		local z = (i - 2) * length * 0.3 + rng:range(-0.15, 0.15)
+		local k = rng:range(1.1, 1.5)
+		local z = (i - 2) * size.Z * 0.28 + rng:range(-0.15, 0.15)
 		Style.block(
 			m,
-			base * CFrame.new(rng:range(-0.1, 0.1), 1.4 + k * 0.4, z),
+			base * CFrame.new(rng:range(-0.12, 0.12), size.Y + 0.14 + k * 0.4, z),
 			Vector3.new(k, k * 0.8, k),
 			Style.vary(shades[i], rng, 0.05),
 			nil,
@@ -387,8 +392,52 @@ local function planters(m: Model, rng: Rng.Rng)
 	for _, deg in Paving.PlanterAngles do
 		local a = math.rad(deg)
 		local p = Vector3.new(math.cos(a), 0, math.sin(a)) * Paving.PlanterRadius
-		if not Common.isEntrance(a, 3) and Common.isClear(p, 1.6) and Common.offStrips(p, 1.6) then
-			planterBox(m, CFrame.new(p) * CFrame.Angles(0, -a, 0), rng, 2.8)
+		if not Common.isEntrance(a, 3) and Common.isClear(p, 2.2) and Common.offStrips(p, 2.2) then
+			planterBox(m, CFrame.new(p) * CFrame.Angles(0, -a, 0), rng)
+		end
+	end
+end
+
+-- Gold ore carts carry matte gold nuggets (C.Gold SmoothPlastic): Neon gold blooms white.
+local function matteGold(cart: Instance, rng: Rng.Rng)
+	for _, d in cart:GetDescendants() do
+		if d:IsA("BasePart") and d.Material == NEON then
+			d.Material = SMOOTH
+			d.Color = Style.vary(C.Gold, rng, 0.05)
+		end
+	end
+end
+
+-- Two small gold ore carts on the plaza's outer slate course (concept v2's
+-- mine carts), turned along the ring, off the paths.
+Paving.RingCartAngles = { 20, 160 }
+local function ringCarts(m: Model, rng: Rng.Rng)
+	for _, deg in Paving.RingCartAngles do
+		local a = math.rad(deg)
+		local p = Vector3.new(math.cos(a), 0, math.sin(a)) * Paving.PlanterRadius
+		if not Common.isEntrance(a, 3) and Common.isClear(p, 2) and Common.offStrips(p, 2) then
+			local tangent = Vector3.new(-math.sin(a), 0, math.cos(a))
+			local at = p + Vector3.new(0, Common.TileTop, 0)
+			-- a small cart (7 parts): dark tub, copper rim, a matte gold load
+			-- with two nuggets on top, two axles
+			local cart = Style.model("OreCart", m)
+			local base = CFrame.lookAt(at, at + tangent)
+			Style.block(cart, base * CFrame.new(0, 1.05, 0), Vector3.new(1.9, 1.1, 2.7), K.MetalDark, nil, Style.decor())
+			Style.block(cart, base * CFrame.new(0, 1.62, 0), Vector3.new(2.05, 0.18, 2.85), C.Copper, nil, Style.tiny())
+			Style.block(cart, base * CFrame.new(0, 1.78, 0), Vector3.new(1.6, 0.36, 2.3), Style.vary(C.Gold, rng, 0.05), nil, Style.tiny())
+			for _, q in { Vector3.new(-0.3, 2.08, -0.5), Vector3.new(0.35, 2.05, 0.45) } do
+				Style.block(
+					cart,
+					base * CFrame.new(q) * CFrame.Angles(rng:range(-0.4, 0.4), rng:range(0, 1.5), 0),
+					Vector3.new(0.6, 0.45, 0.6),
+					Style.vary(C.Gold, rng, 0.06),
+					Enum.Material.Metal,
+					Style.tiny()
+				)
+			end
+			for _, z in { -0.8, 0.8 } do
+				Style.block(cart, base * CFrame.new(0, 0.38, z), Vector3.new(2.3, 0.6, 0.6), K.Metal, nil, Style.tiny())
+			end
 		end
 	end
 end
@@ -405,6 +454,7 @@ local function oreCarts(m: Model, rng: Rng.Rng)
 		local p = Vector3.new(piece.Center.X, 0, piece.Center.Z) + right * side * (piece.Size.X / 2 + 2.6) + look * 4
 		local cart = Style.mineCart(m, CFrame.lookAt(p, p + right) * CFrame.Angles(0, 0.35 * side, 0), rng, { Load = "Gold" })
 		cart.Name = "OreCart"
+		matteGold(cart, rng)
 	end
 end
 
@@ -442,7 +492,9 @@ function Paving.build(parent: Instance, rng: Rng.Rng)
 	forgeApron(Style.model("ForgeApron", m), rng)
 	facadeAprons(Style.model("Aprons", m), rng)
 	planters(Style.model("Planters", parent), rng)
-	oreCarts(Style.model("OreCarts", parent), rng)
+	local carts = Style.model("OreCarts", parent)
+	oreCarts(carts, rng)
+	ringCarts(carts, rng)
 end
 
 return Paving

@@ -160,9 +160,15 @@ function Kit.clearOfStalls(model: Instance): boolean
 	for _, apron in Kit.Aprons do
 		table.insert(aprons, Kit.apronPiece(apron))
 	end
+	-- the whole model's box too (an L-shaped crown's box corner may come
+	-- closer to a stall than any of its parts)
+	local all0 = Vector3.new(math.huge, 0, math.huge)
+	local all1 = Vector3.new(-math.huge, 0, -math.huge)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			local lo, hi = Kit.partBox(d)
+			all0 = Vector3.new(math.min(all0.X, lo.X), 0, math.min(all0.Z, lo.Z))
+			all1 = Vector3.new(math.max(all1.X, hi.X), 0, math.max(all1.Z, hi.Z))
 			for _, piece in LobbyLayout.Pieces do
 				if piece.Package == "Districts" and LobbyLayout.isGroundPiece(piece) then
 					if Kit.boxPieceGap(lo, hi, piece) < Kit.StallGap then
@@ -172,6 +178,15 @@ function Kit.clearOfStalls(model: Instance): boolean
 			end
 			for _, apron in aprons do
 				if Kit.boxPieceGap(lo, hi, apron) < 0.3 then
+					return false
+				end
+			end
+		end
+	end
+	if all0.X < math.huge then
+		for _, piece in LobbyLayout.Pieces do
+			if piece.Package == "Districts" and LobbyLayout.isGroundPiece(piece) then
+				if Kit.boxPieceGap(all0, all1, piece) < Kit.StallGap then
 					return false
 				end
 			end
@@ -211,8 +226,9 @@ function Kit.free(placer: Placer, p: Vector3, r: number, reach: number?): boolea
 			return false
 		end
 	end
-	-- crowns (reach) and trunks (r) both stay clear of the town buildings and the stalls' aprons
-	local clear = math.max(r, reach or 0) + 0.5
+	-- crowns (reach) and trunks (r) both stay clear of the town buildings
+	-- (canopy radius + 2 studs: no crown cuts into a wall or a sign) and the stalls' aprons
+	local clear = math.max(r, reach or 0) + (if reach then 2 else 0.5)
 	for _, box in placer.boxes do
 		if Kit.boxDistance(box, p) < clear then
 			return false
@@ -353,11 +369,12 @@ end
 	puts the lumps on that side only (the belt's plot-side row keeps its
 	crown off the bases). 5-6 parts; every crown part stands over 5 studs.
 ]]
-function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, lean: Vector3?): Model
+function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, lean: Vector3?, lift: number?): Model
 	local s = scale
 	local m = Style.model("Tree", parent)
 	local shades = Kit.shades(kind)
-	local h = rng:range(4.8, 5.6) * s
+	-- `lift`: a taller trunk by the roads, so the crown clears head height
+	local h = rng:range(4.8, 5.6) * s + (lift or 0)
 	local tw = 1.0 * s
 	local trunk = Style.block(m, base * CFrame.new(0, h / 2, 0), Vector3.new(tw, h, tw), Style.vary(C.Trunk, rng, 0.04))
 	trunk.Name = "Trunk"
@@ -458,7 +475,8 @@ export type Gap = { Min: Vector3, Max: Vector3 }
 
 function Kit.rim(parent: Instance, center: Vector3, sizeX: number, sizeZ: number, rng: Rng.Rng, gaps: { Gap }, color: Color3?): { Part }
 	local parts = {}
-	local steps = math.floor((sizeX + sizeZ) * 2 / 3.1)
+	-- (round 2: bigger stones, fewer of them)
+	local steps = math.floor((sizeX + sizeZ) * 2 / 3.9)
 	for i = 0, steps - 1 do
 		local a = i / steps * 2 * math.pi
 		local cx, sz = math.cos(a), math.sin(a)
@@ -472,7 +490,7 @@ function Kit.rim(parent: Instance, center: Vector3, sizeX: number, sizeZ: number
 			end
 		end
 		if not skip then
-			local s = rng:range(2.1, 2.9)
+			local s = rng:range(2.6, 3.4)
 			local h = rng:range(0.8, 1.3)
 			local shade = if i % 4 == 0 then C.StoneLight elseif i % 4 == 2 then C.StoneDark else (color or C.Stone)
 			table.insert(

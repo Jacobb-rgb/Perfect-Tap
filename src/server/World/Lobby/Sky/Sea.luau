@@ -52,6 +52,14 @@ function Sea.nearSea(parent: Instance, piece: Piece, _rng: Rng.Rng): Model
 		part.Reflectance = 0.05
 		part.Name = "NearSea"
 	end
+	-- (round 2) a small far sail on the south horizon (lobby_south's empty
+	-- sea): a dark hull, a mast and a lit cream sail, 4 parts
+	local boat = CFrame.new(piece.Center.X + piece.Size.X * 0.3, SEA_TOP, piece.Center.Z + piece.Size.Z / 2 - 8)
+		* CFrame.Angles(0, math.rad(25), 0)
+	Kit.box(m, boat, Vector3.new(0, 0.6, 0), Vector3.new(2.6, 1.2, 8), C.WoodDark).Name = "Sail"
+	Kit.box(m, boat, Vector3.new(0, 5.5, 0.5), Vector3.new(0.4, 9, 0.4), C.Wood).Name = "Sail"
+	Kit.box(m, boat, Vector3.new(0, 6.2, -0.4), Vector3.new(0.2, 7, 4.6), C.CloudLight).Name = "Sail"
+	Kit.box(m, boat, Vector3.new(0, 3.4, -2.6), Vector3.new(0.2, 3.6, 2.4), C.CloudPink).Name = "Sail"
 	return m
 end
 
@@ -77,7 +85,9 @@ function Sea.sunGlitter(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local half = piece.Size.Z / 2 - 1
 	local halfW = piece.Size.X / 2
 	local y = SEA_TOP + 0.15 - piece.Center.Y -- strip tops at -20.85
-	local count = 92
+	-- (lobby fix round 2: 54 strips instead of 92, a little longer each: less
+	-- translucent overdraw on phones, the same gold path)
+	local count = 40
 	for i = 1, count do
 		local s = math.clamp(((i - 0.5) / count) ^ 0.62 + rng:range(-0.004, 0.004), 0, 1)
 		local z = half - s * 2 * half -- +half = near the shore, -half = toward the sun
@@ -85,7 +95,7 @@ function Sea.sunGlitter(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 		local x = (rng:range(-1, 1) + rng:range(-1, 1)) * 0.5 * spread
 		local across = (4 + 20 * s) * rng:range(0.45, 1)
 		across = math.min(across, 2 * (halfW - math.abs(x)))
-		local along = rng:range(1, 3) * (0.8 + 0.5 * s)
+		local along = rng:range(1.4, 3.8) * (0.8 + 0.5 * s)
 		local color = if math.abs(x) < spread * 0.4 or rng:chance(0.35) then Glitter.Gold else Glitter.Edge
 		local transparency = rng:range(Glitter.Transparency[1], Glitter.Transparency[2])
 		if across > 9 and rng:chance(0.3) then

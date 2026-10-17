@@ -47,7 +47,7 @@ FireCrystal.RingWidth = 2.4
 FireCrystal.RingHeight = 1.2 -- the armor tier over the base tier (cap lip included)
 FireCrystal.BaseRadius = 12.4 -- the wide low base tier
 FireCrystal.BaseHeight = 0.4
-FireCrystal.CrystalHeight = 6.5 -- low: from the spawn (eye y >= 9) the forge's door and stairs show over it
+FireCrystal.CrystalHeight = 7.6 -- (round 2: +17%) low enough that the raised forge door shows over it from the spawn
 FireCrystal.Segments = 12
 local RING_R = FireCrystal.RingRadius
 local RING_W = FireCrystal.RingWidth
@@ -62,19 +62,22 @@ local RING_IN = RING_R - RING_W / 2 -- inner face (9.0)
 local BOWL_R = 8.6 -- the dark inner tier (its top is the bowl's rim)
 local BOWL_TOP = 0.7 -- over the base tier
 local GLOW_R = 5.5 -- the glowing ring at the bowl's lip
-local POOL_R = 4.9 -- the molten floor inside it
+local POOL_R = 5.05 -- the dark bowl floor inside it (a thin orange band shows round it)
 local PEDESTAL_R = 2.5
 local PEDESTAL_TOP = 1.5 -- over the base tier
 local CRYSTAL_H = FireCrystal.CrystalHeight
-local CRYSTAL_W = 3.6
+local CRYSTAL_W = 4.2
 -- colors: the dark machine metal of the plaza kit (the armor never reads
 -- lighter than the slate floor), a mid bevel on the cap lips
 local RING_METAL = K.Metal
 local RING_BEVEL = K.MetalLight -- the cap lips (they catch the light, the segments read)
 local RING_METAL_DARK = K.MetalDark
-local HOT_IRON = rgb(128, 40, 22) -- the bowl's molten crust (dark red, lit by the crystal)
+-- (round 2: the bowl floor is dark metal with one thin orange band at its
+-- lip: the red, orange and yellow discs read as a dartboard)
+local BOWL_FLOOR = K.MetalDark
 local CRYSTAL_GLOW = rgb(255, 120, 20) -- the inner glow (deep orange: no white-hot core)
-local CRYSTAL_TIP = rgb(255, 150, 40)
+-- the top facets lightened toward FireCore (the points catch the light)
+local CRYSTAL_TIP = C.FireCore:Lerp(rgb(255, 150, 40), 0.35)
 -- turns a part's (1, 1, 1) corner straight up (a cube standing on a vertex)
 local VERTEX_UP = CFrame.fromAxisAngle(Vector3.new(-1, 0, 1).Unit, math.acos(1 / math.sqrt(3)))
 
@@ -117,7 +120,7 @@ end
 	body (the spin pivot).
 ]]
 local function mainCrystal(parent: Instance, base: CFrame): BasePart
-	local shell = shard(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, C.LeafOrange, SMOOTH, SMOOTH)
+	local shell = shard(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, C.FireCore:Lerp(C.Fire, 0.3), SMOOTH, SMOOTH)
 	for i, part in shell do
 		part.Transparency = if i == 1 then 0.2 else 0.12
 		part.Name = "CrystalShell"
@@ -134,7 +137,7 @@ end
 	wide (about a third of the ring) and its points fan out like a crown.
 ]]
 -- (shard heights scale with the main crystal: 9.2 tall in round 1)
-local SIDE_SCALE = FireCrystal.CrystalHeight / 9.2
+local SIDE_SCALE = FireCrystal.CrystalHeight / 9.2 * 1.05
 local SIDES = {
 	{ A = 20, H = 6.0 * SIDE_SCALE, Lean = 0.42, Big = true },
 	{ A = 80, H = 4.2 * SIDE_SCALE, Lean = 0.48, Big = false },
@@ -321,7 +324,7 @@ local function moltenBowl(m: Model, center: Vector3, y0: number): number
 		Style.solid({ CastShadow = false })
 	)
 	wall.Name = "BowlWall"
-	local ring = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP - 0.02, 0), 0.12, GLOW_R * 2, C.Ember, NEON, Style.tiny())
+	local ring = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP - 0.02, 0), 0.12, GLOW_R * 2, K.RingOrange, NEON, Style.tiny())
 	ring.Name = "BowlGlow"
 	-- blue and green glow bands on the inner tier (concept v2's coloured lights)
 	for i = 0, 5 do
@@ -338,12 +341,9 @@ local function moltenBowl(m: Model, center: Vector3, y0: number): number
 	end
 	local pool = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP + 0.02, 0), 0.12, POOL_R * 2, C.Molten, SMOOTH, Style.tiny())
 	pool.Name = "MoltenPool"
-	pool.Color = HOT_IRON
-	-- the white-hot heart round the pedestal (deep orange neon, not white)
-	local core = Geo.cylinder(m, center + Vector3.new(0, yb + BOWL_TOP + 0.06, 0), 0.12, 3.3 * 2, C.Ember, NEON, Style.tiny())
-	core.Name = "MoltenCore"
-	Style.emitter(core, "Fire", C.Fire, 12)
-	Style.emitter(core, "Embers", C.Fire, 6)
+	pool.Color = BOWL_FLOOR
+	Style.emitter(pool, "Fire", C.Fire, 12)
+	Style.emitter(pool, "Embers", C.Fire, 6)
 	local pedestalH = PEDESTAL_TOP - BOWL_TOP
 	Geo.cylinder(
 		m,

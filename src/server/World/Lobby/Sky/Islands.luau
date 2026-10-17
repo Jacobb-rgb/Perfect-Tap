@@ -149,7 +149,7 @@ local function watchtower(m: Model, base: CFrame, rng: Rng.Rng)
 	Style.block(m, base * CFrame.new(0, h + 6.6, 1.2), Vector3.new(0.15, 0.8, 1.4), C.AwningRed, nil, Kit.far())
 end
 
--- FloatingIslandEast: bigger island with a green and an orange tree, a
+-- FloatingIslandEast: bigger island with a green tree, a
 -- watchtower, a 45-stud waterfall, blue crystals and two small islets.
 function Islands.east(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local m = Style.model(piece.Id, parent)
@@ -158,8 +158,8 @@ function Islands.east(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local main = frame * CFrame.new(-3, 0, 2)
 	Kit.floatingIsland(m, main, rng, { Width = w, Depth = d, Hang = 34, Tiers = 5 })
 	vines(m, main, w, d, rng, 6)
+	-- (round 2: one tree: the parts went into the town)
 	tree(m, main, Vector3.new(-8, 0, 5), "Green", rng, 1.2)
-	tree(m, main, Vector3.new(-10, 0, -6), "Orange", rng, 1.0)
 	watchtower(m, main * CFrame.new(8, 0, 4), rng)
 	Style.crystalCluster(m, main * CFrame.new(2, 0, -8), 7, C.CrystalBlue, rng, { Count = 3 })
 	bush(m, main, Vector3.new(11, 0, -6), C.LeafGreenLight, rng, 2.4)

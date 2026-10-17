@@ -258,10 +258,10 @@ return function(T, Loader)
 	end)
 
 	T.test("flora: the bridge carries the south road over the creek", function()
-		local colliders = collidersNear({ flora().Water, world().Land }, Vector3.new(-6, 0, 50), Vector3.new(6, 0, 74))
 		local bridge = LobbyLayout.get("CreekBridge")
 		local z0 = bridge.Center.Z - bridge.Size.Z / 2 - 2
 		local z1 = bridge.Center.Z + bridge.Size.Z / 2 + 2
+		local colliders = collidersNear({ flora().Water, world().Land }, Vector3.new(-6, 0, z0 - 1), Vector3.new(6, 0, z1 + 1))
 		local peak = 0
 		for _, x in { -3.5, 0, 3.5 } do
 			local last: number? = nil
@@ -288,7 +288,7 @@ return function(T, Loader)
 	end)
 
 	T.test("flora: creek and ponds are water over solid ground", function()
-		local colliders = collidersNear({ world().Land }, Vector3.new(-40, 0, 54), Vector3.new(40, 0, 70))
+		local colliders = collidersNear({ world().Land }, Vector3.new(-60, 0, 25), Vector3.new(40, 0, 75))
 		for _, id in { "LilyPond", "KoiPond" } do
 			local piece = LobbyLayout.get(id)
 			local c = piece.Center

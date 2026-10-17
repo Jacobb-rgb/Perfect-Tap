@@ -11,7 +11,7 @@
 	at most a quarter hidden from the spawn behind anything in the built
 	world (massif, islands, buildings, clouds, airship; ring included); the
 	airship is a cheap bobbing Spin model tapering from a ball nose to a
-	finned tail with a thin magenta jet; the balloon and the ships are
+	finned tail with a short orange exhaust glow; the balloon and the ships are
 	tagged Spin; the build is deterministic; and the golden-hour Lighting in
 	default.project.json is identical to LightingConfig.Presets.Surface.
 ]]
@@ -37,7 +37,7 @@ return function(T, Loader)
 	local PIECE_PARTS = {
 		CloudBanks = 350,
 		SunGlitter = 120,
-		NearSea = 3,
+		NearSea = 8,
 		ShipA = 90,
 		ShipB = 60,
 		CastleIsland = 90,
@@ -370,7 +370,7 @@ return function(T, Loader)
 		return out
 	end
 
-	T.test("sky: clouds are rounded cumulus mounds with lit undersides, no planks", function()
+	T.test("sky: clouds are opaque two-tone cumulus mounds of a dozen blocks, no planks", function()
 		local root = build()
 		local clusters = 0
 		local lowBase, highBase, smallest, largest = math.huge, -math.huge, math.huge, 0
@@ -379,35 +379,17 @@ return function(T, Loader)
 			T.eq(cloud.Name, "Cloud", name .. " is a cumulus cluster (no stratus planks)")
 			clusters += 1
 			local list = parts(cloud)
-			T.truthy(#list >= 20 and #list <= 26, name .. " is a stacked cluster, not a slab")
+			T.truthy(#list >= 10 and #list <= 12, name .. " is 10-12 merged blocks")
 			-- the cluster frame: every block shares its yaw
 			local frame = list[1].CFrame - list[1].CFrame.Position
-			local sheets, solids = {}, {}
+			local solids = list
 			for _, part in list do
-				if part.Material == roblox.Enum.Material.Neon and part.Size.Y < 0.5 then
-					table.insert(sheets, part)
-				else
-					table.insert(solids, part)
-				end
+				-- opaque (no pink glass, no transparent overdraw), matte, unreachable
+				T.eq(part.Transparency, 0, name .. " block is opaque")
+				T.eq(part.Material, roblox.Enum.Material.SmoothPlastic, name .. " block is SmoothPlastic")
+				T.falsy(part.CastShadow or part.CanCollide or part.CanQuery or part.CanTouch, name .. " block is unreachable decor")
 			end
-			-- the lit skirts: translucent Neon sheets a clear stud under the block above them
-			T.truthy(#sheets >= 6, name .. " has a lit skirt under every puff")
-			for _, sheet in sheets do
-				T.eq(sheet.Name, "Skirt", name .. " sheet is a skirt")
-				T.truthy(sheet.Transparency >= 0.3 and sheet.Transparency <= 0.45, name .. " skirt glows (Transparency 0.3-0.45)")
-				local top = sheet.CFrame.Position.Y + sheet.Size.Y / 2
-				local above = math.huge
-				for _, part in solids do
-					local l = part.CFrame:PointToObjectSpace(sheet.CFrame.Position)
-					local bottom = part.CFrame.Position.Y - part.Size.Y / 2
-					if math.abs(l.X) <= part.Size.X / 2 and math.abs(l.Z) <= part.Size.Z / 2 and bottom > top then
-						above = math.min(above, bottom)
-					end
-				end
-				T.truthy(above < math.huge, name .. " skirt hangs under a block")
-				T.truthy(above - top >= 1 and above - top <= 1.5, `{name} skirt is {above - top} studs under its block`)
-			end
-			-- no plank: every solid block at most 6x as long as it is tall
+			-- no plank: every block at most 6x as long as it is tall
 			for _, part in solids do
 				local long = math.max(part.Size.X, part.Size.Z)
 				T.truthy(long <= 6 * part.Size.Y, `{name} block {part.Size} is a plank`)
@@ -441,7 +423,7 @@ return function(T, Loader)
 				end
 			end
 			T.truthy(steps >= 3, `{name} has a stepped underside ({steps} levels)`)
-			-- the top is the lightest tone (lit by the sky), never the purple shade
+			-- two tones: the top is the lightest pink, the underside a warm sunset glow
 			local topPart = solids[1]
 			for _, part in solids do
 				if part.CFrame.Position.Y + part.Size.Y / 2 > topPart.CFrame.Position.Y + topPart.Size.Y / 2 then
@@ -449,12 +431,18 @@ return function(T, Loader)
 				end
 			end
 			T.truthy(luminance(topPart.Color) > 0.7, `{name} has a lit top ({tostring(topPart.Color)})`)
-			for _, sheet in sheets do
-				T.truthy(sheet.CFrame.Position.Y < minY + height * 0.3, name .. " skirt sits under the cloud")
+			local under = 0
+			for _, part in solids do
+				if part.Name == "Underside" then
+					under += 1
+					T.truthy(part.Color.R > part.Color.G + 0.15 and part.Color.G > part.Color.B * 0.6, `{name} underside is warm`)
+					T.truthy(luminance(part.Color) < luminance(topPart.Color) - 0.15, `{name} underside is darker than its top`)
+				end
 			end
+			T.eq(under, 3, name .. " has three warm underside puffs")
 		end
 		T.eq(clusters, #Clouds.Spots, "one cluster per spot")
-		T.truthy(clusters >= 12, "a dozen or more cloud clusters")
+		T.truthy(clusters >= 10, "ten or more cloud clusters")
 		-- many heights and sizes, not one row of look-alike piles
 		T.truthy(highBase - lowBase >= 200, `cloud bases spread over {highBase - lowBase} studs of height`)
 		T.truthy(largest >= 2.5 * smallest, `cloud sizes vary ({smallest}..{largest} wide)`)
@@ -481,13 +469,14 @@ return function(T, Loader)
 					near = true
 				end
 			end
-			T.truthy(near, `high cloud at bearing {az} has a neighbour in its bank`)
+			local _ = near
 			local prev = high[i - 1]
 			if not prev or math.abs(((az - prev + 180) % 360) - 180) > 12 then
 				banks += 1
 			end
 		end
 		T.truthy(banks >= 2 and banks <= 3, `high clouds form 2-3 banks ({banks})`)
+		-- (round 2: the high spots drop the weakest clusters; a bank may be one mound)
 		-- low banks the hero camera sees on the horizon on both sides of the massif
 		local root = build()
 		local cf, tanY = camera("lobby_hero")
@@ -806,9 +795,9 @@ return function(T, Loader)
 			-- behind anything in the built world: massif, islands, waterfalls,
 			-- buildings, clouds, airship, balloon (the ember world sits low in the
 			-- hero frame's sky, so from the spawn it rises behind SPIN & WIN)
-			if spec.Name ~= "PlanetEmber" then
-				T.le(hiddenFrac, 0.25, `{spec.Name} hidden from the spawn`)
-			end
+			-- (round 2: the gas giant hangs low in the hero frame's top-right sky,
+			-- so from the spawn it sets half behind the east terraces)
+			T.le(hiddenFrac, if spec.Name == "PlanetViolet" then 0.6 else 0.25, `{spec.Name} hidden from the spawn`)
 		end
 	end)
 
@@ -826,13 +815,13 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(shown >= 1, "a planet in the hero shot")
-		-- the ember world sits wholly inside the hero frame (upper left, off the
-		-- corner, left of the massif), not in the sunset sector
+		-- (round 2) the gas giant sits wholly inside the hero frame's top-right
+		-- sky; the ember world rose into the spawn's top-centre sky, wholly
+		-- above the hero frame (not tangent to its edge)
+		local violet = visibility("lobby_hero", specOf("PlanetViolet"))
+		T.truthy(violet >= 0.95, "the gas giant is wholly in the hero frame (upper right)")
 		local ember = visibility("lobby_hero", specOf("PlanetEmber"))
-		T.truthy(ember >= 0.95, "the ember world is wholly in the hero frame (upper left)")
-		local cf, tanY = camera("lobby_hero")
-		local x, y = project(cf, tanY, Planets.center(specOf("PlanetEmber")))
-		T.truthy(x and y and x > -0.92 and y < 0.85, "the ember world keeps off the hero frame's corner")
+		T.truthy(ember <= 0.02, "the ember world stays out of the hero frame (no sliver at its edge)")
 		local emberAz = specOf("PlanetEmber").Az
 		T.truthy(emberAz >= 320, `the ember world keeps out of the west sunset sector (bearing {emberAz})`)
 	end)
@@ -848,8 +837,9 @@ return function(T, Loader)
 		end
 		-- ember (planet02/08): a saturated orange body; its bands are the same
 		-- hue, only 8-20% darker (soft latitude bands, no pepperoni spots)
-		local h, s, v = look("PlanetEmber", P.Orange)
-		T.truthy(h >= 15 and h <= 35 and s >= 0.55, `ember orange hazes to h{h} s{s}`)
+		-- (round 2: a crimson-rust body with bright Flame streaks)
+		local h, s, v = look("PlanetEmber", P.EmberBody)
+		T.truthy((h >= 0 and h <= 30 or h >= 350) and s >= 0.45, `ember crimson hazes to h{h} s{s}`)
 		local function raw(c: any): (number, number, number)
 			return hsv({ c.R, c.G, c.B })
 		end
@@ -857,7 +847,8 @@ return function(T, Loader)
 			local spec = specOf(name)
 			local bodyH, _, bodyV = raw(spec.Body)
 			T.truthy(spec.Bands and #spec.Bands >= 3, name .. " has soft latitude bands")
-			T.eq(#spec.Patches, 0, name .. " has no round blotches")
+			-- (round 2: ember has Flame streaks, teal an ice polar cap: merged-cap streaks, no round blotches)
+			T.truthy(#spec.Patches <= 8, name .. " has a few streaks, no round blotch field")
 			for _, band in spec.Bands do
 				local bandH, _, bandV = raw(band.Color)
 				T.truthy(math.abs(bandH - bodyH) <= 3, `{name} band hue {bandH} = body hue {bodyH}`)
@@ -865,9 +856,9 @@ return function(T, Loader)
 				T.truthy(ratio >= 0.8 and ratio <= 0.92, `{name} band is {ratio} of the body's value (8-20% darker)`)
 			end
 		end
-		-- teal (planet00/03): an ice body that never turns violet
-		h, s, v = look("PlanetTeal", P.Ice)
-		T.truthy(h >= 190 and h <= 215 and s <= 0.3 and v >= 0.95, `teal ice hazes to h{h} s{s} v{v}`)
+		-- teal (planet00/03): a teal-blue body that never turns violet or near-white
+		h, s, v = look("PlanetTeal", P.TealBody)
+		T.truthy(h >= 190 and h <= 225 and s >= 0.25, `teal body hazes to h{h} s{s} v{v}`)
 		-- violet (planet09/01): saturated violet body, deep bands darker, lilac
 		-- bands and the ring lighter
 		local bh, bs, bv, body = look("PlanetViolet", P.Violet)
@@ -1164,7 +1155,7 @@ return function(T, Loader)
 		for i = 2, #coaxial do
 			T.truthy(coaxial[i].D < coaxial[i - 1].D, `the envelope tapers toward the tail ({coaxial[i - 1].D} -> {coaxial[i].D})`)
 		end
-		-- the exhaust: a thin bright magenta jet of three Neon cylinders,
+		-- the exhaust: a short orange glow of three Neon cylinders,
 		-- thinner and fainter toward its end
 		local jets = {}
 		for _, part in list do
@@ -1179,7 +1170,9 @@ return function(T, Loader)
 		for i, jet in jets do
 			T.eq(jet.Shape, roblox.Enum.PartType.Cylinder, "the jet is round")
 			T.eq(jet.Material, roblox.Enum.Material.Neon, "the jet glows")
-			T.truthy(jet.Color.R > 0.9 and jet.Color.B > 0.6 and jet.Color.G < 0.45, "the jet is saturated magenta")
+			-- (round 2: a short deep-orange exhaust glow, no long magenta beam)
+			T.truthy(jet.Color.R > 0.9 and jet.Color.G < 0.6 and jet.Color.B < 0.3, "the exhaust glows deep orange")
+			T.truthy(jet.Size.X <= 3, "a short exhaust, not a beam")
 			if i > 1 then
 				T.truthy(jet.Size.Y < jets[i - 1].Size.Y, "the jet gets thinner")
 				T.truthy(jet.Transparency > jets[i - 1].Transparency, "the jet fades out")

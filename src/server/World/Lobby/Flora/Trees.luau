@@ -51,8 +51,9 @@ function Trees.pinkGrove(parent: Instance, rng: Rng.Rng)
 	-- path (well clear of the forge's wing); the small one east of it keeps
 	-- clear of the INN, and the way from the forge east path to the ENCHANT
 	-- door stays open
-	local big = Kit.bigTree(m, CFrame.new(c + Vector3.new(-3, 0, 2)), "Cherry", rng, 1.45, -1)
-	Kit.bigTree(m, CFrame.new(c + Vector3.new(4, 0, 5)), "Cherry", rng, 1.05, 1)
+	-- (scaled to tower over UPGRADES' roof from the hero camera, concept v1's pink hero trees)
+	local big = Kit.bigTree(m, CFrame.new(c + Vector3.new(-3, 0, 2)), "Cherry", rng, 1.85, -1)
+	Kit.bigTree(m, CFrame.new(c + Vector3.new(4.5, 0, 5)), "Cherry", rng, 1.4, 1)
 	Kit.flowerRing(m, c + Vector3.new(-3, 0, 2), 2.4, { C.FlowerPink, C.FlowerWhite, C.LeafPinkLight }, rng, 4)
 	local crown = crownPart(big)
 	if crown then
@@ -104,10 +105,18 @@ end
 	open.
 ]]
 Trees.BeltZ = { -60, 112 }
+-- Lift: extra trunk height of the road-side rows (crowns over head height).
+-- Inner: the third, inner row (z -60..40 only, the hero's mid-depth
+-- flanks), staggered against the town-side row, mixed autumn, cherry and
+-- green.
+type BeltRow = { X: number, Every: number, Phase: number, Scale: { number }, Lean: boolean, Lift: number?, Inner: boolean? }
 Trees.BeltRows = {
-	{ X = 62.9, Every = 7, Phase = 0, Scale = { 1.05, 1.3 }, Lean = false },
-	{ X = 75.5, Every = 7, Phase = 3.5, Scale = { 1.0, 1.15 }, Lean = true },
-}
+	{ X = 62.9, Every = 7, Phase = 0, Scale = { 1.05, 1.3 }, Lean = false, Lift = 2.5 },
+	{ X = 75.5, Every = 7, Phase = 3.5, Scale = { 1.0, 1.15 }, Lean = true, Lift = 2.5 },
+	{ X = 58.6, Every = 6, Phase = 2, Scale = { 0.95, 1.2 }, Lean = false, Inner = true },
+} :: { BeltRow }
+Trees.InnerZ = { -60, 40 }
+local INNER_KINDS = { Green = 34, Cherry = 22, Yellow = 22, Orange = 22 }
 Trees.BeltLanternEvery = 16
 Trees.BeltLanternColor = C.LampAmber
 
@@ -207,21 +216,22 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 	for _, side in { -1, 1 } do
 		local townSide: { number } = {}
 		for _, row in Trees.BeltRows do
-			local z = Trees.BeltZ[1] + row.Phase
-			while z <= Trees.BeltZ[2] do
+			local z = (if row.Inner then Trees.InnerZ[1] else Trees.BeltZ[1]) + row.Phase
+			local zEnd = if row.Inner then Trees.InnerZ[2] else Trees.BeltZ[2]
+			while z <= zEnd do
 				local p = Vector3.new(side * row.X, 0, z + rng:range(-0.8, 0.8))
 				local scale = rng:range(row.Scale[1], row.Scale[2])
 				local reach = 3.6 * scale
 				if beltClear(p, 0.5 * scale, if row.Lean then 0.6 else reach, sites) then
-					local kind = rng:weighted(BELT_KINDS)
+					local kind = rng:weighted(if row.Inner then INNER_KINDS else BELT_KINDS)
 					if side < 0 and p.Z > 60 then
 						kind = if rng:chance(0.5) then "Yellow" else "Orange"
 					end
 					local lean = if row.Lean then Vector3.new(-side, 0, 0) else nil
-					local tree = Kit.beltTree(m, CFrame.new(p), kind, rng, scale, lean)
+					local tree = Kit.beltTree(m, CFrame.new(p), kind, rng, scale, lean, row.Lift)
 					if not Kit.clearOfStalls(tree) then
 						tree:Destroy()
-					elseif not row.Lean then
+					elseif not row.Lean and not row.Inner then
 						table.insert(townSide, p.Z)
 					end
 				end
@@ -265,7 +275,9 @@ function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 		local z = Trees.BeltZ[1] + 7
 		while z <= Trees.BeltZ[2] do
 			local foot = Vector3.new(side * 64.3, 0, z)
-			if beltClear(foot, 0.5, 0.5, sites) then
+			-- (round 2: the west street's lamp posts light the town stretch, Town.street)
+			local street = side < 0 and z > 10
+			if not street and beltClear(foot, 0.5, 0.5, sites) then
 				beltLantern(m, foot, 4.6)
 			end
 			z += Trees.BeltLanternEvery

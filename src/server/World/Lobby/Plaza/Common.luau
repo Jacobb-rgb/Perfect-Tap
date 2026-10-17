@@ -32,7 +32,7 @@ Common.CurbRadius = 35.6
 Common.FloorTop = 0.4 -- top of the collidable plaza disc
 Common.TileTop = 0.43 -- top of the slate tiles (TownSpawn's top is 0.45, the spawn inlay 0.445)
 Common.ForgeApproach = 11 -- half width of the open plaza edge in front of the forge
-Common.TileReflectance = 0.1 -- polished slate: the sky's sheen shows on the tiles (concept v2's wet polished plaza)
+Common.TileReflectance = 0.03 -- a faint polish: more would mirror the pink sky and lift the dark slate to lilac
 Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
 
 --[[
@@ -45,12 +45,14 @@ Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
 	that stay colored under bloom instead of turning white.
 ]]
 Common.Colors = {
-	Slate = rgb(68, 76, 104), -- polished floor tiles (mid): blue-grey slate light enough that the tile grid reads
-	SlateLight = rgb(86, 94, 124), -- lit / worn tiles
-	SlateAccent = rgb(102, 108, 140), -- light accent slabs (variation, like the concept)
-	SlateDark = rgb(22, 26, 37), -- the thin seams between the tiles (only seams and recesses)
-	SlateDeep = rgb(15, 17, 26), -- the deepest recesses
-	WalkPanel = rgb(34, 38, 54), -- walkway floor panels (matte, darker than the plaza)
+	-- (lobby fix round 2: concept v2's dark wet slate; the round-1 blue-grey
+	-- slate rendered lilac under the pink sky)
+	Slate = rgb(26, 30, 44), -- polished floor tiles (mid)
+	SlateLight = rgb(34, 38, 54), -- lit / worn tiles
+	SlateAccent = rgb(42, 47, 64), -- a few lighter accent slabs (about 4%)
+	SlateDark = rgb(14, 16, 24), -- the thin seams between the tiles (only seams and recesses)
+	SlateDeep = rgb(9, 10, 16), -- the deepest recesses
+	WalkPanel = rgb(22, 25, 36), -- walkway floor panels (matte, darker than the plaza)
 	Metal = rgb(56, 60, 76), -- machine metal (mid)
 	MetalLight = rgb(92, 100, 122), -- small bolts and collars
 	MetalDark = rgb(34, 37, 48), -- ribs, plinths, recesses, cap plates
@@ -61,7 +63,7 @@ Common.Colors = {
 	BannerDark = rgb(92, 8, 28), -- banner border / backing
 	EmblemGold = rgb(255, 150, 30), -- deep gold glow of the gable emblem
 	Amber = rgb(255, 140, 40), -- lantern glow (amber, not white)
-	SlotAmber = rgb(255, 96, 18), -- deep amber lantern slots (they stay orange under bloom)
+	SlotAmber = rgb(255, 70, 10), -- deep orange lantern slots (they stay orange under bloom, never yellow paint)
 	AmberGlass = rgb(255, 150, 62), -- lantern panes
 	Chevron = rgb(255, 72, 14), -- deep orange chevrons (bold, they stay orange under bloom)
 	RingOrange = rgb(255, 84, 18), -- the bold orange floor rings
@@ -299,7 +301,7 @@ end
 -- the dark shades are for the seams only).
 function Common.slate(rng: Rng.Rng): Color3
 	local roll = rng:next()
-	local color = if roll < 0.55 then K.Slate elseif roll < 0.88 then K.SlateLight else K.SlateAccent
+	local color = if roll < 0.6 then K.Slate elseif roll < 0.96 then K.SlateLight else K.SlateAccent
 	return Style.vary(color, rng, 0.03)
 end
 
@@ -307,8 +309,8 @@ end
 -- grid reads: course `ring`, tile `i`.
 Common.CourseShades = { K.Slate, K.SlateLight, K.SlateAccent }
 function Common.courseSlate(ring: number, i: number, rng: Rng.Rng): Color3
-	local order = { 1, 2, 1, 3 }
-	local k = order[(i + ring) % #order + 1]
+	-- mid and lit slabs alternate; about one in 25 is a lighter accent slab
+	local k = if rng:chance(0.04) then 3 else (i + ring) % 2 + 1
 	return Style.vary(Common.CourseShades[k], rng, 0.025)
 end
 
@@ -627,14 +629,19 @@ function Common.pillarLantern(parent: Instance, base: CFrame, opts: LanternOpts?
 	local h = o.Height or 4.4
 	local glowColor = o.Color or K.Amber
 	local m = Style.model("Lantern", parent)
-	Style.block(m, base * CFrame.new(0, 0.3, 0), Vector3.new(2.2, 0.6, 2.2), K.MetalDark)
+	-- (decorative: it collides, but is never raycast, e.g. by the camera)
+	Style.block(m, base * CFrame.new(0, 0.3, 0), Vector3.new(2.2, 0.6, 2.2), K.MetalDark, nil, Style.decor())
 	local shaftH = h - 0.6
-	Style.block(m, base * CFrame.new(0, 0.6 + shaftH / 2, 0), Vector3.new(1.5, shaftH, 1.5), K.Metal)
-	-- two neon bars through the shaft: two slots on the front, two on the back
+	Style.block(m, base * CFrame.new(0, 0.6 + shaftH / 2, 0), Vector3.new(1.5, shaftH, 1.5), K.Metal, nil, Style.decor())
+	-- the slot panel: a dark metal plate through the shaft (front and back
+	-- faces, 0.06 proud) framing two thin deep-orange neon slots, so they read
+	-- as glowing slits set in dark metal, not as yellow paint stripes
 	local slotH = math.max(0.6, shaftH - 1.5)
-	for _, x in { -0.34, 0.34 } do
+	Style.block(m, base * CFrame.new(0, 1.2 + slotH / 2, 0), Vector3.new(0.98, slotH + 0.36, 1.62), K.MetalDark, nil, Style.tiny()).Name =
+		"SlotPanel"
+	for _, x in { -0.24, 0.24 } do
 		local slot =
-			Style.block(m, base * CFrame.new(x, 1.2 + slotH / 2, 0), Vector3.new(0.18, slotH, 1.56), K.SlotAmber, NEON, Style.tiny())
+			Style.block(m, base * CFrame.new(x, 1.2 + slotH / 2, 0), Vector3.new(0.12, slotH, 1.66), K.SlotAmber, NEON, Style.tiny())
 		slot.Name = "LanternSlot"
 	end
 	Style.block(m, base * CFrame.new(0, h - 0.32, 0), Vector3.new(1.58, 0.14, 1.58), K.NeonBlueDeep, NEON, Style.tiny())
@@ -642,8 +649,8 @@ function Common.pillarLantern(parent: Instance, base: CFrame, opts: LanternOpts?
 	local glowY = h + 0.84
 	local glow = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(0.6, 0.72, 0.6), glowColor, NEON, Style.tiny())
 	glow.Name = "LanternGlow"
-	local glass = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(1.12, 1.2, 1.12), K.AmberGlass, nil, Style.tiny())
-	glass.Transparency = 0.25
+	local glass = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(1.12, 1.2, 1.12), K.AmberGlass, NEON, Style.tiny())
+	glass.Transparency = 0.35
 	glass.Name = "LanternGlass"
 	-- the cage: four thick dark corner bars
 	for _, x in { -0.62, 0.62 } do

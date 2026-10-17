@@ -36,12 +36,13 @@ local TITLES = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED" }
 local ARC_R = 30 -- radius of the arc (center toward the spawn)
 local BOARD_W, BOARD_H = 5.0, 6.4
 local BOARD_Y = 2.0 -- bottom of the boards
-local PLATE_H = 2.1 -- title plates over the boards (tall enough to read from the plaza)
+local PLATE_H = 2.8 -- title plates over the boards (round 2: taller, they read from the pond lane)
 local MEDALS = { C.Gold, C.IronLight, C.Copper }
-local ROW_COLOR = Color3.fromRGB(44, 70, 140) -- faint rank rows on the board
 -- the board face: Tech.Screen at about half value, so the waiting boards read
 -- as lit screens (not dead dark panels); thin warm row dividers
-local BOARD_FACE = Color3.fromRGB(15, 46, 107)
+-- (round 2: the dark navy sign board colour with blue neon row separators,
+-- no flat royal-blue placeholder panels)
+local BOARD_FACE = Tech.Board
 
 -- Rough glyph widths of the sign font (em): the title labels get widths in
 -- proportion, so TextScaled gives every title the same letter size.
@@ -113,9 +114,8 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		gui.Parent = ph
 		for row = 1, 5 do
 			local ry = cy + 2.15 - (row - 1) * 1.1
-			Kit.bit(ph, frame * CFrame.new(-0.45, ry - 0.2, 0.03), Vector3.new(3.4, 0.08, 0.06), ROW_COLOR)
 			if row < 5 then
-				Tech.glow(ph, frame * CFrame.new(0, ry - 0.55, 0.02), Vector3.new(BOARD_W - 0.5, 0.06, 0.05), Tech.CaseLight)
+				Tech.glow(ph, frame * CFrame.new(0, ry - 0.55, 0.02), Vector3.new(BOARD_W - 0.5, 0.07, 0.05), Tech.Neon)
 			end
 			local medal = MEDALS[row]
 			if medal then
@@ -166,7 +166,9 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 			Tech.glow(m, frame * CFrame.new(sx * (BOARD_W / 2 - 0.12), cy, 0.0), Vector3.new(0.28, BOARD_H - 0.2, 0.12), Tech.Tube)
 		end
 		Tech.glow(m, frame * CFrame.new(0, cy + BOARD_H / 2 - 0.12, 0.0), Vector3.new(BOARD_W, 0.28, 0.12), Tech.Tube)
-		Kit.bit(m, frame * CFrame.new(0, cy, 0.66), Vector3.new(BOARD_W + 0.6, BOARD_H + 0.4, 0.14), Tech.MetalDark)
+		-- the back: warm timber planks under a blue neon trim line (round 2: no
+		-- black back slab from the hero camera)
+		Kit.bit(m, frame * CFrame.new(0, cy, 0.66), Vector3.new(BOARD_W + 0.6, BOARD_H + 0.4, 0.14), C.Wood)
 		Tech.glow(m, frame * CFrame.new(0, cy + BOARD_H / 2 - 0.4, 0.75), Vector3.new(BOARD_W + 0.4, 0.16, 0.06), Tech.Neon)
 		Kit.bit(m, frame * CFrame.new(0, cy - 1.2, 0.75), Vector3.new(BOARD_W + 0.6, 0.6, 0.06), Tech.Band)
 		-- title plate above the board: white letters on dark navy inside a thin
@@ -177,14 +179,14 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		local textW = (BOARD_W - 0.4) * textWidth(TITLES[i]) / widest
 		Tech.label(m, frame * CFrame.new(0, py, -0.08), TITLES[i], textW, PLATE_H - 0.3, nil, 0.04)
 		Tech.outline(m, frame * CFrame.new(0, py, 0.15), BOARD_W / 2 + 0.02, PLATE_H / 2 - 0.08, 0.3, 0.1, -0.25, Tech.Neon)
-		Kit.bit(m, frame * CFrame.new(0, py, 0.45), Vector3.new(BOARD_W + 0.8, PLATE_H + 0.4, 0.3), Tech.MetalDark)
+		Kit.bit(m, frame * CFrame.new(0, py, 0.45), Vector3.new(BOARD_W + 0.8, PLATE_H + 0.4, 0.3), C.WoodDark)
 	end
 
 	-- the HALL OF FAME sign box on two round pillars, gold crowns at its ends
 	for _, x in { -5.6, 5.6 } do
-		Tech.roundPillar(m, at(x, 0, 1.9), 10.5, 0.9, { Neon = false })
+		Tech.roundPillar(m, at(x, 0, 1.9), 11.2, 0.9, { Neon = false })
 	end
-	local signY = 13.6
+	local signY = 14.2
 	Tech.sign(m, at(0, signY, 1.4), "HALL OF FAME", 11.4, 2.2, { Back = true })
 	for _, x in { -7.5, 7.5 } do
 		Tech.crown(m, at(x, signY - 0.8, 1.5), 1.8, Tech.GoldGlow, { Depth = 0.55, Neon = true })

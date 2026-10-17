@@ -225,11 +225,14 @@ return function(T, Loader)
 		T.truthy(math.abs(axle:Dot(frame.LookVector)) > 0.999, "hub Y axis = the axle (facing the plaza)")
 	end)
 
-	T.test("districts: four leaderboards face the spawn", function()
+	T.test("districts: four leaderboards in an arc face the Hall of Fame's front", function()
 		local map, pkg = districts()
 		local boards = tagged(map, "Leaderboard")
 		T.eq(#boards, 4, "four Leaderboard parts")
-		local spawn = WorldLayout.SpawnPoint
+		-- (round 2: the hall turned toward the koi pond lane and the hero camera;
+		-- its boards face the point 30 studs in front of it, the arc's center)
+		local hall = LobbyLayout.get("HallOfFame")
+		local spawn = hall.Center + hall.Facing.Unit * 30
 		for i = 1, 4 do
 			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
 			T.truthy(board and board:IsA("BasePart"), "Board" .. i .. " is a part")
@@ -238,7 +241,7 @@ return function(T, Loader)
 			T.truthy(board.Size.X >= 4 and board.Size.Y >= 5, "Board" .. i .. " has a big face")
 			local at = board.CFrame.Position
 			local toSpawn = Vector3.new(spawn.X - at.X, 0, spawn.Z - at.Z).Unit
-			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the spawn")
+			T.truthy(board.CFrame.LookVector:Dot(toSpawn) > 0.95, "Board" .. i .. " Front face looks at the arc's center")
 		end
 	end)
 
@@ -410,7 +413,9 @@ return function(T, Loader)
 		local _, pkg = districts()
 		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
 		for _, d in pkg.ShopFront:GetDescendants() do
-			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and d.Transparency < 1 then
+			-- (round 2: the big SELL sign stands high on its own arch, model SellSign)
+			local sign = pkg.ShopFront:FindFirstChild("SellSign")
+			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and not (sign and d:IsDescendantOf(sign)) and d.Transparency < 1 then
 				local top = -math.huge
 				for _, p in corners(d) do
 					top = math.max(top, frame:PointToObjectSpace(p).Y)
@@ -542,7 +547,7 @@ return function(T, Loader)
 		for id, text in want do
 			local found = false
 			for _, d in pkg[id]:GetDescendants() do
-				if d:IsA("TextLabel") and d.Text == text then
+				if d:IsA("TextLabel") and string.gsub(d.Text, "\n", " ") == text then
 					found = true
 					break
 				end

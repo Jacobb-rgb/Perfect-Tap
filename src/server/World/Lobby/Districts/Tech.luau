@@ -59,7 +59,7 @@ Tech.Neon = rgb(40, 130, 255)
 -- the thick neon tubes (frames, roof edges, ring edges): a deep electric
 -- blue, so a 0.3-0.45 stud tube stays saturated blue under the neon boost
 -- and bloom instead of washing out to pastel periwinkle in daylight
-Tech.Tube = rgb(8, 44, 200)
+Tech.Tube = rgb(30, 110, 255) -- (round 2: rgb(8, 44, 200) rendered as flat indigo paint; this one glows as bright as the orange)
 Tech.TUBE = 0.36 -- thick tube size; thin trims stay 0.12-0.2
 Tech.EDGE = 0.45 -- the roof-edge and frame tubes set in a dark channel (Tech.channel)
 Tech.Warm = C.Fire
@@ -536,14 +536,15 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 		)
 		glass.Name = "Showcase"
 		bit(parent, base * CFrame.new(0, height + ch + 0.14, 0), Vector3.new(width, 0.28, depth), Tech.MetalLight)
-		-- four thin neon corner posts frame the glass
+		-- (round 2) one glass box in an opaque frame: four dark metal corner
+		-- posts (no neon pane edges: the case reads as one lit box, not 4 panes)
 		for _, sx in { -1, 1 } do
 			for _, sz in { -1, 1 } do
-				glow(
+				bit(
 					parent,
-					base * CFrame.new(sx * (width / 2 - 0.16), height + ch / 2, sz * (depth / 2 - 0.16)),
-					Vector3.new(0.14, ch, 0.14),
-					neon
+					base * CFrame.new(sx * (width / 2 - 0.17), height + ch / 2, sz * (depth / 2 - 0.17)),
+					Vector3.new(0.3, ch, 0.3),
+					Tech.MetalDark
 				)
 			end
 		end
@@ -782,7 +783,7 @@ end
 	handle is on the viewer's left like the concept's SHOP sign. 11 parts.
 ]]
 function Tech.cartIcon(parent: Instance, cf: CFrame, s: number, color: Color3)
-	local t = s * 0.075
+	local t = s * 0.064
 	local z = -0.05
 	-- handle grip and the slanted left side down to the base rail
 	line(parent, cf, 0.47 * s, 0.4 * s, 0.33 * s, 0.4 * s, t, z, color)
@@ -934,11 +935,11 @@ function Tech.label(parent: Instance, cf: CFrame, text: string, width: number, h
 	return Style.sign(parent, cf, text, width, height, {
 		Kind = "Glow",
 		Frame = false,
-		TextColor = color or (if small then C.GlowText else nil),
+		TextColor = color or (if small then C.GlowText else Color3.new(1, 1, 1)),
 		BoardColor = Tech.Board,
 		Depth = depth or 0.12,
-		StrokeColor = if small then Tech.Board else nil,
-		StrokeTransparency = if small then 0 else nil,
+		StrokeColor = if small then Tech.Board else Tech.Neon,
+		StrokeTransparency = if small then 0 else 0.2,
 	})
 end
 
@@ -992,15 +993,16 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 		end
 	else
 		local small = height < Tech.SmallLabel
+		-- (round 2: pure white letters with a blue neon stroke, unlit: they never render grey)
 		board = Style.sign(parent, cf * CFrame.new(textX, 0, 0), text, textW, height, {
 			Kind = "Glow",
 			Frame = false,
-			TextColor = o.TextColor,
+			TextColor = o.TextColor or Color3.new(1, 1, 1),
 			BoardColor = o.Board or Tech.Board,
 			Depth = 0.5,
 			DoubleSided = o.DoubleSided,
-			StrokeColor = if small then Tech.Board else nil,
-			StrokeTransparency = if small then 0 else nil,
+			StrokeColor = if small then Tech.Board else Tech.Neon,
+			StrokeTransparency = if small then 0 else 0.2,
 		})
 	end
 	local iconAt: CFrame? = nil
@@ -1045,7 +1047,7 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 				if o.BackFrame then
 					-- the back words get the front's thin chamfered neon frame too
 					local bhw, bhh = (width - 0.3) / 2 + 0.06, (height - 0.2) / 2 + 0.06
-					Tech.outline(parent, backCf, bhw, bhh, math.min(bhh * 0.45, 0.6), 0.16, -0.09, o.Frame or Tech.Tube)
+					Tech.outline(parent, backCf, bhw, bhh, math.min(bhh * 0.45, 0.6), 0.3, -0.09, o.Frame or Tech.Tube)
 				end
 			else
 				bit(parent, cf * CFrame.new(0, -height * 0.15, bz + 0.17), Vector3.new(width + 2 * m - 0.5, height * 0.18, 0.08), Tech.Band)

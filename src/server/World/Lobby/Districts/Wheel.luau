@@ -71,7 +71,7 @@ local ICON_R = 0.62 -- icon distance from the axle (share of the segment radius)
 -- the armored side housings: from 40 to 140 degrees (measured from the top)
 -- on each side, 4 plates per side
 local HOUSING_FROM, HOUSING_TO = math.rad(40), math.rad(140)
-local HOUSING_PLATES = 4
+local HOUSING_PLATES = 3 -- (round 2: three longer plates per side, the parts went into the stairs)
 
 -- The frame's proportions at S = 1 (the 18 x 26 x 10 footprint).
 type Dims = {
@@ -101,10 +101,14 @@ local function dims(size: Vector3): Dims
 	local housingOut = math.min(size.X / 2 - 0.05, 9.1 * s)
 	local ringOut = housingOut - 1.4 * s
 	local ringIn = ringOut - 1.3 * s
+	-- (round 2: the platform 3.5 studs higher at S = 1.6; the top landing
+	-- just in front of the housings, the stairs run from the footprint's
+	-- front to it)
+	local proud = 1.2 * s
 	return {
 		S = s,
-		PlatformTop = 2.4 * s,
-		PlatformFront = -hd + 3.0 * s,
+		PlatformTop = 4.6 * s,
+		PlatformFront = math.min(-hd + 3.0 * s, ringZ - ringD / 2 - proud - 1.6 * s),
 		AxleY = 12.6 * s,
 		RingIn = ringIn,
 		RingOut = ringOut,
@@ -143,10 +147,12 @@ end
 -- outward): 3D crates and boxes, gold coins, two-tone capsules.
 local function icon(m: Instance, at: CFrame, kind: string, s: number)
 	if kind == "Coin" then
-		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.1 * s), 0.4 * s, 1.7 * s, C.Gold)
-		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.32 * s), 0.12 * s, 1.05 * s, C.Brass)
+		-- a gold coin: a brass rim, the gold face and a dark centre pip
+		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.1 * s), 0.4 * s, 1.8 * s, C.Brass)
+		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.32 * s), 0.08 * s, 1.45 * s, C.Gold)
+		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.38 * s), 0.06 * s, 0.42 * s, Tech.MetalDeep)
 	elseif kind == "Crate" then
-		cube(m, at, s, C.Wood, C.WoodLight, "Band", C.Gold)
+		cube(m, at, s, C.WoodLight, C.WoodLight:Lerp(C.FlowerWhite, 0.3), "Band", C.Gold)
 	elseif kind == "Gem" then
 		cube(m, at, s, COPPER, COPPER_TOP, "Gem", GEM_GLOW, CRATE_BAND)
 	elseif kind == "Capsule" then
@@ -272,16 +278,40 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 		)
 	end
 
-	-- a grand flight as wide as the wheel with orange handrails on its
-	-- sides (stairs + stairs-handrail), dark lantern pillars beside it
-	local run = (front + hd) / 4 -- 4 steps from the front edge to the platform
+	-- a grand flight as wide as the disc from the footprint's front up to
+	-- the top landing (round 2: readable from afar): dark risers, a light
+	-- metal nose strip on every tread, orange neon handrails on posts, dark
+	-- lantern pillars on both sides
+	local steps = math.ceil(top / 0.95)
+	local rise = top / steps
+	local run = (front + hd) / steps
 	local stairW = math.min(2 * d.RingIn, 2 * hw - 5.2 * s)
-	Tech.stairs(m, at(0, 0, -hd), stairW, top / 4, run, 4, { Rails = true })
-	local daisD = front + hd
+	for i = 1, steps do
+		local y = rise * i
+		local z0 = -hd + run * (i - 1)
+		Style.block(
+			m,
+			at(0, y / 2, (z0 + front) / 2),
+			Vector3.new(stairW, y, front - z0),
+			if i % 2 == 0 then Tech.MetalDeep else Tech.MetalDark,
+			nil,
+			Style.solid()
+		)
+		Kit.bit(m, at(0, y + 0.03, z0 + 0.22), Vector3.new(stairW - 0.2, 0.12, 0.44), Tech.MetalLight)
+	end
+	for _, side in { -1, 1 } do
+		local x = side * (stairW / 2 - 0.35)
+		local a = at(x, rise + 2.4, -hd + run * 0.5)
+		local b = at(x, top + 2.4, front - run * 0.5)
+		for _, q in { a, b } do
+			Kit.bit(m, q * CFrame.new(0, -1.2, 0), Vector3.new(0.3, 2.4, 0.3), Tech.MetalLight)
+		end
+		Tech.rod(m, a.Position, b.Position, 0.36, Tech.Warm, Kit.NEON, Style.tiny())
+	end
 	for _, side in { -1, 1 } do
 		local dx = side * (stairW / 2 + 1.3 * s)
-		Style.block(m, at(dx, 0.4 * s, -hd + daisD / 2), Vector3.new(2.2 * s, 0.8 * s, 2.2 * s), Tech.MetalDark, nil, Style.solid())
-		Tech.lanternPillar(m, at(dx, 0.8 * s, -hd + daisD / 2), 5.2 * s, 1.3 * s)
+		Style.block(m, at(dx, 0.4 * s, -hd + 1.4 * s), Vector3.new(2.2 * s, 0.8 * s, 2.2 * s), Tech.MetalDark, nil, Style.solid())
+		Tech.lanternPillar(m, at(dx, 0.8 * s, -hd + 1.4 * s), 5.2 * s, 1.3 * s)
 	end
 
 	-- the mechanical ring frame (static): 16 gunmetal blocks with a thick
@@ -361,7 +391,7 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 				Vector3.new(2 * (hOut - 0.32 * s) * hTan + 0.04, 0.38 * s, 0.2),
 				Tech.Tube
 			)
-			if k == 1 or k == 2 then
+			if k == 1 then
 				Tech.glow(m, plate * CFrame.new(0, (hIn + hOut) / 2 + 0.1 * s, hFront - 0.06), Vector3.new(1.5, 0.55, 0.12) * s, Tech.Warm)
 			end
 		end
@@ -374,7 +404,8 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	-- the chunky bottom bracket at 6 o'clock (between the housings): deeper
 	-- than the ring, a light bevel cap on its outer front edge, two studs
 	local blockD = d.RingD + 0.6 * s
-	local radial = 2.5 * s
+	-- (stops short of the turning disc: every static part clears it)
+	local radial = math.min(2.5 * s, d.RingOut - d.SegmentR - 0.35 * s)
 	local blk = ringCf * CFrame.Angles(0, 0, math.pi) * CFrame.new(0, d.RingOut - radial / 2, 0)
 	Style.block(m, blk, Vector3.new(3.2 * s, radial, blockD), Tech.Metal, nil, Style.decor())
 	Tech.bevel(
@@ -423,9 +454,11 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 			Style.tiny({ CastShadow = true })
 		)
 	end
-	local housing = at(0, top + 1.0 * s, d.RingZ + 0.2 * s)
-	Style.block(m, housing, Vector3.new(7.0, 2.0, 2.4) * s, Tech.Metal, nil, Style.solid())
-	Tech.glow(m, housing * CFrame.new(0, 0.9 * s, -1.24 * s), Vector3.new(7.0 * s, 0.24, 0.1), Tech.Tube)
+	-- the base housing stays low, under the disc's bottom edge
+	local hh = math.min(2.0 * s, (d.AxleY - d.SegmentR - 0.5 * s) - top)
+	local housing = at(0, top + hh / 2, d.RingZ + 0.2 * s)
+	Style.block(m, housing, Vector3.new(7.0 * s, hh, 2.4 * s), Tech.Metal, nil, Style.solid())
+	Tech.glow(m, housing * CFrame.new(0, hh / 2 - 0.1 * s, -1.24 * s), Vector3.new(7.0 * s, 0.24, 0.1), Tech.Tube)
 	for _, x in { -2.2, 0, 2.2 } do
 		Tech.glow(m, housing * CFrame.new(x * s, -0.1 * s, -1.23 * s), Vector3.new(1.2 * s, 0.3 * s, 0.06), C.Fire)
 	end
@@ -492,9 +525,9 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	Tech.line(m, face, 0, tipY - 0.12 * s, -pw - 0.14 * s, topY, 0.2 * s, -0.24 * s, Tech.Tube)
 	Tech.line(m, face, 0, tipY - 0.12 * s, pw + 0.14 * s, topY, 0.2 * s, -0.24 * s, Tech.Tube)
 
-	-- the EmberChest at the top of the stairs on the viewer's right, clear of
-	-- the wheel's bottom segment
-	emberChest(m, at(-4.6 * s, top, front + 1.6))
+	-- the EmberChest on the side of the top landing (the viewer's right end),
+	-- clear of the stairs' line and of the wheel's bottom segments
+	emberChest(m, at(-(stairW / 2 - 2.6), top, front + 1.6))
 end
 
 return Wheel

@@ -92,7 +92,7 @@ local BAY_BACK_Z = 1.5
 -- screen glyph colors: deep enough to stay colored under bloom
 local GLYPH_BLUE = rgb(20, 150, 255)
 local GEAR_PURPLE = rgb(116, 46, 153) -- neon at ~60% value: a saturated violet gear, no starburst
-local UPG_TUBE = rgb(70, 16, 170) -- UPGRADES' deep violet tubes (its own identity, not SHOP's blue)
+local UPG_TUBE = rgb(170, 80, 255) -- UPGRADES' violet tubes (its own identity, not SHOP's blue; round 2: bright enough to glow)
 local UPG_NEON = rgb(150, 50, 220)
 -- saturated goods that read at plaza distance
 local HELMET = rgb(255, 196, 18)
@@ -611,7 +611,7 @@ local function gearShop(parent: Instance, rng: Rng.Rng)
 	-- the shopping cart on the header sign (viewer's right)
 	local iconAt = h.IconAt
 	if iconAt then
-		Tech.cartIcon(m, iconAt, 4.0, C.GlowEdge)
+		Tech.cartIcon(m, iconAt, 4.0, Tech.Neon)
 	end
 
 	-- one big saturated item per lit bay and per porch showcase (about 70%
@@ -761,12 +761,8 @@ local function techShop(parent: Instance, rng: Rng.Rng)
 	if iconAt then
 		Tech.gearIcon(m, iconAt, 3.6, GEAR_PURPLE)
 	end
-	-- the roof crest: a dark stepped fin on the header's top with a violet
-	-- neon edge (UPGRADES' own silhouette next to the SHOP's)
-	local crest = at(0, HEAD_Y1 + 0.3, (HEAD_Z0 + HEAD_Z1) / 2)
-	Kit.block(m, crest * CFrame.new(0, 0.7, 0.2), Vector3.new(0.8, 1.4, 2.6), Tech.MetalDeep, nil, Style.decor())
-	Kit.block(m, crest * CFrame.new(0, 1.75, 0.6), Vector3.new(0.8, 0.7, 1.6), Tech.MetalDeep, nil, Style.decor())
-	Tech.glow(m, crest * CFrame.new(0, 1.2, -1.12), Vector3.new(0.84, 1.8, 0.16), UPG_NEON)
+	-- (round 2: no roof crest: its violet post and box read as a stray
+	-- magenta part sticking up over the UPGRADES sign)
 
 	-- machines for sale: one big machine per bay and showcase, small ones
 	-- on the counter and the shelves

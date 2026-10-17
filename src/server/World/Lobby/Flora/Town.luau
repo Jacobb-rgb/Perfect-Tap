@@ -14,19 +14,19 @@
 	                side: two narrow three-storey row houses (the Lodge and
 	                the mine cottage) either side of TOOLS (two storeys and a
 	                setback third storey with the TOOLS blade sign over the
-	                mine hill), and the two-storey CARTS shop facing the west
-	                spur behind the SPIN & WIN wheel (the mirror of WORKS on
-	                the east spur)
-	  behind SHOP   the Smithy along the forge west path (the SPIN & WIN
-	                wheel took the MAP tower's and the GEMS workshop's old
-	                spots behind the SHOP)
+	                mine hill; lit windows, timber framing and a blade sign
+	                on its street side), and the wide two-storey CARTS shop
+	                under a slate gable roof facing the west spur
+	  behind SHOP   nothing: the SPIN & WIN wheel stands free there (the
+	                Smithy is gone, its red roof hid the wheel's stairs)
 	  behind UPGR.  the INN (a street parasol), front to the forge east
 	                path, and the two-storey ORE workshop east of the pink
 	                grove under a low module roof
-	  east strip    the WORKS workshop on the east spur under a shingle roof
-	                and the two-storey MAP house with a steep slate roof in
-	                the east tree belt (every ridge under SHOP's 20 studs:
-	                the stalls and the forge lead the skyline)
+	  east strip    the two-storey MAP house with a steep slate roof in the
+	                east tree belt and the WORKS workshop south of it under a
+	                shingle roof (a little street along the east plot road;
+	                every ridge under SHOP's 20 studs: the stalls and the
+	                forge lead the skyline)
 	  south lane    the garden cottage by the south road, with a fence,
 	                flower beds, a stepping-stone path, a shed and barrels
 
@@ -70,7 +70,7 @@ Town.FrontClearance = 6
 
 Town.Sites = {
 	-- the west strip along the west plot road (the hero's left side), north to south
-	{ Id = "CartShop", Min = Vector2.new(-63, 8), Max = Vector2.new(-55.5, 13), Facing = "N", Recipe = "CartShop", Sign = "CARTS" },
+	{ Id = "CartShop", Min = Vector2.new(-63, 8), Max = Vector2.new(-52, 14), Facing = "N", Recipe = "CartShop", Sign = "CARTS" },
 	{ Id = "Lodge", Min = Vector2.new(-63, 54), Max = Vector2.new(-58, 63), Facing = "W", Recipe = "Lodge" },
 	{
 		Id = "ToolShop",
@@ -81,15 +81,14 @@ Town.Sites = {
 		Sign = "TOOLS",
 	},
 	{ Id = "MineCottage", Min = Vector2.new(-63, 74), Max = Vector2.new(-58.5, 88), Facing = "W", Recipe = "MineCottage" },
-	-- behind the SHOP, beside the forge west path (the SPIN & WIN wheel stands north-west of it)
-	{ Id = "Smithy", Min = Vector2.new(-43, -56), Max = Vector2.new(-34, -42), Facing = "E", Recipe = "Smithy" },
 	-- behind UPGRADES, beside the forge east path (the pink grove behind it), and ORE east of the grove
 	{ Id = "Inn", Min = Vector2.new(33, -54), Max = Vector2.new(44, -43), Facing = "W", Recipe = "Inn", Sign = "INN" },
 	{ Id = "OreWorks", Min = Vector2.new(55.5, -71), Max = Vector2.new(63, -66), Facing = "S", Recipe = "OreWorks", Sign = "ORE" },
-	-- the east strip and the east spur
-	{ Id = "SpurWorkshop", Min = Vector2.new(46, 8), Max = Vector2.new(61, 12.5), Facing = "N", Recipe = "SpurWorkshop", Sign = "WORKS" },
-	-- the MAP house in the east tree belt, south of the red tree
+	-- the east strip: the MAP house in the east tree belt, south of the red
+	-- tree, and the WORKS workshop south of it (a little street; the FOSSIL
+	-- DIG turned toward the hero camera took WORKS' old spot on the east spur)
 	{ Id = "MapTower", Min = Vector2.new(54, 90), Max = Vector2.new(63, 100), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
+	{ Id = "SpurWorkshop", Min = Vector2.new(48.5, 103), Max = Vector2.new(63, 107.5), Facing = "S", Recipe = "SpurWorkshop", Sign = "WORKS" },
 	-- the south lane, beside the south road
 	{ Id = "GardenCottage", Min = Vector2.new(9, 96), Max = Vector2.new(26, 112), Facing = "N", Recipe = "GardenCottage" },
 } :: { Site }
@@ -214,7 +213,7 @@ Recipes.MapTower = function(m, fp, site, rng)
 	Buildings.window(m, face(tower, "Back"), 0, floorY(2), 1.6, 1.8)
 	-- the steep dark slate roof (ridge north-south), a lit window in the south gable
 	local roof = Buildings.sub(tower, 0, 0, tower.w + 2 * out - 0.4, tower.d + 2 * out - 0.5)
-	Buildings.gableRoof(m, roof, H + 0.2, 4.6, K.PanelLight, K.SlateDark, C.RoofDark, true)
+	Buildings.gableRoof(m, roof, H + 0.2, 4.6, K.PanelLight, K.SlateDark, C.RoofTerracottaDark, true)
 	local gable = face(roof, "Left")
 	Buildings.window(m, gable, 0, H + 1.7, 1.1, 1.1, { Sill = false, Mullion = false })
 	glow(m, tower.cf * CFrame.new(0, H + 5.25, 0), Vector3.new(0.3, 0.3, 0.3), C.AwningRed)
@@ -242,6 +241,16 @@ Recipes.ToolShop = function(m, fp, site, rng)
 	Buildings.goods(m, case.Sill, "Pickaxe")
 	emblem(m, south, 0, 11.6, 2.8, "CrossedHammers", K.Amber, 0.5)
 	Buildings.window(m, face(b, "Left"), 0, floorY(2), 1.6, 1.8)
+	-- the street side (west, the plot road): dark timber framing, two lit
+	-- windows and a second TOOLS sign with the pickaxe (no blank back)
+	local street, stw = face(b, "Back")
+	Buildings.window(m, street, -1.35, floorY(1), 1.4, 2.4, { Frame = C.WoodDark })
+	Buildings.window(m, street, 1.35, floorY(1), 1.4, 2.4, { Frame = C.WoodDark })
+	for _, x in { -stw / 2 + 0.35, 0, stw / 2 - 0.35 } do
+		trim(m, street * CFrame.new(x, 4.0, -0.2), Vector3.new(0.45, 7.6, 0.3), C.WoodDark)
+	end
+	trim(m, street * CFrame.new(0, 7.95, -0.2), Vector3.new(stw, 0.45, 0.3), C.WoodDark)
+	Buildings.wallSign(m, street, 0, 11.0, site.Sign or "TOOLS", 4.2, 3.2, "Pickaxe", K.Amber, 0.72).Name = "StreetSign"
 	-- the setback third storey on the north half
 	local up = Buildings.sub(fp, -0.9, 0, 3.4, 4.0)
 	local top = Buildings.setback(m, up, deck, 5, rng, { "Front", "Right" })
@@ -249,12 +258,7 @@ Recipes.ToolShop = function(m, fp, site, rng)
 	Buildings.window(m, face(raised, "Front"), 0, 2.7, 1.6, 1.6)
 	Buildings.window(m, face(raised, "Right"), 0, 2.7, 1.8, 1.6)
 	Buildings.vent(m, b.cf * CFrame.new(1.8, deck, 0.4), rng)
-	-- the blade sign on the setback roof, turned south (the hero sees it over the mine hill) and north
-	-- (only when the site asks for one: one sign per building reads best)
-	if site.Blade then
-		local at = up.cf * CFrame.new(0, top, 0) * CFrame.Angles(0, -math.pi / 2, 0)
-		Buildings.bladeSign(m, at, site.Sign or "TOOLS", 6.6, 3.2)
-	end
+	local _ = top
 end
 
 --[[
@@ -286,7 +290,7 @@ Recipes.Lodge = function(m, fp, _site, rng)
 	Buildings.window(m, south, 0, floorY(2), 1.3, 1.8, { Frame = C.WoodDark, Sill = false })
 	Buildings.window(m, south, 0, floorY(3), 1.3, 1.8, { Frame = C.WoodDark, Sill = false })
 	Buildings.window(m, south, 0, H + 1.0, 0.9, 0.9, { Frame = C.WoodDark, Sill = false })
-	Buildings.gableRoof(m, jetty, H + 0.25, 4.2, K.PlasterWarm, C.Roof, C.RoofTrim, true)
+	Buildings.gableRoof(m, jetty, H + 0.25, 4.2, K.PlasterWarm, C.RoofTerracotta, C.RoofTerracottaDark, true)
 	Buildings.chimney(m, b.cf * CFrame.new(-2.2, H + 0.6, 0.65), 4.6, rng)
 end
 
@@ -319,7 +323,7 @@ Recipes.MineCottage = function(m, fp, _site, rng)
 	local south = face(jetty, "Left")
 	Buildings.window(m, south, 0, floorY(2), 1.3, 1.8, { Frame = C.WoodDark, Sill = false })
 	Buildings.window(m, south, 0, H + 1.0, 0.9, 0.9, { Frame = C.WoodDark, Sill = false })
-	Buildings.gableRoof(m, jetty, H + 0.25, 4.2, K.Plaster, K.Shingle, C.Roof, true)
+	Buildings.gableRoof(m, jetty, H + 0.25, 4.2, K.Plaster, K.Shingle, C.RoofTerracottaDark, true)
 	Buildings.chimney(m, b.cf * CFrame.new(-3.6, H + 0.6, 0.65), 4.6, rng)
 	Buildings.chimney(m, b.cf * CFrame.new(4.2, H + 0.6, -0.4), 3.4, rng)
 end
@@ -334,95 +338,23 @@ end
 	+X is east.
 ]]
 Recipes.CartShop = function(m, fp, site, rng)
-	local b = part(fp, -2.75, 2.75, -1.05, 1.5)
-	local _, deck = Buildings.techShell(m, b, { Floors = 2, Out = 0.7, NeonFaces = { "Front", "Right" } }, rng)
+	local b = part(fp, -4.6, 4.6, -1.3, 2.1)
+	local out = 0.7
+	local H = Buildings.techShell(m, b, { Floors = 2, Out = out, Cornice = false, NeonFaces = { "Front", "Right" } }, rng)
 	local front = face(b, "Front")
-	Buildings.shopfront(m, front, 0, 4.6, { Bay = true })
-	Buildings.awningWide(m, front, 0, 8.3, 5.0, 1.0, C.CrystalBlue)
-	Buildings.wallSign(m, front, 0, 11.35, site.Sign or "CARTS", 6.2, 3.3, nil, nil, 1.0)
-	local east = face(b, "Right")
-	Buildings.window(m, east, 0, floorY(1), 1.0, 2.4)
-	Buildings.window(m, east, 0, floorY(2), 1.0, 1.8)
-	Buildings.window(m, face(b, "Left"), 0, floorY(2), 1.0, 1.8)
-	-- the mascot: a little ore cart full of gold on the roof
-	Buildings.cart(m, b.cf * CFrame.new(0.6, deck, 0.2) * CFrame.Angles(0, math.pi / 2, 0), C.Gold)
-end
-
---[[
-	Smithy: a cozy one-storey house (warm cobble with stone blocks and
-	quoins, a steep red roof like the Great Forge; the SPIN &
-	WIN wheel shows over it) and a stone forge wing at the south end
-	under a light slate lean-to roof, with a glowing forge mouth to the
-	forge west path and another to the south, and a tall stone chimney with
-	a dark cap and an ember glow. Facing east: local +X is south.
-]]
-Recipes.Smithy = function(m, fp, _site, rng)
-	-- one storey under a steep red roof: the SPIN & WIN wheel behind it shows
-	-- over its ridge from the plaza and the west lane
-	local house = part(fp, -6.2, 0.4, -3.2, 3.2)
-	local H = Buildings.cozyShell(m, house, { Floors = 1, StoneFaces = { "Front", "Left" } }, rng)
-	local front = face(house, "Front")
-	Buildings.door(m, front, 1.0, 0.7, 3, 6.2, C.WoodDark, C.Wood)
-	Buildings.window(m, front, -1.9, floorY(1), 1.3, 2.4, { Frame = C.WoodDark })
-	local north, nw = face(house, "Left")
-	Buildings.windowRow(m, north, floorY(1), 2, nw - 2.6, 2.2, { Frame = C.WoodDark })
-	Buildings.gableRoof(
-		m,
-		{ cf = house.cf * CFrame.Angles(0, math.pi / 2, 0), w = house.d + 0.5, d = house.w + 0.5 },
-		H + 0.25,
-		4.4,
-		K.Plaster,
-		C.Roof,
-		C.RoofTrim,
-		true
-	)
-	Buildings.chimney(m, house.cf * CFrame.new(-house.w / 2 + 1.4, H + 0.4, 1.6), 5.6, rng)
-	-- the forge wing: warm stone, a light slate lean-to roof sloping south
-	local wing = part(fp, 1.2, 6.4, -2.8, 3.4)
-	Style.block(m, wing.cf * CFrame.new(0, 0.32, 0), Vector3.new(wing.w + 0.6, 0.64, wing.d + 0.6), K.StonePlinth, nil, Style.solid())
-	Style.block(
-		m,
-		wing.cf * CFrame.new(0, 4.1, 0),
-		Vector3.new(wing.w, 8.2, wing.d),
-		Style.vary(K.StoneWarm, rng, 0.03),
-		nil,
-		Style.solid()
-	)
-	local wf = face(wing, "Front")
-	trim(m, wf * CFrame.new(-1.6, 7.3, -0.1), Vector3.new(1.6, 0.9, 0.2), K.StoneCourse)
-	trim(m, wf * CFrame.new(1.7, 1.4, -0.1), Vector3.new(1.4, 1.0, 0.2), K.StoneCourse)
-	local drop = 1.6
-	local a = math.atan2(drop, wing.w)
-	Style.block(
-		m,
-		wing.cf * CFrame.new(0, 8.2 + 0.25, 0) * CFrame.Angles(0, 0, -a) * CFrame.new(0, 0, 0),
-		Vector3.new(math.sqrt(wing.w * wing.w + drop * drop) + 0.4, 0.5, wing.d + 0.6),
-		K.SlateLight,
-		nil,
-		Style.ghost()
-	)
-	-- the forge mouth to the path: a dark stone arch with a molten glow and a timber lintel
-	trim(m, wf * CFrame.new(0, 2.6, -0.23), Vector3.new(3.6, 4.4, 0.4), C.StoneDeep)
-	local mouth = glow(m, wf * CFrame.new(0, 2.3, -0.47), Vector3.new(2.4, 2.6, 0.1), C.Molten)
-	mouth.Name = "ForgeGlow"
-	trim(m, wf * CFrame.new(0, 5.1, -0.45), Vector3.new(4.4, 0.7, 0.7), C.WoodDark)
-	-- a second forge mouth on the south side (the plaza, the hero)
-	local ws = face(wing, "Right")
-	trim(m, ws * CFrame.new(-0.4, 2.4, -0.2), Vector3.new(2.8, 3.4, 0.4), C.StoneDeep)
-	glow(m, ws * CFrame.new(-0.4, 2.2, -0.44), Vector3.new(1.8, 2.2, 0.1), C.Ember)
-	-- a dark timber band round the wing over the forge mouths, and a lit
-	-- window over the south mouth
-	Style.block(m, wing.cf * CFrame.new(0, 5.2, 0), Vector3.new(wing.w + 0.3, 0.5, wing.d + 0.3), C.WoodDark, nil, Style.ghost())
-	Buildings.window(m, ws, -0.4, 6.3, 1.4, 0.9, { Frame = C.WoodDark, Mullion = false, Sill = false })
-	-- the stone chimney (light stone, dark cap) with an ember glow at the top under a dark iron crown
-	local stack = wing.cf * CFrame.new(-0.8, 7.6, wing.d / 2 - 1.2)
-	Buildings.chimney(m, stack, 8, rng)
-	glow(m, stack * CFrame.new(0, 8.45, 0), Vector3.new(1.1, 0.25, 1.1), C.Ember)
-	trim(m, stack * CFrame.new(0, 8.75, 0), Vector3.new(2.3, 0.35, 2.3), K.Metal)
-	-- an anvil on a stump by the forge mouth
-	local anvil = wf * CFrame.new(-2.4, 0, -1.2)
-	trim(m, anvil * CFrame.new(0, 0.5, 0), Vector3.new(0.9, 1, 0.9), C.Trunk)
-	trim(m, anvil * CFrame.new(0, 1.25, 0), Vector3.new(1.4, 0.5, 0.7), C.Iron)
+	Buildings.shopfront(m, front, 1.6, 4.6, { Bay = true })
+	Buildings.window(m, front, -2.9, floorY(1), 1.6, 2.4)
+	Buildings.awningWide(m, front, 0, 8.3, 8.6, 1.0, C.CrystalBlue)
+	Buildings.wallSign(m, front, 0, 11.35, site.Sign or "CARTS", 6.6, 3.3, "Cart", K.Amber, 1.0)
+	-- lit windows on both sides (the wheel, lobby_west; the plot road)
+	local east, ew = face(b, "Right")
+	Buildings.windowRow(m, east, floorY(1), 2, ew - 1.4, 2.2)
+	Buildings.window(m, east, 0, floorY(2), 1.4, 1.8)
+	local west, ww = face(b, "Left")
+	Buildings.windowRow(m, west, floorY(2), 2, ww - 1.4, 1.8)
+	-- a dark slate gable roof, ridge along the front
+	local roof = Buildings.sub(b, 0, 0, b.w + 2 * out - 0.8, b.d + 2 * out - 1.0)
+	Buildings.gableRoof(m, roof, H + 0.2, 2.8, K.PanelLight, K.SlateDark, C.RoofTerracottaDark, true)
 end
 
 --[[
@@ -441,6 +373,10 @@ Recipes.Inn = function(m, fp, site, rng)
 	Buildings.door(m, front, 0.6, 0.7, 3, 6.2, C.WoodDark, C.Wood)
 	local jetty = Buildings.sub(b, 0, 0, b.w + 0.5, b.d + 0.5)
 	local upper = face(jetty, "Front")
+	-- the INN sign on two gunmetal brackets off the wall (the big neon mug on it)
+	for _, y in { 9.2, 13.62 } do
+		trim(m, upper * CFrame.new(0, y, -0.34), Vector3.new(5.4, 0.3, 0.6), K.Gun)
+	end
 	Buildings.wallSign(m, upper, 0, 11.4, site.Sign or "INN", 4.2, 3.4, "Mug", K.Amber, 0.5)
 	Buildings.window(m, upper, 0, H + 1.5, 1.2, 1.2, { Frame = C.WoodDark, Sill = false })
 	-- south side (toward the plaza and the hero)
@@ -457,7 +393,7 @@ Recipes.Inn = function(m, fp, site, rng)
 		4.0,
 		K.PlasterWarm,
 		K.Shingle,
-		C.Roof,
+		C.RoofTerracottaDark,
 		true
 	)
 	Buildings.chimney(m, b.cf * CFrame.new(b.w / 2 - 1.3, H + 1, 2.4), 4.2, rng)
@@ -483,9 +419,9 @@ Recipes.Inn = function(m, fp, site, rng)
 		Buildings.bladeSign(m, at, site.Sign or "INN", 6.6, 3.4)
 	end
 	-- the street cafe in front of the wing: a parasol over a round table, two stools
-	Buildings.parasol(m, fp.cf * CFrame.new(-4.0, 0, -2.2), C.AwningPink, 2.6)
-	Buildings.stool(m, (fp.cf * CFrame.new(-5.0, 0, -2.2)).Position)
-	Buildings.stool(m, (fp.cf * CFrame.new(-4.0, 0, -3.8)).Position)
+	Buildings.parasol(m, fp.cf * CFrame.new(-3.6, 0, -3.4), C.AwningPink, 2.6)
+	Buildings.stool(m, (fp.cf * CFrame.new(-4.7, 0, -3.4)).Position)
+	Buildings.stool(m, (fp.cf * CFrame.new(-2.5, 0, -3.6)).Position)
 end
 
 --[[
@@ -501,7 +437,8 @@ Recipes.OreWorks = function(m, fp, site, rng)
 	local _, deck = Buildings.techShell(m, b, { Floors = 2, Out = 0.7, Accent = C.Copper, NeonFaces = { "Front", "Right" } }, rng)
 	local front = face(b, "Front")
 	Buildings.shopfront(m, front, 0, 4.4, { Glass = false })
-	Buildings.wallSign(m, front, 0, 11.35, site.Sign or "ORE", 6.2, 3.3, nil, nil, 1.0)
+	-- the sign sits low on the first storey: from the hero camera it stays under UPGRADES' roofline
+	Buildings.wallSign(m, front, 0, 9.4, site.Sign or "ORE", 6.2, 3.3, nil, nil, 1.0)
 	local west = face(b, "Right")
 	Buildings.window(m, west, 0, floorY(1), 1.2, 2.4)
 	emblem(m, west, 0, floorY(2), 2.2, "Pickaxe", K.Amber, 0.5)
@@ -521,22 +458,22 @@ end
 	and the hero). Facing north (the spur road): local +X is east.
 ]]
 Recipes.SpurWorkshop = function(m, fp, site, rng)
-	local b = part(fp, -6.6, 6.6, -0.8, 1.35)
+	local b = part(fp, -6.4, 6.4, -0.8, 1.35)
 	local out = 0.6
 	local H =
 		Buildings.techShell(m, b, { Floors = 2, Out = out, Cornice = false, Accent = C.CrystalBlue, NeonFaces = { "Front", "Back" } }, rng)
 	local front = face(b, "Front")
-	local shop = Buildings.shopfront(m, front, -2.4, 6.6, { DoorSide = 1 })
+	local shop = Buildings.shopfront(m, front, -2.0, 6.6, { DoorSide = 1 })
 	Buildings.goods(m, shop.Sill, "Ingot")
-	Buildings.overhang(m, front, -2.4, 8.25, 7.2, 0.9, K.PanelLight)
+	Buildings.overhang(m, front, -2.0, 8.25, 7.2, 0.9, K.PanelLight)
 	Buildings.window(m, front, 3.6, floorY(1), 2.0, 2.4)
-	Buildings.wallSign(m, front, 0, 11.35, site.Sign or "WORKS", 9.8, 3.4, "Hammer", K.Amber, 0.86)
+	Buildings.wallSign(m, front, 0, 11.35, site.Sign or "WORKS", 8.7, 3.4, "Hammer", K.Amber, 0.86)
 	local back, bw = face(b, "Back")
 	Buildings.windowRow(m, back, floorY(1), 2, 6.0, 2.4)
 	Buildings.windowRow(m, back, floorY(2), 3, bw - 3.2, 1.8, { Dark = 3 })
 	-- the low shingle roof along the building and a stone chimney at its east end
 	local roof = Buildings.sub(b, 0, 0, b.w + 2 * out - 0.4, b.d + 2 * out - 0.5)
-	Buildings.gableRoof(m, roof, H + 0.2, 2.4, K.PanelLight, K.Shingle, C.RoofDark, true)
+	Buildings.gableRoof(m, roof, H + 0.2, 2.4, K.PanelLight, K.Shingle, C.RoofTerracottaDark, true)
 	Buildings.chimney(m, b.cf * CFrame.new(4.4, H + 0.6, 0.3), 3.0, rng)
 end
 
@@ -563,7 +500,7 @@ Recipes.GardenCottage = function(m, fp, _site, rng)
 	local back, bw = face(jetty, "Back")
 	Buildings.windowRow(m, back, floorY(2), 2, bw - 3, 1.8, { Frame = C.WoodDark })
 	Buildings.window(m, face(jetty, "Left"), 0, floorY(2), 1.4, 1.8, { Frame = C.WoodDark })
-	Buildings.gableRoof(m, jetty, H + 0.25, 3.6, K.Plaster, K.Terracotta, C.RoofDark)
+	Buildings.gableRoof(m, jetty, H + 0.25, 3.6, K.Plaster, C.RoofTerracotta, C.RoofTerracottaDark)
 	Buildings.chimney(m, b.cf * CFrame.new(b.w / 2 - 1.4, H + 0.6, 1.2), 4.4, rng)
 	-- garden: a low fence along the front with a gate gap, flower beds
 	local fy = 1.8 - 2.6
@@ -587,6 +524,43 @@ Recipes.GardenCottage = function(m, fp, _site, rng)
 	Buildings.barrel(m, (fp.cf * CFrame.new(-4.6, 0, 1.9)).Position, rng, 1.7)
 end
 
+---------------------------------------------------------------- the west street
+
+--[[
+	The west street (round 2): the west plot road's town side dressed like a
+	street: double-headed lamp posts every ~12 studs (amber Neon heads, no
+	lights), a gold ore cart, barrels, crates and flower boxes by the house
+	fronts. All of it 1.5+ studs off the road's edge (x -64.2, the road edge
+	is x -65.5) and clear of the doors.
+]]
+Town.StreetX = -64.2
+Town.StreetLampZ = { 18, 30, 42, 66, 90, 102 }
+local function streetLamp(m: Instance, foot: Vector3)
+	trim(m, CFrame.new(foot + Vector3.new(0, 2.6, 0)), Vector3.new(0.45, 5.2, 0.45), K.Gun).Name = "LampPost"
+	trim(m, CFrame.new(foot + Vector3.new(0, 5.15, 0)), Vector3.new(0.3, 0.3, 2.6), K.Gun)
+	for _, dz in { -1.15, 1.15 } do
+		local head = glow(m, CFrame.new(foot + Vector3.new(0, 4.75, dz)), Vector3.new(0.5, 0.55, 0.5), K.LampAmber)
+		head.Name = "LanternGlow"
+		trim(m, CFrame.new(foot + Vector3.new(0, 5.15, dz)), Vector3.new(0.8, 0.2, 0.8), K.Metal)
+	end
+end
+
+function Town.street(parent: Instance, rng: Rng.Rng)
+	local m = Style.model("WestStreet", parent)
+	local x = Town.StreetX
+	for _, z in Town.StreetLampZ do
+		streetLamp(m, Vector3.new(x, 0, z))
+	end
+	-- an ore cart heaped with gold, barrels and crates, flower boxes
+	Buildings.cart(m, CFrame.new(x + 0.2, 0, 47.5), C.Gold)
+	Buildings.barrel(m, Vector3.new(x + 0.1, 0, 52.4), rng)
+	Buildings.barrel(m, Vector3.new(x + 0.3, 0, 54.0), rng, 1.6)
+	Buildings.crate(m, CFrame.new(x + 0.2, 0, 76.2), 1.6, rng)
+	Buildings.crate(m, CFrame.new(x + 0.4, 0, 77.9), 1.2, rng)
+	flowerBed(m, CFrame.new(x + 0.3, 0, 36.5) * CFrame.Angles(0, math.pi / 2, 0), C.FlowerPink)
+	flowerBed(m, CFrame.new(x + 0.3, 0, 96.5) * CFrame.Angles(0, math.pi / 2, 0), C.FlowerYellow)
+end
+
 ---------------------------------------------------------------- build
 
 function Town.build(parent: Instance, rng: Rng.Rng)
@@ -600,6 +574,7 @@ function Town.build(parent: Instance, rng: Rng.Rng)
 		m:SetAttribute("Facing", site.Facing)
 		recipe(m, Town.footprint(site), site, Kit.sub(rng))
 	end
+	Town.street(parent, Kit.sub(rng))
 end
 
 return Town
