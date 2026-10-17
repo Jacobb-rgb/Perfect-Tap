@@ -2,61 +2,60 @@
 	Sky package: three big planets in the north sky (docs/plans/VISUAL_UPGRADE_PLAN.md,
 	package Sky), styled after the Kenney Planets sprites (CC0, docs/art/kenney_refs/planets_kit.jpg):
 
-	  PlanetViolet  a huge violet gas giant with wavy dark and light bands, a mint streak and a tilted ring (planet09 / planet01)
-	  PlanetEmber   an orange-red world with wavy orange, crimson and maroon camouflage (planet02 / planet08)
-	  PlanetTeal    a small pale-blue world with mint and green land and deep-water blotches (planet00 / planet03)
+	  PlanetViolet  a huge violet gas giant with lilac and deep-violet latitude bands, a wavy lilac
+	                streak along the equator and a light warm-lilac tilted ring (planet09 / planet01)
+	  PlanetEmber   an orange world with interlocking crimson, rust and light-orange camouflage
+	                streaks falling to the right (planet02 / planet08)
+	  PlanetTeal    a small ice-blue world with teal-mint and deep-blue camouflage (planet00 / planet03)
 
-	Each planet is one big Ball (the body) plus "patch" Balls. A patch ball is
-	much smaller than the body (radius <= 0.6 R) and its center sits so that
-	only a cap of it pokes out of the body; the cap is a blotch in a second or
-	third color. Every cap meets the surface it pokes out of at a steep angle
-	(Planets.MinCrease, Planets.MinShadeCrease where a blotch crosses the
-	shading), never at a grazing one, so the two surfaces never z-fight (far
-	away the depth buffer cannot separate nearly tangent spheres).
+	Each planet is one big Neon Ball (the body) plus:
+	  - camouflage streaks, laid out in rows along latitudes of the planet's tilted spin frame: each
+	    streak is a chain of 2-4 low "cap" Balls whose centres sit 0.8 x the smaller cap radius apart
+	    (well under half a cap diameter) with +-2 degrees of latitude jitter, the end caps smaller, so
+	    neighbours merge into one elongated, tapered, wavy streak instead of a row of dots; a streak of
+	    another color often abuts it (1.45 radii further: the two interlock, crossing steeply) and the
+	    rest of the row continues after a gap of body color. Caps are 9-11.5 degrees (angular radius)
+	    on the camouflaged worlds: with the 40-part budget, 4-8 degree caps would cover only about a
+	    quarter of the face, Kenney camouflage covers about half. A cap ball sits so that only a low
+	    cap of it pokes out (lift 0.04 of the radius), meeting the body at a steep angle
+	    (Planets.MinCrease): no z-fighting, and the outline stays round;
+	  - on the gas giant, latitude bands instead: thin Cylinder discs coaxial with the tilted spin
+	    axis, each ~1.01-1.03 x the sphere chord at its latitude, showing 7-10% of the radius of rim,
+	    alternating lilac and deep violet (planet09's clean bands);
+	  - a gloss crescent: one thin translucent Neon Cylinder disc facing the town just in front of the
+	    upper-left part of the face. Only its rim outside the curved surface shows, a crescent sliver
+	    inside the upper-left limb (Kenney's soft sheen), and a darker shade crescent at the lower right;
+	  - a slightly larger translucent Neon rim ball set back behind the body (the sprites' glowing edge);
+	  - on the gas giant, a ring of Planets.RingSegments flat blocks around the tilted equator in a
+	    light warm lilac, clearly lighter than the body.
 
-	The camouflage is the sprites' look: caps of very different sizes (6-18
-	degrees), jittered off their band and unevenly spaced, overlapping into
-	wavy merged shapes that run from limb to limb and cover about two thirds
-	of the face. Three tiers of lift keep the layers apart: the dark
-	lower-right shading (SHADE) under the blotches (BASE) under the spots on
-	the blotches (TOP); caps near the limb poke out less (LIMB) so the outline
-	stays round. The gloss is two or three small elongated caps along the
-	upper-left limb in the body color lightened 35%, translucent Neon (never
-	a white blob). A slightly larger translucent Neon ball in a saturated body
-	hue is the tight glowing rim; the gas giant's ring is one band of 20 flat
-	blocks around its tilted equator, darker than the body.
+	Colors are the sprites' colors AFTER the evening haze: the Atmosphere (LightingConfig.Presets.Surface,
+	Density 0.26, Haze 0.9) mixes each far part with its own peach/lavender color, growing with the square
+	of the distance. The raw Neon tones below were solved per planet against the preview's fog, ACES and
+	color-correction chain, so that, seen from the plaza, they come out as the sprite tones: Ember orange
+	#E87A2E / crimson #C82848 / rust #8C3018, Teal ice #CFEFFF / teal #2FC9B5 / deep blue (kept on the
+	cyan side, never a blue that hazes into violet), Violet base #7A3CE0 / lilac #B48CFF / deep #3C1490
+	(tests/LobbySky.spec.luau checks the hazed hues). Under the thinner Atmosphere requested from the
+	Lighting owner (Density ~0.19, Haze ~0.5) they come out closer still to the sprite tones.
 
-	Colors are picked for the hazed result: 1300-1500 studs out the evening
-	Atmosphere keeps only 40-50% of a part's own color and adds its own:
-	warm (pink-orange) toward the sun, lavender-blue away from it. So every
-	tone is Neon (glow is the part of the color that survives) and each
-	planet hangs on the side of the sky whose haze suits it: the violet giant
-	and its ring on the cool side (north-east), where deep violet stays
-	violet; the ember world on the warm side (north-west), where it keeps its
-	orange-red; the small blue world between them, north-north-west, in
-	deep cyan tones that stay blue through the half-warm haze (bright cyan
-	would glow white there). The sprites' deep tones need a thinner
-	Atmosphere (LightingConfig, Lighting owner): at Density ~0.19 the same
-	palette keeps ~60% of its own color 1500 studs out.
+	Distance: 700-800 studs. The haze grows with the square of the distance: at 1500 studs only ~40% of a
+	color survives (a salmon-pink "orange", a lavender "deep blue"), at 700-800 studs ~75% does. The
+	planets still hang 2x farther out than the massif and the floating islands and 1.6x farther than the
+	airship.
 
-	Placement: the hero camera looks down at the town, so its sky is a band
-	only ~11-13 degrees tall above the far land; the spawn camera stands on
-	the plaza, where the SHOP and UPGRADES roofs, the floating islands and the
-	massif fill the low sky. The planets sit in the hero frame's free corners
-	and in the gap between the west island and the massif, every disc with its
-	rim and ring wholly inside the hero frame; from the spawn none is behind
-	the massif, an airship or a cloud, at most 15% of one dips behind a
-	floating island or the balloon, and only a lower edge behind the town
-	skyline (Planets.MaxSkylineCover; tests/LobbySky.spec.luau). Positions are bearing, elevation and angular
-	size seen from the plaza, so the size on screen stays put if a distance
-	changes. Unreachable decoration: no collision, no raycasts, no touch, no
+	Placement (checked against the real silhouettes of both preview cameras, the ring included): the
+	ember world on the warm side left of the west island (hero: top left, wholly in the frame; spawn:
+	above the SHOP), the gas giant on the cool side right of the east island and its waterfall (spawn:
+	wholly visible; hero: bleeding off the right edge, a deliberate crop), and the small teal world just
+	left of the massif peak, above it (spawn only: the hero frame's sky ends below the massif's top,
+	so any spot the hero sees there hides behind the mountain from the spawn).
+
+	Streaming: Persistent. StreamingTargetRadius is 384 studs, so with LevelOfDetail = StreamingMesh a
+	planet 700+ studs out would never stream in and players would only ever see its low-detail imposter
+	mesh (no Neon glow, no translucent rim, smeared blotches). The three planets are 120 parts at most,
+	so they are cheap enough to keep streamed in (deviation from the brief's "Lod", recorded in
+	docs/plans/VISUAL_UPGRADE_PLAN.md). Unreachable decoration: no collision, no raycasts, no touch, no
 	shadows, <= 40 parts each, no lights.
-
-	Streaming: Persistent. StreamingTargetRadius is 384 studs, so with
-	LevelOfDetail = StreamingMesh a planet 1500 studs out would never stream in
-	and players would only ever see its low-detail imposter mesh (no Neon glow,
-	no translucent rim, smeared blotches). The three planets are 120 parts at
-	most, so they are cheap enough to keep streamed in.
 
 	Pure builder: Instance creation only, deterministic.
 ]]
@@ -70,50 +69,51 @@ local Kit = require(script.Parent.Kit)
 
 local NEON = Enum.Material.Neon
 local BALL = Enum.PartType.Ball
+local CYLINDER = Enum.PartType.Cylinder
 local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
 end
 
--- Local palette after the Kenney Planets sprites, picked for the hazed result
--- (see the header): the Neon tone here comes out about as the sprite tone
--- after the evening haze.
+-- Local palette: raw Neon tones that come out as the Kenney sprite tones after the evening haze
+-- at each planet's distance and bearing (see the header; the hazed result is in the comment).
 local P = {
-	-- planet09 / planet01: violet gas giant (north-east, lavender haze)
-	Violet = rgb(76, 12, 168),
-	VioletDeep = rgb(30, 0, 72),
-	VioletShade = rgb(16, 0, 40),
-	Lilac = rgb(150, 104, 240),
-	Mint = rgb(0, 160, 96),
-	Ring = rgb(24, 0, 62),
-	RimViolet = rgb(110, 40, 255),
-	-- planet02 / planet08: orange-red world (north-west, warm haze)
-	Rust = rgb(180, 10, 0),
-	Orange = rgb(255, 80, 0),
-	Crimson = rgb(220, 0, 30),
-	Maroon = rgb(100, 0, 0),
-	EmberShade = rgb(50, 0, 0),
-	RimOrange = rgb(255, 60, 0),
-	-- planet00 / planet03: pale-blue world (north-north-west, half-warm haze:
-	-- bright cyan would glow white there, so the tones are deep)
-	Ocean = rgb(0, 138, 212),
-	OceanDeep = rgb(0, 104, 200),
-	Mint2 = rgb(0, 176, 166),
-	Leaf = rgb(0, 160, 105),
-	Navy = rgb(0, 90, 170),
-	RimCyan = rgb(0, 180, 240),
+	-- planet09 / planet01: violet gas giant (north-east, lavender haze, 700 studs)
+	Violet = rgb(65, 30, 115), -- -> #844CE6 (base #7A3CE0)
+	Lilac = rgb(80, 75, 250), -- -> #B38EFF (lilac streak #B48CFF)
+	VioletDeep = rgb(30, 0, 65), -- -> #503AB0 (deep #3C1490)
+	Ring = rgb(120, 95, 235), -- -> #D8A8FF, a light warm lilac, lighter than the body
+	RimViolet = rgb(110, 60, 255),
+	-- planet02 / planet08: orange world (north-west, warm haze, 800 studs)
+	Orange = rgb(135, 65, 0), -- -> #FF8F55 (orange #E87A2E)
+	Crimson = rgb(100, 0, 30), -- -> #E55A67 (crimson #C82848)
+	Rust = rgb(70, 15, 0), -- -> #C05F56 (rust #8C3018)
+	Flame = rgb(255, 100, 25), -- -> #FFC371 (the light orange streaks)
+	RimOrange = rgb(255, 70, 0),
+	-- planet00 / planet03: ice-blue world (north, half-warm haze, 760 studs): every blue stays
+	-- cyan-blue through the haze (no deep navy that turns lavender)
+	Ice = rgb(100, 170, 255), -- -> #D0EEFF (ice #CFEFFF)
+	Teal = rgb(0, 120, 95), -- -> #74CDB5 (teal #2FC9B5)
+	Seafoam = rgb(15, 145, 110), -- -> #8AE2C4 (mint)
+	DeepBlue = rgb(0, 75, 115), -- -> #6A93D5 (deep blue #1E64B4, on the cyan side)
+	RimCyan = rgb(0, 150, 220),
 }
 
 export type Patch = {
 	Lon: number, -- degrees, 0 = the point facing the town, + = to the viewer's right
-	Lat: number, -- degrees, + = up (on the tilted spin frame, or the face frame if Face)
+	Lat: number, -- degrees, + = up (on the tilted spin frame)
 	Size: number, -- angular radius of the cap on the body (degrees)
 	Lift: number, -- how far the cap pokes out of the body at its middle (fraction of the radius)
 	Color: Color3,
-	Face: boolean?, -- placed on the town-facing frame (shade, gloss) instead of the spin frame
-	Shade: boolean?, -- part of the dark lower-right shading (under the blotches)
-	Transparency: number?, -- translucent Neon (the gloss)
+}
+
+-- A latitude band: a thin Cylinder disc coaxial with the spin axis.
+export type Band = {
+	Lat: number, -- degrees
+	Width: number, -- visible width of the band (fraction of the radius)
+	Color: Color3,
 }
 
 export type Ring = {
@@ -129,12 +129,14 @@ export type Spec = {
 	Dist: number, -- horizontal distance from the plaza
 	Elev: number, -- elevation of the center seen from the plaza (degrees)
 	Size: number, -- angular diameter of the body seen from the plaza (degrees)
-	Roll: number, -- spin axis tilt seen from the town (degrees, + = top to the viewer's right)
-	Lean: number, -- spin axis leaned toward the town (degrees): opens the ring
+	Roll: number, -- spin axis tilt seen from the town (degrees, + = top to the viewer's left: the streaks and
+	-- the ring rise to the right; - = they fall to the right)
+	Lean: number, -- spin axis leaned toward the town (degrees): opens the ring and the bands
 	Body: Color3,
 	Rim: Color3,
 	RimTransparency: number,
 	Patches: { Patch },
+	Bands: { Band }?,
 	Ring: Ring?,
 }
 
@@ -144,7 +146,15 @@ export type Ball = {
 	Offset: Vector3,
 	Radius: number,
 	Color: Color3,
-	Shade: boolean,
+}
+
+-- A flat disc (a Roblox Cylinder, axis = the CFrame's X axis) in world space.
+export type Disc = {
+	Name: string,
+	CFrame: CFrame,
+	Diameter: number,
+	Thickness: number,
+	Color: Color3,
 	Transparency: number,
 }
 
@@ -157,21 +167,26 @@ Planets.Town = Vector3.new(0, 30, 30)
 
 -- Max parts per planet (mobile budget).
 Planets.MaxParts = 40
--- A cap meets the surface it pokes out of at least this steeply (degrees).
+-- A cap meets the body (or another cap of another color) at least this steeply (degrees).
 Planets.MinCrease = 20
--- ... and a blotch crosses the shading at least this steeply.
-Planets.MinShadeCrease = 30
--- A patch ball is at most this fraction of the body radius.
-Planets.MaxPatchRadius = 0.6
+-- Caps: the largest angular radius (degrees) and how far a cap pokes out of the body (fraction of
+-- the radius; <= 0.04 keeps the outline round, the creases stay >= MinCrease up to MaxCap).
+Planets.MaxCap = 12
+Planets.CapLift = 0.04
 --[[
-	From the spawn, the town skyline (the SHOP / UPGRADES roofs, the Great
-	Forge: their footprint boxes) may hide at most this fraction of a
-	planet's disc. The hero frame tops out ~13 degrees up while those roofs
-	reach ~9-11 degrees seen from the spawn, so a planet wholly inside the
-	hero frame cannot clear them completely: only its lower edge may dip
-	behind them. The floating islands and the balloon hide at most 15%.
+	Camouflage rows: along a row, the caps of one streak sit RunSpacing x the smaller cap radius
+	apart (well under half a cap diameter, so they merge into one elongated streak), a streak of
+	another color that touches the one before it starts TouchSpacing radii further (the two
+	interlock but cross steeply), and a streak after a gap of body color GapSpacing radii further.
+	The end caps of a streak of 3+ are EndTaper smaller.
 ]]
-Planets.MaxSkylineCover = 0.55
+Planets.RunSpacing = 0.8
+Planets.TouchSpacing = 1.45
+Planets.GapSpacing = 2.6
+Planets.EndTaper = 0.8
+-- a band disc's rim comes out of the surface at least this steeply (degrees): only its pole-side
+-- part stands outside, the equator side stays inside the body
+Planets.MinBandCrease = 10
 --[[
 	The rim: a translucent Neon ball RimScale x the body, its center pushed
 	RimBack x the radius away from the town. Its front is hidden inside the
@@ -180,202 +195,202 @@ Planets.MaxSkylineCover = 0.55
 ]]
 Planets.RimScale = 1.07
 Planets.RimBack = 0.3
--- the gloss: the body color lightened this much, translucent Neon
-Planets.GlossLighten = 0.35
-Planets.GlossTransparency = 0.4
+-- The ring of the gas giant.
+Planets.RingSegments = 28
+--[[
+	Gloss and shade crescents: a thin translucent Neon disc facing the town, Offset x the radius from
+	the face center toward the upper left (gloss) or the lower right (shade), Radius x the radius
+	wide, Depth x the radius in front of the center. The curved surface hides it except where the
+	surface falls behind it: between sqrt(1 - Depth^2) and Offset + Radius from the center, a thin
+	crescent just inside the limb.
+]]
+Planets.Crescent = { Offset = 0.46, Radius = 0.5, Depth = 0.6, Thickness = 0.006 }
+Planets.GlossLighten = 0.45
+Planets.GlossTransparency = 0.45
+Planets.ShadeDarken = 0.45
+Planets.ShadeTransparency = 0.5
 
--- cap heights: shading under everything, blotches, spots on the blotches;
--- caps near the limb poke out less so the outline stays round
-local SHADE, BASE, TOP, LIMB = 0.05, 0.12, 0.16, 0.08
+-- latitude jitter along a row (degrees, within +-2): wavy streak edges
+local JITTER = { 0, 2, -1.5, 1, -2 }
+
+export type Run = {
+	Count: number, -- caps in this streak
+	Color: Color3,
+	Touch: boolean?, -- the next streak abuts this one (else a gap of body color follows)
+}
+
+-- A row of camouflage streaks along one latitude, centered on longitude `Offset`.
+export type Row = {
+	Lat: number,
+	Offset: number,
+	Runs: { Run },
+}
 
 --[[
-	A cap: lon/lat of its middle, angular radius, color and lift (BASE by
-	default).
+	The caps of camouflage rows (cap radius `size`): each row is centered on its Offset, its
+	streaks follow each other toward the viewer's right, the caps of one streak RunSpacing radii
+	apart along the arc, the next streak TouchSpacing (touching) or GapSpacing (after a gap)
+	radii further; every cap jittered off the row's latitude.
 ]]
-local function cap(lon: number, lat: number, size: number, color: Color3, lift: number?): Patch
-	return { Lon = lon, Lat = lat, Size = size, Lift = lift or BASE, Color = color }
-end
-
-local function concat(...: { Patch }): { Patch }
+local function rows(list: { Row }, size: number): { Patch }
 	local out: { Patch } = {}
-	for _, list in { ... } do
-		for _, patch in list do
-			table.insert(out, patch)
+	local function capSize(run: Run, j: number): number
+		local tapered = run.Count > 2 and (j == 1 or j == run.Count)
+		return if tapered then size * Planets.EndTaper else size
+	end
+	-- arc from one cap of a streak to the next
+	local function step(run: Run, j: number): number
+		return Planets.RunSpacing * math.min(capSize(run, j), capSize(run, j + 1))
+	end
+	for _, row in list do
+		local perDegree = 1 / math.cos(math.rad(row.Lat)) -- arc degrees -> longitude degrees
+		local span = 0
+		for i, run in row.Runs do
+			for j = 1, run.Count - 1 do
+				span += step(run, j) * perDegree
+			end
+			if i < #row.Runs then
+				span += size * (if run.Touch then Planets.TouchSpacing else Planets.GapSpacing) * perDegree
+			end
 		end
-	end
-	return out
-end
-
--- the dark lower-right limb (the sprites' shading), under the blotches
-local function shade(color: Color3, list: { { number } }): { Patch }
-	local out: { Patch } = {}
-	for _, s in list do
-		table.insert(out, { Lon = s[1], Lat = s[2], Size = s[3], Lift = SHADE, Color = color, Face = true, Shade = true })
-	end
-	return out
-end
-
--- the gloss streak along the upper-left limb: a few small overlapping caps
--- in the body color lightened 35%, translucent Neon
-local function gloss(body: Color3, list: { { number } }): { Patch }
-	local color = body:Lerp(WHITE, Planets.GlossLighten)
-	local out: { Patch } = {}
-	for _, s in list do
-		table.insert(out, {
-			Lon = s[1],
-			Lat = s[2],
-			Size = s[3],
-			Lift = TOP,
-			Color = color,
-			Face = true,
-			Transparency = Planets.GlossTransparency,
-		})
+		local at = row.Offset - span / 2
+		local k = 0
+		for i, run in row.Runs do
+			for j = 1, run.Count do
+				table.insert(out, {
+					Lon = at,
+					Lat = row.Lat + JITTER[k % #JITTER + 1],
+					Size = capSize(run, j),
+					Lift = Planets.CapLift,
+					Color = run.Color,
+				})
+				k += 1
+				if j < run.Count then
+					at += step(run, j) * perDegree
+				end
+			end
+			if i < #row.Runs then
+				at += size * (if run.Touch then Planets.TouchSpacing else Planets.GapSpacing) * perDegree
+			end
+		end
 	end
 	return out
 end
 
 Planets.Specs = {
 	{
-		-- the ringed gas giant in the hero frame's top-right corner, on the
-		-- cool side right of the east island (planet09 / planet01)
+		-- the ringed gas giant on the cool side right of the east island (planet09 / planet01)
 		Name = "PlanetViolet",
-		Az = 32.25,
-		Dist = 1500,
-		Elev = 9.2,
-		Size = 7,
-		Roll = -20,
+		Az = 43.2,
+		Dist = 700,
+		Elev = 10.6,
+		Size = 7.4,
+		Roll = 18,
 		Lean = 26,
 		Body = P.Violet,
 		Rim = P.RimViolet,
 		RimTransparency = 0.6,
-		Patches = concat(shade(P.VioletShade, { { 58, -30, 15 } }), {
-			-- the upper dark band: big uneven caps merging into one wavy
-			-- band from limb to limb
-			cap(-62, 30, 14, P.VioletDeep, LIMB),
-			cap(-36, 35, 17, P.VioletDeep),
-			cap(-8, 27, 14, P.VioletDeep),
-			cap(18, 36, 16, P.VioletDeep),
-			cap(46, 29, 13, P.VioletDeep, LIMB),
-			-- the wide light band: three big caps of different sizes,
-			-- offset from the dark bands, merging into the mint on the right
-			cap(-62, 12, 8, P.Lilac, LIMB),
-			cap(-40, 4, 19, P.Lilac),
-			cap(-12, 9, 15, P.Lilac),
-			cap(16, 2, 18, P.Lilac),
-			cap(44, 7, 12, P.Mint, LIMB),
-			-- the lower dark band
-			cap(-52, -26, 15, P.VioletDeep, LIMB),
-			cap(-22, -22, 17, P.VioletDeep),
-			cap(10, -30, 14, P.VioletDeep),
-			cap(34, -16, 8, P.VioletDeep),
-			-- a mint streak low on the left (planet01)
-			cap(-30, -50, 9, P.Mint),
-		}, gloss(P.Violet, { { -50, 40, 4 }, { -40, 49, 3.5 } })),
-		Ring = { Inner = 1.3, Outer = 1.75, Segments = 20, Color = P.Ring },
+		-- clean latitude bands (planet09), deep and lilac by turns
+		Bands = {
+			{ Lat = 30, Width = 0.07, Color = P.VioletDeep },
+			{ Lat = 14, Width = 0.08, Color = P.Lilac },
+			{ Lat = -14, Width = 0.1, Color = P.VioletDeep },
+			{ Lat = -30, Width = 0.08, Color = P.Lilac },
+		},
+		-- a wavy lilac streak along the equator
+		Patches = rows({
+			{ Lat = 2, Offset = -8, Runs = { { Count = 4, Color = P.Lilac } } },
+		}, 8),
+		Ring = { Inner = 1.3, Outer = 1.72, Segments = Planets.RingSegments, Color = P.Ring },
 	},
 	{
-		-- the orange-red world in the hero frame's top-left corner, on the
-		-- warm side left of the west island (planet02 / planet08)
+		-- the orange world on the warm side left of the west island (planet02 / planet08):
+		-- interlocking crimson and rust camouflage with light-orange streaks, falling to the right
 		Name = "PlanetEmber",
-		Az = 322.5,
-		Dist = 1500,
-		Elev = 8.9,
-		Size = 6.75,
-		Roll = 0,
+		Az = 323,
+		Dist = 800,
+		Elev = 11.5,
+		Size = 9,
+		Roll = -26,
 		Lean = 0,
-		Body = P.Rust,
+		Body = P.Orange,
 		Rim = P.RimOrange,
 		RimTransparency = 0.6,
-		Patches = concat(shade(P.EmberShade, { { 62, -24, 14 }, { 36, -54, 15 } }), {
-			-- the top: maroon blotches and a crimson one
-			cap(-34, 58, 11, P.Maroon, LIMB),
-			cap(-2, 54, 13, P.Maroon),
-			cap(26, 60, 9, P.Crimson, LIMB),
-			cap(48, 44, 10, P.Maroon, LIMB),
-			-- the upper orange band: three blotches, each a big cap with
-			-- smaller lobes, so the outline is wavy, not a bead string
-			cap(-40, 25, 17, P.Orange),
-			cap(-60, 16, 9, P.Orange, LIMB),
-			cap(-26, 39, 8, P.Orange),
-			cap(6, 21, 15, P.Orange),
-			cap(23, 33, 9, P.Orange),
-			cap(-10, 31, 7, P.Orange),
-			cap(45, 17, 11, P.Orange, LIMB),
-			cap(59, 28, 7, P.Orange, LIMB),
-			-- the crimson middle with maroon islands
-			cap(-52, -4, 12, P.Maroon, LIMB),
-			cap(-30, 2, 10, P.Crimson),
-			cap(-14, -7, 8, P.Maroon),
-			cap(8, -2, 11, P.Crimson),
-			cap(28, -1, 13, P.Maroon),
-			cap(54, -8, 9, P.Crimson, LIMB),
-			-- the lower orange band, falling to the right
-			cap(-30, -30, 16, P.Orange),
-			cap(-52, -22, 9, P.Orange, LIMB),
-			cap(-12, -41, 8, P.Orange),
-			cap(12, -34, 12, P.Orange),
-			cap(28, -24, 7, P.Orange),
-			-- the bottom
-			cap(-26, -58, 12, P.Maroon, LIMB),
-			cap(4, -60, 9, P.Crimson, LIMB),
-			-- spots on the blotches
-			cap(-48, 22, 6, P.Crimson, TOP),
-			cap(12, 17, 6, P.Maroon, TOP),
-			cap(-24, -34, 6, P.Maroon, TOP),
-		}, gloss(P.Rust, { { -56, 36, 4 }, { -46, 46, 3.5 }, { -34, 54, 3 } })),
+		Patches = rows({
+			{ Lat = 54, Offset = -10, Runs = { { Count = 3, Color = P.Crimson, Touch = true }, { Count = 2, Color = P.Rust } } },
+			{
+				Lat = 29,
+				Offset = 8,
+				Runs = {
+					{ Count = 2, Color = P.Rust, Touch = true },
+					{ Count = 3, Color = P.Crimson },
+					{ Count = 2, Color = P.Rust },
+				},
+			},
+			{
+				Lat = 3,
+				Offset = -6,
+				Runs = {
+					{ Count = 3, Color = P.Crimson, Touch = true },
+					{ Count = 3, Color = P.Rust },
+					{ Count = 2, Color = P.Crimson },
+				},
+			},
+			{
+				Lat = -23,
+				Offset = 10,
+				Runs = {
+					{ Count = 3, Color = P.Flame },
+					{ Count = 3, Color = P.Rust, Touch = true },
+					{ Count = 2, Color = P.Crimson },
+				},
+			},
+			{ Lat = -50, Offset = -8, Runs = { { Count = 3, Color = P.Crimson, Touch = true }, { Count = 2, Color = P.Rust } } },
+		}, 11.5),
 	},
 	{
-		-- the small pale-blue world between the west island and the massif
-		-- (planet00 / planet03)
+		-- the small ice-blue world just left of the massif peak, above the cloud tier (planet00 / planet03)
 		Name = "PlanetTeal",
-		Az = 338,
-		Dist = 1500,
-		Elev = 11,
-		Size = 5,
-		Roll = 0,
+		Az = 350,
+		Dist = 760,
+		Elev = 22,
+		Size = 7.5,
+		Roll = -14,
 		Lean = 0,
-		Body = P.Ocean,
+		Body = P.Ice,
 		Rim = P.RimCyan,
 		RimTransparency = 0.6,
-		Patches = concat(shade(P.Navy, { { 62, -24, 14 }, { 36, -54, 15 } }), {
-			-- the northern land: a big blotch with lobes and a smaller one
-			cap(-40, 36, 16, P.Mint2),
-			cap(-62, 26, 9, P.Mint2, LIMB),
-			cap(-20, 48, 8, P.Mint2),
-			cap(8, 40, 11, P.Mint2),
-			cap(30, 48, 8, P.Mint2, LIMB),
-			cap(48, 32, 10, P.Mint2, LIMB),
-			cap(-8, 62, 9, P.Mint2, LIMB),
-			-- the middle land, a long wavy run with lobes
-			cap(-14, 6, 17, P.Mint2),
-			cap(-40, -2, 10, P.Mint2),
-			cap(-60, -10, 8, P.Mint2, LIMB),
-			cap(12, 12, 9, P.Mint2),
-			cap(30, 4, 13, P.Mint2),
-			cap(54, 12, 8, P.Mint2, LIMB),
-			-- the southern land
-			cap(-44, -38, 14, P.Mint2),
-			cap(-22, -32, 8, P.Mint2),
-			cap(0, -44, 12, P.Mint2),
-			cap(20, -34, 7, P.Mint2),
-			cap(-64, -34, 8, P.Mint2, LIMB),
-			cap(-20, -60, 8, P.Mint2, LIMB),
-			-- small islands that break up the open water on the right
-			cap(62, 42, 8, P.Mint2, LIMB),
-			cap(40, 24, 7, P.Mint2),
-			cap(-32, 60, 8, P.Mint2, LIMB),
-			cap(14, -58, 8, P.Mint2, LIMB),
-			-- green inside the land
-			cap(-44, 32, 8, P.Leaf, TOP),
-			cap(-8, 8, 9, P.Leaf, TOP),
-			cap(34, 6, 6, P.Leaf, TOP),
-			cap(-48, -42, 7, P.Leaf, TOP),
-			-- deep water between the land
-			cap(-30, 18, 7, P.OceanDeep),
-			cap(16, 26, 8, P.OceanDeep),
-			cap(46, -16, 9, P.OceanDeep),
-			cap(-18, -18, 6, P.OceanDeep),
-		}, gloss(P.Ocean, { { -56, 36, 4 }, { -46, 46, 3.5 }, { -34, 54, 3 } })),
+		Patches = rows({
+			{ Lat = 54, Offset = -6, Runs = { { Count = 3, Color = P.Teal, Touch = true }, { Count = 2, Color = P.DeepBlue } } },
+			{
+				Lat = 29,
+				Offset = 10,
+				Runs = {
+					{ Count = 2, Color = P.DeepBlue },
+					{ Count = 4, Color = P.Teal, Touch = true },
+					{ Count = 2, Color = P.Seafoam },
+				},
+			},
+			{
+				Lat = 3,
+				Offset = -8,
+				Runs = {
+					{ Count = 3, Color = P.Teal, Touch = true },
+					{ Count = 2, Color = P.DeepBlue },
+					{ Count = 3, Color = P.Teal },
+				},
+			},
+			{
+				Lat = -23,
+				Offset = 6,
+				Runs = {
+					{ Count = 2, Color = P.DeepBlue },
+					{ Count = 4, Color = P.Teal, Touch = true },
+					{ Count = 2, Color = P.DeepBlue },
+				},
+			},
+			{ Lat = -50, Offset = -6, Runs = { { Count = 3, Color = P.Teal }, { Count = 1, Color = P.DeepBlue } } },
+		}, 11.5),
 	},
 } :: { Spec }
 
@@ -415,8 +430,10 @@ local function direction(lon: number, lat: number): Vector3
 	local lo, la = math.rad(lon), math.rad(lat)
 	return Vector3.new(-math.sin(lo) * math.cos(la), math.sin(la), -math.cos(lo) * math.cos(la))
 end
+Planets.direction = direction
 
--- The town-facing frame and the tilted spin frame (bands, ring) of a planet.
+-- The town-facing frame and the tilted spin frame (streaks, bands, ring) of a planet.
+-- (LookVector of the face frame = toward the town; the spin frame's Y axis is the spin axis.)
 function Planets.frames(spec: Spec): (CFrame, CFrame)
 	local center = Planets.center(spec)
 	local faceFrame = CFrame.lookAt(center, Planets.Town)
@@ -424,25 +441,84 @@ function Planets.frames(spec: Spec): (CFrame, CFrame)
 	return faceFrame, spin
 end
 
--- Every ball of a planet (body first, then the patches in order).
+-- Every ball of a planet (body first, then the caps in order).
 function Planets.balls(spec: Spec): { Ball }
 	local radius = Planets.diameter(spec) / 2
-	local faceFrame, spin = Planets.frames(spec)
+	local _, spin = Planets.frames(spec)
 	local out: { Ball } = {
-		{ Name = "Body", Offset = Vector3.zero, Radius = radius, Color = spec.Body, Shade = false, Transparency = 0 },
+		{ Name = "Body", Offset = Vector3.zero, Radius = radius, Color = spec.Body },
 	}
 	for i, patch in spec.Patches do
 		local d, r = Planets.capBall(radius, patch.Size, patch.Lift)
-		local frame = if patch.Face then faceFrame else spin
 		table.insert(out, {
 			Name = `Patch{i}`,
-			Offset = frame:VectorToWorldSpace(direction(patch.Lon, patch.Lat) * d),
+			Offset = spin:VectorToWorldSpace(direction(patch.Lon, patch.Lat) * d),
 			Radius = r,
 			Color = patch.Color,
-			Shade = patch.Shade == true,
-			Transparency = patch.Transparency or 0,
 		})
 	end
+	return out
+end
+
+--[[
+	The latitude band discs. A band at latitude `Lat` shows `Width` (x R) of its rim: the disc's
+	pole-side face sits at R sin(Lat) +- Width/2 (toward the pole) and its radius is the sphere's
+	at the band's equator-side edge (R sin(Lat) -+ Width/2), so the rim comes out of the surface
+	there and stands just outside it up to the pole-side face: a clean band ~1.01-1.03 x the chord
+	at its latitude. The disc reaches BandInside x R further toward the equator, inside the body.
+]]
+Planets.BandInside = 0.05
+function Planets.bandDiscs(spec: Spec): { Disc }
+	local out: { Disc } = {}
+	local bands = spec.Bands
+	if not bands then
+		return out
+	end
+	local radius = Planets.diameter(spec) / 2
+	local _, spin = Planets.frames(spec)
+	for i, band in bands do
+		local side = if band.Lat >= 0 then 1 else -1
+		local mid = math.abs(math.sin(math.rad(band.Lat)))
+		local pole = (mid + band.Width / 2) * radius -- the pole-side face (height along the axis)
+		local edge = (mid - band.Width / 2) * radius -- where the rim comes out of the surface
+		local thickness = (band.Width + Planets.BandInside) * radius
+		local discRadius = math.sqrt(radius * radius - edge * edge) * 1.004
+		table.insert(out, {
+			Name = `Band{i}`,
+			-- a Roblox cylinder's axis is its X axis: turn it onto the spin axis (Y)
+			CFrame = spin * CFrame.new(0, side * (pole - thickness / 2), 0) * CFrame.Angles(0, 0, math.pi / 2),
+			Diameter = 2 * discRadius,
+			Thickness = thickness,
+			Color = band.Color,
+			Transparency = 0,
+		})
+	end
+	return out
+end
+
+-- The gloss (upper left) and shade (lower right) crescents.
+function Planets.crescents(spec: Spec): { Disc }
+	local radius = Planets.diameter(spec) / 2
+	local faceFrame = Planets.frames(spec)
+	local k = Planets.Crescent
+	local out: { Disc } = {}
+	local function disc(name: string, sx: number, sy: number, color: Color3, transparency: number)
+		local offset = Vector3.new(sx, sy, 0).Unit * k.Offset * radius
+		-- the face frame looks at the town (-Z local): the disc sits Depth x R toward the town,
+		-- its axis (local X after the turn) pointing at the town
+		local cf = faceFrame * CFrame.new(offset.X, offset.Y, -k.Depth * radius) * CFrame.Angles(0, math.pi / 2, 0)
+		table.insert(out, {
+			Name = name,
+			CFrame = cf,
+			Diameter = 2 * k.Radius * radius,
+			Thickness = math.max(0.3, k.Thickness * radius),
+			Color = color,
+			Transparency = transparency,
+		})
+	end
+	-- the face frame's +X is the viewer's left
+	disc("Gloss", 1, 1, spec.Body:Lerp(WHITE, Planets.GlossLighten), Planets.GlossTransparency)
+	disc("Shade", -1, -1, spec.Body:Lerp(BLACK, Planets.ShadeDarken), Planets.ShadeTransparency)
 	return out
 end
 
@@ -458,6 +534,19 @@ local function ball(parent: Instance, position: Vector3, diameter: number, color
 	)
 end
 
+local function disc(parent: Instance, d: Disc): Part
+	local p = Style.block(
+		parent,
+		d.CFrame,
+		Vector3.new(d.Thickness, d.Diameter, d.Diameter),
+		d.Color,
+		NEON,
+		Kit.far({ Shape = CYLINDER, Transparency = d.Transparency })
+	)
+	p.Name = d.Name
+	return p
+end
+
 -- Center of the rim ball: RimBack x the radius behind the body center.
 function Planets.rimCenter(spec: Spec): Vector3
 	local center = Planets.center(spec)
@@ -471,9 +560,15 @@ function Planets.planet(parent: Instance, spec: Spec): Model
 	local radius = Planets.diameter(spec) / 2
 	local body: Part? = nil
 	for _, b in Planets.balls(spec) do
-		local p = ball(m, center + b.Offset, 2 * b.Radius, b.Color, b.Transparency)
+		local p = ball(m, center + b.Offset, 2 * b.Radius, b.Color)
 		p.Name = b.Name
 		body = body or p
+	end
+	for _, d in Planets.bandDiscs(spec) do
+		disc(m, d)
+	end
+	for _, d in Planets.crescents(spec) do
+		disc(m, d)
 	end
 	-- thin glowing edge (the sprites' bright outline), set back behind the body
 	local rim = ball(m, Planets.rimCenter(spec), 2 * radius * Planets.RimScale, spec.Rim, spec.RimTransparency)
@@ -489,8 +584,8 @@ function Planets.planet(parent: Instance, spec: Spec): Model
 		local inner, outer = ring.Inner * radius, ring.Outer * radius
 		local mid = (inner + outer) / 2
 		local n = ring.Segments
-		local length = 2 * outer * math.tan(math.pi / n) + 1
-		local thickness = math.max(2, radius * 0.01)
+		local length = 2 * outer * math.tan(math.pi / n) + 0.5
+		local thickness = math.max(1.5, radius * 0.02)
 		for i = 0, n - 1 do
 			local a = (i + 0.5) / n * 2 * math.pi
 			local cf = spin * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -mid)

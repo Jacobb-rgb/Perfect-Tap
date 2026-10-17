@@ -1,15 +1,18 @@
 --[[
 	Sky package: voxel cloud banks (docs/plans/LOBBY_PLAN.md 6.1 item 3,
-	ART_DIRECTION section 7). Rounded voxel cumulus clusters and long thin
-	stratus streaks 450-900 studs out, lit like the concept's sunset banks.
+	ART_DIRECTION section 7). Rounded voxel cumulus mounds 500-1000 studs out,
+	grouped into banks and lit like the concept's sunset banks. No flat
+	slabs, no long planks: every solid cloud block is at most ~3x as long as
+	it is tall (the thin lit skirts under the puffs are glow sheets, not
+	cloud bodies).
 
 	A cumulus cluster (24 parts) is a mound, not a slab:
 	  - six underside puffs of different sizes in a rough ellipse, each with
 	    its bottom at its own height, so from below it is a lumpy cluster of
 	    steps, not one flat plate;
 	  - under every puff a lit skirt: an inset translucent Neon sheet
-	    (CloudOrange toward the sun, peach-pink away from it, Transparency
-	    0.3-0.45) 1.2 studs below the puff's bottom (never sharing a face with
+	    (deep sunset orange toward the sun, coral away from it, Transparency
+	    0.4) 1.2 studs below the puff's bottom (never sharing a face with
 	    it), so seen from the plaza the undersides glow warm like the
 	    concept's, instead of the dark bottom faces the low sun never reaches;
 	  - six domes stepped inward like a pyramid (three, two, one), lit tops
@@ -21,19 +24,20 @@
 	Each cluster is turned 20-40 degrees away from the town so it shows a lit
 	and a shaded face.
 
-	A stratus streak (7 parts) is a long thin bank high in the sky: four flat
-	puffs along it at different heights (a stepped underside and a hump in
-	the middle) with lit skirts under the three lowest (the glowing
-	underside of an evening stratus).
-
-	Spots: a low bank on the west horizon beside the setting sun, a big low
-	mass in the north-west, and over the plaza a mix of small high clusters
-	and larger lower ones at many heights (Y 6-270, Scale 0.5-1.55), with the
-	stratus streaks above them (Y 270-300, two nearly overhead) filling the
-	upper sky. Every cluster
-	is either wholly above the hero camera's frame or wholly inside it (no
-	cloud bottoms poking in at its top edge), and none covers a planet
-	(Planets.luau), the airship (Airship.luau) or the balloon.
+	Banks (Clouds.Spots, 14 clusters):
+	  - the sunset bank on the west horizon beside the sun and a big low mass
+	    in the north-west;
+	  - two low horizon banks the hero camera sees under the planets: a big
+	    one far out in the north-west (under the ember world) and two small
+	    ones in the north-east (right of the massif, under the gas giant);
+	  - three loose high banks over the plaza, seen from the spawn: upper
+	    left (left of the balloon), top centre over the massif (right of the
+	    teal world) and upper right over the east island; each 1-3 clusters
+	    of different sizes at stepped heights.
+	Every cluster is either wholly above the hero camera's frame or wholly
+	inside it (none cut by its top or side edges), and none covers a planet
+	(Planets.luau), the airship (Airship.luau) or the balloon in the hero and
+	spawn shots (tests/LobbySky.spec.luau).
 
 	No collision, no shadow, Persistent streaming; all of it stays outside
 	the lobby area box and inside the CloudBanks footprint.
@@ -64,56 +68,43 @@ Clouds.SkirtTransparency = 0.4
 Clouds.SkirtGap = 1.2
 
 export type Spot = { Az: number, Dist: number, Y: number, Scale: number }
-export type Streak = { Az: number, Dist: number, Y: number, Length: number }
 
 --[[
 	Cluster spots: Az = compass bearing from the plaza in degrees (0 = north
 	(-Z), 270 = west (-X)), Dist = studs from the plaza, Y = base height,
 	Scale. The sun sits at bearing ~262, ~13 degrees up: the west bank stays
 	under it and beside it. The planets (seen from the plaza) sit at bearings
-	~318-327 (ember), ~335-341 (teal) and ~22-43 (violet giant and its ring)
-	3-15 degrees up, the airship at ~20 degrees bearing ~17 degrees up over
-	the mountain and the balloon at ~-28 bearing ~30 degrees up from the
-	spawn: the clusters keep out of those windows. A cluster high over the
-	plaza has its base above the hero frame's top edge (~11 degrees up from
-	the hero camera), so the hero never shows only its bottom.
+	~318-328 (ember, 7-16 degrees up), ~346-354 (teal, 18-26 up) and ~33-47
+	(gas giant and its ring, 6-18 up), the airship at ~20 degrees bearing ~17
+	degrees up over the mountain and the balloon at ~-28 bearing ~30 degrees
+	up from the spawn: the clusters keep out of those windows.
 ]]
 Clouds.Spots = {
-	-- low bank on the west horizon, beside and under the sun (south of
-	-- bearing ~265 the footprint ends, so the bank runs north of the sun)
+	-- the sunset bank on the west horizon, beside and under the sun, and a
+	-- big low mass in the north-west
 	{ Az = 268, Dist = 780, Y = 30, Scale = 1.2 },
 	{ Az = 282, Dist = 760, Y = 64, Scale = 1.0 },
-	{ Az = 262, Dist = 740, Y = 6, Scale = 0.8 },
-	-- a big low mass in the north-west and a small high one over it
 	{ Az = 296, Dist = 720, Y = 96, Scale = 1.55 },
-	{ Az = 307, Dist = 640, Y = 262, Scale = 0.5 },
-	{ Az = 312, Dist = 880, Y = 6, Scale = 0.9 },
-	-- over the plaza, seen from the spawn, in three tiers: larger mounds
-	-- left of the balloon, over the forge and right of the east island,
-	-- smaller ones between them and one low and far over the massif's left
-	-- shoulder (the streaks below fill the top tier)
-	{ Az = 318, Dist = 560, Y = 194, Scale = 0.75 },
-	{ Az = 346, Dist = 760, Y = 250, Scale = 0.6 },
-	{ Az = 357, Dist = 610, Y = 268, Scale = 0.5 },
-	{ Az = 8, Dist = 500, Y = 206, Scale = 0.7 },
-	{ Az = 22, Dist = 560, Y = 262, Scale = 0.55 },
-	{ Az = 36, Dist = 520, Y = 226, Scale = 0.62 },
-}
-
---[[
-	Stratus streaks: long thin banks high over the plaza (the top tier of
-	the spawn's sky, above the balloon's left, over the forge and over the
-	east island), two nearly overhead and one low over the western sea.
-	Length in studs.
-]]
-Clouds.Streaks = {
-	{ Az = 314, Dist = 440, Y = 272, Length = 170 },
-	{ Az = 350, Dist = 470, Y = 296, Length = 200 },
-	{ Az = 33, Dist = 460, Y = 292, Length = 170 },
-	{ Az = 290, Dist = 820, Y = 180, Length = 220 },
-	-- two nearly overhead, north of the lobby box (seen when looking up)
-	{ Az = 350, Dist = 230, Y = 300, Length = 160 },
-	{ Az = 24, Dist = 260, Y = 296, Length = 150 },
+	-- the hero's north-west horizon under the ember world: a big far mound
+	-- and a smaller one stepped in front of it
+	{ Az = 325, Dist = 1000, Y = 5, Scale = 1.0 },
+	{ Az = 332, Dist = 940, Y = 8, Scale = 0.85 },
+	-- the hero's north-east horizon right of the massif, under the gas giant
+	{ Az = 40, Dist = 510, Y = 5, Scale = 0.6 },
+	{ Az = 32, Dist = 560, Y = 8, Scale = 0.5 },
+	-- high bank, upper left of the spawn's sky (left of the balloon, over
+	-- the ember world)
+	{ Az = 306, Dist = 600, Y = 250, Scale = 0.6 },
+	{ Az = 315, Dist = 640, Y = 272, Scale = 0.45 },
+	-- high bank, top centre over the massif (right of the teal world, left
+	-- of the airship): three overlapping mounds, the middle one the biggest
+	-- and highest (the footprint tops out at y 321)
+	{ Az = 2.5, Dist = 560, Y = 240, Scale = 0.58 },
+	{ Az = 8.5, Dist = 590, Y = 250, Scale = 0.68 },
+	{ Az = 15, Dist = 560, Y = 256, Scale = 0.45 },
+	-- high bank, upper right over the east island
+	{ Az = 26, Dist = 520, Y = 266, Scale = 0.5 },
+	{ Az = 35, Dist = 500, Y = 240, Scale = 0.6 },
 }
 
 local SUN_AZ = 262
@@ -228,48 +219,6 @@ local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, awa
 	Kit.box(m, frame, Vector3.new(0, h * 0.42, d * 0.3), Vector3.new(w * 0.46, h * 0.24, d * 0.26), Style.vary(shade, rng, 0.04))
 end
 
---[[
-	One stratus streak. `frame` = bottom center, LookVector = toward the town
-	(the streak runs along the frame X axis). 7 parts: four flat puffs along
-	the streak at different heights (a stepped underside and a hump in the
-	middle, not one plank) and lit skirts under the three lowest.
-]]
-local function stratus(m: Model, frame: CFrame, length: number, warm: number, rng: Rng.Rng)
-	-- narrow for its length: seen from below at 25-30 degrees its pink sides
-	-- show as much as its glowing underside, so it reads as a streak, not a
-	-- floating panel
-	local depth = length * rng:range(0.13, 0.17)
-	local top = if warm > 0.5 then C.CloudLight else C.CloudPink:Lerp(C.CloudLight, 0.5)
-	local low = if warm > 0.4 then C.CloudPink:Lerp(C.CloudOrange, 0.4) else C.CloudPink
-	local glow = if warm > 0.3 then GLOW_WARM else GLOW_ROSE
-	local side = if rng:chance(0.5) then 1 else -1
-	local puffs = {
-		-- { x, bottom, z, length, height, depth } in fractions of the length /
-		-- studs: overlapping lumps whose bottoms step by several studs, so
-		-- their pink sides show between the glowing undersides
-		{ -0.28 * side, 0, 0.3, 0.44, 10, 0.8 },
-		{ 0.06 * side, -4, -0.25, 0.38, 11, 1 },
-		{ 0.34 * side, 2.5, 0.35, 0.3, 9, 0.75 },
-		{ -0.04 * side, 6, 0.1, 0.36, 8, 0.7 },
-	}
-	for i, p in puffs do
-		local size = Vector3.new(length * p[4] * rng:range(0.92, 1.08), p[5], depth * p[6] * rng:range(0.85, 1.15))
-		-- each lump turned a little off the streak, so the outline is ragged
-		local cf = frame * CFrame.new(length * p[1], 0, depth * p[3]) * CFrame.Angles(0, math.rad(rng:range(-9, 9)), 0)
-		Style.block(m, cf * CFrame.new(0, p[2] + p[5] / 2, 0), size, Style.vary(if i == 4 then top else low, rng, 0.03), nil, Kit.far())
-		if i <= 3 then
-			local skirt = Kit.glow(
-				m,
-				cf * CFrame.new(0, p[2] - Clouds.SkirtGap - 0.15, 0),
-				Vector3.new(size.X * 0.9, 0.3, size.Z * 0.88),
-				Style.vary(glow, rng, 0.03),
-				Clouds.SkirtTransparency
-			)
-			skirt.Name = "Skirt"
-		end
-	end
-end
-
 function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local m = Style.model(piece.Id, parent)
 	-- the footprint: Center +- Size/2 horizontally (Facing N, so axis-aligned)
@@ -297,14 +246,6 @@ function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 		local away = if frame.RightVector:Dot(toSun) > 0 then -1 else 1
 		local c = Style.model("Cloud", m)
 		cumulus(c, frame, spot.Scale, sunward(spot.Az), away, rng)
-	end
-	for _, streak in Clouds.Streaks do
-		local x, z = place(streak.Az, streak.Dist, streak.Length * 0.55)
-		local center = Vector3.new(x, streak.Y, z)
-		-- broadside to the town, a little skewed
-		local frame = CFrame.lookAt(center, Vector3.new(0, center.Y, 0)) * CFrame.Angles(0, math.rad(rng:range(-14, 14)), 0)
-		local c = Style.model("Stratus", m)
-		stratus(c, frame, streak.Length, sunward(streak.Az), rng)
 	end
 	Style.streaming(m, "Persistent")
 	return m

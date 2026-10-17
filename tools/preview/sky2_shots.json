@@ -1,8 +1,8 @@
 {
   "sky2_wide": {"scene": "world", "position": [0, 24, 70], "target": [0, 190, -700], "fov": 74, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 220, "maxLights": 24},
-  "sky2_violet": {"scene": "world", "position": [0, 40, 30], "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8, "target": [800.4, 242.9, -1268.6], "fov": 11},
-  "sky2_teal": {"scene": "world", "position": [0, 40, 30], "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8, "target": [-561.9, 291.6, -1390.8], "fov": 7},
-  "sky2_ember": {"scene": "world", "position": [0, 40, 30], "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8, "target": [-913.1, 234.9, -1190.0], "fov": 9},
+  "sky2_violet": {"scene": "world", "position": [0, 9, 46], "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8, "target": [479.2, 131.0, -510.3], "fov": 16},
+  "sky2_teal": {"scene": "world", "position": [0, 9, 46], "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8, "target": [-132.0, 307.1, -748.5], "fov": 11},
+  "sky2_ember": {"scene": "world", "position": [0, 9, 46], "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8, "target": [-481.5, 162.8, -638.9], "fov": 12},
   "sky2_airship": {"scene": "world", "position": [95, 152, -250], "target": [139, 147, -371], "fov": 42, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8},
   "sky2_airship_low": {"scene": "world", "position": [30, 96, -212], "target": [139, 147, -371], "fov": 30, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 8}
 }
