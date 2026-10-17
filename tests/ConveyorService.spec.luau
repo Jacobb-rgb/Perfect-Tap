@@ -73,7 +73,7 @@ return function(T, Loader)
 		w.stranger = fakePlayer(STRANGER, "Stranger")
 		w.data = deepCopy(DataTemplate)
 		w.data.StarterKitGiven = true
-		w.data.MachineInventory = { Conveyor = 20, ClayFurnace = 1 }
+		w.data.MachineInventory = { Conveyor = 20, ExpressConveyor = 4, ClayFurnace = 1 }
 		local saved = {}
 		local function patch(t: any, key: string, value: any)
 			table.insert(saved, { t, key, rawget(t, key) })
@@ -113,7 +113,9 @@ return function(T, Loader)
 		IntakeService._test.reset()
 		ItemService._test.reset()
 		conv.reset()
-		MachineService.register("Conveyor", conv.behaviour)
+		for _, id in ConveyorService.beltIds() do
+			MachineService.register(id, conv.behaviour)
+		end
 		MachineService._test.spawnAll(w.player, PLOT)
 		w.restore = function()
 			MachineService._test.reset()
@@ -182,6 +184,84 @@ return function(T, Loader)
 		T.truthy(MachineService.move(m, 9, 6, 1), "turned")
 		local part = m.Model:FindFirstChild("Belt")
 		T.near((part.AssemblyLinearVelocity - part.CFrame.LookVector * GameConfig.ConveyorSpeed).Magnitude, 0, 1e-4, "follows the move")
+	end)
+
+	withWorld("ConveyorService: the Express Conveyor is a belt twice as fast, in every belt rule", function(w)
+		local ids = ConveyorService.beltIds()
+		T.truthy(table.find(ids, "Conveyor") and table.find(ids, "ExpressConveyor"), "both belt types are belts")
+		for _, id in ids do
+			T.truthy(MachineData.ById[id].IsConveyor, id .. " is a conveyor")
+		end
+		local speed = GameConfig.ConveyorSpeed
+		T.near(ConveyorService.speedOf(MachineData.ById.Conveyor), speed, 1e-9, "normal belt")
+		T.near(
+			ConveyorService.speedOf(MachineData.ById.ExpressConveyor),
+			speed * MachineData.ById.ExpressConveyor.SpeedMult,
+			1e-9,
+			"express"
+		)
+		T.near(MachineData.ById.ExpressConveyor.SpeedMult, 2, 1e-9, "twice as fast")
+		T.near(ConveyorService.speedOf({ SpeedMult = 0 / 0 } :: any), speed, 1e-9, "a broken multiplier counts as 1")
+		T.near(ConveyorService.speedOf({ SpeedMult = -3 } :: any), speed, 1e-9, "a negative one too")
+		-- the belt surface
+		local express = MachineService.place(w.player, "ExpressConveyor", 5, 5, 1)
+		T.truthy(express, "express belt placed")
+		local part = express.Model:FindFirstChild("Belt")
+		local dir = express.Model:GetPivot().LookVector
+		T.near((part.AssemblyLinearVelocity - dir * speed * 2).Magnitude, 0, 1e-4, "surface at 2x")
+		for _, d in express.Model:GetDescendants() do
+			if d:IsA("BasePart") then
+				T.eq(d.CollisionGroup, ConveyorService.CollisionGroup, d.Name .. " walk-through group")
+			end
+		end
+		T.truthy(MachineService.move(express, 5, 5, 2), "turned")
+		T.near((part.AssemblyLinearVelocity - part.CFrame.LookVector * speed * 2).Magnitude, 0, 1e-4, "follows the move at 2x")
+		-- a stuck item on it is nudged at the express speed, then pushed off as before
+		local record = onBeltItem(express, Vector3.new(0, 1.4, 0))
+		dir = express.Model:GetPivot().LookVector
+		local now = 100
+		feed(express, record, now)
+		now += GameConfig.ConveyorStuckSeconds + 0.01
+		feed(express, record, now)
+		T.near((record.Body.AssemblyLinearVelocity - (dir * speed * 2 + Vector3.new(0, 1, 0))).Magnitude, 0, 1e-4, "express nudge")
+		for _ = 2, GameConfig.ConveyorMaxNudges do
+			now += GameConfig.ConveyorStuckSeconds + 0.01
+			record.Body.AssemblyLinearVelocity = Vector3.zero
+			feed(express, record, now)
+		end
+		T.eq(#w.ejects, 1, "pushed off after the last nudge")
+		-- side rails open for an express belt feeding a normal one (and back)
+		local target = belt(w, 8, 8, 0)
+		local side = MachineService.place(w.player, "ExpressConveyor", 7, 8, 1)
+		conv.onLayout(w.player, PLOT)
+		local rx = Grid.right(0)
+		local openName = if rx > 0 then "RailL" else "RailR"
+		T.falsy(target.Model:FindFirstChild(openName).CanCollide, "an express belt opens a normal belt's rail")
+		T.truthy(side, "side belt")
+		-- a Source chute starts items at the belt's own speed
+		ConveyorService.SourceGap = 0
+		local px, pz = BaseLayout.chuteCell("Pen")
+		local source = MachineService.place(w.player, "ExpressConveyor", px, pz, 0)
+		T.truthy(source, "express belt on the PEN chute")
+		T.truthy(ConveyorService.beltOn(PLOT, "Pen") == source, "an express belt counts as the chute's belt")
+		local item = ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER)
+		T.truthy(item, "spawned on the express belt")
+		T.near((item.Body.AssemblyLinearVelocity - source.Model:GetPivot().LookVector * speed * 2).Magnitude, 0, 1e-4, "riding at 2x")
+		-- ConveyorService.init gives every belt type the belt behaviour
+		MachineService._test.reset()
+		IntakeService._test.reset()
+		ConveyorService.init()
+		MachineService._test.spawnAll(w.player, PLOT)
+		local belts = 0
+		for _, m in MachineService.ofPlot(PLOT) do
+			if m.Info.IsConveyor then
+				belts += 1
+				local surface = m.Model:FindFirstChild("Belt")
+				local want = surface.CFrame.LookVector * ConveyorService.beltSpeed(m)
+				T.near((surface.AssemblyLinearVelocity - want).Magnitude, 0, 1e-4, m.Id .. " runs after init")
+			end
+		end
+		T.eq(belts, 4, "every belt respawned (3 express, 1 normal)")
 	end)
 
 	withWorld("ConveyorService: a belt feeding in from the side opens that rail, and only that one", function(w)
