@@ -51,8 +51,8 @@
   },
   "plaza2_walk": {
     "scene": "world",
-    "position": [5, 5, 50],
-    "target": [-2, 3, 26],
+    "position": [0, 5, 50],
+    "target": [0, 3, 26],
     "fov": 64,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],

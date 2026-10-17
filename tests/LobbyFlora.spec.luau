@@ -123,7 +123,6 @@ return function(T, Loader)
 			{
 				"Water.LilyPond",
 				"Water.KoiPond",
-				"Water.Creek",
 				"Water.CreekBridge",
 				"Wayfinding.Signpost",
 				"Wayfinding.NextArea",
@@ -131,6 +130,8 @@ return function(T, Loader)
 				"HeroTrees.PinkGrove",
 				"HeroTrees.RedTree",
 				"HeroTrees.AutumnCorner",
+				"HeroTrees.TownBelt",
+				"Gardens",
 				"Scatter",
 				"Fences",
 				"GardenLanterns",
@@ -172,13 +173,15 @@ return function(T, Loader)
 		T.lt(scatter:GetAttribute("Bushes"), 36, "at most 35 bushes")
 		T.lt(scatter:GetAttribute("Flowers"), 51, "at most 50 flower patches")
 		T.lt(scatter:GetAttribute("Boulders"), 16, "at most 15 boulders")
-		T.truthy(scatter:GetAttribute("Trees") >= 30, "the scatter plants its trees")
+		-- (round 3: the bigger dig, wheel and stalls and the continuous belts take ground: 24+)
+		T.truthy(scatter:GetAttribute("Trees") >= 24, "the scatter plants its trees")
 		T.lt(#parts(scatter), 751, "scatter parts")
 	end)
 
 	T.test("flora: nothing on roads, paths, plots, yards, outcrops or the spawn", function()
 		local spawn = WorldLayout.SpawnPoint
-		local walkable = { CreekBridge = true, Creek = true }
+		-- (the bridge carries the south road over the koi pond)
+		local walkable = { CreekBridge = true, KoiPond = true }
 		for _, part in parts(flora()) do
 			local onWalkable = false
 			local node = part.Parent
@@ -256,10 +259,10 @@ return function(T, Loader)
 	end)
 
 	T.test("flora: the bridge carries the south road over the creek", function()
-		local colliders = collidersNear({ flora().Water, world().Land }, Vector3.new(-6, 0, 50), Vector3.new(6, 0, 74))
 		local bridge = LobbyLayout.get("CreekBridge")
 		local z0 = bridge.Center.Z - bridge.Size.Z / 2 - 2
 		local z1 = bridge.Center.Z + bridge.Size.Z / 2 + 2
+		local colliders = collidersNear({ flora().Water, world().Land }, Vector3.new(-6, 0, z0 - 1), Vector3.new(6, 0, z1 + 1))
 		local peak = 0
 		for _, x in { -3.5, 0, 3.5 } do
 			local last: number? = nil
@@ -286,8 +289,8 @@ return function(T, Loader)
 	end)
 
 	T.test("flora: creek and ponds are water over solid ground", function()
-		local colliders = collidersNear({ world().Land }, Vector3.new(-40, 0, 54), Vector3.new(40, 0, 70))
-		for _, id in { "LilyPond", "KoiPond", "Creek" } do
+		local colliders = collidersNear({ world().Land }, Vector3.new(-60, 0, 25), Vector3.new(40, 0, 75))
+		for _, id in { "LilyPond", "KoiPond" } do
 			local piece = LobbyLayout.get(id)
 			local c = piece.Center
 			for _, dx in { -0.3, 0, 0.3 } do
@@ -362,6 +365,59 @@ return function(T, Loader)
 		local p, e = part.CFrame.Position, halfExtents(part)
 		return Vector3.new(p.X - e.X, 0, p.Z - e.Z), Vector3.new(p.X + e.X, 0, p.Z + e.Z)
 	end
+
+	-- Ground points covering a part's XZ box (corners, edges and inside, at most 0.5 apart).
+	local function boxSamples(part): { any }
+		local lo, hi = boxOf(part)
+		local nx = math.max(1, math.ceil((hi.X - lo.X) / 0.5))
+		local nz = math.max(1, math.ceil((hi.Z - lo.Z) / 0.5))
+		local out = {}
+		for i = 0, nx do
+			for j = 0, nz do
+				table.insert(out, Vector3.new(lo.X + (hi.X - lo.X) * i / nx, 0, lo.Z + (hi.Z - lo.Z) * j / nz))
+			end
+		end
+		return out
+	end
+
+	T.test("flora: the clear aprons in front of CAPSULES and ENCHANT stay empty", function()
+		local Kit = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Kit")
+		local ids = {}
+		for _, apron in Kit.Aprons do
+			ids[apron.Id] = true
+			T.truthy(apron.Depth >= 4, `{apron.Id} keeps at least 4 studs clear`)
+		end
+		T.truthy(ids.CapsuleStall and ids.EnchantShop, "aprons in front of CAPSULES and ENCHANT")
+		for _, part in parts(flora()) do
+			for _, apron in Kit.Aprons do
+				for _, q in boxSamples(part) do
+					T.truthy(Kit.apronDistance(apron, q) > 0, `{part:GetFullName()} stands in front of {apron.Id} at {q}`)
+				end
+			end
+		end
+	end)
+
+	T.test("flora: trees keep a stud off the stalls (fences, walls, signs)", function()
+		local stalls = {}
+		for _, piece in LobbyLayout.Pieces do
+			if piece.Package == "Districts" and LobbyLayout.isGroundPiece(piece) then
+				table.insert(stalls, piece)
+			end
+		end
+		for _, d in flora():GetDescendants() do
+			if d:IsA("Model") and d.Name == "Tree" then
+				for _, part in parts(d) do
+					for _, piece in stalls do
+						local gap = math.huge
+						for _, q in boxSamples(part) do
+							gap = math.min(gap, LobbyLayout.distanceTo(piece, q))
+						end
+						T.truthy(gap >= 1, `{d:GetFullName()} is {gap} studs from {piece.Id} at {part.CFrame.Position}`)
+					end
+				end
+			end
+		end
+	end)
 
 	T.test("flora: town buildings stand on free ground inside their sites", function()
 		local sites = Town.Sites
@@ -465,7 +521,7 @@ return function(T, Loader)
 				T.truthy(found, `{site.Id} has its {site.Sign} sign`)
 			end
 		end
-		for _, text in { "TOOLS", "INN", "MAP", "GEMS", "ORE" } do
+		for _, text in { "TOOLS", "INN", "MAP", "ORE", "WORKS", "CARTS" } do
 			T.truthy(texts[text], "town sign " .. text)
 		end
 		-- big glowing planes bloom to white in the renders: every Neon face stays small
@@ -588,7 +644,10 @@ return function(T, Loader)
 						local look = blade.CFrame.LookVector
 						T.truthy(math.abs(look:Dot(LOOK[site.Facing])) < 0.3, `{site.Id} blade sign is perpendicular to the facade`)
 						T.truthy(look:Dot(LOOK.S) > 0.7 or look:Dot(LOOK.W) > 0.7, `{site.Id} blade sign faces south or west`)
-						T.truthy(blade.Size.X >= 6.5 - 1e-3 and blade.Size.Y >= 3 - 1e-3, `{site.Id} blade sign is at least 6.5 x 3 ({blade.Size})`)
+						T.truthy(
+							blade.Size.X >= 6.5 - 1e-3 and blade.Size.Y >= 3 - 1e-3,
+							`{site.Id} blade sign is at least 6.5 x 3 ({blade.Size})`
+						)
 					end
 				end
 				-- windows: lit panes glow, at most one unlit pane in six, unlit glass is light blue (never a black hole)

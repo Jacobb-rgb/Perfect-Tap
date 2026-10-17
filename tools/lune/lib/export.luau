@@ -37,6 +37,14 @@ end
 
 local FACE_INDEX = { Front = 0, Back = 1, Top = 2, Bottom = 3, Left = 4, Right = 5 }
 
+-- SurfaceGui.LightInfluence (0 = full brightness, 1 = lit like the part; 1 when unreadable).
+local function lightInfluence(gui: any): number
+	local ok, value = pcall(function()
+		return gui.LightInfluence
+	end)
+	return if ok and type(value) == "number" then round(value) else 1
+end
+
 function Export.collect(root: any, scene: any?)
 	scene = scene or { parts = {}, lights = {}, emitters = {}, texts = {} }
 	for _, d in root:GetDescendants() do
@@ -77,6 +85,7 @@ function Export.collect(root: any, scene: any?)
 								label.Text,
 								hex(label.TextColor3),
 								label.FontFace.Family,
+								lightInfluence(child),
 							})
 						end
 					end

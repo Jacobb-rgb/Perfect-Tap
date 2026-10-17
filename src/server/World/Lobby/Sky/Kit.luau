@@ -45,7 +45,7 @@ end
 -- center, LookVector = outward.
 function Kit.window(parent: Instance, cf: CFrame, width: number, height: number, frameColor: Color3?): Part
 	Style.block(parent, cf * CFrame.new(0, 0, 0.12), Vector3.new(width + 0.5, height + 0.5, 0.3), frameColor or C.WoodDark, nil, Kit.far())
-	local pane = Kit.glow(parent, cf * CFrame.new(0, 0, -0.06), Vector3.new(width, height, 0.2), C.Lamp)
+	local pane = Kit.glow(parent, cf * CFrame.new(0, 0, -0.06), Vector3.new(width, height, 0.2), C.LampAmber)
 	pane.Name = "WindowGlow"
 	return pane
 end
@@ -132,10 +132,11 @@ function Kit.skyFall(parent: Instance, top: CFrame, height: number, width: numbe
 	local m = Style.model("Waterfall", parent)
 	Style.block(m, top * CFrame.new(0, 0.1, 0.4), Vector3.new(width + 0.8, 1, 1.6), C.Water, nil, Kit.far())
 	local y = 0
-	local steps = { { 0.5, 0.1 }, { 0.3, 0.3 }, { 0.2, 0.55 } }
+	-- (lobby fix round 3: the fall ends in two fading sheets, no stepped stub)
+	local steps = { { 0.55, 0.1 }, { 0.25, 0.5 }, { 0.2, 0.8 } }
 	for i, step in steps do
 		local h = height * step[1]
-		local w = width * (1 - (i - 1) * 0.12)
+		local w = width * (1 - (i - 1) * 0.04)
 		local sheet = Style.block(
 			m,
 			top * CFrame.new(0, y - h / 2, 0),
@@ -153,17 +154,18 @@ function Kit.skyFall(parent: Instance, top: CFrame, height: number, width: numbe
 		local color = if i == 2 then C.CrystalCyan else C.Foam
 		Kit.glow(m, top * CFrame.new(x, -h / 2 - 0.3, -0.4), Vector3.new(math.max(0.4, width * 0.1), h, 0.2), color, 0.3)
 	end
-	-- mist where the water breaks up
+	-- mist where the water breaks up (round 3: small, staggered, faint: no
+	-- hard-edged block over the planets)
 	local mist: Part? = nil
 	for i = 1, 3 do
-		local s = width * rng:range(0.5, 0.8)
+		local s = width * rng:range(0.28, 0.42)
 		local p = Style.block(
 			m,
-			top * CFrame.new(rng:range(-width * 0.35, width * 0.35), -height + i * 1.2, rng:range(-1, 1)),
+			top * CFrame.new((i - 2) * width * 0.3 + rng:range(-0.3, 0.3), -height * 0.8 - i * 1.8, rng:range(-0.6, 0.6)),
 			Vector3.new(s, s * 0.6, s * 0.7),
 			C.Foam,
 			nil,
-			Kit.far({ Transparency = 0.55 + i * 0.1 })
+			Kit.far({ Transparency = 0.75 + i * 0.05 })
 		)
 		mist = mist or p
 	end
@@ -187,7 +189,13 @@ function Kit.hull(parent: Instance, frame: CFrame, rng: Rng.Rng, opts: Opts): (M
 	local hh: number = opts.Height or 4
 	local keel = Kit.box(m, frame, Vector3.new(0, 0.6, 0), Vector3.new(beam * 0.34, 1.2, len * 0.72), C.WoodDark)
 	keel.Name = "Keel"
-	Kit.box(m, frame, Vector3.new(0, 1.2 + hh * 0.2, 0.02 * len), Vector3.new(beam * 0.7, hh * 0.4, len * 0.8), Style.vary(C.WoodDark, rng, 0.04))
+	Kit.box(
+		m,
+		frame,
+		Vector3.new(0, 1.2 + hh * 0.2, 0.02 * len),
+		Vector3.new(beam * 0.7, hh * 0.4, len * 0.8),
+		Style.vary(C.WoodDark, rng, 0.04)
+	)
 	Kit.box(m, frame, Vector3.new(0, 1.2 + hh * 0.7, 0.04 * len), Vector3.new(beam, hh * 0.6, len * 0.78), Style.vary(C.Wood, rng, 0.04))
 	-- stripe and gunwale
 	Kit.box(m, frame, Vector3.new(0, 1.2 + hh * 0.62, 0.04 * len), Vector3.new(beam + 0.25, hh * 0.14, len * 0.79), C.RoofTrim)
@@ -195,9 +203,21 @@ function Kit.hull(parent: Instance, frame: CFrame, rng: Rng.Rng, opts: Opts): (M
 	local deckY = 1.2 + hh
 	Kit.box(m, frame, Vector3.new(0, deckY + 0.1, 0.04 * len), Vector3.new(beam - 1, 0.3, len * 0.76), C.Plank)
 	-- stepped bow (toward -Z = LookVector)
-	Kit.box(m, frame, Vector3.new(0, 1.2 + hh * 0.62, -len * 0.42), Vector3.new(beam * 0.66, hh * 0.9, len * 0.12), Style.vary(C.Wood, rng, 0.04))
+	Kit.box(
+		m,
+		frame,
+		Vector3.new(0, 1.2 + hh * 0.62, -len * 0.42),
+		Vector3.new(beam * 0.66, hh * 0.9, len * 0.12),
+		Style.vary(C.Wood, rng, 0.04)
+	)
 	Kit.box(m, frame, Vector3.new(0, 1.2 + hh * 0.72, -len * 0.5), Vector3.new(beam * 0.34, hh * 0.8, len * 0.06), C.WoodDark)
-	Kit.beam(m, (frame * CFrame.new(0, deckY + 0.4, -len * 0.48)).Position, (frame * CFrame.new(0, deckY + 2.2, -len * 0.64)).Position, 0.5, C.WoodDark)
+	Kit.beam(
+		m,
+		(frame * CFrame.new(0, deckY + 0.4, -len * 0.48)).Position,
+		(frame * CFrame.new(0, deckY + 2.2, -len * 0.64)).Position,
+		0.5,
+		C.WoodDark
+	)
 	-- stern castle (toward +Z)
 	local castleLen = len * 0.24
 	local castleZ = len * 0.4 - castleLen / 2 + 0.04 * len
@@ -222,7 +242,14 @@ function Kit.mast(parent: Instance, base: CFrame, height: number, sails: { { num
 		local color = if i % 2 == 1 then C.AwningWhite else C.FlagLight
 		local cy = y + sh / 2
 		Style.block(m, base * CFrame.new(0, cy, -0.5), Vector3.new(sw, sh, 0.3), Style.vary(color, rng, 0.02), nil, Kit.far())
-		Style.block(m, base * CFrame.new(0, cy - sh * 0.05, -0.95), Vector3.new(sw * 0.76, sh * 0.72, 0.4), Style.vary(color, rng, 0.03), nil, Kit.far())
+		Style.block(
+			m,
+			base * CFrame.new(0, cy - sh * 0.05, -0.95),
+			Vector3.new(sw * 0.76, sh * 0.72, 0.4),
+			Style.vary(color, rng, 0.03),
+			nil,
+			Kit.far()
+		)
 		Style.block(m, base * CFrame.new(0, y + sh + 0.25, -0.4), Vector3.new(sw + 1.2, 0.5, 0.5), C.WoodDark, nil, Kit.far())
 		y += sh + 0.9
 	end

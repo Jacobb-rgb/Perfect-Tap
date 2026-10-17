@@ -71,7 +71,14 @@ local function cottage(m: Model, base: CFrame, rng: Rng.Rng)
 	Style.block(m, base * CFrame.new(0, 0.8 + h / 2, 0), Vector3.new(w, h, d), Style.vary(C.Stone, rng, 0.03), nil, Kit.far())
 	-- corner stones (voxel accents)
 	for _, c in { { -1, -1 }, { 1, -1 } } do
-		Style.block(m, base * CFrame.new(c[1] * (w / 2), 0.8 + h / 2, c[2] * (d / 2)), Vector3.new(1.2, h, 1.2), C.StoneLight, nil, Kit.far())
+		Style.block(
+			m,
+			base * CFrame.new(c[1] * (w / 2), 0.8 + h / 2, c[2] * (d / 2)),
+			Vector3.new(1.2, h, 1.2),
+			C.StoneLight,
+			nil,
+			Kit.far()
+		)
 	end
 	Style.block(m, base * CFrame.new(-1.8, 0.8 + 1.8, -d / 2 - 0.1), Vector3.new(1.8, 3.6, 0.3), C.WoodDark, nil, Kit.far())
 	Kit.window(m, base * CFrame.new(1.9, 0.8 + 3, -d / 2 - 0.15), 1.5, 1.4)
@@ -114,7 +121,7 @@ function Islands.west(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	Kit.skyFall(m, frame * CFrame.new(1.5, -0.4, -d / 2 - 0.5), 30, 4.5, rng)
 	-- a lantern by the door
 	Kit.box(m, frame, Vector3.new(-12.2, 2, -5.2), Vector3.new(0.5, 4, 0.5), C.WoodDark)
-	Kit.glow(m, frame * CFrame.new(-12.2, 4.4, -5.2), Vector3.new(0.9, 0.9, 0.9), C.Lamp)
+	Kit.glow(m, frame * CFrame.new(-12.2, 4.4, -5.2), Vector3.new(0.9, 0.9, 0.9), C.LampAmber)
 	Style.streaming(m, "Lod")
 	return m
 end
@@ -142,7 +149,7 @@ local function watchtower(m: Model, base: CFrame, rng: Rng.Rng)
 	Style.block(m, base * CFrame.new(0, h + 6.6, 1.2), Vector3.new(0.15, 0.8, 1.4), C.AwningRed, nil, Kit.far())
 end
 
--- FloatingIslandEast: bigger island with a green and an orange tree, a
+-- FloatingIslandEast: bigger island with a green tree, a
 -- watchtower, a 45-stud waterfall, blue crystals and two small islets.
 function Islands.east(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local m = Style.model(piece.Id, parent)
@@ -151,8 +158,8 @@ function Islands.east(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	local main = frame * CFrame.new(-3, 0, 2)
 	Kit.floatingIsland(m, main, rng, { Width = w, Depth = d, Hang = 34, Tiers = 5 })
 	vines(m, main, w, d, rng, 6)
+	-- (round 2: one tree: the parts went into the town)
 	tree(m, main, Vector3.new(-8, 0, 5), "Green", rng, 1.2)
-	tree(m, main, Vector3.new(-10, 0, -6), "Orange", rng, 1.0)
 	watchtower(m, main * CFrame.new(8, 0, 4), rng)
 	Style.crystalCluster(m, main * CFrame.new(2, 0, -8), 7, C.CrystalBlue, rng, { Count = 3 })
 	bush(m, main, Vector3.new(11, 0, -6), C.LeafGreenLight, rng, 2.4)
@@ -212,7 +219,14 @@ function Islands.nextIsland(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 		Style.block(m, house * CFrame.new(0, y + 0.3, 0), Vector3.new(fw + 0.6, 0.6, fw + 0.6), C.WoodDark, nil, Kit.far())
 		Style.block(m, house * CFrame.new(0, y + 2.8, 0), Vector3.new(fw, 4.4, fw), Style.vary(C.WoodLight, rng, 0.04), nil, Kit.far())
 		for _, c in { { -1, -1 }, { 1, -1 } } do
-			Style.block(m, house * CFrame.new(c[1] * fw / 2, y + 2.8, c[2] * fw / 2), Vector3.new(0.8, 4.4, 0.8), C.WoodDark, nil, Kit.far())
+			Style.block(
+				m,
+				house * CFrame.new(c[1] * fw / 2, y + 2.8, c[2] * fw / 2),
+				Vector3.new(0.8, 4.4, 0.8),
+				C.WoodDark,
+				nil,
+				Kit.far()
+			)
 		end
 		local pane = Kit.window(m, house * CFrame.new(-1.2, y + 3, -fw / 2 - 0.15), 1.6, 1.6)
 		Kit.window(m, house * CFrame.new(-fw / 2 - 0.15, y + 3, 0) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.5)
@@ -235,7 +249,7 @@ function Islands.nextIsland(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	Style.block(m, house * CFrame.new(0, y + 7, 0), Vector3.new(0.3, 1.6, 0.3), C.WoodDark, nil, Kit.far())
 	Style.block(m, house * CFrame.new(0, y + 7.4, 0.9), Vector3.new(0.15, 0.8, 1.6), C.AwningRed, nil, Kit.far())
 	if lit then
-		Style.light(lit, C.Lamp, 16, 1.2)
+		Style.light(lit, C.LampAmber, 16, 1.2)
 	end
 
 	tree(m, main, Vector3.new(8, 0, 3), "Yellow", rng, 0.9)
@@ -270,7 +284,7 @@ function Islands.nextIsland(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	-- lanterns at both ends of the bridge
 	for _, at in { Vector3.new(x - 3.1, top, headFrom + 1), Vector3.new(x + 3.1, 0, edge + 1.5) } do
 		Kit.box(m, base, at + Vector3.new(0, 1.75, 0), Vector3.new(0.5, 3.5, 0.5), C.WoodDark)
-		Kit.glow(m, base * CFrame.new(at + Vector3.new(0, 3.9, 0)), Vector3.new(0.9, 0.9, 0.9), C.Lamp)
+		Kit.glow(m, base * CFrame.new(at + Vector3.new(0, 3.9, 0)), Vector3.new(0.9, 0.9, 0.9), C.LampAmber)
 	end
 	Style.streaming(m, "Lod")
 	return m
