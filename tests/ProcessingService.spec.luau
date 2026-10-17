@@ -253,6 +253,35 @@ return function(T, Loader)
 		T.eq(attr(m, "WorkTime"), GameConfig.MinProcessTime, "MinProcessTime")
 	end)
 
+	withWorld("ProcessingService: a sorter job (Iron Box) passes items on and counts toward nothing", function(w)
+		-- the Iron Box may run on these jobs (WP-CleanerBox); this pins the contract
+		MachineService.register("IronBox", processing.behaviour)
+		w.data.MachineInventory.IronBox = 1
+		local m = place(w, "IronBox", 0, 0)
+		local seen = 0
+		ProcessingService.onProcessed(function()
+			seen += 1
+		end)
+		local ingot = item("Ingot", "Gold", "Pristine")
+		MachineService.insertDesc(m, ingot, USER, "Hand")
+		MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Hand")
+		tick(m, 10)
+		T.eq(attr(m, "WorkTime"), MachineData.ById.IronBox.Time, "a timed job")
+		tick(m, 10 + MachineData.ById.IronBox.Time)
+		T.eq(#m.Entry.Out, 1, "the ingot waits in Out")
+		local out = m.Entry.Out[1]
+		T.truthy(out.K == "Ingot" and out.O == "Gold" and out.G == "Pristine", "unchanged")
+		tick(m, 10 + 2 * MachineData.ById.IronBox.Time)
+		T.eq(#m.Entry.Out, 2)
+		T.eq(m.Entry.Out[2].K, "Raw", "dirty ore stays dirty")
+		T.eq(m.Entry.In, nil)
+		T.eq(attr(m, "Cycles"), 2, "the box still animates its cycles")
+		T.eq(w.data.Stats.IngotsSmelted, 0, "passing an ingot on is not smelting")
+		T.eq(#w.notes, 0, "no first-ingot toast")
+		T.eq(seen, 0, "no onProcessed")
+		T.eq((w.data.Discovered or {}).Silver, nil, "nothing discovered")
+	end)
+
 	withWorld("ProcessingService: the Crusher makes 2 piles and waits for room in Out", function(w)
 		local m = place(w, "Crusher", 0, 0)
 		m.Entry.Out = { item("Crushed"), item("Crushed"), item("Crushed") }

@@ -4,7 +4,15 @@
 	conservation (nothing appears or disappears).
 
 	entry.In  = input queue. In[1] is being worked; at most queueSize(id)
-	            (MachineIntakeQueue = 4). Anvil ingots wait here too.
+	            (MachineIntakeQueue = 4). Anvil ingots wait here too, and so
+	            do the items a sorter shows and sorts (Iron Box: a Time but
+	            no Output). A sorter's outputs are a copy of its input, so a
+	            generic complete() passes the item on unchanged; its service
+	            may instead complete with {} and put the item into the pen in
+	            the same step (kept ore), never both. A sorter job processes
+	            nothing: it never counts toward Stats (IngotsSmelted, the
+	            first-ingot toast), Discovery or ProcessingService.onProcessed
+	            (ProcessingService only runs those for machines with an Output).
 	entry.Out = finished items waiting to leave; at most MachineData.MaxOutBuffer.
 	Empty queues are set to nil to keep saves small.
 
@@ -29,6 +37,11 @@ local ANVIL = "Anvil"
 -- Machines that turn one input into outputs on a timer (furnaces, Crusher, Auto Cleaner).
 local function isProcessor(info: MachineData.Machine): boolean
 	return info.Output ~= nil and info.Time ~= nil
+end
+
+-- Machines that hold each item for a timed job and pass it on unchanged (Iron Box).
+local function isSorter(info: MachineData.Machine): boolean
+	return info.Output == nil and info.Time ~= nil and info.Accepts ~= nil
 end
 
 local function isFinite(v: any): boolean
@@ -57,11 +70,12 @@ function MachineLogic.isValidDesc(desc: any): boolean
 	return recipeId == nil
 end
 
--- How many items wait in In (the one being worked included). 0 for
+-- How many items wait in In (the one being worked included): processors,
+-- the Anvil and every other machine with a job Time (Iron Box). 0 for
 -- machines that take items straight away (crate, chute) or never queue.
 function MachineLogic.queueSize(id: string): number
 	local info = MachineData.ById[id]
-	if info and (isProcessor(info) or id == ANVIL) then
+	if info and (isProcessor(info) or isSorter(info) or id == ANVIL) then
 		return GameConfig.MachineIntakeQueue
 	end
 	return 0
@@ -97,7 +111,7 @@ function MachineLogic.accepts(id: string, desc: Desc, entry: Entry, sameOwner: b
 		if queued >= MachineLogic.queueSize(id) then
 			return false, "Full"
 		end
-	elseif isProcessor(info) then
+	elseif MachineLogic.queueSize(id) > 0 then
 		if queued >= MachineLogic.queueSize(id) then
 			return false, "Full"
 		end
@@ -139,17 +153,27 @@ function MachineLogic.rollGrade(chances: { [string]: number }, maxGrade: string,
 end
 
 -- What one finished job turns `input` into. `roll` in [0, 1) is only used
--- by machines with GradeChances (Auto Cleaner).
-function MachineLogic.outputs(id: string, input: Desc, roll: number): { Desc }
+-- by machines with GradeChances (Cleaning Plant); `odds` replaces their
+-- GradeChances (the Cleaning Plant's Quality level: MachineData.gradeOdds).
+-- A sorter (Iron Box) gives back a copy of `input`, so no item is ever lost.
+function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [string]: number }?): { Desc }
 	local info = MachineData.ById[id]
 	local list: { Desc } = {}
-	if not info or not isProcessor(info) then
+	if not info then
+		return list
+	end
+	if isSorter(info) then
+		table.insert(list, { K = input.K, O = input.O, G = input.G, R = input.R })
+		return list
+	end
+	if not isProcessor(info) then
 		return list
 	end
 	local kind = info.Output :: string
 	local grade: string
-	if info.GradeChances then
-		grade = MachineLogic.rollGrade(info.GradeChances, info.MaxGrade or "Flawless", roll)
+	local chances = if info.GradeChances then odds or info.GradeChances else nil
+	if chances then
+		grade = MachineLogic.rollGrade(chances, info.MaxGrade or "Flawless", roll)
 	else
 		grade = input.G or "Rough"
 	end
