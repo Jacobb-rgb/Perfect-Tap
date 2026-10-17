@@ -17,7 +17,17 @@
 	jagged faceted underside tapering down like an upside-down mountain, pink
 	veins, crystals and hanging shards. Glowing bridges (pink/aqua edges) join
 	them; star motes, floating shards and far islets fill the void.
-	No ceiling, so opts.Cutaway changes nothing. About 2.6k parts, 18 lights.
+
+	In the game (MineFloors.Placement[5], elevator only) the floor sits inside a
+	closed void enclosure: a few huge dark violet neon panels in a sky gradient
+	(the normal sky and sun never show), and an invisible "VoidCatcher" part
+	(attribute Floor = 5) under the islands sends fallen players back to the
+	elevator (ElevatorService). The Mine Lift is built by Railway from
+	TrainConfig at MineFloors.LiftSpots[5]; its cable hangs into the floating
+	hoist rock (local +30 = WorldLayout.Caves.HeartstoneCore.Max.Y).
+	opts.Cutaway (preview pictures): no enclosure, so cameras outside see in.
+	Everything stays within local y -77 .. +50 (FallenPartsDestroyHeight is
+	world -500). About 2.9k parts, 19 lights.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -943,12 +953,68 @@ local function voidDecor(parent: Instance, rng: Rng.Rng, blocked: Keepout)
 	return m
 end
 
+---------------------------------------------------------------- the void enclosure
+
+-- Inner half size of the enclosure (local, around the origin) and its floor / ceiling.
+local VOID_HALF = Vector3.new(102, 0, 96)
+local VOID_BOTTOM = -75 -- the bottom panel's top face (its underside at -77: world -477 > -480)
+local VOID_TOP = 82
+local CATCH_Y = -40
+-- the sky gradient bottom -> top (dark violet below, magenta glow around the islands'
+-- horizon, deep night violet above), as unlit neon so it looks the same everywhere
+local VOID_BANDS: { { Y: number, Color: Color3 } } = {
+	{ Y = -75, Color = rgb(8, 5, 18) },
+	{ Y = -45, Color = rgb(13, 7, 27) },
+	{ Y = -25, Color = rgb(22, 9, 38) },
+	{ Y = -10, Color = rgb(32, 12, 48) },
+	{ Y = 0, Color = rgb(38, 13, 54) },
+	{ Y = 10, Color = rgb(34, 12, 52) },
+	{ Y = 24, Color = rgb(24, 10, 44) },
+	{ Y = 40, Color = rgb(15, 8, 33) },
+	{ Y = 58, Color = rgb(10, 6, 24) },
+	{ Y = 82, Color = rgb(7, 5, 18) },
+}
+
+--[[
+	A closed box of a few huge panels around the floor: on each wall one panel
+	per gradient band, a dark backing plate behind them (no seam ever shows the
+	sky), a floor and a ceiling. Unlit neon, no shadows, no collision.
+]]
+local function voidEnclosure(parent: Instance)
+	local m = model("VoidEnclosure", parent)
+	local props: Geo.PartProps = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
+	local hx, hz = VOID_HALF.X, VOID_HALF.Z
+	local height = VOID_TOP - VOID_BOTTOM
+	local midY = (VOID_TOP + VOID_BOTTOM) / 2
+	-- walls: { center offset, size along the wall, normal into the floor }
+	type Wall = { At: Vector3, Width: number }
+	local walls: { Wall } = {
+		{ At = Vector3.new(0, 0, -hz), Width = hx * 2 + 6 },
+		{ At = Vector3.new(0, 0, hz), Width = hx * 2 + 6 },
+		{ At = Vector3.new(-hx, 0, 0), Width = hz * 2 + 6 },
+		{ At = Vector3.new(hx, 0, 0), Width = hz * 2 + 6 },
+	}
+	for _, wall in walls do
+		local inward = -wall.At.Unit
+		for k = 1, #VOID_BANDS - 1 do
+			local y0, y1 = VOID_BANDS[k].Y, VOID_BANDS[k + 1].Y
+			local color = VOID_BANDS[k].Color:Lerp(VOID_BANDS[k + 1].Color, 0.5)
+			local pos = wall.At - inward * 1 + Vector3.new(0, (y0 + y1) / 2, 0)
+			blk(m, CFrame.lookAt(pos, pos + inward), Vector3.new(wall.Width, y1 - y0, 2), color, NEON, props)
+		end
+		local back = wall.At - inward * 3 + Vector3.new(0, midY, 0)
+		blk(m, CFrame.lookAt(back, back + inward), Vector3.new(wall.Width + 4, height + 4, 2), VOID_BANDS[1].Color, NEON, props)
+	end
+	blk(m, CFrame.new(0, VOID_BOTTOM - 1, 0), Vector3.new(hx * 2 + 8, 2, hz * 2 + 8), VOID_BANDS[1].Color, NEON, props)
+	blk(m, CFrame.new(0, VOID_TOP + 1, 0), Vector3.new(hx * 2 + 8, 2, hz * 2 + 8), VOID_BANDS[#VOID_BANDS].Color, NEON, props)
+end
+
 ---------------------------------------------------------------- build
 
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	O = origin
-	-- opts.Cutaway: no ceiling and no front wall here, so the cutaway looks the same
-	local _cutaway = opts and opts.Cutaway
+	-- opts.Cutaway (preview pictures): no void enclosure around the floor
+	local cutaway = opts ~= nil and opts.Cutaway == true
 	local rng = Rng.new("Floor5Core")
 	local m = model("MineFloor5", parent)
 	m:SetAttribute("Floor", 5)
@@ -997,7 +1063,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	deep.Paths = { { anchor(5, false), Vector2.new(-18, -22), anchor(4, false), Vector2.new(18, -22), anchor(6, false) } }
 
 	-- set pieces that keep rock spawns away
-	local liftAt = Vector2.new(12, 25)
+	local liftSpot = MineFloors.LiftSpots[5]
+	local liftAt = Vector2.new(liftSpot.X, liftSpot.Z)
 	local runeAt = Vector2.new(-12, 25)
 	local giantAt = Vector2.new(0, -35)
 	table.insert(hub.Avoid, { P = liftAt, R = 9 })
@@ -1070,10 +1137,12 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	glowSign(props, signAt * CFrame.new(0, 4.4, 0), "HEARTSTONE CORE", 12, 2.6, PINK, rgb(255, 236, 248))
 
 	-- the hub: the Mine Lift under a floating hoist rock, a rune circle around a crystal
-	MineKit.oreLift(m, O * v3(liftAt, hub.Top), "Floor5")
+	-- (in the game this only marks the spot: Railway builds the lift from TrainConfig; the
+	-- preview lift gets its own id so its cable is not measured against the in-game cave)
+	MineKit.oreLift(m, O * Vector3.new(liftSpot.X, hub.Top + liftSpot.Y, liftSpot.Z), if MineKit.PreviewLifts then "Floor5Preview" else "HeartstoneCore")
 	local hoist = model("HoistRock", props)
 	local hrng = Rng.new("Floor5Hoist")
-	rockBody(hoist, liftAt, hub.Top + 33.5, outline(liftAt, 4.5, 4.5, 7, hrng), 8, hrng, { Band = 2, Ring = false, Debris = 1 })
+	rockBody(hoist, liftAt, hub.Top + 33.5, outline(liftAt, 4.5, 4.5, 7, hrng), 10, hrng, { Band = 2, Ring = false, Debris = 1 })
 	crystal(hoist, CFrame.new(v3(liftAt, hub.Top + 33.3)) * CFrame.Angles(0, 0, 0.2), 4, 1.1, PINK)
 	for k = 1, 5 do
 		local a = (k / 5) * math.pi * 2 + 0.3
@@ -1202,6 +1271,21 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	sparkB.Transparency = 1
 	Style.emitter(sparkB, "Sparkle", HEART_LIGHT, 4)
 
+	-- the void catcher: falling players touch it and go back to the elevator
+	local catcher = blk(m, CFrame.new(0, CATCH_Y, 0), Vector3.new(VOID_HALF.X * 2, 4, VOID_HALF.Z * 2), ROCK_DARK, SMOOTH, {
+		CanTouch = true,
+		CanQuery = false,
+		CanCollide = false,
+		CastShadow = false,
+		Transparency = 1,
+	})
+	catcher.Name = "VoidCatcher"
+	catcher:AddTag("VoidCatcher")
+	catcher:SetAttribute("Floor", Floor.Index)
+
+	if not cutaway then
+		voidEnclosure(m)
+	end
 	return m
 end
 
