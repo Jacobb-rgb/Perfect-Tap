@@ -7,9 +7,13 @@
 -- the bonuses the slotted enchants give, a fuzz run, and that the view
 -- offers exactly what the server quotes, shows the new odds in numbers
 -- before any buy of an odds booster (the lasting odds: Hexa Lucky left
--- out; "IN A SLOT" when the buy doesn't slot it), "Coming soon" for an
--- enchant whose package isn't in the game yet, and fits phones (44 pt
--- targets, the gamepad row on phones / TVs).
+-- out; "IN A SLOT" when the buy doesn't slot it, with every slot full the
+-- odds with it in place of the least lucky slotted enchant; no artifact
+-- rows while artifacts are coming soon), "Coming soon" for an enchant
+-- whose package isn't in the game yet, the effect on every catalog row,
+-- a gamepad that starts on the picked row (never a buy button), and fits
+-- phones (44 pt targets, the gamepad row on phones / TVs, slot texts that
+-- fit after a new layout).
 -- Save data, players and Net are small fakes; EconomyService runs for real.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -590,6 +594,15 @@ return function(T, Loader)
 		T.eq(byId.Swift.Next, "Buy: +1 walk speed")
 		T.eq(byId.TwinDrop.ListLine, `Owned: not in a slot{EnchantView.Separator}next $30M`)
 		T.eq(byId.Heartfire.ListLine, "$1T or 20 R$ (soon)", "the pass isn't on sale yet")
+		T.eq(byId.Heartfire.Buys[2].Text, "20 R$ • SOON", "the button shows the price too, greyed")
+		T.falsy(byId.Heartfire.Buys[2].CanBuy)
+		-- every catalog row says what the enchant does (the owned tier, else tier I)
+		T.eq(byId.Power.Effect, "+20% blaster damage", "Power II owned")
+		T.eq(byId.Swift.Effect, "+1 walk speed", "not owned: tier I")
+		T.eq(byId.Starbreaker.Effect, table.concat(EnchantConfig.describe("Starbreaker", 1), ", "), "both effects")
+		for _, card in cards do
+			T.truthy(#card.Effect > 0, card.Id .. ": an effect line")
+		end
 		T.truthy(byId.Lucky.Odds and byId.Prospector.Odds and byId.Starbreaker.Odds, "odds boosters marked")
 		T.falsy(byId.Power.Odds)
 		-- where paid random items are restricted: Starbreaker's pass goes, Heartfire's stays
@@ -624,6 +637,15 @@ return function(T, Loader)
 		local slots = EnchantView.slotCards(state())
 		T.eq(#slots, EnchantConfig.MaxSlots)
 		T.eq(slots[1].Name, "POWER II")
+		T.eq(slots[1].Sub, "+20% damage", "a slot shows its main effect in short")
+		T.eq(slots[2].Sub, "+15% ore luck")
+		T.eq(EnchantView.shortEffect("Reach", 2), "+4 studs range")
+		T.eq(EnchantView.shortEffect("Heartfire", 1), "+75% damage", "the main effect of two")
+		T.eq(EnchantView.shortEffect("Starbreaker", 1), "+75% ore luck")
+		T.eq(EnchantView.shortEffect("Overcharge", 1), "+25% surge")
+		for _, enchant in EnchantConfig.List do
+			T.truthy(#EnchantView.shortEffect(enchant.Id, 1) > 0, enchant.Id .. ": a short effect")
+		end
 		T.eq(slots[3].Open, false)
 		T.eq(slots[3].Sub, "Blaster level 7")
 		T.eq(EnchantView.slotCards(state({ BlasterLevel = 10 }))[4].Name, "EMPTY")
@@ -688,7 +710,52 @@ return function(T, Loader)
 		T.eq((EnchantView.odds(state(), "Lucky", "DeepHollow", NOW) :: any).AfterHeader, "AFTER BUY", "slotted")
 		local full = EnchantView.odds(state(), "Starbreaker", "DeepHollow", NOW) :: any
 		T.eq(full.AfterHeader, "IN A SLOT", "both open slots full: the buy doesn't slot it")
-		T.truthy(full.Note:find("slots is full") or full.Note:find("slot is full") or full.Note:find("open slot"), "says so")
+		T.truthy(full.Note:find("open slot is full"), "says so")
+		T.truthy(full.Note:find("in place of Power"), "AFTER with it in place of the slotted enchant that changes no odds")
+		T.truthy(full.Note:find("chance of each rarity"), "the rows are per rarity, the note says so")
+		T.falsy(full.Note:find("chance per ore"), "not per ore")
+		-- every slot holds an odds booster: AFTER is with it in place of the least lucky one,
+		-- its luck taken out (the numbers can really be reached)
+		local lucky = state({
+			BlasterLevel = 5,
+			Enchants = { Owned = { Lucky = 1, Prospector = 1 }, Slots = { "Lucky", "Prospector", "", "" } },
+			Bonuses = { OreLuckPct = 0.15, OreLuckMult = 1, ArtifactPct = 0.25 },
+		})
+		T.eq(EnchantView.replaceTarget(lucky.Enchants, 5, "Starbreaker"), "Lucky", "the least luck")
+		T.eq(EnchantView.replaceTarget(lucky.Enchants, 5, "Lucky"), nil, "slotted: nothing replaced")
+		T.eq(EnchantView.replaceTarget(lucky.Enchants, 7, "Starbreaker"), nil, "a free slot: nothing replaced")
+		local swap = EnchantView.odds(lucky, "Starbreaker", "DeepHollow", NOW) :: any
+		T.truthy(swap.Note:find("in place of Lucky"), "names it")
+		local luckNow = StatConfig.oreLuck(0.15, 1)
+		local luckAfter = StatConfig.oreLuck(0.75, 1) -- Lucky's 0.15 out, Starbreaker's 0.75 in
+		T.truthy(swap.Note:find(BoostView.mult(luckAfter), 1, true), "the luck it really reaches")
+		T.truthy(BoostView.zones(lucky)[1] ~= nil and table.find(EnchantView.zoneIds(lucky), "DeepHollow"), "Deep Hollow in reach")
+		for _, effect in BoostConfig.zoneEffects(5, false, luckNow, luckAfter) do
+			if effect.Zone == "DeepHollow" then
+				T.eq(swap.Summary.Before, BoostView.pct(effect.Before))
+				T.eq(swap.Summary.After, BoostView.pct(effect.After))
+			end
+		end
+		local art = swap.Rows[#swap.Rows]
+		T.eq(art.Name, "Artifact")
+		local chance = BoostConfig.preview(BoostView.context(lucky, NOW), {}).Artifacts :: any
+		for _, line in chance do
+			if line.Zone == "DeepHollow" then
+				T.eq(art.Before, BoostView.pct(line.Before), "artifact chance now")
+			end
+		end
+		-- while artifacts aren't in the game: no artifact rows; Prospector's table stays as information
+		local soon = BoostView.soonSet("Prospector")
+		local starSoon = EnchantView.odds(state(), "Starbreaker", "DeepHollow", NOW, soon) :: any
+		for _, row in starSoon.Rows do
+			T.truthy(row.Name ~= "Artifact", "no artifact row while artifacts are coming soon")
+		end
+		T.truthy(starSoon.Note:find("Artifacts: coming soon"), "says so")
+		T.eq(#starSoon.Rows, #(EnchantView.odds(state(), "Starbreaker", "DeepHollow", NOW) :: any).Rows - 1)
+		local proSoon = EnchantView.odds(state(), "Prospector", nil, NOW, soon) :: any
+		T.truthy(proSoon ~= nil and #proSoon.Rows == #BoostView.zones(state()), "Prospector's table as information")
+		T.truthy(proSoon.Note:find("coming soon"), "says they are coming")
+		T.falsy((EnchantView.odds(state(), "Lucky", "DeepHollow", NOW, soon) :: any).Note:find("Artifacts"), "Lucky: no artifact note")
 		local free = state({ Enchants = { Owned = { Power = 2 }, Slots = { "Power", "", "", "" } } })
 		T.eq((EnchantView.odds(free, "Prospector", nil, NOW) :: any).AfterHeader, "AFTER BUY", "a free slot: it goes in")
 		local unslotted = state({ Enchants = { Owned = { Lucky = 1 }, Slots = { "", "", "", "" } } })
@@ -723,6 +790,26 @@ return function(T, Loader)
 	local function overlaps(a: { number }, b: { number }): boolean
 		return a[1] < b[1] + b[3] and b[1] < a[1] + a[3] and a[2] < b[2] + b[4] and b[2] < a[2] + a[4]
 	end
+
+	T.test("EnchantView: a gamepad starts on the picked row, never on a buy button", function()
+		local s = state()
+		for _, compact in { false, true } do
+			local refs = EnchantView.build(compact)
+			EnchantView.layout(refs, compact, 1280, 684)
+			local cards = EnchantView.cards(s, 1e13, false)
+			for _, card in cards do
+				EnchantView.setRows(refs, cards, card.Id)
+				local odds, canSwitch = EnchantView.odds(s, card.Id, "DeepHollow", NOW)
+				EnchantView.setDetail(refs, card, odds, canSwitch)
+				local first = EnchantView.firstButton(refs)
+				T.eq(first, refs.Rows[card.Id].Button, card.Id .. ": its row")
+				for _, button in refs.Detail.Buttons do
+					T.truthy(first ~= button, card.Id .. ": never a buy button")
+				end
+				T.truthy(first ~= refs.Detail.Equip)
+			end
+		end
+	end)
 
 	T.test("EnchantView: layouts fit, phone targets are at least 44 pt, nothing overlaps", function()
 		local s = state()
@@ -761,6 +848,26 @@ return function(T, Loader)
 						T.falsy(overlaps(box, other), label .. " slots overlap")
 					end
 					table.insert(slotBoxes, box)
+				end
+				-- the slot texts fit (short labels: "+20% damage") and the rows' effect lines too
+				for _, slot in refs.Slots do
+					local room = slot.Button.Parent.Size.X.Offset - slot.Name.Position.X.Offset - 6
+					for _, text in { slot.Name, slot.Sub } do
+						T.truthy(
+							TechShopView.fits(text.Text, room, text.Size.Y.Offset, text.TextSize, false),
+							`{label}: "{text.Text}" fits its slot`
+						)
+					end
+					if screen.Compact then
+						T.truthy(slot.Sub.TextSize >= 13, `{label}: "{slot.Sub.Text}" readable`)
+					end
+				end
+				for _, row in refs.RowList do
+					T.truthy(row.Effect.Text ~= "", label .. " " .. row.Id .. ": an effect line")
+					T.truthy(
+						row.Button.Size.Y.Offset >= row.Line.Position.Y.Offset + row.Line.Size.Y.Offset,
+						label .. " three lines in a row"
+					)
 				end
 				-- the buttons: inside the detail, under its scrolling body, none overlapping
 				local body = boxIn(refs.Detail.Body, detail)
@@ -820,7 +927,16 @@ return function(T, Loader)
 		for _, screen in SCREENS do
 			local refs = EnchantView.build(screen.Compact)
 			EnchantView.layout(refs, screen.Compact, screen.Width, screen.Height)
+			EnchantView.setSlots(refs, EnchantView.slotCards(state()), 5, nil)
 			EnchantView.setHint(refs, "", { "a", "b", "c" })
+			-- the new layout (phones / TVs: a footer of its own) fits the slot texts again
+			for _, slot in refs.Slots do
+				local room = slot.Button.Parent.Size.X.Offset - slot.Name.Position.X.Offset - 6
+				T.truthy(
+					TechShopView.fits(slot.Sub.Text, room, slot.Sub.Size.Y.Offset, slot.Sub.TextSize, false),
+					`{screen.Label}: "{slot.Sub.Text}" still fits after the gamepad row came`
+				)
+			end
 			local panel = { 0, 0, refs.Panel.Size.X.Offset, refs.Panel.Size.Y.Offset }
 			local pad = boxIn(refs.PadHint, panel)
 			T.truthy(refs.PadHint.Visible, screen.Label .. " gamepad row")

@@ -24,6 +24,8 @@
 	  light up). UNEQUIP empties its slot. A tap on a filled slot shows that
 	  enchant; on an empty slot it equips the picked enchant there. Slot
 	  changes are free and work anywhere (EnchantAction "Slot").
+	- A gamepad starts on the picked enchant's row, never on a buy button
+	  (A is also jump: a reflex press right after the prompt buys nothing).
 	- Closes with the X button, B (gamepad), Backspace, walking away from
 	  the table, the table streaming out, respawning or another panel
 	  opening. Other prompts are hidden while it is open.
@@ -242,7 +244,7 @@ local function refresh()
 	EnchantView.setRows(view, cards, selected)
 	local card = cardById[selected]
 	if card then
-		local odds, canSwitch = EnchantView.odds(state, selected, zoneId, Workspace:GetServerTimeNow())
+		local odds, canSwitch = EnchantView.odds(state, selected, zoneId, Workspace:GetServerTimeNow(), soon())
 		EnchantView.setDetail(view, card, odds, canSwitch and #EnchantView.zoneIds(state) > 1)
 	end
 	local shown = shownStatus
@@ -261,7 +263,8 @@ local function selectDefault(view: EnchantView.Refs, force: boolean)
 	if not force and current and current:IsDescendantOf(view.Gui) then
 		return
 	end
-	GuiService.SelectedObject = EnchantView.firstButton(view, cardById[selected])
+	-- the picked row, never a buy button (A is also jump)
+	GuiService.SelectedObject = EnchantView.firstButton(view)
 end
 
 local function padName(key: Enum.KeyCode): string

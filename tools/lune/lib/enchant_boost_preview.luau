@@ -9,20 +9,25 @@
 	"+$X" popup under the coins, with the boost chips under the train chip.
 	UI overlays (build/preview/<name>.json):
 	  ui_enchant_lucky     PC: Lucky picked, its new odds in Deep Hollow
-	  ui_enchant_star      PC: Starbreaker (1T coins or 20 R$, Coming soon),
-	                       luck + artifact odds
+	  ui_enchant_star      PC: Starbreaker (1T coins or "20 R$ • SOON") as in
+	                       this build (artifacts coming soon: no artifact
+	                       row), both slots full: AFTER with it in place
+	                       of Power
 	  ui_enchant_pick      PC: Twin Drop owned, EQUIP with both slots full:
 	                       the slots light up, "Pick a slot"
 	  ui_enchant_phone     667 x 375 pt phone (compact), Lucky
-	  ui_enchant_small     568 x 320 pt phone, Prospector (artifact odds per zone)
+	  ui_enchant_small     568 x 320 pt phone, Prospector as in this build
+	                       (COMING SOON; its artifact odds per zone kept as
+	                       information)
 	  ui_enchant_tv        1080p TV (console), Overcharge (coins or shards),
 	                       the gamepad row
 	  ui_boost_hexa        PC: Hexa Lucky, every Deep Hollow ore without / with
 	  ui_boost_triple      PC: Triple Lucky (running), Crystal capsule golems
 	  ui_boost_phone       phone: Hexa Lucky
-	  ui_boost_small       small phone: Triple Lucky
+	  ui_boost_small       small phone: Triple Lucky (the short card)
 	  ui_boost_tv          1080p TV: Hexa Lucky, the gamepad row
 	  ui_hud_chips         PC HUD: the two running boosts under the train chip
+	                       ([clover] TRIPLE 3:42, [gem] HEXA 1h 05m)
 	  ui_hud_launcher      phone HUD: the BOOSTS launcher (no boost running)
 	(the renderer has no scrolling: lists show their first rows; it draws
 	no images, so the gamepad glyphs get a lettered stand-in)
@@ -34,6 +39,8 @@ local Preview = {}
 
 Preview.Now = 1_800_000_000
 Preview.Coins = 4_820_000
+-- what this build says is coming soon (BoostService.Consumers without their service)
+Preview.Soon = "TripleLucky,Prospector,GolemBond,Magnetism"
 
 Preview.State = {
 	Coins = Preview.Coins,
@@ -117,13 +124,14 @@ function Preview.build(Loader: any): { [string]: any }
 		end
 	end
 
-	local function enchants(screen: Screen, id: string, zone: string?, picking: string?, state: any?): any
-		local s = state or Preview.State
+	local function enchants(screen: Screen, id: string, zone: string?, picking: string?, soonIds: string?): any
+		local s = Preview.State
+		local soon = BoostView.soonSet(soonIds)
 		local refs = EnchantView.build(screen.Compact)
 		refs.Gui.Scale.Scale = screen.Scale
 		refs.Gui.Enabled = true
 		EnchantView.layout(refs, screen.Compact, screen.Width, screen.Height)
-		local cards = EnchantView.cards(s, Preview.Coins, false)
+		local cards = EnchantView.cards(s, Preview.Coins, false, soon)
 		local card = nil
 		for _, c in cards do
 			if c.Id == id then
@@ -133,7 +141,7 @@ function Preview.build(Loader: any): { [string]: any }
 		EnchantView.setBalances(refs, Preview.Coins, s.Shards)
 		EnchantView.setSlots(refs, EnchantView.slotCards(s), s.BlasterLevel, picking)
 		EnchantView.setRows(refs, cards, id)
-		local odds, canSwitch = EnchantView.odds(s, id, zone, NOW)
+		local odds, canSwitch = EnchantView.odds(s, id, zone, NOW, soon)
 		EnchantView.setDetail(refs, card, odds, canSwitch)
 		if screen == TV then
 			EnchantView.setHint(refs, "", { "", "", "" })
@@ -181,12 +189,12 @@ function Preview.build(Loader: any): { [string]: any }
 
 	local exports: { [string]: any } = {}
 	exports.ui_enchant_lucky = with(hud(PC, Preview.State, true), enchants(PC, "Lucky", "DeepHollow", nil))
-	local star = enchants(PC, "Starbreaker", "DeepHollow", nil)
-	EnchantView.showReceipt(star, "Starbreaker: +75% ore luck and +50% artifact chance. See the new odds below.", Theme.Info)
+	local star = enchants(PC, "Starbreaker", "DeepHollow", nil, Preview.Soon)
+	EnchantView.showReceipt(star, "Starbreaker: +75% ore luck. Artifacts come later. See the new odds on the right.", Theme.Info)
 	exports.ui_enchant_star = with(hud(PC, Preview.State, true), star)
 	exports.ui_enchant_pick = with(hud(PC, Preview.State, true), enchants(PC, "TwinDrop", "DeepHollow", "TwinDrop"))
 	exports.ui_enchant_phone = with(hud(PHONE, Preview.State, true), enchants(PHONE, "Lucky", "EmberCaves", nil))
-	exports.ui_enchant_small = with(hud(SMALL, Preview.State, true), enchants(SMALL, "Prospector", nil, nil))
+	exports.ui_enchant_small = with(hud(SMALL, Preview.State, true), enchants(SMALL, "Prospector", nil, nil, Preview.Soon))
 	exports.ui_enchant_tv = with(hud(TV, Preview.State, true), enchants(TV, "Overcharge", nil, nil))
 
 	exports.ui_boost_hexa = with(hud(PC, Preview.State, true), boosts(PC, "HexaLucky", "DeepHollow"))

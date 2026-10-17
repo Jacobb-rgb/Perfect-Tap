@@ -5,9 +5,15 @@
 	Panel (one ScreenGui):
 	  header   LUCK BOOSTS, a line about boosts (or the last message), your
 	           coins, the X button
-	  tabs     TRIPLE LUCKY · HEXA LUCKY (LB / RB on a gamepad)
+	  tabs     TRIPLE LUCKY · HEXA LUCKY (LB / RB on a gamepad); opened
+	           without a boost asked for, the view shows the last tab while
+	           it can be bought, else the first one that can (openTab: not
+	           coming soon, an effect for this player); a gamepad starts on
+	           the tab, never on an offer
 	  left     the boost: icon, name, ACTIVE + time left (or Not active),
-	           what it does, the luck it gives, the offers (coins: "+5 MIN ·
+	           what it does (a short card on small phones: no name, the
+	           tab shows it; status and a two-line Card.Short next to the
+	           icon), the luck it gives, the offers (coins: "+5 MIN ·
 	           $12K", Robux: "+15 MIN · 39 R$", "COMING SOON" while the
 	           product id is 0, or while the package that uses the boost
 	           isn't in the game: soonSet; Robux packs are hidden where
@@ -22,15 +28,18 @@
 	                          lucky golems' total on top
 	           Rows go rarest first, so the numbers the boost raises are
 	           in view even on a small phone (the summary row stays while
-	           two rows fit under it; the note goes first).
+	           two rows fit under it; the note goes first); the list shows
+	           whole rows only (no half-cut row; the rest scrolls).
 	  footer   the control hint; gamepads get the platform's own glyphs
 	           (setHint; on phones and TVs only the gamepad row, bigger)
 	The odds table (buildTable / setTable) is shared with EnchantView (the
 	odds-boosting enchants show their new odds the same way).
 
 	Chips (buildChips / setChips / placeChips, their own small ScreenGui,
-	scaled with the HUD): one pill per running boost ("x3 4:59"), or a
-	BOOSTS launcher when none runs; a tap opens the view. They sit in the
+	scaled with the HUD): one pill per running boost (its picture ringed
+	in its colour, the tag and the time left: [clover] TRIPLE 4:59, [gem]
+	HEXA 1h 05m: shape, word and colour each tell them apart), or a BOOSTS
+	launcher when none runs; a tap opens the view. They sit in the
 	left column under the TRAIN chip (chipsTop), which sits under the
 	coins and their "+$X" popups; the 72-unit touch area grows down from
 	the pill only, so it never reaches over the train chip.
@@ -80,6 +89,7 @@ export type Card = {
 	Kind: string,
 	Name: string,
 	Description: string,
+	Short: string, -- the description in two short lines (a short card: small phones)
 	Color: Color3,
 	Remaining: number, -- seconds left (0 = off)
 	Active: boolean,
@@ -109,7 +119,7 @@ export type OddsTable = {
 	Note: string,
 }
 
-export type Chip = { Kind: string, Mult: string, Text: string, Color: Color3 }
+export type Chip = { Kind: string, Mult: string, Tag: string, Text: string, Color: Color3 }
 
 export type RowRefs = { Frame: Frame, Name: TextLabel, Before: TextLabel, After: TextLabel }
 
@@ -197,6 +207,13 @@ BoostView.SoonAttribute = "TerraForgeComingSoon"
 BoostView.SoonText = {
 	TripleLucky = "Coming soon, with the golem capsules",
 } :: { [string]: string }
+-- a short card's description (small phones: it sits next to the icon, two lines)
+BoostView.ShortText = {
+	TripleLucky = "Golem capsules: the rarest golems are 3x as likely.",
+	HexaLucky = "Mining: ore luck x2.5. Rarer ores in every rock.",
+} :: { [string]: string }
+-- the HUD chips' tag before the timer (with the boost's picture: not told apart by colour alone)
+BoostView.ChipTags = { TripleLucky = "TRIPLE", HexaLucky = "HEXA" } :: { [string]: string }
 -- the gamepad hint row on phones and TVs: bigger, with a footer of its own
 BoostView.PadHintScale = 1.25
 BoostView.PadFooter = 34
@@ -375,6 +392,30 @@ function BoostView.capsules(restricted: boolean): { string }
 	return list
 end
 
+--[[
+	The tab the view opens on when no boost is asked for: `current` (the
+	last one) while it can be bought, else the first tab that can (not
+	coming soon, `soon`: soonSet, and with an effect for this player:
+	BoostConfig.hasEffect), else `current`. So the BOOSTS launcher, L and
+	D-pad right never open on a page with nothing to buy.
+]]
+function BoostView.openTab(current: string, rawState: any, soon: { [string]: boolean }?): string
+	local state = safeState(rawState)
+	local soonSet: { [string]: boolean } = soon or {}
+	local function usable(kindId: string): boolean
+		return BoostConfig.Kinds[kindId] ~= nil and soonSet[kindId] ~= true and BoostConfig.hasEffect(kindId, levelOf(state), vipOf(state))
+	end
+	if usable(current) then
+		return current
+	end
+	for _, kindId in BoostView.Tabs do
+		if usable(kindId) then
+			return kindId
+		end
+	end
+	return current
+end
+
 -- The status text for an offer that can't be bought.
 function BoostView.reasonText(reason: string?): string
 	if reason == "ComingSoon" then
@@ -480,6 +521,7 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 			Kind = kindId,
 			Name = kind.Name,
 			Description = kind.Description,
+			Short = BoostView.ShortText[kindId] or kind.Description,
 			Color = kind.Color,
 			Remaining = remaining,
 			Active = remaining > 0,
@@ -624,7 +666,13 @@ function BoostView.chips(rawState: any, now: number): { Chip }
 		local remaining = BoostConfig.remaining(state.Boosts, kindId, now)
 		if remaining > 0 then
 			local kind = BoostConfig.Kinds[kindId]
-			table.insert(list, { Kind = kindId, Mult = BoostView.mult(kind.Mult), Text = BoostView.timer(remaining), Color = kind.Color })
+			table.insert(list, {
+				Kind = kindId,
+				Mult = BoostView.mult(kind.Mult),
+				Tag = BoostView.ChipTags[kindId] or string.upper(kind.Name),
+				Text = BoostView.timer(remaining),
+				Color = kind.Color,
+			})
 		end
 	end
 	return list
@@ -676,13 +724,22 @@ function BoostView.setIcon(tile: Frame, kindId: string)
 	if old then
 		old:Destroy()
 	end
+	BoostView.art(tile, kindId, true)
+end
+
+--[[
+	A boost's picture (Triple Lucky a clover, Hexa Lucky a gold gem) in a
+	frame "Art" filling 82 % of `parent`; `badge`: the multiplier badge in
+	the corner (the HUD chips leave it out: too small to read there).
+]]
+function BoostView.art(parent: Instance, kindId: string, badge: boolean): Frame
 	local art = UIKit.new("Frame", {
 		Name = "Art",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(0.82, 0.82),
 		BackgroundTransparency = 1,
-	}, tile)
+	}, parent)
 	local kind = BoostConfig.Kinds[kindId]
 	if kindId == "TripleLucky" then
 		local leaf = rgb(90, 220, 120)
@@ -702,8 +759,8 @@ function BoostView.setIcon(tile: Frame, kindId: string)
 	else
 		bit(art, 0.2, 0.2, 0.8, 0.8, Theme.PanelLight, 0.2)
 	end
-	if kind then
-		local badge = UIKit.new("Frame", {
+	if kind and badge then
+		local tag = UIKit.new("Frame", {
 			Name = "Badge",
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.fromScale(1.08, 1.08),
@@ -711,9 +768,9 @@ function BoostView.setIcon(tile: Frame, kindId: string)
 			BackgroundColor3 = kind.Color,
 			BorderSizePixel = 0,
 		}, art)
-		UIKit.corner(badge, 8)
-		UIKit.stroke(badge, 2)
-		UIKit.label(badge, BoostView.mult(kind.Mult), 18, {
+		UIKit.corner(tag, 8)
+		UIKit.stroke(tag, 2)
+		UIKit.label(tag, BoostView.mult(kind.Mult), 18, {
 			Name = "Mult",
 			Size = UDim2.fromScale(1, 1),
 			TextScaled = true,
@@ -721,6 +778,7 @@ function BoostView.setIcon(tile: Frame, kindId: string)
 			FontFace = Theme.TitleFont,
 		})
 	end
+	return art
 end
 
 ---------------------------------------------------------------- odds table (shared)
@@ -979,7 +1037,10 @@ function BoostView.layoutTable(t: TableRefs, width: number, height: number, comp
 	t.Note.Position = UDim2.fromOffset(12, height - m.Note - 6)
 	t.Note.Size = UDim2.new(1, -24, 0, m.Note)
 	t.List.Position = UDim2.fromOffset(10, y)
-	t.List.Size = UDim2.new(1, -20, 0, math.max(m.Row, height - y - note - 12))
+	-- whole rows only: no half-cut row at the bottom (the rest scrolls; the scroll bar shows it)
+	local room = math.max(m.Row, height - y - note - 12)
+	local whole = math.max(1, math.floor((room + 0.01) / (m.Row + 2))) * (m.Row + 2)
+	t.List.Size = UDim2.new(1, -20, 0, math.min(room, whole))
 	for _, row in t.Rows do
 		placeRow(row, inner - SCROLLBAR, m)
 	end
@@ -1460,17 +1521,28 @@ function BoostView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	card.Status.Size = UDim2.new(1, -(textLeft + 10), 0, 26)
 	local y = 10 + m.Icon + 8
 	local descHeight = math.ceil(m.Description * TechShopView.LineHeight * m.DescriptionLines) + 4
-	-- a very short screen (a small phone): the key line and the offers keep their room, the description goes
 	local offersHeight = if compact then m.Offer + GAP + 4 else 3 * (m.Offer + GAP)
 	local need = y + descHeight + 4 + m.Key + 8 + 12 + offersHeight + 24
-	card.Description.Visible = need <= bodyHeight
-	if not card.Description.Visible then
-		descHeight = -4
-	end
+	-- a short card (a small phone): the tab above already shows the name, so
+	-- the status and the two-line short description (Card.Short) sit next to
+	-- the icon, and the key line and the offers keep their room
+	local short = need > bodyHeight
+	card.Frame:SetAttribute("Short", short)
+	card.Name.Visible = not short
+	card.Description.Visible = true
 	card.Description.TextSize = m.Description
-	card.Description.Position = UDim2.fromOffset(12, y)
-	card.Description.Size = UDim2.new(1, -24, 0, descHeight)
-	y += descHeight + 4
+	if short then
+		card.Status.Position = UDim2.fromOffset(textLeft, 6)
+		descHeight = 10 + m.Icon - 34
+		card.Description.Position = UDim2.fromOffset(textLeft, 34)
+		card.Description.Size = UDim2.new(1, -(textLeft + 10), 0, descHeight)
+		card.Frame:SetAttribute("DescriptionWidth", left - textLeft - 10)
+	else
+		card.Description.Position = UDim2.fromOffset(12, y)
+		card.Description.Size = UDim2.new(1, -24, 0, descHeight)
+		card.Frame:SetAttribute("DescriptionWidth", left - 24)
+		y += descHeight + 4
+	end
 	card.KeyLine.TextSize = m.Key
 	card.KeyLine.Position = UDim2.fromOffset(12, y)
 	card.KeyLine.Size = UDim2.new(1, -24, 0, m.Key + 8)
@@ -1603,12 +1675,14 @@ function BoostView.setCard(refs: Refs, card: Card)
 	c.Name.Text = string.upper(card.Name)
 	c.Status.Text = card.Status
 	c.Status.TextColor3 = card.StatusColor
-	c.Description.Text = card.Description
+	local short = c.Frame:GetAttribute("Short") == true
+	c.Description.Text = if short then card.Short else card.Description
 	c.KeyLine.Text = card.KeyLine
 	local width = tonumber(c.Frame:GetAttribute("Width")) or 400
 	local descHeight = tonumber(c.Frame:GetAttribute("DescriptionHeight")) or 60
+	local descWidth = tonumber(c.Frame:GetAttribute("DescriptionWidth")) or (width - 24)
 	local m = metrics(refs.Compact)
-	TechShopView.fitText(c.Description, width - 24, descHeight, m.Description, m.Description - 3)
+	TechShopView.fitText(c.Description, descWidth, descHeight, m.Description, m.Description - (if short then 4 else 3))
 	TechShopView.fitText(c.KeyLine, width - 24, m.Key + 8, m.Key, m.Key - 4)
 	for i, button in c.Offers do
 		local offer = card.Offers[i]
@@ -1672,19 +1746,10 @@ function BoostView.hideReceipt(refs: Refs)
 	refs.Subtitle.Visible = not refs.Compact
 end
 
--- The button a gamepad starts on: the first offer that can be bought, else the first shown one, else the tab.
-function BoostView.firstButton(refs: Refs, card: Card?): GuiObject
-	local fallback: TextButton? = nil
-	for i, button in refs.Card.Offers do
-		local offer = if card then card.Offers[i] else nil
-		if offer and holderOf(button).Visible then
-			if offer.CanBuy then
-				return button
-			end
-			fallback = fallback or button
-		end
-	end
-	return fallback or refs.Tabs[refs.Tab]
+-- The button a gamepad starts on: the open tab, never an offer (A is also
+-- jump: a reflex press right after opening must not spend anything).
+function BoostView.firstButton(refs: Refs): GuiObject
+	return refs.Tabs[refs.Tab]
 end
 
 -- Every button a finger must hit (for the touch-size tests).
@@ -1701,51 +1766,71 @@ end
 
 ---------------------------------------------------------------- HUD chips
 
-local function chipPill(button: TextButton, color: Color3, text: string, mult: string?, width: number)
-	button.Size = UDim2.fromOffset(width, BoostView.ChipHit)
-	local pill = button:FindFirstChild("Pill") :: Frame?
-	if not pill then
-		-- the pill at the top of its touch area (which grows down only)
-		local made = UIKit.new("Frame", {
-			Name = "Pill",
-			Position = UDim2.fromScale(0, 0),
-			BackgroundColor3 = Theme.Panel,
-			BorderSizePixel = 0,
-		}, button)
-		UIKit.corner(made, BoostView.ChipHeight // 2)
-		UIKit.stroke(made, 2.5)
-		local dot = UIKit.new("Frame", {
-			Name = "Dot",
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 4, 0.5, 0),
-			Size = UDim2.fromOffset(46, BoostView.ChipHeight - 8),
-			BorderSizePixel = 0,
-		}, made)
-		UIKit.corner(dot, 12)
-		UIKit.stroke(dot, 2)
-		UIKit.label(dot, "", 18, {
+-- the chip's parts (design units): the icon square and the text ("TRIPLE 3:42")
+local CHIP_DOT = 32
+local CHIP_TEXT = 20
+
+--[[
+	Builds a chip's pill (once) at the top of its touch area (which grows
+	down only): a square with the boost's picture (`kindId`, ringed in the
+	boost's colour; the launcher: a "+" on `color`) and one text, the tag
+	and the timer ("TRIPLE 3:42"). Shape, word and colour each tell the
+	boosts apart.
+]]
+local function chipPill(button: TextButton, color: Color3, kindId: string?)
+	local pill = UIKit.new("Frame", {
+		Name = "Pill",
+		Position = UDim2.fromScale(0, 0),
+		Size = UDim2.fromOffset(120, BoostView.ChipHeight),
+		BackgroundColor3 = Theme.Panel,
+		BorderSizePixel = 0,
+	}, button)
+	UIKit.corner(pill, BoostView.ChipHeight // 2)
+	UIKit.stroke(pill, 2.5)
+	local dot = UIKit.new("Frame", {
+		Name = "Dot",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, 0),
+		Size = UDim2.fromOffset(CHIP_DOT, CHIP_DOT),
+		BackgroundColor3 = if kindId then Theme.PanelDark else color,
+		BorderSizePixel = 0,
+	}, pill)
+	UIKit.corner(dot, 12)
+	UIKit.stroke(dot, 2, if kindId then color else nil)
+	if kindId then
+		BoostView.art(dot, kindId, false)
+	else
+		UIKit.label(dot, "+", 18, {
 			Name = "Mult",
 			Size = UDim2.fromScale(1, 1),
 			FontFace = Theme.TitleFont,
 			TextWrapped = false,
 		})
-		UIKit.label(made, "", 20, {
-			Name = "Text",
-			Position = UDim2.fromOffset(56, 0),
-			Size = UDim2.new(1, -62, 1, 0),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextWrapped = false,
-		})
-		pill = made
 	end
-	local p = pill :: Frame
-	p.Size = UDim2.fromOffset(width, BoostView.ChipHeight)
-	local dot = p:FindFirstChild("Dot") :: Frame
-	dot.BackgroundColor3 = color
-	local multLabel = dot:FindFirstChild("Mult") :: TextLabel
-	multLabel.Text = mult or "+"
-	local label = p:FindFirstChild("Text") :: TextLabel
-	label.Text = text
+	UIKit.label(pill, "", CHIP_TEXT, {
+		Name = "Text",
+		Position = UDim2.fromOffset(4 + CHIP_DOT + 8, 0),
+		Size = UDim2.fromOffset(0, BoostView.ChipHeight),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
+	})
+end
+
+-- Fills a chip: "TRIPLE 3:42" (`tag` "" = the timer / word alone); the
+-- pill is as wide as its text (TechShopView.textWidth, a generous guess).
+function BoostView.setChipText(button: TextButton, tag: string, text: string)
+	local pill = button:FindFirstChild("Pill") :: Frame?
+	if not pill then
+		return
+	end
+	local label = pill:FindFirstChild("Text") :: TextLabel
+	local x = 4 + CHIP_DOT + 8
+	label.Text = if tag == "" then text else `{tag} {text}`
+	local width = math.ceil(TechShopView.textWidth(label.Text, CHIP_TEXT)) + 2
+	label.Position = UDim2.fromOffset(x, 0)
+	label.Size = UDim2.fromOffset(width, BoostView.ChipHeight)
+	pill.Size = UDim2.fromOffset(x + width + 10, BoostView.ChipHeight)
+	button.Size = UDim2.fromOffset(x + width + 10, BoostView.ChipHit)
 end
 
 --[[
@@ -1780,7 +1865,7 @@ function BoostView.buildChips(): ChipRefs
 	local row = UIKit.new("Frame", {
 		Name = "Row",
 		Position = UDim2.fromOffset(BoostView.ChipLeft, BoostView.chipsTop(nil, false)),
-		Size = UDim2.fromOffset(HudView.CoinsWidth + 160, BoostView.ChipHit),
+		Size = UDim2.fromOffset(HudView.CoinsWidth + 200, BoostView.ChipHit),
 		BackgroundTransparency = 1,
 	}, gui)
 	UIKit.list(row, Enum.FillDirection.Horizontal, 8, { VerticalAlignment = Enum.VerticalAlignment.Top })
@@ -1798,12 +1883,14 @@ function BoostView.buildChips(): ChipRefs
 	local chips: { [string]: TextButton } = {}
 	for i, kindId in BoostConfig.KindIds do
 		local button = chipButton("Chip" .. kindId, i)
-		chipPill(button, BoostConfig.Kinds[kindId].Color, "0:00", BoostView.mult(BoostConfig.Kinds[kindId].Mult), 128)
+		chipPill(button, BoostConfig.Kinds[kindId].Color, kindId)
+		BoostView.setChipText(button, BoostView.ChipTags[kindId] or "", "0:00")
 		button.Visible = false
 		chips[kindId] = button
 	end
 	local launcher = chipButton("Launcher", 0)
-	chipPill(launcher, rgb(90, 220, 120), "BOOSTS", "+", 146)
+	chipPill(launcher, rgb(90, 220, 120), nil)
+	BoostView.setChipText(launcher, "", "BOOSTS")
 	-- the gamepad key's glyph, centred on the pills
 	local glyphHolder = UIKit.new("Frame", {
 		Name = "GlyphHolder",
@@ -1830,9 +1917,7 @@ function BoostView.setChips(refs: ChipRefs, chips: { Chip }, launcher: boolean)
 		local button = refs.Chips[chip.Kind]
 		if button then
 			shown[chip.Kind] = true
-			-- "1h 05m" needs a wider pill than "4:59"
-			local width = if #chip.Text > 5 then 150 else 128
-			chipPill(button, chip.Color, chip.Text, chip.Mult, width)
+			BoostView.setChipText(button, chip.Tag, chip.Text)
 			button.Visible = true
 		end
 	end

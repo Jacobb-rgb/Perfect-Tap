@@ -28,8 +28,11 @@
 	  locally and sends nothing. Robux packs are hidden where paid random
 	  items are restricted (the player attribute PaidRandomRestricted; not
 	  known yet = restricted).
-	- Tabs: click / tap, or LB / RB on a gamepad; gamepads get a selected
-	  button on open (the selection stays inside the panel).
+	- Tabs: click / tap, or LB / RB on a gamepad. Opened without a kind,
+	  the view shows the last tab while it can be bought, else the first
+	  one that can (BoostView.openTab: Hexa Lucky while Triple Lucky is
+	  coming soon). Gamepads start on the open tab, never on an offer (A
+	  is also jump); the selection stays inside the panel.
 	- Closes with the X button, B, Backspace, L again, respawning, the HUD
 	  going away or another panel (shops, pen, train...) opening.
 ]]
@@ -321,7 +324,8 @@ local function selectDefault(view: BoostView.Refs, force: boolean)
 	if not force and selected and selected:IsDescendantOf(view.Gui) then
 		return
 	end
-	GuiService.SelectedObject = BoostView.firstButton(view, cards[view.Tab])
+	-- the open tab, never an offer (A is also jump)
+	GuiService.SelectedObject = BoostView.firstButton(view)
 end
 
 local function padName(key: Enum.KeyCode): string
@@ -686,6 +690,10 @@ function BoostController.open(kindId: string?)
 	local view = ensureView()
 	if kindId and BoostConfig.Kinds[kindId] then
 		BoostView.setTab(view, kindId)
+	elseif not isOpen then
+		-- no boost asked for (the launcher, L, D-pad right, the side menu):
+		-- the last tab while it can be bought, else the first one that can
+		BoostView.setTab(view, BoostView.openTab(view.Tab, StateController.get(), soon()))
 	end
 	if isOpen then
 		refresh()

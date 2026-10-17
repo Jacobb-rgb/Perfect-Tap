@@ -6,9 +6,11 @@
 	           coins and crystal shards, the X button
 	  left     YOUR BLASTER: the enchant slots (the blaster level opens 1, 2,
 	           3, 4 slots: EnchantConfig.SlotLevels; a locked slot says which
-	           level opens it), then the catalog grouped by rarity (Common ..
-	           Mythic): rune, name, tier ("NEW", "II / III", "MAX") and a
-	           line (in which slot, owned, or the price)
+	           level opens it; a filled one its main effect in short: "+20%
+	           damage"), then the catalog grouped by rarity (Common ..
+	           Mythic): rune, name, tier ("NEW", "II / III", "MAX"), what it
+	           does ("+10% blaster damage": the owned tier, else tier I) and
+	           a line (in which slot, owned, or the price)
 	  right    the picked enchant: rune, name, rarity and tier chips, what it
 	           does, now -> next tier, then
 	             odds boosters (Lucky, Prospector, Starbreaker): THE NEW ODDS
@@ -19,15 +21,21 @@
 	             the others: every tier's effect
 	           and at the bottom a status line and the buttons: BUY $X
 	           (coins), N SHARDS (Epic and Legendary), 20 R$ (the two
-	           Mythics; COMING SOON while the pass id is 0; hidden where paid
-	           random items are restricted for an odds booster), EQUIP /
-	           UNEQUIP (owned enchants); one COMING SOON button for an
-	           enchant whose effect only a package that isn't in the game
-	           yet reads (BoostView.soonSet)
+	           Mythics; "20 R$ • SOON", greyed, while the pass id is 0;
+	           hidden where paid random items are restricted for an odds
+	           booster), EQUIP / UNEQUIP (owned enchants); one COMING SOON
+	           button for an enchant whose effect only a package that isn't
+	           in the game yet reads (BoostView.soonSet)
 	           The odds are the lasting ones: a running Hexa Lucky is left
 	           out, and the AFTER column says "IN A SLOT" when the buy
-	           doesn't put the enchant in a slot (no free open slot, or
-	           owned but not equipped).
+	           doesn't put the enchant in a slot (owned but not equipped;
+	           or every open slot full: then AFTER is with it in place of
+	           the slotted enchant that gives the least luck, named in the
+	           note). While artifacts aren't in the game (Prospector is
+	           coming soon) the artifact rows are left out (Prospector's
+	           own table stays, as information) and the note says so.
+	  gamepad  the selection starts on the picked catalog row, never on a
+	           buy button (A is also jump: no buy by a reflex press)
 	  footer   the control hint; gamepads get the platform's own glyphs
 	           (on phones and TVs only the gamepad row, bigger)
 	The right pane's middle scrolls when a small screen can't show it all
@@ -80,7 +88,8 @@ export type Card = {
 	Done: boolean, -- top tier
 	Slot: number?, -- the open slot it sits in
 	TierText: string, -- "NEW", "II / III", "MAX", "OWNED"
-	ListLine: string, -- the list row's second line
+	Effect: string, -- the list row's second line: what the owned tier does (tier I when not owned)
+	ListLine: string, -- the list row's third line: in which slot, owned, or the price
 	ListLineColor: Color3,
 	Now: string,
 	Next: string,
@@ -100,7 +109,15 @@ export type SlotCard = {
 }
 
 export type SlotRefs = { Button: TextButton, Rune: Frame, Name: TextLabel, Sub: TextLabel }
-export type RowRefs = { Id: string, Button: TextButton, Rune: Frame, Name: TextLabel, Tier: TextLabel, Line: TextLabel }
+export type RowRefs = {
+	Id: string,
+	Button: TextButton,
+	Rune: Frame,
+	Name: TextLabel,
+	Tier: TextLabel,
+	Effect: TextLabel,
+	Line: TextLabel,
+}
 
 export type DetailRefs = {
 	Frame: Frame,
@@ -170,6 +187,35 @@ EnchantView.SoonText = {
 	GolemBond = "Coming soon, with golems",
 	Magnetism = "Coming soon, with the Ore Magnet",
 } :: { [string]: string }
+-- While this enchant is coming soon, artifacts aren't in the game (BoostService.Consumers:
+-- Prospector -> ArtifactService): the odds tables leave the artifact rows out.
+EnchantView.ArtifactsWith = "Prospector"
+
+-- The slot cards' short stat names (their sub line is narrow): "+20% damage".
+EnchantView.ShortLabels = {
+	DamagePct = "damage",
+	OverchargePct = "surge",
+	ReachStuds = "range",
+	MagnetBonus = "magnet",
+	TwinDropChance = "twin chunk",
+	ArtifactPct = "artifacts",
+	SellPct = "sell value",
+	GolemBondPct = "golem bonus",
+	WalkSpeed = "speed",
+} :: { [string]: string }
+-- the stat a slot card shows when an enchant has two (Heartfire: damage, Starbreaker: ore luck)
+EnchantView.ShortOrder = {
+	"DamagePct",
+	"OreLuckPct",
+	"OverchargePct",
+	"ReachStuds",
+	"WalkSpeed",
+	"MagnetBonus",
+	"TwinDropChance",
+	"SellPct",
+	"ArtifactPct",
+	"GolemBondPct",
+}
 
 -- Status lines the controller shows (here so the tests can check they fit).
 EnchantView.StatusText = {
@@ -233,6 +279,32 @@ local function joined(id: string, tier: number): string
 	return table.concat(EnchantConfig.describe(id, tier), ", ")
 end
 
+-- An enchant's main effect at `tier` in short, for the narrow slot cards:
+-- "+20% damage", "+15% ore luck", "+4 studs range" (ShortLabels, ShortOrder).
+function EnchantView.shortEffect(id: string, tier: number): string
+	local enchant = EnchantConfig.ById[id]
+	if not enchant then
+		return ""
+	end
+	local stat: string? = nil
+	for _, candidate in EnchantView.ShortOrder do
+		if enchant.Effects[candidate] then
+			stat = candidate
+			break
+		end
+	end
+	if stat == nil then
+		return EnchantConfig.describe(id, tier)[1] or ""
+	end
+	local text = StatConfig.describe(stat, EnchantConfig.value(id, stat, tier))
+	local info = StatConfig.ById[stat]
+	local short = EnchantView.ShortLabels[stat]
+	if short and info and #text > #info.Label and string.sub(text, -#info.Label) == info.Label then
+		text = string.sub(text, 1, #text - #info.Label) .. short
+	end
+	return text
+end
+
 -- Every tier's effect, one line each; the owned one is marked.
 function EnchantView.tiersText(id: string, owned: number): string
 	local lines = {}
@@ -285,9 +357,14 @@ local function buysOf(
 	if product and not (restricted and EnchantConfig.isPaidRandom(enchant.Id, "Robux")) then
 		local info = MonetizationConfig.get(product)
 		local live = MonetizationConfig.keyLive(product)
+		-- the pass id is 0 until it's on sale: its price shows, greyed, with SOON
+		local text = if info then `{info.Robux} R$` else "COMING SOON"
+		if info and not live then
+			text ..= " • SOON"
+		end
 		table.insert(list, {
 			Currency = "Robux",
-			Text = if live and info then `{info.Robux} R$` else "COMING SOON",
+			Text = text,
 			Product = product,
 			Tier = nextTier,
 			CanBuy = live,
@@ -370,6 +447,7 @@ function EnchantView.cards(rawState: any, coins: number, restricted: boolean, so
 			Done = done,
 			Slot = slot,
 			TierText = tierText,
+			Effect = joined(id, math.max(1, tier)),
 			ListLine = line,
 			ListLineColor = lineColor,
 			Now = if tier > 0 then `Now: {joined(id, tier)}` else "Not owned yet",
@@ -411,7 +489,7 @@ function EnchantView.slotCards(rawState: any): { SlotCard }
 				Need = need,
 				Id = enchant.Id,
 				Name = string.upper(enchant.Name) .. tierText,
-				Sub = EnchantConfig.describe(enchant.Id, tier)[1] or "",
+				Sub = EnchantView.shortEffect(enchant.Id, tier),
 				Color = enchant.Color,
 			})
 		else
@@ -431,6 +509,39 @@ function EnchantView.zoneIds(rawState: any): { string }
 end
 
 --[[
+	The slotted enchant a buy of `id` would have to replace: nil when `id`
+	sits in an open slot or an open slot is free. Else a slotted enchant
+	that changes no odds (the first one), or, when every slot holds an odds
+	booster, the one that gives the least luck (ore luck + artifact chance).
+]]
+function EnchantView.replaceTarget(enchants: any, blasterLevel: any, id: string): string?
+	if EnchantView.slotOf(enchants, blasterLevel, id) ~= nil or EnchantConfig.firstFreeSlot(enchants, blasterLevel) ~= nil then
+		return nil
+	end
+	local slots = if type(enchants) == "table" then enchants.Slots else nil
+	if type(slots) ~= "table" then
+		return nil
+	end
+	local best: string? = nil
+	local bestScore = math.huge
+	for i = 1, EnchantConfig.unlockedSlots(blasterLevel) do
+		local other = slots[i]
+		local enchant = if type(other) == "string" then EnchantConfig.ById[other] else nil
+		if enchant and enchant.Id ~= id then
+			local score = 0
+			if enchant.OddsBoost then
+				local tier = EnchantConfig.tierOf(enchants, enchant.Id)
+				score = 1 + EnchantConfig.value(enchant.Id, "OreLuckPct", tier) + EnchantConfig.value(enchant.Id, "ArtifactPct", tier)
+			end
+			if score < bestScore then
+				best, bestScore = enchant.Id, score
+			end
+		end
+	end
+	return best
+end
+
+--[[
 	The new odds an odds-boosting enchant's next tier gives
 	(BoostConfig.preview with EnchantConfig.nextDelta, every total capped
 	like the server's), for zone `zoneId` (a zone the player can mine; the
@@ -442,10 +553,21 @@ end
 	left out of NOW and AFTER, and the note says so. The AFTER column is
 	"AFTER BUY" when the enchant is in a slot or the buy puts it in one (a
 	new enchant goes into the first free open slot), else "IN A SLOT" with
-	a note: the luck only counts once it is equipped.
+	a note: the luck only counts once it is equipped. With every open slot
+	full, AFTER is with the enchant in place of replaceTarget (its luck
+	taken out; the note names it), so the numbers can really be reached.
+	`soon` (BoostView.soonSet): while EnchantView.ArtifactsWith is in it
+	artifacts aren't in the game: the luck table has no artifact row,
+	Prospector's table stays as information, and the notes say so.
 	Returns the table and whether the zone can be switched.
 ]]
-function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: number?): (BoostView.OddsTable?, boolean)
+function EnchantView.odds(
+	rawState: any,
+	id: string,
+	zoneId: string?,
+	now: number?,
+	soon: { [string]: boolean }?
+): (BoostView.OddsTable?, boolean)
 	local enchant = EnchantConfig.ById[id]
 	if not enchant or not enchant.OddsBoost then
 		return nil, false
@@ -456,6 +578,7 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 	if next(delta) == nil then
 		return nil, false
 	end
+	local artifactsSoon = soon ~= nil and soon[EnchantView.ArtifactsWith] == true
 	-- the lasting odds: without a running Hexa Lucky
 	local ctx = BoostView.context(state, now)
 	local hexa = ctx.OreLuckMult > 1
@@ -465,16 +588,39 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 	local slotted = EnchantView.slotOf(state.Enchants, level, id) ~= nil
 	local inSlot = slotted or (tier == 0 and EnchantConfig.firstFreeSlot(state.Enchants, level) ~= nil)
 	local afterHeader = if inSlot then "AFTER BUY" else "IN A SLOT"
+	-- every open slot full: AFTER is with it in place of the slotted enchant with the least luck
+	local replaced = if inSlot then nil else EnchantView.replaceTarget(state.Enchants, level, id)
 	local slotNote = ""
-	if not inSlot then
+	if replaced then
+		local other = EnchantConfig.ById[replaced]
+		slotNote = ` Every open slot is full: these odds are with it in place of {other.Name}.`
+	elseif not inSlot then
 		slotNote = if tier > 0
 			then " It isn't in a slot: equip it to get these odds."
 			else " Every open slot is full: put it in a slot to get these odds."
 	end
 	local hexaNote = if hexa then " Hexa Lucky isn't counted (it runs out)." else ""
 	local preview = BoostConfig.preview(ctx, delta)
+	if replaced then
+		local replacedTier = EnchantConfig.tierOf(state.Enchants, replaced)
+		local without = table.clone(ctx)
+		without.OreLuckPct = math.max(0, ctx.OreLuckPct - EnchantConfig.value(replaced, "OreLuckPct", replacedTier))
+		without.ArtifactPct = math.max(0, ctx.ArtifactPct - EnchantConfig.value(replaced, "ArtifactPct", replacedTier))
+		local swapped = BoostConfig.preview(without, delta)
+		local artifacts: { BoostConfig.ArtifactEffect } = {}
+		for i, line in preview.Artifacts do
+			local after = swapped.Artifacts[i]
+			table.insert(artifacts, { Zone = line.Zone, Before = line.Before, After = if after then after.After else line.After })
+		end
+		preview = {
+			LuckBefore = preview.LuckBefore,
+			LuckAfter = swapped.LuckAfter,
+			Zones = BoostConfig.zoneEffects(level, ctx.Vip, preview.LuckBefore, swapped.LuckAfter),
+			Artifacts = artifacts,
+		}
+	end
 	local luck = (delta.OreLuckPct or 0) > 0 or (delta.OreLuckMult or 1) > 1
-	local artifacts = (delta.ArtifactPct or 0) > 0
+	local artifacts = (delta.ArtifactPct or 0) > 0 and not artifactsSoon
 	local artifactName = "Artifact"
 	local rows: { BoostView.OddsRow } = {}
 	if not luck then
@@ -483,6 +629,10 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 			table.insert(rows, BoostView.row(if zone then zone.Name else line.Zone, Theme.Text, line.Before, line.After))
 		end
 		local art = math.floor(ctx.ArtifactPct * 100 + 0.5)
+		local note = `Your artifact bonus now: +{art}%. Every zone you can mine.`
+		if artifactsSoon then
+			note = "Artifacts are coming soon: these will be the odds then. Every zone you can mine."
+		end
 		return {
 			Title = "ARTIFACT CHANCE",
 			Header = "PER ROCK YOU BREAK",
@@ -490,7 +640,7 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 			AfterHeader = afterHeader,
 			Summary = nil,
 			Rows = rows,
-			Note = `Your artifact bonus now: +{art}%. Every zone you can mine.{slotNote}`,
+			Note = note .. slotNote,
 		},
 			false
 	end
@@ -524,14 +674,15 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 		end
 	end
 	local note =
-		`Ore luck {BoostView.mult(preview.LuckBefore)} → {BoostView.mult(preview.LuckAfter)}: chance per ore in a rock you break.`
-	if preview.LuckAfter <= preview.LuckBefore then
+		`Ore luck {BoostView.mult(preview.LuckBefore)} → {BoostView.mult(preview.LuckAfter)}: chance of each rarity for every ore chunk you mine.`
+	if math.abs(preview.LuckAfter - preview.LuckBefore) <= 1e-9 then
 		note = if preview.LuckBefore >= StatConfig.MaxOreLuck - 1e-9
 			then `Your ore luck is at its cap ({BoostView.mult(StatConfig.MaxOreLuck)}): this buy doesn't change it.`
 			else "Your ore luck from enchants and golems is at its cap: this buy doesn't change it."
 	elseif effect and effect.NoEffect then
 		note = "No Rare ores in this zone: ore luck changes nothing here."
 	end
+	local soonNote = if artifactsSoon and (delta.ArtifactPct or 0) > 0 then " Artifacts: coming soon." else ""
 	return {
 		Title = title,
 		Header = "CHANCE",
@@ -539,7 +690,7 @@ function EnchantView.odds(rawState: any, id: string, zoneId: string?, now: numbe
 		AfterHeader = afterHeader,
 		Summary = summary,
 		Rows = rows,
-		Note = note .. slotNote .. hexaNote,
+		Note = note .. slotNote .. hexaNote .. soonNote,
 	},
 		true
 end
@@ -641,7 +792,11 @@ type Metrics = {
 	Row: number,
 	RowRune: number,
 	RowName: number,
+	RowEffect: number,
 	RowLine: number,
+	RowNameY: number, -- the row's three lines: name (+ tier), effect, slot / price
+	RowEffectY: number,
+	RowLineY: number,
 	Group: number,
 	DetailRune: number,
 	Name: number,
@@ -667,10 +822,14 @@ local METRICS: { [string]: Metrics } = {
 		SlotRune = 32,
 		SlotName = 17,
 		SlotSub = 13,
-		Row = 58,
+		Row = 74,
 		RowRune = 40,
 		RowName = 20,
+		RowEffect = 15,
 		RowLine = 15,
+		RowNameY = 5,
+		RowEffectY = 30,
+		RowLineY = 50,
 		Group = 26,
 		DetailRune = 56,
 		Name = 28,
@@ -695,10 +854,14 @@ local METRICS: { [string]: Metrics } = {
 		SlotRune = 38,
 		SlotName = 19,
 		SlotSub = 15,
-		Row = 72,
+		Row = 86,
 		RowRune = 46,
 		RowName = 22,
+		RowEffect = 17,
 		RowLine = 17,
+		RowNameY = 7,
+		RowEffectY = 35,
+		RowLineY = 59,
 		Group = 30,
 		DetailRune = 56,
 		Name = 28,
@@ -767,6 +930,13 @@ local function newRow(list: ScrollingFrame, enchant: EnchantConfig.Enchant, orde
 		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 	})
+	local effect = UIKit.label(button, "", 15, {
+		Name = "Effect",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.Text,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
 	local line = UIKit.label(button, "", 15, {
 		Name = "Line",
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -774,7 +944,7 @@ local function newRow(list: ScrollingFrame, enchant: EnchantConfig.Enchant, orde
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
-	return { Id = enchant.Id, Button = button, Rune = rune, Name = name, Tier = tier, Line = line }
+	return { Id = enchant.Id, Button = button, Rune = rune, Name = name, Tier = tier, Effect = effect, Line = line }
 end
 
 function EnchantView.build(compact: boolean?): Refs
@@ -1141,12 +1311,15 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		slot.Rune.Size = UDim2.fromOffset(m.SlotRune, m.SlotRune)
 		slot.Rune.Position = UDim2.new(0, 8, 0.5, 0)
 		local textLeft = 8 + m.SlotRune + 8
+		-- (a locked slot has no rune: its texts start at the left)
+		local x = if slot.Rune.Visible then textLeft else 10
 		slot.Name.TextSize = m.SlotName
-		slot.Name.Position = UDim2.fromOffset(textLeft, if compact then 10 else 6)
+		slot.Name.Position = UDim2.fromOffset(x, if compact then 10 else 6)
 		slot.Name.Size = UDim2.new(1, -(textLeft + 6), 0, m.SlotName + 6)
 		slot.Sub.TextSize = m.SlotSub
-		slot.Sub.Position = UDim2.fromOffset(textLeft, if compact then 38 else 30)
+		slot.Sub.Position = UDim2.fromOffset(x, if compact then 38 else 30)
 		slot.Sub.Size = UDim2.new(1, -(textLeft + 6), 0, m.SlotSub + 6)
+		EnchantView.fitSlot(refs, slot)
 	end
 	local listTop = slotTop + 5 + 2 * m.SlotHeight + GAP + 10
 	refs.List.Position = UDim2.fromOffset(PAD, listTop)
@@ -1161,14 +1334,17 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		row.Rune.Position = UDim2.new(0, 8, 0.5, 0)
 		local textLeft = 8 + m.RowRune + 10
 		row.Name.TextSize = m.RowName
-		row.Name.Position = UDim2.fromOffset(textLeft, if compact then 9 else 6)
+		row.Name.Position = UDim2.fromOffset(textLeft, m.RowNameY)
 		row.Name.Size = UDim2.new(1, -(textLeft + 96), 0, m.RowName + 6)
 		row.Tier.TextSize = if compact then 18 else 16
-		row.Tier.Position = UDim2.new(1, -10, 0, if compact then 9 else 6)
+		row.Tier.Position = UDim2.new(1, -10, 0, m.RowNameY)
 		row.Tier.Size = UDim2.fromOffset(86, m.RowName + 6)
+		row.Effect.Position = UDim2.fromOffset(textLeft, m.RowEffectY)
+		row.Effect.Size = UDim2.new(1, -(textLeft + 10), 0, m.RowEffect + 4)
+		EnchantView.fitRowEffect(refs, row)
 		row.Line.TextSize = m.RowLine
-		row.Line.Position = UDim2.fromOffset(textLeft, if compact then 40 else 32)
-		row.Line.Size = UDim2.new(1, -(textLeft + 10), 0, m.RowLine + 6)
+		row.Line.Position = UDim2.fromOffset(textLeft, m.RowLineY)
+		row.Line.Size = UDim2.new(1, -(textLeft + 10), 0, m.RowLine + 4)
 	end
 
 	-- right: the detail pane
@@ -1237,6 +1413,13 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	d.TiersTitle.TextSize = if compact then 22 else 20
 	EnchantView.placeButtons(refs)
 	EnchantView.placeBody(refs)
+	-- texts fitted to the old sizes are fitted again (setHint lays the panel out again)
+	TechShopView.fitText(d.Name, d.Name.Size.X.Offset, 34, m.Name, 18)
+	if d.Status.Text ~= "" then
+		TechShopView.fitText(d.Status, refs.BodyWidth, m.Status + 8, m.Status, 13)
+	else
+		d.Status.TextSize = m.Status
+	end
 
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -6)
 	refs.Hint.Size = UDim2.new(1, -PAD * 2, 0, 20)
@@ -1356,13 +1539,25 @@ function EnchantView.setSlots(refs: Refs, slots: { SlotCard }, blasterLevel: num
 			local x = if card.Open then textLeft else 10
 			slotRefs.Name.Position = UDim2.fromOffset(x, slotRefs.Name.Position.Y.Offset)
 			slotRefs.Sub.Position = UDim2.fromOffset(x, slotRefs.Sub.Position.Y.Offset)
-			-- long texts get smaller instead of being cut
-			local m = metrics(refs.Compact)
-			local room = holderOf(slotRefs.Button).Size.X.Offset - x - 6
-			TechShopView.fitText(slotRefs.Name, room, m.SlotName + 6, m.SlotName, 12)
-			TechShopView.fitText(slotRefs.Sub, room, m.SlotSub + 6, m.SlotSub, 10)
+			EnchantView.fitSlot(refs, slotRefs)
 		end
 	end
+end
+
+-- A slot's texts get smaller instead of being cut (layout and setSlots).
+function EnchantView.fitSlot(refs: Refs, slotRefs: SlotRefs)
+	local m = metrics(refs.Compact)
+	local room = holderOf(slotRefs.Button).Size.X.Offset - slotRefs.Name.Position.X.Offset - 6
+	TechShopView.fitText(slotRefs.Name, room, m.SlotName + 6, m.SlotName, 12)
+	TechShopView.fitText(slotRefs.Sub, room, m.SlotSub + 6, m.SlotSub, 10)
+end
+
+-- A catalog row's effect line gets a little smaller before it is cut ("…").
+function EnchantView.fitRowEffect(refs: Refs, row: RowRefs)
+	local m = metrics(refs.Compact)
+	-- the row: the list's width less its scroll bar room and padding
+	local room = refs.List.Size.X.Offset - (SCROLLBAR + 6) - 2 - row.Effect.Position.X.Offset - 10
+	TechShopView.fitText(row.Effect, room, m.RowEffect + 4, m.RowEffect, m.RowEffect - 3)
 end
 
 -- Fills the catalog rows; the `selected` row is outlined.
@@ -1372,6 +1567,8 @@ function EnchantView.setRows(refs: Refs, cards: { Card }, selected: string)
 		if row then
 			row.Tier.Text = card.TierText
 			row.Tier.TextColor3 = if card.Done then Theme.Good elseif card.Owned then Theme.Accent else Theme.Info
+			row.Effect.Text = card.Effect
+			EnchantView.fitRowEffect(refs, row)
 			row.Line.Text = card.ListLine
 			row.Line.TextColor3 = card.ListLineColor
 			local on = card.Id == selected
@@ -1492,17 +1689,10 @@ function EnchantView.hideReceipt(refs: Refs)
 	refs.Subtitle.Visible = not refs.Compact
 end
 
--- The button a gamepad starts on: the first buy that works, else the
--- picked row (so A shows its details), else the close button.
-function EnchantView.firstButton(refs: Refs, card: Card?): GuiObject
-	if card then
-		for i, button in refs.Detail.Buttons do
-			local buy = card.Buys[i]
-			if buy and buy.CanBuy and holderOf(button).Visible then
-				return button
-			end
-		end
-	end
+-- The button a gamepad starts on: the picked catalog row, else the close
+-- button; never a buy button (A is also jump: a reflex press right after
+-- the prompt must not spend anything).
+function EnchantView.firstButton(refs: Refs): GuiObject
 	local row = refs.Rows[refs.Selected]
 	if row then
 		return row.Button

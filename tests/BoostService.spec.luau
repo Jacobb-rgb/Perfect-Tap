@@ -741,6 +741,76 @@ return function(T, Loader)
 		T.eq(pill.AnchorPoint.Y, 0)
 	end)
 
+	T.test("BoostView: chips tell the boosts apart by picture and word, not colour alone", function()
+		local s = state({ Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } })
+		local chips = BoostView.chips(s, NOW)
+		T.eq(chips[1].Tag, "TRIPLE")
+		T.eq(chips[2].Tag, "HEXA")
+		local refs = BoostView.buildChips()
+		BoostView.setChips(refs, chips, true)
+		local widths = {}
+		for _, kindId in BoostConfig.KindIds do
+			local button = refs.Chips[kindId]
+			local pill = button:FindFirstChild("Pill") :: any
+			local dot = pill:FindFirstChild("Dot") :: any
+			local art = dot:FindFirstChild("Art") :: any
+			T.truthy(art ~= nil, kindId .. ": its picture in the chip")
+			T.eq(art:FindFirstChild("Badge"), nil, kindId .. ": no unreadable badge in the chip")
+			local text = pill:FindFirstChild("Text") :: any
+			local chip = if kindId == "TripleLucky" then chips[1] else chips[2]
+			T.eq(text.Text, `{BoostView.ChipTags[kindId]} {chip.Text}`, kindId .. ": the tag before the timer")
+			-- the text fits its label, the label sits inside the pill after the picture, the touch area matches
+			T.truthy(TechShopView.fits(text.Text, text.Size.X.Offset, text.Size.Y.Offset, text.TextSize, false), kindId .. ": fits")
+			T.truthy(text.Position.X.Offset >= dot.Position.X.Offset + dot.Size.X.Offset, kindId .. ": after the picture")
+			T.truthy(text.Position.X.Offset + text.Size.X.Offset <= pill.Size.X.Offset, kindId .. ": inside the pill")
+			T.eq(button.Size.X.Offset, pill.Size.X.Offset)
+			T.eq(button.Size.Y.Offset, BoostView.ChipHit)
+			widths[kindId] = pill.Size.X.Offset
+		end
+		T.eq((refs.Chips.HexaLucky:FindFirstChild("Pill") :: any):FindFirstChild("Text").Text, "HEXA 1h 05m")
+		-- the row holds both chips and the gamepad glyph
+		T.truthy(widths.TripleLucky + widths.HexaLucky + 8 + 8 + 30 <= refs.Row.Size.X.Offset, "both chips fit the row")
+		-- the launcher: "+" and BOOSTS, no tag
+		local launcherPill = refs.Launcher:FindFirstChild("Pill") :: any
+		T.eq(launcherPill:FindFirstChild("Text").Text, "BOOSTS")
+	end)
+
+	T.test("BoostView: opens on a boost that can be bought; a gamepad starts on the tab", function()
+		local s = state()
+		-- this build: Triple Lucky is coming soon (no capsules yet) -> Hexa Lucky
+		local soon = BoostView.soonSet("TripleLucky,Prospector")
+		T.eq(BoostView.openTab("TripleLucky", s, soon), "HexaLucky", "nothing to buy on Triple: Hexa")
+		T.eq(BoostView.openTab("HexaLucky", s, soon), "HexaLucky")
+		T.eq(BoostView.openTab("TripleLucky", s, {}), "TripleLucky", "the last tab while it can be bought")
+		T.eq(BoostView.openTab("HexaLucky", s, nil), "HexaLucky")
+		-- Hexa Lucky without an effect (no Rare ore in reach) isn't usable either
+		local noEffect = false
+		for level = 1, 10 do
+			if not BoostConfig.hasEffect("HexaLucky", level, false) then
+				noEffect = true
+				local low = state({ BlasterLevel = level })
+				T.eq(BoostView.openTab("HexaLucky", low, {}), "TripleLucky", `level {level}: Hexa does nothing yet`)
+				T.eq(BoostView.openTab("TripleLucky", low, soon), "TripleLucky", "nothing usable: the last tab stays")
+			end
+		end
+		T.truthy(noEffect or BoostConfig.hasEffect("HexaLucky", 1, false), "checked")
+		-- the gamepad selection: the open tab, never an offer (A is also jump)
+		for _, compact in { false, true } do
+			local refs = BoostView.build(compact)
+			BoostView.layout(refs, compact, 1280, 684)
+			for _, kindId in BoostConfig.KindIds do
+				BoostView.setTab(refs, kindId)
+				local cards = BoostView.cards(s, 1e12, NOW, false)
+				BoostView.setCard(refs, if kindId == "TripleLucky" then cards[1] else cards[2])
+				local first = BoostView.firstButton(refs)
+				T.eq(first, refs.Tabs[kindId], kindId .. ": starts on its tab")
+				for _, button in refs.Card.Offers do
+					T.truthy(first ~= button, "never on an offer")
+				end
+			end
+		end
+	end)
+
 	-- the screens the layouts must fit (design units: the screen / the HUD scale)
 	local SCREENS = {
 		{ Label = "PC 1280x720", Compact = false, Width = 1280, Height = 720 - 36 },
@@ -815,6 +885,28 @@ return function(T, Loader)
 						T.truthy(target.Size.Y.Offset * 0.62 >= 44 - 0.5, `{label}: {target.Name} tall enough`)
 					end
 				end
+				-- the description stays (a short card next to the icon on a small phone) and fits its box
+				local desc = refs.Card.Description
+				T.truthy(desc.Visible, label .. " the description stays")
+				local short = refs.Card.Frame:GetAttribute("Short") == true
+				T.eq(desc.Text, if short then card.Short else card.Description)
+				T.eq(refs.Card.Name.Visible, not short, label .. " the name only on a card that isn't short (the tab shows it)")
+				local descBox = boxIn(desc, cardBox)
+				T.truthy(
+					TechShopView.fits(desc.Text, descBox[3], descBox[4], desc.TextSize, true),
+					`{label} {kindId}: the description fits`
+				)
+				T.truthy(descBox[2] + descBox[4] <= key[2] + 0.5, label .. " description above the key line")
+				if short then
+					local icon = boxIn(refs.Card.Icon, cardBox)
+					T.falsy(overlaps(descBox, icon), label .. " short description beside the icon")
+					T.falsy(overlaps(descBox, boxIn(refs.Card.Status, cardBox)), label .. " under the status")
+				end
+				-- the odds list shows whole rows only (no half-cut row at the bottom)
+				local m = BoostView.tableMetrics(screen.Compact)
+				local listHeight = refs.Odds.List.Size.Y.Offset
+				local rowsInView = listHeight / (m.Row + 2)
+				T.truthy(math.abs(rowsInView - math.floor(rowsInView + 1e-6)) < 1e-6, label .. " whole rows in view")
 				-- the summary row stays, with at least two rows under it (rarest first)
 				local list = refs.Odds.List
 				T.truthy(refs.Odds.ShowSummary and refs.Odds.Summary.Frame.Visible, label .. " the summary row stays")
@@ -840,6 +932,14 @@ return function(T, Loader)
 				T.eq(refs.Hint.Visible, not screen.Compact, label .. " text hint only on PC")
 			end
 		end
+		-- the small phone gets the short card (both boosts)
+		local small = SCREENS[5]
+		local smallRefs = BoostView.build(true)
+		BoostView.layout(smallRefs, true, small.Width, small.Height)
+		T.eq(smallRefs.Card.Frame:GetAttribute("Short"), true, "short card on the small phone")
+		local big = BoostView.build(false)
+		BoostView.layout(big, false, SCREENS[3].Width, SCREENS[3].Height)
+		T.eq(big.Card.Frame:GetAttribute("Short"), false, "the full card on a big PC")
 		-- the subtitle fits its line
 		local refs = BoostView.build(false)
 		BoostView.layout(refs, false, 1280, 684)
