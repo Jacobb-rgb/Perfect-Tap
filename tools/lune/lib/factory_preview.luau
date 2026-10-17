@@ -4,10 +4,9 @@
 	origin facing -Z, the roster machines placed on the grid the way a player
 	would (express belts from the yard -> Splitter -> Brick / Plasma Furnace
 	-> Sell Box, a Robot Arm feeding an Alloy Furnace), ores and ingots on
-	the belts, and power: a Solar Panel and a Wind Turbine on a network of
-	Power Poles with cables to every machine they power. The cables follow
-	PowerLogic when it exists (the same networks the game computes),
-	otherwise the nearest pole.
+	the belts, and power: a Solar Panel, a Wind Turbine and a Fusion Reactor on a network of
+	Power Poles with cables to every machine they power (PowerLogic: the
+	same networks and cables the game computes).
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -45,10 +44,12 @@ Factory.Machines = {
 	{ Id = "Conveyor", X = 5, Z = 2, R = 2 },
 	{ Id = "SolarPanel", X = 0, Z = 10, R = 0 },
 	{ Id = "WindTurbine", X = 10, Z = 10, R = 0 },
+	{ Id = "FusionReactor", X = 9, Z = 1, R = 0 },
 	{ Id = "PowerPole", X = 2, Z = 9, R = 0 },
 	{ Id = "PowerPole", X = 6, Z = 10, R = 0 },
 	{ Id = "PowerPole", X = 9, Z = 9, R = 0 },
 	{ Id = "PowerPole", X = 1, Z = 6, R = 0 },
+	{ Id = "PowerPole", X = 9, Z = 5, R = 0 },
 }
 
 -- Items lying on belts: cell, item, offset along the belt (-0.5..0.5 of a cell).
@@ -63,22 +64,6 @@ Factory.Items = {
 	{ X = 3, Z = 1, D = { K = "Alloy", O = "Gold", G = "Clean" }, T = 0 },
 	{ X = 5, Z = 2, D = { K = "Ingot", O = "Copper", G = "Clean" }, T = 0 },
 }
-
--- Highest point of a model near its middle (Lune has no GetBoundingBox).
-local function topOf(model: any): any
-	local pivot = model:GetPivot().Position
-	local top = pivot.Y
-	for _, part in model:GetDescendants() do
-		if part:IsA("BasePart") then
-			local p = part.CFrame.Position
-			local dx, dz = p.X - pivot.X, p.Z - pivot.Z
-			if dx * dx + dz * dz < 2.5 then
-				top = math.max(top, p.Y + part.Size.Y / 2)
-			end
-		end
-	end
-	return V3.new(pivot.X, top, pivot.Z)
-end
 
 local function cablePoint(pole: any, name: string): any
 	local base = pole.PrimaryPart
@@ -131,81 +116,47 @@ function Factory.build(Loader: any, parent: any, level: number?)
 		model.Parent = root
 	end
 
-	-- power cables: pole <-> pole, pole -> each machine it powers
-	local okLogic, PowerLogic = pcall(Loader.requirePath, "ReplicatedStorage.Shared.Machines.PowerLogic")
-	local poles = {}
-	for i, entry in Factory.Machines do
-		if entry.Id == "PowerPole" then
-			table.insert(poles, i)
-		end
-	end
-	local links: { { number } } = {}
-	local feeds: { { number } } = {}
-	local fromLogic = false
-	if okLogic and type(PowerLogic) == "table" and type(PowerLogic.cables) == "function" then
-		-- PowerLogic.cables(entries, levels) -> links { {pole, pole} }, feeds { {pole, machine} } (entry indexes)
-		local ok, l, f = pcall(PowerLogic.cables, Factory.Machines, {})
-		if ok and l and f then
-			links, feeds, fromLogic = l, f, true
-		end
-	end
-	if not fromLogic then
-		local rules = MachineData.PowerRules
-		local function cheb(ax: number, az: number, bx: number, bz: number): number
-			return math.max(math.abs(ax - bx), math.abs(az - bz))
-		end
-		for a = 1, #poles do
-			for b = a + 1, #poles do
-				local pa, pb = Factory.Machines[poles[a]], Factory.Machines[poles[b]]
-				if cheb(pa.X, pa.Z, pb.X, pb.Z) <= rules.PoleLink then
-					table.insert(links, { poles[a], poles[b] })
-				end
-			end
-		end
-		for i, entry in Factory.Machines do
-			local info = MachineData.ById[entry.Id]
-			if (info.Power or 0) > 0 or (info.PowerOut or 0) > 0 then
-				local w, d = Grid.footprint(entry.Id, entry.R)
-				local best, bestDist = nil, math.huge
-				for _, p in poles do
-					local pole = Factory.Machines[p]
-					for cx = entry.X, entry.X + w - 1 do
-						for cz = entry.Z, entry.Z + d - 1 do
-							local dist = cheb(cx, cz, pole.X, pole.Z)
-							if dist <= rules.PoleReach and dist < bestDist then
-								best, bestDist = p, dist
-							end
-						end
-					end
-				end
-				if best then
-					table.insert(feeds, { best, i })
-				end
-			end
-		end
-	end
-	for _, pair in links do
-		local a, b = models[pair[1]], models[pair[2]]
-		for _, name in { "CableL", "CableR" } do
-			KitMachines.cable(root, cablePoint(a, name), cablePoint(b, name), 0.9)
-		end
-	end
-	for _, pair in feeds do
-		local pole, target = models[pair[1]], models[pair[2]]
-		local to = topOf(target) - V3.new(0, 0.15, 0)
+	-- power cables exactly as the game draws them (PowerLogic networks, the
+	-- PowerController geometry: one cable between the facing insulators of
+	-- linked poles, one from the nearest insulator down to the top of each
+	-- machine / generator a pole feeds; Beams in game, parts here)
+	local PowerLogic = Loader.requirePath("ReplicatedStorage.Shared.Machines.PowerLogic")
+	local result = PowerLogic.compute(Factory.Machines, {})
+	local function insulator(pole: any, toward: any): any
 		local l, r = cablePoint(pole, "CableL"), cablePoint(pole, "CableR")
-		local from = if (l - to).Magnitude < (r - to).Magnitude then l else r
-		KitMachines.cable(root, from, to, 0.6)
+		return if (l - toward).Magnitude <= (r - toward).Magnitude then l else r
 	end
-	print(
-		string.format(
-			"Factory: %d machines, %d pole links, %d feeds (%s)",
-			#Factory.Machines,
-			#links,
-			#feeds,
-			if fromLogic then "PowerLogic" else "nearest pole"
-		)
-	)
+	local function sag(a: any, b: any): number
+		return math.clamp((a - b).Magnitude * 0.045, 0.25, 1.6)
+	end
+	local links, feeds = 0, 0
+	for i, pole in result.Poles do
+		local model = models[i]
+		local base = model.PrimaryPart
+		for _, j in pole.Links do
+			if j > i then
+				local other = models[j].PrimaryPart
+				local a = insulator(model, other.CFrame.Position)
+				local b = insulator(models[j], base.CFrame.Position)
+				KitMachines.cable(root, a, b, sag(a, b))
+				links += 1
+			end
+		end
+		for _, j in pole.Feeds do
+			local target = models[j].PrimaryPart
+			local a = insulator(model, target.CFrame.Position)
+			local status = target:FindFirstChild("Status")
+			local top = if status then status.CFrame.Position.Y - 1.5 else 3
+			local y = math.min(top, a.Y - 0.4 - target.CFrame.Position.Y)
+			local b = target.CFrame:PointToWorldSpace(V3.new(0, y, 0))
+			KitMachines.cable(root, a, b, sag(a, b))
+			feeds += 1
+		end
+	end
+	for _, net in result.Networks do
+		print(string.format("  network %s: supply %d, demand %d, speed %.2f", net.Id, net.Supply, net.Demand, net.Speed))
+	end
+	print(string.format("Factory: %d machines, %d pole links, %d feeds", #Factory.Machines, links, feeds))
 	return root
 end
 

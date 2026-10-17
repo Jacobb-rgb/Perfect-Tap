@@ -35,7 +35,7 @@ src/shared/Config/MachineData.luau; the owner can change them.
 | Robot Arm | every 1.5 s (faster with Speed and power): takes the first finished item (Entry.Out) of the machine behind it and inserts it into the machine in front of it, if that one accepts it |
 | Sell Box | sells every item that goes in at Tobin's price (SellService.priceOf), coins to the owner |
 | Express Conveyor | a belt with `SpeedMult` 2 |
-| Power | PowerRules: poles link within 6 cells, power machines/generators with a footprint cell within 3 cells; machine speed = 0.6 + 0.4 * min(1, supply / demand), 0.6 when on no powered network; generators make PowerOut * (1 + 0.25 * Speed level) |
+| Power | PowerRules: poles link within 6 cells, power machines/generators with a footprint cell within 3 cells; machine speed = 0.6 + 0.4 * min(1, supply / demand), 0.6 when on no powered network; generators make PowerOut * (1 + 0.25 * Speed level). The starter tier (Clay Furnace, Crusher, Auto Cleaner, Iron Box, Splitter) needs no power, so a new player is never slowed; power matters from the Brick Furnace up. Poles use belt slots |
 | Upgrades | Speed level 1..5 (Tech shop): processors/arm/splitter/sorter faster, generators more power; the crystal look = min(4, level); after a Speed buy the player's models of that type are rebuilt |
 
 ## Packages (separate files, built in parallel worktrees, then integrated)
@@ -48,6 +48,20 @@ src/shared/Config/MachineData.luau; the owner can change them.
 - **WP-Power**: PowerLogic (new, pure: networks), PowerService (new), PowerController (new, client cables), the power
   line + "NeedsOtherOre" + `Detail` lines in MachineBillboard, tests.
 - **Integration** (Claude): boot ORDER entries (server + client), check.sh, previews, QA.
+
+## Status (2026-10-17)
+All three packages are built, merged into art/machines and booted (server ORDER: LogisticsService, PowerService;
+client ORDER: PowerController):
+- WP-Proc: the new processors, Batch, grade-up, shards (+ toast), the Alloy Furnace (it refuses a 4th ingot of the same
+  ore so another ore always fits), job times / speedFactor, the Speed-buy look refresh (refresh fires the layout
+  listeners), furnace/polisher/turbine effects.
+- WP-Logi: LogisticsService (Splitter, Sorter with a "Change Sort" prompt + SorterCycle, Robot Arm, Sell Box that also
+  reaches SellService.onSold via notifySold), MachineService.emitSide, Express belt speed. The arm holds the machine
+  behind it from emitting (State.NextEmit) while the front machine can take its items.
+- WP-Power: PowerLogic (networks, MST cable links), PowerService (attributes, speed modifier), PowerController
+  (Beam cables, info signs near your own poles/generators), MachineBillboard power / Detail / NeedsOtherOre lines.
+- Preview: scene `factory` (tools/lune/lib/factory_preview.luau, tools/preview/factory_shots.json).
+Still "coming soon": Restoration Table (artifacts), Belt Lift and Slide (floors).
 
 ## Done when
 A player can buy any roster machine in the Tech shop, place it, and it works as above; power poles show cables and

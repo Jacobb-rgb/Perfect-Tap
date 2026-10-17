@@ -130,7 +130,6 @@ MachineData.List = {
 		WrongHint = FURNACE_HINT,
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5) },
-		Power = 5,
 	},
 	{
 		Id = "Crusher",
@@ -148,7 +147,6 @@ MachineData.List = {
 		WrongHint = "The Crusher only takes CLEAN ore.",
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1) },
-		Power = 8,
 	},
 	{
 		Id = "Anvil",
@@ -181,7 +179,6 @@ MachineData.List = {
 		GradeChances = QUALITY_LEVELS[1],
 		QualityLevels = QUALITY_LEVELS,
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1), Quality = scaled(QUALITY_CURVE, 1) },
-		Power = 10,
 	},
 	{
 		Id = "IronBox",
@@ -201,7 +198,6 @@ MachineData.List = {
 		WrongHint = "The Iron Box sorts ore, crushed ore and ingots.",
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1) },
-		Power = 2,
 	},
 	{
 		Id = "SellChute",
@@ -274,7 +270,6 @@ MachineData.List = {
 		LoadText = "Split",
 		WrongHint = "The Splitter can't take that.",
 		ConveyorFaces = "NoFront",
-		Power = 1,
 		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5) },
 	},
 	{
@@ -662,6 +657,9 @@ end
 	  UnpoweredSpeed                      when it is on no network with power,
 	  UnpoweredSpeed + (1 - Unpowered) * min(1, supply / demand)  otherwise.
 	A generator makes PowerOut, PowerPerLevel more per Speed level.
+	The starter tier (Clay Furnace, Crusher, Auto Cleaner, Iron Box,
+	Splitter) needs no power, so a new player is never slowed; power
+	matters from the Brick Furnace up (Claude's proposal, 2026-10-17).
 ]]
 MachineData.PowerRules = {
 	UnpoweredSpeed = 0.6,

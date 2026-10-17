@@ -19,6 +19,7 @@ local ORDER = {
 	"PromptController",
 	"CleaningController",
 	"MachineFxController",
+	"PowerController", -- cables between poles and the machines they power
 	"PenController",
 	"IronBoxController",
 	"PodiumController",

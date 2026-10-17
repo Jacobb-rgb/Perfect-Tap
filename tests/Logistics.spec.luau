@@ -28,11 +28,14 @@ return function(T, Loader)
 	local internals = MachineService._test
 	local logi = LogisticsService._test
 
-	-- a speed modifier that only works while a test turns it on
+	-- a speed modifier that only works while a test turns it on (added after
+	-- every MachineService reset, which clears the modifiers)
 	local boost: { [string]: number } = {}
-	MachineService.addSpeedModifier(function(m: any): number
-		return boost[m.Id] or 1
-	end)
+	local function addBoost()
+		MachineService.addSpeedModifier(function(m: any): number
+			return boost[m.Id] or 1
+		end)
+	end
 
 	local function deepCopy(v: any): any
 		if type(v) ~= "table" then
@@ -112,6 +115,7 @@ return function(T, Loader)
 			return record
 		end)
 		internals.reset()
+		addBoost()
 		LogisticsService.init()
 		-- stand-ins with an intake: the answer per type decides canAccept, inserts are logged
 		for _, id in { "Crusher", "ClayFurnace" } do

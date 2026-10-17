@@ -40,6 +40,8 @@ local ORDER = {
 	"ProcessingService",
 	"IronBoxService",
 	"SellService",
+	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
+	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
 	"BuildService",
 	"AccessService",

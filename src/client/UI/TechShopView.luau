@@ -624,6 +624,16 @@ local function doneBuy(text: string): Buy
 	return { Text = text, Price = nil, Reason = "Max", CanBuy = false }
 end
 
+-- " Needs 10 power." / " Makes 40 power." after a machine's description (MachineData Power / PowerOut).
+local function powerNote(machine: MachineData.Machine): string
+	if (machine.PowerOut or 0) > 0 then
+		return ` Makes {machine.PowerOut} power.`
+	elseif (machine.Power or 0) > 0 then
+		return ` Needs {machine.Power} power.`
+	end
+	return ""
+end
+
 local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any }, coins: number, order: number): Card
 	local machine = MachineData.ById[entry.Machine :: string]
 	local owned = EconomyConfig.inventoryCount(state, machine.Id)
@@ -659,7 +669,7 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		Tab = "Machines",
 		Order = order,
 		Title = machine.Name,
-		Description = machine.Description,
+		Description = machine.Description .. powerNote(machine),
 		Detail = if full then EconomyConfig.TechShop.Reasons.MaxOwned else detail,
 		DetailColor = if full or slotsFull then Theme.Bad elseif owned > 0 or placed > 0 then Theme.Text else Theme.TextDim,
 		Chip = `{machine.Size[1]}x{machine.Size[2]}`,

@@ -945,6 +945,7 @@ MachineService._test = {
 		table.clear(layoutCallbacks)
 		table.clear(layoutPending)
 		table.clear(actions)
+		table.clear(speedModifiers)
 	end,
 }
 

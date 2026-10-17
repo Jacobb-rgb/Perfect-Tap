@@ -130,8 +130,8 @@ function Placement.counts(entries: { Entry }): (number, number)
 	for _, entry in entries do
 		local info = known(entry.Id)
 		if info then
-			if info.IsConveyor then
-				conveyors += 1
+			if info.IsConveyor or info.IsPole then
+				conveyors += 1 -- power poles use belt slots
 			elseif not info.SlotFree then
 				machines += 1
 			end
@@ -174,7 +174,7 @@ function Placement.validate(
 	end
 	if limits and not ignore then
 		local machines, conveyors = Placement.counts(entries)
-		if info.IsConveyor then
+		if info.IsConveyor or info.IsPole then
 			if conveyors >= limits.Conveyors then
 				return false, "NoConveyorSlots"
 			end

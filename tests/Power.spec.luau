@@ -42,8 +42,12 @@ return function(T, Loader)
 		T.eq(PowerLogic.kindOf(MachineData.ById.SolarPanel), "Generator")
 		T.eq(PowerLogic.kindOf(MachineData.ById.WindTurbine), "Generator")
 		T.eq(PowerLogic.kindOf(MachineData.ById.FusionReactor), "Generator")
-		T.eq(PowerLogic.kindOf(MachineData.ById.ClayFurnace), "Machine")
-		T.eq(PowerLogic.kindOf(MachineData.ById.Splitter), "Machine")
+		T.eq(PowerLogic.kindOf(MachineData.ById.BrickFurnace), "Machine")
+		T.eq(PowerLogic.kindOf(MachineData.ById.Sorter), "Machine")
+		-- the starter tier needs no power (a new player is never slowed)
+		for _, id in { "ClayFurnace", "Crusher", "AutoCleaner", "IronBox", "Splitter" } do
+			T.eq(PowerLogic.kindOf(MachineData.ById[id]), "Other", id .. " needs no power")
+		end
 		T.eq(PowerLogic.kindOf(MachineData.ById.SellBox), "Other")
 		T.eq(PowerLogic.kindOf(MachineData.ById.Conveyor), "Other")
 		T.eq(PowerLogic.kindOf(nil), "Other")
@@ -116,7 +120,7 @@ return function(T, Loader)
 	T.test("PowerLogic: machines and generators in PoleReach join, beyond it they don't", function()
 		T.eq(RULES.PoleReach, 3, "the rule this test was written for")
 		-- a 2x2 furnace 3 cells right of the pole (its left column at x 8)
-		local near = PowerLogic.compute({ e("PowerPole", 5, 5), e("ClayFurnace", 8, 5), e("SolarPanel", 2, 2) })
+		local near = PowerLogic.compute({ e("PowerPole", 5, 5), e("BrickFurnace", 8, 5), e("SolarPanel", 2, 2) })
 		T.eq(near.Machines[2].Network, "5,5", "furnace in reach")
 		T.eq(near.Machines[2].Pole, 1, "fed by the pole")
 		T.eq(near.Machines[3].Network, "5,5", "solar panel in reach (its corner cell 3,3)")
@@ -124,7 +128,7 @@ return function(T, Loader)
 		T.eq(near.Poles[1].Feeds[2], 2, "then the furnace")
 		T.truthy(near.Machines[2].Powered, "powered")
 		-- one cell further: out of reach
-		local far = PowerLogic.compute({ e("PowerPole", 5, 5), e("ClayFurnace", 9, 5), e("SolarPanel", 0, 0) })
+		local far = PowerLogic.compute({ e("PowerPole", 5, 5), e("BrickFurnace", 9, 5), e("SolarPanel", 0, 0) })
 		T.eq(far.Machines[2].Network, nil, "furnace out of reach")
 		T.eq(far.Machines[3].Network, nil, "panel out of reach (its corner cell 1,1 is 4 away)")
 		T.falsy(far.Machines[2].Powered, "not powered")
@@ -140,46 +144,46 @@ return function(T, Loader)
 			e("PowerPole", 0, 0),
 			e("WindTurbine", 1, 1), -- 40 power on the left network
 			e("PowerPole", 10, 0),
-			e("Crusher", 9, 1), -- 8 needed on the right network, no generator there
-			e("ClayFurnace", 1, 3), -- 5 needed on the left network
+			e("Polisher", 9, 1), -- 12 needed on the right network, no generator there
+			e("BrickFurnace", 1, 3), -- 10 needed on the left network
 		})
 		T.eq(#result.Networks, 2)
 		local left, right = result.ByNetwork["0,0"], result.ByNetwork["10,0"]
 		T.truthy(left and right, "both networks by id")
 		T.eq(left.Supply, 40)
-		T.eq(left.Demand, 5)
+		T.eq(left.Demand, 10)
 		T.eq(right.Supply, 0)
-		T.eq(right.Demand, 8)
+		T.eq(right.Demand, 12)
 		T.eq(result.Machines[5].Speed, 1, "left furnace at full speed")
 		T.truthy(result.Machines[5].Powered, "left furnace powered")
-		T.eq(result.Machines[4].Network, "10,0", "the crusher is on a network...")
+		T.eq(result.Machines[4].Network, "10,0", "the polisher is on a network...")
 		T.falsy(result.Machines[4].Powered, "...without power")
 		T.eq(result.Machines[4].Speed, UNPOWERED, "so it is slow")
 		T.eq(result.Networks[1].Id, "0,0", "networks in the order of their first poles")
 	end)
 
 	T.test("PowerLogic: a machine in reach of two networks joins the nearest pole's", function()
-		-- poles 8 cells apart (not linked); a 1x1 Splitter 3 cells from the left
+		-- poles 8 cells apart (not linked); a 1x1 Sorter 3 cells from the left
 		-- pole and 5 from the right one
-		local result = PowerLogic.compute({ e("PowerPole", 8, 0), e("PowerPole", 0, 0), e("Splitter", 3, 0) })
+		local result = PowerLogic.compute({ e("PowerPole", 8, 0), e("PowerPole", 0, 0), e("Sorter", 3, 0) })
 		T.eq(#result.Networks, 2)
 		T.eq(result.Machines[3].Network, "0,0", "nearest pole")
 		T.eq(result.Machines[3].Pole, 2)
 		T.eq(#result.Poles[1].Feeds, 0, "the far pole feeds nothing")
 		-- equal cells (3 from both): the shorter straight line wins (a 2x2
 		-- furnace at 3..4 x 2..3: centre 4,3; poles at 0,0 and 7,1 are 7 apart)
-		local line = PowerLogic.compute({ e("PowerPole", 0, 0), e("PowerPole", 7, 1), e("ClayFurnace", 3, 2) })
+		local line = PowerLogic.compute({ e("PowerPole", 0, 0), e("PowerPole", 7, 1), e("BrickFurnace", 3, 2) })
 		T.eq(#line.Networks, 2, "not linked")
 		T.eq(line.Machines[3].Network, "7,1", "closer in a straight line")
 		-- a perfect tie: the first pole in cell order, whatever the entry order
-		local tie = PowerLogic.compute({ e("PowerPole", 7, 0), e("PowerPole", 0, 0), e("ClayFurnace", 3, 0) })
+		local tie = PowerLogic.compute({ e("PowerPole", 7, 0), e("PowerPole", 0, 0), e("BrickFurnace", 3, 0) })
 		T.eq(tie.Machines[3].Network, "0,0", "first pole in cell order")
 		T.eq(tie.Machines[3].Pole, 2)
 	end)
 
 	T.test("PowerLogic: supply / demand -> speed (full, partial, none)", function()
-		-- full: 40 for 8
-		local full = PowerLogic.compute({ e("PowerPole", 4, 4), e("WindTurbine", 1, 4), e("Crusher", 6, 4) })
+		-- full: 40 for 12
+		local full = PowerLogic.compute({ e("PowerPole", 4, 4), e("WindTurbine", 1, 4), e("Polisher", 6, 4) })
 		T.eq(full.Machines[3].Speed, 1, "full")
 		T.truthy(full.Machines[3].Powered)
 		-- partial: 15 for 20 -> 0.6 + 0.4 * 0.75
@@ -189,12 +193,12 @@ return function(T, Loader)
 		T.truthy(partial.Machines[3].Powered, "slowed but powered")
 		T.near(partial.Networks[1].Speed, 0.9, 1e-9, "network speed")
 		-- none: a pole and machines but no generator
-		local none = PowerLogic.compute({ e("PowerPole", 4, 4), e("Crusher", 6, 4), e("ClayFurnace", 1, 4) })
+		local none = PowerLogic.compute({ e("PowerPole", 4, 4), e("Polisher", 6, 4), e("BrickFurnace", 1, 4) })
 		T.eq(none.Machines[2].Speed, UNPOWERED, "none")
 		T.falsy(none.Machines[2].Powered)
-		T.eq(none.Networks[1].Demand, 13, "8 + 5")
+		T.eq(none.Networks[1].Demand, 22, "12 + 10")
 		-- no pole at all: everything slow, generators make nothing for anyone
-		local alone = PowerLogic.compute({ e("WindTurbine", 0, 0), e("Crusher", 2, 0) })
+		local alone = PowerLogic.compute({ e("WindTurbine", 0, 0), e("Polisher", 2, 0) })
 		T.eq(alone.Machines[2].Speed, UNPOWERED, "a generator without a pole powers nothing")
 		T.eq(alone.Machines[1].PowerOut, 40, "it still makes its power")
 		T.eq(#alone.Networks, 0)
@@ -208,16 +212,16 @@ return function(T, Loader)
 		local shared = PowerLogic.compute({
 			e("PowerPole", 5, 5),
 			e("SolarPanel", 2, 5), -- 15
-			e("Crusher", 6, 5), -- 8
-			e("ClayFurnace", 5, 7), -- 5
-			e("Splitter", 4, 4), -- 1
+			e("Polisher", 6, 5), -- 12
+			e("BrickFurnace", 5, 7), -- 10
+			e("RobotArm", 4, 4), -- 4
 			e("Sorter", 3, 3), -- 2
 		})
 		local network = shared.Networks[1]
 		T.eq(network.Supply, 15)
-		T.eq(network.Demand, 16)
+		T.eq(network.Demand, 28)
 		for i = 3, 6 do
-			T.near(shared.Machines[i].Speed, speedOn(15, 16), 1e-9, `machine {i} shares the speed`)
+			T.near(shared.Machines[i].Speed, speedOn(15, 28), 1e-9, `machine {i} shares the speed`)
 		end
 	end)
 
@@ -246,14 +250,14 @@ return function(T, Loader)
 	T.test("PowerLogic: deterministic whatever the entry order, broken entries skipped", function()
 		local list = {
 			e("PowerPole", 6, 0),
-			e("Crusher", 7, 2),
+			e("Polisher", 7, 2),
 			e("PowerPole", 0, 0),
 			e("WindTurbine", 1, 2),
 			e("PowerPole", 3, 0),
-			e("ClayFurnace", 4, 2),
+			e("BrickFurnace", 4, 2),
 			{ Id = "Nope", X = 1, Z = 1, R = 0 },
-			{ Id = "Crusher", X = 0 / 0, Z = 1, R = 0 },
-			{ Id = "Crusher", X = 1.5, Z = 1, R = 0 },
+			{ Id = "Polisher", X = 0 / 0, Z = 1, R = 0 },
+			{ Id = "Polisher", X = 1.5, Z = 1, R = 0 },
 		}
 		local function snapshot(entries: { any }): { [string]: string }
 			local result = PowerLogic.compute(entries)
@@ -417,14 +421,14 @@ return function(T, Loader)
 		w.add("PowerPole", 5, 5)
 		w.add("WindTurbine", 2, 5)
 		PowerService._test.recompute(w.player)
-		local crusher = w.add("Crusher", 6, 5)
+		local crusher = w.add("Polisher", 6, 5)
 		T.eq(PowerService.resultOf(crusher), nil, "not computed yet")
-		T.eq(PowerService.speedOf(crusher), 1, "computed on the spot: 40 for 8")
+		T.eq(PowerService.speedOf(crusher), 1, "computed on the spot: 40 for 12")
 		T.eq(crusher.Model:GetAttribute("PowerSpeed"), 1)
-		local far = w.add("Crusher", 0, 11)
+		local far = w.add("Polisher", 0, 11)
 		T.eq(PowerService.speedOf(far), UNPOWERED, "no pole near")
 		far.Removed = true
-		local ghost = w.add("ClayFurnace", 10, 10)
+		local ghost = w.add("BrickFurnace", 10, 10)
 		ghost.Removed = true
 		T.eq(PowerService.speedOf(ghost), UNPOWERED, "a removed machine never computes")
 	end)
@@ -511,7 +515,7 @@ return function(T, Loader)
 		T.eq(#modifiers, 1, "one speed modifier")
 		T.eq(#layouts, 1, "one layout listener")
 		T.eq(#boughts, 1, "one shop listener")
-		local crusher = w.add("Crusher", 6, 5)
+		local crusher = w.add("Polisher", 6, 5)
 		w.add("PowerPole", 5, 5)
 		w.add("SolarPanel", 2, 5)
 		layouts[1](w.player, 1)
@@ -550,7 +554,7 @@ return function(T, Loader)
 			{ Id = "PowerPole", X = 5, Z = 5, R = 0 },
 			{ Id = "SolarPanel", X = 2, Z = 5, R = 0 }, -- 18.75
 			{ Id = "BrickFurnace", X = 6, Z = 6, R = 0 }, -- 10
-			{ Id = "Crusher", X = 9, Z = 9, R = 0 }, -- 8, out of reach (4 cells)
+			{ Id = "RobotArm", X = 9, Z = 9, R = 0 }, -- 4, out of reach (4 cells)
 		}
 		local modifiers = {}
 		patch(DataService, "get", function(p)
@@ -590,7 +594,7 @@ return function(T, Loader)
 			for _, machine in MachineService.ofPlot(3) do
 				byId[machine.Id] = machine
 			end
-			local furnace, crusher = byId.BrickFurnace, byId.Crusher
+			local furnace, crusher = byId.BrickFurnace, byId.RobotArm
 			T.eq(furnace.Model:GetAttribute("PowerSpeed"), 1, "18.75 for 10")
 			T.eq(furnace.Model:GetAttribute("Powered"), true)
 			T.eq(crusher.Model:GetAttribute("PowerSpeed"), UNPOWERED, "out of reach")
@@ -603,8 +607,8 @@ return function(T, Loader)
 			-- move the crusher into reach: the layout listener recomputes
 			T.truthy(MachineService.move(crusher, 7, 3, 0), "moved")
 			task.wait()
-			T.eq(crusher.Model:GetAttribute("PowerSpeed"), 1, "now sharing 18.75 for 18")
-			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 18)
+			T.eq(crusher.Model:GetAttribute("PowerSpeed"), 1, "now sharing 18.75 for 14")
+			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 14)
 			T.eq(modifiers[1](crusher), 1)
 			-- the panel goes back into the Build menu: 0 for 18
 			T.truthy(MachineService.pickup(byId.SolarPanel), "picked up")
