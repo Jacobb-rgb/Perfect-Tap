@@ -23,6 +23,10 @@ return function(T, Loader)
 	local ProcessingService = Loader.requirePath("ServerScriptService.Server.Services.ProcessingService")
 	local IronBoxService = Loader.requirePath("ServerScriptService.Server.Services.IronBoxService")
 	local IronBoxView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.IronBoxView")
+	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
+	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+	local Vector3 = roblox.Vector3
 	local Workspace = Loader.game:GetService("Workspace")
 
 	local PLOT = 4
@@ -224,7 +228,11 @@ return function(T, Loader)
 		T.eq(attr(m, "LastRoute"), "Send")
 		T.eq(attr(m, "Sent"), 1)
 		-- dirty ore always passes on (and the box can't see through the dirt)
-		now = sortOne(w, m, item("Raw", "Diamond"), now + 1)
+		T.truthy(MachineService.insertDesc(m, item("Raw", "Diamond"), USER, "Belt"), "dirty Diamond goes in")
+		tick(m, now + 1)
+		T.eq(attr(m, "WorkOre"), "", "its colour doesn't show on the billboard while it is sorted")
+		now = m.State.Job.EndsAt
+		tick(m, now)
 		T.eq(m.Entry.Out[2].K, "Raw", "dirty Diamond passes on")
 		T.eq(attr(m, "LastKind"), "Raw")
 		T.eq(attr(m, "LastOre"), "", "the ore stays a secret")
@@ -269,7 +277,12 @@ return function(T, Loader)
 	end)
 
 	withWorld("IronBox: a full pen sends kept ore out of the front, with a hint", function(w)
+		local now = 1000
+		box.setClock(function()
+			return now
+		end)
 		local m = place(w)
+		T.eq(attr(m, "PenFull"), false, "PenFull starts off")
 		local capacity = PenService.capacityOf(w.data)
 		for i = 1, capacity do
 			w.data.Storage[i] = item("Clean", "Coal", "Rough")
@@ -279,11 +292,44 @@ return function(T, Loader)
 		T.eq(count(m.Entry.Out), 1, "out of the front instead")
 		T.eq(m.Entry.Out[1].O, "Gold")
 		T.eq(attr(m, "LastRoute"), "Send")
+		T.eq(attr(m, "PenFull"), true, "the box's billboard says the pen is full")
 		local hints = notesNamed(w, "Notify")
 		T.eq(#hints, 1, "one hint")
 		T.eq(hints[1].Payload.Text, IronBoxService.PenFullText)
-		sortOne(w, m, item("Clean", "Gold", "Clean"), 20)
-		T.eq(#notesNamed(w, "Notify"), 1, "the hint is throttled")
+		-- a factory left running with a full pen: no more toasts, however long
+		local t = 20
+		for _ = 1, 40 do
+			now += 30
+			t = sortOne(w, m, item("Clean", "Gold", "Clean"), t + 1)
+			MachineLogic.popOut(m.Entry)
+		end
+		T.eq(#notesNamed(w, "Notify"), 1, "only once while the pen stays full (20 minutes)")
+		T.eq(attr(m, "PenFull"), true, "still says so")
+		-- sending clean ore on doesn't clear it while the pen is still full
+		t = sortOne(w, m, item("Clean", "Coal", "Clean"), t + 1)
+		T.eq(attr(m, "PenFull"), true, "still full")
+		-- the player sells some ore: the sign goes as soon as the save changes
+		local function sellOneAndRefill(wait: number)
+			table.remove(w.data.Storage)
+			box.penRoomCheck(w.player)
+			T.eq(attr(m, "PenFull"), false, "room again")
+			t = sortOne(w, m, item("Clean", "Gold", "Clean"), t + 1)
+			T.eq(attr(m, "LastRoute"), "Keep", "kept again")
+			T.eq(#w.data.Storage, capacity, "full again")
+			now += wait
+			t = sortOne(w, m, item("Clean", "Gold", "Clean"), t + 1)
+			T.eq(attr(m, "PenFull"), true, "full again")
+			MachineLogic.popOut(m.Entry)
+		end
+		-- the pen turns full again long after the last toast: one more toast
+		sellOneAndRefill(10)
+		T.eq(#notesNamed(w, "Notify"), 2, "a new turn to full")
+		-- full again 10 s later: the cooldown keeps it quiet...
+		sellOneAndRefill(10)
+		T.eq(#notesNamed(w, "Notify"), 2, "within the cooldown")
+		-- ...but not after it
+		sellOneAndRefill(1000)
+		T.eq(#notesNamed(w, "Notify"), 3, "after the cooldown")
 	end)
 
 	withWorld("IronBox: a blocked front waits, a kept item still goes into the pen", function(w)
@@ -511,6 +557,124 @@ return function(T, Loader)
 		T.eq(attr(m, "LastRoute"), "Send", "Gold sent on after SetKeep false")
 	end)
 
+	---------------------------------------------------------------- the pen's sorting board
+
+	withWorld("Sorting board: only with Pen Automation, opens the keep list for its owner", function(w)
+		local data = w.data
+		data.Upgrades.PenAutomation = 0
+		IronBoxService.refreshBoard(w.player)
+		T.eq(IronBoxService.boardOf(PLOT), nil, "no board without the upgrade")
+		box.openBoard(w.player, PLOT)
+		T.eq(#notesNamed(w, "OpenUI"), 0, "nothing to open")
+		-- level 1 (the sorting billboard) brings it
+		data.Upgrades.PenAutomation = EconomyConfig.PenAutomation.Billboard
+		IronBoxService.refreshBoard(w.player)
+		local board = IronBoxService.boardOf(PLOT)
+		T.truthy(board, "the board stands")
+		T.truthy(board.Parent == PlotService.model(PLOT), "in the plot (its yard when there is one)")
+		T.eq(board.Name, IronBoxService.BoardName)
+		T.eq(board:GetAttribute("MachineId"), nil, "not a machine (build mode and machine effects leave it alone)")
+		local expected = PlotService.plotCFrame(PLOT) * IronBoxService.boardPoint()
+		T.near((board:GetPivot().Position - expected.Position).Magnitude, 0, 1e-3, "at its spot")
+		-- beside the pen gate, in front of the pen's front wall (not on the walkway into the yard)
+		local spot = IronBoxService.boardPoint().Position
+		local gate = BaseLayout.Pen.PromptPoint
+		local area = BaseLayout.Pen.Area
+		local flat = Vector3.new(spot.X - gate.X, 0, spot.Z - gate.Z).Magnitude
+		T.truthy(flat > 6 and flat < 9, "a few steps from the gate's prompts")
+		T.truthy(spot.Z < area.Center.Z - area.Size.Z / 2 - 0.5, "in front of the pen wall")
+		T.truthy(spot.X + 2.2 < area.Center.X + area.Size.X / 2 - 0.5, "inside the pen's width, clear of its corner")
+		T.truthy(spot.X - 2.2 > gate.X + 3.3 + 0.65 + 1, "a step clear of the gate post")
+		local prompt = board.PrimaryPart.Prompt:FindFirstChild(IronBoxService.BoardPromptName)
+		T.truthy(prompt, "Keep List prompt")
+		T.eq(prompt.ActionText, "Keep List")
+		T.truthy(prompt.KeyboardKeyCode == roblox.Enum.KeyCode.G and prompt.GamepadKeyCode == roblox.Enum.KeyCode.ButtonB, "G / B")
+		T.truthy(prompt:HasTag(PenService.PromptTag), "tagged like the pen's prompts (PenController: owner only)")
+		T.eq(prompt:GetAttribute("PlotId"), PLOT)
+		-- the owner opens the same keep list panel
+		box.openBoard(w.player, PLOT)
+		local opens = notesNamed(w, "OpenUI")
+		T.eq(#opens, 1, "opened")
+		T.eq(opens[1].Payload, "IronBox", "the keep list panel")
+		T.truthy(opens[1].Extra.Box == board, "for the board (range check)")
+		box.open(w.player, place(w))
+		T.eq(#notesNamed(w, "OpenUI"), 2, "an Iron Box opens the same panel")
+		-- not for a stranger
+		box.openBoard(w.stranger, PLOT)
+		T.eq(#notesNamed(w, "OpenUI"), 2, "not for a stranger")
+		T.eq(#notesNamed(w, "Notify"), 1, "a deny toast")
+		-- without the level (e.g. a reset save) the prompt does nothing, and the board goes
+		data.Upgrades.PenAutomation = 0
+		box.openBoard(w.player, PLOT)
+		T.eq(#notesNamed(w, "OpenUI"), 2, "level checked again")
+		IronBoxService.refreshBoard(w.player)
+		T.eq(IronBoxService.boardOf(PLOT), nil, "removed")
+		T.eq(PlotService.model(PLOT):FindFirstChild(IronBoxService.BoardName), nil, "out of the world")
+		-- level 2 (Direct Unload) keeps it; a released plot drops it
+		data.Upgrades.PenAutomation = EconomyConfig.PenAutomation.DirectUnload
+		IronBoxService.refreshBoard(w.player)
+		T.truthy(IronBoxService.boardOf(PLOT), "level 2 has it too")
+		box.removeBoard(PLOT)
+		T.eq(IronBoxService.boardOf(PLOT), nil, "gone with the plot")
+	end)
+
+	withWorld("Sorting board: shows what the keep list keeps", function(w)
+		local data = w.data
+		data.Upgrades.PenAutomation = 1
+		IronBoxService.refreshBoard(w.player)
+		local board = IronBoxService.boardOf(PLOT)
+		local gui = board.Display.BoardGui
+		local function swatches(): { any }
+			local list = {}
+			for _, child in gui.Swatches:GetChildren() do
+				if child:IsA("Frame") then
+					table.insert(list, child)
+				end
+			end
+			table.sort(list, function(a, b)
+				return a.LayoutOrder < b.LayoutOrder
+			end)
+			return list
+		end
+		-- Rare+: of Coal, Copper, Gold and Diamond only Gold and Diamond, best first
+		T.eq(gui.Mode.Text, "KEEPS RARE+")
+		local shown = swatches()
+		T.eq(#shown, 2, "two kept ores")
+		T.truthy(shown[1].BackgroundColor3 == OreData.ById.Diamond.Color, "Diamond first (best income)")
+		T.truthy(shown[2].BackgroundColor3 == OreData.ById.Gold.Color, "then Gold")
+		T.falsy(gui.Empty.Visible)
+		-- the list changes: the board follows on the next save change
+		box.action(w.player, "SetKeep", { Ore = "Coal", Keep = true })
+		IronBoxService.refreshBoard(w.player)
+		T.eq(gui.Mode.Text, "KEEPS MY LIST")
+		T.eq(#swatches(), 3, "Coal joins")
+		box.action(w.player, "SetKeepMany", { Ores = { "Coal", "Copper", "Gold", "Diamond" }, Keep = false })
+		IronBoxService.refreshBoard(w.player)
+		T.eq(#swatches(), 0, "nothing kept")
+		T.truthy(gui.Empty.Visible, "says so")
+		T.eq(gui.Empty.Text, "SENDS EVERYTHING ON")
+		-- Everything, with more ores than swatches: the last one counts the rest
+		data.KeepMode = "All"
+		for _, ore in OreData.List do
+			data.Discovered[ore.Id] = true
+		end
+		IronBoxService.refreshBoard(w.player)
+		T.eq(gui.Mode.Text, "KEEPS EVERYTHING")
+		local max = MachineBuilder.SortingBoard.MaxSwatches
+		shown = swatches()
+		T.eq(#shown, math.min(max, #OreData.List), "at most MaxSwatches")
+		if #OreData.List > max then
+			T.eq(shown[max].More.Text, `+{#OreData.List - max + 1}`, "+N on the last one")
+		end
+		-- nothing discovered yet
+		data.Discovered = {}
+		IronBoxService.refreshBoard(w.player)
+		T.eq(#swatches(), 0)
+		T.eq(gui.Empty.Text, "NO ORE FOUND YET")
+		-- the same board is reused
+		T.truthy(IronBoxService.boardOf(PLOT) == board, "not rebuilt")
+	end)
+
 	---------------------------------------------------------------- the view (pure)
 
 	T.test("IronBoxView: chips are the discovered ores, best income first", function()
@@ -581,12 +745,31 @@ return function(T, Loader)
 		local refs = IronBoxView.build()
 		T.eq(refs.Gui.Enabled, false, "starts closed")
 		T.truthy(refs.Modes.RarePlus and refs.Modes.List and refs.Modes.All, "three mode buttons")
+		-- the mode "everything" and the presets "set every chip" read differently
+		T.eq(refs.Modes.All.Text, "EVERYTHING")
+		T.eq(refs.AllKeep.Text, "SET ALL: KEEP")
+		T.eq(refs.AllSend.Text, "SET ALL: SEND")
+		for _, preset in { refs.AllKeep, refs.AllSend } do
+			for _, button in refs.Modes do
+				T.falsy(preset.Text == button.Text, "a preset never looks like a mode")
+			end
+		end
 		IronBoxView.setMode(refs, "List")
 		T.truthy(refs.Presets.Visible, "presets")
 		T.eq(refs.Modes.List:GetAttribute("Selected"), true)
+		T.truthy((refs.Reset.Parent :: any).Visible, "RESET in MY LIST")
+		T.eq(refs.Reset.Text, "RESET")
+		T.truthy(IronBoxView.modeText("List"):find("RESET", 1, true), "the line under the modes explains it")
 		IronBoxView.setMode(refs, "All")
 		T.eq(refs.Modes.List:GetAttribute("Selected"), false)
 		T.eq(refs.Modes.All:GetAttribute("Selected"), true)
+		T.falsy((refs.Reset.Parent :: any).Visible, "no RESET outside MY LIST")
+		-- RESET = ClearList: a custom list goes back to the Rare+ rule
+		local custom = { Discovered = { Coal = true, Gold = true }, KeepMode = "List", KeepList = { Coal = true, Gold = false } }
+		local after = IronBoxView.predict(custom, "ClearList", nil)
+		T.eq(next(after.KeepList), nil, "list emptied")
+		T.eq(MachineData.keepsOre(after.KeepMode, after.KeepList, "Gold"), true, "Gold kept again (Rare+)")
+		T.eq(MachineData.keepsOre(after.KeepMode, after.KeepList, "Coal"), false, "Coal sent on again")
 		local state = { Discovered = { Coal = true, Gold = true }, KeepMode = "RarePlus", KeepList = {} }
 		local created = IronBoxView.setEntries(refs, IronBoxView.entries(state))
 		T.eq(#created, 2, "two chips")
@@ -603,10 +786,12 @@ return function(T, Loader)
 		IronBoxView.layout(refs, false, 1600, 720)
 		T.eq(refs.Rows, 4)
 		T.truthy(refs.Panel.Size.Y.Offset <= 700, "fits a 720 screen")
+		T.eq(refs.Columns, 4, "four columns on a PC")
 		-- phones: 0.62 scale, a 667 x 375 pt screen; chips and buttons >= 44 pt
 		local phone = 0.62
 		IronBoxView.layout(refs, true, 667 / phone, (375 - 36) / phone)
 		T.truthy(refs.Rows >= 3, "three rows of chips")
+		T.eq(refs.Columns, 4, "four columns fit beside the coins")
 		T.falsy(refs.Info.Visible, "no info line on phones")
 		local modesRow = (refs.Modes.RarePlus.Parent :: any).Parent
 		local closeHolder = refs.Close.Parent :: any
@@ -616,10 +801,44 @@ return function(T, Loader)
 		T.eq(refs.Panel.AnchorPoint.X, 1, "on the right, clear of the HUD coins")
 		T.truthy(refs.Panel.Size.Y.Offset * phone <= 375 - 36, "fits the phone")
 		T.truthy(refs.Panel.Size.X.Offset * phone <= 667, "fits the phone's width")
-		T.truthy(refs.Grid.CellSize.Y.Offset * phone >= 44, "chips >= 44 pt")
-		T.truthy((refs.Modes.List.Parent :: any).Size.Y.Offset * phone >= 40, "mode buttons")
-		T.truthy((refs.AllKeep.Parent :: any).Size.Y.Offset * phone >= 40, "preset buttons")
-		T.truthy((refs.Close.Parent :: any).Size.Y.Offset * phone >= 44, "close button")
+		local function touchTargets(label: string)
+			T.truthy(refs.Grid.CellSize.Y.Offset * phone >= 44, label .. ": chips >= 44 pt")
+			for mode, button in refs.Modes do
+				T.truthy((button.Parent :: any).Size.Y.Offset * phone >= 44, `{label}: mode {mode} >= 44 pt`)
+			end
+			for _, button in { refs.AllKeep, refs.AllSend, refs.Reset } do
+				T.truthy((button.Parent :: any).Size.Y.Offset * phone >= 44, `{label}: {button.Text} >= 44 pt`)
+			end
+			T.truthy((refs.Close.Parent :: any).Size.Y.Offset * phone >= 44, label .. ": close button")
+		end
+		-- the chip grid always fits the list (it only scrolls vertically) and
+		-- the panel never covers the HUD coins
+		local function fits(label: string, maxWidth: number)
+			local grid = refs.Columns * refs.Grid.CellSize.X.Offset + (refs.Columns - 1) * refs.Grid.CellPadding.X.Offset
+			local listWidth = refs.Panel.Size.X.Offset - 16 -- List is the panel's width minus its left pad
+			T.eq(refs.Grid.FillDirectionMaxCells, refs.Columns, label .. ": grid columns")
+			T.truthy(grid + 12 <= listWidth, `{label}: {refs.Columns} columns fit the list`)
+			local left = maxWidth - 12 - refs.Panel.Size.X.Offset
+			T.truthy(left >= 16 + HudView.CoinsWidth, `{label}: clear of the coins`)
+			local row = refs.Panel.Size.X.Offset - 32
+			local used = 0
+			for _, button in { refs.AllKeep, refs.AllSend, refs.Reset } do
+				used += (button.Parent :: any).Size.X.Offset
+			end
+			T.truthy(used + 32 <= row, label .. ": the preset row fits")
+		end
+		touchTargets("667 x 375")
+		fits("667 x 375", 667 / phone)
+		-- a narrow phone (568 x 320 pt): three columns, clear of the coins
+		IronBoxView.layout(refs, true, 568 / phone, (320 - 36) / phone)
+		T.eq(refs.Columns, 3, "three columns on a narrow phone")
+		T.truthy(refs.Rows >= 2, "two rows of chips")
+		T.truthy(refs.Panel.Size.Y.Offset * phone <= 320 - 36, "fits its height")
+		touchTargets("568 x 320")
+		fits("568 x 320", 568 / phone)
+		-- portrait (390 x 844 pt): no room beside the coins, the whole width
+		local columns, width = IronBoxView.fitColumns(true, 390 / phone)
+		T.truthy(columns >= 2 and width <= 390 / phone - 24, "portrait fits the width")
 		IronBoxView.setHint(refs, "", "rbxasset://a", "rbxasset://b")
 		T.truthy(refs.PadHint.Visible and not refs.Hint.Visible, "gamepad glyphs")
 	end)

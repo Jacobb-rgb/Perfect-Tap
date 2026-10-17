@@ -90,4 +90,74 @@ return function(T, Loader)
 		T.eq(refs.Gui.Size.Y.Offset, height, "back to its size")
 		MachineBillboard.detach(refs)
 	end)
+
+	--[[
+		Lune has no text engine (TextBounds stays 0), so the note's lines are
+		worked out with generous FredokaOne glyph widths (em = TextSize):
+		capitals, digits and % 0.66, lower case 0.52, space and · 0.32, and
+		wrapped word by word the way TextWrapped does.
+	]]
+	local function glyph(char: string): number
+		if char == " " then
+			return 0.32
+		elseif char:match("%l") then
+			return 0.52
+		elseif #char > 1 then
+			return 0.32 -- the middle dot (2 bytes in UTF-8)
+		end
+		return 0.66
+	end
+	local function wordWidth(word: string, size: number): number
+		local em = 0
+		for _, code in utf8.codes(word) do
+			em += glyph(utf8.char(code))
+		end
+		return em * size
+	end
+	local function wrappedLines(text: string, size: number, width: number): number
+		local lines, used = 1, 0
+		local space = glyph(" ") * size
+		for word in text:gmatch("%S+") do
+			local w = wordWidth(word, size)
+			if used > 0 and used + space + w > width then
+				lines += 1
+				used = w
+			else
+				used += (if used > 0 then space else 0) + w
+			end
+		end
+		return lines
+	end
+
+	T.test("MachineBillboard: every Quality level's odds fit the note (two lines)", function()
+		local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+		local ProcessingService = Loader.requirePath("ServerScriptService.Server.Services.ProcessingService")
+		local model = MachineBuilder.build("AutoCleaner")
+		local refs = MachineBillboard.attach(model)
+		local size = MachineBillboard.NoteTextSize
+		local box = MachineBillboard.NoteSize
+		for level = 0, MachineData.upgradeMax("AutoCleaner", "Quality") do
+			local text = MachineBillboard.qualityNote(level, ProcessingService.oddsText(MachineData.gradeOdds(level)))
+			MachineBillboard.setNote(refs, text)
+			T.truthy(refs.Note.TextWrapped, "wraps")
+			T.eq(refs.Note.Size.X.Offset, box.X, "note width")
+			T.eq(refs.Note.Size.Y.Offset, box.Y, "note height")
+			local lines = wrappedLines(text, size, box.X)
+			T.truthy(lines <= 2, `level {level}: "{text}" is {lines} lines`)
+			T.truthy(lines * size * 1.2 <= box.Y, `level {level} fits the note's height`)
+			T.truthy(refs.Gui.Size.X.Offset >= box.X and refs.Gui.Size.Y.Offset >= box.Y + 58, "inside the sign")
+		end
+		-- a one-line estimate of the old single-line note was far too wide
+		T.truthy(wordWidth("Quality 3: 15% Rough · 45% Clean · 35% Pristine · 5% Flawless", size) > box.X, "it needs the wrap")
+		MachineBillboard.detach(refs)
+	end)
+
+	T.test("MachineBillboard: an Iron Box with a full pen says so", function()
+		local model = MachineBuilder.build("IronBox")
+		local refs = MachineBillboard.attach(model)
+		MachineBillboard.update(refs, 0, 1, 4, 0, "PenFull", nil)
+		T.truthy(refs.Status.Visible, "status shown")
+		T.eq(refs.Status.Text, "Ore Pen full")
+		MachineBillboard.detach(refs)
+	end)
 end

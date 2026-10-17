@@ -12,9 +12,13 @@
 	    just went to the pen), a scaled display Gold behind the bay's glass;
 	  - dirty ore riding in, a sent Coal and a Copper on the out belts.
 	UI overlays (build/preview/<name>.json):
-	  ui_ironbox        HUD + the keep list in MY LIST (PC, 1.25 scale)
-	  ui_ironbox_phone  the keep list on a 667 x 375 pt phone (compact)
-	  ui_ironbox_rare   KEEP RARE+ mode (PC)
+	  ui_ironbox         HUD + the keep list in MY LIST (PC, 1.25 scale)
+	  ui_ironbox_phone   the keep list on a 667 x 375 pt phone (compact)
+	  ui_ironbox_narrow  the keep list on a 568 x 320 pt phone (3 columns)
+	  ui_ironbox_rare    RARE+ mode (PC)
+	buildBoard (scene "penboard": `lune run tools/lune/export_scene.luau
+	world penboard`): the Pen Automation sorting board at plot 5's Ore Pen
+	gate, placed and painted the way IronBoxService does it.
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -250,7 +254,95 @@ function Preview.build(Loader: any, parent: any): { [string]: any }
 		UiExport.export({ hud(pcScale).Gui, view("RarePlus", false, pcScale, 1600 / pcScale, (900 - 36) / pcScale).Gui })
 	exports.ui_ironbox_phone =
 		UiExport.export({ hud(phoneScale).Gui, view("List", true, phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale).Gui })
+	-- a 568 x 320 pt phone at the 0.62 floor (the render's 16:9 is about its shape)
+	local narrowScale = 0.62 * 900 / 320
+	exports.ui_ironbox_narrow =
+		UiExport.export({ hud(narrowScale).Gui, view("List", true, narrowScale, 1600 / narrowScale, (900 - 58) / narrowScale).Gui })
 	return exports
+end
+
+Preview.BoardPlot = 5 -- the yard preview's plot (an east plot: the sun lights its yard)
+
+-- The sorting board at a plot's pen gate (scene "penboard", on the world).
+function Preview.buildBoard(Loader: any, workspace: any): any
+	local CF = Loader.CFrame
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+	local IronBoxService = Loader.requirePath("ServerScriptService.Server.Services.IronBoxService")
+	local Dummy = require("./dummy")
+	local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[Preview.BoardPlot])
+	local board = MachineBuilder.sortingBoard()
+	board.Name = IronBoxService.BoardName
+	board:PivotTo(plotCF * IronBoxService.boardPoint())
+	local discovered = {}
+	for _, id in Preview.Discovered do
+		discovered[id] = true
+	end
+	MachineBuilder.paintSortingBoard(board, IronBoxService.boardInfo({ KeepMode = "List", KeepList = Preview.KeepList, Discovered = discovered }))
+	board.Parent = workspace
+	-- the renderer paints top-level SurfaceGui frames only: lay the swatch
+	-- grid out the way UIGridLayout does (cells of 1/Columns minus 6 px, 6 px
+	-- apart, centred) as plain frames on a temporary gui, paint, drop it
+	local display = board:FindFirstChild("Display")
+	local gui = display.BoardGui
+	local swatches = gui.Swatches
+	local frames = {}
+	for _, child in swatches:GetChildren() do
+		if child:IsA("Frame") then
+			table.insert(frames, child)
+		end
+	end
+	table.sort(frames, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	local temp = roblox.Instance.new("SurfaceGui")
+	temp.Name = "PreviewSwatches"
+	temp.Face = roblox.Enum.NormalId.Front
+	temp.Parent = display
+	local px, py = display.Size.X * gui.PixelsPerStud, display.Size.Y * gui.PixelsPerStud
+	local fx, fy = swatches.Position.X.Scale * px, swatches.Position.Y.Scale * py
+	local fw, fh = swatches.Size.X.Scale * px, swatches.Size.Y.Scale * py
+	local cols = MachineBuilder.SortingBoard.Columns
+	local cellW, cellH = fw / cols - 6, fh / 2 - 6
+	local used = math.min(#frames, cols)
+	local gridW = used * cellW + (used - 1) * 6
+	for i, frame in frames do
+		local col, row = (i - 1) % cols, (i - 1) // cols
+		local plate = roblox.Instance.new("Frame")
+		plate.BackgroundColor3 = frame.BackgroundColor3
+		plate.Position = roblox.UDim2.fromScale((fx + (fw - gridW) / 2 + col * (cellW + 6)) / px, (fy + row * (cellH + 6)) / py)
+		plate.Size = roblox.UDim2.fromScale(cellW / px, cellH / py)
+		plate.Parent = temp
+	end
+	swatches.Parent = nil
+	require("./machines_gallery").paintGuis(Loader, workspace, board)
+	temp:Destroy()
+	swatches.Parent = gui
+	-- the renderer also centres a SurfaceGui's one text on the whole face:
+	-- give the Mode line a thin band of its own over the display's top
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local mode = gui.Mode
+	local bandH = display.Size.Y * mode.Size.Y.Scale
+	local bandY = display.Size.Y / 2 - display.Size.Y * mode.Position.Y.Scale - bandH / 2
+	local band = Geo.block(
+		workspace,
+		display.CFrame * CF.new(0, bandY, -display.Size.Z / 2 - 0.004),
+		roblox.Vector3.new(display.Size.X * mode.Size.X.Scale, bandH, 0.006),
+		display.Color,
+		roblox.Enum.Material.Neon,
+		{ CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
+	)
+	local bandGui = roblox.Instance.new("SurfaceGui")
+	bandGui.Face = roblox.Enum.NormalId.Front
+	bandGui.Parent = band
+	local text = mode:Clone()
+	text.Parent = bandGui
+	gui:Destroy()
+	-- a forgekeeper on the gate side, turned toward it
+	Dummy.build(workspace, CF, plotCF * IronBoxService.boardPoint() * CF.new(-3.0, 0, -3.9) * CF.Angles(0, math.rad(35), 0), "idle")
+	local at = board:GetPivot().Position
+	print(string.format("sorting board at %.1f, %.1f, %.1f", at.X, at.Y, at.Z))
+	return board
 end
 
 return Preview

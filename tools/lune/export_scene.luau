@@ -665,3 +665,15 @@ if sceneName == "world" and process.args[2] == "yard" then
 	end
 	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
 end
+
+---------------------------------------------------------------- scene "penboard" (WP-CleanerBox)
+-- `lune run tools/lune/export_scene.luau world penboard`: the world above plus the
+-- Pen Automation sorting board at plot 5's Ore Pen gate -> build/preview/penboard.json
+-- (tools/lune/lib/ironbox_preview.luau buildBoard, shots in tools/preview/ironbox_shots.json).
+if sceneName == "world" and process.args[2] == "penboard" then
+	require("./lib/ironbox_preview").buildBoard(Loader, workspace)
+	local boardScene = Export.collect(workspace)
+	boardScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/penboard.json", serde.encode("json", boardScene))
+	print(string.format("Exported penboard: %d parts, %d lights", #boardScene.parts, #boardScene.lights))
+end

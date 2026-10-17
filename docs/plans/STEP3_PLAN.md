@@ -112,6 +112,13 @@ always pass on. If the box runs on ProcessingService jobs, its jobs skip stats/D
 buttons (Rare+ / My list / Everything) + ore toggles showing `MachineData.keepsOre` (`SetKeep` stores the explicit
 choice, `SetKeepMany` for presets, `ClearList` = back to Rare+). The Cleaning Plant sign already reads
 "CLEANING PLANT".
+Sorting billboard (built in fix round 1): while `Upgrades.PenAutomation >= EconomyConfig.PenAutomation.Billboard`,
+IronBoxService stands a sorting board (`MachineBuilder.sortingBoard`: a lit display with the mode and the kept ores'
+colours, repainted on save changes) in front of the pen wall beside the gate (`IronBoxService.boardPoint`). Its
+"Keep List" prompt (tagged `PenPrompt` + `PlotId`, so PenController shows it to the owner only) opens the same
+IronBoxView (OpenUI "IronBox" { Box = board }) after the owner and level checks, so the list can be set without an
+Iron Box. A box whose kept ore can't go into the full pen sets `PenFull` (billboard: "Ore Pen full"); the toast comes
+once per turn to full, at most every 120 s.
 
 ### WP-Foundry: ingots → blasters
 Owns: FoundryService (new), FoundryController + FoundryView (new), PlotBuilder Foundry building (replace the

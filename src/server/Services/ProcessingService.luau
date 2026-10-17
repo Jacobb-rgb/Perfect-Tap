@@ -20,13 +20,17 @@
 	- Grade odds (Cleaning Plant) = MachineData.gradeOdds of the machine
 	  type's Quality level, read when each job starts. The plant shows them:
 	  attributes Quality (level) and QualityOdds ("30% Rough · 50% Clean ·
-	  20% Pristine"), also on its Put In prompt's ObjectText; refreshed every
-	  QUALITY_CHECK seconds, so a level bought in the Tech shop shows at once.
+	  20% Pristine", the client's billboard note), and the level on its Put
+	  In prompt's ObjectText ("Cleaning Plant · Quality 2": short, so the
+	  prompt stays narrow on phones); refreshed every QUALITY_CHECK seconds,
+	  so a level bought in the Tech shop shows at once.
 	- Queue and Out live in the save (Entry.In / Entry.Out), so leaving,
 	  autosaves and shutdowns keep them. Job progress is not saved: after a
 	  rejoin the job on In[1] starts over.
 	- Clients animate everything from model attributes (MachineFxController):
 	  Queue, QueueMax, OutCount, Working, WorkStart, WorkTime, WorkOre, Cycles.
+	  WorkOre is "" while dirty ore is worked: nobody can see through the
+	  dirt (the Cleaning Plant reveals it when the clean ore comes out).
 	- A sorter (a machine with a Time but no Output, the Iron Box) runs on
 	  these jobs too, with the behaviour ProcessingService.sorterBehaviour
 	  builds: its item comes back out unchanged, unless the sorter's `take`
@@ -183,7 +187,7 @@ local function showQuality(machine: PlacedMachine)
 	local anchor = base and (base:FindFirstChild("Prompt") or base)
 	local prompt = anchor and anchor:FindFirstChild("LoadPrompt")
 	if prompt and prompt:IsA("ProximityPrompt") then
-		prompt.ObjectText = `{machine.Info.Name} · Quality {level}: {text}`
+		prompt.ObjectText = `{machine.Info.Name} · Quality {level}`
 	end
 end
 
@@ -216,7 +220,8 @@ local function startJob(machine: PlacedMachine, startedAt: number, now: number)
 		-- the job may have begun a moment before this tick (chained jobs)
 		WorkStart = serverNow() - (now - startedAt),
 		WorkTime = seconds,
-		WorkOre = input.O,
+		-- dirty ore hides what it is (its colour would give it away)
+		WorkOre = if input.K == "Raw" then "" else input.O,
 	})
 end
 

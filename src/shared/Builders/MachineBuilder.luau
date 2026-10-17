@@ -1744,6 +1744,203 @@ local function ironBox(): Model
 	return model
 end
 
+--[[
+	Sorting board (Pen Automation level 1, IronBoxService builds one at the
+	pen gate): the Iron Box's keep list shown at your Ore Pen. Two gunmetal
+	posts on dark footings with brass caps, a riveted iron frame holding a
+	lit teal display (Display, Neon; SurfaceGui BoardGui: Mode line,
+	Swatches = the kept ores in their colours, Empty text), a warm lamp
+	strip over it, steel rails top and bottom (a hazard band on the lower
+	one) and a gold KEEP LIST plate on top. Not a machine (no MachineId);
+	Base is an invisible anchor on the ground, Prompt where its "Keep List"
+	prompt goes. paintSortingBoard fills the display in. 13 parts.
+]]
+MachineBuilder.SortingBoard = {
+	MaxSwatches = 12, -- 2 rows of 6; more kept ores show "+N" on the last one
+	Columns = 6,
+}
+
+function MachineBuilder.sortingBoard(): Model
+	local model = Instance.new("Model")
+	model.Name = "SortingBoard"
+	-- the pivot: centred on the ground line, so PivotTo puts the posts on the ground
+	local base = Geo.block(model, CFrame.new(), Vector3.new(4.2, 0.2, 0.7), C.Floor, nil, tiny({ Name = "Base", Transparency = 1 }))
+	base.Name = "Base"
+	model.PrimaryPart = base
+	local postX, postTop = 1.85, 4.75
+	for _, s in { -1, 1 } do
+		Geo.block(model, CFrame.new(s * postX, 0.15, 0), Vector3.new(0.7, 0.3, 0.7), C.HousingDark, nil, prop({ Name = "Footing" }))
+		Geo.block(model, CFrame.new(s * postX, postTop / 2, 0), Vector3.new(0.34, postTop, 0.34), C.Iron, nil, solid({ Name = "Post" }))
+		ball(model, Vector3.new(s * postX, postTop + 0.12, 0), 0.5, C.Brass)
+	end
+	-- the iron frame between the posts, the display set into its front
+	local y0, y1 = 1.6, 4.35
+	local frame = Geo.block(
+		model,
+		CFrame.new(0, (y0 + y1) / 2, 0.02),
+		Vector3.new(postX * 2 - 0.1, y1 - y0, 0.22),
+		C.Iron,
+		nil,
+		solid({ Name = "Frame" })
+	)
+	local back = surface(frame, "BackFace", Enum.NormalId.Back, 60)
+	for row, y in { 0.1, 0.9 } do
+		for i = 0, 5 do
+			paintRect(back, "Rivet" .. row, 0.08 + i * 0.165, y - 0.03, 0.025, 0.06, C.Brass, true)
+		end
+	end
+	local display = Geo.block(
+		model,
+		CFrame.new(0, (y0 + y1) / 2 - 0.05, -0.12),
+		Vector3.new(postX * 2 - 0.5, y1 - y0 - 0.5, 0.06),
+		C.ScreenLit,
+		NEON,
+		tiny({ Name = "Display" })
+	)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "BoardGui"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0
+	gui.MaxDistance = 80
+	gui.Parent = display
+	local mode = Instance.new("TextLabel")
+	mode.Name = "Mode"
+	mode.Text = "KEEPS RARE+"
+	mode.Position = UDim2.fromScale(0.05, 0.05)
+	mode.Size = UDim2.fromScale(0.9, 0.26)
+	mode.BackgroundTransparency = 1
+	mode.TextScaled = true
+	mode.TextColor3 = C.ScreenText
+	mode.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+	mode.Parent = gui
+	local swatches = Instance.new("Frame")
+	swatches.Name = "Swatches"
+	swatches.BackgroundTransparency = 1
+	swatches.Position = UDim2.fromScale(0.06, 0.38)
+	swatches.Size = UDim2.fromScale(0.88, 0.56)
+	swatches.Parent = gui
+	local grid = Instance.new("UIGridLayout")
+	local columns = MachineBuilder.SortingBoard.Columns
+	grid.CellSize = UDim2.new(1 / columns, -6, 0.5, -6)
+	grid.CellPadding = UDim2.fromOffset(6, 6)
+	grid.FillDirectionMaxCells = columns
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	grid.Parent = swatches
+	local empty = Instance.new("TextLabel")
+	empty.Name = "Empty"
+	empty.Text = ""
+	empty.Position = UDim2.fromScale(0.06, 0.45)
+	empty.Size = UDim2.fromScale(0.88, 0.3)
+	empty.BackgroundTransparency = 1
+	empty.TextScaled = true
+	empty.TextColor3 = C.ScreenText
+	empty.TextTransparency = 0.25
+	empty.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+	empty.Visible = false
+	empty.Parent = gui
+	-- a warm lamp over the display, steel rails top and bottom
+	Geo.block(model, CFrame.new(0, y1 - 0.08, -0.19), Vector3.new(postX * 2 - 0.7, 0.06, 0.1), rgb(255, 232, 196), NEON, tiny({ Name = "Lamp" }))
+	Geo.block(model, CFrame.new(0, y1 + 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
+	local low = Geo.block(model, CFrame.new(0, y0 - 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
+	local band = surface(low, "Hazard", Enum.NormalId.Front, 60)
+	gradientStrip(band, "Dashes", 0.06, 0.88, hazardKeys(11))
+	-- the name plate on top, between the brass caps
+	sign(model, CFrame.new(0, y1 + 0.55, -0.02), "KEEP LIST", 2.7, true)
+	attach(base, "Prompt", CFrame.new(0, 2.5, -1.0))
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	return model
+end
+
+export type BoardInfo = {
+	Mode: string, -- the line on top ("KEEPS RARE+")
+	Colors: { Color3 }, -- kept ores' colours, best first
+	Empty: string, -- shown when Colors is empty
+}
+
+--[[
+	Fills a sorting board's display in: the Mode line, one swatch per kept
+	ore (at most MaxSwatches; the last one says "+N" when there are more),
+	or the Empty text. Reuses its swatches. Pure (only Instances).
+]]
+function MachineBuilder.paintSortingBoard(model: Model, info: BoardInfo)
+	local display = model:FindFirstChild("Display")
+	local gui = display and display:FindFirstChild("BoardGui")
+	if not gui then
+		return
+	end
+	local mode = gui:FindFirstChild("Mode")
+	local swatches = gui:FindFirstChild("Swatches")
+	local empty = gui:FindFirstChild("Empty")
+	if mode and mode:IsA("TextLabel") then
+		mode.Text = info.Mode
+	end
+	local max = MachineBuilder.SortingBoard.MaxSwatches
+	local shown = math.min(#info.Colors, max)
+	if swatches then
+		for i = 1, max do
+			local swatch = swatches:FindFirstChild("Swatch" .. i)
+			if i > shown then
+				if swatch then
+					swatch:Destroy()
+				end
+				continue
+			end
+			local frame: Frame
+			if swatch and swatch:IsA("Frame") then
+				frame = swatch
+			else
+				frame = Instance.new("Frame")
+				frame.Name = "Swatch" .. i
+				frame.LayoutOrder = i
+				frame.BorderSizePixel = 0
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0.3, 0)
+				corner.Parent = frame
+				local stroke = Instance.new("UIStroke")
+				stroke.Color = C.ScreenText
+				stroke.Thickness = 2
+				stroke.Transparency = 0.4
+				stroke.Parent = frame
+				frame.Parent = swatches
+			end
+			frame.BackgroundColor3 = info.Colors[i]
+			-- the last swatch stands for itself and every ore after it
+			local more = #info.Colors - max + 1
+			local existing = frame:FindFirstChild("More")
+			if i == max and more > 1 then
+				local text: TextLabel
+				if existing and existing:IsA("TextLabel") then
+					text = existing
+				else
+					text = Instance.new("TextLabel")
+					text.Name = "More"
+					text.Size = UDim2.fromScale(1, 1)
+					text.BackgroundTransparency = 1
+					text.TextScaled = true
+					text.TextColor3 = C.ScreenText
+					text.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+					text.Parent = frame
+				end
+				text.Text = `+{more}`
+				frame.BackgroundColor3 = C.HousingDark
+			elseif existing then
+				existing:Destroy()
+			end
+		end
+	end
+	if empty and empty:IsA("TextLabel") then
+		empty.Text = info.Empty
+		empty.Visible = shown == 0
+	end
+end
+
 -- Sell Chute (retired): an open round hopper on a copper pipe that goes into
 -- the ground through an octagonal flange, a pile of gold coins (Coins, a
 -- small glowing centre) in its cup and a SELL plate.

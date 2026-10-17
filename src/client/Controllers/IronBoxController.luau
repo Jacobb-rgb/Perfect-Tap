@@ -1,20 +1,22 @@
 --[[
-	IronBoxController: the Iron Box keep list (client side).
+	IronBoxController: the keep list (client side).
 
 	- Opens on OpenUI "IronBox" { Box } (the "Keep List" prompt on your own
-	  box; the server checks it is yours). The panel (IronBoxView) shows
-	  every ore you have discovered as a chip, from the State snapshot
+	  Iron Box or on your pen's sorting board; the server checks it is yours
+	  and, for the board, the Pen Automation level). The panel (IronBoxView)
+	  shows every ore you have discovered as a chip, from the State snapshot
 	  (Discovered, KeepMode, KeepList), and updates live.
 	    chip           IronBoxAction "SetKeep" { Ore, Keep = the other way }
 	    mode buttons   IronBoxAction "SetMode" { Mode }
-	    ALL KEEP/SEND  IronBoxAction "SetKeepMany" { Ores = every chip, Keep }
+	    SET ALL: KEEP / SEND   IronBoxAction "SetKeepMany" { Ores = every chip, Keep }
+	    RESET (MY LIST)        IronBoxAction "ClearList" (back to the Rare+ rule)
 	  A tap shows at once: the action is applied to the last snapshot with
 	  IronBoxView.predict (the server's rules) until the server's snapshot
 	  catches up (pending actions are re-applied on newer snapshots for
 	  PENDING_SECONDS, so an older snapshot never flips a chip back; after
 	  that the panel shows the latest snapshot as it is).
-	- Closes with X, B (gamepad), Backspace, walking away from the box
-	  (Range), the box going away, or respawning. Gamepads start on the
+	- Closes with X, B (gamepad), Backspace, walking away from the box or
+	  board (Range), it going away, or respawning. Gamepads start on the
 	  first chip; other prompts are hidden while it is open. Phones
 	  (uiScale <= 0.75) get the compact layout; the chip rows fit the screen.
 ]]
@@ -245,6 +247,9 @@ local function ensureView(): IronBoxView.Refs
 	end)
 	built.AllSend.Activated:Connect(function()
 		every(false)
+	end)
+	built.Reset.Activated:Connect(function()
+		IronBoxController.act("ClearList", nil)
 	end)
 	refs = built
 	return built

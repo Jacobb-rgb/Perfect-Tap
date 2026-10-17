@@ -6,7 +6,8 @@
 	   o o o .  FULL  2 ready    queue (the item being worked counts), a red
 	                             FULL chip, finished items waiting to leave
 	   Quality 2: 30% Rough ...  an optional note under it (setNote: the
-	                             Cleaning Plant's grade odds)
+	   50% Clean · 20% Pristine  Cleaning Plant's grade odds, qualityNote),
+	                             up to two wrapped lines
 
 	It hangs on the machine's Status attachment and hides itself beyond
 	45 studs. MachineFxController decides which machines get one (at most
@@ -49,12 +50,18 @@ local MAX_PIPS = 8
 local PIP = 10
 local PIP_STEP = 13
 local HEIGHT = 58
-local NOTE_HEIGHT = 18
+local NOTE_HEIGHT = 30 -- two lines of 12 px text
+local NOTE_WIDTH = WIDTH + 80
+
+MachineBillboard.NoteTextSize = 12
+MachineBillboard.NoteSize = Vector2.new(NOTE_WIDTH, NOTE_HEIGHT)
 
 local STATUS_TEXT: { [string]: string } = {
 	OutputBlocked = "Output blocked",
 	TooManyItems = "Too many loose items",
+	PenFull = "Ore Pen full", -- an Iron Box whose kept ore can't go into the pen
 }
+MachineBillboard.StatusText = STATUS_TEXT
 
 -- Builds the sign on the model's Status attachment (or its Base).
 function MachineBillboard.attach(model: Model): Refs
@@ -126,13 +133,14 @@ function MachineBillboard.attach(model: Model): Refs
 		Visible = false,
 	})
 
-	local note = UIKit.label(gui, "", 12, {
+	local note = UIKit.label(gui, "", MachineBillboard.NoteTextSize, {
 		Name = "Note",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, HEIGHT),
-		Size = UDim2.fromOffset(WIDTH + 80, NOTE_HEIGHT),
+		Size = UDim2.fromOffset(NOTE_WIDTH, NOTE_HEIGHT),
 		TextColor3 = Theme.Text,
-		TextWrapped = false,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
 		Visible = false,
 	})
 
@@ -177,7 +185,8 @@ local function setPips(refs: Refs, queue: number, queueMax: number)
 end
 
 -- progress 0..1 of the running job; status is the machine's Status
--- attribute ('' | 'OutputBlocked' | 'TooManyItems').
+-- attribute ('' | 'OutputBlocked' | 'TooManyItems') or 'PenFull' (an Iron
+-- Box's PenFull attribute, MachineFxController).
 function MachineBillboard.update(
 	refs: Refs,
 	progress: number,
@@ -219,7 +228,13 @@ function MachineBillboard.update(
 	end
 end
 
--- A short line under the queue ("" hides it); the sign grows to make room.
+-- The Cleaning Plant's note: its Quality level and grade odds.
+function MachineBillboard.qualityNote(level: number, odds: string): string
+	return `Quality {level}: {odds}`
+end
+
+-- A short note under the queue, up to two wrapped lines ("" hides it);
+-- the sign grows to make room.
 function MachineBillboard.setNote(refs: Refs, text: string)
 	if refs.Note.Text == text then
 		return
@@ -227,9 +242,9 @@ function MachineBillboard.setNote(refs: Refs, text: string)
 	refs.Note.Text = text
 	local on = text ~= ""
 	refs.Note.Visible = on
-	refs.Gui.Size = UDim2.fromOffset(if on then WIDTH + 80 else WIDTH, if on then HEIGHT + NOTE_HEIGHT else HEIGHT)
+	refs.Gui.Size = UDim2.fromOffset(if on then NOTE_WIDTH else WIDTH, if on then HEIGHT + NOTE_HEIGHT else HEIGHT)
 	-- keep the bar and queue where they were (centred in the wider sign)
-	local shift = if on then 40 else 0
+	local shift = if on then (NOTE_WIDTH - WIDTH) / 2 else 0
 	refs.Status.Position = UDim2.fromOffset(shift, 0)
 	refs.Bar.Position = UDim2.fromOffset((WIDTH - BAR_WIDTH) / 2 + shift, 20)
 	refs.PipRow.Position = UDim2.fromOffset((WIDTH - BAR_WIDTH) / 2 + shift, 39)

@@ -342,19 +342,23 @@ return function(T, Loader)
 		local prompt = m.Model.PrimaryPart.Prompt:FindFirstChild("LoadPrompt")
 		T.eq(attr(m, "Quality"), 0, "level 0 shown")
 		T.eq(attr(m, "QualityOdds"), "60% Rough · 40% Clean", "level 0 odds")
-		T.truthy(prompt.ObjectText:find("60% Rough", 1, true), "odds on the prompt")
+		T.eq(prompt.ObjectText, "Cleaning Plant · Quality 0", "the level on the prompt (the odds are on the billboard)")
 		-- the Tech shop writes the level; the plant shows it within a second
 		w.data.MachineUpgrades = { AutoCleaner = { Quality = 5 } }
 		tick(m, 0.5)
 		T.eq(attr(m, "Quality"), 5, "level 5 shown")
 		T.eq(attr(m, "QualityOdds"), "20% Clean · 50% Pristine · 30% Flawless", "level 5 odds")
-		T.truthy(prompt.ObjectText:find("Quality 5", 1, true), "prompt names the level")
+		T.eq(prompt.ObjectText, "Cleaning Plant · Quality 5", "prompt names the level")
+		T.truthy(#prompt.ObjectText <= 32, "short enough for a phone's prompt")
 		local grades = {}
 		local now = 10
 		local jobs = 600
-		for _ = 1, jobs do
+		for i = 1, jobs do
 			MachineService.insertDesc(m, item("Raw", "Silver"), USER, "Belt")
 			tick(m, now)
+			if i == 1 then
+				T.eq(attr(m, "WorkOre"), "", "dirty ore doesn't show its ore while it is cleaned")
+			end
 			now += 8
 			tick(m, now)
 			local out = MachineLogic.popOut(m.Entry)
@@ -411,7 +415,7 @@ return function(T, Loader)
 		T.eq(#m.Entry.In, 2, "junk dropped")
 		T.eq(attr(m, "Queue"), 2, "Queue")
 		tick(m, 1)
-		T.eq(attr(m, "WorkOre"), "Iron", "the stray raw ore is worked")
+		T.eq(attr(m, "WorkOre"), "", "the stray raw ore is worked (dirty: no ore shown)")
 		tick(m, 7)
 		T.eq(#m.Entry.Out, 1, "it comes out")
 		T.eq(m.Entry.Out[1].K, "Raw", "unchanged")

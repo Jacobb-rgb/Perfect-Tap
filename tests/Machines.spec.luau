@@ -463,6 +463,62 @@ return function(T, Loader)
 		T.le(#parts(model), 70, "part budget")
 	end)
 
+	T.test("Machines: the pen's sorting board (Pen Automation) is a small lit board on two posts", function()
+		local board = MachineBuilder.sortingBoard()
+		local base = board.PrimaryPart
+		T.truthy(base and base.Name == "Base", "Base is the PrimaryPart")
+		T.eq(base.Transparency, 1, "an invisible anchor")
+		T.falsy(base.CanCollide, "nothing to trip over")
+		T.eq(board:GetAttribute("MachineId"), nil, "not a machine")
+		T.truthy(attachment(board, "Prompt"), "Prompt attachment")
+		T.truthy(attachment(board, "Prompt").CFrame.Position.Z < 0, "the prompt in front of the board")
+		T.le(#parts(board), 15, "decor prop budget")
+		local display = board:FindFirstChild("Display")
+		T.truthy(display and display.Material == roblox.Enum.Material.Neon, "a lit display")
+		local gui = display:FindFirstChild("BoardGui")
+		T.truthy(gui and gui.Face == roblox.Enum.NormalId.Front, "drawn on its front (-Z)")
+		T.truthy(gui:FindFirstChild("Mode") and gui:FindFirstChild("Swatches") and gui:FindFirstChild("Empty"), "its labels")
+		for _, d in board:GetDescendants() do
+			if d:IsA("BasePart") then
+				T.truthy(d.Anchored, d.Name .. " anchored")
+				T.falsy(d.CanTouch, d.Name .. " no touch events")
+			end
+		end
+		-- no wider than the space between the pen gate's post and the pen's corner
+		local lo, hi = math.huge, -math.huge
+		local top = 0
+		for _, p in parts(board) do
+			if p.Transparency < 1 then
+				local at = p.CFrame.Position
+				lo = math.min(lo, at.X - p.Size.X / 2)
+				hi = math.max(hi, at.X + p.Size.X / 2)
+				top = math.max(top, at.Y + p.Size.Y / 2)
+			end
+		end
+		T.truthy(hi - lo <= 4.5, "about 4.4 studs wide (footings)")
+		T.truthy(top > 4 and top < 6, "taller than a player's waist, under the gate sign")
+		-- painting: one swatch per kept ore, "+N" past the limit, the empty text
+		local red, blue = roblox.Color3.fromRGB(220, 40, 40), roblox.Color3.fromRGB(40, 80, 220)
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS MY LIST", Colors = { red, blue }, Empty = "NOTHING" })
+		T.eq(gui.Mode.Text, "KEEPS MY LIST")
+		T.truthy(gui.Swatches.Swatch1.BackgroundColor3 == red and gui.Swatches.Swatch2.BackgroundColor3 == blue, "in order")
+		T.falsy(gui.Empty.Visible, "no empty text")
+		local many = {}
+		for i = 1, MachineBuilder.SortingBoard.MaxSwatches + 3 do
+			many[i] = if i % 2 == 0 then red else blue
+		end
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS EVERYTHING", Colors = many, Empty = "" })
+		local max = MachineBuilder.SortingBoard.MaxSwatches
+		T.truthy(gui.Swatches:FindFirstChild("Swatch" .. max), "full board")
+		T.eq(gui.Swatches:FindFirstChild("Swatch" .. (max + 1)), nil, "never more than MaxSwatches")
+		T.eq(gui.Swatches["Swatch" .. max].More.Text, "+4", "the last one counts itself and the rest")
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS MY LIST", Colors = { red }, Empty = "" })
+		T.eq(gui.Swatches:FindFirstChild("Swatch2"), nil, "extra swatches removed")
+		MachineBuilder.paintSortingBoard(board, { Mode = "KEEPS MY LIST", Colors = {}, Empty = "SENDS EVERYTHING ON" })
+		T.eq(gui.Swatches:FindFirstChild("Swatch1"), nil)
+		T.truthy(gui.Empty.Visible and gui.Empty.Text == "SENDS EVERYTHING ON", "empty text")
+	end)
+
 	T.test("Machines: old part names and free-standing signs", function()
 		local station = MachineBuilder.build("CleaningStation")
 		T.truthy(station:FindFirstChild("LampShade") and station:FindFirstChild("LampBulb"), "old lamp names still resolve")

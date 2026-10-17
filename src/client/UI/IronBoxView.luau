@@ -1,24 +1,29 @@
 --[[
-	Iron Box keep list (pure builder + pure helpers; IronBoxController fills
-	it in and wires it up).
+	The keep list (pure builder + pure helpers; IronBoxController fills it
+	in and wires it up). Opened at an Iron Box or at the pen's sorting
+	board: both use the same list.
 
-	  header   IRON BOX: KEEP LIST, X button, one line on what keeping means
-	  modes    KEEP RARE+ | MY LIST | KEEP ALL   (data.KeepMode: RarePlus,
+	  header   KEEP LIST, X button, one line on what keeping means
+	  modes    RARE+ | MY LIST | EVERYTHING   (data.KeepMode: RarePlus,
 	           List, All); a line under them says what the chosen one does
 	  chips    every DISCOVERED ore as a toggle chip, best income first:
 	           kept = filled in the ore's colour with a lit (white) light,
 	           KEEP and its podium income; sent on = dark with the ore's
 	           colour as the light and SEND ON; the outline is the ore's
-	           rarity colour. Tapping a chip flips that one ore (in KEEP
-	           RARE+ / KEEP ALL it becomes your list first, so only that
-	           chip changes: IronBoxService)
-	  presets  ALL KEEP / ALL SEND (every chip at once; they make it your list)
+	           rarity colour. Tapping a chip flips that one ore (in RARE+ /
+	           EVERYTHING it becomes your list first, so only that chip
+	           changes: IronBoxService)
+	  presets  SET ALL: KEEP / SET ALL: SEND (every chip at once; they make
+	           it your list), and in MY LIST mode RESET (ClearList: every ore
+	           follows the Rare+ rule again)
 	  footer   control hint (gamepads: the platform's button glyphs)
 	Designed for 720 design units of height (HudController.uiScale). The
 	compact layout (phones) has bigger chips and buttons, so touch targets
-	stay >= 44 pt at the smallest UI scale, drops the info line (the line
-	under the modes still says what they do) and sits on the right, clear
-	of the HUD coins; layout() fits the chip rows to the screen.
+	stay >= 44 pt at the smallest UI scale (0.62), drops the info line (the
+	line under the modes still says what they do) and sits on the right,
+	clear of the HUD coins; layout() fits the chip rows to the screen's
+	height and the chip columns (4, or 3 / 2 on narrow screens) to its
+	width.
 	Pure helpers (tested): entries (the State snapshot as chips), modeOf,
 	modeText, predict (what an IronBoxAction does to KeepMode / KeepList:
 	the same rules as IronBoxService.apply, so a tap shows at once).
@@ -32,6 +37,7 @@ local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local HudView = require(script.Parent.HudView)
 
 local IronBoxView = {}
 
@@ -69,6 +75,7 @@ export type Refs = {
 	Presets: Frame,
 	AllKeep: TextButton,
 	AllSend: TextButton,
+	Reset: TextButton, -- MY LIST only: IronBoxAction "ClearList"
 	Hint: TextLabel,
 	PadHint: Frame,
 	PadA: ImageLabel,
@@ -78,21 +85,63 @@ export type Refs = {
 	Compact: boolean,
 	Mode: KeepMode,
 	Rows: number, -- chip rows shown without scrolling
+	Columns: number, -- chip columns
 }
 
-IronBoxView.Info = "Clean ore you KEEP goes to your Ore Pen. The rest rolls out of the box onto your belts."
-IronBoxView.ModeLabels = { RarePlus = "KEEP RARE+", List = "MY LIST", All = "KEEP ALL" } :: { [string]: string }
+IronBoxView.Title = "KEEP LIST"
+IronBoxView.Info = "Iron Boxes put the clean ore you KEEP into your Ore Pen and send the rest on along your belts."
+IronBoxView.ModeLabels = { RarePlus = "RARE+", List = "MY LIST", All = "EVERYTHING" } :: { [string]: string }
+IronBoxView.PresetLabels = { Keep = "SET ALL: KEEP", Send = "SET ALL: SEND", Reset = "RESET" }
 IronBoxView.Empty = "No ores discovered yet. Clean dirty ore and every ore you find shows up here."
 
 local PAD = 16
 local GAP = 8
 local SCROLLBAR = 12
-local COLUMNS = 4
+local COLUMNS = 4 -- chip columns when the screen is wide enough...
+local MIN_COLUMNS = 2 -- ...down to this many on narrow ones
+local EDGE = 12 -- compact: the panel's gap to the screen's right edge
+-- compact: the HUD's coin panel on the left (its left gap, width and a gap)
+local HUD_CLEAR = 16 + HudView.CoinsWidth + 8
 
--- Sizes per layout (design units; the HUD's UIScale shrinks them on phones).
+-- Sizes per layout (design units; the HUD's UIScale shrinks them on phones:
+-- compact holders are 72 tall, 44.6 pt at the 0.62 floor).
 local LAYOUTS = {
-	Normal = { ChipW = 150, ChipH = 58, ModeH = 50, PresetH = 46, Close = 50, Title = 28, Name = 18, MaxRows = 4 },
-	Compact = { ChipW = 172, ChipH = 74, ModeH = 72, PresetH = 72, Close = 72, Title = 30, Name = 21, MaxRows = 3 },
+	Normal = {
+		ChipW = 150,
+		ChipH = 58,
+		ModeH = 50,
+		PresetH = 46,
+		PresetW = 170,
+		ResetW = 120,
+		Close = 50,
+		Title = 28,
+		Name = 18,
+		ModeText = 19,
+		PresetText = 19,
+		MaxRows = 4,
+		-- gaps over the modes, over the presets and under them
+		ModesGap = 4,
+		PresetGap = 10,
+		HintGap = 8,
+	},
+	Compact = {
+		ChipW = 172,
+		ChipH = 72,
+		ModeH = 78,
+		PresetH = 78,
+		PresetW = 196,
+		ResetW = 120,
+		Close = 72,
+		Title = 30,
+		Name = 21,
+		ModeText = 21,
+		PresetText = 21,
+		MaxRows = 3,
+		-- tighter, so a 568 x 320 pt phone still shows two chip rows
+		ModesGap = 2,
+		PresetGap = 6,
+		HintGap = 4,
+	},
 }
 local TITLE_H = 40
 local INFO_H = 40
@@ -114,7 +163,7 @@ end
 -- What the chosen mode does, for the line under the mode buttons.
 function IronBoxView.modeText(mode: KeepMode): string
 	if mode == "List" then
-		return "Your own list. Ores you haven't set yet follow the Rare+ rule."
+		return "Your own list. Unset ores follow the Rare+ rule; RESET clears it."
 	elseif mode == "All" then
 		return "Keeps every clean ore. Tap an ore to make your own list."
 	end
@@ -238,7 +287,7 @@ function IronBoxView.build(): Refs
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(680, 500),
 	})
-	local title = UIKit.label(panel, "IRON BOX: KEEP LIST", 28, {
+	local title = UIKit.label(panel, IronBoxView.Title, 28, {
 		Name = "Title",
 		Position = UDim2.fromOffset(PAD, 8),
 		Size = UDim2.new(1, -(PAD * 2 + 80), 0, TITLE_H),
@@ -305,8 +354,15 @@ function IronBoxView.build(): Refs
 
 	local presets = UIKit.new("Frame", { Name = "Presets", BackgroundTransparency = 1 }, panel)
 	UIKit.list(presets, Enum.FillDirection.Horizontal, GAP * 2, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
-	local allKeep = UIKit.button(presets, "ALL KEEP", Theme.Good, Theme.GoodDark, { Name = "AllKeep", LayoutOrder = 1, TextSize = 19 })
-	local allSend = UIKit.button(presets, "ALL SEND", Theme.Accent, Theme.AccentDark, { Name = "AllSend", LayoutOrder = 2, TextSize = 19 })
+	local labels = IronBoxView.PresetLabels
+	local allKeep = UIKit.button(presets, labels.Keep, Theme.Good, Theme.GoodDark, { Name = "AllKeep", LayoutOrder = 1, TextSize = 19 })
+	local allSend = UIKit.button(presets, labels.Send, Theme.Accent, Theme.AccentDark, { Name = "AllSend", LayoutOrder = 2, TextSize = 19 })
+	local reset = UIKit.button(presets, labels.Reset, Theme.PanelLight, Theme.PanelDark, {
+		Name = "Reset",
+		LayoutOrder = 3,
+		TextSize = 19,
+		Visible = false,
+	})
 
 	local hint = UIKit.label(panel, "", 15, {
 		Name = "Hint",
@@ -364,6 +420,7 @@ function IronBoxView.build(): Refs
 		Presets = presets,
 		AllKeep = allKeep,
 		AllSend = allSend,
+		Reset = reset,
 		Hint = hint,
 		PadHint = padHint,
 		PadA = padA,
@@ -373,32 +430,64 @@ function IronBoxView.build(): Refs
 		Compact = false,
 		Mode = MachineData.Keep.Default,
 		Rows = LAYOUTS.Normal.MaxRows,
+		Columns = COLUMNS,
 	}
 	IronBoxView.layout(refs, false, 1600, 720)
 	IronBoxView.setMode(refs, MachineData.Keep.Default)
 	return refs
 end
 
+-- The panel's width for this many chip columns.
+local function panelWidth(l: typeof(LAYOUTS.Normal), columns: number): number
+	return columns * l.ChipW + (columns - 1) * GAP + SCROLLBAR + 4 + PAD * 2
+end
+
+-- The most chip columns (COLUMNS..MIN_COLUMNS) whose panel fits `room`.
+local function columnsFor(l: typeof(LAYOUTS.Normal), room: number): number?
+	for columns = COLUMNS, MIN_COLUMNS, -1 do
+		if panelWidth(l, columns) <= room then
+			return columns
+		end
+	end
+	return nil
+end
+
+--[[
+	Chip columns and panel width for a screen `maxWidth` design units wide.
+	Phones: as many columns as fit beside the HUD coins (the panel sits on
+	the right); when not even MIN_COLUMNS do (portrait), the whole width.
+	The panel is always exactly as wide as its chip grid, so no column is
+	ever cut off (the list only scrolls vertically).
+]]
+function IronBoxView.fitColumns(compact: boolean, maxWidth: number): (number, number)
+	local l = layoutOf(compact)
+	local beside = if compact then columnsFor(l, maxWidth - EDGE - HUD_CLEAR) else nil
+	local columns: number = beside or columnsFor(l, maxWidth - (if compact then EDGE * 2 else 16)) or MIN_COLUMNS
+	return columns, panelWidth(l, columns)
+end
+
 --[[
 	Sizes and places everything for a layout (compact = phones) inside
 	`maxWidth` x `maxHeight` design units (the screen divided by the UI
-	scale): as many chip rows as fit (1..MaxRows), the rest scrolls.
+	scale): chip columns that fit the width (fitColumns), as many chip rows
+	as fit (1..MaxRows), the rest scrolls.
 ]]
 function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
 	local l = layoutOf(compact)
-	local listW = COLUMNS * l.ChipW + (COLUMNS - 1) * GAP + SCROLLBAR + 4
-	local width = math.min(listW + PAD * 2, math.max(320, maxWidth - 16))
+	local columns, width = IronBoxView.fitColumns(compact, maxWidth)
+	refs.Columns = columns
+	refs.Grid.FillDirectionMaxCells = columns
 	local info = if compact then 0 else INFO_H
 	refs.Info.Visible = not compact
 	local top = 8 + TITLE_H + info
 	-- the mode buttons sit under the close button, or (no info line) beside it
-	local modesY = top + 4
+	local modesY = top + l.ModesGap
 	local besideClose = modesY < 14 + l.Close + 4
 	local modesW = width - PAD * 2 - (if besideClose then l.Close + GAP else 0)
 	local modeTextY = modesY + l.ModeH + 6
 	local listY = modeTextY + MODE_TEXT_H + 8
-	local below = 10 + l.PresetH + 8 + HINT_H
+	local below = l.PresetGap + l.PresetH + l.HintGap + HINT_H
 	local rowH = l.ChipH + GAP
 	local fit = math.floor((maxHeight - 24 - listY - below + GAP) / rowH)
 	local rows = math.clamp(fit, 1, l.MaxRows)
@@ -408,7 +497,7 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	refs.Panel.Size = UDim2.fromOffset(width, height)
 	-- phones: on the right (thumb side), clear of the HUD coins top left
 	refs.Panel.AnchorPoint = if compact then Vector2.new(1, 0.5) else Vector2.new(0.5, 0.5)
-	refs.Panel.Position = if compact then UDim2.new(1, -12, 0.5, 0) else UDim2.fromScale(0.5, 0.5)
+	refs.Panel.Position = if compact then UDim2.new(1, -EDGE, 0.5, 0) else UDim2.fromScale(0.5, 0.5)
 	refs.Title.TextSize = l.Title
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(l.Close, l.Close)
@@ -420,7 +509,8 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	for _, button in refs.Modes do
 		local holder = button.Parent :: Frame
 		holder.Size = UDim2.fromOffset(modeW, l.ModeH - 6)
-		button.TextSize = if compact then 21 else 19
+		-- "EVERYTHING" still fits a narrow button
+		button.TextSize = math.min(l.ModeText, math.floor(modeW / 6.2))
 	end
 	refs.ModeText.Position = UDim2.fromOffset(PAD, modeTextY)
 	refs.ModeText.Size = UDim2.new(1, -PAD * 2, 0, MODE_TEXT_H)
@@ -429,12 +519,16 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	refs.Grid.CellSize = UDim2.fromOffset(l.ChipW, l.ChipH)
 	refs.Empty.Position = UDim2.fromOffset(PAD * 2, listY)
 	refs.Empty.Size = UDim2.new(1, -PAD * 4, 0, listH)
-	refs.Presets.Position = UDim2.fromOffset(PAD, listY + listH + 10)
+	refs.Presets.Position = UDim2.fromOffset(PAD, listY + listH + l.PresetGap)
 	refs.Presets.Size = UDim2.new(1, -PAD * 2, 0, l.PresetH)
-	for _, button in { refs.AllKeep, refs.AllSend } do
+	-- the two presets and RESET in one row (narrower on a narrow panel)
+	local rowW = width - PAD * 2
+	local squeeze = math.min(1, (rowW - GAP * 4) / (l.PresetW * 2 + l.ResetW))
+	for _, button in { refs.AllKeep, refs.AllSend, refs.Reset } do
 		local holder = button.Parent :: Frame
-		holder.Size = UDim2.fromOffset(if compact then 210 else 170, l.PresetH - 6)
-		button.TextSize = if compact then 22 else 19
+		local w = if button == refs.Reset then l.ResetW else l.PresetW
+		holder.Size = UDim2.fromOffset(math.floor(w * squeeze), l.PresetH - 6)
+		button.TextSize = math.floor(l.PresetText * math.max(0.7, squeeze))
 	end
 	for _, chip in refs.Chips do
 		chip.Name.TextSize = l.Name
@@ -549,6 +643,9 @@ function IronBoxView.setMode(refs: Refs, mode: KeepMode)
 		button:SetAttribute("Selected", on)
 	end
 	refs.ModeText.Text = IronBoxView.modeText(mode)
+	-- RESET (back to the Rare+ rule) only means something for your own list
+	local resetHolder = refs.Reset.Parent :: Frame
+	resetHolder.Visible = mode == "List"
 end
 
 -- The footer: a text hint, or (gamepad) button glyphs with "keep / send" / "close".

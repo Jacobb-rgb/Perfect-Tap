@@ -5,5 +5,8 @@
   "ironbox_back": {"scene": "ironbox", "position": [-14, 12, 6], "target": [-2, 3, -9], "fov": 52, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66]},
   "ironbox_ui": {"scene": "ironbox", "position": [-4, 9.5, -27], "target": [-2, 3, -10], "fov": 50, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66], "ui": "ui_ironbox"},
   "ironbox_ui_rare": {"scene": "ironbox", "position": [-4, 9.5, -27], "target": [-2, 3, -10], "fov": 50, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66], "ui": "ui_ironbox_rare"},
-  "ironbox_ui_phone": {"scene": "ironbox", "position": [-4, 9.5, -27], "target": [-2, 3, -10], "fov": 50, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66], "ui": "ui_ironbox_phone", "uiInset": 58}
+  "ironbox_ui_phone": {"scene": "ironbox", "position": [-4, 9.5, -27], "target": [-2, 3, -10], "fov": 50, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66], "ui": "ui_ironbox_phone", "uiInset": 58},
+  "ironbox_ui_narrow": {"scene": "ironbox", "position": [-4, 9.5, -27], "target": [-2, 3, -10], "fov": 50, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66], "ui": "ui_ironbox_narrow", "uiInset": 58},
+  "penboard_gate": {"scene": "penboard", "position": [119.5, 8, 84], "target": [131.4, 2.6, 91.5], "fov": 55, "preset": "Surface", "shadowExtent": 60},
+  "penboard_close": {"scene": "penboard", "position": [122.5, 5.4, 85.3], "target": [131.2, 3.1, 88.6], "fov": 34, "preset": "Surface", "shadowExtent": 40}
 }
