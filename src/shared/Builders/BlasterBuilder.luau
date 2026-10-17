@@ -13,49 +13,60 @@
 	not sink into the shoulder in the R15 hold.
 
 	Kit pieces, all shared by the levels:
-	  bevelBox   Kenney's soft toy-plastic box: a full-width slab plus an
+	  bevelBox   Kenney's soft toy-plastic box: a full-width slab plus a lighter
 	             inner slab that is narrower and shorter but reaches the full
-	             height, so every long edge shows a small lit step (bevel)
-	  receiver   the colored body (a bevelBox); its bottom corners can be
-	             chamfered (Body + Belly + a wedge per corner) and the belly
-	             can be Kenney's steel lower band (two-tone, like b / c / j)
+	             height, so every long edge shows a wide lit step; `edges` fills
+	             the two top long steps with wedges (real 45-degree chamfers),
+	             `round` chamfers the top front edge the same way
+	  band       a lower band whose bottom front / back corners are chamfered
+	  receiver   the colored body: a bevelBox, optionally on a band (body
+	             colored with a chamfered back, or Kenney's steel lower band)
+	  chinBox    a steel nose / front block reaching down to its chin, only the
+	             front third of the chin chamfered (a soft front, never a keel)
 	  carry      the thick Kenney carry handle on top (bar + 2 posts)
+	  post       a small square sight post
 	  slot       Kenney's dark side slot with a small lever sticking out
 	             (light grey ores: the slot glows in the ore glow instead)
 	  litSlot    the same slot with a thin glowing strip inside (a vent)
-	  core       a small glowing power light framed by a steel bezel
-	  barrel     dark round barrel (+ a slim accent tip ring) + glowing muzzle disc
-	  twin       over-under twin barrels poking out of a handguard, a round
-	             steel collar around both, a glowing bore in each
+	  core       a glowing power light framed by a bezel
+	  stub       a short pistol barrel: a squared muzzle collar on the nose,
+	             the dark bore just poking out of it, a glowing muzzle
+	  barrel     a longer round barrel with a slim ore-colored tip ring
+	  twin       over-under twin barrels in a round steel collar
 	  skeleton   skeleton stock: two rods + a tilted butt plate
-	  scope      dark tube, steel eyepiece ring and front bell seated on the
-	             body, glowing lens
-	  pommel     the pad at the bottom of the grip: big wrap-around pads on
-	             the pistols, small flush pads on the carbines, slim grips
-	             with small pads on the rifles
+	  scope      a slim steel tube on a small dark mount, dark end rings and a
+	             big glowing lens
+	  pommel     the pad at the bottom of the grip (big, flush or slim)
 	  guard      the trigger guard bar
-	  plus per-level steel noses and front blocks (bevelled, with chamfered
-	  chins and sight fins), shrouds, handguards, magazines, humps, stocks,
-	  an energy cell framed by a dark cap and the collar, a muzzle brake.
 
 	Every level is its own gun, bigger and fancier with the level
 	(the part counts never drop, the test checks it):
-	  1 Rusty      pistol (b): light rust body on a steel band, steel nose    21 parts
-	  2 Scrap      pistol (c): steel band, big steel block with a chin        21
-	  3 Spark      SMG (a): rear tube, steel side panel, dark front           22
-	  4 Ember      carbine (j): steel band, rear block, nose with a sight     22
-	  5 Forgefire  bullpup (m): steel ramp, raked mouth, rear cap, vent       23
-	  6 Sunlance   (g): skeleton stock, steel band, hump, top shroud, hook    24
-	  7 Stormlance (r): scope, raked shroud with a vent, stock + butt pad     24
-	  8 Starlance  (p): skeleton stock, short scope, vented handguard, twin   25
-	  9 Royal      (d): raked body handguard, angled stock, scope, twin       25
-	 10 Heartlance sniper (e): loop stock, framed energy cell, long exposed
-	               twin barrels, muzzle brake with two bores                  25
+	  1 Rusty      bare junk pistol (b without the handle): brown-red rust body
+	               with chamfered edges on a worn iron band, corroded rear
+	               chamfer, stubby chamfered nose, wood grip                     22 parts
+	  2 Scrap      pistol (c): carry handle, a big steel front block running
+	               down to the grip line as a front grip, body-colored pad      24
+	  3 Spark      long low SMG (a): rounded rear tube, steel side panel with
+	               the core, low handle, chamfered dark front, magazine         24
+	  4 Ember      carbine (j): steel band, rear block, tall rounded nose,
+	               magazine under the front, handle at the back                 24
+	  5 Forgefire  bullpup (m): steel ramp, chamfered raked front, rear cap     25
+	  6 Sunlance   (g): skeleton stock, steel band, hump, top shroud, hook      25
+	  7 Stormlance (r): long body whose rear is the stock (chamfered, slim
+	               butt pad), dark top rail, scope, raked shroud with a vent    25
+	  8 Starlance  (p): skeleton stock, slim scope, body-colored magazine well,
+	               steel handguard with a vent, two stacked tubes held by a
+	               squared ore-colored muzzle block                             25
+	  9 Royal      (d): solid angled stock, dark carry rail, long slim body
+	               handguard with two stacked vents, twin barrels in a collar   25
+	 10 Heartlance sniper (e): loop stock, scope, a framed glowing energy cell,
+	               long twin barrels on an under-rail, muzzle brake            25
 	Budget: <= 25 parts. Colors follow the ore the blaster was forged from
-	(BlasterData.skin): body, stock and accents (levers, pads, brake) in the
-	ore colors, glows (core, muzzle, vents, lens, cell) in the ore glow,
-	Kenney's light steel for front blocks, handles and magazines (dark steel
-	next to light grey ores); level 1 (or no ore) is the rusty starter.
+	(BlasterData.skin): body, stock and accents (levers, pads, muzzle collars,
+	brake) in the ore colors, glows (core, muzzle, vents, lens, cell) in the
+	ore glow, Kenney's light steel for front blocks, handles and magazines
+	(dark steel next to light grey ores, with mid steel handles and posts so
+	the top silhouette still reads); level 1 (or no ore) is the rusty starter.
 	Bright glows are pulled toward the body color and darkened (by
 	luminance), so neon never blooms into white blobs; the beam (Look.Glow,
 	attribute Glow) keeps the ore's own glow.
@@ -77,16 +88,17 @@ local IRON_LIGHT = Color3.fromRGB(96, 100, 110)
 local SLOT = Color3.fromRGB(34, 34, 40) -- the dark side slots
 local STEEL = Color3.fromRGB(150, 158, 180) -- Kenney's light blue-grey steel (front blocks, handles, magazines)
 local STEEL_DARK = Color3.fromRGB(70, 73, 84) -- steel next to light grey ore bodies (two-tone instead of grey on grey)
-local WOOD = Color3.fromRGB(110, 70, 42)
-local RUST_WARM = Color3.fromRGB(198, 108, 56) -- the starter's body is pulled toward this warm rust
-local RUST_STEEL = Color3.fromRGB(140, 132, 124) -- the starter's light worn steel
-local RUST_PATCH = Color3.fromRGB(122, 66, 38) -- the rust patch on the starter's nose (the only corroded part)
+local STEEL_MID = Color3.fromRGB(120, 124, 136) -- handles and posts next to light grey ore bodies (they stay visible)
+local WOOD = Color3.fromRGB(92, 60, 40)
+local RUST_RED = Color3.fromRGB(140, 82, 64) -- the starter's body is pulled toward this brown-red rust
+local RUST_STEEL = Color3.fromRGB(100, 104, 114) -- the starter's cool, dark worn iron
+local RUST_PATCH = Color3.fromRGB(96, 54, 36) -- the corroded rear chamfer (the only corroded part)
 
 -- Cylinder whose axis runs along Z (Roblox cylinders run along X).
 local ALONG_Z = CFrame.Angles(0, math.pi / 2, 0)
 local CYL = Enum.PartType.Cylinder
 local NEON = Enum.Material.Neon
-local METAL = Enum.Material.Metal -- barrels and scope tubes keep a little sheen
+local METAL = Enum.Material.Metal -- barrels keep a little sheen
 local PLASTIC = Enum.Material.SmoothPlastic
 
 -- Wedge orientations (a WedgePart's slope faces -Z and up, the high edge at +Z).
@@ -94,8 +106,12 @@ local UP_FRONT = CFrame.identity -- the top-front corner is cut away
 local UP_BACK = CFrame.Angles(0, math.pi, 0) -- the top-back corner is cut away
 local DOWN_FRONT = CFrame.Angles(0, 0, math.pi) -- the bottom-front corner is cut away
 local DOWN_BACK = CFrame.Angles(math.pi, 0, 0) -- the bottom-back corner is cut away
+-- Long-edge chamfers: the wedge runs along Z, its slope faces up and out (+X / -X).
+local EDGE_RIGHT = CFrame.Angles(0, -math.pi / 2, 0)
+local EDGE_LEFT = CFrame.Angles(0, math.pi / 2, 0)
 
-local BEVEL = 0.05 -- the step of a bevelBox (design studs)
+local BEVEL = 0.09 -- the step / chamfer of a bevelBox (design studs)
+local OVERLAP = 0.015 -- slabs reach this far into the wedges next to them (no hairline seams)
 
 export type Look = {
 	Level: number,
@@ -108,6 +124,7 @@ export type Look = {
 	Dark: Color3,
 	Grip: Color3,
 	Steel: Color3,
+	Trim: Color3, -- carry handles and sight posts
 	BodyMaterial: Enum.Material,
 	SteelMaterial: Enum.Material,
 	LitSlots: boolean, -- light grey bodies: the side slots glow (one clear color accent)
@@ -138,6 +155,15 @@ type Pad = { Size: Vector3, Forward: number, Up: number }
 
 -- The grip of a level: top center at (0, GRIP_TOP, Z), Length long, Width x Depth thick.
 type Grip = { Z: number, Length: number, Width: number, Depth: number, Pad: Pad }
+
+-- How a bevelBox is finished.
+type BoxOpts = {
+	flat: boolean?, -- a square bottom (the box sits on a band or a chin)
+	edges: boolean?, -- real 45-degree chamfers on the two top long edges (2 wedges)
+	round: boolean?, -- a 45-degree chamfer on the top front edge (1 wedge)
+}
+
+local PLAIN: BoxOpts = {}
 
 local GRIP_TOP = 0.06
 local GRIP_TILT = 0.28 -- radians, the bottom leans back
@@ -184,19 +210,20 @@ function BlasterBuilder.look(level: any, oreId: string?): Look
 	local rusty = info.Level <= 1 or not oreId or oreId == ""
 	local body, glow = BlasterData.skin(if rusty then "" else oreId)
 	if rusty then
-		-- a light warm rust body that reads at game distance; the corrosion is only on the patch
-		local rust = lighter(body, 0.12):Lerp(RUST_WARM, 0.5)
+		-- a desaturated brown-red rust body on cool, dark worn iron (no copper orange);
+		-- the corrosion is only on the rear chamfer
 		return {
 			Level = info.Level,
 			Rusty = true,
-			Body = rust,
-			Accent = Color3.fromRGB(122, 74, 46),
+			Body = body:Lerp(RUST_RED, 0.85),
+			Accent = Color3.fromRGB(112, 62, 42),
 			Glow = glow,
 			GlowSoft = softGlow(glow, 0.2),
 			GlowCore = softGlow(glow, 0.05),
 			Dark = darker(IRON, 0.25),
 			Grip = WOOD,
 			Steel = RUST_STEEL,
+			Trim = RUST_STEEL,
 			BodyMaterial = PLASTIC,
 			SteelMaterial = PLASTIC,
 			LitSlots = false,
@@ -222,6 +249,7 @@ function BlasterBuilder.look(level: any, oreId: string?): Look
 		Dark = if v < 0.32 then IRON_LIGHT elseif greyish then darker(IRON, 0.3) else IRON,
 		Grip = IRON:Lerp(body, 0.12),
 		Steel = if greyish then STEEL_DARK else STEEL,
+		Trim = if greyish then STEEL_MID else STEEL,
 		BodyMaterial = PLASTIC,
 		SteelMaterial = PLASTIC, -- Kenney's steel is flat, like toy plastic
 		LitSlots = greyish,
@@ -251,32 +279,6 @@ local function slab(
 	)
 end
 
---[[
-	Kenney's soft toy-plastic box from two slabs: the main slab is full width and
-	length but BEVEL lower at the top (and bottom), the inner slab is BEVEL narrower
-	on each side and shorter at each end but reaches the full height. The cross
-	section is stepped, so the long edges and the top end edges catch a thin
-	highlight and the side silhouette has soft corners. flatBottom keeps the bottom
-	square (the box sits on a belly band).
-]]
-local function bevelBox(
-	k: Ctx,
-	name: string,
-	zBack: number,
-	zFront: number,
-	yBot: number,
-	yTop: number,
-	w: number,
-	color: Color3,
-	material: Enum.Material?,
-	flatBottom: boolean?
-): BasePart
-	local b = BEVEL
-	local main = slab(k, name, zBack, zFront, if flatBottom then yBot else yBot + b, yTop - b, w, color, material)
-	slab(k, name .. "Bevel", zBack - b, zFront + b, if flatBottom then yBot + 0.02 else yBot, yTop, w - 2 * b, color, material)
-	return main
-end
-
 -- A wedge from its extents; `facing` is one of the wedge orientations above.
 local function wedge(
 	k: Ctx,
@@ -292,6 +294,45 @@ local function wedge(
 ): BasePart
 	local cf = CFrame.new(0, (yBot + yTop) / 2, (zBack + zFront) / 2) * facing
 	return k.part(name, cf, Vector3.new(w, yTop - yBot, zBack - zFront), color, material, nil, "WedgePart")
+end
+
+--[[
+	Kenney's soft toy-plastic box from two slabs: the main slab is full width and
+	length but BEVEL lower at the top (and bottom), the inner slab (a little lighter,
+	like a lit chamfer) is BEVEL narrower on each side and shorter at each end but
+	reaches the full height. The cross section is stepped, so the long edges and the
+	top end edges catch a wide highlight and the side silhouette has soft corners.
+	opts.edges fills the two top long steps with wedges and opts.round the top front
+	step, so those edges become real 45-degree chamfers. opts.flat keeps the bottom
+	square (the box sits on a band or a chin).
+]]
+local function bevelBox(
+	k: Ctx,
+	name: string,
+	zBack: number,
+	zFront: number,
+	yBot: number,
+	yTop: number,
+	w: number,
+	color: Color3,
+	material: Enum.Material?,
+	opts: BoxOpts?
+): BasePart
+	local o = opts or PLAIN
+	local b = BEVEL
+	local lit = lighter(color, 0.06)
+	local main = slab(k, name, zBack, zFront, if o.flat then yBot else yBot + b, yTop - b, w, color, material)
+	slab(k, name .. "Bevel", zBack - b, zFront + b, if o.flat then yBot + 0.02 else yBot, yTop, w - 2 * b, lit, material)
+	if o.edges then
+		local size = Vector3.new(zBack - zFront - 2 * b, b, b)
+		local y, z = yTop - b / 2, (zBack + zFront) / 2
+		k.part(name .. "Edge", CFrame.new(w / 2 - b / 2, y, z) * EDGE_RIGHT, size, lit, material, nil, "WedgePart")
+		k.part(name .. "Edge", CFrame.new(-w / 2 + b / 2, y, z) * EDGE_LEFT, size, lit, material, nil, "WedgePart")
+	end
+	if o.round then
+		wedge(k, name .. "Round", zFront + b, zFront, yTop - b, yTop, w - 2 * b, UP_FRONT, lit, material)
+	end
+	return main
 end
 
 -- A cylinder along Z.
@@ -331,11 +372,37 @@ local function rod(k: Ctx, name: string, a: Vector3, b: Vector3, thick: number, 
 	return k.part(name, cf, Vector3.new(thick, thick, d.Magnitude + thick * 0.6), color, material)
 end
 
+-- A lower band from zBack to zFront whose bottom front / back corners are chamfered
+-- (cf / cb deep, a wedge each); the slab reaches a little into the wedges.
+local function band(
+	k: Ctx,
+	name: string,
+	zBack: number,
+	zFront: number,
+	yBot: number,
+	yTop: number,
+	w: number,
+	cf: number,
+	cb: number,
+	color: Color3,
+	material: Enum.Material
+)
+	local back = if cb > 0 then zBack - cb + OVERLAP else zBack
+	local front = if cf > 0 then zFront + cf - OVERLAP else zFront
+	slab(k, name, back, front, yBot, yTop, w, color, material)
+	if cf > 0 then
+		wedge(k, name .. "ChamferF", zFront + cf, zFront, yBot, yTop, w, DOWN_FRONT, color, material)
+	end
+	if cb > 0 then
+		wedge(k, name .. "ChamferB", zBack, zBack - cb, yBot, yTop, w, DOWN_BACK, color, material)
+	end
+end
+
 --[[
-	The colored body, h tall and w wide, a bevelBox. Its bottom corners can be
-	chamfered (c tall, cf deep at the front, cb deep at the back): the Body sits
-	above, the Belly below it is shortened and a wedge fills each chamfered corner.
-	steelBelly turns the lower band into Kenney's steel strip (two-tone).
+	The colored body, h tall and w wide, a bevelBox (edges: real chamfers on the top
+	long edges). It can sit on a band c tall (its bottom corners chamfered cf deep at
+	the front and cb deep at the back); steelBelly turns that band into Kenney's steel
+	lower strip (two-tone).
 ]]
 local function receiver(
 	k: Ctx,
@@ -346,30 +413,53 @@ local function receiver(
 	c: number,
 	cf: number,
 	cb: number,
-	steelBelly: boolean?
+	steelBelly: boolean?,
+	edges: boolean?
 )
 	local color, material = k.look.Body, k.look.BodyMaterial
 	if c <= 0 or (cf <= 0 and cb <= 0 and not steelBelly) then
-		bevelBox(k, "Body", zBack, zFront, 0, h, w, color, material)
+		bevelBox(k, "Body", zBack, zFront, 0, h, w, color, material, { edges = edges })
 		return
 	end
-	local bellyColor = if steelBelly then k.steel else color
-	local bellyMaterial = if steelBelly then k.metal else material
-	bevelBox(k, "Body", zBack, zFront, c, h, w, color, material, true)
-	slab(k, "Belly", zBack - cb, zFront + cf, 0, c, w, bellyColor, bellyMaterial)
-	if cf > 0 then
-		wedge(k, "ChamferF", zFront + cf, zFront, 0, c, w, DOWN_FRONT, bellyColor, bellyMaterial)
-	end
-	if cb > 0 then
-		wedge(k, "ChamferB", zBack, zBack - cb, 0, c, w, DOWN_BACK, bellyColor, bellyMaterial)
-	end
+	bevelBox(k, "Body", zBack, zFront, c, h, w, color, material, { flat = true, edges = edges })
+	band(k, "Belly", zBack, zFront, 0, c, w, cf, cb, if steelBelly then k.steel else color, if steelBelly then k.metal else material)
+end
+
+--[[
+	A nose / front block from yBot to yTop that reaches all the way down to its chin:
+	a bevelBox above yBot + chin and the chin band below it, only the front cf (about a
+	third of the depth) chamfered. The front reads as Kenney's soft chamfered block,
+	never as a keel or an arrowhead.
+]]
+local function chinBox(
+	k: Ctx,
+	name: string,
+	zBack: number,
+	zFront: number,
+	yBot: number,
+	yTop: number,
+	w: number,
+	chin: number,
+	cf: number,
+	color: Color3,
+	material: Enum.Material,
+	round: boolean?
+)
+	bevelBox(k, name, zBack, zFront, yBot + chin, yTop, w, color, material, { flat = true, round = round })
+	band(k, name .. "Chin", zBack, zFront, yBot, yBot + chin, w, cf, 0, color, material)
 end
 
 -- Kenney's thick carry handle: a bar on two posts on top of the body (top at y = base).
-local function carry(k: Ctx, zBack: number, zFront: number, base: number, height: number)
-	slab(k, "CarryBar", zBack + 0.02, zFront - 0.02, base + height - 0.12, base + height, 0.2, k.steel, k.metal)
-	slab(k, "CarryPost", zBack, zBack - 0.14, base - 0.04, base + height - 0.06, 0.16, k.steel, k.metal)
-	slab(k, "CarryPost", zFront + 0.14, zFront, base - 0.04, base + height - 0.06, 0.16, k.steel, k.metal)
+local function carry(k: Ctx, zBack: number, zFront: number, base: number, height: number, color: Color3?)
+	local c = color or k.look.Trim
+	slab(k, "CarryBar", zBack + 0.02, zFront - 0.02, base + height - 0.12, base + height, 0.2, c, k.metal)
+	slab(k, "CarryPost", zBack, zBack - 0.14, base - 0.04, base + height - 0.06, 0.16, c, k.metal)
+	slab(k, "CarryPost", zFront + 0.14, zFront, base - 0.04, base + height - 0.06, 0.16, c, k.metal)
+end
+
+-- A small square sight post standing on y = base.
+local function post(k: Ctx, z: number, base: number)
+	slab(k, "Sight", z + 0.07, z - 0.07, base - 0.03, base + 0.12, 0.14, k.look.Trim, k.metal)
 end
 
 -- A small lever block sticking out of a slot on both sides.
@@ -396,10 +486,10 @@ local function litSlot(k: Ctx, y: number, zBack: number, zFront: number, w: numb
 	slab(k, "Vent", zBack - 0.05, zFront + 0.05, y - 0.025, y + 0.025, w + 0.04, k.look.GlowSoft, NEON)
 end
 
--- The glowing core: a small power light framed by a steel bezel, through the body (seen on both sides).
+-- The glowing core: a power light framed by a bezel, through the body (seen on both sides).
 local function core(k: Ctx, y: number, z: number, w: number, d: number, bezel: Color3?)
 	disc(k, "CoreHousing", y, z, w + 0.04, d, bezel or k.steel, k.metal)
-	disc(k, "Core", y, z, w + 0.06, d * 0.5, k.look.GlowCore, NEON)
+	disc(k, "Core", y, z, w + 0.06, d * 0.56, k.look.GlowCore, NEON)
 end
 
 -- The trigger guard: a bar from the grip forward to the part in front.
@@ -414,27 +504,48 @@ local function pommel(k: Ctx, color: Color3, material: Enum.Material)
 	k.part("Pommel", cf, pad.Size, color, material)
 end
 
--- Dark round barrel + glowing muzzle disc (+ steel muzzle ring); returns the muzzle point.
+-- A short pistol barrel (Kenney b / c / a / j): a squared muzzle collar on the nose face
+-- (zFace), the dark bore poking just out of it, a glowing muzzle; returns the muzzle point.
+local function stub(k: Ctx, y: number, zFace: number, d: number, collar: Color3): Vector3
+	local look = k.look
+	local zTip = zFace - 0.13
+	tube(k, "Barrel", 0, y, zFace + 0.14, zTip, d, look.Dark, METAL)
+	local half = d / 2 + 0.06
+	slab(k, "MuzzleCollar", zFace + 0.02, zFace - 0.08, y - half, y + half, d + 0.12, collar, k.metal)
+	tube(k, "MuzzleGlow", 0, y, zTip + 0.01, zTip - 0.03, d * 0.66, look.GlowCore, NEON)
+	return Vector3.new(0, y, zTip - 0.08)
+end
+
+-- Dark round barrel + glowing muzzle disc (+ slim ore-colored tip ring); returns the muzzle point.
 local function barrel(k: Ctx, name: string, x: number, y: number, zBack: number, zTip: number, d: number, ring: boolean): Vector3
 	local look = k.look
 	tube(k, name, x, y, zBack, zTip, d, look.Dark, METAL)
 	if ring then
 		tube(k, "MuzzleRing", x, y, zTip + 0.14, zTip + 0.02, d + 0.06, look.Accent, k.metal)
 	end
-	tube(k, "MuzzleGlow", x, y, zTip + 0.01, zTip - 0.03, d * 0.6, look.GlowCore, NEON)
+	tube(k, "MuzzleGlow", x, y, zTip + 0.01, zTip - 0.03, d * 0.66, look.GlowCore, NEON)
 	return Vector3.new(x, y, zTip - 0.08)
 end
 
 -- Over-under twin barrels from zBack to zTip at heights yTop / yBot, a round steel collar
 -- around both (collarBack..collarFront) and a glowing bore in each; returns the muzzle point.
-local function twin(k: Ctx, yTop: number, yBot: number, zBack: number, zTip: number, d: number, collarBack: number, collarFront: number): Vector3
+local function twin(
+	k: Ctx,
+	yTop: number,
+	yBot: number,
+	zBack: number,
+	zTip: number,
+	d: number,
+	collarBack: number,
+	collarFront: number
+): Vector3
 	local look = k.look
 	local mid = (yTop + yBot) / 2
 	tube(k, "Barrel", 0, yTop, zBack, zTip, d, look.Dark, METAL)
 	tube(k, "Barrel2", 0, yBot, zBack, zTip, d, look.Dark, METAL)
 	tube(k, "Collar", 0, mid, collarBack, collarFront, yTop - yBot + d + 0.14, k.steel, k.metal)
-	tube(k, "MuzzleGlow", 0, yTop, zTip + 0.01, zTip - 0.03, d * 0.62, look.GlowCore, NEON)
-	tube(k, "MuzzleGlow2", 0, yBot, zTip + 0.01, zTip - 0.03, d * 0.62, look.GlowCore, NEON)
+	tube(k, "MuzzleGlow", 0, yTop, zTip + 0.01, zTip - 0.03, d * 0.66, look.GlowCore, NEON)
+	tube(k, "MuzzleGlow2", 0, yBot, zTip + 0.01, zTip - 0.03, d * 0.66, look.GlowCore, NEON)
 	return Vector3.new(0, mid, zTip - 0.1)
 end
 
@@ -458,23 +569,31 @@ local function skeleton(
 	k.part("Butt", butt, Vector3.new(0.42, buttH, 0.16), color, material)
 end
 
--- Scope: dark tube, a steel eyepiece ring and front bell seated on the body top (base), glowing lens.
-local function scope(k: Ctx, zBack: number, zFront: number, base: number, d: number)
+--[[
+	Scope: a slim steel tube on a small dark mount standing on the body top (base),
+	dark end rings only a little wider than the tube (eye: also a rear ring) and a
+	big glowing lens in the front ring.
+]]
+local function scope(k: Ctx, zBack: number, zFront: number, base: number, d: number, eye: boolean)
 	local look = k.look
-	local ring = d * 1.4
-	local y = base + ring / 2 - 0.01
-	tube(k, "Scope", 0, y, zBack - 0.06, zFront + 0.12, d, look.Dark, METAL)
-	tube(k, "ScopeEye", 0, y, zBack, zBack - 0.16, ring, k.steel, k.metal)
-	tube(k, "ScopeBell", 0, y, zFront + 0.2, zFront, ring, k.steel, k.metal)
-	tube(k, "Lens", 0, y, zFront + 0.01, zFront - 0.03, d * 0.86, look.GlowCore, NEON)
+	local ring = d * 1.18
+	local y = base + 0.06 + ring / 2
+	local mid = (zBack + zFront) / 2
+	slab(k, "ScopeMount", mid + 0.14, mid - 0.14, base - 0.02, y - d * 0.3, 0.16, look.Dark, k.metal)
+	tube(k, "Scope", 0, y, zBack, zFront + 0.1, d, k.steel, k.metal)
+	if eye then
+		tube(k, "ScopeEye", 0, y, zBack + 0.02, zBack - 0.12, ring, look.Dark, k.metal)
+	end
+	tube(k, "ScopeBell", 0, y, zFront + 0.16, zFront, ring, look.Dark, k.metal)
+	tube(k, "Lens", 0, y, zFront + 0.01, zFront - 0.03, d, look.GlowCore, NEON)
 end
 
 ---------------------------------------------------------------- the ten guns
 
 local GRIPS: { Grip } = {
-	{ Z = 0.2, Length = 0.54, Width = 0.32, Depth = 0.4, Pad = BIG_PAD },
+	{ Z = 0.2, Length = 0.54, Width = 0.32, Depth = 0.4, Pad = FLUSH_PAD },
 	{ Z = 0.22, Length = 0.56, Width = 0.32, Depth = 0.4, Pad = BIG_PAD },
-	{ Z = 0.32, Length = 0.58, Width = 0.32, Depth = 0.4, Pad = BIG_PAD },
+	{ Z = 0.32, Length = 0.58, Width = 0.32, Depth = 0.4, Pad = FLUSH_PAD },
 	{ Z = 0.34, Length = 0.62, Width = 0.3, Depth = 0.38, Pad = FLUSH_PAD },
 	{ Z = 0.16, Length = 0.62, Width = 0.3, Depth = 0.38, Pad = FLUSH_PAD },
 	{ Z = 0.32, Length = 0.62, Width = 0.3, Depth = 0.38, Pad = FLUSH_PAD },
@@ -486,83 +605,81 @@ local GRIPS: { Grip } = {
 
 -- Each design builds its parts (besides the Handle) and returns the muzzle point.
 local DESIGNS: { (k: Ctx) -> Vector3 } = {
-	-- 1 Rusty Blaster: a small junk pistol (blaster-b): light rust body on a steel lower band
-	-- with a chamfered back, a light steel nose with a chamfered chin, a sight fin and a crooked
-	-- corroded patch, the dark barrel mouth in it
+	-- 1 Rusty Blaster: a bare little junk pistol (blaster-b without the handle): a brown-red
+	-- rust body with chamfered top edges on a worn iron band, the rear chamfer corroded, a
+	-- stubby iron nose with a chamfered chin, a square sight post, a wood grip
 	function(k: Ctx): Vector3
-		local w = 0.62
-		receiver(k, 0.5, -0.54, 0.62, w, 0.24, 0, 0.26, true)
-		bevelBox(k, "Nose", -0.48, -0.84, -0.1, 0.58, w + 0.04, k.steel, k.metal)
-		wedge(k, "NoseChin", -0.48, -0.84, -0.28, -0.1, w + 0.04, DOWN_FRONT, k.steel, k.metal)
-		wedge(k, "Sight", -0.54, -0.7, 0.58, 0.74, 0.12, UP_FRONT, k.steel, k.metal)
-		carry(k, 0.32, -0.26, 0.62, 0.24)
-		slot(k, 0.47, 0.34, -0.16, w, 0.1)
-		core(k, 0.4, -0.33, w, 0.2)
-		k.part(
-			"Patch",
-			CFrame.new(0, 0.04, -0.68) * CFrame.Angles(0.22, 0, 0),
-			Vector3.new(w + 0.07, 0.15, 0.2),
-			RUST_PATCH,
-			Enum.Material.CorrodedMetal
-		)
-		guard(k, 0.12, -0.5)
-		pommel(k, k.steel, k.metal)
-		return barrel(k, "Barrel", 0, 0.28, -0.76, -1.06, 0.32, false)
+		local look = k.look
+		local w = 0.6
+		bevelBox(k, "Body", 0.44, -0.46, 0.2, 0.58, w, look.Body, look.BodyMaterial, { flat = true, edges = true })
+		slab(k, "Belly", 0.22 + OVERLAP, -0.46, 0, 0.2, w, k.steel, k.metal)
+		wedge(k, "Patch", 0.44, 0.22, 0, 0.2, w, DOWN_BACK, RUST_PATCH, Enum.Material.CorrodedMetal)
+		chinBox(k, "Nose", -0.42, -0.7, -0.24, 0.56, w + 0.04, 0.26, 0.12, k.steel, k.metal, true)
+		post(k, -0.53, 0.56)
+		slot(k, 0.44, 0.3, -0.1, w, 0.06)
+		core(k, 0.36, -0.28, w, 0.26)
+		guard(k, 0.12, -0.46)
+		pommel(k, look.Dark, k.metal)
+		return stub(k, 0.3, -0.7, 0.24, look.Dark)
 	end,
-	-- 2 Scrap Blaster: pistol (blaster-c): steel lower band, a big steel front block with a
-	-- chamfered chin down to the guard line and a sight fin, body-colored pad, muzzle ring
+	-- 2 Scrap Blaster: pistol (blaster-c): a body-colored receiver with a chamfered back, the
+	-- carry handle, a big steel front block running down to the grip line as a front grip
+	-- (a deep C shape), a body-colored pad
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.62
-		receiver(k, 0.52, -0.62, 0.64, w, 0.2, 0, 0.22, true)
-		bevelBox(k, "Block", -0.5, -0.94, -0.2, 0.58, w + 0.04, k.steel, k.metal)
-		wedge(k, "BlockChin", -0.5, -0.94, -0.42, -0.2, w + 0.04, DOWN_FRONT, k.steel, k.metal)
-		wedge(k, "Sight", -0.6, -0.78, 0.58, 0.78, 0.12, UP_FRONT, k.steel, k.metal)
-		carry(k, 0.36, -0.22, 0.64, 0.24)
-		slot(k, 0.48, 0.36, -0.2, w, 0.1)
-		core(k, 0.38, -0.36, w, 0.2)
-		guard(k, 0.14, -0.5)
+		receiver(k, 0.5, -0.56, 0.62, w, 0.2, 0, 0.22, false, true)
+		carry(k, 0.34, -0.24, 0.62, 0.24)
+		chinBox(k, "Block", -0.5, -0.96, -0.6, 0.56, w + 0.06, 0.34, 0.14, k.steel, k.metal)
+		post(k, -0.84, 0.56)
+		slot(k, 0.48, 0.36, -0.14, w, 0.1)
+		core(k, 0.32, -0.33, w, 0.26)
+		guard(k, 0.14, -0.52)
 		pommel(k, look.Body, look.BodyMaterial)
-		return barrel(k, "Barrel", 0, 0.2, -0.86, -1.16, 0.3, true)
+		return stub(k, 0.24, -0.96, 0.24, look.Accent)
 	end,
-	-- 3 Spark Blaster: SMG (blaster-a) with a rear tube, a steel side panel with the core,
-	-- a darker steel front flush with the body with a sight fin, a round barrel, a short magazine
+	-- 3 Spark Blaster: a long low SMG (blaster-a): a slim body-colored tube running out past
+	-- the back, a long steel side panel with a lit vent and a bolt, a dark top rail between two
+	-- sight posts, a darker steel front with chamfered top and chin, a magazine under the front
 	function(k: Ctx): Vector3
 		local look = k.look
-		local w = 0.62
-		local front = darker(k.steel, 0.14)
-		receiver(k, 0.72, -0.66, 0.64, w, 0.16, 0, 0.2)
-		tube(k, "RearTube", 0, 0.42, 1.06, 0.64, 0.38, look.Body, look.BodyMaterial)
-		slab(k, "SidePanel", 0.46, -0.48, 0.2, 0.5, w + 0.06, k.steel, k.metal)
-		bevelBox(k, "Front", -0.6, -0.94, 0.0, 0.62, w + 0.04, front, k.metal)
-		wedge(k, "FrontChin", -0.6, -0.94, -0.18, 0.0, w + 0.04, DOWN_FRONT, front, k.metal)
-		wedge(k, "Sight", -0.66, -0.82, 0.62, 0.78, 0.12, UP_FRONT, front, k.metal)
-		slab(k, "Magazine", -0.24, -0.56, -0.38, 0.02, 0.42, k.steel, k.metal)
-		carry(k, 0.5, -0.46, 0.64, 0.22)
-		core(k, 0.35, -0.1, w + 0.06, 0.24, look.Accent)
-		guard(k, 0.24, -0.24)
+		local w = 0.6
+		local front = darker(k.steel, 0.12)
+		bevelBox(k, "Body", 0.62, -0.6, 0, 0.54, w, look.Body, look.BodyMaterial, { edges = true })
+		tube(k, "RearTube", 0, 0.38, 0.96, 0.3, 0.3, look.Body, look.BodyMaterial)
+		slab(k, "SidePanel", 0.48, -0.46, 0.1, 0.42, w + 0.06, k.steel, k.metal)
+		litSlot(k, 0.26, 0.3, -0.36, w + 0.06)
+		disc(k, "Bolt", 0.26, 0.4, w + 0.1, 0.09, look.Dark, k.metal)
+		chinBox(k, "Front", -0.56, -0.94, -0.08, 0.6, w + 0.04, 0.2, 0.12, front, k.metal, true)
+		slab(k, "Magazine", -0.44, -0.78, -0.46, 0.02, 0.4, k.steel, k.metal)
+		slab(k, "TopRail", 0.5, -0.5, 0.52, 0.6, 0.3, look.Dark, k.metal)
+		post(k, 0.4, 0.6)
+		post(k, -0.72, 0.6)
+		guard(k, 0.24, -0.46)
 		pommel(k, k.steel, k.metal)
-		return barrel(k, "Barrel", 0, 0.36, -0.9, -1.3, 0.24, true)
+		return stub(k, 0.36, -0.94, 0.22, look.Accent)
 	end,
 	-- 4 Ember Blaster: carbine (blaster-j): body over a steel band, a small steel rear block,
-	-- a steel nose just above the body with a sight fin, a steel magazine under the front
+	-- a tall steel nose with a rounded top and a sight post, a magazine under the front, the
+	-- carry handle at the back
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.62
-		receiver(k, 0.76, -0.66, 0.6, w, 0.2, 0, 0.22, true)
-		slab(k, "RearBlock", 0.9, 0.72, 0.18, 0.44, w - 0.18, k.steel, k.metal)
-		bevelBox(k, "Nose", -0.62, -0.96, 0.0, 0.64, w + 0.04, k.steel, k.metal)
-		wedge(k, "Sight", -0.68, -0.84, 0.64, 0.8, 0.12, UP_FRONT, k.steel, k.metal)
-		slab(k, "Magazine", -0.12, -0.5, -0.54, 0.02, 0.42, k.steel, k.metal)
-		carry(k, 0.56, 0.06, 0.6, 0.24)
+		receiver(k, 0.76, -0.62, 0.58, w, 0.2, 0, 0, true, true)
+		slab(k, "RearBlock", 0.92, 0.72, 0.16, 0.46, w - 0.18, k.steel, k.metal)
+		bevelBox(k, "Nose", -0.58, -0.96, 0, 0.72, w + 0.04, k.steel, k.metal, { round = true })
+		post(k, -0.7, 0.72)
+		slab(k, "Magazine", -0.12, -0.5, -0.56, 0.02, 0.42, k.steel, k.metal)
+		carry(k, 0.56, 0.08, 0.58, 0.22)
 		slot(k, 0.44, 0.28, -0.44, w, 0.02)
-		core(k, 0.34, 0.52, w, 0.2)
+		core(k, 0.36, 0.5, w, 0.26)
 		guard(k, 0.26, -0.12)
 		pommel(k, look.Body, look.BodyMaterial)
-		return barrel(k, "Barrel", 0, 0.34, -0.9, -1.34, 0.26, true)
+		return stub(k, 0.36, -0.96, 0.24, look.Accent)
 	end,
 	-- 5 Forgefire Blaster: bullpup (blaster-m) with a steel top ramp + sight block, a round
-	-- rear cap, a body-colored front with a raked top, the barrel in a mouth over a raked chin
+	-- rear cap, a body-colored front with chamfered edges and a raked top, the barrel in a
+	-- mouth over a raked chin
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.64
@@ -571,117 +688,127 @@ local DESIGNS: { (k: Ctx) -> Vector3 } = {
 		wedge(k, "TopRamp", 0.72, 0.26, 0.5, 0.8, w - 0.14, UP_BACK, k.steel, k.metal)
 		slab(k, "TopCover", 0.26, -0.5, 0.5, 0.8, w - 0.14, k.steel, k.metal)
 		slab(k, "SightBlock", 0.06, -0.24, 0.78, 0.96, 0.16, look.Accent, k.metal)
-		bevelBox(k, "Front", -0.44, -0.88, -0.02, 0.66, w + 0.04, look.Body, look.BodyMaterial)
+		bevelBox(k, "Front", -0.44, -0.88, -0.02, 0.66, w + 0.04, look.Body, look.BodyMaterial, { edges = true })
 		wedge(k, "FrontRake", -0.83, -1.06, 0.3, 0.66, w + 0.04, UP_FRONT, look.Body, look.BodyMaterial)
-		slab(k, "LowerFront", -0.34, -0.82, -0.28, 0.0, w - 0.08, k.steel, k.metal)
+		slab(k, "LowerFront", -0.34, -0.82 - OVERLAP, -0.28, 0.0, w - 0.08, k.steel, k.metal)
 		wedge(k, "LowerChin", -0.82, -1.0, -0.28, 0.0, w - 0.08, DOWN_FRONT, k.steel, k.metal)
 		litSlot(k, 0.3, 0.64, 0.02, w)
-		core(k, 0.4, -0.66, w + 0.04, 0.22)
+		core(k, 0.4, -0.66, w + 0.04, 0.26)
 		guard(k, 0.08, -0.34)
 		pommel(k, look.Accent, k.metal)
 		return barrel(k, "Barrel", 0, 0.18, -0.9, -1.3, 0.26, true)
 	end,
-	-- 6 Sunlance (blaster-g): short skeleton stock, body over a steel band, steel hump, a top
-	-- shroud with a hook over the barrel, a short steel foregrip raked at the back
+	-- 6 Sunlance (blaster-g): short skeleton stock, body with chamfered edges over a steel band,
+	-- steel hump, a top shroud with a hook over the barrel, a short steel foregrip
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.62
-		receiver(k, 0.62, -0.62, 0.6, w, 0.18, 0, 0.2, true)
+		receiver(k, 0.62, -0.62, 0.6, w, 0.18, 0, 0.2, true, true)
 		skeleton(k, 0.62, 0.5, 0.48, 0.16, 0.58, 0.58, 0.16, look.Body, look.BodyMaterial)
 		slab(k, "Hump", 0.32, -0.18, 0.58, 0.84, w - 0.16, k.steel, k.metal)
 		wedge(k, "HumpSlope", 0.52, 0.32, 0.58, 0.84, w - 0.16, UP_BACK, k.steel, k.metal)
 		bevelBox(k, "Shroud", -0.18, -1.24, 0.42, 0.78, w - 0.12, k.steel, k.metal)
 		slab(k, "ShroudHook", -1.1, -1.24, 0.22, 0.44, w - 0.22, k.steel, k.metal)
-		slab(k, "Foregrip", -0.3, -0.7, -0.24, 0.02, w - 0.12, k.steel, k.metal)
+		slab(k, "Foregrip", -0.3 + OVERLAP, -0.7, -0.24, 0.02, w - 0.12, k.steel, k.metal)
 		wedge(k, "ForeChin", -0.14, -0.3, -0.24, 0.02, w - 0.12, DOWN_BACK, k.steel, k.metal)
-		slot(k, 0.32, 0.44, -0.2, w, 0.18)
-		core(k, 0.36, -0.42, w, 0.22)
+		slot(k, 0.32, 0.44, -0.2, w)
+		core(k, 0.36, -0.42, w, 0.26)
 		guard(k, 0.24, -0.3)
 		pommel(k, look.Body, look.BodyMaterial)
 		return barrel(k, "Barrel", 0, 0.3, -0.5, -1.62, 0.24, true)
 	end,
-	-- 7 Stormlance (blaster-r): scope, raked steel shroud with a lit vent, forward-tilted
-	-- magazine, a narrow stock with a dark butt pad
+	-- 7 Stormlance (blaster-r): a long body whose rear is the stock, its bottom-rear chamfered,
+	-- a slim ore-colored butt pad, a dark top rail with the scope, a raked steel shroud with a
+	-- lit vent, a forward-tilted magazine
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.64
-		receiver(k, 0.86, -0.66, 0.64, w, 0, 0, 0)
-		slab(k, "Stock", 1.42, 0.82, 0.22, 0.58, w - 0.24, look.Body, look.BodyMaterial)
-		slab(k, "ButtPad", 1.52, 1.4, -0.04, 0.64, w - 0.16, look.Dark, k.metal)
-		scope(k, 0.5, -0.46, 0.64, 0.22)
+		receiver(k, 1.38, -0.66, 0.64, w, 0.34, 0, 0.42)
+		slab(k, "ButtPad", 1.46, 1.37, 0.36, 0.64, w - 0.12, look.Accent, k.metal)
+		slab(k, "TopRail", 1.22, -0.5, 0.62, 0.69, 0.34, look.Dark, k.metal)
+		scope(k, 0.5, -0.44, 0.69, 0.22, false)
 		bevelBox(k, "Shroud", -0.6, -1.36, 0.08, 0.72, w + 0.04, k.steel, k.metal)
 		wedge(k, "ShroudRake", -1.31, -1.62, 0.08, 0.72, w + 0.04, DOWN_FRONT, k.steel, k.metal)
 		k.part("Magazine", CFrame.new(0, -0.25, -0.3) * CFrame.Angles(0.14, 0, 0), Vector3.new(0.44, 0.56, 0.38), k.steel, k.metal)
 		litSlot(k, 0.44, -0.72, -1.24, w + 0.04)
-		slot(k, 0.46, 0.7, 0.12, w, 0.4)
-		core(k, 0.3, -0.36, w, 0.22)
+		slot(k, 0.5, 1.2, 0.62, w)
+		core(k, 0.47, 0.1, w, 0.26)
 		guard(k, 0.42, -0.1)
 		pommel(k, k.steel, k.metal)
 		return barrel(k, "Barrel", 0, 0.3, -1.36, -1.86, 0.24, true)
 	end,
-	-- 8 Starlance (blaster-p): skeleton stock, a short scope, a steel handguard with a lit
-	-- slot, a steel magazine, over-under twin barrels poking out through a round collar
+	-- 8 Starlance (blaster-p): skeleton stock, a slim scope, a body-colored magazine well over
+	-- a steel magazine, a steel handguard with a lit vent, two short stacked tubes held by a
+	-- squared ore-colored muzzle block
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.62
-		receiver(k, 0.92, -0.6, 0.62, w, 0, 0, 0)
-		skeleton(k, 0.92, 0.52, 0.5, 0.12, 0.6, 0.62, 0.12, look.Body, look.BodyMaterial)
-		scope(k, 0.62, -0.28, 0.62, 0.2)
-		slab(k, "Handguard", -0.54, -1.5, 0.04, 0.58, 0.52, k.steel, k.metal)
-		wedge(k, "HandguardRake", -1.5, -1.64, 0.3, 0.58, 0.52, UP_FRONT, k.steel, k.metal)
-		litSlot(k, 0.32, -0.66, -1.36, 0.52)
-		slab(k, "Magazine", 0.26, -0.14, -0.56, 0.02, 0.44, k.steel, k.metal)
-		slot(k, 0.46, 0.44, -0.44, w)
-		core(k, 0.3, 0.72, w, 0.22)
-		guard(k, 0.52, 0.24)
+		bevelBox(k, "Body", 0.92, -0.6, 0, 0.62, w, look.Body, look.BodyMaterial)
+		skeleton(k, 0.92, 0.6, 0.5, 0.12, 0.62, 0.64, 0.1, look.Body, look.BodyMaterial)
+		scope(k, 0.58, -0.3, 0.62, 0.2, false)
+		slab(k, "MagWell", 0.22, -0.3, -0.24, 0.02, w - 0.1, look.Body, look.BodyMaterial)
+		slab(k, "Magazine", 0.16, -0.22, -0.6, -0.2, 0.42, k.steel, k.metal)
+		bevelBox(k, "Handguard", -0.54, -1.42, 0.04, 0.62, 0.56, k.steel, k.metal)
+		litSlot(k, 0.33, -0.66, -1.3, 0.56)
+		tube(k, "Barrel", 0, 0.46, -1.3, -1.9, 0.17, look.Dark, METAL)
+		tube(k, "Barrel2", 0, 0.22, -1.3, -1.9, 0.17, look.Dark, METAL)
+		slab(k, "MuzzleBlock", -1.62, -1.76, 0.08, 0.6, 0.3, look.Accent, k.metal)
+		tube(k, "MuzzleGlow", 0, 0.46, -1.89, -1.93, 0.12, look.GlowCore, NEON)
+		tube(k, "MuzzleGlow2", 0, 0.22, -1.89, -1.93, 0.12, look.GlowCore, NEON)
+		core(k, 0.32, 0.7, w, 0.24)
+		guard(k, 0.52, 0.22)
 		pommel(k, k.steel, k.metal)
-		return twin(k, 0.46, 0.22, -1.3, -2.02, 0.17, -1.78, -1.9)
+		return Vector3.new(0, 0.34, -2.0)
 	end,
-	-- 9 Royal Sunlance (blaster-d): the body stretched forward into a raked handguard with
-	-- a lit slot, an angled skeleton stock, the scope, a steel magazine, twin barrels
+	-- 9 Royal Sunlance (blaster-d): a solid angled stock (deeper toward the butt, a slim dark
+	-- pad), a dark carry rail, a long slim body-colored handguard with two stacked lit vents,
+	-- over-under twin barrels in a round steel collar
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.62
-		receiver(k, 0.86, -0.56, 0.64, w, 0, 0, 0)
-		bevelBox(k, "Handguard", -0.5, -1.56, 0.1, 0.58, w - 0.08, look.Body, look.BodyMaterial)
-		wedge(k, "HandguardRake", -1.51, -1.8, 0.1, 0.58, w - 0.08, UP_FRONT, look.Body, look.BodyMaterial)
-		skeleton(k, 0.86, 0.57, 0.56, 0.08, 0.66, 0.56, 0.34, look.Body, look.BodyMaterial)
-		scope(k, 0.56, -0.5, 0.64, 0.24)
+		bevelBox(k, "Body", 0.86, -0.56, 0, 0.64, w, look.Body, look.BodyMaterial)
+		slab(k, "Stock", 1.42, 0.82, 0.32 - OVERLAP, 0.58, w - 0.26, look.Body, look.BodyMaterial)
+		wedge(k, "StockTaper", 1.42, 0.82, 0.0, 0.32, w - 0.26, DOWN_FRONT, look.Body, look.BodyMaterial)
+		slab(k, "ButtPad", 1.48, 1.41, 0.0, 0.58, w - 0.22, look.Dark, k.metal)
+		carry(k, 0.56, -0.24, 0.64, 0.2, look.Dark)
+		bevelBox(k, "Handguard", -0.5, -1.6, 0.1, 0.56, w - 0.08, look.Body, look.BodyMaterial)
+		wedge(k, "HandguardRake", -1.55, -1.82, 0.1, 0.56, w - 0.08, UP_FRONT, look.Body, look.BodyMaterial)
+		slab(k, "VentFrame", -0.66, -1.4, 0.18, 0.48, w - 0.06, SLOT, k.metal)
+		slab(k, "Vent", -0.71, -1.35, 0.375, 0.425, w - 0.04, look.GlowSoft, NEON)
+		slab(k, "Vent", -0.71, -1.35, 0.235, 0.285, w - 0.04, look.GlowSoft, NEON)
 		slab(k, "Magazine", 0.26, -0.16, -0.6, 0.02, 0.44, k.steel, k.metal)
-		litSlot(k, 0.36, -0.62, -1.4, w - 0.08)
-		core(k, 0.32, 0.5, w, 0.22)
+		core(k, 0.34, 0.5, w, 0.24)
 		guard(k, 0.54, 0.24)
 		pommel(k, k.steel, k.metal)
-		return twin(k, 0.46, 0.22, -1.5, -2.2, 0.17, -1.96, -2.08)
+		return twin(k, 0.46, 0.22, -1.5, -2.26, 0.18, -2.0, -2.12)
 	end,
-	-- 10 Heartlance: long slim sniper (blaster-e): closed loop stock, big scope, a steel
-	-- handguard, a glowing energy cell framed by a dark cap and the round collar, long exposed
-	-- over-under barrels, a muzzle brake with a glowing bore per barrel
+	-- 10 Heartlance: long slim sniper (blaster-e): closed loop stock, scope, a glowing energy
+	-- cell framed by a dark cap, a dark middle band and the round collar, long over-under
+	-- barrels on a steel under-rail, a muzzle brake with one big glowing bore
 	function(k: Ctx): Vector3
 		local look = k.look
 		local w = 0.6
-		receiver(k, 0.84, -0.6, 0.58, w, 0, 0, 0)
+		bevelBox(k, "Body", 0.84, -0.6, 0, 0.58, w, look.Body, look.BodyMaterial)
 		-- the closed loop stock: top rod + bottom rod + butt, all in the accent color
 		rod(k, "StockRod", Vector3.new(0, 0.5, 0.8), Vector3.new(0, 0.5, 1.5), 0.12, look.Accent, k.metal)
 		rod(k, "StockRod", Vector3.new(0, 0.1, 0.8), Vector3.new(0, -0.02, 1.5), 0.12, look.Accent, k.metal)
 		k.part("Butt", CFrame.new(0, 0.24, 1.56) * CFrame.Angles(0.1, 0, 0), Vector3.new(0.4, 0.7, 0.16), look.Accent, k.metal)
-		scope(k, 0.62, -0.56, 0.58, 0.26)
+		scope(k, 0.62, -0.56, 0.58, 0.26, false)
 		slab(k, "Handguard", -0.54, -1.2, 0.14, 0.54, 0.44, k.steel, k.metal)
-		-- the energy cell: a lit window between a dark cap and the collar that holds the barrels
 		tube(k, "CellCap", 0, 0.34, -1.16, -1.26, 0.48, SLOT, k.metal)
-		tube(k, "Cell", 0, 0.34, -1.24, -1.62, 0.36, look.GlowCore, NEON)
-		tube(k, "Collar", 0, 0.34, -1.6, -1.74, 0.52, k.steel, k.metal)
-		tube(k, "Barrel", 0, 0.43, -1.62, -2.66, 0.15, look.Dark, METAL)
-		tube(k, "Barrel2", 0, 0.25, -1.62, -2.66, 0.15, look.Dark, METAL)
-		tube(k, "Brake", 0, 0.34, -2.58, -2.9, 0.4, look.Accent, k.metal)
-		slab(k, "BrakePorts", -2.66, -2.82, 0.31, 0.37, 0.44, SLOT, k.metal)
-		tube(k, "MuzzleGlow", 0, 0.43, -2.89, -2.93, 0.1, look.GlowCore, NEON)
-		tube(k, "MuzzleGlow2", 0, 0.25, -2.89, -2.93, 0.1, look.GlowCore, NEON)
+		tube(k, "Cell", 0, 0.34, -1.24, -1.74, 0.36, look.GlowCore, NEON)
+		tube(k, "CellBand", 0, 0.34, -1.45, -1.53, 0.42, SLOT, k.metal)
+		tube(k, "Collar", 0, 0.34, -1.72, -1.86, 0.54, k.steel, k.metal)
+		tube(k, "Barrel", 0, 0.44, -1.74, -2.7, 0.18, look.Dark, METAL)
+		tube(k, "Barrel2", 0, 0.24, -1.74, -2.7, 0.18, look.Dark, METAL)
+		slab(k, "UnderRail", -1.8, -2.64, 0.05, 0.16, 0.16, k.steel, k.metal)
+		tube(k, "Brake", 0, 0.34, -2.6, -2.94, 0.44, look.Accent, k.metal)
+		tube(k, "MuzzleGlow", 0, 0.34, -2.93, -2.97, 0.3, look.GlowCore, NEON)
 		slab(k, "Magazine", 0.28, -0.12, -0.6, 0.02, 0.42, k.steel, k.metal)
 		litSlot(k, 0.3, 0.62, -0.42, w)
 		guard(k, 0.58, 0.28)
 		pommel(k, look.Accent, k.metal)
-		return Vector3.new(0, 0.34, -3.0)
+		return Vector3.new(0, 0.34, -3.05)
 	end,
 }
 
