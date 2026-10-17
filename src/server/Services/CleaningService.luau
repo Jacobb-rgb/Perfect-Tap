@@ -379,6 +379,11 @@ function CleaningService.start()
 	end
 end
 
+-- Is the player in the middle of the cleaning minigame?
+function CleaningService.inSession(player: Player): boolean
+	return sessions[player] ~= nil
+end
+
 -- For the tutorial arrow.
 function CleaningService.stationOf(player: Player): Model?
 	for _, machine in MachineService.ofPlayer(player) do
