@@ -372,5 +372,311 @@
     1
    ]
   }
+ },
+ "concept_ladder": {
+  "scene": "blaster_concepts",
+  "position": [
+   237.4,
+   7.6,
+   22.0
+  ],
+  "target": [
+   237.4,
+   7.6,
+   -9.0
+  ],
+  "fov": 40,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.55,
+   0.8
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "hold_tool": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_tool",
+  "position": [
+   -0.5,
+   6.2,
+   45.0
+  ],
+  "target": [
+   -0.5,
+   3.0,
+   22.0
+  ],
+  "fov": 50
+ },
+ "hold_tool_a": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_tool",
+  "position": [
+   -10.4,
+   4.7,
+   29.0
+  ],
+  "target": [
+   -11.3,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "hold_tool_b": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_tool",
+  "position": [
+   0.6000000000000001,
+   4.7,
+   29.0
+  ],
+  "target": [
+   -0.30000000000000004,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "hold_tool_c": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_tool",
+  "position": [
+   11.6,
+   4.7,
+   29.0
+  ],
+  "target": [
+   10.7,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "play_tool_a": {
+  "scene": "blaster_hold_tool",
+  "position": [
+   -14.09,
+   -7.0,
+   -159.13
+  ],
+  "target": [
+   -24.68,
+   -8.7,
+   -160.93
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 60
+ },
+ "play_tool_b": {
+  "scene": "blaster_hold_tool",
+  "position": [
+   -40.09,
+   -7.0,
+   -159.13
+  ],
+  "target": [
+   -50.68,
+   -8.7,
+   -160.93
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 60
+ },
+ "play_tool_c": {
+  "scene": "blaster_hold_tool",
+  "position": [
+   -66.09,
+   -7.0,
+   -159.13
+  ],
+  "target": [
+   -76.68,
+   -8.7,
+   -160.93
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 60
+ },
+ "hold_aim": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_aim",
+  "position": [
+   -0.5,
+   6.2,
+   45.0
+  ],
+  "target": [
+   -0.5,
+   3.0,
+   22.0
+  ],
+  "fov": 50
+ },
+ "hold_aim_a": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_aim",
+  "position": [
+   -10.4,
+   4.7,
+   29.0
+  ],
+  "target": [
+   -11.3,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "hold_aim_b": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_aim",
+  "position": [
+   0.6000000000000001,
+   4.7,
+   29.0
+  ],
+  "target": [
+   -0.30000000000000004,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "hold_aim_c": {
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 60,
+  "maxLights": 24,
+  "scene": "blaster_hold_aim",
+  "position": [
+   11.6,
+   4.7,
+   29.0
+  ],
+  "target": [
+   10.7,
+   3.7,
+   22.0
+  ],
+  "fov": 40
+ },
+ "play_aim_a": {
+  "scene": "blaster_hold_aim",
+  "position": [
+   -14.09,
+   -7.0,
+   -159.13
+  ],
+  "target": [
+   -24.68,
+   -8.7,
+   -160.93
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 60
+ },
+ "play_aim_b": {
+  "scene": "blaster_hold_aim",
+  "position": [
+   -40.09,
+   -7.0,
+   -159.13
+  ],
+  "target": [
+   -50.68,
+   -8.7,
+   -160.93
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 60
+ },
+ "play_aim_c": {
+  "scene": "blaster_hold_aim",
+  "position": [
+   -66.09,
+   -7.0,
+   -159.13
+  ],
+  "target": [
+   -76.68,
+   -8.7,
+   -160.93
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 60
  }
 }

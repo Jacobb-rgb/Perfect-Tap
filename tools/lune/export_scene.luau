@@ -79,12 +79,15 @@ elseif sceneName == "lobby_blockout" then
 	-- the world plus a translucent box for every lobby set piece (LobbyLayout)
 	WorldBuilder.build(workspace)
 	require("./lib/lobby_blockout").build(Loader, workspace)
-elseif sceneName == "machines" then require("./lib/machines_gallery").build(Loader, workspace) -- every machine on a plot pad (Kenney Factory Kit style)
+elseif sceneName == "machines" then
+	require("./lib/machines_gallery").build(Loader, workspace) -- every machine on a plot pad (Kenney Factory Kit style)
 elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	-- laser blasters: the 10 levels in ore skins / a forgekeeper blasting a quarry rock
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
 elseif sceneName == "blaster_concepts" then -- blaster style proposals (tools/lune/lib/blaster_concepts.luau)
 	require("./lib/blaster_concepts").build(Loader, workspace)
+elseif sceneName == "blaster_hold_tool" or sceneName == "blaster_hold_aim" then -- avatars holding the blaster proposals
+	require("./lib/blaster_concepts").buildHold(Loader, workspace, if sceneName == "blaster_hold_aim" then "aim" else "tool")
 elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)
 	require("./lib/train_gallery").build(Loader, workspace)
 elseif sceneName == "gameplay" then
@@ -183,7 +186,9 @@ elseif sceneName == "cleaning" then
 		local machine = MachineData.ById[entry.Id]
 		local w, d = MachineData.footprint(machine, entry.R)
 		local half = GameConfig.PlotCells * GameConfig.CellSize / 2
-		local cf = plotCf * CF.new(-half + (entry.X + w / 2) * GameConfig.CellSize, 0, -half + (entry.Z + d / 2) * GameConfig.CellSize) * CF.Angles(0, -entry.R * math.pi / 2, 0)
+		local cf = plotCf
+			* CF.new(-half + (entry.X + w / 2) * GameConfig.CellSize, 0, -half + (entry.Z + d / 2) * GameConfig.CellSize)
+			* CF.Angles(0, -entry.R * math.pi / 2, 0)
 		local model = MachineBuilder.build(entry.Id)
 		model:PivotTo(cf)
 		model.Parent = workspace
@@ -216,7 +221,9 @@ elseif sceneName == "cleaning" then
 		local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 		local Geometry2D = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.Geometry2D")
 		local function marker(p, size, color)
-			local world = workCf:PointToWorldSpace(roblox.Vector3.new(p.X * OreShellBuilder.Scale, p.Y * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.03))
+			local world = workCf:PointToWorldSpace(
+				roblox.Vector3.new(p.X * OreShellBuilder.Scale, p.Y * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.03)
+			)
 			Geo.ball(fx, world, size, color, roblox.Enum.Material.Neon, { CanCollide = false, CastShadow = false })
 		end
 		marker(cut.Line[#cut.Line], 0.2, roblox.Color3.fromRGB(255, 232, 150))
@@ -261,7 +268,8 @@ elseif sceneName == "cleaning" then
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local ore = OreData.get(oreId)
 	local function toolAt(u, v, kind)
-		local tip = workCf:PointToWorldSpace(roblox.Vector3.new(u * OreShellBuilder.Scale, v * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.05))
+		local tip =
+			workCf:PointToWorldSpace(roblox.Vector3.new(u * OreShellBuilder.Scale, v * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.05))
 		local axis = workCf:VectorToWorldSpace(roblox.Vector3.new(0.35, 0.5, 0.8)).Unit
 		local right = axis:Cross(workCf.LookVector * -1).Unit
 		local back = right:Cross(axis).Unit
@@ -269,12 +277,33 @@ elseif sceneName == "cleaning" then
 		-- a working (pressed) chisel is see-through, like CleaningController.updateTool
 		local props = { CanCollide = false, Transparency = if kind == "Chisel" then 0.55 else 0 }
 		if kind == "Chisel" then
-			Geo.wedge(fx, cf * CF.new(0, 0.12, 0) * CF.Angles(math.pi, 0, 0), roblox.Vector3.new(0.16, 0.24, 0.12), roblox.Color3.fromRGB(200, 205, 215), roblox.Enum.Material.Metal, props)
-			Geo.block(fx, cf * CF.new(0, 0.5, 0), roblox.Vector3.new(0.16, 0.55, 0.12), roblox.Color3.fromRGB(170, 176, 188), roblox.Enum.Material.Metal, props)
+			Geo.wedge(
+				fx,
+				cf * CF.new(0, 0.12, 0) * CF.Angles(math.pi, 0, 0),
+				roblox.Vector3.new(0.16, 0.24, 0.12),
+				roblox.Color3.fromRGB(200, 205, 215),
+				roblox.Enum.Material.Metal,
+				props
+			)
+			Geo.block(
+				fx,
+				cf * CF.new(0, 0.5, 0),
+				roblox.Vector3.new(0.16, 0.55, 0.12),
+				roblox.Color3.fromRGB(170, 176, 188),
+				roblox.Enum.Material.Metal,
+				props
+			)
 			Geo.block(fx, cf * CF.new(0, 1.1, 0), roblox.Vector3.new(0.24, 0.7, 0.24), roblox.Color3.fromRGB(150, 98, 56), nil, props)
 		elseif kind == "Brush" then
 			for x = -1, 1 do
-				Geo.block(fx, cf * CF.new(x * 0.11, 0.1, 0), roblox.Vector3.new(0.08, 0.22, 0.32), roblox.Color3.fromRGB(230, 205, 140), nil, props)
+				Geo.block(
+					fx,
+					cf * CF.new(x * 0.11, 0.1, 0),
+					roblox.Vector3.new(0.08, 0.22, 0.32),
+					roblox.Color3.fromRGB(230, 205, 140),
+					nil,
+					props
+				)
 			end
 			Geo.block(fx, cf * CF.new(0, 0.3, 0), roblox.Vector3.new(0.42, 0.18, 0.4), roblox.Color3.fromRGB(150, 98, 56), nil, props)
 			Geo.block(fx, cf * CF.new(0, 0.75, 0.05), roblox.Vector3.new(0.16, 0.8, 0.16), roblox.Color3.fromRGB(120, 80, 48), nil, props)
@@ -374,10 +403,24 @@ elseif sceneName == "cleaning" then
 		for i = 1, rayCount do
 			local a = i / rayCount * math.pi * 2 + 0.8
 			local dir = workCf:VectorToWorldSpace(roblox.Vector3.new(math.cos(a), math.sin(a), 0.15))
-			Geo.block(fx, CF.lookAt(center + dir * 3.2, center + dir * 4), roblox.Vector3.new(0.12, 0.12, 6), rarity.Color, roblox.Enum.Material.Neon, { CanCollide = false, Transparency = 0.7 })
+			Geo.block(
+				fx,
+				CF.lookAt(center + dir * 3.2, center + dir * 4),
+				roblox.Vector3.new(0.12, 0.12, 6),
+				rarity.Color,
+				roblox.Enum.Material.Neon,
+				{ CanCollide = false, Transparency = 0.7 }
+			)
 		end
 		-- the glow light stays at the vise (behind the lifted core), like the controller's holder
-		local holder = Geo.ball(fx, workCf:PointToWorldSpace(roblox.Vector3.new(0, 0, OreShellBuilder.CoreFront - 0.4)), 0.1, ore.Glow, nil, { CanCollide = false, Transparency = 1 })
+		local holder = Geo.ball(
+			fx,
+			workCf:PointToWorldSpace(roblox.Vector3.new(0, 0, OreShellBuilder.CoreFront - 0.4)),
+			0.1,
+			ore.Glow,
+			nil,
+			{ CanCollide = false, Transparency = 1 }
+		)
 		local light = roblox.Instance.new("PointLight")
 		light.Color = ore.Glow
 		light.Range = 18
@@ -538,7 +581,9 @@ elseif sceneName == "ores" then
 					piece:Destroy()
 				end
 			end
-			local text = if col <= 3 then zoneId .. " · " .. #set .. (if #set == 1 then " ore" else " ores") else zoneId .. " · stage " .. (col - 3)
+			local text = if col <= 3
+				then zoneId .. " · " .. #set .. (if #set == 1 then " ore" else " ores")
+				else zoneId .. " · stage " .. (col - 3)
 			label(CF.new(x, 0.4, z + 4.4) * CF.Angles(-1.05, 0, 0), 6.5, 0.8, text, C3.fromRGB(240, 226, 200))
 		end
 	end
@@ -557,13 +602,24 @@ if scene_extra then
 end
 
 fs.writeDir(root .. "/build/preview")
-local outName = if sceneName == "cleaning" then "cleaning_" .. (process.args[3] or "chisel") .. (if process.args[4] == "phone" then "_phone" else "") else sceneName
+local outName = if sceneName == "cleaning"
+	then "cleaning_" .. (process.args[3] or "chisel") .. (if process.args[4] == "phone" then "_phone" else "")
+	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do
 	fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", guis))
 	print("Exported UI " .. name)
 end
-print(string.format("Exported %s: %d parts, %d lights, %d emitters, %d texts", sceneName, #scene.parts, #scene.lights, #scene.emitters, #scene.texts))
+print(
+	string.format(
+		"Exported %s: %d parts, %d lights, %d emitters, %d texts",
+		sceneName,
+		#scene.parts,
+		#scene.lights,
+		#scene.emitters,
+		#scene.texts
+	)
+)
 
 ---------------------------------------------------------------- scene "yard" (WP-Base)
 -- `lune run tools/lune/export_scene.luau world yard`: the world above plus ores on
