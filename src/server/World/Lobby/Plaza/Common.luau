@@ -5,8 +5,9 @@
 	plaza entrance test (where the curb opens), placement checks against
 	the other packages' footprints, a flat cobble/dirt path strip builder
 	(Style.path with a lift and a curb range, so overlapping strips never
-	z-fight), the dark neon walkway (matte dark floor panels, dark metal
-	borders with orange neon edge strips), flat neon rings and thin chevrons,
+	z-fight), the dark neon walkway (three columns of slate floor panels,
+	dark metal borders with orange neon edge strips), flat neon rings and
+	thin chevrons,
 	and the dark metal lantern pillar with glowing orange slots and an amber
 	lamp in a dark cage.
 ]]
@@ -50,8 +51,8 @@ Common.Colors = {
 	Metal = rgb(56, 60, 76), -- machine metal (mid)
 	MetalLight = rgb(92, 100, 122), -- small bolts and collars
 	MetalDark = rgb(34, 37, 48), -- ribs, plinths, recesses, cap plates
-	RoofSlate = rgb(70, 80, 108), -- Great Forge roof tiles
-	RoofSlateDark = rgb(48, 55, 78), -- tile rows and seams
+	RoofSlate = rgb(66, 72, 90), -- Great Forge roof slate (grey-blue, not glassy navy)
+	RoofSlateDark = rgb(42, 46, 60), -- shingle courses and joints
 	BrickRed = rgb(150, 46, 36), -- roof trim: eaves, bargeboards (concept v2)
 	Banner = rgb(168, 12, 42), -- crimson banner cloth (a touch of blue: the sunset warms it)
 	BannerDark = rgb(92, 8, 28), -- banner border / backing
@@ -62,6 +63,9 @@ Common.Colors = {
 	WindowGlow = rgb(255, 150, 58), -- warm lit windows
 	NeonOrange = C.Fire,
 	NeonBlue = C.GlowEdge,
+	-- a deeper, more saturated blue for the wide floor rings: it stays blue
+	-- at the player's feet instead of blooming to a white-cyan hoop
+	NeonBlueDeep = rgb(40, 124, 255),
 }
 local K = Common.Colors
 
@@ -295,12 +299,11 @@ end
 
 --[[
 	A part with the polished slate finish (SmoothPlastic + a little
-	Reflectance). With `rng`, about half the slabs get a lower sheen, so the
-	floor reads as real polished stone (some slabs catch the sky, some
-	don't) instead of one mirror.
+	Reflectance). Every slab gets the same sheen (one polished floor, not a
+	patchwork of glossy and matte slabs); Common.slate varies the color.
 ]]
-function Common.polish(part: BasePart, rng: Rng.Rng?): BasePart
-	part.Reflectance = if rng and rng:chance(0.55) then Common.TileReflectance * 0.4 else Common.TileReflectance
+function Common.polish(part: BasePart): BasePart
+	part.Reflectance = Common.TileReflectance
 	return part
 end
 
@@ -400,8 +403,9 @@ Common.WalkwayTop = { Slab = 0.23, Panel = 0.27, Border = 0.31, Neon = 0.33 }
 --[[
 	Dark neon walkway (concept v2, Kenney floor-panel) from `from` to `to`
 	(ground points), extended by Width/2 past both ends like every strip.
-	Flat and non-collide over the solid ground: a dark seam slab, two
-	columns of polished slate panels (none under the plaza floor), and along
+	Flat and non-collide over the solid ground: a dark seam slab, three
+	columns of polished slate panels between the borders with wide dark
+	seams (a clear tile grid, none under the plaza floor), and along
 	both edges a dark metal border with an orange neon strip, drawn only
 	where the edge is in view (not on the plaza, another strip, another
 	package's piece or a base).
@@ -451,20 +455,26 @@ function Common.walkway(parent: Instance, from: Vector3, to: Vector3, width: num
 		Style.tiny({ CanQuery = true })
 	)
 	base.Name = "PathBase"
-	-- floor panels: two columns of long slabs
+	-- floor panels: three columns between the edge borders, 0.45 seams
 	local half = width / 2
+	local seam = 0.45
+	local inner = width - 1.8
+	local colW = inner / 3
 	local rows = math.max(1, math.floor(full / (width * 0.65) + 0.5))
 	local rowLen = full / rows
 	for i = 0, rows - 1 do
 		local z = zMid + full / 2 - (i + 0.5) * rowLen
-		for _, side in { -1, 1 } do
-			local cf = frame * CFrame.new(side * half / 2, top.Panel - 0.03, z)
+		for c = 0, 2 do
+			local cf = frame * CFrame.new(-inner / 2 + (c + 0.5) * colW, top.Panel - 0.03, z)
 			if Vector3.new(cf.Position.X, 0, cf.Position.Z).Magnitude > Common.PlazaRadius - 0.5 then
-				-- matte dark panels (Reflectance <= 0.04: no sky sheen, the neon edges stay the brightest thing)
+				-- cool slate panels with the plaza's one light polish (the sky
+				-- keeps them grey-blue under the warm sunset and the orange
+				-- edges), light enough that the dark seams draw a grid
 				local roll = rng:next()
-				local shade = if roll < 0.6 then K.WalkPanel elseif roll < 0.85 then K.SlateDark else K.Slate
-				local panel = Style.block(m, cf, Vector3.new(half - 0.32, 0.06, rowLen - 0.32), Style.vary(shade, rng, 0.03), nil, Style.tiny())
-				panel.Reflectance = 0.03
+				local shade = if roll < 0.55 then K.Slate elseif roll < 0.9 then K.SlateLight else K.Metal
+				local panel =
+					Style.block(m, cf, Vector3.new(colW - seam, 0.06, rowLen - seam), Style.vary(shade, rng, 0.03), nil, Style.tiny())
+				panel.Reflectance = Common.TileReflectance
 				panel.Name = "WalkPanel"
 			end
 		end

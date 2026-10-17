@@ -4,21 +4,24 @@
 	GreatForge), front toward the plaza, everything but the chimneys below
 	y 32.
 
-	Read like concept v2: the forge stands on a raised stone plinth (porch
-	at y 4.9) reached by a monumental flight of ten risers between stone
-	cheek walls with dark metal handrails (orange neon undersides, Kenney
-	stairs-handrail) and a dark metal lantern pillar on each cheek. Above
-	the tall glowing doorway (a busy workshop inside: three furnace mouths
-	in dark iron frames, an anvil and a tool rack against the glow, hanging
-	lamps) a timber-framed upper floor with two lit windows carries THE
-	GREAT FORGE board, which sits at the foot of a wide dark slate cross
-	gable framed by brick-red bargeboards; inside the gable a dark metal
-	crest carries the big glowing gold crossed hammers. Two lower stone wings
-	with dark slate roofs (brick-red eaves) flank it; two tall crimson
-	banners with gold hammers hang from under the wing eaves down to the
-	porch, left and right of the entrance; braziers stand on the porch
-	corners, a gold mine cart and dark metal crates beside the stairs; two
-	chimneys at the back corners (x +-18, z -74.5).
+	Read like concept v2: a low, wide hall under one big gable. The forge
+	stands on a raised stone plinth (porch at y 4.9) reached by a monumental
+	flight of ten risers between stone cheek walls with dark metal handrails
+	(orange neon undersides, Kenney stairs-handrail) and a dark metal lantern
+	pillar on each cheek. The tall arched doorway (a stone arch under a dark
+	timber lintel) opens on a glowing workshop: three furnace mouths recessed
+	in dark iron boxes behind grate bars in a warm-orange furnace wall, an
+	anvil and a tool rack, hanging lamps. Right over the lintel a 2-stud
+	timber beam band carries THE GREAT FORGE board (iron straps at its ends)
+	at the foot of a big, steep dark slate cross gable (eave 16.5, apex
+	31.3: the gable is nearly half the facade) framed by brick-red
+	bargeboards; inside the gable a dark metal crest carries the big glowing
+	gold crossed hammers. Two lower stone wings with dark slate roofs
+	(thin shingle courses, brick-red eaves) flank it; two long crimson
+	banners with gold hammers hang from dark metal arms at the nave corners,
+	from just under the gable's eave down to the porch, right beside the
+	door pillars; a gold mine cart and dark metal crates beside the stairs;
+	two chimneys at the back corners (x +-18, z -74.5).
 
 	Local frame (LobbyLayout.frame): origin at the piece center on the
 	ground, front = -Z (toward the plaza), local +X = the viewer's left
@@ -47,20 +50,22 @@ local GreatForge = {}
 GreatForge.HalfWidth = 21
 GreatForge.PlinthTop = 4.9 -- the raised porch and hall floor
 GreatForge.WingEave = 14.4
-GreatForge.WingRoofHeight = 6.2 -- wing ridge 20.6, under the nave eave
-GreatForge.NaveEave = 21
-GreatForge.NaveRoofHeight = 10.3 -- gable apex 31.3
+GreatForge.WingRoofHeight = 5.2 -- wing ridge 19.6: it dies into the nave roof's slope
+GreatForge.NaveEave = 16.5 -- the gable starts right over the entrance's beam band
+GreatForge.NaveRoofHeight = 14.8 -- gable apex 31.3 (47% of the facade)
 GreatForge.NaveRoofHalf = 12 -- the cross gable spans x -12..12
 GreatForge.ChimneyTop = 43
-GreatForge.SignY = 22 -- THE GREAT FORGE board center (at the foot of the gable)
-GreatForge.EmblemY = 26.3 -- center of the gold crossed hammers inside the gable
-GreatForge.EmblemSize = 4.4
+GreatForge.SignY = 18.2 -- THE GREAT FORGE board center (at the foot of the gable)
+GreatForge.SignWidth = 19.5 -- (the nave walls span x -9..9: the ends hang on iron straps)
+GreatForge.SignHeight = 4
+GreatForge.EmblemY = 24.25 -- center of the gold crossed hammers inside the gable
+GreatForge.EmblemSize = 7.2 -- ~35% of the gable's width, like the concept's emblem
 GreatForge.StairHalfWidth = 8 -- the flight runs x -8..8 (the door width)
 GreatForge.StairSteps = 10 -- risers of 0.45 from the plaza apron (y 0.4) to the porch
 GreatForge.DoorTop = 12.9
 GreatForge.DoorHalf = 7
-GreatForge.BannerX = 12.3 -- banner centers (local x = +-12.3), on the wing fronts
-GreatForge.BannerWidth = 3.6
+GreatForge.BannerX = 11.3 -- banner centers (local x = +-11.3), right beside the door pillars (x +-8.2)
+GreatForge.BannerWidth = 3.4
 
 local PLINTH_TOP = GreatForge.PlinthTop
 local NAVE = 9 -- nave wall half width
@@ -77,17 +82,23 @@ local NAVE_PITCH = NAVE_ROOF_H / NAVE_HALF
 local APEX = NAVE_EAVE + NAVE_ROOF_H
 local WING_ROOF_Z0 = WING_FRONT - 0.5 -- wing roofs: front eave .. back eave
 local WING_ROOF_Z1 = WALL_BACK + 1.5
+local WING_ROOF_X0 = NAVE -- wing roofs: x 9..20.6 (the inner end hides under the nave roof)
+local WING_ROOF_X1 = 20.6
 local NAVE_ROOF_Z0 = NAVE_FRONT - 1 -- nave roof: front gable .. back
 local NAVE_ROOF_Z1 = WALL_BACK + 1.5
 local DOOR_HALF = GreatForge.DoorHalf
 local DOOR_TOP = GreatForge.DoorTop
+local LINTEL_TOP = DOOR_TOP + 1.2 -- the dark timber lintel over the door (y 12.8 .. 14.1)
 local WING_X = NAVE + 5.5 -- wing centers (wings x 9..20)
-local FIRELIT = Color3.fromRGB(112, 72, 58) -- hall walls lit by the furnaces
-local FIRELIT_DARK = Color3.fromRGB(74, 46, 42) -- the furnace wall and the back wall
+local FIRELIT = Color3.fromRGB(158, 98, 64) -- hall walls lit by the furnaces
+local FIRELIT_DARK = Color3.fromRGB(100, 58, 42) -- the back wall over the furnaces
+local HEARTH = Color3.fromRGB(204, 108, 46) -- the furnace wall: the whole hall glows warm orange
+local IRON_DARK = Color3.fromRGB(38, 36, 40) -- furnace boxes and grates
 
--- dark slate roof tiles with brick-red eaves, gable boards (bargeboards) and ridge
-local NAVE_ROOF = { Rows = 3, Color = K.RoofSlate, Dark = K.RoofSlateDark, Trim = K.BrickRed, Ridge = false }
-local WING_ROOF = { Rows = 2, Color = K.RoofSlate, Dark = K.RoofSlateDark, Trim = K.BrickRed }
+-- dark slate roofs with brick-red eaves and gable boards (bargeboards); the
+-- shingle courses are drawn here (thin lines, no thick Style rows)
+local NAVE_ROOF = { Rows = 0, Color = K.RoofSlate, Dark = K.RoofSlateDark, Trim = K.BrickRed, Ridge = false }
+local WING_ROOF = { Rows = 0, Color = K.RoofSlate, Dark = K.RoofSlateDark, Trim = K.BrickRed }
 
 function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("GreatForge")
@@ -98,24 +109,39 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("GreatForge", parent)
 	local front = -piece.Size.Z / 2
 
-	-- vertical tile seams down the given slopes of a Style.gableRoof (same
-	-- frame and measures), so the slate roofs read as tiles like the concept
-	local function roofSeams(cf: CFrame, width: number, depth: number, height: number, sides: { number }, count: number)
+	-- slate shingle courses on the given slopes of a Style.gableRoof (same
+	-- frame and measures): thin horizontal course lines and, with `stubs`,
+	-- short staggered joints in every course (1 more on odd courses), so the
+	-- roofs read as narrow rows of slate shingles (not a grid of panels)
+	local function roofCourses(cf: CFrame, width: number, depth: number, height: number, sides: { number }, rows: number, stubs: number?)
 		local half = depth / 2
 		local slope = math.atan2(height, half)
 		local slopeLen = math.sqrt(height * height + half * half)
+		local band = slopeLen / (rows + 1)
 		for _, side in sides do
-			for i = 1, count do
-				local x = -width / 2 + width * i / (count + 1)
-				local mid = Vector3.new(x, height / 2 + 0.14, side * half / 2)
-				Style.block(
-					m,
-					cf * CFrame.new(mid) * CFrame.Angles(side * slope, 0, 0),
-					Vector3.new(0.3, 0.3, slopeLen - 0.4),
-					K.RoofSlateDark,
-					nil,
-					Style.tiny()
-				)
+			local rot = CFrame.Angles(side * slope, 0, 0)
+			-- t = 0 at the ridge, 1 at the eave (along the slope)
+			local function onSlope(x: number, t: number): CFrame
+				return cf * CFrame.new(x, height * (1 - t) + 0.05, side * half * t) * rot
+			end
+			for r = 1, rows do
+				Style.block(m, onSlope(0, r / (rows + 1)), Vector3.new(width - 0.1, 0.15, 0.16), K.RoofSlateDark, nil, Style.tiny())
+			end
+			if stubs then
+				for r = 0, rows do
+					local n = stubs + (r % 2)
+					for i = 1, n do
+						local x = -width / 2 + width * (i - 0.5) / n
+						Style.block(
+							m,
+							onSlope(x, (r + 0.5) / (rows + 1)),
+							Vector3.new(0.15, 0.15, band - 0.35),
+							K.RoofSlateDark,
+							nil,
+							Style.tiny()
+						)
+					end
+				end
 			end
 		end
 	end
@@ -199,7 +225,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 			Style.vary(C.Stone, rng, 0.03),
 			nil,
 			Style.solid()
-		).Name = "StairCheek"
+		).Name =
+			"StairCheek"
 		-- WedgePart: the tall side at local +Z (toward the porch)
 		Geo.wedge(
 			m,
@@ -266,11 +293,15 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		-- lit windows: one on the front (outside the banner), one on the outer side
 		Style.window(m, at(s * 16.6, PLINTH_TOP + 4.6, WING_FRONT - 0.45), 2.2, 3.2, { Color = K.WindowGlow })
 		Style.window(m, at(s * 20.45, PLINTH_TOP + 4.8, 4) * CFrame.Angles(0, -s * math.pi / 2, 0), 2.6, 3.2, { Color = K.WindowGlow })
-		-- dark slate wing roof (ridge along X), brick-red eaves, timber infill in the outer gable end
+		-- dark slate wing roof (ridge along X), brick-red eaves, timber infill in
+		-- the outer gable end; its inner end and ridge stay under the nave roof
 		local depth = WING_ROOF_Z1 - WING_ROOF_Z0
-		local wingRoof = at(s * 15, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2)
-		Style.gableRoof(m, wingRoof, 11.2, depth, WING_ROOF_H, WING_ROOF)
-		roofSeams(wingRoof, 11.2, depth, WING_ROOF_H, { -1 }, 4)
+		local roofW = WING_ROOF_X1 - WING_ROOF_X0
+		local wingRoof = at(s * (WING_ROOF_X0 + WING_ROOF_X1) / 2, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2)
+		Style.gableRoof(m, wingRoof, roofW, depth, WING_ROOF_H, WING_ROOF)
+		-- shingle joints on the front slope (seen from the plaza), courses only at the back
+		roofCourses(wingRoof, roofW, depth, WING_ROOF_H, { -1 }, 4, 3)
+		roofCourses(wingRoof, roofW, depth, WING_ROOF_H, { 1 }, 4)
 		local infillHalf = depth / 2 - 1.8
 		triangle(
 			at(s * 20.65, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2) * CFrame.Angles(0, -s * math.pi / 2, 0),
@@ -305,19 +336,40 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	------------------------------------------------------------ crimson banners beside the entrance
+	-- long banners (about 3.3 : 1 with the tail) right beside the door
+	-- pillars, in front of the wing fronts and the wing roofs' eaves: each
+	-- hangs from a dark metal arm bolted to the nave corner, just under the
+	-- gable's eave board, down to the porch (the tail ends just above it)
 	for _, s in { -1, 1 } do
 		local bx = s * GreatForge.BannerX
-		local bz = WING_FRONT - 0.75
+		local bz = WING_FRONT - 1.3
 		local banner = Style.model("Banner", m)
 		local width = GreatForge.BannerWidth
-		-- from just under the wing eave down to the porch (the tail ends above it)
-		local clothTop, clothBottom = WING_EAVE - 1, PLINTH_TOP + 1.1
+		local tail = 0.7
+		local clothTop, clothBottom = NAVE_EAVE - 1.2, PLINTH_TOP + 0.8
 		local clothMid = (clothTop + clothBottom) / 2
 		local clothH = clothTop - clothBottom
-		-- dark metal header with gold end caps, the cloth hangs from it
-		Style.block(banner, at(bx, clothTop + 0.2, bz - 0.1), Vector3.new(width + 0.4, 0.4, 0.45), K.MetalDark, nil, Style.tiny())
+		-- the dark metal arm: from the nave corner out past the banner, a
+		-- bolt plate on the nave wall and gold end caps
+		local armX0, armX1 = NAVE, GreatForge.BannerX + width / 2 + 0.3
+		Style.block(
+			banner,
+			at(s * (armX0 + armX1) / 2, clothTop + 0.22, bz - 0.1),
+			Vector3.new(armX1 - armX0, 0.42, 0.42),
+			K.MetalDark,
+			nil,
+			Style.tiny()
+		)
+		Style.block(banner, at(s * (NAVE + 0.1), clothTop + 0.1, bz - 0.1), Vector3.new(0.2, 1.1, 0.9), K.Metal, nil, Style.tiny())
 		for _, t in { -1, 1 } do
-			Style.block(banner, at(bx + t * (width / 2 + 0.35), clothTop + 0.2, bz - 0.1), Vector3.new(0.3, 0.55, 0.55), C.Gold, nil, Style.tiny())
+			Style.block(
+				banner,
+				at(bx + t * (width / 2 + 0.2), clothTop + 0.22, bz - 0.1),
+				Vector3.new(0.28, 0.56, 0.56),
+				C.Gold,
+				nil,
+				Style.tiny()
+			)
 		end
 		-- dark crimson backing (the border) and the crimson cloth
 		Style.block(banner, at(bx, clothMid, bz + 0.05), Vector3.new(width, clothH, 0.12), K.BannerDark, nil, Style.tiny())
@@ -334,23 +386,25 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		for _, t in { -1, 1 } do
 			Geo.wedge(
 				banner,
-				at(bx + t * width / 4, clothBottom - 0.5, bz) * CFrame.Angles(math.pi, 0, 0) * CFrame.Angles(0, -t * math.pi / 2, 0),
-				Vector3.new(0.14, 1, width / 2),
+				at(bx + t * width / 4, clothBottom - tail / 2, bz) * CFrame.Angles(math.pi, 0, 0) * CFrame.Angles(0, -t * math.pi / 2, 0),
+				Vector3.new(0.14, tail, width / 2),
 				K.BannerDark,
 				SMOOTH,
 				Style.tiny()
 			)
 		end
-		-- gold crossed hammers (matte gold, not neon: they stay gold, no bloom)
-		for _, part in Style.icon(banner, at(bx, clothTop - 2.2, bz - 0.2), "CrossedHammers", 2.6, C.Gold, SMOOTH) do
+		-- gold crossed hammers about 3 studs under the arm (matte gold, not
+		-- neon: they stay gold, no bloom) and two thin gold bands near the foot
+		for _, part in Style.icon(banner, at(bx, clothTop - 2.6, bz - 0.2), "CrossedHammers", 2.6, C.Gold, SMOOTH) do
 			part.Name = "BannerIcon"
 		end
-		-- a thin gold band near the foot
-		Style.block(banner, at(bx, clothBottom + 0.7, bz - 0.14), Vector3.new(width - 0.5, 0.22, 0.06), C.Gold, nil, Style.tiny())
+		for _, y in { clothTop - 0.55, clothBottom + 0.7 } do
+			Style.block(banner, at(bx, y, bz - 0.14), Vector3.new(width - 0.5, 0.22, 0.06), C.Gold, nil, Style.tiny())
+		end
 	end
 
 	------------------------------------------------------------ nave
-	-- upper floor mass over the entrance, side jambs (dark interior walls), back wall
+	-- the nave mass over the entrance, side jambs (firelit hall walls), back wall
 	Style.block(
 		m,
 		at(0, (DOOR_TOP + NAVE_EAVE) / 2, (NAVE_FRONT + WALL_BACK) / 2),
@@ -380,83 +434,121 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	)
 	Style.block(m, at(0, PLINTH_TOP + 0.05, -1), Vector3.new(DOOR_HALF * 2, 0.1, 16), C.FlagDark, nil, Style.tiny())
 
-	-- timber-framed upper floor over the entrance (warm wood, dark posts)
-	local timberY = (DOOR_TOP + 1.2 + NAVE_EAVE) / 2
-	local timberH = NAVE_EAVE - DOOR_TOP - 1.2
+	-- entrance: stone pillars, a dark timber lintel and under it a wide stone
+	-- arch (two haunches: the opening reads as an arch, it glows from within)
+	for _, s in { -1, 1 } do
+		Style.pillar(m, at(s * 8.2, PLINTH_TOP, NAVE_FRONT - 0.4), DOOR_TOP - PLINTH_TOP + 0.2, rng, { Width = 2.4 })
+		-- haunch: a wedge with its right angle in the door's top corner (local
+		-- Y down, local Z out to the jamb: the slope faces down and inward)
+		local hw, hh = 3.6, 2.3
+		Geo.wedge(
+			m,
+			CFrame.fromMatrix(
+				at(s * (DOOR_HALF - hw / 2), DOOR_TOP - 0.1 - hh / 2, NAVE_FRONT + 0.1).Position,
+				frame:VectorToWorldSpace(Vector3.new(0, 0, s)),
+				frame:VectorToWorldSpace(Vector3.new(0, -1, 0)),
+				frame:VectorToWorldSpace(Vector3.new(s, 0, 0))
+			),
+			Vector3.new(1.2, hh, hw),
+			Style.vary(C.StoneDark, rng, 0.03),
+			SMOOTH,
+			Style.decor()
+		).Name =
+			"DoorArch"
+	end
+	Style.block(m, at(0, DOOR_TOP + 0.55, NAVE_FRONT - 0.7), Vector3.new(19.4, 1.3, 1.4), C.WoodDark, nil, Style.decor())
+
+	-- the timber beam band over the lintel (warm wood between dark posts):
+	-- it carries THE GREAT FORGE board at the foot of the gable
+	local bandY = (LINTEL_TOP + NAVE_EAVE) / 2
+	local bandH = NAVE_EAVE - LINTEL_TOP
 	Style.block(
 		m,
-		at(0, timberY, NAVE_FRONT - 0.12),
-		Vector3.new(NAVE * 2 - 0.4, timberH, 0.24),
+		at(0, bandY, NAVE_FRONT - 0.12),
+		Vector3.new(NAVE * 2 - 0.4, bandH, 0.24),
 		Style.vary(C.WoodLight, rng, 0.04),
 		nil,
 		Style.tiny()
 	)
-	for _, x in { -8.6, -2, 2, 8.6 } do
-		Style.block(m, at(x, timberY, NAVE_FRONT - 0.3), Vector3.new(0.6, timberH, 0.3), C.WoodDark, nil, Style.tiny())
-	end
-	-- two lit windows over the entrance
-	for _, s in { -1, 1 } do
-		Style.window(m, at(s * 4.8, DOOR_TOP + 3.7, NAVE_FRONT - 0.5), 2.6, 2.6, { Color = K.WindowGlow })
+	for _, x in { -8.6, -4.4, 4.4, 8.6 } do
+		Style.block(m, at(x, bandY, NAVE_FRONT - 0.3), Vector3.new(0.6, bandH, 0.3), C.WoodDark, nil, Style.tiny())
 	end
 
-	-- entrance: stone pillars, a dark timber lintel with knee braces
+	-- THE GREAT FORGE board at the foot of the gable, no wider than the nave
+	-- roof's front: its ends hang on dark iron straps from the lintel. From
+	-- the spawn camera (0, 9, 46) the sight line over the fire crystal's tip
+	-- (y < 9.5 at the plaza center) reaches the forge front at y ~10, so the
+	-- board, the crest and the upper half of the glowing doorway all read
+	-- above the crystal
+	local signZ = NAVE_FRONT - 1.6
+	local signW = GreatForge.SignWidth
+	local sign =
+		Style.sign(m, at(0, GreatForge.SignY, signZ), "THE GREAT FORGE", signW, GreatForge.SignHeight, { Kind = "Wood", Depth = 0.7 })
+	sign.Name = "ForgeSign"
+	local signBottom = GreatForge.SignY - GreatForge.SignHeight / 2
 	for _, s in { -1, 1 } do
-		Style.pillar(m, at(s * 8.2, PLINTH_TOP, NAVE_FRONT - 0.4), DOOR_TOP - PLINTH_TOP + 0.2, rng, { Width = 2.4 })
 		Style.block(
 			m,
-			at(s * 6.1, DOOR_TOP - 1.3, NAVE_FRONT - 0.5) * CFrame.Angles(0, 0, s * math.pi / 4),
-			Vector3.new(0.7, 3.2, 0.7),
-			C.WoodDark,
+			at(s * (signW / 2 - 0.7), (LINTEL_TOP + signBottom) / 2 + 0.2, signZ + 0.05),
+			Vector3.new(0.35, signBottom - LINTEL_TOP + 0.4, 0.5),
+			IRON_DARK,
 			nil,
 			Style.tiny()
-		)
+		).Name =
+			"SignStrap"
 	end
-	Style.block(m, at(0, DOOR_TOP + 0.55, NAVE_FRONT - 0.7), Vector3.new(19.4, 1.3, 1.4), C.WoodDark, nil, Style.decor())
 
-	-- THE GREAT FORGE board at the foot of the gable: from the spawn camera
-	-- (0, 9, 46) the sight line over the fire crystal's tip (y < 11 at the
-	-- plaza center) reaches the forge front at y ~12.5, so the board, the
-	-- crest and the upper half of the doorway all read above the crystal
-	local sign = Style.sign(m, at(0, GreatForge.SignY, NAVE_FRONT - 1.05), "THE GREAT FORGE", 24, 4.4, { Kind = "Wood", Depth = 0.7 })
-	sign.Name = "ForgeSign"
-
-	-- wide dark slate cross gable (ridge along Z) over the nave, framed by
-	-- brick-red bargeboards; no ridge beam (nothing pokes up over the apex)
+	-- big, steep dark slate cross gable (ridge along Z) over the nave, framed
+	-- by brick-red bargeboards; no ridge beam (nothing pokes up over the
+	-- apex); thin shingle courses only (no rafter seams: no moire from afar)
 	local naveRoof = at(0, NAVE_EAVE, (NAVE_ROOF_Z0 + NAVE_ROOF_Z1) / 2) * CFrame.Angles(0, math.pi / 2, 0)
 	local naveLen = NAVE_ROOF_Z1 - NAVE_ROOF_Z0
 	Style.gableRoof(m, naveRoof, naveLen, NAVE_HALF * 2, NAVE_ROOF_H, NAVE_ROOF)
-	roofSeams(naveRoof, naveLen, NAVE_HALF * 2, NAVE_ROOF_H, { -1, 1 }, 6)
+	roofCourses(naveRoof, naveLen, NAVE_HALF * 2, NAVE_ROOF_H, { -1, 1 }, 6)
 	-- dark timber gable infill just in front of the roof's end face, inset so
 	-- a band of slate and the bargeboards frame it
 	local gz = NAVE_ROOF_Z0 - 0.2
 	local infillHalf = NAVE_HALF - 0.5
 	triangle(at(0, NAVE_EAVE, gz), infillHalf, infillHalf * NAVE_PITCH, 0.3, C.WoodDark)
+	-- chunky brick-red bargeboards on the gable front (concept v2's thick red
+	-- frame), stopping short of the apex so nothing pokes over it
+	local rake = math.atan2(NAVE_ROOF_H, NAVE_HALF)
+	local rakeLen = math.sqrt(NAVE_HALF * NAVE_HALF + NAVE_ROOF_H * NAVE_ROOF_H) - 1.2
+	for _, s in { -1, 1 } do
+		local mid =
+			Vector3.new(s * (NAVE_HALF - math.cos(rake) * rakeLen / 2), NAVE_EAVE + math.sin(rake) * rakeLen / 2, NAVE_ROOF_Z0 - 0.4)
+		Style.block(
+			m,
+			at(mid.X, mid.Y, mid.Z) * CFrame.Angles(0, 0, -s * rake) * CFrame.new(0, 0.25, 0),
+			Vector3.new(rakeLen, 0.9, 0.7),
+			K.BrickRed,
+			nil,
+			Style.tiny()
+		).Name =
+			"Bargeboard"
+	end
 
 	-- the crest: a dark metal plate shaped like a small gable (flat foot,
 	-- vertical sides, its top parallel to the bargeboards) on a slightly
 	-- larger metal border, carrying the big glowing deep-gold crossed hammers
-	local crestFoot = GreatForge.SignY + 2.5
-	local crestHalf = 2.65
-	local crestApex = APEX - 0.7
+	local crestFoot = GreatForge.SignY + GreatForge.SignHeight / 2 + 0.5
+	local crestHalf = 4.3
+	local crestApex = APEX - 0.45
 	local shoulder = crestApex - crestHalf * NAVE_PITCH
 	for i, spec in { { Grow = 0.25, Color = K.Metal, Z = gz - 0.3 }, { Grow = 0, Color = K.MetalDark, Z = gz - 0.45 } } do
 		local half = crestHalf + spec.Grow
 		local foot = crestFoot - spec.Grow
 		local top = shoulder + spec.Grow * (1 - NAVE_PITCH)
-		local plate = Style.block(
-			m,
-			at(0, (foot + top) / 2, spec.Z),
-			Vector3.new(half * 2, top - foot, 0.15),
-			spec.Color,
-			nil,
-			Style.tiny()
-		)
+		local plate =
+			Style.block(m, at(0, (foot + top) / 2, spec.Z), Vector3.new(half * 2, top - foot, 0.15), spec.Color, nil, Style.tiny())
 		plate.Name = if i == 1 then "EmblemBorder" else "Emblem"
 		triangle(at(0, top, spec.Z), half, half * NAVE_PITCH, 0.15, spec.Color)
 	end
 	-- a deep-gold neon halo (the same hammers, a size larger) behind solid gold
 	-- hammers: the emblem glows at its edges and stays gold, no white blob
-	for _, part in Style.icon(m, at(0, GreatForge.EmblemY - 0.05, gz - 0.62), "CrossedHammers", GreatForge.EmblemSize * 1.12, K.EmblemGold, NEON) do
+	for _, part in
+		Style.icon(m, at(0, GreatForge.EmblemY - 0.05, gz - 0.62), "CrossedHammers", GreatForge.EmblemSize * 1.12, K.EmblemGold, NEON)
+	do
 		part.Name = "EmblemGlow"
 	end
 	for _, part in Style.icon(m, at(0, GreatForge.EmblemY, gz - 0.95), "CrossedHammers", GreatForge.EmblemSize, C.Gold, SMOOTH) do
@@ -464,31 +556,53 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	------------------------------------------------------------ interior (seen through the entrance)
-	-- a busy workshop: the furnace wall with three big glowing mouths in dark
-	-- iron frames (the middle one is ForgeGlow, it pulses on the client), a
-	-- hood and flues, glowing seams down the firelit side walls, an anvil and
-	-- a tool rack against the glow, hanging lamps
+	-- a busy workshop: a warm-orange furnace wall (the whole hall glows) with
+	-- three furnace mouths recessed in dark iron boxes behind grate bars (the
+	-- middle one is ForgeGlow, it pulses on the client, flames lick out of
+	-- it; the side ones glow molten round a thin neon coal bed), a hood and
+	-- flues, glowing seams down the firelit side walls, an anvil and a tool
+	-- rack against the glow, hanging lamps
 	local fz = 7.7 -- front face of the furnace wall
-	Style.block(m, at(0, PLINTH_TOP + 3.4, fz + 0.6), Vector3.new(DOOR_HALF * 2, 6.8, 1.2), FIRELIT_DARK, nil, Style.solid())
+	Style.block(m, at(0, PLINTH_TOP + 3.4, fz + 0.6), Vector3.new(DOOR_HALF * 2, 6.8, 1.2), HEARTH, nil, Style.solid()).Name = "FurnaceWall"
 	local mouths = {
-		{ X = 0, W = 4.4, H = 3.4, Y = 2.5 },
-		{ X = -4.6, W = 2.6, H = 2.8, Y = 2.2 },
-		{ X = 4.6, W = 2.6, H = 2.8, Y = 2.2 },
+		{ X = 0, W = 4.4, H = 3.4, Y = 2.5, Bars = { -1.1, 0, 1.1 } },
+		{ X = -4.6, W = 2.6, H = 2.8, Y = 2.2, Bars = { -0.45, 0.45 } },
+		{ X = 4.6, W = 2.6, H = 2.8, Y = 2.2, Bars = { -0.45, 0.45 } },
 	}
+	local boxDepth, wall = 1, 0.35
 	for i, mouth in mouths do
-		Style.block(
-			m,
-			at(mouth.X, PLINTH_TOP + mouth.Y, fz - 0.05),
-			Vector3.new(mouth.W + 0.7, mouth.H + 0.7, 0.1),
-			C.Iron,
-			METAL,
-			Style.tiny()
-		)
-		local glow = Style.block(m, at(mouth.X, PLINTH_TOP + mouth.Y, fz - 0.12), Vector3.new(mouth.W, mouth.H, 0.06), C.Ember, NEON, Style.tiny())
-		glow.Name = if i == 1 then "ForgeGlow" else "FurnaceGlow"
+		local x, y = mouth.X, PLINTH_TOP + mouth.Y
+		local bz = fz - boxDepth / 2
+		-- the iron box round the mouth: top, sill and two cheeks, 1 stud deep
+		for _, t in { -1, 1 } do
+			Style.block(
+				m,
+				at(x, y + t * (mouth.H + wall) / 2, bz),
+				Vector3.new(mouth.W + wall * 2, wall, boxDepth),
+				IRON_DARK,
+				nil,
+				Style.tiny()
+			)
+			Style.block(m, at(x + t * (mouth.W + wall) / 2, y, bz), Vector3.new(wall, mouth.H, boxDepth), IRON_DARK, nil, Style.tiny())
+		end
 		if i == 1 then
+			local glow = Style.block(m, at(x, y, fz - 0.04), Vector3.new(mouth.W, mouth.H, 0.06), C.Ember, NEON, Style.tiny())
+			glow.Name = "ForgeGlow"
 			Style.light(glow, C.Fire, 18, 1.8)
+			Style.emitter(glow, "Fire", C.Fire, 6)
 			Style.emitter(glow, "Embers", C.Ember, 5)
+		else
+			-- a molten (not neon) mouth round a thin glowing coal bed
+			local mouthPart = Style.block(m, at(x, y, fz - 0.04), Vector3.new(mouth.W, mouth.H, 0.06), C.Molten, SMOOTH, Style.tiny())
+			mouthPart.Name = "FurnaceMouth"
+			local core =
+				Style.block(m, at(x, y - mouth.H / 2 + 0.35, fz - 0.2), Vector3.new(mouth.W - 0.3, 0.32, 0.25), C.Ember, NEON, Style.tiny())
+			core.Name = "FurnaceGlow"
+		end
+		-- dark vertical grate bars across the front of the box
+		for _, bx in mouth.Bars do
+			Style.block(m, at(x + bx, y, fz - boxDepth + 0.08), Vector3.new(0.2, mouth.H, 0.16), IRON_DARK, nil, Style.tiny()).Name =
+				"FurnaceGrate"
 		end
 	end
 	-- iron hood over the middle mouth and two flues
@@ -498,7 +612,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 	-- glowing seams down the side walls of the hall
 	for _, s in { -1, 1 } do
-		local seam = Style.block(m, at(s * (DOOR_HALF - 0.05), PLINTH_TOP + 3.4, 0.5), Vector3.new(0.15, 0.35, 13), C.Ember, NEON, Style.tiny())
+		local seam =
+			Style.block(m, at(s * (DOOR_HALF - 0.05), PLINTH_TOP + 3.4, 0.5), Vector3.new(0.15, 0.35, 13), C.Ember, NEON, Style.tiny())
 		seam.Name = "HallGlow"
 	end
 	-- anvil on a stump in front of the middle mouth (a dark silhouette against the glow)
@@ -531,9 +646,16 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 	-- a molten sill glowing across the threshold (short-range light: it
 	-- lights the doorway, not the banners)
-	local threshold = Style.block(m, at(0, PLINTH_TOP + 0.06, NAVE_FRONT + 0.7), Vector3.new(DOOR_HALF * 2 - 0.8, 0.12, 0.5), C.Molten, NEON, Style.tiny())
+	local threshold = Style.block(
+		m,
+		at(0, PLINTH_TOP + 0.06, NAVE_FRONT + 0.7),
+		Vector3.new(DOOR_HALF * 2 - 0.8, 0.12, 0.5),
+		C.Molten,
+		NEON,
+		Style.tiny()
+	)
 	threshold.Name = "MoltenChannel"
-	Style.light(threshold, C.Fire, 10, 1.6)
+	Style.light(threshold, C.Fire, 8.5, 1.6)
 
 	------------------------------------------------------------ porch and stair props
 	-- beside the stairs (north-east / north-west of the plaza): a gold mine
@@ -552,9 +674,30 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		for i, spec in { { X = 19, Z = front + 2.6, S = 2.2 }, { X = 18.6, Z = front + 5.6, S = 1.7 } } do
 			local base = at(s * spec.X, 0, spec.Z) * CFrame.Angles(0, s * (0.2 + i * 0.3), 0)
 			local size = spec.S
-			Style.block(props, base * CFrame.new(0, size / 2, 0), Vector3.new(size, size, size), Style.vary(K.Metal, rng, 0.05), nil, Style.decor())
-			Style.block(props, base * CFrame.new(0, size - 0.08, 0), Vector3.new(size + 0.1, 0.2, size + 0.1), K.MetalDark, nil, Style.tiny())
-			Style.block(props, base * CFrame.new(0, size * 0.45, 0), Vector3.new(size + 0.06, 0.16, size + 0.06), K.NeonOrange, NEON, Style.tiny())
+			Style.block(
+				props,
+				base * CFrame.new(0, size / 2, 0),
+				Vector3.new(size, size, size),
+				Style.vary(K.Metal, rng, 0.05),
+				nil,
+				Style.decor()
+			)
+			Style.block(
+				props,
+				base * CFrame.new(0, size - 0.08, 0),
+				Vector3.new(size + 0.1, 0.2, size + 0.1),
+				K.MetalDark,
+				nil,
+				Style.tiny()
+			)
+			Style.block(
+				props,
+				base * CFrame.new(0, size * 0.45, 0),
+				Vector3.new(size + 0.06, 0.16, size + 0.06),
+				K.NeonOrange,
+				NEON,
+				Style.tiny()
+			)
 		end
 	end
 end

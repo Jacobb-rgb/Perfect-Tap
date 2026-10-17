@@ -7,9 +7,10 @@
 	amber status lights, and round it a low stepped outer lip with a blue
 	neon line at its foot - around a glowing ember bed, a stepped octagonal
 	metal base with a blue neon rim and a glowing fire bed, an octagonal
-	pedestal with an Ember seam, and the crystal cluster on top. The cluster
-	is kept short (tip under y 11 with the bob), so from the spawn the
-	Great Forge's raised, glowing doorway shows beside and above it.
+	pedestal with an Ember seam on a molten hearth plate, and the crystal
+	cluster on top (pointed gem shards round the main crystal). The base is
+	low and the cluster short (tip under y 9.5 with the bob), so from the
+	spawn the Great Forge's raised, glowing doorway shows above it.
 
 	Hook: the crystal cluster is the Model "FireCrystal", tagged Spin
 	(SpinSpeed 0.25, BobHeight 0.5, BobSpeed 0.9), streamed Atomic, its
@@ -42,7 +43,7 @@ FireCrystal.RingRadius = 10.2
 FireCrystal.RingWidth = 2.8
 FireCrystal.RingHeight = 2.0
 FireCrystal.LipRadius = 12.1 -- the low outer step (r 11.6 .. 12.6)
-FireCrystal.CrystalHeight = 7.5
+FireCrystal.CrystalHeight = 7
 FireCrystal.Segments = 16
 local RING_R = FireCrystal.RingRadius
 local RING_W = FireCrystal.RingWidth
@@ -50,15 +51,18 @@ local RING_H = FireCrystal.RingHeight
 local SEGMENTS = FireCrystal.Segments
 local MOAT_R = 8.9 -- the glowing ember bed inside the housing
 local INNER = 10.4 -- side of the star base blocks (points reach r 7.35)
--- low base and a short cluster: the crystal tip stays under y 11 (with the
--- bob), so from the spawn the forge's raised doorway, its banners and THE
--- GREAT FORGE board all read above and beside it
-local INNER_H = 0.8
+-- low base and a short cluster: the crystal tip stays under y 9.5 (with the
+-- bob), so from the spawn (eye y 9) the forge's glowing doorway, its
+-- banners and THE GREAT FORGE board all read above the crystal
+local INNER_H = 0.4
 local PEDESTAL = 6.6
-local PEDESTAL_H = 1.0
+local PEDESTAL_H = 0.6
 local CRYSTAL_H = FireCrystal.CrystalHeight
 local CRYSTAL_W = 3.0
-local SIDE_SCALE = 0.75 -- the leaning side crystals
+local SIDE_SCALE = 0.68 -- the leaning side crystals
+local HOT_IRON = Color3.fromRGB(150, 54, 26) -- the glowing bowl round the pedestal
+-- turns a part's (1, 1, 1) corner straight up (a cube standing on a vertex)
+local VERTEX_UP = CFrame.fromAxisAngle(Vector3.new(-1, 0, 1).Unit, math.acos(1 / math.sqrt(3)))
 
 -- Two square slabs turned 45 degrees to each other (an 8-point star).
 local function star(
@@ -78,19 +82,50 @@ local function star(
 end
 
 --[[
-	The main crystal: a see-through orange shell (Transparency 0.3, so its
-	facets catch the sun and the lamps) around a slim neon core, so the
-	crystal reads as a faceted gem that glows from within instead of a flat
-	neon blob. Returns the core body (the spin pivot).
+	A leaning gem shard: a diamond-section body and a pointed tip (a cube
+	standing on one corner, half sunk into the body), so the shard ends in
+	a sharp point from every side instead of a box-cut ridge. 2 parts.
+]]
+local function shard(
+	parent: Instance,
+	base: CFrame,
+	height: number,
+	width: number,
+	color: Color3,
+	tip: Color3,
+	material: Enum.Material,
+	tipMaterial: Enum.Material?
+): { BasePart }
+	local a = width * 0.74
+	local tipCenter = height - a * math.sqrt(3) / 2
+	local bodyH = tipCenter + a * 0.12
+	local body = Style.block(
+		parent,
+		base * CFrame.Angles(0, math.pi / 4, 0) * CFrame.new(0, bodyH / 2, 0),
+		Vector3.new(width, bodyH, width),
+		color,
+		material,
+		Style.tiny()
+	)
+	local point =
+		Style.block(parent, base * CFrame.new(0, tipCenter, 0) * VERTEX_UP, Vector3.new(a, a, a), tip, tipMaterial or NEON, Style.tiny())
+	return { body, point }
+end
+
+--[[
+	The main crystal: a see-through orange shell with a pointed tip
+	(Transparency 0.3, so its facets catch the sun and the lamps) around a
+	slim neon core, so the crystal reads as a sharp faceted gem that glows
+	from within instead of a flat neon blob. Returns the core body (the spin
+	pivot).
 ]]
 local function mainCrystal(parent: Instance, base: CFrame): BasePart
-	local shell = Style.crystal(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, C.LeafOrange)
+	local shell = shard(parent, base, CRYSTAL_H, CRYSTAL_W, C.Fire, C.LeafOrange, SMOOTH, SMOOTH)
 	for i, part in shell do
-		part.Material = SMOOTH
 		part.Transparency = if i == 1 then 0.3 else 0.22
 		part.Name = "CrystalShell"
 	end
-	local core = Style.crystal(parent, base * CFrame.new(0, 0.4, 0), CRYSTAL_H * 0.86, CRYSTAL_W * 0.46, C.Fire, C.FireCore)
+	local core = Style.crystal(parent, base * CFrame.new(0, 0.4, 0), CRYSTAL_H * 0.8, CRYSTAL_W * 0.46, C.Fire, C.FireCore)
 	core[1].Name = "CrystalBody"
 	return core[1]
 end
@@ -98,7 +133,7 @@ end
 local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Model
 	local m = Style.model("FireCrystal", parent)
 	local body = mainCrystal(m, base)
-	-- leaning side crystals (deep Ember glow, Fire tips) and small shards
+	-- leaning side crystals (shaded amber bodies, glowing Fire points) and small neon shards
 	local sides = {
 		{ A = 25, H = 7.2, Lean = 0.38, Color = C.Ember },
 		{ A = 115, H = 5.6, Lean = 0.46, Color = C.Ember },
@@ -113,12 +148,12 @@ local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Mod
 		local foot = base * CFrame.new(math.cos(a) * 1.4, 0.1, math.sin(a) * 1.4)
 		local tilt = CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, -s.Lean) * CFrame.Angles(0, a, 0)
 		local h = s.H * SIDE_SCALE
-		local parts = Style.crystal(m, foot * tilt, h, h * 0.3, s.Color, C.Fire)
 		if i <= 4 then
-			-- the big side crystals: shaded amber bodies (facets read), glowing tips
-			parts[1].Material = SMOOTH
-			parts[1].Color = if i % 2 == 0 then C.LeafOrange else C.Fire
-			parts[1].Transparency = 0.12
+			-- the big side crystals: shaded amber bodies (facets read), glowing points
+			local parts = shard(m, foot * tilt, h, h * 0.3, if i % 2 == 0 then C.LeafOrange else C.Fire, C.Fire, SMOOTH)
+			parts[1].Transparency = 0.05
+		else
+			shard(m, foot * tilt, h, h * 0.3, s.Color, C.Fire, NEON)
 		end
 	end
 	m.PrimaryPart = body
@@ -167,28 +202,39 @@ local function housing(m: Model, center: Vector3, y0: number, rng: Rng.Rng)
 		)
 		local edge = Style.block(
 			m,
-			frame * CFrame.new(RING_W / 2 - 0.07, RING_H - 0.03, 0),
-			Vector3.new(0.14, 0.12, segLen + 0.02),
+			frame * CFrame.new(RING_W / 2 - 0.05, RING_H - 0.02, 0),
+			Vector3.new(0.1, 0.08, segLen + 0.02),
 			K.NeonBlue,
 			NEON,
 			Style.tiny()
 		)
 		edge.Name = "RingEdgeGlow"
+		-- a deep-orange (Ember) slot, split in two short slots by a dark
+		-- divider, so it stays saturated orange under bloom
 		local slot = Style.block(
 			m,
 			frame * CFrame.new(RING_W / 2 + 0.02, RING_H * 0.45, 0),
-			Vector3.new(0.12, 0.8, segLen * 0.75),
-			K.NeonOrange,
+			Vector3.new(0.12, 0.6, segLen * 0.8),
+			C.Ember,
 			NEON,
 			Style.tiny()
 		)
 		slot.Name = "RingSlot"
+		Style.block(
+			m,
+			frame * CFrame.new(RING_W / 2 + 0.06, RING_H * 0.45, 0),
+			Vector3.new(0.14, 0.74, 0.24),
+			K.MetalDark,
+			nil,
+			Style.tiny()
+		).Name =
+			"SlotDivider"
 		if i % 2 == 0 then
 			Style.block(
 				m,
 				frame * CFrame.new(-RING_W / 2 - 0.02, RING_H * 0.55, 0),
-				Vector3.new(0.12, 0.6, segLen * 0.5),
-				C.Fire,
+				Vector3.new(0.12, 0.45, segLen * 0.5),
+				C.Ember,
 				NEON,
 				Style.tiny()
 			)
@@ -228,7 +274,7 @@ end
 ]]
 local function outerLip(m: Model, center: Vector3, y0: number)
 	local r = FireCrystal.LipRadius + 0.5
-	local glow = Geo.cylinder(m, center + Vector3.new(0, y0 + 0.06, 0), 0.12, (r + 0.28) * 2, K.NeonBlue, NEON, Style.tiny())
+	local glow = Geo.cylinder(m, center + Vector3.new(0, y0 + 0.06, 0), 0.12, (r + 0.16) * 2, K.NeonBlueDeep, NEON, Style.tiny())
 	glow.Name = "LipGlow"
 	local lip = Geo.cylinder(m, center + Vector3.new(0, y0 + 0.3, 0), 0.4, r * 2, K.MetalDark, SMOOTH, Style.ghost({ CastShadow = false }))
 	lip.Name = "RingLip"
@@ -253,8 +299,20 @@ function FireCrystal.build(parent: Instance, rng: Rng.Rng)
 	local rim = star(m, CFrame.new(center + Vector3.new(0, yInner - 0.08, 0)), INNER + 0.2, 0.16, K.NeonBlue, NEON, Style.tiny())
 	rim[1].Name = "BaseGlow"
 	rim[2].Name = "BaseGlow"
-	star(m, CFrame.new(center + Vector3.new(0, yInner + 0.2, 0)), INNER + 0.5, 0.4, Style.vary(K.MetalDark, rng, 0.03))
-	local bed = star(m, CFrame.new(center + Vector3.new(0, yInner + 0.4, 0)), INNER - 3.4, 0.2, C.Ember, NEON, Style.tiny())
+	-- the cap of the base is hot iron (lit by the crystal it glows like the
+	-- concept's fire bowl, without another neon part)
+	star(m, CFrame.new(center + Vector3.new(0, yInner + 0.2, 0)), INNER + 0.5, 0.4, Style.vary(HOT_IRON, rng, 0.03))
+	-- the molten hearth plate under the pedestal (same octagon, a little
+	-- larger: a thin glowing step round it, not a jagged neon star)
+	local bed = star(
+		m,
+		CFrame.new(center + Vector3.new(0, yInner + 0.4, 0)) * CFrame.Angles(0, math.pi / 8, 0),
+		PEDESTAL + 0.9,
+		0.2,
+		C.Molten,
+		SMOOTH,
+		Style.tiny()
+	)
 	bed[1].Name = "FireBed"
 	bed[2].Name = "FireBed"
 	Style.emitter(bed[1], "Fire", C.Fire, 12)

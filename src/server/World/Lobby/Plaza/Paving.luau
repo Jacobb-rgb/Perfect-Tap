@@ -5,12 +5,13 @@
 	tiles with an orange ring.
 
 	One collidable dark disc (r 36, top y 0.4) is the floor; on it lie four
-	rings of dark charcoal slate tiles (SmoothPlastic, about half of them
-	with a little Reflectance) whose 0.32 gaps show the darker disc as
-	seams. The wider gaps between the tile rings carry flat neon rings: an
-	orange ring round the crystal's housing (r 14.2), a dashed blue ring
-	(r 18.5), thin orange dashes (r 24.55) and the wide blue outer ring
-	(r 30.6). The rings and tiles run on through the spawn area (only what
+	rings of dark charcoal slate tiles (SmoothPlastic, all with the same
+	little Reflectance: one polished floor) whose 0.32 gaps show the darker
+	disc as seams. The wider gaps between the tile rings carry flat neon
+	rings: a thin deep-orange ring round the crystal's housing (r 14.2), a
+	dashed blue ring (r 18.5), thin orange dashes (r 24.55) and the blue
+	outer ring (r 30.6), both blues a deep saturated blue that stays blue
+	under bloom. The rings and tiles run on through the spawn area (only what
 	TownSpawn would hide is left out). A low dark metal curb (walk-through,
 	at most 0.55 above the floor) with a blue neon top edge and orange
 	glowing slots runs at r 35.6 and opens wherever a road or path enters
@@ -28,6 +29,7 @@ local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
 
+local C = Style.C
 local K = Common.Colors
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
@@ -44,10 +46,10 @@ local RINGS = {
 }
 -- Neon rings in the gaps: radius, width, segments, drawn fraction, color.
 Paving.NeonRings = {
-	{ Name = "InnerRing", R = 14.2, Width = 0.42, Segments = 30, Dash = 1.02, Color = K.NeonOrange },
-	{ Name = "BlueDashRing", R = 18.5, Width = 0.26, Segments = 32, Dash = 0.72, Color = K.NeonBlue },
+	{ Name = "InnerRing", R = 14.2, Width = 0.3, Segments = 30, Dash = 1.02, Color = C.Ember },
+	{ Name = "BlueDashRing", R = 18.5, Width = 0.26, Segments = 32, Dash = 0.72, Color = K.NeonBlueDeep },
 	{ Name = "OrangeDashRing", R = 24.55, Width = 0.18, Segments = 26, Dash = 0.4, Color = K.NeonOrange },
-	{ Name = "OuterRing", R = 30.6, Width = 0.46, Segments = 40, Dash = 1.02, Color = K.NeonBlue },
+	{ Name = "OuterRing", R = 30.6, Width = 0.42, Segments = 40, Dash = 1.02, Color = K.NeonBlueDeep },
 }
 Paving.CrystalFloorRadius = 13.8
 local TILE_H = 0.08
@@ -60,7 +62,7 @@ local function underPad(p: Vector3, spawn: Vector3, margin: number): boolean
 end
 
 local function tile(m: Instance, cf: CFrame, size: Vector3, rng: Rng.Rng)
-	Common.polish(Style.block(m, cf, size, Common.slate(rng), nil, Style.tiny()), rng)
+	Common.polish(Style.block(m, cf, size, Common.slate(rng), nil, Style.tiny()))
 end
 
 local function slateTiles(m: Model, center: Vector3, spawn: Vector3, rng: Rng.Rng)
@@ -143,7 +145,14 @@ local function curb(m: Model, center: Vector3, rng: Rng.Rng)
 			)
 			edge.Name = "CurbGlow"
 			if post then
-				Style.block(m, frame * CFrame.new(-0.62, h / 2 - 0.2, 0), Vector3.new(0.1, 0.2, arc * 0.5), K.NeonOrange, NEON, Style.tiny())
+				Style.block(
+					m,
+					frame * CFrame.new(-0.62, h / 2 - 0.2, 0),
+					Vector3.new(0.1, 0.2, arc * 0.5),
+					K.NeonOrange,
+					NEON,
+					Style.tiny()
+				)
 			end
 		end
 	end
@@ -161,7 +170,7 @@ local function spawnInlay(m: Model, spawn: Vector3, rng: Rng.Rng)
 	local plate = Style.block(m, CFrame.new(c + Vector3.new(0, 0.46, 0)), Vector3.new(8.3, 0.02, 8.3), K.SlateDeep, nil, Style.tiny())
 	plate.Name = "SpawnInlay"
 	local tile = Style.block(m, CFrame.new(c + Vector3.new(0, 0.4825, 0)), Vector3.new(7.9, 0.025, 7.9), K.Slate, nil, Style.tiny())
-	tile.Reflectance = Common.TileReflectance * 0.4
+	tile.Reflectance = Common.TileReflectance
 	for _, part in Common.ring(m, c, 3.1, 0.22, 0.488, 0.02, 12, K.NeonOrange, { Phase = 0.5 }) do
 		part.Name = "SpawnRing"
 	end

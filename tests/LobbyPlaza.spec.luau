@@ -12,6 +12,7 @@ return function(T, Loader)
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 	local Plaza = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza")
+	local Common = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.Common")
 
 	local cached: any = nil
 	local function world(): any
@@ -324,7 +325,7 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(tiles > 80, "rings of slate tiles")
-		T.truthy(polished > tiles / 3, "most slabs are polished (Reflectance)")
+		T.eq(polished, tiles, "one polished finish on every slab (no glossy/matte patchwork)")
 		local orange, blue = {}, {}
 		local piece = LobbyLayout.get("Plaza")
 		for _, part in parts(paving.NeonRings) do
@@ -377,7 +378,8 @@ return function(T, Loader)
 			if part.Name == "RingEdgeGlow" then
 				T.truthy(part.Size.X <= 0.16 and part.Size.Y <= 0.16, "a thin blue accent edge")
 			elseif part.Name == "RingSlot" then
-				T.truthy(part.Size.Y >= 0.7, "big orange slots")
+				T.truthy(part.Size.Y >= 0.45 and part.Size.Z >= 1.5, "long orange slots")
+				T.truthy(part.Color.G < 0.45, "deep orange slots (they stay orange under bloom)")
 			end
 		end
 		-- the low outer step of the two-tier ring, with a blue neon line at its foot
@@ -399,9 +401,9 @@ return function(T, Loader)
 			local _, hi = bounds(part)
 			crystalTop = math.max(crystalTop, hi.Y)
 		end
-		T.truthy(crystalTop > ringTop + 6, "the crystal towers over its housing")
-		-- but stays short, so the forge's raised doorway shows above and beside it from the spawn
-		T.lt(crystalTop + crystal:GetAttribute("BobHeight"), 11, "a short crystal cluster")
+		T.truthy(crystalTop > ringTop + 5, "the crystal towers over its housing")
+		-- but stays short, so the forge's glowing doorway shows above it from the spawn (eye y 9)
+		T.lt(crystalTop + crystal:GetAttribute("BobHeight"), 9.6, "a short crystal cluster")
 	end)
 
 	T.test("plaza v2: neon walkways with orange edge strips and a chevron to the forge", function()
@@ -433,14 +435,17 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(chevrons >= 4, "glowing chevrons on the south walkway")
-		-- crisp thin chevrons and dark matte walkway panels (no glare near the spawn)
+		-- crisp thin chevrons and dark, lightly polished walkway panels (no glare near the spawn)
 		for _, child in roads:GetChildren() do
 			for _, part in parts(child) do
 				if part.Name == "Chevron" then
 					T.truthy(part.Size.X <= 0.5, "thin chevron bars")
 				elseif part.Name == "WalkPanel" then
-					T.lt(luma(part.Color), 0.2, "dark walkway panels")
-					T.le(part.Reflectance, 0.04, "matte walkway panels")
+					T.lt(luma(part.Color), 0.28, "dark walkway panels")
+					T.truthy(part.Color.B > part.Color.R, "cool grey-blue walkway panels")
+					T.le(part.Reflectance, Common.TileReflectance, "the plaza's light polish, no more (no glare)")
+					local base = child:FindFirstChild("PathBase")
+					T.truthy(luma(part.Color) > luma(base.Color) + 0.05, "panels lighter than the seams (the grid reads)")
 				end
 			end
 		end
@@ -546,6 +551,19 @@ return function(T, Loader)
 			end
 		end
 		T.eq(roofs, 6, "three slate gable roofs")
+		-- a low, wide hall under one big gable (concept v2), not a two-storey house
+		T.truthy(GreatForge.NaveEave <= 17.5, "the gable starts right over the entrance")
+		T.truthy(GreatForge.NaveRoofHeight / (GreatForge.NaveEave + GreatForge.NaveRoofHeight) >= 0.4, "the gable is ~half the facade")
+		T.truthy(GreatForge.EmblemSize >= GreatForge.NaveRoofHalf * 2 * 0.28, "a big emblem (~1/3 of the gable's width)")
+		-- slate roofs with thin shingle courses (no thick rows or rafter seams)
+		local courses = 0
+		for _, part in parts(forge) do
+			if part.Color == Common.Colors.RoofSlateDark then
+				courses += 1
+				T.truthy(math.min(part.Size.X, part.Size.Y, part.Size.Z) <= 0.16, "thin shingle courses and joints")
+			end
+		end
+		T.truthy(courses >= 20, "shingle courses on the slate roofs")
 		T.truthy(glow >= 4 and hammers >= 4, "a big glowing crossed-hammers emblem")
 		-- brick-red trim (eaves, bargeboards) frames the slate roofs
 		local trim = 0
@@ -566,6 +584,8 @@ return function(T, Loader)
 		local sign = forge:FindFirstChild("ForgeSign")
 		T.truthy(sign, "THE GREAT FORGE board")
 		T.near(sign.CFrame.Position.Y, GreatForge.SignY, 0.01, "the board stays on the gable")
+		T.truthy(sign.CFrame.Position.Y + sign.Size.Y / 2 > GreatForge.NaveEave, "the board reaches over the gable's foot")
+		T.truthy(sign.Size.X <= GreatForge.NaveRoofHalf * 2 - 4, "the board is no wider than the nave front (no floating billboard)")
 		-- two crimson banners with gold hammers left and right of the entrance
 		local banners = {}
 		for _, child in forge:GetChildren() do
@@ -583,8 +603,12 @@ return function(T, Loader)
 			T.truthy(c.R > 0.55 and c.G < 0.12 and c.B < c.R * 0.4, "crimson banner cloth (not orange)")
 			table.insert(cloths, cloth)
 			local lo, hi = bounds(cloth)
-			T.truthy(hi.Y - lo.Y > 7, "a tall banner")
-			T.truthy(hi.Y >= GreatForge.WingEave - 1.2, "it hangs from just under the wing eave")
+			T.truthy(hi.Y - lo.Y > 9, "a long banner")
+			T.truthy((hi.Y - lo.Y) / GreatForge.BannerWidth > 2.7, "a long, narrow banner (concept: ~3.5 : 1)")
+			T.truthy(hi.Y >= GreatForge.NaveEave - 1.5, "it hangs from just under the gable's eave")
+			T.lt(lo.Y, GreatForge.PlinthTop + 1.2, "down to the porch")
+			local cx = LobbyLayout.get("GreatForge").Center.X
+			T.lt(math.min(math.abs(lo.X - cx), math.abs(hi.X - cx)), 10.5, "right beside the door pillars")
 			local icon = 0
 			for _, part in parts(banner) do
 				if part.Name == "BannerIcon" then
@@ -646,6 +670,22 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(mouths >= 3, "three glowing furnace mouths")
+		-- recessed behind grate bars in a warm-orange furnace wall, under an arched doorway
+		local grates, arches = 0, 0
+		for _, part in parts(forge) do
+			if part.Name == "FurnaceGrate" then
+				grates += 1
+			elseif part.Name == "DoorArch" then
+				arches += 1
+			end
+		end
+		T.truthy(grates >= 6, "grate bars in front of the furnace mouths")
+		T.eq(arches, 2, "an arched doorway (two haunches)")
+		local wall = forge:FindFirstChild("FurnaceWall")
+		T.truthy(
+			wall and wall.Material ~= NEON and wall.Color.R > 0.7 and wall.Color.B < 0.25,
+			"a warm-orange furnace wall (the hall glows)"
+		)
 	end)
 
 	T.test("plaza: parts and lights inside the package budget", function()
