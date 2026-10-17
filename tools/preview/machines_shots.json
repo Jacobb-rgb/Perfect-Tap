@@ -17,5 +17,10 @@
   "machines_game_dist": {"scene": "machines", "position": [30, 34, -48], "target": [2, 0, -2], "fov": 45, "preset": "Surface", "shadowExtent": 80, "sunDir": [-0.45, 0.6, -0.66]},
   "machines_station_front": {"scene": "machines", "position": [-13.5, 6.2, -23.5], "target": [-18, 2.6, -12], "fov": 50, "preset": "Surface", "shadowExtent": 30, "sunDir": [-0.45, 0.6, -0.66]},
   "machines_cleaner_brush": {"scene": "machines", "position": [22.5, 5.2, -20], "target": [20.6, 3.2, -12], "fov": 44, "preset": "Surface", "shadowExtent": 30, "sunDir": [-0.45, 0.6, -0.66]},
-  "machines_blast_tanks": {"scene": "machines", "position": [-5, 7.5, 0.5], "target": [-13.5, 4.2, 5.8], "fov": 55, "preset": "Surface", "shadowExtent": 30, "sunDir": [-0.45, 0.6, -0.66]}
+  "machines_blast_tanks": {"scene": "machines", "position": [-5, 7.5, 0.5], "target": [-13.5, 4.2, 5.8], "fov": 55, "preset": "Surface", "shadowExtent": 30, "sunDir": [-0.45, 0.6, -0.66]},
+  "machines_blast_top": {"scene": "machines", "position": [-9, 19, -8], "target": [-18, 10, 5], "fov": 50, "preset": "Surface", "shadowExtent": 40, "sunDir": [-0.45, 0.6, -0.66]},
+  "machines_crusher_back": {"scene": "machines", "position": [17, 10, -2], "target": [8, 4.5, -12], "fov": 50, "preset": "Surface", "shadowExtent": 40, "sunDir": [-0.45, 0.6, -0.66]},
+  "machines_cleaner_side": {"scene": "machines", "position": [14, 6.5, -20], "target": [20, 3, -11], "fov": 52, "preset": "Surface", "shadowExtent": 40, "sunDir": [-0.45, 0.6, -0.66]},
+  "machines_anvil": {"scene": "machines", "position": [11, 7, -3], "target": [8, 2.5, 4], "fov": 50, "preset": "Surface", "shadowExtent": 40, "sunDir": [-0.45, 0.6, -0.66]},
+  "machines_eye_level": {"scene": "machines", "position": [2, 5, -30], "target": [2, 4, -10], "fov": 70, "preset": "Surface", "shadowExtent": 50, "sunDir": [-0.45, 0.6, -0.66]}
 }

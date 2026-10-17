@@ -89,7 +89,9 @@ return function(T, Loader)
 				local intake = attachment(model, "Intake")
 				local size = intake:GetAttribute("IntakeSize")
 				local localOut = intake.CFrame:PointToObjectSpace(out)
-				local inside = math.abs(localOut.X) <= size.X / 2 and math.abs(localOut.Y) <= size.Y / 2 and math.abs(localOut.Z) <= size.Z / 2
+				local inside = math.abs(localOut.X) <= size.X / 2
+					and math.abs(localOut.Y) <= size.Y / 2
+					and math.abs(localOut.Z) <= size.Z / 2
 				T.falsy(inside, machine.Id .. " Output inside its own Intake")
 			elseif machine.Id == "CleaningStation" then
 				T.truthy(attachment(model, "Output"), "station keeps its tray Output")
@@ -203,12 +205,32 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Machines: pipe bends are pipe pieces, not ball elbows", function()
-		-- every machine with pipes: no ball-shaped elbow parts bigger than a bolt
+	T.test("Machines: pipe bends are pipe pieces with joints in the kinks, not ball elbows", function()
+		-- every machine with pipes: balls bigger than a bolt are only the
+		-- joints inside a two-kink bend (as wide as the pipe, with a diagonal
+		-- pipe piece leaving them) or a robot arm's elbow
 		for _, id in { "CleaningStation", "ClayFurnace", "BlastFurnace", "AutoCleaner" } do
-			for _, part in parts(MachineBuilder.build(id)) do
-				if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball then
-					T.truthy(part.Size.X <= 0.4, `{id} has a ball bigger than a bolt ({part.Size.X})`)
+			local model = MachineBuilder.build(id)
+			local list = parts(model)
+			for _, part in list do
+				if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball and part.Size.X > 0.4 then
+					T.truthy(part.Name == "PipeJoint" or part.Name == "ArmJoint", `{id} has a ball elbow ({part.Name}, {part.Size.X})`)
+					if part.Name == "PipeJoint" then
+						-- a pipe of the same diameter ends in its centre
+						local centre = part.CFrame.Position
+						local found = false
+						for _, other in list do
+							if other ~= part and other:IsA("Part") and other.Shape == roblox.Enum.PartType.Cylinder then
+								local tip = other.CFrame.RightVector * (other.Size.X / 2)
+								local p = other.CFrame.Position
+								local ends = (p + tip - centre).Magnitude < 0.02 or (p - tip - centre).Magnitude < 0.02
+								if ends and math.abs(other.Size.Y - part.Size.X) < 1e-3 then
+									found = true
+								end
+							end
+						end
+						T.truthy(found, `{id} PipeJoint sits at a pipe's end`)
+					end
 				end
 			end
 		end
@@ -297,12 +319,106 @@ return function(T, Loader)
 			if not machine.IsConveyor then
 				T.le(#parts(model), 70, machine.Id .. " part count")
 			end
-			-- nothing pokes more than half a stud into the neighbouring cells
+			-- every part stays inside its footprint (whole extents, 0.05 studs
+			-- of slack); only the output chute may reach out toward the Output
 			local hw, hd = machine.Size[1] * CELL / 2, machine.Size[2] * CELL / 2
 			for _, part in parts(model) do
-				local p = part.CFrame.Position
-				T.truthy(math.abs(p.X) <= hw + 0.5 and math.abs(p.Z) <= hd + 0.5, `{machine.Id} {part.Name} centre outside the footprint`)
+				local cf, size = part.CFrame, part.Size
+				local _, _, _, r00, r01, r02, _, _, _, r20, r21, r22 = cf:GetComponents()
+				if part:IsA("Part") and part.Shape == roblox.Enum.PartType.Ball then
+					r00, r01, r02, r20, r21, r22 = 1, 0, 0, 0, 0, 1
+				end
+				local ex = math.abs(r00) * size.X / 2 + math.abs(r01) * size.Y / 2 + math.abs(r02) * size.Z / 2
+				local ez = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
+				local p = cf.Position
+				local chute = part.Name == "Chute" or part.Name == "ChuteLip"
+				local front = if chute then hd + 0.6 else hd + 0.05
+				T.truthy(
+					math.abs(p.X) + ex <= hw + 0.05 and p.Z + ez <= hd + 0.05 and -(p.Z - ez) <= front,
+					`{machine.Id} {part.Name} reaches out of the footprint ({p.X}, {p.Z} +- {ex}, {ez})`
+				)
 			end
 		end
+	end)
+
+	T.test("Machines: the Blast Furnace has a glowing connection pipe, not the Crusher's hopper", function()
+		local function topParts(model: any, above: number): { any }
+			local list = {}
+			for _, part in parts(model) do
+				if part.CFrame.Position.Y > above then
+					table.insert(list, part)
+				end
+			end
+			return list
+		end
+		local furnace = MachineBuilder.build("BlastFurnace")
+		local intake = attachment(furnace, "Intake")
+		local size = intake:GetAttribute("IntakeSize")
+		-- a molten throat on the roof, inside the intake box
+		local throat = false
+		for _, part in topParts(furnace, 8) do
+			if part.Name == "Molten" and part.Material == roblox.Enum.Material.Neon then
+				local rel = intake.CFrame:PointToObjectSpace(part.CFrame.Position)
+				if math.abs(rel.X) <= size.X / 2 and math.abs(rel.Y) <= size.Y / 2 and math.abs(rel.Z) <= size.Z / 2 then
+					throat = true
+				end
+			end
+		end
+		T.truthy(throat, "molten throat in the connection pipe")
+		-- the roof cup is octagonal (8 walls), the chimney wider than 1.4
+		local walls, chimney = 0, 0
+		for _, part in topParts(furnace, 9.3) do
+			if part.ClassName == "Part" and part.Shape == roblox.Enum.PartType.Block and part.Size.Y > 1.2 and part.Size.Z < 0.5 then
+				walls += 1
+			end
+			if part.Shape == roblox.Enum.PartType.Cylinder and part.Size.X > 4 then
+				chimney = math.max(chimney, part.Size.Y)
+			end
+		end
+		T.eq(walls, 8, "octagonal cup")
+		T.truthy(chimney >= 1.4, "a big chimney")
+		-- two piston tanks with octagonal caps
+		local tanks = 0
+		for _, part in parts(furnace) do
+			if part.Name == "Tank" then
+				tanks += 1
+			end
+		end
+		T.eq(tanks, 2, "two fuel tanks")
+	end)
+
+	T.test("Machines: the Auto Cleaner's water lands in a tray under its rollers", function()
+		local cleaner = MachineBuilder.build("AutoCleaner")
+		local pool = cleaner:FindFirstChild("WaterPool")
+		T.truthy(pool, "tray WaterPool")
+		T.falsy(pool.CanCollide, "water does not collide")
+		local landing = attachment(cleaner, "WaterIn").CFrame.Position
+		local local_ = cleaner.PrimaryPart.CFrame:PointToObjectSpace(pool.CFrame.Position)
+		T.truthy(local_.Y + pool.Size.Y / 2 < landing.Y, "tray below the landing point")
+		T.truthy(
+			math.abs(landing.X - local_.X) < pool.Size.X / 2 and math.abs(landing.Z - local_.Z) < pool.Size.Z / 2,
+			"tray under the shower"
+		)
+		-- the brush rests just on top of ore under the shower (ore about 1 stud tall)
+		local drum = cleaner:FindFirstChild("Drum")
+		local drumLocal = cleaner.PrimaryPart.CFrame:PointToObjectSpace(drum.CFrame.Position)
+		local bottom = drumLocal.Y - drum.Size.Y / 2
+		T.truthy(bottom > landing.Y + 0.6 and bottom < landing.Y + 1.4, "brush at ore height")
+	end)
+
+	T.test("Machines: old part names and free-standing signs", function()
+		local station = MachineBuilder.build("CleaningStation")
+		T.truthy(station:FindFirstChild("LampShade") and station:FindFirstChild("LampBulb"), "old lamp names still resolve")
+		-- the Auto Cleaner's plate stands on its arch: gold letters on both faces
+		local faces = {}
+		for _, d in MachineBuilder.build("AutoCleaner"):GetDescendants() do
+			if d:IsA("SurfaceGui") and d:FindFirstChildWhichIsA("TextLabel") then
+				faces[d.Face.Name] = true
+			end
+		end
+		T.truthy(faces.Front and faces.Back, "sign readable from behind")
+		-- unlit stack lamps keep their hue, the lit one is toned down
+		T.truthy(MachineBuilder.Stack.Dim <= 0.35, "unlit lamps keep their colour")
+		T.truthy(MachineBuilder.Stack.Glow > 0 and MachineBuilder.Stack.Glow < 0.5, "lit lamp does not bloom white")
 	end)
 end

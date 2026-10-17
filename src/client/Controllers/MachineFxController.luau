@@ -26,12 +26,16 @@
 	  emitters with built-in textures; a shower instead rains thin streak
 	  particles from an invisible box the size of its shower head). It always
 	  runs gently and gets stronger while the machine works (Working, or Busy
-	  for a station someone is cleaning at); the basin's WaterPool shimmers.
+	  for a station someone is cleaning at). The WaterPool (the station's
+	  basin, the Auto Cleaner's tray under its rollers) shimmers and carries
+	  the soft foam rings, right under the landing point.
 	  Emitter rates follow the graphics quality (half on low quality and on
 	  phones left on automatic). Leaving the range gives the rig back.
-	- Auto Cleaner: the bed rollers turn with the drum, the stacked light
-	  lights one lamp: green (working), amber (idle) or red (blocked), and the
-	  built look (MachineBuilder.Stack.Lit) out of range. Crusher: the side
+	- Auto Cleaner: the bed rollers turn with the brush drum, the stacked
+	  light lights one lamp (Neon, its colour toned down by Stack.Glow so it
+	  glows in its colour instead of blooming white; the others keep their
+	  hue): green (working), amber (idle) or red (blocked), and the built look
+	  (MachineBuilder.Stack.Lit) out of range. Crusher: the side
 	  cogs turn with the rollers. Furnaces: the Glow and the Molten parts
 	  (glass sections, trickle, mould) pulse from their deep built orange
 	  toward MachineBuilder.Glow.Hot (brightness, never a white blob).
@@ -61,15 +65,17 @@ type Spinner = { Part: BasePart, Rest: CFrame, Axis: CFrame, Dir: number }
 type Emitter = { Emitter: ParticleEmitter, Idle: number, Busy: number }
 
 -- Pooled client water: Beams between Out and In, emitters at the landing
--- point (Splash) and a shower Head (an invisible box the size of the
--- shower head, the spray streaks start anywhere in it). All of it sits on
--- Anchor, which is moved onto the machine's Base.
+-- point (Splash), foam rings on the water surface below it (RippleAt: the
+-- WaterPool's top under WaterIn) and a shower Head (an invisible box the
+-- size of the shower head, the spray streaks start anywhere in it). All of
+-- it sits on Anchor, which is moved onto the machine's Base.
 type WaterRig = {
 	Anchor: Part,
 	Head: Part,
 	Out: Attachment,
 	In: Attachment,
 	Splash: Attachment,
+	RippleAt: Attachment,
 	Stream: Beam,
 	Core: Beam,
 	Drops: ParticleEmitter,
@@ -399,7 +405,7 @@ local function applySignal(fx: Fx)
 		local lit = name == state
 		local color = STACK.Lamps[name] or lamp.Color
 		lamp.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
-		lamp.Color = if lit then color else color:Lerp(Color3.new(0, 0, 0), STACK.Dim)
+		lamp.Color = color:Lerp(Color3.new(0, 0, 0), if lit then STACK.Glow else STACK.Dim)
 	end
 end
 
@@ -462,6 +468,7 @@ local function newRig(): WaterRig
 	local out = waterAttachment(anchor, "Out")
 	local into = waterAttachment(anchor, "In")
 	local splash = waterAttachment(anchor, "Splash")
+	local rippleAt = waterAttachment(anchor, "Ripple")
 
 	-- the stream: a solid ribbon (no texture, so it never reads as smoke),
 	-- light blue and fairly opaque at the outlet, deeper and thinner where
@@ -506,7 +513,7 @@ local function newRig(): WaterRig
 	mist.SpreadAngle = Vector2.new(60, 60)
 	mist.LightInfluence = 0.8
 	-- white foam rings lying flat on the pool, growing and fading
-	local ripple = waterEmitter(splash, "Ripple", SOFT, WATER.Foam)
+	local ripple = waterEmitter(rippleAt, "Ripple", SOFT, WATER.Foam)
 	ripple.EmissionDirection = Enum.NormalId.Top
 	ripple.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
 	ripple.Size = NumberSequence.new(0.35, 1.6)
@@ -544,6 +551,7 @@ local function newRig(): WaterRig
 		Out = out,
 		In = into,
 		Splash = splash,
+		RippleAt = rippleAt,
 		Stream = stream,
 		Core = core,
 		Drops = drops,
@@ -582,6 +590,15 @@ local function placeRig(fx: Fx)
 	rig.Out.CFrame = out.CFrame
 	rig.In.CFrame = into.CFrame
 	rig.Splash.CFrame = CFrame.new(into.CFrame.Position)
+	-- foam rings on the water surface right under the landing point (the
+	-- basin's surface, or the Auto Cleaner's tray under its rollers)
+	local surfaceY = into.CFrame.Position.Y
+	local pool = fx.Pool
+	if pool then
+		local top = base.CFrame:PointToObjectSpace(pool.Position + pool.CFrame.UpVector * pool.Size.Y / 2)
+		surfaceY = math.min(surfaceY, top.Y + 0.02)
+	end
+	rig.RippleAt.CFrame = CFrame.new(into.CFrame.Position.X, surfaceY, into.CFrame.Position.Z)
 	-- the shower head box: level with the Base, just under the outlet
 	rig.Head.CFrame = base.CFrame * CFrame.new(out.CFrame.Position)
 	local c0, c1 = out:GetAttribute("Curve"), into:GetAttribute("Curve")
