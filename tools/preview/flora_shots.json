@@ -21,8 +21,8 @@
   },
   "flora_bridge": {
     "scene": "world",
-    "position": [22, 16, 98],
-    "target": [-2, 2, 58],
+    "position": [16, 18, 76],
+    "target": [-2, 2, 56],
     "fov": 55,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],
@@ -51,8 +51,8 @@
   },
   "flora_autumn": {
     "scene": "world",
-    "position": [-12, 24, 150],
-    "target": [-46, 4, 112],
+    "position": [-110, 24, 100],
+    "target": [-139, 4, 130],
     "fov": 60,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],

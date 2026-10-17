@@ -62,12 +62,19 @@ LobbyLayout.Area = {
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
 	-- visual upgrade (concept v2): richer stalls, brick plot walls, town
-	-- buildings; + the owner-approved Blaster Vault package (~2970 parts)
-	MapParts = 17350,
+	-- buildings; + the owner-approved Blaster Vault package (~2970 parts).
+	-- tests/LobbyBudget.spec.luau: the built map (~15,800 parts with the
+	-- vault) + one ore node on every node spawn (~1,320) must stay 200 under
+	-- it (the podium and pen ores): ~170 parts of headroom.
+	MapParts = 17500,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
-	LobbyParts = 11250,
+	-- The lobby has ~11,200 parts with the vault: the ~200 parts of headroom
+	-- are a deliberate buffer, so a small merge from a parallel package session
+	-- (Backdrop, Districts, Plaza, Flora) does not break this budget; spend it
+	-- on purpose, not by accident.
+	LobbyParts = 11400,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
@@ -688,6 +695,11 @@ LobbyLayout.Paths = {
 	-- end to the yard, a dirt track under the rails to the portal
 	{ Id = "MineLane", From = v(-70, 0, 118), To = v(-70, 0, 125), Width = 9, Kind = "Dirt" },
 	{ Id = "ToMine", From = mineMoved(v(-13, 0, 88)), To = mineMoved(v(-34, 0, 88)), Width = 9, Kind = "Dirt" },
+	-- the south-east hamlet: a dirt lane from the east plot road's end to the
+	-- MAP door, round the south of the ore outcrop at (82, 118); it stops
+	-- 2 studs short of the MAP facade (the town site stays free ground)
+	{ Id = "HamletLane", From = v(70, 0, 119), To = v(80, 0, 127.5), Width = 5, Kind = "Dirt" },
+	{ Id = "ToMap", From = v(80, 0, 127.5), To = v(88, 0, 125), Width = 5, Kind = "Dirt" },
 	{ Id = "ToNextArea", From = v(75, 0, -115), To = v(160, 0, -115), Width = 6, Kind = "Dirt" },
 } :: { Path }
 

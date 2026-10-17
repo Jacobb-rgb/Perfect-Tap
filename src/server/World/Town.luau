@@ -65,13 +65,14 @@ end
 	Pieces whose builder still works in fixed world coordinates (LobbyLayout
 	DesignCenter/DesignFacing, e.g. the Backdrop's MINE hill and yard): the
 	built model (the package's child named like the piece) moves rigidly from
-	that design frame to the piece's Center/Facing.
+	that design frame to the piece's Center/Facing (PivotTo, so the model's
+	pivot moves with its parts).
 ]]
 function Town.relocate(parent: Instance, package: string)
 	for _, piece in LobbyLayout.ofPackage(package) do
 		local designCenter, designFacing = piece.DesignCenter, piece.DesignFacing
 		local built = parent:FindFirstChild(piece.Id)
-		if designCenter and built then
+		if designCenter and built and built:IsA("Model") then
 			local design = LobbyLayout.frame({
 				Id = piece.Id,
 				Package = piece.Package,
@@ -81,11 +82,7 @@ function Town.relocate(parent: Instance, package: string)
 				Note = piece.Note,
 			})
 			local delta = LobbyLayout.frame(piece) * design:Inverse()
-			for _, d in built:GetDescendants() do
-				if d:IsA("BasePart") then
-					d.CFrame = delta * d.CFrame
-				end
-			end
+			built:PivotTo(delta * built:GetPivot())
 		end
 	end
 end

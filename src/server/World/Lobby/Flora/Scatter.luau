@@ -45,9 +45,14 @@ Scatter.TreeFreeBoxes = {
 	-- the MINE's portal, its yard and lane in the south-west corner (seen
 	-- from the hero camera over the Blaster Vault)
 	{ Min = Vector2.new(-92, 116), Max = Vector2.new(-58, 149) },
-	-- the MAP tower's and the WORKS' fronts in the south-east hamlet (the hero
-	-- camera sees them from the south-west)
-	{ Min = Vector2.new(76, 113), Max = Vector2.new(112, 149) },
+	-- the MINE hill itself (x -110..-88, z 121..151) and a crown's reach +
+	-- 2 studs to the west: its voxel rock top must not sink into autumn
+	-- crowns; the autumn woods frame it from the west and the south
+	{ Min = Vector2.new(-118, 117), Max = Vector2.new(-88, 151) },
+	-- the MAP tower's and the WORKS' fronts in the south-east hamlet and the
+	-- hamlet lane (the hero camera sees them from the south-west); trees
+	-- along the island's south edge behind it stay under the sight lines
+	{ Min = Vector2.new(76, 113), Max = Vector2.new(112, 138) },
 }
 
 local function treeFree(p: Vector3): boolean
@@ -329,7 +334,9 @@ Scatter.Lanterns = {
 	{ At = Vector3.new(-7.4, 0, 77.0), Yaw = -math.pi / 2, Light = true },
 	{ At = Vector3.new(78, 0, -120.2), Yaw = math.pi / 2, Light = false }, -- ToNextArea leaves the plot road
 	-- (the Plaza lights the MINE lane where it leaves the west plot road)
-	{ At = Vector3.new(63.5, 0, 125.5), Yaw = math.pi / 2, Light = false }, -- the way past the east plot road's end to the MAP hamlet
+	-- the hamlet lane (LobbyLayout HamletLane) where it leaves the east plot
+	-- road's end for the MAP hamlet, its arm over the lane
+	{ At = Vector3.new(72.5, 0, 127.5), Yaw = -0.705, Light = false },
 }
 
 --[[

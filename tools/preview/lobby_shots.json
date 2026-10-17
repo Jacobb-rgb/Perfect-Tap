@@ -1,8 +1,8 @@
 {
   "lobby_hero": {
     "scene": "world",
-    "position": [-8, 128, 262],
-    "target": [2, 6, -22],
+    "position": [-40, 122, 252],
+    "target": [2, 10, -26],
     "fov": 50,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],
@@ -11,8 +11,8 @@
   },
   "lobby_vault": {
     "scene": "world",
-    "position": [0, 28, 40],
-    "target": [0, 20, 112],
+    "position": [0, 27, 32],
+    "target": [0, 18, 112],
     "fov": 64,
     "preset": "Surface",
     "sunDir": [-0.965, 0.225, 0.136],
