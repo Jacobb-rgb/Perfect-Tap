@@ -2,17 +2,30 @@
 	Floor 1, GREYSTONE QUARRY (blaster 1+): the first mine floor players see.
 	An open-pit quarry under the warm sunset sky (no ceiling): terraced
 	blue-grey slate walls with pale strata stripes like the rocks, a grass
-	rim with trees, a sandy floor with dusty patches and a worn path from the
-	entrance, wooden scaffolds, ladders and plank walkways on the terraces,
-	mine carts on rails, a tool shed, lanterns on posts, copper and quartz
-	crystal clusters sprouting from the walls, and in the back cliff the big
-	glowing tunnel mouth down to the Ember Caves.
+	rim with colorful trees, a sandy floor with dusty patches and a worn path,
+	a wooden scaffold with ladders and a plank walkway on the first terrace, a
+	mine cart on rails, a tool shed, lanterns on posts and copper and quartz
+	crystal clusters sprouting from the walls.
 
 	Contract: MineKit header (Floor.Index, Floor.Size, Floor.build). Local
-	frame: origin = ground center of the pit, +Z = front (entrance, gate,
-	elevator), -Z = back ("deep" rocks, the tunnel). Pit floor: x -46..46,
-	z -39..48 (the tunnel mouth at z -39); walls rise in three terraces.
-	opts.Cutaway: the front wall is a low grass bank so a camera at +Z sees in.
+	frame: origin = ground center (world: MineFloors.Placement[1] at
+	0, -12, -180; local = world - origin), +Z = front (the town), -Z = back.
+
+	In the game (docs/plans/MINE_STEP_PLAN.md) the quarry shares its box with
+	other packages, so the floor leaves these spaces free:
+	  front   Land builds the town-side cliff (z +56..) and the ramp from
+	          0, +12, +68 down to 0, 0, +40: no front wall, x -10..10 clear
+	  train   z +18..+39 stays clear (track at z +24, Mine Station x 12..40);
+	          from z +14 to +39 the side walls step back to |x| 71.5 behind
+	          Railway's tunnel portals (x +-66); no ore lift of our own
+	  grotto  the east wall opens at z -8..+4 (floor to +11) into Land's
+	          tunnel to the VIP Grotto (a rock lintel above it)
+	  back    the lobby's DEPTHS portal (x -22..22, z -60..-45) frames the way
+	          down; the opening x -9..9, y 0..16 is open; the falls pools
+	          at x +-36..52 and the ForgeWorks chute at x 22..26 stay free; the
+	          back wall rises to +34 under the ForgeMountain massif (no grass)
+	opts.Cutaway (preview pictures, no town around): a simple glowing tunnel
+	headland stands where the DEPTHS portal is in the game.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -28,7 +41,7 @@ local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
 local Floor = {}
 
 Floor.Index = 1
-Floor.Size = Vector3.new(140, 44, 120)
+Floor.Size = Vector3.new(154, 44, 118)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -42,16 +55,23 @@ local TINY = { CanTouch = false, CanQuery = false, CanCollide = false, CastShado
 local GHOST = { CanTouch = false, CanQuery = false, CanCollide = false }
 
 -- pit layout (local studs)
-local WALL_X = 46 -- side wall faces at x = +-46
-local BACK_Z = -42 -- back wall face
-local MOUTH_Z = -39 -- front face of the tunnel headland
-local FRONT_Z = 48 -- front edge of the pit
-local TUNNEL_W = 7 -- tunnel half width
-local TUNNEL_H = 14 -- tunnel opening height
-local TUNNEL_END = -56 -- the glowing end of the tunnel
-local TUNNEL_DROP = 4 -- the tunnel floor slopes down this much (the way down)
-local GIANT = Vector3.new(11, 0, -6) -- Giant Crystal plaza (beside the main path, so the tunnel stays in view)
-local LIFT = Vector3.new(38, 0, 6)
+local PIT_X = 56 -- the side walls' first terrace faces
+local BAND_Z0, BAND_Z1 = 14, 39 -- the train band: side walls stand back at |x| 71.5 here
+local BAND_X = 72 -- the quarry edge (town ground and tunnel portals)
+local OUTER_X = 77 -- the side walls' back (in the town ground)
+local BACK_Z = -48 -- the back wall's first terrace face
+local END_Z = -60 -- the back of the floor box (floor 2 starts here)
+local FRONT_Z = 58 -- under Land's town-side cliff
+local DOOR_Z0, DOOR_Z1 = -8, 4 -- the VIP Grotto door in the east wall
+local DOOR_H = 11
+local GIANT = Vector3.new(11, 0, -6) -- Giant Crystal plaza (beside the main path, the DEPTHS portal stays in view)
+-- the preview tunnel (Cutaway only; in the game the lobby's DEPTHS portal stands here)
+local MOUTH_Z = -46
+local TUNNEL_W = 7
+local TUNNEL_H = 14
+local TUNNEL_END = -60
+local TUNNEL_DROP = 4
+local HEAD_X = 22
 
 type Top = { cf: CFrame, w: number, d: number, step: number, wall: string, rim: boolean }
 
@@ -65,6 +85,13 @@ type Ctx = {
 }
 
 type Step = { Face: number, Top: number, Color: Color3 }
+
+type TerraceOpts = {
+	TrimStart: { number }?, -- per step, studs cut from the start
+	TrimEnd: { number }?,
+	Veins: number?, -- chance of a glowing crack on a first-step column
+	Bare: boolean?, -- no topsoil and grass on the top step (under the massif)
+}
 
 ---------------------------------------------------------------- small helpers
 
@@ -126,63 +153,71 @@ end
 
 ---------------------------------------------------------------- terraced walls
 
+local STAGGER = { 0.8, 0.4, 0 } -- end trims so the steps' end faces never share a plane
+
 --[[
-	A terraced slate wall: voxel columns (~7 studs) per step, each with pale
+	A terraced slate wall: voxel columns (~8 studs) per step, each with pale
 	strata stripes on its face (shared heights along the wall, so the layers
 	read as continuous), a pale slate ledge (sometimes a grass lip) on the lower
-	steps and a dirt band + grass cap on the top step. `frame` = wallFrame, the
-	steps' Face = distance from the pit edge into the cliff. trimStart/trimEnd
-	cut each step shorter at the ends (stagger so end faces never share a plane).
+	steps and a dirt band + grass cap on the top step (opts.Bare: a pale slate
+	cap). `frame` = wallFrame, the steps' Face = distance from the pit edge into
+	the cliff, `outer` = the wall's back.
 ]]
-local function terrace(c: Ctx, wall: string, frame: CFrame, length: number, steps: { Step }, outer: number, trimStart: { number }?, trimEnd: { number }?, veins: number?)
+local function terrace(c: Ctx, wall: string, frame: CFrame, length: number, steps: { Step }, outer: number, opts: TerraceOpts?)
+	local o: TerraceOpts = opts or {}
 	local rng, pal = c.rng, c.pal
-	local n = math.max(1, math.floor(length / 7 + 0.5))
+	local n = math.max(1, math.floor(length / 8 + 0.5))
 	local colW = length / n
 	local strata: { { number } } = {}
 	for k, s in steps do
 		local below = if k == 1 then 0 else steps[k - 1].Top
 		local span = s.Top - below
-		strata[k] = { below + span * rng:range(0.24, 0.34), below + span * rng:range(0.6, 0.7) }
+		local count = math.clamp(math.floor(span / 5.5), 1, 3)
+		local levels = {}
+		for j = 1, count do
+			table.insert(levels, below + span * (j - 0.45 + rng:range(-0.08, 0.08)) / (count + 0.2))
+		end
+		strata[k] = levels
 	end
 	for i = 0, n - 1 do
 		local x0, x1 = i * colW, (i + 1) * colW
 		for k, s in steps do
-			local a = math.max(x0, if trimStart then trimStart[k] or 0 else 0)
-			local b = math.min(x1, length - (if trimEnd then trimEnd[k] or 0 else 0))
+			local a = math.max(x0, if o.TrimStart then o.TrimStart[k] or 0 else 0)
+			local b = math.min(x1, length - (if o.TrimEnd then o.TrimEnd[k] or 0 else 0))
 			if b - a >= 1 then
 				local last = k == #steps
 				local below = if k == 1 then 0 else steps[k - 1].Top
 				local zFace = s.Face + rng:range(-0.3, 0.3)
 				local zBack = if last then outer else steps[k + 1].Face + 2
-				local jitter = if last then math.min(1.6, s.Top * 0.2) else 0.5
+				local jitter = if last and not o.Bare then math.min(1.4, s.Top * 0.2) else 0.5
 				local h = s.Top + rng:range(-jitter, jitter)
 				local w = b - a + 0.06
 				local x = (a + b) / 2
 				local depth = zBack - zFace
 				Geo.block(c.m, frame * CFrame.new(x, h / 2, zFace + depth / 2), Vector3.new(w, h, depth), Geo.vary(s.Color, rng, 0.035), nil, SOLID)
 				-- strata: pale layers like the rocks
-				if h - below > 3 then
-					for j, y in strata[k] do
-						if rng:chance(0.88) and y < h - 0.8 then
-							local t = rng:range(0.55, 0.9)
-							local color = if j == 1 then pal.Light:Lerp(WHITE, 0.2) else pal.Light:Lerp(WHITE, 0.45)
-							block(c, frame * CFrame.new(x, y + rng:range(-0.18, 0.18), zFace - 0.15), Vector3.new(w + 0.12, t, 0.7), Geo.vary(color, rng, 0.03), nil, TINY)
-						end
+				for j, y in strata[k] do
+					if y < h - 0.8 and rng:chance(0.9) then
+						local t = rng:range(0.55, 0.9)
+						local color = if j % 2 == 1 then pal.Light:Lerp(WHITE, 0.2) else pal.Light:Lerp(WHITE, 0.45)
+						block(c, frame * CFrame.new(x, y + rng:range(-0.18, 0.18), zFace - 0.15), Vector3.new(w + 0.12, t, 0.7), Geo.vary(color, rng, 0.03), nil, TINY)
 					end
 				end
 				-- a broken chunk sticking out of the face
-				if rng:chance(0.35) and h - below > 4 then
+				if rng:chance(0.25) and h - below > 4 then
 					local sw, sh = rng:range(1.6, 3), rng:range(1.2, 2.2)
 					local y = rng:range(below + sh, math.max(below + sh + 0.1, h - sh))
 					local color = if rng:chance(0.5) then pal.Dark else s.Color:Lerp(pal.Light, 0.45)
 					block(c, frame * CFrame.new(x + rng:range(-w * 0.3, w * 0.3), y, zFace - 0.4), Vector3.new(sw, sh, 1.2), Geo.vary(color, rng, 0.04), nil, TINY)
 				end
-				-- a thin copper glow vein (lowest step only)
-				if k == 1 and veins and rng:chance(veins) and h > 5 then
+				-- a thin glowing crack (lowest step only)
+				if k == 1 and o.Veins and rng:chance(o.Veins) and h > 5 then
 					local dir = if rng:chance(0.5) then 0 else math.pi
-					crack(c, frame * CFrame.new(0, 0, zFace - 0.05), x + rng:range(-w * 0.3, 0), rng:range(1.8, h - 3), dir + rng:range(-0.5, 0.5), 3, 1.4)
+					crack(c, frame * CFrame.new(0, 0, zFace - 0.05), x + rng:range(-w * 0.3, 0), rng:range(1.8, h - 3), dir + rng:range(-0.5, 0.5), 2, 1.4)
 				end
-				if last then
+				if last and o.Bare then
+					block(c, frame * CFrame.new(x, h + 0.2, zFace + depth / 2), Vector3.new(w + 0.1, 0.5, depth + 0.2), Geo.vary(pal.Light, rng, 0.04), nil, SOLID)
+				elseif last then
 					-- topsoil band and grass cap (the rim)
 					block(c, frame * CFrame.new(x, h - 0.7, zFace + depth / 2), Vector3.new(w + 0.24, 1.4, depth + 0.24), Geo.vary(C.DirtDark, rng, 0.04), nil, TINY)
 					block(c, frame * CFrame.new(x, h + 0.4, zFace + depth / 2), Vector3.new(w + 0.5, 0.8, depth + 0.5), Geo.vary(C.Grass, rng, 0.05), nil, SOLID)
@@ -205,9 +240,9 @@ local function talus(c: Ctx, frame: CFrame, length: number, every: number)
 	local rng, pal = c.rng, c.pal
 	local n = math.floor(length / every)
 	for i = 0, n - 1 do
-		local s = rng:range(1.2, 2.8)
+		local s = rng:range(1.4, 2.8)
 		local x = (i + rng:range(0.2, 0.8)) * every
-		local z = -rng:range(0.2, 2.2)
+		local z = -rng:range(0.4, 1.8)
 		local color = if rng:chance(0.55) then pal.Dark else pal.Mid
 		block(c, frame * CFrame.new(x, s * 0.3, z) * Geo.randomTilt(rng, 0.35), Vector3.new(s * 1.2, s * 0.8, s), Geo.vary(color, rng, 0.05))
 	end
@@ -222,7 +257,6 @@ local function wallCrystal(c: Ctx, pos: Vector3, out: Vector3, tilt: number, cou
 	local root = c.o * leaning(pos, out, tilt)
 	return MineKit.crystals(c.m, root, count, height, "Tipped", colors, "Floor1Crystal" .. seed)
 end
-
 
 ---------------------------------------------------------------- wooden pieces
 
@@ -239,18 +273,18 @@ local function ladder(c: Ctx, foot: Vector3, out: Vector3, height: number)
 		local p = foot + side * s
 		beam(c, p, p + Vector3.new(0, height, 0), 0.32, C.WoodDark, GHOST)
 	end
-	local n = math.floor(height / 1.1)
+	local n = math.floor(height / 1.4)
 	for i = 1, n do
-		local p = foot + Vector3.new(0, i * 1.1 - 0.3, 0)
+		local p = foot + Vector3.new(0, i * 1.4 - 0.4, 0)
 		beam(c, p - side * 0.8, p + side * 0.8, 0.22, C.Wood, TINY)
 	end
 end
 
 -- A plank deck on short legs; `center` = top center (local), X across, Z along.
-local function deck(c: Ctx, center: Vector3, size: Vector3, legDown: number, yaw: number)
-	local cf = at(c, center.X, center.Y, center.Z) * CFrame.Angles(0, yaw, 0)
-	Style.planks(c.m, cf, size, c.rng)
-	local n = math.max(1, math.floor(size.Z / 6))
+local function deck(c: Ctx, center: Vector3, size: Vector3, legDown: number)
+	local cf = at(c, center.X, center.Y, center.Z)
+	Style.planks(c.m, cf, size, c.rng, { PlankWidth = 1.7 })
+	local n = math.max(1, math.floor(size.Z / 8))
 	for i = 0, n do
 		local z = -size.Z / 2 + 0.4 + (size.Z - 0.8) * i / n
 		for _, sx in { -1, 1 } do
@@ -259,31 +293,30 @@ local function deck(c: Ctx, center: Vector3, size: Vector3, legDown: number, yaw
 	end
 end
 
----------------------------------------------------------------- the build
+---------------------------------------------------------------- the preview tunnel (Cutaway only)
 
--- The tunnel headland in the back cliff: the big glowing way down to the Ember Caves.
+-- The glowing tunnel headland of the preview pictures: in the game the lobby's DEPTHS portal
+-- (src/server/World/Lobby/Backdrop/Depths.luau) frames the way down at this spot.
 local function tunnel(c: Ctx, slate2: Color3, slate3: Color3, slate1: Color3)
 	local rng, pal, m = c.rng, c.pal, c.m
 	local depth = MOUTH_Z - TUNNEL_END
 	local zMid = (MOUTH_Z + TUNNEL_END) / 2
 	local headH = 23
-	local face = MOUTH_Z + 0.15 -- strata/veins sit just in front of the headland face (+Z)
+	local face = MOUTH_Z + 0.15
 	local flip = CFrame.Angles(0, math.pi, 0) -- signs face the pit (+Z)
-	-- the headland: two jambs, the lintel, a rear tier, topsoil and grass
+	local jambW = HEAD_X - TUNNEL_W
 	for _, sx in { -1, 1 } do
-		local x = sx * (TUNNEL_W + 16) / 2
-		block(c, at(c, x, headH / 2, zMid), Vector3.new(16 - TUNNEL_W, headH, depth), Geo.vary(slate2, rng, 0.03), nil, SOLID)
+		block(c, at(c, sx * (TUNNEL_W + HEAD_X) / 2, headH / 2, zMid), Vector3.new(jambW, headH, depth), Geo.vary(slate2, rng, 0.03), nil, SOLID)
 	end
 	block(c, at(c, 0, (TUNNEL_H + headH) / 2, zMid), Vector3.new(TUNNEL_W * 2 + 0.1, headH - TUNNEL_H, depth), Geo.vary(slate2, rng, 0.03), nil, SOLID)
-	block(c, at(c, 0, headH + 2.5, -50.5), Vector3.new(24, 5, 11), Geo.vary(slate3, rng, 0.03), nil, SOLID)
-	block(c, at(c, 0, headH - 0.7, zMid), Vector3.new(32.3, 1.4, depth + 0.3), C.DirtDark, nil, TINY)
-	block(c, at(c, 0, headH + 0.4, zMid), Vector3.new(32.6, 0.8, depth + 0.6), C.Grass, nil, SOLID)
-	block(c, at(c, 0, headH + 5.4, -50.5), Vector3.new(24.5, 0.8, 11.5), C.Grass, nil, SOLID)
-	-- strata across the face (the upper bands run over the opening)
+	block(c, at(c, 0, headH + 2.5, zMid - 2), Vector3.new(HEAD_X * 1.5, 5, depth - 4), Geo.vary(slate3, rng, 0.03), nil, SOLID)
+	block(c, at(c, 0, headH - 0.7, zMid), Vector3.new(HEAD_X * 2 + 0.3, 1.4, depth + 0.3), C.DirtDark, nil, TINY)
+	block(c, at(c, 0, headH + 0.4, zMid), Vector3.new(HEAD_X * 2 + 0.6, 0.8, depth + 0.6), C.Grass, nil, SOLID)
+	block(c, at(c, 0, headH + 5.4, zMid - 2), Vector3.new(HEAD_X * 1.5 + 0.5, 0.8, depth - 3.5), C.Grass, nil, SOLID)
 	for i, y in { 3.4, 7.4, 11.8 } do
 		for _, sx in { -1, 1 } do
 			local color = if i == 2 then pal.Light:Lerp(WHITE, 0.3) else pal.Light
-			block(c, at(c, sx * 13.2, y + sx * 0.15, face), Vector3.new(5.7, 0.8, 0.7), color, nil, TINY)
+			block(c, at(c, sx * (HEAD_X + 10.2) / 2, y + sx * 0.15, face), Vector3.new(HEAD_X - 10.2, 0.8, 0.7), color, nil, TINY)
 		end
 	end
 	-- the stone arch around the portal: chunky slate blocks with glow seeping through the seams
@@ -331,10 +364,9 @@ local function tunnel(c: Ctx, slate2: Color3, slate3: Color3, slate1: Color3)
 			p.Name = "TunnelGlow"
 		end
 	end
-	block(c, at(c, 0, (TUNNEL_H - TUNNEL_DROP) / 2, TUNNEL_END - 0.6), Vector3.new(TUNNEL_W * 2 + 2, TUNNEL_H + TUNNEL_DROP + 2, 1), C.StoneDeep, nil, GHOST)
-	-- timber frames inside (silhouettes against the glow) and the big portal frame
+	-- receding timber frames (silhouettes against the glow) and the big portal frame
 	local frameColor = Color3.fromRGB(52, 36, 30)
-	for i, z in { -43, -47, -51, -54.6 } do
+	for i, z in { -49.5, -53, -56.5 } do
 		local y0 = floorY(z)
 		local top = TUNNEL_H - 1.2 - i * 0.5
 		local half = TUNNEL_W - 1 - i * 0.35
@@ -350,7 +382,6 @@ local function tunnel(c: Ctx, slate2: Color3, slate3: Color3, slate1: Color3)
 		beam(c, Vector3.new(sx * (TUNNEL_W - 1.2), 10.6, pz + 0.2), Vector3.new(sx * (TUNNEL_W - 4), 13.2, pz + 0.2), 0.7, C.Wood, GHOST)
 	end
 	block(c, at(c, 0, 14.2, pz), Vector3.new(TUNNEL_W * 2 + 2.6, 2, 2), C.Wood)
-	block(c, at(c, 0, 15.35, pz), Vector3.new(TUNNEL_W * 2 + 3, 0.3, 2.3), C.WoodDark, nil, TINY)
 	-- signs: EMBER CAVES with arrows down, and the next floor's blaster level
 	Style.sign(m, at(c, 0, 20.3, MOUTH_Z + 0.9) * flip, "EMBER CAVES", 12, 2.8, { Kind = "Wood" })
 	for _, sx in { -1, 1 } do
@@ -360,22 +391,16 @@ local function tunnel(c: Ctx, slate2: Color3, slate3: Color3, slate1: Color3)
 	for _, sx in { -1, 1 } do
 		Style.lantern(m, at(c, sx * (TUNNEL_W - 2.2), 13.2, pz + 0.6), { Kind = "Hanging", Color = C.FireCore })
 	end
-	-- glow veins radiating from the opening
 	local faceF = at(c, 0, 0, MOUTH_Z + 0.08)
-	for _, v in { { -10.2, 4.6, math.pi + 0.3 }, { -10.2, 13.6, math.pi - 0.5 }, { 10.2, 9.4, 0.25 }, { 10.2, 14.6, 0.6 }, { 10.2, 1.6, -0.1 } } do
+	for _, v in { { -10.2, 4.6, math.pi + 0.3 }, { -10.2, 13.6, math.pi - 0.5 }, { 10.2, 9.4, 0.25 }, { 10.2, 14.6, 0.6 } } do
 		crack(c, faceF, v[1], v[2], v[3], 2, 1.3)
 	end
-	-- rails up out of the tunnel, a cart on the slope (silhouette) and one at the mouth
-	Style.rails(m, pt(c, 2.5, floorY(-55), -55), pt(c, 2.5, 0, MOUTH_Z))
-	Style.rails(m, pt(c, 2.5, 0, MOUTH_Z), pt(c, 2.5, 0, -28.5))
-	Style.mineCart(m, CFrame.lookAt(pt(c, 2.5, floorY(-48), -48), pt(c, 2.5, floorY(-46), -46)), rng, { Load = "Ore" })
-	Style.mineCart(m, at(c, 2.5, 0, -33.5), rng, { Load = "Ore" })
-	block(c, at(c, 2.5, 1.05, -28.3), Vector3.new(4, 0.8, 0.8), C.WoodDark)
-	block(c, at(c, 2.5, 1.05, -28.75), Vector3.new(2.4, 0.5, 0.12), C.Roof, nil, TINY)
-	for _, sx in { -1, 1 } do
-		block(c, at(c, 2.5 + sx * 1.5, 0.6, -28.3), Vector3.new(0.6, 1.2, 0.6), C.WoodDark)
-	end
-	-- light spilling out: the end, the middle, the mouth; embers and a warm haze
+	-- rails up out of the tunnel with a cart on the slope and one at the mouth
+	Style.rails(m, pt(c, 2.5, floorY(-59), -59), pt(c, 2.5, 0, MOUTH_Z))
+	Style.rails(m, pt(c, 2.5, 0, MOUTH_Z), pt(c, 2.5, 0, -30))
+	Style.mineCart(m, CFrame.lookAt(pt(c, 2.5, floorY(-53), -53), pt(c, 2.5, floorY(-51), -51)), rng, { Load = "Ore" })
+	Style.mineCart(m, at(c, 2.5, 0, -38), rng, { Load = "Ore" })
+	-- light spilling out, embers and a warm haze
 	if endGlow then
 		light(c, endGlow, C.Fire, 26, 2.2)
 		local embers = Style.emitter(endGlow, "Embers", C.FireCore, 10)
@@ -384,24 +409,19 @@ local function tunnel(c: Ctx, slate2: Color3, slate3: Color3, slate1: Color3)
 		embers.Lifetime = NumberRange.new(2.5, 4)
 	end
 	local hidden = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 1 }
-	light(c, block(c, at(c, 0, 3, -34), Vector3.new(0.2, 0.2, 0.2), C.Fire, nil, hidden), C.Fire, 26, 1.4)
-	Style.emitter(block(c, at(c, 0, floorY(-52), -52), Vector3.new(8, 0.2, 2), C.Fire, nil, hidden), "Mist", C.Fire, 3)
-	-- crystals: big copper and quartz clusters at the feet and on top of the headland
-	local feet = wallCrystal(c, Vector3.new(-11.2, -0.3, MOUTH_Z + 1.6), Vector3.new(0, 0, 1), 0.3, 9, 7.5, false, 1)
-	wallCrystal(c, Vector3.new(11.6, -0.3, MOUTH_Z + 1.6), Vector3.new(0, 0, 1), 0.35, 8, 6.5, true, 2)
-	wallCrystal(c, Vector3.new(-14.6, -0.3, MOUTH_Z + 1), Vector3.new(-0.6, 0, 0.8).Unit, 0.5, 5, 4, true, 3)
-	wallCrystal(c, Vector3.new(-10, headH - 0.2, -42), Vector3.new(0, 0, 1), 0.15, 8, 7, false, 4)
-	wallCrystal(c, Vector3.new(9.5, headH - 0.2, -44), Vector3.new(0, 0, 1), 0.2, 7, 6, true, 5)
-	wallCrystal(c, Vector3.new(-12.4, 18.4, MOUTH_Z - 0.6), Vector3.new(0, 0, 1), 0.95, 5, 3.6, false, 6)
-	wallCrystal(c, Vector3.new(12.6, 11.5, MOUTH_Z - 0.6), Vector3.new(0, 0, 1), 1.0, 5, 3.6, false, 7)
-	local copperGlow = feet:FindFirstChildWhichIsA("BasePart", true)
-	if copperGlow then
-		light(c, copperGlow, pal.Crystal, 14, 1)
-	end
-	for _, p in { { 15.8, -37.2 }, { -17.6, -37.6 } } do
+	light(c, block(c, at(c, 0, 3, -41), Vector3.new(0.2, 0.2, 0.2), C.Fire, nil, hidden), C.Fire, 26, 1.4)
+	Style.emitter(block(c, at(c, 0, floorY(-56), -56), Vector3.new(8, 0.2, 2), C.Fire, nil, hidden), "Mist", C.Fire, 3)
+	-- crystals at the feet and on top of the headland
+	wallCrystal(c, Vector3.new(-12, -0.3, MOUTH_Z + 1.6), Vector3.new(0, 0, 1), 0.3, 9, 7.5, false, 1)
+	wallCrystal(c, Vector3.new(12.4, -0.3, MOUTH_Z + 1.6), Vector3.new(0, 0, 1), 0.35, 8, 6.5, true, 2)
+	wallCrystal(c, Vector3.new(-12, headH - 0.2, MOUTH_Z - 3), Vector3.new(0, 0, 1), 0.15, 8, 7, false, 4)
+	wallCrystal(c, Vector3.new(11.5, headH - 0.2, MOUTH_Z - 5), Vector3.new(0, 0, 1), 0.2, 7, 6, true, 5)
+	for _, p in { { 18, MOUTH_Z + 1.4 }, { -18.5, MOUTH_Z + 1.6 } } do
 		Style.boulder(m, pt(c, p[1], 0, p[2]), rng:range(2, 2.8), rng, { Color = slate1 })
 	end
 end
+
+---------------------------------------------------------------- the build
 
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	local cutaway = opts ~= nil and opts.Cutaway == true
@@ -427,131 +447,155 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	local SAND_LIGHT = pal.Ground:Lerp(WHITE, 0.18)
 
 	------------------------------------------------------------ ground
-	block(c, at(c, 0, -0.75, (MOUTH_Z + 60) / 2), Vector3.new(96, 1.5, 60 - MOUTH_Z), SAND, nil, SOLID).Name = "Ground"
-	for _, sx in { -1, 1 } do
-		block(c, at(c, sx * (TUNNEL_W + 48) / 2, -0.75, -42.5), Vector3.new(48 - TUNNEL_W, 1.5, 7), SAND, nil, SOLID)
+	-- (east of x 70 the grotto tunnel's own floor runs in at z -20..16; the preview cuts
+	-- the floor back under its tunnel, which slopes down)
+	local back = if cutaway then MOUTH_Z else END_Z
+	block(c, at(c, -1, -0.75, (back + FRONT_Z) / 2), Vector3.new(142, 1.5, FRONT_Z - back), SAND, nil, SOLID).Name = "Ground"
+	if cutaway then
+		for _, sx in { -1, 1 } do
+			block(c, at(c, sx * (TUNNEL_W + 70) / 2, -0.75, (END_Z + MOUTH_Z) / 2), Vector3.new(70 - TUNNEL_W, 1.5, MOUTH_Z - END_Z), SAND, nil, SOLID)
+		end
 	end
-	-- diorama skirt under the front edge (never seen in game)
-	block(c, at(c, 0, -4.5, 59.5), Vector3.new(140, 6, 1), C.DirtDark, nil, GHOST)
-	-- dusty patches on a jittered grid (no overlaps): darker worn sand and pale blast dust
+	for _, z in { { END_Z, -20.5 }, { 16.5, FRONT_Z } } do
+		block(c, at(c, 71, -0.75, (z[1] + z[2]) / 2), Vector3.new(2, 1.5, z[2] - z[1]), SAND, nil, SOLID)
+	end
+	-- dusty patches on a jittered grid (darker worn sand and pale blast dust), pebbles
 	local patch = 0
-	for _, gx in { -34, -17, 0, 17, 34 } do
-		for _, gz in { -31, -13, 5, 23, 40 } do
+	for _, gx in { -38, -19, 0, 19, 38 } do
+		for _, gz in { -36, -18, 0, 46 } do
 			patch += 1
-			if rng:chance(0.75) then
+			if rng:chance(0.7) then
 				local color = if patch % 3 == 0 then SAND_LIGHT else SAND_DARK
 				local base = at(c, gx + rng:range(-3, 3), 0, gz + rng:range(-3, 3)) * CFrame.Angles(0, rng:range(0, math.pi), 0)
 				block(c, base * CFrame.new(0, -0.02, 0), Vector3.new(rng:range(6, 10), 0.2, rng:range(3.5, 5.5)), Geo.vary(color, rng, 0.03), nil, TINY)
-				block(c, base * CFrame.new(rng:range(-2, 2), 0.02, rng:range(-1.5, 1.5)) * CFrame.Angles(0, 0.6, 0), Vector3.new(rng:range(3.5, 5.5), 0.2, rng:range(2.5, 4)), Geo.vary(color, rng, 0.03), nil, TINY)
 			end
 		end
 	end
-	-- pebbles and slate chips
-	for _ = 1, 40 do
-		local s = rng:range(0.35, 0.9)
-		local color = rng:pick({ pal.Dark, pal.Mid, pal.Light })
-		block(c, at(c, rng:range(-43, 43), s * 0.25, rng:range(-37, 46)) * Geo.randomTilt(rng, 0.4), Vector3.new(s * 1.3, s * 0.6, s), Geo.vary(color, rng, 0.05), nil, TINY)
+	for _ = 1, 16 do
+		local s = rng:range(0.4, 0.9)
+		local x, z = rng:range(-50, 50), rng:range(-44, 12)
+		block(c, at(c, x, s * 0.25, z) * Geo.randomTilt(rng, 0.4), Vector3.new(s * 1.3, s * 0.6, s), Geo.vary(rng:pick({ pal.Dark, pal.Mid, pal.Light }), rng, 0.05), nil, TINY)
 	end
-	-- the worn path from the entrance to the plaza and on to the tunnel, side paths
-	Style.path(model, pt(c, 0, 0, 55.5), pt(c, 0, 0, -34.5), 9, rng, { Kind = "Dirt" })
-	Style.path(model, pt(c, 22, 0, 3), pt(c, 30, 0, 6), 7, rng, { Kind = "Dirt", TileEvery = 4 })
-	Style.path(model, pt(c, -8, 0, 34), pt(c, -16, 0, 34), 6, rng, { Kind = "Dirt", TileEvery = 4 })
+	-- worn paths: entrance gate to the DEPTHS rails, side paths to the elevator, the shed, the grotto
+	Style.path(model, pt(c, 0, 0, 8.5), pt(c, 0, 0, -19.5), 9, rng, { Kind = "Dirt" })
+	Style.path(model, pt(c, -13, 0, 46), pt(c, -30, 0, 46), 6, rng, { Kind = "Dirt", TileEvery = 5 })
+	Style.path(model, pt(c, 13, 0, 46), pt(c, 28, 0, 46), 6, rng, { Kind = "Dirt", TileEvery = 5 })
+	Style.path(model, pt(c, 28, 0, -3), pt(c, 54, 0, -2), 6, rng, { Kind = "Dirt", TileEvery = 5 })
 	-- the Giant Crystal plaza: a ring of dark flag tiles with copper studs
-	local tiles = 28
+	local tiles = 20
 	for i = 0, tiles - 1 do
 		local a = (i + 0.5) / tiles * math.pi * 2
 		local p = GIANT + Vector3.new(math.cos(a) * 14, 0, math.sin(a) * 14)
-		local onPath = math.abs(p.X) < 5.2 or (p.X > 18 and p.Z > -1 and p.Z < 6)
+		local onPath = math.abs(p.X) < 5.2 or (p.X > 22 and p.Z > -7 and p.Z < 2)
 		if not onPath then
 			local cf = at(c, p.X, 0.05, p.Z) * CFrame.Angles(0, -a, 0)
-			block(c, cf, Vector3.new(1.8, 0.25, 3.1), Geo.vary(C.StoneDark, rng, 0.05), nil, TINY)
+			block(c, cf, Vector3.new(2.2, 0.25, 3.6), Geo.vary(C.StoneDark, rng, 0.05), nil, TINY)
 			if i % 3 == 0 then
-				block(c, cf * CFrame.new(0, 0.2, 0), Vector3.new(0.6, 0.2, 0.6), pal.Crystal, NEON, TINY)
+				block(c, cf * CFrame.new(0, 0.2, 0), Vector3.new(0.7, 0.2, 0.7), pal.Crystal, NEON, TINY)
 			end
 		end
 	end
 
 	------------------------------------------------------------ walls
 	local sideSteps: { Step } = {
-		{ Face = 0, Top = 9, Color = SLATE1 },
-		{ Face = 7, Top = 19, Color = SLATE2 },
-		{ Face = 14, Top = 30, Color = SLATE3 },
+		{ Face = 0, Top = 7, Color = SLATE1 },
+		{ Face = 6.5, Top = 13, Color = SLATE2 },
+		{ Face = 11, Top = 18, Color = SLATE3 },
 	}
-	local backSteps: { Step } = {
-		{ Face = 0, Top = 10, Color = SLATE1 },
-		{ Face = 6, Top = 20, Color = SLATE2 },
-		{ Face = 12, Top = 31, Color = SLATE3 },
+	-- by the grotto door the top step rises over Land's grotto roof (up to +25)
+	local grottoSteps: { Step } = {
+		{ Face = 0, Top = 7, Color = SLATE1 },
+		{ Face = 6.5, Top = 13, Color = SLATE2 },
+		{ Face = 11, Top = 26, Color = SLATE3 },
 	}
-	local stagger = { 0.8, 0.4, 0 }
-	local leftF = wallFrame(c, Vector3.new(-WALL_X, 0, -60), Vector3.new(0, 0, 1))
-	local rightF = wallFrame(c, Vector3.new(WALL_X, 0, 60), Vector3.new(0, 0, -1))
-	terrace(c, "left", leftF, 120, sideSteps, 24, nil, stagger, 0.15)
-	terrace(c, "right", rightF, 120, sideSteps, 24, stagger, nil, 0.15)
-	local backR = wallFrame(c, Vector3.new(WALL_X + 1, 0, BACK_Z), Vector3.new(-1, 0, 0))
-	local backL = wallFrame(c, Vector3.new(-16, 0, BACK_Z), Vector3.new(-1, 0, 0))
-	terrace(c, "backR", backR, WALL_X + 1 - 16, backSteps, 18, nil, nil, 0.25)
-	terrace(c, "backL", backL, WALL_X + 1 - 16, backSteps, 18, nil, nil, 0.25)
-	terrace(c, "backMid", wallFrame(c, Vector3.new(16, 0, BACK_Z), Vector3.new(-1, 0, 0)), 32, { { Face = 14, Top = 32, Color = SLATE3 } }, 18)
-	talus(c, wallFrame(c, Vector3.new(-WALL_X, 0, -41), Vector3.new(0, 0, 1)), 51, 4.6)
-	talus(c, wallFrame(c, Vector3.new(-WALL_X, 0, 30), Vector3.new(0, 0, 1)), 14, 4.6)
-	talus(c, wallFrame(c, Vector3.new(WALL_X, 0, 44), Vector3.new(0, 0, -1)), 84, 4.6)
-	talus(c, wallFrame(c, Vector3.new(WALL_X - 1, 0, BACK_Z), Vector3.new(-1, 0, 0)), 27, 4.2)
-	talus(c, wallFrame(c, Vector3.new(-18, 0, BACK_Z), Vector3.new(-1, 0, 0)), 27, 4.2)
-
-	-- the front wall: a low grass bank for the preview, else terraces with the arrival tunnel
-	if cutaway then
-		local bank: { Step } = { { Face = 1.5, Top = 1.8, Color = SLATE1 } }
-		terrace(c, "frontL", wallFrame(c, Vector3.new(-WALL_X, 0, FRONT_Z), Vector3.new(1, 0, 0)), WALL_X - 9, bank, 6)
-		terrace(c, "frontR", wallFrame(c, Vector3.new(9, 0, FRONT_Z), Vector3.new(1, 0, 0)), WALL_X - 9, bank, 6)
-	else
-		local frontSteps: { Step } = {
-			{ Face = 0, Top = 7, Color = SLATE1 },
-			{ Face = 4, Top = 15, Color = SLATE2 },
-			{ Face = 8, Top = 24, Color = SLATE3 },
-		}
-		terrace(c, "frontL", wallFrame(c, Vector3.new(-WALL_X, 0, FRONT_Z), Vector3.new(1, 0, 0)), WALL_X - TUNNEL_W, frontSteps, 12, nil, stagger)
-		terrace(c, "frontR", wallFrame(c, Vector3.new(TUNNEL_W, 0, FRONT_Z), Vector3.new(1, 0, 0)), WALL_X - TUNNEL_W, frontSteps, 12, stagger, nil)
-		-- the arrival tunnel from the town through the front cliff
-		block(c, at(c, 0, 14.2, 54), Vector3.new(TUNNEL_W * 2 + 0.2, 2.4, 4), SLATE2, nil, SOLID)
-		block(c, at(c, 0, 18.5, 58), Vector3.new(TUNNEL_W * 2 + 0.2, 11, 4), SLATE3, nil, SOLID)
-		block(c, at(c, 0, 24.4, 58), Vector3.new(TUNNEL_W * 2 + 0.6, 0.8, 4.4), C.Grass, nil, SOLID)
-		block(c, at(c, 0, 6.5, 59.6), Vector3.new(TUNNEL_W * 2, 13, 0.8), C.StoneDeep, nil, SOLID)
-		for _, sx in { -1, 1 } do
-			block(c, at(c, sx * (TUNNEL_W - 0.6), 6.5, 51.6), Vector3.new(1.4, 13, 1.4), C.WoodDark)
+	local bandSteps: { Step } = { { Face = -0.5, Top = 17, Color = SLATE2 } }
+	local outer = OUTER_X - PIT_X
+	local north, south = Vector3.new(0, 0, 1), Vector3.new(0, 0, -1)
+	-- west: back corner to the band, the band behind the portal, the band to the town cliff
+	terrace(c, "west", wallFrame(c, Vector3.new(-PIT_X, 0, END_Z), north), BAND_Z0 - END_Z, sideSteps, outer, { TrimEnd = STAGGER, Veins = 0.15 })
+	terrace(c, "westBand", wallFrame(c, Vector3.new(-BAND_X, 0, BAND_Z0), north), BAND_Z1 - BAND_Z0, bandSteps, OUTER_X - BAND_X)
+	terrace(c, "westFront", wallFrame(c, Vector3.new(-PIT_X, 0, BAND_Z1), north), FRONT_Z - BAND_Z1, sideSteps, outer, { TrimStart = STAGGER })
+	-- east: the same, with the grotto door (a slot through the terraces and a rock lintel)
+	terrace(c, "eastFront", wallFrame(c, Vector3.new(PIT_X, 0, FRONT_Z), south), FRONT_Z - BAND_Z1, sideSteps, outer, { TrimEnd = STAGGER })
+	terrace(c, "eastBand", wallFrame(c, Vector3.new(BAND_X, 0, BAND_Z1), south), BAND_Z1 - BAND_Z0, bandSteps, OUTER_X - BAND_X)
+	local doorN, doorS = DOOR_Z1 + 0.5, DOOR_Z0 - 0.5
+	terrace(c, "eastGrotto", wallFrame(c, Vector3.new(PIT_X, 0, BAND_Z0), south), BAND_Z0 - doorN, grottoSteps, outer, { TrimStart = STAGGER, TrimEnd = STAGGER })
+	terrace(c, "eastGrotto", wallFrame(c, Vector3.new(PIT_X, 0, doorS), south), doorS + 21, grottoSteps, outer, { TrimStart = STAGGER })
+	terrace(c, "east", wallFrame(c, Vector3.new(PIT_X, 0, -21), south), -21 - END_Z, sideSteps, outer, { Veins = 0.15 })
+	do
+		-- the lintel over the grotto door (its underside a little above Land's tunnel roof at +11)
+		local x0, x1 = 60, OUTER_X
+		local y0, y1 = DOOR_H + 0.2, 26
+		local zc, d = (doorN + doorS) / 2, doorN - doorS + 0.2
+		block(c, at(c, (x0 + x1) / 2, (y0 + y1) / 2, zc), Vector3.new(x1 - x0, y1 - y0, d), Geo.vary(SLATE2, rng, 0.03), nil, SOLID)
+		block(c, at(c, (x0 + x1) / 2, y1 - 0.7, zc), Vector3.new(x1 - x0 + 0.24, 1.4, d + 0.24), C.DirtDark, nil, TINY)
+		block(c, at(c, (x0 + x1) / 2, y1 + 0.4, zc), Vector3.new(x1 - x0 + 0.5, 0.8, d + 0.5), C.Grass, nil, SOLID)
+		for _, y in { 15, 20.5 } do
+			block(c, at(c, x0 - 0.15, y, zc), Vector3.new(0.7, 0.8, d + 0.1), pal.Light:Lerp(WHITE, 0.25), nil, TINY)
 		end
-		block(c, at(c, 0, 13.6, 51.6), Vector3.new(TUNNEL_W * 2 + 1.6, 1.6, 1.6), C.Wood)
-		Style.lantern(model, at(c, 0, 12.8, 51.2), { Kind = "Hanging" })
+		-- copper studs framing the way in
+		for _, z in { DOOR_Z0 - 0.4, DOOR_Z1 + 0.4 } do
+			block(c, at(c, x0 - 0.2, y0 - 0.4, z), Vector3.new(0.5, 0.8, 0.8), pal.Crystal, NEON, TINY)
+		end
 	end
-	talus(c, wallFrame(c, Vector3.new(-WALL_X + 4, 0, FRONT_Z + 1), Vector3.new(1, 0, 0)), WALL_X - 24, 5.5)
-	talus(c, wallFrame(c, Vector3.new(20, 0, FRONT_Z + 1), Vector3.new(1, 0, 0)), WALL_X - 24, 5.5)
+	-- back: terraces either side of the DEPTHS portal, a single tall step behind the falls
+	-- pools and beside the ForgeWorks chute; bare slate up to the massif
+	local backSteps: { Step } = {
+		{ Face = 0, Top = 7, Color = SLATE1 },
+		{ Face = 4, Top = 16, Color = SLATE2 },
+		{ Face = 8, Top = 34, Color = SLATE3 },
+	}
+	local fallsStep: { Step } = { { Face = 7, Top = 34, Color = SLATE3 } }
+	local chuteStep: { Step } = { { Face = 8, Top = 34, Color = SLATE3 } }
+	local westward = Vector3.new(-1, 0, 0)
+	local backOuter = BACK_Z - END_Z
+	terrace(c, "back", wallFrame(c, Vector3.new(OUTER_X, 0, BACK_Z), westward), OUTER_X - 35, fallsStep, backOuter, { Bare = true })
+	terrace(c, "back", wallFrame(c, Vector3.new(35, 0, BACK_Z), westward), 8, backSteps, backOuter, { Bare = true, TrimStart = STAGGER, TrimEnd = STAGGER, Veins = 0.3 })
+	terrace(c, "back", wallFrame(c, Vector3.new(27, 0, BACK_Z), westward), 27 - HEAD_X, chuteStep, backOuter, { Bare = true })
+	terrace(c, "back", wallFrame(c, Vector3.new(-HEAD_X, 0, BACK_Z), westward), 35 - HEAD_X, backSteps, backOuter, { Bare = true, TrimStart = STAGGER, TrimEnd = STAGGER, Veins = 0.3 })
+	terrace(c, "back", wallFrame(c, Vector3.new(-35, 0, BACK_Z), westward), OUTER_X - 35, fallsStep, backOuter, { Bare = true })
+	-- rubble at the wall feet (clear of the scaffold, the band and the door)
+	talus(c, wallFrame(c, Vector3.new(-PIT_X, 0, -46), north), 42, 6.5)
+	talus(c, wallFrame(c, Vector3.new(-PIT_X, 0, 41), north), 13, 6.5)
+	talus(c, wallFrame(c, Vector3.new(PIT_X, 0, 54), south), 13, 6.5)
+	talus(c, wallFrame(c, Vector3.new(PIT_X, 0, -12), south), 34, 6.5)
+	talus(c, wallFrame(c, Vector3.new(34.5, 0, BACK_Z), westward), 7, 3.5)
+	talus(c, wallFrame(c, Vector3.new(-22.5, 0, BACK_Z), westward), 12, 4)
 
-	tunnel(c, SLATE2, SLATE3, SLATE1)
+	if cutaway then
+		tunnel(c, SLATE2, SLATE3, SLATE1)
+		-- stand-in for Railway's quarry line (the track the ore trains take at z +24)
+		Style.rails(model, pt(c, -66, 0, 24), pt(c, 66, 0, 24), { SleeperEvery = 3 })
+	end
 
 	------------------------------------------------------------ wall crystals (copper and quartz)
-	wallCrystal(c, Vector3.new(-WALL_X - 0.6, 4.5, -18), Vector3.new(1, 0, 0), 0.95, 6, 5, false, 11)
-	wallCrystal(c, Vector3.new(-WALL_X - 0.6, 3.2, 6), Vector3.new(1, 0, 0), 1.0, 5, 4, true, 12)
-	wallCrystal(c, Vector3.new(-WALL_X - 7.6, 13.5, -30), Vector3.new(1, 0, 0), 0.9, 6, 5.5, false, 13)
-	wallCrystal(c, Vector3.new(-WALL_X - 3.5, 8.8, -38), UP, 0, 7, 6, false, 14)
-	wallCrystal(c, Vector3.new(WALL_X + 0.6, 4, -20), Vector3.new(-1, 0, 0), 0.95, 6, 5, true, 15)
-	wallCrystal(c, Vector3.new(WALL_X + 0.6, 5, 32), Vector3.new(-1, 0, 0), 1.0, 5, 4.5, false, 16)
-	wallCrystal(c, Vector3.new(WALL_X + 7.6, 14, -10), Vector3.new(-1, 0, 0), 0.9, 6, 5, false, 17)
-	wallCrystal(c, Vector3.new(WALL_X + 3.5, 8.8, -34), UP, 0, 6, 5, true, 18)
-	wallCrystal(c, Vector3.new(-34.5, 7, BACK_Z - 0.6), Vector3.new(0, 0, 1), 0.6, 6, 5, false, 19)
-	wallCrystal(c, Vector3.new(34.5, 7, BACK_Z - 0.6), Vector3.new(0, 0, 1), 0.6, 6, 5, true, 20)
-	wallCrystal(c, Vector3.new(-38, 14, BACK_Z - 6.6), Vector3.new(0, 0, 1), 0.85, 7, 6, false, 21)
-	wallCrystal(c, Vector3.new(27, 14, BACK_Z - 6.6), Vector3.new(0, 0, 1), 0.9, 6, 5, false, 22)
+	local east, west = Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0)
+	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.5, -30), west, 0.95, 6, 5, false, 11)
+	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, -14), west, 1.0, 5, 4, true, 12)
+	wallCrystal(c, Vector3.new(-PIT_X - 7.1, 9.5, -40), west, 0.9, 6, 5.5, false, 13)
+	wallCrystal(c, Vector3.new(-PIT_X - 3.5, 6.8, -45), UP, 0, 6, 5, true, 14)
+	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, 49), west, 1.0, 5, 4, true, 15)
+	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, -32), east, 0.95, 6, 5, false, 16)
+	wallCrystal(c, Vector3.new(PIT_X + 0.6, 4, -16), east, 1.0, 5, 4.5, true, 17)
+	wallCrystal(c, Vector3.new(PIT_X + 7.1, 9.5, -42), east, 0.9, 6, 5, false, 18)
+	wallCrystal(c, Vector3.new(PIT_X + 3.5, 6.8, -45), UP, 0, 6, 5, true, 19)
+	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, 47), east, 0.95, 6, 5, false, 20)
+	wallCrystal(c, Vector3.new(31, 4, BACK_Z - 0.6), north, 0.6, 6, 5, false, 21)
+	wallCrystal(c, Vector3.new(-28.5, 4, BACK_Z - 0.6), north, 0.6, 6, 5, false, 22)
+	wallCrystal(c, Vector3.new(31, 10.5, BACK_Z - 4.6), north, 0.85, 5, 4, true, 23)
+	wallCrystal(c, Vector3.new(-30, 10.5, BACK_Z - 4.6), north, 0.85, 5, 4, true, 24)
+	wallCrystal(c, Vector3.new(54, 22, BACK_Z - 7.6), north, 0.9, 6, 5, false, 25)
+	wallCrystal(c, Vector3.new(-54, 24, BACK_Z - 7.6), north, 0.9, 6, 5, true, 26)
 
 	------------------------------------------------------------ spawns and markers
 	local spawns = MineKit.spawns(model)
 	local deep = {
-		{ -39, -36 }, { -30, -36 }, { -22, -35 }, { -36, -27 }, { -27, -27 }, { -19, -27 },
-		{ 39, -35 }, { 30, -36 }, { 22, -36 }, { 36, -27 }, { 27, -27 }, { 19, -28 },
+		{ -43, -40 }, { -34, -40 }, { -25, -39 }, { -39, -31 }, { -30, -31 }, { -21, -30 }, { -12, -30 },
+		{ 45, -40 }, { 36, -40 }, { 40, -31 }, { 31, -31 }, { 22, -30 }, { 13, -30 },
 	}
 	local shallow = {
-		{ -38, -14 }, { -29, -14 }, { -20, -15 }, { -37, -5 }, { -28, -5 }, { -19, -6 }, { -35, 4 }, { -26, 4 },
-		{ 38, -14 }, { 29, -15 }, { 36, -5 }, { 28, -6 },
-		{ -30, 18 }, { -22, 19 }, { -14, 18 },
-		{ 18, 19 }, { 26, 20 }, { 34, 18 },
+		{ -44, -17 }, { -35, -17 }, { -26, -17 }, { -17, -16 }, { -40, -8 }, { -31, -8 }, { -22, -7 }, { -36, 1 }, { -27, 1 }, { -18, 2 },
+		{ 29, -18 }, { 38, -18 }, { 47, -18 }, { 33, -11 }, { 30, 6 }, { 39, 7 },
 	}
 	for _, p in deep do
 		spawns.add(at(c, p[1], 0, p[2]), true)
@@ -560,13 +604,14 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		spawns.add(at(c, p[1], 0, p[2]), false)
 	end
 	MineKit.marker(model, "GiantSpawn", at(c, GIANT.X, 0, GIANT.Z))
-	MineKit.marker(model, "Entrance", at(c, 0, 0, 41))
+	MineKit.marker(model, "Entrance", at(c, 0, 0, 8))
 
 	------------------------------------------------------------ entrance: gate, elevator, name sign
-	MineKit.gate(model, CFrame.lookAt(pt(c, 0, 0, 45), pt(c, 0, 0, 46)), 12, Floor.Index, { pal.Mid, pal.Light, pal.Dark })
-	MineKit.elevator(model, CFrame.lookAt(pt(c, -24, 0, 34), pt(c, -23, 0, 34)), Floor.Index)
+	-- (players come down Land's ramp, cross the track and walk in under the gate)
+	MineKit.gate(model, CFrame.lookAt(pt(c, 0, 0, 12), pt(c, 0, 0, 13)), 12, Floor.Index, { pal.Mid, pal.Light, pal.Dark })
+	MineKit.elevator(model, CFrame.lookAt(pt(c, -36, 0, 46), pt(c, -35, 0, 46)), Floor.Index)
 	do
-		local s = at(c, -15, 0, 44)
+		local s = at(c, -17, 0, 45)
 		for _, sx in { -1, 1 } do
 			block(c, s * CFrame.new(sx * 5.6, 3.2, 0), Vector3.new(0.8, 6.4, 0.8), C.WoodDark)
 		end
@@ -576,39 +621,12 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		end
 		Style.sign(model, s * CFrame.new(0, 2.6, 0) * CFrame.Angles(0, math.pi, 0), "QUARRY", 7, 1.5, { DoubleSided = true, Depth = 0.4 })
 	end
+	-- in the preview only: the Mine Lift is Railway's in the game (floor 1 loads at the Mine Station)
 
-	------------------------------------------------------------ ore lift with its crane on the right ledge
-	MineKit.oreLift(model, pt(c, LIFT.X, LIFT.Y, LIFT.Z), "Floor1Quarry")
+	------------------------------------------------------------ the scaffold, walkway and rails on the west wall
 	do
-		local mx = WALL_X + 4
-		block(c, at(c, mx, 21, LIFT.Z), Vector3.new(1.4, 25, 1.4), C.WoodDark)
-		block(c, at(c, mx, 9.2, LIFT.Z), Vector3.new(2.6, 1.6, 2.6), C.StoneDark)
-		block(c, at(c, (LIFT.X - 2.5 + mx + 1) / 2, 30.6, LIFT.Z), Vector3.new(mx + 1 - (LIFT.X - 2.5), 1.2, 1.2), C.Wood)
-		beam(c, Vector3.new(mx - 0.4, 24, LIFT.Z), Vector3.new(LIFT.X + 5, 30.1, LIFT.Z), 0.7, C.WoodDark)
-		beam(c, Vector3.new(mx + 0.4, 33, LIFT.Z), Vector3.new(WALL_X + 11, 19.4, LIFT.Z), 0.18, C.Iron, TINY)
-		block(c, at(c, mx, 33.6, LIFT.Z), Vector3.new(1.8, 0.6, 1.8), C.Iron, METAL)
-		Geo.make("Part", {
-			Shape = Enum.PartType.Cylinder,
-			CFrame = at(c, LIFT.X - 1.6, 30.6, LIFT.Z),
-			Size = Vector3.new(0.6, 2, 2),
-			Color = C.Hazard,
-			Material = METAL,
-			CanTouch = false,
-			CanQuery = false,
-			CanCollide = false,
-		}, model)
-		Style.lantern(model, at(c, LIFT.X + 4, 30, LIFT.Z), { Kind = "Hanging" })
-		ladder(c, Vector3.new(WALL_X - 0.6, 0, LIFT.Z + 8), Vector3.new(-1, 0, 0), 10)
-	end
-	-- rails along the right wall with a cart of ore, buffer at the front
-	Style.rails(model, pt(c, 41, 0, 12), pt(c, 41, 0, 45))
-	Style.mineCart(model, CFrame.lookAt(pt(c, 41, 0, 23), pt(c, 41, 0, 22)), rng, { Load = "Ore" })
-	block(c, at(c, 41, 1.1, 45.4), Vector3.new(4.6, 0.9, 0.9), C.Roof)
-
-	------------------------------------------------------------ the scaffold and walkway on the left wall
-	do
-		local x0, x1 = -WALL_X + 1.2, -WALL_X + 5.6
-		local z0, z1 = 12, 26
+		local x0, x1 = -PIT_X + 0.6, -PIT_X + 5
+		local z0, z1 = -2, 12
 		local zc = (z0 + z1) / 2
 		local cx = (x0 + x1) / 2
 		local top = sideSteps[1].Top + 1.25
@@ -617,21 +635,19 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 				block(c, at(c, x, top / 2, z), Vector3.new(0.6, top, 0.6), C.WoodDark)
 			end
 		end
-		Style.planks(model, at(c, cx, 4.8, zc), Vector3.new(x1 - x0 + 1, 0.4, z1 - z0), rng)
-		Style.planks(model, at(c, cx, top, zc), Vector3.new(x1 - x0 + 1, 0.4, z1 - z0), rng)
+		Style.planks(model, at(c, cx, 4, zc), Vector3.new(x1 - x0 + 1, 0.4, z1 - z0), rng, { PlankWidth = 1.7 })
+		Style.planks(model, at(c, cx, top, zc), Vector3.new(x1 - x0 + 1, 0.4, z1 - z0), rng, { PlankWidth = 1.7 })
 		for _, zz in { { z0 + 0.5, zc }, { zc, z1 - 0.5 } } do
-			beam(c, Vector3.new(x1 + 0.35, 0.4, zz[1]), Vector3.new(x1 + 0.35, 4.4, zz[2]), 0.35, C.Wood, GHOST)
-			beam(c, Vector3.new(x1 + 0.35, 5.2, zz[2]), Vector3.new(x1 + 0.35, top - 0.5, zz[1]), 0.35, C.Wood, GHOST)
+			beam(c, Vector3.new(x1 + 0.35, 0.4, zz[1]), Vector3.new(x1 + 0.35, 3.6, zz[2]), 0.35, C.Wood, GHOST)
 		end
-		ladder(c, Vector3.new(x1 + 0.6, 0, zc - 3), Vector3.new(1, 0, 0), 5)
-		ladder(c, Vector3.new(x1 + 0.6, 4.8, z1 - 3), Vector3.new(1, 0, 0), top - 4.8)
+		ladder(c, Vector3.new(x1 + 0.6, 0, zc - 3), Vector3.new(1, 0, 0), 4.2)
+		ladder(c, Vector3.new(x1 + 0.6, 4, z1 - 3), Vector3.new(1, 0, 0), top - 4)
 		Style.fence(model, pt(c, x1 + 0.2, top, z0 + 0.4), pt(c, x1 + 0.2, top, z1 - 0.4), { Height = 2.4, PostEvery = 7 })
-		-- a bridge to the ledge walkway, the walkway along the first ledge, a ladder up to the second
-		Style.planks(model, at(c, -WALL_X - 0.4, top, 14.5), Vector3.new(3.8, 0.4, 3), rng)
-		deck(c, Vector3.new(-WALL_X - 3, top, -9.5), Vector3.new(3.4, 0.4, 47), 2.2, 0)
-		Style.fence(model, pt(c, -WALL_X - 1.6, top, -32.5), pt(c, -WALL_X - 1.6, top, 13), { Height = 2.4, PostEvery = 7.5 })
-		ladder(c, Vector3.new(-WALL_X - 6.4, top - 0.2, -2), Vector3.new(1, 0, 0), sideSteps[2].Top - top + 1)
-		-- crates, a barrel and a lit lamp hook on the scaffold
+		-- a bridge to the walkway on the first terrace, a ladder up to the second
+		Style.planks(model, at(c, -PIT_X - 0.6, top, 0), Vector3.new(4.2, 0.4, 3), rng, { PlankWidth = 1.7 })
+		deck(c, Vector3.new(-PIT_X - 3.25, top, -20.5), Vector3.new(3.2, 0.4, 39), 2)
+		Style.fence(model, pt(c, -PIT_X - 1.9, top, -39.5), pt(c, -PIT_X - 1.9, top, -2), { Height = 2.4, PostEvery = 9 })
+		ladder(c, Vector3.new(-PIT_X - 5.9, top - 0.2, -22), Vector3.new(1, 0, 0), sideSteps[2].Top - top + 1)
 		Style.crate(model, at(c, cx - 0.6, top, z1 - 2.4), rng, 2)
 		Style.barrel(model, pt(c, cx, top, z0 + 2.4), rng)
 		block(c, at(c, x1 - 0.6, top + 1.8, zc), Vector3.new(0.5, 3.6, 0.5), C.WoodDark)
@@ -640,38 +656,23 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		if lamp.PrimaryPart then
 			light(c, lamp.PrimaryPart, C.Lamp, 16, 1.2)
 		end
-		Style.crate(model, at(c, -WALL_X + 3, 0, 29.5), rng)
-		Style.barrel(model, pt(c, -WALL_X + 7.5, 0, 28.6), rng)
-		Style.crate(model, at(c, -WALL_X - 3, top, -26), rng, 2)
-		for _, z in { -30, -8 } do
-			local walkLamp = Style.lantern(model, at(c, -WALL_X - 4.3, top, z) * CFrame.Angles(0, -math.pi / 2, 0), { Height = 5 })
-			if walkLamp.PrimaryPart then
-				light(c, walkLamp.PrimaryPart, C.Lamp, 16, 1.2)
-			end
+		local walkLamp = Style.lantern(model, at(c, -PIT_X - 4.6, top, -30) * CFrame.Angles(0, -math.pi / 2, 0), { Height = 5 })
+		if walkLamp.PrimaryPart then
+			light(c, walkLamp.PrimaryPart, C.Lamp, 16, 1.2)
 		end
+		-- a short spur of rails with a cart of ore beside the scaffold
+		Style.rails(model, pt(c, -46.5, 0, -4), pt(c, -46.5, 0, 12))
+		Style.mineCart(model, at(c, -46.5, 0, 4), rng, { Load = "Ore" })
+		block(c, at(c, -46.5, 1, 12.4), Vector3.new(4, 0.8, 0.8), C.WoodDark)
+		block(c, at(c, -46.5, 1, 12.85), Vector3.new(2.4, 0.5, 0.12), C.Roof, nil, TINY)
+		Style.crate(model, at(c, -49.5, 0, -7), rng)
 	end
 
-	------------------------------------------------------------ the back ledge walkway
+	------------------------------------------------------------ the tool shed (front right, door toward the ramp)
 	do
-		local top = backSteps[1].Top + 1.25
-		deck(c, Vector3.new(31, top, BACK_Z - 3), Vector3.new(3.2, 0.4, 26), 2.2, math.pi / 2)
-		Style.fence(model, pt(c, 18.5, top, BACK_Z - 1.7), pt(c, 43.5, top, BACK_Z - 1.7), { Height = 2.4, PostEvery = 6.5 })
-		ladder(c, Vector3.new(24, 0, BACK_Z + 0.7), Vector3.new(0, 0, 1), top + 0.4)
-		local lamp = Style.lantern(model, at(c, 37, top, BACK_Z - 3.8) * CFrame.Angles(0, math.pi, 0), { Height = 5 })
-		if lamp.PrimaryPart then
-			light(c, lamp.PrimaryPart, C.Lamp, 18, 1.2)
-		end
-		Style.crate(model, at(c, 29, top, BACK_Z - 3.2), rng, 2.2)
-		Style.crate(model, at(c, 31.4, top, BACK_Z - 3.2), rng, 1.8)
-		Style.barrel(model, pt(c, 20.5, top, BACK_Z - 3.3), rng)
-	end
-
-	------------------------------------------------------------ the tool shed (front right)
-	do
-		local s = at(c, 28, 0, 38)
+		local s = at(c, 36, 0, 47.5)
 		local w, d, h = 10, 8, 6
 		block(c, s * CFrame.new(0, 0.3, 0), Vector3.new(w + 0.8, 0.6, d + 0.8), C.StoneDark, nil, SOLID)
-		-- plank walls with darker corner posts
 		block(c, s * CFrame.new(0, 0.6 + h / 2, d / 2 - 0.3), Vector3.new(w, h, 0.6), C.WoodLight)
 		block(c, s * CFrame.new(0, 0.6 + h / 2, -d / 2 + 0.3), Vector3.new(w, h, 0.6), C.WoodLight)
 		block(c, s * CFrame.new(w / 2 - 0.3, 0.6 + h / 2, 0), Vector3.new(0.6, h, d - 1.2), C.Wood)
@@ -681,25 +682,23 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 				block(c, s * CFrame.new(sx * (w / 2 - 0.2), 0.6 + h / 2, sz * (d / 2 - 0.2)), Vector3.new(0.8, h, 0.8), C.WoodDark, nil, TINY)
 			end
 		end
-		-- gable ends filled with wedges under the roof
 		for _, sz in { -1, 1 } do
 			local gz = sz * (d / 2 - 0.3)
 			Geo.wedge(model, s * CFrame.new(w / 4, 0.6 + h + 1.5, gz) * CFrame.Angles(0, -math.pi / 2, 0), Vector3.new(0.6, 3, w / 2), C.WoodLight, nil, TINY)
 			Geo.wedge(model, s * CFrame.new(-w / 4, 0.6 + h + 1.5, gz) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(0.6, 3, w / 2), C.WoodLight, nil, TINY)
 		end
 		Style.gableRoof(model, s * CFrame.new(0, 0.6 + h, 0) * CFrame.Angles(0, math.pi / 2, 0), d + 1.6, w + 2, 3.2)
-		-- door toward the path, a lit window and a sign toward the front, a lantern by the door
-		block(c, s * CFrame.new(-w / 2 - 0.05, 0.6 + 2.3, -1), Vector3.new(0.3, 4.6, 2.8), C.WoodDark, nil, TINY)
-		block(c, s * CFrame.new(-w / 2 - 0.15, 0.6 + 2.3, -1), Vector3.new(0.2, 4.6, 0.3), C.Wood, nil, TINY)
-		Style.window(model, s * CFrame.new(0, 0.6 + 3.2, d / 2 + 0.05) * CFrame.Angles(0, math.pi, 0), 2.4, 1.8)
-		Style.sign(model, s * CFrame.new(0, 0.6 + 5.1, d / 2 + 0.2) * CFrame.Angles(0, math.pi, 0), "TOOLS", 4, 1.1, { Depth = 0.3 })
-		block(c, s * CFrame.new(-w / 2 - 0.4, 0.6 + 5.5, 1.4), Vector3.new(0.9, 0.25, 0.25), C.Iron, nil, TINY)
-		local lamp = Style.lantern(model, s * CFrame.new(-w / 2 - 0.75, 0.6 + 5.4, 1.4), { Kind = "Hanging" })
+		-- door toward the ramp, a lit window and the sign toward the pit, a lantern by the door
+		block(c, s * CFrame.new(-w / 2 - 0.05, 0.6 + 2.3, 1), Vector3.new(0.3, 4.6, 2.8), C.WoodDark, nil, TINY)
+		Style.window(model, s * CFrame.new(0, 0.6 + 3.2, -d / 2 - 0.05), 2.4, 1.8)
+		Style.sign(model, s * CFrame.new(0, 0.6 + 5.1, -d / 2 - 0.2), "TOOLS", 4, 1.1, { Depth = 0.3 })
+		block(c, s * CFrame.new(-w / 2 - 0.4, 0.6 + 5.5, -1.4), Vector3.new(0.9, 0.25, 0.25), C.Iron, nil, TINY)
+		local lamp = Style.lantern(model, s * CFrame.new(-w / 2 - 0.75, 0.6 + 5.4, -1.4), { Kind = "Hanging" })
 		if lamp.PrimaryPart then
 			light(c, lamp.PrimaryPart, C.Lamp, 16, 1.3)
 		end
 		-- tool rack on the wall: two pickaxes and a shovel
-		local rack = s * CFrame.new(-w / 2 - 0.5, 0, 2.6)
+		local rack = s * CFrame.new(-w / 2 - 0.5, 0, -2.4)
 		block(c, rack * CFrame.new(0, 3.6, 0), Vector3.new(0.35, 0.35, 3.2), C.WoodDark, nil, TINY)
 		for i, z in { -1, 0, 1 } do
 			local t = rack * CFrame.new(-0.1, 2.3, z) * CFrame.Angles(if i == 2 then 0 else 0.12 * z, 0, 0)
@@ -710,20 +709,18 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 				block(c, t * CFrame.new(0, 1.3, 0), Vector3.new(0.3, 0.3, 1.6), C.IronLight, METAL, TINY)
 			end
 		end
-		Style.crate(model, at(c, 20.8, 0, 33.8), rng)
-		Style.crate(model, at(c, 20.4, 0, 37.2), rng, 2.4)
-		Style.crate(model, at(c, 20.5, 2.4, 37.2), rng, 1.8)
-		Style.barrel(model, pt(c, 21.4, 0, 42.6), rng)
-		Style.barrel(model, pt(c, 34.6, 0, 43.4), rng, C.Copper)
+		Style.crate(model, at(c, 28.6, 0, 51.5), rng)
+		Style.crate(model, at(c, 43.6, 0, 44.6), rng, 2.4)
+		Style.crate(model, at(c, 43.7, 2.4, 44.6), rng, 1.8)
+		Style.barrel(model, pt(c, 44, 0, 50.5), rng, C.Copper)
 	end
 
-	------------------------------------------------------------ lanterns along the paths, props
+	------------------------------------------------------------ lanterns, props by the grotto door and the elevator
 	local postLamps = { -- x, z, lamp direction (x, z)
-		{ -7.5, 30, 1, 0 },
-		{ 7.5, 18, -1, 0 },
-		{ -7.5, -23, 1, 0 },
-		{ 7.5, -31, -1, 0 },
-		{ -10, 38.6, 0, -1 },
+		{ -7.5, 4, 1, 0 },
+		{ -7.5, -18, 1, 0 },
+		{ 7.5, -24, -1, 0 },
+		{ -12, 42.2, 0, -1 },
 	}
 	for _, l in postLamps do
 		local p = pt(c, l[1], 0, l[2])
@@ -733,62 +730,36 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 			light(c, lamp.PrimaryPart, C.Lamp, 18, 1.3)
 		end
 	end
-	for _, a in { 110, 250, 330 } do
+	for _, a in { 110, 250 } do
 		local r = math.rad(a)
 		Style.lantern(model, at(c, GIANT.X + math.cos(r) * 15.5, 0, GIANT.Z + math.sin(r) * 15.5), { Kind = "Ground" })
 	end
-	Style.crate(model, at(c, -12.5, 0, -33.5), rng)
-	Style.crate(model, at(c, -12.3, 2.5, -33.4), rng, 1.6)
-	Style.barrel(model, pt(c, 13.5, 0, -33.6), rng)
-	Style.barrel(model, pt(c, -17.5, 0, 40.5), rng)
-	Style.crate(model, at(c, -31, 0, 41.5), rng)
+	Style.lantern(model, at(c, 52, 0, DOOR_Z0 - 2.5), { Kind = "Pillar", Height = 4 })
+	Style.lantern(model, at(c, 52, 0, DOOR_Z1 + 2.5), { Kind = "Pillar", Height = 4 })
+	Style.crate(model, at(c, 50, 0, 9), rng)
+	Style.barrel(model, pt(c, -44.5, 0, 50.5), rng)
+	Style.crate(model, at(c, -44.5, 0, 46.5), rng)
 
-	------------------------------------------------------------ trees, bushes, flowers and crystals on the rim
+	------------------------------------------------------------ trees, bushes and flowers on the rim
 	local kinds = { "Green", "Orange", "Green", "Pink", "Green", "Yellow" }
 	local perWall: { [string]: number } = {}
 	local trees = 0
 	for _, top in c.tops do
-		local n = (perWall[top.wall] or 0) + 1
-		perWall[top.wall] = n
-		local front = top.wall == "frontL" or top.wall == "frontR"
-		if top.rim and not front and top.step == 3 then
+		local n = perWall[top.wall] or 0
+		if top.rim then
+			n += 1
+			perWall[top.wall] = n
 			local p = top.cf.Position
-			if n % 4 == 2 then
+			if n % 3 == 2 and trees < 10 then
 				trees += 1
-				Style.tree(model, CFrame.new(p) * CFrame.new(rng:range(-1.2, 1.2), -0.3, rng:range(-1.2, 1.2)), kinds[trees % #kinds + 1], rng, rng:range(0.95, 1.3))
-			elseif n % 4 == 0 then
-				Style.bush(model, (top.cf * CFrame.new(rng:range(-1.5, 1.5), 0, -top.d * 0.32)).Position, if rng:chance(0.5) then C.LeafGreen else C.LeafGreenDark, rng, rng:range(2.4, 3.4))
-			elseif top.wall == "backL" and n % 4 == 1 then
-				wallCrystal(c, c.o:PointToObjectSpace((top.cf * CFrame.new(0, -0.6, -top.d * 0.2)).Position), UP, 0.1, 6, 5, true, 30 + n)
-			elseif rng:chance(0.6) then
-				Style.flowers(model, (top.cf * CFrame.new(0, 0, -top.d * 0.3)).Position, rng:pick({ C.FlowerYellow, C.FlowerWhite, C.FlowerPink }), rng, 5, 1.6)
+				Style.tree(model, CFrame.new(p) * CFrame.new(rng:range(-1, 1), -0.3, rng:range(-1, 1)), kinds[trees % #kinds + 1], rng, rng:range(0.95, 1.12))
+			elseif n % 3 == 0 then
+				Style.bush(model, (top.cf * CFrame.new(rng:range(-1.5, 1.5), 0, -top.d * 0.32)).Position, if rng:chance(0.5) then C.LeafGreen else C.LeafGreenDark, rng, rng:range(2.4, 3.2))
+			elseif rng:chance(0.5) then
+				Style.flowers(model, (top.cf * CFrame.new(0, 0, -top.d * 0.3)).Position, rng:pick({ C.FlowerYellow, C.FlowerWhite, C.FlowerPink }), rng, 4, 1.6)
 			end
-		elseif top.rim and top.wall == "backMid" and n % 2 == 1 then
-			Style.tree(model, CFrame.new(top.cf.Position) * CFrame.new(0, -0.3, 1), kinds[(trees + n) % #kinds + 1], rng, 1.1)
-		elseif front and top.rim then
-			-- the front bank / the front rim: boulders, bushes, flowers and small quartz crystals
-			local p = (top.cf * CFrame.new(rng:range(-1.5, 1.5), 0, rng:range(-1, 1))).Position
-			local kind = n % 4
-			if kind == 1 then
-				Style.boulder(model, p - Vector3.new(0, 0.3, 0), rng:range(2.2, 3.2), rng, { Color = SLATE2 })
-			elseif kind == 2 then
-				Style.bush(model, p, if rng:chance(0.5) then C.LeafGreen else C.LeafGreenLight, rng, rng:range(2.2, 3))
-			elseif kind == 3 then
-				Style.flowers(model, p, rng:pick({ C.FlowerYellow, C.FlowerWhite, C.FlowerPink }), rng, 6, 2)
-			else
-				wallCrystal(c, c.o:PointToObjectSpace(p) - Vector3.new(0, 0.5, 0), UP, 0.15, 4, 3, true, 60 + n)
-			end
-		elseif not top.rim and rng:chance(0.12) then
+		elseif top.wall ~= "back" and rng:chance(0.08) then
 			Style.bush(model, (top.cf * CFrame.new(0, -0.1, top.d * 0.2)).Position, C.LeafGreen, rng, rng:range(1.8, 2.4))
-		end
-	end
-	-- grass tufts at the wall feet
-	for _ = 1, 12 do
-		local side = rng:pick({ -1, 1 })
-		local z = rng:range(-34, 42)
-		local x = side * (WALL_X - rng:range(1.5, 3.5))
-		for k = 1, 2 do
-			block(c, at(c, x + rng:range(-0.6, 0.6), 0.35, z + rng:range(-0.6, 0.6)) * CFrame.Angles(0, rng:range(0, 3), 0.15 * k), Vector3.new(0.3, 0.8 + k * 0.2, 0.3), C.LeafGreen, nil, TINY)
 		end
 	end
 
