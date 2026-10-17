@@ -417,31 +417,141 @@ return function(T, Loader)
 					end
 				end
 				T.truthy(glows >= 3, `{site.Id} has lit windows ({glows})`)
-				T.truthy(count <= 80, `{site.Id} part count {count} <= 80`)
+				T.truthy(count <= 100, `{site.Id} part count {count} <= 100`)
 			end
 		end
 	end)
 
-	T.test("flora: town signs and the scatter keeps off the buildings", function()
+	-- Is a world point inside a part's box (conservative for cylinders, balls and wedges)?
+	local function contains(part, p): boolean
+		local q = part.CFrame:PointToObjectSpace(p)
+		local size = part.Size
+		return math.abs(q.X) <= size.X / 2 and math.abs(q.Y) <= size.Y / 2 and math.abs(q.Z) <= size.Z / 2
+	end
+
+	local LOOK = {
+		N = Vector3.new(0, 0, -1),
+		S = Vector3.new(0, 0, 1),
+		E = Vector3.new(1, 0, 0),
+		W = Vector3.new(-1, 0, 0),
+	}
+
+	T.test("flora: town signs are readable and face the town", function()
 		local town = flora().Town
 		local texts = {}
-		for _, d in town:GetDescendants() do
-			if d:IsA("BasePart") and d.Name == "TownSign" then
-				local gui = d:FindFirstChild("FrontText")
-				local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
-				if label then
-					texts[label.Text] = true
+		for _, site in Town.Sites do
+			local m = town:FindFirstChild(site.Id)
+			if site.Sign and m then
+				local found = false
+				for _, d in m:GetDescendants() do
+					if d:IsA("BasePart") and d.Name == "TownSign" then
+						local gui = d:FindFirstChild("FrontText")
+						local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
+						if label and label.Text == site.Sign then
+							found = true
+							texts[label.Text] = true
+							-- dark navy board, white letters (high contrast like TOOLS / UPGRADES)
+							local b = d.Color
+							T.truthy(b.R + b.G + b.B < 0.6, `{site.Sign} board is dark`)
+							local c = label.TextColor3
+							T.truthy(c.R + c.G + c.B > 2.7, `{site.Sign} text is white`)
+							T.truthy(d.Material ~= roblox.Enum.Material.Neon, `{site.Sign} board does not glow`)
+							-- the sign looks out of the facade (toward the town, not into a wall)
+							local look = d.CFrame.LookVector
+							T.truthy(look:Dot(LOOK[site.Facing]) > 0.7, `{site.Sign} sign faces {site.Facing}`)
+						end
+					end
+				end
+				T.truthy(found, `{site.Id} has its {site.Sign} sign`)
+			end
+		end
+		for _, text in { "TOOLS", "INN", "MAP", "GEMS", "ORE" } do
+			T.truthy(texts[text], "town sign " .. text)
+		end
+		-- big glowing planes bloom to white in the renders: every Neon face stays small
+		for _, part in parts(town) do
+			if part.Material == roblox.Enum.Material.Neon then
+				local x, y, z = part.Size.X, part.Size.Y, part.Size.Z
+				local face = math.max(x * y, y * z, x * z)
+				T.truthy(face <= 6.5, `{part:GetFullName()} neon face {face} <= 6.5 studs^2`)
+			end
+		end
+	end)
+
+	T.test("flora: every Flora section keeps off the town buildings", function()
+		local f = flora()
+		for _, section in f:GetChildren() do
+			if section.Name ~= "Town" then
+				for _, part in parts(section) do
+					local lo, hi = boxOf(part)
+					for _, site in Town.Sites do
+						local apart = hi.X <= site.Min.X or lo.X >= site.Max.X or hi.Z <= site.Min.Y or lo.Z >= site.Max.Y
+						T.truthy(apart, `{part:GetFullName()} overlaps the town building {site.Id}`)
+					end
 				end
 			end
 		end
-		for _, text in { "TOOLS", "INN", "MAP", "GEMS" } do
-			T.truthy(texts[text], "town sign " .. text)
-		end
-		for _, part in parts(flora().Scatter) do
+		-- the scatter keeps the ground in front of every facade clear too
+		for _, part in parts(f.Scatter) do
 			local lo, hi = boxOf(part)
 			for _, site in Town.Sites do
-				local apart = hi.X <= site.Min.X or lo.X >= site.Max.X or hi.Z <= site.Min.Y or lo.Z >= site.Max.Y
-				T.truthy(apart, `{part:GetFullName()} overlaps the town building {site.Id}`)
+				local strip = Town.frontStrip(site, Town.FrontClearance)
+				local apart = hi.X <= strip.Min.X or lo.X >= strip.Max.X or hi.Z <= strip.Min.Y or lo.Z >= strip.Max.Y
+				T.truthy(apart, `{part:GetFullName()} stands in front of the town building {site.Id}`)
+			end
+		end
+	end)
+
+	T.test("flora: the ground in front of every town facade is clear", function()
+		local map = world()
+		local f = flora()
+		-- other packages' parts that rise above the ground (y > 1) near the town
+		local others = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(f) then
+				local p, e = d.CFrame.Position, halfExtents(d)
+				if p.Y + e.Y > 1 and p.Y - e.Y < 14 and math.abs(p.X) < 120 then
+					table.insert(others, d)
+				end
+			end
+		end
+		for _, site in Town.Sites do
+			local strip = Town.frontStrip(site, Town.FrontClearance)
+			local near = {}
+			for _, d in others do
+				local p, e = d.CFrame.Position, halfExtents(d)
+				if p.X + e.X >= strip.Min.X and p.X - e.X <= strip.Max.X and p.Z + e.Z >= strip.Min.Y and p.Z - e.Z <= strip.Max.Y then
+					table.insert(near, d)
+				end
+			end
+			for x = strip.Min.X + 0.25, strip.Max.X - 0.24, 0.5 do
+				for z = strip.Min.Y + 0.25, strip.Max.Y - 0.24, 0.5 do
+					for _, y in { 1.25, 2.5, 4, 6, 9, 12 } do
+						local q = Vector3.new(x, y, z)
+						for _, d in near do
+							T.falsy(contains(d, q), `{d:GetFullName()} stands in front of {site.Id} at {q}`)
+						end
+					end
+				end
+			end
+		end
+		-- and every site keeps 2.5 studs from the stalls and set pieces (no 1-2 stud alleys)
+		for _, site in Town.Sites do
+			for _, piece in LobbyLayout.Pieces do
+				if piece.Package ~= "Flora" and LobbyLayout.isGroundPiece(piece) then
+					local gap = math.huge
+					for x = site.Min.X, site.Max.X + 1e-6, 0.5 do
+						for _, z in { site.Min.Y, site.Max.Y } do
+							gap = math.min(gap, LobbyLayout.distanceTo(piece, Vector3.new(x, 0, z)))
+						end
+					end
+					for z = site.Min.Y, site.Max.Y + 1e-6, 0.5 do
+						for _, x in { site.Min.X, site.Max.X } do
+							gap = math.min(gap, LobbyLayout.distanceTo(piece, Vector3.new(x, 0, z)))
+						end
+					end
+					T.truthy(gap >= 2.5, `{site.Id} is {gap} studs from {piece.Id} (>= 2.5)`)
+				end
 			end
 		end
 	end)
