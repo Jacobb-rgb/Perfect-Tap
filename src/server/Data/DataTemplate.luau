@@ -55,6 +55,10 @@ local DataTemplate = {
 	-- the Ore Pen on the base: every stored item, one list
 	-- { { K = kind, O = oreId, G = grade?, R = recipe? } }
 	Storage = {},
+	-- the pen's sorting billboard (Upgrades.PenAutomation >= 1) sends unkept
+	-- arrivals out of the PEN chute while this is on (PenAction "AutoSort";
+	-- readers treat anything but false as on)
+	AutoSort = true,
 	-- what stands on each podium: an ItemData.storageKey ("Clean|Gold|Pristine|") or ""
 	Podiums = { "", "", "", "" },
 	-- os.time() of the last moment the podiums were paying (offline earnings)

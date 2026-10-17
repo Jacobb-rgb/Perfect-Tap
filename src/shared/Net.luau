@@ -32,7 +32,7 @@ Net.Events = {
 	AnvilSubmit = { Rate = 2, Burst = 3 }, -- (sessionId, recipeId, strikes)
 	AnvilCancel = { Rate = 2, Burst = 3 }, -- (sessionId)
 	-- base: Ore Pen, podiums, Sell stall (design v2)
-	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium" | "Send" | "StopSend", arg)
+	PenAction = { Rate = 8, Burst = 12 }, -- (action: "Take" | "ToPodium" | "Send" | "StopSend" | "AutoSort", arg)
 	--   "Take"     { Key, Count }  items to your hands at the pen gate
 	--   "ToPodium" { Key, Slot }   one cleaned ore onto a podium
 	--   "Send"     { Key?, Count?, Filter? }  add a send intent to your send queue for
@@ -44,7 +44,9 @@ Net.Events = {
 	--              "Dirty" (all dirty ore) | "Unkept" (everything MachineData.keeps
 	--              doesn't keep: dirty ore, crushed ore, ingots and the unkept clean
 	--              ore; needs Upgrades.PenAutomation >= 1) | "All" (everything in the pen)
-	--   "StopSend" (no arg)        empties your send queue
+	--   "StopSend" (no arg)        empties your send queue (the train's Direct Unload goes on)
+	--   "AutoSort" { On: boolean } the sorting billboard (PenAutomation >= 1) on / off:
+	--              data.AutoSort; off drops what it queued (State: AutoSort)
 	--   The send queue holds intents only (Key/Count or Filter, how many are left),
 	--   never items: every item stays in data.Storage until the step that spawns it,
 	--   which finds a matching item in Storage, removes it and spawns it on the belt
