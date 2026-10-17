@@ -452,6 +452,42 @@ return function(T, Loader)
 			T.truthy(flap:FindFirstChild("FlapText"), flap.Name .. " label")
 		end
 		T.truthy(keep.Color ~= send.Color, "the two ways look different")
+		-- both flap labels read from the usual eye and camera heights in front
+		-- of the box: the inspection bay's floor never hides their top edge
+		local bayFloor = part("BayFloor")
+		local floorAt = localPos(bayFloor)
+		local lo, hi = floorAt - bayFloor.Size / 2, floorAt + bayFloor.Size / 2
+		-- does the segment a -> b pass through the floor's box (slab test)?
+		local function hits(a: any, b: any): boolean
+			local t0, t1 = 0, 1
+			for _, axis in { "X", "Y", "Z" } do
+				local from, delta = a[axis], b[axis] - a[axis]
+				if math.abs(delta) < 1e-9 then
+					if from < lo[axis] or from > hi[axis] then
+						return false
+					end
+				else
+					local ta, tb = (lo[axis] - from) / delta, (hi[axis] - from) / delta
+					t0 = math.max(t0, math.min(ta, tb))
+					t1 = math.min(t1, math.max(ta, tb))
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		for _, flap in { keep, send } do
+			local p = localPos(flap)
+			local label = flap.FlapText:FindFirstChild("Text")
+			-- the label's top edge on the flap's front face
+			local top = roblox.Vector3.new(p.X, p.Y + flap.Size.Y / 2 - label.Position.Y.Scale * flap.Size.Y, p.Z - flap.Size.Z / 2 - 0.01)
+			-- standing in front, stepped back, and the camera up behind you
+			for _, eye in { { 6, 4.5 }, { 12, 6 }, { 9, 10 }, { 16, 12 } } do
+				local from = roblox.Vector3.new(p.X, eye[2], front - eye[1])
+				T.falsy(hits(from, top), `{flap.Name} label seen from {eye[1]} studs out, {eye[2]} up`)
+			end
+		end
 		-- the floor port the kept ore drops into stays inside the footprint
 		T.truthy(model:FindFirstChild("PenPort"), "pen port")
 		-- the hopper intake covers the roof cup, not the front

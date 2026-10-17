@@ -6,13 +6,17 @@
 	  header   KEEP LIST, X button, one line on what keeping means
 	  modes    RARE+ | MY LIST | EVERYTHING   (data.KeepMode: RarePlus,
 	           List, All); a line under them says what the chosen one does
+	           (in RARE+ / EVERYTHING with a custom list saved: that a tap
+	           replaces MY LIST)
 	  chips    every DISCOVERED ore as a toggle chip, best income first:
 	           kept = filled in the ore's colour with a lit (white) light,
 	           KEEP and its podium income; sent on = dark with the ore's
 	           colour as the light and SEND ON; the outline is the ore's
 	           rarity colour. Tapping a chip flips that one ore (in RARE+ /
-	           EVERYTHING it becomes your list first, so only that chip
-	           changes: IronBoxService)
+	           EVERYTHING what you see becomes your list first, replacing an
+	           older one, so only that chip changes: IronBoxService). Exactly
+	           Rows rows show; with more, a scroll track (the bar's groove)
+	           sits at the list's right edge
 	  presets  SET ALL: KEEP / SET ALL: SEND (every chip at once; they make
 	           it your list), and in MY LIST mode RESET (ClearList: every ore
 	           follows the Rare+ rule again)
@@ -25,7 +29,7 @@
 	height and the chip columns (4, or 3 / 2 on narrow screens) to its
 	width.
 	Pure helpers (tested): entries (the State snapshot as chips), modeOf,
-	modeText, predict (what an IronBoxAction does to KeepMode / KeepList:
+	hasList, modeText, predict (what an IronBoxAction does to KeepMode / KeepList:
 	the same rules as IronBoxService.apply, so a tap shows at once).
 ]]
 
@@ -70,6 +74,7 @@ export type Refs = {
 	Modes: { [string]: TextButton }, -- by KeepMode
 	ModeText: TextLabel,
 	List: ScrollingFrame,
+	Track: Frame, -- the scroll bar's groove (more chips than rows)
 	Grid: UIGridLayout,
 	Empty: TextLabel,
 	Presets: Frame,
@@ -86,6 +91,7 @@ export type Refs = {
 	Mode: KeepMode,
 	Rows: number, -- chip rows shown without scrolling
 	Columns: number, -- chip columns
+	Count: number, -- chips shown
 }
 
 IronBoxView.Title = "KEEP LIST"
@@ -96,7 +102,9 @@ IronBoxView.Empty = "No ores discovered yet. Clean dirty ore and every ore you f
 
 local PAD = 16
 local GAP = 8
-local SCROLLBAR = 12
+local SCROLLBAR = 12 -- room at the list's right for its scroll bar
+local BAR = 8 -- the scroll bar's thickness (inside SCROLLBAR)
+local LIST_PAD = 4 -- the list's padding over and under the chips
 local COLUMNS = 4 -- chip columns when the screen is wide enough...
 local MIN_COLUMNS = 2 -- ...down to this many on narrow ones
 local EDGE = 12 -- compact: the panel's gap to the screen's right edge
@@ -107,7 +115,7 @@ local HUD_CLEAR = 16 + HudView.CoinsWidth + 8
 -- compact holders are 72 tall, 44.6 pt at the 0.62 floor).
 local LAYOUTS = {
 	Normal = {
-		ChipW = 150,
+		ChipW = 160,
 		ChipH = 58,
 		ModeH = 50,
 		PresetH = 46,
@@ -116,6 +124,7 @@ local LAYOUTS = {
 		Close = 50,
 		Title = 28,
 		Name = 18,
+		State = 15, -- the chip's KEEP · income / SEND ON line
 		ModeText = 19,
 		PresetText = 19,
 		MaxRows = 4,
@@ -134,6 +143,7 @@ local LAYOUTS = {
 		Close = 72,
 		Title = 30,
 		Name = 21,
+		State = 16,
 		ModeText = 21,
 		PresetText = 21,
 		MaxRows = 3,
@@ -160,14 +170,23 @@ function IronBoxView.modeOf(state: any): KeepMode
 	return if MachineData.isKeepMode(mode) then mode else MachineData.Keep.Default
 end
 
--- What the chosen mode does, for the line under the mode buttons.
-function IronBoxView.modeText(mode: KeepMode): string
+-- Does the snapshot hold a custom list (any choice on KeepList)?
+function IronBoxView.hasList(state: any): boolean
+	local list = if type(state) == "table" then state.KeepList else nil
+	return type(list) == "table" and next(list) ~= nil
+end
+
+--[[
+	What the chosen mode does, for the line under the mode buttons. In
+	RARE+ / EVERYTHING a tap turns what you see into your list; with a
+	custom list saved (`hasList`) that replaces it, so the line says so.
+]]
+function IronBoxView.modeText(mode: KeepMode, hasList: boolean?): string
 	if mode == "List" then
 		return "Your own list. Unset ores follow the Rare+ rule; RESET clears it."
-	elseif mode == "All" then
-		return "Keeps every clean ore. Tap an ore to make your own list."
 	end
-	return `Keeps {MachineData.Keep.RareFrom} ore and better. Tap an ore to make your own list.`
+	local rule = if mode == "All" then "Keeps every clean ore." else `Keeps {MachineData.Keep.RareFrom} ore and better.`
+	return rule .. (if hasList then " Tapping an ore replaces MY LIST." else " Tap an ore to make your own list.")
 end
 
 --[[
@@ -328,11 +347,22 @@ function IronBoxView.build(): Refs
 		TextWrapped = true,
 	})
 
+	-- the scroll bar's groove (shown when there are more chips than rows),
+	-- behind the list so the bar itself runs in it
+	local track = UIKit.new("Frame", {
+		Name = "Track",
+		BackgroundColor3 = Theme.PanelDark,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 1,
+	}, panel)
+	UIKit.corner(track, BAR // 2)
 	local list = UIKit.new("ScrollingFrame", {
 		Name = "List",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 8,
+		ZIndex = 2,
+		ScrollBarThickness = BAR,
 		ScrollBarImageColor3 = Theme.Accent,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -345,7 +375,11 @@ function IronBoxView.build(): Refs
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		FillDirectionMaxCells = COLUMNS,
 	}, list)
-	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2) }, list)
+	UIKit.new(
+		"UIPadding",
+		{ PaddingTop = UDim.new(0, LIST_PAD), PaddingBottom = UDim.new(0, LIST_PAD), PaddingLeft = UDim.new(0, 2) },
+		list
+	)
 	local empty = UIKit.label(panel, IronBoxView.Empty, 19, {
 		Name = "Empty",
 		TextColor3 = Theme.TextDim,
@@ -415,6 +449,7 @@ function IronBoxView.build(): Refs
 		Modes = modes,
 		ModeText = modeText,
 		List = list,
+		Track = track,
 		Grid = grid,
 		Empty = empty,
 		Presets = presets,
@@ -431,10 +466,16 @@ function IronBoxView.build(): Refs
 		Mode = MachineData.Keep.Default,
 		Rows = LAYOUTS.Normal.MaxRows,
 		Columns = COLUMNS,
+		Count = 0,
 	}
 	IronBoxView.layout(refs, false, 1600, 720)
 	IronBoxView.setMode(refs, MachineData.Keep.Default)
 	return refs
+end
+
+-- The scroll groove shows while the chips need more rows than fit.
+local function syncTrack(refs: Refs)
+	refs.Track.Visible = refs.Count > refs.Rows * refs.Columns
 end
 
 -- The panel's width for this many chip columns.
@@ -492,7 +533,8 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local fit = math.floor((maxHeight - 24 - listY - below + GAP) / rowH)
 	local rows = math.clamp(fit, 1, l.MaxRows)
 	refs.Rows = rows
-	local listH = rows * rowH + 8
+	-- exactly `rows` rows (no sliver of the next one) plus the padding
+	local listH = rows * rowH - GAP + LIST_PAD * 2
 	local height = listY + listH + below
 	refs.Panel.Size = UDim2.fromOffset(width, height)
 	-- phones: on the right (thumb side), clear of the HUD coins top left
@@ -514,8 +556,11 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	end
 	refs.ModeText.Position = UDim2.fromOffset(PAD, modeTextY)
 	refs.ModeText.Size = UDim2.new(1, -PAD * 2, 0, MODE_TEXT_H)
+	-- PAD on both sides: the scroll bar runs inside the panel, by the chips
 	refs.List.Position = UDim2.fromOffset(PAD, listY)
-	refs.List.Size = UDim2.new(1, -PAD, 0, listH)
+	refs.List.Size = UDim2.new(1, -PAD * 2, 0, listH)
+	refs.Track.Position = UDim2.new(1, -PAD - BAR, 0, listY + 2)
+	refs.Track.Size = UDim2.fromOffset(BAR, listH - 4)
 	refs.Grid.CellSize = UDim2.fromOffset(l.ChipW, l.ChipH)
 	refs.Empty.Position = UDim2.fromOffset(PAD * 2, listY)
 	refs.Empty.Size = UDim2.new(1, -PAD * 4, 0, listH)
@@ -532,8 +577,9 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	end
 	for _, chip in refs.Chips do
 		chip.Name.TextSize = l.Name
-		chip.State.TextSize = if compact then 16 else 13
+		chip.State.TextSize = l.State
 	end
+	syncTrack(refs)
 end
 
 local function newChip(refs: Refs, oreId: string): Chip
@@ -567,12 +613,13 @@ local function newChip(refs: Refs, oreId: string): Chip
 		TextScaled = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
-	local state = UIKit.label(button, "", if refs.Compact then 16 else 13, {
+	local state = UIKit.label(button, "", l.State, {
 		Name = "State",
 		Position = UDim2.new(0, 28, 0.56, 0),
 		Size = UDim2.new(1, -34, 0.4, -4),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 	local chip: Chip = { Ore = oreId, Button = button, Swatch = swatch, Name = name, State = state, Stroke = stroke }
 	refs.Chips[oreId] = chip
@@ -628,11 +675,14 @@ function IronBoxView.setEntries(refs: Refs, list: { Entry }): { Chip }
 		end
 	end
 	refs.Empty.Visible = #list == 0
+	refs.Count = #list
+	syncTrack(refs)
 	return created
 end
 
--- The chosen mode: its button lit and the line under the buttons.
-function IronBoxView.setMode(refs: Refs, mode: KeepMode)
+-- The chosen mode: its button lit and the line under the buttons
+-- (`hasList`: a custom list is saved, see modeText).
+function IronBoxView.setMode(refs: Refs, mode: KeepMode, hasList: boolean?)
 	refs.Mode = mode
 	for id, button in refs.Modes do
 		local on = id == mode
@@ -642,7 +692,7 @@ function IronBoxView.setMode(refs: Refs, mode: KeepMode)
 		button.TextColor3 = if on then Theme.Text else Theme.TextDim
 		button:SetAttribute("Selected", on)
 	end
-	refs.ModeText.Text = IronBoxView.modeText(mode)
+	refs.ModeText.Text = IronBoxView.modeText(mode, hasList)
 	-- RESET (back to the Rare+ rule) only means something for your own list
 	local resetHolder = refs.Reset.Parent :: Frame
 	resetHolder.Visible = mode == "List"

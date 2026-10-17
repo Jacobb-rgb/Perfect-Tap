@@ -353,6 +353,75 @@ return function(T, Loader)
 		T.eq(count(m.Entry.Out), 4)
 	end)
 
+	withWorld("IronBox: the pen store is take()'s last step (a failing sign update can't duplicate)", function(w)
+		local now = 1000
+		box.setClock(function()
+			return now
+		end)
+		local m = place(w)
+		local capacity = PenService.capacityOf(w.data)
+		for i = 1, capacity do
+			w.data.Storage[i] = item("Clean", "Coal", "Rough")
+		end
+		local t = sortOne(w, m, item("Clean", "Gold", "Clean"), 10)
+		T.eq(attr(m, "PenFull"), true, "the pen was full")
+		MachineLogic.popOut(m.Entry)
+		-- room again, but nothing told the box yet; its sign update now fails
+		table.remove(w.data.Storage)
+		local setAttrs = MachineService.setAttrs
+		w.patch(MachineService, "setAttrs", function(machine, attrs)
+			if attrs.PenFull ~= nil then
+				error("sign update failed", 0)
+			end
+			return setAttrs(machine, attrs)
+		end)
+		local stored = #w.data.Storage
+		sortOne(w, m, item("Clean", "Gold", "Pristine"), t + 1)
+		T.eq(#w.data.Storage, stored + 1, "kept: in the pen")
+		T.eq(w.data.Storage[#w.data.Storage].G, "Pristine", "the same item")
+		T.eq(count(m.Entry.Out), 0, "and not out of the front too")
+		T.eq(m.Entry.In, nil, "out of the box")
+	end)
+
+	withWorld("IronBox: the pen-full sign goes when nothing kept waits on the pen", function(w)
+		local now = 1000
+		box.setClock(function()
+			return now
+		end)
+		local m = place(w)
+		local capacity = PenService.capacityOf(w.data)
+		for i = 1, capacity do
+			w.data.Storage[i] = item("Clean", "Coal", "Rough")
+		end
+		local t = 10
+		local function pass(desc: any)
+			t = sortOne(w, m, desc, t + 1)
+			MachineLogic.popOut(m.Entry)
+		end
+		pass(item("Clean", "Gold"))
+		T.eq(attr(m, "PenFull"), true, "kept Gold refused")
+		-- a mixed stream: ore the box doesn't keep right after a refusal keeps the sign (no flicker)
+		now += 5
+		pass(item("Clean", "Coal"))
+		T.eq(attr(m, "PenFull"), true, "a kept item was refused moments ago")
+		pass(item("Raw", "Gold"))
+		T.eq(attr(m, "PenFull"), true, "dirty ore neither")
+		-- only ore the box doesn't keep for a while: nothing waits on the pen
+		now += 20
+		pass(item("Ingot", "Gold"))
+		T.eq(attr(m, "PenFull"), false, "only ingots passing by: the sign goes")
+		T.eq(#w.data.Storage, capacity, "the pen is still full")
+		pass(item("Clean", "Diamond"))
+		T.eq(attr(m, "PenFull"), true, "kept ore refused again: back")
+		T.eq(#notesNamed(w, "Notify"), 1, "still one toast (the pen never had room)")
+		-- the list changes so the box keeps nothing: the sign goes at once
+		box.action(w.player, "SetKeepMany", { Ores = { "Coal", "Copper", "Gold", "Diamond" }, Keep = false })
+		T.eq(attr(m, "PenFull"), false, "the list changed")
+		pass(item("Clean", "Gold"))
+		T.eq(attr(m, "LastRoute"), "Send", "Gold is sent on now...")
+		T.eq(attr(m, "PenFull"), false, "...not refused")
+	end)
+
 	withWorld("IronBox: sort time follows the box's Speed level and Bellows", function(w)
 		local m = place(w)
 		MachineService.insertDesc(m, item("Clean", "Coal"), USER, "Belt")
@@ -472,6 +541,8 @@ return function(T, Loader)
 		T.eq(#opens, 1, "opened")
 		T.eq(opens[1].Payload, "IronBox", "the IronBox panel")
 		T.truthy(opens[1].Extra.Box == m.Model, "for this box")
+		local at = opens[1].Extra.Position
+		T.near((at - m.Model:GetPivot().Position).Magnitude, 0, 1e-4, "and where it is (range check while it streams in)")
 		box.open(w.stranger, m)
 		T.eq(#notesNamed(w, "OpenUI"), 1, "not for a stranger")
 		local denied = notesNamed(w, "Notify")
@@ -547,6 +618,42 @@ return function(T, Loader)
 		T.eq(data.KeepMode, "List")
 	end)
 
+	withWorld("IronBoxAction: switching modes keeps MY LIST; a tap in RARE+ replaces it (the panel says so)", function(w)
+		local data = w.data
+		local action = box.action
+		action(w.player, "SetMode", { Mode = "List" })
+		action(w.player, "SetKeepMany", { Ores = { "Coal", "Copper" }, Keep = true })
+		action(w.player, "SetKeep", { Ore = "Diamond", Keep = false })
+		local custom = deepCopy(data.KeepList)
+		T.eq(custom.Coal, true)
+		T.eq(custom.Diamond, false)
+		-- trying the other modes and coming back: the list is still there
+		action(w.player, "SetMode", { Mode = "RarePlus" })
+		action(w.player, "SetMode", { Mode = "All" })
+		action(w.player, "SetMode", { Mode = "List" })
+		for ore, keep in custom do
+			T.eq(data.KeepList[ore], keep, "MY LIST is back: " .. ore)
+		end
+		-- the panel warns in RARE+ / EVERYTHING while a list is saved...
+		local state = { KeepMode = "RarePlus", KeepList = data.KeepList, Discovered = data.Discovered }
+		T.truthy(IronBoxView.hasList(state), "a list is saved")
+		T.falsy(IronBoxView.hasList({ KeepList = {} }), "an empty list is none")
+		T.falsy(IronBoxView.hasList({ KeepList = 5 }), "nor a broken one")
+		for _, mode in { "RarePlus", "All" } do
+			T.truthy(IronBoxView.modeText(mode, true):find("replaces MY LIST", 1, true), mode .. " warns")
+			T.falsy(IronBoxView.modeText(mode, false):find("replaces", 1, true), mode .. ": no list, no warning")
+		end
+		T.falsy(IronBoxView.modeText("List", true):find("replaces", 1, true), "MY LIST itself doesn't")
+		-- ...because a tap there turns what that mode shows into the list
+		action(w.player, "SetMode", { Mode = "RarePlus" })
+		action(w.player, "SetKeep", { Ore = "Gold", Keep = false })
+		T.eq(data.KeepMode, "List")
+		T.eq(data.KeepList.Coal, false, "Coal as RARE+ showed it (the old list kept it)")
+		T.eq(data.KeepList.Copper, false)
+		T.eq(data.KeepList.Diamond, true, "Diamond as RARE+ showed it (the old list sent it on)")
+		T.eq(data.KeepList.Gold, false, "the tapped one")
+	end)
+
 	withWorld("IronBoxAction: the box follows the list at once", function(w)
 		local m = place(w)
 		box.action(w.player, "SetKeep", { Ore = "Coal", Keep = true })
@@ -588,7 +695,10 @@ return function(T, Loader)
 		local prompt = board.PrimaryPart.Prompt:FindFirstChild(IronBoxService.BoardPromptName)
 		T.truthy(prompt, "Keep List prompt")
 		T.eq(prompt.ActionText, "Keep List")
-		T.truthy(prompt.KeyboardKeyCode == roblox.Enum.KeyCode.G and prompt.GamepadKeyCode == roblox.Enum.KeyCode.ButtonB, "G / B")
+		-- its own keys: G / B is the gate's "Open Pen" a few steps away (one
+		-- prompt per key shows, so both must differ to show at the gate)
+		T.truthy(prompt.KeyboardKeyCode == roblox.Enum.KeyCode.F and prompt.GamepadKeyCode == roblox.Enum.KeyCode.ButtonY, "F / Y")
+		T.truthy(board.ModelStreamingMode == roblox.Enum.ModelStreamingMode.Atomic, "streams in whole, like machines")
 		T.truthy(prompt:HasTag(PenService.PromptTag), "tagged like the pen's prompts (PenController: owner only)")
 		T.eq(prompt:GetAttribute("PlotId"), PLOT)
 		-- the owner opens the same keep list panel
@@ -597,6 +707,7 @@ return function(T, Loader)
 		T.eq(#opens, 1, "opened")
 		T.eq(opens[1].Payload, "IronBox", "the keep list panel")
 		T.truthy(opens[1].Extra.Box == board, "for the board (range check)")
+		T.near((opens[1].Extra.Position - board:GetPivot().Position).Magnitude, 0, 1e-4, "and its position")
 		box.open(w.player, place(w))
 		T.eq(#notesNamed(w, "OpenUI"), 2, "an Iron Box opens the same panel")
 		-- not for a stranger
@@ -673,6 +784,46 @@ return function(T, Loader)
 		T.eq(gui.Empty.Text, "NO ORE FOUND YET")
 		-- the same board is reused
 		T.truthy(IronBoxService.boardOf(PLOT) == board, "not rebuilt")
+	end)
+
+	withWorld("Sorting board: save changes don't repaint it; keep list changes and discoveries do", function(w)
+		local data = w.data
+		local infos = 0
+		local boardInfo = IronBoxService.boardInfo
+		w.patch(IronBoxService, "boardInfo", function(d)
+			infos += 1
+			return boardInfo(d)
+		end)
+		box.saveChanged(w.player)
+		T.eq(IronBoxService.boardOf(PLOT), nil, "no upgrade, no board")
+		T.eq(infos, 0)
+		-- the upgrade comes with a save change: built and painted once
+		data.Upgrades.PenAutomation = EconomyConfig.PenAutomation.Billboard
+		box.saveChanged(w.player)
+		local board = IronBoxService.boardOf(PLOT)
+		T.truthy(board, "built")
+		T.eq(infos, 1, "painted")
+		-- a running factory: many save changes, no ore loops
+		for _ = 1, 50 do
+			box.saveChanged(w.player)
+		end
+		T.eq(infos, 1, "save changes only check that the board stands")
+		-- the keep list changes: repainted at once
+		local gui = board.Display.BoardGui
+		box.action(w.player, "SetKeep", { Ore = "Coal", Keep = true })
+		T.eq(infos, 2, "an IronBoxAction repaints")
+		T.eq(gui.Mode.Text, "KEEPS MY LIST")
+		box.action(w.player, "SetKeep", { Ore = "Silver", Keep = true })
+		T.eq(infos, 2, "a refused action doesn't")
+		-- a new discovery: repainted
+		data.Discovered.Silver = true
+		box.discovered(w.player)
+		T.eq(infos, 3, "a discovery repaints")
+		-- the upgrade goes (a reset save): the next save change takes it away
+		data.Upgrades.PenAutomation = 0
+		box.saveChanged(w.player)
+		T.eq(IronBoxService.boardOf(PLOT), nil, "removed")
+		T.eq(infos, 3)
 	end)
 
 	---------------------------------------------------------------- the view (pure)
@@ -787,6 +938,34 @@ return function(T, Loader)
 		T.eq(refs.Rows, 4)
 		T.truthy(refs.Panel.Size.Y.Offset <= 700, "fits a 720 screen")
 		T.eq(refs.Columns, 4, "four columns on a PC")
+		-- exactly Rows rows of chips show (no sliver of the next row over the
+		-- presets) and the list (with its scroll bar) stays inside the panel
+		local function wholeRows(label: string)
+			local gap = refs.Grid.CellPadding.Y.Offset
+			local rowH = refs.Grid.CellSize.Y.Offset + gap
+			T.eq(refs.List.Size.Y.Offset, refs.Rows * rowH - gap + 8, label .. ": whole rows only")
+			T.eq(refs.List.Size.X.Scale, 1)
+			T.eq(refs.List.Size.X.Offset, -32, label .. ": a pad on both sides")
+			local track = refs.Track
+			T.eq(track.Position.X.Offset, -16 - refs.List.ScrollBarThickness, label .. ": the groove under the bar")
+			T.eq(track.Size.X.Offset, refs.List.ScrollBarThickness)
+			T.truthy(track.Size.Y.Offset <= refs.List.Size.Y.Offset, label .. ": the groove fits the list")
+		end
+		wholeRows("PC")
+		-- the scroll groove only shows when there are more chips than fit
+		local everything = { Discovered = {}, KeepMode = "All", KeepList = {} }
+		for _, ore in OreData.List do
+			everything.Discovered[ore.Id] = true
+		end
+		IronBoxView.setEntries(refs, IronBoxView.entries(everything))
+		T.truthy(#OreData.List > refs.Rows * refs.Columns, "more ores than fit")
+		T.truthy(refs.Track.Visible, "the scroll groove shows")
+		T.truthy(refs.Track.ZIndex < refs.List.ZIndex, "behind the bar")
+		-- the chip's KEEP / income line reads on PC (about 11 px even at a 0.75 UI scale)
+		T.truthy(refs.Chips.Gold.State.TextSize >= 15, "state line size")
+		T.truthy(refs.Chips.Gold.State.TextTruncate == roblox.Enum.TextTruncate.AtEnd, "never spills out of its chip")
+		IronBoxView.setEntries(refs, IronBoxView.entries(state))
+		T.falsy(refs.Track.Visible, "two chips fit: no groove")
 		-- phones: 0.62 scale, a 667 x 375 pt screen; chips and buttons >= 44 pt
 		local phone = 0.62
 		IronBoxView.layout(refs, true, 667 / phone, (375 - 36) / phone)
@@ -815,7 +994,7 @@ return function(T, Loader)
 		-- the panel never covers the HUD coins
 		local function fits(label: string, maxWidth: number)
 			local grid = refs.Columns * refs.Grid.CellSize.X.Offset + (refs.Columns - 1) * refs.Grid.CellPadding.X.Offset
-			local listWidth = refs.Panel.Size.X.Offset - 16 -- List is the panel's width minus its left pad
+			local listWidth = refs.Panel.Size.X.Offset - 32 -- List is the panel's width minus a pad on each side
 			T.eq(refs.Grid.FillDirectionMaxCells, refs.Columns, label .. ": grid columns")
 			T.truthy(grid + 12 <= listWidth, `{label}: {refs.Columns} columns fit the list`)
 			local left = maxWidth - 12 - refs.Panel.Size.X.Offset
@@ -829,6 +1008,7 @@ return function(T, Loader)
 		end
 		touchTargets("667 x 375")
 		fits("667 x 375", 667 / phone)
+		wholeRows("667 x 375")
 		-- a narrow phone (568 x 320 pt): three columns, clear of the coins
 		IronBoxView.layout(refs, true, 568 / phone, (320 - 36) / phone)
 		T.eq(refs.Columns, 3, "three columns on a narrow phone")
@@ -836,6 +1016,7 @@ return function(T, Loader)
 		T.truthy(refs.Panel.Size.Y.Offset * phone <= 320 - 36, "fits its height")
 		touchTargets("568 x 320")
 		fits("568 x 320", 568 / phone)
+		wholeRows("568 x 320")
 		-- portrait (390 x 844 pt): no room beside the coins, the whole width
 		local columns, width = IronBoxView.fitColumns(true, 390 / phone)
 		T.truthy(columns >= 2 and width <= 390 / phone - 24, "portrait fits the width")

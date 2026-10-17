@@ -1,9 +1,9 @@
 --[[
 	IronBoxController: the keep list (client side).
 
-	- Opens on OpenUI "IronBox" { Box } (the "Keep List" prompt on your own
-	  Iron Box or on your pen's sorting board; the server checks it is yours
-	  and, for the board, the Pen Automation level). The panel (IronBoxView)
+	- Opens on OpenUI "IronBox" { Box, Position } (the "Keep List" prompt on
+	  your own Iron Box or on your pen's sorting board; the server checks it
+	  is yours and, for the board, the Pen Automation level). The panel (IronBoxView)
 	  shows every ore you have discovered as a chip, from the State snapshot
 	  (Discovered, KeepMode, KeepList), and updates live.
 	    chip           IronBoxAction "SetKeep" { Ore, Keep = the other way }
@@ -16,9 +16,11 @@
 	  PENDING_SECONDS, so an older snapshot never flips a chip back; after
 	  that the panel shows the latest snapshot as it is).
 	- Closes with X, B (gamepad), Backspace, walking away from the box or
-	  board (Range), it going away, or respawning. Gamepads start on the
-	  first chip; other prompts are hidden while it is open. Phones
-	  (uiScale <= 0.75) get the compact layout; the chip rows fit the screen.
+	  board (Range; measured from the Position the server sent, or from
+	  where you stood, while the model hasn't streamed in), it going away,
+	  or respawning. Gamepads start on the first chip; other prompts are
+	  hidden while it is open. Phones (uiScale <= 0.75) get the compact
+	  layout; the chip rows fit the screen.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -53,6 +55,8 @@ local player = Players.LocalPlayer
 local refs: IronBoxView.Refs? = nil
 local isOpen = false
 local box: Model? = nil
+-- where the range check measures from when `box` isn't here (yet)
+local anchor: Vector3? = nil
 local rangeConnection: RBXScriptConnection? = nil
 local resizeConnection: RBXScriptConnection? = nil
 local pending: { Pending } = {}
@@ -112,7 +116,7 @@ local function redraw()
 			end
 		end)
 	end
-	IronBoxView.setMode(view, IronBoxView.modeOf(state))
+	IronBoxView.setMode(view, IronBoxView.modeOf(state), IronBoxView.hasList(state))
 	keepSelection(view)
 end
 
@@ -195,6 +199,7 @@ function IronBoxController.close()
 	end
 	isOpen = false
 	box = nil
+	anchor = nil
 	if rangeConnection then
 		rangeConnection:Disconnect()
 		rangeConnection = nil
@@ -264,24 +269,31 @@ local function watchRange()
 		end
 		elapsed = 0
 		local target = box
-		if not target then
-			return
-		end
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if not root or not target.Parent then
+		if not root or (target and not target.Parent) then
 			IronBoxController.close()
 			return
 		end
-		local offset = root.Position - target:GetPivot().Position
+		local center = if target then target:GetPivot().Position else anchor
+		if not center then
+			-- no model and no position: measure from where you opened it
+			center = root.Position
+			anchor = center
+		end
+		local offset = root.Position - center
 		if Vector3.new(offset.X, 0, offset.Z).Magnitude > IronBoxController.Range then
 			IronBoxController.close()
 		end
 	end)
 end
 
--- Opens the keep list (`target` = the box it was opened at, for the range check).
-function IronBoxController.open(target: Model?)
+--[[
+	Opens the keep list. `target` = the box or board it was opened at, for
+	the range check; `at` = its position (the server's word, used while the
+	model hasn't streamed in to this client).
+]]
+function IronBoxController.open(target: Model?, at: Vector3?)
 	IronBoxController.close()
 	local view = ensureView()
 	fit(view)
@@ -290,6 +302,9 @@ function IronBoxController.open(target: Model?)
 	view.Gui.Enabled = true
 	isOpen = true
 	box = target
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	anchor = at or (if root and root:IsA("BasePart") then root.Position else nil)
 	PromptController.setSuppressed("IronBox", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	watchRange()
@@ -316,7 +331,11 @@ function IronBoxController.init()
 			return
 		end
 		local target = if type(payload) == "table" then payload.Box else nil
-		IronBoxController.open(if typeof(target) == "Instance" and target:IsA("Model") then target else nil)
+		local at = if type(payload) == "table" then payload.Position else nil
+		IronBoxController.open(
+			if typeof(target) == "Instance" and target:IsA("Model") then target else nil,
+			if typeof(at) == "Vector3" then at else nil
+		)
 	end)
 	StateController.onChanged(function(state)
 		if isOpen then

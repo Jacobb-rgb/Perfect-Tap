@@ -53,7 +53,9 @@
 	  full" while the PenFull attribute is set.
 	- Cleaning Plant: your own plant within ODDS_RANGE shows its billboard
 	  even when idle, with the grade odds of its Quality level
-	  (attribute QualityOdds, MachineBillboard.setNote / qualityNote).
+	  (attribute QualityOdds, MachineBillboard.setNote / qualityNote). The
+	  note is built once per change of Quality / QualityOdds (onAttribute),
+	  not every frame, and set when a billboard appears or it changes.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -140,6 +142,7 @@ type Fx = {
 	StubsDirty: boolean,
 	ForgeLight: PointLight?,
 	Billboard: MachineBillboard.Refs?,
+	Note: string, -- the billboard's note (Cleaning Plant odds; "" = none)
 	Connections: { RBXScriptConnection },
 	-- molten parts that pulse with the Glow (furnaces)
 	Hot: { BasePart },
@@ -232,6 +235,12 @@ local quality = 1 -- emitter rate scale from the graphics quality
 local function number(fx: Fx, name: string): number
 	local value = fx.Attr[name]
 	return if type(value) == "number" and value == value then value else 0
+end
+
+-- The billboard's note from the Quality / QualityOdds attributes.
+local function noteOf(fx: Fx): string
+	local odds = fx.Attr.QualityOdds
+	return if type(odds) == "string" and odds ~= "" then MachineBillboard.qualityNote(number(fx, "Quality"), odds) else ""
 end
 
 local function isOwn(fx: Fx): boolean
@@ -1131,6 +1140,12 @@ local function onAttribute(fx: Fx, name: string)
 		end
 	elseif name == "Ingots" or name == "IngotOre" or name == "Forging" then
 		fx.StubsDirty = true
+	elseif name == "Quality" or name == "QualityOdds" then
+		fx.Note = noteOf(fx)
+		local refs = fx.Billboard
+		if refs then
+			MachineBillboard.setNote(refs, fx.Note)
+		end
 	elseif name == "Kept" or name == "Sent" then
 		fx.BoxDirty = true
 		if fx.Active and type(value) == "number" and type(before) == "number" and value > before then
@@ -1224,6 +1239,7 @@ local function register(instance: Instance)
 		StubsDirty = false,
 		ForgeLight = nil,
 		Billboard = nil,
+		Note = "",
 		Connections = {},
 		Hot = {},
 		HotColors = {},
@@ -1250,6 +1266,7 @@ local function register(instance: Instance)
 		NextBuild = 0,
 		ShowAt = nil,
 	}
+	fx.Note = noteOf(fx)
 	capture(fx)
 	if fx.ScreenItem or fx.ScreenCounter then
 		drawScreen(fx)
@@ -1344,10 +1361,7 @@ local function wantsBillboard(fx: Fx): boolean
 		return true
 	end
 	local status = fx.Attr.Status
-	return number(fx, "Queue") > 0
-		or fx.Attr.Working == true
-		or (type(status) == "string" and status ~= "")
-		or fx.Attr.PenFull == true
+	return number(fx, "Queue") > 0 or fx.Attr.Working == true or (type(status) == "string" and status ~= "") or fx.Attr.PenFull == true
 end
 
 local function byDistance(a: Fx, b: Fx): boolean
@@ -1423,7 +1437,9 @@ local function pickActive()
 		if wantsBillboard(fx) and signs < MAX_BILLBOARDS then
 			signs += 1
 			if not fx.Billboard then
-				fx.Billboard = MachineBillboard.attach(fx.Model)
+				local refs = MachineBillboard.attach(fx.Model)
+				MachineBillboard.setNote(refs, fx.Note)
+				fx.Billboard = refs
 			end
 		elseif fx.Billboard then
 			MachineBillboard.detach(fx.Billboard :: MachineBillboard.Refs)
@@ -1550,11 +1566,6 @@ local function step(dt: number)
 				progress = 1
 			end
 			local ore = oreOf(fx.Attr.WorkOre)
-			local odds = fx.Attr.QualityOdds
-			MachineBillboard.setNote(
-				refs,
-				if type(odds) == "string" and odds ~= "" then MachineBillboard.qualityNote(number(fx, "Quality"), odds) else ""
-			)
 			MachineBillboard.update(
 				refs,
 				progress,

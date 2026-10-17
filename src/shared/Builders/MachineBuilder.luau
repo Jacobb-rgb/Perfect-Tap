@@ -1549,7 +1549,9 @@ end
 	    front wall);
 	  - a glass inspection bay on the front left (steel frame, dark inside,
 	    a warm lamp strip InspectLamp under its roof): the client shows the
-	    last sorted item standing on its floor (attachment ShowPoint);
+	    last sorted item standing on its floor (attachment ShowPoint). It
+	    sits high and stands out only 0.9 studs, so its floor never hides
+	    the KEEP flap's label under it, even from a camera well above;
 	  - a little lit screen on the front right (Screen, Neon; SurfaceGui
 	    ScreenGui with Item = the last item, Counter = kept / sent) that the
 	    client fills in from the box's attributes;
@@ -1572,7 +1574,7 @@ MachineBuilder.IronBox = {
 	ScreenIdle = "READY",
 	ScreenText = C.ScreenText, -- the screen's text colour...
 	RarityTint = 0.3, -- ...tinted this much toward a cleaned ore's rarity colour
-	Window = 1.3, -- the shown item is scaled to fit a cube this big
+	Window = 1.1, -- the shown item is scaled to fit a cube this big
 }
 
 local function flapLabel(flap: Part, text: string, color: Color3)
@@ -1631,7 +1633,7 @@ local function ironBox(): Model
 
 	-- glass inspection bay (front left): a steel frame standing out of the
 	-- wall, dark inside, a warm lamp strip, glass with one glint
-	local wx, ww, wy0, wy1, dd, t = -1.45, 2.5, 2.45, 3.95, 1.0, 0.2
+	local wx, ww, wy0, wy1, dd, t = -1.45, 2.5, 2.8, 4.0, 0.9, 0.2
 	local wh = wy1 - wy0
 	local bayZ = front - dd / 2
 	Geo.block(model, CFrame.new(wx, (wy0 + wy1) / 2, front - 0.03), Vector3.new(ww, wh, 0.06), C.Recess, nil, tiny({ Name = "BayBack" }))
@@ -1669,7 +1671,7 @@ local function ironBox(): Model
 	attach(base, "ShowPoint", CFrame.new(wx, wy0 - 0.15, bayZ + 0.05))
 
 	-- the little lit screen (front right) in a dark frame
-	local sx, sw, sy, sh = 1.8, 2.0, 2.5, 1.25
+	local sx, sw, sy, sh = 1.8, 2.0, 2.8, 1.15
 	portal(model, CFrame.new(sx, sy, front), sw, sh, 0.22, 0.3, true, C.HousingDark)
 	local screen =
 		Geo.block(model, CFrame.new(sx, sy + sh / 2, front - 0.2), Vector3.new(sw, sh, 0.06), C.ScreenLit, NEON, tiny({ Name = "Screen" }))
@@ -1842,9 +1844,17 @@ function MachineBuilder.sortingBoard(): Model
 	empty.Visible = false
 	empty.Parent = gui
 	-- a warm lamp over the display, steel rails top and bottom
-	Geo.block(model, CFrame.new(0, y1 - 0.08, -0.19), Vector3.new(postX * 2 - 0.7, 0.06, 0.1), rgb(255, 232, 196), NEON, tiny({ Name = "Lamp" }))
+	Geo.block(
+		model,
+		CFrame.new(0, y1 - 0.08, -0.19),
+		Vector3.new(postX * 2 - 0.7, 0.06, 0.1),
+		rgb(255, 232, 196),
+		NEON,
+		tiny({ Name = "Lamp" })
+	)
 	Geo.block(model, CFrame.new(0, y1 + 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
-	local low = Geo.block(model, CFrame.new(0, y0 - 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
+	local low =
+		Geo.block(model, CFrame.new(0, y0 - 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
 	local band = surface(low, "Hazard", Enum.NormalId.Front, 60)
 	gradientStrip(band, "Dashes", 0.06, 0.88, hazardKeys(11))
 	-- the name plate on top, between the brass caps

@@ -238,7 +238,7 @@ function Preview.build(Loader: any, parent: any): { [string]: any }
 		IronBoxView.layout(refs, compact, maxWidth, maxHeight)
 		local state = { Discovered = discovered, KeepMode = mode, KeepList = Preview.KeepList }
 		IronBoxView.setEntries(refs, IronBoxView.entries(state))
-		IronBoxView.setMode(refs, mode)
+		IronBoxView.setMode(refs, mode, IronBoxView.hasList(state))
 		IronBoxView.setHint(
 			refs,
 			if compact then "Tap an ore to keep it or send it on" else "Click an ore to keep it or send it on  -  Backspace: close",
@@ -278,7 +278,10 @@ function Preview.buildBoard(Loader: any, workspace: any): any
 	for _, id in Preview.Discovered do
 		discovered[id] = true
 	end
-	MachineBuilder.paintSortingBoard(board, IronBoxService.boardInfo({ KeepMode = "List", KeepList = Preview.KeepList, Discovered = discovered }))
+	MachineBuilder.paintSortingBoard(
+		board,
+		IronBoxService.boardInfo({ KeepMode = "List", KeepList = Preview.KeepList, Discovered = discovered })
+	)
 	board.Parent = workspace
 	-- the renderer paints top-level SurfaceGui frames only: lay the swatch
 	-- grid out the way UIGridLayout does (cells of 1/Columns minus 6 px, 6 px
