@@ -467,6 +467,9 @@ local function stoneWall(K: any, cf: any, length: number, height: number, thick:
 	end
 end
 
+-- (defined with the vault's other decorations below)
+local bigFern: (K: any, base: any, size: number, seed: number) -> ()
+
 --[[
 	A big jungle tree in the blocky style of Minecraft's jungle trees: a thick
 	trunk of stacked bark blocks with grooves and flared roots, side branches
@@ -552,6 +555,11 @@ local function jungleTree(K: any, base: any, h: number, R: number, seed: number)
 		for _, o in { V3.new(0, 0, 0), V3.new(u, 0, 0), V3.new(-u, 0, 0), V3.new(0, 0, u), V3.new(0, u, 0), V3.new(0, 0, -u) } do
 			K.boxCF(CF.new(tip + o), V3.new(u, u, u), if rand() < 0.4 then LEAF_L else LEAF)
 		end
+	end
+	-- big ferns around the tree
+	for i = 0, 2 do
+		local a = i / 3 * math.pi * 2 + rand() * 0.8
+		bigFern(K, base + V3.new(math.cos(a), 0, math.sin(a)) * (T / 2 + 4 + rand() * 2.5), 6 + rand() * 2.5, seed * 10 + i)
 	end
 	-- ferns around the foot of the trunk
 	for i = 0, 9 do
@@ -1268,6 +1276,347 @@ local function gableDetail(K: any, origin: any, zG: number)
 	end
 end
 
+---------------------------------------------------------------- Forge Vault: glazing, sign, statues, ferns
+
+--[[
+	Glass between the front columns so the front reads as one building: steel
+	frames, stone sills in the side bays, an open doorway with glass beside and
+	above it in the middle bay, and a row of glass transoms above the column
+	tops up to the lintel, with a fire line along the transom bar. The glass
+	plane is at z = 20.9, inside the columns' depth and behind the fire bowls.
+]]
+local function vaultGlazing(K: any, origin: any)
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local STEELF = C3.fromRGB(48, 50, 60)
+	local z = 20.9
+	local function pane(x0: number, x1: number, y0: number, y1: number)
+		local p =
+			K.boxCF(origin * CF.new((x0 + x1) / 2, (y0 + y1) / 2, z), V3.new(x1 - x0, y1 - y0, 0.25), C3.fromRGB(150, 205, 235), GLASS)
+		p.Transparency = 0.6
+		p.Reflectance = 0.12
+		p.Name = "GlassPane"
+	end
+	local function bar(x0: number, x1: number, y0: number, y1: number)
+		K.boxCF(origin * CF.new((x0 + x1) / 2, (y0 + y1) / 2, z), V3.new(x1 - x0, y1 - y0, 0.6), STEELF, Enum.Material.Metal)
+	end
+	for _, sx in { -1, 1 } do
+		-- the side bay between the columns at 13 and 24 (x 16..21): a stone sill, two panes
+		local a, b = sx * 16, sx * 21
+		local x0, x1 = math.min(a, b), math.max(a, b)
+		K.boxCF(origin * CF.new((x0 + x1) / 2, 0.8, z), V3.new(5, 1.6, 1.2), VS.dark, SLATEM)
+		K.boxCF(origin * CF.new((x0 + x1) / 2, 1.7, z + 0.1), V3.new(5.2, 0.2, 1.5), VS.light, SLATEM)
+		pane(x0, x1, 1.8, 12.6)
+		bar((x0 + x1) / 2 - 0.15, (x0 + x1) / 2 + 0.15, 1.8, 12.6)
+		bar(x0, x1, 7.0, 7.3)
+		-- beside the door in the middle bay (x 4.9..10)
+		local c0, c1 = math.min(sx * 4.9, sx * 10), math.max(sx * 4.9, sx * 10)
+		K.boxCF(origin * CF.new((c0 + c1) / 2, 0.5, z), V3.new(5.1, 1.0, 1.2), VS.dark, SLATEM)
+		pane(c0, c1, 1.0, 12.6)
+		bar((c0 + c1) / 2 - 0.15, (c0 + c1) / 2 + 0.15, 1.0, 12.6)
+		-- the door frame posts
+		bar(math.min(sx * 4.4, sx * 4.9), math.max(sx * 4.4, sx * 4.9), 0, 11.6)
+		neon(K, origin * CF.new(sx * 4.35, 5.8, z + 0.35), V3.new(0.12, 11.4, 0.08), FIRE)
+	end
+	-- over the door: the header, its fire line, a glass strip
+	bar(-4.9, 4.9, 11, 11.6)
+	neon(K, origin * CF.new(0, 10.95, z + 0.35), V3.new(8.8, 0.12, 0.08), FIRE)
+	pane(-4.9, 4.9, 11.6, 12.6)
+	-- the transom bar across the whole front and the glass row above the column tops
+	bar(-27, 27, 12.6, 13.4)
+	neon(K, origin * CF.new(0, 13.0, z + 0.32), V3.new(54, 0.14, 0.06), FIRE)
+	local posts = { -27, -24, -19, -13, -7, 0, 7, 13, 19, 24, 27 }
+	for i = 1, #posts - 1 do
+		pane(posts[i], posts[i + 1], 13.4, 19.8)
+	end
+	for _, x in posts do
+		bar(x - 0.2, x + 0.2, 13.4, 19.8)
+	end
+	bar(-27, 27, 19.8, 20.1)
+end
+
+local function labelFont(K: any, cf: any, size: any, text: string, plate: any, ink: any, font: any)
+	local p = label(K, cf, size, text, plate, ink)
+	local t = p:FindFirstChildWhichIsA("SurfaceGui"):FindFirstChildWhichIsA("TextLabel")
+	t.FontFace = roblox.Font.fromEnum(font)
+	local stroke = roblox.Instance.new("UIStroke")
+	stroke.Color = C3.fromRGB(20, 8, 6)
+	stroke.Thickness = 3
+	stroke.Parent = t
+	return p
+end
+
+--[[
+	The BLASTER VAULT sign, rougher: a dark stone board with pointed ends, a
+	jagged stone frame with glowing cracks, iron corner brackets with rivets,
+	heavy lettering, and glass crystals around it (big ones on the points,
+	small ones on the top edge and the lower corners). cf = its center, facing +Z.
+]]
+local function vaultSign(K: any, parent: any, cf: any)
+	local Geo = L.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local FIRE = C3.fromRGB(255, 140, 50)
+	local IRON = C3.fromRGB(38, 36, 42)
+	local rand = lcg(515)
+	local W, H = 27, 5.4
+	local half, hh = W / 2, H / 2
+	local tip = half + 2.8
+	K.boxCF(cf, V3.new(W, H, 1.0), C3.fromRGB(34, 30, 38), SLATEM)
+	for _, sx in { -1, 1 } do
+		for _, sy in { -1, 1 } do
+			Geo.triangle(
+				parent,
+				(cf * CF.new(sx * half, sy * hh, 0.5)).Position,
+				(cf * CF.new(sx * half, 0, 0.5)).Position,
+				(cf * CF.new(sx * tip, 0, 0.5)).Position,
+				1.0,
+				C3.fromRGB(34, 30, 38),
+				SLATEM,
+				(cf.Rotation * V3.new(0, 0, 1)),
+				{ CanCollide = false }
+			)
+		end
+	end
+	-- the text plate and its fire lines
+	labelFont(
+		K,
+		cf * CF.new(0, 0, 0.55),
+		V3.new(24, 4.0, 0.12),
+		"BLASTER VAULT",
+		C3.fromRGB(46, 20, 14),
+		C3.fromRGB(255, 196, 96),
+		Enum.Font.LuckiestGuy
+	)
+	for _, sy in { -1, 1 } do
+		neon(K, cf * CF.new(0, sy * 2.15, 0.62), V3.new(24, 0.12, 0.06), FIRE)
+	end
+	-- the jagged stone frame along the top and bottom edges, glowing cracks in it
+	for _, sy in { -1, 1 } do
+		local x = -half - 0.4
+		while x < half + 0.4 do
+			local len = 1.6 + rand() * 1.6
+			local tone = VS.tiles[1 + math.floor(rand() * #VS.tiles)]
+			K.boxCF(
+				cf * CF.new(x + len / 2, sy * (hh + 0.25), 0.3) * CF.Angles(0, 0, (rand() - 0.5) * 0.16),
+				V3.new(len - 0.12, 0.8 + rand() * 0.3, 1.5),
+				tone,
+				SLATEM
+			)
+			x += len
+		end
+	end
+	for _, sx in { -1, 1 } do
+		for _, sy in { -1, 1 } do
+			-- blocks along the pointed ends
+			local a = cf * CF.new(sx * half, sy * hh, 0.3)
+			local b = cf * CF.new(sx * tip, 0, 0.3)
+			local d = b.Position - a.Position
+			for i = 0, 2 do
+				local t = (i + 0.5) / 3
+				local p = a.Position + d * t
+				K.boxCF(CF.lookAt(p, p + d) * CF.new(0, 0, 0), V3.new(1.5, 0.8, d.Magnitude / 3 - 0.12), VS.tiles[1 + (i % 4)], SLATEM)
+			end
+			-- an iron corner bracket with rivets
+			local c = cf * CF.new(sx * (half - 0.9), sy * (hh - 0.6), 0.68)
+			K.boxCF(c * CF.new(sx * 0.3, 0, 0), V3.new(1.8, 0.45, 0.12), IRON, Enum.Material.Metal)
+			K.boxCF(c * CF.new(sx * 0.65, -sy * 0.5, 0), V3.new(0.45, 1.4, 0.12), IRON, Enum.Material.Metal)
+			for _, o in { { -0.2, 0 }, { 0.6, 0 }, { 0.65, -0.8 } } do
+				K.cylCF(
+					c * CF.new(sx * o[1], sy * o[2], 0.1) * CF.Angles(0, math.pi / 2, 0),
+					0.12,
+					0.26,
+					C3.fromRGB(150, 140, 120),
+					Enum.Material.Metal
+				)
+			end
+		end
+	end
+	for _, p in { { -9, 1 }, { -2, -1 }, { 6, 1 }, { 11, -1 } } do
+		local x, sy = p[1], p[2]
+		neon(K, cf * CF.new(x, sy * (hh + 0.25), 1.07) * CF.Angles(0, 0, 0.5), V3.new(0.9, 0.09, 0.05), FIRE)
+		neon(K, cf * CF.new(x + 0.6, sy * (hh + 0.2), 1.07) * CF.Angles(0, 0, -0.4), V3.new(0.7, 0.09, 0.05), FIRE)
+	end
+	-- crystals around the sign
+	local ORANGE, CORE = C3.fromRGB(240, 110, 50), C3.fromRGB(200, 70, 20)
+	for _, sx in { -1, 1 } do
+		gemCluster(
+			K,
+			(cf * CF.new(sx * (tip - 0.6), 0.2, 0.2)).Position,
+			(cf.Rotation * V3.new(sx * 0.7, 1, 0.2)).Unit,
+			(cf.Rotation * V3.new(sx, 0, 0)),
+			4.4,
+			ORANGE,
+			CORE
+		)
+		gemCluster(
+			K,
+			(cf * CF.new(sx * (half - 1.2), -hh - 0.3, 0.4)).Position,
+			(cf.Rotation * V3.new(sx * 0.5, -1, 0.3)).Unit,
+			(cf.Rotation * V3.new(sx, 0, 0)),
+			2.0,
+			ORANGE,
+			CORE
+		)
+	end
+	for i, x in { -8.5, -3.2, 3.6, 8.8 } do
+		local s = 1.4 + (i % 2) * 0.9
+		glassShard(
+			K,
+			(cf * CF.new(x, hh + 0.5, 0.3)).Position,
+			(cf.Rotation * V3.new((rand() - 0.5) * 0.6, 1, 0.15)).Unit,
+			s * 0.32,
+			s,
+			ORANGE,
+			CORE
+		)
+	end
+	light(K, (cf * CF.new(0, 0, 4)).Position, FIRE, 16, 0.8)
+end
+
+--[[
+	A big fern: a rosette of fronds that rise and arch out, each with leaflets.
+	base = its center on the ground, size ~ its reach.
+]]
+bigFern = function(K: any, base: any, size: number, seed: number)
+	local rand = lcg(seed)
+	local GREENS = { C3.fromRGB(56, 138, 50), C3.fromRGB(70, 158, 58), C3.fromRGB(46, 116, 42) }
+	local n = 7
+	local function seg(a: any, b: any, w: number, color: any)
+		local d = b - a
+		if d.Magnitude < 0.05 then
+			return
+		end
+		K.boxCF(CF.lookAt((a + b) / 2, b), V3.new(w, 0.16, d.Magnitude + 0.1), color)
+	end
+	for i = 0, n - 1 do
+		local a = i / n * math.pi * 2 + rand() * 0.5
+		local d = V3.new(math.cos(a), 0, math.sin(a))
+		local side = V3.new(-d.Z, 0, d.X)
+		local rise = 0.85 + rand() * 0.35
+		local L1, L2 = size * (0.5 + rand() * 0.15), size * (0.42 + rand() * 0.12)
+		local dir1 = (d * math.cos(rise) + V3.new(0, math.sin(rise), 0)).Unit
+		local p1 = base + dir1 * L1
+		local dir2 = (d + V3.new(0, -0.45, 0)).Unit
+		local p2 = p1 + dir2 * L2
+		local color = GREENS[1 + math.floor(rand() * #GREENS)]
+		seg(base, p1, size * 0.13, color)
+		seg(p1, p2, size * 0.1, color)
+		for _, t in { 0.5, 0.85 } do
+			local q = base + dir1 * (L1 * t)
+			for _, sgn in { -1, 1 } do
+				seg(q, q + side * sgn * size * 0.24 + dir1 * size * 0.08, size * 0.07, color)
+			end
+		end
+		local q = p1 + dir2 * (L2 * 0.45)
+		for _, sgn in { -1, 1 } do
+			seg(q, q + side * sgn * size * 0.18 + V3.new(0, -size * 0.04, 0), size * 0.06, color)
+		end
+	end
+end
+
+-- Turns a model into grey stone (the statue's blaster): no glows, no particles.
+local function stoneify(model: any)
+	for _, d in model:GetDescendants() do
+		if d:IsA("ParticleEmitter") or d:IsA("PointLight") then
+			d.Parent = nil
+		elseif d:IsA("BasePart") and d.Transparency < 0.99 then
+			local c = d.Color
+			local l = 0.299 * c.R + 0.587 * c.G + 0.114 * c.B
+			local g = 0.38 + l * 0.26
+			d.Color = C3.new(g, g, g * 1.02)
+			d.Material = Enum.Material.Concrete
+			d.Transparency = 0
+			d.Reflectance = 0
+		end
+	end
+end
+
+--[[
+	A grey stone statue of a rounded Roblox character with a helmet in the
+	classic tool pose (the right arm out front holding a blaster), on a stone
+	pedestal with an engraved plaque. feet = the pedestal's foot, facing +Z; u = studs per
+	character unit (the character is ~5.4 u tall).
+]]
+local function guardianStatue(K: any, parent: any, feet: any, u: number)
+	local G1, G2, G3, GD = C3.fromRGB(134, 134, 140), C3.fromRGB(118, 118, 124), C3.fromRGB(152, 152, 158), C3.fromRGB(92, 92, 98)
+	local CONC = Enum.Material.Concrete
+	local MOSS = C3.fromRGB(84, 112, 72)
+	-- the pedestal
+	K.boxCF(feet * CF.new(0, 0.6, 0), V3.new(14, 1.2, 14), C3.fromRGB(96, 96, 102), SLATEM)
+	K.boxCF(feet * CF.new(0, 2.0, 0), V3.new(12, 1.6, 12), C3.fromRGB(116, 116, 122), SLATEM)
+	K.boxCF(feet * CF.new(0, 3.0, 0), V3.new(12.8, 0.4, 12.8), C3.fromRGB(140, 140, 146), SLATEM)
+	labelFont(
+		K,
+		feet * CF.new(0, 2.0, 6.04),
+		V3.new(7, 0.95, 0.1),
+		"VAULT GUARDIAN",
+		C3.fromRGB(84, 84, 90),
+		C3.fromRGB(196, 196, 202),
+		Enum.Font.LuckiestGuy
+	)
+	for _, p in { { -5.6, 0.7, 6.2, 2.0 }, { 4.8, 0.5, -6.6, 1.6 }, { 6.6, 0.8, 3.0, 1.2 } } do
+		K.boxCF(feet * CF.new(p[1], 1.2 + p[2] / 2, p[3]), V3.new(p[4], p[2], p[4] * 0.6), MOSS)
+	end
+	local base = feet * CF.new(0, 3.2, 0)
+	local function at(x: number, y: number, z: number): any
+		return base * CF.new(x * u, y * u, z * u)
+	end
+	local function rb(cf: any, sx: number, sy: number, sz: number, r: number, color: any)
+		K.rboxCF(cf * CF.Angles(0, math.pi / 2, 0), V3.new(sz * u, sy * u, sx * u), r * u, color, CONC)
+	end
+	local function ball(p: any, d: number, color: any)
+		local b = K.part("Part", CF.new(p), V3.new(d * u, d * u, d * u), color, CONC)
+		b.Shape = Enum.PartType.Ball
+	end
+	local function cyl(cf: any, h: number, d: number, color: any)
+		K.cylCF(cf * CF.Angles(0, 0, math.pi / 2), h * u, d * u, color, CONC)
+	end
+	-- boots, legs, belt
+	for _, sx in { -1, 1 } do
+		rb(at(sx * 0.5, 0.25, 0.08), 1.0, 0.5, 1.2, 0.15, GD)
+		rb(at(sx * 0.5, 1.3, 0), 0.95, 1.7, 0.95, 0.22, G2)
+	end
+	K.boxCF(at(0, 2.2, 0), V3.new(2.04 * u, 0.36 * u, 1.06 * u), GD, CONC)
+	K.boxCF(at(0, 2.2, 0.54), V3.new(0.42 * u, 0.3 * u, 0.06 * u), G3, CONC)
+	-- torso, chest plate with grooves, shoulder pads, neck
+	rb(at(0, 3.2, 0), 2.0, 1.8, 1.0, 0.32, G1)
+	K.boxCF(at(0, 3.4, 0.5), V3.new(1.4 * u, 1.0 * u, 0.12 * u), G3, CONC)
+	for _, y in { 3.15, 3.45, 3.75 } do
+		K.boxCF(at(0, y, 0.57), V3.new(1.2 * u, 0.04 * u, 0.04 * u), GD, CONC)
+	end
+	for _, sx in { -1, 1 } do
+		rb(at(sx * 1.45, 3.95, 0), 1.1, 0.55, 1.18, 0.25, G3)
+	end
+	cyl(at(0, 4.2, 0), 0.3, 0.62, G2)
+	-- the head (a Roblox head: a rounded cylinder) and the face under the visor
+	cyl(at(0, 4.85, 0), 1.15, 1.3, G1)
+	K.boxCF(at(0, 4.5, 0.655), V3.new(0.36 * u, 0.06 * u, 0.04 * u), GD, CONC)
+	-- the helmet: a round dome, a brim, a visor band, a low crest, chin straps
+	ball((at(0, 5.35, 0)).Position, 1.5, G3)
+	cyl(at(0, 5.2, 0), 0.1, 1.74, G2)
+	K.boxCF(at(0, 4.95, 0.68), V3.new(1.25 * u, 0.26 * u, 0.12 * u), GD, CONC)
+	K.boxCF(at(0, 6.0, 0), V3.new(0.2 * u, 0.3 * u, 1.1 * u), G2, CONC)
+	for _, sx in { -1, 1 } do
+		K.boxCF(at(sx * 0.67, 4.6, 0.1), V3.new(0.06 * u, 0.7 * u, 0.12 * u), GD, CONC)
+	end
+	-- the classic Roblox tool pose: the right arm straight out in front holding the
+	-- blaster (pointing forward), the left arm down by his side; rounded Roblox arms
+	rb(at(-1.48, 3.55, 0.5) * CF.Angles(math.pi / 2, 0, 0), 0.95, 2.0, 0.95, 0.24, G2)
+	rb(at(1.48, 2.95, 0.05) * CF.Angles(-0.08, 0, 0.04), 0.95, 2.0, 0.95, 0.24, G2)
+	-- a level 9 blaster (level 10's loose floating gems would hang in the air as stone)
+	local gun, anchors = Kenney.gun(L, 9, "Stormcore")
+	stoneify(gun)
+	local gs = 3.0 * u / 3.6
+	local R = feet.Rotation
+	local gunCf = CF.fromMatrix((at(-1.48, 3.3, 1.3)).Position, R * V3.new(-1, 0, 0), R * V3.new(0, 1, 0), R * V3.new(0, 0, -1))
+		* CF.new(-anchors.hand * gs)
+	for _, d in gun:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Size = d.Size * gs
+			d.CFrame = gunCf * CF.new(d.CFrame.Position * gs) * d.CFrame.Rotation
+		end
+	end
+	gun.Parent = parent
+end
+
 --[[
 	The vault's "wow" layer (local frame of the vault: front +Z, 70 x 50 studs):
 	a slate roof with fire towers, a stone gable over the entrance with two big
@@ -1460,9 +1809,8 @@ local function vault(K: any, parent: any, ground: any)
 	for i = 0, 44 do
 		K.boxCF(origin * CF.new(-33 + i * 1.5, 19.75, halfD - 0.6), V3.new(0.6, 0.5, 0.6), C3.fromRGB(104, 100, 120))
 	end
-	label(K, origin * CF.new(0, 17.6, halfD - 0.2), V3.new(26, 5, 0.8), "BLASTER VAULT", C3.fromRGB(58, 34, 26), C3.fromRGB(255, 200, 110))
-	neon(K, origin * CF.new(0, 20.3, halfD - 0.2), V3.new(27, 0.4, 0.9), FIRE)
-	neon(K, origin * CF.new(0, 14.9, halfD - 0.2), V3.new(27, 0.4, 0.9), FIRE)
+	vaultSign(K, parent, origin * CF.new(0, 17.9, halfD + 0.3))
+	vaultGlazing(K, origin)
 	-- ore banners on the back wall, fire bowls on the columns
 	for i, x in { -23.2, -13.8, 13.8, 23.2 } do
 		local body = oreGlow(({ 3, 6, 8, 10 })[i]).Body
@@ -1619,6 +1967,10 @@ end
 	the picture here and would be moved if the vault stays.
 ]]
 Shop.LobbyCenter = { x = 0, z = 118, scale = 0.8 }
+-- The two stone guardian statues in front of the side trees, lobby coordinates { x, z } (they face the plaza).
+Shop.Statues = { { -44, 94 }, { 44, 94 } }
+Shop.StatueUnit = 2.9
+
 -- The jungle trees around it in lobby coordinates: { x, z, height, canopy radius, seed }.
 Shop.Trees = {
 	{ -29, 153, 48, 13, 1 },
@@ -1661,6 +2013,19 @@ function Shop.buildLobby(Loader: any, parent: any)
 					removed += 1
 				end
 			end
+			for _, st in Shop.Statues do
+				if
+					d.Transparency < 1
+					and math.abs(p.X - st[1]) < 10
+					and math.abs(p.Z - st[2]) < 10
+					and p.Y + d.Size.Y / 2 > 0.45
+					and p.Y < 30
+					and big < 14
+				then
+					d.Transparency = 1
+					removed += 1
+				end
+			end
 		end
 	end
 	local root = roblox.Instance.new("Model")
@@ -1669,6 +2034,13 @@ function Shop.buildLobby(Loader: any, parent: any)
 	local KT = Concepts.kit(root)
 	for _, t in trees do
 		jungleTree(KT, V3.new(t[1], 0, t[2]), t[3], t[4], t[5])
+	end
+	for i, st in Shop.Statues do
+		local feet = CF.new(st[1], 0, st[2]) * CF.Angles(0, math.pi, 0)
+		guardianStatue(KT, root, feet, Shop.StatueUnit)
+		for _, sx in { -1, 1 } do
+			bigFern(KT, (feet * CF.new(sx * 8.5, 0, 4.5)).Position, 5.5, 700 + i * 10 + sx)
+		end
 	end
 	local holder = roblox.Instance.new("Model")
 	vault(Concepts.kit(holder), holder, CF.identity)
@@ -1748,7 +2120,14 @@ local function studioGround(K: any, s: number)
 	local function spot(): (number?, number?, number?)
 		for _ = 1, 30 do
 			local x, z = -110 + rand() * 220, -90 + rand() * 215
-			if not onPodium(x, z, 4) and not onPath(x, z, 3) and (x * x + (z - 5) ^ 2) > 46 * 46 * s then
+			local nearStatue = false
+			for _, st in Shop.Statues do
+				local sx, sz = -(st[1] - Shop.LobbyCenter.x), Shop.LobbyCenter.z - st[2]
+				if math.abs(x - sx) < 11 and math.abs(z - sz) < 11 then
+					nearStatue = true
+				end
+			end
+			if not nearStatue and not onPodium(x, z, 4) and not onPath(x, z, 3) and (x * x + (z - 5) ^ 2) > 46 * 46 * s then
 				return x, z, level(x, z)
 			end
 		end
@@ -1846,6 +2225,17 @@ function Shop.buildStudio(Loader: any, parent: any)
 		-- lobby coordinates -> the vault's frame (the lobby turns it to face the plaza)
 		jungleTree(KT, V3.new(-(t[1] - c.x), 0, c.z - t[2]), t[3], t[4], t[5])
 	end
+	local statues = roblox.Instance.new("Model")
+	statues.Name = "GuardianStatues"
+	statues.Parent = root
+	local KS = Concepts.kit(statues)
+	for i, st in Shop.Statues do
+		local feet = CF.new(-(st[1] - c.x), 0, c.z - st[2])
+		guardianStatue(KS, statues, feet, Shop.StatueUnit)
+		for _, sx in { -1, 1 } do
+			bigFern(KT, (feet * CF.new(sx * 8.5, 0, 4.5)).Position, 5.5, 700 + i * 10 + sx)
+		end
+	end
 	local ground = roblox.Instance.new("Model")
 	ground.Name = "Ground"
 	ground.Parent = root
@@ -1886,6 +2276,8 @@ function Shop.buildStudio(Loader: any, parent: any)
 		elseif d:IsA("BasePart") then
 			if d.Name == "FakePrompt" then
 				d.Parent = nil
+			elseif d.Name == "GlassPane" then
+				d.CanCollide = true
 			elseif
 				d.Transparency < 0.5
 				and d.Material ~= Enum.Material.Neon
