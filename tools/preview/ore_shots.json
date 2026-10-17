@@ -1,19 +1,290 @@
 {
-  "ores_gallery": { "scene": "ores", "position": [-2.6, 19, 10], "target": [-2.6, 0, -10.2], "fov": 52, "preset": "Surface", "shadowExtent": 60 },
-  "ores_clean_low": { "scene": "ores", "position": [-1.75, 9.5, 12], "target": [-1.75, 0.6, -4.8], "fov": 50, "preset": "Surface", "shadowExtent": 40 },
-  "ores_clean_high": { "scene": "ores", "position": [-1.75, 12, -4], "target": [-1.75, 0.6, -18.8], "fov": 50, "preset": "Surface", "shadowExtent": 40 },
-  "ores_display_low": { "scene": "ores", "position": [68.25, 15, 10.5], "target": [68.25, 1.2, -6.6], "fov": 50, "preset": "Surface", "shadowExtent": 40 },
-  "ores_display_high": { "scene": "ores", "position": [98.25, 15, 10.5], "target": [98.25, 1.2, -6.6], "fov": 50, "preset": "Surface", "shadowExtent": 40 },
-  "ores_common": { "scene": "ores", "position": [70, 6.2, 6.3], "target": [70, 1.9, 0], "fov": 58, "preset": "Surface", "shadowExtent": 30 },
-  "ores_uncommon": { "scene": "ores", "position": [70, 6.2, -0.1], "target": [70, 1.9, -6.4], "fov": 58, "preset": "Surface", "shadowExtent": 30 },
-  "ores_rare": { "scene": "ores", "position": [70, 6.2, -6.5], "target": [70, 1.9, -12.8], "fov": 58, "preset": "Surface", "shadowExtent": 30 },
-  "ores_epic": { "scene": "ores", "position": [100, 6.2, 6.3], "target": [100, 1.9, 0], "fov": 62, "preset": "Surface", "shadowExtent": 30 },
-  "ores_legendary": { "scene": "ores", "position": [100, 6.2, -0.1], "target": [100, 1.9, -6.4], "fov": 56, "preset": "Surface", "shadowExtent": 30 },
-  "ores_mythic": { "scene": "ores", "position": [100, 6.2, -6.5], "target": [100, 1.9, -12.8], "fov": 50, "preset": "Surface", "shadowExtent": 30 },
-  "ores_ingots_low": { "scene": "ores", "position": [-41.75, 9.5, 12], "target": [-41.75, 0.6, -4.8], "fov": 50, "preset": "Surface", "shadowExtent": 40 },
-  "ores_ingots_high": { "scene": "ores", "position": [-71.75, 9.5, 12], "target": [-71.75, 0.6, -4.8], "fov": 50, "preset": "Surface", "shadowExtent": 40 },
-  "ores_raw": { "scene": "ores", "position": [-125, 6, 9], "target": [-125, 0.6, -2], "fov": 52, "preset": "Surface", "shadowExtent": 40 },
-  "rocks": { "scene": "ores", "position": [200, 32, 30], "target": [200, 0, -20], "fov": 50, "preset": "Surface", "shadowExtent": 80 },
-  "rocks_close": { "scene": "ores", "position": [200, 13, 19], "target": [200, 1.5, -6], "fov": 52, "preset": "Surface", "shadowExtent": 60 },
-  "rocks_cave": { "scene": "ores", "position": [200, 17, -13], "target": [200, 1, -36], "fov": 55, "preset": "DeepHollow", "shadowExtent": 60 }
+ "ores_gallery": {
+  "scene": "ores",
+  "position": [
+   -2.6,
+   19,
+   10
+  ],
+  "target": [
+   -2.6,
+   0,
+   -10.2
+  ],
+  "fov": 52,
+  "preset": "Surface",
+  "shadowExtent": 60
+ },
+ "ores_clean_low": {
+  "scene": "ores",
+  "position": [
+   -1.75,
+   9.5,
+   12
+  ],
+  "target": [
+   -1.75,
+   0.6,
+   -4.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_clean_high": {
+  "scene": "ores",
+  "position": [
+   -1.75,
+   12,
+   -4
+  ],
+  "target": [
+   -1.75,
+   0.6,
+   -18.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_display_low": {
+  "scene": "ores",
+  "position": [
+   68.25,
+   15,
+   10.5
+  ],
+  "target": [
+   68.25,
+   1.2,
+   -6.6
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_display_high": {
+  "scene": "ores",
+  "position": [
+   98.25,
+   15,
+   10.5
+  ],
+  "target": [
+   98.25,
+   1.2,
+   -6.6
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_common": {
+  "scene": "ores",
+  "position": [
+   70,
+   6.2,
+   6.3
+  ],
+  "target": [
+   70,
+   1.9,
+   0
+  ],
+  "fov": 58,
+  "preset": "Surface",
+  "shadowExtent": 30
+ },
+ "ores_uncommon": {
+  "scene": "ores",
+  "position": [
+   70,
+   6.2,
+   -0.1
+  ],
+  "target": [
+   70,
+   1.9,
+   -6.4
+  ],
+  "fov": 58,
+  "preset": "Surface",
+  "shadowExtent": 30
+ },
+ "ores_rare": {
+  "scene": "ores",
+  "position": [
+   70,
+   6.2,
+   -6.5
+  ],
+  "target": [
+   70,
+   1.9,
+   -12.8
+  ],
+  "fov": 58,
+  "preset": "Surface",
+  "shadowExtent": 30
+ },
+ "ores_epic": {
+  "scene": "ores",
+  "position": [
+   100,
+   6.2,
+   6.3
+  ],
+  "target": [
+   100,
+   1.9,
+   0
+  ],
+  "fov": 62,
+  "preset": "Surface",
+  "shadowExtent": 30
+ },
+ "ores_legendary": {
+  "scene": "ores",
+  "position": [
+   100,
+   6.2,
+   -0.1
+  ],
+  "target": [
+   100,
+   1.9,
+   -6.4
+  ],
+  "fov": 56,
+  "preset": "Surface",
+  "shadowExtent": 30
+ },
+ "ores_mythic": {
+  "scene": "ores",
+  "position": [
+   100,
+   6.2,
+   -6.5
+  ],
+  "target": [
+   100,
+   1.9,
+   -12.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 30
+ },
+ "ores_ingots_low": {
+  "scene": "ores",
+  "position": [
+   -41.75,
+   9.5,
+   12
+  ],
+  "target": [
+   -41.75,
+   0.6,
+   -4.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_ingots_high": {
+  "scene": "ores",
+  "position": [
+   -71.75,
+   9.5,
+   12
+  ],
+  "target": [
+   -71.75,
+   0.6,
+   -4.8
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "ores_raw": {
+  "scene": "ores",
+  "position": [
+   -125,
+   6,
+   9
+  ],
+  "target": [
+   -125,
+   0.6,
+   -2
+  ],
+  "fov": 52,
+  "preset": "Surface",
+  "shadowExtent": 40
+ },
+ "rocks": {
+  "scene": "ores",
+  "position": [
+   200,
+   32,
+   30
+  ],
+  "target": [
+   200,
+   0,
+   -20
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 80
+ },
+ "rocks_close": {
+  "scene": "ores",
+  "position": [
+   200,
+   13,
+   19
+  ],
+  "target": [
+   200,
+   1.5,
+   -6
+  ],
+  "fov": 52,
+  "preset": "Surface",
+  "shadowExtent": 60
+ },
+ "rocks_cave": {
+  "scene": "ores",
+  "position": [
+   200,
+   17,
+   -13
+  ],
+  "target": [
+   200,
+   1,
+   -36
+  ],
+  "fov": 55,
+  "preset": "DeepHollow",
+  "shadowExtent": 60
+ },
+ "ore_showcase": {
+  "scene": "ore_showcase",
+  "preset": "Surface",
+  "position": [
+   1.2,
+   30,
+   18
+  ],
+  "target": [
+   1.2,
+   5.2,
+   -11.2
+  ],
+  "fov": 48,
+  "shadowExtent": 50
+ }
 }

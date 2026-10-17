@@ -89,6 +89,8 @@ elseif sceneName == "factory" then -- a working roster factory with power cables
 	require("./lib/factory_preview").build(Loader, workspace)
 elseif sceneName == "factory_max" then -- the same at the max upgrade level (crystal)
 	require("./lib/factory_preview").build(Loader, workspace, 4)
+elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
+	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
 	require("./lib/cute_styles_gallery").build(Loader, workspace)
 elseif sceneName == "kit_machines" then -- the Factory Kit machines + upgrade crystal levels (tools/lune/lib/kit_machines_gallery.luau)
