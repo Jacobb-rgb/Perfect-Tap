@@ -1,0 +1,7 @@
+{
+ "mine_floor2_world_overview": { "scene": "world_f2", "position": [0, 10, -250], "target": [0, -6, -320], "fov": 70, "preset": "EmberCaves", "shadowExtent": 160, "maxLights": 24 },
+ "mine_floor2_world_entrance": { "scene": "world_f2", "position": [0, -4, -247], "target": [0, -8, -300], "fov": 70, "preset": "EmberCaves", "shadowExtent": 120, "maxLights": 24 },
+ "mine_floor2_world_bridge": { "scene": "world_f2", "position": [-27, -6, -306], "target": [0, -10.5, -309], "fov": 60, "preset": "EmberCaves", "shadowExtent": 80, "maxLights": 24 },
+ "mine_floor2_world_back": { "scene": "world_f2", "position": [-24, -3, -328], "target": [4, -7, -357], "fov": 65, "preset": "EmberCaves", "shadowExtent": 80, "maxLights": 24 },
+ "mine_floor2_world_front": { "scene": "world_f2", "position": [6, -3, -292], "target": [0, -6, -240], "fov": 70, "preset": "EmberCaves", "shadowExtent": 80, "maxLights": 24 }
+}
