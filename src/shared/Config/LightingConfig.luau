@@ -205,6 +205,95 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 1.0, Size = 32, Threshold = 0.92 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
+	-- Floor 3 (Deep Hollow re-themed, MineFloors): a cool crystal lagoon, teal water glow.
+	Lagoon = {
+		Lighting = {
+			Brightness = 0.4,
+			Ambient = Color3.new(0.16, 0.26, 0.32),
+			OutdoorAmbient = Color3.new(0.08, 0.14, 0.18),
+			ExposureCompensation = 0.45,
+			EnvironmentDiffuseScale = 0.2,
+			EnvironmentSpecularScale = 1,
+		},
+		Atmosphere = {
+			Density = 0.45,
+			Offset = 0,
+			Color = Color3.new(0.12, 0.28, 0.36),
+			Decay = Color3.new(0.06, 0.14, 0.22),
+			Glare = 0,
+			Haze = 2.4,
+		},
+		ColorCorrection = {
+			Brightness = 0.03,
+			Contrast = 0.2,
+			Saturation = 0.34,
+			TintColor = Color3.new(0.9, 1, 1),
+		},
+		Bloom = { Intensity = 1.05, Size = 32, Threshold = 0.92 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
+	},
+	-- Floor 4, Sunken Palace: dim violet halls, warm gold glints.
+	Palace = {
+		Lighting = {
+			Brightness = 0.35,
+			Ambient = Color3.new(0.26, 0.22, 0.34),
+			OutdoorAmbient = Color3.new(0.14, 0.12, 0.2),
+			ExposureCompensation = 0.45,
+			EnvironmentDiffuseScale = 0.2,
+			EnvironmentSpecularScale = 1,
+		},
+		Atmosphere = {
+			Density = 0.42,
+			Offset = 0,
+			Color = Color3.new(0.3, 0.24, 0.4),
+			Decay = Color3.new(0.16, 0.12, 0.24),
+			Glare = 0,
+			Haze = 2.2,
+		},
+		ColorCorrection = {
+			Brightness = 0.03,
+			Contrast = 0.2,
+			Saturation = 0.3,
+			TintColor = Color3.new(1, 0.96, 1),
+		},
+		Bloom = { Intensity = 1.05, Size = 32, Threshold = 0.92 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
+	},
+	-- Floor 5, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
+	Core = {
+		Lighting = {
+			Brightness = 0.3,
+			Ambient = Color3.new(0.24, 0.18, 0.34),
+			OutdoorAmbient = Color3.new(0.14, 0.1, 0.22),
+			ExposureCompensation = 0.4,
+			EnvironmentDiffuseScale = 0.2,
+			EnvironmentSpecularScale = 1,
+		},
+		Atmosphere = {
+			Density = 0.3,
+			Offset = 0,
+			Color = Color3.new(0.3, 0.14, 0.36),
+			Decay = Color3.new(0.12, 0.06, 0.2),
+			Glare = 0,
+			Haze = 1.6,
+		},
+		ColorCorrection = {
+			Brightness = 0.02,
+			Contrast = 0.22,
+			Saturation = 0.36,
+			TintColor = Color3.new(1, 0.94, 1),
+		},
+		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.9 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
+		Sky = {
+			Top = Color3.fromRGB(14, 10, 34),
+			Mid = Color3.fromRGB(48, 22, 82),
+			Horizon = Color3.fromRGB(150, 44, 120),
+			HorizonAway = Color3.fromRGB(90, 30, 110),
+			Sun = Color3.fromRGB(255, 120, 190),
+			MidAngle = 22,
+		},
+	},
 	-- Close-up while cleaning ore: soft focus, extra warmth.
 	Workbench = {
 		Lighting = {},

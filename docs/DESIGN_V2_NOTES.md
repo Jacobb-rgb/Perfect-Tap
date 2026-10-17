@@ -193,3 +193,20 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 ### Platforms (owner, 2026-10-16)
 The game must play **perfectly on PC, mobile, Xbox and PlayStation** (mouse+keyboard, touch, gamepad, TV).
 See the project skill .claude/skills/all-platforms/SKILL.md.
+
+### Mine floors (owner, 2026-10-17)
+The deeper you go, the harder the rocks and the better the ores. Plan: docs/plans/MINE_FLOORS_PLAN.md,
+data: src/shared/Config/MineFloors.luau, rocks: src/shared/Builders/RockBuilder.luau.
+1. **5 floors now**, more floors in updates (floor 6 comes with blaster 11 "Coming soon"). Proposal **A** chosen:
+   1 Greystone Quarry (blaster 1+) · 2 Ember Caves (3+) · 3 Deep Hollow, re-themed as a crystal lagoon (5+) ·
+   4 Sunken Palace of Kaldrum (7+) · 5 Heartstone Core (9+). Each floor has 6 home ores; all 30 ores exist from launch.
+2. **Route C:** floors 1–3 stay connected on foot; floors 4–5 only by an **elevator that is bought once with coins**.
+3. **Hoverboards:** 3 styles for coins (each faster) + 2 styles for ~50 Robux each that are **also faster** and have
+   special effects (owner: "more benefits").
+4. **Rocks:** more HP on every floor; the weakest blaster allowed on a floor breaks a rock in **about 5 s**.
+   Kinds: **small = 3 ores, big = 4 ores, crystal ("shard") = 3 ores of better rarity, 10 % of rocks, a bit more HP**
+   (crystal and shard are the same thing). A **breaking animation** (cracks, chunks, shatter). Blaster **lock**
+   ("Needs Lv N") on rocks and floor gates: yes.
+5. **No crystal crust** mechanic; instead the crystals must look **better and cooler on every deeper floor**.
+6. Yes to: better ore deeper inside each floor (veins), **special rocks** (golden rock, geode, artifact rock) and the
+   server-wide **Giant Crystal**.

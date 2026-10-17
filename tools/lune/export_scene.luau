@@ -98,6 +98,8 @@ elseif sceneName == "blaster_hold_tool" or sceneName == "blaster_hold_aim" then 
 	require("./lib/blaster_concepts").buildHold(Loader, workspace, if sceneName == "blaster_hold_aim" then "aim" else "tool")
 elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)
 	require("./lib/train_gallery").build(Loader, workspace)
+elseif sceneName == "mine_rocks" then -- mine floor rocks, giant crystals, breaking storyboard (tools/lune/lib/mine_concepts.luau)
+	require("./lib/mine_concepts").buildRocks(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
