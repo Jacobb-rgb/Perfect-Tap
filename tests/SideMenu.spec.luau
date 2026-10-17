@@ -1,11 +1,15 @@
 -- The side menu and its panels under Lune: SideMenuView's column layout
--- (below the coins, centred, two or three columns on phones, 44 pt touch
--- targets), its badges and SOON chips; the ORE CODEX (entries from the
--- save's Discovered record, NEW badges, the count, where an ore is found,
--- undiscovered ores keep their secrets, the phone layout); SETTINGS
--- (SettingsConfig.sanitize / steps, SettingsService saving only sane
--- records with DataService.changed, SettingsView's slider math, texts and
--- touch sizes) and the shared MenuPanel frame.
+-- (mouse: below the coins, centred; touch: up to four columns right under
+-- the coins, the thumbstick's bottom-left corner free on phones and
+-- tablets; TVs: the title-safe margin; 44 pt touch targets), its badges,
+-- SOON chips and hidden buttons; the ORE CODEX (entries from the save's
+-- Discovered record, NEW badges, the count, where an ore is found,
+-- undiscovered ores keep their secrets, the redraw fingerprint, the phone
+-- layout); SETTINGS (SettingsConfig.sanitize / steps / merge,
+-- SettingsService saving only sane records with DataService.changed,
+-- SettingsView's slider math, texts and touch sizes) and the shared
+-- MenuPanel frame (the teleport bar and coins kept clear, the gamepad
+-- footer on compact layouts).
 return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -19,6 +23,7 @@ return function(T, Loader)
 	local SettingsView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SettingsView")
 
 	local PHONE = MenuPanel.PhoneScale
+	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 
 	local function deepCopy(v: any): any
 		if type(v) ~= "table" then
@@ -46,37 +51,91 @@ return function(T, Loader)
 		local layout = SideMenuView.layout(1, 720 - 36)
 		T.eq(layout.Columns, 1)
 		T.eq(layout.Rows, #SideMenuView.Entries)
+		T.falsy(layout.Touch)
+		T.eq(layout.Left, SideMenuView.Left)
 		T.truthy(layout.Top >= SideMenuView.TopMin, "below the coins and their popups")
-		T.le(layout.Top + layout.Size.Y, 720 - 36 - SideMenuView.BottomMargin)
+		T.le(layout.Top + SideMenuView.Drop + layout.Size.Y, 720 - 36 - SideMenuView.BottomMargin)
 		-- a big screen centres it
 		local tall = SideMenuView.layout(1, 1200)
 		T.eq(tall.Columns, 1)
 		T.near(tall.Top + tall.Size.Y / 2, 600, 1, "centred")
 	end)
 
-	T.test("side menu: phones get 44 pt buttons in two (or three) columns that fit", function()
-		-- pt sizes of common phones in landscape, under a 58 pt top bar
-		for _, phone in { { 844, 390 }, { 667, 375 }, { 640, 360 }, { 568, 320 } } do
-			local designH = (phone[2] - 58) / PHONE
-			local layout = SideMenuView.layout(PHONE, designH)
-			T.eq(layout.Columns, 2, `{phone[1]}x{phone[2]}: two columns`)
-			T.truthy(layout.Width * PHONE >= SideMenuView.MinTouch - 0.5, "wide enough")
-			T.truthy(layout.Height * PHONE >= SideMenuView.MinTouch - 0.5, "tall enough")
-			T.truthy(layout.Top >= SideMenuView.TopTight, "below the coins panel")
-			T.le(layout.Top + layout.Size.Y, designH - SideMenuView.BottomMargin + 0.01)
-			-- it leaves most of the screen's width to the game (the thumbstick)
-			T.lt(layout.Size.X * PHONE + SideMenuView.Left * PHONE, phone[1] * 0.3)
+	-- The column's box on the screen (design units under the top bar), from
+	-- the placed buttons.
+	local function columnBox(refs: any): (number, number, number, number)
+		local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+		local origin = refs.Column.Position
+		for _, target in SideMenuView.touchTargets(refs) do
+			local x = origin.X.Offset + target.Position.X.Offset
+			local y = origin.Y.Offset + target.Position.Y.Offset
+			x0, y0 = math.min(x0, x), math.min(y0, y)
+			x1, y1 = math.max(x1, x + target.Size.X.Offset), math.max(y1, y + target.Size.Y.Offset)
+		end
+		return x0, y0, x1, y1
+	end
+
+	-- { width, height, uiScale } in pt: phones in landscape under a 58 pt top
+	-- bar (uiScale at the 0.62 floor) and tablets (HudController.uiScale)
+	local TOUCH_SCREENS = {
+		{ 568, 320, PHONE },
+		{ 640, 360, PHONE },
+		{ 667, 375, PHONE },
+		{ 844, 390, PHONE },
+		{ 932, 430, PHONE },
+		{ 1024, 768, math.min(768 / 720, 1024 / 1100) },
+		{ 1180, 820, math.min(820 / 720, 1180 / 1100) },
+	}
+
+	T.test("side menu: touch screens keep the thumbstick's bottom-left corner free", function()
+		local refs = SideMenuView.build()
+		for _, count in { 7, 5 } do
+			for i, id in refs.Order do
+				-- 5: GOLEMS and ARTIFACTS hidden (their packages not in the game)
+				SideMenuView.setHidden(refs, id, count == 5 and (id == "Golems" or id == "Collection"))
+				T.eq(refs.Buttons[id].Parent.Visible, not refs.Hidden[id], `{id} visibility ({i})`)
+			end
+			T.eq(#SideMenuView.touchTargets(refs), count)
+			for _, screen in TOUCH_SCREENS do
+				local w, h, scale = screen[1], screen[2], screen[3]
+				local label = `{w}x{h} pt, {count} buttons`
+				local designW, designH = w / scale, (h - 58) / scale
+				local layout = SideMenuView.layout(scale, designH, { Count = count, Touch = true, DesignWidth = designW })
+				T.truthy(layout.Touch, label)
+				SideMenuView.apply(refs, layout)
+				checkTouch(SideMenuView.touchTargets(refs), scale, label)
+				local x0, y0, x1, y1 = columnBox(refs)
+				-- the thumb's resting corner: the left 40 % x the bottom 40 %
+				local apart = x0 >= designW * 0.4 or y1 <= designH * 0.6
+				T.truthy(apart, `{label}: the bottom-left 40 % x 40 % is free (bottom at {math.floor(y1 / designH * 100)} %)`)
+				T.truthy(y0 >= SideMenuView.TopTight, `{label}: below the coins panel`)
+				T.lt(x1, designW * 0.45, `{label}: the rest of the width is the game's`)
+			end
 		end
 		-- the common phones keep the "+$X" popups clear too
-		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE).Top >= SideMenuView.TopMin)
+		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE, { Touch = true }).Top >= SideMenuView.TopMin)
+		-- a small window (phone-sized buttons) uses the touch layout even without touch
+		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE).Touch)
 	end)
 
-	T.test("side menu: the view places every button, badges and SOON chips", function()
+	T.test("side menu: TVs keep the title-safe margin", function()
+		local scale = 1.25
+		local designW, designH = 1920 / scale, (1080 - 36) / scale
+		local layout = SideMenuView.layout(scale, designH, { TenFoot = true, DesignWidth = designW })
+		T.truthy(layout.Left >= designW * SideMenuView.SafeShare, "5 % from the left edge")
+		T.le(layout.Top + SideMenuView.Drop + layout.Size.Y, designH * (1 - SideMenuView.SafeShare) + 0.01)
+		-- a PC keeps the normal margin
+		T.eq(SideMenuView.layout(1, 684, { DesignWidth = 1280 }).Left, SideMenuView.Left)
+	end)
+
+	T.test("side menu: the view places every button, badges, SOON chips and hidden buttons", function()
 		local refs = SideMenuView.build()
 		T.eq(#refs.Order, 7)
 		for _, id in { "Shop", "Golems", "Codex", "Collection", "Boards", "Settings", "Store" } do
 			T.truthy(refs.Buttons[id], id)
 		end
+		-- under the HUD: its popups and toasts show on top
+		T.lt(refs.Gui.DisplayOrder, HudView.build().Gui.DisplayOrder)
 		local layout = SideMenuView.layout(PHONE, (375 - 58) / PHONE)
 		SideMenuView.apply(refs, layout)
 		checkTouch(SideMenuView.touchTargets(refs), PHONE, "menu")
@@ -105,6 +164,17 @@ return function(T, Loader)
 		SideMenuView.setBadge(refs, "Golems", 1)
 		T.falsy(refs.Soon.Golems.Visible, "a badge hides the SOON chip")
 		SideMenuView.setBadge(refs, "Nope", 1) -- unknown ids are ignored
+		-- a hidden button leaves no gap: the next one takes its place
+		SideMenuView.apply(refs, SideMenuView.layout(1, 684))
+		local codexY = refs.Buttons.Codex.Parent.Position.Y.Offset
+		SideMenuView.setHidden(refs, "Golems", true)
+		T.eq(SideMenuView.shown(refs)[2], "Codex")
+		SideMenuView.apply(refs, SideMenuView.layout(1, 684, { Count = #SideMenuView.shown(refs) }))
+		T.lt(refs.Buttons.Codex.Parent.Position.Y.Offset, codexY, "CODEX moved up")
+		T.falsy(refs.Buttons.Golems.Parent.Visible)
+		SideMenuView.setHidden(refs, "Golems", false)
+		T.eq(#SideMenuView.shown(refs), 7)
+		SideMenuView.setHidden(refs, "Nope", true) -- unknown ids are ignored
 	end)
 
 	---------------------------------------------------------------- codex
@@ -155,6 +225,16 @@ return function(T, Loader)
 			T.eq(text.Lore, ore.Lore)
 		end
 		T.eq(#CodexView.zonesOf("Bogus"), 0)
+	end)
+
+	T.test("codex: the redraw fingerprint changes only with what the cards show", function()
+		local a = CodexView.fingerprint({ Coal = true, Gold = true }, {})
+		T.eq(a, CodexView.fingerprint({ Gold = true, Coal = true, Diamond = false }, nil), "order and false entries don't matter")
+		T.truthy(a ~= CodexView.fingerprint({ Coal = true, Gold = true, Tin = true }, {}), "a new ore")
+		T.truthy(a ~= CodexView.fingerprint({ Coal = true, Gold = true }, { Gold = true }), "a NEW badge")
+		T.eq(CodexView.fingerprint(nil, nil), CodexView.fingerprint("junk", {}))
+		-- the zones per ore are worked out once
+		T.truthy(rawequal(CodexView.zonesOf("Coal"), CodexView.zonesOf("Coal")))
 	end)
 
 	T.test("codex: an undiscovered ore keeps its secrets", function()
@@ -242,6 +322,20 @@ return function(T, Loader)
 		T.falsy(rawequal(a, SettingsConfig.sanitize(a)), "a new table")
 		-- the save template holds the defaults
 		T.truthy(SettingsConfig.equal(SettingsConfig.sanitize(DataTemplate.Settings), DataTemplate.Settings))
+	end)
+
+	T.test("settings: a change made before the saved record arrived keeps the other saved keys", function()
+		local saved = { Music = 0, Sfx = 0.3, Shake = false, Rumble = true }
+		local merged = SettingsConfig.merge(saved, { Rumble = false })
+		T.eq(merged.Music, 0, "the saved 0 % stays")
+		T.eq(merged.Sfx, 0.3)
+		T.eq(merged.Shake, false)
+		T.eq(merged.Rumble, false, "the early change wins")
+		T.eq(SettingsConfig.merge(saved, {}).Music, 0)
+		local junk = SettingsConfig.merge("broken", { Sfx = 9, Evil = 1 })
+		T.eq(junk.Sfx, 1, "clamped")
+		T.eq(junk.Music, SettingsConfig.Defaults.Music)
+		T.eq((junk :: any).Evil, nil)
 	end)
 
 	T.test("settings: - / + step on the 10% grid and stop at the ends", function()
@@ -337,7 +431,7 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- the frame
 
-	T.test("menu panel: big screens keep the HUD coins clear, phones use the room", function()
+	T.test("menu panel: big screens keep the teleport bar and the coins clear, phones use the room", function()
 		local frame = MenuPanel.build("Test", "TEST", "sub")
 		-- a 1280 x 720 window at scale 1 (684 under the top bar)
 		local body = MenuPanel.layout(frame, false, 900, 560, 1280, 684)
@@ -345,6 +439,23 @@ return function(T, Loader)
 		T.truthy(frame.Panel.Position.Y.Offset >= MenuPanel.CoinsBottom, "below the coins")
 		T.eq(body.X, 900 - MenuPanel.Pad * 2)
 		T.truthy(frame.Subtitle.Visible)
+		-- the teleport bar (top centre) never peeks out above a panel
+		T.truthy(MenuPanel.TopBarBottom >= HudView.TopBarY + HudView.TopBarHeight, "under the bar")
+		for _, size in { { 960, 640 }, { 600, 640 }, { 660, 442 } } do
+			MenuPanel.layout(frame, false, size[1], size[2], 1280, 684)
+			local top = frame.Panel.Position.Y.Offset
+			local h = frame.Panel.Size.Y.Offset
+			T.truthy(top >= MenuPanel.TopBarBottom, `{size[1]}x{size[2]}: under the teleport bar`)
+			T.truthy(h >= size[2] * MenuPanel.BarShrink, "nearly whole")
+			T.le(top + h, 684)
+			-- the coins: below them or right of them
+			local left = frame.Panel.Position.X.Offset
+			T.truthy(top >= MenuPanel.CoinsBottom or left >= 16 + HudView.CoinsWidth, "clear of the coins")
+		end
+		-- too little room under the bar: the panel covers it from the top
+		MenuPanel.layout(frame, false, 900, 640, 1280, 500)
+		T.eq(frame.Panel.Position.Y.Offset, 4)
+		T.eq(frame.Panel.Size.Y.Offset, 500 - 8)
 		-- a phone: compact, no subtitle or footer, the X button 44 pt
 		MenuPanel.layout(frame, true, 1200, 700, 667 / PHONE, (375 - 58) / PHONE)
 		T.falsy(frame.Subtitle.Visible)
@@ -360,6 +471,16 @@ return function(T, Loader)
 		T.falsy(frame.PadHint.Visible)
 		T.truthy(frame.Hint.Visible)
 		T.eq(#frame.PadHint:GetChildren(), 1, "only the list layout is left")
+		-- compact layouts (TVs, phones with a gamepad) keep the gamepad footer and its room
+		MenuPanel.setHint(frame, "", { { Image = "rbxasset://b.png", Word = "close" } })
+		local withPad = MenuPanel.layout(frame, true, 1200, 700, 1536, 835)
+		T.truthy(frame.PadHint.Visible, "glyph hints on a TV")
+		T.falsy(frame.Hint.Visible)
+		MenuPanel.setHint(frame, "Backspace: close", nil)
+		local without = MenuPanel.layout(frame, true, 1200, 700, 1536, 835)
+		T.falsy(frame.PadHint.Visible)
+		T.falsy(frame.Hint.Visible, "no text footer when compact")
+		T.eq(without.Y - withPad.Y, MenuPanel.PadFooter - MenuPanel.Metrics.Compact.Footer, "the footer's room")
 		T.truthy(MenuPanel.compactFor(true, false, 1, 900), "touch")
 		T.truthy(MenuPanel.compactFor(false, true, 1, 900), "TV")
 		T.falsy(MenuPanel.compactFor(false, false, 1, 900), "PC")

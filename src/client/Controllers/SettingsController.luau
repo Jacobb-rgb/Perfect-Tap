@@ -7,19 +7,28 @@
 	  that changes it, so later snapshots don't move the sliders back.
 	- A change applies at once and is sent to the server (SettingsSave)
 	  SettingsConfig.SaveDelay seconds after the last change (a drag sends one
-	  request), or right away when the panel closes.
+	  request), or right away when the panel closes. A change made before
+	  the snapshot arrived waits: only the keys the player changed are kept
+	  (SettingsConfig.merge) and laid over the saved record when it
+	  comes, so the defaults never overwrite the other saved settings.
 	- Applying (simple hooks, each skipped when its target doesn't exist):
 	    Music  -> the SoundService SoundGroup SettingsConfig.MusicGroup
-	              ("TerraForgeMusic", created here: music tracks play through it)
-	    Sfx    -> the SoundGroup SettingsConfig.SfxGroup ("TerraForgeSfx", made by
-	              Effects/Sfx on the first sound; applied when it appears)
+	              ("TerraForgeMusic", created here: music tracks play through
+	              it; no track plays yet, the row says "coming soon")
+	    Sfx    -> the SoundGroup SettingsConfig.SfxGroup ("TerraForgeSfx",
+	              created here at start, Effects/Sfx plays through it); every
+	              Sound without a group under SoundService or the client
+	              sound folders (SfxFolders: Sfx's 3D pool, the machine hums,
+	              the trains) joins it, so the slider reaches every game sound
 	    Shake  -> Effects/CameraShake.setEnabled
 	    Rumble -> MiningController.setRumble
 	  Other code can read SettingsController.get() and listen with onChanged.
 	- Opens from the side menu (SettingsController.open / toggle); closes with
-	  the X button, B (gamepad), Backspace, respawning or another panel
-	  opening. Mouse / touch: click or drag a bar, or the - / + buttons;
-	  gamepad: the - / + buttons and the toggles (GuiService selection).
+	  the X button, B (gamepad), Backspace, respawning, another panel
+	  opening or the HUD hiding (SideMenuController). Other prompts are
+	  hidden while it is open. Mouse / touch: click or drag a bar, or the
+	  - / + buttons; gamepad: the - / + buttons and the toggles (GuiService
+	  selection).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -42,6 +51,7 @@ local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
+local PromptController = require(script.Parent.PromptController)
 
 local SettingsController = {}
 
@@ -50,10 +60,16 @@ local CLOSE_ACTION = "TerraForgeSettingsClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local TICK = 0.25
 
+-- Workspace folders whose ungrouped Sounds join the SfxGroup (Effects/Sfx's
+-- 3D pool, MachineFxController's hums, TrainController's voices).
+SettingsController.SfxFolders = { ClientSfx = true, ClientMachineFx = true, ClientTrains = true } :: { [string]: boolean }
+
 local player = Players.LocalPlayer
 local current: SettingsConfig.Settings = SettingsConfig.sanitize(nil)
 local adopted = false -- the saved record from the first snapshot was taken
 local dirty = false -- changed here, not sent yet
+-- keys the player changed before the snapshot arrived
+local early: { [string]: any } = {}
 local saveToken = 0
 local listeners: { (SettingsConfig.Settings) -> () } = {}
 local refs: SettingsView.Refs? = nil
@@ -96,6 +112,51 @@ local function applySfx(group: Instance)
 	end
 end
 
+local function sfxGroup(): SoundGroup
+	local existing = SoundService:FindFirstChild(SettingsConfig.SfxGroup)
+	if existing and existing:IsA("SoundGroup") then
+		return existing
+	end
+	local group = Instance.new("SoundGroup")
+	group.Name = SettingsConfig.SfxGroup
+	group.Volume = current.Sfx
+	group.Parent = SoundService
+	return group
+end
+
+-- A game Sound without a group joins the sounds group (checked a moment
+-- later: the code that made it may still set its own group).
+local function adoptSound(object: Instance)
+	if not object:IsA("Sound") then
+		return
+	end
+	local sound = object
+	task.defer(function()
+		if not sound.Parent or sound.SoundGroup ~= nil then
+			return
+		end
+		local music = SoundService:FindFirstChild(SettingsConfig.MusicGroup)
+		if music and sound:IsDescendantOf(music) then
+			return
+		end
+		sound.SoundGroup = sfxGroup()
+	end)
+end
+
+-- weak keys: folders that were replaced drop out by themselves
+local watchedFolders: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+local function watchFolder(folder: Instance)
+	if not SettingsController.SfxFolders[folder.Name] or watchedFolders[folder] then
+		return
+	end
+	watchedFolders[folder] = true
+	folder.DescendantAdded:Connect(adoptSound)
+	for _, object in folder:GetDescendants() do
+		adoptSound(object)
+	end
+end
+
 local function apply()
 	musicGroup().Volume = current.Music
 	for _, child in SoundService:GetChildren() do
@@ -109,7 +170,8 @@ local function apply()
 end
 
 local function send()
-	if not dirty then
+	-- (before the snapshot the whole record isn't known yet: onState sends it)
+	if not dirty or not adopted then
 		return
 	end
 	dirty = false
@@ -125,8 +187,11 @@ function SettingsController.set(id: string, value: any)
 		return
 	end
 	current = clean
-	-- a change before the snapshot arrived wins over the saved record
-	adopted = true
+	if not adopted then
+		-- before the snapshot: keep just this key, laid over the saved
+		-- record when it arrives (onState sends the result)
+		early[id] = (clean :: any)[id]
+	end
 	dirty = true
 	apply()
 	local view = refs
@@ -147,11 +212,18 @@ local function onState(state: { [string]: any })
 		return
 	end
 	adopted = true
-	current = SettingsConfig.sanitize(state.Settings)
+	current = SettingsConfig.merge(state.Settings, early)
+	local changedEarly = next(early) ~= nil
+	table.clear(early)
 	apply()
 	local view = refs
 	if view then
 		SettingsView.set(view, current)
+	end
+	if changedEarly then
+		-- the saved record with the early changes on top
+		dirty = not SettingsConfig.equal(current, SettingsConfig.sanitize(state.Settings))
+		send()
 	end
 end
 
@@ -273,6 +345,7 @@ function SettingsController.close()
 		end
 		view.Gui.Enabled = false
 	end
+	PromptController.setSuppressed("Settings", false)
 end
 
 local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActionResult
@@ -292,10 +365,12 @@ function SettingsController.open()
 	local view = ensureView()
 	isOpen = true
 	openedAt = os.clock()
-	fit(view)
+	-- the glyphs first: the gamepad footer's room is part of the layout
 	updateGlyphs(view)
+	fit(view)
 	SettingsView.set(view, current)
 	view.Gui.Enabled = true
+	PromptController.setSuppressed("Settings", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	local elapsed = 0
 	tickConnection = RunService.Heartbeat:Connect(function(dt)
@@ -334,6 +409,16 @@ end
 
 function SettingsController.init()
 	SoundService.ChildAdded:Connect(applySfx)
+	-- the sounds group exists from the start, so every sound can find it
+	sfxGroup()
+	SoundService.DescendantAdded:Connect(adoptSound)
+	for _, object in SoundService:GetDescendants() do
+		adoptSound(object)
+	end
+	Workspace.ChildAdded:Connect(watchFolder)
+	for _, child in Workspace:GetChildren() do
+		watchFolder(child)
+	end
 	StateController.onChanged(onState)
 	player.CharacterRemoving:Connect(function()
 		SettingsController.close()
@@ -341,7 +426,12 @@ function SettingsController.init()
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = refs
 		if view and isOpen then
+			local wasPad = view.Frame.PadMode
 			updateGlyphs(view)
+			if view.Frame.PadMode ~= wasPad then
+				-- the gamepad footer came or went: its room changes the layout
+				fit(view)
+			end
 			local selected = GuiService.SelectedObject
 			if MenuPanels.usingGamepad() and (not selected or not selected:IsDescendantOf(view.Gui)) then
 				GuiService.SelectedObject = SettingsView.firstButton(view)

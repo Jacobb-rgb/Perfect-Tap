@@ -59,8 +59,9 @@ export type Refs = {
 }
 
 SettingsView.Rows = {
-	{ Id = "Music", Kind = "Volume", Icon = "🎵", Title = "Music", Note = "Calm background music" },
-	{ Id = "Sfx", Kind = "Volume", Icon = "🔊", Title = "Sounds", Note = "Blasts, machines and coins" },
+	-- (no music plays yet: the volume is saved for the soundtrack)
+	{ Id = "Music", Kind = "Volume", Icon = "🎵", Title = "Music", Note = "Soundtrack coming soon" },
+	{ Id = "Sfx", Kind = "Volume", Icon = "🔊", Title = "Sounds", Note = "Every game sound" },
 	{ Id = "Shake", Kind = "Toggle", Icon = "📷", Title = "Camera shake", Note = "When rocks crack" },
 	{ Id = "Rumble", Kind = "Toggle", Icon = "🎮", Title = "Gamepad rumble", Note = "Vibration while you blast" },
 } :: { RowSpec }
@@ -82,11 +83,13 @@ local function metrics(compact: boolean): Metrics
 	return if compact then SettingsView.Metrics.Compact else SettingsView.Metrics.Normal
 end
 
--- The panel height a layout needs (header, rows, footer).
-function SettingsView.height(compact: boolean): number
+-- The panel height a layout needs (header, rows, footer; padMode = the
+-- gamepad footer shows).
+function SettingsView.height(compact: boolean, padMode: boolean?): number
 	local m = metrics(compact)
 	local mm = if compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
-	return mm.Header + #SettingsView.Rows * (m.Row + 10) + mm.Footer + 6
+	local footer = if padMode then math.max(mm.Footer, MenuPanel.PadFooter) else mm.Footer
+	return mm.Header + #SettingsView.Rows * (m.Row + 10) + footer + 6
 end
 
 -- A slider value (0..1) from a point's x on a bar that starts at `left` and is `width` wide.
@@ -232,7 +235,7 @@ end
 function SettingsView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
 	local m = metrics(compact)
-	local body = MenuPanel.layout(refs.Frame, compact, m.Width, SettingsView.height(compact), maxWidth, maxHeight)
+	local body = MenuPanel.layout(refs.Frame, compact, m.Width, SettingsView.height(compact, refs.Frame.PadMode), maxWidth, maxHeight)
 	local rowW = body.X
 	local controlsW = math.min(math.floor(rowW * 0.56), 420)
 	local textX = 62

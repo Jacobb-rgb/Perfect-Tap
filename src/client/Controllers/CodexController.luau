@@ -6,7 +6,8 @@
 	  OreCodex as it streams in; F / gamepad Y like the other stalls) or from
 	  the side menu's CODEX button (CodexController.open / toggle).
 	- The cards come from the State snapshot's Discovered record and update
-	  live while it is open. Ores discovered since you last looked get a
+	  live while it is open (only when what they show changes:
+	  CodexView.fingerprint). Ores discovered since you last looked get a
 	  NEW badge; the side menu shows how many are waiting (unseen /
 	  onUnseenChanged). The first snapshot of a session counts as seen.
 	- Click / tap a card, or move the gamepad selection onto it, to read it.
@@ -54,6 +55,9 @@ local seen: { [string]: boolean }? = nil
 local fresh: { [string]: boolean } = {}
 local unseenListeners: { (number) -> () } = {}
 local entriesNow: { CodexView.Entry } = {}
+-- what the cards show now (CodexView.fingerprint): State pushes that
+-- don't change it (coins...) don't redraw the codex
+local shownPrint: string? = nil
 
 function CodexController.isOpen(): boolean
 	return isOpen
@@ -106,7 +110,7 @@ local function onState(state: { [string]: any })
 			notifyUnseen()
 		end
 	end
-	if isOpen then
+	if isOpen and CodexView.fingerprint(discovered, fresh) ~= shownPrint then
 		CodexController.refresh()
 	end
 end
@@ -142,7 +146,9 @@ function CodexController.refresh()
 		return
 	end
 	local state = StateController.get()
-	entriesNow = CodexView.entries(if state then state.Discovered else nil, fresh)
+	local discovered = if state then state.Discovered else nil
+	shownPrint = CodexView.fingerprint(discovered, fresh)
+	entriesNow = CodexView.entries(discovered, fresh)
 	CodexView.setEntries(view, entriesNow)
 	local current = entryFor(view.Selected)
 	if not current then
@@ -294,8 +300,9 @@ function CodexController.open()
 	isOpen = true
 	openedAt = os.clock()
 	view.Selected = nil
-	fit(view)
+	-- the glyphs first: the gamepad footer's room is part of the layout
 	updateGlyphs(view)
+	fit(view)
 	CodexController.refresh()
 	view.Gui.Enabled = true
 	PromptController.setSuppressed("Codex", true)
@@ -409,7 +416,12 @@ function CodexController.init()
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = refs
 		if view and isOpen then
+			local wasPad = view.Frame.PadMode
 			updateGlyphs(view)
+			if view.Frame.PadMode ~= wasPad then
+				-- the gamepad footer came or went: its room changes the layout
+				fit(view)
+			end
 			if MenuPanels.usingGamepad() then
 				local selected = GuiService.SelectedObject
 				if not selected or not selected:IsDescendantOf(view.Gui) then

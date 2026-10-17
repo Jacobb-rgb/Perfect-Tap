@@ -13,7 +13,8 @@
 	- The panel (LeaderboardController.open / toggle, the side menu's BOARDS
 	  button): a tab per board, the top TopCount and YOUR line. Tabs: click /
 	  tap, or LB / RB on a gamepad. Closes with the X button, B, Backspace,
-	  respawning or another panel opening.
+	  respawning, another panel opening or the HUD hiding
+	  (SideMenuController). Other prompts are hidden while it is open.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -34,6 +35,7 @@ local MenuPanel = require(script.Parent.Parent.UI.MenuPanel)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local HudController = require(script.Parent.HudController)
+local PromptController = require(script.Parent.PromptController)
 
 local LeaderboardController = {}
 
@@ -222,6 +224,7 @@ function LeaderboardController.close()
 		end
 		view.Gui.Enabled = false
 	end
+	PromptController.setSuppressed("Boards", false)
 end
 
 local function onClose(_: string, state: Enum.UserInputState): Enum.ContextActionResult
@@ -255,10 +258,12 @@ function LeaderboardController.open(boardId: string?)
 	MenuPanels.closeOthers(NAME)
 	isOpen = true
 	openedAt = os.clock()
-	fit(view)
+	-- the glyphs first: the gamepad footer's room is part of the layout
 	updateGlyphs(view)
+	fit(view)
 	fillPanel()
 	view.Gui.Enabled = true
+	PromptController.setSuppressed("Boards", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	ContextActionService:BindActionAtPriority(TAB_ACTION, onTab, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)
 	local elapsed = 0
@@ -316,7 +321,12 @@ function LeaderboardController.init()
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = panel
 		if view and isOpen then
+			local wasPad = view.Frame.PadMode
 			updateGlyphs(view)
+			if view.Frame.PadMode ~= wasPad then
+				-- the gamepad footer came or went: its room changes the layout
+				fit(view)
+			end
 		end
 	end)
 	local camera = Workspace.CurrentCamera

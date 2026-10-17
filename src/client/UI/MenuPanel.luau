@@ -6,14 +6,18 @@
 	  header  the title (and a subtitle line on big screens), the red X
 	          button top right (with the gamepad's B glyph on a gamepad)
 	  body    an empty Frame the panel fills in
-	  footer  the control hint (big screens only): a text, or with a
+	  footer  the control hint: a text (big screens only), or with a
 	          gamepad the platform's own button glyphs and a word for each
+	          (always: TVs and phones with a gamepad need them most)
 
 	Designed for 720 design units of height (HudController.uiScale scales
 	every TerraForge gui). The compact layout (phones, TVs) makes the X
 	button 72 units (44 pt at the phone scale 0.62) and drops the subtitle
-	and the footer. layout() fits the panel into the room it gets and keeps
-	it clear of the HUD coins (top left) when there is space.
+	and the text footer. layout() fits the panel into the room it gets and
+	keeps it clear of the HUD's teleport bar (top centre; the panel loses
+	up to 15 % of its height for that, else it covers the bar whole) and of
+	the coins (top left) when there is space. Call setHint before layout:
+	the gamepad footer's room is reserved when it shows.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,6 +25,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local UIKit = require(script.Parent.UIKit)
 local HudView = require(script.Parent.HudView)
+local TeleportView = require(script.Parent.TeleportView)
 
 local MenuPanel = {}
 
@@ -44,6 +49,13 @@ MenuPanel.Pad = 16
 MenuPanel.PhoneScale = 0.62 -- HudController's floor (phones)
 MenuPanel.MinTouch = 44 -- points
 MenuPanel.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap
+-- under HudView's teleport bar (its frame is TopBarHeight tall; the phone
+-- buttons are taller and stick out evenly) and a gap
+MenuPanel.TopBarBottom = HudView.TopBarY
+	+ (HudView.TopBarHeight + math.max(HudView.TopBarHeight, TeleportView.layout(TeleportView.CompactScale).Height)) / 2
+	+ 6
+MenuPanel.BarShrink = 0.85 -- a panel may lose up to 15 % of its height to stay under the teleport bar
+MenuPanel.PadFooter = 30 -- the gamepad footer's room (compact layouts too)
 MenuPanel.Metrics = {
 	Normal = { Header = 70, Footer = 30, Close = 54, Title = 34 },
 	Compact = { Header = 84, Footer = 8, Close = 72, Title = 32 },
@@ -154,12 +166,25 @@ function MenuPanel.layout(
 ): Vector2
 	refs.Compact = compact
 	local m = if compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
+	local footer = if refs.PadMode then math.max(m.Footer, MenuPanel.PadFooter) else m.Footer
 	local pad = MenuPanel.Pad
 	local w = math.min(width, maxWidth - 16)
 	local h = math.min(height, maxHeight - 8)
 	if maxWidth < 1e6 and maxHeight < 1e6 then
 		local left = (maxWidth - w) / 2
 		local top = (maxHeight - h) / 2
+		-- the teleport bar (top centre, under every panel's middle) would
+		-- peek out above the panel: go under it when the panel can stay
+		-- nearly whole, else cover it from the top
+		if top < MenuPanel.TopBarBottom then
+			local room = maxHeight - MenuPanel.TopBarBottom - 8
+			if room >= h * MenuPanel.BarShrink then
+				h = math.min(h, room)
+				top = MenuPanel.TopBarBottom + (room - h) / 2
+			else
+				top = 4
+			end
+		end
 		-- the HUD coins (top left) would peek out from under the panel: move
 		-- the panel below them, else to their right when there is room
 		-- (phones: the panel covers them, nearly whole)
@@ -191,17 +216,19 @@ function MenuPanel.layout(
 	refs.Subtitle.Size = UDim2.new(1, -(pad * 2 + m.Close + 8), 0, 20)
 	refs.Subtitle.Visible = not compact
 	refs.Body.Position = UDim2.fromOffset(pad, m.Header)
-	refs.Body.Size = UDim2.new(1, -pad * 2, 1, -(m.Header + m.Footer))
+	refs.Body.Size = UDim2.new(1, -pad * 2, 1, -(m.Header + footer))
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -6)
 	refs.Hint.Size = UDim2.new(1, -pad * 2, 0, 20)
 	refs.PadHint.Position = UDim2.new(0.5, 0, 1, -4)
 	refs.PadHint.Size = UDim2.new(1, -pad * 2, 0, 24)
 	refs.Hint.Visible = not compact and not refs.PadMode
-	refs.PadHint.Visible = not compact and refs.PadMode
-	return Vector2.new(w - pad * 2, h - m.Header - m.Footer)
+	refs.PadHint.Visible = refs.PadMode
+	return Vector2.new(w - pad * 2, h - m.Header - footer)
 end
 
 -- The footer: a text, or (gamepad) glyph images with a word after each.
+-- Switching between the two can change the body's room (compact layouts):
+-- lay the panel out again after it (the controllers do: glyphs, then fit).
 function MenuPanel.setHint(refs: Refs, text: string, glyphs: { Glyph }?)
 	refs.Hint.Text = text
 	refs.PadMode = glyphs ~= nil
@@ -230,7 +257,7 @@ function MenuPanel.setHint(refs: Refs, text: string, glyphs: { Glyph }?)
 		end
 	end
 	refs.Hint.Visible = not refs.Compact and not refs.PadMode
-	refs.PadHint.Visible = not refs.Compact and refs.PadMode
+	refs.PadHint.Visible = refs.PadMode
 end
 
 -- The B glyph on the close button (gamepads only).

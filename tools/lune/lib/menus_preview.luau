@@ -5,8 +5,11 @@
 	builders (SideMenuView, CodexView, SettingsView, LeaderboardView,
 	HudView, TeleportView, BuildView) from sample data.
 	UI overlays (build/preview/<name>.json):
-	  ui_menu_hud        PC: the HUD with the side menu (CODEX badge, SOON chips)
-	  ui_menu_phone      667 x 375 pt phone: the side menu in two columns
+	  ui_menu_hud        PC: the HUD with the side menu (CODEX badge, STORE's
+	                     SOON chip; all 7 buttons, as once GOLEMS and
+	                     ARTIFACTS are in the game)
+	  ui_menu_phone      667 x 375 pt phone: the touch layout (four columns
+	                     under the coins, the thumbstick's corner free)
 	  ui_menu_phone_small 568 x 320 pt phone
 	  ui_codex           PC: the codex, 14 of 30 found, Ruby selected (NEW)
 	  ui_codex_hidden    PC: an undiscovered ore selected
@@ -135,11 +138,10 @@ function Preview.build(Loader: any): { [string]: any }
 	local function menu(renderScale: number, uiScale: number, designH: number): any
 		local refs = SideMenuView.build()
 		refs.Gui.Scale.Scale = renderScale
-		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH))
+		local touch = uiScale <= SideMenuView.CompactScale
+		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Touch = touch, DesignWidth = 1600 / renderScale }))
 		SideMenuView.setBadge(refs, "Codex", 2)
-		for _, id in { "Golems", "Collection", "Store" } do
-			SideMenuView.setSoon(refs, id, true)
-		end
+		SideMenuView.setSoon(refs, "Store", true)
 		return refs
 	end
 

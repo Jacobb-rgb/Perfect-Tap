@@ -125,8 +125,16 @@ CodexView.FindHint = "Not discovered yet. Blast rocks, then clean the dirty ore 
 
 ---------------------------------------------------------------- pure helpers
 
+-- the zones never change while the game runs: worked out once per ore
+local zoneCache: { [string]: { string } } = {}
+
 -- Names of the zones whose rocks hold an ore, in world order (deeper later).
+-- (A shared list: don't change it.)
 function CodexView.zonesOf(oreId: string): { string }
+	local cached = zoneCache[oreId]
+	if cached then
+		return cached
+	end
 	local names = {}
 	for _, zone in WorldLayout.Zones do
 		local weight = zone.Ores[oreId]
@@ -134,7 +142,21 @@ function CodexView.zonesOf(oreId: string): { string }
 			table.insert(names, zone.Name)
 		end
 	end
+	zoneCache[oreId] = names
 	return names
+end
+
+-- What the cards show, as one string (discovered ores and NEW badges):
+-- the codex redraws only when it changes, not on every State push.
+function CodexView.fingerprint(discovered: any, fresh: { [string]: boolean }?): string
+	local found = if type(discovered) == "table" then discovered else {}
+	local parts = table.create(#OreData.List)
+	for _, ore in OreData.List do
+		if found[ore.Id] == true then
+			table.insert(parts, if fresh and fresh[ore.Id] then ore.Id .. "!" else ore.Id)
+		end
+	end
+	return table.concat(parts, ",")
 end
 
 -- Every ore with whether it is discovered (the save's { [oreId] = true }).

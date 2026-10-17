@@ -1,13 +1,17 @@
 -- The lobby leaderboards under Lune: LeaderboardService's values per board,
 -- the hours-played credit (whole seconds, the fraction carried, broken
--- saves), which scores are due (only changed ones, zeros only over our own
--- writes), the 120 s write gate, retries and budget, Studio test players
--- never written, the final write on leave, reading the top rows (names,
--- junk keys, a failed read keeps the last rows), this server's ranking
--- without DataStores, the payload with your own rank; and LeaderboardView:
--- the payload check, the row texts, the board / panel builders (touch
--- sizes, tabs). DataStores, players and Net are small fakes.
+-- saves), which scores are due (only changed ones; growing boards never
+-- lowered, MoneyPerSec once per session, a 0 too), the 120 s write gate,
+-- retries and budget, Studio test players never written, the final write
+-- on leave (a round write still running lands first and isn't
+-- remembered), reading the top rows (batched DisplayNames, junk keys, a
+-- failed read keeps the last rows), this server's ranking without
+-- DataStores, the payload with your own rank; and LeaderboardView: the
+-- payload check, the row texts, one text size per board, the board /
+-- panel builders (touch sizes, tabs). DataStores, players and Net are
+-- small fakes.
 return function(T, Loader)
+	local task = require("@lune/task")
 	local LeaderboardConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LeaderboardConfig")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -18,6 +22,8 @@ return function(T, Loader)
 	local MenuPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MenuPanel")
 
 	local lb = LeaderboardService._test
+	-- the real batched name lookup (the worlds below swap in a fake)
+	local realFetchNames = LeaderboardService.fetchNames
 
 	local function deepCopy(v: any): any
 		if type(v) ~= "table" then
@@ -30,16 +36,37 @@ return function(T, Loader)
 		return out
 	end
 
-	-- A fake OrderedDataStore: SetAsync / GetSortedAsync with failures on demand.
+	-- A fake OrderedDataStore: SetAsync / UpdateAsync / GetSortedAsync with
+	-- failures on demand (`sets` counts the write requests; onWrite runs
+	-- inside a write, while it is on its way).
 	local function fakeStore(): any
-		local s: any = { values = {}, sets = 0, fail = 0, readFail = false, reads = 0 }
+		local s: any = { values = {}, sets = 0, updates = 0, fail = 0, readFail = false, reads = 0, onWrite = nil }
 		function s:SetAsync(key: string, value: number)
 			self.sets += 1
 			if self.fail > 0 then
 				self.fail -= 1
 				error("DataStore request was rejected")
 			end
+			if self.onWrite then
+				self.onWrite(key)
+			end
 			self.values[key] = value
+		end
+		function s:UpdateAsync(key: string, transform: (any) -> any)
+			self.sets += 1
+			self.updates += 1
+			if self.fail > 0 then
+				self.fail -= 1
+				error("DataStore request was rejected")
+			end
+			if self.onWrite then
+				self.onWrite(key)
+			end
+			local result = transform(self.values[key])
+			if result ~= nil then
+				self.values[key] = result
+			end
+			return result
 		end
 		function s:GetSortedAsync(ascending: boolean, size: number)
 			self.reads += 1
@@ -98,8 +125,16 @@ return function(T, Loader)
 		patch(LeaderboardService, "budget", function()
 			return 100
 		end)
-		patch(LeaderboardService, "nameOf", function(userId: number)
-			return "User" .. userId
+		patch(LeaderboardService, "fetchNames", function(ids: { number })
+			w.nameCalls = (w.nameCalls or 0) + 1
+			local found = {}
+			for _, id in ids do
+				found[id] = "User" .. id
+			end
+			return found
+		end)
+		patch(LeaderboardService, "fetchName", function(_userId: number)
+			return nil
 		end)
 		patch(LeaderboardService, "RetryWait", 0)
 		patch(LeaderboardService, "ReadGap", 0)
@@ -197,14 +232,19 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- writes
 
-	withWorld("leaderboards: only changed scores are written, zeros only over our own", true, function(w)
+	withWorld("leaderboards: only changed scores are written, MoneyPerSec once per session", true, function(w)
 		local values = { MoneyPerSec = 0, TotalEarned = 2500, Artifacts = 0, HoursPlayed = 600 }
 		local due = LeaderboardService.dueWrites(21, values)
-		T.eq(#due, 2, "a new player: only boards above 0")
-		T.eq(LeaderboardService.flushValues(21, values), 2)
+		T.eq(#due, 3, "the session's first write: growing boards above 0, and MoneyPerSec")
+		T.eq(due[1].Board, "MoneyPerSec")
+		T.eq(due[1].Stored, 0, "a 0 replaces an old session's entry")
+		T.eq(LeaderboardService.flushValues(21, values), 3)
 		T.eq(w.stores.TotalEarned.values["21"], LeaderboardConfig.encode("TotalEarned", 2500))
 		T.eq(w.stores.HoursPlayed.values["21"], 10, "minutes")
-		T.eq(w.stores.MoneyPerSec.values["21"], nil)
+		T.eq(w.stores.MoneyPerSec.values["21"], 0)
+		T.eq(w.stores.Artifacts.values["21"], nil, "a growing board's 0 is never written")
+		T.eq(w.stores.TotalEarned.updates, 1, "growing boards: UpdateAsync")
+		T.eq(w.stores.MoneyPerSec.updates, 0, "MoneyPerSec: SetAsync")
 		T.eq(#LeaderboardService.dueWrites(21, values), 0, "nothing changed")
 		T.eq(LeaderboardService.flushValues(21, values), 0)
 		-- 30 more seconds of play: the same whole minute, nothing to write
@@ -221,6 +261,26 @@ return function(T, Loader)
 		T.eq(again[1].Stored, 0)
 		T.eq(LeaderboardService.flushValues(21, values), 1)
 		T.eq(w.stores.MoneyPerSec.values["21"], 0)
+		-- a new session writes MoneyPerSec again, even unchanged
+		LeaderboardService.beginSession(21)
+		local fresh = LeaderboardService.dueWrites(21, values)
+		T.truthy(#fresh >= 1 and fresh[1].Board == "MoneyPerSec", "first write of the new session")
+	end)
+
+	withWorld("leaderboards: growing boards are never lowered (writes out of order)", true, function(w)
+		-- another server (or a later write that landed first) stored more
+		w.stores.TotalEarned.values["22"] = LeaderboardConfig.encode("TotalEarned", 9000)
+		w.stores.HoursPlayed.values["22"] = 50
+		T.eq(LeaderboardService.flushValues(22, { TotalEarned = 500, HoursPlayed = 600 }), 3, "the requests went through (and MoneyPerSec's first 0)")
+		T.eq(w.stores.TotalEarned.values["22"], LeaderboardConfig.encode("TotalEarned", 9000), "the bigger score stays")
+		T.eq(w.stores.HoursPlayed.values["22"], 50, "50 minutes stay over 10")
+		-- a smaller value later in the same session isn't even sent
+		local before = w.stores.TotalEarned.sets
+		T.eq(LeaderboardService.flushValues(22, { TotalEarned = 400, HoursPlayed = 600 }), 0)
+		T.eq(w.stores.TotalEarned.sets, before)
+		-- a bigger one is
+		T.eq(LeaderboardService.flushValues(22, { TotalEarned = 1e6, HoursPlayed = 600 }), 1)
+		T.eq(w.stores.TotalEarned.values["22"], LeaderboardConfig.encode("TotalEarned", 1e6))
 	end)
 
 	withWorld("leaderboards: writes retry, give up without budget, never for test players", true, function(w)
@@ -233,9 +293,11 @@ return function(T, Loader)
 		T.eq(store.sets, 3 + LeaderboardService.Retries)
 		-- a failed write is not remembered: the next round tries again
 		store.fail = 99
-		T.eq(LeaderboardService.flushValues(33, { TotalEarned = 10 }), 0)
+		T.eq(LeaderboardService.flushValues(33, { TotalEarned = 10 }), 1, "only MoneyPerSec's 0 got through")
+		T.eq((lb.written(33) :: any).TotalEarned, nil, "the failed one isn't remembered")
 		store.fail = 0
 		T.eq(LeaderboardService.flushValues(33, { TotalEarned = 10 }), 1)
+		T.eq((lb.written(33) :: any).TotalEarned, LeaderboardConfig.encode("TotalEarned", 10))
 		-- no budget: no request at all
 		rawset(LeaderboardService, "budget", function()
 			return 0
@@ -257,7 +319,7 @@ return function(T, Loader)
 	withWorld("leaderboards: a player's scores are written at most every WriteSeconds", true, function(w)
 		local p = w.add(41, "Dee")
 		w.data[p].TotalEarned = 100
-		T.eq(LeaderboardService.flush(p, 1000), 1, "first round")
+		T.eq(LeaderboardService.flush(p, 1000), 2, "first round: TotalEarned and MoneyPerSec's first 0")
 		w.data[p].TotalEarned = 200
 		T.eq(LeaderboardService.flush(p, 1000 + LeaderboardService.WriteSeconds - 1), 0, "too soon")
 		T.eq(w.stores.TotalEarned.values["41"], LeaderboardConfig.encode("TotalEarned", 100))
@@ -280,11 +342,46 @@ return function(T, Loader)
 		T.eq(w.stores.TotalEarned.values["51"], LeaderboardConfig.encode("TotalEarned", 9e12))
 		T.eq(w.stores.HoursPlayed.values["51"], 121, "7290 s = 121 whole minutes")
 		T.eq(lb.written(51), nil, "forgotten after the final write")
+		T.falsy(lb.releasing(51))
 		-- a test player leaving: no write, no error
 		local q = w.add(-2, "Player2")
 		w.data[q].TotalEarned = 5
 		lb.release(q, w.data[q])
 		T.eq(w.stores.TotalEarned.values["-2"], nil)
+	end)
+
+	withWorld("leaderboards: a round write still running when the player leaves lands first and is forgotten", true, function(w)
+		local p = w.add(56, "Max")
+		local d = w.data[p]
+		d.TotalEarned = 5000
+		LeaderboardService.beginSession(56)
+		LeaderboardService.startPlay(p, os.clock())
+		-- the player leaves while the round's first write (MoneyPerSec) is on its way
+		local released = false
+		w.stores.MoneyPerSec.onWrite = function()
+			if not released then
+				released = true
+				lb.release(p, d)
+			end
+		end
+		local count = LeaderboardService.flushValues(56, LeaderboardService.values(p, d))
+		T.eq(count, 1, "the write on its way lands; the rest is the leave write's")
+		T.truthy(released)
+		T.eq(lb.written(56), nil, "a write that ended after the leave began isn't remembered")
+		T.eq(lb.inFlight(), 1, "the leave write waited for the round write")
+		T.eq(w.stores.TotalEarned.values["56"], nil, "not yet")
+		-- rounds skip a leaving player
+		T.eq(LeaderboardService.flushValues(56, { TotalEarned = 7000 }), 0)
+		local waited = 0
+		while lb.inFlight() > 0 and waited < 3 do
+			task.wait(0.1)
+			waited += 0.1
+		end
+		T.eq(lb.inFlight(), 0, "the leave write finished")
+		T.eq(w.stores.TotalEarned.values["56"], LeaderboardConfig.encode("TotalEarned", 5000))
+		T.eq(w.stores.MoneyPerSec.values["56"], 0)
+		T.eq(lb.written(56), nil, "nothing left behind")
+		T.falsy(lb.releasing(56))
 	end)
 
 	withWorld("leaderboards: without DataStores nothing is written", false, function(w)
@@ -334,6 +431,10 @@ return function(T, Loader)
 		T.eq(tops.TotalEarned.Rows[1].UserId, 9)
 		T.eq(tops.TotalEarned.Rows[1].Name, "User9")
 		T.eq(tops.TotalEarned.Rows[2].UserId, 71)
+		T.eq(tops.TotalEarned.Rows[2].Name, "Gil", "a player here: their own (display) name")
+		T.eq(w.nameCalls, 1, "one batched name lookup for every board")
+		LeaderboardService.refresh()
+		T.eq(w.nameCalls, 1, "names are cached")
 		-- everyone got a payload with their own values and ranks
 		local sent: { [any]: any } = {}
 		for _, f in w.fired do
@@ -351,6 +452,47 @@ return function(T, Loader)
 		w.stores.TotalEarned.readFail = true
 		LeaderboardService.refresh()
 		T.eq(lb.tops().TotalEarned.Rows[1].UserId, 9, "kept")
+	end)
+
+	withWorld("leaderboards: names are DisplayNames, looked up in one batch", true, function(w)
+		local here = w.add(301, "ada_miner")
+		here.DisplayName = "Ada"
+		local asked: { { number } } = {}
+		rawset(LeaderboardService, "fetchNames", function(ids: { number })
+			table.insert(asked, table.clone(ids))
+			return { [302] = "Bea", [303] = "Cid" }
+		end)
+		local single = 0
+		rawset(LeaderboardService, "fetchName", function(userId: number)
+			single += 1
+			return if userId == 304 then "dan_old" else nil
+		end)
+		LeaderboardService.resolveNames({ 301, 302, 303, 302, 304, 305 })
+		T.eq(#asked, 1, "one batch")
+		T.eq(#asked[1], 4, "players here and repeats aren't asked")
+		T.eq(LeaderboardService.nameOf(301), "Ada", "the DisplayName of a player here")
+		T.eq(LeaderboardService.nameOf(302), "Bea")
+		T.eq(LeaderboardService.nameOf(304), "dan_old", "the batch didn't know it: one lookup")
+		T.eq(LeaderboardService.nameOf(305), LeaderboardService.UnknownName)
+		T.eq(single, 2, "only the ids the batch missed")
+		-- known names and recent failures aren't asked again
+		LeaderboardService.resolveNames({ 302, 303, 304, 305 })
+		T.eq(#asked, 1)
+		-- a failed batch: tried again next time, no one-by-one storm
+		rawset(LeaderboardService, "fetchNames", function(ids: { number })
+			table.insert(asked, table.clone(ids))
+			return nil
+		end)
+		LeaderboardService.resolveNames({ 401, 402, 403 })
+		T.eq(single, 2, "no single lookups after a failed batch")
+		T.eq(LeaderboardService.nameOf(401), LeaderboardService.UnknownName)
+		LeaderboardService.resolveNames({ 401 })
+		T.eq(#asked, 3, "asked again")
+		-- the real lookup without UserService (Lune) fails quietly
+		T.eq(realFetchNames({ 1 }), nil)
+		-- without DataStores the rows use DisplayNames too
+		T.eq(LeaderboardService.displayName(here), "Ada")
+		T.eq(LeaderboardService.displayName(w.add(306, "plain")), "plain", "no DisplayName: the username")
 	end)
 
 	withWorld("leaderboards: a board never read says so (Ready = false)", true, function(w)
@@ -446,13 +588,13 @@ return function(T, Loader)
 		T.eq(lines.OwnValue, "$1.3K")
 		T.eq(lines.Note, nil)
 		local outside = LeaderboardView.lines("MoneyPerSec", data, { Value = 12 }, 99, 5, true)
-		T.eq(outside.OwnRank, `#{LeaderboardConfig.TopCount}+`)
+		T.eq(outside.OwnRank, `#{LeaderboardConfig.TopCount + 1}+`, "outside the top 10: 11th or worse")
 		T.eq(outside.OwnValue, "+$12/s")
 		local nothing = LeaderboardView.lines("HoursPlayed", nil, nil, 99, 5, true)
 		T.eq(nothing.OwnRank, LeaderboardView.Empty)
 		T.eq(nothing.OwnValue, "0.0 h")
 		T.eq(LeaderboardView.lines("Artifacts", { Rows = {}, Ready = false }, nil, 1, 5, true).Note, "Loading...")
-		T.truthy(LeaderboardView.lines("Artifacts", data, nil, 1, 5, false).Note, "Studio note")
+		T.eq(LeaderboardView.lines("Artifacts", data, nil, 1, 5, false).Note, LeaderboardView.LocalNote, "this server only")
 	end)
 
 	T.test("leaderboards view: the board canvas and the panel build and fill", function()
@@ -476,17 +618,36 @@ return function(T, Loader)
 			true
 		)
 		LeaderboardView.fill(canvas, long)
-		T.eq(canvas.Rows[1].Name.TextSize, canvas.TextSize, "a short name")
-		T.lt(canvas.Rows[2].Name.TextSize, canvas.TextSize, "a long name shrinks")
-		T.truthy(canvas.Rows[2].Name.TextSize >= LeaderboardView.MinText, "never below MinText")
-		-- past MinText the label cuts the name off with "..."
-		T.eq(canvas.Rows[2].Name.TextSize, LeaderboardView.MinText)
+		-- one size for every row's name and value: the rows stay even
+		local size = canvas.Rows[1].Name.TextSize
+		for i, row in canvas.Rows do
+			T.eq(row.Name.TextSize, size, `row {i} name`)
+			T.eq(row.Value.TextSize, size, `row {i} value`)
+		end
+		T.lt(size, canvas.TextSize, "a long value pulls every row down")
+		T.truthy(size >= LeaderboardView.MinText)
+		local valueW = canvas.Width * 0.94 * LeaderboardView.Columns.Value[2]
+		T.le(LeaderboardView.textWidth(long.Rows[2].Value) * size, valueW + 1e-6, "values are never cut")
+		-- a long name pulls the rows down only to NameFloor; past that it is cut off with "..."
+		local named = LeaderboardView.lines(
+			"Artifacts",
+			{ Rows = { { Rank = 1, UserId = 1, Name = "Ab", Value = 5 }, { Rank = 2, UserId = 3, Name = "AVeryLongUsername_2024", Value = 7 } }, Ready = true },
+			nil,
+			2,
+			LeaderboardConfig.BoardRows,
+			true
+		)
+		LeaderboardView.fill(canvas, named)
+		T.eq(canvas.Rows[1].Name.TextSize, math.max(LeaderboardView.MinText, math.floor(canvas.TextSize * LeaderboardView.NameFloor)))
+		T.eq(canvas.Rows[2].Value.TextSize, canvas.Rows[1].Name.TextSize)
 		T.eq(canvas.Rows[2].Name.TextTruncate.Name, "AtEnd")
+		-- short rows keep the full size
+		local short = LeaderboardView.lines("Artifacts", { Rows = { { Rank = 1, UserId = 1, Name = "Ab", Value = 5 } }, Ready = true }, nil, 2, LeaderboardConfig.BoardRows, true)
+		LeaderboardView.fill(canvas, short)
+		T.eq(canvas.Rows[1].Name.TextSize, canvas.TextSize)
 		local nameW = canvas.Width * 0.94 * LeaderboardView.Columns.Name[2]
 		local medium = LeaderboardView.fitSize("Forgekeeper_Ola", nameW, canvas.TextSize, LeaderboardView.MinText)
 		T.le(LeaderboardView.textWidth("Forgekeeper_Ola") * medium, nameW + 1e-6)
-		local valueW = canvas.Width * 0.94 * LeaderboardView.Columns.Value[2]
-		T.le(LeaderboardView.textWidth(long.Rows[2].Value) * canvas.Rows[2].Value.TextSize, valueW + 1e-6)
 		T.eq(LeaderboardView.fitSize("", 10, 20, 11), 20)
 		-- the panel: tabs wrap around, each tab shows its own board
 		local panel = LeaderboardView.buildPanel(true)

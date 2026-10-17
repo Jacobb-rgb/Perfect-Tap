@@ -7,14 +7,27 @@
 
 	Chunky buttons in their own colours, an emoji icon over a short label.
 	A red badge shows a count (CODEX: ores discovered since you last looked);
-	a "SOON" chip marks a button whose feature isn't in the game yet.
-	The column starts below the HUD coins and their "+$X" popups and is
-	centred in the room under them; when one column doesn't fit (phones) the
-	buttons make two columns (SideMenuView.Fits). On phones every button is
-	at least 44 pt (SideMenuView.layout, SideMenuView.touchTargets for the
-	tests). With a
-	gamepad the D-pad Left glyph shows over the column (D-pad Left jumps
-	into the menu).
+	a "SOON" chip marks a button whose feature isn't in the game yet (STORE).
+	A button can be hidden (setHidden: GOLEMS / ARTIFACTS while their
+	packages aren't in the game); the others close up.
+
+	Where it goes (SideMenuView.layout):
+	  mouse   one column below the HUD coins and their "+$X" popups, centred
+	          in the room under them; two columns (or three) when one
+	          doesn't fit (SideMenuView.Fits)
+	  touch   (TouchEnabled, or uiScale <= CompactScale) the bottom-left
+	          corner belongs to Roblox's movement thumbstick (the
+	          DynamicThumbstick takes touches in the left 40 % of the screen,
+	          below its top third): the buttons sit right under the coins
+	          in up to four columns and end above TouchBottom (60 %) of the
+	          height, so the 40 % x 40 % corner where the thumb rests stays
+	          free (SideMenuView.TouchFits; SideMenu.spec checks phones and
+	          tablets). Every button is at least 44 pt.
+	  TV      (ten-foot) the column keeps SafeShare (5 %) of the width from the
+	          left edge and of the height from the bottom: the title-safe area
+	With a gamepad the D-pad Left glyph shows over the column (D-pad Left
+	jumps into the menu). SideMenuView.touchTargets lists the shown buttons
+	for the tests.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,7 +43,7 @@ export type Entry = { Id: string, Label: string, Icon: string, Color: Color3, Da
 
 SideMenuView.Entries = {
 	{ Id = "Shop", Label = "SHOP", Icon = "🛒", Color = rgb(255, 120, 168), Dark = rgb(178, 58, 108) },
-	{ Id = "Golems", Label = "GOLEMS", Icon = "🗿", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50) },
+	{ Id = "Golems", Label = "GOLEMS", Icon = "🤖", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50) },
 	{ Id = "Codex", Label = "CODEX", Icon = "📖", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186) },
 	{ Id = "Collection", Label = "ARTIFACTS", Icon = "🏺", Color = rgb(255, 196, 72), Dark = rgb(186, 124, 26) },
 	{ Id = "Boards", Label = "BOARDS", Icon = "🏆", Color = rgb(182, 118, 255), Dark = rgb(104, 56, 178) },
@@ -43,9 +56,21 @@ SideMenuView.Left = 12 -- design units from the left edge
 SideMenuView.TopMin = 150 -- below the coins panel (16..90) and the "+$X" popups under it
 SideMenuView.TopTight = 98 -- right under the coins panel (the smallest phones)
 SideMenuView.BottomMargin = 12
+SideMenuView.Drop = 5 -- the buttons sit this far below the column's top (room for the badges)
 SideMenuView.Normal = { Width = 84, Height = 64, Gap = 8 }
 SideMenuView.Compact = { Width = 84, Height = 72, Gap = 6 }
-SideMenuView.CompactScale = 0.75 -- at this uiScale and below: the phone buttons
+SideMenuView.CompactScale = 0.75 -- at this uiScale and below: the phone buttons (and the touch layout)
+-- touch layouts end above this share of the height: the thumbstick's corner below stays free
+SideMenuView.TouchBottom = 0.6
+-- TVs: the share of the screen kept clear at the edges (title safe)
+SideMenuView.SafeShare = 0.05
+
+export type Options = {
+	Count: number?, -- the buttons shown (default: every entry)
+	Touch: boolean?, -- a touch screen (UserInputService.TouchEnabled)
+	TenFoot: boolean?, -- a TV (GuiService:IsTenFootInterface)
+	DesignWidth: number?, -- the screen's width in design units (the TV margin)
+}
 
 export type Layout = {
 	Columns: number,
@@ -53,8 +78,10 @@ export type Layout = {
 	Width: number, -- one button
 	Height: number,
 	Gap: number,
+	Left: number, -- the column's left edge (design units)
 	Top: number, -- the column's top (design units)
 	Size: Vector2, -- the whole column
+	Touch: boolean, -- the touch layout (kept clear of the thumbstick)
 }
 
 export type Refs = {
@@ -63,36 +90,71 @@ export type Refs = {
 	Buttons: { [string]: TextButton },
 	Badges: { [string]: TextLabel },
 	Soon: { [string]: TextLabel },
+	Hidden: { [string]: boolean },
 	PadGlyph: ImageLabel,
 	Order: { string },
 }
 
--- The tries, in order: { columns, the lowest top }. One column under the
--- coins' popups, then two; on the smallest phones (568 x 320 pt) two
--- columns start right under the coins panel; three only past that.
+-- The tries, in order: { columns, the lowest top }; the first that fits wins.
+-- Mouse: one column under the coins' popups, then two; on short windows
+-- two columns start right under the coins panel; three only past that.
 SideMenuView.Fits = { { 1, SideMenuView.TopMin }, { 2, SideMenuView.TopMin }, { 2, SideMenuView.TopTight }, { 3, SideMenuView.TopTight } }
+-- Touch: must end above TouchBottom; wider before lower (under the popups
+-- while that fits, then right under the coins); one row as the last resort.
+SideMenuView.TouchFits = {
+	{ 1, SideMenuView.TopMin },
+	{ 2, SideMenuView.TopMin },
+	{ 3, SideMenuView.TopMin },
+	{ 4, SideMenuView.TopMin },
+	{ 3, SideMenuView.TopTight },
+	{ 4, SideMenuView.TopTight },
+	{ 7, SideMenuView.TopTight },
+}
 
 -- Where the buttons go for a uiScale and the screen's height in design
 -- units (below the top bar).
-function SideMenuView.layout(uiScale: number, designHeight: number, count: number?): Layout
-	local n = count or #SideMenuView.Entries
-	local m = if uiScale <= SideMenuView.CompactScale then SideMenuView.Compact else SideMenuView.Normal
+function SideMenuView.layout(uiScale: number, designHeight: number, options: Options?): Layout
+	local o: Options = options or {}
+	local n = math.max(1, o.Count or #SideMenuView.Entries)
+	local compact = uiScale <= SideMenuView.CompactScale
+	local touch = o.Touch == true or compact
+	local tv = o.TenFoot == true
+	local m = if compact then SideMenuView.Compact else SideMenuView.Normal
 	-- never under 44 pt on a touch screen
 	local minSide = SideMenuView.MinTouch / math.max(uiScale, 0.1)
 	local w = math.max(m.Width, math.ceil(minSide))
-	local h = math.max(m.Height, if uiScale <= SideMenuView.CompactScale then math.ceil(minSide) else 0)
+	local h = math.max(m.Height, if touch then math.ceil(minSide) else 0)
+	local bottomMargin = if tv then math.max(SideMenuView.BottomMargin, designHeight * SideMenuView.SafeShare) else SideMenuView.BottomMargin
+	-- the lowest the column may end
+	local floor = if touch then designHeight * SideMenuView.TouchBottom else designHeight - bottomMargin
 	local columns, rows, height, topMin = 1, n, 0, SideMenuView.TopMin
-	for _, try in SideMenuView.Fits do
-		columns, topMin = try[1], try[2]
+	local fits: { { number } } = if touch then SideMenuView.TouchFits else SideMenuView.Fits
+	for _, try in fits do
+		columns, topMin = math.min(try[1], n), try[2]
 		rows = math.ceil(n / columns)
 		height = rows * h + (rows - 1) * m.Gap
-		if height <= designHeight - topMin - SideMenuView.BottomMargin then
+		if topMin + SideMenuView.Drop + height <= floor then
 			break
 		end
 	end
-	local top = math.max(topMin, math.floor((designHeight - height) / 2))
+	-- mouse: centred in the room under the coins; touch: right under them
+	local top = if touch then topMin else math.max(topMin, math.floor((designHeight - height) / 2))
+	local left = SideMenuView.Left
+	if tv and o.DesignWidth then
+		left = math.max(left, math.ceil(o.DesignWidth * SideMenuView.SafeShare))
+	end
 	local width = columns * w + (columns - 1) * m.Gap
-	return { Columns = columns, Rows = rows, Width = w, Height = h, Gap = m.Gap, Top = top, Size = Vector2.new(width, height) }
+	return {
+		Columns = columns,
+		Rows = rows,
+		Width = w,
+		Height = h,
+		Gap = m.Gap,
+		Left = left,
+		Top = top,
+		Size = Vector2.new(width, height),
+		Touch = touch,
+	}
 end
 
 local function newButton(column: Frame, entry: Entry, order: number): (TextButton, TextLabel, TextLabel)
@@ -142,7 +204,9 @@ local function newButton(column: Frame, entry: Entry, order: number): (TextButto
 end
 
 function SideMenuView.build(): Refs
-	local gui = UIKit.screen("TerraForgeSideMenu", 6)
+	-- under the HUD (5 would be above): its "+$X" popups and toasts show on
+	-- top where they meet the touch layout's wide grid
+	local gui = UIKit.screen("TerraForgeSideMenu", 4)
 	gui:SetAttribute("TerraForge", true)
 	local column = UIKit.new("Frame", {
 		Name = "Column",
@@ -169,6 +233,7 @@ function SideMenuView.build(): Refs
 		Buttons = {},
 		Badges = {},
 		Soon = {},
+		Hidden = {},
 		PadGlyph = glyph,
 		Order = {},
 	}
@@ -183,15 +248,43 @@ function SideMenuView.build(): Refs
 	return refs
 end
 
--- Places the buttons for a layout (row by row: left, right, next row...).
+-- The ids of the buttons that show, in order.
+function SideMenuView.shown(refs: Refs): { string }
+	local list = {}
+	for _, id in refs.Order do
+		if not refs.Hidden[id] then
+			table.insert(list, id)
+		end
+	end
+	return list
+end
+
+-- Hides a button (a feature that isn't in the game); call apply with a
+-- layout for the new count afterwards.
+function SideMenuView.setHidden(refs: Refs, id: string, hidden: boolean)
+	local button = refs.Buttons[id]
+	if not button then
+		return
+	end
+	if hidden then
+		refs.Hidden[id] = true
+	else
+		refs.Hidden[id] = nil
+	end
+	local holder = button.Parent :: Frame
+	holder.Visible = not hidden
+end
+
+-- Places the shown buttons for a layout (row by row: left to right, then
+-- the next row).
 function SideMenuView.apply(refs: Refs, layout: Layout)
-	refs.Column.Position = UDim2.fromOffset(SideMenuView.Left, layout.Top)
-	refs.Column.Size = UDim2.fromOffset(layout.Size.X, layout.Size.Y)
-	for i, id in refs.Order do
+	refs.Column.Position = UDim2.fromOffset(layout.Left, layout.Top)
+	refs.Column.Size = UDim2.fromOffset(layout.Size.X, layout.Size.Y + SideMenuView.Drop)
+	for i, id in SideMenuView.shown(refs) do
 		local holder = refs.Buttons[id].Parent :: Frame
 		local col = (i - 1) % layout.Columns
 		local row = (i - 1) // layout.Columns
-		holder.Position = UDim2.fromOffset(col * (layout.Width + layout.Gap), row * (layout.Height + layout.Gap) + 5)
+		holder.Position = UDim2.fromOffset(col * (layout.Width + layout.Gap), row * (layout.Height + layout.Gap) + SideMenuView.Drop)
 		holder.Size = UDim2.fromOffset(layout.Width, layout.Height)
 	end
 	refs.PadGlyph.Position = UDim2.new(0, layout.Width / 2, 0, -2)
@@ -219,10 +312,10 @@ function SideMenuView.setSoon(refs: Refs, id: string, on: boolean)
 	end
 end
 
--- Every tappable thing (for the touch-size tests).
+-- Every tappable button that shows (for the touch-size tests).
 function SideMenuView.touchTargets(refs: Refs): { GuiObject }
 	local list: { GuiObject } = {}
-	for _, id in refs.Order do
+	for _, id in SideMenuView.shown(refs) do
 		table.insert(list, refs.Buttons[id].Parent :: Frame)
 	end
 	return list

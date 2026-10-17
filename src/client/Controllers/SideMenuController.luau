@@ -3,9 +3,10 @@
 
 	  SHOP       BoostController (Triple / Hexa Lucky) when it is in the game,
 	             else a hint to visit the SHOP stall
-	  GOLEMS     GolemController
+	  GOLEMS     GolemController (hidden while it isn't in the game)
 	  CODEX      CodexController (badge: ores discovered since you last looked)
-	  ARTIFACTS  ArtifactController (the collection book)
+	  ARTIFACTS  ArtifactController (the collection book; hidden while it
+	             isn't in the game)
 	  BOARDS     LeaderboardController (HALL OF FAME panel)
 	  SETTINGS   SettingsController
 	  STORE      StoreController (Robux items) when it is in the game, else
@@ -13,13 +14,18 @@
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
-	exist), so the menu works before the packages that add them merge; a
-	button whose controller is missing wears a "SOON" chip and answers with
-	a toast. Pressing the button of an open panel closes it.
+	exist), so the menu works before the packages that add them merge: a
+	button whose controller is missing is hidden (GOLEMS, ARTIFACTS: no dead
+	buttons), or wears a "SOON" chip and answers with a toast (STORE), or
+	answers with a hint (SHOP). Pressing the button of an open panel closes
+	it.
+	Layout: SideMenuView.layout (touch screens keep the thumbstick's
+	bottom-left corner free; TVs keep the title-safe margin).
 	Input: click / tap; gamepad: D-pad Left jumps into the column (its glyph
 	shows over the menu while a gamepad is used), the D-pad moves, A opens,
 	B or D-pad Left again leaves. The menu hides whenever the HUD's own menu
-	is hidden (build mode, the cleaning minigame, the Foundry moment).
+	is hidden (build mode, the cleaning minigame, the Foundry moment), and
+	the side menu's own panels (CODEX, SETTINGS, HALL OF FAME) close then.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -35,19 +41,24 @@ local HudController = require(script.Parent.HudController)
 
 local SideMenuController = {}
 
-type Action = { Controller: string?, Missing: string, Soon: boolean }
+type Action = { Controller: string?, Missing: string, Soon: boolean, Hide: boolean }
 
 -- What each button does: the controller it opens and the toast when that
--- controller isn't in the game (Soon = show the SOON chip then).
+-- controller isn't in the game (Soon = show the SOON chip then; Hide = hide
+-- the button then).
 SideMenuController.Actions = {
-	Shop = { Controller = "BoostController", Missing = "Visit the SHOP stall in town for gear and luck boosts!", Soon = false },
-	Golems = { Controller = "GolemController", Missing = "Golem pets are coming soon!", Soon = true },
-	Codex = { Controller = "CodexController", Missing = "The Ore Codex is at the ROCK SCANNER in town.", Soon = false },
-	Collection = { Controller = "ArtifactController", Missing = "The artifact collection book is coming soon!", Soon = true },
-	Boards = { Controller = "LeaderboardController", Missing = "The leaderboards are in the HALL OF FAME in town.", Soon = false },
-	Settings = { Controller = "SettingsController", Missing = "Settings are coming soon!", Soon = true },
-	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true },
+	Shop = { Controller = "BoostController", Missing = "Visit the SHOP stall in town for gear and luck boosts!", Soon = false, Hide = false },
+	Golems = { Controller = "GolemController", Missing = "Golem pets are coming soon!", Soon = false, Hide = true },
+	Codex = { Controller = "CodexController", Missing = "The Ore Codex is at the ROCK SCANNER in town.", Soon = false, Hide = false },
+	Collection = { Controller = "ArtifactController", Missing = "The artifact collection book is coming soon!", Soon = false, Hide = true },
+	Boards = { Controller = "LeaderboardController", Missing = "The leaderboards are in the HALL OF FAME in town.", Soon = false, Hide = false },
+	Settings = { Controller = "SettingsController", Missing = "Settings are coming soon!", Soon = false, Hide = false },
+	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = false },
 } :: { [string]: Action }
+
+-- The side menu's own panels: they close when the HUD hides (build mode,
+-- the cleaning minigame...), like the menu itself.
+SideMenuController.Panels = { "CodexController", "SettingsController", "LeaderboardController" }
 
 local JUMP_ACTION = "TerraForgeSideMenuJump"
 local LEAVE_ACTION = "TerraForgeSideMenuLeave"
@@ -89,7 +100,8 @@ local function inMenu(object: GuiObject?): boolean
 end
 
 local function firstButton(view: SideMenuView.Refs): TextButton
-	return view.Buttons[view.Order[1]]
+	local shown = SideMenuView.shown(view)
+	return view.Buttons[shown[1] or view.Order[1]]
 end
 
 local function leave()
@@ -147,7 +159,15 @@ local function relayout()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local scale = HudController.uiScale()
 	local inset = GuiService:GetGuiInset()
-	SideMenuView.apply(view, SideMenuView.layout(scale, (size.Y - inset.Y) / scale))
+	SideMenuView.apply(
+		view,
+		SideMenuView.layout(scale, (size.Y - inset.Y) / scale, {
+			Count = #SideMenuView.shown(view),
+			Touch = UserInputService.TouchEnabled,
+			TenFoot = GuiService:IsTenFootInterface(),
+			DesignWidth = size.X / scale,
+		})
+	)
 end
 
 local function updateGlyph()
@@ -161,15 +181,24 @@ local function updateGlyph()
 	view.PadGlyph.Image = image
 end
 
--- The SOON chips: buttons whose controller isn't in the game.
+-- Buttons whose controller isn't in the game: hidden, or a SOON chip.
 local function updateSoon()
 	local view = refs
 	if not view then
 		return
 	end
+	local changed = false
 	for id, action in SideMenuController.Actions do
 		local missing = action.Controller == nil or MenuPanels.controller(action.Controller) == nil
 		SideMenuView.setSoon(view, id, action.Soon and missing)
+		local hide = action.Hide and missing
+		if (view.Hidden[id] == true) ~= hide then
+			SideMenuView.setHidden(view, id, hide)
+			changed = true
+		end
+	end
+	if changed then
+		relayout()
 	end
 end
 
@@ -187,6 +216,11 @@ local function followHud()
 		view.Gui.Enabled = visible
 		if not visible then
 			leave()
+			for _, name in SideMenuController.Panels do
+				if MenuPanels.isOpen(name) then
+					MenuPanels.call(name, "close")
+				end
+			end
 		end
 	end
 end

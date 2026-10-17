@@ -72,6 +72,9 @@ LeaderboardView.Short = {
 export type Payload = { Live: boolean, Boards: { [string]: BoardData }, Own: { [string]: Own } }
 
 LeaderboardView.MaxName = 40
+-- the boards rank this server's players (no DataStores: Studio, or a live
+-- server whose stores can't be opened)
+LeaderboardView.LocalNote = "This server only (no global data)"
 
 local function finite(v: any): number?
 	if type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge then
@@ -140,13 +143,14 @@ function LeaderboardView.lines(boardId: string, data: BoardData?, own: Own?, myU
 	if own and type(own.Rank) == "number" then
 		ownRank = "#" .. tostring(own.Rank)
 	elseif value > 0 then
-		ownRank = `#{LeaderboardConfig.TopCount}+`
+		-- below the rows that were read: rank TopCount + 1 or worse
+		ownRank = `#{LeaderboardConfig.TopCount + 1}+`
 	else
 		ownRank = LeaderboardView.Empty
 	end
 	local note: string? = nil
 	if not live then
-		note = "Studio test: players on this server"
+		note = LeaderboardView.LocalNote
 	elseif data and data.Ready == false then
 		note = "Loading..."
 	end
@@ -156,6 +160,7 @@ end
 -- Columns of a row (scale of the row's width): rank, name, value (right-aligned).
 LeaderboardView.Columns = { Rank = { 0, 0.12 }, Name = { 0.13, 0.49 }, Value = { 0.63, 0.35 } }
 LeaderboardView.MinText = 11
+LeaderboardView.NameFloor = 0.8 -- a long name shrinks the rows' text to this share at most
 
 -- A generous guess of a text's width in em (rounded fonts; never smaller
 -- than the real text, so a fitted text never spills).
@@ -319,15 +324,37 @@ function LeaderboardView.canvas(
 	}
 end
 
--- Shows the texts of LeaderboardView.lines on a canvas (long names and
--- values get a smaller text so they fit their column).
+-- The one text size of a canvas's names and values: the biggest at which
+-- every shown value fits its column (values are never cut) and every name
+-- fits too, but a long name only pulls it down to NameFloor of the full
+-- size (past that the name is cut off with "..."), so the rows stay even.
+function LeaderboardView.rowTextSize(lines: Lines, rowCount: number, width: number, max: number): number
+	local rowW = width * 0.94
+	local cols = LeaderboardView.Columns
+	local min = LeaderboardView.MinText
+	local nameFloor = math.max(min, math.floor(max * LeaderboardView.NameFloor))
+	local size = max
+	for i = 1, rowCount do
+		local line = lines.Rows[i]
+		if line and not (lines.Note ~= nil and i == rowCount) then
+			size = math.min(size, LeaderboardView.fitSize(line.Value, rowW * cols.Value[2], max, min))
+			size = math.min(size, math.max(nameFloor, LeaderboardView.fitSize(line.Name, rowW * cols.Name[2], max, min)))
+		end
+	end
+	return size
+end
+
+-- Shows the texts of LeaderboardView.lines on a canvas (one text size for
+-- every row: rowTextSize).
 function LeaderboardView.fill(canvas: Canvas, lines: Lines)
 	local count = #canvas.Rows
 	local rowW = canvas.Width * 0.94
-	local cols = LeaderboardView.Columns
 	local max, min = canvas.TextSize, LeaderboardView.MinText
+	local size = LeaderboardView.rowTextSize(lines, count, canvas.Width, max)
 	for i, refs in canvas.Rows do
 		local line = lines.Rows[i]
+		refs.Name.TextSize = size
+		refs.Value.TextSize = size
 		if lines.Note ~= nil and i == count then
 			-- the note takes the last row's place
 			refs.Rank.Text = ""
@@ -338,8 +365,6 @@ function LeaderboardView.fill(canvas: Canvas, lines: Lines)
 			refs.Rank.Text = line.Rank
 			refs.Name.Text = line.Name
 			refs.Value.Text = line.Value
-			refs.Name.TextSize = LeaderboardView.fitSize(line.Name, rowW * cols.Name[2], max, min)
-			refs.Value.TextSize = LeaderboardView.fitSize(line.Value, rowW * cols.Value[2], max, min)
 			local medal = if line.Medal then LeaderboardView.Medals[line.Medal] else nil
 			refs.Rank.TextColor3 = medal or LeaderboardView.RowText
 			refs.Name.TextColor3 = if line.Mine then LeaderboardView.MineColor else LeaderboardView.RowText
@@ -501,7 +526,8 @@ function LeaderboardView.setTab(panel: Panel, boardId: string)
 		button.TextColor3 = if on then Theme.Text else Theme.TextDim
 	end
 	for id, canvas in panel.Canvases do
-		(canvas.Root.Parent :: Frame).Visible = id == boardId
+		local holder = canvas.Root.Parent :: Frame
+		holder.Visible = id == boardId
 	end
 end
 

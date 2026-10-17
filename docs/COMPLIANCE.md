@@ -230,7 +230,8 @@ enchants, the wheel and later trading all ask it.
 - The forge name box says *"Please don't use your real name or any personal
   info"* (see 2.1). Roblox's filter also blocks things like phone numbers.
 - Show players by their Roblox **DisplayName** (already moderated by Roblox),
-  for example on plot ownership signs or leaderboards.
+  for example on plot ownership signs or leaderboards (`LeaderboardService`
+  looks them up with `UserService:GetUserInfosByUserIdsAsync`).
 
 ### 2.5 Chat
 
@@ -467,8 +468,13 @@ tutorial.
   - Data Store: `TerraForge_PlayerData_v1`
   - Key Pattern: `Player_{UserId}` (exactly this capitalisation)
   - Scope: `global`
-  Add one template per extra data store you create later (for example
-  leaderboards → **Ordered Key**).
+  The four leaderboards (`LeaderboardConfig`, key = the player's UserId)
+  need one template each:
+  - Type: **Ordered Key**, Scope: `global`, Key Pattern: `{UserId}`
+  - Data Stores: `TF_LB_MoneyPerSec_v1`, `TF_LB_TotalEarned_v1`,
+    `TF_LB_Artifacts_v1`, `TF_LB_HoursPlayed_v1`
+  When a board's name gets a new `_vN` suffix, add a template for the new
+  name too. Add one template per extra data store you create later.
 - **Testing in Studio:** Roblox warns that Studio access to data stores is
   dangerous for live games. Once the game is live, test in a **separate test
   place/game** or turn the setting off (see section 3).
@@ -543,6 +549,7 @@ tutorial.
 ### Data and privacy
 - [ ] Save data holds only gameplay fields (`DataTemplate.luau`); analytics hold no free text.
 - [ ] RTBF deletion template created (`TerraForge_PlayerData_v1`, `Player_{UserId}`, `global`).
+- [ ] RTBF **Ordered Key** templates for the four leaderboards (`TF_LB_MoneyPerSec_v1`, `TF_LB_TotalEarned_v1`, `TF_LB_Artifacts_v1`, `TF_LB_HoursPlayed_v1`; `{UserId}`, `global`).
 - [ ] Someone checks the daily RTBF message in the Roblox inbox. **TODO:** name the person: __________
 
 ### Settings

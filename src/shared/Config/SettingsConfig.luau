@@ -58,6 +58,16 @@ function SettingsConfig.sanitize(raw: any): Settings
 	}
 end
 
+-- A saved record with some keys changed on top (the changes a client made
+-- before the saved record reached it); a whole, valid record.
+function SettingsConfig.merge(saved: any, changed: { [string]: any }): Settings
+	local raw = table.clone(SettingsConfig.sanitize(saved)) :: { [string]: any }
+	for key, value in changed do
+		raw[key] = value
+	end
+	return SettingsConfig.sanitize(raw)
+end
+
 function SettingsConfig.equal(a: Settings, b: Settings): boolean
 	return a.Music == b.Music and a.Sfx == b.Sfx and a.Shake == b.Shake and a.Rumble == b.Rumble
 end
