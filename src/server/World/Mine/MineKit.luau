@@ -40,7 +40,8 @@ local Railway = require(World:WaitForChild("Railway"))
 
 local MineKit = {}
 
-MineKit.PartBudget = 3000
+MineKit.PartBudget = 3000 -- floors 4-5 (far from the town, they stream on their own)
+MineKit.NearPartBudget = 1800 -- floors 1-3 stream in with the town: keep them light for phones
 MineKit.LightBudget = 24
 
 local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
@@ -246,9 +247,24 @@ end
 
 ---------------------------------------------------------------- ore lift and gate
 
--- The train's Mine Lift at `position` on the floor (it faces the floor's middle along X).
+-- In the game the Mine Lifts are built by Railway from TrainConfig.Lifts (their train hooks live
+-- under Map.Railway); floor builders only mark the spot. Preview scenes set this to true so
+-- the floor pictures show the lift.
+MineKit.PreviewLifts = false
+
+-- The train's Mine Lift at `position` on the floor (it faces the floor's middle along X), or in
+-- the game an "OreLiftSpot" marker model (attribute LiftId) where TrainConfig puts the lift.
 function MineKit.oreLift(parent: Instance, position: Vector3, id: string): Model
-	return Railway.buildLift(parent, { Id = id, Position = position, Size = Vector3.new(6, 5, 6) })
+	if MineKit.PreviewLifts then
+		return Railway.buildLift(parent, { Id = id, Position = position, Size = Vector3.new(6, 5, 6) })
+	end
+	local m = Instance.new("Model")
+	m.Name = "OreLiftSpot"
+	m:SetAttribute("LiftId", id)
+	m.Parent = parent
+	local spot = MineKit.marker(m, "Spot", CFrame.new(position + Vector3.new(0, 0.5, 0)))
+	m.PrimaryPart = spot
+	return m
 end
 
 -- An arch over a way in with "BLASTER LV N+" on it; cf = ground center, front = LookVector.

@@ -14,8 +14,8 @@ placement (front, entrance) faces the previous floor / the town.
 | 1 Greystone Quarry | (0, -12, -180) | -70..70, -240..-120 | Land's quarry pit | front: the town ramp x -8..8 from (0,0,-112) to (0,-12,-140); back: opening x -9..9, 16 high at z -240 straight into floor 2; east wall: the VIP Grotto door at z -188..-176 |
 | 2 Ember Caves | (0, -12, -300) | -68..68, -240..-360 | Land's Ember Caves room + tunnel | front opening x -9..9 at z -240; back: the ramp down to floor 3 starts at (0,-12,-354), opening x -11..11 in the back wall |
 | 3 Deep Hollow | (0, -40, -444) | -68..68, -386..-502 | Land's Deep Hollow room | front: the ramp from floor 2 ends at (0,-40,-394), opening x -11..11 at z -386 |
-| 4 Sunken Palace | (0, -170, -300) | -66..66, -244..-356 | new | elevator only |
-| 5 Heartstone Core | (0, -330, -300) | -80..80, -230..-370 | new | elevator only; a dark void enclosure and a void catcher under the islands |
+| 4 Sunken Palace | (0, -220, -800) | -66..66, -744..-856 | new | elevator only (far north and deep: never streams in near the town) |
+| 5 Heartstone Core | (0, -400, -800) | -80..80, -730..-870 | new | elevator only; a dark void enclosure and a void catcher under the islands (above FallenPartsDestroyHeight -500) |
 
 Land builds the town ramp, the tunnel/ramp between floors 2 and 3 (z -360..-386) and the grotto tunnel; the floors
 leave the openings. The train session's pieces stay exactly where they are (Railway, TrainConfig): the Mine Station

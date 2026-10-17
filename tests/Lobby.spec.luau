@@ -154,7 +154,12 @@ return function(T, Loader)
 		local game = roblox.Instance.new("DataModel")
 		local map = WorldBuilder.build(game:GetService("Workspace"))
 		local mapParts, lobbyParts, lobbyLights = 0, 0, 0
+		-- the mine floor areas have their own budgets (tests/MineFloorAreas.spec.luau)
+		local mine = map:FindFirstChild("MineFloors")
 		for _, d in map:GetDescendants() do
+			if mine and d:IsDescendantOf(mine) then
+				continue
+			end
 			if d:IsA("BasePart") then
 				mapParts += 1
 				if LobbyLayout.inArea(d.CFrame.Position) then

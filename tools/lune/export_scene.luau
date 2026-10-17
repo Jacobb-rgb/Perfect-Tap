@@ -46,10 +46,37 @@ local function presetToJson(preset)
 	return out
 end
 
-local function addNodes(parent)
+local function addNodes(parent, map)
 	local folder = roblox.Instance.new("Folder")
 	folder.Name = "Nodes"
 	folder.Parent = parent
+	-- the mine floors' rocks (RockBuilder) on their NodeSpawn markers
+	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
+	local markers = map and map:FindFirstChild("NodeSpawns")
+	if markers then
+		for _, marker in markers:GetChildren() do
+			local floorIndex = marker:GetAttribute("Floor")
+			if type(floorIndex) == "number" then
+				local index = marker:GetAttribute("SpawnIndex") or 0
+				local rng = Rng.new(index * 131 + 7)
+				local floor = MineFloors.get(floorIndex)
+				local kind = marker:GetAttribute("Kind")
+				if kind ~= "Giant" then
+					local roll = rng:next()
+					local deep = marker:GetAttribute("Deep") == true
+					kind = if roll < (if deep then 0.25 else 0.1) then "Crystal" elseif roll < 0.42 then "Big" else "Small"
+				end
+				local weights = if kind == "Crystal" then floor.CrystalOres else floor.Ores
+				local ores = {}
+				for _ = 1, MineFloors.OreCount[kind] or 3 do
+					table.insert(ores, rng:weighted(weights))
+				end
+				local ground = marker.CFrame.Position - roblox.Vector3.new(0, marker.Size.Y / 2, 0)
+				RockBuilder.build(floorIndex, kind, ores, roblox.CFrame.new(ground), index).Parent = folder
+			end
+		end
+	end
 	for index, spawn in WorldBuilder.generateNodeSpawns() do
 		local zone = WorldLayout.ZoneById[spawn.Zone]
 		local rng = Rng.new(index * 97 + 5)
@@ -69,9 +96,9 @@ end
 local uiExports: { [string]: { any } } = {}
 local scene_extra: any = nil
 
-if sceneName == "world" then
-	WorldBuilder.build(workspace)
-	addNodes(workspace)
+if sceneName == "world" or string.match(sceneName, "^world_") then
+	-- "world_<name>": the same world into build/preview/world_<name>.json (parallel workers)
+	addNodes(workspace, WorldBuilder.build(workspace))
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)

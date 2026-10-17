@@ -55,6 +55,8 @@ function MineFloorScene.build(Loader, workspace, index: number)
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
 	local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine." .. MineFloorScene.Modules[index])
+	-- the preview shows the floor's own Mine Lift (in the game Railway builds it from TrainConfig)
+	Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit").PreviewLifts = true
 	local floor = MineFloors.get(index)
 	local model = Floor.build(workspace, CF.new(0, 0, 0), { Cutaway = true })
 

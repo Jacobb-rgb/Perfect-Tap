@@ -211,14 +211,34 @@ MineFloors.List = {
 } :: { Floor }
 
 -- Where each floor area stands in the world (ground center; +Z = front/entrance), see
--- docs/plans/MINE_STEP_PLAN.md: floors 1-3 replace the old quarry and caves, 4-5 lie deep below.
+-- docs/plans/MINE_STEP_PLAN.md: floors 1-3 replace the old quarry and caves; 4-5 lie deep below
+-- and far north (beyond the streaming radius of the town, above FallenPartsDestroyHeight -500).
 MineFloors.Placement = {
 	CFrame.new(0, -12, -180),
 	CFrame.new(0, -12, -300),
 	CFrame.new(0, -40, -444),
-	CFrame.new(0, -170, -300),
-	CFrame.new(0, -330, -300),
+	CFrame.new(0, -220, -800),
+	CFrame.new(0, -400, -800),
 } :: { CFrame }
+
+-- Where each floor's Mine Lift stands (floor-local, on the ground; TrainConfig.Lifts builds them
+-- through Railway). Floor 1 has none: players load the Mine Station's hopper in the quarry.
+MineFloors.LiftSpots = {
+	[2] = Vector3.new(46, 0, 40),
+	[3] = Vector3.new(50, 0, 2),
+	[4] = Vector3.new(26, 2.4, 45),
+	[5] = Vector3.new(12, 0, 25),
+} :: { [number]: Vector3 }
+
+-- The world position of a floor's Mine Lift (nil for floor 1).
+function MineFloors.liftPosition(index: number): Vector3?
+	local spot = MineFloors.LiftSpots[index]
+	local placement = MineFloors.Placement[index]
+	if not spot or not placement then
+		return nil
+	end
+	return placement:PointToWorldSpace(spot)
+end
 
 MineFloors.ByIndex = {} :: { [number]: Floor }
 MineFloors.ById = {} :: { [string]: Floor }

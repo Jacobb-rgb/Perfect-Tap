@@ -51,8 +51,11 @@ return function(T, Loader)
 			T.truthy(map:FindFirstChild(path), "map has " .. path)
 		end
 		local parts = 0
+		-- the mine floor areas have their own budgets (tests/MineFloorAreas.spec.luau)
+		local mine = map:FindFirstChild("MineFloors")
+		T.truthy(mine and #mine:GetChildren() == 5, "map has the five mine floors")
 		for _, d in map:GetDescendants() do
-			if d:IsA("BasePart") then
+			if d:IsA("BasePart") and not (mine and d:IsDescendantOf(mine)) then
 				parts += 1
 			end
 		end
@@ -74,16 +77,17 @@ return function(T, Loader)
 		local game = roblox.Instance.new("DataModel")
 		local map = WorldBuilder.build(game:GetService("Workspace"))
 		local caves = WorldLayout.Caves
+		-- (the Ember Caves and the Deep Hollow are the mine floor areas 2 and 3)
 		local rooms = {
-			{ name = "EmberCaves", box = caves.EmberCaves },
-			{ name = "DeepHollow", box = caves.DeepHollow },
-			{ name = "Grotto", box = caves.Grotto },
+			{ name = "EmberCaves", box = caves.EmberCaves, model = "MineFloor2" },
+			{ name = "DeepHollow", box = caves.DeepHollow, model = "MineFloor3" },
+			{ name = "Grotto", box = caves.Grotto, model = "Grotto" },
 		}
 		-- (a cave's own model, or a Mine Lift standing in its cave: Railway)
-		local function insideModel(part, name)
+		local function insideModel(part, name, own)
 			local node = part.Parent
 			while node do
-				if node.Name == name or (node:HasTag("MineLift") and node:GetAttribute("LiftId") == name) then
+				if node.Name == own or (node:HasTag("MineLift") and node:GetAttribute("LiftId") == name) then
 					return true
 				end
 				node = node.Parent
@@ -99,7 +103,7 @@ return function(T, Loader)
 				local hz = math.abs(r20) * size.X / 2 + math.abs(r21) * size.Y / 2 + math.abs(r22) * size.Z / 2
 				local p = cf.Position
 				for _, room in rooms do
-					if not insideModel(d, room.name) then
+					if not insideModel(d, room.name, room.model) then
 						local min = room.box.Min + roblox.Vector3.new(14, 2, 14)
 						local max = room.box.Max - roblox.Vector3.new(14, 6, 14)
 						local overlaps = p.X - hx < max.X and p.X + hx > min.X

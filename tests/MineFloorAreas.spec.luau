@@ -26,10 +26,29 @@ return function(T, Loader)
 		T.le(count(elevator, "PointLight"), 1, "elevator lights")
 		local gate = MineKit.gate(folder, CF.new(20, 0, 0), 12, 5, { roblox.Color3.new(0.5, 0.5, 0.5), roblox.Color3.new(0.7, 0.7, 0.7), roblox.Color3.new(0.3, 0.3, 0.3) })
 		T.eq(gate:GetAttribute("MinBlaster"), 5, "gate level")
+		local spot = MineKit.oreLift(folder, V3.new(40, 0, 0), "Test")
+		T.eq(spot.Name, "OreLiftSpot", "in the game the floor only marks the lift's spot")
+		T.eq(spot:GetAttribute("LiftId"), "Test", "spot lift id")
+		MineKit.PreviewLifts = true
 		local lift = MineKit.oreLift(folder, V3.new(40, 0, 0), "Test")
-		T.truthy(lift:HasTag("MineLift"), "ore lift is a Mine Lift")
+		MineKit.PreviewLifts = false
+		T.truthy(lift:HasTag("MineLift"), "the preview builds the Mine Lift")
 		local cluster = MineKit.crystals(folder, CF.new(0, 0, 20), 7, 6, "Shell", { roblox.Color3.new(0.2, 0.8, 0.9) }, 1)
 		T.truthy(#cluster:GetChildren() >= 7, "cluster crystals")
+	end)
+
+	T.test("mine floor areas in the game: near-town floors stay light, no own ore lifts", function()
+		for index, name in MODULES do
+			local ok, Floor = pcall(Loader.requirePath, "ServerScriptService.Server.World.Mine." .. name)
+			if ok and Floor then
+				local folder = roblox.Instance.new("Folder")
+				local model = Floor.build(folder, CF.new(0, 0, 0), { Cutaway = false })
+				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
+				T.le(count(model, "BasePart"), budget, name .. " in-game parts")
+				local lift = model:FindFirstChild("MineLift", true)
+				T.truthy(lift == nil or not lift:HasTag("MineLift"), name .. " builds no Mine Lift of its own in the game")
+			end
+		end
 	end)
 
 	T.test("mine floor areas: contract, spawns, markers and budgets", function()
