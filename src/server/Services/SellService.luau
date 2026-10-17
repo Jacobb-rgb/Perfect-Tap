@@ -19,7 +19,10 @@
 	  carried items are ever touched.
 
 	Price = ItemData.value (Raw = Dirty Ore pays the raw price; its name is
-	revealed in the toast after the sale). Every sale: EconomyService.award
+	revealed in the toast after the sale), times the player's sell bonus
+	(Bonuses.sellAmount: the Midas enchant, SellValue golems, the Royal
+	Railway collection; the Sell view shows the same numbers with
+	State.Bonuses.SellMult). Every sale: EconomyService.award
 	(source "Sell"), Stats.ItemsSold, DataService.changed, Net "Earned"
 	{ Amount, Source = "Sell", Position, Count } for the coin burst, and a
 	toast "Tobin paid $1.2K for 3 items".
@@ -41,6 +44,7 @@ local Rarity = require(Shared.Config.Rarity)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local DataService = require(script.Parent.DataService)
 local StateService = require(script.Parent.StateService)
 local ItemService = require(script.Parent.ItemService)
@@ -81,7 +85,8 @@ local viewers: { [Player]: boolean } = {}
 local binBatches: { [Player]: BinBatch } = {}
 local soldCallbacks: { SoldCallback } = {}
 
--- Listeners: (player, desc, value) after every single item sold.
+-- Listeners: (player, desc, value) after every single item sold (value =
+-- Tobin's base price, before the player's sell bonus).
 function SellService.onSold(callback: SoldCallback)
 	table.insert(soldCallbacks, callback)
 end
@@ -250,11 +255,12 @@ end
 	of the world): one award, stats, DataService.changed, the Earned popup
 	and the toast.
 ]]
-local function payout(player: Player, data: { [string]: any }, descs: { Desc }, total: number, position: Vector3)
+local function payout(player: Player, data: { [string]: any }, descs: { Desc }, base: number, position: Vector3)
 	local count = #descs
 	if count == 0 then
 		return
 	end
+	local total = Bonuses.sellAmount(Bonuses.stats(player), base)
 	local stats = data.Stats
 	if type(stats) == "table" then
 		local before = tonumber(stats.ItemsSold) or 0
@@ -485,10 +491,11 @@ function SellService.sellRecord(record: ItemRecord, position: Vector3?): number
 	if not owner or not data then
 		return 0
 	end
-	local price = SellService.priceOf(ItemService.descOf(record))
-	if price <= 0 then
+	local base = SellService.priceOf(ItemService.descOf(record))
+	if base <= 0 then
 		return 0
 	end
+	local price = Bonuses.sellAmount(Bonuses.stats(owner), base)
 	local at = position or record.Body.CFrame.Position
 	-- out of the world first, then paid: no yield in between
 	local desc = ItemService.absorb(record)
@@ -500,7 +507,7 @@ function SellService.sellRecord(record: ItemRecord, position: Vector3?): number
 	EconomyService.award(owner, price, "Sell")
 	DataService.changed(owner)
 	for _, callback in soldCallbacks do
-		task.spawn(callback, owner, desc, price)
+		task.spawn(callback, owner, desc, base)
 	end
 	-- one popup and toast for items landing together
 	local batch = binBatches[owner]

@@ -9,7 +9,11 @@
 	  PodiumService; selling in SellService. They all go through award, so
 	  nothing else ever writes data.Coins.
 	- incomeMultiplier(player): EconomyConfig.multiplier over every bonus
-	  added with addIncomeBonus (golems, passes, rebirths in later steps).
+	  added with addIncomeBonus (passes, rebirths in later steps). Golems,
+	  enchants and artifact collections are NOT added one by one: Bonuses
+	  (src/server/Bonuses.luau) adds its capped IncomePct total once under the
+	  key "Bonuses". A keyed bonus replaces the one with the same key, so a
+	  source can never count twice.
 	Amounts that are not finite, below 0.001 or above EconomyConfig.MaxAward
 	are ignored (a bug, never a real payout).
 ]]
@@ -31,6 +35,7 @@ local MIN_AMOUNT = 0.001
 local earnedCallbacks: { EarnedCallback } = {}
 local spentCallbacks: { SpentCallback } = {}
 local incomeBonuses: { IncomeBonus } = {}
+local incomeKeys: { [string]: number } = {} -- key -> index in incomeBonuses
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n > -math.huge and n < math.huge
@@ -100,8 +105,17 @@ function EconomyService.canAfford(player: Player, amount: number): boolean
 end
 
 -- A source of extra podium income: returns a bonus share (0.1 = +10 %).
-function EconomyService.addIncomeBonus(bonus: IncomeBonus)
+-- With a `key`, adding again under the same key replaces that bonus.
+function EconomyService.addIncomeBonus(bonus: IncomeBonus, key: string?)
+	local index = if key then incomeKeys[key] else nil
+	if index then
+		incomeBonuses[index] = bonus
+		return
+	end
 	table.insert(incomeBonuses, bonus)
+	if key then
+		incomeKeys[key] = #incomeBonuses
+	end
 end
 
 -- Total podium income multiplier for a player (1 = no bonus). A bonus that
@@ -121,6 +135,10 @@ end
 EconomyService._test = {
 	reset = function()
 		table.clear(incomeBonuses)
+		table.clear(incomeKeys)
+	end,
+	bonusCount = function(): number
+		return #incomeBonuses
 	end,
 }
 
