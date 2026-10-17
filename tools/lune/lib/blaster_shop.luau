@@ -1617,6 +1617,375 @@ local function guardianStatue(K: any, parent: any, feet: any, u: number)
 	gun.Parent = parent
 end
 
+---------------------------------------------------------------- Forge Vault: giant statues and banners
+
+local PURPLE = C3.fromRGB(88, 46, 132)
+local PURPLE_D = C3.fromRGB(58, 30, 88)
+local GOLD = C3.fromRGB(222, 172, 72)
+local FABRIC = Enum.Material.Fabric
+
+-- The vault's gold crest (cf = its center on a surface facing +Z, s = its size).
+local function crest(K: any, cf: any, s: number)
+	local function g(x: number, y: number, w: number, h: number, rot: number)
+		K.boxCF(cf * CF.new(x * s, y * s, 0.06) * CF.Angles(0, 0, rot), V3.new(w * s, h * s, 0.1), GOLD, Enum.Material.Metal)
+	end
+	-- a diamond outline, a solid core, a spike above, two sweeping wings, a stem below
+	for i = 0, 3 do
+		local a = math.pi / 4 + i * math.pi / 2
+		g(math.cos(a + math.pi / 4) * 0.32, math.sin(a + math.pi / 4) * 0.32, 0.9, 0.14, a)
+	end
+	g(0, 0, 0.36, 0.36, math.pi / 4)
+	g(0, 0.62, 0.16, 0.5, 0)
+	g(0, 0.92, 0.26, 0.26, math.pi / 4)
+	for _, sx in { -1, 1 } do
+		g(sx * 0.62, 0.22, 0.6, 0.14, sx * 0.6)
+		g(sx * 0.92, 0.52, 0.34, 0.12, sx * 1.2)
+		g(sx * 0.5, -0.42, 0.44, 0.12, -sx * 0.7)
+	end
+	g(0, -0.72, 0.14, 0.44, 0)
+end
+
+--[[
+	A hanging purple banner with a gold trim and the gold crest: an iron rod with
+	finials on top, the cloth ending in a point. cf = the rod's center, facing +Z.
+]]
+local function banner(K: any, parent: any, cf: any, w: number, h: number)
+	local Geo = L.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local IRONB = C3.fromRGB(40, 36, 42)
+	local pointH = w * 0.45
+	K.cylCF(cf, w + 0.9, 0.35, IRONB, Enum.Material.Metal)
+	for _, sx in { -1, 1 } do
+		local b = K.part("Part", cf * CF.new(sx * (w / 2 + 0.5), 0, 0), V3.new(0.55, 0.55, 0.55), GOLD, Enum.Material.Metal)
+		b.Shape = Enum.PartType.Ball
+	end
+	local body = h - pointH
+	local cloth = K.boxCF(cf * CF.new(0, -body / 2 - 0.15, 0), V3.new(w, body, 0.14), PURPLE, FABRIC)
+	cloth.Name = "BannerCloth"
+	Geo.triangle(
+		parent,
+		(cf * CF.new(-w / 2, -body - 0.15, 0.07)).Position,
+		(cf * CF.new(w / 2, -body - 0.15, 0.07)).Position,
+		(cf * CF.new(0, -h - 0.15, 0.07)).Position,
+		0.14,
+		PURPLE,
+		FABRIC,
+		(cf.Rotation * V3.new(0, 0, 1)),
+		{ CanCollide = false }
+	)
+	-- the gold trim: the sides, the top band, the point's edges
+	for _, sx in { -1, 1 } do
+		K.boxCF(cf * CF.new(sx * (w / 2 - 0.12), -body / 2 - 0.15, 0.09), V3.new(0.16, body, 0.04), GOLD, Enum.Material.Metal)
+		local a = cf * CF.new(sx * (w / 2 - 0.12), -body - 0.15, 0.09)
+		local b = cf * CF.new(0, -h - 0.05, 0.09)
+		local d = b.Position - a.Position
+		K.boxCF(
+			CF.lookAt((a.Position + b.Position) / 2, b.Position, cf.LookVector * -1),
+			V3.new(0.16, 0.04, d.Magnitude),
+			GOLD,
+			Enum.Material.Metal
+		)
+	end
+	K.boxCF(cf * CF.new(0, -0.6, 0.09), V3.new(w, 0.16, 0.04), GOLD, Enum.Material.Metal)
+	K.boxCF(cf * CF.new(0, -0.95, 0.09), V3.new(w - 0.6, 0.08, 0.04), PURPLE_D)
+	crest(K, cf * CF.new(0, -body * 0.52, 0.07), w * 0.42)
+end
+
+--[[
+	Glowing lava cracks on a face: fcf = the face's center frame (its Z out of
+	the face), hx, hy = the face's half size; n zigzag cracks of 3-5 segments.
+]]
+local function cracks(K: any, fcf: any, hx: number, hy: number, n: number, rand: () -> number, thick: number)
+	local LAVA = C3.fromRGB(255, 136, 44)
+	for _ = 1, n do
+		local x, y = (rand() - 0.5) * hx * 1.4, (rand() - 0.5) * hy * 1.4
+		local a = rand() * math.pi * 2
+		for _ = 1, 3 + math.floor(rand() * 3) do
+			a += (rand() - 0.5) * 1.4
+			local len = (0.3 + rand() * 0.4) * math.min(hx, hy) * 1.4
+			local nx = math.clamp(x + math.cos(a) * len, -hx * 0.92, hx * 0.92)
+			local ny = math.clamp(y + math.sin(a) * len, -hy * 0.92, hy * 0.92)
+			local dx, dy = nx - x, ny - y
+			local l = math.sqrt(dx * dx + dy * dy)
+			if l > 0.05 then
+				local p = K.boxCF(
+					fcf * CF.new((x + nx) / 2, (y + ny) / 2, 0.03) * CF.Angles(0, 0, math.atan2(dy, dx)),
+					V3.new(l + thick, thick, 0.06),
+					LAVA,
+					NEON
+				)
+				p.CastShadow = false
+			end
+			x, y = nx, ny
+		end
+	end
+end
+
+-- The face of a box (cf, size) whose normal points most along `dir`: its center frame and half size.
+local function bestFace(cf: any, size: any, dir: any): (any, number, number)
+	local faces = {
+		{ CF.new(0, 0, size.Z / 2), size.X / 2, size.Y / 2, CF.identity },
+		{ CF.new(0, 0, -size.Z / 2), size.X / 2, size.Y / 2, CF.Angles(0, math.pi, 0) },
+		{ CF.new(size.X / 2, 0, 0), size.Z / 2, size.Y / 2, CF.Angles(0, math.pi / 2, 0) },
+		{ CF.new(-size.X / 2, 0, 0), size.Z / 2, size.Y / 2, CF.Angles(0, -math.pi / 2, 0) },
+		{ CF.new(0, size.Y / 2, 0), size.X / 2, size.Z / 2, CF.Angles(-math.pi / 2, 0, 0) },
+		{ CF.new(0, -size.Y / 2, 0), size.X / 2, size.Z / 2, CF.Angles(math.pi / 2, 0, 0) },
+	}
+	local best, bestDot = faces[1], -math.huge
+	for _, f in faces do
+		local n = (cf * f[1] * f[4]).LookVector * -1 -- a CFrame's LookVector is its -Z; the face's normal is its +Z
+		local d = n:Dot(dir)
+		if d > bestDot then
+			best, bestDot = f, d
+		end
+	end
+	return cf * best[1] * best[4], best[2], best[3]
+end
+
+--[[
+	A giant stone king statue after the owner's concept art: a muscular body of
+	grey stone blocks veined with glowing lava cracks, a crown, a bearded face
+	with glowing eyes, layered shoulder plates, a purple tabard with the gold
+	crest and a dark cape; one arm raises a glowing lava blaster, the other
+	holds an open map forward. It stands on a stone pedestal with a purple
+	banner and a fire line. ground = the pedestal's foot (front +Z); o = the
+	side of the blaster arm (+1 = the statue's local +X, its left).
+]]
+local function giantStatue(K: any, parent: any, ground: any, o: number, seed: number)
+	local Geo = L.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local rand = lcg(seed)
+	local k = 1.85
+	local TONES = { C3.fromRGB(112, 108, 116), C3.fromRGB(98, 94, 102), C3.fromRGB(126, 122, 130), C3.fromRGB(86, 82, 92) }
+	local DARKS = C3.fromRGB(64, 60, 70)
+	local FIRE = C3.fromRGB(255, 140, 50)
+	-- the pedestal: a bottom course, a block body, corner pilasters, a cap with a fire line, a banner
+	local PW, PD, PH = 14, 12, 8.4
+	K.boxCF(ground * CF.new(0, 0.6, 0), V3.new(PW + 1.4, 1.2, PD + 1.4), C3.fromRGB(70, 66, 78), SLATEM)
+	K.boxCF(ground * CF.new(0, PH / 2, 0), V3.new(PW, PH, PD), VS.core)
+	local rows = 5
+	for r = 0, rows - 1 do
+		local y0 = 1.2 + r * (PH - 2) / rows
+		blockRow(K, ground * CF.new(0, y0, PD / 2 - 0.2), PW, (PH - 2) / rows, seed + r, FIRE)
+		blockRow(K, ground * CF.new(0, y0, -PD / 2 + 0.2) * CF.Angles(0, math.pi, 0), PW, (PH - 2) / rows, seed + 10 + r)
+		for _, sx in { -1, 1 } do
+			blockRow(
+				K,
+				ground * CF.new(sx * (PW / 2 - 0.2), y0, 0) * CF.Angles(0, sx * math.pi / 2, 0),
+				PD,
+				(PH - 2) / rows,
+				seed + 20 + r + sx
+			)
+		end
+	end
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			K.boxCF(ground * CF.new(sx * (PW / 2 - 0.4), PH / 2, sz * (PD / 2 - 0.4)), V3.new(1.8, PH, 1.8), C3.fromRGB(78, 74, 88), SLATEM)
+		end
+	end
+	K.boxCF(ground * CF.new(0, PH + 0.4, 0), V3.new(PW + 1.0, 0.8, PD + 1.0), VS.light, SLATEM)
+	neon(K, ground * CF.new(0, PH - 0.1, PD / 2 + 0.52), V3.new(PW + 1.0, 0.16, 0.06), FIRE)
+	for _, sx in { -1, 1 } do
+		neon(K, ground * CF.new(sx * (PW / 2 + 0.52), PH - 0.1, 0), V3.new(0.06, 0.16, PD + 1.0), FIRE)
+	end
+	banner(K, parent, ground * CF.new(0, PH - 0.5, PD / 2 + 0.7), 5.2, 6.4)
+	light(K, (ground * CF.new(0, PH - 1, PD / 2 + 3)).Position, FIRE, 12, 0.6)
+
+	-- the statue, in design units (x k studs) on the pedestal top
+	local feet = ground * CF.new(0, PH + 0.8, 0)
+	local fwd = -feet.LookVector -- the statue faces its +Z (a CFrame's LookVector is its -Z)
+	local function P(x: number, y: number, z: number): any
+		return (feet * CF.new(x * k, y * k, z * k)).Position
+	end
+	local function tone(): any
+		return TONES[1 + math.floor(rand() * #TONES)]
+	end
+	local function crackOn(cf: any, size: any, n: number)
+		if n > 0 then
+			local fcf, hx, hy = bestFace(cf, size, (fwd + V3.new(0, 0.25, 0)).Unit)
+			cracks(K, fcf, hx, hy, n, rand, 0.15 * k)
+		end
+	end
+	-- a block at (x, y, z) design units, size (w, h, d), turned by (rx, ry, rz)
+	local function blk(x: number, y: number, z: number, w: number, h: number, d: number, n: number, rot: any?, color: any?)
+		local cf = feet * CF.new(x * k, y * k, z * k) * (rot or CF.identity)
+		local size = V3.new(w * k, h * k, d * k)
+		K.boxCF(cf, size, color or tone(), SLATEM)
+		crackOn(cf, size, n)
+		return cf
+	end
+	-- a limb from a to b (world points), w x d thick (design units)
+	local function limb(a: any, b: any, w: number, d: number, n: number, color: any?)
+		local cf = CF.lookAt((a + b) / 2, b, fwd)
+		local size = V3.new(w * k, d * k, (b - a).Magnitude + 0.3 * k)
+		K.boxCF(cf, size, color or tone(), SLATEM)
+		crackOn(cf, size, n)
+		return cf
+	end
+	-- legs: boots, shins with knee guards, thick thighs
+	for _, s in { -1, 1 } do
+		blk(s * 1.9, 0.45, 0.35, 1.6, 0.9, 2.4, 0, nil, DARKS)
+		blk(s * 1.9, 0.82, 1.45, 1.4, 0.5, 0.4, 0, nil, C3.fromRGB(78, 74, 84))
+		local ankle, knee, hip = P(s * 1.9, 0.9, 0.2), P(s * 1.75, 3.7, 0.55), P(s * 1.05, 6.2, 0)
+		limb(ankle, knee, 1.45, 1.55, 2)
+		blk(s * 1.75, 3.7, 1.25, 1.3, 1.1, 0.5, 0, nil, C3.fromRGB(78, 74, 84))
+		limb(knee, hip, 2.1, 2.15, 3)
+	end
+	-- hips, belt with a glowing buckle, the purple tabard and the cape
+	blk(0, 6.4, 0, 3.9, 1.3, 2.2, 0)
+	blk(0, 6.95, 0, 4.1, 0.6, 2.4, 0, nil, C3.fromRGB(60, 50, 46))
+	K.boxCF(feet * CF.new(0, 6.95 * k, 1.22 * k) * CF.Angles(0, 0, math.pi / 4), V3.new(0.6 * k, 0.6 * k, 0.1 * k), FIRE, NEON)
+	local tab = feet * CF.new(0, 5.0 * k, 1.25 * k) * CF.Angles(-0.1, 0, 0)
+	K.boxCF(tab, V3.new(1.9 * k, 3.4 * k, 0.16 * k), PURPLE, FABRIC)
+	Geo.triangle(
+		parent,
+		(tab * CF.new(-0.95 * k, -1.7 * k, 0.08 * k)).Position,
+		(tab * CF.new(0.95 * k, -1.7 * k, 0.08 * k)).Position,
+		(tab * CF.new(0, -2.4 * k, 0.08 * k)).Position,
+		0.16 * k,
+		PURPLE,
+		FABRIC,
+		tab.LookVector * -1,
+		{ CanCollide = false }
+	)
+	for _, sx in { -1, 1 } do
+		K.boxCF(tab * CF.new(sx * 0.88 * k, 0, 0.1 * k), V3.new(0.12 * k, 3.4 * k, 0.04 * k), GOLD, Enum.Material.Metal)
+	end
+	crest(K, tab * CF.new(0, 0.3 * k, 0.1 * k), 0.75 * k)
+	local cape = feet * CF.new(0, 6.6 * k, -1.45 * k) * CF.Angles(0.1, 0, 0)
+	K.boxCF(cape, V3.new(4.6 * k, 8.4 * k, 0.25 * k), PURPLE_D, FABRIC)
+	for _, sx in { -1, 1 } do
+		K.boxCF(
+			cape * CF.new(sx * 2.3 * k, -0.5 * k, 0.4 * k) * CF.Angles(0, sx * 0.5, 0),
+			V3.new(0.9 * k, 7.2 * k, 0.22 * k),
+			PURPLE_D,
+			FABRIC
+		)
+	end
+	-- waist with abs, a broad chest with pecs, traps, layered shoulder plates
+	blk(0, 8.05, 0.05, 3.2, 1.9, 2.0, 1)
+	for _, ax in { -0.5, 0.5 } do
+		for _, ay in { 7.4, 7.98, 8.56 } do
+			blk(ax, ay, 1.1, 0.92, 0.5, 0.36, 1)
+		end
+	end
+	blk(0, 9.95, 0.05, 4.9, 2.4, 2.4, 2)
+	for _, s in { -1, 1 } do
+		-- lats flaring out under the arms, the deltoids under the plates
+		blk(s * 2.0, 8.9, -0.1, 1.2, 1.9, 1.9, 1, CF.Angles(0, 0, s * 0.3))
+		blk(s * 2.75, 10.2, 0.1, 1.5, 1.4, 1.9, 1)
+		blk(s * 1.08, 10.25, 1.3, 2.25, 1.5, 0.72, 2, CF.Angles(0, s * 0.12, 0))
+		for i, pl in { { 11.15, 2.3, 1.05, 2.6, 0.22 }, { 10.55, 2.1, 0.55, 2.5, 0.45 }, { 10.1, 1.9, 0.45, 2.3, 0.7 } } do
+			blk(
+				s * (2.6 + i * 0.22),
+				pl[1],
+				0,
+				pl[2],
+				pl[3],
+				pl[4],
+				if i == 1 then 1 else 0,
+				CF.Angles(0, 0, -s * pl[5]),
+				if i == 1 then C3.fromRGB(122, 118, 128) else nil
+			)
+		end
+	end
+	blk(0, 11.25, -0.15, 2.7, 0.65, 1.5, 0)
+	-- neck, head, brow, glowing eyes, nose, beard, crown
+	blk(0, 11.7, 0, 1.3, 0.8, 1.3, 0)
+	blk(0, 12.8, 0.1, 1.75, 1.95, 1.85, 1)
+	blk(0, 13.15, 1.02, 1.8, 0.3, 0.42, 0, nil, C3.fromRGB(96, 92, 100))
+	for _, s in { -1, 1 } do
+		K.boxCF(feet * CF.new(s * 0.42 * k, 12.93 * k, 1.04 * k), V3.new(0.38 * k, 0.14 * k, 0.08 * k), FIRE, NEON)
+	end
+	blk(0, 12.6, 1.12, 0.32, 0.5, 0.32, 0)
+	blk(0, 12.3, 1.1, 1.05, 0.2, 0.3, 0)
+	blk(0, 11.9, 0.88, 1.65, 0.95, 0.65, 1)
+	blk(0, 11.3, 0.95, 1.1, 0.65, 0.5, 0)
+	blk(0, 10.9, 1.0, 0.6, 0.4, 0.4, 0)
+	blk(0, 13.95, 0.1, 1.95, 0.55, 2.05, 1, nil, C3.fromRGB(122, 118, 128))
+	for i = 0, 7 do
+		local a = i / 8 * math.pi * 2
+		local h = if i == 2 then 0.85 else 0.6
+		blk(math.cos(a) * 0.9, 14.25 + h / 2, 0.1 + math.sin(a) * 0.95, 0.38, h, 0.32, 0, CF.Angles(0, -a, 0), C3.fromRGB(122, 118, 128))
+	end
+	K.boxCF(
+		feet * CF.new(0, 13.95 * k, 1.15 * k) * CF.Angles(0, 0, math.pi / 4),
+		V3.new(0.32 * k, 0.32 * k, 0.1 * k),
+		C3.fromRGB(190, 90, 255),
+		NEON
+	)
+	-- the blaster arm: up and out, the forearm raised, a bracer, a fist holding a lava blaster
+	local S, E, H = P(o * 2.85, 10.6, 0), P(o * 4.6, 11.0, 0.7), P(o * 4.95, 13.3, 1.15)
+	limb(S, E, 1.9, 1.9, 3)
+	blk(o * 3.7, 11.6, 0.7, 1.3, 0.95, 1.3, 1)
+	limb(E, H, 1.6, 1.65, 2)
+	local wrist = E:Lerp(H, 0.78)
+	K.boxCF(CF.lookAt(wrist, H, fwd), V3.new(1.6 * k, 1.65 * k, 0.6 * k), C3.fromRGB(70, 66, 76), SLATEM)
+	K.boxCF(CF.lookAt(H, H + (H - E).Unit, fwd), V3.new(1.5 * k, 1.5 * k, 1.3 * k), tone(), SLATEM)
+	local gun, anchors = Kenney.gun(L, 10, "Magmacore")
+	local gs = 7.6 * k / 5.56
+	local dir = (feet.Rotation * V3.new(o * 0.18, 0.88, 0.42)).Unit
+	local Z = -dir
+	local X = (fwd - dir * fwd:Dot(dir)).Unit
+	local Y = Z:Cross(X)
+	local gunCf = CF.fromMatrix(H + dir * 0.2 * k, X, Y, Z) * CF.new(-anchors.hand * gs)
+	for _, d in gun:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Size = d.Size * gs
+			d.CFrame = gunCf * CF.new(d.CFrame.Position * gs) * d.CFrame.Rotation
+		end
+	end
+	gun.Parent = parent
+	-- the map arm: down and forward, holding an open map toward the visitors
+	local S2, E2, H2 = P(-o * 2.85, 10.6, 0), P(-o * 3.45, 8.5, 1.3), P(-o * 2.6, 8.9, 3.1)
+	limb(S2, E2, 1.9, 1.9, 3)
+	blk(-o * 3.35, 9.9, 0.9, 1.2, 1.0, 1.3, 1)
+	limb(E2, H2, 1.6, 1.65, 2)
+	local wrist2 = E2:Lerp(H2, 0.75)
+	K.boxCF(CF.lookAt(wrist2, H2, fwd), V3.new(1.6 * k, 1.65 * k, 0.6 * k), C3.fromRGB(70, 66, 76), SLATEM)
+	K.boxCF(CF.lookAt(H2, H2 + (H2 - E2).Unit, fwd), V3.new(1.5 * k, 1.5 * k, 1.3 * k), tone(), SLATEM)
+	local map = feet * CF.new(-o * 2.3 * k, 9.9 * k, 3.75 * k) * CF.Angles(0, o * 0.3, 0) * CF.Angles(-0.2, 0, 0)
+	for _, sx in { -1, 1 } do
+		local half = map * CF.new(sx * 0.75 * k, 0, 0) * CF.Angles(0, -sx * 0.18, 0)
+		K.boxCF(half, V3.new(1.5 * k, 2.1 * k, 0.08 * k), C3.fromRGB(214, 188, 132))
+		-- the map's drawing: coast lines, a dashed route, an X, a compass
+		for j = 0, 2 do
+			K.boxCF(
+				half * CF.new((rand() - 0.5) * 0.8 * k, (0.6 - j * 0.5) * k, 0.05 * k) * CF.Angles(0, 0, (rand() - 0.5) * 1.2),
+				V3.new((0.5 + rand() * 0.5) * k, 0.06 * k, 0.03 * k),
+				C3.fromRGB(104, 74, 46)
+			)
+		end
+		if sx > 0 then
+			for _, r in { math.pi / 4, -math.pi / 4 } do
+				K.boxCF(
+					half * CF.new(0.2 * k, -0.3 * k, 0.06 * k) * CF.Angles(0, 0, r),
+					V3.new(0.45 * k, 0.08 * k, 0.03 * k),
+					C3.fromRGB(170, 44, 34)
+				)
+			end
+		else
+			for j = 0, 3 do
+				K.boxCF(
+					half * CF.new((-0.45 + j * 0.25) * k, (-0.5 + j * 0.2) * k, 0.06 * k),
+					V3.new(0.16 * k, 0.06 * k, 0.03 * k),
+					C3.fromRGB(170, 44, 34)
+				)
+			end
+			for i = 0, 3 do
+				K.boxCF(
+					half
+						* CF.new(-0.3 * k, 0.45 * k, 0.06 * k)
+						* CF.Angles(0, 0, i * math.pi / 2)
+						* CF.new(0, 0.12 * k, 0)
+						* CF.Angles(0, 0, math.pi / 4),
+					V3.new(0.1 * k, 0.1 * k, 0.03 * k),
+					C3.fromRGB(104, 74, 46)
+				)
+			end
+		end
+	end
+	light(K, (feet * CF.new(0, 9 * k, 4 * k)).Position, FIRE, 18, 0.5)
+end
+
 --[[
 	The vault's "wow" layer (local frame of the vault: front +Z, 70 x 50 studs):
 	a slate roof with fire towers, a stone gable over the entrance with two big
@@ -1819,6 +2188,9 @@ local function vault(K: any, parent: any, ground: any)
 			return if sat > 0.3 then body:Lerp(c, 0.2) else nil
 		end)
 	end
+	for _, x in { -13, 13 } do
+		banner(K, parent, origin * CF.new(x, 12.2, halfD + 1.35), 4.4, 8.6)
+	end
 	for _, x in { -halfW + S + 1, halfW - S - 1, -13, 13 } do
 		K.cylCF(origin * CF.new(x, 13.6, halfD - 2) * CF.Angles(0, 0, math.pi / 2), 1, 3.4, C3.fromRGB(60, 56, 60))
 		local flame = K.part("Part", origin * CF.new(x, 14.4, halfD - 2), V3.new(1.8, 1.6, 1.8), FIRE, NEON)
@@ -1967,8 +2339,8 @@ end
 	the picture here and would be moved if the vault stays.
 ]]
 Shop.LobbyCenter = { x = 0, z = 118, scale = 0.8 }
--- The two stone guardian statues in front of the side trees, lobby coordinates { x, z } (they face the plaza).
-Shop.Statues = { { -44, 94 }, { 44, 94 } }
+-- The two giant stone king statues in front of the side trees, lobby coordinates { x, z } (they face the plaza).
+Shop.Statues = { { -43, 92 }, { 43, 92 } }
 Shop.StatueUnit = 2.9
 
 -- The jungle trees around it in lobby coordinates: { x, z, height, canopy radius, seed }.
@@ -2036,10 +2408,12 @@ function Shop.buildLobby(Loader: any, parent: any)
 		jungleTree(KT, V3.new(t[1], 0, t[2]), t[3], t[4], t[5])
 	end
 	for i, st in Shop.Statues do
-		local feet = CF.new(st[1], 0, st[2]) * CF.Angles(0, math.pi, 0)
-		guardianStatue(KT, root, feet, Shop.StatueUnit)
+		-- facing the plaza, turned a little toward the path; the blaster arm on the outer side
+		local side = if st[1] < 0 then -1 else 1
+		local feet = CF.new(st[1], 0, st[2]) * CF.Angles(0, math.pi + 0.3 * side, 0)
+		giantStatue(KT, root, feet, -side, 900 + i)
 		for _, sx in { -1, 1 } do
-			bigFern(KT, (feet * CF.new(sx * 8.5, 0, 4.5)).Position, 5.5, 700 + i * 10 + sx)
+			bigFern(KT, (feet * CF.new(sx * 9, 0, 7.5)).Position, 5.5, 700 + i * 10 + sx)
 		end
 	end
 	local holder = roblox.Instance.new("Model")
@@ -2123,7 +2497,7 @@ local function studioGround(K: any, s: number)
 			local nearStatue = false
 			for _, st in Shop.Statues do
 				local sx, sz = -(st[1] - Shop.LobbyCenter.x), Shop.LobbyCenter.z - st[2]
-				if math.abs(x - sx) < 11 and math.abs(z - sz) < 11 then
+				if math.abs(x - sx) < 13 and math.abs(z - sz) < 13 then
 					nearStatue = true
 				end
 			end
@@ -2230,10 +2604,12 @@ function Shop.buildStudio(Loader: any, parent: any)
 	statues.Parent = root
 	local KS = Concepts.kit(statues)
 	for i, st in Shop.Statues do
-		local feet = CF.new(-(st[1] - c.x), 0, c.z - st[2])
-		guardianStatue(KS, statues, feet, Shop.StatueUnit)
+		local x = -(st[1] - c.x)
+		local side = if x < 0 then -1 else 1
+		local feet = CF.new(x, 0, c.z - st[2]) * CF.Angles(0, -0.3 * side, 0)
+		giantStatue(KS, statues, feet, side, 900 + i)
 		for _, sx in { -1, 1 } do
-			bigFern(KT, (feet * CF.new(sx * 8.5, 0, 4.5)).Position, 5.5, 700 + i * 10 + sx)
+			bigFern(KT, (feet * CF.new(sx * 9, 0, 7.5)).Position, 5.5, 700 + i * 10 + sx)
 		end
 	end
 	local ground = roblox.Instance.new("Model")
