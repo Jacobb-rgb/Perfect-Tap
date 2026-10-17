@@ -65,32 +65,44 @@ station panel with cargo, Send, upgrades (all inputs, phone layout).
 
 ## Shared contract (server ↔ client)
 What TrainService (server), Railway (world) and TrainController / TrainView (client) rely on. Change both sides together.
+The shared numbers live in TrainConfig (MaxTripSpan, PromptTag, PromptSlotHeight, PromptSlots, PortalInset, BufferGap);
+both sides read them from there, never from their own copies.
 
 **"TrainTrip"** (Net.fireAll; a joining player gets a list of everyone else's trains that carry ore):
 `{ UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load, Waiting? }`. Times are server time
 (`workspace:GetServerTimeNow()`); Color = the plot banner; Load = ore colors (`{}` = all dirty ore: the client shows its
-own dirt colors). Count / Color / Load stay what was sent at departure. Clients refuse a trip with
-ArriveAt - DepartAt > MaxTripSpan (600 s). A TrainTrip with the same DepartAt is the same train again (no rebuild).
+own dirt colors). Within one server session Count / Color / Load stay what was sent at departure, so a repeat never
+rebuilds the client's train; after a rejoin the server no longer has that payload: the re-announced trip has Count = the
+ore still on board (TripCargo), Color = the plot banner and Load recomputed from that ore. Clients refuse a trip with
+ArriveAt - DepartAt > TrainConfig.MaxTripSpan (600 s). A TrainTrip with the same DepartAt is the same train again (no
+rebuild).
 - **Waiting** (optional, only ever `true`): the train stands at its stop because the Ore Pen is full. When the first
   unload try leaves ore on the train, everyone gets the TrainTrip **again** with the same times and `Waiting = true`
   (also in a joiner's list and when a rejoining player's waiting train is announced). Clients keep it standing there
   loaded: no tip, no way back, never sent away by the client's HoldLimit.
 - **Late unload**: once the pen takes the rest, the TrainTrip is **re-sent once more** with `ArriveAt` = the unload time
   and no Waiting (DepartAt kept, or moved so the trip stays within MaxTripSpan; the same standing train), right before
-  Fx "TrainUnload". Whichever of the two reaches a client first starts the tip and the way back; the train is back at
-  the station ReturnSeconds after the unload.
+  Fx "TrainUnload". Whichever of the two reaches a client first starts the tip and the way back (the other one changes
+  nothing); the train is back at the station ReturnSeconds after the unload. The owner's State snapshot that follows
+  has Moving 0, ArriveAt = the unload time and the same DepartAt as that last TrainTrip.
 
 **Fx**: "TrainUnload" (plotId, count) to everyone when a train really unloads (never while it waits); "TrainLoad"
 (position) to players near a hopper that took ore.
 
 **State snapshot** `Train = { Cargo, Capacity, Moving, DepartAt?, ArriveAt?, CapacityLevel, SpeedLevel,
 NextCapacityPrice?, NextSpeedPrice?, Express, TripSeconds, AutoDepartIn?, Waiting }`. Moving > 0 = ore on board (on the
-move or waiting at the stop): the station shows no train. `Waiting = true` only with Moving > 0 after ArriveAt (clients
-also treat Moving > 0 two seconds after ArriveAt as waiting); the chip then says "Pen full – make room" (TrainView phase
-"Waiting", no Send). After the unload ArriveAt is the unload time and the train is back at ArriveAt + ReturnSeconds.
+move or waiting at the stop): the station shows no train, with one exception, the handover of your own departing
+train: when the snapshot says it just left (Moving > 0, not Waiting) and its TrainTrip hasn't reached the client yet,
+the train already parked at the station keeps standing there for at most TrainController.HoldSeconds (3 s) after
+DepartAt, so the trip takes it over instead of a new train popping up (a waiting train never holds). Without any
+TrainTrip, the client makes the trip from the snapshot alone SnapshotTripGrace (HoldSeconds - 1) seconds after DepartAt.
+`Waiting = true` only with Moving > 0 after ArriveAt (clients also treat Moving > 0 TrainView.UnloadGrace = 2 s after
+ArriveAt as waiting); the chip then says "Pen full – make room" (TrainView phase "Waiting", no Send). After the unload
+ArriveAt is the unload time and the train is back at ArriveAt + ReturnSeconds.
 
-**Prompt slots** (TrainService.PromptSlots; UIOffset = (0, Slot × 72), the machine prompts' step) on the `PromptPoint`
-attachment of the Mine Station (tag "TrainStation") and every Mine Lift (tag "MineLift"):
+**Prompt slots** (TrainConfig.PromptSlots; UIOffset = (0, Slot × TrainConfig.PromptSlotHeight = 72), the machine
+prompts' step; tag TrainConfig.PromptTag) on the `PromptPoint` attachment of the Mine Station (tag "TrainStation") and
+every Mine Lift (tag "MineLift"):
 
 | Slot | UIOffset | Name | Action text | Keys | Owner |
 |---|---|---|---|---|---|

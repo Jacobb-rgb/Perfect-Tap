@@ -5,10 +5,12 @@
 -- tunnels hiding the cars, one track per line (no train runs through
 -- another), the wagons tipping toward the pen, emptying and the ore clearing
 -- the Foundry, couplers, the waiting train under the station chute (parked
--- before loading opens), trip payloads (Waiting, late unloads) and snapshots,
--- the HUD chip's state text, the upgrade rows, the view's children and the
--- phone layouts (every touch target >= 44 pt, names readable on narrow
--- phones, the coins and the carry bar never cut by the panel).
+-- before loading opens), trip payloads (Waiting, late unloads) and snapshots
+-- (also in the order the server really sends them), the HUD chip's state
+-- text, the upgrade rows, the view's children, the prompt slots against
+-- TrainService's real prompts and the phone layouts (every touch target
+-- >= 44 pt, names readable on narrow phones, the coins and the carry bar
+-- never cut by the panel).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
@@ -1029,6 +1031,169 @@ return function(T, Loader)
 		T.falsy(TrainController.takeUnload(quiet, 3, ARRIVE + 301), "it left quietly")
 	end)
 
+	-- What TrainService sends for your own train that waits at a full pen, in the order it sends it:
+	-- TrainTrip, the Waiting TrainTrip, the late TrainTrip (ArriveAt = the unload U, DepartAt kept or
+	-- shifted under MaxTripSpan), Fx "TrainUnload", then the State snapshot (Moving 0, ArriveAt U).
+	T.test("TrainClient: your waiting train in the server's real message order tips once and comes home", function()
+		local plot = WorldLayout.Plots[3]
+		local base = { UserId = 7, PlotId = 3, DepartAt = DEPART, ArriveAt = ARRIVE, Count = 8, Color = RED, Load = { ORE[1] } }
+		local function payload(change: { [string]: any }): any
+			local copy = table.clone(base)
+			for k, v in change do
+				copy[k] = v
+			end
+			return copy
+		end
+		local function colorOf(_: number): any
+			return RED
+		end
+		local cases = {
+			{ Name = "DepartAt kept", Unload = ARRIVE + 90, FxFirst = false },
+			{ Name = "DepartAt shifted", Unload = ARRIVE + 650, FxFirst = false },
+			-- (reliable remotes keep the order; even if the Fx came first it stays one tip)
+			{ Name = "shifted, Fx first", Unload = ARRIVE + 650, FxFirst = true },
+		}
+		for _, case in cases do
+			local name = case.Name
+			local unloadAt = case.Unload
+			-- TrainService.deliver: DepartAt kept unless the trip would get longer than MaxTripSpan
+			local departAt = DEPART
+			if unloadAt - departAt > TrainConfig.MaxTripSpan then
+				departAt = unloadAt - (ARRIVE - DEPART)
+			end
+			T.eq(departAt ~= DEPART, unloadAt == ARRIVE + 650, name .. ": the case")
+			local trip: any = nil
+			local function receive(raw: any, now: number)
+				local incoming = TrainController.parseTrip(raw)
+				T.truthy(incoming, name .. ": a TrainTrip clients accept")
+				local merged, rebuild = TrainController.mergeTrip(trip, incoming, now)
+				if trip then
+					T.falsy(rebuild, name .. ": the same train, never rebuilt")
+				end
+				trip = merged
+			end
+			-- what syncSnapshotTrip does with a snapshot
+			local function state(fields: { [string]: any }, now: number): any
+				local train = TrainView.read(fields)
+				local news = TrainController.applySnapshot(trip, train, now)
+				T.eq(TrainController.snapshotTrip(trip, train, 7, plot, colorOf, now), nil, name .. ": no second trip from the snapshot")
+				return news
+			end
+			-- it leaves and arrives at a full pen
+			receive(payload({}), DEPART + 0.05)
+			T.eq(state({ Moving = 8, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE }, DEPART + 0.1), nil, name .. ": on its way")
+			receive(payload({ Waiting = true }), ARRIVE + 0.1)
+			T.eq(trip.Waiting, true, name .. ": waiting")
+			T.eq(trip.UnloadAt, nil, name .. ": no tip at the full pen")
+			local waiting = { Moving = 8, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE, Waiting = true }
+			T.eq(state(waiting, ARRIVE + 0.3), "Waiting")
+			T.eq(trip.UnloadAt, nil)
+			for _, t in { ARRIVE + 1, ARRIVE + 30, unloadAt - 0.5 } do
+				local p = TrainController.poseAt(plot, trip.DepartAt, trip.ArriveAt, t, 1, trip.UnloadAt)
+				T.eq(p.Leg, "Stopped", `{name}: standing at {t}`)
+				T.eq(p.Tip, 0)
+				T.eq(TrainController.parkedState(TrainView.read(waiting), trip, t), "Away", name .. ": no train at the station")
+				T.eq(TrainView.status(TrainView.read(waiting), t).Phase, "Waiting", name .. ": the chip says so")
+				T.eq(state(waiting, t), "Waiting", name .. ": the next snapshots")
+			end
+			-- the pen has room: the late TrainTrip, the Fx right after it (or, at worst, right before)
+			local lateAt = unloadAt + 0.05
+			local fxAt = unloadAt + 0.06
+			local startedAt = lateAt
+			if case.FxFirst then
+				fxAt, lateAt = unloadAt + 0.05, unloadAt + 0.06
+				startedAt = fxAt
+				T.truthy(TrainController.takeUnload(trip, 3, fxAt), name .. ": the Fx starts the tip")
+				T.eq(trip.UnloadAt, startedAt)
+			end
+			receive(payload({ DepartAt = departAt, ArriveAt = unloadAt }), lateAt)
+			T.eq(trip.DepartAt, departAt, name .. ": the new times")
+			T.eq(trip.ArriveAt, unloadAt)
+			T.eq(trip.Waiting, nil, name .. ": not waiting any more")
+			T.eq(trip.UnloadAt, startedAt, name .. ": the tip starts once, at whichever came first")
+			if not case.FxFirst then
+				T.truthy(TrainController.takeUnload(trip, 3, fxAt), name .. ": the Fx is this unload (its train pours)")
+				T.eq(trip.UnloadAt, startedAt, name .. ": the Fx doesn't restart it")
+			end
+			-- the snapshot 0.2 s later and the ones after it change nothing
+			local home = { Moving = 0, Capacity = 8, DepartAt = departAt, ArriveAt = unloadAt }
+			for _, t in { unloadAt + 0.25, unloadAt + 1, unloadAt + 4 } do
+				T.eq(state(home, t), nil, `{name}: the snapshot at {t} adds nothing`)
+				T.eq(trip.UnloadAt, startedAt, name .. ": still one tip")
+			end
+			-- the tip where it stood, the way back, then your train backs into the station
+			local tipping = TrainController.poseAt(plot, trip.DepartAt, trip.ArriveAt, startedAt + 0.6, 1, trip.UnloadAt)
+			T.eq(tipping.Leg, "Unload", name .. ": it tips")
+			near(tipping.Position, TrainController.stopAt(plot, 1) + RAIL, 1e-6, name .. ": where it stood")
+			local from = TrainController.rollInAt(startedAt)
+			local snap = TrainView.read(home)
+			for _, t in { unloadAt + 0.25, unloadAt + 2, from - 0.05 } do
+				T.eq(TrainController.parkedState(snap, trip, t), "Away", `{name}: away at {t}`)
+			end
+			local parked, roll = TrainController.parkedState(snap, trip, from + 0.05)
+			T.eq(parked, "Parked", name .. ": back at the station")
+			T.eq(roll, from, name .. ": backing in from rollInAt")
+			T.eq(TrainController.parkedState(snap, trip, unloadAt + TrainConfig.ReturnSeconds + 5), "Parked", name .. ": and stays")
+		end
+	end)
+
+	T.test("TrainClient: your trip from the snapshot alone (no TrainTrip came)", function()
+		local plot = WorldLayout.Plots[2]
+		local function colorOf(id: number): any
+			return TrainController.BannerColors[id]
+		end
+		local function make(known: any, fields: { [string]: any }, now: number): any
+			return TrainController.snapshotTrip(known, TrainView.read(fields), 7, plot, colorOf, now)
+		end
+		local moving = { Moving = 5, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE }
+		local grace = TrainController.SnapshotTripGrace
+		T.eq(make(nil, moving, DEPART + grace), nil, "its TrainTrip may still come")
+		local trip = make(nil, moving, DEPART + grace + 0.01)
+		T.truthy(trip, "then it is made from the snapshot")
+		T.eq(trip.DepartAt, DEPART)
+		T.eq(trip.ArriveAt, ARRIVE)
+		T.eq(trip.Count, 5, "the ore on board")
+		T.eq(trip.PlotId, 2)
+		T.eq(trip.Color, TrainController.BannerColors[2])
+		T.eq(#trip.Load, 0, "dirt colors")
+		T.eq(trip.Waiting, nil)
+		T.eq(trip.UnloadAt, nil)
+		T.eq(make(nil, { Moving = 0, Capacity = 8 }, ARRIVE), nil, "no trip")
+		-- waiting at a full pen (a joiner without the list yet)
+		local waiting = make(nil, { Moving = 5, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE, Waiting = true }, ARRIVE + 50)
+		T.eq(waiting.Waiting, true)
+		T.eq(waiting.UnloadAt, nil, "no tip")
+		-- already unloaded: only the way back is left, then nothing
+		local back = make(nil, { Moving = 0, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE }, ARRIVE + 1)
+		T.eq(back.UnloadAt, ARRIVE, "it unloaded at ArriveAt")
+		T.eq(make(nil, { Moving = 0, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE }, ARRIVE + 10000), nil, "long home")
+		-- a known trip is kept until it unloaded and a newer departure comes
+		local known = TrainController.parseTrip({ UserId = 7, PlotId = 2, DepartAt = DEPART, ArriveAt = ARRIVE, Count = 5 })
+		T.eq(make(known, moving, DEPART + 10), nil, "the known trip")
+		local nextTrip = { Moving = 8, Capacity = 8, DepartAt = ARRIVE + 100, ArriveAt = ARRIVE + 130 }
+		T.eq(make(known, nextTrip, ARRIVE + 105), nil, "not unloaded on this screen yet")
+		known.UnloadAt = ARRIVE
+		T.eq(make(known, { Moving = 0, Capacity = 8, DepartAt = DEPART + 0.3, ArriveAt = ARRIVE }, ARRIVE + 3), nil, "the same trip")
+		local newer = make(known, nextTrip, ARRIVE + 105)
+		T.truthy(newer, "the next departure")
+		T.eq(newer.DepartAt, ARRIVE + 100)
+		-- applySnapshot: the news lands on the trip
+		local mine = TrainController.parseTrip({ UserId = 7, PlotId = 2, DepartAt = DEPART, ArriveAt = ARRIVE, Count = 5 })
+		T.eq(TrainController.applySnapshot(mine, TrainView.read(moving), ARRIVE - 5), nil)
+		T.eq(TrainController.applySnapshot(mine, TrainView.read(moving), ARRIVE + TrainView.UnloadGrace), "Waiting")
+		T.eq(mine.Waiting, true)
+		T.eq(mine.UnloadAt, nil)
+		local unloaded = { Moving = 0, Capacity = 8, DepartAt = DEPART, ArriveAt = ARRIVE + 40 }
+		T.eq(TrainController.applySnapshot(mine, TrainView.read(unloaded), ARRIVE + 40.2), "Unloaded")
+		T.eq(mine.UnloadAt, ARRIVE + 40.2, "the tip starts now")
+		T.eq(mine.Waiting, nil)
+		T.eq(TrainController.applySnapshot(mine, TrainView.read(unloaded), ARRIVE + 41), nil, "once")
+		T.eq(mine.UnloadAt, ARRIVE + 40.2)
+		local gone = TrainController.parseTrip({ UserId = 7, PlotId = 2, DepartAt = DEPART, ArriveAt = ARRIVE, Count = 5 })
+		T.eq(TrainController.applySnapshot(gone, TrainView.read({ Moving = 0, Capacity = 8 }), ARRIVE + 5), "Gone")
+		T.eq(gone.UnloadAt, nil, "the caller drops it")
+	end)
+
 	T.test("TrainClient: no train at your station while it has ore on board", function()
 		local function snap(fields: { [string]: any }): any
 			return TrainView.read(fields)
@@ -1139,6 +1304,24 @@ return function(T, Loader)
 		T.eq(waiting.Progress, nil, "no trip bar while it waits")
 		T.eq(status({ Moving = 5, Capacity = 8, DepartAt = now - 60, ArriveAt = now - 5 }).Phase, "Waiting", "still loaded long after")
 		T.eq(status({ Moving = 3, Capacity = 8, Waiting = true }).Phase, "Waiting", "Waiting alone")
+		-- the boundary: just before ArriveAt + UnloadGrace it is still unloading, at it it waits
+		local arrived = { Moving = 8, Capacity = 8, DepartAt = now - 60, ArriveAt = now - TrainView.UnloadGrace }
+		local function at(t: number, fields: { [string]: any }?): (boolean, string)
+			local snap = TrainView.read(fields or arrived)
+			return TrainView.waiting(snap, t), TrainView.status(snap, t).Phase
+		end
+		local before, beforePhase = at(now - 0.01)
+		T.falsy(before, "UnloadGrace - 0.01 s after the arrival: not waiting yet")
+		T.eq(beforePhase, "Unloading")
+		local exact, exactPhase = at(now)
+		T.truthy(exact, "exactly UnloadGrace after the arrival: waiting")
+		T.eq(exactPhase, "Waiting")
+		local flagged, flaggedPhase = at(now - 1000, { Moving = 3, Capacity = 8, Waiting = true })
+		T.truthy(flagged, "the server's Waiting without ArriveAt")
+		T.eq(flaggedPhase, "Waiting")
+		T.falsy(TrainView.waiting(TrainView.read({ Moving = 3, Capacity = 8 }), now + 1000), "no ArriveAt, no Waiting: on its way")
+		T.falsy(TrainView.waiting(TrainView.read({ Moving = 0, Capacity = 8, ArriveAt = now - 100 }), now), "nothing on board")
+		T.truthy(TrainView.waiting(TrainView.read({ Moving = 0, Capacity = 8, Waiting = true }), now), "the server's word")
 		-- (a snapshot that also shows station cargo) nothing can be sent while it waits
 		local stocked = status({ Cargo = 8, Capacity = 8, Moving = 4, DepartAt = now - 60, ArriveAt = now - 30, Waiting = true })
 		T.eq(stocked.Phase, "Waiting")
@@ -1412,47 +1595,112 @@ return function(T, Loader)
 		T.eq(TrainController.PromptDistance, 10)
 	end)
 
-	T.test("TrainClient: the panel prompt keeps slot 2 and Load shows only with full hands", function()
+	T.test("TrainClient: the prompt numbers are TrainService's (one TrainConfig for both sides)", function()
+		local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
+		T.eq(TrainController.PromptTag, TrainConfig.PromptTag, "the tag")
+		T.eq(TrainService.PromptTag, TrainConfig.PromptTag)
+		T.eq(TrainController.PromptSlotHeight, TrainService.PromptSlotHeight, "the slot step")
+		T.eq(TrainController.PromptSlot, TrainService.PromptSlots.Panel, "the panel's slot")
+		T.eq(TrainController.MaxTripSpan, TrainService.MaxTripSpan, "the longest trip clients accept")
+		T.eq(TrainService.MaxTripSpan, TrainConfig.MaxTripSpan)
+		-- every slot its own offset
+		local seen = {}
+		for name, slot in TrainConfig.PromptSlots do
+			T.truthy(seen[slot] == nil, name .. " has a slot of its own")
+			seen[slot] = name
+		end
+		-- your snapshot trip comes before the departing train's hold ends (the 4 Hz sync has time)
+		T.lt(TrainController.SnapshotTripGrace, TrainController.HoldSeconds - 0.25)
+		T.lt(0, TrainController.SnapshotTripGrace)
+	end)
+
+	T.test("TrainClient: the panel prompt keeps slot 2 and Load shows only with full hands (TrainService's real prompts)", function()
 		local Vector2 = roblox.Vector2
 		local Enum = roblox.Enum
-		-- the server's prompts on a PromptPoint (TrainService.makePrompt)
-		local function serverPrompt(name: string, action: string, slot: number): any
-			local prompt = Instance.new("ProximityPrompt")
-			prompt.Name = name
-			prompt.UIOffset = Vector2.new(0, slot * 72)
-			prompt:SetAttribute("Action", action)
-			prompt:SetAttribute("Slot", slot)
-			prompt:AddTag(TrainController.PromptTag)
-			return prompt
+		local CFrame = Loader.CFrame
+		local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
+		local IntakeService = Loader.requirePath("ServerScriptService.Server.Services.IntakeService")
+		-- a Mine Station as Railway builds it (the WORLD contract), set up by the real TrainService
+		local s = TrainConfig.Station
+		local station = Instance.new("Model")
+		station.Name = "MineStation"
+		station:AddTag("TrainStation")
+		local platform = Instance.new("Part")
+		platform.Name = "Platform"
+		platform.Anchored = true
+		platform.Size = s.Platform.Size
+		platform.CFrame = CFrame.new(s.Platform.Center)
+		platform.Parent = station
+		local point = Instance.new("Attachment")
+		point.Name = "PromptPoint"
+		point.CFrame = platform.CFrame:ToObjectSpace(CFrame.new(s.PromptPoint))
+		point.Parent = platform
+		local intake = Instance.new("Part")
+		intake.Name = "Intake"
+		intake.Anchored = true
+		intake.Size = s.HopperSize
+		intake.CFrame = CFrame.new(s.Hopper + Vector3.new(0, s.HopperSize.Y / 2, 0))
+		intake:AddTag("TrainHopper")
+		intake.Parent = station
+		-- (no intake zone or hook is left behind for the other specs)
+		local addZone = rawget(IntakeService, "addZone")
+		rawset(IntakeService, "addZone", function() end)
+		TrainService._test.reset()
+		local ok, err = pcall(TrainService._test.setupHook, intake)
+		rawset(IntakeService, "addZone", addZone)
+		TrainService._test.reset()
+		if not ok then
+			error(err, 0)
 		end
-		local load = serverPrompt("TrainLoadPrompt", "Load", 0)
-		local send = serverPrompt("TrainSendPrompt", "Send", 1)
+		local load = point:FindFirstChild("TrainLoadPrompt")
+		local send = point:FindFirstChild("TrainSendPrompt")
+		T.truthy(load and send, "the server's two prompts")
 		local panel = TrainController.makePanelPrompt("Mine Station")
+		panel.Parent = point
 		T.eq(panel.Name, "TrainPanelPrompt", "its own name")
 		T.truthy(panel.Name ~= load.Name and panel.Name ~= send.Name, "never one of the server's names")
 		T.eq(panel.UIOffset, Vector2.new(0, 144), "slot 2")
-		for _, other in { load, send } do
-			T.truthy(math.abs(panel.UIOffset.Y - other.UIOffset.Y) >= 72, "a full slot away from " .. other.Name)
+		local prompts = 0
+		for _, other in point:GetChildren() do
+			if other:IsA("ProximityPrompt") and other ~= panel then
+				prompts += 1
+				T.truthy(other:HasTag(TrainController.PromptTag), other.Name .. " carries the client's tag")
+				T.truthy(other.UIOffset ~= panel.UIOffset, other.Name .. " never at the panel's offset")
+				T.truthy(math.abs(panel.UIOffset.Y - other.UIOffset.Y) >= 72, "a full slot away from " .. other.Name)
+				T.truthy(other.KeyboardKeyCode ~= panel.KeyboardKeyCode, other.Name .. " has another key")
+				T.truthy(other.GamepadKeyCode ~= panel.GamepadKeyCode, other.Name .. " has another button")
+			end
 		end
+		T.eq(prompts, 2, "only Load and Send are the server's")
+		T.eq(load:GetAttribute("Action"), "Load")
+		T.eq(send:GetAttribute("Action"), "Send")
 		T.falsy(panel:HasTag(TrainController.PromptTag), "not one of the server's tagged prompts")
 		T.eq(panel:GetAttribute("Action"), nil)
 		T.eq(panel.KeyboardKeyCode, Enum.KeyCode.T, "T opens the panel (F / G are Load / Send)")
 		T.eq(panel.GamepadKeyCode, Enum.KeyCode.ButtonL3, "L3 (Y / B are Load / Send)")
 		T.eq(panel.ObjectText, "Mine Station")
 		T.eq(panel.MaxActivationDistance, TrainController.PromptDistance)
-		-- Load: only while you carry something
+		T.eq(panel.MaxActivationDistance, load.MaxActivationDistance, "the same range as the server's")
+		-- Load: only while you carry something (it toggles with CarryCount)
+		T.truthy(load.Enabled, "the server leaves it on")
 		T.truthy(TrainController.applyLoadPrompt(load, 0), "a Load prompt")
 		T.falsy(load.Enabled, "empty hands")
 		TrainController.applyLoadPrompt(load, 2)
 		T.truthy(load.Enabled, "carrying")
+		TrainController.applyLoadPrompt(load, 0)
+		T.falsy(load.Enabled, "thrown in")
+		TrainController.applyLoadPrompt(load, 1)
+		T.truthy(load.Enabled, "picked up again")
 		TrainController.applyLoadPrompt(load, nil)
 		T.falsy(load.Enabled, "no CarryCount yet")
 		TrainController.applyLoadPrompt(load, "3")
 		T.falsy(load.Enabled, "junk is empty hands")
-		-- everything else is left alone
-		for _, other in { send, panel } do
-			T.falsy(TrainController.applyLoadPrompt(other, 0), other.Name .. " is not a Load prompt")
-			T.truthy(other.Enabled, other.Name .. " still shows")
+		-- everything else is left alone, whatever you carry
+		for _, count in { 0, 3 } do
+			for _, other in { send, panel } do
+				T.falsy(TrainController.applyLoadPrompt(other, count), other.Name .. " is not a Load prompt")
+				T.truthy(other.Enabled, other.Name .. " still shows")
+			end
 		end
 		local machine = Instance.new("ProximityPrompt")
 		machine.Name = "LoadPrompt"
