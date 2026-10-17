@@ -42,8 +42,8 @@ return function(T, Loader)
 			T.eq(model:GetAttribute("MachineId"), machine.Id)
 			T.truthy(attachment(model, "Prompt"), machine.Id .. " Prompt")
 			T.truthy(attachment(model, "Status"), machine.Id .. " Status")
-			if machine.IsConveyor then
-				T.eq(attachment(model, "Intake"), nil, "belts have no hopper")
+			if machine.IsConveyor or machine.NoIntake then
+				T.eq(attachment(model, "Intake"), nil, machine.Id .. " has no hopper")
 			else
 				local intake = attachment(model, "Intake")
 				T.truthy(intake, machine.Id .. " Intake")
@@ -331,8 +331,10 @@ return function(T, Loader)
 				local p = part.CFrame.Position
 				local chute = part.Name == "Chute" or part.Name == "ChuteLip" or part.Name == "Molten"
 				local front = if chute then hd + 0.8 else hd + 0.12
+				-- side outputs (Splitter, Sorter): their chutes reach into the side cells
+				local side = if chute and machine.SideOutputs then hw + 0.8 else hw + 0.12
 				T.truthy(
-					math.abs(p.X) + ex <= hw + 0.12 and p.Z + ez <= hd + 0.12 and -(p.Z - ez) <= front,
+					math.abs(p.X) + ex <= side and p.Z + ez <= hd + 0.12 and -(p.Z - ez) <= front,
 					`{machine.Id} {part.Name} reaches out of the footprint ({p.X}, {p.Z} +- {ex}, {ez})`
 				)
 			end

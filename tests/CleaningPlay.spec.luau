@@ -270,7 +270,8 @@ return function(T, Loader)
 					angle += 4 / 30
 					t += 1 / 30
 				end
-				local submission = { Cuts = cuts, Scrape = { Samples = scrape }, Polish = { Samples = polish, Mode = "Circle" }, Input = "Touch" }
+				local submission =
+					{ Cuts = cuts, Scrape = { Samples = scrape }, Polish = { Samples = polish, Mode = "Circle" }, Input = "Touch" }
 				local r = Scoring.score(pattern, submission)
 				T.truthy(r.Valid, `{oreId} seed {seed}: {r.Reason}`)
 				T.eq(r.Chips, chips, `{oreId} seed {seed}: chips match the meter`)

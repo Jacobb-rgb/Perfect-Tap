@@ -88,8 +88,20 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 	Kit.bit(m, at(0, (PLINTH + wallTop) / 2, 1.26), Vector3.new(W - 0.6, wallTop - PLINTH - 0.6, 0.12), C.Wood)
 	-- slim side posts with blue neon strips
 	for _, side in { -1, 1 } do
-		Style.block(m, at(side * (W / 2 - 0.3), (PLINTH + wallTop) / 2 + 0.3, 0.3), Vector3.new(0.6, wallTop - PLINTH + 0.6, 1.0), Tech.Metal, nil, Style.decor())
-		Tech.glow(m, at(side * (W / 2 - 0.3), (PLINTH + wallTop) / 2 + 0.3, -0.24), Vector3.new(0.22, wallTop - PLINTH - 0.4, 0.08), Tech.Tube)
+		Style.block(
+			m,
+			at(side * (W / 2 - 0.3), (PLINTH + wallTop) / 2 + 0.3, 0.3),
+			Vector3.new(0.6, wallTop - PLINTH + 0.6, 1.0),
+			Tech.Metal,
+			nil,
+			Style.decor()
+		)
+		Tech.glow(
+			m,
+			at(side * (W / 2 - 0.3), (PLINTH + wallTop) / 2 + 0.3, -0.24),
+			Vector3.new(0.22, wallTop - PLINTH - 0.4, 0.08),
+			Tech.Tube
+		)
 	end
 
 	local widest = 0
@@ -107,14 +119,20 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		Kit.bit(m, frame * CFrame.new(0, cy, 0.42), Vector3.new(BOARD_W + 0.5, BOARD_H + 0.4, 0.2), Tech.MetalLight)
 		Tech.glow(m, frame * CFrame.new(0, cy + BOARD_H / 2 + 0.12, 0.2), Vector3.new(BOARD_W + 0.4, 0.16, 0.12), Tech.Tube)
 		-- the board (flat Front face out of the hall's front)
-		local board = Style.block(m, frame * CFrame.new(0, cy, 0.15), Vector3.new(BOARD_W, BOARD_H, 0.4), Hall.BoardColor, Kit.NEON, Style.solid())
+		local board =
+			Style.block(m, frame * CFrame.new(0, cy, 0.15), Vector3.new(BOARD_W, BOARD_H, 0.4), Hall.BoardColor, Kit.NEON, Style.solid())
 		board.CastShadow = false
 		board.Name = "Board" .. i
 		board:SetAttribute("Board", i)
 		Kit.tag(board, "Leaderboard")
 		-- its title strip over the board's top
 		local textW = (BOARD_W - 0.5) * textWidth(TITLES[i]) / widest
-		Kit.bit(m, frame * CFrame.new(0, cy + BOARD_H / 2 - TITLE_H / 2 - 0.05, -0.08), Vector3.new(BOARD_W - 0.2, TITLE_H, 0.06), Tech.Board)
+		Kit.bit(
+			m,
+			frame * CFrame.new(0, cy + BOARD_H / 2 - TITLE_H / 2 - 0.05, -0.08),
+			Vector3.new(BOARD_W - 0.2, TITLE_H, 0.06),
+			Tech.Board
+		)
 		Tech.label(m, frame * CFrame.new(0, cy + BOARD_H / 2 - TITLE_H / 2 - 0.05, -0.15), TITLES[i], textW, TITLE_H - 0.15, nil, 0.04)
 		-- the placeholder table: five rank rows on one SurfaceGui, no parts
 		local ph = Style.model("Placeholder", board)

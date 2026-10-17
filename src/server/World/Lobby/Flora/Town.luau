@@ -88,7 +88,14 @@ Town.Sites = {
 	-- tree, and the WORKS workshop south of it (a little street; the FOSSIL
 	-- DIG turned toward the hero camera took WORKS' old spot on the east spur)
 	{ Id = "MapTower", Min = Vector2.new(54, 90), Max = Vector2.new(63, 100), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
-	{ Id = "SpurWorkshop", Min = Vector2.new(48.5, 103), Max = Vector2.new(63, 107.5), Facing = "S", Recipe = "SpurWorkshop", Sign = "WORKS" },
+	{
+		Id = "SpurWorkshop",
+		Min = Vector2.new(48.5, 103),
+		Max = Vector2.new(63, 107.5),
+		Facing = "S",
+		Recipe = "SpurWorkshop",
+		Sign = "WORKS",
+	},
 	-- the south lane, beside the south road
 	{ Id = "GardenCottage", Min = Vector2.new(9, 96), Max = Vector2.new(26, 112), Facing = "N", Recipe = "GardenCottage" },
 } :: { Site }

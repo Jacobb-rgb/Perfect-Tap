@@ -123,7 +123,9 @@ local function chooseTarget(root: BasePart): Model?
 		end
 	end
 	local camera = Workspace.CurrentCamera
-	local look = if UserInputService.TouchEnabled or UserInputService.GamepadEnabled then root.CFrame.LookVector else camera.CFrame.LookVector
+	local look = if UserInputService.TouchEnabled or UserInputService.GamepadEnabled
+		then root.CFrame.LookVector
+		else camera.CFrame.LookVector
 	local best, bestScore = nil, math.huge
 	for _, model in CollectionService:GetTagged("Item") do
 		if model:IsA("Model") and isPickable(model, root) then
@@ -162,7 +164,10 @@ local function updateHint()
 	hintName.Text = ItemData.displayName(kind, oreId, grade, recipe)
 	hintName.TextColor3 = color
 	local value = (target:GetAttribute("Value") :: number?) or 0
-	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled then "X" elseif UserInputService.TouchEnabled then "Grab" else "E"
+	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled
+		then "X"
+		elseif UserInputService.TouchEnabled then "Grab"
+		else "E"
 	hintAction.Text = if dirty
 		then `[{key}] Pick up   •   clean it to see what it is`
 		else `[{key}] Pick up   •   {Format.money(value)}`

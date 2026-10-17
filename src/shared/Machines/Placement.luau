@@ -143,7 +143,15 @@ end
 -- OutOfBounds, Chute (only belts on chute cells), Overlap, then slots.
 -- Slots are skipped when `limits` is nil or when moving (`ignore` set), so
 -- a move never fails on slots.
-function Placement.validate(entries: { Entry }, id: string, x: number, z: number, r: number, limits: Limits?, ignore: Entry?): (boolean, string?)
+function Placement.validate(
+	entries: { Entry },
+	id: string,
+	x: number,
+	z: number,
+	r: number,
+	limits: Limits?,
+	ignore: Entry?
+): (boolean, string?)
 	local info = known(id)
 	if not info then
 		return false, "UnknownMachine"

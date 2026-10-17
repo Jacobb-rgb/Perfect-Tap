@@ -69,7 +69,15 @@ return function(T, Loader)
 				return if name == "HumanoidRootPart" then w.root else nil
 			end,
 		}
-		w.player = { UserId = USER, Name = "Tester", Parent = true, Character = character, GetAttribute = function() return nil end }
+		w.player = {
+			UserId = USER,
+			Name = "Tester",
+			Parent = true,
+			Character = character,
+			GetAttribute = function()
+				return nil
+			end,
+		}
 		local saved = {}
 		local function patch(t: any, key: string, value: any)
 			table.insert(saved, { t, key, rawget(t, key) })
@@ -466,9 +474,12 @@ return function(T, Loader)
 		local furnaceLog, crateLog = {}, {}
 		local crateAnswer: any = { true, nil }
 		MachineService.register("ClayFurnace", recorder(furnaceLog))
-		MachineService.register("StorageCrate", recorder(crateLog, function()
-			return crateAnswer[1], crateAnswer[2]
-		end))
+		MachineService.register(
+			"StorageCrate",
+			recorder(crateLog, function()
+				return crateAnswer[1], crateAnswer[2]
+			end)
+		)
 		local a = MachineService.place(w.player, "ClayFurnace", 4, 4, 0)
 		local ox, oz = Grid.outputCell("ClayFurnace", 4, 4, 0)
 		T.eq(ox, 5, "right front cell x")
@@ -497,7 +508,12 @@ return function(T, Loader)
 		T.eq(spawned.Owner, USER, "owned by the machine owner")
 		T.truthy(spawned.ServerOwned, "server keeps output physics")
 		local look = a.Model:GetPivot().LookVector
-		T.near((spawned.Velocity - (look * GameConfig.OutputPop.Forward + Vector3.new(0, GameConfig.OutputPop.Up, 0))).Magnitude, 0, 1e-4, "pop velocity")
+		T.near(
+			(spawned.Velocity - (look * GameConfig.OutputPop.Forward + Vector3.new(0, GameConfig.OutputPop.Up, 0))).Magnitude,
+			0,
+			1e-4,
+			"pop velocity"
+		)
 		local plotId, localPos = PlotService.plotAt(spawned.CFrame.Position)
 		T.eq(plotId, PLOT, "spawned on the plot")
 		local sx, sz = Grid.cellFromLocal(localPos)
@@ -583,10 +599,13 @@ return function(T, Loader)
 		local log = {}
 		local asked = 0
 		local answer: any = { true, nil }
-		MachineService.register("ClayFurnace", recorder(log, function()
-			asked += 1
-			return answer[1], answer[2]
-		end))
+		MachineService.register(
+			"ClayFurnace",
+			recorder(log, function()
+				asked += 1
+				return answer[1], answer[2]
+			end)
+		)
 		MachineService.register("Crusher", {
 			canAccept = function()
 				error("broken canAccept")
@@ -643,7 +662,16 @@ return function(T, Loader)
 			body.Name = "Body"
 			body.Parent = model
 			model.PrimaryPart = body
-			return { Id = "item-" .. kind, Model = model, Body = body, Kind = kind, OreId = "Copper", Grade = "Clean", Owner = USER, State = "Loose" }
+			return {
+				Id = "item-" .. kind,
+				Model = model,
+				Body = body,
+				Kind = kind,
+				OreId = "Copper",
+				Grade = "Clean",
+				Owner = USER,
+				State = "Loose",
+			}
 		end
 		local item = record("Clean")
 		T.truthy(MachineService.insertRecord(furnace, item, "Drop"), "insertRecord")

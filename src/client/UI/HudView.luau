@@ -163,7 +163,12 @@ function HudView.build(): Refs
 		Size = UDim2.fromOffset(84, 360),
 		BackgroundTransparency = 1,
 	}, gui)
-	UIKit.list(menu, Enum.FillDirection.Vertical, 10, { VerticalAlignment = Enum.VerticalAlignment.Center, HorizontalAlignment = Enum.HorizontalAlignment.Right })
+	UIKit.list(
+		menu,
+		Enum.FillDirection.Vertical,
+		10,
+		{ VerticalAlignment = Enum.VerticalAlignment.Center, HorizontalAlignment = Enum.HorizontalAlignment.Right }
+	)
 
 	return {
 		Gui = gui,

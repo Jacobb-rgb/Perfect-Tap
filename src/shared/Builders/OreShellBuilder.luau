@@ -62,7 +62,17 @@ function OreShellBuilder.toWorld(shell: Shell, u: number, v: number, z: number):
 end
 
 -- Extrudes a convex face-space polygon between zBack and zFront.
-local function prism(parent: Instance, workCF: CFrame, scale: number, poly: { Vector2 }, zFront: number, depth: number, color: Color3, material: Enum.Material?, extra: { [string]: any }?): { BasePart }
+local function prism(
+	parent: Instance,
+	workCF: CFrame,
+	scale: number,
+	poly: { Vector2 },
+	zFront: number,
+	depth: number,
+	color: Color3,
+	material: Enum.Material?,
+	extra: { [string]: any }?
+): { BasePart }
 	local parts: { BasePart } = {}
 	local normal = workCF.LookVector * -1 -- +Z in face space (toward the camera)
 	for _, tri in Geometry2D.triangulateConvex(poly) do
@@ -102,23 +112,42 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 	local crust = ItemBuilder.DirtyCrust
 	local glow = ItemBuilder.glowColor(ore.Glow)
 	local bodyColor = crust:Lerp(Color3.fromRGB(40, 32, 30), 0.25)
-	local backRock = prism(model, workCF, scale, pattern.Outline, -0.25, 1.15, bodyColor, Enum.Material.SmoothPlastic, { Name = "RockBody" })
+	local backRock =
+		prism(model, workCF, scale, pattern.Outline, -0.25, 1.15, bodyColor, Enum.Material.SmoothPlastic, { Name = "RockBody" })
 	for _ = 1, 3 do
 		local a = rng:range(0, math.pi * 2)
 		local offset = Vector3.new(math.cos(a) * 0.55 * scale, math.sin(a) * 0.5 * scale, -1.15)
-		table.insert(backRock, Geo.block(model, workCF * CFrame.new(offset) * Geo.randomTilt(rng, 0.5), Vector3.new(1.1, 1, 0.9) * scale * rng:range(0.7, 0.95), Geo.vary(bodyColor, rng, 0.07), nil, props()))
+		table.insert(
+			backRock,
+			Geo.block(
+				model,
+				workCF * CFrame.new(offset) * Geo.randomTilt(rng, 0.5),
+				Vector3.new(1.1, 1, 0.9) * scale * rng:range(0.7, 0.95),
+				Geo.vary(bodyColor, rng, 0.07),
+				nil,
+				props()
+			)
+		)
 	end
 
 	-- core (dull until polished) + a thin rim that glows once exposed
 	local dull = ore.Color:Lerp(Color3.fromRGB(70, 60, 55), 0.55)
-	local core = prism(model, workCF, scale, pattern.Core, OreShellBuilder.CoreFront, 1.1, dull, Enum.Material.SmoothPlastic, { Name = "Core" })
+	local core =
+		prism(model, workCF, scale, pattern.Core, OreShellBuilder.CoreFront, 1.1, dull, Enum.Material.SmoothPlastic, { Name = "Core" })
 	local rim: { BasePart } = {}
 	for i = 1, #pattern.Core do
 		local a2 = pattern.Core[i]
 		local b2 = pattern.Core[i % #pattern.Core + 1]
 		local a = workCF:PointToWorldSpace(Vector3.new(a2.X * scale, a2.Y * scale, OreShellBuilder.CoreFront - 0.05))
 		local b = workCF:PointToWorldSpace(Vector3.new(b2.X * scale, b2.Y * scale, OreShellBuilder.CoreFront - 0.05))
-		local edge = Geo.block(model, CFrame.lookAt((a + b) / 2, b), Vector3.new(0.09, 0.09, (b - a).Magnitude), glow, Enum.Material.Neon, props({ Name = "CoreRim", CastShadow = false, Transparency = 1 }))
+		local edge = Geo.block(
+			model,
+			CFrame.lookAt((a + b) / 2, b),
+			Vector3.new(0.09, 0.09, (b - a).Magnitude),
+			glow,
+			Enum.Material.Neon,
+			props({ Name = "CoreRim", CastShadow = false, Transparency = 1 })
+		)
 		table.insert(rim, edge)
 	end
 
@@ -132,13 +161,16 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 			capModel.Parent = model
 			-- crust reads as lighter, rough stone (clearly different from dirt and core)
 			local color = Geo.vary(crust:Lerp(Color3.fromRGB(176, 160, 142), 0.45), rng, 0.05)
-			local parts = prism(capModel, workCF, scale, cap, OreShellBuilder.CapFront, 0.55, color, Enum.Material.SmoothPlastic, { Name = "Crust" })
+			local parts =
+				prism(capModel, workCF, scale, cap, OreShellBuilder.CapFront, 0.55, color, Enum.Material.SmoothPlastic, { Name = "Crust" })
 			-- a few pebbles on the crust for a rough look
 			local centroid = Geometry2D.centroid(cap)
 			if Geometry2D.area(cap) > 0.05 then
 				local pebble = Geo.block(
 					capModel,
-					workCF * CFrame.new(centroid.X * scale, centroid.Y * scale, OreShellBuilder.CapFront + 0.05) * CFrame.Angles(0, 0, rng:range(0, 3)),
+					workCF
+						* CFrame.new(centroid.X * scale, centroid.Y * scale, OreShellBuilder.CapFront + 0.05)
+						* CFrame.Angles(0, 0, rng:range(0, 3)),
 					Vector3.new(0.35, 0.3, 0.16) * rng:range(0.8, 1.3),
 					Geo.vary(crust, rng, 0.1),
 					nil,
@@ -149,7 +181,9 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 					-- the same tiny glint the Dirty Ore chunk shows; it falls away with the crust
 					local glint = Geo.block(
 						capModel,
-						workCF * CFrame.new(centroid.X * scale + 0.18, centroid.Y * scale + 0.12, OreShellBuilder.CapFront + 0.04) * CFrame.Angles(0.6, 0.7, 0.3),
+						workCF
+							* CFrame.new(centroid.X * scale + 0.18, centroid.Y * scale + 0.12, OreShellBuilder.CapFront + 0.04)
+							* CFrame.Angles(0.6, 0.7, 0.3),
 						Vector3.new(0.13, 0.13, 0.13),
 						glow,
 						Enum.Material.Neon,
@@ -169,9 +203,18 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 	for _, cut in pattern.Cuts do
 		seams[cut.Index] = {}
 		for i = 2, #cut.Line do
-			local a = workCF:PointToWorldSpace(Vector3.new(cut.Line[i - 1].X * scale, cut.Line[i - 1].Y * scale, OreShellBuilder.CapFront + 0.005))
+			local a = workCF:PointToWorldSpace(
+				Vector3.new(cut.Line[i - 1].X * scale, cut.Line[i - 1].Y * scale, OreShellBuilder.CapFront + 0.005)
+			)
 			local b = workCF:PointToWorldSpace(Vector3.new(cut.Line[i].X * scale, cut.Line[i].Y * scale, OreShellBuilder.CapFront + 0.005))
-			local seam = Geo.block(model, CFrame.lookAt((a + b) / 2, b, workCF.LookVector * -1), Vector3.new(0.05, 0.02, (b - a).Magnitude), Color3.fromRGB(60, 46, 40), nil, props({ Name = "Seam", CastShadow = false }))
+			local seam = Geo.block(
+				model,
+				CFrame.lookAt((a + b) / 2, b, workCF.LookVector * -1),
+				Vector3.new(0.05, 0.02, (b - a).Magnitude),
+				Color3.fromRGB(60, 46, 40),
+				nil,
+				props({ Name = "Seam", CastShadow = false })
+			)
 			table.insert(seams[cut.Index], seam)
 		end
 	end
@@ -181,13 +224,22 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 	local dirt: { [number]: BasePart } = {}
 	local fragile: { [number]: BasePart } = {}
 	for _, d in pattern.Dirt do
-		local cf = workCF * CFrame.new(d.Center.X * scale, d.Center.Y * scale, OreShellBuilder.DirtFront - 0.04) * CFrame.Angles(0, 0, rng:range(-0.12, 0.12))
+		local cf = workCF
+			* CFrame.new(d.Center.X * scale, d.Center.Y * scale, OreShellBuilder.DirtFront - 0.04)
+			* CFrame.Angles(0, 0, rng:range(-0.12, 0.12))
 		if d.Fragile then
 			-- A glowing crystal leaning out toward the camera (so it reads on a phone) on a small
 			-- pale base: clearly not dirt, and smaller than the snap radius around it.
 			local lean = cf * CFrame.Angles(0, 0, rng:range(-0.6, 0.6)) * CFrame.Angles(math.rad(OreShellBuilder.CrystalLean), 0, 0)
 			-- (a darker Neon tone: the workbench bloom turns near-white Neon into a blob)
-			local shard = Geo.block(model, lean * CFrame.new(0, 0.11, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.1, 0.24, 0.1) * scale, glow:Lerp(Color3.new(0, 0, 0), 0.2), Enum.Material.Neon, props({ Name = "Fragile", CastShadow = false }))
+			local shard = Geo.block(
+				model,
+				lean * CFrame.new(0, 0.11, 0) * CFrame.Angles(0, math.pi / 4, 0),
+				Vector3.new(0.1, 0.24, 0.1) * scale,
+				glow:Lerp(Color3.new(0, 0, 0), 0.2),
+				Enum.Material.Neon,
+				props({ Name = "Fragile", CastShadow = false })
+			)
 			fragile[d.Index] = shard
 			local diameter = OreShellBuilder.CrystalBaseSize * scale
 			local baseProps = props({ Name = "CrystalBase", CastShadow = false })
@@ -200,7 +252,14 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 			Geo.make("Part", baseProps, model)
 		else
 			local size = d.Size * scale * rng:range(1.05, 1.2)
-			local patch = Geo.block(model, cf, Vector3.new(size, size * rng:range(0.9, 1.05), 0.1), rng:pick(dirtColors), nil, props({ Name = "Dirt", CastShadow = false }))
+			local patch = Geo.block(
+				model,
+				cf,
+				Vector3.new(size, size * rng:range(0.9, 1.05), 0.1),
+				rng:pick(dirtColors),
+				nil,
+				props({ Name = "Dirt", CastShadow = false })
+			)
 			dirt[d.Index] = patch
 		end
 	end
@@ -227,7 +286,14 @@ end
 -- Guide dots along a cut's line (rebuilt for each active cut).
 -- Soft key light on the camera side so the ore face reads clearly in the close-up.
 function OreShellBuilder.workLight(workCF: CFrame, parent: Instance): BasePart
-	local holder = Geo.ball(parent, workCF:PointToWorldSpace(Vector3.new(0, 1.4, 3.2)), 0.1, Color3.new(1, 1, 1), nil, props({ Name = "WorkLight", Transparency = 1, CastShadow = false }))
+	local holder = Geo.ball(
+		parent,
+		workCF:PointToWorldSpace(Vector3.new(0, 1.4, 3.2)),
+		0.1,
+		Color3.new(1, 1, 1),
+		nil,
+		props({ Name = "WorkLight", Transparency = 1, CastShadow = false })
+	)
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 238, 214)
 	light.Range = 9
@@ -254,7 +320,15 @@ function OreShellBuilder.guideDots(shell: Shell, cut: any, color: Color3, parent
 end
 
 -- The cut groove: thin dark line from the start of the cut to `progress` (0..1).
-function OreShellBuilder.updateGroove(shell: Shell, cut: any, progress: number, direction: number, parts: { BasePart }, parent: Instance, glow: Color3): { BasePart }
+function OreShellBuilder.updateGroove(
+	shell: Shell,
+	cut: any,
+	progress: number,
+	direction: number,
+	parts: { BasePart },
+	parent: Instance,
+	glow: Color3
+): { BasePart }
 	-- one groove part per polyline segment
 	local length = cut.Length * math.clamp(progress, 0, 1)
 	local line = cut.Line
@@ -272,7 +346,14 @@ function OreShellBuilder.updateGroove(shell: Shell, cut: any, progress: number, 
 		local visible = math.clamp(length - walked, 0, segment)
 		local part = parts[i - 1]
 		if not part then
-			part = Geo.block(parent, CFrame.new(), Vector3.new(0.1, 0.1, 0.1), glow, Enum.Material.Neon, props({ Name = "Groove", CastShadow = false }))
+			part = Geo.block(
+				parent,
+				CFrame.new(),
+				Vector3.new(0.1, 0.1, 0.1),
+				glow,
+				Enum.Material.Neon,
+				props({ Name = "Groove", CastShadow = false })
+			)
 			parts[i - 1] = part
 		end
 		if visible <= 0.001 then

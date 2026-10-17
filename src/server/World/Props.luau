@@ -81,7 +81,8 @@ function Props.emitter(parent: Instance, kind: string, color: Color3?, rate: num
 	elseif kind == "Sparkle" then
 		e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 		e.Color = ColorSequence.new(color or Color3.new(1, 1, 1))
-		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 0) })
+		e.Size =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 0) })
 		e.Transparency = NumberSequence.new(0)
 		e.Lifetime = NumberRange.new(0.8, 1.4)
 		e.Speed = NumberRange.new(0.5, 1.5)
@@ -109,7 +110,14 @@ function Props.tree(parent: Instance, base: CFrame, rng: Rng.Rng, style: string?
 	local m = model("Tree", parent)
 	local height = rng:range(7, 11)
 	local trunkWidth = rng:range(1.4, 2)
-	Geo.block(m, base * CFrame.new(0, height / 2, 0) * CFrame.Angles(0, rng:range(0, 6.28), rng:range(-0.06, 0.06)), Vector3.new(trunkWidth, height, trunkWidth), Geo.vary(Palette.Trunk, rng), nil, decor())
+	Geo.block(
+		m,
+		base * CFrame.new(0, height / 2, 0) * CFrame.Angles(0, rng:range(0, 6.28), rng:range(-0.06, 0.06)),
+		Vector3.new(trunkWidth, height, trunkWidth),
+		Geo.vary(Palette.Trunk, rng),
+		nil,
+		decor()
+	)
 	local leafColors = if style == "Green"
 		then { Palette.LeafGreen, Palette.LeafDeep }
 		elseif style == "Autumn" then { Palette.LeafOrange, Palette.LeafYellow }
@@ -120,7 +128,14 @@ function Props.tree(parent: Instance, base: CFrame, rng: Rng.Rng, style: string?
 	local size = rng:range(7, 9)
 	for _ = 1, layers do
 		local s = Vector3.new(size, size * rng:range(0.55, 0.75), size)
-		Geo.block(m, base * CFrame.new(rng:range(-0.6, 0.6), y + s.Y * 0.35, rng:range(-0.6, 0.6)) * Geo.randomTilt(rng, 0.25), s, Geo.vary(leafColor, rng, 0.05), nil, decor())
+		Geo.block(
+			m,
+			base * CFrame.new(rng:range(-0.6, 0.6), y + s.Y * 0.35, rng:range(-0.6, 0.6)) * Geo.randomTilt(rng, 0.25),
+			s,
+			Geo.vary(leafColor, rng, 0.05),
+			nil,
+			decor()
+		)
 		y += s.Y * 0.6
 		size *= 0.72
 	end

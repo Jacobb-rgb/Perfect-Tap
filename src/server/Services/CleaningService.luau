@@ -167,7 +167,13 @@ local function onTake(player: Player, machine: MachineService.PlacedMachine)
 	updatePrompts(machine)
 end
 
-local function makePrompt(machine: MachineService.PlacedMachine, name: string, actionText: string, hold: number, order: number): ProximityPrompt
+local function makePrompt(
+	machine: MachineService.PlacedMachine,
+	name: string,
+	actionText: string,
+	hold: number,
+	order: number
+): ProximityPrompt
 	local base = machine.Model.PrimaryPart :: BasePart
 	local attachment = base:FindFirstChild("Prompt") :: Attachment
 	local prompt = Instance.new("ProximityPrompt")
@@ -213,7 +219,11 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 	end
 	if not result.Valid then
 		warn(`[CleaningService] rejected cleaning from {player.Name}: {result.Reason}`)
-		Net.fire("CleanResult", player, { Id = sessionId, Ok = false, Reason = "Something went wrong. Your ore is still in the vise: try again!" })
+		Net.fire(
+			"CleanResult",
+			player,
+			{ Id = sessionId, Ok = false, Reason = "Something went wrong. Your ore is still in the vise: try again!" }
+		)
 		return
 	end
 

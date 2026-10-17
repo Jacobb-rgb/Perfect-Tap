@@ -1507,6 +1507,14 @@ local function outputChute(m: Instance, id: string, x: number, bodyY: number, fr
 	chute(m, Vector3.new(x, bodyY + 0.4, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.45), 1.1)
 end
 
+-- OutputL / OutputR at the shared side output points (MachineData SideOutputs).
+local function sideOutputs(ctx: Ctx, id: string)
+	if MachineData.ById[id] then
+		attach(ctx.base, "OutputL", CFrame.new(Grid.sideOutputLocal(id, -1)))
+		attach(ctx.base, "OutputR", CFrame.new(Grid.sideOutputLocal(id, 1)))
+	end
+end
+
 -- Item machine attachments: Output (when it has one), Prompt, a generous Intake box.
 local function itemPoints(ctx: Ctx, id: string, intake: Vector3, intakeSize: Vector3)
 	local outPos = outputFor(id)
@@ -1707,11 +1715,11 @@ local function sorter(): Ctx
 	glowStrips(m, Vector3.new(0, FLOOR + 0.15, 0), 3.7, 3.7, 0.7, 0.1)
 	local belt = block(m, CFrame.new(0, BELT_TOP - 0.12, 0), Vector3.new(BELT_W, 0.24, 3.6), "Rubber", SOLID, "Belt")
 	beltPaint(belt, 3.6, false)
-	local gz, gateY = 0.7, 3.0
+	local gz, gateY = 1.25, 3.0
 	for _, side in { -1, 1 } do
 		pillSlab(m, Vector3.new(side * 1.6, FLOOR, gz), 0.75, gateY - FLOOR, 1.1, 0.3, "Body")
-		cyl(m, Vector3.new(side * 1.6, FLOOR + 0.3, gz), UP, 0.3, 1.2, "Trim", TINY)
-		chute(m, Vector3.new(side * 1.3, BELT_TOP + 0.05, -1.0), Vector3.new(side * 2.5, BELT_TOP - 0.25, -1.0), 1.1)
+		cyl(m, Vector3.new(side * 1.6, FLOOR + 0.3, gz), UP, 0.3, 0.9, "Trim", TINY)
+		chute(m, Vector3.new(side * 1.3, BELT_TOP + 0.05, 0), Vector3.new(side * 2.5, BELT_TOP - 0.25, 0), 1.1)
 		wedge(
 			m,
 			CFrame.new(side * 0.85, BELT_TOP + 0.02, -1.0) * CFrame.Angles(0, -side * math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
@@ -1731,7 +1739,7 @@ local function sorter(): Ctx
 		local dot = ball(m, Vector3.new(-1.0 + (i - 1) * 0.5, gateY + 0.6, gz), 0.3, "Lamp", TINY, "RarityLamp")
 		dot.Color, dot.Material = c, NEON
 	end
-	cyl(m, Vector3.new(0, BELT_TOP + 0.3, -1.0), UP, 0.6, 0.45, "Frame", TINY)
+	cyl(m, Vector3.new(0, BELT_TOP + 0.3, 0), UP, 0.6, 0.45, "Frame", TINY)
 	block(
 		m,
 		CFrame.new(0, BELT_TOP + 0.3, -1.0) * CFrame.Angles(0, math.rad(35), 0) * CFrame.new(0, 0, -0.6),
@@ -1745,6 +1753,7 @@ local function sorter(): Ctx
 		socket(ctx, Vector3.new(sx * 1.6, FLOOR + 0.3, 1.65), out(sx, 1, 0.7), 0.7)
 	end
 	socket(ctx, Vector3.new(0, gateY + 0.5, gz + 0.45), out(0, 1, 0.3), 0.7, true)
+	sideOutputs(ctx, "Sorter")
 	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
 	local a = attach(ctx.base, "Intake", CFrame.new(0, 1.2, 1.2))
 	a:SetAttribute("IntakeSize", Vector3.new(3, 1.6, 1.4))
@@ -2178,6 +2187,7 @@ local function splitter(): Ctx
 	for _, sz in { -1, 1 } do
 		socket(ctx, Vector3.new(1.7, FLOOR, sz * 1.7), out(1, sz, 0.8), 0.7)
 	end
+	sideOutputs(ctx, "Splitter")
 	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
 	local a = attach(ctx.base, "Intake", CFrame.new(0, 1.2, 1.4))
 	a:SetAttribute("IntakeSize", Vector3.new(3, 1.6, 1.2))
@@ -2273,9 +2283,9 @@ local function windTurbine(): Ctx
 	for k = 0, 2 do
 		local a = k * math.pi * 2 / 3 + 0.3
 		local dir = Vector3.new(math.cos(a), math.sin(a), 0)
-		local cf = CFrame.fromMatrix(hub + dir * 2.3, dir:Cross(ZA), dir, ZA) * CFrame.Angles(0, math.rad(12), 0)
-		block(m, cf, Vector3.new(0.7, 3.8, 0.16), "Body", PROP, "Blade")
-		block(m, cf * CFrame.new(0, 1.65, 0), Vector3.new(0.72, 0.5, 0.18), "Trim", TINY, "Blade")
+		local cf = CFrame.fromMatrix(hub + dir * 2.0, dir:Cross(ZA), dir, ZA) * CFrame.Angles(0, math.rad(12), 0)
+		block(m, cf, Vector3.new(0.7, 3.2, 0.16), "Body", PROP, "Blade")
+		block(m, cf * CFrame.new(0, 1.35, 0), Vector3.new(0.72, 0.5, 0.18), "Trim", TINY, "Blade")
 	end
 	pillSlab(m, Vector3.new(-1.9, y0, -1.9), 1.5, 1.1, 1.1, 0.3, "Body")
 	local bar = block(m, CFrame.new(-1.9, y0 + 0.6, -1.9 - 0.58), Vector3.new(0.9, 0.2, 0.05), "ScreenGlow", TINY, "Charge")

@@ -857,7 +857,8 @@ local function buildMarker(folder: Instance, plotCF: CFrame, name: string, chute
 	model.Name = name
 	local cell = BaseLayout.chuteLocal(name)
 	-- top at 0.085: over the lawn stripes (<= 0.048), under build mode's plates (GridOverlay, >= 0.1)
-	local plate = Geo.block(model, plotCF * CFrame.new(cell.X, 0.06, cell.Z), Vector3.new(CELL - 0.5, 0.05, CELL - 0.5), chute.Color, nil, DECOR)
+	local plate =
+		Geo.block(model, plotCF * CFrame.new(cell.X, 0.06, cell.Z), Vector3.new(CELL - 0.5, 0.05, CELL - 0.5), chute.Color, nil, DECOR)
 	plate.Name = "Plate"
 	plate.Transparency = 0.15
 	-- the plaque: front (-Z model space) toward the grid

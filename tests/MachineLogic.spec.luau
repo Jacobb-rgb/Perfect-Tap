@@ -86,7 +86,10 @@ return function(T, Loader)
 		end
 		-- sell chute takes anything valid, refuses junk
 		for _, kind in { "Raw", "Clean", "Crushed", "Ingot" } do
-			T.truthy(MachineLogic.accepts("SellChute", { K = kind, O = "Silver", G = "Clean" }, entry("SellChute"), false), "chute " .. kind)
+			T.truthy(
+				MachineLogic.accepts("SellChute", { K = kind, O = "Silver", G = "Clean" }, entry("SellChute"), false),
+				"chute " .. kind
+			)
 		end
 		T.truthy(MachineLogic.accepts("SellChute", { K = "Gear", O = "Silver", G = "Clean", R = "Dagger" }, entry("SellChute"), true))
 		T.eq(select(2, MachineLogic.accepts("SellChute", { K = "Gear", O = "Silver" }, entry("SellChute"), true)), "Wrong")
@@ -313,7 +316,10 @@ return function(T, Loader)
 					add(m.L.Pushed, desc.O, 1)
 					stats.push += 1
 				else
-					T.truthy(reason == "Wrong" or reason == "Foreign" or reason == "Mixed" or reason == "Full", "reason " .. tostring(reason))
+					T.truthy(
+						reason == "Wrong" or reason == "Foreign" or reason == "Mixed" or reason == "Full",
+						"reason " .. tostring(reason)
+					)
 					stats.refused += 1
 				end
 			elseif op <= 7 and id ~= "Anvil" then
@@ -394,7 +400,11 @@ return function(T, Loader)
 					local consumed = L.Consumed[ore] or 0
 					local produced = L.Produced[ore] or 0
 					T.eq(pushed, countIn(oe.In, ore) + consumed + (L.DrainedIn[ore] or 0), `step {step}: {oe.Id} {ore} inputs`)
-					T.eq(produced, countIn(oe.Out, ore) + (L.Popped[ore] or 0) + (L.DrainedOut[ore] or 0), `step {step}: {oe.Id} {ore} outputs`)
+					T.eq(
+						produced,
+						countIn(oe.Out, ore) + (L.Popped[ore] or 0) + (L.DrainedOut[ore] or 0),
+						`step {step}: {oe.Id} {ore} outputs`
+					)
 					if oe.Id ~= "Anvil" then
 						T.eq(produced, consumed * (other.Info.OutputCount or 1), `step {step}: {oe.Id} {ore} ratio`)
 					end

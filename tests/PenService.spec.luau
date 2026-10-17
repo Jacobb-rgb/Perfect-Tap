@@ -799,7 +799,9 @@ return function(T, Loader)
 		-- junk All requests change nothing
 		PenService.stopSend(w.player)
 		fill(w, GOLD, 2)
-		for _, arg in { { Key = GOLD, All = "yes" }, { Key = GOLD, All = true, Count = 2 }, { Filter = "Dirty", All = true }, { All = true } } do
+		for _, arg in
+			{ { Key = GOLD, All = "yes" }, { Key = GOLD, All = true, Count = 2 }, { Filter = "Dirty", All = true }, { All = true } }
+		do
 			pen.action(w.player, "Send", arg)
 		end
 		T.eq(pen.queue(w.player), nil, "nothing queued")
@@ -879,7 +881,8 @@ return function(T, Loader)
 		PenService.tickSend(1 + PenService.SendInterval / 2)
 		T.eq(#cargo, 4, "one item every SendInterval")
 		-- the belt is jammed: the item stays on the train, same place
-		local blocker = ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, trainBelt.Model:GetPivot() * CFrame.new(0, 1.5, 0), nil, true)
+		local blocker =
+			ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, trainBelt.Model:GetPivot() * CFrame.new(0, 1.5, 0), nil, true)
 		total += 1
 		PenService.tickSend(2)
 		T.eq(#cargo, 4, "jammed: nothing taken")
@@ -1054,7 +1057,11 @@ return function(T, Loader)
 		local board = pen.board(PLOT)
 		T.truthy(board, "board built")
 		T.eq(board.Model.Parent, PenService.yard(PLOT):FindFirstChild("Pen"), "at the pen")
-		T.eq(board.Model:FindFirstChild("Title"):FindFirstChildWhichIsA("SurfaceGui"):FindFirstChild("Text").Text, PenService.BoardTitle, "AUTO-SORT ON")
+		T.eq(
+			board.Model:FindFirstChild("Title"):FindFirstChildWhichIsA("SurfaceGui"):FindFirstChild("Text").Text,
+			PenService.BoardTitle,
+			"AUTO-SORT ON"
+		)
 		T.eq(board.Body.Text, PenService.keepSummary("RarePlus", {}), "what is kept")
 		T.truthy(board.Status.Text:find("Put a conveyor", 1, true), "needs a belt")
 		local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[PLOT])

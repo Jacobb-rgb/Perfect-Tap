@@ -48,6 +48,19 @@ export type Machine = {
 	QualityLevels: { { [string]: number } }?, -- grade odds per Quality level (index = level + 1, Cleaning Plant)
 	Upgrades: UpgradePrices?, -- Tech shop upgrades of this machine type (nil = none)
 	Retired: boolean?, -- design v2 removed it: not sold, migrations take it off plots
+	-- the machine roster (docs/plans/MACHINES_PLAN.md, MACHINES_GAME_PLAN.md):
+	Behaviour: string?, -- server behaviour of machines that are not plain processors:
+	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole"
+	NoIntake: boolean?, -- no hopper / intake (generators, poles, the robot arm)
+	SideOutputs: boolean?, -- results leave the left / right side (OutputL / OutputR), not the front
+	Inputs: number?, -- items one job takes (Alloy Furnace: 2 ingots of different ores)
+	Batch: number?, -- queued items one job works at once, each giving its own output (Plasma Furnace: 2)
+	GradeUpChance: number?, -- Polisher: chance the output is one grade better
+	ShardChance: number?, -- Crystal Extractor: chance a job also gives a crystal shard
+	SpeedMult: number?, -- belts: speed multiplier (Express Conveyor)
+	Power: number?, -- power used on a powered network (nil / 0 = needs none)
+	PowerOut: number?, -- generators: power made at Speed level 0
+	IsPole: boolean?, -- power pole: links poles, generators and machines in reach; uses a belt slot
 }
 
 local MachineData = {}
@@ -117,6 +130,7 @@ MachineData.List = {
 		WrongHint = FURNACE_HINT,
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5) },
+		Power = 5,
 	},
 	{
 		Id = "Crusher",
@@ -134,6 +148,7 @@ MachineData.List = {
 		WrongHint = "The Crusher only takes CLEAN ore.",
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1) },
+		Power = 8,
 	},
 	{
 		Id = "Anvil",
@@ -166,6 +181,7 @@ MachineData.List = {
 		GradeChances = QUALITY_LEVELS[1],
 		QualityLevels = QUALITY_LEVELS,
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1), Quality = scaled(QUALITY_CURVE, 1) },
+		Power = 10,
 	},
 	{
 		Id = "IronBox",
@@ -185,6 +201,7 @@ MachineData.List = {
 		WrongHint = "The Iron Box sorts ore, crushed ore and ingots.",
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 1) },
+		Power = 2,
 	},
 	{
 		Id = "SellChute",
@@ -216,6 +233,7 @@ MachineData.List = {
 		WrongHint = FURNACE_HINT,
 		ConveyorFaces = "NoFront",
 		Upgrades = { Speed = scaled(SPEED_CURVE, 4) },
+		Power = 20,
 	},
 	{
 		Id = "Conveyor",
@@ -227,6 +245,228 @@ MachineData.List = {
 		Order = 1,
 		IsConveyor = true,
 		SlotFree = true,
+	},
+	-- the machine roster (owner 2026-10-17; prices, times and power are
+	-- Claude's proposals, docs/plans/MACHINES_GAME_PLAN.md)
+	{
+		Id = "ExpressConveyor",
+		Name = "Express Conveyor",
+		Description = "A belt twice as fast as the normal one.",
+		Size = { 1, 1 },
+		Price = 150,
+		Category = "Logistics",
+		Order = 8,
+		IsConveyor = true,
+		SlotFree = true,
+		SpeedMult = 2,
+	},
+	{
+		Id = "Splitter",
+		Name = "Splitter",
+		Description = "Sends items to the left and to the right, one after the other.",
+		Size = { 1, 1 },
+		Price = 3000,
+		Category = "Logistics",
+		Order = 9,
+		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Alloy = true },
+		Behaviour = "Splitter",
+		SideOutputs = true,
+		LoadText = "Split",
+		WrongHint = "The Splitter can't take that.",
+		ConveyorFaces = "NoFront",
+		Power = 1,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 0.5) },
+	},
+	{
+		Id = "Sorter",
+		Name = "Sorter",
+		Description = "Sends ore of the chosen rarity and better to the right, everything else to the left.",
+		Size = { 1, 1 },
+		Price = 8000,
+		Category = "Logistics",
+		Order = 10,
+		Accepts = { Clean = true, Crushed = true, Ingot = true, Alloy = true },
+		Behaviour = "Sorter",
+		SideOutputs = true,
+		LoadText = "Sort",
+		WrongHint = "The Sorter can only read cleaned ore: dirty ore hides its rarity.",
+		ConveyorFaces = "NoFront",
+		Power = 2,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 0.8) },
+	},
+	{
+		Id = "BrickFurnace",
+		Name = "Brick Furnace",
+		Description = "The normal furnace: faster than clay, cheaper than a Blast Furnace.",
+		Size = { 2, 2 },
+		Price = 6000,
+		Category = "Processing",
+		Order = 11,
+		Accepts = { Clean = true, Crushed = true },
+		Time = 4,
+		Output = "Ingot",
+		OutputCount = 1,
+		LoadText = "Smelt Ore",
+		WrongHint = FURNACE_HINT,
+		ConveyorFaces = "NoFront",
+		Power = 10,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 1.5) },
+	},
+	{
+		Id = "Polisher",
+		Name = "Polisher",
+		Description = "Polishes clean ore: half the time it comes out one grade better (worth more on a podium).",
+		Size = { 2, 2 },
+		Price = 25000,
+		Category = "Processing",
+		Order = 12,
+		Accepts = { Clean = true },
+		Time = 4,
+		Output = "Clean",
+		OutputCount = 1,
+		GradeUpChance = 0.5,
+		LoadText = "Polish Ore",
+		WrongHint = "The Polisher only takes CLEAN ore.",
+		ConveyorFaces = "NoFront",
+		Power = 12,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 2) },
+	},
+	{
+		Id = "RobotArm",
+		Name = "Robot Arm",
+		Description = "Takes finished items out of the machine behind it and puts them into the machine in front of it.",
+		Size = { 1, 1 },
+		Price = 20000,
+		Category = "Logistics",
+		Order = 13,
+		Behaviour = "RobotArm",
+		NoIntake = true,
+		Power = 4,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 1.5) },
+	},
+	{
+		Id = "SellBox",
+		Name = "Sell Box",
+		Description = "Sells whatever goes in to Tobin, straight from your factory.",
+		Size = { 2, 2 },
+		Price = 40000,
+		Category = "Selling",
+		Order = 14,
+		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true, Alloy = true },
+		Behaviour = "SellBox",
+		LoadText = "Sell",
+		WrongHint = "The Sell Box can't sell that.",
+		ConveyorFaces = "All",
+	},
+	{
+		Id = "CrystalExtractor",
+		Name = "Crystal Extractor",
+		Description = "Shakes crushed ore: sometimes a crystal shard pops out (shards buy enchants).",
+		Size = { 2, 2 },
+		Price = 80000,
+		Category = "Processing",
+		Order = 15,
+		Accepts = { Crushed = true },
+		Time = 5,
+		Output = "Crushed",
+		OutputCount = 1,
+		ShardChance = 0.15,
+		LoadText = "Extract",
+		WrongHint = "The Crystal Extractor only takes CRUSHED ore.",
+		ConveyorFaces = "NoFront",
+		Power = 15,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 3) },
+	},
+	{
+		Id = "AlloyFurnace",
+		Name = "Alloy Furnace",
+		Description = "Melts two ingots of different ores into one alloy, worth more than both.",
+		Size = { 3, 2 },
+		Price = 150000,
+		Category = "Processing",
+		Order = 16,
+		Accepts = { Ingot = true },
+		Time = 5,
+		Output = "Alloy",
+		OutputCount = 1,
+		Inputs = 2,
+		Behaviour = "Alloy",
+		LoadText = "Add Ingot",
+		WrongHint = "The Alloy Furnace takes INGOTS: two of different ores make an alloy.",
+		ConveyorFaces = "NoFront",
+		Power = 30,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 5) },
+	},
+	{
+		Id = "PlasmaFurnace",
+		Name = "Plasma Furnace",
+		Description = "The fastest furnace there is: smelts two at once.",
+		Size = { 2, 2 },
+		Price = 5000000,
+		Category = "Processing",
+		Order = 17,
+		Accepts = { Clean = true, Crushed = true },
+		Time = 2.5,
+		Batch = 2,
+		Output = "Ingot",
+		OutputCount = 1,
+		LoadText = "Smelt Ore",
+		WrongHint = FURNACE_HINT,
+		ConveyorFaces = "NoFront",
+		Power = 60,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 30) },
+	},
+	{
+		Id = "PowerPole",
+		Name = "Power Pole",
+		Description = "Carries power: links to the poles near it and powers machines in its reach.",
+		Size = { 1, 1 },
+		Price = 500,
+		Category = "Power",
+		Order = 18,
+		Behaviour = "Pole",
+		NoIntake = true,
+		IsPole = true,
+		SlotFree = true,
+	},
+	{
+		Id = "SolarPanel",
+		Name = "Solar Panel",
+		Description = "Free power from the sun. A little.",
+		Size = { 2, 2 },
+		Price = 4000,
+		Category = "Power",
+		Order = 19,
+		Behaviour = "Generator",
+		NoIntake = true,
+		PowerOut = 15,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 0.8) },
+	},
+	{
+		Id = "WindTurbine",
+		Name = "Wind Turbine",
+		Description = "More power, as long as the wind blows (it always does here).",
+		Size = { 2, 2 },
+		Price = 50000,
+		Category = "Power",
+		Order = 20,
+		Behaviour = "Generator",
+		NoIntake = true,
+		PowerOut = 40,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 3) },
+	},
+	{
+		Id = "FusionReactor",
+		Name = "Fusion Reactor",
+		Description = "A star in a jar: power for a whole factory.",
+		Size = { 3, 3 },
+		Price = 10000000,
+		Category = "Power",
+		Order = 21,
+		Behaviour = "Generator",
+		NoIntake = true,
+		PowerOut = 200,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 40) },
 	},
 } :: { Machine }
 
@@ -274,9 +514,7 @@ MachineData.MaxInventory = 999
 -- Workshop pass. Gives 10 / 13 / 16, or 22 with everything.
 function MachineData.machineSlots(extraBought: number, workshop: boolean): number
 	local bought = math.clamp(math.floor(tonumber(extraBought) or 0), 0, #MachineData.SlotUpgrade.Prices)
-	return MachineData.BaseMachineSlots
-		+ MachineData.SlotUpgrade.Amount * bought
-		+ (if workshop then MachineData.WorkshopPassSlots else 0)
+	return MachineData.BaseMachineSlots + MachineData.SlotUpgrade.Amount * bought + (if workshop then MachineData.WorkshopPassSlots else 0)
 end
 
 -- Conveyor slots: 40, or 60 with the Workshop pass.
@@ -411,6 +649,45 @@ function MachineData.keeps(mode: any, keepList: any, desc: any): boolean
 		return true
 	end
 	return MachineData.keepsOre(mode, keepList, desc.O)
+end
+
+---------------------------------------------------------------- power
+
+--[[
+	Power (owner 2026-10-17: cables and poles; too little power slows
+	machines down, it never stops them). A network is the poles linked to
+	each other (pole to pole within PoleLink cells) plus the generators and
+	machines with a footprint cell within PoleReach cells of one of its
+	poles. Every machine with Power > 0 runs at
+	  UnpoweredSpeed                      when it is on no network with power,
+	  UnpoweredSpeed + (1 - Unpowered) * min(1, supply / demand)  otherwise.
+	A generator makes PowerOut, PowerPerLevel more per Speed level.
+]]
+MachineData.PowerRules = {
+	UnpoweredSpeed = 0.6,
+	PoleLink = 6, -- cells between two linked poles (Chebyshev distance)
+	PoleReach = 3, -- cells from a pole to a footprint cell it powers
+	PowerPerLevel = 0.25,
+}
+
+-- Power a generator makes at a Speed level (0 for other machines).
+function MachineData.powerOut(machine: Machine, speedLevel: any): number
+	return (machine.PowerOut or 0) * (1 + MachineData.PowerRules.PowerPerLevel * wholeLevel(speedLevel, #SPEED_CURVE))
+end
+
+-- Speed of a machine on a network with `supply` power for `demand` (0..1, 1 = full speed).
+function MachineData.powerSpeed(supply: number, demand: number): number
+	local rules = MachineData.PowerRules
+	if not (demand > 0) then
+		return 1
+	end
+	local share = math.clamp((tonumber(supply) or 0) / demand, 0, 1)
+	return rules.UnpoweredSpeed + (1 - rules.UnpoweredSpeed) * share
+end
+
+-- The upgrade look of a machine type (KitMachines levels 0..4) for its Speed level 0..5.
+function MachineData.lookLevel(speedLevel: any): number
+	return math.min(4, wholeLevel(speedLevel, #SPEED_CURVE))
 end
 
 ---------------------------------------------------------------- job time

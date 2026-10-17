@@ -51,7 +51,7 @@ export type Limits = Placement.Limits
 -- how an item arrives: dropped/thrown into the hopper, fed by a belt,
 -- loaded from your hands (Put In prompt), or handed over by another machine
 export type Via = "Drop" | "Belt" | "Hand" | "Machine"
-export type RemoveReason = "Unload" | "Pickup"
+export type RemoveReason = "Unload" | "Pickup" | "Refresh" -- Refresh: the model is rebuilt (upgrade look), the data stays
 export type EmitResult = "Handed" | "Spawned" | "Blocked"
 
 export type PlacedMachine = {
@@ -366,7 +366,12 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 		warn(`[MachineService] plot {plotId} has no Machines folder`)
 		return nil
 	end
-	local model = MachineBuilder.build(entry.Id)
+	-- the upgrade look follows the machine type's Speed level (KitMachines crystals)
+	local data = DataService.get(player)
+	local upgrades = data and data.MachineUpgrades
+	local own = if type(upgrades) == "table" then upgrades[entry.Id] else nil
+	local level = MachineData.lookLevel(if type(own) == "table" then own.Speed else 0)
+	local model = MachineBuilder.build(entry.Id, level)
 	model:PivotTo(PlotService.footprintCFrame(plotId, entry.Id, entry.X, entry.Z, entry.R))
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("Owner", player.UserId)
@@ -409,6 +414,46 @@ local function detach(machine: PlacedMachine, reason: RemoveReason)
 	machine.Removed = true
 	placed[machine.Model] = nil
 	machine.Model:Destroy()
+end
+
+--[[
+	Rebuilds the models of every placed machine of type `machineId` the
+	player owns (after a Tech shop upgrade: the upgrade look). Hooks see a
+	"Refresh" removal and a fresh spawn; queues and settings stay in the
+	save (a job in progress starts over).
+]]
+function MachineService.refreshType(player: Player, machineId: string)
+	local plotId = PlotService.plotOf(player)
+	if not plotId then
+		return
+	end
+	for _, machine in MachineService.ofPlayer(player) do
+		if machine.Id == machineId then
+			detach(machine, "Refresh")
+			spawnMachine(player, plotId, machine.Entry)
+		end
+	end
+	rebuildPlot(plotId)
+end
+
+-- Speed modifiers (PowerService): each returns a multiplier for a machine (1 = normal).
+local speedModifiers: { (PlacedMachine) -> number } = {}
+
+function MachineService.addSpeedModifier(modifier: (PlacedMachine) -> number)
+	table.insert(speedModifiers, modifier)
+end
+
+-- How fast this machine works right now (1 = normal, below 1 = slower).
+-- Job times are divided by it.
+function MachineService.speedFactor(machine: PlacedMachine): number
+	local factor = 1
+	for _, modifier in speedModifiers do
+		local ok, value = pcall(modifier, machine)
+		if ok and type(value) == "number" and value == value and value > 0 then
+			factor *= value
+		end
+	end
+	return factor
 end
 
 local function devKit(): GameConfig.DevKit?
@@ -497,9 +542,15 @@ local function spawnAll(player: Player, plotId: number)
 		notifyLater(player, `{#didntFit} machines didn't fit and are waiting in your Build menu.`)
 	end
 	if #offChute == 1 then
-		notifyLater(player, `A chute now sits where your {nameOf(offChute[1])} stood (only belts can go on it). It is waiting in your Build menu.`)
+		notifyLater(
+			player,
+			`A chute now sits where your {nameOf(offChute[1])} stood (only belts can go on it). It is waiting in your Build menu.`
+		)
 	elseif #offChute > 1 then
-		notifyLater(player, `{#offChute} machines stood where the new chutes are (only belts can go on them). They are waiting in your Build menu.`)
+		notifyLater(
+			player,
+			`{#offChute} machines stood where the new chutes are (only belts can go on them). They are waiting in your Build menu.`
+		)
 	end
 end
 

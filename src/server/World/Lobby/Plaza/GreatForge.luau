@@ -354,7 +354,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		Style.block(m, at(s * 19.2, lampY + 0.85, lampZ - 0.3), Vector3.new(0.3, 0.3, 1.2), K.MetalDark, nil, Style.tiny())
 		Style.block(m, at(s * 19.2, lampY, lampZ - 0.85), Vector3.new(0.9, 1.3, 0.9), K.MetalDark, nil, Style.tiny())
 		Style.block(m, at(s * 19.2, lampY + 0.75, lampZ - 0.85), Vector3.new(1.2, 0.2, 1.2), K.Metal, nil, Style.tiny())
-		Style.block(m, at(s * 19.2, lampY, lampZ - 1.33), Vector3.new(0.32, 0.9, 0.06), K.SlotAmber, NEON, Style.tiny()).Name = "WingLantern"
+		Style.block(m, at(s * 19.2, lampY, lampZ - 1.33), Vector3.new(0.32, 0.9, 0.06), K.SlotAmber, NEON, Style.tiny()).Name =
+			"WingLantern"
 		for _, wz in { 1, 10 } do
 			Style.window(m, at(s * 20.45, PLINTH_TOP + 4.6, wz) * CFrame.Angles(0, -s * math.pi / 2, 0), 2.6, 3.4, { Color = K.WindowGlow })
 		end
@@ -483,7 +484,10 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		-- outer edges: two tails with a notch between them) on slightly larger
 		-- gold wedges: a gold edge round the tails
 		for _, spec in
-			{ { W = clothW, T = tail, Z = bz - 0.03, Color = K.Banner }, { W = width, T = tail + 0.3, Z = bz + 0.06, Color = K.BannerDark } }
+			{
+				{ W = clothW, T = tail, Z = bz - 0.03, Color = K.Banner },
+				{ W = width, T = tail + 0.3, Z = bz + 0.06, Color = K.BannerDark },
+			}
 		do
 			for _, t in { -1, 1 } do
 				Geo.wedge(
@@ -756,10 +760,23 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		Style.solid()
 	).Name =
 		"Furnace"
-	local band =
-		Style.block(m, at(0, PLINTH_TOP + 4.3, furnaceFront - 0.03), Vector3.new(DOOR_HALF * 2 - 3.4, 1.7, 0.06), K.SlotAmber, NEON, Style.tiny())
+	local band = Style.block(
+		m,
+		at(0, PLINTH_TOP + 4.3, furnaceFront - 0.03),
+		Vector3.new(DOOR_HALF * 2 - 3.4, 1.7, 0.06),
+		K.SlotAmber,
+		NEON,
+		Style.tiny()
+	)
 	band.Name = "FurnaceGlow"
-	local core = Style.block(m, at(0, PLINTH_TOP + 4.3, furnaceFront - 0.08), Vector3.new(DOOR_HALF * 2 - 3.6, 0.45, 0.06), C.Molten, NEON, Style.tiny())
+	local core = Style.block(
+		m,
+		at(0, PLINTH_TOP + 4.3, furnaceFront - 0.08),
+		Vector3.new(DOOR_HALF * 2 - 3.6, 0.45, 0.06),
+		C.Molten,
+		NEON,
+		Style.tiny()
+	)
 	core.Name = "FurnaceGlow"
 	local glow = Style.block(m, at(0, PLINTH_TOP + 1.5, furnaceFront - 0.03), Vector3.new(4.2, 2.6, 0.06), C.Ember, NEON, Style.tiny())
 	glow.Name = "ForgeGlow"
@@ -767,7 +784,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	Style.emitter(glow, "Fire", C.Fire, 6)
 	Style.emitter(glow, "Embers", C.Ember, 5)
 	for _, x in { -3.75, 3.75 } do
-		local mouth = Style.block(m, at(x, PLINTH_TOP + 1.25, furnaceFront - 0.03), Vector3.new(2, 1.7, 0.06), K.SlotAmber, NEON, Style.tiny())
+		local mouth =
+			Style.block(m, at(x, PLINTH_TOP + 1.25, furnaceFront - 0.03), Vector3.new(2, 1.7, 0.06), K.SlotAmber, NEON, Style.tiny())
 		mouth.Name = "FurnaceGlow"
 	end
 	-- glowing coal beds in front of the side mouths
@@ -776,7 +794,14 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		coal.Name = "FurnaceGlow"
 	end
 	-- the hood over the whole furnace and the flue up to the beams
-	Style.block(m, at(0, PLINTH_TOP + furnaceH + 0.4, furnaceZ - 0.2), Vector3.new(DOOR_HALF * 2 - 1.6, 0.8, furnaceD + 0.6), IRON_DARK, nil, Style.tiny())
+	Style.block(
+		m,
+		at(0, PLINTH_TOP + furnaceH + 0.4, furnaceZ - 0.2),
+		Vector3.new(DOOR_HALF * 2 - 1.6, 0.8, furnaceD + 0.6),
+		IRON_DARK,
+		nil,
+		Style.tiny()
+	)
 	Style.block(
 		m,
 		at(0, (PLINTH_TOP + furnaceH + 0.8 + DOOR_TOP) / 2, furnaceZ),
@@ -824,14 +849,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 	-- a molten sill glowing across the threshold (short-range light: it
 	-- lights the doorway, not the banners)
-	local threshold = Style.block(
-		m,
-		at(0, PLINTH_TOP + 0.1, NAVE_FRONT + 0.6),
-		Vector3.new(DOOR_HALF * 2 - 0.8, 0.2, 0.6),
-		C.Molten,
-		NEON,
-		Style.tiny()
-	)
+	local threshold =
+		Style.block(m, at(0, PLINTH_TOP + 0.1, NAVE_FRONT + 0.6), Vector3.new(DOOR_HALF * 2 - 0.8, 0.2, 0.6), C.Molten, NEON, Style.tiny())
 	threshold.Name = "MoltenChannel"
 	-- (lobby fix round 3: the threshold's PointLight became this SurfaceLight)
 	-- warm light spilling out of the hall down the stairs: a narrow emitter

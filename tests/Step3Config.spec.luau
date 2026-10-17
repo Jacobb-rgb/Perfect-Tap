@@ -367,7 +367,25 @@ return function(T, Loader)
 	end)
 
 	T.test("Step 3: Speed and Quality upgrades per machine", function()
-		local speed = { AutoCleaner = true, ClayFurnace = true, BlastFurnace = true, Crusher = true, IronBox = true }
+		local speed = {
+			AutoCleaner = true,
+			ClayFurnace = true,
+			BlastFurnace = true,
+			Crusher = true,
+			IronBox = true,
+			-- the machine roster (Speed = faster jobs / hand-overs, generators: more power)
+			Splitter = true,
+			Sorter = true,
+			BrickFurnace = true,
+			Polisher = true,
+			RobotArm = true,
+			CrystalExtractor = true,
+			AlloyFurnace = true,
+			PlasmaFurnace = true,
+			SolarPanel = true,
+			WindTurbine = true,
+			FusionReactor = true,
+		}
 		for _, machine in MachineData.List do
 			local upgrades = machine.Upgrades
 			T.eq(upgrades ~= nil and upgrades.Speed ~= nil, speed[machine.Id] == true, machine.Id .. " Speed")
@@ -433,7 +451,8 @@ return function(T, Loader)
 		local bellows = #MachineData.Bellows.Prices
 		local checked = 0
 		for _, machine in MachineData.List do
-			local top = MachineData.upgradeMax(machine.Id, "Speed")
+			-- machines with a job time (the others' Speed works elsewhere: hand-overs, power)
+			local top = if machine.Time then MachineData.upgradeMax(machine.Id, "Speed") else 0
 			for level = 1, top do
 				local now = MachineData.processTime(machine, bellows, level)
 				local before = MachineData.processTime(machine, bellows, level - 1)
@@ -508,8 +527,16 @@ return function(T, Loader)
 		T.truthy(MachineData.keeps("List", { Coal = false, Copper = true }, item("Clean", top.Id)), "unset top ore kept")
 		T.falsy(MachineData.keeps("List", { Coal = false }, item("Clean", "Coal")))
 		T.truthy(MachineData.keeps("List", { Coal = true }, item("Clean", "Coal")))
-		T.eq(MachineData.keeps("List", "junk", item("Clean", "Coal")), MachineData.keeps("RarePlus", {}, item("Clean", "Coal")), "a broken list = Rare+")
-		T.eq(MachineData.keeps("List", { Coal = "yes" }, item("Clean", "Coal")), MachineData.keeps("RarePlus", {}, item("Clean", "Coal")), "only booleans count")
+		T.eq(
+			MachineData.keeps("List", "junk", item("Clean", "Coal")),
+			MachineData.keeps("RarePlus", {}, item("Clean", "Coal")),
+			"a broken list = Rare+"
+		)
+		T.eq(
+			MachineData.keeps("List", { Coal = "yes" }, item("Clean", "Coal")),
+			MachineData.keeps("RarePlus", {}, item("Clean", "Coal")),
+			"only booleans count"
+		)
 		-- junk and odd items
 		T.falsy(MachineData.keeps("All", {}, item("Clean", "Unobtainium")), "unknown ore")
 		T.falsy(MachineData.keepsOre("All", {}, "Unobtainium"), "unknown ore")

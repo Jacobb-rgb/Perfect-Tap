@@ -132,7 +132,10 @@ return function(T, Loader)
 		T.eq(EconomyConfig.offlineEarnings(0 / 0, 3600, true), 0)
 		T.eq(EconomyConfig.offlineEarnings(100, 0 / 0, true), 0)
 		T.eq(EconomyConfig.penCapacity(0, GameConfig.MaxStoredItems), EconomyConfig.Pen.BaseCapacity)
-		T.eq(EconomyConfig.penCapacity(999, GameConfig.MaxStoredItems), EconomyConfig.Pen.BaseCapacity + EconomyConfig.Pen.PerLevel * #EconomyConfig.Pen.Prices)
+		T.eq(
+			EconomyConfig.penCapacity(999, GameConfig.MaxStoredItems),
+			EconomyConfig.Pen.BaseCapacity + EconomyConfig.Pen.PerLevel * #EconomyConfig.Pen.Prices
+		)
 		T.le(EconomyConfig.penCapacity(999, GameConfig.MaxStoredItems), GameConfig.MaxStoredItems)
 		T.eq(EconomyConfig.multiplier({ 0.1, 0.25 }), 1.35)
 		for i = 2, #EconomyConfig.Pen.Prices do

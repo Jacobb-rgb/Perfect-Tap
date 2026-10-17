@@ -66,7 +66,11 @@ end
 local function scanPulsers(root: Instance)
 	for _, d in root:GetDescendants() do
 		-- only the first time: later scans must not take the dimmed color as the new base
-		if not pulsers[d :: BasePart] and d:IsA("BasePart") and (d.Name == "ForgeGlow" or d.Name == "Lava" or d.Name == "MoltenChannel") then
+		if
+			not pulsers[d :: BasePart]
+			and d:IsA("BasePart")
+			and (d.Name == "ForgeGlow" or d.Name == "Lava" or d.Name == "MoltenChannel")
+		then
 			pulsers[d] = { base = d.Color, phase = math.random() * 6 }
 		end
 	end

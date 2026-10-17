@@ -615,9 +615,12 @@ return function(T, Loader)
 		feed(m, onBeltItem(m, atEnd, INGOT), now)
 		T.eq(seen, 0, "not a sink belt now")
 		-- only sinks take a handler
-		T.falsy(pcall(ConveyorService.setSink, "Pen", function()
-			return true
-		end), "the PEN chute is a source")
+		T.falsy(
+			pcall(ConveyorService.setSink, "Pen", function()
+				return true
+			end),
+			"the PEN chute is a source"
+		)
 	end)
 
 	withWorld("ConveyorService: with no belt on the FOUNDRY chute, items lying on its cell go in", function(w)
@@ -715,9 +718,17 @@ return function(T, Loader)
 						T.le(q.Y + half.Y, 3.7, name .. " " .. d.Name .. " under the gate posts' caps and the ORE PEN sign")
 						if name == "Pen" then
 							-- the gate post (2.1 cap) stands out in front of the wall: a stud clear of it
-							T.le(gate.Width / 2 + 2.1 + 1 - 1e-4, math.abs(q.X - gate.CenterX) - half.X, "Pen " .. d.Name .. " clear of the gate post")
+							T.le(
+								gate.Width / 2 + 2.1 + 1 - 1e-4,
+								math.abs(q.X - gate.CenterX) - half.X,
+								"Pen " .. d.Name .. " clear of the gate post"
+							)
 						end
-						T.le(gate.Width / 2, math.abs(q.X - gate.CenterX) - half.X + 1e-6, name .. " " .. d.Name .. " out of the gate walkway")
+						T.le(
+							gate.Width / 2,
+							math.abs(q.X - gate.CenterX) - half.X + 1e-6,
+							name .. " " .. d.Name .. " out of the gate walkway"
+						)
 					end
 				end
 			end

@@ -92,14 +92,21 @@ return function(T, Loader)
 		data.Storage = { { K = "Raw", O = "Copper" }, 42, "x", { K = "Ingot", O = "Iron", G = "Clean" } }
 		data.PlacedMachines = {
 			{ Id = "BlastFurnace", X = 1, Z = 1, R = 0, In = "nope", Out = {} },
-			{ Id = "Crusher", X = 4, Z = 4, R = 0, In = { { K = "Clean", O = "Unobtainium", G = "Rough" }, { K = "Clean", O = "Iron", G = 7 } } },
+			{
+				Id = "Crusher",
+				X = 4,
+				Z = 4,
+				R = 0,
+				In = { { K = "Clean", O = "Unobtainium", G = "Rough" }, { K = "Clean", O = "Iron", G = 7 } },
+			},
 			{ Id = "FutureMachine", X = 6, Z = 6, R = 2, In = { { K = "Raw", O = "Gold" } } },
 			{ Id = "FutureMachine", X = math.huge, Z = 6, R = 0, In = { { K = "Raw", O = "Silver" } } },
 			{ Id = "Crusher", X = 8, Z = "far", R = 0, Out = { { K = "Crushed", O = "Gold", G = "Clean" } } },
 			{ Id = 12, X = 0, Z = 0, R = 0 },
 			{ Id = "ClayFurnace", X = 9, Z = 9 },
 		}
-		data.MachineInventory = { [1] = 3, Conveyor = "5", IronBox = 1015, FutureMachine2 = 5000.5, SellChute = 0 / 0, FutureMachine = 2, Crusher = 0.5 }
+		data.MachineInventory =
+			{ [1] = 3, Conveyor = "5", IronBox = 1015, FutureMachine2 = 5000.5, SellChute = 0 / 0, FutureMachine = 2, Crusher = 0.5 }
 		local report = Migrations.run(data)
 		T.eq(#data.Storage, 5, "2 good entries + 3 rescued items")
 		T.eq(data.Storage[1].K, "Raw")

@@ -2097,8 +2097,8 @@ function MachineBuilder.build(id: string, level: number?): Model
 		return KitMachines.build(id, level)
 	end
 	local model: Model
-	if id == "Conveyor" then
-		model = KitMachines.conveyor()
+	if id == "Conveyor" or id == "ExpressConveyor" then
+		model = KitMachines.conveyor(nil, id == "ExpressConveyor")
 	else
 		local builder = BUILDERS[id]
 		assert(builder, "No model for machine " .. tostring(id))

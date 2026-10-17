@@ -75,7 +75,9 @@ function CutRecorder.feed(self: any, p: Vector2, t: number): Feed
 	if math.abs(p.X) > CutRecorder.MaxReach or math.abs(p.Y) > CutRecorder.MaxReach then
 		return result
 	end
-	local spacing = if #self.samples > GameConfig.MaxTracePoints * 2 then CutRecorder.MinSampleDistance * 3 else CutRecorder.MinSampleDistance
+	local spacing = if #self.samples > GameConfig.MaxTracePoints * 2
+		then CutRecorder.MinSampleDistance * 3
+		else CutRecorder.MinSampleDistance
 	local last = self.lastSample
 	if (last and (p - last).Magnitude < spacing) or t - self.lastSampleT < CutRecorder.MinSampleTime then
 		return result

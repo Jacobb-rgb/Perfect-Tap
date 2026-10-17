@@ -207,13 +207,20 @@ local function chipEffect(ctx: any, p: Vector2): BasePart
 		Name = "ChipMark",
 	})
 	-- the chip flying off
-	local chip = Geo.wedge(ctx.folder, CFrame.new(world) * CFrame.Angles(math.random() * 3, math.random() * 3, 0), Vector3.new(0.18, 0.14, 0.16), ore.Color, nil, {
-		Anchored = false,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-		CastShadow = false,
-	})
+	local chip = Geo.wedge(
+		ctx.folder,
+		CFrame.new(world) * CFrame.Angles(math.random() * 3, math.random() * 3, 0),
+		Vector3.new(0.18, 0.14, 0.16),
+		ore.Color,
+		nil,
+		{
+			Anchored = false,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+		}
+	)
 	local toward = ctx.shell.WorkCF.LookVector * -1
 	chip.AssemblyLinearVelocity = toward * 6 + Vector3.new(math.random() - 0.5, 1, math.random() - 0.5) * 6
 	chip.AssemblyAngularVelocity = Vector3.new(10, 8, 6)

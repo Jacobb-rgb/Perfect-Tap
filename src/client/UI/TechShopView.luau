@@ -245,6 +245,8 @@ local C = {
 TechShopView.CategoryColors = {
 	Processing = rgb(236, 128, 56),
 	Logistics = rgb(90, 160, 230),
+	Selling = rgb(240, 196, 60),
+	Power = rgb(120, 220, 120),
 } :: { [string]: Color3 }
 
 type Metrics = {
@@ -633,11 +635,13 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		local text = if #counts > 1 then `BUY {n}` else "BUY"
 		table.insert(buys, buyOf(text, price, reason, coins, n, nil))
 	end
-	local detail = if owned == 0 and placed == 0
-		then "You don't have one yet"
-		else `Build menu: {Format.commas(owned)}{SEP}Placed: {Format.commas(placed)}`
 	-- the slot use, red when one more would not fit (a warning: buying still works)
 	local slotText, slotsFull = TechShopView.slotText(state, machine)
+	-- (a belt type you don't have yet with other belts waiting says it short: that slot text is long)
+	local short = machine.IsConveyor and slotText ~= nil and string.find(slotText, "waiting", 1, true) ~= nil
+	local detail = if owned == 0 and placed == 0
+		then (if short then "None yet" else "You don't have one yet")
+		else `Build menu: {Format.commas(owned)}{SEP}Placed: {Format.commas(placed)}`
 	if slotText then
 		detail ..= SEP .. slotText
 	end
@@ -889,6 +893,106 @@ local function glyph(parent: Instance, text: string, x0: number, y0: number, x1:
 end
 
 local DRAW: { [string]: (Frame) -> () } = {
+	-- the machine roster (KitMachines Soft style: cream bodies, slate, orange)
+	ExpressConveyor = function(a: Frame)
+		bit(a, "Rail", 0.04, 0.62, 0.96, 0.74, C.Gem, 0.4)
+		bit(a, "Belt", 0.06, 0.4, 0.94, 0.64, C.Belt, 0.5)
+		glyph(a, ">>>", 0.18, 0.42, 0.82, 0.62, C.Gem)
+		bit(a, "Leg", 0.14, 0.74, 0.22, 0.9, C.HousingDark)
+		bit(a, "Leg", 0.78, 0.74, 0.86, 0.9, C.HousingDark)
+	end,
+	Splitter = function(a: Frame)
+		bit(a, "Base", 0.08, 0.62, 0.92, 0.82, C.HousingDark, 0.3)
+		bit(a, "Platform", 0.2, 0.36, 0.8, 0.7, C.Belt, 0.5)
+		bit(a, "Flipper", 0.44, 0.3, 0.56, 0.62, C.Hazard, 0.3)
+		glyph(a, "<", 0.0, 0.36, 0.22, 0.62, C.Hazard)
+		glyph(a, ">", 0.78, 0.36, 1.0, 0.62, C.Hazard)
+	end,
+	Sorter = function(a: Frame)
+		bit(a, "Belt", 0.06, 0.62, 0.94, 0.8, C.Belt, 0.3)
+		bit(a, "PostL", 0.1, 0.24, 0.24, 0.66, C.HousingLight, 0.3)
+		bit(a, "PostR", 0.76, 0.24, 0.9, 0.66, C.HousingLight, 0.3)
+		bit(a, "Gate", 0.08, 0.16, 0.92, 0.32, C.HousingLight, 0.5)
+		bit(a, "Dot", 0.3, 0.2, 0.4, 0.28, C.Green, 0.5)
+		bit(a, "Dot", 0.45, 0.2, 0.55, 0.28, C.Gem, 0.5)
+		bit(a, "Dot", 0.6, 0.2, 0.7, 0.28, C.Gold, 0.5)
+	end,
+	BrickFurnace = function(a: Frame)
+		bit(a, "Dome", 0.16, 0.08, 0.84, 0.6, C.ClayTop, 0.5)
+		bit(a, "Body", 0.1, 0.4, 0.9, 0.9, C.HousingLight, 0.2)
+		bit(a, "Mouth", 0.34, 0.54, 0.66, 0.86, C.Recess, 0.4)
+		bit(a, "Glow", 0.4, 0.62, 0.6, 0.86, C.Glow, 0.4)
+		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, C.Hazard)
+	end,
+	Polisher = function(a: Frame)
+		bit(a, "Body", 0.1, 0.5, 0.9, 0.9, C.HousingLight, 0.2)
+		bit(a, "Table", 0.2, 0.42, 0.8, 0.52, C.Hazard, 0.5)
+		bit(a, "Arm", 0.72, 0.06, 0.8, 0.4, C.HousingDark)
+		bit(a, "Wheel", 0.3, 0.18, 0.7, 0.32, rgb(255, 172, 204), 0.5)
+		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, C.Hazard)
+	end,
+	RobotArm = function(a: Frame)
+		bit(a, "Base", 0.2, 0.78, 0.6, 0.94, C.HousingDark, 0.3)
+		bit(a, "Turret", 0.28, 0.62, 0.52, 0.8, C.Hazard, 0.3)
+		bit(a, "Upper", 0.36, 0.22, 0.46, 0.66, C.Hazard, 0.4)
+		bit(a, "Fore", 0.4, 0.18, 0.84, 0.28, C.Hazard, 0.4)
+		bit(a, "Claw", 0.76, 0.26, 0.9, 0.44, C.HousingDark, 0.2)
+	end,
+	SellBox = function(a: Frame)
+		bit(a, "Body", 0.1, 0.3, 0.9, 0.9, C.HousingLight, 0.25)
+		bit(a, "Coin", 0.3, 0.4, 0.7, 0.8, C.Gold, 0.5)
+		glyph(a, "$", 0.36, 0.44, 0.64, 0.76, C.WoodDark)
+		bit(a, "Lid", 0.18, 0.2, 0.82, 0.32, C.HousingDark, 0.3)
+	end,
+	CrystalExtractor = function(a: Frame)
+		bit(a, "Body", 0.1, 0.52, 0.9, 0.92, C.HousingLight, 0.2)
+		bit(a, "Glass", 0.26, 0.08, 0.74, 0.54, C.Water, 0.3)
+		bit(a, "Gem", 0.4, 0.2, 0.6, 0.44, C.Gem, 0.2).Rotation = 45
+		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, C.Hazard)
+	end,
+	AlloyFurnace = function(a: Frame)
+		bit(a, "HopperL", 0.1, 0.16, 0.36, 0.34, C.Hazard, 0.4)
+		bit(a, "HopperR", 0.64, 0.16, 0.9, 0.34, C.Gem, 0.4)
+		bit(a, "Body", 0.04, 0.34, 0.96, 0.9, C.HousingLight, 0.2)
+		bit(a, "Glow", 0.36, 0.56, 0.64, 0.88, C.Glow, 0.4)
+		bit(a, "Trim", 0.04, 0.86, 0.96, 0.96, C.Hazard)
+	end,
+	PlasmaFurnace = function(a: Frame)
+		bit(a, "Sphere", 0.32, 0.04, 0.68, 0.38, rgb(186, 110, 255), 0.5)
+		bit(a, "Body", 0.1, 0.36, 0.9, 0.9, C.HousingLight, 0.2)
+		bit(a, "Glow", 0.36, 0.56, 0.64, 0.88, rgb(186, 110, 255), 0.4)
+		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, rgb(186, 110, 255))
+	end,
+	PowerPole = function(a: Frame)
+		bit(a, "Pole", 0.45, 0.2, 0.55, 0.9, C.HousingDark)
+		bit(a, "Arm", 0.2, 0.24, 0.8, 0.3, C.HousingDark)
+		bit(a, "Ins", 0.18, 0.14, 0.26, 0.24, C.Hazard, 0.5)
+		bit(a, "Ins", 0.74, 0.14, 0.82, 0.24, C.Hazard, 0.5)
+		bit(a, "Lamp", 0.42, 0.04, 0.58, 0.18, C.Green, 0.5)
+	end,
+	SolarPanel = function(a: Frame)
+		local panel = bit(a, "Panel", 0.08, 0.2, 0.92, 0.56, rgb(44, 78, 160), 0.1)
+		panel.Rotation = -8
+		bit(a, "Post", 0.45, 0.54, 0.55, 0.86, C.HousingDark)
+		bit(a, "Base", 0.24, 0.84, 0.76, 0.94, C.HousingDark, 0.3)
+		glyph(a, "+", 0.4, 0.26, 0.6, 0.5, rgb(140, 190, 255))
+	end,
+	WindTurbine = function(a: Frame)
+		bit(a, "Tower", 0.45, 0.34, 0.55, 0.94, C.HousingLight)
+		bit(a, "BladeA", 0.47, 0.02, 0.53, 0.34, C.HousingLight, 0.5)
+		local b = bit(a, "BladeB", 0.47, 0.18, 0.53, 0.5, C.HousingLight, 0.5)
+		b.Rotation = 120
+		local c = bit(a, "BladeC", 0.47, 0.18, 0.53, 0.5, C.HousingLight, 0.5)
+		c.Rotation = -120
+		bit(a, "Hub", 0.42, 0.28, 0.58, 0.4, C.Hazard, 0.5)
+	end,
+	FusionReactor = function(a: Frame)
+		bit(a, "Base", 0.08, 0.7, 0.92, 0.92, C.HousingLight, 0.3)
+		bit(a, "Ring", 0.2, 0.22, 0.8, 0.72, C.HousingDark, 0.5)
+		bit(a, "Core", 0.34, 0.34, 0.66, 0.62, rgb(70, 228, 255), 0.5)
+		bit(a, "PylonL", 0.06, 0.2, 0.14, 0.7, C.HousingLight)
+		bit(a, "PylonR", 0.86, 0.2, 0.94, 0.7, C.HousingLight)
+	end,
 	Conveyor = function(a: Frame)
 		bit(a, "Rail", 0.04, 0.62, 0.96, 0.74, C.HousingLight, 0.4)
 		bit(a, "Belt", 0.06, 0.4, 0.94, 0.64, C.Belt, 0.5)

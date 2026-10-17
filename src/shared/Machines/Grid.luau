@@ -31,6 +31,17 @@ local NO_FRONT_OUTPUT = {
 	CleaningStation = true,
 	SellChute = true,
 	Conveyor = true,
+	-- the roster: belts, side outputs (Splitter, Sorter), hand-over (Robot
+	-- Arm), selling and power make nothing come out of the front
+	ExpressConveyor = true,
+	Splitter = true,
+	Sorter = true,
+	RobotArm = true,
+	SellBox = true,
+	PowerPole = true,
+	SolarPanel = true,
+	WindTurbine = true,
+	FusionReactor = true,
 }
 
 local DIRS = {
@@ -105,6 +116,31 @@ function Grid.outputLocal(id: string): Vector3?
 	local w, d = info.Size[1], info.Size[2]
 	local column = math.floor(w / 2)
 	return Vector3.new(-w * CELL / 2 + (column + 0.5) * CELL, 1.8, -(d * CELL / 2) - 0.5)
+end
+
+-- Side outputs (MachineData SideOutputs: Splitter, Sorter): `side` -1 = the
+-- machine's left, 1 = its right (Grid.right). Model-local point of the
+-- OutputL / OutputR attachment: 0.5 studs outside the footprint, level
+-- with the front row, 1.4 studs up (an item spawned there drops onto a
+-- belt in the side cell).
+function Grid.sideOutputLocal(id: string, side: number): Vector3
+	local info = machine(id)
+	local w, d = info.Size[1], info.Size[2]
+	return Vector3.new(side * (w * CELL / 2 + 0.5), 1.4, -(d * CELL / 2) + CELL / 2)
+end
+
+-- The cell beside the machine's front row on `side` (-1 left, 1 right).
+function Grid.sideOutputCell(id: string, x: number, z: number, r: number, side: number): (number, number)
+	local fw, fd = Grid.footprint(id, r)
+	local info = machine(id)
+	local w, d = info.Size[1], info.Size[2]
+	local dx, dz = Grid.dir(r)
+	local rx, rz = Grid.right(r)
+	local across = side * (w / 2 + 0.5)
+	local ahead = d / 2 - 0.5
+	local px = x + fw / 2 + across * rx + ahead * dx
+	local pz = z + fd / 2 + across * rz + ahead * dz
+	return math.floor(px), math.floor(pz)
 end
 
 -- The cell the output lands in (just in front of the output column).

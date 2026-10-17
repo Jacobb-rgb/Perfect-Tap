@@ -42,8 +42,22 @@ return function(T, Loader)
 		local folder = Instance.new("Folder")
 		folder.Name = "Machines"
 		folder.Parent = plotModel
-		w.player = { UserId = USER, Name = "Owner", Parent = true, GetAttribute = function() return nil end }
-		w.stranger = { UserId = STRANGER, Name = "Stranger", Parent = true, GetAttribute = function() return nil end }
+		w.player = {
+			UserId = USER,
+			Name = "Owner",
+			Parent = true,
+			GetAttribute = function()
+				return nil
+			end,
+		}
+		w.stranger = {
+			UserId = STRANGER,
+			Name = "Stranger",
+			Parent = true,
+			GetAttribute = function()
+				return nil
+			end,
+		}
 		local data = deepCopy(DataTemplate)
 		data.StarterKitGiven = true
 		data.MachineInventory = { ClayFurnace = 1, Conveyor = 3, StorageCrate = 1 }
@@ -328,7 +342,14 @@ return function(T, Loader)
 
 	withWorld("IntakeService: Put In loads what fits from your hands", function(w)
 		local function carried(kind: string): any
-			return { Id = kind, Kind = kind, OreId = "Copper", Grade = if kind == "Raw" then nil else "Rough", Owner = USER, State = "Carried" }
+			return {
+				Id = kind,
+				Kind = kind,
+				OreId = "Copper",
+				Grade = if kind == "Raw" then nil else "Rough",
+				Owner = USER,
+				State = "Carried",
+			}
 		end
 		w.carried = { carried("Clean"), carried("Raw"), carried("Clean") }
 		intake.load(w.player, w.furnace)

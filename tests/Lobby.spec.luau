@@ -184,7 +184,11 @@ return function(T, Loader)
 							if LobbyLayout.inArea(d.CFrame.Position) then
 								inParts += 1
 							end
-						elseif (d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight")) and d.Parent and d.Parent:IsA("BasePart") then
+						elseif
+							(d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight"))
+							and d.Parent
+							and d.Parent:IsA("BasePart")
+						then
 							lights += 1
 							if LobbyLayout.inArea(d.Parent.CFrame.Position) then
 								inLights += 1

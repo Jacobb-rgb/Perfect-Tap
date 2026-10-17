@@ -70,51 +70,60 @@ end
 
 function PointerInput.start(self: Pointer)
 	local c = self.connections
-	table.insert(c, UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then
-			return
-		end
-		local t = input.UserInputType
-		if t == Enum.UserInputType.MouseButton1 then
-			self.Kind = "Mouse"
-			self.Down = true
-		elseif t == Enum.UserInputType.Touch then
-			if not self.touch then
-				self.Kind = "Touch"
-				self.touch = input
-				self.Position = touchToViewport(input.Position)
+	table.insert(
+		c,
+		UserInputService.InputBegan:Connect(function(input, processed)
+			if processed then
+				return
+			end
+			local t = input.UserInputType
+			if t == Enum.UserInputType.MouseButton1 then
+				self.Kind = "Mouse"
+				self.Down = true
+			elseif t == Enum.UserInputType.Touch then
+				if not self.touch then
+					self.Kind = "Touch"
+					self.touch = input
+					self.Position = touchToViewport(input.Position)
+					self.Down = true
+				end
+			elseif input.KeyCode == Enum.KeyCode.ButtonA or input.KeyCode == Enum.KeyCode.ButtonR2 then
+				self.Kind = "Gamepad"
 				self.Down = true
 			end
-		elseif input.KeyCode == Enum.KeyCode.ButtonA or input.KeyCode == Enum.KeyCode.ButtonR2 then
-			self.Kind = "Gamepad"
-			self.Down = true
-		end
-	end))
-	table.insert(c, UserInputService.InputChanged:Connect(function(input)
-		local t = input.UserInputType
-		if t == Enum.UserInputType.Touch and (input :: any) == self.touch then
-			self.Position = touchToViewport(input.Position)
-		elseif input.KeyCode == Enum.KeyCode.Thumbstick1 then
-			local v = Vector2.new(input.Position.X, -input.Position.Y)
-			self.Stick = if v.Magnitude > DEADZONE then v else Vector2.zero
-			if v.Magnitude > DEADZONE then
-				self.Kind = "Gamepad"
+		end)
+	)
+	table.insert(
+		c,
+		UserInputService.InputChanged:Connect(function(input)
+			local t = input.UserInputType
+			if t == Enum.UserInputType.Touch and (input :: any) == self.touch then
+				self.Position = touchToViewport(input.Position)
+			elseif input.KeyCode == Enum.KeyCode.Thumbstick1 then
+				local v = Vector2.new(input.Position.X, -input.Position.Y)
+				self.Stick = if v.Magnitude > DEADZONE then v else Vector2.zero
+				if v.Magnitude > DEADZONE then
+					self.Kind = "Gamepad"
+				end
+			elseif t == Enum.UserInputType.MouseMovement then
+				self.Kind = "Mouse"
 			end
-		elseif t == Enum.UserInputType.MouseMovement then
-			self.Kind = "Mouse"
-		end
-	end))
-	table.insert(c, UserInputService.InputEnded:Connect(function(input)
-		local t = input.UserInputType
-		if t == Enum.UserInputType.MouseButton1 then
-			self.Down = false
-		elseif t == Enum.UserInputType.Touch and (input :: any) == self.touch then
-			self.touch = nil
-			self.Down = false
-		elseif input.KeyCode == Enum.KeyCode.ButtonA or input.KeyCode == Enum.KeyCode.ButtonR2 then
-			self.Down = false
-		end
-	end))
+		end)
+	)
+	table.insert(
+		c,
+		UserInputService.InputEnded:Connect(function(input)
+			local t = input.UserInputType
+			if t == Enum.UserInputType.MouseButton1 then
+				self.Down = false
+			elseif t == Enum.UserInputType.Touch and (input :: any) == self.touch then
+				self.touch = nil
+				self.Down = false
+			elseif input.KeyCode == Enum.KeyCode.ButtonA or input.KeyCode == Enum.KeyCode.ButtonR2 then
+				self.Down = false
+			end
+		end)
+	)
 end
 
 -- Call every frame.
