@@ -133,6 +133,11 @@ elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list over
 	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Foundry buildings and the chute line (+ the hammer moment and the reveal) and their UI (tools/lune/lib/foundry_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
