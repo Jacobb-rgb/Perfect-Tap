@@ -4,10 +4,15 @@
 	the concept v2 metal and neon language. Each board is a
 	BasePart named Board1..Board4 (tag Leaderboard, attribute Board = 1..4)
 	whose big Front face looks at the spawn; the leaderboard service puts a
-	SurfaceGui on it at runtime. Every board sits in a thick gunmetal
+	SurfaceGui on it at runtime. Until then each board shows a placeholder
+	table: a Model "Placeholder" parented to the board (five faint rank
+	rows, gold, silver and bronze medals on the top three); the
+	leaderboard service destroys Board.Placeholder when it shows real
+	rows. Every board sits in a thick gunmetal
 	display-wall bezel with a blue neon edge on a plinth with the orange
 	band, under a title plate (white letters on dark navy inside a thin
-	neon outline, so the words do not bloom away). A HALL OF FAME sign box with
+	neon outline, so the words do not bloom away; every title has the same
+	letter size). A HALL OF FAME sign box with
 	gold crowns on two round pillars, dark lantern pillars with glowing
 	slots at the ends and a winners' podium in front.
 	Local frame: 24 wide, 14 tall, 6 deep, front = -Z (toward the spawn),
@@ -31,12 +36,38 @@ local ARC_R = 30 -- radius of the arc (center toward the spawn)
 local BOARD_W, BOARD_H = 5.0, 6.4
 local BOARD_Y = 2.0 -- bottom of the boards
 local PLATE_H = 1.5 -- title plates over the boards
+local MEDALS = { C.Gold, C.IronLight, C.Copper }
+local ROW_COLOR = Color3.fromRGB(44, 70, 140) -- faint rank rows on the navy board
+
+-- Rough glyph widths of the sign font (em): the title labels get widths in
+-- proportion, so TextScaled gives every title the same letter size.
+local function textWidth(text: string): number
+	local w = 0
+	for i = 1, #text do
+		local ch = string.sub(text, i, i)
+		if ch == " " then
+			w += 0.3
+		elseif ch == "/" or ch == "I" then
+			w += 0.4
+		elseif ch == "M" or ch == "W" then
+			w += 0.85
+		else
+			w += 0.62
+		end
+	end
+	return w
+end
 
 function Hall.build(parent: Instance, rng: Rng.Rng)
 	local piece, cf = Kit.piece("HallOfFame")
 	local m = Style.model(piece.Id, parent)
 	local function at(x: number, y: number, z: number): CFrame
 		return cf * CFrame.new(x, y, z)
+	end
+
+	local widest = 0
+	for _, title in TITLES do
+		widest = math.max(widest, textWidth(title))
 	end
 
 	-- board i sits at x = 8.1, 2.7, -2.7, -8.1 (viewer's left to right)
@@ -62,6 +93,16 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		board.Name = "Board" .. i
 		board:SetAttribute("Board", i)
 		Kit.tag(board, "Leaderboard")
+		-- the placeholder table: five faint rank rows, medals on the top three
+		local ph = Style.model("Placeholder", board)
+		for row = 1, 5 do
+			local ry = cy + 2.15 - (row - 1) * 1.1
+			Kit.bit(ph, frame * CFrame.new(-0.45, ry, 0.03), Vector3.new(3.4, 0.2, 0.06), ROW_COLOR)
+			local medal = MEDALS[row]
+			if medal then
+				Tech.faceDisc(ph, frame * CFrame.new(1.75, ry, 0.0), 0.08, 0.62, medal)
+			end
+		end
 		-- display-wall bezel: thick frame, dark back plate, blue neon inner edge
 		local bt = 0.6
 		local bz = 0.2
@@ -100,12 +141,9 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		-- neon outline (a thick glowing frame would bloom over the words)
 		local top = cy + BOARD_H / 2 + bt
 		local py = top + 0.2 + PLATE_H / 2
-		Style.sign(m, frame * CFrame.new(0, py, 0.15), TITLES[i], BOARD_W + 0.2, PLATE_H, {
-			Kind = "Glow",
-			Frame = false,
-			Depth = 0.4,
-			BoardColor = Tech.Board,
-		})
+		Kit.bit(m, frame * CFrame.new(0, py, 0.15), Vector3.new(BOARD_W + 0.2, PLATE_H, 0.4), Tech.Board)
+		local textW = (BOARD_W - 0.4) * textWidth(TITLES[i]) / widest
+		Tech.label(m, frame * CFrame.new(0, py, -0.08), TITLES[i], textW, PLATE_H - 0.3, nil, 0.04)
 		Tech.outline(m, frame * CFrame.new(0, py, 0.15), BOARD_W / 2 + 0.02, PLATE_H / 2 - 0.08, 0.3, 0.1, -0.25, Tech.Neon)
 		Kit.bit(m, frame * CFrame.new(0, py, 0.45), Vector3.new(BOARD_W + 0.8, PLATE_H + 0.4, 0.3), Tech.MetalDark)
 	end

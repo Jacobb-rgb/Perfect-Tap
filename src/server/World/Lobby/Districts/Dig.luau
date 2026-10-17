@@ -2,8 +2,9 @@
 	FOSSIL DIG: the artifacts and Kingdom of Kaldrum story corner east of
 	the plaza. A dig site inside a metal barrier fence (light posts with
 	neon caps, orange round handrails) with dark lantern pillars, a
-	sunken-looking pit (stone rim, a dirt terrace, a darker inner step and
-	the darkest bed, flush with the ground, no hole), a half-buried dinosaur
+	sunken-looking pit (stone rim, a dirt terrace, a tan inner step and a
+	light sand bed with darker dug patches, flush with the ground, no hole),
+	a half-buried dinosaur
 	skeleton (a long skull with a jaw, eye sockets and teeth), a small find,
 	tools, a sieve, a wheelbarrow, a City Kit parasol over the finds, a
 	bone-scanning terminal and two glowing FOSSIL DIG sign boxes with a bone
@@ -26,7 +27,13 @@ local Dig = {}
 
 local C = Kit.C
 
-local BED_X, BED_Z = 6.6, 8.6 -- half sizes of the dark bed
+local BED_X, BED_Z = 6.6, 8.6 -- half sizes of the sand bed
+-- light tan sand (concept v1) with darker dug patches, a tan inner step;
+-- bones in a light bone white so they keep their contrast on the sand
+local SAND = Color3.fromRGB(196, 160, 110)
+local DUG = Color3.fromRGB(150, 112, 72)
+local STEP = Color3.fromRGB(162, 124, 82)
+local BONE = Color3.fromRGB(240, 230, 204)
 local FENCE_X, FENCE_Z = 8.3, 11.3
 local GATE_FROM, GATE_TO = 1.4, FENCE_X -- entrance gap on the front fence (local x)
 
@@ -43,17 +50,16 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	-- the pit, stepping down toward the middle so it reads as sunken: stone
 	-- rim (gap at the entrance), a dirt terrace, a darker inner step and the
 	-- darkest bed
-	local bedColor = C.DirtDark:Lerp(Kit.Dark, 0.4)
-	local bed = Style.block(m, at(0, 0.1, 0), Vector3.new(2 * BED_X, 0.2, 2 * BED_Z), bedColor, nil, Style.solid())
+	local bed = Style.block(m, at(0, 0.1, 0), Vector3.new(2 * BED_X, 0.2, 2 * BED_Z), SAND, nil, Style.solid())
 	bed.Name = "Bed"
 	for _ = 1, 4 do
 		local x, z = rng:range(-BED_X + 2, BED_X - 2), rng:range(-BED_Z + 2, BED_Z - 2)
-		Kit.bit(m, at(x, 0.22, z), Vector3.new(rng:range(1.6, 3), 0.06, rng:range(1.6, 3)), Style.vary(C.DirtDark, rng, 0.05))
+		Kit.bit(m, at(x, 0.22, z), Vector3.new(rng:range(1.6, 3), 0.06, rng:range(1.6, 3)), Style.vary(DUG, rng, 0.04))
 	end
 	local ix, iz = BED_X - 0.3, BED_Z - 0.3
 	for _, side in { -1, 1 } do
-		Style.block(m, at(side * ix, 0.16, 0), Vector3.new(0.6, 0.32, 2 * iz + 0.6), Style.vary(C.DirtDark, rng, 0.03), nil, Style.solid())
-		Style.block(m, at(0, 0.16, side * iz), Vector3.new(2 * ix - 0.6, 0.32, 0.6), Style.vary(C.DirtDark, rng, 0.03), nil, Style.solid())
+		Style.block(m, at(side * ix, 0.16, 0), Vector3.new(0.6, 0.32, 2 * iz + 0.6), Style.vary(STEP, rng, 0.03), nil, Style.solid())
+		Style.block(m, at(0, 0.16, side * iz), Vector3.new(2 * ix - 0.6, 0.32, 0.6), Style.vary(STEP, rng, 0.03), nil, Style.solid())
 	end
 	local tx, tz = BED_X + 0.5, BED_Z + 0.5
 	for _, side in { -1, 1 } do
@@ -83,7 +89,7 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 			m,
 			at(spineX(z), 0.85, z) * CFrame.Angles(0, 0.2 * math.cos(z), 0),
 			Vector3.new(s, s, 0.72),
-			if i % 2 == 0 then C.FlowerWhite else C.Sand
+			if i % 2 == 0 then C.FlowerWhite else BONE
 		)
 	end
 	for i = 1, 5 do
@@ -113,7 +119,7 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		local x0 = spineX(z)
 		local top = pos(x0, h, z)
 		for _, side in { -1, 1 } do
-			Kit.beam(m, top, pos(x0 + side * (2.2 - i * 0.1), 0.25, z + 0.35), 0.4, 0.4, C.Sand, Style.tiny({ CastShadow = true }))
+			Kit.beam(m, top, pos(x0 + side * (2.2 - i * 0.1), 0.25, z + 0.35), 0.4, 0.4, BONE, Style.tiny({ CastShadow = true }))
 		end
 	end
 	for _, leg in { { -3.6, -1, 3.2 }, { 2.0, 1, 3.6 } } do
@@ -221,6 +227,7 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		Icon = 2.6,
 		IconLeft = true,
 		Back = "FOSSIL DIG",
+		BackFrame = true,
 	})
 	if southIcon then
 		Style.icon(m, southIcon * CFrame.new(0, 0, -0.12), "Bone", 2.1, Tech.GoldGlow, Kit.NEON)

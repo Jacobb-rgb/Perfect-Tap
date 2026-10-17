@@ -46,7 +46,8 @@ local C = Kit.C
 -- The Forgekeepers' notice board beside the forge porch (tag GuildBoard,
 -- PrimaryPart "Board"), in the concept v2 metal and neon language: a cork
 -- board in a gunmetal display-wall bezel with a blue neon edge between two
--- round pillars, under a glowing FORGEKEEPERS' GUILD sign box.
+-- round pillars, under a glowing FORGEKEEPERS' GUILD sign box with orange
+-- corner studs and a blue neon top edge.
 local function guildBoard(parent: Instance, rng: Rng.Rng)
 	local piece, cf = Kit.piece("GuildBoard")
 	local m = Style.model(piece.Id, parent)
@@ -58,7 +59,7 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 	end
 	-- bezel (top, bottom, sides), back plate, the board and its neon edge
 	local by, bw, bh = 4.2, 7.0, 3.6
-	Style.block(m, at(0, by + bh / 2 + 0.3, 0.25), Vector3.new(bw + 1.0, 0.6, 0.9), Tech.MetalLight)
+	Style.block(m, at(0, by + bh / 2 + 0.3, 0.25), Vector3.new(bw + 1.0, 0.6, 0.9), Tech.Metal)
 	Style.block(m, at(0, by - bh / 2 - 0.3, 0.25), Vector3.new(bw + 1.0, 0.6, 0.9), Tech.Metal)
 	for _, x in { -1, 1 } do
 		Style.block(m, at(x * (bw / 2 + 0.25), by, 0.25), Vector3.new(0.5, bh, 0.9), Tech.Metal)
@@ -84,8 +85,16 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 		end
 		Kit.bit(m, note * CFrame.new(0, -0.1, -0.04), Vector3.new(0.9, 0.12, 0.03), C.SignBoard)
 	end
-	-- the glowing sign box on top
-	Tech.sign(m, at(0, 7.45, -0.1), "FORGEKEEPERS' GUILD", 7.4, 1.1, { Studs = false, Back = true })
+	-- the glowing sign box on top: the words at 80% of the board width (not
+	-- edge to edge), orange studs in the casing corners, a thick blue neon
+	-- line along the casing's top edge (the module's roof line)
+	local title = "FORGEKEEPERS' GUILD"
+	Tech.sign(m, at(0, 7.45, -0.1), title, 7.4, 1.1, {
+		Back = true,
+		Words = { { Text = title, Width = 7.4 * 0.8 } },
+		StudColor = Tech.Warm,
+	})
+	Tech.glow(m, at(0, 8.72, -0.5), Vector3.new(8.8, Tech.TUBE, 0.16), Tech.Tube)
 	m.PrimaryPart = board
 	Kit.tag(m, "GuildBoard")
 end

@@ -6,7 +6,7 @@
 	PrimaryPart = the cabinet), a thick mechanical scanner ring (blue neon
 	inner edge, orange studs) standing on clamp feet with a sample rock and
 	a scan line, sample rocks on table-display-planet pedestals and the ROCK
-	SCANNER sign box with a target icon on a frame, raised over the ring so
+	SCANNER sign box with a scan-ring icon on a frame, raised over the ring so
 	the words read from the terminal side. One blue PointLight.
 	Local frame: 12 wide, 10 tall, 10 deep, front = -Z (south-west).
 ]]
@@ -122,7 +122,7 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 		sampleRock(m, top, rng:range(0.95, 1.2), ore, rng)
 	end
 
-	-- ROCK SCANNER sign box with a target icon on a frame at the back
+	-- ROCK SCANNER sign box with a scan-ring icon on a frame at the back
 	-- (raised over the ring's top: seen from the front at eye height the ring
 	-- stays under the letters)
 	local sz = 3.9
@@ -140,7 +140,8 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 		Back = true,
 	})
 	if iconAt then
-		Style.icon(m, iconAt * CFrame.new(0, 0, -0.12), "Target", 1.5, Tech.Neon, Kit.NEON)
+		-- a scan ring with a crosshair (the machine's octagon ring) in blue neon
+		Tech.scanIcon(m, iconAt, 1.65, Tech.Tube)
 	end
 end
 

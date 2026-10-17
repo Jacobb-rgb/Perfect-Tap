@@ -312,6 +312,51 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("districts: the SHOP and UPGRADES modules get a second display bay when wider", function()
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local function showcases(m): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "Showcase" then
+					n += 1
+				end
+			end
+			return n
+		end
+		local _, pkg = districts()
+		T.eq(showcases(pkg.Shop), 2, "the 20 wide SHOP has two glass showcases")
+		T.eq(showcases(pkg.Upgrades), 2, "the 20 wide UPGRADES has two glass showcases")
+		local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades") }
+		local sizes = { pieces[1].Size, pieces[2].Size }
+		local ok, err = pcall(function()
+			for _, piece in pieces do
+				piece.Size = Vector3.new(28, 20, 14)
+			end
+			local m = roblox.Instance.new("Model")
+			Stalls.build(m, Rng.new("Lobby/Districts/stalls"))
+			for _, piece in pieces do
+				T.falsy(outside(m[piece.Id], piece), piece.Id .. " (28 wide) stays inside its footprint")
+				T.eq(showcases(m[piece.Id]), 4, piece.Id .. " (28 wide) has a second showcase per side")
+			end
+		end)
+		for i, piece in pieces do
+			piece.Size = sizes[i]
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("districts: the Hall of Fame boards show a placeholder table until the leaderboards fill them", function()
+		local _, pkg = districts()
+		for i = 1, 4 do
+			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
+			local ph = board and board:FindFirstChild("Placeholder")
+			T.truthy(ph and ph:IsA("Model"), "Board" .. i .. " has a Placeholder model")
+			T.truthy(#ph:GetChildren() >= 5, "Board" .. i .. " placeholder has rank rows")
+		end
+	end)
+
 	T.test("districts: Tobin's Sell stall stays low so the SHOP windows show", function()
 		local _, pkg = districts()
 		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
@@ -328,7 +373,7 @@ return function(T, Loader)
 
 	T.test("districts: walk lanes to the SHOP and UPGRADES counters stay open", function()
 		local _, pkg = districts()
-		for _, lane in { { "ShopFront", -0.4, 2.6 }, { "UpgradesFront", -1.7, 1.7 } } do
+		for _, lane in { { "ShopFront", -1.6, 1.8 }, { "UpgradesFront", -1.7, 1.7 } } do
 			local piece = LobbyLayout.get(lane[1])
 			local frame = LobbyLayout.frame(piece)
 			for _, d in pkg[lane[1]]:GetDescendants() do

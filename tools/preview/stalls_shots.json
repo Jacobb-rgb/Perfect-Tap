@@ -18,7 +18,7 @@
   "s_shop_eye": {"scene": "world", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
   "s_shop_rear": {"scene": "world", "position": [-66, 9, -30], "target": [-46, 6, -22], "fov": 58, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
   "s_upgrades_eye": {"scene": "world", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
-  "s_wheel_rear": {"scene": "world", "position": [-64, 12, 6], "target": [-48, 12, 18], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "s_wheel_rear": {"scene": "world", "position": [-54, 18, -4], "target": [-48, 13, 18], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
   "s_wheel_front": {"scene": "world", "position": [-30, 7, 30], "target": [-48, 13, 18], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
   "s_caps_front": {"scene": "world", "position": [-22, 5, 30], "target": [-40, 5, 36], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
   "s_scanner_front": {"scene": "world", "position": [46, 6, 90], "target": [56, 5, 80], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},

@@ -64,7 +64,11 @@ Tech.Warm = C.Fire
 Tech.Lens = rgb(255, 150, 50) -- small warm lamp lenses (sign lamps): orange, not white
 Tech.GoldGlow = rgb(200, 116, 14) -- neon gold (crowns) that blooms to warm gold, not white
 Tech.Glass = rgb(150, 200, 250)
-Tech.GlassClear = 0.85 -- glass transparency (windows, showcases): the goods show through
+Tech.GlassClear = 0.85 -- window glass transparency: the goods behind show through
+-- showcase glass: a cyan tint and a lower transparency, so each case reads
+-- as a lit glass box from the plaza (concept v2), the goods still show
+Tech.CaseGlass = rgb(120, 200, 255)
+Tech.CaseClear = 0.58
 Tech.CaseLight = rgb(255, 186, 104) -- thin warm light strips inside showcases and windows
 Tech.Board = rgb(16, 30, 78) -- sign boards and screens behind white letters
 Tech.Screen = rgb(30, 92, 214) -- glowing screens (deep enough to stay blue under bloom)
@@ -444,9 +448,12 @@ end
 --[[
 	table-display with a glass case: a gunmetal stand with orange corner
 	stripes, a light rim with a neon front line and (opts.Case = height) a
-	glass box with a capped frame. `base` = bottom center. Returns the
-	CFrame of the display floor (items go there). opts: Neon, Stripe,
-	Case, Top (Color3: a glowing top instead of glass). 7-10 parts.
+	cyan-tinted glass box framed by four thin neon corner posts and a capped
+	frame, a warm light strip in its top and a glowing floor plate under the
+	goods, so the case reads as a lit glass box. `base` = bottom center.
+	Returns the CFrame of the display floor (items go there). opts: Neon,
+	Stripe, Case, Light, Top (Color3: a glowing top instead of glass).
+	7-14 parts.
 ]]
 function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: number, height: number, opts: Opts?): CFrame
 	local o: Opts = opts or {}
@@ -467,24 +474,31 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 		glow(parent, base * CFrame.new(0, height + 0.02, 0), Vector3.new(width - 0.5, 0.06, depth - 0.5), o.Top)
 	end
 	local ch: number? = o.Case
+	local floor = height
 	if ch then
-		block(
+		-- the glowing floor plate under the goods
+		glow(parent, base * CFrame.new(0, height + 0.03, 0), Vector3.new(width - 0.7, 0.06, depth - 0.7), o.Light or Tech.CaseLight)
+		floor = height + 0.06
+		local glass = block(
 			parent,
 			base * CFrame.new(0, height + ch / 2, 0),
 			Vector3.new(width - 0.3, ch, depth - 0.3),
-			Tech.Glass,
+			Tech.CaseGlass,
 			GLASS,
-			Style.decor({ Transparency = Tech.GlassClear, CastShadow = false })
+			Style.decor({ Transparency = Tech.CaseClear, CastShadow = false })
 		)
+		glass.Name = "Showcase"
 		bit(parent, base * CFrame.new(0, height + ch + 0.14, 0), Vector3.new(width, 0.28, depth), Tech.MetalLight)
-		-- thin front corner posts frame the glass
-		for _, side in { -1, 1 } do
-			bit(
-				parent,
-				base * CFrame.new(side * (width / 2 - 0.2), height + ch / 2, -depth / 2 + 0.2),
-				Vector3.new(0.18, ch, 0.18),
-				Tech.MetalLight
-			)
+		-- four thin neon corner posts frame the glass
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				glow(
+					parent,
+					base * CFrame.new(sx * (width / 2 - 0.16), height + ch / 2, sz * (depth / 2 - 0.16)),
+					Vector3.new(0.14, ch, 0.14),
+					neon
+				)
+			end
 		end
 		glow(parent, base * CFrame.new(0, height + ch + 0.14, -depth / 2 - 0.06), Vector3.new(width, 0.2, 0.1), neon)
 		-- the light strip inside the case top lights the goods
@@ -495,7 +509,7 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 			o.Light or Tech.CaseLight
 		)
 	end
-	return base * CFrame.new(0, height, 0)
+	return base * CFrame.new(0, floor, 0)
 end
 
 --[[
@@ -624,7 +638,9 @@ end
 	`outer`, a lighter front lip, a blue neon inner edge and (opts.Studs)
 	orange light studs on every other block. opts: Depth, Color, Neon,
 	Tube (inner neon edge thickness), AllStuds (a stud on every block),
-	Studs (Color3), Lip (default true). ~3-4 parts per block.
+	Studs (Color3), Lip (default true), OuterNeon (Color3: the front lip
+	becomes a second neon line along the outer rim, the concept's double
+	neon channel). ~3-4 parts per block.
 ]]
 function Tech.ring(parent: Instance, cf: CFrame, inner: number, outer: number, n: number, opts: Opts?)
 	local o: Opts = opts or {}
@@ -643,7 +659,10 @@ function Tech.ring(parent: Instance, cf: CFrame, inner: number, outer: number, n
 			nil,
 			o.Props or Style.decor()
 		)
-		if o.Lip ~= false then
+		if o.OuterNeon then
+			local t: number = o.Tube or Tech.TUBE
+			glow(parent, seg * CFrame.new(0, outer - t * 0.9, -depth / 2 - 0.1), Vector3.new(len - 0.02, t * 0.8, 0.2), o.OuterNeon)
+		elseif o.Lip ~= false then
 			bit(parent, seg * CFrame.new(0, outer - 0.3, -depth / 2 - 0.12), Vector3.new(len - 0.1, 0.6, 0.24), Tech.MetalLight)
 		end
 		local tube: number = o.Tube or Tech.TUBE
@@ -732,6 +751,69 @@ function Tech.cartIcon(parent: Instance, cf: CFrame, s: number, color: Color3)
 		local w = cf * CFrame.new(x * s, -0.37 * s, z) * CFrame.Angles(0, 0, math.pi / 4)
 		Style.block(parent, w, Vector3.new(0.15 * s, 0.15 * s, 0.14), color, NEON, Style.tiny())
 	end
+end
+
+-- A regular polygon outline (n neon bars) of radius r around `cf`; the
+-- first side is centered at angle `a0` (radians from local +Y).
+local function polygon(parent: Instance, cf: CFrame, n: number, r: number, t: number, z: number, color: Color3, a0: number?)
+	local start = (a0 or 0) - math.pi / n
+	for k = 0, n - 1 do
+		local a = start + k * 2 * math.pi / n
+		local b = a + 2 * math.pi / n
+		line(parent, cf, -r * math.sin(a), r * math.cos(a), -r * math.sin(b), r * math.cos(b), t, z, color)
+	end
+end
+Tech.polygon = polygon
+
+--[[
+	A gear pictogram as a crisp outline (the same line weight as the cart):
+	an octagon ring, 8 square teeth and a small diamond hub, centered at
+	`cf`, size `s`. Neon outlines keep their teeth under bloom where a
+	filled gear turns into a white starburst. 17 parts.
+]]
+function Tech.gearIcon(parent: Instance, cf: CFrame, s: number, color: Color3)
+	local t = s * 0.075
+	local z = -0.05
+	local r = s * 0.3
+	polygon(parent, cf, 8, r, t, z, color)
+	for k = 0, 7 do
+		local a = k * math.pi / 4
+		local tooth = cf * CFrame.Angles(0, 0, a) * CFrame.new(0, r * math.cos(math.pi / 8) + s * 0.08, z)
+		Style.block(parent, tooth, Vector3.new(s * 0.13, s * 0.15, 0.14), color, NEON, Style.tiny())
+	end
+	Style.block(
+		parent,
+		cf * CFrame.new(0, 0, z) * CFrame.Angles(0, 0, math.pi / 4),
+		Vector3.new(s * 0.14, s * 0.14, 0.14),
+		color,
+		NEON,
+		Style.tiny()
+	)
+end
+
+--[[
+	A scanner pictogram: an octagon scan ring (like the machine's ring),
+	a crosshair with a gap in the middle and a center dot, centered at
+	`cf`, size `s`. 13 parts.
+]]
+function Tech.scanIcon(parent: Instance, cf: CFrame, s: number, color: Color3)
+	local t = s * 0.07
+	local z = -0.05
+	local r = s * 0.3
+	polygon(parent, cf, 8, r, t, z, color)
+	for k = 0, 3 do
+		local a = k * math.pi / 2
+		local ux, uy = -math.sin(a), math.cos(a)
+		line(parent, cf, ux * s * 0.12, uy * s * 0.12, ux * s * 0.46, uy * s * 0.46, t, z, color)
+	end
+	Style.block(
+		parent,
+		cf * CFrame.new(0, 0, z) * CFrame.Angles(0, 0, math.pi / 4),
+		Vector3.new(t * 1.6, t * 1.6, 0.14),
+		color,
+		NEON,
+		Style.tiny()
+	)
 end
 
 -- A flat right triangle in the XY plane of `cf` (thickness `d` along Z):
@@ -823,10 +905,11 @@ end
 	  DoubleSided letters on the back too
 	  Back        the casing's back: true = a light frame lip with an
 	              orange band, a string = that text on a navy back board in
-	              a light frame lip (signs seen from behind)
-	  Light       range: a dark lamp housing under the casing's front edge
-	              with a small warm lens on top and a PointLight that lights
-	              the letters (signs that face away from the sun); LightColor
+	              a light frame lip (signs seen from behind); BackFrame =
+	              true adds the front's thin chamfered neon frame around it
+	  Light       range: an invisible floodlight anchor LightDist (2.5) in
+	              front of the board with a PointLight that lights the
+	              letters (signs that face away from the sun); LightColor
 	Returns the text board and the icon panel center (or nil). 14-22 parts.
 ]]
 function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, height: number, opts: Opts?): (Part, CFrame?)
@@ -900,6 +983,11 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 			if type(back) == "string" then
 				local backCf = cf * CFrame.new(0, 0, bz + 0.2) * CFrame.Angles(0, math.pi, 0)
 				Tech.label(parent, backCf, back, width - 0.3, height - 0.2, o.TextColor)
+				if o.BackFrame then
+					-- the back words get the front's thin chamfered neon frame too
+					local bhw, bhh = (width - 0.3) / 2 + 0.06, (height - 0.2) / 2 + 0.06
+					Tech.outline(parent, backCf, bhw, bhh, math.min(bhh * 0.45, 0.6), 0.16, -0.09, o.Frame or Tech.Tube)
+				end
 			else
 				bit(parent, cf * CFrame.new(0, -height * 0.15, bz + 0.17), Vector3.new(width + 2 * m - 0.5, height * 0.18, 0.08), Tech.Band)
 			end
@@ -923,15 +1011,19 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 	end
 	local range: number? = o.Light
 	if range then
-		-- a dark lamp housing under the front edge, its small warm lens on top
-		-- (facing the letters), so no bright bar shows under the sign
-		local bottom = if casing then -height / 2 - m - (o.Lip or 0.34) else -height / 2 - m
-		local hw2 = math.min(width * 0.3, 2.6)
-		local hy = bottom - 0.24
-		block(parent, cf * CFrame.new(0, hy, -0.4), Vector3.new(hw2, 0.44, 0.8), Tech.MetalDark, nil, Style.tiny())
-		local lens = glow(parent, cf * CFrame.new(0, hy + 0.24, -0.5), Vector3.new(hw2 - 0.4, 0.06, 0.4), Tech.Lens)
-		lens.Name = "SignLamp"
-		Style.light(lens, o.LightColor or C.Lamp, range, 1.4)
+		-- a floodlight in front of the board lights the letters and the casing
+		-- (signs that face away from the sun): an invisible anchor, so nothing
+		-- hangs under or over the sign (the wheel's pointer, the header lips)
+		local lamp = block(
+			parent,
+			cf * CFrame.new(0, 0, -(o.LightDist or 2.5)),
+			Vector3.new(0.2, 0.2, 0.2),
+			Tech.Lens,
+			nil,
+			Style.tiny({ Transparency = 1 })
+		)
+		lamp.Name = "SignLamp"
+		Style.light(lamp, o.LightColor or C.Lamp, range, 1.4)
 	end
 	return board, iconAt
 end

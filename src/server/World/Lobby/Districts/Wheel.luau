@@ -2,15 +2,18 @@
 	SPIN & WIN: the free daily wheel of fortune, the big landmark left of
 	the plaza (concept v2: docs/art/lobby_concept_v2.webp). A gunmetal
 	platform with stairs and orange handrails, lantern pillars on the front
-	daises, a thick dark mechanical ring frame (16 blocks, a thick blue neon
-	inner edge, a blue neon outer rim, orange light studs) on two legs and a
-	base housing, the wheel inside it (10 glowing rainbow segments with item
-	icons and a crown hub) that turns slowly on the client (sub-model
-	"Wheel", tag Spin, Atomic, hub Y axis = axle), a pointer, the SPIN & WIN
-	sign box over the ring (orange words, a blue "&") with a gold crown on
-	top, and the EmberChest (tag, the free daily reward) at the top of the
-	stairs. The back is finished too: a cover plate with a neon rim, studs
-	and the words behind the ring.
+	daises, a thick dark mechanical ring frame (16 blocks, a double blue
+	neon channel: a thick inner edge and an outer rim line, orange light
+	studs, chunky bolted housing blocks with light bevel caps at 3, 6 and 9
+	o'clock) on two legs and a base housing, the wheel inside it (10
+	saturated rainbow segments with thin neon dividers and chunky 3D item
+	icons, a crown hub) that turns slowly on the client (sub-model "Wheel",
+	tag Spin, Atomic, hub Y axis = axle), a gold V pointer with a blue neon
+	outline right under the sign, the SPIN & WIN sign box over the ring
+	with orange words, a blue "&" and a floodlight in front of it, a gold
+	crown on top, and the EmberChest (tag, the free daily reward) at the top
+	of the stairs. The back is finished too: a cover plate with a light rim
+	lip, radial ribs, studs and the words behind the ring.
 
 	The whole frame scales with the LobbyLayout footprint (S = 1 for the
 	18 x 26 x 10 piece, ~1.4 for a 26 x 36 x 12 one); the EmberChest keeps
@@ -51,6 +54,8 @@ local SEGMENTS = {
 
 -- Item icon on each segment (daily rewards: coins, crates, rare ore, gems, golem capsules).
 local ICONS = { "Coin", "Crate", "Gem", "Capsule", "Ore", "Coin", "Crate", "Gem", "Capsule", "Ore" }
+local GEM_GLOW = rgb(20, 150, 255) -- a deep blue facet: no white bloom
+local ICON_R = 4.15 -- icon distance from the axle (clear of the pointer at the top)
 
 -- The frame's proportions at S = 1 (the 18 x 26 x 10 footprint).
 type Dims = {
@@ -77,40 +82,54 @@ local function dims(size: Vector3): Dims
 		S = s,
 		PlatformTop = 2.4 * s,
 		PlatformFront = -hd + 3.0 * s,
-		AxleY = 13.0 * s,
-		RingIn = 7.0 * s,
-		RingOut = 8.75 * s,
+		AxleY = 12.6 * s,
+		-- a thick ring band (about a quarter of the radius), its flat outer
+		-- sides at most the footprint's half width
+		RingIn = 6.9 * s,
+		RingOut = math.min(9.3 * s, size.X / 2),
 		RingZ = ringZ,
 		RingD = ringD,
 		SegmentR = 6.85 * s,
 		FaceZ = ringZ - 0.65 * s,
-		SignY = 21.0 * s,
+		SignY = 21.3 * s,
 		SignH = 3.0 * s,
 	}
 end
 
--- A chunky item icon in the plane of `at` (front = LookVector, up = outward).
+-- A chunky 3D item icon in the plane of `at` (front = LookVector, up =
+-- outward): deep blocks with a lighter bevel cap, two-tone pills.
 local function icon(m: Instance, at: CFrame, kind: string, s: number)
 	if kind == "Coin" then
-		Tech.faceDisc(m, at, 0.3 * s, 1.8 * s, C.Gold)
-		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.12 * s), 0.12 * s, 1.1 * s, C.Brass)
+		Tech.faceDisc(m, at, 0.4 * s, 1.8 * s, C.Gold)
+		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.16 * s), 0.12 * s, 1.1 * s, C.Brass)
 	elseif kind == "Crate" then
-		Kit.bit(m, at, Vector3.new(1.5, 1.5, 0.5) * s, C.WoodLight)
-		Kit.bit(m, at * CFrame.new(0, 0, -0.04 * s), Vector3.new(1.6, 0.32, 0.5) * s, C.WoodDark)
-		Kit.bit(m, at * CFrame.new(0, 0, -0.04 * s), Vector3.new(0.32, 1.6, 0.5) * s, C.WoodDark)
+		Kit.bit(m, at * CFrame.new(0, 0, -0.15 * s), Vector3.new(1.5, 1.5, 0.8) * s, C.Wood)
+		Kit.bit(m, at * CFrame.new(0, 0, -0.56 * s), Vector3.new(1.2, 1.2, 0.06) * s, C.WoodLight)
+		Kit.bit(m, at * CFrame.new(0, 0, -0.58 * s), Vector3.new(1.6, 0.3, 0.08) * s, C.WoodDark)
+		Kit.bit(m, at * CFrame.new(0, 0, -0.58 * s), Vector3.new(0.3, 1.6, 0.08) * s, C.WoodDark)
 	elseif kind == "Gem" then
-		Kit.bit(m, at * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(1.3, 1.3, 0.3) * s, C.FlowerWhite)
-		Kit.glow(m, at * CFrame.new(0, 0, -0.12 * s) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.75, 0.75, 0.12) * s, C.CrystalCyan)
+		-- a dark bezel, a blue gem, a deep blue glowing facet (no white base)
+		local diamond = at * CFrame.Angles(0, 0, math.pi / 4)
+		Kit.bit(m, diamond, Vector3.new(1.4, 1.4, 0.4) * s, Tech.MetalDark)
+		Kit.bit(m, diamond * CFrame.new(0, 0, -0.22 * s), Vector3.new(1.05, 1.05, 0.12) * s, C.CrystalBlue)
+		Kit.glow(m, diamond * CFrame.new(0, 0, -0.3 * s), Vector3.new(0.55, 0.55, 0.06) * s, GEM_GLOW)
 	elseif kind == "Capsule" then
-		Kit.bit(m, at * CFrame.new(0, 0.42 * s, 0), Vector3.new(1.2, 0.85, 0.4) * s, C.FlowerWhite)
-		Kit.bit(m, at * CFrame.new(0, -0.42 * s, 0), Vector3.new(1.2, 0.85, 0.4) * s, C.AwningRed)
-		Kit.bit(m, at * CFrame.new(0, 0, -0.05 * s), Vector3.new(1.3, 0.16, 0.4) * s, Kit.Dark)
-	else -- Ore: a stone block with a glowing vein
-		Kit.bit(m, at, Vector3.new(1.5, 1.4, 0.5) * s, C.StoneLight)
+		-- a two-tone pill standing outward: red lower half, white upper half,
+		-- round ends
+		local lo = (at * CFrame.new(0, -0.3 * s, -0.3 * s)).Position
+		local mid = (at * CFrame.new(0, 0, -0.3 * s)).Position
+		local hi = (at * CFrame.new(0, 0.3 * s, -0.3 * s)).Position
+		Tech.rod(m, lo, mid, 0.95 * s, C.AwningRed)
+		Tech.rod(m, mid, hi, 0.95 * s, C.AwningWhite)
+		Kit.ball(m, lo, 0.95 * s, C.AwningRed)
+		Kit.ball(m, hi, 0.95 * s, C.AwningWhite)
+	else -- Ore: a deep stone block with a lighter bevel cap and a glowing vein
+		Kit.bit(m, at * CFrame.new(0, 0, -0.15 * s), Vector3.new(1.5, 1.4, 0.8) * s, C.Stone)
+		Kit.bit(m, at * CFrame.new(0, 0, -0.56 * s), Vector3.new(1.2, 1.1, 0.06) * s, C.StoneLight)
 		Kit.glow(
 			m,
-			at * CFrame.new(0.2 * s, 0.15 * s, -0.2 * s) * CFrame.Angles(0, 0, 0.5),
-			Vector3.new(0.85, 0.32, 0.12) * s,
+			at * CFrame.new(0.2 * s, 0.15 * s, -0.6 * s) * CFrame.Angles(0, 0, 0.5),
+			Vector3.new(0.85, 0.32, 0.08) * s,
 			C.CrystalPurple
 		)
 	end
@@ -133,25 +152,25 @@ local function buildWheel(parent: Instance, center: CFrame, d: Dims)
 		nil,
 		Style.tiny({ CastShadow = true })
 	)
-	-- 10 glowing segments, each two triangles (a 20-gon)
+	-- 10 saturated rainbow segments (smooth faces keep their deep colors
+	-- where big neon areas bloom to pastel), each two triangles (a 20-gon)
 	local n = #SEGMENTS
 	local step = 2 * math.pi / n
 	local start = math.pi / 2 + step / 2 -- segment 1 centered at the top
 	local r = d.SegmentR
 	for i = 1, n do
 		local a0 = start - (i - 1) * step
-		local color = SEGMENTS[i]:Lerp(Kit.Dark, 0.22)
 		for h = 0, 1 do
 			local a = a0 - h * step / 2
 			local b = a - step / 2
-			Geo.triangle(m, polar(0, 0, 0), polar(r, a, 0), polar(r, b, 0), 0.4 * s, color, Kit.NEON, normal, Style.tiny())
+			Geo.triangle(m, polar(0, 0, 0), polar(r, a, 0), polar(r, b, 0), 0.4 * s, SEGMENTS[i], Kit.SMOOTH, normal, Style.tiny())
 		end
-		-- divider at the segment's leading edge
+		-- a thin warm neon divider at the segment's leading edge
 		local div = center * CFrame.Angles(0, 0, a0) * CFrame.new(1.2 * s + (r - 1.2 * s) / 2, 0, -0.1 * s)
-		Kit.bit(m, div, Vector3.new(r - 1.2 * s, 0.3 * s, 0.16 * s), C.FlowerWhite)
+		Kit.glow(m, div, Vector3.new(r - 1.2 * s, 0.2 * s, 0.14 * s), Tech.GoldGlow)
 		-- item icon in the middle of the segment (upright as it passes the top)
 		local mid = a0 - step / 2
-		local iconAt = center * CFrame.Angles(0, 0, mid) * CFrame.new(4.55 * s, 0, -0.35 * s) * CFrame.Angles(0, 0, -math.pi / 2)
+		local iconAt = center * CFrame.Angles(0, 0, mid) * CFrame.new(ICON_R * s, 0, -0.35 * s) * CFrame.Angles(0, 0, -math.pi / 2)
 		icon(m, iconAt, ICONS[i], s)
 	end
 	-- gunmetal hub with a blue neon ring and a thick gold crown: its Y axis
@@ -244,30 +263,63 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 		Tech.lanternPillar(m, at(side * 6.6 * s, 1.2 * s, -hd + daisD / 2), 5.2 * s, 1.3 * s)
 	end
 
-	-- the mechanical ring frame (static) with orange light studs
+	-- the mechanical ring frame (static): a double neon channel (thick inner
+	-- edge, outer rim line) and orange light studs on every block
 	local ringCf = at(0, d.AxleY, d.RingZ)
-	Tech.ring(m, ringCf, d.RingIn, d.RingOut, 16, { Depth = d.RingD, Studs = C.Fire, AllStuds = true, Tube = 0.42 * s })
+	Tech.ring(m, ringCf, d.RingIn, d.RingOut, 16, {
+		Depth = d.RingD,
+		Studs = C.Fire,
+		AllStuds = true,
+		Tube = 0.42 * s,
+		OuterNeon = Tech.Tube,
+	})
 	-- outer bolts on the diagonals (gear-like knuckles)
 	for k = 0, 3 do
 		local a = math.pi / 4 + k * math.pi / 2
-		local knuckle = ringCf * CFrame.Angles(0, 0, a) * CFrame.new(0, d.RingOut - 0.55 * s, -d.RingD / 2 - 0.3 * s)
+		local knuckle = ringCf * CFrame.Angles(0, 0, a) * CFrame.new(0, d.RingOut - 0.95 * s, -d.RingD / 2 - 0.3 * s)
 		Kit.bit(m, knuckle, Vector3.new(1.3, 0.7, 0.4) * s, Tech.MetalLight)
-		Tech.glow(m, knuckle * CFrame.new(0, 0, -0.22 * s), Vector3.new(0.7 * s, 0.3 * s, 0.08), Tech.Tube)
+		Tech.glow(m, knuckle * CFrame.new(0, 0, -0.22 * s), Vector3.new(0.7 * s, 0.3 * s, 0.08), Tech.Warm)
 	end
-	-- the back: a blue neon rim disc just behind the ring (it shows as a thin
-	-- glowing outer rim from the front too), a cover plate with orange studs
-	-- and a hub cap
+	-- chunky bolted housing blocks at 9, 6 and 3 o'clock (12 o'clock is the
+	-- sign): deeper than the ring, a light bevel cap on the outer front edge
+	-- and two orange studs each; their outer faces stay flush with the ring
+	local blockD = d.RingD + 0.6 * s
+	local radial = 2.5 * s
+	for _, a in { math.pi / 2, math.pi, 3 * math.pi / 2 } do
+		local blk = ringCf * CFrame.Angles(0, 0, a) * CFrame.new(0, d.RingOut - radial / 2, 0)
+		Style.block(m, blk, Vector3.new(3.2 * s, radial, blockD), Tech.Metal, nil, Style.decor())
+		Tech.bevel(
+			m,
+			blk * CFrame.new(0, radial / 2 - 0.35 * s, -blockD / 2 - 0.3 * s),
+			Vector3.new(3.2 * s, 0.7 * s, 0.6 * s),
+			Tech.MetalLight
+		)
+		for _, x in { -0.85, 0.85 } do
+			Tech.glow(m, blk * CFrame.new(x * s, -0.35 * s, -blockD / 2 - 0.05), Vector3.new(0.55 * s, 0.55 * s, 0.12), Tech.Warm)
+		end
+	end
+	-- the back: a blue neon rim disc just behind the ring (a thin glowing outer
+	-- rim from the side), a light rim lip, a cover plate with four radial
+	-- ribs, orange studs and a hub cap
 	local back = d.RingZ + d.RingD / 2
-	Tech.faceDisc(m, at(0, d.AxleY, back + 0.06), 0.12, 2 * d.RingOut + 0.5 * s, Tech.Tube, Kit.NEON)
-	Tech.faceDisc(m, at(0, d.AxleY, back + 0.2), 0.16, 2 * d.RingOut - 0.7 * s, Tech.MetalDark, nil, Style.tiny({ CastShadow = true }))
+	Tech.faceDisc(m, at(0, d.AxleY, back + 0.06), 0.12, 2 * d.RingOut + 0.36 * s, Tech.Tube, Kit.NEON)
+	Tech.faceDisc(m, at(0, d.AxleY, back + 0.18), 0.1, 2 * d.RingOut - 0.3 * s, Tech.MetalLight)
+	Tech.faceDisc(m, at(0, d.AxleY, back + 0.24), 0.16, 2 * d.RingOut - 0.9 * s, Tech.MetalDark, nil, Style.tiny({ CastShadow = true }))
+	for _, a in { 0, math.pi, math.rad(240), math.rad(300) } do
+		-- ribs at 3 and 9 o'clock and on the two lower diagonals (the words
+		-- sit over the hub)
+		local r0, r1 = 1.8 * s, d.RingOut - 0.7 * s
+		local rib = at(0, d.AxleY, back + 0.42) * CFrame.Angles(0, 0, a) * CFrame.new((r0 + r1) / 2, 0, 0)
+		Kit.bit(m, rib, Vector3.new(r1 - r0, 0.7 * s, 0.24), Tech.MetalLight)
+	end
 	for k = 0, 7 do
 		local a = (k + 0.5) * math.pi / 4
 		local rr = d.RingIn + 0.5 * s
-		Tech.glow(m, at(rr * math.cos(a), d.AxleY + rr * math.sin(a), back + 0.32), Vector3.new(0.6 * s, 0.6 * s, 0.1), Tech.Warm)
+		Tech.glow(m, at(rr * math.cos(a), d.AxleY + rr * math.sin(a), back + 0.36), Vector3.new(0.6 * s, 0.6 * s, 0.1), Tech.Warm)
 	end
-	Tech.faceDisc(m, at(0, d.AxleY, back + 0.4), 0.3, 3.2 * s, Tech.MetalLight)
+	Tech.faceDisc(m, at(0, d.AxleY, back + 0.44), 0.3, 3.2 * s, Tech.MetalLight)
 	-- the words on the back cover (seen from the sea side), in a light frame
-	local backSign = at(0, d.AxleY + d.RingIn * 0.45, back + 0.36)
+	local backSign = at(0, d.AxleY + d.RingIn * 0.45, back + 0.4)
 	Kit.bit(m, backSign, Vector3.new(9.6 * s, 2.6 * s, 0.12), Tech.MetalLight)
 	Tech.label(m, backSign * CFrame.new(0, 0, 0.12) * CFrame.Angles(0, math.pi, 0), "SPIN & WIN", 9.0 * s, 2.0 * s, C.FireCore)
 
@@ -300,28 +352,46 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	-- the wheel
 	buildWheel(m, at(0, d.AxleY, d.FaceZ), d)
 
-	-- pointer at the top (does not turn), hanging under the sign
-	local tipY = d.AxleY + d.SegmentR - 1.5 * s
-	local topY = d.SignY - d.SignH / 2 - 0.5 * s
-	local pz = d.FaceZ - 0.85 * s
-	Kit.tri(m, at(0, tipY, pz).Position, at(-1.0 * s, topY, pz).Position, at(1.0 * s, topY, pz).Position, 0.45 * s, C.Gold, cf.LookVector)
-	Tech.line(m, at(0, 0, pz), 0, tipY - 0.15, -1.15 * s, topY, 0.22, -0.26, Tech.Tube)
-	Tech.line(m, at(0, 0, pz), 0, tipY - 0.15, 1.15 * s, topY, 0.22, -0.26, Tech.Tube)
-
 	-- the SPIN & WIN sign box over the ring: orange words, a blue "&" between
-	-- them (concept v2), a gold crown on top
+	-- them (concept v2), a floodlight in front, a gold crown on top
 	local sh = d.SignH
-	Tech.sign(m, at(0, d.SignY, d.RingZ - 2.0 * s), "SPIN & WIN", 14.8 * s, sh, {
+	local signZ = d.RingZ - 2.0 * s
+	local margin, lip = 0.42 * s, 0.26 * s
+	Tech.sign(m, at(0, d.SignY, signZ), "SPIN & WIN", 14.8 * s, sh, {
 		TextColor = C.FireCore,
 		Words = {
 			{ Text = "SPIN", Width = 6.0 * s },
 			{ Text = "&", Width = 2.2 * s, Color = C.GlowEdge },
 			{ Text = "WIN", Width = 5.6 * s },
 		},
+		Margin = margin,
+		Lip = lip,
 		Light = 18,
+		LightDist = 3.0 * s,
 	})
 	-- the crown overlaps the casing's top margin, in front of it (concept v2)
-	Tech.crown(m, at(0, d.SignY + sh / 2 + 0.3 * s, d.RingZ - 2.5 * s), 3.2 * s, Tech.GoldGlow, { Depth = 0.7 * s, Neon = true })
+	Tech.crown(m, at(0, d.SignY + sh / 2 + 0.25 * s, d.RingZ - 2.5 * s), 2.9 * s, Tech.GoldGlow, { Depth = 0.7 * s, Neon = true })
+
+	-- the gold V pointer (does not turn) right under the casing, over the top
+	-- segment, with a blue neon outline: it reads over the wheel at any scale
+	local pz = d.RingZ - 2.3 * s
+	local topY = d.SignY - sh / 2 - margin - lip - 0.06
+	local tipY = d.AxleY + d.SegmentR - 1.75 * s
+	local pw = 1.1 * s
+	Geo.triangle(
+		m,
+		at(0, tipY, pz).Position,
+		at(-pw, topY, pz).Position,
+		at(pw, topY, pz).Position,
+		0.4 * s,
+		Tech.GoldGlow,
+		Kit.NEON,
+		cf.LookVector,
+		Style.tiny()
+	)
+	local face = at(0, 0, pz)
+	Tech.line(m, face, 0, tipY - 0.12 * s, -pw - 0.14 * s, topY, 0.2 * s, -0.24 * s, Tech.Tube)
+	Tech.line(m, face, 0, tipY - 0.12 * s, pw + 0.14 * s, topY, 0.2 * s, -0.24 * s, Tech.Tube)
 
 	-- the EmberChest at the top of the stairs
 	emberChest(m, at(0, top, front + 1.6))

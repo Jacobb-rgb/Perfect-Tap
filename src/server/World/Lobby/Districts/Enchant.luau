@@ -5,8 +5,9 @@
 	two violet-lit windows and a wide door frame between chunky corner
 	pillars with light bevel caps, the orange band and blue neon edges, an
 	overhang roof with violet and blue neon edges over a light bevel cap,
-	the orange band on the floor plinth), a big deep purple crystal in a
-	bevelled holder on the roof, the ENCHANT sign box over the door and, in
+	the orange band on the floor plinth, blue neon roof edges), a big deep
+	violet crystal with two smaller ones in a dark rock socket on a bevelled
+	holder on the roof, the ENCHANT sign box over the door and, in
 	front of it, the rune table (table-display) with a glowing top (BasePart
 	tag EnchantCounter) under floating crystals (tag Spin), lantern pillars
 	with violet slots at the front corners. The crystals use deep colors so
@@ -32,6 +33,10 @@ local rgb = Color3.fromRGB
 local DEEP_PURPLE, DEEP_PURPLE_TIP = rgb(112, 40, 226), rgb(146, 84, 240)
 local DEEP_PINK, DEEP_PINK_TIP = rgb(206, 40, 150), rgb(226, 86, 176)
 local DEEP_BLUE, DEEP_BLUE_TIP = rgb(36, 88, 236), rgb(76, 128, 246)
+-- the roof crystal: deep violet over a darker rock socket
+-- (the neon boost blooms a redder violet such as 110, 40, 230 to pink)
+local ROOF_VIOLET, ROOF_VIOLET_TIP = rgb(76, 30, 214), rgb(104, 62, 232)
+local ROOF_ROCK = rgb(46, 24, 90)
 
 local FLOOR = 0.5
 local HUT_FRONT = -0.6 -- facade center
@@ -119,11 +124,26 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	Tech.glow(m, at(0, (WALL_TOP + ROOF_TOP) / 2, roofZ - roofD / 2 - 0.06), Vector3.new(13.4, 0.3, 0.12), violet)
 	Tech.glow(m, at(0, ROOF_TOP + 0.42, roofZ - roofD / 2 - 0.04), Vector3.new(13.4, Tech.TUBE, 0.16), Tech.Tube)
 	Tech.underBevel(m, at(0, WALL_TOP - 0.3, roofZ - roofD / 2 + 0.3), Vector3.new(13.4, 0.6, 0.6), Tech.MetalLight)
+	-- thick blue neon roof edges down both sides (the module's outline)
+	for _, side in { -1, 1 } do
+		Tech.glow(m, at(side * 6.74, ROOF_TOP + 0.42, roofZ), Vector3.new(0.16, Tech.TUBE, roofD), Tech.Tube)
+	end
 
-	-- the big crystal in a bevelled holder on the roof
-	local holder = Tech.pedestal(m, at(0, ROOF_TOP, 3.0), 2.8, 1.1, { Neon = violet })
-	Style.crystal(m, holder, 3.6, 1.3, DEEP_PURPLE, DEEP_PURPLE_TIP)
-	Style.crystal(m, holder * CFrame.new(0.8, 0, 0.3) * CFrame.Angles(0, 0, -0.4), 1.8, 0.7, DEEP_PINK, DEEP_PINK_TIP)
+	-- the big deep violet crystal (with two smaller ones) rising out of a
+	-- dark violet rock socket in a bevelled holder on the roof
+	-- on the roof's left back corner, so it rises beside the sign box, not behind it
+	local holder = Tech.pedestal(m, at(4.3, ROOF_TOP, 3.2), 3.0, 0.8, { Neon = violet })
+	Kit.block(
+		m,
+		holder * CFrame.Angles(0, math.pi / 4, 0) * CFrame.new(0, 0.35, 0),
+		Vector3.new(2.1, 0.7, 2.1),
+		ROOF_ROCK,
+		nil,
+		Style.tiny()
+	)
+	Style.crystal(m, holder * CFrame.new(0, 0.2, 0), 5.0, 2.0, ROOF_VIOLET, ROOF_VIOLET_TIP)
+	Style.crystal(m, holder * CFrame.new(0.9, 0.2, 0.2) * CFrame.Angles(0, 0, -0.4), 2.6, 0.9, ROOF_VIOLET, ROOF_VIOLET_TIP)
+	Style.crystal(m, holder * CFrame.new(-1.0, 0.2, 0.3) * CFrame.Angles(0, 0, 0.4), 2.4, 0.9, DEEP_BLUE, DEEP_BLUE_TIP)
 
 	-- ENCHANT sign box over the door (white letters, violet studs)
 	Tech.sign(m, at(0, 11.5, HUT_FRONT - 1.1), "ENCHANT", 8.6, 2.1, { StudColor = violet })
