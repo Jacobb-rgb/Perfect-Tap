@@ -4,43 +4,70 @@
 
 	Trains (client visuals only; the server keeps nothing but times):
 	- "TrainTrip" { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load }
-	  (a list of them for a joining player) starts a trip. Every trip is
-	  animated from server time (workspace:GetServerTimeNow()) along
-	  TrainConfig.Timeline: the quarry leg from TrainConfig.QuarryStop into the
-	  quarry wall portal on the plot's side (west plots x < 0: west portal),
-	  speeding up; hidden underground; the coast leg out of the south portal
-	  north along TrainConfig.lineFor(plot) to TrainConfig.stopFor(plot)
-	  (ease in / out); the unload: the wagons' "Hopper" tips about "TipPivot"
-	  toward the Ore Pen, a dust puff and ore chunks fly into the pen; then it
-	  rolls back south into the tunnel over TrainConfig.ReturnSeconds.
+	  (a list of them for a joining player) starts a trip, animated from
+	  server time (workspace:GetServerTimeNow()). The legs follow the shares
+	  of TrainConfig.Timeline, but the visible ones never get shorter than
+	  MinQuarrySeconds / MinCoastSeconds / MinArriveSeconds: that time comes
+	  out of the hidden underground leg, so the train still arrives at
+	  ArriveAt (legSpans). The quarry leg runs from the Mine Station into the
+	  visible mouth (PortalInset in front of the line's end, like Railway) of
+	  the quarry portal on the plot's side (west plots x < 0: west portal);
+	  hidden underground; the coast leg comes out of the south portal and runs
+	  north along TrainConfig.lineFor(plot) to the plot's stop (ease in /
+	  out). At the stop the wagons, not the locomotive, line up with the Ore
+	  Pen (stopAt, kept short of the buffer stop).
+	- At the stop the train waits for the server to unload it: the Fx
+	  "TrainUnload" (plotId, count) or, for your own train, the State
+	  snapshot (Waiting false, Moving 0). While your Ore Pen is full
+	  (Waiting) it keeps standing there loaded. Then only each wagon's
+	  "Hopper" tips about its "TipPivot" toward the pen (TipUp / TipHold /
+	  TipDown seconds), dust and ore chunks arc into the pen (high enough to
+	  clear the Foundry), and the empty train rolls back south into the
+	  tunnel; it is gone ReturnSeconds after the unload began. Another
+	  player's train whose Fx never comes leaves after HoldLimit seconds
+	  without tipping.
 	- A train is a TrainBuilder.locomotive in the trip's color and 1-2
-	  TrainBuilder.wagons with the load colors (anchored, no collisions or
-	  queries). Only trains within BuildRange studs of the camera are built
-	  (and rebuilt when they come back into range); vehicles behind a tunnel
-	  mouth are hidden. One RenderStepped loop moves every part with one
-	  BulkMoveTo: wheels spin with the distance, steam puffs from the "Smoke"
-	  attachment (pooled emitters, more when faster), a soft chuff on the
-	  nearest moving train and a whistle when a train sets off or comes out of
-	  the south tunnel.
-	- Your own train waits at the Mine Station (locomotive Root on
-	  QuarryStop, facing your quarry portal) whenever it isn't on a trip; its
-	  ore heap grows with Cargo / Capacity from the State snapshot. After a
-	  trip it backs out of the quarry portal into the station.
+	  wagons with the load colors (dirty ore in the warm DirtyLoad clay;
+	  anchored, no collisions or queries). Only trains within BuildRange
+	  studs of the camera are built (one per frame, at most MaxBuilt); a
+	  train that leaves the range goes into a small pool of spare trains and
+	  is reused when the same train comes back. Cars behind a tunnel mouth
+	  are hidden. One PreRender loop moves every part with one BulkMoveTo;
+	  standing trains are only moved when something changes.
+	  Wheels spin with the distance, steam puffs from the "Smoke" attachment
+	  (pooled emitters, more when faster). One looping steam sound of this
+	  controller follows the nearest moving locomotive and pulses with its
+	  wheels (the chuff); a short double toot when a train sets off or leaves
+	  the south tunnel (its own sound too: the shared Sfx pool stays free).
+	- Your own train waits at the Mine Station whenever it isn't on a trip:
+	  its first wagon on TrainConfig.QuarryStop under the station's loading
+	  chute (Railway's TrainPoint), the locomotive toward your quarry portal,
+	  the ore heap growing with Cargo / Capacity. That same train rolls off
+	  when it leaves (it is rebuilt for the trip while underground); after a
+	  trip it backs out of the portal into the station.
 
 	HUD and panel (TrainView):
 	- The chip under the coins: "TRAIN 6/8", the state and SEND (TrainAction
-	  "Send"). Click / tap the chip, press T or gamepad L3, or use the
-	  station's "Train" prompt to open the panel: cargo, trip time, SEND,
+	  "Send"); while the train is away it counts the ore on board. Click /
+	  tap the chip, press T or gamepad L3, or use the "Train" prompt (UIOffset
+	  slot 2 under the server's Load / Send prompts on every Mine Station and
+	  Mine Lift PromptPoint) to open the panel: cargo, trip time, SEND,
 	  Capacity / Speed upgrades with BUY (TrainAction "Upgrade" { Kind }) and
 	  the Express perk placeholder. X, B or Backspace (or T / L3 again) close
-	  it; gamepads get a selected button. The chip hides with the HUD.
-	- Fx "TrainUnload" (plotId, count): dust and glints in that plot's pen;
-	  "TrainLoad" (position): a puff and a gulp at a hopper.
+	  it; gamepads get a selected button. Opening it closes the Pen and Sell
+	  panels; it never opens in build mode or other close-ups; on phones the
+	  chip hides behind it.
+	- The server's "Load Train" prompts (tag "TrainPrompt", attribute Action
+	  "Load") only show while you carry something (CarryCount).
+	- Fx "TrainUnload": starts the unload above (dust and glints in that pen
+	  when its train isn't on screen); "TrainLoad" (position): a puff and a
+	  gulp at a hopper (and over your waiting wagon at the station).
 
-	The pure math (ease, legAt, poseAt, parkedPose, quarryPortal, wagonFlip,
-	visible, ...) and the consist builder are exported for the Lune tests and
-	the preview; the controllers it uses are required in init(), so this
-	module also loads outside Roblox.
+	The pure math (ease, legSpans, legAt, poseAt, stopAt, parkedPose,
+	quarryMouth, wagonFlip, visible, pourFill, arcHeight, ...) and the
+	consist builder are exported for the Lune tests and the preview; the
+	controllers it uses are required in init(), so this module also loads
+	outside Roblox.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -49,15 +76,18 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local SoundConfig = require(Shared.Config.SoundConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Theme = require(Shared.Config.UITheme)
+local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Net = require(Shared.Net)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
@@ -67,29 +97,51 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 -- required in init(): they touch Players.LocalPlayer when loaded
 type FxControllerModule = typeof(require(script.Parent.FxController))
 type HudControllerModule = typeof(require(script.Parent.HudController))
+type PenControllerModule = typeof(require(script.Parent.PenController))
 type PromptControllerModule = typeof(require(script.Parent.PromptController))
+type SellControllerModule = typeof(require(script.Parent.SellController))
 type StateControllerModule = typeof(require(script.Parent.StateController))
+type PlayerControlsModule = typeof(require(script.Parent.Parent.Util.PlayerControls))
 local FxController: FxControllerModule
 local HudController: HudControllerModule
+local PenController: PenControllerModule
 local PromptController: PromptControllerModule
+local SellController: SellControllerModule
 local StateController: StateControllerModule
+local PlayerControls: PlayerControlsModule
 
 local TrainController = {}
 
 TrainController.BuildRange = 300 -- trains closer than this to the camera are built and animated
 TrainController.DropRange = 340 -- ...and dropped again past this
 TrainController.HideDepth = 44 -- studs a train runs on inside a tunnel (a locomotive + 2 wagons fit)
+TrainController.PortalInset = 6 -- Railway: the quarry mouths stand this far in front of the line's ends
+TrainController.BufferGap = 1.7 -- Railway: the coastal buffer stops' face, past the line's end
+TrainController.LocoFront = 7.25 -- TrainBuilder: the locomotive's front buffers, ahead of its Root
+TrainController.LocoBack = 7.15 -- ...its back coupler, behind the Root
+TrainController.WagonLength = 12 -- a wagon, coupler to coupler
 TrainController.TipAngle = math.rad(52) -- the hopper at full tip
-TrainController.TipShare = 0.6 -- share of the unload leg spent tipping up
-TrainController.UnloadHold = 1.2 -- seconds at the stop after arrival (the hopper tips back)
+TrainController.TipUp = 0.6 -- seconds: the hoppers tip up...
+TrainController.TipHold = 0.5 -- ...pour...
+TrainController.TipDown = 0.6 -- ...and come back down before the train rolls back
+TrainController.PourThreshold = 0.7 -- tip at which the ore leaves the wagon
+TrainController.MinQuarrySeconds = 3.5 -- the visible legs never run faster than this
+TrainController.MinCoastSeconds = 6
+TrainController.MinArriveSeconds = 0.6 -- standing at the stop before the arrival
+TrainController.MinUndergroundShare = 0.1 -- of a very short trip that stays hidden
+TrainController.HoldLimit = 300 -- seconds another player's train waits at its stop without an unload Fx
 TrainController.RollInSeconds = 3 -- your train backing into the station after a trip
 TrainController.WagonSlots = 12 -- cargo one wagon shows; more makes a second wagon
 TrainController.MaxBuilt = 6 -- trains built at once (each is ~100 parts)
+TrainController.SpareMax = 4 -- built trains kept out of the world for reuse
 TrainController.HeapDrop = 1.3 -- how far the ore heap sinks in an almost empty wagon
-TrainController.PourThreshold = 0.7 -- tip share at which the ore leaves the wagon
--- your waiting train's load: Dirty Ore colors (the ores stay secret until cleaned)
-TrainController.DirtyLoad = { Color3.fromRGB(132, 116, 100), Color3.fromRGB(104, 96, 90), Color3.fromRGB(152, 130, 106) }
--- PlotBuilder's banner colors, for when your plot's Banner part isn't streamed in
+TrainController.PromptSlot = 2 -- TrainService's prompt slots: Load 0, Send 1, this panel prompt 2
+TrainController.PromptSlotHeight = 72 -- UIOffset pixels per slot (TrainService.PromptSlotHeight)
+TrainController.PromptDistance = 10 -- as TrainService's prompts
+-- dirty ore in a wagon (the ores stay secret until cleaned): Kenney's warm
+-- carriage-dirt clay, so a load reads at a glance
+TrainController.DirtyLoad = { Color3.fromRGB(196, 134, 88), Color3.fromRGB(170, 112, 76), Color3.fromRGB(218, 160, 112) }
+-- PlotBuilder's banner colors, for when a plot's Banner part isn't streamed in
 TrainController.BannerColors = {
 	Color3.fromRGB(220, 70, 50),
 	Color3.fromRGB(240, 170, 40),
@@ -101,7 +153,7 @@ TrainController.BannerColors = {
 	Color3.fromRGB(240, 230, 210),
 }
 
-export type Leg = "Waiting" | "Quarry" | "Underground" | "Coast" | "Unload" | "Return" | "Done" | "Parked"
+export type Leg = "Station" | "Quarry" | "Underground" | "Coast" | "Stopped" | "Unload" | "Return" | "Done" | "Parked"
 export type EaseKind = "In" | "Out" | "InOut"
 
 export type Pose = {
@@ -116,6 +168,9 @@ export type Pose = {
 	Normal: Vector3?, -- from that mouth toward the open side
 }
 
+-- Seconds after the departure at which each leg ends.
+export type Spans = { Quarry: number, Underground: number, Coast: number, Trip: number }
+
 export type Trip = {
 	UserId: number,
 	PlotId: number,
@@ -124,6 +179,9 @@ export type Trip = {
 	Count: number,
 	Color: Color3,
 	Load: { Color3 },
+	UnloadAt: number?, -- server time the unload began on this screen (nil: not yet)
+	Waiting: boolean?, -- standing at the stop: the Ore Pen is full
+	Quiet: boolean?, -- leaves its stop without unloading (no unload ever came)
 }
 
 export type Vehicle = {
@@ -146,14 +204,17 @@ export type Vehicle = {
 
 export type Consist = {
 	Vehicles: { Vehicle },
-	Key: string, -- what it was built from (rebuild when it changes)
+	Key: string, -- what it was built from (consistKey; spare trains are reused by it)
 	Steam: ParticleEmitter?,
 	SteamRate: number,
 	LastTip: number,
 	Leg: Leg?,
-	Load: { Color3 },
+	Load: { Color3 }, -- the chunk colors when it pours
 	Count: number,
 	Dirty: boolean, -- needs placing even when standing still
+	PlacedAt: Vector3?, -- the pose it was last placed at (standing trains aren't moved again)
+	PlacedTip: number,
+	Parked: boolean, -- your waiting train (also while it leaves the station)
 }
 
 local RAIL = Vector3.new(0, TrainBuilder.RailTop, 0)
@@ -180,65 +241,169 @@ function TrainController.ease(kind: EaseKind, f: number): (number, number)
 	return x * x * (3 - 2 * x), 6 * x * (1 - x)
 end
 
-local LEGS: { { Name: Leg, Span: { number } } } = {
-	{ Name = "Quarry", Span = TrainConfig.Timeline.QuarryLeg },
-	{ Name = "Underground", Span = TrainConfig.Timeline.Underground },
-	{ Name = "Coast", Span = TrainConfig.Timeline.CoastLeg },
-	{ Name = "Unload", Span = TrainConfig.Timeline.Unload },
-}
-
--- The leg at a share of the trip (0..1), the fraction inside it and the leg's share.
-function TrainController.legAt(share: number): (Leg, number, number)
-	if share < LEGS[1].Span[1] then
-		return "Waiting", 0, 0
+--[[
+	When the legs of a trip of `duration` seconds end. The legs get their
+	TrainConfig.Timeline shares, but the visible ones never run shorter than
+	their minimum seconds: the time comes out of the hidden underground leg
+	(at least MinUndergroundShare of the trip stays hidden; a trip too short
+	for all the minimums shares the rest by the minimums).
+]]
+function TrainController.legSpans(duration: number): Spans
+	local tl = TrainConfig.Timeline
+	local d = math.max(duration, 0)
+	local quarry = math.max(d * (tl.QuarryLeg[2] - tl.QuarryLeg[1]), TrainController.MinQuarrySeconds)
+	local coast = math.max(d * (tl.CoastLeg[2] - tl.CoastLeg[1]), TrainController.MinCoastSeconds)
+	local arrive = math.max(d * (tl.Unload[2] - tl.Unload[1]), TrainController.MinArriveSeconds)
+	local visible = quarry + coast + arrive
+	local room = d * (1 - TrainController.MinUndergroundShare)
+	if visible > room then
+		local k = room / visible
+		quarry, coast, arrive = quarry * k, coast * k, arrive * k
 	end
-	for _, leg in LEGS do
-		local a, b = leg.Span[1], leg.Span[2]
-		if share < b then
-			return leg.Name, (share - a) / math.max(b - a, 1e-6), b - a
-		end
-	end
-	local last = LEGS[#LEGS].Span
-	return "Unload", 1, last[2] - last[1]
+	local underground = d - quarry - coast - arrive
+	return { Quarry = quarry, Underground = quarry + underground, Coast = quarry + underground + coast, Trip = d }
 end
 
--- The quarry wall portal on a plot's side (west plots x < 0: the west portal).
-function TrainController.quarryPortal(plot: WorldLayout.Plot): Vector3
-	local best = TrainConfig.QuarryLine[1]
-	for _, point in TrainConfig.QuarryLine do
+-- The leg `elapsed` seconds into a trip of `duration`, the fraction done and the leg's seconds.
+function TrainController.legAt(elapsed: number, duration: number): (Leg, number, number)
+	if elapsed < 0 then
+		return "Station", 0, 0
+	end
+	local s = TrainController.legSpans(duration)
+	local function within(leg: Leg, from: number, to: number): (Leg, number, number)
+		local seconds = to - from
+		return leg, math.clamp((elapsed - from) / math.max(seconds, 1e-6), 0, 1), seconds
+	end
+	if elapsed < s.Quarry then
+		return within("Quarry", 0, s.Quarry)
+	elseif elapsed < s.Underground then
+		return within("Underground", s.Quarry, s.Underground)
+	elseif elapsed < s.Coast then
+		return within("Coast", s.Underground, s.Coast)
+	end
+	return within("Stopped", s.Coast, s.Trip)
+end
+
+-- The end of the quarry line on a plot's side (west plots x < 0: the west end) and the way back along the line.
+local function quarryEnd(plot: WorldLayout.Plot): (Vector3, Vector3)
+	local line = TrainConfig.QuarryLine
+	local index = 1
+	for i, point in line do
+		local best = line[index]
 		if (plot.Center.X < 0 and point.X < best.X) or (plot.Center.X >= 0 and point.X > best.X) then
-			best = point
+			index = i
 		end
 	end
-	return best
+	local neighbour = if index == 1 then line[2] else line[index - 1]
+	return line[index], level(neighbour - line[index]).Unit
 end
 
--- The south tunnel mouth, the plot's stop and the direction north along the line.
-function TrainController.coast(plot: WorldLayout.Plot): (Vector3, Vector3, Vector3)
-	local line = TrainConfig.lineFor(plot)
-	local mouth = line[1]
-	local stop = TrainConfig.stopFor(plot)
-	return mouth, stop, level(stop - mouth).Unit
+-- The quarry wall portal on a plot's side (the end of TrainConfig.QuarryLine).
+function TrainController.quarryPortal(plot: WorldLayout.Plot): Vector3
+	local point = quarryEnd(plot)
+	return point
+end
+
+-- The visible tunnel mouth of that portal (PortalInset in front of the line's end, as Railway builds it).
+function TrainController.quarryMouth(plot: WorldLayout.Plot): Vector3
+	local point, inward = quarryEnd(plot)
+	return point + inward * TrainController.PortalInset
+end
+
+-- Root distances of the wagons behind the locomotive's Root (couplers touching).
+function TrainController.wagonOffsets(wagons: number): { number }
+	local offsets = {}
+	for i = 1, wagons do
+		offsets[i] = TrainController.LocoBack + TrainController.WagonLength * (i - 0.5)
+	end
+	return offsets
 end
 
 function TrainController.penCenter(plot: WorldLayout.Plot): Vector3
 	return (WorldLayout.plotCFrame(plot) * CFrame.new(BaseLayout.Pen.Area.Center)).Position
 end
 
--- Wagons tip to their +X side; turn them around when the pen lies on the other side.
-function TrainController.wagonFlip(plot: WorldLayout.Plot): boolean
+--[[
+	Where a plot's train stands at its stop (the locomotive's Root on the
+	line): the wagons centered on the Ore Pen along the line, the
+	locomotive's front buffers short of the buffer stop at the line's end.
+]]
+function TrainController.stopAt(plot: WorldLayout.Plot, wagons: number?): Vector3
+	local line = TrainConfig.lineFor(plot)
+	local mouth, last = line[1], line[#line]
+	local north = level(last - mouth).Unit
+	local count = math.clamp(wagons or 1, 1, 2)
+	local mean = 0
+	for _, offset in TrainController.wagonOffsets(count) do
+		mean += offset / count
+	end
+	local along = (TrainController.penCenter(plot) - mouth):Dot(north) + mean
+	local nearest = TrainController.LocoBack + TrainController.WagonLength * count + 1 -- the last wagon out of the tunnel
+	local farthest = level(last - mouth).Magnitude + TrainController.BufferGap - TrainController.LocoFront - 0.3
+	return mouth + north * math.clamp(along, nearest, farthest)
+end
+
+-- The south tunnel mouth, the plot's stop and the direction north along the line.
+function TrainController.coast(plot: WorldLayout.Plot, wagons: number?): (Vector3, Vector3, Vector3)
+	local line = TrainConfig.lineFor(plot)
+	local mouth = line[1]
+	local stop = TrainController.stopAt(plot, wagons)
+	return mouth, stop, level(stop - mouth).Unit
+end
+
+-- From the line toward the plot's Ore Pen (level, unit).
+function TrainController.penSide(plot: WorldLayout.Plot): Vector3
 	local _, stop, north = TrainController.coast(plot)
 	local right = north:Cross(UP)
-	return (TrainController.penCenter(plot) - stop):Dot(right) < 0
+	return if (TrainController.penCenter(plot) - stop):Dot(right) < 0 then -right else right
+end
+
+-- Wagons tip to their +X side; turn them around when the pen lies on the other side.
+function TrainController.wagonFlip(plot: WorldLayout.Plot): boolean
+	local _, _, north = TrainController.coast(plot)
+	return TrainController.penSide(plot):Dot(north:Cross(UP)) < 0
 end
 
 function TrainController.wagonCount(count: number): number
 	return math.clamp(math.ceil(count / TrainController.WagonSlots), 1, 2)
 end
 
+-- Is this the server's dirty ore color (ItemBuilder.DirtyCrust)?
+local function isDirt(color: Color3): boolean
+	local dirt = ItemBuilder.DirtyCrust
+	return math.abs(color.R - dirt.R) + math.abs(color.G - dirt.G) + math.abs(color.B - dirt.B) < 0.06
+end
+
+-- A trip's load colors as the wagons show them: dirty ore becomes the DirtyLoad shades (up to 6 colors).
+function TrainController.displayLoad(load: { Color3 }): { Color3 }
+	local out: { Color3 } = {}
+	local dirtAdded = false
+	for _, color in load do
+		if isDirt(color) then
+			if not dirtAdded then
+				dirtAdded = true
+				for _, shade in TrainController.DirtyLoad do
+					table.insert(out, shade)
+				end
+			end
+		else
+			table.insert(out, color)
+		end
+	end
+	if #out == 0 then
+		for _, shade in TrainController.DirtyLoad do
+			table.insert(out, shade)
+		end
+	end
+	while #out > 6 do
+		table.remove(out)
+	end
+	return out
+end
+
 -- Load colors shared out over the wagons (up to 3 each; Dirty Ore colors when empty).
 function TrainController.splitLoad(load: { Color3 }, wagons: number): { { Color3 } }
-	local source = if #load > 0 then load else TrainController.DirtyLoad
+	local source = TrainController.displayLoad(load)
 	local out: { { Color3 } } = {}
 	for w = 1, wagons do
 		local colors: { Color3 } = {}
@@ -291,53 +456,86 @@ local function pose(
 	}
 end
 
--- After arrival: hold at the stop while the hopper tips back, then back south into the tunnel.
-local function returnPose(plot: WorldLayout.Plot, since: number): Pose
-	local mouth, stop, north = TrainController.coast(plot)
+-- Seconds from the start of the unload until the train rolls back (tip up, pour, tip down).
+function TrainController.unloadSeconds(): number
+	local total = TrainController.TipUp + TrainController.TipHold + TrainController.TipDown
+	return math.min(total, TrainConfig.ReturnSeconds * 0.4)
+end
+
+-- `since` seconds after the unload began: the hoppers tip and come back down, then the train backs south into the tunnel.
+local function unloadPose(plot: WorldLayout.Plot, wagons: number?, since: number): Pose
+	local mouth, stop, north = TrainController.coast(plot, wagons)
 	local total = TrainConfig.ReturnSeconds
 	local r = math.max(since, 0)
 	local inside = mouth - north * TrainController.HideDepth
 	if r >= total then
 		return pose("Done", inside + RAIL, north, 0, 0, 0, true, mouth + RAIL, north)
 	end
-	local hold = math.min(TrainController.UnloadHold, total * 0.4)
-	if r < hold then
-		local down = (r - hold * 0.35) / (hold * 0.65)
-		local tip = if down <= 0 then 1 else 1 - (TrainController.ease("InOut", down))
+	local tipping = TrainController.unloadSeconds()
+	if r < tipping then
+		local k = tipping / (TrainController.TipUp + TrainController.TipHold + TrainController.TipDown)
+		local up, hold, down = TrainController.TipUp * k, TrainController.TipHold * k, TrainController.TipDown * k
+		local tip: number
+		if r < up then
+			tip = TrainController.ease("Out", r / up)
+		elseif r < up + hold then
+			tip = 1
+		else
+			tip = 1 - (TrainController.ease("InOut", (r - up - hold) / down))
+		end
 		return pose("Unload", stop + RAIL, north, 0, 0, tip, false, mouth + RAIL, north)
 	end
 	local length = (stop - inside).Magnitude
-	local e, slope = TrainController.ease("InOut", (r - hold) / (total - hold))
+	local rolling = total - tipping
+	local e, slope = TrainController.ease("InOut", (r - tipping) / rolling)
 	local s = length * e
-	return pose("Return", stop - north * s + RAIL, north, -s, length * slope / (total - hold), 0, false, mouth + RAIL, north)
+	return pose("Return", stop - north * s + RAIL, north, -s, length * slope / rolling, 0, false, mouth + RAIL, north)
+end
+
+-- The quarry leg: where it starts (first wagon on QuarryStop), its direction, its length into the tunnel and the mouth.
+local function quarryRun(plot: WorldLayout.Plot): (Vector3, Vector3, number, Vector3)
+	local mouth = TrainController.quarryMouth(plot)
+	local dir = level(mouth - TrainConfig.QuarryStop).Unit
+	local start = TrainConfig.QuarryStop + dir * TrainController.wagonOffsets(1)[1]
+	return start, dir, (mouth - start):Dot(dir) + TrainController.HideDepth, mouth
 end
 
 --[[
 	Where a plot's train is at `now` (server time) on a trip from departAt to
-	arriveAt: the locomotive's Root on the rails, where it faces, how far it
-	has rolled, its speed and the hopper's tip.
+	arriveAt with `wagons` wagons (1 by default): the locomotive's Root on
+	the rails, where it faces, how far it has rolled, its speed and the
+	hoppers' tip. After the arrival it stands at the stop until `unloadAt`
+	(nil: not unloaded yet), then unloads and rolls back.
 ]]
-function TrainController.poseAt(plot: WorldLayout.Plot, departAt: number, arriveAt: number, now: number): Pose
+function TrainController.poseAt(
+	plot: WorldLayout.Plot,
+	departAt: number,
+	arriveAt: number,
+	now: number,
+	wagons: number?,
+	unloadAt: number?
+): Pose
 	local duration = arriveAt - departAt
-	if now >= arriveAt or duration <= 0 then
-		return returnPose(plot, now - arriveAt)
+	if duration <= 0 then
+		local mouth, _, north = TrainController.coast(plot, wagons)
+		return pose("Done", mouth - north * TrainController.HideDepth + RAIL, north, 0, 0, 0, true, mouth + RAIL, north)
 	end
-	local leg, f, span = TrainController.legAt((now - departAt) / duration)
-	local legSeconds = math.max(duration * span, 1e-3)
-	if leg == "Waiting" or leg == "Quarry" or leg == "Underground" then
-		local stop = TrainConfig.QuarryStop
-		local portal = TrainController.quarryPortal(plot)
-		local dir = level(portal - stop).Unit
-		local length = (portal - stop).Magnitude + TrainController.HideDepth
+	if now >= arriveAt and unloadAt and now >= unloadAt then
+		return unloadPose(plot, wagons, now - unloadAt)
+	end
+	local leg, f, legSeconds = TrainController.legAt(now - departAt, duration)
+	legSeconds = math.max(legSeconds, 1e-3)
+	if leg == "Station" or leg == "Quarry" or leg == "Underground" then
+		local start, dir, length, mouth = quarryRun(plot)
 		if leg == "Underground" then
-			return pose("Underground", stop + dir * length + RAIL, dir, length, 0, 0, true, portal + RAIL, -dir)
+			return pose("Underground", start + dir * length + RAIL, dir, length, 0, 0, true, mouth + RAIL, -dir)
 		end
 		local e, slope = TrainController.ease("In", f)
 		local s = length * e
-		local speed = if leg == "Waiting" then 0 else length * slope / legSeconds
-		return pose(leg, stop + dir * s + RAIL, dir, s, speed, 0, false, portal + RAIL, -dir)
+		local speed = if leg == "Station" then 0 else length * slope / legSeconds
+		return pose(leg, start + dir * s + RAIL, dir, s, speed, 0, false, mouth + RAIL, -dir)
 	end
-	local mouth, stop, north = TrainController.coast(plot)
+	local mouth, stop, north = TrainController.coast(plot, wagons)
 	if leg == "Coast" then
 		local start = mouth - north * TrainController.HideDepth
 		local length = (stop - start).Magnitude
@@ -345,27 +543,25 @@ function TrainController.poseAt(plot: WorldLayout.Plot, departAt: number, arrive
 		local s = length * e
 		return pose("Coast", start + north * s + RAIL, north, s - length, length * slope / legSeconds, 0, false, mouth + RAIL, north)
 	end
-	local tip = TrainController.ease("Out", f / TrainController.TipShare)
-	return pose("Unload", stop + RAIL, north, 0, 0, tip, false, mouth + RAIL, north)
+	-- at the stop, loaded, until the server unloads it
+	return pose("Stopped", stop + RAIL, north, 0, 0, 0, false, mouth + RAIL, north)
 end
 
 --[[
-	Your train at the Mine Station: the locomotive's Root on QuarryStop,
-	facing your quarry portal. `sinceEnd` = seconds since your last trip
-	ended: for RollInSeconds it backs out of that portal into the station.
+	Your train at the Mine Station: its first wagon on QuarryStop (under the
+	loading chute), the locomotive toward your quarry portal. `sinceEnd` =
+	seconds since your last trip ended: for RollInSeconds it backs out of
+	that portal into the station.
 ]]
 function TrainController.parkedPose(plot: WorldLayout.Plot, sinceEnd: number?): Pose
-	local stop = TrainConfig.QuarryStop
-	local portal = TrainController.quarryPortal(plot)
-	local dir = level(portal - stop).Unit
+	local start, dir, length, mouth = quarryRun(plot)
 	local away, speed = 0, 0
 	if sinceEnd and sinceEnd >= 0 and sinceEnd < TrainController.RollInSeconds then
-		local length = (portal - stop).Magnitude + TrainController.HideDepth
 		local e, slope = TrainController.ease("Out", sinceEnd / TrainController.RollInSeconds)
 		away = length * (1 - e)
 		speed = length * slope / TrainController.RollInSeconds
 	end
-	return pose("Parked", stop + dir * away + RAIL, dir, away, speed, 0, false, portal + RAIL, -dir)
+	return pose("Parked", start + dir * away + RAIL, dir, away, speed, 0, false, mouth + RAIL, -dir)
 end
 
 -- A vehicle centered at `center` (half its length `half`) shows unless it is all inside a tunnel.
@@ -394,8 +590,7 @@ end
 -- Where the ore leaves a tipped wagon `offset` studs behind the locomotive:
 -- over the hopper's lip on the pen side.
 function TrainController.pourMouth(p: Pose, offset: number, plot: WorldLayout.Plot): Vector3
-	local toward = level(TrainController.penCenter(plot) - p.Position).Unit
-	return p.Position - p.Facing * offset + toward * 3 + Vector3.new(0, 5, 0)
+	return p.Position - p.Facing * offset + TrainController.penSide(plot) * 3 + Vector3.new(0, 5, 0)
 end
 
 -- A flying ore chunk at t (0..1) of its arc from `from` to `to`, `height` studs over the line.
@@ -404,11 +599,39 @@ function TrainController.arc(from: Vector3, to: Vector3, height: number, t: numb
 	return from:Lerp(to, f) + Vector3.new(0, 4 * height * f * (1 - f), 0)
 end
 
--- A landing spot in a plot's Ore Pen for roll1, roll2 in 0..1 (3 studs inside the fence).
-function TrainController.penSpot(plot: WorldLayout.Plot, roll1: number, roll2: number): Vector3
+-- An arc height of at least `height` that carries a chunk from `from` to `to` over the plot's Foundry.
+function TrainController.arcHeight(plot: WorldLayout.Plot, from: Vector3, to: Vector3, height: number): number
+	local rect = BaseLayout.Foundry
+	local cf = WorldLayout.plotCFrame(plot)
+	local top = cf.Position.Y + rect.Size.Y + 1.5
+	local need = height
+	for i = 1, 19 do
+		local f = i / 20
+		local at = from:Lerp(to, f)
+		local l = cf:PointToObjectSpace(at) - rect.Center
+		if math.abs(l.X) <= rect.Size.X / 2 + 1 and math.abs(l.Z) <= rect.Size.Z / 2 + 1 then
+			need = math.max(need, (top - at.Y) / (4 * f * (1 - f)))
+		end
+	end
+	return need
+end
+
+--[[
+	A landing spot in a plot's Ore Pen for roll1, roll2 in 0..1 (3 studs
+	inside the fence). With `near` (a wagon), the spot lies in the pen's
+	rail-side half, across from that wagon, so the chunks fly a short way.
+]]
+function TrainController.penSpot(plot: WorldLayout.Plot, roll1: number, roll2: number, near: Vector3?): Vector3
 	local area = BaseLayout.Pen.Area
-	local inside = area.Center + Vector3.new((roll1 - 0.5) * (area.Size.X - 6), 0.6, (roll2 - 0.5) * (area.Size.Z - 6))
-	return (WorldLayout.plotCFrame(plot) * CFrame.new(inside)).Position
+	local cf = WorldLayout.plotCFrame(plot)
+	local hx, hz = area.Size.X / 2 - 3, area.Size.Z / 2 - 3
+	local x, z = (roll1 - 0.5) * 2 * hx, (roll2 - 0.5) * 2 * hz
+	if near then
+		local l = cf:PointToObjectSpace(near) - area.Center
+		x = math.clamp(l.X + (roll1 - 0.5) * 8, -hx, hx)
+		z = roll2 * hz -- plot-local +Z is the rail (sea) side
+	end
+	return (cf * CFrame.new(area.Center + Vector3.new(x, 0.6, z))).Position
 end
 
 -- Root distances behind the locomotive's Root for a consist (couplers touching).
@@ -462,6 +685,44 @@ function TrainController.parseTrip(raw: any, fallbackColor: ((number) -> Color3)
 		Color = color,
 		Load = load,
 	}
+end
+
+--[[
+	What the client knows about your trip after a State snapshot (pure):
+	"Waiting" (at the stop, pen full), "Unloaded" (the server unloaded it),
+	"Gone" (the server has no trip any more: it was delivered without an
+	animation) or nil (nothing new).
+]]
+function TrainController.snapshotNews(trip: Trip, train: TrainView.Snapshot, now: number): ("Waiting" | "Unloaded" | "Gone")?
+	if trip.UnloadAt then
+		return nil
+	end
+	local departAt, arriveAt = train.DepartAt, train.ArriveAt
+	if not departAt or not arriveAt then
+		return if now > trip.ArriveAt + 1 then "Gone" else nil
+	end
+	if math.abs(departAt - trip.DepartAt) > 0.5 then
+		return nil
+	end
+	if train.Waiting then
+		return "Waiting"
+	elseif train.Moving == 0 and now >= arriveAt then
+		return "Unloaded"
+	end
+	return nil
+end
+
+-- What a consist is built from: spare trains are reused for the same key.
+function TrainController.consistKey(color: Color3, loads: { { Color3 } }, flip: boolean): string
+	local parts = { color:ToHex(), if flip then "F" else "N" }
+	for _, load in loads do
+		local hexes = {}
+		for _, c in load do
+			table.insert(hexes, c:ToHex())
+		end
+		table.insert(parts, if #hexes > 0 then table.concat(hexes, ",") else "E")
+	end
+	return table.concat(parts, "|")
 end
 
 ---------------------------------------------------------------- consists
@@ -563,7 +824,7 @@ function TrainController.buildConsist(color: Color3, loads: { { Color3 } }, flip
 	end
 	return {
 		Vehicles = vehicles,
-		Key = key or "",
+		Key = key or TrainController.consistKey(color, loads, flip),
 		Steam = nil,
 		SteamRate = -1,
 		LastTip = 0,
@@ -571,6 +832,9 @@ function TrainController.buildConsist(color: Color3, loads: { { Color3 } }, flip
 		Load = {},
 		Count = 0,
 		Dirty = true,
+		PlacedAt = nil,
+		PlacedTip = -1,
+		Parked = false,
 	}
 end
 
@@ -644,6 +908,7 @@ end
 local player: Player? = nil
 local trips: { [number]: Trip } = {}
 local built: { [number]: Consist } = {}
+local spares: { Consist } = {}
 local parked: Consist? = nil
 local folder: Folder? = nil
 local moveParts: { BasePart } = {}
@@ -655,14 +920,22 @@ local coins = 0
 local autoAt: number? = nil -- os.clock() when the train leaves by itself
 local refs: TrainView.Refs? = nil
 local panelOpen = false
+local hudShown = true
 local openedAt = -math.huge
 local sendLockedUntil = 0
 local buyLockedUntil = 0
 local pulse: Tween? = nil
 local shownKey = ""
+-- weak keys: the server's "Load Train" prompts (shown only while you carry something)
+local loadPrompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
+end
+
+local function myId(): number
+	local me = player
+	return if me then me.UserId else 0
 end
 
 local function myPlot(): WorldLayout.Plot?
@@ -708,9 +981,9 @@ local function ensureFolder(): Folder
 	return made
 end
 
----------------------------------------------------------------- steam, chuffs, pour
+---------------------------------------------------------------- steam, sounds, pour
 
-local STEAM_MAX = 6
+local STEAM_MAX = TrainController.MaxBuilt + 1 -- every built trip and your waiting train
 local STEAM_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
 local steamPool: { ParticleEmitter } = {}
 local steamMade = 0
@@ -749,13 +1022,154 @@ local function giveSteam(e: ParticleEmitter)
 	table.insert(steamPool, e)
 end
 
-local function dropConsist(consist: Consist)
+-- A train leaves the world: into the spare pool (the oldest spare is destroyed).
+local function stash(consist: Consist)
 	local steam = consist.Steam
 	if steam then
 		giveSteam(steam)
 		consist.Steam = nil
 	end
-	TrainController.destroyConsist(consist)
+	for _, vehicle in consist.Vehicles do
+		vehicle.Model.Parent = nil
+		vehicle.Shown = false
+	end
+	table.insert(spares, consist)
+	while #spares > TrainController.SpareMax do
+		TrainController.destroyConsist(table.remove(spares, 1) :: Consist)
+	end
+end
+
+-- A train for these loads: a matching spare (full again) or a new one.
+local function takeConsist(color: Color3, loads: { { Color3 } }, flip: boolean): Consist
+	local key = TrainController.consistKey(color, loads, flip)
+	for i, spare in spares do
+		if spare.Key == key then
+			table.remove(spares, i)
+			for w = 2, #spare.Vehicles do
+				local wagon = spare.Vehicles[w]
+				if wagon.Loaded then
+					TrainController.setFill(wagon, 1)
+				end
+			end
+			spare.SteamRate = -1
+			spare.LastTip = 0
+			spare.Leg = nil
+			spare.Dirty = true
+			spare.PlacedAt = nil
+			spare.PlacedTip = -1
+			spare.Parked = false
+			return spare
+		end
+	end
+	return TrainController.buildConsist(color, loads, flip, key)
+end
+
+local function dropBuilt(userId: number)
+	local consist = built[userId]
+	if consist then
+		built[userId] = nil
+		stash(consist)
+	end
+end
+
+type Voice = { Part: BasePart, Sound: Sound }
+
+-- A 3D sound of this controller (out of the shared Sfx pool), on an invisible part it moves.
+local function newVoice(name: string): Voice
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Transparency = 1
+	part.Size = Vector3.new(0.2, 0.2, 0.2)
+	part.Parent = ensureFolder()
+	local sound = Instance.new("Sound")
+	sound.Name = name
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = 10
+	sound.RollOffMaxDistance = 140
+	local group = SoundService:FindFirstChild("TerraForgeSfx")
+	if group and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
+	sound.Parent = part
+	return { Part = part, Sound = sound }
+end
+
+local CHUFF_RANGE = 120
+local CHUFF_STRIDE = 8.5 / 2 -- studs per chuff: two per turn of the 2.7-stud drive wheels
+local WHISTLE_SECONDS = 1.2
+local chuffVoice: Voice? = nil
+local whistleVoice: Voice? = nil
+local whistleAt = -math.huge
+
+-- The steam sound on the nearest moving locomotive: louder on each chuff, higher when faster.
+local function updateChuff(p: Pose?)
+	local def = SoundConfig.TrainChuff
+	local current = chuffVoice
+	if not p or not def then
+		if current and current.Sound.IsPlaying then
+			current.Sound:Stop()
+		end
+		return
+	end
+	local v = current or newVoice("TrainChuff")
+	chuffVoice = v
+	if v.Sound.SoundId ~= def.Id then
+		v.Sound.SoundId = def.Id
+	end
+	v.Sound.Looped = true
+	table.insert(moveParts, v.Part)
+	table.insert(moveCFrames, CFrame.new(p.Position + Vector3.new(0, 6, 0)))
+	local fast = math.clamp(p.Speed / 40, 0, 1)
+	v.Sound.PlaybackSpeed = def.Pitch[1] + (def.Pitch[#def.Pitch] - def.Pitch[1]) * fast
+	local phase = (math.abs(p.Odometer) / CHUFF_STRIDE) % 1
+	local beat = (1 - phase) ^ 3
+	v.Sound.Volume = def.Volume * (0.2 + 0.8 * beat) * math.clamp(p.Speed / 6, 0.35, 1)
+	if not v.Sound.IsPlaying then
+		v.Sound:Play()
+	end
+end
+
+-- A short double toot at a train (its own sound; faded by updateWhistle).
+local function whistle(position: Vector3)
+	local def = SoundConfig.TrainWhistle
+	if not def or os.clock() - whistleAt < WHISTLE_SECONDS then
+		return
+	end
+	local v = whistleVoice or newVoice("TrainWhistle")
+	whistleVoice = v
+	v.Sound.SoundId = def.Id
+	v.Sound.Looped = def.Looped == true
+	v.Sound.PlaybackSpeed = def.Pitch[1] + (def.Pitch[#def.Pitch] - def.Pitch[1]) * math.random()
+	v.Sound.Volume = 0
+	v.Part.CFrame = CFrame.new(position + Vector3.new(0, 8, 0))
+	v.Sound.TimePosition = 0
+	v.Sound:Play()
+	whistleAt = os.clock()
+end
+
+local function updateWhistle()
+	local v = whistleVoice
+	local def = SoundConfig.TrainWhistle
+	if not v or not def or not v.Sound.IsPlaying then
+		return
+	end
+	local t = os.clock() - whistleAt
+	if t >= WHISTLE_SECONDS then
+		v.Sound:Stop()
+		return
+	end
+	-- toot (0..0.35 s), a breath, toooot (0.5 s..), fading out
+	local env = if t < 0.05
+		then t / 0.05
+		elseif t < 0.35 then 1
+		elseif t < 0.5 then math.max(0, 1 - (t - 0.35) / 0.06)
+		elseif t < 0.55 then (t - 0.5) / 0.05
+		else math.clamp((WHISTLE_SECONDS - t) / 0.4, 0, 1)
+	v.Sound.Volume = def.Volume * env
 end
 
 type Chunk = {
@@ -805,7 +1219,7 @@ local function freeChunk(): Chunk?
 	return chunk
 end
 
--- The ore leaves the tipped wagons: a dust puff at each, chunks arc into the pen.
+-- The ore leaves the tipped wagons: a dust puff at each, chunks arc into the pen across from it.
 local function pour(consist: Consist, p: Pose, plot: WorldLayout.Plot)
 	local wagons = #consist.Vehicles - 1
 	if wagons < 1 then
@@ -828,10 +1242,10 @@ local function pour(consist: Consist, p: Pose, plot: WorldLayout.Plot)
 				chunk.Part.Size = Vector3.new(size, size * 0.8, size)
 				chunk.Part.Color = colors[(i + w) % #colors + 1]
 				chunk.From = mouth + p.Facing * ((math.random() - 0.5) * 4)
-				chunk.To = TrainController.penSpot(plot, math.random(), math.random())
+				chunk.To = TrainController.penSpot(plot, math.random(), math.random(), mouth)
 				chunk.Start = now + (i - 1) * 0.06
 				chunk.Duration = 0.75 + math.random() * 0.25
-				chunk.Height = 7 + math.random() * 3
+				chunk.Height = TrainController.arcHeight(plot, chunk.From, chunk.To, 5 + math.random() * 3)
 				chunk.Spin = Vector3.new(math.random() * 8 - 4, math.random() * 8 - 4, math.random() * 8 - 4)
 				chunk.Active = true
 				chunk.Lands = i == 1 and w == 2
@@ -851,7 +1265,9 @@ local function moveChunks(now: number)
 				chunk.Active = false
 				chunk.Part.Parent = nil
 				if chunk.Lands then
-					Vfx.burst("Dust", chunk.To + Vector3.new(0, 0.5, 0), 8, DUST)
+					-- the ore is home: dust and glints in the pen
+					Vfx.burst("Dust", chunk.To + Vector3.new(0, 0.5, 0), 10, DUST)
+					Vfx.burst("Glint", chunk.To + Vector3.new(0, 2, 0), 8, Theme.Coin)
 					Sfx.play("Gulp", chunk.To)
 				end
 			else
@@ -865,21 +1281,18 @@ local function moveChunks(now: number)
 	end
 end
 
-local CHUFF_RANGE = 120
-local nextChuff = 0
-
 ---------------------------------------------------------------- trains per frame
 
 local builtCount = 0
 
--- Before building: does the locomotive or the last wagon show? (TrainBuilder's
--- coupler lengths: locomotive back coupler 7.15, wagons 12 long.)
+-- Before building: does the locomotive or the last wagon show?
 local function anyVisible(p: Pose, wagons: number): boolean
 	if p.Hidden then
 		return false
 	end
-	local last = 7.15 + 6 + (wagons - 1) * 12
-	return TrainController.visible(p, p.Position, 7.2) or TrainController.visible(p, p.Position - p.Facing * last, 6.2)
+	local last = TrainController.wagonOffsets(math.max(wagons, 1))
+	return TrainController.visible(p, p.Position, TrainController.LocoFront)
+		or TrainController.visible(p, p.Position - p.Facing * last[#last], TrainController.WagonLength / 2)
 end
 
 local function updateSteam(consist: Consist, p: Pose)
@@ -908,18 +1321,41 @@ local function updateSteam(consist: Consist, p: Pose)
 	end
 end
 
+-- Moves a consist to a pose unless it already stands there.
+local function place(consist: Consist, p: Pose, force: boolean)
+	local still = not force and not consist.Dirty and p.Speed == 0 and consist.PlacedAt == p.Position and consist.PlacedTip == p.Tip
+	if still then
+		return
+	end
+	TrainController.placeConsist(consist, p, ensureFolder(), moveParts, moveCFrames)
+	consist.PlacedAt = p.Position
+	consist.PlacedTip = p.Tip
+	consist.Dirty = false
+end
+
 -- Builds, moves or drops one trip's train. Returns its pose when the
 -- locomotive shows (nil otherwise) and whether it was built this frame.
 local function stepTrip(userId: number, trip: Trip, now: number, eye: Vector3, canBuild: boolean): (Pose?, boolean)
 	local plot = WorldLayout.Plots[trip.PlotId]
-	local p = TrainController.poseAt(plot, trip.DepartAt, trip.ArriveAt, now)
 	local wagons = TrainController.wagonCount(trip.Count)
+	local p = TrainController.poseAt(plot, trip.DepartAt, trip.ArriveAt, now, wagons, trip.UnloadAt)
 	local consist = built[userId]
+	local waiting = parked
+	if not consist and waiting and userId == myId() and (p.Leg == "Station" or p.Leg == "Quarry") then
+		-- your waiting train is the one that leaves (no pop); it is rebuilt for the trip underground
+		parked = nil
+		waiting.Leg = "Station"
+		waiting.LastTip = 0
+		waiting.Dirty = true
+		built[userId] = waiting
+		builtCount += 1
+		consist = waiting
+	end
+	local cars = if consist then #consist.Vehicles - 1 else wagons
 	local distance = (p.Position - eye).Magnitude
-	if p.Leg == "Done" or not anyVisible(p, wagons) or distance > TrainController.DropRange then
+	if p.Leg == "Done" or not anyVisible(p, cars) or distance > TrainController.DropRange then
 		if consist then
-			dropConsist(consist)
-			built[userId] = nil
+			dropBuilt(userId)
 			builtCount -= 1
 		end
 		return nil, false
@@ -929,11 +1365,11 @@ local function stepTrip(userId: number, trip: Trip, now: number, eye: Vector3, c
 		if not canBuild or distance > TrainController.BuildRange or builtCount >= TrainController.MaxBuilt then
 			return nil, false
 		end
-		local made =
-			TrainController.buildConsist(trip.Color, TrainController.splitLoad(trip.Load, wagons), TrainController.wagonFlip(plot), "trip")
-		made.Load = trip.Load
+		local made = takeConsist(trip.Color, TrainController.splitLoad(trip.Load, wagons), TrainController.wagonFlip(plot))
+		made.Load = TrainController.displayLoad(trip.Load)
 		made.Count = trip.Count
 		made.LastTip = p.Tip -- a train built mid-unload doesn't pour again
+		made.Leg = p.Leg
 		built[userId] = made
 		builtCount += 1
 		consist = made
@@ -941,81 +1377,101 @@ local function stepTrip(userId: number, trip: Trip, now: number, eye: Vector3, c
 	end
 	local train = consist :: Consist
 	local locoWasShown = train.Vehicles[1].Shown
-	TrainController.applyPour(train, p)
-	TrainController.placeConsist(train, p, ensureFolder(), moveParts, moveCFrames)
+	local poured = if trip.Quiet then false else TrainController.applyPour(train, p)
+	place(train, p, poured)
 	updateSteam(train, p)
-	-- whistle when it sets off, and when it comes out of the south tunnel
+	-- a toot when it sets off, and when it comes out of the south tunnel
 	local loco = train.Vehicles[1]
 	local portal, normal = p.Portal, p.Normal
 	local justOut = portal ~= nil and normal ~= nil and (p.Position - portal):Dot(normal) < 16
 	if loco.Shown and not locoWasShown and p.Leg == "Coast" and justOut then
-		Sfx.play("TrainWhistle", p.Position)
-	elseif p.Leg == "Quarry" and (train.Leg == "Waiting" or (didBuild and now - trip.DepartAt < 1)) then
-		Sfx.play("TrainWhistle", p.Position)
+		whistle(p.Position)
+	elseif p.Leg == "Quarry" and (train.Leg == "Station" or (didBuild and now - trip.DepartAt < 1)) then
+		whistle(p.Position)
 	end
 	train.Leg = p.Leg
-	if p.Tip >= TrainController.PourThreshold and train.LastTip < TrainController.PourThreshold then
+	if not trip.Quiet and p.Tip >= TrainController.PourThreshold and train.LastTip < TrainController.PourThreshold then
 		pour(train, p, plot)
 	end
 	train.LastTip = p.Tip
 	return if loco.Shown then p else nil, didBuild
 end
 
--- Your train waiting at the Mine Station (built from the State snapshot).
-local function stepParked(now: number, eye: Vector3, canBuild: boolean)
+--[[
+	Your train at the Mine Station (from the State snapshot) whenever it
+	isn't away: on a trip, waiting at a full pen or rolling back. When the
+	snapshot says it just left but its TrainTrip hasn't come yet, it keeps
+	standing so the trip can take it over. Returns its pose while it rolls in.
+]]
+local function stepParked(now: number, eye: Vector3, canBuild: boolean): Pose?
 	local plot = myPlot()
 	local train = snapshot
-	local p = player
-	local mine = if p then trips[p.UserId] else nil
-	local away = mine ~= nil and now < mine.ArriveAt + TrainConfig.ReturnSeconds
-	-- the snapshot knows about a trip before (or without) its TrainTrip event
-	local departAt, arriveAt = train and train.DepartAt, train and train.ArriveAt
-	if departAt and arriveAt and now >= departAt and now < arriveAt + TrainConfig.ReturnSeconds then
-		away = true
+	local mine = trips[myId()]
+	local away = false
+	local hold = false
+	if mine then
+		local unloadAt = mine.UnloadAt
+		away = unloadAt == nil or now < unloadAt + TrainConfig.ReturnSeconds
+	end
+	if train then
+		local departAt, arriveAt = train.DepartAt, train.ArriveAt
+		if departAt and arriveAt and now >= departAt - 1 then
+			if train.Moving > 0 or train.Waiting then
+				if not mine and now < departAt + 3 then
+					hold = true
+				else
+					away = true
+				end
+			elseif now < arriveAt + TrainConfig.ReturnSeconds then
+				away = true
+			end
+		end
+	end
+	local current = parked
+	if hold and not away then
+		return nil
 	end
 	if not plot or not train or away then
-		if parked then
-			dropConsist(parked)
+		if current then
 			parked = nil
+			stash(current)
 		end
-		return
+		return nil
 	end
-	local sinceEnd = if mine then now - (mine.ArriveAt + TrainConfig.ReturnSeconds) else nil
+	local sinceEnd = if mine and mine.UnloadAt then now - (mine.UnloadAt + TrainConfig.ReturnSeconds) else nil
 	local standing = TrainController.parkedPose(plot, sinceEnd)
 	local distance = (standing.Position - eye).Magnitude
 	if distance > TrainController.DropRange then
-		if parked then
-			dropConsist(parked)
+		if current then
 			parked = nil
+			stash(current)
 		end
-		return
+		return nil
 	end
 	local wagons = TrainController.wagonCount(train.Capacity)
 	local fills = TrainController.wagonFills(train.Cargo, train.Capacity, wagons)
+	local split = TrainController.splitLoad({}, wagons)
+	local loads: { { Color3 } } = {}
+	for i, fill in fills do
+		loads[i] = if fill > 0 then split[i] else {}
+	end
 	local color = bannerColor(plot.Id)
-	local key = color:ToHex() .. "/" .. wagons
-	for _, fill in fills do
-		key ..= if fill > 0 then "L" else "E"
-	end
-	local consist = parked
-	if consist and consist.Key ~= key then
-		dropConsist(consist)
+	local key = TrainController.consistKey(color, loads, false)
+	if current and current.Key ~= key then
 		parked = nil
-		consist = nil
+		stash(current)
+		current = nil
 	end
-	if not consist then
+	if not current then
 		if not canBuild or distance > TrainController.BuildRange then
-			return
+			return nil
 		end
-		local loads: { { Color3 } } = {}
-		local split = TrainController.splitLoad({}, wagons)
-		for i, fill in fills do
-			loads[i] = if fill > 0 then split[i] else {}
-		end
-		consist = TrainController.buildConsist(color, loads, false, key)
-		parked = consist
+		local made = takeConsist(color, loads, false)
+		made.Parked = true
+		parked = made
+		current = made
 	end
-	local station = consist :: Consist
+	local station = current :: Consist
 	for i, fill in fills do
 		local wagon = station.Vehicles[i + 1]
 		if wagon and wagon.Loaded and math.abs(wagon.Fill - fill) > 1e-3 then
@@ -1023,11 +1479,9 @@ local function stepParked(now: number, eye: Vector3, canBuild: boolean)
 			station.Dirty = true
 		end
 	end
-	if station.Dirty or standing.Speed > 0 then
-		TrainController.placeConsist(station, standing, ensureFolder(), moveParts, moveCFrames)
-		station.Dirty = standing.Speed > 0 -- once more after it stops, right on QuarryStop
-	end
+	place(station, standing, false)
 	updateSteam(station, standing)
+	return if standing.Speed > 0 and station.Vehicles[1].Shown then standing else nil
 end
 
 local order: { number } = {}
@@ -1044,13 +1498,12 @@ local function step()
 	local canBuild = true -- at most one new train per frame (no hitches)
 	local chuffPose: Pose? = nil
 	local chuffDistance = CHUFF_RANGE
-	local me = player
-	local myId = if me then me.UserId else 0
-	-- your own trip first: it gets this frame's build (no gap when it leaves the station)
-	order[1] = myId
+	local mineId = myId()
+	-- your own trip first: it takes over your waiting train
+	order[1] = mineId
 	local n = 1
 	for userId in trips do
-		if userId ~= myId then
+		if userId ~= mineId then
 			n += 1
 			order[n] = userId
 		end
@@ -1062,13 +1515,17 @@ local function step()
 		if not trip then
 			continue
 		end
-		local keep = if userId == myId then TrainController.RollInSeconds + 1 else 1
-		if now > trip.ArriveAt + TrainConfig.ReturnSeconds + keep then
+		if not trip.UnloadAt and userId ~= mineId and now > trip.ArriveAt + TrainController.HoldLimit then
+			-- its unload never came (or it waits very long): it leaves without tipping
+			trip.UnloadAt = now - TrainController.unloadSeconds()
+			trip.Quiet = true
+		end
+		local unloadAt = trip.UnloadAt
+		local keep = if userId == mineId then TrainController.RollInSeconds + 1 else 1
+		if unloadAt and now > unloadAt + TrainConfig.ReturnSeconds + keep then
 			trips[userId] = nil
-			local consist = built[userId]
-			if consist then
-				dropConsist(consist)
-				built[userId] = nil
+			if built[userId] then
+				dropBuilt(userId)
 				builtCount -= 1
 			end
 		else
@@ -1085,23 +1542,23 @@ local function step()
 			end
 		end
 	end
-	for userId, consist in built do
+	for userId in built do
 		if not trips[userId] then
-			dropConsist(consist)
-			built[userId] = nil
+			dropBuilt(userId)
 			builtCount -= 1
 		end
 	end
-	stepParked(now, eye, canBuild)
-	moveChunks(os.clock())
-	if #moveParts > 0 then
-		Workspace:BulkMoveTo(moveParts, moveCFrames, Enum.BulkMoveMode.FireCFrameChanged)
+	-- your train backing into the station chuffs too
+	local rolling = stepParked(now, eye, canBuild)
+	if rolling and rolling.Speed > 1 and (rolling.Position - eye).Magnitude < chuffDistance then
+		chuffPose = rolling
 	end
-	local chuff = chuffPose
-	if chuff and os.clock() >= nextChuff then
-		-- two chuffs per turn of the big drive wheels (2.7 studs across)
-		nextChuff = os.clock() + math.max(0.25, 8.5 / (2 * chuff.Speed))
-		Sfx.play("TrainChuff", chuff.Position)
+	moveChunks(os.clock())
+	updateChuff(chuffPose)
+	updateWhistle()
+	if #moveParts > 0 then
+		-- (FireCFrameChanged is the cheapest mode Roblox has: nothing listens to these parts)
+		Workspace:BulkMoveTo(moveParts, moveCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
 end
 
@@ -1146,6 +1603,14 @@ local function setPulse(view: TrainView.Refs, on: boolean)
 	end
 end
 
+-- The chip shows with the HUD, but not behind the open panel on phones.
+local function applyChip()
+	local view = refs
+	if view then
+		view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen, view.Compact)
+	end
+end
+
 local function refreshUI(force: boolean?)
 	local view = refs
 	if not view then
@@ -1156,7 +1621,7 @@ local function refreshUI(force: boolean?)
 	if not current then
 		return
 	end
-	local key = `{current.Title}|{current.Line}|{current.CanSend}|{current.Fill}|{current.Progress or -1}`
+	local key = `{current.Title}|{current.Line}|{current.CanSend}|{current.Fill}|{current.Progress or -1}|{current.Unit}`
 	if key ~= shownKey or force then
 		shownKey = key
 		TrainView.setStatus(view, current)
@@ -1208,6 +1673,7 @@ local function fit()
 	local compact = isTouch() or scale <= 0.75 or size.Y < 520
 	TrainView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
 	updateHints()
+	applyChip()
 end
 
 local function deny(text: string)
@@ -1220,8 +1686,10 @@ local function send()
 		return
 	end
 	if not current.CanSend then
-		if current.Phase == "Moving" then
+		if current.Phase == "Moving" or current.Phase == "Unloading" then
 			deny("Your train is on its way. It comes back after the delivery.")
+		elseif current.Phase == "PenFull" then
+			deny("Your Ore Pen is full: make room so your train can unload.")
 		elseif current.Phase == "Returning" then
 			deny("Your train is on its way back to the Mine.")
 		else
@@ -1297,6 +1765,7 @@ function TrainController.close()
 		GuiService.SelectedObject = nil
 	end
 	view.Gui.Enabled = false
+	applyChip()
 	PromptController.setSuppressed("Train", false)
 end
 
@@ -1311,13 +1780,21 @@ end
 
 function TrainController.open()
 	local view = refs
-	-- (not while the HUD is hidden: the cleaning close-up and other full-screen modes)
-	if not view or not snapshot or not view.Chip.Enabled then
+	-- not while the HUD is hidden (the cleaning close-up) or something owns the
+	-- screen (build mode, the anvil)
+	if not view or not snapshot or not hudShown or PlayerControls.owner() ~= nil then
 		return
 	end
 	if panelOpen then
 		refreshPanel()
 		return
+	end
+	-- one panel at a time: the Pen and Sell panels close (they bind B / Backspace too)
+	if PenController.isOpen() then
+		PenController.close()
+	end
+	if SellController.isOpen() then
+		SellController.close()
 	end
 	panelOpen = true
 	openedAt = os.clock()
@@ -1325,6 +1802,7 @@ function TrainController.open()
 	refreshUI(true)
 	refreshPanel()
 	view.Gui.Enabled = true
+	applyChip()
 	PromptController.setSuppressed("Train", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	GuiService.SelectedObject = nil
@@ -1357,19 +1835,37 @@ end
 
 ---------------------------------------------------------------- state, trips, effects
 
-local function addTrip(trip: Trip)
-	local existing = trips[trip.UserId]
-	if existing and existing.DepartAt == trip.DepartAt and existing.ArriveAt == trip.ArriveAt then
-		-- same trip again (join list + event): keep the richer payload
-		if #trip.Load == 0 then
-			return
+local function sameColors(a: { Color3 }, b: { Color3 }): boolean
+	if #a ~= #b then
+		return false
+	end
+	for i, color in a do
+		if color ~= b[i] then
+			return false
 		end
 	end
-	if existing then
-		local consist = built[trip.UserId]
-		if consist and (existing.DepartAt ~= trip.DepartAt or #existing.Load ~= #trip.Load) then
-			dropConsist(consist)
-			built[trip.UserId] = nil
+	return true
+end
+
+local function addTrip(trip: Trip)
+	local existing = trips[trip.UserId]
+	if existing and existing.DepartAt == trip.DepartAt then
+		-- the same trip again (join list + event, or the snapshot): keep the richer payload and what we know
+		if #trip.Load == 0 and #existing.Load > 0 then
+			return
+		end
+		trip.UnloadAt = existing.UnloadAt
+		trip.Waiting = existing.Waiting
+		trip.Quiet = existing.Quiet
+	end
+	local consist = built[trip.UserId]
+	if existing and consist and not consist.Parked then
+		local changed = existing.DepartAt ~= trip.DepartAt
+			or existing.Count ~= trip.Count
+			or existing.Color ~= trip.Color
+			or not sameColors(existing.Load, trip.Load)
+		if changed then
+			dropBuilt(trip.UserId)
 			builtCount -= 1
 		end
 	end
@@ -1395,9 +1891,9 @@ local function onTrip(payload: any)
 	end
 end
 
--- Your trip from the State snapshot when no TrainTrip event came for it
--- (missed while joining). 2 s of grace first: the event with the load colors
--- normally arrives together with the snapshot.
+-- Your trip against the State snapshot: waiting at a full pen, unloaded, or
+-- missing (no TrainTrip event came for it: added after 2 s of grace, the event
+-- with the load colors normally comes with the snapshot).
 local function syncSnapshotTrip()
 	local train = snapshot
 	local me = player
@@ -1405,22 +1901,50 @@ local function syncSnapshotTrip()
 	if not train or not me or not plot then
 		return
 	end
-	local departAt, arriveAt = train.DepartAt, train.ArriveAt
 	local now = serverNow()
-	if departAt and arriveAt and arriveAt > departAt and now > departAt + 2 and now < arriveAt + TrainConfig.ReturnSeconds then
-		local known = trips[me.UserId]
-		if not known or math.abs(known.ArriveAt - arriveAt) > 0.5 then
-			addTrip({
-				UserId = me.UserId,
-				PlotId = plot.Id,
-				DepartAt = departAt,
-				ArriveAt = arriveAt,
-				Count = math.max(1, train.Moving),
-				Color = bannerColor(plot.Id),
-				Load = {},
-			})
+	local known = trips[me.UserId]
+	if known then
+		local news = TrainController.snapshotNews(known, train, now)
+		if news == "Waiting" then
+			known.Waiting = true
+		elseif news == "Unloaded" then
+			known.UnloadAt = math.max(now, known.ArriveAt)
+			known.Waiting = false
+		elseif news == "Gone" then
+			trips[me.UserId] = nil
+			if built[me.UserId] then
+				dropBuilt(me.UserId)
+				builtCount -= 1
+			end
+		end
+		local departAt = train.DepartAt
+		local newer = departAt ~= nil and known.UnloadAt ~= nil and departAt > known.DepartAt + 0.5
+		if not newer then
+			return
 		end
 	end
+	local departAt, arriveAt = train.DepartAt, train.ArriveAt
+	if not departAt or not arriveAt or arriveAt <= departAt or now <= departAt + 2 then
+		return
+	end
+	local trip: Trip = {
+		UserId = me.UserId,
+		PlotId = plot.Id,
+		DepartAt = departAt,
+		ArriveAt = arriveAt,
+		Count = math.max(1, train.Moving),
+		Color = bannerColor(plot.Id),
+		Load = {},
+		Waiting = train.Waiting,
+	}
+	if train.Moving == 0 then
+		-- already unloaded (ArriveAt is when): only the way back is left
+		if now >= arriveAt + TrainConfig.ReturnSeconds then
+			return
+		end
+		trip.UnloadAt = arriveAt
+	end
+	addTrip(trip)
 end
 
 local function onState(state: { [string]: any })
@@ -1443,11 +1967,26 @@ local function onState(state: { [string]: any })
 	refreshPanel()
 end
 
+-- The server unloaded a plot's train: its hoppers tip now (or, when it isn't
+-- on screen, dust and glints in that pen).
 local function onUnload(plotId: any, count: any)
 	local plot = if type(plotId) == "number" then WorldLayout.Plots[plotId] else nil
 	local camera = Workspace.CurrentCamera
 	if not plot or not camera then
 		return
+	end
+	local now = serverNow()
+	local shown = false
+	for userId, trip in trips do
+		if trip.PlotId == plot.Id and not trip.UnloadAt and now >= trip.ArriveAt - 3 then
+			trip.UnloadAt = math.max(now, trip.ArriveAt)
+			trip.Waiting = false
+			local consist = built[userId]
+			shown = shown or (consist ~= nil and consist.Vehicles[1].Shown)
+		end
+	end
+	if shown then
+		return -- the chunks bring the dust and glints when they land
 	end
 	local pen = TrainController.penCenter(plot)
 	if (pen - camera.CFrame.Position).Magnitude > TrainController.BuildRange then
@@ -1466,34 +2005,66 @@ local function onLoad(position: any)
 	Vfx.burst("Dust", position + Vector3.new(0, 1, 0), 6, DUST)
 	Vfx.burst("Glint", position + Vector3.new(0, 2, 0), 5, Theme.Accent)
 	Sfx.play("Gulp", position)
+	-- at the station: a puff over your waiting wagon under the chute
+	local standing = parked
+	local wagon = standing and standing.Vehicles[2]
+	if wagon and wagon.Shown and (position - TrainConfig.Station.Hopper).Magnitude < 12 then
+		Vfx.burst("Dust", TrainConfig.QuarryStop + Vector3.new(0, 5, 0), 5, DUST)
+	end
 end
 
----------------------------------------------------------------- station prompt
+---------------------------------------------------------------- prompts
 
-local function addPrompt(station: Instance)
+local PANEL_PROMPT = "TrainPanelPrompt"
+
+-- The "Train" panel prompt on a station's / lift's PromptPoint (slot 2, under the server's Load and Send).
+local function addPrompt(root: Instance, objectText: string)
 	local function attach(point: Instance)
-		if not point:IsA("Attachment") or point.Name ~= "PromptPoint" or point:FindFirstChild("TrainPrompt") then
+		if not point:IsA("Attachment") or point.Name ~= "PromptPoint" or point:FindFirstChild(PANEL_PROMPT) then
 			return
 		end
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "TrainPrompt"
+		prompt.Name = PANEL_PROMPT
 		prompt.ActionText = "Train"
-		prompt.ObjectText = "Mine Station"
+		prompt.ObjectText = objectText
 		prompt.KeyboardKeyCode = Enum.KeyCode.T
 		prompt.GamepadKeyCode = Enum.KeyCode.ButtonL3
 		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = TrainController.PromptDistance
 		prompt.RequiresLineOfSight = false
+		prompt.UIOffset = Vector2.new(0, TrainController.PromptSlot * TrainController.PromptSlotHeight)
 		prompt.Parent = point
 		prompt.Triggered:Connect(function()
 			TrainController.open()
 		end)
 	end
-	for _, d in station:GetDescendants() do
+	for _, d in root:GetDescendants() do
 		attach(d)
 	end
 	-- streaming: the attachment may arrive after the model
-	station.DescendantAdded:Connect(attach)
+	root.DescendantAdded:Connect(attach)
+end
+
+local function carrying(): boolean
+	local me = player
+	local count = me and me:GetAttribute("CarryCount")
+	return type(count) == "number" and count > 0
+end
+
+local function trackLoadPrompt(instance: Instance)
+	if instance:IsA("ProximityPrompt") and instance:GetAttribute("Action") == "Load" then
+		loadPrompts[instance] = true
+		instance.Enabled = carrying()
+	end
+end
+
+local function refreshLoadPrompts()
+	local on = carrying()
+	for prompt in loadPrompts do
+		if prompt.Parent then
+			prompt.Enabled = on
+		end
+	end
 end
 
 ---------------------------------------------------------------- lifecycle
@@ -1501,8 +2072,11 @@ end
 function TrainController.init()
 	FxController = require(script.Parent.FxController)
 	HudController = require(script.Parent.HudController)
+	PenController = require(script.Parent.PenController)
 	PromptController = require(script.Parent.PromptController)
+	SellController = require(script.Parent.SellController)
 	StateController = require(script.Parent.StateController)
+	PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 	local me = Players.LocalPlayer
 	player = me
 
@@ -1552,8 +2126,9 @@ function TrainController.start()
 	local hud = HudController.refs()
 	if hud then
 		local function mirror()
-			view.Chip.Enabled = hud.Gui.Enabled
-			if not hud.Gui.Enabled then
+			hudShown = hud.Gui.Enabled
+			applyChip()
+			if not hudShown then
 				TrainController.close()
 			end
 		end
@@ -1579,12 +2154,30 @@ function TrainController.start()
 		return Enum.ContextActionResult.Pass
 	end, false, Enum.KeyCode.T, Enum.KeyCode.ButtonL3)
 
-	CollectionService:GetInstanceAddedSignal("TrainStation"):Connect(addPrompt)
+	-- the panel prompt on the station and the lifts; the server's Load prompts only with full hands
+	CollectionService:GetInstanceAddedSignal("TrainStation"):Connect(function(station)
+		addPrompt(station, "Mine Station")
+	end)
 	for _, station in CollectionService:GetTagged("TrainStation") do
-		addPrompt(station)
+		addPrompt(station, "Mine Station")
+	end
+	CollectionService:GetInstanceAddedSignal("MineLift"):Connect(function(lift)
+		addPrompt(lift, "Mine Lift")
+	end)
+	for _, lift in CollectionService:GetTagged("MineLift") do
+		addPrompt(lift, "Mine Lift")
+	end
+	CollectionService:GetInstanceAddedSignal("TrainPrompt"):Connect(trackLoadPrompt)
+	for _, prompt in CollectionService:GetTagged("TrainPrompt") do
+		trackLoadPrompt(prompt)
 	end
 	local me = player
 	if me then
+		-- (an item's CarriedBy may arrive a moment after CarryCount: refresh twice, like PromptController)
+		me:GetAttributeChangedSignal("CarryCount"):Connect(function()
+			refreshLoadPrompts()
+			task.delay(0.25, refreshLoadPrompts)
+		end)
 		me:GetAttributeChangedSignal("PlotId"):Connect(function()
 			local plot = myPlot()
 			if plot then
@@ -1593,9 +2186,9 @@ function TrainController.start()
 		end)
 	end
 
-	-- one loop: every train, your waiting train, the flying ore; the chip text 4x a second
+	-- one loop: every train, your waiting train, the flying ore, the sounds; the chip text 4x a second
 	local uiClock = 0
-	RunService.RenderStepped:Connect(function(dt)
+	RunService.PreRender:Connect(function(dt)
 		step()
 		uiClock += dt
 		if uiClock >= 0.25 then

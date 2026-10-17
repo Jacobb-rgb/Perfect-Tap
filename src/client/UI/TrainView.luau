@@ -4,8 +4,10 @@
 
 	  chip    a small HUD panel under the coins (top-left, below the "+$X"
 	          popups): a locomotive icon in your banner color, "TRAIN 6/8",
-	          the state ("On its way 0:12", "Returning", "Full – Send!"...),
-	          a cargo bar and a SEND button. The left part is a button that
+	          the state ("On its way 0:12", "Pen full – make room",
+	          "Returning", "Full – Send!"...), a cargo / trip bar and a SEND
+	          button. While the train is away the count is the ore on board
+	          ("TRAIN 8/8 · On its way 0:12"). The left part is a button that
 	          opens the panel; a key hint shows T (keyboard) or the L3 glyph
 	          (gamepad).
 	  panel   the Mine Station panel: on the left your cargo, the trip time and
@@ -15,7 +17,9 @@
 
 	Designed for 720 design units of height (HudController scales every
 	TerraForge gui). The compact layout (phones, uiScale 0.62) makes every
-	button at least 44 pt (TrainView.touchTargets lists them for the tests).
+	button at least 44 pt (TrainView.touchTargets lists them for the tests);
+	narrow panels move the price onto the detail line, short ones shrink the
+	upgrade rows (never under the 76-unit buttons).
 	Helpers: read (a State snapshot's Train with safe defaults), status (the
 	chip and panel state), upgrade (an upgrade row), seconds.
 ]]
@@ -35,6 +39,7 @@ TrainView.MinTouch = 44 -- points
 TrainView.ChipLeft = 16 -- lines up with the coins panel
 TrainView.ChipTop = 136 -- under the coins panel (16..90) and its "+$X" popups (96..130)
 TrainView.ExpressPrice = 199 -- R$, the placeholder on the Express line
+TrainView.UnloadGrace = 2 -- seconds after the arrival before a train with ore still on board counts as waiting
 
 export type Snapshot = {
 	Cargo: number,
@@ -49,19 +54,21 @@ export type Snapshot = {
 	Express: boolean,
 	TripSeconds: number,
 	AutoDepartIn: number?,
+	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
 }
 
-export type Phase = "Empty" | "Loading" | "Full" | "Moving" | "Returning"
+export type Phase = "Empty" | "Loading" | "Full" | "Moving" | "Unloading" | "PenFull" | "Returning"
 
 export type Status = {
 	Phase: Phase,
-	Cargo: number,
+	Cargo: number, -- the count shown: the station cargo, or the ore on board while the train is away
 	Capacity: number,
 	Title: string, -- "TRAIN 6/8"
+	Unit: string, -- under the panel's big count: "ore on board" / "ore on the way"...
 	Line: string, -- "On its way 0:12"
 	Color: Color3, -- the line's color
 	CanSend: boolean,
-	Fill: number, -- cargo / capacity, 0..1
+	Fill: number, -- Cargo / capacity, 0..1
 	Progress: number?, -- share of the trip done while the train is on its way (the chip's bar shows it)
 }
 
@@ -229,6 +236,7 @@ function TrainView.read(raw: any): Snapshot
 		Express = express,
 		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express)),
 		AutoDepartIn = optional(t.AutoDepartIn),
+		Waiting = t.Waiting == true,
 	}
 end
 
@@ -245,44 +253,62 @@ end
 	What the chip and the panel say. `now` is server time
 	(workspace:GetServerTimeNow(), like DepartAt / ArriveAt); `autoLeft` the
 	seconds until the train leaves by itself (counted down by the controller,
-	nil = use the snapshot's AutoDepartIn).
+	nil = use the snapshot's AutoDepartIn). While the train is away the count
+	is the ore on board (Moving): on its way, unloading at your stop, waiting
+	there because the Ore Pen is full (Waiting, or still loaded UnloadGrace
+	seconds after the arrival), then rolling back empty.
 ]]
 function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Status
 	local capacity = train.Capacity
-	local cargo = train.Cargo
-	local fill = if capacity > 0 then math.clamp(cargo / capacity, 0, 1) else 0
-	local function make(phase: Phase, line: string, color: Color3, canSend: boolean, progress: number?): Status
+	local function make(phase: Phase, count: number, unit: string, line: string, color: Color3, canSend: boolean, progress: number?): Status
 		return {
 			Phase = phase,
-			Cargo = cargo,
+			Cargo = count,
 			Capacity = capacity,
-			Title = `TRAIN {cargo}/{capacity}`,
+			Title = `TRAIN {count}/{capacity}`,
+			Unit = unit,
 			Line = line,
 			Color = color,
 			CanSend = canSend,
-			Fill = fill,
+			Fill = if capacity > 0 then math.clamp(count / capacity, 0, 1) else 0,
 			Progress = progress,
 		}
 	end
+	local moving = train.Moving
 	local arrive = train.ArriveAt
-	if arrive and now < arrive then
+	if (arrive and now < arrive) or (moving > 0 and not arrive and not train.Waiting) then
 		local depart = train.DepartAt
-		local progress = if depart and arrive > depart then math.clamp((now - depart) / (arrive - depart), 0, 1) else nil
-		return make("Moving", "On its way " .. Format.seconds(math.max(0, math.ceil(arrive - now))), Theme.Info, false, progress)
+		local progress = if depart and arrive and arrive > depart then math.clamp((now - depart) / (arrive - depart), 0, 1) else nil
+		local line = if arrive then "On its way " .. Format.seconds(math.max(0, math.ceil(arrive - now))) else "On its way"
+		return make("Moving", moving, "ore on the way", line, Theme.Info, false, progress)
+	elseif moving > 0 or train.Waiting then
+		if train.Waiting or not arrive or now >= arrive + TrainView.UnloadGrace then
+			return make("PenFull", moving, "ore waiting at your pen", "Pen full – make room", Theme.Bad, false)
+		end
+		return make("Unloading", moving, "ore on the way", "Unloading…", Theme.Info, false, 1)
 	elseif arrive and now < arrive + TrainConfig.ReturnSeconds then
-		return make("Returning", "Returning", Theme.TextDim, false)
-	elseif capacity > 0 and cargo >= capacity then
-		return make("Full", "Full – Send!", Theme.Accent, true)
+		return make("Returning", 0, "ore on board", "Returning", Theme.TextDim, false)
+	end
+	local cargo = train.Cargo
+	if capacity > 0 and cargo >= capacity then
+		return make("Full", cargo, "ore on board", "Full – Send!", Theme.Accent, true)
 	elseif cargo > 0 then
 		local auto = autoLeft or train.AutoDepartIn
 		return make(
 			"Loading",
+			cargo,
+			"ore on board",
 			if auto then "Leaves in " .. Format.seconds(math.max(0, math.ceil(auto))) else "Ready – Send!",
 			Theme.Good,
 			true
 		)
 	end
-	return make("Empty", "Load ore at the Mine", Theme.TextDim, false)
+	return make("Empty", 0, "ore on board", "Load ore at the Mine", Theme.TextDim, false)
+end
+
+-- The HUD chip shows with the HUD, except behind the open panel on phones (it would peek out at its edge).
+function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean, compact: boolean): boolean
+	return hudShown and not (panelOpen and compact)
 end
 
 -- One upgrade row from a snapshot (prices from the snapshot, else TrainConfig).
@@ -473,6 +499,7 @@ local function upgradeRow(parent: Instance, name: string, order: number): Row
 		FontFace = Theme.TitleFont,
 		TextColor3 = Theme.Accent,
 		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 	local level = UIKit.chip(frame, "LV 1/6", Theme.PanelDark, { Name = "Level" })
 	local detail = UIKit.label(frame, "", 20, {
@@ -486,6 +513,7 @@ local function upgradeRow(parent: Instance, name: string, order: number): Row
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = Theme.Coin,
 		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 	local buy = UIKit.button(frame, "BUY", Theme.Accent, Theme.AccentDark, { Name = "Buy" })
 	return { Frame = frame, Name = title, Level = level, Detail = detail, Price = price, Buy = buy }
@@ -627,33 +655,63 @@ end
 
 ---------------------------------------------------------------- layout
 
-local function placeRow(row: Row, m: PanelMetrics)
-	row.Frame.Size = UDim2.new(1, 0, 0, m.Row)
+local PRICE_WIDTH = 112
+local NARROW_PRICE_WIDTH = 86
+
+local function chipWidthOf(m: PanelMetrics): number
+	return if m.Text > 20 then 92 else 78
+end
+
+--[[
+	Is a row of `rowsWidth` units too narrow for the name and its level chip
+	next to the price? Then the price moves onto the detail line ("CAPACITY"
+	in the title font is about 5.2 x its text size wide).
+]]
+function TrainView.isNarrow(m: PanelMetrics, rowsWidth: number): boolean
+	local nameRoom = rowsWidth - (14 + 12 + m.Buy + 12 + PRICE_WIDTH + 8 + chipWidthOf(m) + 6)
+	return nameRoom < (m.Text + 2) * 5.2
+end
+
+local function placeRow(row: Row, m: PanelMetrics, rowHeight: number, narrow: boolean)
+	row.Frame.Size = UDim2.new(1, 0, 0, rowHeight)
 	local buy = holderOf(row.Buy)
 	buy.AnchorPoint = Vector2.new(1, 0)
 	buy.Size = UDim2.fromOffset(m.Buy, m.Button)
-	buy.Position = UDim2.new(1, -12, 0, (m.Row - m.Button) / 2 + 3) -- the face sits 5 above its lip
+	buy.Position = UDim2.new(1, -12, 0, (rowHeight - m.Button) / 2 + 3) -- the face sits 5 above its lip
 	row.Buy.TextSize = m.Text + 2
+	local text = if narrow then m.Text - 3 else m.Text
 	local right = 12 + m.Buy + 12
-	local priceWidth = 112
-	row.Price.AnchorPoint = Vector2.new(1, 0.5)
-	row.Price.Position = UDim2.new(1, -right, 0.5, 0)
-	row.Price.Size = UDim2.fromOffset(priceWidth, 30)
-	row.Price.TextSize = m.Text + 2
-	-- the text column: name with the level chip at its right end, the detail under it
-	local textRight = right + priceWidth + 8
-	local chipWidth = if m.Text > 20 then 92 else 78
-	local nameTop = m.Row / 2 - m.Text - 12
+	local chipWidth = chipWidthOf(m)
+	local nameTop = rowHeight / 2 - text - 12
+	local detailTop = rowHeight / 2 + 4
+	-- the text column: name with the level chip at its right end, the detail under it;
+	-- the price beside both (wide rows) or at the detail line's end (narrow rows)
+	local textRight: number
+	local detailRight: number
+	if narrow then
+		textRight = right
+		detailRight = right + NARROW_PRICE_WIDTH + 8
+		row.Price.AnchorPoint = Vector2.new(1, 0)
+		row.Price.Position = UDim2.new(1, -right, 0, detailTop)
+		row.Price.Size = UDim2.fromOffset(NARROW_PRICE_WIDTH, text + 6)
+	else
+		textRight = right + PRICE_WIDTH + 8
+		detailRight = textRight
+		row.Price.AnchorPoint = Vector2.new(1, 0.5)
+		row.Price.Position = UDim2.new(1, -right, 0.5, 0)
+		row.Price.Size = UDim2.fromOffset(PRICE_WIDTH, 30)
+	end
+	row.Price.TextSize = text + 2
 	row.Level.AnchorPoint = Vector2.new(1, 0)
 	row.Level.Position = UDim2.new(1, -textRight, 0, nameTop + 3)
-	row.Level.Size = UDim2.fromOffset(chipWidth, m.Text + 2)
+	row.Level.Size = UDim2.fromOffset(chipWidth, text + 2)
 	row.Level.TextSize = m.Small - 1
 	row.Name.Position = UDim2.fromOffset(14, nameTop)
-	row.Name.Size = UDim2.new(1, -(14 + textRight + (if row.Level.Visible then chipWidth + 6 else 0)), 0, m.Text + 8)
-	row.Name.TextSize = m.Text + 2
-	row.Detail.Position = UDim2.fromOffset(14, m.Row / 2 + 4)
-	row.Detail.Size = UDim2.new(1, -(14 + textRight), 0, m.Text + 6)
-	row.Detail.TextSize = m.Text
+	row.Name.Size = UDim2.new(1, -(14 + textRight + (if row.Level.Visible then chipWidth + 6 else 0)), 0, text + 8)
+	row.Name.TextSize = text + 2
+	row.Detail.Position = UDim2.fromOffset(14, detailTop)
+	row.Detail.Size = UDim2.new(1, -(14 + detailRight), 0, text + 6)
+	row.Detail.TextSize = text
 end
 
 local function placeChip(refs: Refs, m: ChipMetrics)
@@ -745,19 +803,26 @@ function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	refs.Send.TextSize = if compact then 28 else 24
 	local tripTop = stateTop + m.Text + 10
 	refs.Trip.Position = UDim2.fromOffset(14, tripTop)
-	refs.Trip.Size = UDim2.new(1, -28, 0, math.max(0, cardHeight - 14 - m.Button - 8 - tripTop))
+	local tripHeight = math.max(0, cardHeight - 14 - m.Button - 8 - tripTop)
+	refs.Trip.Size = UDim2.new(1, -28, 0, tripHeight)
 	refs.Trip.TextSize = m.Small
+	refs.Trip.Visible = tripHeight >= m.Small + 4 -- (short phones: no room for it)
 
-	-- right: the upgrade rows (+ the hint under them on PC)
+	-- right: the upgrade rows (+ the hint under them on PC); short panels get
+	-- lower rows, never lower than the buttons
 	local rowsLeft = PAD + m.Card + PAD
+	local rowsWidth = width - rowsLeft - PAD
+	local room = height - m.Header - PAD - (if compact then 0 else 28)
+	local rowHeight = math.max(m.Button + 12, math.min(m.Row, (room - GAP * 2) / 3))
+	local narrow = TrainView.isNarrow(m, rowsWidth)
 	local rows = refs.Rows.Capacity.Frame.Parent :: Frame
 	rows.Position = UDim2.fromOffset(rowsLeft, m.Header)
-	rows.Size = UDim2.new(1, -(rowsLeft + PAD), 0, m.Row * 3 + GAP * 2)
+	rows.Size = UDim2.new(1, -(rowsLeft + PAD), 0, rowHeight * 3 + GAP * 2)
 	for _, row in { refs.Rows.Capacity, refs.Rows.Speed, refs.Express } do
-		placeRow(row, m)
+		placeRow(row, m, rowHeight, narrow)
 	end
 	refs.Hint.Visible = not compact
-	refs.Hint.Position = UDim2.fromOffset(rowsLeft, m.Header + m.Row * 3 + GAP * 2 + 6)
+	refs.Hint.Position = UDim2.fromOffset(rowsLeft, m.Header + rowHeight * 3 + GAP * 2 + 6)
 	refs.Hint.Size = UDim2.new(1, -(rowsLeft + PAD), 0, 22)
 	refs.Hint.TextSize = 15
 end
@@ -789,12 +854,20 @@ function TrainView.setStatus(refs: Refs, status: Status)
 	-- the chip's bar: the trip while it runs, else the cargo
 	local progress = status.Progress
 	refs.ChipFill.Size = UDim2.fromScale(progress or status.Fill, 1)
-	refs.ChipFill.BackgroundColor3 = if progress then Theme.Info elseif status.Phase == "Full" then Theme.Good else Theme.Accent
+	refs.ChipFill.BackgroundColor3 = if status.Phase == "PenFull"
+		then Theme.Bad
+		elseif progress then Theme.Info
+		elseif status.Phase == "Full" then Theme.Good
+		else Theme.Accent
 	style(refs.ChipSend, status.CanSend, Theme.Good, Theme.GoodDark)
 
 	refs.Cargo.Text = `{status.Cargo} / {status.Capacity}`
+	refs.CargoUnit.Text = status.Unit
 	refs.CargoFill.Size = UDim2.fromScale(status.Fill, 1)
-	refs.CargoFill.BackgroundColor3 = if status.Phase == "Full" then Theme.Good else Theme.Accent
+	refs.CargoFill.BackgroundColor3 = if status.Phase == "PenFull"
+		then Theme.Bad
+		elseif status.Phase == "Full" then Theme.Good
+		else Theme.Accent
 	refs.State.Text = status.Line
 	refs.State.TextColor3 = status.Color
 	style(refs.Send, status.CanSend, Theme.Good, Theme.GoodDark)

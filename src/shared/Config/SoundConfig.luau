@@ -43,9 +43,11 @@ local SoundConfig: { [string]: SoundDef } = {
 	UIClick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.4, Pitch = { 1.0, 1.1 } },
 	UIDeny = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.6, 0.7 } },
 	Discovery = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.55, Pitch = { 0.9, 0.9 } },
-	-- ore trains (placeholders: paste a steam chuff and a soft whistle from the Creator Store here)
-	TrainChuff = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.2, Pitch = { 0.34, 0.4 } },
-	TrainWhistle = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.28, Pitch = { 0.6, 0.64 } },
+	-- ore trains: TrainController plays both on its own looping sounds (never the shared pool):
+	-- the chuff pulses with the wheels (Pitch = slow..fast), the whistle is a short double toot.
+	-- The built-in wind noise is a stand-in; paste a steam chuff loop / a whistle from the Creator Store here.
+	TrainChuff = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.3, Pitch = { 0.45, 0.85 }, Looped = true },
+	TrainWhistle = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.26, Pitch = { 1.75, 1.9 }, Looped = true },
 }
 
 return SoundConfig
