@@ -1,6 +1,7 @@
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local LobbyLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.LobbyLayout")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
@@ -55,8 +56,8 @@ return function(T, Loader)
 				parts += 1
 			end
 		end
-		-- mobile budget for static map parts (lobby budgets: tests/Lobby.spec.luau)
-		T.lt(parts, 11000, "part count")
+		-- mobile budget for static map parts (the same number tests/Lobby.spec.luau uses)
+		T.lt(parts, LobbyLayout.Budget.MapParts + 1, "part count")
 		local tags = {}
 		for _, d in map:GetDescendants() do
 			for _, tag in d:GetTags() do

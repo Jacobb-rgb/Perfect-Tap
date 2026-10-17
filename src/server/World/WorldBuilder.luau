@@ -21,7 +21,7 @@ local PlotBuilder = require(script.Parent.PlotBuilder)
 
 local WorldBuilder = {}
 
-WorldBuilder.Version = 7 -- 7: rocks keep off the train station, track and lifts; 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
+WorldBuilder.Version = 8 -- 8: visual upgrade (concept v2 stalls, plaza, planets, brick plot walls, town); 7: rocks keep off the train station, track and lifts; 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
 
 export type NodeSpawn = { Position: Vector3, Zone: string }
 
