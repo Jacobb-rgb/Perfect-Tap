@@ -2706,4 +2706,12 @@ function Shop.buildStudio(Loader: any, parent: any)
 	return root
 end
 
+-- The Studio test ground (in the vault's design frame, front +Z), shared with export_vault_game_place.luau.
+Shop.studioGround = function(Loader: any, parent: any, s: number)
+	Concepts.init(Loader)
+	CF = Loader.CFrame
+	L = Loader
+	studioGround(Concepts.kit(parent), s)
+end
+
 return Shop
