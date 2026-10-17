@@ -70,8 +70,9 @@ end
 function WorldBuilder.generateNodeSpawns(): { NodeSpawn }
 	local rng = Rng.new(WorldLayout.Seed * 7 + 11)
 	local spawns: { NodeSpawn } = {}
+	-- the town's starter outcrops grow small Greystone rocks (mine floor 1's rocks)
 	for _, spot in WorldLayout.OutcropSpots do
-		table.insert(spawns, { Position = spot, Zone = "Outcrops" })
+		table.insert(spawns, { Position = spot, Zone = "Outcrops", Floor = 1, Kind = "Small" })
 	end
 	for _, zone in WorldLayout.Zones do
 		if zone.NodeCount > 0 then

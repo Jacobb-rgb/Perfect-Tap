@@ -1,6 +1,20 @@
 --[[
 	MiningService: rocks, laser blasting and dirty ore drops (design v2).
 
+	Mine floors (docs/plans/MINE_STEP_PLAN.md): a NodeSpawn marker with a Floor
+	attribute grows a floor rock (MineFloors + RockBuilder): its kind is rolled
+	from MineFloors.SpawnChance (Deep markers at the back of a floor roll more
+	crystals and special rocks), its ores from the floor's Ores (CrystalOres for
+	crystal, golden and geode rocks), its HP from MineFloors.rockHealth, its gate
+	from the floor's MinBlaster. A floor rock with N ores cracks in N stages (at
+	k/N of its HP lost): every stage drops one ore and breaks a shard and a
+	crystal off (RockBuilder.applyStage); the last stage shatters it. Markers
+	with Kind = "Giant" hold the floor's Giant Crystal: it appears every
+	MineFloors.GiantCrystal.Interval seconds, everyone on the server can blast
+	it, and when it shatters every player who dealt at least MinDamageShare of
+	its HP gets OreCount.Giant ores from the floor's CrystalOres.
+	Markers without a Floor (the VIP Grotto) keep the older rules below.
+
 	- A rock grows at every NodeSpawn marker. It holds 1-3 ores
 	  (BlasterData.oreCount) rolled by the marker zone's ore weights. The ores
 	  stay on the server: clients only see the rock (OreNodeBuilder.buildRock)
@@ -34,6 +48,8 @@ local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local OreNodeBuilder = require(Shared.Builders.OreNodeBuilder)
+local RockBuilder = require(Shared.Builders.RockBuilder)
+local MineFloors = require(Shared.Config.MineFloors)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
@@ -55,6 +71,11 @@ type Rock = {
 	Model: Model,
 	Marker: BasePart?,
 	Zone: WorldLayout.Zone,
+	Floor: number?, -- mine floor rocks (MineFloors); nil for the older zone rocks
+	Kind: string, -- MineFloors rock kind ("Small", "Crystal", "Giant", ...); "Zone" for older rocks
+	MinBlaster: number,
+	Stages: number, -- crack stages until the shatter (floor rocks: one per ore)
+	Damage: { [Player]: number }, -- per player (the Giant Crystal's reward)
 	Ores: { string }, -- server only, never sent to clients
 	Health: number,
 	MaxHealth: number,
@@ -76,13 +97,16 @@ type Shooter = {
 
 type Respawn = { At: number, Marker: BasePart }
 
+type Giant = { Marker: BasePart, Floor: number, At: number, Rock: Rock? }
+
 local rocks: { [Model]: Rock } = {}
 local shooters: { [Player]: Shooter } = {}
 local active: { [Player]: Shooter } = {} -- only players with a target
 local respawns: { Respawn } = {}
+local giants: { Giant } = {}
 local nextRespawnCheck = 0
 local rocksFolder: Instance? = nil
-local brokenStages = false -- warned once if OreNodeBuilder.applyStage fails
+local brokenStages = false -- warned once if a builder's applyStage fails
 
 -- Swappable for the Lune tests.
 local clock: () -> number = os.clock
@@ -94,6 +118,12 @@ end
 local minedCallbacks: { (Player, string, number) -> () } = {}
 function MiningService.onChunkMined(callback: (player: Player, oreId: string, count: number) -> ())
 	table.insert(minedCallbacks, callback)
+end
+
+-- Artifact rocks (step 7 "artifacts + story" listens here): the player who shattered one, and its floor.
+local artifactCallbacks: { (Player, number) -> () } = {}
+function MiningService.onArtifactRock(callback: (player: Player, floor: number) -> ())
+	table.insert(artifactCallbacks, callback)
 end
 
 ---------------------------------------------------------------- rocks
@@ -135,12 +165,139 @@ local function measure(model: Model): (Vector3, number)
 	return center, math.clamp(radius, 1.5, 9)
 end
 
+-- A weighted pick from a { [oreId] = weight } table (keys in name order, so rolls are stable).
+local function pickWeighted(weights: { [string]: number }): string?
+	local keys = {}
+	local total = 0
+	for oreId, weight in weights do
+		if weight > 0 and OreData.ById[oreId] then
+			total += weight
+			table.insert(keys, oreId)
+		end
+	end
+	if #keys == 0 then
+		return nil
+	end
+	table.sort(keys)
+	local roll = random() * total
+	for _, oreId in keys do
+		roll -= weights[oreId]
+		if roll < 0 then
+			return oreId
+		end
+	end
+	return keys[#keys]
+end
+
+-- The kind of a new floor rock: specials, crystals and big rocks by MineFloors.SpawnChance
+-- (deep spawns at the back of a floor double the crystal chance and raise the specials).
+local KIND_ORDER = { "Golden", "Geode", "Artifact", "Crystal", "Big" }
+function MiningService.rollKind(roll: number, deep: boolean): string
+	local acc = 0
+	for _, kind in KIND_ORDER do
+		local chance = MineFloors.SpawnChance[kind] or 0
+		if deep then
+			chance *= if kind == "Crystal" then 2 elseif kind == "Big" then 1 else 1.5
+		end
+		acc += chance
+		if roll < acc then
+			return kind
+		end
+	end
+	return "Small"
+end
+
+local function finishRock(model: Model, rock: Rock): Rock
+	model.Name = "Rock"
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	model:AddTag(MiningService.RockTag)
+	model:SetAttribute("OreId", nil) -- what clients may know: never the ore ids
+	model:SetAttribute("Zone", rock.Zone.Id)
+	model:SetAttribute("OreCount", #rock.Ores)
+	model:SetAttribute("MinBlaster", rock.MinBlaster)
+	model:SetAttribute("VipOnly", rock.Zone.VipOnly == true)
+	model:SetAttribute("Health", rock.Health)
+	model:SetAttribute("MaxHealth", rock.MaxHealth)
+	model:SetAttribute("Stage", 0)
+	if rock.Floor then
+		model:SetAttribute("Floor", rock.Floor)
+		model:SetAttribute("Kind", rock.Kind)
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	local center, radius = measure(model)
+	rock.Center, rock.Radius = center, radius
+	local primary = model.PrimaryPart
+	rock.Crust = if primary then primary.Color else rock.Crust
+	model.Parent = rocksFolder
+	rocks[model] = rock
+	return rock
+end
+
+-- A mine floor rock on `marker` (forcedKind: "Giant" for the Giant Crystal).
+local function spawnFloorRock(marker: BasePart, zone: WorldLayout.Zone, floor: MineFloors.Floor, forcedKind: string?): Rock?
+	local markerKind = marker:GetAttribute("Kind")
+	local kind = forcedKind
+		or (if type(markerKind) == "string" and MineFloors.OreCount[markerKind :: any] and markerKind ~= "Giant" then markerKind else nil)
+		or MiningService.rollKind(random(), marker:GetAttribute("Deep") == true)
+	local rockKind: MineFloors.RockKind = kind :: any
+	local rich = kind == "Crystal" or kind == "Golden" or kind == "Geode" or kind == "Giant"
+	local ores = {}
+	if kind ~= "Giant" then
+		for _ = 1, MineFloors.OreCount[rockKind] or 3 do
+			local oreId = pickWeighted(if rich then floor.CrystalOres else floor.Ores)
+			if oreId then
+				table.insert(ores, oreId)
+			end
+		end
+		if #ores == 0 then
+			return nil
+		end
+	end
+	local seed = math.floor(random() * 1e9) + 1
+	local ground = marker.CFrame.Position - Vector3.new(0, marker.Size.Y / 2, 0)
+	local model = RockBuilder.build(floor.Index, rockKind, ores, CFrame.new(ground), seed)
+	local health = MineFloors.rockHealth(floor.Index, rockKind)
+	return finishRock(model, {
+		Model = model,
+		Marker = marker,
+		Zone = zone,
+		Floor = floor.Index,
+		Kind = kind,
+		MinBlaster = floor.MinBlaster,
+		Stages = if kind == "Giant" then 3 else math.max(1, #ores),
+		Damage = {},
+		Ores = ores,
+		Health = health,
+		MaxHealth = health,
+		Stage = 0,
+		Dropped = 0,
+		Seed = seed,
+		Alive = true,
+		Center = ground,
+		Radius = 2,
+		Crust = floor.Palette.Mid,
+		HitFx = {},
+	})
+end
+
 local function spawnRock(marker: BasePart): Rock?
 	local zoneId = marker:GetAttribute("Zone")
 	local zone = if type(zoneId) == "string" then WorldLayout.ZoneById[zoneId] else nil
 	local folder = rocksFolder
 	if not zone or not folder then
 		return nil
+	end
+	local floorIndex = marker:GetAttribute("Floor")
+	local floor = if type(floorIndex) == "number" then MineFloors.ByIndex[floorIndex] else nil
+	if floor then
+		if marker:GetAttribute("Kind") == "Giant" then
+			return nil -- the Giant Crystal comes and goes on its own timer (see tickGiants)
+		end
+		return spawnFloorRock(marker, zone, floor, nil)
 	end
 	local ores = {}
 	for _ = 1, BlasterData.oreCount(random()) do
@@ -181,6 +338,11 @@ local function spawnRock(marker: BasePart): Rock?
 		Model = model,
 		Marker = marker,
 		Zone = zone,
+		Floor = nil,
+		Kind = "Zone",
+		MinBlaster = zone.MinBlaster,
+		Stages = 3,
+		Damage = {},
 		Ores = ores,
 		Health = health,
 		MaxHealth = health,
@@ -247,9 +409,10 @@ local function breakOff(parts: { BasePart }, away: Vector3)
 	end
 end
 
--- Crack visuals of a stage (OreNodeBuilder belongs to the ore package: never let it break mining).
+-- Crack visuals of a stage (the builders belong to the art packages: never let them break mining).
 local function crackVisual(rock: Rock, stage: number, from: Vector3)
-	local ok, result = pcall(OreNodeBuilder.applyStage, rock.Model, stage, rock.Seed)
+	local apply = if rock.Floor then RockBuilder.applyStage else OreNodeBuilder.applyStage
+	local ok, result = pcall(apply, rock.Model, stage, rock.Seed)
 	if ok then
 		if type(result) == "table" and #result > 0 then
 			local away = (rock.Center - from) * Vector3.new(1, 0, 1)
@@ -257,7 +420,7 @@ local function crackVisual(rock: Rock, stage: number, from: Vector3)
 		end
 	elseif not brokenStages then
 		brokenStages = true
-		warn("[MiningService] OreNodeBuilder.applyStage failed: " .. tostring(result))
+		warn("[MiningService] applyStage failed: " .. tostring(result))
 	end
 	rock.Model:SetAttribute("Stage", stage)
 end
@@ -271,6 +434,28 @@ local function stopShootersOf(rock: Rock)
 	end
 end
 
+-- The Giant Crystal's reward: every player who dealt enough of its HP gets ores near them.
+local function rewardGiant(rock: Rock)
+	local floor = if rock.Floor then MineFloors.ByIndex[rock.Floor] else nil
+	if not floor then
+		return
+	end
+	local needed = rock.MaxHealth * MineFloors.GiantCrystal.MinDamageShare
+	for helper, dealt in rock.Damage do
+		if dealt >= needed and helper.Parent then
+			local root = Guard.rootPart(helper)
+			local from = if root then root.Position else rock.Center + Vector3.new(0, 0, rock.Radius + 4)
+			for _ = 1, MineFloors.OreCount["Giant" :: MineFloors.RockKind] or 3 do
+				local oreId = pickWeighted(floor.CrystalOres)
+				if oreId then
+					dropChunk(helper, rock, oreId, from)
+				end
+			end
+			Net.fire("Notify", helper, { Text = "Giant Crystal shattered! Your share of crystal ores is here.", Kind = "Success" })
+		end
+	end
+end
+
 local function shatter(player: Player, rock: Rock, glow: Color3)
 	rock.Alive = false
 	rocks[rock.Model] = nil
@@ -280,8 +465,23 @@ local function shatter(player: Player, rock: Rock, glow: Color3)
 		data.Stats.RocksBroken = (tonumber(data.Stats.RocksBroken) or 0) + 1
 		DataService.changed(player)
 	end
-	Net.fireNear("Fx", rock.Center, SHATTER_RADIUS, nil, "NodeShatter", rock.Center, rock.Crust, glow)
+	Net.fireNear("Fx", rock.Center, SHATTER_RADIUS, nil, "NodeShatter", rock.Center, rock.Crust, glow, rock.Floor, rock.Kind, rock.Radius)
 	rock.Model:Destroy()
+	if rock.Kind == "Giant" then
+		rewardGiant(rock)
+		for _, giant in giants do
+			if giant.Rock == rock then
+				giant.Rock = nil
+				giant.At = clock() + MineFloors.GiantCrystal.Interval
+			end
+		end
+		return
+	end
+	if rock.Kind == "Artifact" and rock.Floor then
+		for _, callback in artifactCallbacks do
+			task.spawn(callback, player, rock.Floor)
+		end
+	end
 	-- the rarest ore inside decides how long the rock takes to grow back
 	local slowest = 0
 	for _, oreId in rock.Ores do
@@ -297,29 +497,33 @@ local function shatter(player: Player, rock: Rock, glow: Color3)
 end
 
 -- A stage was crossed by `player`'s damage: drop the next ore, crack or shatter.
+-- (The last #Ores stages drop an ore each: every stage for floor rocks, whose Stages = #Ores.)
 local function crossStage(player: Player, rock: Rock, stage: number, from: Vector3, glow: Color3)
 	rock.Stage = stage
-	if stage > 3 - #rock.Ores then
+	local dropped: string? = nil
+	if rock.Kind ~= "Giant" and stage > rock.Stages - #rock.Ores then
 		rock.Dropped += 1
-		local oreId = rock.Ores[rock.Dropped]
-		if oreId then
-			dropChunk(player, rock, oreId, from)
+		dropped = rock.Ores[rock.Dropped]
+		if dropped then
+			dropChunk(player, rock, dropped, from)
 		end
 	end
-	if stage >= 3 then
+	if stage >= rock.Stages then
 		shatter(player, rock, glow)
 	else
 		crackVisual(rock, stage, from)
 		local position = hitPosition(rock, from)
-		Net.fireNear("Fx", position, FX_RADIUS, nil, "NodeCrack", position, rock.Crust, stage)
+		local ore = if dropped then OreData.ById[dropped] else nil
+		Net.fireNear("Fx", position, FX_RADIUS, nil, "NodeCrack", position, rock.Crust, stage, if ore then ore.Glow else glow, rock.Stages)
 	end
 end
 
 local function damage(player: Player, data: { [string]: any }, rock: Rock, amount: number, from: Vector3, now: number)
+	rock.Damage[player] = (rock.Damage[player] or 0) + math.min(amount, rock.Health)
 	rock.Health = math.max(0, rock.Health - amount)
 	rock.Model:SetAttribute("Health", rock.Health)
 	local lost = 1 - rock.Health / rock.MaxHealth
-	local newStage = math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
+	local newStage = math.clamp(math.floor(lost * rock.Stages + 1e-6), 0, rock.Stages)
 	local glow = glowOf(data)
 	local last = rock.HitFx[player]
 	if not last or now - last >= HIT_FX_GAP then
@@ -413,8 +617,8 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		refuse(player, shooter, rock, zone.Name .. " rocks are for Forge VIPs.", from, now)
 		return
 	end
-	if blaster.Level < zone.MinBlaster then
-		refuse(player, shooter, rock, "Needs a Level " .. zone.MinBlaster .. " blaster", from, now)
+	if blaster.Level < rock.MinBlaster then
+		refuse(player, shooter, rock, "Needs a Level " .. rock.MinBlaster .. " blaster", from, now)
 		return
 	end
 	local ore = data.BlasterOre
@@ -422,7 +626,44 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 	damage(player, data, rock, amount, from, now)
 end
 
+-- Players standing in a zone (for the Giant Crystal news).
+local function playersIn(zone: WorldLayout.Zone): { Player }
+	local list = {}
+	local ok, all = pcall(function()
+		return Players:GetPlayers()
+	end)
+	for _, player in if ok then all else {} do
+		local root = Guard.rootPart(player)
+		if root and WorldLayout.isInBox(root.Position, zone.Min, zone.Max) then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+-- The Giant Crystals: one per floor's GiantSpawn, back every Interval after it shattered.
+local function tickGiants(now: number)
+	for _, giant in giants do
+		if not giant.Rock and now >= giant.At and giant.Marker.Parent then
+			local zoneId = giant.Marker:GetAttribute("Zone")
+			local zone = if type(zoneId) == "string" then WorldLayout.ZoneById[zoneId] else nil
+			local floor = MineFloors.ByIndex[giant.Floor]
+			if zone and floor then
+				local rock = spawnFloorRock(giant.Marker, zone, floor, "Giant")
+				giant.Rock = rock
+				giant.At = math.huge
+				if rock then
+					for _, player in playersIn(zone) do
+						Net.fire("Notify", player, { Text = "A Giant Crystal appeared in " .. floor.Name .. "! Blast it together.", Kind = "Info" })
+					end
+				end
+			end
+		end
+	end
+end
+
 local function tick(now: number)
+	tickGiants(now)
 	for player, shooter in active do
 		local ok, err = pcall(function()
 			tickShooter(player, shooter, now)
@@ -463,12 +704,24 @@ function MiningService.init()
 	Players.PlayerRemoving:Connect(forgetPlayer)
 end
 
+-- Remembers a GiantSpawn marker: its Giant Crystal first appears after half an Interval.
+local function addGiant(marker: BasePart)
+	local floorIndex = marker:GetAttribute("Floor")
+	if type(floorIndex) == "number" and MineFloors.ByIndex[floorIndex] then
+		table.insert(giants, { Marker = marker, Floor = floorIndex, At = clock() + MineFloors.GiantCrystal.Interval * 0.5, Rock = nil })
+	end
+end
+
 function MiningService.start()
 	local markers = WorldService.NodeSpawns
 	if markers then
 		for _, marker in markers:GetChildren() do
 			if marker:IsA("BasePart") then
-				spawnRock(marker)
+				if marker:GetAttribute("Kind") == "Giant" then
+					addGiant(marker)
+				else
+					spawnRock(marker)
+				end
 			end
 		end
 	end
@@ -506,7 +759,9 @@ MiningService._test = {
 		table.clear(shooters)
 		table.clear(active)
 		table.clear(respawns)
+		table.clear(giants)
 		table.clear(minedCallbacks)
+		table.clear(artifactCallbacks)
 		nextRespawnCheck = 0
 		brokenStages = false
 		rocksFolder = folder
@@ -522,6 +777,10 @@ MiningService._test = {
 		random = fn
 	end,
 	spawnRock = spawnRock,
+	addGiant = addGiant,
+	giants = function(): { Giant }
+		return giants
+	end,
 	blast = onBlast,
 	tick = tick,
 	forget = forgetPlayer,
