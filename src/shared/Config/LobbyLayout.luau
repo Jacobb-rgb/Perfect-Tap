@@ -52,7 +52,7 @@ LobbyLayout.Area = {
 -- Mobile budgets. Map = every BasePart in Workspace.Map; Lobby = parts and
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
-	MapParts = 14500, -- visual upgrade (concept v2): richer stalls, brick plot walls, town buildings
+	MapParts = 16000, -- visual upgrade (concept v2): richer stalls, brick plot walls, town buildings; + ~1100 Horizon (far sea, isles, ships, sky life)
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2). Plots stream
 	-- in and out with StreamingEnabled like everything else.
@@ -66,7 +66,7 @@ LobbyLayout.Budget = {
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
-		Backdrop = { Parts = 2350, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires
+		Backdrop = { Parts = 3400, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires, + Horizon (~1150)
 		Plaza = { Parts = 1500, LobbyParts = 1500, Lights = 10, LobbyLights = 10 },
 		Districts = { Parts = 2300, LobbyParts = 2300, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 2300, LobbyParts = 2100, Lights = 8, LobbyLights = 8 }, -- + town buildings
