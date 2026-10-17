@@ -168,4 +168,63 @@ return function(T, Loader)
 			T.truthy(#parts(slope) <= 80, "slope parts: " .. #parts(slope))
 		end
 	end)
+
+	T.test("KitMachines: every roster machine builds, stays in its footprint and within budget", function()
+		T.eq(#KitMachines.Catalog, 24, "the roster has 24 machines")
+		local skip = { Chute = true, ChuteLip = true, Molten = true, Blade = true, Cable = true }
+		for _, entry in KitMachines.Catalog do
+			local id = entry.Id
+			local levels = if entry.Upgrades then { 0, KitMachines.MaxLevel } else { 0 }
+			for _, level in levels do
+				local model = KitMachines.buildAny(id, level)
+				local tag = id .. " L" .. level
+				T.eq(model.PrimaryPart.Name, "Base", tag)
+				T.truthy(attachment(model, "Prompt"), tag .. " Prompt")
+				local crystals = 0
+				for _, part in parts(model) do
+					T.truthy(part:GetAttribute("Kit") ~= nil, tag .. " " .. part.Name .. " has a Kit role")
+					if part:GetAttribute("Kit") == "Crystal" then
+						crystals += 1
+					end
+				end
+				if level == 0 then
+					T.eq(crystals, 0, tag .. " plain")
+				else
+					T.truthy(crystals > 0, tag .. " grows crystals")
+				end
+			end
+			local size = KitMachines.Sizes[id] or MachineData.ById[id].Size
+			local model = KitMachines.buildAny(id, 0)
+			local list = parts(model)
+			local cells = size[1] * size[2]
+			T.truthy(#list <= (if cells >= 6 then 200 else 150), id .. " level 0: " .. #list .. " parts")
+			if id ~= "BeltLift" and id ~= "Slide" then
+				local hw, hd = size[1] * CELL / 2, size[2] * CELL / 2
+				for _, part in list do
+					if not skip[part.Name] then
+						local cf, sz = part.CFrame, part.Size
+						local r = { cf:GetComponents() }
+						local ex = math.abs(r[4]) * sz.X / 2 + math.abs(r[5]) * sz.Y / 2 + math.abs(r[6]) * sz.Z / 2
+						local ez = math.abs(r[10]) * sz.X / 2 + math.abs(r[11]) * sz.Y / 2 + math.abs(r[12]) * sz.Z / 2
+						local p = cf.Position
+						T.truthy(math.abs(p.X) + ex <= hw + 0.4, id .. " " .. part.Name .. " x " .. (math.abs(p.X) + ex))
+						T.truthy(math.abs(p.Z) + ez <= hd + 0.4, id .. " " .. part.Name .. " z " .. (math.abs(p.Z) + ez))
+					end
+				end
+			end
+		end
+	end)
+
+	T.test("KitMachines: item machines have an intake, outputs follow the grid rule", function()
+		for _, id in { "IronBox", "Polisher", "BrickFurnace", "PlasmaFurnace", "AlloyFurnace", "CrystalExtractor", "SellBox" } do
+			local model = KitMachines.build(id, 0)
+			T.truthy(attachment(model, "Intake"), id .. " Intake")
+			local out = KitMachines.outputFor(id)
+			if out then
+				T.truthy((attachment(model, "Output").CFrame.Position - out).Magnitude < 1e-4, id .. " Output")
+			else
+				T.eq(attachment(model, "Output"), nil, id .. " has no output")
+			end
+		end
+	end)
 end

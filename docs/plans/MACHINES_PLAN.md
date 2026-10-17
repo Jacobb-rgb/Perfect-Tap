@@ -93,6 +93,17 @@ Then (same day) the first kit version looked "old, like old Minecraft"; the owne
   whether the plot floor becomes a metal plate with glowing edges like the reference (PlotBuilder); belt run end
   caps in the game need run detection (cosmetic, client); the floor height for the lift / slide.
 
+## Status of the looks (2026-10-17)
+All 24 roster machines are built in style A in src/shared/Builders/KitMachines.luau (`KitMachines.Catalog`,
+`KitMachines.buildAny(id, level, theme)`), shown in the showroom scene `kit_showroom` (and `kit_showroom_max` at the
+max level), pictures docs/screenshots/kit_showroom_*.jpg, kit_max_*.jpg, kit_close_*.jpg.
+Proposed footprints for the machines MachineData does not have yet (`KitMachines.Sizes`): Iron Box 2x2, Sorter 1x1,
+Polisher 2x2, Brick Furnace 2x2, Plasma Furnace 2x2, Alloy Furnace 3x2, Crystal Extractor 2x2, Restoration Table 2x2,
+Sell Box 2x2 (no output), Express Conveyor 1x1, Splitter 1x1, Robot Arm 1x1, Solar Panel 2x2, Wind Turbine 2x2,
+Fusion Reactor 3x3, Power Pole 1x1 (+ `KitMachines.cable`), Belt Lift / Slide 1x3. Gameplay for the new machines
+(MachineData entries, services, power network) is not built yet; the 5 existing machines and the belt can switch
+from MachineBuilder to KitMachines (same contract, FX part names kept).
+
 ## Open questions
 - The owner also ticked "Something else" under special machines without saying what; ask.
 - Footprints, power use, prices and upgrade curves (economy step; prices must be exponential, DESIGN_V2_NOTES round 3).

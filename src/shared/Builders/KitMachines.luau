@@ -85,6 +85,13 @@ KitMachines.Palette = {
 	Bristle = rgb(40, 150, 160),
 	Smoke = rgb(236, 236, 240),
 	Bolt = rgb(196, 190, 178),
+	Gold = rgb(255, 196, 60),
+	Felt = rgb(255, 172, 204), -- the Polisher's pink felt
+	Panel = rgb(44, 78, 160), -- solar cells
+	Plasma = rgb(186, 110, 255), -- the Plasma Furnace's glow
+	Cyan = rgb(70, 228, 255), -- end game glow (plasma, fusion)
+	Brick = rgb(222, 126, 92), -- the Brick Furnace's terracotta dome
+	Gem = rgb(90, 214, 255),
 }
 local P = KitMachines.Palette
 
@@ -103,9 +110,11 @@ local MATERIAL: { [string]: Enum.Material } = {
 	ScreenGlow = NEON,
 	Glass = GLASS,
 	Water = NEON,
+	Plasma = NEON,
+	Cyan = NEON,
 }
 local TRANSPARENCY: { [string]: number } = { Glass = 0.6 }
-local SHINE: { [string]: boolean } = { Body = true, Frame = true, Trim = true, Pipe = true }
+local SHINE: { [string]: boolean } = { Body = true, Frame = true, Trim = true, Pipe = true, Gold = true, Brick = true, Panel = true }
 local POOL_TRANSPARENCY = 0.2
 
 local SOLID: Props = { CanTouch = false }
@@ -705,7 +714,7 @@ local function crystalize(ctx: Ctx, level: number, theme: Theme)
 	for _, d in ctx.model:GetDescendants() do
 		if d:IsA("BasePart") then
 			local role = d:GetAttribute("Kit")
-			if role == "Neon" and level >= 2 then
+			if (role == "Neon" or role == "Plasma" or role == "Cyan") and level >= 2 then
 				d.Color = theme.Main
 			elseif role == "Trim" and level >= 2 then
 				d.Color = if level >= 4 then theme.Deep else theme.Main
@@ -717,7 +726,7 @@ local function crystalize(ctx: Ctx, level: number, theme: Theme)
 			elseif role == "Pipe" and level >= 3 then
 				d.Color = theme.Main:Lerp(theme.Deep, 0.4)
 				d.Reflectance = 0.1
-			elseif role == "Body" and level >= 4 then
+			elseif (role == "Body" or role == "Brick" or role == "Gold" or role == "Felt" or role == "Accent") and level >= 4 then
 				d.Color = theme.Main:Lerp(theme.Pale, 0.35)
 				d.Reflectance = 0.1
 			elseif role == "Dark" and level >= 4 then
@@ -750,9 +759,67 @@ end
 
 ---------------------------------------------------------------- machines
 
-local function newModel(id: string): Ctx
+-- Footprints (cells) of the roster machines that MachineData does not have yet (proposals).
+KitMachines.Sizes = {
+	IronBox = { 2, 2 },
+	Sorter = { 1, 1 },
+	Polisher = { 2, 2 },
+	BrickFurnace = { 2, 2 },
+	PlasmaFurnace = { 2, 2 },
+	AlloyFurnace = { 3, 2 },
+	CrystalExtractor = { 2, 2 },
+	RestorationTable = { 2, 2 },
+	SellBox = { 2, 2 },
+	ExpressConveyor = { 1, 1 },
+	Splitter = { 1, 1 },
+	RobotArm = { 1, 1 },
+	SolarPanel = { 2, 2 },
+	WindTurbine = { 2, 2 },
+	FusionReactor = { 3, 3 },
+	PowerPole = { 1, 1 },
+	BeltLift = { 1, 3 },
+	Slide = { 1, 3 },
+} :: { [string]: { number } }
+
+-- Machines without a front output (they sell, route sideways, hand over or make power).
+local NO_OUTPUT: { [string]: boolean } = {
+	SellBox = true,
+	Sorter = true,
+	Splitter = true,
+	RobotArm = true,
+	SolarPanel = true,
+	WindTurbine = true,
+	FusionReactor = true,
+	PowerPole = true,
+	ExpressConveyor = true,
+}
+
+local function sizeOf(id: string): { number }
 	local machine = MachineData.ById[id]
-	local w, d = machine.Size[1] * GameConfig.CellSize, machine.Size[2] * GameConfig.CellSize
+	if machine then
+		return machine.Size
+	end
+	return KitMachines.Sizes[id] or { 2, 2 }
+end
+
+-- The output point (same rule as Grid.outputLocal for the machines MachineData does not have yet).
+local function outputFor(id: string): Vector3?
+	if MachineData.ById[id] then
+		return Grid.outputLocal(id)
+	end
+	if NO_OUTPUT[id] then
+		return nil
+	end
+	local size = sizeOf(id)
+	local cell = GameConfig.CellSize
+	local column = math.floor(size[1] / 2)
+	return Vector3.new(-size[1] * cell / 2 + (column + 0.5) * cell, 1.8, -(size[2] * cell / 2) - 0.5)
+end
+KitMachines.outputFor = outputFor
+
+local function newModel(id: string): Ctx
+	local size = sizeOf(id)
+	local w, d = size[1] * GameConfig.CellSize, size[2] * GameConfig.CellSize
 	local model = Instance.new("Model")
 	model.Name = id
 	model:SetAttribute("MachineId", id)
@@ -1295,10 +1362,10 @@ end
 	`caps` = { start = CapOpts?, finish = CapOpts? } adds end caps (back /
 	front end of the cell).
 ]]
-function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?): Model
+function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?, express: boolean?): Model
 	local model = Instance.new("Model")
-	model.Name = "Conveyor"
-	model:SetAttribute("MachineId", "Conveyor")
+	model.Name = if express then "ExpressConveyor" else "Conveyor"
+	model:SetAttribute("MachineId", model.Name)
 	local base = block(
 		model,
 		CFrame.new(0, 0.15, 0),
@@ -1336,6 +1403,35 @@ function KitMachines.conveyor(caps: { start: CapOpts?, finish: CapOpts? }?): Mod
 			TINY,
 			"Arrow"
 		)
+	end
+	if express then
+		-- the Express Conveyor: cyan rail tops and glow, a second chevron (twice as fast)
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") and part.Name == "RailCap" then
+				part.Color = P.Cyan:Lerp(BLACK, 0.15)
+				part:SetAttribute("Kit", "Accent")
+			elseif part:IsA("BasePart") and part.Name == "RailGlow" then
+				style(part, "Cyan", TINY)
+			end
+		end
+		for _, side in { -1, 1 } do
+			wedge(
+				model,
+				CFrame.new(side * w / 4, BELT_TOP + 0.02, 1.0) * CFrame.Angles(0, 0, -side * math.pi / 2),
+				Vector3.new(0.04, w / 2, h),
+				"Cyan",
+				TINY,
+				"Arrow"
+			)
+			wedge(
+				model,
+				CFrame.new(side * w / 4, BELT_TOP + 0.02, -1.0) * CFrame.Angles(0, 0, -side * math.pi / 2),
+				Vector3.new(0.04, w / 2, h),
+				"Cyan",
+				TINY,
+				"Arrow"
+			)
+		end
 	end
 	if caps then
 		if caps.start then
@@ -1397,7 +1493,809 @@ function KitMachines.slope(up: boolean, length: number?, rise: number?): Model
 	-- drums at both ends, the control box where items get on
 	beltCap(model, CFrame.new(a), { arrow = if up then "up" else "down" })
 	beltCap(model, CFrame.new(b) * CFrame.Angles(0, math.pi, 0), nil)
+	model:SetAttribute("MachineId", model.Name)
+	attach(base, "Prompt", CFrame.new(0, 1.5, startZ))
 	return model
+end
+
+---------------------------------------------------------------- the new machines (roster 2026-10-17)
+
+-- Arched slot + chute from the front face to the machine's output.
+local function outputChute(m: Instance, id: string, x: number, bodyY: number, front: number)
+	local outPos = outputFor(id)
+	if not outPos then
+		return
+	end
+	door(m, x, bodyY + 0.1, front, 1.2, 0.5, "Dark")
+	chute(m, Vector3.new(x, bodyY + 0.4, front - 0.5), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.1)
+end
+
+-- Item machine attachments: Output (when it has one), Prompt, a generous Intake box.
+local function itemPoints(ctx: Ctx, id: string, intake: Vector3, intakeSize: Vector3)
+	local outPos = outputFor(id)
+	if outPos then
+		attach(ctx.base, "Output", CFrame.new(outPos))
+	end
+	local size = sizeOf(id)
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -(size[2] * GameConfig.CellSize / 2) + 0.8))
+	local a = attach(ctx.base, "Intake", CFrame.new(intake))
+	a:SetAttribute("IntakeSize", intakeSize)
+end
+
+-- Sockets on the top corners of a soft box and on the floor corners of the footprint.
+local function boxSockets(ctx: Ctx, hx: number, hz: number, w: number, d: number, top: number, size: number)
+	local s = sizeOf(ctx.model.Name)
+	local fw, fd = s[1] * GameConfig.CellSize / 2 - 0.45, s[2] * GameConfig.CellSize / 2 - 0.45
+	socket(ctx, Vector3.new(hx - w / 2 + 0.7, top - 0.3, hz - d / 2 + 0.7), out(-1, -1), size * 1.2)
+	socket(ctx, Vector3.new(hx + w / 2 - 0.7, top - 0.3, hz + d / 2 - 0.7), out(1, 1), size * 1.1)
+	socket(ctx, Vector3.new(-fw, FLOOR, -fd), out(-1, -1, 0.8), size)
+	socket(ctx, Vector3.new(fw, FLOOR, fd), out(1, 1, 0.8), size)
+	socket(ctx, Vector3.new(hx + w / 2 - 0.7, top - 0.3, hz - d / 2 + 0.7), out(1, -1), size)
+	socket(ctx, Vector3.new(-fw, FLOOR, fd), out(-1, 1, 0.8), size * 0.9)
+	socket(ctx, Vector3.new(hx - w / 2 + 0.7, top - 0.3, hz + d / 2 - 0.7), out(-1, 1), size * 0.9)
+	socket(ctx, Vector3.new(fw, FLOOR, -fd), out(1, -1, 0.8), size * 0.9)
+end
+
+-- A small glowing gem (diamond body, pointed top and bottom), `role` coloured, with a glowing core.
+local function gem(m: Instance, center: Vector3, h: number, color: Color3)
+	local w = h * 0.45
+	local body = block(m, CFrame.new(center) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w, h * 0.4, w), "Gem", TINY, "Gem")
+	body.Color = color
+	for _, sy in { 1, -1 } do
+		local tipH = h * 0.3
+		local at = CFrame.new(center + Vector3.new(0, sy * (h * 0.2 + tipH / 2), 0)) * CFrame.Angles(0, math.pi / 4, 0)
+		if sy < 0 then
+			at = at * CFrame.Angles(math.pi, 0, 0)
+		end
+		local a = wedge(m, at * CFrame.new(0, 0, -w / 4), Vector3.new(w, tipH, w / 2), "Gem", TINY, "Gem")
+		local b = wedge(m, at * CFrame.new(0, 0, w / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, tipH, w / 2), "Gem", TINY, "Gem")
+		a.Color, b.Color = color:Lerp(WHITE, 0.35), color:Lerp(BLACK, 0.1)
+	end
+	local core =
+		block(m, CFrame.new(center) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.5, h * 0.42, w * 0.5), "Gem", TINY, "GemCore")
+	core.Color = color:Lerp(WHITE, 0.4)
+	core.Material = NEON
+end
+
+-- A star icon (two crossed squares) facing -Z at `center`.
+local function star(m: Instance, center: Vector3, s: number, role: string)
+	block(m, CFrame.new(center), Vector3.new(s, s, 0.06), role, TINY)
+	block(m, CFrame.new(center) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(s, s, 0.06), role, TINY)
+end
+
+--[[
+	Iron Box (2x2): a sturdy soft box with a slate iron band and rivets, a
+	round screen showing the revealed ore (a glowing gem), keep / send lamps,
+	a bowl intake on the lid, the output slot and chute.
+]]
+local function ironBox(): Ctx
+	local ctx = newModel("IronBox")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, 0.15, 5.6, 3.6, 5.2, 0.9
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.6, d + 0.6, 0.6, 0.7)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	rivets(body, Enum.NormalId.Right)
+	local bandY = bodyY + 0.75
+	block(m, CFrame.new(hx, bandY, hz + d / 2 + 0.05), Vector3.new(w - 2 * r, 0.55, 0.12), "Frame", TINY)
+	for _, s in { -1, 1 } do
+		block(m, CFrame.new(hx + s * (w / 2 + 0.05), bandY, hz), Vector3.new(0.12, 0.55, d - 2 * r), "Frame", TINY)
+	end
+	local top = bodyY + h
+	pillSlab(m, Vector3.new(hx, top - 0.15, hz), w - 1.6, 0.45, d - 1.6, 0.6, "Frame")
+	local lidTop = top + 0.3
+	local front = hz - d / 2
+	-- round screen with the revealed ore
+	local sc = Vector3.new(hx - 0.9, bodyY + 1.75, front - 0.05)
+	cyl(m, sc + Vector3.new(0, 0, 0.05), ZA, 0.26, 1.75, "Trim", TINY)
+	cyl(m, sc + Vector3.new(0, 0, -0.1), ZA, 0.06, 1.45, "Screen", TINY, "Screen")
+	gem(m, sc + Vector3.new(0, 0, -0.35), 0.9, rgb(80, 220, 200))
+	-- keep (green) and send (amber) lamps over the slot
+	local keep = ball(m, Vector3.new(1.05, bodyY + 2.2, front - 0.1), 0.42, "Lamp", TINY, "KeepLamp")
+	keep.Color, keep.Material = P.Green, NEON
+	local send = ball(m, Vector3.new(1.75, bodyY + 2.2, front - 0.1), 0.42, "Lamp", TINY, "SendLamp")
+	send.Color, send.Material = P.Amber, NEON
+	outputChute(m, "IronBox", 1.4, bodyY, front)
+	local rim = bowl(m, Vector3.new(hx, lidTop, hz + 0.4), 2.4, 0.4)
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.0)
+	socket(ctx, Vector3.new(hx, rim + 0.02, hz + 0.4 + 1.6), UP, 0.9, true)
+	itemPoints(ctx, "IronBox", Vector3.new(0, 4.6, 0.4), Vector3.new(6, 6.6, 6))
+	return ctx
+end
+
+--[[
+	Sorter (1x1): a glowing pill base with a belt on it running through a
+	cute rounded gate (cream posts, a round cream top with orange caps, a
+	glowing scan bar under it and rarity lights on top), an orange flipper,
+	exits to the left and right with glowing arrows.
+]]
+local function sorter(): Ctx
+	local ctx = newModel("Sorter")
+	local m = ctx.model
+	pillSlab(m, Vector3.new(0, FLOOR, 0), 3.7, 0.3, 3.7, 0.7, "Frame")
+	glowStrips(m, Vector3.new(0, FLOOR + 0.15, 0), 3.7, 3.7, 0.7, 0.1)
+	local belt = block(m, CFrame.new(0, BELT_TOP - 0.12, 0), Vector3.new(BELT_W, 0.24, 3.6), "Rubber", SOLID, "Belt")
+	beltPaint(belt, 3.6, false)
+	local gz, gateY = 0.7, 3.0
+	for _, side in { -1, 1 } do
+		pillSlab(m, Vector3.new(side * 1.6, FLOOR, gz), 0.75, gateY - FLOOR, 1.1, 0.3, "Body")
+		cyl(m, Vector3.new(side * 1.6, FLOOR + 0.3, gz), UP, 0.3, 1.2, "Trim", TINY)
+		chute(m, Vector3.new(side * 1.3, BELT_TOP + 0.05, -1.0), Vector3.new(side * 2.5, BELT_TOP - 0.25, -1.0), 1.1)
+		wedge(
+			m,
+			CFrame.new(side * 0.85, BELT_TOP + 0.02, -1.0) * CFrame.Angles(0, -side * math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
+			Vector3.new(0.04, 0.45, 0.5),
+			"Neon",
+			TINY,
+			"Arrow"
+		)
+	end
+	cyl(m, Vector3.new(0, gateY, gz), XA, 3.4, 1.15, "Body", SOLID, "Gate")
+	for _, side in { -1, 1 } do
+		cyl(m, Vector3.new(side * 1.75, gateY, gz), XA, 0.3, 1.25, "Trim", TINY)
+	end
+	block(m, CFrame.new(0, gateY - 0.62, gz), Vector3.new(2.6, 0.08, 0.3), "Plasma", TINY, "ScanBar")
+	local rarity = { rgb(225, 225, 225), rgb(110, 220, 110), rgb(90, 160, 255), rgb(190, 110, 255), rgb(255, 196, 60) }
+	for i, c in rarity do
+		local dot = ball(m, Vector3.new(-1.0 + (i - 1) * 0.5, gateY + 0.6, gz), 0.3, "Lamp", TINY, "RarityLamp")
+		dot.Color, dot.Material = c, NEON
+	end
+	cyl(m, Vector3.new(0, BELT_TOP + 0.3, -1.0), UP, 0.6, 0.45, "Frame", TINY)
+	block(
+		m,
+		CFrame.new(0, BELT_TOP + 0.3, -1.0) * CFrame.Angles(0, math.rad(35), 0) * CFrame.new(0, 0, -0.6),
+		Vector3.new(0.22, 0.45, 1.2),
+		"Trim",
+		TINY,
+		"Flipper"
+	)
+
+	for _, sx in { -1, 1 } do
+		socket(ctx, Vector3.new(sx * 1.6, FLOOR + 0.3, 1.65), out(sx, 1, 0.7), 0.7)
+	end
+	socket(ctx, Vector3.new(0, gateY + 0.5, gz + 0.45), out(0, 1, 0.3), 0.7, true)
+	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
+	local a = attach(ctx.base, "Intake", CFrame.new(0, 1.2, 1.2))
+	a:SetAttribute("IntakeSize", Vector3.new(3, 1.6, 1.4))
+	return ctx
+end
+
+--[[
+	Polisher (2x2): a soft body with a turntable on top (slate, orange rim,
+	pink felt), an arm from the back holding the spinning pink polishing
+	wheel over it, sparkles, a star icon over the output slot, a side screen.
+]]
+local function polisher(): Ctx
+	local ctx = newModel("Polisher")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, 0.1, 5.6, 3.0, 5.2, 0.9
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.6, d + 0.6, 0.6, 0.7)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	local top = bodyY + h
+	local front = hz - d / 2
+	local tz = hz - 0.5
+	cyl(m, Vector3.new(hx, top + 0.1, tz), UP, 0.5, 3.2, "Frame", SOLID, "Turntable")
+	cyl(m, Vector3.new(hx, top + 0.3, tz), UP, 0.2, 3.4, "Trim", SOLID)
+	cyl(m, Vector3.new(hx, top + 0.41, tz), UP, 0.04, 2.8, "Felt", TINY)
+	local glint = Instance.new("ParticleEmitter")
+	glint.Name = "Sparkle"
+	glint.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	glint.Rate = 5
+	glint.Parent = m:FindFirstChild("Turntable") :: Instance
+	-- the arm: a slate post at the back, a bend forward, the motor and the felt wheel
+	local px, pz = hx, hz + d / 2 - 0.9
+	local pd, pr = 0.7, 0.6
+	local armY = top + 3.0
+	pipe(m, Vector3.new(px, top - 0.2, pz), Vector3.new(px, armY - pr, pz), pd, { b = false })
+	local p1 = bend(m, Vector3.new(px, armY - pr, pz), UP, -ZA, pd, pr)
+	pipe(m, p1, Vector3.new(px, armY, tz + 0.2), pd, { a = false })
+	cyl(m, Vector3.new(hx, armY - 0.2, tz), UP, 1.0, 1.1, "Body", PROP, "Motor")
+	cyl(m, Vector3.new(hx, armY - 0.75, tz), UP, 0.14, 1.2, "Trim", TINY)
+	cyl(m, Vector3.new(hx, armY - 1.0, tz), UP, 0.4, 2.3, "Felt", PROP, "Wheel")
+	star(m, Vector3.new(1.4, bodyY + 1.95, front - 0.08), 0.55, "Gold")
+	outputChute(m, "Polisher", 1.4, bodyY, front)
+	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, bodyY, hz + 0.6) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.5, P.Felt)
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.0)
+	socket(ctx, Vector3.new(hx, armY + 0.35, pz - 0.4), out(0, -1, 0.3), 0.9, true)
+	itemPoints(ctx, "Polisher", Vector3.new(0, 4.4, -0.4), Vector3.new(6, 6, 6))
+	return ctx
+end
+
+--[[
+	Brick Furnace (2x2, the normal furnace between the Clay and the Blast
+	Furnace): a soft body under a big terracotta dome with an orange band, a
+	little fat chimney on the dome, the arched glowing door, a bowl intake on
+	the side shelf, a chute to the output.
+]]
+local function brickFurnace(): Ctx
+	local ctx = newModel("BrickFurnace")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, -0.1, 5.8, 3.3, 5.4, 0.9
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.6, d + 0.6, 0.6, 0.7)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	local top = bodyY + h
+	local domeD = 5.0
+	local domeC = Vector3.new(hx, top - 0.8, hz + 0.1)
+	ball(m, domeC, domeD, "Brick", SOLID, "Dome")
+	cyl(m, Vector3.new(hx, top + 0.05, hz + 0.1), UP, 0.35, domeD + 0.1, "Trim", SOLID)
+	local domeTop = domeC.Y + domeD / 2
+	chimney(m, Vector3.new(hx + 0.6, domeTop - 0.5, hz + 0.6), 1.1, 2.3, 2)
+	local front = hz - d / 2
+	local doorX = 0.3
+	door(m, doorX, bodyY + 0.15, front, 2.1, 0.9, "Glow", "Glow")
+	local outPos = outputFor("BrickFurnace") :: Vector3
+	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.3)
+	-- side shelf with the bowl intake on the left
+	pillSlab(m, Vector3.new(hx - w / 2 - 0.2, bodyY + 1.6, hz + 0.6), 1.4, 0.3, 2.4, 0.4, "Frame")
+	local rim = bowl(m, Vector3.new(hx - w / 2 - 0.2, bodyY + 1.9, hz + 0.6), 1.6, 0.3)
+	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, bodyY, hz + 0.8) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.5)
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.0)
+	socket(ctx, Vector3.new(hx - w / 2 - 0.2, rim + 0.02, hz + 0.6 + 0.9), out(-1, 0.5, 0.6), 0.8)
+	socket(ctx, Vector3.new(hx + 0.6, domeTop + 2.0, hz + 0.6), UP, 1.0, true)
+	attach(ctx.base, "Output", CFrame.new(outPos))
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.6))
+	local intake = attach(ctx.base, "Intake", CFrame.new(0, 4.5, 1.2))
+	intake:SetAttribute("IntakeSize", Vector3.new(7, 9, 6))
+	return ctx
+end
+
+--[[
+	Plasma Furnace (2x2, end game): a soft body with a purple glowing arched
+	door, a glass sphere on the lid with a glowing plasma ball and two orbit
+	rings, two tesla coils with cyan glowing tops, purple glowing strips.
+]]
+local function plasmaFurnace(): Ctx
+	local ctx = newModel("PlasmaFurnace")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, -0.1, 5.8, 3.6, 5.4, 1.0
+	pillSlab(m, Vector3.new(hx, FLOOR, hz), w + 0.6, 0.6, d + 0.6, 0.7, "Frame")
+	glowStrips(m, Vector3.new(hx, FLOOR + 0.3, hz), w + 0.6, d + 0.6, 0.7, 0.16, "Plasma")
+	local bodyY = FLOOR + 0.6
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Right)
+	local top = bodyY + h
+	pillSlab(m, Vector3.new(hx, top - 0.15, hz), w - 1.6, 0.45, d - 1.6, 0.6, "Frame")
+	local lidTop = top + 0.3
+	local front = hz - d / 2
+	-- purple door
+	local doorX = 0.3
+	arch(m, Vector3.new(doorX, bodyY + 0.15, front - 0.2), 2.8, 1.1, 0.4, "Trim", SOLID)
+	arch(m, Vector3.new(doorX, bodyY + 0.15, front - 0.42), 2.3, 1.1, 0.06, "Dark", TINY)
+	local glow = arch(m, Vector3.new(doorX, bodyY + 0.15, front - 0.46), 2.1, 1.1, 0.06, "Plasma", TINY, "Glow")
+	local core = arch(m, Vector3.new(doorX, bodyY + 0.4, front - 0.5), 1.15, 0.8, 0.04, "Plasma", TINY, "GlowCore")
+	core.Color = P.Plasma:Lerp(WHITE, 0.45)
+	light(glow, P.Plasma, 8, 0.8)
+	local outPos = outputFor("PlasmaFurnace") :: Vector3
+	chute(m, Vector3.new(doorX, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.3)
+	-- glass sphere with the plasma ball
+	local sx, sz = hx - 0.6, hz + 0.2
+	cyl(m, Vector3.new(sx, lidTop + 0.25, sz), UP, 0.5, 2.6, "Frame", SOLID)
+	cyl(m, Vector3.new(sx, lidTop + 0.45, sz), UP, 0.14, 2.7, "Plasma", TINY)
+	local sc = Vector3.new(sx, lidTop + 0.5 + 1.25, sz)
+	ball(m, sc, 2.5, "Glass", TINY, "Chamber")
+	local plasma = ball(m, sc, 1.3, "Plasma", TINY, "PlasmaBall")
+	light(plasma, P.Plasma, 10, 1.0)
+	for _, a in { 0.45, -0.45 } do
+		local ring = Geo.make("Part", {
+			Shape = Enum.PartType.Cylinder,
+			CFrame = CFrame.new(sc) * CFrame.Angles(0, 0, math.pi / 2) * CFrame.Angles(a, 0, 0),
+			Size = Vector3.new(0.08, 2.0, 2.0),
+		}, m)
+		style(ring, "Cyan", TINY, "Orbit")
+	end
+	-- tesla coils at the back corners of the lid
+	for _, cx in { hx + 1.7, hx - 2.2 } do
+		local cz = hz + 1.6
+		cyl(m, Vector3.new(cx, lidTop + 0.2, cz), UP, 0.4, 0.9, "Frame", SOLID)
+		cyl(m, Vector3.new(cx, lidTop + 1.2, cz), UP, 1.8, 0.35, "Pipe", PROP)
+		for i = 1, 3 do
+			cyl(m, Vector3.new(cx, lidTop + 0.5 + i * 0.45, cz), UP, 0.12, 0.7 - i * 0.08, "Trim", TINY)
+		end
+		ball(m, Vector3.new(cx, lidTop + 2.25, cz), 0.55, "Cyan", TINY, "CoilTop")
+	end
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.0)
+	socket(ctx, Vector3.new(sx + 1.0, lidTop + 0.5, sz - 1.0), out(1, -1, 0.6), 0.9, true)
+	attach(ctx.base, "Output", CFrame.new(outPos))
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.6))
+	local intake = attach(ctx.base, "Intake", CFrame.new(0, 4.5, 1.2))
+	intake:SetAttribute("IntakeSize", Vector3.new(7, 9, 6))
+	return ctx
+end
+
+--[[
+	Alloy Furnace (3x2): a wide soft body with two bowl hoppers on the lid
+	(an orange and a cyan rim, two different ingots) feeding a glass mixing
+	column with molten metal and a cyan coil, a wide arched glowing door, a
+	fat chimney, screens on both sides.
+]]
+local function alloyFurnace(): Ctx
+	local ctx = newModel("AlloyFurnace")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, 0, 10.0, 4.0, 5.8, 1.0
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.8, d + 0.8, 0.6, 0.8)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	rivets(body, Enum.NormalId.Right)
+	local top = bodyY + h
+	pillSlab(m, Vector3.new(hx, top - 0.15, hz), w - 1.8, 0.45, d - 1.6, 0.6, "Frame")
+	local lidTop = top + 0.3
+	local front = hz - d / 2
+	door(m, 0, bodyY + 0.15, front, 2.8, 1.0, "Glow", "Glow")
+	local outPos = outputFor("AlloyFurnace") :: Vector3
+	chute(m, Vector3.new(0, bodyY + 0.45, front - 0.55), Vector3.new(outPos.X, outPos.Y - 0.3, outPos.Z + 0.3), 1.4)
+	-- two hoppers, the mixing column between them
+	local rims = {}
+	for i, bx in { -3.0, 3.0 } do
+		rims[i] = bowl(m, Vector3.new(bx, lidTop, hz - 0.4), 2.4, 0.5)
+	end
+	local colY0, colY1 = lidTop + 0.3, lidTop + 2.6
+	cyl(m, Vector3.new(0, lidTop + 0.15, hz - 0.4), UP, 0.3, 1.6, "Frame", SOLID)
+	pipe(m, Vector3.new(0, colY0, hz - 0.4), Vector3.new(0, colY1, hz - 0.4), 1.1, { fluid = "Molten" })
+	for i = 1, 4 do
+		local ring = Geo.make("Part", {
+			Shape = Enum.PartType.Cylinder,
+			CFrame = along(Vector3.new(0, colY0 + 0.3 + i * 0.4, hz - 0.4), UP) * CFrame.Angles(0, 0, math.rad(22)),
+			Size = Vector3.new(0.08, 0.95, 0.95),
+		}, m)
+		style(ring, "Cyan", TINY, "Coil")
+	end
+	cyl(m, Vector3.new(0, colY1 + 0.2, hz - 0.4), UP, 0.4, 1.5, "Frame", SOLID)
+	for _, side in { -1, 1 } do
+		local from = Vector3.new(side * 1.85, rims[1] - 0.45, hz - 0.4)
+		pipe(m, from, Vector3.new(side * 0.55, colY1 - 0.4, hz - 0.4), 0.45, { a = false })
+	end
+	-- the right hopper's rim in cyan: the second metal
+	for _, part in m:GetDescendants() do
+		if part:IsA("BasePart") and part:GetAttribute("Kit") == "Trim" then
+			local flat = Vector3.new(part.CFrame.Position.X - 3.0, 0, part.CFrame.Position.Z - (hz - 0.4))
+			if flat.Magnitude < 1.6 and part.CFrame.Position.Y > lidTop + 0.3 then
+				part.Color = P.Cyan:Lerp(BLACK, 0.1)
+				part:SetAttribute("Kit", "Accent")
+			end
+		end
+	end
+	chimney(m, Vector3.new(3.3, lidTop, hz + 1.7), 1.5, 3.4, 3)
+	screenPanel(m, CFrame.new(hx - w / 2 - 0.25, bodyY, hz) * CFrame.Angles(0, -math.pi / 2, 0), 1.6, 1.6)
+	screenPanel(m, CFrame.new(hx + w / 2 + 0.25, bodyY, hz) * CFrame.Angles(0, math.pi / 2, 0), 1.6, 1.6, P.Cyan)
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.2)
+	socket(ctx, Vector3.new(0, colY1 + 0.42, hz - 0.4), UP, 1.0, true)
+	attach(ctx.base, "Output", CFrame.new(outPos))
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.6))
+	local intake = attach(ctx.base, "Intake", CFrame.new(0, 5, 0))
+	intake:SetAttribute("IntakeSize", Vector3.new(10, 9, 6))
+	return ctx
+end
+
+--[[
+	Crystal Extractor (2x2): a soft body with a glass chamber on the lid in
+	which a glowing gem floats between two laser emitters, a small bowl
+	intake at the back, a shard tray and chute at the front, a side screen.
+]]
+local function crystalExtractor(): Ctx
+	local ctx = newModel("CrystalExtractor")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, 0.1, 5.6, 3.2, 5.2, 0.9
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.6, d + 0.6, 0.6, 0.7)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	local top = bodyY + h
+	pillSlab(m, Vector3.new(hx, top - 0.15, hz), w - 1.6, 0.45, d - 1.6, 0.6, "Frame")
+	local lidTop = top + 0.3
+	local front = hz - d / 2
+	local cx, cz = hx - 0.3, hz - 0.3
+	cyl(m, Vector3.new(cx, lidTop + 0.25, cz), UP, 0.5, 3.0, "Frame", SOLID)
+	cyl(m, Vector3.new(cx, lidTop + 0.45, cz), UP, 0.14, 3.1, "Neon", TINY)
+	local chamberH = 2.6
+	cyl(m, Vector3.new(cx, lidTop + 0.5 + chamberH / 2, cz), UP, chamberH, 2.5, "Glass", TINY, "Chamber")
+	cyl(m, Vector3.new(cx, lidTop + 0.5 + chamberH + 0.2, cz), UP, 0.4, 2.9, "Frame", SOLID)
+	cyl(m, Vector3.new(cx, lidTop + 0.5 + chamberH + 0.42, cz), UP, 0.06, 1.2, "Trim", TINY)
+	local gc = Vector3.new(cx, lidTop + 0.5 + chamberH / 2, cz)
+	gem(m, gc, 1.5, rgb(90, 214, 255))
+	local gemLight = m:FindFirstChild("GemCore")
+	if gemLight then
+		light(gemLight, rgb(90, 214, 255), 8, 0.8)
+	end
+	for _, side in { -1, 1 } do
+		local e = gc + Vector3.new(side * 1.05, -0.7, 0)
+		cyl(m, e, UP, 0.3, 0.35, "Frame", TINY)
+		rod(m, e + Vector3.new(0, 0.15, 0), gc + Vector3.new(side * 0.25, -0.15, 0), 0.06, "Cyan", TINY, "Laser")
+	end
+	local rim = bowl(m, Vector3.new(hx + 1.7, lidTop, hz + 1.4), 1.6, 0.3)
+	-- shard tray at the front: a slate tray with a few small shards
+	outputChute(m, "CrystalExtractor", 1.4, bodyY, front)
+	pillSlab(m, Vector3.new(-1.3, bodyY + 0.6, front - 0.55), 1.8, 0.3, 1.0, 0.3, "Frame")
+	for i, x in { -1.8, -1.3, -0.85 } do
+		local sh = block(
+			m,
+			CFrame.new(x, bodyY + 1.05, front - 0.55) * CFrame.Angles(0, 0.6 * i, 0.3 - 0.25 * i),
+			Vector3.new(0.22, 0.5, 0.22),
+			"Gem",
+			TINY,
+			"Shard"
+		)
+		sh.Color = rgb(90, 214, 255):Lerp(WHITE, 0.2)
+	end
+	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, bodyY, hz - 0.6) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.5, P.Water)
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.0)
+	socket(ctx, Vector3.new(hx + 1.7, rim + 0.02, hz + 1.4 + 0.6), out(0.6, 1, 0.5), 0.7)
+	socket(ctx, Vector3.new(cx, lidTop + 0.5 + chamberH + 0.48, cz), UP, 1.0, true)
+	itemPoints(ctx, "CrystalExtractor", Vector3.new(0, 4.6, 0.6), Vector3.new(6, 6.6, 6))
+	return ctx
+end
+
+--[[
+	Restoration Table (2x2): a soft cream table with a slate top, a glass bell
+	jar on a turntable with a golden artifact inside, a magnifier lamp arm with
+	a glowing bulb, brushes, a screen, a small output tray.
+]]
+local function restorationTable(): Ctx
+	local ctx = newModel("RestorationTable")
+	local m = ctx.model
+	local hx, hz, w, h, d = 0, 0.2, 6.2, 2.6, 5.0
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.5, d + 0.5, 0.5, 0.6)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, 0.6, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	rivets(body, Enum.NormalId.Right)
+	local top = bodyY + h
+	pillSlab(m, Vector3.new(hx, top - 0.05, hz), w + 0.5, 0.35, d + 0.4, 0.5, "Frame", SOLID, "Bench")
+	local deck = top + 0.3
+	local front = hz - d / 2
+	-- turntable, artifact, bell jar
+	local jx, jz = hx - 0.6, hz - 0.2
+	cyl(m, Vector3.new(jx, deck + 0.2, jz), UP, 0.4, 2.2, "Frame", SOLID, "Turntable")
+	cyl(m, Vector3.new(jx, deck + 0.42, jz), UP, 0.06, 2.3, "Trim", TINY)
+	local vy = deck + 0.45
+	for _, seg in { { 0.35, 0.55 }, { 0.6, 0.9 }, { 0.3, 0.5 }, { 0.15, 0.65 } } do
+		local hgt, dia = seg[1], seg[2]
+		cyl(m, Vector3.new(jx, vy + hgt / 2, jz), UP, hgt, dia, "Gold", TINY, "Artifact")
+		vy += hgt
+	end
+	cyl(m, Vector3.new(jx, deck + 0.45 + 0.9, jz), UP, 1.8, 1.9, "Glass", TINY, "BellJar")
+	ball(m, Vector3.new(jx, deck + 0.45 + 1.8, jz), 1.9, "Glass", TINY, "BellJar")
+	ball(m, Vector3.new(jx, deck + 0.45 + 2.82, jz), 0.36, "Trim", TINY)
+	-- magnifier lamp arm
+	local ax, az = hx + 2.2, hz + 1.6
+	cyl(m, Vector3.new(ax, deck + 0.15, az), UP, 0.3, 0.9, "Frame", TINY)
+	local j1 = Vector3.new(ax, deck + 2.3, az)
+	rod(m, Vector3.new(ax, deck + 0.3, az), j1, 0.2, "Trim", TINY)
+	ball(m, j1, 0.34, "Frame", TINY)
+	local head = Vector3.new(ax - 1.2, deck + 2.0, az - 1.3)
+	rod(m, j1, head, 0.18, "Trim", TINY)
+	local lensFrame = CFrame.new(head) * CFrame.Angles(math.rad(-50), 0, 0)
+	local ringPart = Geo.make(
+		"Part",
+		{ Shape = Enum.PartType.Cylinder, CFrame = lensFrame * CFrame.Angles(0, 0, math.pi / 2), Size = Vector3.new(0.2, 1.3, 1.3) },
+		m
+	)
+	style(ringPart, "Trim", TINY, "Magnifier")
+	local lens = Geo.make(
+		"Part",
+		{ Shape = Enum.PartType.Cylinder, CFrame = lensFrame * CFrame.Angles(0, 0, math.pi / 2), Size = Vector3.new(0.24, 1.05, 1.05) },
+		m
+	)
+	style(lens, "Glass", TINY, "Lens")
+	local bulb = ball(m, head + Vector3.new(0.5, 0.45, 0.2), 0.3, "Hot", TINY, "LampBulb")
+	light(bulb, P.Hot, 6, 0.6)
+	-- brushes and a little hammer on the left
+	block(m, CFrame.new(hx - 2.4, deck + 0.12, hz + 0.6), Vector3.new(0.9, 0.24, 0.3), "Trim", TINY)
+	block(m, CFrame.new(hx - 2.4, deck + 0.3, hz + 0.6), Vector3.new(0.7, 0.18, 0.24), "Body", TINY)
+	block(m, CFrame.new(hx - 2.3, deck + 0.1, hz - 0.5) * CFrame.Angles(0, 0.4, 0), Vector3.new(0.18, 0.18, 1.0), "Trim", TINY)
+	block(m, CFrame.new(hx - 2.12, deck + 0.18, hz - 0.95) * CFrame.Angles(0, 0.4, 0), Vector3.new(0.6, 0.32, 0.32), "Frame", TINY)
+	screenPanel(m, CFrame.new(hx + 0.4, deck, hz + 2.0), 1.6, 1.6, P.Gold)
+	local outPos = outputFor("RestorationTable") :: Vector3
+	outputChute(m, "RestorationTable", 1.5, bodyY, front)
+
+	boxSockets(ctx, hx, hz, w, d, top + 0.3, 0.9)
+	socket(ctx, Vector3.new(hx + 0.4, deck + 1.65, hz + 2.05), UP, 0.8, true)
+	attach(ctx.base, "Output", CFrame.new(outPos))
+	attach(ctx.base, "Prompt", CFrame.new(0, deck + 0.6, front - 0.6))
+	local intake = attach(ctx.base, "Intake", CFrame.new(jx, deck + 1, jz))
+	intake:SetAttribute("IntakeSize", Vector3.new(4, 3, 4))
+	return ctx
+end
+
+--[[
+	Sell Box (2x2): a soft box with a big gold coin and a glowing star on the
+	front, a gold-rimmed bowl intake, a coin sign on a post, a little stack
+	of coins. No output: what goes in is sold to Tobin.
+]]
+local function sellBox(): Ctx
+	local ctx = newModel("SellBox")
+	local m = ctx.model
+	local hx, hz, w, h, d, r = 0, 0.2, 5.4, 3.6, 5.0, 1.0
+	local bodyY = plinth(m, Vector3.new(hx, FLOOR, hz), w + 0.6, d + 0.6, 0.6, 0.7)
+	local body = softBox(m, Vector3.new(hx, bodyY, hz), w, h, d, r, "Body", "Body")
+	rivets(body, Enum.NormalId.Left)
+	rivets(body, Enum.NormalId.Right)
+	local top = bodyY + h
+	pillSlab(m, Vector3.new(hx, top - 0.15, hz), w - 1.6, 0.45, d - 1.6, 0.6, "Frame")
+	local lidTop = top + 0.3
+	local front = hz - d / 2
+	local cc = Vector3.new(hx, bodyY + 1.45, front - 0.05)
+	cyl(m, cc + Vector3.new(0, 0, 0.02), ZA, 0.3, 2.5, "Gold", TINY, "Coin")
+	cyl(m, cc + Vector3.new(0, 0, -0.14), ZA, 0.06, 2.0, "Trim", TINY)
+	star(m, cc + Vector3.new(0, 0, -0.2), 0.8, "Hot")
+	local rim = bowl(m, Vector3.new(hx, lidTop, hz + 0.2), 2.4, 0.4)
+	for _, part in m:GetDescendants() do
+		if part:IsA("BasePart") and part:GetAttribute("Kit") == "Trim" and part.CFrame.Position.Y > lidTop + 0.4 then
+			part.Color = P.Gold
+			part:SetAttribute("Kit", "Gold")
+		end
+	end
+	-- coin sign on a post at the back right
+	local px, pz = hx + w / 2 - 0.4, hz + d / 2 - 0.2
+	cyl(m, Vector3.new(px, lidTop + 1.0, pz), UP, 2.6, 0.3, "Frame", PROP)
+	local sign = Vector3.new(px, lidTop + 2.6, pz)
+	cyl(m, sign, ZA, 0.3, 1.5, "Gold", PROP, "SignCoin")
+	cyl(m, sign + Vector3.new(0, 0, -0.17), ZA, 0.05, 1.1, "Trim", TINY)
+	-- a little coin stack by the front
+	for i = 0, 2 do
+		cyl(m, Vector3.new(-1.9 + i * 0.12, bodyY + 0.1 + i * 0.16, front - 0.7), UP, 0.14, 0.75, "Gold", TINY)
+	end
+
+	boxSockets(ctx, hx, hz, w, d, top, 1.0)
+	socket(ctx, Vector3.new(hx, rim + 0.02, hz + 0.2 - 1.6), out(0, -1, 0.3), 0.9, true)
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -3.2))
+	local intake = attach(ctx.base, "Intake", CFrame.new(0, 4.6, 0.2))
+	intake:SetAttribute("IntakeSize", Vector3.new(6, 6.6, 6))
+	return ctx
+end
+
+--[[
+	Splitter (1x1): a round slate platform (belt-dark top) on a glowing pill
+	base, an orange flipper on a pivot that sends items left and right
+	(glowing arrows), exits on both sides.
+]]
+local function splitter(): Ctx
+	local ctx = newModel("Splitter")
+	local m = ctx.model
+	pillSlab(m, Vector3.new(0, FLOOR, 0), 3.7, 0.3, 3.7, 0.7, "Frame")
+	glowStrips(m, Vector3.new(0, FLOOR + 0.15, 0), 3.7, 3.7, 0.7, 0.1)
+	cyl(m, Vector3.new(0, 0.6, 0), UP, 0.4, 3.4, "Frame", SOLID, "Platform")
+	cyl(m, Vector3.new(0, 0.82, 0), UP, 0.04, 3.0, "Rubber", TINY, "Belt")
+	cyl(m, Vector3.new(0, 0.78, 0), UP, 0.1, 3.5, "Trim", TINY)
+	cyl(m, Vector3.new(0, 1.1, 0), UP, 0.6, 0.55, "Frame", TINY, "Pivot")
+	ball(m, Vector3.new(0, 1.45, 0), 0.5, "Trim", TINY)
+	block(
+		m,
+		CFrame.new(0, 1.05, 0) * CFrame.Angles(0, math.rad(40), 0) * CFrame.new(0, 0, -0.8),
+		Vector3.new(0.24, 0.45, 1.6),
+		"Trim",
+		TINY,
+		"Flipper"
+	)
+	for _, side in { -1, 1 } do
+		chute(m, Vector3.new(side * 1.4, BELT_TOP + 0.02, 0), Vector3.new(side * 2.5, BELT_TOP - 0.25, 0), 1.2)
+		for k = -1, 1, 2 do
+			wedge(
+				m,
+				CFrame.new(side * 0.95, 0.86, k * 0.18) * CFrame.Angles(0, -side * math.pi / 2, 0) * CFrame.Angles(0, 0, -k * math.pi / 2),
+				Vector3.new(0.04, 0.36, 0.5),
+				"Neon",
+				TINY,
+				"Arrow"
+			)
+		end
+	end
+	for _, sz in { -1, 1 } do
+		socket(ctx, Vector3.new(1.7, FLOOR, sz * 1.7), out(1, sz, 0.8), 0.7)
+	end
+	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
+	local a = attach(ctx.base, "Intake", CFrame.new(0, 1.2, 1.4))
+	a:SetAttribute("IntakeSize", Vector3.new(3, 1.6, 1.2))
+	return ctx
+end
+
+--[[
+	Robot Arm (1x1): a glowing pill base, a cream pedestal, the orange arm
+	with slate ball joints and a claw, a little screen.
+]]
+local function robotArmMachine(): Ctx
+	local ctx = newModel("RobotArm")
+	local m = ctx.model
+	pillSlab(m, Vector3.new(0, FLOOR, 0.2), 3.6, 0.35, 3.2, 0.8, "Frame")
+	glowStrips(m, Vector3.new(0, FLOOR + 0.18, 0.2), 3.6, 3.2, 0.8, 0.1)
+	cyl(m, Vector3.new(0, FLOOR + 0.75, 0.4), UP, 0.8, 1.8, "Body", SOLID, "Pedestal")
+	robotArm(m, Vector3.new(0, FLOOR + 1.15, 0.4), Vector3.new(0.5, FLOOR + 4.4, 0.1), Vector3.new(0.1, FLOOR + 3.4, -1.4), 1.3)
+	screenPanel(m, CFrame.new(1.3, FLOOR + 0.35, 1.45), 0.9, 1.0)
+	for _, sx in { -1, 1 } do
+		socket(ctx, Vector3.new(sx * 1.55, FLOOR, -1.6), out(sx, -1, 0.8), 0.7)
+	end
+	socket(ctx, Vector3.new(-1.4, FLOOR + 0.35, 1.5), out(-1, 1, 0.6), 0.6, true)
+	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, -1.2))
+	return ctx
+end
+
+--[[
+	Solar Panel (2x2): a tilted glossy blue panel (painted cells) with a round
+	cream frame on a slate post and an orange bracket, a battery box with a
+	glowing charge bar.
+]]
+local function solarPanel(): Ctx
+	local ctx = newModel("SolarPanel")
+	local m = ctx.model
+	pillSlab(m, Vector3.new(0, FLOOR, 0), 6.4, 0.4, 6.4, 1.0, "Frame")
+	glowStrips(m, Vector3.new(0, FLOOR + 0.2, 0), 6.4, 6.4, 1.0, 0.12)
+	local postTop = FLOOR + 3.0
+	cyl(m, Vector3.new(0, FLOOR + 0.3, 0.4), UP, 0.3, 1.4, "Trim", SOLID)
+	cyl(m, Vector3.new(0, (FLOOR + postTop) / 2, 0.4), UP, postTop - FLOOR, 0.7, "Frame", SOLID)
+	cyl(m, Vector3.new(0, postTop, 0.4), XA, 2.4, 0.55, "Trim", PROP)
+	local tiltCf = CFrame.new(0, postTop + 0.35, 0.4) * CFrame.Angles(math.rad(-28), 0, 0)
+	local pw, pd = 6.6, 4.6
+	local panel = block(m, tiltCf, Vector3.new(pw, 0.22, pd), "Panel", SOLID, "Panel")
+	local cells: { Paint } = {}
+	for i = 1, 5 do
+		table.insert(cells, { x = i / 6 - 0.004, y = 0, w = 0.008, h = 1, color = rgb(120, 170, 240) })
+	end
+	for i = 1, 3 do
+		table.insert(cells, { x = 0, y = i / 4 - 0.006, w = 1, h = 0.012, color = rgb(120, 170, 240) })
+	end
+	paint(panel, Enum.NormalId.Top, cells, "Cells")
+	for _, sz in { -1, 1 } do
+		cyl(m, (tiltCf * CFrame.new(0, 0, sz * pd / 2)).Position, tiltCf.RightVector, pw, 0.32, "Body", TINY)
+	end
+	for _, sx in { -1, 1 } do
+		cyl(m, (tiltCf * CFrame.new(sx * pw / 2, 0, 0)).Position, tiltCf.LookVector, pd, 0.32, "Body", TINY)
+	end
+	pillSlab(m, Vector3.new(-2.1, FLOOR + 0.4, 2.0), 1.6, 1.2, 1.1, 0.3, "Body")
+	local bar = block(m, CFrame.new(-2.1, FLOOR + 1.0, 2.0 - 0.58), Vector3.new(1.0, 0.22, 0.05), "ScreenGlow", TINY, "Charge")
+	bar.Color = P.Green
+	for _, sx in { -1, 1 } do
+		socket(ctx, Vector3.new(sx * 2.9, FLOOR + 0.4, -2.9), out(sx, -1, 0.7), 0.9)
+	end
+	socket(ctx, Vector3.new(2.9, FLOOR + 0.4, 2.9), out(1, 1, 0.7), 0.9)
+	socket(ctx, Vector3.new(-2.9, FLOOR + 0.4, 2.9), out(-1, 1, 0.7), 0.8)
+	socket(ctx, Vector3.new(-2.1, FLOOR + 1.62, 2.2), UP, 0.7, true)
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.0, -3.4))
+	return ctx
+end
+
+--[[
+	Wind Turbine (2x2): a glowing pill base, a two-step cream tower with an
+	orange band, a nacelle with an orange hub (Rotor) and three cream blades
+	with orange tips (Blade, the client can spin them), a battery box.
+]]
+local function windTurbine(): Ctx
+	local ctx = newModel("WindTurbine")
+	local m = ctx.model
+	pillSlab(m, Vector3.new(0, FLOOR, 0), 6.0, 0.5, 6.0, 1.2, "Frame")
+	glowStrips(m, Vector3.new(0, FLOOR + 0.25, 0), 6.0, 6.0, 1.2, 0.12)
+	local y0 = FLOOR + 0.5
+	cyl(m, Vector3.new(0, y0 + 0.3, 0.6), UP, 0.6, 2.4, "Trim", SOLID)
+	cyl(m, Vector3.new(0, y0 + 3.0, 0.6), UP, 5.2, 1.6, "Body", SOLID, "Tower")
+	cyl(m, Vector3.new(0, y0 + 5.7, 0.6), UP, 0.35, 1.8, "Trim", TINY)
+	cyl(m, Vector3.new(0, y0 + 8.2, 0.6), UP, 4.8, 1.15, "Body", SOLID)
+	cyl(m, Vector3.new(0, y0 + 1.2, 0.6), UP, 0.14, 1.7, "Neon", TINY)
+	local hubY = y0 + 11.0
+	cyl(m, Vector3.new(0, hubY, 0.8), ZA, 2.6, 1.4, "Body", SOLID, "Nacelle")
+	ball(m, Vector3.new(0, hubY, 2.1), 1.4, "Body", SOLID)
+	cyl(m, Vector3.new(0, hubY, -0.55), ZA, 0.3, 1.2, "Frame", TINY)
+	local hub = Vector3.new(0, hubY, -0.85)
+	ball(m, hub, 1.0, "Trim", PROP, "Rotor")
+	for k = 0, 2 do
+		local a = k * math.pi * 2 / 3 + 0.3
+		local dir = Vector3.new(math.cos(a), math.sin(a), 0)
+		local cf = CFrame.fromMatrix(hub + dir * 2.3, dir:Cross(ZA), dir, ZA) * CFrame.Angles(0, math.rad(12), 0)
+		block(m, cf, Vector3.new(0.7, 3.8, 0.16), "Body", PROP, "Blade")
+		block(m, cf * CFrame.new(0, 1.65, 0), Vector3.new(0.72, 0.5, 0.18), "Trim", TINY, "Blade")
+	end
+	pillSlab(m, Vector3.new(-1.9, y0, -1.9), 1.5, 1.1, 1.1, 0.3, "Body")
+	local bar = block(m, CFrame.new(-1.9, y0 + 0.6, -1.9 - 0.58), Vector3.new(0.9, 0.2, 0.05), "ScreenGlow", TINY, "Charge")
+	bar.Color = P.Green
+	for _, c in { { -2.6, -2.6 }, { 2.6, -2.6 }, { 2.6, 2.6 }, { -2.6, 2.6 } } do
+		socket(ctx, Vector3.new(c[1], y0, c[2]), out(if c[1] > 0 then 1 else -1, if c[2] > 0 then 1 else -1, 0.7), 0.9)
+	end
+	socket(ctx, Vector3.new(0, y0 + 5.9, 0.6 - 0.8), Vector3.new(0, 0.4, -1), 0.8, true)
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.0, -3.4))
+	return ctx
+end
+
+--[[
+	Fusion Reactor (3x3, the strongest power): a round cream pedestal on a
+	glowing pill base, a glass sphere with a glowing cyan core, a slate ring
+	with orange joints round it, two tilted orbit rings, four pylons with
+	glowing tips beaming energy into the core, a screen and a stack light.
+]]
+local function fusionReactor(): Ctx
+	local ctx = newModel("FusionReactor")
+	local m = ctx.model
+	pillSlab(m, Vector3.new(0, FLOOR, 0), 11.2, 0.7, 11.2, 2.2, "Frame")
+	glowStrips(m, Vector3.new(0, FLOOR + 0.35, 0), 11.2, 11.2, 2.2, 0.16, "Cyan")
+	local y0 = FLOOR + 0.7
+	cyl(m, Vector3.new(0, y0 + 0.6, 0), UP, 1.2, 7.0, "Body", SOLID, "Body")
+	cyl(m, Vector3.new(0, y0 + 1.25, 0), UP, 0.3, 7.3, "Frame", SOLID)
+	cyl(m, Vector3.new(0, y0 + 1.25, 0), UP, 0.1, 7.42, "Cyan", TINY)
+	cyl(m, Vector3.new(0, y0 + 1.6, 0), UP, 0.5, 3.4, "Frame", SOLID)
+	local core = Vector3.new(0, y0 + 3.9, 0)
+	ball(m, core, 3.6, "Glass", TINY, "Chamber")
+	local plasma = ball(m, core, 2.0, "Cyan", TINY, "Core")
+	light(plasma, P.Cyan, 16, 1.2)
+	local ringR = 2.7
+	local pts = {}
+	for i = 0, 7 do
+		local a = i * math.pi / 4
+		table.insert(pts, core + Vector3.new(math.cos(a) * ringR, 0, math.sin(a) * ringR))
+	end
+	for i = 1, 8 do
+		rod(m, pts[i], pts[i % 8 + 1], 0.7, "Frame", PROP, "Ring")
+		ball(m, pts[i], 0.85, "Trim", PROP)
+	end
+	for _, a in { 0.5, -0.5 } do
+		local ring = Geo.make("Part", {
+			Shape = Enum.PartType.Cylinder,
+			CFrame = CFrame.new(core) * CFrame.Angles(0, 0, math.pi / 2) * CFrame.Angles(a, a * 0.6, 0),
+			Size = Vector3.new(0.1, 4.6, 4.6),
+		}, m)
+		style(ring, "Cyan", TINY, "Orbit")
+	end
+	for _, c in { { -4.0, -4.0 }, { 4.0, -4.0 }, { 4.0, 4.0 }, { -4.0, 4.0 } } do
+		local p = Vector3.new(c[1], y0, c[2])
+		cyl(m, p + Vector3.new(0, 0.25, 0), UP, 0.5, 1.5, "Trim", SOLID)
+		cyl(m, p + Vector3.new(0, 2.4, 0), UP, 4.0, 0.9, "Body", SOLID, "Pylon")
+		cyl(m, p + Vector3.new(0, 3.6, 0), UP, 0.2, 1.0, "Trim", TINY)
+		local tipP = p + Vector3.new(0, 4.75, 0)
+		cyl(m, tipP - Vector3.new(0, 0.3, 0), UP, 0.3, 1.1, "Frame", TINY)
+		ball(m, tipP, 0.7, "Cyan", TINY, "PylonTip")
+		rod(m, tipP, core + (tipP - core).Unit * 1.9, 0.08, "Cyan", TINY, "Beam")
+	end
+	screenPanel(m, CFrame.new(0, y0, -4.9), 2.0, 1.6, P.Cyan)
+	stackLight(m, Vector3.new(5.0, y0, -1.6), 1.0)
+	for _, c in { { -2.4, -4.6 }, { 4.6, 2.4 }, { -4.6, 2.4 }, { 2.4, -4.6 }, { 0, 4.8 }, { 4.8, -0.6 } } do
+		socket(ctx, Vector3.new(c[1], y0, c[2]), Vector3.new(c[1] * 0.12, 1, c[2] * 0.12), 1.2)
+	end
+	socket(ctx, Vector3.new(0, y0 + 1.86, -1.6), out(0, -1, 0.3), 1.2, true)
+	attach(ctx.base, "Prompt", CFrame.new(0, 2.5, -5.2))
+	return ctx
+end
+
+--[[
+	Power Pole (1x1): a slate pole on a round base with an orange band, a
+	cross arm with orange insulators (attachments CableL / CableR for the
+	cables) and a glowing green status ball on a cream cap.
+]]
+local function powerPole(): Ctx
+	local ctx = newModel("PowerPole")
+	local m = ctx.model
+	cyl(m, Vector3.new(0, FLOOR + 0.2, 0), UP, 0.4, 1.5, "Frame", SOLID)
+	cyl(m, Vector3.new(0, FLOOR + 0.45, 0), UP, 0.2, 1.2, "Trim", TINY)
+	local poleTop = FLOOR + 6.4
+	cyl(m, Vector3.new(0, (FLOOR + poleTop) / 2, 0), UP, poleTop - FLOOR, 0.45, "Frame", SOLID, "Pole")
+	local armY = poleTop - 0.6
+	rod(m, Vector3.new(-1.1, armY, 0), Vector3.new(1.1, armY, 0), 0.3, "Frame", PROP)
+	for _, side in { -1, 1 } do
+		cyl(m, Vector3.new(side * 0.95, armY + 0.3, 0), UP, 0.45, 0.3, "Trim", TINY)
+		ball(m, Vector3.new(side * 0.95, armY + 0.58, 0), 0.32, "Trim", TINY)
+		attach(ctx.base, if side < 0 then "CableL" else "CableR", CFrame.new(side * 0.95, armY + 0.58 - FLOOR / 2, 0))
+	end
+	cyl(m, Vector3.new(0, poleTop + 0.1, 0), UP, 0.25, 0.8, "Body", TINY)
+	local status = ball(m, Vector3.new(0, poleTop + 0.45, 0), 0.5, "Lamp", TINY, "PowerLamp")
+	status.Color, status.Material = P.Green, NEON
+	attach(ctx.base, "Prompt", CFrame.new(0, 1.5, 0))
+	return ctx
+end
+
+--[[
+	A power cable from `a` to `b` sagging by `sag` in the middle: dark
+	segments along a parabola. Preview helper for the poles.
+]]
+function KitMachines.cable(parent: Instance, a: Vector3, b: Vector3, sag: number?)
+	local n = 6
+	local s = sag or 0.8
+	local prev = a
+	for i = 1, n do
+		local t = i / n
+		local p = a:Lerp(b, t) - Vector3.new(0, s * 4 * t * (1 - t), 0)
+		rod(parent, prev, p, 0.1, "Rubber", TINY, "Cable")
+		prev = p
+	end
 end
 
 local BUILDERS: { [string]: () -> Ctx } = {
@@ -1406,7 +2304,52 @@ local BUILDERS: { [string]: () -> Ctx } = {
 	AutoCleaner = autoCleaner,
 	BlastFurnace = blastFurnace,
 	CleaningStation = cleaningStation,
+	IronBox = ironBox,
+	Sorter = sorter,
+	Polisher = polisher,
+	BrickFurnace = brickFurnace,
+	PlasmaFurnace = plasmaFurnace,
+	AlloyFurnace = alloyFurnace,
+	CrystalExtractor = crystalExtractor,
+	RestorationTable = restorationTable,
+	SellBox = sellBox,
+	Splitter = splitter,
+	RobotArm = robotArmMachine,
+	SolarPanel = solarPanel,
+	WindTurbine = windTurbine,
+	FusionReactor = fusionReactor,
+	PowerPole = powerPole,
 }
+
+export type CatalogEntry = { Id: string, Name: string, Group: string, Upgrades: boolean }
+
+-- The whole machine roster (docs/plans/MACHINES_PLAN.md) in showroom order.
+KitMachines.Catalog = {
+	{ Id = "CleaningStation", Name = "Cleaning Station", Group = "Cleaning", Upgrades = true },
+	{ Id = "AutoCleaner", Name = "Cleaning Plant", Group = "Cleaning", Upgrades = true },
+	{ Id = "IronBox", Name = "Iron Box", Group = "Cleaning", Upgrades = true },
+	{ Id = "Sorter", Name = "Sorter", Group = "Cleaning", Upgrades = true },
+	{ Id = "Polisher", Name = "Polisher", Group = "Cleaning", Upgrades = true },
+	{ Id = "ClayFurnace", Name = "Clay Furnace", Group = "Furnaces", Upgrades = true },
+	{ Id = "BrickFurnace", Name = "Brick Furnace", Group = "Furnaces", Upgrades = true },
+	{ Id = "BlastFurnace", Name = "Blast Furnace", Group = "Furnaces", Upgrades = true },
+	{ Id = "PlasmaFurnace", Name = "Plasma Furnace", Group = "Furnaces", Upgrades = true },
+	{ Id = "AlloyFurnace", Name = "Alloy Furnace", Group = "Furnaces", Upgrades = true },
+	{ Id = "Crusher", Name = "Crusher", Group = "Special", Upgrades = true },
+	{ Id = "CrystalExtractor", Name = "Crystal Extractor", Group = "Special", Upgrades = true },
+	{ Id = "RestorationTable", Name = "Restoration Table", Group = "Special", Upgrades = true },
+	{ Id = "SellBox", Name = "Sell Box", Group = "Special", Upgrades = true },
+	{ Id = "Conveyor", Name = "Conveyor", Group = "Transport", Upgrades = false },
+	{ Id = "ExpressConveyor", Name = "Express Conveyor", Group = "Transport", Upgrades = false },
+	{ Id = "Splitter", Name = "Splitter", Group = "Transport", Upgrades = true },
+	{ Id = "BeltLift", Name = "Belt Lift", Group = "Transport", Upgrades = false },
+	{ Id = "Slide", Name = "Slide", Group = "Transport", Upgrades = false },
+	{ Id = "RobotArm", Name = "Robot Arm", Group = "Transport", Upgrades = true },
+	{ Id = "SolarPanel", Name = "Solar Panel", Group = "Power", Upgrades = true },
+	{ Id = "WindTurbine", Name = "Wind Turbine", Group = "Power", Upgrades = true },
+	{ Id = "FusionReactor", Name = "Fusion Reactor", Group = "Power", Upgrades = true },
+	{ Id = "PowerPole", Name = "Power Pole", Group = "Power", Upgrades = false },
+} :: { CatalogEntry }
 
 function KitMachines.has(id: string): boolean
 	return BUILDERS[id] ~= nil
@@ -1437,6 +2380,20 @@ function KitMachines.build(id: string, level: number?, themeName: string?): Mode
 	end
 	attach(base, "Status", CFrame.new(0, topY - base.CFrame.Position.Y + 1.5, 0))
 	return ctx.model
+end
+
+-- Any roster entry: the machines through build(), the belts and slopes through their own builders.
+function KitMachines.buildAny(id: string, level: number?, themeName: string?): Model
+	if id == "Conveyor" then
+		return KitMachines.conveyor()
+	elseif id == "ExpressConveyor" then
+		return KitMachines.conveyor(nil, true)
+	elseif id == "BeltLift" then
+		return KitMachines.slope(true)
+	elseif id == "Slide" then
+		return KitMachines.slope(false)
+	end
+	return KitMachines.build(id, level, themeName)
 end
 
 return KitMachines

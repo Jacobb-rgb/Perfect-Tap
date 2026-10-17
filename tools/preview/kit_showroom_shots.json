@@ -1,0 +1,569 @@
+{
+ "showroom_all": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   80,
+   62,
+   -38
+  ],
+  "target": [
+   4,
+   0,
+   92
+  ],
+  "fov": 46,
+  "shadowExtent": 200
+ },
+ "showroom_cleaning": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   -34
+  ],
+  "target": [
+   0,
+   3,
+   2
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "showroom_furnaces": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   16
+  ],
+  "target": [
+   0,
+   3,
+   52
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "showroom_special": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   66
+  ],
+  "target": [
+   0,
+   3,
+   102
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "showroom_transport": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   116
+  ],
+  "target": [
+   0,
+   3,
+   152
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "showroom_power": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   166
+  ],
+  "target": [
+   0,
+   3,
+   202
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "close_IronBox": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   3,
+   8.5,
+   -10.5
+  ],
+  "target": [
+   -4,
+   3,
+   2
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_Sorter": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -9,
+   8.5,
+   -10.5
+  ],
+  "target": [
+   -16,
+   3,
+   2
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_Polisher": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -21,
+   8.5,
+   -10.5
+  ],
+  "target": [
+   -28,
+   3,
+   2
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_BrickFurnace": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   25,
+   8.5,
+   39.5
+  ],
+  "target": [
+   18,
+   3,
+   52
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_PlasmaFurnace": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -7,
+   8.5,
+   39.5
+  ],
+  "target": [
+   -14,
+   3,
+   52
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_AlloyFurnace": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -19,
+   13,
+   35
+  ],
+  "target": [
+   -30,
+   4,
+   52
+  ],
+  "fov": 52,
+  "shadowExtent": 40
+ },
+ "close_CrystalExtractor": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   14,
+   8.5,
+   89.5
+  ],
+  "target": [
+   7,
+   3,
+   102
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_RestorationTable": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   8.5,
+   89.5
+  ],
+  "target": [
+   -7,
+   3,
+   102
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_SellBox": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -14,
+   8.5,
+   89.5
+  ],
+  "target": [
+   -21,
+   3,
+   102
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_ExpressConveyor": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   30,
+   8.5,
+   139.5
+  ],
+  "target": [
+   23,
+   3,
+   152
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_Splitter": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   20,
+   8.5,
+   139.5
+  ],
+  "target": [
+   13,
+   3,
+   152
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_RobotArm": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -26,
+   8.5,
+   139.5
+  ],
+  "target": [
+   -33,
+   3,
+   152
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_SolarPanel": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   34,
+   8.5,
+   189.5
+  ],
+  "target": [
+   27,
+   3,
+   202
+  ],
+  "fov": 50,
+  "shadowExtent": 30
+ },
+ "close_WindTurbine": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   23,
+   10,
+   185
+  ],
+  "target": [
+   13,
+   7,
+   202
+  ],
+  "fov": 58,
+  "shadowExtent": 40
+ },
+ "close_FusionReactor": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   8,
+   13,
+   185
+  ],
+  "target": [
+   -3,
+   4,
+   202
+  ],
+  "fov": 52,
+  "shadowExtent": 40
+ },
+ "close_PowerPole": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -14,
+   8,
+   188
+  ],
+  "target": [
+   -23,
+   4,
+   202
+  ],
+  "fov": 58,
+  "shadowExtent": 40
+ },
+ "max_cleaning": {
+  "scene": "kit_showroom_max",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   -34
+  ],
+  "target": [
+   0,
+   3,
+   2
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "max_furnaces": {
+  "scene": "kit_showroom_max",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   16
+  ],
+  "target": [
+   0,
+   3,
+   52
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "max_special": {
+  "scene": "kit_showroom_max",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   66
+  ],
+  "target": [
+   0,
+   3,
+   102
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "max_transport": {
+  "scene": "kit_showroom_max",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   116
+  ],
+  "target": [
+   0,
+   3,
+   152
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ },
+ "max_power": {
+  "scene": "kit_showroom_max",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   0,
+   19,
+   166
+  ],
+  "target": [
+   0,
+   3,
+   202
+  ],
+  "fov": 62,
+  "shadowExtent": 70
+ }
+}
