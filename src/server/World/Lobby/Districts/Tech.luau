@@ -56,10 +56,12 @@ Tech.Band = C.Hazard
 -- a deeper neon blue than Style.C.GlowEdge: thin neon lines stay blue under
 -- bloom instead of washing out to white
 Tech.Neon = rgb(40, 130, 255)
--- the thick neon tubes (frames, roof edges, ring edges): a deeper blue still,
--- so a 0.3-0.4 stud tube keeps its color under bloom
-Tech.Tube = rgb(24, 98, 255)
+-- the thick neon tubes (frames, roof edges, ring edges): a deep electric
+-- blue, so a 0.3-0.45 stud tube stays saturated blue under the neon boost
+-- and bloom instead of washing out to pastel periwinkle in daylight
+Tech.Tube = rgb(8, 44, 200)
 Tech.TUBE = 0.36 -- thick tube size; thin trims stay 0.12-0.2
+Tech.EDGE = 0.45 -- the roof-edge and frame tubes set in a dark channel (Tech.channel)
 Tech.Warm = C.Fire
 Tech.Lens = rgb(255, 150, 50) -- small warm lamp lenses (sign lamps): orange, not white
 Tech.GoldGlow = rgb(200, 116, 14) -- neon gold (crowns) that blooms to warm gold, not white
@@ -68,7 +70,7 @@ Tech.GlassClear = 0.85 -- window glass transparency: the goods behind show throu
 -- showcase glass: a cyan tint and a lower transparency, so each case reads
 -- as a lit glass box from the plaza (concept v2), the goods still show
 Tech.CaseGlass = rgb(120, 200, 255)
-Tech.CaseClear = 0.58
+Tech.CaseClear = 0.66
 Tech.CaseLight = rgb(255, 186, 104) -- thin warm light strips inside showcases and windows
 Tech.Board = rgb(16, 30, 78) -- sign boards and screens behind white letters
 Tech.Screen = rgb(30, 92, 214) -- glowing screens (deep enough to stay blue under bloom)
@@ -88,6 +90,37 @@ function Tech.glow(parent: Instance, cf: CFrame, size: Vector3, color: Color3?):
 	return Style.block(parent, cf, size, color or Tech.Neon, NEON, Style.tiny())
 end
 local glow = Tech.glow
+
+--[[
+	A neon tube set in a dark channel (concept v2: saturated electric blue
+	with dark lines on both sides): a MetalDeep backing strip 0.12 thick,
+	`pad` wider than the tube on both sides of its thin axis, right behind
+	the tube. `cf` = tube center, the tube's visible face = LookVector
+	(local -Z), the tube's long axis = local X (`along` = "Y": local Y).
+	Returns the tube. 2 parts.
+]]
+function Tech.channel(
+	parent: Instance,
+	cf: CFrame,
+	length: number,
+	thickness: number,
+	color: Color3?,
+	along: string?,
+	pad: number?
+): Part
+	local p = pad or 0.16
+	local depth = 0.16
+	local tubeSize: Vector3, backSize: Vector3
+	if along == "Y" then
+		tubeSize = Vector3.new(thickness, length, depth)
+		backSize = Vector3.new(thickness + 2 * p, length, 0.12)
+	else
+		tubeSize = Vector3.new(length, thickness, depth)
+		backSize = Vector3.new(length, thickness + 2 * p, 0.12)
+	end
+	bit(parent, cf * CFrame.new(0, 0, depth / 2 + 0.04), backSize, Tech.MetalDeep)
+	return glow(parent, cf, tubeSize, color or Tech.Tube)
+end
 
 -- A ramp wedge: full face down and back (+Z), sloping down toward the front.
 function Tech.bevel(parent: Instance, cf: CFrame, size: Vector3, color: Color3, props: Opts?): WedgePart
@@ -238,8 +271,8 @@ end
 	wall-window-banner: a wall with a framed window. `base` = bottom center.
 	opts: Color, WindowWidth, WindowBottom, WindowTop (local heights),
 	Frame (inner frame color, default the orange band), Glass (default
-	true), Lit (Color3: a glowing neon pane instead of glass), Foot.
-	Returns the pane (or nil). 9-11 parts.
+	true; false = an open bay), Lit (Color3: a glowing neon pane instead of
+	glass), Foot. Returns the pane (or nil). 8-10 parts.
 ]]
 function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: number, depth: number, opts: Opts?): Part?
 	local o: Opts = opts or {}
@@ -264,13 +297,14 @@ function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: 
 	local frame = o.Frame or Tech.Band
 	local t = 0.36
 	local fd = depth + 0.12
-	bit(parent, base * CFrame.new(0, y0 + t / 2, 0), Vector3.new(ow, t, fd), frame)
+	-- a U frame (top and sides) on a deep sill: the sill is the frame's
+	-- bottom bar and the ledge in front of the wall in one block (the
+	-- Kenney frame's thick bottom)
 	bit(parent, base * CFrame.new(0, y1 - t / 2, 0), Vector3.new(ow, t, fd), frame)
 	for _, side in { -1, 1 } do
 		bit(parent, base * CFrame.new(side * (ow / 2 - t / 2), (y0 + y1) / 2, 0), Vector3.new(t, y1 - y0 - 2 * t, fd), frame)
 	end
-	-- a deeper sill ledge under the window (the Kenney frame's thick bottom)
-	bit(parent, base * CFrame.new(0, y0 - 0.15, -depth / 2 - 0.2), Vector3.new(ow + 0.4, 0.3, 0.4), frame)
+	bit(parent, base * CFrame.new(0, y0 + t / 2 - 0.15, -0.14), Vector3.new(ow + 0.4, t + 0.3, fd + 0.28), frame)
 	if o.Foot ~= false then
 		bit(parent, base * CFrame.new(0, 0.4, -depth / 2 - 0.2), Vector3.new(width, 0.8, 0.4), Tech.MetalDark)
 	end
@@ -452,8 +486,9 @@ end
 	frame, a warm light strip in its top and a glowing floor plate under the
 	goods, so the case reads as a lit glass box. `base` = bottom center.
 	Returns the CFrame of the display floor (items go there). opts: Neon,
-	Stripe, Case, Light, Top (Color3: a glowing top instead of glass).
-	7-14 parts.
+	Stripe, Case, Light, Top (Color3: a glowing top instead of glass),
+	Plinth (Color3: a small neon plinth under the item), Backlight (Color3:
+	a glowing back panel inside the case). 7-16 parts.
 ]]
 function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: number, height: number, opts: Opts?): CFrame
 	local o: Opts = opts or {}
@@ -479,6 +514,16 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 		-- the glowing floor plate under the goods
 		glow(parent, base * CFrame.new(0, height + 0.03, 0), Vector3.new(width - 0.7, 0.06, depth - 0.7), o.Light or Tech.CaseLight)
 		floor = height + 0.06
+		if o.Plinth then
+			-- a small neon plinth under the item: it lights the goods from below
+			local pw, pd = math.min(1.7, width * 0.55), math.min(1.2, depth * 0.6)
+			glow(parent, base * CFrame.new(0, floor + 0.1, 0.05), Vector3.new(pw, 0.2, pd), o.Plinth)
+			floor += 0.2
+		end
+		if o.Backlight then
+			-- a glowing back panel inside the case: the case reads as a lit box
+			glow(parent, base * CFrame.new(0, height + ch / 2, depth / 2 - 0.22), Vector3.new(width - 0.6, ch - 0.3, 0.08), o.Backlight)
+		end
 		local glass = block(
 			parent,
 			base * CFrame.new(0, height + ch / 2, 0),
@@ -501,11 +546,12 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 			end
 		end
 		glow(parent, base * CFrame.new(0, height + ch + 0.14, -depth / 2 - 0.06), Vector3.new(width, 0.2, 0.1), neon)
-		-- the light strip inside the case top lights the goods
+		-- the light strip under the case lid, along its front edge: it shows
+		-- through the glass and lights the goods from the front
 		glow(
 			parent,
-			base * CFrame.new(0, height + ch - 0.06, depth / 2 - 0.45),
-			Vector3.new(width - 0.6, 0.08, 0.3),
+			base * CFrame.new(0, height + ch - 0.08, -depth / 2 + 0.4),
+			Vector3.new(width - 0.6, 0.12, 0.3),
 			o.Light or Tech.CaseLight
 		)
 	end

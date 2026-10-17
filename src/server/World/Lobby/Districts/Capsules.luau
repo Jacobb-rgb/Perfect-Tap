@@ -7,9 +7,10 @@
 	carrying the big CAPSULES sign box, a back wall with a bright violet
 	neon halo, and standing forward out of the recess the hero piece: a
 	giant 8 stud tall glass capsule (a pill) around a vivid violet-to-blue
-	glowing core, a big dark golem silhouette with two cyan eyes in front of
-	the core, a thin deep blue band at the waist and a glowing cap, on a
-	pedestal of deep neon rings with a thin tilted orbit ring. Ore-tone
+	glowing core with saturated neon gem chips floating in the glass, a
+	small see-through deep violet golem (under half the egg's height, a
+	round head with two cyan eyes) in front of the core so the core glows
+	through it, and a glowing cap, on a pedestal of deep neon rings. Ore-tone
 	golem figures with glowing crystal cores (original ore golems, Kenney
 	Mini Characters proportions) on a stepped display and on the beam, the odds
 	board on a stand, a capsule screen on the side that faces south.
@@ -59,6 +60,19 @@ local CAPSULE_COLORS = {
 local DEEP_BLUE = rgb(30, 90, 255)
 local DEEP_VIOLET = rgb(120, 50, 255)
 local CORE_TOP, CORE_BOTTOM = rgb(90, 30, 220), rgb(30, 70, 240)
+-- the golem inside the egg: deep violet, see-through so the core glows
+-- through it
+local EGG_GOLEM = rgb(70, 35, 160)
+-- saturated gem chips floating in the egg's glass (x, y above the egg
+-- bottom, z from the egg's axis; all between the core and the glass)
+type Chip = { At: Vector3, Color: Color3 }
+local CHIPS: { Chip } = {
+	{ At = Vector3.new(-1.4, 2.0, -0.5), Color = rgb(230, 60, 170) },
+	{ At = Vector3.new(1.5, 3.2, -0.3), Color = rgb(20, 200, 230) },
+	{ At = Vector3.new(-1.2, 5.4, -0.6), Color = rgb(240, 170, 20) },
+	{ At = Vector3.new(1.1, 6.3, -0.9), Color = rgb(60, 220, 90) },
+	{ At = Vector3.new(0.2, 7.0, -0.4), Color = rgb(255, 120, 20) },
+}
 
 -- Ore-tone golem figures with a small glowing crystal core (readable next
 -- to the dark module, unlike dark stone golems)
@@ -169,9 +183,8 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	local eggBottom = FLOOR + 1.4
 
 	-- the giant glass capsule: a tall pill (two half-spheres and a cylinder)
-	-- around a vivid violet-to-blue glowing core, a big dark golem
-	-- silhouette (about 55% of the egg's height, two small cyan eyes) in
-	-- front of the core, a thin deep blue band at the waist, a deep blue cap
+	-- around a vivid violet-to-blue glowing core, a small see-through violet
+	-- golem in front of the core, gem chips in the glass, a deep blue cap
 	local lowY, highY = eggBottom + EGG_R, eggBottom + EGG_R + EGG_MID
 	local midY = (lowY + highY) / 2
 	local eggColor = rgb(150, 126, 255)
@@ -192,24 +205,29 @@ function Capsules.build(parent: Instance, rng: Rng.Rng)
 	Kit.ball(m, pos(0, highY - 0.1, coreZ), coreD, CORE_TOP, Kit.NEON, core())
 	Style.light(coreMid, C.CrystalPurple, 18, 1.8)
 	Style.emitter(coreMid, "Sparkle", C.CrystalPink, 2)
-	Kit.golem(m, at(0, eggBottom + 1.0, EGG_Z - 1.2), 1.6, {
-		Body = rgb(20, 22, 52),
-		Accent = rgb(12, 14, 36),
-		Eyes = C.CrystalCyan,
-		Depth = 0.35,
-		TwinEyes = true,
-	})
-	Tech.disc(m, pos(0, midY + 0.1, EGG_Z), 0.22, 2 * EGG_R + 0.12, rgb(40, 60, 230), Kit.NEON)
+	-- the golem inside: about 45% of the egg's height, deep violet and
+	-- see-through, a round head with two cyan eyes, in front of the core
+	local gz = EGG_Z - 1.05
+	local gy = eggBottom + 1.0
+	local see = Style.tiny({ Transparency = 0.3 })
+	for _, x in { -0.35, 0.35 } do
+		Kit.block(m, at(x, gy + 0.45, gz), Vector3.new(0.55, 0.9, 0.5), EGG_GOLEM, nil, Style.tiny({ Transparency = 0.3 }))
+	end
+	Kit.block(m, at(0, gy + 1.5, gz), Vector3.new(1.4, 1.2, 0.55), EGG_GOLEM, nil, see)
+	for _, x in { -0.95, 0.95 } do
+		Kit.block(m, at(x, gy + 1.55, gz), Vector3.new(0.45, 1.15, 0.45), EGG_GOLEM, nil, Style.tiny({ Transparency = 0.3 }))
+	end
+	Kit.ball(m, pos(0, gy + 2.85, gz), 1.4, EGG_GOLEM, nil, Style.tiny({ Transparency = 0.3 }))
+	for _, x in { -0.28, 0.28 } do
+		Kit.glow(m, at(x, gy + 2.9, gz - 0.66), Vector3.new(0.24, 0.2, 0.08), C.CrystalCyan)
+	end
+	-- saturated neon gem chips floating in the glass
+	for i, c in CHIPS do
+		local chip = at(c.At.X, eggBottom + c.At.Y, EGG_Z + c.At.Z) * CFrame.Angles(0.6, 0.4 * i, math.pi / 4)
+		Kit.glow(m, chip, Vector3.new(0.34, 0.34, 0.34), c.Color)
+	end
 	Tech.disc(m, pos(0, highY + EGG_R - 0.12, EGG_Z), 0.3, 1.7, Tech.MetalLight)
 	Tech.disc(m, pos(0, highY + EGG_R + 0.12, EGG_Z), 0.2, 1.1, DEEP_BLUE, Kit.NEON)
-	-- a tilted orbit ring of thin deep blue neon bars around the egg
-	local orbit = at(0, midY - 0.4, EGG_Z) * CFrame.Angles(0.28, 0, 0.12)
-	for k = 0, 7 do
-		local a = (k + 0.5) * math.pi / 4
-		local r = 3.2
-		local seg = orbit * CFrame.new(r * math.cos(a), 0, r * math.sin(a)) * CFrame.Angles(0, -a, 0)
-		Tech.glow(m, seg, Vector3.new(0.1, 0.1, 2 * r * math.tan(math.pi / 8) + 0.06), DEEP_BLUE)
-	end
 
 	-- viewer's left (+X, south): stepped golem display in front of the tower
 	for k = 0, 2 do

@@ -59,9 +59,10 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 			Kit.bit(m, at(sx * 5.0, TOP + 0.06, sz * 4.0), Vector3.new(0.4, 0.14, 0.4), Tech.MetalLight)
 		end
 	end
+	-- the plate's edge tubes in dark channels on its side faces
 	for _, side in { -1, 1 } do
-		Tech.glow(m, at(0, TOP - 0.12, side * 4.56), Vector3.new(11.1, 0.24, 0.2), Tech.Tube)
-		Tech.glow(m, at(side * 5.56, TOP - 0.12, 0), Vector3.new(0.2, 0.24, 9.1), Tech.Tube)
+		Tech.channel(m, at(0, 0.8, side * 4.66) * CFrame.Angles(0, if side > 0 then math.pi else 0, 0), 11.0, 0.26, nil, nil, 0.06)
+		Tech.channel(m, at(side * 5.66, 0.8, 0) * CFrame.Angles(0, -side * math.pi / 2, 0), 9.0, 0.26, nil, nil, 0.06)
 	end
 	Tech.glow(m, at(0, 0.45, -5.02), Vector3.new(11.6, 0.14, 0.08), Tech.Warm)
 

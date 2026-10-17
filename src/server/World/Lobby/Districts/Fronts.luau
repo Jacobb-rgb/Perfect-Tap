@@ -5,10 +5,15 @@
 	  ShopFront      Tobin's Sell stall next to the SHOP, split to the outer
 	                 thirds and pulled toward the plaza: the SellBin (tag
 	                 SellBin, child part Intake) as a low gunmetal hopper with
-	                 an orange band and a thick blue neon rim, the glowing
-	                 SELL sign box on its front wall, Tobin's ore cart on its
-	                 rails with a counter (tag SellCounter) and a brass scale,
-	                 Tobin the Miner at the cart's outer end.
+	                 an orange band and a thick blue neon rim, a glowing SELL
+	                 sign box (chamfered blue neon frame, orange corner studs)
+	                 raised on a gunmetal mast over its front wall, Tobin's
+	                 ore cart on its rails with a counter (tag SellCounter)
+	                 and a brass scale, Tobin the Miner at the cart's inner
+	                 end greeting the walk lane (so the SHOP's showcase and
+	                 display bay behind the cart stay in view), and the
+	                 floodlight that lights the SHOP sign (it faces away
+	                 from the sun).
 	  UpgradesFront  a glowing laser blaster floating over a low
 	                 table-display-planet pedestal inside a neon ring (tag
 	                 Spin) on the viewer's left, a computer-screen kiosk on
@@ -115,14 +120,18 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 	Kit.tag(bin, "SellBin")
 	bin.PrimaryPart = intake
 
-	-- the glowing SELL sign box set into the bin's front wall (its top about
-	-- flush with the bin's rim)
-	Tech.sign(m, at(bx, 1.75, bz - d / 2 - 0.5), "SELL", 3.6, 1.4, { CasingDepth = 0.7 })
+	-- the glowing SELL sign box in the module language (chamfered blue neon
+	-- frame, orange corner studs), raised on a gunmetal mast over the bin's
+	-- front wall: its top about 4.9 studs high, still under the SHOP porch
+	local signY = 3.5
+	local signZ = bz - d / 2 - 0.5
+	Style.block(m, at(bx, 2.95, bz - d / 2 + 0.25), Vector3.new(1.2, 3.1, 0.5), Tech.MetalDark, nil, Style.decor())
+	Tech.sign(m, at(bx, signY, signZ), "SELL", 4.2, 1.8, { CasingDepth = 0.7, Margin = 0.3, Lip = 0.2, Back = true })
 
 	-- Tobin's ore cart on a stub of rails (outer third, viewer's left, pulled
 	-- toward the plaza): a metal counter laid across its front (tag
 	-- SellCounter) with a brass scale and coin stacks
-	local cx, cz = 3.65, -1.6
+	local cx, cz = 4.85, -1.6
 	Style.rails(m, at(cx - 1.65, 0, cz).Position, at(cx + 1.65, 0, cz).Position)
 	Style.block(m, at(cx, 1.6, cz), Vector3.new(3.0, 1.5, 2.6), Tech.Metal, nil, Style.solid())
 	Kit.bit(m, at(cx, 2.5, cz), Vector3.new(3.3, 0.35, 2.9), Tech.MetalLight, Kit.METAL)
@@ -154,10 +163,11 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 		Kit.disc(m, at(cx + x, 3.0 + 0.2 * i, sz).Position, 0.4 * i, 0.55, C.Gold, nil, Style.tiny())
 	end
 
-	-- Tobin the Miner at the outer end of his cart, facing the walk lane (so
-	-- he stands in front of the SHOP's pylon, not its window): hard hat with
-	-- a head lamp, beard, overalls
-	Kit.npc(m, at(cx + 2.55, 0, cz) * CFrame.Angles(0, math.pi / 2, 0), {
+	-- Tobin the Miner at the inner end of his cart, greeting the walk lane
+	-- (seen from the plaza he stands beside the SHOP's door, not in front of
+	-- its glass showcase or display bay): hard hat with a head lamp, beard,
+	-- overalls
+	Kit.npc(m, at(cx - 2.2, 0, cz) * CFrame.Angles(0, math.pi / 2, 0), {
 		Name = "Tobin",
 		Tag = "Tobin the Miner",
 		Shirt = C.AwningRed,
@@ -169,8 +179,15 @@ local function sellStall(parent: Instance, rng: Rng.Rng)
 	})
 
 	-- a flat metal floor plate under the cart and Tobin with a warm front edge (no collision)
-	Kit.bit(m, at(cx + 0.8, 0.04, cz + 0.2), Vector3.new(5.1, 0.08, 4.4), Tech.MetalDark)
-	Tech.glow(m, at(cx + 0.8, 0.06, cz - 2.05), Vector3.new(5.1, 0.08, 0.16), Tech.Warm)
+	Kit.bit(m, at(cx - 0.45, 0.04, cz + 0.2), Vector3.new(5.0, 0.08, 4.4), Tech.MetalDark)
+	Tech.glow(m, at(cx - 0.45, 0.06, cz - 2.05), Vector3.new(5.0, 0.08, 0.16), Tech.Warm)
+
+	-- the floodlight that lights the SHOP sign's letters (the sign faces away
+	-- from the sun): an invisible anchor high over the cart, about 5 studs in
+	-- front of the sign's text, so the light falls evenly on the letters
+	local flood = Kit.block(m, at(2.3, 9.4, 0.4), Vector3.new(0.2, 0.2, 0.2), C.GlowText, nil, Style.tiny({ Transparency = 1 }))
+	flood.Name = "SignFlood"
+	Style.light(flood, C.GlowText, 18, 2.0)
 end
 
 ---------------------------------------------------------------- the blaster display

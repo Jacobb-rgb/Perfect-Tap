@@ -122,11 +122,12 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 		)
 	end
 	Tech.glow(m, at(0, (WALL_TOP + ROOF_TOP) / 2, roofZ - roofD / 2 - 0.06), Vector3.new(13.4, 0.3, 0.12), violet)
-	Tech.glow(m, at(0, ROOF_TOP + 0.42, roofZ - roofD / 2 - 0.04), Vector3.new(13.4, Tech.TUBE, 0.16), Tech.Tube)
+	Tech.channel(m, at(0, ROOF_TOP + 0.42, roofZ - roofD / 2 - 0.14), 13.4, Tech.EDGE)
 	Tech.underBevel(m, at(0, WALL_TOP - 0.3, roofZ - roofD / 2 + 0.3), Vector3.new(13.4, 0.6, 0.6), Tech.MetalLight)
-	-- thick blue neon roof edges down both sides (the module's outline)
+	-- thick blue neon roof edges down both sides (the module's outline), in
+	-- dark channels
 	for _, side in { -1, 1 } do
-		Tech.glow(m, at(side * 6.74, ROOF_TOP + 0.42, roofZ), Vector3.new(0.16, Tech.TUBE, roofD), Tech.Tube)
+		Tech.channel(m, at(side * 6.84, ROOF_TOP + 0.42, roofZ) * CFrame.Angles(0, -side * math.pi / 2, 0), roofD, Tech.EDGE)
 	end
 
 	-- the big deep violet crystal (with two smaller ones) rising out of a

@@ -3,9 +3,12 @@
 	gameplay hook exists once under Lobby.Districts with the right class,
 	children and attributes, every piece stays inside its LobbyLayout
 	footprint and height budget (spinning models over their whole sweep),
-	the SPIN & WIN frame grows with a bigger footprint, Tobin's Sell stall
-	stays low in front of the SHOP, the walk lanes to the shop counters stay
-	open, the build is deterministic and the package stays inside its budget.
+	the SPIN & WIN frame grows with a bigger footprint and its armored
+	housings make it about 1.5 times as wide as the disc, the SHOP and
+	UPGRADES modules get lit display bays and showcases for their width (20
+	or 28), Tobin's Sell stall stays low in front of the SHOP, the walk lanes
+	to the shop counters stay open, the build is deterministic and the
+	package stays inside its budget.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -298,8 +301,11 @@ return function(T, Loader)
 			end
 			return m, top
 		end
-		local _, baseTop = build()
 		local ok, err = pcall(function()
+			-- the layout's 18 x 26 x 10 piece and the requested 26 x 36 x 12 one
+			piece.Size = Vector3.new(18, 26, 10)
+			local base, baseTop = build()
+			T.falsy(outside(base.SpinWheel, piece), "the 18 wide wheel stays inside its footprint")
 			piece.Size = Vector3.new(26, 36, 12)
 			local big, bigTop = build()
 			T.falsy(outside(big.SpinWheel, piece), "the bigger wheel stays inside its footprint")
@@ -310,6 +316,39 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+	end)
+
+	T.test("districts: armored housings make the SPIN & WIN frame much wider than its disc", function()
+		local _, pkg = districts()
+		local piece = LobbyLayout.get("SpinWheel")
+		local frame = LobbyLayout.frame(piece)
+		local wheel = pkg.SpinWheel.Wheel
+		local axle = wheel.PrimaryPart.CFrame.Position
+		-- the disc: the farthest point of the turning wheel from the axle
+		local disc = 0
+		for _, d in wheel:GetDescendants() do
+			if d:IsA("BasePart") then
+				for _, p in corners(d) do
+					local q = frame:PointToObjectSpace(p) - frame:PointToObjectSpace(axle)
+					disc = math.max(disc, math.sqrt(q.X * q.X + q.Y * q.Y))
+				end
+			end
+		end
+		-- the frame beside the disc: static parts at the axle's height
+		local axleY = frame:PointToObjectSpace(axle).Y
+		local half = 0
+		for _, d in pkg.SpinWheel:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(wheel) then
+				local q = frame:PointToObjectSpace(d.CFrame.Position)
+				if math.abs(q.Y - axleY) < disc * 0.35 then
+					for _, p in corners(d) do
+						half = math.max(half, math.abs(frame:PointToObjectSpace(p).X))
+					end
+				end
+			end
+		end
+		T.truthy(disc > 4, `the wheel has a disc ({disc})`)
+		T.truthy(half >= disc * 1.35, `the frame (half width {half}) is about 1.5 times the disc (radius {disc})`)
 	end)
 
 	T.test("districts: the SHOP and UPGRADES modules get a second display bay when wider", function()
@@ -323,20 +362,30 @@ return function(T, Loader)
 			end
 			return n
 		end
-		local _, pkg = districts()
-		T.eq(showcases(pkg.Shop), 2, "the 20 wide SHOP has two glass showcases")
-		T.eq(showcases(pkg.Upgrades), 2, "the 20 wide UPGRADES has two glass showcases")
+		local function bayCases(m): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "BayCase" then
+					n += 1
+				end
+			end
+			return n
+		end
 		local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades") }
 		local sizes = { pieces[1].Size, pieces[2].Size }
 		local ok, err = pcall(function()
-			for _, piece in pieces do
-				piece.Size = Vector3.new(28, 20, 14)
-			end
-			local m = roblox.Instance.new("Model")
-			Stalls.build(m, Rng.new("Lobby/Districts/stalls"))
-			for _, piece in pieces do
-				T.falsy(outside(m[piece.Id], piece), piece.Id .. " (28 wide) stays inside its footprint")
-				T.eq(showcases(m[piece.Id]), 4, piece.Id .. " (28 wide) has a second showcase per side")
+			for _, width in { 20, 28 } do
+				for _, piece in pieces do
+					piece.Size = Vector3.new(width, 20, 14)
+				end
+				local m = roblox.Instance.new("Model")
+				Stalls.build(m, Rng.new("Lobby/Districts/stalls"))
+				local want = if width >= 27 then 4 else 2
+				for _, piece in pieces do
+					T.falsy(outside(m[piece.Id], piece), `{piece.Id} ({width} wide) stays inside its footprint`)
+					T.eq(showcases(m[piece.Id]), want, `{piece.Id} ({width} wide) porch showcases`)
+					T.eq(bayCases(m[piece.Id]), want, `{piece.Id} ({width} wide) lit display bays with a glass case`)
+				end
 			end
 		end)
 		for i, piece in pieces do

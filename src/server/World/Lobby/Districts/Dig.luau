@@ -7,9 +7,10 @@
 	a half-buried dinosaur
 	skeleton (a long skull with a jaw, eye sockets and teeth), a small find,
 	tools, a sieve, a wheelbarrow, a City Kit parasol over the finds, a
-	bone-scanning terminal and two glowing FOSSIL DIG sign boxes with a bone
-	icon: at the entrance (which faces the plaza and the ToFossil path) and
-	over the south fence (its back, seen from the plaza, repeats the words).
+	bone-scanning terminal, the glowing FOSSIL DIG sign box with a bone
+	icon at the entrance (which faces the plaza and the ToFossil path) and
+	a Kingdom of Kaldrum story board over the south fence (a display-wall
+	screen with a bone icon, facing the south road).
 
 	Tag FossilDig on the model, PrimaryPart = the bed.
 	Local frame: 18 wide (+X = north), 8 tall, 24 deep, front = -Z (west).
@@ -216,22 +217,20 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 		Style.icon(m, frontIcon * CFrame.new(0, 0, -0.12), "Bone", 1.9, Tech.GoldGlow, Kit.NEON)
 	end
 
-	-- a second, bigger FOSSIL DIG sign box over the south fence, facing the
-	-- south road and the hero camera (the concept shows the dig's board from
-	-- the south); its frame turns local -Z (west) to local -X (south)
+	-- the Kingdom of Kaldrum story board over the south fence, facing the
+	-- south road and the hero camera: a display-wall screen in a gunmetal
+	-- bezel with a gold bone icon and the kingdom's name; its frame turns
+	-- local -Z (west) to local -X (south)
 	local south = at(-8.5, 0, 5.6) * CFrame.Angles(0, math.pi / 2, 0)
-	for _, dx in { -4.0, 4.0 } do
-		Style.block(m, south * CFrame.new(dx, 2.15, 0.45), Vector3.new(0.6, 4.3, 0.6), Tech.MetalLight)
+	for _, dx in { -2.8, 2.8 } do
+		Style.block(m, south * CFrame.new(dx, 2.0, 0.45), Vector3.new(0.6, 4.0, 0.6), Tech.MetalLight)
 	end
-	local _, southIcon = Tech.sign(m, south * CFrame.new(0, 5.9, 0), "FOSSIL DIG", 8.4, 2.2, {
-		Icon = 2.6,
-		IconLeft = true,
-		Back = "FOSSIL DIG",
-		BackFrame = true,
-	})
-	if southIcon then
-		Style.icon(m, southIcon * CFrame.new(0, 0, -0.12), "Bone", 2.1, Tech.GoldGlow, Kit.NEON)
-	end
+	local story = south * CFrame.new(0, 5.0, 0)
+	Tech.screen(m, story, 5.6, 2.4, Tech.Screen)
+	Tech.label(m, story * CFrame.new(-0.8, 0, -0.08), "KINGDOM OF KALDRUM", 3.7, 1.5, C.GlowText)
+	Style.icon(m, story * CFrame.new(1.9, 0, -0.12), "Bone", 1.5, Tech.GoldGlow, Kit.NEON)
+	-- the bezel's back (seen from the plaza side) names the story corner too
+	Tech.label(m, story * CFrame.new(0, 0, 0.57) * CFrame.Angles(0, math.pi, 0), "KINGDOM OF KALDRUM", 5.4, 1.5, C.GlowText)
 
 	m.PrimaryPart = bed
 	Kit.tag(m, "FossilDig")

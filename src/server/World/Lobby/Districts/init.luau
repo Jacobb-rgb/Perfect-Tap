@@ -94,7 +94,7 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 		Words = { { Text = title, Width = 7.4 * 0.8 } },
 		StudColor = Tech.Warm,
 	})
-	Tech.glow(m, at(0, 8.72, -0.5), Vector3.new(8.8, Tech.TUBE, 0.16), Tech.Tube)
+	Tech.channel(m, at(0, 8.72, -0.5), 8.8, Tech.EDGE)
 	m.PrimaryPart = board
 	Kit.tag(m, "GuildBoard")
 end
