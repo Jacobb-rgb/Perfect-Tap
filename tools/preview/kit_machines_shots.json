@@ -313,5 +313,26 @@
   ],
   "fov": 62,
   "shadowExtent": 40
+ },
+ "kit_max_close": {
+  "scene": "kit_machines",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -60,
+   10,
+   -29
+  ],
+  "target": [
+   -69,
+   4,
+   -16
+  ],
+  "fov": 55,
+  "shadowExtent": 40
  }
 }

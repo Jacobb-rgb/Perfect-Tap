@@ -678,7 +678,7 @@ local GROWTH = {
 	Upgrade look: crystal clusters on the sockets (more and bigger per level),
 	then the machine turns to crystal by colour role: level 2 the orange glow
 	and trims, level 3 the slate frames and pipes, level 4 the cream body
-	(see-through crystal, glowing inside).
+	(opaque glossy crystal, glowing inside).
 ]]
 local function crystalize(ctx: Ctx, level: number, theme: Theme)
 	if level <= 0 then
@@ -709,18 +709,17 @@ local function crystalize(ctx: Ctx, level: number, theme: Theme)
 				d.Color = theme.Main
 			elseif role == "Trim" and level >= 2 then
 				d.Color = if level >= 4 then theme.Deep else theme.Main
+			-- crystal machine parts stay opaque and glossy: see-through parts would
+			-- show the round corners inside them as balls (owner: no balls under crystals)
 			elseif role == "Frame" and level >= 3 then
 				d.Color = theme.Deep:Lerp(theme.Main, 0.25)
-				d.Material = GLASS
-				d.Transparency = 0.05
+				d.Reflectance = 0.1
 			elseif role == "Pipe" and level >= 3 then
 				d.Color = theme.Main:Lerp(theme.Deep, 0.4)
-				d.Material = GLASS
-				d.Transparency = 0.06
+				d.Reflectance = 0.1
 			elseif role == "Body" and level >= 4 then
-				d.Color = theme.Main:Lerp(theme.Pale, 0.3)
-				d.Material = GLASS
-				d.Transparency = 0.1
+				d.Color = theme.Main:Lerp(theme.Pale, 0.35)
+				d.Reflectance = 0.1
 			elseif role == "Dark" and level >= 4 then
 				d.Color = theme.Deep:Lerp(theme.Main, 0.25)
 				d.Material = NEON
@@ -805,7 +804,7 @@ local function clayFurnace(): Ctx
 	screenPanel(m, CFrame.new(hx + w / 2 + 0.22, bodyY, hz + 1.2) * CFrame.Angles(0, math.pi / 2, 0), 1.4, 1.6)
 
 	socket(ctx, Vector3.new(hx - w / 2 + 0.7, top - 0.3, front + 0.7), out(-1, -1), 1.3)
-	socket(ctx, Vector3.new(tx, tankTop - 0.1, tz), out(-0.5, 1, 0.3), 1.0)
+	socket(ctx, Vector3.new(tx + 0.1, FLOOR, tz + 1.35), out(-0.6, 1, 0.7), 1.0)
 	socket(ctx, Vector3.new(hx + w / 2 - 0.7, top - 0.3, hz + d / 2 - 0.7), out(1, 1), 1.2)
 	socket(ctx, Vector3.new(-3.4, FLOOR, -3.3), out(-1, -1, 0.8), 1.1)
 	socket(ctx, Vector3.new(3.4, FLOOR, 3.3), out(1, 1, 0.8), 1.0)
@@ -993,11 +992,11 @@ local function autoCleaner(): Ctx
 	steam.Parent = vent
 	stackLight(m, Vector3.new(-3.3, FLOOR, -3.3), 0.95)
 
-	socket(ctx, Vector3.new(tx - 0.6, tankTop - 0.4, tz + 0.6), out(-1, 1, 0.4), 1.1)
+	socket(ctx, Vector3.new(tx - 0.3, FLOOR, tz + 1.55), out(-1, 1, 0.7), 1.1)
 	socket(ctx, Vector3.new(legX[2] + 0.2, FLOOR + 0.5, az + 0.6), out(1, 0.6, 0.8), 1.0)
 	socket(ctx, Vector3.new(-3.4, FLOOR, 3.3), out(-1, 1, 0.8), 1.0)
 	socket(ctx, Vector3.new(bx + 1.1, rim - 0.4, 2.35 + 0.9), out(1, 1, 0.8), 0.9)
-	socket(ctx, Vector3.new(legX[1] - 0.3, beamY + 0.2, az), out(-1, 0, 0.6), 0.8)
+	socket(ctx, Vector3.new(legX[1] - 0.2, FLOOR, az + 0.9), out(-0.6, 1, 0.7), 0.8)
 	socket(ctx, Vector3.new(3.5, FLOOR, -3.4), out(1, -1, 0.9), 0.9)
 	socket(ctx, Vector3.new(bx + bw / 2, FLOOR + 1.6, 3.0), Vector3.new(1, 0.7, 0), 0.8)
 	socket(ctx, Vector3.new(bx, beamY + 0.45, az + 0.25), out(0, 1, 0.3), 0.9, true)
@@ -1068,7 +1067,7 @@ local function blastFurnace(): Ctx
 	screenPanel(m, CFrame.new(-w / 2 - 0.25, bodyY, hz - 0.6) * CFrame.Angles(0, -math.pi / 2, 0), 2.0, 2.0)
 
 	socket(ctx, Vector3.new(-w / 2 + 1.0, top - 0.45, front + 1.0), out(-1, -1), 1.6)
-	socket(ctx, Vector3.new(tx, tankTop - 0.15, tz + 0.3), out(1, 1, 0.4), 1.1)
+	socket(ctx, Vector3.new(tx + 0.1, FLOOR, tz + 1.3), out(1, 1, 0.7), 1.1)
 	socket(ctx, Vector3.new(w / 2 - 1.0, top - 0.45, front + 1.0), out(1, -1), 1.5)
 	socket(ctx, Vector3.new(-5.4, FLOOR, 5.3), out(-1, 1, 0.8), 1.4)
 	socket(ctx, Vector3.new(5.4, FLOOR, -5.3), out(1, -1, 0.8), 1.3)

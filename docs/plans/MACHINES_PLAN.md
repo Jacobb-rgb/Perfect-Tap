@@ -82,7 +82,10 @@ Then (same day) the first kit version looked "old, like old Minecraft"; the owne
   MachineData yet). Same contract as MachineBuilder so it can replace it.
 - Upgrade looks (KitMachines.build(id, level, theme)): L0 iron · L1 two small crystal clusters · L2 four clusters,
   the orange glow and trims turn crystal colour · L3 six bigger clusters, gunmetal frames and pipes turn crystal, a
-  soft light · L4 (max) the whole machine is crystal, a hero crystal on top, sparkles. Themes Aqua / Amethyst / Rose.
+  soft light · L4 (max) the whole machine is crystal, a hero crystal on top, sparkles. Themes Aqua / Amethyst / Rose:
+  the owner likes **all three** (how players get each colour is still open). Owner: **no ball under a crystal**, so the
+  crystal parts stay opaque and glossy (see-through parts showed the round corners inside as balls) and no crystal
+  grows from a dome or a ball end.
 - Preview: scene `kit_machines` (tools/lune/lib/kit_machines_gallery.luau, shots tools/preview/kit_machines_shots.json;
   the pads there are metal plates with glowing edges like the reference), pictures docs/screenshots/kit_*.jpg.
   Tests: tests/KitMachines.spec.luau.

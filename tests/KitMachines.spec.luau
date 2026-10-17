@@ -127,7 +127,8 @@ return function(T, Loader)
 			local top = KitMachines.build(id, KitMachines.MaxLevel)
 			local body = top:FindFirstChild("Body", true)
 			if body then
-				T.eq(body.Material, roblox.Enum.Material.Glass, id .. " max level body is crystal")
+				T.truthy(body.Color ~= KitMachines.Palette.Body, id .. " max level body is crystal coloured")
+				T.eq(body.Transparency, 0, id .. " max level body stays opaque (no balls showing through)")
 			end
 		end
 	end)
