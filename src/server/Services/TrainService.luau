@@ -4,49 +4,67 @@
 
 	Saved in data.Train (DataTemplate, cleaned by Migrations): CapacityLevel,
 	SpeedLevel, Cargo (items waiting at the station), TripCargo (items on the
-	train) and TripDepartAt / TripArriveAt (os.time(), 0 = no trip). An item
-	is always in exactly one place: in the world (loose or carried), Cargo,
-	TripCargo or the Ore Pen (data.Storage). Every move takes it from one
-	place and puts it into the next without a yield in between. Only the
-	saved trip times use os.time(); everything inside a session runs on
+	train) and TripDepartAt / TripArriveAt (wall-clock Unix seconds with
+	milliseconds, 0 = no trip; old whole-second saves read the same). An
+	item is always in exactly one place: in the world (loose or carried),
+	Cargo, TripCargo or the Ore Pen (data.Storage). Every move takes it from
+	one place and puts it into the next without a yield in between. Only the
+	saved trip times use the wall clock; everything inside a session runs on
 	workspace:GetServerTimeNow() (the clock the clients animate with).
 
 	- Intake: every BasePart tagged "TrainHopper" under Workspace.Map.Railway
 	  (the Mine Station hopper and the Mine Lifts, World/Railway builds them;
-	  hooks added later are picked up too) is an IntakeService zone. A loose
-	  item that lands in one goes into its OWNER's cargo (nobody can load
-	  another player's train) while the cargo has room and the train is at
-	  the station; otherwise it bounces back out toward the prompts with a
-	  throttled toast that says why (on its way / waiting at a full pen /
-	  coming back / full).
-	- Prompts (contract with the client): each hook gets two ProximityPrompts
-	  at the "PromptPoint" attachment of its station / lift (searched from the
-	  ancestor tagged "TrainStation" or "MineLift"), tagged "TrainPrompt" with
-	  attribute Action = "Load" | "Send":
-	    "TrainLoadPrompt"  "Load Train"  F / gamepad Y  UIOffset slot 0 (0, 0)
-	    "TrainSendPrompt"  "Send Train"  G / gamepad B  UIOffset slot 1 (0, 72)
-	  Slot 2 (0, 144) belongs to the client's own "Train" panel prompt. The
-	  server never changes Enabled after creating them: the client shows the
-	  Action "Load" prompt only while the player carries something
-	  (CarryCount attribute), like PromptController does with LoadPrompt.
+	  hooks added later and a railway that is built again are picked up too)
+	  is an IntakeService zone. A loose item that lands in one goes into its
+	  OWNER's cargo (nobody can load another player's train) while the cargo
+	  has room and the train is at the station; otherwise it bounces back out
+	  toward the prompts with a throttled toast that says why (on its way /
+	  waiting at a full pen / coming back / full).
+	- Prompt rules (shared with the client; TrainService.PromptSlots): each
+	  hook gets two ProximityPrompts at the "PromptPoint" attachment of its
+	  station / lift (searched from the ancestor tagged "TrainStation" or
+	  "MineLift"), tagged "TrainPrompt", with attributes Action = "Load" |
+	  "Send" and Slot (UIOffset = (0, Slot * 72), the machine prompts' step):
+	    slot 0 (0, 0)    "TrainLoadPrompt"  "Load Train"  F / gamepad Y
+	    slot 1 (0, 72)   "TrainSendPrompt"  "Send Train"  G / gamepad B
+	    slot 2 (0, 144)  kept free for the client's own "Train" panel prompt
+	                     (it must not stay at the default offset (0, 0))
+	  The server never changes Enabled after creating them, so the client
+	  decides what this screen shows: it hides every Action "Load" prompt while
+	  the player carries nothing (CarryCount attribute), the way
+	  PromptController treats machine LoadPrompts. A press with empty hands
+	  only gets a throttled hint.
 	- Departure: as soon as the cargo is full, on TrainAction "Send" (from
 	  anywhere: it is harmless) or AutoDepartSeconds after the last load.
 	  Cargo moves to TripCargo, the trip times are saved and every client gets
 	  "TrainTrip" { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load }
-	  (server time) and animates the trip. A timer wakes the train exactly at
-	  ArriveAt, the 1 s loop is the safety net.
+	  (server time; Load = {} when all of it is dirty ore, so the client shows
+	  its own dirt colors) and animates the trip. A timer wakes the train
+	  exactly at ArriveAt, the 1 s loop is the safety net.
 	- Arrival: TripCargo goes into the Ore Pen up to its capacity
-	  (ItemService.penCapacity). Leftovers wait on the train ("Waiting") and
-	  are tried again every DeliveryRetry seconds (one "pen full" toast per
-	  trip). Once empty: trip times cleared, Stats.TrainTrips + 1, Fx
-	  "TrainUnload" (plotId, count) to everyone, and the empty train rolls
-	  back for ReturnSeconds before it can load again.
+	  (ItemService.penCapacity). Once empty: trip times cleared,
+	  Stats.TrainTrips + 1, Fx "TrainUnload" (plotId, count) to everyone, and
+	  the empty train rolls back for ReturnSeconds before it can load again.
+	- Waiting (shared with the client): when the pen can't take the whole
+	  load, the rest stays on the train, which stands at the player's stop and
+	  is tried again every DeliveryRetry seconds (one "pen full" toast per
+	  trip). Everyone gets "TrainTrip" again with the same times and the
+	  optional field Waiting = true (also in a joiner's list and when a
+	  rejoining player's waiting train is announced); the owner's snapshot has
+	  Waiting = true and Moving > 0. No "TrainUnload" comes until it really
+	  unloads; then "TrainTrip" comes once more with ArriveAt = the unload
+	  time (no Waiting; DepartAt kept unless the trip would get longer than
+	  MaxTripSpan, which clients refuse) right before Fx "TrainUnload", and
+	  it rolls back for ReturnSeconds from then.
 	- Joining: a trip that arrived while you were away is delivered at once
-	  (no animation, no return trip; also its later retries when the pen was
-	  full) with one "while you were away" toast for the whole load. A
-	  running trip is announced again, and the joining player gets the list
-	  of everyone else's trips. For JoinGrace seconds a full cargo does not
-	  leave by itself (perks such as Express may still be on their way).
+	  (no animation, no return trip) with a "while you were away" toast; if
+	  the pen can't take it all, the train waits at your stop as above, for
+	  everyone to see. A running trip is announced again (same server times
+	  as before when you rejoin the same server), and the joining player gets
+	  the list of everyone else's trains that carry ore (on the move or
+	  waiting; empty trains rolling back are left out: Count 0 never happens).
+	  For JoinGrace seconds a full cargo does not leave by itself (perks such
+	  as Express may still be on their way).
 	- Upgrades: TrainAction "Upgrade" { Kind = "Capacity" | "Speed" } buys
 	  the next level (TrainConfig.nextPrice, EconomyService.spend). The
 	  Express perk (Perks "TrainExpress") adds cargo and speed.
@@ -58,7 +76,8 @@
 	  at ArriveAt + TrainConfig.ReturnSeconds. ArriveAt is the TrainTrip
 	  arrival, or the moment it really unloaded when it had to wait.
 	  Waiting = true while it stands at your stop because the pen is full
-	  (Moving > 0 and the arrival has passed).
+	  (then Moving > 0 and ArriveAt has passed); the train is away (no
+	  loading) whenever Moving > 0 or ArriveAt + ReturnSeconds is ahead.
 	Studio: Players.<you>:SetAttribute("Perk_TrainExpress", true) tries Express.
 ]]
 
@@ -99,7 +118,8 @@ export type Trip = {
 	ArriveAt: number, -- server time
 	Count: number,
 	Color: Color3, -- the plot banner
-	Load: { Color3 }, -- ore colors for the wagon (dirty ore stays dirt colored)
+	Load: { Color3 }, -- ore colors for the wagon ({} = all dirty ore: the client's dirt colors)
+	Waiting: boolean?, -- true: it stands at its stop, the pen is full (see the header)
 }
 
 type Train = {
@@ -128,28 +148,41 @@ type Runtime = {
 	ArriveAt: number?, -- its arrival, or the late unload after waiting at a full pen
 	ReturnUntil: number?, -- the empty train is back at the station (ArriveAt + ReturnSeconds)
 	NextRetry: number?, -- the next unloading try (pen full)
-	PenToast: boolean, -- "pen full" was said on this trip (it had to wait)
+	Waiting: boolean, -- a try left ore on the train: it stands at the stop ("pen full" said once)
 	Delivered: number, -- items unloaded on this trip so far
-	Silent: boolean, -- the trip arrived while the player was away: no unload effect, no return
+	Trip: Trip?, -- the last TrainTrip everyone got for this trip (kept while it rolls back)
 	Prepared: boolean, -- the join checks (onLoaded) have run
 	Announced: boolean, -- the trip from the last session was announced
 	Toasts: { [string]: number }, -- the last throttled toast per kind
+}
+
+-- A trip's server times by UserId, so a player who rejoins this server
+-- mid-trip gets exactly the times the other clients already animate.
+type SessionTrip = {
+	Wall: number, -- the saved TripDepartAt
+	WallArrive: number, -- the saved TripArriveAt
+	DepartAt: number,
+	ArriveAt: number,
 }
 
 TrainService.HookTag = "TrainHopper"
 TrainService.StationTag = "TrainStation"
 TrainService.LiftTag = "MineLift"
 TrainService.PromptTag = "TrainPrompt"
-TrainService.PromptSlotHeight = 72 -- UIOffset pixels per prompt slot
-TrainService.PromptSlots = { Load = 0, Send = 1, Panel = 2 } -- Panel: the client's "Train" prompt
+TrainService.PromptSlotHeight = 72 -- UIOffset pixels per prompt slot (as IntakeService's machine prompts)
+-- The prompt rules (header): Load and Send are the server's, Panel is the client's "Train" prompt.
+TrainService.PromptSlots = { Load = 0, Send = 1, Panel = 2 }
 TrainService.LoadRange = 14 -- studs from a hook's prompt point for "Load Train"
 TrainService.FxRange = 90 -- players this close to a hopper see its TrainLoad puff
 TrainService.JoinGrace = 10 -- seconds after joining before a full cargo leaves by itself
+TrainService.MaxTripSpan = 600 -- clients ignore a TrainTrip with ArriveAt - DepartAt above this
 TrainService.FullText = "Your train is full – press Send"
 TrainService.AwayText = "Your train is on its way"
 TrainService.ReturnText = "Your train is coming back"
 TrainService.PenFullText = "Your Ore Pen is full – make room"
-TrainService.EmptyText = "Your train is empty. Throw ore into the Mine Station hopper first."
+TrainService.EmptyText = "Your train is empty. Throw ore into a train hopper first."
+TrainService.HandsText = "Carry ore here to load your train."
+TrainService.NoPlotText = "Your train leaves once you have a plot."
 -- PlotBuilder's banner colors (by plot id), for a plot whose Banner part can't be found.
 TrainService.BannerColors = {
 	Color3.fromRGB(220, 70, 50),
@@ -164,37 +197,50 @@ TrainService.BannerColors = {
 
 local RANGE_SLACK = 4 -- the server allows a little more (lag, walking while pressing)
 local TOAST_COOLDOWN = 5
+local PROMPT_TOAST_COOLDOWN = 2 -- hints for prompt presses and Send (a real press still gets one)
 local MAX_LOAD = 64 -- more than any carry stack
 local MAX_LOAD_COLORS = 6
 local BOUNCE_GAP = 1.5 -- studs outside the hopper box where refused items come out
 local OUT_SPEED = 8
 local OUT_UP = 12
 local WAKE_SLACK = 0.05 -- the arrival timer fires this much after ArriveAt
+local SESSION_TRIP_KEEP = 3600 -- seconds after its arrival a session trip is forgotten
 
--- os.time(): only for the saved trip times
-local wallClock: () -> number = os.time
+-- Unix seconds with milliseconds (os.time() has whole seconds): only for the saved trip times
+local function defaultWallClock(): number
+	return DateTime.now().UnixTimestampMillis / 1000
+end
+
 -- workspace:GetServerTimeNow(): every timer inside a session
-local serverNow: () -> number = function(): number
+local function defaultServerNow(): number
 	return Workspace:GetServerTimeNow()
 end
+
 -- runs fn after `seconds` (an arrival timer)
-local schedule: (number, () -> ()) -> () = function(seconds: number, fn: () -> ())
+local function defaultSchedule(seconds: number, fn: () -> ())
 	task.delay(seconds, fn)
 end
 
+local wallClock: () -> number = defaultWallClock
+local serverNow: () -> number = defaultServerNow
+local schedule: (number, () -> ()) -> () = defaultSchedule
+
 local runtimes: { [Player]: Runtime } = {}
+local sessionTrips: { [number]: SessionTrip } = {}
 local hooks: { Hook } = {} -- a list: a handful of hooks, compared by instance
 local perkConnections: { [Player]: RBXScriptConnection } = {}
 -- weak keys: the last Reject effect per bounced item (GameConfig.RejectCooldown)
 local lastReject: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
 local watchedRailway: Instance? = nil
+local railwayConnection: RBXScriptConnection? = nil
+local mapConnection: RBXScriptConnection? = nil
 
 ---------------------------------------------------------------- state
 
 local function runtimeOf(player: Player): Runtime
 	local r = runtimes[player]
 	if not r then
-		r = { PenToast = false, Delivered = 0, Silent = false, Prepared = false, Announced = false, Toasts = {} }
+		r = { Waiting = false, Delivered = 0, Prepared = false, Announced = false, Toasts = {} }
 		runtimes[player] = r
 	end
 	return r
@@ -263,16 +309,40 @@ local function cargoRoom(player: Player, train: Train): number
 	return math.max(0, math.min(byCapacity, bySave))
 end
 
--- Server times of the trip on the move (worked out from the save once per session).
-local function tripTimes(train: Train, r: Runtime): (number, number)
+-- Remembers a trip's server times for a rejoin on this server (and forgets old ones).
+local function rememberTrip(userId: number, train: Train, departAt: number, arriveAt: number)
+	local now = serverNow()
+	for id, known in sessionTrips do
+		if known.ArriveAt + SESSION_TRIP_KEEP < now then
+			sessionTrips[id] = nil
+		end
+	end
+	sessionTrips[userId] = {
+		Wall = train.TripDepartAt,
+		WallArrive = train.TripArriveAt,
+		DepartAt = departAt,
+		ArriveAt = arriveAt,
+	}
+end
+
+-- Server times of the trip on the move (worked out from the save once per
+-- session; the very same times again when this server announced the trip before).
+local function tripTimes(userId: number, train: Train, r: Runtime): (number, number)
 	local departAt, arriveAt = r.DepartAt, r.ArriveAt
 	if departAt and arriveAt then
 		return departAt, arriveAt
 	end
-	local wall = wallClock()
-	local server = serverNow()
-	local depart = server - (wall - train.TripDepartAt)
-	local arrive = server + (train.TripArriveAt - wall)
+	local known = sessionTrips[userId]
+	local depart: number, arrive: number
+	if known and known.Wall == train.TripDepartAt and known.WallArrive == train.TripArriveAt then
+		depart, arrive = known.DepartAt, known.ArriveAt
+	else
+		local wall = wallClock()
+		local server = serverNow()
+		depart = server - (wall - train.TripDepartAt)
+		arrive = server + (train.TripArriveAt - wall)
+		rememberTrip(userId, train, depart, arrive)
+	end
 	r.DepartAt = depart
 	r.ArriveAt = arrive
 	return depart, arrive
@@ -280,11 +350,8 @@ end
 
 -- The train stands at your stop with ore it can't unload (the pen is full).
 local function isWaiting(player: Player, train: Train): boolean
-	if #train.TripCargo == 0 then
-		return false
-	end
-	local _, arriveAt = tripTimes(train, runtimeOf(player))
-	return serverNow() >= arriveAt
+	local r = runtimes[player]
+	return #train.TripCargo > 0 and r ~= nil and r.Waiting
 end
 
 ---------------------------------------------------------------- toasts and looks
@@ -293,16 +360,22 @@ local function toast(player: Player, text: string, kind: string?)
 	Net.fire("Notify", player, { Text = text, Kind = kind or "Deny" })
 end
 
--- At most one toast of this kind per TOAST_COOLDOWN seconds.
-local function throttledToast(player: Player, key: string, text: string, kind: string?)
+-- At most one toast of this kind per `cooldown` (default TOAST_COOLDOWN) seconds:
+-- exploit tools can fire prompts and remotes much faster than people.
+local function throttledToast(player: Player, key: string, text: string, kind: string?, cooldown: number?)
 	local r = runtimeOf(player)
 	local now = serverNow()
 	local last = r.Toasts[key]
-	if last and now >= last and now - last < TOAST_COOLDOWN then
+	if last and now >= last and now - last < (cooldown or TOAST_COOLDOWN) then
 		return
 	end
 	r.Toasts[key] = now
 	toast(player, text, kind)
+end
+
+-- A hint for a prompt press or Send (keyed by its text).
+local function hint(player: Player, text: string, kind: string?)
+	throttledToast(player, text, text, kind, PROMPT_TOAST_COOLDOWN)
 end
 
 -- Why an away train can't load now: waiting at a full pen, coming back or on its way.
@@ -327,15 +400,23 @@ function TrainService.bannerColor(plotId: number): Color3
 end
 
 -- What the wagon shows: the cargo's ore colors, most common first. Dirty ore
--- keeps its secret (one dirt color for every ore).
+-- keeps its secret (one dirt color for every ore); a load of nothing but
+-- dirty ore is {}, so the client uses its own shaded dirt colors.
 function TrainService.loadColors(items: { Desc }): { Color3 }
 	local counts: { [string]: number } = {}
 	local colors: { [string]: Color3 } = {}
+	local clean = 0
 	for _, item in items do
 		local ore = if item.K ~= "Raw" then OreData.ById[item.O] else nil
 		local key = if ore then item.O else "~Dirt"
 		counts[key] = (counts[key] or 0) + 1
 		colors[key] = if ore then ore.Color else ItemBuilder.DirtyCrust
+		if ore then
+			clean += 1
+		end
+	end
+	if clean == 0 then
+		return {}
 	end
 	local keys = {}
 	for key in counts do
@@ -354,22 +435,46 @@ function TrainService.loadColors(items: { Desc }): { Color3 }
 	return list
 end
 
--- The "TrainTrip" payload of a player's trip (nil when nothing is on the move).
+--[[
+	The "TrainTrip" payload of a player's train while it carries ore (on the
+	move or waiting at the stop); nil without a plot or ore on board. Count,
+	Color and Load stay what everyone got at departure, so a repeat never
+	rebuilds the client's train.
+]]
 local function tripOf(player: Player, train: Train): Trip?
 	local plotId = PlotService.plotOf(player)
 	if not plotId or #train.TripCargo == 0 then
 		return nil
 	end
-	local departAt, arriveAt = tripTimes(train, runtimeOf(player))
-	return {
+	local r = runtimeOf(player)
+	local departAt, arriveAt = tripTimes(player.UserId, train, r)
+	local sent = r.Trip
+	local trip: Trip = {
 		UserId = player.UserId,
 		PlotId = plotId,
 		DepartAt = departAt,
 		ArriveAt = arriveAt,
-		Count = #train.TripCargo,
-		Color = TrainService.bannerColor(plotId),
-		Load = TrainService.loadColors(train.TripCargo),
+		Count = if sent then sent.Count else #train.TripCargo,
+		Color = if sent then sent.Color else TrainService.bannerColor(plotId),
+		Load = if sent then sent.Load else TrainService.loadColors(train.TripCargo),
 	}
+	if r.Waiting then
+		trip.Waiting = true
+	end
+	return trip
+end
+
+-- Tells every client where this player's train is (TrainTrip). False when it carries nothing.
+local function broadcast(player: Player, train: Train): boolean
+	local trip = tripOf(player, train)
+	if not trip then
+		return false
+	end
+	local r = runtimeOf(player)
+	r.Trip = trip
+	r.Announced = true
+	Net.fireAll("TrainTrip", trip)
+	return true
 end
 
 ---------------------------------------------------------------- departure and arrival
@@ -410,26 +515,25 @@ function TrainService.depart(player: Player): boolean
 	r.ArriveAt = server + seconds
 	r.ReturnUntil = nil
 	r.NextRetry = nil
-	r.PenToast = false
+	r.Waiting = false
 	r.Delivered = 0
-	r.Silent = false
-	r.Announced = true
+	r.Trip = nil
+	rememberTrip(player.UserId, train, server, server + seconds)
 	DataService.changed(player)
-	local trip = tripOf(player, train)
-	if trip then
-		Net.fireAll("TrainTrip", trip)
-	end
+	broadcast(player, train)
 	wakeAt(player, server + seconds)
 	return true
 end
 
 --[[
 	Unloads an arrived train into the Ore Pen, up to the pen's capacity.
-	What doesn't fit stays on the train and is tried again later. A trip
-	that arrived while the player was away (r.Silent) unloads without the
-	unload effect and the return trip, and says the whole count once.
+	`away`: the trip arrived while the player was away (joining): it unloads
+	without the unload effect and the return trip and says the count once.
+	What doesn't fit stays on the train, which then waits at the stop for
+	everyone to see (Waiting, see the header) and is tried again later; once
+	it is empty it unloads with the effect and rolls back from then.
 ]]
-local function deliver(player: Player, data: { [string]: any })
+local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 	local train = trainOf(data)
 	local storage = data.Storage
 	if type(storage) ~= "table" then
@@ -448,45 +552,66 @@ local function deliver(player: Player, data: { [string]: any })
 	local now = serverNow()
 	if #train.TripCargo > 0 then
 		r.NextRetry = now + TrainConfig.DeliveryRetry
-		local first = not r.PenToast
-		if first then
-			-- (shares the throttle with the bounce toasts that say the same)
-			r.PenToast = true
-			throttledToast(player, TrainService.PenFullText, TrainService.PenFullText)
+		if r.Waiting then
+			if moved > 0 then
+				DataService.changed(player)
+			end
+			return
 		end
-		-- the HUD learns that the train waits (Waiting) on the first failed try
-		if moved > 0 or first then
-			DataService.changed(player)
+		-- the first try that leaves ore on the train: it waits at the stop
+		r.Waiting = true
+		if away and moved > 0 then
+			toast(player, `Your train brought {moved} ore to your Ore Pen while you were away.`, "Info")
 		end
+		-- (shares the throttle with the bounce toasts that say the same)
+		throttledToast(player, TrainService.PenFullText, TrainService.PenFullText)
+		DataService.changed(player)
+		-- everyone sees it standing there (without a plot yet: announced when it comes)
+		broadcast(player, train)
 		return
 	end
 	local count = r.Delivered
-	local waited = r.PenToast
+	local waited = r.Waiting
 	train.TripDepartAt = 0
 	train.TripArriveAt = 0
+	sessionTrips[player.UserId] = nil
 	local stats = data.Stats
 	if type(stats) == "table" then
 		stats.TrainTrips = (tonumber(stats.TrainTrips) or 0) + 1
 	end
 	r.NextRetry = nil
-	r.PenToast = false
+	r.Waiting = false
 	r.Delivered = 0
-	if r.Silent or count == 0 then
+	if (away and not waited) or count == 0 then
 		-- arrived while away (or an empty trip from a broken save): no effect, no return
-		r.Silent = false
 		r.DepartAt = nil
 		r.ArriveAt = nil
 		r.ReturnUntil = nil
+		r.Trip = nil
 		if count > 0 then
 			toast(player, `Your train brought {count} ore to your Ore Pen while you were away.`, "Info")
 		end
 	else
 		-- on time: the arrival the clients animate; after waiting at a full pen: now
 		local unloadAt = if waited or not r.ArriveAt then now else r.ArriveAt :: number
-		r.ArriveAt = unloadAt
-		r.DepartAt = r.DepartAt or unloadAt
-		r.ReturnUntil = unloadAt + TrainConfig.ReturnSeconds
+		local departAt = r.DepartAt or unloadAt
 		local plotId = PlotService.plotOf(player)
+		local sent = r.Trip
+		if waited and sent and plotId then
+			-- everyone sees it unload now (a trip no longer than clients accept)
+			if unloadAt - departAt > TrainService.MaxTripSpan then
+				departAt = unloadAt - math.clamp(sent.ArriveAt - sent.DepartAt, 0, TrainService.MaxTripSpan)
+			end
+			local trip = table.clone(sent)
+			trip.DepartAt = departAt
+			trip.ArriveAt = unloadAt
+			trip.Waiting = nil
+			r.Trip = trip
+			Net.fireAll("TrainTrip", trip)
+		end
+		r.DepartAt = departAt
+		r.ArriveAt = unloadAt
+		r.ReturnUntil = unloadAt + TrainConfig.ReturnSeconds
 		if plotId and count > 0 then
 			Net.fireAll("Fx", "TrainUnload", plotId, count)
 		end
@@ -502,11 +627,15 @@ function TrainService.send(player: Player): boolean
 	end
 	local train = trainOf(data)
 	if isAway(player, train) then
-		toast(player, awayText(player, train), "Info")
+		hint(player, awayText(player, train), "Info")
 		return false
 	end
 	if #train.Cargo == 0 then
-		toast(player, TrainService.EmptyText, "Info")
+		hint(player, TrainService.EmptyText, "Info")
+		return false
+	end
+	if not PlotService.plotOf(player) then
+		hint(player, TrainService.NoPlotText, "Info")
 		return false
 	end
 	return TrainService.depart(player)
@@ -596,11 +725,11 @@ local function loadFromHands(player: Player, hook: Hook)
 	end
 	local train = trainOf(data)
 	if #CarryService.list(player) == 0 then
-		toast(player, "Carry ore here to load your train.", "Info")
+		hint(player, TrainService.HandsText, "Info")
 		return
 	end
 	if isAway(player, train) then
-		toast(player, awayText(player, train))
+		hint(player, awayText(player, train))
 		return
 	end
 	local loaded = 0
@@ -622,7 +751,7 @@ local function loadFromHands(player: Player, hook: Hook)
 		afterLoad(player, train, hook.Part.CFrame.Position)
 	end
 	if #CarryService.list(player) > 0 then
-		toast(player, if isAway(player, train) then awayText(player, train) else TrainService.FullText)
+		hint(player, if isAway(player, train) then awayText(player, train) else TrainService.FullText)
 	end
 end
 
@@ -647,6 +776,7 @@ local function makePrompt(
 	prompt.RequiresLineOfSight = false
 	prompt.UIOffset = Vector2.new(0, slot * TrainService.PromptSlotHeight)
 	prompt:SetAttribute("Action", action)
+	prompt:SetAttribute("Slot", slot)
 	prompt:AddTag(TrainService.PromptTag)
 	prompt.Parent = parent
 	return prompt
@@ -737,20 +867,47 @@ end
 
 -- Every hook under the railway, now and later (deferred: a model being
 -- built gets its attachments before the hook is set up). `added` is the
--- railway's DescendantAdded (the tests pass their own).
+-- railway's DescendantAdded (the tests pass their own). A railway built
+-- again replaces the old one; hooks whose part is gone are dropped.
 local function watchRailway(railway: Instance, added: RBXScriptSignal<Instance>?)
 	watchedRailway = railway
+	for i = #hooks, 1, -1 do
+		if not hooks[i].Part.Parent then
+			table.remove(hooks, i)
+		end
+	end
 	for _, d in railway:GetDescendants() do
 		tryHook(d)
 	end
-	local function onAdded(d: Instance)
+	local previous = railwayConnection
+	if previous then
+		previous:Disconnect()
+	end
+	local signal: RBXScriptSignal<Instance> = added or railway.DescendantAdded
+	railwayConnection = signal:Connect(function(d: Instance)
 		task.defer(tryHook, d)
-	end
-	if added then
-		added:Connect(onAdded)
+	end)
+end
+
+-- The map's railway now and every "Railway" built into the map later
+-- (`childAdded` is the map's ChildAdded; the tests pass their own).
+local function watchMap(map: Instance, childAdded: RBXScriptSignal<Instance>?)
+	local railway = map:FindFirstChild("Railway")
+	if railway then
+		watchRailway(railway)
 	else
-		railway.DescendantAdded:Connect(onAdded)
+		warn("[TrainService] Workspace.Map has no Railway yet: the train hoppers come with it")
 	end
+	local previous = mapConnection
+	if previous then
+		previous:Disconnect()
+	end
+	local signal: RBXScriptSignal<Instance> = childAdded or map.ChildAdded
+	mapConnection = signal:Connect(function(child: Instance)
+		if child.Name == "Railway" and child ~= watchedRailway then
+			watchRailway(child)
+		end
+	end)
 end
 
 -- A part tagged TrainHopper after it was built (or rebuilt) under the railway.
@@ -830,7 +987,7 @@ local function tickOne(player: Player, now: number)
 	local r = runtimeOf(player)
 	-- on the move or waiting at the stop: unload when it has arrived
 	if #train.TripCargo > 0 or train.TripArriveAt > 0 then
-		local _, arriveAt = tripTimes(train, r)
+		local _, arriveAt = tripTimes(player.UserId, train, r)
 		local retry = r.NextRetry
 		if now >= arriveAt and (not retry or now >= retry) then
 			deliver(player, data)
@@ -842,9 +999,11 @@ local function tickOne(player: Player, now: number)
 		r.ReturnUntil = nil
 		r.DepartAt = nil
 		r.ArriveAt = nil
+		r.Trip = nil
 		DataService.changed(player)
 	end
-	if #train.Cargo == 0 or isReturning(player) then
+	-- (no plot: the train can't leave, so no countdown either)
+	if #train.Cargo == 0 or isReturning(player) or not PlotService.plotOf(player) then
 		return
 	end
 	-- leave when full (not right after joining: perks may still come), or
@@ -879,23 +1038,27 @@ end
 
 ---------------------------------------------------------------- joining
 
--- A player's running trip to every client (once per session, when both the
--- save and the plot are ready).
+-- A joining player's train to every client (once per session, when both
+-- the save and the plot are ready): on the move, or waiting at its stop.
 local function announce(player: Player)
 	local r = runtimes[player]
 	local data = DataService.get(player)
-	if not r or not r.Prepared or r.Announced or r.Silent or not data then
+	if not r or not r.Prepared or r.Announced or not data then
 		return
 	end
-	local trip = tripOf(player, trainOf(data))
-	if not trip or trip.ArriveAt <= serverNow() then
+	local train = trainOf(data)
+	if #train.TripCargo == 0 then
 		return
 	end
-	r.Announced = true
-	Net.fireAll("TrainTrip", trip)
+	local _, arriveAt = tripTimes(player.UserId, train, r)
+	-- (arrived but not tried yet: the arrival unloads it in a moment)
+	if arriveAt > serverNow() or r.Waiting then
+		broadcast(player, train)
+	end
 end
 
--- Everyone else's trips for a joining player (a list, maybe empty).
+-- Everyone else's trains that carry ore, for a joining player (a list, maybe
+-- empty). Empty trains rolling back are left out (Count 0 never happens).
 local function sendTripsTo(player: Player)
 	local list: { Trip } = {}
 	for other in runtimes do
@@ -925,11 +1088,10 @@ local function onLoaded(player: Player, data: { [string]: any })
 		if train.TripDepartAt <= 0 or train.TripDepartAt > train.TripArriveAt then
 			train.TripDepartAt = train.TripArriveAt - tripSecondsOf(player, train)
 		end
-		local _, arriveAt = tripTimes(train, r)
+		local _, arriveAt = tripTimes(player.UserId, train, r)
 		if server >= arriveAt then
-			-- arrived while away: no animation, now or on the retries
-			r.Silent = true
-			deliver(player, data)
+			-- arrived while away: no animation (unless the pen is full: then it waits at the stop)
+			deliver(player, data, true)
 		else
 			wakeAt(player, arriveAt)
 		end
@@ -956,14 +1118,14 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 	local now = serverNow()
 	local departAt: number?, arriveAt: number? = nil, nil
 	if r and #train.TripCargo > 0 then
-		departAt, arriveAt = tripTimes(train, r)
+		departAt, arriveAt = tripTimes(player.UserId, train, r)
 	elseif r and isReturning(player) then
 		-- rolling back: the client works out "returning" from ArriveAt + ReturnSeconds
 		departAt, arriveAt = r.DepartAt, r.ArriveAt
 	end
 	local lastLoad = r and r.LastLoad
 	local autoIn: number? = nil
-	if not away and #train.Cargo > 0 and lastLoad then
+	if not away and #train.Cargo > 0 and lastLoad and PlotService.plotOf(player) then
 		autoIn = math.max(0, lastLoad + TrainConfig.AutoDepartSeconds - now)
 	end
 	snapshot.Train = {
@@ -979,19 +1141,11 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		Express = express,
 		TripSeconds = TrainConfig.tripSeconds(train.SpeedLevel, express),
 		AutoDepartIn = autoIn,
-		Waiting = #train.TripCargo > 0 and arriveAt ~= nil and now >= arriveAt,
+		Waiting = isWaiting(player, train),
 	}
 end
 
 ---------------------------------------------------------------- lifecycle
-
-local function defaultServerNow(): number
-	return Workspace:GetServerTimeNow()
-end
-
-local function defaultSchedule(seconds: number, fn: () -> ())
-	task.delay(seconds, fn)
-end
 
 -- Internals for the Lune tests only (tests/TrainService.spec.luau).
 TrainService._test = {
@@ -1000,6 +1154,10 @@ TrainService._test = {
 	load = loadFromHands,
 	setupHook = setupHook,
 	watch = watchRailway,
+	watchMap = watchMap,
+	hooks = function(): number
+		return #hooks
+	end,
 	tagged = onTagged,
 	loaded = onLoaded,
 	announce = announce,
@@ -1012,17 +1170,20 @@ TrainService._test = {
 	forget = function(player: Player)
 		runtimes[player] = nil
 	end,
-	-- wall: os.time() for the saved times; server: GetServerTimeNow(); after: the arrival timer
+	-- wall: the wall clock for the saved times; server: GetServerTimeNow(); after: the arrival timer
 	setClock = function(wall: (() -> number)?, server: (() -> number)?, after: ((number, () -> ()) -> ())?)
-		wallClock = wall or os.time
+		wallClock = wall or defaultWallClock
 		serverNow = server or defaultServerNow
 		schedule = after or defaultSchedule
 	end,
 	reset = function()
 		table.clear(runtimes)
+		table.clear(sessionTrips)
 		table.clear(hooks)
 		watchedRailway = nil
-		wallClock = os.time
+		railwayConnection = nil
+		mapConnection = nil
+		wallClock = defaultWallClock
 		serverNow = defaultServerNow
 		schedule = defaultSchedule
 	end,
@@ -1067,23 +1228,11 @@ function TrainService.start()
 	-- WorldService.init has built (or kept) the map, the railway with it
 	local map: Instance? = WorldService.Map or Workspace:FindFirstChild("Map")
 	if map then
-		local railway = map:FindFirstChild("Railway")
-		if railway then
-			watchRailway(railway)
-		else
-			warn("[TrainService] Workspace.Map has no Railway: the train hoppers come when it does")
-			local connection: RBXScriptConnection? = nil
-			connection = map.ChildAdded:Connect(function(child: Instance)
-				if child.Name == "Railway" and not watchedRailway then
-					if connection then
-						connection:Disconnect()
-					end
-					watchRailway(child)
-				end
-			end)
-		end
+		watchMap(map)
 	else
-		warn("[TrainService] no Workspace.Map: the train hoppers are missing")
+		task.spawn(function()
+			watchMap(Workspace:WaitForChild("Map"))
+		end)
 	end
 	while true do
 		task.wait(1)

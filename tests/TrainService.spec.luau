@@ -421,10 +421,18 @@ return function(T, Loader)
 		T.truthy(load:HasTag(TrainService.PromptTag) and send:HasTag(TrainService.PromptTag), "tagged for the client")
 		T.eq(load:GetAttribute("Action"), "Load", "load action")
 		T.eq(send:GetAttribute("Action"), "Send", "send action")
-		-- UIOffset slots: Load 0, Send 1, the client's "Train" panel prompt 2
+		-- the prompt rules: Load slot 0, Send slot 1, slot 2 (0, 144) for the client's "Train" panel prompt
 		T.eq(load.UIOffset, Vector2.new(0, 0), "load in slot 0")
 		T.eq(send.UIOffset, Vector2.new(0, TrainService.PromptSlotHeight), "send in slot 1")
+		T.eq(load:GetAttribute("Slot"), 0, "load slot attribute")
+		T.eq(send:GetAttribute("Slot"), 1, "send slot attribute")
+		T.eq(TrainService.PromptSlotHeight, 72, "the machine prompts' step")
 		T.eq(TrainService.PromptSlots.Panel * TrainService.PromptSlotHeight, 144, "slot 2 for the client")
+		for _, prompt in point:GetChildren() do
+			if prompt:IsA("ProximityPrompt") then
+				T.truthy(prompt.Name ~= "TrainPrompt", "no server prompt takes the client's prompt name")
+			end
+		end
 		T.truthy(load.Enabled and send.Enabled, "enabled (the client hides Load with empty hands)")
 		local liftPoint = w.railway.Lift_EmberCaves.Cage.PromptPoint
 		T.eq(liftPoint.TrainLoadPrompt.ObjectText, "Mine Lift", "lift prompts")
@@ -617,6 +625,7 @@ return function(T, Loader)
 		T.eq(#trip.Load, 2, "dirt and gold")
 		T.eq(trip.Load[1], ItemBuilder.DirtyCrust, "dirty ore shows as dirt, most first")
 		T.eq(trip.Load[2], OreData.ById.Gold.Color, "cleaned gold shows its color")
+		T.eq(trip.Waiting, nil, "on its way: not waiting")
 		-- the train is away: items bounce, the toast is throttled
 		local bounced = drop(w.station, USER, COAL)
 		T.eq(bounced.State, "Loose", "bounced")
@@ -630,8 +639,14 @@ return function(T, Loader)
 		T.eq(toasts(w, w.player, TrainService.AwayText), 2, "told again later")
 		T.eq(#t.TripCargo, CAP, "nothing joined the moving train")
 		T.eq(#t.Cargo, 0, "nothing waits at the station")
-		-- dirty ore never shows its ore color on the wagon
-		T.eq(TrainService.loadColors({ DIRTY_GOLD, DIRTY_GOLD })[1], ItemBuilder.DirtyCrust, "dirty gold is dirt")
+		-- dirty ore never shows its ore color on the wagon; all dirty: {} (the client's shaded dirt)
+		T.eq(#TrainService.loadColors({ DIRTY_GOLD, DIRTY_GOLD, COAL }), 0, "all dirty: no colors")
+		T.eq(#TrainService.loadColors({}), 0, "nothing: no colors")
+		local mixed = TrainService.loadColors({ DIRTY_GOLD, GOLD, IRON, IRON })
+		T.eq(mixed[1], OreData.ById.Iron.Color, "most common first")
+		T.eq(#mixed, 3, "iron, then dirt and gold")
+		T.truthy(table.find(mixed, ItemBuilder.DirtyCrust) ~= nil, "dirty gold is dirt")
+		T.truthy(table.find(mixed, OreData.ById.Gold.Color) ~= nil, "clean gold shows")
 	end)
 
 	withWorld("TrainService: an item that rolls back into the hopper gets the Reject effect once per cooldown", function(w)
@@ -717,6 +732,7 @@ return function(T, Loader)
 		local list = trips(w, USER)
 		T.eq(#list, 1, "sent from far away")
 		T.eq(list[1].Count, 2, "with 2 items")
+		T.eq(#list[1].Load, 0, "all dirty ore: no colors, the client shows its dirt")
 		T.eq(#w.data.Train.Cargo, 0, "cargo moved")
 		train.action(w.player, "Send")
 		T.eq(#trips(w, USER), 1, "can't send twice")
@@ -821,15 +837,31 @@ return function(T, Loader)
 		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "one toast")
 		T.eq(#unloads(w), 0, "not unloaded yet")
 		T.truthy(t.TripArriveAt > 0, "the trip is not over")
+		-- everyone learns it stands at the stop: the same trip again, Waiting = true
+		local list = trips(w, USER)
+		T.eq(#list, 2, "TrainTrip again")
+		T.eq(list[2].Waiting, true, "waiting")
+		T.eq(list[2].DepartAt, trip.DepartAt, "same departure (the client keeps its train)")
+		T.eq(list[2].ArriveAt, trip.ArriveAt, "same arrival")
+		T.eq(list[2].Count, trip.Count, "the count it left with")
+		T.eq(list[2].Load, trip.Load, "the load it left with")
 		-- the snapshot as the client reads it: waiting at the stop
 		local s = snapshot(w, w.player)
 		T.eq(s.Waiting, true, "waiting")
 		T.eq(s.Moving, 3, "on the train")
 		T.near(s.ArriveAt, trip.ArriveAt, 1e-6, "it did arrive")
+		-- a joiner sees it waiting too
+		train.loaded(w.other, w.otherData)
+		local joinList = lastNote(w, "TrainTrip")
+		T.eq(joinList.Player, w.other, "the joiner's list")
+		T.eq(#joinList.A, 1, "my waiting train")
+		T.eq(joinList.A[1].Waiting, true, "marked waiting")
+		T.eq(joinList.A[1].ArriveAt, trip.ArriveAt, "same times")
 		-- every refusal says why
 		T.eq(drop(w.station, USER, COAL).State, "Loose", "the train is not back: no loading")
 		T.eq(toasts(w, w.player, TrainService.AwayText), 0, "not 'on its way'")
 		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "shares the throttle with the arrival toast")
+		w.now += 2
 		train.action(w.player, "Send")
 		T.eq(lastToast(w, w.player).Text, TrainService.PenFullText, "Send: make room")
 		local said = toasts(w, w.player, TrainService.PenFullText)
@@ -838,6 +870,7 @@ return function(T, Loader)
 		T.eq(#t.TripCargo, 3, "still full")
 		T.eq(snapshot(w, w.player).Waiting, true, "still waiting")
 		T.eq(toasts(w, w.player, TrainService.PenFullText), said, "the retries don't repeat it")
+		T.eq(#trips(w, USER), 2, "nor the TrainTrip")
 		for _ = 1, 3 do
 			table.remove(w.data.Storage)
 		end
@@ -852,11 +885,29 @@ return function(T, Loader)
 		T.eq(#fx, 1, "unloaded once")
 		T.eq(fx[1].C, 5, "the whole load counts")
 		T.eq(toasts(w, w.player, TrainService.PenFullText), said, "never repeated")
-		-- unloaded late: ArriveAt moves to the unload, ArriveAt + ReturnSeconds is when it is back
+		-- unloaded late: everyone gets the unload time first (the train is at the stop for the effect)
+		list = trips(w, USER)
+		T.eq(#list, 3, "TrainTrip with the unload")
+		local late = list[3]
+		T.eq(late.Waiting, nil, "not waiting any more")
+		T.eq(late.DepartAt, trip.DepartAt, "same departure")
+		T.near(late.ArriveAt, unloadAt, 1e-6, "arrives (unloads) now")
+		T.eq(late.Count, trip.Count, "count")
+		local lateAt, fxAt = 0, 0
+		for i, note in w.all do
+			if note.Name == "TrainTrip" and note.A == late then
+				lateAt = i
+			elseif note.Name == "Fx" and note.A == "TrainUnload" then
+				fxAt = i
+			end
+		end
+		T.lt(lateAt, fxAt, "the trip before the unload effect")
+		-- ArriveAt moves to the unload, ArriveAt + ReturnSeconds is when it is back
 		s = snapshot(w, w.player)
 		T.eq(s.Waiting, false, "not waiting any more")
 		T.near(s.DepartAt, trip.DepartAt, 1e-6, "same departure")
 		T.near(s.ArriveAt, unloadAt, 1e-6, "the late unload")
+		T.near(s.ArriveAt, late.ArriveAt, 1e-6, "as the clients got it")
 		advance(w, TrainConfig.ReturnSeconds - 1)
 		T.eq(drop(w.station, USER, COAL).State, "Loose", "rolling back")
 		T.eq(lastToast(w, w.player).Text, TrainService.ReturnText, "coming back")
@@ -871,6 +922,30 @@ return function(T, Loader)
 		T.eq(toasts(w, w.player, TrainService.PenFullText), said + 1, "a new trip, a new toast")
 		T.lt(before, w.changed[w.player], "snapshot pushed")
 		T.eq(snapshot(w, w.player).Waiting, true, "waiting")
+		T.eq(trips(w, USER)[#trips(w, USER)].Waiting, true, "announced as waiting")
+	end)
+
+	withWorld("TrainService: a long wait at a full pen still unloads as a trip clients accept", function(w)
+		fillPen(w, ItemService.penCapacity(w.data))
+		drop(w.station, USER, GOLD)
+		TrainService.send(w.player)
+		local trip = trips(w, USER)[1]
+		advance(w, TRIP)
+		T.eq(snapshot(w, w.player).Waiting, true, "waiting")
+		-- hours later the player makes room
+		advance(w, 3 * 3600)
+		table.remove(w.data.Storage)
+		advance(w, TrainConfig.DeliveryRetry)
+		T.eq(#w.data.Train.TripCargo, 0, "delivered")
+		local list = trips(w, USER)
+		local late = list[#list]
+		T.near(late.ArriveAt, serverTime(w), 1e-6, "unloads now")
+		T.le(late.ArriveAt - late.DepartAt, TrainService.MaxTripSpan, "never longer than clients accept")
+		T.near(late.ArriveAt - late.DepartAt, trip.ArriveAt - trip.DepartAt, 1e-6, "as long as the real trip")
+		local s = snapshot(w, w.player)
+		T.near(s.DepartAt, late.DepartAt, 1e-6, "the snapshot agrees")
+		T.near(s.ArriveAt, late.ArriveAt, 1e-6, "the snapshot agrees")
+		T.eq(#unloads(w), 1, "the unload effect")
 	end)
 
 	---------------------------------------------------------------- joining
@@ -903,7 +978,7 @@ return function(T, Loader)
 		T.eq(#t.Cargo, 3, "loading right away")
 	end)
 
-	withWorld("TrainService: joining with a full pen keeps the rest on the train and retries quietly", function(w)
+	withWorld("TrainService: joining with a full pen: the rest waits at the stop where everyone sees it", function(w)
 		local t = w.data.Train
 		fillPen(w, ItemService.penCapacity(w.data) - 1)
 		for _ = 1, 3 do
@@ -913,12 +988,25 @@ return function(T, Loader)
 		t.TripArriveAt = NOW - 70
 		train.loaded(w.player, w.data)
 		T.eq(#t.TripCargo, 2, "two wait on the train")
+		T.eq(toasts(w, w.player, "Your train brought 1 ore to your Ore Pen while you were away."), 1, "what fit")
 		T.eq(toasts(w, w.player, TrainService.PenFullText), 1, "pen full toast")
-		T.eq(#trips(w, USER), 0, "nothing to animate")
+		T.eq(#unloads(w), 0, "nothing unloaded for anyone to see")
+		-- the waiting train is announced: every client can draw it standing at the stop
+		local list = trips(w, USER)
+		T.eq(#list, 1, "announced once")
+		local trip = list[1]
+		T.eq(trip.Waiting, true, "waiting")
+		T.eq(trip.Count, 2, "what is on the train")
+		T.eq(trip.PlotId, PLOT, "at my plot")
+		T.eq(#trip.Load, 1, "clean gold")
+		T.near(trip.ArriveAt, serverTime(w) - 70, 1e-6, "it arrived long ago")
+		T.near(trip.ArriveAt - trip.DepartAt, 30, 1e-6, "the trip as it was")
+		train.announce(w.player) -- PlotService.onAssigned
+		T.eq(#trips(w, USER), 1, "only once")
 		local s = snapshot(w, w.player)
 		T.eq(s.Waiting, true, "waiting at the stop")
 		T.eq(s.Moving, 2, "two on the train")
-		T.le(s.ArriveAt, serverTime(w), "it arrived long ago")
+		T.near(s.ArriveAt, trip.ArriveAt, 1e-6, "the times everyone got")
 		T.eq(drop(w.station, USER, COAL).State, "Loose", "no loading while it waits")
 		T.eq(toasts(w, w.player, TrainService.AwayText), 0, "not 'on its way'")
 		table.remove(w.data.Storage)
@@ -926,13 +1014,54 @@ return function(T, Loader)
 		advance(w, TrainConfig.DeliveryRetry)
 		T.eq(#t.TripCargo, 0, "delivered on the retry")
 		T.eq(w.data.Stats.TrainTrips, 1, "counted once")
-		T.eq(#unloads(w), 0, "no unload effect for a train nobody saw arrive")
-		T.eq(lastToast(w, w.player).Text, "Your train brought 3 ore to your Ore Pen while you were away.", "the whole load, once")
+		-- a train everyone saw waiting unloads for everyone, then rolls back
+		local fx = unloads(w)
+		T.eq(#fx, 1, "the unload effect")
+		T.eq(fx[1].C, 3, "the whole load")
+		list = trips(w, USER)
+		T.eq(#list, 2, "the unload time to everyone")
+		T.eq(list[2].Waiting, nil, "not waiting")
+		T.near(list[2].ArriveAt, serverTime(w), 1e-6, "unloads now")
+		T.le(list[2].ArriveAt - list[2].DepartAt, TrainService.MaxTripSpan, "a trip clients accept")
 		s = snapshot(w, w.player)
-		T.eq(s.ArriveAt, nil, "no return trip")
 		T.eq(s.Waiting, false, "done")
+		T.near(s.ArriveAt, serverTime(w), 1e-6, "rolling back from now")
+		T.eq(drop(w.station, USER, COAL).State, "Loose", "rolling back: no loading")
+		advance(w, TrainConfig.ReturnSeconds)
 		drop(w.station, USER, COAL)
-		T.eq(#t.Cargo, 1, "loading right away")
+		T.eq(#t.Cargo, 1, "back: loading")
+	end)
+
+	withWorld("TrainService: rejoining this server mid-trip announces the very same times", function(w)
+		drop(w.station, USER, GOLD)
+		w.now += 0.437 -- between two whole seconds
+		TrainService.send(w.player)
+		local first = trips(w, USER)[1]
+		T.eq(w.data.Train.TripDepartAt, w.now, "saved with the fraction (milliseconds)")
+		advance(w, 3)
+		train.forget(w.player) -- left and came back (same server)
+		w.now += 0.25
+		train.loaded(w.player, w.data)
+		local list = trips(w, USER)
+		T.eq(#list, 2, "announced again")
+		T.eq(list[2].DepartAt, first.DepartAt, "exactly the same departure (no rebuilt train on other screens)")
+		T.eq(list[2].ArriveAt, first.ArriveAt, "exactly the same arrival")
+		T.eq(#list[2].Load, #first.Load, "same load colors")
+		T.eq(list[2].Load[1], first.Load[1], "same load colors")
+		-- a joiner gets the same times too
+		train.loaded(w.other, w.otherData)
+		local join = lastNote(w, "TrainTrip")
+		T.eq(join.A[1].DepartAt, first.DepartAt, "the joiner's list")
+		-- another server (no session times): worked out from the saved wall-clock times
+		train.reset()
+		train.setClock(function()
+			return w.now
+		end, function()
+			return w.now + OFFSET + 40 -- a different server clock
+		end, function() end)
+		train.loaded(w.player, w.data)
+		list = trips(w, USER)
+		T.near(list[#list].DepartAt, first.DepartAt + 40, 1e-6, "same trip in that server's time")
 	end)
 
 	withWorld("TrainService: right after joining a full cargo waits a moment for perks such as Express", function(w)
@@ -1070,6 +1199,128 @@ return function(T, Loader)
 		T.eq(#w.data.Train.Cargo, 3, "unchanged")
 	end)
 
+	withWorld("TrainService: prompt and Send hints fit every hook and can't be spammed", function(w)
+		local lift = train.setupHook(w.TrainEmberCaves.Part)
+		w.player.stand(lift.Point)
+		-- Send Train at a Mine Lift with an empty train: no talk of the Mine Station
+		T.falsy(TrainService.EmptyText:find("Mine Station", 1, true), "fits a lift too")
+		for _ = 1, 50 do
+			train.action(w.player, "Send")
+			train.load(w.player, lift) -- empty hands
+		end
+		T.eq(toasts(w, w.player, TrainService.EmptyText), 1, "one empty-train hint")
+		T.eq(toasts(w, w.player, TrainService.HandsText), 1, "one empty-hands hint")
+		w.now += 2
+		train.action(w.player, "Send")
+		train.load(w.player, lift)
+		T.eq(toasts(w, w.player, TrainService.EmptyText), 2, "a real press later gets it again")
+		T.eq(toasts(w, w.player, TrainService.HandsText), 2, "the hands hint too")
+		-- while the train is away: Load and Send with something in hand
+		drop(w.station, USER, COAL)
+		TrainService.send(w.player)
+		local before = #w.notes
+		for _ = 1, 30 do
+			carry(w, w.player, COAL)
+			train.load(w.player, lift)
+			train.action(w.player, "Send")
+		end
+		local said = 0
+		for i = before + 1, #w.notes do
+			if w.notes[i].Name == "Notify" then
+				said += 1
+			end
+		end
+		T.eq(said, 1, "one 'on its way' for all of it")
+		T.eq(#w.data.Train.Cargo, 0, "nothing loaded")
+		T.eq(#w.carried[w.player], 30, "still in your hands")
+	end)
+
+	withWorld("TrainService: without a plot the train never leaves by itself", function(w)
+		w.plots[w.player] = nil
+		local t = w.data.Train
+		for _ = 1, CAP do
+			table.insert(t.Cargo, { K = "Raw", O = "Coal" })
+		end
+		train.loaded(w.player, w.data)
+		advance(w, TrainService.JoinGrace + TrainConfig.AutoDepartSeconds + 5)
+		T.eq(#t.TripCargo, 0, "a full cargo waits")
+		T.eq(#t.Cargo, CAP, "kept")
+		T.eq(snapshot(w, w.player).AutoDepartIn, nil, "no countdown that never ends")
+		TrainService.send(w.player)
+		T.eq(lastToast(w, w.player).Text, TrainService.NoPlotText, "Send says why")
+		-- the plot comes: it leaves as usual
+		w.plots[w.player] = PLOT
+		advance(w, 1)
+		T.eq(#t.TripCargo, CAP, "full: it leaves")
+		T.eq(#trips(w, USER), 1, "announced")
+	end)
+
+	withWorld("TrainService: the map's railway is watched, also when it comes later or is built again", function(w)
+		local before = #w.zones
+		local mapHandlers = {}
+		local listening = 0
+		local mapAdded = {
+			Connect = function(_, fn)
+				table.insert(mapHandlers, 1, fn)
+				listening += 1
+				return {
+					Disconnect = function()
+						listening -= 1
+					end,
+					Connected = true,
+				}
+			end,
+		}
+		-- a map without a railway yet
+		local map = Instance.new("Model")
+		map.Name = "Map"
+		train.watchMap(map, mapAdded)
+		T.eq(listening, 1, "listening for the railway")
+		T.eq(#w.zones, before, "nothing yet")
+		local first = buildRailway()
+		first.Parent = map
+		mapHandlers[1](first)
+		T.eq(#w.zones, before + 1 + #TrainConfig.Lifts, "the railway's hooks")
+		-- built again: the old railway goes (Destroy: every part's Parent is nil), a new one comes
+		local gone = first:GetDescendants()
+		for i = #gone, 1, -1 do
+			gone[i].Parent = nil
+		end
+		first.Parent = nil
+		local second = buildRailway()
+		second.Parent = map
+		mapHandlers[1](second)
+		T.eq(#w.zones, before + 2 * (1 + #TrainConfig.Lifts), "the new railway's hooks")
+		T.eq(train.hooks(), 1 + #TrainConfig.Lifts + 1 + #TrainConfig.Lifts, "hooks of the first test railway and the new one")
+		local zone = w.zones[#w.zones - #TrainConfig.Lifts]
+		T.eq(zone.Part, second.MineStation.Intake, "the new station hopper")
+		drop(zone, USER, COAL)
+		T.eq(#w.data.Train.Cargo, 1, "loads through the new railway")
+		-- a part tagged later under the new railway is a hook; the old railway is forgotten
+		local late = newPart(second.MineStation, "Annex", CFrame.new(40, -10, -147), Vector3.new(3, 3, 3))
+		late:SetAttribute("LiftId", "Late")
+		late:AddTag("TrainHopper")
+		train.tagged(late)
+		task.wait()
+		T.eq(w.zones[#w.zones].Part, late, "tagged under the new railway")
+		-- other children of the map are no railway
+		local count = #w.zones
+		local decor = Instance.new("Folder")
+		decor.Name = "Decor"
+		mapHandlers[1](decor)
+		mapHandlers[1](second) -- the same railway again
+		T.eq(#w.zones, count, "nothing new")
+		-- a map that has its railway right away
+		local other = Instance.new("Model")
+		other.Name = "Map"
+		local third = buildRailway()
+		third.Parent = other
+		train.watchMap(other, mapAdded)
+		T.eq(#w.zones, count + 1 + #TrainConfig.Lifts, "its hooks at once")
+		T.eq(#mapHandlers, 2, "a new listener")
+		T.eq(listening, 1, "the old map's listener is gone")
+	end)
+
 	---------------------------------------------------------------- upgrades
 
 	withWorld("TrainService: upgrades cost the next price, stop at the top and need the coins", function(w)
@@ -1150,6 +1401,7 @@ return function(T, Loader)
 		train.action(w.player, "Send")
 		T.eq(#trips(w), 0, "no plot: the train waits")
 		T.eq(#w.data.Train.Cargo, 2, "cargo kept")
+		T.eq(lastToast(w, w.player).Text, TrainService.NoPlotText, "told why")
 		train.action(fakePlayer(STRANGER, "Stranger"), "Send")
 		T.eq(#trips(w), 0, "stranger: nothing")
 	end)
