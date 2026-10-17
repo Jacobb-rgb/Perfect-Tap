@@ -40,7 +40,9 @@ local LANTERN_ROADS = {
 	-- and the ToScanner/ToMine junctions (z 75-80), so the posts start at z 95
 	SouthRoad = 59,
 	EastSpur = 9,
-	WestSpur = 9,
+	-- (the west spur's first lantern stands on the SHOP's side: it starts past
+	-- the SHOP's south end, 2+ studs clear of its porch showcases)
+	WestSpur = 15,
 	ForgePathEast = 13,
 	ForgePathWest = 13,
 	RimRoad = 10,
@@ -61,10 +63,15 @@ local LIT_POSTS = {
 -- side has no pair here: the Great Forge's stair cheeks carry two lit
 -- lantern pillars (GreatForge.luau), clear of the banners.
 local ENTRANCES = {
-	{ Center = Vector3.new(0, 0, 44), Across = Vector3.new(7.3, 0, 0), Lit = { false, false } },
-	{ Center = Vector3.new(37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { true, false } },
-	{ Center = Vector3.new(-37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { false, true } },
+	{ Center = Vector3.new(0, 0, 44), Across = Vector3.new(7.3, 0, 0), Lit = { false, false }, Height = 6.4 },
+	{ Center = Vector3.new(37.6, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { true, false }, Height = 4.8 },
+	-- (the west pair stands a little further out: Tobin's Sell stall sits
+	-- south of the SHOP's door lane at the plaza rim)
+	{ Center = Vector3.new(-40.5, 0, 0), Across = Vector3.new(0, 0, 7.3), Lit = { false, true }, Height = 4.8 },
 }
+-- The south road's "road into the plaza" framing (concept v2): two dark
+-- metal planters with small voxel trees just past the tall entry pillars.
+Roads.EntryPlanters = { Vector3.new(-8.4, 0, 49.6), Vector3.new(8.4, 0, 49.6) }
 
 local function onPlaza(p: Vector3, margin: number): boolean
 	return Vector3.new(p.X, 0, p.Z).Magnitude < Common.PlazaRadius + margin
@@ -91,7 +98,7 @@ end
 -- so they stay orange under bloom and lead the eye to the crystal.
 Roads.ChevronZ = { 39.5, 47 }
 Roads.ChevronSize = 4.2
-Roads.ChevronThickness = 0.95
+Roads.ChevronThickness = 0.66 -- bold but not a road marking (30% thinner than round 1)
 Roads.ChevronGap = 1.9
 
 local function chevrons(m: Model, s: Common.Strip)
@@ -211,7 +218,7 @@ local function roadLanterns(parent: Instance)
 				if s.Neon and not (s.Id == "SouthRoad" and entry.P.Z > Roads.SouthRoadDarkZ[1]) then
 					Common.pillarLantern(m, base, { Height = 4.2, Light = lit, Range = 18, Brightness = 1.4 })
 				else
-					Style.lantern(m, base, { Kind = "Post", Light = lit, Range = 18, Brightness = 1.4 })
+					Style.lantern(m, base, { Kind = "Post", Light = lit, Range = 18, Brightness = 1.2, Color = Style.C.LampAmber })
 				end
 			end
 		end
@@ -225,7 +232,7 @@ local function entranceLanterns(parent: Instance)
 			local p = e.Center + e.Across * side
 			local lit = e.Lit[i]
 			Common.pillarLantern(m, CFrame.lookAt(p, Vector3.new(0, 0, 0)), {
-				Height = 4.8,
+				Height = e.Height,
 				Light = lit,
 				Range = 18,
 				Brightness = 1.4,
@@ -234,10 +241,44 @@ local function entranceLanterns(parent: Instance)
 	end
 end
 
+-- A dark metal planter with a blue neon lip and a small voxel tree (a
+-- trunk, a leafy cube and a lighter cap). 6 parts.
+local function entryPlanter(parent: Instance, at: Vector3, rng: Rng.Rng)
+	local m = Style.model("EntryPlanter", parent)
+	local K = Common.Colors
+	local C = Style.C
+	local base = CFrame.new(at)
+	Style.block(m, base * CFrame.new(0, 0.8, 0), Vector3.new(2.6, 1.6, 2.6), K.MetalDark, nil, Style.solid()).Name = "Planter"
+	Style.block(m, base * CFrame.new(0, 1.62, 0), Vector3.new(2.72, 0.1, 2.72), K.NeonBlueDeep, Enum.Material.Neon, Style.tiny())
+	Style.block(m, base * CFrame.new(0, 1.66, 0), Vector3.new(2.3, 0.1, 2.3), C.DirtDark, nil, Style.tiny())
+	Style.block(m, base * CFrame.new(0, 2.6, 0), Vector3.new(0.5, 1.9, 0.5), C.Trunk, nil, Style.tiny())
+	local k = rng:range(2.4, 2.7)
+	Style.block(
+		m,
+		base * CFrame.new(0, 3.3 + k * 0.4, 0),
+		Vector3.new(k, k * 0.8, k),
+		Style.vary(C.LeafGreen, rng, 0.04),
+		nil,
+		Style.ghost()
+	)
+	Style.block(
+		m,
+		base * CFrame.new(rng:range(-0.2, 0.2), 3.3 + k * 0.85, rng:range(-0.2, 0.2)),
+		Vector3.new(k * 0.66, k * 0.32, k * 0.66),
+		Style.vary(C.LeafGreenLight, rng, 0.04),
+		nil,
+		Style.tiny()
+	)
+end
+
 function Roads.build(parent: Instance, rng: Rng.Rng)
 	paveAll(parent, rng)
 	roadLanterns(parent)
 	entranceLanterns(parent)
+	local planters = Style.model("EntryPlanters", parent)
+	for _, at in Roads.EntryPlanters do
+		entryPlanter(planters, at, rng)
+	end
 end
 
 return Roads

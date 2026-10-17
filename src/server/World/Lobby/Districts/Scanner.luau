@@ -127,14 +127,14 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 	-- (raised over the ring's top: seen from the front at eye height the ring
 	-- stays under the letters)
 	local sz = 3.9
-	local signY, signH = 8.75, 1.7
+	local signY, signH = 8.95, 2.4
 	local postTop = signY - signH / 2 - 0.55
 	for _, x in { -5.1, 5.1 } do
 		Style.block(m, at(x, (TOP + postTop) / 2, sz + 0.3), Vector3.new(0.6, postTop - TOP, 0.6), Tech.MetalLight)
 		Tech.disc(m, at(x, TOP + 0.5, sz + 0.3).Position, 1.0, 0.9, Tech.Band)
 	end
-	local _, iconAt = Tech.sign(m, at(0, signY, sz - 0.4), "ROCK SCANNER", 9.4, signH, {
-		Icon = 2.0,
+	local _, iconAt = Tech.sign(m, at(0, signY, sz - 0.4), "ROCK SCANNER", 9.6, signH, {
+		Icon = 2.4,
 		IconLeft = true,
 		Margin = 0.35,
 		Lip = 0.2,
@@ -142,7 +142,7 @@ function Scanner.build(parent: Instance, rng: Rng.Rng)
 	})
 	if iconAt then
 		-- a scan ring with a crosshair (the machine's octagon ring) in blue neon
-		Tech.scanIcon(m, iconAt, 1.65, Tech.Tube)
+		Tech.scanIcon(m, iconAt, 2.1, Tech.Tube)
 	end
 end
 

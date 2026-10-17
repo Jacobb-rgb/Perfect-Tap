@@ -123,7 +123,6 @@ return function(T, Loader)
 			{
 				"Water.LilyPond",
 				"Water.KoiPond",
-				"Water.Creek",
 				"Water.CreekBridge",
 				"Wayfinding.Signpost",
 				"Wayfinding.NextArea",
@@ -131,6 +130,8 @@ return function(T, Loader)
 				"HeroTrees.PinkGrove",
 				"HeroTrees.RedTree",
 				"HeroTrees.AutumnCorner",
+				"HeroTrees.TownBelt",
+				"Gardens",
 				"Scatter",
 				"Fences",
 				"GardenLanterns",
@@ -178,7 +179,8 @@ return function(T, Loader)
 
 	T.test("flora: nothing on roads, paths, plots, yards, outcrops or the spawn", function()
 		local spawn = WorldLayout.SpawnPoint
-		local walkable = { CreekBridge = true, Creek = true }
+		-- (the bridge carries the south road over the koi pond)
+		local walkable = { CreekBridge = true, KoiPond = true }
 		for _, part in parts(flora()) do
 			local onWalkable = false
 			local node = part.Parent
@@ -287,7 +289,7 @@ return function(T, Loader)
 
 	T.test("flora: creek and ponds are water over solid ground", function()
 		local colliders = collidersNear({ world().Land }, Vector3.new(-40, 0, 54), Vector3.new(40, 0, 70))
-		for _, id in { "LilyPond", "KoiPond", "Creek" } do
+		for _, id in { "LilyPond", "KoiPond" } do
 			local piece = LobbyLayout.get(id)
 			local c = piece.Center
 			for _, dx in { -0.3, 0, 0.3 } do
@@ -518,7 +520,7 @@ return function(T, Loader)
 				T.truthy(found, `{site.Id} has its {site.Sign} sign`)
 			end
 		end
-		for _, text in { "TOOLS", "INN", "MAP", "GEMS", "ORE" } do
+		for _, text in { "TOOLS", "INN", "MAP", "ORE", "WORKS", "CARTS" } do
 			T.truthy(texts[text], "town sign " .. text)
 		end
 		-- big glowing planes bloom to white in the renders: every Neon face stays small
@@ -641,7 +643,10 @@ return function(T, Loader)
 						local look = blade.CFrame.LookVector
 						T.truthy(math.abs(look:Dot(LOOK[site.Facing])) < 0.3, `{site.Id} blade sign is perpendicular to the facade`)
 						T.truthy(look:Dot(LOOK.S) > 0.7 or look:Dot(LOOK.W) > 0.7, `{site.Id} blade sign faces south or west`)
-						T.truthy(blade.Size.X >= 6.5 - 1e-3 and blade.Size.Y >= 3 - 1e-3, `{site.Id} blade sign is at least 6.5 x 3 ({blade.Size})`)
+						T.truthy(
+							blade.Size.X >= 6.5 - 1e-3 and blade.Size.Y >= 3 - 1e-3,
+							`{site.Id} blade sign is at least 6.5 x 3 ({blade.Size})`
+						)
 					end
 				end
 				-- windows: lit panes glow, at most one unlit pane in six, unlit glass is light blue (never a black hole)

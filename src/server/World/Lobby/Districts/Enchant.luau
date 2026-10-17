@@ -201,7 +201,7 @@ function Enchant.build(parent: Instance, rng: Rng.Rng)
 	for _, side in { -1, 1 } do
 		Tech.lanternPillar(m, at(side * 6.6, FLOOR, -4.6), 5.4, 1.2, { Slot = violet })
 	end
-	Style.crystalCluster(m, at(4.5, FLOOR, -2.6), 2.6, DEEP_PURPLE, rng, { Count = 3 })
+	Style.crystalCluster(m, at(4.5, FLOOR, -2.6), 2.6, DEEP_PURPLE, rng, { Count = 3, TipLerp = 0.12 })
 	Tech.container(m, at(-6.5, FLOOR, -2.7), 2.6, 1.3, C.AwningPurple)
 end
 

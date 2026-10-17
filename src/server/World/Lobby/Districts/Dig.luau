@@ -174,7 +174,7 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	-- and a computer-screen terminal that scans the bones
 	Tech.parasol(m, at(-4.4, 0.2, 6.6), 4.6, 4.4, Tech.Band)
 	Kit.crate(m, at(-1.8, 0.2, 7.4), 1.6, rng)
-	Kit.glow(m, at(-1.8, 2.1, 7.4), Vector3.new(0.55, 0.6, 0.55), C.Lamp)
+	Kit.glow(m, at(-1.8, 2.1, 7.4), Vector3.new(0.55, 0.6, 0.55), C.LampAmber)
 	Tech.computer(m, at(-5.6, 0.2, 0.6), 2.2, Tech.Screen, { Bars = C.FlowerWhite })
 
 	-- metal barrier fence: light posts with neon caps, a lower rail and an
@@ -209,12 +209,12 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	-- FOSSIL DIG sign box with a bone icon, on two posts behind the front fence
 	local signZ = -11.0
 	for _, x in { -7.6, -0.2 } do
-		Style.block(m, at(x, 2.1, signZ + 0.6), Vector3.new(0.6, 4.2, 0.6), Tech.MetalLight)
+		Style.block(m, at(x, 2.3, signZ + 0.6), Vector3.new(0.6, 4.6, 0.6), Tech.MetalLight)
 		Tech.disc(m, at(x, 0.5, signZ + 0.6).Position, 1.0, 0.9, Tech.Band)
 	end
-	local _, frontIcon = Tech.sign(m, at(-3.9, 5.7, signZ), "FOSSIL DIG", 8.4, 2.0, { Icon = 2.4, IconLeft = true, Back = true })
+	local _, frontIcon = Tech.sign(m, at(-3.9, 6.1, signZ), "FOSSIL DIG", 8.4, 2.8, { Icon = 2.8, IconLeft = true, Back = true })
 	if frontIcon then
-		Style.icon(m, frontIcon * CFrame.new(0, 0, -0.12), "Bone", 1.9, Tech.GoldGlow, Kit.NEON)
+		Style.icon(m, frontIcon * CFrame.new(0, 0, -0.12), "Bone", 2.3, Tech.GoldGlow, Kit.NEON)
 	end
 
 	-- the Kingdom of Kaldrum story board over the south fence, facing the
@@ -227,10 +227,27 @@ function Dig.build(parent: Instance, rng: Rng.Rng)
 	end
 	local story = south * CFrame.new(0, 5.0, 0)
 	Tech.screen(m, story, 5.6, 2.4, Tech.Screen)
-	Tech.label(m, story * CFrame.new(-0.8, 0, -0.08), "KINGDOM OF KALDRUM", 3.7, 1.5, C.GlowText)
+	-- the kingdom's name on two lines, filling most of the screen's height
+	Tech.label(m, story * CFrame.new(-0.75, 0, -0.08), "KINGDOM OF\nKALDRUM", 3.8, 2.0, C.GlowText)
 	Style.icon(m, story * CFrame.new(1.9, 0, -0.12), "Bone", 1.5, Tech.GoldGlow, Kit.NEON)
 	-- the bezel's back (seen from the plaza side) names the story corner too
-	Tech.label(m, story * CFrame.new(0, 0, 0.57) * CFrame.Angles(0, math.pi, 0), "KINGDOM OF KALDRUM", 5.4, 1.5, C.GlowText)
+	Tech.label(m, story * CFrame.new(0, 0, 0.57) * CFrame.Angles(0, math.pi, 0), "KINGDOM OF\nKALDRUM", 5.2, 2.0, C.GlowText)
+
+	-- the tall wooden FOSSIL DIG board on two timber posts on the dig's south
+	-- edge, facing south (+Z: the south road and the hero camera), like the
+	-- concept v1's: gold letters with a dark outline, a bone over it
+	local board = at(-8.5, 0, -3.4) * CFrame.Angles(0, math.pi / 2, 0)
+	for _, dx in { -4.6, 4.6 } do
+		Style.block(m, board * CFrame.new(dx, 4.4, 0.25), Vector3.new(0.7, 8.8, 0.7), C.WoodDark)
+		Kit.bit(m, board * CFrame.new(dx, 8.95, 0.25), Vector3.new(1.0, 0.3, 1.0), C.Wood)
+	end
+	Style.sign(m, board * CFrame.new(0, 7.1, -0.2), "FOSSIL DIG", 10, 2.6, {
+		Kind = "Wood",
+		Depth = 0.5,
+		StrokeColor = C.TextShadow,
+		StrokeTransparency = 0,
+	})
+	Style.icon(m, board * CFrame.new(0, 5.25, -0.25), "Bone", 1.6, C.SignText)
 
 	m.PrimaryPart = bed
 	Kit.tag(m, "FossilDig")

@@ -21,7 +21,7 @@ local PlotBuilder = require(script.Parent.PlotBuilder)
 
 local WorldBuilder = {}
 
-WorldBuilder.Version = 9 -- 9: wide SHOP/UPGRADES/SPIN & WIN, town re-sited, stall aprons; 8: visual upgrade (concept v2 stalls, plaza, planets, brick plot walls, town); 7: rocks keep off the train station, track and lifts; 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
+WorldBuilder.Version = 10 -- 10: lobby fix round 1 (wheel behind SHOP, front koi pond + humped bridge, town belts, slate plaza, restyled stalls, smaller planets); 9: wide SHOP/UPGRADES/SPIN & WIN, town re-sited, stall aprons; 8: visual upgrade (concept v2 stalls, plaza, planets, brick plot walls, town); 7: rocks keep off the train station, track and lifts; 6: lobby polish (plot lawns, massif, falls, clouds, signs); 4: base yards
 
 export type NodeSpawn = { Position: Vector3, Zone: string }
 

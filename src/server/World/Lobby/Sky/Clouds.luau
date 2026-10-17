@@ -52,6 +52,7 @@ local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 
 local C = Style.C
+local WHITE = Color3.new(1, 1, 1)
 
 type Piece = LobbyLayout.Piece
 
@@ -64,6 +65,8 @@ local GLOW_WARM = Color3.fromRGB(255, 104, 34)
 local GLOW_ROSE = Color3.fromRGB(255, 96, 64)
 -- skirt transparency (lit undersides)
 Clouds.SkirtTransparency = 0.4
+-- the cloud bodies are a little see-through (soft, not opaque bricks)
+Clouds.Transparency = 0.2
 -- skirt offset below the block above it (studs): never a shared face
 Clouds.SkirtGap = 1.2
 
@@ -85,17 +88,17 @@ Clouds.Spots = {
 	{ Az = 268, Dist = 780, Y = 30, Scale = 1.2 },
 	{ Az = 282, Dist = 760, Y = 64, Scale = 1.0 },
 	{ Az = 296, Dist = 720, Y = 96, Scale = 1.55 },
-	-- the hero's north-west horizon under the ember world: a big far mound
-	-- and a smaller one stepped in front of it
-	{ Az = 325, Dist = 1000, Y = 5, Scale = 1.0 },
-	{ Az = 332, Dist = 940, Y = 8, Scale = 0.85 },
-	-- the hero's north-east horizon right of the massif, under the gas giant
-	{ Az = 40, Dist = 510, Y = 5, Scale = 0.6 },
+	-- the north-west horizon: a big far mound left of the hero frame and a
+	-- smaller one inside it, between the ember world and the massif
+	{ Az = 316, Dist = 1000, Y = 5, Scale = 1.0 },
+	{ Az = 340, Dist = 950, Y = 6, Scale = 0.75 },
+	-- the north-east horizon right of the massif (one in the hero frame)
+	{ Az = 47, Dist = 510, Y = 5, Scale = 0.6 },
 	{ Az = 32, Dist = 560, Y = 8, Scale = 0.5 },
 	-- high bank, upper left of the spawn's sky (left of the balloon, over
 	-- the ember world)
 	{ Az = 306, Dist = 600, Y = 250, Scale = 0.6 },
-	{ Az = 315, Dist = 640, Y = 272, Scale = 0.45 },
+	{ Az = 310, Dist = 640, Y = 272, Scale = 0.45 },
 	-- high bank, top centre over the massif (right of the teal world, left
 	-- of the airship): three overlapping mounds, the middle one the biggest
 	-- and highest (the footprint tops out at y 321)
@@ -134,18 +137,21 @@ local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, awa
 	local h = w * rng:range(0.66, 0.74)
 	local mirror = if rng:chance(0.5) then 1 else -1
 
-	-- lit tops, pink middle, warm underside toward the sun, purple only in the shade
-	local top = if warm > 0.5 then C.CloudLight else C.CloudPink:Lerp(C.CloudLight, 0.55)
+	-- light pink tops, pink middle, undersides and shade melting into the
+	-- warm horizon color (no hard purple bricks)
+	local top = if warm > 0.5 then C.CloudLight else C.CloudPink:Lerp(WHITE, 0.3)
 	local mid = if warm > 0.5 then C.CloudPink:Lerp(C.CloudLight, 0.35) else C.CloudPink
-	local base = if warm > 0.4 then C.CloudPink:Lerp(C.CloudOrange, 0.45) else C.CloudPink:Lerp(C.CloudOrange, 0.2)
-	local shade = C.CloudPink:Lerp(C.CloudPurple, 0.62)
+	local base = if warm > 0.4 then C.CloudPink:Lerp(C.SkyHorizon, 0.45) else C.CloudPink:Lerp(C.SkyHorizon, 0.3)
+	local shade = C.CloudPink:Lerp(C.SkyHorizon, 0.5)
 	local glow = if warm > 0.3 then GLOW_WARM else GLOW_ROSE
 
 	-- a block by its bottom, in fractions: X of w, Z of d, Y (bottom) and H of h
 	local function box(b: Block, color: Color3, amount: number?): Part
 		local size = Vector3.new(b.W * w, b.H * h, b.D * d)
 		local at = Vector3.new(b.X * w * mirror, b.Y * h + size.Y / 2, b.Z * d)
-		return Kit.box(m, frame, at, size, Style.vary(color, rng, amount or 0.03))
+		local part = Kit.box(m, frame, at, size, Style.vary(color, rng, amount or 0.03))
+		part.Transparency = Clouds.Transparency
+		return part
 	end
 	local function jitter(b: Block): Block
 		return {
@@ -215,8 +221,10 @@ local function cumulus(m: Model, frame: CFrame, scale: number, warm: number, awa
 		Vector3.new(away * w * 0.36, h * 0.4, d * 0.06),
 		Vector3.new(w * 0.2, h * 0.28, d * 0.52),
 		Style.vary(shade, rng, 0.04)
-	)
-	Kit.box(m, frame, Vector3.new(0, h * 0.42, d * 0.3), Vector3.new(w * 0.46, h * 0.24, d * 0.26), Style.vary(shade, rng, 0.04))
+	).Transparency =
+		Clouds.Transparency
+	Kit.box(m, frame, Vector3.new(0, h * 0.42, d * 0.3), Vector3.new(w * 0.46, h * 0.24, d * 0.26), Style.vary(shade, rng, 0.04)).Transparency =
+		Clouds.Transparency
 end
 
 function Clouds.build(parent: Instance, piece: Piece, rng: Rng.Rng): Model

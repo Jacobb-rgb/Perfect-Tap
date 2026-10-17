@@ -32,7 +32,7 @@ Common.CurbRadius = 35.6
 Common.FloorTop = 0.4 -- top of the collidable plaza disc
 Common.TileTop = 0.43 -- top of the slate tiles (TownSpawn's top is 0.45, the spawn inlay 0.445)
 Common.ForgeApproach = 11 -- half width of the open plaza edge in front of the forge
-Common.TileReflectance = 0.04 -- polished slate (a hint of sky: more would pick up the pink sunset at grazing angles)
+Common.TileReflectance = 0.1 -- polished slate: the sky's sheen shows on the tiles (concept v2's wet polished plaza)
 Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
 
 --[[
@@ -45,10 +45,10 @@ Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
 	that stay colored under bloom instead of turning white.
 ]]
 Common.Colors = {
-	Slate = rgb(40, 47, 67), -- polished floor tiles (mid): dark wet blue-grey slate
-	SlateLight = rgb(52, 60, 83), -- lit / worn tiles
-	SlateAccent = rgb(60, 68, 93), -- a few light accent slabs (variation, like the concept)
-	SlateDark = rgb(22, 26, 37), -- shaded tiles and the thin seams between them
+	Slate = rgb(68, 76, 104), -- polished floor tiles (mid): blue-grey slate light enough that the tile grid reads
+	SlateLight = rgb(86, 94, 124), -- lit / worn tiles
+	SlateAccent = rgb(102, 108, 140), -- light accent slabs (variation, like the concept)
+	SlateDark = rgb(22, 26, 37), -- the thin seams between the tiles (only seams and recesses)
 	SlateDeep = rgb(15, 17, 26), -- the deepest recesses
 	WalkPanel = rgb(34, 38, 54), -- walkway floor panels (matte, darker than the plaza)
 	Metal = rgb(56, 60, 76), -- machine metal (mid)
@@ -295,11 +295,21 @@ end
 
 ---------------------------------------------------------------- concept v2 kit
 
--- A polished slate tile color (mostly mid, some lit, some shaded, a few light accents).
+-- A polished slate tile color (mostly mid, some lit, a few light accents;
+-- the dark shades are for the seams only).
 function Common.slate(rng: Rng.Rng): Color3
 	local roll = rng:next()
-	local color = if roll < 0.5 then K.Slate elseif roll < 0.78 then K.SlateLight elseif roll < 0.92 then K.SlateDark else K.SlateAccent
+	local color = if roll < 0.55 then K.Slate elseif roll < 0.88 then K.SlateLight else K.SlateAccent
 	return Style.vary(color, rng, 0.03)
+end
+
+-- The slate shades of a radial course, alternating tile by tile so the
+-- grid reads: course `ring`, tile `i`.
+Common.CourseShades = { K.Slate, K.SlateLight, K.SlateAccent }
+function Common.courseSlate(ring: number, i: number, rng: Rng.Rng): Color3
+	local order = { 1, 2, 1, 3 }
+	local k = order[(i + ring) % #order + 1]
+	return Style.vary(Common.CourseShades[k], rng, 0.025)
 end
 
 --[[
@@ -523,10 +533,8 @@ function Common.walkway(parent: Instance, from: Vector3, to: Vector3, width: num
 				-- cool slate panels with the plaza's one light polish (the sky
 				-- keeps them grey-blue under the warm sunset and the orange
 				-- edges), light enough that the dark seams draw a grid
-				local roll = rng:next()
-				local shade = if roll < 0.55 then K.Slate elseif roll < 0.9 then K.SlateLight else K.SlateAccent
 				local panel =
-					Style.block(m, cf, Vector3.new(colW - seam, 0.06, rowLen - seam), Style.vary(shade, rng, 0.015), nil, Style.tiny())
+					Style.block(m, cf, Vector3.new(colW - seam, 0.06, rowLen - seam), Common.courseSlate(i, c, rng), nil, Style.tiny())
 				panel.Reflectance = Common.TileReflectance
 				panel.Name = "WalkPanel"
 			end
@@ -559,11 +567,11 @@ function Common.walkway(parent: Instance, from: Vector3, to: Vector3, width: num
 			if t1 - t0 >= 1.5 then
 				local z = length / 2 - (t0 + t1) / 2
 				local len = t1 - t0
-				Style.block(m, frame * CFrame.new(edgeX, top.Border - 0.05, z), Vector3.new(0.9, 0.1, len), K.MetalDark, nil, Style.tiny())
+				Style.block(m, frame * CFrame.new(edgeX, top.Border - 0.05, z), Vector3.new(0.65, 0.1, len), K.MetalDark, nil, Style.tiny())
 				local glow = Style.block(
 					m,
 					frame * CFrame.new(edgeX, top.Neon - 0.03, z),
-					Vector3.new(0.28, 0.06, len - 0.2),
+					Vector3.new(0.2, 0.06, len - 0.2),
 					K.NeonOrange,
 					NEON,
 					Style.tiny()

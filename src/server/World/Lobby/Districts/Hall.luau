@@ -6,16 +6,17 @@
 	whose big Front face looks at the spawn; the leaderboard service puts a
 	SurfaceGui on it at runtime. Until then each board shows a placeholder
 	table: a Model "Placeholder" parented to the board (five faint rank
-	rows, gold, silver and bronze medals on the top three); the
-	leaderboard service destroys Board.Placeholder when it shows real
-	rows. Every board sits in a thick gunmetal
+	rows reading "-" between thin warm dividers, gold, silver and bronze
+	medals on the top three); the leaderboard service destroys
+	Board.Placeholder when it shows real rows. The boards glow a soft
+	half-bright screen blue (no dead dark panels). Every board sits in a thick gunmetal
 	display-wall bezel with a blue neon edge on a plinth with the orange
 	band, under a title plate (white letters on dark navy inside a thin
 	neon outline, so the words do not bloom away; every title has the same
 	letter size). A HALL OF FAME sign box with
 	gold crowns on two round pillars, dark lantern pillars with glowing
 	slots at the ends and a winners' podium in front.
-	Local frame: 24 wide, 14 tall, 6 deep, front = -Z (toward the spawn),
+	Local frame: 24 wide, 16 tall, 6 deep, front = -Z (toward the spawn),
 	seen from the spawn local +X is on the viewer's left (Board1 first).
 ]]
 
@@ -35,9 +36,12 @@ local TITLES = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED" }
 local ARC_R = 30 -- radius of the arc (center toward the spawn)
 local BOARD_W, BOARD_H = 5.0, 6.4
 local BOARD_Y = 2.0 -- bottom of the boards
-local PLATE_H = 1.5 -- title plates over the boards
+local PLATE_H = 2.1 -- title plates over the boards (tall enough to read from the plaza)
 local MEDALS = { C.Gold, C.IronLight, C.Copper }
-local ROW_COLOR = Color3.fromRGB(44, 70, 140) -- faint rank rows on the navy board
+local ROW_COLOR = Color3.fromRGB(44, 70, 140) -- faint rank rows on the board
+-- the board face: Tech.Screen at about half value, so the waiting boards read
+-- as lit screens (not dead dark panels); thin warm row dividers
+local BOARD_FACE = Color3.fromRGB(15, 46, 107)
 
 -- Rough glyph widths of the sign font (em): the title labels get widths in
 -- proportion, so TextScaled gives every title the same letter size.
@@ -89,19 +93,47 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		Tech.glow(m, frame * CFrame.new(0, BOARD_Y - 0.1, -0.53), Vector3.new(BOARD_W + 0.6, 0.12, 0.08), Tech.Neon)
 		-- the board (flat Front face toward the spawn)
 		local cy = BOARD_Y + 0.1 + BOARD_H / 2
-		local board = Style.block(m, frame * CFrame.new(0, cy, 0.3), Vector3.new(BOARD_W, BOARD_H, 0.5), Tech.Board, nil, Style.solid())
+		local board =
+			Style.block(m, frame * CFrame.new(0, cy, 0.3), Vector3.new(BOARD_W, BOARD_H, 0.5), BOARD_FACE, Kit.NEON, Style.solid())
+		board.CastShadow = false
 		board.Name = "Board" .. i
 		board:SetAttribute("Board", i)
 		Kit.tag(board, "Leaderboard")
-		-- the placeholder table: five faint rank rows, medals on the top three
+		-- the placeholder table: five rank rows ("—" until the leaderboards
+		-- fill in) between thin warm dividers, medals on the top three
 		local ph = Style.model("Placeholder", board)
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "PlaceholderRows"
+		gui.Face = Enum.NormalId.Front
+		gui.Adornee = board
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 40
+		gui.LightInfluence = 0
+		gui.MaxDistance = 120
+		gui.Parent = ph
 		for row = 1, 5 do
 			local ry = cy + 2.15 - (row - 1) * 1.1
-			Kit.bit(ph, frame * CFrame.new(-0.45, ry, 0.03), Vector3.new(3.4, 0.2, 0.06), ROW_COLOR)
+			Kit.bit(ph, frame * CFrame.new(-0.45, ry - 0.2, 0.03), Vector3.new(3.4, 0.08, 0.06), ROW_COLOR)
+			if row < 5 then
+				Tech.glow(ph, frame * CFrame.new(0, ry - 0.55, 0.02), Vector3.new(BOARD_W - 0.5, 0.06, 0.05), Tech.CaseLight)
+			end
 			local medal = MEDALS[row]
 			if medal then
 				Tech.faceDisc(ph, frame * CFrame.new(1.75, ry, 0.0), 0.08, 0.62, medal)
 			end
+			local label = Instance.new("TextLabel")
+			label.Name = "Row" .. row
+			label.BackgroundTransparency = 1
+			label.Size = UDim2.fromScale(0.7, 0.13)
+			label.Position = UDim2.fromScale(0.06, 0.07 + (row - 1) * 0.172)
+			label.Text = `{row}   —`
+			label.TextScaled = true
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.TextColor3 = C.GlowText
+			label.TextStrokeColor3 = Tech.Board
+			label.TextStrokeTransparency = 0
+			label.FontFace = Font.fromEnum(Style.LabelFont)
+			label.Parent = gui
 		end
 		-- display-wall bezel: thick frame, dark back plate, blue neon inner edge
 		local bt = 0.6
@@ -152,7 +184,7 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 	for _, x in { -5.6, 5.6 } do
 		Tech.roundPillar(m, at(x, 0, 1.9), 10.5, 0.9, { Neon = false })
 	end
-	local signY = 12.0
+	local signY = 13.6
 	Tech.sign(m, at(0, signY, 1.4), "HALL OF FAME", 11.4, 2.2, { Back = true })
 	for _, x in { -7.5, 7.5 } do
 		Tech.crown(m, at(x, signY - 0.8, 1.5), 1.8, Tech.GoldGlow, { Depth = 0.55, Neon = true })
@@ -164,17 +196,19 @@ function Hall.build(parent: Instance, rng: Rng.Rng)
 		Tech.lanternPillar(m, at(x, 0, z), 8.4, 1.2)
 	end
 
-	-- winners' podium in front of the middle boards (gold, silver, copper)
+	-- the winners' 1-2-3 podium in front of the middle boards: a dark
+	-- gunmetal base and three stepped blocks (gold, silver, copper fronts)
+	Style.block(m, at(0, 0.15, -1.8), Vector3.new(6.6, 0.3, 2.3), Tech.MetalDark, nil, Style.solid())
 	local podium = {
-		{ X = 0, H = 1.5, Color = C.Gold },
-		{ X = 2.0, H = 1.0, Color = C.IronLight },
-		{ X = -2.0, H = 0.7, Color = C.Copper },
+		{ X = 0, H = 1.6, Color = C.Gold },
+		{ X = 2.1, H = 1.1, Color = C.IronLight },
+		{ X = -2.1, H = 0.75, Color = C.Copper },
 	}
 	for _, p in podium do
 		local x, h, color = p.X, p.H, p.Color
-		Style.block(m, at(x, h / 2, -1.8), Vector3.new(2.0, h, 1.8), Style.vary(Tech.Metal, rng, 0.03), nil, Style.solid())
-		Kit.bit(m, at(x, h + 0.05, -1.8), Vector3.new(2.05, 0.12, 1.85), color)
-		Tech.glow(m, at(x, h - 0.2, -2.72), Vector3.new(1.8, 0.12, 0.06), color)
+		Style.block(m, at(x, 0.3 + h / 2, -1.8), Vector3.new(2.1, h, 1.9), Style.vary(Tech.Metal, rng, 0.03), nil, Style.solid())
+		Kit.bit(m, at(x, 0.3 + h / 2, -2.78), Vector3.new(1.7, h - 0.2, 0.08), color)
+		Tech.glow(m, at(x, 0.3 + h - 0.08, -2.78), Vector3.new(2.1, 0.12, 0.08), color)
 	end
 end
 

@@ -4,7 +4,8 @@
 
 	  Water    lily pond, koi pond, creek, arched bridge over the creek
 	  Signs    MINE/UPGRADE/EXPLORE/BUILD signpost, NEXT AREA + rope gate, boardwalk
-	  Trees    pink grove behind UPGRADES, red hero tree, autumn corner
+	  Trees    cherry grove behind UPGRADES, red hero tree, autumn corner,
+	           the town-edge tree belts along both plot roads
 	  Scatter  colorful voxel trees, bushes, flowers, boulders, fences, garden lanterns
 	  Town     small town buildings along the plot roads and behind the stalls
 	           in Kenney City Kit + Space Station Kit shapes with concept v2 neon trims
@@ -38,10 +39,19 @@ function Flora.build(parent: Model, rng: Rng.Rng)
 	local town = Kit.sub(rng)
 	Water.build(Style.model("Water", parent), water)
 	Signs.build(Style.model("Wayfinding", parent), signs)
-	Trees.build(Style.model("HeroTrees", parent), trees)
+	-- the belts keep their crowns off the town sites
+	local sites: { Kit.Box } = {}
+	for _, site in Town.Sites do
+		table.insert(sites, { Min = site.Min, Max = site.Max })
+	end
+	Trees.build(Style.model("HeroTrees", parent), trees, sites)
 	Town.build(Style.model("Town", parent), town)
-	-- the scatter keeps 1 stud off every building site
-	Scatter.build(parent, scatter, Town.keepOut(1))
+	-- the scatter keeps 1 stud off every building site and off the town-edge belts
+	local keepOut = Town.keepOut(1)
+	for _, box in Trees.beltBoxes() do
+		table.insert(keepOut, box)
+	end
+	Scatter.build(parent, scatter, keepOut)
 end
 
 return Flora

@@ -38,7 +38,7 @@ local rgb = Color3.fromRGB
 local FireCrystal = {}
 
 FireCrystal.SpinSpeed = 0.25
-FireCrystal.BobHeight = 0.5
+FireCrystal.BobHeight = 0.25
 FireCrystal.BobSpeed = 0.9
 
 -- the armor ring (segments 9.0 .. 11.4 from the center), on the base tier
@@ -47,7 +47,7 @@ FireCrystal.RingWidth = 2.4
 FireCrystal.RingHeight = 1.2 -- the armor tier over the base tier (cap lip included)
 FireCrystal.BaseRadius = 12.4 -- the wide low base tier
 FireCrystal.BaseHeight = 0.4
-FireCrystal.CrystalHeight = 9.2
+FireCrystal.CrystalHeight = 6.5 -- low: from the spawn (eye y >= 9) the forge's door and stairs show over it
 FireCrystal.Segments = 12
 local RING_R = FireCrystal.RingRadius
 local RING_W = FireCrystal.RingWidth
@@ -67,10 +67,11 @@ local PEDESTAL_R = 2.5
 local PEDESTAL_TOP = 1.5 -- over the base tier
 local CRYSTAL_H = FireCrystal.CrystalHeight
 local CRYSTAL_W = 3.6
--- colors: lighter machine metal than the plaza's (it reads at game distance)
-local RING_METAL = rgb(84, 92, 116)
-local RING_BEVEL = rgb(124, 132, 154) -- the light cap lips (they catch the light, the segments read)
-local RING_METAL_DARK = rgb(54, 60, 78)
+-- colors: the dark machine metal of the plaza kit (the armor never reads
+-- lighter than the slate floor), a mid bevel on the cap lips
+local RING_METAL = K.Metal
+local RING_BEVEL = K.MetalLight -- the cap lips (they catch the light, the segments read)
+local RING_METAL_DARK = K.MetalDark
 local HOT_IRON = rgb(128, 40, 22) -- the bowl's molten crust (dark red, lit by the crystal)
 local CRYSTAL_GLOW = rgb(255, 120, 20) -- the inner glow (deep orange: no white-hot core)
 local CRYSTAL_TIP = rgb(255, 150, 40)
@@ -132,20 +133,22 @@ end
 	glowing ones alternating, leaning out 20-25 degrees, so the cluster is
 	wide (about a third of the ring) and its points fan out like a crown.
 ]]
+-- (shard heights scale with the main crystal: 9.2 tall in round 1)
+local SIDE_SCALE = FireCrystal.CrystalHeight / 9.2
 local SIDES = {
-	{ A = 20, H = 6.0, Lean = 0.36, Big = true },
-	{ A = 80, H = 4.2, Lean = 0.42, Big = false },
-	{ A = 140, H = 5.5, Lean = 0.4, Big = true },
-	{ A = 200, H = 4.6, Lean = 0.4, Big = false },
-	{ A = 260, H = 5.8, Lean = 0.36, Big = true },
-	{ A = 320, H = 4.0, Lean = 0.44, Big = false },
+	{ A = 20, H = 6.0 * SIDE_SCALE, Lean = 0.42, Big = true },
+	{ A = 80, H = 4.2 * SIDE_SCALE, Lean = 0.48, Big = false },
+	{ A = 140, H = 5.5 * SIDE_SCALE, Lean = 0.46, Big = true },
+	{ A = 200, H = 4.6 * SIDE_SCALE, Lean = 0.46, Big = false },
+	{ A = 260, H = 5.8 * SIDE_SCALE, Lean = 0.42, Big = true },
+	{ A = 320, H = 4.0 * SIDE_SCALE, Lean = 0.5, Big = false },
 }
 local function crystalCluster(parent: Instance, base: CFrame, rng: Rng.Rng): Model
 	local m = Style.model("FireCrystal", parent)
 	local body = mainCrystal(m, base)
 	for i, s in SIDES do
 		local a = math.rad(s.A + rng:range(-5, 5))
-		local foot = base * CFrame.new(math.cos(a) * 1.7, 0.05, math.sin(a) * 1.7)
+		local foot = base * CFrame.new(math.cos(a) * 1.9, 0.05, math.sin(a) * 1.9)
 		local tilt = CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, -s.Lean) * CFrame.Angles(0, a, 0)
 		if s.Big then
 			-- shaded amber bodies (the facets read) with glowing points

@@ -42,21 +42,27 @@ local Wheel = {}
 
 local C = Kit.C
 
--- Rainbow segments, clockwise from the top (concept v2). Local saturated
--- neon tints: the Style.C crystal/leaf colors bloom to pastel on a big wheel.
+-- Rainbow segments, clockwise from the top (concept v2). Neon at about
+-- 55-60% value: every segment glows saturated (the whole rainbow reads, no
+-- muddy lower half in the shade) without blooming to pastel.
 local rgb = Color3.fromRGB
 local SEGMENTS = {
-	rgb(214, 26, 40), -- red
-	rgb(240, 112, 12), -- orange
-	rgb(236, 192, 12), -- yellow
-	rgb(132, 210, 22), -- lime
-	rgb(22, 176, 72), -- green
-	rgb(12, 186, 200), -- teal
-	rgb(30, 100, 240), -- blue
-	rgb(92, 52, 232), -- indigo
-	rgb(172, 40, 230), -- purple
-	rgb(232, 40, 150), -- magenta
+	rgb(130, 16, 26), -- red
+	rgb(150, 70, 8), -- orange
+	rgb(150, 120, 8), -- yellow
+	rgb(84, 126, 10), -- lime
+	rgb(14, 110, 46), -- green
+	rgb(8, 112, 122), -- teal
+	rgb(18, 60, 150), -- blue
+	rgb(56, 28, 150), -- indigo
+	rgb(100, 24, 140), -- purple
+	rgb(140, 24, 90), -- magenta
 }
+-- bright mid-tone crates that read on every segment (no dark cube holes)
+local COPPER = rgb(198, 112, 62)
+local COPPER_TOP = rgb(226, 156, 108)
+local CRATE_BAND = rgb(236, 230, 218) -- the light band round the gem and ore crates
+local BLUE_TOP = rgb(150, 206, 255)
 
 -- Item icon on each segment (daily rewards: coins, crates, rare ore, gems, golem capsules).
 local ICONS = { "Coin", "Crate", "Gem", "Capsule", "Ore", "Coin", "Crate", "Gem", "Capsule", "Ore" }
@@ -114,12 +120,15 @@ end
 
 -- A chunky 3D item cube standing proud of the segment (concept v2's ore
 -- crates): turned so its lighter bevelled top (outward) and one side show
--- next to its front face. 3 parts.
-local function cube(m: Instance, at: CFrame, s: number, body: Color3, top: Color3, face: string, accent: Color3)
+-- next to its front face; `band` = a light band round it. 3-4 parts.
+local function cube(m: Instance, at: CFrame, s: number, body: Color3, top: Color3, face: string, accent: Color3, band: Color3?)
 	local c = 1.2 * s
 	local cf = at * CFrame.new(0, 0, -1.05 * s) * CFrame.Angles(-0.5, 0.6, 0)
 	Kit.bit(m, cf, Vector3.new(c, c, c), body)
 	Kit.bit(m, cf * CFrame.new(0, c / 2 + 0.05 * s, 0), Vector3.new(c + 0.08 * s, 0.14 * s, c + 0.08 * s), top)
+	if band then
+		Kit.bit(m, cf * CFrame.new(0, -0.18 * s, 0), Vector3.new(c + 0.08 * s, 0.22 * s, c + 0.08 * s), band)
+	end
 	if face == "Band" then
 		-- a gold band around the crate
 		Kit.bit(m, cf, Vector3.new(c + 0.08 * s, 0.3 * s, c + 0.08 * s), accent)
@@ -139,7 +148,7 @@ local function icon(m: Instance, at: CFrame, kind: string, s: number)
 	elseif kind == "Crate" then
 		cube(m, at, s, C.Wood, C.WoodLight, "Band", C.Gold)
 	elseif kind == "Gem" then
-		cube(m, at, s, Tech.MetalDark, Tech.MetalLight, "Gem", GEM_GLOW)
+		cube(m, at, s, COPPER, COPPER_TOP, "Gem", GEM_GLOW, CRATE_BAND)
 	elseif kind == "Capsule" then
 		-- a two-tone pill standing outward: red lower half, white upper half,
 		-- round ends
@@ -150,8 +159,8 @@ local function icon(m: Instance, at: CFrame, kind: string, s: number)
 		Tech.rod(m, mid, hi, 0.95 * s, C.AwningWhite)
 		Kit.ball(m, lo, 0.95 * s, C.AwningRed)
 		Kit.ball(m, hi, 0.95 * s, C.AwningWhite)
-	else -- Ore: a stone crate with a glowing purple vein
-		cube(m, at, s, C.Stone, C.StoneLight, "Ore", C.CrystalPurple)
+	else -- Ore: a crystal-blue crate with a light band and a glowing purple vein
+		cube(m, at, s, C.CrystalBlue, BLUE_TOP, "Ore", C.CrystalPurpleDeep, CRATE_BAND)
 	end
 end
 
@@ -183,7 +192,7 @@ local function buildWheel(parent: Instance, center: CFrame, d: Dims)
 		for h = 0, 1 do
 			local a = a0 - h * step / 2
 			local b = a - step / 2
-			Geo.triangle(m, polar(0, 0, 0), polar(r, a, 0), polar(r, b, 0), 0.4 * s, SEGMENTS[i], Kit.SMOOTH, normal, Style.tiny())
+			Geo.triangle(m, polar(0, 0, 0), polar(r, a, 0), polar(r, b, 0), 0.4 * s, SEGMENTS[i], Kit.NEON, normal, Style.tiny())
 		end
 		-- a thin warm neon divider at the segment's leading edge
 		local div = center * CFrame.Angles(0, 0, a0) * CFrame.new(1.2 * s + (r - 1.2 * s) / 2, 0, -0.1 * s)
@@ -220,8 +229,8 @@ local function emberChest(parent: Instance, base: CFrame)
 		Kit.bit(m, base * CFrame.new(x, 1.95, 0), Vector3.new(0.4, 3.5, 3.3), C.Gold)
 	end
 	Kit.bit(m, base * CFrame.new(0, 0.25, 0), Vector3.new(4.8, 0.3, 3.2), C.Gold)
-	Tech.glow(m, base * CFrame.new(0, 2.6, -1.55), Vector3.new(4.4, 0.22, 0.1), C.Fire)
-	local lock = Kit.glow(m, base * CFrame.new(0, 2.5, -1.6), Vector3.new(0.9, 1, 0.3), C.Ember)
+	-- one horizontal glow strip under the lid (the lock glows in it)
+	local lock = Kit.glow(m, base * CFrame.new(0, 2.6, -1.56), Vector3.new(4.4, 0.3, 0.12), C.Ember)
 	lock.Name = "Lock"
 	Style.light(lock, C.Ember, 16, 1.6)
 	Style.emitter(lock, "Embers", C.Fire, 3)
@@ -263,24 +272,16 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 		)
 	end
 
-	-- stairs with orange handrails up the middle (stairs + stairs-handrail)
+	-- a grand flight as wide as the wheel with orange handrails on its
+	-- sides (stairs + stairs-handrail), dark lantern pillars beside it
 	local run = (front + hd) / 4 -- 4 steps from the front edge to the platform
-	Tech.stairs(m, at(0, 0, -hd), 7.0 * s, top / 4, run, 4, { Rails = true })
-
-	-- front daises with dark lantern pillars (glowing slots)
+	local stairW = math.min(2 * d.RingIn, 2 * hw - 5.2 * s)
+	Tech.stairs(m, at(0, 0, -hd), stairW, top / 4, run, 4, { Rails = true })
 	local daisD = front + hd
 	for _, side in { -1, 1 } do
-		local dx = side * 6.3 * s
-		Style.block(
-			m,
-			at(dx, 0.6 * s, -hd + daisD / 2),
-			Vector3.new(5.4 * s, 1.2 * s, daisD),
-			Style.vary(Tech.Metal, rng, 0.03),
-			nil,
-			Style.solid()
-		)
-		Tech.glow(m, at(dx, 1.1 * s, -hd - 0.04), Vector3.new(5.2 * s, 0.22, 0.1), C.Fire)
-		Tech.lanternPillar(m, at(side * 6.6 * s, 1.2 * s, -hd + daisD / 2), 5.2 * s, 1.3 * s)
+		local dx = side * (stairW / 2 + 1.3 * s)
+		Style.block(m, at(dx, 0.4 * s, -hd + daisD / 2), Vector3.new(2.2 * s, 0.8 * s, 2.2 * s), Tech.MetalDark, nil, Style.solid())
+		Tech.lanternPillar(m, at(dx, 0.8 * s, -hd + daisD / 2), 5.2 * s, 1.3 * s)
 	end
 
 	-- the mechanical ring frame (static): 16 gunmetal blocks with a thick
@@ -300,7 +301,14 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 		local a = k * 2 * math.pi / n
 		local seg = ringCf * CFrame.Angles(0, 0, a)
 		local shade = if k % 2 == 0 then Tech.Metal else Tech.Metal:Lerp(Tech.MetalDark, 0.35)
-		Style.block(m, seg * CFrame.new(0, d.RingIn + band / 2, 0), Vector3.new(2 * d.RingOut * tan, band, d.RingD), shade, nil, Style.decor())
+		Style.block(
+			m,
+			seg * CFrame.new(0, d.RingIn + band / 2, 0),
+			Vector3.new(2 * d.RingOut * tan, band, d.RingD),
+			shade,
+			nil,
+			Style.decor()
+		)
 		Tech.glow(
 			m,
 			seg * CFrame.new(0, d.RingIn + tube / 2, -d.RingD / 2 - 0.1),
@@ -369,10 +377,13 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	local radial = 2.5 * s
 	local blk = ringCf * CFrame.Angles(0, 0, math.pi) * CFrame.new(0, d.RingOut - radial / 2, 0)
 	Style.block(m, blk, Vector3.new(3.2 * s, radial, blockD), Tech.Metal, nil, Style.decor())
-	Tech.bevel(m, blk * CFrame.new(0, radial / 2 - 0.35 * s, -blockD / 2 - 0.3 * s), Vector3.new(3.2 * s, 0.7 * s, 0.6 * s), Tech.MetalLight)
-	for _, x in { -0.85, 0.85 } do
-		Tech.glow(m, blk * CFrame.new(x * s, -0.35 * s, -blockD / 2 - 0.05), Vector3.new(0.55 * s, 0.55 * s, 0.12), Tech.Warm)
-	end
+	Tech.bevel(
+		m,
+		blk * CFrame.new(0, radial / 2 - 0.35 * s, -blockD / 2 - 0.3 * s),
+		Vector3.new(3.2 * s, 0.7 * s, 0.6 * s),
+		Tech.MetalLight
+	)
+	Tech.glow(m, blk * CFrame.new(0, -0.35 * s, -blockD / 2 - 0.05), Vector3.new(2.2 * s, 0.24 * s, 0.12), Tech.Warm)
 	-- the back: a blue neon rim disc just behind the ring (a thin glowing outer
 	-- rim from the side), a light rim lip, a cover plate with four radial
 	-- ribs, orange studs and a hub cap
@@ -418,6 +429,20 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	for _, x in { -2.2, 0, 2.2 } do
 		Tech.glow(m, housing * CFrame.new(x * s, -0.1 * s, -1.23 * s), Vector3.new(1.2 * s, 0.3 * s, 0.06), C.Fire)
 	end
+
+	-- a dark gunmetal back disc just behind the turning segments (no
+	-- see-through hoop from the side or the back) and a dark rear hub cap
+	Tech.faceDisc(
+		m,
+		at(0, d.AxleY, d.FaceZ + 0.2 * s + 0.35),
+		0.2,
+		2 * d.RingIn + 0.3,
+		Tech.MetalDark,
+		nil,
+		Style.tiny({ CastShadow = true })
+	).Name =
+		"BackDisc"
+	Tech.faceDisc(m, at(0, d.AxleY, d.RingZ + d.RingD / 2 + 0.7), 0.4, 2.0 * s, Tech.MetalDeep, nil, Style.tiny())
 
 	-- the wheel
 	buildWheel(m, at(0, d.AxleY, d.FaceZ), d)
@@ -467,8 +492,9 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	Tech.line(m, face, 0, tipY - 0.12 * s, -pw - 0.14 * s, topY, 0.2 * s, -0.24 * s, Tech.Tube)
 	Tech.line(m, face, 0, tipY - 0.12 * s, pw + 0.14 * s, topY, 0.2 * s, -0.24 * s, Tech.Tube)
 
-	-- the EmberChest at the top of the stairs
-	emberChest(m, at(0, top, front + 1.6))
+	-- the EmberChest at the top of the stairs on the viewer's right, clear of
+	-- the wheel's bottom segment
+	emberChest(m, at(-4.6 * s, top, front + 1.6))
 end
 
 return Wheel

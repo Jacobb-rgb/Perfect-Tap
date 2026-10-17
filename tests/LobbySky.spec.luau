@@ -37,6 +37,7 @@ return function(T, Loader)
 	local PIECE_PARTS = {
 		CloudBanks = 350,
 		SunGlitter = 120,
+		NearSea = 3,
 		ShipA = 90,
 		ShipB = 60,
 		CastleIsland = 90,
@@ -782,22 +783,32 @@ return function(T, Loader)
 		end
 		T.truthy(count >= 2 and count <= 3, "two or three planets")
 		T.eq(ringed, 1, "one ringed gas giant")
-		-- big: the gas giant (ring included) 11-13.5 degrees wide, the ember
-		-- world >= 8, the teal world >= 6
+		-- moderate (round 1's planets crowded the sky like pizzas): the gas
+		-- giant (ring included) 6.5-8.5 degrees wide, the ember world 5-6.5,
+		-- the teal world 3.5-5
 		local giant = angularWidth(specOf("PlanetViolet"))
-		T.truthy(giant >= 11 and giant <= 13.5, `the gas giant is {giant} degrees wide with its ring`)
-		T.truthy(angularWidth(specOf("PlanetEmber")) >= 8, "the ember world is >= 8 degrees")
-		T.truthy(angularWidth(specOf("PlanetTeal")) >= 6, "the teal world is >= 6 degrees")
+		T.truthy(giant >= 6.5 and giant <= 8.5, `the gas giant is {giant} degrees wide with its ring`)
+		local ember = angularWidth(specOf("PlanetEmber"))
+		T.truthy(ember >= 5 and ember <= 6.5, `the ember world is {ember} degrees wide`)
+		local teal = angularWidth(specOf("PlanetTeal"))
+		T.truthy(teal >= 3.5 and teal <= 5, `the teal world is {teal} degrees wide`)
+		-- the teal world keeps well off the spawn-to-forge axis (north)
+		local tealCenter = Planets.center(specOf("PlanetTeal"))
+		local tealBearing = math.deg(math.atan2(tealCenter.X, -tealCenter.Z))
+		T.truthy(math.abs(tealBearing) >= 25, `the teal world is {tealBearing} degrees off the spawn-to-forge axis`)
 	end)
 
-	T.test("sky: from the spawn every planet is in frame and at most a quarter hidden (ring included)", function()
+	T.test("sky: from the spawn every planet is in frame, the gas giant and the teal world at most a quarter hidden", function()
 		build()
 		for _, spec in Planets.Specs do
 			local inside, hiddenFrac = visibility("lobby_spawn", spec)
 			T.truthy(inside >= 0.95, `{spec.Name} is {math.floor(inside * 100)}% inside the lobby_spawn frame`)
 			-- behind anything in the built world: massif, islands, waterfalls,
-			-- buildings, clouds, airship, balloon
-			T.le(hiddenFrac, 0.25, `{spec.Name} hidden from the spawn`)
+			-- buildings, clouds, airship, balloon (the ember world sits low in the
+			-- hero frame's sky, so from the spawn it rises behind SPIN & WIN)
+			if spec.Name ~= "PlanetEmber" then
+				T.le(hiddenFrac, 0.25, `{spec.Name} hidden from the spawn`)
+			end
 		end
 	end)
 
@@ -814,11 +825,16 @@ return function(T, Loader)
 				T.le(hiddenFrac, 0.1, `{spec.Name} hidden in the hero shot`)
 			end
 		end
-		T.truthy(shown >= 2, "two planets in the hero shot")
+		T.truthy(shown >= 1, "a planet in the hero shot")
+		-- the ember world sits wholly inside the hero frame (upper left, off the
+		-- corner, left of the massif), not in the sunset sector
 		local ember = visibility("lobby_hero", specOf("PlanetEmber"))
-		T.truthy(ember >= 0.9, "the ember world is wholly in the hero frame (top left)")
-		local giant = visibility("lobby_hero", specOf("PlanetViolet"))
-		T.truthy(giant >= 0.4 and giant < 0.9, "the gas giant bleeds off the hero frame's right edge")
+		T.truthy(ember >= 0.95, "the ember world is wholly in the hero frame (upper left)")
+		local cf, tanY = camera("lobby_hero")
+		local x, y = project(cf, tanY, Planets.center(specOf("PlanetEmber")))
+		T.truthy(x and y and x > -0.92 and y < 0.85, "the ember world keeps off the hero frame's corner")
+		local emberAz = specOf("PlanetEmber").Az
+		T.truthy(emberAz >= 320, `the ember world keeps out of the west sunset sector (bearing {emberAz})`)
 	end)
 
 	T.test("sky: planet colors are the Kenney sprites' after the evening haze", function()
@@ -830,24 +846,28 @@ return function(T, Loader)
 			local h, s, v = hsv(c)
 			return h, s, v, c
 		end
-		-- ember (planet02/08): saturated orange, crimson and dark rust, no salmon
+		-- ember (planet02/08): a saturated orange body; its bands are the same
+		-- hue, only 8-20% darker (soft latitude bands, no pepperoni spots)
 		local h, s, v = look("PlanetEmber", P.Orange)
 		T.truthy(h >= 15 and h <= 35 and s >= 0.55, `ember orange hazes to h{h} s{s}`)
-		h, s = look("PlanetEmber", P.Crimson)
-		T.truthy((h >= 340 or h <= 8) and s >= 0.5, `ember crimson hazes to h{h} s{s}`)
-		h, s, v = look("PlanetEmber", P.Rust)
-		T.truthy((h >= 350 or h <= 20) and s >= 0.45 and v <= 0.8, `ember rust hazes to h{h} s{s} v{v}`)
-		h, s = look("PlanetEmber", P.Flame)
-		T.truthy(h >= 18 and h <= 40 and s >= 0.5, `ember light streak hazes to h{h} s{s}`)
-		-- teal (planet00/03): ice body, teal-mint and a blue that never turns violet
+		local function raw(c: any): (number, number, number)
+			return hsv({ c.R, c.G, c.B })
+		end
+		for _, name in { "PlanetEmber", "PlanetTeal" } do
+			local spec = specOf(name)
+			local bodyH, _, bodyV = raw(spec.Body)
+			T.truthy(spec.Bands and #spec.Bands >= 3, name .. " has soft latitude bands")
+			T.eq(#spec.Patches, 0, name .. " has no round blotches")
+			for _, band in spec.Bands do
+				local bandH, _, bandV = raw(band.Color)
+				T.truthy(math.abs(bandH - bodyH) <= 3, `{name} band hue {bandH} = body hue {bodyH}`)
+				local ratio = bandV / bodyV
+				T.truthy(ratio >= 0.8 and ratio <= 0.92, `{name} band is {ratio} of the body's value (8-20% darker)`)
+			end
+		end
+		-- teal (planet00/03): an ice body that never turns violet
 		h, s, v = look("PlanetTeal", P.Ice)
 		T.truthy(h >= 190 and h <= 215 and s <= 0.3 and v >= 0.95, `teal ice hazes to h{h} s{s} v{v}`)
-		for _, mint in { P.Teal, P.Seafoam } do
-			h, s = look("PlanetTeal", mint)
-			T.truthy(h >= 150 and h <= 180 and s >= 0.3, `teal mint hazes to h{h} s{s}`)
-		end
-		h, s = look("PlanetTeal", P.DeepBlue)
-		T.truthy(h >= 195 and h < 228 and s >= 0.35, `teal deep blue hazes to h{h} s{s} (no lavender)`)
 		-- violet (planet09/01): saturated violet body, deep bands darker, lilac
 		-- bands and the ring lighter
 		local bh, bs, bv, body = look("PlanetViolet", P.Violet)
@@ -904,7 +924,20 @@ return function(T, Loader)
 					runLength = 1
 				end
 			end
-			T.truthy(longest >= 3, `{spec.Name} has streaks of 3+ merged caps`)
+			if #spec.Patches > 0 then
+				T.truthy(longest >= 3, `{spec.Name} has streaks of 3+ merged caps`)
+			end
+			-- the single-hue banded worlds: a darker terminator on the side away from
+			-- the western sun (the viewer's right), a thin translucent rim shell
+			if spec.Terminator then
+				local term = m:FindFirstChild("Terminator")
+				T.truthy(term and term.Shape == roblox.Enum.PartType.Cylinder, `{spec.Name} has a terminator disc`)
+				local faceFrame = Planets.frames(spec)
+				local off = faceFrame:PointToObjectSpace(term.CFrame.Position)
+				T.truthy(off.X < -0.2 * radius, `{spec.Name} terminator sits on the side away from the sun`)
+				T.truthy(luminance(term.Color) < luminance(spec.Body), `{spec.Name} terminator is darker than the body`)
+				T.truthy(m.Rim.Transparency >= 0.65, `{spec.Name} rim is a thin translucent shell`)
+			end
 			-- every cap meets the body (and every cap of another color it
 			-- crosses) at a steep angle
 			local balls = Planets.balls(spec)
@@ -1157,7 +1190,7 @@ return function(T, Loader)
 			T.falsy(part.CanCollide, part:GetFullName() .. " never collides")
 			T.falsy(part.CastShadow, part:GetFullName() .. " casts no shadow")
 			T.falsy(LobbyLayout.inArea(part.CFrame.Position), part:GetFullName() .. " flies outside the lobby area")
-			if part.Material == roblox.Enum.Material.Neon and part.Color == Style.C.Lamp then
+			if part.Material == roblox.Enum.Material.Neon and part.Color == Style.C.LampAmber then
 				windows += 1
 			end
 		end

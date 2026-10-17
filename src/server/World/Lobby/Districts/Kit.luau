@@ -190,9 +190,12 @@ function Kit.neonSign(
 		label.BackgroundTransparency = 1
 		label.Text = text
 		label.TextScaled = true
+		-- small labels: light letters with a solid dark outline (a frame-colored
+		-- stroke smears at distance); the big hero signs keep the frame color
+		local small = height < 2.6
 		label.TextColor3 = o.TextColor or C.GlowText
-		label.TextStrokeColor3 = o.Stroke or frame
-		label.TextStrokeTransparency = 0.4
+		label.TextStrokeColor3 = o.Stroke or (if small then Color3.fromRGB(16, 30, 78) else frame)
+		label.TextStrokeTransparency = if small then 0 else 0.4
 		label.FontFace = Font.fromEnum(o.Font or Style.SignFont)
 		label.Parent = gui
 	end
@@ -248,6 +251,8 @@ end
 	  Apron (Color3), Goggles (Color3), Hat (Color3)
 	  Robe (Color3): long robe instead of legs (mystics)
 	  Wave (boolean): right arm raised
+	  HeadScale (number, default 1): a smaller head (Tobin: 0.85)
+	  Lens (Color3): the head lamp's lens (default a small deep amber disc)
 ]]
 function Kit.npc(parent: Instance, base: CFrame, opts: Opts): Model
 	local m = Style.model(opts.Name or "Npc", parent)
@@ -287,36 +292,43 @@ function Kit.npc(parent: Instance, base: CFrame, opts: Opts): Model
 			Kit.bit(m, base * CFrame.new(x, 1.9, 0), Vector3.new(0.75, 0.6, 0.75), skin)
 		end
 	end
-	local head = Style.block(m, base * CFrame.new(0, 4.8, 0), Vector3.new(1.45, 1.45, 1.45), skin, nil, p)
+	-- the head (and everything on it) scales about its foot on the shoulders
+	local k: number = opts.HeadScale or 1
+	local foot = 4.075
+	local function hcf(x: number, y: number, z: number): CFrame
+		return base * CFrame.new(x * k, foot + (y - foot) * k, z * k)
+	end
+	local head = Style.block(m, hcf(0, 4.8, 0), Vector3.new(1.45, 1.45, 1.45) * k, skin, nil, p)
 	head.Name = "Head"
 	for _, x in { -0.32, 0.32 } do
-		Kit.bit(m, base * CFrame.new(x, 4.95, -0.74), Vector3.new(0.2, 0.3, 0.05), Kit.Dark)
+		Kit.bit(m, hcf(x, 4.95, -0.74), Vector3.new(0.2, 0.3, 0.05) * k, Kit.Dark)
 	end
 	if opts.Beard then
-		Kit.bit(m, base * CFrame.new(0, 4.32, -0.62), Vector3.new(1.5, 0.75, 0.4), opts.Beard)
-		Kit.bit(m, base * CFrame.new(0, 4.62, -0.78), Vector3.new(0.95, 0.22, 0.15), opts.Beard)
+		-- a narrow chin beard and a separate mustache bar, skin showing between them
+		Kit.bit(m, hcf(0, 4.3, -0.66), Vector3.new(1.05, 0.5, 0.2) * k, opts.Beard)
+		Kit.bit(m, hcf(0, 4.68, -0.77), Vector3.new(0.9, 0.17, 0.1) * k, opts.Beard)
 	end
 	if opts.Hair then
-		Kit.bit(m, base * CFrame.new(0, 5.42, 0.1), Vector3.new(1.55, 0.36, 1.35), opts.Hair)
+		Kit.bit(m, hcf(0, 5.42, 0.1), Vector3.new(1.55, 0.36, 1.35) * k, opts.Hair)
 	end
 	if opts.Goggles then
-		Kit.bit(m, base * CFrame.new(0, 5.25, -0.7), Vector3.new(1.5, 0.3, 0.15), opts.Goggles)
+		Kit.bit(m, hcf(0, 5.25, -0.7), Vector3.new(1.5, 0.3, 0.15) * k, opts.Goggles)
 		for _, x in { -0.34, 0.34 } do
-			Kit.glow(m, base * CFrame.new(x, 5.25, -0.79), Vector3.new(0.4, 0.26, 0.06), C.CrystalCyan)
+			Kit.glow(m, hcf(x, 5.25, -0.79), Vector3.new(0.4, 0.26, 0.06) * k, C.CrystalCyan)
 		end
 	end
 	if opts.Helmet then
-		Style.block(m, base * CFrame.new(0, 5.75, 0), Vector3.new(1.6, 0.6, 1.6), opts.Helmet, nil, p)
-		Kit.bit(m, base * CFrame.new(0, 5.5, -0.15), Vector3.new(1.85, 0.16, 1.95), opts.Helmet:Lerp(Kit.Dark, 0.2))
+		Style.block(m, hcf(0, 5.75, 0), Vector3.new(1.6, 0.6, 1.6) * k, opts.Helmet, nil, p)
+		Kit.bit(m, hcf(0, 5.5, -0.15), Vector3.new(1.85, 0.16, 1.95) * k, opts.Helmet:Lerp(Kit.Dark, 0.2))
 		if opts.HelmetLamp then
-			Kit.bit(m, base * CFrame.new(0, 5.72, -0.85), Vector3.new(0.62, 0.55, 0.15), C.Iron)
-			-- a small orange lens disc (a bigger, paler one blooms to a white blob)
-			Kit.faceDisc(m, base * CFrame.new(0, 5.72, -0.95), 0.06, 0.3, Color3.fromRGB(255, 150, 50), Kit.NEON)
+			Kit.bit(m, hcf(0, 5.72, -0.85), Vector3.new(0.62, 0.55, 0.15) * k, C.Iron)
+			-- a small deep amber lens disc (a bigger, paler one blooms to a white blob)
+			Kit.faceDisc(m, hcf(0, 5.72, -0.95), 0.06, 0.21 * k, opts.Lens or Color3.fromRGB(255, 150, 50), Kit.NEON)
 		end
 	elseif opts.Hat then
-		Kit.bit(m, base * CFrame.new(0, 5.6, 0), Vector3.new(1.9, 0.22, 1.9), opts.Hat)
-		Style.block(m, base * CFrame.new(0, 6.05, 0.05), Vector3.new(1.15, 0.8, 1.15), opts.Hat, nil, p)
-		Kit.bit(m, base * CFrame.new(0.05, 6.65, 0.1), Vector3.new(0.6, 0.45, 0.6), opts.Hat)
+		Kit.bit(m, hcf(0, 5.6, 0), Vector3.new(1.9, 0.22, 1.9) * k, opts.Hat)
+		Style.block(m, hcf(0, 6.05, 0.05), Vector3.new(1.15, 0.8, 1.15) * k, opts.Hat, nil, p)
+		Kit.bit(m, hcf(0.05, 6.65, 0.1), Vector3.new(0.6, 0.45, 0.6) * k, opts.Hat)
 	end
 	m.PrimaryPart = torso
 	if opts.Tag then
@@ -385,7 +397,7 @@ Kit.GolemLooks = {
 	{ Body = C.Copper, Accent = C.LeafOrangeDark, Eyes = C.CrystalCyan }, -- copper golem
 	{ Body = C.StoneDark, Accent = C.StoneDeep, Eyes = C.CrystalPurple, Gem = C.CrystalPurple }, -- amethyst golem
 	{ Body = C.StoneDeep, Accent = C.Iron, Eyes = C.Ember, Gem = C.Ember }, -- ember golem
-	{ Body = C.Stone, Accent = C.StoneDark, Eyes = C.Lamp, Moss = true }, -- mossy stone golem
+	{ Body = C.Stone, Accent = C.StoneDark, Eyes = C.LampAmber, Moss = true }, -- mossy stone golem
 	{ Body = C.LeafGreenDark, Accent = C.StoneDark, Eyes = C.FireCore, Gem = C.CrystalCyan }, -- jade golem
 } :: { Opts }
 
@@ -393,14 +405,14 @@ Kit.GolemLooks = {
 
 -- Small hanging lamp (glow only unless `range` is given). `top` = hook point.
 function Kit.hangingLamp(parent: Instance, top: CFrame, color: Color3?, range: number?): Part
-	local m = Style.lantern(parent, top, { Kind = "Hanging", Color = color, Light = range ~= nil, Range = range or 16 })
+	local m = Style.lantern(parent, top, { Kind = "Hanging", Color = color or C.LampAmber, Light = range ~= nil, Range = range or 16 })
 	return m.PrimaryPart :: Part
 end
 
 -- Wooden lantern post with a lamp box on top (3 parts). Returns the glow.
 function Kit.lampPost(parent: Instance, base: CFrame, height: number, color: Color3?): Part
 	Style.block(parent, base * CFrame.new(0, height / 2, 0), Vector3.new(0.9, height, 0.9), C.WoodDark)
-	local glow = Kit.glow(parent, base * CFrame.new(0, height + 0.45, 0), Vector3.new(0.9, 0.9, 0.9), color or C.Lamp)
+	local glow = Kit.glow(parent, base * CFrame.new(0, height + 0.45, 0), Vector3.new(0.9, 0.9, 0.9), color or C.LampAmber)
 	glow.Name = "LanternGlow"
 	Kit.bit(parent, base * CFrame.new(0, height + 1.05, 0), Vector3.new(1.3, 0.3, 1.3), C.Iron)
 	return glow

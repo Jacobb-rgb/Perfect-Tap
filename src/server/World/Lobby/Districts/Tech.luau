@@ -99,15 +99,7 @@ local glow = Tech.glow
 	(local -Z), the tube's long axis = local X (`along` = "Y": local Y).
 	Returns the tube. 2 parts.
 ]]
-function Tech.channel(
-	parent: Instance,
-	cf: CFrame,
-	length: number,
-	thickness: number,
-	color: Color3?,
-	along: string?,
-	pad: number?
-): Part
+function Tech.channel(parent: Instance, cf: CFrame, length: number, thickness: number, color: Color3?, along: string?, pad: number?): Part
 	local p = pad or 0.16
 	local depth = 0.16
 	local tubeSize: Vector3, backSize: Vector3
@@ -307,6 +299,16 @@ function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: 
 	bit(parent, base * CFrame.new(0, y0 + t / 2 - 0.15, -0.14), Vector3.new(ow + 0.4, t + 0.3, fd + 0.28), frame)
 	if o.Foot ~= false then
 		bit(parent, base * CFrame.new(0, 0.4, -depth / 2 - 0.2), Vector3.new(width, 0.8, 0.4), Tech.MetalDark)
+	end
+	local inner: Color3? = o.FrameNeon
+	if inner then
+		-- a thin neon line inside the U frame (top and both sides)
+		local z = -fd / 2 - 0.03
+		local h = y1 - y0 - t
+		glow(parent, base * CFrame.new(0, y1 - t - 0.07, z), Vector3.new(ow - 2 * t, 0.14, 0.08), inner)
+		for _, side in { -1, 1 } do
+			glow(parent, base * CFrame.new(side * (ow / 2 - t - 0.07), y0 + t / 2 + h / 2, z), Vector3.new(0.14, h - 0.14, 0.08), inner)
+		end
 	end
 	local pane: Part? = nil
 	if o.Lit then
@@ -921,14 +923,22 @@ function Tech.crown(parent: Instance, cf: CFrame, w: number, color: Color3?, opt
 	end
 end
 
+-- Small labels (boards under this height) get light letters with a solid
+-- dark outline: a blue frame-colored stroke smears at distance. The big
+-- hero signs keep the glowing frame-colored outline.
+Tech.SmallLabel = 2.6
+
 -- Letters on a thin board (no frame). `cf` = board center. 1 part.
 function Tech.label(parent: Instance, cf: CFrame, text: string, width: number, height: number, color: Color3?, depth: number?): Part
+	local small = height < Tech.SmallLabel
 	return Style.sign(parent, cf, text, width, height, {
 		Kind = "Glow",
 		Frame = false,
-		TextColor = color,
+		TextColor = color or (if small then C.GlowText else nil),
 		BoardColor = Tech.Board,
 		Depth = depth or 0.12,
+		StrokeColor = if small then Tech.Board else nil,
+		StrokeTransparency = if small then 0 else nil,
 	})
 end
 
@@ -981,6 +991,7 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 			x -= ww
 		end
 	else
+		local small = height < Tech.SmallLabel
 		board = Style.sign(parent, cf * CFrame.new(textX, 0, 0), text, textW, height, {
 			Kind = "Glow",
 			Frame = false,
@@ -988,6 +999,8 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 			BoardColor = o.Board or Tech.Board,
 			Depth = 0.5,
 			DoubleSided = o.DoubleSided,
+			StrokeColor = if small then Tech.Board else nil,
+			StrokeTransparency = if small then 0 else nil,
 		})
 	end
 	local iconAt: CFrame? = nil
@@ -1069,7 +1082,7 @@ function Tech.sign(parent: Instance, cf: CFrame, text: string, width: number, he
 			Style.tiny({ Transparency = 1 })
 		)
 		lamp.Name = "SignLamp"
-		Style.light(lamp, o.LightColor or C.Lamp, range, 1.4)
+		Style.light(lamp, o.LightColor or C.LampAmber, range, 1.4)
 	end
 	return board, iconAt
 end

@@ -18,63 +18,72 @@ local C = Style.C
 local Signs = {}
 
 -- Boards top to bottom: text, icon, a small yaw (radians) toward where it leads.
--- (big boards: the concept's signpost reads from the hero camera)
+-- (big boards: the concept's foreground signpost reads from the hero camera)
 Signs.Boards = {
-	{ Text = "MINE", Icon = "Pickaxe", Y = 8.7, Yaw = 0.14 },
-	{ Text = "UPGRADE", Icon = "Gear", Y = 6.6, Yaw = -0.1 },
-	{ Text = "EXPLORE", Icon = "Compass", Y = 4.5, Yaw = 0.05 },
-	{ Text = "BUILD", Icon = "House", Y = 2.4, Yaw = -0.12 },
+	{ Text = "MINE", Icon = "Pickaxe", Y = 13.3, Yaw = 0.12 },
+	{ Text = "UPGRADE", Icon = "Gear", Y = 10.0, Yaw = -0.08 },
+	{ Text = "EXPLORE", Icon = "Compass", Y = 6.7, Yaw = 0.05 },
+	{ Text = "BUILD", Icon = "House", Y = 3.4, Yaw = -0.1 },
 }
+Signs.BoardHeight = 3.0
+Signs.BoardTextWidth = 8.0
+Signs.BoardIconWidth = 3.0
 
 --[[
-	The signpost: a thick post on the viewer's left (frame +X) with a lamp
-	on top, four double-sided boards reaching to the right, each with its
-	icon on a square board next to the post (icons on both faces).
+	The big foreground signpost at the bridge's south-west foot: a thick
+	post on the viewer's left (frame +X) with a hanging lantern on an arm
+	(neon, no light), four double-sided boards reaching to the right, each
+	with its icon on a square board next to the post (icons on both
+	faces); gold letters with a solid dark outline that read from the hero
+	camera.
 ]]
 function Signs.signpost(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("Signpost")
 	local frame = LobbyLayout.frame(piece)
 	local m = Style.model("Signpost", parent)
-	local postX = 2.8
+	local postX = 5.4
 	local post = frame * CFrame.new(postX, 0, 0)
-	-- stone foot, post, cap and lamp
-	Style.block(m, post * CFrame.new(0, 0.3, 0), Vector3.new(2.4, 0.6, 2.4), Style.vary(C.StoneDark, rng, 0.04), nil, Style.solid())
-	Style.block(m, post * CFrame.new(0.15, 0.85, 0.1), Vector3.new(1.8, 0.5, 1.8), Style.vary(C.Stone, rng, 0.04), nil, Style.tiny())
-	local height = 10.2
-	local main = Style.block(m, post * CFrame.new(0, height / 2, 0), Vector3.new(1.2, height, 1.2), C.WoodDark, nil, Style.decor())
+	-- stone foot, post, cap and a lantern hanging from a short arm
+	Style.block(m, post * CFrame.new(0, 0.35, 0), Vector3.new(3.0, 0.7, 3.0), Style.vary(C.StoneDark, rng, 0.04), nil, Style.solid())
+	Style.block(m, post * CFrame.new(0.15, 0.95, 0.1), Vector3.new(2.3, 0.5, 2.3), Style.vary(C.Stone, rng, 0.04), nil, Style.tiny())
+	local height = 15.4
+	local main = Style.block(m, post * CFrame.new(0, height / 2, 0), Vector3.new(1.6, height, 1.6), C.WoodDark, nil, Style.decor())
 	main.Name = "Post"
-	Style.block(m, post * CFrame.new(0, height + 0.15, 0), Vector3.new(1.6, 0.3, 1.6), C.Wood, nil, Style.tiny())
-	Kit.lampBox(m, post * CFrame.new(0, height + 0.3, 0), 0.75, true)
+	Style.block(m, post * CFrame.new(0, height + 0.2, 0), Vector3.new(2.1, 0.4, 2.1), C.Wood, nil, Style.tiny())
+	Style.block(m, post * CFrame.new(0.4, height - 0.5, -1.1), Vector3.new(0.4, 0.4, 2.4), C.WoodDark, nil, Style.tiny())
+	Style.lantern(m, post * CFrame.new(0.4, height - 0.7, -2.0), { Kind = "Hanging", Color = C.LampAmber })
 	-- the boards
+	local iconW, textW, h = Signs.BoardIconWidth, Signs.BoardTextWidth, Signs.BoardHeight
+	local total = iconW + textW
 	for _, b in Signs.Boards do
-		local pivot = post * CFrame.new(-0.6, b.Y, 0) * CFrame.Angles(0, b.Yaw, 0)
-		local iconW, textW, h = 1.9, 5.0, 1.9
-		local total = iconW + textW
+		local pivot = post * CFrame.new(-0.8, b.Y, 0) * CFrame.Angles(0, b.Yaw, 0)
 		-- one frame block behind both boards shows as a rim on both faces
 		Style.block(
 			m,
 			pivot * CFrame.new(-total / 2 - 0.05, 0, 0),
-			Vector3.new(total + 0.3, h + 0.3, 0.36),
+			Vector3.new(total + 0.4, h + 0.4, 0.4),
 			C.SignFrame,
 			nil,
 			Style.decor({ CastShadow = false })
 		)
 		local iconCf = pivot * CFrame.new(-iconW / 2 - 0.05, 0, 0)
-		local iconBoard = Style.block(m, iconCf, Vector3.new(iconW - 0.1, h - 0.1, 0.56), C.SignBoard, nil, Style.tiny())
+		local iconBoard = Style.block(m, iconCf, Vector3.new(iconW - 0.1, h - 0.1, 0.6), C.SignBoard, nil, Style.tiny())
 		iconBoard.Name = "IconBoard"
 		for _, turn in { 0, math.pi } do
-			Style.icon(m, iconCf * CFrame.Angles(0, turn, 0) * CFrame.new(0, 0, -0.3 - 0.15), b.Icon, 1.6, C.SignText)
+			Style.icon(m, iconCf * CFrame.Angles(0, turn, 0) * CFrame.new(0, 0, -0.32 - 0.15), b.Icon, 2.6, C.SignText)
 		end
 		local board = Style.sign(m, pivot * CFrame.new(-iconW - textW / 2 - 0.05, 0, 0), b.Text, textW - 0.1, h - 0.1, {
 			Kind = "Wood",
 			DoubleSided = true,
 			Frame = false,
-			Depth = 0.56,
+			Depth = 0.6,
+			StrokeColor = C.TextShadow,
+			StrokeTransparency = 0,
 		})
 		board.Name = b.Text .. "Board"
 	end
 	-- flowers at the foot
-	Style.flowers(m, (frame * CFrame.new(-1.2, 0, 1.4)).Position, C.FlowerYellow, rng, 4, 1.1)
+	Style.flowers(m, (frame * CFrame.new(1.4, 0, 1.4)).Position, C.FlowerYellow, rng, 4, 1.1)
 	return m
 end
 
@@ -92,7 +101,7 @@ function Signs.nextArea(parent: Instance, rng: Rng.Rng)
 		Style.block(m, frame * CFrame.new(x, 9.65, 0), Vector3.new(1.4, 0.3, 1.4), C.Wood, nil, Style.tiny())
 		Style.block(m, frame * CFrame.new(x, 0.3, 0), Vector3.new(1.8, 0.6, 1.8), Style.vary(C.StoneDark, rng, 0.04), nil, Style.tiny())
 	end
-	local board = Style.sign(m, frame * CFrame.new(0, 7.7, -0.75), "NEXT AREA", 11, 3, { Kind = "Wood" })
+	local board = Style.sign(m, frame * CFrame.new(0, 7.7, -0.75), "NEXT AREA", 11, 3, { Kind = "Wood", StrokeTransparency = 0 })
 	board.Name = "NextAreaSign"
 	-- arrow plank under the right end (viewer's right = frame -X = east)
 	local arrowCf = frame * CFrame.new(-2.6, 5.15, -0.75)
@@ -100,9 +109,14 @@ function Signs.nextArea(parent: Instance, rng: Rng.Rng)
 	Style.block(m, arrowCf * CFrame.new(0, 0, 0.1), Vector3.new(5.5, 2, 0.4), C.SignFrame, nil, Style.tiny())
 	Style.icon(m, arrowCf * CFrame.new(0, 0, -0.45), "Arrow", 3.4, C.SignText)
 	-- lantern posts either side (one light)
-	Style.lantern(m, frame * CFrame.new(6.4, 0, -1.4) * CFrame.Angles(0, -math.pi / 2, 0), { Kind = "Post", Height = 7 })
+	Style.lantern(
+		m,
+		frame * CFrame.new(6.4, 0, -1.4) * CFrame.Angles(0, -math.pi / 2, 0),
+		{ Kind = "Post", Height = 7, Color = C.LampAmber }
+	)
 	Style.lantern(m, frame * CFrame.new(-6.4, 0, -1.4) * CFrame.Angles(0, math.pi / 2, 0), {
 		Kind = "Post",
+		Color = C.LampAmber,
 		Height = 7,
 		Light = true,
 		Range = 16,

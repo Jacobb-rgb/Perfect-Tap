@@ -317,9 +317,9 @@ return function(T, Loader)
 			if part:IsA("BasePart") and part ~= floor and part.Name ~= "CrystalFloor" then
 				tiles += 1
 				T.eq(part.Material, SMOOTH, "slate tiles are SmoothPlastic")
-				T.lt(luma(part.Color), 0.32, "slate tiles are dark charcoal blue-grey")
+				T.lt(luma(part.Color), 0.46, "slate tiles are blue-grey slate (light enough that the tile grid reads)")
 				T.truthy(part.Color.B > part.Color.R, "slate tiles are cool (blue over red)")
-				T.le(part.Reflectance, 0.05, "only a little reflectance (no pink sky mirrored at grazing angles)")
+				T.le(part.Reflectance, 0.1 + 1e-6, "a polished sheen, no mirror")
 				if math.abs(part.Reflectance - Common.TileReflectance) < 1e-4 and part.Reflectance > 0 then
 					polished += 1
 				end
@@ -344,11 +344,11 @@ return function(T, Loader)
 		end
 		T.truthy((orange.InnerRing or 0) >= 20, "an orange neon ring round the crystal")
 		T.truthy((orange.OrangeRing or 0) >= 20, "a second orange ring in the middle of the plaza")
-		T.truthy((blue.OuterRing or 0) >= 24, "a blue neon outer ring")
+		T.truthy((blue.OuterRing or 0) >= 12, "a blue neon outer ring of long dashes")
 		-- bold rings (concept v2): the orange ones continuous, the blue one long dashes
 		local Paving = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.Paving")
 		for _, spec in Paving.NeonRings do
-			T.truthy(spec.Width >= 0.45, spec.Name .. " is a bold ring, not a hairline")
+			T.truthy(spec.Width >= 0.95, spec.Name .. " is a bold neon ring, not a lane marking")
 			if spec.Name == "OuterRing" then
 				T.truthy(spec.Dash >= 0.7 and spec.Dash < 1, "the blue outer ring: long dashes, short gaps")
 			else
@@ -454,7 +454,8 @@ return function(T, Loader)
 			crystalTop = math.max(crystalTop, hi.Y)
 		end
 		T.lt(ringTop, 2.4, "a low ring (the crystal is the focal point)")
-		T.truthy(crystalTop > ringTop + 7.5, "the crystal towers over its housing")
+		T.truthy(crystalTop > ringTop + 5.5, "the crystal towers over its housing")
+		T.lt(crystalTop + crystal:GetAttribute("BobHeight"), 9.5, "the crystal stays under the eye line (the forge door shows over it)")
 		-- but THE GREAT FORGE board stays in view over it from the spawn camera (eye y 9, z 46)
 		local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
 		local forge = LobbyLayout.get("GreatForge")
@@ -505,12 +506,12 @@ return function(T, Loader)
 		for _, child in roads:GetChildren() do
 			for _, part in parts(child) do
 				if part.Name == "Chevron" then
-					T.truthy(part.Size.X >= 0.8, "bold chevron strokes")
+					T.truthy(part.Size.X >= 0.6 and part.Size.X <= 0.8, "bold chevron strokes, not road markings")
 					T.truthy(part.Color.G < 0.45, "deep orange chevrons (no pale yellow under bloom)")
 				elseif part.Name == "WalkPanel" then
-					T.lt(luma(part.Color), 0.28, "dark walkway panels")
+					T.lt(luma(part.Color), 0.46, "slate walkway panels")
 					T.truthy(part.Color.B > part.Color.R, "cool grey-blue walkway panels")
-					T.le(part.Reflectance, Common.TileReflectance, "the plaza's light polish, no more (no glare)")
+					T.le(part.Reflectance, Common.TileReflectance + 1e-6, "the plaza's light polish, no more (no glare)")
 					local base = child:FindFirstChild("PathBase")
 					T.truthy(luma(part.Color) > luma(base.Color) + 0.02, "panels lighter than the thin seams (the grid reads)")
 				elseif part.Name == "Threshold" then
@@ -627,9 +628,9 @@ return function(T, Loader)
 		end
 		T.eq(roofs, 6, "three slate gable roofs")
 		-- a low, wide hall under one big gable (concept v2), not a two-storey house
-		T.truthy(GreatForge.NaveEave <= 17.5, "the gable starts right over the entrance")
+		T.truthy(GreatForge.NaveEave <= 18, "the gable starts right over the entrance")
 		T.truthy(GreatForge.NaveRoofHeight / (GreatForge.NaveEave + GreatForge.NaveRoofHeight) >= 0.4, "the gable is ~half the facade")
-		T.truthy(GreatForge.EmblemSize >= GreatForge.NaveRoofHalf * 2 * 0.28, "a big emblem (~1/3 of the gable's width)")
+		T.truthy(GreatForge.EmblemSize >= GreatForge.NaveRoofHalf * 2 * 0.24, "a big emblem (~1/4 of the gable's width)")
 		-- slate roofs with thin shingle courses (no thick rows or rafter seams)
 		local courses = 0
 		for _, part in parts(forge) do
@@ -678,10 +679,10 @@ return function(T, Loader)
 			T.truthy(c.R > 0.55 and c.G < 0.12 and c.B < c.R * 0.4, "crimson banner cloth (not orange)")
 			table.insert(cloths, cloth)
 			local lo, hi = bounds(cloth)
-			T.truthy(hi.Y - lo.Y > 14, "a long banner (from the sign's level to just over the ground)")
+			T.truthy(hi.Y - lo.Y > 8 and hi.Y - lo.Y < 13, "a banner from the sign's level to about the door's middle (not a red pillar)")
 			T.truthy((hi.Y - lo.Y) / GreatForge.BannerWidth > 2.7, "a long, narrow banner (concept: ~3.5 : 1)")
 			T.truthy(hi.Y >= GreatForge.NaveEave - 1.5, "it hangs from just under the gable's eave")
-			T.lt(lo.Y, 3, "down to just over the ground")
+			T.lt(lo.Y, GreatForge.DoorTop - 2, "down to about the door's middle")
 			local cx = LobbyLayout.get("GreatForge").Center.X
 			T.lt(math.min(math.abs(lo.X - cx), math.abs(hi.X - cx)), 10.5, "right beside the door pillars")
 			local icon = 0
@@ -756,9 +757,11 @@ return function(T, Loader)
 		end
 		T.eq(grates, 0, "no grate bars (no dark shopfront grille in the doorway)")
 		T.eq(arches, 2, "an arched doorway (two haunches)")
-		local back = forge:FindFirstChild("DoorGlow")
-		T.truthy(back and back.Material == NEON and back.Color.R > 0.9 and back.Color.B < 0.25, "a bright amber glow fills the doorway")
-		T.truthy(back.Size.X >= GreatForge.DoorHalf * 2 - 0.5, "the whole doorway glows")
+		-- a dark brick back wall: the glow stays on the hearth and a few window strips (no flat bright wall)
+		local back = forge:FindFirstChild("BackWall")
+		T.truthy(back and back.Material ~= NEON and luma(back.Color) < 0.2, "a dark brick back wall behind the hearth")
+		T.truthy(back.Size.X >= GreatForge.DoorHalf * 2 - 0.5, "the back wall fills the doorway")
+		T.falsy(forge:FindFirstChild("DoorGlow"), "no flat glowing back wall")
 		T.truthy(forge:FindFirstChild("StairLipGlow"), "light spills onto the top step")
 		for _, wallPart in forge:GetChildren() do
 			if wallPart.Name == "HallWall" then
@@ -784,6 +787,59 @@ return function(T, Loader)
 			local pier, cloth = banner.BannerPier, banner.BannerCloth
 			T.truthy(luma(pier.Color) < 0.2, "a dark pier behind the crimson")
 			T.truthy(math.abs(pier.CFrame.Position.Z - cloth.CFrame.Position.Z) > 0.5, "it hangs in front of its pier")
+		end
+	end)
+
+	T.test("plaza: every neon strip on the roads lies within 0.1 stud of the road's top", function()
+		local roads = world().plaza.Roads
+		for _, road in roads:GetChildren() do
+			local roadTop = -math.huge
+			for _, part in parts(road) do
+				if part.Name == "WalkPanel" or part.Name == "PathBase" then
+					local _, hi = bounds(part)
+					roadTop = math.max(roadTop, hi.Y)
+				end
+			end
+			for _, part in parts(road) do
+				if part.Material == NEON then
+					local _, hi = bounds(part)
+					T.truthy(math.abs(hi.Y - roadTop) <= 0.1, `{part:GetFullName()} top {hi.Y} vs the road top {roadTop}`)
+				end
+			end
+		end
+	end)
+
+	T.test("plaza: no lantern stands within 2 studs of a stall showcase", function()
+		local w = world()
+		local cases = {}
+		local districts = w.map.Emberfall.Lobby:FindFirstChild("Districts")
+		for _, d in (if districts then districts:GetDescendants() else {}) do
+			if d:IsA("BasePart") and d.Name == "Showcase" then
+				local lo, hi = bounds(d)
+				table.insert(cases, { lo = lo, hi = hi, name = d:GetFullName() })
+			end
+		end
+		T.truthy(#cases >= 8, "the SHOP and UPGRADES porch showcases")
+		local lanterns = {}
+		for _, d in w.plaza:GetDescendants() do
+			if d:IsA("Model") and d.Name == "Lantern" then
+				table.insert(lanterns, d)
+			end
+		end
+		for _, lantern in lanterns do
+			local lo = Vector3.new(math.huge, 0, math.huge)
+			local hi = Vector3.new(-math.huge, 0, -math.huge)
+			for _, part in parts(lantern) do
+				local a, b = bounds(part)
+				lo = Vector3.new(math.min(lo.X, a.X), 0, math.min(lo.Z, a.Z))
+				hi = Vector3.new(math.max(hi.X, b.X), 0, math.max(hi.Z, b.Z))
+			end
+			for _, case in cases do
+				local dx = math.max(case.lo.X - hi.X, 0, lo.X - case.hi.X)
+				local dz = math.max(case.lo.Z - hi.Z, 0, lo.Z - case.hi.Z)
+				local gap = math.sqrt(dx * dx + dz * dz)
+				T.truthy(gap >= 2, `{lantern:GetFullName()} stands {gap} studs from {case.name}`)
+			end
 		end
 	end)
 

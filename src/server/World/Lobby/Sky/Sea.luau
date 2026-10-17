@@ -21,6 +21,40 @@ local Sea = {}
 -- Sea surface top (Land.luau: sea parts span y -23..-21).
 local SEA_TOP = -21
 
+---------------------------------------------------------------- near sea
+
+--[[
+	The near west sea, deepened: three flat bands just over the sea surface
+	(Land's sea parts) from the island's cliff outward, WaterDeep near the
+	shore fading through the sea color to a see-through outer band, so the
+	near sea reads as deep blue water instead of a flat lavender band of
+	haze. The sun glitter strips lie on top (0.05 higher). 3 parts.
+]]
+Sea.NearSeaBands = {
+	{ From = 0, To = 0.3, Mix = 0, Transparency = 0 },
+	{ From = 0.3, To = 0.72, Mix = 0.45, Transparency = 0.15 },
+	{ From = 0.72, To = 1, Mix = 0.8, Transparency = 0.45 },
+}
+function Sea.nearSea(parent: Instance, piece: Piece, _rng: Rng.Rng): Model
+	local m = Style.model(piece.Id, parent)
+	local x0 = piece.Center.X + piece.Size.X / 2 -- the shore side (east)
+	local width = piece.Size.X
+	for _, band in Sea.NearSeaBands do
+		local a, b = x0 - width * band.From, x0 - width * band.To
+		local part = Kit.box(
+			m,
+			CFrame.new((a + b) / 2, SEA_TOP + 0.1, piece.Center.Z),
+			Vector3.new(0, 0, 0),
+			Vector3.new(a - b, 0.1, piece.Size.Z),
+			C.WaterDeep:Lerp(C.Sea, band.Mix)
+		)
+		part.Transparency = band.Transparency
+		part.Reflectance = 0.05
+		part.Name = "NearSea"
+	end
+	return m
+end
+
 ---------------------------------------------------------------- sun glitter
 
 --[[
@@ -61,7 +95,13 @@ function Sea.sunGlitter(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 			local b = across - gap - a
 			local left = x - across / 2
 			Kit.glow(m, frame * CFrame.new(left + a / 2, y - 0.1, z), Vector3.new(a, 0.2, along), color, transparency)
-			Kit.glow(m, frame * CFrame.new(left + a + gap + b / 2, y - 0.1, z + rng:range(-0.6, 0.6)), Vector3.new(b, 0.2, along), color, transparency)
+			Kit.glow(
+				m,
+				frame * CFrame.new(left + a + gap + b / 2, y - 0.1, z + rng:range(-0.6, 0.6)),
+				Vector3.new(b, 0.2, along),
+				color,
+				transparency
+			)
 		else
 			Kit.glow(m, frame * CFrame.new(x, y - 0.1, z), Vector3.new(math.max(1, across), 0.2, along), color, transparency)
 		end
@@ -83,7 +123,7 @@ local function sternLights(m: Model, frame: CFrame, len: number, beam: number, d
 	end
 	for _, side in { -1, 1 } do
 		local at = frame * CFrame.new(side * (beam * 0.48 + 0.12), deckY + 1.3, len * 0.4 - castleLen * 0.4)
-		Kit.glow(m, at, Vector3.new(0.2, 0.9, 1.2), C.Lamp)
+		Kit.glow(m, at, Vector3.new(0.2, 0.9, 1.2), C.LampAmber)
 	end
 	-- stern lantern on a short post
 	local post = frame * CFrame.new(0, deckY + 2.8, back - 0.6)
@@ -198,9 +238,9 @@ function Sea.castleIsland(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	Kit.box(m, frame, Vector3.new(-14, base + 20.5, 0), Vector3.new(7, 3, 6), roof)
 	Kit.box(m, frame, Vector3.new(-14, base + 23, 0), Vector3.new(4, 2.4, 3.6), roof)
 	for _, x in { -17, -11 } do
-		Kit.glow(m, frame * CFrame.new(x, base + 13, -5.05), Vector3.new(1.2, 1.8, 0.2), C.Lamp)
+		Kit.glow(m, frame * CFrame.new(x, base + 13, -5.05), Vector3.new(1.2, 1.8, 0.2), C.LampAmber)
 	end
-	Kit.glow(m, frame * CFrame.new(-14, base + 8, -5.05), Vector3.new(1.4, 2, 0.2), C.Lamp)
+	Kit.glow(m, frame * CFrame.new(-14, base + 8, -5.05), Vector3.new(1.4, 2, 0.2), C.LampAmber)
 	-- three towers: two crenellated, the tallest with a pointed roof and a flag
 	local towers = {
 		{ At = Vector3.new(-27, 0, -11), Height = 15, Pointed = false },
@@ -221,7 +261,7 @@ function Sea.castleIsland(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 				Kit.box(m, frame, p + Vector3.new(c[1] * 2.7, base + h + 1.6, c[2] * 2.7), Vector3.new(1.8, 1.8, 1.8), wall)
 			end
 		end
-		Kit.glow(m, frame * CFrame.new(p + Vector3.new(0, base + h * 0.62, -3.05)), Vector3.new(1, 1.6, 0.2), C.Lamp)
+		Kit.glow(m, frame * CFrame.new(p + Vector3.new(0, base + h * 0.62, -3.05)), Vector3.new(1, 1.6, 0.2), C.LampAmber)
 	end
 	-- lighthouse: banded tapered tower, gallery, lamp room, cap
 	local lh = Vector3.new(42, 15, 4)
@@ -229,7 +269,7 @@ function Sea.castleIsland(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	Kit.box(m, frame, lh + Vector3.new(0, 10.5, 0), Vector3.new(6.2, 1.6, 6.2), C.RoofDark)
 	Kit.box(m, frame, lh + Vector3.new(0, 15.5, 0), Vector3.new(5, 8.4, 5), C.StoneLight)
 	Kit.box(m, frame, lh + Vector3.new(0, 20, 0), Vector3.new(6.6, 0.6, 6.6), C.Iron)
-	local lamp = Kit.glow(m, frame * CFrame.new(lh + Vector3.new(0, 21.8, 0)), Vector3.new(3, 3, 3), C.Lamp)
+	local lamp = Kit.glow(m, frame * CFrame.new(lh + Vector3.new(0, 21.8, 0)), Vector3.new(3, 3, 3), C.LampAmber)
 	lamp.Name = "LighthouseLamp"
 	Kit.box(m, frame, lh + Vector3.new(0, 23.8, 0), Vector3.new(4.2, 1, 4.2), C.RoofDark)
 	Kit.box(m, frame, lh + Vector3.new(0, 25, 0), Vector3.new(1.6, 1.4, 1.6), C.RoofDark)
@@ -241,7 +281,7 @@ end
 
 local function lanternPost(m: Model, cf: CFrame, height: number): Part
 	Style.block(m, cf * CFrame.new(0, height / 2, 0), Vector3.new(0.6, height, 0.6), C.WoodDark, nil, Kit.far())
-	local glow = Kit.glow(m, cf * CFrame.new(0, height + 0.5, 0), Vector3.new(0.9, 1, 0.9), C.Lamp)
+	local glow = Kit.glow(m, cf * CFrame.new(0, height + 0.5, 0), Vector3.new(0.9, 1, 0.9), C.LampAmber)
 	glow.Name = "LanternGlow"
 	Style.block(m, cf * CFrame.new(0, height + 1.15, 0), Vector3.new(1.2, 0.3, 1.2), C.Iron, nil, Kit.far())
 	return glow
@@ -299,7 +339,15 @@ function Sea.westPier(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 		for i = 1, f.steps do
 			local z = f.fromZ - run * (i - 0.5)
 			local y = f.fromY - rise * i
-			Kit.box(m, frame, Vector3.new(stairX, y - 0.25, z), Vector3.new(3.6, 0.5, run + 0.15), Style.vary(C.WoodLight, rng, 0.05), nil, deck)
+			Kit.box(
+				m,
+				frame,
+				Vector3.new(stairX, y - 0.25, z),
+				Vector3.new(3.6, 0.5, run + 0.15),
+				Style.vary(C.WoodLight, rng, 0.05),
+				nil,
+				deck
+			)
 		end
 		for _, side in { -1, 1 } do
 			local x = stairX + side * 2
@@ -333,7 +381,7 @@ function Sea.westPier(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	lanternPost(m, frame * CFrame.new(3.6, deckY, 0.2), 4)
 	lanternPost(m, frame * CFrame.new(-3.6, deckY, -13.6), 4)
 	local lit = lanternPost(m, frame * CFrame.new(3.6, deckY, -13.6), 4)
-	Style.light(lit, C.Lamp, 16, 1.3)
+	Style.light(lit, C.LampAmber, 16, 1.3)
 	-- moored boats beside the finger pier
 	local water = SEA_TOP - piece.Center.Y - 0.3
 	rowboat(m, frame * CFrame.new(-3.2, water, -18) * CFrame.Angles(0, 0.06, 0), rng)

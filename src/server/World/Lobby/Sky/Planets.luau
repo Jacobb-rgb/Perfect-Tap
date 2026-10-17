@@ -86,18 +86,19 @@ local P = {
 	VioletDeep = rgb(30, 0, 65), -- -> #503AB0 (deep #3C1490)
 	Ring = rgb(120, 95, 235), -- -> #D8A8FF, a light warm lilac, lighter than the body
 	RimViolet = rgb(110, 60, 255),
-	-- planet02 / planet08: orange world (north-west, warm haze, 800 studs)
+	-- planet02 / planet08: orange world (north-west, warm haze, 800 studs):
+	-- one hue, the bands only 10-15% darker than the body (no pepperoni spots)
 	Orange = rgb(135, 65, 0), -- -> #FF8F55 (orange #E87A2E)
-	Crimson = rgb(100, 0, 30), -- -> #E55A67 (crimson #C82848)
-	Rust = rgb(70, 15, 0), -- -> #C05F56 (rust #8C3018)
-	Flame = rgb(255, 100, 25), -- -> #FFC371 (the light orange streaks)
+	Crimson = rgb(118, 57, 0), -- 12% darker bands
+	Rust = rgb(112, 54, 0), -- 15% darker bands
+	Flame = rgb(255, 100, 25), -- (the light orange streaks of round 1)
 	RimOrange = rgb(255, 70, 0),
 	-- planet00 / planet03: ice-blue world (north, half-warm haze, 760 studs): every blue stays
 	-- cyan-blue through the haze (no deep navy that turns lavender)
 	Ice = rgb(100, 170, 255), -- -> #D0EEFF (ice #CFEFFF)
-	Teal = rgb(0, 120, 95), -- -> #74CDB5 (teal #2FC9B5)
-	Seafoam = rgb(15, 145, 110), -- -> #8AE2C4 (mint)
-	DeepBlue = rgb(0, 75, 115), -- -> #6A93D5 (deep blue #1E64B4, on the cyan side)
+	Teal = rgb(87, 148, 222), -- the ice world's bands: its own hue, 13% darker
+	Seafoam = rgb(92, 156, 234), -- 8% darker
+	DeepBlue = rgb(84, 143, 214), -- 16% darker
 	RimCyan = rgb(0, 150, 220),
 }
 
@@ -138,6 +139,7 @@ export type Spec = {
 	Patches: { Patch },
 	Bands: { Band }?,
 	Ring: Ring?,
+	Terminator: boolean?, -- a darker disc on the side away from the sun (the night side)
 }
 
 -- A ball of a planet in world orientation: `Offset` from the planet center.
@@ -205,6 +207,9 @@ Planets.RingSegments = 28
 	crescent just inside the limb.
 ]]
 Planets.Crescent = { Offset = 0.46, Radius = 0.5, Depth = 0.6, Thickness = 0.006 }
+-- the terminator (night side) disc: offset toward the viewer's right (away
+-- from the western sun), wider and set back further than the crescents
+Planets.Terminator = { Offset = 0.4, Radius = 0.56, Depth = 0.55, Darken = 0.5, Transparency = 0.45 }
 Planets.GlossLighten = 0.45
 Planets.GlossTransparency = 0.45
 Planets.ShadeDarken = 0.45
@@ -279,12 +284,14 @@ end
 
 Planets.Specs = {
 	{
-		-- the ringed gas giant on the cool side right of the east island (planet09 / planet01)
+		-- the ringed gas giant high in the spawn's upper-right sky, left of the
+		-- east island and its waterfall (above the hero frame's top edge: the
+		-- hero's sky right of the massif is too narrow for it)
 		Name = "PlanetViolet",
-		Az = 43.2,
+		Az = 32,
 		Dist = 700,
-		Elev = 10.6,
-		Size = 7.4,
+		Elev = 15,
+		Size = 4.6,
 		Roll = 18,
 		Lean = 26,
 		Body = P.Violet,
@@ -304,93 +311,48 @@ Planets.Specs = {
 		Ring = { Inner = 1.3, Outer = 1.72, Segments = Planets.RingSegments, Color = P.Ring },
 	},
 	{
-		-- the orange world on the warm side left of the west island (planet02 / planet08):
-		-- interlocking crimson and rust camouflage with light-orange streaks, falling to the right
+		-- the orange world left of the massif in the hero's upper-left sky (out of
+		-- the sunset sector): one hue with soft darker latitude bands, a darker
+		-- terminator on the side away from the sun and a thin glowing rim shell
 		Name = "PlanetEmber",
-		Az = 323,
+		Az = 330,
 		Dist = 800,
-		Elev = 11.5,
-		Size = 9,
+		Elev = 6.8,
+		Size = 5.6,
 		Roll = -26,
-		Lean = 0,
+		Lean = 18,
 		Body = P.Orange,
 		Rim = P.RimOrange,
-		RimTransparency = 0.6,
-		Patches = rows({
-			{ Lat = 54, Offset = -10, Runs = { { Count = 3, Color = P.Crimson, Touch = true }, { Count = 2, Color = P.Rust } } },
-			{
-				Lat = 29,
-				Offset = 8,
-				Runs = {
-					{ Count = 2, Color = P.Rust, Touch = true },
-					{ Count = 3, Color = P.Crimson },
-					{ Count = 2, Color = P.Rust },
-				},
-			},
-			{
-				Lat = 3,
-				Offset = -6,
-				Runs = {
-					{ Count = 3, Color = P.Crimson, Touch = true },
-					{ Count = 3, Color = P.Rust },
-					{ Count = 2, Color = P.Crimson },
-				},
-			},
-			{
-				Lat = -23,
-				Offset = 10,
-				Runs = {
-					{ Count = 3, Color = P.Flame },
-					{ Count = 3, Color = P.Rust, Touch = true },
-					{ Count = 2, Color = P.Crimson },
-				},
-			},
-			{ Lat = -50, Offset = -8, Runs = { { Count = 3, Color = P.Crimson, Touch = true }, { Count = 2, Color = P.Rust } } },
-		}, 11.5),
+		RimTransparency = 0.7,
+		Bands = {
+			{ Lat = 42, Width = 0.1, Color = P.Rust },
+			{ Lat = 20, Width = 0.12, Color = P.Crimson },
+			{ Lat = -16, Width = 0.12, Color = P.Rust },
+			{ Lat = -38, Width = 0.1, Color = P.Crimson },
+		},
+		Patches = {},
+		Terminator = true,
 	},
 	{
-		-- the small ice-blue world just left of the massif peak, above the cloud tier (planet00 / planet03)
+		-- the small ice-blue world high in the spawn's upper-left sky, well off the
+		-- spawn-to-forge axis, with soft single-hue bands
 		Name = "PlanetTeal",
-		Az = 350,
+		Az = 332,
 		Dist = 760,
-		Elev = 22,
-		Size = 7.5,
+		Elev = 19,
+		Size = 4.65,
 		Roll = -14,
-		Lean = 0,
+		Lean = 16,
 		Body = P.Ice,
 		Rim = P.RimCyan,
-		RimTransparency = 0.6,
-		Patches = rows({
-			{ Lat = 54, Offset = -6, Runs = { { Count = 3, Color = P.Teal, Touch = true }, { Count = 2, Color = P.DeepBlue } } },
-			{
-				Lat = 29,
-				Offset = 10,
-				Runs = {
-					{ Count = 2, Color = P.DeepBlue },
-					{ Count = 4, Color = P.Teal, Touch = true },
-					{ Count = 2, Color = P.Seafoam },
-				},
-			},
-			{
-				Lat = 3,
-				Offset = -8,
-				Runs = {
-					{ Count = 3, Color = P.Teal, Touch = true },
-					{ Count = 2, Color = P.DeepBlue },
-					{ Count = 3, Color = P.Teal },
-				},
-			},
-			{
-				Lat = -23,
-				Offset = 6,
-				Runs = {
-					{ Count = 2, Color = P.DeepBlue },
-					{ Count = 4, Color = P.Teal, Touch = true },
-					{ Count = 2, Color = P.DeepBlue },
-				},
-			},
-			{ Lat = -50, Offset = -6, Runs = { { Count = 3, Color = P.Teal }, { Count = 1, Color = P.DeepBlue } } },
-		}, 11.5),
+		RimTransparency = 0.7,
+		Bands = {
+			{ Lat = 36, Width = 0.12, Color = P.Teal },
+			{ Lat = 14, Width = 0.1, Color = P.Seafoam },
+			{ Lat = -20, Width = 0.12, Color = P.DeepBlue },
+		},
+		Patches = {},
+		Terminator = true,
 	},
 } :: { Spec }
 
@@ -519,6 +481,20 @@ function Planets.crescents(spec: Spec): { Disc }
 	-- the face frame's +X is the viewer's left
 	disc("Gloss", 1, 1, spec.Body:Lerp(WHITE, Planets.GlossLighten), Planets.GlossTransparency)
 	disc("Shade", -1, -1, spec.Body:Lerp(BLACK, Planets.ShadeDarken), Planets.ShadeTransparency)
+	if spec.Terminator then
+		-- the night side: a wider darker crescent on the side away from the low
+		-- western sun (the viewer's right), behind the shade
+		local t = Planets.Terminator
+		local cf = faceFrame * CFrame.new(-t.Offset * radius, 0, -t.Depth * radius) * CFrame.Angles(0, math.pi / 2, 0)
+		table.insert(out, {
+			Name = "Terminator",
+			CFrame = cf,
+			Diameter = 2 * t.Radius * radius,
+			Thickness = math.max(0.3, k.Thickness * radius),
+			Color = spec.Body:Lerp(BLACK, t.Darken),
+			Transparency = t.Transparency,
+		})
+	end
 	return out
 end
 

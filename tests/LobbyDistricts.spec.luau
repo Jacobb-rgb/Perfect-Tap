@@ -406,7 +406,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("districts: Tobin's Sell stall stays low so the SHOP windows show", function()
+	T.test("districts: Tobin's Sell stall stays low and off the SHOP's door lane, Tobin clear of his cart", function()
 		local _, pkg = districts()
 		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
 		for _, d in pkg.ShopFront:GetDescendants() do
@@ -418,25 +418,56 @@ return function(T, Loader)
 				T.truthy(top <= 5.0, `{d:GetFullName()} rises to {top} (keep the stall under 5 studs)`)
 			end
 		end
+		-- the stall keeps the SHOP's 6-stud door lane open
+		local shop = LobbyLayout.get("Shop")
+		local shopFrame = LobbyLayout.frame(shop)
+		for _, d in pkg.ShopFront:GetDescendants() do
+			if d:IsA("BasePart") and d.Transparency < 1 then
+				for _, p in corners(d) do
+					T.truthy(math.abs(shopFrame:PointToObjectSpace(p).X) >= 3, `{d:GetFullName()} stands in the SHOP's door lane`)
+				end
+			end
+		end
+		-- Tobin stands a stud clear of his cart
+		local cart = nil
+		for _, d in pkg.ShopFront:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "SellCounter" then
+				cart = d
+			end
+		end
+		local gap = math.huge
+		for _, d in pkg.ShopFront.Tobin:GetDescendants() do
+			if d:IsA("BasePart") then
+				for _, p in corners(d) do
+					local q = cart.CFrame:PointToObjectSpace(p)
+					local dx = math.max(math.abs(q.X) - cart.Size.X / 2, 0)
+					local dz = math.max(math.abs(q.Z) - cart.Size.Z / 2, 0)
+					gap = math.min(gap, math.sqrt(dx * dx + dz * dz))
+				end
+			end
+		end
+		T.truthy(gap >= 0.9, `Tobin stands {gap} studs from his counter`)
 	end)
 
-	T.test("districts: walk lanes to the SHOP and UPGRADES counters stay open", function()
-		local _, pkg = districts()
-		for _, lane in { { "ShopFront", -1.6, 1.8 }, { "UpgradesFront", -1.7, 1.7 } } do
-			local piece = LobbyLayout.get(lane[1])
+	T.test("districts: a lane at least 4 studs wide runs clear from the plaza to the SHOP and UPGRADES counters", function()
+		local map = districts()
+		for _, pair in { { "Shop", "ShopCounter" }, { "Upgrades", "UpgradeCounter" } } do
+			local id, counterName = pair[1], pair[2]
+			local piece = LobbyLayout.get(id)
 			local frame = LobbyLayout.frame(piece)
-			for _, d in pkg[lane[1]]:GetDescendants() do
-				if d:IsA("BasePart") and d.CanCollide then
-					-- the part's box in the piece frame
-					local minX, maxX, minY, maxY = math.huge, -math.huge, math.huge, -math.huge
-					for _, p in corners(d) do
-						local q = frame:PointToObjectSpace(p)
-						minX, maxX = math.min(minX, q.X), math.max(maxX, q.X)
-						minY, maxY = math.min(minY, q.Y), math.max(maxY, q.Y)
-					end
-					local blocked = maxX > lane[2] and minX < lane[3] and maxY > 0.4 and minY < 6
-					T.falsy(blocked, `{d:GetFullName()} blocks the walk lane of {lane[1]}`)
-				end
+			local counter = map:FindFirstChild(counterName, true)
+			local counterFront = frame:PointToObjectSpace(counter.CFrame.Position).Z - counter.Size.Z / 2
+			-- from the plaza rim (the module's front is about 44 studs from the plaza
+			-- center: the lane starts 9 studs further out) to the counter
+			local laneFront = -piece.Size.Z / 2 - 9
+			for _, b in solidBoxes(map.Emberfall, frame) do
+				local blocked = b.MaxX > -2
+					and b.MinX < 2
+					and b.MaxZ > laneFront
+					and b.MinZ < counterFront - 0.3
+					and b.MaxY > 0.9
+					and b.MinY < 6
+				T.falsy(blocked, `{b.Name} blocks the lane to the {id} counter`)
 			end
 		end
 	end)

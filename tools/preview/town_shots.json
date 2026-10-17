@@ -68,14 +68,14 @@
   "town_map_close": {
     "scene": "world",
     "position": [
-      -44,
-      18,
-      -50
+      44,
+      14,
+      108
     ],
     "target": [
-      -58,
-      12,
-      -69
+      58.5,
+      10,
+      95
     ],
     "fov": 62,
     "preset": "Surface",
@@ -288,14 +288,14 @@
   "town_east_row": {
     "scene": "world",
     "position": [
-      50,
-      15,
-      78
+      38,
+      16,
+      64
     ],
     "target": [
-      60.5,
-      12,
-      58
+      60,
+      9,
+      90
     ],
     "fov": 60,
     "preset": "Surface",

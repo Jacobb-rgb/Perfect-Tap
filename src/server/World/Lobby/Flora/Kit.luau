@@ -262,48 +262,142 @@ function Kit.treeHeight(scale: number): number
 	return 14.8 * scale
 end
 
+-- Leaf shades per tree kind ({ light, mid, dark }): Style.TreeKinds plus
+-- a light cherry pink (the Style pinks read magenta-to-purple in the
+-- evening light).
+Kit.TreeShades = {
+	Cherry = { Color3.fromRGB(255, 214, 234), Color3.fromRGB(252, 176, 212), Color3.fromRGB(232, 136, 186) },
+} :: { [string]: { Color3 } }
+
+function Kit.shades(kind: string): { Color3 }
+	return Kit.TreeShades[kind] or Style.TreeKinds[kind] or Style.TreeKinds.Green
+end
+
 --[[
-	Hero tree: like Style.tree but the second crown is a lean lump cluster,
-	so a big tree costs ~20 parts instead of ~25. `scale` 1.2-1.6.
-	`sideX` (+1 / -1, optional) puts the side crown toward world +X / -X.
+	One canopy cluster: a mid core, a light cap on top (set in from the
+	core's faces, its top above the core's) and a dark underside slab (its
+	sides inside the core's, its bottom under the core's), so no faces
+	share a plane. `cf` = the core's center, `k` = the core's width. 3 parts.
+]]
+local function cluster(parent: Instance, cf: CFrame, k: number, shades: { Color3 }, rng: Rng.Rng)
+	local p = Style.ghost()
+	Style.block(parent, cf, Vector3.new(k, k * 0.8, k), Style.vary(shades[2], rng, 0.03), nil, p)
+	local cap = cf * CFrame.new(rng:range(-0.08, 0.08) * k, k * 0.5, rng:range(-0.08, 0.08) * k)
+	Style.block(parent, cap, Vector3.new(k * 0.7, k * 0.32, k * 0.7), Style.vary(shades[1], rng, 0.03), nil, p)
+	Style.block(parent, cf * CFrame.new(0, -k * 0.42, 0), Vector3.new(k * 0.86, k * 0.16, k * 0.86), shades[3], nil, Style.tiny())
+end
+
+--[[
+	Hero tree (concept v1 voxel trees): a visible trunk with a root and two
+	branch stubs carrying four offset canopy clusters of smaller voxels (the
+	top one over the trunk, two lower ones out to the sides, one to the
+	back), each light on top and dark underneath. `scale` 1-1.6; `sideX`
+	(+1 / -1, optional) puts the big side cluster toward world +X / -X.
+	~16 parts.
 ]]
 function Kit.bigTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, sideX: number?): Model
 	local s = scale
 	local m = Style.model("Tree", parent)
-	local shades = Style.TreeKinds[kind] or Style.TreeKinds.Green
-	local turns = rng:int(0, 3)
-	local frame = base * CFrame.Angles(0, if sideX then 0 else turns * math.pi / 2, 0)
-	local h = rng:range(6, 6.8) * s
-	local tw = 1.7 * s
+	local shades = Kit.shades(kind)
+	local frame = base * CFrame.Angles(0, if sideX then 0 else rng:int(0, 3) * math.pi / 2, 0)
+	local h = rng:range(6.4, 7.0) * s
+	local tw = 1.4 * s
 	local trunk = Style.block(m, frame * CFrame.new(0, h / 2, 0), Vector3.new(tw, h, tw), Style.vary(C.Trunk, rng, 0.04))
 	trunk.Name = "Trunk"
-	Style.block(m, frame * CFrame.new(tw * 0.55, 0.4 * s, 0), Vector3.new(tw * 0.6, 0.8 * s, tw * 0.6), C.TrunkDark, nil, Style.tiny())
-	Style.block(m, frame * CFrame.new(-tw * 0.7, h * 0.62, 0), Vector3.new(tw * 0.9, tw * 0.5, tw * 0.5), C.Trunk, nil, Style.tiny())
-	local size = rng:range(7.6, 8.4) * s
-	Style.canopy(m, frame * CFrame.new(0, h + size * 0.22, 0), size, shades, rng)
-	-- side crown: core, cap and two lumps
+	Style.block(
+		m,
+		frame * CFrame.new(tw * 0.55, 0.4 * s, 0.1 * s),
+		Vector3.new(tw * 0.6, 0.8 * s, tw * 0.6),
+		C.TrunkDark,
+		nil,
+		Style.tiny()
+	)
 	local side = if rng:chance(0.5) then 1 else -1
 	if sideX then
 		side = if sideX > 0 then 1 else -1
 	end
-	local at = frame * CFrame.new(side * size * 0.58, h + size * 0.04, size * 0.18)
-	local k = size * 0.5
-	local p = Style.ghost()
-	Style.block(m, at, Vector3.new(k, k * 0.8, k), Style.vary(shades[2], rng, 0.03), nil, p)
-	Style.block(m, at * CFrame.new(0, k * 0.45, 0), Vector3.new(k * 0.66, k * 0.3, k * 0.66), Style.vary(shades[1], rng, 0.03), nil, p)
+	-- branch stubs toward the two side clusters
 	Style.block(
 		m,
-		at * CFrame.new(side * k * 0.45, -k * 0.1, -k * 0.2),
-		Vector3.new(k * 0.55, k * 0.5, k * 0.55),
+		frame * CFrame.new(side * tw * 0.9, h * 0.78, 0.3 * s),
+		Vector3.new(tw * 1.1, tw * 0.45, tw * 0.45),
+		C.Trunk,
+		nil,
+		Style.tiny()
+	)
+	Style.block(
+		m,
+		frame * CFrame.new(-side * tw * 0.8, h * 0.88, -0.4 * s),
+		Vector3.new(tw * 0.9, tw * 0.4, tw * 0.4),
+		C.TrunkDark,
+		nil,
+		Style.tiny()
+	)
+	local clusters = {
+		{ X = 0.2, Y = 2.7, Z = 0.1, K = 4.6 },
+		{ X = side * 3.3, Y = 0.9, Z = 0.7, K = 3.9 },
+		{ X = -side * 2.6, Y = 1.4, Z = -1.0, K = 3.5 },
+		{ X = side * 0.6, Y = 0.5, Z = -2.7, K = 3.2 },
+	}
+	for _, c in clusters do
+		local k = c.K * s * rng:range(0.94, 1.06)
+		cluster(m, frame * CFrame.new(c.X * s, h + c.Y * s, c.Z * s), k, shades, rng)
+	end
+	return m
+end
+
+--[[
+	Low-part voxel tree for the town-edge belts: a slim trunk and a crown of
+	four blocks in three shades (a mid core, a light cap, a dark lower lump
+	and a mid lump to one side). `lean` (a world XZ unit vector, optional)
+	puts the lumps on that side only (the belt's plot-side row keeps its
+	crown off the bases). 5-6 parts; every crown part stands over 5 studs.
+]]
+function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, lean: Vector3?): Model
+	local s = scale
+	local m = Style.model("Tree", parent)
+	local shades = Kit.shades(kind)
+	local h = rng:range(4.8, 5.6) * s
+	local tw = 1.0 * s
+	local trunk = Style.block(m, base * CFrame.new(0, h / 2, 0), Vector3.new(tw, h, tw), Style.vary(C.Trunk, rng, 0.04))
+	trunk.Name = "Trunk"
+	local size = rng:range(4.4, 5.2) * s
+	local cf = base * CFrame.new(0, h + size * 0.34, 0)
+	local p = Style.ghost()
+	Style.block(m, cf, Vector3.new(size, size * 0.8, size), Style.vary(shades[2], rng, 0.03), nil, p)
+	Style.block(
+		m,
+		cf * CFrame.new(rng:range(-0.08, 0.08) * size, size * 0.5, rng:range(-0.08, 0.08) * size),
+		Vector3.new(size * 0.66, size * 0.3, size * 0.66),
+		Style.vary(shades[1], rng, 0.03),
+		nil,
+		p
+	)
+	-- two side lumps: a dark one low, a mid one higher on the other side
+	local dirs = { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) }
+	local first = rng:int(1, 4)
+	local d1 = dirs[first]
+	local d2 = dirs[(first + 1) % 4 + 1]
+	if lean then
+		-- lumps along the belt and toward `lean` only
+		d1 = Vector3.new(0, 0, if rng:chance(0.5) then 1 else -1)
+		d2 = lean
+	end
+	local k1 = size * rng:range(0.5, 0.58)
+	Style.block(
+		m,
+		cf * CFrame.new(d1 * size * 0.48 + Vector3.new(0, -size * 0.14, 0)),
+		Vector3.new(k1, k1 * 0.86, k1),
 		Style.vary(shades[3], rng, 0.04),
 		nil,
 		p
 	)
+	local k2 = size * rng:range(0.44, 0.52)
 	Style.block(
 		m,
-		at * CFrame.new(0, -k * 0.05, k * 0.45),
-		Vector3.new(k * 0.5, k * 0.45, k * 0.5),
-		Style.vary(shades[1], rng, 0.04),
+		cf * CFrame.new(d2 * size * 0.46 + Vector3.new(0, size * 0.12, 0)),
+		Vector3.new(k2, k2 * 0.86, k2),
+		Style.vary(shades[2], rng, 0.05),
 		nil,
 		p
 	)
@@ -411,18 +505,31 @@ function Kit.cattails(parent: Instance, at: Vector3, rng: Rng.Rng, count: number
 	end
 end
 
--- Small crystal cluster without a light: a dark rock and 2 neon crystals.
+-- Small crystal cluster without a light: a dark rock and 2 neon crystals
+-- in a deep body color with barely lighter tips (pale tints bloom to
+-- pastel or white).
+Kit.CrystalTipLerp = 0.12
 function Kit.smallCrystals(parent: Instance, base: CFrame, color: Color3, rng: Rng.Rng, size: number?)
 	local s = size or 2.6
 	local m = Style.model("Crystals", parent)
 	Style.block(m, base * CFrame.new(0, s * 0.12, 0), Vector3.new(s * 0.6, s * 0.24, s * 0.5), C.StoneDeep, nil, Style.decor())
-	Style.crystal(m, base * CFrame.new(0, s * 0.15, 0) * CFrame.Angles(rng:range(-0.1, 0.1), 0, 0.12), s, s * 0.3, color)
+	Style.crystal(
+		m,
+		base * CFrame.new(0, s * 0.15, 0) * CFrame.Angles(rng:range(-0.1, 0.1), 0, 0.12),
+		s,
+		s * 0.3,
+		color,
+		nil,
+		Kit.CrystalTipLerp
+	)
 	Style.crystal(
 		m,
 		base * CFrame.new(s * 0.22, s * 0.1, s * 0.05) * CFrame.Angles(0, 0, -0.45),
 		s * 0.6,
 		s * 0.22,
-		color:Lerp(Color3.new(1, 1, 1), 0.25)
+		color:Lerp(Color3.new(1, 1, 1), 0.08),
+		nil,
+		Kit.CrystalTipLerp
 	)
 end
 
@@ -431,11 +538,11 @@ end
 -- Lamp box on top of a post (bridge newels, boardwalk posts): neon cube + iron hat. 2 parts.
 function Kit.lampBox(parent: Instance, top: CFrame, size: number?, light: boolean?): Part
 	local s = size or 0.9
-	local glow = Style.block(parent, top * CFrame.new(0, s / 2, 0), Vector3.new(s, s, s), C.Lamp, NEON, Style.tiny())
+	local glow = Style.block(parent, top * CFrame.new(0, s / 2, 0), Vector3.new(s, s, s), C.LampAmber, NEON, Style.tiny())
 	glow.Name = "LanternGlow"
 	Style.block(parent, top * CFrame.new(0, s + 0.15, 0), Vector3.new(s * 1.35, 0.3, s * 1.35), C.Iron, nil, Style.tiny())
 	if light then
-		Style.light(glow, C.Lamp, 16, 1.3)
+		Style.light(glow, C.LampAmber, 16, 1.1)
 	end
 	return glow
 end

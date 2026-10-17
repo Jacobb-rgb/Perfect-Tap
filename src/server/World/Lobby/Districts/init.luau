@@ -55,7 +55,7 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 		return cf * CFrame.new(x, y, z)
 	end
 	for _, x in { -3.85, 3.85 } do
-		Tech.roundPillar(m, at(x, 0, 0.2), 7.6, 0.9, { Neon = false })
+		Tech.roundPillar(m, at(x, 0, 0.2), 8.4, 0.9, { Neon = false })
 	end
 	-- bezel (top, bottom, sides), back plate, the board and its neon edge
 	local by, bw, bh = 4.2, 7.0, 3.6
@@ -89,12 +89,14 @@ local function guildBoard(parent: Instance, rng: Rng.Rng)
 	-- edge to edge), orange studs in the casing corners, a thick blue neon
 	-- line along the casing's top edge (the module's roof line)
 	local title = "FORGEKEEPERS' GUILD"
-	Tech.sign(m, at(0, 7.45, -0.1), title, 7.4, 1.1, {
+	Tech.sign(m, at(0, 8.35, -0.1), title, 7.6, 1.6, {
 		Back = true,
-		Words = { { Text = title, Width = 7.4 * 0.8 } },
+		Words = { { Text = title, Width = 7.6 * 0.86 } },
 		StudColor = Tech.Warm,
+		Margin = 0.4,
+		Lip = 0.25,
 	})
-	Tech.channel(m, at(0, 8.72, -0.5), 8.8, Tech.EDGE)
+	Tech.channel(m, at(0, 9.95, -0.5), 8.8, Tech.EDGE)
 	m.PrimaryPart = board
 	Kit.tag(m, "GuildBoard")
 end

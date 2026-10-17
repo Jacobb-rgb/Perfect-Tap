@@ -80,12 +80,12 @@ local rgb = Color3.fromRGB
 local C = Style.C
 local NEON = Enum.Material.Neon
 
-local LAWN = rgb(160, 202, 96)
+local LAWN = rgb(96, 150, 66) -- a deep warm lawn (no bright lime pitch in the hero view)
 -- the empty plot from above (lobby hero view): a mown lawn with subtle
 -- lighter stripes on every other cell row, framed by a band of light paving
 -- stones and a cobble edge
-local PLOT_LAWN = rgb(112, 180, 66)
-local PLOT_LAWN_STRIPE = rgb(128, 192, 76)
+local PLOT_LAWN = rgb(78, 140, 58)
+local PLOT_LAWN_STRIPE = rgb(86, 150, 62) -- barely visible mower stripes
 local PLOT_PAVING = rgb(196, 180, 152)
 local PLOT_EDGE = rgb(156, 142, 128)
 local GRAVEL = rgb(214, 192, 150)
@@ -96,19 +96,21 @@ local RIM_LOCKED = rgb(96, 88, 104)
 local ROBUX_GREEN = rgb(110, 255, 140)
 -- Graveyard Kit brick walls in the warm concept palette: warm pale stone, red
 -- brick light enough to stay red (not maroon) on the shaded side
-local WALL_STONE = rgb(208, 200, 188) -- plinths, pillar shafts
-local WALL_CAP = rgb(228, 221, 208) -- cap slabs, pillar caps and feet
+local WALL_STONE = rgb(160, 150, 140) -- plinths, pillar shafts: warm grey stone (no cream posts)
+local WALL_CAP = rgb(180, 170, 158) -- cap slabs, pillar caps and feet
 -- (the renderer and Roblox both push a saturated red to orange in full sun and to
 -- maroon in shade: a dusty brick red stays brick in both)
-local BRICK = rgb(180, 100, 90)
-local BRICK_RAISED = rgb(208, 128, 110) -- raised bricks: a close, lighter tone of the band
+local BRICK = rgb(150, 72, 60) -- a deep brick red (Brick material), no salmon rails
+local BRICK_RAISED = rgb(172, 90, 74) -- raised bricks: a close, lighter tone of the band
 local LAMP_AMBER = rgb(220, 90, 20) -- lanterns on the posts (small and deep: no white bloom)
 -- Factory / Space Station metals (docs/ART_DIRECTION.md section 9)
-local HOUSING = rgb(122, 130, 184) -- the Factory Kit's periwinkle machine blue
-local HOUSING_LIGHT = rgb(150, 158, 204)
+local HOUSING = rgb(66, 72, 92) -- the foundry's gunmetal housing (concept v2 dark metal)
+local HOUSING_LIGHT = rgb(90, 98, 122)
 local HOUSING_DARK = rgb(58, 60, 72)
-local NAVY = rgb(62, 70, 112) -- the podium's octagon step
-local SHELL = rgb(188, 194, 212) -- pale Space Station panels (podium base and top, foundry frame)
+local NAVY = rgb(27, 29, 41) -- the podium's octagon step (deep gunmetal)
+local SHELL = rgb(44, 48, 64) -- gunmetal Space Station panels (podium base, foundry frame)
+local PODIUM_TOP = rgb(112, 120, 144) -- the podium's top plate (a lighter metal under the ore)
+local PODIUM_COLUMN = rgb(66, 72, 92)
 local HOLO = rgb(36, 140, 235) -- the podium's holo-ring (deep enough to stay cyan, not bloom white)
 local BASE_LIGHT = rgb(40, 140, 255) -- the podium base's corner lights
 local LOCK_GOLD = rgb(255, 200, 40)
@@ -314,7 +316,7 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 	local frame = cf * CFrame.lookAt(flatA, flatB) -- `a` at the origin, the run along the frame's -Z
 	local tanA, tanB = math.tan((o.TurnA or 0) / 2), math.tan((o.TurnB or 0) / 2)
 	-- one layer of the run, mitred at both ends for its own half width
-	local function layer(width: number, y: number, height: number, color: Color3, round: boolean?): Part
+	local function layer(width: number, y: number, height: number, color: Color3, round: boolean?, material: Enum.Material?): Part
 		local extA, extB = width / 2 * tanA, width / 2 * tanB
 		local at = frame * CFrame.new(0, y, -(length + extB - extA) / 2)
 		local full = length + extA + extB
@@ -324,12 +326,12 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 			part.Shape = Enum.PartType.Cylinder
 			return part
 		end
-		return Geo.block(parent, at, Vector3.new(width, height, full), color, nil, FENCE)
+		return Geo.block(parent, at, Vector3.new(width, height, full), color, material, FENCE)
 	end
 	local plinthH = kit.PlinthTop - kit.Bottom
 	layer(kit.Plinth, kit.Bottom + plinthH / 2, plinthH, WALL_STONE)
 	local bandH = kit.BandTop - kit.PlinthTop
-	layer(kit.Band, kit.PlinthTop + bandH / 2, bandH, BRICK)
+	layer(kit.Band, kit.PlinthTop + bandH / 2, bandH, BRICK, false, Enum.Material.Brick)
 	if kit.CapH > 0 then
 		local cap = layer(kit.Cap, kit.BandTop + kit.CapH / 2, kit.CapH, WALL_CAP)
 		cap.Name = "Cap"
@@ -353,7 +355,7 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 	local size = Vector3.new(kit.Band + 0.24, brickH, brickL)
 	local lowY, highY = kit.PlinthTop + bandH * 0.3, kit.PlinthTop + bandH * 0.7
 	local function brick(d: number, y: number)
-		local raised = Geo.block(parent, frame * CFrame.new(0, y, -d), size, BRICK_RAISED, nil, GHOST)
+		local raised = Geo.block(parent, frame * CFrame.new(0, y, -d), size, BRICK_RAISED, Enum.Material.Brick, GHOST)
 		raised.Name = "Brick"
 	end
 	local count = 0
@@ -604,7 +606,8 @@ local function pen(yard: Model, cf: CFrame)
 	wall(m, cf, k, Vector3.new(x1, 0, z0), Vector3.new(x1, 0, z1), { TurnA = math.pi / 2, TurnB = math.pi / 2 })
 	-- the gate: two taller posts with the sign across them
 	local postX = gateHalf + 0.8
-	local gateTop = area.Size.Y + 0.4
+	-- tall gate posts carry the board well above the pen's walls
+	local gateTop = area.Size.Y + 2.4
 	for _, side in { -1, 1 } do
 		local px = gateX + side * postX
 		pillar(m, cf, k, Vector3.new(px, 0, z0), { Width = 1.3, Cap = 1.65, Top = gateTop })
@@ -717,7 +720,7 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	local bevelTop = lowTop + stepH
 	prism(m, base * CFrame.new(0, lowTop + stepH / 2, 0), 8, stepW, stepH, NAVY, nil, SOLID)
 	-- the pale top plate on the amber rim
-	local topH, topW = 0.35, 2.9
+	local topH, topW = 0.35, 3.5 -- (the holo-ring is about 1.2 x the top)
 	local topY = 3.35 -- top plate centre
 	local rimH = 0.24
 	local rimTop = topY - topH / 2 + 0.02
@@ -725,7 +728,7 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	local hex = base * CFrame.Angles(0, math.pi / 6, 0)
 	local columnBottom, columnTop = bevelTop, rimTop - rimH
 	local shaft =
-		prism(m, hex * CFrame.new(0, (columnBottom + columnTop) / 2, 0), 6, 2.0, columnTop - columnBottom, HOUSING_LIGHT, nil, SOLID)
+		prism(m, hex * CFrame.new(0, (columnBottom + columnTop) / 2, 0), 6, 2.0, columnTop - columnBottom, PODIUM_COLUMN, nil, SOLID)
 	shaft[1].Name = "Column"
 	local collarBottom, collarH = columnBottom + 0.06, 0.42
 	cylinder(m, base * CFrame.new(0, collarBottom + collarH / 2, 0), collarH, 2.5, C.Hazard, nil, FENCE)
@@ -739,7 +742,7 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 		GHOST
 	)
 	rim.Name = "Rim"
-	local top = cylinder(m, base * CFrame.new(0, topY, 0), topH, topW, SHELL, nil, SOLID)
+	local top = cylinder(m, base * CFrame.new(0, topY, 0), topH, topW, PODIUM_TOP, nil, SOLID)
 	top.Name = "Top"
 	attachment(top, "OrePoint", top.CFrame:ToObjectSpace(base * CFrame.new(0, BaseLayout.PodiumOreHeight, 0)))
 	attachment(top, "Prompt", top.CFrame:ToObjectSpace(base * CFrame.new(0, 2.6, -rect.Size.Z / 2 - 0.3)))
@@ -879,9 +882,9 @@ local function foundry(yard: Model, cf: CFrame)
 		m,
 		face * CFrame.new(0, (mouthTop + frameTop) / 2, -frameD - 0.12) * CFrame.Angles(0, 0, 0.05),
 		Vector3.new(6.2, 1.15, 0.2),
-		Palette.WoodLight,
+		C.StoneDeep,
 		"COMING SOON",
-		Palette.WoodDark
+		Palette.Gold
 	)
 	plank.Name = "ComingSoon"
 	-- hopper-square on the roof (front left): a funnel standing on its tip, the
