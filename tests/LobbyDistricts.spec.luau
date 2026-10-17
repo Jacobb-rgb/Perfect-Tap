@@ -3,8 +3,12 @@
 	gameplay hook exists once under Lobby.Districts with the right class,
 	children and attributes, every piece stays inside its LobbyLayout
 	footprint and height budget (spinning models over their whole sweep),
-	the walk lanes to the shop counters stay open, the build is
-	deterministic and the package stays inside its budget.
+	the SPIN & WIN frame grows with a bigger footprint and its armored
+	housings make it about 1.5 times as wide as the disc, the SHOP and
+	UPGRADES modules get lit display bays and showcases for their width (20
+	or 28), Tobin's Sell stall stays low in front of the SHOP, the walk lanes
+	to the shop counters stay open, the build is deterministic and the
+	package stays inside its budget.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -97,6 +101,33 @@ return function(T, Loader)
 			node = node.Parent
 		end
 		return nil
+	end
+
+	-- Every colliding part under `root` as a box in `frame` (min/max per axis).
+	type Box = { Name: string, MinX: number, MaxX: number, MinY: number, MaxY: number, MinZ: number, MaxZ: number }
+	local function solidBoxes(root, frame): { Box }
+		local out = {}
+		for _, d in root:GetDescendants() do
+			if d:IsA("BasePart") and d.CanCollide then
+				local b: Box = {
+					Name = d:GetFullName(),
+					MinX = math.huge,
+					MaxX = -math.huge,
+					MinY = math.huge,
+					MaxY = -math.huge,
+					MinZ = math.huge,
+					MaxZ = -math.huge,
+				}
+				for _, p in corners(d) do
+					local q = frame:PointToObjectSpace(p)
+					b.MinX, b.MaxX = math.min(b.MinX, q.X), math.max(b.MaxX, q.X)
+					b.MinY, b.MaxY = math.min(b.MinY, q.Y), math.max(b.MaxY, q.Y)
+					b.MinZ, b.MaxZ = math.min(b.MinZ, q.Z), math.max(b.MaxZ, q.Z)
+				end
+				table.insert(out, b)
+			end
+		end
+		return out
 	end
 
 	T.test("districts: the package builds every piece as a model under Lobby.Districts", function()
@@ -211,52 +242,187 @@ return function(T, Loader)
 		end
 	end)
 
+	-- The first part of `root` outside `piece`'s footprint and height (spinning
+	-- models are checked over their whole sweep), or nil.
+	local function outside(root, piece): string?
+		local frame = LobbyLayout.frame(piece)
+		local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
+		for _, d in root:GetDescendants() do
+			if d:IsA("BasePart") then
+				local points = corners(d)
+				local spinner = spinnerOf(d, root)
+				if spinner then
+					-- check the whole sweep around the pivot's Y axis (plus the bob)
+					local pivot = spinner.PrimaryPart.CFrame
+					local bob = spinner:GetAttribute("BobHeight") or 0.4
+					local swept = {}
+					for _, p in points do
+						local localP = pivot:PointToObjectSpace(p)
+						for k = 0, 15 do
+							local a = k * math.pi / 8
+							for _, dy in { -bob, bob } do
+								table.insert(swept, pivot * (CFrame.Angles(0, a, 0) * localP + Vector3.new(0, dy, 0)))
+							end
+						end
+					end
+					points = swept
+				end
+				for _, p in points do
+					local q = frame:PointToObjectSpace(p)
+					if math.abs(q.X) > hx or math.abs(q.Z) > hz or q.Y < -0.3 or q.Y > h then
+						return `{d:GetFullName()} at {q}`
+					end
+				end
+			end
+		end
+		return nil
+	end
+
 	T.test("districts: every part stays inside its piece footprint and height", function()
 		local _, pkg = districts()
 		for _, piece in LobbyLayout.ofPackage("Districts") do
+			T.falsy(outside(pkg[piece.Id], piece), piece.Id .. " part outside its footprint/height")
+		end
+	end)
+
+	T.test("districts: the SPIN & WIN frame grows with a bigger footprint and stays inside it", function()
+		local Wheel = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Wheel")
+		local piece = LobbyLayout.get("SpinWheel")
+		local size = piece.Size
+		local function build(): (any, number)
+			local m = roblox.Instance.new("Model")
+			Wheel.build(m, Rng.new("Lobby/Districts/wheel"))
 			local frame = LobbyLayout.frame(piece)
-			local hx, hz, h = piece.Size.X / 2 + TOLERANCE, piece.Size.Z / 2 + TOLERANCE, piece.Size.Y + TOLERANCE
-			local root = pkg[piece.Id]
-			local bad = nil
-			for _, d in root:GetDescendants() do
+			local top = 0
+			for _, d in m:GetDescendants() do
 				if d:IsA("BasePart") then
-					local points = corners(d)
-					local spinner = spinnerOf(d, root)
-					if spinner then
-						-- check the whole sweep around the pivot's Y axis (plus the bob)
-						local pivot = spinner.PrimaryPart.CFrame
-						local bob = spinner:GetAttribute("BobHeight") or 0.4
-						local swept = {}
-						for _, p in points do
-							local localP = pivot:PointToObjectSpace(p)
-							for k = 0, 15 do
-								local a = k * math.pi / 8
-								for _, dy in { -bob, bob } do
-									table.insert(swept, pivot * (CFrame.Angles(0, a, 0) * localP + Vector3.new(0, dy, 0)))
-								end
-							end
-						end
-						points = swept
-					end
-					for _, p in points do
-						local q = frame:PointToObjectSpace(p)
-						if math.abs(q.X) > hx or math.abs(q.Z) > hz or q.Y < -0.3 or q.Y > h then
-							bad = `{d:GetFullName()} at {q}`
-							break
-						end
-					end
-				end
-				if bad then
-					break
+					top = math.max(top, frame:PointToObjectSpace(d.CFrame.Position).Y)
 				end
 			end
-			T.falsy(bad, piece.Id .. " part outside its footprint/height")
+			return m, top
+		end
+		local ok, err = pcall(function()
+			-- the layout's 18 x 26 x 10 piece and the requested 26 x 36 x 12 one
+			piece.Size = Vector3.new(18, 26, 10)
+			local base, baseTop = build()
+			T.falsy(outside(base.SpinWheel, piece), "the 18 wide wheel stays inside its footprint")
+			piece.Size = Vector3.new(26, 36, 12)
+			local big, bigTop = build()
+			T.falsy(outside(big.SpinWheel, piece), "the bigger wheel stays inside its footprint")
+			T.truthy(bigTop > baseTop * 1.3, `the wheel grows with the footprint ({baseTop} -> {bigTop})`)
+			T.truthy(big.SpinWheel:FindFirstChild("EmberChest", true), "the bigger wheel keeps its EmberChest")
+		end)
+		piece.Size = size
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("districts: armored housings make the SPIN & WIN frame much wider than its disc", function()
+		local _, pkg = districts()
+		local piece = LobbyLayout.get("SpinWheel")
+		local frame = LobbyLayout.frame(piece)
+		local wheel = pkg.SpinWheel.Wheel
+		local axle = wheel.PrimaryPart.CFrame.Position
+		-- the disc: the farthest point of the turning wheel from the axle
+		local disc = 0
+		for _, d in wheel:GetDescendants() do
+			if d:IsA("BasePart") then
+				for _, p in corners(d) do
+					local q = frame:PointToObjectSpace(p) - frame:PointToObjectSpace(axle)
+					disc = math.max(disc, math.sqrt(q.X * q.X + q.Y * q.Y))
+				end
+			end
+		end
+		-- the frame beside the disc: static parts at the axle's height
+		local axleY = frame:PointToObjectSpace(axle).Y
+		local half = 0
+		for _, d in pkg.SpinWheel:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(wheel) then
+				local q = frame:PointToObjectSpace(d.CFrame.Position)
+				if math.abs(q.Y - axleY) < disc * 0.35 then
+					for _, p in corners(d) do
+						half = math.max(half, math.abs(frame:PointToObjectSpace(p).X))
+					end
+				end
+			end
+		end
+		T.truthy(disc > 4, `the wheel has a disc ({disc})`)
+		T.truthy(half >= disc * 1.35, `the frame (half width {half}) is about 1.5 times the disc (radius {disc})`)
+	end)
+
+	T.test("districts: the SHOP and UPGRADES modules get a second display bay when wider", function()
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local function showcases(m): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "Showcase" then
+					n += 1
+				end
+			end
+			return n
+		end
+		local function bayCases(m): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "BayCase" then
+					n += 1
+				end
+			end
+			return n
+		end
+		local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades") }
+		local sizes = { pieces[1].Size, pieces[2].Size }
+		local ok, err = pcall(function()
+			for _, width in { 20, 28 } do
+				for _, piece in pieces do
+					piece.Size = Vector3.new(width, 20, 14)
+				end
+				local m = roblox.Instance.new("Model")
+				Stalls.build(m, Rng.new("Lobby/Districts/stalls"))
+				local want = if width >= 27 then 4 else 2
+				for _, piece in pieces do
+					T.falsy(outside(m[piece.Id], piece), `{piece.Id} ({width} wide) stays inside its footprint`)
+					T.eq(showcases(m[piece.Id]), want, `{piece.Id} ({width} wide) porch showcases`)
+					T.eq(bayCases(m[piece.Id]), want, `{piece.Id} ({width} wide) lit display bays with a glass case`)
+				end
+			end
+		end)
+		for i, piece in pieces do
+			piece.Size = sizes[i]
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("districts: the Hall of Fame boards show a placeholder table until the leaderboards fill them", function()
+		local _, pkg = districts()
+		for i = 1, 4 do
+			local board = pkg.HallOfFame:FindFirstChild("Board" .. i)
+			local ph = board and board:FindFirstChild("Placeholder")
+			T.truthy(ph and ph:IsA("Model"), "Board" .. i .. " has a Placeholder model")
+			T.truthy(#ph:GetChildren() >= 5, "Board" .. i .. " placeholder has rank rows")
+		end
+	end)
+
+	T.test("districts: Tobin's Sell stall stays low so the SHOP windows show", function()
+		local _, pkg = districts()
+		local frame = LobbyLayout.frame(LobbyLayout.get("ShopFront"))
+		for _, d in pkg.ShopFront:GetDescendants() do
+			if d:IsA("BasePart") and not d:IsDescendantOf(pkg.ShopFront.Tobin) and d.Transparency < 1 then
+				local top = -math.huge
+				for _, p in corners(d) do
+					top = math.max(top, frame:PointToObjectSpace(p).Y)
+				end
+				T.truthy(top <= 5.0, `{d:GetFullName()} rises to {top} (keep the stall under 5 studs)`)
+			end
 		end
 	end)
 
 	T.test("districts: walk lanes to the SHOP and UPGRADES counters stay open", function()
 		local _, pkg = districts()
-		for _, lane in { { "ShopFront", -0.4, 2.6 }, { "UpgradesFront", -1.7, 1.7 } } do
+		for _, lane in { { "ShopFront", -1.6, 1.8 }, { "UpgradesFront", -1.7, 1.7 } } do
 			local piece = LobbyLayout.get(lane[1])
 			local frame = LobbyLayout.frame(piece)
 			for _, d in pkg[lane[1]]:GetDescendants() do
@@ -271,6 +437,96 @@ return function(T, Loader)
 					local blocked = maxX > lane[2] and minX < lane[3] and maxY > 0.4 and minY < 6
 					T.falsy(blocked, `{d:GetFullName()} blocks the walk lane of {lane[1]}`)
 				end
+			end
+		end
+	end)
+
+	T.test("districts: the SPIN & WIN stairs climb in small steps up to the EmberChest", function()
+		local _, pkg = districts()
+		local piece = LobbyLayout.get("SpinWheel")
+		local frame = LobbyLayout.frame(piece)
+		local boxes = solidBoxes(pkg.SpinWheel, frame)
+		local chestFront = math.huge
+		for _, b in solidBoxes(pkg.SpinWheel.EmberChest, frame) do
+			chestFront = math.min(chestFront, b.MinZ)
+		end
+		T.truthy(chestFront < piece.Size.Z / 2, "the EmberChest stands on the platform")
+		-- walk the stairs' center line from the ground in front up to the chest
+		local floor = 0
+		local z = -piece.Size.Z / 2 - 0.5
+		while z < chestFront - 0.3 do
+			local top = 0
+			for _, b in boxes do
+				if b.MinX <= 0 and b.MaxX >= 0 and b.MinZ <= z and b.MaxZ >= z and b.MinY < floor + 1.1 then
+					top = math.max(top, b.MaxY)
+				end
+			end
+			T.truthy(top - floor <= 1.05, `the stairs rise {top - floor} at z {z}`)
+			floor = top
+			for _, b in boxes do
+				local overhead = b.MinX < 1 and b.MaxX > -1 and b.MinZ < z + 0.4 and b.MaxZ > z - 0.4
+				T.falsy(overhead and b.MinY > floor + 0.05 and b.MinY < floor + 5, `{b.Name} blocks the stairs at z {z}`)
+			end
+			z += 0.25
+		end
+		T.truthy(floor >= 2.0, "the stairs reach the platform in front of the chest")
+	end)
+
+	T.test("districts: the SHOP and UPGRADES doors stay open up to the counters", function()
+		local _, pkg = districts()
+		for _, pair in { { "Shop", "ShopCounter" }, { "Upgrades", "UpgradeCounter" } } do
+			local id, counterName = pair[1], pair[2]
+			local piece = LobbyLayout.get(id)
+			local frame = LobbyLayout.frame(piece)
+			local counter = pkg[id]:FindFirstChild(counterName)
+			T.truthy(counter and counter:IsA("BasePart"), `{id} counter part`)
+			local counterFront = frame:PointToObjectSpace(counter.CFrame.Position).Z - counter.Size.Z / 2
+			T.truthy(counterFront > -piece.Size.Z / 2 + 4, `{id} counter sits inside the module`)
+			for _, b in solidBoxes(pkg[id], frame) do
+				local blocked = b.MaxX > -2.2
+					and b.MinX < 2.2
+					and b.MaxZ > -piece.Size.Z / 2
+					and b.MinZ < counterFront - 0.3
+					and b.MaxY > 0.9
+					and b.MinY < 6
+				T.falsy(blocked, `{b.Name} blocks the way to the {id} counter`)
+			end
+		end
+	end)
+
+	T.test("districts: the big signs keep their words, the capsule stall its odds board", function()
+		local _, pkg = districts()
+		local want = {
+			Shop = "SHOP",
+			Upgrades = "UPGRADES",
+			SpinWheel = "SPIN & WIN",
+			CapsuleStall = "CAPSULES",
+			ShopFront = "SELL",
+			EnchantShop = "ENCHANT",
+			HallOfFame = "HALL OF FAME",
+			RockScanner = "ROCK SCANNER",
+			FossilDig = "FOSSIL DIG",
+			GuildBoard = "FORGEKEEPERS' GUILD",
+		}
+		for id, text in want do
+			local found = false
+			for _, d in pkg[id]:GetDescendants() do
+				if d:IsA("TextLabel") and d.Text == text then
+					found = true
+					break
+				end
+			end
+			T.truthy(found, `{id} shows "{text}"`)
+		end
+		local odds = pkg.CapsuleStall:FindFirstChild("OddsBoard", true)
+		T.truthy(odds and odds:IsA("BasePart"), "CapsuleStall has an OddsBoard part")
+	end)
+
+	T.test("districts: small details cast no shadow", function()
+		local _, pkg = districts()
+		for _, d in pkg:GetDescendants() do
+			if d:IsA("BasePart") and math.max(d.Size.X, d.Size.Y, d.Size.Z) <= 0.5 then
+				T.falsy(d.CastShadow, d:GetFullName() .. " (small) casts a shadow")
 			end
 		end
 	end)
