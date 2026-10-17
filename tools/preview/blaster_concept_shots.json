@@ -1,0 +1,376 @@
+{
+ "concept_a": {
+  "scene": "blaster_concepts",
+  "position": [
+   0,
+   7.6,
+   21.0
+  ],
+  "target": [
+   0,
+   3.2,
+   -2.5
+  ],
+  "fov": 40,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.35,
+   0.8,
+   0.5
+  ],
+  "sunColor": [
+   1,
+   0.97,
+   0.94
+  ],
+  "exposure": 1.05,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "concept_b": {
+  "scene": "blaster_concepts",
+  "position": [
+   80,
+   5.6,
+   12.0
+  ],
+  "target": [
+   80,
+   4.6,
+   -9.0
+  ],
+  "fov": 46,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.7,
+   0.65
+  ],
+  "sunColor": [
+   1,
+   0.97,
+   0.94
+  ],
+  "exposure": 1.05,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "concept_c": {
+  "scene": "blaster_concepts",
+  "position": [
+   160,
+   7.8,
+   23.0
+  ],
+  "target": [
+   160,
+   3.3,
+   -2.5
+  ],
+  "fov": 40,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.35,
+   0.8,
+   0.5
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 0.8,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "concept_compare": {
+  "scene": "blaster_concepts",
+  "position": [
+   241,
+   7.4,
+   22.0
+  ],
+  "target": [
+   241,
+   7.2,
+   -9.0
+  ],
+  "fov": 38,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.55,
+   0.8
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "zoom_a": {
+  "scene": "blaster_concepts",
+  "fov": 30,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.55,
+   0.8
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  },
+  "position": [
+   240.5,
+   9.4,
+   4.0
+  ],
+  "target": [
+   240.5,
+   9.0,
+   -9.0
+  ]
+ },
+ "zoom_b": {
+  "scene": "blaster_concepts",
+  "fov": 30,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.55,
+   0.8
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  },
+  "position": [
+   240.5,
+   5.800000000000001,
+   4.0
+  ],
+  "target": [
+   240.5,
+   5.4,
+   -9.0
+  ]
+ },
+ "zoom_c": {
+  "scene": "blaster_concepts",
+  "fov": 30,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.55,
+   0.8
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  },
+  "position": [
+   240.5,
+   2.2,
+   4.0
+  ],
+  "target": [
+   240.5,
+   1.8,
+   -9.0
+  ]
+ },
+ "zoom_badge": {
+  "scene": "blaster_concepts",
+  "position": [
+   73,
+   2.4,
+   -4.0
+  ],
+  "target": [
+   73,
+   2.2,
+   -9.8
+  ],
+  "fov": 30,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.7,
+   0.65
+  ],
+  "sunColor": [
+   1,
+   0.97,
+   0.94
+  ],
+  "exposure": 1.05,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "hero_a": {
+  "scene": "blaster_concepts",
+  "position": [
+   13.5,
+   5.2,
+   5.0
+  ],
+  "target": [
+   10.5,
+   3.9,
+   -2.5
+  ],
+  "fov": 40,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.35,
+   0.8,
+   0.5
+  ],
+  "sunColor": [
+   1,
+   0.97,
+   0.94
+  ],
+  "exposure": 1.05,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "hero_b": {
+  "scene": "blaster_concepts",
+  "position": [
+   86.5,
+   5.8,
+   -1.0
+  ],
+  "target": [
+   87.6,
+   5.3,
+   -9.0
+  ],
+  "fov": 44,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.3,
+   0.7,
+   0.65
+  ],
+  "sunColor": [
+   1,
+   0.97,
+   0.94
+  ],
+  "exposure": 1.05,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "hero_c": {
+  "scene": "blaster_concepts",
+  "position": [
+   173.5,
+   5.4,
+   5.0
+  ],
+  "target": [
+   170.5,
+   3.6,
+   -2.5
+  ],
+  "fov": 40,
+  "preset": "Workbench",
+  "sunDir": [
+   -0.35,
+   0.8,
+   0.5
+  ],
+  "sunColor": [
+   1,
+   0.98,
+   0.96
+  ],
+  "exposure": 0.8,
+  "shadowExtent": 30,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ }
+}

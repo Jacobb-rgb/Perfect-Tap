@@ -83,6 +83,8 @@ elseif sceneName == "machines" then require("./lib/machines_gallery").build(Load
 elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	-- laser blasters: the 10 levels in ore skins / a forgekeeper blasting a quarry rock
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
+elseif sceneName == "blaster_concepts" then -- blaster style proposals (tools/lune/lib/blaster_concepts.luau)
+	require("./lib/blaster_concepts").build(Loader, workspace)
 elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)
 	require("./lib/train_gallery").build(Loader, workspace)
 elseif sceneName == "gameplay" then

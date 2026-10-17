@@ -292,6 +292,8 @@ async function main() {
   const shot = shots[shotName];
   if (!shot) throw new Error("unknown shot " + shotName);
   const scene = await fetch(`/scenes/${shot.scene || sceneName}.json`).then((r) => r.json());
+  // empty Lua tables are exported as {} instead of []
+  for (const key of ["parts", "lights", "emitters", "texts"]) if (!Array.isArray(scene[key])) scene[key] = [];
   // presets with empty groups (e.g. Workbench) inherit from Surface
   const base = scene.presets.Surface;
   const own = scene.presets[shot.preset || "Surface"] || base;
@@ -388,7 +390,7 @@ async function main() {
 
   const target = new THREE.Vector3(...shot.target);
   if (!isCave) {
-    const sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.84, 0.66), (L.Brightness ?? 2) * 1.15);
+    const sun = new THREE.DirectionalLight(new THREE.Color(...(shot.sunColor || [1.0, 0.84, 0.66])), (L.Brightness ?? 2) * 1.15);
     const sunDir = new THREE.Vector3(...(shot.sunDir || [-0.62, 0.48, 0.62])).normalize();
     sun.position.copy(target.clone().add(sunDir.multiplyScalar(400)));
     sun.target.position.copy(target);
@@ -498,7 +500,7 @@ async function main() {
   }
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(WIDTH, HEIGHT), (B.Intensity ?? 0.8) * (isCaveShot ? 0.45 : 0.75), ((B.Size ?? 24) / 56) * 0.9, isCaveShot ? 0.9 : 0.82));
   composer.addPass(new OutputPass());
-  const CC = preset.ColorCorrection || {};
+  const CC = { ...(preset.ColorCorrection || {}), ...(shot.cc || {}) }; // shot.cc: per-shot overrides (studio shots)
   const tint = CC.TintColor || [1, 1, 1];
   composer.addPass(
     new ShaderPass({
