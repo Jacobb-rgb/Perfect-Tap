@@ -19,13 +19,16 @@
 	  Levelled items buy exactly one level: Level must be the level being
 	  bought (the one the card shows), else "Stale" (EconomyConfig.techQuote),
 	  so a double tap or a lagging card never buys two levels.
-	  Only within ShopService.Range of an UpgradeCounter ("TooFar").
+	  Only within ShopService.Range of an UpgradeCounter ("TooFar"; the
+	  client closes the shop nearer than that, so lag never refuses a BUY).
 	- Every ShopBuy the server reads gets a ShopResult { Item, Ok, Reason?,
 	  Level?, Count? } (Reason: an EconomyConfig.TechShop.Reasons code; the
-	  client shows the text on the card). A successful buy also sends a
-	  "Reward" toast; a refused one only the ShopResult (the client shows the
-	  reason on the card, or as a toast when the shop is closed), so the
-	  player never reads the same message twice.
+	  client shows the text on the card), also one from a player whose save
+	  isn't loaded (yet / any more): "BadItem", nothing changes. A
+	  successful buy also sends a "Reward" toast; a refused one only the
+	  ShopResult (the client shows the reason on the card, or as a toast
+	  when the shop is closed), so the player never reads the same message
+	  twice.
 	- Atomic: quote (techQuote), spend (EconomyService.spend) and write the
 	  inventory / level happen in one step with no yield in between, and
 	  every table the write needs is made before the coins are taken, so two
@@ -66,8 +69,10 @@ export type Bought = {
 }
 export type BoughtCallback = (Player, Bought) -> ...any
 
--- studs from an UpgradeCounter's surface the server accepts (the prompt itself reaches less)
-ShopService.Range = 20
+-- studs from an UpgradeCounter's surface the server accepts: the prompt reaches
+-- 12, the client closes the shop past 24 (TechShopController), so the server is
+-- the lenient side and lag never refuses a BUY from an open shop
+ShopService.Range = 30
 ShopService.Tag = "UpgradeCounter"
 ShopService.PromptName = "TechShopPrompt"
 ShopService.PointName = "TechShopPromptPoint"
@@ -257,13 +262,11 @@ end
 
 -- ShopBuy { Shop = "Tech", Item, Count?, Level? }: every request read gets a ShopResult.
 local function onShopBuy(player: Player, payload: any)
-	if not DataService.get(player) then
-		return
-	end
 	local args = Guard.table(payload, MAX_PAYLOAD)
 	local item = if args then Guard.string(args.Item, MAX_ITEM_LENGTH) else nil
 	local echo = item or ""
-	if not args or args.Shop ~= EconomyConfig.TechShop.Shop then
+	-- no save loaded (joining / leaving): nothing can be sold, but the client still gets its answer
+	if not DataService.get(player) or not args or args.Shop ~= EconomyConfig.TechShop.Shop then
 		answer(player, echo, false, "BadItem")
 		return
 	end
@@ -278,9 +281,7 @@ local function onShopBuy(player: Player, payload: any)
 	end
 	local ok, reason, bought = ShopService.buy(player, entry, args.Count, args.Level)
 	if not ok or not bought then
-		if reason ~= "NoData" then
-			answer(player, echo, false, reason)
-		end
+		answer(player, echo, false, if reason == "NoData" or reason == nil then "BadItem" else reason)
 		return
 	end
 	answer(player, echo, true, nil, bought.Level, if bought.Kind == "Machine" then bought.Count else nil)
@@ -296,13 +297,30 @@ local function openView(player: Player, counter: BasePart)
 	Net.fire("OpenUI", player, "Tech", { Counter = counter })
 end
 
+-- Forgets counters that left the game (the lobby was rebuilt), so the list never only grows.
+local function pruneCounters()
+	for i = #counters, 1, -1 do
+		local counter = counters[i]
+		if not counter.Parent then
+			table.remove(counters, i)
+			hooked[counter] = nil
+		end
+	end
+end
+
 local function hookCounter(counter: Instance)
+	pruneCounters()
 	if hooked[counter] or not counter:IsA("BasePart") then
 		return
 	end
 	hooked[counter] = true
 	local part = counter :: BasePart
 	table.insert(counters, part)
+	-- a counter pruned while away comes back with one prompt, never two
+	local old = part:FindFirstChild(ShopService.PointName)
+	if old then
+		old:Destroy()
+	end
 	-- the prompt sits on the customer side (-Z) of the counter top
 	local point = Instance.new("Attachment")
 	point.Name = ShopService.PointName
@@ -323,12 +341,31 @@ local function hookCounter(counter: Instance)
 	end)
 end
 
+-- A counter lost its tag or left the game: drop it and its prompt (hooked
+-- again, with a new prompt, if it comes back).
+local function unhookCounter(counter: Instance)
+	local index = table.find(counters, counter :: any)
+	if index then
+		table.remove(counters, index)
+	end
+	hooked[counter] = nil
+	local point = counter:FindFirstChild(ShopService.PointName)
+	if point then
+		point:Destroy()
+	end
+	pruneCounters()
+end
+
 ---------------------------------------------------------------- lifecycle
 
 -- Internals for the Lune tests only (tests/ShopService.spec.luau).
 ShopService._test = {
 	shopBuy = onShopBuy,
 	hookCounter = hookCounter,
+	unhookCounter = unhookCounter,
+	counters = function(): { BasePart }
+		return table.clone(counters)
+	end,
 	open = openView,
 	reset = function()
 		table.clear(counters)
@@ -346,6 +383,7 @@ function ShopService.start()
 		hookCounter(instance)
 	end
 	CollectionService:GetInstanceAddedSignal(ShopService.Tag):Connect(hookCounter)
+	CollectionService:GetInstanceRemovedSignal(ShopService.Tag):Connect(unhookCounter)
 end
 
 return ShopService

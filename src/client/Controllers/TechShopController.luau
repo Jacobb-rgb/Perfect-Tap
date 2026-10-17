@@ -53,11 +53,13 @@ local TAB_ACTION = "TerraForgeTechShopTab"
 -- above the default player controls, so B / Backspace close the shop first
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local TICK = 0.25
--- a bit more than the server's ShopService.Range (20), so lag never closes it early
-local CLOSE_RANGE = 26
+-- less than the server's ShopService.Range: the shop closes before the server
+-- would refuse a BUY as "TooFar", with room for lag (TechShopView.CloseRange)
+local CLOSE_RANGE = TechShopView.CloseRange
 local PENDING_TIMEOUT = 3 -- seconds a BUY waits for its ShopResult
 local FLASH_TIME = 0.9 -- "BOUGHT!" on the button
 local STATUS_TIME = 3.5 -- a reason on the card's status line
+local NO_ANSWER = "No answer, try again" -- a BUY whose ShopResult never came (the rate limit dropped it)
 local RECEIPT_TIME = 5 -- a message in the header
 local RECEIPT_COLORS: { [string]: Color3 } = {
 	Reward = Theme.Good,
@@ -193,13 +195,42 @@ local function selectDefault(view: TechShopView.Refs, force: boolean)
 	GuiService.SelectedObject = TechShopView.firstButton(view, view.Tab)
 end
 
-local function hint(): string
-	if usingGamepad() then
-		return "LB / RB: switch tab   •   A: buy   •   B: close"
-	elseif isTouch() then
-		return "Tap a tab, then BUY"
+-- A gamepad button's name on this platform ("A" / "Cross"), for when it has no glyph image.
+local function padName(key: Enum.KeyCode): string
+	local name = string.gsub(UserInputService:GetStringForKeyCode(key), "^Button", "")
+	if name == "" then
+		name = string.gsub(key.Name, "^Button", "")
 	end
-	return "Click a tab, then BUY   •   Backspace: close"
+	return name
+end
+
+-- The footer hint: the platform's own glyphs on a gamepad (Xbox or PlayStation).
+local function updateHint(view: TechShopView.Refs)
+	if usingGamepad() then
+		local keys = { Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonB }
+		local images: { string } = {}
+		local complete = true
+		for i, key in keys do
+			images[i] = UserInputService:GetImageForKeyCode(key)
+			complete = complete and images[i] ~= ""
+		end
+		if complete then
+			TechShopView.setHint(view, "", images)
+		else
+			-- no glyph images: the platform's button names
+			local names: { string } = {}
+			for i, key in keys do
+				names[i] = padName(key)
+			end
+			local text =
+				`{names[1]} / {names[2]}: switch tab{TechShopView.Separator}{names[3]}: buy{TechShopView.Separator}{names[4]}: close`
+			TechShopView.setHint(view, text, nil)
+		end
+	elseif isTouch() then
+		TechShopView.setHint(view, "Tap a tab, then BUY", nil)
+	else
+		TechShopView.setHint(view, `Click a tab, then BUY{TechShopView.Separator}Backspace: close`, nil)
+	end
 end
 
 -- The platform's own glyphs: B on the close button, LB / RB at the tab bar's ends.
@@ -229,7 +260,7 @@ local function updateGlyphs(view: TechShopView.Refs)
 	if gamepad then
 		closeGlyph.Image = UserInputService:GetImageForKeyCode(Enum.KeyCode.ButtonB)
 	end
-	view.Hint.Text = hint()
+	updateHint(view)
 end
 
 -- Fits the panel to the screen (phones get the compact layout).
@@ -345,7 +376,8 @@ local function onResult(payload: any)
 	end
 end
 
--- Buys that never got an answer (the rate limit dropped them) free their button.
+-- Buys that never got an answer (the rate limit dropped them) free their
+-- button; with the shop open the card says so (nothing was bought).
 local function expirePending(force: boolean?)
 	local now = os.clock()
 	local view = refs
@@ -358,6 +390,9 @@ local function expirePending(force: boolean?)
 			local button = row and row.Buttons[wait.Button]
 			if button then
 				setBusy(button, nil)
+			end
+			if row and not force and counter then
+				status(row.Id, NO_ANSWER, Theme.Bad)
 			end
 		end
 	end

@@ -4,5 +4,8 @@
   "tech_ui_upgrades": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_upgrades"},
   "tech_ui_automation": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_automation"},
   "tech_ui_phone": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_phone", "uiInset": 58},
-  "tech_ui_phone_small": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_phone_small", "uiInset": 163}
+  "tech_ui_phone_small": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_phone_small", "uiInset": 163},
+  "tech_ui_machines_more": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_machines_more"},
+  "tech_ui_upgrades_more": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_upgrades_more"},
+  "tech_ui_phone_more": {"scene": "tech_shop", "position": [26, 5, -12], "target": [46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_tech_phone_more", "uiInset": 163}
 }

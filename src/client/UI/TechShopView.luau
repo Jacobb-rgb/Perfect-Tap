@@ -17,13 +17,20 @@
 	                machine Slots (they work on all machines)
 	    AUTOMATION  pen automation level 1 "Auto-Sort Billboard" and level 2
 	                "Train Direct Unload" (level 2 needs level 1)
-	  footer   the control hint (not on phones)
+	  footer   the control hint (not on phones); with a gamepad the
+	           platform's own button glyphs (TechShopView.setHint)
 
 	A row shows the server's answer for a moment (the controller sets its
 	status line and button text). Designed for 720 design units of height
 	(HudController.uiScale); the compact layout (phones, uiScale 0.62) makes
 	every button at least 44 pt (TechShopView.touchTargets lists them for the
-	tests) and puts the price above the buttons, so the text keeps its room.
+	tests) and puts the price above the buttons, so the text keeps its room;
+	there the tab bar ends left of the X button, so no two buttons overlap.
+	Row texts fit their boxes: TechShopView.fitText shrinks a text a little
+	when a generous guess of its size (TechShopView.textWidth / textLines,
+	never smaller than the real text) says it would not fit.
+	Machine cards show the slot use (snapshot.Build) and turn red when the
+	slots are full; upgrade cards warn when you have none of that machine.
 	The panel fits the space it gets (TechShopView.layout) and sits below
 	the HUD coins when there is room (on phones it covers them whole; its
 	header shows your coins).
@@ -70,8 +77,9 @@ export type Card = {
 	Chip: string, -- footprint ("2x2") or level ("LV 2/5"), "ACTIVE"
 	ChipColor: Color3,
 	PriceText: string, -- "$25K"; "" when done
-	PriceSub: string, -- "each" / "level 3"
+	PriceSub: string, -- "each" / "level 3" / "5 for $125" (belts: the BUY 5 total)
 	PriceColor: Color3, -- red when you can't afford it
+	PriceSubColor: Color3, -- red when you can't afford the BUY 5 total
 	Done: boolean, -- top level / owned: nothing more to buy
 	Buys: { Buy },
 	Icon: string, -- TechShopView.icon kind
@@ -79,10 +87,28 @@ export type Card = {
 	Note: string?, -- why a row is locked
 }
 
+-- The room a row's texts get (design units) and their sizes (TechShopView.fitText).
+export type Boxes = {
+	TitleWidth: number,
+	DescriptionWidth: number,
+	DescriptionHeight: number,
+	DetailWidth: number,
+	DetailHeight: number,
+	PriceWidth: number,
+	Title: number, -- the full text sizes (the layout's metrics)
+	Description: number,
+	Detail: number,
+	PriceSub: number,
+	TitleMin: number, -- the smallest they may shrink to
+	DescriptionMin: number,
+	DetailMin: number,
+}
+
 export type Row = {
 	Id: string,
 	Tab: Tab,
 	Item: string,
+	Boxes: Boxes,
 	Frame: Frame,
 	Icon: Frame,
 	Title: TextLabel,
@@ -113,6 +139,9 @@ export type Refs = {
 	Rows: { [string]: Row },
 	RowList: { Row }, -- every row in catalog order
 	Hint: TextLabel,
+	PadHint: Frame, -- gamepad hint: [LB][RB] switch tab  [A] buy  [B] close, the platform's glyphs
+	PadGlyphs: { ImageLabel }, -- LB, RB, A, B
+	PadMode: boolean, -- the gamepad hint shows (TechShopView.setHint)
 	Tab: string, -- the shown Tab
 	Compact: boolean,
 }
@@ -139,6 +168,9 @@ TechShopView.ConveyorPack = 5 -- the second button on conveyors: BUY 5
 TechShopView.AllMachinesOrder = 1000
 TechShopView.MinHeight = 380 -- the panel never gets shorter (header, tabs and one row)
 TechShopView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a panel below this leaves it clear
+-- studs from the counter's surface at which the open shop closes: under the
+-- server's ShopService.Range (30), so lag never gets an open shop's BUY refused
+TechShopView.CloseRange = 24
 
 -- Pen automation steps (EconomyConfig.PenAutomation levels).
 TechShopView.Automation = {
@@ -210,7 +242,12 @@ type Metrics = {
 	Title: number,
 	Description: number,
 	Detail: number,
+	-- the smallest a row text may shrink to (TechShopView.fitText)
+	TitleMin: number,
+	DescriptionMin: number,
+	DetailMin: number,
 	Close: number,
+	TabGap: number, -- room between the tab bar's end and the X button (compact: they share rows)
 }
 
 local PAD = 16
@@ -225,7 +262,8 @@ local METRICS: { [string]: Metrics } = {
 		TabBar = 62,
 		TabHeight = 48,
 		Footer = 30,
-		Row = 118,
+		-- three lines of description (16 units) above the detail line
+		Row = 132,
 		Icon = 94,
 		Button = 54,
 		BuyWidth = 112,
@@ -235,7 +273,11 @@ local METRICS: { [string]: Metrics } = {
 		Title = 24,
 		Description = 16,
 		Detail = 18,
+		TitleMin = 18,
+		DescriptionMin = 13,
+		DetailMin = 14,
 		Close = 54,
+		TabGap = 0,
 	},
 	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
@@ -255,7 +297,12 @@ local METRICS: { [string]: Metrics } = {
 		Title = 26,
 		Description = 18,
 		Detail = 20,
+		TitleMin = 20,
+		DescriptionMin = 15,
+		DetailMin = 16,
 		Close = 72,
+		-- the X (72 high) reaches below the header: the tab bar ends left of it
+		TabGap = 72 + 20,
 	},
 }
 
@@ -263,7 +310,110 @@ local function metrics(compact: boolean): Metrics
 	return if compact then METRICS.Compact else METRICS.Normal
 end
 
+---------------------------------------------------------------- measuring text
+
+--[[
+	A generous guess of how big a text is in the game's fonts (FredokaOne,
+	LuckiestGuy), with no TextService: the same in the game, the tests and
+	the preview. Each character counts at least as wide as it really is
+	(widths in em, measured from the fonts and rounded up), and lines at
+	TechShopView.LineHeight of the text size (Roblox puts them 1.0 apart),
+	so a text that fits by this guess fits on screen.
+]]
+TechShopView.LineHeight = 1.1
+
+local function charWidth(code: number): number
+	if code == 32 then
+		return 0.3 -- space
+	elseif code >= 65 and code <= 90 then
+		return 0.7 -- A-Z
+	elseif code >= 97 and code <= 122 then
+		return 0.56 -- a-z
+	elseif code >= 48 and code <= 57 then
+		return 0.6 -- 0-9
+	elseif code == 46 or code == 44 or code == 58 or code == 59 or code == 39 or code == 33 then
+		return 0.32 -- . , : ; ' !
+	elseif code < 128 then
+		return 0.7 -- other ASCII: $ % ( ) / - + ? "
+	end
+	return 1 -- the rest (→ •): a whole em
+end
+
+-- Width of one line of `text` at `size` (design units).
+function TechShopView.textWidth(text: string, size: number): number
+	local em = 0
+	for _, code in utf8.codes(text) do
+		em += charWidth(code)
+	end
+	return em * size
+end
+
+-- Lines `text` wraps to in a box `width` wide at `size` (word wrap, like a TextLabel with TextWrapped).
+function TechShopView.textLines(text: string, width: number, size: number): number
+	local lines = 0
+	local space = charWidth(32) * size
+	for _, paragraph in string.split(text, "\n") do
+		local count = 1
+		local line = 0
+		for word in paragraph:gmatch("%S+") do
+			local w = TechShopView.textWidth(word, size)
+			if line > 0 and line + space + w <= width then
+				line += space + w
+			else
+				if line > 0 then
+					count += 1
+				end
+				-- a word wider than the box is broken over several lines
+				local extra = math.max(0, math.ceil(w / math.max(width, 1)) - 1)
+				count += extra
+				line = w - extra * width
+			end
+		end
+		lines += count
+	end
+	return lines
+end
+
+-- Does `text` fit a `width` x `height` box at `size` (one line when not `wrapped`)?
+function TechShopView.fits(text: string, width: number, height: number, size: number, wrapped: boolean): boolean
+	if wrapped then
+		return TechShopView.textLines(text, width, size) * size * TechShopView.LineHeight <= height
+	end
+	return TechShopView.textWidth(text, size) <= width and size * TechShopView.LineHeight <= height
+end
+
+--[[
+	Sets `label.TextSize` to the biggest size from `max` down to `min` at
+	which its text fits `width` x `height` (TechShopView.fits; one line when
+	the label doesn't wrap). Nothing fits: `min` (the label clips or cuts
+	the rest). Returns whether it fits. The cards refresh every second: a
+	label whose text and box didn't change keeps its size unmeasured.
+]]
+local fitted: { [TextLabel]: { Key: string, Size: number, Fits: boolean } } = setmetatable({}, { __mode = "k" }) :: any
+
+function TechShopView.fitText(label: TextLabel, width: number, height: number, max: number, min: number): boolean
+	local key = `{width}|{height}|{max}|{min}|{label.TextWrapped}|{label.Text}`
+	local last = fitted[label]
+	if last and last.Key == key then
+		label.TextSize = last.Size
+		return last.Fits
+	end
+	local size, fits = min, false
+	for s = max, min, -1 do
+		if TechShopView.fits(label.Text, width, height, s, label.TextWrapped) then
+			size, fits = s, true
+			break
+		end
+	end
+	label.TextSize = size
+	fitted[label] = { Key = key, Size = size, Fits = fits }
+	return fits
+end
+
 ---------------------------------------------------------------- pure helpers
+
+local SEP = "  •  "
+TechShopView.Separator = SEP
 
 -- "8 s", "6.4 s"
 function TechShopView.seconds(t: number): string
@@ -319,6 +469,108 @@ local function bellowsLevel(state: { [string]: any }): number
 	return if type(bought) == "table" then num(bought.Bellows) else 0
 end
 
+local function inventoryOf(state: { [string]: any }): { [string]: any }
+	local inventory = state.MachineInventory
+	return if type(inventory) == "table" then inventory else {}
+end
+
+-- Slot use as BuildService's State field `Build` has it.
+export type Slots = { MachinesUsed: number, MachineSlots: number, ConveyorsUsed: number, ConveyorSlots: number }
+
+--[[
+	Slot use from a State snapshot: its `Build` field (BuildService), else
+	worked out the same way from Placed, Upgrades.ExtraSlots and the
+	Workshop pass. Like Placement.counts, belts use belt slots and every
+	other machine without SlotFree a machine slot.
+]]
+function TechShopView.slots(rawState: any): Slots
+	local state = safeState(rawState)
+	local build = state.Build
+	if
+		type(build) == "table"
+		and type(build.MachinesUsed) == "number"
+		and type(build.MachineSlots) == "number"
+		and type(build.ConveyorsUsed) == "number"
+		and type(build.ConveyorSlots) == "number"
+	then
+		return {
+			MachinesUsed = num(build.MachinesUsed),
+			MachineSlots = num(build.MachineSlots),
+			ConveyorsUsed = num(build.ConveyorsUsed),
+			ConveyorSlots = num(build.ConveyorSlots),
+		}
+	end
+	local machines, conveyors = 0, 0
+	local placed = state.Placed
+	if type(placed) == "table" then
+		for _, entry in placed do
+			local info = if type(entry) == "table" and type(entry.Id) == "string" then MachineData.ById[entry.Id] else nil
+			if info and info.IsConveyor then
+				conveyors += 1
+			elseif info and not info.SlotFree then
+				machines += 1
+			end
+		end
+	end
+	local bought = state.Upgrades
+	local extra = if type(bought) == "table" then num(bought.ExtraSlots) else 0
+	local shop = workshop(state)
+	return {
+		MachinesUsed = machines,
+		MachineSlots = MachineData.machineSlots(extra, shop),
+		ConveyorsUsed = conveyors,
+		ConveyorSlots = MachineData.conveyorSlots(shop),
+	}
+end
+
+-- Machines waiting in the Build menu that will need a slot of `belts` (true: belt slots) kind.
+local function waitingFor(state: { [string]: any }, belts: boolean): number
+	local n = 0
+	for id in inventoryOf(state) do
+		local info = if type(id) == "string" then MachineData.ById[id] else nil
+		if info and not info.Retired and (if belts then info.IsConveyor == true else not info.IsConveyor and not info.SlotFree) then
+			n += EconomyConfig.inventoryCount(state, info.Id)
+		end
+	end
+	return n
+end
+
+--[[
+	The slot part of a machine card's detail line ("Slots 8/10", "Belt
+	slots 38/40") and whether those slots are full: what is placed plus
+	what waits in the Build menu fills them, so one more would not fit (the
+	card turns red; "Slots full 10/10"; "Slots 8/10 (+2 waiting)" when
+	other machine types wait, the card's own "Build menu" count says the
+	rest). nil for a machine that needs no slot. A warning only: buying is
+	still allowed.
+]]
+function TechShopView.slotText(rawState: any, machine: MachineData.Machine): (string?, boolean)
+	if machine.SlotFree and not machine.IsConveyor then
+		return nil, false
+	end
+	local state = safeState(rawState)
+	local slots = TechShopView.slots(state)
+	local belts = machine.IsConveyor == true
+	local label = if belts then "Belt slots" else "Slots"
+	local used = if belts then slots.ConveyorsUsed else slots.MachinesUsed
+	local total = if belts then slots.ConveyorSlots else slots.MachineSlots
+	local waiting = waitingFor(state, belts)
+	if used + waiting < total then
+		return `{label} {used}/{total}`, false
+	elseif used >= total then
+		return `{label} full {used}/{total}`, true
+	elseif waiting > EconomyConfig.inventoryCount(state, machine.Id) then
+		return `{label} {used}/{total} (+{waiting} waiting)`, true
+	end
+	return `{label} {used}/{total}`, true
+end
+
+-- How many of a machine type you have: in the Build menu plus placed.
+function TechShopView.haveCount(rawState: any, machineId: string): number
+	local state = safeState(rawState)
+	return EconomyConfig.inventoryCount(state, machineId) + TechShopView.placedCount(state, machineId)
+end
+
 -- One BUY button for a price (nil price: `reason` says why).
 local function buyOf(text: string, price: number?, reason: string?, coins: number, count: number?, level: number?): Buy
 	local why = reason
@@ -352,8 +604,16 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 	end
 	local detail = if owned == 0 and placed == 0
 		then "You don't have one yet"
-		else `In your Build menu: {Format.commas(owned)}   •   Placed: {Format.commas(placed)}`
+		else `Build menu: {Format.commas(owned)}{SEP}Placed: {Format.commas(placed)}`
+	-- the slot use, red when one more would not fit (a warning: buying still works)
+	local slotText, slotsFull = TechShopView.slotText(state, machine)
+	if slotText then
+		detail ..= SEP .. slotText
+	end
 	local full = owned >= EconomyConfig.TechShop.MaxOwned
+	-- two buttons (belts): the price column says what BUY 5 costs in all
+	local pack = if #counts > 1 then counts[#counts] else nil
+	local packTotal = if pack then machine.Price * pack else nil
 	return {
 		Id = entry.Item,
 		Item = entry.Item,
@@ -362,12 +622,13 @@ local function machineCard(entry: EconomyConfig.TechItem, state: { [string]: any
 		Title = machine.Name,
 		Description = machine.Description,
 		Detail = if full then EconomyConfig.TechShop.Reasons.MaxOwned else detail,
-		DetailColor = if full then Theme.Bad elseif owned > 0 or placed > 0 then Theme.Text else Theme.TextDim,
+		DetailColor = if full or slotsFull then Theme.Bad elseif owned > 0 or placed > 0 then Theme.Text else Theme.TextDim,
 		Chip = `{machine.Size[1]}x{machine.Size[2]}`,
 		ChipColor = TechShopView.CategoryColors[machine.Category] or Theme.PanelDark,
 		PriceText = Format.money(machine.Price),
-		PriceSub = "each",
+		PriceSub = if pack and packTotal then `{pack} for {Format.money(packTotal)}` else "each",
 		PriceColor = if coins >= machine.Price then Theme.Coin else Theme.Bad,
+		PriceSubColor = if packTotal and coins < packTotal then Theme.Bad else Theme.TextDim,
 		Done = false,
 		Buys = buys,
 		Icon = machine.Id,
@@ -384,11 +645,21 @@ local function levelDetail(entry: EconomyConfig.TechItem, state: { [string]: any
 		if entry.Upgrade == "Quality" then
 			local now = MachineData.gradeOdds(level)
 			if done then
-				return `Pristine {percent(now.Pristine)}   •   Flawless {percent(now.Flawless)}   (top level)`
+				return `Pristine {percent(now.Pristine)}{SEP}Flawless {percent(now.Flawless)}  (top level)`
 			end
+			-- only the grades that change: the better ones, and fewer Rough while
+			-- just one better grade moves (level 1: Rough 60% -> 50%, Pristine 0% -> 5%)
 			local nextOdds = MachineData.gradeOdds(level + 1)
-			local pristine = `Pristine {percent(now.Pristine)} → {percent(nextOdds.Pristine)}`
-			return `{pristine}   •   Flawless {percent(now.Flawless)} → {percent(nextOdds.Flawless)}`
+			local parts: { string } = {}
+			for _, grade in { "Pristine", "Flawless" } do
+				if (now[grade] or 0) ~= (nextOdds[grade] or 0) then
+					table.insert(parts, `{grade} {percent(now[grade])} → {percent(nextOdds[grade])}`)
+				end
+			end
+			if #parts < 2 and (now.Rough or 0) ~= (nextOdds.Rough or 0) then
+				table.insert(parts, 1, `Rough {percent(now.Rough)} → {percent(nextOdds.Rough)}`)
+			end
+			return table.concat(parts, SEP)
 		end
 		local bellows = bellowsLevel(state)
 		local now = TechShopView.seconds(MachineData.processTime(machine, bellows, level))
@@ -439,6 +710,12 @@ local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }
 	local done = level >= max
 	local price = if done then nil else (entry.Prices :: { number })[level + 1]
 	local buys = if done then { doneBuy("MAX") } else { buyOf("BUY", price, nil, coins, nil, level + 1) }
+	local detail = levelDetail(entry, state, level, max)
+	-- a machine upgrade for a type you have none of: say so (a warning: buying still works)
+	local missing = not done and entry.Kind == "Upgrade" and TechShopView.haveCount(state, entry.Machine :: string) == 0
+	if missing then
+		detail = `No {MachineData.ById[entry.Machine :: string].Name} yet{SEP}{detail}`
+	end
 	return {
 		Id = entry.Item,
 		Item = entry.Item,
@@ -446,13 +723,14 @@ local function levelCard(entry: EconomyConfig.TechItem, state: { [string]: any }
 		Order = order,
 		Title = levelTitle(entry),
 		Description = levelDescription(entry),
-		Detail = levelDetail(entry, state, level, max),
-		DetailColor = if done then Theme.Good else Theme.Accent,
+		Detail = detail,
+		DetailColor = if done then Theme.Good elseif missing then Theme.Bad else Theme.Accent,
 		Chip = `LV {level}/{max}`,
 		ChipColor = if done then Theme.GoodDark else Theme.PanelDark,
 		PriceText = if price then Format.money(price) else "",
 		PriceSub = if done then "" else `level {level + 1}`,
 		PriceColor = if price and coins < price then Theme.Bad else Theme.Coin,
+		PriceSubColor = Theme.TextDim,
 		Done = done,
 		Buys = buys,
 		Icon = if entry.Kind == "Upgrade" then entry.Machine :: string else entry.Kind,
@@ -493,6 +771,7 @@ local function automationCard(entry: EconomyConfig.TechItem, state: { [string]: 
 		PriceText = if owned then "" else Format.money(price),
 		PriceSub = "",
 		PriceColor = if not owned and not locked and coins < price then Theme.Bad else Theme.Coin,
+		PriceSubColor = Theme.TextDim,
 		Done = owned,
 		Buys = buys,
 		Icon = info.Icon,
@@ -827,6 +1106,22 @@ local function newRow(refs: Refs, spec: RowSpec, m: Metrics): Row
 		Id = spec.Id,
 		Tab = spec.Tab,
 		Item = spec.Item,
+		-- set by placeRow
+		Boxes = {
+			TitleWidth = 0,
+			DescriptionWidth = 0,
+			DescriptionHeight = 0,
+			DetailWidth = 0,
+			DetailHeight = 0,
+			PriceWidth = 0,
+			Title = m.Title,
+			Description = m.Description,
+			Detail = m.Detail,
+			PriceSub = 14,
+			TitleMin = m.TitleMin,
+			DescriptionMin = m.DescriptionMin,
+			DetailMin = m.DetailMin,
+		},
 		Frame = frame,
 		Icon = icon,
 		Title = title,
@@ -979,6 +1274,50 @@ function TechShopView.build(compact: boolean?): Refs
 		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 	})
+	-- gamepads: the platform's own button glyphs (Xbox or PlayStation), set by the controller
+	local padHint = UIKit.new("Frame", {
+		Name = "PadHint",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.fromOffset(460, 24),
+		BackgroundTransparency = 1,
+		Visible = false,
+	}, panel)
+	UIKit.list(padHint, Enum.FillDirection.Horizontal, 6, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local padGlyphs: { ImageLabel } = {}
+	local order = 0
+	local function padGlyph(name: string)
+		order += 1
+		table.insert(
+			padGlyphs,
+			UIKit.new("ImageLabel", {
+				Name = "Glyph" .. name,
+				LayoutOrder = order,
+				Size = UDim2.fromOffset(24, 24),
+				BackgroundTransparency = 1,
+			}, padHint)
+		)
+	end
+	local function padWord(text: string, width: number)
+		order += 1
+		UIKit.label(padHint, text, 15, {
+			Name = "Word",
+			LayoutOrder = order,
+			Size = UDim2.fromOffset(width, 24),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = Theme.TextDim,
+			TextWrapped = false,
+		})
+	end
+	padGlyph("L")
+	padGlyph("R")
+	padWord("switch tab", 92)
+	padGlyph("A")
+	padWord("buy", 44)
+	padGlyph("B")
+	padWord("close", 52)
 
 	local refs: Refs = {
 		Gui = gui,
@@ -997,6 +1336,9 @@ function TechShopView.build(compact: boolean?): Refs
 		Rows = {},
 		RowList = {},
 		Hint = hint,
+		PadHint = padHint,
+		PadGlyphs = padGlyphs,
+		PadMode = false,
 		Tab = "Machines",
 		Compact = compact == true,
 	}
@@ -1018,13 +1360,29 @@ local function buttonsWidth(row: Row, m: Metrics): number
 	return n * each + (n - 1) * GAP
 end
 
+-- Fits a row's texts into their boxes (TechShopView.fitText): a long text
+-- gets a little smaller instead of running out of its box.
+local function fitRow(row: Row)
+	local b = row.Boxes
+	if b.DescriptionWidth <= 0 then
+		return -- not placed yet
+	end
+	TechShopView.fitText(row.Title, b.TitleWidth, 32, b.Title, b.TitleMin)
+	TechShopView.fitText(row.Description, b.DescriptionWidth, b.DescriptionHeight, b.Description, b.DescriptionMin)
+	TechShopView.fitText(row.Detail, b.DetailWidth, b.DetailHeight, b.Detail, b.DetailMin)
+	TechShopView.fitText(row.Status, b.DetailWidth, b.DetailHeight, b.Detail, b.DetailMin)
+	TechShopView.fitText(row.PriceSub, b.PriceWidth, 18, b.PriceSub, 11)
+end
+TechShopView.fitRow = fitRow
+
 --[[
-	One row: icon | title + chip, description, detail | price | buttons.
-	Normal: the price sits left of the buttons, both centred. Compact
-	(phones): the buttons sit at the bottom right with the price above them,
-	so the text gets the price column's room.
+	One row (`rowWidth` design units wide): icon | title + chip, description
+	(three lines), detail | price | buttons. Normal: the price sits left of
+	the buttons, both centred. Compact (phones): the buttons sit at the
+	bottom right with the price above them, so the text gets the price
+	column's room.
 ]]
-local function placeRow(row: Row, m: Metrics, compact: boolean)
+local function placeRow(row: Row, m: Metrics, compact: boolean, rowWidth: number)
 	local h = m.Row
 	row.Frame.Size = UDim2.new(1, -SCROLLBAR, 0, h)
 	row.Icon.Size = UDim2.fromOffset(m.Icon, m.Icon)
@@ -1042,15 +1400,18 @@ local function placeRow(row: Row, m: Metrics, compact: boolean)
 		button.TextSize = if compact then 22 else 20
 	end
 	local textRight: number
+	local priceWidth: number
 	row.Price.AnchorPoint = Vector2.new(1, 0)
 	row.PriceSub.AnchorPoint = Vector2.new(1, 0)
 	if compact then
+		priceWidth = buttons
 		row.Price.Position = UDim2.new(1, -12, 0, 6)
-		row.Price.Size = UDim2.fromOffset(buttons, 26)
-		row.PriceSub.Position = UDim2.new(1, -12, 0, 32)
-		row.PriceSub.Size = UDim2.fromOffset(buttons, 16)
+		row.Price.Size = UDim2.fromOffset(buttons, 28)
+		row.PriceSub.Position = UDim2.new(1, -12, 0, 34)
+		row.PriceSub.Size = UDim2.fromOffset(buttons, 18)
 		textRight = 10 + buttons + 14
 	else
+		priceWidth = m.PriceWidth
 		local right = 10 + buttons + 10
 		row.Price.Position = UDim2.new(1, -right, 0, h / 2 - 22)
 		row.Price.Size = UDim2.fromOffset(m.PriceWidth, 26)
@@ -1059,26 +1420,41 @@ local function placeRow(row: Row, m: Metrics, compact: boolean)
 		textRight = right + m.PriceWidth + 10
 	end
 	row.Price.TextSize = if compact then 24 else 22
-	row.PriceSub.TextSize = if compact then 15 else 14
 	local left = m.Icon + 22
 	local chipWidth = m.ChipWidth
 	row.Chip.AnchorPoint = Vector2.new(1, 0)
 	row.Chip.Position = UDim2.new(1, -textRight, 0, 12)
 	row.Chip.Size = UDim2.fromOffset(chipWidth, if compact then 28 else 24)
 	row.Chip.TextSize = if compact then 16 else 14
+	local titleInset = left + textRight + chipWidth + 8
 	row.Title.Position = UDim2.fromOffset(left, 8)
-	row.Title.Size = UDim2.new(1, -(left + textRight + chipWidth + 8), 0, 32)
-	row.Title.TextSize = m.Title
+	row.Title.Size = UDim2.new(1, -titleInset, 0, 32)
 	local detailHeight = m.Detail + 6
+	local descriptionHeight = h - 42 - detailHeight - 10
 	row.Description.Position = UDim2.fromOffset(left, 42)
-	row.Description.Size = UDim2.new(1, -(left + textRight), 0, h - 42 - detailHeight - 10)
-	row.Description.TextSize = m.Description
+	row.Description.Size = UDim2.new(1, -(left + textRight), 0, descriptionHeight)
+	-- up to the buttons
+	local detailInset = left + (if compact then textRight else 10 + buttons + 14)
 	for _, line in { row.Detail, row.Status } do
 		line.Position = UDim2.fromOffset(left, h - detailHeight - 8)
-		-- up to the buttons
-		line.Size = UDim2.new(1, -(left + (if compact then textRight else 10 + buttons + 14)), 0, detailHeight)
-		line.TextSize = m.Detail
+		line.Size = UDim2.new(1, -detailInset, 0, detailHeight)
 	end
+	row.Boxes = {
+		TitleWidth = rowWidth - titleInset,
+		DescriptionWidth = rowWidth - (left + textRight),
+		DescriptionHeight = descriptionHeight,
+		DetailWidth = rowWidth - detailInset,
+		DetailHeight = detailHeight,
+		PriceWidth = priceWidth,
+		Title = m.Title,
+		Description = m.Description,
+		Detail = m.Detail,
+		PriceSub = if compact then 15 else 14,
+		TitleMin = m.TitleMin,
+		DescriptionMin = m.DescriptionMin,
+		DetailMin = m.DetailMin,
+	}
+	fitRow(row)
 end
 
 --[[
@@ -1143,9 +1519,10 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		refs.Receipt.TextSize = 17
 	end
 
-	-- tabs: three equal buttons, room for the LB / RB glyphs at the ends
+	-- tabs: three equal buttons, room for the LB / RB glyphs at the ends;
+	-- compact: the bar ends left of the X button (it reaches down beside it)
 	refs.TabBar.Position = UDim2.fromOffset(PAD, m.Header)
-	refs.TabBar.Size = UDim2.new(1, -PAD * 2, 0, m.TabBar)
+	refs.TabBar.Size = UDim2.new(1, -(PAD * 2 + m.TabGap), 0, m.TabBar)
 	-- each tab: share * W - fixed; tab i starts at inset + (i - 1) * (its width + GAP)
 	local count = #TABS
 	local inset = 26
@@ -1165,11 +1542,14 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		list.Position = UDim2.fromOffset(PAD, listTop)
 		list.Size = UDim2.new(1, -PAD, 1, -(listTop + m.Footer))
 	end
-	refs.Hint.Visible = not compact
+	refs.Hint.Visible = not compact and not refs.PadMode
 	refs.Hint.Position = UDim2.new(0.5, 0, 1, -6)
 	refs.Hint.Size = UDim2.new(1, -PAD * 2, 0, 20)
+	refs.PadHint.Visible = not compact and refs.PadMode
+	refs.PadHint.Position = UDim2.new(0.5, 0, 1, -4)
+	local rowWidth = width - PAD - SCROLLBAR
 	for _, row in refs.RowList do
-		placeRow(row, m, compact)
+		placeRow(row, m, compact, rowWidth)
 	end
 end
 
@@ -1200,15 +1580,15 @@ local function fillRow(row: Row, card: Card)
 	row.Price.Text = card.PriceText
 	row.Price.TextColor3 = card.PriceColor
 	row.PriceSub.Text = card.PriceSub
+	row.PriceSub.TextColor3 = card.PriceSubColor
 	TechShopView.setIcon(row.Icon, card.Icon, card.Badge)
 	for i, button in row.Buttons do
 		local buy = card.Buys[i]
 		holderOf(button).Visible = buy ~= nil
-		if buy then
-			-- a button showing an answer ("BOUGHT!", "...") keeps its text until the controller resets it
-			if button:GetAttribute("Busy") ~= true then
-				button.Text = buy.Text
-			end
+		-- a button showing an answer ("BOUGHT!", "...") keeps its text and
+		-- colors until the controller frees it (and refreshes the card)
+		if buy and button:GetAttribute("Busy") ~= true then
+			button.Text = buy.Text
 			if card.Done then
 				style(button, false, Theme.Good, Theme.GoodDark)
 				button.TextColor3 = Theme.Good
@@ -1217,6 +1597,7 @@ local function fillRow(row: Row, card: Card)
 			end
 		end
 	end
+	fitRow(row)
 end
 
 -- Fills every row from TechShopView.cards (rows with no card keep their last content).
@@ -1243,6 +1624,28 @@ function TechShopView.setStatus(refs: Refs, rowId: string, text: string?, color:
 	row.Detail.Visible = text == nil
 	row.Status.Text = text or ""
 	row.Status.TextColor3 = color or Theme.Text
+	local b = row.Boxes
+	if b.DetailWidth > 0 then
+		TechShopView.fitText(row.Status, b.DetailWidth, b.DetailHeight, b.Detail, b.DetailMin)
+	end
+end
+
+--[[
+	The footer hint: `text` (mouse / touch), or with `glyphs` (the images of
+	the platform's LB, RB, A and B buttons, from GetImageForKeyCode) the
+	gamepad hint "[LB][RB] switch tab  [A] buy  [B] close". Phones show no
+	footer.
+]]
+function TechShopView.setHint(refs: Refs, text: string, glyphs: { string }?)
+	refs.Hint.Text = text
+	refs.PadMode = glyphs ~= nil
+	if glyphs then
+		for i, image in refs.PadGlyphs do
+			image.Image = glyphs[i] or ""
+		end
+	end
+	refs.Hint.Visible = not refs.Compact and not refs.PadMode
+	refs.PadHint.Visible = not refs.Compact and refs.PadMode
 end
 
 -- Shows a message in the header (instead of the subtitle).
