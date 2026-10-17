@@ -11,19 +11,22 @@
 
 	Where they stand (each site checked against the lobby cameras):
 	  west strip    a street wall along the west plot road, the hero's left
-	                side: the MAP lookout tower (the lookout deck carries the
-	                MAP blade sign), two narrow three-storey row houses (the
-	                Lodge and the mine cottage) either side of TOOLS (two
-	                storeys and a setback third storey with the TOOLS blade
-	                sign over the mine hill), and the two-storey CARTS shop
-	                by the west spur (the gap between the wheel and the SHOP
-	                in lobby_west / lobby_spawn)
-	  behind SHOP   the Smithy and the GEMS workshop along the forge west path
+	                side: two narrow three-storey row houses (the Lodge and
+	                the mine cottage) either side of TOOLS (two storeys and a
+	                setback third storey with the TOOLS blade sign over the
+	                mine hill), and the two-storey CARTS shop facing the west
+	                spur behind the SPIN & WIN wheel (the mirror of WORKS on
+	                the east spur)
+	  behind SHOP   the MAP lookout tower by the west plot road (its lookout
+	                deck and MAP blade sign rise over the SHOP roof in the
+	                hero view; the wide SPIN & WIN wheel took its old spot),
+	                the Smithy and the GEMS workshop along the forge west path
 	  behind UPGR.  the INN (a blade sign on its cafe wing turned to the
 	                spawn and the hero, a street parasol), front to the forge
-	                east path
-	  east strip    the three-storey ORE workshop by the east spur, the
-	                WORKS workshop across the spur (a rooftop crane), the
+	                east path, and the three-storey ORE workshop east of the
+	                pink grove (its top rises over the UPGRADES roof in the
+	                hero view; the wide UPGRADES module took its old spot)
+	  east strip    the WORKS workshop on the east spur (a rooftop crane), the
 	                narrow EastRow house, the LAB with a street parasol by the
 	                ROCK SCANNER path, the Depot in the hero's right corner
 	  south lane    the garden cottage by the south road, with a fence,
@@ -70,16 +73,7 @@ Town.FrontClearance = 6
 
 Town.Sites = {
 	-- the west strip along the west plot road (the hero's left side), north to south
-	{ Id = "CartShop", Min = Vector2.new(-63, -12.5), Max = Vector2.new(-55.5, -7.5), Facing = "S", Recipe = "CartShop", Sign = "CARTS" },
-	{
-		Id = "MapTower",
-		Min = Vector2.new(-63, 28),
-		Max = Vector2.new(-54, 38),
-		Facing = "E",
-		Recipe = "MapTower",
-		Sign = "MAP",
-		Blade = true,
-	},
+	{ Id = "CartShop", Min = Vector2.new(-63, 8), Max = Vector2.new(-55.5, 13), Facing = "N", Recipe = "CartShop", Sign = "CARTS" },
 	{ Id = "Lodge", Min = Vector2.new(-63, 54), Max = Vector2.new(-58, 63), Facing = "W", Recipe = "Lodge" },
 	{
 		Id = "ToolShop",
@@ -91,7 +85,16 @@ Town.Sites = {
 		Blade = true,
 	},
 	{ Id = "MineCottage", Min = Vector2.new(-63, 74), Max = Vector2.new(-58.5, 88), Facing = "W", Recipe = "MineCottage" },
-	-- behind the SHOP, beside the forge west path
+	-- behind the SHOP: the MAP tower by the west plot road, then beside the forge west path
+	{
+		Id = "MapTower",
+		Min = Vector2.new(-62, -74),
+		Max = Vector2.new(-53, -64),
+		Facing = "E",
+		Recipe = "MapTower",
+		Sign = "MAP",
+		Blade = true,
+	},
 	{ Id = "Smithy", Min = Vector2.new(-44, -58), Max = Vector2.new(-35, -44), Facing = "E", Recipe = "Smithy" },
 	{
 		Id = "GemCutter",
@@ -102,10 +105,10 @@ Town.Sites = {
 		Sign = "GEMS",
 		Blade = true,
 	},
-	-- behind UPGRADES, beside the forge east path (the pink grove behind it)
+	-- behind UPGRADES, beside the forge east path (the pink grove behind it), and ORE east of the grove
 	{ Id = "Inn", Min = Vector2.new(33, -54), Max = Vector2.new(44, -43), Facing = "W", Recipe = "Inn", Sign = "INN", Blade = true },
+	{ Id = "OreWorks", Min = Vector2.new(55.5, -71), Max = Vector2.new(63, -66), Facing = "S", Recipe = "OreWorks", Sign = "ORE" },
 	-- the east strip and the east spur
-	{ Id = "OreWorks", Min = Vector2.new(55.5, -12.5), Max = Vector2.new(63, -7.5), Facing = "S", Recipe = "OreWorks", Sign = "ORE" },
 	{ Id = "SpurWorkshop", Min = Vector2.new(46, 8), Max = Vector2.new(61, 12.5), Facing = "N", Recipe = "SpurWorkshop", Sign = "WORKS" },
 	{ Id = "EastRow", Min = Vector2.new(58, 54), Max = Vector2.new(63, 65), Facing = "S", Recipe = "EastRow" },
 	{ Id = "CityBlock", Min = Vector2.new(40, 66), Max = Vector2.new(49, 74.5), Facing = "S", Recipe = "CityBlock", Sign = "LAB" },
@@ -215,7 +218,8 @@ local Recipes: { [string]: (m: Model, fp: Buildings.Body, site: Site, rng: Rng.R
 	sign across the top storey, window rows on every side, and a lookout
 	deck with Space Station balcony rails, a lantern room under a stepped
 	slate cap, and the double-sided MAP blade sign on its south half (it
-	reads above CAPSULES and the trees). Facing east: local +X is south.
+	reads over the SHOP roof in the hero view). Facing east: local +X is
+	south.
 ]]
 Recipes.MapTower = function(m, fp, site, rng)
 	local tower = part(fp, -3.7, 3.7, -2.75, 3.2)
@@ -224,7 +228,7 @@ Recipes.MapTower = function(m, fp, site, rng)
 	Buildings.shopfront(m, front, -1.0, 3.7, { Glass = false, DoorSide = -1 })
 	Buildings.displayWall(m, front, 2.05, 4.4, 1.0, 2.6)
 	Buildings.windowRow(m, front, floorY(2), 2, fw - 2.2, 1.8)
-	-- the big MAP sign across the top storey: it reads above CAPSULES (lobby_west) and the trees (hero)
+	-- the big MAP sign across the top storey (to the GEMS lane and the forge west path)
 	Buildings.wallSign(m, front, 0, 16.4, site.Sign or "MAP", 5.5, 3.6, "Compass", K.Amber, 1.0)
 	local south, sw = face(tower, "Right")
 	Buildings.windowRow(m, south, floorY(1), 2, sw - 2.2, 2.4)
@@ -249,7 +253,7 @@ Recipes.MapTower = function(m, fp, site, rng)
 	local cap = Buildings.steppedRoof(m, Buildings.sub(tower, -1.5, 0.4, 3.0, 3.4), deck + 2.6, 2, { K.Slate, K.SlateLight }, 0.6)
 	Buildings.dome(m, tower.cf * CFrame.new(-1.5, cap, 0.4), 1.3, K.PanelLight)
 	glow(m, tower.cf * CFrame.new(-1.5, cap + 0.72, 0.4), Vector3.new(0.3, 0.3, 0.3), C.AwningRed)
-	-- the MAP blade sign on the south half of the deck, facing south (the hero, the lawn) and north
+	-- the MAP blade sign on the south half of the deck, facing south (the hero, over the SHOP roof) and north
 	local at = tower.cf * CFrame.new(2.3, deck, 0) * CFrame.Angles(0, -math.pi / 2, 0)
 	Buildings.bladeSign(m, at, site.Sign or "MAP", 7.0, 3.4)
 end
@@ -365,24 +369,25 @@ Recipes.MineCottage = function(m, fp, _site, rng)
 end
 
 --[[
-	CARTS: a City Kit two-storey cart garage by the west spur (seen in the
-	gap between the wheel and the SHOP): an orange roll-up garage door in
-	a neon frame under a blue awning-wide bar, the CARTS sign across the
-	first storey, lit windows on both floors on the east side (lobby_west /
-	lobby_spawn) and the west side, a little ore cart on the roof as the
-	shop's mascot. Facing south: local +X is west.
+	CARTS: a City Kit two-storey cart garage on the west spur, behind the
+	SPIN & WIN wheel (the mirror of WORKS across the plaza): an orange
+	roll-up garage door in a neon frame under a blue awning-wide bar to the
+	spur road, the CARTS sign across the first storey, lit windows on both
+	floors on the east side (the wheel, lobby_west) and the west side, a
+	little ore cart on the roof as the shop's mascot. Facing north: local
+	+X is east.
 ]]
 Recipes.CartShop = function(m, fp, site, rng)
 	local b = part(fp, -2.75, 2.75, -1.05, 1.5)
-	local _, deck = Buildings.techShell(m, b, { Floors = 2, Out = 0.7, NeonFaces = { "Front", "Left" } }, rng)
+	local _, deck = Buildings.techShell(m, b, { Floors = 2, Out = 0.7, NeonFaces = { "Front", "Right" } }, rng)
 	local front = face(b, "Front")
 	Buildings.shopfront(m, front, 0, 4.6, { Bay = true })
 	Buildings.awningWide(m, front, 0, 8.3, 5.0, 1.0, C.CrystalBlue)
 	Buildings.wallSign(m, front, 0, 11.35, site.Sign or "CARTS", 6.2, 3.3, nil, nil, 1.0)
-	local east = face(b, "Left")
+	local east = face(b, "Right")
 	Buildings.window(m, east, 0, floorY(1), 1.0, 2.4)
 	Buildings.window(m, east, 0, floorY(2), 1.0, 1.8)
-	Buildings.window(m, face(b, "Right"), 0, floorY(2), 1.0, 1.8)
+	Buildings.window(m, face(b, "Left"), 0, floorY(2), 1.0, 1.8)
 	-- the mascot: a little ore cart full of gold on the roof
 	Buildings.cart(m, b.cf * CFrame.new(0.6, deck, 0.2) * CFrame.Angles(0, math.pi / 2, 0), C.Gold)
 end
@@ -564,10 +569,10 @@ Recipes.Inn = function(m, fp, site, rng)
 end
 
 --[[
-	ORE: a three-storey two-tone workshop by the east spur (the free ground
-	is only 5 deep, so it is a narrow tower): a neon-framed door, the big
-	ORE sign across the first storey, a glowing pickaxe emblem and a lit
-	window on the third storey, windows on the west side, and a Space
+	ORE: a three-storey two-tone workshop east of the pink grove (a narrow
+	tower on a 7.5 x 5 site): a neon-framed door, the big ORE sign across
+	the first storey, a glowing pickaxe emblem and a lit window on the
+	third storey, windows on the west side (the grove), and a Space
 	Station container-tall tank and a dish antenna on the roof.
 	Facing south: local +X is west.
 ]]
@@ -587,8 +592,8 @@ Recipes.OreWorks = function(m, fp, site, rng)
 end
 
 --[[
-	WORKS: a long three-storey City Kit building-k workshop across the east
-	spur from ORE: a lit display case and a door under a City Kit
+	WORKS: a long three-storey City Kit building-k workshop on the east
+	spur: a lit display case and a door under a City Kit
 	overhang-wide tray, the big WORKS sign, window rows on both long sides
 	(the north to the spur road, the south to the fossil dig and the hero),
 	and on the roof a jib crane lifting a crate and two Space Station

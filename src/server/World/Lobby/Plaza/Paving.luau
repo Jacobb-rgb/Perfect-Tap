@@ -113,28 +113,83 @@ local function neonRings(m: Model, center: Vector3, spawn: Vector3)
 	end
 end
 
+Paving.CurbBlocks = 50
+Paving.CurbDepth = 1.2
+
+-- Ground corners and edge midpoints of curb block i (y = 0).
+function Paving.curbBlockPoints(center: Vector3, i: number): { Vector3 }
+	local step = TAU / Paving.CurbBlocks
+	local arc = TAU * Common.CurbRadius / Paving.CurbBlocks
+	local frame = CFrame.new(center.X, 0, center.Z) * CFrame.Angles(0, -(i + 0.5) * step, 0) * CFrame.new(Common.CurbRadius, 0, 0)
+	local out = {}
+	for _, x in { -Paving.CurbDepth / 2, 0, Paving.CurbDepth / 2 } do
+		for _, z in { -arc / 2, 0, arc / 2 } do
+			table.insert(out, (frame * CFrame.new(x, 0, z)).Position)
+		end
+	end
+	return out
+end
+
+-- Does curb block i stand on another package's footprint (a stall straddling the rim)?
+local function onFootprint(center: Vector3, i: number): boolean
+	for _, p in Paving.curbBlockPoints(center, i) do
+		for _, piece in LobbyLayout.Pieces do
+			if
+				piece.Package ~= "Plaza"
+				and not piece.Walkable
+				and LobbyLayout.isGroundPiece(piece)
+				and LobbyLayout.distanceTo(piece, p) < 0.1
+			then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 -- Walk-through dark metal curb on the plaza rim, open at every entrance:
 -- a blue neon strip along its outer top edge, and every third block a
--- slightly taller post with an orange glowing slot facing the plaza. Low
--- (0.4 / 0.55 over the plaza floor), so legs barely clip through it.
+-- slightly taller post with an orange glowing slot facing the plaza (a
+-- post that would stand on a stall's footprint, like the GuildBoard's
+-- behind the board, moves to the next clear block). Low (0.4 / 0.55 over
+-- the plaza floor), so legs barely clip through it.
 local function curb(m: Model, center: Vector3, rng: Rng.Rng)
-	local count = 50
+	local count = Paving.CurbBlocks
 	local step = TAU / count
 	local arc = TAU * Common.CurbRadius / count
+	local function open(i: number): boolean
+		local a = (i + 0.5) * step
+		return not (Common.isEntrance(a) or Common.isEntrance(a - step * 0.5) or Common.isEntrance(a + step * 0.5))
+	end
+	local posts: { [number]: boolean } = {}
+	for i = 0, count - 1, 3 do
+		if open(i) then
+			for _, j in { i, i + 1, i - 1 } do
+				local k = j % count
+				if open(k) and not onFootprint(center, k) then
+					posts[k] = true
+					break
+				end
+			end
+		end
+	end
 	for i = 0, count - 1 do
 		local a = (i + 0.5) * step
-		if not (Common.isEntrance(a) or Common.isEntrance(a - step * 0.5) or Common.isEntrance(a + step * 0.5)) then
-			local post = i % 3 == 0
+		if open(i) then
+			local post = posts[i] == true
 			local h = if post then 0.95 else 0.8
 			local frame = CFrame.new(center) * CFrame.Angles(0, -a, 0) * CFrame.new(Common.CurbRadius, h / 2, 0)
-			Style.block(
+			local block = Style.block(
 				m,
 				frame,
-				Vector3.new(1.2, h, arc + 0.05),
+				Vector3.new(Paving.CurbDepth, h, arc + 0.05),
 				Style.vary(if post then K.MetalDark else K.Metal, rng, 0.04),
 				nil,
 				Style.ghost()
 			)
+			if post then
+				block.Name = "CurbPost"
+			end
 			local edge = Style.block(
 				m,
 				frame * CFrame.new(0.46, h / 2 - 0.05, 0),
@@ -145,7 +200,15 @@ local function curb(m: Model, center: Vector3, rng: Rng.Rng)
 			)
 			edge.Name = "CurbGlow"
 			if post then
-				Style.block(m, frame * CFrame.new(-0.62, h / 2 - 0.2, 0), Vector3.new(0.1, 0.2, arc * 0.5), K.SlotAmber, NEON, Style.tiny())
+				local slot = Style.block(
+					m,
+					frame * CFrame.new(-0.62, h / 2 - 0.2, 0),
+					Vector3.new(0.1, 0.2, arc * 0.5),
+					K.SlotAmber,
+					NEON,
+					Style.tiny()
+				)
+				slot.Name = "CurbSlot"
 			end
 		end
 	end

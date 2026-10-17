@@ -42,6 +42,144 @@ function Kit.newPlacer(boxes: { Box }?): Placer
 	return { spots = {}, boxes = boxes or {} }
 end
 
+--[[
+	Clear aprons: the ground in front of a stall's front face, `Depth` studs
+	deep and as wide as its footprint, where Flora puts nothing (no bush in
+	the CAPSULES entrance, no tree crowding the ENCHANT door).
+]]
+export type Apron = { Id: string, Depth: number }
+Kit.Aprons = {
+	{ Id = "CapsuleStall", Depth = 4 },
+	{ Id = "EnchantShop", Depth = 4 },
+} :: { Apron }
+
+-- The apron as an oriented rectangle on the ground (a footprint-like Piece).
+function Kit.apronPiece(apron: Apron): LobbyLayout.Piece
+	local piece = LobbyLayout.get(apron.Id)
+	local look = Vector3.new(piece.Facing.X, 0, piece.Facing.Z).Unit
+	return {
+		Id = apron.Id .. "Apron",
+		Package = "Flora",
+		Center = piece.Center + look * ((piece.Size.Z + apron.Depth) / 2),
+		Size = Vector3.new(piece.Size.X, 0, apron.Depth),
+		Facing = look,
+		Note = "clear apron",
+	}
+end
+
+-- Distance from a ground point to an apron (0 inside; Y ignored).
+function Kit.apronDistance(apron: Apron, p: Vector3): number
+	return LobbyLayout.distanceTo(Kit.apronPiece(apron), p)
+end
+
+-- Is a ground point at least `r` studs from every clear apron?
+function Kit.apronClear(p: Vector3, r: number): boolean
+	for _, apron in Kit.Aprons do
+		if Kit.apronDistance(apron, p) < r then
+			return false
+		end
+	end
+	return true
+end
+
+-- Corners of a box footprint (world XZ, y = 0).
+local function corners(piece: LobbyLayout.Piece): { Vector3 }
+	local look = Vector3.new(piece.Facing.X, 0, piece.Facing.Z).Unit
+	local right = Vector3.new(-look.Z, 0, look.X)
+	local c = Vector3.new(piece.Center.X, 0, piece.Center.Z)
+	local hx, hz = piece.Size.X / 2, piece.Size.Z / 2
+	return { c + right * hx + look * hz, c + right * hx - look * hz, c - right * hx - look * hz, c - right * hx + look * hz }
+end
+
+-- Do the projections of two point sets onto `axis` stay apart?
+local function separated(a: { Vector3 }, b: { Vector3 }, axis: Vector3): boolean
+	local a0, a1, b0, b1 = math.huge, -math.huge, math.huge, -math.huge
+	for _, p in a do
+		local t = p:Dot(axis)
+		a0, a1 = math.min(a0, t), math.max(a1, t)
+	end
+	for _, p in b do
+		local t = p:Dot(axis)
+		b0, b1 = math.min(b0, t), math.max(b1, t)
+	end
+	return a1 < b0 or b1 < a0
+end
+
+--[[
+	Exact XZ gap between an axis-aligned world box (lo..hi) and a piece's
+	footprint (0 when they overlap). Two disjoint convex shapes are closest
+	at a corner of one of them.
+]]
+function Kit.boxPieceGap(lo: Vector3, hi: Vector3, piece: LobbyLayout.Piece): number
+	local box: Box = { Min = Vector2.new(lo.X, lo.Z), Max = Vector2.new(hi.X, hi.Z) }
+	if piece.Radius then
+		return math.max(0, Kit.boxDistance(box, piece.Center) - piece.Radius)
+	end
+	local rect = corners(piece)
+	local quad = { Vector3.new(lo.X, 0, lo.Z), Vector3.new(hi.X, 0, lo.Z), Vector3.new(hi.X, 0, hi.Z), Vector3.new(lo.X, 0, hi.Z) }
+	local look = Vector3.new(piece.Facing.X, 0, piece.Facing.Z).Unit
+	local axes = { Vector3.new(1, 0, 0), Vector3.new(0, 0, 1), look, Vector3.new(-look.Z, 0, look.X) }
+	local apart = false
+	for _, axis in axes do
+		apart = apart or separated(rect, quad, axis)
+	end
+	if not apart then
+		return 0
+	end
+	local gap = math.huge
+	for _, q in quad do
+		gap = math.min(gap, LobbyLayout.distanceTo(piece, q))
+	end
+	for _, q in rect do
+		gap = math.min(gap, Kit.boxDistance(box, q))
+	end
+	return gap
+end
+
+-- World XZ box of a part (rotation included), as min/max Vector3s.
+function Kit.partBox(part: BasePart): (Vector3, Vector3)
+	local _, _, _, r00, r01, r02, _, _, _, r20, r21, r22 = part.CFrame:GetComponents()
+	local s = part.Size
+	local ex = math.abs(r00) * s.X / 2 + math.abs(r01) * s.Y / 2 + math.abs(r02) * s.Z / 2
+	local ez = math.abs(r20) * s.X / 2 + math.abs(r21) * s.Y / 2 + math.abs(r22) * s.Z / 2
+	local p = part.CFrame.Position
+	return Vector3.new(p.X - ex, 0, p.Z - ez), Vector3.new(p.X + ex, 0, p.Z + ez)
+end
+
+-- Gap between a tree (trunk to crown) and every stall footprint (Districts pieces).
+Kit.StallGap = 1.2
+
+--[[
+	Does every part of `model` keep Kit.StallGap off the stalls (Districts
+	pieces: fences, walls, signs) and stay out of the clear aprons? The
+	scatter builds a tree, checks it and takes it down again when it
+	crowds a stall.
+]]
+function Kit.clearOfStalls(model: Instance): boolean
+	local aprons = {}
+	for _, apron in Kit.Aprons do
+		table.insert(aprons, Kit.apronPiece(apron))
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local lo, hi = Kit.partBox(d)
+			for _, piece in LobbyLayout.Pieces do
+				if piece.Package == "Districts" and LobbyLayout.isGroundPiece(piece) then
+					if Kit.boxPieceGap(lo, hi, piece) < Kit.StallGap then
+						return false
+					end
+				end
+			end
+			for _, apron in aprons do
+				if Kit.boxPieceGap(lo, hi, apron) < 0.3 then
+					return false
+				end
+			end
+		end
+	end
+	return true
+end
+
 -- Distance from a ground point to a keep-out box (0 inside; Y ignored).
 function Kit.boxDistance(box: Box, p: Vector3): number
 	local dx = math.max(box.Min.X - p.X, 0, p.X - box.Max.X)
@@ -73,12 +211,15 @@ function Kit.free(placer: Placer, p: Vector3, r: number, reach: number?): boolea
 			return false
 		end
 	end
-	-- crowns (reach) and trunks (r) both stay clear of the town buildings
+	-- crowns (reach) and trunks (r) both stay clear of the town buildings and the stalls' aprons
 	local clear = math.max(r, reach or 0) + 0.5
 	for _, box in placer.boxes do
 		if Kit.boxDistance(box, p) < clear then
 			return false
 		end
+	end
+	if not Kit.apronClear(p, clear) then
+		return false
 	end
 	local flat = Vector3.new(p.X, 0, p.Z)
 	for _, spot in placer.spots do
@@ -117,7 +258,6 @@ end
 function Kit.treeReach(scale: number): number
 	return 5.6 * scale
 end
-
 function Kit.treeHeight(scale: number): number
 	return 14.8 * scale
 end

@@ -363,6 +363,59 @@ return function(T, Loader)
 		return Vector3.new(p.X - e.X, 0, p.Z - e.Z), Vector3.new(p.X + e.X, 0, p.Z + e.Z)
 	end
 
+	-- Ground points covering a part's XZ box (corners, edges and inside, at most 0.5 apart).
+	local function boxSamples(part): { any }
+		local lo, hi = boxOf(part)
+		local nx = math.max(1, math.ceil((hi.X - lo.X) / 0.5))
+		local nz = math.max(1, math.ceil((hi.Z - lo.Z) / 0.5))
+		local out = {}
+		for i = 0, nx do
+			for j = 0, nz do
+				table.insert(out, Vector3.new(lo.X + (hi.X - lo.X) * i / nx, 0, lo.Z + (hi.Z - lo.Z) * j / nz))
+			end
+		end
+		return out
+	end
+
+	T.test("flora: the clear aprons in front of CAPSULES and ENCHANT stay empty", function()
+		local Kit = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Kit")
+		local ids = {}
+		for _, apron in Kit.Aprons do
+			ids[apron.Id] = true
+			T.truthy(apron.Depth >= 4, `{apron.Id} keeps at least 4 studs clear`)
+		end
+		T.truthy(ids.CapsuleStall and ids.EnchantShop, "aprons in front of CAPSULES and ENCHANT")
+		for _, part in parts(flora()) do
+			for _, apron in Kit.Aprons do
+				for _, q in boxSamples(part) do
+					T.truthy(Kit.apronDistance(apron, q) > 0, `{part:GetFullName()} stands in front of {apron.Id} at {q}`)
+				end
+			end
+		end
+	end)
+
+	T.test("flora: trees keep a stud off the stalls (fences, walls, signs)", function()
+		local stalls = {}
+		for _, piece in LobbyLayout.Pieces do
+			if piece.Package == "Districts" and LobbyLayout.isGroundPiece(piece) then
+				table.insert(stalls, piece)
+			end
+		end
+		for _, d in flora():GetDescendants() do
+			if d:IsA("Model") and d.Name == "Tree" then
+				for _, part in parts(d) do
+					for _, piece in stalls do
+						local gap = math.huge
+						for _, q in boxSamples(part) do
+							gap = math.min(gap, LobbyLayout.distanceTo(piece, q))
+						end
+						T.truthy(gap >= 1, `{d:GetFullName()} is {gap} studs from {piece.Id} at {part.CFrame.Position}`)
+					end
+				end
+			end
+		end
+	end)
+
 	T.test("flora: town buildings stand on free ground inside their sites", function()
 		local sites = Town.Sites
 		T.truthy(#sites >= 8 and #sites <= 14, `8-14 town buildings ({#sites})`)

@@ -27,11 +27,14 @@ local Scatter = {}
 Scatter.Limits = { Trees = 45, Bushes = 20, Flowers = 8, Boulders = 3 }
 
 -- No scattered trees here: they would hide the ponds, the creek and the
--- bridge, the corridor from the plaza to the bridge, or the LAB shopfront
--- and the ROCK SCANNER (hero camera views).
+-- bridge, the corridor from the plaza to the bridge, the CAPSULES module
+-- (the ground between it and the lily pond, so it shows from lobby_hero
+-- like in concept v2), or the LAB shopfront and the ROCK SCANNER (hero
+-- camera views).
 Scatter.TreeFreeBoxes = {
 	{ Min = Vector2.new(-44, 52), Max = Vector2.new(44, 92) },
 	{ Min = Vector2.new(-12, 28), Max = Vector2.new(32, 52) },
+	{ Min = Vector2.new(-58, 36), Max = Vector2.new(-12, 52) },
 	{ Min = Vector2.new(26, 84), Max = Vector2.new(58, 100) },
 }
 
@@ -52,17 +55,19 @@ type Zone = {
 	Full: boolean?, -- full Style.tree (near the hero camera) instead of lean trees
 }
 
--- Where trees go, in order (each zone gets up to `Trees`).
+-- Where trees go, in order (each zone gets up to `Trees`). The wide
+-- concept v2 stalls leave little free ground in the Front and Middle
+-- zones, so the Back, South and Corners zones carry more of the trees.
 Scatter.Zones = {
 	-- foreground and the strips along the plot roads (the hero view)
 	{ Name = "Front", Min = Vector2.new(-66, 20), Max = Vector2.new(66, 82), Trees = 9, Full = true },
 	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6 },
 	-- behind the forge and the stalls
-	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 12 },
+	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 15 },
 	-- south foreground (lobby_south view)
-	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 7 },
+	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 10 },
 	-- the island's south corners beyond the bases
-	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 5 },
+	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 10 },
 } :: { Zone }
 
 local KIND_WEIGHTS = { Green = 45, Pink = 15, Red = 12, Yellow = 14, Orange = 14 }
@@ -128,14 +133,15 @@ local function trees(m: Instance, placer: Kit.Placer, counts: Counts, rng: Rng.R
 				reach = Kit.treeReach(scale)
 			end
 			if treeFree(p) and Kit.treeAllowed(p, reach, Kit.treeHeight(scale)) and Kit.free(placer, p, 3.6 * scale, reach) then
-				Kit.take(placer, p, reach * 0.8)
 				local kind = treeKind(rng, p)
 				local base = CFrame.new(p)
-				if zone.Full then
-					Style.tree(m, base, kind, rng, scale)
-				else
-					Kit.leanTree(m, base, kind, rng, scale)
+				local tree = if zone.Full then Style.tree(m, base, kind, rng, scale) else Kit.leanTree(m, base, kind, rng, scale)
+				-- the whole tree keeps off the stalls (fences, walls, signs) and their clear aprons
+				if not Kit.clearOfStalls(tree) then
+					tree:Destroy()
+					continue
 				end
+				Kit.take(placer, p, reach * 0.8)
 				placed += 1
 				counts.Trees += 1
 				-- a bush at its feet

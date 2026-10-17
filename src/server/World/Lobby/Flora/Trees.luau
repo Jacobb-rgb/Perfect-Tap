@@ -40,8 +40,9 @@ function Trees.pinkGrove(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("PinkGrove")
 	local c = piece.Center
 	local m = Style.model("PinkGrove", parent)
-	-- the big one leans its side crown toward the forge (like the concept)
-	local big = Kit.bigTree(m, CFrame.new(c + Vector3.new(-4, 0, -2)), "Pink", rng, 1.5, -1)
+	-- the big one leans its side crown toward the forge (like the concept); it stands in the
+	-- south-west of the grove, so the way from the forge east path to the ENCHANT door stays open
+	local big = Kit.bigTree(m, CFrame.new(c + Vector3.new(-5, 0, 1)), "Pink", rng, 1.5, -1)
 	Kit.bigTree(m, CFrame.new(c + Vector3.new(5, 0, 4)), "Pink", rng, 1.3, 1)
 	Style.bush(m, c + Vector3.new(2.5, 0, -5.5), C.LeafPink, rng, 2.6)
 	Style.bush(m, c + Vector3.new(-6.5, 0, 4.5), C.LeafPinkDark, rng, 2.2)
@@ -53,17 +54,18 @@ function Trees.pinkGrove(parent: Instance, rng: Rng.Rng)
 	return m
 end
 
--- The red tree stands 4 studs west and 2 south of its piece center (inside
--- the footprint), so it no longer covers the spur workshop and the ORE
--- workshop from the hero camera.
-Trees.RedTreeOffset = Vector3.new(-4, 0, 2)
+-- The red tree stands in the south-east of its footprint, so its crown
+-- keeps Kit.StallGap off the Hall of Fame boards (no crown through the
+-- HOURS PLAYED header) and covers as little of the FOSSIL DIG as it can.
+Trees.RedTreeOffset = Vector3.new(1.5, 0, 4.5)
+Trees.RedTreeScale = 1.3
 
 function Trees.redTree(parent: Instance, rng: Rng.Rng)
 	local piece = LobbyLayout.get("RedTree")
 	local c = piece.Center + Trees.RedTreeOffset
 	local m = Style.model("RedTree", parent)
 	-- side crown east, away from the Hall of Fame boards
-	Kit.bigTree(m, CFrame.new(c), "Red", rng, 1.4, 1)
+	Kit.bigTree(m, CFrame.new(c), "Red", rng, Trees.RedTreeScale, 1)
 	Style.bush(m, c + Vector3.new(3.6, 0, 2.8), C.LeafRed, rng, 2.2)
 	Style.bush(m, c + Vector3.new(-3.4, 0, 3.2), C.LeafOrange, rng, 1.9)
 	Kit.flowerRing(m, c, 2.6, { C.FlowerYellow, C.FlowerRed, C.FlowerWhite }, rng, 5)

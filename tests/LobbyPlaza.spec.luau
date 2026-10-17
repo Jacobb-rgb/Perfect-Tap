@@ -367,6 +367,31 @@ return function(T, Loader)
 		T.truthy(curbGlow > 12, "a blue neon edge along the curb (between the entrances)")
 	end)
 
+	T.test("plaza: curb posts (the glowing slots) stand off the stalls' footprints", function()
+		local curb = world().plaza.Paving.Curb
+		local posts = 0
+		for _, part in parts(curb) do
+			if part.Name == "CurbPost" or part.Name == "CurbSlot" then
+				if part.Name == "CurbPost" then
+					posts += 1
+				end
+				-- the block's own corners and edge midpoints (it is turned along the rim)
+				local size = part.Size
+				for _, sx in { -0.5, 0, 0.5 } do
+					for _, sz in { -0.5, 0, 0.5 } do
+						local q = (part.CFrame * roblox.CFrame.new(sx * size.X, 0, sz * size.Z)).Position
+						for _, piece in LobbyLayout.Pieces do
+							if piece.Package ~= "Plaza" and not piece.Walkable and LobbyLayout.isGroundPiece(piece) then
+								T.truthy(LobbyLayout.distanceTo(piece, q) > 0, `{part.Name} at {part.CFrame.Position} stands in {piece.Id}`)
+							end
+						end
+					end
+				end
+			end
+		end
+		T.truthy(posts >= 4, `posts with glowing slots along the curb ({posts})`)
+	end)
+
 	T.test("plaza v2: the fire crystal sits in a chunky mechanical ring", function()
 		local ring = world().plaza.FireCrystalRing
 		local segments, slots, edges = 0, 0, 0
