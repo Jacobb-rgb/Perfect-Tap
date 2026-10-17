@@ -66,7 +66,12 @@ Owner (2026-10-17): build the machines **from the Kenney Factory Kit** (the pipe
 **iron first**, and upgrades grow crystals: small shards first, after 3-4 upgrades the whole machine is crystal.
 Then (same day) the first kit version looked "old, like old Minecraft"; the owner sent the target look:
 **docs/art/machines_reference.webp** (neon factory) and **docs/art/conveyors_reference.webp** (belts, lift, slide).
-- Style now (src/shared/Builders/KitMachines.luau): housings with 45 degree chamfered corners, light silver panels on
+- Then the owner wanted "cute and at the same time cool, like the new games": three styles of the Clay Furnace were
+  shown (src/shared/Builders/CuteMachines.luau, scene `cute_styles`: A Soft, B Bot with a face, C Cool dark) and the
+  owner chose **A "Soft"**: rounded toy shapes (soft box bodies with every top and upright edge rounded, pill plinths
+  and lids, arched glowing doors, fat chimneys, bowl hoppers, capsule tanks with glowing portholes) in cream with
+  slate and orange, glowing orange strips. KitMachines now builds every machine and belt in this style.
+- Previous style (neon reference, kept in git history d113ee9): housings with 45 degree chamfered corners, light silver panels on
   a dark gunmetal plinth and lid, glowing orange strips, glowing furnace doors (thick frame, neon outline, hot core),
   chimneys with glowing rings, dark pipes with orange sleeves, glass pipes with glowing water and a coil (or molten
   metal), tanks with glowing windows, screens, stack lights, a yellow robot arm, the mountain emblem on the Blast
