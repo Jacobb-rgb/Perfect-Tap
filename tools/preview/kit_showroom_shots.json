@@ -565,5 +565,26 @@
   ],
   "fov": 62,
   "shadowExtent": 70
+ },
+ "close_IronBox_front": {
+  "scene": "kit_showroom",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.6,
+   -0.66
+  ],
+  "position": [
+   -1,
+   6.5,
+   -9
+  ],
+  "target": [
+   -4,
+   3,
+   2
+  ],
+  "fov": 50,
+  "shadowExtent": 30
  }
 }

@@ -375,18 +375,7 @@ return function(T, Loader)
 	end)
 
 	T.test("Machines: the Iron Box has its window, screen, two flaps and hopper", function()
-		-- the owner's "Soft" machine style (KitMachines) builds the Iron Box when it
-		-- has one; these detail checks are for the MachineBuilder model only (the
-		-- FX degrade gracefully when the Soft model lacks the screen/flaps/ShowPoint)
-		local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
-		if KitMachines.has("IronBox") then
-			local soft = MachineBuilder.build("IronBox")
-			T.truthy(soft.PrimaryPart, "Soft Iron Box builds")
-			for _, name in { "Intake", "Output", "Prompt", "Status" } do
-				T.truthy(soft.PrimaryPart:FindFirstChild(name, true) or soft:FindFirstChild(name, true), "Soft Iron Box keeps " .. name)
-			end
-			return
-		end
+		-- (the owner's "Soft" style: KitMachines builds it with the same parts)
 		local model = MachineBuilder.build("IronBox")
 		local base = model.PrimaryPart
 		local CELLS = MachineData.ById.IronBox.Size
@@ -422,7 +411,8 @@ return function(T, Loader)
 		-- two flaps on the front, SEND at the output column, both under the screen / window
 		local keep, send = part("FlapKeep"), part("FlapSend")
 		local out = attachment(model, "Output").CFrame.Position
-		T.near(localPos(send).X, out.X, 1e-4, "SEND at the output column")
+		-- SEND over the chute to the output column (the Soft box keeps it on its flat front)
+		T.truthy(math.abs(localPos(send).X - out.X) <= 1, "SEND near the output column")
 		T.truthy(localPos(keep).X < 0 and localPos(send).X > 0, "KEEP left, SEND right")
 		for _, flap in { keep, send } do
 			local p = localPos(flap)
