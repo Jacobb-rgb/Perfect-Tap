@@ -1,8 +1,10 @@
 --[[
 	ProcessingService: the machines that work on their own. Clay Furnace and
 	Blast Furnace smelt clean or crushed ore into ingots, the Crusher turns 1
-	clean ore into 2 crushed piles, the Auto Cleaner cleans raw ore (60%
-	Rough, 40% Clean, never better).
+	clean ore into 2 crushed piles, the Cleaning Plant (Id AutoCleaner)
+	cleans raw ore with the grade odds of its Quality level
+	(MachineData.QualityLevels / gradeOdds: 60% Rough / 40% Clean at level
+	0, up to 30% Flawless at level 5; MachineLogic.outputs takes the odds).
 
 	- Items arrive through MachineService (hopper, belt, Put In prompt or a
 	  machine in front): canAccept = MachineLogic.accepts, insert = push onto
@@ -18,6 +20,10 @@
 	  rejoin the job on In[1] starts over.
 	- Clients animate everything from model attributes (MachineFxController):
 	  Queue, QueueMax, OutCount, Working, WorkStart, WorkTime, WorkOre, Cycles.
+	- A sorter (a machine with a Time but no Output, the Iron Box) may use
+	  these jobs too: its item comes back out unchanged and the job counts
+	  toward nothing (no IngotsSmelted, first-ingot toast, Discovery or
+	  onProcessed; MachineLogic).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -187,17 +193,21 @@ local function finishJob(machine: PlacedMachine, job: Job): boolean
 	if not job.PassThrough then
 		local cycles = machine.Model:GetAttribute("Cycles")
 		MachineService.setAttrs(machine, { Cycles = (if type(cycles) == "number" then cycles else 0) + 1 })
-		countIngots(player, list)
-		-- dirty ore that comes out clean reveals what it was (design v2)
-		local data = DataService.get(player)
-		if data and job.Input.K == "Raw" then
-			for _, desc in list do
-				if desc.K == "Clean" then
-					Discovery.mark(player, data, desc.O)
+		-- a sorter (Iron Box: no Output) only passes the item on: nothing was
+		-- smelted, cleaned or discovered, so no stats, toasts or listeners
+		if machine.Info.Output ~= nil then
+			countIngots(player, list)
+			-- dirty ore that comes out clean reveals what it was (design v2)
+			local data = DataService.get(player)
+			if data and job.Input.K == "Raw" then
+				for _, desc in list do
+					if desc.K == "Clean" then
+						Discovery.mark(player, data, desc.O)
+					end
 				end
 			end
+			announce(player, machine.Id, job.Input, list)
 		end
-		announce(player, machine.Id, job.Input, list)
 	end
 	DataService.changed(player)
 	return true
