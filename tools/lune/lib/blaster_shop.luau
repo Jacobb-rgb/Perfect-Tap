@@ -104,14 +104,26 @@ local function oreGlow(level: number)
 end
 
 -- A case on a pedestal with a light beam and its level plate. cf = the pedestal's bottom center (front +Z).
+local DISPLAY_TILT = 0.34 -- the cases lean forward toward the visitor
+
 local function display(K: any, parent: any, level: number, cf: any, s: number)
 	local look = oreGlow(level)
 	local w, d = 7.6 * s, 4.4 * s
 	K.boxCF(cf * CF.new(0, 0.35, 0), V3.new(w, 0.7, d), DARK)
 	neon(K, cf * CF.new(0, 0.72, 0), V3.new(w + 0.1, 0.06, d + 0.1), look.Glow)
-	crate(parent, level, cf * CF.new(0, 0.76, 0) * CF.Angles(0, -math.pi / 2, 0), s)
+	local rise = d * math.tan(DISPLAY_TILT)
+	K.part("WedgePart", cf * CF.new(0, 0.7 + rise / 2, 0) * CF.Angles(0, math.pi, 0), V3.new(w, rise, d), C3.fromRGB(46, 42, 54))
+	local top = cf * CF.new(0, 0.7 + rise / 2, 0) * CF.Angles(DISPLAY_TILT, 0, 0)
+	K.boxCF(top * CF.new(0, 0.05, 0), V3.new(w - 0.2, 0.1, d / math.cos(DISPLAY_TILT) - 0.2), C3.fromRGB(70, 30, 34))
+	K.boxCF(
+		top * CF.new(0, 0.3, d / 2 / math.cos(DISPLAY_TILT) - 0.15),
+		V3.new(w - 0.2, 0.5, 0.25),
+		C3.fromRGB(196, 152, 66),
+		Enum.Material.Metal
+	)
+	crate(parent, level, top * CF.new(0, 0.1, -0.1) * CF.Angles(0, -math.pi / 2, 0), s)
 	label(K, cf * CF.new(0, 0.35, d / 2 + 0.03), V3.new(1.7, 0.5, 0.04), "LV " .. level, DARK, look.Glow)
-	light(K, (cf * CF.new(0, 3, 2)).Position, look.Glow, 8, 0.8)
+	light(K, (cf * CF.new(0, 3, 2)).Position, look.Glow, 7, 0.5)
 end
 
 --[[
@@ -371,9 +383,9 @@ end
 local function stoneWall(K: any, cf: any, length: number, height: number, thick: number, opts: any)
 	local rand = lcg(opts.seed or 1)
 	local half = length / 2
-	local STONE = C3.fromRGB(124, 120, 140)
-	local LIGHT = C3.fromRGB(150, 146, 166)
-	local DARKS = C3.fromRGB(92, 88, 108)
+	local STONE = C3.fromRGB(98, 92, 110)
+	local LIGHT = C3.fromRGB(122, 116, 136)
+	local DARKS = C3.fromRGB(72, 68, 84)
 	local MOSS = C3.fromRGB(86, 122, 78)
 	local FIRE = C3.fromRGB(255, 140, 50)
 	local function box(x: number, y: number, z: number, sx: number, sy: number, sz: number, color: any, mat: any?)
@@ -384,11 +396,11 @@ local function stoneWall(K: any, cf: any, length: number, height: number, thick:
 		if t < 0.07 then
 			return MOSS:Lerp(STONE, rand() * 0.4)
 		elseif t < 0.11 then
-			return C3.fromRGB(80, 76, 92)
+			return C3.fromRGB(62, 58, 72)
 		end
 		return if rand() < 0.5 then STONE:Lerp(LIGHT, rand() * 0.8) else STONE:Lerp(DARKS, rand() * 0.8)
 	end
-	box(0, height / 2, 0, length, height, thick, C3.fromRGB(62, 58, 72)) -- the mortar core
+	box(0, height / 2, 0, length, height, thick, C3.fromRGB(42, 38, 50)) -- the mortar core
 	local faces = if opts.inner then { 1, -1 } else { 1 }
 	for _, f in faces do
 		local zf = f * thick / 2
@@ -409,29 +421,33 @@ local function stoneWall(K: any, cf: any, length: number, height: number, thick:
 				local len = 2.6 + rand() * 1.6
 				local a, b = math.max(x, -half), math.min(x + len, half)
 				if b - a > 0.6 then
-					box((a + b) / 2, y, zf + f * 0.12, b - a - 0.16, bh - 0.16, 0.5, tone())
+					local t = tone()
+					if f < 0 and opts.innerDark then
+						t = t:Lerp(C3.new(0, 0, 0), opts.innerDark)
+					end
+					box((a + b) / 2, y, zf + f * 0.12, b - a - 0.16, bh - 0.16, 0.5, t)
 				end
 				x += len
 			end
 		end
 		-- string course, cornice with dentils
 		box(0, y0 + bh * 6.5, zf + f * 0.3, length, 0.45, 0.8, LIGHT:Lerp(STONE, 0.4))
-		box(0, height - 0.45, f * 0.4, length + 1.0, 0.9, thick + 1.4, C3.fromRGB(110, 106, 126))
+		box(0, height - 0.45, f * 0.4, length + 1.0, 0.9, thick + 1.4, C3.fromRGB(88, 82, 100))
 		local n = math.floor(length / 1.4)
 		for i = 0, n - 1 do
-			box(-half + 0.7 + i * 1.4, height - 1.15, zf + f * 0.55, 0.6, 0.5, 0.6, C3.fromRGB(104, 100, 120))
+			box(-half + 0.7 + i * 1.4, height - 1.15, zf + f * 0.55, 0.6, 0.5, 0.6, C3.fromRGB(80, 76, 94))
 		end
 	end
-	box(0, height + 0.25, 0, length + 0.6, 0.5, thick + 0.8, C3.fromRGB(96, 92, 110))
+	box(0, height + 0.25, 0, length + 0.6, 0.5, thick + 0.8, C3.fromRGB(74, 70, 86))
 	-- outer face: pilasters, sconces, rune slits, moss drips
 	local zo = thick / 2
 	local bays = math.max(1, math.floor(length / 10 + 0.5))
 	local bay = length / bays
 	for k = 0, bays do
 		local x = -half + k * bay
-		box(x, height / 2, zo + 0.6, 1.8, height - 1, 1.2, C3.fromRGB(136, 132, 152))
+		box(x, height / 2, zo + 0.6, 1.8, height - 1, 1.2, C3.fromRGB(106, 100, 120))
 		box(x, 1.2, zo + 0.8, 2.6, 2.4, 1.8, DARKS)
-		box(x, height - 1.6, zo + 0.8, 2.6, 1.0, 1.8, C3.fromRGB(144, 140, 160))
+		box(x, height - 1.6, zo + 0.8, 2.6, 1.0, 1.8, C3.fromRGB(112, 106, 126))
 		if opts.sconces and k % 2 == 1 then
 			box(x, 11.8, zo + 1.6, 0.4, 0.4, 1.4, C3.fromRGB(40, 38, 44))
 			local flame = K.part("Part", cf * CF.new(x, 12.6, zo + 2.2), V3.new(1.1, 1.3, 1.1), FIRE, NEON)
@@ -441,7 +457,7 @@ local function stoneWall(K: any, cf: any, length: number, height: number, thick:
 			local xs = x + bay / 2
 			box(xs, 14.6, zo + 0.35, 1.9, 6.4, 0.7, C3.fromRGB(70, 66, 80))
 			box(xs, 14.6, zo + 0.42, 0.55, 5.2, 0.7, FIRE, NEON)
-			box(xs, 18.1, zo + 0.5, 2.6, 0.6, 0.9, C3.fromRGB(144, 140, 160))
+			box(xs, 18.1, zo + 0.5, 2.6, 0.6, 0.9, C3.fromRGB(112, 106, 126))
 		end
 	end
 	for _ = 1, math.floor(length / 6) do
@@ -572,13 +588,13 @@ end
 
 -- The vault's stone tones.
 local VS = {
-	core = C3.fromRGB(54, 50, 64), -- grout, mortar
-	tiles = { C3.fromRGB(118, 114, 134), C3.fromRGB(104, 100, 120), C3.fromRGB(130, 126, 146), C3.fromRGB(94, 90, 110) },
-	moss = C3.fromRGB(88, 120, 80),
-	light = C3.fromRGB(148, 144, 164),
-	dark = C3.fromRGB(80, 76, 94),
-	wood = C3.fromRGB(122, 74, 48),
-	roof = { C3.fromRGB(62, 56, 78), C3.fromRGB(74, 66, 90), C3.fromRGB(54, 48, 68) },
+	core = C3.fromRGB(40, 36, 48), -- grout, mortar
+	tiles = { C3.fromRGB(94, 88, 106), C3.fromRGB(82, 76, 94), C3.fromRGB(104, 98, 116), C3.fromRGB(74, 70, 86) },
+	moss = C3.fromRGB(78, 108, 70),
+	light = C3.fromRGB(120, 114, 134),
+	dark = C3.fromRGB(62, 58, 74),
+	wood = C3.fromRGB(108, 64, 42),
+	roof = { C3.fromRGB(84, 54, 50), C3.fromRGB(96, 62, 56), C3.fromRGB(72, 46, 44) },
 }
 local SLATEM = Enum.Material.Slate
 local MARBLE = Enum.Material.Marble
@@ -800,7 +816,7 @@ local function chandelier(K: any, top: any, drop: number)
 	for _, a in { 0, math.pi / 2 } do
 		K.boxCF(ring * CF.Angles(0, a, 0), V3.new(2 * r, 0.25, 0.25), IRON)
 	end
-	light(K, (ring * CF.new(0, 0.8, 0)).Position, FLAME, 20, 1)
+	light(K, (ring * CF.new(0, 0.8, 0)).Position, FLAME, 16, 0.7)
 end
 
 --[[
@@ -908,7 +924,7 @@ end
 -- The inside floor: a two-tone marble checker, a fire inlay border, and a red runner to the counter.
 local function vaultFloor(K: any, origin: any)
 	local FIRE = C3.fromRGB(255, 140, 50)
-	local A, B = C3.fromRGB(70, 64, 84), C3.fromRGB(104, 98, 120)
+	local A, B = C3.fromRGB(44, 38, 54), C3.fromRGB(70, 64, 84)
 	local size = 4
 	for ix = 0, 13 do
 		for iz = 0, 11 do
@@ -936,6 +952,319 @@ local function vaultFloor(K: any, origin: any)
 	end
 	for i = 0, 13 do
 		K.boxCF(origin * CF.new(-3.25 + i * 0.5, 0.06, z1 + 0.25), V3.new(0.18, 0.08, 0.5), GOLD)
+	end
+end
+
+---------------------------------------------------------------- Forge Vault wall decorations
+
+local BlasterShapes = require("./kenney_blaster_shapes") :: any
+
+--[[
+	A frame on an inside wall (vault frame): the decoration's local X runs to the
+	viewer's right, Y up, Z out of the wall. side -1 = the left wall (x = -28),
+	1 = the right wall (x = 28).
+]]
+local function wallFrame(origin: any, side: number, z: number, y: number): any
+	-- in front of the bricks and the string course (they stand 0.7 out of the wall's inner face at 28)
+	return origin * CF.new(side * 27.2, y, z) * CF.Angles(0, -side * math.pi / 2, 0)
+end
+
+-- A picture frame (w x h) with a canvas; returns the canvas front frame (z = its front face).
+local function pictureFrame(K: any, f: any, w: number, h: number, frameColor: any, canvas: any): any
+	K.boxCF(f * CF.new(0, 0, 0.1), V3.new(w, h, 0.2), canvas)
+	for _, sy in { -1, 1 } do
+		K.boxCF(f * CF.new(0, sy * (h / 2 + 0.25), 0.25), V3.new(w + 1, 0.5, 0.5), frameColor)
+	end
+	for _, sx in { -1, 1 } do
+		K.boxCF(f * CF.new(sx * (w / 2 + 0.25), 0, 0.25), V3.new(0.5, h, 0.5), frameColor)
+	end
+	return f * CF.new(0, 0, 0.2)
+end
+
+-- A treasure map of the island: parchment between two scroll rods, the island, a dashed route, an X, a compass.
+local function treasureMap(K: any, f: any)
+	local PAPER, INK, RED = C3.fromRGB(226, 200, 146), C3.fromRGB(96, 66, 42), C3.fromRGB(168, 44, 34)
+	local W, H = 12, 7.6
+	K.boxCF(f * CF.new(0, 0, 0.1), V3.new(W, H, 0.12), PAPER)
+	for _, sy in { -1, 1 } do
+		K.cylCF(f * CF.new(0, sy * (H / 2 + 0.2), 0.3), W + 0.6, 0.6, C3.fromRGB(112, 72, 46))
+		for _, sx in { -1, 1 } do
+			K.cylCF(f * CF.new(sx * (W / 2 + 0.55), sy * (H / 2 + 0.2), 0.3), 0.3, 0.85, C3.fromRGB(176, 136, 70))
+		end
+	end
+	local function ink(x: number, y: number, w: number, h: number, color: any, rot: number?)
+		K.boxCF(f * CF.new(x, y, 0.19) * CF.Angles(0, 0, rot or 0), V3.new(w, h, 0.06), color)
+	end
+	-- sea waves
+	for _, p in { { -4.6, 2.6 }, { 3.8, 2.8 }, { -4.8, -2.9 }, { 4.6, -0.6 }, { -1.2, 3.0 } } do
+		ink(p[1], p[2], 1.1, 0.1, C3.fromRGB(120, 150, 150))
+		ink(p[1] + 0.4, p[2] - 0.25, 0.8, 0.1, C3.fromRGB(120, 150, 150))
+	end
+	-- the island: sand, grass, a mountain, a shore line
+	for _, r in { { -0.6, 0.0, 6.8, 3.6 }, { 0.6, -1.0, 5.0, 2.6 }, { -1.8, 1.3, 3.4, 1.8 }, { 2.4, 0.9, 2.6, 1.6 } } do
+		ink(r[1], r[2], r[3] + 0.3, r[4] + 0.3, INK)
+		K.boxCF(f * CF.new(r[1], r[2], 0.21), V3.new(r[3], r[4], 0.06), C3.fromRGB(214, 184, 118))
+	end
+	for _, r in { { -0.8, 0.2, 4.6, 2.0 }, { 0.8, -0.8, 3.2, 1.4 }, { -1.8, 1.2, 2.2, 1.0 } } do
+		K.boxCF(f * CF.new(r[1], r[2], 0.23), V3.new(r[3], r[4], 0.06), C3.fromRGB(120, 150, 82))
+	end
+	K.boxCF(f * CF.new(-1.4, 0.7, 0.25) * CF.Angles(0, 0, math.pi / 4), V3.new(1.0, 1.0, 0.06), C3.fromRGB(110, 86, 64))
+	-- the dashed route to the X
+	local pts = { { -5.0, -2.2 }, { -3.4, -1.6 }, { -2.2, -0.6 }, { -0.6, -0.2 }, { 0.6, 0.6 }, { 1.8, 0.2 } }
+	for i = 1, #pts - 1 do
+		local a, b = pts[i], pts[i + 1]
+		local mx, my = (a[1] + b[1]) / 2, (a[2] + b[2]) / 2
+		ink(mx, my, 0.5, 0.14, RED, math.atan2(b[2] - a[2], b[1] - a[1]))
+	end
+	for _, r in { math.pi / 4, -math.pi / 4 } do
+		K.boxCF(f * CF.new(2.4, 0.2, 0.27) * CF.Angles(0, 0, r), V3.new(1.0, 0.22, 0.06), RED)
+	end
+	-- compass rose
+	for i = 0, 3 do
+		K.boxCF(
+			f * CF.new(4.4, -2.4, 0.21) * CF.Angles(0, 0, i * math.pi / 2) * CF.new(0, 0.45, 0) * CF.Angles(0, 0, math.pi / 4),
+			V3.new(0.34, 0.34, 0.06),
+			INK
+		)
+	end
+	K.boxCF(f * CF.new(4.4, -1.5, 0.21), V3.new(0.16, 0.4, 0.06), RED)
+end
+
+-- A blueprint of the level 10 blaster (Kenney's blaster-e outline) on a blue board with a grid.
+local function blueprint(K: any, f: any)
+	local W, H = 12, 7
+	local LINE = C3.fromRGB(226, 238, 255)
+	local c = pictureFrame(K, f, W, H, C3.fromRGB(46, 42, 52), C3.fromRGB(38, 78, 150))
+	for i = 1, 11 do
+		K.boxCF(c * CF.new(-W / 2 + i, 0, 0.02), V3.new(0.05, H, 0.03), C3.fromRGB(70, 112, 190))
+	end
+	for i = 1, 6 do
+		K.boxCF(c * CF.new(0, -H / 2 + i, 0.02), V3.new(W, 0.05, 0.03), C3.fromRGB(70, 112, 190))
+	end
+	local data = BlasterShapes["blaster-e"]
+	local b = data.bounds
+	local s = 10 / (b[2] - b[1])
+	local cz, cy = (b[1] + b[2]) / 2, (b[3] + b[4]) / 2
+	for i, region in data.regions do
+		if i <= 14 then
+			for _, L in region.loops do
+				local n = #L // 2
+				for k = 1, n do
+					local j = k % n + 1
+					-- the barrel points left on the board (the muzzle at -Z in the data)
+					local x0, y0 = (L[2 * k - 1] - cz) * s, (L[2 * k] - cy) * s + 0.4
+					local x1, y1 = (L[2 * j - 1] - cz) * s, (L[2 * j] - cy) * s + 0.4
+					local len = math.sqrt((x1 - x0) ^ 2 + (y1 - y0) ^ 2)
+					if len > 0.12 then
+						K.boxCF(
+							c * CF.new((x0 + x1) / 2, (y0 + y1) / 2, 0.05) * CF.Angles(0, 0, math.atan2(y1 - y0, x1 - x0)),
+							V3.new(len + 0.06, 0.07, 0.04),
+							LINE
+						)
+					end
+				end
+			end
+		end
+	end
+	-- "text" lines and a stamp
+	for i, w in { 3.2, 2.2, 2.6 } do
+		K.boxCF(c * CF.new(-W / 2 + 0.6 + w / 2, -H / 2 + 0.5 + i * 0.35, 0.05), V3.new(w, 0.12, 0.04), LINE)
+	end
+	K.boxCF(c * CF.new(W / 2 - 1.3, -H / 2 + 1.0, 0.05) * CF.Angles(0, 0, 0.2), V3.new(1.6, 0.9, 0.04), C3.fromRGB(220, 70, 60))
+end
+
+-- A sunset painting of a volcano in a gold frame.
+local function volcanoPainting(K: any, parent: any, f: any)
+	local Geo = L.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local W, H = 9, 6
+	local c = pictureFrame(K, f, W, H, C3.fromRGB(196, 152, 66), C3.fromRGB(70, 46, 90))
+	for i, band in { { 1.3, C3.fromRGB(150, 80, 120) }, { 0.0, C3.fromRGB(226, 120, 104) }, { -1.1, C3.fromRGB(246, 168, 92) } } do
+		K.boxCF(c * CF.new(0, band[1], 0.02 + i * 0.002), V3.new(W, 1.4, 0.04), band[2])
+	end
+	K.cylCF(c * CF.new(2.4, 0.4, 0.05) * CF.Angles(0, math.pi / 2, 0), 0.04, 1.6, C3.fromRGB(255, 226, 150))
+	local function tri(a: any, b: any, cc: any, color: any)
+		Geo.triangle(
+			parent,
+			(c * CF.new(a.X, a.Y, 0.09)).Position,
+			(c * CF.new(b.X, b.Y, 0.09)).Position,
+			(c * CF.new(cc.X, cc.Y, 0.09)).Position,
+			0.05,
+			color,
+			nil,
+			nil,
+			{ CanCollide = false }
+		)
+	end
+	tri(V3.new(-4.5, -3), V3.new(4.5, -3), V3.new(4.5, -1.6), C3.fromRGB(70, 56, 66))
+	tri(V3.new(-4.5, -3), V3.new(4.5, -1.6), V3.new(-4.5, -1.2), C3.fromRGB(70, 56, 66))
+	tri(V3.new(-3.6, -2.2), V3.new(1.6, -2.2), V3.new(-1.0, 1.4), C3.fromRGB(56, 40, 50))
+	tri(V3.new(-0.6, -2.2), V3.new(3.8, -2.2), V3.new(1.8, 0.0), C3.fromRGB(84, 62, 72))
+	K.boxCF(c * CF.new(-1.0, 1.3, 0.12), V3.new(0.9, 0.25, 0.04), C3.fromRGB(255, 120, 40), NEON)
+	K.boxCF(c * CF.new(-1.3, 0.3, 0.12) * CF.Angles(0, 0, 0.35), V3.new(0.16, 1.9, 0.04), C3.fromRGB(255, 120, 40), NEON)
+	K.boxCF(c * CF.new(-0.5, -0.1, 0.12) * CF.Angles(0, 0, -0.5), V3.new(0.14, 2.2, 0.04), C3.fromRGB(255, 120, 40), NEON)
+	for i = 0, 3 do
+		K.boxCF(c * CF.new(-1.0 + (i - 1.5) * 0.5, 2.0 + i * 0.3, 0.1), V3.new(0.7, 0.4, 0.04), C3.fromRGB(90, 80, 92))
+	end
+end
+
+-- The ore collection: a dark board with twelve ore gems on brass plates.
+local function oreBoard(K: any, f: any)
+	local OreData = L.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local W, H = 9, 6.4
+	local c = pictureFrame(K, f, W, H, C3.fromRGB(96, 62, 40), C3.fromRGB(44, 32, 30))
+	K.boxCF(c * CF.new(0, H / 2 - 0.55, 0.04), V3.new(5, 0.5, 0.06), C3.fromRGB(196, 152, 66))
+	local ores = { "Copper", "Iron", "Silver", "Amethyst", "Jade", "Emberite", "Gold", "Ruby", "Azurium", "Sapphire", "Emerald", "Diamond" }
+	for i, id in ores do
+		local ore = OreData.ById[id]
+		local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+		local x, y = -3.15 + col * 2.1, 1.2 - row * 1.75
+		local gem = K.boxCF(
+			c * CF.new(x, y, 0.4) * CF.Angles(0, 0, math.pi / 4) * CF.Angles(0.5, 0, 0),
+			V3.new(0.8, 0.8, 0.8),
+			if ore then ore.Color else C3.new(1, 1, 1)
+		)
+		gem.Material = Enum.Material.Glass
+		gem.Reflectance = 0.2
+		K.boxCF(c * CF.new(x, y - 0.75, 0.05), V3.new(1.2, 0.24, 0.06), C3.fromRGB(196, 152, 66))
+	end
+end
+
+-- A wooden rack with three blasters on pegs.
+local function weaponRack(K: any, parent: any, f: any)
+	local WOOD = C3.fromRGB(96, 62, 40)
+	K.boxCF(f * CF.new(0, 0, 0.15), V3.new(8.6, 6.6, 0.3), WOOD)
+	for _, sx in { -1, 1 } do
+		K.boxCF(f * CF.new(sx * 4.5, 0, 0.3), V3.new(0.5, 7.2, 0.6), C3.fromRGB(70, 44, 30))
+	end
+	local guns = { { 3, 1.25 }, { 5, 1.15 }, { 7, 1.0 } }
+	for i, g in guns do
+		local y = 2.2 - (i - 1) * 2.2
+		for _, sx in { -1.6, 1.6 } do
+			K.boxCF(f * CF.new(sx, y - 0.75, 0.6), V3.new(0.25, 0.25, 0.9), C3.fromRGB(150, 120, 70), Enum.Material.Metal)
+		end
+		local gun = Kenney.gun(L, g[1], Kenney.Lineup[g[1]])
+		Concepts.present(gun, f * CF.new(0, y, 0.8) * CF.Angles(0, -math.pi / 2, 0), g[2], parent)
+	end
+end
+
+-- A wall torch: an iron bracket, a stick and a flame.
+local function wallTorch(K: any, f: any)
+	K.boxCF(f * CF.new(0, 0, 0.2), V3.new(0.8, 1.4, 0.4), C3.fromRGB(40, 38, 44))
+	K.boxCF(f * CF.new(0, 0.6, 0.7) * CF.Angles(0.5, 0, 0), V3.new(0.4, 1.8, 0.4), C3.fromRGB(96, 62, 40))
+	local flame = K.part("Part", f * CF.new(0, 1.6, 1.15), V3.new(0.8, 1.0, 0.8), C3.fromRGB(255, 150, 60), NEON)
+	flame.Shape = Enum.PartType.Ball
+	local embers = roblox.Instance.new("ParticleEmitter")
+	embers.Name = "Embers"
+	embers.Color = roblox.ColorSequence.new(C3.fromRGB(255, 150, 60))
+	embers.Parent = flame
+	light(K, (f * CF.new(0, 1.8, 1.8)).Position, C3.fromRGB(255, 160, 80), 12, 0.7)
+end
+
+-- Everything on the inside side walls.
+local function vaultWallDecor(K: any, parent: any, origin: any)
+	treasureMap(K, wallFrame(origin, -1, 9.5, 12.5))
+	oreBoard(K, wallFrame(origin, -1, -12.5, 15.5))
+	blueprint(K, wallFrame(origin, 1, 9.5, 14))
+	weaponRack(K, parent, wallFrame(origin, 1, 9.5, 5.6))
+	volcanoPainting(K, parent, wallFrame(origin, 1, -12.5, 15.5))
+	for _, side in { -1, 1 } do
+		for _, z in { 1.5, 18.5 } do
+			wallTorch(K, wallFrame(origin, side, z, 9))
+		end
+	end
+end
+
+--[[
+	The front facade beside the entrance: a stone wall bay outside each outer
+	column with a lit niche holding a glass ore crystal.
+]]
+local function vaultFacade(K: any, origin: any)
+	for _, side in { { -1, 7 }, { 1, 9 } } do
+		local sx = side[1]
+		local look = oreGlow(side[2])
+		local cx = sx * 30.5
+		stoneWall(K, origin * CF.new(cx, 0, 21.5), 7, 20, 3, { inner = true, seed = 50 + sx, innerDark = 0.4 })
+		local zf = 23
+		K.boxCF(origin * CF.new(cx, 8.6, zf + 0.06), V3.new(3.6, 9.2, 0.14), C3.fromRGB(22, 18, 26))
+		for _, jx in { -2.1, 2.1 } do
+			K.boxCF(origin * CF.new(cx + jx, 8.6, zf + 0.35), V3.new(0.6, 9.2, 0.7), VS.light, SLATEM)
+		end
+		for i = 0, 6 do
+			local a = i / 6 * math.pi
+			K.boxCF(
+				origin * CF.new(cx + math.cos(a) * 2.1, 13.2 + math.sin(a) * 2.1, zf + 0.35) * CF.Angles(0, 0, a),
+				V3.new(0.6, 1.2, 0.7),
+				VS.light,
+				SLATEM
+			)
+		end
+		K.boxCF(origin * CF.new(cx, 3.9, zf + 0.5), V3.new(4.6, 0.5, 1.2), VS.light, SLATEM)
+		K.boxCF(origin * CF.new(cx, 4.6, zf + 0.25), V3.new(1.8, 0.9, 1.0), VS.dark, SLATEM)
+		gemCluster(
+			K,
+			(origin * CF.new(cx, 5.05, zf + 0.25)).Position,
+			V3.new(0, 1, 0),
+			V3.new(1, 0, 0),
+			3.8,
+			look.Body,
+			look.Body:Lerp(C3.new(0, 0, 0), 0.35)
+		)
+		neon(K, origin * CF.new(cx, 4.17, zf + 0.6), V3.new(4.4, 0.06, 0.6), look.Glow)
+		light(K, (origin * CF.new(cx, 8, zf + 2)).Position, look.Glow, 9, 0.7)
+		neon(K, origin * CF.new(cx, 16.4, zf + 0.12) * CF.Angles(0, 0, math.pi / 4), V3.new(0.9, 0.9, 0.12), C3.fromRGB(255, 140, 50))
+	end
+end
+
+--[[
+	Stonework on the front gable: brick courses, a base cornice with dentils,
+	raking cornices under the fire lines, a dark medallion with a fire ring
+	behind the crossed blasters, crystal acroteria on the corners.
+]]
+local function gableDetail(K: any, origin: any, zG: number)
+	local rand = lcg(808)
+	local zf = zG + 1.3 -- the gable's front face
+	local y = 24.7
+	local row = 0
+	while y < 38.4 do
+		local hw = 36 * (40 - (y + 0.65)) / 16 - 1.4
+		local x = -hw - (if row % 2 == 1 then 1.3 else 0)
+		while x < hw do
+			local len = 2.4 + rand() * 1.4
+			local a, b = math.max(x, -hw), math.min(x + len, hw)
+			if b - a > 0.6 then
+				local tone = VS.tiles[1 + math.floor(rand() * #VS.tiles)]
+				K.boxCF(origin * CF.new((a + b) / 2, y, zf + 0.12), V3.new(b - a - 0.14, 1.16, 0.3), tone, SLATEM)
+			end
+			x += len
+		end
+		y += 1.3
+		row += 1
+	end
+	K.boxCF(origin * CF.new(0, 24.2, zf + 0.3), V3.new(73, 0.8, 1.4), VS.light, SLATEM)
+	for i = 0, 46 do
+		K.boxCF(origin * CF.new(-34.5 + i * 1.5, 23.65, zf + 0.45), V3.new(0.6, 0.45, 0.6), VS.dark, SLATEM)
+	end
+	for _, sx in { -1, 1 } do
+		local a = (origin * CF.new(sx * 36, 24.4, zf + 0.5)).Position
+		local c = (origin * CF.new(0, 40.2, zf + 0.5)).Position
+		K.boxCF(CF.lookAt((a + c) / 2, c), V3.new(1.0, 0.9, (c - a).Magnitude), VS.light, SLATEM)
+		gemCluster(
+			K,
+			(origin * CF.new(sx * 35.6, 24.6, zf + 0.4)).Position,
+			V3.new(sx * 0.3, 1, 0).Unit,
+			V3.new(sx, 0, 0),
+			2.4,
+			C3.fromRGB(240, 110, 50),
+			C3.fromRGB(200, 70, 20)
+		)
+	end
+	-- the medallion behind the crossed blasters
+	local m = origin * CF.new(0, 31, zf + 0.4)
+	K.cylCF(m * CF.Angles(0, math.pi / 2, 0), 0.3, 10, C3.fromRGB(34, 30, 40), SLATEM)
+	K.cylCF(m * CF.new(0, 0, -0.1) * CF.Angles(0, math.pi / 2, 0), 0.2, 10.7, C3.fromRGB(255, 140, 50), NEON)
+	for i = 0, 15 do
+		local a = i / 16 * math.pi * 2
+		K.boxCF(m * CF.Angles(0, 0, a) * CF.new(5.9, 0, 0), V3.new(1.0, 2.1, 0.8), if i % 2 == 0 then VS.light else VS.tiles[1], SLATEM)
 	end
 end
 
@@ -993,9 +1322,10 @@ local function vaultWow(K: any, parent: any, origin: any)
 		local gun = Kenney.gun(L, 10, "Magmacore")
 		Concepts.present(gun, at(0, 30.6, zG + 2.4) * CF.Angles(0, 0, roll) * CF.Angles(0, -math.pi / 2, 0), 3.0, parent)
 	end
+	gableDetail(K, origin, zG)
 	gemCluster(
 		K,
-		(at(0, 33.6, zG + 1.6)).Position,
+		(at(0, 34.6, zG + 2.2)).Position,
 		V3.new(0, 1, 0.35).Unit,
 		V3.new(1, 0, 0),
 		4.2,
@@ -1100,7 +1430,7 @@ local function vault(K: any, parent: any, ground: any)
 		2 * halfW - 2,
 		22,
 		6,
-		{ inner = true, slits = true, sconces = true, seed = 11 }
+		{ inner = true, slits = true, sconces = true, seed = 11, innerDark = 0.4 }
 	)
 	for _, sx in { -1, 1 } do
 		stoneWall(
@@ -1109,11 +1439,13 @@ local function vault(K: any, parent: any, ground: any)
 			42,
 			22,
 			6,
-			{ inner = true, slits = true, sconces = true, seed = 20 + sx }
+			{ inner = true, slits = true, sconces = true, seed = 20 + sx, innerDark = 0.4 }
 		)
 	end
 	for _, x in { -halfW + S + 1, halfW - S - 1, -13, 13 } do
-		piece("dungeon/column", CF.new(x, 0, halfD - 2), 12)
+		piece("dungeon/column", CF.new(x, 0, halfD - 2), 12, function(_, c)
+			return c:Lerp(C3.fromRGB(40, 36, 50), 0.42)
+		end)
 	end
 	-- two tie beams with iron chandeliers (they stay clear of the vault door's top in the view from the entrance)
 	for _, z in { -6, 12 } do
@@ -1132,7 +1464,7 @@ local function vault(K: any, parent: any, ground: any)
 	neon(K, origin * CF.new(0, 20.3, halfD - 0.2), V3.new(27, 0.4, 0.9), FIRE)
 	neon(K, origin * CF.new(0, 14.9, halfD - 0.2), V3.new(27, 0.4, 0.9), FIRE)
 	-- ore banners on the back wall, fire bowls on the columns
-	for i, x in { -27, -14, 14, 27 } do
+	for i, x in { -23.2, -13.8, 13.8, 23.2 } do
 		local body = oreGlow(({ 3, 6, 8, 10 })[i]).Body
 		piece("dungeon/banner", CF.new(x, 7, -halfD + 11.5), 16, function(region, c)
 			local _, sat = c:ToHSV()
@@ -1188,7 +1520,13 @@ local function vault(K: any, parent: any, ground: any)
 	for _, x in { -halfW + 6, halfW - 6 } do
 		piece("dungeon/barrel", CF.new(x, 0, halfD - 7), 8)
 	end
-	light(K, (origin * CF.new(0, 16, -4)).Position, C3.fromRGB(255, 210, 160), 40, 1.1)
+	light(K, (origin * CF.new(0, 16, -4)).Position, C3.fromRGB(255, 210, 160), 30, 0.6)
+	vaultFacade(K, origin)
+	vaultWallDecor(K, parent, origin)
+	-- the inside, for the Studio test's darker interior lighting (an invisible zone)
+	local zone = K.part("Part", origin * CF.new(0, 15, 0.5), V3.new(56, 30, 45), C3.new(0, 0, 0))
+	zone.Name = "VaultInterior"
+	zone.Transparency = 1
 	vaultWow(K, parent, origin)
 end
 

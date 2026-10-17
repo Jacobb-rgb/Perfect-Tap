@@ -103,5 +103,68 @@ end
 ]]
 script.Parent = game:GetService("ServerScriptService")
 
+-- inside the vault the light goes down (dark and moody, the glows stand out); back up outside
+local zonePart = vault:FindFirstChild("VaultInterior", true)
+if zonePart then
+	zonePart.CanQuery = false
+	zonePart.CanTouch = false
+end
+local starterPlayer = game:GetService("StarterPlayer")
+local playerScripts = starterPlayer:FindFirstChildOfClass("StarterPlayerScripts")
+if not playerScripts then
+	playerScripts = roblox.Instance.new("StarterPlayerScripts")
+	playerScripts.Parent = starterPlayer
+end
+local mood = roblox.Instance.new("LocalScript")
+mood.Name = "VaultInteriorLight"
+mood.Source = [[
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local zone = workspace:WaitForChild("BlasterVault"):FindFirstChild("VaultInterior", true)
+local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
+local outside = {
+	Ambient = Lighting.Ambient,
+	OutdoorAmbient = Lighting.OutdoorAmbient,
+	ExposureCompensation = Lighting.ExposureCompensation,
+	EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+}
+local inside = {
+	Ambient = Color3.new(0.05, 0.04, 0.07),
+	OutdoorAmbient = Color3.new(0.2, 0.18, 0.26),
+	ExposureCompensation = -0.45,
+	EnvironmentDiffuseScale = 0.15,
+}
+local ccOut = cc and { Contrast = cc.Contrast, Saturation = cc.Saturation, Brightness = cc.Brightness }
+local ccIn = { Contrast = 0.32, Saturation = 0.34, Brightness = -0.02 }
+local bloomOut = bloom and { Intensity = bloom.Intensity, Threshold = bloom.Threshold }
+local bloomIn = { Intensity = 1.1, Threshold = 0.85 }
+local info = TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+local wasInside = false
+while true do
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local now = false
+	if root and zone then
+		local p = zone.CFrame:PointToObjectSpace(root.Position)
+		local h = zone.Size / 2
+		now = math.abs(p.X) <= h.X and math.abs(p.Y) <= h.Y and math.abs(p.Z) <= h.Z
+	end
+	if now ~= wasInside then
+		wasInside = now
+		TweenService:Create(Lighting, info, if now then inside else outside):Play()
+		if cc then
+			TweenService:Create(cc, info, if now then ccIn else ccOut):Play()
+		end
+		if bloom then
+			TweenService:Create(bloom, info, if now then bloomIn else bloomOut):Play()
+		end
+	end
+	task.wait(0.2)
+end
+]]
+mood.Parent = playerScripts
+
 fs.writeFile(out, roblox.serializePlace(game))
 print(string.format("Wrote %s (%d parts in the vault model)", out, parts))
