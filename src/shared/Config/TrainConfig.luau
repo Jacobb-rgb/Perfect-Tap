@@ -46,6 +46,15 @@ TrainConfig.MinTripSeconds = 5 -- no upgrade makes a trip shorter than this
 TrainConfig.ReturnSeconds = 6 -- the empty train rolls back before it can load again (the station shows "returning")
 TrainConfig.DeliveryRetry = 3 -- seconds between tries when the pen is full
 TrainConfig.MaxCargoSaved = 80 -- hard cap per save (Cargo + TripCargo), DataStore safety
+TrainConfig.MaxTripSpan = 600 -- clients refuse a TrainTrip with ArriveAt - DepartAt above this (the server never sends one)
+
+-- The prompts on every Mine Station / Mine Lift PromptPoint (shared contract,
+-- docs/plans/STEP2_PLAN.md): UIOffset = (0, slot * PromptSlotHeight). Load and
+-- Send are the server's (tagged PromptTag, attribute Action = "Load" | "Send"),
+-- Panel is the client's own untagged "Train" prompt. No two share a slot.
+TrainConfig.PromptTag = "TrainPrompt"
+TrainConfig.PromptSlotHeight = 72 -- UIOffset pixels per slot (the machine prompts' step)
+TrainConfig.PromptSlots = { Load = 0, Send = 1, Panel = 2 }
 
 -- What a client shows when (share of the trip, 0..1).
 TrainConfig.Timeline = {
@@ -80,6 +89,11 @@ TrainConfig.SouthPortalZ = 126
 TrainConfig.BufferZ = -100
 TrainConfig.CoastWest = { Vector3.new(-RAIL_X, 0, 126), Vector3.new(-RAIL_X, 0, -100) }
 TrainConfig.CoastEast = { Vector3.new(RAIL_X, 0, 126), Vector3.new(RAIL_X, 0, -100) }
+
+-- Where the lines' visible parts end (Railway builds them there, the client
+-- hides the trains at the same planes and stops them short of the buffers).
+TrainConfig.PortalInset = 6 -- the quarry tunnel mouths stand this far in front of the quarry line's ends
+TrainConfig.BufferGap = 1.7 -- the coastal buffer stops' face, past the coastal lines' ends
 
 -- Mine Lifts: throw ore in down in the caves, it goes into your train's cargo.
 TrainConfig.Lifts = {

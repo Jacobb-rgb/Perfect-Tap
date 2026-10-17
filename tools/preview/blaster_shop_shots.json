@@ -1,0 +1,322 @@
+{
+ "kit_check": {
+  "scene": "kit_check",
+  "position": [
+   0,
+   48,
+   46
+  ],
+  "target": [
+   0,
+   2,
+   -26
+  ],
+  "fov": 55,
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.6
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 90,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "shop_a": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   38,
+   22,
+   86
+  ],
+  "target": [
+   0,
+   17,
+   0
+  ],
+  "fov": 52
+ },
+ "shop_a_in": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   6,
+   8,
+   13
+  ],
+  "target": [
+   0,
+   6.2,
+   -14
+  ],
+  "fov": 62
+ },
+ "shop_b": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   224,
+   16,
+   74
+  ],
+  "target": [
+   200,
+   10,
+   0
+  ],
+  "fov": 50
+ },
+ "shop_b_in": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   205,
+   8,
+   24
+  ],
+  "target": [
+   200,
+   6,
+   -12
+  ],
+  "fov": 60
+ },
+ "shop_c": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   416,
+   11,
+   42
+  ],
+  "target": [
+   400,
+   7.5,
+   -4
+  ],
+  "fov": 50
+ },
+ "shop_c_in": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   403,
+   7,
+   19
+  ],
+  "target": [
+   400,
+   5,
+   -7
+  ],
+  "fov": 58
+ },
+ "shop_keeper": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   604,
+   6.5,
+   10.5
+  ],
+  "target": [
+   600,
+   4.6,
+   0
+  ],
+  "fov": 40
+ },
+ "shop_a_keeper": {
+  "scene": "blaster_shop",
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.55,
+   0.75
+  ],
+  "shadowExtent": 90,
+  "maxLights": 24,
+  "position": [
+   3.5,
+   8.6,
+   11
+  ],
+  "target": [
+   0,
+   7.2,
+   -2.5
+  ],
+  "fov": 46
+ },
+ "lobby_vault_road": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   6,
+   11,
+   30
+  ],
+  "target": [
+   0,
+   12,
+   112
+  ],
+  "fov": 58
+ },
+ "lobby_vault_aerial": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 160,
+  "maxLights": 32,
+  "position": [
+   75,
+   70,
+   30
+  ],
+  "target": [
+   0,
+   4,
+   100
+  ],
+  "fov": 52
+ },
+ "lobby_vault_front": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 160,
+  "maxLights": 32,
+  "position": [
+   16,
+   9,
+   66
+  ],
+  "target": [
+   0,
+   8,
+   112
+  ],
+  "fov": 58
+ },
+ "lobby_vault_hero": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   -36,
+   62,
+   -34
+  ],
+  "target": [
+   0,
+   4,
+   96
+  ],
+  "fov": 55
+ },
+ "lobby_vault_side": {
+  "scene": "blaster_shop_lobby",
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 200,
+  "maxLights": 32,
+  "position": [
+   50,
+   16,
+   82
+  ],
+  "target": [
+   24,
+   10,
+   120
+  ],
+  "fov": 55
+ }
+}

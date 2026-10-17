@@ -68,7 +68,7 @@ LobbyLayout.Budget = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
 		Plaza = { Parts = 1500, LobbyParts = 1500, Lights = 10, LobbyLights = 10 },
-		Districts = { Parts = 2100, LobbyParts = 2100, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
+		Districts = { Parts = 2300, LobbyParts = 2300, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 2300, LobbyParts = 2100, Lights = 8, LobbyLights = 8 }, -- + town buildings
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the

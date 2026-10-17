@@ -17,18 +17,22 @@ local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Water = require(script.Parent.Water)
+local Buildings = require(script.Parent.Buildings)
 
 local C = Style.C
 
 local Scatter = {}
 
-Scatter.Limits = { Trees = 45, Bushes = 30, Flowers = 42, Boulders = 10 }
+-- (flowers, bushes and boulders were cut to pay for the town buildings' parts)
+Scatter.Limits = { Trees = 45, Bushes = 20, Flowers = 8, Boulders = 3 }
 
 -- No scattered trees here: they would hide the ponds, the creek and the
--- bridge, or the corridor from the plaza to the bridge (hero camera views).
+-- bridge, the corridor from the plaza to the bridge, or the LAB shopfront
+-- and the ROCK SCANNER (hero camera views).
 Scatter.TreeFreeBoxes = {
 	{ Min = Vector2.new(-44, 52), Max = Vector2.new(44, 92) },
 	{ Min = Vector2.new(-12, 28), Max = Vector2.new(32, 52) },
+	{ Min = Vector2.new(26, 84), Max = Vector2.new(58, 100) },
 }
 
 local function treeFree(p: Vector3): boolean
@@ -52,11 +56,11 @@ type Zone = {
 Scatter.Zones = {
 	-- foreground and the strips along the plot roads (the hero view)
 	{ Name = "Front", Min = Vector2.new(-66, 20), Max = Vector2.new(66, 82), Trees = 9, Full = true },
-	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6, Full = true },
+	{ Name = "Middle", Min = Vector2.new(-66, -60), Max = Vector2.new(66, 20), Trees = 6 },
 	-- behind the forge and the stalls
 	{ Name = "Back", Min = Vector2.new(-66, -112), Max = Vector2.new(66, -60), Trees = 12 },
 	-- south foreground (lobby_south view)
-	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 10 },
+	{ Name = "South", Min = Vector2.new(-66, 86), Max = Vector2.new(66, 146), Trees = 7 },
 	-- the island's south corners beyond the bases
 	{ Name = "Corners", Min = Vector2.new(-166, 112), Max = Vector2.new(166, 146), Trees = 5 },
 } :: { Zone }
@@ -134,15 +138,11 @@ local function trees(m: Instance, placer: Kit.Placer, counts: Counts, rng: Rng.R
 				end
 				placed += 1
 				counts.Trees += 1
-				-- a bush and flowers at its feet
+				-- a bush at its feet
 				local a = rng:range(0, math.pi * 2)
 				local d = reach + rng:range(0.5, 2.5)
-				if rng:chance(0.7) then
+				if rng:chance(0.45) then
 					bush(m, placer, counts, p + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d), rng)
-				end
-				if rng:chance(0.6) then
-					local b = a + rng:range(1.4, 2.6)
-					flowers(m, placer, counts, p + Vector3.new(math.cos(b) * d, 0, math.sin(b) * d), rng)
 				end
 			end
 		end
@@ -156,10 +156,10 @@ local function groundCover(m: Instance, placer: Kit.Placer, counts: Counts, rng:
 	local middle = { Name = "Cover", Min = Vector2.new(-64, -110), Max = Vector2.new(64, 24), Trees = 0 }
 	local south = { Name = "Cover", Min = Vector2.new(-150, 84), Max = Vector2.new(150, 146), Trees = 0 }
 	local plan = {
-		{ zone = banks, flowers = 10, bushes = 6, boulders = 3 },
-		{ zone = front, flowers = 16, bushes = 9, boulders = 2 },
-		{ zone = middle, flowers = 6, bushes = 4, boulders = 2 },
-		{ zone = south, flowers = 42, bushes = 30, boulders = 10 },
+		{ zone = banks, flowers = 6, bushes = 4, boulders = 2 },
+		{ zone = front, flowers = 2, bushes = 4, boulders = 1 },
+		{ zone = middle, flowers = 0, bushes = 2, boulders = 0 },
+		{ zone = south, flowers = 0, bushes = 6, boulders = 0 },
 	}
 	for _, step in plan do
 		local zone = step.zone :: Zone
@@ -218,12 +218,12 @@ local function fences(m: Instance, placer: Kit.Placer)
 	local lx = lily.Center.X - lily.Size.X / 2 - 1.8
 	fence(m, Vector3.new(lx, 0, lily.Center.Z - 5.5), Vector3.new(lx, 0, lily.Center.Z + 5.5))
 	local kx = koi.Center.X + koi.Size.X / 2 + 1.8
-	fence(m, Vector3.new(kx, 0, koi.Center.Z - 4), Vector3.new(kx, 0, koi.Center.Z + 5.5))
+	fence(m, Vector3.new(kx, 0, koi.Center.Z - 4), Vector3.new(kx, 0, koi.Center.Z + 3.4)) -- ends before the LAB
 	-- one side of ToScanner (north) and of ToMine (north)
-	fence(m, Vector3.new(9.5, 0, 75.4), Vector3.new(44, 0, 75.4))
+	fence(m, Vector3.new(9.5, 0, 75.4), Vector3.new(38, 0, 75.4)) -- ends before the LAB shopfront
 	fence(m, Vector3.new(-33, 0, 80.4), Vector3.new(-9.5, 0, 80.4))
 	-- keep the scatter off the fence lines
-	for x = 9.5, 44, 3 do
+	for x = 9.5, 38, 3 do
 		Kit.take(placer, Vector3.new(x, 0, 75.4), 1)
 	end
 	for x = -33, -9.5, 3 do
@@ -235,7 +235,9 @@ local function fences(m: Instance, placer: Kit.Placer)
 	end
 end
 
--- Post lanterns at the path junctions (lights where people gather).
+-- Post lanterns at the path junctions (lights where people gather); a
+-- deeper amber than C.Lamp so they glow warm and never blow out white.
+Scatter.LanternColor = Color3.fromRGB(255, 165, 70)
 Scatter.Lanterns = {
 	{ At = Vector3.new(7.6, 0, 75.4), Yaw = math.pi / 2, Light = true }, -- ToScanner meets the south road
 	{ At = Vector3.new(-7.6, 0, 80.4), Yaw = -math.pi / 2, Light = true }, -- ToMine meets the south road
@@ -243,15 +245,34 @@ Scatter.Lanterns = {
 	{ At = Vector3.new(-35, 0, 111), Yaw = -math.pi / 2, Light = true }, -- by the autumn corner
 }
 
+--[[
+	Post lantern (concept v1): a dark wooden post with a cap and an arm, a
+	small deep-amber lamp in a dark metal cage hanging from the arm (no
+	white blob up close), optionally a PointLight. 7 parts.
+]]
+local function postLantern(parent: Instance, base: CFrame, h: number, light: boolean)
+	local m = Style.model("Lantern", parent)
+	Style.block(m, base * CFrame.new(0, h / 2, 0), Vector3.new(0.7, h, 0.7), C.WoodDark)
+	Style.block(m, base * CFrame.new(0, h + 0.15, 0), Vector3.new(1, 0.3, 1), C.Wood, nil, Style.tiny())
+	Style.block(m, base * CFrame.new(0, h - 0.4, -0.9), Vector3.new(0.35, 0.35, 2.2), C.WoodDark, nil, Style.tiny())
+	local glow = Buildings.cagedLamp(m, base * CFrame.new(0, h - 1.1, -1.7), 1.4)
+	glow.Color = Scatter.LanternColor
+	if light then
+		Style.light(glow, Scatter.LanternColor, 16, 1.3)
+	end
+	m.PrimaryPart = glow
+end
+
 local function lanterns(m: Instance, placer: Kit.Placer)
 	for _, l in Scatter.Lanterns do
-		Style.lantern(m, CFrame.new(l.At) * CFrame.Angles(0, l.Yaw, 0), { Kind = "Post", Height = 7, Light = l.Light, Range = 16 })
+		postLantern(m, CFrame.new(l.At) * CFrame.Angles(0, l.Yaw, 0), 7, l.Light)
 		Kit.take(placer, l.At, 1.2)
 	end
 end
 
-function Scatter.build(parent: Instance, rng: Rng.Rng)
-	local placer = Kit.newPlacer()
+-- `keepOut`: rectangles (the town building sites) the scatter must stay clear of.
+function Scatter.build(parent: Instance, rng: Rng.Rng, keepOut: { Kit.Box }?)
+	local placer = Kit.newPlacer(keepOut)
 	local fenceModel = Style.model("Fences", parent)
 	fences(fenceModel, placer)
 	local lanternModel = Style.model("GardenLanterns", parent)

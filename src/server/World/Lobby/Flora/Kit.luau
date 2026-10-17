@@ -28,7 +28,9 @@ end
 ---------------------------------------------------------------- placement
 
 export type Spot = { P: Vector3, R: number }
-export type Placer = { spots: { Spot } }
+-- An axis-aligned keep-out rectangle in world XZ (town building sites).
+export type Box = { Min: Vector2, Max: Vector2 }
+export type Placer = { spots: { Spot }, boxes: { Box } }
 
 -- Sight lines (LOBBY_PLAN 6.5): no tree within 6 studs of the south road
 -- between z 36 and 100, nothing taller than 12 within 10 studs of the plaza curb.
@@ -36,8 +38,15 @@ Kit.SouthRoad = WorldLayout.Roads[1]
 Kit.PlazaCurb = 35.6
 Kit.LowZone = Kit.PlazaCurb + 10
 
-function Kit.newPlacer(): Placer
-	return { spots = {} }
+function Kit.newPlacer(boxes: { Box }?): Placer
+	return { spots = {}, boxes = boxes or {} }
+end
+
+-- Distance from a ground point to a keep-out box (0 inside; Y ignored).
+function Kit.boxDistance(box: Box, p: Vector3): number
+	local dx = math.max(box.Min.X - p.X, 0, p.X - box.Max.X)
+	local dz = math.max(box.Min.Y - p.Z, 0, p.Z - box.Max.Y)
+	return math.sqrt(dx * dx + dz * dz)
 end
 
 function Kit.take(placer: Placer, p: Vector3, r: number)
@@ -61,6 +70,13 @@ function Kit.free(placer: Placer, p: Vector3, r: number, reach: number?): boolea
 		end
 		local island = WorldLayout.Island
 		if p.X < island.Min.X + reach or p.X > island.Max.X - reach or p.Z > island.Max.Z - reach then
+			return false
+		end
+	end
+	-- crowns (reach) and trunks (r) both stay clear of the town buildings
+	local clear = math.max(r, reach or 0) + 0.5
+	for _, box in placer.boxes do
+		if Kit.boxDistance(box, p) < clear then
 			return false
 		end
 	end

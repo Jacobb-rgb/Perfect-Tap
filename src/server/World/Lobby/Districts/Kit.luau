@@ -310,7 +310,8 @@ function Kit.npc(parent: Instance, base: CFrame, opts: Opts): Model
 		Kit.bit(m, base * CFrame.new(0, 5.5, -0.15), Vector3.new(1.85, 0.16, 1.95), opts.Helmet:Lerp(Kit.Dark, 0.2))
 		if opts.HelmetLamp then
 			Kit.bit(m, base * CFrame.new(0, 5.72, -0.85), Vector3.new(0.62, 0.55, 0.15), C.Iron)
-			Kit.glow(m, base * CFrame.new(0, 5.72, -0.95), Vector3.new(0.42, 0.38, 0.08), C.Lamp)
+			-- a small orange lens disc (a bigger, paler one blooms to a white blob)
+			Kit.faceDisc(m, base * CFrame.new(0, 5.72, -0.95), 0.06, 0.3, Color3.fromRGB(255, 150, 50), Kit.NEON)
 		end
 	elseif opts.Hat then
 		Kit.bit(m, base * CFrame.new(0, 5.6, 0), Vector3.new(1.9, 0.22, 1.9), opts.Hat)
@@ -328,39 +329,50 @@ end
 	Golem figure (original ore/metal golems in Kenney Mini Characters
 	proportions: big head, short body, stubby limbs). scale 1 = ~2.6 studs.
 	opts: Body, Accent, Eyes (neon), Gem (neon chest/head crystal),
-	Helmet (Color3), Moss (boolean: grass cap). 9-12 parts.
+	Helmet (Color3), Moss (boolean: grass cap), Depth (front-to-back scale,
+	default 1: a flat silhouette uses ~0.35), TwinEyes (two small eye glows
+	instead of the visor bar). 9-12 parts.
 ]]
 function Kit.golem(parent: Instance, base: CFrame, s: number, opts: Opts): Model
 	local m = Style.model("Golem", parent)
 	local body: Color3 = opts.Body or C.IronLight
 	local accent: Color3 = opts.Accent or body:Lerp(Kit.Dark, 0.35)
-	local p = Style.tiny({ CastShadow = true })
-	for _, x in { -0.32, 0.32 } do
-		Style.block(m, base * CFrame.new(x * s, 0.3 * s, 0), Vector3.new(0.48, 0.6, 0.58) * s, accent, nil, p)
+	local k: number = opts.Depth or 1
+	local function v(x: number, y: number, z: number): Vector3
+		return Vector3.new(x * s, y * s, z * s * k)
 	end
-	local torso = Style.block(m, base * CFrame.new(0, 0.98 * s, 0), Vector3.new(1.2, 0.8, 0.85) * s, body, nil, p)
+	local function at(x: number, y: number, z: number): CFrame
+		return base * CFrame.new(x * s, y * s, z * s * k)
+	end
+	-- only big golems cast shadows (small details: no shadow)
+	local p = Style.tiny({ CastShadow = s >= 1.2 and k >= 0.8 })
+	for _, x in { -0.32, 0.32 } do
+		Style.block(m, at(x, 0.3, 0), v(0.48, 0.6, 0.58), accent, nil, p)
+	end
+	local torso = Style.block(m, at(0, 0.98, 0), v(1.2, 0.8, 0.85), body, nil, p)
 	torso.Name = "Body"
 	for _, x in { -0.8, 0.8 } do
-		Style.block(m, base * CFrame.new(x * s, 0.9 * s, -0.05 * s), Vector3.new(0.4, 0.85, 0.5) * s, accent, nil, p)
+		Style.block(m, at(x, 0.9, -0.05), v(0.4, 0.85, 0.5), accent, nil, p)
 	end
-	Style.block(m, base * CFrame.new(0, 1.92 * s, 0), Vector3.new(1.4, 1.1, 1.2) * s, body, nil, p)
-	-- face plate and glowing visor eyes
-	Kit.bit(m, base * CFrame.new(0, 1.86 * s, -0.61 * s), Vector3.new(1.1, 0.62, 0.06) * s, accent)
-	Kit.glow(m, base * CFrame.new(0, 1.92 * s, -0.66 * s), Vector3.new(0.86, 0.2, 0.06) * s, opts.Eyes or C.CrystalCyan)
+	Style.block(m, at(0, 1.92, 0), v(1.4, 1.1, 1.2), body, nil, p)
+	-- face plate and glowing visor eyes (or two small eye dots)
+	Kit.bit(m, at(0, 1.86, -0.61), Vector3.new(1.1 * s, 0.62 * s, 0.06), accent)
+	if opts.TwinEyes then
+		for _, x in { -0.26, 0.26 } do
+			Kit.glow(m, at(x, 1.94, -0.61) * CFrame.new(0, 0, -0.05), Vector3.new(0.2 * s, 0.16 * s, 0.06), opts.Eyes or C.CrystalCyan)
+		end
+	else
+		Kit.glow(m, at(0, 1.92, -0.61) * CFrame.new(0, 0, -0.05), Vector3.new(0.86 * s, 0.2 * s, 0.06), opts.Eyes or C.CrystalCyan)
+	end
 	if opts.Gem then
-		Kit.glow(m, base * CFrame.new(0, 1.0 * s, -0.45 * s) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.3, 0.3, 0.08) * s, opts.Gem)
-		Kit.glow(
-			m,
-			base * CFrame.new(0.38 * s, 2.62 * s, 0.1 * s) * CFrame.Angles(0, math.pi / 4, 0.25),
-			Vector3.new(0.28, 0.5, 0.28) * s,
-			opts.Gem
-		)
+		Kit.glow(m, at(0, 1.0, -0.45) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.3 * s, 0.3 * s, 0.08), opts.Gem)
+		Kit.glow(m, at(0.38, 2.62, 0.1) * CFrame.Angles(0, math.pi / 4, 0.25), v(0.28, 0.5, 0.28), opts.Gem)
 	end
 	if opts.Helmet then
-		Kit.bit(m, base * CFrame.new(0, 2.6 * s, 0), Vector3.new(1.5, 0.32, 1.3) * s, opts.Helmet)
-		Kit.bit(m, base * CFrame.new(0, 2.5 * s, -0.6 * s), Vector3.new(1.5, 0.14, 0.3) * s, opts.Helmet:Lerp(Kit.Dark, 0.2))
+		Kit.bit(m, at(0, 2.6, 0), v(1.5, 0.32, 1.3), opts.Helmet)
+		Kit.bit(m, at(0, 2.5, -0.6), v(1.5, 0.14, 0.3), opts.Helmet:Lerp(Kit.Dark, 0.2))
 	elseif opts.Moss then
-		Kit.bit(m, base * CFrame.new(-0.1 * s, 2.55 * s, 0.05 * s), Vector3.new(1.2, 0.2, 1.0) * s, C.GrassLight)
+		Kit.bit(m, at(-0.1, 2.55, 0.05), v(1.2, 0.2, 1.0), C.GrassLight)
 	end
 	m.PrimaryPart = torso
 	return m

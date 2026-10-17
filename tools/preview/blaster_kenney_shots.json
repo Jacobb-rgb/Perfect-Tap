@@ -444,5 +444,93 @@
    0.0
   ],
   "fov": 40
+ },
+ "crates_all": {
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.5,
+   0.8
+  ],
+  "shadowExtent": 50,
+  "exposure": 0.95,
+  "scene": "crate_gallery",
+  "position": [
+   -1,
+   213,
+   31
+  ],
+  "target": [
+   -1,
+   200.5,
+   -6
+  ],
+  "fov": 46
+ },
+ "crate_1": {
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.5,
+   0.8
+  ],
+  "shadowExtent": 50,
+  "exposure": 0.95,
+  "scene": "crate_gallery",
+  "position": [
+   151.5,
+   205.2,
+   3.5
+  ],
+  "target": [
+   140,
+   201.3,
+   -0.3
+  ],
+  "fov": 40
+ },
+ "crate_6": {
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.5,
+   0.8
+  ],
+  "shadowExtent": 50,
+  "exposure": 0.95,
+  "scene": "crate_gallery",
+  "position": [
+   191.5,
+   205.2,
+   3.5
+  ],
+  "target": [
+   180,
+   201.3,
+   -0.3
+  ],
+  "fov": 40
+ },
+ "crate_10": {
+  "preset": "Surface",
+  "sunDir": [
+   0.35,
+   0.5,
+   0.8
+  ],
+  "shadowExtent": 50,
+  "exposure": 0.95,
+  "scene": "crate_gallery",
+  "position": [
+   231.5,
+   205.2,
+   3.5
+  ],
+  "target": [
+   220,
+   201.3,
+   -0.3
+  ],
+  "fov": 40
  }
 }

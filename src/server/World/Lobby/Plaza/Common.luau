@@ -1,28 +1,78 @@
 --[[
 	Shared helpers of the Plaza package (src/server/World/Lobby/Plaza):
-	the list of road/path strips with their look, the plaza entrance test
-	(where the curb opens), placement checks against the other packages'
-	footprints and a flat path strip builder (Style.path with a lift and a
-	curb range, so overlapping strips never z-fight).
+	the concept v2 palette (dark polished slate, dark machine metal, blue
+	and orange neon), the list of road/path strips with their look, the
+	plaza entrance test (where the curb opens), placement checks against
+	the other packages' footprints, a flat cobble/dirt path strip builder
+	(Style.path with a lift and a curb range, so overlapping strips never
+	z-fight), the dark neon walkway (three columns of slate floor panels,
+	dark metal borders with orange neon edge strips, a dark metal threshold
+	ramp where it meets the plaza), flat neon rings and bold (double)
+	chevrons, and the dark metal lantern pillar with glowing orange slots
+	and an amber lamp in a dark cage.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local Geo = require(Shared.Builders.Geo)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 
 local C = Style.C
+local NEON = Enum.Material.Neon
+local rgb = Color3.fromRGB
 
 local Common = {}
 
 Common.PlazaRadius = 36
 Common.CurbRadius = 35.6
 Common.FloorTop = 0.4 -- top of the collidable plaza disc
-Common.TileTop = 0.43 -- top of the flagstones (TownSpawn's top is 0.45, the spawn inlay 0.445)
+Common.TileTop = 0.43 -- top of the slate tiles (TownSpawn's top is 0.45, the spawn inlay 0.445)
 Common.ForgeApproach = 11 -- half width of the open plaza edge in front of the forge
+Common.TileReflectance = 0.04 -- polished slate (a hint of sky: more would pick up the pink sunset at grazing angles)
+Common.Seam = 0.14 -- gap between floor tiles (a thin dark line, not a trench)
+
+--[[
+	Concept v2 colors of this package (three shades per material, like
+	Style.C): dark charcoal blue-grey slate for the plaza and the walkways,
+	dark machine metal for the crystal's ring, the curbs and the lantern
+	pillars, slate roof tiles with brick-red trim, the forge's crimson
+	banners; glows: Fire (orange) and GlowEdge (blue) from Style.C, plus a
+	few deeper tones (amber lamps, deep-orange chevrons, deep-gold emblem)
+	that stay colored under bloom instead of turning white.
+]]
+Common.Colors = {
+	Slate = rgb(40, 47, 67), -- polished floor tiles (mid): dark wet blue-grey slate
+	SlateLight = rgb(52, 60, 83), -- lit / worn tiles
+	SlateAccent = rgb(60, 68, 93), -- a few light accent slabs (variation, like the concept)
+	SlateDark = rgb(22, 26, 37), -- shaded tiles and the thin seams between them
+	SlateDeep = rgb(15, 17, 26), -- the deepest recesses
+	WalkPanel = rgb(34, 38, 54), -- walkway floor panels (matte, darker than the plaza)
+	Metal = rgb(56, 60, 76), -- machine metal (mid)
+	MetalLight = rgb(92, 100, 122), -- small bolts and collars
+	MetalDark = rgb(34, 37, 48), -- ribs, plinths, recesses, cap plates
+	RoofSlate = rgb(66, 72, 90), -- Great Forge roof slate (grey-blue, not glassy navy)
+	RoofSlateDark = rgb(42, 46, 60), -- shingle courses and joints
+	BrickRed = rgb(150, 46, 36), -- roof trim: eaves, bargeboards (concept v2)
+	Banner = rgb(168, 12, 42), -- crimson banner cloth (a touch of blue: the sunset warms it)
+	BannerDark = rgb(92, 8, 28), -- banner border / backing
+	EmblemGold = rgb(255, 150, 30), -- deep gold glow of the gable emblem
+	Amber = rgb(255, 140, 40), -- lantern glow (amber, not white)
+	SlotAmber = rgb(255, 96, 18), -- deep amber lantern slots (they stay orange under bloom)
+	AmberGlass = rgb(255, 150, 62), -- lantern panes
+	Chevron = rgb(255, 72, 14), -- deep orange chevrons (bold, they stay orange under bloom)
+	RingOrange = rgb(255, 84, 18), -- the bold orange floor rings
+	WindowGlow = rgb(255, 150, 58), -- warm lit windows
+	NeonOrange = C.Fire,
+	NeonBlue = C.GlowEdge,
+	-- a deeper, more saturated blue for the wide floor rings: it stays blue
+	-- at the player's feet instead of blooming to a white-cyan hoop
+	NeonBlueDeep = rgb(40, 124, 255),
+}
+local K = Common.Colors
 
 export type Strip = {
 	Id: string,
@@ -32,6 +82,21 @@ export type Strip = {
 	Kind: string, -- "Cobble" | "Dirt"
 	Lift: number, -- stacking order where strips overlap (cobble over dirt)
 	Main: boolean, -- a WorldLayout road (lanterns, curbs near the plaza)
+	Neon: boolean, -- paved as a dark neon walkway (concept v2) near the plaza
+}
+
+-- Strips paved as dark neon walkways: the roads and paths that leave the
+-- plaza (the south road only up to the creek bridge, see Roads).
+Common.NeonStrips = {
+	SouthRoad = true,
+	EastSpur = true,
+	WestSpur = true,
+	ForgePathEast = true,
+	ForgePathWest = true,
+	ToShop = true,
+	ToUpgrades = true,
+	ToWheel = true,
+	ToFossil = true,
 }
 
 local function roadName(road: WorldLayout.Road): string
@@ -70,6 +135,7 @@ function Common.strips(): { Strip }
 			Kind = if dirt then "Dirt" else "Cobble",
 			Lift = if id == "RimRoad" then 0.012 elseif dirt then 0 else 0.03,
 			Main = true,
+			Neon = Common.NeonStrips[id] == true,
 		})
 	end
 	for _, path in LobbyLayout.Paths do
@@ -82,6 +148,7 @@ function Common.strips(): { Strip }
 			Kind = if dirt then "Dirt" else "Cobble",
 			Lift = if dirt then 0.022 else 0.045,
 			Main = false,
+			Neon = Common.NeonStrips[path.Id] == true,
 		})
 	end
 	stripCache = list
@@ -223,6 +290,364 @@ function Common.path(parent: Instance, from: Vector3, to: Vector3, width: number
 			Style.block(m, cf, Vector3.new(1.1, 0.5, rng:range(1.6, 2.4)), Style.vary(C.StoneDark, rng, 0.06), nil, Style.tiny())
 		end
 	end
+	return m
+end
+
+---------------------------------------------------------------- concept v2 kit
+
+-- A polished slate tile color (mostly mid, some lit, some shaded, a few light accents).
+function Common.slate(rng: Rng.Rng): Color3
+	local roll = rng:next()
+	local color = if roll < 0.5 then K.Slate elseif roll < 0.78 then K.SlateLight elseif roll < 0.92 then K.SlateDark else K.SlateAccent
+	return Style.vary(color, rng, 0.03)
+end
+
+--[[
+	A part with the polished slate finish (SmoothPlastic + a little
+	Reflectance). Every slab gets the same sheen (one polished floor, not a
+	patchwork of glossy and matte slabs); Common.slate varies the color.
+]]
+function Common.polish(part: BasePart): BasePart
+	part.Reflectance = Common.TileReflectance
+	return part
+end
+
+--[[
+	Flat ring of straight segments lying on the floor (a neon ring, a
+	channel). `y` = segment center height. opts: Dash (drawn fraction of
+	each segment, default 1.02 = closed ring), Phase (in segments), Skip
+	(no segment where it returns true for the segment center), Material.
+]]
+export type RingOpts = {
+	Dash: number?,
+	Phase: number?,
+	Skip: ((Vector3) -> boolean)?,
+	Material: Enum.Material?,
+}
+function Common.ring(
+	parent: Instance,
+	center: Vector3,
+	radius: number,
+	width: number,
+	y: number,
+	height: number,
+	segments: number,
+	color: Color3,
+	opts: RingOpts?
+): { Part }
+	local o: RingOpts = opts or {}
+	local chord = 2 * radius * math.sin(math.pi / segments)
+	local inner = radius * math.cos(math.pi / segments)
+	local parts = {}
+	for i = 0, segments - 1 do
+		local a = (i + (o.Phase or 0)) / segments * 2 * math.pi
+		local frame = CFrame.new(center.X, y, center.Z) * CFrame.Angles(0, -a, 0) * CFrame.new(inner, 0, 0)
+		if o.Skip and o.Skip(frame.Position) then
+			continue
+		end
+		table.insert(
+			parts,
+			Style.block(parent, frame, Vector3.new(width, height, chord * (o.Dash or 1.02)), color, o.Material or NEON, Style.tiny())
+		)
+	end
+	return parts
+end
+
+--[[
+	Flat glowing chevron "^" pointing along the LookVector of `tip` (the
+	tip point on the floor): two neon bars of length `size`, each `spread`
+	radians off the arrow's axis (default 45 degrees; the concept's wide,
+	flat arrows use ~58). A deep orange keeps it orange under bloom. 2 parts.
+]]
+function Common.chevron(
+	parent: Instance,
+	tip: CFrame,
+	size: number,
+	thickness: number,
+	color: Color3,
+	height: number?,
+	spread: number?
+): { Part }
+	local h = height or 0.06
+	local a = spread or math.pi / 4
+	local parts = {}
+	for _, s in { -1, 1 } do
+		-- each arm runs from the tip back (local +Z) and out to one side
+		local dir = Vector3.new(s * math.sin(a), 0, math.cos(a))
+		local cf = tip * CFrame.new(dir * (size / 2 - thickness / 2)) * CFrame.Angles(0, s * a, 0)
+		table.insert(parts, Style.block(parent, cf, Vector3.new(thickness, h, size), color, NEON, Style.tiny()))
+	end
+	return parts
+end
+
+-- The concept v2 arrow: two bold nested chevrons, the second `gap` studs
+-- behind the first (along the arrow's axis), wide and flat, each stroke a
+-- deep-orange body with a thin bright core line on top (the core blooms,
+-- so the arrow glows like a neon tube instead of reading as road paint).
+-- Returns the 4 strokes; the 4 cores are named "ChevronCore". 8 parts.
+Common.ChevronSpread = math.rad(58)
+function Common.doubleChevron(
+	parent: Instance,
+	tip: CFrame,
+	size: number,
+	thickness: number,
+	gap: number,
+	color: Color3,
+	height: number?
+): { Part }
+	local h = height or 0.06
+	local parts = Common.chevron(parent, tip, size, thickness, color, h, Common.ChevronSpread)
+	for _, part in Common.chevron(parent, tip * CFrame.new(0, 0, gap), size, thickness, color, h, Common.ChevronSpread) do
+		table.insert(parts, part)
+	end
+	for _, stroke in parts do
+		local core = Style.block(
+			parent,
+			stroke.CFrame * CFrame.new(0, h / 2, 0),
+			Vector3.new(thickness * 0.3, 0.03, size - thickness),
+			K.NeonOrange,
+			NEON,
+			Style.tiny()
+		)
+		core.Name = "ChevronCore"
+	end
+	return parts
+end
+
+-- Is this point of a walkway edge in view: off the plaza, off every other
+-- road/path strip, off the other packages' ground pieces and the bases?
+local function edgeVisible(p: Vector3, selfId: string?): boolean
+	if Vector3.new(p.X, 0, p.Z).Magnitude < Common.PlazaRadius + 0.3 then
+		return false
+	end
+	for _, s in Common.strips() do
+		if s.Id ~= selfId and LobbyLayout.distanceToStrip(s.From, s.To, s.Width, p) < 0.05 then
+			return false
+		end
+	end
+	for _, piece in LobbyLayout.Pieces do
+		if piece.Package ~= "Plaza" and LobbyLayout.isGroundPiece(piece) and LobbyLayout.distanceTo(piece, p) < 0.2 then
+			return false
+		end
+	end
+	for _, plot in WorldLayout.Plots do
+		if LobbyLayout.onBase(plot, p, 0.2) then
+			return false
+		end
+	end
+	return true
+end
+
+export type WalkwayOpts = {
+	Lift: number?, -- extra height so overlapping strips never z-fight
+	Name: string?,
+	Self: string?, -- the strip's own Id (its edges ignore its own strip)
+	EdgeInset: number?, -- the edge strips stop this far before `to`
+	RowScale: number?, -- panel row length / strip width (default 0.65; longer slabs on the long side paths)
+	Threshold: boolean?, -- a dark metal ramp where the strip leaves the plaza (bridges the step down)
+}
+
+-- Walkway measures (local heights over the lift): slab top, panel top,
+-- border top, neon top. All flat (< 0.4: hidden under the plaza floor).
+Common.WalkwayTop = { Slab = 0.23, Panel = 0.27, Border = 0.31, Neon = 0.33 }
+
+--[[
+	Dark neon walkway (concept v2, Kenney floor-panel) from `from` to `to`
+	(ground points), extended by Width/2 past both ends like every strip.
+	Flat and non-collide over the solid ground: a dark seam slab, three
+	columns of polished slate panels between the borders with thin dark
+	seams (a tile grid, none under the plaza floor), and along both edges a
+	dark metal border with an orange neon strip, drawn only where the edge
+	is in view (not on the plaza, another strip, another package's piece or
+	a base). opts.Threshold adds a dark metal ramp where the strip leaves
+	the plaza rim, so the plaza floor (0.43) runs down to the panels without
+	a lip or a dark trench.
+]]
+function Common.walkway(parent: Instance, from: Vector3, to: Vector3, width: number, rng: Rng.Rng, opts: WalkwayOpts?): Model
+	local o: WalkwayOpts = opts or {}
+	local m = Style.model(o.Name or "Walkway", parent)
+	local delta = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local length = delta.Magnitude
+	if length < 0.5 then
+		return m
+	end
+	local dir = delta / length
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local lift = o.Lift or 0
+	local mid = Vector3.new((from.X + to.X) / 2, lift, (from.Z + to.Z) / 2)
+	-- local -Z runs from `from` to `to`; t (studs from `from`) sits at z = length/2 - t
+	local frame = CFrame.fromMatrix(mid, right, Vector3.new(0, 1, 0), -dir)
+	-- the far end stops at the edge of a crossing cobble/dirt road (no dark
+	-- slab over the plot roads and the rim road)
+	local endT = length + width / 2
+	local scan = math.max(0, length - width)
+	while scan < endT do
+		local p = from + dir * scan
+		local onOther = false
+		for _, s in Common.strips() do
+			if s.Id ~= o.Self and not s.Neon and LobbyLayout.distanceToStrip(s.From, s.To, s.Width, p) < 0.05 then
+				onOther = true
+				break
+			end
+		end
+		if onOther then
+			endT = scan
+			break
+		end
+		scan += 0.25
+	end
+	local full = endT + width / 2
+	local zMid = length / 2 - (endT - width / 2) / 2 -- local z of the slab center
+	local top = Common.WalkwayTop
+	local base = Style.block(
+		m,
+		frame * CFrame.new(0, top.Slab - 0.15, zMid),
+		Vector3.new(width, 0.3, full),
+		K.SlateDark,
+		nil,
+		Style.tiny({ CanQuery = true })
+	)
+	base.Name = "PathBase"
+	-- floor panels: three columns between the edge borders, thin seams
+	local half = width / 2
+	local seam = 0.2
+	local inner = width - 1.8
+	local colW = inner / 3
+	local rows = math.max(1, math.floor(full / (width * (o.RowScale or 0.65)) + 0.5))
+	local rowLen = full / rows
+	for i = 0, rows - 1 do
+		local z = zMid + full / 2 - (i + 0.5) * rowLen
+		for c = 0, 2 do
+			local cf = frame * CFrame.new(-inner / 2 + (c + 0.5) * colW, top.Panel - 0.03, z)
+			if Vector3.new(cf.Position.X, 0, cf.Position.Z).Magnitude > Common.PlazaRadius - 0.5 then
+				-- cool slate panels with the plaza's one light polish (the sky
+				-- keeps them grey-blue under the warm sunset and the orange
+				-- edges), light enough that the dark seams draw a grid
+				local roll = rng:next()
+				local shade = if roll < 0.55 then K.Slate elseif roll < 0.9 then K.SlateLight else K.SlateAccent
+				local panel =
+					Style.block(m, cf, Vector3.new(colW - seam, 0.06, rowLen - seam), Style.vary(shade, rng, 0.015), nil, Style.tiny())
+				panel.Reflectance = Common.TileReflectance
+				panel.Name = "WalkPanel"
+			end
+		end
+	end
+	-- edge borders with orange neon strips, in runs where the edge is in view
+	local stepLen = 0.5
+	local stop = length - (o.EdgeInset or 0)
+	for _, side in { -1, 1 } do
+		local edgeX = side * (half - 0.45)
+		local runs: { { number } } = {}
+		local runStart: number? = nil
+		local t = 0
+		while t <= stop + 1e-6 do
+			local p = from + dir * t + right * edgeX
+			local visible = edgeVisible(p, o.Self)
+			if visible and not runStart then
+				runStart = t
+			elseif not visible and runStart then
+				table.insert(runs, { runStart, t - stepLen })
+				runStart = nil
+			end
+			t += stepLen
+		end
+		if runStart then
+			table.insert(runs, { runStart, math.min(t - stepLen, stop) })
+		end
+		for _, run in runs do
+			local t0, t1 = run[1], run[2]
+			if t1 - t0 >= 1.5 then
+				local z = length / 2 - (t0 + t1) / 2
+				local len = t1 - t0
+				Style.block(m, frame * CFrame.new(edgeX, top.Border - 0.05, z), Vector3.new(0.9, 0.1, len), K.MetalDark, nil, Style.tiny())
+				local glow = Style.block(
+					m,
+					frame * CFrame.new(edgeX, top.Neon - 0.03, z),
+					Vector3.new(0.28, 0.06, len - 0.2),
+					K.NeonOrange,
+					NEON,
+					Style.tiny()
+				)
+				glow.Name = "EdgeGlow"
+			end
+		end
+	end
+	if o.Threshold then
+		-- where the centerline crosses the plaza rim (|from + dir t| = PlazaRadius)
+		local f = Vector3.new(from.X, 0, from.Z)
+		local b = f:Dot(dir)
+		local disc = b * b - (f:Dot(f) - Common.PlazaRadius * Common.PlazaRadius)
+		if disc >= 0 then
+			local t0 = -b + math.sqrt(disc)
+			local rampLen = 1.8
+			local panelTop = lift + top.Panel
+			local high = Common.TileTop - 0.005
+			-- WedgePart: tall side at local +Z (toward the plaza), low end sunk under the panels
+			local c = from + dir * (t0 + rampLen / 2 - 0.15)
+			local h = high - (panelTop - 0.04)
+			local center = Vector3.new(c.X, panelTop - 0.04 + h / 2, c.Z)
+			-- (lookAt: LookVector = dir, so local +Z = -dir points back to the plaza)
+			local ramp = Geo.wedge(m, CFrame.lookAt(center, center + dir), Vector3.new(width, h, rampLen), K.MetalDark, nil, Style.tiny())
+			ramp.Name = "Threshold"
+		end
+	end
+	return m
+end
+
+export type LanternOpts = {
+	Height: number?, -- top of the shaft (default 4.4)
+	Light: boolean?,
+	Range: number?,
+	Brightness: number?,
+	Color: Color3?, -- lamp core glow (default Amber)
+}
+
+--[[
+	Dark metal lantern pillar (concept v2 foreground, Kenney pipe-ring /
+	structure look): a dark plinth, a square metal shaft with two glowing
+	orange slots on its front and back faces, a blue neon band under a dark
+	collar, and the lamp: a small amber neon core inside orange glass panes
+	(SmoothPlastic, Transparency 0.25) held by four thick dark corner bars,
+	under a dark cap. Only the small core is neon, so the lamp glows amber
+	inside a visible dark cage instead of blooming into a white block.
+	`base` = ground point, LookVector = the slotted front. 13 parts; the
+	plinth is the lowest part, the core ("LanternGlow") the PrimaryPart.
+	opts.Light adds a PointLight (count it against the package budget).
+]]
+function Common.pillarLantern(parent: Instance, base: CFrame, opts: LanternOpts?): Model
+	local o: LanternOpts = opts or {}
+	local h = o.Height or 4.4
+	local glowColor = o.Color or K.Amber
+	local m = Style.model("Lantern", parent)
+	Style.block(m, base * CFrame.new(0, 0.3, 0), Vector3.new(2.2, 0.6, 2.2), K.MetalDark)
+	local shaftH = h - 0.6
+	Style.block(m, base * CFrame.new(0, 0.6 + shaftH / 2, 0), Vector3.new(1.5, shaftH, 1.5), K.Metal)
+	-- two neon bars through the shaft: two slots on the front, two on the back
+	local slotH = math.max(0.6, shaftH - 1.5)
+	for _, x in { -0.34, 0.34 } do
+		local slot =
+			Style.block(m, base * CFrame.new(x, 1.2 + slotH / 2, 0), Vector3.new(0.18, slotH, 1.56), K.SlotAmber, NEON, Style.tiny())
+		slot.Name = "LanternSlot"
+	end
+	Style.block(m, base * CFrame.new(0, h - 0.32, 0), Vector3.new(1.58, 0.14, 1.58), K.NeonBlueDeep, NEON, Style.tiny())
+	Style.block(m, base * CFrame.new(0, h + 0.12, 0), Vector3.new(1.9, 0.24, 1.9), K.MetalDark, nil, Style.tiny())
+	local glowY = h + 0.84
+	local glow = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(0.6, 0.72, 0.6), glowColor, NEON, Style.tiny())
+	glow.Name = "LanternGlow"
+	local glass = Style.block(m, base * CFrame.new(0, glowY, 0), Vector3.new(1.12, 1.2, 1.12), K.AmberGlass, nil, Style.tiny())
+	glass.Transparency = 0.25
+	glass.Name = "LanternGlass"
+	-- the cage: four thick dark corner bars
+	for _, x in { -0.62, 0.62 } do
+		for _, z in { -0.62, 0.62 } do
+			Style.block(m, base * CFrame.new(x, glowY, z), Vector3.new(0.3, 1.3, 0.3), K.MetalDark, nil, Style.tiny())
+		end
+	end
+	Style.block(m, base * CFrame.new(0, glowY + 0.75, 0), Vector3.new(1.75, 0.32, 1.75), K.MetalDark, nil, Style.tiny())
+	if o.Light then
+		Style.light(glow, glowColor, o.Range or 16, o.Brightness or 1.3)
+	end
+	m.PrimaryPart = glow
 	return m
 end
 

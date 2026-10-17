@@ -40,12 +40,12 @@ export type Region = { role: string, w: number, c: number, loops: { { number } }
 	paint(region) -> (color, material?, widthBonus?) picks every region's look.
 	Returns the model data (bounds, regions) and the X center that was removed.
 ]]
-function Kenney.shape(Loader: any, model: any, name: string, scale: number, paint: (Region) -> (any, any?, number?))
+function Kenney.shape(Loader: any, model: any, name: string, scale: number, paint: (Region) -> (any, any?, number?), center: number?)
 	CF = Loader.CFrame
 	Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local data = Shapes[name]
 	local b = data.bounds
-	local cx = (b[5] + b[6]) / 2
+	local cx = center or (b[5] + b[6]) / 2
 	local K = Concepts.kit(model)
 	for _, region in data.regions do
 		local color, material, bonus = paint(region)
@@ -398,17 +398,23 @@ local function surface(data: any, scale: number, z: number, top: boolean): numbe
 	return best
 end
 
--- Builds a level's blaster: a Kenney shape with the Ore Glow skin. Returns the model, anchors, kind.
-function Kenney.gun(Loader: any, level: number, oreId: string): (any, any, string)
-	Concepts.init(Loader)
-	CF = Loader.CFrame
-	local name = Kenney.Models[math.clamp(level, 1, #Kenney.Models)]
+-- The Ore Glow skin of a level, with very bright ores' lines darkened so they glow in their color.
+local function tamedSkin(Loader: any, level: number, oreId: string): any
 	local skin = Glow.skinFor(Loader, level, oreId)
 	for _, key in { "vein", "rim", "edge" } do
 		local c = skin[key]
 		local luma = 0.299 * c.R + 0.587 * c.G + 0.114 * c.B
 		skin[key] = c:Lerp(BLACK, math.max(0, luma - 0.55) * 0.9)
 	end
+	return skin
+end
+
+-- Builds a level's blaster: a Kenney shape with the Ore Glow skin. Returns the model, anchors, kind.
+function Kenney.gun(Loader: any, level: number, oreId: string): (any, any, string)
+	Concepts.init(Loader)
+	CF = Loader.CFrame
+	local name = Kenney.Models[math.clamp(level, 1, #Kenney.Models)]
+	local skin = tamedSkin(Loader, level, oreId)
 	local model = roblox.Instance.new("Model")
 	model.Name = "Kenney" .. level .. oreId
 	local S = Kenney.Scale
@@ -522,6 +528,218 @@ function Kenney.build(Loader: any, parent: any)
 		-- the close-up copy
 		local copy = Kenney.gun(Loader, level, oreId)
 		Concepts.present(copy, CF.new(100 + level * 40, 200, 0) * CF.Angles(0, -1.25, 0) * CF.Angles(0.1, 0, 0.05), 1.4, root)
+	end
+	return root
+end
+
+---------------------------------------------------------------- the weapon case (the new blaster comes out of it)
+
+Kenney.CrateScale = 7 -- Kenney meters -> studs (a 7 stud long case)
+
+--[[
+	The Kenney weapon case in a level's ore skin, built as two models: the
+	base and the lid (the lid swings open around its -X edge). Detail grows
+	with the level like the blasters:
+	  all   the ore pattern on the body panels, a glowing seam all around,
+	        glowing latches, metal corner caps, strap inlays, a diamond emblem
+	        on the lid
+	  4+    an ore crystal cluster in the emblem, glowing lid edges
+	  7+    crystal clusters on the lid corners, sparks / flames around it
+	  10    a crown of shards around the emblem and loose gems above
+	Returns base, lid and { length, width, baseTop, top, hingeX, hingeY } (studs).
+]]
+function Kenney.crate(Loader: any, level: number, oreId: string)
+	Concepts.init(Loader)
+	CF = Loader.CFrame
+	local S = Kenney.CrateScale
+	local skin = tamedSkin(Loader, level, oreId)
+	local tier = skin.tier
+	local hue, sat = skin.base:ToHSV()
+	local panel = if skin.magma then C3.fromRGB(42, 38, 40) else C3.fromHSV(hue, math.min(1, sat * 0.95), 0.42)
+	local METAL = C3.fromRGB(62, 66, 78)
+	local DARK = C3.fromRGB(26, 27, 32)
+	local glow = if tier == 0 then skin.glow:Lerp(BLACK, 0.3) else skin.glow
+	local baseData = Shapes["crate-medium:base"]
+	local lidData = Shapes["crate-medium:lid"]
+	local bb, lb = baseData.bounds, lidData.bounds
+	local cx = (lb[5] + lb[6]) / 2 -- base and lid share the lid's center line
+	local base = roblox.Instance.new("Model")
+	base.Name = "CrateBase"
+	local lid = roblox.Instance.new("Model")
+	lid.Name = "CrateLid"
+	Kenney.shape(Loader, base, "crate-medium:base", S, function(region)
+		if region.role == "body" then
+			return skin.base
+		elseif region.role == "mid" and region.c > 0.2 then
+			return glow, NEON -- the latches
+		elseif region.role == "mid" then
+			return METAL
+		end
+		return DARK -- the feet
+	end, cx)
+	Kenney.shape(Loader, lid, "crate-medium:lid", S, function(region)
+		if region.w > 0.51 then
+			return METAL -- the straps over the lid
+		end
+		return panel
+	end, cx)
+	local KB, KL = Concepts.kit(base), Concepts.kit(lid)
+	local rand = Glow.rng(level * 977 + #oreId * 131 + 5)
+	-- the ore pattern on the base panels, glowing rims on the lid panels
+	for _, region in baseData.regions do
+		if region.role == "body" then
+			pattern(KB, skin, (region.c - cx) * S, scaledLoops(region, S), region.w * S, true, rand)
+		end
+	end
+	for _, region in lidData.regions do
+		if region.w <= 0.51 then
+			pattern(KL, skin, (region.c - cx) * S, scaledLoops(region, S), region.w * S, false, rand)
+		end
+	end
+	local length = (bb[2] - bb[1]) * S
+	local width = 0.5 * S
+	local baseTop = 0.19 * S
+	local lidTop = 0.33 * S
+	local recessTop = 0.3 * S
+	-- a glowing seam all around between base and lid
+	KB.boxCF(CF.new(0, baseTop - 0.04, 0), V3.new(width + 0.06, 0.07, length - 0.06), glow, NEON)
+	-- glowing inlays down the middle of the straps (both sides), on the base and on the lid
+	for _, z in { -0.33 * S, 0.33 * S } do
+		KB.boxCF(CF.new(0, 0.45, z), V3.new(0.52 * S + 0.03, 0.55, 0.07), glow, NEON)
+		KL.boxCF(CF.new(0, 0.29 * S, z), V3.new(0.54 * S + 0.03, 0.45, 0.07), glow, NEON)
+	end
+	-- the end faces: a glowing frame with a small diamond (base) and a line (lid)
+	for _, sz in { -1, 1 } do
+		local z = sz * (length / 2 + 0.01)
+		local fw, y0, y1 = width - 0.95, 0.3, baseTop - 0.3
+		KB.boxCF(CF.new(0, y0, z), V3.new(fw, 0.06, 0.04), glow, NEON)
+		KB.boxCF(CF.new(0, y1, z), V3.new(fw, 0.06, 0.04), glow, NEON)
+		for _, sx in { -1, 1 } do
+			KB.boxCF(CF.new(sx * fw / 2, (y0 + y1) / 2, z), V3.new(0.06, y1 - y0, 0.04), glow, NEON)
+		end
+		for i = 0, 3 do
+			local a = i * math.pi / 2 + math.pi / 4
+			KB.boxCF(CF.new(0, (y0 + y1) / 2, z) * CF.Angles(0, 0, a) * CF.new(0.2, 0, 0), V3.new(0.05, 0.4, 0.04), glow, NEON)
+		end
+		KL.boxCF(CF.new(0, (baseTop + lidTop) / 2 + 0.05, z), V3.new(width - 0.95, 0.06, 0.04), glow, NEON)
+	end
+	-- metal corner caps
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			local x, z = sx * (width / 2 - 0.12), sz * (length / 2 - 0.12)
+			KB.boxCF(CF.new(x, 0.55, z), V3.new(0.42, 1.25, 0.42), METAL)
+			KB.boxCF(CF.new(x, 0.04, z), V3.new(0.46, 0.2, 0.46), DARK)
+			KL.boxCF(CF.new(x, (baseTop + lidTop) / 2 + 0.05, z), V3.new(0.42, lidTop - baseTop - 0.1, 0.42), METAL)
+			if tier >= 1 then
+				KL.boxCF(CF.new(x, lidTop - 0.06, z), V3.new(0.44, 0.06, 0.44), glow, NEON)
+			end
+		end
+	end
+	-- glowing edges along the top of the lid
+	if tier >= 1 then
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				local z0, z1 = sz * 0.235 * S, sz * 0.445 * S
+				KL.boxCF(CF.new(sx * (width / 2 - 0.02), lidTop - 0.03, (z0 + z1) / 2), V3.new(0.06, 0.06, math.abs(z1 - z0)), glow, NEON)
+			end
+		end
+	end
+	-- the emblem on the lid: a glowing diamond frame, an inner diamond and two guide lines
+	local function flat(cf: any, size: any, color: any, transparency: number?)
+		local p = KL.boxCF(cf, size, color, NEON)
+		if transparency then
+			p.Transparency = transparency
+		end
+		return p
+	end
+	local top = recessTop + 0.03
+	local d = 1.25
+	for i = 0, 3 do
+		local a = i * math.pi / 2
+		flat(CF.new(0, top, 0) * CF.Angles(0, math.pi / 4 + a, 0) * CF.new(d / 2, 0, 0), V3.new(0.08, 0.05, d + 0.08), glow)
+	end
+	flat(CF.new(0, top - 0.01, 0) * CF.Angles(0, math.pi / 4, 0), V3.new(d * 0.62, 0.03, d * 0.62), skin.ore, 0.35)
+	for _, sx in { -1, 1 } do
+		flat(CF.new(sx * 1.35, top, 0), V3.new(0.06, 0.04, 0.45 * S - 0.6), glow)
+		flat(CF.new(sx * 1.35, top, 0), V3.new(0.22, 0.045, 0.06), glow)
+	end
+	local UP = V3.new(0, 1, 0)
+	local FWD = V3.new(0, 0, -1)
+	local shard, tip = skin.shard, skin.shard:Lerp(skin.glow, 0.45)
+	if tier >= 1 then
+		KL.cluster(V3.new(0, top, 0), UP, FWD, 0.75 + 0.2 * tier, shard, tip)
+	end
+	if tier >= 2 then
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				local p = V3.new(sx * (width / 2 - 0.2), lidTop, sz * (length / 2 - 0.25))
+				KL.cluster(p, V3.new(sx * 0.4, 1, sz * 0.4).Unit, V3.new(sx, 0, 0), 0.55 + 0.1 * tier, shard, tip)
+			end
+		end
+		local holder = KB.part("Part", CF.new(0, 1.4, 0), V3.new(width + 1, 2.4, length + 1), skin.glow)
+		holder.Transparency = 1
+		holder.Name = "Effects"
+		local emitter = roblox.Instance.new("ParticleEmitter")
+		emitter.Name = if skin.magma then "GunFlame" else "GunSpark"
+		emitter.Texture = if skin.magma
+			then "rbxasset://textures/particles/fire_main.dds"
+			else "rbxasset://textures/particles/sparkles_main.dds"
+		emitter.Color = roblox.ColorSequence.new(skin.glow)
+		emitter.Parent = holder
+	end
+	if tier >= 3 then
+		for i = 0, 7 do
+			local a = i / 8 * math.pi * 2
+			local o = V3.new(math.cos(a), 0, math.sin(a))
+			KL.shard(V3.new(0, top, 0) + o * 1.05, (o * 0.55 + UP).Unit, 0.12, 0.6, shard, tip)
+		end
+		for i, p in { V3.new(0.9, 1.4, -1.6), V3.new(-0.8, 1.1, 1.4), V3.new(0.2, 1.8, 2.6) } do
+			KL.gem(V3.new(0, lidTop, 0) + p, V3.new(0.3 * (i - 2), 1, 0.2).Unit, 0.16, 0.5, shard, tip)
+		end
+	end
+	return base,
+		lid,
+		{
+			length = length,
+			width = width,
+			baseTop = baseTop,
+			top = lidTop,
+			hingeX = (lb[5] - cx) * S,
+			hingeY = lb[3] * S,
+		}
+end
+
+-- "crate_gallery": the ten cases (closed) in their ore skins on a dark floor in the evening sky,
+-- and three of them off to the side for close-ups.
+function Kenney.buildCrates(Loader: any, parent: any)
+	Concepts.init(Loader)
+	CF = Loader.CFrame
+	local root = roblox.Instance.new("Model")
+	root.Name = "CrateGallery"
+	root.Parent = parent
+	local K = Concepts.kit(root)
+	local floor = K.boxCF(CF.new(100, 199.5, -10), V3.new(600, 1, 160), C3.fromRGB(18, 18, 24))
+	floor.Reflectance = 0.15
+	local function place(level: number, oreId: string, at: any, yaw: number)
+		local base, lid = Kenney.crate(Loader, level, oreId)
+		local holder = roblox.Instance.new("Model")
+		base.Parent = holder
+		lid.Parent = holder
+		for _, d in holder:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CFrame = CF.new(at) * CF.Angles(0, yaw, 0) * CF.new(0, 0.14, 0) * d.CFrame
+			end
+		end
+		holder.Parent = root
+	end
+	for level, oreId in Kenney.Lineup do
+		local row = if level <= 5 then 0 else 1
+		local col = (level - 1) % 5
+		-- the long side (latches, pattern) toward the camera at +Z, turned a little
+		place(level, oreId, V3.new(-19.6 + col * 9.8, 200, -row * 12), -math.pi / 2 + 0.28)
+	end
+	for i, level in { 1, 6, 10 } do
+		place(level, Kenney.Lineup[level], V3.new(100 + i * 40, 200, 0), -0.35)
 	end
 	return root
 end

@@ -1,15 +1,25 @@
 --[[
-	Lobby package "Plaza" (docs/plans/LOBBY_PLAN.md 6.3): the round
-	flagstone plaza with the spawn's compass-rose inlay, the giant fire
-	crystal in its glowing stone ring (tag Spin), THE GREAT FORGE, every
-	road and path as cobble or dirt, and the lanterns along them.
+	Lobby package "Plaza" (docs/plans/LOBBY_PLAN.md 6.3, restyled after
+	concept v2, docs/art/lobby_concept_v2.webp): the round plaza of dark
+	polished slate with bold concentric orange and blue neon rings (the
+	spawn pad dressed in slate, a glowing double chevron pointing to the
+	forge), the giant fire crystal crown (tag Spin) in a low stepped
+	mechanical ring round a molten bowl, THE GREAT FORGE (dark slate roofs
+	with brick-red trim, warm timber, long crimson banners on dark piers, a
+	glowing framed crossed-hammers crest in the gable, a monumental flight
+	of stairs up to a brightly glowing workshop), dark neon walkways with
+	orange edge strips and double chevrons near the plaza, cobble and dirt
+	roads further out, and dark
+	metal lantern pillars with glowing orange slots and amber lamps (wooden
+	post lanterns on the far roads).
 
 	Replaces the legacy "roads", "plaza" and "greatForge" pieces
 	(TownLegacy.luau). Pure builder: Instance creation only, deterministic
 	from `rng`. TownSpawn stays in Town.luau; the spawn area stays flat.
 
-	Submodules: Common (strips, placement checks, path strips), Paving,
-	FireCrystal, GreatForge, Roads (roads, paths, lanterns).
+	Submodules: Common (palette, strips, placement checks, path strips,
+	walkways, neon rings, chevrons, lantern pillars), Paving, FireCrystal,
+	GreatForge, Roads (roads, paths, lanterns).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

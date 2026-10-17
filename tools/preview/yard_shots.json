@@ -2,31 +2,31 @@
   "base_yard": {
     "scene": "yard",
     "position": [
-      -122,
+      112,
       26,
-      54
+      106
     ],
     "target": [
-      -146,
+      146,
       0,
-      86
+      76
     ],
-    "fov": 60,
+    "fov": 58,
     "preset": "Surface",
-    "shadowExtent": 110,
+    "shadowExtent": 120,
     "ui": "hud_base"
   },
   "base_podiums": {
     "scene": "yard",
     "position": [
-      -124,
+      124,
       7.5,
-      97
+      71
     ],
     "target": [
-      -135.5,
+      135.5,
       3.6,
-      91
+      77
     ],
     "fov": 58,
     "preset": "Surface",
@@ -35,14 +35,14 @@
   "base_pen": {
     "scene": "yard",
     "position": [
-      -122,
+      122,
       13,
-      66
+      102
     ],
     "target": [
-      -141,
+      141,
       0,
-      72
+      96
     ],
     "fov": 60,
     "preset": "Surface",
@@ -51,14 +51,14 @@
   "base_pen_ui": {
     "scene": "yard",
     "position": [
-      -122,
+      122,
       13,
-      66
+      102
     ],
     "target": [
-      -141,
+      141,
       0,
-      72
+      96
     ],
     "fov": 60,
     "preset": "Surface",
@@ -68,14 +68,14 @@
   "base_pen_phone": {
     "scene": "yard",
     "position": [
-      -122,
+      122,
       13,
-      66
+      102
     ],
     "target": [
-      -141,
+      141,
       0,
-      72
+      96
     ],
     "fov": 60,
     "preset": "Surface",
@@ -86,18 +86,210 @@
   "base_offline": {
     "scene": "yard",
     "position": [
-      -122,
+      112,
       26,
-      54
+      106
     ],
     "target": [
-      -146,
+      146,
       0,
-      86
+      76
     ],
-    "fov": 60,
+    "fov": 58,
     "preset": "Surface",
-    "shadowExtent": 110,
+    "shadowExtent": 120,
     "ui": "ui_offline"
+  },
+  "base_walls": {
+    "scene": "yard",
+    "position": [
+      70,
+      12,
+      112
+    ],
+    "target": [
+      84,
+      1.5,
+      92
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 110
+  },
+  "base_lock": {
+    "scene": "yard",
+    "position": [
+      127,
+      7,
+      63.5
+    ],
+    "target": [
+      135,
+      4.6,
+      67
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 60
+  },
+  "base_train": {
+    "scene": "yard",
+    "position": [
+      172,
+      7.5,
+      58
+    ],
+    "target": [
+      161,
+      1.3,
+      78
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 80
+  },
+  "base_corner": {
+    "scene": "yard",
+    "position": [
+      150,
+      9,
+      52
+    ],
+    "target": [
+      159,
+      1,
+      63
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_pod_player": {
+    "scene": "yard",
+    "position": [
+      125,
+      8.5,
+      78
+    ],
+    "target": [
+      135,
+      4.6,
+      71
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_pod_row": {
+    "scene": "yard",
+    "position": [
+      130.5,
+      5.6,
+      87
+    ],
+    "target": [
+      135,
+      5.0,
+      64
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_pod_high": {
+    "scene": "yard",
+    "position": [
+      127,
+      21,
+      71
+    ],
+    "target": [
+      135,
+      3.3,
+      71
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_trainsign": {
+    "scene": "yard",
+    "position": [
+      174,
+      6.5,
+      76
+    ],
+    "target": [
+      161.8,
+      5.0,
+      79
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_wall_close": {
+    "scene": "yard",
+    "position": [
+      -69,
+      4.5,
+      73
+    ],
+    "target": [
+      -79,
+      1.8,
+      64
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 70
+  },
+  "base_sea": {
+    "scene": "yard",
+    "position": [
+      192,
+      30,
+      88
+    ],
+    "target": [
+      138,
+      0,
+      82
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 120
+  },
+  "base_foundry": {
+    "scene": "yard",
+    "position": [
+      137,
+      4.8,
+      76
+    ],
+    "target": [
+      146.5,
+      3.3,
+      71
+    ],
+    "fov": 55,
+    "preset": "Surface",
+    "shadowExtent": 60
+  },
+  "base_lamp": {
+    "scene": "yard",
+    "position": [
+      155.5,
+      5.6,
+      96.5
+    ],
+    "target": [
+      162,
+      4.6,
+      99.8
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "shadowExtent": 50
   }
 }

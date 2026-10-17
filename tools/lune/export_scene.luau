@@ -90,6 +90,14 @@ elseif sceneName == "kenney_check" then -- the Kenney Blaster Kit shapes rebuilt
 	require("./lib/blaster_kenney").buildCheck(Loader, workspace)
 elseif sceneName == "blaster_kenney" then -- the ten levels: Kenney shapes with the Ore Glow skins
 	require("./lib/blaster_kenney").build(Loader, workspace)
+elseif sceneName == "kit_check" then -- Space Station / Mini Dungeon / City pieces rebuilt from parts (tools/lune/lib/kenney_kit.luau)
+	require("./lib/kenney_kit").buildCheck(Loader, workspace)
+elseif sceneName == "blaster_shop_lobby" then -- TEST: the Forge Vault placed in the lobby (preview only)
+	require("./lib/blaster_shop").buildLobby(Loader, workspace)
+elseif sceneName == "blaster_shop" then -- the blaster shop proposals (tools/lune/lib/blaster_shop.luau)
+	require("./lib/blaster_shop").build(Loader, workspace)
+elseif sceneName == "crate_gallery" then -- the weapon cases in the ore skins (tools/lune/lib/blaster_kenney.luau)
+	require("./lib/blaster_kenney").buildCrates(Loader, workspace)
 elseif sceneName == "blaster_glow" then -- proposal D "Ore Glow" floating in the sky (tools/lune/lib/blaster_glow.luau)
 	require("./lib/blaster_glow").build(Loader, workspace)
 elseif sceneName == "blaster_glow_hold" then -- proposal D held on the plaza
@@ -102,6 +110,14 @@ elseif sceneName == "mine_rocks" then -- mine floor rocks, giant crystals, break
 	require("./lib/mine_concepts").buildRocks(Loader, workspace)
 elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine floor rocks
 	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
+elseif sceneName == "railway" then -- the world with parked preview trains on the railway (tools/lune/lib/railway_gallery.luau)
+	require("./lib/railway_gallery").build(Loader, workspace)
+	addNodes(workspace)
+elseif sceneName == "train_trip" then -- trains on their trips + the train HUD and panel (tools/lune/lib/train_trip_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/train_trip_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
