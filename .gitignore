@@ -9,3 +9,6 @@ node_modules/
 
 # agent worktrees (temporary)
 .claude/worktrees/
+
+# a node_modules symlink in a worktree (tools/preview/node_modules -> main checkout)
+node_modules
