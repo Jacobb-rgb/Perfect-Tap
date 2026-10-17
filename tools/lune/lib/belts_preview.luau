@@ -15,6 +15,8 @@
 	grid and chute plates (GridOverlay), and the UI overlays:
 	  ui_belts_pen        HUD + the Ore Pen panel with the send toolbar (PC)
 	  ui_belts_pen_phone  the same at the phone scale (compact layout)
+	  ui_belts_train      HUD + the train chip while Direct Unload waits ("Belt full")
+	  ui_belts_train_phone  the same on a phone
 	The preview can't draw BillboardGuis (build mode's chute labels) or
 	SurfaceGui frames (belt faces are painted with machines_gallery.paintGuis).
 ]]
@@ -121,6 +123,9 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 		return if p == player then data else nil
 	end)
 	rawset(DataService, "changed", function() end)
+	-- no clients here: toasts (the billboard's first-send one) go nowhere
+	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+	rawset(Net, "fire", function() end)
 	rawset(PlotService, "plotOf", function(p)
 		return if p == player then plotId else nil
 	end)
@@ -236,7 +241,10 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 		PenView.setHeader(refs, total, 60)
 		local entries = PenView.entries(BeltsPreview.Pen, "Pen")
 		PenView.setEntries(refs, entries, true)
-		PenView.setSending(refs, { Pen = 9, Train = 0 }, true, 10)
+		-- the State the server sends (the same count as the board)
+		local snapshot: any = {}
+		PenService._test.provide(player, data, snapshot)
+		PenView.setSending(refs, snapshot.PenSend, true, 10)
 		PenView.setHint(
 			refs,
 			if compact
@@ -245,10 +253,10 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 			nil,
 			nil
 		)
-		-- a SEND just pressed on the amethyst row: a second press sends the rest
+		-- a SEND just pressed on the amethyst row: a second press sends the whole stack
 		local row = refs.Rows["Clean|Amethyst|Pristine|"]
 		if row then
-			row.Send.Text = PenView.sendButtonText(1)
+			row.Send.Text = PenView.sendButtonText(BeltsPreview.Pen["Clean|Amethyst|Pristine|"])
 		end
 		return refs
 	end
@@ -257,6 +265,32 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 	exports.ui_belts_pen = UiExport.export({ hud(scale).Gui, pen(false, scale, 0).Gui })
 	local phoneScale = 0.62 * 900 / 375 -- an iPhone SE-sized screen at the 0.62 phone floor
 	exports.ui_belts_pen_phone = UiExport.export({ hud(phoneScale).Gui, pen(true, phoneScale, 58).Gui })
+	-- the train chip while Direct Unload waits for room on the TRAIN chute's belt
+	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+	local function trainChip(uiScale: number, compact: boolean, inset: number): any
+		local refs = TrainView.build(compact)
+		refs.Chip.Scale.Scale = uiScale
+		refs.Gui.Scale.Scale = uiScale
+		TrainView.layout(refs, compact, 1600 / uiScale, (900 - inset) / uiScale)
+		refs.ChipKey.Visible = not compact
+		local train = TrainView.read({
+			Cargo = 0,
+			Capacity = 8,
+			Moving = 5,
+			DepartAt = 100,
+			ArriveAt = 130,
+			Unloading = true,
+			UnloadWait = "Jammed",
+		})
+		TrainView.setStatus(refs, TrainView.status(train, 140, nil))
+		TrainView.setColor(refs, BaseLayout.Chutes.Train.Color)
+		refs.Gui.Enabled = false
+		refs.Chip.Enabled = TrainView.chipVisible(true, false)
+		return refs
+	end
+	exports.ui_belts_train = UiExport.export({ hud(scale).Gui, trainChip(scale, false, 0).Chip })
+	local trainPhone = TrainView.PhoneScale * 900 / 375
+	exports.ui_belts_train_phone = UiExport.export({ hud(trainPhone).Gui, trainChip(trainPhone, true, 58).Chip })
 
 	-- build mode on the empty plot next door (BuildPlot): the grid and the
 	-- chute plates, written as belts_build.json right here (then taken away

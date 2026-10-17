@@ -8,12 +8,15 @@
 	    TAKE    PenAction "Take" { Key, Count = 1 }: the ore comes out at the
 	            pen gate, into your hands
 	    SEND    PenAction "Send" { Key, Count = 1 } (like TAKE, one per
-	            press; the merged Dirty Ore row picks one of its keys): the
-	            server sends it onto your belts at the PEN chute. For
-	            SendAllWindow seconds after, the button reads "ALL xN?" and
-	            a second press sends the rest of the stack ({ Key, Count =
-	            the stack }; the Dirty Ore row: { Filter = "Dirty" }), so a
-	            mis-tap never sends a whole stack of podium ore
+	            press; the merged Dirty Ore row: { Filter = "Dirty", Count
+	            = 1 }): the server sends it onto your belts at the PEN
+	            chute. For SendAllWindow seconds after, the button reads
+	            "ALL xN?" (N = the stack, the one just sent included) and a
+	            second press sends exactly that: { Key, All = true } (the
+	            Dirty Ore row: { Filter = "Dirty" }), "all of this key",
+	            which the server counts with the one already queued, so the
+	            number shown is the number sent and nothing extra stays
+	            queued. A mis-tap never sends a whole stack of podium ore
 	    PODIUM  PenAction "ToPodium" { Key, Slot = first free unlocked slot }
 	    PLACE   (pick mode) PodiumAction(slot, "Place", { Key }), then closes
 	  The toolbar: SEND ALL DIRTY ({ Filter = "Dirty" }), SEND UNKEPT
@@ -133,7 +136,11 @@ local function disarm(view: PenView.Refs, rowKey: string)
 	end
 end
 
--- SEND: one item; pressed again while it reads "ALL xN?": the rest of the stack.
+--[[
+	SEND: one item; pressed again while it reads "ALL xN?" (N = the stack):
+	all of it. The server counts "all" with the one already queued, so N is
+	exactly what goes out, whether that one has left yet or not.
+]]
 local function sendRow(view: PenView.Refs, rowKey: string, entry: PenView.Entry?, key: string)
 	local deadline = armedUntil[rowKey]
 	if entry and deadline and os.clock() < deadline then
@@ -141,19 +148,23 @@ local function sendRow(view: PenView.Refs, rowKey: string, entry: PenView.Entry?
 		if entry.Keys then
 			Net.send("PenAction", "Send", { Filter = "Dirty" })
 		else
-			Net.send("PenAction", "Send", { Key = entry.Key, Count = entry.Count })
+			Net.send("PenAction", "Send", { Key = entry.Key, All = true })
 		end
 		return
 	end
-	Net.send("PenAction", "Send", { Key = key, Count = 1 })
-	local rest = if entry then entry.Count - 1 else 0
+	if entry and entry.Keys then
+		Net.send("PenAction", "Send", { Filter = "Dirty", Count = 1 })
+	else
+		Net.send("PenAction", "Send", { Key = key, Count = 1 })
+	end
+	local all = if entry then entry.Count else 0
 	local row = view.Rows[rowKey]
-	if rest <= 0 or not row then
+	if all <= 1 or not row then
 		return
 	end
 	local stamp = os.clock() + PenController.SendAllWindow
 	armedUntil[rowKey] = stamp
-	row.Send.Text = PenView.sendButtonText(rest)
+	row.Send.Text = PenView.sendButtonText(all)
 	task.delay(PenController.SendAllWindow, function()
 		if armedUntil[rowKey] == stamp then
 			disarm(view, rowKey)
@@ -246,7 +257,8 @@ local function refresh(state: { [string]: any }?)
 	end
 	local canPodium = state ~= nil and PenView.freeSlot(state.Podiums, state.PodiumSlots) ~= nil
 	wire(PenView.setEntries(view, entries, canPodium))
-	-- an armed SEND follows the stack (or goes back to SEND when it is gone)
+	-- an armed SEND follows the stack: "ALL xN?" is always what a press sends
+	-- (back to SEND when it is gone)
 	local now = os.clock()
 	for rowKey, deadline in armedUntil do
 		local entry = shownEntries[rowKey]

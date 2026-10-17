@@ -15,7 +15,11 @@
 	    "Take"     { Key, Count 1..StorageTakeMax }: the items appear at the
 	               gate and go into your hands while they have room
 	    "ToPodium" { Key, Slot }: puts one cleaned ore on a podium (PodiumService)
-	    "Send"     { Key, Count? } | { Filter, Count? }: a send intent (below)
+	    "Send"     { Key, Count? } | { Key, All = true } | { Filter, Count? }:
+	               a send intent (below). A Count (a key alone: 1) is that
+	               many more; All and a filter without Count are all of
+	               them: what is in the pen now, the queued ones included
+	               (a second press never sends extra)
 	    "StopSend" (no arg): drops every send intent of the pen (Pen lane)
 	    "AutoSort" { On: boolean }: the sorting billboard on / off (below)
 	  Checks: types (Guard), ItemData.parseKey, your own plot, standing within
@@ -32,8 +36,10 @@
 	  spawned it goes straight back to the same index. One item per lane
 	  every SendInterval seconds, while the belt on the chute cell feeds
 	  (ConveyorService.sourceReady: a belt there, not facing the yard, with
-	  room, the owner below the loose-item cap); otherwise the lane waits and
-	  the State says why. An intent ends when nothing matches it any more.
+	  room, the owner below ConveyorService.sourceCeiling() loose items,
+	  which leaves room for their machines' finished items, so a long line
+	  keeps draining); otherwise the lane waits and the State says why, per
+	  lane. An intent ends when nothing matches it any more.
 	  Only entries that can become an item match (ConveyorService.spawnable:
 	  a known kind, ore, grade and recipe): a broken save entry stays in the
 	  pen and never blocks a lane; an entry that still fails to spawn
@@ -49,11 +55,17 @@
 	  (data.KeepMode / KeepList: dirty ore, crushed ore, ingots and the clean
 	  ore the player doesn't keep) get a Pen-lane intent at once (marked Auto:
 	  switching auto-sort off drops those), while a belt feeds from the PEN
-	  chute (no belt: they simply stay in the pen); a full queue says so. A
-	  board on the pen's front wall shows "AUTO-SORT ON" / "OFF", what is
-	  kept and the lane's state (the Iron Box view edits KeepMode / KeepList).
+	  chute (no belt: they simply stay in the pen); a full queue says so.
+	  An Auto intent only sends what is still unkept when it spawns (keeping
+	  that ore later in the Iron Box view stops it). The first time in a
+	  session the billboard sends something, a toast says so and where to
+	  switch it off. A board on the pen's front wall shows "AUTO-SORT ON" /
+	  "OFF", what is kept and the lane's state. WP-Belts owns the board and
+	  arrived(); the Iron Box view (WP-CleanerBox) only edits KeepMode /
+	  KeepList.
 	  arrived() is ONLY for those sources: sinks and machines (the Foundry,
-	  the Iron Box) store with PenService.store or ItemService.storeDesc, or
+	  the Iron Box) store with PenService.store (it refuses at the pen's
+	  capacity: then their item waits, see ConveyorService's sink hook), or
 	  the billboard would send their items out again in a loop.
 	- Direct Unload (PenAutomation >= EconomyConfig.PenAutomation.DirectUnload,
 	  TrainService): with a belt feeding from the TRAIN chute, the arrived
@@ -66,8 +78,9 @@
 	  the train stops unloading that way (belt gone: the rest goes into the
 	  pen as without the upgrade).
 	- StateService gets PenCapacity, AutoSort and PenSend = { Pen, Train
-	  (items still to send per lane), Wait? (why a lane waits, a line for
-	  the player) }.
+	  (items still to send per lane), PenWait?, TrainWait? (why that lane
+	  waits, a line for the player) }; TrainService puts the Train lane's
+	  reason (laneWait) into its Train snapshot (UnloadWait) for TrainView.
 	Prompts are made for every plot once; the client shows them only on your
 	own pen ("Put In" only while you carry something), the server checks again.
 ]]
@@ -147,6 +160,7 @@ PenService.BoardTitleOff = "AUTO-SORT OFF"
 PenService.AutoOnText = "Auto-sort on: ore you don't keep rides out of your PEN chute. The Iron Box sets what you keep."
 PenService.AutoOffText = "Auto-sort off: everything you bring stays in your Ore Pen."
 PenService.QueueFullText = "Your send queue is full: some ore stays in your Ore Pen."
+PenService.AutoFirstText = "Auto-sort is sending ore you don't keep out of your PEN chute. You can switch it off in your Ore Pen."
 local SEND_TICK = 0.1
 local SEND_RETRY = 0.25 -- a waiting lane looks again this often
 local LANES: { SendLane } = { "Pen", "Train" }
@@ -155,6 +169,7 @@ local CHUTE_PLACE = "(the blue plate on the back row of your build grid)"
 local lastFullToast: { [Player]: number } = {}
 local lastForeignToast: { [Player]: number } = {}
 local lastQueueToast: { [Player]: number } = {}
+local autoTold: { [Player]: boolean } = {} -- the first auto-sort toast of the session
 local podiumPlacer: PodiumPlacer? = nil
 local trainCargo: TrainCargo? = nil
 local queues: { [Player]: Queue } = {}
@@ -469,6 +484,8 @@ end
 	Does this entry (of data.Storage, or of the train's cargo for a Cargo
 	intent) belong to the intent? Only entries that can become an item
 	(ConveyorService.spawnable) ever match, so a broken one never blocks.
+	The billboard's (Auto) intents only take what is still unkept right now:
+	ore the player has marked Keep since then stays.
 ]]
 local function matches(intent: Intent, entry: any, data: { [string]: any }): boolean
 	if not ConveyorService.spawnable(entry) then
@@ -479,7 +496,10 @@ local function matches(intent: Intent, entry: any, data: { [string]: any }): boo
 	end
 	local key = intent.Key
 	if key then
-		return ItemData.storageKey(entry) == key
+		if ItemData.storageKey(entry) ~= key then
+			return false
+		end
+		return not intent.Auto or not MachineData.keeps(data.KeepMode, data.KeepList, entry)
 	end
 	local filter = intent.Filter
 	if filter == "Dirty" then
@@ -531,19 +551,31 @@ local function laneOf(queue: Queue, name: SendLane): Lane
 end
 
 --[[
-	Adds a send intent to a lane, merged with an equal one (the same Key
-	and the same Auto mark adds up, the same Filter keeps the bigger count).
-	Returns false when the lane already holds MaxIntents other intents. The
-	caller pushes the State.
+	Adds a send intent to a lane, merged with an equal one (the same Key and
+	the same Auto mark, or the same Filter): a count adds up ("one more"),
+	`atLeast` keeps the bigger one ("all of them": what is in the pen now,
+	so the ones already queued are part of it, never on top). `cap` (the
+	matching items in the pen) bounds the result: an intent never asks for
+	more than there is. Returns false when the lane already holds
+	MaxIntents other intents. The caller pushes the State.
 ]]
-local function addIntent(lane: Lane, key: string?, filter: SendFilter?, count: number, auto: boolean?): boolean
+local function addIntent(
+	lane: Lane,
+	key: string?,
+	filter: SendFilter?,
+	count: number,
+	auto: boolean?,
+	atLeast: boolean?,
+	cap: number?
+): boolean
 	local isAuto = auto == true
+	local limit = math.min(cap or GameConfig.MaxStoredItems, GameConfig.MaxStoredItems)
 	for _, intent in lane.Intents do
-		if key and intent.Key == key and (intent.Auto == true) == isAuto then
-			intent.Left = math.min(intent.Left + count, GameConfig.MaxStoredItems)
-			return true
-		elseif filter and intent.Filter == filter then
-			intent.Left = math.max(intent.Left, count)
+		local sameKey = key ~= nil and intent.Key == key and (intent.Auto == true) == isAuto
+		local same = sameKey or (filter ~= nil and intent.Filter == filter)
+		if same then
+			local left = if atLeast then math.max(intent.Left, count) else intent.Left + count
+			intent.Left = math.min(left, limit)
 			return true
 		end
 	end
@@ -553,7 +585,7 @@ local function addIntent(lane: Lane, key: string?, filter: SendFilter?, count: n
 	table.insert(lane.Intents, {
 		Key = key,
 		Filter = filter,
-		Left = math.min(count, GameConfig.MaxStoredItems),
+		Left = math.min(count, limit),
 		Auto = if isAuto then true else nil,
 	})
 	return true
@@ -611,19 +643,23 @@ function PenService.sendCounts(player: Player): (number, number)
 	return pen, lane(queue.Train)
 end
 
--- Why a lane waits, as a line for the player (nil: it doesn't wait).
-local function waitLine(player: Player): string?
+-- Why a lane waits right now (nil: it has nothing queued or doesn't wait).
+function PenService.laneWait(player: Player, name: SendLane): SourceWait?
 	local queue = queues[player]
 	if not queue then
 		return nil
 	end
-	for _, name: SendLane in LANES do
-		local lane = laneOf(queue, name)
-		if #lane.Intents > 0 and lane.Wait then
-			return ConveyorService.waitText(name, lane.Wait)
-		end
+	local lane = laneOf(queue, name)
+	return if #lane.Intents > 0 then lane.Wait else nil
+end
+
+-- The same as a line for the player (the pen panel, the board).
+local function waitLine(player: Player, name: SendLane): string?
+	local why: SourceWait? = PenService.laneWait(player, name)
+	if not why then
+		return nil
 	end
-	return nil
+	return ConveyorService.waitText(name, why)
 end
 
 local function markBoard(player: Player)
@@ -712,7 +748,8 @@ local function stepLane(player: Player, data: { [string]: any }, plotId: number,
 		-- no yield from taking it out of its list until it rides the belt; if
 		-- nothing spawned (or it errored), it goes straight back where it was
 		local entry = table.remove(list, index) :: Desc
-		local spawned, record, fail = pcall(ConveyorService.spawnAtSource, plotId, name, entry, player.UserId)
+		-- (sourceReady said yes above, in this same step)
+		local spawned, record, fail = pcall(ConveyorService.spawnAtSource, plotId, name, entry, player.UserId, true)
 		if not spawned or not record then
 			table.insert(list, index, entry)
 			if spawned and fail ~= "Bad" then
@@ -822,8 +859,7 @@ end
 	on, the ones the player doesn't keep get a Pen-lane intent (marked
 	Auto), while a belt feeds from the PEN chute (the header). The items
 	stay in the pen until sent. Only these sources: sinks and machines
-	store with PenService.store / ItemService.storeDesc (header), anything
-	else is ignored here.
+	store with PenService.store (header), anything else is ignored here.
 ]]
 function PenService.arrived(player: Player, descs: { Desc }, source: ArrivalSource)
 	if source ~= "Pen" and source ~= "Train" then
@@ -861,6 +897,11 @@ function PenService.arrived(player: Player, descs: { Desc }, source: ArrivalSour
 		end
 	end
 	if queued > 0 then
+		if not autoTold[player] then
+			-- once a session: ore leaving the pen by itself must not surprise anyone
+			autoTold[player] = true
+			toast(player, PenService.AutoFirstText, "Info")
+		end
 		DataService.changed(player)
 		markBoard(player)
 	end
@@ -903,6 +944,14 @@ local function send(player: Player, plotId: number, data: { [string]: any }, arg
 	end
 	local key: string? = nil
 	local filter: SendFilter? = nil
+	local all = false
+	if arg.All ~= nil then
+		-- { Key, All = true }: every item of that key (no Count, no Filter)
+		if arg.All ~= true or arg.Key == nil or arg.Count ~= nil then
+			return
+		end
+		all = true
+	end
 	if arg.Key ~= nil then
 		local text = Guard.string(arg.Key, MAX_KEY_LENGTH)
 		local desc = if text and arg.Filter == nil then ItemData.parseKey(text) else nil
@@ -926,8 +975,11 @@ local function send(player: Player, plotId: number, data: { [string]: any }, arg
 		toast(player, "There is nothing like that in your pen.", "Info")
 		return
 	end
-	local n = math.min(count or (if key then 1 else available), available)
-	if not addIntent(queueOf(player).Pen, key, filter, n) then
+	local n = math.min(count or (if key and not all then 1 else available), available)
+	-- a Count is "that many more"; All (a key) and a filter without Count are
+	-- "all of them": what is in the pen now, the ones already queued included
+	local atLeast = if filter then count == nil else all
+	if not addIntent(queueOf(player).Pen, key, filter, n, nil, atLeast, available) then
 		toast(player, "Your send queue is full. Wait a moment or press STOP.")
 		return
 	end
@@ -1008,8 +1060,10 @@ function PenService.boardLines(player: Player): (string?, string?, string?)
 	end
 	local _, why: SourceWait? = ConveyorService.sourceBelt(plotId, "Pen")
 	local pen = PenService.sendCounts(player)
+	local waiting = if pen > 0 then waitLine(player, "Pen") else nil
 	local status = if why
 		then ConveyorService.waitText("Pen", why) or ""
+		elseif waiting then waiting
 		elseif pen > 0 then `Sending {pen}…`
 		else "The rest rides out of the PEN chute"
 	return PenService.BoardTitle, body, status
@@ -1245,7 +1299,12 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 	snapshot.PenCapacity = PenService.capacityOf(data)
 	snapshot.AutoSort = PenService.autoSortOn(data)
 	local pen, train = PenService.sendCounts(player)
-	snapshot.PenSend = { Pen = pen, Train = train, Wait = waitLine(player) }
+	snapshot.PenSend = {
+		Pen = pen,
+		Train = train,
+		PenWait = waitLine(player, "Pen"),
+		TrainWait = waitLine(player, "Train"),
+	}
 end
 
 -- Internals for the Lune tests only (tests/PenService.spec.luau).
@@ -1268,6 +1327,7 @@ PenService._test = {
 		table.clear(lastFullToast)
 		table.clear(lastForeignToast)
 		table.clear(lastQueueToast)
+		table.clear(autoTold)
 		table.clear(queues)
 		trainCargo = nil
 		for _, board in boards do
@@ -1298,6 +1358,7 @@ function PenService.init()
 		lastFullToast[player] = nil
 		lastForeignToast[player] = nil
 		lastQueueToast[player] = nil
+		autoTold[player] = nil
 		-- intents only: nothing to put back (the train's cargo is saved on the train)
 		queues[player] = nil
 	end)

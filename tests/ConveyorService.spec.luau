@@ -1,9 +1,12 @@
 -- ConveyorService under Lune: belt velocity and the walk-through collision
--- group, rails that open at corners, jam nudges (a queue waits, head-on belts
--- get pushed off), the Source chutes (no belt / facing the yard / jammed /
--- loose-item cap / spawning), the Sink hook (belt end and belt-less cell,
--- owner only, waiting, errors), descs that can't spawn ('Bad'), errors half way
--- through spawning, and the chute plates and plaques in the world.
+-- group, rails that open at corners, jam nudges (a queue waits, also across a
+-- cell edge; head-on belts get pushed off), the Source chutes (no belt /
+-- facing the yard / jammed / the loose-item ceiling under the machines' limit,
+-- so a full line keeps draining / spawning), the Sink hook (belt end and
+-- belt-less cell, owner only, not in mid-air, waiting, errors, a handler that
+-- says it took an item but leaves it), descs that can't spawn ('Bad'), errors
+-- half way through spawning, the server cost (one walk over the loose items
+-- per pass, none for chutes) and the chute plates and plaques in the world.
 -- MachineService and items are real; players, saves, plots and Net are small fakes.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -12,6 +15,7 @@ return function(T, Loader)
 	local CFrame = Loader.CFrame
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local Grid = Loader.requirePath("ReplicatedStorage.Shared.Machines.Grid")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -323,12 +327,20 @@ return function(T, Loader)
 		ConveyorService.SourceGap = 100
 		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "Jammed", "gap")
 		ConveyorService.SourceGap = 0
-		-- the owner's loose-item cap
-		for i = 1, GameConfig.MaxLooseItemsPerPlayer do
+		-- the owner's loose-item ceiling: SourceReserve under the machines' limit
+		local machinesStop = GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom
+		T.eq(ConveyorService.sourceCeiling(), machinesStop - ConveyorService.SourceReserve, "the ceiling")
+		T.le(2 * MachineData.MaxOutBuffer, ConveyorService.SourceReserve, "room for two machines' finished items")
+		T.lt(0, ConveyorService.sourceCeiling(), "Sources still work")
+		for i = 1, ConveyorService.sourceCeiling() - ItemService.looseCount(USER) - 1 do
 			ItemService.spawnDesc(COPPER, USER, CFrame.new(i * 3, 5, 900), nil, true)
 		end
-		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "TooMany", "too many loose items")
-		T.truthy(ConveyorService.sourceReady(PLOT, "Pen", STRANGER), "the cap is per owner")
+		T.truthy(ConveyorService.sourceReady(PLOT, "Pen", USER), "one under the ceiling: ready")
+		ItemService.spawnDesc(COPPER, USER, CFrame.new(0, 5, 900), nil, true)
+		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "TooMany", "at the ceiling: waits")
+		T.eq(ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER), nil, "nothing spawned")
+		T.le(ItemService.looseCount(USER) + ConveyorService.SourceReserve, machinesStop, "the machines' room is left free")
+		T.truthy(ConveyorService.sourceReady(PLOT, "Pen", STRANGER), "the ceiling is per owner")
 		-- every wait has a line for the player
 		for _, why in { "NoBelt", "Yard", "Jammed", "TooMany", "NoPlot" } do
 			local text = ConveyorService.waitText("Pen", why)
@@ -423,6 +435,97 @@ return function(T, Loader)
 		end
 	end)
 
+	withWorld("ConveyorService: a long line never locks: machines keep emitting while the Sources wait", function(w)
+		ConveyorService.SourceGap = 0
+		local px, pz = BaseLayout.chuteCell("Pen")
+		belt(w, px, pz, 0)
+		local furnace = MachineService.place(w.player, "ClayFurnace", 4, 4, 0)
+		T.truthy(furnace, "a machine on the line")
+		-- a busy line: the Sources fill the owner's loose items up to their ceiling
+		for _ = 1, GameConfig.MaxLooseItemsPerPlayer + 5 do
+			if not ConveyorService.sourceReady(PLOT, "Pen", USER) then
+				break
+			end
+			local record = ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER)
+			assert(record, "spawned")
+			-- it rides on down the line (somewhere off the chute's cell)
+			record.Model:PivotTo(CFrame.new(ItemService.looseCount(USER) * 3, 5, 700))
+		end
+		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "TooMany", "the Sources wait")
+		T.eq(ItemService.looseCount(USER), ConveyorService.sourceCeiling(), "exactly at their ceiling")
+		-- the machines' finished items still come out, one after another, so the
+		-- line drains instead of filling their Out buffers and stopping
+		for i = 1, MachineData.MaxOutBuffer do
+			local result = MachineService.emit(furnace, INGOT)
+			T.eq(result, "Spawned", "finished item " .. i .. " comes out")
+		end
+		T.eq(select(2, ConveyorService.sourceReady(PLOT, "Pen", USER)), "TooMany", "still nothing from the Sources")
+	end)
+
+	withWorld("ConveyorService: cheap on the server: one walk over the loose items per pass, none for chutes", function(w)
+		ConveyorService.SourceGap = 0
+		local m = belt(w, 5, 5, 1)
+		local ahead = belt(w, 6, 5, 1)
+		ConveyorService.setSink("Foundry", function()
+			return false
+		end)
+		local px, pz = BaseLayout.chuteCell("Pen")
+		belt(w, px, pz, 0)
+		local slow: { any } = {}
+		for i = 1, 6 do
+			table.insert(slow, onBeltItem(m, Vector3.new(0, 1.4, 1.8 - i * 0.6)))
+		end
+		-- a far-away crowd of other loose items
+		for i = 1, 40 do
+			ItemService.spawnDesc(COPPER, STRANGER, CFrame.new(i * 3, 5, 800), nil, true)
+		end
+		local walks = 0
+		local looseList = ItemService.looseList
+		rawset(ItemService, "looseList", function()
+			walks += 1
+			return looseList()
+		end)
+		local ok, err = pcall(function()
+			for _, record in slow do
+				feed(m, record, 20)
+			end
+			T.eq(walks, 1, "every slow item of one pass shares one index")
+			feed(m, slow[1], 20.2)
+			T.eq(walks, 2, "a new pass builds it again")
+			conv.scanSinks(21)
+			T.truthy(ConveyorService.sourceReady(PLOT, "Pen", USER), "a ready chute")
+			T.truthy(ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER), "spawned")
+			T.eq(walks, 2, "the sink scan and the Sources never walk every item")
+		end)
+		rawset(ItemService, "looseList", looseList)
+		if not ok then
+			error(err, 0)
+		end
+		-- the cell index still finds the line across a cell edge: an item waiting
+		-- at the start of the next belt holds the one behind it
+		for _, record in slow do
+			ItemService.destroy(record)
+		end
+		local front = onBeltItem(ahead, Vector3.new(0, 1.4, 1.6))
+		local rear = onBeltItem(m, Vector3.new(0, 1.4, -1.0))
+		local now = 40
+		for _ = 1, 12 do
+			now += 1.6
+			front.Body.AssemblyLinearVelocity = Vector3.zero
+			rear.Body.AssemblyLinearVelocity = Vector3.zero
+			feed(m, rear, now)
+		end
+		T.eq(#w.ejects, 0, "it waits behind the next belt's item")
+		-- without it in front the same item is stuck: nudged, then pushed off
+		front.Model:PivotTo(CFrame.new(0, 5, 600))
+		for _ = 1, GameConfig.ConveyorMaxNudges + 2 do
+			now += GameConfig.ConveyorStuckSeconds + 0.01
+			rear.Body.AssemblyLinearVelocity = Vector3.zero
+			feed(m, rear, now)
+		end
+		T.eq(#w.ejects, 1, "nothing ahead: cleared")
+	end)
+
 	---------------------------------------------------------------- sinks
 
 	withWorld("ConveyorService: a belt into the FOUNDRY chute hands the owner's items to the sink", function(w)
@@ -482,6 +585,25 @@ return function(T, Loader)
 		local survivor = onBeltItem(m, atEnd, INGOT)
 		feed(m, survivor, now)
 		T.eq(survivor.State, "Loose", "an error takes nothing")
+		-- a handler that says it took an item but leaves it in the world: the
+		-- item is taken out right there, so it is never offered (and stored) again
+		ConveyorService.setSink("Foundry", nil)
+		local stored: { any } = {}
+		ConveyorService.setSink("Foundry", function(_, record)
+			table.insert(stored, ItemService.descOf(record)) -- forgot ItemService.absorb
+			return true
+		end)
+		local sloppy = onBeltItem(m, atEnd, INGOT)
+		feed(m, sloppy, now)
+		T.eq(#stored, 1, "stored")
+		T.eq(sloppy.State, "Consumed", "out of the world: no copy left behind")
+		for _ = 1, 10 do
+			-- (IntakeService only scans loose items; even a stale call takes nothing)
+			now += 0.2
+			conv.onBelt(m, sloppy, atEnd, now)
+		end
+		T.eq(#stored, 1, "never offered (and stored) again")
+		T.eq(#w.ejects, 0, "not pushed anywhere")
 		-- a belt on the sink cell that faces elsewhere just carries items
 		ConveyorService.setSink("Foundry", nil)
 		local seen = 0
@@ -513,25 +635,39 @@ return function(T, Loader)
 		T.truthy(calls[1].Record == mine and calls[1].Player == w.player, "the owner's, with the owner")
 		T.eq(theirs.State, "Loose", "another player's item stays (IntakeService sends it home)")
 		T.eq(elsewhere.State, "Loose", "other cells are not the chute")
+		-- ore flying over the cell is not on it (the plot reaches 24 studs up)
+		local high = ItemService.spawnDesc(
+			INGOT,
+			USER,
+			PlotService.plotCFrame(PLOT) * CFrame.new(BaseLayout.chuteLocal("Foundry") + Vector3.new(0, ConveyorService.SinkScanUp + 2, 0)),
+			nil,
+			true
+		)
+		conv.scanSinks(1.5)
+		T.eq(#calls, 1, "not taken in mid-air")
+		T.eq(high.State, "Loose", "it flies on")
+		high.Model:PivotTo(PlotService.plotCFrame(PLOT) * CFrame.new(BaseLayout.chuteLocal("Foundry") + Vector3.new(0, 0.8, 0)))
+		conv.scanSinks(1.6)
+		T.eq(#calls, 2, "once it lands on the cell it goes in")
 		-- with a belt on the cell the belt decides (it is no sink while it faces elsewhere)
 		local fx, fz = BaseLayout.chuteCell("Foundry")
 		belt(w, fx, fz, 0)
 		local onBeltCell = chuteItem("Foundry")
 		conv.scanSinks(2)
-		T.eq(#calls, 1, "belt on the cell: no scan")
+		T.eq(#calls, 2, "belt on the cell: no scan")
 		T.eq(onBeltCell.State, "Loose", "left to the belt")
 		-- a free plot takes nothing
 		w.free = true
 		MachineService._test.reset()
 		local lone = chuteItem("Foundry")
 		conv.scanSinks(3)
-		T.eq(#calls, 1, "no owner, no sink")
+		T.eq(#calls, 2, "no owner, no sink")
 		T.eq(lone.State, "Loose", "still there")
 	end)
 
 	---------------------------------------------------------------- chutes in the world
 
-	withWorld("ConveyorService: every chute gets a plate on its cell and a plaque low on the back wall", function(w)
+	withWorld("ConveyorService: every chute gets a plate on its cell and a plaque up on the back wall", function(w)
 		conv.buildMarkers(PLOT)
 		local folder = w.plotModel:FindFirstChild("Chutes")
 		T.truthy(folder, "Chutes model on the plot")
@@ -559,6 +695,11 @@ return function(T, Loader)
 			T.lt(look.Z, -0.99, name .. " faces the grid")
 			local b = plotCF:PointToObjectSpace(board.CFrame.Position)
 			T.le(math.abs(b.X - cell.X), 6, name .. " plaque near its cell")
+			-- the podiums' price tags (2.2 wide, low behind the wall) stay in view straight on
+			for i, podium in BaseLayout.Podiums do
+				local apart = math.abs(b.X - podium.Center.X)
+				T.le(ConveyorService.PlaqueSize.X / 2 + 1.1, apart, `{name} plaque not in front of podium {i}'s tag`)
+			end
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") then
 					T.falsy(d.CanCollide, name .. " " .. d.Name .. " never blocks")
@@ -567,8 +708,15 @@ return function(T, Loader)
 						local half = d.Size / 2
 						T.lt(grid, q.Z - half.Z, name .. " " .. d.Name .. " off the grid")
 						T.le(q.Z + half.Z, wallLine - 0.5 + 1e-6, name .. " " .. d.Name .. " on the wall's grid face, not in it")
-						T.le(q.Y + half.Y, 2.4, name .. " " .. d.Name .. " below the wall's cap (nothing behind it hidden)")
-						T.le(0.5, q.Y - half.Y, name .. " " .. d.Name .. " above the plinth")
+						-- the wall's cap is at 2.25: above it, over the rails (1.1) of a belt on the
+						-- chute and the items riding it; under the gate posts' caps (3.7) and the
+						-- ORE PEN sign (3.75)
+						T.le(2.25 - 1e-4, q.Y - half.Y, name .. " " .. d.Name .. " up on the wall's cap, over the belt and its items")
+						T.le(q.Y + half.Y, 3.7, name .. " " .. d.Name .. " under the gate posts' caps and the ORE PEN sign")
+						if name == "Pen" then
+							-- the gate post (2.1 cap) stands out in front of the wall: a stud clear of it
+							T.le(gate.Width / 2 + 2.1 + 1 - 1e-4, math.abs(q.X - gate.CenterX) - half.X, "Pen " .. d.Name .. " clear of the gate post")
+						end
 						T.le(gate.Width / 2, math.abs(q.X - gate.CenterX) - half.X + 1e-6, name .. " " .. d.Name .. " out of the gate walkway")
 					end
 				end

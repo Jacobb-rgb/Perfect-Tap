@@ -94,6 +94,9 @@ sides, jam nudges, cheap on mobile). Pen "Send": a queue of send intents per pla
 until the step that takes it out and spawns it, with no yield); one item every 0.5 s spawns on the PEN CHUTE cell and
 rides the belts; "Send all dirty", "Send this", "Send unkept" (PenAutomation >= 1), "Stop". Sources only spawn onto a
 belt with room that doesn't face off the grid (`BaseLayout.sourceFeeds`, see P0 details).
+**WP-Belts also owns the pen sorting billboard (PenAutomation 1)**: the board model (`Yard.Pen.SortBoard`), the
+auto-sort logic (`PenService.arrived`, the AUTO-SORT switch `data.AutoSort`) and Direct Unload (PenAutomation 2,
+TrainService's small Direct Unload section + PenService's Train lane). Nobody else builds a board or sorts arrivals.
 **Chutes must be visible** (two jobs, nobody else draws them): (1) in build mode, a plate in the chute's `Color` with
 its `Label` on each chute cell (GridOverlay.plate from BaseLayout.Chutes; PlacementController/GridOverlay are yours
 for this) and the `Hint` / "Only belts can go on a chute" toast, plus "Turn the belt away from the yard" on a Source
@@ -103,7 +106,8 @@ plot (PlotBuilder is off limits). These plates ship in the same merge as P0 (the
 ### WP-CleanerBox: Cleaning Plant upgrades + Iron Box + sorting billboard
 Owns: ProcessingService (quality odds by upgrade level, speed by upgrade), MachineBuilder (Iron Box model in the
 Factory Kit style of the restyled machines), IronBoxService (new), IronBoxView (keep-list: discovered ores as
-toggles, defaults Rare+), the pen sorting billboard (PenAutomation 1), tests.
+toggles, defaults Rare+), tests. The pen sorting billboard (board + auto-sort) is WP-Belts'; this package only edits
+`data.KeepMode` / `data.KeepList` (the billboard reads them through `MachineData.keeps`).
 Iron Box: reveals (items are clean already), items `MachineData.keeps` keeps go to the pen (bounce out the front when
 full), the rest leave the front onto belts (`MachineLogic.outputs` pass-through); dirty ore, crushed ore and ingots
 always pass on. If the box runs on ProcessingService jobs, its jobs skip stats/Discovery/onProcessed (P0 gate). The model

@@ -48,6 +48,11 @@ TrainView.ExpressPrice = 199 -- R$, the placeholder on the Express line
 TrainView.UnloadGrace = 2 -- seconds after the arrival before a train with ore still on board counts as waiting
 TrainView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a phone panel below this leaves it clear
 TrainView.MinPanelHeight = 400 -- the compact cargo card needs this much (its SEND under the state line)
+-- Direct Unload waits (the server's UnloadWait, PenService's Train lane): the state line meanwhile
+TrainView.UnloadWaitText = {
+	Jammed = "Belt full – waiting",
+	TooMany = "Too many loose items",
+} :: { [string]: string }
 
 export type Snapshot = {
 	Cargo: number,
@@ -64,6 +69,7 @@ export type Snapshot = {
 	AutoDepartIn: number?,
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
 	Unloading: boolean?, -- at your stop pouring dirty ore onto your TRAIN chute's belt (Direct Unload)
+	UnloadWait: string?, -- why that pouring waits right now (a key of TrainView.UnloadWaitText)
 }
 
 export type Phase = "Empty" | "Loading" | "Full" | "Moving" | "Unloading" | "Waiting" | "Returning"
@@ -254,6 +260,7 @@ function TrainView.read(raw: any): Snapshot
 		AutoDepartIn = optional(t.AutoDepartIn),
 		Waiting = t.Waiting == true,
 		Unloading = t.Unloading == true,
+		UnloadWait = if type(t.UnloadWait) == "string" and TrainView.UnloadWaitText[t.UnloadWait] then t.UnloadWait else nil,
 	}
 end
 
@@ -290,10 +297,11 @@ end
 	(workspace:GetServerTimeNow(), like DepartAt / ArriveAt); `autoLeft` the
 	seconds until the train leaves by itself (counted down by the controller,
 	nil = use the snapshot's AutoDepartIn). While the train is away the count
-	is the ore on board (Moving): on its way, unloading at your stop, the
-	phase "Waiting" there because the Ore Pen is full ("Pen full – make
-	room", TrainView.waiting), then rolling back empty. Nothing can be sent
-	while it is away.
+	is the ore on board (Moving): on its way, unloading at your stop (with
+	Direct Unload "Unloading onto your belt", or why that waits:
+	UnloadWaitText), the phase "Waiting" there because the Ore Pen is full
+	("Pen full – make room", TrainView.waiting), then rolling back empty.
+	Nothing can be sent while it is away.
 ]]
 function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Status
 	local capacity = train.Capacity
@@ -322,6 +330,11 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 		return make("Moving", moving, "ore on the way", line, Theme.Info, false, progress)
 	elseif moving > 0 then
 		-- just arrived (UnloadGrace), or Direct Unload: the server is unloading it
+		-- (onto your belt, or waiting for room there: UnloadWait says why)
+		local wait = if train.Unloading and train.UnloadWait then TrainView.UnloadWaitText[train.UnloadWait] else nil
+		if wait then
+			return make("Unloading", moving, "ore on the way", wait, Theme.Accent, false, 1)
+		end
 		local line = if train.Unloading then "Unloading onto your belt" else "Unloading…"
 		return make("Unloading", moving, "ore on the way", line, Theme.Info, false, 1)
 	elseif arrive and now < arrive + TrainConfig.ReturnSeconds then

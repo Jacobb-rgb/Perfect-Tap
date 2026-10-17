@@ -6,8 +6,9 @@
 -- joining (quiet delivery and retries, re-announcing, the Express grace),
 -- banner colors, upgrades, Express, junk input, one broken train, no
 -- duplication, and Direct Unload (dirty ore straight off the train onto the
--- TRAIN chute's belt through PenService's Train lane, a full pen, a belt that
--- goes away, leaving, a failing chute). The railway hooks follow the WORLD
+-- TRAIN chute's belt through PenService's Train lane, a full pen, why it
+-- waits on the train's line, a belt that goes away, leaving, a failing
+-- chute). The railway hooks follow the WORLD
 -- contract; players, saves, carrying, plots and Net are small fakes, items
 -- and coins are real.
 return function(T, Loader)
@@ -1613,6 +1614,34 @@ return function(T, Loader)
 		local view = TrainView.read(s)
 		T.falsy(TrainView.waiting(view, serverTime(w) + 60), "the chip doesn't say Pen full")
 		T.eq(TrainView.status(view, serverTime(w) + 60, nil).Phase, "Unloading", "it says unloading")
+		T.eq(TrainView.status(view, serverTime(w) + 60, nil).Line, "Unloading onto your belt", "onto your belt")
+		T.eq(s.UnloadWait, nil, "nothing to wait for")
+		-- the belt at the TRAIN chute is full: the train's line says why it stands there
+		local ConveyorService = Loader.requirePath("ServerScriptService.Server.Services.ConveyorService")
+		local blocker = ItemService.spawnDesc(COAL, USER, b.Belt.Model:GetPivot() * CFrame.new(0, 1.5, 0), nil, true)
+		b.Pen.tickSend(150)
+		T.eq(#w.data.Train.TripCargo, 3, "nothing poured onto a full belt")
+		s = snapshot(w, w.player)
+		T.eq(s.UnloadWait, "Jammed", "the snapshot says why (PenService's TRAIN lane)")
+		local status = TrainView.status(TrainView.read(s), serverTime(w) + 60, nil)
+		T.eq(status.Phase, "Unloading", "still unloading, not Pen full")
+		T.eq(status.Line, TrainView.UnloadWaitText.Jammed, "Belt full – waiting")
+		-- too many of the owner's items lie loose: the train says that too
+		blocker.Model:PivotTo(CFrame.new(0, 5, 900))
+		local extra: { any } = {}
+		for i = 1, ConveyorService.sourceCeiling() - ItemService.looseCount(USER) do
+			table.insert(extra, ItemService.spawnDesc(COAL, USER, CFrame.new(i * 3, 5, 900), nil, true))
+		end
+		b.Pen.tickSend(151)
+		s = snapshot(w, w.player)
+		T.eq(s.UnloadWait, "TooMany", "too many loose items")
+		T.eq(TrainView.status(TrainView.read(s), serverTime(w) + 60, nil).Line, TrainView.UnloadWaitText.TooMany, "the line says so")
+		T.eq(TrainView.read({ Moving = 3, Unloading = true, UnloadWait = "Bogus" }).UnloadWait, nil, "junk reasons are ignored")
+		for _, record in extra do
+			ItemService.destroy(record)
+		end
+		ItemService.destroy(blocker)
+		T.eq(census(w, USER, w.data), total, "the test's own items are gone again")
 		-- you can't load it meanwhile, and you're told why
 		local held = drop(w.station, USER, COAL)
 		T.eq(lastToast(w, w.player).Text, TrainService.ChuteText, "unloading at the TRAIN chute")

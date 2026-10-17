@@ -272,10 +272,14 @@ function PenView.keyFor(entry: Entry, roll: number): string?
 	return sorted[#sorted]
 end
 
--- The send toolbar's status line for the State's PenSend (pure): why a
--- chute waits, "Sending 3…" while items leave (the pen's and the train's
--- Direct Unload), or a short how-to. Also returns whether it waits, how
--- many items are still to go and how many of them the pen sends (STOP).
+--[[
+	The send toolbar's status line for the State's PenSend (pure): the pen's
+	own sends ("Sending 3…", or why they wait: PenWait), else the train's
+	Direct Unload ("Train unloading 4…"; why that waits shows in the train
+	panel, TrainWait), or a short how-to. Also returns whether the pen's
+	sends wait, how many items are still to go (both lanes) and how many of
+	them the pen sends (STOP).
+]]
 PenView.SendIdleText = "SEND puts ore on your belts at the PEN chute"
 function PenView.sendText(send: any): (string, boolean, number, number)
 	if type(send) ~= "table" then
@@ -286,20 +290,23 @@ function PenView.sendText(send: any): (string, boolean, number, number)
 	end
 	local pen, train = count(send.Pen), count(send.Train)
 	local total = pen + train
-	local wait = if type(send.Wait) == "string" and send.Wait ~= "" then send.Wait else nil
-	if total > 0 and wait then
-		return `{Format.big(total)} waiting: {wait}`, true, total, pen
-	elseif total > 0 then
-		return `Sending {Format.big(total)}…`, false, total, pen
+	local wait = if type(send.PenWait) == "string" and send.PenWait ~= "" then send.PenWait else nil
+	if pen > 0 and wait then
+		return `{Format.big(pen)} waiting: {wait}`, true, total, pen
+	elseif pen > 0 then
+		return `Sending {Format.big(pen)}…`, false, total, pen
+	elseif train > 0 then
+		return `Train unloading {Format.big(train)}…`, false, total, 0
 	end
 	return PenView.SendIdleText, false, 0, 0
 end
 
 -- The row SEND button's text: "SEND", or "ALL xN?" while a second press
--- would send the rest of the stack (`rest` = N, nil = not armed).
-function PenView.sendButtonText(rest: number?): string
-	if rest and rest > 0 then
-		return `ALL x{Format.big(rest)}?`
+-- would send the whole stack (`all` = N, its size, the one just sent
+-- included: that is what the second press sends; nil = not armed).
+function PenView.sendButtonText(all: number?): string
+	if all and all > 1 then
+		return `ALL x{Format.big(all)}?`
 	end
 	return "SEND"
 end

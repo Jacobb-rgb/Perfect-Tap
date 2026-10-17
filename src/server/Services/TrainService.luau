@@ -78,7 +78,7 @@
 	- StateService gets Train = { Cargo, Capacity, Moving, DepartAt?,
 	  ArriveAt?, CapacityLevel, SpeedLevel, NextCapacityPrice?,
 	  NextSpeedPrice?, Express, TripSeconds, AutoDepartIn?, Waiting,
-	  Unloading }.
+	  Unloading, UnloadWait? }.
 	  DepartAt / ArriveAt (server time) are there while the train is on a
 	  trip, waiting at a full pen or rolling back: it is back at the station
 	  at ArriveAt + TrainConfig.ReturnSeconds. ArriveAt is the TrainTrip
@@ -86,8 +86,11 @@
 	  Waiting = true while it stands at your stop because the pen is full
 	  (then Moving > 0 and ArriveAt has passed); Unloading = true while it
 	  stands there pouring its dirty ore onto the TRAIN chute's belt (Direct
-	  Unload; not Waiting unless the pen is full too); the train is away (no
-	  loading) whenever Moving > 0 or ArriveAt + ReturnSeconds is ahead.
+	  Unload; not Waiting unless the pen is full too), and UnloadWait is why
+	  that pouring waits right now (PenService.laneWait "Train": "Jammed" =
+	  the belt at the chute is full, "TooMany" = too many of your items lie
+	  loose); the train is away (no loading) whenever Moving > 0 or
+	  ArriveAt + ReturnSeconds is ahead.
 	Studio: Players.<you>:SetAttribute("Perk_TrainExpress", true) tries Express.
 ]]
 
@@ -1300,6 +1303,7 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 	if not away and #train.Cargo > 0 and lastLoad and PlotService.plotOf(player) then
 		autoIn = math.max(0, lastLoad + TrainConfig.AutoDepartSeconds - now)
 	end
+	local unloading = isUnloading(player, train)
 	snapshot.Train = {
 		Cargo = #train.Cargo,
 		Capacity = TrainConfig.capacity(train.CapacityLevel, express),
@@ -1314,7 +1318,8 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		TripSeconds = TrainConfig.tripSeconds(train.SpeedLevel, express),
 		AutoDepartIn = autoIn,
 		Waiting = isWaiting(player, train),
-		Unloading = isUnloading(player, train),
+		Unloading = unloading,
+		UnloadWait = if unloading then PenService.laneWait(player, "Train") else nil,
 	}
 end
 
