@@ -33,7 +33,7 @@ local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
 local Floor = {}
 
 Floor.Index = 3
-Floor.Size = Vector3.new(136, 47, 116)
+Floor.Size = Vector3.new(136, 40, 116)
 
 type BuildOpts = { Cutaway: boolean? }
 type Ellipse = { x: number, z: number, rx: number, rz: number }
@@ -42,7 +42,8 @@ type Seg = { ax: number, az: number, bx: number, bz: number, w: number }
 ---------------------------------------------------------------- layout
 
 local HX, HZ = 62, 52 -- wall lines (inner half extents)
-local CEIL = 44 -- ceiling underside
+local ROOF = 40 -- top of the ceiling slab: in the game the ground and mountains are above (world y 0)
+local CEIL = ROOF - 3 -- ceiling underside
 local WATER = -0.7 -- lagoon surface
 local BED = -4 -- lagoon bed (the ground blocks run from here up to 0)
 local DECK = 0.35 -- boardwalk top
@@ -52,8 +53,17 @@ local DEEP_Z = -18 -- spawns behind this line are "deep" (the back third)
 local GIANT = Vector2.new(0, 18)
 local ENTRANCE = Vector2.new(0, 46)
 local ELEVATOR = Vector2.new(-32, 42)
-local LIFT = Vector2.new(50, 2)
-local LIFT_ANCHOR = 30 -- Railway.buildLift hangs its cable from 30 studs up
+-- the ramp from floor 2 (Land) comes in through the front wall: x -11..11, from about 5.6 up at
+-- the front face (z 58) down to the floor at z 50; x -12..12, z 44..58 stays clear, the gate
+-- stands at the ramp's foot
+local OPEN_HALF = 12 -- half width of the opening in the front wall
+local OPEN_TOP = 28 -- underside of the lintel (22+ over the ramp at the front face)
+local GATE_Z = 49
+local GATE_WIDTH = 22
+-- the Mine Lift's spot (Railway builds the lift there from TrainConfig in the game)
+local LIFT_SPOT = MineFloors.LiftSpots[3] or Vector3.new(50, 0, 2)
+local LIFT = Vector2.new(LIFT_SPOT.X, LIFT_SPOT.Z)
+local LIFT_ANCHOR = 30 -- the preview lift (Railway.buildLift outside a cave) hangs its cable from 30 up
 
 local LAKE: { Ellipse } = {
 	{ x = 0, z = -24, rx = 40, rz = 24 }, -- the main basin
@@ -296,10 +306,6 @@ local function classify(x: number, z: number): number
 	if inside(ISLANDS[1], x, z) then
 		return 3 -- Moss Isle
 	end
-	local n = math.sin(x * 0.17 + 1.3) * math.cos(z * 0.13 - 0.4) + 0.6 * math.sin((x - z) * 0.09 + 2)
-	if n > 0.95 then
-		return 3
-	end
 	return 1
 end
 
@@ -501,7 +507,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 				elseif grid[i][j - 1] == 0 then
 					toWater = Vector2.new(0, -1)
 				end
-				if toWater and rimRng:chance(0.34) then
+				if toWater and rimRng:chance(0.17) then
 					local x = -GX + (i - 0.5) * CELL + toWater.X * 0.9
 					local z = -GZ + (j - 0.5) * CELL + toWater.Y * 0.9
 					local nearLanding = false
@@ -518,7 +524,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 						local cf = at(x, top - hgt / 2, z)
 							* CFrame.Angles(rimRng:range(-0.1, 0.1), rimRng:range(0, math.pi), rimRng:range(-0.1, 0.1))
 						Geo.block(rims, cf, Vector3.new(s, hgt, s * rimRng:range(0.7, 1)), Geo.vary(C.Rim, rimRng, 0.06), nil, BUMP)
-						if rimRng:chance(0.35) then
+						if rimRng:chance(0.3) then
 							Geo.block(
 								rims,
 								cf * CFrame.new(0, hgt / 2 + 0.06, 0),
@@ -555,7 +561,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	local glintRng = Rng.new(3103)
 	local glints = 0
 	for _ = 1, 80 do
-		if glints >= 22 then
+		if glints >= 12 then
 			break
 		end
 		local x, z = glintRng:range(-38, 38), glintRng:range(-50, 4)
@@ -581,7 +587,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	local padRng = Rng.new(3104)
 	local pads = 0
 	for _ = 1, 60 do
-		if pads >= 9 then
+		if pads >= 7 then
 			break
 		end
 		local x, z = padRng:range(-36, 36), padRng:range(-46, 4)
@@ -612,24 +618,28 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	---------------------------------------------------------------- walls
 	local walls = folder("Walls")
 	local wallRng = Rng.new(3105)
-	local wallOpts = { Depth = 6 }
-	MineKit.wall(walls, pt(-HX, 0, HZ), pt(-HX, 0, -HZ), 50, dir(1, 0, 0), WALL_COLORS, wallRng, wallOpts)
-	MineKit.wall(walls, pt(HX, 0, -HZ), pt(HX, 0, HZ), 50, dir(-1, 0, 0), WALL_COLORS, wallRng, wallOpts)
-	MineKit.wall(walls, pt(-HX, 0, -HZ), pt(-22, 0, -HZ), 50, dir(0, 0, 1), WALL_COLORS, wallRng, wallOpts)
-	MineKit.wall(walls, pt(6, 0, -HZ), pt(HX, 0, -HZ), 50, dir(0, 0, 1), WALL_COLORS, wallRng, wallOpts)
+	local wallOpts = { Depth = 4 } -- (shards stay inside the floor's world box)
+	local wallH = ROOF - 1 -- (tilted shard tops stay under the roof)
+	MineKit.wall(walls, pt(-HX, 0, HZ), pt(-HX, 0, -HZ), wallH, dir(1, 0, 0), WALL_COLORS, wallRng, wallOpts)
+	MineKit.wall(walls, pt(HX, 0, -HZ), pt(HX, 0, HZ), wallH, dir(-1, 0, 0), WALL_COLORS, wallRng, wallOpts)
+	MineKit.wall(walls, pt(-HX, 0, -HZ), pt(-22, 0, -HZ), wallH, dir(0, 0, 1), WALL_COLORS, wallRng, wallOpts)
+	MineKit.wall(walls, pt(6, 0, -HZ), pt(HX, 0, -HZ), wallH, dir(0, 0, 1), WALL_COLORS, wallRng, wallOpts)
 	-- backing slabs fill every gap between the jagged shards and the ceiling
-	Geo.block(walls, at(-HX - 4.5, 22.5, 0), Vector3.new(3, 45, HZ * 2 + 12), C.WallDark, nil, SOLID)
-	Geo.block(walls, at(HX + 4.5, 22.5, 0), Vector3.new(3, 45, HZ * 2 + 12), C.WallDark, nil, SOLID)
-	Geo.block(walls, at(0, 22.5, -HZ - 4.5), Vector3.new(HX * 2 + 12, 45, 3), C.WallDark, nil, SOLID)
+	Geo.block(walls, at(-HX - 4.5, ROOF / 2, 0), Vector3.new(3, ROOF, HZ * 2 + 12), C.WallDark, nil, SOLID)
+	Geo.block(walls, at(HX + 4.5, ROOF / 2, 0), Vector3.new(3, ROOF, HZ * 2 + 12), C.WallDark, nil, SOLID)
+	Geo.block(walls, at(0, ROOF / 2, -HZ - 4.5), Vector3.new(HX * 2 + 12, ROOF, 3), C.WallDark, nil, SOLID)
 	if not cutaway then
-		MineKit.wall(walls, pt(HX, 0, HZ), pt(10, 0, HZ), 50, dir(0, 0, -1), WALL_COLORS, wallRng, wallOpts)
-		MineKit.wall(walls, pt(-10, 0, HZ), pt(-HX, 0, HZ), 50, dir(0, 0, -1), WALL_COLORS, wallRng, wallOpts)
-		Geo.block(walls, at(0, 22.5, HZ + 4.5), Vector3.new(HX * 2 + 12, 45, 3), C.WallDark, nil, SOLID)
-		-- the way in: a lintel over the opening and a short tunnel
-		Geo.block(walls, at(0, 31, HZ + 3), Vector3.new(22, 34, 6), C.WallMid, nil, SOLID)
+		-- the front wall with the opening for the ramp from floor 2: jambs at x +-12, a lintel at OPEN_TOP
+		local side = OPEN_HALF + 2.5
+		MineKit.wall(walls, pt(HX, 0, HZ), pt(side, 0, HZ), wallH, dir(0, 0, -1), WALL_COLORS, wallRng, wallOpts)
+		MineKit.wall(walls, pt(-side, 0, HZ), pt(-HX, 0, HZ), wallH, dir(0, 0, -1), WALL_COLORS, wallRng, wallOpts)
+		local backW = HX + 6 - OPEN_HALF
 		for _, sx in { -1, 1 } do
-			Geo.block(walls, at(sx * 11.5, 7, HZ + 3), Vector3.new(3, 14, 6), C.WallDark, nil, SOLID)
+			Geo.block(walls, at(sx * (OPEN_HALF + backW / 2), ROOF / 2, HZ + 4.5), Vector3.new(backW, ROOF, 3), C.WallDark, nil, SOLID)
+			Geo.block(walls, at(sx * (OPEN_HALF + 1.5), OPEN_TOP / 2, HZ + 3), Vector3.new(3, OPEN_TOP, 6), C.WallDark, nil, SOLID)
 		end
+		Geo.block(walls, at(0, (OPEN_TOP + ROOF) / 2, HZ + 3), Vector3.new(OPEN_HALF * 2 + 5, ROOF - OPEN_TOP, 6), C.WallMid, nil, SOLID)
+		Geo.block(walls, at(0, OPEN_TOP + 0.5, HZ - 0.2), Vector3.new(OPEN_HALF * 2 + 3, 0.8, 0.8), C.WallLight, nil, TINY)
 	end
 
 	-- a band of lighter, mossy fallen stones at the foot of the walls (smaller next to spawns)
@@ -639,7 +649,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 		local along = to - from
 		local len = along.Magnitude
 		local d = along.Unit
-		local n = math.max(1, math.floor(len / 6.5))
+		local n = math.max(1, math.floor(len / 9))
 		for k = 0, n - 1 do
 			local p = from + d * ((k + talusRng:range(0.25, 0.75)) * len / n)
 			local near = false
@@ -656,7 +666,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 			local cf = facing(c.X, h / 2 - 0.3, c.Y, face.X, face.Y)
 				* CFrame.Angles(talusRng:range(-0.08, 0.04), talusRng:range(-0.25, 0.25), talusRng:range(-0.06, 0.06))
 			Geo.block(talus, cf, Vector3.new(w, h, depth), Geo.vary(C.Talus, talusRng, 0.07), nil, BUMP)
-			if talusRng:chance(0.5) then
+			if talusRng:chance(0.35) then
 				Geo.block(
 					talus,
 					cf * CFrame.new(0, h / 2 + 0.07, 0),
@@ -673,15 +683,15 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	talusRow(Vector2.new(-HX + 2, -HZ), Vector2.new(-23, -HZ), Vector2.new(0, 1))
 	talusRow(Vector2.new(7, -HZ), Vector2.new(HX - 2, -HZ), Vector2.new(0, 1))
 	if not cutaway then
-		talusRow(Vector2.new(HX - 2, HZ), Vector2.new(12, HZ), Vector2.new(0, -1))
-		talusRow(Vector2.new(-12, HZ), Vector2.new(-HX + 2, HZ), Vector2.new(0, -1))
+		talusRow(Vector2.new(HX - 2, HZ), Vector2.new(OPEN_HALF + 4, HZ), Vector2.new(0, -1))
+		talusRow(Vector2.new(-OPEN_HALF - 4, HZ), Vector2.new(-HX + 2, HZ), Vector2.new(0, -1))
 	end
 
 	-- moss drapes with glowing berries hanging down the wall faces
 	local drapeRng = Rng.new(3114)
 	local drapes = 0
 	for _ = 1, 80 do
-		if drapes >= 22 then
+		if drapes >= 8 then
 			break
 		end
 		local side = drapeRng:int(1, 3)
@@ -726,8 +736,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	-- the back cliff the falls pour from
 	local cliff = folder("FallsCliff")
 	local cliffRng = Rng.new(3106)
-	Geo.block(cliff, at(-8, (BED + 50) / 2, -57), Vector3.new(30, 50 - BED, 8), C.WallMid, nil, SOLID)
-	for _, s in { { -20.5, 30, 3.4 }, { -17, 16, 2.6 }, { 4.5, 34, 3.2 }, { 1.5, 12, 2.2 }, { -21, 44, 2 }, { 5, 46, 2 } } do
+	Geo.block(cliff, at(-8, (BED + ROOF) / 2, -55.5), Vector3.new(30, ROOF - BED, 5), C.WallMid, nil, SOLID)
+	for _, s in { { -20.5, 30, 3.4 }, { -17, 16, 2.6 }, { 4.5, 34, 3.2 }, { 1.5, 12, 2.2 }, { -21, 38, 2 }, { 5, ROOF, 2 } } do
 		local x, h, d = s[1], s[2], s[3]
 		local cf = at(x, (h + BED) / 2, -53 + d / 2 - 0.4) * CFrame.Angles(0, cliffRng:range(-0.15, 0.15), cliffRng:range(-0.04, 0.04))
 		Geo.block(
@@ -740,7 +750,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 		)
 	end
 	-- lip ledges of the two falls, mossy on top, with crystals
-	local lips = { { -4, 30, 16, 10 }, { -15, 20.5, 8, 5 } }
+	local lips = { { -4, 28, 16, 10 }, { -15, 20.5, 8, 5 } }
 	for _, l in lips do
 		local x, y, w = l[1], l[2], l[3]
 		-- the shelf, a corbel wedge under it into the cliff and a crag stacked on top
@@ -781,8 +791,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 		Style.emitter(mist, "Sparkle", C.WaterLight, 5)
 	end
 	lightAt(falls, at(-9, 4, -46), rgb(170, 240, 255), 30, 1.4)
-	MineKit.crystals(cliff, upFrame(pt(3, 33.2, -51.4), dir(0.3, 1, 0.3)), 5, 4, "Shell", CRYSTALS, 31071)
-	MineKit.crystals(cliff, upFrame(pt(-18.5, 23.6, -51), dir(-0.3, 1, 0.2)), 4, 3, "Shell", CRYSTALS, 31072)
+	MineKit.crystals(cliff, upFrame(pt(3, 31.2, -51.4), dir(0.3, 1, 0.3)), 4, 3.6, "Shell", CRYSTALS, 31071)
+	MineKit.crystals(cliff, upFrame(pt(-18.5, 23.6, -51), dir(-0.3, 1, 0.2)), 3, 3, "Shell", CRYSTALS, 31072)
 
 	-- a timber shaft frame on top of the ore lift up to its cable anchor (LIFT_ANCHOR),
 	-- braced back to the east wall
@@ -854,7 +864,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	local front = if cutaway then 0 else GZ
 	Geo.block(ceiling, at(0, CEIL + 1.5, (front - GZ) / 2), Vector3.new(GX * 2, 3, front + GZ), C.WallMid, nil, SOLID)
 	-- rock lumps under the ceiling
-	for _ = 1, if cutaway then 9 else 16 do
+	for _ = 1, if cutaway then 7 else 10 do
 		local x, z = ceilRng:range(-54, 54), ceilRng:range(-48, front - 8)
 		local s = ceilRng:range(8, 16)
 		local h = ceilRng:range(2, 5)
@@ -867,16 +877,16 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 			DECOR
 		)
 	end
-	MineKit.stalactites(ceiling, pt(0, CEIL, -26), Vector2.new(116, 46), WALL_COLORS, ceilRng, 34)
+	MineKit.stalactites(ceiling, pt(0, CEIL, -26), Vector2.new(116, 46), WALL_COLORS, ceilRng, 20)
 	if not cutaway then
-		MineKit.stalactites(ceiling, pt(0, CEIL, 26), Vector2.new(116, 46), WALL_COLORS, ceilRng, 24)
+		MineKit.stalactites(ceiling, pt(0, CEIL, 26), Vector2.new(116, 46), WALL_COLORS, ceilRng, 10)
 	end
-	for _ = 1, 12 do
+	for _ = 1, 6 do
 		local x, z = ceilRng:range(-50, 50), ceilRng:range(-48, if cutaway then -4 else 44)
 		crystalStalactite(ceiling, at(x, CEIL, z), ceilRng:range(4, 8), ceilRng:range(1.4, 2.4), ceilRng)
 	end
 	-- giant crystals hanging over the lagoon
-	local hanging = { { -12, -30, 9, 6 }, { 22, -16, 7, 5 }, { -36, -40, 6, 5 }, { 36, -42, 7, 5 }, { 4, -6, 6, 5 }, { -30, -12, 6, 4 } }
+	local hanging = { { -12, -30, 9, 5 }, { 22, -16, 7, 4 }, { 36, -42, 7, 4 }, { -30, -12, 6, 4 } }
 	for i, hc in hanging do
 		local x, z, h, n = hc[1], hc[2], hc[3], hc[4]
 		Geo.block(
@@ -903,16 +913,13 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	local crystalRng = Rng.new(3110)
 	-- giants: x, z, foot height (BED = rising out of the lagoon), height, count, light (1/0), sparkle (1/0)
 	local giants: { { number } } = {
-		{ -27, -47, 0, 14, 8, 1, 1 },
-		{ 13, -48, 0, 12, 7, 1, 1 },
-		{ -2, -41, 0, 13, 8, 1, 1 },
-		{ 32, -20, BED, 14, 7, 1, 0 },
-		{ -36, -24, BED, 12, 6, 0, 0 },
-		{ 24, 0, BED, 11, 6, 1, 0 },
-		{ -20, -36, BED, 11, 6, 0, 0 },
-		{ 10, -14, BED, 10, 6, 1, 0 },
-		{ -13, 48, 0, 7, 5, 0, 0 },
-		{ 13, 48, 0, 7, 5, 0, 0 },
+		{ -27, -47, 0, 13, 7, 1, 1 },
+		{ 13, -48, 0, 11, 6, 1, 1 },
+		{ -2, -41, 0, 12, 7, 1, 1 },
+		{ 32, -20, BED, 13, 6, 1, 0 },
+		{ 24, 0, BED, 11, 5, 1, 0 },
+		{ 10, -14, BED, 10, 5, 1, 0 },
+		{ -20, -36, BED, 10, 5, 0, 0 },
 	}
 	for i, g in giants do
 		local x, z, y0, h, n = g[1], g[2], g[3], g[4], g[5]
@@ -943,12 +950,12 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 			if i % 2 == 0 then { C.Crystal2, C.Crystal } else CRYSTALS,
 			31100 + i
 		)
-		if h >= 9 then
+		if h >= 12 then
 			MineKit.crystals(
 				crystals,
 				root * CFrame.new(h * 0.22, 0.2, 0) * CFrame.Angles(0, 0, -0.4),
-				4,
-				h * 0.5,
+				3,
+				h * 0.3,
 				"Shell",
 				{ C.Crystal2, C.Crystal },
 				31120 + i
@@ -965,7 +972,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	-- small clusters along the walls and shores
 	local placed = 0
 	for _ = 1, 120 do
-		if placed >= 8 then
+		if placed >= 2 then
 			break
 		end
 		local x, z = crystalRng:range(-HX + 4, HX - 4), crystalRng:range(-HZ + 4, HZ - 6)
@@ -996,18 +1003,14 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	-- (the lit ones glow over the rock patches next to them)
 	local wallSpots: { { number } } = {
 		{ -HX + 0.6, 10, 22, 1, 0, 1 },
-		{ -HX + 0.6, 14, -6, 1, 0, 0 },
-		{ -HX + 0.6, 7, -30, 1, 0, 0 },
 		{ HX - 0.6, 11, 22, -1, 0, 1 },
-		{ HX - 0.6, 8, -20, -1, 0, 0 },
 		{ HX - 0.6, 15, -38, -1, 0, 0 },
 		{ -44, 12, -HZ + 0.6, 0, 1, 1 },
-		{ 30, 16, -HZ + 0.6, 0, 1, 0 },
 		{ 46, 9, -HZ + 0.6, 0, 1, 1 },
 	}
 	for i, w in wallSpots do
 		local x, y, z, fx, fz = w[1], w[2], w[3], w[4], w[5]
-		MineKit.crystals(crystals, upFrame(pt(x, y, z), dir(fx, 0.9, fz)), 4, crystalRng:range(3.5, 5.5), "Shell", CRYSTALS, 31300 + i)
+		MineKit.crystals(crystals, upFrame(pt(x, y, z), dir(fx, 0.9, fz)), 4, 3.8, "Shell", CRYSTALS, 31300 + i)
 		if w[6] == 1 then
 			lightAt(crystals, at(x + fx * 3, y + 2, z + fz * 3), rgb(196, 240, 255), 34, 1.8)
 		end
@@ -1070,20 +1073,20 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 		end
 	end
 	-- glowing guide stones along the main road
-	for _, z in { 46, 33, 26.5 } do
+	for _, z in { 36, 27 } do
 		for _, sx in { -1, 1 } do
 			Style.lantern(walk, at(sx * 5.4, 0, z), { Kind = "Ground", Color = C.PathGlow })
 		end
 	end
 	-- warm lanterns (glow only, no light) along the side paths
-	for _, l in { { -26, 13.5, 0, -1 }, { -40, 1, 1, 0 }, { 26, 14.2, 0, -1 }, { 38, -6, -1, 0 }, { -47.5, -22, 1, 0 }, { 38, -36, -1, 0 } } do
+	for _, l in { { -26, 13.5, 0, -1 }, { 26, 14.2, 0, -1 }, { -47.5, -22, 1, 0 }, { 38, -36, -1, 0 } } do
 		Style.lantern(walk, facing(l[1], 0, l[2], l[3], l[4]), { Kind = "Post", Color = C.Lamp, Height = 6 })
 	end
-	-- warm pillar lanterns inside the gate
+	-- warm pillar lanterns beside the gate (outside the ramp's clear box)
 	for _, sx in { -1, 1 } do
 		Style.lantern(
 			walk,
-			facing(sx * 8, 0, 46, 0, 1),
+			facing(sx * (OPEN_HALF + 4), 0, GATE_Z - 1.5, 0, 1),
 			{ Kind = "Pillar", Light = true, Color = C.Lamp, Range = 20, Brightness = 1.3, Height = 4 }
 		)
 	end
@@ -1115,11 +1118,11 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	local floraRng = Rng.new(3112)
 	-- groves: x, z, radius, big, small, light (1/0)
 	local groves: { { number } } = {
-		{ 53, 44, 6, 6, 6, 0 },
-		{ -56, -48, 4, 4, 5, 1 },
-		{ 56, -48, 4, 4, 5, 1 },
-		{ -11, -27, 2.5, 1, 4, 0 },
-		{ -56, 44, 4, 3, 4, 0 },
+		{ 53, 44, 6, 5, 4, 0 },
+		{ -56, -48, 4, 3, 3, 1 },
+		{ 56, -48, 4, 3, 3, 1 },
+		{ -11, -27, 2.5, 1, 2, 0 },
+		{ -56, 44, 4, 2, 3, 0 },
 	}
 	for gi, g in groves do
 		local cx, cz, radius = g[1], g[2], g[3]
@@ -1159,7 +1162,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	-- single small mushrooms and moss carpets scattered along the walls and shores
 	local scattered = 0
 	for _ = 1, 160 do
-		if scattered >= 26 then
+		if scattered >= 8 then
 			break
 		end
 		local x, z = floraRng:range(-HX + 4, HX - 4), floraRng:range(-HZ + 4, HZ - 4)
@@ -1181,7 +1184,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	-- pebbles break up the open floor
 	local pebbles = 0
 	for _ = 1, 200 do
-		if pebbles >= 34 then
+		if pebbles >= 8 then
 			break
 		end
 		local x, z = floraRng:range(-HX + 6, HX - 6), floraRng:range(-HZ + 6, HZ - 4)
@@ -1211,9 +1214,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	end
 	MineKit.marker(model, "GiantSpawn", at(GIANT.X, 0, GIANT.Y))
 	MineKit.marker(model, "Entrance", facing(ENTRANCE.X, 0, ENTRANCE.Y, 0, -1))
-	MineKit.gate(model, facing(0, 0, HZ - 3, 0, 1), 14, MineFloors.get(3).MinBlaster, { PAL.Mid, PAL.Light, PAL.Dark })
+	MineKit.gate(model, facing(0, 0, GATE_Z, 0, 1), GATE_WIDTH, MineFloors.get(3).MinBlaster, { PAL.Mid, PAL.Light, PAL.Dark })
 	MineKit.elevator(model, facing(ELEVATOR.X, 0, ELEVATOR.Y, 1, 0), Floor.Index)
-	MineKit.oreLift(model, pt(LIFT.X, 0, LIFT.Y), "Floor3")
+	MineKit.oreLift(model, origin:PointToWorldSpace(LIFT_SPOT), "Floor3")
 
 	-- everything anchored (the helpers already are; this keeps it a rule)
 	for _, d in model:GetDescendants() do

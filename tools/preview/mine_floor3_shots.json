@@ -1,5 +1,5 @@
 {
- "mine_floor3_overview": {"scene": "mine_floor_3", "position": [0, 46, 94], "target": [0, 0, -14], "fov": 55, "preset": "Lagoon", "shadowExtent": 160, "maxLights": 24},
+ "mine_floor3_overview": {"scene": "mine_floor_3", "position": [0, 39, 98], "target": [0, 0, -14], "fov": 55, "preset": "Lagoon", "shadowExtent": 160, "maxLights": 24},
  "mine_floor3_entrance": {"scene": "mine_floor_3", "position": [-3, 6.5, 41], "target": [-15, 3.5, -2], "fov": 70, "preset": "Lagoon", "shadowExtent": 120, "maxLights": 24},
  "mine_floor3_lagoon": {"scene": "mine_floor_3", "position": [-28, 9, -6], "target": [-5, 11, -50], "fov": 58, "preset": "Lagoon", "shadowExtent": 100, "maxLights": 24},
  "mine_floor3_bridge": {"scene": "mine_floor_3", "position": [16, 9, -10], "target": [-4, 13, -46], "fov": 62, "preset": "Lagoon", "shadowExtent": 100, "maxLights": 24},
