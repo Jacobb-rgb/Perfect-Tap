@@ -327,6 +327,7 @@ async function main() {
   const groups = new Map();
   scene.parts.forEach((p, index) => {
     const [shape, sx, sy, sz, cf, color, mat, transparency, reflectance] = p;
+    if (Math.min(sx, sy, sz) < 1e-4) return; // flat parts give NaN normals (one NaN pixel blacks out the bloom)
     const kind = materialKind(mat, reflectance);
     const tKey = Math.round(transparency * 10) / 10;
     const key = `${shape}|${kind}|${tKey}`;

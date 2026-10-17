@@ -543,4 +543,9 @@ function Glow.buildHold(Loader: any, parent: any)
 	return root
 end
 
+-- Shared with the Kenney shape gallery (tools/lune/lib/blaster_kenney.luau).
+Glow.skinFor = skinFor
+Glow.cracks = cracks
+Glow.rng = rng
+
 return Glow

@@ -1,0 +1,448 @@
+{
+ "kenney_check": {
+  "scene": "kenney_check",
+  "position": [
+   0,
+   7,
+   40
+  ],
+  "target": [
+   0,
+   7,
+   0
+  ],
+  "fov": 40,
+  "preset": "Workbench",
+  "sunDir": [
+   0.2,
+   0.5,
+   0.85
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 40,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "kc_d": {
+  "scene": "kenney_check",
+  "position": [
+   6.5,
+   12.8,
+   7.5
+  ],
+  "target": [
+   5,
+   12,
+   0
+  ],
+  "fov": 34,
+  "preset": "Workbench",
+  "sunDir": [
+   0.2,
+   0.5,
+   0.85
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 40,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "kc_e": {
+  "scene": "kenney_check",
+  "position": [
+   16.5,
+   12.8,
+   7.5
+  ],
+  "target": [
+   15,
+   12,
+   0
+  ],
+  "fov": 34,
+  "preset": "Workbench",
+  "sunDir": [
+   0.2,
+   0.5,
+   0.85
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 40,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "kc_b": {
+  "scene": "kenney_check",
+  "position": [
+   -13.5,
+   12.8,
+   7.5
+  ],
+  "target": [
+   -15,
+   12,
+   0
+  ],
+  "fov": 34,
+  "preset": "Workbench",
+  "sunDir": [
+   0.2,
+   0.5,
+   0.85
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 40,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "kc_j": {
+  "scene": "kenney_check",
+  "position": [
+   6.5,
+   7.8,
+   7.5
+  ],
+  "target": [
+   5,
+   7,
+   0
+  ],
+  "fov": 34,
+  "preset": "Workbench",
+  "sunDir": [
+   0.2,
+   0.5,
+   0.85
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 40,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "kc_p": {
+  "scene": "kenney_check",
+  "position": [
+   6.5,
+   2.8,
+   7.5
+  ],
+  "target": [
+   5,
+   2,
+   0
+  ],
+  "fov": 34,
+  "preset": "Workbench",
+  "sunDir": [
+   0.2,
+   0.5,
+   0.85
+  ],
+  "sunColor": [
+   1,
+   1,
+   1
+  ],
+  "exposure": 1.0,
+  "shadowExtent": 40,
+  "cc": {
+   "TintColor": [
+    1,
+    1,
+    1
+   ]
+  }
+ },
+ "kb_lineup": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   0.3,
+   203.4,
+   24.0
+  ],
+  "target": [
+   0.3,
+   203.0,
+   0.0
+  ],
+  "fov": 38
+ },
+ "kb_1": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   140.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   140,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_2": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   180.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   180,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_3": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   220.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   220,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_4": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   260.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   260,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_5": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   300.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   300,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_6": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   340.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   340,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_7": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   380.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   380,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_8": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   420.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   420,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_9": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   460.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   460,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ },
+ "kb_10": {
+  "preset": "Surface",
+  "sunDir": [
+   0.3,
+   0.45,
+   0.85
+  ],
+  "shadowExtent": 30,
+  "exposure": 0.95,
+  "scene": "blaster_kenney",
+  "position": [
+   500.8,
+   200.6,
+   8.0
+  ],
+  "target": [
+   500,
+   200.0,
+   0.0
+  ],
+  "fov": 40
+ }
+}

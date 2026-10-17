@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Terra Forge Crate Opening</title>
+    <style>
+      @font-face {
+        font-family: "Fredoka One";
+        src: url("/node_modules/@fontsource/fredoka-one/files/fredoka-one-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Luckiest Guy";
+        src: url("/node_modules/@fontsource/luckiest-guy/files/luckiest-guy-latin-400-normal.woff2") format("woff2");
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      #stage {
+        position: relative;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+      .layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      #vignette {
+        background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+      #flash {
+        background: #fff;
+        opacity: 0;
+      }
+      #fade {
+        background: #000;
+        opacity: 0;
+      }
+      #title {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        padding-bottom: 4.5%;
+        font-family: "Fredoka One", sans-serif;
+        color: #fff;
+        text-align: center;
+      }
+      #title > div {
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      #newTag {
+        font-size: 1.7vw;
+        letter-spacing: 0.5vw;
+        color: #ffe6f2;
+        text-shadow: 0 0 1vw var(--glow), 0 0 2vw var(--glow);
+      }
+      #rarity {
+        font-family: "Luckiest Guy", sans-serif;
+        font-size: 5.6vw;
+        line-height: 1;
+        margin-top: 0.4vw;
+        background: linear-gradient(180deg, #ffffff 0%, var(--light) 38%, var(--deep) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        filter: drop-shadow(0 0 0.6vw var(--glow)) drop-shadow(0 0 1.6vw var(--glow)) drop-shadow(0 0.4vw 0 rgba(0, 0, 0, 0.6));
+      }
+      #name {
+        font-size: 2.2vw;
+        margin-top: 0.6vw;
+        text-shadow: 0 0.25vw 0 rgba(0, 0, 0, 0.55), 0 0 1.2vw var(--glow);
+      }
+      #level {
+        margin-top: 0.8vw;
+        font-size: 1.6vw;
+        padding: 0.3vw 1.4vw;
+        border-radius: 2vw;
+        background: linear-gradient(180deg, var(--light), var(--deep));
+        box-shadow: 0 0 1.2vw var(--glow);
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="vignette" class="layer"></div>
+      <div id="title" class="layer">
+        <div id="newTag">NEW BLASTER!</div>
+        <div id="rarity">MYTHIC</div>
+        <div id="name">NAME</div>
+        <div id="level">LV 10</div>
+      </div>
+      <div id="flash" class="layer"></div>
+      <div id="fade" class="layer"></div>
+    </div>
+    <script type="module" src="/anim.js"></script>
+  </body>
+</html>

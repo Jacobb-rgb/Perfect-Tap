@@ -86,6 +86,10 @@ elseif sceneName == "blasters" or sceneName == "blaster_fire" then
 	require("./lib/blaster_gallery").build(Loader, workspace, sceneName)
 elseif sceneName == "blaster_concepts" then -- blaster style proposals (tools/lune/lib/blaster_concepts.luau)
 	require("./lib/blaster_concepts").build(Loader, workspace)
+elseif sceneName == "kenney_check" then -- the Kenney Blaster Kit shapes rebuilt from parts (tools/lune/lib/blaster_kenney.luau)
+	require("./lib/blaster_kenney").buildCheck(Loader, workspace)
+elseif sceneName == "blaster_kenney" then -- the ten levels: Kenney shapes with the Ore Glow skins
+	require("./lib/blaster_kenney").build(Loader, workspace)
 elseif sceneName == "blaster_glow" then -- proposal D "Ore Glow" floating in the sky (tools/lune/lib/blaster_glow.luau)
 	require("./lib/blaster_glow").build(Loader, workspace)
 elseif sceneName == "blaster_glow_hold" then -- proposal D held on the plaza
