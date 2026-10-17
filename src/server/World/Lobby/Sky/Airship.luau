@@ -1,20 +1,23 @@
 --[[
 	Sky package: the airship of concept v2 (docs/art/lobby_concept_v2.webp,
-	top right): a long tapered dark-bronze cigar cruising over the mountain's
+	top right): a long rounded copper bullet cruising over the mountain's
 	right shoulder, between the peak and the east floating island, pitched a
 	little nose-down like the concept.
 
-	The envelope is a long bronze cylinder with a steel nose (four shrinking
-	cylinders and a brass cap with the lamp) and a steel tail (four
-	shrinking cylinders into the stern propeller), so the silhouette tapers
-	at both ends; brass ribs hide the steps at the nose and the tail and band
-	the belly, four thin dark gore strips run along it, two portholes glow on
-	each flank. On top a small engine (a cylinder housing with a brass cap
-	and a glowing exhaust), at the tail four wedge fins with red/green
-	navigation lamps, behind the stern a three-blade propeller and a pink-
-	ember exhaust trail. Two engine pods hang on pylons with three-blade
-	propellers and glowing exhausts, and under the belly a timber gondola
-	with a thin windscreen strip and lit windows.
+	The envelope is a sunlit copper-bronze cylinder closed by Balls, not
+	stepped drums: a full-width copper ball makes the round nose (one dark
+	band around it) with a smaller ball pushed out in front as the tip and
+	the lamp on it; a slightly narrower ball rounds the tail off into a
+	two-drum cone that carries the stern propeller. A light brass strip runs
+	along the sunlit top, brass ribs band the body, four thin copper-brown
+	gore strips run along it, two portholes glow on each flank. On top a
+	small engine (a cylinder housing with a brass cap and a glowing exhaust),
+	at the tail four wedge fins with red/green navigation lamps, behind the
+	stern a three-blade propeller and a long glowing exhaust streak (three
+	Neon segments, each longer, wider and fainter). Two engine pods hang on
+	pylons with big dark three-blade propellers on brass hubs and glowing
+	exhausts, and under the belly a timber gondola with a thin windscreen
+	strip and lit windows.
 
 	Tagged Spin with SpinSpeed 0 (it never turns) and a slow bob. Persistent
 	streaming: it hangs ~400 studs from the plaza, right at the 384-stud
@@ -39,10 +42,12 @@ local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
 end
 
--- local tones: dark bronze body, steel nose/tail and pods, dark gores
-local Bronze = rgb(150, 92, 60)
+-- local tones: sunlit copper-bronze body, steel pods, copper-brown gores
+local Bronze = rgb(190, 120, 72)
 local Steel = rgb(150, 140, 136)
-local Gore = rgb(52, 38, 34)
+local Gore = rgb(112, 64, 40)
+local Band = rgb(58, 40, 34)
+local TopStrip = rgb(236, 182, 112)
 local NavRed = rgb(255, 64, 64)
 local NavGreen = rgb(80, 255, 140)
 local Screen = rgb(255, 170, 90)
@@ -67,10 +72,14 @@ Airship.MaxParts = 70
 -- envelope (ship units, the nose toward -Z)
 local BODY_D = 14 -- main cylinder diameter
 local BODY_LEN = 40 -- main cylinder length (z -20 .. 20)
--- nose and tail tapers: { diameter, center z, length } (each overlaps the
--- last; small steps read as one smooth taper at a distance)
-local NOSE = { { 12.6, -21.8, 4.4 }, { 10.8, -24.8, 3.6 }, { 8.6, -27.4, 3.2 }, { 6, -29.6, 2.8 } }
-local TAIL = { { 12.4, 22, 5 }, { 10.2, 25.4, 4 }, { 7.6, 28.4, 3.6 }, { 4.8, 31, 3.2 } }
+-- the rounded nose: a full-width ball on the body's front end and a smaller
+-- tip ball pushed out in front of it ({ diameter, center z })
+local NOSE = { BODY_D, -BODY_LEN / 2 }
+local TIP = { 10, -23.2 }
+-- the rounded tail: a slightly narrower ball and a two-drum cone
+-- ({ diameter, center z, length }) into the stern propeller
+local TAIL = { 13, BODY_LEN / 2 }
+local CONE = { { 8, 26.6, 4 }, { 5, 29.8, 3 } }
 
 function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	local m = Style.model("Airship", parent)
@@ -104,37 +113,49 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 			Kit.far({ Shape = CYLINDER })
 		)
 	end
-	-- a three-blade propeller facing along the ship's axis; `span` = tip to tip
+	-- a ball (diameter in ship units)
+	local function orb(cf: CFrame, diameter: number, color: Color3): Part
+		return Style.block(m, cf, size(diameter, diameter, diameter), color, nil, Kit.far({ Shape = BALL }))
+	end
+	-- a three-blade propeller facing along the ship's axis on a brass hub
+	-- disc; `span` = tip to tip
 	local function propeller(cf: CFrame, span: number)
-		box(cf, size(1.1, 1.1, 0.9), C.Iron)
+		drum(cf, 2.2, 0.8, C.Brass)
 		local twist = rng:range(0, math.pi * 2 / 3)
 		for k = 0, 2 do
 			local spin = cf * CFrame.Angles(0, 0, twist + k * math.pi * 2 / 3)
-			box(spin * CFrame.new(0, span / 4 * S, 0) * CFrame.Angles(0, math.rad(18), 0), size(0.7, span / 2, 0.2), C.WoodLight)
+			box(spin * CFrame.new(0, span / 4 * S, 0) * CFrame.Angles(0, math.rad(18), 0), size(1.1, span / 2, 0.25), C.Iron)
 		end
 	end
 
-	-- the envelope: bronze body, steel nose and tail tapers, a brass nose cap
+	-- the envelope: a copper-bronze body closed by balls, a copper nose with
+	-- one dark band, a small tip ball with the lamp, a ball tail and a cone
 	local bronze = Style.vary(Bronze, rng, 0.03)
 	local body = drum(at(0, 0, 0), BODY_D, BODY_LEN, bronze)
 	body.Name = "Envelope"
-	for _, t in NOSE do
-		drum(at(0, 0, t[2]), t[1], t[3], Steel)
+	local nose = orb(at(0, 0, NOSE[2]), NOSE[1], C.Copper)
+	nose.Name = "Nose"
+	-- the dark band: a thin disc around the nose ball just in front of the
+	-- body, so from the front the nose stays one clean dome
+	local bandZ = NOSE[2] - 1.6
+	drum(at(0, 0, bandZ), 2 * math.sqrt((NOSE[1] / 2) ^ 2 - 1.6 ^ 2) + 0.3, 0.9, Band)
+	orb(at(0, 0, TIP[2]), TIP[1], C.Copper)
+	glow(at(0, 0, TIP[2] - TIP[1] / 2 - 0.1), size(1.8, 1.8, 0.6), C.Lamp)
+	local tail = orb(at(0, 0, TAIL[2]), TAIL[1], bronze)
+	tail.Name = "Tail"
+	for _, t in CONE do
+		drum(at(0, 0, t[2]), t[1], t[3], C.Copper)
 	end
-	for _, t in TAIL do
-		drum(at(0, 0, t[2]), t[1], t[3], Steel)
-	end
-	local tip = NOSE[4][2] - NOSE[4][3] / 2
-	Style.block(m, at(0, 0, tip + 0.6), size(4.6, 4.6, 4.6), C.Brass, nil, Kit.far({ Shape = BALL }))
-	glow(at(0, 0, tip - 1.4), size(1.8, 1.8, 0.6), C.Lamp)
 
-	-- brass ribs: over the nose and tail steps (no visible seam) and around the belly
-	drum(at(0, 0, -BODY_LEN / 2 + 0.4), BODY_D + 0.6, 1.2, C.Brass)
-	drum(at(0, 0, BODY_LEN / 2 - 0.4), BODY_D + 0.6, 1.2, C.Brass)
+	-- brass ribs where the balls meet the body and around the belly
+	drum(at(0, 0, -BODY_LEN / 2 + 0.4), BODY_D + 0.5, 1.2, C.Brass)
+	drum(at(0, 0, BODY_LEN / 2 - 0.4), BODY_D + 0.5, 1.2, C.Brass)
 	for _, rz in { -7, 7 } do
-		drum(at(0, 0, rz), BODY_D + 0.5, 0.8, C.Brass)
+		drum(at(0, 0, rz), BODY_D + 0.4, 0.8, C.Brass)
 	end
-	-- four thin dark gore strips along the envelope
+	-- the light brass strip along the sunlit top (0.25 above the skin)
+	box(at(0, BODY_D / 2 + 0.05, 0), size(2.6, 0.6, BODY_LEN - 1), TopStrip)
+	-- four thin copper-brown gore strips along the envelope
 	for k = 0, 3 do
 		local angle = math.rad(45 + k * 90)
 		local r = BODY_D / 2 + 0.1
@@ -159,7 +180,7 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 	-- wedge fins on the tail: the slope faces forward (a wedge's tall face is
 	-- its +Z side), so every fin's leading edge sweeps back
 	local finZ = 25
-	local finR = 5
+	local finR = 4.2
 	Geo.wedge(m, at(0, finR + 3, finZ), size(0.8, 6, 8), C.AwningRed, nil, Kit.far())
 	Geo.wedge(m, at(0, -finR - 2.5, finZ) * CFrame.Angles(0, 0, math.pi), size(0.8, 5, 7), C.RoofTrim, nil, Kit.far())
 	for _, side in { -1, 1 } do
@@ -175,11 +196,22 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 		glow(at(side * (finR + 6.2), 0, finZ + 3.2), size(0.8, 0.8, 0.8), if side < 0 then NavRed else NavGreen)
 	end
 
-	-- stern propeller and the exhaust trail behind it (pink-ember, fading)
-	local sternZ = TAIL[4][2] + TAIL[4][3] / 2 + 0.6
-	propeller(at(0, 0, sternZ), 9)
-	glow(at(0, 0, sternZ + 3.4), size(1.6, 1.6, 4), C.Ember, 0.2)
-	glow(at(0, 0.3, sternZ + 9), size(1.2, 1.2, 8), Trail, 0.55)
+	-- stern propeller and the long glowing exhaust streak behind it: three
+	-- Neon segments, each longer, wider and fainter (ember into pink)
+	local last = CONE[#CONE]
+	local sternZ = last[2] + last[3] / 2 + 0.5
+	propeller(at(0, 0, sternZ), 12)
+	local z = sternZ + 1
+	type Segment = { Width: number, Length: number, Transparency: number, Color: Color3 }
+	local trail: { Segment } = {
+		{ Width = 2.6, Length = 5, Transparency = 0.3, Color = C.Ember },
+		{ Width = 3.2, Length = 9, Transparency = 0.5, Color = Trail },
+		{ Width = 3.8, Length = 14, Transparency = 0.7, Color = Trail },
+	}
+	for i, seg in trail do
+		glow(at(0, 0.25 * i, z + seg.Length / 2), size(seg.Width, seg.Width * 0.8, seg.Length), seg.Color, seg.Transparency)
+		z += seg.Length - 0.4
+	end
 
 	-- engine pods on pylons, low on both flanks
 	for _, side in { -1, 1 } do
@@ -189,7 +221,7 @@ function Airship.build(parent: Instance, rng: Rng.Rng): Model
 		box(at(side * (BODY_D / 2 + 1.1), -2.6, podZ), size(4.2, 0.7, 2.6), C.Iron)
 		drum(at(podX, podY, podZ), 3.4, 8, Steel)
 		drum(at(podX, podY, podZ - 4.2), 2.6, 0.8, C.Brass)
-		propeller(at(podX, podY, podZ - 5), 9)
+		propeller(at(podX, podY, podZ - 4.9), 12)
 		glow(at(podX, podY, podZ + 4.4), size(1.8, 1.8, 0.8), C.Fire, 0.1)
 	end
 

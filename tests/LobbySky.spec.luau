@@ -2,12 +2,15 @@
 	Lobby package "Sky" (src/server/World/Lobby/Sky, docs/plans/LOBBY_PLAN.md
 	6.1, docs/plans/VISUAL_UPGRADE_PLAN.md): every set piece is built inside
 	its LobbyLayout footprint and part budget, clouds stay out of the lobby
-	area and are puffy clusters with lit undersides, the three planets hang
-	1500-3000 studs out in the north-west..north-east sky (big, cheap,
-	two/three-tone, one ringed, never in front of the sun), the airship is a
-	cheap bobbing Spin model, the balloon and the ships are tagged Spin, the
-	build is deterministic, and the golden-hour Lighting in
-	default.project.json is identical to LightingConfig.Presets.Surface.
+	area and are puffy clusters and thin streaks with lit undersides at many
+	heights (never straddling the hero frame's top edge), the three planets
+	hang 1500-3000 studs out in the north-west..north-east sky (Kenney
+	camouflage, cheap, one ringed, never in front of the sun, wholly inside
+	the hero frame, not hidden from the spawn), the airship is a cheap
+	bobbing Spin model with a rounded nose and tail, the balloon and the
+	ships are tagged Spin, the build is deterministic, and the golden-hour
+	Lighting in default.project.json is identical to
+	LightingConfig.Presets.Surface.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -227,71 +230,7 @@ return function(T, Loader)
 	local function luminance(c: any): number
 		return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B
 	end
-
-	T.test("sky: clouds are rounded mounds with lit tops and a faint lit underside", function()
-		local root = build()
-		local clusters = 0
-		for _, cloud in root.CloudBanks:GetChildren() do
-			if cloud:IsA("Model") then
-				clusters += 1
-				local name = cloud:GetFullName()
-				local list = parts(cloud)
-				T.truthy(#list >= 16, name .. " is a stacked cluster, not a slab")
-				-- the cluster frame: every block shares its yaw
-				local frame = list[1].CFrame - list[1].CFrame.Position
-				local minY, maxY = math.huge, -math.huge
-				local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
-				local sheets, solids = {}, {}
-				for _, part in list do
-					local p = part.CFrame.Position
-					local half = part.Size.Y / 2
-					if part.Material == roblox.Enum.Material.Neon and part.Size.Y < 0.5 then
-						table.insert(sheets, part)
-					else
-						table.insert(solids, part)
-						minY = math.min(minY, p.Y - half)
-						maxY = math.max(maxY, p.Y + half)
-						local l = frame:PointToObjectSpace(p)
-						minX, maxX = math.min(minX, l.X - part.Size.X / 2), math.max(maxX, l.X + part.Size.X / 2)
-						minZ, maxZ = math.min(minZ, l.Z - part.Size.Z / 2), math.max(maxZ, l.Z + part.Size.Z / 2)
-					end
-				end
-				local height, width, depth = maxY - minY, maxX - minX, maxZ - minZ
-				-- a mound, not a slab: tall and deep for its width
-				T.truthy(height > 0.45 * width, `{name} is puffy ({height} tall, {width} wide)`)
-				T.truthy(depth > 0.6 * width, `{name} has a deep footprint ({depth} deep, {width} wide)`)
-				-- a stepped, lumpy underside: the low blocks sit at several heights
-				local bottoms: { [number]: boolean } = {}
-				local steps = 0
-				for _, part in solids do
-					local bottom = part.CFrame.Position.Y - part.Size.Y / 2
-					local key = math.floor(bottom + 0.5)
-					if bottom < minY + height * 0.2 and not bottoms[key] then
-						bottoms[key] = true
-						steps += 1
-					end
-				end
-				T.truthy(steps >= 3, `{name} has a stepped underside ({steps} levels)`)
-				-- the top is the lightest tone (lit by the sky), never the purple shade
-				local topPart = solids[1]
-				for _, part in solids do
-					if part.CFrame.Position.Y + part.Size.Y / 2 > topPart.CFrame.Position.Y + topPart.Size.Y / 2 then
-						topPart = part
-					end
-				end
-				T.truthy(luminance(topPart.Color) > 0.7, `{name} has a lit top ({tostring(topPart.Color)})`)
-				-- a faint warm glow under it, a clear stud below the lowest block (no shared face)
-				T.truthy(#sheets >= 1, name .. " has a lit underside")
-				for _, sheet in sheets do
-					T.truthy(sheet.Transparency >= 0.7, name .. " underside glow is faint")
-					local top = sheet.CFrame.Position.Y + sheet.Size.Y / 2
-					T.truthy(top < minY + height * 0.25, name .. " glow sits under the cloud")
-					T.truthy(minY - top >= 1, `{name} glow is {minY - top} studs under the lowest block`)
-				end
-			end
-		end
-		T.truthy(clusters >= 12, "a dozen or more cloud clusters")
-	end)
+	local Color3White = roblox.Color3.new(1, 1, 1)
 
 	-- Preview cameras (tools/preview/lobby_shots.json, rendered 1600 x 900).
 	local shots = serde.decode("json", fs.readFile(process.cwd .. "/tools/preview/lobby_shots.json"))
@@ -367,11 +306,263 @@ return function(T, Loader)
 		return false
 	end
 
+	T.test("sky: clouds are rounded mounds and thin streaks with lit undersides", function()
+		local root = build()
+		local clusters, streaks = 0, 0
+		local lowBase, highBase, smallest, largest = math.huge, -math.huge, math.huge, 0
+		-- the lit skirts: translucent Neon sheets a clear stud under the block above them
+		local function skirts(list: { any }, name: string): ({ any }, { any })
+			local sheets, solids = {}, {}
+			for _, part in list do
+				if part.Material == roblox.Enum.Material.Neon and part.Size.Y < 0.5 then
+					table.insert(sheets, part)
+				else
+					table.insert(solids, part)
+				end
+			end
+			for _, sheet in sheets do
+				T.eq(sheet.Name, "Skirt", name .. " sheet is a skirt")
+				T.truthy(sheet.Transparency >= 0.3 and sheet.Transparency <= 0.45, name .. " skirt glows (Transparency 0.3-0.45)")
+				local top = sheet.CFrame.Position.Y + sheet.Size.Y / 2
+				-- the solid right above the skirt's middle
+				local above = math.huge
+				for _, part in solids do
+					local l = part.CFrame:PointToObjectSpace(sheet.CFrame.Position)
+					local bottom = part.CFrame.Position.Y - part.Size.Y / 2
+					if math.abs(l.X) <= part.Size.X / 2 and math.abs(l.Z) <= part.Size.Z / 2 and bottom > top then
+						above = math.min(above, bottom)
+					end
+				end
+				T.truthy(above < math.huge, name .. " skirt hangs under a block")
+				T.truthy(above - top >= 1 and above - top <= 1.5, `{name} skirt is {above - top} studs under its block`)
+			end
+			return sheets, solids
+		end
+		for _, cloud in root.CloudBanks:GetChildren() do
+			local name = cloud:GetFullName()
+			local list = parts(cloud)
+			if cloud:IsA("Model") and cloud.Name == "Cloud" then
+				clusters += 1
+				T.truthy(#list >= 20 and #list <= 26, name .. " is a stacked cluster, not a slab")
+				-- the cluster frame: every block shares its yaw
+				local frame = list[1].CFrame - list[1].CFrame.Position
+				local sheets, solids = skirts(list, name)
+				T.truthy(#sheets >= 6, name .. " has a lit skirt under every puff")
+				local minY, maxY = math.huge, -math.huge
+				local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+				for _, part in solids do
+					local p = part.CFrame.Position
+					local half = part.Size.Y / 2
+					minY = math.min(minY, p.Y - half)
+					maxY = math.max(maxY, p.Y + half)
+					local l = frame:PointToObjectSpace(p)
+					minX, maxX = math.min(minX, l.X - part.Size.X / 2), math.max(maxX, l.X + part.Size.X / 2)
+					minZ, maxZ = math.min(minZ, l.Z - part.Size.Z / 2), math.max(maxZ, l.Z + part.Size.Z / 2)
+				end
+				local height, width, depth = maxY - minY, maxX - minX, maxZ - minZ
+				lowBase, highBase = math.min(lowBase, minY), math.max(highBase, minY)
+				smallest, largest = math.min(smallest, width), math.max(largest, width)
+				-- a mound, not a slab: tall and deep for its width
+				T.truthy(height > 0.45 * width, `{name} is puffy ({height} tall, {width} wide)`)
+				T.truthy(depth > 0.6 * width, `{name} has a deep footprint ({depth} deep, {width} wide)`)
+				-- a stepped, lumpy underside: the low blocks sit at several heights
+				local bottoms: { [number]: boolean } = {}
+				local steps = 0
+				for _, part in solids do
+					local bottom = part.CFrame.Position.Y - part.Size.Y / 2
+					local key = math.floor(bottom + 0.5)
+					if bottom < minY + height * 0.2 and not bottoms[key] then
+						bottoms[key] = true
+						steps += 1
+					end
+				end
+				T.truthy(steps >= 3, `{name} has a stepped underside ({steps} levels)`)
+				-- the top is the lightest tone (lit by the sky), never the purple shade
+				local topPart = solids[1]
+				for _, part in solids do
+					if part.CFrame.Position.Y + part.Size.Y / 2 > topPart.CFrame.Position.Y + topPart.Size.Y / 2 then
+						topPart = part
+					end
+				end
+				T.truthy(luminance(topPart.Color) > 0.7, `{name} has a lit top ({tostring(topPart.Color)})`)
+				-- the skirts sit under the cloud's lower part
+				for _, sheet in sheets do
+					T.truthy(sheet.CFrame.Position.Y < minY + height * 0.3, name .. " skirt sits under the cloud")
+				end
+			elseif cloud:IsA("Model") and cloud.Name == "Stratus" then
+				streaks += 1
+				T.truthy(#list >= 6 and #list <= 8, name .. " streak is 6-8 parts")
+				local sheets, solids = skirts(list, name)
+				T.truthy(#sheets >= 2, name .. " streak has a lit underside")
+				-- its length along the streak (the frame X axis every puff shares)
+				local frame = solids[1].CFrame - solids[1].CFrame.Position
+				local minY, maxY, minX, maxX = math.huge, -math.huge, math.huge, -math.huge
+				for _, part in solids do
+					minY = math.min(minY, part.CFrame.Position.Y - part.Size.Y / 2)
+					maxY = math.max(maxY, part.CFrame.Position.Y + part.Size.Y / 2)
+					local l = frame:PointToObjectSpace(part.CFrame.Position)
+					minX, maxX = math.min(minX, l.X - part.Size.X / 2), math.max(maxX, l.X + part.Size.X / 2)
+				end
+				local long = maxX - minX
+				T.truthy(long >= 110 and maxY - minY < 0.15 * long, `{name} is a long thin streak ({long} long, {maxY - minY} tall)`)
+			end
+		end
+		T.truthy(clusters >= 12, "a dozen or more cloud clusters")
+		T.truthy(streaks >= 4 and streaks <= 6, "four to six stratus streaks")
+		-- many heights and sizes, not one row of look-alike piles
+		T.truthy(highBase - lowBase >= 200, `cloud bases spread over {highBase - lowBase} studs of height`)
+		T.truthy(largest >= 2.5 * smallest, `cloud sizes vary ({smallest}..{largest} wide)`)
+	end)
+
+	-- The hero camera's frame top edge: a cloud is wholly above it or wholly
+	-- below it (no cloud bottoms poking in at the top of the hero shot).
+	T.test("sky: no cloud straddles the top edge of the hero shot", function()
+		local root = build()
+		local cf, tanY = camera("lobby_hero")
+		for _, cloud in root.CloudBanks:GetChildren() do
+			local above, below = 0, 0
+			for _, part in parts(cloud) do
+				for _, p in corners(part) do
+					local x, y = project(cf, tanY, p)
+					if x and y and math.abs(x) <= 1 then
+						if y > 1 then
+							above += 1
+						else
+							below += 1
+						end
+					end
+				end
+			end
+			T.falsy(above > 0 and below > 0, `{cloud:GetFullName()} straddles the hero frame's top edge`)
+		end
+	end)
+
+	-- Does the segment from `origin` to `target` pass through the box (cf, size)?
+	local function rayHitsBox(origin: any, target: any, cf: any, size: any): boolean
+		local o = cf:PointToObjectSpace(origin)
+		local d = cf:PointToObjectSpace(target) - o
+		local half = size / 2
+		local tmin, tmax = 0, 1
+		for _, axis in { "X", "Y", "Z" } do
+			local oa, da, h = o[axis], d[axis], half[axis]
+			if math.abs(da) < 1e-9 then
+				if math.abs(oa) > h then
+					return false
+				end
+			else
+				local t1, t2 = (-h - oa) / da, (h - oa) / da
+				if t1 > t2 then
+					t1, t2 = t2, t1
+				end
+				tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
+				if tmin > tmax then
+					return false
+				end
+			end
+		end
+		return true
+	end
+
+	-- Fraction of a sphere's disc (seen from `eye`) hidden behind any of the
+	-- boxes ({ CFrame, Size }); boxes far off the line of sight are skipped.
+	local function hidden(eye: any, center: any, radius: number, boxes: { any }): number
+		local view = (center - eye).Unit
+		local reach = math.atan(radius / (center - eye).Magnitude)
+		local near = {}
+		for _, b in boxes do
+			local to = b.CFrame.Position - eye
+			local spread = math.atan((b.Size.Magnitude / 2) / math.max(to.Magnitude, 1))
+			if to.Magnitude < (center - eye).Magnitude and math.acos(math.clamp(to.Unit:Dot(view), -1, 1)) < reach + spread then
+				table.insert(near, b)
+			end
+		end
+		local e1 = view:Cross(Vector3.new(0, 1, 0)).Unit
+		local e2 = e1:Cross(view).Unit
+		local covered, total = 0, 0
+		for i = -10, 10 do
+			for j = -10, 10 do
+				local u, v = i / 10, j / 10
+				if u * u + v * v <= 1 then
+					total += 1
+					local p = center + (e1 * u + e2 * v) * radius
+					for _, b in near do
+						if rayHitsBox(eye, p, b.CFrame, b.Size) then
+							covered += 1
+							break
+						end
+					end
+				end
+			end
+		end
+		return covered / total
+	end
+
+	local function boxesOf(m: any): { any }
+		local out = {}
+		for _, part in parts(m) do
+			table.insert(out, { CFrame = part.CFrame, Size = part.Size })
+		end
+		return out
+	end
+
+	-- Fraction of the town-facing disc of a planet covered by caps (the
+	-- nearest opaque ball along each line of sight is not the body).
+	local function coverage(balls: { any }, toTown: any, radius: number): number
+		local e1 = toTown:Cross(Vector3.new(0, 1, 0)).Unit
+		local e2 = e1:Cross(toTown).Unit
+		local covered, total = 0, 0
+		for i = -12, 12 do
+			for j = -12, 12 do
+				local u, v = i / 12, j / 12
+				if u * u + v * v <= 0.98 then
+					total += 1
+					-- a ray from far in front of the face straight back at the planet
+					local o = toTown * radius * 4 + (e1 * u + e2 * v) * radius
+					local d = -toTown
+					local best, name = math.huge, "Body"
+					for _, b in balls do
+						if b.Transparency == 0 then
+							local oc = o - b.Offset
+							local bb = oc:Dot(d)
+							local disc = bb * bb - (oc:Dot(oc) - b.Radius * b.Radius)
+							if disc >= 0 then
+								local t = -bb - math.sqrt(disc)
+								if t < best then
+									best, name = t, b.Name
+								end
+							end
+						end
+					end
+					if name ~= "Body" then
+						covered += 1
+					end
+				end
+			end
+		end
+		return covered / total
+	end
+
 	T.test("sky: three big Kenney-style planets frame the mountain", function()
 		local root = build()
 		local planets = root:FindFirstChild("Planets")
 		T.truthy(planets and planets:IsA("Model"), "Planets model")
 		local sun = LobbyLayout.SunDirection
+		local heroCf, heroTan = camera("lobby_hero")
+		local spawnCf = camera("lobby_spawn")
+		local eye = spawnCf.Position
+		-- what may stand in front of a planet from the spawn: the Sky set
+		-- pieces (their real blocks) and the town skyline (building footprints)
+		local skyBoxes = {}
+		for _, id in { "FloatingIslandWest", "FloatingIslandEast", "Balloon", "NextIsland" } do
+			for _, b in boxesOf(root:FindFirstChild(id)) do
+				table.insert(skyBoxes, b)
+			end
+		end
+		local townBoxes = {}
+		for _, id in { "Shop", "ShopFront", "Upgrades", "UpgradesFront", "GreatForge" } do
+			local piece = LobbyLayout.get(id)
+			table.insert(townBoxes, { CFrame = LobbyLayout.frame(piece) * roblox.CFrame.new(0, piece.Size.Y / 2, 0), Size = piece.Size })
+		end
 		local ringed = 0
 		local count = 0
 		for _, spec in Planets.Specs do
@@ -388,9 +579,12 @@ return function(T, Loader)
 			local radius = body.Size.X / 2
 			local center = body.CFrame.Position
 			local toTown = (Planets.Town - center).Unit
-			-- the glowing rim is set back: its front stays inside the body (it never veils the face)
+			-- a thin translucent glowing edge, set back: its front stays inside
+			-- the body (it never veils the face)
 			local rim = m:FindFirstChild("Rim")
-			T.truthy(rim and rim.Material == roblox.Enum.Material.Neon and rim.Transparency > 0.5, spec.Name .. " glowing rim")
+			T.truthy(rim and rim.Material == roblox.Enum.Material.Neon, spec.Name .. " glowing rim")
+			T.truthy(rim.Transparency >= 0.5 and rim.Transparency <= 0.7, spec.Name .. " rim is translucent")
+			T.truthy(rim.Size.X <= body.Size.X * 1.1, spec.Name .. " rim is a thin edge, not a bubble")
 			local rimFront = rim.CFrame.Position + toTown * rim.Size.X / 2
 			T.truthy((rimFront - center).Magnitude < radius, spec.Name .. " rim stays behind the face")
 			-- far away, high, from the north-west to the north-east, big on screen
@@ -400,18 +594,34 @@ return function(T, Loader)
 			T.truthy(bearing >= 300 or bearing <= 60, `{spec.Name} is in the north-west..north-east sky ({bearing})`)
 			T.truthy(center.Y > radius * 0.5, spec.Name .. " is high in the sky")
 			local angular = math.deg(2 * math.atan(radius / center.Magnitude))
-			T.truthy(angular >= 6, `{spec.Name} is big on screen ({angular} degrees)`)
+			T.truthy(angular >= 4.5, `{spec.Name} is big on screen ({angular} degrees)`)
 			-- never in front of the sun: the whole planet (ring included) keeps clear of it
 			local reach = math.deg(math.atan(radius * (if spec.Ring then spec.Ring.Outer else 1.1) / center.Magnitude))
 			local apart = math.deg(math.acos(math.clamp(center.Unit:Dot(sun), -1, 1)))
 			T.truthy(apart > reach + 15, `{spec.Name} keeps clear of the sun ({apart} vs {reach})`)
-			-- at least 75% of it inside the hero frame
-			local heroCf, heroTan = camera("lobby_hero")
-			local frac = inFrame(heroCf, heroTan, center, radius)
-			T.truthy(frac >= 0.75, `{spec.Name} is {math.floor(frac * 100)}% inside the lobby_hero frame`)
-			-- from the spawn camera its middle is clear of the massif (at most an
-			-- edge tucks behind the mountain's shoulder)
-			local spawnCf = camera("lobby_spawn")
+			-- the whole disc with its rim and its ring inside the hero frame
+			local frac = inFrame(heroCf, heroTan, center, radius * Planets.RimScale)
+			T.truthy(frac >= 0.95, `{spec.Name} is {math.floor(frac * 100)}% inside the lobby_hero frame`)
+			if spec.Ring then
+				local inside, total = 0, 0
+				for _, part in list do
+					if part.Name == "Ring" then
+						for _, p in corners(part) do
+							total += 1
+							local x, y = project(heroCf, heroTan, p)
+							if x and y and math.abs(x) <= 1 and math.abs(y) <= 1 then
+								inside += 1
+							end
+						end
+					end
+				end
+				T.truthy(inside / total >= 0.95, `{spec.Name} ring is {math.floor(inside / total * 100)}% inside the lobby_hero frame`)
+			end
+			-- from the spawn: never behind the massif, at most a sliver behind
+			-- the floating islands or the balloon, and only the lower edge
+			-- behind the town skyline (the hero frame tops out ~13 degrees up and
+			-- the SHOP / UPGRADES roofs reach ~9-11 degrees from the spawn, so a
+			-- planet inside the hero frame cannot clear them completely)
 			local mountain = LobbyLayout.get("ForgeMountain")
 			local lo, hi = math.huge, -math.huge
 			for _, sx in { -1, 1 } do
@@ -425,8 +635,13 @@ return function(T, Loader)
 			local lc = spawnCf:PointToObjectSpace(center)
 			local b = math.deg(math.atan2(lc.X, -lc.Z))
 			T.truthy(b < lo or b > hi, `{spec.Name} is not behind the massif from the spawn ({b} vs {lo}..{hi})`)
+			local bySky = hidden(eye, center, radius, skyBoxes)
+			T.le(bySky, 0.15, `{spec.Name} hidden behind the floating islands / balloon from the spawn`)
+			local byTown = hidden(eye, center, radius, townBoxes)
+			T.le(byTown, Planets.MaxSkylineCover, `{spec.Name} hidden behind the town skyline from the spawn`)
 			-- every cap is much smaller than the body and pokes out steeply: no two
-			-- differently colored surfaces ever meet at a grazing angle (z-fighting)
+			-- differently colored surfaces ever meet at a grazing angle (z-fighting);
+			-- a blotch crosses the shading more steeply still
 			local balls = Planets.balls(spec)
 			for i, a in balls do
 				if i > 1 then
@@ -438,7 +653,8 @@ return function(T, Loader)
 					if a.Color ~= o.Color and dist < a.Radius + o.Radius and dist > math.abs(a.Radius - o.Radius) then
 						if creaseVisible(balls, i, j, toTown) then
 							local angle = Planets.crease(a.Radius, o.Radius, dist)
-							T.truthy(angle >= Planets.MinCrease, `{spec.Name} {a.Name}/{o.Name} crease {angle} degrees`)
+							local min = if i > 1 and a.Shade ~= o.Shade then Planets.MinShadeCrease else Planets.MinCrease
+							T.truthy(angle >= min, `{spec.Name} {a.Name}/{o.Name} crease {angle} degrees (min {min})`)
 						end
 					end
 				end
@@ -447,7 +663,28 @@ return function(T, Loader)
 			for _, ball in balls do
 				local part = m:FindFirstChild(ball.Name)
 				T.truthy(part and (part.CFrame.Position - (center + ball.Offset)).Magnitude < 0.01, `{spec.Name} {ball.Name} built`)
+				T.near(part.Transparency, ball.Transparency, 1e-6, `{spec.Name} {ball.Name} transparency`)
 			end
+			-- Kenney camouflage: about two thirds of the face patterned, caps of
+			-- very different sizes, a translucent gloss in the body color (never
+			-- a white blob)
+			local cov = coverage(balls, toTown, radius)
+			T.truthy(cov >= 0.55, `{spec.Name} face is {math.floor(cov * 100)}% patterned`)
+			local smallest, largest, gloss = math.huge, 0, 0
+			for _, patch in spec.Patches do
+				if patch.Transparency then
+					gloss += 1
+					T.truthy(patch.Transparency >= 0.4, spec.Name .. " gloss is translucent")
+					local light = spec.Body:Lerp(Color3White, Planets.GlossLighten)
+					T.truthy(patch.Color == light, spec.Name .. " gloss is the body color lightened")
+				elseif not patch.Shade then
+					smallest, largest = math.min(smallest, patch.Size), math.max(largest, patch.Size)
+				end
+				local c = patch.Color
+				T.falsy(math.min(c.R, c.G, c.B) > 0.8 and (patch.Transparency or 0) < 0.4, spec.Name .. " has no white blob")
+			end
+			T.truthy(gloss >= 2 and gloss <= 3, spec.Name .. " gloss streak of 2-3 small caps")
+			T.truthy(largest >= 2 * smallest and largest >= 14, `{spec.Name} caps vary in size ({smallest}..{largest})`)
 			-- two/three-tone blotches: at least two colors besides the body
 			local colors: { [string]: boolean } = {}
 			local ringColors: { [string]: boolean } = {}
@@ -458,7 +695,7 @@ return function(T, Loader)
 				T.falsy(part.CanTouch, part:GetFullName() .. " is not touched")
 				T.falsy(part.CastShadow, part:GetFullName() .. " casts no shadow")
 				T.falsy(LobbyLayout.inArea(part.CFrame.Position), part:GetFullName() .. " is far outside the lobby")
-				if part.Name:sub(1, 5) == "Patch" then
+				if part.Name:sub(1, 5) == "Patch" and part.Transparency == 0 then
 					colors[tostring(part.Color)] = true
 				elseif part.Name == "Ring" then
 					rings += 1
@@ -471,16 +708,18 @@ return function(T, Loader)
 					tones += 1
 				end
 			end
-			T.truthy(tones >= 2, spec.Name .. " has two or more blotch colors")
+			T.truthy(tones >= 3, spec.Name .. " has three or more blotch colors")
 			if spec.Ring then
 				ringed += 1
-				T.truthy(rings >= 16, spec.Name .. " has a ring of 16+ flat segments")
+				T.eq(rings, 20, spec.Name .. " has a ring of 20 flat segments")
 				local ringTones = 0
 				for _ in ringColors do
 					ringTones += 1
 				end
 				-- overlapping coplanar segments must share one color (no z-fight flicker)
 				T.eq(ringTones, 1, spec.Name .. " ring is one color")
+				T.truthy(luminance(spec.Ring.Color) < luminance(spec.Body), spec.Name .. " ring is darker than the body")
+				T.truthy(spec.Ring.Outer >= 1.7 and spec.Ring.Outer <= 1.8, spec.Name .. " ring is wide (Outer 1.7-1.8)")
 				T.truthy(spec.Lean >= 24 and spec.Lean <= 30, spec.Name .. " ring is open (Lean 24-30)")
 			end
 		end
@@ -492,13 +731,14 @@ return function(T, Loader)
 		local root = build()
 		for _, shot in { "lobby_hero", "lobby_spawn" } do
 			local cf, tanY = camera(shot)
-			-- the planets' discs (with the rim) on screen
+			-- the planets' discs (with the rim, or the ring) on screen
 			local discs = {}
 			for _, spec in Planets.Specs do
 				local body = root.Planets[spec.Name].Body
 				local center = body.CFrame.Position
 				local x, y = project(cf, tanY, center)
-				local edge = center + cf.UpVector * body.Size.X / 2 * Planets.RimScale
+				local reach = if spec.Ring then spec.Ring.Outer * 0.75 else Planets.RimScale
+				local edge = center + cf.UpVector * body.Size.X / 2 * reach
 				local _, ey = project(cf, tanY, edge)
 				if x and y and ey then
 					table.insert(discs, { Name = spec.Name, X = x * ASPECT, Y = y, R = math.abs(ey - y) })
@@ -528,6 +768,13 @@ return function(T, Loader)
 					T.falsy(hit, `{shot}: {m:GetFullName()} covers {d.Name}`)
 				end
 			end
+			-- and the planets never cover each other
+			for i, a in discs do
+				for j = i + 1, #discs do
+					local d = discs[j]
+					T.truthy(math.sqrt((a.X - d.X) ^ 2 + (a.Y - d.Y) ^ 2) > a.R + d.R, `{shot}: {a.Name} and {d.Name} overlap`)
+				end
+			end
 		end
 	end)
 
@@ -539,6 +786,11 @@ return function(T, Loader)
 		T.le(#list, Airship.MaxParts, "airship parts")
 		T.eq(m.PrimaryPart and m.PrimaryPart.Name, "Envelope", "the airship bobs around its envelope")
 		T.truthy(m:FindFirstChild("Gondola"), "a gondola under the envelope")
+		-- a rounded bullet like concept v2, not stepped drums: ball nose and tail
+		for _, name in { "Nose", "Tail" } do
+			local part = m:FindFirstChild(name)
+			T.truthy(part and part.Shape == roblox.Enum.PartType.Ball, `the airship's {name} is a ball`)
+		end
 		-- a long cigar pitched a little nose-down like the concept
 		local envelope = m.PrimaryPart
 		local axis = envelope.CFrame.RightVector -- a Roblox cylinder runs along its X axis
