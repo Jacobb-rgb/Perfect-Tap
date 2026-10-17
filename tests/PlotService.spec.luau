@@ -250,6 +250,7 @@ return function(T, Loader)
 		end
 		local line = PlotBuilder.WallLine
 		local back = PlotBuilder.BackWallZ
+		local chamfer = PlotBuilder.YardChamfer
 		local gate = BaseLayout.YardGate
 		local stopHalf = BaseLayout.TrainStop.Size.X / 2
 		local samples = 0
@@ -258,7 +259,7 @@ return function(T, Loader)
 			T.truthy(blocked(Vector3.new(x, 1, z)), `gap in the {label} wall at x {x}, z {z}`)
 		end
 		for _, s in { -1, 1 } do
-			for z = -line, back, 1 do
+			for z = -line, back - chamfer, 1 do
 				check(s * line, z, "side")
 			end
 			for x = PlotBuilder.EntranceHalf + 0.6, line, 1 do
@@ -267,14 +268,18 @@ return function(T, Loader)
 			for x = gate.Width / 2 + 0.6, line, 1 do
 				check(gate.CenterX + s * x, line, "pad/yard")
 			end
-			for x = stopHalf + 1, line, 1 do
+			for x = stopHalf + 1, line - chamfer, 1 do
 				check(s * x, back, "back")
 			end
-			-- the square back corner (a brick-wall-end pillar)
-			check(s * line, back, "corner")
+			-- the back corner is cut at 45 degrees (brick-wall-curve-small): closed all along
+			for i = 0, 10 do
+				local t = i / 10
+				check(s * (line - chamfer * t), back - chamfer * (1 - t), "back corner")
+			end
 		end
 		T.lt(150, samples, "border samples")
-		-- every wall segment is brick: plinth, red band, a cap slab overhanging both faces
+		-- every wall run is brick: plinth, red band, a cap slab overhanging both
+		-- faces; long runs go on under the pillars that stand on them
 		local caps = 0
 		for _, d in model.Walls:GetDescendants() do
 			if d:IsA("BasePart") and d.Name == "Cap" then
@@ -283,7 +288,43 @@ return function(T, Loader)
 				T.lt(d.Size.Y, d.Size.X, "cap is a low slab")
 			end
 		end
-		T.lt(9, caps, "pad wall segments")
+		T.le(6, caps, "pad wall runs: two front, two sides, two pad/yard")
+		-- raised bricks on every run of the border (pad and yard)
+		for _, folder in { model.Walls, model.Yard.Fence, model.Yard.Pen } do
+			local bricks = 0
+			for _, d in folder:GetChildren() do
+				if d:IsA("BasePart") and d.Name == "Brick" then
+					bricks += 1
+					T.falsy(d.CastShadow, "raised bricks cast no shadow")
+				end
+			end
+			T.lt(1, bricks, `raised bricks in {folder.Name}`)
+		end
+		-- a pillar about every 12.5 studs along the pillared side, the front and the pad/yard wall
+		local pillars = {}
+		for _, d in model.Walls:GetChildren() do
+			if d:IsA("BasePart") and d.Name == "Pillar" then
+				table.insert(pillars, WorldLayout.plotCFrame(plot):PointToObjectSpace(d.CFrame.Position))
+			end
+		end
+		local function gapAlong(points: { number }): number
+			table.sort(points)
+			local widest = 0
+			for i = 2, #points do
+				widest = math.max(widest, points[i] - points[i - 1])
+			end
+			return widest
+		end
+		local side, yardWall = {}, {}
+		for _, p in pillars do
+			if p.X < -line + 0.5 then
+				table.insert(side, p.Z)
+			elseif math.abs(p.Z - line) < 0.5 and p.X > 0 then
+				table.insert(yardWall, p.X)
+			end
+		end
+		T.le(gapAlong(side), 14.5, "pillar rhythm on the left side (pad ~12.5, yard ~14)")
+		T.le(gapAlong(yardWall), 10, "pillar rhythm on the pad/yard wall")
 	end)
 
 	T.test("Podiums: showpiece pedestals keep what PodiumService and PodiumController read", function()
@@ -384,7 +425,7 @@ return function(T, Loader)
 				return math.sqrt(q.X * q.X + q.Z * q.Z), q.Y
 			end
 			-- the ring's inner edge (nearest point to the podium's axis) and its top
-			local bars, size = PlotBuilder.holoRingBars(axis)
+			local bars, size = PlotBuilder.holoRingBars(axis, slot)
 			local inner, ringTop = math.huge, -math.huge
 			for _, bar in bars do
 				for i = 0, 20 do
@@ -422,7 +463,8 @@ return function(T, Loader)
 			local lockModel = podium:FindFirstChild("Lock")
 			if lockModel then
 				for _, d in lockModel:GetDescendants() do
-					if d:IsA("BasePart") then
+					-- (the price plate's neon frame lives in the lock so it hides with it)
+					if d:IsA("BasePart") and d.Name ~= "PriceFrame" then
 						for _, p in points(d) do
 							local r, y = flat(p)
 							T.lt(r, inner, "lock inside the holo-ring")
