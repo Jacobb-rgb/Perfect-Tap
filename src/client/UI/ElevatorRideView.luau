@@ -1,18 +1,27 @@
 --[[
 	The elevator ride on screen (owner 2026-10-18: "make some animation during
-	that transfer"). Pure builder + pure timing; ElevatorController drives it
-	(ElevatorRideView.pose every frame of the ride, a few property writes).
+	that transfer"; "people must be hooked at first sight"). Pure builder +
+	pure timing; ElevatorController drives it (ElevatorRideView.pose every
+	frame of the ride: positions of a few dozen reused Frames, colours only
+	when the tint changes; nothing is created during the ride).
 
-	  doors      two full-screen steel door halves in the panel's style (navy
-	             glass windows in a neon frame, hazard stripe, glowing inner
-	             edges) slam shut with a thud and a short shake
-	  indicator  a panel at the top centre: an arrow (down = deeper, up = back
-	             up), "FLOOR" and the big floor number in the floor's card
-	             colour, and a column of five floor dots; the number ticks one
-	             floor at a time from the floor you left to the target
-	  ride       light strips sweep through the door windows and along the
-	             screen-edge rails in the ride direction (lights pass upward
-	             when going down), a gentle rumble shake
+	  doors      two full-screen steel door halves in the panel's style: a
+	             vertical steel gradient, a darker inner frame with rows of
+	             rivets, a window, a call plate (up / down), a stripe in the
+	             target floor's colour, the hazard stripe and a thin neon edge
+	             on the seam; they slam shut with a thud and a short shake
+	  windows    the shaft passing by: rock bands scroll in the ride direction
+	             (going down the wall moves up), tinted by the floor being
+	             passed (MineFloors palettes: 1 slate + copper, 2 basalt + lava
+	             cracks, 3 lagoon teal + cyan crystals, 4 palace violet + gold
+	             trim, 5 core magenta + pink crystals) with crystal glints and
+	             one lamp passing per floor; the tint cross-fades at each tick
+	  indicator  a panel at the top centre: chevrons flowing in the ride
+	             direction, "FLOOR" and the big number in the floor's card
+	             colour (a glow pulse and a little pop at every tick), a column
+	             of floor dots that light up in their colours as you pass them
+	  ride       speed lines along the screen edges and a running light on the
+	             edge rails in the ride direction, a gentle rumble shake
 	  arrival    once the server says "Arrive" and the ride lasted at least
 	             its Duration: ding, the doors slide open on the new floor and
 	             a banner "FLOOR 4 · SUNKEN PALACE" in the floor colour slides
@@ -21,8 +30,8 @@
 	Timeline (seconds from "Depart"): the doors shut by Close; ticks between
 	Close + TickLead and MinRide - TickLead; the doors start opening at
 	OpenAt (>= MinRide, after "Arrive"; FailSafe seconds later without it);
-	the banner follows. Reduced motion: the doors and the numbers only (no
-	shake, sweeps or bobbing arrow).
+	the banner follows. Reduced motion: no scrolling, shake, speed lines or
+	pops: the doors, the tint changes and the numbers only.
 
 	The doors fill the screen (no UIScale on this gui); the indicator and the
 	banner carry their own UIScale (ElevatorRideView.layout) so they follow
@@ -52,17 +61,41 @@ export type Ride = {
 
 export type Tick = { Time: number, Floor: number }
 
+-- one rock band of a window: the band, its crack / trim line and its glints
+export type Band = {
+	Frame: Frame,
+	Start: number,
+	Height: number,
+	Shade: number,
+	Vein: Frame,
+	VeinGlow: Frame,
+	Glints: { Frame },
+	Halos: { Frame },
+}
+
+export type Window = {
+	Frame: Frame,
+	Shaft: Frame,
+	Bands: { Band },
+	Lamp: Frame,
+	LampGlow: Frame,
+}
+
 export type Refs = {
 	Gui: ScreenGui,
 	Root: Frame, -- moves for the shake
 	DoorLeft: Frame,
 	DoorRight: Frame,
 	Seam: Frame,
-	Strips: { Frame }, -- light strips in the door windows
+	Windows: { Window },
+	FloorStripes: { Frame },
 	Runners: { Frame }, -- bright segments on the screen-edge rails
+	SpeedLines: { Frame },
 	Indicator: Frame,
 	IndicatorScale: UIScale,
+	IndicatorGlow: UIStroke,
 	Arrow: Frame,
+	Chevrons: { Frame }, -- flowing in the arrow box, tip first
 	Number: TextLabel,
 	FloorLabel: TextLabel,
 	Dots: { Frame },
@@ -72,6 +105,7 @@ export type Refs = {
 	BannerText: TextLabel,
 	UiScale: number,
 	TopInset: number,
+	TintKey: string, -- the tint last painted (colours change only when it does)
 }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -79,6 +113,7 @@ local function rgb(r: number, g: number, b: number): Color3
 end
 
 local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
 local INK = rgb(10, 12, 26)
 local NEON = rgb(70, 170, 255)
 local NEON_BRIGHT = rgb(120, 210, 255)
@@ -86,6 +121,7 @@ local NAVY_TOP = rgb(26, 34, 72)
 local NAVY_BOTTOM = rgb(12, 16, 38)
 local TEXT_SOFT = rgb(196, 208, 236)
 local HAZARD = rgb(255, 196, 52)
+local STEEL_FRAME = rgb(36, 42, 64)
 
 ElevatorRideView.Timing = {
 	Close = 0.42, -- the doors slam shut (at most the server's DoorsClose - 0.05)
@@ -99,12 +135,21 @@ ElevatorRideView.Timing = {
 	BannerHold = 1.0,
 	BannerOut = 0.3,
 	Thud = 0.3, -- the thud's shake fades over this long
+	TintFade = 0.28, -- the window tint cross-fades over this long after a tick
+	Pulse = 0.3, -- the indicator's glow pulse and pop fade over this long
+	SpeedUp = 0.3, -- the shaft wall gets up to speed over this long after the thud
 }
 
 ElevatorRideView.IndicatorSize = Vector2.new(320, 132)
 ElevatorRideView.BannerSize = Vector2.new(760, 100)
-local STRIPS = 3 -- per window
+ElevatorRideView.ShaftSpeed = 2.2 -- window heights of rock wall per second
 local SHAKE_ROOM = 16 -- the root is this much bigger on each side, so a shake never shows an edge
+-- the rock bands of a window (heights in window heights; they loop, so the sum must be >= 1 + the biggest)
+local BANDS = { 0.24, 0.3, 0.22, 0.28, 0.26 }
+local BAND_CYCLE = 1.3
+-- speed lines per screen side: x (pixels from the edge), length (screen heights), phase
+local SPEED_LINES = { { 20, 0.14, 0 }, { 44, 0.2, 0.37 }, { 30, 0.1, 0.71 }, { 62, 0.16, 0.18 }, { 52, 0.12, 0.55 } }
+local CHEVRONS = 3
 
 ---------------------------------------------------------------- pure timing
 
@@ -220,6 +265,85 @@ function ElevatorRideView.bannerText(floor: number, name: string): string
 	return `FLOOR {floor} · {string.upper(name)}`
 end
 
+-- The last tick at or before `t` (nil before the first).
+function ElevatorRideView.lastTick(ride: Ride, t: number): Tick?
+	local found: Tick? = nil
+	for _, tick in ElevatorRideView.ticks(ride) do
+		if t >= tick.Time then
+			found = tick
+		end
+	end
+	return found
+end
+
+-- Seconds between two ticks (the ride's shut time when there is none).
+function ElevatorRideView.tickSpacing(ride: Ride): number
+	local steps = math.abs(ride.To - ride.From)
+	local first = ride.Close + ElevatorRideView.Timing.TickLead
+	local last = ride.MinRide - ElevatorRideView.Timing.TickLead
+	if steps == 0 then
+		return math.max(0.3, ride.MinRide - ride.Close)
+	end
+	return math.max(0.2, (last - first) / steps)
+end
+
+--[[
+	The windows' tint at `t`: the floor being left, the floor being passed and
+	how far the cross-fade between their colours is (1 = all the second).
+]]
+function ElevatorRideView.tintAt(ride: Ride, t: number): (number, number, number)
+	local tick = ElevatorRideView.lastTick(ride, t)
+	if not tick then
+		return ride.From, ride.From, 1
+	end
+	local step = if ride.To > ride.From then 1 else -1
+	return tick.Floor - step, tick.Floor, clamp01((t - tick.Time) / ElevatorRideView.Timing.TintFade)
+end
+
+-- The indicator's tick pulse at `t` (1 right at a tick, fading to 0).
+function ElevatorRideView.pulseAt(ride: Ride, t: number): number
+	local tick = ElevatorRideView.lastTick(ride, t)
+	if not tick then
+		return 0
+	end
+	return 1 - clamp01((t - tick.Time) / ElevatorRideView.Timing.Pulse)
+end
+
+-- How far the shaft wall has moved (window heights): up to speed after the thud, frozen once the doors open.
+function ElevatorRideView.travel(ride: Ride, t: number): number
+	local stop = ride.OpenAt or math.huge
+	local u = math.min(t, stop) - ride.Close
+	if u <= 0 then
+		return 0
+	end
+	local ramp = ElevatorRideView.Timing.SpeedUp
+	local distance = if u < ramp then u * u / (2 * ramp) else ramp / 2 + (u - ramp)
+	return distance * ElevatorRideView.ShaftSpeed
+end
+
+-- The shaft colours of a floor (MineFloors palette; floors past the list use the last one).
+export type Shaft = { Back: Color3, Bands: { Color3 }, Vein: Color3, Glint: Color3, Glint2: Color3, Lamp: Color3 }
+
+function ElevatorRideView.shaftColors(floor: number): Shaft
+	local list = MineFloors.List
+	local index = math.clamp(floor, 1, #list)
+	local p = list[index].Palette
+	return {
+		Back = p.Dark:Lerp(BLACK, 0.2),
+		Bands = {
+			p.Mid:Lerp(p.Light, 0.2),
+			p.Mid:Lerp(p.Dark, 0.3),
+			p.Light:Lerp(p.Mid, 0.1),
+			p.Mid:Lerp(p.Light, 0.4),
+			p.Dark:Lerp(p.Mid, 0.25),
+		},
+		Vein = p.Accent,
+		Glint = p.Crystal,
+		Glint2 = p.Crystal2,
+		Lamp = p.Accent:Lerp(WHITE, 0.55),
+	}
+end
+
 ---------------------------------------------------------------- building
 
 local function frame(parent: Instance, name: string, props: { [string]: any }): Frame
@@ -239,12 +363,16 @@ local function gradient(parent: Instance, keys: { Color3 }, rotation: number)
 	UIKit.new("UIGradient", { Color = ColorSequence.new(points), Rotation = rotation }, parent)
 end
 
--- "^" of two bars (the indicator's arrow is two of them, turned for "Down").
-local function chevron(parent: Instance, cy: number, color: Color3)
+local function round(parent: Instance, scale: number)
+	UIKit.new("UICorner", { CornerRadius = UDim.new(scale, 0) }, parent)
+end
+
+-- "^" of two bars (the indicator's arrow is three of them, turned for "Down").
+local function chevron(parent: Instance, cy: number, color: Color3): Frame
 	local box = frame(parent, "Chevron", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, cy),
-		Size = UDim2.fromScale(0.8, 0.4),
+		Size = UDim2.fromScale(0.8, 0.34),
 		BackgroundTransparency = 1,
 	})
 	for _, spec in { { 0.32, -42 }, { 0.68, 42 } } do
@@ -255,79 +383,172 @@ local function chevron(parent: Instance, cy: number, color: Color3)
 			BackgroundColor3 = color,
 			Rotation = spec[2],
 		})
-		UIKit.new("UICorner", { CornerRadius = UDim.new(0.2, 0) }, bar)
+		round(bar, 0.2)
 	end
+	return box
 end
 
--- One full-screen door half; `left` = the left half. Returns the door, its window strips and its rail runner.
-local function door(root: Frame, left: boolean): (Frame, { Frame }, Frame)
+-- where each band's crack / trim line and its two glints sit (band-relative)
+local VEINS = { { 0.36, 0.32, 0.62 }, { 0.62, 0.58, 0.7 }, { 0.42, 0.72, 0.5 }, { 0.55, 0.36, 0.78 }, { 0.32, 0.62, 0.56 } }
+local GLINTS = {
+	{ { 0.18, 0.4 }, { 0.8, 0.66 } },
+	{ { 0.72, 0.3 }, { 0.26, 0.74 } },
+	{ { 0.52, 0.5 }, { 0.88, 0.28 } },
+	{ { 0.14, 0.7 }, { 0.64, 0.34 } },
+	{ { 0.84, 0.56 }, { 0.36, 0.26 } },
+}
+
+-- A door window: the shaft wall (rock bands, cracks, crystal glints, a lamp) behind glass.
+local function window(d: Frame): Window
+	local win = frame(d, "Window", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromScale(0.44, 0.5),
+		BackgroundColor3 = BLACK,
+		ClipsDescendants = true,
+	})
+	UIKit.corner(win, 18)
+	local shaft = frame(win, "Shaft", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(20, 22, 34) })
+	local bands: { Band } = {}
+	local start = 0
+	for i, height in BANDS do
+		local band = frame(shaft, "Band", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, start),
+			Size = UDim2.fromScale(1.04, height + 0.006),
+			BackgroundColor3 = WHITE,
+		})
+		-- lit from above: the band darkens toward its foot
+		UIKit.new("UIGradient", { Color = ColorSequence.new(WHITE, rgb(185, 185, 185)), Rotation = 90 }, band)
+		-- the band's crack / trim line, glowing (lava, copper, gold, glow moss, pink)
+		local spec = VEINS[i]
+		local veinGlow = frame(band, "VeinGlow", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(spec[1], spec[2]),
+			Size = UDim2.new(spec[3] + 0.04, 0, 0, 12),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.72,
+		})
+		round(veinGlow, 0.5)
+		local vein = frame(band, "Vein", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(spec[1], spec[2]),
+			Size = UDim2.new(spec[3], 0, 0, 4),
+			BackgroundColor3 = WHITE,
+		})
+		round(vein, 0.5)
+		local glints: { Frame } = {}
+		local halos: { Frame } = {}
+		for k, spot in GLINTS[i] do
+			local size = if k == 1 then 17 else 12
+			local halo = frame(band, "Halo", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(spot[1], spot[2]),
+				Size = UDim2.fromOffset(size * 2.4, size * 2.4),
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = 0.78,
+			})
+			round(halo, 0.5)
+			table.insert(halos, halo)
+			local glint = frame(band, "Glint", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(spot[1], spot[2]),
+				Size = UDim2.fromOffset(size, size),
+				BackgroundColor3 = WHITE,
+				Rotation = 45,
+			})
+			frame(glint, "Core", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.36, 0.36),
+				BackgroundColor3 = WHITE,
+			})
+			table.insert(glints, glint)
+		end
+		table.insert(
+			bands,
+			{ Frame = band, Start = start, Height = height, Shade = i, Vein = vein, VeinGlow = veinGlow, Glints = glints, Halos = halos }
+		)
+		start += height
+	end
+	-- the lamp passing once per floor (its glow under it)
+	local lampGlow = frame(win, "LampGlow", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromScale(1, 0.14),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.72,
+	})
+	local lamp = frame(win, "Lamp", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromScale(1, 0.035),
+		BackgroundColor3 = WHITE,
+	})
+	-- depth: darker glass at the top and the bottom, then the glass's shine
+	for _, y in { 0, 1 } do
+		frame(win, "Depth", {
+			AnchorPoint = Vector2.new(0.5, y),
+			Position = UDim2.fromScale(0.5, y),
+			Size = UDim2.fromScale(1, 0.16),
+			BackgroundColor3 = BLACK,
+			BackgroundTransparency = 0.5,
+		})
+	end
+	frame(win, "Shine", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.24, 0.5),
+		Size = UDim2.fromScale(0.035, 1.2),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.9,
+	})
+	UIKit.stroke(win, 4, NEON_BRIGHT)
+	return { Frame = win, Shaft = shaft, Bands = bands, Lamp = lamp, LampGlow = lampGlow }
+end
+
+-- One full-screen door half; `left` = the left half. Returns the door, its window, its floor stripe and its rail runner.
+local function door(root: Frame, left: boolean): (Frame, Window, Frame, Frame)
 	local d = frame(root, if left then "DoorLeft" else "DoorRight", {
 		AnchorPoint = Vector2.new(if left then 0 else 1, 0),
 		Size = UDim2.new(0.5, 14, 1, 0),
 		BackgroundColor3 = WHITE,
 		ZIndex = 2,
 	})
-	gradient(d, { rgb(118, 132, 168), rgb(84, 96, 128), rgb(50, 58, 82) }, 90)
+	gradient(d, { rgb(132, 146, 182), rgb(96, 108, 142), rgb(58, 66, 92) }, 90)
 	local inner = if left then 1 else 0
 	local outer = 1 - inner
-	-- panel lines and a lighter band near the seam
-	for _, y in { 0.12, 0.8 } do
-		frame(d, "Groove", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, y),
-			Size = UDim2.new(0.84, 0, 0, 4),
-			BackgroundColor3 = rgb(32, 38, 56),
-		})
-	end
-	local band = frame(d, "Band", {
+	-- brushed steel: a lighter band near the seam
+	frame(d, "Band", {
 		AnchorPoint = Vector2.new(inner, 0),
 		Position = UDim2.new(inner, if left then -20 else 20, 0, 0),
 		Size = UDim2.new(0, 34, 1, 0),
-		BackgroundColor3 = rgb(140, 154, 190),
-		BackgroundTransparency = 0.55,
+		BackgroundColor3 = rgb(150, 164, 200),
+		BackgroundTransparency = 0.6,
 	})
-	band.ZIndex = 2
-	-- the window: navy glass in a neon frame; light strips sweep through it
-	local window = frame(d, "Window", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromScale(0.44, 0.48),
-		BackgroundColor3 = WHITE,
-		ClipsDescendants = true,
+	-- the darker inner frame with rows of rivets (the root reaches SHAKE_ROOM past the screen)
+	local panel = frame(d, "Frame", {
+		Position = UDim2.fromOffset(if left then 22 + SHAKE_ROOM else 22, 22 + SHAKE_ROOM),
+		Size = UDim2.new(1, -(44 + SHAKE_ROOM), 1, -(44 + SHAKE_ROOM * 2)),
+		BackgroundTransparency = 1,
 	})
-	UIKit.corner(window, 18)
-	gradient(window, { rgb(22, 34, 78), rgb(12, 18, 46), rgb(8, 12, 30) }, 90)
-	UIKit.stroke(window, 4, NEON_BRIGHT)
-	local strips: { Frame } = {}
-	for i = 1, STRIPS do
-		local strip = frame(window, "Strip", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, i / (STRIPS + 1)),
-			Size = UDim2.fromScale(1.1, 0.07),
-			BackgroundColor3 = rgb(130, 215, 255),
-			BackgroundTransparency = 0.2,
-		})
-		frame(strip, "Core", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(1, 0.35),
-			BackgroundColor3 = WHITE,
-		})
-		table.insert(strips, strip)
+	UIKit.corner(panel, 16)
+	UIKit.stroke(panel, 5, STEEL_FRAME)
+	for _, row in { 0, 1 } do
+		for k = 1, 8 do
+			local rivet = frame(panel, "Rivet", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(k / 9, 0, row, if row == 0 then 16 else -16),
+				Size = UDim2.fromOffset(12, 12),
+				BackgroundColor3 = WHITE,
+			})
+			round(rivet, 0.5)
+			gradient(rivet, { rgb(196, 206, 230), rgb(96, 106, 136) }, 90)
+			UIKit.stroke(rivet, 1.5, INK, 0.35)
+		end
 	end
-	-- the glass's shine
-	local shine = frame(window, "Shine", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.3, 0.5),
-		Size = UDim2.fromScale(0.08, 1.2),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.85,
-	})
-	shine.ZIndex = 2
+	local win = window(d)
 	-- a call plate under the window: up on the left door, down on the right
 	local plate = frame(d, "Plate", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.75),
+		Position = UDim2.fromScale(0.5, 0.745),
 		Size = UDim2.fromOffset(84, 46),
 		BackgroundColor3 = rgb(12, 18, 44),
 	})
@@ -341,10 +562,19 @@ local function door(root: Frame, left: boolean): (Frame, { Frame }, Frame)
 		Rotation = if left then 0 else 180,
 	})
 	chevron(mark, 0.5, NEON_BRIGHT)
+	-- a stripe in the target floor's colour along the seam (setRide)
+	local stripe = frame(d, "FloorStripe", {
+		AnchorPoint = Vector2.new(inner, 0.5),
+		Position = UDim2.new(inner, if left then -34 else 34, 0.42, 0),
+		Size = UDim2.new(0, 10, 0.42, 0),
+		BackgroundColor3 = WHITE,
+	})
+	UIKit.corner(stripe, 6)
+	UIKit.stroke(stripe, 2, INK)
 	-- hazard stripe at the bottom
 	local hazard = frame(d, "Hazard", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.91),
+		Position = UDim2.fromScale(0.5, 0.9),
 		Size = UDim2.new(0.84, 0, 0, 26),
 		BackgroundColor3 = INK,
 	})
@@ -373,21 +603,21 @@ local function door(root: Frame, left: boolean): (Frame, { Frame }, Frame)
 		BackgroundColor3 = NEON_BRIGHT,
 	})
 	UIKit.corner(runner, 4)
-	-- the glowing inner edge (where the halves meet)
-	frame(d, "Edge", {
-		AnchorPoint = Vector2.new(inner, 0),
-		Position = UDim2.fromScale(inner, 0),
-		Size = UDim2.new(0, 6, 1, 0),
-		BackgroundColor3 = NEON_BRIGHT,
-	})
+	-- the thin neon edge on the seam
 	frame(d, "EdgeGlow", {
 		AnchorPoint = Vector2.new(inner, 0),
 		Position = UDim2.fromScale(inner, 0),
-		Size = UDim2.new(0, 20, 1, 0),
+		Size = UDim2.new(0, 16, 1, 0),
 		BackgroundColor3 = NEON,
-		BackgroundTransparency = 0.6,
+		BackgroundTransparency = 0.65,
 	})
-	return d, strips, runner
+	frame(d, "Edge", {
+		AnchorPoint = Vector2.new(inner, 0),
+		Position = UDim2.fromScale(inner, 0),
+		Size = UDim2.new(0, 4, 1, 0),
+		BackgroundColor3 = NEON_BRIGHT,
+	})
+	return d, win, stripe, runner
 end
 
 function ElevatorRideView.build(): Refs
@@ -404,21 +634,32 @@ function ElevatorRideView.build(): Refs
 		Size = UDim2.new(1, SHAKE_ROOM * 2, 1, SHAKE_ROOM * 2),
 		BackgroundTransparency = 1,
 	})
-	local left, leftStrips, leftRunner = door(root, true)
-	local right, rightStrips, rightRunner = door(root, false)
-	local strips: { Frame } = {}
-	for _, list in { leftStrips, rightStrips } do
-		for _, strip in list do
-			table.insert(strips, strip)
-		end
-	end
+	local left, leftWindow, leftStripe, leftRunner = door(root, true)
+	local right, rightWindow, rightStripe, rightRunner = door(root, false)
 	local seam = frame(root, "Seam", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(0, 12, 1, 0),
+		Size = UDim2.new(0, 8, 1, 0),
 		BackgroundColor3 = NEON_BRIGHT,
 		ZIndex = 3,
 	})
+	-- speed lines along both screen edges
+	local lines: { Frame } = {}
+	for side = 0, 1 do
+		for _, spec in SPEED_LINES do
+			local line = frame(root, "SpeedLine", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(side, if side == 0 then SHAKE_ROOM + spec[1] else -(SHAKE_ROOM + spec[1]), 0.5, 0),
+				Size = UDim2.new(0, 3, spec[2], 0),
+				BackgroundColor3 = NEON_BRIGHT,
+				BackgroundTransparency = 0.45,
+				ZIndex = 4,
+				Visible = false,
+			})
+			round(line, 0.5)
+			table.insert(lines, line)
+		end
+	end
 
 	-- the floor indicator
 	local size = ElevatorRideView.IndicatorSize
@@ -434,7 +675,7 @@ function ElevatorRideView.build(): Refs
 	local indicatorScale: UIScale = UIKit.new("UIScale", { Scale = 1 }, indicator)
 	local glow = frame(indicator, "Glow", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 })
 	UIKit.corner(glow, 24)
-	UIKit.stroke(glow, 10, NEON, 0.6)
+	local glowStroke = UIKit.stroke(glow, 12, NEON, 0.6)
 	local arrowBox = frame(indicator, "ArrowBox", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 18, 0.5, 0),
@@ -449,8 +690,10 @@ function ElevatorRideView.build(): Refs
 		Size = UDim2.fromScale(0.74, 0.74),
 		BackgroundTransparency = 1,
 	})
-	chevron(arrow, 0.32, NEON_BRIGHT)
-	chevron(arrow, 0.68, NEON_BRIGHT)
+	local chevrons: { Frame } = {}
+	for i = 1, CHEVRONS do
+		table.insert(chevrons, chevron(arrow, 0.25 * i, NEON_BRIGHT))
+	end
 	local floorLabel = UIKit.label(indicator, "FLOOR", 20, {
 		Name = "FloorLabel",
 		Position = UDim2.fromOffset(112, 12),
@@ -478,7 +721,7 @@ function ElevatorRideView.build(): Refs
 			Size = UDim2.fromOffset(10, 10),
 			BackgroundColor3 = ElevatorView.floorColor(i),
 		})
-		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, dot)
+		round(dot, 0.5)
 		UIKit.stroke(dot, 2, INK)
 		table.insert(dots, dot)
 	end
@@ -523,11 +766,15 @@ function ElevatorRideView.build(): Refs
 		DoorLeft = left,
 		DoorRight = right,
 		Seam = seam,
-		Strips = strips,
+		Windows = { leftWindow, rightWindow },
+		FloorStripes = { leftStripe, rightStripe },
 		Runners = { leftRunner, rightRunner },
+		SpeedLines = lines,
 		Indicator = indicator,
 		IndicatorScale = indicatorScale,
+		IndicatorGlow = glowStroke,
 		Arrow = arrow,
+		Chevrons = chevrons,
 		Number = number,
 		FloorLabel = floorLabel,
 		Dots = dots,
@@ -537,6 +784,7 @@ function ElevatorRideView.build(): Refs
 		BannerText = bannerText,
 		UiScale = 1,
 		TopInset = 36,
+		TintKey = "",
 	}
 	return refs
 end
@@ -549,20 +797,51 @@ function ElevatorRideView.layout(refs: Refs, uiScale: number, topInset: number)
 	refs.BannerScale.Scale = uiScale
 end
 
--- The banner text and colours for the ride's target floor.
+-- The banner text, the doors' floor stripes and colours for the ride's target floor.
 function ElevatorRideView.setRide(refs: Refs, ride: Ride)
 	local color = ElevatorView.floorColor(ride.To)
 	refs.BannerText.Text = ElevatorRideView.bannerText(ride.To, ride.Name)
 	refs.BannerText.TextColor3 = color:Lerp(WHITE, 0.15)
 	refs.BannerStroke.Color = color
+	for _, stripe in refs.FloorStripes do
+		stripe.BackgroundColor3 = color
+	end
+	refs.TintKey = ""
+end
+
+-- Paints the windows for the cross-fade from floor `a`'s shaft to floor `b`'s (`k` = 0..1).
+local function paintTint(refs: Refs, a: number, b: number, k: number)
+	local ca = ElevatorRideView.shaftColors(a)
+	local cb = ElevatorRideView.shaftColors(b)
+	local function mix(x: Color3, y: Color3): Color3
+		return x:Lerp(y, k)
+	end
+	for _, win in refs.Windows do
+		win.Shaft.BackgroundColor3 = mix(ca.Back, cb.Back)
+		for _, band in win.Bands do
+			band.Frame.BackgroundColor3 = mix(ca.Bands[band.Shade], cb.Bands[band.Shade])
+			local vein = mix(ca.Vein, cb.Vein)
+			band.Vein.BackgroundColor3 = vein
+			band.VeinGlow.BackgroundColor3 = vein
+			for g, glint in band.Glints do
+				local glow = if g == 1 then mix(ca.Glint, cb.Glint) else mix(ca.Glint2, cb.Glint2)
+				glint.BackgroundColor3 = glow
+				band.Halos[g].BackgroundColor3 = glow
+			end
+		end
+		local lamp = mix(ca.Lamp, cb.Lamp)
+		win.Lamp.BackgroundColor3 = lamp
+		win.LampGlow.BackgroundColor3 = lamp
+	end
 end
 
 ---------------------------------------------------------------- the pose
 
 --[[
-	The overlay `t` seconds into `ride`: door positions, shake, light sweeps,
-	the indicator (slides in, ticks, slides out), the banner. Cheap: a few
-	dozen property writes.
+	The overlay `t` seconds into `ride`: doors, shake, the shaft in the
+	windows, speed lines, the indicator (slides in, ticks with a pulse, slides
+	out), the banner. Positions of reused Frames every frame; colours only
+	when the windows' tint changes.
 ]]
 function ElevatorRideView.pose(refs: Refs, ride: Ride, t: number)
 	local timing = ElevatorRideView.Timing
@@ -574,22 +853,47 @@ function ElevatorRideView.pose(refs: Refs, ride: Ride, t: number)
 	local openAt = ride.OpenAt
 	local riding = t >= ride.Close and (openAt == nil or t < openAt)
 	local motion = not ride.Reduced
+	local down = ElevatorRideView.direction(ride.From, ride.To) == "Down"
 	refs.Seam.Visible = c >= 0.999
 	refs.Seam.BackgroundTransparency = if motion then 0.15 + 0.3 * (0.5 + 0.5 * math.sin(t * 7)) else 0.2
-	-- light strips: going down the lights pass upward, going up they pass downward
-	local down = ElevatorRideView.direction(ride.From, ride.To) == "Down"
-	for i, strip in refs.Strips do
-		local k = (i - 1) % STRIPS
-		local p = (t * 0.9 + k / STRIPS) % 1
-		local y = if down then 1 - p else p
-		strip.Position = UDim2.fromScale(0.5, -0.1 + 1.2 * y)
-		strip.Visible = riding and motion
+	-- the windows: the shaft wall scrolls (going down it moves up), one lamp per floor
+	local a, b, k = ElevatorRideView.tintAt(ride, t)
+	local key = `{a}:{b}:{math.floor(k * 20 + 0.5)}`
+	if key ~= refs.TintKey then
+		refs.TintKey = key
+		paintTint(refs, a, b, k)
+	end
+	local travel = if motion then ElevatorRideView.travel(ride, t) else 0
+	local sign = if down then -1 else 1
+	local spacing = ElevatorRideView.tickSpacing(ride)
+	local ticks = ElevatorRideView.ticks(ride)
+	local first = if ticks[1] then ticks[1].Time else ride.Close + spacing / 2
+	local phase = ((t - first) / spacing + 0.5) % 1
+	local lampY = if down then 1.15 - 1.3 * phase else -0.15 + 1.3 * phase
+	for _, win in refs.Windows do
+		for _, band in win.Bands do
+			local y = ((band.Start + sign * travel) % BAND_CYCLE) - (BAND_CYCLE - 1)
+			band.Frame.Position = UDim2.fromScale(0.5, y)
+		end
+		win.Lamp.Position = UDim2.fromScale(0.5, lampY)
+		win.LampGlow.Position = UDim2.fromScale(0.5, lampY)
+		win.Lamp.Visible = riding and motion
+		win.LampGlow.Visible = riding and motion
 	end
 	for _, runner in refs.Runners do
 		local p = (t * 1.4) % 1
 		local y = if down then 1 - p else p
 		runner.Position = UDim2.fromScale(0.5, -0.1 + 1.2 * y)
 		runner.Visible = riding and motion
+	end
+	-- speed lines streak along the screen edges in the ride direction
+	for i, line in refs.SpeedLines do
+		local spec = SPEED_LINES[(i - 1) % #SPEED_LINES + 1]
+		local p = (spec[3] + t * 2.6) % 1
+		local y = if down then 1.1 - 1.2 * p else -0.1 + 1.2 * p
+		local x = line.Position.X
+		line.Position = UDim2.new(x.Scale, x.Offset, y, 0)
+		line.Visible = riding and motion
 	end
 	-- shake: a thud when the doors meet, a gentle rumble while riding
 	local dx, dy = 0, 0
@@ -610,32 +914,49 @@ function ElevatorRideView.pose(refs: Refs, ride: Ride, t: number)
 	local size = ElevatorRideView.IndicatorSize
 	local inK = easeOut(clamp01((t - 0.05) / timing.IndicatorIn))
 	local outK = if openAt then easeIn(clamp01((t - openAt) / timing.IndicatorOut)) else 0
-	local k = inK * (1 - outK)
+	local slide = inK * (1 - outK)
 	local restY = SHAKE_ROOM + refs.TopInset + 14 * s + size.Y * s / 2
-	refs.Indicator.Visible = k > 0
-	refs.Indicator.Position = UDim2.new(0.5, 0, 0, restY - (1 - k) * (restY + size.Y * s))
+	refs.Indicator.Visible = slide > 0
+	refs.Indicator.Position = UDim2.new(0.5, 0, 0, restY - (1 - slide) * (restY + size.Y * s))
 	local number = ElevatorRideView.numberAt(ride, t)
 	local color = ElevatorView.floorColor(number)
 	refs.Number.Text = tostring(number)
 	refs.Number.TextColor3 = color
+	-- every tick: a glow pulse in the floor's colour and a little pop
+	local pulse = if motion then ElevatorRideView.pulseAt(ride, t) else 0
+	refs.IndicatorScale.Scale = s * (1 + 0.1 * pulse)
+	refs.IndicatorGlow.Transparency = 0.6 - 0.5 * pulse
+	refs.IndicatorGlow.Color = NEON:Lerp(color, pulse)
+	-- the chevrons flow toward the arrow's tip (the arrow turns for "Down")
 	refs.Arrow.Rotation = if down then 180 else 0
-	local bob = if motion and riding then math.sin(t * 9) * 4 else 0
-	refs.Arrow.Position = UDim2.new(0.5, 0, 0.5, if down then bob else -bob)
+	local flowing = motion and riding
+	for i, chev in refs.Chevrons do
+		local p = if flowing then (t * 1.6 + (i - 1) / CHEVRONS) % 1 else 1 - i / (CHEVRONS + 1)
+		chev.Position = UDim2.fromScale(0.5, 0.88 - 0.76 * p)
+		local light = if flowing then math.sin(p * math.pi) else 1
+		for _, bar in chev:GetChildren() do
+			if bar:IsA("Frame") then
+				bar.BackgroundTransparency = 0.9 * (1 - light)
+			end
+		end
+	end
+	-- the dots of the floors passed so far light up in their colours
 	for i, dot in refs.Dots do
 		local current = i == number
-		dot.Size = if current then UDim2.fromOffset(18, 18) else UDim2.fromOffset(10, 10)
-		dot.BackgroundTransparency = if current then 0 else 0.55
+		local passed = (i - ride.From) * (number - i) >= 0
+		dot.Size = if current then UDim2.fromOffset(18, 18) elseif passed then UDim2.fromOffset(12, 12) else UDim2.fromOffset(9, 9)
+		dot.BackgroundTransparency = if passed then 0 else 0.7
 	end
 	-- the banner slides in from the left after the ding, holds, slides out to the right
 	local x: number? = nil
 	if openAt then
-		local b = t - (openAt + timing.BannerDelay)
-		if b >= 0 and b < timing.BannerIn then
-			x = -0.6 + 1.1 * backOut(b / timing.BannerIn)
-		elseif b >= timing.BannerIn and b < timing.BannerIn + timing.BannerHold then
+		local bt = t - (openAt + timing.BannerDelay)
+		if bt >= 0 and bt < timing.BannerIn then
+			x = -0.6 + 1.1 * backOut(bt / timing.BannerIn)
+		elseif bt >= timing.BannerIn and bt < timing.BannerIn + timing.BannerHold then
 			x = 0.5
-		elseif b >= timing.BannerIn + timing.BannerHold and b < timing.BannerIn + timing.BannerHold + timing.BannerOut then
-			x = 0.5 + 1.1 * easeIn((b - timing.BannerIn - timing.BannerHold) / timing.BannerOut)
+		elseif bt >= timing.BannerIn + timing.BannerHold and bt < timing.BannerIn + timing.BannerHold + timing.BannerOut then
+			x = 0.5 + 1.1 * easeIn((bt - timing.BannerIn - timing.BannerHold) / timing.BannerOut)
 		end
 	end
 	refs.Banner.Visible = x ~= nil
