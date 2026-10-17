@@ -194,7 +194,7 @@ local SIGNALS = { "StackRed", "StackAmber", "StackGreen" }
 local IRON_BOX = MachineBuilder.IronBox
 local FLAP_OPEN, FLAP_HOLD, FLAP_CLOSE = 0.12, 0.18, 0.45 -- seconds: swing open, stay, fall shut
 local SHOW_RANGE = 40 -- the item behind the glass only for boxes this close
-local SCREEN_TEXT = Color3.fromRGB(196, 255, 236)
+local SCREEN_TEXT = IRON_BOX.ScreenText
 -- Cleaning Plant odds on your own plant's billboard, idle too, this close
 local ODDS_RANGE = 24
 
@@ -826,7 +826,11 @@ end
 
 ---------------------------------------------------------------- Iron Box
 
+-- Any dirty chunk looks the same; this ore only picks its tiny glint.
+local DIRTY_LOOK = "Coal"
+
 -- The last sorted item from the box's attributes (nil before the first).
+-- Dirty ore has no ore id there (the box can't see through the dirt).
 local function lastItem(fx: Fx): ItemData.Desc?
 	local kind = fx.Attr.LastKind
 	if type(kind) ~= "string" or not ItemData.Kinds[kind] then
@@ -836,8 +840,8 @@ local function lastItem(fx: Fx): ItemData.Desc?
 	local grade = fx.Attr.LastGrade
 	return {
 		K = kind,
-		O = if type(oreId) == "string" then oreId else "",
-		G = if type(grade) == "string" and ItemData.GradeById[grade] then grade else nil,
+		O = if kind == "Raw" then DIRTY_LOOK elseif type(oreId) == "string" then oreId else "",
+		G = if kind ~= "Raw" and type(grade) == "string" and ItemData.GradeById[grade] then grade else nil,
 	}
 end
 
@@ -855,7 +859,7 @@ local function drawScreen(fx: Fx)
 		else
 			item.Text = string.upper(ItemData.displayName(desc.K, desc.O, desc.G, nil))
 		end
-		item.TextColor3 = if rarity then SCREEN_TEXT:Lerp(rarity.Color, 0.75) else SCREEN_TEXT
+		item.TextColor3 = if rarity then SCREEN_TEXT:Lerp(rarity.Color, IRON_BOX.RarityTint) else SCREEN_TEXT
 	end
 	if counter then
 		counter.Text = `KEPT {number(fx, "Kept")} · SENT {number(fx, "Sent")}`

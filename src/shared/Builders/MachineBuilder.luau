@@ -89,7 +89,7 @@ local C = {
 	Iron = rgb(96, 100, 106),
 	IronTop = rgb(134, 138, 144),
 	Steel = rgb(196, 200, 206),
-	ScreenLit = rgb(26, 112, 100),
+	ScreenLit = rgb(16, 70, 64), -- dark teal glow, so the bright text reads
 	ScreenText = rgb(196, 255, 236),
 	Keep = rgb(70, 164, 92), -- the Iron Box's KEEP flap (green: into the pen)
 	Gauge = rgb(220, 132, 40),
@@ -609,17 +609,17 @@ local function squareHopper(
 		)
 	end
 	local collar = 0.45
-	Geo.block(m, cf * CFrame.new(0, taperH + collar / 2, 0), Vector3.new(topW + 0.3, collar, topW + 0.3), collarColor or C.HousingLight, nil, solid())
+	Geo.block(
+		m,
+		cf * CFrame.new(0, taperH + collar / 2, 0),
+		Vector3.new(topW + 0.3, collar, topW + 0.3),
+		collarColor or C.HousingLight,
+		nil,
+		solid()
+	)
 	local cupY = taperH + collar
 	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			cf * CFrame.new(0, cupY + cupH / 2, side * (topW / 2 - wall / 2)),
-			Vector3.new(topW, cupH, wall),
-			body,
-			nil,
-			solid()
-		)
+		Geo.block(m, cf * CFrame.new(0, cupY + cupH / 2, side * (topW / 2 - wall / 2)), Vector3.new(topW, cupH, wall), body, nil, solid())
 		Geo.block(
 			m,
 			cf * CFrame.new(side * (topW / 2 - wall / 2), cupY + cupH / 2, 0),
@@ -1570,6 +1570,8 @@ end
 MachineBuilder.IronBox = {
 	FlapOpen = math.rad(62), -- how far a flap swings out (about its top edge)
 	ScreenIdle = "READY",
+	ScreenText = C.ScreenText, -- the screen's text colour...
+	RarityTint = 0.3, -- ...tinted this much toward a cleaned ore's rarity colour
 	Window = 1.3, -- the shown item is scaled to fit a cube this big
 }
 
@@ -1611,7 +1613,14 @@ local function ironBox(): Model
 	local guardH = top - 0.5 - skirtTop
 	for _, x in { -side, side } do
 		for _, z in { front, rear } do
-			Geo.block(model, CFrame.new(x, skirtTop + guardH / 2, z), Vector3.new(0.42, guardH, 0.42), C.Steel, nil, prop({ Name = "Guard" }))
+			Geo.block(
+				model,
+				CFrame.new(x, skirtTop + guardH / 2, z),
+				Vector3.new(0.42, guardH, 0.42),
+				C.Steel,
+				nil,
+				prop({ Name = "Guard" })
+			)
 		end
 	end
 	-- belt slots just over the skirt: left, right, back (portals face -Z, so turn them)
@@ -1662,7 +1671,8 @@ local function ironBox(): Model
 	-- the little lit screen (front right) in a dark frame
 	local sx, sw, sy, sh = 1.8, 2.0, 2.5, 1.25
 	portal(model, CFrame.new(sx, sy, front), sw, sh, 0.22, 0.3, true, C.HousingDark)
-	local screen = Geo.block(model, CFrame.new(sx, sy + sh / 2, front - 0.2), Vector3.new(sw, sh, 0.06), C.ScreenLit, NEON, tiny({ Name = "Screen" }))
+	local screen =
+		Geo.block(model, CFrame.new(sx, sy + sh / 2, front - 0.2), Vector3.new(sw, sh, 0.06), C.ScreenLit, NEON, tiny({ Name = "Screen" }))
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "ScreenGui"
 	gui.Face = Enum.NormalId.Front

@@ -114,6 +114,10 @@ elseif sceneName == "train_trip" then -- trains on their trips + the train HUD a
 	for name, guis in require("./lib/train_trip_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "ironbox" then -- the Iron Box sorting line + keep list overlays (tools/lune/lib/ironbox_preview.luau)
+	for name, guis in require("./lib/ironbox_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

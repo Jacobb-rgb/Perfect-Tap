@@ -6,17 +6,19 @@
 	  modes    KEEP RARE+ | MY LIST | KEEP ALL   (data.KeepMode: RarePlus,
 	           List, All); a line under them says what the chosen one does
 	  chips    every DISCOVERED ore as a toggle chip, best income first:
-	           kept = filled in the ore's colour with KEEP, sent on = dark
-	           with the ore's colour as a swatch and SEND; the outline is
-	           the ore's rarity colour. Tapping a chip flips that one ore
-	           (in KEEP RARE+ / KEEP ALL it becomes your list first, so only
-	           that chip changes: IronBoxService)
-	  presets  ALL KEEP / ALL SEND (MY LIST only)
+	           kept = filled in the ore's colour with a lit (white) light,
+	           KEEP and its podium income; sent on = dark with the ore's
+	           colour as the light and SEND ON; the outline is the ore's
+	           rarity colour. Tapping a chip flips that one ore (in KEEP
+	           RARE+ / KEEP ALL it becomes your list first, so only that
+	           chip changes: IronBoxService)
+	  presets  ALL KEEP / ALL SEND (every chip at once; they make it your list)
 	  footer   control hint (gamepads: the platform's button glyphs)
 	Designed for 720 design units of height (HudController.uiScale). The
 	compact layout (phones) has bigger chips and buttons, so touch targets
-	stay >= 44 pt at the smallest UI scale; layout() fits the chip rows to
-	the screen.
+	stay >= 44 pt at the smallest UI scale, drops the info line (the line
+	under the modes still says what they do) and sits on the right, clear
+	of the HUD coins; layout() fits the chip rows to the screen.
 	Pure helpers (tested): entries (the State snapshot as chips), modeOf,
 	modeText, predict (what an IronBoxAction does to KeepMode / KeepList:
 	the same rules as IronBoxService.apply, so a tap shows at once).
@@ -112,7 +114,7 @@ end
 -- What the chosen mode does, for the line under the mode buttons.
 function IronBoxView.modeText(mode: KeepMode): string
 	if mode == "List" then
-		return "Your own list: tap an ore to keep it or send it on. Ores you haven't set follow the Rare+ rule."
+		return "Your own list. Ores you haven't set yet follow the Rare+ rule."
 	elseif mode == "All" then
 		return "Keeps every clean ore. Tap an ore to make your own list."
 	end
@@ -153,10 +155,7 @@ function IronBoxView.entries(state: any): { Entry }
 end
 
 local function isDiscovered(state: { [string]: any }, oreId: any): boolean
-	return type(oreId) == "string"
-		and OreData.ById[oreId] ~= nil
-		and type(state.Discovered) == "table"
-		and state.Discovered[oreId] == true
+	return type(oreId) == "string" and OreData.ById[oreId] ~= nil and type(state.Discovered) == "table" and state.Discovered[oreId] == true
 end
 
 --[[
@@ -390,8 +389,13 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local l = layoutOf(compact)
 	local listW = COLUMNS * l.ChipW + (COLUMNS - 1) * GAP + SCROLLBAR + 4
 	local width = math.min(listW + PAD * 2, math.max(320, maxWidth - 16))
-	local top = 8 + TITLE_H + INFO_H
+	local info = if compact then 0 else INFO_H
+	refs.Info.Visible = not compact
+	local top = 8 + TITLE_H + info
+	-- the mode buttons sit under the close button, or (no info line) beside it
 	local modesY = top + 4
+	local besideClose = modesY < 14 + l.Close + 4
+	local modesW = width - PAD * 2 - (if besideClose then l.Close + GAP else 0)
 	local modeTextY = modesY + l.ModeH + 6
 	local listY = modeTextY + MODE_TEXT_H + 8
 	local below = 10 + l.PresetH + 8 + HINT_H
@@ -402,14 +406,17 @@ function IronBoxView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local listH = rows * rowH + 8
 	local height = listY + listH + below
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	-- phones: on the right (thumb side), clear of the HUD coins top left
+	refs.Panel.AnchorPoint = if compact then Vector2.new(1, 0.5) else Vector2.new(0.5, 0.5)
+	refs.Panel.Position = if compact then UDim2.new(1, -12, 0.5, 0) else UDim2.fromScale(0.5, 0.5)
 	refs.Title.TextSize = l.Title
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(l.Close, l.Close)
 	refs.Info.Size = UDim2.new(1, -(PAD * 2 + l.Close + 8), 0, INFO_H)
 	local modesRow = (refs.Modes.RarePlus.Parent :: Frame).Parent :: Frame
 	modesRow.Position = UDim2.fromOffset(PAD, modesY)
-	modesRow.Size = UDim2.new(1, -PAD * 2, 0, l.ModeH)
-	local modeW = math.floor((width - PAD * 2 - GAP * 2) / 3)
+	modesRow.Size = UDim2.fromOffset(modesW, l.ModeH)
+	local modeW = math.floor((modesW - GAP * 2) / 3)
 	for _, button in refs.Modes do
 		local holder = button.Parent :: Frame
 		holder.Size = UDim2.fromOffset(modeW, l.ModeH - 6)
@@ -478,12 +485,13 @@ local function newChip(refs: Refs, oreId: string): Chip
 	return chip
 end
 
--- One chip's look: kept = filled in the ore's colour, sent on = dark.
+-- One chip's look: kept = filled in the ore's colour with a lit light,
+-- sent on = dark with the ore's colour as the light.
 local function paintChip(chip: Chip, entry: Entry, index: number)
 	chip.Button.LayoutOrder = index
 	chip.Name.Text = entry.Name
 	chip.Stroke.Color = entry.RarityColor
-	chip.Swatch.BackgroundColor3 = entry.Color
+	chip.Swatch.BackgroundColor3 = if entry.Keep then Theme.Text else entry.Color
 	if entry.Keep then
 		chip.Button.BackgroundColor3 = entry.Color
 		chip.State.Text = "KEEP · " .. Format.perSecond(entry.Income)
@@ -529,7 +537,7 @@ function IronBoxView.setEntries(refs: Refs, list: { Entry }): { Chip }
 	return created
 end
 
--- The chosen mode: its button lit, the line under the buttons, presets only in MY LIST.
+-- The chosen mode: its button lit and the line under the buttons.
 function IronBoxView.setMode(refs: Refs, mode: KeepMode)
 	refs.Mode = mode
 	for id, button in refs.Modes do
@@ -541,7 +549,6 @@ function IronBoxView.setMode(refs: Refs, mode: KeepMode)
 		button:SetAttribute("Selected", on)
 	end
 	refs.ModeText.Text = IronBoxView.modeText(mode)
-	refs.Presets.Visible = mode == "List"
 end
 
 -- The footer: a text hint, or (gamepad) button glyphs with "keep / send" / "close".

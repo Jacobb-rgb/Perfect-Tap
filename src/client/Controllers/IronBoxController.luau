@@ -11,7 +11,8 @@
 	  A tap shows at once: the action is applied to the last snapshot with
 	  IronBoxView.predict (the server's rules) until the server's snapshot
 	  catches up (pending actions are re-applied on newer snapshots for
-	  PENDING_SECONDS, so an older snapshot never flips a chip back).
+	  PENDING_SECONDS, so an older snapshot never flips a chip back; after
+	  that the panel shows the latest snapshot as it is).
 	- Closes with X, B (gamepad), Backspace, walking away from the box
 	  (Range), the box going away, or respawning. Gamepads start on the
 	  first chip; other prompts are hidden while it is open. Phones
@@ -140,6 +141,14 @@ function IronBoxController.act(action: string, arg: any)
 	table.insert(pending, { At = os.clock(), Action = action, Arg = arg })
 	shown = IronBoxView.predict(base, action, arg)
 	redraw()
+	-- once the guess expires, show the server's word again (an action the
+	-- rate limit dropped changes nothing there, so no new snapshot comes)
+	task.delay(PENDING_SECONDS + 0.1, function()
+		local state = StateController.get()
+		if isOpen and state then
+			onState(state)
+		end
+	end)
 end
 
 local function every(keep: boolean)

@@ -582,10 +582,11 @@ return function(T, Loader)
 		T.eq(refs.Gui.Enabled, false, "starts closed")
 		T.truthy(refs.Modes.RarePlus and refs.Modes.List and refs.Modes.All, "three mode buttons")
 		IronBoxView.setMode(refs, "List")
-		T.truthy(refs.Presets.Visible, "presets in MY LIST")
+		T.truthy(refs.Presets.Visible, "presets")
 		T.eq(refs.Modes.List:GetAttribute("Selected"), true)
 		IronBoxView.setMode(refs, "All")
-		T.falsy(refs.Presets.Visible, "no presets in KEEP ALL")
+		T.eq(refs.Modes.List:GetAttribute("Selected"), false)
+		T.eq(refs.Modes.All:GetAttribute("Selected"), true)
 		local state = { Discovered = { Coal = true, Gold = true }, KeepMode = "RarePlus", KeepList = {} }
 		local created = IronBoxView.setEntries(refs, IronBoxView.entries(state))
 		T.eq(#created, 2, "two chips")
@@ -605,7 +606,14 @@ return function(T, Loader)
 		-- phones: 0.62 scale, a 667 x 375 pt screen; chips and buttons >= 44 pt
 		local phone = 0.62
 		IronBoxView.layout(refs, true, 667 / phone, (375 - 36) / phone)
-		T.truthy(refs.Rows >= 2, "at least two rows of chips")
+		T.truthy(refs.Rows >= 3, "three rows of chips")
+		T.falsy(refs.Info.Visible, "no info line on phones")
+		local modesRow = (refs.Modes.RarePlus.Parent :: any).Parent
+		local closeHolder = refs.Close.Parent :: any
+		local clear = modesRow.Position.Y.Offset >= 14 + closeHolder.Size.Y.Offset
+			or modesRow.Position.X.Offset + modesRow.Size.X.Offset <= refs.Panel.Size.X.Offset - 16 - closeHolder.Size.X.Offset
+		T.truthy(clear, "mode buttons clear of the close button")
+		T.eq(refs.Panel.AnchorPoint.X, 1, "on the right, clear of the HUD coins")
 		T.truthy(refs.Panel.Size.Y.Offset * phone <= 375 - 36, "fits the phone")
 		T.truthy(refs.Panel.Size.X.Offset * phone <= 667, "fits the phone's width")
 		T.truthy(refs.Grid.CellSize.Y.Offset * phone >= 44, "chips >= 44 pt")
