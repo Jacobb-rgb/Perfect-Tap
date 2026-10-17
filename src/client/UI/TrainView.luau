@@ -10,16 +10,21 @@
 	          ("TRAIN 8/8 · On its way 0:12"). The left part is a button that
 	          opens the panel; a key hint shows T (keyboard) or the L3 glyph
 	          (gamepad).
-	  panel   the Mine Station panel: on the left your cargo, the trip time and
-	          a big SEND button; on the right the Capacity and Speed upgrades
-	          (level, what the next level gives, price, BUY) and the Express
-	          perk line ("coming soon"); X / B / Backspace closes it.
+	  panel   the Mine Station panel: your coins in the header; on the left
+	          your cargo, the trip time and a big SEND button; on the right
+	          the Capacity and Speed upgrades (level, what the next level
+	          gives, price, BUY) and the Express perk line ("coming soon");
+	          X / B / Backspace closes it. A gamepad selection stays inside
+	          it (SelectionGroup). The chip hides while it is open.
 
 	Designed for 720 design units of height (HudController scales every
 	TerraForge gui). The compact layout (phones, uiScale 0.62) makes every
 	button at least 44 pt (TrainView.touchTargets lists them for the tests);
 	narrow panels move the price onto the detail line, short ones shrink the
-	upgrade rows (never under the 76-unit buttons).
+	upgrade rows (never under the 76-unit buttons). On phones the panel sits
+	at the bottom of the screen (over the carry bar) and under the HUD coins
+	when there is room; when it has to cover them, CoversCoins tells the
+	controller to hide them while it is open.
 	Helpers: read (a State snapshot's Train with safe defaults), status (the
 	chip and panel state), upgrade (an upgrade row), seconds.
 ]]
@@ -31,6 +36,7 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local UIKit = require(script.Parent.UIKit)
+local HudView = require(script.Parent.HudView)
 
 local TrainView = {}
 
@@ -40,6 +46,8 @@ TrainView.ChipLeft = 16 -- lines up with the coins panel
 TrainView.ChipTop = 136 -- under the coins panel (16..90) and its "+$X" popups (96..130)
 TrainView.ExpressPrice = 199 -- R$, the placeholder on the Express line
 TrainView.UnloadGrace = 2 -- seconds after the arrival before a train with ore still on board counts as waiting
+TrainView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a phone panel below this leaves it clear
+TrainView.MinPanelHeight = 400 -- the compact cargo card needs this much (its SEND under the state line)
 
 export type Snapshot = {
 	Cargo: number,
@@ -112,6 +120,9 @@ export type Refs = {
 	Panel: Frame,
 	Title: TextLabel,
 	Subtitle: TextLabel,
+	Balance: Frame, -- your coins in the header
+	BalanceIcon: Frame,
+	BalanceAmount: TextLabel,
 	Close: TextButton,
 	Card: Frame,
 	CardLabel: TextLabel,
@@ -127,6 +138,7 @@ export type Refs = {
 	Express: Row,
 	Hint: TextLabel,
 	Compact: boolean,
+	CoversCoins: boolean, -- the panel lies over the HUD coins (layout)
 }
 
 type ChipMetrics = {
@@ -145,6 +157,7 @@ type PanelMetrics = {
 	Width: number,
 	Height: number,
 	Header: number,
+	Balance: number, -- the header's coins pill: width (height = Close - 14)
 	Card: number, -- left column width
 	Row: number,
 	Button: number,
@@ -172,6 +185,7 @@ local PANEL: { [string]: PanelMetrics } = {
 		Width = 860,
 		Height = 460,
 		Header = 72,
+		Balance = 172,
 		Card = 300,
 		Row = 100,
 		Button = 56,
@@ -188,6 +202,7 @@ local PANEL: { [string]: PanelMetrics } = {
 		Width = 1000,
 		Height = 490,
 		Header = 90,
+		Balance = 196,
 		Card = 360,
 		Row = 112,
 		Button = 76,
@@ -306,9 +321,10 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 	return make("Empty", 0, "ore on board", "Load ore at the Mine", Theme.TextDim, false)
 end
 
--- The HUD chip shows with the HUD, except behind the open panel on phones (it would peek out at its edge).
-function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean, compact: boolean): boolean
-	return hudShown and not (panelOpen and compact)
+-- The HUD chip shows with the HUD, but not while the panel is open (it says the same; on PC its
+-- edge would cover the chip's SEND).
+function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean): boolean
+	return hudShown and not panelOpen
 end
 
 -- One upgrade row from a snapshot (prices from the snapshot, else TrainConfig).
@@ -530,6 +546,12 @@ function TrainView.build(compact: boolean?): Refs
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Active = true,
+		-- a gamepad selection never wanders out to the HUD
+		SelectionGroup = true,
+		SelectionBehaviorUp = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorDown = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	})
 	local title = UIKit.label(panel, "YOUR ORE TRAIN", 34, {
 		Name = "Title",
@@ -549,6 +571,23 @@ function TrainView.build(compact: boolean?): Refs
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
 		TextSize = 26,
+	})
+	-- your coins, next to the close button (the HUD's may be covered on phones)
+	local balance = UIKit.new("Frame", {
+		Name = "Balance",
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = Theme.PanelDark,
+		BorderSizePixel = 0,
+	}, panel)
+	UIKit.corner(balance, 10)
+	UIKit.stroke(balance, 2)
+	local balanceIcon = HudView.coinIcon(balance, 26)
+	local balanceAmount = UIKit.label(balance, "$0", 24, {
+		Name = "Amount",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.Coin,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 
 	-- left: your cargo
@@ -633,6 +672,9 @@ function TrainView.build(compact: boolean?): Refs
 		Panel = panel,
 		Title = title,
 		Subtitle = subtitle,
+		Balance = balance,
+		BalanceIcon = balanceIcon,
+		BalanceAmount = balanceAmount,
 		Close = close,
 		Card = card,
 		CardLabel = cardLabel,
@@ -648,6 +690,7 @@ function TrainView.build(compact: boolean?): Refs
 		Express = express,
 		Hint = hint,
 		Compact = false,
+		CoversCoins = false,
 	}
 	TrainView.layout(refs, compact == true, math.huge, math.huge)
 	return refs
@@ -756,19 +799,50 @@ function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 
 	local m = if compact then PANEL.Compact else PANEL.Normal
 	local width = math.max(620, math.min(m.Width, maxWidth - 24))
-	local height = math.max(400, math.min(m.Height, maxHeight - 16))
+	local minHeight = TrainView.MinPanelHeight
+	local height = math.max(minHeight, math.min(m.Height, maxHeight - 16))
+	local top: number
+	if compact then
+		-- phones: at the bottom of the screen, over the carry bar; under the HUD coins when it fits
+		local below = maxHeight - TrainView.CoinsBottom - 8
+		if below >= minHeight then
+			height = math.min(m.Height, below)
+		end
+		refs.Panel.AnchorPoint = Vector2.new(0.5, 1)
+		refs.Panel.Position = UDim2.new(0.5, 0, 1, -8)
+		top = maxHeight - 8 - height
+	else
+		refs.Panel.AnchorPoint = Vector2.new(0.5, 0.5)
+		refs.Panel.Position = UDim2.fromScale(0.5, 0.5)
+		top = (maxHeight - height) / 2
+	end
 	refs.Panel.Size = UDim2.fromOffset(width, height)
+	-- does it lie over HudView's coins panel (16, 16, CoinsWidth x 74)?
+	local left = (maxWidth - width) / 2
+	refs.CoversCoins = left < 16 + HudView.CoinsWidth and top < 16 + 74
 
-	-- header: title, subtitle (not on phones), close
+	-- header: title, your coins, close; the subtitle under them (not on phones)
+	local closeSize = m.Close
+	-- (PC: a slim pill above the subtitle line; phones: as tall as the close button's face)
+	local pillHeight = if compact then closeSize - 14 else 34
+	local balance = refs.Balance
+	balance.Size = UDim2.fromOffset(m.Balance, pillHeight)
+	balance.Position = UDim2.new(1, -(PAD + closeSize + 10), 0, if compact then 16 else 10)
+	local iconSize = pillHeight - 12
+	refs.BalanceIcon.Size = UDim2.fromOffset(iconSize, iconSize)
+	refs.BalanceIcon.Position = UDim2.fromOffset(8, 6)
+	refs.BalanceAmount.Position = UDim2.fromOffset(8 + iconSize + 8, 0)
+	refs.BalanceAmount.Size = UDim2.new(1, -(8 + iconSize + 8 + 8), 1, 0)
+	refs.BalanceAmount.TextSize = if compact then m.Text + 4 else m.Text + 2
 	refs.Title.Position = UDim2.fromOffset(PAD, if compact then 20 else 8)
-	refs.Title.Size = UDim2.new(1, -(PAD * 2 + m.Close + 10), 0, m.Title + 6)
+	refs.Title.Size = UDim2.new(1, -(PAD * 2 + closeSize + 10 + m.Balance + 10), 0, m.Title + 6)
 	refs.Title.TextSize = m.Title
 	refs.Subtitle.Visible = not compact
 	refs.Subtitle.Position = UDim2.fromOffset(PAD, 46)
-	refs.Subtitle.Size = UDim2.new(1, -(PAD * 2 + m.Close + 10), 0, 20)
+	refs.Subtitle.Size = UDim2.new(1, -(PAD * 2 + closeSize + 10), 0, 20)
 	refs.Subtitle.TextSize = m.Small
 	local close = holderOf(refs.Close)
-	close.Size = UDim2.fromOffset(m.Close, m.Close)
+	close.Size = UDim2.fromOffset(closeSize, closeSize)
 	close.Position = UDim2.new(1, -PAD, 0, 12)
 
 	-- left: the cargo card
@@ -806,7 +880,8 @@ function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local tripHeight = math.max(0, cardHeight - 14 - m.Button - 8 - tripTop)
 	refs.Trip.Size = UDim2.new(1, -28, 0, tripHeight)
 	refs.Trip.TextSize = m.Small
-	refs.Trip.Visible = tripHeight >= m.Small + 4 -- (short phones: no room for it)
+	-- PC: three lines of explanation; phones: one short line (setUpgrades), or none when short
+	refs.Trip.Visible = tripHeight >= (m.Small + 4) * (if compact then 1 else 3)
 
 	-- right: the upgrade rows (+ the hint under them on PC); short panels get
 	-- lower rows, never lower than the buttons
@@ -876,8 +951,8 @@ end
 -- The trip line and the two upgrade rows.
 function TrainView.setUpgrades(refs: Refs, train: Snapshot, coins: number)
 	local auto = TrainConfig.AutoDepartSeconds
-	refs.Trip.Text =
-		`Trip {TrainView.seconds(train.TripSeconds)} to your base. It leaves when full, when you send it, or {auto} s after the last load.`
+	local trip = `Trip {TrainView.seconds(train.TripSeconds)} to your base.`
+	refs.Trip.Text = if refs.Compact then trip else `{trip} It leaves when full, when you send it, or {auto} s after the last load.`
 	for _, row in { refs.Rows.Capacity, refs.Rows.Speed } do
 		local info = TrainView.upgrade(train, if row == refs.Rows.Capacity then "Capacity" else "Speed", coins)
 		row.Name.Text = info.Name
@@ -899,6 +974,14 @@ function TrainView.setUpgrades(refs: Refs, train: Snapshot, coins: number)
 		express.Price.Text = `{TrainView.ExpressPrice} R$`
 		express.Buy.Text = "SOON"
 		style(express.Buy, false, Theme.Good, Theme.GoodDark)
+	end
+end
+
+-- Your coins in the panel's header.
+function TrainView.setCoins(refs: Refs, coins: number)
+	local text = Format.money(math.max(0, coins))
+	if refs.BalanceAmount.Text ~= text then
+		refs.BalanceAmount.Text = text
 	end
 end
 

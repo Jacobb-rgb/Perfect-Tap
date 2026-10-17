@@ -1,11 +1,14 @@
 -- Ore trains on the client (TrainController + TrainView): the trip timeline
 -- (legs with minimum visible seconds, easing, the quarry portal per plot side,
 -- where a train is at a time), the stop that lines the wagons up with the Ore
--- Pen, the hold at a full pen and the unload, tunnels hiding the cars, the
--- wagons tipping toward the pen and the ore clearing the Foundry, couplers,
--- the waiting train under the station chute, trip payloads and snapshots, the
--- HUD chip's state text, the upgrade rows, the view's children and the phone
--- layouts (every touch target >= 44 pt, names readable on narrow phones).
+-- Pen, the hold at a full pen and the unload, the way back at a sane speed,
+-- tunnels hiding the cars, one track per line (no train runs through
+-- another), the wagons tipping toward the pen, emptying and the ore clearing
+-- the Foundry, couplers, the waiting train under the station chute (parked
+-- before loading opens), trip payloads (Waiting, late unloads) and snapshots,
+-- the HUD chip's state text, the upgrade rows, the view's children and the
+-- phone layouts (every touch target >= 44 pt, names readable on narrow
+-- phones, the coins and the carry bar never cut by the panel).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
@@ -232,11 +235,13 @@ return function(T, Loader)
 		T.eq(p.Leg, "Return")
 		T.near(p.Tip, 0, 1e-9, "hopper back down")
 		near(p.Facing, Vector3.new(0, 0, -1), 1e-6, "backs up (still faces north)")
-		local mid = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + TrainConfig.ReturnSeconds * 0.7, 1, unloadAt)
+		local back = TrainController.returnSeconds(WEST, 1)
+		T.le(TrainConfig.ReturnSeconds, back, "never back sooner than the server's ReturnSeconds")
+		local mid = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + back * 0.7, 1, unloadAt)
 		T.lt(trainStop.Z, mid.Position.Z, "rolls south")
-		p = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + TrainConfig.ReturnSeconds - 0.001, 1, unloadAt)
+		p = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + back - 0.001, 1, unloadAt)
 		near(p.Position, inside + RAIL, 0.01, "back inside the tunnel")
-		p = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + TrainConfig.ReturnSeconds, 1, unloadAt)
+		p = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + back, 1, unloadAt)
 		T.eq(p.Leg, "Done")
 		T.truthy(p.Hidden, "gone after the return")
 		T.le(TrainController.TipUp + TrainController.TipHold + TrainController.TipDown, TrainController.unloadSeconds() + 1e-9)
@@ -253,7 +258,7 @@ return function(T, Loader)
 			local dt = 0.005
 			local last = TrainController.poseAt(plot, DEPART, arrive, DEPART, wagons, unloadAt)
 			local t = DEPART + dt
-			while t < unloadAt + TrainConfig.ReturnSeconds do
+			while t < unloadAt + TrainController.returnSeconds(plot, wagons) do
 				local p = TrainController.poseAt(plot, DEPART, arrive, t, wagons, unloadAt)
 				local label = `plot {plot.Id} {trip} s {p.Leg} at {t - DEPART}`
 				if not p.Hidden and not last.Hidden then
@@ -292,6 +297,174 @@ return function(T, Loader)
 		local span = consist.Vehicles[1].Half + last.Offset + last.Half
 		T.le(span, TrainController.HideDepth, "a whole consist fits in a tunnel")
 		TrainController.destroyConsist(consist)
+	end)
+
+	-- no two shown cars of different trains on one track overlap
+	local function apart(bodies: { any }, label: string)
+		for i = 1, #bodies do
+			for j = i + 1, #bodies do
+				local a, b = bodies[i], bodies[j]
+				if a.Track and a.Track == b.Track then
+					for v, ca in a.Centers do
+						for w, cb in b.Centers do
+							if a.Shown[v] and b.Shown[w] then
+								local gap = math.abs(ca - cb) - (a.Halves[v] + b.Halves[w])
+								T.le(-TrainController.OcclusionSlack - 1e-6, gap, label)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	T.test("TrainClient: two plots on one coast line never show overlapping trains", function()
+		-- plot 1 (z 84) is the first stop north of the south portal: every other west train passes it
+		local south, north = WorldLayout.Plots[1], WorldLayout.Plots[4]
+		for _, mineIsThrough in { false, true } do
+			local standing = TrainController.nominalBody(2)
+			local through = TrainController.nominalBody(2)
+			local hid, cameOut, passedBack = false, false, false
+			local unloadAt = ARRIVE + 4
+			local t = DEPART
+			while t < unloadAt + TrainController.returnSeconds(north, 2) do
+				-- plot 1's train waits at its full pen (arrived long ago, no unload)
+				local ps = TrainController.poseAt(south, DEPART - 400, DEPART - 370, t, 2, nil)
+				local pt = TrainController.poseAt(north, DEPART, ARRIVE, t, 2, unloadAt)
+				TrainController.fillBody(standing, ps, TrainController.tierOf(ps, false), DEPART - 400, 11)
+				TrainController.fillBody(through, pt, TrainController.tierOf(pt, mineIsThrough), DEPART, 12)
+				local list = { through, standing }
+				TrainController.occlude(list)
+				local label = `{if mineIsThrough then "yours" else "theirs"} at {math.floor((t - DEPART) * 100) / 100} s ({pt.Leg})`
+				apart(list, label)
+				T.eq(standing.Track, "West")
+				if mineIsThrough then
+					-- your own train always shows (where no tunnel hides it); the other one makes way
+					for v = 1, 3 do
+						T.eq(through.Shown[v], through.Open[v], label .. ": yours never hides")
+					end
+				else
+					for v = 1, 3 do
+						T.truthy(standing.Shown[v], label .. ": the standing train never blinks")
+					end
+					if through.Open[1] and not through.Shown[1] then
+						hid = true
+					elseif hid and through.Shown[1] and pt.Leg == "Coast" then
+						cameOut = true
+					end
+					if pt.Leg == "Return" and through.Open[1] and not through.Shown[1] then
+						passedBack = true
+					end
+				end
+				t += 0.02
+			end
+			if not mineIsThrough then
+				T.truthy(hid, "the through train hides where it meets the standing one")
+				T.truthy(cameOut, "...and comes out at its far end")
+				T.truthy(passedBack, "on the way back too")
+			end
+		end
+		-- every pair of west plots, trips overlapping in time (one faster): never a ghost
+		for a = 1, 4 do
+			for b = 1, 4 do
+				if a ~= b then
+					local pa, pb = WorldLayout.Plots[a], WorldLayout.Plots[b]
+					local ba, bb = TrainController.nominalBody(2), TrainController.nominalBody(1)
+					local t = DEPART
+					while t < DEPART + 60 do
+						local p1 = TrainController.poseAt(pa, DEPART, DEPART + 30, t, 2, DEPART + 33)
+						local p2 = TrainController.poseAt(pb, DEPART + 4, DEPART + 16, t, 1, DEPART + 17)
+						TrainController.fillBody(ba, p1, TrainController.tierOf(p1, false), DEPART, 1)
+						TrainController.fillBody(bb, p2, TrainController.tierOf(p2, false), DEPART + 4, 2)
+						local list = { bb, ba }
+						TrainController.occlude(list)
+						apart(list, `plots {a} and {b} at {t - DEPART}`)
+						t += 0.1
+					end
+				end
+			end
+		end
+	end)
+
+	T.test("TrainClient: other trains leave the station from behind your waiting train", function()
+		local mineBody = TrainController.nominalBody(1)
+		local yours = TrainController.parkedPose(WorldLayout.Plots[6], nil) -- an east plot: it faces the east portal
+		local s = spans()
+		for _, otherId in { 2, 7 } do -- a west and an east plot
+			local other = WorldLayout.Plots[otherId]
+			local body = TrainController.nominalBody(1)
+			local startHidden, laterShown = false, false
+			local t = DEPART
+			while t < DEPART + s.Quarry do
+				local p = TrainController.poseAt(other, DEPART, ARRIVE, t, 1)
+				TrainController.fillBody(mineBody, yours, 0, -math.huge, 1)
+				TrainController.fillBody(body, p, TrainController.tierOf(p, false), DEPART, 2)
+				local list = { body, mineBody }
+				TrainController.occlude(list)
+				apart(list, `plot {otherId} at {t - DEPART}`)
+				T.truthy(mineBody.Shown[1] and mineBody.Shown[2], "your waiting train never blinks")
+				T.eq(body.Track, "Quarry")
+				if t == DEPART then
+					startHidden = not body.Shown[2]
+				end
+				if body.Shown[1] and body.Shown[2] then
+					laterShown = true
+				end
+				t += 0.05
+			end
+			T.truthy(startHidden, `plot {otherId}: its wagon starts inside yours, so it hides`)
+			T.truthy(laterShown, `plot {otherId}: the whole train shows once clear`)
+		end
+		-- underground or gone: no track, nothing to hide behind
+		local below = TrainController.poseAt(WEST, DEPART, ARRIVE, DEPART + (s.Quarry + s.Underground) / 2)
+		T.eq(TrainController.trackOf(below), nil)
+		T.eq(TrainController.tierOf(below, true), 0, "yours ranks first")
+		T.eq(TrainController.tierOf(TrainController.poseAt(WEST, DEPART, ARRIVE, ARRIVE + 5, 1, nil), false), 1, "standing")
+		T.eq(TrainController.tierOf(TrainController.poseAt(WEST, DEPART, ARRIVE, DEPART + TRIP * 0.85), false), 2, "moving")
+	end)
+
+	T.test("TrainClient: the empty train backs home at a sane speed", function()
+		for _, plot in WorldLayout.Plots do
+			for _, trip in { 30, 12 } do
+				local arrive = DEPART + trip
+				local unloadAt = arrive + 0.5
+				local peakIn, peakBack = 0, 0
+				local back = TrainController.returnSeconds(plot, 2)
+				T.le(TrainConfig.ReturnSeconds, back, `plot {plot.Id}: at least ReturnSeconds`)
+				local t = DEPART
+				while t < unloadAt + back do
+					local p = TrainController.poseAt(plot, DEPART, arrive, t, 2, unloadAt)
+					if p.Leg == "Coast" then
+						peakIn = math.max(peakIn, p.Speed)
+					elseif p.Leg == "Return" then
+						peakBack = math.max(peakBack, p.Speed)
+					end
+					t += 0.01
+				end
+				-- (ease in / out peaks at 1.5x the average)
+				T.le(peakBack, TrainController.ReturnSpeed * 1.5 + 0.5, `plot {plot.Id} {trip} s: no zipping away`)
+				T.lt(0, peakIn)
+				-- gone at the end, still visible just before
+				local gone = TrainController.poseAt(plot, DEPART, arrive, unloadAt + back + 1e-6, 2, unloadAt)
+				T.eq(gone.Leg, "Done")
+			end
+		end
+		-- the far stops take longer than ReturnSeconds (the old 92 studs/s), the near one doesn't
+		T.lt(TrainConfig.ReturnSeconds + 2, TrainController.returnSeconds(WorldLayout.Plots[4], 2), "plot 4 rolls back longer")
+		T.near(TrainController.returnSeconds(WEST, 1), TrainConfig.ReturnSeconds, 1e-9, "plot 1 as before")
+	end)
+
+	T.test("TrainClient: your train is parked again when loading opens", function()
+		local unloadAt = ARRIVE + 2
+		local from = TrainController.rollInAt(unloadAt)
+		T.near(from + TrainController.RollInSeconds, unloadAt + TrainConfig.ReturnSeconds, 1e-9, "done at unload + ReturnSeconds")
+		local plot = WorldLayout.Plots[6]
+		local rest = TrainController.parkedPose(plot, nil)
+		local open = TrainController.parkedPose(plot, unloadAt + TrainConfig.ReturnSeconds - from)
+		near(open.Position, rest.Position, 1e-6, "standing under the chute when the server accepts loads")
+		T.eq(open.Speed, 0)
+		local rolling = TrainController.parkedPose(plot, 0.5)
+		T.lt(0, rolling.Speed, "still backing in before that")
 	end)
 
 	T.test("TrainClient: the waiting train stands under the station chute", function()
@@ -533,21 +706,124 @@ return function(T, Loader)
 		local unloadAt = ARRIVE + 0.2
 		local consist = TrainController.buildConsist(RED, { ORE, ORE }, false)
 		local fills = {}
-		for _, after in { 0, 0.2, 0.35, 0.5, 0.8 } do
+		local holdEnd = TrainController.TipUp + TrainController.TipHold
+		for _, after in { 0, 0.2, 0.35, 0.5, 0.8, holdEnd } do
 			TrainController.applyPour(consist, TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + after, 2, unloadAt))
 			table.insert(fills, consist.Vehicles[2].Fill)
 		end
 		T.eq(fills[1], 1, "not before the tip")
+		T.lt(fills[4], 1, "pouring once the tip passes PourThreshold")
+		T.lt(0.05, fills[5], "still pouring during the hold (the rocks slide out, not blink out)")
 		for i = 2, #fills do
 			T.le(fills[i], fills[i - 1], "never fills back up")
 		end
-		T.lt(fills[#fills], 0.05, "empty at full tip")
+		T.eq(fills[#fills], 0, "empty at the end of the hold")
+		-- it starts pouring when the hopper passes PourThreshold
+		local start = TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + 0.25, 2, unloadAt)
+		T.lt(start.Tip, TrainController.PourThreshold, "0.25 s: not tipped far enough")
+		T.eq(start.Pour, 0, "...so nothing pours yet")
 		-- tipping back and the trip home keep it empty
 		local down = unloadAt + TrainController.TipUp + TrainController.TipHold + TrainController.TipDown / 2
 		TrainController.applyPour(consist, TrainController.poseAt(WEST, DEPART, ARRIVE, down, 2, unloadAt))
 		T.lt(consist.Vehicles[2].Fill, 0.05, "stays empty while the hopper comes down")
 		T.eq(TrainController.pourFill(TrainController.poseAt(WEST, DEPART, ARRIVE, unloadAt + 3, 2, unloadAt)), 0, "empty on the way back")
 		T.eq(consist.Vehicles[3].Fill, consist.Vehicles[2].Fill, "both wagons pour")
+		TrainController.destroyConsist(consist)
+	end)
+
+	-- the top of a part in its wagon's model space (TrainBuilder's frame: the rim top is at TOP 6.4)
+	local function topOf(cf: any, size: any): number
+		local h = size / 2
+		local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+		return cf.Position.Y + math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z
+	end
+	local RIM_TOP = 6.4
+
+	T.test("TrainClient: a poured wagon is empty (no rock above the rim)", function()
+		for _, plot in { WEST, EAST_FAR } do
+			local consist = TrainController.buildConsist(RED, { ORE, ORE }, TrainController.wagonFlip(plot))
+			local unloadAt = ARRIVE + 0.3
+			-- the moment the pour is done (pourFill 0), and on the way back
+			local holdEnd = TrainController.TipUp + TrainController.TipHold
+			for _, after in { holdEnd - 0.02, holdEnd + 0.01, TrainController.unloadSeconds() + 1 } do
+				local p = TrainController.poseAt(plot, DEPART, ARRIVE, unloadAt + after, 2, unloadAt)
+				TrainController.applyPour(consist, p)
+				place(consist, p, nil)
+			end
+			for w = 2, 3 do
+				local wagon = consist.Vehicles[w]
+				T.eq(wagon.Fill, 0, `plot {plot.Id} wagon {w - 1} poured out`)
+				T.truthy(wagon.Empty, "flagged empty")
+				local rocks, bed = 0, 0
+				for i, part in wagon.Parts do
+					local offset = wagon.Offsets[i]
+					if part.Name == "Ore" then
+						rocks += 1
+						local hidden = part.Transparency >= 1
+						T.truthy(hidden or topOf(offset, part.Size) <= RIM_TOP, `plot {plot.Id}: no rock sticks out of the empty hopper`)
+						T.truthy(hidden, "the rocks are gone")
+					elseif part.Name == "OreBed" then
+						bed += 1
+						T.le(topOf(offset, part.Size), RIM_TOP - 1.2, "the bed sinks to the empty hopper's floor")
+						T.lt(part.Transparency, 1, "...and stays as its dark floor")
+					end
+				end
+				T.lt(0, rocks, "a loaded wagon has rocks")
+				T.eq(bed, 1)
+			end
+			-- a spare train reused for a new trip is full again (setFill above 0 brings the rocks back)
+			local wagon = consist.Vehicles[2]
+			TrainController.setFill(wagon, 1)
+			T.falsy(wagon.Empty)
+			for i, part in wagon.Parts do
+				if part.Name == "Ore" then
+					T.eq(part.Transparency, wagon.Rocks[i], "rock shown again")
+					near(wagon.Offsets[i].Position, wagon.Base[i].Position, 1e-9, "rock back on the heap")
+				end
+			end
+			TrainController.destroyConsist(consist)
+		end
+	end)
+
+	T.test("TrainClient: the rocks slide over the lip while they pour", function()
+		local consist = TrainController.buildConsist(RED, { ORE }, false)
+		local wagon = consist.Vehicles[2]
+		local index: number? = nil
+		for i in wagon.Rocks do
+			index = i
+			break
+		end
+		local i = index :: number
+		local base = wagon.Base[i].Position
+		TrainController.setFill(wagon, 0.5, true)
+		local half = wagon.Offsets[i].Position - base
+		T.near(half.X, TrainController.PourSlide * 0.5, 1e-9, "toward the tipping side (+X)")
+		T.lt(half.Y, 0, "and down")
+		-- the waiting train's heap only sinks (no sideways slide)
+		TrainController.setFill(wagon, 0.5)
+		T.near((wagon.Offsets[i].Position - base).X, 0, 1e-9, "parked: straight down")
+		TrainController.destroyConsist(consist)
+	end)
+
+	T.test("TrainClient: the waiting train's heap grows from a small mound", function()
+		local consist = TrainController.buildConsist(RED, { ORE }, false)
+		local wagon = consist.Vehicles[2]
+		local function peak(): number
+			local best = -math.huge
+			for i, part in wagon.Parts do
+				if part.Name == "Ore" then
+					best = math.max(best, topOf(wagon.Offsets[i], part.Size))
+				end
+			end
+			return best
+		end
+		local full = peak()
+		TrainController.setFill(wagon, 1 / 8)
+		local low = peak()
+		T.le(low, RIM_TOP + 0.05, "1 of 8: a small mound inside the hopper")
+		T.lt(RIM_TOP - 1.2, low, "...that still shows")
+		T.lt(1.2, full - low, "a clear difference to a full wagon")
+		T.lt(RIM_TOP + 1, full, "full: a dome over the rim")
 		TrainController.destroyConsist(consist)
 	end)
 
@@ -581,6 +857,70 @@ return function(T, Loader)
 		T.eq(fixed.Color, TrainController.BannerColors[3], "banner color of plot 3")
 		T.eq(#fixed.Load, 0)
 		T.eq(fixed.Count, 1)
+	end)
+
+	T.test("TrainClient: Waiting trains and late unloads keep their train", function()
+		local base = { UserId = 7, PlotId = 3, DepartAt = DEPART, ArriveAt = ARRIVE, Count = 8, Color = RED, Load = { ORE[1] } }
+		local function parse(change: { [string]: any }): any
+			local copy = table.clone(base)
+			for k, v in change do
+				copy[k] = v
+			end
+			return TrainController.parseTrip(copy)
+		end
+		local trip = parse({})
+		T.eq(trip.Waiting, nil, "not waiting")
+		T.eq(parse({ Waiting = true }).Waiting, true, "the server's Waiting")
+		T.eq(parse({ Waiting = "yes" }).Waiting, nil, "junk is not waiting")
+		-- a new trip
+		local first, rebuildFirst = TrainController.mergeTrip(nil, trip, DEPART)
+		T.eq(first, trip)
+		T.falsy(rebuildFirst)
+		-- the pen is full: the same trip again, now waiting (the train is kept)
+		local waiting, rebuild = TrainController.mergeTrip(trip, parse({ Waiting = true }), ARRIVE + 3)
+		T.eq(waiting.Waiting, true)
+		T.falsy(rebuild, "no rebuild for the Waiting announcement")
+		-- the late unload: same DepartAt, ArriveAt = the unload, no Waiting (cleared)
+		local late, rebuildLate = TrainController.mergeTrip(waiting, parse({ ArriveAt = ARRIVE + 200 }), ARRIVE + 200)
+		T.eq(late.Waiting, nil, "a TrainTrip without Waiting clears it")
+		T.eq(late.ArriveAt, ARRIVE + 200)
+		T.falsy(rebuildLate, "the standing train stays")
+		-- after a very long wait the server moves DepartAt (MaxTripSpan): still the same standing train
+		local now = ARRIVE + 650
+		local shifted, rebuildShifted = TrainController.mergeTrip(waiting, parse({ DepartAt = now - 30, ArriveAt = now }), now)
+		T.eq(shifted.DepartAt, now - 30, "the new times")
+		T.eq(shifted.ArriveAt, now)
+		T.eq(shifted.Waiting, nil)
+		T.falsy(rebuildShifted, "no blink")
+		local plot = WorldLayout.Plots[3]
+		local before = TrainController.poseAt(plot, waiting.DepartAt, waiting.ArriveAt, now, 1)
+		local after = TrainController.poseAt(plot, shifted.DepartAt, shifted.ArriveAt, now, 1)
+		T.eq(after.Leg, "Stopped")
+		near(after.Position, before.Position, 1e-6, "it doesn't move")
+		-- what this screen knows survives the merge
+		local quiet = table.clone(waiting)
+		quiet.UnloadAt = ARRIVE + 300
+		quiet.Quiet = true
+		local kept = TrainController.mergeTrip(quiet, parse({ Waiting = true }), ARRIVE + 310)
+		T.eq(kept.UnloadAt, ARRIVE + 300)
+		T.eq(kept.Quiet, true)
+		-- a moved DepartAt for a train still on its way, or a new departure, is a new trip
+		local _, onTheWay = TrainController.mergeTrip(trip, parse({ DepartAt = DEPART + 5, ArriveAt = ARRIVE + 5 }), DEPART + 10)
+		T.truthy(onTheWay, "on its way: a new trip")
+		local nextTrip, rebuildNext =
+			TrainController.mergeTrip(late, parse({ DepartAt = ARRIVE + 700, ArriveAt = ARRIVE + 730 }), ARRIVE + 700)
+		T.truthy(rebuildNext, "the next departure")
+		T.eq(nextTrip.UnloadAt, nil)
+		-- a payload without load colors never replaces one with them
+		local bare = table.clone(base)
+		bare.Load = nil
+		local richer, rebuildBare = TrainController.mergeTrip(trip, TrainController.parseTrip(bare), DEPART + 5)
+		T.eq(#richer.Load, 1, "keeps the colors")
+		T.falsy(rebuildBare)
+		-- and the other way round: the colors arrive after a bare trip (the snapshot's): rebuilt with them
+		local colored, rebuildColored = TrainController.mergeTrip(TrainController.parseTrip(bare), trip, DEPART + 5)
+		T.eq(#colored.Load, 1)
+		T.truthy(rebuildColored)
 	end)
 
 	T.test("TrainClient: your trip follows the State snapshot (full pen, late unload)", function()
@@ -839,11 +1179,14 @@ return function(T, Loader)
 			-- the chip stays on the left of the screen, under the coins (and hides behind the open panel)
 			T.le((refs.ChipFrame.Position.X.Offset + refs.ChipFrame.Size.X.Offset) * scale, screen[1] * 0.7, label .. " chip width")
 		end
-		local roomy = phone(667, 375)
-		T.lt(0, roomy.Trip.Size.Y.Offset, "room for the trip line")
-		T.falsy(TrainView.chipVisible(true, true, true), "phones: the chip hides behind the open panel")
-		T.truthy(TrainView.chipVisible(true, true, false), "PC: the chip stays")
-		T.falsy(TrainView.chipVisible(false, false, false), "hidden with the HUD")
+		local roomy = phone(844, 390)
+		T.truthy(roomy.Trip.Visible, "a roomier phone has a line for the trip time")
+		T.le((roomy.Trip.TextSize + 4), roomy.Trip.Size.Y.Offset, "...that fits")
+		TrainView.setUpgrades(roomy, TrainView.read({ TripSeconds = 25 }), 0)
+		T.eq(roomy.Trip.Text, "Trip 25 s to your base.", "one short line on phones")
+		T.falsy(TrainView.chipVisible(true, true), "the chip hides behind the open panel (PC and phones)")
+		T.truthy(TrainView.chipVisible(true, false), "shown with the HUD")
+		T.falsy(TrainView.chipVisible(false, false), "hidden with the HUD")
 		-- desktop: still comfortable to click, and the panel fits a 720p screen
 		local refs = TrainView.build(false)
 		TrainView.layout(refs, false, 1280, 720 - 36)
@@ -853,6 +1196,54 @@ return function(T, Loader)
 		end
 		T.le(refs.Panel.Size.Y.Offset, 720 - 36, "fits 720p")
 		T.eq(refs.Rows.Capacity.Frame.Size.Y.Offset, 100, "full rows on desktop")
+		T.falsy(refs.CoversCoins, "the PC panel stays clear of the HUD coins")
+	end)
+
+	T.test("TrainClient: the phone panel never cuts the coins or the carry bar", function()
+		local scale = TrainView.PhoneScale
+		for _, screen in { { 667, 375 }, { 812, 375 }, { 844, 390 }, { 800, 360 }, { 568, 320 } } do
+			local label = `{screen[1]}x{screen[2]}`
+			local refs, width, height = phone(screen[1], screen[2])
+			local panel = refs.Panel
+			T.eq(panel.AnchorPoint, roblox.Vector2.new(0.5, 1), label .. " at the bottom of the screen")
+			local bottom = height + panel.Position.Y.Offset
+			local top = bottom - panel.Size.Y.Offset
+			T.le(0, top, label .. " inside the screen")
+			-- HudView's carry bar (bottom center, 16 up, 74 tall, at most ~430 wide) lies under the panel
+			T.le(height - 16, bottom, label .. " covers the carry bar's bottom")
+			T.le(top, height - 16 - 74, label .. " ...and its top")
+			T.le(430, panel.Size.X.Offset, label .. " ...and its width")
+			-- the HUD coins (16..90): either fully clear, or the panel says it covers them (they hide)
+			if refs.CoversCoins then
+				T.lt(top, 90, label .. " covers the coins")
+			else
+				T.le(TrainView.CoinsBottom, top, label .. " clear of the coins")
+			end
+			-- your coins are in the header either way, clear of the title
+			local balance = refs.Balance
+			T.truthy(balance.Visible, label .. " coins in the header")
+			local titleRight = refs.Title.Position.X.Offset + panel.Size.X.Offset + refs.Title.Size.X.Offset
+			local balanceLeft = panel.Size.X.Offset + balance.Position.X.Offset - balance.Size.X.Offset
+			T.le(titleRight, balanceLeft, label .. " title clear of the coins")
+			T.le(TrainView.MinTouch, absolute(refs.Close.Parent) * scale, label .. " close stays big")
+		end
+		-- the common phones keep the HUD coins in sight; only the smallest (320 pt) covers them
+		T.falsy((phone(667, 375)).CoversCoins, "667x375: coins stay visible")
+		T.truthy((phone(568, 320)).CoversCoins, "568x320: covered, so they hide while it is open")
+	end)
+
+	T.test("TrainClient: the panel keeps a gamepad selection and shows your coins", function()
+		local refs = TrainView.build(false)
+		T.eq(refs.Panel.SelectionGroup, true, "a selection group")
+		for _, side in { "Up", "Down", "Left", "Right" } do
+			T.eq(refs.Panel["SelectionBehavior" .. side], roblox.Enum.SelectionBehavior.Stop, "stops at the " .. side .. " edge")
+		end
+		TrainView.setCoins(refs, 12480)
+		T.eq(refs.BalanceAmount.Text, "$12.5K")
+		TrainView.setCoins(refs, -5)
+		T.eq(refs.BalanceAmount.Text, "$0", "never negative")
+		T.truthy(refs.Panel:FindFirstChild("Balance"), "the header's coins")
+		T.truthy(refs.Balance:FindFirstChild("CoinIcon"), "with the HUD's coin icon")
 	end)
 
 	T.test("TrainClient: train sounds and the panel prompt", function()

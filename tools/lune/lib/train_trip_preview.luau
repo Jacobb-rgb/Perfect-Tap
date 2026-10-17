@@ -6,8 +6,9 @@
 	arcHeight / arc and TrainView.
 	  - plot 3's train (west line) on its coast leg, passing behind plot 1
 	  - plot 2's train (west line) unloading: its wagons alongside its Ore Pen,
-	    the hoppers tipped toward it, ore chunks in the air
-	  - plot 5's train (east line) unloading the same way
+	    the hoppers tipped toward it mid-pour (the rocks sliding over the
+	    lip), ore chunks (two-block rocks) in the air
+	  - plot 5's train (east line) at the end of its pour: tipped, empty
 	  - your train (plot 6) waiting at the Mine Station with a 6/8 load, its
 	    first wagon under the loading chute
 	Steam shows as one or two small soft puffs over a standing chimney and a
@@ -19,9 +20,11 @@
 	line.
 	UI overlays (build/preview/<name>.json):
 	  ui_train_hud         HUD + the train chip ("On its way", the ore on board)
-	  ui_train_panel       HUD + chip + the Mine Station panel (PC)
-	  ui_train_phone       the panel on a 667 x 375 pt phone (compact layout)
-	  ui_train_phone_small the panel on a 568 x 320 pt phone (narrow rows)
+	  ui_train_panel       HUD + the Mine Station panel (PC; the chip hides behind it)
+	  ui_train_phone       the panel on a 667 x 375 pt phone (compact layout, at
+	                       the bottom under the HUD coins, over the carry bar)
+	  ui_train_phone_small the panel on a 568 x 320 pt phone (narrow rows; it
+	                       covers the HUD coins, which hide: coins in its header)
 	  ui_train_hud_phone   the chip on a phone, the train waiting at a full pen
 ]]
 
@@ -34,7 +37,8 @@ Preview.CoastPlot = 3 -- its train passes behind plot 1...
 Preview.CoastZ = 78 -- ...with its locomotive here
 Preview.UnloadPlot = 2 -- a west plot: the yard is mirrored, the pen lies north of the plot centre
 Preview.UnloadEastPlot = 5
-Preview.UnloadSeconds = 0.62 -- after the unload began: tipped, the load sliding out
+Preview.UnloadSeconds = 0.62 -- after the unload began: tipped, the load sliding out over the lip
+Preview.UnloadEastSeconds = 1.12 -- ...and the east train at the end of its pour: empty
 Preview.StationPlot = 6 -- an east plot: the waiting train faces the east portal
 Preview.Coins = 12480
 
@@ -191,11 +195,11 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		TrainController.wagonFlip(coastPlot)
 	)
 
-	-- 2) unloading trains (west plot 2, east plot 5): tipped, ore in the air
-	local function unload(plotId: number, ids: { string })
+	-- 2) unloading trains (west plot 2 mid-pour, east plot 5 poured out): tipped, ore in the air
+	local function unload(plotId: number, ids: { string }, since: number)
 		local plot = WorldLayout.Plots[plotId]
 		local unloadAt = arrive + 0.3
-		local pose = TrainController.poseAt(plot, depart, arrive, unloadAt + Preview.UnloadSeconds, 2, unloadAt)
+		local pose = TrainController.poseAt(plot, depart, arrive, unloadAt + since, 2, unloadAt)
 		local load = oreColors(ids)
 		local consist = train(
 			Loader,
@@ -214,25 +218,27 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 				local to = TrainController.penSpot(plot, ((i * 37 + w * 11) % 10) / 10, ((i * 53 + w * 7) % 10) / 10, mouth)
 				local height = TrainController.arcHeight(plot, from, to, 5 + (i % 3))
 				local at = TrainController.arc(from, to, height, t)
-				local size = 0.9 + ((i + w) % 3) * 0.2
-				local chunk = Geo.block(
-					folder,
-					CF.new(at) * CF.Angles(i * 1.3, i * 0.7 + w, i * 0.4),
-					V3.new(size, size * 0.8, size),
-					load[(i + w) % #load + 1]
-				)
-				chunk.Name = "OreChunk"
+				-- a little rock like the game's (TrainController.pour): two blocks 45 degrees apart
+				local lo, hi = TrainController.RockSize[1], TrainController.RockSize[2]
+				local size = lo + ((i + w) % 3) / 2 * (hi - lo)
+				local color = TrainController.rockColor(load[(i + w) % #load + 1], i + w)
+				local a, b = TrainController.rockPair(CF.new(at) * CF.Angles(i * 1.3, i * 0.7 + w, i * 0.4))
+				local sizeA, sizeB = TrainController.rockSizes(size)
+				Geo.block(folder, a, sizeA, color).Name = "OreChunk"
+				Geo.block(folder, b, sizeB, color).Name = "OreChunk"
 			end
-			-- the dust puff over the tipped hopper's lip (Vfx "Dust" in the game)
-			local dust = C3.fromRGB(222, 204, 178)
-			for k = 0, 2 do
-				local spot = mouth + side * (0.6 + k * 0.7) + V3.new(0, 0.3 + (k % 2) * 0.5, 0) - pose.Facing * ((k - 1) * 2.2)
-				puff(folder, spot, 0.9 + (k % 2) * 0.35, dust, 0.35)
+			-- the dust puff over the tipped hopper's lip while it pours (Vfx "Dust" in the game)
+			if pose.Pour < 1 then
+				local dust = C3.fromRGB(222, 204, 178)
+				for k = 0, 2 do
+					local spot = mouth + side * (1.2 + k * 0.7) + V3.new(0, 0.8 + (k % 2) * 0.5, 0) - pose.Facing * ((k - 1) * 2.2)
+					puff(folder, spot, 1.3 + (k % 2) * 0.4, dust, 0.5)
+				end
 			end
 		end
 	end
-	unload(Preview.UnloadPlot, { "Gold", "Copper", "Amethyst", "Iron", "Silver", "Coal" })
-	unload(Preview.UnloadEastPlot, { "Copper", "Iron", "Silver", "Coal", "Gold", "Copper" })
+	unload(Preview.UnloadPlot, { "Gold", "Copper", "Amethyst", "Iron", "Silver", "Coal" }, Preview.UnloadSeconds)
+	unload(Preview.UnloadEastPlot, { "Copper", "Iron", "Silver", "Coal", "Gold", "Copper" }, Preview.UnloadEastSeconds)
 
 	-- 3) your train waiting at the Mine Station, 6 of 8 loaded (dirty ore: the warm clay load)
 	local stationPlot = WorldLayout.Plots[Preview.StationPlot]
@@ -267,7 +273,10 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		return refs
 	end
 
+	-- the train views as TrainController shows them (the chip hides behind the open panel; the HUD
+	-- coins hide when the panel covers them, its header shows them)
 	local function view(
+		hudRefs: any,
 		snapshot: { [string]: any },
 		now: number,
 		uiScale: number,
@@ -284,10 +293,12 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		local train = TrainView.read(snapshot)
 		TrainView.setStatus(refs, TrainView.status(train, now, nil))
 		TrainView.setUpgrades(refs, train, Preview.Coins)
+		TrainView.setCoins(refs, Preview.Coins)
 		TrainView.setColor(refs, TrainController.BannerColors[Preview.StationPlot])
 		refs.Hint.Text = "T: open / close   •   Backspace: close"
 		refs.Gui.Enabled = open
-		refs.Chip.Enabled = TrainView.chipVisible(true, open, compact)
+		refs.Chip.Enabled = TrainView.chipVisible(true, open)
+		hudRefs.CoinsPanel.Visible = not (open and refs.CoversCoins)
 		return refs
 	end
 
@@ -296,22 +307,22 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local waiting = { Cargo = 6, Capacity = 8, CapacityLevel = 0, SpeedLevel = 1, AutoDepartIn = 18, TripSeconds = 25 }
 	local exports: { [string]: any } = {}
 	local hudRefs = hud(scale)
-	local chip = view(moving, 118, scale, false, 1600 / scale, (900 - 36) / scale, false)
+	local chip = view(hudRefs, moving, 118, scale, false, 1600 / scale, (900 - 36) / scale, false)
 	exports.ui_train_hud = UiExport.export({ hudRefs.Gui, chip.Chip })
 	local panelHud = hud(scale)
 	panelHud.Toasts:ClearAllChildren()
-	local panel = view(waiting, 0, scale, false, 1600 / scale, (900 - 36) / scale, true)
+	local panel = view(panelHud, waiting, 0, scale, false, 1600 / scale, (900 - 36) / scale, true)
 	exports.ui_train_panel = UiExport.export({ panelHud.Gui, panel.Chip, panel.Gui })
 	local phoneHud = hud(phoneScale)
 	phoneHud.Toasts:ClearAllChildren()
-	local phone = view(waiting, 0, phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, true)
+	local phone = view(phoneHud, waiting, 0, phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, true)
 	exports.ui_train_phone = UiExport.export({ phoneHud.Gui, phone.Chip, phone.Gui })
 	local smallHud = hud(smallScale)
 	smallHud.Toasts:ClearAllChildren()
-	local small = view(waiting, 0, smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, true)
+	local small = view(smallHud, waiting, 0, smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, true)
 	exports.ui_train_phone_small = UiExport.export({ smallHud.Gui, small.Chip, small.Gui })
-	local phoneChip = view(penFull, 160, phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, false)
 	local phoneHud2 = hud(phoneScale)
+	local phoneChip = view(phoneHud2, penFull, 160, phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, false)
 	phoneHud2.Toasts:ClearAllChildren()
 	HudView.toast(phoneHud2.Toasts, "Your Ore Pen is full – make room", C3.fromRGB(236, 84, 70))
 	exports.ui_train_hud_phone = UiExport.export({ phoneHud2.Gui, phoneChip.Chip })

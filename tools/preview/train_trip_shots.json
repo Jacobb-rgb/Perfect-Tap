@@ -1,12 +1,12 @@
 {
-  "train_trip_coast": {"scene": "train_trip", "position": [-120, 20, 50], "target": [-164, 3, 84], "fov": 55, "preset": "Surface", "shadowExtent": 110},
+  "train_trip_coast": {"scene": "train_trip", "position": [-200, 14, 120], "target": [-166, 5, 86], "fov": 55, "preset": "Surface", "shadowExtent": 110},
   "train_trip_unload": {"scene": "train_trip", "position": [-136, 10, 29], "target": [-166, 4, 12], "fov": 60, "preset": "Surface", "shadowExtent": 90},
   "train_trip_unload_sea": {"scene": "train_trip", "position": [-186, 21, 36], "target": [-154, 3, 12], "fov": 58, "preset": "Surface", "shadowExtent": 90},
   "train_trip_unload_east": {"scene": "train_trip", "position": [137, 10, 86], "target": [166, 4, 99], "fov": 60, "preset": "Surface", "shadowExtent": 90},
   "train_trip_station": {"scene": "train_trip", "position": [10, 0, -178], "target": [30, -6, -152], "fov": 55, "preset": "Quarry", "shadowExtent": 80},
-  "train_ui_hud": {"scene": "train_trip", "position": [-120, 20, 50], "target": [-164, 3, 84], "fov": 55, "preset": "Surface", "shadowExtent": 110, "ui": "ui_train_hud"},
+  "train_ui_hud": {"scene": "train_trip", "position": [-212, 22, 56], "target": [-166, 4, 90], "fov": 50, "preset": "Surface", "shadowExtent": 110, "ui": "ui_train_hud"},
   "train_ui_panel": {"scene": "train_trip", "position": [10, 0, -178], "target": [30, -6, -152], "fov": 55, "preset": "Quarry", "shadowExtent": 80, "ui": "ui_train_panel"},
   "train_ui_phone": {"scene": "train_trip", "position": [10, 0, -178], "target": [30, -6, -152], "fov": 55, "preset": "Quarry", "shadowExtent": 80, "ui": "ui_train_phone", "uiInset": 58},
   "train_ui_phone_small": {"scene": "train_trip", "position": [10, 0, -178], "target": [30, -6, -152], "fov": 55, "preset": "Quarry", "shadowExtent": 80, "ui": "ui_train_phone_small", "uiInset": 163},
-  "train_ui_hud_phone": {"scene": "train_trip", "position": [-120, 20, 50], "target": [-164, 3, 84], "fov": 55, "preset": "Surface", "shadowExtent": 110, "ui": "ui_train_hud_phone", "uiInset": 58}
+  "train_ui_hud_phone": {"scene": "train_trip", "position": [-212, 22, 56], "target": [-166, 4, 90], "fov": 50, "preset": "Surface", "shadowExtent": 110, "ui": "ui_train_hud_phone", "uiInset": 58}
 }
