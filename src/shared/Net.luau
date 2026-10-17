@@ -100,6 +100,8 @@ Net.Events = {
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialSkip = { Rate = 1, Burst = 2 },
+	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
+	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
 	-- server -> client
 	Notify = false,
 	Fx = false,
@@ -128,6 +130,8 @@ Net.Events = {
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,
 	--   Count?: machines bought }; a State push follows a successful buy
 	ShopResult = false,
+	-- the answer to a Teleport: { Destination, Ok, Reason?: a TeleportConfig.Reasons code }
+	TeleportResult = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

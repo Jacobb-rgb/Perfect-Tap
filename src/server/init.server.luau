@@ -45,6 +45,7 @@ local ORDER = {
 	"ShopService",
 	"BuildService",
 	"AccessService",
+	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
 }
 
 local loaded = {}

@@ -28,6 +28,7 @@ local ORDER = {
 	"FoundryController",
 	"TechShopController",
 	"PlacementController",
+	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }
 
 local loaded = {}

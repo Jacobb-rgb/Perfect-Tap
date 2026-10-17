@@ -2,7 +2,8 @@
 	HUD layout (pure builder). Returns references the HudController fills in.
 	  top-left     coins ("$1.23K") with the podium income under it ("+$12/s"),
 	               floating "+$X" popups (Earned) below
-	  top-center   zone name + toast notifications
+	  top-center   the quick-teleport bar (TeleportView: BASE / LOBBY / VAULT),
+	               the zone name + toast notifications under it
 	  bottom       carry slots + hints
 	  center       throw power bar
 	  right side   menu buttons (added by later steps)
@@ -18,6 +19,9 @@ local HudView = {}
 
 HudView.CoinsWidth = 236
 HudView.DirtyColor = Color3.fromRGB(120, 114, 108) -- dirty ore: no rarity color until cleaned
+HudView.TopBarY = 10 -- the teleport bar at the top centre (design units)
+HudView.TopBarWidth = 440
+HudView.TopBarHeight = 58
 
 export type Refs = {
 	Gui: ScreenGui,
@@ -33,6 +37,7 @@ export type Refs = {
 	ThrowBar: Frame,
 	ThrowFill: Frame,
 	Menu: Frame,
+	TopBar: Frame,
 }
 
 local function coinIcon(parent: Instance, size: number): Frame
@@ -94,11 +99,24 @@ function HudView.build(): Refs
 		BackgroundTransparency = 1,
 	}, gui)
 
-	-- zone name + toasts
+	-- the quick-teleport bar (TeleportController fills it)
+	local topBar = UIKit.new("Frame", {
+		Name = "TopBar",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, HudView.TopBarY),
+		Size = UDim2.fromOffset(HudView.TopBarWidth, HudView.TopBarHeight),
+		BackgroundTransparency = 1,
+	}, gui)
+	UIKit.list(topBar, Enum.FillDirection.Horizontal, 10, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+
+	-- zone name + toasts (under the teleport bar)
 	local zone = UIKit.label(gui, "Emberfall", 26, {
 		Name = "Zone",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 14),
+		Position = UDim2.new(0.5, 0, 0, HudView.TopBarY + HudView.TopBarHeight + 8),
 		Size = UDim2.fromOffset(420, 34),
 		FontFace = Theme.TitleFont,
 		TextColor3 = Theme.Accent,
@@ -107,7 +125,7 @@ function HudView.build(): Refs
 	local toasts = UIKit.new("Frame", {
 		Name = "Toasts",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 56),
+		Position = UDim2.new(0.5, 0, 0, HudView.TopBarY + HudView.TopBarHeight + 50),
 		Size = UDim2.fromOffset(520, 260),
 		BackgroundTransparency = 1,
 	}, gui)
@@ -184,6 +202,7 @@ function HudView.build(): Refs
 		ThrowBar = throwBar,
 		ThrowFill = throwFill,
 		Menu = menu,
+		TopBar = topBar,
 	}
 end
 

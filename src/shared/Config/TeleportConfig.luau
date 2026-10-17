@@ -1,0 +1,55 @@
+--[[
+	Quick teleports (owner 2026-10-17): a bar at the top centre of the HUD
+	with BASE (your own plot), LOBBY (the town spawn) and VAULT (the Blaster
+	Vault), and an ELEVATOR icon on the side (the mine elevator; it shows
+	only when the world has one). TeleportService moves the character,
+	TeleportController / TeleportView draw the buttons.
+]]
+
+local rgb = Color3.fromRGB
+
+local TeleportConfig = {}
+
+export type Destination = "Base" | "Lobby" | "Vault" | "Elevator"
+
+export type Spot = {
+	Id: Destination,
+	Label: string,
+	Icon: string,
+	Color: Color3,
+	Dark: Color3,
+	Bar: boolean, -- true = the top bar, false = the side icon
+}
+
+TeleportConfig.Spots = {
+	{ Id = "Base", Label = "BASE", Icon = "🏠", Color = rgb(255, 176, 64), Dark = rgb(196, 106, 26), Bar = true },
+	{ Id = "Lobby", Label = "LOBBY", Icon = "⛲", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186), Bar = true },
+	{ Id = "Vault", Label = "VAULT", Icon = "💎", Color = rgb(182, 118, 255), Dark = rgb(104, 56, 178), Bar = true },
+	{ Id = "Elevator", Label = "LIFT", Icon = "⛏", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50), Bar = false },
+} :: { Spot }
+
+TeleportConfig.ById = {} :: { [string]: Spot }
+for _, spot in TeleportConfig.Spots do
+	TeleportConfig.ById[spot.Id] = spot
+end
+
+TeleportConfig.Cooldown = 3 -- seconds between two teleports (the server allows a little less for lag)
+TeleportConfig.ServerCooldown = 2.5
+TeleportConfig.Fade = 0.18 -- seconds the screen takes to go dark / come back
+TeleportConfig.ReplyTimeout = 4 -- the client fades back in by itself after this long
+TeleportConfig.StandHeight = 3 -- studs above the ground a character lands
+TeleportConfig.Spread = 3 -- studs of random spread so players don't land inside each other
+TeleportConfig.VaultFront = 6 -- studs in front of the Blaster Vault's steps
+TeleportConfig.ElevatorTag = "MineElevator" -- MineKit elevator stops (attribute Floor, a "Base" plate, front -Z)
+TeleportConfig.ElevatorAttribute = "TeleportElevator" -- Workspace attribute: true while an elevator stop exists
+
+-- Refusal codes -> text for the player.
+TeleportConfig.Reasons = {
+	Cooldown = "Wait a moment before teleporting again.",
+	NoBase = "Your base isn't ready yet.",
+	NotHere = "That place isn't open yet.",
+	Cleaning = "Finish cleaning first.",
+	Dead = "You can't teleport right now.",
+}
+
+return TeleportConfig

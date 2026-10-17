@@ -1752,7 +1752,7 @@ local function hideHud(on: boolean)
 		return
 	end
 	if on then
-		for _, gui in { hud.CarryPanel :: GuiObject, hud.Menu :: GuiObject } do
+		for _, gui in { hud.CarryPanel :: GuiObject, hud.Menu :: GuiObject, hud.TopBar :: GuiObject } do
 			savedHud[gui] = gui.Visible
 			gui.Visible = false
 		end
