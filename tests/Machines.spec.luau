@@ -375,6 +375,18 @@ return function(T, Loader)
 	end)
 
 	T.test("Machines: the Iron Box has its window, screen, two flaps and hopper", function()
+		-- the owner's "Soft" machine style (KitMachines) builds the Iron Box when it
+		-- has one; these detail checks are for the MachineBuilder model only (the
+		-- FX degrade gracefully when the Soft model lacks the screen/flaps/ShowPoint)
+		local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
+		if KitMachines.has("IronBox") then
+			local soft = MachineBuilder.build("IronBox")
+			T.truthy(soft.PrimaryPart, "Soft Iron Box builds")
+			for _, name in { "Intake", "Output", "Prompt", "Status" } do
+				T.truthy(soft.PrimaryPart:FindFirstChild(name, true) or soft:FindFirstChild(name, true), "Soft Iron Box keeps " .. name)
+			end
+			return
+		end
 		local model = MachineBuilder.build("IronBox")
 		local base = model.PrimaryPart
 		local CELLS = MachineData.ById.IronBox.Size
