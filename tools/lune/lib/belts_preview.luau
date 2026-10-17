@@ -220,12 +220,15 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 		refs.Income.TextColor3 = roblox.Color3.fromRGB(110, 214, 92)
 		return refs
 	end
-	local function pen(compact: boolean, scale: number): any
+	-- `inset`: the render's top bar (pixels), like the shot's uiInset
+	local function pen(compact: boolean, scale: number, inset: number): any
 		local refs = PenView.build()
 		refs.Gui.Scale.Scale = scale
 		refs.Gui.Enabled = true
-		PenView.setCompact(refs, compact)
+		-- the screen in design units, as PenController measures it (1600 x 900 renders)
+		PenView.setCompact(refs, compact, roblox.Vector2.new(1600 / scale, (900 - inset) / scale))
 		PenView.setMode(refs, "Pen", nil)
+		PenView.setAutoSort(refs, true, true)
 		local total = 0
 		for _, n in BeltsPreview.Pen do
 			total += n
@@ -237,18 +240,23 @@ function BeltsPreview.build(Loader: any, workspace: any): { [string]: any }
 		PenView.setHint(
 			refs,
 			if compact
-				then "TAKE: carry it  -  SEND: onto your belts  -  PODIUM: money every second"
-				else "TAKE: into your hands  -  SEND: onto your belts  -  PODIUM: money every second  -  Backspace: close",
+				then "TAKE: carry it  -  SEND: onto your belts (twice: all)  -  PODIUM: money every second"
+				else "TAKE: to your hands  -  SEND: to your belts (twice: all)  -  PODIUM: money/s  -  Backspace: close",
 			nil,
 			nil
 		)
+		-- a SEND just pressed on the amethyst row: a second press sends the rest
+		local row = refs.Rows["Clean|Amethyst|Pristine|"]
+		if row then
+			row.Send.Text = PenView.sendButtonText(1)
+		end
 		return refs
 	end
 	local scale = 1.25 -- 900 px tall render / 720 design height
 	local exports: { [string]: any } = {}
-	exports.ui_belts_pen = UiExport.export({ hud(scale).Gui, pen(false, scale).Gui })
+	exports.ui_belts_pen = UiExport.export({ hud(scale).Gui, pen(false, scale, 0).Gui })
 	local phoneScale = 0.62 * 900 / 375 -- an iPhone SE-sized screen at the 0.62 phone floor
-	exports.ui_belts_pen_phone = UiExport.export({ hud(phoneScale).Gui, pen(true, phoneScale).Gui })
+	exports.ui_belts_pen_phone = UiExport.export({ hud(phoneScale).Gui, pen(true, phoneScale, 58).Gui })
 
 	-- build mode on the empty plot next door (BuildPlot): the grid and the
 	-- chute plates, written as belts_build.json right here (then taken away

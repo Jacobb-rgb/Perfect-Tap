@@ -28,15 +28,24 @@
 	  off the grid edge (BaseLayout.sourceFeeds), has room (no loose item on
 	  its cell, none spawned there in the last SourceGap seconds) and the
 	  owner is below the loose-item cap. A Source never drops an item loose.
-	  PenService's send queue and TrainService's Direct Unload use them.
+	  PenService's send queue (both lanes: the pen's Send and the train's
+	  Direct Unload) uses them. spawnable(desc) says whether a saved desc can
+	  become an item at all (known kind, ore, grade, recipe); spawnAtSource
+	  refuses any other with "Bad" (the caller keeps it and moves on), and
+	  an error half way through never leaves a half-made item behind.
 	- Sinks (FOUNDRY): setSink(name, handler), see below. Another player's
 	  item at a sink is refused like at a machine ("Foreign": pushed off the
 	  belt, IntakeService sends it home after ForeignItemReturn).
 	- In the world every chute gets a colored floor plate on its cell and a
-	  sign behind it (per plot, built once in start(); PlotBuilder stays
-	  untouched). A Source's sign says "Turn the belt away from the yard"
-	  while the belt on it faces SinkRotation. Build mode draws its own
-	  plates (PlacementController / GridOverlay).
+	  small plaque on the plot's back wall below its cap, facing the grid
+	  (per plot, built once in start(); PlotBuilder stays untouched): PEN on
+	  the brick band right behind its cell, TRAIN on the yard gate's post
+	  beside its cell (that cell sits in the gate opening), FOUNDRY on the
+	  wall pillar beside its cell (the Foundry's receiver hood,
+	  BaseLayout.FoundryIntake, covers the wall behind it); an arrow points
+	  from an off-cell plaque to its cell. A Source's plaque says
+	  "TURN BELT" while the belt on it faces SinkRotation. Build mode draws
+	  its own plates (PlacementController / GridOverlay).
 
 	THE SINK HOOK (for the package that owns a sink, e.g. FoundryService):
 	  ConveyorService.setSink("Foundry", function(player, record): boolean ... end)
@@ -53,6 +62,12 @@
 	  the same step. It returns false to leave the item where it is: it
 	  waits there and is offered again every IntakeTick (the handler shows
 	  its own throttled hint, e.g. "Ore Pen full"). An error counts as false.
+	- What doesn't go into the sink's own store goes into the Ore Pen with
+	  PenService.store (or ItemService.storeDesc), NEVER PenService.arrived:
+	  arrived() is for things a player brings to the pen (thrown in, Put In,
+	  a train delivery) and lets the sorting billboard send them on again,
+	  so an item stored that way would ride the PEN chute back to the sink
+	  and loop forever. Machines (the Iron Box) store the same way.
 	- setSink(name, nil) removes the handler. Without a handler items wait
 	  at the end of the belt (the plot's back wall stops them) and items on
 	  a belt-less cell stay where they are.
@@ -65,6 +80,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
 local GameConfig = require(Shared.Config.GameConfig)
+local ItemData = require(Shared.Config.ItemData)
+local OreData = require(Shared.Config.OreData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Geo = require(Shared.Builders.Geo)
 local Grid = require(Shared.Machines.Grid)
@@ -83,23 +100,29 @@ type Desc = ItemService.Desc
 
 -- Why a Source chute can't take an item right now.
 export type SourceWait = "NoPlot" | "NoBelt" | "Yard" | "Jammed" | "TooMany"
+-- Why spawnAtSource gave no item: a SourceWait (try again later) or "Bad"
+-- (this desc can never become an item: keep it and move on).
+export type SpawnFail = SourceWait | "Bad"
 -- What a Sink does with an owner's item (see the header): true = taken.
 export type SinkHandler = (player: Player, record: ItemRecord) -> boolean
 
 type Jam = { SlowSince: number?, Nudges: { number } }
-type Marker = { Sign: Part, Line: TextLabel, Plate: Part }
+-- Before / After: the arrow toward the chute cell around the line (off-cell plaques)
+type Marker = { Line: TextLabel, Plate: Part, Edge: Part, Before: string, After: string }
 
 ConveyorService.CollisionGroup = "Conveyors"
 ConveyorService.SourceGap = 0.45 -- seconds between two items spawned on one Source belt
 ConveyorService.SpawnUp = 1.7 -- studs above the pad where a Source item appears
 ConveyorService.SpawnBack = 0.6 -- studs toward the belt's back end (it rides the whole belt)
--- what the in-world chute signs say under the Label (the Hint is too long for them)
+-- the in-world plaques: the chute's Label big, one short word line under it
+-- (the Hint is far too long for a plaque; build mode and toasts carry it)
 ConveyorService.SignLines = {
-	Pen = "Sent ore comes out here",
-	Train = "Direct Unload: dirty ore here",
-	Foundry = "Belt in here feeds the Foundry",
+	Pen = "ORE OUT",
+	Train = "ORE OUT",
+	Foundry = "BELT IN",
 } :: { [string]: string }
-ConveyorService.YardText = "Turn the belt away from the yard"
+ConveyorService.YardText = "Turn the belt away from the yard" -- toasts, the pen panel
+ConveyorService.YardSign = "TURN BELT" -- the plaque's line meanwhile
 
 local CELL = GameConfig.CellSize
 -- a jam: items closer than this ahead (along the belt) are the line in front
@@ -288,13 +311,62 @@ end
 ConveyorService.sourceReady = sourceReady
 
 --[[
-	Spawns `desc` (owned by ownerUserId) onto the belt of a Source chute,
-	riding toward the belt's front with server physics. Checks sourceReady
-	first: (nil, why) when it can't, and then nothing happened. The caller
-	takes the item out of its place first and puts it back on nil, all
-	without a yield.
+	Can this saved desc become an item at all? A table with a known kind and
+	ore, and a grade / recipe that is nil or a known one (exactly what
+	ItemService.spawnDesc needs, so it never refuses or errors half way on
+	our data). Saves can hold others (an ore that was renamed, a broken
+	entry): those stay where they are and are never sent.
 ]]
-function ConveyorService.spawnAtSource(plotId: number, chute: string, desc: Desc, ownerUserId: number): (ItemRecord?, SourceWait?)
+function ConveyorService.spawnable(desc: any): boolean
+	if type(desc) ~= "table" then
+		return false
+	end
+	local kind, ore, grade, recipe = desc.K, desc.O, desc.G, desc.R
+	if type(kind) ~= "string" or type(ore) ~= "string" or not ItemData.Kinds[kind] or not OreData.exists(ore) then
+		return false
+	end
+	if grade ~= nil and (type(grade) ~= "string" or not ItemData.GradeById[grade]) then
+		return false
+	end
+	if recipe ~= nil and (type(recipe) ~= "string" or not ItemData.RecipeById[recipe]) then
+		return false
+	end
+	return true
+end
+
+--[[
+	ItemService.spawnDesc in a protected call. If it errors half way, the
+	item it may already have made (indexed, maybe not in the world yet) is
+	unmade again, so the caller can trust the answer: a record = the item
+	exists once, nil = nothing exists (and the caller keeps its desc).
+]]
+local function spawnSafely(desc: Desc, ownerUserId: number, spot: CFrame, velocity: Vector3): ItemRecord?
+	local before = os.clock()
+	local ok, result = pcall(ItemService.spawnDesc, desc, ownerUserId, spot, velocity, true)
+	if ok then
+		return result
+	end
+	warnThrottled("spawn", `[ConveyorService] spawning {desc.K} {desc.O} failed: {result}`)
+	for _, record in ItemService.ownedBy(ownerUserId) do
+		if record.CreatedAt >= before and record.State == "Loose" and record.Kind == desc.K and record.OreId == desc.O then
+			ItemService.destroy(record)
+		end
+	end
+	return nil
+end
+
+--[[
+	Spawns `desc` (owned by ownerUserId) onto the belt of a Source chute,
+	riding toward the belt's front with server physics. (nil, why) when it
+	can't, and then nothing happened: a SourceWait (sourceReady said no: try
+	again later) or "Bad" (spawnable says no, or spawning failed: this desc
+	won't spawn, move on). The caller takes the item out of its place
+	first and puts it back on nil, all without a yield.
+]]
+function ConveyorService.spawnAtSource(plotId: number, chute: string, desc: Desc, ownerUserId: number): (ItemRecord?, SpawnFail?)
+	if not ConveyorService.spawnable(desc) then
+		return nil, "Bad"
+	end
 	local ok: boolean, why: SourceWait? = sourceReady(plotId, chute, ownerUserId)
 	local belt = sourceBelt(plotId, chute)
 	if not ok or not belt then
@@ -302,9 +374,9 @@ function ConveyorService.spawnAtSource(plotId: number, chute: string, desc: Desc
 	end
 	local pivot = belt.Model:GetPivot()
 	local spot = pivot * CFrame.new(0, ConveyorService.SpawnUp, ConveyorService.SpawnBack)
-	local record = ItemService.spawnDesc(desc, ownerUserId, spot, pivot.LookVector * GameConfig.ConveyorSpeed, true)
+	local record = spawnSafely(desc, ownerUserId, spot, pivot.LookVector * GameConfig.ConveyorSpeed)
 	if not record then
-		return nil, "Jammed"
+		return nil, "Bad"
 	end
 	lastSpawn[`{plotId}/{chute}`] = os.clock()
 	return record, nil
@@ -540,21 +612,69 @@ end
 ---------------------------------------------------------------- chutes in the world
 
 local SIGN_BOARD = Color3.fromRGB(46, 40, 44)
-local SIGN_POST = Color3.fromRGB(86, 90, 106)
 local SIGN_TEXT = Color3.fromRGB(255, 244, 228)
 local SIGN_WARN = Color3.fromRGB(255, 120, 90)
-local SIGN_SIZE = Vector3.new(3.4, 1.5, 0.22)
-local SIGN_BOTTOM = 3.7 -- above the back wall's cap and the Foundry's receiver hood (FoundryIntake.Zone, 3.5 high)
-local WALL_Z = GameConfig.PlotCells * CELL / 2 + 1 -- the back wall's centre line (PlotBuilder.WallLine)
-local WALL_CAP_TOP = 2.55
 local DECOR = { CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false }
 
-local function label(gui: SurfaceGui, name: string, text: string, y: number, h: number, color: Color3, font: Enum.Font): TextLabel
+-- The plot's back wall (PlotBuilder padWalls, which this package must not
+-- change; plot-local): its centre line, the brick band's grid-facing face
+-- (1 stud thick, plinth top 0.6 .. cap slab 1.95), the yard gate's posts
+-- (2.1-stud caps at the opening's edges, 1.8-stud shafts) and the pillar
+-- half way from a gate post to the corner (1.6 studs wide).
+local WALL_Z = GameConfig.PlotCells * CELL / 2 + 1 -- PlotBuilder.WallLine
+local PILLAR_Z = WALL_Z + 0.1
+local BAND_FACE = WALL_Z - 0.5
+local POST_CAP, POST_W, PILLAR_W = 2.1, 1.8, 1.6
+-- a plaque: under the wall's cap, above the plinth and the gate posts' feet
+ConveyorService.PlaqueSize = Vector2.new(2.6, 1.25)
+ConveyorService.PlaqueBottom = 0.66
+local EDGE = 0.08 -- the colored frame around the board (and its depth)
+local BOARD_DEPTH = 0.06
+local STRIP_DEPTH = 0.02 -- the text strips on the board (one label each)
+
+--[[
+	Where a chute's plaque hangs (plot-local): its centre x, the z of the
+	face it hangs on, and the x of its cell. On the brick band right behind
+	the cell; in the gate opening (no wall there) on the nearer gate post,
+	its inner edge at the opening; where the Foundry's receiver hood
+	(BaseLayout.FoundryIntake.Zone) covers the wall, on the pillar beside
+	it, clear of the hood.
+]]
+function ConveyorService.plaqueSpot(name: string): (number, number, number)
+	local cell = BaseLayout.chuteLocal(name)
+	local half = ConveyorService.PlaqueSize.X / 2
+	local gate = BaseLayout.YardGate
+	local side = if cell.X >= gate.CenterX then 1 else -1
+	if math.abs(cell.X - gate.CenterX) < gate.Width / 2 then
+		local x = gate.CenterX + side * (gate.Width / 2 + 0.1 + half)
+		return x, PILLAR_Z - POST_W / 2, cell.X
+	end
+	local zone = BaseLayout.FoundryIntake.Zone
+	local zoneMin, zoneMax = zone.Center.X - zone.Size.X / 2, zone.Center.X + zone.Size.X / 2
+	if cell.X + half > zoneMin and cell.X - half < zoneMax then
+		local postX = gate.Width / 2 + POST_CAP / 2
+		local pillarX = gate.CenterX + side * (postX + WALL_Z + 0.1) / 2
+		local x = if side > 0 then math.max(pillarX, zoneMax + 0.1 + half) else math.min(pillarX, zoneMin - 0.1 - half)
+		return x, PILLAR_Z - PILLAR_W / 2, cell.X
+	end
+	return cell.X, BAND_FACE, cell.X
+end
+
+-- One text strip on the plaque's board: a thin part with one SurfaceGui
+-- and one label (big, short words, readable from the grid).
+local function strip(model: Model, cf: CFrame, size: Vector3, name: string, text: string, color: Color3, font: Enum.Font): TextLabel
+	local part = Geo.block(model, cf, size, SIGN_BOARD, nil, DECOR)
+	part.Name = name
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	gui.LightInfluence = 0.3
+	gui.Parent = part
 	local l = Instance.new("TextLabel")
-	l.Name = name
+	l.Name = "Text"
 	l.BackgroundTransparency = 1
-	l.Position = UDim2.fromScale(0.05, y)
-	l.Size = UDim2.fromScale(0.9, h)
+	l.Size = UDim2.fromScale(1, 1)
 	l.Text = text
 	l.TextScaled = true
 	l.TextColor3 = color
@@ -563,27 +683,14 @@ local function label(gui: SurfaceGui, name: string, text: string, y: number, h: 
 	return l
 end
 
--- A sign face: the Label big, one short line under it.
-local function signFace(part: Part, face: Enum.NormalId, title: string, line: string, color: Color3): TextLabel
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "Face" .. face.Name
-	gui.Face = face
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 60
-	gui.LightInfluence = 0.3
-	gui.Parent = part
-	label(gui, "Title", title, 0.06, 0.5, color, Enum.Font.LuckiestGuy)
-	return label(gui, "Line", line, 0.6, 0.32, SIGN_TEXT, Enum.Font.FredokaOne)
-end
-
 --[[
-	One chute's floor plate and sign on a plot (plot-local layout):
-	  plate  the cell in the chute's Color, a thin slab on the pad (a belt
-	         on the cell hides it; it shows where the chute is while empty)
-	  sign   a dark board edged in the chute's Color behind the cell, facing
-	         the grid (title + line) and the yard (title), above the back
-	         wall's cap on two short posts; the TRAIN chute sits in the yard
-	         gate's opening, so its posts stand on the cell's back corners
+	One chute's floor plate and plaque on a plot (plot-local layout):
+	  plate   the cell in the chute's Color, a thin slab on the pad (a belt
+	          on the cell hides it; it shows where the chute is while empty)
+	  plaque  a dark board in a frame of the chute's Color, flat on the back
+	          wall facing the grid (plaqueSpot), between the plinth and the
+	          cap: the Label big, a one-word line under it (SignLines, with
+	          an arrow toward the cell when the plaque is beside it)
 ]]
 local function buildMarker(folder: Instance, plotCF: CFrame, name: string, chute: BaseLayout.Chute): Marker
 	local model = Instance.new("Model")
@@ -593,28 +700,47 @@ local function buildMarker(folder: Instance, plotCF: CFrame, name: string, chute
 	local plate = Geo.block(model, plotCF * CFrame.new(cell.X, 0.06, cell.Z), Vector3.new(CELL - 0.5, 0.05, CELL - 0.5), chute.Color, nil, DECOR)
 	plate.Name = "Plate"
 	plate.Transparency = 0.15
-	-- the board: front (-Z model space) toward the grid
-	local signZ = WALL_Z + 0.1 -- just behind the wall line: clear of the Foundry hood (FoundryIntake.Zone ends at 24.9)
-	local center = plotCF * CFrame.new(cell.X, SIGN_BOTTOM + SIGN_SIZE.Y / 2, signZ)
-	local edge = Geo.block(model, center, SIGN_SIZE + Vector3.new(0.24, 0.24, -0.06), chute.Color, nil, DECOR)
+	-- the plaque: front (-Z model space) toward the grid
+	local x, face, cellX = ConveyorService.plaqueSpot(name)
+	local size = ConveyorService.PlaqueSize
+	local y = ConveyorService.PlaqueBottom + size.Y / 2
+	local edge = Geo.block(
+		model,
+		plotCF * CFrame.new(x, y, face - EDGE / 2),
+		Vector3.new(size.X + EDGE * 2, size.Y + EDGE * 2, EDGE),
+		chute.Color,
+		nil,
+		DECOR
+	)
 	edge.Name = "Edge"
-	local sign = Geo.block(model, center, SIGN_SIZE, SIGN_BOARD, nil, DECOR)
-	sign.Name = "Sign"
-	local line = signFace(sign, Enum.NormalId.Front, chute.Label, ConveyorService.SignLines[name] or chute.Hint, chute.Color)
-	signFace(sign, Enum.NormalId.Back, chute.Label .. " CHUTE", "", chute.Color)
-	-- posts: on the wall's cap, or (no wall: the TRAIN chute in the gate) from the ground
-	local gate = BaseLayout.YardGate
-	local inGate = math.abs(cell.X - gate.CenterX) < gate.Width / 2
-	local base = if inGate then 0 else WALL_CAP_TOP
-	local postZ = if inGate then signZ - 0.1 else signZ
-	for _, side in { -1, 1 } do
-		local x = cell.X + side * (SIGN_SIZE.X / 2 - 0.35)
-		local height = SIGN_BOTTOM - base + 0.2
-		local post = Geo.block(model, plotCF * CFrame.new(x, base + height / 2, postZ), Vector3.new(0.22, height, 0.22), SIGN_POST, nil, DECOR)
-		post.Name = "Post"
-	end
+	local boardZ = face - EDGE - BOARD_DEPTH / 2
+	local board = Geo.block(model, plotCF * CFrame.new(x, y, boardZ), Vector3.new(size.X, size.Y, BOARD_DEPTH), SIGN_BOARD, nil, DECOR)
+	board.Name = "Board"
+	local stripZ = face - EDGE - BOARD_DEPTH - STRIP_DEPTH / 2
+	local w = size.X * 0.9
+	strip(
+		model,
+		plotCF * CFrame.new(x, y + size.Y * 0.17, stripZ),
+		Vector3.new(w, size.Y * 0.56, STRIP_DEPTH),
+		"Title",
+		chute.Label,
+		chute.Color,
+		Enum.Font.LuckiestGuy
+	)
+	-- from the grid the plot's +X is on the left: an arrow from the plaque toward its cell
+	local before = if cellX > x + 0.5 then "< " else ""
+	local after = if cellX < x - 0.5 then " >" else ""
+	local line = strip(
+		model,
+		plotCF * CFrame.new(x, y - size.Y * 0.3, stripZ),
+		Vector3.new(w, size.Y * 0.3, STRIP_DEPTH),
+		"Line",
+		before .. (ConveyorService.SignLines[name] or chute.Label) .. after,
+		SIGN_TEXT,
+		Enum.Font.FredokaOne
+	)
 	model.Parent = folder
-	return { Sign = sign, Line = line, Plate = plate }
+	return { Line = line, Plate = plate, Edge = edge, Before = before, After = after }
 end
 
 local function buildMarkers(plotId: number)
@@ -637,7 +763,7 @@ local function buildMarkers(plotId: number)
 	markers[plotId] = list
 end
 
--- A Source's sign warns while the belt on it runs off the grid edge.
+-- A Source's plaque warns while the belt on it runs off the grid edge.
 local function updateMarkers(plotId: number)
 	local list = markers[plotId]
 	if not list then
@@ -647,7 +773,8 @@ local function updateMarkers(plotId: number)
 		local info = BaseLayout.Chutes[name]
 		local _, why: SourceWait? = sourceBelt(plotId, name)
 		local warnYard = info.Kind == "Source" and why == "Yard"
-		local text = if warnYard then ConveyorService.YardText else ConveyorService.SignLines[name] or info.Hint
+		local word = if warnYard then ConveyorService.YardSign else ConveyorService.SignLines[name] or info.Label
+		local text = marker.Before .. word .. marker.After
 		if marker.Line.Text ~= text then
 			marker.Line.Text = text
 			marker.Line.TextColor3 = if warnYard then SIGN_WARN else SIGN_TEXT

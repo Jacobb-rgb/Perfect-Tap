@@ -2,7 +2,8 @@
 -- group, rails that open at corners, jam nudges (a queue waits, head-on belts
 -- get pushed off), the Source chutes (no belt / facing the yard / jammed /
 -- loose-item cap / spawning), the Sink hook (belt end and belt-less cell,
--- owner only, waiting, errors) and the chute plates and signs in the world.
+-- owner only, waiting, errors), descs that can't spawn ('Bad'), errors half way
+-- through spawning, and the chute plates and plaques in the world.
 -- MachineService and items are real; players, saves, plots and Net are small fakes.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -337,6 +338,91 @@ return function(T, Loader)
 		T.eq(ConveyorService.waitText("Pen", nil), nil, "no wait, no text")
 	end)
 
+	withWorld("ConveyorService: only descs that can become items spawn; the rest are 'Bad', never a wait", function(w)
+		ConveyorService.SourceGap = 0
+		local good: { any } = {
+			COPPER,
+			INGOT,
+			{ K = "Clean", O = "Gold", G = "Pristine" },
+			{ K = "Gear", O = "Iron", G = "Clean", R = "Dagger" },
+		}
+		for _, desc in good do
+			T.truthy(ConveyorService.spawnable(desc), `{desc.K} {desc.O} can spawn`)
+		end
+		local bad: { any } = {
+			nil,
+			"Raw|Copper||",
+			{ K = "Raw" },
+			{ K = "Raw", O = "Unobtainium" },
+			{ K = "Shiny", O = "Copper" },
+			{ K = 5, O = "Copper" },
+			{ K = "Clean", O = "Gold", G = 5 },
+			{ K = "Clean", O = "Gold", G = "Shiny" },
+			{ K = "Clean", O = "Gold", G = "Clean", R = {} },
+			{ K = "Gear", O = "Iron", R = "Spoon" },
+		}
+		for i, desc in bad do
+			T.falsy(ConveyorService.spawnable(desc), "junk desc " .. i)
+		end
+		local px, pz = BaseLayout.chuteCell("Pen")
+		belt(w, px, pz, 0)
+		T.truthy(ConveyorService.sourceReady(PLOT, "Pen", USER), "a ready PEN chute")
+		for i, desc in bad do
+			if type(desc) == "table" then
+				local record, why = ConveyorService.spawnAtSource(PLOT, "Pen", desc, USER)
+				T.eq(record, nil, "nothing spawned " .. i)
+				T.eq(why, "Bad", "says Bad " .. i)
+			end
+		end
+		T.eq(#ItemService.ownedBy(USER), 0, "no item made")
+		T.truthy(ConveyorService.sourceReady(PLOT, "Pen", USER), "the chute is still free (no gap started)")
+	end)
+
+	withWorld("ConveyorService: an error half way through spawning never leaves a half-made item", function(w)
+		ConveyorService.SourceGap = 0
+		local px, pz = BaseLayout.chuteCell("Pen")
+		local m = belt(w, px, pz, 0)
+		local original = ItemService.spawnDesc
+		local ok, err = pcall(function()
+			-- made and indexed, but it never reached the world (like a SetAttribute error before Parent)
+			rawset(ItemService, "spawnDesc", function(...)
+				local record = original(...)
+				record.Model.Parent = nil
+				error("broken half way")
+			end)
+			local record, why = ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER)
+			T.eq(record, nil, "no item")
+			T.eq(why, "Bad", "Bad: the caller keeps its desc and moves on")
+			T.eq(#ItemService.ownedBy(USER), 0, "the half-made item is gone again (nothing to store into the pen later)")
+			-- made completely, then an error: unmade too (the caller keeps its desc)
+			rawset(ItemService, "spawnDesc", function(...)
+				original(...)
+				error("broken after")
+			end)
+			local again, whyAgain = ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER)
+			T.eq(again, nil, "no item")
+			T.eq(whyAgain, "Bad", "Bad")
+			T.eq(#ItemService.ownedBy(USER), 0, "nothing left over")
+			T.eq(#ItemService.looseList(), 0, "nothing loose on the belt")
+			-- other items of the owner are never touched
+			rawset(ItemService, "spawnDesc", original)
+			local old = ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER)
+			T.truthy(old, "a normal spawn")
+			old.Model:PivotTo(m.Model:GetPivot() * CFrame.new(0, 1.4, -CELL * 3))
+			rawset(ItemService, "spawnDesc", function(...)
+				original(...)
+				error("broken after")
+			end)
+			ConveyorService.spawnAtSource(PLOT, "Pen", COPPER, USER)
+			T.eq(#ItemService.ownedBy(USER), 1, "the earlier item stays")
+			T.eq(ItemService.ownedBy(USER)[1], old, "that one")
+		end)
+		rawset(ItemService, "spawnDesc", original)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	---------------------------------------------------------------- sinks
 
 	withWorld("ConveyorService: a belt into the FOUNDRY chute hands the owner's items to the sink", function(w)
@@ -445,11 +531,14 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- chutes in the world
 
-	withWorld("ConveyorService: every chute gets a plate on its cell and a sign behind it", function(w)
+	withWorld("ConveyorService: every chute gets a plate on its cell and a plaque low on the back wall", function(w)
 		conv.buildMarkers(PLOT)
 		local folder = w.plotModel:FindFirstChild("Chutes")
 		T.truthy(folder, "Chutes model on the plot")
 		local plotCF = PlotService.plotCFrame(PLOT)
+		local gate = BaseLayout.YardGate
+		local grid = GameConfig.PlotCells * CELL / 2
+		local wallLine = grid + 1 -- PlotBuilder.WallLine
 		for _, name in BaseLayout.ChuteNames do
 			local chute = BaseLayout.Chutes[name]
 			local model = folder:FindFirstChild(name)
@@ -461,21 +550,36 @@ return function(T, Loader)
 			T.near(p.Z, cell.Z, 1e-3, name .. " plate on the cell (z)")
 			T.lt(0.048, p.Y + plate.Size.Y / 2, name .. " plate over the lawn")
 			T.eq(plate.Color, chute.Color, name .. " plate colour")
-			local sign = model:FindFirstChild("Sign")
-			local s = plotCF:PointToObjectSpace(sign.CFrame.Position)
-			T.lt(GameConfig.PlotCells * CELL / 2, s.Z, name .. " sign off the grid")
-			T.lt(3.5, s.Y - sign.Size.Y / 2, name .. " sign above the wall and the Foundry hood")
-			local face = sign:FindFirstChild("FaceFront")
-			T.eq(face:FindFirstChild("Title").Text, chute.Label, name .. " label")
+			local board = model:FindFirstChild("Board")
+			local title = model:FindFirstChild("Title"):FindFirstChildWhichIsA("SurfaceGui"):FindFirstChild("Text")
+			T.eq(title.Text, chute.Label, name .. " label")
+			T.eq(model:FindFirstChild("Edge").Color, chute.Color, name .. " frame in the chute's colour")
 			-- the front faces the grid (-Z plot-local)
-			local look = plotCF:VectorToObjectSpace(sign.CFrame.LookVector)
+			local look = plotCF:VectorToObjectSpace(board.CFrame.LookVector)
 			T.lt(look.Z, -0.99, name .. " faces the grid")
+			local b = plotCF:PointToObjectSpace(board.CFrame.Position)
+			T.le(math.abs(b.X - cell.X), 6, name .. " plaque near its cell")
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") then
 					T.falsy(d.CanCollide, name .. " " .. d.Name .. " never blocks")
+					if d.Name ~= "Plate" then
+						local q = plotCF:PointToObjectSpace(d.CFrame.Position)
+						local half = d.Size / 2
+						T.lt(grid, q.Z - half.Z, name .. " " .. d.Name .. " off the grid")
+						T.le(q.Z + half.Z, wallLine - 0.5 + 1e-6, name .. " " .. d.Name .. " on the wall's grid face, not in it")
+						T.le(q.Y + half.Y, 2.4, name .. " " .. d.Name .. " below the wall's cap (nothing behind it hidden)")
+						T.le(0.5, q.Y - half.Y, name .. " " .. d.Name .. " above the plinth")
+						T.le(gate.Width / 2, math.abs(q.X - gate.CenterX) - half.X + 1e-6, name .. " " .. d.Name .. " out of the gate walkway")
+					end
 				end
 			end
 		end
+		-- the PEN plaque is right behind its cell; the TRAIN one (on the gate post)
+		-- points at its cell, which is on the right as seen from the grid (+X is left)
+		local markers = conv.markers(PLOT)
+		T.eq(markers.Pen.Line.Text, ConveyorService.SignLines.Pen, "PEN: no arrow")
+		T.eq(markers.Train.Line.Text, ConveyorService.SignLines.Train .. " >", "TRAIN: arrow toward its cell")
+		T.truthy(markers.Foundry.Line.Text:find("BELT IN", 1, true), "FOUNDRY: belt in")
 		-- nothing pokes into the room kept for the Foundry's receiver hood
 		local zone = BaseLayout.FoundryIntake.Zone
 		for _, d in folder:FindFirstChild("Foundry"):GetDescendants() do
@@ -485,7 +589,7 @@ return function(T, Loader)
 				local apart = math.abs(p.X - zone.Center.X) >= half.X + zone.Size.X / 2
 					or math.abs(p.Z - zone.Center.Z) >= half.Z + zone.Size.Z / 2
 					or p.Y - half.Y >= zone.Size.Y
-				T.truthy(apart, "Foundry sign " .. d.Name .. " clear of the receiver zone")
+				T.truthy(apart, "Foundry plaque " .. d.Name .. " clear of the receiver zone")
 			end
 		end
 		-- built once per plot
@@ -501,15 +605,20 @@ return function(T, Loader)
 		local px, pz = BaseLayout.chuteCell("Pen")
 		local m = belt(w, px, pz, BaseLayout.SinkRotation)
 		conv.onLayout(w.player, PLOT)
-		local line = conv.markers(PLOT).Pen.Line
-		T.eq(line.Text, ConveyorService.YardText, "turn the belt")
+		local line = markers.Pen.Line
+		T.eq(line.Text, ConveyorService.YardSign, "turn the belt")
+		T.le(#line.Text, 12, "a short word, readable from the grid")
 		MachineService.move(m, px, pz, 3)
 		conv.onLayout(w.player, PLOT)
 		T.eq(line.Text, ConveyorService.SignLines.Pen, "back to normal")
+		local tx, tz = BaseLayout.chuteCell("Train")
+		belt(w, tx, tz, BaseLayout.SinkRotation)
+		conv.onLayout(w.player, PLOT)
+		T.eq(markers.Train.Line.Text, ConveyorService.YardSign .. " >", "the TRAIN plaque warns too, still pointing")
 		-- the FOUNDRY sink belt faces the yard on purpose: no warning there
 		local fx, fz = BaseLayout.chuteCell("Foundry")
 		belt(w, fx, fz, BaseLayout.SinkRotation)
 		conv.onLayout(w.player, PLOT)
-		T.eq(conv.markers(PLOT).Foundry.Line.Text, ConveyorService.SignLines.Foundry, "sink belt is fine")
+		T.falsy(markers.Foundry.Line.Text:find(ConveyorService.YardSign, 1, true), "sink belt is fine")
 	end)
 end

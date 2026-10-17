@@ -43,10 +43,15 @@
 	  exactly at ArriveAt, the 1 s loop is the safety net.
 	- Arrival: TripCargo goes into the Ore Pen up to its capacity
 	  (ItemService.penCapacity); what went in goes on to PenService.arrived
-	  (step 3 Direct Unload: dirty ore pours onto the TRAIN chute's belt, see
-	  directUnload). Once empty: trip times cleared,
-	  Stats.TrainTrips + 1, Fx "TrainUnload" (plotId, count) to everyone, and
-	  the empty train rolls back for ReturnSeconds before it can load again.
+	  (the sorting billboard). Direct Unload (step 3, see that section):
+	  with Upgrades.PenAutomation >= EconomyConfig.PenAutomation.DirectUnload
+	  and a belt feeding from the TRAIN chute, the dirty ore stays on board
+	  and pours out onto that belt one by one (PenService's Train lane), not
+	  through the pen; the train stands at the stop until it is all out.
+	  Once empty: trip times cleared, Stats.TrainTrips + 1, Fx "TrainUnload"
+	  (plotId, count of items that went into the pen, when any) to
+	  everyone, and the empty train rolls back for ReturnSeconds before it
+	  can load again.
 	- Waiting (shared with the client): when the pen can't take the whole
 	  load, the rest stays on the train, which stands at the player's stop and
 	  is tried again every DeliveryRetry seconds (one "pen full" toast per
@@ -72,13 +77,16 @@
 	  Express perk (Perks "TrainExpress") adds cargo and speed.
 	- StateService gets Train = { Cargo, Capacity, Moving, DepartAt?,
 	  ArriveAt?, CapacityLevel, SpeedLevel, NextCapacityPrice?,
-	  NextSpeedPrice?, Express, TripSeconds, AutoDepartIn?, Waiting }.
+	  NextSpeedPrice?, Express, TripSeconds, AutoDepartIn?, Waiting,
+	  Unloading }.
 	  DepartAt / ArriveAt (server time) are there while the train is on a
 	  trip, waiting at a full pen or rolling back: it is back at the station
 	  at ArriveAt + TrainConfig.ReturnSeconds. ArriveAt is the TrainTrip
 	  arrival, or the moment it really unloaded when it had to wait.
 	  Waiting = true while it stands at your stop because the pen is full
-	  (then Moving > 0 and ArriveAt has passed); the train is away (no
+	  (then Moving > 0 and ArriveAt has passed); Unloading = true while it
+	  stands there pouring its dirty ore onto the TRAIN chute's belt (Direct
+	  Unload; not Waiting unless the pen is full too); the train is away (no
 	  loading) whenever Moving > 0 or ArriveAt + ReturnSeconds is ahead.
 	Studio: Players.<you>:SetAttribute("Perk_TrainExpress", true) tries Express.
 ]]
@@ -89,6 +97,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
@@ -106,6 +115,7 @@ local CarryService = require(script.Parent.CarryService)
 local PlotService = require(script.Parent.PlotService)
 local IntakeService = require(script.Parent.IntakeService)
 local EconomyService = require(script.Parent.EconomyService)
+local ConveyorService = require(script.Parent.ConveyorService)
 local PenService = require(script.Parent.PenService)
 
 local TrainService = {}
@@ -150,9 +160,13 @@ type Runtime = {
 	DepartAt: number?, -- the trip clients animate; kept while the train rolls back
 	ArriveAt: number?, -- its arrival, or the late unload after waiting at a full pen
 	ReturnUntil: number?, -- the empty train is back at the station (ArriveAt + ReturnSeconds)
-	NextRetry: number?, -- the next unloading try (pen full)
-	Waiting: boolean, -- a try left ore on the train: it stands at the stop ("pen full" said once)
-	Delivered: number, -- items unloaded on this trip so far
+	NextRetry: number?, -- the next unloading try (pen full, or the Direct Unload check)
+	Waiting: boolean, -- a try left ore on the train: it stands at the stop (until unloaded)
+	PenFull: boolean, -- the last try left ore for the pen on board: the pen is full
+	Chute: boolean, -- Direct Unload: its dirty ore pours onto the TRAIN chute's belt now
+	ChuteFailed: boolean, -- spawning onto that belt failed for good: the rest goes the old way
+	Delivered: number, -- items unloaded into the pen on this trip so far
+	Chuted: number, -- items that left onto the TRAIN chute's belt on this trip so far
 	Trip: Trip?, -- the last TrainTrip everyone got for this trip (kept while it rolls back)
 	Prepared: boolean, -- the join checks (onLoaded) have run
 	Announced: boolean, -- the trip from the last session was announced
@@ -184,6 +198,7 @@ TrainService.FullText = "Your train is full – press Send"
 TrainService.AwayText = "Your train is on its way"
 TrainService.ReturnText = "Your train is coming back"
 TrainService.PenFullText = "Your Ore Pen is full – make room"
+TrainService.ChuteText = "Your train is unloading at your TRAIN chute"
 TrainService.EmptyText = "Your train is empty. Throw ore into a train hopper first."
 TrainService.HandsText = "Carry ore here to load your train."
 TrainService.NoPlotText = "Your train leaves once you have a plot."
@@ -209,6 +224,7 @@ local OUT_SPEED = 8
 local OUT_UP = 12
 local WAKE_SLACK = 0.05 -- the arrival timer fires this much after ArriveAt
 local SESSION_TRIP_KEEP = 3600 -- seconds after its arrival a session trip is forgotten
+local CHUTE_RETRY = 1 -- seconds between Direct Unload checks (belt still there? room in the pen?)
 
 -- Unix seconds with milliseconds (os.time() has whole seconds): only for the saved trip times
 local function defaultWallClock(): number
@@ -244,7 +260,17 @@ local mapConnection: RBXScriptConnection? = nil
 local function runtimeOf(player: Player): Runtime
 	local r = runtimes[player]
 	if not r then
-		r = { Waiting = false, Delivered = 0, Prepared = false, Announced = false, Toasts = {} }
+		r = {
+			Waiting = false,
+			PenFull = false,
+			Chute = false,
+			ChuteFailed = false,
+			Delivered = 0,
+			Chuted = 0,
+			Prepared = false,
+			Announced = false,
+			Toasts = {},
+		}
 		runtimes[player] = r
 	end
 	return r
@@ -355,7 +381,13 @@ end
 -- The train stands at your stop with ore it can't unload (the pen is full).
 local function isWaiting(player: Player, train: Train): boolean
 	local r = runtimes[player]
-	return #train.TripCargo > 0 and r ~= nil and r.Waiting
+	return #train.TripCargo > 0 and r ~= nil and r.Waiting and r.PenFull
+end
+
+-- The train stands at your stop pouring its dirty ore onto the TRAIN chute (Direct Unload).
+local function isUnloading(player: Player, train: Train): boolean
+	local r = runtimes[player]
+	return #train.TripCargo > 0 and r ~= nil and r.Chute
 end
 
 ---------------------------------------------------------------- toasts and looks
@@ -382,10 +414,13 @@ local function hint(player: Player, text: string, kind: string?)
 	throttledToast(player, text, text, kind, PROMPT_TOAST_COOLDOWN)
 end
 
--- Why an away train can't load now: waiting at a full pen, coming back or on its way.
+-- Why an away train can't load now: waiting at a full pen, unloading at the
+-- TRAIN chute, coming back or on its way.
 local function awayText(player: Player, train: Train): string
 	if isWaiting(player, train) then
 		return TrainService.PenFullText
+	elseif isUnloading(player, train) then
+		return TrainService.ChuteText
 	elseif #train.TripCargo == 0 and train.TripArriveAt <= 0 and isReturning(player) then
 		return TrainService.ReturnText
 	end
@@ -484,22 +519,61 @@ end
 ---------------------------------------------------------------- Direct Unload (step 3, WP-Belts)
 
 --[[
-	Ore a train just unloaded into the pen goes on to PenService.arrived:
-	with Direct Unload (Upgrades.PenAutomation >= EconomyConfig.PenAutomation.DirectUnload)
-	its dirty ore gets send intents for the TRAIN chute and pours out onto
-	the belt there one by one; with the sorting billboard what the player
-	doesn't keep is sent from the PEN chute. Without a belt on those chutes
-	(or without the upgrades) it simply stays in the pen. The train itself
-	unloads exactly as before (same capacity rule, timing and animation),
-	so a crash or leaving never finds ore anywhere but the pen or a belt.
+	Direct Unload (Upgrades.PenAutomation >= EconomyConfig.PenAutomation.DirectUnload):
+	when the train arrives and a belt feeds from the player's TRAIN chute
+	(ConveyorService.sourceBelt: there, not facing the yard), its dirty ore
+	(spawnable Raw) STAYS IN TripCargo, which is saved, so leaving or a
+	crash never loses it; only its other items go into the pen (deliver).
+	PenService's Train lane takes that ore straight off the train: one item
+	every SendInterval it removes one desc from TripCargo and spawns it onto
+	the belt with no yield in between, or puts it back at the same index
+	(PenService.setTrainCargo below: `list` hands it TripCargo while Chute
+	is set, `sent` counts what left). The train stands at the stop
+	(Waiting for everyone, Unloading in the owner's snapshot) until no
+	dirty ore is left, then deliver finishes the trip as always; a full
+	pen doesn't stop the dirty ore, only the items meant for the pen wait.
+	Every CHUTE_RETRY seconds deliver looks again: when the belt is gone or
+	faces the yard (or spawning failed for good), the rest goes into the
+	pen as without the upgrade.
 ]]
-local function directUnload(player: Player, delivered: { Desc })
+
+-- Does this cargo item pour out of the TRAIN chute (dirty ore that can spawn)?
+local function pours(item: any): boolean
+	return type(item) == "table" and item.K == "Raw" and ConveyorService.spawnable(item)
+end
+
+-- Is there dirty ore for the chute on board?
+local function chuteOre(train: Train): boolean
+	for _, item in train.TripCargo do
+		if pours(item) then
+			return true
+		end
+	end
+	return false
+end
+
+-- May the arrived train unload its dirty ore onto the TRAIN chute's belt now?
+local function chuteReady(player: Player, data: { [string]: any }, r: Runtime): boolean
+	if r.ChuteFailed then
+		return false
+	end
+	local upgrades = data.Upgrades
+	local level = if type(upgrades) == "table" then upgrades.PenAutomation else nil
+	if type(level) ~= "number" or level ~= level or level < EconomyConfig.PenAutomation.DirectUnload then
+		return false
+	end
+	local plotId = PlotService.plotOf(player)
+	return plotId ~= nil and ConveyorService.sourceBelt(plotId, "Train") ~= nil
+end
+
+-- Items that went into the pen: the sorting billboard may send them on (never breaks unloading).
+local function arrivedInPen(player: Player, delivered: { Desc })
 	if #delivered > 0 then
 		local ok, err = pcall(function()
 			PenService.arrived(player, delivered, "Train")
 		end)
 		if not ok then
-			warn(`[TrainService] Direct Unload for {player.Name} failed: {err}`)
+			warn(`[TrainService] pen arrival for {player.Name} failed: {err}`)
 		end
 	end
 end
@@ -543,7 +617,11 @@ function TrainService.depart(player: Player): boolean
 	r.ReturnUntil = nil
 	r.NextRetry = nil
 	r.Waiting = false
+	r.PenFull = false
+	r.Chute = false
+	r.ChuteFailed = false
 	r.Delivered = 0
+	r.Chuted = 0
 	r.Trip = nil
 	rememberTrip(player.UserId, train, server, server + seconds)
 	DataService.changed(player)
@@ -553,12 +631,14 @@ function TrainService.depart(player: Player): boolean
 end
 
 --[[
-	Unloads an arrived train into the Ore Pen, up to the pen's capacity.
-	`away`: the trip arrived while the player was away (joining): it unloads
-	without the unload effect and the return trip and says the count once.
-	What doesn't fit stays on the train, which then waits at the stop for
-	everyone to see (Waiting, see the header) and is tried again later; once
-	it is empty it unloads with the effect and rolls back from then.
+	Unloads an arrived train into the Ore Pen, up to the pen's capacity;
+	with Direct Unload its dirty ore stays on board for the TRAIN chute
+	(see that section). `away`: the trip arrived while the player was away
+	(joining): it unloads without the unload effect and the return trip and
+	says the count once. What doesn't fit (or pours out of the chute) stays
+	on the train, which then waits at the stop for everyone to see
+	(Waiting, see the header) and is tried again later; once it is empty it
+	unloads with the effect and rolls back from then.
 ]]
 local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 	local train = trainOf(data)
@@ -568,23 +648,49 @@ local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 	end
 	local r = runtimeOf(player)
 	local capacity = ItemService.penCapacity(data)
+	local chute = chuteReady(player, data, r)
 	local moved = 0
 	local delivered: { Desc } = {}
+	local penFull = false
+	local onBoard = 0
 	-- no yield between taking an item off the train and putting it into the pen
-	while #train.TripCargo > 0 and #storage < capacity do
-		local item = table.remove(train.TripCargo, 1) :: Desc
-		local stored = { K = item.K, O = item.O, G = item.G, R = item.R }
-		table.insert(storage, stored)
-		table.insert(delivered, stored)
-		moved += 1
+	local cargo = train.TripCargo
+	local i = 1
+	while i <= #cargo do
+		local item = cargo[i]
+		if chute and pours(item) then
+			-- Direct Unload: it leaves from here, onto the TRAIN chute's belt
+			onBoard += 1
+			i += 1
+		elseif #storage < capacity then
+			table.remove(cargo, i)
+			local stored = { K = item.K, O = item.O, G = item.G, R = item.R }
+			table.insert(storage, stored)
+			table.insert(delivered, stored)
+			moved += 1
+		else
+			penFull = true
+			i += 1
+		end
 	end
 	r.Delivered += moved
-	directUnload(player, delivered)
+	arrivedInPen(player, delivered)
+	local was = `{r.Chute}/{r.PenFull}`
+	r.Chute = onBoard > 0
+	local newlyFull = penFull and not r.PenFull
+	r.PenFull = penFull
+	if r.Chute then
+		PenService.unloadTrain(player)
+	end
 	local now = serverNow()
-	if #train.TripCargo > 0 then
-		r.NextRetry = now + TrainConfig.DeliveryRetry
+	if #cargo > 0 then
+		r.NextRetry = now + (if r.Chute then CHUTE_RETRY else TrainConfig.DeliveryRetry)
+		-- (shares the throttle with the bounce toasts that say the same)
+		if newlyFull then
+			throttledToast(player, TrainService.PenFullText, TrainService.PenFullText)
+		end
 		if r.Waiting then
-			if moved > 0 then
+			if moved > 0 or was ~= `{r.Chute}/{r.PenFull}` then
 				DataService.changed(player)
 			end
 			return
@@ -594,14 +700,13 @@ local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 		if away and moved > 0 then
 			toast(player, `Your train brought {moved} ore to your Ore Pen while you were away.`, "Info")
 		end
-		-- (shares the throttle with the bounce toasts that say the same)
-		throttledToast(player, TrainService.PenFullText, TrainService.PenFullText)
 		DataService.changed(player)
 		-- everyone sees it standing there (without a plot yet: announced when it comes)
 		broadcast(player, train)
 		return
 	end
 	local count = r.Delivered
+	local chuted = r.Chuted
 	local waited = r.Waiting
 	train.TripDepartAt = 0
 	train.TripArriveAt = 0
@@ -612,8 +717,12 @@ local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 	end
 	r.NextRetry = nil
 	r.Waiting = false
+	r.PenFull = false
+	r.Chute = false
+	r.ChuteFailed = false
 	r.Delivered = 0
-	if (away and not waited) or count == 0 then
+	r.Chuted = 0
+	if (away and not waited) or count + chuted == 0 then
 		-- arrived while away (or an empty trip from a broken save): no effect, no return
 		r.DepartAt = nil
 		r.ArriveAt = nil
@@ -1060,6 +1169,38 @@ tickPlayer = function(player: Player)
 	end
 end
 
+--[[
+	Direct Unload's hand-over to PenService's Train lane (PenService.TrainCargo):
+	the cargo list while the arrived train pours out of the TRAIN chute,
+	and what happened to each item it took. After the last dirty ore (or
+	when spawning failed for good) the train unloads the rest right away.
+]]
+local cargoSource: PenService.TrainCargo = {
+	list = function(player: Player, data: { [string]: any }): { Desc }?
+		local r = runtimes[player]
+		if not r or not r.Chute then
+			return nil
+		end
+		return trainOf(data).TripCargo
+	end,
+	sent = function(player: Player, ok: boolean)
+		local r = runtimes[player]
+		local data = DataService.get(player)
+		if not r or not data then
+			return
+		end
+		if ok then
+			r.Chuted += 1
+		else
+			r.ChuteFailed = true
+		end
+		if not ok or not chuteOre(trainOf(data)) then
+			r.NextRetry = nil
+			tickPlayer(player)
+		end
+	end,
+}
+
 -- Arrivals, pen-full retries, returns and auto departures for every player.
 function TrainService.tick()
 	for _, player in Players:GetPlayers() do
@@ -1173,6 +1314,7 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		TripSeconds = TrainConfig.tripSeconds(train.SpeedLevel, express),
 		AutoDepartIn = autoIn,
 		Waiting = isWaiting(player, train),
+		Unloading = isUnloading(player, train),
 	}
 end
 
@@ -1194,6 +1336,7 @@ TrainService._test = {
 	announce = announce,
 	provide = provide,
 	tickOne = tickOne,
+	cargo = cargoSource,
 	runtime = function(player: Player): Runtime?
 		return runtimes[player]
 	end,
@@ -1231,6 +1374,7 @@ end
 
 function TrainService.init()
 	Net.on("TrainAction", onAction)
+	PenService.setTrainCargo(cargoSource)
 	StateService.addProvider(provide)
 	DataService.onLoaded(onLoaded)
 	PlotService.onAssigned(function(player: Player)

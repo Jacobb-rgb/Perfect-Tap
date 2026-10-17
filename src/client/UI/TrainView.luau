@@ -63,6 +63,7 @@ export type Snapshot = {
 	TripSeconds: number,
 	AutoDepartIn: number?,
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
+	Unloading: boolean?, -- at your stop pouring dirty ore onto your TRAIN chute's belt (Direct Unload)
 }
 
 export type Phase = "Empty" | "Loading" | "Full" | "Moving" | "Unloading" | "Waiting" | "Returning"
@@ -252,6 +253,7 @@ function TrainView.read(raw: any): Snapshot
 		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express)),
 		AutoDepartIn = optional(t.AutoDepartIn),
 		Waiting = t.Waiting == true,
+		Unloading = t.Unloading == true,
 	}
 end
 
@@ -268,11 +270,16 @@ end
 	Is your train standing at your stop because the Ore Pen is full? The
 	server says so (Waiting), or it still has ore on board (Moving > 0)
 	UnloadGrace seconds after its ArriveAt (the arrival itself unloads, the
-	grace covers the snapshot that is still on its way). `now` is server time.
+	grace covers the snapshot that is still on its way), unless the server
+	says it is pouring its dirty ore onto your TRAIN chute's belt
+	(Unloading, Direct Unload). `now` is server time.
 ]]
 function TrainView.waiting(train: Snapshot, now: number): boolean
 	if train.Waiting then
 		return true
+	elseif train.Unloading then
+		-- Direct Unload: it stands there on purpose, pouring onto your belt
+		return false
 	end
 	local arrive = train.ArriveAt
 	return train.Moving > 0 and arrive ~= nil and now >= arrive + TrainView.UnloadGrace
@@ -314,8 +321,9 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 		local line = if arrive then "On its way " .. Format.seconds(math.max(0, math.ceil(arrive - now))) else "On its way"
 		return make("Moving", moving, "ore on the way", line, Theme.Info, false, progress)
 	elseif moving > 0 then
-		-- just arrived (UnloadGrace): the server is unloading it
-		return make("Unloading", moving, "ore on the way", "Unloading…", Theme.Info, false, 1)
+		-- just arrived (UnloadGrace), or Direct Unload: the server is unloading it
+		local line = if train.Unloading then "Unloading onto your belt" else "Unloading…"
+		return make("Unloading", moving, "ore on the way", line, Theme.Info, false, 1)
 	elseif arrive and now < arrive + TrainConfig.ReturnSeconds then
 		return make("Returning", 0, "ore on board", "Returning", Theme.TextDim, false)
 	end
