@@ -213,7 +213,14 @@ function directionalFog(atm, shot) {
 // layer of Terrain-Clouds-like streaks (Cover ~0.5) lit pink/orange toward
 // the sun. Below the horizon it fades into the Atmosphere color so the far
 // sea edge disappears.
-function sunsetSky(preset, shot, camera, fogColor, fogAway) {
+//
+// shot.skybox (an equirectangular panorama URL, e.g. "/scenes/skybox/x.png"
+// from tools/kenney/skybox.mjs) puts a Roblox Sky skybox behind it: the
+// panorama fills the sky, the sunset gradient stays as the Atmosphere haze
+// low over the horizon (shot.skyboxHaze, default 0.35 = sine of the angle
+// where the haze is gone) and the clouds and the sun stay in front.
+// shot.skyboxYaw / skyboxTilt (degrees) turn it like tools/kenney/skybox.mjs.
+function sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex) {
   const S = preset.Sky || {};
   const col = (a, fallback) => fromArray3(a || fallback);
   const sunDir = new THREE.Vector3(...(shot.sunDir || [-0.62, 0.48, 0.62])).normalize();
@@ -228,6 +235,12 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway) {
     sunDir: { value: sunDir },
     midSin: { value: Math.sin(((S.MidAngle ?? 25) * Math.PI) / 180) },
     cloudCover: { value: S.CloudCover ?? 0.5 },
+    spaceTex: { value: spaceTex },
+    spaceOn: { value: spaceTex ? 1.0 : 0.0 },
+    spaceYaw: { value: ((shot.skyboxYaw ?? 0) * Math.PI) / 180 },
+    spaceTilt: { value: ((shot.skyboxTilt ?? 0) * Math.PI) / 180 },
+    spaceHaze: { value: shot.skyboxHaze ?? 0.35 },
+    spaceGain: { value: shot.skyboxGain ?? 1.0 },
   };
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -239,6 +252,7 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway) {
       uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 horizonAway;
       uniform vec3 sunColor; uniform vec3 fogColor; uniform vec3 fogAway; uniform vec3 sunDir;
       uniform float midSin; uniform float cloudCover;
+      uniform sampler2D spaceTex; uniform float spaceOn; uniform float spaceYaw; uniform float spaceTilt; uniform float spaceHaze; uniform float spaceGain;
       varying vec3 vPos;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float noise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
@@ -260,6 +274,17 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway) {
         // warm band hugging the horizon toward the sun
         col += horizon * 0.18 * warm * exp(-max(h, 0.0) * 9.0);
         if (h < 0.0) col = mix(hor, mix(fogAway, fogColor, warm), clamp(-h * 10.0, 0.0, 1.0));
+        // a Roblox Sky skybox: the panorama above, the sunset haze low down
+        if (spaceOn > 0.5) {
+          // tools/kenney/skybox.mjs's frame: x = north (-Z), y = west (-X), z = up
+          vec3 q = vec3(-d.z, -d.x, d.y);
+          q = vec3(q.x * cos(spaceTilt) + q.z * sin(spaceTilt), q.y, -q.x * sin(spaceTilt) + q.z * cos(spaceTilt));
+          float lon = spaceYaw + atan(q.y, q.x);
+          vec2 suv = vec2(fract(lon / 6.2831853), 1.0 - acos(clamp(q.z, -1.0, 1.0)) / 3.1415927);
+          vec3 space = texture2D(spaceTex, suv).rgb * spaceGain;
+          float haze = 1.0 - smoothstep(0.0, spaceHaze, h);
+          col = mix(space, col, haze * 0.9);
+        }
         // Terrain-Clouds-like streaks, lit pink/orange toward the sun
         if (h > 0.0) {
           vec2 uv = d.xz / (h + 0.12);
@@ -426,7 +451,13 @@ async function main() {
   const fogColor = fromArray3(atm.Color || [0.8, 0.7, 0.6]);
   if (!isCave) {
     const fogAway = fromArray3(atm.Decay || atm.Color || [0.6, 0.5, 0.8]);
-    const sky = sunsetSky(preset, shot, camera, fogColor, fogAway);
+    let spaceTex = null;
+    if (shot.skybox) {
+      spaceTex = await new THREE.TextureLoader().loadAsync(shot.skybox);
+      spaceTex.colorSpace = THREE.SRGBColorSpace;
+      spaceTex.wrapS = THREE.RepeatWrapping;
+    }
+    const sky = sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex);
     world.add(sky);
     const envScene = new THREE.Scene();
     envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), sky.material));

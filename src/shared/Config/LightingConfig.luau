@@ -47,6 +47,34 @@ LightingConfig.Sky = {
 	CelestialBodiesShown = true,
 }
 
+--[[
+	Space skybox (owner 2026-10-17): Kenney Skyboxes Space "band" (CC0, a
+	Milky Way band over violet space), cut into Roblox's six faces by
+	tools/kenney/skybox.mjs with Yaw 97 and Tilt 18 so the band's bright core
+	arches over the northern sky (~33 degrees up, above the massif) and the
+	sunset haze stays on the horizon. Roblox can only show uploaded images:
+	the owner uploads the six PNGs (NAHRAJ_DO_ROBLOXU/obloha_mlecna_draha) and
+	pastes each asset id here. Until all six are set the place keeps
+	Roblox's default sky (LightingController.applySkybox).
+]]
+LightingConfig.Skybox = {
+	Bk = "",
+	Dn = "",
+	Ft = "",
+	Lf = "",
+	Rt = "",
+	Up = "",
+	-- how the faces were cut (the preview renderer's shot.skyboxYaw / skyboxTilt)
+	Yaw = 97,
+	Tilt = 18,
+}
+
+-- "123456", "rbxassetid://123456" or "" -> the content id or nil.
+function LightingConfig.skyboxId(value: string): string?
+	local digits = string.match(value, "^%s*(%d+)%s*$") or string.match(value, "rbxassetid://(%d+)")
+	return if digits then "rbxassetid://" .. digits else nil
+end
+
 -- Workspace.Terrain.Clouds (created by the client if the place has none).
 LightingConfig.Clouds = {
 	Cover = 0.5,
