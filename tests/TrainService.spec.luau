@@ -1481,4 +1481,87 @@ return function(T, Loader)
 		end
 		T.truthy(w.data.Stats.TrainTrips > 3, "trains really ran")
 	end)
+
+	---------------------------------------------------------------- Direct Unload (step 3, WP-Belts)
+
+	withWorld("TrainService: Direct Unload pours the dirty ore out of the TRAIN chute, one by one", function(w)
+		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
+		local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
+		local ConveyorService = Loader.requirePath("ServerScriptService.Server.Services.ConveyorService")
+		local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
+		MachineService._test.reset()
+		ConveyorService._test.reset()
+		PenService._test.reset()
+		local gap = ConveyorService.SourceGap
+		ConveyorService.SourceGap = 0
+		local ok, err = pcall(function()
+			w.data.StarterKitGiven = true
+			w.data.MachineInventory = { Conveyor = 2 }
+			MachineService._test.spawnAll(w.player, PLOT)
+			local tx, tz = BaseLayout.chuteCell("Train")
+			local belt = MachineService.place(w.player, "Conveyor", tx, tz, 0)
+			assert(belt, "belt on the TRAIN chute")
+			local function onBelt(): { any }
+				local list = {}
+				for _, record in ItemService.looseList() do
+					local p = belt.Model:GetPivot():PointToObjectSpace(record.Body.CFrame.Position)
+					if math.abs(p.X) <= 2 and math.abs(p.Z) <= 2.5 then
+						table.insert(list, record)
+					end
+				end
+				return list
+			end
+			-- without the upgrade: into the pen as before, nothing else
+			drop(w.station, USER, COAL)
+			TrainService.send(w.player)
+			advance(w, TRIP)
+			T.eq(#w.data.Storage, 1, "unloaded into the pen")
+			T.eq(PenService._test.queue(w.player), nil, "no Direct Unload yet")
+			advance(w, TrainConfig.ReturnSeconds + 1)
+			-- with it: the same unload, then the dirty ore leaves the pen onto the belt
+			w.data.Upgrades.PenAutomation = 2
+			drop(w.station, USER, COAL)
+			drop(w.station, USER, DIRTY_GOLD)
+			drop(w.station, USER, GOLD)
+			local total = census(w, USER, w.data)
+			TrainService.send(w.player)
+			advance(w, TRIP)
+			T.eq(#w.data.Storage, 4, "the train unloads into the pen as before")
+			T.eq(#w.data.Train.TripCargo, 0, "train empty")
+			T.eq(#unloads(w), 2, "the usual unload effect")
+			local queue = PenService._test.queue(w.player)
+			local trainLane = 0
+			for _, intent in queue.Train.Intents do
+				trainLane += intent.Left
+			end
+			T.eq(trainLane, 2, "this trip's two dirty ores for the TRAIN chute (the clean gold is kept)")
+			PenService.tickSend(1)
+			T.eq(#onBelt(), 1, "one on the TRAIN chute's belt")
+			T.eq(onBelt()[1].Kind, "Raw", "dirty ore")
+			T.eq(#w.data.Storage, 3, "it left the pen")
+			T.eq(census(w, USER, w.data), total, "moved, not copied")
+			for _, record in onBelt() do
+				record.Model:PivotTo(belt.Model:GetPivot() * CFrame.new(0, 1.5, -8))
+			end
+			PenService.tickSend(2)
+			T.eq(#w.data.Storage, 2, "the second one")
+			T.eq(PenService._test.queue(w.player), nil, "done")
+			T.eq(census(w, USER, w.data), total, "still nothing lost")
+			-- no belt on the chute: it stays in the pen, as without the upgrade
+			MachineService.pickup(belt)
+			advance(w, TrainConfig.ReturnSeconds + 1)
+			drop(w.station, USER, COAL)
+			TrainService.send(w.player)
+			advance(w, TRIP)
+			T.eq(#w.data.Storage, 3, "delivered")
+			T.eq(PenService._test.queue(w.player), nil, "nothing queued without a belt")
+		end)
+		MachineService._test.reset()
+		ConveyorService._test.reset()
+		PenService._test.reset()
+		ConveyorService.SourceGap = gap
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end

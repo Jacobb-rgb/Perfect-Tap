@@ -7,8 +7,14 @@
 	  PodiumSlots, PenCapacity) and update live.
 	    TAKE    PenAction "Take" { Key, Count = 1 }: the ore comes out at the
 	            pen gate, into your hands
+	    SEND    PenAction "Send" { Key, Count = the whole stack } (the merged
+	            Dirty Ore row: { Filter = "Dirty" }): the server sends it onto
+	            your belts at the PEN chute, one item every half second
 	    PODIUM  PenAction "ToPodium" { Key, Slot = first free unlocked slot }
 	    PLACE   (pick mode) PodiumAction(slot, "Place", { Key }), then closes
+	  The toolbar: SEND ALL DIRTY ({ Filter = "Dirty" }), SEND UNKEPT
+	  ({ Filter = "Unkept" }, only with Upgrades.PenAutomation >= 1), STOP
+	  (PenAction "StopSend") and the status from the State's PenSend.
 	  Closes with X, B (gamepad), Backspace, walking away (pen: Range from
 	  the gate; pick mode: from the podium) or respawning. Gamepads start on
 	  the first button; other prompts are hidden while it is open. Phones
@@ -32,6 +38,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local EconomyConfig = require(Shared.Config.EconomyConfig)
 local ItemData = require(Shared.Config.ItemData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
@@ -120,7 +127,13 @@ local function send(rowKey: string, button: string)
 		return
 	end
 	Sfx.play("UIClick")
-	if view.Mode == "Pick" then
+	if button == "Send" then
+		if entry and entry.Keys then
+			Net.send("PenAction", "Send", { Filter = "Dirty" })
+		else
+			Net.send("PenAction", "Send", { Key = key, Count = if entry then entry.Count else 1 })
+		end
+	elseif view.Mode == "Pick" then
 		local slot = view.Slot
 		if slot then
 			Net.send("PodiumAction", slot, "Place", { Key = key })
@@ -144,6 +157,9 @@ local function wire(rows: { PenView.Row })
 		local key = row.Key
 		row.Take.Activated:Connect(function()
 			send(key, "Take")
+		end)
+		row.Send.Activated:Connect(function()
+			send(key, "Send")
 		end)
 		row.Podium.Activated:Connect(function()
 			send(key, "Podium")
@@ -189,6 +205,15 @@ local function refresh(state: { [string]: any }?)
 	end
 	local canPodium = state ~= nil and PenView.freeSlot(state.Podiums, state.PodiumSlots) ~= nil
 	wire(PenView.setEntries(view, entries, canPodium))
+	local upgrades = state and state.Upgrades
+	local automation = if type(upgrades) == "table" then tonumber(upgrades.PenAutomation) or 0 else 0
+	local dirty = 0
+	for _, entry in entries do
+		if entry.Keys then
+			dirty += entry.Count
+		end
+	end
+	PenView.setSending(view, state and state.PenSend, automation >= EconomyConfig.PenAutomation.Billboard, dirty)
 	local count = if state then tonumber(state.StorageCount) or 0 else 0
 	local capacity = if state then tonumber(state.PenCapacity) or 0 else 0
 	PenView.setHeader(view, count, capacity)
@@ -204,9 +229,9 @@ local function updateHint(view: PenView.Refs)
 	elseif view.Mode == "Pick" then
 		PenView.setHint(view, "Pick the ore this podium shows off", nil, nil)
 	elseif isTouch() then
-		PenView.setHint(view, "TAKE: carry it  -  PODIUM: earn money every second", nil, nil)
+		PenView.setHint(view, "TAKE: carry it  -  SEND: onto your belts  -  PODIUM: money every second", nil, nil)
 	else
-		PenView.setHint(view, "TAKE puts ore in your hands  -  PODIUM earns money every second  -  Backspace: close", nil, nil)
+		PenView.setHint(view, "TAKE: into your hands  -  SEND: onto your belts  -  PODIUM: money every second  -  Backspace: close", nil, nil)
 	end
 end
 
@@ -254,6 +279,18 @@ local function ensureView(): PenView.Refs
 	built.Close.Activated:Connect(function()
 		PenController.close()
 		Sfx.play("UIClick")
+	end)
+	built.SendDirty.Activated:Connect(function()
+		Sfx.play("UIClick")
+		Net.send("PenAction", "Send", { Filter = "Dirty" })
+	end)
+	built.SendUnkept.Activated:Connect(function()
+		Sfx.play("UIClick")
+		Net.send("PenAction", "Send", { Filter = "Unkept" })
+	end)
+	built.StopSend.Activated:Connect(function()
+		Sfx.play("UIClick")
+		Net.send("PenAction", "StopSend", {})
 	end)
 	refs = built
 	return built

@@ -30,6 +30,7 @@ local ORDER = {
 	"PlotService",
 	"MachineService",
 	"IntakeService",
+	"ConveyorService", -- belts + chutes: before PenService / TrainService, which feed its chutes
 	"EconomyService",
 	"PenService",
 	"PodiumService",
@@ -37,7 +38,6 @@ local ORDER = {
 	"CleaningService",
 	"ProcessingService",
 	"SellService",
-	"ConveyorService",
 	"BuildService",
 	"AccessService",
 }

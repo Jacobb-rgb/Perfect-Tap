@@ -2,7 +2,8 @@
 	GridOverlay: the build-mode grid drawn on your plot (client only).
 
 	26 thin lines (13 each way, one per cell edge) plus a few named plates
-	(the ghost's footprint, its output cell, the cursor...). Everything is
+	(the ghost's footprint, its output cell, the cursor, the chute cells...),
+	some with a floating text tag (tag(): the chutes' labels). Everything is
 	created once and kept in one folder, Workspace.BuildClient, which is
 	parented to nil while build mode is closed, so the overlay costs nothing
 	the rest of the time. The build ghost lives in the same folder
@@ -31,10 +32,14 @@ local PLATE_INSET = 0.3 -- plates stop short of the cell edges so the lines stay
 local PLATE_TRANSPARENCY = 0.5
 local PLATE_COLOR = Color3.fromRGB(255, 255, 255)
 
+local TAG_SIZE = Vector2.new(150, 34) -- plate labels, pixels
+local TAG_UP = 2.6 -- studs above the plate (over a belt standing on it)
+
 local folder: Folder? = nil
 local lines: { BasePart } = {}
 local lineOffsets: { CFrame } = {}
 local plates: { [string]: BasePart } = {}
+local tags: { [string]: TextLabel } = {}
 
 local function newPart(name: string, size: Vector3, color: Color3, transparency: number): Part
 	local part = Instance.new("Part")
@@ -121,6 +126,47 @@ function GridOverlay.plate(name: string, cf: CFrame, w: number, d: number, color
 		plate.Color = wanted
 	end
 	plate.Parent = GridOverlay.folder()
+end
+
+--[[
+	A short label floating over a named plate (shown with the plate, hidden
+	with it; e.g. the chute cells' PEN / TRAIN / FOUNDRY). Drawn on top of
+	everything, the same size on screen at every zoom. Call after plate().
+]]
+function GridOverlay.tag(name: string, text: string, color: Color3)
+	local plate = plates[name]
+	if not plate then
+		return
+	end
+	local label = tags[name]
+	if not label then
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "Tag"
+		gui.Size = UDim2.fromOffset(TAG_SIZE.X, TAG_SIZE.Y)
+		gui.StudsOffset = Vector3.new(0, TAG_UP, 0)
+		gui.AlwaysOnTop = true
+		gui.LightInfluence = 0
+		gui.MaxDistance = 400
+		gui.Parent = plate
+		local newLabel = Instance.new("TextLabel")
+		newLabel.Name = "Text"
+		newLabel.BackgroundTransparency = 1
+		newLabel.Size = UDim2.fromScale(1, 1)
+		newLabel.TextScaled = true
+		newLabel.FontFace = Font.fromEnum(Enum.Font.LuckiestGuy)
+		newLabel.TextStrokeColor3 = Color3.fromRGB(24, 16, 14)
+		newLabel.TextStrokeTransparency = 0
+		newLabel.Parent = gui
+		tags[name] = newLabel
+		label = newLabel
+	end
+	local current = label :: TextLabel
+	if current.Text ~= text then
+		current.Text = text
+	end
+	if current.TextColor3 ~= color then
+		current.TextColor3 = color
+	end
 end
 
 -- Hides one named plate (it stays pooled).

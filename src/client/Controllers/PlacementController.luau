@@ -28,6 +28,14 @@
 	numbered, at most SEND_RATE a second). The server always decides: a
 	refused request shakes the ghost and says why. A placed belt moves the
 	cursor one cell forward, so pressing Place again lays a line.
+
+	Chutes (step 3, BaseLayout.Chutes): the three chute cells on the back
+	row get a plate in their colour with their label floating over it (PEN,
+	TRAIN, FOUNDRY; "turn the belt" in red while a belt on a Source chute
+	runs off the grid into the yard). Only belts go there (Placement says
+	"Chute"); the reason line shows the chute's Hint when the cursor or a
+	belt ghost is on one, and warns "Turn the belt away from the yard" for
+	a belt ghost on a Source chute that faces SinkRotation.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -42,6 +50,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BaseLayout = require(Shared.Config.BaseLayout)
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -120,6 +129,8 @@ local WARN_COLOR = Color3.fromRGB(255, 210, 80)
 local OUT_COLOR = Color3.fromRGB(255, 160, 40)
 local CURSOR_COLOR = Color3.fromRGB(255, 255, 255)
 local SELECT_COLOR = Color3.fromRGB(255, 214, 90)
+local CHUTE_LIFT = 0.05 -- chute plates float a bit above the others (no flicker where they overlap)
+local YARD_TEXT = "Turn the belt away from the yard"
 
 -- input
 local TAP_PIXELS = 12
@@ -749,6 +760,11 @@ local function warningFor(entries: { Entry }, id: string, x: number, z: number, 
 		end
 	end
 	if myInfo.IsConveyor then
+		-- a Source chute's belt must not run off the grid (its item would fall into the yard)
+		local chute = BaseLayout.chuteAt(x, z)
+		if chute and BaseLayout.Chutes[chute].Kind == "Source" and not BaseLayout.sourceFeeds(r) then
+			return YARD_TEXT
+		end
 		local test = table.clone(others)
 		table.insert(test, me)
 		for _, pair in ConveyorLogic.headOn(test) do
@@ -820,6 +836,30 @@ local function refreshUI()
 	BuildView.setHint(refs, hintFor())
 end
 
+-- The chute under a cell (plot grid), if any.
+local function chuteInfo(gx: number, gz: number): BaseLayout.Chute?
+	local name = BaseLayout.chuteAt(gx, gz)
+	return if name then BaseLayout.Chutes[name] else nil
+end
+
+-- The chute cells: their plates and labels (red while a Source's belt faces the yard).
+local function updateChutes(entries: { Entry })
+	local occupied = Placement.occupancy(entries)
+	for _, name in BaseLayout.ChuteNames do
+		local chute = BaseLayout.Chutes[name]
+		local plateName = "Chute" .. name
+		GridOverlay.plate(plateName, cellsCFrame(chute.X, chute.Z, 1, 1) * CFrame.new(0, CHUTE_LIFT, 0), CELL, CELL, chute.Color)
+		local belt = occupied[Grid.key(chute.X, chute.Z)]
+		local beltInfo = belt and info(belt.Id)
+		local yard = chute.Kind == "Source"
+			and belt ~= nil
+			and beltInfo ~= nil
+			and beltInfo.IsConveyor == true
+			and not BaseLayout.sourceFeeds(belt.R)
+		GridOverlay.tag(plateName, if yard then `{chute.Label}: TURN THE BELT` else chute.Label, if yard then BAD_COLOR else chute.Color)
+	end
+end
+
 -- Ghost, plates, highlight colours and the reason line for the current
 -- mode, cursor and layout. Runs only after something changed.
 local function updateVisuals()
@@ -827,6 +867,7 @@ local function updateVisuals()
 	if not active or not refs then
 		return
 	end
+	updateChutes((layout()))
 	local id: string? = nil
 	local ignore: Entry? = nil
 	if mode == "Placing" then
@@ -855,10 +896,15 @@ local function updateVisuals()
 			highlight.FillColor = if ok then OK_COLOR else BAD_COLOR
 			highlight.OutlineColor = if ok then OK_COLOR else BAD_COLOR
 		end
+		local chute = chuteInfo(cursorX, cursorZ)
 		if not ok then
 			BuildView.setReason(refs, Placement.Reasons[code or "Invalid"] or Placement.Reasons.Invalid, "Bad")
-		else
+		elseif warning then
 			BuildView.setReason(refs, warning, "Warn")
+		elseif chute then
+			BuildView.setReason(refs, chute.Hint, "Info")
+		else
+			BuildView.setReason(refs, nil)
 		end
 		return
 	end
@@ -882,7 +928,8 @@ local function updateVisuals()
 	else
 		GridOverlay.hidePlate("Selected")
 		GridOverlay.hidePlate("SelectedOut")
-		BuildView.setReason(refs, nil)
+		local chute = chuteInfo(cursorX, cursorZ)
+		BuildView.setReason(refs, if chute then `{chute.Label} chute: {chute.Hint}` else nil, "Info")
 	end
 end
 

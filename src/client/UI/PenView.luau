@@ -1,12 +1,17 @@
 --[[
 	Ore Pen panel (pure builder; PenController fills it in and wires it up).
 	  header   ORE PEN title, fill "37 / 40" with a coloured bar, X button
+	  toolbar  (step 3, WP-Belts) SEND ALL DIRTY, SEND UNKEPT (with the
+	           sorting billboard, Upgrades.PenAutomation >= 1), STOP (while
+	           something is being sent) and a status line ("Sending 3…", or
+	           why the PEN chute waits)
 	  list     one row per kind of item (storage key): an icon square in the
 	           ore's colour (Dirty Ore: dull grey with "?"), the name, a grade
-	           chip, "+$X/s" for cleaned ore, the count, TAKE and PODIUM
+	           chip, "+$X/s" for cleaned ore, the count, TAKE, SEND (the whole
+	           stack onto your belts at the PEN chute) and PODIUM
 	  footer   control hint
 	Pick mode (from a podium's "Place Ore" prompt) lists only cleaned ore
-	with one PLACE button per row.
+	with one PLACE button per row (no toolbar, no TAKE / SEND).
 	Compact layout for phones (uiScale <= 0.75): taller rows and buttons, so
 	touch targets stay >= 44 pt at the smallest UI scale.
 	PenView.entries() turns the State snapshot into sorted rows (pure, tested).
@@ -50,6 +55,7 @@ export type Row = {
 	Income: TextLabel,
 	Count: TextLabel,
 	Take: TextButton,
+	Send: TextButton,
 	Podium: TextButton,
 }
 
@@ -61,6 +67,11 @@ export type Refs = {
 	Bar: Frame,
 	BarFill: Frame,
 	Close: TextButton,
+	Toolbar: Frame,
+	SendDirty: TextButton,
+	SendUnkept: TextButton,
+	StopSend: TextButton,
+	Status: TextLabel,
 	List: ScrollingFrame,
 	Empty: TextLabel,
 	Hint: TextLabel,
@@ -76,6 +87,8 @@ export type Refs = {
 
 PenView.MaxRows = 80
 PenView.DirtyColor = Color3.fromRGB(120, 114, 108)
+PenView.SendColor = Theme.Info
+PenView.SendDark = Color3.fromRGB(46, 104, 164)
 
 local PAD = 16
 local HEADER = 84
@@ -84,9 +97,44 @@ local GAP = 8
 local SCROLLBAR = 12
 
 -- Sizes per layout (design units; the HUD's UIScale shrinks them on phones).
+-- Tool* = the send toolbar under the header (ToolH tall, buttons ToolButtonH).
 local LAYOUTS = {
-	Normal = { Width = 660, RowH = 64, ButtonH = 50, TakeW = 92, PodiumW = 112, Rows = 5, Name = 20, Close = 52 },
-	Compact = { Width = 760, RowH = 86, ButtonH = 72, TakeW = 116, PodiumW = 132, Rows = 4, Name = 22, Close = 72 },
+	Normal = {
+		Width = 740,
+		RowH = 64,
+		ButtonH = 50,
+		TakeW = 92,
+		SendW = 92,
+		PodiumW = 112,
+		Rows = 5,
+		Name = 20,
+		Close = 52,
+		ToolH = 54,
+		ToolButtonH = 44,
+		DirtyW = 190,
+		UnkeptW = 170,
+		StopW = 100,
+		ToolText = 18,
+		StatusText = 16,
+	},
+	Compact = {
+		Width = 800,
+		RowH = 86,
+		ButtonH = 72,
+		TakeW = 108,
+		SendW = 108,
+		PodiumW = 124,
+		Rows = 3,
+		Name = 22,
+		Close = 72,
+		ToolH = 84,
+		ToolButtonH = 72,
+		DirtyW = 214,
+		UnkeptW = 196,
+		StopW = 112,
+		ToolText = 20,
+		StatusText = 19,
+	},
 }
 
 local function layoutOf(refs: Refs): typeof(LAYOUTS.Normal)
@@ -196,6 +244,28 @@ function PenView.keyFor(entry: Entry, roll: number): string?
 		end
 	end
 	return sorted[#sorted]
+end
+
+-- The send toolbar's status line for the State's PenSend (pure): why the
+-- chute waits, "Sending 3…" while items leave, or a short how-to. Also
+-- returns whether it waits and how many items are still to send.
+PenView.SendIdleText = "SEND puts ore on your belts at the PEN chute"
+function PenView.sendText(send: any): (string, boolean, number)
+	if type(send) ~= "table" then
+		return PenView.SendIdleText, false, 0
+	end
+	local function count(v: any): number
+		return if type(v) == "number" and v == v and v < math.huge then math.max(0, math.floor(v)) else 0
+	end
+	local pen, train = count(send.Pen), count(send.Train)
+	local total = pen + train
+	local wait = if type(send.Wait) == "string" and send.Wait ~= "" then send.Wait else nil
+	if total > 0 and wait then
+		return `{Format.big(total)} waiting: {wait}`, true, total
+	elseif total > 0 then
+		return `Sending {Format.big(total)}…`, false, total
+	end
+	return PenView.SendIdleText, false, 0
 end
 
 -- The first podium slot that is unlocked and empty (nil when none).
@@ -340,6 +410,36 @@ function PenView.build(): Refs
 		TextSize = 26,
 	})
 
+	-- the send toolbar (WP-Belts): three buttons and a status line in a row
+	local toolbar = UIKit.new("Frame", {
+		Name = "Toolbar",
+		Position = UDim2.fromOffset(PAD, HEADER),
+		Size = UDim2.new(1, -PAD * 2, 0, LAYOUTS.Normal.ToolH),
+		BackgroundTransparency = 1,
+	}, panel)
+	UIKit.list(toolbar, Enum.FillDirection.Horizontal, 8, { VerticalAlignment = Enum.VerticalAlignment.Center })
+	local sendDirty = UIKit.button(toolbar, "SEND ALL DIRTY", PenView.SendColor, PenView.SendDark, {
+		Name = "SendDirty",
+		LayoutOrder = 1,
+		TextSize = 18,
+	})
+	local sendUnkept = UIKit.button(toolbar, "SEND UNKEPT", PenView.SendColor, PenView.SendDark, {
+		Name = "SendUnkept",
+		LayoutOrder = 2,
+		TextSize = 18,
+	})
+	local stopSend = UIKit.button(toolbar, "STOP", Theme.Bad, Theme.BadDark, {
+		Name = "StopSend",
+		LayoutOrder = 3,
+		TextSize = 18,
+	})
+	local status = UIKit.label(toolbar, "", 16, {
+		Name = "Status",
+		LayoutOrder = 4,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.TextDim,
+	})
+
 	local list = UIKit.new("ScrollingFrame", {
 		Name = "List",
 		Position = UDim2.fromOffset(PAD, HEADER),
@@ -415,6 +515,11 @@ function PenView.build(): Refs
 		Bar = bar,
 		BarFill = barFill,
 		Close = close,
+		Toolbar = toolbar,
+		SendDirty = sendDirty,
+		SendUnkept = sendUnkept,
+		StopSend = stopSend,
+		Status = status,
 		List = list,
 		Empty = empty,
 		Hint = hint,
@@ -442,7 +547,7 @@ local function layoutRow(refs: Refs, row: Row)
 	row.Icon.Position = UDim2.fromOffset(8, 8)
 	row.Mystery.TextSize = math.floor(icon * 0.6)
 	local textX = icon + 18
-	local buttons = l.TakeW + l.PodiumW + 24
+	local buttons = l.TakeW + l.SendW + l.PodiumW + 32
 	local countW = 64
 	local textW = rowW - textX - buttons - countW
 	row.Name.Position = UDim2.fromOffset(textX, 6)
@@ -456,8 +561,11 @@ local function layoutRow(refs: Refs, row: Row)
 	row.Count.Size = UDim2.fromOffset(countW - 6, l.RowH)
 	local buttonY = math.floor((l.RowH - l.ButtonH) / 2) + 3
 	local take = row.Take.Parent :: Frame
-	take.Position = UDim2.fromOffset(rowW - l.PodiumW - l.TakeW - 16, buttonY)
+	take.Position = UDim2.fromOffset(rowW - l.PodiumW - l.SendW - l.TakeW - 24, buttonY)
 	take.Size = UDim2.fromOffset(l.TakeW, l.ButtonH)
+	local sendHolder = row.Send.Parent :: Frame
+	sendHolder.Position = UDim2.fromOffset(rowW - l.PodiumW - l.SendW - 16, buttonY)
+	sendHolder.Size = UDim2.fromOffset(l.SendW, l.ButtonH)
 	local podium = row.Podium.Parent :: Frame
 	podium.Position = UDim2.fromOffset(rowW - l.PodiumW - 8, buttonY)
 	podium.Size = UDim2.fromOffset(l.PodiumW, l.ButtonH)
@@ -506,6 +614,7 @@ local function newRow(refs: Refs, key: string): Row
 		TextWrapped = false,
 	})
 	local take = UIKit.button(frame, "TAKE", Theme.Good, Theme.GoodDark, { Name = "Take", TextSize = 20 })
+	local send = UIKit.button(frame, "SEND", PenView.SendColor, PenView.SendDark, { Name = "Send", TextSize = 20 })
 	local podium = UIKit.button(frame, "PODIUM", Theme.Accent, Theme.AccentDark, { Name = "Podium", TextSize = 20 })
 	local row: Row = {
 		Key = key,
@@ -517,6 +626,7 @@ local function newRow(refs: Refs, key: string): Row
 		Income = income,
 		Count = count,
 		Take = take,
+		Send = send,
 		Podium = podium,
 	}
 	refs.Rows[key] = row
@@ -565,8 +675,10 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 		row.Income.TextColor3 = if entry.Income > 0 then Theme.Good else Theme.TextDim
 		row.Count.Text = "x" .. Format.big(entry.Count)
 		local takeHolder = row.Take.Parent :: Frame
+		local sendHolder = row.Send.Parent :: Frame
 		local podiumHolder = row.Podium.Parent :: Frame
 		takeHolder.Visible = not pick
+		sendHolder.Visible = not pick
 		local podiumOre = entry.Income > 0
 		podiumHolder.Visible = podiumOre and (pick or canPodium)
 		row.Podium.Text = if pick then "PLACE" else "PODIUM"
@@ -605,6 +717,48 @@ function PenView.setHint(refs: Refs, text: string, glyphA: string?, glyphB: stri
 	end
 end
 
+--[[
+	The send toolbar (normal mode only): what is being sent and why it waits
+	(PenView.sendText of the State's PenSend), STOP while something is
+	queued, SEND UNKEPT only with the sorting billboard (`canUnkept`), SEND
+	ALL DIRTY dimmed while the pen holds no dirty ore (`dirty` = how many).
+]]
+function PenView.setSending(refs: Refs, send: any, canUnkept: boolean, dirty: number)
+	local text, waiting, total = PenView.sendText(send)
+	refs.Status.Text = text
+	refs.Status.TextColor3 = if waiting then Theme.Accent else Theme.TextDim
+	local stop = refs.StopSend.Parent :: Frame
+	stop.Visible = total > 0
+	local unkept = refs.SendUnkept.Parent :: Frame
+	unkept.Visible = canUnkept
+	refs.SendDirty.BackgroundColor3 = if dirty > 0 then PenView.SendColor else Theme.PanelLight
+	refs.SendDirty.TextTransparency = if dirty > 0 then 0 else 0.4
+end
+
+-- Panel size, toolbar and list for the current layout and mode.
+local function layoutPanel(refs: Refs)
+	local l = layoutOf(refs)
+	local tool = if refs.Mode == "Pen" then l.ToolH else 0
+	local height = HEADER + tool + l.Rows * l.RowH + (l.Rows - 1) * GAP + 12 + FOOTER
+	refs.Panel.Size = UDim2.fromOffset(l.Width, height)
+	refs.Toolbar.Visible = tool > 0
+	refs.Toolbar.Size = UDim2.new(1, -PAD * 2, 0, l.ToolH)
+	refs.List.Position = UDim2.fromOffset(PAD, HEADER + tool)
+	refs.List.Size = UDim2.new(1, -PAD, 1, -(HEADER + tool + FOOTER))
+	local used = 0
+	local function sizeButton(button: TextButton, width: number)
+		local holder = button.Parent :: Frame
+		holder.Size = UDim2.fromOffset(width, l.ToolButtonH)
+		button.TextSize = l.ToolText
+		used += width + 8
+	end
+	sizeButton(refs.SendDirty, l.DirtyW)
+	sizeButton(refs.SendUnkept, l.UnkeptW)
+	sizeButton(refs.StopSend, l.StopW)
+	refs.Status.Size = UDim2.fromOffset(math.max(80, l.Width - PAD * 2 - used), l.ToolButtonH)
+	refs.Status.TextSize = l.StatusText
+end
+
 -- Normal pen view, or pick mode for one podium slot.
 function PenView.setMode(refs: Refs, mode: Mode, slot: number?)
 	refs.Mode = mode
@@ -616,14 +770,14 @@ function PenView.setMode(refs: Refs, mode: Mode, slot: number?)
 		refs.Title.Text = "ORE PEN"
 		refs.Empty.Text = "Your Ore Pen is empty. Throw or drop ore into the pen to keep it here."
 	end
+	layoutPanel(refs)
 end
 
 -- Phone layout (taller rows and buttons) or the normal one.
 function PenView.setCompact(refs: Refs, compact: boolean)
 	refs.Compact = compact
 	local l = layoutOf(refs)
-	local height = HEADER + l.Rows * l.RowH + (l.Rows - 1) * GAP + 12 + FOOTER
-	refs.Panel.Size = UDim2.fromOffset(l.Width, height)
+	layoutPanel(refs)
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(l.Close, l.Close)
 	refs.Title.TextSize = if compact then 34 else 30

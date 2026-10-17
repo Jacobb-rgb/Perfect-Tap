@@ -42,7 +42,9 @@
 	  its own dirt colors) and animates the trip. A timer wakes the train
 	  exactly at ArriveAt, the 1 s loop is the safety net.
 	- Arrival: TripCargo goes into the Ore Pen up to its capacity
-	  (ItemService.penCapacity). Once empty: trip times cleared,
+	  (ItemService.penCapacity); what went in goes on to PenService.arrived
+	  (step 3 Direct Unload: dirty ore pours onto the TRAIN chute's belt, see
+	  directUnload). Once empty: trip times cleared,
 	  Stats.TrainTrips + 1, Fx "TrainUnload" (plotId, count) to everyone, and
 	  the empty train rolls back for ReturnSeconds before it can load again.
 	- Waiting (shared with the client): when the pen can't take the whole
@@ -104,6 +106,7 @@ local CarryService = require(script.Parent.CarryService)
 local PlotService = require(script.Parent.PlotService)
 local IntakeService = require(script.Parent.IntakeService)
 local EconomyService = require(script.Parent.EconomyService)
+local PenService = require(script.Parent.PenService)
 
 local TrainService = {}
 
@@ -478,6 +481,29 @@ local function broadcast(player: Player, train: Train): boolean
 	return true
 end
 
+---------------------------------------------------------------- Direct Unload (step 3, WP-Belts)
+
+--[[
+	Ore a train just unloaded into the pen goes on to PenService.arrived:
+	with Direct Unload (Upgrades.PenAutomation >= EconomyConfig.PenAutomation.DirectUnload)
+	its dirty ore gets send intents for the TRAIN chute and pours out onto
+	the belt there one by one; with the sorting billboard what the player
+	doesn't keep is sent from the PEN chute. Without a belt on those chutes
+	(or without the upgrades) it simply stays in the pen. The train itself
+	unloads exactly as before (same capacity rule, timing and animation),
+	so a crash or leaving never finds ore anywhere but the pen or a belt.
+]]
+local function directUnload(player: Player, delivered: { Desc })
+	if #delivered > 0 then
+		local ok, err = pcall(function()
+			PenService.arrived(player, delivered, "Train")
+		end)
+		if not ok then
+			warn(`[TrainService] Direct Unload for {player.Name} failed: {err}`)
+		end
+	end
+end
+
 ---------------------------------------------------------------- departure and arrival
 
 local tickPlayer: (Player) -> ()
@@ -543,13 +569,17 @@ local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 	local r = runtimeOf(player)
 	local capacity = ItemService.penCapacity(data)
 	local moved = 0
+	local delivered: { Desc } = {}
 	-- no yield between taking an item off the train and putting it into the pen
 	while #train.TripCargo > 0 and #storage < capacity do
 		local item = table.remove(train.TripCargo, 1) :: Desc
-		table.insert(storage, { K = item.K, O = item.O, G = item.G, R = item.R })
+		local stored = { K = item.K, O = item.O, G = item.G, R = item.R }
+		table.insert(storage, stored)
+		table.insert(delivered, stored)
 		moved += 1
 	end
 	r.Delivered += moved
+	directUnload(player, delivered)
 	local now = serverNow()
 	if #train.TripCargo > 0 then
 		r.NextRetry = now + TrainConfig.DeliveryRetry
