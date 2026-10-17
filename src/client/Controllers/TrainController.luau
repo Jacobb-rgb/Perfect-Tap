@@ -3,24 +3,29 @@
 	chip and the Mine Station panel (design v2, docs/plans/STEP2_PLAN.md).
 
 	Trains (client visuals only; the server keeps nothing but times):
-	- "TrainTrip" { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load }
-	  (a list of them for a joining player) starts a trip, animated from
-	  server time (workspace:GetServerTimeNow()). The legs follow the shares
-	  of TrainConfig.Timeline, but the visible ones never get shorter than
-	  MinQuarrySeconds / MinCoastSeconds / MinArriveSeconds: that time comes
-	  out of the hidden underground leg, so the train still arrives at
-	  ArriveAt (legSpans). The quarry leg runs from the Mine Station into the
-	  visible mouth (PortalInset in front of the line's end, like Railway) of
-	  the quarry portal on the plot's side (west plots x < 0: west portal);
+	- "TrainTrip" { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load,
+	  Waiting? } (a list of them for a joining player) starts a trip,
+	  animated from server time (workspace:GetServerTimeNow()). The legs
+	  follow the shares of TrainConfig.Timeline, but the visible ones never
+	  get shorter than MinQuarrySeconds / MinCoastSeconds / MinArriveSeconds:
+	  that time comes out of the hidden underground leg, so the train still
+	  arrives at ArriveAt (legSpans). The quarry leg runs from the Mine
+	  Station into the visible mouth (PortalInset in front of the line's
+	  end, like Railway) of the quarry portal on the plot's side (west plots
+	  x < 0: west portal);
 	  hidden underground; the coast leg comes out of the south portal and runs
 	  north along TrainConfig.lineFor(plot) to the plot's stop (ease in /
 	  out). At the stop the wagons, not the locomotive, line up with the Ore
 	  Pen (stopAt, kept short of the buffer stop).
 	- At the stop the train waits for the server to unload it: the Fx
-	  "TrainUnload" (plotId, count) or, for your own train, the State
-	  snapshot (Waiting false, Moving 0). While an Ore Pen is full (Waiting:
-	  your snapshot, or TrainTrip's Waiting for everyone's trains) it keeps
-	  standing there loaded. Then only each wagon's "Hopper" tips about its
+	  "TrainUnload" (plotId, count), the late TrainTrip (ArriveAt moved to
+	  the unload, no Waiting) that comes right before that Fx after a wait,
+	  or, for your own train, the State snapshot (Waiting false, Moving 0).
+	  While an Ore Pen is full (TrainTrip's Waiting = true for everyone's
+	  trains; your snapshot's Waiting, or Moving > 0 UnloadGrace seconds
+	  after ArriveAt) it keeps standing there loaded: no tip, no way back,
+	  the chip says "Pen full – make room" (TrainView phase "Waiting").
+	  Then only each wagon's "Hopper" tips about its
 	  "TipPivot" toward the pen (TipUp / TipHold / TipDown seconds); from
 	  PourThreshold to the end of the hold the rocks slide over the lip and
 	  sink (the empty hopper keeps only its dark bed as a floor), dust and
@@ -55,7 +60,9 @@
 	  controller follows the nearest moving locomotive and pulses with its
 	  wheels (the chuff); a short double toot when a train sets off or leaves
 	  the south tunnel (its own sound too: the shared Sfx pool stays free).
-	- Your own train waits at the Mine Station whenever it isn't on a trip:
+	- Your own train waits at the Mine Station whenever it isn't on a trip
+	  (parkedState; never while the snapshot has ore on board, Moving > 0 or
+	  Waiting, except the HoldSeconds handover to its departing trip):
 	  its first wagon on TrainConfig.QuarryStop under the station's loading
 	  chute (Railway's TrainPoint), the locomotive toward your quarry portal,
 	  the ore heap growing with Cargo / Capacity (from a small mound to the
@@ -78,24 +85,33 @@
 	  hides behind it. On phones it sits at the bottom of the screen over the
 	  carry bar, under the coins (when it has to cover them, the HUD coins
 	  hide while it is open).
-	- The server's "Load Train" prompts (tag "TrainPrompt", attribute Action
-	  "Load") only show while you carry something (CarryCount).
-	- Fx "TrainUnload": starts the unload above (dust and glints in that pen
-	  when its train isn't on screen); "TrainLoad" (position): a puff and a
+	- Prompt slots (TrainConfig.PromptSlots, read by TrainService too): the
+	  server's "TrainLoadPrompt" (slot 0, UIOffset (0, 0)) and
+	  "TrainSendPrompt" (slot 1, (0, 72)) are tagged "TrainPrompt"
+	  (TrainConfig.PromptTag); this client's "TrainPanelPrompt" sits in
+	  slot 2 ((0, 144)). The Load prompts (attribute Action "Load") are
+	  Enabled only while you carry something (CarryCount > 0): refreshed
+	  when one is tagged in, when one shows (PromptShown) and when
+	  CarryCount changes (applyLoadPrompt, like PromptController's machine
+	  LoadPrompts).
+	- Fx "TrainUnload": starts the unload above unless the late TrainTrip
+	  already did (takeUnload; dust and glints in that pen when its train
+	  isn't on screen); "TrainLoad" (position): a puff and a
 	  gulp at a hopper (and over your waiting wagon at the station).
 
 	The pure math (ease, legSpans, legAt, poseAt, stopAt, parkedPose,
-	returnSeconds, quarryMouth, wagonFlip, visible, occlude, pourFill,
-	arcHeight, mergeTrip, ...) and the consist builder are exported for the
-	Lune tests and the preview; the
-	controllers it uses are required in init(), so this module also loads
-	outside Roblox.
+	parkedState, returnSeconds, quarryMouth, wagonFlip, visible, occlude,
+	pourFill, arcHeight, mergeTrip, takeUnload, snapshotNews, applySnapshot,
+	snapshotTrip, ...), the prompt helpers and the consist builder are
+	exported for the Lune tests and the preview; the controllers it uses are
+	required in init(), so this module also loads outside Roblox.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
@@ -137,8 +153,8 @@ local TrainController = {}
 TrainController.BuildRange = 300 -- trains closer than this to the camera are built and animated
 TrainController.DropRange = 340 -- ...and dropped again past this
 TrainController.HideDepth = 44 -- studs a train runs on inside a tunnel (a locomotive + 2 wagons fit)
-TrainController.PortalInset = 6 -- Railway: the quarry mouths stand this far in front of the line's ends
-TrainController.BufferGap = 1.7 -- Railway: the coastal buffer stops' face, past the line's end
+TrainController.PortalInset = TrainConfig.PortalInset -- the quarry mouths stand this far in front of the line's ends (as Railway)
+TrainController.BufferGap = TrainConfig.BufferGap -- the coastal buffer stops' face, past the line's end (as Railway)
 TrainController.LocoFront = 7.25 -- TrainBuilder: the locomotive's front buffers, ahead of its Root
 TrainController.LocoBack = 7.15 -- ...its back coupler, behind the Root
 TrainController.WagonLength = 12 -- a wagon, coupler to coupler
@@ -161,9 +177,17 @@ TrainController.HeapDrop = 2.2 -- how far the ore rocks sink in an almost empty 
 TrainController.BedDrop = 1.3 -- ...and the dark bed under them (at 0 it is the empty hopper's floor)
 TrainController.PourSlide = 3 -- studs the rocks slide toward the lip while they pour out
 TrainController.OcclusionSlack = 0.05 -- cars of two trains may touch by this much before one hides
-TrainController.PromptSlot = 2 -- TrainService's prompt slots: Load 0, Send 1, this panel prompt 2
-TrainController.PromptSlotHeight = 72 -- UIOffset pixels per slot (TrainService.PromptSlotHeight)
+TrainController.PromptSlot = TrainConfig.PromptSlots.Panel -- the shared prompt slots: Load 0, Send 1 (the server's), this panel prompt 2
+TrainController.PromptSlotHeight = TrainConfig.PromptSlotHeight -- UIOffset pixels per slot (as TrainService)
 TrainController.PromptDistance = 10 -- as TrainService's prompts
+TrainController.PanelPromptName = "TrainPanelPrompt" -- never "TrainLoadPrompt" / "TrainSendPrompt" (the server's)
+TrainController.PromptTag = TrainConfig.PromptTag -- the server's Load / Send prompts carry it (as TrainService)
+TrainController.HoldSeconds = 3 -- your departing train stands at the station this long for its TrainTrip to take it over
+-- No TrainTrip yet this long after the snapshot's DepartAt: your trip is made from the snapshot
+-- (before the hold ends, so it still takes the standing train over; the 4 Hz sync has time)
+TrainController.SnapshotTripGrace = TrainController.HoldSeconds - 1
+TrainController.UnloadMatch = 3 -- seconds: an unload Fx belongs to a trip arriving / unloading this close to it
+TrainController.MaxTripSpan = TrainConfig.MaxTripSpan -- a TrainTrip longer than this is junk (as TrainService)
 -- dirty ore in a wagon (the ores stay secret until cleaned): Kenney's warm
 -- carriage-dirt clay, so a load reads at a glance
 TrainController.DirtyLoad = { Color3.fromRGB(196, 134, 88), Color3.fromRGB(170, 112, 76), Color3.fromRGB(218, 160, 112) }
@@ -861,7 +885,7 @@ function TrainController.parseTrip(raw: any, fallbackColor: ((number) -> Color3)
 	if type(userId) ~= "number" or type(plotId) ~= "number" or not WorldLayout.Plots[plotId] then
 		return nil
 	end
-	if not finite(departAt) or not finite(arriveAt) or arriveAt <= departAt or arriveAt - departAt > 600 then
+	if not finite(departAt) or not finite(arriveAt) or arriveAt <= departAt or arriveAt - departAt > TrainController.MaxTripSpan then
 		return nil
 	end
 	local load: { Color3 } = {}
@@ -910,10 +934,14 @@ end
 	Waiting announcement, or the late unload with its new ArriveAt); a moved
 	DepartAt on a train that stands at its stop with the same look is the
 	late unload after a very long wait (the server shifts DepartAt to stay
-	under MaxTripSpan). Both keep what this screen knows (UnloadAt, Quiet),
-	take the new times and Waiting (a TrainTrip without it clears it) and
-	the richer look. Anything else is a new trip. Returns the trip to keep
-	and whether its train must be rebuilt (its look changed).
+	under MaxTripSpan; also when its Fx came first and started the unload).
+	Both keep what this screen knows (UnloadAt, Quiet), take the new times
+	and Waiting (a TrainTrip without it clears it) and the richer look.
+	Anything else is a new trip. Returns the trip to keep and whether its
+	train must be rebuilt (its look changed).
+	The late unload (no Waiting, ArriveAt moved to about now) also starts
+	the tip and the way back: UnloadAt = now (the Fx "TrainUnload" that
+	follows finds it started, see takeUnload).
 ]]
 function TrainController.mergeTrip(existing: Trip?, incoming: Trip, now: number): (Trip, boolean)
 	if not existing then
@@ -925,10 +953,12 @@ function TrainController.mergeTrip(existing: Trip?, incoming: Trip, now: number)
 		and existing.Color == incoming.Color
 		and sameColors(existing.Load, incoming.Load)
 	-- (TrainService: DepartAt = the unload - the trip's seconds, ArriveAt = the unload, i.e. now;
-	-- a new departure arrives in the future)
+	-- a new departure arrives in the future. Its Fx normally comes after it; one that came first
+	-- already started this unload, within UnloadMatch of the new ArriveAt)
+	local startedAt = existing.UnloadAt
 	local shifted = not same
 		and sameLook
-		and existing.UnloadAt == nil
+		and (startedAt == nil or math.abs(startedAt - incoming.ArriveAt) <= TrainController.UnloadMatch)
 		and now >= existing.ArriveAt
 		and incoming.ArriveAt >= existing.ArriveAt
 		and incoming.ArriveAt <= now + 1
@@ -936,6 +966,11 @@ function TrainController.mergeTrip(existing: Trip?, incoming: Trip, now: number)
 	if not same and not shifted then
 		return incoming, true
 	end
+	-- the late unload: it stood at its stop and its ArriveAt moved to the unload (now): it tips
+	local unloads = existing.UnloadAt == nil
+		and incoming.Waiting ~= true
+		and incoming.ArriveAt <= now + 1
+		and (shifted or incoming.ArriveAt > existing.ArriveAt + 1e-3)
 	-- (a payload without load colors never replaces one with them)
 	local look = if #incoming.Load > 0 or #existing.Load == 0 then incoming else existing
 	local merged: Trip = {
@@ -946,7 +981,7 @@ function TrainController.mergeTrip(existing: Trip?, incoming: Trip, now: number)
 		Count = look.Count,
 		Color = look.Color,
 		Load = look.Load,
-		UnloadAt = existing.UnloadAt,
+		UnloadAt = if unloads then math.max(now, incoming.ArriveAt) else existing.UnloadAt,
 		Waiting = incoming.Waiting,
 		Quiet = existing.Quiet,
 	}
@@ -957,13 +992,16 @@ function TrainController.mergeTrip(existing: Trip?, incoming: Trip, now: number)
 	return merged, rebuild
 end
 
+export type SnapshotNews = "Waiting" | "Unloaded" | "Gone"
+
 --[[
 	What the client knows about your trip after a State snapshot (pure):
-	"Waiting" (at the stop, pen full), "Unloaded" (the server unloaded it),
-	"Gone" (the server has no trip any more: it was delivered without an
-	animation) or nil (nothing new).
+	"Waiting" (at the stop, pen full: the snapshot's Waiting, or still
+	loaded UnloadGrace seconds after the arrival, TrainView.waiting),
+	"Unloaded" (the server unloaded it), "Gone" (the server has no trip any
+	more: it was delivered without an animation) or nil (nothing new).
 ]]
-function TrainController.snapshotNews(trip: Trip, train: TrainView.Snapshot, now: number): ("Waiting" | "Unloaded" | "Gone")?
+function TrainController.snapshotNews(trip: Trip, train: TrainView.Snapshot, now: number): SnapshotNews?
 	if trip.UnloadAt then
 		return nil
 	end
@@ -974,12 +1012,148 @@ function TrainController.snapshotNews(trip: Trip, train: TrainView.Snapshot, now
 	if math.abs(departAt - trip.DepartAt) > 0.5 then
 		return nil
 	end
-	if train.Waiting then
+	if TrainView.waiting(train, now) then
 		return "Waiting"
 	elseif train.Moving == 0 and now >= arriveAt then
 		return "Unloaded"
 	end
 	return nil
+end
+
+--[[
+	A State snapshot applied to your trip on this screen (pure, changes
+	`trip`): "Waiting" keeps it standing loaded at the stop, "Unloaded"
+	starts the tip and the way back now. Returns the news (snapshotNews);
+	on "Gone" the caller drops the trip and its train.
+]]
+function TrainController.applySnapshot(trip: Trip, train: TrainView.Snapshot, now: number): SnapshotNews?
+	local news: SnapshotNews? = TrainController.snapshotNews(trip, train, now)
+	if news == "Waiting" then
+		trip.Waiting = true
+	elseif news == "Unloaded" then
+		trip.UnloadAt = math.max(now, trip.ArriveAt)
+		trip.Waiting = nil
+	end
+	return news
+end
+
+--[[
+	An Fx "TrainUnload" for plot `plotId` and a trip we know (pure): a trip
+	at that plot that stands at (or is just reaching) its stop unloads now
+	(UnloadAt = now, Waiting cleared). Returns true when the trip unloads
+	now, also when its late TrainTrip started the unload a moment ago
+	(mergeTrip), so its train pours instead of the pen's stand-in dust.
+]]
+function TrainController.takeUnload(trip: Trip, plotId: number, now: number): boolean
+	if trip.PlotId ~= plotId then
+		return false
+	end
+	local unloadAt = trip.UnloadAt
+	if unloadAt then
+		return not trip.Quiet and math.abs(now - unloadAt) <= TrainController.UnloadMatch
+	end
+	if now < trip.ArriveAt - TrainController.UnloadMatch then
+		return false
+	end
+	trip.UnloadAt = math.max(now, trip.ArriveAt)
+	trip.Waiting = nil
+	return true
+end
+
+--[[
+	Has another player's train stood at its stop too long without an unload
+	(pure)? Only when it isn't Waiting (the server said its pen is full: it
+	stands there as long as that lasts) and HoldLimit seconds have passed
+	since its arrival; your own train always waits for the server.
+]]
+function TrainController.holdExpired(trip: Trip, mine: boolean, now: number): boolean
+	return not mine and trip.UnloadAt == nil and trip.Waiting ~= true and now > trip.ArriveAt + TrainController.HoldLimit
+end
+
+--[[
+	Your trip made from the State snapshot alone (pure), for when no
+	TrainTrip came for it SnapshotTripGrace seconds after the snapshot's
+	DepartAt (the event with the load colors normally comes with the
+	snapshot). `known` is the trip this screen has: it is only replaced by a
+	newer departure once it unloaded. Count = the ore on board, no load
+	colors (the client's dirt colors); a trip that already unloaded (Moving
+	0, ArriveAt = the unload) only rolls back. nil: nothing to add.
+]]
+function TrainController.snapshotTrip(
+	known: Trip?,
+	train: TrainView.Snapshot,
+	userId: number,
+	plot: WorldLayout.Plot,
+	colorOf: (number) -> Color3,
+	now: number
+): Trip?
+	local departAt, arriveAt = train.DepartAt, train.ArriveAt
+	if not departAt or not arriveAt or arriveAt <= departAt or now <= departAt + TrainController.SnapshotTripGrace then
+		return nil
+	end
+	if known and (known.UnloadAt == nil or departAt <= known.DepartAt + 0.5) then
+		return nil
+	end
+	local trip: Trip = {
+		UserId = userId,
+		PlotId = plot.Id,
+		DepartAt = departAt,
+		ArriveAt = arriveAt,
+		Count = math.max(1, train.Moving),
+		Color = colorOf(plot.Id),
+		Load = {},
+		Waiting = if TrainView.waiting(train, now) then true else nil,
+	}
+	if train.Moving == 0 then
+		-- already unloaded (ArriveAt is when): only the way back is left
+		if now >= arriveAt + TrainController.returnSeconds(plot, TrainController.wagonCount(trip.Count)) then
+			return nil
+		end
+		trip.UnloadAt = arriveAt
+	end
+	return trip
+end
+
+export type ParkedState = "Parked" | "Hold" | "Away"
+
+--[[
+	Where your own train is for the Mine Station (pure), from the State
+	snapshot and your trip on this screen (`mine`):
+	- "Away": on a trip, standing at your stop (Waiting at a full pen) or
+	  not back yet. While the snapshot has ore on board (Moving > 0) or
+	  says Waiting, no train ever stands at the station.
+	- "Hold": the snapshot says it just left (HoldSeconds) but its
+	  TrainTrip hasn't come yet: the train already standing there keeps
+	  standing (nothing new is built), so the trip takes it over.
+	- "Parked": at the station; the second value is when it began to back
+	  in after a trip (rollInAt), nil when it simply stands there.
+]]
+function TrainController.parkedState(train: TrainView.Snapshot?, mine: Trip?, now: number): (ParkedState, number?)
+	if not train then
+		return "Away", nil
+	end
+	local rollFrom: number? = nil
+	local away = false
+	if mine then
+		local unloadAt = mine.UnloadAt
+		rollFrom = if unloadAt then TrainController.rollInAt(unloadAt) else nil
+		away = rollFrom == nil or now < rollFrom
+	end
+	local departAt, arriveAt = train.DepartAt, train.ArriveAt
+	if train.Moving > 0 or train.Waiting then
+		-- (a trip still rolling home from before is not this one)
+		local known = mine ~= nil and departAt ~= nil and math.abs(mine.DepartAt - departAt) < 0.5
+		local leaving = departAt ~= nil and not train.Waiting and now < departAt + TrainController.HoldSeconds
+		if leaving and not known and not away then
+			return "Hold", nil
+		end
+		return "Away", nil
+	elseif departAt and arriveAt and now >= departAt - 1 then
+		-- unloaded at ArriveAt: it backs into the station from rollInAt
+		local from = rollFrom or TrainController.rollInAt(arriveAt)
+		return if away or now < from then "Away" else "Parked", from
+	end
+	return if away then "Away" else "Parked", rollFrom
 end
 
 -- What a consist is built from: spare trains are reused for the same key.
@@ -1801,53 +1975,25 @@ end
 
 --[[
 	Your train at the Mine Station (from the State snapshot) whenever it
-	isn't away: on a trip or waiting at a full pen; after an unload it backs
-	into the station from rollInAt. When the snapshot says it just left but
-	its TrainTrip hasn't come yet, it keeps standing so the trip can take it
-	over. Returns the train to show and its pose.
+	isn't away (parkedState): never while it has ore on board (on a trip or
+	waiting at a full pen); after an unload it backs into the station from
+	rollInAt. When the snapshot says it just left but its TrainTrip hasn't
+	come yet, it keeps standing so the trip can take it over. Returns the
+	train to show and its pose.
 ]]
 local function prepareParked(now: number, eye: Vector3, canBuild: boolean): (Consist?, Pose?)
 	local plot = myPlot()
 	local train = snapshot
-	local mine = trips[myId()]
-	local away = false
-	local hold = false
-	local rollFrom: number? = nil
-	if mine then
-		local unloadAt = mine.UnloadAt
-		rollFrom = if unloadAt then TrainController.rollInAt(unloadAt) else nil
-		away = rollFrom == nil or now < rollFrom
-	end
-	if train then
-		local departAt, arriveAt = train.DepartAt, train.ArriveAt
-		if departAt and arriveAt and now >= departAt - 1 then
-			if train.Moving > 0 or train.Waiting then
-				-- (a trip still rolling home from before is not this one)
-				local known = mine ~= nil and math.abs(mine.DepartAt - departAt) < 0.5
-				if not known and now < departAt + 3 then
-					hold = true
-				else
-					away = true
-				end
-			else
-				-- unloaded at ArriveAt: it backs into the station from rollInAt
-				local from = rollFrom or TrainController.rollInAt(arriveAt)
-				rollFrom = from
-				if now < from then
-					away = true
-				end
-			end
-		end
-	end
+	local state, rollFrom = TrainController.parkedState(train, trips[myId()], now)
 	local current = parked
-	if hold and not away then
+	if state == "Hold" then
 		-- (it stands still until its trip takes it over)
 		if current and plot then
 			return current, TrainController.parkedPose(plot, nil)
 		end
 		return nil, nil
 	end
-	if not plot or not train or away then
+	if not plot or not train or state == "Away" then
 		if current then
 			parked = nil
 			stash(current)
@@ -1929,7 +2075,7 @@ local function step()
 		if not trip then
 			continue
 		end
-		if not trip.UnloadAt and not trip.Waiting and userId ~= mineId and now > trip.ArriveAt + TrainController.HoldLimit then
+		if TrainController.holdExpired(trip, userId == mineId, now) then
 			-- its unload never came (and the server never said its pen is full): it leaves without tipping
 			trip.UnloadAt = now - TrainController.unloadSeconds()
 			trip.Quiet = true
@@ -2136,7 +2282,7 @@ local function send()
 	if not current.CanSend then
 		if current.Phase == "Moving" or current.Phase == "Unloading" then
 			deny("Your train is on its way. It comes back after the delivery.")
-		elseif current.Phase == "PenFull" then
+		elseif current.Phase == "Waiting" then
 			deny("Your Ore Pen is full: make room so your train can unload.")
 		elseif current.Phase == "Returning" then
 			deny("Your train is on its way back to the Mine.")
@@ -2319,9 +2465,8 @@ local function onTrip(payload: any)
 	end
 end
 
--- Your trip against the State snapshot: waiting at a full pen, unloaded, or
--- missing (no TrainTrip event came for it: added after 2 s of grace, the event
--- with the load colors normally comes with the snapshot).
+-- Your trip against the State snapshot (applySnapshot): waiting at a full
+-- pen, unloaded, gone, or missing (snapshotTrip: no TrainTrip came for it).
 local function syncSnapshotTrip()
 	local train = snapshot
 	local me = player
@@ -2331,48 +2476,18 @@ local function syncSnapshotTrip()
 	end
 	local now = serverNow()
 	local known = trips[me.UserId]
-	if known then
-		local news = TrainController.snapshotNews(known, train, now)
-		if news == "Waiting" then
-			known.Waiting = true
-		elseif news == "Unloaded" then
-			known.UnloadAt = math.max(now, known.ArriveAt)
-			known.Waiting = false
-		elseif news == "Gone" then
-			trips[me.UserId] = nil
-			if built[me.UserId] then
-				dropBuilt(me.UserId)
-				builtCount -= 1
-			end
+	if known and TrainController.applySnapshot(known, train, now) == "Gone" then
+		trips[me.UserId] = nil
+		if built[me.UserId] then
+			dropBuilt(me.UserId)
+			builtCount -= 1
 		end
-		local departAt = train.DepartAt
-		local newer = departAt ~= nil and known.UnloadAt ~= nil and departAt > known.DepartAt + 0.5
-		if not newer then
-			return
-		end
-	end
-	local departAt, arriveAt = train.DepartAt, train.ArriveAt
-	if not departAt or not arriveAt or arriveAt <= departAt or now <= departAt + 2 then
 		return
 	end
-	local trip: Trip = {
-		UserId = me.UserId,
-		PlotId = plot.Id,
-		DepartAt = departAt,
-		ArriveAt = arriveAt,
-		Count = math.max(1, train.Moving),
-		Color = bannerColor(plot.Id),
-		Load = {},
-		Waiting = train.Waiting,
-	}
-	if train.Moving == 0 then
-		-- already unloaded (ArriveAt is when): only the way back is left
-		if now >= arriveAt + TrainController.returnSeconds(plot, TrainController.wagonCount(trip.Count)) then
-			return
-		end
-		trip.UnloadAt = arriveAt
+	local trip = TrainController.snapshotTrip(known, train, me.UserId, plot, bannerColor, now)
+	if trip then
+		addTrip(trip)
 	end
-	addTrip(trip)
 end
 
 local function onState(state: { [string]: any })
@@ -2396,7 +2511,8 @@ local function onState(state: { [string]: any })
 end
 
 -- The server unloaded a plot's train: its hoppers tip now (or, when it isn't
--- on screen, dust and glints in that pen).
+-- on screen, dust and glints in that pen). A train waiting at a full pen
+-- tips here or at its late TrainTrip, whichever comes first (takeUnload).
 local function onUnload(plotId: any, count: any)
 	local plot = if type(plotId) == "number" then WorldLayout.Plots[plotId] else nil
 	local camera = Workspace.CurrentCamera
@@ -2406,9 +2522,7 @@ local function onUnload(plotId: any, count: any)
 	local now = serverNow()
 	local shown = false
 	for userId, trip in trips do
-		if trip.PlotId == plot.Id and not trip.UnloadAt and now >= trip.ArriveAt - 3 then
-			trip.UnloadAt = math.max(now, trip.ArriveAt)
-			trip.Waiting = false
+		if TrainController.takeUnload(trip, plot.Id, now) then
 			local consist = built[userId]
 			shown = shown or (consist ~= nil and consist.Vehicles[1].Shown)
 		end
@@ -2443,24 +2557,35 @@ end
 
 ---------------------------------------------------------------- prompts
 
-local PANEL_PROMPT = "TrainPanelPrompt"
+--[[
+	The prompt rules (TrainConfig.PromptSlots / PromptSlotHeight / PromptTag,
+	the same numbers TrainService uses): on every Mine Station and Mine Lift
+	PromptPoint the server's "TrainLoadPrompt" (slot 0, UIOffset (0, 0),
+	F / Y) and "TrainSendPrompt" (slot 1, (0, 72), G / B) are tagged
+	"TrainPrompt"; this client adds its own "TrainPanelPrompt" in slot 2
+	((0, 144), T / L3), untagged, so the three never overlap or share keys.
+]]
+function TrainController.makePanelPrompt(objectText: string): ProximityPrompt
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = TrainController.PanelPromptName
+	prompt.ActionText = "Train"
+	prompt.ObjectText = objectText
+	prompt.KeyboardKeyCode = Enum.KeyCode.T
+	prompt.GamepadKeyCode = Enum.KeyCode.ButtonL3
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = TrainController.PromptDistance
+	prompt.RequiresLineOfSight = false
+	prompt.UIOffset = Vector2.new(0, TrainController.PromptSlot * TrainController.PromptSlotHeight)
+	return prompt
+end
 
 -- The "Train" panel prompt on a station's / lift's PromptPoint (slot 2, under the server's Load and Send).
 local function addPrompt(root: Instance, objectText: string)
 	local function attach(point: Instance)
-		if not point:IsA("Attachment") or point.Name ~= "PromptPoint" or point:FindFirstChild(PANEL_PROMPT) then
+		if not point:IsA("Attachment") or point.Name ~= "PromptPoint" or point:FindFirstChild(TrainController.PanelPromptName) then
 			return
 		end
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = PANEL_PROMPT
-		prompt.ActionText = "Train"
-		prompt.ObjectText = objectText
-		prompt.KeyboardKeyCode = Enum.KeyCode.T
-		prompt.GamepadKeyCode = Enum.KeyCode.ButtonL3
-		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = TrainController.PromptDistance
-		prompt.RequiresLineOfSight = false
-		prompt.UIOffset = Vector2.new(0, TrainController.PromptSlot * TrainController.PromptSlotHeight)
+		local prompt = TrainController.makePanelPrompt(objectText)
 		prompt.Parent = point
 		prompt.Triggered:Connect(function()
 			TrainController.open()
@@ -2473,28 +2598,42 @@ local function addPrompt(root: Instance, objectText: string)
 	root.DescendantAdded:Connect(attach)
 end
 
-local function carrying(): boolean
-	local me = player
-	local count = me and me:GetAttribute("CarryCount")
-	return type(count) == "number" and count > 0
-end
-
--- The server's "Load Train" prompt (tag TrainPrompt, Action "Load") shows while you carry something.
-local function showLoadPrompt(instance: Instance, on: boolean)
-	if instance:IsA("ProximityPrompt") and instance:GetAttribute("Action") == "Load" then
+--[[
+	The server's "Load Train" prompts (tag "TrainPrompt", Action "Load") are
+	Enabled only while you carry something (CarryCount > 0), like
+	PromptController's machine LoadPrompts; the server never changes Enabled
+	after creating them, so this local choice sticks. Every other prompt
+	(Send, the panel prompt) is left alone. Returns true when it is a Load
+	prompt.
+]]
+function TrainController.applyLoadPrompt(instance: Instance, carryCount: any): boolean
+	if not instance:IsA("ProximityPrompt") or not instance:HasTag(TrainController.PromptTag) then
+		return false
+	end
+	if instance:GetAttribute("Action") ~= "Load" then
+		return false
+	end
+	local on = type(carryCount) == "number" and carryCount > 0
+	if instance.Enabled ~= on then
 		instance.Enabled = on
 	end
+	return true
+end
+
+local function carryCount(): any
+	local me = player
+	return if me then me:GetAttribute("CarryCount") else nil
 end
 
 local function trackLoadPrompt(instance: Instance)
-	showLoadPrompt(instance, carrying())
+	TrainController.applyLoadPrompt(instance, carryCount())
 end
 
 -- (looked up by tag each time: no table of prompts that could miss one or keep a destroyed one)
 local function refreshLoadPrompts()
-	local on = carrying()
-	for _, prompt in CollectionService:GetTagged("TrainPrompt") do
-		showLoadPrompt(prompt, on)
+	local count = carryCount()
+	for _, prompt in CollectionService:GetTagged(TrainController.PromptTag) do
+		TrainController.applyLoadPrompt(prompt, count)
 	end
 end
 
@@ -2598,10 +2737,12 @@ function TrainController.start()
 	for _, lift in CollectionService:GetTagged("MineLift") do
 		addPrompt(lift, "Mine Lift")
 	end
-	CollectionService:GetInstanceAddedSignal("TrainPrompt"):Connect(trackLoadPrompt)
-	for _, prompt in CollectionService:GetTagged("TrainPrompt") do
+	CollectionService:GetInstanceAddedSignal(TrainController.PromptTag):Connect(trackLoadPrompt)
+	for _, prompt in CollectionService:GetTagged(TrainController.PromptTag) do
 		trackLoadPrompt(prompt)
 	end
+	-- (a Load prompt that shows anyway, e.g. streamed in before its tag signal ran, is checked again)
+	ProximityPromptService.PromptShown:Connect(trackLoadPrompt)
 	local me = player
 	if me then
 		-- (an item's CarriedBy may arrive a moment after CarryCount: refresh twice, like PromptController)

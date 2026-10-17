@@ -20,7 +20,7 @@
 	  has room and the train is at the station; otherwise it bounces back out
 	  toward the prompts with a throttled toast that says why (on its way /
 	  waiting at a full pen / coming back / full).
-	- Prompt rules (shared with the client; TrainService.PromptSlots): each
+	- Prompt rules (shared with the client; TrainConfig.PromptSlots): each
 	  hook gets two ProximityPrompts at the "PromptPoint" attachment of its
 	  station / lift (searched from the ancestor tagged "TrainStation" or
 	  "MineLift"), tagged "TrainPrompt", with attributes Action = "Load" |
@@ -168,14 +168,15 @@ type SessionTrip = {
 TrainService.HookTag = "TrainHopper"
 TrainService.StationTag = "TrainStation"
 TrainService.LiftTag = "MineLift"
-TrainService.PromptTag = "TrainPrompt"
-TrainService.PromptSlotHeight = 72 -- UIOffset pixels per prompt slot (as IntakeService's machine prompts)
--- The prompt rules (header): Load and Send are the server's, Panel is the client's "Train" prompt.
-TrainService.PromptSlots = { Load = 0, Send = 1, Panel = 2 }
+-- The prompt rules (header; the numbers live in TrainConfig, the client reads the same ones):
+-- Load and Send are the server's, Panel is the client's "Train" prompt.
+TrainService.PromptTag = TrainConfig.PromptTag
+TrainService.PromptSlotHeight = TrainConfig.PromptSlotHeight -- UIOffset pixels per prompt slot (as IntakeService's machine prompts)
+TrainService.PromptSlots = TrainConfig.PromptSlots
 TrainService.LoadRange = 14 -- studs from a hook's prompt point for "Load Train"
 TrainService.FxRange = 90 -- players this close to a hopper see its TrainLoad puff
 TrainService.JoinGrace = 10 -- seconds after joining before a full cargo leaves by itself
-TrainService.MaxTripSpan = 600 -- clients ignore a TrainTrip with ArriveAt - DepartAt above this
+TrainService.MaxTripSpan = TrainConfig.MaxTripSpan -- clients ignore a TrainTrip with ArriveAt - DepartAt above this
 TrainService.FullText = "Your train is full – press Send"
 TrainService.AwayText = "Your train is on its way"
 TrainService.ReturnText = "Your train is coming back"
