@@ -49,6 +49,7 @@ local function exportNode(instance): any?
 			node.img = tostring(instance.Image)
 			node.it = instance.ImageTransparency
 			node.ic = hex(instance.ImageColor3)
+			node.icon = instance:GetAttribute("Icon") -- 3D UI icon name (tools/preview/icons), shown from build/preview/icons
 		end
 	elseif class == "UICorner" then
 		node.r = { instance.CornerRadius.Scale, instance.CornerRadius.Offset }

@@ -79,6 +79,14 @@ function styleElement(el, node, w, h) {
       el.style.boxShadow = `0 0 0 ${s.th}px ${rgba(s.col, 1 - s.t)}`;
     }
   }
+  if (node.icon) {
+    // 3D UI icon (tools/preview/render_icons.mjs output), ScaleType Fit
+    const img = document.createElement("img");
+    img.src = `/scenes/icons/${node.icon}.png`;
+    img.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;";
+    img.style.opacity = String(1 - (node.it || 0));
+    el.appendChild(img);
+  }
   if (node.rot) el.style.transform = `rotate(${node.rot}deg)`;
   if (node.clip) el.style.overflow = "hidden";
   el.style.zIndex = String(node.z || 1);

@@ -1,0 +1,51 @@
+-- HudBubble (the light "Bubble" HUD, pure builder) under Lune: every menu tile,
+-- teleport tab and hotbar slot exists, uses an uploaded-icon name, and stays
+-- >= 44 pt to tap on phones (uiScale 0.62).
+return function(T, Loader)
+	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+	local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+
+	T.test("HudBubble: tiles, tabs and slots exist with known icons and roles", function()
+		for _, scale in { 1.25, 0.62 } do
+			local refs = HudBubble.build(scale)
+			T.truthy(refs.Gui:GetAttribute("TerraForge"), "UIScale applies")
+			for _, entry in HudBubble.Menu do
+				T.truthy(refs.Menu[entry.Id], "tile " .. entry.Id)
+				T.truthy(IconAssets.Ids[entry.Icon] ~= nil, "icon listed " .. entry.Icon)
+				T.truthy(BubbleTheme.Roles[entry.Role], "role " .. entry.Role)
+			end
+			for _, spot in HudBubble.Spots do
+				T.truthy(refs.Tabs[spot.Id], "tab " .. spot.Id)
+				T.truthy(IconAssets.Ids[spot.Icon] ~= nil, "icon listed " .. spot.Icon)
+			end
+			T.eq(#refs.Slots, HudBubble.layout(scale).Slots, "hotbar slots")
+		end
+	end)
+
+	T.test("HudBubble: phone layout keeps touch targets >= 44 pt", function()
+		local layout = HudBubble.layout(0.62)
+		T.truthy(layout.Compact, "compact on phones")
+		T.truthy(layout.Tile * 0.62 >= 44, "menu tiles")
+		T.truthy(layout.TabHeight * 0.62 >= 44, "teleport tabs")
+		T.truthy(layout.Slot * 0.62 >= 44, "hotbar slots")
+		T.falsy(HudBubble.layout(1.25).Compact, "full layout on PC")
+	end)
+
+	T.test("HudBubble: setSlot puts an icon in and outlines the held slot", function()
+		local refs = HudBubble.build(1)
+		HudBubble.setSlot(refs.Slots[1], "blaster", true)
+		local face = refs.Slots[1]:FindFirstChild("Face")
+		local icon = face:FindFirstChild("Icon")
+		T.eq(icon:GetAttribute("Icon"), "blaster", "icon name")
+		T.eq(face:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Gold, "held slot is gold")
+		HudBubble.setSlot(refs.Slots[1], nil, false)
+		T.falsy(face:FindFirstChild("Icon"), "cleared")
+		T.eq(face:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Outline, "plain outline again")
+	end)
+
+	T.test("IconAssets: an icon without an upload gives an empty image", function()
+		T.eq(IconAssets.image("coin"), "", "not uploaded yet")
+		T.eq(IconAssets.image("nope"), "", "unknown icon")
+	end)
+end
