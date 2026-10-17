@@ -16,7 +16,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
-local ToolData = require(Shared.Config.ToolData)
+local GearConfig = require(Shared.Config.GearConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
@@ -36,10 +36,11 @@ function CarryService.onPickup(callback: (Player, ItemService.ItemRecord) -> ())
 	table.insert(pickupCallbacks, callback)
 end
 
+-- Items the player can carry: the Backpack gear line (GearConfig; the old
+-- CarryLevel was folded into it by Migrations), doubled by StrongBack.
 function CarryService.capacity(player: Player): number
 	local data = DataService.get(player)
-	local level = if data then data.CarryLevel else 1
-	return ToolData.carryCapacity(level, Perks.has(player, "StrongBack"))
+	return GearConfig.carryCapacity(if data then data.Gear else nil, Perks.has(player, "StrongBack"))
 end
 
 function CarryService.list(player: Player): { ItemService.ItemRecord }
@@ -132,7 +133,7 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 		carried[player] = list
 	end
 	if #list >= CarryService.capacity(player) then
-		Net.fire("Notify", player, { Text = "Your hands are full! Upgrade your carry gear at the Tool Smithy.", Kind = "Deny" })
+		Net.fire("Notify", player, { Text = "Your hands are full! A bigger Ore Backpack from the SHOP holds more.", Kind = "Deny" })
 		return false
 	end
 	table.insert(list, record)

@@ -1,0 +1,1303 @@
+-- Steps 6-7 P0 contracts: gear, enchants, boosts, golems + capsules, wheel,
+-- artifacts + story, leaderboards, monetization placeholders, the new save
+-- records and their migration, the Bonuses helper, shards and the policy
+-- wrapper. Odds always sum to 1 (also boosted), boosts favour rarer results,
+-- prices climb, leaderboard numbers survive the round trip in order, and no
+-- name borrows from Minecraft.
+return function(T, Loader)
+	local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
+	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+	local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
+	local GearConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GearConfig")
+	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+	local LeaderboardConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LeaderboardConfig")
+	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
+	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
+	local StoryConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StoryConfig")
+	local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
+	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
+	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
+	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
+	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+	local Shards = Loader.requirePath("ServerScriptService.Server.Shards")
+	local Policy = Loader.requirePath("ServerScriptService.Server.Policy")
+
+	local EPS = 1e-9
+	local NOW = 1_800_000_000
+
+	local function sum(list: { any }, field: string): number
+		local total = 0
+		for _, line in list do
+			total += line[field]
+		end
+		return total
+	end
+
+	local function deepEqual(a: any, b: any): boolean
+		if type(a) ~= type(b) then
+			return false
+		end
+		if type(a) ~= "table" then
+			return a == b
+		end
+		for k, v in a do
+			if not deepEqual(v, b[k]) then
+				return false
+			end
+		end
+		for k in b do
+			if a[k] == nil then
+				return false
+			end
+		end
+		return true
+	end
+
+	local function fresh(): { [string]: any }
+		return ProfileStore.deepCopy(DataTemplate)
+	end
+
+	local function order(rarity: string): number
+		return Rarity.ById[rarity].Order
+	end
+
+	---------------------------------------------------------------- names
+
+	-- words that would borrow from Minecraft (checked lower-case, as substrings)
+	local BANNED = {
+		"minecraft",
+		"creeper",
+		"enderman",
+		"ender pearl",
+		"wither",
+		"steve",
+		"herobrine",
+		"zombie",
+		"piglin",
+		"villager",
+		"iron golem",
+		"snow golem",
+		"copper golem",
+		"nether",
+		"redstone",
+		"allay",
+		"warden",
+		"ghast",
+		"blaze rod",
+		"elytra",
+		"mooshroom",
+	}
+
+	local function allNames(): { string }
+		local names = {}
+		local function add(text: string)
+			table.insert(names, text)
+		end
+		for _, golem in GolemConfig.List do
+			add(golem.Name)
+			add(golem.Id)
+			add(golem.Lore)
+		end
+		for _, capsule in CapsuleConfig.List do
+			add(capsule.Name)
+			add(capsule.Description)
+		end
+		for _, enchant in EnchantConfig.List do
+			add(enchant.Name)
+			add(enchant.Description)
+		end
+		for _, line in GearConfig.Lines do
+			add(line.Name)
+		end
+		for _, kind in BoostConfig.Kinds do
+			add(kind.Name)
+		end
+		for _, artifact in ArtifactConfig.List do
+			add(artifact.Name)
+			add(artifact.Lore)
+		end
+		for _, collection in ArtifactConfig.Collections do
+			add(collection.Name)
+			add(collection.Reward.Title)
+		end
+		for _, chapter in StoryConfig.Chapters do
+			add(chapter.Title)
+			for _, page in chapter.Pages do
+				add(page.Title)
+				add(page.Text)
+			end
+		end
+		for _, product in MonetizationConfig.List do
+			add(product.Name)
+			add(product.Description)
+		end
+		return names
+	end
+
+	T.test("Step67: no name or text borrows from Minecraft", function()
+		for _, text in allNames() do
+			local lower = text:lower()
+			for _, word in BANNED do
+				T.falsy(lower:find(word, 1, true), `"{text}" contains "{word}"`)
+			end
+		end
+	end)
+
+	---------------------------------------------------------------- stats
+
+	T.test("Step67: StatConfig adds, multiplies and caps", function()
+		local totals = StatConfig.combine({
+			{ DamagePct = 0.1, OreLuckMult = 2.5, Junk = 5 },
+			{ DamagePct = 0.2, OreLuckMult = 2, TwinDropChance = 0.4 },
+			{ TwinDropChance = 0.4, WalkSpeed = 0 / 0, ThrowMult = -1 },
+			"junk",
+		})
+		T.near(totals.DamagePct, 0.3, EPS, "Add stats sum")
+		T.near(totals.OreLuckMult, 5, EPS, "Mult stats multiply")
+		T.near(totals.TwinDropChance, 0.5, EPS, "capped at Max")
+		T.eq(totals.WalkSpeed, 0, "NaN skipped")
+		T.eq(totals.ThrowMult, 1, "a Mult value <= 0 is skipped")
+		T.eq(totals.Junk, nil, "unknown names skipped")
+		T.eq(StatConfig.describe("DamagePct", 0.1), "+10% blaster damage")
+		T.eq(StatConfig.describe("OreLuckMult", 2.5), "x2.5 rare ore luck")
+		T.eq(StatConfig.describe("ReachStuds", 4), "+4 studs blaster range")
+		T.eq(StatConfig.describe("WalkSpeed", 2), "+2 walk speed")
+	end)
+
+	---------------------------------------------------------------- gear
+
+	T.test("Step67: gear lines, values per level and exponential prices", function()
+		T.eq(#GearConfig.Lines, 5)
+		T.eq(GearConfig.MaxLevel, 5)
+		local expected = {
+			Boots = { 16, 18, 20, 22, 24, 26 },
+			HelmetLamp = { 0, 18, 26, 34, 44, 56 },
+			Backpack = { 1, 2, 3, 5, 8, 12 },
+			Gloves = { 11, 13, 15, 17, 20, 24 },
+			Magnet = { 0, 8, 12, 16, 22, 30 },
+		}
+		for lineId, values in expected do
+			for level = 0, 5 do
+				T.eq(GearConfig.value(lineId, level), values[level + 1], `{lineId} level {level}`)
+			end
+			T.eq(GearConfig.value(lineId, 99), values[6], "clamped high")
+			T.eq(GearConfig.value(lineId, -3), values[1], "clamped low")
+			T.eq(GearConfig.value(lineId, 0 / 0), values[1], "NaN = level 0")
+		end
+		T.near(GearConfig.value("Gloves", 0, "ThrowMult"), 1, EPS)
+		T.near(GearConfig.value("Gloves", 5, "ThrowMult"), 1.4, EPS)
+		T.truthy(GearConfig.value("HelmetLamp", 5, "LampBrightness") > GearConfig.value("HelmetLamp", 1, "LampBrightness"))
+		for _, line in GearConfig.Lines do
+			T.eq(#line.Prices, GearConfig.MaxLevel, line.Id .. " has a price per level")
+			T.truthy(line.Prices[1] >= 300 and line.Prices[1] <= 1500, line.Id .. " starts near 500")
+			for level = 2, #line.Prices do
+				local ratio = line.Prices[level] / line.Prices[level - 1]
+				T.truthy(ratio >= 5 and ratio <= 7, `{line.Id} grows about x6 ({ratio})`)
+			end
+			for stat, values in line.Stats do
+				T.truthy(StatConfig.ById[stat], line.Id .. " stat " .. stat)
+				T.eq(#values, GearConfig.MaxLevel + 1)
+				for level = 2, #values do
+					T.truthy(values[level] > values[level - 1], `{line.Id} {stat} grows`)
+				end
+			end
+			T.eq(GearConfig.nextPrice(line.Id, 0), line.Prices[1])
+			T.eq(GearConfig.nextPrice(line.Id, GearConfig.MaxLevel), nil, "no price at the top")
+		end
+		T.eq(GearConfig.nextPrice("Cape", 0), nil)
+	end)
+
+	T.test("Step67: gear quote, stats and the ToolData shim", function()
+		local gear = { Boots = 2, Backpack = 5 }
+		T.eq(GearConfig.quote(gear, "Boots", 3), GearConfig.ById.Boots.Prices[3], "the next level")
+		local price, reason = GearConfig.quote(gear, "Boots", 2)
+		T.eq(price, nil)
+		T.eq(reason, "Stale", "a repeat of the last level")
+		price, reason = GearConfig.quote(gear, "Boots", nil)
+		T.eq(reason, "Stale", "the level is required")
+		price, reason = GearConfig.quote(gear, "Backpack", 6)
+		T.eq(reason, "Max")
+		price, reason = GearConfig.quote(gear, "Jetpack", 1)
+		T.eq(reason, "BadItem")
+		price, reason = GearConfig.quote(nil, "Magnet", 1)
+		T.eq(price, GearConfig.ById.Magnet.Prices[1], "a missing record is all zeros")
+		for _, code in { "BadItem", "Max", "Stale", "NoCoins", "TooFar" } do
+			T.truthy(GearConfig.Reasons[code], "reason text " .. code)
+		end
+		local stats = GearConfig.stats(gear)
+		T.eq(stats.WalkSpeed, 20)
+		T.eq(stats.CarryCapacity, 12)
+		T.eq(stats.MagnetRadius, 0)
+		T.eq(stats.PickupRange, 11)
+		T.eq(stats.LampRange, 0)
+		T.eq(GearConfig.carryCapacity(gear, false), 12)
+		T.eq(GearConfig.carryCapacity(gear, true), 24, "StrongBack doubles")
+		T.eq(GearConfig.carryCapacity(nil, false), 1, "bare hands")
+		-- the deprecated shim: old CarryLevel N = Backpack level N - 1
+		T.eq(#ToolData.CarryLevels, GearConfig.MaxLevel + 1)
+		local old = { 1, 2, 3, 5, 8 } -- the old CarryLevels 1..5
+		for n, capacity in old do
+			T.eq(ToolData.carryCapacity(n, false), capacity, "old carry level " .. n)
+			T.eq(ToolData.CarryLevels[n].Capacity, GearConfig.value("Backpack", n - 1))
+		end
+		T.eq(ToolData.carryCapacity(nil, false), 1, "nil = bare hands")
+	end)
+
+	---------------------------------------------------------------- enchants
+
+	T.test("Step67: enchants: 12 across every rarity, slots by blaster level", function()
+		T.eq(#EnchantConfig.List, 12)
+		local rarities = {}
+		local ids = {}
+		for _, enchant in EnchantConfig.List do
+			T.falsy(ids[enchant.Id], "unique id " .. enchant.Id)
+			ids[enchant.Id] = true
+			rarities[enchant.Rarity] = true
+			T.truthy(Rarity.ById[enchant.Rarity], enchant.Id .. " rarity")
+			local tiers = #enchant.Coins
+			T.truthy(tiers >= 1, enchant.Id .. " has a price")
+			for stat, values in enchant.Effects do
+				T.truthy(StatConfig.ById[stat], enchant.Id .. " effect " .. stat)
+				T.eq(#values, tiers, enchant.Id .. " value per tier")
+				for t = 2, tiers do
+					T.truthy(values[t] > values[t - 1], enchant.Id .. " grows per tier")
+				end
+			end
+			for t = 2, tiers do
+				T.truthy(enchant.Coins[t] > enchant.Coins[t - 1], enchant.Id .. " coin prices climb")
+			end
+			if enchant.Shards then
+				T.eq(#enchant.Shards, tiers)
+			end
+			T.eq(#EnchantConfig.describe(enchant.Id, 1) > 0, true)
+		end
+		for _, info in Rarity.List do
+			T.truthy(rarities[info.Id], "an enchant of rarity " .. info.Id)
+		end
+		-- exponential by rarity: every rarity's cheapest first tier beats the previous rarity's dearest
+		local cheapest, dearest = {}, {}
+		for _, enchant in EnchantConfig.List do
+			local o = order(enchant.Rarity)
+			cheapest[o] = math.min(cheapest[o] or math.huge, enchant.Coins[1])
+			dearest[o] = math.max(dearest[o] or 0, enchant.Coins[1])
+		end
+		for o = 2, #Rarity.List do
+			T.truthy(cheapest[o] > dearest[o - 1], "rarity " .. o .. " costs more")
+		end
+		-- shards for the rarer ones, the two Mythics: enormous coins or 20 Robux
+		for _, enchant in EnchantConfig.List do
+			if enchant.Rarity == "Epic" or enchant.Rarity == "Legendary" then
+				T.truthy(enchant.Shards, enchant.Id .. " sells for shards")
+			end
+		end
+		for _, id in { "Heartfire", "Starbreaker" } do
+			local enchant = EnchantConfig.ById[id]
+			T.eq(enchant.Rarity, "Mythic")
+			T.truthy(enchant.Coins[1] >= 1e11, id .. " costs an enormous amount")
+			local product = MonetizationConfig.get(enchant.Product)
+			T.truthy(product, id .. " has a product")
+			T.eq(product.Robux, 20)
+			T.eq(product.Enchant, id)
+		end
+		T.eq(EnchantConfig.MaxSlots, 4)
+		local slotsAt = { [1] = 1, [3] = 1, [4] = 2, [6] = 2, [7] = 3, [9] = 3, [10] = 4 }
+		for level, slots in slotsAt do
+			T.eq(EnchantConfig.unlockedSlots(level), slots, "slots at blaster level " .. level)
+		end
+		T.eq(EnchantConfig.unlockedSlots(nil), 1)
+	end)
+
+	T.test("Step67: enchant quotes, grants, slots and stats", function()
+		local enchants: any = { Owned = { Power = 1 }, Slots = { "", "", "", "" } }
+		T.eq(EnchantConfig.quote(enchants, "Power", "Coins", 2), EnchantConfig.ById.Power.Coins[2])
+		local _, reason = EnchantConfig.quote(enchants, "Power", "Coins", 1)
+		T.eq(reason, "Stale")
+		_, reason = EnchantConfig.quote(enchants, "Power", "Shards", 2)
+		T.eq(reason, "BadCurrency", "Commons don't sell for shards")
+		_, reason = EnchantConfig.quote(enchants, "Power", "Gold", 2)
+		T.eq(reason, "BadCurrency")
+		_, reason = EnchantConfig.quote(enchants, "Nope", "Coins", 1)
+		T.eq(reason, "BadItem")
+		T.eq(EnchantConfig.quote(enchants, "TwinDrop", "Shards", 1), EnchantConfig.ById.TwinDrop.Shards[1])
+		_, reason = EnchantConfig.quote(enchants, "Heartfire", "Robux", 1)
+		T.eq(reason, "Robux", "a Robux buy goes to PurchasePrompt")
+		_, reason = EnchantConfig.quote(enchants, "Power", "Robux", 2)
+		T.eq(reason, "BadCurrency", "no Robux for normal enchants")
+		T.eq(EnchantConfig.grant(enchants, "Power"), 2)
+		T.eq(EnchantConfig.grant(enchants, "Power"), 3)
+		T.eq(EnchantConfig.grant(enchants, "Power"), 3, "stays at the top tier")
+		_, reason = EnchantConfig.quote(enchants, "Power", "Coins", 4)
+		T.eq(reason, "Max")
+		T.eq(EnchantConfig.grant(enchants, "Heartfire"), 1)
+		T.eq(EnchantConfig.grant(enchants, "Fake"), 0)
+		-- slots: blaster level 4 opens 2
+		local ok, why = EnchantConfig.setSlot(enchants, 4, 1, "Power")
+		T.truthy(ok, "slot 1")
+		ok, why = EnchantConfig.setSlot(enchants, 4, 3, "Heartfire")
+		T.falsy(ok)
+		T.eq(why, "Locked", "slot 3 needs blaster level 7")
+		ok, why = EnchantConfig.setSlot(enchants, 4, 2, "Lucky")
+		T.eq(why, "NotOwned")
+		ok, why = EnchantConfig.setSlot(enchants, 4, 5, "Power")
+		T.eq(why, "BadSlot")
+		ok = EnchantConfig.setSlot(enchants, 4, 2, "Power")
+		T.truthy(ok, "moving Power to slot 2")
+		T.eq(enchants.Slots[1], "", "it left slot 1")
+		T.eq(enchants.Slots[2], "Power")
+		T.eq(EnchantConfig.firstFreeSlot(enchants, 4), 1)
+		EnchantConfig.setSlot(enchants, 4, 1, "Heartfire")
+		T.eq(EnchantConfig.firstFreeSlot(enchants, 4), nil, "both open slots used")
+		local stats = EnchantConfig.stats(enchants, 4)
+		T.near(stats.DamagePct, 0.35 + 0.75, EPS, "Power III + Heartfire")
+		T.near(stats.OverchargePct, 0.5, EPS)
+		-- a lower blaster level closes slot 2
+		stats = EnchantConfig.stats(enchants, 1)
+		T.near(stats.DamagePct, 0.75, EPS, "only slot 1 counts")
+		ok = EnchantConfig.setSlot(enchants, 4, 1, nil)
+		T.truthy(ok)
+		T.eq(enchants.Slots[1], "", "emptied")
+		for _, code in { "BadItem", "BadCurrency", "Max", "Stale", "NoCoins", "NoShards", "TooFar", "BadSlot", "Locked", "NotOwned" } do
+			T.truthy(EnchantConfig.Reasons[code], "reason text " .. code)
+		end
+	end)
+
+	---------------------------------------------------------------- golems + capsules
+
+	T.test("Step67: 18 original golems from Common to Mythic", function()
+		T.eq(#GolemConfig.List, 18)
+		local names, rarities = {}, {}
+		for _, golem in GolemConfig.List do
+			T.falsy(names[golem.Name], "unique name " .. golem.Name)
+			names[golem.Name] = true
+			rarities[golem.Rarity] = true
+			T.truthy(GolemConfig.Accessories[golem.Accessory], golem.Id .. " accessory")
+			T.truthy(GolemConfig.BonusTypes[golem.Bonus.Type], golem.Id .. " bonus type")
+			T.truthy(golem.Bonus.Value > 0 and golem.Bonus.Value <= 0.5, golem.Id .. " bonus size")
+			T.eq(typeof(golem.Body), "Color3")
+			T.eq(typeof(golem.Glow), "Color3")
+			T.eq(typeof(golem.Trim), "Color3")
+			T.eq(typeof(golem.Material), "EnumItem")
+			T.truthy(golem.Ore == nil or OreData.ById[golem.Ore], golem.Id .. " ore")
+		end
+		for _, info in Rarity.List do
+			T.truthy(rarities[info.Id], "a golem of rarity " .. info.Id)
+		end
+		-- rarer golems give at least as much as commoner ones of the same bonus type
+		for _, a in GolemConfig.List do
+			for _, b in GolemConfig.List do
+				if a.Bonus.Type == b.Bonus.Type and order(a.Rarity) > order(b.Rarity) then
+					T.truthy(a.Bonus.Value >= b.Bonus.Value, `{a.Id} >= {b.Id}`)
+				end
+			end
+		end
+		T.eq(GolemConfig.EquipSlots, 3)
+		T.eq(GolemConfig.InventoryCap, 60)
+		T.truthy(GolemConfig.MaxSaved >= GolemConfig.InventoryCap + 10, "room for a paid x10")
+	end)
+
+	T.test("Step67: golem record helpers", function()
+		local golems: any = { Owned = {}, Equipped = {}, NextId = 1 }
+		local a = GolemConfig.add(golems, "PebbleGolem")
+		local b = GolemConfig.add(golems, "DiamondDuke")
+		local c = GolemConfig.add(golems, "EmberImp")
+		local d = GolemConfig.add(golems, "StarmetalSovereign")
+		T.eq(a.Id, 1)
+		T.eq(d.Id, 4)
+		T.eq(golems.NextId, 5)
+		T.eq(GolemConfig.add(golems, "IronThing"), nil, "unknown kind")
+		T.truthy(GolemConfig.equip(golems, a.Id))
+		T.truthy(GolemConfig.equip(golems, a.Id), "equipping twice is fine")
+		T.eq(#golems.Equipped, 1)
+		T.truthy(GolemConfig.equip(golems, b.Id))
+		T.truthy(GolemConfig.equip(golems, c.Id))
+		local ok, why = GolemConfig.equip(golems, d.Id)
+		T.falsy(ok)
+		T.eq(why, "SlotsFull")
+		ok, why = GolemConfig.equip(golems, 99)
+		T.eq(why, "BadGolem")
+		ok, why = GolemConfig.unequip(golems, d.Id)
+		T.eq(why, "NotEquipped")
+		local stats = GolemConfig.stats(golems, 0)
+		T.near(stats.IncomePct, 0.03 + 0.15, EPS, "Pebble + Duke income")
+		T.near(stats.DamagePct, 0.1, EPS, "Ember Imp mining speed")
+		stats = GolemConfig.stats(golems, 0.5)
+		T.near(stats.IncomePct, (0.03 + 0.15) * 1.5, EPS, "Golem Bond +50%")
+		T.eq(GolemConfig.describe("DiamondDuke", 0), "+15% Income")
+		local best = GolemConfig.equipBest(golems)
+		T.eq(#best, 3)
+		T.eq(best[1], d.Id, "the Mythic first")
+		T.falsy(table.find(best, a.Id), "the Pebble Golem sits out")
+		local removed = GolemConfig.delete(golems, { d.Id, 77 })
+		T.eq(removed, 1)
+		T.falsy(GolemConfig.isEquipped(golems, d.Id), "deleting unequips")
+		T.eq(#golems.Equipped, 2)
+		local n, reason = GolemConfig.delete(golems, { 1.5 })
+		T.eq(n, 0)
+		T.eq(reason, "BadIds")
+		n, reason = GolemConfig.delete(golems, {})
+		T.eq(reason, "BadIds")
+		-- the cap: plain adds stop at InventoryCap, a paid receipt may pass it up to MaxSaved
+		local full: any = { Owned = {}, Equipped = {}, NextId = 1 }
+		for _ = 1, GolemConfig.InventoryCap do
+			T.truthy(GolemConfig.add(full, "PebbleGolem"))
+		end
+		T.eq(GolemConfig.room(full), 0)
+		T.eq(GolemConfig.add(full, "PebbleGolem"), nil, "full")
+		T.truthy(GolemConfig.add(full, "PebbleGolem", true), "a receipt is never lost")
+		-- a broken record is repaired by the writers
+		local broken: any = { Owned = "x", NextId = 0 / 0 }
+		T.truthy(GolemConfig.add(broken, "TinTumbler"))
+		T.eq(broken.Owned[1].Id, 1)
+	end)
+
+	T.test("Step67: capsules: exact odds sum to 1, Triple Lucky triples the rarest and keeps the sum", function()
+		T.eq(#CapsuleConfig.List, 3)
+		T.eq(CapsuleConfig.ById.Stone.Currency, "Coins")
+		T.eq(CapsuleConfig.ById.Crystal.Currency, "Coins")
+		T.eq(CapsuleConfig.ById.Royal.Currency, "Robux")
+		T.truthy(CapsuleConfig.ById.Crystal.Price > CapsuleConfig.ById.Stone.Price * 10, "Crystal is expensive")
+		local epicPlus = {}
+		for _, capsule in CapsuleConfig.List do
+			local base = CapsuleConfig.odds(capsule.Id, false)
+			local lucky = CapsuleConfig.odds(capsule.Id, true)
+			T.near(sum(base, "Chance"), 1, EPS, capsule.Id .. " odds sum to 1")
+			T.near(sum(lucky, "Chance"), 1, EPS, capsule.Id .. " Triple Lucky odds sum to 1")
+			T.eq(#base, #lucky)
+			local from = order(capsule.LuckyFrom)
+			local luckyShare = 0
+			for i, line in base do
+				T.eq(lucky[i].Golem, line.Golem)
+				T.truthy(line.Chance > 0, "no zero odds")
+				if GolemConfig.order(line.Golem) >= from then
+					luckyShare += line.Chance
+					T.near(lucky[i].Chance, line.Chance * 3, EPS, line.Golem .. " exactly x3")
+				else
+					T.truthy(lucky[i].Chance < line.Chance, line.Golem .. " gives way")
+				end
+			end
+			T.truthy(luckyShare > 0 and luckyShare * 3 < 1, capsule.Id .. " can triple its lucky golems")
+			-- rarer favoured: the chance of each rarity tier at or above LuckyFrom grows
+			local baseR, luckyR = CapsuleConfig.rarityOdds(capsule.Id, false), CapsuleConfig.rarityOdds(capsule.Id, true)
+			for rarity, chance in baseR do
+				if order(rarity) >= from then
+					T.truthy(luckyR[rarity] > chance, capsule.Id .. " " .. rarity .. " more likely")
+				end
+			end
+			-- rolls follow the list; the edges stay inside
+			T.eq(CapsuleConfig.roll(capsule.Id, false, 0), base[1].Golem)
+			T.eq(CapsuleConfig.roll(capsule.Id, false, 0.9999999999), base[#base].Golem)
+			T.eq(CapsuleConfig.roll(capsule.Id, true, 1), lucky[#lucky].Golem)
+			local share = 0
+			for rarity, chance in baseR do
+				if order(rarity) >= order("Epic") then
+					share += chance
+				end
+			end
+			epicPlus[capsule.Id] = share
+			T.truthy(CapsuleConfig.isPaidRandom(capsule.Id), "every capsule is a paid random item")
+		end
+		T.truthy(epicPlus.Royal > epicPlus.Crystal and epicPlus.Crystal > epicPlus.Stone, "Royal has the best odds")
+		-- prices: 1 / 3 / 10, x10 a small discount
+		T.eq(CapsuleConfig.price("Stone", 1), 2500)
+		T.eq(CapsuleConfig.price("Stone", 3), 7500)
+		T.eq(CapsuleConfig.price("Stone", 10), 22500, "x10 pays 9")
+		T.eq(CapsuleConfig.price("Stone", 2), nil, "only 1, 3 or 10")
+		T.eq(CapsuleConfig.price("Royal", 1), nil, "Royal is Robux")
+		for _, count in CapsuleConfig.Counts do
+			local key = CapsuleConfig.product("Royal", count)
+			local product = MonetizationConfig.get(key)
+			T.truthy(product, "Royal x" .. count)
+			T.eq(product.Count, count)
+			T.eq(product.Capsule, "Royal")
+			T.truthy(product.PaidRandom, "paid random")
+		end
+		local x1 = MonetizationConfig.get("RoyalCapsule1").Robux
+		T.truthy(MonetizationConfig.get("RoyalCapsule10").Robux < x1 * 10, "x10 has a Robux discount")
+		T.eq(#CapsuleConfig.odds("Nope", false), 0)
+	end)
+
+	---------------------------------------------------------------- boosts
+
+	T.test("Step67: boosts stack to 2 hours, coin prices follow income", function()
+		local boosts: any = { TripleLuckyUntil = 0, HexaLuckyUntil = 0 }
+		T.falsy(BoostConfig.active(boosts, "HexaLucky", NOW))
+		T.eq(BoostConfig.extend(boosts, "HexaLucky", 300, NOW, true), NOW + 300)
+		T.truthy(BoostConfig.active(boosts, "HexaLucky", NOW + 299))
+		T.falsy(BoostConfig.active(boosts, "HexaLucky", NOW + 300))
+		T.eq(BoostConfig.extend(boosts, "HexaLucky", 600, NOW + 100, true), NOW + 900, "adds to what is left")
+		T.truthy(BoostConfig.canExtend(boosts, "HexaLucky", 3600, NOW))
+		T.falsy(BoostConfig.canExtend(boosts, "HexaLucky", 7200, NOW), "past 2 h")
+		T.eq(BoostConfig.extend(boosts, "HexaLucky", 7200, NOW, true), NOW + 7200, "capped")
+		T.eq(BoostConfig.extend(boosts, "HexaLucky", 3600, NOW, false), NOW + 10800, "a paid receipt passes the cap")
+		T.eq(BoostConfig.extend(boosts, "HexaLucky", 60, NOW, true), NOW + 10800, "capping never shortens")
+		T.eq(BoostConfig.extend(boosts, "TripleLucky", -5, NOW, true), 0, "bad seconds change nothing")
+		T.eq(BoostConfig.remaining(boosts, "TripleLucky", NOW), 0)
+		T.eq(BoostConfig.remaining({ HexaLuckyUntil = 0 / 0 }, "HexaLucky", NOW), 0, "broken = off")
+		local stats = BoostConfig.stats(boosts, NOW)
+		T.eq(stats.OreLuckMult, 2.5, "Hexa Lucky = Rare+ weights x2.5")
+		T.eq(stats.CapsuleLuckMult, nil)
+		BoostConfig.extend(boosts, "TripleLucky", 600, NOW, true)
+		T.eq(BoostConfig.stats(boosts, NOW).CapsuleLuckMult, 3)
+		-- offers
+		for _, offer in BoostConfig.CoinOffers do
+			T.eq(offer.Seconds, 300, "coin boosts last 5 minutes")
+			T.eq(BoostConfig.coinPrice(offer.Id, 0), offer.MinPrice, "at least MinPrice")
+			T.eq(BoostConfig.coinPrice(offer.Id, 1000), 1000 * offer.PriceSeconds, "income x PriceSeconds")
+			T.eq(BoostConfig.coinPrice(offer.Id, 0 / 0), offer.MinPrice)
+		end
+		T.eq(BoostConfig.coinPrice("TripleLucky15", 100), nil, "a Robux offer has no coin price")
+		for _, offer in BoostConfig.RobuxOffers do
+			local product = MonetizationConfig.get(offer.Product)
+			T.truthy(product and product.PaidRandom, offer.Id .. " product, paid random")
+		end
+		T.truthy(BoostConfig.OfferById.TripleLucky15.Seconds == 900, "Triple Lucky 15 min")
+		T.truthy(BoostConfig.OfferById.HexaLucky15.Seconds == 900, "Hexa Lucky 15 min")
+	end)
+
+	T.test("Step67: ore odds with luck sum to 1 and favour Rare and rarer ores", function()
+		for _, zone in WorldLayout.Zones do
+			local base = BoostConfig.zoneOdds(zone.Id, 1)
+			if #base == 0 then
+				continue
+			end
+			local boosted = BoostConfig.zoneOdds(zone.Id, 2.5)
+			T.near(sum(base, "Chance"), 1, EPS, zone.Id .. " odds sum to 1")
+			T.near(sum(boosted, "Chance"), 1, EPS, zone.Id .. " Hexa Lucky odds sum to 1")
+			local anyCommon = false
+			for _, line in base do
+				if not BoostConfig.isLuckyOre(line.Ore) then
+					anyCommon = true
+				end
+			end
+			local commonOre, rareOre = nil, nil
+			for i, line in base do
+				T.eq(boosted[i].Ore, line.Ore)
+				if BoostConfig.isLuckyOre(line.Ore) then
+					rareOre = line
+					if anyCommon then
+						T.truthy(boosted[i].Chance > line.Chance, zone.Id .. " " .. line.Ore .. " more likely")
+					end
+				else
+					commonOre = line
+					T.truthy(boosted[i].Chance <= line.Chance, zone.Id .. " " .. line.Ore .. " gives way")
+				end
+			end
+			if commonOre and rareOre then
+				-- the exact effect: a Rare+ ore's weight relative to a lower one is x2.5
+				local function chanceOf(list: any, oreId: string): number
+					for _, l in list do
+						if l.Ore == oreId then
+							return l.Chance
+						end
+					end
+					return 0
+				end
+				local before = chanceOf(base, rareOre.Ore) / chanceOf(base, commonOre.Ore)
+				local after = chanceOf(boosted, rareOre.Ore) / chanceOf(boosted, commonOre.Ore)
+				T.near(after / before, 2.5, 1e-6, zone.Id .. " ratio x2.5")
+			end
+		end
+		-- rolls: luck 1 = the plain weights
+		local weights = { Coal = 1, Gold = 1 }
+		T.eq(BoostConfig.rollOre(weights, 1, 0.49), "Coal")
+		T.eq(BoostConfig.rollOre(weights, 1, 0.51), "Gold")
+		T.eq(BoostConfig.rollOre(weights, 3, 0.26), "Gold", "Gold weighs 3 of 4 with luck 3")
+		T.eq(BoostConfig.rollOre({}, 2, 0.5), nil)
+		T.eq(BoostConfig.rollOre({ Unobtainium = 3 }, 2, 0.5), nil, "unknown ores skipped")
+	end)
+
+	---------------------------------------------------------------- wheel
+
+	T.test("Step67: the daily wheel: 8 segments, exact odds, income-scaled coins", function()
+		T.eq(#WheelConfig.Segments, 8)
+		T.near(sum(WheelConfig.Segments, "Odds"), 1, EPS, "odds sum to 1")
+		T.near(sum(WheelConfig.odds(), "Chance"), 1, EPS)
+		local kinds, colors = {}, {}
+		local Color3 = (require("@lune/roblox") :: any).Color3
+		-- the lobby wheel's rainbow (src/server/World/Lobby/Districts/Wheel.luau SEGMENTS)
+		local lobby = {
+			Color3.fromRGB(130, 16, 26),
+			Color3.fromRGB(150, 70, 8),
+			Color3.fromRGB(150, 120, 8),
+			Color3.fromRGB(84, 126, 10),
+			Color3.fromRGB(14, 110, 46),
+			Color3.fromRGB(8, 112, 122),
+			Color3.fromRGB(18, 60, 150),
+			Color3.fromRGB(56, 28, 150),
+			Color3.fromRGB(100, 24, 140),
+			Color3.fromRGB(140, 24, 90),
+		}
+		for i, segment in WheelConfig.Segments do
+			T.eq(segment.Index, i)
+			T.truthy(segment.Odds > 0)
+			kinds[segment.Kind] = true
+			local key = tostring(segment.Color)
+			T.falsy(colors[key], "distinct colors")
+			colors[key] = true
+			local matches = false
+			for _, color in lobby do
+				if color == segment.Color then
+					matches = true
+				end
+			end
+			T.truthy(matches, segment.Id .. " uses a lobby wheel color")
+		end
+		for _, kind in { "Coins", "Boost", "Capsule", "Ore", "Shards" } do
+			T.truthy(kinds[kind], "a " .. kind .. " prize")
+		end
+		T.eq(WheelConfig.ById.TripleLucky.Seconds, 600)
+		T.eq(WheelConfig.ById.HexaLucky.Seconds, 600)
+		T.eq(WheelConfig.ById.StoneCapsule.Capsule, "Stone")
+		T.eq(WheelConfig.ById.CrystalCapsule.Capsule, "Crystal")
+		-- pick walks the segments in order
+		T.eq(WheelConfig.pick(0).Index, 1)
+		T.eq(WheelConfig.pick(0.2999).Index, 1)
+		T.eq(WheelConfig.pick(0.3001).Index, 2)
+		T.eq(WheelConfig.pick(0.99999).Index, 8)
+		T.eq(WheelConfig.pick(1).Index, 8)
+		-- coins: 120 s / 600 s of podium income, at least 500 / 2500
+		T.eq(WheelConfig.coins(WheelConfig.ById.Coins, 0), 500)
+		T.eq(WheelConfig.coins(WheelConfig.ById.Coins, 100), 12000)
+		T.eq(WheelConfig.coins(WheelConfig.ById.BigCoins, 1), 2500)
+		T.eq(WheelConfig.coins(WheelConfig.ById.BigCoins, 100), 60000)
+		T.eq(WheelConfig.coins(WheelConfig.ById.Shards, 100), 0)
+		-- timer
+		T.truthy(WheelConfig.ready(0, NOW))
+		T.truthy(WheelConfig.ready(0 / 0, NOW), "broken = ready")
+		T.falsy(WheelConfig.ready(NOW + 10, NOW))
+		T.eq(WheelConfig.secondsLeft(NOW + 10, NOW), 10)
+		T.eq(WheelConfig.CooldownSeconds, 86400)
+		-- the rare ore prize is always Rare or better; fallbacks pay something
+		for i = 0, 99 do
+			local oreId = WheelConfig.pickOre(i / 100)
+			T.truthy(order(OreData.ById[oreId].Rarity) >= order("Rare"), oreId .. " is Rare+")
+			T.eq(WheelConfig.oreFallbackCoins(oreId), ItemData.value("Raw", oreId))
+		end
+		T.eq(WheelConfig.pickOre(0), "Gold", "the commonest prize ore first")
+		T.eq(WheelConfig.capsuleFallbackCoins("Stone"), CapsuleConfig.price("Stone", 1))
+		T.eq(WheelConfig.capsuleFallbackCoins("Royal"), CapsuleConfig.price("Crystal", 1))
+	end)
+
+	---------------------------------------------------------------- artifacts + story
+
+	T.test("Step67: 24 artifacts in 4 collections, rarer deeper, odds sum to 1", function()
+		T.eq(#ArtifactConfig.List, 24)
+		T.eq(#ArtifactConfig.Collections, 4)
+		local names = {}
+		for _, collection in ArtifactConfig.Collections do
+			T.eq(#ArtifactConfig.ByCollection[collection.Id], 6, collection.Id .. " has 6")
+			T.truthy(ArtifactConfig.PodiumSkins[collection.Reward.PodiumSkin], collection.Id .. " skin")
+			T.truthy(#collection.Reward.Title > 0)
+			T.truthy(collection.Reward.Bonus.Value > 0)
+			local chapter = StoryConfig.ByCollection[collection.Id]
+			T.truthy(chapter, collection.Id .. " unlocks a chapter")
+			T.truthy(#chapter.Pages >= 3 and #chapter.Pages <= 5, collection.Id .. " chapter has 3-5 pages")
+			for _, page in chapter.Pages do
+				T.truthy(#page.Title > 0 and #page.Text > 20)
+				T.truthy(#page.Text <= 260, "short journal pages")
+			end
+		end
+		T.eq(#StoryConfig.Chapters, #ArtifactConfig.Collections, "one chapter per collection")
+		T.truthy(#StoryConfig.Prologue.Pages >= 1, "a prologue")
+		for _, artifact in ArtifactConfig.List do
+			T.falsy(names[artifact.Name], "unique name " .. artifact.Name)
+			names[artifact.Name] = true
+			T.truthy(ArtifactConfig.Shapes[artifact.Shape])
+			T.eq(typeof(artifact.Primary), "Color3")
+			T.truthy(#artifact.Lore > 10)
+			T.truthy(ArtifactConfig.DuplicateShards[artifact.Rarity], "duplicate shards for " .. artifact.Rarity)
+		end
+		-- the drop chance comes from BlasterData.Rocks.ArtifactChance and grows deeper
+		T.truthy(ArtifactConfig.rockChance("DeepHollow") > ArtifactConfig.rockChance("EmberCaves"))
+		T.truthy(ArtifactConfig.rockChance("EmberCaves") > ArtifactConfig.rockChance("Quarry"))
+		T.truthy(ArtifactConfig.rockChance("Quarry") > ArtifactConfig.rockChance("Outcrops"))
+		local function meanOrder(zoneId: string): number
+			local total = 0
+			for _, line in ArtifactConfig.odds(zoneId) do
+				total += line.Chance * order(ArtifactConfig.ById[line.Artifact].Rarity)
+			end
+			return total
+		end
+		for _, zone in WorldLayout.Zones do
+			local list = ArtifactConfig.odds(zone.Id)
+			T.near(sum(list, "Chance"), 1, EPS, zone.Id .. " artifact odds sum to 1")
+		end
+		T.near(sum(ArtifactConfig.odds("SomeNewFloor"), "Chance"), 1, EPS, "an unknown zone still works")
+		T.truthy(meanOrder("DeepHollow") > meanOrder("EmberCaves"), "rarer deeper")
+		T.truthy(meanOrder("EmberCaves") > meanOrder("Quarry"), "rarer deeper")
+		T.truthy(meanOrder("Quarry") > meanOrder("Outcrops"), "rarer deeper")
+		-- the Mythic only deep down
+		local function chanceOf(zoneId: string, id: string): number
+			for _, line in ArtifactConfig.odds(zoneId) do
+				if line.Artifact == id then
+					return line.Chance
+				end
+			end
+			return 0
+		end
+		T.eq(chanceOf("Quarry", "HeartstoneFragment"), 0)
+		T.truthy(chanceOf("DeepHollow", "HeartstoneFragment") > 0)
+		T.eq(ArtifactConfig.pick("Quarry", 0), ArtifactConfig.odds("Quarry")[1].Artifact)
+		T.truthy(ArtifactConfig.pick("DeepHollow", 0.999999))
+	end)
+
+	T.test("Step67: finding artifacts completes collections and gives their rewards", function()
+		local artifacts: any = { Found = {}, Chapters = {} }
+		local list = ArtifactConfig.ByCollection.CrownOfKaldrum
+		for i, artifact in list do
+			local count, isNew, completed = ArtifactConfig.add(artifacts, artifact.Id)
+			T.eq(count, 1)
+			T.truthy(isNew)
+			if i < #list then
+				T.eq(completed, nil, "not complete yet")
+			else
+				T.eq(completed, "CrownOfKaldrum", "the last one completes it")
+			end
+		end
+		local count, isNew, completed = ArtifactConfig.add(artifacts, list[1].Id)
+		T.eq(count, 2)
+		T.falsy(isNew)
+		T.eq(completed, nil, "a duplicate never completes again")
+		T.eq(ArtifactConfig.add(artifacts, "Nope"), 0)
+		T.truthy(ArtifactConfig.isComplete(artifacts, "CrownOfKaldrum"))
+		T.falsy(ArtifactConfig.isComplete(artifacts, "RoyalRailway"))
+		T.eq(ArtifactConfig.uniqueCount(artifacts), 6)
+		T.eq(#ArtifactConfig.completed(artifacts), 1)
+		T.eq(ArtifactConfig.titles(artifacts)[1], "Heir of Kaldrum")
+		local stats = ArtifactConfig.stats(artifacts)
+		T.near(stats.IncomePct, 0.05, EPS)
+		artifacts.Found[list[2].Id] = 2 ^ 40
+		T.eq(ArtifactConfig.countOf(artifacts, list[2].Id), ArtifactConfig.MaxCount, "counts are capped")
+	end)
+
+	---------------------------------------------------------------- leaderboards
+
+	T.test("Step67: 4 leaderboards with versioned stores", function()
+		T.eq(#LeaderboardConfig.Boards, 4)
+		local titles = { "MONEY / SEC", "TOTAL EARNED", "ARTIFACTS", "HOURS PLAYED" }
+		local stores = {}
+		for i, board in LeaderboardConfig.Boards do
+			T.eq(board.Index, i)
+			T.eq(board.Title, titles[i])
+			T.truthy(board.Store:match("_v%d+$"), board.Store .. " is versioned")
+			T.falsy(stores[board.Store], "unique store")
+			stores[board.Store] = true
+			T.eq(LeaderboardConfig.ByIndex[i], board)
+		end
+		T.eq(LeaderboardConfig.RefreshSeconds, 60)
+		T.eq(LeaderboardConfig.TopCount, 10)
+	end)
+
+	T.test("Step67: leaderboard encode/decode round-trips big numbers and keeps their order", function()
+		local values = {
+			0.5,
+			1,
+			1.5,
+			9.99,
+			10,
+			123.456,
+			999,
+			1000,
+			12345.678,
+			1e6,
+			3.3e9,
+			1e12,
+			7.77e15,
+			1e18,
+			1e18 * (1 + 1e-9),
+			4.2e21,
+			1e30,
+			1e100,
+			1e300,
+		}
+		for _, boardId in { "MoneyPerSec", "TotalEarned" } do
+			local last = -1
+			for _, v in values do
+				local stored = LeaderboardConfig.encode(boardId, v)
+				T.eq(stored, math.floor(stored), "whole number")
+				T.truthy(stored >= 0 and stored < 2 ^ 53, "fits an OrderedDataStore")
+				T.truthy(stored > last, `{boardId}: {v} sorts above the smaller value`)
+				last = stored
+				local back = LeaderboardConfig.decode(boardId, stored)
+				T.truthy(math.abs(back - v) <= 1e-9 * math.max(1, v), `{boardId} round trip {v} -> {back}`)
+			end
+			T.eq(LeaderboardConfig.encode(boardId, 0), 0)
+			T.eq(LeaderboardConfig.encode(boardId, -5), 0)
+			T.eq(LeaderboardConfig.encode(boardId, 0 / 0), 0)
+			T.truthy(LeaderboardConfig.encode(boardId, math.huge) < 2 ^ 53, "infinity is capped")
+			T.eq(LeaderboardConfig.decode(boardId, 0), 0)
+		end
+		T.eq(LeaderboardConfig.encode("Artifacts", 37.9), 37)
+		T.eq(LeaderboardConfig.decode("Artifacts", 37), 37)
+		T.eq(LeaderboardConfig.encode("HoursPlayed", 3 * 3600 + 59), 180, "whole minutes")
+		T.eq(LeaderboardConfig.decode("HoursPlayed", 180), 3 * 3600)
+		T.truthy(LeaderboardConfig.encode("HoursPlayed", 61) > LeaderboardConfig.encode("HoursPlayed", 59))
+		T.eq(LeaderboardConfig.format("HoursPlayed", 3 * 3600 + 1800), "3.5 h")
+		T.eq(LeaderboardConfig.format("MoneyPerSec", 1300), "+$1.3K/s")
+		T.eq(LeaderboardConfig.format("TotalEarned", 4.5e6), "$4.5M")
+		T.eq(LeaderboardConfig.format("Artifacts", 1234), "1,234")
+		T.eq(LeaderboardConfig.encode("Nope", 5), 0)
+	end)
+
+	---------------------------------------------------------------- monetization
+
+	T.test("Step67: every Robux item is a placeholder and never live", function()
+		local required = {
+			BigPass = 560,
+			Podiums = 100,
+			OfflineExtension = 99,
+			TrainExpress = 199,
+			RoyalCapsule1 = 49,
+			EnchantHeartfire = 20,
+			EnchantStarbreaker = 20,
+		}
+		for key, robux in required do
+			local product = MonetizationConfig.get(key)
+			T.truthy(product, key)
+			T.eq(product.Robux, robux, key .. " price")
+		end
+		for _, key in
+			{
+				"RoyalCapsule3",
+				"RoyalCapsule10",
+				"TripleLucky15",
+				"TripleLucky60",
+				"HexaLucky15",
+				"HexaLucky60",
+				"CoinsSmall",
+				"CoinsMedium",
+				"CoinsLarge",
+			}
+		do
+			T.truthy(MonetizationConfig.get(key), key)
+		end
+		local big = MonetizationConfig.get("BigPass")
+		T.truthy(
+			table.find(big.Perks, "Podiums") and table.find(big.Perks, "OfflineExtension"),
+			"the big pass has podiums 3-4 and 12 h offline"
+		)
+		for _, product in MonetizationConfig.List do
+			T.eq(product.Id, 0, product.Key .. " is a placeholder")
+			T.falsy(MonetizationConfig.isLive(product.Id))
+			T.falsy(MonetizationConfig.keyLive(product.Key))
+			T.truthy(product.Robux > 0)
+			T.eq(MonetizationConfig.Products[product.Key], product)
+		end
+		T.truthy(MonetizationConfig.isLive(123456))
+		T.falsy(MonetizationConfig.isLive(0 / 0))
+		T.falsy(MonetizationConfig.isLive("123"))
+		T.eq(MonetizationConfig.promptStatus("RoyalCapsule1", false), "ComingSoon")
+		T.eq(MonetizationConfig.promptStatus("RoyalCapsule1", true), "Restricted", "paid random + restricted")
+		T.eq(MonetizationConfig.promptStatus("EnchantHeartfire", true), "ComingSoon", "not random: policy doesn't matter")
+		T.eq(MonetizationConfig.promptStatus("EnchantHeartfire", false, true), "Owned")
+		T.eq(MonetizationConfig.promptStatus("HexaLucky15", false, false, true), "Full")
+		T.eq(MonetizationConfig.promptStatus("Nope", false), "Unknown")
+		for _, status in { "ComingSoon", "Restricted", "Owned", "Full", "Unknown" } do
+			T.truthy(MonetizationConfig.StatusText[status], status .. " text")
+		end
+		T.eq(MonetizationConfig.coinPackAmount("CoinsSmall", 0), 5000)
+		T.eq(MonetizationConfig.coinPackAmount("CoinsSmall", 100), 60000)
+		T.eq(MonetizationConfig.coinPackAmount("BigPass", 100), nil)
+	end)
+
+	---------------------------------------------------------------- remotes + save
+
+	T.test("Step67: the new remotes", function()
+		for _, name in { "GearAction", "EnchantAction", "BoostAction", "CapsuleAction", "GolemAction", "WheelAction", "ArtifactAction" } do
+			local limit = Net.Events[name]
+			T.truthy(type(limit) == "table" and limit.Rate > 0 and limit.Burst >= 1, name .. " is rate limited")
+			T.truthy(limit.Rate <= 4, name .. " is not spammable")
+		end
+		for _, name in { "ActionResult", "CapsuleResult", "WheelResult", "ArtifactFound", "PurchasePrompt" } do
+			T.eq(Net.Events[name], false, name .. " is server -> client")
+		end
+	end)
+
+	T.test("Step67: the new save records", function()
+		T.eq(DataTemplate.Version, 3, "still version 3")
+		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
+		for _, lineId in GearConfig.LineIds do
+			T.eq(DataTemplate.Gear[lineId], 0)
+		end
+		T.eq(#DataTemplate.Enchants.Slots, EnchantConfig.MaxSlots)
+		T.eq(next(DataTemplate.Enchants.Owned), nil)
+		T.eq(DataTemplate.Boosts.TripleLuckyUntil, 0)
+		T.eq(DataTemplate.Boosts.HexaLuckyUntil, 0)
+		T.eq(DataTemplate.Golems.NextId, 1)
+		T.eq(DataTemplate.Wheel.NextSpinAt, 0)
+		T.eq(next(DataTemplate.Artifacts.Found), nil)
+		for _, stat in { "ArtifactsFound", "CapsulesOpened", "WheelSpins" } do
+			T.eq(DataTemplate.Stats[stat], 0)
+		end
+		-- an old save gets the records from reconcile
+		local old = fresh()
+		old.Gear, old.Enchants, old.Golems, old.Wheel, old.Artifacts, old.Boosts = nil, nil, nil, nil, nil, nil
+		old.Stats.WheelSpins = nil
+		ProfileStore.reconcile(old, DataTemplate)
+		T.eq(old.Gear.Boots, 0)
+		T.eq(#old.Enchants.Slots, 4)
+		T.eq(old.Golems.NextId, 1)
+		T.eq(old.Stats.WheelSpins, 0)
+	end)
+
+	---------------------------------------------------------------- migration
+
+	T.test("Step67 migration: a fresh save is untouched, CarryLevel folds into the Backpack", function()
+		local data = fresh()
+		local copy = ProfileStore.deepCopy(data)
+		local report = Migrations.run(data, NOW)
+		T.truthy(deepEqual(data, copy), "fresh save untouched")
+		T.eq(report.Moved + report.Dropped, 0)
+		for carry, backpack in { [1] = 0, [2] = 1, [3] = 2, [4] = 3, [5] = 4, [9] = 4, [-2] = 0 } do
+			local save = fresh()
+			save.CarryLevel = carry
+			Migrations.run(save, NOW)
+			T.eq(save.Gear.Backpack, backpack, "CarryLevel " .. carry)
+			T.eq(save.CarryLevel, nil, "removed")
+			T.eq(ToolData.carryCapacity(math.clamp(carry, 1, 5), false), GearConfig.carryCapacity(save.Gear, false), "same capacity")
+		end
+		local bought = fresh()
+		bought.CarryLevel = 2
+		bought.Gear.Backpack = 4
+		Migrations.run(bought, NOW)
+		T.eq(bought.Gear.Backpack, 4, "the higher one wins")
+		local junk = fresh()
+		junk.CarryLevel = "lots"
+		Migrations.run(junk, NOW)
+		T.eq(junk.Gear.Backpack, 0)
+		T.eq(junk.CarryLevel, nil)
+	end)
+
+	local function junkSave(): { [string]: any }
+		local data = fresh()
+		data.BlasterLevel = 4 -- 2 enchant slots open
+		data.Gear = { Boots = 2.7, HelmetLamp = -1, Backpack = 99, Gloves = 0 / 0, Magnet = "3", Cape = 2 }
+		data.Enchants = {
+			Owned = { Power = 2.5, Lucky = 0, Midas = 9, Fake = 1, [3] = 1, Heartfire = 1 },
+			Slots = { "Power", "Power", "Midas", 5, "x" },
+		}
+		data.Boosts = { TripleLuckyUntil = NOW + 10 ^ 9, HexaLuckyUntil = -5 }
+		data.Golems = {
+			Owned = {
+				{ Id = 1, Kind = "PebbleGolem", Extra = "cut" },
+				{ Id = 1, Kind = "EmberImp" }, -- duplicate id
+				{ Id = 2.5, Kind = "EmberImp" },
+				{ Id = 3, Kind = "IronGolem" }, -- unknown kind
+				"junk",
+				{ Id = 7, Kind = "DiamondDuke" },
+			},
+			Equipped = { 7, 7, 1, 99, "x" },
+			NextId = 2,
+		}
+		data.Wheel = { NextSpinAt = NOW + 10 ^ 9 }
+		data.Artifacts = {
+			Found = { CrownCoin = 2.9, RoyalSeal = 0, Fake = 3, EmberCrown = 1e9 },
+			Chapters = { CrownOfKaldrum = true, RoyalRailway = "yes", Nope = true },
+		}
+		data.Stats.ArtifactsFound = -3
+		data.Stats.CapsulesOpened = 4.6
+		data.Stats.WheelSpins = 0 / 0
+		return data
+	end
+
+	T.test("Step67 migration: junk is repaired (known ids, caps, whole levels, finite times)", function()
+		local data = junkSave()
+		local report = Migrations.run(data, NOW)
+		T.truthy(report.Dropped > 0, "repairs counted")
+		-- gear
+		T.eq(data.Gear.Boots, 2)
+		T.eq(data.Gear.HelmetLamp, 0)
+		T.eq(data.Gear.Backpack, GearConfig.MaxLevel)
+		T.eq(data.Gear.Gloves, 0)
+		T.eq(data.Gear.Magnet, 0, "a string level is junk")
+		T.eq(data.Gear.Cape, nil, "unknown line dropped")
+		-- enchants
+		T.eq(data.Enchants.Owned.Power, 2)
+		T.eq(data.Enchants.Owned.Lucky, nil)
+		T.eq(data.Enchants.Owned.Midas, 3, "capped at the top tier")
+		T.eq(data.Enchants.Owned.Fake, nil)
+		T.eq(data.Enchants.Owned[3], nil)
+		T.eq(data.Enchants.Owned.Heartfire, 1)
+		T.eq(#data.Enchants.Slots, 4)
+		T.eq(data.Enchants.Slots[1], "Power")
+		T.eq(data.Enchants.Slots[2], "", "an id sits in one slot only")
+		T.eq(data.Enchants.Slots[3], "", "slot 3 isn't open at blaster level 4")
+		T.eq(data.Enchants.Slots[4], "")
+		T.eq(data.Enchants.Slots[5], nil)
+		-- boosts
+		T.eq(data.Boosts.TripleLuckyUntil, NOW + BoostConfig.MaxSavedSeconds, "capped")
+		T.eq(data.Boosts.HexaLuckyUntil, 0)
+		-- golems
+		T.eq(#data.Golems.Owned, 2)
+		T.eq(data.Golems.Owned[1].Id, 1)
+		T.eq(data.Golems.Owned[1].Kind, "PebbleGolem")
+		T.eq(data.Golems.Owned[1].Extra, nil, "extra fields cut")
+		T.eq(data.Golems.Owned[2].Id, 7)
+		T.eq(#data.Golems.Equipped, 2)
+		T.eq(data.Golems.Equipped[1], 7)
+		T.eq(data.Golems.Equipped[2], 1)
+		T.eq(data.Golems.NextId, 8, "above every owned id")
+		-- wheel
+		T.eq(data.Wheel.NextSpinAt, NOW + WheelConfig.CooldownSeconds)
+		-- artifacts
+		T.eq(data.Artifacts.Found.CrownCoin, 2)
+		T.eq(data.Artifacts.Found.RoyalSeal, nil)
+		T.eq(data.Artifacts.Found.Fake, nil)
+		T.eq(data.Artifacts.Found.EmberCrown, ArtifactConfig.MaxCount)
+		T.eq(data.Artifacts.Chapters.CrownOfKaldrum, true)
+		T.eq(data.Artifacts.Chapters.RoyalRailway, nil)
+		T.eq(data.Artifacts.Chapters.Nope, nil)
+		-- stats
+		T.eq(data.Stats.ArtifactsFound, 0)
+		T.eq(data.Stats.CapsulesOpened, 4)
+		T.eq(data.Stats.WheelSpins, 0)
+	end)
+
+	T.test("Step67 migration: idempotent, and records that aren't tables are rebuilt", function()
+		local once = junkSave()
+		Migrations.run(once, NOW)
+		local twice = ProfileStore.deepCopy(once)
+		local report = Migrations.run(twice, NOW)
+		T.truthy(deepEqual(once, twice), "second run changed the save")
+		T.eq(report.Moved + report.Dropped, 0)
+		-- a later run (time moved on) changes nothing either
+		local later = ProfileStore.deepCopy(once)
+		Migrations.run(later, NOW + 5000)
+		T.truthy(deepEqual(once, later), "a later run changed the save")
+		local broken = fresh()
+		broken.Gear = "x"
+		broken.Enchants = 5
+		broken.Boosts = true
+		broken.Golems = "y"
+		broken.Wheel = {}
+		broken.Artifacts = { Found = "z" }
+		broken.Stats = "w"
+		local r = Migrations.run(broken, NOW)
+		T.truthy(r.Dropped >= 6, "counted")
+		T.eq(broken.Gear.Boots, 0)
+		T.eq(#broken.Enchants.Slots, 4)
+		T.eq(broken.Boosts.HexaLuckyUntil, 0)
+		T.eq(broken.Golems.NextId, 1)
+		T.eq(broken.Wheel.NextSpinAt, 0)
+		T.eq(next(broken.Artifacts.Found), nil)
+		T.eq(type(broken.Artifacts.Chapters), "table")
+		T.eq(broken.Stats.WheelSpins, 0)
+		T.eq(broken.Stats.OresMined, 0, "Stats rebuilt from the template")
+		local again = ProfileStore.deepCopy(broken)
+		local r2 = Migrations.run(again, NOW)
+		T.truthy(deepEqual(broken, again))
+		T.eq(r2.Moved + r2.Dropped, 0)
+	end)
+
+	---------------------------------------------------------------- Bonuses
+
+	local function fakePlayer(userId: number): any
+		local p: any = { UserId = userId, Name = "P" .. userId, Parent = true, attrs = {} }
+		p.GetAttribute = function(_, key: string)
+			return p.attrs[key]
+		end
+		p.SetAttribute = function(_, key: string, value: any)
+			p.attrs[key] = value
+		end
+		return p
+	end
+
+	local function withBonuses(name: string, fn: (any) -> ())
+		T.test(name, function()
+			local w: any = { byPlayer = {} }
+			local savedGet = rawget(DataService, "get")
+			rawset(DataService, "get", function(p)
+				return w.byPlayer[p]
+			end)
+			Bonuses._test.reset()
+			Bonuses._test.setClock(function()
+				return NOW
+			end)
+			local ok, err = pcall(fn, w)
+			rawset(DataService, "get", savedGet)
+			Bonuses._test.reset()
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end
+
+	withBonuses("Step67 Bonuses: a fresh save is neutral", function(w)
+		local stats = Bonuses.compute(fresh(), NOW, nil)
+		T.eq(Bonuses.damageMult(stats, false), 1)
+		T.eq(Bonuses.damageMult(stats, true), 1)
+		T.eq(Bonuses.reach(stats), 0)
+		T.eq(Bonuses.oreLuck(stats), 1)
+		T.falsy(Bonuses.tripleLucky(stats))
+		T.eq(Bonuses.twinDrop(stats), 0)
+		T.near(Bonuses.artifactChance(stats, "Quarry"), ArtifactConfig.rockChance("Quarry"), EPS)
+		T.eq(Bonuses.sellMult(stats), 1)
+		T.eq(Bonuses.walkSpeed(stats), 16, "Boots level 0")
+		T.eq(Bonuses.magnetRadius(stats), 0)
+		T.eq(Bonuses.pickupRange(stats), 11)
+		T.eq(Bonuses.throwMult(stats), 1)
+		T.eq(Bonuses.carryCapacity(stats, nil), 1)
+		local range, brightness = Bonuses.lamp(stats)
+		T.eq(range, 0)
+		T.eq(brightness, 0)
+		-- no save at all behaves the same
+		local none = Bonuses.compute(nil, NOW, nil)
+		T.eq(Bonuses.walkSpeed(none), 16)
+		T.eq(Bonuses.carryCapacity(none, nil), 1)
+		local names = Bonuses._test.names()
+		for _, source in { "Gear", "Enchants", "Golems", "Boosts", "Collections" } do
+			T.truthy(table.find(names, source), "built-in source " .. source)
+		end
+		-- rollOre: no luck, no random call, the rock's ore stays
+		local calls = 0
+		local ore = Bonuses.rollOre(stats, { Coal = 1, Gold = 1 }, "Coal", function()
+			calls += 1
+			return 0.99
+		end)
+		T.eq(ore, "Coal")
+		T.eq(calls, 0)
+		local p = fakePlayer(1)
+		w.byPlayer[p] = fresh()
+		local summary = Bonuses.summary(p)
+		T.eq(summary.WalkSpeed, 16)
+		T.eq(summary.CarryCapacity, 1)
+		T.eq(summary.TripleLucky, false)
+		p.attrs.Perk_StrongBack = true
+		T.eq(Bonuses.summary(p).CarryCapacity, 2, "StrongBack doubles")
+	end)
+
+	withBonuses("Step67 Bonuses: every source adds up", function(w)
+		local data = fresh()
+		data.BlasterLevel = 10
+		data.Gear = { Boots = 5, HelmetLamp = 3, Backpack = 2, Gloves = 5, Magnet = 1 }
+		data.Enchants = {
+			Owned = { Power = 3, Swift = 2, Magnetism = 1, GolemBond = 2, TwinDrop = 3 },
+			Slots = { "Power", "Swift", "Magnetism", "GolemBond" },
+		}
+		data.Golems = {
+			Owned = { { Id = 1, Kind = "EmberImp" }, { Id = 2, Kind = "TinTumbler" }, { Id = 3, Kind = "GildedPorter" } },
+			Equipped = { 1, 2, 3 },
+			NextId = 4,
+		}
+		data.Boosts = { TripleLuckyUntil = NOW + 60, HexaLuckyUntil = NOW + 60 }
+		for _, artifact in ArtifactConfig.ByCollection.Golemworks do
+			ArtifactConfig.add(data.Artifacts, artifact.Id)
+		end
+		local p = fakePlayer(2)
+		w.byPlayer[p] = data
+		local stats = Bonuses.stats(p)
+		local bond = 1 + 0.25 + 0.1 -- Golem Bond II + the Golemworks collection
+		T.near(Bonuses.damageMult(stats, false), 1 + 0.35 + 0.1 * bond, EPS, "Power III + Ember Imp")
+		T.near(Bonuses.walkSpeed(stats), (26 + 2) * (1 + 0.03 * bond), EPS, "Boots 5 + Swift II, Tin Tumbler")
+		T.eq(Bonuses.magnetRadius(stats), 8 + 3, "Magnet 1 + Magnetism I")
+		T.eq(Bonuses.pickupRange(stats), 24)
+		T.near(Bonuses.throwMult(stats), 1.4, EPS)
+		T.eq(Bonuses.carryCapacity(stats, p), 3)
+		local range = Bonuses.lamp(stats)
+		T.eq(range, 34)
+		T.eq(Bonuses.oreLuck(stats), 2.5, "Hexa Lucky")
+		T.truthy(Bonuses.tripleLucky(stats))
+		T.eq(Bonuses.twinDrop(stats), 0, "Twin Drop is owned but not slotted")
+		-- income is per source, for EconomyService.addIncomeBonus
+		T.near(Bonuses.incomeBonus("Golems")(p), 0.1 * bond, EPS, "Gilded Porter income")
+		T.eq(Bonuses.incomeBonus("Gear")(p), 0)
+		T.eq(Bonuses.incomeBonus("Missing")(p), 0)
+		-- boosts run out
+		Bonuses._test.setClock(function()
+			return NOW + 61
+		end)
+		stats = Bonuses.stats(p)
+		T.eq(Bonuses.oreLuck(stats), 1, "Hexa Lucky ran out")
+		T.falsy(Bonuses.tripleLucky(stats))
+		-- ore luck re-rolls with Rare+ weights x luck
+		data.Boosts.HexaLuckyUntil = NOW + 600
+		stats = Bonuses.stats(p)
+		local ore = Bonuses.rollOre(stats, { Coal = 1, Gold = 1 }, "Coal", function()
+			return 0.3
+		end)
+		T.eq(ore, "Gold", "Gold weighs 2.5 of 3.5: a 0.3 roll lands on it")
+	end)
+
+	withBonuses("Step67 Bonuses: register replaces a source, bad providers count as nothing", function(w)
+		local p = fakePlayer(3)
+		w.byPlayer[p] = fresh()
+		Bonuses.register("Event", function()
+			return { DamagePct = 0.5 }
+		end)
+		T.near(Bonuses.damageMult(Bonuses.stats(p), false), 1.5, EPS)
+		Bonuses.register("Event", function()
+			return { DamagePct = 0.25 }
+		end)
+		T.near(Bonuses.damageMult(Bonuses.stats(p), false), 1.25, EPS, "replaced, not added")
+		Bonuses.register("Broken", function()
+			error("boom")
+		end)
+		Bonuses.register("Junk", function()
+			return "nope"
+		end)
+		T.near(Bonuses.damageMult(Bonuses.stats(p), false), 1.25, EPS, "errors ignored")
+		Bonuses.unregister("Event")
+		T.eq(Bonuses.damageMult(Bonuses.stats(p), false), 1)
+		Bonuses.register("Gear", function()
+			return { WalkSpeed = 20 }
+		end)
+		T.eq(Bonuses.walkSpeed(Bonuses.stats(p)), 20, "a package may replace a built-in source")
+	end)
+
+	---------------------------------------------------------------- shards + policy
+
+	T.test("Step67: shards are read defensively and never go negative", function()
+		T.eq(Shards.get({}), 0, "no field yet")
+		T.eq(Shards.get({ Shards = "12" }), 12)
+		T.eq(Shards.get({ Shards = 0 / 0 }), 0)
+		T.eq(Shards.get({ Shards = -4 }), 0)
+		T.eq(Shards.get({ Shards = 7.9 }), 7)
+		local data: any = {}
+		T.eq(Shards.add(data, 25), 25)
+		T.eq(Shards.add(data, 0.5), 25, "below 1 adds nothing")
+		T.eq(Shards.add(data, 0 / 0), 25)
+		T.falsy(Shards.spend(data, 26), "not enough")
+		T.falsy(Shards.spend(data, 1.5), "whole numbers only")
+		T.falsy(Shards.spend(data, -1))
+		T.truthy(Shards.spend(data, 20))
+		T.eq(Shards.get(data), 5)
+		T.eq(Shards.add(data, 1e15), Shards.Max, "capped")
+	end)
+
+	T.test("Step67: the policy wrapper is strict until it knows, then caches", function()
+		Policy._test.reset()
+		local calls = 0
+		Policy._test.setFetcher(function()
+			calls += 1
+			return { ArePaidRandomItemsRestricted = false, IsPaidItemTradingAllowed = true }
+		end)
+		local p = fakePlayer(4)
+		T.truthy(Policy.cached(p).PaidRandomRestricted, "strict before the first answer")
+		T.falsy(Policy.paidRandomRestricted(p))
+		T.falsy(Policy.paidRandomRestricted(p))
+		T.eq(calls, 1, "asked once")
+		T.eq(p.attrs.PaidRandomRestricted, false, "the client can read it")
+		T.eq(p.attrs.PaidTradingAllowed, true)
+		-- a failing call keeps the strict values and is tried again later
+		local q = fakePlayer(5)
+		Policy._test.setFetcher(function()
+			error("PolicyService down")
+		end)
+		T.truthy(Policy.paidRandomRestricted(q), "strict when the call fails")
+		T.eq(q.attrs.PaidRandomRestricted, true)
+		Policy._test.setFetcher(function()
+			return { ArePaidRandomItemsRestricted = true }
+		end)
+		T.truthy(Policy.paidRandomRestricted(q))
+		T.truthy(Policy.cached(q).Known, "known now")
+		Policy._test.reset()
+	end)
+end

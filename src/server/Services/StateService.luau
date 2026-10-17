@@ -11,10 +11,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local GearConfig = require(Shared.Config.GearConfig)
 local ItemData = require(Shared.Config.ItemData)
-local ToolData = require(Shared.Config.ToolData)
 local Net = require(Shared.Net)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local Perks = require(script.Parent.Parent.Perks)
+local Shards = require(script.Parent.Parent.Shards)
 local DataService = require(script.Parent.DataService)
 
 local StateService = {}
@@ -51,8 +53,9 @@ function StateService.snapshot(player: Player): { [string]: any }?
 		BlasterLevel = BlasterData.get(data.BlasterLevel).Level,
 		BlasterOre = data.BlasterOre,
 		Podiums = data.Podiums,
-		CarryLevel = data.CarryLevel,
-		CarryCapacity = ToolData.carryCapacity(data.CarryLevel, Perks.has(player, "StrongBack")),
+		-- deprecated mirror of the Backpack level (old CarryLevel = Backpack + 1)
+		CarryLevel = GearConfig.level(data.Gear, "Backpack") + 1,
+		CarryCapacity = GearConfig.carryCapacity(data.Gear, Perks.has(player, "StrongBack")),
 		Upgrades = data.Upgrades,
 		MachineInventory = data.MachineInventory,
 		PlacedCount = #data.PlacedMachines,
@@ -64,6 +67,17 @@ function StateService.snapshot(player: Player): { [string]: any }?
 		KeepList = data.KeepList,
 		FoundryStock = storageSummary(foundryStock),
 		FoundryCount = #foundryStock,
+		-- steps 6-7: the saved records as they are (times are os.time() seconds:
+		-- compare with workspace:GetServerTimeNow()), crystal shards, and the
+		-- player's bonus numbers (Bonuses.summary)
+		Gear = data.Gear,
+		Enchants = data.Enchants,
+		Boosts = data.Boosts,
+		Golems = data.Golems,
+		Wheel = data.Wheel,
+		Artifacts = data.Artifacts,
+		Shards = Shards.get(data),
+		Bonuses = Bonuses.summary(player),
 		Discovered = data.Discovered,
 		Stats = data.Stats,
 		Tutorial = data.Tutorial,

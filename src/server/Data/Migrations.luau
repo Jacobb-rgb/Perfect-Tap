@@ -51,13 +51,39 @@
 	- Upgrades is a record and Upgrades.PenAutomation a whole number
 	  0..MAX_LEVEL_KEPT (readers clamp to EconomyConfig.PenAutomation; a newer
 	  server may sell more levels).
+
+	Steps 6-7 (same Version 3; DataTemplate fills the records in; `now` =
+	os.time() unless the caller passes one, for the time caps):
+	- Gear: whole levels 0..GearConfig.MaxLevel for the five lines, other keys
+	  dropped. The old CarryLevel N (1..5) folds into Backpack level N - 1
+	  (same capacity; the higher of the two wins) and CarryLevel is removed.
+	- Enchants.Owned: known enchant ids -> whole tiers 1..their tier count.
+	  Enchants.Slots: exactly EnchantConfig.MaxSlots strings; a slot keeps an
+	  owned id only once, and only when the blaster level has opened it.
+	- Boosts: finite whole os.time() seconds >= 0, at most now +
+	  BoostConfig.MaxSavedSeconds.
+	- Golems.Owned: entries { Id, Kind } with a whole unique Id 1..MAX_GOLEM_ID
+	  and a known kind, at most GolemConfig.MaxSaved (extra fields are cut).
+	  Equipped: at most GolemConfig.EquipSlots unique owned ids. NextId is a
+	  whole number above every owned Id.
+	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
+	- Artifacts.Found: known artifact ids -> whole counts 1..ArtifactConfig.MaxCount;
+	  Chapters: known collection ids -> true.
+	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins are
+	  whole numbers >= 0.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local BlasterData = require(Shared.Config.BlasterData)
+local BoostConfig = require(Shared.Config.BoostConfig)
+local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GameConfig = require(Shared.Config.GameConfig)
+local GearConfig = require(Shared.Config.GearConfig)
+local GolemConfig = require(Shared.Config.GolemConfig)
+local WheelConfig = require(Shared.Config.WheelConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
 local TrainConfig = require(Shared.Config.TrainConfig)
@@ -74,6 +100,8 @@ local MAX_INVENTORY = MachineData.MaxInventory
 -- Highest saved level of a step 3 upgrade (readers clamp to what is sold).
 local MAX_LEVEL_KEPT = 99
 local PODIUM_SLOTS = 4
+local MAX_GOLEM_ID = 2 ^ 31 - 1
+local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 
 local function isFinite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
@@ -128,6 +156,224 @@ local function foundryIngot(item: any): boolean
 		and item.R == nil
 end
 
+-- The keys of a table (so entries can be removed while walking them).
+local function keysOf(t: { [any]: any }): { any }
+	local keys = {}
+	for k in t do
+		table.insert(keys, k)
+	end
+	return keys
+end
+
+local function deepCopy(v: any): any
+	if type(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in v do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+-- data[field] as a table: anything else is replaced by a copy of the
+-- template's record (counted as dropped when it wasn't nil).
+local function record(data: { [string]: any }, field: string, report: Report): { [any]: any }
+	local t = data[field]
+	if type(t) ~= "table" then
+		if t ~= nil then
+			report.Dropped += 1
+		end
+		t = deepCopy((DataTemplate :: any)[field])
+		data[field] = t
+	end
+	return t
+end
+
+-- t[field] as a table (a fresh empty one when missing or junk).
+local function subTable(t: { [any]: any }, field: string, report: Report): { [any]: any }
+	local sub = t[field]
+	if type(sub) ~= "table" then
+		if sub ~= nil then
+			report.Dropped += 1
+		end
+		sub = {}
+		t[field] = sub
+	end
+	return sub
+end
+
+-- Steps 6-7: gear, enchants, boosts, golems, wheel, artifacts, new stats.
+local function migrateSteps67(data: { [string]: any }, now: number, report: Report)
+	-- gear levels; the old CarryLevel N becomes Backpack level N - 1
+	local gear = record(data, "Gear", report)
+	for _, key in keysOf(gear) do
+		if type(key) ~= "string" or not GearConfig.ById[key] then
+			gear[key] = nil
+			report.Dropped += 1
+		end
+	end
+	for _, lineId in GearConfig.LineIds do
+		local v = gear[lineId]
+		if v ~= nil and not isFinite(v) then
+			report.Dropped += 1
+		end
+		gear[lineId] = if isFinite(v) then math.clamp(math.floor(v), 0, GearConfig.MaxLevel) else 0
+	end
+	local carry = data.CarryLevel
+	if carry ~= nil then
+		if isFinite(carry) then
+			-- the old levels were 1..OLD_CARRY_LEVELS: higher junk never gives more
+			local backpack = math.clamp(math.floor(carry) - 1, 0, OLD_CARRY_LEVELS - 1)
+			gear.Backpack = math.max(gear.Backpack, backpack)
+		end
+		data.CarryLevel = nil
+	end
+
+	-- enchants: owned tiers, then slots (owned, unique, opened by the blaster level)
+	local enchants = record(data, "Enchants", report)
+	local owned = subTable(enchants, "Owned", report)
+	for _, id in keysOf(owned) do
+		local tier = owned[id]
+		local max = if type(id) == "string" then EnchantConfig.tiers(id) else 0
+		if max == 0 or not isFinite(tier) or tier < 1 then
+			owned[id] = nil
+			report.Dropped += 1
+		else
+			local whole = math.clamp(math.floor(tier), 1, max)
+			if whole ~= tier then
+				owned[id] = whole
+			end
+		end
+	end
+	local slots = enchants.Slots
+	if slots ~= nil and type(slots) ~= "table" then
+		report.Dropped += 1
+	end
+	local open = EnchantConfig.unlockedSlots(data.BlasterLevel)
+	local cleanSlots = {}
+	local slotted: { [string]: boolean } = {}
+	for i = 1, EnchantConfig.MaxSlots do
+		local id = if type(slots) == "table" then slots[i] else nil
+		if type(id) == "string" and id ~= "" and i <= open and owned[id] ~= nil and not slotted[id] then
+			slotted[id] = true
+			cleanSlots[i] = id
+		else
+			if id ~= nil and id ~= "" then
+				report.Dropped += 1
+			end
+			cleanSlots[i] = ""
+		end
+	end
+	enchants.Slots = cleanSlots
+
+	-- boosts: whole os.time() seconds, never absurdly far ahead
+	local boosts = record(data, "Boosts", report)
+	for _, kindId in BoostConfig.KindIds do
+		local field = BoostConfig.Kinds[kindId].Field
+		local v = boosts[field]
+		if not isFinite(v) or v < 0 then
+			if v ~= nil then
+				report.Dropped += 1
+			end
+			boosts[field] = 0
+		else
+			boosts[field] = math.min(math.floor(v), now + BoostConfig.MaxSavedSeconds)
+		end
+	end
+
+	-- golems: well-formed unique entries, equipped ids that exist, NextId above them all
+	local golems = record(data, "Golems", report)
+	local ownedGolems = {}
+	local ids: { [number]: boolean } = {}
+	local maxId = 0
+	local list = golems.Owned
+	if type(list) == "table" then
+		for _, entry in values(list) do
+			local id = if type(entry) == "table" then entry.Id else nil
+			local kind = if type(entry) == "table" then entry.Kind else nil
+			if
+				isFinite(id)
+				and id >= 1
+				and id <= MAX_GOLEM_ID
+				and id == math.floor(id)
+				and not ids[id]
+				and type(kind) == "string"
+				and GolemConfig.ById[kind] ~= nil
+				and #ownedGolems < GolemConfig.MaxSaved
+			then
+				ids[id] = true
+				maxId = math.max(maxId, id)
+				table.insert(ownedGolems, { Id = id, Kind = kind })
+			else
+				report.Dropped += 1
+			end
+		end
+	elseif list ~= nil then
+		report.Dropped += 1
+	end
+	golems.Owned = ownedGolems
+	local equipped = {}
+	local wearing = golems.Equipped
+	if type(wearing) == "table" then
+		for _, id in values(wearing) do
+			if type(id) == "number" and ids[id] and not table.find(equipped, id) and #equipped < GolemConfig.EquipSlots then
+				table.insert(equipped, id)
+			else
+				report.Dropped += 1
+			end
+		end
+	elseif wearing ~= nil then
+		report.Dropped += 1
+	end
+	golems.Equipped = equipped
+	local nextId = golems.NextId
+	local wholeNext = if isFinite(nextId) then math.floor(nextId) else 1
+	golems.NextId = math.clamp(math.max(wholeNext, maxId + 1), 1, MAX_GOLEM_ID + 1)
+
+	-- the daily wheel: a whole time, at most one cooldown ahead
+	local wheel = record(data, "Wheel", report)
+	local spinAt = wheel.NextSpinAt
+	if not isFinite(spinAt) or spinAt < 0 then
+		if spinAt ~= nil then
+			report.Dropped += 1
+		end
+		wheel.NextSpinAt = 0
+	else
+		wheel.NextSpinAt = math.min(math.floor(spinAt), now + WheelConfig.CooldownSeconds)
+	end
+
+	-- artifacts: known ids with whole counts, chapters of known collections
+	local artifacts = record(data, "Artifacts", report)
+	local found = subTable(artifacts, "Found", report)
+	for _, id in keysOf(found) do
+		local n = found[id]
+		if type(id) ~= "string" or not ArtifactConfig.ById[id] or not isFinite(n) or n < 1 then
+			found[id] = nil
+			report.Dropped += 1
+		else
+			local whole = math.min(math.floor(n), ArtifactConfig.MaxCount)
+			if whole ~= n then
+				found[id] = whole
+			end
+		end
+	end
+	local chapters = subTable(artifacts, "Chapters", report)
+	for _, id in keysOf(chapters) do
+		if type(id) ~= "string" or not ArtifactConfig.CollectionById[id] or chapters[id] ~= true then
+			chapters[id] = nil
+			report.Dropped += 1
+		end
+	end
+
+	-- the new stats
+	local stats = record(data, "Stats", report)
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins" } do
+		local v = stats[field]
+		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+end
+
 -- Cleans one machine queue. Returns the kept items, or nil when none are left.
 local function cleanQueue(queue: any, storage: { any }, report: Report): { any }?
 	if queue == nil then
@@ -151,8 +397,9 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 	return if #kept > 0 then kept else nil
 end
 
-function Migrations.run(data: { [string]: any }): Report
+function Migrations.run(data: { [string]: any }, now: number?): Report
 	local report: Report = { Moved = 0, Dropped = 0 }
+	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
 	-- MachineInventory first, so machines sent back below add to clean counts
 	local inventory = data.MachineInventory
@@ -471,6 +718,9 @@ function Migrations.run(data: { [string]: any }): Report
 	end
 	local automation = bought.PenAutomation
 	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, MAX_LEVEL_KEPT) else 0
+
+	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots)
+	migrateSteps67(data, clock, report)
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

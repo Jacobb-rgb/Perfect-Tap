@@ -14,7 +14,7 @@ local DataTemplate = {
 	-- blaster (design v2): level 1..10 and the ore it was forged from ("" = rusty starter)
 	BlasterLevel = 1,
 	BlasterOre = "",
-	CarryLevel = 1,
+	-- (CarryLevel is gone: carrying is the Backpack gear line, Migrations folds it in)
 
 	-- upgrades bought with coins
 	Upgrades = {
@@ -76,6 +76,23 @@ local DataTemplate = {
 		TripArriveAt = 0,
 	},
 
+	-- steps 6-7 (rules in Shared/Config: GearConfig, EnchantConfig, BoostConfig,
+	-- GolemConfig, WheelConfig, ArtifactConfig); Migrations keeps them sane
+	-- gear levels 0..GearConfig.MaxLevel, bought at the Gear shop
+	Gear = { Boots = 0, HelmetLamp = 0, Backpack = 0, Gloves = 0, Magnet = 0 },
+	-- blaster enchants: Owned = { [enchantId] = tier }, Slots = exactly
+	-- EnchantConfig.MaxSlots strings (an owned enchant id or "" = empty)
+	Enchants = { Owned = {}, Slots = { "", "", "", "" } },
+	-- luck boosts: os.time() second each one runs out (0 = never ran)
+	Boosts = { TripleLuckyUntil = 0, HexaLuckyUntil = 0 },
+	-- golem pets: Owned = { { Id = number, Kind = golemId } }, Equipped = { Id }
+	-- (at most GolemConfig.EquipSlots), NextId = the next Id to hand out
+	Golems = { Owned = {}, Equipped = {}, NextId = 1 },
+	-- the daily wheel: os.time() second the next free spin is ready (0 = now)
+	Wheel = { NextSpinAt = 0 },
+	-- artifacts: Found = { [artifactId] = count }, Chapters = { [collectionId] = true } (read)
+	Artifacts = { Found = {}, Chapters = {} },
+
 	-- progression
 	Discovered = {}, -- [oreId] = true
 	Stats = {
@@ -89,6 +106,9 @@ local DataTemplate = {
 		PodiumEarned = 0,
 		TrainTrips = 0, -- trains unloaded into the Ore Pen (TrainService)
 		PlaySeconds = 0,
+		ArtifactsFound = 0, -- every artifact find, duplicates too (the ARTIFACTS board)
+		CapsulesOpened = 0, -- golems woken from capsules (also free ones)
+		WheelSpins = 0,
 	},
 	Tutorial = { Step = 1, Done = false },
 	Daily = { LastClaimDay = 0, Streak = 0 },
