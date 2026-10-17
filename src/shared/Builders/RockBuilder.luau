@@ -37,8 +37,8 @@ local RockBuilder = {}
 
 -- Part budgets per kind (a floor streams in on its own; ~26 rocks per floor).
 RockBuilder.Budget = {
-	Small = 66,
-	Big = 74,
+	Small = 76,
+	Big = 90,
 	Crystal = 92,
 	Golden = 68,
 	Geode = 60,
@@ -260,6 +260,7 @@ type BodyOpts = {
 	Chunks: number?, -- shards in the ring
 	Flat: number?, -- height multiplier
 	Colors: { Color3 }?, -- override Mid, Light, Dark
+	Strata: { Color3 }?, -- colored rock layers across the shards (Greystone Quarry)
 }
 
 -- A point on the rock surface toward yaw `a` (fraction `up` of the half height), pushed out by `out`.
@@ -287,10 +288,19 @@ end
 	ridged top that catches the light; carved shards get a flat top with a
 	gold trim. Returns the body.
 ]]
-local function shard(parent: Instance, foot: CFrame, w: number, d: number, h: number, colors: { Color3 }, rng: Rng.Rng, carved: boolean, accent: Color3?, name: string): BasePart
+local function shard(parent: Instance, foot: CFrame, w: number, d: number, h: number, colors: { Color3 }, rng: Rng.Rng, carved: boolean, accent: Color3?, name: string, strata: { Color3 }?): BasePart
 	local mid, lite, dark = colors[1], colors[2], colors[3]
 	local body = Geo.block(parent, foot * CFrame.new(0, h / 2, 0), Vector3.new(w, h, d), Geo.vary(mid, rng, 0.04), SMOOTH, SOLID)
 	body.Name = name
+	if strata then
+		-- colored rock layers, like the striped quarry cliffs
+		local layers = if h > 2.4 then 2 else 1
+		for i = 1, layers do
+			local y = h * (if layers == 1 then rng:range(0.35, 0.6) else (0.22 + (i - 1) * 0.36 + rng:range(-0.04, 0.04)))
+			local band = Geo.block(parent, foot * CFrame.new(0, y, 0), Vector3.new(w + 0.08, rng:range(0.3, 0.46), d + 0.08), Geo.vary(strata[(i + rng:int(0, 1)) % #strata + 1], rng, 0.03), SMOOTH, GLOW)
+			band.Name = "Strata"
+		end
+	end
 	local m = math.min(w, d)
 	local facet = Geo.block(parent, foot * CFrame.new(0, h * 0.47, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(m * 0.86, h * 0.94, m * 0.86), Geo.vary(mid:Lerp(dark, 0.45), rng, 0.04), SMOOTH, SOLID)
 	facet.Name = "Facet"
@@ -349,7 +359,7 @@ local function body(c: Ctx, opts: BodyOpts): BasePart
 		local core = Geo.block(c.model, foot * CFrame.new(0, h1 * 0.36, 0) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(2.9 * scale, h1 * 0.6, 2.9 * scale), glow(opts.Core), NEON, GLOW)
 		core.Name = "Core"
 	end
-	local rock1 = shard(c.model, foot * CFrame.Angles(rng:range(-0.05, 0.05), c.start, rng:range(-0.05, 0.05)), w1, d1, h1, colors, rng, carved, accent, "Rock1")
+	local rock1 = shard(c.model, foot * CFrame.Angles(rng:range(-0.05, 0.05), c.start, rng:range(-0.05, 0.05)), w1, d1, h1, colors, rng, carved, accent, "Rock1", opts.Strata)
 	local n = opts.Chunks or (if c.big then 6 else 5)
 	c.gaps = {}
 	for i = 1, n do
@@ -362,7 +372,7 @@ local function body(c: Ctx, opts: BodyOpts): BasePart
 		group.Name = "Rock" .. (i + 1)
 		group.Parent = c.model
 		local tone = if i % 3 == 0 then { colors[1]:Lerp(colors[2], 0.3), colors[2], colors[3] } else colors
-		shard(group, tilt(CFrame.new(at.Position), a, lean) * CFrame.Angles(0, a + rng:range(-0.3, 0.3), 0), rng:range(1.4, 1.9) * scale, rng:range(1.2, 1.6) * scale, h, tone, rng, carved, accent, "Body")
+		shard(group, tilt(CFrame.new(at.Position), a, lean) * CFrame.Angles(0, a + rng:range(-0.3, 0.3), 0), rng:range(1.4, 1.9) * scale, rng:range(1.2, 1.6) * scale, h, tone, rng, carved, accent, "Body", opts.Strata)
 	end
 	for i = 1, 2 do
 		local a = c.start + 0.7 + i * 2.6
@@ -412,17 +422,50 @@ end
 
 ---------------------------------------------------------------- floor looks
 
--- Floor 1, Greystone Quarry: sandy stone chunks with copper and quartz crystal clusters (matte).
+-- Floor 1, Greystone Quarry: blue-grey slate shards (they stand out on the sandy quarry
+-- floor) with pale layers, shiny copper veins and nuggets catching the sun, grass at the
+-- foot, and a crown of copper and quartz crystals with glowing tips (the first floor has to
+-- grab players at first sight).
+local QUARRY_STRATA = { Color3.fromRGB(150, 158, 178), Color3.fromRGB(96, 100, 120) }
+local COPPER = Color3.fromRGB(232, 132, 66)
+local GRASS = { Color3.fromRGB(104, 178, 70), Color3.fromRGB(132, 200, 84) }
+
 local function quarry(c: Ctx, oreIds: { string })
-	body(c, {})
-	rockClusters(c, "Matte", 2.45, { c.pal.Crystal, c.pal.Crystal:Lerp(WHITE, 0.2) }, { c.pal.Crystal2 })
+	local rng = c.rng
+	body(c, { Strata = QUARRY_STRATA })
+	-- copper veins: shiny metal strips across the outer shards, and a few nuggets
+	for i = 1, 2 do
+		local a = c.start + 0.9 + i * 2.7
+		local at = surface(c, a, rng:range(-0.35, 0.15), -0.32)
+		local vein = Geo.block(c.model, at * CFrame.Angles(0, -a + math.pi / 2, rng:range(-0.9, 0.9)), Vector3.new(rng:range(1.6, 2.3), 0.24, 0.16), COPPER, FOIL, GLOW)
+		vein.Name = "Vein"
+	end
+	for i = 1, 3 do
+		local a = c.start + 2.0 + i * 1.9
+		local s = rng:range(0.45, 0.65)
+		local nugget = Geo.block(c.model, surface(c, a, rng:range(-0.6, 0.1), -0.25) * randomTilt(rng, 0.6), Vector3.new(s, s * 0.8, s), COPPER:Lerp(Color3.fromRGB(255, 200, 120), rng:range(0, 0.4)), FOIL, SMALL)
+		nugget.Name = "Nugget"
+	end
+	-- grass tufts at the foot (the quarry is open to the sky)
+	for i = 1, 2 do
+		local a = c.start + 1.6 + i * 3.1
+		local root = c.foot * CFrame.new(math.cos(a) * c.ring * 1.55, 0, math.sin(a) * c.ring * 1.55)
+		for j = 1, 3 do
+			local b = a + (j - 2) * 0.7
+			local h = rng:range(0.6, 0.95)
+			local blade = Geo.block(c.model, tilt(root, b, 0.35) * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, b, 0), Vector3.new(0.2, h, 0.12), GRASS[j % 2 + 1], SMOOTH, GLOW)
+			blade.Name = "Grass"
+		end
+	end
+	local tallest = rockClusters(c, "Tipped", 3.1, { c.pal.Crystal, c.pal.Crystal:Lerp(WHITE, 0.25) }, { c.pal.Crystal2, c.pal.Crystal })
+	twinkle(c, tipOf(tallest), 0.8, glow(Color3.fromRGB(255, 230, 190)))
 	glints(c, oreIds)
 end
 
 -- Floor 2, Ember Caves: dark basalt chunks around a lava heart, fire-tipped crystals.
 local function ember(c: Ctx, oreIds: { string })
 	body(c, { Core = c.pal.Accent })
-	local tallest = rockClusters(c, "Tipped", 2.75, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
+	local tallest = rockClusters(c, "Tipped", 3.3, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
 	twinkle(c, tipOf(tallest), 0.8, glow(c.pal.Crystal:Lerp(WHITE, 0.5)))
 	glints(c, oreIds)
 end
@@ -437,7 +480,7 @@ local function lagoon(c: Ctx, oreIds: { string })
 		local moss = Geo.block(c.model, at, Vector3.new(c.rng:range(1.0, 1.5), 0.16, c.rng:range(0.7, 1.1)), c.pal.Accent, SMOOTH, SMALL)
 		moss.Name = "Moss"
 	end
-	local tallest = rockClusters(c, "Shell", 2.9, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
+	local tallest = rockClusters(c, "Shell", 3.45, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
 	twinkle(c, tipOf(tallest), 0.9, glow(c.pal.Crystal2))
 	local a = c.start + 4.4
 	local foot = c.base * CFrame.new(math.cos(a) * c.mainSize.X * 0.62, 0, math.sin(a) * c.mainSize.Z * 0.62)
@@ -476,7 +519,7 @@ local function palace(c: Ctx, oreIds: { string })
 		Shape = Enum.PartType.Cylinder,
 	})
 	ring.Name = "Trim"
-	local tallest = rockClusters(c, "Shell", 3.2, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
+	local tallest = rockClusters(c, "Shell", 3.6, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
 	twinkle(c, tipOf(tallest), 1.0, glow(c.pal.Crystal:Lerp(WHITE, 0.4)))
 	glints(c, oreIds)
 end
@@ -498,7 +541,7 @@ local function core(c: Ctx, oreIds: { string })
 		)
 		bit.Name = "Debris"
 	end
-	local tallest = rockClusters(c, "Glow", 3.4, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Accent })
+	local tallest = rockClusters(c, "Glow", 3.8, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Accent })
 	twinkle(c, tipOf(tallest), 1.1, glow(c.pal.Crystal2:Lerp(WHITE, 0.3)))
 	light(tallest, glow(c.pal.Crystal), 12, 1.1)
 	glints(c, oreIds)

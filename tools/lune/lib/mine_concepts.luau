@@ -59,6 +59,41 @@ local function lamp(Geo, CF, parent, position, color, range, brightness)
 	return p
 end
 
+
+-- highest point of a built model
+local function topOf(model)
+	local top = -math.huge
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 0.99 then
+			local _, _, _, _, _, _, r10, r11, r12 = d.CFrame:GetComponents()
+			local h = d.Size / 2
+			top = math.max(top, d.CFrame.Position.Y + math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z)
+		end
+	end
+	return top
+end
+
+-- the in-game rock label (src/client/UI/RockLabel.luau) drawn as boards facing +Z for the preview:
+-- name in its color on the left, HP on the right, a red bar under them
+local function rockLabel(Geo, CF, parent, x, y, z, name, color, hpText, fraction)
+	local function textBoard(cx, w, h, text, textColor)
+		local board = Geo.block(parent, CF.new(cx, y, z), V3.new(w, h, 0.05), C3.new(0, 0, 0), nil, { Transparency = 0.97, CanCollide = false, CastShadow = false })
+		local gui = roblox.Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Back
+		gui.Parent = board
+		local t = roblox.Instance.new("TextLabel")
+		t.Text = text
+		t.TextColor3 = textColor
+		t.FontFace = roblox.Font.fromEnum(Enum.Font.FredokaOne)
+		t.Parent = gui
+	end
+	textBoard(x - 0.75, 3.6, 0.72, name, color)
+	textBoard(x + 1.85, 1.5, 0.56, hpText, C3.fromRGB(255, 240, 220))
+	local barW = 5.0
+	Geo.block(parent, CF.new(x, y - 0.6, z), V3.new(barW + 0.12, 0.3, 0.06), C3.fromRGB(18, 11, 9), nil, { CanCollide = false, CastShadow = false })
+	Geo.block(parent, CF.new(x - barW / 2 + barW * fraction / 2, y - 0.6, z + 0.03), V3.new(barW * fraction, 0.2, 0.06), C3.fromRGB(236, 84, 70), nil, { CanCollide = false, CastShadow = false })
+end
+
 local function rollOres(Rng, weights, count, seed)
 	local rng = Rng.new(seed)
 	local list = {}
@@ -116,6 +151,9 @@ function MineConcepts.buildRocks(Loader, workspace)
 			local ores = rollOres(Rng, weights, count, i * 100 + col)
 			local rock = RockBuilder.build(i, kind, ores, CF.new(x, 0, z - 3), i * 31 + col * 7)
 			rock.Parent = row
+			local maxHp = MineFloors.rockHealth(i, kind)
+			local hp = if col == 2 then math.ceil(maxHp * 0.55) else maxHp
+			rockLabel(Geo, CF, row, x, topOf(rock) + 1.3, z - 1, MineFloors.rockName(i, kind), MineFloors.labelColor(i, kind), (if hp >= 1e4 then string.format("%.1fK", hp / 1000) else tostring(hp)) .. " HP", hp / maxHp)
 			local hp = if kind == "Small" or kind == "Big" or kind == "Crystal" then " · " .. hpText(MineFloors, i, kind) else ""
 			label(Geo, CF, row, CF.new(x, 0.32, z + 4.2) * CF.Angles(-1.05, 0, 0), 8.6, 0.9, KIND_TEXT[kind] .. hp, TEXT)
 		end

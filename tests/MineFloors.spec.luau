@@ -133,15 +133,18 @@ return function(T, Loader)
 	T.test("rock builder: deeper floors have more and bigger crystals, crack stages still work", function()
 		local last = 0
 		for _, floor in MineFloors.List do
-			local rock = RockBuilder.build(floor.Index, "Small", { "Coal", "Coal", "Coal" }, CF.new(0, 0, 0), 5)
+			-- average crystal volume over several rocks (one rock's random sizes can vary)
 			local volume = 0
-			for _, part in partsOf(rock) do
-				if part.Name == "Crystal" then
-					volume += part.Size.X * part.Size.Y * part.Size.Z
+			for seed = 1, 8 do
+				for _, part in partsOf(RockBuilder.build(floor.Index, "Small", { "Coal", "Coal", "Coal" }, CF.new(0, 0, 0), seed)) do
+					if part.Name == "Crystal" then
+						volume += part.Size.X * part.Size.Y * part.Size.Z / 8
+					end
 				end
 			end
 			T.truthy(volume > last, floor.Id .. " crystals grow with depth")
 			last = volume
+			local rock = RockBuilder.build(floor.Index, "Small", { "Coal", "Coal", "Coal" }, CF.new(0, 0, 0), 5)
 			local cracks = 0
 			for stage = 1, 2 do
 				local broken = RockBuilder.applyStage(rock, stage, 3)

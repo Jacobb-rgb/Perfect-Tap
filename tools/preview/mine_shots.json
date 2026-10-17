@@ -246,5 +246,21 @@
   "preset": "Palace",
   "shadowExtent": 60,
   "maxLights": 32
+ },
+ "mine_floor1_close": {
+  "scene": "mine_rocks",
+  "position": [
+   -14,
+   8,
+   15
+  ],
+  "target": [
+   -14,
+   2.8,
+   -3
+  ],
+  "fov": 50,
+  "preset": "Quarry",
+  "shadowExtent": 40
  }
 }

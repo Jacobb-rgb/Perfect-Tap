@@ -45,6 +45,8 @@ export type Floor = {
 	Ores: { [string]: number }, -- weights for Small and Big rocks
 	CrystalOres: { [string]: number }, -- weights for Crystal rocks (better)
 	Palette: Palette,
+	RockName: string, -- the name over Small rocks ("Greystone 20 HP")
+	CrystalName: string, -- the name over Crystal rocks
 }
 
 local MineFloors = {}
@@ -99,6 +101,8 @@ MineFloors.List = {
 	{
 		Index = 1,
 		Id = "Quarry",
+		RockName = "Greystone",
+		CrystalName = "Quartz Shard",
 		Name = "Greystone Quarry",
 		ZoneId = "Quarry",
 		MinBlaster = 1,
@@ -107,11 +111,11 @@ MineFloors.List = {
 		Ores = { Coal = 30, Copper = 25, Tin = 18, Iron = 13, Quartz = 9, Silver = 5 },
 		CrystalOres = { Iron = 20, Quartz = 30, Silver = 30, Amethyst = 14, Jade = 6 },
 		Palette = {
-			Mid = rgb(150, 128, 104),
-			Light = rgb(190, 166, 134),
-			Dark = rgb(108, 90, 76),
-			Crystal = rgb(224, 122, 60),
-			Crystal2 = rgb(244, 236, 236),
+			Mid = rgb(118, 124, 142),
+			Light = rgb(168, 176, 194),
+			Dark = rgb(74, 78, 96),
+			Crystal = rgb(255, 146, 60),
+			Crystal2 = rgb(252, 246, 240),
 			Accent = rgb(255, 170, 90),
 			Ground = rgb(196, 160, 116),
 		},
@@ -119,6 +123,8 @@ MineFloors.List = {
 	{
 		Index = 2,
 		Id = "EmberCaves",
+		RockName = "Basalt",
+		CrystalName = "Ember Shard",
 		Name = "Ember Caves",
 		ZoneId = "EmberCaves",
 		MinBlaster = 3,
@@ -139,6 +145,8 @@ MineFloors.List = {
 	{
 		Index = 3,
 		Id = "DeepHollow",
+		RockName = "Hollow Stone",
+		CrystalName = "Azure Shard",
 		Name = "Deep Hollow",
 		ZoneId = "DeepHollow",
 		MinBlaster = 5,
@@ -159,6 +167,8 @@ MineFloors.List = {
 	{
 		Index = 4,
 		Id = "SunkenPalace",
+		RockName = "Palace Stone",
+		CrystalName = "Royal Shard",
 		Name = "Sunken Palace",
 		ZoneId = nil,
 		MinBlaster = 7,
@@ -179,6 +189,8 @@ MineFloors.List = {
 	{
 		Index = 5,
 		Id = "HeartstoneCore",
+		RockName = "Void Rock",
+		CrystalName = "Heart Shard",
 		Name = "Heartstone Core",
 		ZoneId = nil,
 		MinBlaster = 9,
@@ -209,6 +221,44 @@ end
 function MineFloors.get(key: number | string): Floor
 	local floor = if type(key) == "number" then MineFloors.ByIndex[key] else MineFloors.ById[key]
 	return floor or MineFloors.List[1]
+end
+
+-- The name shown over a rock (English UI), e.g. "Greystone", "Basalt Boulder", "Ember Shard".
+function MineFloors.rockName(key: number | string, kind: RockKind): string
+	local floor = MineFloors.get(key)
+	if kind == "Big" then
+		return floor.RockName .. " Boulder"
+	elseif kind == "Crystal" then
+		return floor.CrystalName
+	elseif kind == "Golden" then
+		return "Golden Rock"
+	elseif kind == "Geode" then
+		return "Geode"
+	elseif kind == "Artifact" then
+		return "Ancient Rock"
+	elseif kind == "Giant" then
+		return "Giant " .. floor.CrystalName
+	end
+	return floor.RockName
+end
+
+-- Name color over a rock: plain rocks warm white, crystals in the floor's crystal color,
+-- special rocks in their own colors (the same on every floor).
+MineFloors.LabelColors = {
+	Rock = rgb(255, 240, 220),
+	Golden = rgb(255, 206, 72),
+	Geode = rgb(196, 140, 255),
+	Artifact = rgb(110, 255, 220),
+}
+
+function MineFloors.labelColor(key: number | string, kind: RockKind): Color3
+	local floor = MineFloors.get(key)
+	if kind == "Crystal" or kind == "Giant" then
+		return floor.Palette.Crystal:Lerp(Color3.new(1, 1, 1), 0.35)
+	elseif kind == "Golden" or kind == "Geode" or kind == "Artifact" then
+		return MineFloors.LabelColors[kind]
+	end
+	return MineFloors.LabelColors.Rock
 end
 
 -- HP of a rock of `kind` on a floor: the floor's weakest blaster needs Seconds[kind].
