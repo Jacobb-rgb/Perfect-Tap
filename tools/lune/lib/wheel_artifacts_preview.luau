@@ -1,0 +1,310 @@
+--[[
+	Preview-only setup for the wheel + artifacts package (step 7).
+	  lune run tools/lune/export_scene.luau wheel_artifacts
+	The world with:
+	  plot 5    the museum (MuseumBuilder, as ArtifactService builds it) with a
+	            mid-game collection: the Crown complete, the others partly found
+	  gallery   every relic (ArtifactBuilder) on a plinth row high above the sea
+	            (x 0, y 240), one row per collection, with its name on a tag
+	  quarry    a relic popping out of a broken rock (the client's found moment)
+	UI overlays (the real views, filled like the controllers do):
+	  ui_wheel            PC: the wheel screen, a free spin ready
+	  ui_wheel_won        PC: the wheel stopped, the prize card and confetti
+	  ui_wheel_wait       PC: spun today, the countdown
+	  ui_wheel_phone      667 x 375 pt phone: the compact wheel screen
+	  ui_wheel_phone_small 568 x 320 pt phone
+	  ui_chip             the HUD with the FREE SPIN! chip
+	  ui_chip_phone       the same on a phone
+	  ui_book             PC: the collection book, Railway tab (silhouettes)
+	  ui_book_done        PC: the Crown tab, complete, chapter waiting
+	  ui_book_phone       phone: the collection book
+	  ui_story            PC: the journal, chapter 1 page 2
+	  ui_story_phone      phone: the journal (a locked chapter selected)
+	  ui_reveal           the ARTIFACT FOUND card (a new one)
+	  ui_reveal_complete  the card for a find that completes a collection
+	Shots: tools/preview/wheel_artifacts_shots.json (scene "wheel_artifacts").
+]]
+
+local UiExport = require("./uiexport")
+
+local Preview = {}
+
+Preview.Plot = 5
+Preview.GalleryAt = { 0, 240, 0 }
+
+-- a mid-game player's finds
+Preview.Found = {
+	CrownCoin = 3,
+	RoyalSeal = 2,
+	QueensBrooch = 1,
+	ThroneFinial = 1,
+	EmberScepter = 1,
+	EmberCrown = 1,
+	GoldenSpike = 2,
+	ConductorWhistle = 1,
+	RailLantern = 1,
+	RoyalTimetable = 1,
+	GolemCog = 4,
+	SparkVial = 1,
+	StarMapFragment = 1,
+	EmberRune = 1,
+	HeartstoneFragment = 1,
+}
+
+function Preview.build(Loader: any, workspace: any): { [string]: any }
+	local roblox = Loader.roblox
+	local C3 = roblox.Color3
+	local V3 = roblox.Vector3
+	local CF = Loader.CFrame
+	local Instance = roblox.Instance
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local ArtifactBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ArtifactBuilder")
+	local MuseumBuilder = Loader.requirePath("ServerScriptService.Server.World.MuseumBuilder")
+
+	local artifacts = { Found = Preview.Found, Chapters = {} }
+
+	-- the museum on plot 5's yard
+	local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[Preview.Plot])
+	local plot = workspace:FindFirstChild("Plot_" .. Preview.Plot, true)
+	local yard = plot and plot:FindFirstChild("Yard")
+	local museum = MuseumBuilder.build(plotCF)
+	museum.Parent = yard or workspace
+	local shown = MuseumBuilder.show(museum, plotCF, artifacts)
+	local structure = 0
+	for _, d in museum:GetDescendants() do
+		if d:IsA("BasePart") then
+			structure += 1
+		end
+	end
+	print(string.format("museum: %d parts with %d relics", structure, shown))
+
+	-- the gallery: every relic on a plinth, one row per collection
+	local gallery = Instance.new("Model")
+	gallery.Name = "ArtifactGallery"
+	gallery.Parent = workspace
+	local g = Preview.GalleryAt
+	local origin = CF.new(g[1], g[2], g[3])
+	Geo.block(gallery, origin * CF.new(0, -0.5, 0), V3.new(30, 1, 22), C3.fromRGB(46, 40, 44))
+	for row, collection in ArtifactConfig.Collections do
+		local z = (row - 2.5) * 4.6
+		for col, art in ArtifactConfig.ByCollection[collection.Id] do
+			local x = (col - 3.5) * 4
+			local base = origin * CF.new(x, 0, z)
+			Geo.block(gallery, base * CF.new(0, 0.3, 0), V3.new(2.6, 0.6, 2.6), C3.fromRGB(70, 76, 98))
+			local model = ArtifactBuilder.build(art.Id, base * CF.new(0, 0.6, 0) * CF.Angles(0, math.pi, 0), 1.25)
+			if model then
+				model.Parent = gallery
+			end
+		end
+		Geo.block(gallery, origin * CF.new(-13.2, 0.4, z), V3.new(1.2, 0.8, 3.2), collection.Color, roblox.Enum.Material.Neon)
+	end
+
+	-- the found moment in the quarry: a relic popping out of a broken rock
+	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
+	for _, spawn in WorldBuilder.generateNodeSpawns() do
+		if spawn.Zone == "Quarry" then
+			local rock = OreNodeBuilder.buildRock("Quarry", { "Copper", "Gold" }, CF.new(spawn.Position), 11)
+			rock.Parent = workspace
+			for _, piece in OreNodeBuilder.applyStage(rock, 2, 11) do
+				piece:Destroy()
+			end
+			local relic = ArtifactBuilder.build("EmberScepter", CF.new(spawn.Position + V3.new(0, 4.2, 0)) * CF.Angles(0, 2.6, 0.25), 1.6)
+			if relic then
+				relic.Parent = workspace
+			end
+			print("found moment at", spawn.Position)
+			break
+		end
+	end
+
+	return Preview.ui(Loader)
+end
+
+-- The HUD as HudController fills it (coins, income, empty carry slots).
+local function hud(Loader: any, uiScale: number): any
+	local roblox = Loader.roblox
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
+	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
+	local refs = HudView.build()
+	refs.Gui.Scale.Scale = uiScale
+	refs.Coins.Text = Format.money(Preview.Coins)
+	refs.Income.Text = Format.perSecond(Preview.Income)
+	refs.Income.TextColor3 = roblox.Color3.fromRGB(110, 214, 92)
+	refs.CarryLabel.Text = "CARRYING 0/3"
+	for i = 1, 3 do
+		HudView.slot(refs.CarrySlots, nil, i)
+	end
+	refs.Toasts:ClearAllChildren()
+	TeleportView.build(refs.TopBar, refs.Menu, uiScale)
+	return refs
+end
+
+Preview.Coins = 184500
+Preview.Income = 640
+
+-- The wheel screen's info for a mid-game player (WheelController.info).
+function Preview.wheelInfo(): any
+	return {
+		NoCapsules = false,
+		Income = Preview.Income,
+		Ore = { BlasterLevel = 4, BestIncome = 900, Vip = false },
+		TripleLucky = false,
+	}
+end
+
+function Preview.ui(Loader: any): { [string]: any }
+	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
+	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
+	local exports: { [string]: any } = {}
+	local scale = 1.25 -- 900 px tall render / 720 design height
+	local phoneScale = 0.62 * 900 / 375 -- a 667 x 375 pt phone scaled up to the render
+	local smallScale = 0.62 * 900 / 320 -- a 568 x 320 pt phone
+	local phoneInset = math.floor(58 * 900 / 375)
+	local smallInset = math.floor(58 * 900 / 320)
+
+	local function wheel(uiScale: number, compact: boolean, maxW: number, maxH: number): any
+		local refs = WheelView.build(compact)
+		refs.Gui.Scale.Scale = uiScale
+		refs.Gui.Enabled = true
+		WheelView.setRows(refs, WheelView.rows(Preview.wheelInfo()))
+		WheelView.layout(refs, maxW, maxH)
+		WheelView.setReady(refs, true, 0)
+		refs.Hint.Text = "Click SPIN!  ·  Backspace: close"
+		return refs
+	end
+
+	-- PC: ready
+	local h1 = hud(Loader, scale)
+	local w1 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	exports.ui_wheel = UiExport.export({ h1.Gui, w1.Gui })
+
+	-- PC: stopped on the Ore Prize, the prize card
+	local h2 = hud(Loader, scale)
+	local w2 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	local index = WheelConfig.ById.OrePrize.Index
+	w2.Disc.Rotation = WheelView.spinTarget(0, index, 8, 5, 0.15)
+	WheelView.setReady(w2, false, WheelConfig.CooldownSeconds, true)
+	WheelView.highlight(w2, "OrePrize")
+	local prize, detail = WheelView.prizeText({ Kind = "Ore", DirtyOre = true })
+	WheelView.showResult(w2, prize, detail, WheelConfig.ById.OrePrize.Color)
+	WheelView.confetti(w2, 7)
+	exports.ui_wheel_won = UiExport.export({ h2.Gui, w2.Gui })
+
+	-- PC: spun today
+	local h3 = hud(Loader, scale)
+	local w3 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	WheelView.setReady(w3, false, 13 * 3600 + 42 * 60 + 10)
+	w3.Disc.Rotation = WheelView.restAngle(WheelConfig.ById.Shards.Index, 8)
+	exports.ui_wheel_wait = UiExport.export({ h3.Gui, w3.Gui })
+
+	-- phones
+	local h4 = hud(Loader, phoneScale)
+	local w4 = wheel(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale)
+	w4.Hint.Text = "Tap SPIN!"
+	exports.ui_wheel_phone = UiExport.export({ h4.Gui, w4.Gui })
+	local h5 = hud(Loader, smallScale)
+	local w5 = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
+	w5.Hint.Text = "Tap SPIN!"
+	exports.ui_wheel_phone_small = UiExport.export({ h5.Gui, w5.Gui })
+
+	-- the HUD chip
+	local h6 = hud(Loader, scale)
+	local chip = WheelView.buildChip(scale)
+	chip.Gui.Scale.Scale = scale
+	chip.Gui.Enabled = true
+	exports.ui_chip = UiExport.export({ h6.Gui, chip.Gui })
+	local h7 = hud(Loader, phoneScale)
+	local chip2 = WheelView.buildChip(0.62)
+	chip2.Gui.Scale.Scale = phoneScale
+	chip2.Gui.Enabled = true
+	exports.ui_chip_phone = UiExport.export({ h7.Gui, chip2.Gui })
+
+	-- the collection book, the journal and the found card
+	local CollectionView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CollectionView")
+	local StoryView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoryView")
+	local artifacts = { Found = Preview.Found, Chapters = {} }
+
+	local function bookView(uiScale: number, compact: boolean, maxW: number, maxH: number, collection: string, selected: string?): any
+		local refs = CollectionView.build(compact)
+		refs.Gui.Scale.Scale = uiScale
+		refs.Gui.Enabled = true
+		refs.Collection = collection
+		refs.Selected = selected
+		CollectionView.layout(refs, maxW, maxH)
+		CollectionView.fill(refs, artifacts)
+		refs.Hint.Text = if compact
+			then "Tap a collection, then an artifact"
+			else "Click a collection, then an artifact  ·  Backspace: close"
+		return refs
+	end
+	local h8 = hud(Loader, scale)
+	local b1 = bookView(scale, false, 1600 / scale, (900 - 36) / scale, "RoyalRailway", "RailLantern")
+	exports.ui_book = UiExport.export({ h8.Gui, b1.Gui })
+	local h9 = hud(Loader, scale)
+	local b2 = bookView(scale, false, 1600 / scale, (900 - 36) / scale, "CrownOfKaldrum", "EmberCrown")
+	exports.ui_book_done = UiExport.export({ h9.Gui, b2.Gui })
+	local h10 = hud(Loader, phoneScale)
+	local b3 = bookView(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale, "HeartstoneLore", "HeartstoneFragment")
+	exports.ui_book_phone = UiExport.export({ h10.Gui, b3.Gui })
+	local h10b = hud(Loader, smallScale)
+	local b4 = bookView(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, "Golemworks", "SparkVial")
+	exports.ui_book_phone_small = UiExport.export({ h10b.Gui, b4.Gui })
+
+	local function journalView(uiScale: number, compact: boolean, maxW: number, maxH: number, key: string, page: number): any
+		local refs = StoryView.build(compact)
+		refs.Gui.Scale.Scale = uiScale
+		refs.Gui.Enabled = true
+		StoryView.layout(refs, maxW, maxH)
+		local entries = StoryView.entries(artifacts)
+		refs.Key = key
+		StoryView.setEntries(refs, entries, nil)
+		StoryView.showPage(refs, StoryView.entry(entries, key) or entries[1], page)
+		refs.Hint.Text = if compact then "Tap a chapter, then NEXT" else "Arrow keys: page  ·  Backspace: close"
+		return refs
+	end
+	local h11 = hud(Loader, scale)
+	local j1 = journalView(scale, false, 1600 / scale, (900 - 36) / scale, "CrownOfKaldrum", 2)
+	exports.ui_story = UiExport.export({ h11.Gui, j1.Gui })
+	local h12 = hud(Loader, phoneScale)
+	local j2 = journalView(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale, "Golemworks", 1)
+	exports.ui_story_phone = UiExport.export({ h12.Gui, j2.Gui })
+
+	local h13 = hud(Loader, scale)
+	local card = CollectionView.buildReveal(false)
+	card.Gui.Scale.Scale = scale
+	CollectionView.showReveal(
+		card,
+		{ Artifact = "RailLantern", Count = 1, New = true, Collection = "RoyalRailway", Completed = false },
+		artifacts
+	)
+	CollectionView.fitReveal(card, 1600 / scale, (900 - 36) / scale)
+	exports.ui_reveal = UiExport.export({ h13.Gui, card.Gui })
+	local h14 = hud(Loader, scale)
+	local card2 = CollectionView.buildReveal(false)
+	card2.Gui.Scale.Scale = scale
+	CollectionView.showReveal(
+		card2,
+		{ Artifact = "EmberCrown", Count = 1, New = true, Collection = "CrownOfKaldrum", Completed = true },
+		artifacts
+	)
+	CollectionView.fitReveal(card2, 1600 / scale, (900 - 36) / scale)
+	exports.ui_reveal_complete = UiExport.export({ h14.Gui, card2.Gui })
+	local h15 = hud(Loader, smallScale)
+	local card3 = CollectionView.buildReveal(true)
+	card3.Gui.Scale.Scale = smallScale
+	CollectionView.showReveal(
+		card3,
+		{ Artifact = "GolemCog", Count = 4, New = false, Collection = "Golemworks", Completed = false, Shards = 1 },
+		artifacts
+	)
+	CollectionView.fitReveal(card3, 1600 / smallScale, (900 - smallInset) / smallScale)
+	exports.ui_reveal_phone = UiExport.export({ h15.Gui, card3.Gui })
+
+	return exports
+end
+
+return Preview

@@ -46,6 +46,8 @@ local ORDER = {
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
+	"WheelService", -- step 7: the free daily wheel (EmberChest prompt, WheelAction)
+	"ArtifactService", -- step 7: artifact finds, the book / journal prompts, the base museums
 }
 
 local loaded = {}
