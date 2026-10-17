@@ -273,6 +273,51 @@ return function(T, Loader)
 		T.eq(toasts, 1, "one toast")
 	end)
 
+	withWorld("MachineService: machines on the new chutes get their own toast", function(w)
+		local data = newData()
+		data.PlacedMachines = {
+			{ Id = "Crusher", X = 2, Z = 10, R = 0 }, -- covers the PEN chute (3, 11)
+			{ Id = "Conveyor", X = 6, Z = 11, R = 0 }, -- belts may stand on a chute
+			{ Id = "ClayFurnace", X = 11, Z = 0, R = 0 }, -- sticks out of the plot
+		}
+		w.data[w.player] = data
+		internals.spawnAll(w.player, PLOT)
+		local list = MachineService.ofPlot(PLOT)
+		T.eq(#list, 1, "only the belt spawns")
+		T.eq(list[1].Id, "Conveyor")
+		T.eq(data.MachineInventory.Crusher, 1, "crusher back in the inventory")
+		T.eq(data.MachineInventory.ClayFurnace, 1, "furnace back in the inventory")
+		task.wait(3.1)
+		local texts = {}
+		for _, note in w.notes do
+			if note.Name == "Notify" then
+				texts[note.Payload.Text] = true
+			end
+		end
+		T.truthy(texts["Clay Furnace didn't fit and is waiting in your Build menu."], "the usual toast")
+		T.truthy(
+			texts["A chute now sits where your Crusher stood (only belts can go on it). It is waiting in your Build menu."],
+			"the chute toast"
+		)
+	end)
+
+	withWorld("MachineService: packing up past the inventory cap refunds the machine", function(w)
+		local data = newData()
+		data.MachineInventory = { Conveyor = 1 }
+		data.Coins = 0
+		w.data[w.player] = data
+		internals.spawnAll(w.player, PLOT)
+		local m = MachineService.place(w.player, "Conveyor", 0, 0, 0)
+		T.truthy(m, "placed")
+		data.MachineInventory.Conveyor = MachineData.MaxInventory -- bought a full stack since
+		T.truthy(MachineService.pickup(m), "picked up")
+		T.eq(data.MachineInventory.Conveyor, MachineData.MaxInventory, "the stack stays at the cap")
+		T.eq(data.Coins, MachineData.ById.Conveyor.Price, "refunded")
+		local note = w.notes[#w.notes]
+		T.eq(note.Name, "Notify")
+		T.truthy(string.find(note.Payload.Text, "refunded", 1, true), "refund toast")
+	end)
+
 	withWorld("MachineService: place, move and pickup keep the ledger", function(w)
 		local data = newData()
 		data.MachineInventory = { ClayFurnace = 2, StorageCrate = 1 }
