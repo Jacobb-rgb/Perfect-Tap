@@ -315,8 +315,10 @@ LobbyLayout.Pieces = {
 	{
 		Id = "Signpost",
 		Package = "Flora",
-		-- on the koi pond's south-west bank by the bridge's south end, facing the hero camera
-		Center = v(-15, 0, 65),
+		-- on the koi pond's south-west bank, west of the bridge's south end and
+		-- out of the plaza-to-vault view (it hid the west statue's pedestal),
+		-- facing the hero camera
+		Center = v(-20, 0, 62),
 		Size = v(14, 17, 4),
 		Facing = v(0.16, 0, 0.99).Unit,
 		Note = "Big double-sided signpost: MINE / UPGRADE / EXPLORE / BUILD with part-built icons.",

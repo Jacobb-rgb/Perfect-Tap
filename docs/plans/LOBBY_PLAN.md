@@ -21,8 +21,8 @@ The build is split into **six packages** (Sky, Backdrop, Plaza, Districts, Flora
   15.4 x 45 x 13.4 (the pedestals) turned (+-0.296, 0, -0.955) to the plaza, and the reservations `VaultTree1..6`
   (`Reserve = true`, Radius = the canopy: they keep the scatter and the town buildings away, may overlap their own
   package's pieces; the package places the trees as offsets from the vault). Budget 3500 parts / 6 lights
-  (~2970 / 5 built); lobby lights 40 / 45. MapParts 17500 (tests/LobbyBudget.spec.luau: the built map, ~15,800
-  parts, + one ore node on every node spawn, ~1,320, must stay 200 under it; ~170 parts of headroom), LobbyParts
+  (~2970 / 5 built); lobby lights 40 / 45. MapParts 17500 (tests/LobbyBudget.spec.luau: the built map, ~15,790
+  parts, + one ore node on every node spawn, ~1,320, must stay 200 under it; ~190 parts of headroom), LobbyParts
   11400 (~11,200 built: ~200 parts of deliberate buffer for small merges from the parallel package sessions).
   Moved for it: the south road (WorldLayout) now ends at the vault's steps (z 74, its strip at z 79); the **MINE**
   (`MineEntrance` + `MineYard`, Backdrop) went to the south-west corner past the west plot road's end, at
@@ -131,8 +131,8 @@ lines the plot roads with trees.
 
 | Shot | Camera -> target (fov) | Purpose |
 |---|---|---|
-| `lobby_hero` | (-40, 122, 252) -> (2, 10, -26) (50) | **The concept angle** (Blaster Vault, 2026-10-17): elevated from far south-south-west, a 3/4 view over the vault (its back gable, pillars and lit windows, the hologram over the ridge) and its jungle trees in the foreground, the two MINE boards bottom left, the MAP / WORKS hamlet bottom right, the plaza with the fire crystal, SHOP / SPIN & WIN left, UPGRADES / FOSSIL DIG right, THE GREAT FORGE in the middle, the massif with DEPTHS, THE FORGE, waterfalls and crystals filling the upper middle, the violet gas giant wholly in the top-right sky (tests/LobbySky.spec.luau). **No longer in the hero, on purpose:** the ROCK SCANNER, the creek bridge and the koi pond stand north of the vault, hidden by the vault, `VaultTree5` and the east statue from every camera south of the island; do not move the hero camera to bring them back (`lobby_south`, `lobby_vault` and `d_scanner` show them). |
-| `lobby_vault` | (0, 27, 32) -> (0, 18, 112) (64) | From the plaza's south rim over the bridge to the BLASTER VAULT (like the owner's render): the glass front with its sign, the hologram, both statues whole with their raised blasters and the jungle trees, the signpost bottom right, the MINE board right, the MAP house left; nothing in front of the doors. |
+| `lobby_hero` | (0, 135, 255) -> (4, 12, -28) (50) | **The concept angle** (Blaster Vault, 2026-10-17): elevated from far south, a symmetric view over the vault's back gable (rose window, lit windows, the hologram over the ridge) centred between the two back jungle trees, the searchlight beams forming a V around the plaza; the **MINE** portal, both MINE boards and the glowing gold carts bottom left with the autumn woods west of it, the MAP / WORKS hamlet bottom right, the plaza with the fire crystal, SHOP / SPIN & WIN left, UPGRADES / FOSSIL DIG right, THE GREAT FORGE in the middle, the massif with DEPTHS, THE FORGE, waterfalls and crystals filling the upper middle, the violet gas giant wholly in the top-right sky and both horizon cloud banks whole (tests/LobbySky.spec.luau). **No longer in the hero, on purpose:** the ROCK SCANNER, the creek bridge and the koi pond stand north of the vault, hidden by the vault, `VaultTree5` and the east statue from every camera south of the island; do not move the hero camera to bring them back (`lobby_south`, `lobby_vault` and `d_scanner` show them). |
+| `lobby_vault` | (0, 27, 32) -> (0, 18, 112) (64) | From the plaza's south rim over the bridge to the BLASTER VAULT (like the owner's render): the glass front with its sign, the hologram, both statues whole with their raised blasters and the jungle trees, the signpost (on the koi pond's south-west bank, clear of the steps) bottom right, the MINE board right, the MAP house left; nothing in front of the doors. |
 | `lobby_spawn` | (0, 13, 58) -> (-4, 7, -50) (62) | What a new player sees: fire crystal, Great Forge, SHOP left, UPGRADES right, mountain and portal above the roof. |
 | `lobby_west` | (14, 20, 26) -> (-62, 8, -40) (65) | Toward the sunset: SHOP, SPIN & WIN, NW cliff and waterfall, sea, ships, pier, sun glitter. |
 | `lobby_east` | (-14, 16, 36) -> (64, 6, -6) (65) | UPGRADES, FOSSIL DIG, ROCK SCANNER, pink grove, NEXT AREA in the distance. |
@@ -207,11 +207,11 @@ piece's front (LookVector). Build inside your footprint and height budget.
 | koi pond (center front) | KoiPond | (26, 0, 62) | 24 x 2 x 14 | S | koi, stepping stones |
 | creek under the bridge | Creek | (0, 0, 62) | 28 x 1 x 6 | S | joins the ponds |
 | arched wooden bridge | CreekBridge | (0, 0, 62) | 12 x 5 x 16 | S | carries the south road |
-| MINE / UPGRADE / EXPLORE / BUILD signpost | Signpost | (-14, 0, 46) | 7 x 10 x 3 | (0.52, 0, 0.86) | double-sided, icons |
+| MINE / UPGRADE / EXPLORE / BUILD signpost | Signpost | (-20, 0, 62) | 14 x 17 x 4 | (0.16, 0, 0.99) | double-sided, icons; the koi pond's south-west bank, west of the bridge (clear of the plaza-to-vault view of the steps) |
 | NEXT AREA sign | NextArea | (150, 0, -120) | 14 x 12 x 4 | S | arrow east, closed gate |
 | boardwalk to the next area | NextAreaBoardwalk | (205, 0, -112) | 8 x 3 x 70 | E | out over the sea to NextIsland |
 | pink cherry trees (right of forge) | PinkGrove | (41, 0, -66) | r 9, h 22 | - | two hero trees |
-| big red tree (foreground right) | RedTree | (28, 0, 40) | r 6, h 18 | - | hero tree |
+| big red tree (east town edge) | RedTree | (59, 0, 80) | r 6, h 18 | - | joins the east tree belt, off the camera-to-dig line |
 | yellow/orange trees (foreground left) | AutumnCorner | (-139, 0, 130) | r 12, h 18 | - | cluster behind the MINE hill |
 | colorful voxel trees, flowers, fences, lanterns | rule | - | - | - | scatter with `LobbyLayout.isFree` |
 | town buildings | rule (Flora/Town.luau `Sites`) | - | - | - | west street (CARTS, Lodge, TOOLS, RowCottage), INN and ORE behind UPGRADES, the south-east hamlet (MAP, WORKS, garden cottage) |
@@ -588,8 +588,8 @@ reservations in LobbyLayout in step when the trees move). Hooks: `VaultCounter` 
 counter top), `LightingZone` (Preset VaultInterior) over the inside.
 
 Budget: 3500 parts, 6 lights (both in the lobby area), <= 12 particle emitters (~2970 parts
-and 5 lights built). Shots: `lobby_vault`, `lobby_south` (and `lobby_hero` for the 3/4 view
-of its back). Done when the vault reads like the owner's render from the plaza: both statues
+and 5 lights built). Shots: `lobby_vault`, `lobby_south` (and `lobby_hero` for the symmetric
+view over its back gable). Done when the vault reads like the owner's render from the plaza: both statues
 whole with their blasters, the sign and the glass front, nothing in front of the doors.
 
 ## 7. Integration
