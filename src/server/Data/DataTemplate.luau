@@ -111,7 +111,7 @@ local DataTemplate = {
 		WheelSpins = 0,
 	},
 	Tutorial = { Step = 1, Done = false },
-	Daily = { LastClaimDay = 0, Streak = 0 },
+	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
 	Badges = {}, -- [badgeKey] = true (local cache, Roblox is the source of truth)
 	GroupRewardClaimed = false,
 	ForgeName = "", -- raw text, always filtered by TextService before showing

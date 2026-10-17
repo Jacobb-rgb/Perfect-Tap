@@ -4,6 +4,14 @@
 	machine upgrades, keep settings, Foundry stock...).
 	Pushes are coalesced: at most one every 0.2 s per player.
 	Other services add fields with StateService.addProvider().
+
+	Bandwidth (steps 6-7): the bigger records that rarely change (STICKY:
+	Gear, Enchants, Golems, Artifacts, Bonuses) are sent only when they
+	changed since the last push to that player (compared by fingerprint).
+	An unchanged one is left out and its key listed in snapshot.Kept; the
+	client (StateController) copies those keys from its previous snapshot,
+	so every listener still sees a whole snapshot. The first push after a
+	join is always whole.
 ]]
 
 local Players = game:GetService("Players")
@@ -25,6 +33,72 @@ type Provider = (player: Player, data: { [string]: any }, snapshot: { [string]: 
 
 local providers: { Provider } = {}
 local pending: { [Player]: boolean } = {}
+-- player -> sticky key -> fingerprint of what that player's client has
+local sent: { [Player]: { [string]: string } } = {}
+
+-- Records sent only when they change (see the header).
+StateService.Sticky = { "Gear", "Enchants", "Golems", "Artifacts", "Bonuses" }
+
+local MAX_DEPTH = 8
+
+local function keyOrder(a: any, b: any): boolean
+	local ta, tb = type(a), type(b)
+	if ta ~= tb then
+		return ta < tb
+	end
+	if ta == "number" or ta == "string" then
+		return a < b
+	end
+	return tostring(a) < tostring(b)
+end
+
+-- A deterministic text for a save value (same content = same text).
+function StateService.fingerprint(value: any, depth: number?): string
+	local level = depth or 0
+	if type(value) ~= "table" then
+		return type(value):sub(1, 1) .. tostring(value)
+	end
+	if level >= MAX_DEPTH then
+		return "{...}"
+	end
+	local keys = {}
+	for key in value do
+		table.insert(keys, key)
+	end
+	table.sort(keys, keyOrder)
+	local parts = table.create(#keys)
+	for i, key in keys do
+		parts[i] = StateService.fingerprint(key, level + 1) .. "=" .. StateService.fingerprint(value[key], level + 1)
+	end
+	return "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- Leaves out the sticky records this player's client already has (listing
+-- them in snapshot.Kept) and remembers what it now has. `snapshot` is changed.
+function StateService.trim(player: Player, snapshot: { [string]: any }): { [string]: any }
+	local known = sent[player]
+	if not known then
+		known = {}
+		sent[player] = known
+	end
+	local kept = {}
+	for _, key in StateService.Sticky do
+		local value = snapshot[key]
+		if value ~= nil then
+			local mark = StateService.fingerprint(value)
+			if known[key] == mark then
+				snapshot[key] = nil
+				table.insert(kept, key)
+			else
+				known[key] = mark
+			end
+		end
+	end
+	if #kept > 0 then
+		snapshot.Kept = kept
+	end
+	return snapshot
+end
 
 function StateService.addProvider(provider: Provider)
 	table.insert(providers, provider)
@@ -55,7 +129,8 @@ function StateService.snapshot(player: Player): { [string]: any }?
 		Podiums = data.Podiums,
 		-- deprecated mirror of the Backpack level (old CarryLevel = Backpack + 1)
 		CarryLevel = GearConfig.level(data.Gear, "Backpack") + 1,
-		CarryCapacity = GearConfig.carryCapacity(data.Gear, Perks.has(player, "StrongBack")),
+		-- the same number CarryService uses (Bonuses: Backpack, later providers, StrongBack)
+		CarryCapacity = Bonuses.carryCapacity(Bonuses.stats(player), player),
 		Upgrades = data.Upgrades,
 		MachineInventory = data.MachineInventory,
 		PlacedCount = #data.PlacedMachines,
@@ -109,7 +184,7 @@ function StateService.push(player: Player)
 		if player.Parent then
 			local snapshot = StateService.snapshot(player)
 			if snapshot then
-				Net.fire("State", player, snapshot)
+				Net.fire("State", player, StateService.trim(player, snapshot))
 			end
 		end
 	end)
@@ -119,6 +194,7 @@ function StateService.init()
 	DataService.onChanged(StateService.push)
 	Players.PlayerRemoving:Connect(function(player)
 		pending[player] = nil
+		sent[player] = nil
 	end)
 end
 

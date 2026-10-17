@@ -238,7 +238,29 @@ return function(T, Loader)
 		w.step()
 		T.eq(#w.spawned, 1)
 		T.eq(w.spawned[1].Info.OreId, "Diamond", "a Diamond rock gives its Diamond")
-		T.eq(w.calls, plainCalls, "no luck roll for a Rare+ ore")
+		T.eq(w.calls, plainCalls, "no luck roll for an ore whose share grows")
+		-- Deep Hollow (mostly Rare+ already): luck grows with rarity, so even a Gold
+		-- (Rare) chunk may become a rarer ore, never a commoner one
+		p.data.BlasterLevel = 5
+		p.data.Enchants.Slots = { "", "", "", "" }
+		Bonuses.invalidate(p)
+		T.eq(Bonuses.oreLuck(Bonuses.stats(p)), 2.5, "Hexa Lucky only")
+		local deep = WorldLayout.ZoneById.DeepHollow.Ores
+		local goldChance = BoostConfig.upgradeChance(deep, 2.5, "Gold")
+		T.truthy(goldChance > 0.1, "Gold gives way in Deep Hollow")
+		w.spawned = {}
+		local goldRock = w.rock("DeepHollow", { "Gold" }, 0.01)
+		w.rolls = { goldChance * 0.5, 0.999999 } -- upgraded, the rarest pick
+		mining.blast(p, goldRock.Model)
+		w.step()
+		T.eq(#w.spawned, 1)
+		T.eq(w.spawned[1].Info.OreId, "Heartstone", "Gold -> the rarest gain (Heartstone)")
+		w.spawned = {}
+		local keptRock = w.rock("DeepHollow", { "Gold" }, 0.01)
+		w.rolls = { goldChance + 0.01 }
+		mining.blast(p, keptRock.Model)
+		w.step()
+		T.eq(w.spawned[1].Info.OreId, "Gold", "above the chance: Gold stays Gold")
 	end)
 
 	withWorld("Step67 Mining: Twin Drop drops a second chunk of the same ore", function(w)

@@ -170,20 +170,21 @@ return function(T, Loader)
 		T.eq(totals.ThrowMult, 1, "a Mult value <= 0 is skipped")
 		T.eq(totals.Junk, nil, "unknown names skipped")
 		T.eq(StatConfig.describe("DamagePct", 0.1), "+10% blaster damage")
-		T.eq(StatConfig.describe("OreLuckMult", 2.5), "x2.5 rare ore luck")
+		T.eq(StatConfig.describe("OreLuckMult", 2.5), "x2.5 ore luck")
 		T.eq(StatConfig.describe("ReachStuds", 4), "+4 studs blaster range")
 		T.eq(StatConfig.describe("WalkSpeed", 2), "+2 walk speed")
 		-- real caps: the best gear today can reach them, the totals never pass them
 		local caps = {
-			DamagePct = 3,
+			DamagePct = 1.5,
 			OreLuckPct = 1.5,
 			OreLuckMult = 2.5,
-			IncomePct = 3,
+			IncomePct = 2,
 			SellPct = 3,
 			WalkSpeedPct = 0.5,
 			GolemBondPct = 1,
 			ArtifactPct = 3,
-			OverchargePct = 3,
+			OverchargePct = 1,
+			MagnetBonus = 20,
 		}
 		for id, max in caps do
 			T.eq(StatConfig.ById[id].Max, max, id .. " cap")
@@ -193,8 +194,14 @@ return function(T, Loader)
 		-- ore luck: the product is capped too, broken values are no luck
 		T.eq(StatConfig.oreLuck(0, 1), 1)
 		T.near(StatConfig.oreLuck(0.5, 2.5), 3.75, EPS)
-		T.eq(StatConfig.oreLuck(1.5, 2.5), StatConfig.MaxOreLuck, "6.25 -> x5")
-		T.eq(StatConfig.MaxOreLuck, 5)
+		T.eq(StatConfig.oreLuck(1.5, 2.5), StatConfig.MaxOreLuck, "6.25 -> x4")
+		T.eq(StatConfig.MaxOreLuck, 4)
+		-- balance: the best damage stays within ~1.5 blaster levels (x1.8 each), the
+		-- best income bonus at most x3, even with paid golems and Mythic enchants
+		local best = StatConfig.combine({ { DamagePct = 10, OverchargePct = 10, IncomePct = 10 } })
+		T.truthy(1 + best.DamagePct <= 2.5, "damage at most x2.5")
+		T.truthy((1 + best.DamagePct) * (1 + best.OverchargePct) <= 5, "x5 at most on a cracked rock's last third")
+		T.truthy(1 + best.IncomePct <= 3, "income at most x3")
 		T.eq(StatConfig.oreLuck(0 / 0, -2), 1)
 		T.eq(StatConfig.oreLuck(-1, 1), 1, "never below 1")
 	end)
@@ -485,6 +492,31 @@ return function(T, Loader)
 		T.eq(broken.Owned[1].Id, 1)
 	end)
 
+	T.test("Step67: paid golems are marked, locked golems are never deleted", function()
+		local golems: any = { Owned = {}, Equipped = {}, NextId = 1 }
+		local coin = GolemConfig.add(golems, "PebbleGolem")
+		local paid = GolemConfig.add(golems, "RubyKnight", true, true)
+		local other = GolemConfig.add(golems, "EmberImp")
+		T.eq(coin.Paid, nil, "a coin capsule's golem isn't paid")
+		T.eq(paid.Paid, true, "a Robux receipt's golem is marked Paid")
+		local ok, why = GolemConfig.setLocked(golems, paid.Id, true)
+		T.truthy(ok)
+		T.eq(GolemConfig.find(golems, paid.Id).Locked, true)
+		ok, why = GolemConfig.setLocked(golems, 99, true)
+		T.eq(why, "BadGolem")
+		ok, why = GolemConfig.setLocked(golems, coin.Id, "yes")
+		T.eq(why, "BadLock")
+		GolemConfig.equip(golems, paid.Id)
+		local removed = GolemConfig.delete(golems, { coin.Id, paid.Id, other.Id })
+		T.eq(removed, 2, "the locked one is skipped")
+		T.truthy(GolemConfig.find(golems, paid.Id), "still there")
+		T.truthy(GolemConfig.isEquipped(golems, paid.Id), "and still equipped")
+		T.truthy(GolemConfig.setLocked(golems, paid.Id, false))
+		T.eq(GolemConfig.find(golems, paid.Id).Locked, nil, "unlocking clears the flag")
+		T.eq(GolemConfig.delete(golems, { paid.Id }), 1, "unlocked: it can go")
+		T.truthy(GolemConfig.Reasons.BadLock)
+	end)
+
 	T.test("Step67: golems of a newer update count, can't be equipped or deleted; Delete takes plain lists only", function()
 		local golems: any = {
 			Owned = { { Id = 1, Kind = "FutureGolem" }, { Id = 2, Kind = "PebbleGolem" }, { Id = 3, Kind = "RubyKnight" } },
@@ -521,7 +553,12 @@ return function(T, Loader)
 		T.eq(reason, "BadIds", "too many")
 		T.truthy(GolemConfig.find(golems, 3), "nothing deleted")
 		-- budgets for the followers and museum pieces
-		T.truthy(GolemConfig.MaxParts <= 25 and ArtifactConfig.MaxParts <= 12)
+		T.truthy(GolemConfig.MaxParts <= 25 and ArtifactConfig.MaxParts <= 8)
+		-- museums: 8 bases x 24 artifacts stay within ~1,500 parts; one real lamp light per client
+		T.truthy(8 * #ArtifactConfig.List * ArtifactConfig.MaxParts <= 1600)
+		T.eq(GearConfig.LampBudget.MaxLights, 1)
+		T.eq(GearConfig.LampBudget.Shadows, false)
+		T.truthy(GearConfig.LampBudget.OthersNeon)
 		T.truthy(GolemConfig.FollowerHideDistance <= 150)
 		T.eq(ArtifactConfig.LightRarity, "Mythic")
 	end)
@@ -633,27 +670,59 @@ return function(T, Loader)
 		T.eq(BoostConfig.remaining(boosts, "TripleLucky", NOW), 0)
 		T.eq(BoostConfig.remaining({ HexaLuckyUntil = 0 / 0 }, "HexaLucky", NOW), 0, "broken = off")
 		local stats = BoostConfig.stats(boosts, NOW)
-		T.eq(stats.OreLuckMult, 2.5, "Hexa Lucky = Rare+ weights x2.5")
+		T.eq(stats.OreLuckMult, 2.5, "Hexa Lucky = ore luck x2.5")
 		T.eq(stats.CapsuleLuckMult, nil)
 		BoostConfig.extend(boosts, "TripleLucky", 600, NOW, true)
 		T.eq(BoostConfig.stats(boosts, NOW).CapsuleLuckMult, 3)
-		-- offers: coin prices scale with the blaster level like the capsules
+		-- offers: coin prices follow the blaster level (never the income)
 		for _, offer in BoostConfig.CoinOffers do
 			T.eq(offer.Seconds, 300, "coin boosts last 5 minutes")
-			T.eq(BoostConfig.coinPrice(offer.Id, 1), offer.BasePrice)
-			T.eq(BoostConfig.coinPrice(offer.Id, 0 / 0), offer.BasePrice, "broken = level 1")
+			local last = 0
 			for level = 1, 10 do
-				T.eq(BoostConfig.coinPrice(offer.Id, level), offer.BasePrice * CapsuleConfig.levelScale(level))
+				local price = BoostConfig.coinPrice(offer.Id, level) :: number
+				T.truthy(price >= last, offer.Id .. " never cheaper at a higher blaster level")
+				last = price
 			end
+			T.truthy(last >= 1e8, offer.Id .. " is no pocket change late in the game")
+			T.eq(BoostConfig.coinPrice(offer.Id, 0 / 0), BoostConfig.coinPrice(offer.Id, 1), "broken = level 1")
 			T.eq(BoostConfig.isPaidRandom(offer.Id), MonetizationConfig.coinsBuyable(), offer.Id .. " paid random only with coin packs")
 		end
+		-- Triple Lucky pays off on Crystal capsules, so it is priced against them
 		for level = 1, 10 do
-			T.eq(
-				BoostConfig.coinPrice("TripleLucky5", level),
-				10 * (CapsuleConfig.price("Stone", 1, level) :: number),
-				"Triple Lucky = 10 Stone capsules at every level"
-			)
+			local crystal = CapsuleConfig.price("Crystal", 1, level) :: number
+			local price = BoostConfig.coinPrice("TripleLucky5", level) :: number
+			T.eq(price, 2 * crystal, "Triple Lucky 5 min = 2 Crystal capsules at blaster level " .. level)
+			local twoHours = BoostConfig.MaxStackSeconds / 300 * price
+			T.truthy(twoHours >= 24 * crystal, "2 h of coin Triple Lucky costs at least 24 Crystal capsules")
 		end
+		-- Hexa Lucky: 20 % of the next blaster forge (the top forge at the top), at least 2,500
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 1), 2500, "the minimum")
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 3), 3000, "20 % of the 15,000 forge")
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 4), 20000)
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 9), 3e8)
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 10), 3e8, "the level-10 forge at the top")
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 99), 3e8)
+		-- coins only top a boost up: the Robux packs keep their place
+		local wallet: any = { TripleLuckyUntil = 0, HexaLuckyUntil = 0 }
+		local price, why = BoostConfig.coinQuote(wallet, "TripleLucky5", 5, false, NOW)
+		T.eq(price, BoostConfig.coinPrice("TripleLucky5", 5))
+		T.eq(why, nil)
+		BoostConfig.extend(wallet, "TripleLucky", 300, NOW, true)
+		T.truthy(BoostConfig.coinQuote(wallet, "TripleLucky5", 5, false, NOW), "5 min left: a top-up is fine")
+		BoostConfig.extend(wallet, "TripleLucky", 300, NOW, true)
+		price, why = BoostConfig.coinQuote(wallet, "TripleLucky5", 5, false, NOW)
+		T.eq(price, nil)
+		T.eq(why, "CoinLimit", "10 min left: no more coin time")
+		T.truthy(BoostConfig.coinQuote(wallet, "TripleLucky5", 5, false, NOW + 1), "9:59 left: fine again")
+		T.truthy(BoostConfig.CoinBuyBelow + 300 <= 15 * 60, "coins keep at most 15 minutes running")
+		T.truthy(BoostConfig.Reasons.CoinLimit)
+		BoostConfig.extend(wallet, "HexaLucky", 3600, NOW, false) -- a Robux pack
+		_, why = BoostConfig.coinQuote(wallet, "HexaLucky5", 5, false, NOW)
+		T.eq(why, "CoinLimit", "a running Robux hour isn't topped up with coins")
+		_, why = BoostConfig.coinQuote(wallet, "HexaLucky15", 5, false, NOW)
+		T.eq(why, "BadOffer", "a Robux offer has no coin quote")
+		_, why = BoostConfig.coinQuote(wallet, 42, 5, false, NOW)
+		T.eq(why, "BadOffer")
 		T.eq(BoostConfig.coinPrice("TripleLucky15", 3), nil, "a Robux offer has no coin price")
 		for _, offer in BoostConfig.RobuxOffers do
 			local product = MonetizationConfig.get(offer.Product)
@@ -678,8 +747,12 @@ return function(T, Loader)
 		T.truthy(byZone.Outcrops and byZone.Outcrops.NoEffect, "Outcrops: no effect here")
 		T.eq(byZone.Outcrops.Before, 0)
 		T.eq(byZone.Outcrops.After, 0)
+		T.eq(#byZone.Outcrops.Rarities, 0)
 		T.truthy(byZone.Quarry and not byZone.Quarry.NoEffect)
 		T.truthy(byZone.Quarry.After > byZone.Quarry.Before, "Quarry: Gold more likely")
+		T.eq(#byZone.Quarry.Rarities, 1, "the Quarry's only lucky rarity: Rare (Gold)")
+		T.eq(byZone.Quarry.Rarities[1].Rarity, "Rare")
+		T.near(byZone.Quarry.Rarities[1].Before, byZone.Quarry.Before, EPS)
 		T.eq(byZone.EmberCaves, nil, "a zone the blaster can't mine yet isn't listed")
 		T.eq(byZone.Grotto, nil, "VIP zones only for VIP players")
 		T.truthy(#BoostConfig.zoneEffects(10, true, 1, 2.5) > #effects)
@@ -693,54 +766,112 @@ return function(T, Loader)
 		T.truthy(BoostConfig.OfferById.HexaLucky15.Seconds == 900, "Hexa Lucky 15 min")
 	end)
 
-	T.test("Step67: ore odds with luck sum to 1 and favour Rare and rarer ores", function()
+	local function chanceOf(list: { any }, oreId: string): number
+		for _, line in list do
+			if line.Ore == oreId then
+				return line.Chance
+			end
+		end
+		return 0
+	end
+
+	local function rarityShare(list: { any }, rarity: string): number
+		local share = 0
+		for _, line in list do
+			if OreData.ById[line.Ore].Rarity == rarity then
+				share += line.Chance
+			end
+		end
+		return share
+	end
+
+	T.test("Step67: ore luck grows with rarity: odds sum to 1 and favour rarer ores (Deep Hollow too)", function()
+		-- the multipliers: luck ^ (Rare 1, Epic 1.5, Legendary 2, Mythic 2.5), never falling with rarity
+		local table25 = BoostConfig.luckTable(2.5)
+		T.eq(#table25, 4, "Rare, Epic, Legendary, Mythic")
+		T.eq(table25[1].Rarity, "Rare")
+		T.near(table25[1].Mult, 2.5, EPS, "Hexa Lucky: Rare x2.5")
+		T.near(table25[2].Mult, 2.5 ^ 1.5, EPS, "Epic x3.95")
+		T.near(table25[3].Mult, 6.25, EPS, "Legendary x6.25")
+		T.near(table25[4].Mult, 2.5 ^ 2.5, EPS, "Mythic x9.88")
+		local last = 0
+		for _, info in Rarity.List do
+			local mult = BoostConfig.rarityMult(info.Id, 4)
+			T.truthy(mult >= last, info.Id .. ": never falls with rarity")
+			last = mult
+		end
+		T.eq(BoostConfig.rarityMult("Common", 4), 1)
+		T.eq(BoostConfig.rarityMult("Uncommon", 4), 1)
+		T.eq(BoostConfig.rarityMult("Mythic", 1), 1, "no luck")
+		T.eq(BoostConfig.rarityMult("Mythic", 0 / 0), 1, "broken luck = no luck")
+		T.eq(BoostConfig.rarityMult("Nope", 4), 1)
 		for _, zone in WorldLayout.Zones do
 			local base = BoostConfig.zoneOdds(zone.Id, 1)
 			if #base == 0 then
 				continue
 			end
-			local boosted = BoostConfig.zoneOdds(zone.Id, 2.5)
 			T.near(sum(base, "Chance"), 1, EPS, zone.Id .. " odds sum to 1")
-			T.near(sum(boosted, "Chance"), 1, EPS, zone.Id .. " Hexa Lucky odds sum to 1")
-			local anyCommon = false
-			for _, line in base do
-				if not BoostConfig.isLuckyOre(line.Ore) then
-					anyCommon = true
-				end
-			end
-			local commonOre, rareOre = nil, nil
-			for i, line in base do
-				T.eq(boosted[i].Ore, line.Ore)
-				if BoostConfig.isLuckyOre(line.Ore) then
-					rareOre = line
-					if anyCommon then
-						T.truthy(boosted[i].Chance > line.Chance, zone.Id .. " " .. line.Ore .. " more likely")
+			for _, luck in { 1.5, 2.5, 4 } do
+				local boosted = BoostConfig.zoneOdds(zone.Id, luck)
+				T.near(sum(boosted, "Chance"), 1, EPS, `{zone.Id} odds at luck {luck} sum to 1`)
+				T.eq(#boosted, #base)
+				-- the exact effect: an ore's chance relative to another's grows by the ratio of their multipliers
+				local first = base[1].Ore
+				local firstGain = chanceOf(boosted, first) / chanceOf(base, first)
+				local byOrder: { [number]: number } = {}
+				for i, line in base do
+					T.eq(boosted[i].Ore, line.Ore)
+					local gain = boosted[i].Chance / line.Chance
+					local expected = BoostConfig.oreMult(line.Ore, luck) / BoostConfig.oreMult(first, luck)
+					T.near(gain / firstGain, expected, 1e-9, `{zone.Id} {line.Ore} x{expected} at luck {luck}`)
+					local o = order(OreData.ById[line.Ore].Rarity)
+					byOrder[o] = gain
+					if not BoostConfig.isLuckyOre(line.Ore) then
+						T.truthy(gain <= 1 + EPS, zone.Id .. " " .. line.Ore .. " gives way")
 					end
-				else
-					commonOre = line
-					T.truthy(boosted[i].Chance <= line.Chance, zone.Id .. " " .. line.Ore .. " gives way")
 				end
-			end
-			if commonOre and rareOre then
-				-- the exact effect: a Rare+ ore's weight relative to a lower one is x2.5
-				local function chanceOf(list: any, oreId: string): number
-					for _, l in list do
-						if l.Ore == oreId then
-							return l.Chance
-						end
+				-- rarer ores gain at least as much as commoner ones, and the rarest always gains
+				local prev, top = 0, 0
+				for o = 1, #Rarity.List do
+					local gain = byOrder[o]
+					if gain then
+						T.truthy(gain >= prev - EPS, `{zone.Id} rarity {o} gains at least as much`)
+						prev = gain
+						top = o
 					end
-					return 0
 				end
-				local before = chanceOf(base, rareOre.Ore) / chanceOf(base, commonOre.Ore)
-				local after = chanceOf(boosted, rareOre.Ore) / chanceOf(boosted, commonOre.Ore)
-				T.near(after / before, 2.5, 1e-6, zone.Id .. " ratio x2.5")
+				if top >= order("Rare") and (byOrder[1] or byOrder[2]) then
+					T.truthy(byOrder[top] > 1, zone.Id .. " the rarest ores get more likely")
+				end
 			end
 		end
+		-- Deep Hollow (the end game, mostly Rare+ already): luck still matters a lot
+		local plain = BoostConfig.zoneOdds("DeepHollow", 1)
+		local hexa = BoostConfig.zoneOdds("DeepHollow", 2.5)
+		local capped = BoostConfig.zoneOdds("DeepHollow", StatConfig.MaxOreLuck)
+		local mythic, mythicHexa = rarityShare(plain, "Mythic"), rarityShare(hexa, "Mythic")
+		T.near(mythic, 0.175 / 100.425, 1e-12, "Mythic 0.17 % without luck")
+		T.truthy(mythicHexa > 3 * mythic, "Hexa Lucky: Mythic more than x3 (0.17 % -> 0.59 %)")
+		T.truthy(rarityShare(capped, "Mythic") > 5 * mythic, "at the x4 cap: Mythic more than x5")
+		T.truthy(rarityShare(hexa, "Legendary") > 2 * rarityShare(plain, "Legendary"), "Legendary more than x2")
+		T.truthy(chanceOf(hexa, "Heartstone") > 3 * chanceOf(plain, "Heartstone"), "Heartstone more than x3")
+		-- the Quarry's Gold (its only Rare+ ore) is exactly x2.5 against the commons
+		local quarry = BoostConfig.zoneOdds("Quarry", 2.5)
+		local q1 = BoostConfig.zoneOdds("Quarry", 1)
+		T.near((chanceOf(quarry, "Gold") / chanceOf(quarry, "Coal")) / (chanceOf(q1, "Gold") / chanceOf(q1, "Coal")), 2.5, 1e-9)
+		-- rarityShares / rareShare agree with the odds
+		local shares = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 2.5)
+		T.near(shares.Mythic, mythicHexa, EPS)
+		T.near(
+			BoostConfig.rareShare(WorldLayout.ZoneById.DeepHollow.Ores, 2.5),
+			1 - rarityShare(hexa, "Uncommon") - rarityShare(hexa, "Common"),
+			EPS
+		)
 		-- rolls: luck 1 = the plain weights
 		local weights = { Coal = 1, Gold = 1 }
 		T.eq(BoostConfig.rollOre(weights, 1, 0.49), "Coal")
 		T.eq(BoostConfig.rollOre(weights, 1, 0.51), "Gold")
-		T.eq(BoostConfig.rollOre(weights, 3, 0.26), "Gold", "Gold weighs 3 of 4 with luck 3")
+		T.eq(BoostConfig.rollOre(weights, 3, 0.26), "Gold", "Gold (Rare) weighs 3 of 4 with luck 3")
 		T.eq(BoostConfig.rollOre({}, 2, 0.5), nil)
 		T.eq(BoostConfig.rollOre({ Unobtainium = 3 }, 2, 0.5), nil, "unknown ores skipped")
 	end)
@@ -756,81 +887,13 @@ return function(T, Loader)
 		end
 	end
 
-	T.test("Step67: ore luck only upgrades: a Rare+ ore never changes, the result matches oreOdds exactly", function()
-		local caves = WorldLayout.ZoneById.EmberCaves.Ores
-		-- a Rare+ ore from the rock is kept, whatever the luck, without a roll
-		for _, oreId in { "Gold", "Ruby", "Sapphire", "Diamond" } do
-			for _, luck in { 1.05, 2.5, 5 } do
-				local random, calls = scripted({ 0, 0, 0 })
-				T.eq(BoostConfig.upgradeOre(caves, luck, oreId, random), oreId, oreId .. " stays")
-				T.eq(calls(), 0, "no roll for a Rare+ ore")
-			end
-		end
-		-- a lower ore: kept above the upgrade chance, upgraded below it
-		local chance = BoostConfig.upgradeChance(caves, 2.5)
-		local low, rare = 0, 0
-		for oreId, weight in caves do
-			if BoostConfig.isLuckyOre(oreId) then
-				rare += weight
-			else
-				low += weight
-			end
-		end
-		T.near(chance, 1 - (low + rare) / (low + rare * 2.5), EPS, "1 - T/T'")
-		local random, calls = scripted({ chance + 1e-6 })
-		T.eq(BoostConfig.upgradeOre(caves, 2.5, "Iron", random), "Iron", "above the chance: kept")
-		T.eq(calls(), 1)
-		random, calls = scripted({ chance * 0.5, 0 })
-		local upgraded = BoostConfig.upgradeOre(caves, 2.5, "Iron", random)
-		T.truthy(BoostConfig.isLuckyOre(upgraded), "below the chance: a Rare+ ore")
-		T.eq(calls(), 2)
-		random = scripted({ 0, 0.999999 })
-		T.eq(BoostConfig.upgradeOre(caves, 2.5, "Iron", random), "Diamond", "the rarest pick is last")
-		-- no luck, no Rare+ ores, or an ore that isn't in the zone: kept, no roll
-		random, calls = scripted({ 0, 0 })
-		T.eq(BoostConfig.upgradeOre(caves, 1, "Iron", random), "Iron")
-		T.eq(BoostConfig.upgradeOre(WorldLayout.ZoneById.Outcrops.Ores, 5, "Coal", random), "Coal")
-		T.eq(BoostConfig.upgradeOre(caves, 5, "Coal", random), "Coal", "Coal isn't a Caves ore")
-		T.eq(calls(), 0)
-		T.eq(BoostConfig.upgradeChance(WorldLayout.ZoneById.Outcrops.Ores, 5), 0)
-		-- exact: rock ores rolled with the plain weights, then upgraded, give oreOdds(weights, luck)
-		for _, zone in WorldLayout.Zones do
-			local base = BoostConfig.zoneOdds(zone.Id, 1)
-			if #base == 0 then
-				continue
-			end
-			local rareTotal = 0
-			for _, line in base do
-				if BoostConfig.isLuckyOre(line.Ore) then
-					rareTotal += line.Chance
-				end
-			end
-			for _, luck in { 1.05, 1.5, 2.5, 5 } do
-				local p = BoostConfig.upgradeChance(zone.Ores, luck)
-				local lowShare = 1 - rareTotal
-				local final: { [string]: number } = {}
-				for _, line in base do
-					if BoostConfig.isLuckyOre(line.Ore) then
-						final[line.Ore] = line.Chance + (if rareTotal > 0 then lowShare * p * line.Chance / rareTotal else 0)
-					else
-						final[line.Ore] = line.Chance * (1 - p)
-					end
-				end
-				for _, line in BoostConfig.zoneOdds(zone.Id, luck) do
-					T.near(final[line.Ore], line.Chance, 1e-12, `{zone.Id} {line.Ore} at luck {luck}`)
-				end
-			end
-		end
-		-- and the same by sampling (a seeded generator, 100k chunks in the Ember Caves at x2.5)
-		math.randomseed(12345)
-		local function lcg(): number
-			return math.random()
-		end
-		local base = BoostConfig.zoneOdds("EmberCaves", 1)
+	-- rolls a rock's ore from plain odds, then lets luck upgrade it: N samples
+	local function sample(zoneId: string, luck: number, n: number): { [string]: number }
+		local weights = WorldLayout.ZoneById[zoneId].Ores
+		local base = BoostConfig.zoneOdds(zoneId, 1)
 		local counts: { [string]: number } = {}
-		local N = 100000
-		for _ = 1, N do
-			local roll = lcg()
+		for _ = 1, n do
+			local roll = math.random()
 			local rolled = base[#base].Ore
 			local acc = 0
 			for _, line in base do
@@ -840,12 +903,195 @@ return function(T, Loader)
 					break
 				end
 			end
-			local ore = BoostConfig.upgradeOre(caves, 2.5, rolled, lcg)
+			local ore = BoostConfig.upgradeOre(weights, luck, rolled, math.random)
 			counts[ore] = (counts[ore] or 0) + 1
 		end
+		return counts
+	end
+
+	T.test("Step67: ore luck only upgrades: growing ores never change, the result matches oreOdds exactly", function()
+		local caves = WorldLayout.ZoneById.EmberCaves.Ores
+		local deep = WorldLayout.ZoneById.DeepHollow.Ores
+		-- an ore whose share grows is kept, without a roll
+		for _, luck in { 1.05, 2.5, 4 } do
+			for _, line in BoostConfig.gains(caves, luck) do
+				local random, calls = scripted({ 0, 0, 0 })
+				T.eq(BoostConfig.upgradeOre(caves, luck, line.Ore, random), line.Ore, line.Ore .. " stays")
+				T.eq(calls(), 0, "no roll for a growing ore")
+				T.eq(BoostConfig.upgradeChance(caves, luck, line.Ore), 0)
+			end
+		end
+		T.truthy(#BoostConfig.gains(caves, 2.5) > 0)
+		-- a dropping ore: upgraded below the chance 1 - p'/p, kept above it
+		local plain, lucky = BoostConfig.zoneOdds("EmberCaves", 1), BoostConfig.zoneOdds("EmberCaves", 2.5)
+		local chance = BoostConfig.upgradeChance(caves, 2.5, "Iron")
+		T.near(chance, 1 - chanceOf(lucky, "Iron") / chanceOf(plain, "Iron"), 1e-12, "1 - p'/p")
+		T.near(BoostConfig.upgradeChance(caves, 2.5), chance, 1e-12, "no ore = a lower (x1) ore")
+		T.near(BoostConfig.keepChance(caves, 2.5, "Iron"), 1 - chance, 1e-12)
+		local random, calls = scripted({ chance + 1e-6 })
+		T.eq(BoostConfig.upgradeOre(caves, 2.5, "Iron", random), "Iron", "above the chance: kept")
+		T.eq(calls(), 1)
+		random, calls = scripted({ chance * 0.5, 0 })
+		local upgraded = BoostConfig.upgradeOre(caves, 2.5, "Iron", random)
+		T.truthy(BoostConfig.isLuckyOre(upgraded), "below the chance: a Rare+ ore")
+		T.eq(calls(), 2)
+		random = scripted({ 0, 0.999999 })
+		T.eq(BoostConfig.upgradeOre(caves, 2.5, "Iron", random), "Diamond", "the rarest pick is last")
+		-- Deep Hollow: even a Rare ore gives way, and only ever to a rarer one
+		local goldChance = BoostConfig.upgradeChance(deep, 2.5, "Gold")
+		T.truthy(goldChance > 0, "Gold (Rare) can be upgraded in Deep Hollow")
+		for _, line in BoostConfig.gains(deep, 2.5) do
+			T.truthy(order(OreData.ById[line.Ore].Rarity) > order("Rare"), line.Ore .. " is rarer than Gold")
+		end
+		for _, roll in { 0, 0.3, 0.7, 0.999999 } do
+			random = scripted({ 0, roll })
+			local target = BoostConfig.upgradeOre(deep, 2.5, "Gold", random)
+			T.truthy(order(OreData.ById[target].Rarity) > order("Rare"), "Gold -> " .. target)
+		end
+		-- no luck, no Rare+ ores, or an ore that isn't in the zone: kept, no roll
+		random, calls = scripted({ 0, 0 })
+		T.eq(BoostConfig.upgradeOre(caves, 1, "Iron", random), "Iron")
+		T.eq(BoostConfig.upgradeOre(WorldLayout.ZoneById.Outcrops.Ores, 4, "Coal", random), "Coal")
+		T.eq(BoostConfig.upgradeOre(caves, 4, "Coal", random), "Coal", "Coal isn't a Caves ore")
+		T.eq(calls(), 0)
+		T.eq(BoostConfig.upgradeChance(WorldLayout.ZoneById.Outcrops.Ores, 4), 0)
+		T.eq(#BoostConfig.gains(WorldLayout.ZoneById.Outcrops.Ores, 4), 0)
+		-- exact: rock ores rolled with the plain weights, then upgraded, give oreOdds(weights, luck)
+		for _, zone in WorldLayout.Zones do
+			local base = BoostConfig.zoneOdds(zone.Id, 1)
+			if #base == 0 then
+				continue
+			end
+			for _, luck in { 1.05, 1.5, 2.5, 4 } do
+				local gains = BoostConfig.gains(zone.Ores, luck)
+				local totalGain = sum(gains, "Chance")
+				local final: { [string]: number } = {}
+				local moved = 0
+				for _, line in base do
+					local keep = BoostConfig.keepChance(zone.Ores, luck, line.Ore)
+					final[line.Ore] = line.Chance * keep
+					moved += line.Chance * (1 - keep)
+				end
+				T.near(moved, totalGain, 1e-12, `{zone.Id}: what drops is what grows at luck {luck}`)
+				for _, line in gains do
+					final[line.Ore] += moved * line.Chance / totalGain
+				end
+				for _, line in BoostConfig.zoneOdds(zone.Id, luck) do
+					T.near(final[line.Ore], line.Chance, 1e-12, `{zone.Id} {line.Ore} at luck {luck}`)
+				end
+			end
+		end
+		-- and the same by sampling (seeded, 100k chunks each)
+		math.randomseed(12345)
+		local N = 100000
+		local counts = sample("EmberCaves", 2.5, N)
 		for _, line in BoostConfig.zoneOdds("EmberCaves", 2.5) do
 			T.near((counts[line.Ore] or 0) / N, line.Chance, 0.006, "sampled " .. line.Ore)
 		end
+		counts = sample("DeepHollow", 2.5, N)
+		local byRarity: { [string]: number } = {}
+		for oreId, n in counts do
+			local rarity = OreData.ById[oreId].Rarity
+			byRarity[rarity] = (byRarity[rarity] or 0) + n
+		end
+		local deepOdds = BoostConfig.zoneOdds("DeepHollow", 2.5)
+		for _, info in Rarity.List do
+			local expected = rarityShare(deepOdds, info.Id)
+			local tolerance = if info.Id == "Mythic" then 0.0012 else 0.006
+			T.near((byRarity[info.Id] or 0) / N, expected, tolerance, "Deep Hollow sampled " .. info.Id)
+		end
+	end)
+
+	T.test("Step67: luck cards show the new odds before any buy (Hexa Lucky, Lucky, Prospector, Starbreaker)", function()
+		local context = { BlasterLevel = 5, Vip = false, OreLuckPct = 0, OreLuckMult = 1, ArtifactPct = 0 }
+		-- Hexa Lucky
+		local hexa = BoostConfig.preview(context, { OreLuckMult = BoostConfig.Kinds.HexaLucky.Mult })
+		T.eq(hexa.LuckBefore, 1)
+		T.near(hexa.LuckAfter, 2.5, EPS)
+		local zones = {}
+		for _, effect in hexa.Zones do
+			zones[effect.Zone] = effect
+		end
+		T.truthy(zones.DeepHollow, "blaster 5 mines Deep Hollow")
+		local mythic
+		for _, line in zones.DeepHollow.Rarities do
+			if line.Rarity == "Mythic" then
+				mythic = line
+			end
+		end
+		T.truthy(mythic and mythic.After > 3 * mythic.Before, "the card shows Mythic 0.17 % -> 0.59 %")
+		T.near(mythic.Before, rarityShare(BoostConfig.zoneOdds("DeepHollow", 1), "Mythic"), EPS)
+		T.near(mythic.After, rarityShare(BoostConfig.zoneOdds("DeepHollow", 2.5), "Mythic"), EPS)
+		for _, line in hexa.Artifacts do
+			T.eq(line.Before, line.After, "Hexa Lucky doesn't touch artifacts")
+		end
+		-- Hexa Lucky while it runs: the same odds (it only adds time)
+		local running = BoostConfig.preview({ BlasterLevel = 5, OreLuckPct = 0, OreLuckMult = 2.5, ArtifactPct = 0 }, { OreLuckMult = 2.5 })
+		T.eq(running.LuckBefore, running.LuckAfter)
+		-- the enchants: what the next tier adds once slotted
+		local enchants: any = { Owned = {}, Slots = { "", "", "", "" } }
+		T.near(EnchantConfig.nextDelta(enchants, 5, "Lucky").OreLuckPct, 0.15, EPS, "Lucky I")
+		enchants.Owned.Lucky = 1
+		T.near(EnchantConfig.nextDelta(enchants, 5, "Lucky").OreLuckPct, 0.3, EPS, "Lucky II, not slotted: all of it")
+		EnchantConfig.setSlot(enchants, 5, 1, "Lucky")
+		T.near(EnchantConfig.nextDelta(enchants, 5, "Lucky").OreLuckPct, 0.15, EPS, "Lucky II over a slotted Lucky I")
+		enchants.Owned.Lucky = 3
+		T.eq(next(EnchantConfig.nextDelta(enchants, 5, "Lucky")), nil, "top tier: nothing more")
+		local lucky = BoostConfig.preview(context, EnchantConfig.nextDelta({ Owned = {}, Slots = {} }, 5, "Lucky"))
+		T.near(lucky.LuckAfter, 1.15, EPS)
+		local prospector = BoostConfig.preview(context, EnchantConfig.nextDelta({ Owned = {}, Slots = {} }, 5, "Prospector"))
+		T.eq(prospector.LuckAfter, 1, "Prospector: artifacts only")
+		for _, line in prospector.Artifacts do
+			T.near(line.After, line.Before * 1.25, EPS, line.Zone .. " artifact chance +25 %")
+			T.near(line.Before, ArtifactConfig.rockChance(line.Zone), EPS)
+		end
+		local star = BoostConfig.preview(context, EnchantConfig.nextDelta({ Owned = {}, Slots = {} }, 5, "Starbreaker"))
+		T.near(star.LuckAfter, 1.75, EPS)
+		T.truthy(star.Artifacts[1].After > star.Artifacts[1].Before)
+		-- a capped player sees no change (what the game would apply)
+		local capped = BoostConfig.preview(
+			{ BlasterLevel = 5, OreLuckPct = 1.5, OreLuckMult = 1, ArtifactPct = 3 },
+			{ OreLuckPct = 0.75, ArtifactPct = 0.5 }
+		)
+		T.eq(capped.LuckBefore, capped.LuckAfter)
+		T.eq(capped.Artifacts[1].Before, capped.Artifacts[1].After)
+		-- every odds booster is flagged, shows a change, and is a paid random item for Robux
+		for _, enchant in EnchantConfig.List do
+			local odds = false
+			for stat in enchant.Effects do
+				odds = odds or EnchantConfig.OddsStats[stat] == true
+			end
+			T.eq(enchant.OddsBoost == true, odds, enchant.Id .. " OddsBoost")
+			if enchant.OddsBoost then
+				local view = BoostConfig.preview(context, EnchantConfig.nextDelta({ Owned = {}, Slots = {} }, 5, enchant.Id))
+				local changed = view.LuckAfter > view.LuckBefore
+				for _, line in view.Artifacts do
+					changed = changed or line.After > line.Before
+				end
+				T.truthy(changed, enchant.Id .. " card shows new odds")
+				T.truthy(EnchantConfig.isPaidRandom(enchant.Id, "Robux"), enchant.Id .. " for Robux is paid random")
+				T.eq(EnchantConfig.isPaidRandom(enchant.Id, "Coins"), MonetizationConfig.coinsBuyable())
+			else
+				T.falsy(EnchantConfig.isPaidRandom(enchant.Id, "Robux"), enchant.Id .. " changes no odds")
+			end
+			local product = if enchant.Product then MonetizationConfig.get(enchant.Product) else nil
+			if product then
+				T.eq(product.PaidRandom == true, enchant.OddsBoost == true, enchant.Id .. " product PaidRandom")
+			end
+		end
+		T.truthy(EnchantConfig.isPaidRandom("Nope", "Coins"), "unknown = strict")
+		-- restricted players: no Robux Starbreaker; Heartfire (no odds) and coin buys stay
+		local none: any = { Owned = {}, Slots = {} }
+		local _, why = EnchantConfig.quote(none, "Starbreaker", "Robux", 1, true)
+		T.eq(why, "Restricted")
+		_, why = EnchantConfig.quote(none, "Starbreaker", "Robux", 1, false)
+		T.eq(why, "Robux")
+		_, why = EnchantConfig.quote(none, "Heartfire", "Robux", 1, true)
+		T.eq(why, "Robux", "Heartfire changes no odds")
+		T.eq(EnchantConfig.quote(none, "Starbreaker", "Coins", 1, true), 1e12, "coins can't be bought with Robux")
+		T.eq(MonetizationConfig.promptStatus("EnchantStarbreaker", true), "Restricted")
+		T.eq(MonetizationConfig.promptStatus("EnchantHeartfire", true), "ComingSoon")
+		T.truthy(EnchantConfig.Reasons.Restricted)
 	end)
 
 	---------------------------------------------------------------- wheel
@@ -909,32 +1155,31 @@ return function(T, Loader)
 		T.falsy(WheelConfig.ready(NOW + 10, NOW))
 		T.eq(WheelConfig.secondsLeft(NOW + 10, NOW), 10)
 		T.eq(WheelConfig.CooldownSeconds, 86400)
-		-- the ore prize follows the player: a step up from their best ore, from mines they can reach
+		-- the ore prize: a dirty Rare+ ore, a step up from the best one found, from mines they can reach
 		local day1 = { BlasterLevel = 1, BestIncome = OreData.ById.Copper.Income }
 		local odds1 = WheelConfig.oreOdds(day1)
 		T.near(sum(odds1, "Chance"), 1, EPS, "nested odds sum to 1")
-		T.eq(#odds1, 3)
-		local cap1 = math.max(WheelConfig.OrePrize.MinIncome, day1.BestIncome * WheelConfig.OrePrize.IncomeMult)
-		for _, line in odds1 do
-			T.truthy(OreData.ById[line.Ore].Income <= cap1, line.Ore .. " within reach of a day-1 player")
-		end
-		T.eq(odds1[1].Ore, "Tin")
-		T.eq(odds1[3].Ore, "Quartz", "the best one last")
-		T.truthy(odds1[3].Chance < odds1[1].Chance, "the best one is the least likely")
-		T.eq(WheelConfig.pickOre(0, day1), "Tin")
-		T.eq(WheelConfig.pickOre(0.9999, day1), "Quartz")
-		T.eq(WheelConfig.pickOre(1, day1), "Quartz")
-		-- nothing found yet: the same small prize
-		T.eq(#WheelConfig.oreOdds({ BlasterLevel = 1, BestIncome = 0 }), 3)
-		-- mid game (blaster 3, Ruby found): Ember Caves ores up to 3x Ruby
+		T.eq(#odds1, 1)
+		T.eq(odds1[1].Ore, "Gold", "a day-1 player wins a Gold chunk (the Quarry's Rare ore)")
+		T.eq(WheelConfig.pickOre(0, day1), "Gold")
+		T.eq(WheelConfig.pickOre(1, day1), "Gold")
+		T.eq(WheelConfig.OrePrize.MinIncome, OreData.ById.Gold.Income)
+		T.truthy(OreData.ById.Gold.Income * 10 > WheelConfig.ById.Coins.Min, "on a podium it beats the plain Coins prize within seconds")
+		-- nothing found yet: Gold too
+		T.eq(WheelConfig.oreOdds({ BlasterLevel = 1, BestIncome = 0 })[1].Ore, "Gold")
+		-- mid game (blaster 3, Ruby found): Ember Caves Rare+ ores up to 3x Ruby, the best the least likely
 		local mid = { BlasterLevel = 3, BestIncome = OreData.ById.Ruby.Income }
 		local seen = {}
-		for _, line in WheelConfig.oreOdds(mid) do
+		local midOdds = WheelConfig.oreOdds(mid)
+		T.eq(#midOdds, 3)
+		for _, line in midOdds do
 			seen[line.Ore] = true
 			T.truthy(OreData.ById[line.Ore].Income <= OreData.ById.Ruby.Income * 3)
 		end
 		T.truthy(seen.Sapphire and seen.Azurium and seen.Ruby, "mid game prizes")
 		T.falsy(seen.Moonstone, "no Grotto ore without VIP")
+		T.eq(midOdds[3].Ore, "Sapphire", "the best one last")
+		T.truthy(midOdds[3].Chance < midOdds[1].Chance, "the best one is the least likely")
 		-- a deep ore never comes before the blaster can mine its zone
 		for level = 1, 10 do
 			for best = 0, 6 do
@@ -947,13 +1192,23 @@ return function(T, Loader)
 						end
 					end
 					T.truthy(reachable, `{line.Ore} reachable at blaster {level}`)
-					T.truthy(OreData.ById[line.Ore].Income <= math.max(8, 10 ^ best * 3), line.Ore .. " capped")
+					T.truthy(BoostConfig.isLuckyOre(line.Ore), line.Ore .. " is Rare or rarer")
+					T.truthy(
+						OreData.ById[line.Ore].Income <= math.max(WheelConfig.OrePrize.MinIncome, 10 ^ best * 3),
+						line.Ore .. " capped"
+					)
 				end
 			end
 		end
 		T.eq(WheelConfig.bestIncome({ Coal = true, Gold = true, Fake = true }), OreData.ById.Gold.Income)
 		T.eq(WheelConfig.bestIncome("junk"), 0)
-		T.eq(WheelConfig.oreFallbackCoins("Gold"), ItemData.value("Raw", "Gold"))
+		-- a full pen pays the prize's expected raw value: the coins don't tell which ore it was
+		T.eq(WheelConfig.oreFallbackCoins(day1), ItemData.value("Raw", "Gold"))
+		local expected = 0
+		for _, line in midOdds do
+			expected += line.Chance * ItemData.value("Raw", line.Ore)
+		end
+		T.eq(WheelConfig.oreFallbackCoins(mid), math.floor(expected + 0.5))
 		-- a full golem inventory pays a share of the capsule's price, never the whole
 		T.eq(WheelConfig.capsuleFallbackCoins("Stone", 1), math.floor(2500 * WheelConfig.FallbackShare))
 		T.eq(WheelConfig.capsuleFallbackCoins("Crystal", 10), math.floor((CapsuleConfig.price("Crystal", 1, 10) :: number) * 0.25))
@@ -1086,7 +1341,9 @@ return function(T, Loader)
 			T.eq(LeaderboardConfig.ByIndex[i], board)
 		end
 		T.eq(LeaderboardConfig.RefreshSeconds, 60)
-		T.eq(LeaderboardConfig.TopCount, 10)
+		T.eq(LeaderboardConfig.TopCount, 10, "the side menu panel")
+		T.eq(LeaderboardConfig.BoardRows, 5, "the lobby boards: readable on phones")
+		T.truthy(LeaderboardConfig.BoardRows <= LeaderboardConfig.TopCount)
 	end)
 
 	T.test("Step67: leaderboard encode/decode round-trips big numbers and keeps their order", function()
@@ -1219,8 +1476,16 @@ return function(T, Loader)
 			local pass = MonetizationConfig.get(key)
 			T.eq(pass.Kind, "GamePass", key .. " is a game pass")
 			T.truthy(pass.Enchant, key .. " grants an enchant")
-			T.falsy(pass.PaidRandom)
 		end
+		-- Starbreaker raises ore luck and the artifact chance: an odds booster, so paid random
+		T.truthy(MonetizationConfig.get("EnchantStarbreaker").PaidRandom, "Starbreaker is a paid odds booster")
+		T.falsy(MonetizationConfig.get("EnchantHeartfire").PaidRandom, "Heartfire changes no odds")
+		T.eq(MonetizationConfig.promptStatus("EnchantStarbreaker", true), "Restricted", "hidden where restricted")
+		-- every luck product says what it does in numbers
+		for _, key in { "HexaLucky15", "HexaLucky60", "EnchantStarbreaker" } do
+			T.truthy(MonetizationConfig.get(key).Description:find("new odds shown before buying", 1, true), key .. " promises the odds")
+		end
+		T.truthy(MonetizationConfig.PromptMemorySeconds >= 60, "a Royal prompt remembers the Triple Lucky state it showed")
 		for _, product in MonetizationConfig.List do
 			if product.Kind == "Product" then
 				T.falsy(product.Enchant, product.Key .. ": no one-time item as a developer product")
@@ -1259,11 +1524,15 @@ return function(T, Loader)
 		for _, name in { "ActionResult", "CapsuleResult", "WheelResult", "ArtifactFound", "PurchasePrompt" } do
 			T.eq(Net.Events[name], false, name .. " is server -> client")
 		end
+		-- the 7-day Ember Chest is retired: the EmberChest hook belongs to the wheel alone
+		T.eq(Net.Events.DailyClaim, nil)
+		T.eq(WheelConfig.Tag, "EmberChest")
 	end)
 
 	T.test("Step67: the new save records", function()
 		T.eq(DataTemplate.Version, 3, "still version 3")
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
+		T.eq(DataTemplate.Daily, nil, "the 7-day chest streak is gone (the wheel replaced it)")
 		for _, lineId in GearConfig.LineIds do
 			T.eq(DataTemplate.Gear[lineId], 0)
 		end
@@ -1327,7 +1596,16 @@ return function(T, Loader)
 		data.Boosts = { TripleLuckyUntil = NOW + 10 ^ 9, HexaLuckyUntil = -5 }
 		data.Golems = {
 			Owned = {
-				{ Id = 1, Kind = "PebbleGolem", Extra = "cut" },
+				{
+					Id = 1,
+					Kind = "PebbleGolem",
+					Extra = "kept",
+					Locked = "yes", -- not a boolean
+					Paid = true,
+					Junk = { 1 }, -- not a scalar
+					[5] = true, -- not a string key
+					Long = string.rep("x", 100), -- too long
+				},
 				{ Id = 1, Kind = "EmberImp" }, -- duplicate id
 				{ Id = 2.5, Kind = "EmberImp" },
 				{ Id = 3, Kind = "IronGolem" }, -- unknown kind
@@ -1381,7 +1659,12 @@ return function(T, Loader)
 		T.eq(#data.Golems.Owned, 3)
 		T.eq(data.Golems.Owned[1].Id, 1)
 		T.eq(data.Golems.Owned[1].Kind, "PebbleGolem")
-		T.eq(data.Golems.Owned[1].Extra, nil, "extra fields cut")
+		T.eq(data.Golems.Owned[1].Extra, "kept", "a well-formed extra field is kept (a newer server's)")
+		T.eq(data.Golems.Owned[1].Paid, true)
+		T.eq(data.Golems.Owned[1].Locked, nil, "Locked must be a boolean")
+		T.eq(data.Golems.Owned[1].Junk, nil, "tables are dropped")
+		T.eq(data.Golems.Owned[1][5], nil, "number keys are dropped")
+		T.eq(data.Golems.Owned[1].Long, nil, "long strings are dropped")
 		T.eq(data.Golems.Owned[2].Id, 3)
 		T.eq(data.Golems.Owned[2].Kind, "IronGolem", "a newer server's kind is kept")
 		T.eq(data.Golems.Owned[3].Id, 7)
@@ -1413,10 +1696,15 @@ return function(T, Loader)
 		data.Enchants.Owned = { FutureEnchant = 2, Power = 5, Heartfire = 1 }
 		data.Enchants.Slots = { "FutureEnchant", "Power", "Heartfire", "" }
 		data.Golems = {
-			Owned = { { Id = 1, Kind = "FutureGolem" }, { Id = 2, Kind = "RubyKnight" }, { Id = 5, Kind = "FutureGolem" } },
+			Owned = {
+				{ Id = 1, Kind = "FutureGolem" },
+				{ Id = 2, Kind = "RubyKnight", Paid = true, Locked = true, TradeLockUntil = NOW + 3600, Source = "Royal" },
+				{ Id = 5, Kind = "FutureGolem", Paid = true },
+			},
 			Equipped = { 1, 2 },
 			NextId = 6,
 		}
+		data.Daily = { LastClaimDay = 3, Streak = 2 } -- the retired 7-day chest
 		data.Artifacts.Found = { FutureArtifact = 4, CrownCoin = 1 }
 		data.Artifacts.Chapters = { FutureCollection = true }
 		for run = 1, 2 do
@@ -1429,6 +1717,13 @@ return function(T, Loader)
 			T.eq(#data.Golems.Owned, 3, `run {run}: FutureGolems kept`)
 			T.eq(data.Golems.Owned[1].Kind, "FutureGolem")
 			T.eq(data.Golems.Owned[3].Kind, "FutureGolem")
+			local ruby = data.Golems.Owned[2]
+			T.eq(ruby.Paid, true, `run {run}: Paid kept`)
+			T.eq(ruby.Locked, true, `run {run}: Locked kept`)
+			T.eq(ruby.TradeLockUntil, NOW + 3600, `run {run}: a newer server's trading field kept`)
+			T.eq(ruby.Source, "Royal", `run {run}: a newer server's field kept`)
+			T.eq(data.Golems.Owned[3].Paid, true, `run {run}: a paid unknown golem stays paid`)
+			T.eq(data.Daily, nil, `run {run}: the retired chest streak is gone`)
 			T.eq(#data.Golems.Equipped, 1, `run {run}: an unknown golem isn't equipped here`)
 			T.eq(data.Golems.Equipped[1], 2)
 			T.eq(data.Golems.NextId, 6)
@@ -1450,6 +1745,27 @@ return function(T, Loader)
 		T.eq(GolemConfig.count(data.Golems), 3, "they count toward the cap")
 		T.eq(ArtifactConfig.countOf(data.Artifacts, "FutureArtifact"), 0)
 		T.eq(ArtifactConfig.uniqueCount(data.Artifacts), 1)
+		-- at most 8 extra fields per golem (the first by name); Paid / Locked always stay
+		local many: any = { Id = 20, Kind = "PebbleGolem", Paid = true, Locked = false }
+		for i = 1, 12 do
+			many[string.format("F%02d", i)] = i
+		end
+		data.Golems.Owned[4] = many
+		Migrations.run(data, NOW)
+		local kept = data.Golems.Owned[4]
+		local extras = 0
+		for key in kept do
+			if key ~= "Id" and key ~= "Kind" and key ~= "Paid" and key ~= "Locked" then
+				extras += 1
+			end
+		end
+		T.eq(extras, 8)
+		T.eq(kept.F01, 1)
+		T.eq(kept.F08, 8)
+		T.eq(kept.F09, nil)
+		T.eq(kept.Paid, true)
+		T.eq(kept.Locked, false)
+		table.remove(data.Golems.Owned, 4)
 		-- junk inside those records still goes
 		data.Golems.Owned[4] = { Id = 9, Kind = 5 }
 		data.Golems.Owned[5] = { Id = 10, Kind = "" }
@@ -1701,6 +2017,62 @@ return function(T, Loader)
 		local ghost = fakePlayer(8)
 		Bonuses.stats(ghost)
 		T.falsy(Bonuses._test.cached(ghost))
+	end)
+
+	withBonuses("Step67 Bonuses: magnet, sell value and one carry capacity for every reader", function(w)
+		local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
+		local data = fresh()
+		data.Enchants = { Owned = { Magnetism = 3, Midas = 2 }, Slots = { "Magnetism", "", "", "" } }
+		local p = fakePlayer(11)
+		w.byPlayer[p] = data
+		-- Magnetism only adds to a real Ore Magnet
+		T.eq(Bonuses.magnetRadius(Bonuses.stats(p)), 0, "no Ore Magnet: no pull, whatever the enchant")
+		data.Gear.Magnet = 2
+		Bonuses.invalidate(p)
+		T.eq(Bonuses.magnetRadius(Bonuses.stats(p)), 12 + 10, "Magnet II + Magnetism III")
+		T.eq(Bonuses.magnetRadius({ MagnetRadius = 55, MagnetBonus = 20 }), 60, "capped")
+		-- sell value: whole coins
+		T.eq(Bonuses.sellAmount({ SellPct = 0.2 }, 101), 121)
+		T.eq(Bonuses.sellAmount({}, 101), 101)
+		T.eq(Bonuses.sellAmount({ SellPct = 0.2 }, 0 / 0), 0)
+		-- carry capacity: one source for CarryService and the State snapshot
+		Bonuses.register("Event", function()
+			return { CarryCapacity = 3 }
+		end)
+		local capacity = Bonuses.carryCapacity(Bonuses.stats(p), p)
+		T.eq(capacity, 4, "Backpack 0 (1) + an event's 3")
+		local snapshot = StateService.snapshot(p) :: any
+		T.eq(snapshot.CarryCapacity, capacity, "the State shows what CarryService applies")
+		T.eq(snapshot.Bonuses.CarryCapacity, capacity)
+		p.attrs.Perk_StrongBack = true
+		T.eq(StateService.snapshot(p).CarryCapacity, 8, "StrongBack doubles it")
+	end)
+
+	withBonuses("Step67 State: big records are sent only when they change", function(w)
+		local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
+		local data = fresh()
+		local p = fakePlayer(12)
+		w.byPlayer[p] = data
+		local first = StateService.trim(p, StateService.snapshot(p) :: any)
+		T.eq(first.Kept, nil, "the first push is whole")
+		for _, key in StateService.Sticky do
+			T.truthy(first[key] ~= nil, key .. " sent")
+		end
+		local second = StateService.trim(p, StateService.snapshot(p) :: any)
+		T.eq(#second.Kept, #StateService.Sticky, "nothing changed: all kept")
+		for _, key in StateService.Sticky do
+			T.eq(second[key], nil, key .. " left out")
+		end
+		T.truthy(second.Coins ~= nil and second.Boosts ~= nil, "small fields always go")
+		GolemConfig.add(data.Golems, "PebbleGolem")
+		local third = StateService.trim(p, StateService.snapshot(p) :: any)
+		T.truthy(third.Golems and #third.Golems.Owned == 1, "a new golem: Golems sent again")
+		T.falsy(table.find(third.Kept, "Golems"))
+		T.truthy(table.find(third.Kept, "Gear"), "Gear still kept")
+		-- fingerprints: same content = same text, whatever the key order
+		T.eq(StateService.fingerprint({ A = 1, B = { 2, 3 } }), StateService.fingerprint({ B = { 2, 3 }, A = 1 }))
+		T.truthy(StateService.fingerprint({ A = 1 }) ~= StateService.fingerprint({ A = "1" }))
+		T.truthy(StateService.fingerprint({ 1, 2 }) ~= StateService.fingerprint({ 2, 1 }))
 	end)
 
 	withBonuses("Step67 Bonuses: register replaces a source, bad providers count as nothing", function(w)

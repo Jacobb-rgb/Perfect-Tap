@@ -20,11 +20,16 @@
 	  artifacts and a StoryConfig chapter. Saves keep artifact and chapter
 	  ids this server doesn't know (Migrations); every reader here ignores them.
 	- Budgets (mobile, 8 base museums x 24 artifacts): an artifact model has
-	  at most MaxParts parts, all anchored, CanCollide/CanTouch/CanQuery off,
-	  no lights except the Mythic ones (one small PointLight, LightRarity);
-	  the Glow is a Neon part. Museum shelves are built once per base (no
-	  per-frame animation on the server; a slow spin, if any, runs on clients
-	  within MuseumAnimateDistance studs).
+	  at most MaxParts (8) parts, all anchored, CanCollide/CanTouch/CanQuery
+	  off, no lights except the Mythic ones (one small PointLight,
+	  LightRarity); the Glow is a Neon part. A museum shows ONLY the
+	  artifacts its owner has found (an empty shelf spot is one plain
+	  plinth part, shared per shelf) and lives in the base model, so
+	  StreamingEnabled streams it in only within the streaming radius; the
+	  pieces are built once (and when a new artifact is found), no per-frame
+	  animation on the server; a slow spin, if any, runs on clients within
+	  MuseumAnimateDistance studs. Worst case: 8 bases x 24 x 8 = 1,536
+	  parts, and only the bases near a player are streamed in.
 
 	Saved as data.Artifacts = {
 	  Found = { [artifactId] = count (whole 1..MaxCount) },
@@ -68,7 +73,7 @@ export type OddsLine = { Artifact: string, Chance: number }
 local ArtifactConfig = {}
 
 ArtifactConfig.MaxCount = 9999 -- copies of one artifact a save keeps count of
-ArtifactConfig.MaxParts = 12 -- parts in one artifact model (see the header)
+ArtifactConfig.MaxParts = 8 -- parts in one artifact model (see the header)
 ArtifactConfig.LightRarity = "Mythic" -- only this rarity may carry a light
 ArtifactConfig.MuseumAnimateDistance = 60 -- studs: clients animate museum pieces only this close
 

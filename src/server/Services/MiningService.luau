@@ -24,10 +24,11 @@
 	- Bonuses (steps 6-7, src/server/Bonuses.luau) of the player whose damage
 	  counts: damage x Bonuses.damageMult (Overcharge in the last third), range
 	  + Bonuses.reach; ore luck (Lucky enchant, Luck golems, Hexa Lucky:
-	  Bonuses.oreLuck above 1) only UPGRADES a dropped ore: the rock's own
-	  Rare+ ores always stay, a lower ore may become a Rare+ ore of the zone
-	  (BoostConfig.upgradeOre: every chunk then has exactly the chances
-	  BoostConfig.oreOdds shows); a chunk drops a twin with chance
+	  Bonuses.oreLuck above 1, growing with rarity) only UPGRADES a dropped
+	  ore: an ore whose share grows with the luck always stays, one whose
+	  share drops may become a rarer ore of the zone (BoostConfig.upgradeOre:
+	  every chunk then has exactly the chances BoostConfig.oreOdds shows); a
+	  chunk drops a twin with chance
 	  Bonuses.twinDrop. When a rock shatters and an onArtifactRoll listener is
 	  registered, one roll against Bonuses.artifactChance (zone chance x
 	  Prospector) calls the listeners (player, zoneId, position) on success.

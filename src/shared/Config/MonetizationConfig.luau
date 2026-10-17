@@ -12,10 +12,13 @@
 	  (MonetizationService). Until then a feature that is asked to sell a Robux
 	  item answers the client with PurchasePrompt { Product, Status }
 	  (MonetizationConfig.promptStatus).
-	- PaidRandom = true: buying it gives a random result (or changes the odds
-	  of one), so it is hidden/disabled for players whose
-	  PolicyService ArePaidRandomItemsRestricted is true (src/server/Policy.luau),
-	  and the exact odds are shown before buying.
+	- PaidRandom = true: buying it gives a random result (Royal capsules) or
+	  changes the odds of one (the Triple / Hexa Lucky packs, the Starbreaker
+	  enchant's pass: ore luck and artifact chance), so it is hidden/disabled
+	  for players whose PolicyService ArePaidRandomItemsRestricted is true
+	  (src/server/Policy.luau), and the exact odds (for odds boosters: the
+	  odds now and the NEW odds, BoostConfig.preview / CapsuleConfig.odds)
+	  are shown in numbers before buying.
 	- Coin packs (CoinsSmall/Medium/Large) wait for the owner: the design notes
 	  say "Money comes only from podiums", so CoinPacksEnabled is false. While
 	  it is false the packs are never offered (promptStatus "Unknown") and
@@ -35,8 +38,9 @@
 	- A receipt is never stranded: it is granted (on the server that holds the
 	  session lock, saved first, then PurchaseGranted), or, when the item truly
 	  can't be given, compensated with something of equal worth, and the
-	  receipt is still answered PurchaseGranted. Paid golems may pass the
-	  inventory cap (GolemConfig.add overCap, up to MaxSaved); paid boost time
+	  receipt is still answered PurchaseGranted. Paid golems are saved with
+	  Paid = true and may pass the inventory cap (GolemConfig.add(golems,
+	  kind, true, true): overCap up to MaxSaved, paid); paid boost time
 	  is added uncapped (BoostConfig.extend capped = false). Past MaxSaved a
 	  capsule is refunded as coins (CapsuleConfig.price of a Crystal capsule
 	  at the player's blaster level per golem).
@@ -46,6 +50,18 @@
 	  with the player id, product id and purchase id for review.
 	- Clients can prompt any product themselves (exploiters, restricted
 	  regions): the server never trusts that a prompt came from its own UI.
+	- Royal capsules and Triple Lucky: the odds the player saw are the odds
+	  they get. When the server answers "Prompted" for a Royal capsule it
+	  stores { Product, TripleLucky = Bonuses.tripleLucky at that moment, At }
+	  for the player (the latest prompt per product, kept PromptMemorySeconds);
+	  ProcessReceipt opens the capsules with that stored TripleLucky state,
+	  even if the boost has started or ended since. With no stored prompt (a
+	  purchase from the Store tab, another server, a rejoin) it uses the
+	  state when the receipt is processed, and the capsule card always says
+	  which odds a purchase uses ("Triple Lucky odds" / "normal odds").
+	- A late result is still a result: the client shows a CapsuleResult /
+	  WheelResult that arrives after its ResultTimeout (CapsuleConfig /
+	  WheelConfig), and the State push always brings the saved truth.
 ]]
 
 export type Kind = "GamePass" | "Product"
@@ -173,7 +189,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 39,
 		Name = "Hexa Lucky (15 min)",
-		Description = "Mining: Rare and rarer ores weigh 2.5 times as much in every rock for 15 minutes (new odds shown before buying).",
+		Description = "Mining: ore luck x2.5 for 15 minutes. Rare ores weigh x2.5, Epic x4, Legendary x6.3, Mythic x9.9 (new odds shown before buying).",
 		PaidRandom = true,
 		Boost = "HexaLucky",
 		Seconds = 900,
@@ -184,7 +200,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 129,
 		Name = "Hexa Lucky (1 hour)",
-		Description = "Mining: Rare and rarer ores weigh 2.5 times as much in every rock for 1 hour (new odds shown before buying).",
+		Description = "Mining: ore luck x2.5 for 1 hour. Rare ores weigh x2.5, Epic x4, Legendary x6.3, Mythic x9.9 (new odds shown before buying).",
 		PaidRandom = true,
 		Boost = "HexaLucky",
 		Seconds = 3600,
@@ -205,7 +221,8 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 20,
 		Name = "Starbreaker Enchant",
-		Description = "The Mythic Starbreaker enchant for your blaster, yours forever.",
+		Description = "The Mythic Starbreaker enchant for your blaster, yours forever: +75% ore luck, +50% artifact chance (new odds shown before buying).",
+		PaidRandom = true,
 		Enchant = "Starbreaker",
 	},
 	---------------------------------------------------------------- coin packs
@@ -247,6 +264,10 @@ local LIST: { Product } = {
 -- Coin packs wait for the owner's decision (see the header). Keep false
 -- until the owner confirms them; it decides the paid-random-items rules.
 MonetizationConfig.CoinPacksEnabled = false
+
+-- Seconds a "Prompted" Royal capsule remembers the Triple Lucky state the
+-- player saw (step 8 contract above).
+MonetizationConfig.PromptMemorySeconds = 15 * 60
 
 MonetizationConfig.List = LIST
 MonetizationConfig.Products = {} :: { [string]: Product }

@@ -25,11 +25,20 @@
 	  beyond FollowerLodDistance.
 
 	Saved as data.Golems = {
-	  Owned = { { Id = number, Kind = golemId } }, -- Id: whole, unique, >= 1
-	  Equipped = { Id, ... },                      -- at most EquipSlots ids from Owned
-	  NextId = number,                             -- > every Id in Owned
+	  Owned = { Entry },  -- Entry = { Id = number, Kind = golemId,
+	                      --   Paid = true?    (from a Robux purchase: a paid
+	                      --                    random item; trading checks
+	                      --                    IsPaidItemTradingAllowed),
+	                      --   Locked = true?  (the player's lock: never
+	                      --                    deleted, see delete()),
+	                      --   + scalar fields a newer server adds (trading,
+	                      --     sources...): Migrations keeps them) }
+	                      -- Id: whole, unique, >= 1
+	  Equipped = { Id, ... }, -- at most EquipSlots ids from Owned
+	  NextId = number,        -- > every Id in Owned
 	}
-	GolemAction ("Equip", { Id }) ("Unequip", { Id }) ("EquipBest") ("Delete", { Ids = { Id, ... } })
+	GolemAction ("Equip", { Id }) ("Unequip", { Id }) ("EquipBest")
+	            ("Lock", { Id, Locked: boolean }) ("Delete", { Ids = { Id, ... } })
 	The pure helpers below do the data writes, so every service (capsules,
 	the wheel, step 8 receipts) changes the record the same way.
 ]]
@@ -55,7 +64,7 @@ export type Golem = {
 	Lore: string,
 }
 
-export type Owned = { Id: number, Kind: string }
+export type Owned = { Id: number, Kind: string, Paid: boolean?, Locked: boolean? }
 
 local GolemConfig = {}
 
@@ -101,6 +110,7 @@ GolemConfig.Reasons = {
 	NotEquipped = "That golem isn't equipped",
 	InventoryFull = "Your golem inventory is full",
 	BadIds = "Pick the golems to delete",
+	BadLock = "Lock or unlock one of your golems",
 } :: { [string]: string }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -418,8 +428,10 @@ end
 
 -- Adds a golem of `kind`. Refused (nil) for an unknown kind or when the
 -- inventory is at InventoryCap, unless `overCap` (a paid Robux receipt:
--- never lost; still never past MaxSaved). Returns the new entry.
-function GolemConfig.add(golems: { [string]: any }, kind: string, overCap: boolean?): Owned?
+-- never lost; still never past MaxSaved). `paid`: it came from a Robux
+-- purchase (saved as Paid = true; capsules bought with coins and wheel
+-- prizes pass nil). Returns the new entry.
+function GolemConfig.add(golems: { [string]: any }, kind: string, overCap: boolean?, paid: boolean?): Owned?
 	if not GolemConfig.ById[kind] then
 		return nil
 	end
@@ -430,6 +442,9 @@ function GolemConfig.add(golems: { [string]: any }, kind: string, overCap: boole
 		return nil
 	end
 	local entry: Owned = { Id = golems.NextId, Kind = kind }
+	if paid then
+		entry.Paid = true
+	end
 	golems.NextId += 1
 	table.insert(golems.Owned, entry)
 	return entry
@@ -490,11 +505,27 @@ function GolemConfig.equipBest(golems: { [string]: any }): { number }
 	return best
 end
 
+-- GolemAction "Lock": sets or clears an owned golem's Locked flag (a locked
+-- golem is never deleted). true, or false + "BadGolem" | "BadLock".
+function GolemConfig.setLocked(golems: { [string]: any }, id: any, locked: any): (boolean, string?)
+	if type(locked) ~= "boolean" then
+		return false, "BadLock"
+	end
+	local entry = GolemConfig.find(golems, id)
+	if not entry then
+		return false, "BadGolem"
+	end
+	entry.Locked = if locked then true else nil
+	return true, nil
+end
+
 -- GolemAction "Delete": removes the owned golems with these ids (also from
 -- Equipped). `ids` must be a plain list of 1..MaxDelete whole numbers (the
 -- check walks at most MaxDelete + 1 entries, whatever the client sent).
--- Golems of unknown kinds are never deleted (they may be paid ones from a
--- newer update). Returns how many were deleted (0 + "BadIds" for a bad list).
+-- Locked golems and golems of unknown kinds (they may be paid ones from a
+-- newer update) are never deleted: they are skipped and stay equipped.
+-- Equipped golems the list names are deleted and unequipped (the UI asks
+-- first). Returns how many were deleted (0 + "BadIds" for a bad list).
 function GolemConfig.delete(golems: { [string]: any }, ids: any): (number, string?)
 	if type(ids) ~= "table" then
 		return 0, "BadIds"
@@ -521,12 +552,12 @@ function GolemConfig.delete(golems: { [string]: any }, ids: any): (number, strin
 	local kept = {}
 	local removed = 0
 	for _, entry in golems.Owned do
-		if type(entry) == "table" and wanted[entry.Id] and GolemConfig.ById[entry.Kind] then
+		if type(entry) == "table" and wanted[entry.Id] and GolemConfig.ById[entry.Kind] and entry.Locked ~= true then
 			removed += 1
 		else
 			table.insert(kept, entry)
 			if type(entry) == "table" and type(entry.Id) == "number" then
-				wanted[entry.Id] = nil -- kept (an unknown kind): stays equipped too
+				wanted[entry.Id] = nil -- kept (locked or an unknown kind): stays equipped too
 			end
 		end
 	end

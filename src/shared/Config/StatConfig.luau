@@ -8,8 +8,8 @@
 	  DamagePct        + share of blaster damage (0.1 = +10 %)
 	  OverchargePct    + share of damage while a rock is in its last third
 	  ReachStuds       + blaster range (studs)
-	  OreLuckPct       + share of the weight of Rare and rarer ores in rock rolls
-	  OreLuckMult      x the weight of Rare and rarer ores (Hexa Lucky)
+	  OreLuckPct       + share of ore luck (Lucky / Starbreaker enchants, Luck golems)
+	  OreLuckMult      x ore luck (Hexa Lucky)
 	  CapsuleLuckMult  x Triple Lucky on golem capsules (CapsuleConfig.odds)
 	  TwinDropChance   chance that a dropped ore drops a twin chunk too
 	  ArtifactPct      + share of the artifact chance of every rock
@@ -19,7 +19,10 @@
 	  GolemBondPct     + share of every equipped golem's bonus
 	  WalkSpeed        walk speed in studs/s (Boots give the base, Swift adds)
 	  WalkSpeedPct     + share of walk speed
-	  MagnetRadius     studs in which your own loose items fly to you
+	  MagnetRadius     studs in which your own loose items fly to you (the
+	                   Ore Magnet gear; 0 = no magnet)
+	  MagnetBonus      + studs on top of an Ore Magnet (Magnetism enchant);
+	                   nothing without the gear (Bonuses.magnetRadius)
 	  PickupRange      studs you can grab an item from
 	  ThrowMult        x throw power
 	  CarryCapacity    items you can carry (the StrongBack perk doubles it)
@@ -30,10 +33,17 @@
 	best gear can reach, so the numbers on the cards are what the game
 	applies (the UI shows the capped totals from State.Bonuses). Ore luck has
 	one more cap on the product: oreLuck() = (1 + OreLuckPct) x OreLuckMult,
-	at most MaxOreLuck (x5), so the odds on a Hexa Lucky card match the rolls.
-	Today's highest sums (3 equipped golems with Golem Bond III + Golemworks):
-	DamagePct ~3.0, OreLuckPct ~2.45 (capped 1.5), IncomePct ~2.1, SellPct ~1.3,
-	WalkSpeedPct ~0.24, ArtifactPct 1.5, OverchargePct 1.3.
+	at most MaxOreLuck (x4), so the odds on a luck card match the rolls.
+	How ore luck acts on the ores (it grows with rarity): BoostConfig header.
+	The caps keep paid golems (Royal capsules) and the Mythic enchants from
+	skipping blaster progression: a whole blaster level is about x1.8 damage,
+	and the best possible damage is x2.5 (x5 on a cracked rock's last third).
+	Today's highest sums (3 equipped Mythic/Legendary golems with Golem Bond
+	III + Golemworks, the best enchants) and the caps:
+	  DamagePct     ~3.0  -> cap 1.5     OverchargePct ~1.3  -> cap 1
+	  IncomePct     ~2.1  -> cap 2       SellPct       ~1.3  (cap 3)
+	  OreLuckPct    ~2.45 -> cap 1.5     ArtifactPct    1.5  (cap 3)
+	  WalkSpeedPct  ~0.24 (cap 0.5)      MagnetBonus    10   (cap 20)
 ]]
 
 export type StatKind = "Add" | "Mult"
@@ -49,20 +59,21 @@ export type Stat = {
 local StatConfig = {}
 
 StatConfig.List = {
-	{ Id = "DamagePct", Kind = "Add", Label = "blaster damage", Format = "Percent", Max = 3 },
-	{ Id = "OverchargePct", Kind = "Add", Label = "damage on a cracked rock's last third", Format = "Percent", Max = 3 },
+	{ Id = "DamagePct", Kind = "Add", Label = "blaster damage", Format = "Percent", Max = 1.5 },
+	{ Id = "OverchargePct", Kind = "Add", Label = "damage on a cracked rock's last third", Format = "Percent", Max = 1 },
 	{ Id = "ReachStuds", Kind = "Add", Label = "blaster range", Format = "Studs", Max = 12 },
-	{ Id = "OreLuckPct", Kind = "Add", Label = "rare ore luck", Format = "Percent", Max = 1.5 },
-	{ Id = "OreLuckMult", Kind = "Mult", Label = "rare ore luck", Format = "Times", Max = 2.5 },
+	{ Id = "OreLuckPct", Kind = "Add", Label = "ore luck", Format = "Percent", Max = 1.5 },
+	{ Id = "OreLuckMult", Kind = "Mult", Label = "ore luck", Format = "Times", Max = 2.5 },
 	{ Id = "CapsuleLuckMult", Kind = "Mult", Label = "capsule luck", Format = "Times", Max = 3 },
 	{ Id = "TwinDropChance", Kind = "Add", Label = "chance of a twin chunk", Format = "Percent", Max = 0.5 },
 	{ Id = "ArtifactPct", Kind = "Add", Label = "artifact chance", Format = "Percent", Max = 3 },
 	{ Id = "SellPct", Kind = "Add", Label = "sell value", Format = "Percent", Max = 3 },
-	{ Id = "IncomePct", Kind = "Add", Label = "podium income", Format = "Percent", Max = 3 },
+	{ Id = "IncomePct", Kind = "Add", Label = "podium income", Format = "Percent", Max = 2 },
 	{ Id = "GolemBondPct", Kind = "Add", Label = "golem bonuses", Format = "Percent", Max = 1 },
 	{ Id = "WalkSpeed", Kind = "Add", Label = "walk speed", Format = "Speed", Max = 40 },
 	{ Id = "WalkSpeedPct", Kind = "Add", Label = "walk speed", Format = "Percent", Max = 0.5 },
 	{ Id = "MagnetRadius", Kind = "Add", Label = "magnet radius", Format = "Studs", Max = 60 },
+	{ Id = "MagnetBonus", Kind = "Add", Label = "ore magnet radius", Format = "Studs", Max = 20 },
 	{ Id = "PickupRange", Kind = "Add", Label = "pickup range", Format = "Studs", Max = 40 },
 	{ Id = "ThrowMult", Kind = "Mult", Label = "throw power", Format = "Times", Max = 3 },
 	{ Id = "CarryCapacity", Kind = "Add", Label = "carry capacity", Format = "Number", Max = 50 },
@@ -70,8 +81,8 @@ StatConfig.List = {
 	{ Id = "LampBrightness", Kind = "Add", Label = "lamp brightness", Format = "Number", Max = 10 },
 } :: { Stat }
 
--- The highest total rare ore luck (the product, see the header).
-StatConfig.MaxOreLuck = 5
+-- The highest total ore luck (the product, see the header).
+StatConfig.MaxOreLuck = 4
 
 StatConfig.ById = {} :: { [string]: Stat }
 for _, stat in StatConfig.List do
@@ -112,9 +123,10 @@ function StatConfig.add(totals: { [string]: number }, partial: any): { [string]:
 	return totals
 end
 
--- The multiplier on Rare and rarer ore weights from the two luck totals:
--- (1 + pct) x mult, between 1 (no luck) and MaxOreLuck. Broken values count
--- as no luck. Bonuses.oreLuck and the boost cards both use this.
+-- The ore luck from the two luck totals: (1 + pct) x mult, between 1 (no
+-- luck) and MaxOreLuck. Broken values count as no luck. Bonuses.oreLuck and
+-- the luck cards both use this; BoostConfig.rarityMult turns it into the
+-- weight multiplier of each rarity.
 function StatConfig.oreLuck(pct: any, mult: any): number
 	local p = if finite(pct) and pct > 0 then pct else 0
 	local m = if finite(mult) and mult > 0 then mult else 1

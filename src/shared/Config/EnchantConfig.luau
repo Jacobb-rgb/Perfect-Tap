@@ -19,6 +19,19 @@
 	- Unknown enchant ids and tiers above today's count stay in the save (a
 	  newer server may sell them, Migrations); every reader here ignores or
 	  clamps them, and grant() never lowers a saved tier.
+	- Odds boosters (OddsBoost = true: Lucky, Prospector, Starbreaker) change
+	  the odds of random results (ore luck, artifact chance). Roblox: their
+	  card shows the NEW odds in numbers before ANY buy (coins, shards or
+	  Robux): BoostConfig.preview(context, nextDelta(enchants, blasterLevel,
+	  id)) gives, per zone the player can mine, the chance of each lucky
+	  rarity now and after (BoostConfig.zoneEffects with the luck from
+	  StatConfig.oreLuck(OreLuckPct + delta, OreLuckMult)) and the artifact
+	  chance per rock now and after (ArtifactConfig.rockChance x (1 +
+	  ArtifactPct)). Buying one for Robux (Starbreaker's game pass,
+	  MonetizationConfig PaidRandom) is a paid random item: the Robux option
+	  is hidden and refused ("Restricted", quote's `restricted`) where
+	  PolicyService ArePaidRandomItemsRestricted is true; coins and shards
+	  are too only while coins can be bought with Robux (isPaidRandom).
 
 	Saved as data.Enchants = {
 	  Owned = { [enchantId] = tier (whole 1..#tiers) },
@@ -43,6 +56,7 @@ export type Enchant = {
 	Coins: { number }, -- coin price per tier
 	Shards: { number }?, -- shard price per tier (Epic and Legendary)
 	Product: string?, -- MonetizationConfig key (the two Mythics: a 20 Robux game pass)
+	OddsBoost: boolean?, -- changes the odds of random results (see the header)
 	Color: Color3, -- rune color on cards and the blaster
 }
 
@@ -66,6 +80,7 @@ EnchantConfig.Reasons = {
 	NoShards = "Not enough crystal shards",
 	TooFar = "Go to the Enchant shop to buy",
 	Robux = "Robux purchase", -- the server answers with PurchasePrompt instead
+	Restricted = "This isn't available where you play",
 	BadSlot = "That slot doesn't exist",
 	Locked = "Forge a stronger blaster to open this slot",
 	NotOwned = "Buy this enchant first",
@@ -109,8 +124,8 @@ EnchantConfig.List = {
 		Id = "Magnetism",
 		Name = "Magnetism",
 		Rarity = "Uncommon",
-		Description = "Your ore magnet pulls from further away.",
-		Effects = { MagnetRadius = { 3, 6, 10 } },
+		Description = "Your Ore Magnet pulls from further away (needs an Ore Magnet from the SHOP).",
+		Effects = { MagnetBonus = { 3, 6, 10 } },
 		Coins = { 15000, 90000, 540000 },
 		Color = rgb(200, 90, 255),
 	},
@@ -122,6 +137,7 @@ EnchantConfig.List = {
 		Description = "Rare and rarer ores show up more often in the rocks you break.",
 		Effects = { OreLuckPct = { 0.15, 0.3, 0.5 } },
 		Coins = { 250000, 1500000, 9000000 },
+		OddsBoost = true,
 		Color = rgb(90, 220, 120),
 	},
 	{
@@ -163,6 +179,7 @@ EnchantConfig.List = {
 		Effects = { ArtifactPct = { 0.25, 0.5, 1 } },
 		Coins = { 100000000, 600000000, 3600000000 },
 		Shards = { 150, 450, 1350 },
+		OddsBoost = true,
 		Color = rgb(230, 170, 90),
 	},
 	{
@@ -194,15 +211,27 @@ EnchantConfig.List = {
 		Effects = { OreLuckPct = { 0.75 }, ArtifactPct = { 0.5 } },
 		Coins = { 1e12 },
 		Product = "EnchantStarbreaker",
+		OddsBoost = true,
 		Color = rgb(150, 120, 255),
 	},
 } :: { Enchant }
+
+-- Stats that change the odds of random results: an enchant with one of
+-- them must be an OddsBoost (and its Robux product PaidRandom).
+EnchantConfig.OddsStats = { OreLuckPct = true, OreLuckMult = true, ArtifactPct = true } :: { [string]: boolean }
 
 EnchantConfig.ById = {} :: { [string]: Enchant }
 for _, enchant in EnchantConfig.List do
 	EnchantConfig.ById[enchant.Id] = enchant
 	local product = enchant.Product
-	assert(product == nil or MonetizationConfig.Products[product], "EnchantConfig: unknown product " .. tostring(product))
+	local info = if product then MonetizationConfig.Products[product] else nil
+	assert(product == nil or info, "EnchantConfig: unknown product " .. tostring(product))
+	local odds = false
+	for stat in enchant.Effects do
+		odds = odds or EnchantConfig.OddsStats[stat] == true
+	end
+	assert(odds == (enchant.OddsBoost == true), "EnchantConfig: OddsBoost must match the effects of " .. enchant.Id)
+	assert(info == nil or (info.PaidRandom == true) == odds, "EnchantConfig: PaidRandom must match OddsBoost for " .. enchant.Id)
 end
 
 -- Rarity order of an enchant (Common 1 .. Mythic 6), for sorting.
@@ -278,12 +307,60 @@ function EnchantConfig.nextPrice(id: string, currentTier: number): (number?, num
 	return enchant.Coins[currentTier + 1], if shards then shards[currentTier + 1] else nil, enchant.Product
 end
 
+-- Is buying `id` with `currency` a paid random item? Only odds boosters:
+-- with Robux always, with coins or shards while coins can be bought with
+-- Robux (MonetizationConfig.coinsBuyable). Unknown enchant: true (strict).
+function EnchantConfig.isPaidRandom(id: any, currency: any): boolean
+	local enchant = if type(id) == "string" then EnchantConfig.ById[id] else nil
+	if not enchant then
+		return true
+	end
+	if not enchant.OddsBoost then
+		return false
+	end
+	return currency == "Robux" or MonetizationConfig.coinsBuyable()
+end
+
+-- What buying the next tier of `id` adds to the player's stat totals once
+-- it sits in a slot: the next tier's values minus the current tier's when
+-- the enchant is already slotted in an open slot (else the next tier's
+-- values). Empty at the top tier. The luck card's `add`
+-- (BoostConfig.preview, see the header).
+function EnchantConfig.nextDelta(enchants: any, blasterLevel: any, id: string): { [string]: number }
+	local out: { [string]: number } = {}
+	local enchant = EnchantConfig.ById[id]
+	if not enchant then
+		return out
+	end
+	local current = EnchantConfig.tierOf(enchants, id)
+	if current >= EnchantConfig.tiers(id) then
+		return out
+	end
+	local slotted = false
+	local slots = if type(enchants) == "table" then enchants.Slots else nil
+	if type(slots) == "table" then
+		for i = 1, EnchantConfig.unlockedSlots(blasterLevel) do
+			if slots[i] == id then
+				slotted = true
+			end
+		end
+	end
+	for stat in enchant.Effects do
+		local now = if slotted then EnchantConfig.value(id, stat, current) else 0
+		out[stat] = EnchantConfig.value(id, stat, current + 1) - now
+	end
+	return out
+end
+
 -- The server's check of an EnchantAction "Buy" for this save: the price in
 -- `currency` of the next tier when `tier` (from the client: the tier being
 -- bought, as the card shows it) is exactly current + 1.
--- nil + "BadItem" | "BadCurrency" | "Max" | "Stale" | "Robux" (EnchantConfig.Reasons;
--- "Robux": a valid Robux buy, answered with PurchasePrompt, never granted here).
-function EnchantConfig.quote(enchants: any, id: any, currency: any, tier: any): (number?, string?)
+-- nil + "BadItem" | "BadCurrency" | "Max" | "Stale" | "Restricted" | "Robux"
+-- (EnchantConfig.Reasons; "Restricted": a paid random buy (isPaidRandom)
+-- for a player whose policy restricts them, `restricted` from
+-- src/server/Policy.luau; "Robux": a valid Robux buy, answered with
+-- PurchasePrompt, never granted here).
+function EnchantConfig.quote(enchants: any, id: any, currency: any, tier: any, restricted: boolean?): (number?, string?)
 	if type(id) ~= "string" or not EnchantConfig.ById[id] then
 		return nil, "BadItem"
 	end
@@ -297,6 +374,9 @@ function EnchantConfig.quote(enchants: any, id: any, currency: any, tier: any): 
 	end
 	if tier ~= current + 1 then
 		return nil, "Stale"
+	end
+	if restricted and EnchantConfig.isPaidRandom(id, currency) then
+		return nil, "Restricted"
 	end
 	if currency == "Coins" then
 		return coins, nil

@@ -23,6 +23,13 @@
 	backpack never cancels the boots. Anything that changes walk speed calls
 	CarryService.refreshWalkSpeed(player) (a data change does it too).
 
+	Head lamp budget (mobile, dark caves, 8 players): LampBudget. Only the
+	LOCAL player's own lamp is a real light (one SpotLight, Shadows off,
+	range LampRange, at most LampBudget.MaxLights); other players' lamps
+	are a small Neon part on their helmet and cast no light. The lamp is
+	built on each client from State.Bonuses (own) and the player attribute
+	LampAttribute (others: the lamp level, set by the gear package).
+
 	Saved as data.Gear = { Boots, HelmetLamp, Backpack, Gloves, Magnet }
 	(whole levels 0..MaxLevel; Migrations keeps higher levels and other
 	lines a newer server may sell, every reader here clamps to MaxLevel). GearAction ("Buy", { Line, Level }) buys
@@ -52,6 +59,13 @@ GearConfig.Tag = "ShopCounter"
 GearConfig.CarrySlowPerItem = 0.5
 GearConfig.CarrySlowMax = 3
 GearConfig.MinWalkSpeed = 10
+-- head lamps (see the header)
+GearConfig.LampBudget = {
+	MaxLights = 1, -- real lights per client: the local player's lamp only
+	Shadows = false, -- the lamp light never casts shadows
+	OthersNeon = true, -- other players' lamps: a Neon part, no light
+}
+GearConfig.LampAttribute = "LampLevel" -- player attribute: HelmetLamp level (0 = none)
 
 -- GearAction / ActionResult reason codes -> text for the player
 GearConfig.Reasons = {

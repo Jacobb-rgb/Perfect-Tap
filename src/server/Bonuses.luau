@@ -1,9 +1,12 @@
 --[[
-	Bonuses (steps 6-7): one place the services ask for a player's bonuses
-	(MiningService: damage, reach, ore luck, twin drops, artifact chance;
-	SellService: sell value; CarryService: walk speed and carry capacity; the
-	gear package: magnet, pickup range, throw power, head lamp; capsules:
-	Triple Lucky; EconomyService: podium income).
+	Bonuses (steps 6-7): one place the services ask for a player's bonuses.
+	Wired in P0: MiningService (damage, Overcharge, reach, ore luck, twin
+	drops, artifact chance), SellService (sell value: every sale x sellMult),
+	CarryService (walk speed, carry capacity, pickup range, throw power; the
+	ONLY source of carry capacity, StateService shows the same number) and
+	EconomyService (podium income). Left to their packages: the gear package
+	(the Ore Magnet pull and the head lamp, from magnetRadius / lamp and
+	State.Bonuses), the capsule package (Triple Lucky, tripleLucky).
 
 	- Providers: functions (player, data, now) -> a partial stat table
 	  (StatConfig names). stats(player) sums every registered provider with
@@ -237,8 +240,8 @@ function Bonuses.reach(stats: Stats): number
 	return math.max(0, stats.ReachStuds or 0)
 end
 
--- The multiplier on Rare and rarer ore weights (1 = no luck, at most
--- StatConfig.MaxOreLuck).
+-- The ore luck (1 = no luck, at most StatConfig.MaxOreLuck); each rarity's
+-- weight multiplier is BoostConfig.rarityMult(rarity, oreLuck).
 function Bonuses.oreLuck(stats: Stats): number
 	return StatConfig.oreLuck(stats.OreLuckPct, stats.OreLuckMult)
 end
@@ -263,6 +266,16 @@ function Bonuses.sellMult(stats: Stats): number
 	return 1 + math.max(0, stats.SellPct or 0)
 end
 
+-- Coins Tobin pays for items whose base price adds up to `base`: base x
+-- sellMult, rounded to whole coins (SellService pays this; the Sell view
+-- shows math.floor(base x State.Bonuses.SellMult + 0.5)).
+function Bonuses.sellAmount(stats: Stats, base: number): number
+	if type(base) ~= "number" or base ~= base or base <= 0 then
+		return 0
+	end
+	return math.floor(base * Bonuses.sellMult(stats) + 0.5)
+end
+
 -- Walk speed in studs/s with nothing carried (Boots base and Swift, times the
 -- WalkSpeed golems).
 function Bonuses.walkSpeed(stats: Stats): number
@@ -281,9 +294,15 @@ function Bonuses.carryWalkSpeed(stats: Stats, count: number): number
 	return math.max(GearConfig.MinWalkSpeed, Bonuses.walkSpeed(stats) - slow)
 end
 
--- Studs in which your own loose items fly to you (0 = no magnet).
+-- Studs in which your own loose items fly to you (0 = no magnet). The
+-- Magnetism enchant's MagnetBonus only adds to a real Ore Magnet (gear).
 function Bonuses.magnetRadius(stats: Stats): number
-	return math.max(0, stats.MagnetRadius or 0)
+	local base = math.max(0, stats.MagnetRadius or 0)
+	if base <= 0 then
+		return 0
+	end
+	local max = StatConfig.ById.MagnetRadius.Max or math.huge
+	return math.min(max, base + math.max(0, stats.MagnetBonus or 0))
 end
 
 -- Studs you can grab an item from.
@@ -308,9 +327,10 @@ function Bonuses.lamp(stats: Stats): (number, number)
 end
 
 -- The ore a dropped chunk really is: ore luck only ever upgrades the rock's
--- own `rolled` ore (BoostConfig.upgradeOre: a Rare+ ore stays, a lower one
--- may become a Rare+ ore of `weights`, exactly matching BoostConfig.oreOdds
--- with this luck). Without luck `random` is not called.
+-- own `rolled` ore (BoostConfig.upgradeOre: an ore whose share grows stays,
+-- one whose share drops may become a rarer ore of `weights`, exactly
+-- matching BoostConfig.oreOdds with this luck). Without luck `random` is
+-- not called.
 function Bonuses.rollOre(stats: Stats, weights: { [string]: number }, rolled: string, random: () -> number): string
 	local luck = Bonuses.oreLuck(stats)
 	if luck <= 1 then
@@ -333,11 +353,13 @@ function Bonuses.summary(player: Player): { [string]: any }
 		Reach = Bonuses.reach(stats),
 		OreLuck = Bonuses.oreLuck(stats),
 		OreLuckPct = luckPct, -- the Lucky enchant + Luck golems part (capped)
+		OreLuckMult = math.max(1, stats.OreLuckMult or 1), -- Hexa Lucky's part (capped)
 		OreLuckWithHexa = luckWithHexa, -- what OreLuck becomes with Hexa Lucky (boost cards)
 		TripleLucky = Bonuses.tripleLucky(stats),
 		HexaLucky = (stats.OreLuckMult or 1) > 1,
 		TwinDrop = Bonuses.twinDrop(stats),
 		ArtifactMult = 1 + math.max(0, stats.ArtifactPct or 0),
+		ArtifactPct = math.max(0, stats.ArtifactPct or 0), -- luck cards: BoostConfig.preview context
 		SellMult = Bonuses.sellMult(stats),
 		IncomePct = math.max(0, stats.IncomePct or 0),
 		GolemBond = math.max(0, stats.GolemBondPct or 0),

@@ -70,10 +70,18 @@
 	  owned id only once, and only when the blaster level has opened it.
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
 	  BoostConfig.MaxSavedSeconds.
-	- Golems.Owned: entries { Id, Kind } with a whole unique Id 1..MAX_GOLEM_ID
-	  and a string Kind (unknown kinds too), at most GolemConfig.MaxSaved
-	  (extra fields are cut). Equipped: at most GolemConfig.EquipSlots unique
-	  owned ids of known kinds. NextId is a whole number above every owned Id.
+	- Golems.Owned: entries { Id, Kind, ... } with a whole unique Id
+	  1..MAX_GOLEM_ID and a string Kind (unknown kinds too), at most
+	  GolemConfig.MaxSaved. Paid and Locked must be booleans (else dropped).
+	  Other fields a newer server adds (trading flags, sources) are KEPT when
+	  they are well-formed scalars: a string key of at most
+	  MAX_FIELD_KEY_LENGTH characters with a boolean, finite number or string
+	  of at most MAX_FIELD_TEXT_LENGTH characters; at most MAX_GOLEM_FIELDS of
+	  them per entry (the first by name); anything else is dropped. Equipped:
+	  at most GolemConfig.EquipSlots unique owned ids of known kinds. NextId
+	  is a whole number above every owned Id.
+	- Daily (the retired 7-day Ember Chest streak, replaced by the daily
+	  wheel: docs/plans/V2_PLAN.md) is removed.
 	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
 	- Artifacts.Found: string ids -> whole counts 1..ArtifactConfig.MaxCount;
 	  Chapters: string ids -> true.
@@ -109,6 +117,11 @@ local MAX_INVENTORY = MachineData.MaxInventory
 local MAX_LEVEL_KEPT = 99
 local PODIUM_SLOTS = 4
 local MAX_GOLEM_ID = 2 ^ 31 - 1
+-- extra golem entry fields a newer server may add (see the header)
+local MAX_GOLEM_FIELDS = 8
+local MAX_FIELD_KEY_LENGTH = 32
+local MAX_FIELD_TEXT_LENGTH = 64
+local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 
 local function isFinite(v: any): boolean
@@ -219,8 +232,49 @@ local function wholeIn(v: any, lo: number, hi: number): number?
 	return math.clamp(math.floor(v), lo, hi)
 end
 
+-- One well-formed golem entry: Id and Kind, Paid / Locked when they are
+-- booleans, and the extra scalar fields a newer server added (header).
+local function cleanGolem(entry: { [any]: any }, id: number, kind: string, report: Report): { [string]: any }
+	local clean: { [string]: any } = { Id = id, Kind = kind }
+	local extras = {}
+	for key, value in entry do
+		if key == "Id" or key == "Kind" then
+			continue
+		end
+		if GOLEM_FLAGS[key] then
+			if type(value) == "boolean" then
+				clean[key] = value
+			else
+				report.Dropped += 1
+			end
+		elseif
+			type(key) == "string"
+			and #key <= MAX_FIELD_KEY_LENGTH
+			and (type(value) == "boolean" or isFinite(value) or (type(value) == "string" and #value <= MAX_FIELD_TEXT_LENGTH))
+		then
+			table.insert(extras, key)
+		else
+			report.Dropped += 1
+		end
+	end
+	table.sort(extras)
+	for i, key in extras do
+		if i > MAX_GOLEM_FIELDS then
+			report.Dropped += 1
+		else
+			clean[key] = entry[key]
+		end
+	end
+	return clean
+end
+
 -- Steps 6-7: gear, enchants, boosts, golems, wheel, artifacts, new stats.
 local function migrateSteps67(data: { [string]: any }, now: number, report: Report)
+	-- the retired 7-day Ember Chest streak (the daily wheel replaced it)
+	if data.Daily ~= nil then
+		data.Daily = nil
+	end
+
 	-- gear levels (unknown lines and levels kept); the old CarryLevel N becomes Backpack level N - 1
 	local gear = record(data, "Gear", report)
 	for _, key in keysOf(gear) do
@@ -321,7 +375,7 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 			then
 				kinds[id] = kind
 				maxId = math.max(maxId, id)
-				table.insert(ownedGolems, { Id = id, Kind = kind })
+				table.insert(ownedGolems, cleanGolem(entry, id, kind, report))
 			else
 				report.Dropped += 1
 			end

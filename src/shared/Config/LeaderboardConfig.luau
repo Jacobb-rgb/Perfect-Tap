@@ -11,6 +11,12 @@
 	  start a board fresh). Every RefreshSeconds the server writes the online
 	  players' values (SetAsync, only when the encoded value changed) and
 	  reads the top TopCount (GetSortedAsync descending) for the board.
+	- Where they show: the lobby boards (Hall, 5.4 x 5 studs, five rank rows)
+	  show the top BoardRows (5) so the rows stay readable on phones from the
+	  plaza; the side menu's Leaderboards panel shows the top TopCount (10)
+	  plus the player's own value (and their rank when they are in the top
+	  TopCount; "not ranked yet" otherwise: OrderedDataStores don't give a
+	  rank below the page that was read).
 	- OrderedDataStore values must be whole numbers, and safely below 2^53 in
 	  Luau, but money grows past Qi (1e18). So:
 	    "Log" boards store floor(log10(1 + value) * LogScale): order-preserving
@@ -40,7 +46,8 @@ export type Board = {
 local LeaderboardConfig = {}
 
 LeaderboardConfig.RefreshSeconds = 60
-LeaderboardConfig.TopCount = 10
+LeaderboardConfig.TopCount = 10 -- read per board, shown in the side menu panel
+LeaderboardConfig.BoardRows = 5 -- rows on each lobby board (readable on phones)
 LeaderboardConfig.Tag = "Leaderboard"
 LeaderboardConfig.LogScale = 1e12
 LeaderboardConfig.MaxStored = 2 ^ 53 - 1

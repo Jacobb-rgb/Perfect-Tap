@@ -108,13 +108,15 @@ Net.Events = {
 	--   "Buy"  { Id: EnchantConfig id, Currency: "Coins" | "Shards" | "Robux", Tier: the tier
 	--          being bought, = current + 1 } (EnchantConfig.quote; within EnchantConfig.Range
 	--          of an EnchantCounter; "Robux" -> PurchasePrompt for the Mythic's game pass,
-	--          never granted here)
+	--          never granted here; "Restricted" for an odds booster where paid random items
+	--          are restricted, EnchantConfig.isPaidRandom)
 	--   "Slot" { Slot: 1..EnchantConfig.MaxSlots, Id: an owned enchant id, or nil / "" to empty
 	--          the slot } (EnchantConfig.setSlot; free, anywhere)
 	BoostAction = { Rate = 2, Burst = 4 }, -- (action, arg):
-	--   "BuyCoins" { Id: BoostConfig.CoinOffers id } (BoostConfig.coinPrice at the player's
-	--              blaster level; refused "Full" past BoostConfig.MaxStackSeconds, "NoEffect"
-	--              when BoostConfig.hasEffect is false)
+	--   "BuyCoins" { Id: BoostConfig.CoinOffers id } (BoostConfig.coinQuote: the price at the
+	--              player's blaster level; refused "NoEffect" (BoostConfig.hasEffect false),
+	--              "CoinLimit" (BoostConfig.CoinBuyBelow or more left), "Full" (past
+	--              BoostConfig.MaxStackSeconds))
 	--   "BuyRobux" { Id: BoostConfig.RobuxOffers id } -> PurchasePrompt
 	--   refused ("Restricted") where paid random items are restricted (src/server/Policy.luau)
 	--   and the offer is one (BoostConfig.isPaidRandom)
@@ -125,17 +127,19 @@ Net.Events = {
 	--   capsule is one (CapsuleConfig.isPaidRandom). Answer: CapsuleResult (or an
 	--   ActionResult when refused). Anywhere (side menu or the CapsuleStall). A request the
 	--   rate limit drops gets NO answer: the client waits CapsuleConfig.ClientCooldown between
-	--   opens and gives up after CapsuleConfig.ResultTimeout (same for WheelAction).
+	--   opens and gives the buttons back after CapsuleConfig.ResultTimeout, but still shows a
+	--   CapsuleResult that arrives later (same for WheelAction / WheelResult).
 	GolemAction = { Rate = 4, Burst = 8 }, -- (action, arg):
 	--   "Equip" { Id } | "Unequip" { Id } | "EquipBest" (no arg) |
-	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers) } (GolemConfig helpers)
+	--   "Lock" { Id, Locked: boolean } (a locked golem is never deleted) |
+	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers; locked ones are
+	--   skipped) } (GolemConfig helpers)
 	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
 	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
 	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
 	--   WheelConfig.ClientCooldown / ResultTimeout)
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
 	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters)
-	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialSkip = { Rate = 1, Burst = 2 },
@@ -178,8 +182,9 @@ Net.Events = {
 	CapsuleResult = false,
 	-- the daily spin: { Segment: 1..8 (WheelConfig.Segments index), Id: segment id,
 	--   Kind: WheelConfig PrizeKind, Amount?: coins or shards, Boost?, Seconds?,
-	--   Capsule?, Golem?: { Id, Kind } (a capsule prize), Ore?: oreId (the dirty ore went to
-	--   the pen), Coins?: coins paid instead (full pen / full golem inventory),
+	--   Capsule?, Golem?: { Id, Kind } (a capsule prize), DirtyOre?: true (a dirty Rare+ ore
+	--   went to the pen; WHICH ore stays secret until it is cleaned, the screen shows
+	--   WheelConfig.oreOdds), Coins?: coins paid instead (full pen / full golem inventory),
 	--   NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
 	--   WheelConfig.segments(noCapsules): "TripleLuckyCoins" replaces "TripleLucky" there)
 	WheelResult = false,

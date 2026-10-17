@@ -1,6 +1,9 @@
 --[[
 	The daily wheel of fortune (step 7, SPIN & WIN in town; the free spin is
 	taken at the wheel's EmberChest / SpinWheel, WheelAction "Spin").
+	The EmberChest hook belongs to the wheel alone: the old free 7-day
+	Ember Chest streak is retired (docs/plans/V2_PLAN.md: "Daily Ember Chest
+	-> Wheel of fortune"; data.Daily and the DailyClaim remote are gone).
 
 	- One free spin every 24 h. data.Wheel.NextSpinAt is the os.time() second
 	  the next free spin is ready (0 = ready now), so the timer keeps running
@@ -11,6 +14,9 @@
 	  (src/server/World/Lobby/Districts/Wheel.luau SEGMENTS). The big lobby
 	  wheel is DECORATIVE ONLY: it has 10 equal segments with made-up icons
 	  (a donut, crates) and must never be used to show a result or the odds.
+	  Asked of the lobby owner: rebuild it with these 8 segments (labels and
+	  colors) or keep it still and without prize icons, so nobody reads it as
+	  the prize wheel.
 	- Prizes:
 	    Coins       Seconds x the player's podium income per second, at least Min
 	    Boost       adds Seconds to that boost (BoostConfig.extend, capped)
@@ -19,20 +25,24 @@
 	                Lucky counts); with a full golem inventory the player gets
 	                FallbackShare (25 %) of the capsule's coin price at their
 	                blaster level instead (capsuleFallbackCoins)
-	    Ore         one dirty (Raw) ore into the Ore Pen, a step up from the
-	                best ore the player has found (see "Ore prize"); with a full
-	                pen the player gets what Tobin pays for it
-	                (ItemData.value("Raw", ore)) instead
+	    Ore         one dirty (Raw) Rare-or-rarer ore into the Ore Pen (see
+	                "Ore prize"); which ore it is stays secret until it is
+	                cleaned (WheelResult only says DirtyOre = true). With a
+	                full pen the player gets the prize's expected raw value
+	                instead (oreFallbackCoins: the same for every ore, so
+	                the coins don't tell which one it was)
 	    Shards      Amount crystal shards (data.Shards)
-	- Ore prize: from the ores of the zones the player's blaster can mine
-	  (BoostConfig.minableZones; VIP zones only for VIP players), those with an
-	  Income of at most max(OrePrize.MinIncome, best found ore's Income x
-	  OrePrize.IncomeMult), the OrePrize.Picks best of them, weighted
-	  OrePrize.Weights (the best one is the least likely). oreOdds(context) is
-	  the exact nested list the wheel screen shows under the segment. A day-1
-	  player (Copper found, blaster 1) wins Tin / Iron / Quartz; late players
-	  their top ores. No candidate at all (never with today's map): the Coins
-	  segment's prize instead.
+	- Ore prize: from the Rare-or-rarer ores (BoostConfig.isLuckyOre) of the
+	  zones the player's blaster can mine (BoostConfig.minableZones; VIP zones
+	  only for VIP players), those with an Income of at most
+	  max(OrePrize.MinIncome, best found ore's Income x OrePrize.IncomeMult),
+	  the OrePrize.Picks best of them, weighted OrePrize.Weights (the best one
+	  is the least likely). oreOdds(context) is the exact nested list the
+	  wheel screen shows under the segment. A day-1 player (blaster 1) wins a
+	  Gold chunk (130 coins/s on a podium, worth far more than the 500-coin
+	  segment); late players their top Rare+ ores. No candidate at all
+	  (never with today's map: the Quarry has Gold): the Coins segment's
+	  prize instead.
 	- Players who can't buy ANY capsule (paid random items restricted and
 	  every capsule is a paid random item: CapsuleConfig.allRestricted) would
 	  get nothing from Triple Lucky, so for them that segment pays coins
@@ -42,10 +52,12 @@
 	  its odds are still shown (Roblox: odds for any random reward). There are
 	  no paid spins and no rewards for likes or favorites.
 	- A rate-limited "Spin" is dropped without an answer (Net): the client
-	  keeps ClientCooldown between requests and stops waiting for WheelResult
-	  after ResultTimeout seconds (the button comes back).
+	  keeps ClientCooldown between requests and gives the button back after
+	  ResultTimeout seconds, but a WheelResult that arrives later is still
+	  shown (a slow first policy fetch or server lag: the spin happened) and
+	  the State push brings the saved NextSpinAt either way.
 	WheelResult { Segment, Id, Kind, Amount?, Boost?, Seconds?, Capsule?,
-	Golem?, Ore?, Coins?, NextSpinAt } tells the client where the wheel stops.
+	Golem?, DirtyOre?, Coins?, NextSpinAt } tells the client where the wheel stops.
 ]]
 
 local CapsuleConfig = require(script.Parent.CapsuleConfig)
@@ -88,7 +100,7 @@ WheelConfig.ModelName = "SpinWheel"
 
 WheelConfig.OrePrize = {
 	IncomeMult = 3, -- at most this many times the best found ore's income
-	MinIncome = 8, -- ...but always up to this (a new player: Quartz)
+	MinIncome = 130, -- ...but always up to this (Gold: a new player's prize)
 	Picks = 3, -- the best few candidates
 	Weights = { 1, 2, 3 }, -- best first: the best ore is the least likely
 }
@@ -254,7 +266,7 @@ function WheelConfig.oreOdds(context: OreContext): { OreLine }
 	for _, zone in BoostConfig.minableZones(context.BlasterLevel, context.Vip) do
 		for oreId, weight in zone.Ores do
 			local ore = OreData.ById[oreId]
-			if ore and weight > 0 and ore.Income <= cap and not seen[oreId] then
+			if ore and weight > 0 and ore.Income <= cap and BoostConfig.isLuckyOre(oreId) and not seen[oreId] then
 				seen[oreId] = true
 				table.insert(candidates, oreId)
 			end
@@ -302,9 +314,15 @@ function WheelConfig.pickOre(roll: number, context: OreContext): string?
 	return if last then last.Ore else nil
 end
 
--- Coins instead of the ore when the pen is full: what Tobin pays for it dirty.
-function WheelConfig.oreFallbackCoins(oreId: string): number
-	return ItemData.value("Raw", oreId)
+-- Coins instead of the ore when the pen is full: the prize's expected raw
+-- value (what Tobin pays dirty, averaged over oreOdds), so the amount never
+-- tells which ore it would have been. 0 when no ore qualifies.
+function WheelConfig.oreFallbackCoins(context: OreContext): number
+	local total = 0
+	for _, line in WheelConfig.oreOdds(context) do
+		total += line.Chance * ItemData.value("Raw", line.Ore)
+	end
+	return math.floor(total + 0.5)
 end
 
 -- Coins instead of a capsule when the golem inventory is full: FallbackShare

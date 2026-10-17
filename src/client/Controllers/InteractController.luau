@@ -102,7 +102,10 @@ local function isPickable(model: Model, root: BasePart): boolean
 		return false
 	end
 	local primary = model.PrimaryPart
-	return primary ~= nil and (primary.Position - root.Position).Magnitude <= GameConfig.PickupRange
+	-- Gloves reach further: the server mirrors the range in the PickupRange attribute
+	local range = player:GetAttribute("PickupRange")
+	local reach = if type(range) == "number" and range > 0 then range else GameConfig.PickupRange
+	return primary ~= nil and (primary.Position - root.Position).Magnitude <= reach
 end
 
 local function chooseTarget(root: BasePart): Model?

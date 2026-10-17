@@ -31,8 +31,13 @@
 	CapsuleAction ("Open", { Capsule, Count }) opens coin capsules; Royal
 	capsules are Robux products (the server answers with PurchasePrompt).
 	A rate-limited "Open" is dropped without an answer (Net): the client keeps
-	its own ClientCooldown between opens and stops waiting for CapsuleResult
-	after ResultTimeout seconds (the buttons come back, nothing was spent).
+	its own ClientCooldown between opens and gives the buttons back after
+	ResultTimeout seconds. That does NOT mean nothing was spent: a slow
+	handler (a first policy fetch, server lag) may still open the capsules,
+	so a CapsuleResult that arrives later is still shown (the opening plays),
+	and the coins and golems on screen always come from the State push.
+	Royal capsules: the odds a receipt uses are the ones the player saw at
+	the prompt (MonetizationConfig, the step 8 contract).
 ]]
 
 local GolemConfig = require(script.Parent.GolemConfig)
