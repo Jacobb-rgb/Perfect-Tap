@@ -4,10 +4,10 @@
   "train_side": { "scene": "trains", "position": [-46, 7, 1], "target": [-13, 4, 1], "fov": 44, "preset": "Surface", "sunDir": [-0.5, 0.75, -0.4], "shadowExtent": 50 },
   "train_wagons": { "scene": "trains", "position": [9, 19, 30], "target": [0, 5, 6], "fov": 46, "preset": "Surface", "sunDir": [0.45, 0.75, -0.5], "shadowExtent": 50 },
   "train_back": { "scene": "trains", "position": [44, 14, 30], "target": [24, 4, -8], "fov": 42, "preset": "Surface", "sunDir": [0.45, 0.75, -0.5], "shadowExtent": 50 },
-  "train_ref_loco": { "scene": "trains", "position": [260.87, 19.41, -22.96], "target": [280, 4.1, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
-  "train_ref_loco_side": { "scene": "trains", "position": [243, 4.1, 0], "target": [280, 4.1, 0], "fov": 30, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.5], "shadowExtent": 30 },
+  "train_ref_loco": { "scene": "trains", "position": [248.87, 19.41, -22.96], "target": [268, 4.1, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
+  "train_ref_loco_side": { "scene": "trains", "position": [231, 4.1, 0], "target": [268, 4.1, 0], "fov": 30, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.5], "shadowExtent": 30 },
   "train_ref_wagon": { "scene": "trains", "position": [284.27, 16.88, -18.87], "target": [300, 4.3, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
-  "train_ref_empty": { "scene": "trains", "position": [304.27, 16.08, -18.87], "target": [320, 3.5, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
-  "train_ref_track": { "scene": "trains", "position": [324.27, 13.08, -18.87], "target": [340, 0.5, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
+  "train_ref_empty": { "scene": "trains", "position": [316.27, 16.08, -18.87], "target": [332, 3.5, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
+  "train_ref_track": { "scene": "trains", "position": [348.27, 13.08, -18.87], "target": [364, 0.5, 0], "fov": 35, "preset": "Surface", "sunDir": [-0.6, 0.9, -0.8], "shadowExtent": 30 },
   "train_colors": { "scene": "trains", "position": [256.5, 41.3, 8.4], "target": [300, 3.5, 71], "fov": 25, "preset": "Surface", "sunDir": [-0.55, 0.85, -0.7], "shadowExtent": 70 }
 }

@@ -46,13 +46,18 @@ Gallery.SteamEmitter = {
 	Size = { 1.2, 4 },
 	Transparency = { 0.2, 1 },
 }
+-- The puffs are opaque (overlapping see-through balls render as soap bubbles with
+-- dark lens-shaped overlaps); they fade by turning from white toward a light
+-- lilac like the golden-hour sky.
 local PUFFS = {
-	{ Up = 0.7, Back = 0.1, Size = 1.4, Fade = 0.1 },
-	{ Up = 2.0, Back = 0.9, Size = 2.2, Fade = 0.2 },
-	{ Up = 3.6, Back = 2.3, Size = 3.0, Fade = 0.32 },
-	{ Up = 5.3, Back = 4.3, Size = 3.8, Fade = 0.46 },
+	{ Up = 0.7, Back = 0.1, Size = 1.4, Fade = 0 },
+	{ Up = 2.0, Back = 0.9, Size = 2.2, Fade = 0.25 },
+	{ Up = 3.6, Back = 2.3, Size = 3.0, Fade = 0.5 },
+	{ Up = 5.3, Back = 4.3, Size = 3.8, Fade = 0.75 },
 }
 function Gallery.steam(parent: any, top: any)
+	local white = roblox.Color3.fromRGB(242, 242, 248)
+	local sky = roblox.Color3.fromRGB(236, 214, 230)
 	for _, puff in PUFFS do
 		local p = roblox.Instance.new("Part")
 		p.Name = "SteamPuff"
@@ -61,8 +66,7 @@ function Gallery.steam(parent: any, top: any)
 		p.CanCollide = false
 		p.CastShadow = false
 		p.Material = roblox.Enum.Material.SmoothPlastic
-		p.Color = roblox.Color3.fromRGB(236, 236, 242)
-		p.Transparency = puff.Fade
+		p.Color = white:Lerp(sky, puff.Fade)
 		p.Size = roblox.Vector3.new(puff.Size, puff.Size, puff.Size)
 		p.CFrame = roblox.CFrame.new(top + roblox.Vector3.new(0, puff.Up, puff.Back))
 		p.Parent = parent
@@ -206,21 +210,24 @@ function Gallery.build(Loader: any, parent: any)
 	)
 
 	-- a "studio" corner far away on a dark floor, framed like the Kenney reference
-	-- sheet (docs/art/kenney_refs/train_kit.jpg): green locomotive, copper wagon, track
+	-- sheet (docs/art/kenney_refs/train_kit.jpg): green locomotive, copper wagon,
+	-- empty blue wagon, track; 32 studs apart, so each train_ref_* close-up shows
+	-- only its own model
 	local studio = V3.new(300, 0, 0)
+	local apart = 32
 	-- (it reaches far behind the lineup, so the colors shot shows no yard horizon)
 	Geo.block(root, CF.new(studio + V3.new(50, -0.45, 200)), V3.new(400, 1, 600), C3.fromRGB(42, 42, 51))
 	local loco = TrainBuilder.locomotive(C3.fromRGB(80, 180, 90))
-	loco:PivotTo(CF.new(studio + V3.new(-20, 0, 0)))
+	loco:PivotTo(CF.new(studio + V3.new(-apart, 0, 0)))
 	loco.Parent = root
 	local wagon = TrainBuilder.wagon(C3.fromRGB(80, 180, 90), { OreData.ById.Copper.Color })
 	wagon:PivotTo(CF.new(studio))
 	wagon.Parent = root
 	local empty = TrainBuilder.wagon(C3.fromRGB(60, 140, 220))
-	empty:PivotTo(CF.new(studio + V3.new(20, 0, 0)))
+	empty:PivotTo(CF.new(studio + V3.new(apart, 0, 0)))
 	empty.Parent = root
 	local piece = TrainBuilder.track(12)
-	piece:PivotTo(CF.new(studio + V3.new(40, 0, 0)))
+	piece:PivotTo(CF.new(studio + V3.new(2 * apart, 0, 0)))
 	piece.Parent = root
 
 	-- all eight banner colors in two rows of four, each row an echelon across the
