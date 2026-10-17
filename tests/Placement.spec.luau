@@ -45,7 +45,7 @@ return function(T, Loader)
 	end
 
 	T.test("Placement: every reason code has a text", function()
-		for _, code in { "NoPlot", "TooFar", "NotYours", "Invalid", "UnknownMachine", "BadInput", "OutOfBounds", "Overlap", "NoMachineSlots", "NoConveyorSlots", "NoneOwned", "Busy" } do
+		for _, code in { "NoPlot", "TooFar", "NotYours", "Invalid", "UnknownMachine", "BadInput", "OutOfBounds", "Chute", "Overlap", "NoMachineSlots", "NoConveyorSlots", "NoneOwned", "Busy" } do
 			T.truthy(type(Placement.Reasons[code]) == "string" and #Placement.Reasons[code] > 0, code)
 		end
 	end)
@@ -57,10 +57,14 @@ return function(T, Loader)
 				for x = -1, CELLS do
 					for z = -1, CELLS do
 						local fits = x >= 0 and z >= 0 and x + w <= CELLS and z + d <= CELLS
+						-- only belts may cover a chute cell (Step3Config.spec has the details)
+						local chute = fits and not machine.IsConveyor and Placement.chuteUnder(machine.Id, x, z, r) ~= nil
 						local ok, code = Placement.validate({}, machine.Id, x, z, r)
-						T.eq(ok, fits, `{machine.Id} r{r} at {x},{z}`)
+						T.eq(ok, fits and not chute, `{machine.Id} r{r} at {x},{z}`)
 						if not fits then
 							T.eq(code, "OutOfBounds", `{machine.Id} r{r} at {x},{z} code`)
+						elseif chute then
+							T.eq(code, "Chute", `{machine.Id} r{r} at {x},{z} code`)
 						end
 						T.eq(Placement.inBounds(machine.Id, x, z, r), fits)
 					end
@@ -69,7 +73,8 @@ return function(T, Loader)
 		end
 		T.eq(select(2, Placement.validate({}, "StorageCrate", 11, 0, 0)), "OutOfBounds", "2x2 at X=11")
 		T.eq(select(2, Placement.validate({}, "BlastFurnace", 0, 10, 0)), "OutOfBounds", "3x3 at Z=10")
-		T.truthy(Placement.validate({}, "BlastFurnace", 9, 9, 0), "3x3 in the far corner")
+		T.truthy(Placement.validate({}, "BlastFurnace", 9, 0, 0), "3x3 in the far corner")
+		T.eq(select(2, Placement.validate({}, "BlastFurnace", 9, 9, 0)), "Chute", "3x3 over the Foundry chute")
 	end)
 
 	T.test("Placement: unknown machines and bad numbers are refused first", function()
@@ -223,6 +228,7 @@ return function(T, Loader)
 			local seen = {}
 			for _, e in data.PlacedMachines do
 				T.truthy(Placement.inBounds(e.Id, e.X, e.Z, e.R), label .. " in bounds")
+				T.truthy(Placement.chuteAllows(e.Id, e.X, e.Z, e.R), label .. " only belts on chutes")
 				for _, k in Placement.cells(e.Id, e.X, e.Z, e.R) do
 					T.falsy(seen[k], label .. " overlap")
 					seen[k] = true
