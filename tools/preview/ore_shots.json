@@ -349,5 +349,26 @@
    1,
    -0.15
   ]
+ },
+ "cleaning_reveal_strip": {
+  "scene": "cleaning_reveal_strip",
+  "preset": "Surface",
+  "sunDir": [
+   0.2,
+   0.9,
+   0.4
+  ],
+  "position": [
+   -1.8,
+   6.3,
+   26
+  ],
+  "target": [
+   -1.8,
+   6.0,
+   0
+  ],
+  "fov": 40,
+  "shadowExtent": 40
  }
 }
