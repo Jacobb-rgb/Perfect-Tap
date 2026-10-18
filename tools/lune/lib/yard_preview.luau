@@ -16,6 +16,8 @@ local UiExport = require("./uiexport")
 local YardPreview = {}
 
 YardPreview.Plot = 5 -- an east plot: the sun lights the yard from the pad side
+-- relics this owner found (their museum shows them; ArtifactConfig ids)
+YardPreview.Artifacts = { "CrownCoin", "RoyalSeal", "GoldenSpike", "RailLantern", "LastTicket", "GolemCog", "SparkVial", "EmberRune" }
 YardPreview.Podiums = {
 	{ K = "Clean", O = "Jade", G = "Flawless" },
 	{ K = "Clean", O = "StormPearl", G = "Pristine" }, -- a wide Epic ore inside the holo-ring
@@ -83,6 +85,28 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	folder.Name = "YardPreview"
 	folder.Parent = workspace
 
+	-- the plot's museum (the world export builds one per yard, empty) with a
+	-- few relics this owner found, as a client near it shows them
+	do
+		local MuseumBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MuseumBuilder")
+		local museum: any = nil
+		for _, d in workspace:GetDescendants() do
+			if d.Name == MuseumBuilder.Name and d:GetAttribute("PlotId") == YardPreview.Plot then
+				museum = d
+			end
+		end
+		if not museum then
+			museum = MuseumBuilder.build(plotCF)
+			museum.Parent = folder
+		end
+		local found = {}
+		for _, id in YardPreview.Artifacts do
+			found[id] = 1
+		end
+		MuseumBuilder.publish(museum, { Found = found })
+		MuseumBuilder.showFound(museum, plotCF)
+	end
+
 	-- ores on the podiums (what PodiumService shows), pile in the pen (PenController)
 	local income = 0
 	for slot, desc in YardPreview.Podiums do
@@ -119,15 +143,16 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 
 	-- HUD as a player with two podiums would see it
 	local scale = 1.25 -- 900 px tall render / 720 design height
-	local function hud(uiScale: number?): any
+	local function hud(uiScale: number?, screenWidth: number?): any
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = scale
-		-- the quick-teleport bar (layout for the real uiScale: 0.62 on phones) and
-		-- the side menu: BUILD and the elevator icon (shown here; in game only once
-		-- the world has a mine elevator)
+		-- the quick-teleport bar (layout for the real uiScale and screen width in
+		-- pt: 0.62 on phones, icon-only under 600 pt) and the side menu: BUILD and
+		-- the elevator icon (shown here; in game only once the world has a mine
+		-- elevator)
 		BuildView.menuButton(refs.Menu)
-		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale or 1)
-		TeleportView.relayout(teleport, refs.TopBar, uiScale or 1)
+		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale or 1, screenWidth)
+		TeleportView.relayout(teleport, refs.TopBar, uiScale or 1, screenWidth)
 		TeleportView.setSideVisible(teleport, true)
 		refs.Coins.Text = Format.money(12480)
 		refs.Income.Text = Format.perSecond(income)
@@ -164,10 +189,10 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	exports.ui_pen = UiExport.export({ hud().Gui, pen(false, scale).Gui })
 	-- an iPhone SE-sized screen (375 pt tall) scaled up to the 900 px render, at the 0.62 phone floor
 	local phoneScale = 0.62 * 900 / 375
-	local phoneHud = hud(0.62)
+	local phoneHud = hud(0.62, 667)
 	phoneHud.Gui.Scale.Scale = phoneScale
 	exports.ui_pen_phone = UiExport.export({ phoneHud.Gui, pen(true, phoneScale).Gui })
-	local phoneOnly = hud(0.62)
+	local phoneOnly = hud(0.62, 667)
 	phoneOnly.Gui.Scale.Scale = phoneScale
 	exports.hud_phone = UiExport.export({ phoneOnly.Gui })
 	local offline = HudView.buildOffline()

@@ -395,16 +395,28 @@ return function(T, Loader)
 		local _, again = MachineService.pickup(m)
 		T.eq(again, "Invalid", "can't pick up twice")
 
-		-- full storage: contents are paid out instead
+		-- a full Ore Pen: packing a machine up is no way past its capacity
 		local m2 = MachineService.place(w.player, "ClayFurnace", 0, 0, 0)
 		m2.Entry.In = { desc("Clean") }
-		for _ = #data.Storage + 1, GameConfig.MaxStoredItems do
+		local capacity = ItemService.penCapacity(data)
+		for _ = #data.Storage + 1, capacity do
 			table.insert(data.Storage, desc("Raw"))
 		end
 		local coins = data.Coins
-		T.truthy(MachineService.pickup(m2), "picked up with full storage")
-		T.lt(coins, data.Coins, "paid out")
-		T.eq(#data.Storage, GameConfig.MaxStoredItems, "storage not over the cap")
+		local ok, why = MachineService.pickup(m2)
+		T.falsy(ok, "refused while its contents don't fit")
+		T.eq(why, "PenFull")
+		T.falsy(m2.Removed, "still placed")
+		T.eq(#m2.Entry.In, 1, "contents kept")
+		T.eq(#data.Storage, capacity, "the pen not over its capacity")
+		T.eq(data.Coins, coins, "nothing sold behind the player's back")
+		-- room again: it packs up
+		table.remove(data.Storage)
+		T.truthy(MachineService.pickup(m2), "picked up once its contents fit")
+		T.eq(#data.Storage, capacity, "contents stored")
+		-- an empty machine always packs up, pen full or not
+		local m3 = MachineService.place(w.player, "ClayFurnace", 0, 0, 0)
+		T.truthy(MachineService.pickup(m3), "an empty machine packs up with a full pen")
 	end)
 
 	withWorld("MachineService: random place/move/pickup keep placed + inventory constant", function(w)

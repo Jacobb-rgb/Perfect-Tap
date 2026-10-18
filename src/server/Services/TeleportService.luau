@@ -89,7 +89,7 @@ end
 -- loaded on first use: it needs the whole game around it)
 function TeleportService.isCleaning(player: Player): boolean
 	local CleaningService = require(script.Parent.CleaningService) :: any
-	return CleaningService.stationOf(player) ~= nil
+	return CleaningService.isCleaning(player)
 end
 
 -- The lowest mine elevator stop in the world (its Base plate), if any.

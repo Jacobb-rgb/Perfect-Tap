@@ -10,11 +10,23 @@
 	edge, a blue neon arc along their outer edge, two orange lamp panels and
 	gear-like brackets), so the frame's silhouette is about 1.5 times the
 	disc like the concept's; legs and a base housing carry it. The wheel
-	inside (10 saturated rainbow segments with thin neon dividers and
-	chunky 3D item icons: ore crates, gem boxes and wooden crates with a
-	gold band turned so their light top and a side show, coins and
-	capsules, a crown hub) turns slowly on the client (sub-model "Wheel",
-	tag Spin, Atomic, hub Y axis = axle); a gold V pointer with a blue neon
+	inside shows the daily wheel's REAL prizes: one segment per
+	WheelConfig.Segments entry (8), in its colour and order, clockwise from
+	the top as seen from the plaza like the wheel screen (WheelView), with
+	thin neon dividers and a chunky 3D icon of its kind (Coins: a gold coin,
+	Capsule: a two-tone capsule in that capsule's colour, Shards: a blue
+	gem, Ore: an ore crate, Boost: a four-leaf clover for Triple Lucky and
+	a gold gem for Hexa Lucky). A substitute prize (WheelConfig.Substitutes:
+	what players who can't buy capsules win there) has its own icon in the
+	same place, built hidden (sub-model "Icon<Id>", attribute Substitute;
+	every icon's sub-model has the attribute Segment = its Index): the
+	client swaps them locally (WheelController). The disc turns slowly on
+	the client (sub-model "Wheel", tag Spin, Atomic, hub Y axis = axle, +Y
+	= clockwise as seen) with segment 1 under the pointer at rest, and
+	lands on the player's own result when they spin (WheelController,
+	DecorController.hold / setAngle / release); the gold crown and the
+	hub's neon rim stay put on the frame, so the crown is never upside
+	down. A gold V pointer with a blue neon
 	outline sits right under the SPIN & WIN sign box (orange words, a blue
 	"&", a floodlight in front of it, a gold crown on top), the EmberChest
 	(tag, the free daily reward) at the top of the stairs. The back is
@@ -32,6 +44,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local CapsuleConfig = require(Shared.Config.CapsuleConfig)
+local WheelConfig = require(Shared.Config.WheelConfig)
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
@@ -42,38 +56,32 @@ local Wheel = {}
 
 local C = Kit.C
 
--- Rainbow segments, clockwise from the top (concept v2). Neon at about
--- 55-60% value: every segment glows saturated (the whole rainbow reads, no
--- muddy lower half in the shade) without blooming to pastel.
 local rgb = Color3.fromRGB
-local SEGMENTS = {
-	rgb(130, 16, 26), -- red
-	rgb(150, 70, 8), -- orange
-	rgb(150, 120, 8), -- yellow
-	rgb(84, 126, 10), -- lime
-	rgb(14, 110, 46), -- green
-	rgb(8, 112, 122), -- teal
-	rgb(18, 60, 150), -- blue
-	rgb(56, 28, 150), -- indigo
-	rgb(100, 24, 140), -- purple
-	rgb(140, 24, 90), -- magenta
-}
 -- bright mid-tone crates that read on every segment (no dark cube holes)
-local CRATE_BAND = rgb(236, 230, 218) -- the light band round the gem and ore crates
+local CRATE_BAND = rgb(236, 230, 218) -- the light band round the ore crate
 local BLUE_TOP = rgb(150, 206, 255)
 
--- Item icon on each segment (daily rewards: coins, chests, rare ore, gems,
--- golem capsules and a frosted donut treat).
-local ICONS = { "Coin", "Crate", "Gem", "Capsule", "Ore", "Donut", "Crate", "Gem", "Capsule", "Coin" }
+-- The icon of a prize segment (by its WheelConfig Kind; see the header).
+local function iconOf(segment: WheelConfig.Segment): string
+	if segment.Kind == "Capsule" then
+		return "Capsule"
+	elseif segment.Kind == "Shards" then
+		return "Gem"
+	elseif segment.Kind == "Ore" then
+		return "Ore"
+	elseif segment.Kind == "Boost" then
+		return if segment.Boost == "HexaLucky" then "Hexa" else "Clover"
+	end
+	return "Coin"
+end
 local GEM_GLOW = rgb(20, 150, 255) -- a deep blue facet: no white bloom
 -- (lobby fix round 3: clear, bright prizes instead of muddy brown ones)
-local CHEST_GOLD = rgb(255, 190, 40)
-local CHEST_LID = rgb(255, 214, 110)
-local CHEST_STRIPE = rgb(60, 36, 22)
 local COIN_RIM = rgb(222, 140, 24)
-local DONUT = rgb(206, 140, 76)
-local FROSTING = rgb(255, 120, 190)
 local GEM_BODY = rgb(60, 120, 255)
+local CLOVER = rgb(70, 200, 90) -- Triple Lucky's clover (BoostView's art colours)
+local CLOVER_DARK = rgb(30, 120, 50)
+local HEXA = rgb(255, 196, 60) -- Hexa Lucky's gold gem
+local HEXA_GLOW = rgb(255, 236, 150)
 local ICON_BACK = rgb(28, 34, 66) -- the dark navy backing disc behind every icon
 local ICON_R = 0.62 -- icon distance from the axle (share of the segment radius)
 -- the armored side housings: from 40 to 140 degrees (measured from the top)
@@ -148,10 +156,7 @@ local function cube(m: Instance, at: CFrame, s: number, body: Color3, top: Color
 	if band then
 		Kit.bit(m, cf * CFrame.new(0, -0.18 * s, 0), Vector3.new(c + 0.08 * s, 0.22 * s, c + 0.08 * s), band)
 	end
-	if face == "Band" then
-		-- a gold band around the crate
-		Kit.bit(m, cf, Vector3.new(c + 0.08 * s, 0.3 * s, c + 0.08 * s), accent)
-	elseif face == "Gem" then
+	if face == "Gem" then
 		Kit.glow(m, cf * CFrame.new(0, 0, -c / 2 - 0.03) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(0.55, 0.55, 0.06) * s, accent)
 	else -- a glowing ore vein across the front face
 		Kit.glow(m, cf * CFrame.new(0.1 * s, 0.05 * s, -c / 2 - 0.03) * CFrame.Angles(0, 0, 0.5), Vector3.new(0.8, 0.32, 0.06) * s, accent)
@@ -159,8 +164,9 @@ local function cube(m: Instance, at: CFrame, s: number, body: Color3, top: Color
 end
 
 -- The item icon of a segment in the plane of `at` (front = LookVector, up =
--- outward): 3D crates and boxes, gold coins, two-tone capsules.
-local function icon(m: Instance, at: CFrame, kind: string, s: number)
+-- outward): gold coins, two-tone capsules (`tint`: the capsule's colour),
+-- gems, an ore crate, a clover and a gold gem.
+local function icon(m: Instance, at: CFrame, kind: string, s: number, tint: Color3?)
 	-- (round 3) a dark backing disc behind every icon: the prize reads on any segment
 	Tech.faceDisc(m, at * CFrame.new(0, 0, 0.05 * s), 0.12 * s, 2.05 * s, ICON_BACK)
 	if kind == "Coin" then
@@ -171,24 +177,22 @@ local function icon(m: Instance, at: CFrame, kind: string, s: number)
 		for _, a in { 0, math.pi / 4 } do
 			Kit.glow(m, at * CFrame.new(0, 0, -0.42 * s) * CFrame.Angles(0, 0, a), Vector3.new(0.62, 0.62, 0.14) * s, rgb(255, 210, 110))
 		end
-	elseif kind == "Donut" then
-		-- a frosted donut: the dough ring, pink frosting, the hole and sprinkles
-		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.15 * s), 0.5 * s, 1.9 * s, DONUT)
-		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.42 * s), 0.08 * s, 1.55 * s, FROSTING)
-		Tech.faceDisc(m, at * CFrame.new(0, 0, -0.48 * s), 0.06 * s, 0.5 * s, DONUT:Lerp(Kit.Dark, 0.5))
-		local sprinkles = { C.CrystalCyan, C.LeafYellowLight, C.FlowerWhite }
-		local spots = { Vector2.new(0.45, 0.2), Vector2.new(-0.35, 0.42), Vector2.new(-0.2, -0.48) }
-		for i, q in spots do
-			Kit.bit(
-				m,
-				at * CFrame.new(q.X * s, q.Y * s, -0.5 * s) * CFrame.Angles(0, 0, i * 0.9),
-				Vector3.new(0.3, 0.1, 0.06) * s,
-				sprinkles[i]
-			)
+	elseif kind == "Clover" then
+		-- Triple Lucky: a four-leaf clover (four green leaves round a dark heart) and its stem
+		for k = 0, 3 do
+			local a = k * math.pi / 2 + math.pi / 4
+			Tech.faceDisc(m, at * CFrame.new(0.38 * s * math.cos(a), 0.38 * s * math.sin(a) + 0.12 * s, -0.3 * s), 0.3 * s, 0.82 * s, CLOVER)
 		end
-	elseif kind == "Crate" then
-		-- a gold treasure chest with a light lid and a dark lid stripe
-		cube(m, at, s, CHEST_GOLD, CHEST_LID, "Band", CHEST_STRIPE)
+		Kit.bit(m, at * CFrame.new(0.12 * s, -0.55 * s, -0.3 * s) * CFrame.Angles(0, 0, 0.35), Vector3.new(0.16, 0.7, 0.2) * s, CLOVER_DARK)
+	elseif kind == "Hexa" then
+		-- Hexa Lucky: a big gold gem with a glowing light facet
+		Kit.bit(m, at * CFrame.new(0, 0, -0.55 * s) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(1.25, 1.25, 0.7) * s, HEXA)
+		Kit.glow(
+			m,
+			at * CFrame.new(0.12 * s, 0.12 * s, -0.92 * s) * CFrame.Angles(0, 0, math.pi / 4),
+			Vector3.new(0.55, 0.55, 0.06) * s,
+			HEXA_GLOW
+		)
 	elseif kind == "Gem" then
 		-- a big cut gem: a blue diamond with a glowing cyan facet
 		Kit.bit(m, at * CFrame.new(0, 0, -0.55 * s) * CFrame.Angles(0, 0, math.pi / 4), Vector3.new(1.25, 1.25, 0.7) * s, GEM_BODY)
@@ -204,9 +208,10 @@ local function icon(m: Instance, at: CFrame, kind: string, s: number)
 		local lo = (at * CFrame.new(0, -0.3 * s, -0.45 * s)).Position
 		local mid = (at * CFrame.new(0, 0, -0.45 * s)).Position
 		local hi = (at * CFrame.new(0, 0.3 * s, -0.45 * s)).Position
-		Tech.rod(m, lo, mid, 0.95 * s, C.AwningRed)
+		local shell = tint or C.AwningRed
+		Tech.rod(m, lo, mid, 0.95 * s, shell)
 		Tech.rod(m, mid, hi, 0.95 * s, C.AwningWhite)
-		Kit.ball(m, lo, 0.95 * s, C.AwningRed)
+		Kit.ball(m, lo, 0.95 * s, shell)
 		Kit.ball(m, hi, 0.95 * s, C.AwningWhite)
 	else -- Ore: a crystal-blue crate with a light band and a glowing purple vein
 		cube(m, at, s, C.CrystalBlue, BLUE_TOP, "Ore", C.CrystalPurpleDeep, CRATE_BAND)
@@ -230,26 +235,49 @@ local function buildWheel(parent: Instance, center: CFrame, d: Dims)
 		nil,
 		Style.tiny({ CastShadow = true })
 	)
-	-- 10 saturated rainbow segments (smooth faces keep their deep colors
-	-- where big neon areas bloom to pastel), each two triangles (a 20-gon)
-	local n = #SEGMENTS
+	-- the daily wheel's prize segments (WheelConfig.Segments: their colours,
+	-- smooth neon that keeps the deep colours), each two triangles. The
+	-- angle grows clockwise as seen from the plaza (the frame's +X is the
+	-- viewer's left), so segment i follows segment i - 1 clockwise from the
+	-- top, like the wheel screen
+	local segments = WheelConfig.Segments
+	local n = #segments
 	local step = 2 * math.pi / n
 	local start = math.pi / 2 + step / 2 -- segment 1 centered at the top
 	local r = d.SegmentR
-	for i = 1, n do
-		local a0 = start - (i - 1) * step
+	local function iconModel(segment: WheelConfig.Segment, mid: number, hidden: boolean)
+		local holder = Style.model("Icon" .. segment.Id, m)
+		holder:SetAttribute("Segment", segment.Index)
+		local iconAt = center * CFrame.Angles(0, 0, mid) * CFrame.new(ICON_R * r, 0, -0.35 * s) * CFrame.Angles(0, 0, -math.pi / 2)
+		local capsule = if segment.Capsule then CapsuleConfig.ById[segment.Capsule] else nil
+		icon(holder, iconAt, iconOf(segment), s, if capsule then capsule.Color else nil)
+		if hidden then
+			-- shown only on the wheels of players who win this instead (WheelController)
+			holder:SetAttribute("Substitute", true)
+			for _, part in holder:GetDescendants() do
+				if part:IsA("BasePart") then
+					part.Transparency = 1
+				end
+			end
+		end
+	end
+	for i, segment in segments do
+		local a0 = start + (i - 1) * step -- the segment's edge toward the previous one
 		for h = 0, 1 do
 			local a = a0 - h * step / 2
 			local b = a - step / 2
-			Geo.triangle(m, polar(0, 0, 0), polar(r, a, 0), polar(r, b, 0), 0.4 * s, SEGMENTS[i], Kit.NEON, normal, Style.tiny())
+			Geo.triangle(m, polar(0, 0, 0), polar(r, a, 0), polar(r, b, 0), 0.4 * s, segment.Color, Kit.NEON, normal, Style.tiny())
 		end
-		-- a thin warm neon divider at the segment's leading edge
+		-- a thin warm neon divider at the segment's edge
 		local div = center * CFrame.Angles(0, 0, a0) * CFrame.new(1.2 * s + (r - 1.2 * s) / 2, 0, -0.1 * s)
 		Kit.glow(m, div, Vector3.new(r - 1.2 * s, 0.2 * s, 0.14 * s), Tech.GoldGlow)
-		-- item icon in the middle of the segment (upright as it passes the top)
+		-- the prize's icon in the middle of the segment (upright as it passes the top)
 		local mid = a0 - step / 2
-		local iconAt = center * CFrame.Angles(0, 0, mid) * CFrame.new(ICON_R * r, 0, -0.35 * s) * CFrame.Angles(0, 0, -math.pi / 2)
-		icon(m, iconAt, ICONS[i], s)
+		iconModel(segment, mid, false)
+		local substitute = WheelConfig.Substitutes[segment.Id]
+		if substitute then
+			iconModel(substitute, mid, true)
+		end
 	end
 	-- gunmetal hub with a blue neon ring and a thick gold crown: its Y axis
 	-- is the axle, so the client turns the wheel around it
@@ -259,8 +287,9 @@ local function buildWheel(parent: Instance, center: CFrame, d: Dims)
 	local hub = Kit.block(m, hubCf, Vector3.new(1.6, 0.5, 1.6) * s, Tech.MetalDark, nil, Style.tiny({ CastShadow = true }))
 	hub.Name = "Hub"
 	Tech.faceDisc(m, center * CFrame.new(0, 0, -0.38 * s), 0.6 * s, 3.3 * s, Tech.MetalDark, nil, Style.tiny({ CastShadow = true }))
-	Tech.faceDisc(m, center * CFrame.new(0, 0, -0.2 * s), 0.3 * s, 3.8 * s, Tech.GoldGlow, Kit.NEON).Name = "HubRim"
-	Tech.crown(m, center * CFrame.new(0, -0.75 * s, -0.95 * s), 1.75 * s, Tech.GoldGlow, { Depth = 0.55 * s, Neon = true })
+	-- the neon rim and the crown stay on the frame (the disc stops at any angle)
+	Tech.faceDisc(parent, center * CFrame.new(0, 0, -0.2 * s), 0.3 * s, 3.8 * s, Tech.GoldGlow, Kit.NEON).Name = "HubRim"
+	Tech.crown(parent, center * CFrame.new(0, -0.75 * s, -0.95 * s), 1.75 * s, Tech.GoldGlow, { Depth = 0.55 * s, Neon = true })
 	m.PrimaryPart = hub
 	m:SetAttribute("SpinSpeed", 0.6)
 	m:SetAttribute("BobHeight", 0)

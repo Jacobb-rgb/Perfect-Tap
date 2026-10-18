@@ -1,0 +1,16 @@
+{
+  "enchant_table": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "enchant_ui_lucky": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_enchant_lucky"},
+  "enchant_ui_star": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_enchant_star"},
+  "enchant_ui_pick": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_enchant_pick"},
+  "enchant_ui_phone": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_enchant_phone", "uiInset": 58},
+  "enchant_ui_small": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_enchant_small", "uiInset": 163},
+  "enchant_ui_tv": {"scene": "enchants", "position": [38, 7, -70], "target": [50, 5, -84], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_enchant_tv", "uiInset": 30},
+  "boost_ui_hexa": {"scene": "enchants", "position": [30, -26, -388], "target": [-10, -38, -445], "fov": 70, "preset": "DeepHollow", "maxLights": 14, "ui": "ui_boost_hexa"},
+  "boost_ui_triple": {"scene": "enchants", "position": [30, -26, -388], "target": [-10, -38, -445], "fov": 70, "preset": "DeepHollow", "maxLights": 14, "ui": "ui_boost_triple"},
+  "boost_ui_phone": {"scene": "enchants", "position": [-30, 2, -250], "target": [10, -10, -305], "fov": 70, "preset": "EmberCaves", "maxLights": 14, "ui": "ui_boost_phone", "uiInset": 58},
+  "boost_ui_small": {"scene": "enchants", "position": [-30, 2, -250], "target": [10, -10, -305], "fov": 70, "preset": "EmberCaves", "maxLights": 14, "ui": "ui_boost_small", "uiInset": 163},
+  "boost_ui_tv": {"scene": "enchants", "position": [30, -26, -388], "target": [-10, -38, -445], "fov": 70, "preset": "DeepHollow", "maxLights": 14, "ui": "ui_boost_tv", "uiInset": 30},
+  "boost_hud_chips": {"scene": "enchants", "position": [30, -26, -388], "target": [-10, -38, -445], "fov": 70, "preset": "DeepHollow", "maxLights": 14, "ui": "ui_hud_chips"},
+  "boost_hud_launcher": {"scene": "enchants", "position": [-10, 28, -108], "target": [5, -12, -190], "fov": 70, "preset": "Quarry", "shadowExtent": 160, "ui": "ui_hud_launcher", "uiInset": 58}
+}

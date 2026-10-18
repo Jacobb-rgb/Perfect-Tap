@@ -26,10 +26,17 @@ local function ensure()
 		return
 	end
 	ready = true
-	local group = Instance.new("SoundGroup")
-	group.Name = "TerraForgeSfx"
-	group.Volume = 1
-	group.Parent = SoundService
+	-- the group SettingsController made (its volume is the player's Sounds setting)
+	local existing = SoundService:FindFirstChild("TerraForgeSfx")
+	local group: SoundGroup
+	if existing and existing:IsA("SoundGroup") then
+		group = existing
+	else
+		group = Instance.new("SoundGroup")
+		group.Name = "TerraForgeSfx"
+		group.Volume = 1
+		group.Parent = SoundService
+	end
 	for i = 1, POOL_2D do
 		local s = Instance.new("Sound")
 		s.Name = "Sfx2D_" .. i

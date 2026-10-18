@@ -3,6 +3,7 @@
 	camera each frame, so it works with any camera mode.
 	CameraShake.add(0.3) -- light hit; 0.6 big crack; 1.0 explosion
 	CameraShake.kick(math.rad(0.5)) -- recoil: the view tips up and settles back
+	CameraShake.setEnabled(false) turns both off (the player's Settings).
 ]]
 
 local RunService = game:GetService("RunService")
@@ -20,6 +21,7 @@ local applied = CFrame.identity -- offset added last frame, removed before the c
 local kickAngle = 0 -- recoil pitch (radians), settles back to 0
 local KICK_RECOVER = 14 -- per second
 local MAX_KICK = math.rad(3)
+local enabled = true
 
 local function noise(seed: number): number
 	return math.noise(t * 22, seed) * 2
@@ -57,17 +59,29 @@ local function bind()
 end
 
 function CameraShake.add(amount: number)
+	if not enabled then
+		return
+	end
 	bind()
 	trauma = math.min(1, trauma + amount)
 end
 
 -- Recoil: tips the view up by `angle` radians (adds up, capped), settling back quickly.
 function CameraShake.kick(angle: number)
-	if angle <= 0 or angle ~= angle then
+	if not enabled or angle <= 0 or angle ~= angle then
 		return
 	end
 	bind()
 	kickAngle = math.min(MAX_KICK, kickAngle + angle)
+end
+
+-- Off: no new shake or recoil, and any shake in progress stops at once.
+function CameraShake.setEnabled(on: boolean)
+	enabled = on
+	if not on then
+		trauma = 0
+		kickAngle = 0
+	end
 end
 
 return CameraShake

@@ -295,6 +295,26 @@ return function(T, Loader)
 		T.eq(toast[1].A.Rarity, "Rare", "rare reveal colours the toast")
 	end)
 
+	withWorld("SellService: the sell bonus (Midas, SellValue golems) raises every payout", function(w)
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		w.data.Enchants.Owned.Midas = 3 -- +35 %
+		w.data.Enchants.Slots[1] = "Midas"
+		Bonuses.invalidate(w.player)
+		pen(w, { { "Clean", "Copper", "Rough", 2 } })
+		local each = price("Clean", "Copper", "Rough")
+		act(w, "Sell", { Key = "Clean|Copper|Rough|", Count = 2, From = "Pen" })
+		local paid = math.floor(each * 2 * 1.35 + 0.5)
+		T.truthy(paid > each * 2)
+		T.eq(w.data.Coins, paid, "coins with the bonus")
+		T.eq(notes(w, "Earned", w.player)[1].A.Amount, paid, "popup amount")
+		T.eq(notes(w, "Notify", w.player)[1].A.Text, `Tobin paid {Format.money(paid)} for 2 items.`, "toast amount")
+		-- the SellBin pays the owner's bonus too
+		local item = loose(w, "Clean", "Copper", "Rough", USER)
+		T.eq(SellService.sellRecord(item, STALL), math.floor(each * 1.35 + 0.5))
+		T.eq(w.data.Coins, paid + math.floor(each * 1.35 + 0.5))
+		Bonuses.invalidate(w.player)
+	end)
+
 	---------------------------------------------------------------- hands
 
 	withWorld("SellService: sells what you carry", function(w)
