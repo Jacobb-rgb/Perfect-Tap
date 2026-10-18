@@ -72,6 +72,8 @@ end
 
 -- Half the plot pad plus a little: anything further from a plot centre is off it.
 local QUICK_REJECT = GameConfig.PlotCells * GameConfig.CellSize / 2 + 2
+-- (plotAt only ever returns a plot whose centre is this close on X and Z)
+PlotService.PlotReach = QUICK_REJECT
 local MIN_LOCAL_Y, MAX_LOCAL_Y = -3, 24
 
 -- Which plot a world position is over (any plot, owned or not), and the

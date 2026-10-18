@@ -182,6 +182,9 @@ Net.Events = {
 	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
 	--   discovered ores were looked at (their NEW badges go; CodexService keeps them in
 	--   data.OreCodex.Seen, sent back as snapshot.CodexSeen)
+	StateSync = { Rate = 0.5, Burst = 2 }, -- (no arg) the client got a partial State push before
+	--   any whole one (it missed the Full push): the server forgets what it sent and pushes the
+	--   whole snapshot (StateService.resync; StateController asks at most every SyncSeconds)
 	-- server -> client
 	Notify = false,
 	Fx = false,

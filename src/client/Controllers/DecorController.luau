@@ -1,7 +1,7 @@
 --[[
 	Small client-only animations for world decoration (no network cost):
 	- parts/models tagged "Spin" rotate about their pivot's Y axis and bob
-	  (the plaza's fire crystal, the SPIN & WIN wheel, the balloon, ships).
+	  (the plaza's fire crystal, the SPIN & WIN wheel, the balloon, the airship).
 	  Optional attributes on the tagged instance:
 	    SpinSpeed  radians per second (default 0.8; 0 = no spin)
 	    BobHeight  studs (default 0.4; 0 = no bob)

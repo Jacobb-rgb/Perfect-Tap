@@ -658,11 +658,24 @@ return function(T, Loader)
 		T.eq(podium.Base.Color, skin.Base, "the podium in the skin's colors")
 		T.eq(podium.Top.Color, skin.Trim)
 		T.truthy(podium.Rim.Color ~= skin.Base and podium.Rim:GetAttribute("SkinFrom") == nil, "the Rim stays PodiumService's")
+		-- the opaque holo-ring bars: the skin's glow toned like the default ring
+		-- (perf pass 1: full strength reads as bright gizmo hexagons)
+		local rings = 0
 		for _, child in podium:GetChildren() do
 			if child.Name == "HoloRing" then
-				T.eq(child.Color, skin.Glow, "the holo-ring glows in the skin")
+				rings += 1
+				T.eq(child.Color, PlotBuilder.holoTone(skin.Glow), "the holo-ring glows in the skin, toned")
+				local _, sat, value = child.Color:ToHSV()
+				local _, glowSat, glowValue = skin.Glow:ToHSV()
+				T.truthy(value < glowValue and sat < glowSat, "darker and less saturated than the skin's glow")
 			end
 		end
+		T.truthy(rings > 0, "the podium has its holo-ring")
+		T.eq(
+			PlotBuilder.holoTone(roblox.Color3.fromRGB(40, 130, 255)),
+			PlotBuilder.HoloColor,
+			"the default ring is the same tone of the Tech blue"
+		)
 		-- a second completed collection: the newest shows, Equip picks the other back
 		for _, art in ArtifactConfig.ByCollection.CrownOfKaldrum do
 			ArtifactService.find(w.player, "Quarry", nil, art.Id)

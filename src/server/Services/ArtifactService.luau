@@ -82,6 +82,7 @@ local MuseumBuilder = require(script.Parent.Parent.World.MuseumBuilder)
 local DataService = require(script.Parent.DataService)
 local MiningService = require(script.Parent.MiningService)
 local PlotService = require(script.Parent.PlotService)
+local PlotBuilder = require(script.Parent.Parent.World.PlotBuilder)
 
 local ArtifactService = {}
 
@@ -181,8 +182,13 @@ type Skin = { Name: string, Base: Color3, Trim: Color3, Glow: Color3 }
 
 -- The skin color for a podium part: the named parts (and the parts in their
 -- own colors) take their role, neon is the glow, a bright saturated color
--- is the trim, anything else a darker base.
+-- is the trim, anything else a darker base. The opaque holo-ring bars take
+-- the glow toned like the default ring (PlotBuilder.holoTone, perf pass 1):
+-- full strength they read as bright gizmo hexagons again.
 local function skinColor(part: BasePart, roles: { [string]: string }, skin: Skin): Color3
+	if part.Name == "HoloRing" then
+		return PlotBuilder.holoTone(skin.Glow)
+	end
 	local own = ownColor(part)
 	local role = if part.Material == Enum.Material.Neon then "Glow" else roles[colorKey(own)]
 	if role == "Glow" then

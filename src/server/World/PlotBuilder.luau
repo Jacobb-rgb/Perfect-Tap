@@ -48,7 +48,15 @@
 	Everything decorative stays outside the 48x48 build grid, so every cell
 	is free for machines. Machines are added at runtime into the plot's
 	"Machines" folder by MachineService. A plot with its yard is <= 300 parts
-	(300, 13 of them in the Track placeholder) and one light (8 plots).
+	(300, 13 of them in the Track placeholder the railway replaces: 287 in the
+	map) and one light (8 plots).
+	Perf pass 1 (phone audit fix 4): no see-through part (the holo-rings are
+	opaque), no shadow from small trim (TRIM: pillar caps and feet, podium
+	collars, the chimney flange, the buffer stop struts: under a stud thick
+	and at most 3 studs long, the rule tests/PlotService.spec.luau checks),
+	none from the platform step either (STEP: 5 studs long, so outside that
+	rule; it stays queryable like the platform it steps up to), a longer
+	brick course instead of a staggered pair on the side walls.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -121,7 +129,17 @@ local NAVY = rgb(27, 29, 41) -- the podium's octagon step (deep gunmetal)
 local SHELL = rgb(44, 48, 64) -- gunmetal Space Station panels (podium base, foundry frame)
 local PODIUM_TOP = rgb(70, 76, 98) -- the podium's top plate: a dark inset in the thin glowing rim (round 2)
 local PODIUM_COLUMN = rgb(66, 72, 92)
-local HOLO = rgb(40, 130, 255) -- the podium's holo-ring (the lobby's Tech blue: no debug-cyan outline)
+-- the podium's holo-ring: the lobby's Tech blue rgb(40, 130, 255) (no debug-cyan
+-- outline). Perf pass 1: the bars are opaque, so holoTone mixes a glow color
+-- 0.4 of the way to HOLO_BEHIND (the grey-blue the old 0.4 see-through bars
+-- let through over the yard): a darker, less saturated blue with the same soft
+-- look. A podium skin's glow on the ring goes through it too (ArtifactService).
+local HOLO_BEHIND = rgb(100, 115, 133)
+local HOLO_SEE_THROUGH = 0.4
+local function holoTone(glow: Color3): Color3
+	return glow:Lerp(HOLO_BEHIND, HOLO_SEE_THROUGH)
+end
+local HOLO = holoTone(rgb(40, 130, 255)) -- about rgb(64, 124, 206)
 local BASE_LIGHT = rgb(40, 140, 255) -- the podium base's corner lights
 local LOCK_GOLD = rgb(255, 200, 40)
 local LOCK_STEEL = rgb(230, 232, 240)
@@ -135,6 +153,9 @@ local FOUNDRY_INSET = 3.5
 
 PlotBuilder.RimGold = RIM_GOLD
 PlotBuilder.RimLocked = RIM_LOCKED
+PlotBuilder.HoloColor = HOLO
+-- A glow color as an opaque holo-ring bar shows it (see HOLO).
+PlotBuilder.holoTone = holoTone
 
 -- Border walls (plot-local): the center line of the walls around the pad
 -- (the pad's outer edge, |x| or |z|), pillars 0.1 further out so their caps
@@ -150,6 +171,13 @@ local PILLAR_LINE = WALL_LINE + 0.1
 local SOLID = { CanTouch = false } -- players and items bump into it
 local FENCE = { CanTouch = false, CanQuery = false }
 local THIN = { CanTouch = false, CanQuery = false, CastShadow = false } -- collides, too thin for a shadow
+-- (perf pass 1) small trim under a stud thick and at most 3 studs long:
+-- pillar caps and feet, the podium collar, the chimney flange, the buffer
+-- stop struts: it still collides, but casts no shadow
+local TRIM = THIN
+-- (perf pass 1) the train platform's step: no shadow (a 0.5-stud riser), but
+-- solid and queryable like the platform (SOLID without the shadow)
+local STEP = { CanTouch = false, CastShadow = false }
 local GHOST = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
 
 local function model(name: string, parent: Instance): Model
@@ -243,7 +271,10 @@ end
 	line, so its section reads as a bullnose; the lower pen walls have the
 	bullnose alone), 4 parts per straight run (3 on the pen),
 	plus raised bricks (one part pokes out of both faces): a staggered pair
-	(lower and upper row, half a brick apart) or a single brick per bay.
+	(lower and upper row, half a brick apart) on the road-facing front walls,
+	a longer brick course (one raised part two bricks long, rows alternating
+	bay by bay; perf pass 1: 1 part instead of a pair) on the long side
+	walls, or a single brick per bay.
 	Pillars like brick-wall-end: a square stone shaft with a wider cap, 2
 	parts (+1 for a stone foot, +2 for a lantern under a roof plate on the
 	road entrance posts). A straight run goes on under the pillars that
@@ -308,7 +339,8 @@ type WallOpts = {
 	-- them (and the run's ends) get the raised bricks
 	Stops: { number }?,
 	-- raised bricks per bay, bay by bay from `a` (the last entry repeats):
-	-- 2 = a staggered pair, 1 = one brick (rows alternate), 0 = none; nil: none
+	-- 2 = a staggered pair, COURSE (3) = one longer course two bricks long,
+	-- 1 = one brick (rows alternate), 0 = none; nil: none
 	Bricks: { number }?,
 	-- the turn (radians) to the run that meets this one at `a` / `b` without a pillar
 	TurnA: number?,
@@ -316,6 +348,9 @@ type WallOpts = {
 	-- (round 3) two darker mortar lines along the brick band (both faces)
 	Mortar: boolean?,
 }
+
+-- WallOpts.Bricks: one raised part two bricks long (rows alternate bay by bay)
+local COURSE = 3
 
 -- One straight wall from a to b (plot-local, y ignored).
 local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: Vector3, opts: WallOpts?)
@@ -377,8 +412,9 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 	local brickL = math.min(1.3, kit.Band * 1.6)
 	local size = Vector3.new(kit.Band + 0.24, brickH, brickL)
 	local lowY, highY = kit.PlinthTop + bandH * 0.3, kit.PlinthTop + bandH * 0.7
-	local function brick(d: number, y: number)
-		local raised = Geo.block(parent, frame * CFrame.new(0, y, -d), size, BRICK_RAISED, Enum.Material.Brick, GHOST)
+	local function brick(d: number, y: number, bricks: number?)
+		local raisedSize = if bricks then Vector3.new(size.X, size.Y, brickL * bricks) else size
+		local raised = Geo.block(parent, frame * CFrame.new(0, y, -d), raisedSize, BRICK_RAISED, Enum.Material.Brick, GHOST)
 		raised.Name = "Brick"
 	end
 	local count = 0
@@ -388,7 +424,10 @@ local function wall(parent: Instance, cf: CFrame, kit: WallKit, a: Vector3, b: V
 		if d1 - d0 >= 3.5 and n > 0 then
 			local mid = (d0 + d1) / 2
 			count += 1
-			if n >= 2 then
+			if n == COURSE then
+				-- a longer course: one raised part two bricks long, rows alternating
+				brick(mid, if count % 2 == 0 then highY else lowY, 2)
+			elseif n >= 2 then
 				-- a little running bond: lower and upper brick half a brick apart
 				local flip = if count % 2 == 0 then 1 else -1
 				brick(mid - flip * brickL / 2, lowY)
@@ -419,7 +458,7 @@ local function pillar(parent: Instance, cf: CFrame, kit: WallKit, at: Vector3, o
 		Vector3.new(capWidth, kit.PillarCapH, capWidth),
 		PILLAR_CAP,
 		nil,
-		if capWidth * capWidth * kit.PillarCapH < 1 then THIN else FENCE
+		TRIM
 	)
 	if o.Foot then
 		-- brick-wall-end's wider stone foot
@@ -430,7 +469,7 @@ local function pillar(parent: Instance, cf: CFrame, kit: WallKit, at: Vector3, o
 			Vector3.new(width + 0.3, footTop - kit.Bottom, width + 0.3),
 			WALL_CAP,
 			nil,
-			FENCE
+			TRIM
 		)
 	end
 	if o.Lamp then
@@ -489,8 +528,8 @@ local function padWalls(plot: Model, cf: CFrame): Part?
 		end
 		wall(m, cf, k, Vector3.new(s * L, 0, -P), Vector3.new(s * L, 0, sideEnd), {
 			Stops = stops,
-			-- pairs on the pad's bays, single bricks beside the yard (none behind the foundry)
-			Bricks = if s < 0 then { 2, 2, 2, 2, 1 } else { 2, 0 },
+			-- longer courses on the pad's bays, single bricks beside the yard (none behind the foundry)
+			Bricks = if s < 0 then { COURSE, COURSE, COURSE, COURSE, 1 } else { COURSE, 0 },
 			TurnB = TURN,
 		})
 		-- front: corner .. the entrance post
@@ -714,7 +753,11 @@ end
 -- reading as a debug outline over the neighbours)
 -- (round 3: thinner, tighter and see-through: the big hexagons read as
 -- gizmos over the yard)
-PlotBuilder.HoloRing = { Y = 5.2, Radius = 1.88, Bar = 0.09, Sides = 6, Transparency = 0.4 }
+-- (perf pass 1: opaque, so the 192 bars of the 8 bases leave the
+-- transparent pass; a darker, less saturated blue (holoTone) gives the
+-- same soft glow the 0.4 see-through bars had, nobody looks through a
+-- 0.09-stud bar)
+PlotBuilder.HoloRing = { Y = 5.2, Radius = 1.88, Bar = 0.09, Sides = 6, Transparency = 0 }
 
 -- The holo-ring as a closed polygon of bars (`Sides` bars, each tangent to
 -- the circle at its middle): returns the bar CFrames and the bar size
@@ -774,7 +817,7 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 		prism(m, hex * CFrame.new(0, (columnBottom + columnTop) / 2, 0), 6, 2.0, columnTop - columnBottom, PODIUM_COLUMN, nil, SOLID)
 	shaft[1].Name = "Column"
 	local collarBottom, collarH = columnBottom + 0.06, 0.42
-	cylinder(m, base * CFrame.new(0, collarBottom + collarH / 2, 0), collarH, 2.5, C.Hazard, nil, FENCE)
+	cylinder(m, base * CFrame.new(0, collarBottom + collarH / 2, 0), collarH, 2.5, C.Hazard, nil, TRIM)
 	local rim = cylinder(
 		m,
 		base * CFrame.new(0, rimTop - rimH / 2, 0),
@@ -950,7 +993,7 @@ local function foundry(yard: Model, cf: CFrame)
 	-- round chimney (back right) with a copper flange and an ember top
 	local stack = base * CFrame.new(width / 2 - 2.6, 0, depth / 2 - 1.9)
 	cylinder(m, stack * CFrame.new(0, 10.9, 0), 7.2, 2.4, HOUSING_LIGHT, nil, SOLID)
-	cylinder(m, stack * CFrame.new(0, 9.4, 0), 0.5, 2.9, C.Copper, nil, FENCE)
+	cylinder(m, stack * CFrame.new(0, 9.4, 0), 0.5, 2.9, C.Copper, nil, TRIM)
 	local top = cylinder(m, stack * CFrame.new(0, 14.52, 0), 0.06, 1.9, C.Ember, NEON, GHOST)
 	top.Name = "ForgeGlow"
 end
@@ -992,7 +1035,7 @@ local function trainStop(yard: Model, cf: CFrame)
 		nil,
 		GHOST
 	)
-	Geo.block(m, cf * CFrame.new(0.7, 0.25, c.Z - rect.Size.Z / 2 - 0.5), Vector3.new(5, 0.5, 1), WALL_STONE, nil, SOLID)
+	Geo.block(m, cf * CFrame.new(0.7, 0.25, c.Z - rect.Size.Z / 2 - 0.5), Vector3.new(5, 0.5, 1), WALL_STONE, nil, STEP)
 	-- sign on two square stone posts (the walls' stone) just beyond the board's
 	-- ends (they never cut into its faces), a little taller than the board
 	local signZ = c.Z + 0.3
@@ -1049,7 +1092,7 @@ local function trainStop(yard: Model, cf: CFrame)
 			Vector3.new(0.45, 1.6, 1.8),
 			HOUSING,
 			nil,
-			FENCE
+			TRIM
 		)
 	end
 	Geo.block(buffer, stop * CFrame.new(0.2, beamY, 0), Vector3.new(0.6, beamH, gauge + 1.6), C.AwningRed, nil, SOLID)
