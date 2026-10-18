@@ -1,7 +1,7 @@
 # review/hory-noc: the mountains chat's night work (2026-10-18)
 
-One branch with everything from the night, on top of main 953b542 (steps 6-7 + save safety). It is fast-forwardable from main.
-Map v31, 20,658 / 23,000 parts (+ the 8 yard museums at runtime). `bash tools/check.sh`: ALL CHECKS PASSED (1078 tests, PhoneBudget included).
+One branch with everything from the night, on top of main fc224a5 (steps 6-7, save safety, perf pass 1). It is fast-forwardable from main.
+Map v32, 20,557 / 23,000 parts (+ the 8 yard museums at runtime). `bash tools/check.sh`: ALL CHECKS PASSED (1217 tests, PhoneBudget included).
 It goes in only after the integrator's ok **and** the owner's "ano" in the mountains chat.
 
 ## What is in it (each part still has its own branch)
@@ -39,7 +39,7 @@ The mine floors reuse this branch's ambience (I). Whichever of the two lands on 
    (MineAmbience never requires AmbienceConfig).
 2. tests/Ambience.spec.luau: scope "exactly 5 kinds", "spots in the lobby area" and "<= 20 spots" to the lobby kinds
    (Waterfall, Brook, Pond, Forge, Plaza); tests/MineAmbience.spec.luau covers the floors.
-3. `WorldBuilder.Version` above both (mine-floors 28, this branch 31), every note kept.
+3. `WorldBuilder.Version` above both (mine-floors 28, this branch 32), every note kept.
 SoundConfig: their keys sit after DoorThud, ours after CaseRise; no names collide.
 
 ## Not done (on purpose)
