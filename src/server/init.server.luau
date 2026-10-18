@@ -49,6 +49,7 @@ local ORDER = {
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
 	"BadgeService", -- badges from save data (BadgeConfig)
 	"AnalyticsService", -- onboarding funnel, progression and coin flow (Roblox AnalyticsService)
+	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 }
 
 local loaded = {}

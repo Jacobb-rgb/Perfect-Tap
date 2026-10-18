@@ -161,6 +161,14 @@ elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop wind
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" then -- the tutorial's bubble + guide in the quarry (tools/lune/lib/tutorial_preview.luau)
+	WorldBuilder.build(workspace)
+	addNodes(workspace)
+	local TutorialPreview = require("./lib/tutorial_preview")
+	TutorialPreview.scene(Loader, workspace, if sceneName == "tutorial_hopper" then "hopper" else "station")
+	for name, guis in TutorialPreview.build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
 	require("./lib/gallery_preview").build(Loader, workspace)
 elseif sceneName == "gameplay" then

@@ -32,6 +32,7 @@ local ORDER = {
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)
 	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
+	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 }
 
 local loaded = {}
