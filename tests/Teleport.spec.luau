@@ -177,6 +177,29 @@ return function(T, Loader)
 		T.eq(reply and reply.Reason, "Dead", "no character")
 	end)
 
+	T.test("Teleport: only a running cleaning session blocks it, not owning a Cleaning Station", function()
+		local CleaningService = Loader.requirePath("ServerScriptService.Server.Services.CleaningService")
+		local player: any = { UserId = 702, Name = "P702", Parent = true }
+		T.falsy(CleaningService.isCleaning(player), "no session")
+		local savedStation, savedCleaning = CleaningService.stationOf, CleaningService.isCleaning
+		local ok, err = pcall(function()
+			-- every player owns a station (the starter kit): that alone must not block
+			rawset(CleaningService, "stationOf", function()
+				return Instance.new("Model")
+			end)
+			T.falsy(TeleportService.isCleaning(player), "a station without a session")
+			rawset(CleaningService, "isCleaning", function()
+				return true
+			end)
+			T.truthy(TeleportService.isCleaning(player), "a running session")
+		end)
+		rawset(CleaningService, "stationOf", savedStation)
+		rawset(CleaningService, "isCleaning", savedCleaning)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	---------------------------------------------------------------- TeleportView
 
 	T.test("TeleportView: phone buttons are big enough to tap and the bar fits next to the coins", function()
