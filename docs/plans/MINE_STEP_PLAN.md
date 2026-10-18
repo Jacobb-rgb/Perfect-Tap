@@ -36,3 +36,30 @@ Quarry, EmberCaves, Lagoon, Palace, Core).
 
 Every WP: strict Luau, `lune run tools/lune/test.luau` 0 failed, previews where visual; the lead integrates, runs
 `bash tools/check.sh`, rebakes, renders the town + every floor in the real map, commits and pushes.
+
+## Parts and streaming (integrator's model, 2026-10-18)
+Budgets: `LobbyLayout.Budget.MapParts` = 32,000 counts the floors; every floor ≤ `MineKit.PartBudget` 2,500 and
+floors 1–3 (they stream near the town) ≤ `MineKit.NearPartBudget` 1,250 (tests/MineFloorAreas.spec.luau). The floors
+use the default per-part streaming (nothing Persistent, so tests/PhoneBudget.spec.luau doesn't count them).
+
+| Floor (game build) | Before trim | After trim |
+|---|---|---|
+| 1 Greystone Quarry | 1,462 | 1,125 |
+| 2 Ember Caves | 1,776 | 1,187 |
+| 3 Deep Hollow | 1,688 | 1,144 |
+| 4 Sunken Palace | 2,720 | 2,350 |
+| 5 Heartstone Core | 2,824 | 2,353 |
+
+Measured with every BasePart of the built map within StreamingTargetRadius 384 (3D) of an eye at y 4 (map v27,
+28,201 parts in all; the persistent Horizon adds its parts outside that radius):
+
+| Spot | Parts within 384 | of which mine floors |
+|---|---|---|
+| worst lobby spot: the quarry ramp top (10, 4, −122) | 20,458 (21,928 before the trim) | 3,363 |
+| inside floor 1 (0, −8, −180) | 20,592 | 3,364 |
+| inside floor 2 (0, −8, −300) | 15,532 | 3,364 |
+| inside floor 3 (0, −36, −444) | 9,935 | 4,019 |
+| floor 4 (0, −216, −800) / floor 5 (0, −396, −800) | 5,396 / 4,799 | 5,167 / 4,651 |
+
+Without the floors the quarry ramp top is ~17.1k. Agreed with the integrator: keep StreamingTargetRadius 384 and
+revisit a smaller radius only if a Studio phone test (device emulator, low memory) shows trouble at the quarry rim.

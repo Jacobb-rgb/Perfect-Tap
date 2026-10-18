@@ -156,9 +156,10 @@ end
 local STAGGER = { 0.8, 0.4, 0 } -- end trims so the steps' end faces never share a plane
 
 --[[
-	A terraced slate wall: voxel columns (~8 studs) per step, each with pale
-	strata stripes on its face (shared heights along the wall, so the layers
-	read as continuous), a pale slate ledge (sometimes a grass lip) on the lower
+	A terraced slate wall: voxel columns per step (~8 studs on the lowest step,
+	~16 on the steps above, out of reach), each with pale strata stripes on its
+	face (shared heights along the wall, so the layers read as continuous), a
+	pale slate ledge (sometimes a grass lip) on the lower
 	steps and a dirt band + grass cap on the top step (opts.Bare: a pale slate
 	cap). `frame` = wallFrame, the steps' Face = distance from the pit edge into
 	the cliff, `outer` = the wall's back.
@@ -167,7 +168,6 @@ local function terrace(c: Ctx, wall: string, frame: CFrame, length: number, step
 	local o: TerraceOpts = opts or {}
 	local rng, pal = c.rng, c.pal
 	local n = math.max(1, math.floor(length / 8 + 0.5))
-	local colW = length / n
 	local strata: { { number } } = {}
 	for k, s in steps do
 		local below = if k == 1 then 0 else steps[k - 1].Top
@@ -179,9 +179,11 @@ local function terrace(c: Ctx, wall: string, frame: CFrame, length: number, step
 		end
 		strata[k] = levels
 	end
-	for i = 0, n - 1 do
-		local x0, x1 = i * colW, (i + 1) * colW
-		for k, s in steps do
+	for k, s in steps do
+		local nk = if k == 1 then n else math.max(1, math.floor(n / 2 + 0.5))
+		local colW = length / nk
+		for i = 0, nk - 1 do
+			local x0, x1 = i * colW, (i + 1) * colW
 			local a = math.max(x0, if o.TrimStart then o.TrimStart[k] or 0 else 0)
 			local b = math.min(x1, length - (if o.TrimEnd then o.TrimEnd[k] or 0 else 0))
 			if b - a >= 1 then
@@ -464,14 +466,14 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	for _, gx in { -38, -19, 0, 19, 38 } do
 		for _, gz in { -36, -18, 0, 46 } do
 			patch += 1
-			if rng:chance(0.7) then
+			if rng:chance(0.45) then
 				local color = if patch % 3 == 0 then SAND_LIGHT else SAND_DARK
 				local base = at(c, gx + rng:range(-3, 3), 0, gz + rng:range(-3, 3)) * CFrame.Angles(0, rng:range(0, math.pi), 0)
 				block(c, base * CFrame.new(0, -0.02, 0), Vector3.new(rng:range(6, 10), 0.2, rng:range(3.5, 5.5)), Geo.vary(color, rng, 0.03), nil, TINY)
 			end
 		end
 	end
-	for _ = 1, 16 do
+	for _ = 1, 6 do
 		local s = rng:range(0.4, 0.9)
 		local x, z = rng:range(-50, 50), rng:range(-44, 12)
 		block(c, at(c, x, s * 0.25, z) * Geo.randomTilt(rng, 0.4), Vector3.new(s * 1.3, s * 0.6, s), Geo.vary(rng:pick({ pal.Dark, pal.Mid, pal.Light }), rng, 0.05), nil, TINY)
@@ -555,12 +557,12 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	terrace(c, "back", wallFrame(c, Vector3.new(-HEAD_X, 0, BACK_Z), westward), 35 - HEAD_X, backSteps, backOuter, { Bare = true, TrimStart = STAGGER, TrimEnd = STAGGER, Veins = 0.3 })
 	terrace(c, "back", wallFrame(c, Vector3.new(-35, 0, BACK_Z), westward), OUTER_X - 35, fallsStep, backOuter, { Bare = true })
 	-- rubble at the wall feet (clear of the scaffold, the band and the door)
-	talus(c, wallFrame(c, Vector3.new(-PIT_X, 0, -46), north), 42, 6.5)
+	talus(c, wallFrame(c, Vector3.new(-PIT_X, 0, -46), north), 42, 10)
 	talus(c, wallFrame(c, Vector3.new(-PIT_X, 0, 41), north), 13, 6.5)
 	talus(c, wallFrame(c, Vector3.new(PIT_X, 0, 54), south), 13, 6.5)
-	talus(c, wallFrame(c, Vector3.new(PIT_X, 0, -12), south), 34, 6.5)
+	talus(c, wallFrame(c, Vector3.new(PIT_X, 0, -12), south), 34, 10)
 	talus(c, wallFrame(c, Vector3.new(34.5, 0, BACK_Z), westward), 7, 3.5)
-	talus(c, wallFrame(c, Vector3.new(-22.5, 0, BACK_Z), westward), 12, 4)
+	talus(c, wallFrame(c, Vector3.new(-22.5, 0, BACK_Z), westward), 12, 6)
 
 	if cutaway then
 		tunnel(c, SLATE2, SLATE3, SLATE1)
@@ -570,22 +572,19 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 
 	------------------------------------------------------------ wall crystals (copper and quartz)
 	local east, west = Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0)
-	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.5, -30), west, 0.95, 6, 5, false, 11)
-	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, -14), west, 1.0, 5, 4, true, 12)
-	wallCrystal(c, Vector3.new(-PIT_X - 7.1, 9.5, -40), west, 0.9, 6, 5.5, false, 13)
-	wallCrystal(c, Vector3.new(-PIT_X - 3.5, 6.8, -45), UP, 0, 6, 5, true, 14)
-	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, 49), west, 1.0, 5, 4, true, 15)
-	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, -32), east, 0.95, 6, 5, false, 16)
-	wallCrystal(c, Vector3.new(PIT_X + 0.6, 4, -16), east, 1.0, 5, 4.5, true, 17)
-	wallCrystal(c, Vector3.new(PIT_X + 7.1, 9.5, -42), east, 0.9, 6, 5, false, 18)
-	wallCrystal(c, Vector3.new(PIT_X + 3.5, 6.8, -45), UP, 0, 6, 5, true, 19)
-	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, 47), east, 0.95, 6, 5, false, 20)
-	wallCrystal(c, Vector3.new(31, 4, BACK_Z - 0.6), north, 0.6, 6, 5, false, 21)
-	wallCrystal(c, Vector3.new(-28.5, 4, BACK_Z - 0.6), north, 0.6, 6, 5, false, 22)
-	wallCrystal(c, Vector3.new(31, 10.5, BACK_Z - 4.6), north, 0.85, 5, 4, true, 23)
-	wallCrystal(c, Vector3.new(-30, 10.5, BACK_Z - 4.6), north, 0.85, 5, 4, true, 24)
-	wallCrystal(c, Vector3.new(54, 22, BACK_Z - 7.6), north, 0.9, 6, 5, false, 25)
-	wallCrystal(c, Vector3.new(-54, 24, BACK_Z - 7.6), north, 0.9, 6, 5, true, 26)
+	-- (3-4 crystals each; none up on the back wall: part budget)
+	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.5, -30), west, 0.95, 4, 5, false, 11)
+	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, -14), west, 1.0, 3, 4, true, 12)
+	wallCrystal(c, Vector3.new(-PIT_X - 7.1, 9.5, -40), west, 0.9, 3, 5.5, false, 13)
+	wallCrystal(c, Vector3.new(-PIT_X - 3.5, 6.8, -45), UP, 0, 4, 5, true, 14)
+	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, 49), west, 1.0, 3, 4, true, 15)
+	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, -32), east, 0.95, 4, 5, false, 16)
+	wallCrystal(c, Vector3.new(PIT_X + 0.6, 4, -16), east, 1.0, 3, 4.5, true, 17)
+	wallCrystal(c, Vector3.new(PIT_X + 7.1, 9.5, -42), east, 0.9, 3, 5, false, 18)
+	wallCrystal(c, Vector3.new(PIT_X + 3.5, 6.8, -45), UP, 0, 4, 5, true, 19)
+	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, 47), east, 0.95, 4, 5, false, 20)
+	wallCrystal(c, Vector3.new(31, 4, BACK_Z - 0.6), north, 0.6, 4, 5, false, 21)
+	wallCrystal(c, Vector3.new(-28.5, 4, BACK_Z - 0.6), north, 0.6, 4, 5, false, 22)
 
 	------------------------------------------------------------ spawns and markers
 	local spawns = MineKit.spawns(model)
@@ -742,18 +741,28 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 
 	------------------------------------------------------------ trees, bushes and flowers on the rim
 	local kinds = { "Green", "Orange", "Green", "Pink", "Green", "Yellow" }
+	-- 8 trees spread evenly along the whole rim, bushes and flowers between them
+	local TREES = 8
+	local rimCount = 0
+	for _, top in c.tops do
+		if top.rim then
+			rimCount += 1
+		end
+	end
 	local perWall: { [string]: number } = {}
+	local rimIndex = 0
 	local trees = 0
 	for _, top in c.tops do
 		local n = perWall[top.wall] or 0
 		if top.rim then
 			n += 1
 			perWall[top.wall] = n
+			rimIndex += 1
 			local p = top.cf.Position
-			if n % 3 == 2 and trees < 10 then
+			if math.floor(rimIndex * TREES / rimCount) > math.floor((rimIndex - 1) * TREES / rimCount) then
 				trees += 1
 				Style.tree(model, CFrame.new(p) * CFrame.new(rng:range(-1, 1), -0.3, rng:range(-1, 1)), kinds[trees % #kinds + 1], rng, rng:range(0.95, 1.12))
-			elseif n % 3 == 0 then
+			elseif n % 4 == 0 then
 				Style.bush(model, (top.cf * CFrame.new(rng:range(-1.5, 1.5), 0, -top.d * 0.32)).Position, if rng:chance(0.5) then C.LeafGreen else C.LeafGreenDark, rng, rng:range(2.4, 3.2))
 			elseif rng:chance(0.5) then
 				Style.flowers(model, (top.cf * CFrame.new(0, 0, -top.d * 0.3)).Position, rng:pick({ C.FlowerYellow, C.FlowerWhite, C.FlowerPink }), rng, 4, 1.6)

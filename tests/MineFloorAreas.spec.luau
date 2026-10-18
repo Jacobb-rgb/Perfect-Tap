@@ -37,9 +37,11 @@ return function(T, Loader)
 		T.truthy(#cluster:GetChildren() >= 7, "cluster crystals")
 	end)
 
-	T.test("mine floor areas in the game: every floor <= 2500 parts, near-town floors lighter, no own ore lifts", function()
+	T.test("mine floor areas in the game: every floor <= 2500 parts, floors 1-3 <= 1250, no own ore lifts", function()
 		-- the integrator's rule: FloorParts <= 2500 BaseParts per mine floor in the game build
 		T.eq(MineKit.PartBudget, 2500, "MineKit.PartBudget")
+		-- floors 1-3 stream in with the town (the quarry rim on phones): 1250 each
+		T.eq(MineKit.NearPartBudget, 1250, "MineKit.NearPartBudget")
 		T.le(MineKit.NearPartBudget, MineKit.PartBudget, "the near-town budget is the tighter one")
 		for index, name in MODULES do
 			local ok, Floor = pcall(Loader.requirePath, "ServerScriptService.Server.World.Mine." .. name)

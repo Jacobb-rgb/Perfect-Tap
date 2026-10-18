@@ -24,8 +24,8 @@
 	  portal, kept clear from z +54); back opening x -11..11, 16 high at z -60 (x -12..12,
 	  z -60..-50 clear, no floor over the ramp); nothing above y +34 (the ForgeMountain
 	  massif rests on the roof at world y 22); the Mine Lift is Railway's (TrainConfig) at
-	  MineFloors.LiftSpots[2]: the floor only marks the spot. In the game about 1750 parts
-	  (MineKit.NearPartBudget 1800), 20 PointLights, 6 ParticleEmitters.
+	  MineFloors.LiftSpots[2]: the floor only marks the spot. In the game about 1200 parts
+	  (MineKit.NearPartBudget 1250), 20 PointLights, 6 ParticleEmitters.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -232,7 +232,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		local u = r:range(0.2, 0.6) * half * (if r:chance(0.5) then 1 else -1)
 		local v = r:range(0.8, math.max(1, height * 0.3))
 		local sign = if u > 0 then 1 else -1
-		for _ = 1, r:int(2, 4) do
+		for _ = 1, r:int(2, 3) do
 			local len = r:range(2.4, 4.2)
 			local theta = sign * r:range(0.22, 0.42)
 			local du, dv = -math.sin(theta) * len, math.cos(theta) * len
@@ -305,21 +305,22 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		local shade = Geo.vary(TILE, rng, 0.05)
 		hexColumn(tiles, CFrame.new(x, -0.1, z) * CFrame.Angles(0, rng:range(-0.05, 0.05), 0), width, 0.32, shade, DECOR)
 	end
+	-- (two staggered rows of hexes, 4.6 apart: a little bigger and fewer than at first)
 	for _, ix in { -1, 1 } do
 		local x = ix * 1.56
-		local z = ENTRANCE_Z + 2 - (if ix > 0 then 1.8 else 0)
+		local z = ENTRANCE_Z + 2 - (if ix > 0 then 2.3 else 0)
 		while z > BRIDGE_FRONT + 1.5 do
-			tile(x, z, 3.3)
-			z -= 3.6
+			tile(x, z, 3.7)
+			z -= 4.6
 		end
 	end
 	-- the Giant Crystal's round causeway plaza behind the bridge, on to the way down
-	for ix = -2, 2 do
-		local x = GIANT.X + ix * 3.81
-		for iz = -3, 3 do
-			local z = GIANT.Y + iz * 4.4 + (ix % 2) * 2.2
+	for ix = -1, 1 do
+		local x = GIANT.X + ix * 5.14
+		for iz = -2, 2 do
+			local z = GIANT.Y + iz * 5.94 + (ix % 2) * 2.97
 			if (Vector2.new(x, z) - GIANT).Magnitude <= 8.6 then
-				tile(x, z, 4)
+				tile(x, z, 5.4)
 			end
 		end
 	end
@@ -342,20 +343,20 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	for gx = -56, 40, 16 do
 		for gz = -50, 38, 16 do
 			local c = Vector2.new(gx + 8 + rng:range(-2, 2), gz + 8 + rng:range(-2, 2))
-			if rng:chance(0.6) and not nearLava(c, 6) and math.abs(c.X) > 7 then
+			if rng:chance(0.35) and not nearLava(c, 6) and math.abs(c.X) > 7 then
 				local shade = if c.Y < -20 then GROUND:Lerp(CRUST_LIGHT, 0.35) else GROUND:Lerp(BASALT_DARK, 0.3)
 				block(ground, CFrame.new(c.X, 0.02, c.Y) * CFrame.Angles(0, rng:range(0, math.pi), 0), Vector3.new(rng:range(5, 9), 0.08, rng:range(4, 7)), Geo.vary(shade, rng, 0.04), nil, DECOR)
 			end
 		end
 	end
-	for _ = 1, 16 do
+	for _ = 1, 8 do
 		local p = Vector2.new(rng:range(-54, 54), rng:range(-46, 48))
 		if not nearLava(p, 2.5) and math.abs(p.X) > 5 and free(p, 0.6) then
 			local sz = rng:range(0.5, 1.3)
 			block(ground, CFrame.new(p.X, sz * 0.25, p.Y) * Geo.randomTilt(rng, 0.4), Vector3.new(sz, sz * 0.7, sz * 0.9), Geo.vary(if rng:chance(0.5) then BASALT else BASALT_DARK, rng, 0.05), nil, DECOR)
 		end
 	end
-	for _ = 1, 9 do
+	for _ = 1, 5 do
 		local p = Vector2.new(rng:range(-50, 50), rng:range(-46, -22))
 		if not nearLava(p, 1.5) then
 			local yaw = rng:range(0, math.pi)
@@ -388,26 +389,23 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 			block(lava, frame * CFrame.new(s * (RIVER_HW - 0.9), LAVA_Y + 0.02, 0), Vector3.new(2, 0.1, len + 3), LAVA_DEEP, NEON, GLOW)
 		end
 		local wob = rng:range(-1, 1)
-		block(lava, frame * CFrame.new(wob, LAVA_Y + 0.06, -len * 0.25), Vector3.new(2.4, 0.1, len * 0.5 + 1.5), LAVA_HOT, NEON, GLOW)
-		block(lava, frame * CFrame.new(-wob * 0.8, LAVA_Y + 0.06, len * 0.25), Vector3.new(2.2, 0.1, len * 0.5 + 1.5), LAVA_HOT, NEON, GLOW)
-		-- crust rafts drifting on it
-		for _ = 1, 2 do
-			local s = rng:range(1.2, 2.6)
-			block(
-				lava,
-				frame * CFrame.new(rng:range(-RIVER_HW + 1.6, RIVER_HW - 1.6), LAVA_Y + 0.12, rng:range(-len / 2, len / 2)) * CFrame.Angles(0, rng:range(0, math.pi), 0),
-				Vector3.new(s, 0.22, s * rng:range(0.5, 0.9)),
-				Geo.vary(CRUST_LIGHT, rng, 0.05),
-				nil,
-				DECOR
-			)
-		end
+		block(lava, frame * CFrame.new(wob, LAVA_Y + 0.06, 0) * CFrame.Angles(0, wob * 0.05, 0), Vector3.new(2.3, 0.1, len + 1.5), LAVA_HOT, NEON, GLOW)
+		-- a crust raft drifting on it
+		local raft = rng:range(1.2, 2.6)
+		block(
+			lava,
+			frame * CFrame.new(rng:range(-RIVER_HW + 1.6, RIVER_HW - 1.6), LAVA_Y + 0.12, rng:range(-len / 2, len / 2)) * CFrame.Angles(0, rng:range(0, math.pi), 0),
+			Vector3.new(raft, 0.22, raft * rng:range(0.5, 0.9)),
+			Geo.vary(CRUST_LIGHT, rng, 0.05),
+			nil,
+			DECOR
+		)
 		-- crusty rim along both banks (low: keeps players and rocks off the lava)
 		local nrm = Vector2.new(-d2.Y, d2.X)
 		for _, s in { -1, 1 } do
 			local t = rng:range(0, 1.2)
 			while t < len do
-				local step = rng:range(3, 4.2)
+				local step = rng:range(6, 7.5)
 				local p = a + d2 * t + nrm * s * (RIVER_HW + 0.2)
 				local onBridge = math.abs(p.X) < 7 or math.abs(p.X - BRIDGE2_X) < BRIDGE2_W / 2 + 1.2
 				if math.abs(p.X) < WALL_X - 1 and not onBridge then
@@ -439,7 +437,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	-- the main stone arch bridge over the river on the path
 	local bridge = group("Bridge")
 	do
-		local n = 10
+		local n = 8
 		local length = BRIDGE_FRONT - BRIDGE_BACK
 		local zc = riverZ(0)
 		local open0 = (BRIDGE_FRONT - (zc + RIVER_HW)) / length
@@ -526,14 +524,14 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		local disc = cylinder(m, Vector3.new(c.X, 0.25, c.Y), 0.4, r * 2 + 1, LAVA, NEON, GLOW)
 		disc.Name = "Lava"
 		cylinder(m, Vector3.new(c.X + rng:range(-0.6, 0.6), 0.36, c.Y + rng:range(-0.6, 0.6)), 0.3, r * 0.95, LAVA_HOT, NEON, GLOW)
-		for _ = 1, 3 do
+		for _ = 1, 2 do
 			local a = rng:range(0, math.pi * 2)
 			local d = rng:range(r * 0.45, r * 0.8)
 			local s = rng:range(0.9, 1.8)
 			block(m, CFrame.new(c.X + math.cos(a) * d, 0.5, c.Y + math.sin(a) * d) * CFrame.Angles(0, rng:range(0, 3), 0), Vector3.new(s, 0.2, s * 0.7), CRUST_LIGHT, nil, DECOR)
 		end
 		-- the crusty rim
-		local count = math.max(10, math.floor(math.pi * 2 * r / 2.8))
+		local count = math.max(9, math.floor(math.pi * 2 * r / 3.6))
 		for k = 1, count do
 			local a = (k / count) * math.pi * 2 + rng:range(-0.08, 0.08)
 			local p = Vector3.new(c.X + math.cos(a) * (r + 0.7), 0, c.Y + math.sin(a) * (r + 0.7))
@@ -542,13 +540,11 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 			local rimFrame = facing(p, Vector3.new(-math.sin(a), 0, math.cos(a))) * CFrame.Angles(0, rng:range(-0.15, 0.15), rng:range(-0.08, 0.08))
 			block(m, rimFrame * CFrame.new(0, h / 2 - 0.2, 0), Vector3.new(rng:range(1.8, 2.6), h, arc * rng:range(1.15, 1.4)), Geo.vary(if k % 3 == 0 then CRUST_LIGHT else CRUST, rng, 0.05), nil, BUMP)
 		end
-		-- glowing cracks running out over the ground
-		for _ = 1, 2 do
-			local a = rng:range(0, math.pi * 2)
-			local len = rng:range(3, 6)
-			local d = r + 0.5 + len / 2
-			block(m, CFrame.new(c.X + math.cos(a) * d, 0.02, c.Y + math.sin(a) * d) * CFrame.Angles(0, -a + rng:range(-0.25, 0.25), 0), Vector3.new(len, 0.1, 0.24), LAVA, NEON, GLOW)
-		end
+		-- a glowing crack running out over the ground
+		local crackA = rng:range(0, math.pi * 2)
+		local crackLen = rng:range(3, 6)
+		local crackD = r + 0.5 + crackLen / 2
+		block(m, CFrame.new(c.X + math.cos(crackA) * crackD, 0.02, c.Y + math.sin(crackA) * crackD) * CFrame.Angles(0, -crackA + rng:range(-0.25, 0.25), 0), Vector3.new(crackLen, 0.1, 0.24), LAVA, NEON, GLOW)
 		lamp(m, Vector3.new(c.X, 3.5, c.Y), rgb(255, 132, 50), r * 3.6 + 6, if index == 1 then 2 else 1.6)
 		return disc
 	end
@@ -593,13 +589,13 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 			end
 			return main
 		end
-		sheet(FALL_TOP, ledgeY, wallZ + 2.2, 5.4, 2)
-		sheet(ledgeY - 0.4, 5, wallZ + 4.2, 6.6, 2)
-		sheet(5.4, 0.3, wallZ + 4.5, 8.2, 1)
+		sheet(FALL_TOP, ledgeY, wallZ + 2.2, 5.4, 1)
+		sheet(ledgeY - 0.4, 5, wallZ + 4.2, 6.6, 1)
+		sheet(5.4, 0.3, wallZ + 4.5, 8.2, 0)
 		-- splash at the foot
 		local splash = block(fall, CFrame.new(FALL_X, 0.55, wallZ + 5.6), Vector3.new(7, 0.5, 3), LAVA_HOT, NEON, GLOW)
 		splash.Name = "Splash"
-		for k = 1, 5 do
+		for k = 2, 4 do
 			local sz = rng:range(0.9, 1.6)
 			block(fall, CFrame.new(FALL_X + (k - 3) * 1.6, 0.7 + sz * 0.3, wallZ + 5.6 + rng:range(-1, 1)) * Geo.randomTilt(rng, 0.6), Vector3.new(sz, sz * 0.7, sz), if k % 2 == 0 then LAVA_HOT else LAVA, NEON, GLOW)
 		end
@@ -611,17 +607,18 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 
 	local walls = group("Walls")
 	local veinRng = Rng.new(2203)
-	local function wallRun(from: Vector3, to: Vector3, face: Vector3, height: number)
-		MineKit.wall(walls, pt(from.X, 0, from.Z), pt(to.X, 0, to.Z), height, dir(face.X, 0, face.Z), WALL_COLORS, rng, { Depth = 5, Glow = VEIN })
+	local function wallRun(from: Vector3, to: Vector3, face: Vector3, height: number, step: number)
+		MineKit.wall(walls, pt(from.X, 0, from.Z), pt(to.X, 0, to.Z), height, dir(face.X, 0, face.Z), WALL_COLORS, rng, { Depth = 5, Glow = VEIN, Step = step })
 	end
+	local BEHIND_COLUMNS, FRONT_WALL = 14, 10 -- shard spacing (MineKit.wall's default is 5)
 	-- side walls: split where the river runs into its tunnels
 	for _, s in { -1, 1 } do
 		local x = s * WALL_X
 		local zc = riverZ(x)
 		local gap0, gap1 = zc + RIVER_HW + 1.5, zc - RIVER_HW - 1.5
 		local face = Vector3.new(-s, 0, 0)
-		wallRun(Vector3.new(x, 0, HALF_Z), Vector3.new(x, 0, gap0), face, ROOF - 1)
-		wallRun(Vector3.new(x, 0, gap1), Vector3.new(x, 0, -HALF_Z), face, ROOF - 1)
+		wallRun(Vector3.new(x, 0, HALF_Z), Vector3.new(x, 0, gap0), face, ROOF - 1, BEHIND_COLUMNS)
+		wallRun(Vector3.new(x, 0, gap1), Vector3.new(x, 0, -HALF_Z), face, ROOF - 1, BEHIND_COLUMNS)
 		-- the tunnel mouth: a crusty lintel beam (columns stand on it), rock behind, glowing underside
 		block(walls, CFrame.new(x + s * 3.5, (8 + ROOF) / 2, zc), Vector3.new(4, ROOF - 8, gap0 - gap1 + 2), BASALT_DARK, nil, BUMP)
 		block(walls, CFrame.new(COL_X * s, 6.8, zc), Vector3.new(7, 1.4, gap0 - gap1 + 3), CRUST, nil, BUMP)
@@ -629,12 +626,12 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		lamp(walls, Vector3.new(x - s * 4, 4, zc), rgb(255, 128, 48), 30, 1.6)
 	end
 	-- back wall: split at the way down to floor 3, a lintel over it
-	wallRun(Vector3.new(-HALF_X, 0, WALL_BACK), Vector3.new(-BACK_OPENING - 2.5, 0, WALL_BACK), Vector3.new(0, 0, 1), ROOF - 1)
-	wallRun(Vector3.new(BACK_OPENING + 2.5, 0, WALL_BACK), Vector3.new(HALF_X, 0, WALL_BACK), Vector3.new(0, 0, 1), ROOF - 1)
+	wallRun(Vector3.new(-HALF_X, 0, WALL_BACK), Vector3.new(-BACK_OPENING - 2.5, 0, WALL_BACK), Vector3.new(0, 0, 1), ROOF - 1, BEHIND_COLUMNS)
+	wallRun(Vector3.new(BACK_OPENING + 2.5, 0, WALL_BACK), Vector3.new(HALF_X, 0, WALL_BACK), Vector3.new(0, 0, 1), ROOF - 1, BEHIND_COLUMNS)
 	block(walls, CFrame.new(0, (DOOR_H + ROOF) / 2, (WALL_BACK - HALF_Z - 2) / 2), Vector3.new(BACK_OPENING * 2 + 5, ROOF - DOOR_H, HALF_Z + 2 + WALL_BACK), BASALT_DARK, nil, BUMP)
 	if not cutaway then
-		wallRun(Vector3.new(HALF_X, 0, WALL_FRONT), Vector3.new(OPENING + 1.5, 0, WALL_FRONT), Vector3.new(0, 0, -1), ROOF - 1)
-		wallRun(Vector3.new(-OPENING - 1.5, 0, WALL_FRONT), Vector3.new(-HALF_X, 0, WALL_FRONT), Vector3.new(0, 0, -1), ROOF - 1)
+		wallRun(Vector3.new(HALF_X, 0, WALL_FRONT), Vector3.new(OPENING + 1.5, 0, WALL_FRONT), Vector3.new(0, 0, -1), ROOF - 1, FRONT_WALL)
+		wallRun(Vector3.new(-OPENING - 1.5, 0, WALL_FRONT), Vector3.new(-HALF_X, 0, WALL_FRONT), Vector3.new(0, 0, -1), ROOF - 1, FRONT_WALL)
 		-- rock over the way in
 		block(walls, CFrame.new(0, (DOOR_H + ROOF) / 2, WALL_FRONT + 2), Vector3.new(OPENING * 2 + 4, ROOF - DOOR_H, 4), BASALT_DARK, nil, BUMP)
 	end
@@ -668,8 +665,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	Style.sign(walls, origin * CFrame.new(0, DOOR_H + 2.2, doorZ + 0.6) * CFrame.Angles(0, math.pi, 0), "DEEP HOLLOW", 9, 2, { Kind = "Stone", Depth = 0.4 })
 	lamp(walls, Vector3.new(0, 9, doorZ + 3), rgb(255, 170, 90), 22, 1.2)
 
-	-- basalt column rows in front of the rock walls: a tall back row, a stepped
-	-- front row and a few knee-high stools, glowing zig-zag veins on the columns
+	-- basalt column rows in front of the rock walls: a tall back row and a stepped
+	-- front row, glowing zig-zag veins on the columns
 	local columns = group("BasaltColumns")
 	local function columnRow(a: Vector2, b: Vector2, inward: Vector2, skip: (p: Vector2) -> boolean, frontRow: (p: Vector2) -> boolean, deepBonus: boolean, raise: ((p: Vector2) -> number)?)
 		local along = b - a
@@ -677,7 +674,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		local d2 = along.Unit
 		local t = 0
 		while t < len do
-			local width = rng:range(4.8, 6.6)
+			local width = rng:range(5.9, 7.7)
 			local p = a + d2 * t + inward * rng:range(-0.4, 0.4)
 			t += width * 0.88
 			if not skip(p) then
@@ -687,7 +684,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 				local frame = facing(flat(p, baseY), Vector3.new(inward.X, 0, inward.Y)) * CFrame.Angles(0, rng:range(-0.12, 0.12), 0)
 				local shade = Geo.vary(if rng:chance(0.3) then BASALT_LIGHT:Lerp(BASALT, 0.5) else BASALT, rng, 0.06)
 				hexColumn(columns, frame, width, h, shade, BUMP)
-				if veinRng:chance(if deep or p.Y < -30 then 0.55 else 0.28) then
+				-- (the side columns by the way in, beside and behind the arriving players, get fewer)
+				if veinRng:chance(if deep or p.Y < -30 then 0.55 elseif p.Y < 10 then 0.28 else 0.12) then
 					columnVein(columns, frame, width, h, if veinRng:chance(0.2) then GOLD else VEIN, veinRng)
 				end
 				if veinRng:chance(0.1) then
@@ -702,17 +700,12 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 				-- stepped front row
 				local p2 = p + inward * width * 0.82 + d2 * rng:range(-1, 1)
 				local w2 = width * rng:range(0.72, 0.95)
-				if frontRow(p2) and rng:chance(0.5) and free(p2, w2 / SQRT3) then
+				if frontRow(p2) and rng:chance(0.35) and free(p2, w2 / SQRT3) then
 					local h2 = rng:range(3, 11)
 					local f2 = facing(flat(p2, 0), Vector3.new(inward.X, 0, inward.Y)) * CFrame.Angles(0, rng:range(-0.15, 0.15), 0)
 					hexColumn(columns, f2, w2, h2, Geo.vary(BASALT_LIGHT:Lerp(BASALT, 0.35), rng, 0.06), BUMP)
-					if veinRng:chance(0.2) then
+					if veinRng:chance(0.1) then
 						columnVein(columns, f2, w2, h2, VEIN, veinRng)
-					end
-					local p3 = p2 + inward * w2 * 0.78 + d2 * rng:range(-0.8, 0.8)
-					local w3 = w2 * rng:range(0.7, 0.9)
-					if rng:chance(0.2) and free(p3, w3 / SQRT3) then
-						hexColumn(columns, facing(flat(p3, 0), Vector3.new(inward.X, 0, inward.Y)), w3, rng:range(0.8, 2.6), Geo.vary(BASALT_LIGHT, rng, 0.05), BUMP)
 					end
 				end
 			end
@@ -734,9 +727,11 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	end, function(p: Vector2): boolean
 		return math.abs(p.X) > 40 and math.abs(p.X - FALL_X) > 10
 	end, true)
-	-- frame the lava fall with two tall columns
+	-- frame the lava fall with two tall veined columns
 	for _, s in { -1, 1 } do
-		hexColumn(columns, facing(Vector3.new(FALL_X + s * 7.5, 0, COL_BACK + 0.5), Vector3.new(0, 0, 1)), 5, ROOF - 0.4, BASALT_DARK, BUMP)
+		local frame = facing(Vector3.new(FALL_X + s * 7.5, 0, COL_BACK + 0.5), Vector3.new(0, 0, 1))
+		hexColumn(columns, frame, 5, ROOF - 0.4, BASALT_DARK, BUMP)
+		columnVein(columns, frame, 5, ROOF - 0.4, if s < 0 then GOLD else VEIN, veinRng)
 	end
 	-- and the river tunnels
 	for _, s in { -1, 1 } do
@@ -753,7 +748,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	local zMin = -HALF_Z - 2
 	local zMax = if cutaway then 0 else HALF_Z + 2
 	block(ceiling, CFrame.new(0, (CEIL + ROOF) / 2, (zMin + zMax) / 2), Vector3.new(HALF_X * 2 + 4, ROOF - CEIL, zMax - zMin), BASALT_DARK, nil, BUMP)
-	local chunks = if cutaway then 10 else 12
+	local chunks = if cutaway then 7 else 8
 	for k = 1, chunks do
 		local x = rng:range(-54, 54)
 		local edge = k <= 6 and cutaway
@@ -762,9 +757,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		block(ceiling, CFrame.new(x, CEIL - h / 2 + 0.4, z) * CFrame.Angles(0, rng:range(0, math.pi), 0), Vector3.new(rng:range(8, 15), h, rng:range(7, 12)), Geo.vary(BASALT, rng, 0.05), nil, DECOR)
 	end
 	local zSpan = zMax - zMin - 10
-	MineKit.stalactites(ceiling, pt(0, CEIL + 0.3, (zMin + zMax) / 2), Vector2.new(HALF_X * 2 - 16, zSpan), WALL_COLORS, rng, if cutaway then 18 else 24)
+	MineKit.stalactites(ceiling, pt(0, CEIL + 0.3, (zMin + zMax) / 2), Vector2.new(HALF_X * 2 - 16, zSpan), WALL_COLORS, rng, if cutaway then 5 else 6)
 	-- glowing cracks across the ceiling (the deep half is hotter)
-	for _ = 1, 4 do
+	for _ = 1, 2 do
 		local x = rng:range(-48, 48)
 		local z = rng:range(-48, -6)
 		local yaw = rng:range(0, math.pi)
@@ -796,24 +791,16 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 		MineKit.crystals(crystals, root, count, height, "Tipped", colors, seed)
 	end
 	-- front corners and side walls (small)
-	cluster(Vector3.new(-55, 0, 48), Vector3.new(0.35, 1, -0.3), 5, 4.2, orange, 21)
-	cluster(Vector3.new(56, 0, 51), Vector3.new(-0.35, 1, -0.3), 5, 4.2, ruby, 22)
-	cluster(Vector3.new(-53.5, 0, 15), Vector3.new(0.5, 1, 0), 4, 4, orange, 23)
-	cluster(Vector3.new(54, 0, 12), Vector3.new(-0.5, 1, 0), 4, 4.2, ruby, 24)
-	-- deep: big corner clusters, the back wall, side walls, out of the wall, from the ceiling
-	cluster(Vector3.new(-53, 0, -47), Vector3.new(0.4, 1, 0.4), 7, 8.5, ruby, 25)
-	cluster(Vector3.new(54, 0, -47), Vector3.new(-0.4, 1, 0.4), 7, 8, orange, 26)
-	cluster(Vector3.new(-22, 0, -49), Vector3.new(0, 1, 0.45), 6, 6, ruby, 27)
-	cluster(Vector3.new(22, 0, -49), Vector3.new(0.1, 1, 0.45), 5, 5, orange, 28)
-	cluster(Vector3.new(-54, 0, -35), Vector3.new(0.5, 1, 0), 5, 5.5, orange, 29)
-	cluster(Vector3.new(55, 0, -23), Vector3.new(-0.5, 1, 0), 5, 5.5, ruby, 30)
-	for k, ledge in { Vector3.new(-30, 12, -48.6), Vector3.new(21, 15, -48.6) } do
-		-- a rock ledge sticking out of the back wall with crystals on it
-		block(crystals, CFrame.new(ledge.X, ledge.Y - 0.6, ledge.Z - 1.2), Vector3.new(5.5, 1.4, 5), BASALT_DARK, nil, DECOR)
-		block(crystals, CFrame.new(ledge.X, ledge.Y - 2, ledge.Z - 2.2) * CFrame.Angles(math.rad(35), 0, 0), Vector3.new(4, 2.4, 3), BASALT, nil, DECOR)
-		cluster(ledge + Vector3.new(0, -0.1, 0.2), Vector3.new(0, 1, 0.35), 5, 4, if k == 1 then orange else ruby, 30 + k)
-	end
-	cluster(Vector3.new(-24, CEIL + 0.4, -28), Vector3.new(0.1, -1, 0), 5, 3.5, orange, 33)
+	-- (the front corners' clusters, the back-wall ledges and the ceiling's are left out: part budget)
+	cluster(Vector3.new(-53.5, 0, 15), Vector3.new(0.5, 1, 0), 3, 4, orange, 23)
+	cluster(Vector3.new(54, 0, 12), Vector3.new(-0.5, 1, 0), 3, 4.2, ruby, 24)
+	-- deep: big corner clusters, the back wall, side walls, out of the wall
+	cluster(Vector3.new(-53, 0, -47), Vector3.new(0.4, 1, 0.4), 5, 8.5, ruby, 25)
+	cluster(Vector3.new(54, 0, -47), Vector3.new(-0.4, 1, 0.4), 5, 8, orange, 26)
+	cluster(Vector3.new(-22, 0, -49), Vector3.new(0, 1, 0.45), 4, 6, ruby, 27)
+	cluster(Vector3.new(22, 0, -49), Vector3.new(0.1, 1, 0.45), 3, 5, orange, 28)
+	cluster(Vector3.new(-54, 0, -35), Vector3.new(0.5, 1, 0), 3, 5.5, orange, 29)
+	cluster(Vector3.new(55, 0, -23), Vector3.new(-0.5, 1, 0), 3, 5.5, ruby, 30)
 	lamp(crystals, Vector3.new(-50, 5, -44), rgb(255, 70, 90), 26, 1.5)
 	lamp(crystals, Vector3.new(51, 5, -44), rgb(255, 120, 50), 26, 1.5)
 
@@ -857,10 +844,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	block(props, CFrame.new(18.4, 0.8, 47.5), Vector3.new(1.2, 1.6, 4.4), Style.C.WoodDark, nil, BUMP)
 	-- crates and barrels by the elevator, a few by the lift
 	Style.crate(props, origin * CFrame.new(-40, 0, 48), rng, 2.6)
-	Style.crate(props, origin * CFrame.new(-40, 2.6, 48), rng, 2)
 	Style.crate(props, origin * CFrame.new(-43, 0, 47), rng, 2.2)
 	Style.barrel(props, pt(-36.5, 0, 49.5), rng)
-	Style.barrel(props, pt(-46, 0, 49), rng)
 	Style.crate(props, origin * CFrame.new(53, 0, 33), rng, 2.4)
 	Style.barrel(props, pt(54, 0, 29.5), rng)
 	-- the cave's name board facing the arrivals
@@ -870,22 +855,6 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 			block(props, CFrame.new(15.5 + s * 3.2, 2.2, 44), Vector3.new(0.6, 4.4, 0.6), Style.C.WoodDark, nil, BUMP)
 		end
 		Style.sign(props, origin * boardAt * CFrame.Angles(0, math.pi, 0), "EMBER CAVES", 7, 1.8, { Kind = "Wood", DoubleSided = true })
-	end
-	-- loose basalt boulders in the open corners
-	for _ = 1, 4 do
-		local p = Vector2.new(rng:range(-52, 52), rng:range(-46, 46))
-		if math.abs(p.Y - riverZ(p.X)) > RIVER_HW + 4 and free(p, 3.2) and math.abs(p.X) > 8 then
-			local inPool = false
-			for _, pool in POOLS do
-				if (pool.C - p).Magnitude < pool.R + 4 then
-					inPool = true
-				end
-			end
-			if not inPool then
-				hexColumn(props, facing(flat(p, 0), Vector3.new(rng:range(-1, 1), 0, 1)), rng:range(1.8, 2.8), rng:range(0.8, 2.2), Geo.vary(BASALT_LIGHT, rng, 0.05), BUMP)
-				keep(p, 2)
-			end
-		end
 	end
 
 	------------------------------------------------------------ spawns and markers

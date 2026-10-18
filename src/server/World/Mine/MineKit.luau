@@ -25,7 +25,7 @@
 	  The model holds: Folder "RockSpawns" (parts named "RockSpawn", attribute Deep),
 	  a part "GiantSpawn", a part "Entrance" (where players arrive), the elevator
 	  stop, the ore lift and a blaster gate. Budgets in the game build: <= 2500
-	  parts without rocks (floors 1-3: <= 1800), <= 24 PointLights.
+	  parts without rocks (floors 1-3: <= 1250), <= 24 PointLights.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -41,7 +41,7 @@ local Railway = require(World:WaitForChild("Railway"))
 local MineKit = {}
 
 MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-5 stream on their own, far from the town)
-MineKit.NearPartBudget = 1800 -- floors 1-3 stream in with the town: keep them light for phones
+MineKit.NearPartBudget = 1250 -- floors 1-3 stream in with the town (the quarry rim on phones): keep them light
 MineKit.LightBudget = 24
 
 local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
