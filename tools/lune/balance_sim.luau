@@ -95,6 +95,15 @@ local A = {
 	StopTime = nil :: number?, -- ...or after this many seconds
 	ShopEvery = 30, -- seconds between machine / upgrade shopping decisions
 	CalibratePlayers = 24, -- players per calibration run
+	-- price / design options (override files; nil = today's config)
+	MachinePrices = nil :: { [string]: number }?, -- machine id -> price instead of MachineData's
+	EnchantCoinMult = nil :: { [string]: number }?, -- enchant rarity -> multiplier on the coin prices
+	HexaForgeShare = nil :: number?, -- Hexa Lucky's coin offer: share of the next forge
+	TrainCapacityExtra = nil :: { { Value: number, Price: number } }?, -- train capacity levels after the config's last
+	TrainSpeedExtra = nil :: { { Value: number, Price: number } }?, -- train trip seconds levels after the config's last
+	MachineUpgrades = false, -- buy the Tech shop's Speed / Quality upgrades (Auto Cleaner, Crusher)
+	UpgradePriceMult = nil :: { [string]: number }?, -- "Speed" / "Quality" -> multiplier on the upgrade prices
+	ExtraFloor = nil :: { Gate: number, Elevator: boolean, LegendaryShare: number }?, -- a floor between 4 and 5
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
 	IncomeMult = 1, -- podium income and every sale
 	DamageMult = 1, -- blaster damage
@@ -178,10 +187,12 @@ local function combined(ores: { { ore: any, w: number } }, crystal: { { ore: any
 end
 
 local function buildFloors()
+	table.clear(floors)
 	for i = 1, 5 do
 		local ores, crystal = tableOf(i), crystalTable(i)
 		floors[i] = {
 			Index = i,
+			Name = "Floor " .. i,
 			Gate = A.FloorGates[i],
 			Elevator = A.FloorElevator[i],
 			Ores = ores,
@@ -192,6 +203,31 @@ local function buildFloors()
 			-- HP: the floor's weakest allowed (rusty) blaster needs RockSeconds
 			HP = BlasterData.damage(A.FloorGates[i], "") * A.RockSeconds,
 		}
+	end
+	-- option: a floor between 4 and 5 (the best Epic ores mixed with the
+	-- cheapest Legendary ones; its crystal rocks roll Legendary)
+	local extra = A.ExtraFloor
+	if extra then
+		local ores = {}
+		local epic, legendary = byRarity[4] or {}, byRarity[5] or {}
+		for i = math.max(1, #epic - 2), #epic do
+			table.insert(ores, { ore = epic[i], w = (1 - extra.LegendaryShare) / 3 })
+		end
+		for i = 1, math.min(3, #legendary) do
+			table.insert(ores, { ore = legendary[i], w = extra.LegendaryShare / 3 })
+		end
+		local crystal = tableOf(5)
+		table.insert(floors, 5, {
+			Index = 4.5,
+			Name = "Floor 4.5",
+			Gate = extra.Gate,
+			Elevator = extra.Elevator,
+			Ores = ores,
+			Crystal = crystal,
+			Odds = combined(ores, crystal),
+			ArtifactZone = "DeepHollow",
+			HP = BlasterData.damage(extra.Gate, "") * A.RockSeconds,
+		})
 	end
 end
 
@@ -277,6 +313,38 @@ local GENERATORS = {
 	{ Id = "FusionReactor", Out = MachineData.ById.FusionReactor.PowerOut, Price = MachineData.ById.FusionReactor.Price },
 }
 
+local function machinePrice(id: string): number
+	return (A.MachinePrices and A.MachinePrices[id]) or MachineData.ById[id].Price
+end
+
+local function enchantCoins(enchant: any, tier: number): number?
+	local coins = EnchantConfig.nextPrice(enchant.Id, tier)
+	local mult = A.EnchantCoinMult and A.EnchantCoinMult[enchant.Rarity]
+	return if coins and mult then coins * mult else coins
+end
+
+-- Train levels: the config's list plus the option's extra levels.
+local function trainList(list: { any }, extra: { any }?): { any }
+	if not extra then
+		return list
+	end
+	local out = table.clone(list)
+	for _, level in extra do
+		table.insert(out, level)
+	end
+	return out
+end
+
+local function trainCapacity(level: number): number
+	local list = trainList(TrainConfig.Capacity, A.TrainCapacityExtra)
+	return list[math.clamp(level + 1, 1, #list)].Value
+end
+
+local function trainTrip(level: number): number
+	local list = trainList(TrainConfig.Speed, A.TrainSpeedExtra)
+	return list[math.clamp(level + 1, 1, #list)].Value
+end
+
 local function newPlayer(): any
 	return {
 		Coins = 0,
@@ -291,6 +359,7 @@ local function newPlayer(): any
 		Cleaners = 0,
 		Crusher = false,
 		Extractor = false,
+		Upgrades = { CleanerSpeed = 0, CleanerQuality = 0, CrusherSpeed = 0 }, -- Tech shop levels (MachineUpgrades)
 		Furnaces = { "ClayFurnace" }, -- the starter kit
 		PowerOut = 0,
 		PowerDemand = 0,
@@ -317,6 +386,7 @@ end
 local function clonePlayer(p: any): any
 	local q = table.clone(p)
 	q.Furnaces = table.clone(p.Furnaces)
+	q.Upgrades = table.clone(p.Upgrades)
 	q.Gear = table.clone(p.Gear)
 	q.Enchants = { Owned = table.clone(p.Enchants.Owned), Slots = table.clone(p.Enchants.Slots) }
 	q.Golems = { Owned = table.clone(p.Golems.Owned), Equipped = table.clone(p.Golems.Equipped), NextId = p.Golems.NextId }
@@ -417,8 +487,8 @@ local function flow(p: any): (number, number, any, number)
 	local rockTime = breakTime + A.RockWalk * walkMult(p)
 	local perRock = A.OresPerRock * (1 + (stats.TwinDropChance or 0))
 	local perOre = (rockTime / perRock + A.DropWalk * walkMult(p) / ToolData.carryCapacity(p.Carry, false)) / A.Efficiency
-	local cap = TrainConfig.capacity(p.TrainCap, false)
-	local trainRate = cap / (TrainConfig.tripSeconds(p.TrainSpeed, false) + TrainConfig.ReturnSeconds + A.TrainLoad)
+	local cap = trainCapacity(p.TrainCap)
+	local trainRate = cap / (trainTrip(p.TrainSpeed) + TrainConfig.ReturnSeconds + A.TrainLoad)
 	if p.Cleaners == 0 then
 		local trip = if p.Elevator then 8 else A.CleanTrip
 		local handPerOre = perOre + (A.HandClean + trip / A.CleanBatch) / A.Efficiency
@@ -426,7 +496,8 @@ local function flow(p: any): (number, number, any, number)
 		return rate, 0, floor, rate / perRock
 	end
 	local delivered = math.min(1 / perOre, trainRate)
-	local cleanRate = p.Cleaners * A.CleanSpeedMult / MachineData.ById.AutoCleaner.Time
+	local cleanTime = MachineData.ById.AutoCleaner.Time * MachineData.speedMult(p.Upgrades.CleanerSpeed)
+	local cleanRate = p.Cleaners * A.CleanSpeedMult / cleanTime
 	local cleaned = math.min(delivered, cleanRate)
 	return cleaned, delivered - cleaned, floor, delivered / perRock
 end
@@ -436,7 +507,7 @@ local function crushRate(p: any, cleaned: number): number
 	if not p.Crusher then
 		return 0
 	end
-	return math.min(cleaned, 1 / MachineData.ById.Crusher.Time) * 2
+	return math.min(cleaned, 1 / (MachineData.ById.Crusher.Time * MachineData.speedMult(p.Upgrades.CrusherSpeed))) * 2
 end
 
 local function shardRate(p: any, cleaned: number): number
@@ -451,11 +522,13 @@ end
 -- Coins per second from selling (expected), given the cleaned flow.
 local function saleRate(p: any, cleaned: number, raw: number, floor: any): number
 	local value = meanValue(floor, luckOf(p))
-	local grade = if p.Cleaners > 0 then meanGradeMult(MachineData.gradeOdds(0)) else meanGradeMult(A.HandGrades)
+	local grade = if p.Cleaners > 0
+		then meanGradeMult(MachineData.gradeOdds(p.Upgrades.CleanerQuality))
+		else meanGradeMult(A.HandGrades)
 	local f = furnaceRate(p)
 	local perClean: number
 	if p.Crusher then
-		local crushIn = math.min(cleaned, 1 / MachineData.ById.Crusher.Time)
+		local crushIn = math.min(cleaned, 1 / (MachineData.ById.Crusher.Time * MachineData.speedMult(p.Upgrades.CrusherSpeed)))
 		local crushed = crushIn * 2
 		local ingots = math.min(crushed, f)
 		local total = ingots * 1.25 + (crushed - ingots) * 0.75 + (cleaned - crushIn) * 1.0
@@ -639,7 +712,7 @@ local function candidates(p: any): { any }
 			end,
 		})
 	end
-	local cap = TrainConfig.Capacity[p.TrainCap + 2]
+	local cap = trainList(TrainConfig.Capacity, A.TrainCapacityExtra)[p.TrainCap + 2]
 	if cap then
 		table.insert(list, {
 			Name = "Train capacity " .. cap.Value,
@@ -649,7 +722,7 @@ local function candidates(p: any): { any }
 			end,
 		})
 	end
-	local speed = TrainConfig.Speed[p.TrainSpeed + 2]
+	local speed = trainList(TrainConfig.Speed, A.TrainSpeedExtra)[p.TrainSpeed + 2]
 	if speed then
 		table.insert(list, {
 			Name = "Train speed " .. speed.Value .. " s",
@@ -662,16 +735,39 @@ local function candidates(p: any): { any }
 	if p.Cleaners < A.MaxCleaners then
 		table.insert(list, {
 			Name = "Auto Cleaner #" .. (p.Cleaners + 1),
-			Price = MachineData.ById.AutoCleaner.Price,
+			Price = machinePrice("AutoCleaner"),
 			Apply = function(q)
 				q.Cleaners += 1
 			end,
 		})
 	end
+	-- the Tech shop's type upgrades (option MachineUpgrades)
+	if A.MachineUpgrades then
+		for _, up in {
+			{ Key = "CleanerSpeed", Machine = "AutoCleaner", Kind = "Speed", Needs = p.Cleaners > 0 },
+			{ Key = "CleanerQuality", Machine = "AutoCleaner", Kind = "Quality", Needs = p.Cleaners > 0 },
+			{ Key = "CrusherSpeed", Machine = "Crusher", Kind = "Speed", Needs = p.Crusher },
+		} do
+			local prices = MachineData.upgradePrices(up.Machine, up.Kind)
+			local mult = (A.UpgradePriceMult and A.UpgradePriceMult[up.Kind]) or 1
+			local price = prices and prices[p.Upgrades[up.Key] + 1]
+			price = if price then price * mult else nil
+			if up.Needs and price then
+				table.insert(list, {
+					Name = up.Machine .. " " .. up.Kind .. " " .. (p.Upgrades[up.Key] + 1),
+					Price = price,
+					Cat = "Upgrades",
+					Apply = function(q)
+						q.Upgrades[up.Key] += 1
+					end,
+				})
+			end
+		end
+	end
 	if not p.Crusher then
 		table.insert(list, {
 			Name = "Crusher",
-			Price = MachineData.ById.Crusher.Price,
+			Price = machinePrice("Crusher"),
 			Apply = function(q)
 				q.Crusher = true
 			end,
@@ -683,7 +779,7 @@ local function candidates(p: any): { any }
 				local extra, out = powerCost(p, f.Power)
 				table.insert(list, {
 					Name = f.Id .. (if extra > 0 then " + power" else ""),
-					Price = MachineData.ById[f.Id].Price + extra,
+					Price = machinePrice(f.Id) + extra,
 					Apply = function(q)
 						table.insert(q.Furnaces, f.Id)
 						q.PowerDemand += f.Power
@@ -720,7 +816,7 @@ local function candidates(p: any): { any }
 	-- coin enchants that change the income (the comfort ones: comfortItems)
 	for _, enchant in EnchantConfig.List do
 		local tier = EnchantConfig.tierOf(p.Enchants, enchant.Id)
-		local coins = EnchantConfig.nextPrice(enchant.Id, tier)
+		local coins = enchantCoins(enchant, tier)
 		if coins and not enchant.Product and coins <= budget then
 			table.insert(list, {
 				Name = enchant.Name .. " " .. EnchantConfig.TierNames[tier + 1],
@@ -786,7 +882,7 @@ local function comfortItems(p: any): { any }
 	end
 	for _, id in { "Reach", "Magnetism", "Prospector" } do
 		local tier = EnchantConfig.tierOf(p.Enchants, id)
-		local coins = EnchantConfig.nextPrice(id, tier)
+		local coins = enchantCoins(EnchantConfig.ById[id], tier)
 		if coins then
 			table.insert(list, {
 				Name = EnchantConfig.ById[id].Name .. " " .. EnchantConfig.TierNames[tier + 1],
@@ -803,7 +899,7 @@ local function comfortItems(p: any): { any }
 		local extra, out = powerCost(p, extractor.Power or 0)
 		table.insert(list, {
 			Name = "Crystal Extractor" .. (if extra > 0 then " + power" else ""),
-			Price = extractor.Price + extra,
+			Price = machinePrice("CrystalExtractor") + extra,
 			Apply = function(q)
 				q.Extractor = true
 				q.PowerDemand += extractor.Power or 0
@@ -958,7 +1054,8 @@ local function hexaLucky(p: any, floor: any, coinsNeeded: number, reserve: numbe
 		local top = BlasterData.MaxLevel
 		forge = (A.BlasterCoins and A.BlasterCoins[top]) or BlasterData.ByLevel[top].Recipe.Coins
 	end
-	local price = math.max(offer.MinPrice or 0, math.floor(forge * (offer.ForgeShare or 0) + 0.5))
+	local share = A.HexaForgeShare or offer.ForgeShare or 0
+	local price = math.max(offer.MinPrice or 0, math.floor(forge * share + 0.5))
 	if p.Coins - reserve < price then
 		return
 	end
@@ -1024,7 +1121,7 @@ local function simulate(seed: number, start: any?): any
 		while p.Pending >= 1 do
 			p.Pending -= 1
 			local ore = drawOre(rng, floor, luck)
-			local grade = drawGrade(rng, if p.Cleaners > 0 then MachineData.gradeOdds(0) else A.HandGrades)
+			local grade = drawGrade(rng, if p.Cleaners > 0 then MachineData.gradeOdds(p.Upgrades.CleanerQuality) else A.HandGrades)
 			local income = ore.Income * ItemData.gradeMult(grade)
 			mark(p, "First podium filled", t)
 			if #p.Podium < A.Podiums then
@@ -1134,9 +1231,9 @@ local function simulate(seed: number, start: any?): any
 			-- 6) Hexa Lucky top-ups
 			hexaLucky(p, floor, coinsNeeded, reserve, t)
 		end
-		for i, floor2 in floors do
+		for _, floor2 in floors do
 			if p.Blaster >= floor2.Gate and (not floor2.Elevator or p.Elevator) then
-				mark(p, "Floor " .. i, t)
+				mark(p, floor2.Name, t)
 			end
 		end
 		if t % 300 == 0 then
@@ -1442,9 +1539,9 @@ local function priceWindows(result: any): { any }
 	end
 	for _, enchant in EnchantConfig.List do
 		if not enchant.Product then
-			for tier, coins in enchant.Coins do
+			for tier in enchant.Coins do
 				row(enchant.Name .. " " .. EnchantConfig.TierNames[tier], function()
-					return coins
+					return enchantCoins(enchant, tier - 1) or 0
 				end)
 			end
 		end
@@ -1470,11 +1567,12 @@ local function priceWindows(result: any): { any }
 				local scale = if A.LevelScale then A.LevelScale[level] else CapsuleConfig.levelScale(level)
 				return math.max(offer.MinPrice or 0, capsule.Price * scale * (offer.PriceCount or 1))
 			end
-			return math.max(offer.MinPrice or 0, forgeAfter(level) * (offer.ForgeShare or 0))
+			local share = if offer.Id == "HexaLucky5" and A.HexaForgeShare then A.HexaForgeShare else offer.ForgeShare or 0
+			return math.max(offer.MinPrice or 0, forgeAfter(level) * share)
 		end)
 	end
 	row("Auto Cleaner", function()
-		return MachineData.ById.AutoCleaner.Price
+		return machinePrice("AutoCleaner")
 	end)
 	row("Elevator", function()
 		return A.ElevatorPrice or A.Elevator
@@ -1505,6 +1603,19 @@ for _, result in results do
 	)
 	for _, m in result.Milestones do
 		print(string.format("  %-34s %10s  (%3d%% reach it)", m.Key, clock(m.Median), math.floor(m.Share * 100 + 0.5)))
+	end
+	local function incomeAt(t: number): number?
+		for _, point in result.Series do
+			if point.T == t then
+				return point.Income
+			end
+		end
+		return nil
+	end
+	local i3, i5 = incomeAt(10800), incomeAt(18000)
+	if i3 and i5 and i3 > 0 then
+		result.Slope35 = i5 / i3
+		print(string.format("  3h -> 5h income: %.3g/s -> %.3g/s (x%.2f)", i3, i5, i5 / i3))
 	end
 	print("  income per second (median):")
 	for _, point in result.Series do

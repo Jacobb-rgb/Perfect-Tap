@@ -112,6 +112,25 @@ Income then: 3h15 ≈ 290K/s (blaster 7), 5h ≈ 340K/s (blaster 8: **flat from 
   levels past today's last, a 5th Auto Cleaner, machine Speed / Quality upgrades), or a floor between 4 and 5. Those
   are design calls; the sim can test any of them.
 
+### Options for the flat 3h–5h stretch (Typical, 120 players)
+All runs on the steps 6–7 proposal prices plus the agreed changes (Auto Cleaner 25K, Epic / Legendary enchant coins
+× 10, Hexa Lucky ForgeShare 0.02). Override files: `MachinePrices`, `EnchantCoinMult`, `HexaForgeShare`,
+`TrainCapacityExtra`, `TrainSpeedExtra`, `MaxCleaners`, `MachineUpgrades` (+ `UpgradePriceMult`), `ExtraFloor`.
+
+| Option | Blaster 10 | Income 3h → 5h |
+|---|---|---|
+| Base (agreed changes only) | 8h 07m | 286K → 331K/s (× 1.16) |
+| 1. More train levels (capacity 70 / 100 / 140 for 40M / 300M / 2B, trip 10 s / 8 s for 60M / 400M) | 8h 07m | × 1.16 (never bought) |
+| 2. A 5th Auto Cleaner (25K) | 8h 07m | × 1.16 (never bought) |
+| 3. Tech shop Speed / Quality upgrades at today's prices (Auto Cleaner Speed + Quality, Crusher Speed) | 5h 21m | 583K → 5.37M/s (× 9.2) |
+| 3b. The same upgrades at × 100 prices (Quality 4 = 200M lands at 4h17) | 6h 22m | 374K → 4.76M/s (× 12.7) |
+| 4. A floor between 4 and 5 (gate 8, elevator, best Epic + cheapest Legendary ores 50/50) | 6h 57m | 286K → 3.14M/s (× 11.0) |
+
+Why 1 and 2 do nothing: a typical player mines about 0.4 ores/s, while 4 Auto Cleaners clean 0.5/s and the top train
+carries 2.2/s, so neither is the bottleneck. Options 3 and 4 work because they raise the value per ore (cleaner
+grades, better ores) or open a floor in the gap. Each of them makes blaster 10 earlier, so the Foundry curve needs a
+re-calibration after the choice (`lune run tools/lune/balance_sim.luau calibrate override=<the option>.json`).
+
 ![Money and income over 10 hours](screenshots/balance_chart.png)
 
 ## What the model does
