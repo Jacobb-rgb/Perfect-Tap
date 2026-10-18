@@ -17,6 +17,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Config"):WaitForChild("UITheme"))
 local MineFloors = require(Shared:WaitForChild("Config"):WaitForChild("MineFloors"))
@@ -48,6 +49,19 @@ RockLabel.Refresh = 0.25 -- seconds between picks of the nearest rocks
 RockLabel.FocusDistance = 90 -- the aimed rock keeps its label (and note) up to here
 RockLabel.CameraSlack = 25 -- the camera sits behind the player: cull a bit later than we pick
 RockLabel.Gap = 0.8 -- studs between the rock's top and the label
+-- seconds the HP fill glides to a lower value (rock Health replicates about 3x a second)
+RockLabel.FillGlide = 0.28
+
+-- the running fill glide of each label (cancelled when the bar snaps: a pooled label, a lock, a heal)
+local glides: { [Frame]: Tween } = setmetatable({}, { __mode = "k" }) :: any
+
+local function stopGlide(fill: Frame)
+	local tween = glides[fill]
+	if tween then
+		glides[fill] = nil
+		tween:Cancel()
+	end
+end
 RockLabel.GrottoName = "Grotto Rock" -- rocks without a Floor (the VIP Grotto)
 
 local WIDTH = 220
@@ -272,21 +286,38 @@ function RockLabel.set(refs: Refs, hp: number, maxHp: number, lockedLevel: numbe
 	if shown.Hp == now and shown.Max == max and shown.Locked == locked and shown.Vip == vip then
 		return
 	end
+	local wasHp, wasLocked, wasVip = shown.Hp, shown.Locked, shown.Vip
 	shown.Hp, shown.Max, shown.Locked, shown.Vip = now, max, locked, vip
 	if vip then
 		refs.Hp.Text = "VIP"
 		refs.Hp.TextColor3 = Theme.Coin
+		stopGlide(refs.Fill)
 		refs.Fill.Size = UDim2.fromScale(1, 1)
 		refs.Fill.BackgroundColor3 = Theme.AccentDark
 	elseif locked > 0 then
 		refs.Hp.Text = "Lv " .. locked
 		refs.Hp.TextColor3 = Theme.Bad
+		stopGlide(refs.Fill)
 		refs.Fill.Size = UDim2.fromScale(1, 1)
 		refs.Fill.BackgroundColor3 = Theme.BadDark
 	else
 		refs.Hp.Text = RockLabel.hpText(now, max)
 		refs.Hp.TextColor3 = Theme.Text
-		refs.Fill.Size = UDim2.fromScale(now / max, 1)
+		local target = UDim2.fromScale(now / max, 1)
+		-- damage glides down (Health arrives in steps); a fresh label or a heal snaps
+		local glided = false
+		stopGlide(refs.Fill)
+		if wasHp >= 0 and wasLocked == 0 and not wasVip and now < wasHp and RockLabel.FillGlide > 0 then
+			glided = pcall(function()
+				local info = TweenInfo.new(RockLabel.FillGlide, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+				local tween = TweenService:Create(refs.Fill, info, { Size = target })
+				glides[refs.Fill] = tween
+				tween:Play()
+			end)
+		end
+		if not glided then
+			refs.Fill.Size = target
+		end
 		refs.Fill.BackgroundColor3 = Theme.Bad
 	end
 end
