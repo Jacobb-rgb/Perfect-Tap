@@ -513,6 +513,13 @@ return function(T, Loader)
 			seen[entry.Desc] = true
 		end
 		T.truthy(seen[a] and seen[b] and seen[c], "never lost")
+		-- dirty ore: the hand never tells which ore it is (security #6)
+		furnace.Entry.Out = { item("Raw", "Diamond") }
+		now += interval
+		tick(arm, now)
+		T.eq(#log, 4, "the raw chunk moved")
+		T.eq(attr(arm, "Holding"), "", "no ore id for dirty ore")
+		T.eq(attr(arm, "Working"), true, "but the arm shows it working")
 		-- faster with Speed
 		w.data.MachineUpgrades.RobotArm = { Speed = 3 }
 		T.near(LogisticsService.interval(arm, LogisticsService.ArmInterval), 1.5 * MachineData.speedMult(3), 1e-9, "Speed 3")

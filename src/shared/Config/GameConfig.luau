@@ -29,6 +29,7 @@ local GameConfig = {
 
 	-- Physical items (performance)
 	MaxLooseItemsPerPlayer = 30, -- loose items per player on bases (machines / chutes stop below it) and, apart, away from bases (rocks stop giving ore)
+	MaxLooseItemsTotal = 60, -- the hard ceiling of one player's loose items anywhere: hand drops, throws and Pen takes stop there
 	ServerOwnershipAfter = 3, -- seconds after a drop/throw before the server takes back item physics
 	PickupRange = 11,
 	ThrowSpeedMin = 22,

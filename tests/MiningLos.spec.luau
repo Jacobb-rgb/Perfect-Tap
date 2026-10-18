@@ -196,7 +196,7 @@ return function(T, Loader)
 		return n
 	end
 
-	withWorld("Beam LOS: a wall between the head and the rock zeroes the damage tick, no toast", function(w)
+	withWorld("Beam LOS: a wall between the head and the rock zeroes the damage tick, with one throttled toast", function(w)
 		local rock = w.rock()
 		T.truthy(w.hits(rock), "open ground: damage")
 		w.wall(Vector3.new(3.6, -1, -10), Vector3.new(4.4, 20, 10)) -- between the player (x 6) and the rock (x <= 2)
@@ -206,7 +206,14 @@ return function(T, Loader)
 			w.step()
 		end
 		T.eq(rock.Health, health, "blocked: no damage")
-		T.eq(toasts(w), 0, "and no toast")
+		T.eq(toasts(w), 1, "one toast says why (throttled per rock)")
+		local last: any = nil
+		for _, note in w.notes do
+			if note.Name == "Notify" then
+				last = note
+			end
+		end
+		T.eq(last and last.Args[1].Text, MiningService.NoSightText, "the no-sight text")
 		T.truthy(mining.target(w.player) == rock.Model, "the beam keeps its target (the client still draws it)")
 		-- the wall goes away: damage again once the cached result runs out
 		table.clear(w.walls)

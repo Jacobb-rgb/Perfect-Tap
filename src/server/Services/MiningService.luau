@@ -84,6 +84,7 @@ local HEALTH_GAP = 0.3 -- the Health attribute replicates at most ~3 times a sec
 local TOAST_GAP = 3 -- seconds between "Needs a Level N blaster" toasts for the same rock
 local CAP_TOAST_GAP = 4 -- seconds between "Pick up your ore first" toasts per player
 MiningService.CapText = "Pick up your ore first"
+MiningService.NoSightText = "No clear shot: something is in the way" -- the beam has no line of sight (BeamSight)
 local RESPAWN_CHECK = 1 -- seconds between respawn queue checks
 
 type Rock = {
@@ -565,7 +566,9 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		return
 	end
 	if MovementConfig.BeamLos and not BeamSight.canHit(player, character, root, rock.Model, now) then
-		return -- a wall between: no damage this tick
+		-- a wall between: no damage this tick, and the player learns why (throttled per rock)
+		refuse(player, shooter, rock, MiningService.NoSightText, from, now)
+		return
 	end
 	local ore = data.BlasterOre
 	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * dt

@@ -431,6 +431,29 @@ return function(T, Loader)
 		T.eq(inPen(w, GOLD), 0, "nothing to take")
 	end)
 
+	withWorld("PenService: Take never goes past the hard ceiling of loose items (items lying in the mine count)", function(w)
+		fill(w, GOLD, 4)
+		w.hands = 0
+		-- this test's items lie away from bases (the harness counts them as base items)
+		local onBase = rawget(ItemService, "onBase")
+		rawset(ItemService, "onBase", function()
+			return false
+		end)
+		local ok, err = pcall(function()
+			for i = 1, GameConfig.MaxLooseItemsTotal do
+				ItemService.spawnDesc({ K = "Raw", O = "Coal" }, USER, CFrame.new(i * 3, 5, 400), nil, true)
+			end
+			T.eq(ItemService.looseCount(USER, "Base"), 0, "none at the base")
+			T.eq(ItemService.totalRoom(USER), 0, "at the hard ceiling")
+			pen.action(w.player, "Take", { Key = GOLD, Count = 1 })
+			T.eq(inPen(w, GOLD), 4, "nothing taken onto the ground")
+		end)
+		rawset(ItemService, "onBase", onBase)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("PenService: Take refuses with full hands and too many loose items, far away or without a plot", function(w)
 		fill(w, GOLD, 4)
 		w.hands = 0

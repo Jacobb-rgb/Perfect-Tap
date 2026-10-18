@@ -684,6 +684,58 @@ return function(T, Loader)
 		T.eq(ItemService.wakeNear(USER, Vector3.zero, 100), 0, "nobody left asleep")
 	end)
 
+	withWorld("ItemService: ore left far behind or stuck in the mine goes into the pen at the cap (review)", function(w)
+		local world = roblox.Instance.new("Folder")
+		local cap = GameConfig.MaxLooseItemsPerPlayer
+		local t0 = os.clock()
+		local function spawnAt(position: any): any
+			local r = ItemService.spawnDesc(clean(), USER, CFrame.new(position))
+			r.Model.Parent = world
+			return r
+		end
+		-- the owner stands at the origin; 25 chunks lie far away in the mine, 5 wedged 20 studs off,
+		-- 1 right at the owner's feet: 31 away from bases, one over the cap
+		w.moveOwner(Vector3.new(0, 3, 0))
+		local farOnes, nearOnes = {}, {}
+		for i = 1, 25 do
+			table.insert(farOnes, spawnAt(Vector3.new(400 + i * 2, 5, 0)))
+		end
+		for i = 1, 5 do
+			table.insert(nearOnes, spawnAt(Vector3.new(20, 5, i * 2)))
+		end
+		local feet = spawnAt(Vector3.new(1, 3, 0))
+		T.truthy(ItemService.atLooseCap(USER), "at the mine's cap: rocks hold")
+		-- not long enough yet: nothing moves
+		ItemService.maintainAll(t0 + 30)
+		T.eq(ItemService.looseCount(USER, "Away"), cap + 1, "nothing rescued after 30 s")
+		-- 90 s later the far ones count as left behind: the oldest 2 go, back under the cap
+		ItemService.maintainAll(t0 + ItemService.StaleAwaySeconds + 5)
+		T.eq(ItemService.looseCount(USER, "Away"), cap - 1, "back under the cap")
+		T.falsy(ItemService.atLooseCap(USER), "rocks give ore again")
+		T.eq(farOnes[1].State, "Consumed", "the oldest went")
+		T.eq(farOnes[2].State, "Consumed")
+		T.eq(farOnes[3].State, "Loose", "only as many as needed")
+		T.eq(#w.data.Storage, 2, "into the pen, nothing lost")
+		local last = w.notes[#w.notes]
+		T.truthy(last.Payload.Text:find("2 ore you left lying in the mine", 1, true), "one toast says so")
+		-- the player walks over to the far ones: only the stuck rule is left
+		w.moveOwner(Vector3.new(420, 3, 0))
+		for i = 1, 2 do
+			table.insert(farOnes, spawnAt(Vector3.new(440 + i, 5, 0)))
+		end
+		T.truthy(ItemService.atLooseCap(USER), "at the cap again")
+		ItemService.maintainAll(t0 + ItemService.StaleAwaySeconds + 10)
+		T.truthy(ItemService.atLooseCap(USER), "everything is near the owner now: nothing rescued")
+		-- 3 minutes after they were dropped, chunks still out of grab reach count as stuck;
+		-- the very oldest one lies at the owner's feet: never taken
+		local atFeet = spawnAt(Vector3.new(421, 3, 0))
+		atFeet.CreatedAt = t0 - 1000
+		ItemService.maintainAll(t0 + ItemService.StuckSeconds + 10)
+		T.falsy(ItemService.atLooseCap(USER), "stuck ones rescued")
+		T.eq(atFeet.State, "Loose", "nothing within grab reach is ever taken")
+		T.eq(feet.State, "Loose", "the next oldest out-of-reach ones went first")
+	end)
+
 	withWorld("ItemService: one maintenance pass looks each owner up once (perf audit #10)", function(w)
 		local world = roblox.Instance.new("Folder")
 		for i = 1, 12 do

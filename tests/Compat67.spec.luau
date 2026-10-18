@@ -64,4 +64,11 @@ return function(T, Loader)
 		local players = project.tree.StarterPlayer
 		T.eq(players["$properties"].CharacterWalkSpeed, GearConfig.value("Boots", 0))
 	end)
+
+	T.test("Compat67: aim assist only locks onto rocks the head can see (BeamSight deals no damage through walls)", function()
+		local client = fs.readFile("src/client/Controllers/MiningController.luau")
+		T.truthy(client:find("if score < bestScore and canSee(eye, rock) then", 1, true), "findAssist checks the line of sight")
+		T.truthy(client:find("MovementConfig.BeamStopShort", 1, true), "stops short of the rock like the server")
+		T.truthy(client:find("MovementConfig.BeamIgnoreTag", 1, true), "BeamIgnore parts never block")
+	end)
 end

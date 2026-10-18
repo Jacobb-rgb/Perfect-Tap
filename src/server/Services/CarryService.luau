@@ -340,10 +340,24 @@ local function dropCFrame(player: Player, root: BasePart): CFrame
 end
 local dropSpot: (Player, BasePart) -> CFrame = dropCFrame
 
+CarryService.TooManyText = "Too many of your items lie around: pick some up first."
+CarryService.TooManyToastGap = 3 -- seconds between two of those toasts
+local tooManyToastAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function dropTop(player: Player, velocity: Vector3?): ItemService.ItemRecord?
 	local root = Guard.rootPart(player)
 	local list = prune(player)
 	if not root or not list or #list == 0 then
+		return nil
+	end
+	-- the hard ceiling of loose items (GameConfig.MaxLooseItemsTotal): nobody
+	-- pours a whole pen onto the map
+	if ItemService.atTotalCap(player.UserId) then
+		local now = os.clock()
+		if now - (tooManyToastAt[player] or -math.huge) >= CarryService.TooManyToastGap then
+			tooManyToastAt[player] = now
+			Net.fire("Notify", player, { Text = CarryService.TooManyText, Kind = "Deny" })
+		end
 		return nil
 	end
 	local record = table.remove(list) :: ItemService.ItemRecord
@@ -367,7 +381,8 @@ function CarryService.dropAll(player: Player)
 	for i, record in list do
 		if record.State == "Carried" then
 			detach(record)
-			if root then
+			-- at the hard ceiling of loose items they go into the pen instead
+			if root and not ItemService.atTotalCap(player.UserId) then
 				ItemService.release(record, root.CFrame * CFrame.new((i % 3 - 1) * 1.5, 1 + math.floor(i / 3), -2))
 			else
 				ItemService.stash(record, nil)
@@ -412,8 +427,8 @@ local function onThrow(player: Player, direction: any, power: any)
 		-- release may fly as fast as the throw plus half a legal run (the
 		-- anti-teleport checks still hold a spoofed run speed to that)
 		ItemService.allowSpeed(record, speed + 0.5 * Bonuses.walkSpeed(stats))
+		Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
 	end
-	Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
 end
 
 -- The Ore Magnet's catch: an item that flew to the player's feet goes into

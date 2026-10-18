@@ -28,8 +28,13 @@
 	  GameConfig.MaxLooseItemsPerPlayer items on and around bases, and
 	  MiningService doesn't let a rock give ore while that many lie away from
 	  bases (atLooseCap). A busy factory never stops your mining and ore left
-	  in the mine never stalls your factory. Nothing is ever moved into the
-	  pen behind your back. Resting items sleep in Roblox physics.
+	  in the mine never stalls your factory. One last-resort rescue: while a
+	  player is at the mine's cap, ore they left far behind (StaleAway*) or
+	  that lies stuck out of reach (StuckSeconds) goes into their pen, oldest
+	  first, with a toast, so a wedged chunk can't block mining for ever.
+	  Over everything, GameConfig.MaxLooseItemsTotal: hand drops, throws and
+	  Pen takes stop at that many loose items (atTotalCap). Resting items
+	  sleep in Roblox physics.
 	- Items that fall out of the world are put back next to their owner.
 	- Leaving players: loose and carried items go into the Ore Pen.
 	- The Ore Pen (data.Storage) holds penCapacity items. Only RESCUE moves
@@ -152,6 +157,8 @@ export type ItemRecord = {
 	CreatedAt: number, -- also reset when the item is dropped/ejected
 	ClientOwnedUntil: number?,
 	LastNearOwner: number, -- os.clock() when the item was last near its owner or a machine
+	BaseAt: Vector3?, -- where onBase was last asked for this item (looseCount's cache)
+	OnBase: boolean?, -- its answer there
 	ReleasePos: Vector3, -- where it was last spawned or released (trust and snap-back)
 	ReleasedAt: number, -- os.clock() of that release
 	-- the flat speed (studs/s) this release may plausibly reach (a strong
@@ -534,6 +541,20 @@ end
 
 export type LooseWhere = "Base" | "Away"
 
+-- Is this item on / around a base? Cached per item until it moved 2 studs
+-- (looseCount runs every machine tick pass and at every rock stage).
+local function recordOnBase(record: ItemRecord): boolean
+	local position = record.Body.CFrame.Position
+	local last = record.BaseAt
+	if last and (last - position).Magnitude < 2 then
+		return record.OnBase == true
+	end
+	local on = ItemService.onBase(position)
+	record.BaseAt = position
+	record.OnBase = on
+	return on
+end
+
 -- The player's loose items: all, or only those on / around a base ("Base":
 -- belts, chutes, the pen gate) or away from every base ("Away": mine drops).
 function ItemService.looseCount(userId: number, where: LooseWhere?): number
@@ -545,8 +566,7 @@ function ItemService.looseCount(userId: number, where: LooseWhere?): number
 				if where == nil then
 					count += 1
 				else
-					local onBase = ItemService.onBase(record.Body.CFrame.Position)
-					if onBase == (where == "Base") then
+					if recordOnBase(record) == (where == "Base") then
 						count += 1
 					end
 				end
@@ -561,6 +581,17 @@ end
 -- ore then (MiningService); items on bases don't count (the factory's own cap).
 function ItemService.atLooseCap(userId: number): boolean
 	return ItemService.looseCount(userId, "Away") >= GameConfig.MaxLooseItemsPerPlayer
+end
+
+-- Has this player as many loose items, anywhere, as the hard ceiling
+-- (GameConfig.MaxLooseItemsTotal)? Hand drops, throws and Pen takes stop.
+function ItemService.atTotalCap(userId: number): boolean
+	return ItemService.looseCount(userId) >= GameConfig.MaxLooseItemsTotal
+end
+
+-- Room for more loose items under the hard ceiling.
+function ItemService.totalRoom(userId: number): number
+	return math.max(0, GameConfig.MaxLooseItemsTotal - ItemService.looseCount(userId))
 end
 
 -- Every loose item. A copy, so callers may destroy items while walking it.
@@ -1226,10 +1257,72 @@ local function maintainOne(record: ItemRecord, now: number, root: BasePart?)
 	end
 end
 
+-- The mine cap's last resort (see the header): ore away from bases that
+-- was left behind (not near its owner for StaleAwaySeconds and further than
+-- StaleAwayStuds now) or lies stuck (StuckSeconds since it was dropped,
+-- still out of grab reach) goes into the pen, oldest first, until the
+-- player is back under the cap. Only while at the cap, every StaleCheckEvery.
+ItemService.StaleAwaySeconds = 90
+ItemService.StaleAwayStuds = 60
+ItemService.StuckSeconds = 180
+ItemService.StaleCheckEvery = 2
+local staleCheckedAt: { [number]: number } = {}
+
+local function rescueStale(owner: number, now: number, root: BasePart?)
+	if now - (staleCheckedAt[owner] or -math.huge) < ItemService.StaleCheckEvery then
+		return
+	end
+	staleCheckedAt[owner] = now
+	local set = byOwner[owner]
+	if not set then
+		return
+	end
+	local away: { ItemRecord } = {}
+	for record in set do
+		if record.State == "Loose" and not recordOnBase(record) then
+			table.insert(away, record)
+		end
+	end
+	local cap = GameConfig.MaxLooseItemsPerPlayer
+	if #away < cap then
+		return
+	end
+	local grab = GameConfig.PickupRange + 2
+	local stale: { ItemRecord } = {}
+	for _, record in away do
+		local distance = if root then (root.Position - positionOf(record)).Magnitude else math.huge
+		local leftBehind = now - record.LastNearOwner >= ItemService.StaleAwaySeconds and distance > ItemService.StaleAwayStuds
+		local stuck = now - record.CreatedAt >= ItemService.StuckSeconds and distance > grab
+		if leftBehind or stuck then
+			table.insert(stale, record)
+		end
+	end
+	if #stale == 0 then
+		return
+	end
+	table.sort(stale, function(a: ItemRecord, b: ItemRecord): boolean
+		return a.CreatedAt < b.CreatedAt
+	end)
+	local player = ownerPlayer(stale[1])
+	local moved = 0
+	for i = 1, math.min(#away - cap + 1, #stale) do
+		ItemService.stash(stale[i], nil) -- a rescue move: may overfill the pen (header)
+		moved += 1
+	end
+	if player and moved > 0 then
+		local what = if moved == 1 then "1 ore" else `{moved} ore`
+		Net.fire("Notify", player, {
+			Text = `{what} you left lying in the mine went into your Ore Pen, so your rocks give ore again.`,
+			Kind = "Info",
+		})
+	end
+end
+
 --[[
 	The maintenance pass (every 0.25 s from start; the tests call it): each
 	owner's root is looked up once, every record checked in a protected
-	call without a closure per record, old parked models dropped.
+	call without a closure per record, old parked models dropped, and the
+	mine cap's rescue (rescueStale).
 ]]
 function ItemService.maintainAll(now: number)
 	for owner, set in byOwner do
@@ -1239,6 +1332,15 @@ function ItemService.maintainAll(now: number)
 			if not ok then
 				warn("[ItemService] maintenance error: " .. tostring(err))
 			end
+		end
+		local rescued, why = pcall(rescueStale :: any, owner, now, root)
+		if not rescued then
+			warn("[ItemService] rescue error: " .. tostring(why))
+		end
+	end
+	for owner in staleCheckedAt do
+		if not byOwner[owner] then
+			staleCheckedAt[owner] = nil
 		end
 	end
 	expireParked(now)
@@ -1828,6 +1930,7 @@ ItemService._test = {
 		table.clear(records)
 		table.clear(byId)
 		table.clear(byOwner)
+		table.clear(staleCheckedAt)
 		table.clear(pulling)
 		table.clear(avoidParts)
 		table.clear(parked)

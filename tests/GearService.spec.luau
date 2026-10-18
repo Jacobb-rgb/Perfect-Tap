@@ -1966,6 +1966,70 @@ return function(T, Loader)
 		end
 	end)
 
+	withWorld("Carry: hand drops and throws stop at the hard ceiling of loose items; death drops go into the pen", function(w)
+		magnetWorld(w, 0)
+		local rootPart = Instance.new("Part")
+		rootPart.Size = Vector3.new(2, 2, 1)
+		rootPart.CFrame = CFrame.new(w.player.root.Position)
+		rootPart.Position = w.player.root.Position
+		rootPart.AssemblyLinearVelocity = Vector3.zero
+		w.player.root = rootPart
+		local at = rootPart.CFrame.Position
+		w.data.Gear.Backpack = 5
+		Bonuses.invalidate(w.player)
+		CarryService._test.setDropSpot(function(_, root)
+			return root.CFrame * CFrame.new(0, 0, -3)
+		end)
+		local fireNear = rawget(Net, "fireNear")
+		rawset(Net, "fireNear", function() end)
+		local ok, err = pcall(function()
+			local total = GameConfig.MaxLooseItemsTotal
+			-- a player pouring items out: Take into the hands, drop, again and again
+			local dropped = 0
+			for _ = 1, total + 20 do
+				local item = chunk(w, USER, at + Vector3.new(1, -1, 0))
+				T.truthy(CarryService.pickup(w.player, item), "picked up")
+				CarryService._test.drop(w.player)
+				if item.State == "Loose" then
+					dropped += 1
+				else
+					break
+				end
+			end
+			T.eq(ItemService.looseCount(USER), total, "never more than the ceiling")
+			T.truthy(ItemService.atTotalCap(USER), "at the ceiling")
+			T.eq(#CarryService.list(w.player), 1, "the refused one stays in the hands")
+			T.eq(dropped, total, "every drop up to the ceiling went through")
+			-- a throw is refused the same way
+			CarryService._test.throw(w.player, Vector3.new(0, 0, -1), 0.5)
+			T.eq(#CarryService.list(w.player), 1, "no throw either")
+			T.eq(ItemService.looseCount(USER), total, "still at the ceiling")
+			-- dying at the ceiling: what was in the hands goes into the pen, not onto the ground
+			local before = #w.data.Storage
+			CarryService.dropAll(w.player)
+			T.eq(ItemService.looseCount(USER), total, "nothing more on the ground")
+			T.eq(#w.data.Storage, before + 1, "kept in the pen")
+			-- picking one up makes room for one drop
+			local any: any = nil
+			for _, record in ItemService.ownedBy(USER) do
+				if record.State == "Loose" then
+					any = record
+					break
+				end
+			end
+			T.truthy(any, "a loose item")
+			T.truthy(CarryService.pickup(w.player, any), "picked up")
+			CarryService._test.drop(w.player)
+			T.eq(any.State, "Loose", "room again: dropped")
+			T.eq(ItemService.totalRoom(USER), 0, "back at the ceiling")
+		end)
+		rawset(Net, "fireNear", fireNear)
+		CarryService._test.setDropSpot(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Carry: a pickup wears the full look; consumed items leave the hands; drops pass on at most CharacterSpeedCap", function(w)
 		magnetWorld(w, 0)
 		-- a real root part (the carry weld needs an Instance)

@@ -45,7 +45,8 @@
 	  machine's MachineService State.NextEmit ArmHold seconds ahead on every
 	  tick), so the items wait in the back machine's Out for the arm.
 	- Attributes: Working + Holding (the ore id of the item it just moved, ""
-	  when idle) for ArmShow seconds after each move, Cycles, Status
+	  when idle or for dirty ore, which keeps its secret: security #6) for
+	  ArmShow seconds after each move, Cycles, Status
 	  ("OutputBlocked" while the front machine refuses the item), each
 	  written only when it changes.
 	- The machines behind and in front are looked up once per layout change
@@ -516,7 +517,9 @@ local function armTick(arm: PlacedMachine, now: number)
 		local seconds = LogisticsService.interval(arm, LogisticsService.ArmInterval)
 		state.NextMove = now + seconds
 		state.ShowUntil = now + math.min(seconds * 0.8, LogisticsService.ArmShow)
-		MachineService.setAttrs(arm, { Working = true, Holding = item.O, Cycles = bump(arm) })
+		-- dirty ore keeps its secret (security #6): the hand shows a plain chunk
+		local holding = if item.K == "Raw" then "" else item.O
+		MachineService.setAttrs(arm, { Working = true, Holding = holding, Cycles = bump(arm) })
 		armStatus(arm, "")
 	else
 		armStatus(arm, if result == "Refused" then "OutputBlocked" else "")
