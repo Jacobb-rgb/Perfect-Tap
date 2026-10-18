@@ -2224,7 +2224,9 @@ return function(T, Loader)
 		for _, key in StateService.Sticky do
 			T.eq(second[key], nil, key .. " left out")
 		end
-		T.truthy(second.Coins ~= nil and second.Boosts ~= nil, "small fields always go")
+		-- (perf pass 1: every unchanged section is left out, the small ones too)
+		T.eq(second.Coins, nil, "unchanged coins left out")
+		T.eq(second.Boosts, nil, "unchanged boosts left out")
 		GolemConfig.add(data.Golems, "PebbleGolem")
 		local third = StateService.trim(p, StateService.snapshot(p) :: any)
 		T.truthy(third.Golems and #third.Golems.Owned == 1, "a new golem: Golems sent again")
