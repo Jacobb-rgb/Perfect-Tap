@@ -536,7 +536,6 @@ export type LooseWhere = "Base" | "Away"
 
 -- The player's loose items: all, or only those on / around a base ("Base":
 -- belts, chutes, the pen gate) or away from every base ("Away": mine drops).
--- An item without a body counts as on a base.
 function ItemService.looseCount(userId: number, where: LooseWhere?): number
 	local count = 0
 	local set = byOwner[userId]
@@ -546,8 +545,7 @@ function ItemService.looseCount(userId: number, where: LooseWhere?): number
 				if where == nil then
 					count += 1
 				else
-					local body = record.Body
-					local onBase = body == nil or ItemService.onBase(body.CFrame.Position)
+					local onBase = ItemService.onBase(record.Body.CFrame.Position)
 					if onBase == (where == "Base") then
 						count += 1
 					end
