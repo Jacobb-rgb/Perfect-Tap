@@ -169,6 +169,10 @@ elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" then -- the tut
 	for name, guis in TutorialPreview.build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading_preview.luau); the screen is opaque, no world
+	for name, guis in require("./lib/loading_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
 	require("./lib/gallery_preview").build(Loader, workspace)
 elseif sceneName == "gameplay" then
