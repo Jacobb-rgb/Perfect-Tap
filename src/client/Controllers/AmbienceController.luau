@@ -8,9 +8,10 @@
 	it, and the Sounds go when the spot streams out. Every CheckEvery seconds
 	it plays the loops in earshot of the camera (and stops the rest) and fires
 	the one-shots on their own random timers. Every Sound plays through the
-	SoundGroup AmbienceConfig.Group (a settings menu sets its Volume; this
-	controller never does). While the cleaning minigame is open everything
-	turns down to AmbienceConfig.CleaningDuck.
+	SoundGroup AmbienceConfig.Group, nested in the sound effects group
+	(AmbienceConfig.ParentGroup) so the SETTINGS sound slider covers it; this
+	controller never sets a Volume on a group. While the cleaning minigame is
+	open everything turns down to AmbienceConfig.CleaningDuck.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -43,7 +44,7 @@ function AmbienceController.group(): SoundGroup
 	if group and group.Parent then
 		return group
 	end
-	local found = SoundService:FindFirstChild(AmbienceConfig.Group)
+	local found = SoundService:FindFirstChild(AmbienceConfig.Group, true)
 	if found and found:IsA("SoundGroup") then
 		group = found
 		return found
@@ -53,6 +54,15 @@ function AmbienceController.group(): SoundGroup
 	created.Parent = SoundService
 	group = created
 	return created
+end
+
+-- Nests the ambience group in the sound effects group (the SETTINGS slider), once that group exists.
+local function nest()
+	local own = AmbienceController.group()
+	local sfx = SoundService:FindFirstChild(AmbienceConfig.ParentGroup)
+	if sfx and sfx:IsA("SoundGroup") and own.Parent ~= sfx then
+		own.Parent = sfx
+	end
 end
 
 local function pitch(def: SoundConfig.SoundDef): number
@@ -178,6 +188,12 @@ function AmbienceController.init()
 end
 
 function AmbienceController.start()
+	nest()
+	SoundService.ChildAdded:Connect(function(child: Instance)
+		if child.Name == AmbienceConfig.ParentGroup then
+			nest()
+		end
+	end)
 	CollectionService:GetInstanceAddedSignal(AmbienceConfig.Tag):Connect(addSpot)
 	CollectionService:GetInstanceRemovedSignal(AmbienceConfig.Tag):Connect(removeSpot)
 	for _, instance in CollectionService:GetTagged(AmbienceConfig.Tag) do

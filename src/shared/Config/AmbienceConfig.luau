@@ -19,9 +19,10 @@
 	tests/BlasterFeel.spec.luau) or a Creator Store id the owner pastes in.
 
 	Volume: every ambience Sound plays through the SoundGroup named
-	AmbienceConfig.Group in SoundService. A settings menu sets that group's
-	Volume; the controller finds the group or creates it by that exact name
-	and never sets its Volume itself.
+	AmbienceConfig.Group, which sits inside the sound effects group
+	(AmbienceConfig.ParentGroup = SettingsConfig.SfxGroup) once that exists,
+	so the SETTINGS panel's sound slider turns the ambience down too (nested
+	SoundGroups multiply). The controller never sets a group's Volume.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,6 +47,7 @@ export type Layer = {
 local AmbienceConfig = {}
 
 AmbienceConfig.Group = "TerraForgeAmbience"
+AmbienceConfig.ParentGroup = "TerraForgeSfx" -- SettingsConfig.SfxGroup (tests/Ambience.spec.luau)
 AmbienceConfig.Tag = "AmbienceSpot"
 AmbienceConfig.Attribute = "Ambience"
 
