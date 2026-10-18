@@ -16,13 +16,13 @@ local roblox = require("@lune/roblox") :: any
 local Gallery = {}
 
 -- The ore skin shown for each level in the gallery ("" = rusty starter).
-Gallery.Skins = { "", "Copper", "Azurium", "Amethyst", "Gold", "Ruby", "Sapphire", "Emerald", "Stormcore", "Heartstone" }
+Gallery.Skins = { "", "Copper", "DragonEgg", "Amethyst", "Gold", "Bronze", "Sapphire", "Jade", "StormPearl", "Heartstone" }
 
 -- A few levels in many skins (the skins wall).
 Gallery.SkinRows = {
 	{ Level = 4, Spacing = 5.4, Ores = { "Iron", "Jade", "Cobalt", "Emberite" } },
-	{ Level = 7, Spacing = 6.4, Ores = { "Obsidian", "Moonstone", "Verdantine" } },
-	{ Level = 10, Spacing = 7.4, Ores = { "Diamond", "Magmacore", "Prismite" } },
+	{ Level = 7, Spacing = 6.4, Ores = { "Obsidian", "Moonstone", "CrystalRose" } },
+	{ Level = 10, Spacing = 7.4, Ores = { "Diamond", "VolcanicCore", "PhoenixFeather" } },
 }
 
 local function label(Loader: any, parent: any, cf: any, size: any, text: string, face: string?)
@@ -326,7 +326,7 @@ function Gallery.build(Loader: any, parent: any, sceneName: string)
 		local feet = rockPos + V3.new(8.5, 0, 6.5)
 		local aimAt = Gallery.surface(rock, feet, 0.6)
 		local rootCf = CF.lookAt(feet, V3.new(center.X, feet.Y, center.Z))
-		local level, oreId = 9, "Azurium"
+		local level, oreId = 9, "DragonEgg"
 		local _, muzzle = Gallery.forgekeeper(Loader, root, rootCf, aimAt, level, oreId)
 		local glow = BlasterBuilder.look(level, oreId).Glow
 		Gallery.beam(Loader, root, muzzle, aimAt, glow)

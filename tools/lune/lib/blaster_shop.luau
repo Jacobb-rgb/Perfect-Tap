@@ -194,7 +194,7 @@ local function blastsmith(K: any, parent: any, feet: any, s: number, colors: any
 	for _, sx in { -1, 1 } do
 		K.cylCF(feet * CF.new(sx * 0.6 * s, 2.55 * s, -1.0 * s) * CF.Angles(0, 0, math.pi / 2), 0.5 * s, 0.38 * s, DARK)
 	end
-	local gun = Kenney.gun(L, 9, "Stormcore")
+	local gun = Kenney.gun(L, 9, "StormPearl")
 	Concepts.present(
 		gun,
 		feet * CF.new(0.2 * s, 4.1 * s, -1.55 * s) * CF.Angles(0, 0, -0.75) * CF.Angles(0, math.pi / 2, 0),
@@ -1121,7 +1121,7 @@ local function oreBoard(K: any, f: any)
 	local W, H = 9, 6.4
 	local c = pictureFrame(K, f, W, H, C3.fromRGB(96, 62, 40), C3.fromRGB(44, 32, 30))
 	K.boxCF(c * CF.new(0, H / 2 - 0.55, 0.04), V3.new(5, 0.5, 0.06), C3.fromRGB(196, 152, 66))
-	local ores = { "Copper", "Iron", "Silver", "Amethyst", "Jade", "Emberite", "Gold", "Ruby", "Azurium", "Sapphire", "Emerald", "Diamond" }
+	local ores = { "Copper", "Iron", "Silver", "Amethyst", "Jade", "Emberite", "Gold", "Bronze", "DragonEgg", "Sapphire", "LeafOre", "Diamond" }
 	for i, id in ores do
 		local ore = OreData.ById[id]
 		local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
@@ -1602,7 +1602,7 @@ local function guardianStatue(K: any, parent: any, feet: any, u: number)
 	rb(at(-1.48, 3.55, 0.5) * CF.Angles(math.pi / 2, 0, 0), 0.95, 2.0, 0.95, 0.24, G2)
 	rb(at(1.48, 2.95, 0.05) * CF.Angles(-0.08, 0, 0.04), 0.95, 2.0, 0.95, 0.24, G2)
 	-- a level 9 blaster (level 10's loose floating gems would hang in the air as stone)
-	local gun, anchors = Kenney.gun(L, 9, "Stormcore")
+	local gun, anchors = Kenney.gun(L, 9, "StormPearl")
 	stoneify(gun)
 	local gs = 3.0 * u / 3.6
 	local R = feet.Rotation
@@ -1920,7 +1920,7 @@ local function giantStatue(K: any, parent: any, ground: any, o: number, seed: nu
 	local wrist = E:Lerp(H, 0.78)
 	K.boxCF(CF.lookAt(wrist, H, fwd), V3.new(1.6 * k, 1.65 * k, 0.6 * k), C3.fromRGB(70, 66, 76), SLATEM)
 	K.boxCF(CF.lookAt(H, H + (H - E).Unit, fwd), V3.new(1.5 * k, 1.5 * k, 1.3 * k), tone(), SLATEM)
-	local gun, anchors = Kenney.gun(L, 10, "Magmacore")
+	local gun, anchors = Kenney.gun(L, 10, "VolcanicCore")
 	local gs = 7.6 * k / 5.56
 	local dir = (feet.Rotation * V3.new(o * 0.18, 0.88, 0.42)).Unit
 	local Z = -dir
@@ -2037,7 +2037,7 @@ local function vaultWow(K: any, parent: any, origin: any)
 		K.boxCF(CF.lookAt(mid + V3.new(0, 0, 1.4), mid + V3.new(0, 0, 1.4) + rake), V3.new(0.35, 0.35, rake.Magnitude), FIRE, NEON)
 	end
 	for _, roll in { 0.55, -0.55 } do
-		local gun = Kenney.gun(L, 10, "Magmacore")
+		local gun = Kenney.gun(L, 10, "VolcanicCore")
 		Concepts.present(gun, at(0, 30.6, zG + 2.4) * CF.Angles(0, 0, roll) * CF.Angles(0, -math.pi / 2, 0), 3.0, parent)
 	end
 	gableDetail(K, origin, zG)
@@ -2070,7 +2070,7 @@ local function vaultWow(K: any, parent: any, origin: any)
 		KG.gem(p, V3.new(math.cos(a) * 0.3, 1, math.sin(a) * 0.3).Unit, 0.7, 2.6, C3.fromRGB(220, 70, 130), holoGlow)
 	end
 	-- giant ore crystals on plinths beside the entrance
-	for _, side in { { -1, "Heartstone" }, { 1, "Stormcore" } } do
+	for _, side in { { -1, "Heartstone" }, { 1, "StormPearl" } } do
 		local sx = side[1]
 		local look = oreGlow(if side[2] == "Heartstone" then 10 else 9)
 		local x, z = sx * 30, halfD + 7

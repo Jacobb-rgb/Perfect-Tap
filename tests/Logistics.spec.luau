@@ -366,7 +366,7 @@ return function(T, Loader)
 			{ item("Clean", "Copper", "Clean"), -1 }, -- Common
 			{ item("Clean", "Gold", "Rough"), 1 }, -- Rare
 			{ item("Ingot", "Diamond", "Clean"), 1 }, -- Epic
-			{ item("Crushed", "Silver", "Clean"), -1 }, -- Uncommon
+			{ item("Crushed", "Emberite", "Clean"), -1 }, -- Uncommon
 		}
 		for _, pair in list do
 			T.truthy(MachineService.insertDesc(m, pair[1], USER, "Belt"), "in: " .. pair[1].O)

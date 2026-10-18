@@ -574,17 +574,25 @@ local function chute(m: Instance, a: Vector3, b: Vector3, w: number)
 end
 
 -- Orange robot arm from `base` through `elbow` to `hand` (claw pointing down), round joints.
-local function robotArm(m: Instance, base: Vector3, elbow: Vector3, hand: Vector3, s: number)
-	cyl(m, base + Vector3.new(0, 0.2 * s, 0), UP, 0.4 * s, 1.25 * s, "Frame", SOLID)
-	cyl(m, base + Vector3.new(0, 0.62 * s, 0), UP, 0.45 * s, 0.9 * s, "Trim", SOLID)
+-- (`name`: every part gets it, e.g. "Arm" for the parts MachineFxController swings)
+local function robotArm(m: Instance, base: Vector3, elbow: Vector3, hand: Vector3, s: number, name: string?)
+	cyl(m, base + Vector3.new(0, 0.2 * s, 0), UP, 0.4 * s, 1.25 * s, "Frame", SOLID, name)
+	cyl(m, base + Vector3.new(0, 0.62 * s, 0), UP, 0.45 * s, 0.9 * s, "Trim", SOLID, name)
 	local shoulder = base + Vector3.new(0, 1.0 * s, 0)
-	ball(m, shoulder, 0.68 * s, "Frame", PROP)
-	rod(m, shoulder, elbow, 0.46 * s, "Trim", PROP)
-	ball(m, elbow, 0.6 * s, "Frame", PROP)
-	rod(m, elbow, hand, 0.4 * s, "Trim", PROP)
-	cyl(m, hand, UP, 0.32 * s, 0.56 * s, "Frame", TINY)
+	ball(m, shoulder, 0.68 * s, "Frame", PROP, name)
+	rod(m, shoulder, elbow, 0.46 * s, "Trim", PROP, name)
+	ball(m, elbow, 0.6 * s, "Frame", PROP, name)
+	rod(m, elbow, hand, 0.4 * s, "Trim", PROP, name)
+	cyl(m, hand, UP, 0.32 * s, 0.56 * s, "Frame", TINY, name)
 	for _, side in { -1, 1 } do
-		block(m, CFrame.new(hand + Vector3.new(side * 0.17 * s, -0.36 * s, 0)), Vector3.new(0.1 * s, 0.42 * s, 0.26 * s), "Dark", TINY)
+		block(
+			m,
+			CFrame.new(hand + Vector3.new(side * 0.17 * s, -0.36 * s, 0)),
+			Vector3.new(0.1 * s, 0.42 * s, 0.26 * s),
+			"Dark",
+			TINY,
+			name
+		)
 	end
 end
 
@@ -2204,7 +2212,9 @@ local function robotArmMachine(): Ctx
 	pillSlab(m, Vector3.new(0, FLOOR, 0.2), 3.6, 0.35, 3.2, 0.8, "Frame")
 	glowStrips(m, Vector3.new(0, FLOOR + 0.18, 0.2), 3.6, 3.2, 0.8, 0.1)
 	cyl(m, Vector3.new(0, FLOOR + 0.75, 0.4), UP, 0.8, 1.8, "Body", SOLID, "Pedestal")
-	robotArm(m, Vector3.new(0, FLOOR + 1.15, 0.4), Vector3.new(0.5, FLOOR + 4.4, 0.1), Vector3.new(0.1, FLOOR + 3.4, -1.4), 1.3)
+	-- every part of the arm is named "Arm": MachineFxController turns them
+	-- round the Pedestal's axis to swing an item from the back to the front
+	robotArm(m, Vector3.new(0, FLOOR + 1.15, 0.4), Vector3.new(0.5, FLOOR + 4.4, 0.1), Vector3.new(0.1, FLOOR + 3.4, -1.4), 1.3, "Arm")
 	screenPanel(m, CFrame.new(1.3, FLOOR + 0.35, 1.45), 0.9, 1.0)
 	for _, sx in { -1, 1 } do
 		socket(ctx, Vector3.new(sx * 1.55, FLOOR, -1.6), out(sx, -1, 0.8), 0.7)

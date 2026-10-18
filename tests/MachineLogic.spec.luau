@@ -343,9 +343,9 @@ return function(T, Loader)
 		T.falsy(MachineLogic.rollShard(0, 0), "zero chance")
 		T.truthy(MachineLogic.rollShard(2, 0.99), "a chance above 1 counts as 1")
 		-- the item passes through: Crushed -> the same Crushed
-		local out = MachineLogic.outputs("CrystalExtractor", crushed("Ruby", "Pristine"), 0)
+		local out = MachineLogic.outputs("CrystalExtractor", crushed("Bronze", "Pristine"), 0)
 		T.eq(#out, 1, "one item out")
-		T.truthy(out[1].K == "Crushed" and out[1].O == "Ruby" and out[1].G == "Pristine", "unchanged")
+		T.truthy(out[1].K == "Crushed" and out[1].O == "Bronze" and out[1].G == "Pristine", "unchanged")
 		local chance = MachineData.ById.CrystalExtractor.ShardChance
 		local rng = Rng.new(7)
 		local shards, n = 0, 10000

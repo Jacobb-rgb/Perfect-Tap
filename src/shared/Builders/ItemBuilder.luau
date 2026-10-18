@@ -24,6 +24,8 @@ local Geo = require(script.Parent.Geo)
 local Rng = require(script.Parent.Parent.Util.Rng)
 local OreData = require(script.Parent.Parent.Config.OreData)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
+local OreShapesLow = require(script.Parent.OreShapesLow)
+local OreShapesHigh = require(script.Parent.OreShapesHigh)
 
 local ItemBuilder = {}
 
@@ -871,6 +873,27 @@ SHAPES.Heart = function(c)
 		point(c, P(0.6, 0.12, -0.45) * A(0.2, 0.6, 0.2), 0.16, "Light")
 	end
 end
+
+-- The looks of the owner's ore picture (docs/art/ores_reference.webp): one
+-- recipe per ore, keyed by the ore's Id (OreData Shape = Id). They use the
+-- same helpers as the recipes above (the kit) and override nothing above.
+local KIT = {
+	P = P,
+	A = A,
+	V = V,
+	block = block,
+	wedge = wedge,
+	ball = ball,
+	cyl = cyl,
+	point = point,
+	beam = beam,
+	hexPrism = hexPrism,
+	onBall = onBall,
+	VertexUp = VERTEX_UP,
+	UpCyl = UP_CYL,
+}
+OreShapesLow.register(SHAPES, KIT)
+OreShapesHigh.register(SHAPES, KIT)
 
 ItemBuilder.Shapes = SHAPES
 

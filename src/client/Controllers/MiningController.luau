@@ -30,8 +30,8 @@ local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
-local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
+local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 
 local MiningController = {}
@@ -370,10 +370,9 @@ local function restoreRotate()
 	end
 end
 
-local function startFiring()
+local function startFiring(tool: Tool)
 	firing = true
-	Sfx.play("BlasterStart")
-	Sfx.loop("BlasterHum", true)
+	BlasterFx.start(tool) -- the flash, the zap, the hum, the kick (Config/BlasterFeel)
 	rumble(Enum.VibrationMotor.Small, 0.18)
 end
 
@@ -384,8 +383,7 @@ local function stopFiring()
 	firing = false
 	target = nil
 	Vfx.hideBeam("local")
-	Sfx.loop("BlasterHum", false)
-	Sfx.play("BlasterStop")
+	BlasterFx.stop()
 	stopRumble()
 	restoreRotate()
 end
@@ -680,7 +678,7 @@ local function update(dt: number)
 
 	if wantFire and humanoid and root and tool then
 		if not firing then
-			startFiring()
+			startFiring(tool)
 			seenStage = 0
 		end
 		local rock, point, solid = aim(root, tool, now)
@@ -691,16 +689,14 @@ local function update(dt: number)
 		local muzzle = muzzleOf(tool)
 		local from = if muzzle then muzzle.WorldPosition else root.Position
 		local glow = glowOf(tool)
-		Vfx.setBeam("local", muzzle, from, point, glow)
+		Vfx.setBeam("local", muzzle, from, point, glow, nil, BlasterFx.beamStyle())
 		faceTowards(humanoid, root, point, dt)
 		local gated = rock ~= nil and gateText(rock, tool) ~= ""
 		if solid and now - sparkAt >= SPARK_GAP then
 			sparkAt = now
-			if gated then
-				Vfx.burst("Sparks", point, 2, Color3.fromRGB(200, 200, 220), from - point)
-			else
-				Vfx.impact(point, glow, from - point, 3)
-			end
+			-- sparks; on a rock you can mine also the hit pulses (chips, sounds, recoil)
+			local primary = rock and rock.PrimaryPart
+			BlasterFx.hit(point, glow, from - point, gated, if primary then primary.Color else nil)
 		end
 		if rock and not gated then
 			lastHitAt = now

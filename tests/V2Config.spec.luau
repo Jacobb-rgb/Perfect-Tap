@@ -11,8 +11,8 @@ return function(T, Loader)
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local CFrame = Loader.CFrame
 
-	T.test("v2: 30 ores, each with its own id, name and shape", function()
-		T.eq(#OreData.List, 30)
+	T.test("v2: 36 ores (the owner's picture), each with its own id, name and shape", function()
+		T.eq(#OreData.List, 36)
 		local ids, names, shapes = {}, {}, {}
 		for _, ore in OreData.List do
 			T.falsy(ids[ore.Id], "duplicate id " .. ore.Id)
