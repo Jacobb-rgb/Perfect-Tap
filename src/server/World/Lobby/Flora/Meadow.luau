@@ -193,6 +193,13 @@ function Meadow.allowed(p: Vector3, r: number): boolean
 			return false
 		end
 	end
+	-- the ore outcrops: their rocks grow there at runtime (not in the index)
+	local flat = Vector3.new(p.X, 0, p.Z)
+	for _, spot in WorldLayout.OutcropSpots do
+		if (flat - Vector3.new(spot.X, 0, spot.Z)).Magnitude < r + 6 then
+			return false
+		end
+	end
 	for _, site in Town.Sites do
 		if p.X > site.Min.X - r - 0.5 and p.X < site.Max.X + r + 0.5 and p.Z > site.Min.Y - r - 0.5 and p.Z < site.Max.Y + r + 0.5 then
 			return false
