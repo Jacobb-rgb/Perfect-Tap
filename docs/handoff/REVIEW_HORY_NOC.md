@@ -1,6 +1,6 @@
 # review/hory-noc: the mountains chat's night work (2026-10-18)
 
-One branch with everything from the night, on top of main 9be848a (steps 6-7). It is fast-forwardable from main.
+One branch with everything from the night, on top of main 953b542 (steps 6-7 + save safety). It is fast-forwardable from main.
 Map v31, 20,658 / 23,000 parts (+ the 8 yard museums at runtime). `bash tools/check.sh`: ALL CHECKS PASSED (1078 tests, PhoneBudget included).
 It goes in only after the integrator's ok **and** the owner's "ano" in the mountains chat.
 
