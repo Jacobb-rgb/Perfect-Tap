@@ -45,6 +45,8 @@ local ORDER = {
 	"ShopService",
 	"VaultService", -- the Blaster Vault shop (buy the next blaster level, the crate opening)
 	"GearService", -- the Gear shop at the SHOP stall (boots, lamp, backpack, gloves, magnet)
+	"BoostService", -- luck boosts (Triple / Hexa Lucky), purchase prompts, boost expiry pushes
+	"EnchantService", -- the Enchant shop at the rune table (EnchantCounter)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)

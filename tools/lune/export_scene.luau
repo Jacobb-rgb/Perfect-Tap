@@ -159,6 +159,11 @@ elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the
 	for name, guis in require("./lib/gear_shop_preview").build(Loader, workspace) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "enchants" then -- the world + the Enchant shop / luck boosts overlays (tools/lune/lib/enchant_boost_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/enchant_boost_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

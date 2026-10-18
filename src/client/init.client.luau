@@ -30,6 +30,8 @@ local ORDER = {
 	"VaultController", -- the Blaster Vault shop and its crate opening
 	"GearShopController", -- the Gear shop at the SHOP stall
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
+	"BoostController", -- luck boosts view + the boost chips under the HUD coins
+	"EnchantController", -- the Enchant shop at the rune table
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }
