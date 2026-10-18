@@ -31,6 +31,7 @@ local ORDER = {
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
+	"LightWorldController", -- the light UI's world labels and prompts (only with UIConfig.LightUI on)
 }
 
 local loaded = {}

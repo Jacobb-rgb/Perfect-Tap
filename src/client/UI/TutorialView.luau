@@ -22,6 +22,9 @@
 	SKIP asks once more ("SURE?") before it counts. GOT IT shows only on an
 	info step (TutorialConfig Optional), the hint line on the others.
 	A step-done pop and the finish card are tweens in the controller.
+	With UIConfig.lightUI() on (the light UI, ships off) the bubble and the
+	card wear the light look (LightSkin) and the touch bubble keeps clear of
+	the light HUD's tabs.
 
 	Designed for 720 design units of height (HudController scales every
 	TerraForge gui).
@@ -31,8 +34,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local TutorialConfig = require(Shared.Config.TutorialConfig)
+local UIConfig = require(Shared.Config.UIConfig)
 local UIKit = require(script.Parent.UIKit)
 local TeleportView = require(script.Parent.TeleportView)
+local HudBubble = require(script.Parent.HudBubble)
+local LightSkin = require(script.Parent.LightSkin)
 
 local TutorialView = {}
 
@@ -92,8 +98,15 @@ function TutorialView.layout(uiScale: number, screen: Vector2, touch: boolean, t
 	local scale = if uiScale > 0 then uiScale else 1
 	local w, h = screen.X / scale, screen.Y / scale
 	if touch then
-		local bar = TeleportView.layout(scale, screen.X)
-		local barRight = w / 2 + (TeleportView.barWidth(bar, 3) + 44 + bar.Gap) / 2
+		local barRight
+		if UIConfig.lightUI() then
+			-- the light HUD's tabs (HudBubble.buildGame's top bar)
+			local light = HudBubble.layout(scale, screen.X)
+			barRight = w / 2 + (3 * light.TabWidth + 3 * 14 + 40) / 2
+		else
+			local bar = TeleportView.layout(scale, screen.X)
+			barRight = w / 2 + (TeleportView.barWidth(bar, 3) + 44 + bar.Gap) / 2
+		end
 		local room = w - TutorialView.Margin - barRight - TutorialView.BarGap
 		local width = math.clamp(room, TutorialView.MinWidth, TutorialView.MaxWidth)
 		local row = TutorialView.RowTouch
@@ -215,6 +228,9 @@ function TutorialView.build(): Refs
 		DoneText = doneText,
 	}
 	TutorialView.apply(refs, TutorialView.layout(1, Vector2.new(1280, 720), false))
+	if UIConfig.lightUI() then
+		LightSkin.apply(gui)
+	end
 	return refs
 end
 

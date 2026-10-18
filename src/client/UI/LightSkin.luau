@@ -119,6 +119,9 @@ end
 
 local function skinText(object: GuiObject)
 	local label: any = object -- a TextLabel, TextButton or TextBox
+	if key(label.TextStrokeColor3) == OUTLINE_KEY then
+		label.TextStrokeColor3 = BubbleTheme.Outline -- the old built-in text edge
+	end
 	local stroke = textStroke(label)
 	local behind = backdrop(label)
 	if isLight(behind) then
@@ -184,6 +187,36 @@ function LightSkin.refresh(root: Instance)
 	for _, d in all do
 		if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
 			LightSkin.skin(d)
+		end
+	end
+end
+
+--[[
+	World labels (BillboardGuis): the light skin, plus the light look's bold
+	edge on every text floating over the world: a navy outline (UIStroke,
+	about a tenth of the text size, at least 2.5) instead of Roblox's thin
+	built-in text edge. Runs once; LightWorldController calls it for new labels.
+]]
+function LightSkin.world(root: Instance)
+	LightSkin.apply(root)
+	local all = root:GetDescendants()
+	for _, d in all do
+		if (d:IsA("TextLabel") or d:IsA("TextButton")) and backdrop(d) == nil then
+			local label: any = d
+			local stroke = textStroke(label)
+			if not stroke then
+				local created = Instance.new("UIStroke")
+				created.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+				created.Parent = label
+				stroke = created
+			end
+			local s = stroke :: UIStroke
+			s.Enabled = true
+			s.Color = BubbleTheme.Outline
+			s.Transparency = 0
+			local size = if label.TextScaled then 30 else label.TextSize
+			s.Thickness = math.max(2.5, math.floor(size / 10 + 0.5))
+			label.TextStrokeTransparency = 1
 		end
 	end
 end

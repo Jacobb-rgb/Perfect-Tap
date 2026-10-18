@@ -721,3 +721,84 @@ for _, d in DEVICES do
 	print("Exported UI ui_dev_tech_" .. name)
 end
 UIConfig.LightUI = false
+
+---------------------------------------------------------------- world labels + prompts: today's look vs the light look
+local MachineBillboard = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MachineBillboard")
+local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+local LightPrompt = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LightPrompt")
+local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+local Instance = roblox.Instance
+
+-- a BillboardGui's contents as a Frame on a ScreenGui (the preview can't draw billboards)
+local function flatten(billboard: any, parent: any, x: number, y: number)
+	local frame = UIKit.new("Frame", {
+		Name = billboard.Name,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(x, y),
+		Size = UDim2.fromOffset(billboard.Size.X.Offset, billboard.Size.Y.Offset),
+	}, parent)
+	for _, child in billboard:GetChildren() do
+		child.Parent = frame
+	end
+	return frame
+end
+
+-- the podium income tag and the sell pop-up as PodiumService / SellController make them (labels with the old edge)
+local function podiumTag(parent: any): any
+	local tag = Instance.new("BillboardGui")
+	tag.Name = "IncomeTag"
+	tag.Size = UDim2.fromOffset(240, 74)
+	local amount = UIKit.new("TextLabel", { Name = "Amount", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 0.6), FontFace = Theme.TitleFont, TextScaled = true, TextColor3 = Theme.Coin, TextStrokeTransparency = 0.2, TextStrokeColor3 = Theme.Outline, Text = "+$3.4K/s" }, tag)
+	local _ = amount
+	UIKit.new("TextLabel", { Name = "OreName", BackgroundTransparency = 1, Position = UDim2.fromScale(0, 0.6), Size = UDim2.fromScale(1, 0.4), FontFace = Theme.Font, TextScaled = true, TextColor3 = Color3.fromRGB(180, 92, 255), TextStrokeTransparency = 0.3, TextStrokeColor3 = Theme.Outline, Text = "Pristine Amethyst" }, tag)
+	return tag
+end
+local function sellPop(): any
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Earned"
+	gui.Size = UDim2.fromOffset(260, 100)
+	UIKit.label(gui, "+$13.8K", 46, { Name = "Amount", Size = UDim2.new(1, 0, 0, 60), FontFace = Theme.TitleFont, TextColor3 = Theme.Coin })
+	UIKit.label(gui, "Tobin paid for 2 Pristine Gold", 20, { Name = "Line", Position = UDim2.fromOffset(0, 60), Size = UDim2.new(1, 0, 0, 28) })
+	return gui
+end
+local function itemHint(): any
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "TerraForgeItemHint"
+	gui.Size = UDim2.fromOffset(260, 58)
+	UIKit.label(gui, "Pristine Gold", 22, { Size = UDim2.new(1, 0, 0, 28) })
+	UIKit.label(gui, "E: grab   Q: throw", 16, { Position = UDim2.fromOffset(0, 28), Size = UDim2.new(1, 0, 0, 24), TextColor3 = Theme.TextDim })
+	return gui
+end
+
+for _, light in { false, true } do
+	UIConfig.LightUI = light
+	local gui = UIKit.screen("WorldLabels", 3)
+	gui.Scale.Scale = 1.25
+	local machine = MachineBuilder.build("ClayFurnace")
+	local sign = MachineBillboard.attach(machine)
+	MachineBillboard.update(sign, 0.6, 2, 4, 1, "", Color3.fromRGB(255, 196, 40))
+	local billboards = { sign.Gui, podiumTag(gui), sellPop(), itemHint() }
+	if light then
+		for _, b in billboards do
+			LightSkin.world(b)
+		end
+	end
+	flatten(sign.Gui, gui, 120, 150)
+	flatten(billboards[2], gui, 470, 160)
+	flatten(billboards[3], gui, 820, 140)
+	flatten(billboards[4], gui, 900, 360)
+	if light then
+		local keyboard = LightPrompt.build("Open Shop", "Tobin's Ore Stall", "F")
+		flatten(keyboard.Gui, gui, 120, 380)
+		local touch = LightPrompt.build("Put In", "Clay Furnace", "")
+		LightPrompt.setKey(touch, "TAP", nil)
+		LightPrompt.setHold(touch, 0.6)
+		flatten(touch.Gui, gui, 470, 380)
+		local pad = LightPrompt.build("Take Ore Back", "", "Y")
+		flatten(pad.Gui, gui, 120, 480)
+	end
+	local name = "ui_world_labels" .. (if light then "_light" else "")
+	fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", UiExport.export({ gui })))
+	print("Exported UI " .. name)
+end
+UIConfig.LightUI = false

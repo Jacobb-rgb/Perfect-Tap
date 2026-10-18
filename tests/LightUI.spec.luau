@@ -6,6 +6,7 @@ local roblox = require("@lune/roblox") :: any
 local Color3 = roblox.Color3
 local Vector2 = roblox.Vector2
 local UDim2 = roblox.UDim2
+local Instance = roblox.Instance
 
 return function(T, Loader)
 	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
@@ -257,6 +258,54 @@ return function(T, Loader)
 				T.truthy(coinsRight < barLeft, `coins clear of the tabs at {screen.X} x {screen.Y}`)
 			end
 		end)
+	end)
+
+	T.test("LightUI: the tutorial bubble keeps clear of the light tabs on touch screens", function()
+		local TutorialView = ui("TutorialView")
+		local HudBubble = ui("HudBubble")
+		withLight(function()
+			for _, screen in { Vector2.new(568, 320), Vector2.new(667, 375), Vector2.new(932, 430), Vector2.new(1024, 768) } do
+				local scale = HudBubble.scaleFor(screen)
+				local layout = TutorialView.layout(scale, screen, true, false, nil)
+				local hud = HudBubble.buildGame(scale, screen.X)
+				local w = screen.X / scale
+				local tabsRight = w / 2 + hud.TopBar.Size.X.Offset / 2
+				local bubbleLeft = layout.Position.X - layout.Width
+				T.truthy(bubbleLeft >= tabsRight, `bubble right of the tabs at {screen.X} x {screen.Y}`)
+				T.truthy(layout.RowHeight * scale >= 44, "SKIP >= 44 pt")
+			end
+			local refs = TutorialView.build()
+			T.truthy(refs.Gui:GetAttribute("LightSkin"), "light bubble")
+		end)
+		T.falsy(TutorialView.build().Gui:GetAttribute("LightSkin"), "switch off: today's bubble")
+	end)
+
+	T.test("LightUI: prompt pills and world labels", function()
+		local LightPrompt = ui("LightPrompt")
+		local LightSkin = ui("LightSkin")
+		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+		local prompt = LightPrompt.build("Open Shop", "Tobin's Ore Stall", "F")
+		T.eq(prompt.Action.Text, "OPEN SHOP", "action in capitals")
+		T.eq(prompt.Key.Text, "F", "key letter")
+		T.truthy(prompt.Gui:FindFirstChild("Pill"), "the pill")
+		T.truthy(LightPrompt.Height * 0.62 >= 38, "big enough to tap at the phone scale")
+		LightPrompt.setKey(prompt, "TAP", nil)
+		T.eq(prompt.Key.TextSize, 15, "TAP fits the circle")
+		LightPrompt.setHold(prompt, 2)
+		T.eq(prompt.Fill.Size.X.Scale, 1, "hold clamps to 1")
+		local short = LightPrompt.width("Go", "")
+		local long = LightPrompt.width("Take Ore Back To The Pen", "")
+		T.truthy(long > short and short >= LightPrompt.MinWidth, "the pill grows with its text")
+		-- a floating label gets the bold navy edge
+		local tag = Instance.new("BillboardGui")
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.TextSize = 40
+		label.Parent = tag
+		LightSkin.world(tag)
+		local stroke = label:FindFirstChildOfClass("UIStroke")
+		T.truthy(stroke and stroke.Color == BubbleTheme.Outline and stroke.Thickness >= 4, "bold navy edge")
+		T.eq(label.TextStrokeTransparency, 1, "the thin built-in edge is off")
 	end)
 
 	T.test("LightUI: game HUD touch sizes on phones", function()
