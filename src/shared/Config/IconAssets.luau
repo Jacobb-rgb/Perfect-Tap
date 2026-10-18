@@ -58,6 +58,30 @@ IconAssets.Sheets = {
 			"machine_SolarPanel", "machine_WindTurbine", "machine_FusionReactor", "machine_PowerPole",
 		},
 	},
+	{
+		Name = "Menus",
+		File = "ikony_4_menu.png",
+		Id = 0,
+		Icons = {
+			"boots", "gloves", "magnet", "speaker", "music", "camera", "gamepad",
+			"enchant_Power", "enchant_Swift", "enchant_Reach", "enchant_Magnetism", "enchant_Lucky",
+			"enchant_Midas", "enchant_TwinDrop", "enchant_Overcharge", "enchant_Prospector",
+			"enchant_GolemBond", "enchant_Heartfire", "enchant_Starbreaker",
+		},
+	},
+	{
+		Name = "Artifacts",
+		File = "ikony_5_artefakty.png",
+		Id = 0,
+		Icons = {
+			"artifact_CrownCoin", "artifact_RoyalSeal", "artifact_QueensBrooch", "artifact_ThroneFinial",
+			"artifact_EmberScepter", "artifact_EmberCrown", "artifact_GoldenSpike", "artifact_ConductorWhistle",
+			"artifact_RailLantern", "artifact_LastTicket", "artifact_RoyalTimetable", "artifact_LocomotiveCrest",
+			"artifact_GolemCog", "artifact_GolemBlueprint", "artifact_SparkVial", "artifact_CoreCasing",
+			"artifact_GolemsmithHammer", "artifact_FirstGolemEye", "artifact_HeartstoneFragment", "artifact_EmberRune",
+			"artifact_StarMapFragment", "artifact_SunlanceLens", "artifact_ForgekeeperOath", "artifact_ShatteringChronicle",
+		},
+	},
 } :: { Sheet }
 
 -- Roblox's own images (no upload needed).

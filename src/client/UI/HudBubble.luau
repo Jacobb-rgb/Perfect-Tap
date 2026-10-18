@@ -267,12 +267,12 @@ end
 
 -- Behind MORE (owner: only the main buttons on the left, the rest here).
 HudBubble.More = {
-	{ Id = "Wheel", Label = "WHEEL", Icon = "wheel", Role = "Danger" },
-	{ Id = "Codex", Label = "CODEX", Icon = "book", Role = "Base" },
-	{ Id = "Artifacts", Label = "ARTIFACTS", Icon = "artifact", Role = "Build" },
-	{ Id = "Boards", Label = "BOARDS", Icon = "trophy", Role = "Vault" },
-	{ Id = "Gear", Label = "GEAR", Icon = "helmet", Role = "Lobby" },
-	{ Id = "Settings", Label = "SETTINGS", Icon = "cog", Role = "More" },
+	{ Id = "Wheel", Label = "WHEEL", Icon = "wheel", Role = "Wheel" },
+	{ Id = "Codex", Label = "CODEX", Icon = "book", Role = "Codex" },
+	{ Id = "Artifacts", Label = "ARTIFACTS", Icon = "artifact", Role = "Artifacts" },
+	{ Id = "Boards", Label = "BOARDS", Icon = "trophy", Role = "Boards" },
+	{ Id = "Gear", Label = "GEAR", Icon = "helmet", Role = "Gear" },
+	{ Id = "Settings", Label = "SETTINGS", Icon = "cog", Role = "Settings" },
 } :: { MenuEntry }
 
 export type MoreRefs = { Panel: Frame, Tiles: { [string]: TextButton }, Close: TextButton }
