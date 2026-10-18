@@ -56,6 +56,7 @@ IconAssets.Sheets = {
 			"machine_RestorationTable", "machine_SellBox", "machine_Conveyor", "machine_ExpressConveyor",
 			"machine_Splitter", "machine_BeltLift", "machine_Slide", "machine_RobotArm",
 			"machine_SolarPanel", "machine_WindTurbine", "machine_FusionReactor", "machine_PowerPole",
+			"machine_StorageCrate", "machine_Anvil", "machine_SellChute",
 		},
 	},
 	{

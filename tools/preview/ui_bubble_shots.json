@@ -1116,5 +1116,54 @@
     "maxLights": 24,
     "ui": "ui_vault_tv_light",
     "uiInset": 30
+  },
+  "ui_light_build_pc": {
+    "scene": "factory",
+    "preset": "Surface",
+    "sunDir": [
+      -0.45,
+      0.7,
+      -0.55
+    ],
+    "position": [
+      -6,
+      22,
+      -40
+    ],
+    "target": [
+      0,
+      1,
+      -6
+    ],
+    "fov": 52,
+    "shadowExtent": 90,
+    "ui": "ui_light_build_pc",
+    "uiInset": 58
+  },
+  "ui_light_build_phone": {
+    "scene": "factory",
+    "preset": "Surface",
+    "sunDir": [
+      -0.45,
+      0.7,
+      -0.55
+    ],
+    "position": [
+      -6,
+      22,
+      -40
+    ],
+    "target": [
+      0,
+      1,
+      -6
+    ],
+    "fov": 52,
+    "shadowExtent": 90,
+    "ui": "ui_light_build_phone",
+    "uiInset": 116,
+    "width": 1688,
+    "height": 780,
+    "mobileControls": 2
   }
 }

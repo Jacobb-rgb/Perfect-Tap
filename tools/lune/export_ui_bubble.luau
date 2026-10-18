@@ -619,4 +619,25 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	HudView.toast(refs.Toasts, "New ore discovered: Sapphire!", Color3.fromRGB(61, 165, 255))
 	write("ui_bubble_game_" .. spec[1], refs.Gui)
 end
+
+-- build mode with the switch on (BuildView's own light refs + the HUD it leaves on screen)
+for _, spec in { { "pc", 1.25, 1, false }, { "phone", 0.62, 2, true } } do
+	local hud = HudBubble.buildGame(spec[2])
+	hud.Gui.Scale.Scale = spec[2] * spec[3]
+	hud.Coins.Text = "$48.2K"
+	hud.Income.Text = "+$186/s"
+	hud.CarryPanel.Visible = false
+	hud.Menu.Visible = false
+	hud.TopBar.Visible = false
+	local view = BuildView.build()
+	view.Gui.Scale.Scale = spec[2] * spec[3]
+	view.Gui.Enabled = true
+	BuildView.setInventory(view, { ClayFurnace = 2, Crusher = 1, CleaningStation = 1, Conveyor = 24, Splitter = 2, StorageCrate = 1, AutoCleaner = 1, SolarPanel = 2 }, "Crusher", function() end)
+	BuildView.setCounts(view, 6, 10, 24, 40)
+	BuildView.setReason(view, "Needs power: put a Solar Panel nearby", "Warn")
+	BuildView.setHint(view, if spec[4] then nil else "R rotate  ·  Q cancel  ·  Click to place")
+	BuildView.setMode(view, "Placing", spec[4])
+	fs.writeFile(root .. "/build/preview/ui_light_build_" .. spec[1] .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))
+	print("Exported UI ui_light_build_" .. spec[1])
+end
 UIConfig.LightUI = false

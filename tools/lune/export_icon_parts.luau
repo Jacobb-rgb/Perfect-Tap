@@ -52,7 +52,12 @@ for _, row in {
 	{ "Clean", "Coal", "Rough" },
 } do
 	local name = "item_" .. row[1] .. "_" .. row[2]
-	models[name] = ItemBuilder.build({ Kind = row[1], OreId = row[2], Grade = row[3] }, CF.new(), name)
+	local ok, model = pcall(ItemBuilder.build, { Kind = row[1], OreId = row[2], Grade = row[3] }, CF.new(), name)
+	if ok then
+		models[name] = model
+	else
+		print("skipped " .. name .. " (no such ore any more)")
+	end
 end
 
 -- the shop's Express Train pass: the game's own locomotive
@@ -71,6 +76,14 @@ for _, ore in OreData.List do
 	local name = "item_Clean_" .. ore.Id
 	if not models[name] then
 		models[name] = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id, Grade = "Clean" }, CF.new(), name)
+	end
+end
+
+-- the older machines without a Soft-style model (MachineBuilder)
+local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
+for _, id in { "StorageCrate", "Anvil", "SellChute" } do
+	if not models["machine_" .. id] then
+		models["machine_" .. id] = MachineBuilder.build(id)
 	end
 end
 
