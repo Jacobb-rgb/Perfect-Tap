@@ -14,6 +14,10 @@
 	  MineKit.wall(parent, from, to, height, colors, rng, opts)
 	                                             a jagged rock wall of stacked shards
 	  MineKit.stalactites(parent, center, size, colors, rng, count)
+	  MineKit.ambience(host, kind, worldPos)     a mine ambience spot (Config/MineAmbience)
+	                                             on a part that is already there
+	  MineKit.ambienceNear(container, kind, worldPos)
+	                                             the same on the nearest part in container
 
 	Contract of a floor builder (Floor<N><Name>.luau):
 	  Floor.Index, Floor.Size (footprint X, height, Z)
@@ -25,7 +29,10 @@
 	  The model holds: Folder "RockSpawns" (parts named "RockSpawn", attribute Deep),
 	  a part "GiantSpawn", a part "Entrance" (where players arrive), the elevator
 	  stop, the ore lift and a blaster gate. Budgets in the game build: <= 2500
-	  parts without rocks (floors 1-3: <= 1250), <= 24 PointLights.
+	  parts without rocks (floors 1-3: <= 1250), <= 24 PointLights. In the game
+	  build too: 4-8 ambience spots of the floor's MineAmbience.Floors kinds, each
+	  an Attachment on an existing part inside the floor's box, never on a
+	  RockSpawn or the GiantSpawn marker (WorldBuilder removes those).
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -34,6 +41,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared:WaitForChild("Builders"):WaitForChild("Geo"))
 local RockBuilder = require(Shared:WaitForChild("Builders"):WaitForChild("RockBuilder"))
 local Rng = require(Shared:WaitForChild("Util"):WaitForChild("Rng"))
+local MineAmbience = require(Shared:WaitForChild("Config"):WaitForChild("MineAmbience"))
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local Railway = require(World:WaitForChild("Railway"))
@@ -158,6 +166,70 @@ function MineKit.stalactites(parent: Instance, center: Vector3, size: Vector2, c
 		Geo.wedge(m, cf * CFrame.new(0, 0, w / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, h, w / 2), Geo.vary(colors[3], rng, 0.05), nil, DECOR)
 	end
 	return m
+end
+
+---------------------------------------------------------------- ambience spots
+
+--[[
+	A mine ambience spot (Config/MineAmbience): an invisible Attachment on `host`,
+	a part that is already there (no new parts: the floors sit at their part
+	budgets), at the world point `worldPos`, tagged MineAmbience.Tag with the
+	attribute MineAmbience.Attribute = `kind`. It streams in and out with its
+	host; the client's AmbienceController hangs the kind's sounds on it.
+]]
+function MineKit.ambience(host: BasePart, kind: string, worldPos: Vector3): Attachment
+	assert(MineAmbience.Kinds[kind] ~= nil, "unknown mine ambience kind " .. kind)
+	local a = Instance.new("Attachment")
+	a.Name = "Ambience" .. kind
+	a.CFrame = CFrame.new(host.CFrame:PointToObjectSpace(worldPos))
+	a:SetAttribute(MineAmbience.Attribute, kind)
+	a:AddTag(MineAmbience.Tag)
+	a.Parent = host
+	return a
+end
+
+-- How far `p` is from the box of `part` (0 inside it).
+local function boxDistance(part: BasePart, p: Vector3): number
+	local q = part.CFrame:PointToObjectSpace(p)
+	local h = part.Size / 2
+	local dx = math.max(math.abs(q.X) - h.X, 0)
+	local dy = math.max(math.abs(q.Y) - h.Y, 0)
+	local dz = math.max(math.abs(q.Z) - h.Z, 0)
+	return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
+-- Spots ride on a part at most this far from its box.
+MineKit.AmbienceReach = 6
+
+--[[
+	The part in `container` for an ambience spot at `worldPos`: of the parts whose box
+	is within MineKit.AmbienceReach of the point, the one whose middle is nearest (a
+	small part right there streams in with the spot), or nil. Never a rock spawn or
+	the GiantSpawn marker: WorldBuilder removes those after the build.
+]]
+function MineKit.nearestPart(container: Instance, worldPos: Vector3): BasePart?
+	local best: BasePart? = nil
+	local bestD = math.huge
+	for _, d in container:GetDescendants() do
+		if d:IsA("BasePart") and d.Name ~= "RockSpawn" and d.Name ~= "GiantSpawn" then
+			if boxDistance(d, worldPos) <= MineKit.AmbienceReach then
+				local dist = (d.CFrame.Position - worldPos).Magnitude
+				if dist < bestD then
+					best, bestD = d, dist
+				end
+			end
+		end
+	end
+	return best
+end
+
+-- MineKit.ambience on the nearest part in `container` (an error when there is none).
+function MineKit.ambienceNear(container: Instance, kind: string, worldPos: Vector3): Attachment
+	local host = MineKit.nearestPart(container, worldPos)
+	if not host then
+		error(`no part in {container:GetFullName()} near {worldPos} for the {kind} ambience spot`)
+	end
+	return MineKit.ambience(host, kind, worldPos)
 end
 
 ---------------------------------------------------------------- the elevator stop

@@ -1210,6 +1210,21 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	MineKit.elevator(model, facing(ELEVATOR.X, 0, ELEVATOR.Y, 1, 0), Floor.Index)
 	MineKit.oreLift(model, origin:PointToWorldSpace(LIFT_SPOT), "Floor3")
 
+	---------------------------------------------------------------- ambience (Config/MineAmbience: tagged Attachments, no parts)
+	-- water lapping at three stretches of the lagoon's shore (front, west bay, behind Crystal
+	-- Isle), drips from the ceiling (a hanging crystal over the water, the front half: no
+	-- ceiling there in the cutaway), the hum of the Giant Crystal's plaza and of the giant
+	-- crystal on the islet before the falls
+	for _, p in { Vector2.new(6, 2), Vector2.new(-36, -14), Vector2.new(10, -44) } do
+		MineKit.ambience(water, "LagoonLap", pt(p.X, WATER + 0.6, p.Y))
+	end
+	MineKit.ambienceNear(ceiling, "MineDrip", pt(22, CEIL - 8, -16))
+	if not cutaway then
+		MineKit.ambienceNear(ceiling, "MineDrip", pt(-24, CEIL - 4, 26))
+	end
+	MineKit.ambienceNear(ground, "CrystalHum", pt(GIANT.X, 3, GIANT.Y))
+	MineKit.ambienceNear(crystals, "CrystalHum", pt(-2, 4, -41))
+
 	-- everything anchored (the helpers already are; this keeps it a rule)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then

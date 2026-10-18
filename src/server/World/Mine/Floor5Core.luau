@@ -912,6 +912,7 @@ local function heartstone(parent: Instance, tip: Vector3, rng: Rng.Rng): Model
 		shard(m, upFrame(v3(p, cradleTop - 0.5) - Vector3.new(p.X - cc.X, 0, p.Y - cc.Y) * 0.12, dir), h, rng:range(1.6, 2.4), Geo.vary(ROCK, rng, 0.05), Geo.vary(ROCK_LIGHT, rng, 0.05), SMOOTH, GHOST)
 	end
 	local pool = blk(m, CFrame.new(cc.X, cradleTop + 0.1, cc.Y) * CFrame.Angles(0, math.pi / 8, 0), Vector3.new(8, 0.3, 8), PINK, NEON, GLOW)
+	pool.Name = "CradlePool"
 	blk(m, CFrame.new(cc.X, cradleTop + 0.1, cc.Y) * CFrame.Angles(0, math.pi * 3 / 8, 0), Vector3.new(8, 0.3, 8), PINK, NEON, GLOW)
 	light(pool, AQUA, 34, 1.6)
 	local embers = blk(m, CFrame.new(cc.X, cradleTop + 1, cc.Y), Vector3.new(6, 0.2, 6), PINK, SMOOTH, GLOW)
@@ -1181,6 +1182,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	-- crystal clusters and rune stones on free spots near the island corners
 	-- (the landing also tries two spots beside the gate first)
 	local lit: { [string]: number } = { Landing = 1, Hub = 0, West = 1, East = 1, Deep = 2 }
+	local sideLamps: { BasePart } = {} -- the lit clusters of the west and east rock fields (their hum)
 	local firstSpots: { [string]: { Vector2 } } = { Landing = { Vector2.new(9, 49), Vector2.new(-19, 48.5) } }
 	for _, isl in islands do
 		local drng = Rng.new("Floor5Decor" .. isl.Name)
@@ -1204,6 +1206,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 					local lamp = blk(props, CFrame.new(v3(p, isl.Top + h * 0.7)), Vector3.new(0.2, 0.2, 0.2), PINK, NEON, GLOW)
 					lamp.Transparency = 1
 					light(lamp, if made % 2 == 0 then AQUA else ACCENT, 22, 1.4)
+					if isl == west or isl == east then
+						table.insert(sideLamps, lamp)
+					end
 				end
 			elseif made >= 1 and drng:chance(0.5) and freeSpot(isl, p, 1.5) then
 				local pos = v3(p, isl.Top)
@@ -1226,7 +1231,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 
 	-- the Heartstone floating over the void behind the deep island
 	local heartTip = Vector3.new(0, 6, -56)
-	heartstone(m, heartTip, Rng.new("Floor5Heart"))
+	local heart = heartstone(m, heartTip, Rng.new("Floor5Heart"))
 
 	-- far islets for depth
 	local far = model("FarIslets", m)
@@ -1301,6 +1306,22 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	catcher.Name = "VoidCatcher"
 	catcher:AddTag("VoidCatcher")
 	catcher:SetAttribute("Floor", Floor.Index)
+
+	-- ambience (Config/MineAmbience: tagged Attachments, no parts): the living ember's lava
+	-- bubbling and low roar in the Heartstone's core and in the glowing pool of its cradle
+	-- (heard from the back of the deep island), the hum of the Giant Crystal's spot, of the
+	-- rune circle's crystals on the hub and of the lit clusters on the west and east islands
+	for _, name in { "HeartCore", "CradlePool" } do
+		local part = heart:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			MineKit.ambience(part, "LavaBubble", part.CFrame.Position + Vector3.new(0, 1, 0))
+		end
+	end
+	MineKit.ambienceNear(islandFolder, "CrystalHum", O * v3(giantAt, deep.Top + 2.5))
+	MineKit.ambience(runeLamp, "CrystalHum", runeLamp.CFrame.Position)
+	for _, lamp in sideLamps do
+		MineKit.ambience(lamp, "CrystalHum", lamp.CFrame.Position)
+	end
 
 	if not cutaway then
 		voidEnclosure(m)

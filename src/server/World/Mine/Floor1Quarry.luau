@@ -452,7 +452,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	-- (east of x 70 the grotto tunnel's own floor runs in at z -20..16; the preview cuts
 	-- the floor back under its tunnel, which slopes down)
 	local back = if cutaway then MOUTH_Z else END_Z
-	block(c, at(c, -1, -0.75, (back + FRONT_Z) / 2), Vector3.new(142, 1.5, FRONT_Z - back), SAND, nil, SOLID).Name = "Ground"
+	local ground = block(c, at(c, -1, -0.75, (back + FRONT_Z) / 2), Vector3.new(142, 1.5, FRONT_Z - back), SAND, nil, SOLID)
+	ground.Name = "Ground"
 	if cutaway then
 		for _, sx in { -1, 1 } do
 			block(c, at(c, sx * (TUNNEL_W + 70) / 2, -0.75, (END_Z + MOUTH_Z) / 2), Vector3.new(70 - TUNNEL_W, 1.5, MOUTH_Z - END_Z), SAND, nil, SOLID)
@@ -573,18 +574,18 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	------------------------------------------------------------ wall crystals (copper and quartz)
 	local east, west = Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0)
 	-- (3-4 crystals each; none up on the back wall: part budget)
-	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.5, -30), west, 0.95, 4, 5, false, 11)
+	local dripWest = wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.5, -30), west, 0.95, 4, 5, false, 11)
 	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, -14), west, 1.0, 3, 4, true, 12)
 	wallCrystal(c, Vector3.new(-PIT_X - 7.1, 9.5, -40), west, 0.9, 3, 5.5, false, 13)
 	wallCrystal(c, Vector3.new(-PIT_X - 3.5, 6.8, -45), UP, 0, 4, 5, true, 14)
 	wallCrystal(c, Vector3.new(-PIT_X - 0.6, 3.2, 49), west, 1.0, 3, 4, true, 15)
 	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, -32), east, 0.95, 4, 5, false, 16)
-	wallCrystal(c, Vector3.new(PIT_X + 0.6, 4, -16), east, 1.0, 3, 4.5, true, 17)
+	local dripEast = wallCrystal(c, Vector3.new(PIT_X + 0.6, 4, -16), east, 1.0, 3, 4.5, true, 17)
 	wallCrystal(c, Vector3.new(PIT_X + 7.1, 9.5, -42), east, 0.9, 3, 5, false, 18)
 	wallCrystal(c, Vector3.new(PIT_X + 3.5, 6.8, -45), UP, 0, 4, 5, true, 19)
 	wallCrystal(c, Vector3.new(PIT_X + 0.6, 3.5, 47), east, 0.95, 4, 5, false, 20)
 	wallCrystal(c, Vector3.new(31, 4, BACK_Z - 0.6), north, 0.6, 4, 5, false, 21)
-	wallCrystal(c, Vector3.new(-28.5, 4, BACK_Z - 0.6), north, 0.6, 4, 5, false, 22)
+	local dripBack = wallCrystal(c, Vector3.new(-28.5, 4, BACK_Z - 0.6), north, 0.6, 4, 5, false, 22)
 
 	------------------------------------------------------------ spawns and markers
 	local spawns = MineKit.spawns(model)
@@ -771,6 +772,16 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 			Style.bush(model, (top.cf * CFrame.new(0, -0.1, top.d * 0.2)).Position, C.LeafGreen, rng, rng:range(1.8, 2.4))
 		end
 	end
+
+	------------------------------------------------------------ ambience (Config/MineAmbience: tagged Attachments, no parts)
+	-- drips by the crystals on both side walls and the back wall, a rare rumble from deep in
+	-- the back, the Giant Crystal's hum over its plaza (the only loop here: the lobby's waterfalls
+	-- by the quarry may be heard too)
+	MineKit.ambienceNear(dripWest, "MineDrip", pt(c, -PIT_X + 1, 6, -30))
+	MineKit.ambienceNear(dripEast, "MineDrip", pt(c, PIT_X - 1, 6, -16))
+	MineKit.ambienceNear(dripBack, "MineDrip", pt(c, -28.5, 6, BACK_Z + 1.5))
+	MineKit.ambience(ground, "MineRumble", pt(c, 0, 5, -38))
+	MineKit.ambience(ground, "CrystalHum", pt(c, GIANT.X, 3, GIANT.Z))
 
 	model.Parent = parent
 	return model

@@ -33,7 +33,8 @@
 	  (doors slam shut with a thud, the floor counter ticks with a click per
 	  floor, light sweeps, rumble and hum); the character's controls are
 	  frozen. "Arrive" (and at least Duration seconds of ride) ding, the doors
-	  open on the new floor and the floor banner slides through; the controls
+	  open on the new floor and the floor banner slides through with a short
+	  arrival sting (0.2 s after the ding); the controls
 	  come back when the doors are open. Without "Arrive" the doors open by
 	  themselves (ElevatorRideView.Timing.FailSafe). A void rescue ("Arrive"
 	  with Rescue) only dips the screen to black.
@@ -678,12 +679,16 @@ type Driving = {
 	Arrived: boolean,
 	Number: number, -- the floor the indicator shows (a click when it changes)
 	Thud: boolean,
+	Sting: boolean, -- the arrival sting has played
 	Restored: boolean,
 	Frozen: boolean, -- we hold the controls lock
 	Connection: RBXScriptConnection?,
 }
 
 local RIDE_LOCK = "Elevator"
+-- the arrival sting (SoundConfig.ElevatorArrive) plays this long after the doors start to open:
+-- the ding plays at the open, the sting comes with the floor banner
+local ARRIVE_STING = 0.2
 local rideRefs: ElevatorRideView.Refs? = nil
 local driving: Driving? = nil
 
@@ -743,6 +748,11 @@ local function stepRide(dt: number)
 		Sfx.loop("MachineHum", false)
 		Sfx.play("ElevatorDing")
 	end
+	local openAt = ride.OpenAt
+	if not state.Sting and openAt and t >= openAt + ARRIVE_STING then
+		state.Sting = true
+		Sfx.play("ElevatorArrive")
+	end
 	local number = ElevatorRideView.numberAt(ride, t)
 	if number ~= state.Number then
 		state.Number = number
@@ -774,6 +784,7 @@ local function startRide(payload: { [string]: any })
 		Arrived = false,
 		Number = ride.From,
 		Thud = false,
+		Sting = false,
 		Restored = false,
 		Frozen = false,
 		Connection = nil,

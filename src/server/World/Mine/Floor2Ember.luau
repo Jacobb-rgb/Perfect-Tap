@@ -747,7 +747,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	local ceiling = group("Ceiling")
 	local zMin = -HALF_Z - 2
 	local zMax = if cutaway then 0 else HALF_Z + 2
-	block(ceiling, CFrame.new(0, (CEIL + ROOF) / 2, (zMin + zMax) / 2), Vector3.new(HALF_X * 2 + 4, ROOF - CEIL, zMax - zMin), BASALT_DARK, nil, BUMP)
+	local roof = block(ceiling, CFrame.new(0, (CEIL + ROOF) / 2, (zMin + zMax) / 2), Vector3.new(HALF_X * 2 + 4, ROOF - CEIL, zMax - zMin), BASALT_DARK, nil, BUMP)
 	local chunks = if cutaway then 7 else 8
 	for k = 1, chunks do
 		local x = rng:range(-54, 54)
@@ -868,6 +868,19 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	end
 	MineKit.marker(model, "GiantSpawn", origin * CFrame.new(GIANT.X, 0, GIANT.Y))
 	MineKit.marker(model, "Entrance", origin * facing(Vector3.new(0, 0, ENTRANCE_Z), Vector3.new(0, 0, -1)))
+
+	------------------------------------------------------------ ambience (Config/MineAmbience: tagged Attachments, no parts)
+	-- lava bubbling with its low roar on both stretches of the river (heard faintly from the
+	-- bridge) and at the lava fall's splash, the Giant Crystal's hum, the hum of the big ruby
+	-- cluster in the back-left corner, a rare rumble from the roof
+	for _, x in { -30, 30 } do
+		local stretch = if x < 0 then riverParts[2] else riverParts[6]
+		MineKit.ambience(stretch, "LavaBubble", pt(x, LAVA_Y + 1, riverZ(x)))
+	end
+	MineKit.ambienceNear(fall, "LavaBubble", pt(FALL_X, 2.5, COL_BACK + 6.6))
+	MineKit.ambienceNear(ground, "CrystalHum", pt(GIANT.X, 3, GIANT.Y))
+	MineKit.ambienceNear(crystals, "CrystalHum", pt(-51, 4, -45.5))
+	MineKit.ambience(roof, "MineRumble", pt(0, CEIL - 2, -6))
 
 	model.Parent = parent
 	return model

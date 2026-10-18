@@ -1266,6 +1266,17 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		spawns.add(at(c, s[1], 0, s[2]), true)
 	end
 
+	-- ambience (Config/MineAmbience: tagged Attachments, no parts): the hum of the gold rune
+	-- circle (the Giant Crystal's spot) and of the two big crystal clusters in the deep back
+	-- corners, a hollow breath and a far chime from the column rows (front left, back right), a
+	-- rare rumble from the rock ceiling
+	MineKit.ambience(giantCore, "CrystalHum", pt(c, GIANT.X, 3, GIANT.Y))
+	MineKit.ambienceNear(model, "CrystalHum", pt(c, -55, 4, -47))
+	MineKit.ambienceNear(model, "CrystalHum", pt(c, 55.5, 4, -47.5))
+	MineKit.ambienceNear(model, "PalaceEcho", pt(c, -COL_X + 2.5, 14, COL_Z[2]))
+	MineKit.ambienceNear(model, "PalaceEcho", pt(c, COL_X - 2.5, 14, COL_Z[4]))
+	MineKit.ambienceNear(model, "MineRumble", pt(c, 0, CEIL - 3, -20))
+
 	model.Parent = parent
 	return model
 end
