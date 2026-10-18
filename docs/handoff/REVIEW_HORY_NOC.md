@@ -31,6 +31,17 @@ Drop in this order (the later ones depend on nothing that comes after them):
 
 Every merge: take `WorldBuilder.Version` = max + 1 and keep every note; rebake (`bash tools/build.sh`).
 
+## Meeting art/mine-floors (mine ambience, 97548a1)
+
+The mine floors reuse this branch's ambience (I). Whichever of the two lands on main second:
+1. AmbienceConfig.luau: `local MineAmbience = require(Shared.Config.MineAmbience)`, and right after
+   `AmbienceConfig.Kinds = {...}`: `for kind, layers in MineAmbience.Kinds do AmbienceConfig.Kinds[kind] = layers end`
+   (MineAmbience never requires AmbienceConfig).
+2. tests/Ambience.spec.luau: scope "exactly 5 kinds", "spots in the lobby area" and "<= 20 spots" to the lobby kinds
+   (Waterfall, Brook, Pond, Forge, Plaza); tests/MineAmbience.spec.luau covers the floors.
+3. `WorldBuilder.Version` above both (mine-floors 28, this branch 30), every note kept.
+SoundConfig: their keys sit after DoorThud, ours after CaseRise; no names collide.
+
 ## Not done (on purpose)
 
 - Persistent horizon -> `StreamingMesh` LOD for the isles and the fleet (integrator plan item a, up to ~3k fewer
