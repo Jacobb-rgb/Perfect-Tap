@@ -9,7 +9,12 @@
 	  the free spin is ready AND the HUD itself shows: never over the
 	  cleaning minigame, the Foundry moment or build mode (HUD hidden,
 	  CleaningController.isActive, PlayerControls.owner), and the screen
-	  doesn't open then either. The screen (WheelView) shows the
+	  doesn't open then either. On touch screens the tutorial bubble has
+	  the chip's spot (right of the teleport bar): the chip waits while it
+	  shows there (TutorialController.inTopRow / onTopRowChanged) and
+	  chimes when it comes. The chip follows the teleport bar's width for
+	  the uiScale and the screen width (icon-only bar on small phones),
+	  also when the screen changes. The screen (WheelView) shows the
 	  player's 8 segments with their exact odds, what each pays them, and
 	  the countdown from State.Wheel.NextSpinAt (os.time() seconds, compared
 	  with Workspace:GetServerTimeNow()). A row opens its details card (the
@@ -65,6 +70,7 @@ local Net = require(Shared.Net)
 local WheelView = require(script.Parent.Parent.UI.WheelView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local CleaningController = require(script.Parent.CleaningController)
 local DecorController = require(script.Parent.DecorController)
@@ -732,6 +738,24 @@ end
 
 ---------------------------------------------------------------- the chip
 
+-- The screen width in pt (the teleport bar turns icon-only on small phones).
+local function screenWidth(): number?
+	local camera = Workspace.CurrentCamera
+	return if camera then camera.ViewportSize.X else nil
+end
+
+-- Is the tutorial bubble in the chip's spot (touch: right of the teleport
+-- bar)? TutorialController loads after this controller: looked up on use.
+local function tutorialInTopRow(): boolean
+	local tutorial = MenuPanels.controller("TutorialController")
+	local check = tutorial and tutorial.inTopRow
+	if type(check) ~= "function" then
+		return false
+	end
+	local ok, result = pcall(check)
+	return ok and result == true
+end
+
 local function updateChip()
 	local c = chip
 	if not c then
@@ -739,22 +763,25 @@ local function updateChip()
 	end
 	local ready = isReady()
 	local busyScreen = screenBusy()
-	local show = WheelView.chipVisible(ready, open, busy, busyScreen)
+	local tutorial = tutorialInTopRow()
+	local show = WheelView.chipVisible(ready, open, busy, busyScreen, tutorial)
 	if c.Gui.Enabled ~= show then
 		c.Gui.Enabled = show
 	end
 	-- the sound only when the spin BECOMES ready (not after every close, and
-	-- not in the middle of the minigame: it chimes once the HUD is back)
-	if ready and not chipReady and not open and not busyScreen then
+	-- not while the chip is away for the minigame or the tutorial bubble: it
+	-- chimes once the chip can show)
+	local away = busyScreen or tutorial
+	if ready and not chipReady and not open and not away then
 		Sfx.play("Discovery")
 	end
-	if not busyScreen or not ready then
+	if not away or not ready then
 		chipReady = ready
 	end
 end
 
 local function buildChip()
-	local c = WheelView.buildChip(HudController.uiScale())
+	local c = WheelView.buildChip(HudController.uiScale(), screenWidth())
 	c.Gui.Parent = player:WaitForChild("PlayerGui")
 	c.Button.Activated:Connect(function()
 		-- (a stray tap while something else has the screen does nothing)
@@ -854,7 +881,7 @@ function WheelController.init()
 			end
 			local c = chip
 			if c then
-				WheelView.placeChip(c, HudController.uiScale())
+				WheelView.placeChip(c, HudController.uiScale(), screenWidth())
 			end
 		end)
 	end
@@ -862,6 +889,11 @@ end
 
 function WheelController.start()
 	buildChip()
+	-- the touch tutorial bubble takes the chip's spot: the chip steps aside at once
+	local tutorial = MenuPanels.controller("TutorialController")
+	if tutorial and type(tutorial.onTopRowChanged) == "function" then
+		tutorial.onTopRowChanged(updateChip)
+	end
 	while true do
 		local ok, err = pcall(function()
 			step()

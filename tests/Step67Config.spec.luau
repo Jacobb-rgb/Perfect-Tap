@@ -939,10 +939,24 @@ return function(T, Loader)
 		T.truthy(rarityShare(capped, "Mythic") > 5 * mythic, "at the luck cap: Mythic more than x5")
 		T.truthy(rarityShare(hexa, "Legendary") > 2 * rarityShare(plain, "Legendary"), "Legendary more than x2")
 		T.truthy(chanceOf(hexa, "Heartstone") > 3 * chanceOf(plain, "Heartstone"), "Heartstone more than x3")
-		-- the Quarry's Gold (its only Rare+ ore) is exactly x2.5 against the commons
+		-- the factors BoostConfig's header quotes for Deep Hollow (change the
+		-- comment with these when the map weights change)
+		local deepShares = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 1)
+		local deepHexa = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 2.5)
+		T.near(deepHexa.Mythic / deepShares.Mythic, 3.8, 0.05, "header: Mythic about x3.8")
+		T.near(deepHexa.Legendary / deepShares.Legendary, 2.4, 0.05, "header: Legendary about x2.4")
+		-- the Quarry's Bronze (its only Rare+ ore) is exactly x2.5 against the commons
+		local quarryRare = {}
+		for oreId in WorldLayout.ZoneById.Quarry.Ores do
+			if BoostConfig.isLuckyOre(oreId) then
+				table.insert(quarryRare, oreId)
+			end
+		end
+		T.eq(table.concat(quarryRare, ","), "Bronze", "the Quarry's only Rare+ ore")
 		local quarry = BoostConfig.zoneOdds("Quarry", 2.5)
 		local q1 = BoostConfig.zoneOdds("Quarry", 1)
-		T.near((chanceOf(quarry, "Gold") / chanceOf(quarry, "Coal")) / (chanceOf(q1, "Gold") / chanceOf(q1, "Coal")), 2.5, 1e-9)
+		T.truthy(chanceOf(q1, "Bronze") > 0 and chanceOf(q1, "Coal") > 0, "both in the Quarry")
+		T.near((chanceOf(quarry, "Bronze") / chanceOf(quarry, "Coal")) / (chanceOf(q1, "Bronze") / chanceOf(q1, "Coal")), 2.5, 1e-9)
 		-- rarityShares / rareShare agree with the odds
 		local shares = BoostConfig.rarityShares(WorldLayout.ZoneById.DeepHollow.Ores, 2.5)
 		T.near(shares.Mythic, mythicHexa, EPS)
@@ -1670,7 +1684,7 @@ return function(T, Loader)
 		T.eq(DataTemplate.Golems.NextId, 1)
 		T.eq(DataTemplate.Wheel.NextSpinAt, 0)
 		T.eq(next(DataTemplate.Artifacts.Found), nil)
-		for _, stat in { "ArtifactsFound", "CapsulesOpened", "WheelSpins" } do
+		for _, stat in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
 			T.eq(DataTemplate.Stats[stat], 0)
 		end
 		-- an old save gets the records from reconcile
@@ -1758,6 +1772,7 @@ return function(T, Loader)
 		data.Stats.ArtifactsFound = -3
 		data.Stats.CapsulesOpened = 4.6
 		data.Stats.WheelSpins = 0 / 0
+		data.Stats.WheelOres = "two"
 		return data
 	end
 
@@ -1821,6 +1836,7 @@ return function(T, Loader)
 		T.eq(data.Stats.ArtifactsFound, 0)
 		T.eq(data.Stats.CapsulesOpened, 4)
 		T.eq(data.Stats.WheelSpins, 0)
+		T.eq(data.Stats.WheelOres, 0)
 	end)
 
 	T.test("Step67 migration: what a newer server added survives an old server (two runs)", function()

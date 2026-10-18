@@ -11,9 +11,10 @@
 	          last looked (the controller decides which).
 	  detail  the selected card: big gem, name, rarity chip, podium income
 	          (Rough and Flawless), sell value (cleaned Rough and Flawless,
-	          and dirty, before sell bonuses), the blaster level it needs,
-	          where it is found (the WorldLayout zones whose rocks hold it)
-	          and its lore. Undiscovered: "???" and how to find it.
+	          and dirty, before sell bonuses), the blaster level it needs
+	          (the lowest gate of the zones that hold it: levelOf), where it
+	          is found (the WorldLayout zones whose rocks hold it) and its
+	          lore. Undiscovered: "???" and how to find it.
 
 	Click / tap a card (or move the gamepad selection onto it) to read it.
 	Designed for 720 design units of height; the compact layout (phones)
@@ -147,6 +148,33 @@ function CodexView.zonesOf(oreId: string): { string }
 	return names
 end
 
+local levelCache: { [string]: number } = {}
+
+-- The blaster level an ore needs: the lowest MinBlaster of the zones whose
+-- rocks hold it (the VIP-only zones count only when no other zone holds
+-- it), else the ore's own Tier (no zone holds it). So the line agrees with
+-- "Found in" under it (Bronze: the Quarry, level 1).
+function CodexView.levelOf(ore: OreData.Ore): number
+	local cached = levelCache[ore.Id]
+	if cached then
+		return cached
+	end
+	local open, vip = math.huge, math.huge
+	for _, zone in WorldLayout.Zones do
+		local weight = zone.Ores[ore.Id]
+		if type(weight) == "number" and weight > 0 then
+			if zone.VipOnly then
+				vip = math.min(vip, zone.MinBlaster)
+			else
+				open = math.min(open, zone.MinBlaster)
+			end
+		end
+	end
+	local level = if open < math.huge then open elseif vip < math.huge then vip else ore.Tier
+	levelCache[ore.Id] = level
+	return level
+end
+
 -- What the cards show, as one string (discovered ores and NEW badges):
 -- the codex redraws only when it changes, not on every State push.
 function CodexView.fingerprint(discovered: any, fresh: { [string]: boolean }?): string
@@ -228,7 +256,7 @@ function CodexView.detailText(entry: Entry): DetailText
 		Rarity = ore.Rarity,
 		Income = `Podium: {Format.perSecond(ore.Income)}  (Flawless {Format.perSecond(flawless)})`,
 		Value = `Sells: {Format.money(clean)} (Flawless {Format.money(best)}), dirty {Format.money(dirty)}`,
-		Tier = `Blaster level {ore.Tier}+`,
+		Tier = `Blaster level {CodexView.levelOf(ore)}+`,
 		Where = `Found in: {where}`,
 		Lore = ore.Lore,
 	}

@@ -314,11 +314,13 @@ choices marked *(ours)*):
   improve the odds of random outcomes must explain the new odds in numbers
   before purchase (their example is a "magic fishing rod"). The Grotto has
   its own ore mix (`WorldLayout.luau` node weights), so the Forgemaster's
-  Pass description ends with those numbers ("Glimmer Grotto ore: 20%
-  Silver, 18% Amethyst, ... 2% Moonstone."), built from the weights by
+  Pass description ends with those numbers ("Glimmer Grotto ore: 19.0%
+  Silver, 16.9% Gold, 14.8% Emberite, 14.8% Amber, ... 1.6% Crystal Rose."
+  on the 36-ore map), built from the weights by
   `MonetizationConfig.grottoOddsText()`, so it never goes stale; copy the
   same line into the pass description on the Creator Dashboard whenever the
-  weights change. The free daily wheel's ore prize never uses the Grotto
+  weights change (the in-game text follows by itself, the Dashboard text
+  does not). The free daily wheel's ore prize never uses the Grotto
   (`WheelConfig.oreOdds` leaves VIP zones out for everyone), so the pass
   changes no free random prize.
 - **Not pay-to-win only.** Every ore is minable by everyone: Silver, Gold and

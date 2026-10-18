@@ -116,6 +116,7 @@ local DataTemplate = {
 		ArtifactsFound = 0, -- every artifact find, duplicates too (the ARTIFACTS board)
 		CapsulesOpened = 0, -- golems woken from capsules (also free ones)
 		WheelSpins = 0,
+		WheelOres = 0, -- dirty ores the wheel's ore prize put into the Ore Pen (the tutorial doesn't count them)
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)

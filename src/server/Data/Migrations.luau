@@ -103,8 +103,8 @@
 	  Chapters: string ids -> true; Equipped: a string of at most
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
 	  equipped ignores them), anything else nil.
-	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins are
-	  whole numbers >= 0.
+	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
+	  WheelOres are whole numbers >= 0.
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
@@ -532,7 +532,7 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 
 	-- the new stats
 	local stats = record(data, "Stats", report)
-	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins" } do
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
 		local v = stats[field]
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
 	end

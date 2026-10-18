@@ -22,6 +22,7 @@
 	  ui_wheel_info_phone 568 x 320 pt phone: the details card
 	  ui_chip             the HUD with the FREE SPIN! chip (no BOOK button: the side menu has the book)
 	  ui_chip_phone       the same on a phone
+	  ui_chip_phone_small 568 x 320 pt phone: the icon-only bar, the chip after it
 	  ui_book             PC: the collection book, Railway tab (silhouettes)
 	  ui_book_done        PC: the Crown tab, complete, its title + skin IN USE
 	  ui_book_phone       phone: the collection book
@@ -177,14 +178,17 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	return Preview.ui(Loader)
 end
 
--- The HUD as HudController fills it (coins, income, empty carry slots).
-local function hud(Loader: any, uiScale: number): any
+-- The HUD as HudController fills it (coins, income, empty carry slots),
+-- drawn at `renderScale` (the 1600 x 900 render); the teleport bar is laid
+-- out for the real uiScale and the screen width in pt it stands for (phones:
+-- 0.62, the icon-only bar under 600 pt).
+local function hud(Loader: any, renderScale: number, uiScale: number): any
 	local roblox = Loader.roblox
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local refs = HudView.build()
-	refs.Gui.Scale.Scale = uiScale
+	refs.Gui.Scale.Scale = renderScale
 	refs.Coins.Text = Format.money(Preview.Coins)
 	refs.Income.Text = Format.perSecond(Preview.Income)
 	refs.Income.TextColor3 = roblox.Color3.fromRGB(110, 214, 92)
@@ -193,7 +197,7 @@ local function hud(Loader: any, uiScale: number): any
 		HudView.slot(refs.CarrySlots, nil, i)
 	end
 	refs.Toasts:ClearAllChildren()
-	TeleportView.build(refs.TopBar, refs.Menu, uiScale)
+	TeleportView.build(refs.TopBar, refs.Menu, uiScale, 1600 / renderScale * uiScale)
 	local BuildView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BuildView")
 	BuildView.menuButton(refs.Menu)
 	-- (no BOOK button: with the side menu in the game its ARTIFACTS button is the book's one entry)
@@ -223,6 +227,10 @@ function Preview.ui(Loader: any): { [string]: any }
 	local smallScale = 0.62 * 900 / 320 -- a 568 x 320 pt phone
 	local phoneInset = math.floor(58 * 900 / 375)
 	local smallInset = math.floor(58 * 900 / 320)
+	-- the HUD for a render scale: phones run at the 0.62 uiScale floor
+	local function hudAt(renderScale: number): any
+		return hud(Loader, renderScale, if renderScale == scale then scale else 0.62)
+	end
 
 	local function wheel(uiScale: number, compact: boolean, maxW: number, maxH: number): any
 		local refs = WheelView.build(compact)
@@ -236,12 +244,12 @@ function Preview.ui(Loader: any): { [string]: any }
 	end
 
 	-- PC: ready
-	local h1 = hud(Loader, scale)
+	local h1 = hudAt(scale)
 	local w1 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	exports.ui_wheel = UiExport.export({ h1.Gui, w1.Gui })
 
 	-- PC: stopped on the Ore Prize, the prize card
-	local h2 = hud(Loader, scale)
+	local h2 = hudAt(scale)
 	local w2 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	local index = WheelConfig.ById.OrePrize.Index
 	w2.Disc.Rotation = WheelView.spinTarget(0, index, 8, 5, 0.15)
@@ -254,45 +262,51 @@ function Preview.ui(Loader: any): { [string]: any }
 	exports.ui_wheel_won = UiExport.export({ h2.Gui, w2.Gui })
 
 	-- PC: spun today
-	local h3 = hud(Loader, scale)
+	local h3 = hudAt(scale)
 	local w3 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	WheelView.setReady(w3, false, 13 * 3600 + 42 * 60 + 10)
 	w3.Disc.Rotation = WheelView.restAngle(WheelConfig.ById.Shards.Index, 8)
 	exports.ui_wheel_wait = UiExport.export({ h3.Gui, w3.Gui })
 
 	-- PC: a capsule row's details card
-	local h3b = hud(Loader, scale)
+	local h3b = hudAt(scale)
 	local w3b = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	WheelView.showInfo(w3b, "StoneCapsule")
 	WheelView.highlight(w3b, nil)
 	exports.ui_wheel_info = UiExport.export({ h3b.Gui, w3b.Gui })
 
 	-- phones
-	local h4 = hud(Loader, phoneScale)
+	local h4 = hudAt(phoneScale)
 	local w4 = wheel(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale)
 	w4.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	exports.ui_wheel_phone = UiExport.export({ h4.Gui, w4.Gui })
-	local h5 = hud(Loader, smallScale)
+	local h5 = hudAt(smallScale)
 	local w5 = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
 	w5.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	exports.ui_wheel_phone_small = UiExport.export({ h5.Gui, w5.Gui })
-	local h5b = hud(Loader, smallScale)
+	local h5b = hudAt(smallScale)
 	local w5b = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
 	w5b.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	WheelView.showInfo(w5b, "CrystalCapsule")
 	exports.ui_wheel_info_phone = UiExport.export({ h5b.Gui, w5b.Gui })
 
 	-- the HUD chip
-	local h6 = hud(Loader, scale)
-	local chip = WheelView.buildChip(scale)
+	local h6 = hudAt(scale)
+	local chip = WheelView.buildChip(scale, 1600)
 	chip.Gui.Scale.Scale = scale
 	chip.Gui.Enabled = true
 	exports.ui_chip = UiExport.export({ h6.Gui, chip.Gui })
-	local h7 = hud(Loader, phoneScale)
-	local chip2 = WheelView.buildChip(0.62)
+	local h7 = hudAt(phoneScale)
+	local chip2 = WheelView.buildChip(0.62, 667)
 	chip2.Gui.Scale.Scale = phoneScale
 	chip2.Gui.Enabled = true
 	exports.ui_chip_phone = UiExport.export({ h7.Gui, chip2.Gui })
+	-- a 568 x 320 phone: the icon-only bar, the chip right after it
+	local h7b = hudAt(smallScale)
+	local chip3 = WheelView.buildChip(0.62, 568)
+	chip3.Gui.Scale.Scale = smallScale
+	chip3.Gui.Enabled = true
+	exports.ui_chip_phone_small = UiExport.export({ h7b.Gui, chip3.Gui })
 
 	-- the collection book, the journal and the found card
 	local CollectionView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CollectionView")
@@ -322,22 +336,22 @@ function Preview.ui(Loader: any): { [string]: any }
 			else "Click a collection, then an artifact  ·  Backspace: close"
 		return refs
 	end
-	local h8 = hud(Loader, scale)
+	local h8 = hudAt(scale)
 	local b1 = bookView(scale, false, 1600 / scale, (900 - 36) / scale, "RoyalRailway", "RailLantern")
 	exports.ui_book = UiExport.export({ h8.Gui, b1.Gui })
-	local h9 = hud(Loader, scale)
+	local h9 = hudAt(scale)
 	local b2 = bookView(scale, false, 1600 / scale, (900 - 36) / scale, "CrownOfKaldrum", "EmberCrown")
 	exports.ui_book_done = UiExport.export({ h9.Gui, b2.Gui })
-	local h10 = hud(Loader, phoneScale)
+	local h10 = hudAt(phoneScale)
 	local b3 = bookView(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale, "HeartstoneLore", "HeartstoneFragment")
 	exports.ui_book_phone = UiExport.export({ h10.Gui, b3.Gui })
-	local h10b = hud(Loader, smallScale)
+	local h10b = hudAt(smallScale)
 	local b4 = bookView(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, "Golemworks", "SparkVial")
 	exports.ui_book_phone_small = UiExport.export({ h10b.Gui, b4.Gui })
 	-- the Railway with the banner's find in: only the Locomotive Crest is missing
 	local railway = { Found = table.clone(Preview.Found), Chapters = {} }
 	railway.Found[Preview.NewFind] = 1
-	local h10c = hud(Loader, scale)
+	local h10c = hudAt(scale)
 	local b5 = bookView(scale, false, 1600 / scale, (900 - 36) / scale, "RoyalRailway", "LocomotiveCrest", railway)
 	exports.ui_book_restore = UiExport.export({ h10c.Gui, b5.Gui })
 
@@ -353,22 +367,22 @@ function Preview.ui(Loader: any): { [string]: any }
 		refs.Hint.Text = if compact then "Tap a chapter, then NEXT" else "Arrow keys: page  ·  Backspace: close"
 		return refs
 	end
-	local h11 = hud(Loader, scale)
+	local h11 = hudAt(scale)
 	local j1 = journalView(scale, false, 1600 / scale, (900 - 36) / scale, "CrownOfKaldrum", 2)
 	exports.ui_story = UiExport.export({ h11.Gui, j1.Gui })
-	local h12 = hud(Loader, phoneScale)
+	local h12 = hudAt(phoneScale)
 	local j2 = journalView(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale, "Golemworks", 1)
 	exports.ui_story_phone = UiExport.export({ h12.Gui, j2.Gui })
 
 	-- the NEW ARTIFACT! banner (not modal) over the HUD
-	local h13 = hud(Loader, scale)
+	local h13 = hudAt(scale)
 	local banner = CollectionView.buildBanner(false)
 	banner.Gui.Scale.Scale = scale
 	-- (as the controller does it: the key row first, it sets the height)
 	CollectionView.setBannerKeys(banner, "", "J: book", "", "Backspace: close")
 	CollectionView.showBanner(banner, newFind, artifacts)
 	exports.ui_banner = UiExport.export({ h13.Gui, banner.Gui })
-	local h13b = hud(Loader, smallScale)
+	local h13b = hudAt(smallScale)
 	local banner2 = CollectionView.buildBanner(true)
 	banner2.Gui.Scale.Scale = smallScale
 	CollectionView.setBannerKeys(banner2, "", "", "", "")
@@ -378,7 +392,7 @@ function Preview.ui(Loader: any): { [string]: any }
 	-- the COLLECTION COMPLETE card (the State push with the find not there yet: 6 / 6 all the same)
 	local stale = { Found = table.clone(Preview.Found), Chapters = {} }
 	stale.Found.EmberCrown = nil
-	local h14 = hud(Loader, scale)
+	local h14 = hudAt(scale)
 	local card2 = CollectionView.buildReveal(false)
 	card2.Gui.Scale.Scale = scale
 	CollectionView.showReveal(
@@ -388,7 +402,7 @@ function Preview.ui(Loader: any): { [string]: any }
 	)
 	CollectionView.fitReveal(card2, 1600 / scale, (900 - 36) / scale)
 	exports.ui_reveal_complete = UiExport.export({ h14.Gui, card2.Gui })
-	local h15 = hud(Loader, smallScale)
+	local h15 = hudAt(smallScale)
 	local card3 = CollectionView.buildReveal(true)
 	card3.Gui.Scale.Scale = smallScale
 	CollectionView.showReveal(

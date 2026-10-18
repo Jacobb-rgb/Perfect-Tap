@@ -28,8 +28,10 @@
 	  result  the prize card over the panel ("YOU WON!") with an OK button
 	          and confetti pieces the controller lets fall
 	  chip    its own ScreenGui: "FREE SPIN!" in the HUD's top row, right of
-	          the quick-teleport bar (TeleportView's width), only while the
-	          free spin is ready; a gamepad glyph shows its shortcut
+	          the quick-teleport bar (TeleportView's width for this uiScale
+	          and screen width: icon-only under TeleportView.NarrowWidth),
+	          only while the free spin is ready and the touch tutorial bubble
+	          isn't in that same spot (chipVisible)
 
 	Designed for 720 design units of height (HudController scales every
 	TerraForge gui); `compact` (phones, TVs) has 72-unit buttons (44 pt at
@@ -1175,20 +1177,35 @@ end
 ---------------------------------------------------------------- the HUD chip
 
 -- Where the chip sits: right of the quick-teleport bar in the HUD's top row
--- (TeleportView's width at this uiScale), design units from the top centre.
-function WheelView.chipOffset(uiScale: number): Vector2
-	local layout = TeleportView.layout(uiScale)
+-- (TeleportView's bar at this uiScale and screen width in pt: the icon-only
+-- bar under TeleportView.NarrowWidth), design units from the top centre.
+function WheelView.chipOffset(uiScale: number, screenWidth: number?): Vector2
+	local layout = TeleportView.layout(uiScale, screenWidth)
 	local barWidth = TeleportView.barWidth(layout, 3) + 44 + layout.Gap
 	return Vector2.new(math.floor(barWidth / 2) + 14, 10)
 end
 
-function WheelView.buildChip(uiScale: number): ChipRefs
+-- The chip's size at a uiScale (design units).
+function WheelView.chipSize(uiScale: number): Vector2
+	return if uiScale <= TeleportView.CompactScale then WheelView.ChipSize.Compact else WheelView.ChipSize.Normal
+end
+
+-- The chip's box on a screen (pt): its top-left corner and size in design
+-- units from the screen's top-left.
+function WheelView.chipRect(uiScale: number, screen: Vector2): (Vector2, Vector2)
+	local offset = WheelView.chipOffset(uiScale, screen.X)
+	return Vector2.new(screen.X / uiScale / 2 + offset.X, offset.Y), WheelView.chipSize(uiScale)
+end
+
+-- The chip for a uiScale and the screen width in pt (nil: the bar's
+-- uiScale layout, as on a screen wider than TeleportView.NarrowWidth).
+function WheelView.buildChip(uiScale: number, screenWidth: number?): ChipRefs
 	local gui = UIKit.screen("TerraForgeFreeSpin", 4)
 	gui:SetAttribute("TerraForge", true)
 	gui.Enabled = false
 	local compact = uiScale <= TeleportView.CompactScale
-	local size = if compact then WheelView.ChipSize.Compact else WheelView.ChipSize.Normal
-	local offset = WheelView.chipOffset(uiScale)
+	local size = WheelView.chipSize(uiScale)
+	local offset = WheelView.chipOffset(uiScale, screenWidth)
 	local button = UIKit.button(gui, "", Color3.fromRGB(255, 120, 60), Color3.fromRGB(170, 60, 24), {
 		Name = "FreeSpin",
 		Position = UDim2.new(0.5, offset.X, 0, offset.Y),
@@ -1214,17 +1231,24 @@ function WheelView.buildChip(uiScale: number): ChipRefs
 end
 
 -- Should the FREE SPIN! chip show: the spin is ready, the wheel screen is
--- closed, no spin is in flight, and nothing else has the screen (the
--- cleaning minigame, build mode, the Foundry moment: the HUD is hidden)?
-function WheelView.chipVisible(ready: boolean, isOpen: boolean, spinning: boolean, busyScreen: boolean): boolean
-	return ready and not isOpen and not spinning and not busyScreen
+-- closed, no spin is in flight, nothing else has the screen (the cleaning
+-- minigame, build mode, the Foundry moment: the HUD is hidden) and the
+-- tutorial bubble isn't in the chip's spot (`tutorialInTopRow`: on touch
+-- screens the bubble sits right of the teleport bar too; it comes first)?
+function WheelView.chipVisible(
+	ready: boolean,
+	isOpen: boolean,
+	spinning: boolean,
+	busyScreen: boolean,
+	tutorialInTopRow: boolean?
+): boolean
+	return ready and not isOpen and not spinning and not busyScreen and not tutorialInTopRow
 end
 
--- Moves the chip for a new uiScale (phone <-> big screen).
-function WheelView.placeChip(chip: ChipRefs, uiScale: number)
-	local compact = uiScale <= TeleportView.CompactScale
-	local size = if compact then WheelView.ChipSize.Compact else WheelView.ChipSize.Normal
-	local offset = WheelView.chipOffset(uiScale)
+-- Moves the chip for a new uiScale and screen width in pt (phone <-> big screen).
+function WheelView.placeChip(chip: ChipRefs, uiScale: number, screenWidth: number?)
+	local size = WheelView.chipSize(uiScale)
+	local offset = WheelView.chipOffset(uiScale, screenWidth)
 	local holder = chip.Button.Parent
 	if holder and holder:IsA("Frame") then
 		holder.Position = UDim2.new(0.5, offset.X, 0, offset.Y)

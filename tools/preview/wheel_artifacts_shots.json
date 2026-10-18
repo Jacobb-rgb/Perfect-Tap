@@ -14,6 +14,7 @@
  "shot_wheel_info_phone": {"scene": "wheel_artifacts", "position": [-47.5, 22, -38], "target": [-47.5, 24, -72.5], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_wheel_info_phone"},
  "shot_chip": {"scene": "wheel_artifacts", "position": [-40, 9, -10], "target": [-47.5, 24, -72.5], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_chip"},
  "shot_chip_phone": {"scene": "wheel_artifacts", "position": [-40, 9, -10], "target": [-47.5, 24, -72.5], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_chip_phone"},
+ "shot_chip_phone_small": {"scene": "wheel_artifacts", "position": [-40, 9, -10], "target": [-47.5, 24, -72.5], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_chip_phone_small"},
  "shot_book": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book"},
  "shot_book_done": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book_done"},
  "shot_book_phone": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book_phone"},

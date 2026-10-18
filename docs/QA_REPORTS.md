@@ -475,6 +475,60 @@ into the steps 6-7 integration. Decisions:
   the grid shuts (before, the grid half-covered the TRAIN chip and its SEND button stuck out).
 - Artifact book on phones: the detail card puts the icon beside the name whenever the tall card would cut the text,
   so "Most often in ...: 1 in N" always shows (667 x 375 and bigger; on 568 x 320 the lore scrolls under it).
+- Second sync with main (308d257: the security audit fixes in TeleportService / MachineService / Placement /
+  CleaningService, docs/SECURITY_AUDIT.md, docs/SERVER_PERF_AUDIT.md, the mining network diet). MiningService keeps
+  both sides: the steps 6-7 Bonuses notes and main's Network note in the header, and its test reset clears
+  artifactCallbacks, glowCache and healthDirty. Rebaked (map v25, 20,668 parts).
+- Tutorial vs the daily wheel: the wheel's ore prize (a dirty ore straight into the pen) counted as "ore came home by
+  train", so a new player who won it jumped from step 1 to "Clean your ore". WheelService now counts these ores
+  (Stats.WheelOres, sanitized by Migrations); TutorialConfig.home counts the pen only with more in it than the wheel
+  gave, and the first four steps take a clean as "done before" only beyond the wheel's ores (cleanedMined).
+- Touch: the tutorial bubble and the FREE SPIN! chip share the top row right of the teleport bar (568 x 320,
+  667 x 375, 1024 x 768 all overlap). The chip waits while the bubble is there (TutorialController.inTopRow /
+  onTopRowChanged -> WheelView.chipVisible) and chimes when it comes. PC and TV keep both (the bubble is bottom right).
+  The chip also follows main's icon-only bar under 600 pt (WheelView.chipOffset / buildChip / placeChip take the
+  screen width; on 568 x 320 it moved 57 units in, the same gap after the bar as on other screens), and so do the
+  steps 6-7 phone previews (menus, wheel_artifacts with a new ui_chip_phone_small, yard).
+- The tutorial bubble, its guide beam and R3 hide while a panel other than the steps' own is open (CODEX, GOLEMS,
+  ARTIFACTS, BOOSTS, SETTINGS, HALL OF FAME, the wheel, the shops; the Ore Pen, Tobin's counter, the Tech shop
+  and the Foundry keep it: TutorialView.StepPanels). Before, R3 twice inside a panel skipped the tutorial.
+- ORE CODEX: "Blaster level N+" is the lowest gate of the zones that hold the ore (Bronze 1, Sapphire / Dragon Egg /
+  Diamond 3), so it agrees with "Found in" (CodexView.levelOf; the ore's own Tier only when no zone holds it).
+- BoostConfig's Deep Hollow example says factors now (Hexa Lucky: Mythic about x3.8, Legendary about x2.4), checked
+  by tests/Step67Config.spec.luau. That spec's Quarry check still asked for Gold, which left the Quarry with the
+  36-ore map, and passed on NaN: it checks Bronze now, and T.near fails on NaN (no other test relied on it).
+- docs/BALANCE_SIM.md + tools/lune/balance_sim.luau: steps 6-7 are merged but not modelled yet (gear except the
+  Backpack, golems, boosts, enchants, capsules, wheel, artifacts); re-run on the merged config (the Backpack prices),
+  tables and chart refreshed.
+- bash tools/check.sh: ALL CHECKS PASSED (strict luau-lsp no problems, 1059 Lune tests, map v25 baked, 20,668 parts).
+Checks from the night QA list (docs/QA_NIGHT_2026-10-18.md, "Still to check"):
+- Keys the steps 6-7 add, none taken twice:
+
+  | Action | PC | Gamepad | Touch |
+  |---|---|---|---|
+  | Golems | P | L1 | side menu GOLEMS |
+  | Boosts | L | D-pad right | side menu SHOP |
+  | Artifact book | J | (side menu) | side menu ARTIFACTS |
+  | Side menu | click | D-pad left (B leaves) | MENU button |
+  | Daily wheel | FREE SPIN! chip / F at the Spin & Win chest | Y at the chest, the chip by UI selection | the chip / the chest prompt |
+  | Ore Codex | F at the ROCK SCANNER / side menu | Y / side menu | prompt / side menu |
+  | Panel tabs | click | L1 / R1 (only while the panel is open) | tap |
+
+  next to main's T / L3 train, D-pad down teleport bar, D-pad up build mode (only while no menu holds the
+  selection), R3 tutorial, E / X grab, Q / R1 throw, R2 blast. The golem toggle and the panels pass while build
+  mode or the cleaning minigame has the controls.
+- Net events: every event a script fires, sends or listens to is in Net.Events (GearAction, EnchantAction,
+  BoostAction, CapsuleAction, GolemAction, WheelAction, ArtifactAction, SettingsSave, CodexSeen, ActionResult,
+  CapsuleResult, WheelResult, ArtifactFound, PurchasePrompt, Leaderboards; main's TutorialAction / Tutorial).
+  Tags: ShopCounter (gear), EnchantCounter, CapsuleStall, EmberChest, Spin, Leaderboard, OreCodex, Museum,
+  ArtifactPrompt, MagnetPulled: none reuses one of main's.
+- Sounds: every Sfx.play / Sfx.loop key (38) exists in SoundConfig.
+- Budgets (map v25): map + ore nodes + 8 museums 22,336 parts (MapParts 22,800, 200 kept free), lobby 12,835 /
+  13,200, phones 15,625 / 18,000.
+Owner to-do (Creator Dashboard, not Studio): the Grotto weights changed with the 36-ore map. Paste
+`MonetizationConfig.grottoOddsText()` into the Forgemaster's Pass description: "Glimmer Grotto ore: 19.0% Silver,
+16.9% Gold, 14.8% Emberite, 14.8% Amber, 10.6% Jade, 8.5% Sapphire, 6.3% Dragon Egg, 4.2% Diamond, 3.2% Amethyst,
+1.6% Crystal Rose." (COMPLIANCE.md: the Dashboard text must follow whenever the weights change.)
 What to test in Studio:
 1. Old save: in a test place give yourself data with Ruby / Skyglass ores (pen, podium, Discovered, the codex's
    seen list) and a Ruby Knight golem; join: Bronze / Storm Gem everywhere, the Rose Knight still equipped, the
@@ -482,4 +536,15 @@ What to test in Studio:
 2. Phone emulator 667 x 375: tap MENU: the TRAIN chip and the boost chips disappear, the grid stands in their
    place; tap CLOSE (or wait for the auto-shut): they are back. Same on 568 x 320.
 3. Phone emulator: open the artifact book, tap several artifacts: the "Most often in ..." line is always in view.
-4. The tutorial and the side menu together: the tutorial bubble (right side) never covers the left column.
+4. The tutorial and the side menu together: the tutorial bubble (right side) never covers the left column. On
+   touch (device emulator 568 x 320, 667 x 375 and an iPad 1024 x 768) with a new save, the free spin is ready at
+   once: the FREE SPIN! chip does NOT show while the tutorial bubble is in the top right; skip or finish the
+   tutorial and the chip appears there with its chime. On 568 x 320 the chip keeps the same small gap after the
+   icon-only BASE / LOBBY / VAULT bar as on bigger screens (no extra hole the width of half a button). With the
+   mouse (PC) both show: the bubble bottom right, the chip top.
+5. Wheel ore during the tutorial: new save, spin the wheel at the Spin & Win chest until the Ore Prize comes (or set
+   the roll in a test place): the tutorial stays on 1 / 8 "To the mine!" and later walks Mine -> Load -> Train as
+   usual; the dirty ore waits in the pen. Clean that wheel ore before mining: still 1 / 8.
+6. Gamepad: during the tutorial open the CODEX (or GOLEMS, the wheel...): the bubble and the guide beam go, R3 does
+   nothing (no "SURE?"); close it: the bubble is back. In the Ore Pen (the Clean step) the bubble stays.
+7. ORE CODEX: Bronze reads "Blaster level 1+", Sapphire, Dragon Egg and Diamond "Blaster level 3+".

@@ -491,6 +491,35 @@ return function(T, Loader)
 		T.eq(#CodexView.zonesOf("Bogus"), 0)
 	end)
 
+	T.test("codex: the blaster level agrees with where the ore is found", function()
+		for _, ore in OreData.List do
+			local open, any = math.huge, math.huge
+			for _, zone in WorldLayout.Zones do
+				local weight = zone.Ores[ore.Id]
+				if type(weight) == "number" and weight > 0 then
+					any = math.min(any, zone.MinBlaster)
+					if not zone.VipOnly then
+						open = math.min(open, zone.MinBlaster)
+					end
+				end
+			end
+			local expected = if open < math.huge then open elseif any < math.huge then any else ore.Tier
+			T.eq(CodexView.levelOf(ore), expected, ore.Id .. ": the lowest gate of its zones")
+			local text = CodexView.detailText({ Ore = ore, Found = true, New = false, Zones = CodexView.zonesOf(ore.Id) })
+			T.eq(text.Tier, `Blaster level {expected}+`, ore.Id)
+		end
+		-- the 36-ore map: Bronze is the Quarry's (level 1), the Ember Caves hold Sapphire, Dragon Egg, Diamond (level 3)
+		T.eq(CodexView.levelOf(OreData.ById.Bronze), 1, "Bronze")
+		for _, id in { "Sapphire", "DragonEgg", "Diamond" } do
+			T.eq(CodexView.levelOf(OreData.ById[id]), 3, id)
+		end
+		-- an ore no zone holds keeps its own Tier
+		local loose = table.clone(OreData.ById.Coal)
+		loose.Id = "NoZoneOre"
+		loose.Tier = 7
+		T.eq(CodexView.levelOf(loose), 7)
+	end)
+
 	T.test("codex: the redraw fingerprint changes only with what the cards show", function()
 		local a = CodexView.fingerprint({ Coal = true, Gold = true }, {})
 		T.eq(a, CodexView.fingerprint({ Gold = true, Coal = true, Diamond = false }, nil), "order and false entries don't matter")

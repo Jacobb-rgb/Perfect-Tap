@@ -22,8 +22,10 @@
 	golems add to OreLuckPct, Hexa Lucky multiplies. It GROWS WITH RARITY:
 	an ore's weight is multiplied by L ^ LuckPower[its rarity] (Rare 1, Epic
 	1.5, Legendary 2, Mythic 2.5), so luck still matters where most ores are
-	already Rare+ (Deep Hollow: Hexa Lucky takes Mythic from 0.17 % to 0.59 %,
-	Legendary from 3.7 % to 8.0 %).
+	already Rare+ (Deep Hollow: Hexa Lucky makes a Mythic chunk about x3.8 as
+	likely and a Legendary one about x2.4; the exact chances come from the map
+	weights, rarityShares, and tests/Step67Config.spec.luau checks these
+	factors).
 
 	How luck works in a rock (upgradeOre, exact): a rock's ores are rolled
 	from the zone's plain weights when it grows, and the rock shows them

@@ -49,7 +49,9 @@
 	             WheelResult.Coins + Full = true; a failed opening pays the
 	             same coins (no Full) and never rolls a second time
 	    Ore      a dirty (Raw) Rare+ ore (WheelConfig.pickOre) into the Ore
-	             Pen (PenService.store); WheelResult.DirtyOre = true only, WHICH
+	             Pen (PenService.store), Stats.WheelOres + 1 (TutorialConfig:
+	             a wheel ore in the pen isn't ore the train brought home);
+	             WheelResult.DirtyOre = true only, WHICH
 	             ore stays secret until cleaned. Full pen: the expected raw
 	             value (oreFallbackCoins); no candidate: the Coins segment's
 	             coins (both as WheelResult.Coins)
@@ -320,6 +322,8 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 			award(player, WheelConfig.coins(WheelConfig.ById.Coins, incomeOf(player, data)), result)
 		elseif PenService.store(player, { K = "Raw", O = oreId }) then
 			result.DirtyOre = true
+			-- (the tutorial counts the pen's ore as "came home by train" only without these)
+			bump(data, "WheelOres")
 		else
 			award(player, WheelConfig.oreFallbackCoins(context), result)
 		end

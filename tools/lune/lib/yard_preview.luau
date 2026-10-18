@@ -143,15 +143,16 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 
 	-- HUD as a player with two podiums would see it
 	local scale = 1.25 -- 900 px tall render / 720 design height
-	local function hud(uiScale: number?): any
+	local function hud(uiScale: number?, screenWidth: number?): any
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = scale
-		-- the quick-teleport bar (layout for the real uiScale: 0.62 on phones) and
-		-- the side menu: BUILD and the elevator icon (shown here; in game only once
-		-- the world has a mine elevator)
+		-- the quick-teleport bar (layout for the real uiScale and screen width in
+		-- pt: 0.62 on phones, icon-only under 600 pt) and the side menu: BUILD and
+		-- the elevator icon (shown here; in game only once the world has a mine
+		-- elevator)
 		BuildView.menuButton(refs.Menu)
-		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale or 1)
-		TeleportView.relayout(teleport, refs.TopBar, uiScale or 1)
+		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale or 1, screenWidth)
+		TeleportView.relayout(teleport, refs.TopBar, uiScale or 1, screenWidth)
 		TeleportView.setSideVisible(teleport, true)
 		refs.Coins.Text = Format.money(12480)
 		refs.Income.Text = Format.perSecond(income)
@@ -188,10 +189,10 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	exports.ui_pen = UiExport.export({ hud().Gui, pen(false, scale).Gui })
 	-- an iPhone SE-sized screen (375 pt tall) scaled up to the 900 px render, at the 0.62 phone floor
 	local phoneScale = 0.62 * 900 / 375
-	local phoneHud = hud(0.62)
+	local phoneHud = hud(0.62, 667)
 	phoneHud.Gui.Scale.Scale = phoneScale
 	exports.ui_pen_phone = UiExport.export({ phoneHud.Gui, pen(true, phoneScale).Gui })
-	local phoneOnly = hud(0.62)
+	local phoneOnly = hud(0.62, 667)
 	phoneOnly.Gui.Scale.Scale = phoneScale
 	exports.hud_phone = UiExport.export({ phoneOnly.Gui })
 	local offline = HudView.buildOffline()

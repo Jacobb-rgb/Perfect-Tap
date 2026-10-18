@@ -22,6 +22,7 @@ return function(T, Loader)
 	local WheelService = Loader.requirePath("ServerScriptService.Server.Services.WheelService")
 	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
+	local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
 
 	local NOW = 1_800_000_000
 	local DAY = WheelConfig.CooldownSeconds
@@ -426,6 +427,8 @@ return function(T, Loader)
 		T.eq(result.DirtyOre, true)
 		T.eq(result.Ore, nil, "which ore stays secret")
 		T.eq(#w.data.Storage, 1)
+		T.eq(w.data.Stats.WheelOres, 1, "counted as the wheel's (the tutorial leaves it out)")
+		T.eq(TutorialConfig.advance(1, w.data), 1, "a new player's tutorial stays on step 1 (no mine, hopper or train skipped)")
 		local entry = w.data.Storage[1]
 		T.eq(entry.K, "Raw", "dirty")
 		local context = WheelService.oreContext(w.player, w.data)
@@ -447,6 +450,7 @@ return function(T, Loader)
 		local result = w.spin(rollFor(7)).A
 		T.falsy(result.DirtyOre)
 		T.eq(#w.data.Storage, before, "nothing stored")
+		T.eq(w.data.Stats.WheelOres, 0, "no wheel ore in the pen")
 		local expected = WheelConfig.oreFallbackCoins(WheelService.oreContext(w.player, w.data))
 		T.truthy(expected > 0)
 		T.eq(result.Coins, expected)
@@ -784,9 +788,54 @@ return function(T, Loader)
 
 	T.test("WheelView: the chip only shows over the HUD", function()
 		T.truthy(WheelView.chipVisible(true, false, false, false), "ready, nothing else on screen")
+		T.truthy(WheelView.chipVisible(true, false, false, false, false), "the tutorial bubble elsewhere (PC, TV)")
 		T.falsy(WheelView.chipVisible(true, false, false, true), "not over the minigame / Foundry moment / build mode")
 		T.falsy(WheelView.chipVisible(true, true, false, false), "not while the wheel is open")
 		T.falsy(WheelView.chipVisible(true, false, true, false), "not while a spin is in flight")
 		T.falsy(WheelView.chipVisible(false, false, false, false), "not before the spin is ready")
+		T.falsy(WheelView.chipVisible(true, false, false, false, true), "not while the touch tutorial bubble has its spot")
+	end)
+
+	T.test("WheelView: the chip follows the bar on every screen width (icon-only bar under 600 pt)", function()
+		local Vector2 = (require("@lune/roblox") :: any).Vector2
+		for _, screen in {
+			{ Name = "phone 568x320", Size = Vector2.new(568, 320) },
+			{ Name = "phone 667x375", Size = Vector2.new(667, 375) },
+			{ Name = "phone 844x390", Size = Vector2.new(844, 390) },
+			{ Name = "tablet 1024x768", Size = Vector2.new(1024, 768) },
+			{ Name = "PC 1280x720", Size = Vector2.new(1280, 720) },
+			{ Name = "PC 1920x1080", Size = Vector2.new(1920, 1080) },
+		} do
+			local scale = math.clamp(math.min(screen.Size.Y / 720, screen.Size.X / 1100), 0.62, 1.25)
+			local w = screen.Size.X / scale
+			-- the bar as TeleportController lays it out (screen width in pt)
+			local bar = TeleportView.layout(scale, screen.Size.X)
+			local barRight = w / 2 + (TeleportView.barWidth(bar, 3) + 44 + bar.Gap) / 2
+			local at, size = WheelView.chipRect(scale, screen.Size)
+			T.truthy(at.X >= barRight, `{screen.Name}: right of the bar`)
+			T.le(at.X - barRight, 16, `{screen.Name}: right after the bar's end, not floating`)
+			T.le(at.X + size.X, w, `{screen.Name}: on screen`)
+			T.eq(at.Y, 10, `{screen.Name}: in the top row`)
+			-- buildChip / placeChip put it there
+			local chip = WheelView.buildChip(scale, screen.Size.X)
+			local holder = chip.Button.Parent
+			T.near(holder.Position.X.Offset, at.X - w / 2, 1e-3, `{screen.Name}: built where chipRect says`)
+			WheelView.placeChip(chip, 1, nil)
+			WheelView.placeChip(chip, scale, screen.Size.X)
+			T.near(holder.Position.X.Offset, at.X - w / 2, 1e-3, `{screen.Name}: placed again for the screen`)
+			T.eq(holder.Size.X.Offset, size.X)
+			chip.Gui:Destroy()
+		end
+		-- 568 pt: the icon-only bar is 114 units shorter than the compact one, so the chip moves in by half of that
+		local small = WheelView.chipOffset(0.62, 568)
+		local wide = WheelView.chipOffset(0.62, 667)
+		T.eq(wide.X - small.X, 57, "the chip sits at the icon-only bar's end")
+		-- the controller passes the screen width and the tutorial flag
+		local fs = require("@lune/fs")
+		local source = fs.readFile("src/client/Controllers/WheelController.luau")
+		T.truthy(source:find("WheelView.buildChip(HudController.uiScale(), screenWidth())", 1, true), "built for the screen width")
+		T.truthy(source:find("WheelView.placeChip(c, HudController.uiScale(), screenWidth())", 1, true), "placed again on a new screen size")
+		T.truthy(source:find("WheelView.chipVisible(ready, open, busy, busyScreen, tutorial)", 1, true), "reads the tutorial bubble")
+		T.truthy(source:find("tutorial.onTopRowChanged(updateChip)", 1, true), "steps aside the moment the bubble comes")
 	end)
 end
