@@ -16,7 +16,7 @@ for (let i = 0; i + 1 < rest.length; i += 2) {
 const cols = cells.length === 4 ? 2 : cells.length;
 const W = 1920, cellW = (W - 30 * (cols + 1)) / cols, cellH = cellW * 9 / 16;
 const rows = Math.ceil(cells.length / cols);
-const H = rows * (cellH + 70) + 30;
+const H = rows * (cellH + 120) + 30;
 const html = `<html><body style="margin:0;background:#16141f;font-family:Arial,sans-serif">
 <div style="display:grid;grid-template-columns:repeat(${cols},${cellW}px);gap:30px;padding:30px">
 ${cells.map((c) => `<div><img src="${c.src}" style="width:${cellW}px;height:${cellH}px;border-radius:14px;display:block"/>
