@@ -92,6 +92,8 @@ elseif sceneName == "factory_max" then -- the same at the max upgrade level (cry
 elseif sceneName == "ore_stages_1" or sceneName == "ore_stages_2" or sceneName == "ore_stages_3" then
 	-- every ore through the loop's stages, one sheet per two rarities (tools/lune/lib/ore_stages.luau)
 	require("./lib/ore_stages").build(Loader, workspace, tonumber(string.sub(sceneName, -1)) :: number)
+elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common vs Mythic, 4 moments (tools/lune/lib/reveal_strip.luau)
+	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
