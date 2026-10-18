@@ -155,7 +155,15 @@ return function(T, Loader)
 	local function tick(m: any, now: number)
 		sorterTick(m, now)
 	end
+	local MachineBillboard = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MachineBillboard")
+	-- the old job attributes ride in the one packed Job attribute now
+	-- (ProcessingService.jobText), read the way the client reads it
+	local JOB_FIELDS = { Working = "Working", WorkStart = "Start", WorkTime = "Time", WorkOre = "Ore", Cycles = "Cycles" }
 	local function attr(m: any, name: string): any
+		local field = JOB_FIELDS[name]
+		if field then
+			return (MachineBillboard.decodeJob(m.Model:GetAttribute("Job")) :: any)[field]
+		end
 		return m.Model:GetAttribute(name)
 	end
 	local function count(list: any): number

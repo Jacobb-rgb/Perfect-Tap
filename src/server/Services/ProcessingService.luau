@@ -59,9 +59,23 @@
 	  the new upgrade look (MachineService.refreshType: a "Refresh" removal,
 	  like "Unload": the queues stay, a job in progress starts over).
 	- Clients animate everything from model attributes (MachineFxController):
-	  Queue, QueueMax, OutCount, Working, WorkStart, WorkTime, WorkOre, Cycles.
-	  WorkOre is "" while dirty ore is worked: nobody can see through the
-	  dirt (the Cleaning Plant reveals it when the clean ore comes out).
+	  Queue, QueueMax, OutCount, Status and ONE packed Job attribute
+	  (ProcessingService.jobText, read by MachineBillboard.decodeJob):
+	    "cycles|start|time|ore"  while a job runs: finished jobs so far,
+	                             the server time it began, its seconds,
+	                             the ore worked ("" for dirty ore: nobody
+	                             can see through the dirt; the Cleaning
+	                             Plant reveals it when the clean ore comes out)
+	    "cycles|||"              idle (or a finished job waiting for room in Out)
+	  It is written only when a job starts or the machine goes idle, at most
+	  once per tick (a chained job is one write); the finished-job count
+	  (Cycles) lives in machine.State and rides along, so the client's done
+	  effect needs no write of its own.
+	- busy (MachineService.Behaviour): a job runs, or items wait in the queue
+	  (an Alloy Furnace waiting for another ore only until NeedsOtherOre
+	  shows); an idle machine leaves the tick until an item wakes it. The
+	  Cleaning Plant's Quality odds refresh on a Tech shop Quality buy (and
+	  every QUALITY_CHECK seconds while it ticks).
 	- A sorter (a machine with a Time but no Output, the Iron Box) runs on
 	  these jobs too, with the behaviour ProcessingService.sorterBehaviour
 	  builds: its item comes back out unchanged, unless the sorter's `take`
@@ -123,6 +137,9 @@ type Job = {
 	Input: Desc, -- the In[1] table being worked
 	Inputs: { Desc }, -- every queued table the job works, In[1] first (Batch: a few; Alloy: the pair)
 	EndsAt: number, -- os.clock() time the job finishes
+	Start: number, -- server time it began (shown in the Job attribute)
+	Seconds: number, -- how long it takes
+	Ore: string, -- the ore shown while it runs ("" for dirty ore)
 	Odds: { [string]: number }?, -- grade odds of the Quality level when it started (Cleaning Plant)
 	Results: { Result }?, -- rolled once when it finishes (a blocked job keeps its roll)
 	Outputs: { Desc }?, -- every result's outputs, in order
@@ -189,6 +206,39 @@ local function isAlloy(machine: PlacedMachine): boolean
 	return machine.Info.Behaviour == ALLOY
 end
 
+--[[
+	The packed Job attribute (see the header): "cycles|start|time|ore" while
+	a job runs, "cycles|||" when idle. Numbers keep full precision (Luau's
+	shortest round-trip tostring). MachineBillboard.decodeJob reads it.
+]]
+function ProcessingService.jobText(cycles: number, start: number?, seconds: number?, ore: string?): string
+	if start and seconds then
+		return `{cycles}|{start}|{seconds}|{ore or ""}`
+	end
+	return `{cycles}|||`
+end
+
+-- Writes the Job attribute when what it shows changed: a new running job,
+-- going idle (or blocked), or another finished job. At most once per tick.
+local function showJob(machine: PlacedMachine)
+	if machine.Removed then
+		return
+	end
+	local state = machine.State
+	local job = state.Job :: Job?
+	local running = if job and not job.Blocked then job else nil
+	local cycles = state.Cycles or 0
+	if state.ShownCycles == cycles and state.ShownJob == running then
+		return
+	end
+	state.ShownCycles = cycles
+	state.ShownJob = running
+	local text = if running
+		then ProcessingService.jobText(cycles, running.Start, running.Seconds, running.Ore)
+		else ProcessingService.jobText(cycles)
+	MachineService.setAttr(machine, "Job", text)
+end
+
 ---------------------------------------------------------------- upgrades
 
 -- The owner's level of an upgrade of this machine type (0 without a save).
@@ -252,10 +302,10 @@ local function showQuality(machine: PlacedMachine)
 		return
 	end
 	local level = upgradeLevel(machine, "Quality")
-	if machine.Model:GetAttribute("Quality") == level and machine.State.QualityShown then
+	if machine.State.QualityShown == level then
 		return
 	end
-	machine.State.QualityShown = true
+	machine.State.QualityShown = level
 	local text = ProcessingService.oddsText(MachineData.gradeOdds(level))
 	MachineService.setAttrs(machine, { Quality = level, QualityOdds = text })
 	local base = machine.Model.PrimaryPart
@@ -274,11 +324,19 @@ end
 	(level 5 looks like level 4) rebuilds nothing.
 ]]
 local function onBought(player: Player, bought: Bought)
-	if bought.Kind ~= "Upgrade" or bought.Upgrade ~= "Speed" then
+	local machineId = bought.Machine
+	if bought.Kind ~= "Upgrade" or type(machineId) ~= "string" or not MachineData.ById[machineId] then
 		return
 	end
-	local machineId = bought.Machine
-	if type(machineId) ~= "string" or not MachineData.ById[machineId] then
+	if bought.Upgrade == "Quality" then
+		-- the plants show their new odds now (an idle one doesn't tick)
+		for _, machine in MachineService.ofPlayer(player) do
+			if machine.Id == machineId then
+				showQuality(machine)
+			end
+		end
+		return
+	elseif bought.Upgrade ~= "Speed" then
 		return
 	end
 	local level = bought.Level
@@ -291,10 +349,8 @@ end
 ---------------------------------------------------------------- jobs
 
 local function syncCounts(machine: PlacedMachine)
-	MachineService.setAttrs(machine, {
-		Queue = count(machine.Entry.In),
-		OutCount = count(machine.Entry.Out),
-	})
+	MachineService.setAttr(machine, "Queue", count(machine.Entry.In))
+	MachineService.setAttr(machine, "OutCount", count(machine.Entry.Out))
 end
 
 -- Alloy Furnace: shows "NeedsOtherOre" while it waits for a second ore. A
@@ -303,10 +359,10 @@ local function showWaiting(machine: PlacedMachine, waiting: boolean)
 	local status = machine.Model:GetAttribute("Status")
 	if waiting then
 		if status == nil or status == "" then
-			MachineService.setAttrs(machine, { Status = NEEDS_OTHER_ORE })
+			MachineService.setAttr(machine, "Status", NEEDS_OTHER_ORE)
 		end
 	elseif status == NEEDS_OTHER_ORE then
-		MachineService.setAttrs(machine, { Status = "" })
+		MachineService.setAttr(machine, "Status", "")
 	end
 end
 
@@ -329,6 +385,7 @@ local function jobInputs(machine: PlacedMachine, queue: { Desc }): ({ Desc }?, b
 	return MachineLogic.batch(machine.Id, queue, count(machine.Entry.Out)), false
 end
 
+-- Starts a job (the Job attribute follows at the end of the tick, showJob).
 local function startJob(machine: PlacedMachine, inputs: { Desc }, passThrough: boolean, startedAt: number, now: number)
 	local input = inputs[1]
 	local seconds = jobTime(machine)
@@ -336,20 +393,17 @@ local function startJob(machine: PlacedMachine, inputs: { Desc }, passThrough: b
 		Input = input,
 		Inputs = inputs,
 		EndsAt = startedAt + seconds,
+		-- the job may have begun a moment before this tick (chained jobs)
+		Start = serverNow() - (now - startedAt),
+		Seconds = seconds,
+		-- dirty ore hides what it is (its colour would give it away)
+		Ore = if input.K == "Raw" then "" else input.O,
 		Odds = jobOdds(machine),
 		Results = nil,
 		Outputs = nil,
 		PassThrough = passThrough,
 		Blocked = false,
 	} :: Job
-	MachineService.setAttrs(machine, {
-		Working = true,
-		-- the job may have begun a moment before this tick (chained jobs)
-		WorkStart = serverNow() - (now - startedAt),
-		WorkTime = seconds,
-		-- dirty ore hides what it is (its colour would give it away)
-		WorkOre = if input.K == "Raw" then "" else input.O,
-	})
 end
 
 -- Are all of the job's items still where it found them (In[1] first)?
@@ -502,13 +556,12 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 		list = {}
 	elseif count(entry.Out) + #list > MachineData.MaxOutBuffer then
 		if not job.Blocked then
+			-- idle while waiting (showJob); keep a more specific reason MachineService set
 			job.Blocked = true
-			-- idle while waiting; keep a more specific reason MachineService set
 			local status = machine.Model:GetAttribute("Status")
-			MachineService.setAttrs(machine, {
-				Working = false,
-				Status = if status == nil or status == "" then "OutputBlocked" else status,
-			})
+			if status == nil or status == "" then
+				MachineService.setAttr(machine, "Status", "OutputBlocked")
+			end
 		end
 		return false
 	end
@@ -524,8 +577,8 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 				warnThrottled(machine.Id .. ".sorted", `[ProcessingService] {machine.Id} sorted hook failed: {err}`)
 			end
 		end
-		local cycles = machine.Model:GetAttribute("Cycles")
-		MachineService.setAttrs(machine, { Cycles = (if type(cycles) == "number" then cycles else 0) + 1 })
+		-- shown through the Job attribute (showJob), no write of its own
+		machine.State.Cycles = (machine.State.Cycles or 0) + 1
 		-- a sorter (Iron Box: no Output) only passes the item on: nothing was
 		-- smelted, cleaned or discovered, so no stats, toasts or listeners
 		if machine.Info.Output ~= nil then
@@ -557,18 +610,19 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 	return true
 end
 
-local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
-	if machine.Info.QualityLevels and now >= (machine.State.NextQualityCheck or 0) then
-		machine.State.NextQualityCheck = now + QUALITY_CHECK
+local function step(machine: PlacedMachine, now: number, sorter: Sorter?)
+	local state = machine.State
+	if machine.Info.QualityLevels and now >= (state.NextQualityCheck or 0) then
+		state.NextQualityCheck = now + QUALITY_CHECK
 		showQuality(machine)
 	end
 	local entry = machine.Entry
-	local job = machine.State.Job :: Job?
+	local job = state.Job :: Job?
 	local startedAt = now
 	if job then
 		if not stillQueued(entry.In, job) then
 			-- the queue changed under the job (repaired save): start over
-			machine.State.Job = nil
+			state.Job = nil
 			job = nil
 		elseif now < job.EndsAt then
 			return
@@ -581,10 +635,10 @@ local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
 			startedAt = if wasBlocked then now else math.max(job.EndsAt, now - GameConfig.MachineTick)
 		end
 	end
+	state.Waiting = false
 	local queue = entry.In
 	local input = queue and queue[1]
 	if input == nil then
-		MachineService.setAttrs(machine, { Working = false })
 		if isAlloy(machine) then
 			showWaiting(machine, false)
 		end
@@ -606,21 +660,49 @@ local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
 		showWaiting(machine, inputs == nil)
 	end
 	if not inputs then
-		MachineService.setAttrs(machine, { Working = false })
+		state.Waiting = true
 		return
 	end
 	startJob(machine, inputs, passThrough, startedAt, now)
 end
 
+local function tickWith(machine: PlacedMachine, now: number, sorter: Sorter?)
+	step(machine, now, sorter)
+	showJob(machine)
+end
+
+--[[
+	Does the machine still need the tick (MachineService.Behaviour.busy)? A
+	running job (also one waiting for room in Out), or a queue to start on.
+	An Alloy Furnace waiting for another ore only needs it while
+	NeedsOtherOre isn't shown (MachineService cleared the Status); an
+	insert wakes it again.
+]]
+local function busy(machine: PlacedMachine, _now: number): boolean
+	local state = machine.State
+	if state.Job ~= nil then
+		return true
+	end
+	if machine.Entry.In == nil then
+		return false
+	end
+	if state.Waiting then
+		local status = machine.Model:GetAttribute("Status")
+		return status == nil or status == ""
+	end
+	return true
+end
+
 local function spawned(machine: PlacedMachine)
+	local state = machine.State
+	state.Cycles = 0
+	state.ShownCycles = 0
+	state.ShownJob = nil
 	MachineService.setAttrs(machine, {
 		Queue = count(machine.Entry.In),
 		QueueMax = MachineLogic.queueSize(machine.Id),
 		OutCount = count(machine.Entry.Out),
-		Working = false,
-		WorkStart = 0,
-		WorkTime = 0,
-		Cycles = 0,
+		Job = ProcessingService.jobText(0),
 		Status = "",
 	})
 	IntakeService.addLoadPrompt(machine, machine.Info.LoadText or "Put In", 0)
@@ -653,6 +735,7 @@ local behaviour: MachineService.Behaviour = {
 	tick = function(machine: PlacedMachine, now: number)
 		tickWith(machine, now, nil)
 	end,
+	busy = busy,
 }
 
 --[[
@@ -676,6 +759,7 @@ function ProcessingService.sorterBehaviour(sorter: Sorter): MachineService.Behav
 		tick = function(machine: PlacedMachine, now: number)
 			tickWith(machine, now, sorter)
 		end,
+		busy = busy,
 	}
 end
 
