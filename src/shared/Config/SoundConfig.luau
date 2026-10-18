@@ -50,6 +50,14 @@ local SoundConfig: { [string]: SoundDef } = {
 	-- Store and paste their rbxassetid:// ids here (then Volume ~0.4 / 0.35, whistle Pitch { 0.95, 1.05 }).
 	TrainChuff = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.22, Pitch = { 0.45, 0.85 }, Looped = true },
 	TrainWhistle = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.14, Pitch = { 1.75, 1.9 }, Looped = true },
+	-- the Blaster Vault's crate opening (VaultController): the case lands, hums while it charges, bursts
+	-- (glass crash + a soft boom), the blaster rises. Ids that play in today's clients: files shipped in
+	-- content/sounds, or Roblox's own uploads of the classic sounds (12222005 = glassbreak.wav, 12222200 = swoosh.wav).
+	CaseLand = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.75, Pitch = { 0.5, 0.55 } },
+	CaseCharge = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.3, Pitch = { 1.5, 1.6 }, Looped = true },
+	CaseBurst = { Id = "rbxassetid://12222005", Volume = 0.75, Pitch = { 0.42, 0.48 } },
+	CaseBoom = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.35, Pitch = { 1.15, 1.25 } },
+	CaseRise = { Id = "rbxassetid://12222200", Volume = 0.5, Pitch = { 0.55, 0.62 } },
 }
 
 return SoundConfig
