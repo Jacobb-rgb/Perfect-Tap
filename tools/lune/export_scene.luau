@@ -94,6 +94,8 @@ elseif sceneName == "ore_stages_1" or sceneName == "ore_stages_2" or sceneName =
 	require("./lib/ore_stages").build(Loader, workspace, tonumber(string.sub(sceneName, -1)) :: number)
 elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common vs Mythic, 4 moments (tools/lune/lib/reveal_strip.luau)
 	require("./lib/reveal_strip").build(Loader, workspace)
+elseif sceneName == "platforms" then -- PREVIEW: platforms one level up with a Belt Lift and a Slide (tools/lune/lib/platforms_preview.luau)
+	require("./lib/platforms_preview").build(Loader, workspace)
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
