@@ -1,0 +1,8 @@
+{
+  "tutorial_station": {"scene": "tutorial", "position": [-2, -6.5, -127], "target": [22, -4, -149], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.75, 0.43]},
+  "tutorial_ui_pc": {"scene": "tutorial", "position": [-2, -6.5, -127], "target": [22, -4, -149], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.75, 0.43], "ui": "ui_tutorial_pc"},
+  "tutorial_ui_tv": {"scene": "tutorial", "position": [-2, -6.5, -127], "target": [22, -4, -149], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.75, 0.43], "ui": "ui_tutorial_tv", "uiInset": 30},
+  "tutorial_ui_done": {"scene": "tutorial", "position": [-2, -6.5, -127], "target": [22, -4, -149], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.75, 0.43], "ui": "ui_tutorial_done"},
+  "tutorial_ui_phone": {"scene": "tutorial_hopper", "position": [14, -3, -133], "target": [27, -7.5, -150], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.75, 0.43], "ui": "ui_tutorial_phone", "uiInset": 58},
+  "tutorial_ui_phone_small": {"scene": "tutorial_hopper", "position": [14, -3, -133], "target": [27, -7.5, -150], "fov": 55, "preset": "Quarry", "sunDir": [-0.5, 0.75, 0.43], "ui": "ui_tutorial_phone_small", "uiInset": 163}
+}

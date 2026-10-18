@@ -101,7 +101,10 @@ function styleElement(el, node, w, h) {
     span.style.justifyContent = node.tx === "Left" ? "flex-start" : node.tx === "Right" ? "flex-end" : "center";
     span.style.textAlign = node.tx === "Left" ? "left" : node.tx === "Right" ? "right" : "center";
     span.style.fontFamily = `"${font}"`;
-    const size = node.scaled ? fitText(node.text, font, w, h, node.wrap) : node.ts;
+    let size = node.scaled ? fitText(node.text, font, w, h, node.wrap) : node.ts;
+    // UITextSizeConstraint on a scaled label: Roblox keeps the fitted size within it
+    if (node.scaled && node.maxts) size = Math.min(size, node.maxts);
+    if (node.scaled && node.mints) size = Math.max(size, node.mints);
     span.style.fontSize = `${size}px`;
     span.style.lineHeight = "1.05";
     span.style.color = rgba(node.tc, 1 - node.tt);
