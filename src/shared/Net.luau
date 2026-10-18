@@ -96,6 +96,9 @@ Net.Events = {
 	--   refuses any other ("Stale", EconomyConfig.techQuote). The handler quotes, spends and
 	--   writes the level / inventory in one step with no yield, so a double tap buys one
 	--   level. Every request (except one the rate limit drops) gets a ShopResult answer.
+	VaultBuy = { Rate = 2, Burst = 4 }, -- ({ Level: number }) buy your next blaster level at the Blaster Vault
+	--   counter for coins (BlasterData.vaultPrice, the case's ore look BlasterData.vaultOre); every
+	--   request read gets a VaultResult (see VaultService)
 	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
@@ -132,6 +135,10 @@ Net.Events = {
 	ShopResult = false,
 	-- the answer to a Teleport: { Destination, Ok, Reason?: a TeleportConfig.Reasons code }
 	TeleportResult = false,
+	-- the answer to a VaultBuy: { Level, Ok, Reason?: "BadLevel" | "Owned" | "Locked" | "Max" |
+	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
+	--   on Ok the client plays the crate opening (a State push follows)
+	VaultResult = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

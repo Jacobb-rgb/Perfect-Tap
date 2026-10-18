@@ -27,6 +27,7 @@ local ORDER = {
 	"TrainController",
 	"FoundryController",
 	"TechShopController",
+	"VaultController", -- the Blaster Vault shop and its crate opening
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)

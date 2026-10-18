@@ -305,3 +305,29 @@ What to test in Studio:
 6. Sit on a seat (the train, a bench) and press LOBBY: you get up and land in the lobby.
 7. The LIFT icon under BUILD stays hidden until the world has a mine elevator (art/mine-floors); with it,
    LIFT puts you in front of the lowest elevator stop.
+
+## Blaster Vault shop + crate opening (2026-10-18, branch feature/vault-shop)
+Owner: "click the cape (counter) and a menu of cases with blasters opens", then the approved crate-opening
+animation in the game. VaultService / VaultController / VaultView / CrateOpeningView, Builders/CaseBuilder +
+CrateOpeningStage (the preview video's animation rebuilt from parts), BlasterData.Vault (prices, case looks).
+The Vault sells only your NEXT level, for coins only: 4x the Foundry's coin price (Lv4 60K ... Lv10 6B), in that
+level's case look (Copper, Cobalt, Amethyst, Gold, Emberite, Sapphire, Obsidian, Royal Aurum, Heartstone).
+The Foundry stays the cheaper way (ingots + coins) and lets you pick the ore look.
+QA notes: buy is checked on the server in one step with no yield (level = yours + 1, at the counter within 30
+studs, coins), so a double tap or a spammed remote buys one level (tests/VaultService.spec.luau fuzzes it);
+every request gets one VaultResult; the prompt key is F / Y because E is the game's grab key.
+What to test in Studio:
+1. Walk to the vault counter: "Blaster Vault" prompt (F, gamepad Y). The window opens: your level's cards say
+   OWNED, the next one has the gold outline, NEXT and a green BUY, the rest LOCKED, LV 11 SOON.
+2. With too few coins the price is red; BUY says "Not enough coins" in the footer and nothing is sent.
+3. BUY with enough coins: "..." then the screen fades into the dark room: the case drops, hums, bursts
+   (flash, light pillar, shards), the blaster rises and spins; "NEW BLASTER!", rarity, name, LV, damage, then
+   AWESOME!. Click / tap / A before the burst jumps to the burst; AWESOME!, A, B, Enter, Space or Backspace end
+   it. Back in the vault you hold the new blaster and the coins went down by the price.
+4. During the cinematic: no walking, no prompts, no HUD, no backpack, no touch buttons; after it all come back
+   and the camera follows you again (FieldOfView back to 70).
+5. Reset your character during the cinematic: it ends at once, the camera and HUD come back.
+6. Walk 25 studs away with the window open: it closes. B / Backspace / the red X close it too.
+7. Phone (iPhone SE emulator): one row of wide cards that scrolls sideways, the NEXT card in view, BUY and X
+   are easy to tap. Controller: A on the selected card buys, the row scrolls with the selection.
+8. The display cases behind the counter have the same colours as the shop's cases.

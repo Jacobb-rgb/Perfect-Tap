@@ -15,6 +15,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local BlasterData = require(Shared.Config.BlasterData)
+local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Geo = require(Shared.Builders.Geo)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
@@ -88,19 +90,20 @@ Kit.C = {
 
 local C = Kit.C
 
--- The ore looks of the ten blaster levels (BlasterData ore skins), for cases and display rims.
-Kit.Levels = {
-	{ Body = rgb(150, 96, 64), Glow = rgb(255, 150, 70), Magma = true }, -- 1 rusty
-	{ Body = rgb(222, 120, 60), Glow = rgb(255, 150, 80), Magma = true }, -- 2 copper
-	{ Body = rgb(40, 200, 220), Glow = rgb(120, 244, 255), Magma = false }, -- 3 azurium
-	{ Body = rgb(150, 84, 220), Glow = rgb(196, 130, 255), Magma = false }, -- 4 amethyst
-	{ Body = rgb(255, 200, 58), Glow = rgb(255, 222, 96), Magma = true }, -- 5 gold
-	{ Body = rgb(222, 30, 64), Glow = rgb(255, 76, 108), Magma = true }, -- 6 ruby
-	{ Body = rgb(30, 64, 220), Glow = rgb(90, 130, 255), Magma = false }, -- 7 sapphire
-	{ Body = rgb(20, 176, 84), Glow = rgb(80, 255, 140), Magma = false }, -- 8 emerald
-	{ Body = rgb(122, 104, 255), Glow = rgb(110, 230, 255), Magma = false }, -- 9 stormcore
-	{ Body = rgb(255, 50, 112), Glow = rgb(255, 120, 160), Magma = false }, -- 10 heartstone
-}
+export type LevelLook = { Body: Color3, Glow: Color3, Magma: boolean }
+
+--[[
+	The looks of the ten blaster levels for the display cases and rims: the
+	cases the shop sells (BlasterData.Vault.Ores in CaseBuilder's colours),
+	so the cases behind the counter match the shop window and the opening.
+]]
+Kit.Levels = {} :: { LevelLook }
+for level = 1, BlasterData.MaxLevel do
+	local ore = BlasterData.vaultOre(level)
+	local color = BlasterData.skin(ore)
+	local _, _, glow, hot = CaseBuilder.look(ore)
+	table.insert(Kit.Levels, { Body = color, Glow = glow, Magma = hot })
+end
 
 ---------------------------------------------------------------- frames
 
