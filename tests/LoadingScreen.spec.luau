@@ -59,7 +59,7 @@ return function(T, Loader)
 
 	T.test("loading: tips and the logo slot", function()
 		local n = #LoadingConfig.Tips
-		T.truthy(n >= 6 and n <= 8, `{n} tips`)
+		T.truthy(n >= 6 and n <= 10, `{n} tips`)
 		for i, tip in LoadingConfig.Tips do
 			T.truthy(#tip <= 80, `tip {i} is short`)
 			T.truthy(string.match(tip, "^[%w%s%.,!'%-]+$") ~= nil, `tip {i} is plain text`)

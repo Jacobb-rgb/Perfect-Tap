@@ -47,7 +47,6 @@ LoadingConfig.Attribute = "LoadingDone"
 LoadingConfig.Logo = { Id = 0 }
 
 -- simple English, only what the game has today
--- TODO(steps 6-7): a golem / capsule tip once they are in the game
 LoadingConfig.Tips = {
 	"Clean your ore by hand to raise its grade. Flawless sells best!",
 	"Put your best ores on podiums. They earn coins every second.",
@@ -57,6 +56,8 @@ LoadingConfig.Tips = {
 	"Buy the next blaster level in the Blaster Vault.",
 	"Press BASE, LOBBY or VAULT at the top to travel fast.",
 	"Every ore can be mined without a game pass.",
+	"Golems from capsules follow you around. Each one gives you a bonus!",
+	"Spin the free wheel in town once every day.",
 }
 
 LoadingConfig.TipEvery = 4 -- seconds per tip
