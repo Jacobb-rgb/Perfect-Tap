@@ -190,6 +190,17 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 3. **Trading:** golems and ores only (no blasters, no money). ✔
 4. **Leaderboards: 4 boards:** Money per second, Total earned, Artifacts found, and **Most hours played**.
 
+### Ore roster from the owner's picture (owner, 2026-10-18)
+The owner sent docs/art/ores_reference.webp (36 ores on a tiered neon shelf) and chose "everything like the picture":
+names, count, rarities and looks. OreData now has 36 ores: Common Coal, Copper, Tin, Iron, Quartz, Oakwood, Honeycomb;
+Uncommon Leaf Ore, Frostbite, Emberite, Cobalt, Bogwood, Amber; Rare Bronze, Silver, Gold, Jade, Sapphire, Dragon Egg;
+Epic Diamond, Amethyst, Obsidian, Crystal Rose, Storm Pearl, Galaxy Stone; Legendary Royal Aurum, Sunstone, Moonstone,
+Storm Gem, Leaf Gem, Volcanic Core; Mythic Aetherium, Phoenix Feather, Dragon Scale, Celestial Core, Heartstone Shard.
+The two unnamed ores of the picture (the black-gold gem, the violet cluster) took the old names Royal Aurum and
+Aetherium (the owner may rename them). Incomes keep the old per-rarity ranges. Replaced old ores map to a new ore of
+the same rarity (OreData.Renamed; Data/Migrations renames them in saves). Looks: ItemBuilder recipes per ore Id in
+OreShapesLow / OreShapesHigh; picture: scene `ore_showcase` (docs/screenshots/ore_showcase.jpg).
+
 ### Machine roster (owner, 2026-10-17)
 The owner accepted every proposed machine and asked for more: 24 placeable machines (cleaning/sorting, a furnace
 ladder Clay → Brick → Blast → Plasma + Alloy Furnace, Crusher, Crystal Extractor, Restoration Table, Sell Box,

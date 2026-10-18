@@ -275,16 +275,16 @@
   "scene": "ore_showcase",
   "preset": "Surface",
   "position": [
-   1.2,
+   1.1,
    30,
-   18
+   66
   ],
   "target": [
-   1.2,
-   5.2,
-   -11.2
+   1.1,
+   6.6,
+   -9.3
   ],
-  "fov": 48,
+  "fov": 18,
   "shadowExtent": 50
  }
 }
