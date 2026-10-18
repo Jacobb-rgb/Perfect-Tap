@@ -948,16 +948,17 @@ function MachineService.pushOut(machine: PlacedMachine, desc: Desc)
 	DataService.changed(player)
 end
 
--- Loose items the owner has now. During a tick pass each owner is counted
+-- Loose items the owner has on / around bases now (ore lying in the mine
+-- doesn't stall the factory). During a tick pass each owner is counted
 -- once (ItemService.looseCount walks their items) plus what the pass spawned:
 -- nothing else takes loose items away or adds them while the pass runs.
 local function looseNow(owner: number): number
 	if not inPass then
-		return ItemService.looseCount(owner)
+		return ItemService.looseCount(owner, "Base")
 	end
 	local n = passLoose[owner]
 	if n == nil then
-		n = ItemService.looseCount(owner)
+		n = ItemService.looseCount(owner, "Base")
 		passLoose[owner] = n
 	end
 	return n :: number

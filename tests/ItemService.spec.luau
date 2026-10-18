@@ -218,6 +218,29 @@ return function(T, Loader)
 		T.eq(w.data.Coins, coins + ItemData.value("Raw", "Diamond"), "raw price")
 	end)
 
+	withWorld("ItemService: items at home and items in the mine have their own loose caps (compat #4)", function(w)
+		local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+		local home = WorldLayout.plotCFrame(WorldLayout.Plots[1])
+		T.truthy(ItemService.onBase(home.Position + Vector3.new(0, 3, 0)), "a plot's middle is a base")
+		local cap = GameConfig.MaxLooseItemsPerPlayer
+		-- a busy factory: belt items at home
+		for i = 1, cap + 4 do
+			ItemService.spawnDesc(clean(), USER, home * CFrame.new((i % 10) - 5, 3, math.floor(i / 10)), nil, true)
+		end
+		T.eq(ItemService.looseCount(USER, "Base"), cap + 4, "all at home")
+		T.eq(ItemService.looseCount(USER, "Away"), 0, "none in the mine")
+		T.falsy(ItemService.atLooseCap(USER), "a busy factory never stops your mining")
+		-- ore left lying in the mine (far from every base)
+		local far = Vector3.new(0, 5, 0)
+		T.falsy(ItemService.onBase(far), "the test spot is away from bases")
+		for i = 1, cap do
+			ItemService.spawnDesc(clean(), USER, CFrame.new(far + Vector3.new(i, 0, 0)))
+		end
+		T.truthy(ItemService.atLooseCap(USER), "the mine's cap: rocks stop giving ore")
+		T.eq(ItemService.looseCount(USER, "Base"), cap + 4, "and the factory's count didn't grow")
+		T.eq(ItemService.looseCount(USER), 2 * cap + 4, "all of them")
+	end)
+
 	withWorld("ItemService: stash and the loose cap keep every item", function(w)
 		local record = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
 		T.truthy(ItemService.stash(record, "Your item landed on another forge"), "stashed")

@@ -23,10 +23,13 @@
 	  as a key and a look seed: never saved, never sent as an attribute.
 	- Attributes (all clients read): Kind, Owner, State, and for anything but
 	  dirty ore OreId, Grade?, Recipe?, Value; CarriedBy while carried.
-	- Loose items per player: the SOURCES stop at GameConfig.MaxLooseItemsPerPlayer
-	  (machines and chutes a little below it, MiningService doesn't let a rock
-	  give ore while you have that many: atLooseCap); nothing is ever moved
-	  into the pen behind your back. Resting items sleep in Roblox physics.
+	- Loose items per player, counted apart by where they lie (looseCount
+	  "Base" / "Away"): machines, chutes and pen takes stop a little below
+	  GameConfig.MaxLooseItemsPerPlayer items on and around bases, and
+	  MiningService doesn't let a rock give ore while that many lie away from
+	  bases (atLooseCap). A busy factory never stops your mining and ore left
+	  in the mine never stalls your factory. Nothing is ever moved into the
+	  pen behind your back. Resting items sleep in Roblox physics.
 	- Items that fall out of the world are put back next to their owner.
 	- Leaving players: loose and carried items go into the Ore Pen.
 	- The Ore Pen (data.Storage) holds penCapacity items. Only RESCUE moves
@@ -529,23 +532,37 @@ function ItemService.descOf(record: ItemRecord): Desc
 	return { K = record.Kind, O = record.OreId, G = record.Grade, R = record.Recipe }
 end
 
-function ItemService.looseCount(userId: number): number
+export type LooseWhere = "Base" | "Away"
+
+-- The player's loose items: all, or only those on / around a base ("Base":
+-- belts, chutes, the pen gate) or away from every base ("Away": mine drops).
+-- An item without a body counts as on a base.
+function ItemService.looseCount(userId: number, where: LooseWhere?): number
 	local count = 0
 	local set = byOwner[userId]
 	if set then
 		for record in set do
 			if record.State == "Loose" then
-				count += 1
+				if where == nil then
+					count += 1
+				else
+					local body = record.Body
+					local onBase = body == nil or ItemService.onBase(body.CFrame.Position)
+					if onBase == (where == "Base") then
+						count += 1
+					end
+				end
 			end
 		end
 	end
 	return count
 end
 
--- Has this player as many loose items as the world lets them have
--- (GameConfig.MaxLooseItemsPerPlayer)? Sources stop then (MiningService).
+-- Does this player have as many loose items away from bases as the world
+-- lets them have (GameConfig.MaxLooseItemsPerPlayer)? Mining stops giving
+-- ore then (MiningService); items on bases don't count (the factory's own cap).
 function ItemService.atLooseCap(userId: number): boolean
-	return ItemService.looseCount(userId) >= GameConfig.MaxLooseItemsPerPlayer
+	return ItemService.looseCount(userId, "Away") >= GameConfig.MaxLooseItemsPerPlayer
 end
 
 -- Every loose item. A copy, so callers may destroy items while walking it.

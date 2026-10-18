@@ -90,14 +90,19 @@ local function updatePrompts(machine: MachineService.PlacedMachine)
 	end
 end
 
-local function mount(machine: MachineService.PlacedMachine, record: ItemService.ItemRecord)
+-- Puts the record into the vise; false when it can't be (no OrePoint, or a
+-- record ItemService refuses: a consumed one, security audit #11).
+local function mount(machine: MachineService.PlacedMachine, record: ItemService.ItemRecord): boolean
 	local orePoint = MachineService.point(machine, "OrePoint")
 	if not orePoint then
-		return
+		return false
 	end
-	ItemService.mount(record, orePoint * CFrame.new(0, -0.55, 0))
+	if not ItemService.mount(record, orePoint * CFrame.new(0, -0.55, 0)) then
+		return false
+	end
 	machine.State.Item = record
 	updatePrompts(machine)
+	return true
 end
 
 local function endSession(session: Session)
@@ -149,14 +154,17 @@ local function onPrompt(player: Player, machine: MachineService.PlacedMachine)
 		return
 	end
 	if not stationItem(machine) then
+		-- only a chunk really in the hands (CarryService.takeTop skips others too: #11)
 		local record = CarryService.takeTop(player, function(r)
-			return r.Kind == "Raw"
+			return r.Kind == "Raw" and r.State == "Carried"
 		end)
 		if not record then
 			Net.fire("Notify", player, { Text = "Bring a raw ore chunk to clean it.", Kind = "Info" })
 			return
 		end
-		mount(machine, record)
+		if not mount(machine, record) then
+			return
+		end
 	end
 	startSession(player, machine)
 end
@@ -331,11 +339,12 @@ local function intakePass(scan: IntakeScan): number
 				and record.Owner == machine.Owner.UserId
 				and ItemService.isTrusted(record, os.clock())
 			then
-				mount(machine, record)
 				-- start right away if the owner is close by
-				local root = Guard.rootPart(machine.Owner)
-				if root and (root.Position - (base :: BasePart).Position).Magnitude < 22 then
-					startSession(machine.Owner, machine)
+				if mount(machine, record) then
+					local root = Guard.rootPart(machine.Owner)
+					if root and (root.Position - (base :: BasePart).Position).Magnitude < 22 then
+						startSession(machine.Owner, machine)
+					end
 				end
 				break
 			end

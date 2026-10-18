@@ -66,7 +66,7 @@ Net.Events = {
 	--   just drops the intents: there is nothing to put back.
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
-	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed" }?)
+	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed", Level = the level bought }?: "Stale" unless Level = current + 1)
 	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
@@ -180,7 +180,7 @@ Net.Events = {
 	Tutorial = false, -- { Step, Done, Total, Reward?, How = "Step" | "Done" | "Skip" | "Load" }
 	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
-	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
+	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? (a short per-session number) }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
 	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,

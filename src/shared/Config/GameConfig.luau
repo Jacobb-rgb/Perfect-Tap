@@ -28,7 +28,7 @@ local GameConfig = {
 	CellSize = 4, -- studs per grid cell
 
 	-- Physical items (performance)
-	MaxLooseItemsPerPlayer = 30, -- above this, the oldest loose item is moved to storage
+	MaxLooseItemsPerPlayer = 30, -- loose items per player on bases (machines / chutes stop below it) and, apart, away from bases (rocks stop giving ore)
 	ServerOwnershipAfter = 3, -- seconds after a drop/throw before the server takes back item physics
 	PickupRange = 11,
 	ThrowSpeedMin = 22,

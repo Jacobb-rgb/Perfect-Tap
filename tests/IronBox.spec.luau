@@ -284,6 +284,24 @@ return function(T, Loader)
 		T.eq(attr(m, "Sent"), 2)
 	end)
 
+	withWorld("IronBox: a pen over its limit sends kept ore out with the 'over' hint", function(w)
+		local now = 1000
+		box.setClock(function()
+			return now
+		end)
+		local m = place(w)
+		local capacity = PenService.capacityOf(w.data)
+		for i = 1, capacity + 3 do
+			w.data.Storage[i] = item("Clean", "Coal", "Rough")
+		end
+		sortOne(w, m, item("Clean", "Gold", "Clean"), 10)
+		T.eq(#w.data.Storage, capacity + 3, "nothing added while over")
+		T.eq(count(m.Entry.Out), 1, "out of the front instead")
+		local hints = notesNamed(w, "Notify")
+		T.eq(#hints, 1, "one hint")
+		T.eq(hints[1].Payload.Text, IronBoxService.PenOverText, "says the pen is over its limit")
+	end)
+
 	withWorld("IronBox: a full pen sends kept ore out of the front, with a hint", function(w)
 		local now = 1000
 		box.setClock(function()

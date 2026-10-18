@@ -508,7 +508,8 @@ end
 ]]
 local function takeItems(player: Player, plotId: number, data: { [string]: any }, key: string, count: number): number
 	local freeHands = math.max(0, CarryService.capacity(player) - #CarryService.list(player))
-	local looseRoom = math.max(0, GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom - ItemService.looseCount(player.UserId))
+	local looseRoom =
+		math.max(0, GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom - ItemService.looseCount(player.UserId, "Base"))
 	local allowed = math.min(count, freeHands + looseRoom)
 	if allowed <= 0 then
 		toast(player, HANDS_FULL)

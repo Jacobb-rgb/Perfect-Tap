@@ -134,4 +134,15 @@ return function(T, Loader)
 			error(err, 0)
 		end
 	end)
+	T.test("CleaningService: only a chunk really in the hands goes into the vise (security #11)", function()
+		local fs = require("@lune/fs")
+		local source = fs.readFile("src/server/Services/CleaningService.luau")
+		T.truthy(source:find('return r.Kind == "Raw" and r.State == "Carried"', 1, true), "takeTop asks for a carried chunk")
+		T.truthy(source:find("if not mount(machine, record) then", 1, true), "a refused mount starts no session")
+		T.truthy(source:find("if mount(machine, record) then", 1, true), "nor does the auto-start from the intake")
+		local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
+		local consumed: any = { State = "Consumed", Model = Instance.new("Model") }
+		T.eq(ItemService.mount(consumed, roblox.CFrame.new()), false, "ItemService refuses a consumed record")
+	end)
+
 end
