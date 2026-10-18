@@ -625,10 +625,12 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Position = UDim2.new(0.5, 0, 1, -16),
 		Size = UDim2.fromOffset(260, layout.Slot + Theme.Lip),
 	}, gui)
+	-- (above the slots, measured from the bottom: HudController sizes the panel
+	-- for today's HUD, HudView.CarryPanelHeight)
 	local carryLabel = Bubble.text(carryPanel, "CARRYING 0/1", 18, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0, -6),
+		Position = UDim2.new(0.5, 0, 1, -(layout.Slot + Theme.Lip) - 6),
 		Size = UDim2.fromOffset(260, 22),
 	})
 	local slots = UIKit.new("Frame", {
@@ -909,6 +911,20 @@ function HudBubble.slot(parent: Instance, filled: Color3?, order: number, myster
 		Bubble.stroke(gem, 3)
 		Bubble.gradient(gem, Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190))
 	end
+	return holder
+end
+
+-- The last hotbar slot when more items are carried than slots show: "+N".
+function HudBubble.moreSlot(parent: Instance, more: number, order: number): Frame
+	local holder = HudBubble.slot(parent, nil, order, false)
+	local face = holder:FindFirstChild("Face") :: GuiObject
+	local size = (parent:GetAttribute("SlotSize") :: number?) or 70
+	Bubble.ink(face, `+{more}`, if more >= 100 then math.floor(size * 0.3) else math.floor(size * 0.4), {
+		Name = "More",
+		FontFace = Theme.TitleFont,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 4,
+	})
 	return holder
 end
 

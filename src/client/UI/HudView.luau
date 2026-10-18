@@ -238,6 +238,9 @@ end
 
 -- The last carry square when more items are carried than squares are drawn: "+N".
 function HudView.moreSlot(parent: Instance, more: number, order: number): Frame
+	if UIConfig.lightUI() then
+		return HudBubble.moreSlot(parent, more, order)
+	end
 	local slot = HudView.slot(parent, Theme.PanelLight, order)
 	UIKit.label(slot, `+{more}`, if more >= 100 then 14 else 18, { Name = "More", Size = UDim2.fromScale(1, 1) })
 	return slot

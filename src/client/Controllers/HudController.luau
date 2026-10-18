@@ -268,7 +268,12 @@ local function showCoins(coins: number, newIncome: number)
 		shownCoins = coins
 	end
 	refs.Income.Text = Format.perSecond(newIncome)
-	refs.Income.TextColor3 = if newIncome > 0 then Theme.Good else Theme.TextDim
+	if refs.Gui:GetAttribute("Bubble") then
+		-- the light HUD: white on the green income chip (green text would vanish on it)
+		refs.Income.TextTransparency = if newIncome > 0 then 0 else 0.35
+	else
+		refs.Income.TextColor3 = if newIncome > 0 then Theme.Good else Theme.TextDim
+	end
 end
 
 -- The balance and income now: the attributes first, the last snapshot's
