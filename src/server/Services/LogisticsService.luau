@@ -69,6 +69,12 @@
 	  the sales within SellToast seconds one toast ("Sell Box: Tobin paid
 	  $1.2K for 3 items." with the Dirty Ore reveal).
 	- Attribute Cycles (+1 per sale) for effects.
+	- The payment is the very LAST step of a sale: the Cycles attribute,
+	  the popup / toast batches and the stats come first, then
+	  EconomyService.award, DataService.changed and SellService.notifySold
+	  (listeners run in their own threads). So an error before it leaves
+	  the item with MachineService (it comes back out), never paid AND
+	  returned.
 	- busy: while a popup or toast waits to be sent (a sale wakes it).
 
 	Speed (interval): base seconds * MachineData.speedMult(the machine type's
@@ -641,18 +647,21 @@ local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: numb
 	-- golems, collection rewards); onSold listeners still get the base price
 	local price = Bonuses.sellAmount(Bonuses.stats(player), base)
 	local sold: Desc = { K = desc.K, O = desc.O, G = desc.G, R = desc.R }
+	-- everything that could fail comes first: an error here sends the item
+	-- back out (MachineService.deliver) with nothing paid
+	MachineService.setAttr(machine, "Cycles", bump(machine))
+	local now = os.clock()
+	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)
+	addSale(machine, "SaleToast", LogisticsService.SellToast, sold, price, now)
 	local stats = (data :: { [string]: any }).Stats
 	if type(stats) == "table" then
 		local before = tonumber(stats.ItemsSold) or 0
 		stats.ItemsSold = (if before == before then before else 0) + 1
 	end
+	-- the payment is the very last step (listeners run in their own threads)
 	EconomyService.award(player, price, LogisticsService.SellSource, true)
 	DataService.changed(player)
 	SellService.notifySold(player, sold, base)
-	MachineService.setAttrs(machine, { Cycles = bump(machine) })
-	local now = os.clock()
-	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)
-	addSale(machine, "SaleToast", LogisticsService.SellToast, sold, price, now)
 end
 
 -- A Sell Box needs the tick while a popup or toast waits to be sent.
