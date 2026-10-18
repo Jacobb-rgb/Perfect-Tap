@@ -70,6 +70,7 @@ local FoundryView = require(script.Parent.Parent.UI.FoundryView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local FxController = require(script.Parent.FxController)
 local HudController = require(script.Parent.HudController)
@@ -427,6 +428,7 @@ function FoundryController.open()
 		return
 	end
 	FoundryController.close()
+	MenuPanels.closeOthers("FoundryController") -- one panel at a time
 	local view = ensureView()
 	FoundryView.setCompact(view, HudController.uiScale() <= 0.75)
 	FoundryView.setTakeMode(view, false) -- ONE each time

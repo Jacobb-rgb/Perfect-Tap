@@ -33,7 +33,7 @@ function T.eq(actual: any, expected: any, label: string?)
 end
 
 function T.near(actual: number, expected: number, epsilon: number?, label: string?)
-	if math.abs(actual - expected) > (epsilon or 1e-6) then
+	if not (math.abs(actual - expected) <= (epsilon or 1e-6)) then
 		fail(`{label or "value"}: expected ~{expected}, got {actual}`)
 	end
 end

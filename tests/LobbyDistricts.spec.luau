@@ -225,6 +225,100 @@ return function(T, Loader)
 		T.truthy(math.abs(axle:Dot(frame.LookVector)) > 0.999, "hub Y axis = the axle (facing the plaza)")
 	end)
 
+	T.test("districts: the SPIN & WIN disc shows the daily wheel's prizes clockwise and lands where the screen does", function()
+		local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
+		local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
+		local _, pkg = districts()
+		local wheel = pkg.SpinWheel.Wheel
+		local hub = wheel.PrimaryPart.CFrame
+		local frame = LobbyLayout.frame(LobbyLayout.get("SpinWheel"))
+		local axle = hub.Position
+		-- the viewer in the plaza looks at the front (-Z of the frame): their right is the frame's -X
+		local function clockwiseFromTop(p: any): number
+			local q = p - axle
+			local right = q:Dot(-frame.RightVector)
+			local up = q:Dot(frame.UpVector)
+			return math.deg(math.atan2(right, up)) % 360
+		end
+		local function centre(model: any): any
+			local sum, n = Vector3.zero, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					sum += d.CFrame.Position
+					n += 1
+				end
+			end
+			return sum / math.max(n, 1)
+		end
+		local n = #WheelConfig.Segments
+		local step = 360 / n
+		for _, segment in WheelConfig.Segments do
+			local holder = wheel:FindFirstChild("Icon" .. segment.Id)
+			T.truthy(holder and holder:IsA("Model"), segment.Id .. ": its icon on the disc")
+			T.eq(holder:GetAttribute("Segment"), segment.Index)
+			local angle = clockwiseFromTop(centre(holder))
+			local expected = (segment.Index - 1) * step
+			local off = math.abs((angle - expected + 180) % 360 - 180)
+			T.lt(off, step / 2, `{segment.Id}: {expected} degrees clockwise from the top as seen (is {angle})`)
+			-- its colour on the disc
+			local coloured = 0
+			for _, d in wheel:GetChildren() do
+				if d:IsA("BasePart") and d.Color == segment.Color then
+					coloured += 1
+				end
+			end
+			T.truthy(coloured >= 2, segment.Id .. ": the segment in its WheelConfig colour")
+			-- DecorController turns the model by psi about the hub's Y axis: at
+			-- psi = restAngle(k) the segment sits under the pointer (the top)
+			local psi = math.rad(WheelView.restAngle(segment.Index, n))
+			local turned = (hub * roblox.CFrame.Angles(0, psi, 0) * hub:Inverse()) * centre(holder)
+			local landed = clockwiseFromTop(turned)
+			T.lt(math.abs((landed + 180) % 360 - 180), 1, `{segment.Id} lands under the pointer at restAngle (at {landed})`)
+		end
+		-- the substitute prizes are there, hidden (the client shows them to players who can't buy capsules)
+		for id, substitute in WheelConfig.Substitutes do
+			local holder = wheel:FindFirstChild("Icon" .. substitute.Id)
+			T.truthy(holder, id .. ": its substitute's icon")
+			T.eq(holder:GetAttribute("Substitute"), true)
+			T.eq(holder:GetAttribute("Segment"), substitute.Index)
+			for _, d in holder:GetDescendants() do
+				if d:IsA("BasePart") then
+					T.eq(d.Transparency, 1, "hidden until the client shows it")
+				end
+			end
+		end
+		-- no made-up prizes: one icon per prize (and its substitute)
+		local icons = 0
+		for _, child in wheel:GetChildren() do
+			if child:IsA("Model") and child:GetAttribute("Segment") ~= nil then
+				icons += 1
+			end
+		end
+		local subs = 0
+		for _ in WheelConfig.Substitutes do
+			subs += 1
+		end
+		T.eq(icons, n + subs, "one icon per prize")
+		-- the crown and the hub rim stay on the frame (the disc stops at any angle)
+		local rim = pkg.SpinWheel:FindFirstChild("HubRim", true)
+		T.truthy(rim and not rim:IsDescendantOf(wheel), "the hub rim is on the frame")
+	end)
+
+	T.test("districts: DecorController moves only what is near and on screen", function()
+		local DecorController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.DecorController")
+		T.eq(DecorController.tier(30, true), 1, "near: every frame")
+		T.eq(DecorController.tier(200, true), 2, "mid-range: every 2nd frame")
+		T.eq(DecorController.tier(200, true, true), 1, "a held wheel lands smoothly")
+		T.eq(DecorController.tier(400, true), 0, "far: not at all")
+		T.eq(DecorController.tier(30, false), 0, "off screen: not at all")
+		local Vector2 = roblox.Vector2
+		local view = Vector2.new(1600, 900)
+		T.truthy(DecorController.sphereInView(Vector3.new(800, 450, 50), 5, view, 70), "in the middle")
+		T.falsy(DecorController.sphereInView(Vector3.new(800, 450, -50), 5, view, 70), "behind the camera")
+		T.falsy(DecorController.sphereInView(Vector3.new(4000, 450, 50), 5, view, 70), "far to the side")
+		T.truthy(DecorController.sphereInView(Vector3.new(1700, 450, 50), 20, view, 70), "a big model whose edge is in view")
+	end)
+
 	T.test("districts: four leaderboards in an arc face the Hall of Fame's front", function()
 		local map, pkg = districts()
 		local boards = tagged(map, "Leaderboard")

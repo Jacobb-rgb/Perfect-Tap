@@ -150,6 +150,41 @@ return function(T, Loader)
 		T.eq(TutorialConfig.advance(1, old, {}), TOTAL + 1, "an old save is done without the signals")
 	end)
 
+	T.test("Tutorial: the daily wheel's ore prize skips no step", function()
+		-- WheelService: a dirty ore straight into the pen, Stats.WheelOres + 1
+		local function wheelOre(data: any)
+			table.insert(data.Storage, { K = "Raw", O = "Bronze" })
+			data.Stats.WheelOres += 1
+		end
+		local data, signals = fresh(), {}
+		wheelOre(data)
+		T.eq(TutorialConfig.advance(1, data, signals), 1, "a fresh save with a wheel ore stays on step 1")
+		DO.Station(data, signals)
+		T.eq(TutorialConfig.advance(1, data, signals), 2, "the mine step")
+		DO.Mine(data, signals)
+		T.eq(TutorialConfig.advance(2, data, signals), 3, "mining with the wheel ore in the pen: on to the hopper, not to cleaning")
+		DO.Load(data, signals)
+		T.eq(TutorialConfig.advance(3, data, signals), 4, "the train step")
+		DO.Train(data, signals)
+		T.eq(TutorialConfig.advance(4, data, signals), 5, "the train brought it home: clean")
+		-- cleaning the wheel ore before mining teaches cleaning, not the mine
+		local early = fresh()
+		wheelOre(early)
+		table.remove(early.Storage, 1)
+		early.Stats.OresCleaned = 1
+		T.eq(TutorialConfig.advance(1, early, {}), 1, "a cleaned wheel ore skips nothing")
+		early.Stats.OresCleaned = 2
+		T.eq(TutorialConfig.advance(1, early, {}), 6, "a second cleaned ore came out of a rock: an old hand")
+		-- ore carried home by hand still counts, next to a wheel ore
+		local walk, s2 = fresh(), {}
+		wheelOre(walk)
+		DO.Station(walk, s2)
+		DO.Mine(walk, s2)
+		T.eq(TutorialConfig.advance(1, walk, s2), 3, "waiting at Load")
+		table.insert(walk.Storage, { K = "Raw", O = "Copper" })
+		T.eq(TutorialConfig.advance(3, walk, s2), 5, "more in the pen than the wheel gave: on to cleaning")
+	end)
+
 	T.test("Tutorial: the checks read broken saves safely", function()
 		T.eq(TutorialConfig.clamp(nil), 1, "nil")
 		T.eq(TutorialConfig.clamp(0 / 0), 1, "NaN")
@@ -497,6 +532,76 @@ return function(T, Loader)
 			T.truthy(refs.Ack.Parent.Position.X.Offset >= refs.Hint.Position.X.Offset, `{screen.Name}: GOT IT right of the hint's start`)
 		end
 		refs.Gui:Destroy()
+	end)
+
+	-- the FREE SPIN! chip's box (WheelView.chipRect) against the bubble's
+	local function overlaps(aMin: any, aSize: any, bMin: any, bSize: any): boolean
+		return aMin.X < bMin.X + bSize.X and bMin.X < aMin.X + aSize.X and aMin.Y < bMin.Y + bSize.Y and bMin.Y < aMin.Y + aSize.Y
+	end
+
+	T.test("TutorialView: the touch bubble and the FREE SPIN! chip never show in the same spot", function()
+		local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
+		for _, screen in SCREENS do
+			local scale = uiScale(screen.Size)
+			local h = screen.Size.Y / scale
+			local menuTop = h / 2 - (64 * 2 + 10) / 2
+			local layout = TutorialView.layout(scale, screen.Size, screen.Touch, screen.TenFoot, menuTop)
+			local bubbleMin = Vector2.new(
+				layout.Position.X - layout.AnchorPoint.X * layout.Width,
+				layout.Position.Y - layout.AnchorPoint.Y * layout.Height
+			)
+			local bubbleSize = Vector2.new(layout.Width, layout.Height)
+			local chipMin, chipSize = WheelView.chipRect(scale, screen.Size)
+			local shared = overlaps(bubbleMin, bubbleSize, chipMin, chipSize)
+			if screen.Touch then
+				-- the top row right of the teleport bar: the chip's spot too (568x320, 667x375, 1024x768...)
+				T.truthy(layout.Touch, `{screen.Name}: the bubble is in the top row`)
+				T.falsy(
+					WheelView.chipVisible(true, false, false, false, layout.Touch),
+					`{screen.Name}: a ready chip waits while the bubble shows there`
+				)
+				T.truthy(WheelView.chipVisible(true, false, false, false, false), `{screen.Name}: and comes back after it`)
+			else
+				-- PC / TV: the bubble is in the bottom-right corner, the chip may show with it
+				T.falsy(shared, `{screen.Name}: the bubble is clear of the chip`)
+				T.falsy(layout.Touch)
+			end
+		end
+		-- the controllers are wired up (the bubble's spot changes -> the chip steps aside at once)
+		local fs = require("@lune/fs")
+		local tutorial = fs.readFile("src/client/Controllers/TutorialController.luau")
+		T.truthy(tutorial:find("function TutorialController.inTopRow(): boolean", 1, true), "inTopRow")
+		T.truthy(tutorial:find("return visible and touchLayout", 1, true), "the bubble shows with the touch layout")
+		T.truthy(tutorial:find("function TutorialController.onTopRowChanged(", 1, true), "onTopRowChanged")
+	end)
+
+	T.test("TutorialView: an open panel other than the steps' own hides the bubble (and frees R3)", function()
+		local MenuPanels = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.MenuPanels")
+		T.falsy(TutorialView.panelHides({}), "no panel open")
+		for _, name in TutorialView.StepPanels do
+			T.truthy(table.find(MenuPanels.Names, name), name .. " is a panel")
+			T.falsy(TutorialView.panelHides({ name }), name .. ": a step sends you there, the bubble stays")
+		end
+		for _, name in {
+			"CodexController",
+			"GolemController",
+			"ArtifactController",
+			"BoostController",
+			"SettingsController",
+			"LeaderboardController",
+			"WheelController",
+			"CapsuleController",
+			"EnchantController",
+			"GearShopController",
+		} do
+			T.truthy(table.find(MenuPanels.Names, name), name .. " is a panel")
+			T.truthy(TutorialView.panelHides({ name }), name .. " hides the bubble")
+			T.truthy(TutorialView.panelHides({ "PenController", name }), name .. " hides it next to a step's panel too")
+		end
+		local fs = require("@lune/fs")
+		local tutorial = fs.readFile("src/client/Controllers/TutorialController.luau")
+		T.truthy(tutorial:find("TutorialView.panelHides(openPanels())", 1, true), "the controller blocks on open panels")
+		T.truthy(tutorial:find("setBound(show)", 1, true), "R3 is bound only while the bubble shows")
 	end)
 
 	T.test("TutorialView: a step fills the bubble; SKIP asks once more", function()

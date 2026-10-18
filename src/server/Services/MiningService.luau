@@ -21,6 +21,18 @@
 	  "new ore" toasts here (CleaningService does that).
 	- A shattered rock grows back after the rarest contained ore's RespawnTime.
 	- Only players who are firing are looked at each tick (no loops over parts).
+	- Bonuses (steps 6-7, src/server/Bonuses.luau) of the player whose damage
+	  counts: damage x Bonuses.damageMult (Overcharge in the last third), range
+	  + Bonuses.reach; ore luck (Lucky enchant, Luck golems, Hexa Lucky:
+	  Bonuses.oreLuck above 1, growing with rarity) only UPGRADES a dropped
+	  ore: an ore whose share grows with the luck always stays, one whose
+	  share drops may become a rarer ore of the zone (BoostConfig.upgradeOre:
+	  every chunk then has exactly the chances BoostConfig.oreOdds shows); a
+	  chunk drops a twin with chance
+	  Bonuses.twinDrop. When a rock shatters and an onArtifactRoll listener is
+	  registered, one roll against Bonuses.artifactChance (zone chance x
+	  Prospector) calls the listeners (player, zoneId, position) on success.
+	  With no bonuses nothing extra is rolled.
 	- Network (docs/SERVER_PERF_AUDIT.md #8): the Health attribute replicates
 	  at most every HEALTH_GAP seconds per rock (and at once when a stage is
 	  crossed or the rock breaks); the last change always follows within
@@ -40,6 +52,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local OreNodeBuilder = require(Shared.Builders.OreNodeBuilder)
 local Net = require(Shared.Net)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
@@ -101,6 +114,14 @@ end
 local minedCallbacks: { (Player, string, number) -> () } = {}
 function MiningService.onChunkMined(callback: (player: Player, oreId: string, count: number) -> ())
 	table.insert(minedCallbacks, callback)
+end
+
+-- The Artifacts package listens here: (player, zoneId, position) when a
+-- shattered rock's artifact roll succeeds (see the header).
+export type ArtifactCallback = (player: Player, zoneId: string, position: Vector3) -> ()
+local artifactCallbacks: { ArtifactCallback } = {}
+function MiningService.onArtifactRoll(callback: ArtifactCallback)
+	table.insert(artifactCallbacks, callback)
 end
 
 ---------------------------------------------------------------- rocks
@@ -245,7 +266,7 @@ end
 
 ---------------------------------------------------------------- drops and stages
 
-local function dropChunk(player: Player, rock: Rock, oreId: string, from: Vector3)
+local function spawnChunk(player: Player, rock: Rock, oreId: string, from: Vector3)
 	local toward = (from - rock.Center) * Vector3.new(1, 0, 1)
 	local forward = if toward.Magnitude > 0.1 then toward.Unit else Vector3.new(0, 0, 1)
 	-- fly roughly toward the shooter, spread up to ~60 degrees to each side
@@ -261,6 +282,29 @@ local function dropChunk(player: Player, rock: Rock, oreId: string, from: Vector
 	end
 	for _, callback in minedCallbacks do
 		task.spawn(callback, player, oreId, 1)
+	end
+end
+
+-- Bonuses: ore luck may upgrade the rock's ore, Twin Drop may add a second chunk.
+local function dropChunk(player: Player, rock: Rock, rolled: string, from: Vector3)
+	local stats = Bonuses.stats(player)
+	local oreId = Bonuses.rollOre(stats, rock.Zone.Ores, rolled, random)
+	spawnChunk(player, rock, oreId, from)
+	local twin = Bonuses.twinDrop(stats)
+	if twin > 0 and random() < twin then
+		spawnChunk(player, rock, oreId, from)
+	end
+end
+
+-- Bonuses: one artifact roll per shattered rock (only with a listener).
+local function rollArtifact(player: Player, rock: Rock)
+	if #artifactCallbacks == 0 then
+		return
+	end
+	if random() < Bonuses.artifactChance(Bonuses.stats(player), rock.Zone.Id) then
+		for _, callback in artifactCallbacks do
+			task.spawn(callback, player, rock.Zone.Id, rock.Center)
+		end
 	end
 end
 
@@ -313,6 +357,7 @@ local function shatter(player: Player, rock: Rock, glow: Color3)
 		data.Stats.RocksBroken = (tonumber(data.Stats.RocksBroken) or 0) + 1
 		DataService.changed(player)
 	end
+	rollArtifact(player, rock)
 	Net.fireNear("Fx", rock.Center, SHATTER_RADIUS, nil, "NodeShatter", rock.Center, rock.Crust, glow)
 	rock.Model:Destroy()
 	-- the rarest ore inside decides how long the rock takes to grow back
@@ -441,9 +486,10 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		return -- the blaster must be in hand
 	end
 	local blaster = BlasterData.get(data.BlasterLevel)
+	local stats = Bonuses.stats(player)
 	local from = root.Position
 	local distance = (from - rock.Center).Magnitude - rock.Radius
-	if distance > blaster.Range + BlasterData.Beam.RangeSlack then
+	if distance > blaster.Range + Bonuses.reach(stats) + BlasterData.Beam.RangeSlack then
 		return
 	end
 	local zone = rock.Zone
@@ -457,6 +503,7 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 	end
 	local ore = data.BlasterOre
 	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * dt
+	amount *= Bonuses.damageMult(stats, rock.Stage >= 2)
 	damage(player, data, rock, amount, from, now)
 end
 
@@ -554,6 +601,7 @@ MiningService._test = {
 		table.clear(active)
 		table.clear(respawns)
 		table.clear(minedCallbacks)
+		table.clear(artifactCallbacks)
 		table.clear(glowCache)
 		table.clear(healthDirty)
 		nextRespawnCheck = 0

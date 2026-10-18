@@ -128,6 +128,7 @@ local Theme = require(Shared.Config.UITheme)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Net = require(Shared.Net)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -2192,7 +2193,7 @@ local function applyChip()
 	if not view then
 		return
 	end
-	view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen)
+	view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen, MenuPanels.gridOpen())
 	local hide = panelOpen and view.CoversCoins
 	local hud = HudController.refs()
 	if hud and hide ~= coinsHidden then
@@ -2395,6 +2396,7 @@ function TrainController.open()
 	if SellController.isOpen() then
 		SellController.close()
 	end
+	MenuPanels.closeOthers("TrainController") -- and every other panel (MenuPanels.Names)
 	panelOpen = true
 	openedAt = os.clock()
 	fit()
@@ -2682,6 +2684,10 @@ function TrainController.init()
 	FxController.register("TrainUnload", onUnload)
 	FxController.register("TrainLoad", onLoad)
 	StateController.onChanged(onState)
+	-- the touch side menu's open grid takes the chip's place: the chip hides until it shuts
+	MenuPanels.onGridChanged(function()
+		applyChip()
+	end)
 	Players.PlayerRemoving:Connect(function(leaving)
 		trips[leaving.UserId] = nil
 	end)

@@ -179,9 +179,11 @@ end
 ---------------------------------------------------------------- public API
 
 -- A fixed box in the world (not on a plot) that takes trusted loose items,
--- e.g. Tobin's SellBin. The handler owns the item from then on.
+-- e.g. Tobin's SellBin. The handler owns the item from then on. The Ore
+-- Magnet never pulls items into or past the zone (ItemService.magnetAvoid).
 function IntakeService.addZone(name: string, part: BasePart, handler: (ItemRecord) -> ...any)
 	table.insert(staticZones, { Name = name, Part = part, Handler = handler })
+	ItemService.magnetAvoid(part)
 end
 
 -- Called for every trusted loose item on a belt cell that no hopper or belt
