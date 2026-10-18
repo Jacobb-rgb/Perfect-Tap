@@ -222,6 +222,43 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("LightUI: gamepad order of the menu tiles and the teleport tabs", function()
+		local HudBubble = ui("HudBubble")
+		withLight(function()
+			local refs = HudBubble.buildGame(1.25)
+			local build = HudBubble.claimTile(refs.Menu, "Build")
+			local shop = HudBubble.claimTile(refs.Menu, "Shop")
+			local lift = HudBubble.claimTile(refs.Menu, "Elevator")
+			local faces = HudBubble.linkMenu(refs.Menu)
+			T.eq(#faces, 3, "only the claimed tiles")
+			T.eq(faces[1], build, "grid order")
+			T.eq(build.NextSelectionRight, shop, "right along the row")
+			T.eq(shop.NextSelectionLeft, build, "left along the row")
+			T.eq(build.NextSelectionDown, lift, "down the column")
+			T.eq(lift.NextSelectionUp, build, "up the column")
+			T.truthy(shop.NextSelectionRight ~= lift, "the row ends at SHOP")
+			local teleport = TeleportView.build(refs.TopBar, refs.Menu, 1.25)
+			T.eq(teleport.Buttons.Base.NextSelectionRight, teleport.Buttons.Lobby, "BASE -> LOBBY")
+			T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Lobby, "VAULT -> LOBBY")
+			local outline = HudBubble.selectionImage()
+			T.truthy(outline:FindFirstChildOfClass("UIStroke"), "gold selection outline")
+		end)
+	end)
+
+	T.test("LightUI: on a small phone the coins and the teleport bar don't meet", function()
+		local HudBubble = ui("HudBubble")
+		withLight(function()
+			for _, screen in { Vector2.new(667, 375), Vector2.new(568, 320), Vector2.new(932, 430) } do
+				local scale = HudBubble.scaleFor(screen)
+				local refs = HudBubble.buildGame(scale, screen.X)
+				local width = screen.X / scale
+				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
+				local coinsRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
+				T.truthy(coinsRight < barLeft, `coins clear of the tabs at {screen.X} x {screen.Y}`)
+			end
+		end)
+	end)
+
 	T.test("LightUI: game HUD touch sizes on phones", function()
 		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)))
 		T.truthy(layout.Compact, "a phone gets the compact layout")

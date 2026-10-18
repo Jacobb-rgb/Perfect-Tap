@@ -43,6 +43,7 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 
 local IronBoxView = {}
@@ -721,6 +722,7 @@ IronBoxView.build = function(): Refs
 	local refs = darkBuild()
 	if UIConfig.lightUI() then
 		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
 	end
 	return refs
 end

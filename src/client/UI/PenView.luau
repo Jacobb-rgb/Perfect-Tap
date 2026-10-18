@@ -42,6 +42,7 @@ local UIConfig = require(Shared.Config.UIConfig)
 local BubbleTheme = require(Shared.Config.BubbleTheme)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local PenView = {}
 
@@ -757,6 +758,7 @@ function PenView.build(): Refs
 	}
 	if UIConfig.lightUI() then
 		skinLight(refs)
+		TouchControls.follow(gui)
 	end
 	PenView.setCompact(refs, false)
 	PenView.setMode(refs, "Pen", nil)

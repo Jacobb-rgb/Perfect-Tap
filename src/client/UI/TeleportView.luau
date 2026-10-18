@@ -123,7 +123,8 @@ end
 local function buildBubble(topBar: Frame, menu: Frame?, uiScale: number): Refs
 	local layout = HudBubble.layout(uiScale)
 	if topBar:GetAttribute("Compact") ~= nil then
-		layout = HudBubble.layout(if topBar:GetAttribute("Compact") then 0.62 else 1)
+		local narrow = topBar:GetAttribute("Narrow") == true
+		layout = HudBubble.layout(if topBar:GetAttribute("Compact") then 0.62 else 1, if narrow then 0 else nil)
 	end
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
@@ -160,6 +161,23 @@ local function buildBubble(topBar: Frame, menu: Frame?, uiScale: number): Refs
 			buttons[spot.Id], covers[spot.Id] = face, cover(face)
 			side = face
 		end
+	end
+	-- gamepad: left / right along the tabs
+	local order: { TextButton } = {}
+	for _, spot in TeleportConfig.Spots do
+		local tab = buttons[spot.Id]
+		if spot.Bar and tab then
+			table.insert(order, tab)
+		end
+	end
+	for i, tab in order do
+		local links: any = tab
+		pcall(function() -- (Lune's instances can't hold a nil Ref)
+			links.NextSelectionLeft = order[i - 1]
+		end)
+		pcall(function()
+			links.NextSelectionRight = order[i + 1]
+		end)
 	end
 	return { Buttons = buttons, Covers = covers, Hint = hint, Side = side }
 end

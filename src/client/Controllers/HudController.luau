@@ -32,6 +32,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
+local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local StateController = require(script.Parent.StateController)
 
@@ -339,6 +340,11 @@ function HudController.init()
 	refs = HudView.build()
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")
+	if refs.Gui:GetAttribute("Bubble") then
+		-- the light UI: a gold outline around the gamepad's selection
+		local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
+		playerGui.SelectionImageObject = HudBubble.selectionImage()
+	end
 
 	Net.listen("Notify", function(message)
 		if type(message) ~= "table" or type(message.Text) ~= "string" then

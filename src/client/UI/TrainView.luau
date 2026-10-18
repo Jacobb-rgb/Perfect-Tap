@@ -38,6 +38,7 @@ local Format = require(Shared.Util.Format)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local UIKit = require(script.Parent.UIKit)
 local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 
 local TrainView = {}
@@ -1037,6 +1038,7 @@ TrainView.build = function(compact: boolean?): Refs
 	local refs = darkBuild(compact)
 	if UIConfig.lightUI() then
 		LightSkin.apply(refs.Chip)
+		TouchControls.follow(refs.Gui)
 		LightSkin.apply(refs.Gui)
 	end
 	return refs

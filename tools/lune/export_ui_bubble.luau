@@ -677,3 +677,47 @@ for _, light in { false, true } do
 	end
 end
 UIConfig.LightUI = false
+
+---------------------------------------------------------------- device sweep (switch on): HUD + the Tech Shop on every screen
+local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+local TechPreview = require("./lib/tech_shop_preview")
+local DEVICES = {
+	-- name, width pt, height pt, render pixels per pt, touch, ten-foot
+	{ "phone_tiny", 568, 320, 2.2, true, false },
+	{ "phone_small", 667, 375, 2, true, false },
+	{ "phone_big", 932, 430, 1.6, true, false },
+	{ "tablet", 1024, 768, 1.5, true, false },
+	{ "pc", 1920, 1080, 1, false, false },
+	{ "tv", 1920, 1080, 1, false, true },
+}
+local INSET = 58 -- Roblox's top bar (pt)
+local Vector2 = roblox.Vector2
+UIConfig.LightUI = true
+for _, d in DEVICES do
+	local name, w, h, px, touch, tenFoot = d[1], d[2], d[3], d[4], d[5], d[6]
+	local uiScale = HudBubble.scaleFor(Vector2.new(w, h))
+	local hud = HudBubble.buildGame(uiScale, w)
+	hud.Gui.Scale.Scale = uiScale * px
+	TeleportView.build(hud.TopBar, hud.Menu, uiScale, w)
+	BuildView.menuButton(hud.Menu)
+	hud.Coins.Text = "$48.2K"
+	hud.Income.Text = "+$64/s"
+	for i = 1, 3 do
+		HudView.slot(hud.CarrySlots, nil, i)
+	end
+	hud.CarryLabel.Text = "CARRYING 0/3"
+	write("ui_dev_hud_" .. name, hud.Gui)
+	local compact = TechShopView.compactFor(touch, tenFoot, uiScale, h)
+	local view = TechShopView.build(compact)
+	view.Gui.Scale.Scale = uiScale * px
+	view.Gui.Enabled = true
+	TechShopView.layout(view, compact, w / uiScale, (h - INSET) / uiScale)
+	TechShopView.setTab(view, "Machines")
+	TechShopView.setCoins(view, 48250)
+	TechShopView.setCards(view, TechShopView.cards(TechPreview.State, 48250))
+	TechShopView.setHint(view, if tenFoot then "A: buy   B: close" elseif touch then "Tap BUY" else "Click a tab, then BUY · Backspace: close", nil)
+	LightSkin.refresh(view.Gui)
+	fs.writeFile(root .. "/build/preview/ui_dev_tech_" .. name .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))
+	print("Exported UI ui_dev_tech_" .. name)
+end
+UIConfig.LightUI = false

@@ -52,16 +52,21 @@ export type Layout = {
 	Slot: number,
 	SlotGap: number,
 	Slots: number,
+	Narrow: boolean, -- the smallest phones: icon-only teleport tabs
 }
 
-function HudBubble.layout(uiScale: number): Layout
+HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
+
+function HudBubble.layout(uiScale: number, screenWidth: number?): Layout
 	if uiScale <= HudBubble.CompactScale then
+		local narrow = screenWidth ~= nil and screenWidth < HudBubble.NarrowWidth
 		return {
 			Compact = true,
+			Narrow = narrow,
 			Tile = 78,
 			TileGap = 16,
 			Columns = 3,
-			TabWidth = 118,
+			TabWidth = if narrow then 74 else 118,
 			TabHeight = 72,
 			Slot = 76,
 			SlotGap = 10,
@@ -70,6 +75,7 @@ function HudBubble.layout(uiScale: number): Layout
 	end
 	return {
 		Compact = false,
+		Narrow = false,
 		Tile = 88,
 		TileGap = 16,
 		Columns = 2,
@@ -132,7 +138,9 @@ function HudBubble.tab(parent: Instance, spot: MenuEntry, layout: Layout, order:
 		Clickable = true,
 	})
 	holder.LayoutOrder = order
-	if layout.Compact then
+	if layout.Narrow then
+		Bubble.icon(face, spot.Icon, 66, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -4) })
+	elseif layout.Compact then
 		Bubble.icon(face, spot.Icon, 52, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -12) })
 		Bubble.text(face, spot.Label, 20, {
 			Name = "Label",
@@ -196,7 +204,9 @@ function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	local rowGap = layout.TileGap + 8 -- room for the icons popping out of the row below
 	local width = layout.Columns * layout.Tile + (layout.Columns - 1) * layout.TileGap
 	local height = rows * cellH + (rows - 1) * rowGap
-	local origin = if layout.Compact then UDim2.fromOffset(18, 112) else UDim2.new(0, 18, 0.5, 24 - height // 2)
+	-- phones: under the coins and the income chip (it sits under the pill so
+	-- it never meets the teleport bar on narrow phones)
+	local origin = if layout.Compact then UDim2.fromOffset(18, 136) else UDim2.new(0, 18, 0.5, 24 - height // 2)
 	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
 end
 
@@ -506,10 +516,23 @@ export type GameRefs = {
 	TopBar: Frame,
 }
 
-function HudBubble.buildGame(uiScale: number?): GameRefs
-	local layout = HudBubble.layout(uiScale or HudBubble.screenScale())
+-- The screen's width in points right now (nil without a camera).
+function HudBubble.screenWidth(): number?
+	local ok, width = pcall(function()
+		local camera = game:GetService("Workspace").CurrentCamera
+		return if camera then camera.ViewportSize.X else nil
+	end)
+	return if ok and type(width) == "number" and width > 0 then width else nil
+end
+
+function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
+	local layout = HudBubble.layout(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth())
 	local gui = UIKit.screen("TerraForgeHud", 5)
 	gui:SetAttribute("Bubble", true)
+	-- TVs and notched phones: keep clear of the unsafe edges
+	pcall(function()
+		(gui :: any).ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	end)
 
 	-- coins (the income chip lives inside, so hiding the coins hides both)
 	local coins, plus, income = coinsPill(gui, layout)
@@ -520,14 +543,12 @@ function HudBubble.buildGame(uiScale: number?): GameRefs
 	coins.Size = UDim2.new(1, -52, 1, 0)
 	local chipHolder = (income.Parent :: Frame).Parent :: Frame
 	chipHolder.Parent = coinsPanel
-	chipHolder.Position = if layout.Compact
-		then UDim2.new(1, 14, 0, 12)
-		else UDim2.new(0, 42, 1, 6)
+	chipHolder.Position = UDim2.new(0, 42, 1, 6) -- under the pill (beside it would meet the tabs on small phones)
 	chipHolder.ZIndex = 2
 	local floaters = UIKit.new("Frame", {
 		Name = "Floaters",
 		BackgroundTransparency = 1,
-		Position = if layout.Compact then UDim2.fromOffset(34, 90) else UDim2.fromOffset(34, 130),
+		Position = UDim2.fromOffset(if layout.Compact then 190 else 34, if layout.Compact then 92 else 130),
 		Size = UDim2.fromOffset(HudBubble.CoinsWidth, 60),
 	}, gui)
 
@@ -541,6 +562,7 @@ function HudBubble.buildGame(uiScale: number?): GameRefs
 	}, gui)
 	topBar:SetAttribute("Bubble", true)
 	topBar:SetAttribute("Compact", layout.Compact)
+	topBar:SetAttribute("Narrow", layout.Narrow)
 	UIKit.list(topBar, Enum.FillDirection.Horizontal, 14, {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -576,6 +598,7 @@ function HudBubble.buildGame(uiScale: number?): GameRefs
 		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
 	menu:SetAttribute("Bubble", true)
+	menu:SetAttribute("Columns", layout.Columns)
 	UIKit.new("UIGridLayout", {
 		CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight),
 		CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap),
@@ -671,7 +694,63 @@ function HudBubble.claimTile(menu: Instance, id: string): TextButton
 	end
 	local frame = holder :: Frame
 	frame.Visible = true
+	HudBubble.linkMenu(menu)
 	return frame:FindFirstChild("Face") :: TextButton
+end
+
+--[[
+	Gamepad D-pad order of the menu tiles: the visible tiles in grid order
+	(LayoutOrder), left / right along a row, up / down a column. Run again
+	whenever a tile shows or hides. Returns the faces in order (tests).
+]]
+function HudBubble.linkMenu(menu: Instance): { GuiObject }
+	local columns = (menu:GetAttribute("Columns") :: number?) or 2
+	local holders: { Frame } = {}
+	for _, child in menu:GetChildren() do
+		if child:IsA("Frame") and child.Visible and child:FindFirstChild("Face") then
+			table.insert(holders, child)
+		end
+	end
+	table.sort(holders, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	local faces: { GuiObject } = {}
+	for _, holder in holders do
+		table.insert(faces, holder:FindFirstChild("Face") :: GuiObject)
+	end
+	for i, face in faces do
+		local col = (i - 1) % columns
+		local links: any = face -- NextSelection* take a GuiObject or nil
+		local function link(name: string, target: GuiObject?)
+			pcall(function() -- (Lune's instances can't hold a nil Ref)
+				links[name] = target
+			end)
+		end
+		link("NextSelectionLeft", if col > 0 then faces[i - 1] else nil)
+		link("NextSelectionRight", if col < columns - 1 then faces[i + 1] else nil)
+		link("NextSelectionUp", faces[i - columns])
+		link("NextSelectionDown", faces[i + columns])
+	end
+	return faces
+end
+
+-- The light look's gamepad selection: a thick gold rounded outline
+-- (PlayerGui.SelectionImageObject, set by HudController).
+function HudBubble.selectionImage(): Frame
+	local frame = UIKit.new("Frame", {
+		Name = "BubbleSelection",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, 8, 1, 8),
+	})
+	Bubble.corner(frame, Theme.Corner + 4)
+	UIKit.new("UIStroke", {
+		Thickness = 5,
+		Color = Theme.Gold,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, frame)
+	return frame
 end
 
 -- One hotbar slot: a carried ore in its rarity colour, "?" for dirty ore,
