@@ -37,6 +37,20 @@ light, false-positive-safe check. Nothing here is built yet; the integrator deci
 - The quarry/cave walls are the only blockers that matter; thin decorations (lamps, fences) should be in a
   "BeamIgnore" collision group or tagged so they never block.
 
+## Integrator review (2026-10-18): approved with these changes
+1. `maxSpeed` per player, read on the server: the Humanoid's current WalkSpeed (Miner's Boots up to 26, Gear sets it
+   server-side) + the active hoverboard's speed (`HoverboardService.speedOf(player)` from the mine chat) × 1.15;
+   unknown boosts fall back to the maximum.
+2. Grace / slack also for: the Blaster Vault crate-opening stage (check whether it moves the character), the mine
+   elevator and the teleport bar (server PivotTo → `serverMoved`), standing on belts (Express Conveyors carry players:
+   add belt speed to the slack, or skip while standing on a part tagged as a belt). Wheel / capsule screens and the
+   tutorial beam don't move the character.
+3. Jump: read the Humanoid's JumpPower / JumpHeight, not a constant.
+4. LOS: MineFloors and Vault-interior decorations go on the BeamIgnore list; a rock flush against the quarry wall must
+   stay mineable (tested).
+5. Rollout unchanged: logging → trusted position → pull-back only after the logs. Built after the steps 6–7 landing,
+   on the new main, with tests; ping before merging.
+
 ## Tests (Lune, pure)
 - Movement: allowed distance per dt and speed; grace windows (server move, seated, joining); violation counting and
   flag expiry; trusted position while flagged; never a kick.
