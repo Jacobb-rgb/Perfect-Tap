@@ -32,28 +32,9 @@ the launch build before launch if the game has changed.
 
 ## 2. Page text
 
-STORE_PAGE.md sections 1-4 hold the title, the hook, both descriptions, genre (**Simulation -> Tycoon**) and the
-keywords. **Update before launch:** its descriptions were written for the pickaxe and 10-ore build. A draft for
-the current game (check every line against the live build, STORE_PAGE.md section 0):
-
-```text
-TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and forge new blasters in your own factory!
-
-The Heartstone, the heart of Terra, has shattered into glowing ore. Join the Forgekeepers in Emberfall and help reforge it.
-
-⛏️ HOW IT WORKS
-• Blast ore rocks with your laser blaster and carry the chunks home
-• Clean each ore by hand: chisel, scrape, polish. Can you get Flawless?
-• Show your best ores on podiums: they earn coins every second
-• Ride your own ore train, fill the Ore Pen, build machines, belts and power
-• Smelt ingots and forge blasters up to level 10, or buy the next one in the Blaster Vault
-• 36 ores to discover
-• No combat. Every ore can be mined without a game pass
-
-🎮 Play on PC, phone, tablet and console
-```
-
-(about 760 characters; leave room for a one-line "What's new".)
+STORE_PAGE.md sections 1-4 hold the title, the hook, both descriptions (updated 2026-10-18 for the blaster /
+36-ore build), genre (**Simulation -> Tycoon**) and the keywords. Before launch, tick every claim against the live
+build (STORE_PAGE.md section 0) and update the "What's new" line.
 
 ## 3. Settings, rules and launch order
 

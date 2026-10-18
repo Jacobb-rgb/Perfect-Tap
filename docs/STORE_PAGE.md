@@ -19,21 +19,23 @@ from the description.
 
 | Claim on the page | Build step (see `PLAN.md`) | Works in the live build? |
 |---|---|---|
-| Mine nodes, physical chunks, carry and throw | b | [ ] TODO |
+| Blast ore rocks with the laser blaster, physical chunks, carry them home | b, V2 | [ ] TODO |
 | Cleaning Station: chisel, scrape, polish, grades up to Flawless | c | [ ] TODO |
-| 10 ores, Quarry, Ember Caves, Deep Hollow, VIP Glimmer Grotto | a, b | [ ] TODO |
-| Crush, smelt, anvil (dagger, helm…), selling | d, e | [ ] TODO |
-| Furnaces, crushers, anvils, conveyors on your own plot (9 machines, Cleaning Station included) | d | [ ] TODO |
-| Daily Ember Chest, Ore Codex, badges (today only the "New ore discovered" tracking exists, no Codex screen yet) | e, f | [ ] TODO |
+| 36 ores to discover | V2 | [ ] TODO |
+| Podiums that earn coins every second | V2 | [ ] TODO |
+| Your own ore train and the Ore Pen | V2 | [ ] TODO |
+| Machines, belts and power on your own plot (the factory) | d, V2 | [ ] TODO |
+| Smelt ingots, forge blasters up to level 10, the Blaster Vault | V2 | [ ] TODO |
+| Badges (only once their ids are in BadgeConfig, `NAHRAJ_DO_ROBLOXU/odznaky`) | f | [ ] TODO |
 | Passes are optional, every ore can be mined without them | f | [ ] TODO |
 | "PC, phone, tablet and console": the **Console** device box is ticked and the game was tested on a controller. If not, remove "console" / "i konzoli" from both descriptions | f | [ ] TODO |
 
 ### Dashboard checklist
 
 - [ ] **Maturity & Compliance Questionnaire** (Creator Dashboard → Configure → Questionnaire). Answer honestly.
-      There is no combat and no blood. The dagger, greatsword and helm are only crafted goods you sell; nobody can
-      equip or swing them. The forge name is a short typed name that goes through Roblox's text filter, not freehand
-      drawing or writing, so it isn't "free-form user creation". There are no paid random items.
+      There is no combat and no blood. The laser blaster only breaks ore rocks; it can't hit players. The forge name
+      is a short typed name that goes through Roblox's text filter, not freehand drawing or writing, so it isn't
+      "free-form user creation". Any paid random item must show its odds before buying (COMPLIANCE.md 2.6).
       You can't make the game Public (or Limited) until the questionnaire is done, and Roblox restricts games
       without it. Full answers: `COMPLIANCE.md` section 1. TODO: fill it in and note the label you get here: `TODO`.
 - [ ] **Audience**: to reach players under 16 (Roblox Kids and Select accounts), your account must be verified
@@ -108,29 +110,29 @@ field ships, move the "What's new" line there.
 snippets and on mobile before "read more", so it names the game, the genre and the unique feature:
 
 ```text
-TERRA FORGE is a mining and crafting tycoon: mine glowing ore, clean it by hand and forge it into gear in your own workshop!
+TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and forge new blasters in your own factory!
 ```
 
-**Full description (paste as is, 908 characters):**
+**Full description (paste as is, updated 2026-10-18 for the blaster / 36-ore build):**
 
 ```text
-TERRA FORGE is a mining and crafting tycoon: mine glowing ore, clean it by hand and forge it into gear in your own workshop!
+TERRA FORGE is a mining and crafting tycoon: blast glowing ore, clean it by hand and forge new blasters in your own factory!
 
-The Heartstone, the heart of Terra, has shattered into glowing ore. Join the Forgekeepers' Guild in Emberfall and help reforge it.
+The Heartstone, the heart of Terra, has shattered into glowing ore. Join the Forgekeepers in Emberfall and help reforge it.
 
 ⛏️ HOW IT WORKS
-• Crack ore nodes with your pickaxe. Real chunks drop: carry them or throw them
-• Clean each chunk by hand: chisel, scrape, polish. Can you get Flawless?
-• Crush and smelt ore into ingots, forge daggers, helms and more, then sell
-• Set up furnaces, crushers, anvils and conveyors on your own plot
-• Find 10 ores in the Quarry, Ember Caves and Deep Hollow, up to the mythic Heartstone Shard
-• Daily Ember Chest, Ore Codex and badges
+• Blast ore rocks with your laser blaster and carry the chunks home
+• Clean each ore by hand: chisel, scrape, polish. Can you get Flawless?
+• Show your best ores on podiums: they earn coins every second
+• Ride your own ore train, fill the Ore Pen, build machines, belts and power
+• Smelt ingots and forge blasters up to level 10, or buy the next one in the Blaster Vault
+• 36 ores to discover
 • No combat. Every ore can be mined without a game pass
 
 🎮 Play on PC, phone, tablet and console
 
 🆕 WHAT'S NEW (v1.0, TODO date)
-• Launch! 3 mining zones plus the VIP Glimmer Grotto, 10 ores, 9 machines
+• Launch! Blasters, 36 ores, trains, podiums, your own factory and the Blaster Vault
 ```
 
 The "What's new" block: replace it with every update and keep it to 1–2 lines, so the whole text stays under the limit.
@@ -168,29 +170,29 @@ because that's how players see them in the game. The game itself is in English f
 **Úvodní věta (1 řádek):**
 
 ```text
-TERRA FORGE je tycoon o těžbě a kovářství: těž zářící rudu, ručně ji vyčisti a ve své dílně z ní ukovej výbavu!
+TERRA FORGE je tycoon o těžbě a kovářství: rozstřílej zářící rudu, ručně ji vyčisti a ve své továrně ukovej nové blastery!
 ```
 
-**Celý popis (vložit beze změn, 954 znaků):**
+**Celý popis (vložit beze změn, aktualizováno 2026-10-18 pro verzi s blastery a 36 rudami):**
 
 ```text
-TERRA FORGE je tycoon o těžbě a kovářství: těž zářící rudu, ručně ji vyčisti a ve své dílně z ní ukovej výbavu!
+TERRA FORGE je tycoon o těžbě a kovářství: rozstřílej zářící rudu, ručně ji vyčisti a ve své továrně ukovej nové blastery!
 
-Srdce světa Terra se roztříštilo na zářící rudu. Přidej se k Cechu strážců výhně v Emberfallu a pomoz ho znovu vykovat.
+Srdce světa Terra se roztříštilo na zářící rudu. Přidej se ke strážcům výhně v Emberfallu a pomoz ho znovu vykovat.
 
 ⛏️ JAK SE HRAJE
-• Rozbíjej ložiska krumpáčem a sbírej skutečné kusy rudy. Nos je v náručí nebo je házej
-• Každý kus ručně vyčisti: otesej dlátem, oškrábej a vylešti. Zvládneš Flawless?
-• Rudu podrť a roztav na ingoty, ukovej z nich dýky, přilby a další zboží a prodávej
-• Postav si na svém pozemku pece, drtiče, kovadliny a dopravníky
-• Najdi 10 druhů rudy v Greystone Quarry, Ember Caves a Deep Hollow, až po mýtický Heartstone Shard
-• Denní Ember Chest, Ore Codex a odznaky
+• Rozstřílej skály s rudou laserovým blasterem a odnes kusy domů
+• Každou rudu ručně vyčisti: otesej dlátem, oškrábej a vylešti. Zvládneš Flawless?
+• Vystav nejlepší rudy na podstavce: každou sekundu ti vydělávají
+• Jezdi vlastním vlakem s rudou, plň Ore Pen, stav stroje, pásy a elektřinu
+• Taveninu proměň v ingoty a ukovej blastery až do úrovně 10, nebo si další kup v Blaster Vaultu
+• 36 druhů rudy k objevení
 • Žádné souboje. Každou rudu vytěžíš i bez game passu
 
 🎮 Hraj na PC, mobilu, tabletu i konzoli. Hra je zatím v angličtině.
 
 🆕 CO JE NOVÉHO (v1.0, TODO datum)
-• Hra je venku! 3 těžební oblasti a k tomu VIP Glimmer Grotto, 10 druhů rudy, 9 strojů
+• Hra je venku! Blastery, 36 rud, vlaky, podstavce, vlastní továrna a Blaster Vault
 ```
 
 ---
@@ -226,7 +228,7 @@ That is TERRA FORGE's loop: gather and process ore, sell it, upgrade, and grow y
 
 ### Keywords
 
-Already in the descriptions: mine/mining, ore, pickaxe, crafting, tycoon, clean, polish, smelt, crush, anvil, forge, conveyors, plot, workshop.
+Already in the descriptions: mining, ore, blaster, crafting, tycoon, clean, polish, smelt, ingots, forge, train, podiums, factory, machines, belts.
 
 **Search ads** (Ads Manager → new campaign with the **Visits** objective → ad set placement **Search Experience**;
 up to **10 keywords per ad set**, and an ad only shows when the search exactly matches a keyword).
@@ -234,12 +236,12 @@ Choose from the suggestions Roblox shows while you type; if a word isn't suggest
 
 | Ad set | Keywords (English) |
 |---|---|
-| Core | mining, mine, ore, pickaxe, forge, blacksmith, crafting, smelting, mining tycoon, mining game |
-| Feel | satisfying, cleaning, polishing, crystals, factory, conveyor, furnace, anvil, workshop, cozy |
+| Core | mining, mine, ore, blaster, forge, blacksmith, crafting, smelting, mining tycoon, mining game |
+| Feel | satisfying, cleaning, polishing, crystals, factory, conveyor, furnace, train, podium, cozy |
 
 | Sada | Klíčová slova (čeština) |
 |---|---|
-| Základ | těžba, ruda, krumpáč, kovárna, kovář, tavení, výroba, dílna, tycoon, simulátor |
+| Základ | těžba, ruda, blaster, kovárna, kovář, tavení, výroba, továrna, tycoon, simulátor |
 
 **Never use:** names of other games (for example "mining simulator" or "the forge", which are titles of existing
 Roblox games), "free robux", "admin", "pets", "obby", "fight", "PvP", or anything that isn't in the game.
@@ -247,6 +249,9 @@ Roblox games), "free robux", "admin", "pets", "obby", "fight", "PvP", or anythin
 ---
 
 ## 5. Icon and thumbnails
+
+> **2026-10-18:** the finished icons and thumbnails are in `NAHRAJ_DO_ROBLOXU/obchod/` (rendered from the game,
+> listed in PUBLISHING.md section 1). The concepts below are from the pickaxe build and are kept only as reference.
 
 ### Roblox rules and best practices (checked 2026-10-12)
 
