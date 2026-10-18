@@ -55,6 +55,10 @@ for _, row in {
 	models[name] = ItemBuilder.build({ Kind = row[1], OreId = row[2], Grade = row[3] }, CF.new(), name)
 end
 
+-- the shop's Express Train pass: the game's own locomotive
+local TrainBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.TrainBuilder")
+models.train = TrainBuilder.locomotive(roblox.Color3.fromRGB(226, 72, 60))
+
 fs.writeDir(root .. "/build/preview/icon_parts")
 for name, model in models do
 	local scene = Export.collect(model)

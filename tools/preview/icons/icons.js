@@ -300,6 +300,96 @@ const ICONS = {
     return { model: group([velvet, ring, ...points, ...gems]), yaw: 0, pitch: 18 };
   },
 
+  medal() {
+    const ribbonL = box(0.34, 0.9, 0.06, 0.04, "#ff4f6d", {}, [-0.22, 0.75, -0.1], [0, 0, 16]);
+    const ribbonR = box(0.34, 0.9, 0.06, 0.04, "#4da3ff", {}, [0.22, 0.75, -0.1], [0, 0, -16]);
+    const disc = lathe([[0, -0.12], [0.8, -0.12], [0.88, -0.06], [0.9, 0], [0.88, 0.06], [0.8, 0.12], [0, 0.12]], GOLD, shiny, [0, 0, 0], [90, 0, 0]);
+    const inner = cyl(0.62, 0.62, 0.05, "#ffe07a", shiny, [0, 0, 0.12], [90, 0, 0]);
+    const star = extrude(starShape(0.48, 0.21), 0.08, 0.04, "#ff9f1c", shiny, [0, 0, 0.18]);
+    return { model: group([ribbonL, ribbonR, disc, inner, star]), yaw: -16, pitch: 6 };
+  },
+
+  podium() {
+    const parts = [
+      cyl(1.1, 1.15, 0.3, "#6b7b99", steel, [0, -0.9, 0]),
+      cyl(0.8, 0.85, 0.5, "#fff1d6", {}, [0, -0.5, 0]),
+      cyl(0.84, 0.84, 0.08, GOLD, shiny, [0, -0.22, 0]),
+      crystal(0.26, 0.55, "#ff4f6d", glow("#c01838", 0.35), [0, -0.2, 0], [0, 0, 0]),
+      crystal(0.16, 0.32, "#ff8ab3", glow("#c01838", 0.3), [0.32, -0.2, 0.1], [0, 0, -26]),
+      crystal(0.15, 0.3, "#ff8ab3", glow("#c01838", 0.3), [-0.3, -0.2, 0.06], [0, 0, 24]),
+    ];
+    return { model: group(parts), yaw: -20, pitch: 18 };
+  },
+
+  moon() {
+    const moon = new THREE.Shape();
+    moon.absarc(0, 0, 1, D(-110), D(110), true);
+    moon.absarc(0.45, 0, 0.82, D(118), D(-118), false);
+    const parts = [
+      extrude(moon, 0.4, 0.08, "#ffd75e", { coat: 0.8, rough: 0.3 }, [-0.2, 0, 0]),
+      extrude(starShape(0.3, 0.13), 0.12, 0.04, "#fff1a8", glow("#ffd040", 0.4), [0.75, 0.55, 0.1]),
+      extrude(starShape(0.18, 0.08), 0.1, 0.03, "#fff1a8", glow("#ffd040", 0.4), [0.95, -0.35, 0.1]),
+      ball(0.07, "#fff1a8", glow("#ffd040", 0.5), [0.45, 0.95, 0.1]),
+    ];
+    return { model: group(parts), yaw: -14, pitch: 4 };
+  },
+
+  clover() {
+    const leaves = [];
+    for (let i = 0; i < 4; i++) {
+      const a = D(45 + i * 90);
+      leaves.push(ball(0.42, "#3ddc84", {}, [Math.cos(a) * 0.42, Math.sin(a) * 0.42, 0], [0, 0, i * 90 + 45], 1.0, 0.75, 0.35));
+    }
+    const stem = cyl(0.07, 0.09, 0.8, "#25a85a", {}, [0.25, -0.75, -0.05], [0, 0, 24]);
+    const center = ball(0.14, "#9df2b8", {}, [0, 0, 0.1]);
+    const spark = extrude(starShape(0.2, 0.08, 4), 0.06, 0.02, "#fff1a8", glow("#ffd040", 0.5), [0.75, 0.7, 0.15]);
+    return { model: group([...leaves, stem, center, spark]), yaw: -16, pitch: 10 };
+  },
+
+  rainbow() {
+    // Hexa Lucky (mining luck): a faceted rainbow gem with sparkles
+    const colors = ["#ff5a5a", "#ffa63c", "#ffd23c", "#3ddc84", "#4da3ff", "#b48cff"];
+    const parts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const wedge = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.85, 1.0, 1, 1, false, a, Math.PI / 3), mat(colors[i], glow(colors[i], 0.25)));
+      wedge.position.set(0, -0.3, 0);
+      wedge.rotation.x = Math.PI;
+      parts.push(wedge);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.85, 0.4, 1, 1, false, a, Math.PI / 3), mat(colors[i], glow(colors[i], 0.25)));
+      top.position.set(0, 0.4, 0);
+      parts.push(top);
+    }
+    parts.push(cyl(0.55, 0.55, 0.02, "#ffffff", { coat: 1 }, [0, 0.61, 0], [0, 0, 0], 6));
+    parts.push(extrude(starShape(0.22, 0.08, 4), 0.06, 0.02, "#fff1a8", glow("#ffd040", 0.5), [0.9, 0.85, 0.2]));
+    parts.push(extrude(starShape(0.15, 0.06, 4), 0.06, 0.02, "#fff1a8", glow("#ffd040", 0.5), [-0.95, 0.35, 0.2]));
+    return { model: group(parts), yaw: 0, pitch: 22 };
+  },
+
+  enchant() {
+    const parts = [
+      ball(0.62, "#ff6a3d", glow("#ff3d1a", 0.6), [0, 0.05, 0]),
+      ball(0.4, "#ffd27a", glow("#ffb03c", 0.9), [0, 0.05, 0.3]),
+      torus(0.85, 0.06, Math.PI * 2, GOLD, shiny, [0, 0.05, 0], [70, 0, 20]),
+      torus(0.85, 0.06, Math.PI * 2, GOLD, shiny, [0, 0.05, 0], [70, 0, -40]),
+      cyl(0.5, 0.65, 0.3, "#5b6677", steel, [0, -0.8, 0]),
+      cyl(0.66, 0.66, 0.08, GOLD, shiny, [0, -0.62, 0]),
+    ];
+    return { model: group(parts), yaw: -10, pitch: 10 };
+  },
+
+  check() {
+    const s = new THREE.Shape();
+    s.moveTo(-0.95, 0.1);
+    s.lineTo(-0.55, 0.5);
+    s.lineTo(-0.25, 0.2);
+    s.lineTo(0.6, 1.0);
+    s.lineTo(1.0, 0.6);
+    s.lineTo(-0.25, -0.62);
+    s.closePath();
+    return { model: group([extrude(s, 0.3, 0.1, "#3ddc84", {})]), yaw: -10, pitch: 6 };
+  },
+
   // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
   // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
   robux() {
@@ -405,6 +495,7 @@ const PART_ICONS = {
   ore_copper: { file: "ore_copper", yaw: -20, pitch: 22 },
   ore_silver: { file: "ore_silver", yaw: -20, pitch: 22 },
   ingot_gold: { file: "ingot_gold", yaw: -30, pitch: 28 },
+  train: { file: "train", yaw: 125, pitch: 14 },
 };
 
 window.ICON_NAMES = [...Object.keys(ICONS), ...Object.keys(PART_ICONS)];

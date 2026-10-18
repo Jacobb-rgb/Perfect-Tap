@@ -166,7 +166,8 @@ function Bubble.body(parent: Instance, role: Role, size: Vector2, opts: BodyOpti
 			BackgroundTransparency = Theme.GlossTransparency,
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(5, 4),
-			Size = UDim2.new(1, -10, 0.4, 0),
+			-- 40 % of short faces; tall cards and panels keep a thin strip
+			Size = if size.Y > 0 and size.Y <= 90 then UDim2.new(1, -10, 0.4, 0) else UDim2.new(1, -10, 0, 30),
 			ZIndex = 2,
 		}, face)
 		Bubble.corner(gloss, math.max(4, corner - 5))

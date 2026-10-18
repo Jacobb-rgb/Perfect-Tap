@@ -190,3 +190,51 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	BackpackBubble.build(gui, spec[2], backpackData())
 	write("ui_bubble_backpack_" .. spec[1], gui)
 end
+
+---------------------------------------------------------------- shop (Robux)
+local ShopBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ShopBubble")
+-- MonetizationConfig (worktree-wf_7288c494-51a-10) passes
+local shopData = {
+	Tab = "Passes",
+	Hero = {
+		Id = "BigPass",
+		Name = "Forgemaster's Pass",
+		Description = "",
+		Icon = "medal",
+		Price = "560",
+		Tag = "BEST VALUE",
+		Perks = { "Podiums 3 and 4", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
+	},
+	Offers = {
+		{ Id = "Podiums", Name = "Two More Podiums", Description = "Unlocks podiums 3 and 4 on your base.", Icon = "podium", Price = "100" },
+		{ Id = "OfflineExtension", Name = "Night Shift", Description = "Your podiums keep earning while you are away for up to 12 hours instead of 5.", Icon = "moon", Price = "99", Owned = true },
+		{ Id = "TrainExpress", Name = "Express Train", Description = "Your ore train runs twice as fast and carries half as much again.", Icon = "train", Price = "199" },
+	},
+}
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	ShopBubble.build(gui, spec[2], shopData)
+	write("ui_bubble_shop_" .. spec[1], gui)
+end
+
+-- the BOOSTS tab (random things: the text says the new odds show before buying)
+local boostsData = {
+	Tab = "Boosts",
+	Hero = {
+		Id = "TripleLucky15",
+		Name = "Triple Lucky",
+		Description = "",
+		Icon = "clover",
+		Price = "39",
+		Tag = "15 MIN",
+		Perks = { "Rarest golems x3", "In every capsule", "New odds shown first", "Stacks with your golems" },
+	},
+	Offers = {
+		{ Id = "TripleLucky60", Name = "Triple Lucky (1 hour)", Description = "Golem capsules: the rarest golems are 3 times as likely. New odds shown before buying.", Icon = "clover", Price = "129" },
+		{ Id = "HexaLucky15", Name = "Hexa Lucky (15 min)", Description = "Mining: ore luck x2.5 (Rare x2.5, Epic x4, Legendary x6.3, Mythic x9.9).", Icon = "rainbow", Price = "39" },
+		{ Id = "HexaLucky60", Name = "Hexa Lucky (1 hour)", Description = "The same mining luck for a whole hour. New odds shown before buying.", Icon = "rainbow", Price = "129" },
+	},
+}
+local boostsGui = windowGui(1.25, 1)
+ShopBubble.build(boostsGui, 1.25, boostsData)
+write("ui_bubble_shop_boosts_pc", boostsGui)
