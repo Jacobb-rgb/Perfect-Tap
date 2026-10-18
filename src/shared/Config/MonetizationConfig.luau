@@ -11,7 +11,10 @@
 	  The real ProcessReceipt / game pass checks arrive in step 8
 	  (MonetizationService). Until then a feature that is asked to sell a Robux
 	  item answers the client with PurchasePrompt { Product, Status }
-	  (MonetizationConfig.promptStatus).
+	  (MonetizationConfig.promptStatus), and the one receipts gate
+	  (src/server/Receipts.luau) turns "Prompt" into "ComingSoon" for every
+	  product and pass, live id or not, until step 8 calls
+	  Receipts.setReady(true) (ReceiptsAttribute tells the clients).
 	- PaidRandom = true: buying it gives a random result (Royal capsules) or
 	  changes the odds of one (the Triple / Hexa Lucky packs, the Starbreaker
 	  enchant's pass: ore luck and artifact chance), so it is hidden/disabled
@@ -37,13 +40,19 @@
 	Contract for step 8 (ProcessReceipt, developer products):
 	- A receipt is never stranded: it is granted (on the server that holds the
 	  session lock, saved first, then PurchaseGranted), or, when the item truly
-	  can't be given, compensated with something of equal worth, and the
+	  can't be given, compensated with something of equal worth (never
+	  coins while coinsBuyable() is false), and the
 	  receipt is still answered PurchaseGranted. Paid golems are saved with
 	  Paid = true and may pass the inventory cap (GolemConfig.add(golems,
 	  kind, true, true): overCap up to MaxSaved, paid); paid boost time
-	  is added uncapped (BoostConfig.extend capped = false). Past MaxSaved a
-	  capsule is refunded as coins (CapsuleConfig.price of a Crystal capsule
-	  at the player's blaster level per golem).
+	  is added uncapped (BoostConfig.extend capped = false) and kept on
+	  every later load (Migrations clips only junk past
+	  BoostConfig.MaxSavedSeconds, a year ahead). Past MaxSaved the golems that
+	  don't fit are NEVER paid out as coins (Robux -> coins would be a coin
+	  pack: coinsBuyable() and docs/COMPLIANCE.md 2.6a would have to change):
+	  they wait in the save as a pending-golem credit (data.Golems.Pending:
+	  the rolled kinds, Paid) and wake into the inventory as soon as there is
+	  room (CapsuleService.grantProduct returns how many didn't fit).
 	- Receipts that arrive "off policy" (a paid random product for a player
 	  whose policy restricts it, a product whose id is 0 here, an unknown
 	  product id) are still granted or compensated, never dropped, and logged
@@ -63,6 +72,9 @@
 	  WheelResult that arrives after its ResultTimeout (CapsuleConfig /
 	  WheelConfig), and the State push always brings the saved truth.
 ]]
+
+local OreData = require(script.Parent.OreData)
+local WorldLayout = require(script.Parent.WorldLayout)
 
 export type Kind = "GamePass" | "Product"
 
@@ -88,6 +100,41 @@ export type Product = {
 
 local MonetizationConfig = {}
 
+--[[
+	The Glimmer Grotto's ore odds in numbers, from its node weights in
+	WorldLayout (docs/COMPLIANCE.md 2.6 "Forge VIP and ore odds": a paid item
+	that opens better odds says the odds before purchase). Built from the
+	map data, so the Forgemaster's Pass text never goes stale.
+]]
+function MonetizationConfig.grottoOddsText(): string
+	local zone = WorldLayout.ZoneById.Grotto
+	if not zone then
+		return ""
+	end
+	local total = 0
+	local lines: { { Name: string, Weight: number, Order: number } } = {}
+	for order, ore in OreData.List do
+		local weight = zone.Ores[ore.Id]
+		if type(weight) == "number" and weight > 0 then
+			total += weight
+			table.insert(lines, { Name = ore.Name, Weight = weight, Order = order })
+		end
+	end
+	table.sort(lines, function(a, b)
+		if a.Weight ~= b.Weight then
+			return a.Weight > b.Weight
+		end
+		return a.Order < b.Order
+	end)
+	local parts: { string } = {}
+	for _, line in lines do
+		local pct = line.Weight / total * 100
+		local text = if math.abs(pct - math.floor(pct + 0.5)) < 1e-9 then tostring(math.floor(pct + 0.5)) else string.format("%.1f", pct)
+		table.insert(parts, `{text}% {line.Name}`)
+	end
+	return `Glimmer Grotto ore: {table.concat(parts, ", ")}.`
+end
+
 local LIST: { Product } = {
 	---------------------------------------------------------------- game passes
 	{
@@ -96,7 +143,8 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 560,
 		Name = "Forgemaster's Pass",
-		Description = "Podiums 3 and 4, offline earnings for 12 hours, double carrying, the Glimmer Grotto and extra machine slots.",
+		Description = "Podiums 3 and 4, offline earnings for 12 hours, double carrying, the Glimmer Grotto and extra machine slots. "
+			.. MonetizationConfig.grottoOddsText(),
 		Perks = { "Podiums", "OfflineExtension", "StrongBack", "ForgeVip", "Workshop" },
 	},
 	{
@@ -221,7 +269,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 20,
 		Name = "Starbreaker Enchant",
-		Description = "The Mythic Starbreaker enchant for your blaster, yours forever: +75% ore luck, +50% artifact chance (new odds shown before buying).",
+		Description = "The Mythic Starbreaker enchant for your blaster, yours forever: +75% ore luck, +50% artifact chance. Ore luck bonuses add up to at most +150% (new odds shown before buying).",
 		PaidRandom = true,
 		Enchant = "Starbreaker",
 	},
@@ -268,6 +316,10 @@ MonetizationConfig.CoinPacksEnabled = false
 -- Seconds a "Prompted" Royal capsule remembers the Triple Lucky state the
 -- player saw (step 8 contract above).
 MonetizationConfig.PromptMemorySeconds = 15 * 60
+-- ReplicatedStorage attribute: true once step 8 grants receipts and passes
+-- (src/server/Receipts.luau, Receipts.setReady). Until then no product is
+-- prompted, live id or not, and the cards show "Coming soon".
+MonetizationConfig.ReceiptsAttribute = "ReceiptsReady"
 
 MonetizationConfig.List = LIST
 MonetizationConfig.Products = {} :: { [string]: Product }

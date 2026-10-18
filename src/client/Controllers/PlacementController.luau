@@ -64,6 +64,7 @@ local GridOverlay = require(script.Parent.Parent.Effects.GridOverlay)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local StateController = require(script.Parent.StateController)
 local HudController = require(script.Parent.HudController)
 local FxController = require(script.Parent.FxController)
@@ -1791,6 +1792,9 @@ function PlacementController.enter()
 		HudController.toast(BUSY_TEXT, "Deny")
 		return
 	end
+	-- build mode takes the screen: no panel (golems, boosts, the book, the
+	-- wheel, a shop...) stays over BuildView or keeps its keys bound
+	MenuPanels.closeAll()
 	active = true
 	plotId = id
 	plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[id])

@@ -412,8 +412,9 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 		result = "Stored"
 		DataService.changed(player)
 	else
-		-- DataStore cap reached: pay the full value instead of losing the item
-		value = ItemData.value(desc.K, desc.O, desc.G, desc.R)
+		-- DataStore cap reached: pay what Tobin would (base value x the
+		-- player's sell bonus, Bonuses.sellAmount) instead of losing the item
+		value = Bonuses.sellAmount(Bonuses.stats(player), ItemData.value(desc.K, desc.O, desc.G, desc.R))
 		EconomyService.award(player, value, "PenFull")
 		result = "Sold"
 	end

@@ -18,5 +18,7 @@
   "golem_ui_confirm": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_golems_confirm"},
   "capsule_reveal": {"scene": "capsule_reveal", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_reveal"},
   "capsule_reveal_phone": {"scene": "capsule_reveal", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_reveal_phone", "uiInset": 58},
-  "capsule_crack": {"scene": "capsule_crack", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_crack"}
+  "capsule_crack": {"scene": "capsule_crack", "position": [-11.8, 8.7, 42.2], "target": [-40, 4.5, 14], "fov": 50, "preset": "Surface", "sunDir": [0.55, 0.65, 0.5], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsule_crack"},
+  "capsule_ui_small": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_capsules_small", "uiInset": 58},
+  "golem_ui_small": {"scene": "capsules", "position": [-12, 7, 2], "target": [-34, 3.5, 15], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_golems_small", "uiInset": 58}
 }

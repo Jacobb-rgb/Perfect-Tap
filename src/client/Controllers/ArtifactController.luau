@@ -48,6 +48,7 @@
 	  build mode.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -61,7 +62,9 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local Rarity = require(Shared.Config.Rarity)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local ArtifactBuilder = require(Shared.Builders.ArtifactBuilder)
+local MuseumBuilder = require(Shared.Builders.MuseumBuilder)
 local Net = require(Shared.Net)
 local CollectionView = require(script.Parent.Parent.UI.CollectionView)
 local StoryView = require(script.Parent.Parent.UI.StoryView)
@@ -70,6 +73,7 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local CleaningController = require(script.Parent.CleaningController)
 local HudController = require(script.Parent.HudController)
+local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
 
 local ArtifactController = {}
@@ -464,6 +468,7 @@ function ArtifactController.close()
 		return
 	end
 	screen = nil
+	PromptController.setSuppressed("Artifacts", false)
 	ContextActionService:UnbindAction(CLOSE_ACTION)
 	ContextActionService:UnbindAction(PAGE_ACTION)
 	local guis: { ScreenGui } = {}
@@ -531,6 +536,8 @@ local function begin(kind: Screen): boolean
 	ArtifactController.close()
 	screen = kind
 	openedAt = os.clock()
+	-- like every panel: no world prompt (the Cleaning Station's F / Y) fires behind it
+	PromptController.setSuppressed("Artifacts", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	ContextActionService:BindActionAtPriority(
 		PAGE_ACTION,
@@ -1069,11 +1076,80 @@ function ArtifactController.init()
 	end
 end
 
+---------------------------------------------------------------- the museums
+
+-- What each museum near the camera shows (its FoundAttribute text when built).
+local museumShown: { [Instance]: string } = setmetatable({}, { __mode = "k" }) :: any
+
+local function plotFrame(museum: Model): CFrame?
+	local id = museum:GetAttribute("PlotId")
+	for _, plot in WorldLayout.Plots do
+		if plot.Id == id then
+			return WorldLayout.plotCFrame(plot)
+		end
+	end
+	return nil
+end
+
+-- The relics in the base museums are built here, only near the camera
+-- (MuseumBuilder: the server publishes the finds, the map budget keeps
+-- the structure only): within ShowDistance the published ones show, past
+-- HideDistance they go again.
+local function updateMuseums()
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local from = camera.CFrame.Position
+	for _, museum in CollectionService:GetTagged(MuseumBuilder.Tag) do
+		if museum:IsA("Model") and museum:IsDescendantOf(Workspace) then
+			local distance = (museum:GetPivot().Position - from).Magnitude
+			local found = museum:GetAttribute(MuseumBuilder.FoundAttribute)
+			local text = if type(found) == "string" then found else ""
+			local shown = museumShown[museum]
+			if distance <= MuseumBuilder.ShowDistance then
+				local cf = if shown ~= text then plotFrame(museum) else nil
+				if cf then
+					MuseumBuilder.showFound(museum, cf)
+					museumShown[museum] = text
+				end
+			elseif distance > MuseumBuilder.HideDistance and shown ~= nil then
+				MuseumBuilder.clear(museum)
+				museumShown[museum] = nil
+			end
+		end
+	end
+end
+
+-- Something else took the screen: the cleaning close-up, build mode / the
+-- anvil (PlayerControls), or the HUD is hidden.
+local function screenTaken(): boolean
+	if CleaningController.isActive() or PlayerControls.owner() ~= nil then
+		return true
+	end
+	local hud = HudController.refs()
+	return hud ~= nil and not hud.Gui.Enabled
+end
+
 function ArtifactController.start()
-	-- another big panel opening closes the book / the journal
+	-- another big panel opening (or the cleaning close-up, build mode, a
+	-- hidden HUD) closes the book / the journal; every 0.5 s the museums
+	-- near the camera get their relics
+	local beat = 0
 	while true do
 		task.wait(0.25)
-		if screen and os.clock() - openedAt > 0.3 then
+		beat += 1
+		if beat % 2 == 0 then
+			local ok, err = pcall(function()
+				updateMuseums()
+			end)
+			if not ok then
+				warn("[ArtifactController] museum: " .. tostring(err))
+			end
+		end
+		if screen and screenTaken() then
+			ArtifactController.close()
+		elseif screen and os.clock() - openedAt > 0.3 then
 			for _, panel in otherPanels() do
 				if panel.isOpen() then
 					ArtifactController.close()

@@ -194,8 +194,14 @@ return function(T, Loader)
 		-- ore luck: the product is capped too, broken values are no luck
 		T.eq(StatConfig.oreLuck(0, 1), 1)
 		T.near(StatConfig.oreLuck(0.5, 2.5), 3.75, EPS)
-		T.eq(StatConfig.oreLuck(1.5, 2.5), StatConfig.MaxOreLuck, "6.25 -> x4")
-		T.eq(StatConfig.MaxOreLuck, 4)
+		T.eq(StatConfig.oreLuck(1.5, 2.5), StatConfig.MaxOreLuck, "the two caps multiplied")
+		T.near(StatConfig.MaxOreLuck, 6.25, EPS)
+		T.eq(StatConfig.oreLuck(9, 9), StatConfig.MaxOreLuck, "never past it")
+		-- Hexa Lucky is sold as "ore luck x2.5": exactly x2.5 at every OreLuckPct the caps allow
+		for _, pct in { 0, 0.15, 0.3, 0.6, 0.75, 1.05, 1.25, 1.5, 3 } do
+			local without, with = BoostConfig.hexaLuck(math.min(pct, StatConfig.ById.OreLuckPct.Max :: number))
+			T.near(with / without, BoostConfig.Kinds.HexaLucky.Mult, EPS, `Hexa Lucky x2.5 at +{pct * 100}% ore luck`)
+		end
 		-- balance: the best damage stays within ~1.5 blaster levels (x1.8 each), the
 		-- best income bonus at most x3, even with paid golems and Mythic enchants
 		local best = StatConfig.combine({ { DamagePct = 10, OverchargePct = 10, IncomePct = 10 } })
@@ -926,7 +932,7 @@ return function(T, Loader)
 		local mythic, mythicHexa = rarityShare(plain, "Mythic"), rarityShare(hexa, "Mythic")
 		T.near(mythic, 0.175 / 100.425, 1e-12, "Mythic 0.17 % without luck")
 		T.truthy(mythicHexa > 3 * mythic, "Hexa Lucky: Mythic more than x3 (0.17 % -> 0.59 %)")
-		T.truthy(rarityShare(capped, "Mythic") > 5 * mythic, "at the x4 cap: Mythic more than x5")
+		T.truthy(rarityShare(capped, "Mythic") > 5 * mythic, "at the luck cap: Mythic more than x5")
 		T.truthy(rarityShare(hexa, "Legendary") > 2 * rarityShare(plain, "Legendary"), "Legendary more than x2")
 		T.truthy(chanceOf(hexa, "Heartstone") > 3 * chanceOf(plain, "Heartstone"), "Heartstone more than x3")
 		-- the Quarry's Gold (its only Rare+ ore) is exactly x2.5 against the commons
@@ -1252,6 +1258,16 @@ return function(T, Loader)
 		end
 		T.truthy(seen.Sapphire and seen.Azurium and seen.Ruby, "mid game prizes")
 		T.falsy(seen.Moonstone, "no Grotto ore without VIP")
+		-- a VIP who found Moonstone in the Grotto gets the same odds as anyone (no paid odds booster)
+		local vip: any = { BlasterLevel = 3, BestIncome = OreData.ById.Moonstone.Income, Vip = true }
+		local plainCtx = { BlasterLevel = 3, BestIncome = OreData.ById.Moonstone.Income }
+		local vipOdds, plainOdds = WheelConfig.oreOdds(vip), WheelConfig.oreOdds(plainCtx)
+		T.eq(#vipOdds, #plainOdds, "the same list with or without the pass")
+		for i, line in vipOdds do
+			T.eq(line.Ore, plainOdds[i].Ore)
+			T.near(line.Chance, plainOdds[i].Chance, EPS)
+			T.truthy(line.Ore ~= "Moonstone", "never the Grotto's Moonstone")
+		end
 		T.eq(midOdds[3].Ore, "Sapphire", "the best one last")
 		T.truthy(midOdds[3].Chance < midOdds[1].Chance, "the best one is the least likely")
 		-- a deep ore never comes before the blaster can mine its zone
@@ -1519,6 +1535,16 @@ return function(T, Loader)
 			T.truthy(MonetizationConfig.get(key), key)
 		end
 		local big = MonetizationConfig.get("BigPass")
+		-- the pass opens the Grotto's odds: its text says them in numbers, from the map weights
+		local grotto = WorldLayout.ZoneById.Grotto
+		local gtotal = 0
+		for _, weight in grotto.Ores do
+			gtotal += weight
+		end
+		for oreId, weight in grotto.Ores do
+			local pct = math.floor(weight / gtotal * 100 + 0.5)
+			T.truthy(big.Description:find(`{pct}% {OreData.ById[oreId].Name}`, 1, true), `BigPass names {oreId} at {pct}%`)
+		end
 		T.truthy(
 			table.find(big.Perks, "Podiums") and table.find(big.Perks, "OfflineExtension"),
 			"the big pass has podiums 3-4 and 12 h offline"
@@ -1559,6 +1585,9 @@ return function(T, Loader)
 		for _, key in { "HexaLucky15", "HexaLucky60", "EnchantStarbreaker" } do
 			T.truthy(MonetizationConfig.get(key).Description:find("new odds shown before buying", 1, true), key .. " promises the odds")
 		end
+		-- a percent bonus can hit its cap: the pass says where (Hexa's x2.5 never does: MaxOreLuck)
+		T.truthy(MonetizationConfig.get("EnchantStarbreaker").Description:find("at most +150%", 1, true), "Starbreaker names the cap")
+		T.near((StatConfig.ById.OreLuckPct.Max :: number), 1.5, EPS, "the cap the Starbreaker text names")
 		T.truthy(MonetizationConfig.PromptMemorySeconds >= 60, "a Royal prompt remembers the Triple Lucky state it showed")
 		for _, product in MonetizationConfig.List do
 			if product.Kind == "Product" then
@@ -1647,6 +1676,14 @@ return function(T, Loader)
 			T.eq(save.CarryLevel, nil, "removed")
 			T.eq(ToolData.carryCapacity(math.clamp(carry, 1, 5), false), GearConfig.carryCapacity(save.Gear, false), "same capacity")
 		end
+		-- paid boost time stacked past MaxStackSeconds (Robux packs, uncapped) is never lost
+		local paid = fresh()
+		paid.Boosts.HexaLuckyUntil = NOW + 30 * 3600
+		paid.Boosts.TripleLuckyUntil = NOW + 9 * 24 * 3600
+		Migrations.run(paid, NOW)
+		T.eq(paid.Boosts.HexaLuckyUntil, NOW + 30 * 3600, "a 30 h paid boost is kept")
+		T.eq(paid.Boosts.TripleLuckyUntil, NOW + 9 * 24 * 3600, "9 days of paid boost are kept")
+		T.lt(30 * 24 * 3600, BoostConfig.MaxSavedSeconds, "the save cap is only a junk guard")
 		local bought = fresh()
 		bought.CarryLevel = 2
 		bought.Gear.Backpack = 4

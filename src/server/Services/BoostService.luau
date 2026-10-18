@@ -13,7 +13,8 @@
 	               new until-time, all in one step with no yield.
 	    "BuyRobux" { Id: a BoostConfig.RobuxOffers id }  answered with
 	               PurchasePrompt { Product, Status } (promptPurchase:
-	               "ComingSoon" while the product id is 0, "Restricted" where
+	               "ComingSoon" while the product id is 0 or step 8's
+	               receipts gate (src/server/Receipts.luau) is off, "Restricted" where
 	               paid random items are restricted, "Full" when the pack
 	               would pass MaxStackSeconds, else MarketplaceService's
 	               prompt and "Prompted"). NEVER granted here: step 8's
@@ -62,6 +63,7 @@ local Bonuses = require(script.Parent.Parent.Bonuses)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local Policy = require(script.Parent.Parent.Policy)
+local Receipts = require(script.Parent.Parent.Receipts)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local StateService = require(script.Parent.StateService)
@@ -128,8 +130,10 @@ end
 	product `key`, or says why not, and answers the client with
 	PurchasePrompt { Product = key, Status }. `owned` / `full` as in
 	MonetizationConfig.promptStatus. The player's paid-random policy is read
-	only for a PaidRandom product (it may yield on the first call). Returns
-	the Status sent. Nothing is ever granted here (step 8).
+	only for a PaidRandom product (it may yield on the first call). "Prompt"
+	becomes "ComingSoon" until step 8 turns the receipts gate on
+	(Receipts.setReady). Returns the Status sent. Nothing is ever granted
+	here (step 8).
 ]]
 function BoostService.promptPurchase(player: Player, key: string, owned: boolean?, full: boolean?): string
 	local product = MonetizationConfig.get(key)
@@ -137,7 +141,9 @@ function BoostService.promptPurchase(player: Player, key: string, owned: boolean
 	if product and product.PaidRandom then
 		restricted = Policy.paidRandomRestricted(player)
 	end
-	local status = MonetizationConfig.promptStatus(key, restricted, owned, full)
+	-- the one receipts gate: nothing is prompted before step 8 grants receipts
+	-- and passes (a live id would take Robux and give nothing)
+	local status = Receipts.gate(MonetizationConfig.promptStatus(key, restricted, owned, full))
 	if status == "Prompt" and product then
 		local ok, err = pcall(function()
 			prompter(player, product)

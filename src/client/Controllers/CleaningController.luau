@@ -40,6 +40,7 @@ local CameraFit = require(Cleaning.CameraFit)
 local ScrapeStep = require(Cleaning.ScrapeStep)
 local PolishStep = require(Cleaning.PolishStep)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
@@ -374,6 +375,8 @@ local function fitCamera(ctx: any, scale: number, compact: boolean): (CFrame, nu
 end
 
 local function enter(ctx: any)
+	-- the close-up takes the screen: no panel (the book, the wheel, a shop...) stays over it
+	MenuPanels.closeAll()
 	MiningController.setBusy(true)
 	InteractController.suspend()
 	playerControls(false)

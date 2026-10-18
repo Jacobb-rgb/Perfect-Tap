@@ -299,6 +299,22 @@ function BoostView.soonSet(attribute: any): { [string]: boolean }
 	return set
 end
 
+-- A `soon` key that is no boost or enchant id: every Robux button waits for
+-- step 8's receipts gate (src/server/Receipts.luau; the ReplicatedStorage
+-- attribute MonetizationConfig.ReceiptsAttribute isn't true yet). The server
+-- answers "ComingSoon" then too.
+BoostView.RobuxSoon = "Robux"
+
+-- What the controllers pass as `soon`: soonSet of the coming-soon attribute,
+-- plus RobuxSoon while the receipts attribute isn't true.
+function BoostView.soonNow(soonAttribute: any, receiptsAttribute: any): { [string]: boolean }
+	local set = BoostView.soonSet(soonAttribute)
+	if receiptsAttribute ~= true then
+		set[BoostView.RobuxSoon] = true
+	end
+	return set
+end
+
 local function safeState(state: any): { [string]: any }
 	return if type(state) == "table" then state else {}
 end
@@ -431,7 +447,8 @@ local function offerOf(
 	coins: number,
 	now: number,
 	effect: boolean,
-	soon: boolean
+	soon: boolean,
+	robuxSoon: boolean
 ): Offer
 	local boosts = state.Boosts
 	local robux = offer.Product ~= nil
@@ -444,7 +461,8 @@ local function offerOf(
 		reason = "ComingSoon"
 	elseif robux then
 		local product = MonetizationConfig.get(offer.Product)
-		local live = MonetizationConfig.keyLive(offer.Product)
+		-- a real id AND step 8's receipts gate on (RobuxSoon not in `soon`)
+		local live = MonetizationConfig.keyLive(offer.Product) and not robuxSoon
 		priceText = if live and product then `{product.Robux} R$` else "COMING SOON"
 		if not effect then
 			reason = "NoEffect"
@@ -498,7 +516,8 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 		for _, group in { BoostConfig.CoinOffers, BoostConfig.RobuxOffers } do
 			for _, offer in group do
 				if offer.Boost == kindId and not (restricted and BoostConfig.isPaidRandom(offer.Id)) then
-					table.insert(offers, offerOf(offer, state, cash, now, effect, soonSet[kindId] == true))
+					local robuxSoon = soonSet[BoostView.RobuxSoon] == true
+					table.insert(offers, offerOf(offer, state, cash, now, effect, soonSet[kindId] == true, robuxSoon))
 				end
 			end
 		end
@@ -1846,6 +1865,20 @@ function BoostView.chipsTop(trainChip: GuiObject?, compact: boolean): number
 		bottom = TrainView.ChipTop + (if compact then BoostView.TrainChipHeight.Compact else BoostView.TrainChipHeight.Normal)
 	end
 	return math.max(bottom, BoostView.FloatersBottom) + BoostView.ChipGap
+end
+
+-- The widest the chips' row gets (design units): every boost chip with the
+-- longest timer text, the gaps and the gamepad glyph (SideMenuView keeps
+-- its column clear of it; SideMenu.spec checks the rects).
+function BoostView.chipsWidth(): number
+	local function pill(text: string): number
+		return 4 + CHIP_DOT + 8 + math.ceil(TechShopView.textWidth(text, CHIP_TEXT)) + 2 + 10
+	end
+	local width = 0
+	for _, kindId in BoostConfig.KindIds do
+		width += pill(`{BoostView.ChipTags[kindId] or ""} 23h 59m`) + 8
+	end
+	return math.max(width, pill("BOOSTS") + 8) + 30
 end
 
 -- Moves the chips' row to `top` (BoostView.chipsTop).

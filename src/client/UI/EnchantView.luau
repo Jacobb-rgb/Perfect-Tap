@@ -323,7 +323,8 @@ local function buysOf(
 	coins: number,
 	shards: number,
 	restricted: boolean,
-	soon: boolean
+	soon: boolean,
+	robuxSoon: boolean
 ): { Buy }
 	local coinPrice, shardPrice, product = EnchantConfig.nextPrice(enchant.Id, tier)
 	local nextTier = tier + 1
@@ -356,8 +357,9 @@ local function buysOf(
 	end
 	if product and not (restricted and EnchantConfig.isPaidRandom(enchant.Id, "Robux")) then
 		local info = MonetizationConfig.get(product)
-		local live = MonetizationConfig.keyLive(product)
-		-- the pass id is 0 until it's on sale: its price shows, greyed, with SOON
+		local live = MonetizationConfig.keyLive(product) and not robuxSoon
+		-- the pass id is 0 (or step 8's receipts gate is off) until it's on
+		-- sale: its price shows, greyed, with SOON
 		local text = if info then `{info.Robux} R$` else "COMING SOON"
 		if info and not live then
 			text ..= " • SOON"
@@ -397,7 +399,8 @@ function EnchantView.cards(rawState: any, coins: number, restricted: boolean, so
 		local slot = EnchantView.slotOf(enchants, level, id)
 		local info = Rarity.get(enchant.Rarity)
 		local isSoon = soonSet[id] == true
-		local buys = buysOf(enchant, tier, cash, shards, restricted, isSoon)
+		local robuxSoon = soonSet[BoostView.RobuxSoon] == true
+		local buys = buysOf(enchant, tier, cash, shards, restricted, isSoon, robuxSoon)
 		local tierText: string
 		if tier == 0 then
 			tierText = "NEW"
@@ -417,7 +420,8 @@ function EnchantView.cards(rawState: any, coins: number, restricted: boolean, so
 		local robux = if product then MonetizationConfig.get(product) else nil
 		if product and robux and not (restricted and EnchantConfig.isPaidRandom(id, "Robux")) then
 			-- the pass id is 0 until it's on sale: the Robux price is only a promise
-			priceText ..= if MonetizationConfig.keyLive(product) then ` or {robux.Robux} R$` else ` or {robux.Robux} R$ (soon)`
+			local sold = MonetizationConfig.keyLive(product) and not robuxSoon
+			priceText ..= if sold then ` or {robux.Robux} R$` else ` or {robux.Robux} R$ (soon)`
 		end
 		local line: string
 		local lineColor: Color3

@@ -69,8 +69,26 @@ end
 local uiExports: { [string]: { any } } = {}
 local scene_extra: any = nil
 
+-- The artifact museum ArtifactService builds into every plot's yard at
+-- server start (MuseumBuilder), empty (the relics show near the camera for
+-- each owner's finds; yard_preview fills its plot's).
+local function addMuseums(map: any)
+	local MuseumBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MuseumBuilder")
+	local plots = map and map:FindFirstChild("Plots")
+	for _, plot in WorldLayout.Plots do
+		local model = plots and plots:FindFirstChild("Plot_" .. plot.Id)
+		local yard = model and model:FindFirstChild("Yard")
+		if yard then
+			local museum = MuseumBuilder.build(WorldLayout.plotCFrame(plot))
+			museum:SetAttribute("PlotId", plot.Id)
+			museum.Parent = yard
+		end
+	end
+end
+
 if sceneName == "world" then
-	WorldBuilder.build(workspace)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
 	addNodes(workspace)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper

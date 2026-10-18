@@ -11,25 +11,28 @@
 	             chapters waiting unread; hidden while it isn't in the game)
 	  BOARDS     LeaderboardController (HALL OF FAME panel)
 	  SETTINGS   SettingsController
-	  STORE      StoreController (Robux items) when it is in the game, else
-	             "Coming soon"
+	  STORE      StoreController (Robux items; hidden while it isn't in the
+	             game, step 8)
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
 	exist), so the menu works before the packages that add them merge: a
-	button whose controller is missing is hidden (GOLEMS, ARTIFACTS: no dead
-	buttons), or wears a "SOON" chip and answers with a toast (STORE), or
-	answers with a hint (SHOP). Pressing the button of an open panel closes
+	button whose controller is missing is hidden (GOLEMS, ARTIFACTS, STORE:
+	no dead buttons), or answers with a hint (SHOP). (An entry with Soon and
+	without Hide would wear a "SOON" chip and answer with a toast.) Pressing the button of an open panel closes
 	it.
 	One entry per panel: the side menu is THE entry for the panels it
 	opens, so the controllers leave out their own HUD buttons while it is
 	in the game (GolemController's GOLEMS, ArtifactController's BOOK) and
 	the BOOSTS launcher chip is turned off (BoostController.setLauncher);
 	hotkeys (P, L, J), world prompts and the boost chips stay.
-	Layout: SideMenuView.layout (touch screens: MenuPanels.isTouch, the same
-	test the panels use; they get one MENU button that opens the grid and
+	Layout: SideMenuView.layout (the left column has one order: coins,
+	TRAIN chip, boost chips, then this menu, so nothing covers anything:
+	mouse layouts start under the boost chips; touch screens
+	(MenuPanels.isTouch, the same test the panels use) get one MENU button
+	first in the train chip's row that opens the grid over the chips and
 	keep the thumbstick's bottom-left corner free; TVs keep the title-safe
-	margin). The touch grid shuts again when a button runs, after
+	margin and get bigger texts). The touch grid shuts again when a button runs, after
 	AutoShut seconds without a tap, when the gamepad selection leaves it or
 	when the HUD hides.
 	Input: click / tap; gamepad: D-pad Left jumps into the column (its glyph
@@ -75,7 +78,8 @@ SideMenuController.Actions = {
 		Hide = false,
 	},
 	Settings = { Controller = "SettingsController", Missing = "Settings are coming soon!", Soon = false, Hide = false },
-	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = false },
+	-- hidden until step 8's StoreController is in the game (no dead buttons); it comes back by itself
+	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = true },
 } :: { [string]: Action }
 
 -- Buttons whose controller has onUnseenChanged(callback(count)): its count

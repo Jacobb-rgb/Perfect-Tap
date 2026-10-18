@@ -15,6 +15,11 @@
 	  ui_menu_phone_open 667 x 375 pt phone: MENU tapped, the grid open (the
 	                     thumbstick's corner free)
 	  ui_menu_phone_small 568 x 320 pt phone, the grid open
+	  ui_menu_column_pc / _phone / _phone_open / _small / _small_open
+	                     the whole left column as it ships: coins, the TRAIN
+	                     chip, two running boost chips and the side menu (PC:
+	                     the column under the chips; phones: MENU first in the
+	                     train chip's row; open: the grid over the chips)
 	  ui_codex           PC: the codex, 14 of 30 found, Ruby selected (NEW)
 	  ui_codex_hidden    PC: an undiscovered ore selected
 	  ui_codex_phone     667 x 375 pt phone (compact)
@@ -163,6 +168,46 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
+	-- the train chip and two running boost chips under it, placed like
+	-- TrainController and BoostController place them
+	local BoostView = Loader.requirePath(UI .. "BoostView")
+	local TrainView = Loader.requirePath(UI .. "TrainView")
+	local NOW = 1.7e9
+	local function chips(renderScale: number, compact: boolean, designW: number, designH: number): { any }
+		local train = TrainView.build(compact)
+		train.Chip.Scale.Scale = renderScale
+		train.Gui.Scale.Scale = renderScale
+		TrainView.layout(train, compact, designW, designH)
+		train.ChipKey.Visible = not compact
+		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
+		train.Gui.Enabled = false
+		train.Chip.Enabled = true
+		local boost = BoostView.buildChips()
+		boost.Gui.Scale.Scale = renderScale
+		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact))
+		local state = { Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } }
+		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
+		return { train.Chip, boost.Gui }
+	end
+
+	-- the side menu as it ships (STORE hidden until step 8's store) over the whole left column
+	local function column(renderScale: number, uiScale: number, designH: number, open: boolean?): { any }
+		local touch = uiScale <= SideMenuView.CompactScale
+		local designW = 1600 / renderScale
+		local refs = SideMenuView.build()
+		refs.Gui.Scale.Scale = renderScale
+		SideMenuView.setHidden(refs, "Store", true)
+		refs.Expanded = open == true
+		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Count = #SideMenuView.shown(refs), Touch = touch, DesignWidth = designW }))
+		SideMenuView.setBadge(refs, "Codex", 2)
+		local list = { hud(renderScale, uiScale).Gui }
+		for _, gui in chips(renderScale, touch, designW, designH) do
+			table.insert(list, gui)
+		end
+		table.insert(list, refs.Gui)
+		return list
+	end
+
 	local exports: { [string]: any } = {}
 
 	-- the HUD with the side menu
@@ -173,6 +218,11 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_menu_phone_open = UiExport.export({ hud(phoneScale, PHONE).Gui, menu(phoneScale, PHONE, phoneDesignH, false, true).Gui })
 	local smallDesignH = (900 - smallInset) / smallScale
 	exports.ui_menu_phone_small = UiExport.export({ hud(smallScale, PHONE).Gui, menu(smallScale, PHONE, smallDesignH, false, true).Gui })
+	exports.ui_menu_column_pc = UiExport.export(column(PC, 1, pcH))
+	exports.ui_menu_column_phone = UiExport.export(column(phoneScale, PHONE, phoneDesignH))
+	exports.ui_menu_column_phone_open = UiExport.export(column(phoneScale, PHONE, phoneDesignH, true))
+	exports.ui_menu_column_small = UiExport.export(column(smallScale, PHONE, smallDesignH))
+	exports.ui_menu_column_small_open = UiExport.export(column(smallScale, PHONE, smallDesignH, true))
 
 	-- the codex
 	local function codex(renderScale: number, compact: boolean, maxW: number, maxH: number, select: string): any

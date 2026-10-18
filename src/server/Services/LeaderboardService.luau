@@ -40,11 +40,16 @@
 	  skipped), and every player gets Leaderboards { Live, Boards, Own }
 	  (Net.luau). A board that can't be read keeps its last rows. A joining
 	  player gets the latest rows at once.
-	- removeUser(userId): deletes a user's entries from all four stores
-	  (RemoveAsync; a cheater's or banned user's score, or an RTBF request).
-	  From the Studio command bar (API access on):
+	- removeUser(userId): hides the user at once (a runtime hidden set next
+	  to LeaderboardConfig.Hidden: never written again, never shown, also
+	  while they are online), deletes their entries from all four stores
+	  (RemoveAsync; a cheater's or banned user's score, or an RTBF request),
+	  saves the id in the HiddenStore DataStore (key HiddenKey, at most
+	  MaxHidden ids) and tells the running servers (MessagingService
+	  HiddenTopic). Every server reads that list in start() and every
+	  HiddenSeconds, so no deploy is needed and no other server writes the
+	  user back. From the Studio command bar (API access on):
 	    require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(12345)
-	  Add the id to LeaderboardConfig.Hidden too so it never comes back.
 	- Names are DisplayNames (docs/COMPLIANCE.md 2.4): players on this server
 	  by their own, the rest from one batched
 	  UserService:GetUserInfosByUserIdsAsync call per refresh for every id
@@ -108,6 +113,13 @@ LeaderboardService.ActivityTick = 10 -- how often the characters' moves are chec
 LeaderboardService.MoveStuds = 4 -- a move this long (flat) since the last check is activity
 -- boards whose value never goes down: UpdateAsync keeps the bigger number
 LeaderboardService.Growing = { TotalEarned = true, Artifacts = true, HoursPlayed = true } :: { [string]: boolean }
+-- users hidden at runtime (removeUser): a DataStore list every server reads, and a
+-- MessagingService topic that tells the running servers at once
+LeaderboardService.HiddenStore = "TF_LB_Hidden_v1"
+LeaderboardService.HiddenKey = "Hidden"
+LeaderboardService.HiddenTopic = "TF_LB_Hidden"
+LeaderboardService.HiddenSeconds = 300 -- every server re-reads the hidden list this often
+LeaderboardService.MaxHidden = 1000 -- ids kept in the list (the newest)
 
 local live = false
 local writable = false -- live and allowed to write (not Studio)
@@ -131,6 +143,20 @@ local sessionCount = 0
 local releasing: { [number]: boolean } = {}
 -- userId -> round writes running now (the leave write waits for them)
 local busy: { [number]: number } = {}
+-- users hidden at runtime (removeUser, the HiddenStore list, HiddenTopic)
+local hidden: { [number]: boolean } = {}
+
+-- Is this user kept off every board (LeaderboardConfig.Hidden or hidden at runtime)?
+function LeaderboardService.isHidden(userId: number): boolean
+	return LeaderboardConfig.Hidden[userId] == true or hidden[userId] == true
+end
+
+-- Hides a user on this server (no request; removeUser also saves and tells the others).
+function LeaderboardService.hide(userId: any)
+	if type(userId) == "number" and userId == math.floor(userId) and userId > 0 then
+		hidden[userId] = true
+	end
+end
 
 ---------------------------------------------------------------- values
 
@@ -351,7 +377,7 @@ end
 -- Writes a user's changed scores now (`final` = the leave write). Returns
 -- how many were written.
 function LeaderboardService.flushValues(userId: number, values: { [string]: number }, final: boolean?): number
-	if not writable or userId <= 0 or LeaderboardConfig.Hidden[userId] then
+	if not writable or userId <= 0 or LeaderboardService.isHidden(userId) then
 		return 0
 	end
 	if not final and releasing[userId] then
@@ -363,6 +389,9 @@ function LeaderboardService.flushValues(userId: number, values: { [string]: numb
 	for _, item in LeaderboardService.dueWrites(userId, values) do
 		if not final and releasing[userId] then
 			break -- the leave write takes over
+		end
+		if LeaderboardService.isHidden(userId) then
+			break -- removeUser ran meanwhile
 		end
 		if LeaderboardService.writeScore(item.Board, userId, item.Stored) then
 			count += 1
@@ -516,7 +545,7 @@ function LeaderboardService.rowsFromPage(boardId: string, page: any): { Row }
 		if type(entry) == "table" then
 			local userId = tonumber(entry.key)
 			local value = LeaderboardConfig.decode(boardId, entry.value)
-			if userId and userId == math.floor(userId) and value > 0 and not LeaderboardConfig.Hidden[userId] then
+			if userId and userId == math.floor(userId) and value > 0 and not LeaderboardService.isHidden(userId) then
 				table.insert(rows, { Rank = #rows + 1, UserId = userId, Name = "", Value = value })
 			end
 		end
@@ -527,11 +556,16 @@ end
 -- How many entries a read asks for: TopCount, plus room for the hidden
 -- users that may sit in it (a page holds at most 100).
 function LeaderboardService.pageSize(): number
-	local hidden = 0
+	local count = 0
 	for _ in LeaderboardConfig.Hidden do
-		hidden += 1
+		count += 1
 	end
-	return math.min(100, LeaderboardConfig.TopCount + hidden)
+	for userId in hidden do
+		if not LeaderboardConfig.Hidden[userId] then
+			count += 1
+		end
+	end
+	return math.min(100, LeaderboardConfig.TopCount + count)
 end
 
 -- Reads a board's top rows (nil when it can't be read right now).
@@ -556,7 +590,7 @@ end
 function LeaderboardService.localRows(boardId: string, entries: { { UserId: number, Name: string, Value: number } }): { Row }
 	local list = {}
 	for _, entry in entries do
-		if entry.Value > 0 and not LeaderboardConfig.Hidden[entry.UserId] then
+		if entry.Value > 0 and not LeaderboardService.isHidden(entry.UserId) then
 			table.insert(list, entry)
 		end
 	end
@@ -597,14 +631,103 @@ function LeaderboardService.storeOf(boardId: string): any?
 	return if ok then opened else nil
 end
 
--- Deletes a user's entries from every board (RemoveAsync: a cheater's or
--- banned user's score, an RTBF request) and from the rows shown now.
--- Returns how many boards it was removed from (every request is pcall'd,
--- budget-aware and retried; Studio may do this, it is an admin action).
+-- The DataStore holding the runtime hidden list (swappable for the tests).
+function LeaderboardService.hiddenStoreOf(): any?
+	local ok, store = pcall(function()
+		return DataStoreService:GetDataStore(LeaderboardService.HiddenStore)
+	end)
+	return if ok then store else nil
+end
+
+-- Tells the running servers to hide `userId` (swappable for the tests).
+function LeaderboardService.publishHidden(userId: number): boolean
+	local ok, err = pcall(function()
+		game:GetService("MessagingService"):PublishAsync(LeaderboardService.HiddenTopic, userId)
+	end)
+	if not ok then
+		warn(`[LeaderboardService] telling the servers to hide {userId} failed: {err}`)
+	end
+	return ok
+end
+
+-- A clean id list from the hidden-list DataStore value.
+local function hiddenList(value: any): { number }
+	local list: { number } = {}
+	if type(value) == "table" then
+		for _, id in value do
+			if type(id) == "number" and id == math.floor(id) and id > 0 then
+				table.insert(list, id)
+			end
+		end
+	end
+	return list
+end
+
+-- Reads the hidden list (start() and every HiddenSeconds). True when read.
+function LeaderboardService.loadHidden(): boolean
+	local store = LeaderboardService.hiddenStoreOf()
+	if not store or not waitBudget(Enum.DataStoreRequestType.GetAsync, LeaderboardService.reserve()) then
+		return false
+	end
+	local ok, value = pcall(function()
+		return store:GetAsync(LeaderboardService.HiddenKey)
+	end)
+	if not ok then
+		warn(`[LeaderboardService] reading the hidden list failed: {value}`)
+		return false
+	end
+	for _, id in hiddenList(value) do
+		hidden[id] = true
+	end
+	return true
+end
+
+-- Adds `userId` to the hidden list in the DataStore (retried). True when saved.
+local function saveHidden(userId: number): boolean
+	local store = LeaderboardService.hiddenStoreOf()
+	if not store then
+		return false
+	end
+	for attempt = 1, LeaderboardService.Retries do
+		if waitBudget(Enum.DataStoreRequestType.GetAsync, LeaderboardService.reserve()) then
+			local ok, err = pcall(function()
+				store:UpdateAsync(LeaderboardService.HiddenKey, function(old: any): any
+					local list = hiddenList(old)
+					if table.find(list, userId) then
+						return list
+					end
+					table.insert(list, userId)
+					while #list > LeaderboardService.MaxHidden do
+						table.remove(list, 1)
+					end
+					return list
+				end)
+			end)
+			if ok then
+				return true
+			end
+			if attempt == LeaderboardService.Retries then
+				warn(`[LeaderboardService] saving hidden user {userId} failed: {err}`)
+			end
+		end
+		if attempt < LeaderboardService.Retries then
+			task.wait(LeaderboardService.RetryWait * attempt)
+		end
+	end
+	return false
+end
+
+-- Hides a user everywhere and deletes their entries from every board
+-- (RemoveAsync: a cheater's or banned user's score, an RTBF request) and
+-- from the rows shown now (see the header). Returns how many boards it was
+-- removed from (every request is pcall'd, budget-aware and retried; Studio
+-- may do this, it is an admin action).
 function LeaderboardService.removeUser(userId: number): number
 	if type(userId) ~= "number" or userId ~= math.floor(userId) or userId <= 0 then
 		return 0
 	end
+	-- first: no write of this server brings the entry back (online or not)
+	LeaderboardService.hide(userId)
 	local removed = 0
 	for _, board in LeaderboardConfig.Boards do
 		local store = LeaderboardService.storeOf(board.Id)
@@ -639,7 +762,9 @@ function LeaderboardService.removeUser(userId: number): number
 			top.Rows = kept
 		end
 	end
-	written[userId] = nil
+	-- the other servers (running now and started later) stop writing it too
+	saveHidden(userId)
+	LeaderboardService.publishHidden(userId)
 	return removed
 end
 
@@ -785,7 +910,7 @@ local function onRelease(player: Player, data: { [string]: any })
 	lastSpot[player] = nil
 	local userId = player.UserId
 	local session = sessions[userId]
-	if not writable or userId <= 0 or LeaderboardConfig.Hidden[userId] then
+	if not writable or userId <= 0 or LeaderboardService.isHidden(userId) then
 		forget(userId, session)
 		return
 	end
@@ -854,6 +979,20 @@ function LeaderboardService.start()
 	if live and not writable then
 		print("[LeaderboardService] Studio: the boards are read, never written")
 	end
+	-- the users hidden at runtime: told at once, and the saved list now and every HiddenSeconds
+	pcall(function()
+		game:GetService("MessagingService"):SubscribeAsync(LeaderboardService.HiddenTopic, function(message: any)
+			LeaderboardService.hide(if type(message) == "table" then message.Data else nil)
+		end)
+	end)
+	if live then
+		task.spawn(function()
+			while true do
+				pcall(LeaderboardService.loadHidden)
+				task.wait(LeaderboardService.HiddenSeconds)
+			end
+		end)
+	end
 	-- hours played: moves every ActivityTick, the credit every PlayTick
 	task.spawn(function()
 		local sinceCredit = 0
@@ -920,6 +1059,7 @@ LeaderboardService._test = {
 		table.clear(sessions)
 		table.clear(releasing)
 		table.clear(busy)
+		table.clear(hidden)
 		nameCount = 0
 		inFlight = 0
 		sessionCount = 0

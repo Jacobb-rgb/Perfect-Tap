@@ -52,14 +52,17 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- side menu
 
-	T.test("side menu: one column on a PC, under the coins, inside the screen", function()
+	T.test("side menu: on a PC the column starts under the train and boost chips, inside the screen", function()
 		local layout = SideMenuView.layout(1, 720 - 36)
-		T.eq(layout.Columns, 1)
-		T.eq(layout.Rows, #SideMenuView.Entries)
 		T.falsy(layout.Touch)
 		T.eq(layout.Left, SideMenuView.Left)
-		T.truthy(layout.Top >= SideMenuView.TopMin, "below the coins and their popups")
+		T.truthy(layout.Top >= SideMenuView.TopMin, "below the train chip and the boost chips")
 		T.le(layout.Top + SideMenuView.Drop + layout.Size.Y, 720 - 36 - SideMenuView.BottomMargin)
+		T.eq(layout.Columns, 2, "a 720p window: two columns under the chips")
+		-- a 1080p screen (HUD scale 1.25): one column
+		local hd = SideMenuView.layout(1.25, (1080 - 36) / 1.25, { Count = 6 })
+		T.eq(hd.Columns, 1)
+		T.eq(hd.Rows, 6)
 		-- a big screen centres it
 		local tall = SideMenuView.layout(1, 1200)
 		T.eq(tall.Columns, 1)
@@ -118,11 +121,18 @@ return function(T, Loader)
 				local apart = x0 >= designW * 0.4 or y1 <= designH * 0.6
 				T.truthy(apart, `{label}: the bottom-left 40 % x 40 % is free (bottom at {math.floor(y1 / designH * 100)} %)`)
 				T.truthy(y0 >= SideMenuView.TopTight, `{label}: below the coins panel`)
-				T.lt(x1, designW * 0.45, `{label}: the rest of the width is the game's`)
+				T.le(x1, designW - SideMenuView.RightReserve, `{label}: never the HUD's right-side menu`)
+				if layout.Rows > 1 then
+					T.lt(x1, designW * 0.45, `{label}: the rest of the width is the game's`)
+				end
 			end
 		end
-		-- the common phones keep the "+$X" popups clear too
-		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE, { Touch = true }).Top >= SideMenuView.TopMin)
+		-- MENU sits first in the train chip's row (the chip starts right of it on touch layouts)
+		local phone = SideMenuView.layout(PHONE, (375 - 58) / PHONE, { Touch = true })
+		local train = SideMenuView.trainRect(true)
+		T.le(phone.Left + phone.Width, train.X - 8, "MENU left of the train chip")
+		T.truthy(phone.Top + SideMenuView.Drop >= train.Y, "in the train chip's row")
+		T.le(phone.Top + SideMenuView.Drop + phone.Height, train.Y + train.H)
 		-- a small window (phone-sized buttons) uses the touch layout even without touch
 		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE).Touch)
 	end)
@@ -188,6 +198,114 @@ return function(T, Loader)
 		T.le(soon.Position.X.Offset, 0, "inside the right edge")
 		T.truthy(soon.Position.Y.Offset >= 0, "inside the top edge")
 		T.le(soon.Size.X.Offset, SideMenuView.Normal.Width / 2, "a corner tag, not a bridge")
+	end)
+
+	-- Do two design-unit boxes overlap?
+	local function overlaps(a: any, b: any): boolean
+		return a.X < b.X + b.W and b.X < a.X + a.W and a.Y < b.Y + b.H and b.Y < a.Y + a.H
+	end
+
+	-- The side menu's shown targets as screen boxes (design units).
+	local function targetRects(refs: any): { any }
+		local list = {}
+		local origin = refs.Column.Position
+		for _, target in SideMenuView.touchTargets(refs) do
+			table.insert(list, {
+				Name = target.Name,
+				X = origin.X.Offset + target.Position.X.Offset,
+				Y = origin.Y.Offset + target.Position.Y.Offset,
+				W = target.Size.X.Offset,
+				H = target.Size.Y.Offset,
+			})
+		end
+		return list
+	end
+
+	T.test("side menu: one owner for the left column (coins, train chip, boost chips, menu never overlap)", function()
+		local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+		local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
+		local coins = { X = 16, Y = 16, W = HudView.CoinsWidth, H = 74 }
+		-- { label, width pt, height pt, uiScale, touch, top inset pt }
+		local screens = {
+			{ "PC 1600x900", 1600, 900, 1.25, false, 36 },
+			{ "PC 1280x720", 1280, 720, 1, false, 36 },
+			{ "phone 667x375", 667, 375, PHONE, true, 58 },
+			{ "phone 568x320", 568, 320, PHONE, true, 58 },
+		}
+		for _, screen in screens do
+			local label, w, h, scale, touch, inset = screen[1], screen[2], screen[3], screen[4], screen[5], screen[6]
+			local designW, designH = w / scale, (h - inset) / scale
+			-- the train chip where TrainController puts it (compact = touch here)
+			local train = TrainView.build(touch)
+			TrainView.layout(train, touch, designW, designH)
+			local frame = train.ChipFrame
+			local trainRect = { X = frame.Position.X.Offset, Y = frame.Position.Y.Offset, W = frame.Size.X.Offset, H = frame.Size.Y.Offset }
+			local expected = SideMenuView.trainRect(touch)
+			T.eq(trainRect.X, expected.X, label .. ": train chip x")
+			T.eq(trainRect.W, expected.W, label .. ": train chip width")
+			-- the boost chips' row under it (BoostController: chipsTop of the real frame), at its widest
+			local chips = { X = BoostView.ChipLeft, Y = BoostView.chipsTop(frame, touch), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
+			T.eq(chips.Y, SideMenuView.chipsRect(touch).Y, label .. ": chips where the side menu expects them")
+			T.falsy(overlaps(trainRect, chips), label .. ": train chip and boost chips")
+			T.falsy(overlaps(coins, trainRect), label .. ": coins and train chip")
+			local refs = SideMenuView.build()
+			SideMenuView.setHidden(refs, "Store", true)
+			local count = #SideMenuView.shown(refs)
+			local layout = SideMenuView.layout(scale, designH, { Count = count, Touch = touch, DesignWidth = designW })
+			SideMenuView.apply(refs, layout)
+			-- shut (touch: MENU alone; mouse: every button): nothing overlaps
+			for _, rect in targetRects(refs) do
+				T.falsy(overlaps(rect, trainRect), `{label}: {rect.Name} clear of the train chip`)
+				T.falsy(overlaps(rect, chips), `{label}: {rect.Name} clear of the boost chips`)
+				T.falsy(overlaps(rect, coins), `{label}: {rect.Name} clear of the coins`)
+				T.le(rect.Y + rect.H, designH, `{label}: {rect.Name} on the screen`)
+			end
+			T.eq(refs.Gui.DisplayOrder, SideMenuView.Order)
+			if touch then
+				-- open: the grid may cover the chips, but draws over them and takes the taps
+				SideMenuView.setExpanded(refs, true)
+				local covers = false
+				for _, rect in targetRects(refs) do
+					covers = covers or overlaps(rect, trainRect) or overlaps(rect, chips)
+					T.falsy(overlaps(rect, coins), `{label}: open {rect.Name} clear of the coins`)
+				end
+				T.truthy(not covers or refs.Gui.DisplayOrder > train.Chip.DisplayOrder, label .. ": the open grid over the train chip")
+				T.truthy(not covers or refs.Gui.DisplayOrder > BoostView.buildChips().Gui.DisplayOrder, label .. ": the open grid over the boost chips")
+				SideMenuView.setExpanded(refs, false)
+				T.eq(refs.Gui.DisplayOrder, SideMenuView.Order, label .. ": under the HUD again once shut")
+			end
+		end
+	end)
+
+	T.test("side menu: STORE stays hidden until its controller is in the game (no dead button)", function()
+		-- (the controller needs a LocalPlayer, so its Actions table is read as text)
+		local fs = require("@lune/fs")
+		local source = fs.readFile("src/client/Controllers/SideMenuController.luau")
+		local store = string.match(source, "\n\tStore = (%b{})")
+		T.truthy(store, "the STORE action")
+		T.truthy(string.find(store :: string, "Hide = true", 1, true), "STORE is hidden while StoreController is missing")
+		for line in string.gmatch(source, "\n\t(%w+ = %b{})") do
+			if string.find(line, "Soon = true", 1, true) then
+				T.truthy(string.find(line, "Hide = true", 1, true), line .. ": no SOON-only dead button")
+			end
+		end
+	end)
+
+	T.test("side menu: TVs read from the couch (labels and SOON chips at least 18 px)", function()
+		local scale = 1.25
+		local designW, designH = 1920 / scale, (1080 - 36) / scale
+		local refs = SideMenuView.build()
+		SideMenuView.apply(refs, SideMenuView.layout(scale, designH, { TenFoot = true, DesignWidth = designW }))
+		for id, button in refs.Buttons do
+			local text = button:FindFirstChild("Label") :: any
+			T.truthy(text.TextSize * scale >= 18, `{id} label {text.TextSize * scale} px`)
+			T.truthy(refs.Soon[id].TextSize * scale >= 18, `{id} SOON chip {refs.Soon[id].TextSize * scale} px`)
+			T.le(refs.Soon[id].Size.X.Offset, (button.Parent :: any).Size.X.Offset * 0.6, id .. ": SOON still a corner tag")
+		end
+		-- a PC keeps the normal sizes
+		SideMenuView.apply(refs, SideMenuView.layout(1, 684))
+		T.eq((refs.Buttons.Shop:FindFirstChild("Label") :: any).TextSize, SideMenuView.LabelText)
+		T.eq(refs.Soon.Shop.TextSize, SideMenuView.SoonText)
 	end)
 
 	T.test("side menu: TVs keep the title-safe margin", function()

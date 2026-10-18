@@ -29,12 +29,18 @@
 	  "NotReady") or no answer within WheelConfig.ResultTimeout gives the
 	  button back; a WheelResult that comes later is still shown (or, with
 	  the screen closed, a toast says what was won).
-	- The big lobby wheel (SpinWheel's "Wheel" sub-model, tag Spin) keeps
-	  its idle turn (DecorController): it is decoration with 10 made-up
-	  segments (WheelConfig), so it must never look like it shows a result.
-	  Only confetti comes out of its hub when the prize shows. Asked of the
-	  lobby owner: rebuild its disc with WheelConfig's 8 segments; then it
-	  can turn with WheelView.spinTarget to land on result.Segment.
+	- The big lobby wheel (SpinWheel's "Wheel" sub-model, tag Spin) shows
+	  WheelConfig's 8 prizes in the screen's order and turns idly
+	  (DecorController). When this player's spin result comes, every lobby
+	  wheel within LobbyRange lands on the same segment with the same
+	  jitter as the screen disc (DecorController.hold / setAngle from its
+	  own RenderStepped, so closing the screen mid-spin still lands it;
+	  WheelView.spinTarget, the same clockwise angle), fires confetti from
+	  its hub, rests on the prize LobbyHold seconds and then turns on
+	  (release). Client-only: everyone else keeps seeing the idle turn.
+	  Players who can't buy capsules see the substitute prizes' icons on it
+	  (WheelConfig.Substitutes: the "Icon<Id>" sub-models with the
+	  Substitute attribute; swapped locally, lobbyIcons).
 	- Closes with the X, B (gamepad), Backspace, respawning or another big
 	  panel opening (OtherPanels, plus the side menu's MenuPanels.Names
 	  when that module is in the game); it never locks movement. Gamepads
@@ -61,7 +67,9 @@ local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local CleaningController = require(script.Parent.CleaningController)
+local DecorController = require(script.Parent.DecorController)
 local HudController = require(script.Parent.HudController)
+local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
 
 local WheelController = {}
@@ -94,6 +102,8 @@ WheelController.OtherPanels = {
 }
 local RESTRICTED_ATTRIBUTE = "PaidRandomRestricted" -- set by the server's Policy
 local SPIN_TAG = "Spin"
+WheelController.LobbyRange = 160 -- studs: lobby wheels this near land on your prize
+WheelController.LobbyHold = 15 -- seconds the lobby wheel rests on the prize before it turns on
 
 local player = Players.LocalPlayer
 local refs: WheelView.Refs? = nil
@@ -193,7 +203,6 @@ end
 -- What the odds rows need (WheelView.Info) from the latest State snapshot.
 function WheelController.info(state: { [string]: any }?, restricted: boolean): WheelView.Info
 	local s: { [string]: any } = state or {}
-	local perks = if type(s.Perks) == "table" then s.Perks else {}
 	local bonuses = if type(s.Bonuses) == "table" then s.Bonuses else {}
 	local income = tonumber(s.Income) or 0
 	return {
@@ -202,7 +211,6 @@ function WheelController.info(state: { [string]: any }?, restricted: boolean): W
 		Ore = {
 			BlasterLevel = tonumber(s.BlasterLevel) or 1,
 			BestIncome = WheelConfig.bestIncome(s.Discovered),
-			Vip = perks.ForgeVip == true,
 		},
 		TripleLucky = bonuses.TripleLucky == true,
 	}
@@ -221,8 +229,7 @@ end
 
 ---------------------------------------------------------------- the lobby wheel
 
--- The lobby wheel(s): SpinWheel's "Wheel" sub-model (tag Spin). They keep
--- their idle turn; only confetti comes out of the hub.
+-- The lobby wheel(s): SpinWheel's "Wheel" sub-model (tag Spin, see the header).
 local function lobbyWheels(): { Model }
 	local list: { Model } = {}
 	for _, instance in CollectionService:GetTagged(SPIN_TAG) do
@@ -246,6 +253,81 @@ local function lobbyConfetti()
 					Vfx.burst("Burst", hub.Position, 18, color)
 				end
 			end
+		end
+	end
+end
+
+local lobbyToken = 0
+
+-- The lobby wheel's icons follow this player's own wheel: players who
+-- can't buy capsules see the substitute prizes (local Transparency only;
+-- checked every step, so a wheel that streams in again is fixed too).
+local function lobbyIcons(substitutes: boolean)
+	local replaced: { [number]: boolean } = {}
+	for _, substitute in WheelConfig.Substitutes do
+		replaced[substitute.Index] = true
+	end
+	for _, model in lobbyWheels() do
+		for _, holder in model:GetChildren() do
+			local index = holder:GetAttribute("Segment")
+			if holder:IsA("Model") and type(index) == "number" and replaced[index] then
+				local isSubstitute = holder:GetAttribute("Substitute") == true
+				-- 0 = shown, 1 = hidden: this player's prize shows in that place
+				local wanted = if isSubstitute == substitutes then 0 else 1
+				local first = holder:FindFirstChildWhichIsA("BasePart", true)
+				local now = if not first then wanted elseif isSubstitute then first.Transparency else first.LocalTransparencyModifier
+				if now ~= wanted then
+					for _, part in holder:GetDescendants() do
+						if part:IsA("BasePart") then
+							if isSubstitute then
+								part.Transparency = wanted
+							else
+								part.LocalTransparencyModifier = wanted
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Every lobby wheel near the player lands on segment `index` (with the
+-- screen disc's `jitter`), rests there LobbyHold seconds, then turns on.
+local function landLobby(index: number, jitter: number)
+	lobbyToken += 1
+	local token = lobbyToken
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local count = #WheelConfig.Segments
+	for _, model in lobbyWheels() do
+		local hub = model.PrimaryPart
+		local from = if hub and root and (hub.Position - root.Position).Magnitude < WheelController.LobbyRange
+			then DecorController.hold(model)
+			else nil
+		if from then
+			local start = from :: number
+			local target = math.rad(WheelView.spinTarget(math.deg(start), index, count, WheelView.Turns, jitter))
+			local started = os.clock()
+			local connection: RBXScriptConnection
+			connection = RunService.RenderStepped:Connect(function()
+				if token ~= lobbyToken then
+					connection:Disconnect() -- a newer spin holds the wheel now
+					return
+				end
+				local t = (os.clock() - started) / WheelConfig.SpinSeconds
+				DecorController.setAngle(model, start + (target - start) * WheelView.ease(t))
+				if t >= 1 then
+					connection:Disconnect()
+					DecorController.setAngle(model, target)
+					lobbyConfetti()
+					task.delay(WheelController.LobbyHold, function()
+						if token == lobbyToken then
+							DecorController.release(model)
+						end
+					end)
+				end
+			end)
 		end
 	end
 end
@@ -421,7 +503,6 @@ local function finish(view: WheelView.Refs, result: { [string]: any }, segmentCo
 	WheelView.highlight(view, litId)
 	WheelView.showResult(view, prize, detail, segmentColor)
 	dropConfetti(view)
-	lobbyConfetti()
 	Sfx.play("Reveal")
 	refresh()
 	selectDefault(view)
@@ -466,7 +547,10 @@ local function animate(view: WheelView.Refs, result: { [string]: any })
 	local token = animToken
 	local count = #view.SegmentIds
 	local from = view.Disc.Rotation % 360
-	local target = WheelView.spinTarget(from, segment.Index, count, WheelView.Turns, math.random() - 0.5)
+	-- one jitter for the screen disc and the lobby wheel: both stop on the same spot
+	local jitter = math.random() - 0.5
+	local target = WheelView.spinTarget(from, segment.Index, count, WheelView.Turns, jitter)
+	landLobby(segment.Index, jitter)
 	local started = os.clock()
 	local lastSegment = WheelView.segmentAt(from, count)
 	local connection: RBXScriptConnection
@@ -559,6 +643,7 @@ function WheelController.close()
 		return
 	end
 	open = false
+	PromptController.setSuppressed("Wheel", false)
 	if animating then
 		-- the spin went through: a toast says what it was
 		animating = false
@@ -622,6 +707,8 @@ function WheelController.open()
 	local view = ensureView()
 	open = true
 	openedAt = os.clock()
+	-- like every panel: no world prompt (the Cleaning Station's F / Y) fires behind it
+	PromptController.setSuppressed("Wheel", true)
 	fit(view)
 	updateHint(view)
 	WheelView.hideResult(view)
@@ -699,7 +786,11 @@ local function step()
 		elseif not animating then
 			WheelView.setReady(view, isReady(), secondsLeft(), busy)
 		end
-		if os.clock() - openedAt > 0.3 then
+		if screenBusy() then
+			-- the cleaning close-up, build mode or a hidden HUD took the screen
+			-- (a spin in flight still lands: close() toasts its prize)
+			WheelController.close()
+		elseif os.clock() - openedAt > 0.3 then
 			for _, panel in otherPanels() do
 				if panel.isOpen() then
 					WheelController.close()
@@ -709,6 +800,7 @@ local function step()
 		end
 	end
 	updateChip()
+	lobbyIcons(noCapsules())
 end
 
 ---------------------------------------------------------------- lifecycle

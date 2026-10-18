@@ -17,7 +17,8 @@
 	  (GetSortedAsync descending). Studio never writes (it only reads).
 	- Hidden: UserIds that never show on a board and are never written
 	  (cheaters, banned users); LeaderboardService.removeUser(userId) deletes
-	  a user's entries from all four stores (the command bar; RTBF too).
+	  a user's entries from all four stores (the command bar; RTBF too) and
+	  hides them at runtime on every server (no deploy needed).
 	- Where they show: the lobby boards (Hall, 5.4 x 5 studs, five rank rows)
 	  show the top BoardRows (5) so the rows stay readable on phones from the
 	  plaza; the side menu's Leaderboards panel shows the top TopCount (10).
@@ -60,7 +61,8 @@ LeaderboardConfig.Tag = "Leaderboard"
 LeaderboardConfig.LogScale = 1e12
 LeaderboardConfig.MaxStored = 2 ^ 53 - 1
 -- UserIds kept off every board (never shown, never written): cheaters and
--- banned users. Remove their old entries with LeaderboardService.removeUser.
+-- banned users. LeaderboardService.removeUser deletes their entries and
+-- hides them at runtime on every server (this table is the in-code list).
 LeaderboardConfig.Hidden = {} :: { [number]: boolean }
 
 LeaderboardConfig.Boards = {

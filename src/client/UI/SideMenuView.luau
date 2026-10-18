@@ -21,23 +21,31 @@
 	GOLEMS / ARTIFACTS while their packages aren't in the game); the others
 	close up.
 
-	Where it goes (SideMenuView.layout):
-	  mouse   one column below the HUD coins and their "+$X" popups, centred
-	          in the room under them; two columns (or three) when one
+	Where it goes (SideMenuView.layout). The left column under the coins has
+	ONE order, so nothing in it covers anything else: the coins (16..90),
+	their "+$X" popups, the TRAIN chip (TrainView, at ChipTop), the running
+	boost chips (BoostView.chipsTop, a ChipHit-tall touch area), then this
+	menu (SideMenu.spec intersects the rects on PC, 667 x 375 and 568 x 320):
+	  mouse   one column below the boost chips' touch area (TopMin), centred
+	          in the room under them; two columns (or more) when one
 	          doesn't fit (SideMenuView.Fits)
 	  touch   (MenuPanels.isTouch, or uiScale <= CompactScale) one MENU
-	          button right under the coins (a 44 pt square: the screen stays
-	          the game's); a tap opens the grid of buttons next to and under
-	          it (setExpanded; the badges add up on MENU while it is shut).
+	          button (a 44 pt square: the screen stays the game's) first in
+	          the train chip's row, which starts right of it on these layouts
+	          (TrainView.chipLeft: MenuSlot); a tap opens the grid of buttons
+	          next to and under it (setExpanded; the badges add up on MENU
+	          while it is shut). The open grid draws over the train and boost
+	          chips (DisplayOrder OpenOrder) until it shuts again.
 	          The bottom-left corner belongs to Roblox's movement thumbstick
 	          (the DynamicThumbstick takes touches in the left 40 % of the
-	          screen, below its top third): the open grid has up to four
-	          columns and ends above TouchBottom (60 %) of the height, so
-	          the 40 % x 40 % corner where the thumb rests stays free
-	          (SideMenuView.TouchFits; SideMenu.spec checks phones and
-	          tablets). Every button is at least 44 pt.
+	          screen, below its top third): the open grid ends above
+	          TouchBottom (60 %) of the height, so the 40 % x 40 % corner
+	          where the thumb rests stays free (SideMenuView.TouchFits;
+	          SideMenu.spec checks phones and tablets). Every button is at
+	          least 44 pt.
 	  TV      (ten-foot) the column keeps SafeShare (5 %) of the width from the
-	          left edge and of the height from the bottom: the title-safe area
+	          left edge and of the height from the bottom: the title-safe area;
+	          the labels and SOON chips get bigger there (TenFootText)
 	With a gamepad the D-pad Left glyph shows over the column (D-pad Left
 	jumps into the menu). SideMenuView.touchTargets lists the shown buttons
 	for the tests.
@@ -47,6 +55,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local UIKit = require(script.Parent.UIKit)
+local BoostView = require(script.Parent.BoostView)
+local TrainView = require(script.Parent.TrainView)
 
 local SideMenuView = {}
 
@@ -145,9 +155,25 @@ end
 
 SideMenuView.MinTouch = 44 -- points
 SideMenuView.Left = 12 -- design units from the left edge
-SideMenuView.TopMin = 150 -- below the coins panel (16..90) and the "+$X" popups under it
-SideMenuView.TopTight = 98 -- right under the coins panel (the smallest phones)
+SideMenuView.ChipsGap = 8 -- between the boost chips' touch area and the mouse column
+-- mouse: below the train chip and the boost chips' touch area under it
+SideMenuView.TopMin = BoostView.chipsTop(nil, false) + BoostView.ChipHit + SideMenuView.ChipsGap
+SideMenuView.TopTight = 98 -- nothing of the menu ever goes above this (the coins panel ends at 90)
 SideMenuView.BottomMargin = 12
+-- the HUD's right-side menu (BUILD, LIFT: 84 wide, 14 from the edge) and a gap:
+-- the open touch grid never reaches it
+SideMenuView.RightReserve = 14 + 84 + 8
+-- the ScreenGui's DisplayOrder: under the HUD (5) while shut, its "+$X"
+-- popups and toasts on top; the open touch grid draws over the train and
+-- boost chips (6) until it shuts
+SideMenuView.Order = 4
+SideMenuView.OpenOrder = 7
+-- TVs: the labels and SOON chips at least this big (18 px at the 1.25 HUD scale),
+-- on buttons this much wider (ARTIFACTS still fits)
+SideMenuView.TenFootText = { Label = 15, Soon = 15 }
+SideMenuView.TenFootWidth = 96
+SideMenuView.LabelText = 14
+SideMenuView.SoonText = 10
 SideMenuView.Drop = 5 -- the buttons sit this far below the column's top (room for the badges)
 SideMenuView.Normal = { Width = 84, Height = 64, Gap = 8 }
 SideMenuView.Compact = { Width = 84, Height = 72, Gap = 6 }
@@ -164,6 +190,9 @@ export type Options = {
 	DesignWidth: number?, -- the screen's width in design units (the TV margin)
 }
 
+-- A box on the screen in design units (the tests' rects).
+export type Rect = { X: number, Y: number, W: number, H: number }
+
 export type Layout = {
 	Columns: number,
 	Rows: number,
@@ -175,6 +204,7 @@ export type Layout = {
 	Size: Vector2, -- the whole column (touch: the open grid with MENU)
 	Touch: boolean, -- the touch layout (kept clear of the thumbstick)
 	Toggle: boolean, -- the MENU button takes the first cell (the touch layout)
+	TenFoot: boolean, -- a TV: bigger label and SOON text
 }
 
 export type Refs = {
@@ -195,24 +225,35 @@ export type Refs = {
 	ToggleLabel: TextLabel,
 	Expanded: boolean,
 	Layout: Layout?, -- the last layout applied
+	TenFoot: boolean, -- the TV text sizes are on (apply: Layout.TenFoot)
 }
 
 -- The tries, in order: { columns, the lowest top }; the first that fits wins.
--- Mouse: one column under the coins' popups, then two; on short windows
--- two columns start right under the coins panel; three only past that.
-SideMenuView.Fits = { { 1, SideMenuView.TopMin }, { 2, SideMenuView.TopMin }, { 2, SideMenuView.TopTight }, { 3, SideMenuView.TopTight } }
--- Touch (the open grid, MENU in its first cell): must end above
--- TouchBottom; wider before lower (under the popups while that fits, then
--- right under the coins); one row as the last resort.
-SideMenuView.TouchFits = {
-	{ 1, SideMenuView.TopMin },
-	{ 2, SideMenuView.TopMin },
-	{ 3, SideMenuView.TopMin },
-	{ 4, SideMenuView.TopMin },
-	{ 3, SideMenuView.TopTight },
-	{ 4, SideMenuView.TopTight },
-	{ 8, SideMenuView.TopTight },
-}
+-- Mouse: one column under the boost chips, then two, three, four (never
+-- higher: the train and boost chips own the column above TopMin).
+SideMenuView.Fits = { { 1, SideMenuView.TopMin }, { 2, SideMenuView.TopMin }, { 3, SideMenuView.TopMin }, { 4, SideMenuView.TopMin } }
+-- Touch (the open grid, MENU in its first cell, in the train chip's row):
+-- must end above TouchBottom; narrower before wider; one row as the last
+-- resort (the top comes from touchTop).
+SideMenuView.TouchFits = { { 1 }, { 2 }, { 3 }, { 4 }, { 8 } }
+
+-- The touch layout's top: MENU (`h` tall) centred on the compact train
+-- chip's row (TrainView.ChipTop), the badges' Drop above it.
+function SideMenuView.touchTop(h: number): number
+	local row = TrainView.chipSize(true).Y
+	return math.max(SideMenuView.TopTight, math.floor(TrainView.ChipTop + (row - h) / 2) - SideMenuView.Drop)
+end
+
+-- The train chip's box on a layout (compact = touch) and the boost chips'
+-- row under it at its widest (design units): the column stays clear of both.
+function SideMenuView.trainRect(compact: boolean): Rect
+	local size = TrainView.chipSize(compact)
+	return { X = TrainView.chipLeft(compact), Y = TrainView.ChipTop, W = size.X, H = size.Y }
+end
+
+function SideMenuView.chipsRect(compact: boolean): Rect
+	return { X = BoostView.ChipLeft, Y = BoostView.chipsTop(nil, compact), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
+end
 
 -- Where the buttons go for a uiScale and the screen's height in design
 -- units (below the top bar). Touch layouts count the MENU button as a cell.
@@ -225,29 +266,32 @@ function SideMenuView.layout(uiScale: number, designHeight: number, options: Opt
 	local m = if compact then SideMenuView.Compact else SideMenuView.Normal
 	-- never under 44 pt on a touch screen
 	local minSide = SideMenuView.MinTouch / math.max(uiScale, 0.1)
-	local w = math.max(m.Width, math.ceil(minSide))
+	local w = math.max(m.Width, math.ceil(minSide), if tv then SideMenuView.TenFootWidth else 0)
 	local h = math.max(m.Height, if touch then math.ceil(minSide) else 0)
 	local bottomMargin = if tv
 		then math.max(SideMenuView.BottomMargin, designHeight * SideMenuView.SafeShare)
 		else SideMenuView.BottomMargin
 	-- the lowest the column may end
 	local floor = if touch then designHeight * SideMenuView.TouchBottom else designHeight - bottomMargin
-	local columns, rows, height, topMin = 1, n, 0, SideMenuView.TopMin
-	local fits: { { number } } = if touch then SideMenuView.TouchFits else SideMenuView.Fits
-	for _, try in fits do
-		columns, topMin = math.min(try[1], n), try[2]
-		rows = math.ceil(n / columns)
-		height = rows * h + (rows - 1) * m.Gap
-		if topMin + SideMenuView.Drop + height <= floor then
-			break
-		end
-	end
-	-- mouse: centred in the room under the coins; touch: right under them
-	local top = if touch then topMin else math.max(topMin, math.floor((designHeight - height) / 2))
 	local left = SideMenuView.Left
 	if tv and o.DesignWidth then
 		left = math.max(left, math.ceil(o.DesignWidth * SideMenuView.SafeShare))
 	end
+	-- the rightmost the open touch grid may reach: never the HUD's right-side menu
+	local right = if o.DesignWidth then o.DesignWidth - SideMenuView.RightReserve else math.huge
+	local columns, rows, height, topMin = 1, n, 0, SideMenuView.TopMin
+	local fits: { { number } } = if touch then SideMenuView.TouchFits else SideMenuView.Fits
+	for _, try in fits do
+		columns, topMin = math.min(try[1], n), try[2] or SideMenuView.touchTop(h)
+		rows = math.ceil(n / columns)
+		height = rows * h + (rows - 1) * m.Gap
+		local wide = left + columns * w + (columns - 1) * m.Gap
+		if topMin + SideMenuView.Drop + height <= floor and (not touch or wide <= right) then
+			break
+		end
+	end
+	-- mouse: centred in the room under the boost chips; touch: in the train chip's row
+	local top = if touch then topMin else math.max(topMin, math.floor((designHeight - height) / 2))
 	local width = columns * w + (columns - 1) * m.Gap
 	return {
 		Columns = columns,
@@ -260,6 +304,7 @@ function SideMenuView.layout(uiScale: number, designHeight: number, options: Opt
 		Size = Vector2.new(width, height),
 		Touch = touch,
 		Toggle = touch,
+		TenFoot = tv,
 	}
 end
 
@@ -278,7 +323,7 @@ local function newButton(column: Frame, entry: Entry, order: number): (TextButto
 		Size = UDim2.new(1, 0, 0, 34),
 		TextWrapped = false,
 	})
-	UIKit.label(button, entry.Label, 14, {
+	UIKit.label(button, entry.Label, SideMenuView.LabelText, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -5),
@@ -304,7 +349,7 @@ local function newButton(column: Frame, entry: Entry, order: number): (TextButto
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -3, 0, 3),
 		Size = UDim2.fromOffset(38, 15),
-		TextSize = 10,
+		TextSize = SideMenuView.SoonText,
 		TextColor3 = Theme.TextDim,
 		ZIndex = 4,
 		Visible = false,
@@ -349,7 +394,7 @@ local function newToggle(column: Frame): (TextButton, TextLabel, Frame, TextLabe
 		TextWrapped = false,
 		Visible = false,
 	})
-	local label = UIKit.label(button, "MENU", 14, {
+	local label = UIKit.label(button, "MENU", SideMenuView.LabelText, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -5),
@@ -373,7 +418,7 @@ end
 function SideMenuView.build(): Refs
 	-- under the HUD (5 would be above): its "+$X" popups and toasts show on
 	-- top where they meet the touch layout's wide grid
-	local gui = UIKit.screen("TerraForgeSideMenu", 4)
+	local gui = UIKit.screen("TerraForgeSideMenu", SideMenuView.Order)
 	gui:SetAttribute("TerraForge", true)
 	local column = UIKit.new("Frame", {
 		Name = "Column",
@@ -412,6 +457,7 @@ function SideMenuView.build(): Refs
 		ToggleLabel = toggleLabel,
 		Expanded = false,
 		Layout = nil,
+		TenFoot = false,
 	}
 	for i, entry in SideMenuView.sorted() do
 		local button, badge, soon = newButton(column, entry, i)
@@ -471,11 +517,37 @@ end
 -- Places the shown buttons for a layout (row by row: left to right, then
 -- the next row). Touch layouts: MENU in the first cell, the buttons after
 -- it only while the grid is open (refs.Expanded).
+-- The label / SOON text sizes: bigger on TVs (TenFootText: at least 18 px
+-- at the HUD's 1.25 scale, the all-platforms TV minimum).
+local function applyText(refs: Refs, tenFoot: boolean)
+	refs.TenFoot = tenFoot
+	local label = if tenFoot then SideMenuView.TenFootText.Label else SideMenuView.LabelText
+	local soonSize = if tenFoot then SideMenuView.TenFootText.Soon else SideMenuView.SoonText
+	refs.ToggleLabel.TextSize = label
+	for id, button in refs.Buttons do
+		local text = button:FindFirstChild("Label")
+		if text and text:IsA("TextLabel") then
+			text.TextSize = label
+			text.Size = UDim2.new(1, -4, 0, label + 4)
+		end
+		local soon = refs.Soon[id]
+		if soon then
+			soon.TextSize = soonSize
+			soon.Size = UDim2.fromOffset(if tenFoot then 46 else 38, soonSize + 5)
+		end
+	end
+end
+
 function SideMenuView.apply(refs: Refs, layout: Layout)
 	refs.Layout = layout
+	if refs.TenFoot ~= layout.TenFoot then
+		applyText(refs, layout.TenFoot)
+	end
 	local toggleHolder = refs.Toggle.Parent :: Frame
 	toggleHolder.Visible = layout.Toggle
 	local open = not layout.Toggle or refs.Expanded
+	-- the open touch grid draws over the train and boost chips
+	refs.Gui.DisplayOrder = if layout.Toggle and refs.Expanded then SideMenuView.OpenOrder else SideMenuView.Order
 	local function place(holder: Frame, cell: number)
 		local col = cell % layout.Columns
 		local row = cell // layout.Columns

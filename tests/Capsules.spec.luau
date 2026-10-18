@@ -31,6 +31,7 @@ return function(T, Loader)
 	local GolemService = Loader.requirePath("ServerScriptService.Server.Services.GolemService")
 	local CapsuleView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CapsuleView")
 	local GolemView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.GolemView")
+	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
 
 	local NOW = 1_800_000_000
 	local caps = CapsuleService._test
@@ -941,6 +942,29 @@ return function(T, Loader)
 					end
 				end
 				T.eq(rows, #CapsuleConfig.odds("Stone", false), "one odds row per golem")
+				-- the paid odds stay readable: no cell runs into the next, RARITY only when wide enough
+				local label = `{size[1]}x{size[2]}`
+				local heads = refs.Heads :: any
+				for _, row in refs.Rows do
+					if row.Frame.Visible then
+						local nameEnd = row.Name.Position.X.Offset + row.Name.Size.X.Offset
+						local bonusStart = row.Bonus.Position.X.Offset
+						if row.Rarity.Visible then
+							T.truthy(row.Rarity.Size.X.Offset >= CapsuleView.RarityMinWidth, label .. ": a readable RARITY column")
+							T.le(nameEnd, row.Rarity.Position.X.Offset + 0.5, label .. ": name before rarity")
+							T.le(row.Rarity.Position.X.Offset + row.Rarity.Size.X.Offset, bonusStart + 0.5, label .. ": rarity before bonus")
+						else
+							T.le(nameEnd, bonusStart + 0.5, label .. ": name before bonus")
+						end
+						for _, cell in { row.Name, row.Rarity, row.Bonus } do
+							T.eq(cell.TextTruncate, roblox.Enum.TextTruncate.AtEnd, label .. ": " .. cell.Name .. " is cut, never overlapped")
+						end
+						T.eq(heads.HeadRarity.Visible, row.Rarity.Visible, label .. ": the RARITY header follows its column")
+					end
+				end
+				if size[1] == 916 then
+					T.falsy(refs.Rows[1].Rarity.Visible, "a 568 x 320 phone drops the RARITY column (the bar shows it)")
+				end
 			end
 			if compact then
 				for _, target in CapsuleView.touchTargets(refs) do
@@ -1080,6 +1104,28 @@ return function(T, Loader)
 	end)
 
 	T.test("Capsules view: the stall's odds board shows each rarity's real total, big", function()
+		-- where the built stall's RarityChip parts sit on its OddsBoard (share of the board's width, seen from the front)
+		local Stall = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Capsules")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local stall = Instance.new("Model")
+		Stall.build(stall, Rng.new("Lobby/Districts/capsules"))
+		local board = stall:FindFirstChild("OddsBoard", true)
+		T.truthy(board, "the stall's OddsBoard")
+		local chipEnd = 0
+		local chips = 0
+		for _, d in stall:GetDescendants() do
+			if d.Name == "RarityChip" and d:IsA("BasePart") then
+				chips += 1
+				local p = board.CFrame:PointToObjectSpace(d.CFrame.Position)
+				-- the Front face looks along -Z: +X of the board is the viewer's left
+				local right = 0.5 - (p.X - d.Size.X / 2) / board.Size.X
+				chipEnd = math.max(chipEnd, right)
+			end
+		end
+		T.eq(chips, 6, "one chip per rarity")
+		T.truthy(chipEnd > 0.2 and chipEnd < 0.27, `the chips end at {chipEnd}`)
+		local markerCol = CapsuleView.BoardColumns.Marker
+		T.le(markerCol[1], 0.5 - 0.66 / board.Size.X + 0.02, "the GUI's own markers sit behind the chips")
 		local gui = Instance.new("SurfaceGui")
 		local old = Instance.new("TextLabel")
 		old.Name = "Title"
@@ -1106,6 +1152,13 @@ return function(T, Loader)
 					T.eq(total.TextWrapped, false)
 				end
 				T.near(sum, 1, 1e-9, "the totals add up")
+				-- no row label or total under the stall's neon RarityChip parts
+				for i = 1, #Rarity.List do
+					for _, name in { "Row" .. i, "Total" .. i } do
+						local l = gui:FindFirstChild(name)
+						T.truthy(l.Position.X.Scale >= chipEnd - 1e-6, `{name} starts right of the stall's chips ({l.Position.X.Scale} >= {chipEnd})`)
+					end
+				end
 				T.eq(gui:FindFirstChild("Subtitle").Text, if lucky then "TRIPLE LUCKY ODDS" else "ODDS PER RARITY")
 				T.truthy(gui:FindFirstChild("Note").Text:find("capsule menu"), "where each golem's odds are")
 				for _, child in gui:GetChildren() do
@@ -1236,6 +1289,28 @@ return function(T, Loader)
 				T.eq(n, 12, "one card per golem")
 				T.le(refs.Panel.Size.X.Offset, size[1])
 				T.le(refs.Panel.Size.Y.Offset, size[2] + 1)
+				-- the equipped totals never run under EQUIP BEST, and fit their box in one go
+				local label = `{size[1]}x{size[2]}`
+				local totals = refs.Totals
+				local best = refs.EquipBest.Parent :: any
+				local tBottom = totals.Position.Y.Offset + totals.Size.Y.Offset
+				local tRight = totals.Position.X.Offset + totals.Size.X.Offset
+				local apart = tBottom <= best.Position.Y.Offset + 0.5
+					or tRight <= best.Position.X.Offset + 0.5
+					or totals.Position.X.Offset >= best.Position.X.Offset + best.Size.X.Offset - 0.5
+				T.truthy(apart, label .. ": the totals line clear of EQUIP BEST")
+				T.truthy(
+					TechShopView.fits(totals.Text, totals.Size.X.Offset, totals.Size.Y.Offset, totals.TextSize, totals.TextWrapped),
+					`{label}: "{totals.Text}" fits at {totals.TextSize}`
+				)
+				T.eq(totals.TextTruncate, roblox.Enum.TextTruncate.AtEnd, label .. ": cut, never spilled")
+				-- the card grid fills its width: no gap wider than a card before the detail column
+				local cell = refs.GridLayout.CellSize.X.Offset
+				local pad = refs.GridLayout.CellPadding.X.Offset
+				local usable = refs.Grid.Size.X.Offset - refs.Grid.ScrollBarThickness - 4
+				local columns = math.floor((usable + pad) / (cell + pad))
+				T.truthy(columns >= 3, label .. ": at least three columns")
+				T.lt(usable - (columns * cell + (columns - 1) * pad), pad + 1, label .. ": the columns fill the grid")
 				-- detail buttons inside the detail column
 				for _, b in { refs.Equip, refs.Lock, refs.Delete } do
 					local holder = b.Parent

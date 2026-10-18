@@ -16,6 +16,8 @@ local UiExport = require("./uiexport")
 local YardPreview = {}
 
 YardPreview.Plot = 5 -- an east plot: the sun lights the yard from the pad side
+-- relics this owner found (their museum shows them; ArtifactConfig ids)
+YardPreview.Artifacts = { "CrownCoin", "RoyalSeal", "GoldenSpike", "RailLantern", "LastTicket", "GolemCog", "SparkVial", "EmberRune" }
 YardPreview.Podiums = {
 	{ K = "Clean", O = "Emerald", G = "Flawless" },
 	{ K = "Clean", O = "Stormcore", G = "Pristine" }, -- a wide Epic ore inside the holo-ring
@@ -82,6 +84,28 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	local folder = Loader.roblox.Instance.new("Folder")
 	folder.Name = "YardPreview"
 	folder.Parent = workspace
+
+	-- the plot's museum (the world export builds one per yard, empty) with a
+	-- few relics this owner found, as a client near it shows them
+	do
+		local MuseumBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MuseumBuilder")
+		local museum: any = nil
+		for _, d in workspace:GetDescendants() do
+			if d.Name == MuseumBuilder.Name and d:GetAttribute("PlotId") == YardPreview.Plot then
+				museum = d
+			end
+		end
+		if not museum then
+			museum = MuseumBuilder.build(plotCF)
+			museum.Parent = folder
+		end
+		local found = {}
+		for _, id in YardPreview.Artifacts do
+			found[id] = 1
+		end
+		MuseumBuilder.publish(museum, { Found = found })
+		MuseumBuilder.showFound(museum, plotCF)
+	end
 
 	-- ores on the podiums (what PodiumService shows), pile in the pen (PenController)
 	local income = 0

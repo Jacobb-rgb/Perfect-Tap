@@ -57,6 +57,7 @@ local BoostView = require(script.Parent.Parent.UI.BoostView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local CleaningController = require(script.Parent.CleaningController)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
@@ -134,7 +135,8 @@ end
 
 -- The boosts that are coming soon (their package isn't in the game yet).
 local function soon(): { [string]: boolean }
-	return BoostView.soonSet(ReplicatedStorage:GetAttribute(BoostView.SoonAttribute))
+	local receipts = ReplicatedStorage:GetAttribute(MonetizationConfig.ReceiptsAttribute)
+	return BoostView.soonNow(ReplicatedStorage:GetAttribute(BoostView.SoonAttribute), receipts)
 end
 
 -- Is the HUD on screen (the cleaning close-up and other takeovers turn it off)?
@@ -670,7 +672,7 @@ end
 -- Opens the view (on `kindId`'s tab when given). Refused while build mode or a minigame holds the controls.
 function BoostController.open(kindId: string?)
 	local owner = PlayerControls.owner()
-	if owner ~= nil then
+	if owner ~= nil or CleaningController.isActive() or not hudShown() then
 		HudController.toast(if owner == "Build" then "Finish building first." else "Finish what you are doing first.", "Info")
 		return
 	end
@@ -751,8 +753,9 @@ local function onOpenKey(_: string, state: Enum.UserInputState, input: InputObje
 		BoostController.close()
 		return Enum.ContextActionResult.Sink
 	end
-	-- only when nothing else uses the selection or the controls
-	if GuiService.SelectedObject ~= nil or PlayerControls.owner() ~= nil then
+	-- only when nothing else uses the selection, the controls or the screen
+	-- (the cleaning minigame has its own lock and hides the HUD)
+	if GuiService.SelectedObject ~= nil or PlayerControls.owner() ~= nil or CleaningController.isActive() or not hudShown() then
 		return Enum.ContextActionResult.Pass
 	end
 	BoostController.open(nil)
@@ -795,6 +798,11 @@ function BoostController.init()
 		end
 	end)
 	ReplicatedStorage:GetAttributeChangedSignal(BoostView.SoonAttribute):Connect(function()
+		if isOpen then
+			refresh()
+		end
+	end)
+	ReplicatedStorage:GetAttributeChangedSignal(MonetizationConfig.ReceiptsAttribute):Connect(function()
 		if isOpen then
 			refresh()
 		end

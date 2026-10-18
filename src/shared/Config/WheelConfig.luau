@@ -33,8 +33,10 @@
 	                the coins don't tell which one it was)
 	    Shards      Amount crystal shards (data.Shards)
 	- Ore prize: from the Rare-or-rarer ores (BoostConfig.isLuckyOre) of the
-	  zones the player's blaster can mine (BoostConfig.minableZones; VIP zones
-	  only for VIP players), those with an Income of at most
+	  zones the player's blaster can mine (BoostConfig.minableZones without
+	  the VIP zones, for everyone: the free wheel never depends on a paid
+	  pass, so the Forgemaster's Pass is no hidden odds booster), those with
+	  an Income of at most
 	  max(OrePrize.MinIncome, best found ore's Income x OrePrize.IncomeMult),
 	  the OrePrize.Picks best of them, weighted OrePrize.Weights (the best one
 	  is the least likely). oreOdds(context) is the exact nested list the
@@ -82,9 +84,9 @@ export type Segment = {
 }
 
 -- What the ore prize needs to know about the player (the service builds it:
--- BlasterLevel = data.BlasterLevel, BestIncome = bestIncome(data.Discovered),
--- Vip = the ForgeVip perk).
-export type OreContext = { BlasterLevel: number, BestIncome: number, Vip: boolean? }
+-- BlasterLevel = data.BlasterLevel, BestIncome = bestIncome(data.Discovered)).
+-- No VIP flag: the free wheel's odds never depend on a paid pass.
+export type OreContext = { BlasterLevel: number, BestIncome: number }
 export type OreLine = { Ore: string, Chance: number }
 
 local WheelConfig = {}
@@ -263,7 +265,8 @@ function WheelConfig.oreOdds(context: OreContext): { OreLine }
 	local cap = math.max(prize.MinIncome, best * prize.IncomeMult)
 	local seen: { [string]: boolean } = {}
 	local candidates: { string } = {}
-	for _, zone in BoostConfig.minableZones(context.BlasterLevel, context.Vip) do
+	-- never the VIP zones: a paid pass must not change a free random prize
+	for _, zone in BoostConfig.minableZones(context.BlasterLevel, false) do
 		for oreId, weight in zone.Ores do
 			local ore = OreData.ById[oreId]
 			if ore and weight > 0 and ore.Income <= cap and BoostConfig.isLuckyOre(oreId) and not seen[oreId] then

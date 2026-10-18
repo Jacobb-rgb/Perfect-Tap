@@ -12,6 +12,7 @@
 	    ui_capsules_shop        PC: the capsule panel, STONE tab
 	    ui_capsules_lucky       PC: CRYSTAL tab with Triple Lucky on (boosted odds)
 	    ui_capsules_phone       667 x 375 pt phone (compact layout)
+	    ui_capsules_small       568 x 320 pt phone (the odds list drops RARITY)
 	    ui_capsules_royal       PC: ROYAL tab as it will look once two of its
 	                            products are live (preview-only ids) and step 8
 	                            takes receipts: OPEN 10 still "Coming soon"
@@ -19,6 +20,7 @@
 	    ui_capsules_grid_phone  phone: the same
 	    ui_golems               PC: the golem inventory, a golem selected
 	    ui_golems_phone         phone: the inventory
+	    ui_golems_small         568 x 320 pt phone: the inventory
 	    ui_golems_delete        PC: delete mode, three golems picked (one bought
 	                            with Robux and unlocked by the player)
 	    ui_golems_confirm       PC: the confirm box before deleting (it says
@@ -52,6 +54,7 @@ Preview.Fov = 50
 Preview.Scale = 1.25 -- 900 px / 720 design units
 Preview.Inset = 36 -- the PC top bar (render px)
 Preview.PhoneScale = 0.62 * 900 / 375 -- a 667 x 375 pt phone at the 0.62 floor
+Preview.SmallScale = 0.62 * 900 / 320 -- a 568 x 320 pt phone
 Preview.PhoneInset = 58
 
 -- The hero camera of the reveal shots (scene "capsule_reveal" / "capsule_crack"),
@@ -315,6 +318,8 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 	local scale, phone = Preview.Scale, Preview.PhoneScale
 	local pcW, pcH = Preview.Width / scale, (Preview.Height - Preview.Inset) / scale
 	local phW, phH = Preview.Width / phone, (Preview.Height - Preview.PhoneInset) / phone
+	local small = Preview.SmallScale
+	local smW, smH = Preview.Width / small, (Preview.Height - Preview.PhoneInset) / small
 
 	-- the HUD (its GOLEMS button only shows in a game without the side menu:
 	-- the side menu's GOLEMS is the one entry, see sideMenu below)
@@ -414,6 +419,7 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 			UiExport.export({ hud(scale, 48250).Gui, sideMenu(scale).Gui, shop(scale, false, pcW, pcH, false, "Stone").Gui })
 		exports.ui_capsules_lucky = UiExport.export({ hud(scale, 2.4e6).Gui, shop(scale, false, pcW, pcH, true, "Crystal").Gui })
 		exports.ui_capsules_phone = UiExport.export({ hud(phone, 48250).Gui, shop(phone, true, phW, phH, false, "Stone").Gui })
+		exports.ui_capsules_small = UiExport.export({ hud(small, 48250).Gui, shop(small, true, smW, smH, false, "Stone").Gui })
 		-- preview-only ids: x1 and x3 live, x10 still a placeholder
 		local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 		local p1, p3 = MonetizationConfig.Products.RoyalCapsule1, MonetizationConfig.Products.RoyalCapsule3
@@ -455,6 +461,7 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		exports.ui_golems = UiExport.export({ hud(scale, 48250).Gui, sideMenu(scale).Gui, inventory(scale, false, pcW, pcH, false).Gui })
 		exports.ui_golems_phone =
 			UiExport.export({ hud(phone, 48250).Gui, sideMenu(phone).Gui, inventory(phone, true, phW, phH, false).Gui })
+		exports.ui_golems_small = UiExport.export({ hud(small, 48250).Gui, inventory(small, true, smW, smH, false).Gui })
 		exports.ui_golems_delete = UiExport.export({ hud(scale, 48250).Gui, inventory(scale, false, pcW, pcH, true).Gui })
 		exports.ui_golems_confirm = UiExport.export({ hud(scale, 48250).Gui, inventory(scale, false, pcW, pcH, true, true).Gui })
 

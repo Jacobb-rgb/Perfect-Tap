@@ -72,7 +72,8 @@
 	  Enchants.Slots: exactly EnchantConfig.MaxSlots strings; a slot keeps an
 	  owned id only once, and only when the blaster level has opened it.
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
-	  BoostConfig.MaxSavedSeconds.
+	  BoostConfig.MaxSavedSeconds (a year: a junk guard only; paid boost
+	  time beyond MaxStackSeconds is kept, it is never lost).
 	- Golems.Owned: entries { Id, Kind, ... } with a whole unique Id
 	  1..MAX_GOLEM_ID and a string Kind (unknown kinds too), at most
 	  GolemConfig.MaxSaved. Paid and Locked must be booleans (else dropped).
@@ -354,7 +355,8 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	end
 	enchants.Slots = cleanSlots
 
-	-- boosts: whole os.time() seconds, never absurdly far ahead
+	-- boosts: whole os.time() seconds, never absurdly far ahead (MaxSavedSeconds
+	-- is a junk guard: paid time stacked past MaxStackSeconds is kept)
 	local boosts = record(data, "Boosts", report)
 	for _, kindId in BoostConfig.KindIds do
 		local field = BoostConfig.Kinds[kindId].Field
@@ -631,6 +633,9 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 
 	-- crystal shards: a whole number >= 0
 	data.Shards = if isFinite(data.Shards) and data.Shards > 0 then math.floor(data.Shards) else 0
+	-- shard rolls of crushed piles (ProcessingService): a whole number >= 0
+	local rolls = data.ShardRolls
+	data.ShardRolls = if isFinite(rolls) and rolls > 0 then math.floor(math.min(rolls, 100000)) else 0
 
 	-- v3: blasters instead of pickaxes
 	data.Pickaxe = nil

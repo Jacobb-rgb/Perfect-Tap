@@ -117,7 +117,8 @@ end
 
 -- The enchants that are coming soon (their package isn't in the game yet).
 local function soon(): { [string]: boolean }
-	return BoostView.soonSet(ReplicatedStorage:GetAttribute(BoostView.SoonAttribute))
+	local receipts = ReplicatedStorage:GetAttribute(MonetizationConfig.ReceiptsAttribute)
+	return BoostView.soonNow(ReplicatedStorage:GetAttribute(BoostView.SoonAttribute), receipts)
 end
 
 local function coins(): number
@@ -764,6 +765,11 @@ function EnchantController.init()
 		end
 	end)
 	ReplicatedStorage:GetAttributeChangedSignal(BoostView.SoonAttribute):Connect(function()
+		if counter then
+			refresh()
+		end
+	end)
+	ReplicatedStorage:GetAttributeChangedSignal(MonetizationConfig.ReceiptsAttribute):Connect(function()
 		if counter then
 			refresh()
 		end

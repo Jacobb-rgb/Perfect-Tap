@@ -27,6 +27,7 @@ return function(T, Loader)
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local Policy = Loader.requirePath("ServerScriptService.Server.Policy")
+	local Receipts = Loader.requirePath("ServerScriptService.Server.Receipts")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
 	local BoostService = Loader.requirePath("ServerScriptService.Server.Services.BoostService")
@@ -103,6 +104,10 @@ return function(T, Loader)
 			return { ArePaidRandomItemsRestricted = w.restricted, IsPaidItemTradingAllowed = false }
 		end)
 		boost.reset()
+		Receipts._test.reset()
+		Receipts._test.setPublisher(function(ready)
+			w.receiptsPublished = ready
+		end)
 		boost.setClock(function()
 			return w.now
 		end)
@@ -118,6 +123,7 @@ return function(T, Loader)
 		end)
 		w.restore = function()
 			boost.reset()
+			Receipts._test.reset()
 			Policy._test.reset()
 			MonetizationConfig.CoinPacksEnabled = false
 			for _, product in MonetizationConfig.List do
@@ -306,8 +312,14 @@ return function(T, Loader)
 		T.eq(w.data.Boosts.TripleLuckyUntil, 0)
 		T.eq(w.data.Coins, 500, "no coins taken")
 		T.eq(w.changed, 0, "no save change")
-		-- a live product: the prompt is shown
+		-- a live product id but no receipt handler yet (step 8): Coming soon, never prompted
 		MonetizationConfig.Products.HexaLucky15.Id = 4242
+		T.eq(Receipts.ready(), false, "no receipt handler before step 8")
+		T.eq(prompt("HexaLucky15"), "ComingSoon", "live id, receipts not ready")
+		T.eq(#w.prompts, 0, "nobody pays Robux for nothing")
+		-- step 8 turns the gate on: the prompt is shown
+		Receipts.setReady(true)
+		T.eq(w.receiptsPublished, true, "the clients learn it (ReplicatedStorage attribute)")
 		T.eq(prompt("HexaLucky15"), "Prompted")
 		T.eq(#w.prompts, 1, "prompted once")
 		T.eq(w.prompts[1].Product.Id, 4242, "with the id from MonetizationConfig")
@@ -341,17 +353,21 @@ return function(T, Loader)
 		T.eq(BoostService.promptPurchase(w.player, "EnchantStarbreaker", false, false), "ComingSoon")
 		T.eq(w.policyCalls, 1, "Starbreaker's pass changes odds: policy asked")
 		MonetizationConfig.Products.EnchantHeartfire.Id = 77
+		-- a live pass before step 8 grants passes: Coming soon
+		T.eq(BoostService.promptPurchase(w.player, "EnchantHeartfire", false, false), "ComingSoon", "no pass grant yet")
+		T.eq(#w.prompts, 0, "not prompted")
+		Receipts.setReady(true)
 		T.eq(BoostService.promptPurchase(w.player, "EnchantHeartfire", true, false), "Owned")
 		T.eq(BoostService.promptPurchase(w.player, "EnchantHeartfire", false, false), "Prompted")
 		T.eq(w.prompts[1].Product.Kind, "GamePass", "a game pass")
 		T.eq(BoostService.promptPurchase(w.player, "CoinsSmall", false, false), "Unknown", "coin packs are off")
 		T.eq(BoostService.promptPurchase(w.player, "Nope", false, false), "Unknown")
 		local sent = notes(w, "PurchasePrompt")
-		T.eq(#sent, 6, "every call answered the client")
+		T.eq(#sent, 7, "every call answered the client")
 		-- a player who left gets no event
 		w.player.Parent = nil
 		BoostService.promptPurchase(w.player, "EnchantHeartfire", false, false)
-		T.eq(#notes(w, "PurchasePrompt"), 6)
+		T.eq(#notes(w, "PurchasePrompt"), 7)
 	end)
 
 	---------------------------------------------------------------- expiry and add
@@ -601,6 +617,17 @@ return function(T, Loader)
 		MonetizationConfig.Products.TripleLucky15.Id = 0
 		T.eq(card.Offers[2].Text, `+15 MIN{BoostView.Separator}39 R$`)
 		T.truthy(card.Offers[2].CanBuy)
+		-- ...but only once step 8's receipts gate is on (the controllers pass soonNow)
+		MonetizationConfig.Products.TripleLucky15.Id = 99
+		local waiting = BoostView.cards(state(), 0, NOW, false, BoostView.soonNow(nil, nil))[1]
+		local ready = BoostView.cards(state(), 0, NOW, false, BoostView.soonNow(nil, true))[1]
+		MonetizationConfig.Products.TripleLucky15.Id = 0
+		T.eq(waiting.Offers[2].Text, `+15 MIN{BoostView.Separator}COMING SOON`, "live id, no receipt handler yet")
+		T.falsy(waiting.Offers[2].CanBuy)
+		T.eq(waiting.Offers[2].Reason, "ComingSoon")
+		T.truthy(waiting.Offers[1].CanBuy == card.Offers[1].CanBuy, "the coin offer doesn't wait for receipts")
+		T.eq(ready.Offers[2].Text, `+15 MIN{BoostView.Separator}39 R$`, "receipts ready: sold")
+		T.truthy(ready.Offers[2].CanBuy)
 		-- Hexa Lucky's key line: the luck without and with it
 		local hexa = BoostView.cards(state(), 0, NOW, false)[2]
 		local without, with = BoostConfig.hexaLuck(0.15)

@@ -312,10 +312,14 @@ choices marked *(ours)*):
 - **Forge VIP and ore odds** *(to be safe)*. Roblox says paid items that
   improve the odds of random outcomes must explain the new odds in numbers
   before purchase (their example is a "magic fishing rod"). The Grotto has
-  its own ore mix (`WorldLayout.luau`: 40% Silver, 32% Emberite, 28% Gold of
-  its nodes), so put those numbers in the Forge VIP description, for example
-  "Glimmer Grotto ore: 40% Silver, 32% Emberite, 28% Gold". Update the text
-  whenever the weights change.
+  its own ore mix (`WorldLayout.luau` node weights), so the Forgemaster's
+  Pass description ends with those numbers ("Glimmer Grotto ore: 20%
+  Silver, 18% Amethyst, ... 2% Moonstone."), built from the weights by
+  `MonetizationConfig.grottoOddsText()`, so it never goes stale; copy the
+  same line into the pass description on the Creator Dashboard whenever the
+  weights change. The free daily wheel's ore prize never uses the Grotto
+  (`WheelConfig.oreOdds` leaves VIP zones out for everyone), so the pass
+  changes no free random prize.
 - **Not pay-to-win only.** Every ore is minable by everyone: Silver, Gold and
   Emberite also spawn outside the Grotto. Coin pouches only skip time. Keep
   it that way.
@@ -359,8 +363,13 @@ choices marked *(ours)*):
   offline), so it isn't a paid random item, but its odds are shown on the
   wheel screen anyway, including the ore prize's own odds *(ours)*. It
   replaced the old 7-day Ember Chest streak (retired; the EmberChest on
-  the wheel's stairs now opens the wheel). The big lobby wheel is
-  decoration only and must not look like it shows the prizes or odds.
+  the wheel's stairs now opens the wheel). The big lobby wheel shows the
+  same 8 prizes as the wheel screen, in the same order and colours
+  (`WheelConfig.Segments`; players who can't buy capsules see their
+  substitute prize's icon), and when you spin it lands on your own
+  result (client-side, `WheelController`), so it never promises a prize
+  the wheel can't give. Its segments are equal like the screen's; the
+  odds are on the screen.
 
 ### 2.6a Golem capsules: what the game does (step 7)
 
@@ -394,9 +403,15 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   "Restricted" and never prompts. Each of OPEN 1 / 3 / 10 is decided on
   its own: while its product id is a placeholder (0), **or** step 8's
   ProcessReceipt handler isn't registered yet (it calls
+  `Receipts.setReady(true)`, also reachable as
   `CapsuleService.setReceiptsReady(true)`), the button is greyed "Coming
   soon" and the server answers "ComingSoon" without prompting, so nobody
-  can pay Robux before the game can deliver; with none of the three live
+  can pay Robux before the game can deliver. The same one gate
+  (src/server/Receipts.luau, ReplicatedStorage attribute `ReceiptsReady`)
+  holds back every other Robux sale too: the Triple / Hexa Lucky packs and
+  the Heartfire / Starbreaker passes (BoostService.promptPurchase) answer
+  "ComingSoon" and their cards show COMING SOON / "20 R$ • SOON" until
+  step 8 grants receipts and passes; with none of the three live
   the tab shows the odds and "Coming soon!" instead of buttons. Nothing is
   ever granted outside ProcessReceipt (step 8: `CapsuleService.grantProduct`).
   A receipt rolls Triple Lucky when the prompt the player saw had it **or**
@@ -548,8 +563,12 @@ tutorial.
   By hand (a request before the templates exist, or a cheater's score):
   Studio command bar with API access on,
   `require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(12345)`
-  deletes the user's entry from all four boards; add a cheater's UserId to
-  `LeaderboardConfig.Hidden` too so the boards never show or write it again.
+  deletes the user's entry from all four boards and hides the user at once
+  on every server (a runtime hidden list in the `TF_LB_Hidden_v1` data
+  store, key `Hidden`, read on start and every 5 minutes, plus a
+  MessagingService message to the running servers), so nobody writes it
+  back, even while the user plays; no deploy is needed.
+  `LeaderboardConfig.Hidden` is the same list in code (optional).
   (Studio play sessions read the live boards but never write them.)
 - **Testing in Studio:** Roblox warns that Studio access to data stores is
   dangerous for live games. Once the game is live, test in a **separate test

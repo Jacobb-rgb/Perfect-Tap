@@ -61,7 +61,9 @@
 	The museum
 	  At server start every plot's yard gets a MuseumBuilder museum
 	  (Plot_<id>.Yard.Museum, Atomic streaming; PlotBuilder is not changed).
-	  When a plot is assigned it shows its owner's finds (MuseumBuilder.show),
+	  When a plot is assigned it publishes its owner's finds
+	  (MuseumBuilder.publish: the Found attribute and the plaques; the
+	  clients build the relics near the camera, ArtifactController),
 	  a new find adds its relic, a freed plot is emptied.
 ]]
 
@@ -287,7 +289,8 @@ function ArtifactService.refreshMuseum(plotId: number): number
 	end
 	local owner = PlotService.ownerOf(plotId)
 	local data = owner and DataService.get(owner)
-	return MuseumBuilder.show(museum, PlotService.plotCFrame(plotId), if data then data.Artifacts else nil)
+	-- the finds as an attribute: the clients build the relics near the camera
+	return MuseumBuilder.publish(museum, if data then data.Artifacts else nil)
 end
 
 ---------------------------------------------------------------- finds
@@ -597,7 +600,7 @@ function ArtifactService.init()
 	PlotService.onReleased(function(_player: Player, plotId: number)
 		local museum = museumOf(plotId)
 		if museum then
-			MuseumBuilder.show(museum, PlotService.plotCFrame(plotId), nil)
+			MuseumBuilder.publish(museum, nil)
 		end
 		local ok, err = pcall(ArtifactService.paintPodiums, plotId, nil)
 		if not ok then

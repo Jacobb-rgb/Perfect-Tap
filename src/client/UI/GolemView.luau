@@ -803,6 +803,8 @@ function GolemView.build(compact: boolean?): Refs
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Theme.Good,
+		-- never runs out of its box (fitText shrinks it first)
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 	local equipBest = UIKit.button(strip, "EQUIP BEST", Theme.Good, Theme.GoodDark, {
 		Name = "EquipBest",
@@ -1059,9 +1061,28 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local rightX = slotsWidth + GAP + 4
 	local rightW = width - 2 * PAD - rightX
 	local bestH = if compact then m.Button else 46
-	place(refs.Totals, rightX, 4, rightW, m.Strip - bestH - 14)
-	TechShopView.fitText(refs.Totals, rightW, m.Strip - bestH - 14, m.Small, 11)
-	placeButton(refs.EquipBest, rightX, m.Strip - bestH - 4, math.min(rightW, 220), bestH)
+	if compact then
+		-- phones / TVs: EQUIP BEST is as tall as the slot row, so the totals
+		-- line goes on the strip's title row, right of "EQUIPPED (3 SLOTS)"
+		-- (one line; never under the button)
+		local label = refs.Strip:FindFirstChild("Label")
+		local labelEnd = if label and label:IsA("TextLabel")
+			then math.ceil(TechShopView.textWidth(label.Text, label.TextSize)) + 16
+			else 220
+		local totalsW = width - 2 * PAD - labelEnd
+		refs.Totals.TextWrapped = false
+		refs.Totals.TextXAlignment = Enum.TextXAlignment.Right
+		place(refs.Totals, labelEnd, 0, totalsW, 22)
+		TechShopView.fitText(refs.Totals, totalsW, 22, m.Small, 11)
+		bestH = math.min(bestH, m.Strip - 30)
+		placeButton(refs.EquipBest, rightX, 26, math.min(rightW, 220), bestH)
+	else
+		refs.Totals.TextWrapped = true
+		refs.Totals.TextXAlignment = Enum.TextXAlignment.Left
+		place(refs.Totals, rightX, 4, rightW, m.Strip - bestH - 14)
+		TechShopView.fitText(refs.Totals, rightW, m.Strip - bestH - 14, m.Small, 11)
+		placeButton(refs.EquipBest, rightX, m.Strip - bestH - 4, math.min(rightW, 220), bestH)
+	end
 
 	-- body: grid on the left, detail on the right
 	local bodyY = stripY + m.Strip + 6
@@ -1070,7 +1091,13 @@ function GolemView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 	local detailX = width - PAD - m.Detail
 	local gridW = detailX - PAD - GAP
 	place(refs.Grid, PAD, bodyY, gridW, bodyH)
-	refs.GridLayout.CellSize = UDim2.fromOffset(m.Cell.X, m.Cell.Y)
+	-- as many whole columns as fit, the cards widened to fill the row (no
+	-- empty gap before the detail column; the scroll bar keeps its room)
+	local cellPad = refs.GridLayout.CellPadding.X.Offset
+	local usable = gridW - refs.Grid.ScrollBarThickness - 4
+	local columns = math.max(1, math.floor((usable + cellPad) / (m.Cell.X + cellPad)))
+	local cellW = math.max(m.Cell.X, math.floor((usable - (columns - 1) * cellPad) / columns))
+	refs.GridLayout.CellSize = UDim2.fromOffset(cellW, m.Cell.Y)
 	place(refs.Empty, PAD + 20, bodyY + 20, gridW - 40, bodyH - 40)
 	place(refs.Detail, detailX, bodyY, m.Detail, bodyH)
 	place(refs.DeleteBar, detailX, bodyY, m.Detail, bodyH)

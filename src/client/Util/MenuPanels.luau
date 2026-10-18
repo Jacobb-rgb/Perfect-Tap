@@ -15,6 +15,8 @@
 	                     closes every other known panel that is open
 	  otherOpen(self)    true while another known panel is open (an open
 	                     panel closes itself when one appears)
+	  closeAll()         every open panel closes (CleaningController and
+	                     PlacementController call it when they take the screen)
 	  device helpers     usingGamepad / isTouch / padName / glyph
 ]]
 
@@ -103,6 +105,16 @@ function MenuPanels.otherOpen(self: string): boolean
 		end
 	end
 	return false
+end
+
+-- Closes every known panel that is open (the cleaning close-up and build
+-- mode take the screen: no panel may stay over them).
+function MenuPanels.closeAll()
+	for _, name in MenuPanels.Names do
+		if MenuPanels.isOpen(name) then
+			MenuPanels.call(name, "close")
+		end
+	end
 end
 
 function MenuPanels.closeOthers(self: string)

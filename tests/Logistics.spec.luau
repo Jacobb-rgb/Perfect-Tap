@@ -636,6 +636,42 @@ return function(T, Loader)
 		T.eq(w.notes[4].Name, "Notify", "toast")
 	end)
 
+	withWorld("Logistics: the Sell Box pays the owner's sell bonus, listeners get the base price", function(w)
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		local SELL_PCT = 0.63
+		Bonuses.register("LogisticsSpecSell", function()
+			return { SellPct = SELL_PCT }
+		end)
+		local heard = {}
+		local listening = true
+		SellService.onSold(function(_p, d, value)
+			if listening then
+				table.insert(heard, { Desc = d, Value = value })
+			end
+		end)
+		local ok, err = pcall(function()
+			local m = place(w, "SellBox", 5, 5, 0)
+			local d = item("Clean", "Gold", "Pristine")
+			local base = SellService.priceOf(d)
+			local coins = w.data.Coins
+			T.truthy(MachineService.insertDesc(m, d, USER, "Belt"), "sold")
+			local paid = math.floor(base * (1 + SELL_PCT) + 0.5)
+			T.eq(w.data.Coins, coins + paid, "base x sellMult, like Tobin's counter")
+			T.eq(paid, Bonuses.sellAmount(Bonuses.stats(w.player), base), "the same number as Bonuses.sellAmount")
+			T.eq(#heard, 1, "onSold heard the sale")
+			T.eq(heard[1].Value, base, "onSold gets the base price")
+			logi.sellBox.tick(m, os.clock() + LogisticsService.SellPopup + 0.01)
+			local earned = w.notes[1]
+			T.truthy(earned and earned.Name == "Earned", "a coin popup")
+			T.eq(earned.Payload.Amount, paid, "the popup shows what was paid")
+		end)
+		listening = false
+		Bonuses.unregister("LogisticsSpecSell")
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Logistics: LogisticsService registers every roster logistics machine", function(w)
 		local m = place(w, "Splitter", 1, 1, 0)
 		local s = place(w, "Sorter", 3, 1, 0)

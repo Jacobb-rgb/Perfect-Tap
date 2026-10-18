@@ -69,7 +69,6 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
-local Perks = require(script.Parent.Parent.Perks)
 local Policy = require(script.Parent.Parent.Policy)
 local Shards = require(script.Parent.Parent.Shards)
 local DataService = require(script.Parent.DataService)
@@ -193,7 +192,6 @@ function WheelService.oreContext(player: Player, data: { [string]: any }): Wheel
 	return {
 		BlasterLevel = if finite(data.BlasterLevel) then data.BlasterLevel else 1,
 		BestIncome = WheelConfig.bestIncome(data.Discovered),
-		Vip = Perks.has(player, "ForgeVip"),
 	}
 end
 

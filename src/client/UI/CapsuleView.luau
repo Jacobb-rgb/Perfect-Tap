@@ -60,11 +60,24 @@ local CapsuleView = {}
 CapsuleView.PhoneScale = TechShopView.PhoneScale
 -- the odds list's columns: shares of the room left of the chance for the name and the rarity (the bonus gets the rest)
 CapsuleView.Columns = { 0.41, 0.25 }
+-- a RARITY column narrower than this can't show "Legendary" readably: the list
+-- drops it (the coloured bar and the name's colour show the rarity) and the
+-- name and bonus share the room (oddsColumns; small phones)
+CapsuleView.RarityMinWidth = 80
 CapsuleView.MinTouch = TechShopView.MinTouch
 CapsuleView.Separator = "  •  "
 CapsuleView.BoardAttribute = "CapsuleBoard" -- on every instance fillBoard adds (old labels don't have it)
--- ReplicatedStorage attribute: step 8's receipts take Royal capsules (= CapsuleService.ReceiptsAttribute)
-CapsuleView.ReceiptsAttribute = "CapsuleReceiptsReady"
+-- fillBoard's columns (x, width as shares of the board) on the stall's own
+-- grid (Districts/Capsules.luau): the stall's neon RarityChip parts stand in
+-- front of the Marker column, so the names and totals start right of them
+CapsuleView.BoardColumns = {
+	Marker = { 0.08, 0.13 },
+	Row = { 0.27, 0.31 },
+	Total = { 0.6, 0.35 },
+} :: { [string]: { number } }
+-- ReplicatedStorage attribute: step 8's receipts are handled (the one receipts
+-- gate, src/server/Receipts.luau; = CapsuleService.ReceiptsAttribute)
+CapsuleView.ReceiptsAttribute = MonetizationConfig.ReceiptsAttribute
 
 export type OddsLine = {
 	Golem: string,
@@ -541,6 +554,8 @@ local function newRow(refs: Refs, index: number, m: Metrics): Row
 			Name = name,
 			TextXAlignment = align,
 			TextWrapped = false,
+			-- never runs into the next cell (fitText shrinks it first)
+			TextTruncate = Enum.TextTruncate.AtEnd,
 		})
 	end
 	local row: Row = {
@@ -562,15 +577,26 @@ local function newRow(refs: Refs, index: number, m: Metrics): Row
 	return row
 end
 
+-- The odds list's GOLEM / RARITY / BONUS widths for `rest` units (RARITY 0
+-- = dropped: too narrow to read, see RarityMinWidth).
+function CapsuleView.oddsColumns(rest: number): (number, number, number)
+	local nameW = math.floor(rest * CapsuleView.Columns[1])
+	local rarityW = math.floor(rest * CapsuleView.Columns[2])
+	if rarityW < CapsuleView.RarityMinWidth then
+		nameW = math.floor(rest * 0.5)
+		rarityW = 0
+	end
+	return nameW, rarityW, rest - nameW - rarityW
+end
+
 -- Places a row's cells for a list `width` wide.
 local function placeRow(row: Row, m: Metrics, width: number)
 	local h = m.Row
 	local chanceW = if m.Row > 28 then 120 else 96
 	local luckyW = 34
 	local rest = width - 20 - chanceW - luckyW - 12
-	local nameW = math.floor(rest * CapsuleView.Columns[1])
-	local rarityW = math.floor(rest * CapsuleView.Columns[2])
-	local bonusW = rest - nameW - rarityW
+	local nameW, rarityW, bonusW = CapsuleView.oddsColumns(rest)
+	row.Rarity.Visible = rarityW > 0
 	row.Frame.Size = UDim2.new(1, -10, 0, h)
 	row.Bar.Position = UDim2.new(0, 4, 0.5, -(h - 10) / 2)
 	row.Bar.Size = UDim2.fromOffset(8, h - 10)
@@ -941,13 +967,16 @@ function CapsuleView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local listW = rightW - 16
 	local chanceW = if m.Row > 28 then 120 else 96
 	local rest = listW - 10 - 20 - chanceW - 34 - 12
-	local nameW = math.floor(rest * CapsuleView.Columns[1])
-	local rarityW = math.floor(rest * CapsuleView.Columns[2])
+	local nameW, rarityW, bonusW = CapsuleView.oddsColumns(rest)
 	local headCells = {
 		HeadGolem = { 18, nameW },
 		HeadRarity = { 18 + nameW, rarityW },
-		HeadBonus = { 18 + nameW + rarityW, rest - nameW - rarityW },
+		HeadBonus = { 18 + nameW + rarityW, bonusW },
 	}
+	local headRarity = refs.Heads:FindFirstChild("HeadRarity")
+	if headRarity and headRarity:IsA("TextLabel") then
+		headRarity.Visible = rarityW > 0
+	end
 	for _, child in refs.Heads:GetChildren() do
 		if child:IsA("TextLabel") then
 			local cell = headCells[child.Name]
@@ -1603,18 +1632,20 @@ function CapsuleView.fillBoard(gui: Instance, capsuleId: string, lucky: boolean)
 		marker.Name = "Marker" .. i
 		marker.BorderSizePixel = 0
 		marker.BackgroundColor3 = info.Color
-		marker.Position = UDim2.fromScale(0.05, y + rowH * 0.2)
-		marker.Size = UDim2.fromScale(0.08, rowH * 0.6)
+		local columns = CapsuleView.BoardColumns
+		marker.Position = UDim2.fromScale(columns.Marker[1], y + rowH * 0.22)
+		marker.Size = UDim2.fromScale(columns.Marker[2], rowH * 0.56)
 		marker:SetAttribute(CapsuleView.BoardAttribute, true)
 		marker.Parent = gui
 		local held = total ~= nil and total > 0
-		label("Row" .. i, info.Name, 0.16, y + rowH * 0.22, 0.4, rowH * 0.56, if held then Color3.new(1, 1, 1) else rgb(150, 140, 136))
+		local nameColor = if held then Color3.new(1, 1, 1) else rgb(150, 140, 136)
+		label("Row" .. i, info.Name, columns.Row[1], y + rowH * 0.22, columns.Row[2], rowH * 0.56, nameColor)
 		label(
 			"Total" .. i,
 			if held then CapsuleView.percent(total :: number) else "-",
-			0.57,
+			columns.Total[1],
 			y + rowH * 0.1,
-			0.38,
+			columns.Total[2],
 			rowH * 0.8,
 			info.Color,
 			Enum.TextXAlignment.Right

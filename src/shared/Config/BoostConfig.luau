@@ -17,7 +17,8 @@
 	               about x6 ("Hexa") - rename it or change Mult if you like.
 
 	Ore luck (one number L >= 1, StatConfig.oreLuck: (1 + OreLuckPct) x
-	OreLuckMult, at most x4): the Lucky and Starbreaker enchants and the Luck
+	OreLuckMult, at most x6.25, which never cuts Hexa Lucky's x2.5): the
+	Lucky and Starbreaker enchants and the Luck
 	golems add to OreLuckPct, Hexa Lucky multiplies. It GROWS WITH RARITY:
 	an ore's weight is multiplied by L ^ LuckPower[its rarity] (Rare 1, Epic
 	1.5, Legendary 2, Mythic 2.5), so luck still matters where most ores are
@@ -58,8 +59,9 @@
 	Stacking: every new boost of the same kind adds its time to what is left;
 	at most MaxStackSeconds (2 h) may be left after a coin buy or a wheel
 	prize (the wheel caps). A Robux pack is only offered while it fits; a
-	receipt that arrives late still adds its full time (paid time is never
-	lost); saves are capped at MaxSavedSeconds.
+	receipt that arrives late still adds its full time, uncapped (paid time
+	is never lost: Migrations only clips junk beyond MaxSavedSeconds, a
+	year ahead, never a real purchase).
 
 	Roblox rules: anything bought (Robux or coins) that changes the odds of
 	random results must show the NEW odds in numbers before purchase. A Hexa
@@ -137,7 +139,12 @@ export type OddsPreview = {
 local BoostConfig = {}
 
 BoostConfig.MaxStackSeconds = 2 * 3600
-BoostConfig.MaxSavedSeconds = 24 * 3600
+-- A junk guard, never a gameplay cap: Migrations only clips a saved boost
+-- that ends more than this far ahead (broken or hacked values). Paid time
+-- (Robux packs, step 8: BoostService.add capped = false) is never lost, so
+-- this sits far above anything a player can buy on purpose (a year of
+-- boost is 8,760 hour packs).
+BoostConfig.MaxSavedSeconds = 365 * 24 * 3600
 -- a coin offer is sold only while less than this is left of that boost
 BoostConfig.CoinBuyBelow = 600
 

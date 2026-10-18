@@ -30,6 +30,7 @@ return function(T, Loader)
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
 	local Policy = Loader.requirePath("ServerScriptService.Server.Policy")
+	local Receipts = Loader.requirePath("ServerScriptService.Server.Receipts")
 	local Shards = Loader.requirePath("ServerScriptService.Server.Shards")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local BoostService = Loader.requirePath("ServerScriptService.Server.Services.BoostService")
@@ -104,6 +105,8 @@ return function(T, Loader)
 			return { ArePaidRandomItemsRestricted = w.restricted, IsPaidItemTradingAllowed = false }
 		end)
 		BoostService._test.reset()
+		Receipts._test.reset()
+		Receipts._test.setPublisher(function() end)
 		BoostService._test.setPrompter(function(p, product)
 			table.insert(w.prompts, { Player = p, Product = product })
 		end)
@@ -132,6 +135,7 @@ return function(T, Loader)
 		w.restore = function()
 			shop.reset()
 			BoostService._test.reset()
+			Receipts._test.reset()
 			Policy._test.reset()
 			MonetizationConfig.CoinPacksEnabled = false
 			for _, product in MonetizationConfig.List do
@@ -329,8 +333,13 @@ return function(T, Loader)
 		T.eq(#w.prompts, 0, "no prompt")
 		T.eq(EnchantConfig.tierOf(w.data.Enchants, "Heartfire"), 0, "never granted")
 		T.eq(w.data.Coins, 50)
-		-- live: the game pass prompt
+		-- a live pass id before step 8 grants passes: still Coming soon
 		MonetizationConfig.Products.EnchantHeartfire.Id = 123
+		answer = act(w, "Buy", { Id = "Heartfire", Currency = "Robux", Tier = 1 })
+		T.eq(answer.A.Status, "ComingSoon", "receipts gate off")
+		T.eq(#w.prompts, 0, "no prompt")
+		-- live and step 8 ready: the game pass prompt
+		Receipts.setReady(true)
 		answer = act(w, "Buy", { Id = "Heartfire", Currency = "Robux", Tier = 1 })
 		T.eq(answer.A.Status, "Prompted")
 		T.eq(w.prompts[1].Product.Kind, "GamePass")
@@ -625,7 +634,22 @@ return function(T, Loader)
 		-- a live pass shows its price
 		MonetizationConfig.Products.EnchantHeartfire.Id = 5
 		local live = EnchantView.cards(state(), 0, false)
+		-- a live pass waits for step 8's receipts gate (the controllers pass soonNow)
+		local gated = EnchantView.cards(state(), 0, false, BoostView.soonNow(nil, false))
+		local opened = EnchantView.cards(state(), 0, false, BoostView.soonNow(nil, true))
 		MonetizationConfig.Products.EnchantHeartfire.Id = 0
+		for _, card in gated do
+			if card.Id == "Heartfire" then
+				T.eq(card.Buys[2].Text, "20 R$ • SOON", "receipts not ready: greyed")
+				T.falsy(card.Buys[2].CanBuy)
+				T.eq(card.Buys[2].Reason, "ComingSoon")
+			end
+		end
+		for _, card in opened do
+			if card.Id == "Heartfire" then
+				T.truthy(card.Buys[2].CanBuy, "receipts ready: sold")
+			end
+		end
 		for _, card in live do
 			if card.Id == "Heartfire" then
 				T.eq(card.Buys[2].Text, "20 R$")
@@ -696,7 +720,7 @@ return function(T, Loader)
 		local c = EnchantView.odds(capped, "Lucky", "DeepHollow", NOW) :: any
 		T.truthy(c.Note:find("cap"), "at the cap")
 		T.eq(c.Summary.Before, c.Summary.After, "no change")
-		T.truthy(StatConfig.MaxOreLuck == 4)
+		T.near(StatConfig.MaxOreLuck, 6.25, 1e-9)
 		-- the lasting odds: a running Hexa Lucky is left out (Lucky I + Hexa: Starbreaker
 		-- shows x1.15 -> x1.9, not the temporary x2.88 -> x4)
 		local hexa = state({ Bonuses = { OreLuckPct = 0.15, OreLuckMult = 2.5, ArtifactPct = 0 }, Boosts = { HexaLuckyUntil = NOW + 600 } })

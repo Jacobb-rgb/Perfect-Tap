@@ -31,9 +31,14 @@
 
 	Caps (Max, applied to each total by combine): they are real limits the
 	best gear can reach, so the numbers on the cards are what the game
-	applies (the UI shows the capped totals from State.Bonuses). Ore luck has
-	one more cap on the product: oreLuck() = (1 + OreLuckPct) x OreLuckMult,
-	at most MaxOreLuck (x4), so the odds on a luck card match the rolls.
+	applies (the UI shows the capped totals from State.Bonuses). Ore luck is
+	the product oreLuck() = (1 + OreLuckPct) x OreLuckMult, at most
+	MaxOreLuck = (1 + the OreLuckPct cap) x the OreLuckMult cap (x6.25): the
+	product cap never cuts a multiplier, so Hexa Lucky is always exactly x2.5
+	(what its Robux pack promises, docs/COMPLIANCE.md 2.6) and the odds on a
+	luck card match the rolls. The OreLuckPct cap does cut a percent bonus
+	(Starbreaker's +75% ore luck adds nothing to a player already at +150%):
+	every text that sells one says so, and the cards show the real odds.
 	How ore luck acts on the ores (it grows with rarity): BoostConfig header.
 	The caps keep paid golems (Royal capsules) and the Mythic enchants from
 	skipping blaster progression: a whole blaster level is about x1.8 damage,
@@ -81,13 +86,14 @@ StatConfig.List = {
 	{ Id = "LampBrightness", Kind = "Add", Label = "lamp brightness", Format = "Number", Max = 10 },
 } :: { Stat }
 
--- The highest total ore luck (the product, see the header).
-StatConfig.MaxOreLuck = 4
-
 StatConfig.ById = {} :: { [string]: Stat }
 for _, stat in StatConfig.List do
 	StatConfig.ById[stat.Id] = stat
 end
+
+-- The highest total ore luck (the product, see the header): the two luck
+-- caps multiplied, so it never cuts Hexa Lucky's multiplier (x6.25).
+StatConfig.MaxOreLuck = (1 + (StatConfig.ById.OreLuckPct.Max :: number)) * (StatConfig.ById.OreLuckMult.Max :: number)
 
 local function finite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge

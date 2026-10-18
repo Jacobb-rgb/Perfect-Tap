@@ -11,6 +11,9 @@ local DataTemplate = {
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- crystal shards (the Crystal Extractor finds them; the Enchant shop spends them)
 	Shards = 0,
+	-- crushed piles a Crusher made that the Crystal Extractor hasn't shaken yet
+	-- (ProcessingService: each pile gets ONE shard roll, a loop finds nothing)
+	ShardRolls = 0,
 	TotalEarned = 0,
 
 	-- blaster (design v2): level 1..10 and the ore it was forged from ("" = rusty starter)

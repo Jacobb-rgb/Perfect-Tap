@@ -431,8 +431,35 @@ return function(T, Loader)
 		end
 		LeaderboardService.refresh()
 		T.eq(lb.tops().Artifacts.Rows[1].UserId, 69)
+		-- the runtime hidden list: a small DataStore and a MessagingService topic (fakes)
+		local list: any = { values = {}, gets = 0, updates = 0 }
+		function list:GetAsync(key: string): any
+			self.gets += 1
+			return self.values[key]
+		end
+		function list:UpdateAsync(key: string, transform: (any) -> any): any
+			self.updates += 1
+			local result = transform(self.values[key])
+			if result ~= nil then
+				self.values[key] = result
+			end
+			return result
+		end
+		local published = {}
+		w.patch(LeaderboardService, "hiddenStoreOf", function()
+			return list
+		end)
+		w.patch(LeaderboardService, "publishHidden", function(id: number): boolean
+			table.insert(published, id)
+			return true
+		end)
+		-- user 69 is online here and was written before
+		T.truthy(LeaderboardService.flushValues(69, { TotalEarned = 50, Artifacts = 2, HoursPlayed = 3600, MoneyPerSec = 4 }) > 0)
 		w.stores.Artifacts.fail = 1
 		T.eq(LeaderboardService.removeUser(69), #LeaderboardConfig.Boards)
+		T.truthy(LeaderboardService.isHidden(69), "hidden at runtime, no deploy")
+		T.eq(published[1], 69, "the running servers are told")
+		T.truthy(table.find(list.values[LeaderboardService.HiddenKey], 69), "saved for servers started later")
 		for _, board in LeaderboardConfig.Boards do
 			T.eq(w.stores[board.Id].values["69"], nil, board.Id .. " removed")
 			T.eq(w.stores[board.Id].values["70"], 3, board.Id .. " others kept")
@@ -443,6 +470,34 @@ return function(T, Loader)
 		T.eq(lb.tops().Artifacts.Rows[1].UserId, 70)
 		T.eq(lb.tops().Artifacts.Rows[1].Rank, 1)
 		T.eq(w.stores.Artifacts.removes, 2, "retried once")
+		-- an online user stays removed: the next rounds (any board due) write nothing
+		local sets = 0
+		for _, board in LeaderboardConfig.Boards do
+			sets += w.stores[board.Id].sets
+		end
+		T.eq(LeaderboardService.flushValues(69, { TotalEarned = 99, Artifacts = 5, HoursPlayed = 7200, MoneyPerSec = 9 }), 0, "never written again")
+		T.eq(LeaderboardService.flushValues(69, { TotalEarned = 99 }, true), 0, "not on leave either")
+		local after = 0
+		for _, board in LeaderboardConfig.Boards do
+			after += w.stores[board.Id].sets
+			T.eq(w.stores[board.Id].values["69"], nil, board.Id .. " stays removed")
+		end
+		T.eq(after, sets, "no write request at all")
+		T.eq(LeaderboardService.pageSize(), LeaderboardConfig.TopCount + 2, "room for both hidden users")
+		-- a server started later reads the saved list
+		LeaderboardService.removeUser(71)
+		T.eq(#list.values[LeaderboardService.HiddenKey], 2, "one entry per user")
+		LeaderboardService.removeUser(71)
+		T.eq(#list.values[LeaderboardService.HiddenKey], 2, "saved once")
+		lb.reset()
+		lb.setLive(true)
+		T.falsy(LeaderboardService.isHidden(69), "a fresh server knows nothing yet")
+		T.truthy(LeaderboardService.loadHidden(), "reads the list")
+		T.truthy(LeaderboardService.isHidden(69) and LeaderboardService.isHidden(71), "both hidden")
+		list.values[LeaderboardService.HiddenKey] = { "x", -3, 2.5, 72 }
+		LeaderboardService.loadHidden()
+		T.truthy(LeaderboardService.isHidden(72), "junk ids are skipped")
+		T.falsy(LeaderboardService.isHidden(-3))
 		for _, bad in { 0, -5, 1.5, 0 / 0 } do
 			T.eq(LeaderboardService.removeUser(bad), 0)
 		end

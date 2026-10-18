@@ -72,8 +72,10 @@ LobbyLayout.Budget = {
 	-- main roads paved with kerbs and glowing studs).
 	-- + the artifact museums (steps 6-7: ArtifactService builds one into
 	-- every plot's yard at server start, MuseumBuilder, ~44 structure parts
-	-- each = ~350; the relics the owners found come on top like the podium
-	-- ores, at most ArtifactConfig.MaxParts each).
+	-- each = ~350; the relics the owners found are NOT on the server: the
+	-- clients build them only for museums near the camera, at most
+	-- ArtifactConfig.MaxParts each, so a full collection never touches
+	-- this budget).
 	-- tests/LobbyBudget.spec.luau: the built map (~20,400 parts) + one ore
 	-- node on every node spawn (~1,320) + the 8 empty museums (~350) must
 	-- stay 200 under it (the podium and pen ores): ~140 parts of headroom.
