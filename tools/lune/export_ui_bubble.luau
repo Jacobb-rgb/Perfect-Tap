@@ -142,3 +142,51 @@ end
 local luckyGui = windowGui(1.25, 1)
 CapsuleBubble.build(luckyGui, 1.25, capsuleData(true))
 write("ui_bubble_capsules_lucky_pc", luckyGui)
+
+---------------------------------------------------------------- backpack
+local BackpackBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BackpackBubble")
+local penItems = {
+	{ "Clean", "Diamond", "Epic", "Clean", "$28K" },
+	{ "Clean", "Heartstone", "Mythic", "Pristine", "$1.2M" },
+	{ "Clean", "Stormcore", "Epic", "Flawless", "$52K" },
+	{ "Ingot", "Gold", "Rare", "Pristine", "$9.6K" },
+	{ "Clean", "Ruby", "Rare", "Pristine", "$4.8K" },
+	{ "Clean", "Emerald", "Rare", "Clean", "$6.1K" },
+	{ "Ingot", "Silver", "Uncommon", "Clean", "$3.2K" },
+	{ "Clean", "Silver", "Uncommon", "Flawless", "$2.1K" },
+	{ "Clean", "Jade", "Uncommon", "Pristine", "$1.4K" },
+	{ "Clean", "Amethyst", "Uncommon", "Clean", "$860" },
+	{ "Ingot", "Copper", "Common", "Clean", "$640" },
+	{ "Crushed", "Iron", "Common", "Clean", "$240" },
+	{ "Clean", "Quartz", "Common", "Clean", "$180" },
+	{ "Clean", "Copper", "Common", "Rough", "$120" },
+	{ "Clean", "Coal", "Common", "Rough", "$60" },
+	{ "Raw", "Stormcore", "Epic", nil, "?" },
+	{ "Raw", "Silver", "Uncommon", nil, "?" },
+	{ "Raw", "Copper", "Common", nil, "?" },
+}
+local function backpackData()
+	local items = {}
+	for i, row in penItems do
+		local kind, ore, rar, grade, value = row[1], row[2], row[3], row[4], row[5]
+		local name = if kind == "Raw" then "Raw " .. ore
+			elseif kind == "Ingot" then ore .. " Ingot"
+			elseif kind == "Crushed" then "Crushed " .. ore
+			else (grade or "") .. " " .. ore
+		table.insert(items, {
+			Id = "Item" .. i,
+			Name = name,
+			Icon = "item_" .. kind .. "_" .. ore,
+			Color = rarity[rar],
+			Rarity = rar,
+			Grade = grade,
+			Value = value,
+		})
+	end
+	return { Tab = "Ores", Items = items, Selected = "Item1", Coins = "$48.2K", Shards = "120", Used = 18, Capacity = 40 }
+end
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	BackpackBubble.build(gui, spec[2], backpackData())
+	write("ui_bubble_backpack_" .. spec[1], gui)
+end

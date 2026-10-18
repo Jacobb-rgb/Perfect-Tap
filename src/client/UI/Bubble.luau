@@ -455,4 +455,145 @@ function Bubble.window(parent: Instance, o: WindowOptions): Window
 	return { Holder = holder, Panel = panel, Header = header, Title = title, Body = body, Close = close }
 end
 
+export type CardOptions = {
+	Name: string,
+	Label: string,
+	Icon: string,
+	Color: Color3, -- rarity / data colour of the card face
+	Chip: string, -- the pill on the bottom edge (chance, value, level)
+	ChipRole: (string | Role)?, -- coloured chip (else white with ink text)
+	Badge: string?,
+	Size: Vector2,
+	NameSize: number,
+	ChipSize: number,
+	Selected: boolean?,
+	LayoutOrder: number?,
+}
+
+-- Grid card: 3D icon popping out of the top, the name, a chip on the bottom edge.
+function Bubble.card(parent: Instance, o: CardOptions): (TextButton, Frame)
+	local size = o.Size
+	local holder, face = Bubble.body(parent, Bubble.roleFrom(o.Color), Vector2.new(size.X, size.Y - Theme.Lip), {
+		Name = o.Name,
+		Corner = 16,
+		Clickable = true,
+	})
+	holder.LayoutOrder = o.LayoutOrder or 0
+	local iconSize = math.floor(size.X * 0.66)
+	Bubble.icon(face, o.Icon, iconSize, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, -12),
+	})
+	Bubble.text(face, o.Label, o.NameSize, {
+		Name = "Name",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -(o.ChipSize + 8) // 2 - 3),
+		Size = UDim2.new(1, -8, 0, o.NameSize + 2),
+		TextScaled = true,
+		ZIndex = 4,
+	})
+	Bubble.chip(face, o.Chip, Vector2.new(math.floor(size.X * 0.66), o.ChipSize + 8), o.ChipSize, o.ChipRole, {
+		Name = "Chance",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 1, 0),
+	})
+	if o.Badge then
+		Bubble.badge(face, o.Badge)
+	end
+	if o.Selected then
+		Bubble.select(face, true)
+	end
+	return face :: TextButton, holder
+end
+
+-- Gold outline on the selected tab / card / slot (false = the plain outline).
+function Bubble.select(face: GuiObject, selected: boolean)
+	local stroke = face:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = if selected then Theme.Gold else Theme.Outline
+		stroke.Thickness = if selected then 5 else Theme.Stroke
+	end
+end
+
+export type Tab = { Id: string, Label: string, Icon: string, Role: (string | Role)? }
+
+-- A row of tabs: the selected one in its colour with a gold outline, the rest plain.
+function Bubble.tabs(parent: Instance, tabs: { Tab }, selected: string, size: Vector2, textSize: number, props: Props?): { [string]: TextButton }
+	local row = UIKit.new("Frame", {
+		Name = "Tabs",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, size.Y + Theme.Lip),
+	}, parent)
+	apply(row, props)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 12)
+	local out = {}
+	for i, tab in tabs do
+		local on = tab.Id == selected
+		local face = Bubble.button(row, {
+			Name = tab.Id,
+			Text = tab.Label,
+			Role = if on then (tab.Role or "Plain") else "Plain",
+			Size = size,
+			Icon = tab.Icon,
+			TextSize = textSize,
+			LayoutOrder = i,
+		})
+		if on then
+			Bubble.select(face, true)
+		else
+			local label = face:FindFirstChild("Label") :: TextLabel
+			label.TextColor3 = Theme.InkSoft
+			local stroke = label:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Enabled = false
+				stroke.Transparency = 1
+			end
+		end
+		out[tab.Id] = face
+	end
+	return out
+end
+
+-- An inner panel (light tint, outlined, no lip) filling `size` (UDim2) at `position`.
+function Bubble.inset(parent: Instance, name: string, position: UDim2, size: UDim2): Frame
+	local frame = UIKit.new("Frame", {
+		Name = name,
+		BackgroundColor3 = Theme.PanelTint,
+		BorderSizePixel = 0,
+		Position = position,
+		Size = size,
+		ZIndex = 2,
+	}, parent)
+	Bubble.corner(frame, 20)
+	Bubble.stroke(frame, 3)
+	return frame
+end
+
+-- A scrolling grid of cards inside `parent` (room on top for the popping icons).
+function Bubble.grid(parent: Instance, cell: Vector2, gap: Vector2, props: Props?): ScrollingFrame
+	local scroll = UIKit.new("ScrollingFrame", {
+		Name = "Grid",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 8,
+		ScrollBarImageColor3 = Theme.InkSoft,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ClipsDescendants = true,
+		ZIndex = 3,
+	}, parent)
+	apply(scroll, props)
+	local pad = UIKit.padding(scroll, 4)
+	pad.PaddingTop = UDim.new(0, 16)
+	pad.PaddingBottom = UDim.new(0, 18)
+	UIKit.new("UIGridLayout", {
+		CellSize = UDim2.fromOffset(cell.X, cell.Y),
+		CellPadding = UDim2.fromOffset(gap.X, gap.Y),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, scroll)
+	return scroll
+end
+
 return Bubble

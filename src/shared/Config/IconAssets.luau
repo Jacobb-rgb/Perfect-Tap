@@ -23,6 +23,8 @@ IconAssets.Ids = {
 	ore_copper = 0,
 	ore_silver = 0,
 	ingot_gold = 0,
+	shard = 0,
+	artifact = 0,
 	-- golems and capsules (step 7 GolemBuilder models)
 	golem_PebbleGolem = 0,
 	golem_CopperTinker = 0,

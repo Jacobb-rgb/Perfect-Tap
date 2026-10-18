@@ -124,34 +124,19 @@ local function selectedCapsule(data: Data): Capsule
 end
 
 local function card(parent: Instance, golem: Golem, layout: Layout, order: number): Frame
-	local size = layout.Card
-	local holder, face = Bubble.body(parent, Bubble.roleFrom(golem.Color), Vector2.new(size.X, size.Y - Theme.Lip), {
+	local _, holder = Bubble.card(parent, {
 		Name = golem.Id,
-		Corner = 16,
+		Label = golem.Name,
+		Icon = "golem_" .. golem.Id,
+		Color = golem.Color,
+		Chip = CapsuleBubble.percent(golem.Chance),
+		ChipRole = if golem.Lucky then "Build" else nil,
+		Badge = if golem.Lucky then "x3" else nil,
+		Size = layout.Card,
+		NameSize = layout.NameSize,
+		ChipSize = layout.ChanceSize,
+		LayoutOrder = order,
 	})
-	holder.LayoutOrder = order
-	local iconSize = math.floor(size.X * 0.66)
-	Bubble.icon(face, "golem_" .. golem.Id, iconSize, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, -12),
-	})
-	Bubble.text(face, golem.Name, layout.NameSize, {
-		Name = "Name",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -(layout.ChanceSize + 8) // 2 - 3),
-		Size = UDim2.new(1, -8, 0, layout.NameSize + 2),
-		TextScaled = true,
-		ZIndex = 4,
-	})
-	local chip = Bubble.chip(face, CapsuleBubble.percent(golem.Chance), Vector2.new(math.floor(size.X * 0.66), layout.ChanceSize + 8), layout.ChanceSize, if golem.Lucky then "Build" else nil, {
-		Name = "Chance",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 1, 0),
-	})
-	chip.ZIndex = 4
-	if golem.Lucky then
-		Bubble.badge(face, "x3")
-	end
 	return holder
 end
 

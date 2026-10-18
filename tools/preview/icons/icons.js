@@ -272,6 +272,34 @@ const ICONS = {
     return { model: group(parts), yaw: 0, pitch: 24 };
   },
 
+  shard() {
+    const parts = [
+      crystal(0.32, 1.1, "#7cf0ff", glow("#25b6e6", 0.45), [0, -0.7, 0], [0, 0, 0]),
+      crystal(0.24, 0.75, "#b48cff", glow("#7a4ce0", 0.45), [-0.45, -0.75, 0.1], [0, 30, 22]),
+      crystal(0.22, 0.65, "#ff8ad8", glow("#e04ca8", 0.4), [0.45, -0.75, 0.05], [0, -20, -24]),
+      crystal(0.16, 0.45, "#7cf0ff", glow("#25b6e6", 0.45), [0.12, -0.75, 0.42], [28, 0, -8]),
+      ball(0.6, "#8a7f9a", { rough: 0.8 }, [0, -0.85, 0], [0, 0, 0], 1.2, 0.35, 1),
+    ];
+    return { model: group(parts), yaw: -18, pitch: 12 };
+  },
+
+  artifact() {
+    const ring = lathe([[0.62, -0.3], [0.7, -0.3], [0.74, -0.22], [0.74, 0.12], [0.66, 0.16], [0.6, 0.12], [0.6, -0.22]], GOLD, shiny);
+    const points = [];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      points.push(place(new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 4), mat(GOLD, shiny)), [Math.cos(a) * 0.66, 0.38, Math.sin(a) * 0.66], [0, -D(a * 57.3), 0]));
+      points.push(ball(0.07, GOLD, shiny, [Math.cos(a) * 0.66, 0.66, Math.sin(a) * 0.66]));
+    }
+    const gems = [
+      ball(0.13, "#ff4f6d", glow("#c01838", 0.35), [0, -0.06, 0.72], [0, 0, 0], 1, 1, 0.6),
+      ball(0.1, "#46b8ff", glow("#1a6fd0", 0.35), [0.5, -0.06, 0.52], [0, 45, 0], 1, 1, 0.6),
+      ball(0.1, "#3ddc84", glow("#18a050", 0.35), [-0.5, -0.06, 0.52], [0, -45, 0], 1, 1, 0.6),
+    ];
+    const velvet = ball(0.58, "#c0304a", {}, [0, 0.0, 0], [0, 0, 0], 1, 0.75, 1);
+    return { model: group([velvet, ring, ...points, ...gems]), yaw: 0, pitch: 18 };
+  },
+
   // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
   // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
   robux() {
@@ -455,7 +483,10 @@ async function main() {
   scene.add(rim);
 
   // golem_<Kind> / capsule_<Id>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
-  const partSpec = PART_ICONS[iconName] || (/^(golem|capsule)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null);
+  const partSpec =
+    PART_ICONS[iconName] ||
+    (/^(golem|capsule)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
+    (/^item_/.test(iconName) ? { file: iconName, yaw: -24, pitch: 24 } : null);
   if (!ICONS[iconName] && !partSpec) throw new Error("unknown icon " + iconName);
   const spec = ICONS[iconName] ? ICONS[iconName]() : await partsModel(partSpec.file, partSpec);
   const holder = new THREE.Group();
