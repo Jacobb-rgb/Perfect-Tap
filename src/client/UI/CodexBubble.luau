@@ -12,7 +12,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.BubbleTheme)
-local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
 
 local CodexBubble = {}
