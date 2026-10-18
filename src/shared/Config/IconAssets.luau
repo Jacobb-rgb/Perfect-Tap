@@ -68,6 +68,7 @@ IconAssets.Sheets = {
 			"enchant_Power", "enchant_Swift", "enchant_Reach", "enchant_Magnetism", "enchant_Lucky",
 			"enchant_Midas", "enchant_TwinDrop", "enchant_Overcharge", "enchant_Prospector",
 			"enchant_GolemBond", "enchant_Heartfire", "enchant_Starbreaker",
+			"rebirth", "star_token", -- the blaster chat's rebirth window
 		},
 	},
 	{

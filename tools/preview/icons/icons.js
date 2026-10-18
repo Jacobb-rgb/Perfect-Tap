@@ -651,6 +651,32 @@ const ICONS = {
     ];
     return { model: group(parts), yaw: -24, pitch: 8 };
   },
+
+  // rebirth (proposal mock): a gold star inside two chasing arrows
+  rebirth() {
+    const parts = [extrude(starShape(0.6, 0.26), 0.26, 0.07, GOLD, glow("#ffb000", 0.25), [0, 0, 0.1])];
+    for (const [start, color] of [[25, "#ff8a1f"], [205, "#6c74f5"]]) {
+      parts.push(torus(1.02, 0.14, D(140), color, shiny, [0, 0, 0], [0, 0, start]));
+      const end = start + 140;
+      const a = D(end);
+      parts.push(place(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.46, 24), mat(color, shiny)), [Math.cos(a) * 1.02, Math.sin(a) * 1.02, 0], [0, 0, end]));
+    }
+    parts.push(ball(0.08, "#fff6c8", glow("#ffd040", 0.8), [0.78, 0.92, 0.2]));
+    parts.push(ball(0.06, "#fff6c8", glow("#ffd040", 0.8), [-0.95, -0.82, 0.2]));
+    return { model: group(parts), yaw: -14, pitch: 6 };
+  },
+
+  // Forge Star (proposal mock): the rebirth token, an indigo coin with a gold star
+  star_token() {
+    const disc = lathe([[0, -0.14], [0.82, -0.14], [0.92, -0.07], [0.95, 0], [0.92, 0.07], [0.82, 0.14], [0, 0.14]], "#6c74f5", shiny, [0, 0, 0], [90, 0, 0]);
+    const inner = cyl(0.7, 0.7, 0.05, "#8e95ff", shiny, [0, 0, 0.14], [90, 0, 0]);
+    const star = extrude(starShape(0.56, 0.24), 0.12, 0.05, GOLD, glow("#ffb000", 0.3), [0, 0, 0.22]);
+    const sparkles = [
+      ball(0.08, "#fff6c8", glow("#ffd040", 0.9), [0.86, 0.8, 0.25]),
+      ball(0.06, "#fff6c8", glow("#ffd040", 0.9), [-0.9, 0.62, 0.25]),
+    ];
+    return { model: group([disc, inner, star, ...sparkles]), yaw: -18, pitch: 8 };
+  },
 };
 
 // ---------------------------------------------------------------- part models (exported from the game)

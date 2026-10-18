@@ -63,6 +63,7 @@ local BubbleTheme = {
 		Settings = role(rgb(160, 176, 204), rgb(110, 126, 160), rgb(70, 84, 114)),
 		Enchant = role(rgb(255, 140, 222), rgb(222, 72, 184), rgb(150, 30, 122)),
 		Boosts = role(rgb(128, 240, 140), rgb(47, 201, 90), rgb(27, 143, 60)),
+		Rebirth = role(rgb(160, 168, 255), rgb(102, 110, 242), rgb(60, 64, 172)), -- the blaster chat's rebirth window
 	} :: { [string]: Role },
 
 	BaseHeight = 720,
