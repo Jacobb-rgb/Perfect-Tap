@@ -77,6 +77,7 @@ local StoryConfig = require(Shared.Config.StoryConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local Shards = require(script.Parent.Parent.Shards)
+local Perks = require(script.Parent.Parent.Perks)
 local MuseumBuilder = require(script.Parent.Parent.World.MuseumBuilder)
 local DataService = require(script.Parent.DataService)
 local MiningService = require(script.Parent.MiningService)
@@ -395,7 +396,8 @@ function ArtifactService.restore(player: Player, artifactId: any): (boolean, str
 		return false, "BadArtifact"
 	end
 	local level = if finite(data.BlasterLevel) then data.BlasterLevel else 1
-	local price, reason = ArtifactConfig.restoreQuote(data.Artifacts, artifactId, level, Shards.get(data))
+	local vip = Perks.has(player, "ForgeVip")
+	local price, reason = ArtifactConfig.restoreQuote(data.Artifacts, artifactId, level, Shards.get(data), vip)
 	if not price then
 		return false, reason
 	end
@@ -448,11 +450,12 @@ function ArtifactService.equip(player: Player, collectionId: any): (boolean, str
 	if collectionId ~= "" and not ArtifactConfig.isComplete(artifacts, collectionId) then
 		return false, "NotComplete"
 	end
+	-- only a real change repaints the podiums for everyone (security audit S6)
 	if artifacts.Equipped ~= collectionId then
 		artifacts.Equipped = collectionId
 		DataService.changed(player)
+		ArtifactService.applyRewards(player)
 	end
-	ArtifactService.applyRewards(player)
 	return true, nil
 end
 

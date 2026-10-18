@@ -3,10 +3,20 @@
 	one pen, saved as data.Storage (a list of item descriptors { K, O, G?, R? }).
 
 	- Capacity: EconomyConfig.penCapacity(Upgrades.PenLevel, GameConfig.MaxStoredItems)
-	  (pen upgrades are bought in the shops, step 6). Players can only fill
-	  the pen up to it; system writes (leaving, the loose-item cap, packing a
-	  machine up) go through ItemService.storeDesc, which pays Tobin's price
-	  for anything that doesn't fit.
+	  (pen upgrades are bought in the shops, step 6). Players and their
+	  automation can only fill the pen up to it (store, hasRoom, refusal).
+	  Only rescue moves (ItemService.storeDesc: leaving, an item the engine
+	  lost, Placement repair, an item returned from someone else's plot)
+	  may overfill it, up to GameConfig.MaxStoredItems.
+	- Over capacity (#Storage > capacity, after a rescue or a smaller pen):
+	  the pen takes nothing new from the player or their automation, all
+	  with ONE reason code, PenService.OverReason ("PenOver"): throwing ore
+	  in and Put In bounce / refuse with OverText, the train's cargo waits
+	  at the station (TrainService: Train.WaitReason "PenOver"), a podium's
+	  Remove is refused (PodiumService), the sinks and the Iron Box keep
+	  route (store / hasRoom) refuse. Take, Sell and Send still work, so the
+	  player can always get back under it. The State shows it: PenOver =
+	  true next to StorageCount / PenCapacity (PenView turns red).
 	- In: drop or throw your own items into the pen (the yard's Pen.Intake
 	  box, an IntakeService zone), or press "Put In" (F / gamepad Y) at the
 	  pen gate while carrying items. Items of other players are not taken:
@@ -77,7 +87,7 @@
 	  (unloadTrain); the intent ends when no dirty ore is left on board or
 	  the train stops unloading that way (belt gone: the rest goes into the
 	  pen as without the upgrade).
-	- StateService gets PenCapacity, AutoSort and PenSend = { Pen, Train
+	- StateService gets PenCapacity, PenOver (true while over capacity), AutoSort and PenSend = { Pen, Train
 	  (items still to send per lane), PenWait?, TrainWait? (why that lane
 	  waits, a line for the player) }; TrainService puts the Train lane's
 	  reason (laneWait) into its Train snapshot (UnloadWait) for TrainView.
@@ -150,6 +160,11 @@ local MAX_PUT_IN = 64 -- more than any carry stack
 local MAX_KEY_LENGTH = 80
 local GATE_OUT = 1.6 -- studs in front of the gate where items come out
 local HANDS_FULL = "Your hands are full and lots of items are lying around. Pick some up first!"
+local OVER_TOAST_COOLDOWN = 5
+
+-- The one reason code for "the pen is over its capacity" (see the header).
+PenService.OverReason = "PenOver"
+PenService.FullReason = "PenFull"
 
 -- send queue (WP-Belts)
 PenService.SendInterval = 0.5 -- seconds between two items leaving one chute
@@ -167,6 +182,7 @@ local LANES: { SendLane } = { "Pen", "Train" }
 local CHUTE_PLACE = "(the blue plate on the back row of your build grid)"
 
 local lastFullToast: { [Player]: number } = {}
+local lastOverToast: { [Player]: number } = {}
 local lastForeignToast: { [Player]: number } = {}
 local lastQueueToast: { [Player]: number } = {}
 local autoTold: { [Player]: boolean } = {} -- the first auto-sort toast of the session
@@ -192,21 +208,47 @@ function PenService.count(player: Player): number
 	return if data then #data.Storage else 0
 end
 
+-- Is the pen holding more than its capacity (a rescue move overfilled it)?
+function PenService.isOver(data: { [string]: any }): boolean
+	return #data.Storage > PenService.capacityOf(data)
+end
+
+--[[
+	Why the pen refuses `n` (default 1) more items from the player or their
+	automation: "PenOver" (over its capacity: nothing new until it is back
+	under), "PenFull" (no room for them), nil = they fit.
+]]
+function PenService.refusal(data: { [string]: any }, n: number?): string?
+	local capacity = PenService.capacityOf(data)
+	local count = #data.Storage
+	if count > capacity then
+		return PenService.OverReason
+	elseif count + (n or 1) > capacity then
+		return PenService.FullReason
+	end
+	return nil
+end
+
 -- Room for `n` (default 1) more items?
 function PenService.hasRoom(player: Player, n: number?): boolean
 	local data = DataService.get(player)
-	return data ~= nil and #data.Storage + (n or 1) <= PenService.capacityOf(data)
+	return data ~= nil and PenService.refusal(data, n) == nil
 end
 
--- Puts one item into the pen when it has room (no sale fallback). The
--- caller calls DataService.changed (several changes, one push).
-function PenService.store(player: Player, desc: Desc): boolean
+-- Puts one item into the pen when it has room (no sale fallback); else
+-- false and the reason ("PenOver" | "PenFull" | "NoData"). The caller calls
+-- DataService.changed (several changes, one push).
+function PenService.store(player: Player, desc: Desc): (boolean, string?)
 	local data = DataService.get(player)
-	if not data or #data.Storage >= PenService.capacityOf(data) then
-		return false
+	if not data then
+		return false, "NoData"
+	end
+	local why = PenService.refusal(data)
+	if why then
+		return false, why
 	end
 	table.insert(data.Storage, { K = desc.K, O = desc.O, G = desc.G, R = desc.R })
-	return true
+	return true, nil
 end
 
 -- Takes one item with this storage key out of the pen (the newest one).
@@ -266,6 +308,26 @@ local function fullText(data: { [string]: any }): string
 	return `Your Ore Pen is full ({#data.Storage}/{PenService.capacityOf(data)}). Sell ore at Tobin's stall or put some on a podium.`
 end
 
+-- The over-capacity line (the same everywhere the pen says "PenOver").
+function PenService.overText(data: { [string]: any }): string
+	return `Your Ore Pen holds more than it fits ({#data.Storage}/{PenService.capacityOf(data)}): nothing new goes in until you take, sell or send some.`
+end
+
+-- The refusal line for a reason from PenService.refusal.
+function PenService.refusalText(data: { [string]: any }, why: string?): string
+	return if why == PenService.OverReason then PenService.overText(data) else fullText(data)
+end
+
+-- The over-capacity toast (at most every OVER_TOAST_COOLDOWN seconds).
+local function overToast(player: Player, data: { [string]: any })
+	local now = os.clock()
+	if now - (lastOverToast[player] or -math.huge) < OVER_TOAST_COOLDOWN then
+		return
+	end
+	lastOverToast[player] = now
+	toast(player, PenService.overText(data))
+end
+
 local function fullToast(player: Player, data: { [string]: any })
 	local now = os.clock()
 	if now - (lastFullToast[player] or -math.huge) < FULL_TOAST_COOLDOWN then
@@ -309,9 +371,14 @@ local function onIntake(plotId: number, record: ItemRecord)
 		bounceOut(plotId, record)
 		return
 	end
-	if #data.Storage >= PenService.capacityOf(data) then
+	local why = PenService.refusal(data)
+	if why then
 		bounceOut(plotId, record)
-		fullToast(owner, data)
+		if why == PenService.OverReason then
+			overToast(owner, data)
+		else
+			fullToast(owner, data)
+		end
 		Net.fire("Fx", owner, "Reject", record.Body.CFrame.Position)
 		return
 	end
@@ -325,23 +392,29 @@ end
 
 ---------------------------------------------------------------- prompts
 
--- "Put In": everything you carry goes in while the pen has room.
-local function putIn(player: Player, plotId: number)
+-- "Put In": everything you carry goes in while the pen has room (none
+-- while it is over its capacity: "PenOver"). Returns the refusal, if any.
+local function putIn(player: Player, plotId: number): string?
 	if PlotService.ownerOf(plotId) ~= player then
 		toast(player, "That's not your Ore Pen.")
-		return
+		return nil
 	end
 	local data = DataService.get(player)
 	if not data then
-		return
+		return nil
 	end
 	if #CarryService.list(player) == 0 then
 		toast(player, "Carry ore here to put it in your pen.", "Info")
-		return
+		return nil
+	end
+	local why = PenService.refusal(data)
+	if why == PenService.OverReason then
+		toast(player, PenService.overText(data))
+		return why
 	end
 	local stored: { Desc } = {}
 	for _ = 1, MAX_PUT_IN do
-		if #data.Storage >= PenService.capacityOf(data) then
+		if PenService.refusal(data) then
 			break
 		end
 		local record = CarryService.takeTop(player)
@@ -359,8 +432,11 @@ local function putIn(player: Player, plotId: number)
 		PenService.arrived(player, stored, "Pen")
 	end
 	if #CarryService.list(player) > 0 then
-		toast(player, fullText(data))
+		local left = PenService.refusal(data)
+		toast(player, PenService.refusalText(data, left))
+		return left
 	end
+	return nil
 end
 
 local function openPen(player: Player, plotId: number)
@@ -432,7 +508,10 @@ end
 ]]
 local function takeItems(player: Player, plotId: number, data: { [string]: any }, key: string, count: number): number
 	local freeHands = math.max(0, CarryService.capacity(player) - #CarryService.list(player))
-	local looseRoom = math.max(0, GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom - ItemService.looseCount(player.UserId))
+	local baseRoom =
+		math.max(0, GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom - ItemService.looseCount(player.UserId, "Base"))
+	-- and never past the hard ceiling of loose items (GameConfig.MaxLooseItemsTotal)
+	local looseRoom = math.min(baseRoom, ItemService.totalRoom(player.UserId))
 	local allowed = math.min(count, freeHands + looseRoom)
 	if allowed <= 0 then
 		toast(player, HANDS_FULL)
@@ -1297,6 +1376,7 @@ end
 -- The State snapshot's pen fields (StateService provider).
 local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
 	snapshot.PenCapacity = PenService.capacityOf(data)
+	snapshot.PenOver = PenService.isOver(data)
 	snapshot.AutoSort = PenService.autoSortOn(data)
 	local pen, train = PenService.sendCounts(player)
 	snapshot.PenSend = {
@@ -1325,6 +1405,7 @@ PenService._test = {
 	provide = provide,
 	reset = function()
 		table.clear(lastFullToast)
+		table.clear(lastOverToast)
 		table.clear(lastForeignToast)
 		table.clear(lastQueueToast)
 		table.clear(autoTold)
@@ -1356,6 +1437,7 @@ function PenService.init()
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		lastFullToast[player] = nil
+		lastOverToast[player] = nil
 		lastForeignToast[player] = nil
 		lastQueueToast[player] = nil
 		autoTold[player] = nil

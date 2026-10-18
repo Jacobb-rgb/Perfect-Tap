@@ -108,7 +108,7 @@ that line.
 | 9 | **Merge fix/save-safety** (60 s autosave, stale lock 180 s) into main and steps 6-7 | each player saved every 60 s instead of ~160 s, still ≤ 7 % of the budget | TERRA FORGE Roblox hra vývoj (with the save audit) |
 | 10 | Small loops: `ItemService` maintenance caches the owner root per pass and drops the per-record closure; `CleaningService` keeps a list of stations instead of scanning every machine; `refreshLocks` compares before writing; profile the Ore Magnet (≤ 640 raycasts/s) | ~3k lookups/s | TERRA FORGE Roblox hra vývoj (steps 6-7: the magnet) + Návrhy strojů (CleaningService) |
 
-**Status (branch perf/pass1, map v26).**
+**Status (perf pass 1, map v27).**
 - Fix 1 done: StateService throttles pushes to one per 0.5 s per player with a leading edge (a push
   after a quiet spell, e.g. a buy or a golem equip, goes out at once; changes within 0.5 s of the
   last push wait for the rest of it), sends only the
@@ -124,7 +124,7 @@ that line.
 - Fix 5 done: IntakeService asks `plotAt` first and tests only the town zones over that plot or in
   the item's 32-stud town square, from a cached index of zone boxes (rebuilt when a zone is added or
   its part moves, resizes or leaves): ~26k -> ~2k box tests/s.
-- Fixes 2-4 and 6-10 are still open (other chats own ItemService, ConveyorService, DataService).
+- Fix 2 (DataService.changed coalescing) is still open; #3, #4, #6, #7 and #10 are done by the machines chat (below).
 - Phone audit ([PERF_AUDIT.md](PERF_AUDIT.md), branch `docs/perf-audit`; update its table when it lands):
   item 4 (plots) done: 0 see-through parts, small trim without shadows (the preview now honours
   `CastShadow`, so shadow cuts show in renders); item 3 done for the west-sea ShipA / ShipB only
@@ -132,6 +132,25 @@ that line.
   and two stair studs), the 16 inner-edge rim chords, 8 dividers and 16 segment triangles are
   untouched; Districts neon only about -12 of 858 (the shared bay strips). A real fix for item 7 is
   fewer, longer rim / divider neon parts on the static frame, not on the turning disc.
+
+### Status after the steps 6-7 landing (branch fix/post-steps67, 2026-10-18)
+- **#3 done**: machine / chute spawns use `ItemBuilder.buildLight` (≤ 3 parts, 2 welds, no sparkles; same Body as
+  the full look), pickup re-dresses the same model (`ItemService.dress`); ItemId is a short per-session number and
+  no attribute; attributes: Kind, Owner, State (+ OreId, Grade, Recipe, Value for clean items).
+- **#4 done (item side + emit side)**: an absorbed light item parks its model; the owner's next server spawn within
+  14 studs wears it again (re-dress only when the look changes; 6 s, ≤ 8 per owner); `ItemService.sleep / wake /
+  wakeNear` for queued items; MachineService counts loose items once per owner per tick pass. Left: calling
+  `ItemService.sleep` from ConveyorService / IntakeService when a belt end answers Full / Busy (IntakeService is the
+  integrator's).
+- **#6 done**: `tickAll` walks an active list (busy rules per behaviour, `wake` on every input); the Robot Arm caches
+  its neighbours per layout version. Benchmark (8 plots, 392 machines): busy factory 72 → 16 tick calls, 0.22 →
+  0.07 ms per tick; idle factory 72 → 0 calls.
+- **#7 done**: one `Job` attribute (`cycles|start|time|ore`, `ProcessingService.jobText`, read by
+  `MachineBillboard.decodeJob`); Status shows a block at once and clears only when it stays clear (40 → 0 flips over
+  40 alternating retries).
+- **#10 done**: ItemService maintenance looks up each owner's root once per pass, no per-record closure;
+  CleaningService keeps its station set; the Ore Magnet sets its ray filter once per pass and re-raycasts a blocked
+  item only after it or the player moved (standing still with 4 items behind a wall: 52 → 20 rays in 12 s).
 
 Not changed on purpose: `StreamingTargetRadius` 384 keeps every plot (and its belt items) in every client's
 range. Dropping it to ~256 would cut far-plot replication, but the town would pop in on PCs; after fixes 3-4,

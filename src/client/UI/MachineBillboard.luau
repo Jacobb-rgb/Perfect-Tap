@@ -31,6 +31,10 @@
 	attachInfo builds a compact sign with only these lines (no status, bar
 	or queue): PowerController puts it on your poles, generators and
 	machines with a Detail (those never get the busy sign while idle).
+
+	decodeJob reads a processor's packed Job attribute (ProcessingService
+	jobText: "cycles|start|time|ore", "cycles|||" when idle) for the
+	progress bar and MachineFxController's effects.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -113,6 +117,44 @@ end
 local function numberAttr(model: Instance, name: string): number?
 	local value = model:GetAttribute(name)
 	return if type(value) == "number" and value == value then value else nil
+end
+
+-- A processor's job as its Job attribute says (decodeJob).
+export type Job = {
+	Cycles: number, -- jobs finished since the model appeared
+	Working: boolean, -- a job runs now
+	Start: number, -- its server start time (0 when idle)
+	Time: number, -- its seconds (0 when idle)
+	Ore: string, -- the ore worked ("" for dirty ore or when idle)
+}
+
+local function finiteOr(text: string?, default: number?): number?
+	local n = if text then tonumber(text) else nil
+	if n == nil or n ~= n or n == math.huge or n == -math.huge then
+		return default
+	end
+	return n
+end
+
+--[[
+	Reads the packed Job attribute ("cycles|start|time|ore"; start and time
+	empty while idle). Anything else (nil, junk) reads as idle with 0 jobs.
+]]
+function MachineBillboard.decodeJob(value: any): Job
+	local job: Job = { Cycles = 0, Working = false, Start = 0, Time = 0, Ore = "" }
+	if type(value) ~= "string" then
+		return job
+	end
+	local cycles, start, seconds, ore = string.match(value, "^([^|]*)|([^|]*)|([^|]*)|(.*)$")
+	job.Cycles = finiteOr(cycles, 0) :: number
+	local s, t = finiteOr(start, nil), finiteOr(seconds, nil)
+	if s and t then
+		job.Working = true
+		job.Start = s
+		job.Time = t
+		job.Ore = ore or ""
+	end
+	return job
 end
 
 --[[

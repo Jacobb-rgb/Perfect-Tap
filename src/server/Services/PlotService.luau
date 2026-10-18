@@ -13,6 +13,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Grid = require(Shared.Machines.Grid)
 local DataService = require(script.Parent.DataService)
+local MovementService = require(script.Parent.MovementService)
 local WorldService = require(script.Parent.WorldService)
 
 local PlotService = {}
@@ -166,6 +167,7 @@ function PlotService.sendHome(player: Player)
 	local character = player.Character
 	if plotId and character then
 		character:PivotTo(PlotService.homeCFrame(plotId))
+		MovementService.serverMoved(player)
 	end
 end
 

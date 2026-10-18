@@ -2,6 +2,7 @@
 	Holds the latest snapshot of the player's own data sent by StateService.
 	StateController.get() -> snapshot or nil (not loaded yet)
 	StateController.onChanged(fn) -> fn(snapshot) on every update
+	StateController.sellMult() -> the player's sell bonus (State.Bonuses.SellMult, 1 without)
 	Every snapshot listeners see is whole. The server sends only the
 	sections that changed (StateService, perf pass 1), so merge() fills in
 	the rest from the previous snapshot:
@@ -30,6 +31,15 @@ StateController.SyncSeconds = 2
 
 function StateController.get(): { [string]: any }?
 	return snapshot
+end
+
+-- The player's sell bonus (State.Bonuses.SellMult: Midas, SellValue golems,
+-- collections), 1 when none or not loaded: coin numbers the client shows
+-- for sales are base x this, rounded like Bonuses.sellAmount.
+function StateController.sellMult(): number
+	local bonuses = if snapshot then snapshot.Bonuses else nil
+	local mult = if type(bonuses) == "table" then bonuses.SellMult else nil
+	return if type(mult) == "number" and mult == mult and mult >= 1 and mult < math.huge then mult else 1
 end
 
 function StateController.onChanged(callback: ({ [string]: any }) -> ())

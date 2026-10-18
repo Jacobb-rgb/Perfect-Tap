@@ -6,6 +6,16 @@
 
 	Client -> server events carry *intents* only ("I swung at this node").
 	The server validates everything (see Guard) before changing state.
+
+	- An event from a player who already left (player.Parent ~= Players:
+	  it arrived after PlayerRemoving) is dropped before its rate limit or
+	  handler, so no per-player state is ever made again for them. The
+	  rate-limit buckets are weak-keyed besides (Net.forget clears them).
+	- Every remote with no Net.on handler (server -> client events, and
+	  client -> server entries nothing handles yet) gets a do-nothing
+	  listener from setupServer that only counts the drop
+	  (Net.droppedCount / Net.unhandledCount), so a client firing them can't
+	  fill the server's event queue or its logs. Net.on replaces it.
 ]]
 
 local Net = {}
@@ -56,7 +66,7 @@ Net.Events = {
 	--   just drops the intents: there is nothing to put back.
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
-	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed" }?)
+	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed", Level = the level bought }?: "Stale" unless Level = current + 1)
 	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
@@ -173,7 +183,7 @@ Net.Events = {
 	Tutorial = false, -- { Step, Done, Total, Reward?, How = "Step" | "Done" | "Skip" | "Load" }
 	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
-	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
+	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? (a short per-session number) }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
 	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
@@ -286,18 +296,55 @@ function Net.event(name: string): RemoteEvent
 	return remote
 end
 
--- Server: create every remote up front so clients never wait.
-function Net.setupServer()
-	for name in Net.Events do
-		Net.event(name)
-	end
-end
-
 ---------------------------------------------------------------- server
 
 type Bucket = { tokens: number, last: number }
-local buckets: { [Player]: { [string]: Bucket } } = {}
-local dropped: { [Player]: number } = {}
+-- weak keys: a Player the game let go of never stays here
+local buckets: { [Player]: { [string]: Bucket } } = setmetatable({}, { __mode = "k" }) :: any
+local dropped: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+-- remotes with a Net.on handler, and the do-nothing listeners on the others
+local handled: { [string]: boolean } = {}
+local sinks: { [string]: RBXScriptConnection } = {}
+local unhandled = 0
+
+local playersService: Instance? = nil
+
+-- Is the player still in the game? (An event can arrive after PlayerRemoving.)
+local function present(player: Player): boolean
+	local service = playersService
+	if not service then
+		service = game:GetService("Players")
+		playersService = service
+	end
+	return player.Parent == service
+end
+
+local function countDrop(player: Player)
+	if present(player) then
+		dropped[player] = (dropped[player] or 0) + 1
+	end
+end
+
+-- The do-nothing listener of a remote nothing handles: a client firing it
+-- costs one counter, never a queued event or a warning.
+local function connectSink(name: string)
+	if handled[name] or sinks[name] then
+		return
+	end
+	sinks[name] = Net.event(name).OnServerEvent:Connect(function(player: Player)
+		unhandled += 1
+		countDrop(player)
+	end)
+end
+
+-- Server: create every remote up front so clients never wait, and give
+-- every one without a handler (yet) its do-nothing listener.
+function Net.setupServer()
+	for name in Net.Events do
+		Net.event(name)
+		connectSink(name)
+	end
+end
 
 local function allow(player: Player, name: string, limit: Limit): boolean
 	local perPlayer = buckets[player]
@@ -322,10 +369,16 @@ local function allow(player: Player, name: string, limit: Limit): boolean
 end
 
 -- Server: listen to a client event with rate limiting and error isolation.
+-- Events from a player who already left are dropped first (no bucket, no
+-- handler: nothing per player is made again after PlayerRemoving).
 function Net.on(name: string, handler: (player: Player, ...any) -> ...any)
 	local limit = Net.Events[name]
 	assert(limit, name .. " is not a client->server event")
+	handled[name] = true
 	Net.event(name).OnServerEvent:Connect(function(player: Player, ...)
+		if not present(player) then
+			return
+		end
 		if not allow(player, name, limit :: Limit) then
 			return
 		end
@@ -334,6 +387,12 @@ function Net.on(name: string, handler: (player: Player, ...any) -> ...any)
 			warn(`[Net] {name} from {player.Name} failed: {err}`)
 		end
 	end)
+	-- the handler is connected: the do-nothing listener can go
+	local sink = sinks[name]
+	if sink then
+		sinks[name] = nil
+		sink:Disconnect()
+	end
 end
 
 function Net.fire(name: string, player: Player, ...: any)
@@ -363,9 +422,41 @@ function Net.forget(player: Player)
 	dropped[player] = nil
 end
 
+-- Events of this player the server dropped: over a rate limit, or fired
+-- at a remote nothing handles.
 function Net.droppedCount(player: Player): number
 	return dropped[player] or 0
 end
+
+-- Events fired at remotes nothing handles, from anyone, since the start.
+function Net.unhandledCount(): number
+	return unhandled
+end
+
+-- Internals for the Lune tests only (tests/Net.spec.luau).
+Net._test = {
+	hasBucket = function(player: Player): boolean
+		return buckets[player] ~= nil
+	end,
+	weakKeys = function(): boolean
+		local a, b = getmetatable(buckets :: any), getmetatable(dropped :: any)
+		return a ~= nil and a.__mode == "k" and b ~= nil and b.__mode == "k"
+	end,
+	hasSink = function(name: string): boolean
+		local sink: RBXScriptConnection? = sinks[name]
+		return sink ~= nil
+	end,
+	reset = function()
+		table.clear(buckets)
+		table.clear(dropped)
+		table.clear(handled)
+		for _, sink in sinks do
+			sink:Disconnect()
+		end
+		table.clear(sinks)
+		unhandled = 0
+	end,
+}
 
 ---------------------------------------------------------------- client
 

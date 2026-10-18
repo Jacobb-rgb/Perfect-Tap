@@ -677,11 +677,12 @@ function ArtifactConfig.lastMissing(artifacts: any, collectionId: string): strin
 	return missing
 end
 
--- Does a zone the player can mine (WorldLayout zone MinBlaster <= blasterLevel)
--- turn up artifacts of this rarity?
-function ArtifactConfig.rarityOpen(rarityId: string, blasterLevel: number): boolean
+-- Does a zone the player can mine (WorldLayout zone MinBlaster <= blasterLevel;
+-- VIP-only zones only with `vip`) turn up artifacts of this rarity?
+function ArtifactConfig.rarityOpen(rarityId: string, blasterLevel: number, vip: boolean?): boolean
 	for _, zone in WorldLayout.Zones do
-		if zone.MinBlaster <= blasterLevel and (ArtifactConfig.rarityWeights(zone.Id)[rarityId] or 0) > 0 then
+		local minable = zone.MinBlaster <= blasterLevel and (vip == true or not zone.VipOnly)
+		if minable and (ArtifactConfig.rarityWeights(zone.Id)[rarityId] or 0) > 0 then
 			return true
 		end
 	end
@@ -692,10 +693,17 @@ end
 	The shard price to restore `artifactId` (RestoreShards), or nil + a
 	Reasons code: BadArtifact, NotMissing (already found), NotLast (more
 	than this one missing in its collection), Locked (no open zone turns up
-	its rarity), NoShards (`shards` < price). Pure: the server checks and
-	spends with no yield in between, the book shows the same answer.
+	its rarity; VIP-only zones count only with `vip`), NoShards (`shards` <
+	price). Pure: the server checks and spends with no yield in between, the
+	book shows the same answer.
 ]]
-function ArtifactConfig.restoreQuote(artifacts: any, artifactId: string, blasterLevel: number, shards: number): (number?, string?)
+function ArtifactConfig.restoreQuote(
+	artifacts: any,
+	artifactId: string,
+	blasterLevel: number,
+	shards: number,
+	vip: boolean?
+): (number?, string?)
 	local artifact = ArtifactConfig.ById[artifactId]
 	local price = if artifact then ArtifactConfig.RestoreShards[artifact.Rarity] else nil
 	if not artifact or not price then
@@ -708,7 +716,7 @@ function ArtifactConfig.restoreQuote(artifacts: any, artifactId: string, blaster
 		return nil, "NotLast"
 	end
 	local level = if type(blasterLevel) == "number" and blasterLevel == blasterLevel then blasterLevel else 1
-	if not ArtifactConfig.rarityOpen(artifact.Rarity, level) then
+	if not ArtifactConfig.rarityOpen(artifact.Rarity, level, vip) then
 		return nil, "Locked"
 	end
 	if type(shards) ~= "number" or shards ~= shards or shards < price then

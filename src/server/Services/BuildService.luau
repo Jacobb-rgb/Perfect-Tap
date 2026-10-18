@@ -35,6 +35,7 @@ local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local MachineService = require(script.Parent.MachineService)
+local MovementService = require(script.Parent.MovementService)
 local StateService = require(script.Parent.StateService)
 
 local BuildService = {}
@@ -134,6 +135,7 @@ local function liftOccupants(machine: PlacedMachine)
 			local position = root.Position
 			local turn = root.CFrame - position
 			character:PivotTo(CFrame.new(position.X, top + CHARACTER_LIFT, position.Z) * turn)
+			MovementService.serverMoved(other)
 		end
 	end
 	for _, record in ItemService.looseList() do

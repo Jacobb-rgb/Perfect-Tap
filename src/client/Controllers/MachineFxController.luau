@@ -1,7 +1,9 @@
 --[[
 	MachineFxController: all machine juice, played from the attributes the
 	server sets on machine models (Working, Queue, Cycles...). No remotes
-	per tick; the server never waits on any of this.
+	per tick; the server never waits on any of this. Processors send one
+	packed Job attribute instead of Working / WorkStart / WorkTime / WorkOre /
+	Cycles (MachineBillboard.decodeJob, applyJob): it fills the same fields.
 
 	- Machines are found by the 'Machine' tag, so streaming in and out just
 	  works. Every 0.5 s the machines within 80 studs become active; only
@@ -1354,11 +1356,44 @@ local function onWorkStart(fx: Fx)
 	end
 end
 
+--[[
+	A processor's packed Job attribute (MachineBillboard.decodeJob) fills the
+	same Attr fields the other machines send one by one: Cycles, Working,
+	WorkStart, WorkTime, WorkOre (the last job's values stay while idle). With
+	`live`, it plays what the separate attributes played: the done effect
+	first (Attr.WorkOre still holds the finished job's ore), then the start
+	sound, then the stack light.
+]]
+local function applyJob(fx: Fx, value: any, live: boolean)
+	local job = MachineBillboard.decodeJob(value)
+	local attr = fx.Attr
+	local cycles = attr.Cycles
+	local wasWorking = attr.Working == true
+	attr.Cycles = job.Cycles
+	if live and fx.Active and type(cycles) == "number" and job.Cycles > cycles then
+		onCyclesUp(fx)
+	end
+	attr.Working = job.Working
+	if job.Working then
+		attr.WorkStart = job.Start
+		attr.WorkTime = job.Time
+		attr.WorkOre = job.Ore
+	end
+	if live then
+		if fx.Active and job.Working and not wasWorking then
+			onWorkStart(fx)
+		end
+		applySignal(fx)
+	end
+end
+
 local function onAttribute(fx: Fx, name: string)
 	local value = fx.Model:GetAttribute(name)
 	local before = fx.Attr[name]
 	fx.Attr[name] = value
-	if name == "Queue" then
+	if name == "Job" then
+		applyJob(fx, value, true)
+	elseif name == "Queue" then
 		if fx.Active and type(value) == "number" and type(before) == "number" and value > before then
 			onQueueUp(fx)
 		end
@@ -1527,6 +1562,10 @@ local function register(instance: Instance)
 		Flipper = nil,
 	}
 	fx.Note = noteOf(fx)
+	local job = fx.Attr.Job
+	if job ~= nil then
+		applyJob(fx, job, false)
+	end
 	capture(fx)
 	if fx.ScreenItem or fx.ScreenCounter then
 		drawScreen(fx)
