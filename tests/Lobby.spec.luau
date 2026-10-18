@@ -161,10 +161,13 @@ return function(T, Loader)
 		local game = roblox.Instance.new("DataModel")
 		local map = WorldBuilder.build(game:GetService("Workspace"))
 		local mapParts, lobbyParts, lobbyLights = 0, 0, 0
-		-- the mine floor areas have their own budgets (tests/MineFloorAreas.spec.luau)
+		-- the mine floors count in the map budget, not in the lobby's (MineFloorAreas has their own)
 		local mine = map:FindFirstChild("MineFloors")
 		for _, d in map:GetDescendants() do
-			if mine and d:IsDescendantOf(mine) then
+			if d:IsA("BasePart") and mine and d:IsDescendantOf(mine) then
+				mapParts += 1
+				continue
+			elseif mine and d:IsDescendantOf(mine) then
 				continue
 			end
 			if d:IsA("BasePart") then

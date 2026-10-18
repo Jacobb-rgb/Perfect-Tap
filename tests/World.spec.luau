@@ -51,11 +51,11 @@ return function(T, Loader)
 			T.truthy(map:FindFirstChild(path), "map has " .. path)
 		end
 		local parts = 0
-		-- the mine floor areas have their own budgets (tests/MineFloorAreas.spec.luau)
+		-- the mine floors count too (each also within MineKit.PartBudget, tests/MineFloorAreas.spec.luau)
 		local mine = map:FindFirstChild("MineFloors")
 		T.truthy(mine and #mine:GetChildren() == 5, "map has the five mine floors")
 		for _, d in map:GetDescendants() do
-			if d:IsA("BasePart") and not (mine and d:IsDescendantOf(mine)) then
+			if d:IsA("BasePart") then
 				parts += 1
 			end
 		end

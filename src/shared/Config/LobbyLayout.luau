@@ -73,7 +73,10 @@ LobbyLayout.Budget = {
 	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
 	-- node on every node spawn (~1,320) must stay 200 under it (the podium
 	-- and pen ores): ~250 parts of headroom.
-	MapParts = 22400, -- + 400 for the blaster gallery in THE GREAT FORGE (~330 parts)
+	-- + the five mine floor areas (integrator 2026-10-18: ≤ 2,500 parts each,
+	-- MineKit.PartBudget, ~9,800 in all; floors 4-5 sit far north and deep and
+	-- never stream in near the town).
+	MapParts = 32000, -- was 22,400 without the mine floors (+ 400 for the blaster gallery in THE GREAT FORGE)
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.

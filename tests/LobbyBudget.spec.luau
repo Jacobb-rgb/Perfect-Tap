@@ -20,10 +20,9 @@ return function(T, Loader)
 		local workspace = game:GetService("Workspace")
 		local map = WorldBuilder.build(workspace)
 		local mapParts = 0
-		-- the mine floor areas have their own budgets (tests/MineFloorAreas.spec.luau)
-		local mine = map:FindFirstChild("MineFloors")
+		-- the mine floors count too (each also within MineKit.PartBudget, tests/MineFloorAreas.spec.luau)
 		for _, d in map:GetDescendants() do
-			if d:IsA("BasePart") and not (mine and d:IsDescendantOf(mine)) then
+			if d:IsA("BasePart") then
 				mapParts += 1
 			end
 		end
