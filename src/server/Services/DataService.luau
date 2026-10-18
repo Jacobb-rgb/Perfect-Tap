@@ -69,6 +69,7 @@ local nextSave: { [any]: number } = {} -- profile -> clock() of its next autosav
 local inFlight = 0 -- loads and releases in progress (BindToClose waits for these)
 local clock = os.clock -- (swappable in the Lune tests)
 local releaseWait = RELEASE_WAIT -- (shorter in the Lune tests)
+local callbackLimit = CALLBACK_LIMIT -- (shorter in the Lune tests)
 local pause = function(seconds: number)
 	task.wait(seconds)
 end
@@ -311,12 +312,12 @@ local function runReleaseCallbacks(player: Player, profile: ProfileStore.Profile
 		done = true
 	end)
 	local waited = 0
-	while not done and waited < CALLBACK_LIMIT do
+	while not done and waited < callbackLimit do
 		task.wait(0.05)
 		waited += 0.05
 	end
 	if not done then
-		warn(`[DataService] beforeRelease callbacks of {player.Name} took over {CALLBACK_LIMIT} s: saving anyway`)
+		warn(`[DataService] beforeRelease callbacks of {player.Name} took over {callbackLimit} s: saving anyway`)
 	end
 end
 
@@ -572,9 +573,10 @@ DataService._test = {
 		clock = fn
 	end,
 	-- shorter waits for the tests: the rejoin wait and the pauses between final-save attempts
-	setTimings = function(wait: number, pauseFn: (number) -> ())
+	setTimings = function(wait: number, pauseFn: (number) -> (), callbacks: number?)
 		releaseWait = wait
 		pause = pauseFn
+		callbackLimit = callbacks or CALLBACK_LIMIT
 	end,
 	nextSave = function(player: Player): number?
 		local profile = profiles[player]
@@ -596,6 +598,7 @@ DataService._test = {
 			clock,
 			releaseWait,
 			pause,
+			callbackLimit,
 			inFlight,
 			shuttingDown,
 			inMemory,
@@ -621,9 +624,9 @@ DataService._test = {
 		local ok, err = pcall(fn :: any)
 		profileStore, memoryProfileStore = saved[1], saved[2]
 		profiles, loading, releasing, closing, nextSave = saved[3], saved[4], saved[5], saved[6], saved[7]
-		clock, releaseWait, pause = saved[8], saved[9], saved[10]
-		inFlight, shuttingDown, inMemory = saved[11], saved[12], saved[13]
-		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[14], saved[15], saved[16]
+		clock, releaseWait, pause, callbackLimit = saved[8], saved[9], saved[10], saved[11]
+		inFlight, shuttingDown, inMemory = saved[12], saved[13], saved[14]
+		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[15], saved[16], saved[17]
 		if not ok then
 			error(err, 0)
 		end

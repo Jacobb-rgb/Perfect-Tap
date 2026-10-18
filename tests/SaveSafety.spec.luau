@@ -528,10 +528,10 @@ return function(T, Loader)
 		})
 	end
 
-	local function quickTimings(releaseWait: number)
+	local function quickTimings(releaseWait: number, callbackLimit: number?)
 		DataService._test.setTimings(releaseWait, function(seconds: number)
 			task.wait(math.min(seconds, 0.01))
-		end)
+		end, callbackLimit)
 	end
 
 	local function waitUntil(condition: () -> boolean, limit: number?): boolean
@@ -674,16 +674,17 @@ return function(T, Loader)
 		local store = robloxStore()
 		local ps = lifeServer(store, "S")
 		DataService._test.isolate(ps, function()
+			quickTimings(1, 0.2) -- (the game gives the callbacks 5 s)
 			local p = fakePlayer(605)
 			DataService._test.loadPlayer(p)
 			DataService.get(p).Coins = 42
 			DataService.beforeRelease(function()
-				task.wait(60) -- stuck
+				task.wait(1) -- stuck (longer than the limit)
 			end)
 			p.Parent = nil
 			local started = os.clock()
 			DataService._test.releasePlayer(p)
-			T.truthy(os.clock() - started < 6.5, `the final save started after the callback limit ({os.clock() - started} s)`)
+			T.truthy(os.clock() - started < 0.6, `the final save started after the callback limit ({os.clock() - started} s)`)
 			T.eq(store:get("Player_605").Data.Coins, 42, "saved")
 		end)
 	end)
@@ -850,7 +851,8 @@ return function(T, Loader)
 					check()
 				end
 			end
-			T.truthy(worst <= interval + 5 + 4 * 5, `every lock refreshed within {worst} s (one minute of outage included)`)
+			-- worst case: due inside the 20 s outage, retried every 15 s, checked every 5 s
+			T.truthy(worst <= interval + 20 + 15 + 5, `every lock refreshed within {worst} s (a 20 s outage included)`)
 			T.truthy(worst < GameConfig.StaleLockSeconds, "never near the stale time")
 			-- a failed refresh is tried again soon, not a whole interval later
 			local id = 701
