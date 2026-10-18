@@ -37,15 +37,21 @@ live lock is on the save (a lock dated ahead of this PC's clock counts as live),
 value is broken (not a save) or its lock is stale (a crashed server).
 
 **Robux purchases made after that version are undone by a restore.** Roblox never delivers an acknowledged receipt
-again, so the snippet keeps every purchase id of the current save and prints the ones the old version doesn't
-have. Re-grant those products by hand on the restored save (the player bought them):
+again, so the snippet keeps every purchase id of the current save. After the write it prints the ones the old
+version didn't have. **Send those printed lines to the developer**: the player paid for them and must get them back.
+Today a save stores only the receipt id and its time, not which product it was, so the developer looks the receipt
+up (Creator Dashboard > Monetization > Sales). Step 8's receipts should record the product id with each receipt,
+for example in a `PurchaseLog { [id] = { Product, At } }` next to `Purchases`, and come with a helper that grants a
+product on an offline save. Then this becomes one command:
 
 ```lua
 local store = game:GetService("DataStoreService"):GetDataStore("TerraForge_PlayerData_v1")
 local key = "Player_" .. 12345
 local old = store:GetVersionAsync(key, "PASTE_VERSION_ID")
 assert(type(old) == "table" and type(old.Data) == "table", "that version isn't a save")
-store:UpdateAsync(key, function(current)
+local regrant = {}
+local written = store:UpdateAsync(key, function(current)
+	table.clear(regrant) -- (Roblox may run this more than once: only the last run counts)
 	local isSave = type(current) == "table" and type(current.Data) == "table"
 	local lock = if isSave and type(current.Lock) == "table" then current.Lock else nil
 	local age = if lock then os.time() - (tonumber(lock.Time) or 0) else math.huge
@@ -60,12 +66,18 @@ store:UpdateAsync(key, function(current)
 		for id, at in current.Data.Purchases do
 			if data.Purchases[id] == nil then
 				data.Purchases[id] = at
-				print("RE-GRANT purchase", id, os.date("!%Y-%m-%d %H:%M", tonumber(at) or 0))
+				table.insert(regrant, `RE-GRANT purchase {id} {os.date("!%Y-%m-%d %H:%M", tonumber(at) or 0)}`)
 			end
 		end
 	end
 	return { Data = data, Saved = os.time() }
 end)
+if written ~= nil then
+	print("restored")
+	for _, line in regrant do
+		print(line) -- send these to the developer
+	end
+end
 ```
 
 - An older version has a lower `Data.Version`. The game's Migrations bring it up to date on the next join.
@@ -92,8 +104,8 @@ To take a cheater off the boards, call `LeaderboardService.removeUser(id)` as in
 and keeps them off. To keep them out of the game, use Roblox's ban tools in the Creator Dashboard or
 `Players:BanAsync`.
 
-Don't edit coins by hand to "fix" a cheater. Restore a version from before the cheating instead (2), and re-grant
-the Robux purchases it prints: those were paid for.
+Don't edit coins by hand to "fix" a cheater. Restore a version from before the cheating instead (2). Send the Robux
+purchases it prints to the developer: those were paid for.
 
 ## 5. "My progress is gone" checklist
 
@@ -110,7 +122,7 @@ the Robux purchases it prints: those were paid for.
      left untouched; fix the reason, then the player can join again.
    - `[DataService] final save failed for user <id>`: the last minute of play may be lost. Restore from a version
      if the player lost more.
-4. If nothing explains it, restore the last good version (2), then re-grant the purchases it prints.
+4. If nothing explains it, restore the last good version (2). Send the purchases it prints to the developer.
 
 ## 6. "Couldn't read your save" / "couldn't prepare your save"
 

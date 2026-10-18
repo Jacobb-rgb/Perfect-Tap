@@ -82,7 +82,16 @@ return function(T, Loader)
 			rerun = false,
 			keyInfo = false,
 			calls = 0,
+			hangNext = 0, -- the next N requests each wait on their own gate (openGates lets them through)
+			gates = {},
+			errorAfter = nil :: string?, -- "before" / "after": the transform runs, then the call errors (before / after storing)
+			errorCount = 0, -- how many calls do that
 		}
+		function s:openGates()
+			for _, gate in self.gates do
+				gate.open = true
+			end
+		end
 		function s:UpdateAsync(key: string, transform: (any) -> any): any
 			self.calls += 1
 			if self.delay > 0 then
@@ -90,6 +99,14 @@ return function(T, Loader)
 			end
 			while self.hang do
 				task.wait(0.01)
+			end
+			if self.hangNext > 0 then
+				self.hangNext -= 1
+				local gate = { open = false }
+				table.insert(self.gates, gate)
+				while not gate.open do
+					task.wait(0.01)
+				end
 			end
 			if self.failAll then
 				error("502: API Services rejected request")
@@ -101,11 +118,21 @@ return function(T, Loader)
 				transform(if old ~= nil then serde.decode("json", old) else nil, info)
 			end
 			local result = transform(if old ~= nil then serde.decode("json", old) else nil, info)
+			local failing = self.errorAfter ~= nil and self.errorCount > 0
+			if failing then
+				self.errorCount -= 1
+			end
+			if failing and self.errorAfter == "before" then
+				error("502: the write was rejected after the transform ran")
+			end
 			if result ~= nil then
 				checkStorable(result, key, {})
 				self.values[key] = serde.encode("json", result)
 				self.updated[key] = clock.t * 1000
 				self.writes += 1
+			end
+			if failing then
+				error("502: the write landed but the answer was lost")
 			end
 			if self.after > 0 then
 				task.wait(self.after) -- the write's round trip: the caller hears back later
@@ -1124,5 +1151,134 @@ return function(T, Loader)
 			)
 			T.eq(store:get("Player_618").Data.Coins, 20, "the hung save never wrote over it")
 		end)
+	end)
+
+	---------------------------------------------------------------- review round 3 (Z1-Z5)
+
+	T.test("SaveSafety Z1: a final save hung past StaleLockSeconds (its lock still stored) is given up; the rejoin loads", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			quickTimings(0.1)
+			DataService._test.setClock(now)
+			local p1 = fakePlayer(621)
+			DataService._test.loadPlayer(p1)
+			DataService.get(p1).Coins = 10
+			T.truthy(DataService.saveNow(p1), "10 stored")
+			DataService.get(p1).Coins = 99 -- not stored
+			store.hangNext = 1 -- the final save's request hangs; later requests go through
+			p1.Parent = nil
+			task.spawn(DataService._test.releasePlayer, p1)
+			task.wait(0.02)
+			clock.t += GameConfig.StaleLockSeconds + 1
+			local late = fakePlayer(621)
+			DataService._test.loadPlayer(late)
+			T.truthy(DataService.get(late), "given up (forget): the rejoin takes this server's lock at once")
+			T.eq(DataService.get(late).Coins, 10, "the last stored copy")
+			store:openGates()
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"settles"
+			)
+			T.truthy(store:get("Player_621").Lock, "the rejoin's lock is stored")
+			T.truthy(DataService.saveNow(late), "the new session still owns the lock")
+			T.eq(store:get("Player_621").Data.Coins, 10, "the hung save never wrote over it")
+		end)
+	end)
+
+	T.test("SaveSafety Z2: a hung final save after another server took over and released: the rejoin loads the newest copy", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			quickTimings(0.1)
+			DataService._test.setClock(now)
+			local p1 = fakePlayer(622)
+			DataService._test.loadPlayer(p1)
+			DataService.get(p1).Coins = 10
+			T.truthy(DataService.saveNow(p1))
+			store.hangNext = 1
+			p1.Parent = nil
+			task.spawn(DataService._test.releasePlayer, p1)
+			task.wait(0.02)
+			clock.t += GameConfig.StaleLockSeconds + 1
+			local value = store:get("Player_622") -- another server took over, played and left
+			value.Lock = nil
+			value.Data.Coins = 20
+			store:put("Player_622", value)
+			local late = fakePlayer(622)
+			DataService._test.loadPlayer(late)
+			T.truthy(DataService.get(late), "loads (the hung release is given up)")
+			T.eq(DataService.get(late).Coins, 20, "the newest stored copy")
+			store:openGates()
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"settles"
+			)
+			T.eq(store:get("Player_622").Data.Coins, 20, "the hung save never wrote over it")
+		end)
+	end)
+
+	T.test("SaveSafety Z3: a hung put-back (left during the lock write) is given up like a release", function()
+		local store = robloxStore()
+		store.after = 0.05 -- the lock write's round trip
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			quickTimings(0.1)
+			DataService._test.setClock(now)
+			local p = fakePlayer(623)
+			task.spawn(DataService._test.loadPlayer, p)
+			task.wait(0.02) -- the lock is written, the answer still on its way
+			p.Parent = nil
+			store.hangNext = 1 -- the put-back's request hangs
+			task.wait(0.1)
+			store.after = 0
+			clock.t += GameConfig.StaleLockSeconds + 1
+			local value = store:get("Player_623") -- another server took the stale lock over and left
+			value.Lock = nil
+			value.Data.Coins = 30
+			store:put("Player_623", value)
+			local back = fakePlayer(623)
+			DataService._test.loadPlayer(back)
+			T.truthy(DataService.get(back), "the rejoin loads instead of 'still being saved' for ever")
+			T.eq(DataService.get(back).Coins, 30)
+			store:openGates()
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"settles"
+			)
+			T.eq(store:get("Player_623").Data.Coins, 30, "the hung put-back never wrote over it")
+		end)
+	end)
+
+	T.test("SaveSafety Z4: a load whose write is rejected after the transform ran leaves no live session", function()
+		local store = robloxStore()
+		store.errorAfter = "before"
+		store.errorCount = 3 -- every try of the first load
+		local ps = lifeServer(store, "S")
+		local profile, reason = ps:load("Player_624")
+		T.eq(profile, nil, "the load failed")
+		T.truthy(type(reason) == "string" and string.sub(reason, 1, 6) == "error:", tostring(reason))
+		T.falsy(ps:isLive("Player_624"), "no live entry left behind")
+		T.truthy(ps:load("Player_624"), "a second load on this server works")
+	end)
+
+	T.test("SaveSafety Z5: a load whose write landed but whose answer was lost leaves no live session", function()
+		local store = robloxStore()
+		store.errorAfter = "after"
+		store.errorCount = 3
+		local ps = lifeServer(store, "S")
+		local profile = ps:load("Player_625")
+		T.eq(profile, nil, "the load failed")
+		T.falsy(ps:isLive("Player_625"), "no live entry left behind")
+		T.truthy(store:get("Player_625").Lock, "(the lock did land)")
+		local again = ps:load("Player_625")
+		T.truthy(again, "this server's own, not-live lock is taken at once")
+		T.eq(store:get("Player_625").Lock.SessionId, again.SessionId)
 	end)
 end

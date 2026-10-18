@@ -460,9 +460,12 @@ local function loadPlayer(player: Player)
 	end
 	if not player.Parent or shuttingDown then
 		-- left (or the server started closing) after the lock was taken: put it back right away
+		-- (counted like a release: releaseHung and the rejoin's give-up cover a hung put-back too)
+		closing[profile] = clock()
 		addReleasing(userId, 1)
 		finalSave(userId, profile)
 		addReleasing(userId, -1)
+		closing[profile] = nil
 		finish()
 		return
 	end
