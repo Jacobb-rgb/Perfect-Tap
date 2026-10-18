@@ -44,6 +44,11 @@
 	  crossed or the rock breaks); the last change always follows within
 	  HEALTH_GAP (the tick flushes it). The shooter's beam colour is cached
 	  until their blaster level or ore changes.
+	- Movement check (docs/plans/MOVEMENT_CHECK_PLAN.md): with
+	  MovementConfig.Enforce on the range is measured from
+	  MovementService.trustedPosition (off today: the live position); with
+	  MovementConfig.BeamLos on a tick deals no damage while BeamSight says a
+	  wall stands between the head and the rock (no toast).
 ]]
 
 local Players = game:GetService("Players")
@@ -52,17 +57,20 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local MovementConfig = require(Shared.Config.MovementConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local OreNodeBuilder = require(Shared.Builders.OreNodeBuilder)
 local Net = require(Shared.Net)
+local BeamSight = require(script.Parent.Parent.BeamSight)
 local Bonuses = require(script.Parent.Parent.Bonuses)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
+local MovementService = require(script.Parent.MovementService)
 local WorldService = require(script.Parent.WorldService)
 
 local MiningService = {}
@@ -543,7 +551,7 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 	local blaster = BlasterData.get(data.BlasterLevel)
 	local stats = Bonuses.stats(player)
 	local from = root.Position
-	local distance = (from - rock.Center).Magnitude - rock.Radius
+	local distance = (MovementService.rangeOrigin(player, from) - rock.Center).Magnitude - rock.Radius
 	if distance > blaster.Range + Bonuses.reach(stats) + BlasterData.Beam.RangeSlack then
 		return
 	end
@@ -555,6 +563,9 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 	if blaster.Level < zone.MinBlaster then
 		refuse(player, shooter, rock, "Needs a Level " .. zone.MinBlaster .. " blaster", from, now)
 		return
+	end
+	if MovementConfig.BeamLos and not BeamSight.canHit(player, character, root, rock.Model, now) then
+		return -- a wall between: no damage this tick
 	end
 	local ore = data.BlasterOre
 	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * dt
@@ -599,6 +610,7 @@ local function forgetPlayer(player: Player)
 	shooters[player] = nil
 	active[player] = nil
 	glowCache[player] = nil
+	BeamSight.forget(player)
 	for _, rock in rocks do
 		rock.HitFx[player] = nil
 	end
@@ -659,6 +671,7 @@ MiningService._test = {
 		table.clear(artifactCallbacks)
 		table.clear(glowCache)
 		table.clear(healthDirty)
+		BeamSight._test.reset() -- an empty world (BeamSight._test.setRaycast adds walls)
 		nextRespawnCheck = 0
 		brokenStages = false
 		rocksFolder = folder
