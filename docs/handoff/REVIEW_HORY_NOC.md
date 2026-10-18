@@ -1,7 +1,7 @@
 # review/hory-noc: the mountains chat's night work (2026-10-18)
 
-One branch with everything from the night, on top of main 4b46616. It is fast-forwardable from main.
-Map v30, 20,672 / 23,000 parts. `bash tools/check.sh`: ALL CHECKS PASSED (778 tests, PhoneBudget included).
+One branch with everything from the night, on top of main 49c2bac (tutorial). It is fast-forwardable from main.
+Map v30, 20,672 / 23,000 parts. `bash tools/check.sh`: ALL CHECKS PASSED (792 tests, PhoneBudget included).
 It goes in only after the integrator's ok **and** the owner's "ano" in the mountains chat.
 
 ## What is in it (each part still has its own branch)
