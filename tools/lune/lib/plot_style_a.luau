@@ -314,10 +314,12 @@ local function post(parent: any, cf: any, kit: Kit, at: any, opts: PostOpts?): a
 	local height = top - kit.Bottom
 	cylUp(parent, cf * CF.new(at.X, kit.Bottom + height / 2, at.Z), height, d, "Body", FENCE, "Pillar")
 	local capH = 0.42
-	cylUp(parent, cf * CF.new(at.X, top + capH / 2, at.Z), capH, d + 0.34, "Frame", FENCE, "PillarCap")
+	-- cap and foot are 0.3 wider than the shaft: on the entrance and gate posts (d 1.8)
+	-- their edges meet the openings' edges exactly, as PlotBuilder's 2.1 caps do
+	cylUp(parent, cf * CF.new(at.X, top + capH / 2, at.Z), capH, d + 0.3, "Frame", FENCE, "PillarCap")
 	if o.Foot then
 		local footTop = kit.PlinthTop + 0.3
-		cylUp(parent, cf * CF.new(at.X, (kit.Bottom + footTop) / 2, at.Z), footTop - kit.Bottom, d + 0.5, "Frame", FENCE, "Foot")
+		cylUp(parent, cf * CF.new(at.X, (kit.Bottom + footTop) / 2, at.Z), footTop - kit.Bottom, d + 0.3, "Frame", FENCE, "Foot")
 	end
 	if o.Band then
 		cylUp(parent, cf * CF.new(at.X, o.Band, at.Z), 0.22, d + 0.06, "Neon", TINY, "PostGlow")
@@ -527,7 +529,7 @@ function StyleA.podium(yard: any, cf: any, index: number, rect: any): any
 	if locked then
 		local padlock = lock(m, base * CF.new(0, BaseLayout.PodiumOreHeight + 0.8, 0))
 		local plateCF = base * CF.new(0, baseH + 0.47, -1.45) * CF.Angles(0.12, 0, 0)
-		local plate = part(m, plateCF, V3.new(2.2, 0.9, 0.1), "Screen", PROP, "PricePlate")
+		local plate = part(m, plateCF, V3.new(2.2, 0.9, 0.1), "Screen", TINY, "PricePlate")
 		local gui = label(plate, Enum.NormalId.Front, "100 R$", ROBUX_GREEN, 0)
 		local _ = gui
 		local frame = part(padlock, plateCF * CF.new(0, 0, 0.06), V3.new(2.34, 1.04, 0.06), ROBUX_GREEN, TINY, "PriceFrame")
@@ -659,7 +661,7 @@ local function foundryFurnace(m: any, F: any)
 	cylUp(m, F * CF.new(px, (FLOOR + bendY) / 2, pz), bendY - FLOOR, 0.7, "Pipe", PROP, "FeedPipe")
 	local bend = (F * CF.new(px, bendY, pz)).Position
 	local inlet = (F * CF.new(FURNACE.X + FURNACE_D / 2 - 0.4, bendY, pz)).Position
-	ball(m, bend, 0.86, "Trim", PROP, "PipeJoint")
+	ball(m, bend, 0.86, "Trim", TINY, "PipeJoint")
 	rod(m, bend, inlet, 0.7, "Pipe", PROP)
 end
 
@@ -673,7 +675,7 @@ local function foundryCasting(m: any, F: any)
 	rod(m, a, b, 0.9, "Glass", PROP, "GlassPipe")
 	rod(m, a, b, 0.42, "Molten", TINY, "Molten")
 	cylX(m, F * CF.new(fromX - 0.2, pipeY, z), 0.3, 1.2, "Trim", TINY)
-	ball(m, b, 0.98, "Frame", PROP, "PipeJoint")
+	ball(m, b, 0.98, "Frame", TINY, "PipeJoint")
 	local spoutY = FLOOR + 2.25
 	local c = (F * CF.new(turnX, spoutY, z)).Position
 	rod(m, b, c, 0.8, "Glass", PROP, "GlassPipe")
@@ -722,7 +724,7 @@ local function foundryAnvil(m: any, F: any)
 	local at = F * CF.new(ANVIL.X, 0, ANVIL.Z)
 	local face, faceH = V3.new(2.6, 0.6, 1.2), 0.6
 	part(m, at * CF.new(0, FLOOR + 0.45, 0), V3.new(1.9, 0.9, 1.5), "Frame", SOLID, "AnvilBase")
-	part(m, at * CF.new(0, FLOOR + 0.2, 0), V3.new(2.0, 0.24, 1.6), "Trim", PROP)
+	part(m, at * CF.new(0, FLOOR + 0.2, 0), V3.new(2.0, 0.24, 1.6), "Trim", TINY)
 	local waistBottom, waistTop = FLOOR + 0.9, ANVIL_TOP - faceH
 	part(m, at * CF.new(0, (waistBottom + waistTop) / 2, 0), V3.new(0.95, waistTop - waistBottom, 0.85), "Dark", SOLID)
 	part(m, at * CF.new(0, ANVIL_TOP - faceH / 2, 0), face, STEEL, SOLID, "Anvil")
