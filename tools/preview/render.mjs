@@ -67,14 +67,17 @@ const browser = await chromium.launch({
   executablePath: fs.existsSync("/opt/pw-browsers/chromium") ? undefined : undefined,
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+// RENDER_W / RENDER_H (default 1600 x 900): e.g. 1920 x 1080 for the store thumbnails
+const renderW = Number(process.env.RENDER_W || 1600);
+const renderH = Number(process.env.RENDER_H || 900);
+const page = await browser.newPage({ viewport: { width: renderW, height: renderH } });
 page.on("console", (m) => {
   if (m.type() === "error") console.error("[page]", m.text());
 });
 
 for (const name of names) {
   const t0 = Date.now();
-  await page.goto(`http://127.0.0.1:${port}/index.html?scene=${sceneName}&shot=${name}`);
+  await page.goto(`http://127.0.0.1:${port}/index.html?scene=${sceneName}&shot=${name}&w=${renderW}&h=${renderH}`);
   await page.waitForFunction(() => window.__done || window.__error, null, { timeout: 240000 });
   const err = await page.evaluate(() => window.__error);
   if (err) {

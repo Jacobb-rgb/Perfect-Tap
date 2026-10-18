@@ -46,6 +46,7 @@ export type Refs = {
 	CardValue: TextLabel,
 	CardStars: TextLabel,
 	CardDetail: TextLabel,
+	CardStreak: TextLabel,
 	Collect: TextButton,
 	Flash: Frame,
 }
@@ -340,6 +341,16 @@ function CleaningView.build(options: Options?): Refs
 		Size = UDim2.new(1, 0, 0, 20),
 		TextColor3 = Theme.TextDim,
 	})
+	-- a little streak chip in the card's top corner (cleans in a row, cosmetic only)
+	local cardStreak = UIKit.chip(card, "", Theme.Accent, {
+		Name = "Streak",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 10),
+		Size = UDim2.fromOffset(if touch then 132 else 112, if touch then 34 else 28),
+		TextSize = if touch then 20 else 17,
+		Visible = false,
+		ZIndex = 31,
+	})
 	local collect = UIKit.button(card, "Collect", Theme.Good, Theme.GoodDark, {
 		Name = "Collect",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -380,6 +391,7 @@ function CleaningView.build(options: Options?): Refs
 		CardValue = cardValue,
 		CardStars = cardStars,
 		CardDetail = cardDetail,
+		CardStreak = cardStreak,
 		Collect = collect,
 		Flash = flash,
 	}
@@ -439,6 +451,29 @@ function CleaningView.setReveal(refs: Refs, instruction: string)
 	for _, pip in refs.Pips do
 		pip.BackgroundColor3 = Theme.Good
 	end
+end
+
+-- Cleans in a row (each within StreakWindow seconds of the last one): purely
+-- cosmetic, nothing is saved or rewarded.
+CleaningView.StreakWindow = 120
+
+-- The streak after a clean that finished at `now` (the last one at `last`, nil = none).
+function CleaningView.nextStreak(streak: number, last: number?, now: number): number
+	if last and now - last <= CleaningView.StreakWindow then
+		return streak + 1
+	end
+	return 1
+end
+
+-- The chip's text for a streak ("" below 2: no chip).
+function CleaningView.streakText(streak: number): string
+	return if streak >= 2 then `🔥 Streak x{streak}` else ""
+end
+
+function CleaningView.setStreak(view: Refs, streak: number)
+	local text = CleaningView.streakText(streak)
+	view.CardStreak.Text = text
+	view.CardStreak.Visible = text ~= ""
 end
 
 return CleaningView
