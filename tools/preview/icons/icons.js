@@ -466,6 +466,18 @@ const ICONS = {
     return { model: group([extrude(s, 0.32, 0.06, "#aab6c8", steel)]), yaw: -18, pitch: 12 };
   },
 
+  lock() {
+    const parts = [
+      box(1.3, 1.05, 0.55, 0.22, GOLD, shiny, [0, -0.35, 0]),
+      torus(0.42, 0.13, Math.PI, "#b8c4d0", steel, [0, 0.18, 0]),
+      cyl(0.13, 0.13, 0.28, "#b8c4d0", steel, [-0.42, 0.06, 0]),
+      cyl(0.13, 0.13, 0.28, "#b8c4d0", steel, [0.42, 0.06, 0]),
+      cyl(0.13, 0.13, 0.1, "#5b4a1a", {}, [0, -0.25, 0.28], [90, 0, 0]),
+      box(0.1, 0.26, 0.08, 0.03, "#5b4a1a", {}, [0, -0.45, 0.29]),
+    ];
+    return { model: group(parts), yaw: -16, pitch: 8 };
+  },
+
   // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
   // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
   robux() {

@@ -38,6 +38,7 @@ IconAssets.Ids = {
 	trophy = 0,
 	helmet = 0,
 	cog = 0,
+	lock = 0,
 	-- golems and capsules (step 7 GolemBuilder models)
 	golem_PebbleGolem = 0,
 	golem_CopperTinker = 0,

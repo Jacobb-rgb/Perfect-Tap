@@ -289,3 +289,45 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	Bubble.badge(more.Tiles.Wheel, "!")
 	write("ui_bubble_more_" .. spec[1], refs.Gui)
 end
+
+---------------------------------------------------------------- MY GOLEMS
+local GolemsBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.GolemsBubble")
+local owned = {
+	{ "RubyKnight", "Ruby Knight", "Epic", "+16% Mining speed", "+16% MINING", true, true },
+	{ "GildedPorter", "Gilded Porter", "Rare", "+10% Income", "+10% INCOME", true, false },
+	{ "CobaltDiver", "Cobalt Diver", "Rare", "+10% Ore luck", "+10% LUCK", true, false },
+	{ "EmberImp", "Ember Imp", "Rare", "+10% Mining speed", "+10% MINING", false, false },
+	{ "AmethystAcolyte", "Amethyst Acolyte", "Uncommon", "+7% Sell value", "+7% SELL", false, false },
+	{ "SilverSquire", "Silver Squire", "Uncommon", "+6% Income", "+6% INCOME", false, true },
+	{ "QuartzSprite", "Quartz Sprite", "Uncommon", "+5% Ore luck", "+5% LUCK", false, false },
+	{ "JadeGardener", "Jade Gardener", "Uncommon", "+5% Walk speed", "+5% SPEED", false, false },
+	{ "CopperTinker", "Copper Tinker", "Common", "+4% Mining speed", "+4% MINING", false, false },
+	{ "CoalChomper", "Coal Chomper", "Common", "+4% Sell value", "+4% SELL", false, false },
+	{ "PebbleGolem", "Pebble Golem", "Common", "+3% Income", "+3% INCOME", false, false },
+	{ "TinTumbler", "Tin Tumbler", "Common", "+3% Walk speed", "+3% SPEED", false, false },
+	{ "PebbleGolem", "Pebble Golem", "Common", "+3% Income", "+3% INCOME", false, false },
+	{ "CopperTinker", "Copper Tinker", "Common", "+4% Mining speed", "+4% MINING", false, false },
+}
+local function golemsData()
+	local golems = {}
+	for i, row in owned do
+		table.insert(golems, {
+			Id = "G" .. i,
+			Kind = row[1],
+			Name = row[2],
+			Rarity = row[3],
+			Color = rarity[row[3]],
+			Bonus = row[4],
+			Short = row[5],
+			Equipped = row[6],
+			Locked = row[7],
+			Lore = if i == 1 then "Guarded the throne room of the Ember Kings. Now it guards you." else "A loyal little helper.",
+		})
+	end
+	return { Golems = golems, Selected = "G1", Total = "+10% Income · +16% Mining speed · +10% Ore luck", Count = 14, Cap = 60 }
+end
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	GolemsBubble.build(gui, spec[2], golemsData())
+	write("ui_bubble_golems_" .. spec[1], gui)
+end

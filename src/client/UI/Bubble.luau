@@ -175,12 +175,12 @@ function Bubble.body(parent: Instance, role: Role, size: Vector2, opts: BodyOpti
 	return holder, face
 end
 
--- Small red notification badge on the top-right corner of a face.
-function Bubble.badge(face: GuiObject, text: string): Frame
+-- Small notification badge (red unless `color`) on the top-right corner of a face.
+function Bubble.badge(face: GuiObject, text: string, color: Color3?): Frame
 	local badge = UIKit.new("Frame", {
 		Name = "Badge",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Theme.Bad,
+		BackgroundColor3 = color or Theme.Bad,
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -4, 0, 4),
 		Size = UDim2.fromOffset(28, 28),
@@ -463,7 +463,10 @@ export type CardOptions = {
 	Color: Color3, -- rarity / data colour of the card face
 	Chip: string, -- the pill on the bottom edge (chance, value, level)
 	ChipRole: (string | Role)?, -- coloured chip (else white with ink text)
+	ChipWidth: number?, -- default 66 % of the card
 	Badge: string?,
+	BadgeColor: Color3?,
+	CornerIcon: string?, -- a small icon on the top-left corner (lock)
 	Size: Vector2,
 	NameSize: number,
 	ChipSize: number,
@@ -493,13 +496,21 @@ function Bubble.card(parent: Instance, o: CardOptions): (TextButton, Frame)
 		TextScaled = true,
 		ZIndex = 4,
 	})
-	Bubble.chip(face, o.Chip, Vector2.new(math.floor(size.X * 0.66), o.ChipSize + 8), o.ChipSize, o.ChipRole, {
+	Bubble.chip(face, o.Chip, Vector2.new(o.ChipWidth or math.floor(size.X * 0.66), o.ChipSize + 8), o.ChipSize, o.ChipRole, {
 		Name = "Chance",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 1, 0),
 	})
 	if o.Badge then
-		Bubble.badge(face, o.Badge)
+		Bubble.badge(face, o.Badge, o.BadgeColor)
+	end
+	if o.CornerIcon then
+		Bubble.icon(face, o.CornerIcon, 36, {
+			Name = "CornerIcon",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(6, 6),
+			ZIndex = 6,
+		})
 	end
 	if o.Selected then
 		Bubble.select(face, true)
