@@ -12,12 +12,12 @@ return function(T, Loader)
 			T.truthy(refs.Gui:GetAttribute("TerraForge"), "UIScale applies")
 			for _, entry in HudBubble.Menu do
 				T.truthy(refs.Menu[entry.Id], "tile " .. entry.Id)
-				T.truthy(IconAssets.Ids[entry.Icon] ~= nil, "icon listed " .. entry.Icon)
+				T.truthy(IconAssets.has(entry.Icon), "icon listed " .. entry.Icon)
 				T.truthy(BubbleTheme.Roles[entry.Role], "role " .. entry.Role)
 			end
 			for _, spot in HudBubble.Spots do
 				T.truthy(refs.Tabs[spot.Id], "tab " .. spot.Id)
-				T.truthy(IconAssets.Ids[spot.Icon] ~= nil, "icon listed " .. spot.Icon)
+				T.truthy(IconAssets.has(spot.Icon), "icon listed " .. spot.Icon)
 			end
 			T.eq(#refs.Slots, HudBubble.layout(scale).Slots, "hotbar slots")
 		end
@@ -29,7 +29,7 @@ return function(T, Loader)
 			local more = HudBubble.moreMenu(refs, scale)
 			for _, entry in HudBubble.More do
 				T.truthy(more.Tiles[entry.Id], "tile " .. entry.Id)
-				T.truthy(IconAssets.Ids[entry.Icon] ~= nil, "icon listed " .. entry.Icon)
+				T.truthy(IconAssets.has(entry.Icon), "icon listed " .. entry.Icon)
 			end
 			T.truthy(more.Close, "close")
 			T.eq(refs.Menu.More:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Gold, "MORE outlined while open")
@@ -71,7 +71,23 @@ return function(T, Loader)
 	end)
 
 	T.test("IconAssets: an icon without an upload gives an empty image", function()
-		T.eq(IconAssets.image("coin"), "", "not uploaded yet")
-		T.eq(IconAssets.image("nope"), "", "unknown icon")
+		T.eq((IconAssets.find("coin")), "", "not uploaded yet")
+		T.eq((IconAssets.find("nope")), "", "unknown icon")
+		T.truthy((IconAssets.find("robux")):find("rbxasset://"), "Roblox's own Robux icon")
+	end)
+
+	T.test("IconAssets: sheets fit Roblox's 1024 px and every icon has one cell", function()
+		local seen = {}
+		for _, sheet in IconAssets.Sheets do
+			T.truthy(#sheet.Icons <= IconAssets.Columns * IconAssets.Columns, sheet.Name .. " fits 6 x 6")
+			for _, name in sheet.Icons do
+				T.falsy(seen[name], "listed once: " .. name)
+				seen[name] = true
+			end
+		end
+		T.truthy(IconAssets.Columns * IconAssets.Cell <= 1024, "sheet size")
+		local offset = IconAssets.cellOffset(7)
+		T.eq(offset.X, IconAssets.Cell, "cell 7 = column 1")
+		T.eq(offset.Y, IconAssets.Cell, "cell 7 = row 1")
 	end)
 end

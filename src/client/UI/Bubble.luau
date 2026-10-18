@@ -91,11 +91,11 @@ function Bubble.icon(parent: Instance, name: string, size: number, props: Props?
 	local image = UIKit.new("ImageLabel", {
 		Name = "Icon",
 		BackgroundTransparency = 1,
-		Image = IconAssets.image(name),
 		ScaleType = Enum.ScaleType.Fit,
 		Size = UDim2.fromOffset(size, size),
 		ZIndex = 3,
 	}, parent)
+	IconAssets.apply(image, name)
 	image:SetAttribute("Icon", name)
 	apply(image, props)
 	return image
