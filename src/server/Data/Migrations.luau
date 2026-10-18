@@ -37,9 +37,10 @@
 	- Retired machines (MachineData.Retired: Storage Crate, Sell Chute, Anvil)
 	  leave the plot and the inventory; their queued items go to the pen
 	  (data.Storage) and each machine is refunded at its price.
-	- Podiums is a list of exactly 4 strings: a storage key of a cleaned
+	- Podiums is a list of at least 4 strings: a storage key of a cleaned
 	  ore, or "". A readable non-clean item on a podium moves to the pen; a
-	  four-part key this server can't read stays.
+	  four-part key this server can't read stays. Slots past the 4th (a
+	  newer build's, up to MAX_PODIUM_SLOTS_KEPT) stay when "" or four-part.
 	- Coins, TotalEarned and LastSeen are finite numbers >= 0.
 
 	Trains (step 2, same Version 3; DataTemplate fills the record in):
@@ -95,8 +96,10 @@
 	  everyone walked at 18: it gets Boots level 1 (18, GearConfig) at
 	  least, so nobody walks slower after the update.
 	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
-	  Enchants.Slots: exactly EnchantConfig.MaxSlots strings; a slot keeps an
+	  Enchants.Slots: at least EnchantConfig.MaxSlots strings; a slot keeps an
 	  owned id only once, and only when the blaster level has opened it.
+	  Slots past MaxSlots (a newer build's, up to MAX_ENCHANT_SLOTS_KEPT)
+	  stay when "" or an owned id not slotted before (readers skip them).
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
 	  BoostConfig.MaxSavedSeconds (a year: a junk guard only; paid boost
 	  time beyond MaxStackSeconds is kept, it is never lost).
@@ -110,7 +113,8 @@
 	  them per entry (the first by name); anything else is dropped. A Kind
 	  in GolemConfig.Renamed (RubyKnight, StormcoreTitan, StarmetalSovereign:
 	  the 36-ore roster's names) becomes its new id. Equipped:
-	  at most GolemConfig.EquipSlots unique owned ids of known kinds. NextId
+	  at most GolemConfig.EquipSlots unique owned ids (unknown kinds too:
+	  GolemConfig.stats / equippedKinds skip them). NextId
 	  is a whole number above every owned Id.
 	- Daily (the retired 7-day Ember Chest streak, replaced by the daily
 	  wheel: docs/plans/V2_PLAN.md) is removed.
@@ -152,9 +156,14 @@ Migrations.Latest = 3
 export type Report = { Moved: number, Dropped: number }
 
 local MAX_INVENTORY = MachineData.MaxInventory
--- Highest saved level of a step 3 upgrade (readers clamp to what is sold).
-local MAX_LEVEL_KEPT = 99
+-- Highest saved level of any upgrade line (readers clamp to what is sold;
+-- TrainService uses the same GameConfig number).
+local MAX_LEVEL_KEPT = GameConfig.MaxLevelKept
 local PODIUM_SLOTS = 4
+-- a newer build may sell more podiums: its slots past PODIUM_SLOTS are kept up to here
+local MAX_PODIUM_SLOTS_KEPT = 16
+-- and more enchant slots: kept past EnchantConfig.MaxSlots up to here
+local MAX_ENCHANT_SLOTS_KEPT = 16
 local MAX_GOLEM_ID = 2 ^ 31 - 1
 -- extra golem entry fields a newer server may add (see the header)
 local MAX_GOLEM_FIELDS = 8
@@ -447,6 +456,34 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 			cleanSlots[i] = ""
 		end
 	end
+	-- slots a newer build added stay ("" or an owned id once; the readers only look at 1..MaxSlots)
+	local function extraSlot(id: any): boolean
+		return id == "" or (type(id) == "string" and owned[id] ~= nil and not slotted[id])
+	end
+	local lastExtra = EnchantConfig.MaxSlots
+	if type(slots) == "table" then
+		for i = EnchantConfig.MaxSlots + 1, MAX_ENCHANT_SLOTS_KEPT do
+			if extraSlot(slots[i]) then
+				lastExtra = i
+			end
+		end
+	end
+	for i = EnchantConfig.MaxSlots + 1, MAX_ENCHANT_SLOTS_KEPT do
+		local id = if type(slots) == "table" then slots[i] else nil
+		if i <= lastExtra and extraSlot(id) then
+			if id ~= "" then
+				slotted[id] = true
+			end
+			cleanSlots[i] = id
+		else
+			if id ~= nil and id ~= "" then
+				report.Dropped += 1
+			end
+			if i <= lastExtra then
+				cleanSlots[i] = ""
+			end
+		end
+	end
 	enchants.Slots = cleanSlots
 
 	-- boosts: whole os.time() seconds, never absurdly far ahead (MaxSavedSeconds
@@ -506,8 +543,9 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	local wearing = golems.Equipped
 	if type(wearing) == "table" then
 		for _, id in values(wearing) do
+			-- (a newer build's kinds stay equipped: GolemConfig.stats / equippedKinds skip them)
 			local kind = if type(id) == "number" then kinds[id] else nil
-			if kind and GolemConfig.ById[kind] and not table.find(equipped, id) and #equipped < GolemConfig.EquipSlots then
+			if kind and not table.find(equipped, id) and #equipped < GolemConfig.EquipSlots then
 				table.insert(equipped, id)
 			else
 				report.Dropped += 1
@@ -748,11 +786,20 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		data.BlasterOre = ""
 	end
 
-	-- v3: exactly 4 podium strings, each a cleaned ore or "". A key this server
+	-- v3: at least 4 podium strings, each a cleaned ore or "". A key this server
 	-- can't read (a newer build's ore or grade) stays as it is: PodiumService
-	-- shows that slot empty, and the newer server reads it again.
+	-- shows that slot empty, and the newer server reads it again. Slots past
+	-- the 4th (a newer build's) stay as they are when "" or key-shaped.
 	local podiums = data.Podiums
 	local slots = {}
+	local lastPodium = PODIUM_SLOTS
+	if type(podiums) == "table" then
+		for i = PODIUM_SLOTS + 1, MAX_PODIUM_SLOTS_KEPT do
+			if podiums[i] == "" or keyLike(podiums[i]) then
+				lastPodium = i
+			end
+		end
+	end
 	for i = 1, PODIUM_SLOTS do
 		local key = if type(podiums) == "table" then podiums[i] else nil
 		local desc = if type(key) == "string" and key ~= "" then ItemData.parseKey(key) else nil
@@ -769,6 +816,19 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 				report.Dropped += 1
 			end
 			slots[i] = ""
+		end
+	end
+	for i = PODIUM_SLOTS + 1, MAX_PODIUM_SLOTS_KEPT do
+		local key = if type(podiums) == "table" then podiums[i] else nil
+		if i <= lastPodium and (key == "" or keyLike(key)) then
+			slots[i] = key
+		else
+			if key ~= nil and key ~= "" then
+				report.Dropped += 1
+			end
+			if i <= lastPodium then
+				slots[i] = ""
+			end
 		end
 	end
 	data.Podiums = slots

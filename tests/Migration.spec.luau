@@ -8,6 +8,8 @@ return function(T, Loader)
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
+	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 
 	local function deepEqual(a: any, b: any): boolean
 		if type(a) ~= type(b) then
@@ -192,11 +194,12 @@ return function(T, Loader)
 		T.eq(data.OwnedPickaxes, nil)
 		T.eq(data.BlasterLevel, 1)
 		T.eq(data.BlasterOre, "Unobtainium", "a blaster ore this server doesn't know is kept (a newer build's)")
-		T.eq(#data.Podiums, 4, "exactly 4 podium slots")
+		T.eq(#data.Podiums, 5, "the 4 podium slots and a newer build's 5th")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
 		T.eq(data.Podiums[3], "")
 		T.eq(data.Podiums[4], "")
+		T.eq(data.Podiums[5], "Clean|Nope|Rough|", "a four-part 5th slot stays as it is (docs/SAVE_AUDIT.md #1(b))")
 		T.eq(data.TotalEarned, 0)
 		T.eq(data.LastSeen, 0)
 		T.truthy(report.Moved > 0 and report.Dropped > 0)
@@ -207,7 +210,6 @@ return function(T, Loader)
 	end)
 
 	T.test("Migration v3: blaster level floored and kept above this server's top (readers clamp)", function()
-		local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 		local data = ProfileStore.deepCopy(DataTemplate)
 		data.BlasterLevel = 12.7
 		data.BlasterOre = "Sapphire"
@@ -529,15 +531,19 @@ return function(T, Loader)
 		T.truthy(deepEqual(old, DataTemplate), "same as a fresh save")
 	end)
 
-	T.test("Migration #1(b): a save from a newer build goes through unchanged (nothing it names is 'repaired' away)", function()
-		local now = 1_800_000_000
+	-- What a newer build may have written: ids, grades, kinds, modes, levels
+	-- and slots this server doesn't know (docs/SAVE_AUDIT.md #1(b)).
+	local NEWER_NOW = 1_800_000_000
+	local function newerSave(): { [string]: any }
+		local now = NEWER_NOW
 		local data = ProfileStore.deepCopy(DataTemplate)
 		Migrations.run(data, now) -- a clean baseline
 		-- what a newer build may have written: ids, grades, kinds, modes and levels this server doesn't know
 		data.Version = Migrations.Latest + 1
 		data.BlasterLevel = 12
 		data.BlasterOre = "Zzzium"
-		data.Podiums = { "Clean|Zzzium|Pristine|", "Clean|Gold|Mythical|", "Clean|Gold|Pristine|", "" }
+		-- six podiums: a newer build sells two more (a readable gold on the 5th)
+		data.Podiums = { "Clean|Zzzium|Pristine|", "Clean|Gold|Mythical|", "Clean|Gold|Pristine|", "", "Clean|Gold|Pristine|", "" }
 		data.KeepMode = "Smart"
 		data.KeepList = { Zzzium = true, Gold = false }
 		data.Discovered = { Zzzium = true, Gold = true }
@@ -555,12 +561,25 @@ return function(T, Loader)
 		data.Upgrades.PenAutomation = 6
 		data.Gear.Boots = 7
 		data.Gear.Jetpack = 3
-		data.Enchants = { Owned = { Voidfire = 2, Power = 1 }, Slots = { "Voidfire", "Power", "", "" } }
+		-- six enchant slots: the newer build's 5th is empty, its 6th holds an owned enchant
+		data.Enchants = { Owned = { Voidfire = 2, Power = 1, Starlight = 1 }, Slots = { "Voidfire", "Power", "", "", "", "Starlight" } }
 		data.Boosts.MegaLuckyUntil = now + 100
-		data.Golems = { Owned = { { Id = 1, Kind = "VoidGolem", Shiny = true } }, Equipped = {}, NextId = 2 }
+		data.Golems = { Owned = { { Id = 1, Kind = "VoidGolem", Shiny = true } }, Equipped = { 1 }, NextId = 2 }
+		data.Tutorial = { Step = 14, Done = false } -- the newer build's tutorial has more steps
 		data.Artifacts = { Found = { VoidRelic = 1 }, Chapters = { VoidChapter = true } }
 		data.Stats.VoidOres = 5
 		data.Hoverboards = { Owned = { "Comet" } } -- a whole record this server has never heard of
+		data.Artifacts.Equipped = "VoidCollection"
+		data.Wheel.NextSpinAt = now + 60
+		data.Settings.Language = "cs"
+		data.OreCodex = { Seen = { Zzzium = true, Gold = true }, Ready = true }
+		data.LastSeen = now
+		return data
+	end
+
+	T.test("Migration #1(b): a save from a newer build goes through unchanged (nothing it names is 'repaired' away)", function()
+		local now = NEWER_NOW
+		local data = newerSave()
 		local before = ProfileStore.deepCopy(data)
 		local report = Migrations.run(data, now)
 		for key, value in before do
@@ -576,6 +595,114 @@ return function(T, Loader)
 		Migrations.run(data, now)
 		T.eq(#data.Storage, pen + 2, "both kept, in the pen")
 		T.eq(data.Storage[#data.Storage].O, "Zzzium")
+	end)
+
+	T.test("Migration #1(b): a newer build's save survives the load hooks and a State snapshot unchanged", function()
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
+		local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
+		local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
+		local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
+		local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
+		local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
+		local BuildService = Loader.requirePath("ServerScriptService.Server.Services.BuildService")
+		local CodexService = Loader.requirePath("ServerScriptService.Server.Services.CodexService")
+		local SettingsService = Loader.requirePath("ServerScriptService.Server.Services.SettingsService")
+		local TutorialService = Loader.requirePath("ServerScriptService.Server.Services.TutorialService")
+		local GolemService = Loader.requirePath("ServerScriptService.Server.Services.GolemService")
+		local GearService = Loader.requirePath("ServerScriptService.Server.Services.GearService")
+		local ArtifactService = Loader.requirePath("ServerScriptService.Server.Services.ArtifactService")
+		local Players = Loader.game:GetService("Players")
+		local data = newerSave()
+		local before = ProfileStore.deepCopy(data)
+		local player: any = { UserId = 1901, Name = "Newer", Parent = true, attributes = {} }
+		player.GetAttribute = function(self, key)
+			return self.attributes[key]
+		end
+		player.SetAttribute = function(self, key, value)
+			self.attributes[key] = value
+		end
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		patch(DataService, "get", function(p)
+			return if p == player then data else nil
+		end)
+		patch(DataService, "changed", function() end)
+		patch(Net, "fire", function() end)
+		patch(PlotService, "plotOf", function()
+			return nil
+		end)
+		patch(Players, "GetPlayers", function()
+			return { player }
+		end)
+		PodiumService._test.setClock(function()
+			return NEWER_NOW
+		end)
+		TrainService._test.setClock(function()
+			return NEWER_NOW
+		end, function()
+			return 100
+		end, function() end)
+		local ok, err = pcall(function()
+			Migrations.run(data, NEWER_NOW)
+			-- every DataService.onLoaded hook that reads or repairs the save
+			CodexService.prepare(data)
+			SettingsService.read(data)
+			GolemService.refresh(player)
+			GearService.refreshLamp(player)
+			ArtifactService.applyRewards(player)
+			PodiumService._test.loaded(player, data)
+			TrainService._test.loaded(player, data)
+			TutorialService._test.loaded(player, data)
+			-- the State snapshot and its providers
+			local snapshot = StateService.snapshot(player) :: any
+			TrainService._test.provide(player, data, snapshot)
+			PenService._test.provide(player, data, snapshot)
+			BuildService._test.provide(player, data, snapshot)
+			T.eq(snapshot.Train.Capacity, TrainConfig.Capacity[#TrainConfig.Capacity].Value, "read as this build's top")
+			T.eq(snapshot.BlasterLevel, BlasterData.MaxLevel, "read as this build's top")
+		end)
+		for i = #saved, 1, -1 do
+			rawset(saved[i][1], saved[i][2], saved[i][3])
+		end
+		PodiumService._test.reset()
+		TrainService._test.reset()
+		TutorialService._test.reset()
+		Bonuses.invalidate(player)
+		if not ok then
+			error(err, 0)
+		end
+		for key, value in before do
+			T.truthy(deepEqual(value, data[key]), `{key} is unchanged`)
+		end
+		T.truthy(deepEqual(before, data), "the whole save is unchanged")
+	end)
+
+	T.test("Migration #1(b): podium and enchant slots past this build's count: kept when well-formed, junk dropped", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.BlasterLevel = 12
+		data.Podiums = { "", "", "", "", 7, "Clean|Gold|Pristine|", "junk", { "table" } }
+		data.Enchants = { Owned = { Power = 1, Lucky = 1 }, Slots = { "Power", "", "", "", "Power", 5, "Lucky", "NotOwned" } }
+		local report = Migrations.run(data)
+		T.eq(#data.Podiums, 6, "up to the last well-formed slot")
+		T.eq(data.Podiums[5], "", "junk before it becomes empty")
+		T.eq(data.Podiums[6], "Clean|Gold|Pristine|", "a newer build's 6th podium stays")
+		T.eq(data.Podiums[7], nil, "junk after it is dropped")
+		T.eq(#data.Enchants.Slots, 7, "up to the last well-formed slot")
+		T.eq(data.Enchants.Slots[5], "", "an enchant slotted twice is slotted once")
+		T.eq(data.Enchants.Slots[6], "", "junk becomes empty")
+		T.eq(data.Enchants.Slots[7], "Lucky", "an owned enchant in a newer build's 7th slot stays")
+		T.eq(data.Enchants.Slots[8], nil, "an enchant that isn't owned is dropped")
+		T.eq(report.Dropped, 6, "5 junk entries and a double")
+		local copy = ProfileStore.deepCopy(data)
+		Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
+		T.eq(EnchantConfig.stats(data.Enchants, data.BlasterLevel).OreLuckPct, nil, "this build reads only its own slots")
 	end)
 
 	T.test("Migration #1(b): the ORE CODEX and the settings keep what a newer build added", function()

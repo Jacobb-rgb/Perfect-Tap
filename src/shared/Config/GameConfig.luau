@@ -118,6 +118,9 @@ local GameConfig = {
 	-- Studio saves into its own DataStore (TerraForge_PlayerData_Studio) so command-bar tests never
 	-- touch a real save; true = Studio reads and writes the live store (only to look into a live save)
 	StudioLiveData = false,
+	-- the highest saved level kept for any upgrade line (a junk guard): a newer build may sell more
+	-- levels, so saves keep them and the readers clamp to this build's top (docs/SAVE_AUDIT.md #1(b))
+	MaxLevelKept = 99,
 }
 
 return GameConfig

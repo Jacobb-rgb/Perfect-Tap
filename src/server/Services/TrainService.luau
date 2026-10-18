@@ -283,8 +283,10 @@ local function finite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
 end
 
-local function wholeLevel(v: any, list: { TrainConfig.Level }): number
-	return if finite(v) then math.clamp(math.floor(v), 0, TrainConfig.maxLevel(list)) else 0
+-- A saved level as a whole number. A level above this build's top (a newer
+-- build's) stays: TrainConfig.capacity / tripSeconds / nextPrice clamp it.
+local function wholeLevel(v: any): number
+	return if finite(v) then math.clamp(math.floor(v), 0, GameConfig.MaxLevelKept) else 0
 end
 
 -- data.Train in the right shape (repaired in place; Migrations does the deep clean on load).
@@ -300,8 +302,8 @@ local function trainOf(data: { [string]: any }): Train
 	if type(train.TripCargo) ~= "table" then
 		train.TripCargo = {}
 	end
-	train.CapacityLevel = wholeLevel(train.CapacityLevel, TrainConfig.Capacity)
-	train.SpeedLevel = wholeLevel(train.SpeedLevel, TrainConfig.Speed)
+	train.CapacityLevel = wholeLevel(train.CapacityLevel)
+	train.SpeedLevel = wholeLevel(train.SpeedLevel)
 	for _, field in { "TripDepartAt", "TripArriveAt" } do
 		local v = train[field]
 		if not finite(v) or v < 0 then

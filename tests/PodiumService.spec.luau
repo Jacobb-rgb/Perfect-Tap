@@ -315,12 +315,29 @@ return function(T, Loader)
 		T.falsy(PodiumService.remove(w.player, 1), "junk")
 		T.eq(w.data.Podiums[1], "", "junk cleared")
 		T.eq(#w.data.Storage, before, "no item made from junk")
-		-- an ore a newer build knows (a key this server can't read) is never cleared
+		-- an ore a newer build knows (a key this server can't read) goes into the pen as it is
 		w.data.Podiums[1] = "Clean|Zzzium|Pristine|"
-		T.falsy(PodiumService.remove(w.player, 1), "can't be taken off here")
-		T.eq(w.data.Podiums[1], "Clean|Zzzium|Pristine|", "kept for the newer build (docs/SAVE_AUDIT.md #1(b))")
-		T.eq(#w.data.Storage, before, "no item made from it")
-		w.data.Podiums[1] = ""
+		fill(w, DIRTY, PenService.capacity(w.player) - #w.data.Storage)
+		local full, fullWhy = PodiumService.remove(w.player, 1)
+		T.falsy(full, "not into a full pen")
+		T.eq(fullWhy, "PenFull", "pen full")
+		T.eq(w.data.Podiums[1], "Clean|Zzzium|Pristine|", "still on the podium (docs/SAVE_AUDIT.md #1(b))")
+		table.remove(w.data.Storage)
+		before = #w.data.Storage
+		T.truthy(PodiumService.remove(w.player, 1), "taken off")
+		T.eq(w.data.Podiums[1], "", "the slot is free")
+		T.eq(#w.data.Storage, before + 1, "one item in the pen")
+		local kept = w.data.Storage[#w.data.Storage]
+		T.eq(ItemData.storageKey(kept), "Clean|Zzzium|Pristine|", "the same key: the newer build reads it back")
+		T.eq(kept.R, nil, "no empty recipe field")
+		T.truthy(lastNote(w, "Notify").A.Text:find("newest version", 1, true), "told why it can't be seen")
+		-- a key-shaped one with a recipe keeps every part
+		w.data.Podiums[2] = "Relic|Zzzium||Halo"
+		table.remove(w.data.Storage, 1) -- (room for it)
+		T.truthy(PodiumService.remove(w.player, 2), "taken off")
+		kept = w.data.Storage[#w.data.Storage]
+		T.eq(ItemData.storageKey(kept), "Relic|Zzzium||Halo", "kind, ore and recipe kept")
+		T.eq(kept.G, nil, "no empty grade field")
 	end)
 
 	withWorld("PodiumService: Place and Put On Podium never cover an ore a newer build put there", function(w)

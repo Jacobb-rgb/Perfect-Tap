@@ -411,9 +411,24 @@ function PodiumService.remove(player: Player, slot: number): (boolean, Reason?)
 	if not desc then
 		local parts = string.split(key, "|")
 		if ItemData.parseKey(key) == nil and #parts == 4 and parts[1] ~= "" and parts[2] ~= "" then
-			-- an ore a newer build knows (docs/SAVE_AUDIT.md #1(b)): it stays for that build
-			toast(player, "This ore needs the newest version of the game. Rejoin to see it.")
-			return false, "Empty"
+			-- an ore a newer build knows (docs/SAVE_AUDIT.md #1(b)): it goes into the pen as it
+			-- is (the newer build reads it there again) and the slot is free
+			local kept: Desc = {
+				K = parts[1],
+				O = parts[2],
+				G = if parts[3] ~= "" then parts[3] else nil,
+				R = if parts[4] ~= "" then parts[4] else nil,
+			} :: any
+			if not PenService.store(player, kept) then
+				local data = DataService.get(player) :: { [string]: any }
+				toast(player, `Your Ore Pen is full ({#data.Storage}/{PenService.capacityOf(data)}). Make room first.`)
+				return false, "PenFull"
+			end
+			list[slot] = ""
+			DataService.changed(player)
+			refreshPlayer(player)
+			toast(player, "This ore needs the newest version of the game. It is in your Ore Pen, rejoin to see it.", "Info")
+			return true, nil
 		end
 		-- junk that slipped past the migration: just clear it
 		list[slot] = ""
