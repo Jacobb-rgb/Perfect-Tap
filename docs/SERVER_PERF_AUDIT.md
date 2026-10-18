@@ -108,6 +108,26 @@ that line.
 | 9 | **Merge fix/save-safety** (60 s autosave, stale lock 180 s) into main and steps 6-7 | each player saved every 60 s instead of ~160 s, still ≤ 7 % of the budget | TERRA FORGE Roblox hra vývoj (with the save audit) |
 | 10 | Small loops: `ItemService` maintenance caches the owner root per pass and drops the per-record closure; `CleaningService` keeps a list of stations instead of scanning every machine; `refreshLocks` compares before writing; profile the Ore Magnet (≤ 640 raycasts/s) | ~3k lookups/s | TERRA FORGE Roblox hra vývoj (steps 6-7: the magnet) + Návrhy strojů (CleaningService) |
 
+
+### Status after the steps 6-7 landing (branch fix/post-steps67, 2026-10-18)
+- **#3 done**: machine / chute spawns use `ItemBuilder.buildLight` (≤ 3 parts, 2 welds, no sparkles; same Body as
+  the full look), pickup re-dresses the same model (`ItemService.dress`); ItemId is a short per-session number and
+  no attribute; attributes: Kind, Owner, State (+ OreId, Grade, Recipe, Value for clean items).
+- **#4 done (item side + emit side)**: an absorbed light item parks its model; the owner's next server spawn within
+  14 studs wears it again (re-dress only when the look changes; 6 s, ≤ 8 per owner); `ItemService.sleep / wake /
+  wakeNear` for queued items; MachineService counts loose items once per owner per tick pass. Left: calling
+  `ItemService.sleep` from ConveyorService / IntakeService when a belt end answers Full / Busy (IntakeService is the
+  integrator's).
+- **#6 done**: `tickAll` walks an active list (busy rules per behaviour, `wake` on every input); the Robot Arm caches
+  its neighbours per layout version. Benchmark (8 plots, 392 machines): busy factory 72 → 16 tick calls, 0.22 →
+  0.07 ms per tick; idle factory 72 → 0 calls.
+- **#7 done**: one `Job` attribute (`cycles|start|time|ore`, `ProcessingService.jobText`, read by
+  `MachineBillboard.decodeJob`); Status shows a block at once and clears only when it stays clear (40 → 0 flips over
+  40 alternating retries).
+- **#10 done**: ItemService maintenance looks up each owner's root once per pass, no per-record closure;
+  CleaningService keeps its station set; the Ore Magnet sets its ray filter once per pass and re-raycasts a blocked
+  item only after it or the player moved (standing still with 4 items behind a wall: 52 → 20 rays in 12 s).
+
 Not changed on purpose: `StreamingTargetRadius` 384 keeps every plot (and its belt items) in every client's
 range. Dropping it to ~256 would cut far-plot replication, but the town would pop in on PCs; after fixes 3-4,
 measure first.

@@ -325,7 +325,8 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 			-- (the tutorial counts the pen's ore as "came home by train" only without these)
 			bump(data, "WheelOres")
 		else
-			award(player, WheelConfig.oreFallbackCoins(context), result)
+			-- what Tobin would pay this player dirty: with their sell bonus
+			award(player, Bonuses.sellAmount(Bonuses.stats(player), WheelConfig.oreFallbackCoins(context)), result)
 		end
 	elseif kind == "Shards" then
 		local amount = segment.Amount or 0
@@ -339,6 +340,11 @@ end
 	nil + "NotReady". Yields only before the check (the policy answer).
 ]]
 function WheelService.spin(player: Player): (Result?, string?)
+	-- a spin that isn't ready never reaches PolicyService (security audit S1)
+	local before = DataService.get(player)
+	if not before or not WheelConfig.ready(record(before, "Wheel").NextSpinAt, math.floor(clock())) then
+		return nil, "NotReady"
+	end
 	local restricted = Policy.paidRandomRestricted(player)
 	local noCapsules = CapsuleConfig.allRestricted(restricted)
 	-- from here on nothing yields: check, save the cooldown, grant

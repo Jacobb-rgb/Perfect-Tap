@@ -42,6 +42,7 @@ local Geo = require(Shared:WaitForChild("Builders"):WaitForChild("Geo"))
 local RockBuilder = require(Shared:WaitForChild("Builders"):WaitForChild("RockBuilder"))
 local Rng = require(Shared:WaitForChild("Util"):WaitForChild("Rng"))
 local MineAmbience = require(Shared:WaitForChild("Config"):WaitForChild("MineAmbience"))
+local MovementConfig = require(Shared:WaitForChild("Config"):WaitForChild("MovementConfig"))
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
 local Railway = require(World:WaitForChild("Railway"))
@@ -108,7 +109,9 @@ end
 -- A decoration crystal cluster that matches the rocks; root = bottom, up = growth direction.
 -- look: "Matte" | "Tipped" | "Shell" | "Glow".
 function MineKit.crystals(parent: Instance, root: CFrame, count: number, height: number, look: string, colors: { Color3 }, seed: number | string): Model
-	return RockBuilder.decorCluster(parent, root, count, height, look, colors, seed)
+	local m = RockBuilder.decorCluster(parent, root, count, height, look, colors, seed)
+	m:AddTag(MovementConfig.BeamIgnoreTag) -- solid decoration: never blocks the mining beam
+	return m
 end
 
 ---------------------------------------------------------------- rock walls
@@ -246,6 +249,7 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number): Mod
 	m.Name = "Elevator"
 	m.Parent = parent
 	m:AddTag("MineElevator")
+	m:AddTag(MovementConfig.BeamIgnoreTag) -- never blocks the mining beam
 	m:SetAttribute("Floor", floorIndex)
 	local half = 4.2
 	local height = 16
@@ -347,6 +351,7 @@ function MineKit.gate(parent: Instance, cf: CFrame, width: number, level: number
 	m.Name = "BlasterGate"
 	m.Parent = parent
 	m:SetAttribute("MinBlaster", level)
+	m:AddTag(MovementConfig.BeamIgnoreTag) -- never blocks the mining beam
 	local h = 11
 	for _, sx in { -1, 1 } do
 		Geo.block(m, cf * CFrame.new(sx * (width / 2 + 0.9), h / 2, 0), Vector3.new(1.8, h, 1.8), colors[1], nil, SOLID)

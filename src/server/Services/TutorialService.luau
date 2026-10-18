@@ -3,9 +3,11 @@
 	8 of V2_PLAN).
 
 	data.Tutorial = { Step, Done } (DataTemplate). Step is the index of the
-	step the player is on (1 .. Total; Total + 1 once all are done). It only
-	moves on from the save data and server signals, never from a client
-	claim:
+	step the player is on (1 .. Total; Total + 1 once all are done). A step
+	past Total that isn't Done is a newer build's (more steps): this server
+	shows nothing for it and leaves it as it is (docs/SAVE_AUDIT.md #1(b)).
+	It only moves on from the save data and server signals, never from a
+	client claim:
 	  - every DataService.onChanged (and right after the data loads) runs
 	    TutorialConfig.advance, which walks past every step whose check holds
 	  - Signals the save data doesn't hold: NearStation (a TutorialConfig.
@@ -54,6 +56,8 @@ local signals: { [Player]: TutorialConfig.Signals } = {}
 -- load callback (the starter kit) must not count as live progress before it
 local ready: { [Player]: boolean } = {}
 local stepListeners: { (Player, StepInfo) -> () } = {}
+-- a saved step is kept up to here (a junk guard: a newer build may have more steps)
+local MAX_STEP_KEPT = 99
 
 -- The player's tutorial table, repaired (a whole Step in range, a boolean Done).
 local function stateOf(data: { [string]: any }): { Step: number, Done: boolean }
@@ -62,7 +66,8 @@ local function stateOf(data: { [string]: any }): { Step: number, Done: boolean }
 		t = { Step = 1, Done = false }
 		data.Tutorial = t
 	end
-	t.Step = TutorialConfig.clamp(t.Step)
+	local step = t.Step
+	t.Step = if type(step) == "number" and step == step then math.clamp(math.floor(step), 1, MAX_STEP_KEPT) else 1
 	t.Done = t.Done == true
 	return t
 end
@@ -127,8 +132,7 @@ function TutorialService.evaluate(player: Player, catchUp: boolean?)
 		return
 	end
 	if t.Step > TutorialConfig.Total then
-		-- every step passed but never marked done (a shorter step list): finish quietly
-		moveTo(player, t, t.Step, true)
+		-- a newer build's step (it has more): nothing to show or change here
 		return
 	end
 	local s = signalsOf(player)

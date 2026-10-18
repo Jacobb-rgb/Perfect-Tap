@@ -86,6 +86,11 @@ local function isPhone(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 end
 
+-- The player's sell bonus: the stall's prices are what Tobin pays.
+local function sellMult(): number
+	return StateController.sellMult()
+end
+
 local function penSummary(): any
 	local state = StateController.get()
 	return state and state.Storage
@@ -245,7 +250,7 @@ local function sellFiltered(filter: string)
 	if locked() then
 		return
 	end
-	local plan = SellView.plan(penSummary(), hands, filter, nil)
+	local plan = SellView.plan(penSummary(), hands, filter, nil, sellMult())
 	if plan.Count == 0 then
 		receipt(
 			if filter == "Dirty" then "You have no Dirty Ore to sell." else "Nothing to sell: Tobin leaves your best ores to you.",
@@ -279,9 +284,10 @@ local function refresh()
 		return
 	end
 	local pen = penSummary()
-	wire(SellView.setEntries(view, "Pen", SellView.entries(pen, "Pen")))
-	wire(SellView.setEntries(view, "Hands", SellView.entries(hands, "Hands")))
-	SellView.setFooter(view, SellView.plan(pen, hands, "Dirty", nil), SellView.plan(pen, hands, "AllButBest", nil))
+	local mult = sellMult()
+	wire(SellView.setEntries(view, "Pen", SellView.entries(pen, "Pen", mult)))
+	wire(SellView.setEntries(view, "Hands", SellView.entries(hands, "Hands", mult)))
+	SellView.setFooter(view, SellView.plan(pen, hands, "Dirty", nil, mult), SellView.plan(pen, hands, "AllButBest", nil, mult))
 	if not view.Confirm.Visible then
 		selectDefault(view)
 	end

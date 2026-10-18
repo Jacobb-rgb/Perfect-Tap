@@ -24,7 +24,12 @@
 	  else one step on, wrapping around) saves the next one in C.
 	- Attributes: Queue, QueueMax, Working, Cycles, LastSide (-1 / 1, the
 	  side the last item left), Status; the Sorter also Threshold (its Rarity
-	  Order) and Detail ("Rare+ ▶ right", the billboard line).
+	  Order) and Detail ("Rare+ ▶ right", the billboard line). A blocked
+	  side shows its reason at once; it clears when the queue empties or the
+	  next item leaves too (MachineService.outputFlowed), never in between.
+	  When the first side is blocked and the other takes the item, nothing
+	  shows at all (emitSide quiet).
+	- busy: while items wait in the queue (an insert wakes it).
 
 	Robot Arm (MachineData NoIntake)
 	- Every interval (ArmInterval) it takes the first finished item (Entry.Out)
@@ -40,8 +45,16 @@
 	  machine's MachineService State.NextEmit ArmHold seconds ahead on every
 	  tick), so the items wait in the back machine's Out for the arm.
 	- Attributes: Working + Holding (the ore id of the item it just moved, ""
-	  when idle) for ArmShow seconds after each move, Cycles, Status
-	  ("OutputBlocked" while the front machine refuses the item).
+	  when idle or for dirty ore, which keeps its secret: security #6) for
+	  ArmShow seconds after each move, Cycles, Status
+	  ("OutputBlocked" while the front machine refuses the item), each
+	  written only when it changes.
+	- The machines behind and in front are looked up once per layout change
+	  (MachineService.layoutVersion), not on every tick. The arm follows the
+	  back machine (MachineService.follow) and is busy while that machine
+	  is on the tick (it may finish an item any moment), has items in Out,
+	  or the arm shows a move or a status; a layout change wakes every arm
+	  of the plot.
 
 	Sell Box
 	- Intake (hopper, belts from every side, Put In) that takes the owner's
@@ -57,6 +70,13 @@
 	  the sales within SellToast seconds one toast ("Sell Box: Tobin paid
 	  $1.2K for 3 items." with the Dirty Ore reveal).
 	- Attribute Cycles (+1 per sale) for effects.
+	- The payment is the very LAST step of a sale: the Cycles attribute,
+	  the popup / toast batches and the stats come first, then
+	  EconomyService.award, DataService.changed and SellService.notifySold
+	  (listeners run in their own threads). So an error before it leaves
+	  the item with MachineService (it comes back out), never paid AND
+	  returned.
+	- busy: while a popup or toast waits to be sent (a sale wakes it).
 
 	Speed (interval): base seconds * MachineData.speedMult(the machine type's
 	Speed level) / MachineService.speedFactor(machine) (power), never below
@@ -251,27 +271,31 @@ local function route(machine: PlacedMachine, now: number, base: number, pick: Pi
 	local queue = machine.Entry.In
 	local desc = queue and queue[1]
 	if desc == nil then
-		MachineService.setAttrs(machine, { Working = false })
+		MachineService.setAttr(machine, "Working", false)
 		return
 	end
 	if not MachineLogic.isValidDesc(desc) then
 		-- junk from a damaged save: drop it so the machine doesn't jam
 		dropFirst(machine)
 		warn(`[LogisticsService] dropped a bad item from {machine.Owner.Name}'s {machine.Id}`)
-		MachineService.setAttrs(machine, { Queue = count(machine.Entry.In) })
+		MachineService.setAttr(machine, "Queue", count(machine.Entry.In))
 		DataService.changed(machine.Owner)
 		return
 	end
+	-- quiet: a side that refuses only shows once the item can't leave at all
 	local side = if pick(machine, desc) < 0 then -1 else 1
-	local result = MachineService.emitSide(machine, desc, side)
+	local result, _, reason = MachineService.emitSide(machine, desc, side, true)
 	if result == "Blocked" and fallback then
 		side = -side
-		result = MachineService.emitSide(machine, desc, side)
+		result, _, reason = MachineService.emitSide(machine, desc, side, true)
 	end
 	if result == "Blocked" then
-		-- emitSide set the Status; the item stays first in line
+		-- the item stays first in line
+		if reason then
+			MachineService.showBlocked(machine, reason)
+		end
 		state.NextSend = now + GameConfig.OutputRetry
-		MachineService.setAttrs(machine, { Working = false })
+		MachineService.setAttr(machine, "Working", false)
 		return
 	end
 	dropFirst(machine)
@@ -282,9 +306,14 @@ local function route(machine: PlacedMachine, now: number, base: number, pick: Pi
 		Working = machine.Entry.In ~= nil,
 		LastSide = side,
 		Cycles = bump(machine),
-		Status = "",
 	})
+	MachineService.outputFlowed(machine, machine.Entry.In == nil)
 	DataService.changed(machine.Owner)
+end
+
+-- A Splitter / Sorter needs the tick while items wait in its queue.
+local function routerBusy(machine: PlacedMachine, _now: number): boolean
+	return machine.Entry.In ~= nil
 end
 
 -- Splitter: left first, then the side the last item didn't take.
@@ -338,6 +367,7 @@ local splitterBehaviour: MachineService.Behaviour = {
 	tick = function(machine: PlacedMachine, now: number)
 		route(machine, now, LogisticsService.SplitInterval, splitterPick, true)
 	end,
+	busy = routerBusy,
 }
 
 local sorterBehaviour: MachineService.Behaviour = {
@@ -351,6 +381,7 @@ local sorterBehaviour: MachineService.Behaviour = {
 	tick = function(machine: PlacedMachine, now: number)
 		route(machine, now, LogisticsService.SortInterval, sorterPick, false)
 	end,
+	busy = routerBusy,
 }
 
 ---------------------------------------------------------------- Robot Arm
@@ -375,11 +406,51 @@ local function frontTakes(arm: PlacedMachine, front: PlacedMachine): boolean
 	return MachineService.hasIntake(front) and ConveyorLogic.faceAllowed(front.Entry, arm.X, arm.Z)
 end
 
+-- What the arm knows about its neighbours since the last layout change.
+type ArmCache = {
+	Version: number, -- MachineService.layoutVersion of the arm's plot when looked up
+	Back: PlacedMachine?,
+	Front: PlacedMachine?,
+	Takes: boolean, -- the front takes items from the arm's side (frontTakes)
+	Holds: boolean, -- the back machine's output front faces the arm: hold it in
+}
+
+-- The arm's neighbours, looked up again only after a layout change.
+local function armCache(arm: PlacedMachine): ArmCache
+	local state = arm.State
+	local version = MachineService.layoutVersion(arm.PlotId)
+	local cached = state.Neighbours :: ArmCache?
+	if cached and cached.Version == version then
+		return cached
+	end
+	local back, front = armNeighbours(arm)
+	local takes = back ~= nil and front ~= nil and frontTakes(arm, front)
+	local holds = false
+	if back and takes then
+		local ox, oz = Grid.outputCell(back.Id, back.X, back.Z, back.R)
+		holds = ox == arm.X and oz == arm.Z
+	end
+	-- wake whenever the back machine wakes: it may finish an item any moment
+	local before = cached and cached.Back
+	if before ~= back then
+		if before then
+			MachineService.unfollow(arm, before)
+		end
+		if back then
+			MachineService.follow(arm, back)
+		end
+	end
+	local fresh: ArmCache = { Version = version, Back = back, Front = front, Takes = takes, Holds = holds }
+	state.Neighbours = fresh
+	return fresh
+end
+
 --[[
 	Moves at most one item from back's Out into front. The check comes
-	first, then the pop and the insert with no yield in between.
+	first, then the pop and the insert with no yield in between. `takes`:
+	frontTakes already worked out (the arm's cache), nil = check now.
 ]]
-local function armMove(arm: PlacedMachine, back: PlacedMachine?, front: PlacedMachine?): (ArmResult, Desc?)
+local function armMove(arm: PlacedMachine, back: PlacedMachine?, front: PlacedMachine?, takes: boolean?): (ArmResult, Desc?)
 	if not back or not front or back == front then
 		return "Idle", nil
 	end
@@ -390,7 +461,8 @@ local function armMove(arm: PlacedMachine, back: PlacedMachine?, front: PlacedMa
 		return "Idle", nil
 	end
 	local owner = arm.Owner.UserId
-	if not frontTakes(arm, front) or not MachineService.canAccept(front, desc, owner, "Machine") then
+	local ok = if takes == nil then frontTakes(arm, front) else takes
+	if not ok or not MachineService.canAccept(front, desc, owner, "Machine") then
 		return "Refused", nil
 	end
 	local item = MachineLogic.popOut(back.Entry) :: Desc
@@ -402,7 +474,8 @@ local function armMove(arm: PlacedMachine, back: PlacedMachine?, front: PlacedMa
 		return "Refused", nil
 	end
 	local left = back.Entry.Out
-	MachineService.setAttrs(back, { OutCount = if left then #left else 0, Status = "" })
+	MachineService.setAttr(back, "OutCount", if left then #left else 0)
+	MachineService.outputFlowed(back, left == nil)
 	DataService.changed(arm.Owner)
 	return "Moved", item
 end
@@ -413,42 +486,86 @@ function LogisticsService.armMove(arm: PlacedMachine): (ArmResult, Desc?)
 	return armMove(arm, back, front)
 end
 
+-- The arm's Status, written only when it changes.
+local function armStatus(arm: PlacedMachine, status: string)
+	if arm.State.Status ~= status then
+		arm.State.Status = status
+		MachineService.setAttr(arm, "Status", status)
+	end
+end
+
 local function armTick(arm: PlacedMachine, now: number)
 	local state = arm.State
 	local showUntil = state.ShowUntil
 	if showUntil and now >= showUntil then
 		state.ShowUntil = nil
-		MachineService.setAttrs(arm, { Working = false, Holding = "" })
+		MachineService.setAttr(arm, "Working", false)
+		MachineService.setAttr(arm, "Holding", "")
 	end
-	local back, front = armNeighbours(arm)
-	if back and front and frontTakes(arm, front) then
+	local cache = armCache(arm)
+	local back, front = cache.Back, cache.Front
+	if back and cache.Holds then
 		-- the back machine's output front faces the arm: keep its items in for the arm
-		local ox, oz = Grid.outputCell(back.Id, back.X, back.Z, back.R)
-		if ox == arm.X and oz == arm.Z then
-			local held = tonumber(back.State.NextEmit) or 0
-			back.State.NextEmit = math.max(held, now + LogisticsService.ArmHold)
-		end
+		local held = tonumber(back.State.NextEmit) or 0
+		back.State.NextEmit = math.max(held, now + LogisticsService.ArmHold)
 	end
 	if now < (state.NextMove or 0) then
 		return
 	end
-	local result, item = armMove(arm, back, front)
+	local result, item = armMove(arm, back, front, cache.Takes)
 	if result == "Moved" and item then
 		local seconds = LogisticsService.interval(arm, LogisticsService.ArmInterval)
 		state.NextMove = now + seconds
 		state.ShowUntil = now + math.min(seconds * 0.8, LogisticsService.ArmShow)
-		MachineService.setAttrs(arm, { Working = true, Holding = item.O, Cycles = bump(arm), Status = "" })
+		-- dirty ore keeps its secret (security #6): the hand shows a plain chunk
+		local holding = if item.K == "Raw" then "" else item.O
+		MachineService.setAttrs(arm, { Working = true, Holding = holding, Cycles = bump(arm) })
+		armStatus(arm, "")
 	else
-		MachineService.setAttrs(arm, { Status = if result == "Refused" then "OutputBlocked" else "" })
+		armStatus(arm, if result == "Refused" then "OutputBlocked" else "")
 	end
+end
+
+--[[
+	Does the arm need the tick? While it shows a move or a status, after a
+	layout change (it looks again), and while it has a back and a front
+	machine and the back one has items in Out or is on the tick itself (it
+	may finish one any moment; the arm holds its output in meanwhile).
+]]
+local function armBusy(arm: PlacedMachine, _now: number): boolean
+	local state = arm.State
+	if state.ShowUntil ~= nil or (state.Status ~= nil and state.Status ~= "") then
+		return true
+	end
+	local cache = state.Neighbours :: ArmCache?
+	if not cache or cache.Version ~= MachineService.layoutVersion(arm.PlotId) then
+		return true
+	end
+	local back = cache.Back
+	if not back or not cache.Front or back.Removed then
+		return false
+	end
+	local out = back.Entry.Out
+	return (out ~= nil and #out > 0) or MachineService.isActive(back)
 end
 
 local armBehaviour: MachineService.Behaviour = {
 	spawned = function(arm: PlacedMachine)
+		arm.State.Status = ""
 		MachineService.setAttrs(arm, { Working = false, Holding = "", Cycles = 0, Status = "" })
 	end,
 	tick = armTick,
+	busy = armBusy,
 }
+
+-- After a layout change the plot's arms look at their neighbours again.
+local function wakeArms(_player: Player, plotId: number)
+	for _, machine in MachineService.ofPlot(plotId) do
+		if machine.Info.Behaviour == ROBOT_ARM then
+			MachineService.wake(machine)
+		end
+	end
+end
 
 ---------------------------------------------------------------- Sell Box
 
@@ -533,18 +650,26 @@ local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: numb
 	-- golems, collection rewards); onSold listeners still get the base price
 	local price = Bonuses.sellAmount(Bonuses.stats(player), base)
 	local sold: Desc = { K = desc.K, O = desc.O, G = desc.G, R = desc.R }
+	-- everything that could fail comes first: an error here sends the item
+	-- back out (MachineService.deliver) with nothing paid
+	MachineService.setAttr(machine, "Cycles", bump(machine))
+	local now = os.clock()
+	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)
+	addSale(machine, "SaleToast", LogisticsService.SellToast, sold, price, now)
 	local stats = (data :: { [string]: any }).Stats
 	if type(stats) == "table" then
 		local before = tonumber(stats.ItemsSold) or 0
 		stats.ItemsSold = (if before == before then before else 0) + 1
 	end
+	-- the payment is the very last step (listeners run in their own threads)
 	EconomyService.award(player, price, LogisticsService.SellSource, true)
 	DataService.changed(player)
 	SellService.notifySold(player, sold, base)
-	MachineService.setAttrs(machine, { Cycles = bump(machine) })
-	local now = os.clock()
-	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)
-	addSale(machine, "SaleToast", LogisticsService.SellToast, sold, price, now)
+end
+
+-- A Sell Box needs the tick while a popup or toast waits to be sent.
+local function sellBusy(machine: PlacedMachine, _now: number): boolean
+	return machine.State.SalePopup ~= nil or machine.State.SaleToast ~= nil
 end
 
 local sellBehaviour: MachineService.Behaviour = {
@@ -561,6 +686,7 @@ local sellBehaviour: MachineService.Behaviour = {
 	tick = function(machine: PlacedMachine, now: number)
 		flushSales(machine, now, false)
 	end,
+	busy = sellBusy,
 }
 
 ---------------------------------------------------------------- lifecycle
@@ -581,6 +707,7 @@ LogisticsService._test = {
 	sellBox = sellBehaviour,
 	sorterCycle = onSorterCycle,
 	flushSales = flushSales,
+	wakeArms = wakeArms,
 }
 
 function LogisticsService.init()
@@ -591,6 +718,7 @@ function LogisticsService.init()
 		end
 	end
 	MachineService.onAction("SorterCycle", onSorterCycle)
+	MachineService.onLayoutChanged(wakeArms)
 end
 
 function LogisticsService.start() end

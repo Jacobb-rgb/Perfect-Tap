@@ -138,7 +138,15 @@ return function(T, Loader)
 	end
 
 	local tick = processing.behaviour.tick
+	local MachineBillboard = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MachineBillboard")
+	-- the old job attributes ride in the one packed Job attribute now
+	-- (ProcessingService.jobText), read the way the client reads it
+	local JOB_FIELDS = { Working = "Working", WorkStart = "Start", WorkTime = "Time", WorkOre = "Ore", Cycles = "Cycles" }
 	local function attr(m: any, name: string): any
+		local field = JOB_FIELDS[name]
+		if field then
+			return (MachineBillboard.decodeJob(m.Model:GetAttribute("Job")) :: any)[field]
+		end
 		return m.Model:GetAttribute(name)
 	end
 	local function count(list: any): number
@@ -717,10 +725,17 @@ return function(T, Loader)
 		T.eq(toast.Payload.Text, "+1 Crystal Shard!", "toast text")
 		T.eq(toast.Payload.Kind, "Reward", "toast kind")
 		-- a broken or negative count starts again from 0: never negative
-		for _, broken in { -5, 0 / 0, "lots", math.huge } do
+		for _, broken in { -5, 0 / 0, "lots" } do
 			w.data.Shards = broken
 			job()
 			T.eq(w.data.Shards, 1, `from {broken}`)
+		end
+		-- through Shards.add: never past Shards.Max (an endless count is clamped too)
+		local Shards = Loader.requirePath("ServerScriptService.Server.Shards")
+		for _, full in { Shards.Max, math.huge } do
+			w.data.Shards = full
+			job()
+			T.eq(w.data.Shards, Shards.Max, `clamped at Shards.Max from {full}`)
 		end
 		w.data.Shards = 2.7
 		job()

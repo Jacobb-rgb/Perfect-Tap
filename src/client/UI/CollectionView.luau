@@ -331,7 +331,7 @@ function CollectionView.useButton(artifacts: any, collectionId: string): (string
 end
 
 -- What the book knows about the player besides the record (State snapshot).
-export type Wallet = { BlasterLevel: number, Shards: number }
+export type Wallet = { BlasterLevel: number, Shards: number, Vip: boolean? }
 
 --[[
 	The RESTORE button of a collection with exactly one artifact missing:
@@ -346,7 +346,7 @@ function CollectionView.restoreButton(artifacts: any, collectionId: string, wall
 		return nil, nil, nil
 	end
 	local cost = ArtifactConfig.RestoreShards[art.Rarity] or 0
-	local price, reason = ArtifactConfig.restoreQuote(artifacts, missing, wallet.BlasterLevel, wallet.Shards)
+	local price, reason = ArtifactConfig.restoreQuote(artifacts, missing, wallet.BlasterLevel, wallet.Shards, wallet.Vip)
 	local text = `RESTORE: {Format.commas(cost)} SHARDS`
 	if price then
 		return text, missing, nil
@@ -364,7 +364,7 @@ function CollectionView.restoreText(artifacts: any, artifactId: string, wallet: 
 		return CollectionView.RestoreHint
 	end
 	local cost = Format.commas(ArtifactConfig.RestoreShards[art.Rarity] or 0)
-	local _, reason = ArtifactConfig.restoreQuote(artifacts, artifactId, wallet.BlasterLevel, wallet.Shards)
+	local _, reason = ArtifactConfig.restoreQuote(artifacts, artifactId, wallet.BlasterLevel, wallet.Shards, wallet.Vip)
 	if reason == "Locked" then
 		return `The last one missing! Restore it for {cost} shards once your blaster opens a mine where it turns up.`
 	elseif reason == "NoShards" then

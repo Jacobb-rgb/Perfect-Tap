@@ -174,14 +174,31 @@ local KIND_ORDER = { Clean = 1, Ingot = 2, Gear = 3, Crushed = 4, Raw = 5 }
 -- Key of the one merged Dirty Ore row (not a storage key).
 PenView.DirtyKey = "Dirty"
 
+-- The podium income multiplier from the State's Bonuses (1 + IncomePct,
+-- the same bonus the podium tags and the HUD count); junk counts as none.
+function PenView.incomeMult(bonuses: any): number
+	local pct = if type(bonuses) == "table" then bonuses.IncomePct else nil
+	if type(pct) ~= "number" or pct ~= pct or pct < 0 or pct == math.huge then
+		return 1
+	end
+	return 1 + pct
+end
+
 --[[
 	Rows for a State Storage summary ("K|O|G|R" -> count): unknown keys
 	are skipped, cleaned ore first by income (best first), then the other
 	kinds by value, dirty ore last as ONE row (PenView.DirtyKey; its Keys
 	map holds the real keys), so the list never shows which chunks are
-	the same ore. Pick mode keeps only podium ore.
+	the same ore. Pick mode keeps only podium ore. `incomeMult` (default 1)
+	scales "+$X/s" like the podium tags and the HUD do (PenView.incomeMult).
 ]]
-function PenView.entries(summary: any, mode: Mode?): { Entry }
+function PenView.entries(summary: any, mode: Mode?, incomeMult: number?): { Entry }
+	local mult = if type(incomeMult) == "number"
+			and incomeMult == incomeMult
+			and incomeMult >= 0
+			and incomeMult < math.huge
+		then incomeMult
+		else 1
 	local list: { Entry } = {}
 	if type(summary) ~= "table" then
 		return list
@@ -227,7 +244,7 @@ function PenView.entries(summary: any, mode: Mode?): { Entry }
 						Name = ItemData.displayName(desc.K, desc.O, desc.G, desc.R),
 						Grade = if dirty then nil else desc.G,
 						Count = math.floor(count),
-						Income = if podiumOre then ItemData.income(desc) else 0,
+						Income = if podiumOre then ItemData.income(desc) * mult else 0,
 						Value = if dirty then 0 else ItemData.value(desc.K, desc.O, desc.G, desc.R),
 						Color = if dirty or not ore then PenView.DirtyColor else ore.Color,
 						Mystery = dirty,
@@ -749,7 +766,21 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 	return created
 end
 
--- "37 / 40" and the fill bar (green, amber from 80%, red when full).
+-- The status line while the pen holds more than its capacity (State PenOver:
+-- a rescue move overfilled it; the server refuses new ore with "PenOver").
+PenView.OverText = "Over its limit: nothing new goes in until you TAKE, sell or SEND some"
+
+-- Does the pen hold more than its capacity?
+function PenView.isOver(count: number, capacity: number): boolean
+	return capacity > 0 and count > capacity
+end
+
+--[[
+	"37 / 40" and the fill bar (green, amber from 80%, red when full). Over
+	its capacity it stays red and, while nothing is being sent (setSending
+	runs first and showed the idle line), the status line says why new ore
+	can't go in (OverText).
+]]
 function PenView.setHeader(refs: Refs, count: number, capacity: number)
 	refs.Header.Text = `{Format.commas(count)} / {Format.commas(capacity)}`
 	local fraction = if capacity > 0 then count / capacity else 1
@@ -757,6 +788,10 @@ function PenView.setHeader(refs: Refs, count: number, capacity: number)
 	local color = fillColor(fraction)
 	refs.BarFill.BackgroundColor3 = color
 	refs.Header.TextColor3 = if fraction >= 0.8 then color else Theme.Text
+	if PenView.isOver(count, capacity) and refs.Status.Text == PenView.SendIdleText then
+		refs.Status.Text = PenView.OverText
+		refs.Status.TextColor3 = Theme.Bad
+	end
 end
 
 -- The footer: a text hint, or (gamepad) button glyphs with "choose" / "close".

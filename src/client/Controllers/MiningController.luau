@@ -28,6 +28,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local MovementConfig = require(Shared.Config.MovementConfig)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -158,9 +159,19 @@ local function blasterLevel(tool: Tool?): number
 	return if type(level) == "number" then level else levelOf(tool)
 end
 
+-- The Reach enchant's extra studs (State.Bonuses.Reach: the same capped
+-- bonus MiningService adds to the range it accepts).
+local function bonusReach(): number
+	local state = StateController.get()
+	local bonuses = if state then state.Bonuses else nil
+	local reach = if type(bonuses) == "table" then bonuses.Reach else nil
+	return if type(reach) == "number" and reach == reach and reach > 0 then math.min(reach, 40) else 0
+end
+
 local function rangeOf(tool: Tool?): number
 	local range = tool and tool:GetAttribute("Range")
-	return if type(range) == "number" then range else BlasterData.get(levelOf(tool)).Range
+	local base = if type(range) == "number" then range else BlasterData.get(levelOf(tool)).Range
+	return base + bonusReach()
 end
 
 local function glowOf(tool: Tool?): Color3
@@ -231,6 +242,74 @@ local function screenRay(point: Vector2, viewport: boolean): Ray?
 end
 
 -- The nearest rock in front of the camera within `range` of the character.
+-- The server deals no damage through walls (BeamSight): aim assist only
+-- locks onto a rock the head can see. Like BeamSight, a line to the rock
+-- box's closest point and one to its top, each stopping BeamStopShort
+-- before the rock; characters, items, debris, the rocks and BeamIgnore
+-- parts never block (the filter is rebuilt at most once a second).
+local sightParams: RaycastParams? = nil
+local sightAt = -math.huge
+local sightRocks: Instance? = nil
+
+local function sightFilter(rocks: Instance?): RaycastParams
+	local now = os.clock()
+	local current = sightParams
+	if current and sightRocks == rocks and now - sightAt < 1 then
+		return current
+	end
+	local ignore: { Instance } = {}
+	for _, name in { "Items", "Debris" } do
+		local folder = Workspace:FindFirstChild(name)
+		if folder then
+			table.insert(ignore, folder)
+		end
+	end
+	if rocks and rocks ~= Workspace then
+		table.insert(ignore, rocks)
+	end
+	for _, other in Players:GetPlayers() do
+		if other.Character then
+			table.insert(ignore, other.Character)
+		end
+	end
+	for _, tagged in CollectionService:GetTagged(MovementConfig.BeamIgnoreTag) do
+		table.insert(ignore, tagged)
+	end
+	local fresh = current or RaycastParams.new()
+	fresh.FilterType = Enum.RaycastFilterType.Exclude
+	fresh.FilterDescendantsInstances = ignore
+	fresh.IgnoreWater = true
+	fresh.RespectCanCollide = true
+	sightParams, sightAt, sightRocks = fresh, now, rocks
+	return fresh
+end
+
+local function canSee(eye: Vector3, rock: Model): boolean
+	if not MovementConfig.BeamLos then
+		return true
+	end
+	local cf, size = rock:GetBoundingBox()
+	local half = size / 2
+	local p = cf:PointToObjectSpace(eye)
+	local closest = cf:PointToWorldSpace(
+		Vector3.new(math.clamp(p.X, -half.X, half.X), math.clamp(p.Y, -half.Y, half.Y), math.clamp(p.Z, -half.Z, half.Z))
+	)
+	local top = cf:PointToWorldSpace(Vector3.new(0, half.Y, 0))
+	local params = sightFilter(rock.Parent)
+	for _, target in { closest, top } do
+		local line = target - eye
+		local length = line.Magnitude - MovementConfig.BeamStopShort
+		if length <= 0 then
+			return true
+		end
+		local hit = Workspace:Raycast(eye, line.Unit * length, params)
+		if not hit or hit.Instance:GetAttribute(MovementConfig.BeamIgnoreAttribute) == true then
+			return true
+		end
+	end
+	return false
+end
+
 local function findAssist(root: BasePart, range: number): Model?
 	local camera = Workspace.CurrentCamera
 	if not camera then
@@ -240,6 +319,8 @@ local function findAssist(root: BasePart, range: number): Model?
 	local flatLook = if look.Magnitude > 0.05 then look.Unit else root.CFrame.LookVector
 	local best: Model? = nil
 	local bestScore = math.huge
+	local head = player.Character and player.Character:FindFirstChild("Head")
+	local eye = if head and head:IsA("BasePart") then head.Position else root.Position + Vector3.new(0, 1.5, 0)
 	for _, rock in CollectionService:GetTagged(ROCK_TAG) do
 		if rock:IsA("Model") and rock.PrimaryPart then
 			local offset = rock.PrimaryPart.Position - root.Position
@@ -249,7 +330,8 @@ local function findAssist(root: BasePart, range: number): Model?
 				local facing = if flat.Magnitude > 0.5 then flatLook:Dot(flat.Unit) else 1
 				if facing > ASSIST_FACING then
 					local score = math.max(distance, 0) + 1 + (1 - facing) * 12
-					if score < bestScore then
+					-- the line-of-sight raycast only for a would-be best
+					if score < bestScore and canSee(eye, rock) then
 						best, bestScore = rock, score
 					end
 				end

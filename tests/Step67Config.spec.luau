@@ -1877,8 +1877,10 @@ return function(T, Loader)
 			T.eq(rose.Source, "Royal", `run {run}: a newer server's field kept`)
 			T.eq(data.Golems.Owned[3].Paid, true, `run {run}: a paid unknown golem stays paid`)
 			T.eq(data.Daily, nil, `run {run}: the retired chest streak is gone`)
-			T.eq(#data.Golems.Equipped, 1, `run {run}: an unknown golem isn't equipped here`)
-			T.eq(data.Golems.Equipped[1], 2)
+			T.eq(#data.Golems.Equipped, 2, `run {run}: an unknown golem stays equipped (docs/SAVE_AUDIT.md #1(b))`)
+			T.eq(data.Golems.Equipped[1], 1)
+			T.eq(data.Golems.Equipped[2], 2)
+			T.eq(GolemConfig.equippedKinds(data.Golems), "RoseKnight", `run {run}: only the known kind follows here`)
 			T.eq(data.Golems.NextId, 6)
 			T.eq(data.Artifacts.Found.FutureArtifact, 4, `run {run}: FutureArtifact kept`)
 			T.eq(data.Artifacts.Chapters.FutureCollection, true)
@@ -2301,14 +2303,60 @@ return function(T, Loader)
 		Policy._test.setFetcher(function()
 			error("PolicyService down")
 		end)
+		local now = 100
+		Policy._test.setClock(function()
+			return now
+		end)
 		T.truthy(Policy.paidRandomRestricted(q), "strict when the call fails")
 		T.eq(q.attrs.PaidRandomRestricted, true)
+		local asked = 0
 		Policy._test.setFetcher(function()
+			asked += 1
 			return { ArePaidRandomItemsRestricted = true }
 		end)
+		-- right after a failure, requests get the strict answer without a new call (audit S1)
+		for _ = 1, 5 do
+			T.truthy(Policy.paidRandomRestricted(q))
+		end
+		T.eq(asked, 0, "no call storm while PolicyService is down")
+		now += Policy.RefetchSeconds + 1
 		T.truthy(Policy.paidRandomRestricted(q))
+		T.eq(asked, 1, "asked again after RefetchSeconds")
 		T.truthy(Policy.cached(q).Known, "known now")
 		Policy._test.reset()
+	end)
+
+	T.test("Step67: requests wait for the retry loop instead of asking PolicyService again", function()
+		Policy._test.reset()
+		local scheduled: { () -> () } = {}
+		Policy._test.setSchedule(function(_seconds, fn)
+			table.insert(scheduled, fn)
+		end)
+		local calls = 0
+		Policy._test.setFetcher(function()
+			calls += 1
+			error("PolicyService down")
+		end)
+		local p = fakePlayer(7)
+		local ok, err = pcall(function()
+			Policy.prefetch(p)
+			T.eq(calls, 1)
+			for _ = 1, 10 do
+				T.truthy(Policy.paidRandomRestricted(p), "strict while unknown")
+			end
+			T.eq(calls, 1, "the retry loop is the only caller")
+			Policy._test.setFetcher(function()
+				calls += 1
+				return { ArePaidRandomItemsRestricted = false }
+			end)
+			table.remove(scheduled, 1)()
+			T.eq(calls, 2)
+			T.falsy(Policy.paidRandomRestricted(p), "the loop's answer is used")
+		end)
+		Policy._test.reset()
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	T.test("Step67: a failed policy call on join is retried with backoff until it is known", function()

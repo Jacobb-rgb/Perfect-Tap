@@ -21,6 +21,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
+local GearConfig = require(Shared.Config.GearConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
@@ -30,6 +31,7 @@ local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local HudController = require(script.Parent.HudController)
+local StateController = require(script.Parent.StateController)
 
 local InteractController = {}
 
@@ -97,15 +99,53 @@ local function handsFull(): boolean
 	return carryCount() >= capacity
 end
 
-local function isPickable(model: Model, root: BasePart): boolean
+-- Beyond the bare-handed reach the server only lets you grab an item with a
+-- clear line to it (CarryService.hasReach: BASE_REACH + PICKUP_SLACK).
+local LINE_FREE_REACH = GearConfig.value("Gloves", 0) + 2
+local lineParams: RaycastParams? = nil
+
+-- Nothing solid between the root and the item (items and your own character
+-- don't count): the same test as CarryService's defaultReachClear.
+local function lineClear(root: BasePart, primary: BasePart): boolean
+	local params = lineParams
+	if not params then
+		local made = RaycastParams.new()
+		made.FilterType = Enum.RaycastFilterType.Exclude
+		made.RespectCanCollide = true
+		lineParams = made
+		params = made
+	end
+	local p = params :: RaycastParams
+	local ignore: { Instance } = {}
+	local items = Workspace:FindFirstChild("Items")
+	if items then
+		table.insert(ignore, items)
+	end
+	if player.Character then
+		table.insert(ignore, player.Character)
+	end
+	p.FilterDescendantsInstances = ignore
+	return Workspace:Raycast(root.Position, primary.Position - root.Position, p) == nil
+end
+
+-- Within reach (Gloves: the server mirrors the range in the PickupRange
+-- attribute). The wall check beyond the bare-handed reach runs only when
+-- `checkLine` (it raycasts: the target loop asks only for a new best).
+local function isPickable(model: Model, root: BasePart, checkLine: boolean?): boolean
 	if model:GetAttribute("Owner") ~= player.UserId or model:GetAttribute("State") ~= "Loose" then
 		return false
 	end
 	local primary = model.PrimaryPart
-	-- Gloves reach further: the server mirrors the range in the PickupRange attribute
 	local range = player:GetAttribute("PickupRange")
 	local reach = if type(range) == "number" and range > 0 then range else GameConfig.PickupRange
-	return primary ~= nil and (primary.Position - root.Position).Magnitude <= reach
+	if primary == nil then
+		return false
+	end
+	local distance = (primary.Position - root.Position).Magnitude
+	if distance > reach then
+		return false
+	end
+	return checkLine == false or distance <= LINE_FREE_REACH or lineClear(root, primary)
 end
 
 local function chooseTarget(root: BasePart): Model?
@@ -121,7 +161,7 @@ local function chooseTarget(root: BasePart): Model?
 		end
 		local hit = Workspace:Raycast(ray.Origin, ray.Direction * 60, params)
 		local model = hit and itemFromPart(hit.Instance)
-		if model and isPickable(model, root) then
+		if model and isPickable(model, root, true) then
 			return model
 		end
 	end
@@ -131,13 +171,14 @@ local function chooseTarget(root: BasePart): Model?
 		else camera.CFrame.LookVector
 	local best, bestScore = nil, math.huge
 	for _, model in CollectionService:GetTagged("Item") do
-		if model:IsA("Model") and isPickable(model, root) then
+		if model:IsA("Model") and isPickable(model, root, false) then
 			local offset = (model.PrimaryPart :: BasePart).Position - root.Position
 			local flat = Vector3.new(offset.X, 0, offset.Z)
 			local flatLook = Vector3.new(look.X, 0, look.Z)
 			local facing = if flat.Magnitude > 0.5 and flatLook.Magnitude > 0.1 then flatLook.Unit:Dot(flat.Unit) else 1
 			local score = offset.Magnitude * (1.7 - facing)
-			if score < bestScore then
+			-- the wall check only for a would-be best (an item behind a wall is skipped)
+			if score < bestScore and isPickable(model, root, true) then
 				best, bestScore = model, score
 			end
 		end
@@ -166,7 +207,9 @@ local function updateHint()
 	hint.Enabled = true
 	hintName.Text = ItemData.displayName(kind, oreId, grade, recipe)
 	hintName.TextColor3 = color
-	local value = (target:GetAttribute("Value") :: number?) or 0
+	-- what Tobin pays for it (the item's base Value x the player's sell bonus)
+	local base = (target:GetAttribute("Value") :: number?) or 0
+	local value = math.floor(base * StateController.sellMult() + 0.5)
 	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled
 		then "X"
 		elseif UserInputService.TouchEnabled then "Grab"

@@ -155,7 +155,15 @@ return function(T, Loader)
 	local function tick(m: any, now: number)
 		sorterTick(m, now)
 	end
+	local MachineBillboard = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MachineBillboard")
+	-- the old job attributes ride in the one packed Job attribute now
+	-- (ProcessingService.jobText), read the way the client reads it
+	local JOB_FIELDS = { Working = "Working", WorkStart = "Start", WorkTime = "Time", WorkOre = "Ore", Cycles = "Cycles" }
 	local function attr(m: any, name: string): any
+		local field = JOB_FIELDS[name]
+		if field then
+			return (MachineBillboard.decodeJob(m.Model:GetAttribute("Job")) :: any)[field]
+		end
 		return m.Model:GetAttribute(name)
 	end
 	local function count(list: any): number
@@ -274,6 +282,24 @@ return function(T, Loader)
 		T.eq(attr(m, "LastRoute"), "Keep", "default Rare+")
 		T.eq(attr(m, "Kept"), 4)
 		T.eq(attr(m, "Sent"), 2)
+	end)
+
+	withWorld("IronBox: a pen over its limit sends kept ore out with the 'over' hint", function(w)
+		local now = 1000
+		box.setClock(function()
+			return now
+		end)
+		local m = place(w)
+		local capacity = PenService.capacityOf(w.data)
+		for i = 1, capacity + 3 do
+			w.data.Storage[i] = item("Clean", "Coal", "Rough")
+		end
+		sortOne(w, m, item("Clean", "Gold", "Clean"), 10)
+		T.eq(#w.data.Storage, capacity + 3, "nothing added while over")
+		T.eq(count(m.Entry.Out), 1, "out of the front instead")
+		local hints = notesNamed(w, "Notify")
+		T.eq(#hints, 1, "one hint")
+		T.eq(hints[1].Payload.Text, IronBoxService.PenOverText, "says the pen is over its limit")
 	end)
 
 	withWorld("IronBox: a full pen sends kept ore out of the front, with a hint", function(w)

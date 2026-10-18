@@ -452,6 +452,13 @@ local function hookCharacter(player: Player, character: Model)
 	end)
 end
 
+-- The Speed of the board `player` rides (0 on foot): MovementService adds it to the speed
+-- it allows while the character's Hoverboard attribute is set.
+function HoverboardService.speedOf(player: Player): number
+	local board = HoverboardData.get(riding[player])
+	return if board then board.Speed else 0
+end
+
 -- Internals for the Lune tests only (tests/HoverboardService.spec.luau).
 HoverboardService._test = {
 	action = onAction,

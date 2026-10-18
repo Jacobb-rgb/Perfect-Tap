@@ -62,6 +62,7 @@ local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local StateService = require(script.Parent.StateService)
 local EconomyService = require(script.Parent.EconomyService)
+local MovementService = require(script.Parent.MovementService)
 
 local ElevatorService = {}
 
@@ -283,6 +284,7 @@ local function teleport(player: Player, target: CFrame): boolean
 	end
 	root.AssemblyLinearVelocity = Vector3.zero
 	character:PivotTo(target)
+	MovementService.serverMoved(player) -- the movement check allows this jump (rides, fall rescues)
 	return true
 end
 

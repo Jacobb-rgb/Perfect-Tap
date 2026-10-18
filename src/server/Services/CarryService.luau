@@ -44,6 +44,14 @@
 	capacity: 6 in front of the chest (below the chin, so the view and the
 	aim stay free), 6 on the back, every further item joins the back
 	bundle (24 with Backpack V and Strong Back).
+
+	Looks (docs/SERVER_PERF_AUDIT.md #3): belt items wear a light look; a
+	pickup puts on the full one (ItemService.dress) before the weld.
+	Only records still "Carried" count (Security #11): list, takeTop and
+	drops skip and forget anything else, and ItemService tells this service
+	when it consumes a carried record (onCarriedConsumed).
+	Drops and throws add at most CharacterSpeedCap studs/s of the
+	character's own (client-simulated) speed (Security #8).
 ]]
 
 local Players = game:GetService("Players")
@@ -64,6 +72,9 @@ local CarryService = {}
 
 -- studs of lag slack on top of the pickup range the client checks
 local PICKUP_SLACK = 2
+-- the most of the character's own speed a drop or throw passes on (studs/s):
+-- the character's physics belong to its client (Security #8)
+CarryService.CharacterSpeedCap = 30
 -- everyone's reach without Gloves: further grabs need a clear line (hasReach)
 local BASE_REACH = GearConfig.value("Gloves", 0)
 
@@ -86,9 +97,36 @@ function CarryService.pickupRange(player: Player): number
 	return Bonuses.pickupRange(Bonuses.stats(player))
 end
 
-function CarryService.list(player: Player): { ItemService.ItemRecord }
-	return carried[player] or {}
+-- Forgets every record in the hands' list that isn't "Carried" any more
+-- (consumed, released...). Returns the list (nil = carries nothing).
+local function prune(player: Player): { ItemService.ItemRecord }?
+	local list = carried[player]
+	if not list then
+		return nil
+	end
+	for i = #list, 1, -1 do
+		if list[i].State ~= "Carried" then
+			table.remove(list, i)
+		end
+	end
+	return list
 end
+
+function CarryService.list(player: Player): { ItemService.ItemRecord }
+	return prune(player) or {}
+end
+
+-- The character's own velocity, at most CharacterSpeedCap long (zero when broken).
+local function characterVelocity(root: BasePart): Vector3
+	local v = root.AssemblyLinearVelocity
+	local length = v.Magnitude
+	if length ~= length or length == math.huge then
+		return Vector3.zero
+	end
+	local cap = CarryService.CharacterSpeedCap
+	return if length > cap then v.Unit * cap else v
+end
+CarryService.characterVelocity = characterVelocity
 
 --[[
 	Where the index-th carried item sits (root space). A big backpack
@@ -180,6 +218,8 @@ end
 CarryService.updateWalkSpeed = updateWalkSpeed
 
 local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
+	-- in the hands an item wears its full look (a belt item was light)
+	ItemService.dress(record, false)
 	local model = record.Model
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -214,13 +254,14 @@ end
 
 -- Removes the top carried item without releasing it (for machines/selling).
 function CarryService.takeTop(player: Player, predicate: ((ItemService.ItemRecord) -> boolean)?): ItemService.ItemRecord?
-	local list = carried[player]
+	-- only items still in the hands (never a consumed one: Security #11)
+	local list = prune(player)
 	if not list then
 		return nil
 	end
 	for i = #list, 1, -1 do
 		local record = list[i]
-		if not predicate or predicate(record) then
+		if record.State == "Carried" and (not predicate or predicate(record)) then
 			table.remove(list, i)
 			detach(record)
 			updateWalkSpeed(player)
@@ -297,7 +338,7 @@ function CarryService.pickup(player: Player, record: ItemService.ItemRecord): bo
 	attach(player, root, record, #list)
 	updateWalkSpeed(player)
 	-- dirty ore keeps its secret: no ore color for raw chunks (design v2)
-	Net.fire("Fx", player, "Pickup", record.Body.Position, if record.Kind == "Raw" then nil else record.OreId)
+	Net.fire("Fx", player, "Pickup", record.Body.CFrame.Position, if record.Kind == "Raw" then nil else record.OreId)
 	for _, callback in pickupCallbacks do
 		task.spawn(callback, player, record)
 	end
@@ -319,16 +360,31 @@ local function dropCFrame(player: Player, root: BasePart): CFrame
 	local position = if hit then hit.Position - root.CFrame.LookVector * 1.2 else origin + ahead
 	return CFrame.new(position)
 end
+local dropSpot: (Player, BasePart) -> CFrame = dropCFrame
+
+CarryService.TooManyText = "Too many of your items lie around: pick some up first."
+CarryService.TooManyToastGap = 3 -- seconds between two of those toasts
+local tooManyToastAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 
 local function dropTop(player: Player, velocity: Vector3?): ItemService.ItemRecord?
 	local root = Guard.rootPart(player)
-	local list = carried[player]
+	local list = prune(player)
 	if not root or not list or #list == 0 then
+		return nil
+	end
+	-- the hard ceiling of loose items (GameConfig.MaxLooseItemsTotal): nobody
+	-- pours a whole pen onto the map
+	if ItemService.atTotalCap(player.UserId) then
+		local now = os.clock()
+		if now - (tooManyToastAt[player] or -math.huge) >= CarryService.TooManyToastGap then
+			tooManyToastAt[player] = now
+			Net.fire("Notify", player, { Text = CarryService.TooManyText, Kind = "Deny" })
+		end
 		return nil
 	end
 	local record = table.remove(list) :: ItemService.ItemRecord
 	detach(record)
-	ItemService.release(record, dropCFrame(player, root), velocity or (root.AssemblyLinearVelocity + root.CFrame.LookVector * 4))
+	ItemService.release(record, dropSpot(player, root), velocity or (characterVelocity(root) + root.CFrame.LookVector * 4))
 	-- put down on purpose: the Ore Magnet leaves it alone until it is picked up again
 	record.HandDropped = true
 	updateWalkSpeed(player)
@@ -347,7 +403,8 @@ function CarryService.dropAll(player: Player)
 	for i, record in list do
 		if record.State == "Carried" then
 			detach(record)
-			if root then
+			-- at the hard ceiling of loose items they go into the pen instead
+			if root and not ItemService.atTotalCap(player.UserId) then
 				ItemService.release(record, root.CFrame * CFrame.new((i % 3 - 1) * 1.5, 1 + math.floor(i / 3), -2))
 			else
 				ItemService.stash(record, nil)
@@ -385,15 +442,15 @@ local function onThrow(player: Player, direction: any, power: any)
 	local throwDir = (flat.Unit * math.sqrt(1 - pitch * pitch) + Vector3.new(0, pitch, 0)).Unit
 	local stats = Bonuses.stats(player)
 	local speed = (GameConfig.ThrowSpeedMin + (GameConfig.ThrowSpeedMax - GameConfig.ThrowSpeedMin) * charge) * Bonuses.throwMult(stats)
-	local velocity = throwDir * speed + Vector3.new(0, 8, 0) + root.AssemblyLinearVelocity * 0.5
+	local velocity = throwDir * speed + Vector3.new(0, 8, 0) + characterVelocity(root) * 0.5
 	local record = dropTop(player, velocity)
 	if record then
 		-- Grip Gloves throw harder than GameConfig.MaxItemSpeed allows: this
 		-- release may fly as fast as the throw plus half a legal run (the
 		-- anti-teleport checks still hold a spoofed run speed to that)
 		ItemService.allowSpeed(record, speed + 0.5 * Bonuses.walkSpeed(stats))
+		Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
 	end
-	Net.fireNear("Fx", root.Position, 80, nil, "Throw", root.Position)
 end
 
 -- The Ore Magnet's catch: an item that flew to the player's feet goes into
@@ -405,12 +462,33 @@ function CarryService.magnetCatch(player: Player, record: ItemService.ItemRecord
 	return CarryService.pickup(player, record)
 end
 
+-- A carried record was consumed (ItemService.onCarriedConsumed): it leaves
+-- its owner's hands' list, so nothing can take, clean or drop it again.
+function CarryService.forget(record: ItemService.ItemRecord)
+	local player = Players:GetPlayerByUserId(record.Owner)
+	local list = player and carried[player]
+	if not player or not list then
+		return
+	end
+	local index = table.find(list, record)
+	if index then
+		table.remove(list, index)
+		updateWalkSpeed(player)
+	end
+end
+
 -- Internals for the Lune tests only (tests/GearService.spec.luau).
 CarryService._test = {
 	-- the line-of-sight check of long grabs (nil = the real raycast)
 	setReach = function(check: ((Player, Vector3, ItemService.ItemRecord) -> boolean)?)
 		reachClear = check or defaultReachClear
 	end,
+	-- where a drop appears (nil = the real raycast; the tests' world has nothing to hit)
+	setDropSpot = function(spot: ((Player, BasePart) -> CFrame)?)
+		dropSpot = spot or dropCFrame
+	end,
+	drop = onDrop,
+	throw = onThrow,
 }
 
 function CarryService.init()
@@ -419,6 +497,8 @@ function CarryService.init()
 	Net.on("CarryThrow", onThrow)
 	-- the Ore Magnet puts what it fetched into your hands
 	ItemService.setMagnetHands(CarryService.room, CarryService.magnetCatch)
+	-- a carried item consumed elsewhere (the engine destroyed it) leaves the hands
+	ItemService.onCarriedConsumed(CarryService.forget)
 
 	local function hookCharacter(player: Player, character: Model)
 		local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
