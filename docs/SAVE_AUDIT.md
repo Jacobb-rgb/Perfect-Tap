@@ -15,22 +15,24 @@ This audit only reads. Nothing in the game was changed. DataTemplate, Migrations
 
 | # | Status |
 |---|---|
-| 1 | **Gate done:** a save with `Version > Migrations.Latest` is refused untouched (no lock taken), and the player sees "The game just updated, please rejoin". PUBLISHING.md step 12 says to always Migrate To Latest Update. **Still open:** keeping unknown values in Migrations (MAX_LEVEL_KEPT, podium keys and ores). It comes after integrate/steps67 lands, since that branch rewrote Migrations. |
-| 2 | **Done:** `ProfileStore.storable` / `repair` (pure). Every save repairs in place, `OnRepair` warns with the paths, and the rest is saved. |
-| 3 | **Done:** a SessionId per load in `Lock`. `save()` writes only to its own session; a nil lock means the session is lost. |
+| 1 | **Gate done:** a save with a Version above the server's (`DataService.latestVersion()`: the higher of `DataTemplate.Version` and `Migrations.Latest`) is refused untouched (no lock taken), and the player sees "The game just updated, please rejoin". A spec requires the two constants to be equal, and PUBLISHING.md step 12 says to bump them together, always Migrate To Latest Update, and never roll back to a lower save version. **Still open:** keeping unknown values in Migrations (MAX_LEVEL_KEPT, podium keys and ores). It comes after integrate/steps67 lands, since that branch rewrote Migrations. |
+| 2 | **Done:** `ProfileStore.storable` / `repair` (pure). Repair runs **inside the UpdateAsync transform**, on exactly what is written, so a value changed while the request waits is repaired too. `OnRepair` warns with the paths, and the rest is saved. |
+| 3 | **Done:** a SessionId per load in `Lock`. `save()` writes only to its own session; a nil lock means the session is lost. A session stays live on its server until its release succeeds, it is lost or DataService forgets it, and a live one blocks a second load of the key there. One load per UserId per server, a load stops (and takes no lock) once its player left. A rejoin never loads past a final save still running: it waits up to 40 s, then is told to rejoin. |
 | 4 | **Done:** reconcile and Migrate run in a pcall. On an error only our own lock is cleared, the data is untouched, and the player is kicked. `Purchases` that isn't a table is reset (with a warn) instead of throwing. |
-| 5 | **Done:** `AutosaveInterval` 60 s, `StaleLockSeconds` 180 s (both in GameConfig). One autosave round takes 60 s. A younger lock is never taken over, so the old "half the stale time on the last try" shortcut is gone: a slow final save keeps its session. |
+| 5 | **Done:** `AutosaveInterval` 60 s, `StaleLockSeconds` 180 s (both in GameConfig). Each profile saves 60 s after its last save (checked every 5 s). A failed refresh warns and is tried again after 15 s. Old-format locks (no SessionId) stay live for 600 s. A lock time over 60 s in the future counts as broken. A younger lock is never taken over, so the old "half the stale time on the last try" shortcut is gone: a slow final save keeps its session. |
 | 6 | **Done:** the template is used only when nothing is stored. Any other shape gives "malformed" and nothing is written. |
 | 7 | **Done:** Studio uses `TerraForge_PlayerData_Studio` unless `GameConfig.StudioLiveData`. Test players (UserId <= 0) live in memory only. |
 | 8 | **Rules sent** to the mine-floors chat (MonetizationService already follows them). DataService now never trims purchase ids younger than 30 days. |
-| 9, 13 | **Done:** loads and releases count in `inFlight` from their first step, so BindToClose waits for each of them. |
+| 9, 13 | **Done:** loads and releases count in `inFlight` from their first step, so BindToClose waits for each of them. A release blocks the autosave from its first step; the beforeRelease callbacks get 5 s, then the final save starts anyway. A load still waiting at shutdown stops at once. Any save that finds the session lost kicks the player (no zombies). |
 | 10 | **Done:** at shutdown the stores go urgent (2 attempts, 0.5 s pauses), the budget wait is at most 3 s, and the final save makes 2 attempts. |
 | 11 | **Done:** tests/SaveSize.spec.luau measures 134 KB at every cap (limit 256 KB). |
 | 12 | **Done** together with #5. |
 | 14 | **Done:** docs/SUPPORT.md. |
 
-Every scenario has a spec in tests/SaveSafety.spec.luau, with a fake store that rejects what Roblox rejects. Run
-against the old ProfileStore and DataService, 16 of its 17 first specs failed.
+Every scenario has a spec in tests/SaveSafety.spec.luau (31): the audit's, plus the adversarial review's R1–R4, A,
+C, the shutdown load and the real autosave schedule. They run on a fake store that rejects what Roblox rejects, can
+yield, hang or run a transform twice. Against the old code (49c2bac), 16 of the first 17 failed. Against the
+reviewed commit (ec76d00), the 12 review specs failed.
 
 ## What is already solid
 
@@ -101,6 +103,11 @@ Machines, upgrades and the steps 6–7 records already keep unknown entries. The
 Once one service writes such a value anywhere in the save, **every** autosave and the final save fail for that player. The only sign is a `warn`. When they leave, the whole session since the last good save is gone. Migrations clean these at **load** (finite money, rebuilt lists), but nothing checks at **save**. The code has dozens of writers (pen, machine queues, trains, steps 6–7 records). I found no such write on main today, but a single future slip is enough.
 
 **Fix:** a pure `ProfileStore.storable(data)` check before every write. It walks the save and returns the path of the first bad value. Bad values are repaired where that is safe (NaN or inf → 0, holes closed up) or the field is dropped. The rest is saved, and the path is logged to analytics.
+
+*Correction (review, 2026-10-18):* Roblox's engine DataStores **do** store NaN and inf (Open Cloud returns them
+tagged). So NaN alone never blocked a save. Repair still turns them into 0, because no reader can use them, and
+Migrations zeroes Coins and TotalEarned on load anyway. The blocking cases are the others: userdata, functions, bad
+keys, gapped or mixed tables and loops.
 
 **Test ideas:**
 - ProfileStore.spec with a fake store that JSON-encodes like Roblox (`serde`) and throws on NaN, userdata and mixed keys: a save with `Coins = 0/0` and `Storage[5]` but no `Storage[4]` still saves, with those two fields repaired.

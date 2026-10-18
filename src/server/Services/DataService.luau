@@ -2,7 +2,17 @@
 	DataService: loads, autosaves and releases player data.
 
 	- Session locking, retries and safe writes live in Data/ProfileStore.
-	- Autosave every GameConfig.AutosaveInterval seconds.
+	- Autosave: each profile saves AutosaveInterval after its last save
+	  (checked every AUTOSAVE_CHECK seconds; the save also refreshes the
+	  lock). A failed save is warned about and tried again after
+	  AUTOSAVE_RETRY. A save that finds the session lost (any save:
+	  autosave, saveNow) kicks the player.
+	- One load per user on this server; a load stops (and never takes a
+	  lock) once its player left or the server is closing. A rejoin waits up
+	  to RELEASE_WAIT for its last session's final save and is told to
+	  rejoin later if it is still running (it never loads an older copy).
+	- Release: no autosave once it started; the beforeRelease callbacks get
+	  CALLBACK_LIMIT seconds, then the final save starts anyway.
 	- On leave: other services get a chance to write last changes
 	  (DataService.beforeRelease), then the profile is saved and unlocked.
 	- On server shutdown (BindToClose) every profile is released in parallel;
@@ -42,13 +52,26 @@ local STUDIO_STORE_NAME = "TerraForge_PlayerData_Studio"
 local MAX_PURCHASE_IDS = 100
 local PURCHASE_KEEP_SECONDS = 30 * 86400 -- receipt ids younger than this are never trimmed
 
+local LEGACY_STALE_SECONDS = 600 -- locks of servers from before the SessionId (their autosave ran every ~160-195 s)
+local RELEASE_WAIT = 40 -- a rejoin waits this long for its last session's final save, then is told to rejoin later
+local CALLBACK_LIMIT = 5 -- seconds the beforeRelease callbacks get before the final save starts anyway
+local AUTOSAVE_CHECK = 5 -- seconds between autosave checks (each profile saves AutosaveInterval after its last save)
+local AUTOSAVE_RETRY = 15 -- a failed autosave (the lock refresh) is tried again this soon
+local SESSION_LOST_TEXT = "Your Terra Forge session was opened on another server."
+
 local profiles: { [Player]: ProfileStore.Profile } = {}
-local loading: { [Player]: boolean } = {}
--- userId -> true while that user's final save is still being written.
--- A quick rejoin to the same server waits for it (no rollback).
-local releasing: { [number]: boolean } = {}
-local closing: { [any]: boolean } = {} -- profiles whose release has started (never twice)
+local loading: { [number]: boolean } = {} -- userId -> a load is running (one per user on this server)
+-- userId -> final saves of that user still being written (a counter: two
+-- quick sessions can release at once). A rejoin to the same server waits.
+local releasing: { [number]: number } = {}
+local closing: { [any]: boolean } = {} -- profiles whose release has started (never twice, no autosave)
+local nextSave: { [any]: number } = {} -- profile -> clock() of its next autosave
 local inFlight = 0 -- loads and releases in progress (BindToClose waits for these)
+local clock = os.clock -- (swappable in the Lune tests)
+local releaseWait = RELEASE_WAIT -- (shorter in the Lune tests)
+local pause = function(seconds: number)
+	task.wait(seconds)
+end
 local loadedCallbacks: { (Player, { [string]: any }) -> ...any } = {}
 local releaseCallbacks: { (Player, { [string]: any }) -> ...any } = {}
 local changedCallbacks: { (Player) -> ...any } = {}
@@ -166,6 +189,13 @@ local function onRepair(profileKey: string, problems: { ProfileStore.Problem })
 	warn(`[DataService] {profileKey}: repaired before saving: {table.concat(lines, "; ")}`)
 end
 
+-- The highest save Version this server understands. DataTemplate.Version and
+-- Migrations.Latest must be equal (tests/SaveSafety.spec checks it); the max
+-- keeps a slip from refusing this server's own saves.
+function DataService.latestVersion(): number
+	return math.max(DataTemplate.Version, Migrations.Latest)
+end
+
 local function makeStore(dataStore: any, budget: boolean): any
 	return ProfileStore.new({
 		Store = dataStore,
@@ -177,8 +207,9 @@ local function makeStore(dataStore: any, budget: boolean): any
 		end,
 		BeforeRequest = if budget then waitForBudget else nil,
 		StaleLockSeconds = GameConfig.StaleLockSeconds,
+		LegacyStaleSeconds = LEGACY_STALE_SECONDS,
 		Migrate = migrate,
-		LatestVersion = Migrations.Latest,
+		LatestVersion = DataService.latestVersion(),
 		OnRepair = onRepair,
 	})
 end
@@ -240,13 +271,25 @@ function DataService.changed(player: Player)
 	end
 end
 
+-- After any save: a session another server took over ends here (the player is told and leaves).
+local function afterSave(player: Player, profile: ProfileStore.Profile, ok: boolean)
+	if not ok and profile.SessionLost and player.Parent then
+		player:Kick(SESSION_LOST_TEXT)
+	end
+end
+
 -- Saves right now (used after purchases). Returns true when the write succeeded.
 function DataService.saveNow(player: Player): boolean
 	local profile = profiles[player]
 	if not profile or profile.Released then
 		return false
 	end
-	return storeFor(player.UserId):save(profile, false)
+	local ok = storeFor(player.UserId):save(profile, false)
+	if ok then
+		nextSave[profile] = clock() + GameConfig.AutosaveInterval
+	end
+	afterSave(player, profile, ok)
+	return ok
 end
 
 function DataService.isInMemory(): boolean
@@ -255,12 +298,25 @@ end
 
 ---------------------------------------------------------------- lifecycle
 
+-- The beforeRelease callbacks, in order, at most CALLBACK_LIMIT seconds in all (the final save must start).
 local function runReleaseCallbacks(player: Player, profile: ProfileStore.Profile)
-	for _, callback in releaseCallbacks do
-		local ok, err = pcall(callback, player, profile.Data)
-		if not ok then
-			warn("[DataService] beforeRelease callback failed: " .. tostring(err))
+	local done = false
+	task.spawn(function()
+		for _, callback in releaseCallbacks do
+			local ok, err = pcall(callback, player, profile.Data)
+			if not ok then
+				warn("[DataService] beforeRelease callback failed: " .. tostring(err))
+			end
 		end
+		done = true
+	end)
+	local waited = 0
+	while not done and waited < CALLBACK_LIMIT do
+		task.wait(0.05)
+		waited += 0.05
+	end
+	if not done then
+		warn(`[DataService] beforeRelease callbacks of {player.Name} took over {CALLBACK_LIMIT} s: saving anyway`)
 	end
 end
 
@@ -279,11 +335,22 @@ local function finalSave(userId: number, profile: ProfileStore.Profile)
 			break
 		end
 		if attempt < attempts then
-			task.wait(if shuttingDown then 0.5 else 2 * attempt)
+			pause(if shuttingDown then 0.5 else 2 * attempt)
 		end
 	end
 	if not ok then
 		warn("[DataService] final save failed for user " .. userId)
+		-- give up on it here: a rejoin may load the last stored copy
+		store:forget(profile)
+	end
+end
+
+local function addReleasing(userId: number, delta: number)
+	local n = (releasing[userId] or 0) + delta
+	if n > 0 then
+		releasing[userId] = n
+	else
+		releasing[userId] = nil
 	end
 end
 
@@ -292,9 +359,10 @@ local function release(player: Player, profile: ProfileStore.Profile)
 	if closing[profile] then
 		return
 	end
-	closing[profile] = true
+	closing[profile] = true -- no autosave from here on (the callbacks may still yield)
+	nextSave[profile] = nil
 	local userId = player.UserId
-	releasing[userId] = true
+	addReleasing(userId, 1)
 	inFlight += 1
 	runReleaseCallbacks(player, profile)
 	if profiles[player] == profile then
@@ -305,44 +373,78 @@ local function release(player: Player, profile: ProfileStore.Profile)
 	end
 	closing[profile] = nil
 	inFlight -= 1
-	releasing[userId] = nil
+	addReleasing(userId, -1)
 end
 
 local function loadPlayer(player: Player)
-	if loading[player] or profiles[player] then
+	if profiles[player] then
 		return
 	end
-	loading[player] = true
+	local userId = player.UserId
 	inFlight += 1 -- a load running at shutdown is waited for (and put back)
-	-- rejoined while the last session is still saving: wait for it first
+	local function finish()
+		inFlight -= 1
+	end
+	-- one load per user: an earlier Player object of this user (left and
+	-- rejoined while loading) stops its load once it sees it has left
+	while loading[userId] and player.Parent do
+		task.wait(0.25)
+	end
+	if loading[userId] or not player.Parent or profiles[player] then
+		finish()
+		return
+	end
+	loading[userId] = true
+	-- rejoined while the last session is still saving: wait for it; never load past it
 	local waited = 0
-	while releasing[player.UserId] and waited < 40 and player.Parent do
+	while releasing[userId] and waited < releaseWait and player.Parent do
 		task.wait(0.25)
 		waited += 0.25
 	end
-	local store = storeFor(player.UserId)
-	local called, profile, reason = pcall(store.load, store, key(player))
-	loading[player] = nil
+	if not player.Parent then
+		loading[userId] = nil
+		finish()
+		return
+	end
+	if releasing[userId] then
+		loading[userId] = nil
+		warn(`[DataService] {player.Name} rejoined while their last save is still being written`)
+		player:Kick(DataService.kickText("locked"))
+		finish()
+		return
+	end
+	local store = storeFor(userId)
+	local function gone(): boolean
+		return not player.Parent or shuttingDown
+	end
+	local called, profile, reason = pcall(store.load, store, key(player), gone)
+	loading[userId] = nil
 	if not called then
 		reason = "error: " .. tostring(profile)
 		profile = nil
 	end
 	if not profile then
-		warn(`[DataService] could not load {player.Name}: {reason}`)
-		if player.Parent then
-			player:Kick(DataService.kickText(reason))
+		if reason ~= "gone" then
+			warn(`[DataService] could not load {player.Name}: {reason}`)
+			if player.Parent then
+				player:Kick(DataService.kickText(reason))
+			end
 		end
-		inFlight -= 1
+		finish()
 		return
 	end
 	if not player.Parent or shuttingDown then
-		-- left while loading (or the server is closing): put the lock back right away
-		finalSave(player.UserId, profile)
-		inFlight -= 1
+		-- left (or the server started closing) after the lock was taken: put it back right away
+		addReleasing(userId, 1)
+		finalSave(userId, profile)
+		addReleasing(userId, -1)
+		finish()
 		return
 	end
 	profiles[player] = profile
-	inFlight -= 1
+	-- the first autosave somewhere in the next interval (spreads the players out)
+	nextSave[profile] = clock() + GameConfig.AutosaveInterval * (0.5 + math.random() * 0.5)
+	finish()
 	for _, callback in loadedCallbacks do
 		task.spawn(callback, player, profile.Data)
 	end
@@ -373,6 +475,35 @@ local function shutdown()
 	while inFlight > 0 and waited < 27 do
 		task.wait(0.25)
 		waited += 0.25
+	end
+end
+
+-- One autosave check: every profile whose time has come saves (it also
+-- refreshes its lock). A failed save is warned about and tried again after
+-- AUTOSAVE_RETRY; a lost session kicks the player.
+local function autosaveStep(now: number)
+	if shuttingDown then
+		return
+	end
+	for player, profile in profiles do
+		local due = nextSave[profile]
+		if due and now >= due and not closing[profile] and not profile.Released and not profile.Saving and player.Parent then
+			nextSave[profile] = now + GameConfig.AutosaveInterval
+			task.spawn(function()
+				local ok = storeFor(player.UserId):save(profile, false)
+				if ok then
+					if nextSave[profile] then
+						nextSave[profile] = clock() + GameConfig.AutosaveInterval
+					end
+				elseif not profile.SessionLost then
+					warn(`[DataService] autosave failed for {player.Name}: trying again in {AUTOSAVE_RETRY} s`)
+					if nextSave[profile] then
+						nextSave[profile] = clock() + AUTOSAVE_RETRY
+					end
+				end
+				afterSave(player, profile, ok)
+			end)
+		end
 	end
 end
 
@@ -423,28 +554,11 @@ function DataService.init()
 end
 
 function DataService.start()
-	-- autosave, spread over the interval so all players are not saved in the
-	-- same second; one round takes AutosaveInterval, so every player's lock is
-	-- refreshed about that often (well inside GameConfig.StaleLockSeconds)
+	-- each profile saves AutosaveInterval after its last save (its own
+	-- schedule, so a join right after a round never waits two rounds)
 	while true do
-		local list = {}
-		for player in profiles do
-			table.insert(list, player)
-		end
-		local gap = GameConfig.AutosaveInterval / (#list + 1)
-		task.wait(gap)
-		for _, player in list do
-			local profile = profiles[player]
-			if profile and not profile.Released and not shuttingDown then
-				task.spawn(function()
-					storeFor(player.UserId):save(profile, false)
-					if profile.SessionLost and player.Parent then
-						player:Kick("Your Terra Forge session was opened on another server.")
-					end
-				end)
-			end
-			task.wait(gap)
-		end
+		task.wait(AUTOSAVE_CHECK)
+		autosaveStep(clock())
 	end
 end
 
@@ -453,6 +567,19 @@ DataService._test = {
 	loadPlayer = loadPlayer,
 	releasePlayer = releasePlayer,
 	shutdown = shutdown,
+	autosaveStep = autosaveStep,
+	setClock = function(fn: () -> number)
+		clock = fn
+	end,
+	-- shorter waits for the tests: the rejoin wait and the pauses between final-save attempts
+	setTimings = function(wait: number, pauseFn: (number) -> ())
+		releaseWait = wait
+		pause = pauseFn
+	end,
+	nextSave = function(player: Player): number?
+		local profile = profiles[player]
+		return if profile then nextSave[profile] else nil
+	end,
 	inFlight = function(): number
 		return inFlight
 	end,
@@ -465,6 +592,10 @@ DataService._test = {
 			loading,
 			releasing,
 			closing,
+			nextSave,
+			clock,
+			releaseWait,
+			pause,
 			inFlight,
 			shuttingDown,
 			inMemory,
@@ -484,14 +615,15 @@ DataService._test = {
 			StaleLockSeconds = GameConfig.StaleLockSeconds,
 			LatestVersion = Migrations.Latest,
 		})
-		profiles, loading, releasing, closing = {}, {}, {}, {}
+		profiles, loading, releasing, closing, nextSave = {}, {}, {}, {}, {}
 		inFlight, shuttingDown, inMemory = 0, false, false
 		loadedCallbacks, releaseCallbacks, changedCallbacks = {}, {}, {}
 		local ok, err = pcall(fn :: any)
 		profileStore, memoryProfileStore = saved[1], saved[2]
-		profiles, loading, releasing, closing = saved[3], saved[4], saved[5], saved[6]
-		inFlight, shuttingDown, inMemory = saved[7], saved[8], saved[9]
-		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[10], saved[11], saved[12]
+		profiles, loading, releasing, closing, nextSave = saved[3], saved[4], saved[5], saved[6], saved[7]
+		clock, releaseWait, pause = saved[8], saved[9], saved[10]
+		inFlight, shuttingDown, inMemory = saved[11], saved[12], saved[13]
+		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[14], saved[15], saved[16]
 		if not ok then
 			error(err, 0)
 		end

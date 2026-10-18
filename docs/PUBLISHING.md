@@ -60,6 +60,10 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
 12. **Every later update**: publish, then **Game Settings > Places > ... > "Migrate To Latest Update"** (or
     "Shut Down All Servers"). Never leave old servers running: a save a newer server wrote is refused by an older
     one ("The game just updated, please rejoin"), so players would be bounced until the old servers close.
-    An update that adds ore ids, levels or save fields bumps `DataTemplate.Version` (docs/SAVE_AUDIT.md #1).
+    An update that adds ore ids, levels or save fields bumps the save version: **`DataTemplate.Version` and
+    `Migrations.Latest` together** (tests/SaveSafety.spec.luau fails while they differ; docs/SAVE_AUDIT.md #1).
+    **Never roll back** to a place version with a lower save version (Version History): its servers would refuse
+    every save the newer build wrote. To undo a broken update, republish the old code with the save version kept at
+    the highest one ever shipped.
 
 Nothing in this branch uploads or publishes anything; every step above is done by the owner.

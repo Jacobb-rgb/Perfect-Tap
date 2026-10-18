@@ -6,13 +6,21 @@
 	  { Data = {...player data...}, Lock = { JobId, SessionId, Time }?, Saved = os.time() }
 
 	Rules (docs/SAVE_AUDIT.md):
-	- load(): takes the lock with UpdateAsync. If another live server holds
-	  it, wait and retry (that server is probably still saving the player who
-	  just hopped). A lock that has not been refreshed for StaleLockSeconds is
-	  from a crashed server and gets taken over; a younger one never is (a
-	  live server with a slow final save keeps its session, so nothing it
-	  still writes is lost). A lock of this same server (an earlier session
-	  whose final save failed) is taken at once.
+	- load(key, shouldStop?): takes the lock with UpdateAsync. If another
+	  live session holds it, wait and retry (that server is probably still
+	  saving the player who just hopped). A lock not refreshed for
+	  StaleLockSeconds is from a crashed server and gets taken over; a younger
+	  one never is (a live server with a slow final save keeps its session,
+	  so nothing it still writes is lost). Old-format locks (no SessionId:
+	  servers from before this code) count as stale only after
+	  LegacyStaleSeconds (their autosave was every ~160-195 s). A lock time
+	  more than FutureSlack seconds in the future (a broken clock) counts as
+	  stale. A lock of this same server is taken at once only when its
+	  session isn't live here any more (an earlier session whose final save
+	  gave up: forget); a live one here is waited for like any other.
+	  shouldStop() (the player left, the server is closing) ends the retries
+	  and is checked again right before the lock would be written: a load
+	  for someone who is gone never takes a lock ("gone").
 	  Refused without writing anything (no lock taken):
 	    "malformed"  a stored value that isn't { Data = table, ... }: never
 	                 replaced with the template (the template is only for a
@@ -20,7 +28,8 @@
 	    "newer"      Data.Version above LatestVersion: a save from a newer
 	                 server must not be "repaired" by this older one
 	  Every load gets its own SessionId (JobId + a counter): two sessions on
-	  the same server are told apart.
+	  the same server are told apart. A loaded session stays live here (one
+	  per key) until its release succeeds, it is lost or it is forgotten.
 	  Migrate (and the template reconcile) run after the lock was taken; if
 	  they throw, only our own lock is cleared again (data untouched) and
 	  load returns nil, "error: migrate: ...".
@@ -28,16 +37,20 @@
 	  SessionId). Another session's lock, or no lock at all (someone took
 	  the session over and already released it), means the session is lost:
 	  nothing is written, profile.SessionLost. Refreshes the lock time.
-	  Before writing, repair() makes the data storable in place (see below)
-	  and OnRepair reports what it changed.
+	  repair() runs inside the UpdateAsync transform, on exactly the value
+	  being written (a value changed while the request waited is repaired
+	  too); OnRepair reports what it changed.
 	- release(): final save that clears the lock.
+	- forget(profile): DataService gave up on a session (its final save kept
+	  failing): it no longer blocks a new session of the same key here.
 	- Every DataStore call is retried with exponential backoff (shorter
 	  while urgent: setUrgent, for server shutdown).
 
-	storable(data) / repair(data): what a DataStore can't hold, by path.
-	A DataStore write fails as a whole for one bad value, so one slip would
-	block every save of that player; repair fixes it at its path instead:
-	  NaN / inf                     -> 0
+	storable(data) / repair(data): what a DataStore can't hold (or the game
+	can't use), by path. A DataStore write fails as a whole for one value it
+	can't hold, so one slip would block every save of that player; repair
+	fixes it at its path instead:
+	  NaN / inf                     -> 0 (Roblox stores them, but no reader can use them)
 	  invalid UTF-8 text            -> dropped
 	  userdata, functions, threads  -> dropped (Vector3, Instance, ...)
 	  non-string, non-number keys   -> dropped
@@ -65,6 +78,7 @@ export type Options = {
 	CallRetries: number?, -- retries per DataStore call on errors
 	Migrate: ((data: { [string]: any }) -> ())?,
 	LatestVersion: number?, -- saves with a higher Data.Version are refused ("newer")
+	LegacyStaleSeconds: number?, -- stale age of an old-format lock (no SessionId), default 600
 	OnRepair: ((key: string, problems: { Problem }) -> ())?, -- what repair() changed before a save
 }
 
@@ -267,21 +281,42 @@ end
 
 ---------------------------------------------------------------- the store
 
+ProfileStore.FutureSlack = 60 -- a lock time this far ahead of our clock is broken: stale
+
 function ProfileStore.new(options: Options)
 	local self = setmetatable({}, ProfileStore)
 	self.options = options
 	self.lockRetries = options.LockRetries or 6
 	self.lockRetryDelay = options.LockRetryDelay or 5
 	self.staleLock = options.StaleLockSeconds or 600
+	self.legacyStale = options.LegacyStaleSeconds or math.max(600, self.staleLock)
 	self.callRetries = options.CallRetries or 4
 	self.urgent = false
 	self.sessions = 0
+	self.live = {} :: { [string]: string } -- key -> the SessionId live on this server
 	return self
 end
 
 -- Server shutdown: fewer retries and short pauses, so every final save fits the time left.
 function ProfileStore.setUrgent(self: any, urgent: boolean)
 	self.urgent = urgent
+end
+
+-- Is a session of `key` live on this server?
+function ProfileStore.isLive(self: any, key: string): boolean
+	return self.live[key] ~= nil
+end
+
+local function endSession(self: any, key: string, sessionId: string)
+	if self.live[key] == sessionId then
+		self.live[key] = nil
+	end
+end
+
+-- DataService gave up on this session (its final save kept failing): a new
+-- session of the same key on this server may take its lock over.
+function ProfileStore.forget(self: any, profile: Profile)
+	endSession(self, profile.Key, profile.SessionId)
 end
 
 -- Runs one UpdateAsync with retries. Returns ok, error message.
@@ -326,16 +361,38 @@ function ProfileStore._releaseLock(self: any, key: string, sessionId: string): b
 	return ok
 end
 
+-- Must load() wait for this lock (true), or may it take it over (false)?
+function ProfileStore._blocks(self: any, key: string, lock: { [string]: any }, now: number): boolean
+	local options = self.options
+	if lock.JobId == options.JobId then
+		-- this server's own lock: wait only while that session is live here
+		local liveId = self.live[key]
+		if liveId == nil or liveId ~= lock.SessionId then
+			return false
+		end
+	end
+	local age = now - (tonumber(lock.Time) or 0)
+	if age < -ProfileStore.FutureSlack then
+		return false -- a lock from the future: a broken clock, never refreshed for real
+	end
+	local stale = if lock.SessionId == nil then self.legacyStale else self.staleLock
+	return age < stale
+end
+
 --[[
-	Loads and locks a profile.
-	Returns profile or nil + reason ("locked" | "malformed" | "newer" |
-	"error: ..." | "error: migrate: ...").
+	Loads and locks a profile. `shouldStop` (optional) ends the attempt when it
+	returns true: before every try and right before the lock is written.
+	Returns profile or nil + reason ("locked" | "gone" | "malformed" |
+	"newer" | "error: ..." | "error: migrate: ...").
 ]]
-function ProfileStore.load(self: any, key: string): (Profile?, string?)
+function ProfileStore.load(self: any, key: string, shouldStop: (() -> boolean)?): (Profile?, string?)
 	local options = self.options
 	self.sessions += 1
 	local sessionId = `{options.JobId}#{self.sessions}#{options.Now()}`
 	for attempt = 1, self.lockRetries do
+		if shouldStop and shouldStop() then
+			return nil, "gone"
+		end
 		local loadedData: { [string]: any }? = nil
 		local lockedByOther = false
 		local refused: string? = nil
@@ -356,13 +413,13 @@ function ProfileStore.load(self: any, key: string): (Profile?, string?)
 					return nil
 				end
 			end
-			if old ~= nil and type(old.Lock) == "table" and old.Lock.JobId ~= options.JobId then
-				local age = now - (tonumber(old.Lock.Time) or 0)
-				-- a fresh lock belongs to a live server: wait for it, unless it is stale
-				if age < self.staleLock then
-					lockedByOther = true
-					return nil -- cancel the write
-				end
+			if old ~= nil and type(old.Lock) == "table" and self:_blocks(key, old.Lock, now) then
+				lockedByOther = true
+				return nil -- cancel the write
+			end
+			if shouldStop and shouldStop() then
+				refused = "gone" -- never take a lock for someone who left
+				return nil
 			end
 			local data = if old ~= nil then old.Data else deepCopy(options.Template)
 			loadedData = data
@@ -376,6 +433,7 @@ function ProfileStore.load(self: any, key: string): (Profile?, string?)
 		end
 		if loadedData then
 			local data = loadedData :: { [string]: any }
+			self.live[key] = sessionId
 			local prepared, problem = pcall(function()
 				reconcile(data, options.Template)
 				if options.Migrate then
@@ -384,6 +442,7 @@ function ProfileStore.load(self: any, key: string): (Profile?, string?)
 			end)
 			if not prepared then
 				-- the save stays as it was; free the session so the player isn't locked out
+				endSession(self, key, sessionId)
 				self:_releaseLock(key, sessionId)
 				return nil, "error: migrate: " .. tostring(problem)
 			end
@@ -428,22 +487,16 @@ function ProfileStore.save(self: any, profile: Profile, release: boolean?): bool
 		return false
 	end
 	profile.Saving = true
-	-- never let one bad value block the whole save
-	local problems = ProfileStore.repair(profile.Data)
-	if #problems > 0 and options.OnRepair then
-		local shown = {}
-		for i = 1, math.min(#problems, ProfileStore.MaxProblems) do
-			shown[i] = problems[i]
-		end
-		pcall(options.OnRepair, profile.Key, shown)
-	end
 	local lost = false
+	local problems: { Problem } = {}
 	local ok = self:_update(profile.Key, function(old): any
 		lost = false
 		if not ownedBy(old, profile.SessionId) then
 			lost = true
 			return nil
 		end
+		-- repaired right here: exactly what is written can be stored (no yield in between)
+		problems = ProfileStore.repair(profile.Data)
 		local now = options.Now()
 		return {
 			Data = profile.Data,
@@ -452,15 +505,24 @@ function ProfileStore.save(self: any, profile: Profile, release: boolean?): bool
 		}
 	end)
 	profile.Saving = false
+	if #problems > 0 and options.OnRepair then
+		local shown = {}
+		for i = 1, math.min(#problems, ProfileStore.MaxProblems) do
+			shown[i] = problems[i]
+		end
+		pcall(options.OnRepair, profile.Key, shown)
+	end
 	if lost then
 		profile.SessionLost = true
 		profile.Released = true
+		endSession(self, profile.Key, profile.SessionId)
 		return false
 	end
 	if ok then
 		profile.LastSave = options.Now()
 		if release then
 			profile.Released = true
+			endSession(self, profile.Key, profile.SessionId)
 		end
 		return true
 	end

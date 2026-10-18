@@ -1,8 +1,12 @@
 -- Save-data safety (docs/SAVE_AUDIT.md): every scenario the audit found or
--- reproduced, against the real ProfileStore / DataService with a fake
--- DataStore that encodes like Roblox (it rejects what a real DataStore
--- rejects: NaN / inf, userdata, functions, mixed or gapped tables,
--- non-string keys, invalid UTF-8; values are copied through JSON).
+-- reproduced, and every scenario of its adversarial review (R1-R4, A, C,
+-- the autosave schedule), against the real ProfileStore / DataService with
+-- a fake DataStore that encodes like Roblox (it rejects what a real
+-- DataStore rejects: userdata, functions, mixed or gapped tables,
+-- non-string keys, invalid UTF-8, loops; like Roblox it takes NaN / inf;
+-- values are copied through JSON). Options: delay (UpdateAsync yields
+-- first, like the real network read), hang (requests wait until it is
+-- cleared), rerun (the transform runs twice, as Roblox may).
 --   #3  a late save never writes over a newer session (SessionId lock, nil lock = lost)
 --   #6  a malformed stored value is never replaced with the template
 --   #2  an unstorable value is repaired or dropped at its path, the rest saves
@@ -27,9 +31,7 @@ return function(T, Loader)
 	local function checkStorable(value: any, path: string, ancestors: { [any]: boolean })
 		local kind = type(value)
 		if kind == "number" then
-			if value ~= value or value == math.huge or value == -math.huge then
-				error(`104: Cannot store NaN / inf at {path}`)
-			end
+			-- Roblox's engine DataStores take NaN / inf (they come back as NaN / inf)
 		elseif kind == "string" then
 			if utf8.len(value) == nil then
 				error(`104: invalid UTF-8 at {path}`)
@@ -67,15 +69,23 @@ return function(T, Loader)
 	end
 
 	local function robloxStore()
-		local s = { values = {}, writes = 0, failAll = false, delay = 0 }
+		local s = { values = {}, writes = 0, failAll = false, delay = 0, hang = false, rerun = false, calls = 0 }
 		function s:UpdateAsync(key: string, transform: (any) -> any): any
+			self.calls += 1
 			if self.delay > 0 then
 				task.wait(self.delay)
+			end
+			while self.hang do
+				task.wait(0.01)
 			end
 			if self.failAll then
 				error("502: API Services rejected request")
 			end
 			local old = self.values[key]
+			if self.rerun then
+				-- Roblox may call the transform again (a conflicting write): the first result is thrown away
+				transform(if old ~= nil then serde.decode("json", old) else nil)
+			end
 			local result = transform(if old ~= nil then serde.decode("json", old) else nil)
 			if result ~= nil then
 				checkStorable(result, key, {})
@@ -148,7 +158,12 @@ return function(T, Loader)
 		local a = server(store, "A")
 		local first = a:load("P")
 		first.Data.Coins = 7
-		-- the first session's final save failed (lock still ours); the player rejoins the same server
+		-- while the first session is live here, a second load of the key waits like for any other server
+		local blocked, reason = a:load("P")
+		T.eq(blocked, nil, "a live session on this server blocks a second load")
+		T.eq(reason, "locked")
+		-- its final save gave up (DataService forgets it): the rejoin may take the lock at once
+		a:forget(first)
 		local second = a:load("P")
 		T.truthy(second, "the same server loads again at once")
 		T.truthy(first.SessionId ~= second.SessionId, "each load has its own SessionId")
@@ -200,7 +215,7 @@ return function(T, Loader)
 		T.eq(#problems, 0)
 		local bad = { Coins = 0 / 0, Stats = { Mined = math.huge } }
 		local ok2, problems2 = ProfileStore.storable(bad)
-		T.falsy(ok2, "NaN is not storable")
+		T.falsy(ok2, "NaN is reported (Roblox stores it, but no reader can use it)")
 		T.truthy(#problems2 >= 2, "both bad numbers reported")
 		T.truthy(string.find(problems2[1].Path .. problems2[2].Path, "Coins", 1, true) ~= nil, "the path names the field")
 		T.eq(bad.Coins ~= bad.Coins, true, "storable() itself changes nothing")
@@ -449,8 +464,8 @@ return function(T, Loader)
 			player.Parent = nil -- left while loading
 			DataService._test.shutdown()
 			local saved = store:get("Player_502")
-			T.truthy(saved, "the record exists")
-			T.eq(saved.Lock, nil, "the lock was put back before shutdown returned")
+			T.truthy(saved == nil or saved.Lock == nil, "no lock left behind for a player who is gone")
+			T.eq(DataService._test.inFlight(), 0, "nothing in flight")
 		end)
 	end)
 
@@ -488,5 +503,359 @@ return function(T, Loader)
 		T.truthy(#DataService.kickText("malformed") > 10, "malformed")
 		T.truthy(#DataService.kickText("error: migrate: x") > 10, "migrate")
 		T.truthy(#DataService.kickText("error: 502") > 10, "busy")
+	end)
+
+	---------------------------------------------------------------- the review (R1-R4, A, C, autosave)
+
+	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
+
+	-- a ProfileStore with quick real waits; `retries` lock tries 0.01 s apart
+	local function lifeServer(store: any, jobId: string, retries: number?): any
+		return ProfileStore.new({
+			Store = store,
+			JobId = jobId,
+			Template = template,
+			Now = now,
+			Wait = function(seconds: number)
+				task.wait(math.min(seconds, 0.01))
+			end,
+			LockRetries = retries or 2,
+			LockRetryDelay = 0.01,
+			StaleLockSeconds = 180,
+			CallRetries = 3,
+			LatestVersion = 3,
+		})
+	end
+
+	local function quickTimings(releaseWait: number)
+		DataService._test.setTimings(releaseWait, function(seconds: number)
+			task.wait(math.min(seconds, 0.01))
+		end)
+	end
+
+	local function waitUntil(condition: () -> boolean, limit: number?): boolean
+		local waited = 0
+		while not condition() and waited < (limit or 2) do
+			task.wait(0.01)
+			waited += 0.01
+		end
+		return condition()
+	end
+
+	T.test("SaveSafety R1: leaving during a load and rejoining the same server: the live session keeps its lock", function()
+		local store = robloxStore()
+		store:put("Player_601", { Data = { Version = 3, Coins = 100 }, Lock = { JobId = "X", SessionId = "X#1", Time = now() }, Saved = 1 })
+		local ps = lifeServer(store, "S", 400) -- keeps retrying while X holds the lock
+		DataService._test.isolate(ps, function()
+			quickTimings(1)
+			local p1 = fakePlayer(601)
+			task.spawn(DataService._test.loadPlayer, p1)
+			task.wait(0.05) -- P1's load waits on X's lock
+			p1.Parent = nil -- P1 gives up and leaves...
+			local p2 = fakePlayer(601) -- ...and rejoins the same server
+			task.spawn(DataService._test.loadPlayer, p2)
+			task.wait(0.05)
+			local held = store:get("Player_601")
+			held.Lock = nil -- X releases
+			store:put("Player_601", held)
+			T.truthy(
+				waitUntil(function()
+					return DataService.get(p2) ~= nil
+				end),
+				"P2 loads"
+			)
+			task.wait(0.1) -- (P1's stale load had every chance to take the lock)
+			T.eq(DataService.get(p1), nil, "P1 never got a session")
+			local lock = store:get("Player_601").Lock
+			T.truthy(lock and string.sub(lock.SessionId, 1, 2) == "S#", "the lock is this server's")
+			DataService.get(p2).Coins = 999
+			T.truthy(DataService.saveNow(p2), "P2's session still owns the lock")
+			T.eq(store:get("Player_601").Data.Coins, 999, "P2's progress is saved")
+			T.eq(p2.kicked, nil, "P2 plays on")
+		end)
+	end)
+
+	T.test("SaveSafety R2: a rejoin while the last final save hangs is told to rejoin, the final save lands", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			quickTimings(0.2)
+			local p1 = fakePlayer(602)
+			DataService._test.loadPlayer(p1)
+			DataService.get(p1).Coins = 100
+			T.truthy(DataService.saveNow(p1), "100 saved")
+			DataService.get(p1).Coins = 500 -- not saved yet
+			store.hang = true -- the final save's request hangs (throttle queue / outage)
+			p1.Parent = nil
+			task.spawn(DataService._test.releasePlayer, p1)
+			task.wait(0.05)
+			local p2 = fakePlayer(602)
+			DataService._test.loadPlayer(p2) -- waits 0.2 s on the release, then gives up
+			T.eq(DataService.get(p2), nil, "no stale load while the last session is still saving")
+			T.eq(p2.kicked, DataService.kickText("locked"), "told to rejoin in a minute")
+			store.hang = false
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"the release finishes"
+			)
+			local saved = store:get("Player_602")
+			T.eq(saved.Data.Coins, 500, "the hanging final save landed: nothing lost")
+			T.eq(saved.Lock, nil, "and released")
+			local p3 = fakePlayer(602)
+			DataService._test.loadPlayer(p3)
+			T.eq(DataService.get(p3).Coins, 500, "the next rejoin loads it")
+		end)
+	end)
+
+	T.test("SaveSafety R2b: leaving while waiting on the last final save starts no load", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			quickTimings(5)
+			local p1 = fakePlayer(603)
+			DataService._test.loadPlayer(p1)
+			DataService.get(p1).Coins = 555
+			store.hang = true
+			p1.Parent = nil
+			task.spawn(DataService._test.releasePlayer, p1)
+			task.wait(0.05)
+			local p2 = fakePlayer(603)
+			task.spawn(DataService._test.loadPlayer, p2)
+			task.wait(0.05)
+			p2.Parent = nil -- leaves while waiting
+			task.wait(0.05)
+			store.hang = false
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"everything settles"
+			)
+			local saved = store:get("Player_603")
+			T.eq(saved.Data.Coins, 555, "the old final save landed")
+			T.eq(saved.Lock, nil, "no lock left by the waiting load")
+			T.eq(p2.kicked, nil, "nobody to kick")
+		end)
+	end)
+
+	T.test("SaveSafety R3: a yielding beforeRelease callback: the autosave no longer refreshes the departed lock", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			quickTimings(1)
+			DataService._test.setClock(now)
+			local p = fakePlayer(604)
+			DataService._test.loadPlayer(p)
+			local lockTime = store:get("Player_604").Lock.Time
+			DataService.beforeRelease(function()
+				task.wait(0.2)
+			end)
+			p.Parent = nil
+			task.spawn(DataService._test.releasePlayer, p)
+			task.wait(0.02) -- inside the callback
+			clock.t += 500
+			DataService._test.autosaveStep(clock.t)
+			task.wait(0.05)
+			T.eq(store:get("Player_604").Lock.Time, lockTime, "no autosave for a player who left")
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"the release finishes"
+			)
+			T.eq(store:get("Player_604").Lock, nil, "and releases the lock")
+		end)
+	end)
+
+	T.test("SaveSafety R3: a hanging beforeRelease callback can't hold the final save back for ever", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			local p = fakePlayer(605)
+			DataService._test.loadPlayer(p)
+			DataService.get(p).Coins = 42
+			DataService.beforeRelease(function()
+				task.wait(60) -- stuck
+			end)
+			p.Parent = nil
+			local started = os.clock()
+			DataService._test.releasePlayer(p)
+			T.truthy(os.clock() - started < 6.5, `the final save started after the callback limit ({os.clock() - started} s)`)
+			T.eq(store:get("Player_605").Data.Coins, 42, "saved")
+		end)
+	end)
+
+	T.test("SaveSafety R4: saveNow finding the session lost kicks the player (no zombie)", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			local p = fakePlayer(606)
+			DataService._test.loadPlayer(p)
+			local held = store:get("Player_606")
+			held.Lock = { JobId = "B", SessionId = "B#1", Time = now() } -- another server took over
+			store:put("Player_606", held)
+			DataService.get(p).Coins = 7
+			T.falsy(DataService.saveNow(p), "refused")
+			T.eq(p.kicked, "Your Terra Forge session was opened on another server.", "kicked at once")
+			T.eq(store:get("Player_606").Lock.SessionId, "B#1", "B's session untouched")
+		end)
+	end)
+
+	T.test("SaveSafety A: a bad value written while the request waits can't fail the save", function()
+		local store = robloxStore()
+		store.delay = 0.02 -- the request yields before the transform, like the real network read
+		local a = lifeServer(store, "A")
+		local p = a:load("P")
+		local writing = true
+		task.spawn(function()
+			while writing do
+				p.Data.Spot = roblox.Vector3.new(1, 2, 3) -- a buggy writer, every 5 ms
+				task.wait(0.005)
+			end
+		end)
+		p.Data.Coins = 77
+		local ok = a:save(p, false)
+		writing = false
+		T.truthy(ok, "saved: the repair runs inside the transform, on what is written")
+		T.eq(store:get("P").Data.Coins, 77)
+		T.eq(store:get("P").Data.Spot, nil, "the Vector3 never reaches the store")
+	end)
+
+	T.test("SaveSafety: UpdateAsync running a transform twice changes nothing", function()
+		local store = robloxStore()
+		store.rerun = true
+		local a = lifeServer(store, "A")
+		local p = a:load("P")
+		T.truthy(p, "load")
+		T.eq(store:get("P").Lock.SessionId, p.SessionId, "one session, the one returned")
+		p.Data.Storage = { { K = "Raw", O = "Coal" } }
+		p.Data.Storage[3] = { K = "Raw", O = "Iron" }
+		T.truthy(a:save(p, false), "save")
+		T.eq(#store:get("P").Data.Storage, 2, "repaired once, nothing duplicated or lost")
+		T.truthy(a:save(p, true), "release")
+		T.eq(store:get("P").Lock, nil)
+	end)
+
+	T.test("SaveSafety C: one save version: DataTemplate.Version == Migrations.Latest, and a slip never locks players out", function()
+		T.eq(DataTemplate.Version, Migrations.Latest, "bump DataTemplate.Version and Migrations.Latest together")
+		T.eq(DataService.latestVersion(), Migrations.Latest, "the gate's version")
+		-- if they ever diverge, the gate takes the higher one: a new player's save loads again
+		local real = DataTemplate.Version
+		DataTemplate.Version = Migrations.Latest + 1
+		local ok, err = pcall(function()
+			local store = robloxStore()
+			local server2 = ProfileStore.new({
+				Store = store,
+				JobId = "S",
+				Template = DataTemplate,
+				Now = now,
+				Wait = fakeWait,
+				LatestVersion = DataService.latestVersion(),
+				Migrate = function(data)
+					Migrations.run(data)
+				end,
+			})
+			local first = server2:load("New")
+			T.truthy(first, "first join")
+			T.truthy(server2:save(first, true), "leaves")
+			local second, reason = server2:load("New")
+			T.truthy(second, "second join on the same build: " .. tostring(reason))
+		end)
+		DataTemplate.Version = real
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("SaveSafety: a load still waiting at shutdown stops at once and takes no lock", function()
+		local store = robloxStore()
+		store:put("Player_607", { Data = { Version = 3, Coins = 1 }, Lock = { JobId = "X", SessionId = "X#1", Time = now() }, Saved = 1 })
+		local ps = lifeServer(store, "S", 400)
+		DataService._test.isolate(ps, function()
+			local p = fakePlayer(607)
+			task.spawn(DataService._test.loadPlayer, p)
+			task.wait(0.05)
+			local started = os.clock()
+			local calls = store.calls
+			DataService._test.shutdown()
+			T.truthy(os.clock() - started < 1, `shutdown didn't wait for the retries ({os.clock() - started} s)`)
+			T.truthy(store.calls - calls <= 2, "at most the request already on its way")
+			T.eq(store:get("Player_607").Lock.SessionId, "X#1", "X's lock untouched, none taken")
+		end)
+	end)
+
+	T.test("SaveSafety: old-format locks (no SessionId) get the old stale time; future locks count as broken", function()
+		local store = robloxStore()
+		local b = server(store, "B")
+		store:put("P", { Data = { Version = 3, Coins = 3 }, Lock = { JobId = "Old", Time = now() - 200 }, Saved = 1 })
+		T.eq(b:load("P"), nil, "an old server's lock 200 s old is still live (its autosave ran every ~160-195 s)")
+		store:put("P", { Data = { Version = 3, Coins = 3 }, Lock = { JobId = "Old", Time = now() - 601 }, Saved = 1 })
+		T.truthy(b:load("P"), "after 600 s it is stale")
+		store:put(
+			"Q",
+			{ Data = { Version = 3, Coins = 3 }, Lock = { JobId = "Skewed", SessionId = "Z#1", Time = now() + 3600 }, Saved = 1 }
+		)
+		T.truthy(b:load("Q"), "a lock an hour in the future is a broken clock: taken over")
+	end)
+
+	T.test("SaveSafety #5/#12: the real autosave keeps every lock fresh and retries a failed refresh soon", function()
+		local store = robloxStore()
+		local ps = lifeServer(store, "S")
+		DataService._test.isolate(ps, function()
+			DataService._test.setClock(now)
+			local interval = GameConfig.AutosaveInterval
+			local players = {}
+			local lastLock = {}
+			local worst = 0
+			local function join(id: number)
+				local p = fakePlayer(id)
+				DataService._test.loadPlayer(p)
+				players[id] = p
+				lastLock[id] = store:get("Player_" .. id).Lock.Time
+			end
+			local function check()
+				for id, p in players do
+					if p.Parent then
+						local lock = store:get("Player_" .. id).Lock
+						if lock.Time ~= lastLock[id] then
+							worst = math.max(worst, lock.Time - lastLock[id])
+							lastLock[id] = lock.Time
+						end
+						worst = math.max(worst, clock.t - lastLock[id])
+					end
+				end
+			end
+			join(701)
+			join(702)
+			-- 10 minutes in 5 s steps; players join and leave mid-round; one minute of failures
+			for step = 1, 120 do
+				clock.t += 5
+				if step == 7 then
+					join(703) -- right after a round
+				elseif step == 30 then
+					players[702].Parent = nil
+					DataService._test.releasePlayer(players[702])
+					players[702] = nil
+				elseif step == 50 then
+					store.failAll = true
+				elseif step == 54 then
+					store.failAll = false
+				end
+				DataService._test.autosaveStep(clock.t)
+				task.wait(0.005)
+				if not store.failAll then
+					check()
+				end
+			end
+			T.truthy(worst <= interval + 5 + 4 * 5, `every lock refreshed within {worst} s (one minute of outage included)`)
+			T.truthy(worst < GameConfig.StaleLockSeconds, "never near the stale time")
+			-- a failed refresh is tried again soon, not a whole interval later
+			local id = 701
+			local due = DataService._test.nextSave(players[id])
+			T.truthy(due ~= nil, "scheduled")
+		end)
 	end)
 end
