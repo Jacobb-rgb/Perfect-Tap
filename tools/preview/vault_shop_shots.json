@@ -1,7 +1,8 @@
 {
-  "vault_ui_pc": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "VaultInterior", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_pc"},
-  "vault_ui_pc_poor": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "VaultInterior", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_pc_poor"},
-  "vault_ui_phone": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "VaultInterior", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_phone", "uiInset": 58},
-  "vault_ui_phone_small": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "VaultInterior", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_phone_small", "uiInset": 163},
-  "vault_ui_tv": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "VaultInterior", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_tv", "uiInset": 30}
+  "vault_cases": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "vault_ui_pc": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_pc"},
+  "vault_ui_pc_poor": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_pc_poor"},
+  "vault_ui_phone": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_phone", "uiInset": 58},
+  "vault_ui_phone_small": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_phone_small", "uiInset": 163},
+  "vault_ui_tv": {"scene": "vault_shop", "position": [2, 6.8, 100], "target": [0, 8, 134], "fov": 66, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_vault_tv", "uiInset": 30}
 }

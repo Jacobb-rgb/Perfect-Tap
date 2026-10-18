@@ -74,20 +74,23 @@ return function(T, Loader)
 	T.test("CrateOpening: the blaster is shown centered at its hero size", function()
 		for level = 1, BlasterData.MaxLevel do
 			local model = Stage.blasterModel(level, BlasterData.vaultOre(level))
-			local zLo, zHi = math.huge, -math.huge
+			local lo, hi = { math.huge, math.huge }, { -math.huge, -math.huge }
 			local count = 0
 			for _, p in parts(model) do
 				count += 1
 				T.truthy(p.Anchored, "anchored")
-				T.eq(#p:GetChildren() > 0 and p:FindFirstChildOfClass("WeldConstraint") or nil, nil, "no welds")
-				local z = p.CFrame.Position.Z
-				zLo = math.min(zLo, z - p.Size.Magnitude / 2)
-				zHi = math.max(zHi, z + p.Size.Magnitude / 2)
+				T.eq(p:FindFirstChildOfClass("WeldConstraint"), nil, "no welds")
+				local pos = p.CFrame.Position
+				local r = math.min(p.Size.X, p.Size.Y, p.Size.Z) / 2
+				lo = { math.min(lo[1], pos.Y - r), math.min(lo[2], pos.Z - r) }
+				hi = { math.max(hi[1], pos.Y + r), math.max(hi[2], pos.Z + r) }
 			end
 			T.truthy(count > 5, "level " .. level .. " has parts")
-			T.le(zHi - zLo, Stage.BlasterLength * 1.6, "level " .. level .. " not too long")
-			T.le(Stage.BlasterLength * 0.7, zHi - zLo, "level " .. level .. " not too short")
-			T.near((zHi + zLo) / 2, 0, 1.2, "level " .. level .. " centered")
+			local height, length = hi[1] - lo[1], hi[2] - lo[2]
+			T.le(length, Stage.BlasterLength * 1.05, "level " .. level .. " not too long")
+			T.le(height, Stage.BlasterHeight * 1.05, "level " .. level .. " not too tall")
+			T.truthy(length > Stage.BlasterLength * 0.6 or height > Stage.BlasterHeight * 0.6, "level " .. level .. " big enough")
+			T.near((hi[2] + lo[2]) / 2, 0, 1.2, "level " .. level .. " centered")
 		end
 	end)
 

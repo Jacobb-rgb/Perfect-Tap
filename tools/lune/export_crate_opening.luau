@@ -16,6 +16,7 @@ local serde = require("@lune/serde")
 
 local Loader = require("./lib/loader")
 local Export = require("./lib/export")
+local UiExport = require("./lib/uiexport")
 
 local root = process.cwd
 Loader.init(root)
@@ -23,6 +24,7 @@ Loader.init(root)
 local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 local LightingConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LightingConfig")
 local Stage = Loader.requirePath("ReplicatedStorage.Shared.Builders.CrateOpeningStage")
+local CrateOpeningView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CrateOpeningView")
 local CF = Loader.CFrame
 
 local level = tonumber(process.args[1]) or 10
@@ -51,6 +53,10 @@ local ore = BlasterData.vaultOre(level)
 local game = roblox.Instance.new("DataModel")
 local workspace = game:GetService("Workspace")
 local stage = Stage.build(workspace, ORIGIN, level, ore, Stage.blasterModel(level, ore))
+-- the overlay ("NEW BLASTER!", the flash, AWESOME!) at the render's 1.25 UI scale
+local view = CrateOpeningView.build()
+view.Gui.Scale.Scale = 1.25
+CrateOpeningView.setBlaster(view, level, ore)
 
 fs.writeDir(root .. "/build/preview")
 local shotsPath = root .. "/build/preview/crate_open_shots.json"
@@ -63,6 +69,8 @@ for i, t in times do
 	scene.presets = presets
 	local name = string.format("crate_open_%d_%d", level, i)
 	fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", scene))
+	CrateOpeningView.update(view, t, stage.Burst, stage.Reveal)
+	fs.writeFile(root .. "/build/preview/ui_" .. name .. ".json", serde.encode("json", UiExport.export({ view.Gui })))
 	local p, look = cam.Position, cam.Position + cam.LookVector * 20
 	shots[name] = {
 		scene = name,
@@ -71,6 +79,7 @@ for i, t in times do
 		fov = fov,
 		preset = "CrateOpening",
 		maxLights = 4,
+		ui = "ui_" .. name,
 	}
 	print(string.format("Exported %s (t = %.2f): %d parts, %d lights", name, t, #scene.parts, #scene.lights))
 end

@@ -115,12 +115,15 @@ end
 -- Hides a part far below (cheaper than toggling Parent every frame).
 local HIDDEN = CFrame.new(0, -5000, 0)
 
-Stage.BlasterLength = 7 -- studs: every level is shown at about the same hero size
+-- studs: every level is shown at about the same hero size, inside this box
+Stage.BlasterLength = 7
+Stage.BlasterHeight = 3
 
 --[[
 	The new blaster as a loose Model for the stage: BlasterBuilder's held tool
 	(the same parts the player gets), unwelded, centered on its bounding box
-	and scaled to Stage.BlasterLength along the barrel (-Z).
+	and scaled to fit Stage.BlasterLength along the barrel (-Z) and
+	Stage.BlasterHeight up.
 ]]
 function Stage.blasterModel(level: number, oreId: string?): Model
 	local tool = BlasterBuilder.build(level, oreId)
@@ -147,7 +150,8 @@ function Stage.blasterModel(level: number, oreId: string?): Model
 	end
 	local center = Vector3.new((lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2, (lo[3] + hi[3]) / 2)
 	local length = math.max(hi[3] - lo[3], 0.5)
-	local k = Stage.BlasterLength / length
+	local height = math.max(hi[2] - lo[2], 0.2)
+	local k = math.min(Stage.BlasterLength / length, Stage.BlasterHeight / height)
 	for _, p in parts do
 		for _, c in p:GetChildren() do
 			if c:IsA("WeldConstraint") or c:IsA("Weld") then
@@ -293,7 +297,7 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 	gunHolder.Transparency = 1
 	local gunLight = Instance.new("PointLight")
 	gunLight.Color = glowColor
-	gunLight.Range = 20
+	gunLight.Range = 14
 	gunLight.Brightness = 0
 	gunLight.Shadows = false
 	gunLight.Parent = gunHolder
@@ -462,8 +466,8 @@ function Stage.build(parent: Instance, origin: CFrame, level: number, oreId: str
 		for _, n in gunNeon do
 			n.p.Color = n.color:Lerp(Color3.new(1, 1, 1), gunGlow * 0.5)
 		end
-		gunHolder.CFrame = gunCf * CFrame.new(2.5, 1.2, 1.5)
-		gunLight.Brightness = if shown then 2.4 + 0.6 * math.sin(t * 4) else 0
+		gunHolder.CFrame = gunCf * CFrame.new(3.5, 2.5, 3)
+		gunLight.Brightness = if shown then 1.1 + 0.3 * math.sin(t * 4) else 0
 
 		-- the camera side for camera-facing effects
 		local camCf = self.camera(t)
