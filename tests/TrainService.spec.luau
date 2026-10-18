@@ -20,6 +20,22 @@ return function(T, Loader)
 	local Instance = roblox.Instance
 	local Enum = roblox.Enum
 	local CFrame = Loader.CFrame
+
+	-- Waits until check() holds, at most `timeout` seconds (<= 1): deferred
+	-- hooks can take more than one frame when many test runs share the machine.
+	local function waitUntil(check: () -> boolean, timeout: number?)
+		local deadline = os.clock() + math.min(timeout or 1, 1)
+		repeat
+			task.wait()
+		until check() or os.clock() > deadline
+	end
+	-- Lets deferred work run (for checks that something did NOT happen).
+	local function settle()
+		local deadline = os.clock() + 0.05
+		repeat
+			task.wait()
+		until os.clock() > deadline
+	end
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
@@ -531,7 +547,9 @@ return function(T, Loader)
 			handlers[1](d)
 		end
 		T.eq(#w.zones, before, "deferred: the model finishes building first")
-		task.wait()
+		waitUntil(function()
+			return #w.zones >= before + 1
+		end)
 		T.eq(#w.zones, before + 1, "the new lift's zone")
 		T.eq(w.zones[#w.zones].Name, "TrainThird", "zone name")
 		T.eq(w.zones[#w.zones].Part, box, "its intake")
@@ -547,11 +565,14 @@ return function(T, Loader)
 		train.tagged(late)
 		local outside = hopper(Instance.new("Folder"), Vector3.new(0, 0, 800), Vector3.new(3, 3, 3))
 		train.tagged(outside)
-		task.wait()
+		waitUntil(function()
+			return #w.zones >= before + 2
+		end)
+		settle()
 		T.eq(#w.zones, before + 2, "the tagged part under the railway, not the one outside")
 		T.eq(w.zones[#w.zones].Part, late, "the late hopper")
 		train.tagged(late)
-		task.wait()
+		settle()
 		T.eq(#w.zones, before + 2, "never twice")
 	end)
 
@@ -1305,7 +1326,9 @@ return function(T, Loader)
 		late:SetAttribute("LiftId", "Late")
 		late:AddTag("TrainHopper")
 		train.tagged(late)
-		task.wait()
+		waitUntil(function()
+			return w.zones[#w.zones].Part == late
+		end)
 		T.eq(w.zones[#w.zones].Part, late, "tagged under the new railway")
 		-- other children of the map are no railway
 		local count = #w.zones
