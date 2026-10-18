@@ -128,6 +128,7 @@ local Theme = require(Shared.Config.UITheme)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Net = require(Shared.Net)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -2395,6 +2396,7 @@ function TrainController.open()
 	if SellController.isOpen() then
 		SellController.close()
 	end
+	MenuPanels.closeOthers("TrainController") -- and every other panel (MenuPanels.Names)
 	panelOpen = true
 	openedAt = os.clock()
 	fit()

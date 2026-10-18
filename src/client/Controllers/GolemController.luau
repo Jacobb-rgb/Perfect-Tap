@@ -2,12 +2,14 @@
 	GolemController: golem pets on the client (step 7).
 
 	Inventory (GolemView):
-	- Opens from the HUD's GOLEMS button (right-side menu, under BUILD; 44 pt
-	  tall at the phone scale), the toggle key P (keyboard) / L1 (gamepad,
-	  only while no other screen holds the selection or the controls; the
-	  button shows the key or the platform's glyph), the capsule view's MY
-	  GOLEMS button (GolemController.open) or OpenUI "Golems". Cards come
-	  from the State snapshot and update live.
+	- Opens from the side menu's GOLEMS button (SideMenuController: the one
+	  GOLEMS button; the HUD's own GOLEMS button in the right-side menu,
+	  under BUILD, 44 pt tall at the phone scale, showing the key or the
+	  platform's glyph, is added only in a game without the side menu), the
+	  toggle key P (keyboard) / L1 (gamepad, only while no other screen
+	  holds the selection or the controls), the capsule view's MY GOLEMS
+	  button (GolemController.open) or OpenUI "Golems". Cards come from the
+	  State snapshot and update live.
 	- Select a golem (click / tap / A) to see it turn in 3D (a ViewportFrame
 	  over its portrait) with EQUIP / UNEQUIP, LOCK / UNLOCK and DELETE
 	  (asks first). EQUIP BEST equips the 3 best. DELETE... enters delete
@@ -69,6 +71,7 @@ local GolemBuilder = require(Shared.Builders.GolemBuilder)
 local GolemView = require(script.Parent.Parent.UI.GolemView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local CleaningController = require(script.Parent.CleaningController)
 local HudController = require(script.Parent.HudController)
@@ -93,32 +96,15 @@ GolemController.RebuildSeconds = 0.4 -- a player's followers change at most this
 -- Left the side menu, Right the luck boosts; L1 is free outside panels)
 GolemController.ToggleKey = Enum.KeyCode.P
 GolemController.ToggleButton = Enum.KeyCode.ButtonL1
+GolemController.SideMenu = "SideMenuController" -- with it in the game, the HUD gets no GOLEMS button
 
 local CLOSE_ACTION = "TerraForgeGolemsClose"
 local TOGGLE_ACTION = "TerraForgeGolemsToggle"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local PENDING_TIMEOUT = 3
 local STATUS_TIME = 3
--- panels that own the middle of the screen: one at a time (the step 6-7
--- packages' panels too; a name that isn't in the game is skipped)
-local OTHER_PANELS = {
-	"CapsuleController",
-	"TechShopController",
-	"PenController",
-	"SellController",
-	"TrainController",
-	"IronBoxController",
-	"FoundryController",
-	"GearShopController",
-	"BoostController",
-	"EnchantController",
-	"WheelController",
-	"ArtifactController",
-	"CodexController",
-	"LeaderboardController",
-	"SettingsController",
-	"StoreController",
-}
+-- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
+-- the one list of every panel controller (a name that isn't in the game is skipped)
 
 local player = Players.LocalPlayer
 local refs: GolemView.Refs? = nil
@@ -166,7 +152,10 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in MenuPanels.Names do
+		if name == "GolemController" then
+			continue
+		end
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)
@@ -1153,9 +1142,10 @@ local function updateMenu()
 end
 
 function GolemController.start()
-	-- the HUD's GOLEMS button
+	-- the HUD's GOLEMS button, only without the side menu (its GOLEMS button
+	-- is the one entry then)
 	local hud = HudController.refs()
-	if hud and not menuButton then
+	if hud and not menuButton and not script.Parent:FindFirstChild(GolemController.SideMenu) then
 		local button = GolemView.menuButton(hud.Menu, GolemController.ToggleKey.Name)
 		menuButton = button
 		button.Activated:Connect(function()

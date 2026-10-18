@@ -5,10 +5,11 @@
 	builders (SideMenuView, CodexView, SettingsView, LeaderboardView,
 	HudView, TeleportView, BuildView) from sample data.
 	UI overlays (build/preview/<name>.json); the side menu as it ships now
-	(5 buttons: GOLEMS and ARTIFACTS hidden until their packages are in):
+	(all 7 buttons since the golem and artifact packages are in, sorted by
+	Group then Order: GOLEMS, SHOP | CODEX, ARTIFACTS, BOARDS, SETTINGS, STORE):
 	  ui_menu_hud        PC: the HUD with the side menu (CODEX badge, STORE's
 	                     SOON chip)
-	  ui_menu_hud_full   PC: all 7 buttons, as once GOLEMS and ARTIFACTS are in
+	  ui_menu_hud_full   PC: the same with the ARTIFACTS badge (a chapter to read)
 	  ui_menu_phone      667 x 375 pt phone: the MENU button alone (its badge
 	                     adds up the CODEX count), the screen the game's
 	  ui_menu_phone_open 667 x 375 pt phone: MENU tapped, the grid open (the
@@ -145,14 +146,13 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
-	-- the side menu; `full` = all 7 buttons (else the 5 that ship now),
+	-- the side menu (all 7 buttons); `full` = the ARTIFACTS badge too,
 	-- `open` = the touch layout's grid opened with MENU
 	local function menu(renderScale: number, uiScale: number, designH: number, full: boolean?, open: boolean?): any
 		local refs = SideMenuView.build()
 		refs.Gui.Scale.Scale = renderScale
-		if not full then
-			SideMenuView.setHidden(refs, "Golems", true)
-			SideMenuView.setHidden(refs, "Collection", true)
+		if full then
+			SideMenuView.setBadge(refs, "Collection", 1) -- a completed chapter waits unread
 		end
 		local touch = uiScale <= SideMenuView.CompactScale
 		refs.Expanded = open == true
@@ -277,9 +277,14 @@ function Preview.build(Loader: any): { [string]: any }
 					BorderSizePixel = 0,
 				}, bezel)
 				local canvas = LeaderboardView.canvas(face, board, LeaderboardConfig.BoardRows, true, math.floor(20 * k), w)
-				local data = if live then payload.Boards[board.Id] else { Rows = { { Rank = 1, UserId = -1, Name = "Player1", Value = payload.Own[board.Id].Value } }, Ready = true }
+				local data = if live
+					then payload.Boards[board.Id]
+					else { Rows = { { Rank = 1, UserId = -1, Name = "Player1", Value = payload.Own[board.Id].Value } }, Ready = true }
 				local own = if live then payload.Own[board.Id] else { Value = payload.Own[board.Id].Value, Rank = 1 }
-				LeaderboardView.fill(canvas, LeaderboardView.lines(board.Id, data, own, if live then Preview.Me else -1, LeaderboardConfig.BoardRows, live))
+				LeaderboardView.fill(
+					canvas,
+					LeaderboardView.lines(board.Id, data, own, if live then Preview.Me else -1, LeaderboardConfig.BoardRows, live)
+				)
 				-- the hall's own title strip in front of the board's top
 				local strip = UIKit.new("Frame", {
 					Name = "TitleStrip",

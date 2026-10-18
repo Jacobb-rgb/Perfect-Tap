@@ -402,14 +402,14 @@ return function(T, Loader)
 	end)
 
 	withWorld("Capsules: Legendary and Mythic golems are announced to the other players", function(w)
-		local text = caps.announce(w.player, { "PebbleGolem", "StormcoreTitan", "EmberImp" })
-		T.eq(text, "Waker701 woke a Legendary Stormcore Titan!")
+		local text = caps.announce(w.player, { "PebbleGolem", "StormTitan", "EmberImp" })
+		T.eq(text, "Waker701 woke a Legendary Storm Titan!")
 		local told = notes(w, "Notify", w.other)
 		T.eq(#told, 1, "the other player")
 		T.eq(told[1].A.Kind, "Discovery")
 		T.eq(told[1].A.Rarity, "Legendary")
 		T.eq(#notes(w, "Notify", w.player), 0, "not the opener")
-		T.eq(caps.announce(w.player, { "PebbleGolem", "RubyKnight" }), nil, "Epic: no announcement")
+		T.eq(caps.announce(w.player, { "PebbleGolem", "RoseKnight" }), nil, "Epic: no announcement")
 	end)
 
 	---------------------------------------------------------------- paid random items
@@ -452,7 +452,11 @@ return function(T, Loader)
 			local stored = caps.prompts(w.player).RoyalCapsule3
 			T.eq(stored.Until, NOW + 60 + CapsuleService.PurchaseGrace, "capped at the boost's end + grace")
 			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3", NOW + 60 + CapsuleService.PurchaseGrace - 1), true)
-			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3", NOW + 60 + CapsuleService.PurchaseGrace + 1), nil, "forgotten after")
+			T.eq(
+				CapsuleService.promptedLucky(w.player, "RoyalCapsule3", NOW + 60 + CapsuleService.PurchaseGrace + 1),
+				nil,
+				"forgotten after"
+			)
 			-- the odds shown no longer hold: no prompt, OddsChanged
 			local before = #w.prompted
 			local name2, mismatch = act(w, "Open", { Capsule = "Royal", Count = 3, Lucky = false })
@@ -535,6 +539,15 @@ return function(T, Loader)
 		T.eq(w.data.Coins, coins, "free")
 		T.eq(#notes(w, "CapsuleResult"), 1, "the client plays it")
 		T.eq(w.opened[1].Info.Source, "Free")
+		-- quiet (the wheel's contract): granted the same, the caller sends the CapsuleResult
+		T.eq(CapsuleService.QuietFree, true, "the wheel may ask for quiet")
+		local quiet = CapsuleService.grantFree(w.player, "Crystal", 1, true)
+		T.truthy(quiet, "granted quietly")
+		T.eq(quiet.Free, true)
+		T.eq(#quiet.Golems, 1)
+		T.truthy(GolemConfig.find(w.data.Golems, quiet.Golems[1].Id), "in the inventory")
+		T.eq(#notes(w, "CapsuleResult"), 1, "no second CapsuleResult: the wheel sends it on Reveal")
+		T.eq(w.opened[2].Info.Source, "Free")
 		fill(w.data, GolemConfig.InventoryCap - 1)
 		local none, reason = CapsuleService.grantFree(w.player, "Crystal")
 		T.eq(none, nil)
@@ -697,7 +710,7 @@ return function(T, Loader)
 	withWorld("Golems: equip, unequip, equip best, lock and delete through GolemAction", function(w)
 		local g = w.data.Golems
 		GolemConfig.add(g, "PebbleGolem") -- 1
-		GolemConfig.add(g, "RubyKnight") -- 2
+		GolemConfig.add(g, "RoseKnight") -- 2
 		GolemConfig.add(g, "EmberImp") -- 3
 		GolemConfig.add(g, "HeartstoneColossus") -- 4
 		GolemConfig.add(g, "CopperTinker") -- 5
@@ -716,17 +729,17 @@ return function(T, Loader)
 		end
 		local attr = GolemConfig.EquippedAttribute
 		T.eq(golem("Equip", { Id = 2 }).Ok, true)
-		T.eq(w.player.attrs[attr], "RubyKnight", "followers attribute")
+		T.eq(w.player.attrs[attr], "RoseKnight", "followers attribute")
 		golem("Equip", { Id = 1 })
 		golem("Equip", { Id = 3 })
 		local full = golem("Equip", { Id = 4 })
 		T.eq(full.Ok, false)
 		T.eq(full.Reason, "SlotsFull")
 		T.eq(golem("Unequip", { Id = 1 }).Ok, true)
-		T.eq(w.player.attrs[attr], "RubyKnight,EmberImp")
+		T.eq(w.player.attrs[attr], "RoseKnight,EmberImp")
 		T.eq(golem("Unequip", { Id = 1 }).Reason, "NotEquipped")
 		T.eq(golem("EquipBest").Ok, true)
-		T.eq(w.player.attrs[attr], "HeartstoneColossus,RubyKnight,EmberImp", "the 3 best")
+		T.eq(w.player.attrs[attr], "HeartstoneColossus,RoseKnight,EmberImp", "the 3 best")
 		-- lock: locked golems are never deleted
 		T.eq(golem("Lock", { Id = 4, Locked = true }).Ok, true)
 		T.eq(g.Owned[4].Locked, true)
@@ -739,7 +752,7 @@ return function(T, Loader)
 		T.eq(golem("Delete", { Ids = { 4 } }).Reason, "BadIds", "only locked golems named")
 		T.eq(golem("Lock", { Id = 4, Locked = false }).Ok, true)
 		T.eq(golem("Delete", { Ids = { 4 } }).Count, 1)
-		T.eq(w.player.attrs[attr], "RubyKnight,EmberImp", "a deleted golem leaves its slot")
+		T.eq(w.player.attrs[attr], "RoseKnight,EmberImp", "a deleted golem leaves its slot")
 		-- junk
 		T.eq(golem("Equip", { Id = "2" }).Reason, "BadGolem")
 		T.eq(golem("Equip", { Id = 0 / 0 }).Reason, "BadGolem")
@@ -1023,13 +1036,13 @@ return function(T, Loader)
 			local o = CapsuleView.buildOpening(compact)
 			local w, h = if compact then 916 else 1280, if compact then 423 else 684
 			CapsuleView.layoutOpening(o, compact, w, h)
-			CapsuleView.setPlate(o, "StarmetalSovereign", true)
+			CapsuleView.setPlate(o, "CelestialSovereign", true)
 			T.truthy(o.Plate.Visible)
 			T.eq(o.PlateRarity.Text, "MYTHIC")
 			T.truthy(o.PlateNew.Visible)
 			local kinds = {
 				"PebbleGolem",
-				"RubyKnight",
+				"RoseKnight",
 				"EmberImp",
 				"TinTumbler",
 				"QuartzSprite",
@@ -1159,23 +1172,22 @@ return function(T, Loader)
 	end)
 
 	T.test("Golem followers: an Equip / Unequip keeps every model whose kind stays", function()
-		local kinds = GolemView.followerKinds("RubyKnight,Bogus,EmberImp,PebbleGolem")
-		T.eq(kinds[1], "RubyKnight")
+		local kinds = GolemView.followerKinds("RoseKnight,Bogus,EmberImp,PebbleGolem")
+		T.eq(kinds[1], "RoseKnight")
 		T.eq(kinds[2], nil, "unknown kind: empty slot")
 		T.eq(kinds[3], "EmberImp")
 		T.eq(kinds[4], nil, "at most EquipSlots")
 		T.eq(next(GolemView.followerKinds("")), nil)
 		T.eq(next(GolemView.followerKinds(42)), nil)
 		-- unequip the first: the other two move up, nothing is built
-		local keep, build = GolemView.matchFollowers(
-			{ "RubyKnight", "EmberImp", "PebbleGolem" },
-			GolemView.followerKinds("EmberImp,PebbleGolem")
-		)
+		local keep, build =
+			GolemView.matchFollowers({ "RoseKnight", "EmberImp", "PebbleGolem" }, GolemView.followerKinds("EmberImp,PebbleGolem"))
 		T.eq(keep[1], 2, "EmberImp moves to slot 1")
 		T.eq(keep[2], 3, "PebbleGolem moves to slot 2")
 		T.eq(#build, 0, "no model built")
 		-- equip one more: only that one is built
-		local keep2, build2 = GolemView.matchFollowers({ "EmberImp", "PebbleGolem" }, GolemView.followerKinds("EmberImp,PebbleGolem,RubyKnight"))
+		local keep2, build2 =
+			GolemView.matchFollowers({ "EmberImp", "PebbleGolem" }, GolemView.followerKinds("EmberImp,PebbleGolem,RoseKnight"))
 		T.eq(keep2[1], 1)
 		T.eq(keep2[2], 2)
 		T.eq(#build2, 1)
@@ -1186,9 +1198,9 @@ return function(T, Loader)
 		T.eq(keep3[2], nil)
 		T.eq(build3[1], 2)
 		-- spam: equip / unequip back and forth never builds more than one model per change
-		local have: { [number]: string } = { "RubyKnight", "EmberImp" }
+		local have: { [number]: string } = { "RoseKnight", "EmberImp" }
 		for step = 1, 20 do
-			local want = GolemView.followerKinds(if step % 2 == 1 then "RubyKnight,EmberImp,PebbleGolem" else "RubyKnight,EmberImp")
+			local want = GolemView.followerKinds(if step % 2 == 1 then "RoseKnight,EmberImp,PebbleGolem" else "RoseKnight,EmberImp")
 			local k, b = GolemView.matchFollowers(have, want)
 			T.le(#b, 1, "at most one model per change")
 			local nextHave: { [number]: string } = {}

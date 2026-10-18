@@ -80,7 +80,9 @@
 	  they are well-formed scalars: a string key of at most
 	  MAX_FIELD_KEY_LENGTH characters with a boolean, finite number or string
 	  of at most MAX_FIELD_TEXT_LENGTH characters; at most MAX_GOLEM_FIELDS of
-	  them per entry (the first by name); anything else is dropped. Equipped:
+	  them per entry (the first by name); anything else is dropped. A Kind
+	  in GolemConfig.Renamed (RubyKnight, StormcoreTitan, StarmetalSovereign:
+	  the 36-ore roster's names) becomes its new id. Equipped:
 	  at most GolemConfig.EquipSlots unique owned ids of known kinds. NextId
 	  is a whole number above every owned Id.
 	- Daily (the retired 7-day Ember Chest streak, replaced by the daily
@@ -92,6 +94,12 @@
 	  equipped ignores them), anything else nil.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins are
 	  whole numbers >= 0.
+	- Not here: Settings (SettingsService.read) and OreCodex
+	  (CodexService.prepare) are repaired by their services once per load
+	  (DataService.onLoaded, after this chain), next to the code that owns
+	  their rules.
+	Every step above runs once per load, in this order, inside run(); the
+	Version stays 3 (all of it is additive and idempotent).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -372,6 +380,11 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		for _, entry in values(list) do
 			local id = if type(entry) == "table" then entry.Id else nil
 			local kind = if type(entry) == "table" then entry.Kind else nil
+			-- a renamed kind (GolemConfig.Renamed) takes its new id
+			local renamed = if type(kind) == "string" then GolemConfig.Renamed[kind] else nil
+			if renamed then
+				kind = renamed
+			end
 			if
 				isFinite(id)
 				and id >= 1

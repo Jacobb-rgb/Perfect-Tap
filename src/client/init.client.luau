@@ -32,7 +32,7 @@ local ORDER = {
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
 	"EnchantController", -- the Enchant shop at the rune table
-	"GolemController", -- golem inventory + followers, the HUD's GOLEMS button (step 7)
+	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)

@@ -46,6 +46,7 @@ local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local GearShopView = require(script.Parent.Parent.UI.GearShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
@@ -73,26 +74,8 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 	Info = Theme.Info,
 	Discovery = Theme.Accent,
 }
--- panels that own the middle of the screen: one at a time (names that
--- don't exist yet are skipped; the steps 6-7 shops and menus are listed so
--- they close each other once they are merged in)
-local OTHER_PANELS = {
-	"PenController",
-	"SellController",
-	"TrainController",
-	"IronBoxController",
-	"FoundryController",
-	"TechShopController",
-	"EnchantController",
-	"BoostController",
-	"CapsuleController",
-	"GolemController",
-	"WheelController",
-	"ArtifactController",
-	"CodexController",
-	"LeaderboardController",
-	"SettingsController",
-}
+-- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
+-- the one list of every panel controller (a name that isn't in the game is skipped)
 
 local player = Players.LocalPlayer
 local refs: GearShopView.Refs? = nil
@@ -136,7 +119,10 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in MenuPanels.Names do
+		if name == "GearShopController" then
+			continue
+		end
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)

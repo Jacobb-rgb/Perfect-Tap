@@ -136,7 +136,7 @@ return function(T, Loader)
 	end)
 
 	T.test("GolemBuilder: welded followers move with their Body (every part made in place)", function()
-		for _, kind in { "RubyKnight", "HeartstoneColossus" } do
+		for _, kind in { "RoseKnight", "HeartstoneColossus" } do
 			local model = GolemBuilder.build(kind, CFrame.new(0, 0, 0), { Welded = true, Size = 0.85 })
 			local body = model.PrimaryPart
 			T.truthy(body.Anchored, "Body anchored")

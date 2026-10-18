@@ -67,7 +67,8 @@
 	- A Legendary or Mythic golem is announced to the other players (Notify
 	  "Discovery").
 	- Hooks for other packages: grantFree (the wheel's capsule prize: no
-	  price, CapsuleResult with Free = true), grantProduct (step 8 receipts:
+	  price, CapsuleResult with Free = true; quiet = true leaves sending it
+	  to the caller, QuietFree says this service honors that), grantProduct (step 8 receipts:
 	  paid golems may pass the inventory cap up to GolemConfig.MaxSaved,
 	  Paid = true and Locked = true, so a golem bought with Robux is never
 	  deleted by a slip), setReceiptsReady (step 8, see Royal above; also
@@ -323,10 +324,14 @@ end
 --[[
 	A free capsule (the daily wheel's prize): no price, the player's Triple
 	Lucky counts. Refused ("InventoryFull") when there is no room for
-	`count` (default 1): the caller pays its fallback instead. Sends the
-	CapsuleResult (Free = true) and returns it.
+	`count` (default 1): the caller pays its fallback instead. Returns the
+	CapsuleResult (Free = true) and sends it, unless `quiet`: then the
+	caller sends it when its own screen is ready (WheelService sends it on
+	the wheel's "Reveal", so the opening never spoils the turning disc).
 ]]
-function CapsuleService.grantFree(player: Player, capsuleId: string, count: number?): (Result?, string?)
+CapsuleService.QuietFree = true -- grantFree honors `quiet` (WheelService reads this)
+
+function CapsuleService.grantFree(player: Player, capsuleId: string, count: number?, quiet: boolean?): (Result?, string?)
 	local data = DataService.get(player)
 	local n = count or 1
 	if not data or not CapsuleConfig.ById[capsuleId] or type(n) ~= "number" or n < 1 or n > 10 or n ~= math.floor(n) then
@@ -343,7 +348,9 @@ function CapsuleService.grantFree(player: Player, capsuleId: string, count: numb
 	local woken = add(data, kinds)
 	DataService.changed(player)
 	local result: Result = { Capsule = capsuleId, Count = n, Golems = woken, Lucky = lucky, Free = true }
-	Net.fire("CapsuleResult", player, result)
+	if quiet ~= true then
+		Net.fire("CapsuleResult", player, result)
+	end
 	opened(player, { Capsule = capsuleId, Count = n, Kinds = kindsOf(woken), Lucky = lucky, Source = "Free" })
 	return result, nil
 end

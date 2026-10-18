@@ -55,6 +55,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
@@ -87,25 +88,8 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 	Info = Theme.Info,
 	Discovery = Theme.Accent,
 }
--- panels that own the middle of the screen: one at a time (a name that
--- isn't in the game yet is skipped: the step 6-7 panels are built in parallel)
-local OTHER_PANELS = {
-	"TechShopController",
-	"EnchantController",
-	"PenController",
-	"SellController",
-	"TrainController",
-	"IronBoxController",
-	"FoundryController",
-	"GearShopController",
-	"CapsuleController",
-	"GolemController",
-	"ArtifactController",
-	"WheelController",
-	"CodexController",
-	"LeaderboardController",
-	"SettingsController",
-}
+-- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
+-- the one list of every panel controller (a name that isn't in the game is skipped)
 
 local player = Players.LocalPlayer
 local refs: BoostView.Refs? = nil
@@ -194,7 +178,10 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in MenuPanels.Names do
+		if name == "BoostController" then
+			continue
+		end
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)

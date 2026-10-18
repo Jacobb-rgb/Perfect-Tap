@@ -67,6 +67,7 @@ local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local GolemBuilder = require(Shared.Builders.GolemBuilder)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -95,26 +96,8 @@ local STATUS_TIME = 3.5
 local REVEAL_TIME = 1.7 -- seconds one golem stays before the next (or the end) when not skipped
 local SHAKE_TIME = 1.35
 local LUCKY_COLOR = Color3.fromRGB(255, 206, 72)
--- panels that own the middle of the screen: one at a time (the step 6-7
--- packages' panels too; a name that isn't in the game is skipped)
-local OTHER_PANELS = {
-	"GolemController",
-	"TechShopController",
-	"PenController",
-	"SellController",
-	"TrainController",
-	"IronBoxController",
-	"FoundryController",
-	"GearShopController",
-	"BoostController",
-	"EnchantController",
-	"WheelController",
-	"ArtifactController",
-	"CodexController",
-	"LeaderboardController",
-	"SettingsController",
-	"StoreController",
-}
+-- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
+-- the one list of every panel controller (a name that isn't in the game is skipped)
 
 local player = Players.LocalPlayer
 local refs: CapsuleView.Refs? = nil
@@ -176,7 +159,10 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in MenuPanels.Names do
+		if name == "CapsuleController" then
+			continue
+		end
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)

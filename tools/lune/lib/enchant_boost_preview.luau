@@ -28,7 +28,7 @@
 	  ui_boost_tv          1080p TV: Hexa Lucky, the gamepad row
 	  ui_hud_chips         PC HUD: the two running boosts under the train chip
 	                       ([clover] TRIPLE 3:42, [gem] HEXA 1h 05m)
-	  ui_hud_launcher      phone HUD: the BOOSTS launcher (no boost running)
+	  ui_hud_launcher      phone HUD: the BOOSTS launcher (no boost running; only in a game without the side menu)
 	(the renderer has no scrolling: lists show their first rows; it draws
 	no images, so the gamepad glyphs get a lettered stand-in)
 ]]

@@ -64,7 +64,7 @@ Preview.Now = 1_800_000_000
 function Preview.state(lucky: boolean?): { [string]: any }
 	local owned = {}
 	local kinds = {
-		"RubyKnight",
+		"RoseKnight",
 		"GildedPorter",
 		"CobaltDiver",
 		"EmberImp",
@@ -159,7 +159,7 @@ function Preview.buildGallery(Loader: any, workspace: any)
 	-- a forgekeeper with three followers (scale check, follower size)
 	local feet = CF.new(-24, 0, 4)
 	Dummy.build(gallery, CF, feet, "idle")
-	for i, kind in { "GildedPorter", "RubyKnight", "StarmetalSovereign" } do
+	for i, kind in { "GildedPorter", "RoseKnight", "CelestialSovereign" } do
 		local slot = Preview.Slots[i]
 		GolemBuilder.build(kind, feet * CF.new(slot.X, 0, slot.Z), { Size = Preview.FollowerSize }).Parent = gallery
 	end
@@ -215,7 +215,7 @@ function Preview.buildWorld(Loader: any, workspace: any)
 	local at = pedestal + front * 7 + side * 4.5
 	local feet = CF.lookAt(Vector3.new(at.X, ground, at.Z), Vector3.new(pedestal.X, ground, pedestal.Z))
 	Dummy.build(folder, CF, feet, "idle")
-	for i, kind in { "StarmetalSovereign", "RubyKnight", "GildedPorter" } do
+	for i, kind in { "CelestialSovereign", "RoseKnight", "GildedPorter" } do
 		local slot = Preview.Slots[i]
 		-- standing followers look around (GolemController.LookAround): here back toward the plaza
 		local golemFeet = feet * CF.new(slot.X, 0, slot.Z) * CF.Angles(0, ({ 2.2, -2.0, 2.6 })[i], 0)
@@ -316,13 +316,12 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 	local pcW, pcH = Preview.Width / scale, (Preview.Height - Preview.Inset) / scale
 	local phW, phH = Preview.Width / phone, (Preview.Height - Preview.PhoneInset) / phone
 
+	-- the HUD (its GOLEMS button only shows in a game without the side menu:
+	-- the side menu's GOLEMS is the one entry, see sideMenu below)
 	local function hud(uiScale: number, coins: number): any
 		local refs = HudView.build()
 		refs.Gui.Scale.Scale = uiScale
 		BuildView.menuButton(refs.Menu)
-		local golems = GolemView.menuButton(refs.Menu, "P")
-		-- (the phone shots: the HUD at the 0.62 floor, touch; PC: the P key)
-		GolemView.menuLayout(golems, if uiScale == phone then 0.62 else 1, if uiScale == phone then "Touch" else "Keyboard", nil)
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(186)
 		refs.Income.TextColor3 = Theme.Good
@@ -330,6 +329,21 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		for i = 1, 3 do
 			HudView.slot(refs.CarrySlots, nil, i)
 		end
+		return refs
+	end
+
+	-- the side menu (GOLEMS and SHOP first; phones: the MENU button, shut)
+	local function sideMenu(uiScale: number): any
+		local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
+		local refs = SideMenuView.build()
+		refs.Gui.Scale.Scale = uiScale
+		local onPhone = uiScale == phone
+		local layout = SideMenuView.layout(if onPhone then 0.62 else 1, if onPhone then phH else pcH, {
+			Touch = onPhone,
+			DesignWidth = if onPhone then phW else pcW,
+		})
+		SideMenuView.apply(refs, layout)
+		SideMenuView.setSoon(refs, "Store", true)
 		return refs
 	end
 
@@ -396,7 +410,8 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 
 	local exports: { [string]: any } = {}
 	if which == "capsules" then
-		exports.ui_capsules_shop = UiExport.export({ hud(scale, 48250).Gui, shop(scale, false, pcW, pcH, false, "Stone").Gui })
+		exports.ui_capsules_shop =
+			UiExport.export({ hud(scale, 48250).Gui, sideMenu(scale).Gui, shop(scale, false, pcW, pcH, false, "Stone").Gui })
 		exports.ui_capsules_lucky = UiExport.export({ hud(scale, 2.4e6).Gui, shop(scale, false, pcW, pcH, true, "Crystal").Gui })
 		exports.ui_capsules_phone = UiExport.export({ hud(phone, 48250).Gui, shop(phone, true, phW, phH, false, "Stone").Gui })
 		-- preview-only ids: x1 and x3 live, x10 still a placeholder
@@ -437,8 +452,9 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		exports.ui_capsules_grid = UiExport.export({ grid(scale, false, pcW, pcH).Gui })
 		exports.ui_capsules_grid_phone = UiExport.export({ grid(phone, true, phW, phH).Gui })
 
-		exports.ui_golems = UiExport.export({ hud(scale, 48250).Gui, inventory(scale, false, pcW, pcH, false).Gui })
-		exports.ui_golems_phone = UiExport.export({ hud(phone, 48250).Gui, inventory(phone, true, phW, phH, false).Gui })
+		exports.ui_golems = UiExport.export({ hud(scale, 48250).Gui, sideMenu(scale).Gui, inventory(scale, false, pcW, pcH, false).Gui })
+		exports.ui_golems_phone =
+			UiExport.export({ hud(phone, 48250).Gui, sideMenu(phone).Gui, inventory(phone, true, phW, phH, false).Gui })
 		exports.ui_golems_delete = UiExport.export({ hud(scale, 48250).Gui, inventory(scale, false, pcW, pcH, true).Gui })
 		exports.ui_golems_confirm = UiExport.export({ hud(scale, 48250).Gui, inventory(scale, false, pcW, pcH, true, true).Gui })
 

@@ -1644,7 +1644,7 @@ local function onKey(_: string, state: Enum.UserInputState, input: InputObject):
 end
 
 -- B / D-pad Up, bound all the time: open or close build mode.
-local function onToggle(_: string, state: Enum.UserInputState, _input: InputObject): Enum.ContextActionResult
+local function onToggle(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
 	if state ~= Enum.UserInputState.Begin then
 		return Enum.ContextActionResult.Pass
 	end
@@ -1652,7 +1652,9 @@ local function onToggle(_: string, state: Enum.UserInputState, _input: InputObje
 		PlacementController.exit()
 		return Enum.ContextActionResult.Sink
 	end
-	if CleaningController.isActive() then
+	-- D-pad Up moves a gamepad selection (the side menu, a panel's list):
+	-- it enters build mode only while no menu holds the selection
+	if CleaningController.isActive() or (input.KeyCode == Enum.KeyCode.DPadUp and GuiService.SelectedObject ~= nil) then
 		return Enum.ContextActionResult.Pass
 	end
 	task.spawn(PlacementController.enter)

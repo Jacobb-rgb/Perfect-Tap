@@ -3,7 +3,16 @@
 	SideMenuController fills it in and handles input), like the button
 	columns of popular simulators:
 
-	  SHOP · GOLEMS · CODEX · ARTIFACTS · BOARDS · SETTINGS · STORE
+	  GOLEMS · SHOP · CODEX · ARTIFACTS · BOARDS · SETTINGS · STORE
+
+	The entries are data (SideMenuView.Entries) for the coming light-UI
+	restyle: each has a Group ("Main": the tiles that stay on screen;
+	"More": the ones behind a MORE flyout), a stable Order inside its group
+	(Main follows the light HUD's tiles BACKPACK 1, GOLEMS 2, BUILD 3, SHOP 4;
+	BACKPACK and BUILD have no side menu controller yet) and an IconName
+	that ONE table (SideMenuView.Icons) maps to today's emoji. There is no
+	MORE flyout yet, so every entry shows, sorted by Group then Order
+	(SideMenuView.sorted).
 
 	Chunky buttons in their own colours, an emoji icon over a short label.
 	A red badge shows a count (CODEX: ores discovered since you last looked);
@@ -48,17 +57,91 @@ SideMenuView.ToggleId = "Menu"
 SideMenuView.ToggleColor = Theme.PanelLight
 SideMenuView.ToggleDark = Theme.PanelDark
 
-export type Entry = { Id: string, Label: string, Icon: string, Color: Color3, Dark: Color3 }
+export type Group = "Main" | "More"
+
+export type Entry = {
+	Id: string, -- stable: the button's name, SideMenuController.Actions key
+	Label: string,
+	Group: Group, -- "Main" stays on screen, "More" goes behind the MORE flyout
+	Order: number, -- stable place inside the group (gaps are kept for new entries)
+	IconName: string, -- a key of SideMenuView.Icons
+	Color: Color3,
+	Dark: Color3,
+}
+
+-- The groups in the order they show.
+SideMenuView.Groups = { "Main", "More" } :: { Group }
+
+-- IconName -> today's icon (an emoji). The light-UI restyle swaps this one
+-- table for its sprite icons.
+SideMenuView.Icons = {
+	Shop = "🛒",
+	Golems = "🤖",
+	Codex = "📖",
+	Artifacts = "🏺",
+	Boards = "🏆",
+	Settings = "⚙️",
+	Store = "💰",
+} :: { [string]: string }
 
 SideMenuView.Entries = {
-	{ Id = "Shop", Label = "SHOP", Icon = "🛒", Color = rgb(255, 120, 168), Dark = rgb(178, 58, 108) },
-	{ Id = "Golems", Label = "GOLEMS", Icon = "🤖", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50) },
-	{ Id = "Codex", Label = "CODEX", Icon = "📖", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186) },
-	{ Id = "Collection", Label = "ARTIFACTS", Icon = "🏺", Color = rgb(255, 196, 72), Dark = rgb(186, 124, 26) },
-	{ Id = "Boards", Label = "BOARDS", Icon = "🏆", Color = rgb(182, 118, 255), Dark = rgb(104, 56, 178) },
-	{ Id = "Settings", Label = "SETTINGS", Icon = "⚙️", Color = rgb(150, 140, 132), Dark = rgb(88, 80, 74) },
-	{ Id = "Store", Label = "STORE", Icon = "💰", Color = rgb(72, 200, 150), Dark = rgb(28, 120, 86) },
+	{ Id = "Golems", Label = "GOLEMS", Group = "Main", Order = 2, IconName = "Golems", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50) },
+	{ Id = "Shop", Label = "SHOP", Group = "Main", Order = 4, IconName = "Shop", Color = rgb(255, 120, 168), Dark = rgb(178, 58, 108) },
+	{ Id = "Codex", Label = "CODEX", Group = "More", Order = 1, IconName = "Codex", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186) },
+	{
+		Id = "Collection",
+		Label = "ARTIFACTS",
+		Group = "More",
+		Order = 2,
+		IconName = "Artifacts",
+		Color = rgb(255, 196, 72),
+		Dark = rgb(186, 124, 26),
+	},
+	{
+		Id = "Boards",
+		Label = "BOARDS",
+		Group = "More",
+		Order = 3,
+		IconName = "Boards",
+		Color = rgb(182, 118, 255),
+		Dark = rgb(104, 56, 178),
+	},
+	{
+		Id = "Settings",
+		Label = "SETTINGS",
+		Group = "More",
+		Order = 4,
+		IconName = "Settings",
+		Color = rgb(150, 140, 132),
+		Dark = rgb(88, 80, 74),
+	},
+	{ Id = "Store", Label = "STORE", Group = "More", Order = 5, IconName = "Store", Color = rgb(72, 200, 150), Dark = rgb(28, 120, 86) },
 } :: { Entry }
+
+-- An IconName's icon ("" for a name the table doesn't know).
+function SideMenuView.icon(name: string): string
+	return SideMenuView.Icons[name] or ""
+end
+
+-- The entries in the order they show: by Group (SideMenuView.Groups), then Order, then Id.
+function SideMenuView.sorted(): { Entry }
+	local rank: { [string]: number } = {}
+	for i, group in SideMenuView.Groups do
+		rank[group] = i
+	end
+	local list = table.clone(SideMenuView.Entries)
+	table.sort(list, function(a: Entry, b: Entry): boolean
+		local ga, gb = rank[a.Group] or #SideMenuView.Groups + 1, rank[b.Group] or #SideMenuView.Groups + 1
+		if ga ~= gb then
+			return ga < gb
+		end
+		if a.Order ~= b.Order then
+			return a.Order < b.Order
+		end
+		return a.Id < b.Id
+	end)
+	return list
+end
 
 SideMenuView.MinTouch = 44 -- points
 SideMenuView.Left = 12 -- design units from the left edge
@@ -144,7 +227,9 @@ function SideMenuView.layout(uiScale: number, designHeight: number, options: Opt
 	local minSide = SideMenuView.MinTouch / math.max(uiScale, 0.1)
 	local w = math.max(m.Width, math.ceil(minSide))
 	local h = math.max(m.Height, if touch then math.ceil(minSide) else 0)
-	local bottomMargin = if tv then math.max(SideMenuView.BottomMargin, designHeight * SideMenuView.SafeShare) else SideMenuView.BottomMargin
+	local bottomMargin = if tv
+		then math.max(SideMenuView.BottomMargin, designHeight * SideMenuView.SafeShare)
+		else SideMenuView.BottomMargin
 	-- the lowest the column may end
 	local floor = if touch then designHeight * SideMenuView.TouchBottom else designHeight - bottomMargin
 	local columns, rows, height, topMin = 1, n, 0, SideMenuView.TopMin
@@ -185,7 +270,8 @@ local function newButton(column: Frame, entry: Entry, order: number): (TextButto
 		Size = UDim2.fromOffset(SideMenuView.Normal.Width, SideMenuView.Normal.Height),
 	})
 	button:SetAttribute("Menu", entry.Id)
-	UIKit.label(button, entry.Icon, 28, {
+	button:SetAttribute("MenuGroup", entry.Group)
+	UIKit.label(button, SideMenuView.icon(entry.IconName), 28, {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 4),
@@ -327,7 +413,7 @@ function SideMenuView.build(): Refs
 		Expanded = false,
 		Layout = nil,
 	}
-	for i, entry in SideMenuView.Entries do
+	for i, entry in SideMenuView.sorted() do
 		local button, badge, soon = newButton(column, entry, i)
 		refs.Buttons[entry.Id] = button
 		refs.Badges[entry.Id] = badge

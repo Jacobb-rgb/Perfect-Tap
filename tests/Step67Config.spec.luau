@@ -419,7 +419,8 @@ return function(T, Loader)
 			T.eq(typeof(golem.Glow), "Color3")
 			T.eq(typeof(golem.Trim), "Color3")
 			T.eq(typeof(golem.Material), "EnumItem")
-			T.truthy(golem.Ore == nil or OreData.ById[golem.Ore], golem.Id .. " ore")
+			-- (an ore of the coming 36-ore roster may not exist yet: its FallbackOre does)
+			T.truthy(golem.Ore == nil or OreData.ById[golem.Ore] or OreData.ById[golem.FallbackOre or ""], golem.Id .. " ore")
 		end
 		for _, info in Rarity.List do
 			T.truthy(rarities[info.Id], "a golem of rarity " .. info.Id)
@@ -442,7 +443,7 @@ return function(T, Loader)
 		local a = GolemConfig.add(golems, "PebbleGolem")
 		local b = GolemConfig.add(golems, "DiamondDuke")
 		local c = GolemConfig.add(golems, "EmberImp")
-		local d = GolemConfig.add(golems, "StarmetalSovereign")
+		local d = GolemConfig.add(golems, "CelestialSovereign")
 		T.eq(a.Id, 1)
 		T.eq(d.Id, 4)
 		T.eq(golems.NextId, 5)
@@ -495,7 +496,7 @@ return function(T, Loader)
 	T.test("Step67: paid golems are marked, locked golems are never deleted", function()
 		local golems: any = { Owned = {}, Equipped = {}, NextId = 1 }
 		local coin = GolemConfig.add(golems, "PebbleGolem")
-		local paid = GolemConfig.add(golems, "RubyKnight", true, true)
+		local paid = GolemConfig.add(golems, "RoseKnight", true, true)
 		local other = GolemConfig.add(golems, "EmberImp")
 		T.eq(coin.Paid, nil, "a coin capsule's golem isn't paid")
 		T.eq(paid.Paid, true, "a Robux receipt's golem is marked Paid")
@@ -517,9 +518,82 @@ return function(T, Loader)
 		T.truthy(GolemConfig.Reasons.BadLock)
 	end)
 
+	T.test("Step67: renamed golems (the 36-ore roster names) keep their rarity, colors and saves", function()
+		local renames = {
+			{ Old = "RubyKnight", New = "RoseKnight", Name = "Rose Knight", Rarity = "Epic", Ore = "CrystalRose", Fallback = "Ruby" },
+			{
+				Old = "StormcoreTitan",
+				New = "StormTitan",
+				Name = "Storm Titan",
+				Rarity = "Legendary",
+				Ore = "StormGem",
+				Fallback = "Stormcore",
+			},
+			{
+				Old = "StarmetalSovereign",
+				New = "CelestialSovereign",
+				Name = "Celestial Sovereign",
+				Rarity = "Mythic",
+				Ore = "CelestialCore",
+				Fallback = "Starmetal",
+			},
+		}
+		for _, r in renames do
+			local golem = GolemConfig.ById[r.New]
+			T.truthy(golem, r.New)
+			T.eq(GolemConfig.ById[r.Old], nil, r.Old .. " is gone")
+			T.eq(GolemConfig.Renamed[r.Old], r.New, r.Old .. " -> " .. r.New)
+			T.eq(golem.Name, r.Name)
+			T.eq(golem.Rarity, r.Rarity, r.New .. " keeps its rarity")
+			T.eq(golem.Ore, r.Ore)
+			T.eq(golem.FallbackOre, r.Fallback)
+			-- the colors come from the ore while it exists, else from the fallback
+			local colorOre = if OreData.exists(r.Ore) then r.Ore else r.Fallback
+			T.eq(golem.Glow, OreData.get(colorOre).Glow, r.New .. " glows in its ore's colors")
+		end
+		for old, new in GolemConfig.Renamed do
+			T.eq(GolemConfig.ById[old], nil, old .. ": an old id is never a live golem")
+			T.truthy(GolemConfig.ById[new], new .. ": renamed to a live golem")
+		end
+		for _, golem in GolemConfig.List do
+			local ore = golem.Ore
+			if ore ~= nil then
+				T.truthy(OreData.exists(ore) or OreData.exists(golem.FallbackOre), golem.Id .. ": its ore or fallback exists")
+			end
+		end
+		for _, capsule in CapsuleConfig.List do
+			for old in GolemConfig.Renamed do
+				T.eq(capsule.Odds[old], nil, `{capsule.Id} rolls no old id`)
+			end
+		end
+		-- a save from before the rename: the kinds take their new ids, stay equipped, twice
+		local data = fresh()
+		data.Golems = {
+			Owned = {
+				{ Id = 1, Kind = "RubyKnight", Locked = true },
+				{ Id = 2, Kind = "StormcoreTitan" },
+				{ Id = 3, Kind = "StarmetalSovereign", Paid = true },
+				{ Id = 4, Kind = "PebbleGolem" },
+			},
+			Equipped = { 1, 2, 3 },
+			NextId = 5,
+		}
+		for run = 1, 2 do
+			Migrations.run(data, NOW)
+			T.eq(data.Golems.Owned[1].Kind, "RoseKnight", `run {run}`)
+			T.eq(data.Golems.Owned[1].Locked, true, `run {run}: the lock stays`)
+			T.eq(data.Golems.Owned[2].Kind, "StormTitan", `run {run}`)
+			T.eq(data.Golems.Owned[3].Kind, "CelestialSovereign", `run {run}`)
+			T.eq(data.Golems.Owned[3].Paid, true, `run {run}: still a paid golem`)
+			T.eq(data.Golems.Owned[4].Kind, "PebbleGolem", `run {run}`)
+			T.eq(#data.Golems.Equipped, 3, `run {run}: all three stay equipped`)
+			T.eq(GolemConfig.equippedKinds(data.Golems), "RoseKnight,StormTitan,CelestialSovereign", `run {run}: followers`)
+		end
+	end)
+
 	T.test("Step67: golems of a newer update count, can't be equipped or deleted; Delete takes plain lists only", function()
 		local golems: any = {
-			Owned = { { Id = 1, Kind = "FutureGolem" }, { Id = 2, Kind = "PebbleGolem" }, { Id = 3, Kind = "RubyKnight" } },
+			Owned = { { Id = 1, Kind = "FutureGolem" }, { Id = 2, Kind = "PebbleGolem" }, { Id = 3, Kind = "RoseKnight" } },
 			Equipped = {},
 			NextId = 4,
 		}
@@ -531,13 +605,13 @@ return function(T, Loader)
 		local best = GolemConfig.equipBest(golems)
 		T.eq(#best, 2, "EquipBest skips it")
 		T.falsy(table.find(best, 1))
-		T.eq(GolemConfig.equippedKinds(golems), "RubyKnight,PebbleGolem", "the follower attribute")
+		T.eq(GolemConfig.equippedKinds(golems), "RoseKnight,PebbleGolem", "the follower attribute")
 		T.eq(next(GolemConfig.stats({ Owned = golems.Owned, Equipped = { 1 } }, 0)), nil, "gives nothing")
 		local removed = GolemConfig.delete(golems, { 1, 2 })
 		T.eq(removed, 1, "only the known one goes")
 		T.truthy(GolemConfig.find(golems, 1), "the newer update's golem stays")
 		T.eq(GolemConfig.find(golems, 2), nil)
-		T.eq(GolemConfig.equippedKinds(golems), "RubyKnight")
+		T.eq(GolemConfig.equippedKinds(golems), "RoseKnight")
 		-- a client table with extra keys, holes or too many entries is refused
 		local n, reason = GolemConfig.delete(golems, { 3, Extra = 1 })
 		T.eq(n, 0)
@@ -1698,6 +1772,7 @@ return function(T, Loader)
 		data.Golems = {
 			Owned = {
 				{ Id = 1, Kind = "FutureGolem" },
+				-- saved under its old name (GolemConfig.Renamed)
 				{ Id = 2, Kind = "RubyKnight", Paid = true, Locked = true, TradeLockUntil = NOW + 3600, Source = "Royal" },
 				{ Id = 5, Kind = "FutureGolem", Paid = true },
 			},
@@ -1717,11 +1792,12 @@ return function(T, Loader)
 			T.eq(#data.Golems.Owned, 3, `run {run}: FutureGolems kept`)
 			T.eq(data.Golems.Owned[1].Kind, "FutureGolem")
 			T.eq(data.Golems.Owned[3].Kind, "FutureGolem")
-			local ruby = data.Golems.Owned[2]
-			T.eq(ruby.Paid, true, `run {run}: Paid kept`)
-			T.eq(ruby.Locked, true, `run {run}: Locked kept`)
-			T.eq(ruby.TradeLockUntil, NOW + 3600, `run {run}: a newer server's trading field kept`)
-			T.eq(ruby.Source, "Royal", `run {run}: a newer server's field kept`)
+			local rose = data.Golems.Owned[2]
+			T.eq(rose.Kind, "RoseKnight", `run {run}: the old RubyKnight id takes its new name`)
+			T.eq(rose.Paid, true, `run {run}: Paid kept`)
+			T.eq(rose.Locked, true, `run {run}: Locked kept`)
+			T.eq(rose.TradeLockUntil, NOW + 3600, `run {run}: a newer server's trading field kept`)
+			T.eq(rose.Source, "Royal", `run {run}: a newer server's field kept`)
 			T.eq(data.Golems.Owned[3].Paid, true, `run {run}: a paid unknown golem stays paid`)
 			T.eq(data.Daily, nil, `run {run}: the retired chest streak is gone`)
 			T.eq(#data.Golems.Equipped, 1, `run {run}: an unknown golem isn't equipped here`)
@@ -2055,11 +2131,19 @@ return function(T, Loader)
 		w.byPlayer[p] = data
 		local first = StateService.trim(p, StateService.snapshot(p) :: any)
 		T.eq(first.Kept, nil, "the first push is whole")
+		-- (CodexSeen comes from CodexService's provider, there once it is in the game)
+		local present = {}
 		for _, key in StateService.Sticky do
-			T.truthy(first[key] ~= nil, key .. " sent")
+			if first[key] ~= nil then
+				table.insert(present, key)
+			end
+		end
+		for _, key in { "Gear", "Enchants", "Golems", "Artifacts", "Bonuses", "Discovered" } do
+			T.truthy(table.find(StateService.Sticky, key), key .. " is sticky")
+			T.truthy(table.find(present, key), key .. " sent")
 		end
 		local second = StateService.trim(p, StateService.snapshot(p) :: any)
-		T.eq(#second.Kept, #StateService.Sticky, "nothing changed: all kept")
+		T.eq(#second.Kept, #present, "nothing changed: all kept")
 		for _, key in StateService.Sticky do
 			T.eq(second[key], nil, key .. " left out")
 		end

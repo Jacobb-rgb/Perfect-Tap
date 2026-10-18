@@ -1,6 +1,10 @@
 --[[
-	MenuPanels: what the side menu's panels (CodexController,
-	SettingsController, LeaderboardController) share on the client.
+	MenuPanels: what the panels share on the client.
+
+	Names is THE list of every panel controller (a big panel in the middle
+	of the screen with isOpen() and close()). Every panel closes the others
+	when it opens (closeOthers, or its own loop over Names) and closes
+	itself when another one opens; a new panel controller goes in here.
 
 	  controller(name)   another controller module by name, required with
 	                     pcall on first use (nil while it doesn't exist: the
@@ -26,8 +30,9 @@ MenuPanels.Names = {
 	"IronBoxController",
 	"FoundryController",
 	"TechShopController",
+	"VaultController",
 	"BoostController",
-	"GearController",
+	"GearShopController",
 	"EnchantController",
 	"CapsuleController",
 	"GolemController",

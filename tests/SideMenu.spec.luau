@@ -200,6 +200,39 @@ return function(T, Loader)
 		T.eq(SideMenuView.layout(1, 684, { DesignWidth = 1280 }).Left, SideMenuView.Left)
 	end)
 
+	T.test("side menu: entries are data (Group, Order, IconName) shown by Group then Order", function()
+		local ids: { [string]: boolean } = {}
+		local places: { [string]: boolean } = {}
+		local mains: { string } = {}
+		for _, entry in SideMenuView.Entries do
+			T.falsy(ids[entry.Id], entry.Id .. " once")
+			ids[entry.Id] = true
+			T.truthy(entry.Group == "Main" or entry.Group == "More", entry.Id .. " group")
+			T.truthy(type(entry.Order) == "number" and entry.Order == math.floor(entry.Order), entry.Id .. " order")
+			local place = `{entry.Group}:{entry.Order}`
+			T.falsy(places[place], place .. " is one entry's")
+			places[place] = true
+			T.truthy(SideMenuView.Icons[entry.IconName], entry.Id .. " has an icon through SideMenuView.Icons")
+			T.eq(SideMenuView.icon(entry.IconName), SideMenuView.Icons[entry.IconName])
+			if entry.Group == "Main" then
+				table.insert(mains, entry.Id)
+			end
+		end
+		T.eq(SideMenuView.icon("NoSuchIcon"), "")
+		table.sort(mains)
+		T.eq(table.concat(mains, ","), "Golems,Shop", "GOLEMS and SHOP are the main tiles")
+		local order = {}
+		for _, entry in SideMenuView.sorted() do
+			table.insert(order, entry.Id)
+		end
+		T.eq(table.concat(order, ","), "Golems,Shop,Codex,Collection,Boards,Settings,Store")
+		local refs = SideMenuView.build()
+		T.eq(table.concat(refs.Order, ","), table.concat(order, ","), "the buttons follow the sorted entries")
+		T.eq(refs.Buttons.Golems:GetAttribute("MenuGroup"), "Main")
+		T.eq(refs.Buttons.Codex:GetAttribute("MenuGroup"), "More")
+		T.eq((refs.Buttons.Shop:FindFirstChild("Icon") :: any).Text, SideMenuView.Icons.Shop)
+	end)
+
 	T.test("side menu: the view places every button, badges, SOON chips and hidden buttons", function()
 		local refs = SideMenuView.build()
 		T.eq(#refs.Order, 7)
@@ -216,7 +249,10 @@ return function(T, Loader)
 		-- no two buttons overlap
 		local boxes = {}
 		for _, target in SideMenuView.touchTargets(refs) do
-			table.insert(boxes, { x = target.Position.X.Offset, y = target.Position.Y.Offset, w = target.Size.X.Offset, h = target.Size.Y.Offset })
+			table.insert(
+				boxes,
+				{ x = target.Position.X.Offset, y = target.Position.Y.Offset, w = target.Size.X.Offset, h = target.Size.Y.Offset }
+			)
 		end
 		for i = 1, #boxes do
 			for j = i + 1, #boxes do
@@ -254,7 +290,10 @@ return function(T, Loader)
 	---------------------------------------------------------------- codex
 
 	T.test("codex: entries follow the save's Discovered record", function()
-		local entries = CodexView.entries({ Coal = true, Gold = true, Diamond = false, Bogus = true, [5] = true }, { Gold = true, Coal = false })
+		local entries = CodexView.entries(
+			{ Coal = true, Gold = true, Diamond = false, Bogus = true, [5] = true },
+			{ Gold = true, Coal = false }
+		)
 		T.eq(#entries, #OreData.List)
 		T.eq(#entries, 30)
 		local found, total = CodexView.count(entries)

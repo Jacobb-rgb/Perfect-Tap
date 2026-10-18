@@ -354,3 +354,37 @@ What to test in Studio:
 7. Listen to the new picks and swap any you dislike in SoundConfig: BlasterBeam (Roblox "UFO Beam" loop, quiet),
    BlasterZap (flashbulb), BlastThud (hit.wav), RockBreak (the shipped explosion, high pitch), ElevatorDing
    (Roblox pinball low bell), DoorThud (collide.wav, low pitch).
+
+## Steps 6-7 integration (2026-10-18, branch integrate/steps67)
+The six steps 6-7 branches (P0 contracts, Gear, Enchants + Boosts, Capsules + Golems, Wheel + Artifacts,
+Leaderboards + Codex + Side menu + Settings) merged onto main (teleport bar, Blaster Vault, blaster feel, lobby).
+Integration decisions:
+- Golems for the coming 36-ore roster: Rose Knight (CrystalRose), Storm Titan (StormGem), Celestial Sovereign
+  (CelestialCore), same rarities and bonuses. Until OreData has those ores they wear the colours of their
+  FallbackOre (Ruby, Stormcore, Starmetal). Saves with the old ids (RubyKnight, StormcoreTitan,
+  StarmetalSovereign) get the new ids on load (GolemConfig.Renamed, Migrations) and stay equipped / locked / paid.
+- Side menu entries are data (Group Main / More, Order, IconName -> one emoji table) for the light-UI restyle:
+  GOLEMS and SHOP are Main, the rest More; shown sorted by Group then Order (GOLEMS, SHOP, CODEX, ARTIFACTS,
+  BOARDS, SETTINGS, STORE). The ARTIFACTS button shows the unread-chapter badge.
+- One entry per panel: with the side menu in the game the HUD has no GOLEMS or BOOK button and the BOOSTS launcher
+  chip is off (SHOP opens the boosts). Hotkeys stay: P / L1 golems, L / D-pad right boosts, J book.
+- MenuPanels.Names is the one list of panels (VaultController and GearShopController added): opening any panel
+  closes the others.
+- D-pad: Left side menu, Right boosts, Down teleport bar, Up build mode (now only while no menu holds the gamepad
+  selection, so D-pad Up moves inside the side menu instead of entering build mode).
+- The wheel's capsule prize: CapsuleService.grantFree honours `quiet` (QuietFree), so the capsule opening plays
+  after the wheel's prize card ("Reveal"), not while the disc turns.
+- Camera shake OFF in Settings also stops the blaster recoil kick.
+- State pushes: Discovered and CodexSeen are sticky (sent only when they change).
+- Budgets: the 8 yard museums (~350 parts, built at server start) count toward MapParts (22,000 -> 22,400) and
+  LobbyParts (fits, 12,800 unchanged); tests/LobbyBudget.spec.luau builds them.
+What to test in Studio:
+1. Side menu (PC): GOLEMS and SHOP on top, then CODEX, ARTIFACTS, BOARDS, SETTINGS, STORE. No GOLEMS / BOOK buttons
+   in the right HUD menu, no BOOSTS chip under the coins while no boost runs.
+2. Open the Blaster Vault, then press P: the vault window closes, the golems open. Open the Gear shop, then the
+   Enchant table: only one window at a time.
+3. Controller: D-pad Left jumps into the side menu; D-pad Up / Down move inside it (no build mode, no teleport
+   bar); B leaves. Outside the menu D-pad Up still enters build mode on your plot.
+4. Win a capsule on the daily wheel: the disc stops, the prize card shows, then the capsule opening plays once.
+5. Settings: Camera shake off -> firing the blaster no longer tips the view.
+6. An old save with a Ruby Knight: it is a Rose Knight now, still equipped.

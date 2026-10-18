@@ -1,12 +1,14 @@
 --[[
-	SideMenuController: the button column on the left edge (SideMenuView).
+	SideMenuController: the button column on the left edge (SideMenuView;
+	its entries are data: Group "Main" / "More", Order, IconName, shown by
+	Group then Order).
 
+	  GOLEMS     GolemController (hidden while it isn't in the game)
 	  SHOP       BoostController (Triple / Hexa Lucky) when it is in the game,
 	             else a hint to visit the SHOP stall
-	  GOLEMS     GolemController (hidden while it isn't in the game)
 	  CODEX      CodexController (badge: ores discovered since you last looked)
-	  ARTIFACTS  ArtifactController (the collection book; hidden while it
-	             isn't in the game)
+	  ARTIFACTS  ArtifactController (the collection book; badge: completed
+	             chapters waiting unread; hidden while it isn't in the game)
 	  BOARDS     LeaderboardController (HALL OF FAME panel)
 	  SETTINGS   SettingsController
 	  STORE      StoreController (Robux items) when it is in the game, else
@@ -19,6 +21,11 @@
 	buttons), or wears a "SOON" chip and answers with a toast (STORE), or
 	answers with a hint (SHOP). Pressing the button of an open panel closes
 	it.
+	One entry per panel: the side menu is THE entry for the panels it
+	opens, so the controllers leave out their own HUD buttons while it is
+	in the game (GolemController's GOLEMS, ArtifactController's BOOK) and
+	the BOOSTS launcher chip is turned off (BoostController.setLauncher);
+	hotkeys (P, L, J), world prompts and the boost chips stay.
 	Layout: SideMenuView.layout (touch screens: MenuPanels.isTouch, the same
 	test the panels use; they get one MENU button that opens the grid and
 	keep the thumbstick's bottom-left corner free; TVs keep the title-safe
@@ -52,14 +59,28 @@ type Action = { Controller: string?, Missing: string, Soon: boolean, Hide: boole
 -- controller isn't in the game (Soon = show the SOON chip then; Hide = hide
 -- the button then).
 SideMenuController.Actions = {
-	Shop = { Controller = "BoostController", Missing = "Visit the SHOP stall in town for gear and luck boosts!", Soon = false, Hide = false },
+	Shop = {
+		Controller = "BoostController",
+		Missing = "Visit the SHOP stall in town for gear and luck boosts!",
+		Soon = false,
+		Hide = false,
+	},
 	Golems = { Controller = "GolemController", Missing = "Golem pets are coming soon!", Soon = false, Hide = true },
 	Codex = { Controller = "CodexController", Missing = "The Ore Codex is at the ROCK SCANNER in town.", Soon = false, Hide = false },
 	Collection = { Controller = "ArtifactController", Missing = "The artifact collection book is coming soon!", Soon = false, Hide = true },
-	Boards = { Controller = "LeaderboardController", Missing = "The leaderboards are in the HALL OF FAME in town.", Soon = false, Hide = false },
+	Boards = {
+		Controller = "LeaderboardController",
+		Missing = "The leaderboards are in the HALL OF FAME in town.",
+		Soon = false,
+		Hide = false,
+	},
 	Settings = { Controller = "SettingsController", Missing = "Settings are coming soon!", Soon = false, Hide = false },
 	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = false },
 } :: { [string]: Action }
+
+-- Buttons whose controller has onUnseenChanged(callback(count)): its count
+-- is the button's badge.
+SideMenuController.Badges = { "Codex", "Collection" }
 
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.
@@ -315,14 +336,23 @@ function SideMenuController.start()
 	updateSoon()
 	-- controllers that load late (or a codex discovery count) update the chips
 	task.delay(5, updateSoon)
-	local codex = MenuPanels.controller("CodexController")
-	if codex and type(codex.onUnseenChanged) == "function" then
-		codex.onUnseenChanged(function(count: number)
-			local current = refs
-			if current then
-				SideMenuView.setBadge(current, "Codex", count)
-			end
-		end)
+	for _, id in SideMenuController.Badges do
+		local action = SideMenuController.Actions[id]
+		local controller = if action and action.Controller then MenuPanels.controller(action.Controller) else nil
+		if controller and type(controller.onUnseenChanged) == "function" then
+			controller.onUnseenChanged(function(count: number)
+				local current = refs
+				if current then
+					SideMenuView.setBadge(current, id, count)
+				end
+			end)
+		end
+	end
+	-- SHOP opens the luck boosts: the boost chips' own BOOSTS launcher would
+	-- be a second entry
+	local shop = SideMenuController.Actions.Shop.Controller
+	if shop then
+		MenuPanels.call(shop, "setLauncher", false)
 	end
 	local hud = HudController.refs()
 	if hud then

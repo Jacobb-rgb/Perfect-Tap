@@ -70,17 +70,23 @@ LobbyLayout.Budget = {
 	-- owner-approved meadow and road look (~1,330 parts: grass tufts, grass
 	-- patches and flower beds on the free lawns, fences along the roads, the
 	-- main roads paved with kerbs and glowing studs).
-	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
-	-- node on every node spawn (~1,320) must stay 200 under it (the podium
-	-- and pen ores): ~250 parts of headroom.
-	MapParts = 22000,
+	-- + the artifact museums (steps 6-7: ArtifactService builds one into
+	-- every plot's yard at server start, MuseumBuilder, ~44 structure parts
+	-- each = ~350; the relics the owners found come on top like the podium
+	-- ores, at most ArtifactConfig.MaxParts each).
+	-- tests/LobbyBudget.spec.luau: the built map (~20,400 parts) + one ore
+	-- node on every node spawn (~1,320) + the 8 empty museums (~350) must
+	-- stay 200 under it (the podium and pen ores): ~140 parts of headroom.
+	MapParts = 22400,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
-	-- The lobby has ~12,500 parts with the vault and the meadow: the ~300
-	-- parts of headroom are a deliberate buffer, so a small merge from a
-	-- parallel package session (Backdrop, Districts, Plaza, Flora) does not
-	-- break this budget; spend it on purpose, not by accident.
+	-- The lobby has ~12,200 parts with the vault and the meadow, ~12,550
+	-- with the 8 yard museums (steps 6-7, inside the area: counted by
+	-- tests/LobbyBudget.spec.luau): the ~250 parts of headroom are a
+	-- deliberate buffer, so a small merge from a parallel package session
+	-- (Backdrop, Districts, Plaza, Flora) does not break this budget; spend
+	-- it on purpose, not by accident.
 	LobbyParts = 12800,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,

@@ -20,7 +20,7 @@
 	  ui_wheel_phone      667 x 375 pt phone: the compact wheel screen
 	  ui_wheel_phone_small 568 x 320 pt phone (all 8 odds tiles in view)
 	  ui_wheel_info_phone 568 x 320 pt phone: the details card
-	  ui_chip             the HUD with the FREE SPIN! chip (and the BOOK button)
+	  ui_chip             the HUD with the FREE SPIN! chip (no BOOK button: the side menu has the book)
 	  ui_chip_phone       the same on a phone
 	  ui_book             PC: the collection book, Railway tab (silhouettes)
 	  ui_book_done        PC: the Crown tab, complete, its title + skin IN USE
@@ -194,11 +194,9 @@ local function hud(Loader: any, uiScale: number): any
 	end
 	refs.Toasts:ClearAllChildren()
 	TeleportView.build(refs.TopBar, refs.Menu, uiScale)
-	local CollectionView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CollectionView")
 	local BuildView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BuildView")
 	BuildView.menuButton(refs.Menu)
-	local book = CollectionView.menuButton(refs.Menu)
-	book.New.Visible = true -- the Crown's chapter waits unread
+	-- (no BOOK button: with the side menu in the game its ARTIFACTS button is the book's one entry)
 	return refs
 end
 

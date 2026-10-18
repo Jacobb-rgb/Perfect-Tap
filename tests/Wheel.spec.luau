@@ -345,6 +345,25 @@ return function(T, Loader)
 		T.eq(w.reveal(), nil, "once")
 	end)
 
+	withWheel("Wheel + the real CapsuleService: a quiet free capsule, its opening once on Reveal", function(w)
+		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		T.eq(CapsuleService.QuietFree, true, "the capsule package honors quiet")
+		WheelService._test.setCapsules(CapsuleService :: any)
+		local result = w.spin(rollFor(8)).A
+		T.eq(result.Capsule, "Crystal")
+		T.truthy(result.Golem, "a golem woke")
+		T.eq(#w.data.Golems.Owned, 1, "added once, by the capsule package")
+		T.eq(w.data.Golems.Owned[1].Kind, result.Golem.Kind)
+		T.truthy(CapsuleConfig.ById.Crystal.Odds[result.Golem.Kind], "rolled from the Crystal capsule's odds")
+		T.eq(w.data.Stats.CapsulesOpened, 1)
+		T.eq(count(w, "CapsuleResult"), 0, "nothing spoils the turning disc")
+		local opening = w.reveal()
+		T.eq(opening.Event, "CapsuleResult")
+		T.eq(opening.A.Free, true)
+		T.eq(opening.A.Golems[1].Id, result.Golem.Id)
+		T.eq(w.reveal(), nil, "once")
+	end)
+
 	withWheel("Wheel: an older capsule package sends the opening itself: the wheel never sends it again", function(w)
 		local fake = fakeCapsules(w, false)
 		WheelService._test.setCapsules(fake)
@@ -724,17 +743,23 @@ return function(T, Loader)
 			-- the biggest details card (a capsule's 14 golems) fits its card
 			WheelView.showInfo(refs, "StoneCapsule")
 			local lines = refs.InfoLines
-			T.truthy(lines.Position.Y.Offset + 7 * (lines:FindFirstChildOfClass("UIGridLayout").CellSize.Y.Offset) <= refs.Info.Size.Y.Offset, "the golem odds fit the card")
+			T.truthy(
+				lines.Position.Y.Offset + 7 * lines:FindFirstChildOfClass("UIGridLayout").CellSize.Y.Offset <= refs.Info.Size.Y.Offset,
+				"the golem odds fit the card"
+			)
 		end
 		-- a list longer than its box says so
 		local short = WheelView.build(false)
 		WheelView.layout(short, 1280, 420)
-		WheelView.setRows(short, WheelView.rows({
-			NoCapsules = false,
-			Income = 0,
-			Ore = { BlasterLevel = 1, BestIncome = 0, Vip = false },
-			TripleLucky = false,
-		}))
+		WheelView.setRows(
+			short,
+			WheelView.rows({
+				NoCapsules = false,
+				Income = 0,
+				Ore = { BlasterLevel = 1, BestIncome = 0, Vip = false },
+				TripleLucky = false,
+			})
+		)
 		T.truthy(short.More.Visible, "more below")
 	end)
 

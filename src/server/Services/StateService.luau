@@ -6,7 +6,8 @@
 	Other services add fields with StateService.addProvider().
 
 	Bandwidth (steps 6-7): the bigger records that rarely change (STICKY:
-	Gear, Enchants, Golems, Artifacts, Bonuses) are sent only when they
+	Gear, Enchants, Golems, Artifacts, Bonuses, and the ore lists Discovered
+	and CodexSeen, CodexService's provider) are sent only when they
 	changed since the last push to that player (compared by fingerprint).
 	An unchanged one is left out and its key listed in snapshot.Kept; the
 	client (StateController) copies those keys from its previous snapshot,
@@ -37,7 +38,7 @@ local pending: { [Player]: boolean } = {}
 local sent: { [Player]: { [string]: string } } = {}
 
 -- Records sent only when they change (see the header).
-StateService.Sticky = { "Gear", "Enchants", "Golems", "Artifacts", "Bonuses" }
+StateService.Sticky = { "Gear", "Enchants", "Golems", "Artifacts", "Bonuses", "Discovered", "CodexSeen" }
 
 local MAX_DEPTH = 8
 
