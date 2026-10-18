@@ -50,7 +50,8 @@ local Meadow = {}
 Meadow.Area = { Min = Vector3.new(-168, 0, -118), Max = Vector3.new(168, 0, 148) }
 Meadow.VaultClear = { Min = Vector3.new(-28, 0, 72), Max = Vector3.new(28, 0, 156) }
 Meadow.SpawnClear = 12
-Meadow.Max = { Tufts = 140, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
+-- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
+Meadow.Max = { Tufts = 100, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
 -- south road to the vault do not).
 Meadow.FencedStrips = {
@@ -587,22 +588,22 @@ local function jungle(parent: Instance, map: Instance, index: Index, rng: Rng.Rn
 end
 
 -- A small glowing lantern on a fence's end and middle posts (the concept's
--- warm lights along every fence): an iron collar, an amber glass, an iron cap. 3 parts,
+-- warm lights along every fence): an amber glass and an iron cap. 2 parts,
 -- glow only (no light).
 local function fenceLantern(parent: Instance, foot: Vector3)
 	local m = Style.model("FenceLantern", parent)
 	local h = Meadow.FenceHeight
-	Style.block(m, CFrame.new(foot + Vector3.new(0, h + 0.11, 0)), Vector3.new(0.95, 0.22, 0.95), C.Iron, nil, Style.tiny())
+	-- (phones: 2 parts, an amber glass and an iron cap; the post carries it)
 	local glass = Style.block(
 		m,
-		CFrame.new(foot + Vector3.new(0, h + 0.68, 0)),
-		Vector3.new(0.62, 0.7, 0.62),
+		CFrame.new(foot + Vector3.new(0, h + 0.5, 0)),
+		Vector3.new(0.85, 1, 0.85),
 		Common.Colors.AmberGlass,
 		Enum.Material.Neon,
 		Style.tiny()
 	)
 	glass.Name = "LanternGlow"
-	Style.block(m, CFrame.new(foot + Vector3.new(0, h + 1.15, 0)), Vector3.new(1.05, 0.22, 1.05), C.Iron, nil, Style.tiny())
+	Style.block(m, CFrame.new(foot + Vector3.new(0, h + 1.1, 0)), Vector3.new(1.1, 0.22, 1.1), C.Iron, nil, Style.tiny())
 end
 
 local function fences(parent: Instance, index: Index, rng: Rng.Rng)
@@ -688,8 +689,8 @@ end
 
 -- A flower bed: a leafy mound and 4-6 flowers (a plus-shaped head on top).
 local function flowerBed(parent: Instance, p: Vector3, color: Color3, rng: Rng.Rng)
-	patch(parent, p, rng:range(2.4, 3.2), 0.45, Style.vary(C.LeafGreenDark, rng, 0.05), rng, true)
-	for _ = 1, rng:int(3, 5) do
+	patch(parent, p, rng:range(2.4, 3.2), 0.45, Style.vary(C.LeafGreenDark, rng, 0.05), rng)
+	for _ = 1, 3 do
 		local q = p + Vector3.new(rng:range(-1.1, 1.1), rng:range(0.75, 1.15), rng:range(-1.1, 1.1))
 		local s = rng:range(0.75, 1.0)
 		local head = CFrame.new(q) * CFrame.Angles(0, rng:range(0, math.pi), 0)

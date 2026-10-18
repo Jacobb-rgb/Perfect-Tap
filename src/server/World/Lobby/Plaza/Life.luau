@@ -233,8 +233,8 @@ end
 
 ---------------------------------------------------------------- lanterns and props
 
--- A hanging lantern on an L-post: post, arm, chain, iron cap, amber glass,
--- iron base. 6 parts, no light.
+-- A hanging lantern on an L-post: post, arm, iron cap, amber glass.
+-- 4 parts (phones), no light.
 function Life.lanternPost(parent: Instance, foot: Vector3, toward: Vector3): Model
 	local m = Style.model("HangingLantern", parent)
 	local dir = Vector3.new(toward.X, 0, toward.Z).Unit
@@ -242,12 +242,10 @@ function Life.lanternPost(parent: Instance, foot: Vector3, toward: Vector3): Mod
 	local post = CFrame.lookAt(foot, foot + dir)
 	Style.block(m, post * CFrame.new(0, h / 2, 0), Vector3.new(0.5, h, 0.5), C.WoodDark, nil, Style.tiny())
 	Style.block(m, post * CFrame.new(0, h - 0.25, -1), Vector3.new(0.4, 0.4, 2.4), C.WoodDark, nil, Style.tiny())
-	Style.block(m, post * CFrame.new(0, h - 0.95, -1.9), Vector3.new(0.12, 1, 0.12), C.Iron, nil, Style.tiny())
-	Style.block(m, post * CFrame.new(0, h - 1.55, -1.9), Vector3.new(1.05, 0.25, 1.05), C.Iron, nil, Style.tiny())
+	Style.block(m, post * CFrame.new(0, h - 0.57, -1.9), Vector3.new(1.05, 0.25, 1.05), C.Iron, nil, Style.tiny())
 	local glass =
-		Style.block(m, post * CFrame.new(0, h - 2.2, -1.9), Vector3.new(0.8, 1.05, 0.8), Common.Colors.AmberGlass, NEON, Style.tiny())
+		Style.block(m, post * CFrame.new(0, h - 1.2, -1.9), Vector3.new(0.8, 1.05, 0.8), Common.Colors.AmberGlass, NEON, Style.tiny())
 	glass.Name = "LanternGlow"
-	Style.block(m, post * CFrame.new(0, h - 2.85, -1.9), Vector3.new(0.95, 0.22, 0.95), C.Iron, nil, Style.tiny())
 	return m
 end
 
