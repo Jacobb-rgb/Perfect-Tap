@@ -32,6 +32,7 @@ local Dummy = require("./dummy")
 local Preview = {}
 
 local Instance, Vector2, Vector3, Color3 = roblox.Instance, roblox.Vector2, roblox.Vector3, roblox.Color3
+local UDim2 = roblox.UDim2
 
 local GLOW = Color3.fromRGB(255, 176, 64) -- Theme.Accent
 local GOLD = Color3.fromRGB(255, 206, 72) -- Theme.Coin
@@ -103,7 +104,28 @@ function Preview.scene(Loader: any, workspace: any, variant: string)
 	props.Name = "TutorialProps"
 	props.Parent = workspace
 	local station = TrainConfig.Station.Platform.Center
-	if variant == "hopper" then
+	if variant == "golems" then
+		-- step 9 (the golem hint): on the plaza, the guide on the CapsuleStall
+		local stall = nil
+		for _, d in workspace:GetDescendants() do
+			if d:IsA("Model") and d:HasTag("CapsuleStall") then
+				stall = d:GetPivot().Position
+				break
+			end
+		end
+		local feet = Vector3.new(-14, 0.2, 18)
+		local target = (stall or Vector3.new(-39, 0.85, 12.4)) + Vector3.new(0, 3, 0)
+		Dummy.build(props, CF, CF.lookAt(feet, Vector3.new(target.X, feet.Y, target.Z)), "idle")
+		Preview.guide(
+			props,
+			CF,
+			feet + Vector3.new(0, 0.6, 0),
+			target,
+			TutorialConfig.TargetNames.Capsules,
+			Vector3.new(-2, 7, 30),
+			TutorialConfig.arrowHeight("Capsules")
+		)
+	elseif variant == "hopper" then
 		local deck = station.Y + TrainConfig.Station.Platform.Size.Y
 		local feet = Vector3.new(station.X - 8, deck, station.Z + 1.5)
 		local target = TutorialConfig.layoutPoint("Hopper", nil)
@@ -178,7 +200,39 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
+	-- the side menu as it ships (STORE hidden until step 8's store), and the
+	-- golem hint's on-screen arrow at GOLEMS (or at MENU on the shut touch grid)
+	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
+	local function golemHint(screen: Screen, input: string): { any }
+		local menu = SideMenuView.build()
+		menu.Gui.Scale.Scale = screen.Px
+		SideMenuView.setHidden(menu, "Store", true)
+		local designH = screen.Pt.Y / screen.Ui
+		local touch = screen.Touch
+		SideMenuView.apply(
+			menu,
+			SideMenuView.layout(
+				screen.Ui,
+				designH,
+				{ Count = #SideMenuView.shown(menu), Touch = touch, DesignWidth = screen.Pt.X / screen.Ui }
+			)
+		)
+		local tut = bubble(screen, 9, input)
+		local holder = (
+			if menu.Layout and menu.Layout.Toggle and not menu.Expanded then menu.Toggle.Parent else menu.Buttons.Golems.Parent
+		) :: any
+		local column = menu.Column.Position
+		local right = math.max(holder.Position.X.Offset + holder.Size.X.Offset, menu.Column.Size.X.Offset)
+		local x = column.X.Offset + right + TutorialView.PointerGap
+		local y = column.Y.Offset + holder.Position.Y.Offset + holder.Size.Y.Offset / 2
+		tut.Pointer.Position = UDim2.fromOffset(x, y)
+		tut.Pointer.Visible = true
+		return { hud(screen).Gui, menu.Gui, tut.Gui }
+	end
+
 	local exports: { [string]: any } = {}
+	exports.ui_tutorial_golems_pc = UiExport.export(golemHint(PC, "Mouse"))
+	exports.ui_tutorial_golems_phone = UiExport.export(golemHint(PHONE, "Touch"))
 	exports.ui_tutorial_pc = UiExport.export({ hud(PC).Gui, bubble(PC, 1, "Mouse").Gui })
 	exports.ui_tutorial_tv = UiExport.export({ hud(TV).Gui, bubble(TV, 2, "Gamepad").Gui })
 	exports.ui_tutorial_phone = UiExport.export({ hud(PHONE).Gui, bubble(PHONE, 3, "Touch").Gui })

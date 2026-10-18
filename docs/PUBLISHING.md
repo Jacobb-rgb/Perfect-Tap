@@ -8,6 +8,7 @@ The order to take a build from Studio to a public game. It links the detailed do
 | [COMPLIANCE.md](COMPLIANCE.md) | the Maturity & Compliance questionnaire answers (section 1), fair monetization and odds (2.6), text filtering, audience rules, **the place settings table (section 3)** and the pre-launch checklist (section 4) |
 | [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md) | the few things done by hand in Studio |
 | [PERF_AUDIT.md](PERF_AUDIT.md) | phone performance numbers and the fixes still open |
+| [SUPPORT.md](SUPPORT.md) | player saves after launch: restoring a save, data-erasure (RTBF) requests, bans |
 | [SERVER_PERF_AUDIT.md](SERVER_PERF_AUDIT.md) | a full 8-player server: CPU loops, network per client, item churn, DataStore budget, top 10 fixes by chat |
 | Owner guide (Czech) | `Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/obchod/NAVOD.md`, with the logo, icons and thumbnails |
 
@@ -57,5 +58,16 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
     on PC + phone (+ controller) for 30 minutes: tutorial, mining, cleaning, podiums, train, factory, vault, saving
     after a rejoin. Fix, republish.
 11. **Public**: switch Audience to Public, post the update (STORE_PAGE.md section 7).
+12. **Every later update**: publish, then **Game Settings > Places > ... > "Migrate To Latest Update"** (or
+    "Shut Down All Servers"). Never leave old servers running: a save a newer server wrote is refused by an older
+    one ("The game just updated, please rejoin"), so players would be bounced until the old servers close.
+    An update that adds **anything a save can name** bumps the save version: ore ids, grades, recipes, item kinds,
+    machine ids, keep modes, blaster / train / upgrade levels, new save fields. Bump **`DataTemplate.Version` and
+    `Migrations.Latest` together** (tests/SaveSafety.spec.luau fails while they differ; docs/SAVE_AUDIT.md #1).
+    **A broken update is fixed forward**: republish the newest code with the broken feature switched off. **Never
+    run an older build on saves a newer build wrote**: its Migrations don't know the new ids and drop them for
+    good (a podium ore, a blaster level, a keep-list entry). If a real rollback is unavoidable before audit
+    #1(b) lands, keep the old build's **lower** save version as it was: players who played the newer build then
+    get "The game just updated, please rejoin" and their saves stay untouched until the fix ships.
 
 Nothing in this branch uploads or publishes anything; every step above is done by the owner.
