@@ -47,6 +47,8 @@ local ORDER = {
 	"GearService", -- the Gear shop at the SHOP stall (boots, lamp, backpack, gloves, magnet)
 	"BoostService", -- luck boosts (Triple / Hexa Lucky), purchase prompts, boost expiry pushes
 	"EnchantService", -- the Enchant shop at the rune table (EnchantCounter)
+	"GolemService", -- golem pets: GolemAction, the followers attribute (step 7)
+	"CapsuleService", -- golem capsules: CapsuleAction, the CapsuleStall prompt (step 7)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
