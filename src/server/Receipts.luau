@@ -15,6 +15,15 @@
 	  It also sets the ReplicatedStorage attribute
 	  MonetizationConfig.ReceiptsAttribute, which the client cards read
 	  (CapsuleView, BoostView, EnchantView: "Coming soon" while it isn't true).
+
+	The gate only blocks in-game prompts. Game passes are also sold on the
+	game page's Store tab (website and app) with no prompt at all, and
+	nothing grants a pass before step 8. So create the passes and products
+	to get their ids, but keep every game pass Off Sale (Creator Dashboard
+	-> Monetization -> Passes -> Sales) until step 8 is live and calls
+	Receipts.setReady(true); the same for a developer product if the
+	Dashboard offers to list it on the Store tab (docs/COMPLIANCE.md 2.6a,
+	section 3 and the section 4 checklist).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

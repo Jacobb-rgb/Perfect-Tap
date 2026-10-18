@@ -280,7 +280,8 @@ important details inside the circle.
 
 Listed passes and products can also be bought **outside the game**, on the
 game page's Store tab, so a player may join already owning one. The join
-check for passes and `ProcessReceipt` for products (below) cover this.
+check for passes and `ProcessReceipt` for products (below) cover this once
+step 8 is in; until then every game pass stays **Off Sale** (see 2.6a).
 
 **Rules to follow** (from Roblox's monetization guidelines, plus our own
 choices marked *(ours)*):
@@ -406,13 +407,24 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   `Receipts.setReady(true)`, also reachable as
   `CapsuleService.setReceiptsReady(true)`), the button is greyed "Coming
   soon" and the server answers "ComingSoon" without prompting, so nobody
-  can pay Robux before the game can deliver. The same one gate
+  can pay Robux in the game before it can deliver. The same one gate
   (src/server/Receipts.luau, ReplicatedStorage attribute `ReceiptsReady`)
   holds back every other Robux sale too: the Triple / Hexa Lucky packs and
   the Heartfire / Starbreaker passes (BoostService.promptPurchase) answer
   "ComingSoon" and their cards show COMING SOON / "20 R$ • SOON" until
   step 8 grants receipts and passes; with none of the three live
-  the tab shows the odds and "Coming soon!" instead of buttons. Nothing is
+  the tab shows the odds and "Coming soon!" instead of buttons.
+  **The gate only blocks in-game prompts.** Game passes (`BigPass`,
+  `Podiums`, `OfflineExtension`, `TrainExpress`, `EnchantHeartfire`,
+  `EnchantStarbreaker`) are also sold on the game page's **Store tab**
+  (website and app) with no prompt at all, and nothing grants a pass before
+  step 8 (`Perks` are set by the coming MonetizationService, the Mythic
+  enchant passes are granted by step 8). So create the passes and products
+  to get their ids, but keep every game pass **Off Sale** (Creator
+  Dashboard → Monetization → Passes → Sales) until step 8 is live and calls
+  `Receipts.setReady(true)`. Developer products go through `ProcessReceipt`
+  (also step 8); if the Dashboard offers to list one on the Store tab, leave
+  that off until then too. Nothing is
   ever granted outside ProcessReceipt (step 8: `CapsuleService.grantProduct`).
   A receipt rolls Triple Lucky when the prompt the player saw had it **or**
   it runs when the receipt is processed, so a purchase never gets worse
@@ -567,7 +579,10 @@ tutorial.
   on every server (a runtime hidden list in the `TF_LB_Hidden_v1` data
   store, key `Hidden`, read on start and every 5 minutes, plus a
   MessagingService message to the running servers), so nobody writes it
-  back, even while the user plays; no deploy is needed.
+  back, even while the user plays; no deploy is needed. A server writes
+  no score before it has read that list once (a failed first read is
+  tried again within 10-30 seconds), so a server started later can't
+  bring a removed user back either.
   `LeaderboardConfig.Hidden` is the same list in code (optional).
   (Studio play sessions read the live boards but never write them.)
 - **Testing in Studio:** Roblox warns that Studio access to data stores is
@@ -603,7 +618,7 @@ tutorial.
 | **Social links** | Dashboard → Engagement → Social Links | Optional (needs 16+ verification; see 2.3). |
 | **Icon & thumbnails** | Dashboard → Configure → Places → start place | **Icon:** square, 512×512. **Thumbnails:** up to 10 images or videos, 16:9, ideally 1920×1080, under 3 MB; keep text away from the bottom edge (the player count covers it). All of them are moderated. **TODO:** use real screenshots of the **launch build**. The files in `docs/screenshots/` (1600×900) are from development builds: only use ones that show features that work at launch (for example, no machines or shop until they exist), and treat `items.jpg` (a lineup of item models) as a showcase, not a scene players see. No fake UI, no other games' art, no "FREE ROBUX" or "ADMIN" text, no misleading promises. Videos must show real gameplay (3 uploads per month). |
 | **Badges** | Dashboard → Engagement → Badges | **TODO:** create Welcome, First Ore, First Clean, First Flawless, First Legendary, First Mythic, First Gear, Tutorial Done, Tycoon. 5 badges per game per day are free (then 100 Robux each), so spread these 9 over two days. Images (512×512) and names must follow Community Standards. |
-| **Game passes / developer products** | Dashboard → Monetization → Passes / Developer Products | **TODO:** create them and paste the ids into the config (see 2.6). |
+| **Game passes / developer products** | Dashboard → Monetization → Passes / Developer Products | **TODO:** create them and paste the ids into the config (see 2.6). Create the passes and products to get their ids, but keep every game pass **Off Sale** (Dashboard → Monetization → Passes → Sales) until step 8 is live and calls `Receipts.setReady(true)`. The gate only blocks in-game prompts, and passes are also sold on the Store tab (see 2.6a). |
 
 ---
 
@@ -629,6 +644,7 @@ tutorial.
 - [ ] One `ProcessReceipt` callback; dedupe by `PurchaseId`; grant only on the server holding the session lock; grant + save before `PurchaseGranted`; `NotProcessedYet` on any failure.
 - [ ] Tested: buy a coin pouch, leave right away, rejoin → coins arrive exactly once.
 - [ ] Passes: ownership checked on join (in `pcall`, with a retry) and on purchase; perks work as described.
+- [ ] Every game pass stayed **Off Sale** until step 8 went live (ProcessReceipt and the pass grants connected, `Receipts.setReady(true)` called); only then put them On Sale (the receipts gate only blocks in-game prompts, and the Store tab sells passes without one).
 - [ ] Pass and product descriptions match exactly what the code does; the Forge VIP description lists the Grotto's ore odds in numbers.
 - [ ] Purchase prompts only open after a player taps a button; no fake timers or fake discounts; close button easy to find on mobile.
 - [ ] Paid random items (Royal capsules, Robux luck packs, Starbreaker): exact odds shown before every buy, odds boosters show the new odds in numbers, hidden where `ArePaidRandomItemsRestricted` is true; questionnaire answered **Yes** once any of them is live.

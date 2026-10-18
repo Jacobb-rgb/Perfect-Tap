@@ -4,7 +4,8 @@
 -- which scores are due (only changed ones; growing boards never lowered,
 -- MoneyPerSec once per session, a 0 too), the 120 s write gate, retries
 -- and budget (a reserve for the player saves), Studio and Studio test
--- players never written, hidden users and removeUser, the final write on
+-- players never written, hidden users and removeUser (a fresh server
+-- writes nothing before its first read of the hidden list), the final write on
 -- leave (after LeaveDelay; a round write still running lands first and
 -- isn't remembered), reading the top rows (batched DisplayNames, junk
 -- keys, a failed read keeps the last rows), this server's ranking without
@@ -503,6 +504,91 @@ return function(T, Loader)
 		end
 		-- the command bar's own copy opens the stores by name (none in Lune)
 		T.eq(LeaderboardService.storeOf("Nope"), nil)
+	end)
+
+	withWorld("leaderboards: a fresh server writes nothing until it has read the hidden list", true, function(w)
+		w.patch(LeaderboardService, "BusyWait", 0.5)
+		-- a server started after removeUser(77): the saved list has 77, the first read fails
+		local list: any = { values = { [LeaderboardService.HiddenKey] = { 77 } }, gets = 0, fail = 1 }
+		function list:GetAsync(key: string): any
+			self.gets += 1
+			if self.fail > 0 then
+				self.fail -= 1
+				error("502: API Services rejected request")
+			end
+			return self.values[key]
+		end
+		w.patch(LeaderboardService, "hiddenStoreOf", function()
+			return list
+		end)
+		lb.setHiddenLoaded(false)
+		local cheat = w.add(77, "Cheat")
+		local fair = w.add(78, "Fair")
+		w.data[cheat].TotalEarned = 9e12
+		w.data[fair].TotalEarned = 500
+		local function sets(): number
+			local n = 0
+			for _, board in LeaderboardConfig.Boards do
+				n += w.stores[board.Id].sets
+			end
+			return n
+		end
+		T.falsy(LeaderboardService.hiddenKnown())
+		T.falsy(LeaderboardService.loadHidden(), "the first read fails")
+		T.falsy(LeaderboardService.hiddenKnown())
+		T.falsy(LeaderboardService.isHidden(77), "this server doesn't know 77 yet")
+		-- the retry comes soon, not after HiddenSeconds
+		T.eq(LeaderboardService.hiddenWait(1), LeaderboardService.HiddenRetry)
+		T.eq(LeaderboardService.hiddenWait(2), 2 * LeaderboardService.HiddenRetry)
+		T.eq(LeaderboardService.hiddenWait(50), LeaderboardService.HiddenRetryMax)
+		T.truthy(LeaderboardService.HiddenRetryMax < LeaderboardService.HiddenSeconds)
+		-- a write round meanwhile: nobody is written (77 is on the saved list)
+		T.eq(LeaderboardService.flush(cheat, 1000), 0, "the removed user isn't written back")
+		T.eq(LeaderboardService.flush(fair, 1000), 0, "nobody is, until the list is read")
+		T.eq(LeaderboardService.flushValues(77, LeaderboardService.values(cheat, w.data[cheat])), 0)
+		T.eq(sets(), 0, "no write request at all")
+		-- a leave meanwhile waits for the list (BusyWait), then gives up without writing
+		LeaderboardService.beginSession(77)
+		lb.release(cheat, w.data[cheat])
+		T.eq(lb.inFlight(), 1, "the leave write waits for the hidden list")
+		local waited = 0
+		while lb.inFlight() > 0 and waited < 3 do
+			task.wait(0.1)
+			waited += 0.1
+		end
+		T.eq(lb.inFlight(), 0)
+		T.eq(sets(), 0, "skipped: the list never came")
+		-- the retry reads the list: 77 stays off, the others are written at the next round
+		T.truthy(LeaderboardService.loadHidden(), "the retry works")
+		T.truthy(LeaderboardService.hiddenKnown())
+		T.truthy(LeaderboardService.isHidden(77))
+		T.eq(LeaderboardService.hiddenWait(3), LeaderboardService.HiddenSeconds, "then the usual pace")
+		T.eq(LeaderboardService.flush(cheat, 1000 + LeaderboardService.WriteCheck), 0, "77 never")
+		T.eq(LeaderboardService.flush(fair, 1000 + LeaderboardService.WriteCheck), 2, "the deferred round goes out at once")
+		for _, board in LeaderboardConfig.Boards do
+			T.eq(w.stores[board.Id].values["77"], nil, board.Id .. ": 77 stays removed")
+		end
+		T.eq(w.stores.TotalEarned.values["78"], LeaderboardConfig.encode("TotalEarned", 500))
+		-- a leave once the list is known: written as usual (no wait)
+		w.data[fair].TotalEarned = 800
+		lb.release(fair, w.data[fair])
+		T.eq(lb.inFlight(), 0)
+		T.eq(w.stores.TotalEarned.values["78"], LeaderboardConfig.encode("TotalEarned", 800))
+		-- a leave started before the read is written once the list comes (within BusyWait)
+		lb.setHiddenLoaded(false)
+		local late = w.add(79, "Late")
+		w.data[late].TotalEarned = 300
+		LeaderboardService.beginSession(79)
+		lb.release(late, w.data[late])
+		T.eq(lb.inFlight(), 1)
+		T.truthy(LeaderboardService.loadHidden())
+		waited = 0
+		while lb.inFlight() > 0 and waited < 3 do
+			task.wait(0.1)
+			waited += 0.1
+		end
+		T.eq(lb.inFlight(), 0)
+		T.eq(w.stores.TotalEarned.values["79"], LeaderboardConfig.encode("TotalEarned", 300), "written after the read")
 	end)
 
 	withWorld("leaderboards: a player's scores are written at most every WriteSeconds", true, function(w)

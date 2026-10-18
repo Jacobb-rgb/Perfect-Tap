@@ -48,7 +48,13 @@
 	  MaxHidden ids) and tells the running servers (MessagingService
 	  HiddenTopic). Every server reads that list in start() and every
 	  HiddenSeconds, so no deploy is needed and no other server writes the
-	  user back. From the Studio command bar (API access on):
+	  user back. A server writes no score at all until it has read that list
+	  once (a fresh server could otherwise write back a user removed before
+	  it started): a failed first read is tried again after HiddenRetry,
+	  2x, 3x... (at most HiddenRetryMax), only then every HiddenSeconds; the
+	  round writes wait for it (the next WriteCheck after the read) and so
+	  does a leave write (up to BusyWait, else it is skipped: growing boards
+	  catch up next session). From the Studio command bar (API access on):
 	    require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(12345)
 	- Names are DisplayNames (docs/COMPLIANCE.md 2.4): players on this server
 	  by their own, the rest from one batched
@@ -119,6 +125,10 @@ LeaderboardService.HiddenStore = "TF_LB_Hidden_v1"
 LeaderboardService.HiddenKey = "Hidden"
 LeaderboardService.HiddenTopic = "TF_LB_Hidden"
 LeaderboardService.HiddenSeconds = 300 -- every server re-reads the hidden list this often
+-- until the first read worked (no score is written before it): tried again
+-- after HiddenRetry, 2x, 3x... seconds, at most HiddenRetryMax
+LeaderboardService.HiddenRetry = 10
+LeaderboardService.HiddenRetryMax = 30
 LeaderboardService.MaxHidden = 1000 -- ids kept in the list (the newest)
 
 local live = false
@@ -145,10 +155,29 @@ local releasing: { [number]: boolean } = {}
 local busy: { [number]: number } = {}
 -- users hidden at runtime (removeUser, the HiddenStore list, HiddenTopic)
 local hidden: { [number]: boolean } = {}
+-- has this server read the HiddenStore list once? No score is written before
+-- (a user removed before this server started would come back)
+local hiddenLoaded = false
 
 -- Is this user kept off every board (LeaderboardConfig.Hidden or hidden at runtime)?
 function LeaderboardService.isHidden(userId: number): boolean
 	return LeaderboardConfig.Hidden[userId] == true or hidden[userId] == true
+end
+
+-- Has this server read the saved hidden list yet (writes wait for it)?
+function LeaderboardService.hiddenKnown(): boolean
+	return hiddenLoaded
+end
+
+-- Seconds before the next read of the hidden list: HiddenSeconds once it
+-- was read (a later failed read too: the ids known so far stay), else
+-- HiddenRetry x the failed reads in a row, at most HiddenRetryMax.
+function LeaderboardService.hiddenWait(failures: number): number
+	if hiddenLoaded then
+		return LeaderboardService.HiddenSeconds
+	end
+	local wait = LeaderboardService.HiddenRetry * math.max(1, math.floor(failures))
+	return math.min(wait, LeaderboardService.HiddenRetryMax)
 end
 
 -- Hides a user on this server (no request; removeUser also saves and tells the others).
@@ -375,10 +404,13 @@ function LeaderboardService.dueWrites(userId: number, values: { [string]: number
 end
 
 -- Writes a user's changed scores now (`final` = the leave write). Returns
--- how many were written.
+-- how many were written. Nothing before the hidden list was read once.
 function LeaderboardService.flushValues(userId: number, values: { [string]: number }, final: boolean?): number
 	if not writable or userId <= 0 or LeaderboardService.isHidden(userId) then
 		return 0
+	end
+	if not hiddenLoaded then
+		return 0 -- maybe a removed user: the writes wait for the list (see the header)
 	end
 	if not final and releasing[userId] then
 		return 0
@@ -424,6 +456,11 @@ function LeaderboardService.flush(player: Player, now: number): number
 	end
 	local last = lastWrite[player]
 	if last and now - last < LeaderboardService.WriteSeconds then
+		return 0
+	end
+	if not hiddenLoaded then
+		-- the hidden list isn't read yet: the round waits (the next
+		-- WriteCheck after the read writes, not WriteSeconds later)
 		return 0
 	end
 	lastWrite[player] = now
@@ -679,6 +716,7 @@ function LeaderboardService.loadHidden(): boolean
 	for _, id in hiddenList(value) do
 		hidden[id] = true
 	end
+	hiddenLoaded = true
 	return true
 end
 
@@ -923,9 +961,10 @@ local function onRelease(player: Player, data: { [string]: any })
 			task.wait(LeaderboardService.LeaveDelay)
 		end
 		-- a round write still running lands first (MoneyPerSec is set: the
-		-- leave write must be the last)
+		-- leave write must be the last); a fresh server reads the hidden
+		-- list first (not read by then: flushValues writes nothing)
 		local waited = 0
-		while busy[userId] and waited < LeaderboardService.BusyWait do
+		while (busy[userId] or not hiddenLoaded) and waited < LeaderboardService.BusyWait do
 			task.wait(0.25)
 			waited += 0.25
 		end
@@ -987,9 +1026,16 @@ function LeaderboardService.start()
 	end)
 	if live then
 		task.spawn(function()
+			-- a failed first read is tried again soon (no score is written before it)
+			local failures = 0
 			while true do
-				pcall(LeaderboardService.loadHidden)
-				task.wait(LeaderboardService.HiddenSeconds)
+				local ok, read = pcall(LeaderboardService.loadHidden)
+				if ok and read then
+					failures = 0
+				else
+					failures += 1
+				end
+				task.wait(LeaderboardService.hiddenWait(failures))
 			end
 		end)
 	end
@@ -1060,13 +1106,19 @@ LeaderboardService._test = {
 		table.clear(releasing)
 		table.clear(busy)
 		table.clear(hidden)
+		hiddenLoaded = false
 		nameCount = 0
 		inFlight = 0
 		sessionCount = 0
 	end,
+	-- a running live server (its hidden list read once; setHiddenLoaded(false): a fresh one)
 	setLive = function(on: boolean)
 		live = on
 		writable = on
+		hiddenLoaded = on
+	end,
+	setHiddenLoaded = function(on: boolean)
+		hiddenLoaded = on
 	end,
 	-- Studio: live (reads) but not writable
 	setWritable = function(on: boolean)

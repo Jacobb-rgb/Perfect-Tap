@@ -365,7 +365,8 @@ Integration decisions:
   StarmetalSovereign) get the new ids on load (GolemConfig.Renamed, Migrations) and stay equipped / locked / paid.
 - Side menu entries are data (Group Main / More, Order, IconName -> one emoji table) for the light-UI restyle:
   GOLEMS and SHOP are Main, the rest More; shown sorted by Group then Order (GOLEMS, SHOP, CODEX, ARTIFACTS,
-  BOARDS, SETTINGS, STORE). The ARTIFACTS button shows the unread-chapter badge.
+  BOARDS, SETTINGS, STORE; STORE stays hidden until step 8's StoreController exists). The ARTIFACTS button shows
+  the unread-chapter badge.
 - One entry per panel: with the side menu in the game the HUD has no GOLEMS or BOOK button and the BOOSTS launcher
   chip is off (SHOP opens the boosts). Hotkeys stay: P / L1 golems, L / D-pad right boosts, J book.
 - MenuPanels.Names is the one list of panels (VaultController and GearShopController added): opening any panel
@@ -379,8 +380,9 @@ Integration decisions:
 - Budgets: the 8 yard museums (~350 parts, built at server start) count toward MapParts (22,000 -> 22,400) and
   LobbyParts (fits, 12,800 unchanged); tests/LobbyBudget.spec.luau builds them.
 What to test in Studio:
-1. Side menu (PC): GOLEMS and SHOP on top, then CODEX, ARTIFACTS, BOARDS, SETTINGS, STORE. No GOLEMS / BOOK buttons
-   in the right HUD menu, no BOOSTS chip under the coins while no boost runs.
+1. Side menu (PC): GOLEMS and SHOP on top, then CODEX, ARTIFACTS, BOARDS, SETTINGS. STORE is hidden until step 8
+   (its StoreController isn't in the game). No GOLEMS / BOOK buttons in the right HUD menu, no BOOSTS chip under the
+   coins while no boost runs.
 2. Open the Blaster Vault, then press P: the vault window closes, the golems open. Open the Gear shop, then the
    Enchant table: only one window at a time.
 3. Controller: D-pad Left jumps into the side menu; D-pad Up / Down move inside it (no build mode, no teleport
@@ -388,3 +390,53 @@ What to test in Studio:
 4. Win a capsule on the daily wheel: the disc stops, the prize card shows, then the capsule opening plays once.
 5. Settings: Camera shake off -> firing the blaster no longer tips the view.
 6. An old save with a Ruby Knight: it is a Rose Knight now, still equipped.
+
+### Steps 6-7 review fixes (db4db37) and final fixes
+Review round: one receipts gate for every Robux product and pass (src/server/Receipts.luau), the Sell Box and the
+pen-full sale pay the sell bonus, one Crystal Extractor shard roll per crushed pile (data.ShardRolls), MaxOreLuck =
+both luck caps, one left column (coins, TRAIN chip, boost chips, side menu), panels close for cleaning and build
+mode, the lobby SPIN & WIN disc lands on your prize, museum relics built on the client near the camera,
+LeaderboardService.removeUser hides a user on every server. Final fixes: a server writes no leaderboard score
+before it has read the saved hidden list once (a failed first read is retried after 10, 20, 30 s, not 5 min; the
+round and leave writes wait for it; tests/Leaderboards.spec.luau), and COMPLIANCE 2.6a / section 3 / section 4 say
+to keep every game pass Off Sale until step 8 (the gate only blocks in-game prompts; the Store tab sells passes).
+bash tools/check.sh: ALL CHECKS PASSED (strict luau-lsp no problems, 1010 Lune tests, map v22 baked, 20,368 parts).
+What to test in Studio:
+1. Receipts gate: in MonetizationConfig give HexaLucky15 and EnchantStarbreaker a test id (any number, Studio only;
+   put the 0 back afterwards) and leave Receipts as it is. SHOP -> Boosts -> Hexa Lucky: the Robux offer is greyed
+   COMING SOON; the Enchant table's Starbreaker button reads "20 R$ • SOON", greyed. In the server command bar
+   `require(game.ServerScriptService.Server.Services.BoostService).promptPurchase(game.Players:GetPlayers()[1],
+   "HexaLucky15")` returns "ComingSoon" and no purchase window opens. Then
+   `require(game.ServerScriptService.Server.Receipts).setReady(true)`: with the shop open the cards switch to the
+   R$ price (close any test purchase window without buying; nothing would be granted before step 8).
+2. Sell bonus: equip a Coal Chomper (+4 % sell value) or slot Midas. Sell one ore at Tobin's counter, then put the
+   same kind of ore into a Sell Box: the Sell Box's popup and your coins show the same bonus price as the counter
+   (base price x the bonus, not the bare base). Pen full: set GameConfig.MaxStoredItems to 2 for the test, fill the
+   pen, then pick up a machine with ore still inside: that ore is sold at the same bonus price (source "PenFull").
+3. Crystal Extractor: crush ore in a Crusher and feed the piles into the extractor: shards come now and then
+   (15 %). Put the extractor's own output back in (Put In again, or a belt loop): no shard ever comes once
+   `require(game.ServerScriptService.Server.Services.DataService).get(game.Players:GetPlayers()[1]).ShardRolls`
+   is 0; each new pile from the Crusher adds one roll.
+4. Left column, PC: coins, TRAIN chip, the running boost chips, then the side menu under them; nothing overlaps.
+   Phone (device emulator 568 x 320, iPhone SE 1st gen landscape): the 44 pt MENU button sits first in the train
+   chip's row, left of the TRAIN chip; tapping MENU opens the grid over the TRAIN and boost chips and MENU turns
+   into CLOSE; the bottom-left thumbstick corner stays free. Also 667 x 375. TV (Xbox emulation): the column keeps
+   clear of the left and bottom 5 %, the labels are bigger.
+5. Boosts stay shut: start cleaning an ore and press L (or D-pad Right): Boosts doesn't open. Open Boosts (or the
+   golems, the book, the wheel), then start cleaning or enter build mode: the window closes. In build mode L does
+   nothing.
+6. Lobby SPIN & WIN: stand within 160 studs of the lobby disc and spin the daily wheel: the lobby disc turns and
+   stops on the same prize as the disc on your screen, rests there 15 s, then turns on. Its 8 segments
+   match the screen wheel's prizes, clockwise. A second Studio player keeps seeing the idle turn.
+7. Museums: with artifacts found, walk to your yard museum: the relics appear in their cases when the camera is
+   within about 100 studs. Walk (or fly the camera) more than 130 studs away: the relics go; come back: they
+   return. Sign and plaque texts disappear past 120 studs.
+8. LeaderboardService.removeUser (a live test server, a test account of your own; Studio never writes the
+   boards): while the test account plays, run
+   `require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(<its UserId>)` in the
+   Developer Console's server command line. Its rows leave the lobby boards and the BOARDS panel at once and don't
+   come back after 3 more minutes of play (two write rounds), after it leaves and rejoins, or on a server started
+   afterwards. The server output shows no "reading the hidden list failed" warning at start (if it does, the
+   scores of everyone on that server reach the boards only after the retry, 10-30 s later).
+9. Before publishing (Creator Dashboard, not Studio): every game pass stays Off Sale (Monetization -> Passes ->
+   Sales) until step 8 is live and calls Receipts.setReady(true).
