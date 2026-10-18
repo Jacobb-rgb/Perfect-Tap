@@ -102,7 +102,7 @@ export type Refs = {
 	Compact: boolean,
 }
 
-export type ChipRefs = { Gui: ScreenGui, Button: TextButton, Glyph: ImageLabel, Icon: TextLabel }
+export type ChipRefs = { Gui: ScreenGui, Button: TextButton, Icon: TextLabel }
 
 type Metrics = {
 	Width: number,
@@ -387,7 +387,10 @@ function WheelView.prizeText(result: { [string]: any }): (string, string)
 			local rarity = Rarity.get(golemInfo.Rarity)
 			return `{golemInfo.Name}!`, `A {rarity.Name} golem from a free {capsuleName}`
 		end
-		return `{Format.money(coins or 0)} coins`, `Your golem inventory is full: coins instead of a {capsuleName}`
+		if result.Full == true then
+			return `{Format.money(coins or 0)} coins`, `Your golem inventory is full: coins instead of a {capsuleName}`
+		end
+		return `{Format.money(coins or 0)} coins`, `Coins instead of a {capsuleName}`
 	elseif kind == "Ore" then
 		if result.DirtyOre then
 			return "A dirty Rare+ ore!", "It's in your Ore Pen: clean it to see which one"
@@ -1198,15 +1201,6 @@ function WheelView.buildChip(uiScale: number): ChipRefs
 		Size = UDim2.fromOffset(36, 36),
 		TextWrapped = false,
 	})
-	-- a gamepad's shortcut glyph in the icon's place (WheelController shows it)
-	local glyph = UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 0),
-		Size = UDim2.fromOffset(34, 34),
-		BackgroundTransparency = 1,
-		Visible = false,
-	}, button)
 	UIKit.label(button, "FREE SPIN!", if compact then 24 else 22, {
 		Name = "Label",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -1216,14 +1210,14 @@ function WheelView.buildChip(uiScale: number): ChipRefs
 		FontFace = Theme.TitleFont,
 		TextWrapped = false,
 	})
-	return { Gui = gui, Button = button, Glyph = glyph, Icon = icon }
+	return { Gui = gui, Button = button, Icon = icon }
 end
 
--- The chip's gamepad glyph (an image) in place of its icon; "" = the icon.
-function WheelView.setChipGlyph(chip: ChipRefs, image: string)
-	chip.Glyph.Image = image
-	chip.Glyph.Visible = image ~= ""
-	chip.Icon.Visible = image == ""
+-- Should the FREE SPIN! chip show: the spin is ready, the wheel screen is
+-- closed, no spin is in flight, and nothing else has the screen (the
+-- cleaning minigame, build mode, the Foundry moment: the HUD is hidden)?
+function WheelView.chipVisible(ready: boolean, isOpen: boolean, spinning: boolean, busyScreen: boolean): boolean
+	return ready and not isOpen and not spinning and not busyScreen
 end
 
 -- Moves the chip for a new uiScale (phone <-> big screen).

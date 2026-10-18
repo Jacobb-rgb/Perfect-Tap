@@ -12,20 +12,25 @@
 	          rarity, missing ones as dark silhouettes ("???", rarity shown).
 	          Right: the selected artifact (name, rarity; under them a
 	          scrolling text: how many, its lore once found, where it turns
-	          up most with the exact chance per rock there, so small phones
-	          scroll instead of dropping lines). Bottom: the collection's
-	          reward, USE TITLE + SKIN once it is complete (IN USE when its
-	          title and podium skin show) and the chapter button ("READ
-	          CHAPTER 1", or what unlocks it).
+	          up most with the exact chance per rock there and, for a
+	          missing one, how shards can restore it; small phones put the
+	          icon beside the name so the text gets the room). Bottom: the
+	          collection's reward, USE TITLE + SKIN once it is complete (IN
+	          USE when its title and podium skin show), RESTORE: N SHARDS
+	          while exactly one artifact is missing (ArtifactConfig.
+	          restoreQuote; greyed while it can't be paid or its mine isn't
+	          open) and the chapter button ("READ CHAPTER 1", or what
+	          unlocks it).
 	  banner  its own ScreenGui: the small NEW ARTIFACT! note at the left
 	          under the coins (icon, name, rarity, collection progress, a
-	          BOOK button and a key hint). Not modal: it takes no gamepad
-	          selection and leaves the thumbstick and jump areas free.
+	          BOOK button and a key hint on a keyboard; shorter without
+	          one). Not modal: it takes no gamepad selection and leaves the
+	          thumbstick and jump areas free.
 	  reveal  its own ScreenGui: the big COLLECTION COMPLETE card (the relic's
 	          icon, name, rarity, collection progress, its lore, the reward
 	          and the chapter) with READ CHAPTER and OK.
 	  menu    the BOOK button for the HUD's right-side menu (a NEW badge
-	          while a chapter is unread, the gamepad glyph of its shortcut).
+	          while a chapter is unread; only without the side menu).
 	  title   the BillboardGui with a player's collection title over their head.
 	  glyph   every relic also has a flat icon made of frames (glyph(): the
 	          same shape family and colors as ArtifactBuilder's 3D model), so
@@ -82,14 +87,17 @@ export type Refs = {
 	DetailCount: TextLabel,
 	DetailLore: TextLabel,
 	DetailWhere: TextLabel,
+	DetailRestore: TextLabel, -- how shards restore a missing one ("" = hidden)
 	Footer: Frame,
 	Reward: TextLabel,
 	Use: TextButton,
+	Restore: TextButton,
 	Chapter: TextButton,
 	Hint: TextLabel,
 	Collection: string,
 	Selected: string?,
 	Compact: boolean,
+	Short: boolean, -- the detail column is short (small phones): icon beside the name
 }
 
 export type BannerRefs = {
@@ -109,7 +117,7 @@ export type BannerRefs = {
 	Compact: boolean,
 }
 
-export type MenuRefs = { Button: TextButton, New: TextLabel, Glyph: ImageLabel }
+export type MenuRefs = { Button: TextButton, New: TextLabel }
 
 export type RevealRefs = {
 	Gui: ScreenGui,
@@ -179,9 +187,13 @@ local METRICS: { [string]: Metrics } = {
 }
 
 CollectionView.Columns = 3
+CollectionView.ShortDetail = 260 -- a detail column shorter than this (design units) is laid out side by side
 CollectionView.SilhouetteColor = Color3.fromRGB(34, 28, 32)
 CollectionView.MissingName = "???"
 
+local RESTORE_COLOR = Color3.fromRGB(70, 160, 210) -- crystal shards
+local RESTORE_DARK = Color3.fromRGB(34, 96, 140)
+local RESTORE_TEXT = Color3.fromRGB(140, 210, 245)
 local GOLD = Color3.fromRGB(255, 196, 64)
 local STAND = Color3.fromRGB(58, 46, 40)
 local PAGES = Color3.fromRGB(240, 228, 196)
@@ -308,6 +320,49 @@ function CollectionView.useButton(artifacts: any, collectionId: string): (string
 		return "IN USE ✓", ""
 	end
 	return "USE TITLE + SKIN", collectionId
+end
+
+-- What the book knows about the player besides the record (State snapshot).
+export type Wallet = { BlasterLevel: number, Shards: number }
+
+--[[
+	The RESTORE button of a collection with exactly one artifact missing:
+	(text, the artifact a press restores or nil when it can't be pressed
+	now, the reason code then). nil text: no button (complete, or more than
+	one missing).
+]]
+function CollectionView.restoreButton(artifacts: any, collectionId: string, wallet: Wallet): (string?, string?, string?)
+	local missing = ArtifactConfig.lastMissing(artifacts, collectionId)
+	local art = if missing then ArtifactConfig.ById[missing] else nil
+	if not missing or not art then
+		return nil, nil, nil
+	end
+	local cost = ArtifactConfig.RestoreShards[art.Rarity] or 0
+	local price, reason = ArtifactConfig.restoreQuote(artifacts, missing, wallet.BlasterLevel, wallet.Shards)
+	local text = `RESTORE: {Format.commas(cost)} SHARDS`
+	if price then
+		return text, missing, nil
+	end
+	return text, nil, reason
+end
+
+-- The restore line under a missing artifact's "where" (nil: found already).
+function CollectionView.restoreText(artifacts: any, artifactId: string, wallet: Wallet): string?
+	local art = ArtifactConfig.ById[artifactId]
+	if not art or ArtifactConfig.countOf(artifacts, artifactId) > 0 then
+		return nil
+	end
+	if ArtifactConfig.lastMissing(artifacts, art.Collection) ~= artifactId then
+		return "The last missing artifact of a collection can be restored with crystal shards."
+	end
+	local cost = Format.commas(ArtifactConfig.RestoreShards[art.Rarity] or 0)
+	local _, reason = ArtifactConfig.restoreQuote(artifacts, artifactId, wallet.BlasterLevel, wallet.Shards)
+	if reason == "Locked" then
+		return `The last one missing! Restore it for {cost} shards once your blaster opens a mine where it turns up.`
+	elseif reason == "NoShards" then
+		return `The last one missing! Restore it for {cost} shards (you have {Format.commas(wallet.Shards)}). Copies and the wheel give shards.`
+	end
+	return `The last one missing! RESTORE it for {cost} shards (you have {Format.commas(wallet.Shards)}).`
 end
 
 -- Has a completed collection's chapter not been read yet?
@@ -761,6 +816,13 @@ function CollectionView.build(compact: boolean): Refs
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
 	})
+	local detailRestore = UIKit.label(detailBody, "", m.Body - 3, {
+		Name = "Restore",
+		TextColor3 = RESTORE_TEXT,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		Visible = false,
+	})
 	-- the footer: reward and chapter
 	local footer = UIKit.new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, panel)
 	local reward = UIKit.label(footer, "", m.Body - 1, {
@@ -772,6 +834,15 @@ function CollectionView.build(compact: boolean): Refs
 	})
 	local use = UIKit.button(footer, "USE TITLE + SKIN", Theme.Info, Color3.fromRGB(38, 110, 186), {
 		Name = "Use",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(210, m.Button),
+		TextSize = if compact then 20 else 18,
+		TextWrapped = true,
+		Visible = false,
+	})
+	-- the last missing artifact for crystal shards (the same slot as USE: never both)
+	local restore = UIKit.button(footer, "RESTORE", RESTORE_COLOR, RESTORE_DARK, {
+		Name = "Restore",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Size = UDim2.fromOffset(210, m.Button),
 		TextSize = if compact then 20 else 18,
@@ -813,37 +884,70 @@ function CollectionView.build(compact: boolean): Refs
 		DetailCount = detailCount,
 		DetailLore = detailLore,
 		DetailWhere = detailWhere,
+		DetailRestore = detailRestore,
 		Footer = footer,
 		Reward = reward,
 		Use = use,
+		Restore = restore,
 		Chapter = chapter,
 		Hint = hint,
 		Collection = ArtifactConfig.Collections[1].Id,
 		Selected = nil,
 		Compact = compact,
+		Short = false,
 	}
 end
 
--- The detail column's scrolling text: how many, the lore and where, one
--- under the other at their own heights (the canvas grows; small phones scroll).
+-- The detail column's scrolling text, one under the other at their own
+-- heights (the canvas grows): how many, the lore, where it turns up and how
+-- shards restore it. A short column (small phones) drops the count line
+-- (the tile shows "x4", a silhouette says "not found"), uses one size
+-- smaller texts and puts where (+ restore) first: the useful lines are in
+-- view, the lore follows.
 local function placeBody(refs: Refs)
 	local m = metrics(refs.Compact)
 	local width = refs.DetailBody:GetAttribute("TextWidth")
 	local w = if type(width) == "number" then width else 240
+	local short = refs.Short
+	local loreSize = if short then m.Body - 2 else m.Body - 1
+	local whereSize = if short then m.Body - 4 else m.Body - 3
 	local y = 0
-	local countH = m.Body + 6
-	refs.DetailCount.Position = UDim2.fromOffset(4, y)
-	refs.DetailCount.Size = UDim2.fromOffset(w, countH)
-	y += countH + 4
-	local loreH = CollectionView.textHeight(refs.DetailLore.Text, m.Body - 1, w)
-	refs.DetailLore.Position = UDim2.fromOffset(4, y)
-	refs.DetailLore.Size = UDim2.fromOffset(w, loreH)
-	y += loreH + 8
-	local whereH = CollectionView.textHeight(refs.DetailWhere.Text, m.Body - 3, w)
-	refs.DetailWhere.Position = UDim2.fromOffset(4, y)
-	refs.DetailWhere.Size = UDim2.fromOffset(w, whereH)
-	y += whereH + 4
+	local function put(label: TextLabel, size: number, gap: number)
+		label.TextSize = size
+		local h = CollectionView.textHeight(label.Text, size, w)
+		label.Position = UDim2.fromOffset(4, y)
+		label.Size = UDim2.fromOffset(w, h)
+		y += h + gap
+	end
+	refs.DetailCount.Visible = not short
+	refs.DetailRestore.Visible = refs.DetailRestore.Text ~= ""
+	if short then
+		put(refs.DetailWhere, whereSize, 2)
+		if refs.DetailRestore.Visible then
+			put(refs.DetailRestore, whereSize, 2)
+		end
+		y += 4
+		put(refs.DetailLore, loreSize, 4)
+	else
+		local countH = m.Body + 6
+		refs.DetailCount.Position = UDim2.fromOffset(4, y)
+		refs.DetailCount.Size = UDim2.fromOffset(w, countH)
+		y += countH + 4
+		put(refs.DetailLore, loreSize, 6)
+		put(refs.DetailWhere, whereSize, 2)
+		if refs.DetailRestore.Visible then
+			put(refs.DetailRestore, whereSize, 2)
+		end
+		y += 2
+	end
 	refs.DetailBody.CanvasSize = UDim2.fromOffset(0, y)
+end
+
+-- The detail name's text size: as big as fits its box.
+local function fitName(refs: Refs)
+	local m = metrics(refs.Compact)
+	local size = refs.DetailName.Size
+	refs.DetailName.TextSize = CollectionView.fitBox(refs.DetailName.Text, m.Body + 3, 14, math.max(60, size.X.Offset), size.Y.Offset)
 end
 
 -- The reward line's text size: as big as fits its box (never below 12).
@@ -924,26 +1028,50 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	if chapterHolder and chapterHolder:IsA("Frame") then
 		chapterHolder.Size = UDim2.fromOffset(chapterW, m.Button)
 	end
-	local useHolder = refs.Use.Parent
-	if useHolder and useHolder:IsA("Frame") then
-		useHolder.Position = UDim2.new(1, -(chapterW + 10), 0.5, 4)
-		useHolder.Size = UDim2.fromOffset(useW, m.Button)
+	for _, button in { refs.Use, refs.Restore } do
+		local holder = button.Parent
+		if holder and holder:IsA("Frame") then
+			holder.Position = UDim2.new(1, -(chapterW + 10), 0.5, 4)
+			holder.Size = UDim2.fromOffset(useW, m.Button)
+		end
 	end
 	refs.Reward.Size = UDim2.fromOffset(math.max(80, footerW - chapterW - useW - 24), m.Footer - 6)
 	refs.Hint.Position = UDim2.fromOffset(pad, height - 6)
 	refs.Hint.Size = UDim2.fromOffset(width - 2 * pad, m.Hint + 4)
 	-- the detail column's inside follows its size: the icon, the name and the
-	-- rarity at the top, the scrolling text under them
-	local icon = math.min(110, math.floor(detailH * 0.24))
-	refs.DetailIcon.Size = UDim2.fromOffset(icon, icon)
-	local y = 10 + icon + 6
-	local detailNameH = (m.Body + 3) * 2 + 4
-	refs.DetailName.Position = UDim2.fromOffset(10, y)
-	refs.DetailName.Size = UDim2.new(1, -20, 0, detailNameH)
-	y += detailNameH + 2
-	local chipHolder = refs.DetailChip
-	chipHolder.Position = UDim2.new(0.5, 0, 0, y)
-	y += 30
+	-- rarity at the top, the scrolling text under them; a short column
+	-- (small phones) puts the icon beside the name and the rarity, so the
+	-- lore and where it turns up get the room
+	local y: number
+	refs.Short = detailH < CollectionView.ShortDetail
+	if refs.Short then
+		local icon = math.min(56, math.floor(detailH * 0.28))
+		refs.DetailIcon.AnchorPoint = Vector2.new(0, 0)
+		refs.DetailIcon.Position = UDim2.fromOffset(8, 8)
+		refs.DetailIcon.Size = UDim2.fromOffset(icon, icon)
+		local x = 8 + icon + 8
+		refs.DetailName.Position = UDim2.fromOffset(x, 6)
+		refs.DetailName.Size = UDim2.fromOffset(detailW - x - 8, 30)
+		refs.DetailName.TextXAlignment = Enum.TextXAlignment.Left
+		refs.DetailChip.AnchorPoint = Vector2.new(0, 0)
+		refs.DetailChip.Position = UDim2.fromOffset(x, 38)
+		y = 8 + math.max(icon, 60) + 6
+	else
+		local icon = math.min(110, math.floor(detailH * 0.24))
+		refs.DetailIcon.AnchorPoint = Vector2.new(0.5, 0)
+		refs.DetailIcon.Position = UDim2.new(0.5, 0, 0, 10)
+		refs.DetailIcon.Size = UDim2.fromOffset(icon, icon)
+		y = 10 + icon + 6
+		local detailNameH = (m.Body + 3) * 2 + 4
+		refs.DetailName.Position = UDim2.fromOffset(10, y)
+		refs.DetailName.Size = UDim2.fromOffset(detailW - 20, detailNameH)
+		refs.DetailName.TextXAlignment = Enum.TextXAlignment.Center
+		y += detailNameH + 2
+		refs.DetailChip.AnchorPoint = Vector2.new(0.5, 0)
+		refs.DetailChip.Position = UDim2.new(0.5, 0, 0, y)
+		y += 30
+	end
+	fitName(refs)
 	refs.DetailBody.Position = UDim2.fromOffset(8, y)
 	refs.DetailBody.Size = UDim2.new(1, -12, 0, math.max(30, detailH - y - 8))
 	refs.DetailBody:SetAttribute("TextWidth", detailW - 12 - 8 - 10)
@@ -975,8 +1103,10 @@ function CollectionView.fitSize(text: string, size: number, width: number): numb
 	return smallest
 end
 
--- Fills the tabs, tiles, detail and footer from a data.Artifacts record.
-function CollectionView.fill(refs: Refs, artifacts: any)
+-- Fills the tabs, tiles, detail and footer from a data.Artifacts record
+-- (`wallet`: the player's blaster level and shards for RESTORE; nil = none).
+function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
+	local purse: Wallet = wallet or { BlasterLevel = 1, Shards = 0 }
 	local unique = ArtifactConfig.uniqueCount(artifacts)
 	refs.Total.Text = `{unique} / {#ArtifactConfig.List} found`
 	for _, collection in ArtifactConfig.Collections do
@@ -1041,6 +1171,8 @@ function CollectionView.fill(refs: Refs, artifacts: any)
 		refs.DetailCount.Text = if found then `Found: {count}` else "Not found yet"
 		refs.DetailLore.Text = if found then art.Lore else "Break rocks to find it. Rarer artifacts turn up deeper."
 		refs.DetailWhere.Text = CollectionView.whereText(art.Id)
+		refs.DetailRestore.Text = CollectionView.restoreText(artifacts, art.Id, purse) or ""
+		fitName(refs)
 		placeBody(refs)
 	end
 	refs.Reward.Text = CollectionView.rewardText(refs.Collection)
@@ -1059,6 +1191,17 @@ function CollectionView.fill(refs: Refs, artifacts: any)
 	if useHolder and useHolder:IsA("Frame") then
 		useHolder.BackgroundColor3 = if inUse then Theme.GoodDark else Color3.fromRGB(38, 110, 186)
 	end
+	-- RESTORE while exactly one is missing (greyed while it can't be paid / its mine is closed)
+	local restoreText, restoreArg, restoreWhy = CollectionView.restoreButton(artifacts, refs.Collection, purse)
+	local restoreHolder = refs.Restore.Parent
+	if restoreHolder and restoreHolder:IsA("Frame") then
+		restoreHolder.Visible = restoreText ~= nil and not complete
+		restoreHolder.BackgroundColor3 = if restoreArg then RESTORE_DARK else Color3.fromRGB(64, 56, 52)
+	end
+	refs.Restore.Text = restoreText or ""
+	refs.Restore:SetAttribute("Restore", restoreArg)
+	refs.Restore:SetAttribute("Reason", restoreWhy)
+	refs.Restore.BackgroundColor3 = if restoreArg then RESTORE_COLOR else Color3.fromRGB(110, 98, 92)
 	local text, enabled = CollectionView.chapterButton(artifacts, refs.Collection)
 	refs.Chapter.Text = text
 	refs.Chapter:SetAttribute("Enabled", enabled)
@@ -1222,6 +1365,9 @@ function CollectionView.revealText(found: { [string]: any }, artifacts: any): (s
 		title = "COLLECTION COMPLETE!"
 		local chapter = StoryConfig.ByCollection[art.Collection]
 		extra = `Chapter {if chapter then chapter.Number else "?"} unlocked! ` .. CollectionView.rewardText(art.Collection)
+		if found.Restored == true then
+			extra = "Restored with crystal shards. " .. extra
+		end
 	elseif found.New ~= true then
 		local shards = tonumber(found.Shards) or 0
 		extra = if shards > 0 then `A copy: +{shards} Shards` else "A copy"
@@ -1259,6 +1405,8 @@ end
 
 CollectionView.BannerTop = 100 -- design units: right under the coins panel (16..90), high above the thumbstick
 CollectionView.BannerSize = { Normal = Vector2.new(480, 128), Compact = Vector2.new(500, 140) }
+-- the height without the key row (touch, gamepad): no empty strip at the bottom
+CollectionView.BannerShort = { Normal = 100, Compact = 102 }
 
 -- The toast for a copy: "Golem Cog (copy) +1 Shard".
 function CollectionView.copyText(found: { [string]: any }): string
@@ -1387,8 +1535,32 @@ function CollectionView.buildBanner(compact: boolean): BannerRefs
 	}
 end
 
+-- The banner's height and inside for a key row or none: the icon fills the
+-- height left, the texts start right of it.
+local function layoutBanner(refs: BannerRefs, withKeys: boolean)
+	local size = if refs.Compact then CollectionView.BannerSize.Compact else CollectionView.BannerSize.Normal
+	local height = if withKeys then size.Y else (if refs.Compact then CollectionView.BannerShort.Compact else CollectionView.BannerShort.Normal)
+	refs.Card.Size = UDim2.fromOffset(size.X, height)
+	local iconSize = height - 24
+	refs.Icon.Size = UDim2.fromOffset(iconSize, iconSize)
+	local x = 12 + iconSize + 12
+	local bookHolder = refs.Book.Parent
+	local buttonW = if bookHolder and bookHolder:IsA("Frame") then bookHolder.Size.X.Offset else 104
+	local textW = size.X - x - buttonW - 24
+	refs.Title.Position = UDim2.fromOffset(x, 8)
+	refs.Title.Size = UDim2.fromOffset(textW, 28)
+	refs.Name.Position = UDim2.fromOffset(x, 36)
+	refs.Name.Size = UDim2.fromOffset(textW, 28)
+	refs.Chip.Position = UDim2.fromOffset(x, 68)
+	refs.Progress.Position = UDim2.fromOffset(x + 104, 66)
+	refs.Progress.Size = UDim2.fromOffset(textW - 104, 26)
+	refs.Keys.Position = UDim2.fromOffset(x, size.Y - 32)
+	refs.Keys.Size = UDim2.fromOffset(size.X - x - 12, 26)
+end
+
 -- The key row: `bookImage` / `closeImage` are glyph images (a gamepad), else
--- `bookText` / `closeText` alone (a keyboard); all empty hides it (touch).
+-- `bookText` / `closeText` alone (a keyboard); all empty hides it (touch and
+-- gamepads today) and the banner gets shorter (BannerShort).
 function CollectionView.setBannerKeys(refs: BannerRefs, bookImage: string, bookText: string, closeImage: string, closeText: string)
 	local m = if refs.Compact then 16 else 15
 	refs.BookGlyph.Image = bookImage
@@ -1401,7 +1573,9 @@ function CollectionView.setBannerKeys(refs: BannerRefs, bookImage: string, bookT
 	refs.CloseKey.Size = UDim2.fromOffset(math.ceil(#closeText * m * 0.56) + 6, 24)
 	refs.BookKey.Visible = bookText ~= ""
 	refs.CloseKey.Visible = closeText ~= ""
-	refs.Keys.Visible = bookText ~= "" or closeText ~= "" or bookImage ~= ""
+	local withKeys = bookText ~= "" or closeText ~= "" or bookImage ~= "" or closeImage ~= ""
+	refs.Keys.Visible = withKeys
+	layoutBanner(refs, withKeys)
 end
 
 -- Fills the note for a new find (ArtifactFound payload) and shows it.
@@ -1431,8 +1605,8 @@ end
 ---------------------------------------------------------------- the HUD menu button
 
 -- The BOOK button for the HUD's right-side menu (HudController.refs().Menu),
--- under BUILD and the elevator: a NEW badge while a chapter waits unread,
--- the glyph of its gamepad shortcut while a gamepad is used.
+-- under BUILD and the elevator (only in a game without the side menu,
+-- ArtifactController): a NEW badge while a chapter waits unread.
 function CollectionView.menuButton(menu: Instance): MenuRefs
 	local button = UIKit.button(menu, "", Color3.fromRGB(150, 96, 200), Color3.fromRGB(92, 56, 130), {
 		Name = "Book",
@@ -1462,25 +1636,23 @@ function CollectionView.menuButton(menu: Instance): MenuRefs
 		ZIndex = 4,
 	})
 	badge.TextSize = 13
-	local glyph = UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(0, -6, 0.5, 0),
-		Size = UDim2.fromOffset(30, 30),
-		BackgroundTransparency = 1,
-		Visible = false,
-	}, button)
-	return { Button = button, New = badge, Glyph = glyph }
+	return { Button = button, New = badge }
 end
 
 -- Does any completed collection's chapter wait unread (the menu's NEW badge)?
 function CollectionView.anyChapterNew(artifacts: any): boolean
+	return CollectionView.unreadChapters(artifacts) > 0
+end
+
+-- How many completed collections' chapters wait unread (the book's badge).
+function CollectionView.unreadChapters(artifacts: any): number
+	local count = 0
 	for _, collection in ArtifactConfig.Collections do
 		if CollectionView.chapterNew(artifacts, collection.Id) then
-			return true
+			count += 1
 		end
 	end
-	return false
+	return count
 end
 
 ---------------------------------------------------------------- the title over a player

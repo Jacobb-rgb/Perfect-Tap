@@ -19,6 +19,7 @@ return function(T, Loader)
 	local ArtifactBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ArtifactBuilder")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
+	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local MuseumBuilder = Loader.requirePath("ServerScriptService.Server.World.MuseumBuilder")
 	local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
@@ -232,16 +233,16 @@ return function(T, Loader)
 		T.eq(MuseumBuilder.show(museum, plotCF, all), #ArtifactConfig.List)
 		T.eq(#museum.Pieces:GetChildren(), #ArtifactConfig.List, "one model each, nothing doubled")
 		T.le(#parts(museum), structure + #ArtifactConfig.List * ArtifactConfig.MaxParts, "the whole budget")
-		-- every relic on its own spot, facing the visitors (+Z of the plot)
+		-- every relic on its own spot, facing the visitors and the yard (-Z of the plot)
 		local seen = {}
-		local plusZ = plotCF:VectorToWorldSpace(Vector3.new(0, 0, 1))
+		local yardSide = plotCF:VectorToWorldSpace(Vector3.new(0, 0, -1))
 		for _, art in ArtifactConfig.List do
 			local spot = MuseumBuilder.spot(plotCF, art.Id)
 			T.truthy(spot, "a spot for " .. art.Id)
 			local key = string.format("%.2f,%.2f,%.2f", spot.Position.X, spot.Position.Y, spot.Position.Z)
 			T.falsy(seen[key], "spots are unique")
 			seen[key] = true
-			T.truthy(spot.LookVector:Dot(plusZ) > 0.99, "faces the visitors")
+			T.truthy(spot.LookVector:Dot(yardSide) > 0.99, "faces the visitors")
 		end
 		-- a new owner with fewer finds: the others are taken away; no owner: empty
 		T.eq(MuseumBuilder.show(museum, plotCF, some), 3)
@@ -268,6 +269,38 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(plotCF)
+	end)
+
+	T.test("Artifacts: the museum opens toward the yard, its back wall to the train stop", function()
+		local plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[PLOT])
+		local museum = MuseumBuilder.build(plotCF)
+		local function localOf(part: any): any
+			return plotCF:PointToObjectSpace(part.CFrame.Position)
+		end
+		local wall = localOf(museum.Wall)
+		local pen = BaseLayout.Pen.Area
+		local stop = BaseLayout.TrainStop
+		local penBack = pen.Center.Z + pen.Size.Z / 2
+		T.truthy(math.abs(wall.Z - (stop.Center.Z - stop.Size.Z / 2)) < 2, "the wall backs onto the train stop")
+		local caseFront = math.huge
+		for _, case in MuseumBuilder.cases() do
+			caseFront = math.min(caseFront, case.Center.Z - 2.3 / 2)
+			T.truthy(case.Center.Z < wall.Z, "the cases stand in front of the wall")
+		end
+		-- a walkway between the pen fence and the cases, open at the lane's end
+		T.truthy(caseFront - penBack >= 4, "room to walk between the pen and the cases")
+		local point = museum.PrimaryPart:FindFirstChild(MuseumBuilder.PromptName)
+		local prompt = plotCF:PointToObjectSpace((museum.PrimaryPart.CFrame * point.CFrame).Position)
+		T.truthy(prompt.Z > penBack and prompt.Z < caseFront, "the prompt on the walkway")
+		-- the cases read in collection order from the visitors' left (they face +Z: their left is +X)
+		local cases = MuseumBuilder.cases()
+		for i = 2, #cases do
+			T.truthy(cases[i].Center.X < cases[i - 1].Center.X, "left to right for the visitors")
+		end
+		-- the plaques face the yard too
+		local case1 = museum:FindFirstChild("Case1")
+		local yardSide = plotCF:VectorToWorldSpace(Vector3.new(0, 0, -1))
+		T.truthy(case1.Plaque.CFrame.LookVector:Dot(yardSide) > 0.99, "the plaque's front faces the yard")
 	end)
 
 	---------------------------------------------------------------- ArtifactService
@@ -400,6 +433,133 @@ return function(T, Loader)
 		T.eq(copy.Completed, false)
 	end)
 
+	T.test("Artifacts: restoring the last missing one: prices, rules, the book's button", function()
+		-- a price for every rarity, rarer costs more
+		local prev = 0
+		for _, rarity in Rarity.List do
+			local price = ArtifactConfig.RestoreShards[rarity.Id]
+			if price then
+				T.truthy(price > prev, "rarer costs more: " .. rarity.Id)
+				prev = price
+			end
+		end
+		for _, art in ArtifactConfig.List do
+			T.truthy(ArtifactConfig.RestoreShards[art.Rarity], "a price for " .. art.Id)
+		end
+		-- rarer stays deeper: the Mythic only once Deep Hollow is open
+		T.truthy(ArtifactConfig.rarityOpen("Common", 1))
+		T.falsy(ArtifactConfig.rarityOpen("Mythic", 1))
+		T.falsy(ArtifactConfig.rarityOpen("Legendary", 2))
+		T.truthy(ArtifactConfig.rarityOpen("Legendary", 3))
+		T.truthy(ArtifactConfig.rarityOpen("Mythic", 5))
+		local record = allFound()
+		record.Found.HeartstoneFragment = nil
+		T.eq(ArtifactConfig.lastMissing(record, "HeartstoneLore"), "HeartstoneFragment")
+		T.eq(ArtifactConfig.lastMissing(record, "CrownOfKaldrum"), nil, "complete: none")
+		T.eq(ArtifactConfig.lastMissing({ Found = {} }, "CrownOfKaldrum"), nil, "six missing: none")
+		local mythic = ArtifactConfig.RestoreShards.Mythic
+		T.eq(select(2, ArtifactConfig.restoreQuote(record, "HeartstoneFragment", 1, 9999)), "Locked")
+		T.eq(select(2, ArtifactConfig.restoreQuote(record, "HeartstoneFragment", 5, mythic - 1)), "NoShards")
+		T.eq(ArtifactConfig.restoreQuote(record, "HeartstoneFragment", 5, mythic), mythic)
+		T.eq(select(2, ArtifactConfig.restoreQuote(record, "CrownCoin", 5, 9999)), "NotMissing")
+		T.eq(select(2, ArtifactConfig.restoreQuote({ Found = {} }, "CrownCoin", 5, 9999)), "NotLast")
+		T.eq(select(2, ArtifactConfig.restoreQuote(record, "Nope", 5, 9999)), "BadArtifact")
+		for _, code in { "BadArtifact", "NotMissing", "NotLast", "Locked", "NoShards" } do
+			T.truthy(ArtifactConfig.Reasons[code], "a Reasons text for " .. code)
+		end
+		-- the book shows the way: the button and the line under "where"
+		local text, arg, why = CollectionView.restoreButton(record, "HeartstoneLore", { BlasterLevel = 5, Shards = 10 })
+		T.truthy(text and text:find(tostring(mythic), 1, true), "the price on the button")
+		T.eq(arg, nil, "greyed")
+		T.eq(why, "NoShards")
+		local _, ready = CollectionView.restoreButton(record, "HeartstoneLore", { BlasterLevel = 5, Shards = mythic })
+		T.eq(ready, "HeartstoneFragment")
+		T.eq(CollectionView.restoreButton(record, "CrownOfKaldrum", { BlasterLevel = 5, Shards = 9999 }), nil, "complete: no button")
+		local line = CollectionView.restoreText(record, "HeartstoneFragment", { BlasterLevel = 5, Shards = 10 })
+		T.truthy(line and line:find("last one missing", 1, true) and line:find("you have 10", 1, true))
+		T.truthy(CollectionView.restoreText(record, "HeartstoneFragment", { BlasterLevel = 1, Shards = 10 }):find("blaster", 1, true))
+		T.eq(CollectionView.restoreText(record, "CrownCoin", { BlasterLevel = 5, Shards = 10 }), nil, "found: no line")
+		T.truthy(CollectionView.restoreText({ Found = {} }, "CrownCoin", { BlasterLevel = 5, Shards = 0 }):find("crystal shards", 1, true))
+		-- in the book: RESTORE in USE's place, inside the footer, 44 pt on a phone
+		local refs = CollectionView.build(true)
+		CollectionView.layout(refs, 568 / 0.62, (320 - 58) / 0.62)
+		refs.Collection = "HeartstoneLore"
+		refs.Selected = "HeartstoneFragment"
+		CollectionView.fill(refs, record, { BlasterLevel = 5, Shards = 500 })
+		T.truthy(refs.Restore.Parent.Visible, "RESTORE shows")
+		T.falsy(refs.Use.Parent.Visible, "never with USE")
+		T.eq(refs.Restore:GetAttribute("Restore"), "HeartstoneFragment")
+		T.truthy(refs.DetailRestore.Visible and refs.DetailRestore.Text:find("RESTORE", 1, true), "the detail says how")
+		T.truthy(refs.Restore.Parent.Size.Y.Offset * 0.62 >= 44, "44 pt")
+		local footer = refs.Footer.Size.X.Offset
+		T.truthy(refs.Reward.Size.X.Offset + refs.Restore.Parent.Size.X.Offset + refs.Chapter.Parent.Size.X.Offset <= footer)
+		refs.Collection = "CrownOfKaldrum"
+		CollectionView.fill(refs, record, { BlasterLevel = 5, Shards = 500 })
+		T.falsy(refs.Restore.Parent.Visible, "a complete collection has no RESTORE")
+	end)
+
+	withFinds("Artifacts: Restore buys back the last missing one with shards, once", function(w)
+		local list = ArtifactConfig.ByCollection.HeartstoneLore
+		local last = list[#list].Id
+		T.eq(last, "HeartstoneFragment")
+		w.data.BlasterLevel = 1
+		w.data.Shards = 10
+		T.eq(select(2, ArtifactService.restore(w.player, last)), "NotLast", "five still missing")
+		for i = 1, #list - 1 do
+			ArtifactService.find(w.player, "DeepHollow", nil, list[i].Id)
+		end
+		local finds = w.data.Stats.ArtifactsFound
+		T.eq(select(2, ArtifactService.restore(w.player, last)), "Locked", "Deep Hollow isn't open yet")
+		w.data.BlasterLevel = 5
+		T.eq(select(2, ArtifactService.restore(w.player, last)), "NoShards")
+		T.eq(w.data.Shards, 10, "nothing taken")
+		local price = ArtifactConfig.RestoreShards.Mythic
+		w.data.Shards = price + 7
+		ArtifactService._test.action(w.player, "Restore", { Artifact = last })
+		local reply = w.last("ActionResult")
+		T.eq(reply.A.Action, "Artifact")
+		T.eq(reply.A.Op, "Restore")
+		T.eq(reply.A.Ok, true)
+		T.eq(reply.A.Id, last)
+		T.eq(w.data.Shards, 7, "paid")
+		T.eq(w.data.Artifacts.Found[last], 1)
+		T.truthy(ArtifactConfig.isComplete(w.data.Artifacts, "HeartstoneLore"), "complete")
+		T.eq(w.data.Stats.ArtifactsFound, finds, "no rock was broken: not on the ARTIFACTS board")
+		local found = w.last("ArtifactFound")
+		T.eq(found.A.Artifact, last)
+		T.eq(found.A.Restored, true)
+		T.eq(found.A.Completed, true, "the COLLECTION COMPLETE card")
+		T.eq(found.A.Position, nil)
+		T.eq(w.player:GetAttribute("Title"), ArtifactConfig.CollectionById.HeartstoneLore.Reward.Title, "the reward is on")
+		-- a second request (a double tap) pays nothing more
+		ArtifactService._test.action(w.player, "Restore", { Artifact = last })
+		T.eq(w.last("ActionResult").A.Reason, "NotMissing")
+		T.eq(w.data.Shards, 7)
+		T.eq(w.data.Artifacts.Found[last], 1)
+		-- junk
+		ArtifactService._test.action(w.player, "Restore", "HeartstoneFragment")
+		T.eq(w.last("ActionResult").A.Reason, "BadArtifact")
+		ArtifactService._test.action(w.player, "Restore", { Artifact = string.rep("x", 200) })
+		T.eq(w.last("ActionResult").A.Reason, "BadArtifact")
+		T.eq(w.last("ActionResult").A.Id, nil, "a long id is not echoed")
+		T.eq(select(2, ArtifactService.restore(fakePlayer(4), last)), "BadArtifact", "no save")
+	end)
+
+	T.test("Artifacts: Migrations keep Equipped only as a short string", function()
+		for value, kept in { [""] = true, CrownOfKaldrum = true, SomeNewerCollection = true } do
+			local data = deepCopy(DataTemplate)
+			data.Artifacts.Equipped = value
+			Migrations.run(data, 1_800_000_000)
+			T.eq(data.Artifacts.Equipped, if kept then value else nil, "kept: " .. value)
+		end
+		for _, junk in { 5, true, { "CrownOfKaldrum" }, string.rep("x", 65) } do
+			local data = deepCopy(DataTemplate)
+			data.Artifacts.Equipped = junk
+			Migrations.run(data, 1_800_000_000)
+			T.eq(data.Artifacts.Equipped, nil, "dropped: " .. tostring(junk))
+		end
+	end)
+
 	withFinds("Artifacts: ReadChapter only for completed collections", function(w)
 		local ok, reason = ArtifactService.readChapter(w.player, "CrownOfKaldrum")
 		T.eq(ok, false)
@@ -442,7 +602,7 @@ return function(T, Loader)
 		T.truthy(prompt and prompt:FindFirstChild("Prompt"), "Collection Book prompt")
 		T.eq(prompt.Prompt.ActionText, "Collection Book")
 		T.eq(prompt.Prompt.ObjectText, "Your Collection", "it opens the viewer's own book")
-		T.eq(prompt.Prompt.RequiresLineOfSight, true, "not through the back wall from the pen")
+		T.eq(prompt.Prompt.RequiresLineOfSight, true, "not through the back wall from the train stop")
 		ArtifactService.find(w.player, "Quarry", nil, "GolemCog")
 		T.eq(#museum.Pieces:GetChildren(), 1, "a new find shows up at home")
 		ArtifactService.find(w.player, "Quarry", nil, "GolemCog")
@@ -624,10 +784,17 @@ return function(T, Loader)
 			if screen.Compact then
 				T.truthy(banner.Book.Parent.Size.Y.Offset * screen.Scale >= 44, "BOOK is 44 pt")
 			end
-			CollectionView.setBannerKeys(banner, "rbxasset://a.png", "Book", "rbxasset://b.png", "Close")
-			T.truthy(banner.BookGlyph.Visible and banner.CloseGlyph.Visible)
+			CollectionView.setBannerKeys(banner, "", "J: book", "", "Backspace: close")
+			T.truthy(banner.Keys.Visible and banner.BookKey.Visible and banner.CloseKey.Visible, "a keyboard's key row")
+			local tall = banner.Card.Size.Y.Offset
 			CollectionView.setBannerKeys(banner, "", "", "", "")
-			T.falsy(banner.Keys.Visible, "touch: no key row")
+			T.falsy(banner.Keys.Visible, "touch and gamepads: no key row")
+			local short = banner.Card.Size.Y.Offset
+			T.truthy(short < tall - 20, "no empty strip where the keys would be")
+			T.truthy(banner.Icon.Size.Y.Offset <= short - 20, "the icon fits the shorter card")
+			local chipBottom = banner.Chip.Position.Y.Offset + banner.Chip.Size.Y.Offset
+			T.truthy(chipBottom <= short - 6, "the rarity chip inside the card")
+			T.truthy(banner.Book.Parent.Position.Y.Offset + banner.Book.Parent.Size.Y.Offset <= short - 6, "BOOK inside the card")
 		end
 	end)
 
@@ -642,6 +809,11 @@ return function(T, Loader)
 			all.Chapters[collection.Id] = true
 		end
 		T.falsy(CollectionView.anyChapterNew(all), "all read")
+		T.eq(CollectionView.unreadChapters(all), 0)
+		all.Chapters.CrownOfKaldrum = nil
+		all.Chapters.Golemworks = nil
+		T.eq(CollectionView.unreadChapters(all), 2, "the side menu's badge count")
+		T.eq(m.Button.Parent.Parent:FindFirstChild("Glyph", true), nil, "no gamepad shortcut glyph")
 		local board = CollectionView.titleBoard("Heir of Kaldrum")
 		T.eq(board.ClassName, "BillboardGui")
 		T.truthy(board.Text.Text:find("Heir of Kaldrum", 1, true))
@@ -667,12 +839,24 @@ return function(T, Loader)
 		-- the last completed collection shows by itself (nothing picked)
 		all.Equipped = nil
 		T.truthy(CollectionView.inUse(all, ArtifactConfig.Collections[#ArtifactConfig.Collections].Id))
-		-- a small phone scrolls the detail text instead of dropping the lore
-		T.truthy(refs.DetailLore.Visible and refs.DetailCount.Visible, "nothing dropped")
+		-- a small phone: the icon beside the name, so the lore and where it turns up get the room
+		T.truthy(refs.Short, "a short detail column")
+		T.truthy(refs.DetailLore.Visible, "the lore stays")
 		T.eq(refs.DetailLore.Text, ArtifactConfig.ById.EmberCrown.Lore)
+		local icon = refs.DetailIcon
+		T.truthy(refs.DetailName.Position.X.Offset >= icon.Position.X.Offset + icon.Size.X.Offset, "the name beside the icon")
 		local body = refs.DetailBody
-		T.truthy(body.CanvasSize.Y.Offset > body.Size.Y.Offset, "it scrolls on a small phone")
-		T.truthy(refs.DetailWhere.Position.Y.Offset >= refs.DetailLore.Position.Y.Offset + refs.DetailLore.Size.Y.Offset, "where under the lore")
+		T.truthy(body.Position.Y.Offset <= icon.Position.Y.Offset + icon.Size.Y.Offset + 16, "the text right under the icon row")
+		local whereBottom = refs.DetailWhere.Position.Y.Offset + refs.DetailWhere.Size.Y.Offset
+		T.truthy(whereBottom <= body.Size.Y.Offset, "where it turns up (1 in N) in view without scrolling")
+		T.truthy(refs.DetailLore.Position.Y.Offset >= whereBottom, "the lore follows")
+		T.truthy(refs.DetailLore.Position.Y.Offset < body.Size.Y.Offset - 40, "the lore starts in view")
+		-- a big screen keeps the tall layout with the count
+		local big = CollectionView.build(false)
+		CollectionView.layout(big, 1280, 684)
+		CollectionView.fill(big, all)
+		T.falsy(big.Short)
+		T.truthy(big.DetailCount.Visible, "Found: N on a big screen")
 		-- the footer: reward, USE and the chapter button side by side, inside the panel
 		local footer = refs.Footer.Size.X.Offset
 		local used = refs.Reward.Size.X.Offset + refs.Use.Parent.Size.X.Offset + refs.Chapter.Parent.Size.X.Offset

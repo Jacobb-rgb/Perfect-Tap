@@ -289,41 +289,116 @@ return function(T, Loader)
 		T.eq(w.reveal(), nil)
 	end)
 
-	withWheel("Wheel: the capsule package's grantFree opens the free capsule when it exists", function(w)
-		local calls = {}
-		local fake = {
-			grantFree = function(p: any, capsuleId: string, roll: number): (any, boolean?)
-				table.insert(calls, { Player = p, Capsule = capsuleId, Roll = roll })
-				return { Id = 77, Kind = GolemConfig.List[2].Id }, true
-			end,
-		}
+	-- A capsule package like the real one (Capsules, step 7): grantFree(player,
+	-- capsuleId, count?, quiet?) -> (CapsuleResult?, reason?); it adds the golems,
+	-- calls DataService.changed and sends the CapsuleResult itself unless it
+	-- declares QuietFree and is asked to be quiet.
+	local function fakeCapsules(w: any, quietFree: boolean): any
+		local fake: any = { QuietFree = if quietFree then true else nil, calls = {} }
+		fake.grantFree = function(p: any, capsuleId: string, count: number?, quiet: boolean?): (any, string?)
+			table.insert(fake.calls, { Player = p, Capsule = capsuleId, Count = count, Quiet = quiet })
+			local n = count or 1
+			if GolemConfig.room(w.data.Golems) < n then
+				return nil, "InventoryFull"
+			end
+			local entry = GolemConfig.add(w.data.Golems, GolemConfig.List[2].Id)
+			w.data.Stats.CapsulesOpened = (w.data.Stats.CapsulesOpened or 0) + 1
+			DataService.changed(p)
+			local result = { Capsule = capsuleId, Count = n, Golems = { { Id = entry.Id, Kind = entry.Kind } }, Lucky = true, Free = true }
+			if not (fake.QuietFree and quiet) then
+				Net.fire("CapsuleResult", p, result)
+			end
+			return result, nil
+		end
+		return fake
+	end
+
+	local function count(w: any, event: string): number
+		local n = 0
+		for _, reply in w.replies do
+			if reply.Event == event then
+				n += 1
+			end
+		end
+		return n
+	end
+
+	withWheel("Wheel: the capsule package's grantFree (quiet) opens it, the wheel's Reveal plays it once", function(w)
+		local fake = fakeCapsules(w, true)
 		WheelService._test.setCapsules(fake)
 		local result = w.spin(rollFor(8), 0.25).A
-		T.eq(#calls, 1)
-		T.eq(calls[1].Player, w.player)
-		T.eq(calls[1].Capsule, "Crystal")
-		T.eq(calls[1].Roll, 0.25, "the wheel's seeded roll")
-		T.eq(result.Golem.Id, 77)
+		T.eq(#fake.calls, 1)
+		T.eq(fake.calls[1].Player, w.player)
+		T.eq(fake.calls[1].Capsule, "Crystal")
+		T.eq(fake.calls[1].Count, 1, "one capsule")
+		T.eq(fake.calls[1].Quiet, true, "asked to stay quiet")
+		T.eq(result.Golem.Id, w.data.Golems.Owned[1].Id)
 		T.eq(result.Golem.Kind, GolemConfig.List[2].Id)
-		T.eq(result.Lucky, true)
-		T.eq(#w.data.Golems.Owned, 0, "the service did the adding, not the wheel")
-		T.eq(w.reveal().A.Golems[1].Id, 77)
-		-- the service says the inventory is full: the coins share
-		w.now += DAY
-		fake.grantFree = function(): (any, boolean?)
-			return nil, false
+		T.eq(result.Lucky, true, "the service's Triple Lucky answer")
+		T.eq(#w.data.Golems.Owned, 1, "one golem, added by the service only")
+		T.eq(w.data.Stats.CapsulesOpened, 1)
+		T.eq(count(w, "CapsuleResult"), 0, "nothing spoils the turning disc")
+		local opening = w.reveal()
+		T.eq(opening.Event, "CapsuleResult")
+		T.eq(opening.A.Golems[1].Id, result.Golem.Id)
+		T.eq(opening.A.Free, true)
+		T.eq(w.reveal(), nil, "once")
+	end)
+
+	withWheel("Wheel: an older capsule package sends the opening itself: the wheel never sends it again", function(w)
+		local fake = fakeCapsules(w, false)
+		WheelService._test.setCapsules(fake)
+		local result = w.spin(rollFor(3), 0.25).A
+		T.truthy(result.Golem, "the golem")
+		T.eq(count(w, "CapsuleResult"), 1, "the service's own CapsuleResult")
+		T.eq(w.reveal(), nil, "no second opening")
+		T.eq(count(w, "CapsuleResult"), 1)
+		T.eq(#w.data.Golems.Owned, 1)
+	end)
+
+	withWheel("Wheel: grantFree refusals and errors pay the coin share and never roll again", function(w)
+		local fake = fakeCapsules(w, true)
+		WheelService._test.setCapsules(fake)
+		-- the inventory is full: the coins share, Full = true (the card says why)
+		for _ = 1, GolemConfig.InventoryCap do
+			GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
 		end
 		local full = w.spin(rollFor(3)).A
 		T.falsy(full.Golem)
-		T.eq(full.Coins, WheelConfig.capsuleFallbackCoins("Stone", w.data.BlasterLevel))
-		-- the service fails: the wheel opens it itself
+		local share = WheelConfig.capsuleFallbackCoins("Stone", w.data.BlasterLevel)
+		T.eq(full.Coins, share)
+		T.eq(full.Full, true)
+		local _, fullText = WheelView.prizeText(full)
+		T.truthy(fullText:find("inventory is full", 1, true))
+		T.eq(#w.data.Golems.Owned, GolemConfig.InventoryCap, "no golem past the cap")
+		T.eq(w.reveal(), nil, "no opening")
+		-- any other refusal: the same coins, no false "full" message, no roll here
+		table.clear(w.data.Golems.Owned)
 		w.now += DAY
-		fake.grantFree = function(): (any, boolean?)
+		fake.grantFree = function(): (any, string?)
+			return nil, "BadCapsule"
+		end
+		local coinsBefore = w.data.Coins
+		local refused = w.spin(rollFor(3)).A
+		T.falsy(refused.Golem)
+		T.eq(refused.Coins, share)
+		T.eq(refused.Full, nil)
+		local _, refusedText = WheelView.prizeText(refused)
+		T.falsy(refusedText:find("full", 1, true), "never claims a full inventory")
+		T.eq(w.data.Coins, coinsBefore + share)
+		T.eq(#w.data.Golems.Owned, 0, "the wheel didn't open one itself")
+		-- the service fails half-way (a golem may already be in): coins, never a second golem
+		w.now += DAY
+		fake.grantFree = function(p: any): (any, string?)
+			GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
 			error("capsule package down")
 		end
-		local fallback = w.spin(rollFor(3), 0.0).A
-		T.truthy(fallback.Golem, "opened here instead")
-		T.eq(#w.data.Golems.Owned, 1)
+		local failed = w.spin(rollFor(3), 0.0).A
+		T.falsy(failed.Golem)
+		T.eq(failed.Coins, share)
+		T.eq(#w.data.Golems.Owned, 1, "only the service's half-done golem, no second roll")
+		T.eq(w.reveal(), nil)
+		T.eq(w.data.Wheel.NextSpinAt, w.now + DAY, "the cooldown holds all the same")
 	end)
 
 	withWheel("Wheel: the Ore Prize puts a dirty Rare+ ore into the pen and keeps it secret", function(w)
@@ -670,10 +745,8 @@ return function(T, Loader)
 			local offset = WheelView.chipOffset(scale)
 			T.truthy(offset.X > barHalf, "clear of the bar at " .. scale)
 			local chip = WheelView.buildChip(scale)
-			WheelView.setChipGlyph(chip, "rbxasset://glyph.png")
-			T.truthy(chip.Glyph.Visible and not chip.Icon.Visible, "the gamepad glyph in the icon's place")
-			WheelView.setChipGlyph(chip, "")
-			T.truthy(chip.Icon.Visible and not chip.Glyph.Visible)
+			T.falsy(chip.Gui.Enabled, "hidden until the controller shows it")
+			T.eq(chip.Button:FindFirstChild("Glyph"), nil, "no gamepad shortcut of its own (the D-pad is the side menu's)")
 			local holder = chip.Button.Parent
 			local width = holder.Size.X.Offset
 			local screenHalf = 568 / 0.62 / 2
@@ -682,5 +755,13 @@ return function(T, Loader)
 				T.truthy(holder.Size.Y.Offset * scale >= 44, "44 pt to tap")
 			end
 		end
+	end)
+
+	T.test("WheelView: the chip only shows over the HUD", function()
+		T.truthy(WheelView.chipVisible(true, false, false, false), "ready, nothing else on screen")
+		T.falsy(WheelView.chipVisible(true, false, false, true), "not over the minigame / Foundry moment / build mode")
+		T.falsy(WheelView.chipVisible(true, true, false, false), "not while the wheel is open")
+		T.falsy(WheelView.chipVisible(true, false, true, false), "not while a spin is in flight")
+		T.falsy(WheelView.chipVisible(false, false, false, false), "not before the spin is ready")
 	end)
 end

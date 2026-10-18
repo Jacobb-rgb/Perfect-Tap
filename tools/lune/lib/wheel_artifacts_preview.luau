@@ -8,10 +8,13 @@
 	            (ArtifactService.paintYard, as for its owner)
 	  gallery   every relic (ArtifactBuilder) on a plinth row high above the sea
 	            (x 0, y 240), one row per collection, with its name on a tag
-	  quarry    a relic popping out of a broken rock (the client's found moment)
+	  quarry    the found moment: the rock shattered into rubble, the new
+	            relic (the one the banner shows, Last Train Ticket) hovering
+	            over it
 	UI overlays (the real views, filled like the controllers do):
 	  ui_wheel            PC: the wheel screen, a free spin ready
 	  ui_wheel_won        PC: the wheel stopped, the prize card and confetti
+	                      (the button back to its countdown)
 	  ui_wheel_wait       PC: spun today, the countdown
 	  ui_wheel_info       PC: a capsule row's details card (every golem's odds)
 	  ui_wheel_phone      667 x 375 pt phone: the compact wheel screen
@@ -22,11 +25,14 @@
 	  ui_book             PC: the collection book, Railway tab (silhouettes)
 	  ui_book_done        PC: the Crown tab, complete, its title + skin IN USE
 	  ui_book_phone       phone: the collection book
-	  ui_book_phone_small 568 x 320 pt phone: the detail text scrolls
+	  ui_book_phone_small 568 x 320 pt phone: the icon beside the name, the
+	                      lore and where it turns up in view
+	  ui_book_restore     PC: the Railway with one artifact missing: RESTORE
+	                      for shards and the detail's restore line
 	  ui_story            PC: the journal, chapter 1 page 2
 	  ui_story_phone      phone: the journal (a locked chapter selected)
-	  ui_banner           PC: the small NEW ARTIFACT! banner over the HUD
-	  ui_banner_phone     568 x 320 pt phone: the banner
+	  ui_banner           PC: the small NEW ARTIFACT! banner over the HUD (keyboard keys)
+	  ui_banner_phone     568 x 320 pt phone: the banner (no key row: shorter)
 	  ui_reveal_complete  the COLLECTION COMPLETE card (the only big card)
 	  ui_reveal_phone     568 x 320 pt phone: that card
 	Shots: tools/preview/wheel_artifacts_shots.json (scene "wheel_artifacts").
@@ -38,6 +44,7 @@ local Preview = {}
 
 Preview.Plot = 5
 Preview.GalleryAt = { 0, 240, 0 }
+Preview.NewFind = "LastTicket" -- the find the banner and the found moment show
 
 -- a mid-game player's finds
 Preview.Found = {
@@ -59,6 +66,7 @@ Preview.Found = {
 }
 
 function Preview.build(Loader: any, workspace: any): { [string]: any }
+	local newFindId = Preview.NewFind
 	local roblox = Loader.roblox
 	local C3 = roblox.Color3
 	local V3 = roblox.Vector3
@@ -115,21 +123,53 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 		Geo.block(gallery, origin * CF.new(-13.2, 0.4, z), V3.new(1.2, 0.8, 3.2), collection.Color, roblox.Enum.Material.Neon)
 	end
 
-	-- the found moment in the quarry: a relic popping out of a broken rock
+	-- the found moment in the quarry: the rock shattered into rubble, the
+	-- new relic (the banner's Last Train Ticket) hovering over it
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
+	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	for _, spawn in WorldBuilder.generateNodeSpawns() do
 		if spawn.Zone == "Quarry" then
-			local rock = OreNodeBuilder.buildRock("Quarry", { "Copper", "Gold" }, CF.new(spawn.Position), 11)
+			local center = spawn.Position
+			local rock = OreNodeBuilder.buildRock("Quarry", { "Copper", "Gold" }, CF.new(center), 11)
 			rock.Parent = workspace
-			for _, piece in OreNodeBuilder.applyStage(rock, 2, 11) do
-				piece:Destroy()
+			local rng = Rng.new("shatter")
+			local i = 0
+			for _, part in rock:GetChildren() do
+				if part:IsA("BasePart") then
+					if part.Name == "Crack" or part.Name == "Moss" then
+						part:Destroy()
+					else
+						-- a rubble piece: smaller, thrown out from the middle, lying on the ground
+						i += 1
+						local angle = i * 2.39996 + rng:range(-0.3, 0.3)
+						local reach = rng:range(1.4, 3.4)
+						local size = part.Size * 0.5
+						part.Size = size
+						part.CFrame = CF.new(center + V3.new(math.cos(angle) * reach, size.Y / 2 - 0.1, math.sin(angle) * reach))
+							* CF.Angles(rng:range(-0.5, 0.5), rng:range(0, 6.28), rng:range(-0.5, 0.5))
+					end
+				end
 			end
-			local relic = ArtifactBuilder.build("EmberScepter", CF.new(spawn.Position + V3.new(0, 4.2, 0)) * CF.Angles(0, 2.6, 0.25), 1.6)
+			-- the relic up out of the rubble, turned toward the camera, with the
+			-- client's sparkle burst (Vfx "Glint") as a few tiny glowing bits
+			local lift = center + V3.new(0, 3.6, 0)
+			local relic = ArtifactBuilder.build(newFindId, CF.new(lift) * CF.Angles(0, -2.2, 0.12), 1.6)
 			if relic then
 				relic.Parent = workspace
 			end
-			print("found moment at", spawn.Position)
+			for k = 1, 9 do
+				local a = k * 2.39996
+				local r = 1.2 + (k % 3) * 0.45
+				Geo.block(
+					workspace,
+					CF.new(lift + V3.new(math.cos(a) * r, 0.4 + (k % 4) * 0.45, math.sin(a) * r)) * CF.Angles(a, a * 0.7, 0.4),
+					V3.new(0.18, 0.18, 0.18),
+					C3.fromRGB(255, 214, 130),
+					roblox.Enum.Material.Neon
+				)
+			end
+			print("found moment at", center)
 			break
 		end
 	end
@@ -164,6 +204,7 @@ end
 
 Preview.Coins = 184500
 Preview.Income = 640
+Preview.Wallet = { BlasterLevel = 4, Shards = 120 } -- RESTORE in the book
 
 -- The wheel screen's info for a mid-game player (WheelController.info).
 function Preview.wheelInfo(): any
@@ -206,7 +247,8 @@ function Preview.ui(Loader: any): { [string]: any }
 	local w2 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	local index = WheelConfig.ById.OrePrize.Index
 	w2.Disc.Rotation = WheelView.spinTarget(0, index, 8, 5, 0.15)
-	WheelView.setReady(w2, false, WheelConfig.CooldownSeconds, true)
+	-- after the spin: the button counts down to tomorrow's spin
+	WheelView.setReady(w2, false, WheelConfig.CooldownSeconds - 6, false)
 	WheelView.highlight(w2, "OrePrize")
 	local prize, detail = WheelView.prizeText({ Kind = "Ore", DirtyOre = true })
 	WheelView.showResult(w2, prize, detail, WheelConfig.ById.OrePrize.Color)
@@ -259,16 +301,24 @@ function Preview.ui(Loader: any): { [string]: any }
 	local StoryView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoryView")
 	local artifacts = { Found = Preview.Found, Chapters = {} }
 	-- the newest find (the State push hasn't brought it yet)
-	local newFind = { Artifact = "LastTicket", Count = 1, New = true, Collection = "RoyalRailway", Completed = false }
+	local newFind = { Artifact = Preview.NewFind, Count = 1, New = true, Collection = "RoyalRailway", Completed = false }
 
-	local function bookView(uiScale: number, compact: boolean, maxW: number, maxH: number, collection: string, selected: string?): any
+	local function bookView(
+		uiScale: number,
+		compact: boolean,
+		maxW: number,
+		maxH: number,
+		collection: string,
+		selected: string?,
+		record: any?
+	): any
 		local refs = CollectionView.build(compact)
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
 		refs.Collection = collection
 		refs.Selected = selected
 		CollectionView.layout(refs, maxW, maxH)
-		CollectionView.fill(refs, artifacts)
+		CollectionView.fill(refs, record or artifacts, Preview.Wallet)
 		refs.Hint.Text = if compact
 			then "Tap a collection, then an artifact"
 			else "Click a collection, then an artifact  ·  Backspace: close"
@@ -286,6 +336,12 @@ function Preview.ui(Loader: any): { [string]: any }
 	local h10b = hud(Loader, smallScale)
 	local b4 = bookView(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, "Golemworks", "SparkVial")
 	exports.ui_book_phone_small = UiExport.export({ h10b.Gui, b4.Gui })
+	-- the Railway with the banner's find in: only the Locomotive Crest is missing
+	local railway = { Found = table.clone(Preview.Found), Chapters = {} }
+	railway.Found[Preview.NewFind] = 1
+	local h10c = hud(Loader, scale)
+	local b5 = bookView(scale, false, 1600 / scale, (900 - 36) / scale, "RoyalRailway", "LocomotiveCrest", railway)
+	exports.ui_book_restore = UiExport.export({ h10c.Gui, b5.Gui })
 
 	local function journalView(uiScale: number, compact: boolean, maxW: number, maxH: number, key: string, page: number): any
 		local refs = StoryView.build(compact)
@@ -310,14 +366,15 @@ function Preview.ui(Loader: any): { [string]: any }
 	local h13 = hud(Loader, scale)
 	local banner = CollectionView.buildBanner(false)
 	banner.Gui.Scale.Scale = scale
-	CollectionView.showBanner(banner, newFind, artifacts)
+	-- (as the controller does it: the key row first, it sets the height)
 	CollectionView.setBannerKeys(banner, "", "J: book", "", "Backspace: close")
+	CollectionView.showBanner(banner, newFind, artifacts)
 	exports.ui_banner = UiExport.export({ h13.Gui, banner.Gui })
 	local h13b = hud(Loader, smallScale)
 	local banner2 = CollectionView.buildBanner(true)
 	banner2.Gui.Scale.Scale = smallScale
-	CollectionView.showBanner(banner2, newFind, artifacts)
 	CollectionView.setBannerKeys(banner2, "", "", "", "")
+	CollectionView.showBanner(banner2, newFind, artifacts)
 	exports.ui_banner_phone = UiExport.export({ h13b.Gui, banner2.Gui })
 
 	-- the COLLECTION COMPLETE card (the State push with the find not there yet: 6 / 6 all the same)

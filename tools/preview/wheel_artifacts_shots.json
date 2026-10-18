@@ -1,6 +1,7 @@
 {
- "museum_front": {"scene": "wheel_artifacts", "position": [168, 7.5, 91], "target": [154, 3.2, 96], "fov": 55, "preset": "Surface", "shadowExtent": 80},
- "museum_close": {"scene": "wheel_artifacts", "position": [161, 4.6, 93], "target": [152.5, 2.6, 93], "fov": 50, "preset": "Surface", "shadowExtent": 60},
+ "museum_front": {"scene": "wheel_artifacts", "position": [139, 8.5, 91], "target": [156, 3.2, 96], "fov": 55, "preset": "Surface", "shadowExtent": 80},
+ "museum_close": {"scene": "wheel_artifacts", "position": [147.5, 5.4, 91.5], "target": [157.5, 2.8, 93.5], "fov": 52, "preset": "Surface", "shadowExtent": 60},
+ "museum_lane": {"scene": "wheel_artifacts", "position": [139, 6.5, 81.5], "target": [154, 2.8, 93], "fov": 58, "preset": "Surface", "shadowExtent": 80},
  "museum_yard": {"scene": "wheel_artifacts", "position": [122, 16, 80], "target": [152, 3, 94], "fov": 58, "preset": "Surface", "shadowExtent": 120},
  "artifact_gallery": {"scene": "wheel_artifacts", "position": [0, 251, 21], "target": [0, 240.6, 0], "fov": 55, "preset": "Surface", "shadowExtent": 60},
  "artifact_found": {"scene": "wheel_artifacts", "position": [-49, -5.5, -163], "target": [-58, -9.5, -172], "fov": 55, "preset": "Quarry", "shadowExtent": 60},
@@ -16,6 +17,7 @@
  "shot_book": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book"},
  "shot_book_done": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book_done"},
  "shot_book_phone": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book_phone"},
+ "shot_book_restore": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book_restore"},
  "shot_book_phone_small": {"scene": "wheel_artifacts", "position": [30.5, 10, 50.7], "target": [43, 3, 29], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_book_phone_small"},
  "shot_story": {"scene": "wheel_artifacts", "position": [-10.2, 6, -16.8], "target": [-15, 4.5, -30], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_story"},
  "shot_story_phone": {"scene": "wheel_artifacts", "position": [-10.2, 6, -16.8], "target": [-15, 4.5, -30], "fov": 60, "preset": "Surface", "shadowExtent": 100, "ui": "ui_story_phone"},

@@ -28,6 +28,7 @@
 	  (capsule package) plays after the wheel, and never for a player who
 	  closed the screen (the golem is in their inventory either way; the
 	  toast told them). It grants nothing. Kept RevealSeconds, then dropped.
+	  Only when nobody sent that CapsuleResult yet (see FreeCapsules).
 	- Prizes (WheelConfig):
 	    Coins    EconomyService.award(WheelConfig.coins(segment, podium income))
 	    Boost    BoostConfig.extend(data.Boosts, kind, Seconds, now, capped)
@@ -38,13 +39,15 @@
 	             that didn't fit are paid as coins (boostFallbackCoins: that
 	             share of the Coins segment's prize), WheelResult.Coins
 	    Capsule  one capsule of that kind opened for free right away: through
-	             CapsuleService.grantFree when the capsule package has it (its
-	             own side effects then run too), else here (CapsuleConfig.roll
-	             with the player's Triple Lucky + GolemConfig.add,
-	             Stats.CapsulesOpened + 1); WheelResult.Golem. The opening
-	             plays on "Reveal" (above). Full golem inventory:
+	             CapsuleService.grantFree(player, capsule, 1, quiet = true)
+	             when the capsule package is in the place (its own side
+	             effects then run too; FreeCapsules below), else here
+	             (CapsuleConfig.roll with the player's Triple Lucky +
+	             GolemConfig.add, Stats.CapsulesOpened + 1); WheelResult.Golem.
+	             The opening plays on "Reveal" (above). Full golem inventory:
 	             FallbackShare coins (WheelConfig.capsuleFallbackCoins),
-	             WheelResult.Coins
+	             WheelResult.Coins + Full = true; a failed opening pays the
+	             same coins (no Full) and never rolls a second time
 	    Ore      a dirty (Raw) Rare+ ore (WheelConfig.pickOre) into the Ore
 	             Pen (PenService.store); WheelResult.DirtyOre = true only, WHICH
 	             ore stays secret until cleaned. Full pen: the expected raw
@@ -83,17 +86,32 @@ WheelService.PromptDistance = 12
 WheelService.RevealSeconds = 60
 
 --[[
-	The capsule package's free opening, when this place has it:
-	CapsuleService.grantFree(player, capsuleId, roll) opens one capsule of
-	that kind for free into the player's golems with no yield (no price, not
-	paid; the player's Triple Lucky counts; Stats.CapsulesOpened and its own
-	side effects such as the codex / seen list) and returns the golem added
-	({ Id, Kind }, nil when the inventory is full) and whether Triple Lucky
-	counted. It sends no CapsuleResult and doesn't call DataService.changed
-	(the wheel does both).
+	The capsule package's free opening, when this place has it (its real
+	contract, Capsules package step 7):
+	  CapsuleService.grantFree(player, capsuleId, count?, quiet?)
+	      -> (Result?, reason?)
+	opens `count` (default 1) capsules of that kind for free with no yield
+	(no price, not paid; the player's Triple Lucky counts; Stats.
+	CapsulesOpened, DataService.changed and its own side effects) and returns
+	its CapsuleResult { Capsule, Count, Golems = { { Id, Kind } }, Lucky,
+	Free = true }, or nil + "InventoryFull" (no room) / "BadCapsule".
+	The wheel calls grantFree(player, capsuleId, 1, true):
+	  - QuietFree = true on the service: `quiet` is honored, the service
+	    sends NO CapsuleResult; the wheel sends it on "Reveal" (after its
+	    own prize card), so the opening never spoils the turning disc.
+	  - no QuietFree (an older capsule package, which ignores `quiet`): the
+	    service has already sent the CapsuleResult itself; the wheel never
+	    sends it again (no double opening; the client closes the wheel
+	    screen when a free opening starts).
+	  - nil + "InventoryFull": the wheel's coin share instead (Full = true).
+	  - any other reason, or an error: the coin share too, never a second
+	    roll here (a partly done grant must not add a second golem).
+	Only a place with no CapsuleService at all opens the capsule here
+	(CapsuleConfig.roll + GolemConfig.add).
 ]]
 export type FreeCapsules = {
-	grantFree: (player: Player, capsuleId: string, roll: number) -> ({ Id: number, Kind: string }?, boolean?),
+	grantFree: (player: Player, capsuleId: string, count: number?, quiet: boolean?) -> (any, any),
+	QuietFree: boolean?,
 }
 
 export type Result = {
@@ -109,6 +127,15 @@ export type Result = {
 	Lucky: boolean?,
 	DirtyOre: boolean?,
 	Coins: number?,
+	Full: boolean?, -- a capsule prize paid as coins because the golem inventory was full
+}
+
+-- How a free capsule opened (openFree).
+type Opened = {
+	Golem: { Id: number, Kind: string }?,
+	Lucky: boolean,
+	Full: boolean, -- no golem: the inventory was full (else: the opening failed)
+	Reveal: boolean, -- the wheel sends the CapsuleResult on "Reveal" (nobody sent it yet)
 }
 
 -- Swappable for the Lune tests.
@@ -203,33 +230,48 @@ local function freeCapsules(): FreeCapsules?
 	return found
 end
 
--- Opens the free capsule (CapsuleService.grantFree, else here): the golem
--- added (nil: the inventory is full) and whether Triple Lucky counted.
-local function openFree(player: Player, data: { [string]: any }, capsuleId: string): ({ Id: number, Kind: string }?, boolean)
+-- The first golem of a CapsuleResult-like table (nil: none / malformed).
+local function firstGolem(result: any): { Id: number, Kind: string }?
+	local golems = if type(result) == "table" then result.Golems else nil
+	local g = if type(golems) == "table" then golems[1] else nil
+	if type(g) == "table" and type(g.Id) == "number" and type(g.Kind) == "string" then
+		return { Id = g.Id, Kind = g.Kind }
+	end
+	return nil
+end
+
+-- Opens the free capsule (see FreeCapsules above): through the capsule
+-- package when this place has one (never a second roll here), else here.
+local function openFree(player: Player, data: { [string]: any }, capsuleId: string): Opened
 	local service = freeCapsules()
 	if service then
-		local ok, golem, lucky = pcall(service.grantFree, player, capsuleId, random())
-		if ok then
-			local g: any = golem
-			if type(g) == "table" and type(g.Id) == "number" and type(g.Kind) == "string" then
-				return { Id = g.Id, Kind = g.Kind }, lucky == true
-			end
-			return nil, false
+		local ok, result, reason = pcall(service.grantFree, player, capsuleId, 1, true)
+		if not ok then
+			warn("[WheelService] CapsuleService.grantFree: " .. tostring(result))
+			return { Golem = nil, Lucky = false, Full = false, Reveal = false }
 		end
-		warn("[WheelService] CapsuleService.grantFree: " .. tostring(golem))
+		local golem = firstGolem(result)
+		if golem then
+			local lucky = type(result) == "table" and result.Lucky == true
+			return { Golem = golem, Lucky = lucky, Full = false, Reveal = service.QuietFree == true }
+		end
+		if reason ~= "InventoryFull" then
+			warn("[WheelService] CapsuleService.grantFree refused: " .. tostring(reason))
+		end
+		return { Golem = nil, Lucky = false, Full = reason == "InventoryFull", Reveal = false }
 	end
 	local golems = record(data, "Golems")
 	if GolemConfig.room(golems) < 1 then
-		return nil, false
+		return { Golem = nil, Lucky = false, Full = true, Reveal = false }
 	end
 	local lucky = Bonuses.tripleLucky(Bonuses.stats(player))
 	local golemKind = CapsuleConfig.roll(capsuleId, lucky, random())
 	local entry = if golemKind then GolemConfig.add(golems, golemKind) else nil
 	if not entry then
-		return nil, false
+		return { Golem = nil, Lucky = false, Full = false, Reveal = false }
 	end
 	bump(data, "CapsulesOpened")
-	return { Id = entry.Id, Kind = entry.Kind }, lucky
+	return { Golem = { Id = entry.Id, Kind = entry.Kind }, Lucky = lucky, Full = false, Reveal = true }
 end
 
 -- Grants a segment's prize into the save (no yield) and fills `result`.
@@ -256,16 +298,22 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 	elseif kind == "Capsule" then
 		local capsuleId = segment.Capsule or ""
 		result.Capsule = capsuleId
-		local golem, lucky = openFree(player, data, capsuleId)
+		local opened = openFree(player, data, capsuleId)
+		local golem = opened.Golem
 		if golem then
 			result.Golem = golem
-			result.Lucky = lucky
-			openings[player] = {
-				Payload = { Capsule = capsuleId, Count = 1, Golems = { golem }, Lucky = lucky, Free = true },
-				At = timer(),
-			}
+			result.Lucky = opened.Lucky
+			if opened.Reveal then
+				openings[player] = {
+					Payload = { Capsule = capsuleId, Count = 1, Golems = { golem }, Lucky = opened.Lucky, Free = true },
+					At = timer(),
+				}
+			end
 		else
 			award(player, WheelConfig.capsuleFallbackCoins(capsuleId, data.BlasterLevel), result)
+			if opened.Full then
+				result.Full = true
+			end
 		end
 	elseif kind == "Ore" then
 		local context = WheelService.oreContext(player, data)
@@ -303,6 +351,7 @@ function WheelService.spin(player: Player): (Result?, string?)
 	end
 	wheel.NextSpinAt = now + WheelConfig.CooldownSeconds
 	bump(data, "WheelSpins")
+	openings[player] = nil -- an older capsule prize's opening never plays after a new spin
 	local segment = WheelConfig.pick(random(), noCapsules)
 	local result: Result = {
 		Segment = segment.Index,

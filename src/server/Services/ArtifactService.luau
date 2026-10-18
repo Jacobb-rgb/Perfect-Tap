@@ -42,13 +42,21 @@
 	ArtifactAction ("Equip", { Collection }): whose title + skin show
 	  (data.Artifacts.Equipped = a completed collection id, or "" = none).
 	  ActionResult { Action = "Artifact", Op = "Equip", Ok, Reason?, Id }.
+	ArtifactAction ("Restore", { Artifact }): the end of a long chase. The ONE
+	  missing artifact of a collection is bought back with crystal shards
+	  (ArtifactConfig.restoreQuote: RestoreShards by rarity, only once a zone
+	  the player can mine turns up its rarity); check, Shards.spend and the
+	  add in one step with no yield. It completes the collection: the same
+	  moment as a find (ArtifactFound { Restored = true }, rewards, museum),
+	  but no Stats.ArtifactsFound (no rock was broken). ActionResult
+	  { Action = "Artifact", Op = "Restore", Ok, Reason?, Id }.
 	Prompts (F / gamepad Y)
 	  FossilDig (lobby)  "Collection Book" at the dig's gate side and "Read
 	                     Journal" at the story screen at its back
 	  GuildBoard (lobby) "Read Journal"
 	  Museum (base)      "Collection Book" / "Your Collection" in front of the
 	                     cases, line of sight needed (not through the back
-	                     wall from the pen); it opens the VIEWER's own book
+	                     wall from the train stop); it opens the VIEWER's own book
 	  They open the book (OpenUI "Artifacts") or the journal (OpenUI "Story").
 	The museum
 	  At server start every plot's yard gets a MuseumBuilder museum
@@ -85,6 +93,7 @@ export type Found = {
 	Completed: boolean,
 	Shards: number?,
 	Position: Vector3?,
+	Restored: boolean?,
 }
 
 -- Swappable for the Lune tests.
@@ -283,19 +292,13 @@ end
 
 ---------------------------------------------------------------- finds
 
---[[
-	Records one artifact find for `player` in `zoneId` (see the header).
-	`artifactId` forces which one (tests, events); nil = rolled by the zone's
-	odds. Returns what was found (nil: no save, or nothing to find).
-]]
-function ArtifactService.find(player: Player, zoneId: string, position: Vector3?, artifactId: string?): Found?
-	local data = DataService.get(player)
-	if not data or type(zoneId) ~= "string" then
-		return nil
-	end
-	local id = artifactId or ArtifactConfig.pick(zoneId, random())
-	local art = if id then ArtifactConfig.ById[id] else nil
-	if not id or not art then
+-- Adds artifact `id` to the save (no yield) and tells the player and the
+-- world: the ArtifactFound moment, the completed collection's rewards, the
+-- museum, the onFound listeners. `restored`: bought back with shards (no
+-- rock, not counted in Stats.ArtifactsFound, never a duplicate).
+local function record(player: Player, data: { [string]: any }, id: string, position: Vector3?, restored: boolean): Found?
+	local art = ArtifactConfig.ById[id]
+	if not art then
 		return nil
 	end
 	local artifacts = artifactsOf(data)
@@ -303,12 +306,14 @@ function ArtifactService.find(player: Player, zoneId: string, position: Vector3?
 	if count <= 0 then
 		return nil
 	end
-	local stats = data.Stats
-	if type(stats) ~= "table" then
-		stats = {}
-		data.Stats = stats
+	if not restored then
+		local stats = data.Stats
+		if type(stats) ~= "table" then
+			stats = {}
+			data.Stats = stats
+		end
+		stats.ArtifactsFound = (if finite(stats.ArtifactsFound) then stats.ArtifactsFound else 0) + 1
 	end
-	stats.ArtifactsFound = (if finite(stats.ArtifactsFound) then stats.ArtifactsFound else 0) + 1
 	local found: Found = {
 		Artifact = id,
 		Count = count,
@@ -316,6 +321,7 @@ function ArtifactService.find(player: Player, zoneId: string, position: Vector3?
 		Collection = art.Collection,
 		Completed = completed ~= nil,
 		Position = position,
+		Restored = if restored then true else nil,
 	}
 	if not isNew then
 		local shards = ArtifactConfig.DuplicateShards[art.Rarity] or 0
@@ -347,6 +353,53 @@ function ArtifactService.find(player: Player, zoneId: string, position: Vector3?
 		task.spawn(callback, player, found)
 	end
 	return found
+end
+
+--[[
+	Records one artifact find for `player` in `zoneId` (see the header).
+	`artifactId` forces which one (tests, events); nil = rolled by the zone's
+	odds. Returns what was found (nil: no save, or nothing to find).
+]]
+function ArtifactService.find(player: Player, zoneId: string, position: Vector3?, artifactId: string?): Found?
+	local data = DataService.get(player)
+	if not data or type(zoneId) ~= "string" then
+		return nil
+	end
+	local id = artifactId or ArtifactConfig.pick(zoneId, random())
+	if not id then
+		return nil
+	end
+	return record(player, data, id, position, false)
+end
+
+--[[
+	ArtifactAction "Restore" { Artifact }: buys back the one missing artifact
+	of a collection with crystal shards (ArtifactConfig.restoreQuote; check,
+	spend and add with no yield in between, so two quick requests can't
+	both pay). Returns (ok, reason?) with an ArtifactConfig.Reasons code;
+	on success the ArtifactFound { Restored = true } moment follows (it
+	always completes the collection).
+]]
+function ArtifactService.restore(player: Player, artifactId: any): (boolean, string?)
+	local data = DataService.get(player)
+	if type(artifactId) ~= "string" or not ArtifactConfig.ById[artifactId] or not data then
+		return false, "BadArtifact"
+	end
+	local level = if finite(data.BlasterLevel) then data.BlasterLevel else 1
+	local price, reason = ArtifactConfig.restoreQuote(data.Artifacts, artifactId, level, Shards.get(data))
+	if not price then
+		return false, reason
+	end
+	if not Shards.spend(data, price) then
+		return false, "NoShards"
+	end
+	if not record(player, data, artifactId, nil, true) then
+		-- (can't happen after the quote; the shards go back all the same)
+		Shards.add(data, price)
+		DataService.changed(player)
+		return false, "BadArtifact"
+	end
+	return true, nil
 end
 
 ---------------------------------------------------------------- the book and the journal
@@ -395,7 +448,13 @@ function ArtifactService.equip(player: Player, collectionId: any): (boolean, str
 end
 
 local function onAction(player: Player, action: any, arg: any)
-	if action ~= "ReadChapter" and action ~= "Equip" then
+	if action ~= "ReadChapter" and action ~= "Equip" and action ~= "Restore" then
+		return
+	end
+	if action == "Restore" then
+		local artifactId = if type(arg) == "table" then arg.Artifact else nil
+		local ok, reason = ArtifactService.restore(player, artifactId)
+		reply(player, action, ok, reason, if type(artifactId) == "string" and #artifactId <= 64 then artifactId else nil)
 		return
 	end
 	local collectionId = if type(arg) == "table" then arg.Collection else nil
@@ -488,7 +547,7 @@ local function setupPlot(plotId: number): boolean
 	local floor = museum.PrimaryPart
 	local point = floor and floor:FindFirstChild(MuseumBuilder.PromptName)
 	if floor and point and point:IsA("Attachment") then
-		-- only from the visitors' side (not through the back wall from the pen);
+		-- only from the visitors' side (not through the back wall from the train stop);
 		-- on anyone's plot it opens the viewer's own book
 		makePrompt(floor, "BookPoint", point.CFrame, "Collection Book", "Your Collection", "Artifacts", true)
 		point:Destroy()

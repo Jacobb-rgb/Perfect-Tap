@@ -9,20 +9,30 @@
 	    a new one     the small NEW ARTIFACT! banner at the left under the
 	                  coins (CollectionView.buildBanner): not modal, no
 	                  gamepad selection, the thumbstick and jump areas stay
-	                  free; it goes away by itself after BannerSeconds, with
-	                  B / Backspace, or opens the book (its BOOK button, J,
-	                  D-pad right). A newer find replaces it.
+	                  free; it goes away by itself after BannerSeconds, or
+	                  sooner with Backspace (a keyboard; only while no panel,
+	                  minigame or prompt wants that key: below the panels'
+	                  close priority), or opens the book (its BOOK button,
+	                  J). A gamepad's B is never taken (panels and the B
+	                  prompts keep it). A newer find replaces it.
 	    a completed   the big COLLECTION COMPLETE card (modal: OK, READ
 	      collection  CHAPTER; B / Backspace close it; a gamepad starts on
 	                  OK); it never closes by itself. Several wait their turn.
 	- The collection book (CollectionView) opens on OpenUI "Artifacts" (the
 	  "Collection Book" prompts at the FOSSIL DIG and the base museum), the
-	  HUD's BOOK button (right-side menu; NEW while a chapter waits unread),
-	  J on a keyboard, D-pad right on a gamepad (when no menu has the
-	  selection), the banner and the card. Tabs: click / tap, or LB / RB;
+	  side menu's ARTIFACTS button (SideMenuController.press calls
+	  ArtifactController.open / toggle / close; onUnseenChanged feeds its
+	  badge), J on a keyboard, the banner and the card. One book button
+	  only: the HUD's own BOOK button (right-side menu, NEW while a chapter
+	  waits unread) is added only in a game without the side menu. No
+	  gamepad shortcut of its own (the D-pad belongs to the side menu,
+	  boosts, build mode and the teleport bar). Tabs: click / tap, or LB / RB;
 	  tiles show an artifact's detail; USE TITLE + SKIN sends ArtifactAction
-	  "Equip" (IN USE takes it off again); READ CHAPTER and JOURNAL (the
-	  header, left of the X) open the journal.
+	  "Equip" (IN USE takes it off again); RESTORE: N SHARDS (a collection
+	  with exactly one artifact missing) asks for a second press within
+	  RESTORE_CONFIRM seconds, then sends ArtifactAction "Restore" (the
+	  COLLECTION COMPLETE card follows; a greyed one says why in a toast);
+	  READ CHAPTER and JOURNAL (the header, left of the X) open the journal.
 	- The journal (StoryView) opens on OpenUI "Story" (the "Read Journal"
 	  prompts at the Guild board and the FOSSIL DIG's story screen) and from
 	  the book. Pages: PREV / NEXT, LB / RB or the arrow keys. Opening a
@@ -32,12 +42,16 @@
 	  their head (CollectionView.titleBoard, a BillboardGui in this
 	  PlayerGui adorned to their Head, up to TitleDistance studs).
 	- Every screen closes with its X, B (gamepad), Backspace, respawning or
-	  another big panel opening; gamepads get a selected button on open.
+	  another big panel opening (OtherPanels, plus the side menu's
+	  MenuPanels.Names when that module is in the game); gamepads get a
+	  selected button on open. Nothing opens over the cleaning minigame or
+	  build mode.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -69,25 +83,40 @@ local REVEAL_ACTION = "TerraForgeArtifactReveal"
 local BANNER_ACTION = "TerraForgeArtifactBanner"
 local BOOK_ACTION = "TerraForgeBook"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
-local BANNER_PRIORITY = Enum.ContextActionPriority.High.Value + 12
+-- below every panel's close binding (High + 10): an open panel keeps its Backspace
+local BANNER_PRIORITY = Enum.ContextActionPriority.High.Value + 2
 local REVEAL_PRIORITY = Enum.ContextActionPriority.High.Value + 15
 local TITLE_ATTRIBUTE = "Title" -- ArtifactService.TitleAttribute
 local EQUIP_COOLDOWN = 0.5
-local OTHER_PANELS = {
+local RESTORE_CONFIRM = 4 -- seconds the RESTORE button waits for its second press
+
+-- Every big panel of the game so far (missing ones are skipped); the side
+-- menu's MenuPanels.Names are added when that module is in the game.
+ArtifactController.OtherPanels = {
 	"PenController",
 	"SellController",
 	"TrainController",
 	"IronBoxController",
 	"FoundryController",
 	"TechShopController",
+	"GearShopController",
+	"GearController",
+	"EnchantController",
+	"BoostController",
+	"CapsuleController",
+	"GolemController",
 	"WheelController",
+	"CodexController",
+	"SettingsController",
+	"LeaderboardController",
+	"StoreController",
 }
 
 ArtifactController.BannerSeconds = 6 -- the NEW ARTIFACT! banner goes away by itself
 ArtifactController.PopRange = 140 -- studs: farther finds skip the relic flight
 ArtifactController.PopSeconds = 1.8
-ArtifactController.BookKey = Enum.KeyCode.J -- the book shortcut on a keyboard
-ArtifactController.BookPad = Enum.KeyCode.DPadRight -- ...and on a gamepad
+ArtifactController.BookKey = Enum.KeyCode.J -- the book shortcut on a keyboard (no gamepad shortcut)
+ArtifactController.SideMenu = "SideMenuController" -- with it in the game, the HUD gets no BOOK button
 
 local player = Players.LocalPlayer
 local book: CollectionView.Refs? = nil
@@ -104,6 +133,10 @@ local bannerToken = 0
 local menu: CollectionView.MenuRefs? = nil
 local titles: { [Player]: BillboardGui } = {}
 local lastEquip = -math.huge
+local restoreArmed: { Artifact: string, Until: number }? = nil -- the first RESTORE press
+local unseenCallbacks: { (count: number) -> () } = {}
+local unseenShown = -1
+local shownPrompts: { [ProximityPrompt]: boolean } = {}
 
 function ArtifactController.isOpen(): boolean
 	return screen ~= nil
@@ -134,12 +167,23 @@ local function padName(key: Enum.KeyCode): string
 	return name
 end
 
--- The platform's glyph image for a gamepad key ("" when there is none).
-local function glyphImage(key: Enum.KeyCode): string
-	local ok, image = pcall(function()
-		return UserInputService:GetImageForKeyCode(key)
-	end)
-	return if ok and type(image) == "string" then image else ""
+-- The names of every other big panel: OtherPanels plus the side menu's list.
+function ArtifactController.panelNames(): { string }
+	local names = table.clone(ArtifactController.OtherPanels)
+	local util = script.Parent.Parent:FindFirstChild("Util")
+	local menuPanels = util and util:FindFirstChild("MenuPanels")
+	if menuPanels and menuPanels:IsA("ModuleScript") then
+		local ok, module = pcall(require, menuPanels :: any)
+		local listed = if ok and type(module) == "table" then (module :: any).Names else nil
+		if type(listed) == "table" then
+			for _, name in listed do
+				if type(name) == "string" and not table.find(names, name) then
+					table.insert(names, name)
+				end
+			end
+		end
+	end
+	return names
 end
 
 local function otherPanels(): { Panel }
@@ -148,7 +192,7 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in ArtifactController.panelNames() do
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)
@@ -190,13 +234,66 @@ end
 local openStory: (key: string?) -> ()
 
 local shownRecord: any = nil -- the data.Artifacts table the open screen shows
+local shownWallet = "" -- the blaster level and shards the open book shows
+
+-- The player's blaster level and shards (RESTORE) from the latest State.
+local function wallet(): CollectionView.Wallet
+	local state = StateController.get()
+	local level = if state then tonumber(state.BlasterLevel) else nil
+	local shards = if state then tonumber(state.Shards) else nil
+	return {
+		BlasterLevel = if level and level == level then level else 1,
+		Shards = if shards and shards == shards then shards else 0,
+	}
+end
+
+local function walletKey(w: CollectionView.Wallet): string
+	return `{w.BlasterLevel}/{w.Shards}`
+end
 
 local function refreshBook()
 	local view = book
 	if view and screen == "Book" then
 		shownRecord = artifacts()
-		CollectionView.fill(view, shownRecord)
+		local w = wallet()
+		shownWallet = walletKey(w)
+		CollectionView.fill(view, shownRecord, w)
+		-- a RESTORE waiting for its second press keeps asking for it
+		local armed = restoreArmed
+		if armed and os.clock() < armed.Until and view.Restore:GetAttribute("Restore") == armed.Artifact then
+			view.Restore.Text = if usingGamepad() or isTouch() then "PRESS AGAIN TO PAY" else "CLICK AGAIN TO PAY"
+		end
 	end
+end
+
+-- RESTORE: the first press arms it (the button asks for a second press),
+-- the second within RESTORE_CONFIRM seconds sends ArtifactAction "Restore".
+local function pressRestore(view: CollectionView.Refs)
+	local id = view.Restore:GetAttribute("Restore")
+	if type(id) ~= "string" then
+		local why = view.Restore:GetAttribute("Reason")
+		local text = if type(why) == "string" then ArtifactConfig.Reasons[why] else nil
+		HudController.toast(text or "You can't restore it yet", "Deny")
+		return
+	end
+	local armed = restoreArmed
+	if armed and armed.Artifact == id and os.clock() < armed.Until then
+		restoreArmed = nil
+		Net.send("ArtifactAction", "Restore", { Artifact = id })
+		view.Restore.Text = "RESTORING..."
+		Sfx.play("UIClick")
+		return
+	end
+	restoreArmed = { Artifact = id, Until = os.clock() + RESTORE_CONFIRM }
+	view.Restore.Text = if usingGamepad() or isTouch() then "PRESS AGAIN TO PAY" else "CLICK AGAIN TO PAY"
+	Sfx.play("UIClick")
+	task.delay(RESTORE_CONFIRM, function()
+		local still = restoreArmed
+		if still and still.Artifact == id and os.clock() >= still.Until then
+			restoreArmed = nil
+			refreshBook()
+		end
+	end)
 end
 
 local function selectTab(collectionId: string)
@@ -249,6 +346,9 @@ local function ensureBook(): CollectionView.Refs
 	view.Journal.Activated:Connect(function()
 		Sfx.play("UIClick")
 		openStory(nil)
+	end)
+	view.Restore.Activated:Connect(function()
+		pressRestore(view)
 	end)
 	view.Use.Activated:Connect(function()
 		local arg = view.Use:GetAttribute("Equip")
@@ -419,7 +519,7 @@ end
 -- Opens one of the two screens (closing other panels); false when it can't.
 local function begin(kind: Screen): boolean
 	local owner = PlayerControls.owner()
-	if owner ~= nil then
+	if owner ~= nil or CleaningController.isActive() then
 		HudController.toast(if owner == "Build" then "Finish building first." else "Finish what you are doing first.", "Info")
 		return false
 	end
@@ -650,17 +750,11 @@ local function hideBanner()
 	end
 end
 
+-- The key row: a keyboard's J / Backspace only (a gamepad and touch have
+-- no keys for the banner: it goes by itself, its BOOK button is a tap; the
+-- banner is then shorter, CollectionView.setBannerKeys).
 local function bannerKeys(view: CollectionView.BannerRefs)
-	if usingGamepad() then
-		local bookImage, closeImage = glyphImage(ArtifactController.BookPad), glyphImage(Enum.KeyCode.ButtonB)
-		CollectionView.setBannerKeys(
-			view,
-			bookImage,
-			if bookImage ~= "" then "Book" else `{padName(ArtifactController.BookPad)}: book`,
-			closeImage,
-			if closeImage ~= "" then "Close" else `{padName(Enum.KeyCode.ButtonB)}: close`
-		)
-	elseif isTouch() then
+	if usingGamepad() or isTouch() then
 		CollectionView.setBannerKeys(view, "", "", "", "")
 	else
 		local key = UserInputService:GetStringForKeyCode(ArtifactController.BookKey)
@@ -688,8 +782,30 @@ local function ensureBanner(): CollectionView.BannerRefs
 	return view
 end
 
-local function onBannerClose(_: string, state: Enum.UserInputState): Enum.ContextActionResult
-	if state ~= Enum.UserInputState.Begin or not bannerFound or PlayerControls.owner() ~= nil then
+-- Does anything else want a key right now (a panel, the minigame, build
+-- mode, a menu with the selection, a prompt bound to that key)?
+local function keyWanted(key: Enum.KeyCode): boolean
+	if screen ~= nil or showing ~= nil or PlayerControls.owner() ~= nil or CleaningController.isActive() then
+		return true
+	end
+	if GuiService.SelectedObject ~= nil then
+		return true
+	end
+	for _, panel in otherPanels() do
+		if panel.isOpen() then
+			return true
+		end
+	end
+	for prompt in shownPrompts do
+		if prompt.Parent and (prompt.KeyboardKeyCode == key or prompt.GamepadKeyCode == key) then
+			return true
+		end
+	end
+	return false
+end
+
+local function onBannerClose(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+	if state ~= Enum.UserInputState.Begin or not bannerFound or keyWanted(input.KeyCode) then
 		return Enum.ContextActionResult.Pass
 	end
 	hideBanner()
@@ -701,8 +817,9 @@ local function showBanner(found: { [string]: any })
 	bannerToken += 1
 	local token = bannerToken
 	bannerFound = found
-	CollectionView.showBanner(view, found, artifacts())
+	-- the key row first: it sets the banner's height and the name's width
 	bannerKeys(view)
+	CollectionView.showBanner(view, found, artifacts())
 	-- slides in from the left edge
 	local card = view.Card
 	card.Position = UDim2.fromOffset(-card.Size.X.Offset - 20, CollectionView.BannerTop)
@@ -710,14 +827,7 @@ local function showBanner(found: { [string]: any })
 		Position = UDim2.fromOffset(16, CollectionView.BannerTop),
 	}):Play()
 	Sfx.play("Reveal")
-	ContextActionService:BindActionAtPriority(
-		BANNER_ACTION,
-		onBannerClose,
-		false,
-		BANNER_PRIORITY,
-		Enum.KeyCode.ButtonB,
-		Enum.KeyCode.Backspace
-	)
+	ContextActionService:BindActionAtPriority(BANNER_ACTION, onBannerClose, false, BANNER_PRIORITY, Enum.KeyCode.Backspace)
 	task.delay(ArtifactController.BannerSeconds, function()
 		if bannerToken == token then
 			hideBanner()
@@ -760,32 +870,54 @@ local function toggleBook()
 	ArtifactController.openBook(if art then art.Collection else nil, if art then art.Id else nil)
 end
 
--- J / D-pad right: the book (not while a minigame or build mode holds the
--- controls, a big card shows, or a menu has the gamepad selection).
-local function onBookKey(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+-- The side menu's ARTIFACTS button (SideMenuController.press: open /
+-- toggle / close through MenuPanels) and anything else that opens the book
+-- (on the banner's new find, when one shows).
+function ArtifactController.open()
+	if screen ~= "Book" then
+		toggleBook()
+	end
+end
+
+function ArtifactController.toggle()
+	toggleBook()
+end
+
+-- J: the book (not while a minigame or build mode holds the controls or a
+-- big card shows). Keyboard only.
+local function onBookKey(_: string, state: Enum.UserInputState): Enum.ContextActionResult
 	if state ~= Enum.UserInputState.Begin or showing then
 		return Enum.ContextActionResult.Pass
 	end
 	if PlayerControls.owner() ~= nil or CleaningController.isActive() then
 		return Enum.ContextActionResult.Pass
 	end
-	if input.KeyCode == ArtifactController.BookPad and GuiService.SelectedObject ~= nil then
-		return Enum.ContextActionResult.Pass
-	end
 	toggleBook()
 	return Enum.ContextActionResult.Sink
 end
 
+--[[
+	Listeners for the book's badge (the side menu's ARTIFACTS button, like
+	CodexController.onUnseenChanged): called with how many completed
+	chapters wait unread, now and whenever that changes.
+]]
+function ArtifactController.onUnseenChanged(callback: (count: number) -> ())
+	table.insert(unseenCallbacks, callback)
+	task.spawn(callback, CollectionView.unreadChapters(artifacts()))
+end
+
 local function updateMenu()
-	local m = menu
-	if not m then
-		return
+	local unread = CollectionView.unreadChapters(artifacts())
+	if unread ~= unseenShown then
+		unseenShown = unread
+		for _, callback in unseenCallbacks do
+			task.spawn(callback, unread)
+		end
 	end
-	m.New.Visible = CollectionView.anyChapterNew(artifacts())
-	local gamepad = usingGamepad()
-	local image = if gamepad then glyphImage(ArtifactController.BookPad) else ""
-	m.Glyph.Image = image
-	m.Glyph.Visible = image ~= ""
+	local m = menu
+	if m then
+		m.New.Visible = unread > 0
+	end
 end
 
 ---------------------------------------------------------------- titles over players
@@ -852,10 +984,14 @@ function ArtifactController.init()
 		end
 		local reason = if type(payload.Reason) == "string" then ArtifactConfig.Reasons[payload.Reason] else nil
 		HudController.toast(reason or "That didn't work", "Deny")
+		if payload.Op == "Restore" then
+			refreshBook()
+		end
 	end)
-	-- the BOOK button in the HUD's right-side menu
+	-- the BOOK button in the HUD's right-side menu, only without the side
+	-- menu (its ARTIFACTS button is the one book button then)
 	local hud = HudController.refs()
-	if hud and hud.Menu then
+	if hud and hud.Menu and not script.Parent:FindFirstChild(ArtifactController.SideMenu) then
 		local m = CollectionView.menuButton(hud.Menu)
 		m.Button.Activated:Connect(function()
 			if PlayerControls.owner() ~= nil or CleaningController.isActive() then
@@ -866,7 +1002,14 @@ function ArtifactController.init()
 		end)
 		menu = m
 	end
-	ContextActionService:BindAction(BOOK_ACTION, onBookKey, false, ArtifactController.BookKey, ArtifactController.BookPad)
+	ContextActionService:BindAction(BOOK_ACTION, onBookKey, false, ArtifactController.BookKey)
+	-- the prompts on screen (the banner leaves their keys alone)
+	ProximityPromptService.PromptShown:Connect(function(prompt: ProximityPrompt)
+		shownPrompts[prompt] = true
+	end)
+	ProximityPromptService.PromptHidden:Connect(function(prompt: ProximityPrompt)
+		shownPrompts[prompt] = nil
+	end)
 	-- titles over every player's head
 	for _, other in Players:GetPlayers() do
 		watchTitle(other)
@@ -884,7 +1027,7 @@ function ArtifactController.init()
 		-- an unchanged record comes back as the same table (StateService sends
 		-- it only when it changed): nothing to redraw
 		local record = artifacts()
-		if record == shownRecord then
+		if record == shownRecord and (screen ~= "Book" or walletKey(wallet()) == shownWallet) then
 			return
 		end
 		if screen == "Book" then

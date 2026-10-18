@@ -2,9 +2,14 @@
 	WheelController: the daily wheel of fortune on this screen (step 7).
 
 	- Opens on OpenUI "Wheel" (the "Spin & Win" prompt at the EmberChest,
-	  added by WheelService) or the HUD's FREE SPIN! chip (shown only while
-	  the free spin is ready, anywhere; a click / tap, or D-pad left on a
-	  gamepad, its glyph on the chip). The screen (WheelView) shows the
+	  added by WheelService) or the HUD's FREE SPIN! chip (a click / tap;
+	  no gamepad shortcut of its own: the D-pad belongs to the side menu,
+	  build mode and the teleport bar, and a gamepad reaches the chip with
+	  the UI selection or spins at the chest). The chip shows only while
+	  the free spin is ready AND the HUD itself shows: never over the
+	  cleaning minigame, the Foundry moment or build mode (HUD hidden,
+	  CleaningController.isActive, PlayerControls.owner), and the screen
+	  doesn't open then either. The screen (WheelView) shows the
 	  player's 8 segments with their exact odds, what each pays them, and
 	  the countdown from State.Wheel.NextSpinAt (os.time() seconds, compared
 	  with Workspace:GetServerTimeNow()). A row opens its details card (the
@@ -18,7 +23,9 @@
 	  HUD's coin counter holds (HudController.holdCoins), so a coin prize
 	  doesn't show in the balance before the wheel stops. A capsule prize
 	  asks for its opening (WheelAction "Reveal") 1.5 s after the card,
-	  only while the screen is still open. A refusal (ActionResult
+	  only while the screen is still open; a free capsule opening
+	  (CapsuleResult Free) closes the wheel screen, so the opening never
+	  plays on top of it. A refusal (ActionResult
 	  "NotReady") or no answer within WheelConfig.ResultTimeout gives the
 	  button back; a WheelResult that comes later is still shown (or, with
 	  the screen closed, a toast says what was won).
@@ -29,8 +36,10 @@
 	  lobby owner: rebuild its disc with WheelConfig's 8 segments; then it
 	  can turn with WheelView.spinTarget to land on result.Segment.
 	- Closes with the X, B (gamepad), Backspace, respawning or another big
-	  panel opening; it never locks movement. Gamepads start on SPIN! (or
-	  the X when the spin isn't ready); the rows are selectable.
+	  panel opening (OtherPanels, plus the side menu's MenuPanels.Names
+	  when that module is in the game); it never locks movement. Gamepads
+	  start on SPIN! (or the X when the spin isn't ready); the rows are
+	  selectable.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -51,6 +60,7 @@ local WheelView = require(script.Parent.Parent.UI.WheelView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local CleaningController = require(script.Parent.CleaningController)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
 
@@ -59,18 +69,28 @@ local WheelController = {}
 type Panel = { isOpen: () -> boolean, close: () -> () }
 
 local CLOSE_ACTION = "TerraForgeWheelClose"
-local CHIP_ACTION = "TerraForgeFreeSpin"
-local CHIP_KEY = Enum.KeyCode.DPadLeft -- the chip's gamepad shortcut (D-pad up is build mode)
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local REVEAL_DELAY = 1.5 -- seconds after the prize card before a capsule's opening
-local OTHER_PANELS = {
+-- Every big panel of the game so far (missing ones are skipped); the side
+-- menu's MenuPanels.Names are added when that module is in the game.
+WheelController.OtherPanels = {
 	"PenController",
 	"SellController",
 	"TrainController",
 	"IronBoxController",
 	"FoundryController",
 	"TechShopController",
+	"GearShopController",
+	"GearController",
+	"EnchantController",
+	"BoostController",
+	"CapsuleController",
+	"GolemController",
 	"ArtifactController",
+	"CodexController",
+	"SettingsController",
+	"LeaderboardController",
+	"StoreController",
 }
 local RESTRICTED_ATTRIBUTE = "PaidRandomRestricted" -- set by the server's Policy
 local SPIN_TAG = "Spin"
@@ -91,7 +111,6 @@ local rowsKey = "" -- what the odds rows show now (rebuilt only when it changes)
 local current: { [string]: any }? = nil -- the WheelResult the disc is turning to
 local others: { Panel }? = nil
 local chipReady = false -- the free spin was ready at the last chip update
-local chipBound = false
 
 function WheelController.isOpen(): boolean
 	return open
@@ -109,13 +128,32 @@ local function serverNow(): number
 	return Workspace:GetServerTimeNow()
 end
 
+-- The names of every other big panel: OtherPanels plus the side menu's list.
+function WheelController.panelNames(): { string }
+	local names = table.clone(WheelController.OtherPanels)
+	local util = script.Parent.Parent:FindFirstChild("Util")
+	local menuPanels = util and util:FindFirstChild("MenuPanels")
+	if menuPanels and menuPanels:IsA("ModuleScript") then
+		local ok, module = pcall(require, menuPanels :: any)
+		local listed = if ok and type(module) == "table" then (module :: any).Names else nil
+		if type(listed) == "table" then
+			for _, name in listed do
+				if type(name) == "string" and not table.find(names, name) then
+					table.insert(names, name)
+				end
+			end
+		end
+	end
+	return names
+end
+
 local function otherPanels(): { Panel }
 	local cached = others
 	if cached then
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in WheelController.panelNames() do
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)
@@ -129,6 +167,20 @@ local function otherPanels(): { Panel }
 	end
 	others = list
 	return list
+end
+
+-- Something else has the screen: the cleaning minigame, build mode / the
+-- anvil (PlayerControls), or the HUD is hidden (the Foundry moment, build
+-- mode's top bar).
+local function screenBusy(): boolean
+	if CleaningController.isActive() or PlayerControls.owner() ~= nil then
+		return true
+	end
+	local hud = HudController.refs()
+	if hud and (not hud.Gui.Enabled or not hud.TopBar.Visible) then
+		return true
+	end
+	return false
 end
 
 ---------------------------------------------------------------- state
@@ -558,7 +610,7 @@ function WheelController.open()
 		return
 	end
 	local owner = PlayerControls.owner()
-	if owner ~= nil then
+	if owner ~= nil or CleaningController.isActive() then
 		HudController.toast(if owner == "Build" then "Finish building first." else "Finish what you are doing first.", "Info")
 		return
 	end
@@ -593,58 +645,24 @@ end
 
 ---------------------------------------------------------------- the chip
 
--- D-pad left while the chip shows: the wheel screen (not while a minigame,
--- build mode or a menu with the gamepad selection has the controls).
-local function onChipKey(_: string, state: Enum.UserInputState): Enum.ContextActionResult
-	local c = chip
-	if state ~= Enum.UserInputState.Begin or not c or not c.Gui.Enabled then
-		return Enum.ContextActionResult.Pass
-	end
-	if PlayerControls.owner() ~= nil or GuiService.SelectedObject ~= nil then
-		return Enum.ContextActionResult.Pass
-	end
-	WheelController.open()
-	return Enum.ContextActionResult.Sink
-end
-
-local function chipGlyph()
-	local c = chip
-	if not c then
-		return
-	end
-	local image = ""
-	if usingGamepad() then
-		local ok, found = pcall(function()
-			return UserInputService:GetImageForKeyCode(CHIP_KEY)
-		end)
-		image = if ok and type(found) == "string" then found else ""
-	end
-	WheelView.setChipGlyph(c, image)
-end
-
 local function updateChip()
 	local c = chip
 	if not c then
 		return
 	end
 	local ready = isReady()
-	local show = ready and not open and not busy
+	local busyScreen = screenBusy()
+	local show = WheelView.chipVisible(ready, open, busy, busyScreen)
 	if c.Gui.Enabled ~= show then
 		c.Gui.Enabled = show
 	end
-	-- the sound only when the spin BECOMES ready (not after every close)
-	if ready and not chipReady and not open then
+	-- the sound only when the spin BECOMES ready (not after every close, and
+	-- not in the middle of the minigame: it chimes once the HUD is back)
+	if ready and not chipReady and not open and not busyScreen then
 		Sfx.play("Discovery")
 	end
-	chipReady = ready
-	if show ~= chipBound then
-		chipBound = show
-		if show then
-			ContextActionService:BindAction(CHIP_ACTION, onChipKey, false, CHIP_KEY)
-			chipGlyph()
-		else
-			ContextActionService:UnbindAction(CHIP_ACTION)
-		end
+	if not busyScreen or not ready then
+		chipReady = ready
 	end
 end
 
@@ -652,6 +670,10 @@ local function buildChip()
 	local c = WheelView.buildChip(HudController.uiScale())
 	c.Gui.Parent = player:WaitForChild("PlayerGui")
 	c.Button.Activated:Connect(function()
+		-- (a stray tap while something else has the screen does nothing)
+		if screenBusy() then
+			return
+		end
 		WheelController.open()
 	end)
 	chip = c
@@ -699,6 +721,12 @@ function WheelController.init()
 	end)
 	Net.listen("WheelResult", onResult)
 	Net.listen("ActionResult", onActionResult)
+	-- a free capsule's opening (the wheel's prize) plays instead of the wheel screen
+	Net.listen("CapsuleResult", function(payload: any)
+		if open and type(payload) == "table" and payload.Free == true then
+			WheelController.close()
+		end
+	end)
 	StateController.onChanged(function()
 		if open and not animating then
 			refresh()
@@ -718,8 +746,13 @@ function WheelController.init()
 		if view and open then
 			updateHint(view)
 		end
-		chipGlyph()
 	end)
+	-- the chip follows the HUD (hidden by the minigame, the Foundry moment, build mode)
+	local hud = HudController.refs()
+	if hud then
+		hud.Gui:GetPropertyChangedSignal("Enabled"):Connect(updateChip)
+		hud.TopBar:GetPropertyChangedSignal("Visible"):Connect(updateChip)
+	end
 	local camera = Workspace.CurrentCamera
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()

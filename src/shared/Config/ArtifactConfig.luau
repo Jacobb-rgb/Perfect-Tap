@@ -13,7 +13,10 @@
 	  chance multiplier on BlasterData.Rocks.ArtifactChance (ZoneChance).
 	  Zones that aren't listed (new mine floors) use the weights of their
 	  depth class (by the zone's MinBlaster).
-	- A duplicate find gives crystal shards (DuplicateShards) instead.
+	- A duplicate find gives crystal shards (DuplicateShards) instead. The
+	  ONE missing artifact of a collection can be restored with shards
+	  (RestoreShards, restoreQuote; ArtifactAction "Restore"), once a zone
+	  the player can mine turns up its rarity.
 	- Completing a collection (every artifact found at least once) unlocks its
 	  story chapter (StoryConfig, read at the Guild board / collection book)
 	  and its reward: a title, a podium skin and a small permanent bonus
@@ -45,7 +48,8 @@
 	}
 	plus data.Stats.ArtifactsFound (every find, duplicates too: the ARTIFACTS board).
 	ArtifactAction ("ReadChapter", { Collection }) marks a completed collection's chapter read;
-	ArtifactAction ("Equip", { Collection }) picks whose reward shows ("" = none).
+	ArtifactAction ("Equip", { Collection }) picks whose reward shows ("" = none);
+ArtifactAction ("Restore", { Artifact }) buys back a collection's last missing artifact.
 ]]
 
 local BlasterData = require(script.Parent.BlasterData)
@@ -90,6 +94,11 @@ ArtifactConfig.MuseumAnimateDistance = 60 -- studs: clients animate museum piece
 ArtifactConfig.Reasons = {
 	BadCollection = "That collection doesn't exist",
 	NotComplete = "Find every artifact of this collection first",
+	BadArtifact = "That artifact doesn't exist",
+	NotMissing = "You already have that artifact",
+	NotLast = "Find all the others of this collection first",
+	Locked = "Reach a mine where it turns up first",
+	NoShards = "Not enough crystal shards",
 } :: { [string]: string }
 
 -- Shape families the artifact model builder knows.
@@ -452,6 +461,25 @@ ArtifactConfig.DuplicateShards = {
 	Mythic = 40,
 } :: { [string]: number }
 
+--[[
+	The end of a long chase: the ONE missing artifact of a collection (all
+	the others found) can be restored with crystal shards (ArtifactAction
+	"Restore"), at this price by its rarity; only once the player's blaster
+	opens a zone where that rarity turns up (rarer stays deeper). About
+	half the shards the duplicates of an average chase pay (Deep Hollow:
+	~3.75 shards per duplicate; the Mythic's ~150 finds pay ~560), and the
+	Enchant shop wants the same shards: a real choice, never a shortcut
+	past the zones.
+]]
+ArtifactConfig.RestoreShards = {
+	Common = 20,
+	Uncommon = 30,
+	Rare = 50,
+	Epic = 80,
+	Legendary = 150,
+	Mythic = 300,
+} :: { [string]: number }
+
 ArtifactConfig.ById = {} :: { [string]: Artifact }
 ArtifactConfig.CollectionById = {} :: { [string]: Collection }
 ArtifactConfig.ByCollection = {} :: { [string]: { Artifact } }
@@ -629,6 +657,64 @@ function ArtifactConfig.equipped(artifacts: any): string?
 	end
 	local done = ArtifactConfig.completed(artifacts)
 	return done[#done]
+end
+
+-- The one missing artifact of a collection (nil: none or more than one missing).
+function ArtifactConfig.lastMissing(artifacts: any, collectionId: string): string?
+	local list = ArtifactConfig.ByCollection[collectionId]
+	if not list then
+		return nil
+	end
+	local missing: string? = nil
+	for _, artifact in list do
+		if ArtifactConfig.countOf(artifacts, artifact.Id) == 0 then
+			if missing then
+				return nil
+			end
+			missing = artifact.Id
+		end
+	end
+	return missing
+end
+
+-- Does a zone the player can mine (WorldLayout zone MinBlaster <= blasterLevel)
+-- turn up artifacts of this rarity?
+function ArtifactConfig.rarityOpen(rarityId: string, blasterLevel: number): boolean
+	for _, zone in WorldLayout.Zones do
+		if zone.MinBlaster <= blasterLevel and (ArtifactConfig.rarityWeights(zone.Id)[rarityId] or 0) > 0 then
+			return true
+		end
+	end
+	return false
+end
+
+--[[
+	The shard price to restore `artifactId` (RestoreShards), or nil + a
+	Reasons code: BadArtifact, NotMissing (already found), NotLast (more
+	than this one missing in its collection), Locked (no open zone turns up
+	its rarity), NoShards (`shards` < price). Pure: the server checks and
+	spends with no yield in between, the book shows the same answer.
+]]
+function ArtifactConfig.restoreQuote(artifacts: any, artifactId: string, blasterLevel: number, shards: number): (number?, string?)
+	local artifact = ArtifactConfig.ById[artifactId]
+	local price = if artifact then ArtifactConfig.RestoreShards[artifact.Rarity] else nil
+	if not artifact or not price then
+		return nil, "BadArtifact"
+	end
+	if ArtifactConfig.countOf(artifacts, artifactId) > 0 then
+		return nil, "NotMissing"
+	end
+	if ArtifactConfig.lastMissing(artifacts, artifact.Collection) ~= artifactId then
+		return nil, "NotLast"
+	end
+	local level = if type(blasterLevel) == "number" and blasterLevel == blasterLevel then blasterLevel else 1
+	if not ArtifactConfig.rarityOpen(artifact.Rarity, level) then
+		return nil, "Locked"
+	end
+	if type(shards) ~= "number" or shards ~= shards or shards < price then
+		return nil, "NoShards"
+	end
+	return price, nil
 end
 
 -- The titles a player has earned (completed collections), in order.
