@@ -39,8 +39,9 @@
 	the dark glass, the plinth with its neon edge and floor glow, the glass
 	case, its lid and light strip; the door jambs reach over the inner bay
 	jambs; one back wall carries both orange bands; the porch showcases
-	get one dark back plate (their backs face the pylons).
-	Shop / Upgrades: 427 / 444 -> 396 / 413 parts, the same look.
+	get one dark back plate (their backs face the pylons); the mid pylons
+	skip the foot lip and orange band their showcase's stand hides.
+	Shop / Upgrades: 427 / 444 -> 392 / 409 parts, the same look.
 
 	Local frame (LobbyLayout piece, 20 x 20 x 14): front = -Z (toward the
 	plaza), seen from the front local +X is on the viewer's left.
@@ -394,9 +395,15 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 			local x = side * py.X
 			local pw = py.W
 			Style.block(m, at(x, 0.4, pz), Vector3.new(pw + 0.4, 0.8, pd + 0.4), Tech.MetalDark, nil, Style.solid())
-			Tech.bevel(m, at(x, 0.95, PYLON_Z0 - 0.1), Vector3.new(pw + 0.4, 0.3, 0.2), Tech.MetalLight)
+			-- (perf pass 1) the foot lip and the orange band only on the end
+			-- pylons: a mid pylon's lower front hides behind its showcase's stand
+			if py.Outer then
+				Tech.bevel(m, at(x, 0.95, PYLON_Z0 - 0.1), Vector3.new(pw + 0.4, 0.3, 0.2), Tech.MetalLight)
+			end
 			Style.block(m, at(x, HEAD_Y0 / 2, pz), Vector3.new(pw, HEAD_Y0, pd), Style.vary(FACE, rng, 0.02), nil, Style.solid())
-			Kit.bit(m, at(x, 2.5, PYLON_Z0 - 0.06), Vector3.new(pw + 0.04, 0.7, 0.12), Tech.Band)
+			if py.Outer then
+				Kit.bit(m, at(x, 2.5, PYLON_Z0 - 0.06), Vector3.new(pw + 0.04, 0.7, 0.12), Tech.Band)
+			end
 			if py.Outer then
 				local sc = at(x, 6.6, PYLON_Z0 - 0.1)
 				Kit.bit(m, sc, Vector3.new(pw - 0.65, 4.8, 0.2), Tech.MetalDeep)
