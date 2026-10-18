@@ -514,12 +514,12 @@ function OreShapesHigh.register(shapes: { [string]: (any) -> () }, kit: any)
 		crystalCut(c, P(-0.4, 0, -0.05) * A(0, 0.5, 0.38), 0.52, 0.44, 0.62, 0.4, -1, "Light", "Light")
 		-- the swirl: an open ribbon of light round the cluster, low at the front left,
 		-- high at the back right
-		local swirl = P(0, 0.5, 0.05) * A(0.3, 0, -0.28)
+		local swirl = P(0, 0.82, 0.05) * A(0.36, 0, -0.3)
 		if c.Full then
 			crystalCut(c, P(0.42, 0, -0.12) * A(0, -0.5, -0.36), 0.48, 0.4, 0.58, 0.38, 1, "Dark", "Main")
-			ring(c, swirl, 1.04, -0.7, 3.5, 4, 0.06, 0.15, { "Neon" })
+			ring(c, swirl, 1.0, -0.7, 3.5, 4, 0.09, 0.17, { "Neon" })
 		else
-			ring(c, swirl, 1.04, 0.2, 2.9, 2, 0.06, 0.15, { "Neon" })
+			ring(c, swirl, 1.0, 0.2, 2.9, 2, 0.09, 0.17, { "Neon" })
 		end
 	end
 
