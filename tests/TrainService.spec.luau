@@ -1443,6 +1443,28 @@ return function(T, Loader)
 		T.eq(snapshot(w, w.player).WaitReason, nil, "no reason when not waiting")
 	end)
 
+	withWorld("TrainService: a newer build's levels above this build's top stay in the save (read as the top)", function(w)
+		w.data.Train.CapacityLevel = 8
+		w.data.Train.SpeedLevel = 7
+		train.loaded(w.player, w.data)
+		T.eq(w.data.Train.CapacityLevel, 8, "capacity level 8 kept (docs/SAVE_AUDIT.md #1(b))")
+		T.eq(w.data.Train.SpeedLevel, 7, "speed level 7 kept")
+		local s = snapshot(w, w.player)
+		T.eq(s.Capacity, TrainConfig.Capacity[#TrainConfig.Capacity].Value, "the top level's cargo")
+		T.eq(s.TripSeconds, TrainConfig.Speed[#TrainConfig.Speed].Value, "the top level's trip")
+		T.eq(s.NextCapacityPrice, nil, "nothing more to buy")
+		T.eq(s.NextSpeedPrice, nil, "nothing more to buy")
+		w.data.Coins = 1e12
+		local ok, why = TrainService.upgrade(w.player, "Capacity", 9) -- the card's next level (Security #7)
+		T.falsy(ok, "no upgrade")
+		T.eq(why, "Max", "answered Max")
+		T.eq(w.data.Coins, 1e12, "nothing paid")
+		T.eq(w.data.Train.CapacityLevel, 8, "still 8")
+		w.data.Train.SpeedLevel = 1e9
+		snapshot(w, w.player)
+		T.eq(w.data.Train.SpeedLevel, GameConfig.MaxLevelKept, "junk is still capped")
+	end)
+
 	withWorld("TrainService: junk TrainAction input changes nothing", function(w)
 		dropMany(w.station, USER, COAL, 2)
 		w.data.Coins = 1e9

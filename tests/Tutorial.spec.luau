@@ -410,12 +410,21 @@ return function(T, Loader)
 		TutorialService.evaluate(w.player)
 		T.eq(w.data.Tutorial.Done, false, "Done must be true, not truthy")
 		T.eq(w.step(), 5, "NaN step -> walked from 1 to 5")
-		-- past the end but not marked done (a shorter list): finished quietly
+		-- past the end but not marked done: a newer build's step (it has more), left as it is
 		w.data.Tutorial = { Step = TOTAL + 4, Done = false }
 		local coins = w.data.Coins
 		TutorialService.evaluate(w.player)
-		T.truthy(w.data.Tutorial.Done, "finished")
-		T.eq(w.data.Coins, coins, "without the reward")
+		T.falsy(w.data.Tutorial.Done, "not finished here (docs/SAVE_AUDIT.md #1(b))")
+		T.eq(w.data.Tutorial.Step, TOTAL + 4, "the newer build's step stays")
+		T.eq(w.data.Coins, coins, "no reward")
+		tut.loaded(w.player, w.data)
+		T.eq(w.data.Tutorial.Step, TOTAL + 4, "a load keeps it too")
+		T.eq(TutorialService.stepOf(w.player), TOTAL + 4, "(no step of this build: no bubble)")
+		tut.action(w.player, "Ack")
+		T.eq(w.data.Tutorial.Step, TOTAL + 4, "Ack changes nothing")
+		w.data.Tutorial = { Step = 1e9, Done = false }
+		TutorialService.evaluate(w.player)
+		T.eq(w.data.Tutorial.Step, 99, "junk is capped")
 	end)
 
 	withWorld("TutorialService: Skip ends it without a reward, junk is ignored", function(w)
