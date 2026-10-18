@@ -1165,5 +1165,91 @@
     "width": 1688,
     "height": 780,
     "mobileControls": 2
+  },
+  "base_pen_ui_light": {
+    "scene": "yard",
+    "position": [
+      122,
+      13,
+      102
+    ],
+    "target": [
+      141,
+      0,
+      96
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 80,
+    "ui": "ui_pen_light"
+  },
+  "base_pen_phone_light": {
+    "scene": "yard",
+    "position": [
+      122,
+      13,
+      102
+    ],
+    "target": [
+      141,
+      0,
+      96
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "shadowExtent": 80,
+    "ui": "ui_pen_phone_light",
+    "uiInset": 58
+  },
+  "base_offline_light": {
+    "scene": "yard",
+    "position": [
+      112,
+      26,
+      106
+    ],
+    "target": [
+      146,
+      0,
+      76
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 120,
+    "ui": "ui_offline_light"
+  },
+  "base_hud_phone_light": {
+    "scene": "yard",
+    "position": [
+      112,
+      26,
+      106
+    ],
+    "target": [
+      146,
+      0,
+      76
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 120,
+    "ui": "hud_phone_light"
+  },
+  "base_yard_light": {
+    "scene": "yard",
+    "position": [
+      112,
+      26,
+      106
+    ],
+    "target": [
+      146,
+      0,
+      76
+    ],
+    "fov": 58,
+    "preset": "Surface",
+    "shadowExtent": 120,
+    "ui": "hud_base_light"
   }
 }

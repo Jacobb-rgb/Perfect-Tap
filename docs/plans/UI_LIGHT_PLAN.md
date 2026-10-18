@@ -51,6 +51,19 @@ Pictures: `docs/screenshots/ui_bubble/` (overview: `prehled_styl_a.jpg`). Re-ren
 All builders are pure and take plain data, so the controllers fill them from configs; specs in
 `tests/*Bubble.spec.luau` check the content and the >= 44 pt touch sizes at uiScale 0.62.
 
+## Game windows already converted (behind the switch)
+| Window | How | Preview (`docs/screenshots/ui_light_game/`) |
+|---|---|---|
+| HUD, teleport bar, BUILD / LIFT tiles, offline popup | `HudView` → `HudBubble` (same refs) | `hud_*`, `base_offline_light` |
+| Blaster Vault shop | `VaultView`: light header band + 3D icon, X on the corner (layout leaves room) | `vault_ui_*_light` |
+| Build mode | `BuildView.build` → own light refs; `setInventory` / `setCounts` light-aware | `build_*` |
+| Ore Pen | `PenView`: light skin on the same parts (`skinLight` / `skinRow`), setters light-aware | `base_pen_*_light` |
+
+Previews with the switch on: `LIGHT_UI=1 lune run tools/lune/export_scene.luau vault_shop` / `... world yard`,
+then render the `*_light` shots from `tools/preview/ui_bubble_shots.json`.
+Not on main yet (wait for the steps 6-7 merge): the Robux shop, capsules, golems, wheel, codex, artifacts,
+boards, settings, gear, enchants, boosts. The elevator window stays dark (owner).
+
 ## Wiring it in (after the owner's YES)
 1. Owner uploads the 5 sheets (`NAHRAJ_DO_ROBLOXU/ikony_ui`) → paste the ids into `IconAssets.Sheets[*].Id`,
    then set `UIConfig.LightUI = true`.

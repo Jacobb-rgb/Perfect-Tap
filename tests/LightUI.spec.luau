@@ -137,6 +137,39 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("LightUI: the Ore Pen wears the light look and keeps its behaviour", function()
+		local PenView = ui("PenView")
+		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+		local entries = {
+			{ Key = "a", Kind = "Clean", Name = "Clean Silver", Grade = "Clean", Count = 3, Income = 12, Value = 1, Color = Color3.new(0.7, 0.7, 0.8), Mystery = false },
+			{ Key = "b", Kind = "Raw", Name = "Dirty Ore", Count = 2, Income = 0, Value = 0, Color = Color3.new(0.5, 0.5, 0.5), Mystery = true },
+		}
+		withLight(function()
+			for _, compact in { false, true } do
+				local refs = PenView.build()
+				PenView.setCompact(refs, compact)
+				T.truthy(refs.Gui:GetAttribute("Bubble"), "light pen")
+				T.truthy(refs.Panel:FindFirstChild("HeaderIcon"), "3D backpack in the header")
+				T.eq(refs.Panel.BackgroundColor3, BubbleTheme.Panel, "white panel")
+				local rows = PenView.setEntries(refs, entries, true)
+				T.eq(#rows, 2, "a row per entry")
+				T.eq(refs.Rows.a.Name.TextColor3, BubbleTheme.Ink, "dark item names")
+				T.truthy(refs.Rows.a.Income.TextColor3 ~= BubbleTheme.Panel, "income readable")
+				PenView.setHeader(refs, 3, 40)
+				T.eq(refs.Header.TextColor3, BubbleTheme.Ink, "count in dark text")
+				PenView.setSending(refs, nil, true, 0)
+				T.eq(refs.SendDirty.BackgroundColor3, BubbleTheme.Roles.Plain.Base, "no dirty ore: a plain button")
+				PenView.setAutoSort(refs, true, false)
+				T.eq(refs.AutoSort.Text, "AUTO-SORT OFF", "switch text")
+				local take = refs.Rows.a.Take.Parent :: any
+				T.truthy(not compact or take.Size.Y.Offset * 0.62 >= 44, "phone buttons >= 44 pt")
+			end
+		end)
+		local plain = PenView.build()
+		T.falsy(plain.Gui:GetAttribute("Bubble"), "switch off: today's pen")
+		T.falsy(plain.Panel:FindFirstChild("HeaderIcon"), "switch off: no light header")
+	end)
+
 	T.test("LightUI: game HUD touch sizes on phones", function()
 		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)))
 		T.truthy(layout.Compact, "a phone gets the compact layout")
