@@ -64,7 +64,10 @@
 	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the five lines
 	  this server sells always exist, broken = 0; other junk keys dropped).
 	  The old CarryLevel N (1..5) folds into Backpack level N - 1 (same
-	  capacity; the higher of the two wins) and CarryLevel is removed.
+	  capacity; the higher of the two wins) and CarryLevel is removed. A
+	  save that still has CarryLevel is from before the Gear shop, when
+	  everyone walked at 18: it gets Boots level 1 (18, GearConfig) at
+	  least, so nobody walks slower after the update.
 	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
 	  Enchants.Slots: exactly EnchantConfig.MaxSlots strings; a slot keeps an
 	  owned id only once, and only when the blaster level has opened it.
@@ -301,6 +304,8 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 			gear.Backpack = math.max(gear.Backpack, backpack)
 		end
 		data.CarryLevel = nil
+		-- from before the Gear shop: the old walk speed (18) is Boots I now
+		gear.Boots = math.max(gear.Boots, 1)
 	end
 
 	-- enchants: owned tiers (unknown ids and tiers kept), then slots (owned, unique, opened by the blaster level)

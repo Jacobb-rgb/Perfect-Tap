@@ -28,6 +28,8 @@ local ORDER = {
 	"FoundryController",
 	"TechShopController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
+	"GearShopController", -- the Gear shop at the SHOP stall
+	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }

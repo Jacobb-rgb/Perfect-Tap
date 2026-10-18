@@ -154,6 +154,11 @@ elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop wind
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the Gear shop panel overlays (tools/lune/lib/gear_shop_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/gear_shop_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
