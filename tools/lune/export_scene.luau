@@ -154,6 +154,8 @@ elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop wind
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
+	require("./lib/gallery_preview").build(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

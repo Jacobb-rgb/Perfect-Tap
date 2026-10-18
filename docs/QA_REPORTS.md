@@ -354,3 +354,19 @@ What to test in Studio:
 7. Listen to the new picks and swap any you dislike in SoundConfig: BlasterBeam (Roblox "UFO Beam" loop, quiet),
    BlasterZap (flashbulb), BlastThud (hit.wav), RockBreak (the shipped explosion, high pitch), ElevatorDing
    (Roblox pinball low bell), DoorThud (collide.wav, low pitch).
+
+## Blaster gallery in THE GREAT FORGE (2026-10-18, branch feature/blaster-gallery)
+V2_PLAN section 5 ("THE GREAT FORGE | landmark (blaster gallery: levels 1-10 + Coming soon)"), placed with the
+Plaza owner's ok (option A: inside the hall, seen through the door from the porch and the stairs).
+Plaza/BlasterGallery: a rack of two rows on each side wall of the hall, turned 12 degrees toward the door. Each
+plaque has the real game gun (BlasterBuilder) in its level's case ore, a glowing rim in the ore's glow and two plates
+(LV n, the blaster's name). The viewer's right wall has LV 1-3 below and LV 4-5 above (the forge's tool rack moved up
+into the third slot). The left wall has LV 6-8 below and LV 9, LV 10 and LV 11 above (a dark silhouette, a violet
+"?" and COMING SOON). The niche over the furnace hood was only 1.3 studs tall and hidden behind the z 5 beam, so
+LV 11 went on the wall. 334 parts, one soft violet light (LV 11), no shadows, nothing collides or is raycast.
+Budgets: MapParts 22,400, LobbyParts 13,200, Plaza 2,000 parts / 11 lights. Map v22.
+What to test in Studio:
+1. From the plaza and the stairs: the door still glows; inside you see the two racks with the guns and the plates.
+2. Walk into the hall: you can walk through the gallery (no collision), the plates read (LV n, the name) and the
+   LV 11 "?" glows violet. The tool rack hangs up at the back of the right wall.
+3. Phone: no frame drop when you stand on the porch.
