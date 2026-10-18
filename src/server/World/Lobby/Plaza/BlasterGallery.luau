@@ -31,6 +31,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Stage = require(Shared.Builders.CrateOpeningStage)
+local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local Style = require(script.Parent.Parent.Style)
 
 local BlasterGallery = {}
@@ -73,23 +74,45 @@ end
 	Every part is a non-colliding detail with no shadow.
 ]]
 function BlasterGallery.gun(parent: Instance, cf: CFrame, level: number, oreId: string, length: number, height: number): Model
-	local model = Stage.blasterModel(level, oreId) -- Stage.BlasterLength x Stage.BlasterHeight
-	local k = math.min(length / Stage.BlasterLength, height / Stage.BlasterHeight)
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
-			local rel = d.CFrame
-			d.Size *= k
-			d.CFrame = cf * CFrame.new(rel.Position * k) * rel.Rotation
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-			d.CastShadow = false
-			d.Anchored = true
-		end
-	end
+	local model = BlasterGallery.fit(parent, Stage.blasterModel(level, oreId), cf, length, height)
 	model.Name = "Blaster" .. level
 	model:SetAttribute("Level", level)
 	model:SetAttribute("OreId", oreId)
+	return model
+end
+
+--[[
+	Centers `model` on its bounding box, scales it to fit `length` (along
+	its -Z) x `height` and places it at `cf`, every part a non-colliding
+	detail with no shadow. Returns the model (parented to `parent`).
+]]
+function BlasterGallery.fit(parent: Instance, model: Model, cf: CFrame, length: number, height: number): Model
+	local lo = { math.huge, math.huge, math.huge }
+	local hi = { -math.huge, -math.huge, -math.huge }
+	local parts: { BasePart } = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			table.insert(parts, d)
+			local p = d.CFrame.Position
+			local half = d.Size.Magnitude / 2
+			for i, v in { p.X, p.Y, p.Z } do
+				lo[i] = math.min(lo[i], v - half * 0.5)
+				hi[i] = math.max(hi[i], v + half * 0.5)
+			end
+		end
+	end
+	local center = Vector3.new((lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2, (lo[3] + hi[3]) / 2)
+	local k = math.min(length / math.max(hi[3] - lo[3], 0.1), height / math.max(hi[2] - lo[2], 0.1))
+	for _, d in parts do
+		local rel = d.CFrame
+		d.Size *= k
+		d.CFrame = cf * CFrame.new((rel.Position - center) * k) * rel.Rotation
+		d.CanCollide = false
+		d.CanQuery = false
+		d.CanTouch = false
+		d.CastShadow = false
+		d.Anchored = true
+	end
 	model.Parent = parent
 	return model
 end
@@ -173,21 +196,16 @@ function BlasterGallery.mystery(parent: Instance, cf: CFrame, barrelLeft: boolea
 	board(m, cf, violet, "LV 11", "COMING SOON", violet:Lerp(Color3.new(1, 1, 1), 0.35))
 	local turn = if barrelLeft then -math.pi / 2 else math.pi / 2
 	local w, h = BlasterGallery.PlaqueSize.X, BlasterGallery.PlaqueSize.Y
-	local gun = BlasterGallery.gun(
+	-- the dark silhouette of the top blaster (its outline only: BlasterBuilder.silhouette)
+	local outline = BlasterBuilder.silhouette(BlasterData.MaxLevel, BlasterGallery.Silhouette)
+	local gun = BlasterGallery.fit(
 		m,
+		outline,
 		cf * CFrame.new(0, 0.35, -0.7) * CFrame.Angles(0, turn, 0) * CFrame.Angles(0.06, 0, 0),
-		BlasterData.MaxLevel,
-		"",
 		w * 0.86,
 		h * 0.52
 	)
 	gun.Name = "Silhouette"
-	for _, d in gun:GetDescendants() do
-		if d:IsA("BasePart") then
-			d.Color = BlasterGallery.Silhouette
-			d.Material = Enum.Material.SmoothPlastic
-		end
-	end
 	-- the big glowing "?" on a faint glass plate in front of the silhouette (it holds the one light)
 	local mark = plate(
 		m,

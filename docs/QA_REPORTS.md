@@ -370,3 +370,24 @@ What to test in Studio:
 2. Walk into the hall: you can walk through the gallery (no collision), the plates read (LV n, the name) and the
    LV 11 "?" glows violet. The tool rack hangs up at the back of the right wall.
 3. Phone: no frame drop when you stand on the porch.
+
+## The owner-approved Kenney-shape blasters in the game (2026-10-18, branch art/kenney-blasters: WAITS FOR THE OWNER'S "ANO")
+The blasters the owner approved on 2026-10-17 (the Kenney Blaster Kit shapes, the Ore Glow lava / galaxy skins,
+crystals from Lv 4, flames / sparks from Lv 7) as the game's held guns. The prototype
+(tools/lune/lib/blaster_kenney.luau) had 139-408 parts per gun, so tools/kenney/blaster_lite.py traces lighter shapes
+(Builders/KenneyShapes). Each region is covered by a few overlapping boxes and wedges instead of being sliced into
+strips, which gives 22-62 parts for the shapes and 8-23 for the black silhouettes. Builders/KenneyBlaster adds the
+skin (a glowing rim on the main panel, lava cracks or stars), the crystals, the Lv 7+ emitter, the MuzzleGlow and
+the Muzzle. Every level in every ore stays within 90 parts (tests/KenneyBlaster.spec.luau; the classic guns had
+25). BlasterBuilder.build makes the new guns; BlasterBuilder.buildClassic keeps the old ones for the comparison
+(delete it after the owner's yes). The held tool, the Vault's crate opening, the Great Forge gallery and the
+Foundry's NEXT rack (now BlasterBuilder.silhouette) all use them. Effects/BlasterFx still finds its Muzzle.
+Budgets: the gallery grows to ~610 parts (Plaza 2,300, LobbyParts 13,500, MapParts 22,700; the integrator decides
+at merge time). Map v23 (renumber at merge).
+What to test in Studio (after the owner's yes):
+1. Equip the blaster at levels 1, 4, 7 and 10 (Studio dev kit): the gun sits in the hand, the barrel points
+   forward, the beam leaves the barrel's tip, the muzzle flash shows at the tip.
+2. Lv 7+: slow flames (hot ores) or sparks around the gun. Lv 10: the crystal crown around the barrel.
+3. Phone emulator with 10+ players holding guns: no frame drop.
+4. The Vault's crate opening and the Great Forge gallery show the new guns; the Foundry's NEXT rack shows the
+   new black silhouette.

@@ -156,6 +156,15 @@ elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop wind
 	end
 elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
 	require("./lib/gallery_preview").build(Loader, workspace)
+elseif sceneName == "blaster_compare" then -- the ten levels: classic, the Kenney port, the prototype (tools/lune/lib/blaster_compare.luau)
+	local _, counts = require("./lib/blaster_compare").build(Loader, workspace, process.args[2] == "prototype")
+	local line = {}
+	for level = 1, 10 do
+		table.insert(line, string.format("L%d %d/%d", level, counts["Classic" .. level], counts["Kenney" .. level]))
+	end
+	print("[blaster_compare] classic/kenney parts: " .. table.concat(line, "  "))
+elseif sceneName == "blaster_hold_compare" then -- miners holding the classic vs the Kenney-shape blasters (tools/lune/lib/blaster_hold_compare.luau)
+	require("./lib/blaster_hold_compare").build(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

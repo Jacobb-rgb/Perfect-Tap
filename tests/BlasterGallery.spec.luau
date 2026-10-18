@@ -61,7 +61,7 @@ return function(T, Loader)
 
 	T.test("BlasterGallery: budget and mobile finish", function()
 		local list = parts(built)
-		T.le(#list, 360, "parts (Plaza budget +400)")
+		T.le(#list, 650, "parts (the Kenney-shape guns: Plaza budget +700)")
 		local lights = 0
 		for _, d in built:GetDescendants() do
 			if d:IsA("Light") then

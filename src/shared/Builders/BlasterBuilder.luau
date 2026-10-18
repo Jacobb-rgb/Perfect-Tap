@@ -75,12 +75,16 @@
 ]]
 
 local Geo = require(script.Parent.Geo)
+local KenneyBlaster = require(script.Parent.KenneyBlaster)
 local BlasterData = require(script.Parent.Parent.Config.BlasterData)
 
 local BlasterBuilder = {}
 
 BlasterBuilder.ToolName = "Blaster"
-BlasterBuilder.MaxParts = 25
+-- (branch art/kenney-blasters, waiting for the owner's yes) build() makes the owner-approved
+-- Kenney-shape blasters (Builders/KenneyBlaster); buildClassic() keeps the guns above for comparison
+BlasterBuilder.MaxParts = KenneyBlaster.MaxParts
+BlasterBuilder.ClassicMaxParts = 25
 BlasterBuilder.Scale = 1.2 -- design studs -> held studs (level 1 is ~2.4 studs long, level 10 ~5.6)
 
 local IRON = Color3.fromRGB(58, 60, 68)
@@ -812,7 +816,7 @@ local DESIGNS: { (k: Ctx) -> Vector3 } = {
 	end,
 }
 
-function BlasterBuilder.build(level: any, oreId: string?): Tool
+function BlasterBuilder.buildClassic(level: any, oreId: string?): Tool
 	local info = BlasterData.get(level)
 	local look = BlasterBuilder.look(info.Level, oreId)
 	local lv = info.Level
@@ -902,6 +906,129 @@ function BlasterBuilder.build(level: any, oreId: string?): Tool
 	muzzle.Position = handleCf:PointToObjectSpace(tip * s)
 	muzzle.Parent = handle
 	return tool
+end
+
+--[[
+	The blaster tool of a level in an ore's look: the owner-approved Kenney
+	Blaster Kit shapes with the Ore Glow skins (Builders/KenneyBlaster, at
+	most BlasterBuilder.MaxParts parts). The Handle is an invisible block at
+	the hand (Tool.Grip = identity: the barrel straight along the arm), every
+	part is welded to it, the Muzzle attachment sits at the barrel's tip.
+	From level 7 a slow GunFlame / GunSpark emitter rides along the gun.
+]]
+function BlasterBuilder.build(level: any, oreId: string?): Tool
+	local info = BlasterData.get(level)
+	local lv = info.Level
+	local look = BlasterBuilder.look(lv, oreId)
+	local ore = if look.Rusty or not oreId then "" else oreId
+	local skin = KenneyBlaster.skin(lv, ore, look)
+
+	local tool = Instance.new("Tool")
+	tool.Name = BlasterBuilder.ToolName
+	tool.ToolTip = BlasterData.displayName(lv, oreId)
+	tool.CanBeDropped = false
+	tool.RequiresHandle = true
+	tool.ManualActivationOnly = true
+	tool.Grip = CFrame.identity
+	tool:SetAttribute("Level", lv)
+	tool:SetAttribute("OreId", if oreId then oreId else "")
+	tool:SetAttribute("Range", info.Range)
+	tool:SetAttribute("Glow", look.Glow)
+
+	local handle = Geo.make("Part", {
+		Name = "Handle",
+		Size = Vector3.new(0.3, 0.6, 0.3),
+		Color = skin.Base,
+		Transparency = 1,
+		Anchored = false,
+		CanCollide = false,
+		CanTouch = false,
+		CanQuery = false,
+		Massless = true,
+		CastShadow = false,
+		CFrame = CFrame.identity,
+	})
+	handle.Parent = tool
+	local function part(name: string, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?, className: string?): BasePart
+		local p = Geo.make(className or "Part", {
+			Name = name,
+			CFrame = cf,
+			Size = size,
+			Color = color,
+			Material = material or PLASTIC,
+			Anchored = false,
+			CanCollide = false,
+			CanTouch = false,
+			CanQuery = false,
+			Massless = true,
+			CastShadow = false,
+		})
+		p.Parent = tool
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = handle
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	local anchors = KenneyBlaster.parts(lv, ore, skin, part)
+	-- flames (hot ores) or sparks around the gun from level 7: slow, short-lived (phones)
+	local fxCf, fxSize = KenneyBlaster.effects(lv)
+	if fxCf and fxSize then
+		local holder = part("Effects", fxCf, fxSize, skin.Glow)
+		holder.Transparency = 1
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Name = if skin.Magma then "GunFlame" else "GunSpark"
+		emitter.Texture = if skin.Magma
+			then "rbxasset://textures/particles/fire_main.dds"
+			else "rbxasset://textures/particles/sparkles_main.dds"
+		emitter.Color = ColorSequence.new(skin.Glow)
+		emitter.LightEmission = 1
+		emitter.LightInfluence = 0
+		emitter.Rate = if lv >= 10 then 8 else 5
+		emitter.Lifetime = NumberRange.new(0.3, 0.6)
+		emitter.Speed = NumberRange.new(0.3, 1)
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Acceleration = Vector3.new(0, if skin.Magma then 3 else 0.5, 0)
+		emitter.Size =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, if skin.Magma then 0.35 else 0.18), NumberSequenceKeypoint.new(1, 0) })
+		emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Parent = holder
+	end
+	-- where the beam leaves the barrel
+	local muzzle = Instance.new("Attachment")
+	muzzle.Name = "Muzzle"
+	muzzle.Position = anchors.Muzzle
+	muzzle.Parent = handle
+	return tool
+end
+
+--[[
+	A level's black silhouette (the whole outline in one color, 8-23 parts):
+	a Model of anchored, non-colliding parts in the gun's frame (the hand at
+	the origin, the barrel along -Z). The Foundry's NEXT rack and the
+	gallery's LV 11 use it.
+]]
+function BlasterBuilder.silhouette(level: any, color: Color3?): Model
+	local model = Instance.new("Model")
+	model.Name = "Silhouette"
+	local lv = math.max(2, BlasterData.get(level).Level)
+	KenneyBlaster.silhouette(lv, color or Color3.fromRGB(20, 18, 26), function(name, cf, size, c, material, className)
+		local p = Geo.make(className or "Part", {
+			Name = name,
+			CFrame = cf,
+			Size = size,
+			Color = c,
+			Material = material or PLASTIC,
+			Anchored = true,
+			CanCollide = false,
+			CanTouch = false,
+			CanQuery = false,
+			CastShadow = false,
+		})
+		p.Parent = model
+		return p
+	end)
+	return model
 end
 
 return BlasterBuilder
