@@ -73,12 +73,20 @@ return function(T, Loader)
 		Blaster = function(data: any, _signals: any)
 			data.BlasterLevel = 2
 		end,
+		Golems = function(data: any, _signals: any)
+			data.Stats.CapsulesOpened += 1
+		end,
+		Wheel = function(data: any, _signals: any)
+			data.Stats.WheelSpins += 1
+		end,
 	}
 
 	---------------------------------------------------------------- config
 
 	T.test("Tutorial: the steps are complete, short and point somewhere", function()
-		T.eq(TOTAL, 8, "eight steps (the steps 6-7 hints come later)")
+		T.eq(TOTAL, 10, "eight task steps and the two steps 6-7 hints")
+		T.truthy(TutorialConfig.ById.Golems.Optional and TutorialConfig.ById.Wheel.Optional, "the hints are info steps (GOT IT)")
+		T.eq(TutorialConfig.ById.Golems.UiTarget, "Golems", "the golem hint points at the side menu's GOLEMS")
 		local seen = {}
 		for index, step in TutorialConfig.Steps do
 			T.falsy(seen[step.Id], "unique id " .. step.Id)
@@ -131,7 +139,11 @@ return function(T, Loader)
 		DO.Clean(data, signals)
 		T.eq(TutorialConfig.advance(1, data, signals), 6, "up to the podium")
 		DO.Podium(data, signals)
-		T.eq(TutorialConfig.advance(6, data, signals), TOTAL + 1, "Grow and Blaster were done before")
+		T.eq(TutorialConfig.advance(6, data, signals), 9, "Grow and Blaster were done before: on to the golem hint")
+		DO.Golems(data, signals)
+		T.eq(TutorialConfig.advance(9, data, signals), 10, "a golem woken: the hint passes by itself")
+		DO.Wheel(data, signals)
+		T.eq(TutorialConfig.advance(10, data, signals), TOTAL + 1, "a spin: the wheel hint too")
 		-- carrying the ore home by hand (no train) passes Load and Train
 		local walk, s2 = fresh(), {}
 		DO.Station(walk, s2)
@@ -427,13 +439,14 @@ return function(T, Loader)
 	end)
 
 	withWorld("TutorialService: an info step waits for Got it", function(w)
+		local used = false
 		local hint = {
 			Id = "TestHint",
 			Title = "Golems",
 			Text = "Golems help you mine.",
 			Optional = true,
 			done = function()
-				return true
+				return used -- the player hasn't used the feature yet
 			end,
 		}
 		table.insert(TutorialConfig.Steps, 3, hint)
@@ -442,7 +455,7 @@ return function(T, Loader)
 			tut.loaded(w.player, w.data)
 			w.play("Station")
 			w.play("Mine")
-			T.eq(w.step(), 3, "stops at the hint even though its check holds")
+			T.eq(w.step(), 3, "stops at the hint")
 			DO.Load(w.data, {})
 			TutorialService.evaluate(w.player)
 			T.eq(w.step(), 3, "later progress doesn't pass the hint")
@@ -450,9 +463,22 @@ return function(T, Loader)
 			T.eq(w.step(), 5, "Got it: past the hint and the Load step already done")
 			tut.action(w.player, "Ack")
 			T.eq(w.step(), 5, "Ack on a task step does nothing")
+			-- a hint whose feature was already used passes by itself
+			table.insert(TutorialConfig.Steps, 6, hint)
+			TutorialConfig.Total += 1
+			used = true
+			DO.Train(w.data, {})
+			DO.Clean(w.data, {})
+			TutorialService.evaluate(w.player)
+			T.eq(w.step(), 8, "past Train, the used hint and Clean: waiting at Podium")
 		end)
-		table.remove(TutorialConfig.Steps, 3)
-		TutorialConfig.Total -= 1
+		-- take every test hint out again (also after a failure)
+		for i = #TutorialConfig.Steps, 1, -1 do
+			if TutorialConfig.Steps[i] == hint then
+				table.remove(TutorialConfig.Steps, i)
+			end
+		end
+		TutorialConfig.Total = #TutorialConfig.Steps
 		if not ok then
 			error(err, 0)
 		end
@@ -582,18 +608,20 @@ return function(T, Loader)
 			T.truthy(table.find(MenuPanels.Names, name), name .. " is a panel")
 			T.falsy(TutorialView.panelHides({ name }), name .. ": a step sends you there, the bubble stays")
 		end
-		for _, name in {
-			"CodexController",
-			"GolemController",
-			"ArtifactController",
-			"BoostController",
-			"SettingsController",
-			"LeaderboardController",
-			"WheelController",
-			"CapsuleController",
-			"EnchantController",
-			"GearShopController",
-		} do
+		for _, name in
+			{
+				"CodexController",
+				"GolemController",
+				"ArtifactController",
+				"BoostController",
+				"SettingsController",
+				"LeaderboardController",
+				"WheelController",
+				"CapsuleController",
+				"EnchantController",
+				"GearShopController",
+			}
+		do
 			T.truthy(table.find(MenuPanels.Names, name), name .. " is a panel")
 			T.truthy(TutorialView.panelHides({ name }), name .. " hides the bubble")
 			T.truthy(TutorialView.panelHides({ "PenController", name }), name .. " hides it next to a step's panel too")
@@ -638,6 +666,19 @@ return function(T, Loader)
 		T.falsy(refs.PadGlyph.Visible, "hidden without an image")
 		T.eq(TutorialView.doneText(250), "Nice work, forger! +250 coins", "the finish line")
 		T.eq(TutorialView.doneText(nil), "Nice work, forger!", "without a reward")
+		refs.Gui:Destroy()
+	end)
+
+	T.test("TutorialView: the side-menu arrow sits right of the menu, level with its button", function()
+		local refs = TutorialView.build()
+		T.truthy(refs.Pointer, "the arrow exists")
+		T.falsy(refs.Pointer.Visible, "hidden until a step names a side-menu button")
+		-- a button at (12, 150) px, 84 x 64, the gui at (0, 36), scale 1.25; the column ends at 200 px
+		local spot = TutorialView.pointerSpot(Vector2.new(12, 150), Vector2.new(84, 64), Vector2.new(0, 36), 1.25, 200)
+		T.near(spot.X, 200 / 1.25 + TutorialView.PointerGap, 1e-3, "right of the whole column (a grid's other buttons stay clear)")
+		T.near(spot.Y, (150 + 32 - 36) / 1.25, 1e-3, "level with the button's middle")
+		local alone = TutorialView.pointerSpot(Vector2.new(12, 150), Vector2.new(84, 64), Vector2.new(0, 36), 1.25, nil)
+		T.near(alone.X, 96 / 1.25 + TutorialView.PointerGap, 1e-3, "no column: right of the button")
 		refs.Gui:Destroy()
 	end)
 end

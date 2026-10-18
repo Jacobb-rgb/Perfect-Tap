@@ -48,6 +48,7 @@ local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
 local CleaningController = require(script.Parent.CleaningController)
+local SideMenuController = require(script.Parent.SideMenuController)
 
 local TutorialController = {}
 
@@ -486,6 +487,10 @@ local function resolve(target: Target, from: Vector3): Vector3?
 		end)
 		local at = if prompt then pointOf(prompt) else nil
 		return at or TutorialConfig.layoutPoint(target, plotId)
+	elseif target == "Capsules" or target == "Wheel" then
+		-- lobby stalls (steps 6-7 hints): nothing to fall back to while they haven't streamed in
+		local thing = nearestTagged(TutorialConfig.Tags[target], from, always)
+		return if thing then pointOf(thing) else nil
 	end
 	return TutorialConfig.layoutPoint(target, plotId)
 end
@@ -552,6 +557,33 @@ local function openPanels(): { string }
 	return list
 end
 
+-- The on-screen arrow at the step's side-menu button (UiTarget): on the
+-- touch layout's shut grid it points at MENU, which opens it.
+local function updatePointer(r: TutorialView.Refs, def: TutorialConfig.Step?, show: boolean)
+	local pointer = r.Pointer
+	local id = if show and def then def.UiTarget else nil
+	local menu = if id then SideMenuController.refs() else nil
+	local button: GuiObject? = nil
+	if menu and id then
+		local layout = menu.Layout
+		if layout and layout.Toggle and not menu.Expanded then
+			button = menu.Toggle
+		else
+			button = menu.Buttons[id]
+		end
+	end
+	if not button or not button.Visible or button.AbsoluteSize.X <= 0 then
+		pointer.Visible = false
+		return
+	end
+	local column = if menu then menu.Column else nil
+	local rightEdge = if column then column.AbsolutePosition.X + column.AbsoluteSize.X else nil
+	local spot =
+		TutorialView.pointerSpot(button.AbsolutePosition, button.AbsoluteSize, r.Gui.AbsolutePosition, HudController.uiScale(), rightEdge)
+	pointer.Position = UDim2.fromOffset(spot.X, spot.Y)
+	pointer.Visible = true
+end
+
 local function update()
 	local r = refs
 	if not r then
@@ -578,6 +610,7 @@ local function update()
 	else
 		hideGuide()
 	end
+	updatePointer(r, def, show)
 end
 
 local function setState(newStep: number, newDone: boolean)
@@ -629,6 +662,16 @@ function TutorialController.init()
 	built.Ack.Activated:Connect(ack)
 	relayout()
 	Net.listen("Tutorial", onTutorial)
+	-- the on-screen arrow bobs toward its button (a looping tween, no per-frame code)
+	for _, arm in built.Pointer:GetChildren() do
+		if arm:IsA("Frame") then
+			TweenService:Create(
+				arm,
+				TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+				{ Position = arm.Position - UDim2.fromOffset(8, 0) }
+			):Play()
+		end
+	end
 end
 
 function TutorialController.start()
