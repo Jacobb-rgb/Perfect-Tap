@@ -31,6 +31,54 @@ hardening and one real functional bug.
 | 13 | Low | BuildPlace / BuildPickup rate (8/s, 6/s) | Place/pick-up churn of big machines floods nearby clients with model replication. | A lower rate for non-belt machines or a per-player model build budget. | building | Open (later) |
 | 14 | Low | LogisticsService Sell Box insert | Coins are paid before the attribute / popup steps; today nothing after the payment can fail, but a future change could duplicate the item. | Pay as the very last step. (The steps 6–7 version of this function changed: the owner of that version applies it.) | integrator | → integrator |
 
+## Steps 6–7 pass (2026-10-18, main at 9be848a)
+
+Read-only review of everything steps 6–7 added: GearAction, EnchantAction, BoostAction, CapsuleAction, GolemAction,
+WheelAction, ArtifactAction, SettingsSave, CodexSeen (client → server, all with Net.on handlers); ActionResult,
+CapsuleResult, WheelResult, ArtifactFound, PurchasePrompt, Leaderboards (server → client); the new ProximityPrompts
+(they only open views; Gear / Enchant re-check the range); Bonuses / StatConfig, Shards, Policy, Receipts gate,
+leaderboards.
+
+**Bottom line: nothing lets a client get coins, shards, gear, enchants, golems, boosts, capsules, wheel spins,
+artifacts or collection rewards for free or twice.** Every random roll is server-side, the client never says which
+prize it got, every buy quotes, spends and writes in one step with no yield, and the one yield (PolicyService) always
+comes before that step, which re-reads the save. No ProcessReceipt exists yet (step 8): every product id is 0 and the
+Receipts gate turns every prompt into "ComingSoon".
+
+| # | Risk | Where | What | Fix | Owner | Status |
+|---|---|---|---|---|---|---|
+| S1 | Low | Policy.luau fetch, WheelService.spin | While the policy answer is unknown (a failed call) every Spin / Royal capsule / Robux boost / Starbreaker buy calls GetPolicyInfoForPlayerAsync again and warns; Spin asks before its cheap ready check. During an outage a spamming client multiplies API calls and log lines. | Keep the strict cached answer until the scheduled retry; check `WheelConfig.ready` before asking Policy (and again after the yield). | wheel / policy | Open |
+| S2 | Low | LeaderboardService markActive (listens to every remote) | Any remote counts as activity (junk WheelAction "Reveal", `MineBlast(nil)`, `CodexSeen({})`, remotes without handlers), even when the rate limiter drops it, so an AFK script climbs HOURS PLAYED. | Credit time only for real server-checked work (rock damage, pickup, sale, cleaning, build), or mark from inside Net.on after a handler did something. | leaderboard | Open |
+| S3 | Low | WheelService ore prize → State Storage keys | The State push shows which dirty ore the wheel gave (same root as #6). | The masked dirty key of #6. | wheel / integrator | With #6 |
+| S4 | Low (process) | Receipts gate, MonetizationConfig | Once real ids are pasted, a client-made prompt or the Store tab could take Robux with no ProcessReceipt / pass grant to answer it. | Keep every id at 0 (not only Off Sale) until the step 8 handlers ship in the same release. | receipts | Rule for step 8 |
+| S5 | Info | LeaderboardService activity listeners | They bypass Net's rate limiter and pcall (tiny work). They also gave the 5 handler-less remotes of #10 a listener. | One hook inside Net.on after `allow()` (with S2). | net / leaderboard | Open |
+| S6 | Info | ArtifactService.equip | Every "Equip" repaints the podiums for every client, even when nothing changed (2/s toggling = bandwidth). | Apply only when the value changed. | artifact | Open |
+| S7 | Info | CapsuleService LuckyGrace / PurchaseGrace | Triple Lucky odds hold 3 s after the boost ends for coin capsules and up to 120 s for a Royal prompt shown with it; the client's Lucky flag can only lower odds or get "OddsChanged". | By design. | capsule | OK |
+| S8 | Info | ArtifactConfig.rarityOpen | Counts the VIP Grotto for players without the pass; no effect today (same rarities as Ember Caves). | Skip VIP zones without the pass. | artifact | Open |
+
+Step 8 receipt checklist (from this pass): one ProcessReceipt; NotProcessedYet while `DataService.get` is nil
+(released / lost session); write `data.Purchases[PurchaseId]` and grant in one step with no yield
+(`CapsuleService.grantProduct`, `BoostService.add(..., false)`, `EnchantConfig.grant`); PurchaseGranted only when
+`DataService.saveNow` returns true, and on a retry with the id already saved: saveNow then Granted without granting
+again. Game passes: `UserOwnsGamePassAsync` in a pcall at join and after `PromptGamePassPurchaseFinished` (never trust
+`wasPurchased`), then `Perks.set` and `Bonuses.invalidate`. `data.Golems.Pending` (MonetizationConfig contract) needs a
+Migrations clean-up. Movement check: per-player walk speed reaches ~43.5 studs/s (Boots V + Swift III + golems).
+
+Checked and OK (steps 6–7): GearAction (next level only, "Stale", range, no yield), EnchantAction Buy (next tier,
+shards only for Epic / Legendary, Robux = prompt only, Policy before the re-read) and Slot (owned, open slots, no
+duplicates), BoostAction BuyCoins (NoEffect / CoinLimit / Full, capped extend, fixed multipliers, StatConfig caps) and
+BuyRobux (prompt behind the gate), CapsuleAction (counts, room before the roll, server Random per open, odds sum 1,
+Royal odds remembered only after a successful prompt), GolemAction (owned ids, capped Delete list, locked / unknown
+skipped, at most 3 count), WheelAction Spin (one step after the Policy read, capped boost prizes, free capsules via
+grantFree, ore via PenService.store) and Reveal (grants nothing), ArtifactAction Restore / ReadChapter / Equip,
+artifact finds (server roll per shattered rock), ore luck and Twin Drop (server, capped), the Crystal Extractor
+(ShardRolls), the Ore Magnet (own items only, off bases), Gloves (raycast past the base reach, throw allowance ≤ 2×),
+SettingsSave (sanitized), CodexSeen (discovered ores only), Bonuses (every total capped, failing providers count as
+nothing), Shards / EconomyService helpers, server-only attributes (Perks, Policy, Title, LampLevel, EquippedGolems),
+Migrations for every new field, leaderboards (server-derived values, write budgets, UpdateAsync keeps the larger
+value, hidden list first), compliance (odds everywhere, paid random items hidden where restricted and while the
+policy is unknown, no rewards for likes / favorites / groups, coin packs off).
+
 ## Notes (no change needed now)
 - **Monetization isn't built yet** (no ProcessReceipt, `Perks.set` never called). When it is: idempotent receipts on
   `data.Purchases[PurchaseId]`, save before returning PurchaseGranted, NotProcessedYet while data isn't loaded,

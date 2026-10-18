@@ -339,6 +339,11 @@ end
 	nil + "NotReady". Yields only before the check (the policy answer).
 ]]
 function WheelService.spin(player: Player): (Result?, string?)
+	-- a spin that isn't ready never reaches PolicyService (security audit S1)
+	local before = DataService.get(player)
+	if not before or not WheelConfig.ready(record(before, "Wheel").NextSpinAt, math.floor(clock())) then
+		return nil, "NotReady"
+	end
 	local restricted = Policy.paidRandomRestricted(player)
 	local noCapsules = CapsuleConfig.allRestricted(restricted)
 	-- from here on nothing yields: check, save the cooldown, grant

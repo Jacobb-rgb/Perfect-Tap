@@ -81,7 +81,9 @@ return function(T, Loader)
 			patch(Net, "fire", function(event: string, p: any, a: any, b: any)
 				table.insert(w.replies, { Event = event, Player = p, A = a, B = b })
 			end)
+			w.policyCalls = 0
 			patch(Policy, "paidRandomRestricted", function()
+				w.policyCalls += 1
 				return w.restricted
 			end)
 			patch(PodiumService, "incomeOf", function()
@@ -128,6 +130,18 @@ return function(T, Loader)
 	end
 
 	---------------------------------------------------------------- the free spin
+
+	withWheel("Wheel: a spin that isn't ready never asks PolicyService (audit S1)", function(w)
+		T.truthy(w.spin(rollFor(4)), "the first spin works")
+		T.eq(w.policyCalls, 1)
+		for _ = 1, 5 do
+			w.spin(rollFor(4))
+		end
+		T.eq(w.policyCalls, 1, "not-ready spins stop before the policy call")
+		w.now += DAY
+		T.truthy(w.spin(rollFor(4)))
+		T.eq(w.policyCalls, 2, "the next day's spin asks again")
+	end)
 
 	withWheel("Wheel: a ready spin saves the cooldown and answers with WheelResult", function(w)
 		local reply = w.spin(rollFor(4))

@@ -452,6 +452,20 @@ return function(T, Loader)
 		T.falsy(ArtifactConfig.rarityOpen("Legendary", 2))
 		T.truthy(ArtifactConfig.rarityOpen("Legendary", 3))
 		T.truthy(ArtifactConfig.rarityOpen("Mythic", 5))
+		-- a VIP-only zone opens a rarity only for VIPs (security audit S8)
+		local grotto = ArtifactConfig.ZoneRarity.Grotto
+		local vipZone = WorldLayout.ZoneById.Grotto
+		T.truthy(vipZone and vipZone.VipOnly, "the Grotto is VIP-only")
+		ArtifactConfig.ZoneRarity.Grotto = { Common = 1, Mythic = 1 }
+		local level = vipZone.MinBlaster
+		local ok, err = pcall(function()
+			T.falsy(ArtifactConfig.rarityOpen("Mythic", level), "not open without the pass")
+			T.truthy(ArtifactConfig.rarityOpen("Mythic", level, true), "open with the pass")
+		end)
+		ArtifactConfig.ZoneRarity.Grotto = grotto
+		if not ok then
+			error(err, 0)
+		end
 		local record = allFound()
 		record.Found.HeartstoneFragment = nil
 		T.eq(ArtifactConfig.lastMissing(record, "HeartstoneLore"), "HeartstoneFragment")
@@ -661,6 +675,19 @@ return function(T, Loader)
 		T.eq(reply.A.Ok, true)
 		T.eq(w.data.Artifacts.Equipped, "CrownOfKaldrum")
 		T.eq(w.player:GetAttribute("Title"), crown.Reward.Title)
+		-- the same pick again repaints nothing for anyone (security audit S6)
+		local repaints = 0
+		local apply = ArtifactService.applyRewards
+		ArtifactService.applyRewards = function(...)
+			repaints += 1
+			return apply(...)
+		end
+		for _ = 1, 3 do
+			ArtifactService._test.action(w.player, "Equip", { Collection = "CrownOfKaldrum" })
+		end
+		ArtifactService.applyRewards = apply
+		T.eq(repaints, 0, "an unchanged Equip doesn't repaint the podiums")
+		T.eq(w.last("ActionResult").A.Ok, true, "still answered OK")
 		T.eq(podium.Base.Color, ArtifactConfig.PodiumSkins[crown.Reward.PodiumSkin].Base)
 		-- "" takes them off: the podiums get their own colors back
 		local before = podium.Column:GetAttribute("SkinFrom")
