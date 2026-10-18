@@ -59,3 +59,78 @@ light, false-positive-safe check. Nothing here is built yet; the integrator deci
 ## Rollout
 1. Ship with logging only (no trusted-position switch) for a few days and look at the flag rate of real players.
 2. Turn on the trusted position; keep the pull-back off until the logs show no honest flags.
+
+## Built (rollout step 1, 2026-10-18)
+Logging only: nothing a player does is refused or moved because of the movement check yet. The beam line of sight is on.
+
+**Files**
+- `src/shared/Config/MovementConfig.luau`: every number and the switches below.
+- `src/server/MovementLogic.luau`: the pure rules (no Roblox services; the Lune tests drive it).
+- `src/server/Services/MovementService.luau` (ORDER: after ToolService): one loop over `Players` every 0.3 s reads
+  `HumanoidRootPart.CFrame.Position`, `Humanoid.WalkSpeed` (the server sets it), JumpPower / JumpHeight (UseJumpPower,
+  `Workspace.Gravity`), SeatPart / Sit and the FallingDown / Ragdoll / Physics states. API: `serverMoved(player)`,
+  `isFlagged(player)`, `trustedPosition(player)`, `rangeOrigin(player, livePosition)`, `stats()`.
+- `src/server/BeamSight.luau`: the beam's line of sight (cache, raycast filter, BeamIgnore). MiningService asks
+  `BeamSight.canHit` before a damage tick and measures the range from `MovementService.rangeOrigin` (live while
+  Enforce is off).
+- Blaster Vault interior (`World/Lobby/Vault/init.luau`): its raycastable interior parts (the case steps, the counter)
+  carry the `BeamIgnore` tag at build time (part count unchanged; map v26).
+- Tests: `tests/Movement.spec.luau`, `tests/MiningLos.spec.luau`.
+
+**Switches** (MovementConfig)
+
+| Switch | Now | Meaning |
+|---|---|---|
+| `Enforce` | false | false: `trustedPosition` / `rangeOrigin` give the live position. true: while flagged, the last good sample. |
+| `PullBack` | false | Step 3, not built: must stay false. |
+| `BeamLos` | true | No beam damage through walls. |
+
+**How it decides** (the note above, plus what the review and the tests needed)
+- Allowed per sample: horizontal `maxSpeed * dt + 6`, `maxSpeed = (WalkSpeed + hoverboard) * 1.15` (the higher of the
+  two samples); upward `jumpHeight + 4 + maxSpeed * dt` (the last term: stairs and ramps); falling is free. Unknown
+  walk speed = 50, unknown board = 38 (Royal Phoenix).
+- Belts: players walk through belts today (the "Conveyors" collision group ignores characters), so the belt term is a
+  safety net: only a move over the limit casts one ray down; a part in the "Conveyors" group adds the fastest belt
+  (14 studs/s) to the speed.
+- Start over (sample and anchor reset): first sample, a new character, 2 s after `serverMoved`, first 5 s after
+  joining. Skip (no check): seated; FallingDown / Ragdoll / Physics for at most 4 s per 30 s (the client reports its
+  Humanoid state, so a faked state can't exempt anyone for long).
+- 3 violations in 10 s = flagged 30 s; 5 flags in 5 min = one `warn` line with the UserId. Never a kick, never a move.
+- "The last good sample" is an anchor that only moves to a sample reachable from it in the time since: a teleport
+  leaves it behind until walking there would have taken that long (standing still at the far rock doesn't reset it).
+- Hoverboards: the character attribute `Hoverboard` (set by the server while riding) adds
+  `HoverboardService.speedOf(player)` once that service exists, else 38. On art/mine-floors the board speed is also
+  the Humanoid's WalkSpeed, so it counts twice: lenient on purpose.
+- Line of sight: every 0.5 s per (player, rock), from the Head (else root + 1.5) toward the rock's box: its closest
+  point, then (only if that is blocked) the line to its top center (a rock up on a ledge); each line stops 1.5 studs
+  before the rock, so the quarry wall right behind a rock never counts. Never blocking: characters, Items, Debris, the
+  rocks folder, BeamIgnore tag (filter) or attribute (cast on behind it), CanCollide off, CanQuery off, water.
+
+**Server moves covered** (every `character:PivotTo` calls `MovementService.serverMoved` right after; a test scans
+src/server for new ones): TeleportService.luau:194 (teleport bar + elevator destination), PlotService.luau:168
+(sendHome, also after every respawn), BuildService.luau:138 (lift-out of a machine footprint, any player),
+AccessService.luau:35 (VIP Grotto door push-out), respawns (CharacterAdded in MovementService). The Blaster Vault crate
+opening, the wheel / capsule screens and the tutorial don't move the character.
+
+**When art/mine-floors lands** (not on main yet)
+- ElevatorService `teleport()` (rides and fall rescues): `MovementService.serverMoved(player)` after
+  `character:PivotTo(target)` (the scan test fails until then).
+- HoverboardService: `function HoverboardService.speedOf(player: Player): number local board = HoverboardData.get(riding[player]) return if board then board.Speed else 0 end`.
+- MineKit: `m:AddTag(MovementConfig.BeamIgnoreTag)` on the models of `MineKit.elevator`, `MineKit.gate` and
+  `MineKit.crystals` (the SOLID decorations; walls stay untagged); bump the map version.
+
+**Step 2 one-liners for the other owners** (turn `Enforce` on after a few days of logs). Each file also gets
+`local MovementService = require(script.Parent.MovementService)` (it requires no services: no cycles). While
+Enforce is off `rangeOrigin` returns the position passed in, so nothing changes before the switch.
+- CarryService `hasReach`: `local distance = (record.Body.CFrame.Position - MovementService.rangeOrigin(player, root.Position)).Magnitude`
+- ItemService `isTrusted`: `if (MovementService.rangeOrigin(Players:GetPlayerByUserId(record.Owner), root.Position) - position).Magnitude > GameConfig.AntiTeleportRange then`
+- ItemService (LastNearOwner): `if root and (MovementService.rangeOrigin(Players:GetPlayerByUserId(record.Owner), root.Position) - position).Magnitude < 40 then`
+  (`giveClientPhysics` keeps the live position: network ownership needs the real one.)
+- PenService `isNear`: `local offset = MovementService.rangeOrigin(player, root.Position) - gate`
+- PodiumService `isNear`: `local offset = MovementService.rangeOrigin(player, root.Position) - orePoint(plotId, slot).Position`
+- TrainService `isNear`: `return root ~= nil and (MovementService.rangeOrigin(player, root.Position) - position).Magnitude <= range + RANGE_SLACK`
+- MachineService (MachineAction range): `if not root or (MovementService.rangeOrigin(player, root.Position) - machine.Model:GetPivot().Position).Magnitude > GameConfig.MachineUseRange then`
+- CleaningService (auto-start when the owner is close): `if root and (MovementService.rangeOrigin(machine.Owner, root.Position) - (base :: BasePart).Position).Magnitude < 22 then`
+- ProcessingService, LogisticsService: no character range check, nothing to change.
+- Net.luau: nothing for the movement check (audit #9, separately: `if player.Parent ~= Players or not allow(player, name, limit :: Limit) then` in `Net.on`).
+- Optional, same pattern: the shop counters' `counterNear` (Sell, Shop, Vault, Gear, Enchant) and Foundry `isNear`.
