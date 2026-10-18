@@ -305,3 +305,68 @@ What to test in Studio:
 6. Sit on a seat (the train, a bench) and press LOBBY: you get up and land in the lobby.
 7. The LIFT icon under BUILD stays hidden until the world has a mine elevator (art/mine-floors); with it,
    LIFT puts you in front of the lowest elevator stop.
+
+## Blaster Vault shop + crate opening (2026-10-18, branch feature/vault-shop)
+Owner: "click the cape (counter) and a menu of cases with blasters opens", then the approved crate-opening
+animation in the game. VaultService / VaultController / VaultView / CrateOpeningView, Builders/CaseBuilder +
+CrateOpeningStage (the preview video's animation rebuilt from parts), BlasterData.Vault (prices, case looks).
+The Vault sells only your NEXT level, for coins only: 4x the Foundry's coin price (Lv4 60K ... Lv10 6B), in that
+level's case look (Copper, Cobalt, Amethyst, Gold, Emberite, Sapphire, Obsidian, Royal Aurum, Heartstone).
+The Foundry stays the cheaper way (ingots + coins) and lets you pick the ore look.
+QA notes: buy is checked on the server in one step with no yield (level = yours + 1, at the counter within 30
+studs, coins), so a double tap or a spammed remote buys one level (tests/VaultService.spec.luau fuzzes it);
+every request gets one VaultResult; the prompt key is F / Y because E is the game's grab key.
+What to test in Studio:
+1. Walk to the vault counter: "Blaster Vault" prompt (F, gamepad Y). The window opens: your level's cards say
+   OWNED, the next one has the gold outline, NEXT and a green BUY, the rest LOCKED, LV 11 SOON.
+2. With too few coins the price is red; BUY says "Not enough coins" in the footer and nothing is sent.
+3. BUY with enough coins: "..." then the screen fades into the dark room: the case drops, hums, bursts
+   (flash, light pillar, shards), the blaster rises and spins; "NEW BLASTER!", rarity, name, LV, damage, then
+   AWESOME!. Click / tap / A before the burst jumps to the burst; AWESOME!, A, B, Enter, Space or Backspace end
+   it. Back in the vault you hold the new blaster and the coins went down by the price.
+4. During the cinematic: no walking, no prompts, no HUD, no backpack, no touch buttons; after it all come back
+   and the camera follows you again (FieldOfView back to 70).
+5. Reset your character during the cinematic: it ends at once, the camera and HUD come back.
+6. Walk 25 studs away with the window open: it closes. B / Backspace / the red X close it too.
+7. Phone (iPhone SE emulator): one row of wide cards that scrolls sideways, the NEXT card in view, BUY and X
+   are easy to tap. Controller: A on the selected card buys, the row scrolls with the selection.
+8. The display cases behind the counter have the same colours as the shop's cases.
+
+## Blaster shooting feel + sounds that play (2026-10-18, branch feature/blaster-feel)
+Watcher task: a stronger beam with a muzzle flash, hit sparks and chips, a small recoil, satisfying hit and break
+sounds, the Lv7+ effects visible while firing, light on phones. Config/BlasterFeel (all tuning), Effects/BlasterFx,
+Vfx.setBeam style (width, light, the Lv7+ energy stream, the hit swell), CameraShake.kick (recoil), MiningController
+hooks (start / stop / hit), FxController (other players' beams get their tier look; your own hit crackle is local).
+Sounds: today's Roblox clients ship only 11 files in content/sounds, so most rbxasset://sounds/*.wav ids were silent.
+Every SoundConfig id is now a shipped file or Roblox's own upload of the classic sound (same keys, ids only), and
+tests/BlasterFeel.spec.luau checks every id. New keys: BlasterBeam, BlasterZap, BlastThud, RockBreak, ElevatorDing,
+DoorThud. The rock chips use the rock's crust colour (the ores inside stay secret until cleaned).
+What to test in Studio:
+1. Fire at a rock (PC): a bright flash at the muzzle when you press, the gun jumps back a little and settles, the
+   view tips up a hair; while the beam is on the rock: sparks in the beam's colour, small chips every third of a
+   second, a crackle and a soft thud. Sounds play (UI clicks too: they were silent before).
+2. A Lv7+ blaster: sparkles stream along the beam from the gun to the rock and swirl off the muzzle. Lv10: a shock
+   ring at the hit with the chips.
+3. A rock you can't mine yet (Needs Lv N): only dull grey sparks, no chips, no thud.
+4. Phone (emulator): about half the sparks, no camera kick, the gun kick still shows; no stutter on an iPhone SE.
+5. Another player fires near you: you see their beam in their level's thickness (Lv7+ with the energy stream).
+6. Equip / unequip while firing, reset while firing: the gun is back in the hand normally, no stuck offset.
+7. Listen to the new picks and swap any you dislike in SoundConfig: BlasterBeam (Roblox "UFO Beam" loop, quiet),
+   BlasterZap (flashbulb), BlastThud (hit.wav), RockBreak (the shipped explosion, high pitch), ElevatorDing
+   (Roblox pinball low bell), DoorThud (collide.wav, low pitch).
+
+## Blaster gallery in THE GREAT FORGE (2026-10-18, branch feature/blaster-gallery)
+V2_PLAN section 5 ("THE GREAT FORGE | landmark (blaster gallery: levels 1-10 + Coming soon)"), placed with the
+Plaza owner's ok (option A: inside the hall, seen through the door from the porch and the stairs).
+Plaza/BlasterGallery: a rack of two rows on each side wall of the hall, turned 12 degrees toward the door. Each
+plaque has the real game gun (BlasterBuilder) in its level's case ore, a glowing rim in the ore's glow and two plates
+(LV n, the blaster's name). The viewer's right wall has LV 1-3 below and LV 4-5 above (the forge's tool rack moved up
+into the third slot). The left wall has LV 6-8 below and LV 9, LV 10 and LV 11 above (a dark silhouette, a violet
+"?" and COMING SOON). The niche over the furnace hood was only 1.3 studs tall and hidden behind the z 5 beam, so
+LV 11 went on the wall. 334 parts, one soft violet light (LV 11), no shadows, nothing collides or is raycast.
+Budgets: MapParts 22,400, LobbyParts 13,200, Plaza 2,000 parts / 11 lights. Map v22.
+What to test in Studio:
+1. From the plaza and the stairs: the door still glows; inside you see the two racks with the guns and the plates.
+2. Walk into the hall: you can walk through the gallery (no collision), the plates read (LV n, the name) and the
+   LV 11 "?" glows violet. The tool rack hangs up at the back of the right wall.
+3. Phone: no frame drop when you stand on the porch.

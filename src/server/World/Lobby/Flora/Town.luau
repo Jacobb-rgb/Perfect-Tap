@@ -72,37 +72,14 @@ Town.RailMinX = 160
 -- Clear ground in front of every facade (studs).
 Town.FrontClearance = 6
 
-Town.Sites = {
-	-- the west strip along the west plot road (the hero's left side), north to south
-	{ Id = "CartShop", Min = Vector2.new(-63, 8), Max = Vector2.new(-52, 14), Facing = "N", Recipe = "CartShop", Sign = "CARTS" },
-	{ Id = "Lodge", Min = Vector2.new(-63, 54), Max = Vector2.new(-58, 63), Facing = "W", Recipe = "Lodge" },
-	{
-		Id = "ToolShop",
-		Min = Vector2.new(-63, 64),
-		Max = Vector2.new(-56, 72.5),
-		Facing = "E",
-		Recipe = "ToolShop",
-		Sign = "TOOLS",
-	},
-	{ Id = "RowCottage", Min = Vector2.new(-63, 74), Max = Vector2.new(-58.5, 88), Facing = "W", Recipe = "RowCottage" },
-	-- behind UPGRADES, beside the forge east path (the pink grove behind it), and ORE east of the grove
-	{ Id = "Inn", Min = Vector2.new(33, -54), Max = Vector2.new(44, -43), Facing = "W", Recipe = "Inn", Sign = "INN" },
-	{ Id = "OreWorks", Min = Vector2.new(55.5, -71), Max = Vector2.new(63, -66), Facing = "S", Recipe = "OreWorks", Sign = "ORE" },
-	-- the south-east hamlet past the east plot road's end (the Blaster Vault,
-	-- its east statue and jungle trees took the east strip and the south
-	-- lane): the MAP tower and the WORKS workshop turned to the town and the
-	-- hero camera, the garden cottage behind them
-	{ Id = "MapTower", Min = Vector2.new(93, 115), Max = Vector2.new(102, 125), Facing = "W", Recipe = "MapTower", Sign = "MAP" },
-	{
-		Id = "SpurWorkshop",
-		Min = Vector2.new(107, 116),
-		Max = Vector2.new(121.5, 120.5),
-		Facing = "S",
-		Recipe = "SpurWorkshop",
-		Sign = "WORKS",
-	},
-	{ Id = "GardenCottage", Min = Vector2.new(127, 120), Max = Vector2.new(143, 137), Facing = "W", Recipe = "GardenCottage" },
-} :: { Site }
+--[[
+	(2026-10-18, owner: "take those weird little houses away") The town houses
+	are gone: CARTS, the Lodge, TOOLS, the row cottage, the INN, ORE, the MAP
+	tower, WORKS and the garden cottage. Their ground went to the meadow's
+	ponds and jungle trees (Flora/Meadow). The recipes (Flora/Buildings) stay,
+	so a site added back here is built again.
+]]
+Town.Sites = {} :: { Site }
 
 local DIRS: { [string]: Vector3 } = {
 	N = Vector3.new(0, 0, -1),

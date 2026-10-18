@@ -18,6 +18,7 @@ local Net = require(Shared.Net)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
+local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
 
 local FxController = {}
 
@@ -85,11 +86,17 @@ handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any
 	end
 	local color = colorOf(glow, DEFAULT_GLOW, true)
 	local muzzle, from = muzzleOf(shooter)
-	if from and shooter ~= Players.LocalPlayer then
-		Vfx.setBeam(shooter, muzzle, from, position, color, OTHER_BEAM_HOLD)
+	local mine = shooter == Players.LocalPlayer
+	if from and not mine then
+		-- their blaster's tier look (thickness, the Lv7+ energy stream)
+		local tool = muzzle and muzzle.Parent and muzzle.Parent.Parent
+		local level = if tool then tool:GetAttribute("Level") else nil
+		Vfx.setBeam(shooter, muzzle, from, position, color, OTHER_BEAM_HOLD, BlasterFx.styleFor(level))
 	end
-	Vfx.impact(position, color, if from then from - position else nil, 5)
-	Sfx.play("BlastHit", position)
+	Vfx.impact(position, color, if from then from - position else nil, if mine then 2 else 5)
+	if not mine then
+		Sfx.play("BlastHit", position) -- your own hits crackle locally, in time (Effects/BlasterFx)
+	end
 end
 
 -- Your beam bounced off a rock you can't mine yet: (position)
