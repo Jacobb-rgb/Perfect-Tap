@@ -42,11 +42,13 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MachineData = require(Shared.Config.MachineData)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
 local HudView = require(script.Parent.HudView)
 local TrainView = require(script.Parent.TrainView)
 
@@ -1855,6 +1857,19 @@ function TechShopView.touchTargets(refs: Refs): { GuiObject }
 		end
 	end
 	return list
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+local darkBuild = TechShopView.build
+TechShopView.build = function(compact: boolean?): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return TechShopView

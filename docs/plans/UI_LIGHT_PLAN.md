@@ -58,6 +58,11 @@ All builders are pure and take plain data, so the controllers fill them from con
 | Blaster Vault shop | `VaultView`: light header band + 3D icon, X on the corner (layout leaves room) | `vault_ui_*_light` |
 | Build mode | `BuildView.build` → own light refs; `setInventory` / `setCounts` light-aware | `build_*` |
 | Ore Pen | `PenView`: light skin on the same parts (`skinLight` / `skinRow`), setters light-aware | `base_pen_*_light` |
+| Tobin's Sell, Tech Shop / Upgrades, Train (panel + HUD chip), Iron Box, Foundry (window + forge moment), Cleaning | `LightSkin.apply` on their gui (wrapped `build`): dark kit colours → light, navy outlines, readable text; keeps re-skinning new rows and colour changes; the cleaning reveal effects and the Foundry's 3D rack are untouched | `sell_*_light`, `tech_ui_*_light`, `train_ui_*_light`, `ironbox_ui_*_light`, `foundry_*_light`, `clean_*_light` |
+
+Overview of the in-game light windows: `docs/screenshots/ui_light_game/prehled_ve_hre.jpg`.
+`LIGHT_UI=1 lune run tools/lune/export_scene.luau <scene>` exports every UI overlay with the switch on
+(`*_light`; skinned windows are refreshed right before export, since Roblox signals don't run in Lune).
 
 Previews with the switch on: `LIGHT_UI=1 lune run tools/lune/export_scene.luau vault_shop` / `... world yard`,
 then render the `*_light` shots from `tools/preview/ui_bubble_shots.json`.

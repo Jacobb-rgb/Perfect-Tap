@@ -641,3 +641,39 @@ for _, spec in { { "pc", 1.25, 1, false }, { "phone", 0.62, 2, true } } do
 	print("Exported UI ui_light_build_" .. spec[1])
 end
 UIConfig.LightUI = false
+
+---------------------------------------------------------------- Tobin's Sell window (SellView) with the switch on and off
+local SellView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SellView")
+local LightSkin = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LightSkin")
+local penSummary = {
+	["Raw|Copper||"] = 3,
+	["Raw|Silver||"] = 1,
+	["Clean|Gold|Pristine|"] = 2,
+	["Clean|Silver|Clean|"] = 4,
+	["Clean|Copper|Rough|"] = 6,
+	["Ingot|Iron|Clean|"] = 2,
+}
+local handsSummary = { ["Clean|Amethyst|Flawless|"] = 1 }
+for _, light in { false, true } do
+	UIConfig.LightUI = light
+	for _, spec in { { "pc", 1.25, 1, false, 1280, 690 }, { "phone", 0.62, 2, true, 1000, 520 } } do
+		local hud = if light then HudBubble.buildGame(spec[2]) else HudView.build()
+		hud.Gui.Scale.Scale = spec[2] * spec[3]
+		hud.Coins.Text = "$12.5K"
+		hud.Income.Text = "+$412/s"
+		local view = SellView.build(spec[4])
+		view.Gui.Scale.Scale = spec[2] * spec[3]
+		view.Gui.Enabled = true
+		SellView.layout(view, spec[4], spec[5], spec[6])
+		SellView.setEntries(view, "Pen", SellView.entries(penSummary, "Pen"))
+		SellView.setEntries(view, "Hands", SellView.entries(handsSummary, "Hands"))
+		SellView.setFooter(view, SellView.plan(penSummary, handsSummary, "Dirty"), SellView.plan(penSummary, handsSummary, "AllButBest"))
+		if light then
+			LightSkin.refresh(view.Gui)
+		end
+		local name = "ui_sell_" .. spec[1] .. (if light then "_light" else "")
+		fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", UiExport.export({ hud.Gui, view.Gui })))
+		print("Exported UI " .. name)
+	end
+end
+UIConfig.LightUI = false

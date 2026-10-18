@@ -117,7 +117,8 @@ local function textStroke(label: GuiObject): UIStroke?
 	return nil
 end
 
-local function skinText(label: TextLabel | TextButton | TextBox)
+local function skinText(object: GuiObject)
+	local label: any = object -- a TextLabel, TextButton or TextBox
 	local stroke = textStroke(label)
 	local behind = backdrop(label)
 	if isLight(behind) then
@@ -125,10 +126,14 @@ local function skinText(label: TextLabel | TextButton | TextBox)
 		local mapped = INK[key(colour)]
 		if mapped then
 			label.TextColor3 = mapped
+		elseif luminance(colour) > 0.6 then
+			label.TextColor3 = BubbleTheme.Ink -- a light colour meant for the dark panels
 		end
+		-- body text is plain; only titles (LuckiestGuy) keep a thin navy edge
+		local title = string.find(label.FontFace.Family, "Luckiest") ~= nil
 		local plain = PLAIN_INK[key(label.TextColor3)] == true
 		if stroke then
-			stroke.Enabled = not plain
+			stroke.Enabled = title and not plain
 			stroke.Color = BubbleTheme.Outline
 			stroke.Thickness = math.min(stroke.Thickness, 1.5)
 		end
@@ -185,7 +190,7 @@ end
 
 -- Skins root now and keeps skinning new children and colour changes.
 function LightSkin.apply(root: Instance)
-	root:SetAttribute("Bubble", true)
+	root:SetAttribute("LightSkin", true)
 	LightSkin.refresh(root)
 	pcall(function()
 		local function watch(d: Instance)

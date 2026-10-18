@@ -5,6 +5,7 @@
 local roblox = require("@lune/roblox") :: any
 local Color3 = roblox.Color3
 local Vector2 = roblox.Vector2
+local UDim2 = roblox.UDim2
 
 return function(T, Loader)
 	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
@@ -168,6 +169,57 @@ return function(T, Loader)
 		local plain = PenView.build()
 		T.falsy(plain.Gui:GetAttribute("Bubble"), "switch off: today's pen")
 		T.falsy(plain.Panel:FindFirstChild("HeaderIcon"), "switch off: no light header")
+	end)
+
+	T.test("LightSkin: old dark panels become light, text stays readable", function()
+		local LightSkin = ui("LightSkin")
+		local UIKit = ui("UIKit")
+		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
+		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
+		local gui = UIKit.screen("Old")
+		local panel = UIKit.panel(gui, { Size = UDim2.fromOffset(400, 300) })
+		local body = UIKit.label(panel, "Body text", 18)
+		local title = UIKit.label(panel, "TITLE", 30, { FontFace = Theme.TitleFont, TextColor3 = Theme.Accent })
+		local button = UIKit.button(panel, "BUY", Theme.Good, Theme.GoodDark)
+		local over = UIKit.label(gui, "Over the world", 18)
+		LightSkin.apply(gui)
+		T.truthy(gui:GetAttribute("LightSkin"), "marked")
+		T.eq(panel.BackgroundColor3, BubbleTheme.Panel, "white panel")
+		T.eq(panel:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Outline, "navy outline")
+		T.eq(body.TextColor3, BubbleTheme.Ink, "dark body text")
+		T.falsy(body:FindFirstChildOfClass("UIStroke").Enabled, "no outline on body text")
+		T.truthy(title:FindFirstChildOfClass("UIStroke").Enabled, "titles keep a thin edge")
+		T.eq(button.BackgroundColor3, BubbleTheme.Roles.Go.Base, "light green button")
+		T.eq(button.TextColor3, BubbleTheme.White, "white text on the button")
+		T.eq(over.TextColor3, BubbleTheme.White, "white text over the world")
+		-- a controller setting the old colour again (Lune: refresh stands in for the signal)
+		body.TextColor3 = Theme.Text
+		LightSkin.refresh(gui)
+		T.eq(body.TextColor3, BubbleTheme.Ink, "mapped again")
+		LightSkin.refresh(gui)
+		T.eq(panel.BackgroundColor3, BubbleTheme.Panel, "idempotent")
+	end)
+
+	T.test("LightUI: the older windows wear the light skin only with the switch on", function()
+		local function builds(): { [string]: any }
+			return {
+				Sell = ui("SellView").build(false).Gui,
+				TechShop = ui("TechShopView").build(false).Gui,
+				Train = ui("TrainView").build(false).Gui,
+				IronBox = ui("IronBoxView").build().Gui,
+				Foundry = ui("FoundryView").build().Gui,
+				Forge = ui("FoundryView").buildForge(false).Gui,
+				Cleaning = ui("CleaningView").build().Gui,
+			}
+		end
+		for name, gui in builds() do
+			T.falsy(gui:GetAttribute("LightSkin"), "switch off: today's " .. name)
+		end
+		withLight(function()
+			for name, gui in builds() do
+				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
+			end
+		end)
 	end)
 
 	T.test("LightUI: game HUD touch sizes on phones", function()
