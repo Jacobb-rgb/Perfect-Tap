@@ -17,9 +17,9 @@ This audit only reads. Nothing in the game was changed. DataTemplate, Migrations
 |---|---|
 | 1 | **Gate done:** a save with a Version above the server's (`DataService.latestVersion()`: the higher of `DataTemplate.Version` and `Migrations.Latest`) is refused untouched (no lock taken), and the player sees "The game just updated, please rejoin". A spec requires the two constants to be equal, and PUBLISHING.md step 12 says to bump them together, always Migrate To Latest Update, and never roll back to a lower save version. **Still open:** keeping unknown values in Migrations (MAX_LEVEL_KEPT, podium keys and ores). It comes after integrate/steps67 lands, since that branch rewrote Migrations. |
 | 2 | **Done:** `ProfileStore.storable` / `repair` (pure). Repair runs **inside the UpdateAsync transform**, on exactly what is written, so a value changed while the request waits is repaired too. `OnRepair` warns with the paths, and the rest is saved. |
-| 3 | **Done:** a SessionId per load in `Lock`. `save()` writes only to its own session; a nil lock means the session is lost. A session stays live on its server until its release succeeds, it is lost or DataService forgets it, and a live one blocks a second load of the key there. One load per UserId per server, a load stops (and takes no lock) once its player left. A rejoin never loads past a final save still running: it waits up to 40 s, then is told to rejoin. |
+| 3 | **Done:** a SessionId per load in `Lock`. `save()` writes only to its own session; a nil lock means the session is lost. A session stays live on its server until its release succeeds, it is lost or DataService forgets it, and a live one blocks a second load of the key there, whatever its age. A session counts as live from the moment its lock is written. One load per UserId per server, a load stops (and takes no lock) once its player left. A rejoin never loads past a final save still running: it waits up to 40 s, then is told to rejoin. A final save that has hung for longer than StaleLockSeconds is given up, and load's lock rules decide. |
 | 4 | **Done:** reconcile and Migrate run in a pcall. On an error only our own lock is cleared, the data is untouched, and the player is kicked. `Purchases` that isn't a table is reset (with a warn) instead of throwing. |
-| 5 | **Done:** `AutosaveInterval` 60 s, `StaleLockSeconds` 180 s (both in GameConfig). Each profile saves 60 s after its last save (checked every 5 s). A failed refresh warns and is tried again after 15 s. Old-format locks (no SessionId) stay live for 600 s. A lock time over 60 s in the future counts as broken. A younger lock is never taken over, so the old "half the stale time on the last try" shortcut is gone: a slow final save keeps its session. |
+| 5 | **Done:** `AutosaveInterval` 60 s, `StaleLockSeconds` 180 s (both in GameConfig). Each profile saves 60 s after its last save (checked every 5 s). A failed refresh warns and is tried again after 15 s. Old-format locks (no SessionId) stay live for 600 s. A lock's age comes from the key's DataStoreKeyInfo.UpdatedTime (Roblox's clock), so a writer's clock skew doesn't count. A lock dated ahead of us is fresh, unless it is absurdly far ahead. A younger lock is never taken over, so the old "half the stale time on the last try" shortcut is gone: a slow final save keeps its session. |
 | 6 | **Done:** the template is used only when nothing is stored. Any other shape gives "malformed" and nothing is written. |
 | 7 | **Done:** Studio uses `TerraForge_PlayerData_Studio` unless `GameConfig.StudioLiveData`. Test players (UserId <= 0) live in memory only. |
 | 8 | **Rules sent** to the mine-floors chat (MonetizationService already follows them). DataService now never trims purchase ids younger than 30 days. |
@@ -29,10 +29,15 @@ This audit only reads. Nothing in the game was changed. DataTemplate, Migrations
 | 12 | **Done** together with #5. |
 | 14 | **Done:** docs/SUPPORT.md. |
 
-Every scenario has a spec in tests/SaveSafety.spec.luau (31): the audit's, plus the adversarial review's R1–R4, A,
-C, the shutdown load and the real autosave schedule. They run on a fake store that rejects what Roblox rejects, can
-yield, hang or run a transform twice. Against the old code (49c2bac), 16 of the first 17 failed. Against the
-reviewed commit (ec76d00), the 12 review specs failed.
+Every scenario has a spec in tests/SaveSafety.spec.luau (40): the audit's, plus the adversarial reviews' R1–R4, A,
+C, S1, S2, S4, S6, H2, H3, H6, the shutdown load and the real autosave schedule. They run on a fake store that
+rejects what Roblox rejects and can yield before or after the transform, hang, run a transform twice or pass a
+DataStoreKeyInfo. Against the old code (49c2bac), 16 of the first 17 failed; against the round-1 commit (ec76d00),
+the 12 review specs failed. Mutation check for round 2: removing any one fix (retry, put-back, autosave kick,
+forget, live-inside-transform, same-server-by-live, UpdatedTime age, hung-release give-up) fails at least one spec.
+
+Rollback rule (review round 2): a broken update is fixed forward. An older build must never run on saves a newer
+build wrote, because its Migrations drop unknown ids until #1(b) lands. PUBLISHING step 12 and SUPPORT 5.2 say so.
 
 ## What is already solid
 

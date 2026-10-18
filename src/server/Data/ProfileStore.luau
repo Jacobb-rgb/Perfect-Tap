@@ -11,13 +11,16 @@
 	  saving the player who just hopped). A lock not refreshed for
 	  StaleLockSeconds is from a crashed server and gets taken over; a younger
 	  one never is (a live server with a slow final save keeps its session,
-	  so nothing it still writes is lost). Old-format locks (no SessionId:
-	  servers from before this code) count as stale only after
-	  LegacyStaleSeconds (their autosave was every ~160-195 s). A lock time
-	  more than FutureSlack seconds in the future (a broken clock) counts as
-	  stale. A lock of this same server is taken at once only when its
-	  session isn't live here any more (an earlier session whose final save
-	  gave up: forget); a live one here is waited for like any other.
+	  so nothing it still writes is lost). The lock's age comes from the
+	  key's DataStoreKeyInfo.UpdatedTime (Roblox's own clock: every refresh
+	  is a write), else from Lock.Time; a lock dated ahead of us is fresh
+	  (clock skew), unless it is absurdly far ahead (FarFuture). Old-format
+	  locks (no SessionId: servers from before this code) count as stale
+	  only after LegacyStaleSeconds (their autosave was every ~160-195 s).
+	  A lock of this same server is decided by `live` alone: a session live
+	  here always blocks (whatever its age), one that isn't (released, lost
+	  or forgotten) is taken at once. A session counts as live from the
+	  moment the transform returns its lock record.
 	  shouldStop() (the player left, the server is closing) ends the retries
 	  and is checked again right before the lock would be written: a load
 	  for someone who is gone never takes a lock ("gone").
@@ -281,7 +284,7 @@ end
 
 ---------------------------------------------------------------- the store
 
-ProfileStore.FutureSlack = 60 -- a lock time this far ahead of our clock is broken: stale
+ProfileStore.FarFuture = 3600 -- a lock dated more than StaleLockSeconds + this ahead is a broken clock: stale
 
 function ProfileStore.new(options: Options)
 	local self = setmetatable({}, ProfileStore)
@@ -320,7 +323,7 @@ function ProfileStore.forget(self: any, profile: Profile)
 end
 
 -- Runs one UpdateAsync with retries. Returns ok, error message.
-function ProfileStore._update(self: any, key: string, transform: (any) -> any): (boolean, string?)
+function ProfileStore._update(self: any, key: string, transform: (any, any) -> any): (boolean, string?)
 	local options = self.options
 	local lastError = nil
 	local tries = if self.urgent then math.min(self.callRetries, 2) else self.callRetries
@@ -329,8 +332,8 @@ function ProfileStore._update(self: any, key: string, transform: (any) -> any): 
 			options.BeforeRequest()
 		end
 		local ok, err = pcall(function()
-			options.Store:UpdateAsync(key, function(old)
-				return transform(old)
+			options.Store:UpdateAsync(key, function(old, keyInfo)
+				return transform(old, keyInfo)
 			end)
 		end)
 		if ok then
@@ -361,19 +364,30 @@ function ProfileStore._releaseLock(self: any, key: string, sessionId: string): b
 	return ok
 end
 
+-- When the key was last written (seconds, Roblox's clock), from the DataStoreKeyInfo UpdateAsync passes.
+local function updatedAt(keyInfo: any): number?
+	if keyInfo == nil then
+		return nil
+	end
+	local ok, updated = pcall(function()
+		return keyInfo.UpdatedTime
+	end)
+	return if ok and type(updated) == "number" then updated / 1000 else nil
+end
+
 -- Must load() wait for this lock (true), or may it take it over (false)?
-function ProfileStore._blocks(self: any, key: string, lock: { [string]: any }, now: number): boolean
+function ProfileStore._blocks(self: any, key: string, lock: { [string]: any }, now: number, keyInfo: any): boolean
 	local options = self.options
 	if lock.JobId == options.JobId then
-		-- this server's own lock: wait only while that session is live here
+		-- this server's own lock: only `live` knows (a live session always blocks, whatever its age)
 		local liveId = self.live[key]
-		if liveId == nil or liveId ~= lock.SessionId then
-			return false
-		end
+		return liveId ~= nil and liveId == lock.SessionId
 	end
-	local age = now - (tonumber(lock.Time) or 0)
-	if age < -ProfileStore.FutureSlack then
-		return false -- a lock from the future: a broken clock, never refreshed for real
+	local written = updatedAt(keyInfo) or tonumber(lock.Time) or 0
+	local age = now - written
+	if age < 0 then
+		-- dated ahead of us: clock skew, written recently; only an absurd date is a broken clock
+		return age >= -(self.staleLock + ProfileStore.FarFuture)
 	end
 	local stale = if lock.SessionId == nil then self.legacyStale else self.staleLock
 	return age < stale
@@ -396,10 +410,12 @@ function ProfileStore.load(self: any, key: string, shouldStop: (() -> boolean)?)
 		local loadedData: { [string]: any }? = nil
 		local lockedByOther = false
 		local refused: string? = nil
-		local ok, err = self:_update(key, function(old): any
+		local ok, err = self:_update(key, function(old, keyInfo): any
 			loadedData = nil
 			lockedByOther = false
 			refused = nil
+			-- (Roblox may run this again: only the run whose record is written counts)
+			endSession(self, key, sessionId)
 			local now = options.Now()
 			-- nothing stored = a new player; anything else must be a proper record
 			if old ~= nil and (type(old) ~= "table" or type(old.Data) ~= "table") then
@@ -413,7 +429,7 @@ function ProfileStore.load(self: any, key: string, shouldStop: (() -> boolean)?)
 					return nil
 				end
 			end
-			if old ~= nil and type(old.Lock) == "table" and self:_blocks(key, old.Lock, now) then
+			if old ~= nil and type(old.Lock) == "table" and self:_blocks(key, old.Lock, now, keyInfo) then
 				lockedByOther = true
 				return nil -- cancel the write
 			end
@@ -423,17 +439,20 @@ function ProfileStore.load(self: any, key: string, shouldStop: (() -> boolean)?)
 			end
 			local data = if old ~= nil then old.Data else deepCopy(options.Template)
 			loadedData = data
+			-- live from the moment the lock is written (a same-server load during the round trip waits)
+			self.live[key] = sessionId
 			return { Data = data, Lock = { JobId = options.JobId, SessionId = sessionId, Time = now }, Saved = now }
 		end)
 		if not ok then
+			endSession(self, key, sessionId)
 			return nil, "error: " .. tostring(err)
 		end
 		if refused then
+			endSession(self, key, sessionId)
 			return nil, refused
 		end
 		if loadedData then
 			local data = loadedData :: { [string]: any }
-			self.live[key] = sessionId
 			local prepared, problem = pcall(function()
 				reconcile(data, options.Template)
 				if options.Migrate then
@@ -459,6 +478,7 @@ function ProfileStore.load(self: any, key: string, shouldStop: (() -> boolean)?)
 			},
 				nil
 		end
+		endSession(self, key, sessionId)
 		if lockedByOther and attempt < self.lockRetries then
 			options.Wait(self.lockRetryDelay)
 		end

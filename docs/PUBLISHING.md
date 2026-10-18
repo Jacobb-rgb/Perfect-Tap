@@ -61,10 +61,13 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
 12. **Every later update**: publish, then **Game Settings > Places > ... > "Migrate To Latest Update"** (or
     "Shut Down All Servers"). Never leave old servers running: a save a newer server wrote is refused by an older
     one ("The game just updated, please rejoin"), so players would be bounced until the old servers close.
-    An update that adds ore ids, levels or save fields bumps the save version: **`DataTemplate.Version` and
+    An update that adds **anything a save can name** bumps the save version: ore ids, grades, recipes, item kinds,
+    machine ids, keep modes, blaster / train / upgrade levels, new save fields. Bump **`DataTemplate.Version` and
     `Migrations.Latest` together** (tests/SaveSafety.spec.luau fails while they differ; docs/SAVE_AUDIT.md #1).
-    **Never roll back** to a place version with a lower save version (Version History): its servers would refuse
-    every save the newer build wrote. To undo a broken update, republish the old code with the save version kept at
-    the highest one ever shipped.
+    **A broken update is fixed forward**: republish the newest code with the broken feature switched off. **Never
+    run an older build on saves a newer build wrote**: its Migrations don't know the new ids and drop them for
+    good (a podium ore, a blaster level, a keep-list entry). If a real rollback is unavoidable before audit
+    #1(b) lands, keep the old build's **lower** save version as it was: players who played the newer build then
+    get "The game just updated, please rejoin" and their saves stay untouched until the fix ships.
 
 Nothing in this branch uploads or publishes anything; every step above is done by the owner.

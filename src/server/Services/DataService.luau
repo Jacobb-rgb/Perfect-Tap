@@ -64,10 +64,11 @@ local loading: { [number]: boolean } = {} -- userId -> a load is running (one pe
 -- userId -> final saves of that user still being written (a counter: two
 -- quick sessions can release at once). A rejoin to the same server waits.
 local releasing: { [number]: number } = {}
-local closing: { [any]: boolean } = {} -- profiles whose release has started (never twice, no autosave)
+local closing: { [any]: number } = {} -- profile -> clock() its release started (never twice, no autosave)
 local nextSave: { [any]: number } = {} -- profile -> clock() of its next autosave
 local inFlight = 0 -- loads and releases in progress (BindToClose waits for these)
 local clock = os.clock -- (swappable in the Lune tests)
+local random = math.random -- (swappable in the Lune tests: the first autosave's offset)
 local releaseWait = RELEASE_WAIT -- (shorter in the Lune tests)
 local callbackLimit = CALLBACK_LIMIT -- (shorter in the Lune tests)
 local pause = function(seconds: number)
@@ -108,7 +109,7 @@ end
 -- What a player whose save couldn't be loaded is told (ProfileStore.load reasons).
 function DataService.kickText(reason: string?): string
 	if reason == "locked" then
-		return "Your Terra Forge data is still being saved on another server. Please rejoin in a minute."
+		return "Your Terra Forge data is still being saved. Please rejoin in a minute."
 	elseif reason == "newer" then
 		return "The game just updated, please rejoin"
 	elseif reason == "malformed" then
@@ -346,6 +347,21 @@ local function finalSave(userId: number, profile: ProfileStore.Profile)
 	end
 end
 
+-- Has every running release of this user been going for longer than a lock can live?
+local function releaseHung(userId: number): boolean
+	local any = false
+	local name = "Player_" .. userId
+	for profile, started in closing do
+		if profile.Key == name then
+			any = true
+			if clock() - started < GameConfig.StaleLockSeconds then
+				return false
+			end
+		end
+	end
+	return any
+end
+
 local function addReleasing(userId: number, delta: number)
 	local n = (releasing[userId] or 0) + delta
 	if n > 0 then
@@ -360,7 +376,7 @@ local function release(player: Player, profile: ProfileStore.Profile)
 	if closing[profile] then
 		return
 	end
-	closing[profile] = true -- no autosave from here on (the callbacks may still yield)
+	closing[profile] = clock() -- no autosave from here on (the callbacks may still yield)
 	nextSave[profile] = nil
 	local userId = player.UserId
 	addReleasing(userId, 1)
@@ -398,7 +414,7 @@ local function loadPlayer(player: Player)
 	loading[userId] = true
 	-- rejoined while the last session is still saving: wait for it; never load past it
 	local waited = 0
-	while releasing[userId] and waited < releaseWait and player.Parent do
+	while releasing[userId] and not releaseHung(userId) and waited < releaseWait and player.Parent do
 		task.wait(0.25)
 		waited += 0.25
 	end
@@ -407,7 +423,15 @@ local function loadPlayer(player: Player)
 		finish()
 		return
 	end
-	if releasing[userId] then
+	if releasing[userId] and releaseHung(userId) then
+		-- a final save stuck for longer than a lock can live: give it up; load's lock rules decide
+		for profile in closing do
+			if profile.Key == key(player) then
+				storeFor(userId):forget(profile)
+			end
+		end
+		warn(`[DataService] {player.Name}: a final save has hung for over {GameConfig.StaleLockSeconds} s, given up`)
+	elseif releasing[userId] then
 		loading[userId] = nil
 		warn(`[DataService] {player.Name} rejoined while their last save is still being written`)
 		player:Kick(DataService.kickText("locked"))
@@ -444,7 +468,7 @@ local function loadPlayer(player: Player)
 	end
 	profiles[player] = profile
 	-- the first autosave somewhere in the next interval (spreads the players out)
-	nextSave[profile] = clock() + GameConfig.AutosaveInterval * (0.5 + math.random() * 0.5)
+	nextSave[profile] = clock() + GameConfig.AutosaveInterval * (0.5 + random() * 0.5)
 	finish()
 	for _, callback in loadedCallbacks do
 		task.spawn(callback, player, profile.Data)
@@ -573,6 +597,9 @@ DataService._test = {
 		clock = fn
 	end,
 	-- shorter waits for the tests: the rejoin wait and the pauses between final-save attempts
+	setRandom = function(fn: () -> number)
+		random = fn
+	end,
 	setTimings = function(wait: number, pauseFn: (number) -> (), callbacks: number?)
 		releaseWait = wait
 		pause = pauseFn
@@ -596,6 +623,7 @@ DataService._test = {
 			closing,
 			nextSave,
 			clock,
+			random,
 			releaseWait,
 			pause,
 			callbackLimit,
@@ -624,9 +652,9 @@ DataService._test = {
 		local ok, err = pcall(fn :: any)
 		profileStore, memoryProfileStore = saved[1], saved[2]
 		profiles, loading, releasing, closing, nextSave = saved[3], saved[4], saved[5], saved[6], saved[7]
-		clock, releaseWait, pause, callbackLimit = saved[8], saved[9], saved[10], saved[11]
-		inFlight, shuttingDown, inMemory = saved[12], saved[13], saved[14]
-		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[15], saved[16], saved[17]
+		clock, random, releaseWait, pause, callbackLimit = saved[8], saved[9], saved[10], saved[11], saved[12]
+		inFlight, shuttingDown, inMemory = saved[13], saved[14], saved[15]
+		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[16], saved[17], saved[18]
 		if not ok then
 			error(err, 0)
 		end

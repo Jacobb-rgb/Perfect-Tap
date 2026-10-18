@@ -33,8 +33,12 @@ end
 ```
 
 Copy the version id from the list. Then restore it while the player is **offline**. The write is refused while a
-live lock is on the save, but goes through when the stored value is broken (not a save) or its lock is stale (a
-crashed server):
+live lock is on the save (a lock dated ahead of this PC's clock counts as live), but goes through when the stored
+value is broken (not a save) or its lock is stale (a crashed server).
+
+**Robux purchases made after that version are undone by a restore.** Roblox never delivers an acknowledged receipt
+again, so the snippet keeps every purchase id of the current save and prints the ones the old version doesn't
+have. Re-grant those products by hand on the restored save (the player bought them):
 
 ```lua
 local store = game:GetService("DataStoreService"):GetDataStore("TerraForge_PlayerData_v1")
@@ -45,11 +49,22 @@ store:UpdateAsync(key, function(current)
 	local isSave = type(current) == "table" and type(current.Data) == "table"
 	local lock = if isSave and type(current.Lock) == "table" then current.Lock else nil
 	local age = if lock then os.time() - (tonumber(lock.Time) or 0) else math.huge
-	if lock and age >= 0 and age < 600 then
+	if lock and age < 600 then
 		warn(`the player is online (or a server still holds the save, {age} s ago): try again in a few minutes`)
 		return nil
 	end
-	return { Data = old.Data, Saved = os.time() }
+	-- purchases since that version: keep their ids, list them for a re-grant
+	local data = old.Data
+	data.Purchases = if type(data.Purchases) == "table" then data.Purchases else {}
+	if isSave and type(current.Data.Purchases) == "table" then
+		for id, at in current.Data.Purchases do
+			if data.Purchases[id] == nil then
+				data.Purchases[id] = at
+				print("RE-GRANT purchase", id, os.date("!%Y-%m-%d %H:%M", tonumber(at) or 0))
+			end
+		end
+	end
+	return { Data = data, Saved = os.time() }
 end)
 ```
 
@@ -77,7 +92,8 @@ To take a cheater off the boards, call `LeaderboardService.removeUser(id)` as in
 and keeps them off. To keep them out of the game, use Roblox's ban tools in the Creator Dashboard or
 `Players:BanAsync`.
 
-Don't edit coins by hand to "fix" a cheater. Restore a version from before the cheating instead (2).
+Don't edit coins by hand to "fix" a cheater. Restore a version from before the cheating instead (2), and re-grant
+the Robux purchases it prints: those were paid for.
 
 ## 5. "My progress is gone" checklist
 
@@ -85,7 +101,8 @@ Don't edit coins by hand to "fix" a cheater. Restore a version from before the c
    lock is taken over after 180 s.
 2. Is `Data.Version` higher than the game's `Migrations.Latest`? Then an old server is still running. Use
    *Migrate To Latest Update* (docs/PUBLISHING.md step 12). It is also the sign of a rollback to an older build:
-   republish with the save version kept (PUBLISHING step 12).
+   fix forward instead (republish the newest build with the broken feature off). An older build must never run on
+   these saves: its Migrations drop what it doesn't know (PUBLISHING step 12).
 3. Look for these warns in the server log (Creator Dashboard > Error Report / Logs):
    - `[DataService] ... repaired before saving: <path>`: a value the DataStore couldn't hold was fixed. Fix the code
      that wrote it.
@@ -93,7 +110,7 @@ Don't edit coins by hand to "fix" a cheater. Restore a version from before the c
      left untouched; fix the reason, then the player can join again.
    - `[DataService] final save failed for user <id>`: the last minute of play may be lost. Restore from a version
      if the player lost more.
-4. If nothing explains it, restore the last good version (2).
+4. If nothing explains it, restore the last good version (2), then re-grant the purchases it prints.
 
 ## 6. "Couldn't read your save" / "couldn't prepare your save"
 
