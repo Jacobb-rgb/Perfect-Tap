@@ -11,7 +11,7 @@ return function(T, Loader)
 
 	local B = HoverboardData.ById
 
-	T.test("HoverboardView: card states from the save, coins and product ids", function()
+	T.test("HoverboardView: card states from the save, coins and game pass ids", function()
 		local none = {}
 		local p1 = B.TimberDrifter.Price :: number
 		T.eq(HoverboardView.cardState(B.TimberDrifter, none, "", p1 - 1), "BuyLocked", "not enough coins")
@@ -21,15 +21,15 @@ return function(T, Loader)
 		local owned = { TimberDrifter = true }
 		T.eq(HoverboardView.cardState(B.TimberDrifter, owned, "", 0), "Equip", "owned")
 		T.eq(HoverboardView.cardState(B.TimberDrifter, owned, "TimberDrifter", 0), "Equipped", "equipped")
-		-- Robux boards: COMING SOON until the owner writes the product id
-		local product = MonetizationConfig.Products.HoverboardComet
-		local old = product.Id
-		product.Id = 0
-		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 1e12), "Soon", "no product id")
-		product.Id = 777
-		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Robux", "a real product id")
+		-- Robux boards: COMING SOON until the owner writes the game pass id
+		local pass = MonetizationConfig.Entries.HoverboardComet
+		local old = pass.Id
+		pass.Id = 0
+		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 1e12), "Soon", "no pass id")
+		pass.Id = 777
+		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Robux", "a real pass id")
 		T.eq(HoverboardView.cardState(B.NeonComet, { NeonComet = true }, "", 0), "Equip", "owned Robux board")
-		product.Id = old
+		pass.Id = old
 	end)
 
 	T.test("HoverboardView: texts", function()

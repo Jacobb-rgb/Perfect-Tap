@@ -41,11 +41,12 @@ return function(T, Loader)
 				robux += 1
 				T.eq(board.Kind, "Robux", board.Id .. " kind")
 				T.eq(board.Robux, 49, board.Id .. " costs 49 R$")
-				local product = MonetizationConfig.get(board.ProductKey)
-				T.truthy(product ~= nil, board.Id .. " names a product in MonetizationConfig")
-				T.eq(product.Kind, "Hoverboard", board.Id .. " product kind")
-				T.eq(product.BoardId, board.Id, board.Id .. " product grants this board")
-				T.eq(product.Robux, board.Robux, board.Id .. " shown price = the product price")
+				local pass = MonetizationConfig.get(board.PassKey)
+				T.truthy(pass ~= nil, board.Id .. " names a game pass in MonetizationConfig")
+				T.eq(pass.Kind, "GamePass", board.Id .. " is a game pass (owned forever, never bought twice)")
+				T.eq(pass.Grant, "Hoverboard", board.Id .. " pass grant")
+				T.eq(pass.BoardId, board.Id, board.Id .. " pass unlocks this board")
+				T.eq(pass.Robux, board.Robux, board.Id .. " shown price = the pass price")
 				T.truthy(board.IgnoresCarrySlow, board.Id .. " ignores the carry slowdown (owner)")
 				T.truthy(board.Effect ~= "None", board.Id .. " has a special effect")
 				T.eq(board.Price, nil, board.Id .. " is not sold for coins")
@@ -68,42 +69,51 @@ return function(T, Loader)
 		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), 28, "23 / 18 = +28%")
 	end)
 
-	T.test("hoverboards: product ids live in MonetizationConfig, 0 is never prompted or matched", function()
-		T.eq(HoverboardData.byProduct(0), nil, "id 0 matches no board")
-		T.eq(HoverboardData.byProduct("12"), nil, "a string is no product id")
-		T.eq(HoverboardData.byProduct(0 / 0), nil, "NaN is no product id")
+	T.test("hoverboards: game pass ids live in MonetizationConfig, 0 is never prompted or matched", function()
+		T.eq(HoverboardData.byPass(0), nil, "id 0 matches no board")
+		T.eq(HoverboardData.byPass("12"), nil, "a string is no pass id")
+		T.eq(HoverboardData.byPass(0 / 0), nil, "NaN is no pass id")
+		T.falsy(MonetizationConfig.isLive(0), "0 is not live")
+		T.falsy(MonetizationConfig.isLive(-5), "negative ids are not live")
+		T.falsy(MonetizationConfig.isLive(1.5), "fractions are not live")
+		T.falsy(MonetizationConfig.isLive("7"), "strings are not live")
+		T.truthy(MonetizationConfig.isLive(7), "a whole id is live")
 		T.eq(MonetizationConfig.byId(-5), nil, "negative ids never match")
 		T.eq(MonetizationConfig.byId(1.5), nil, "fractions never match")
 		T.eq(HoverboardData.get(nil), nil, "nil id")
 		T.eq(HoverboardData.get("Nope"), nil, "unknown id")
 		local seen = {}
-		for key, product in MonetizationConfig.Products do
-			T.eq(product.Key, key, key .. " knows its key")
-			T.truthy(product.Id == 0 or (product.Id > 0 and product.Id == math.floor(product.Id)), key .. " id is 0 or a whole number")
-			if product.Id > 0 then
-				T.falsy(seen[product.Id], key .. " id is unique")
-				seen[product.Id] = true
+		for key, entry in MonetizationConfig.Entries do
+			T.eq(entry.Key, key, key .. " knows its key")
+			T.truthy(entry.Kind == "GamePass" or entry.Kind == "Product", key .. " kind")
+			T.truthy(type(entry.Grant) == "string" and #entry.Grant > 0, key .. " names its grant")
+			T.truthy(entry.Id == 0 or MonetizationConfig.isLive(entry.Id), key .. " id is 0 or a whole number")
+			if entry.Id > 0 then
+				T.falsy(seen[entry.Id], key .. " id is unique")
+				seen[entry.Id] = true
 			end
-			T.eq(MonetizationConfig.canPrompt(key), product.Id > 0, key .. " prompts only with a real id")
+			T.eq(MonetizationConfig.canPrompt(key), entry.Id > 0, key .. " prompts only with a real id")
 		end
 		for _, board in HoverboardData.List do
 			if board.Kind == "Robux" then
-				local id = HoverboardData.productId(board)
+				local id = HoverboardData.passId(board)
 				T.eq(HoverboardData.canPrompt(board), id > 0, board.Id .. " prompts only with a real id")
-				-- a real id (simulated) matches the board, and only that one
-				local product = MonetizationConfig.get(board.ProductKey)
-				local old = product.Id
-				product.Id = 9000000 + board.Order
+				-- a real id (simulated) matches the board as a pass, never as a product
+				local pass = MonetizationConfig.get(board.PassKey)
+				local old = pass.Id
+				pass.Id = 9000000 + board.Order
 				local ok, err = pcall(function()
 					T.truthy(HoverboardData.canPrompt(board), board.Id .. " prompts once it has an id")
-					T.eq(HoverboardData.byProduct(product.Id), board, board.Id .. " by product id")
+					T.eq(HoverboardData.byPass(pass.Id), board, board.Id .. " by pass id")
+					T.eq(MonetizationConfig.byId(pass.Id, "GamePass"), pass, board.Id .. " is found as a pass")
+					T.eq(MonetizationConfig.byId(pass.Id, "Product"), nil, board.Id .. " is never a developer product")
 				end)
-				product.Id = old
+				pass.Id = old
 				if not ok then
 					error(err, 0)
 				end
 			else
-				T.eq(HoverboardData.productId(board), 0, board.Id .. " has no product")
+				T.eq(HoverboardData.passId(board), 0, board.Id .. " has no pass")
 			end
 		end
 	end)

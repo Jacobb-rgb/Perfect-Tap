@@ -2,9 +2,11 @@
 	HoverboardService: buying, equipping and riding hoverboards
 	(HoverboardData; owner: mine floors point 3).
 
-	Save: data.Hoverboards = { Owned = { [boardId] = true }, Equipped = id or "" }
-	(DataTemplate; junk is repaired in place when read: unknown ids and
-	non-true values leave Owned, an Equipped board you don't own becomes "").
+	Save: data.Hoverboards = { Owned = { [boardId] = true }, Equipped = id or "",
+	Passes = { [boardId] = true } } (DataTemplate). Passes marks the boards a
+	game pass gave (only those can be taken back). Junk is repaired in place
+	when read: unknown ids and non-true values leave Owned and Passes, a pass
+	mark without the board leaves, an Equipped board you don't own becomes "".
 
 	HoverboardAction (Net, rate limited), from anywhere (the Boards panel opens
 	from the left side menu); every request read gets a HoverboardResult
@@ -14,7 +16,7 @@
 	                               yield (a double tap buys once). The new board
 	                               is equipped when it is faster than the one you
 	                               had (or you had none). Robux boards: "Robux"
-	                               (the client prompts the developer product).
+	                               (the client prompts the game pass).
 	  { Action = "Equip", Board }  an owned board ("" = none, also gets you off).
 	                               While riding, the new board replaces the old.
 	  { Action = "Ride", On }      On = true / false (nil = toggle). Getting on
@@ -33,9 +35,13 @@
 	a cleaning session starting, an elevator ride departing, unequipping.
 	The blaster keeps working while riding.
 
-	Robux boards: MonetizationService grants them (Kind "Hoverboard"):
-	Owned[board] = true, equipped like a bought board; already owned = granted
-	with nothing new.
+	Robux boards are game passes and come only through MonetizationService's
+	pass path (registerPass "Hoverboard", checked on every load and on a
+	purchase): grant = Owned[board] = Passes[board] = true, equipped like a
+	bought board, "unlocked" said once (the check on later loads changes
+	nothing and says nothing); revoke (Roblox says the pass isn't owned any
+	more, e.g. a refund) = only a pass-given board leaves Owned (coin boards
+	are never touched), it is unequipped and you get off it if you ride it.
 	State: snapshot.Hoverboards = { Owned = { boardId... }, Equipped }.
 ]]
 
@@ -74,7 +80,7 @@ export type Reason =
 	| "Elevator"
 	| "Cooldown"
 
-export type Record = { Owned: { [string]: boolean }, Equipped: string }
+export type Record = { Owned: { [string]: boolean }, Equipped: string, Passes: { [string]: boolean } }
 
 HoverboardService.ToggleCooldown = 0.5 -- seconds between two ride changes of one player
 HoverboardService.Reasons = {
@@ -105,7 +111,7 @@ local clock: () -> number = os.clock
 function HoverboardService.record(data: { [string]: any }): Record
 	local record = data.Hoverboards
 	if type(record) ~= "table" then
-		record = { Owned = {}, Equipped = "" }
+		record = { Owned = {}, Equipped = "", Passes = {} }
 		data.Hoverboards = record
 	end
 	local owned = record.Owned
@@ -121,6 +127,20 @@ function HoverboardService.record(data: { [string]: any }): Record
 	end
 	for _, id in junk do
 		owned[id] = nil
+	end
+	local passes = record.Passes
+	if type(passes) ~= "table" then
+		passes = {}
+		record.Passes = passes
+	end
+	table.clear(junk)
+	for id, value in passes do
+		if value ~= true or owned[id] ~= true then
+			table.insert(junk, id)
+		end
+	end
+	for _, id in junk do
+		passes[id] = nil
 	end
 	local equipped = record.Equipped
 	if type(equipped) ~= "string" or (equipped ~= "" and owned[equipped] ~= true) then
@@ -364,22 +384,50 @@ end
 
 ---------------------------------------------------------------- Robux boards
 
--- MonetizationService grant handler (Kind "Hoverboard"): owns the product's board.
-local function grantBoard(player: Player, data: { [string]: any }, product: MonetizationConfig.Product): boolean
-	local board = HoverboardData.get(product.BoardId)
+-- Pass handler "Hoverboard" grant: owns the pass's board (idempotent: runs on every load).
+-- True when the board is new; the "unlocked" line is said only then.
+local function grantBoard(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local board = HoverboardData.get(entry.BoardId)
 	if not board then
 		return false
 	end
 	local record = HoverboardService.record(data)
 	if record.Owned[board.Id] then
-		Net.fire("Notify", player, { Text = `You already own the {board.Name}.`, Kind = "Info" })
+		if record.Passes[board.Id] then
+			return false
+		end
+		-- owned already (an older grant): from now on the pass holds it
+		record.Passes[board.Id] = true
 		return true
 	end
 	give(record, board)
+	record.Passes[board.Id] = true
 	if riding[player] and record.Equipped ~= "" and riding[player] ~= record.Equipped then
 		setRide(player, record.Equipped)
 	end
 	Net.fire("Notify", player, { Text = `{board.Name} unlocked! Thank you! Press RIDE to hover.`, Kind = "Reward" })
+	return true
+end
+
+-- Pass handler "Hoverboard" revoke: Roblox says the pass isn't owned (a refund). Takes back
+-- only a board this pass gave; unequips it and gets you off it. True when the save changed.
+local function revokeBoard(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local board = HoverboardData.get(entry.BoardId)
+	if not board then
+		return false
+	end
+	local record = HoverboardService.record(data)
+	if not record.Passes[board.Id] then
+		return false
+	end
+	record.Passes[board.Id] = nil
+	record.Owned[board.Id] = nil
+	if record.Equipped == board.Id then
+		record.Equipped = ""
+	end
+	if riding[player] == board.Id then
+		setRide(player, nil)
+	end
 	return true
 end
 
@@ -408,6 +456,11 @@ end
 HoverboardService._test = {
 	action = onAction,
 	grant = grantBoard,
+	revoke = revokeBoard,
+	-- marks the player as riding `boardId` (no character needed)
+	riding = function(player: Player, boardId: string)
+		riding[player] = boardId
+	end,
 	setRide = setRide,
 	hookCharacter = hookCharacter,
 	setClock = function(fn: () -> number)
@@ -422,7 +475,7 @@ HoverboardService._test = {
 
 function HoverboardService.init()
 	Net.on("HoverboardAction", onAction)
-	MonetizationService.register("Hoverboard", grantBoard)
+	MonetizationService.registerPass("Hoverboard", { grant = grantBoard, revoke = revokeBoard })
 	StateService.addProvider(function(_player: Player, data: { [string]: any }, snapshot: { [string]: any })
 		local record = HoverboardService.record(data)
 		local owned = {}

@@ -1,15 +1,33 @@
 --[[
-	MonetizationService: the game's one MarketplaceService.ProcessReceipt
-	callback (docs/COMPLIANCE.md "Process receipts safely"). Product ids:
-	MonetizationConfig (id 0 = not created yet: never prompted, never matched).
+	MonetizationService: everything bought with Robux (docs/COMPLIANCE.md).
+	Ids and kinds: MonetizationConfig (Id 0 = not created yet: never prompted,
+	never checked, never matched). Handlers register by the entry's Grant in
+	their service's init().
 
-	Grant handlers register by product Kind in their service's init():
-	  MonetizationService.register("Hoverboard", function(player, data, product): boolean)
-	A handler changes the save (no yields) and returns true when the product is
-	granted (also when there was nothing new to give, e.g. a board already
-	owned: the purchase is used up, never retried forever).
+	Game passes (Kind "GamePass": bought once, owned forever):
+	  MonetizationService.registerPass(grant, { grant = fn, revoke = fn })
+	    grant(player, data, entry): boolean   give what the pass gives; true
+	                                          when something changed (no yield,
+	                                          idempotent: it runs on every load)
+	    revoke(player, data, entry): boolean? take back only what the pass gave
+	                                          (Roblox says it isn't owned any
+	                                          more: a refund); false = nothing changed
+	  - Every time a save loads (DataService.onLoaded) a spawned task asks
+	    MarketplaceService:UserOwnsGamePassAsync for each live pass, in pcall,
+	    up to CheckTries times with a growing pause (RetryDelay, x2), never
+	    holding the load up and giving up quietly when the player leaves.
+	    Owned -> grant. A successful "not owned" -> revoke. A check that keeps
+	    failing changes nothing.
+	  - PromptGamePassPurchaseFinished(player, passId, wasPurchased) on the
+	    server: grant when wasPurchased and passId is a live pass entry.
+	  - MonetizationService.owns(player, key): the session's answer (true only
+	    once Roblox or a purchase said so).
+	  - DataService.changed after every change (the saves don't need an extra
+	    write: ownership is checked again on the next load).
 
-	A receipt is decided like this (MonetizationService.decide):
+	Developer products (Kind "Product", bought again and again): the game's one
+	MarketplaceService.ProcessReceipt callback (MonetizationService.decide):
+	  MonetizationService.register(grant, function(player, data, entry): boolean)
 	  - the player is not in this server, or their save isn't loaded here
 	    (DataService.get is nil: only the server holding the ProfileStore
 	    session lock has it)                         -> NotProcessedYet
@@ -17,13 +35,14 @@
 	  - the PurchaseId is already in data.Purchases  -> PurchaseGranted, once
 	    the save holding it went through (granted here but the save failed:
 	    save again first; still failing -> NotProcessedYet)
-	  - unknown product or no handler, or the handler refuses -> NotProcessedYet
+	  - not a live "Product" entry, no handler, or the handler refuses
+	                                                 -> NotProcessedYet
 	  - else: grant, data.Purchases[PurchaseId] = os.time(), PurchaseCount + 1,
 	    DataService.changed, DataService.saveNow; PurchaseGranted only when the
 	    save succeeded, else NotProcessedYet (Roblox calls again; the id is
 	    already recorded, so the next call only retries the save)
-	Never grants from PromptProductPurchaseFinished. DataService keeps the
-	Purchases record bounded (the last 100 ids).
+	Game passes never go through ProcessReceipt. Nothing is granted from
+	PromptProductPurchaseFinished. DataService keeps Purchases bounded.
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -36,21 +55,134 @@ local DataService = require(script.Parent.DataService)
 
 local MonetizationService = {}
 
-export type Grant = (player: Player, data: { [string]: any }, product: MonetizationConfig.Product) -> boolean
+export type Grant = (player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry) -> boolean
+export type PassHandler = {
+	grant: (player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry) -> boolean,
+	revoke: (player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry) -> boolean?,
+}
+
+MonetizationService.CheckTries = 4 -- UserOwnsGamePassAsync attempts per pass and load
+MonetizationService.RetryDelay = 2 -- seconds before the 2nd attempt (then x2)
 
 local grants: { [string]: Grant } = {}
+local passHandlers: { [string]: PassHandler } = {}
+-- the session's pass answers: [player][entry key] = owned (nil = not known yet)
+local passOwned: { [Player]: { [string]: boolean } } = {}
 -- purchase ids granted in this server whose save hasn't gone through yet
 local unsaved: { [string]: boolean } = {}
 -- purchase ids being decided right now (Roblox may call again while a save yields)
 local inFlight: { [string]: boolean } = {}
+
+-- test seams (MonetizationService._test)
 local findPlayer: (userId: number) -> Player? = function(userId: number): Player?
 	return Players:GetPlayerByUserId(userId)
 end
-
--- Registers the grant handler of a product Kind (MonetizationConfig.Product.Kind).
-function MonetizationService.register(kind: string, grant: Grant)
-	grants[kind] = grant
+local ownsGamePass: (userId: number, passId: number) -> boolean = function(userId: number, passId: number): boolean
+	return MarketplaceService:UserOwnsGamePassAsync(userId, passId)
 end
+local pause: (seconds: number) -> () = function(seconds: number)
+	task.wait(seconds)
+end
+
+-- Registers the ProcessReceipt handler of a developer product Grant.
+function MonetizationService.register(grant: string, handler: Grant)
+	grants[grant] = handler
+end
+
+-- Registers the grant / revoke handlers of a game pass Grant.
+function MonetizationService.registerPass(grant: string, handler: PassHandler)
+	passHandlers[grant] = handler
+end
+
+-- True once Roblox (or a purchase in this session) said the player owns the pass `key`.
+function MonetizationService.owns(player: Player, key: string): boolean
+	local known = passOwned[player]
+	return known ~= nil and known[key] == true
+end
+
+---------------------------------------------------------------- game passes
+
+local function remember(player: Player, key: string, owned: boolean)
+	local known = passOwned[player]
+	if not known then
+		known = {}
+		passOwned[player] = known
+	end
+	known[key] = owned
+end
+
+-- Applies a pass answer to the save: grant when owned, revoke otherwise. True when the save changed.
+local function applyPass(player: Player, entry: MonetizationConfig.Entry, owned: boolean): boolean
+	remember(player, entry.Key, owned)
+	local data = DataService.get(player)
+	local handler = passHandlers[entry.Grant]
+	if not data or not handler then
+		return false
+	end
+	local ok, changed = pcall(function(): boolean
+		if owned then
+			return handler.grant(player, data, entry) == true
+		end
+		return handler.revoke(player, data, entry) ~= false
+	end)
+	if not ok then
+		warn(`[MonetizationService] pass {entry.Key} failed: {changed}`)
+		return false
+	end
+	if changed then
+		DataService.changed(player)
+	end
+	return changed
+end
+
+-- Asks Roblox whether the player owns the pass: true / false, or nil when every try failed
+-- (or the player left).
+local function checkPass(player: Player, entry: MonetizationConfig.Entry): boolean?
+	local delay = MonetizationService.RetryDelay
+	for attempt = 1, MonetizationService.CheckTries do
+		if not player.Parent then
+			return nil
+		end
+		local ok, result = pcall(ownsGamePass, player.UserId, entry.Id)
+		if ok and type(result) == "boolean" then
+			return result
+		end
+		if attempt < MonetizationService.CheckTries then
+			pause(delay)
+			delay *= 2
+		end
+	end
+	if player.Parent then
+		warn(`[MonetizationService] couldn't check pass {entry.Key} for {player.Name}; trying again next load`)
+	end
+	return nil
+end
+
+-- Checks every live pass of a player whose save just loaded (yields: run it in its own task).
+local function checkAll(player: Player)
+	for _, entry in MonetizationConfig.list("GamePass") do
+		if MonetizationConfig.isLive(entry.Id) and passHandlers[entry.Grant] then
+			local owned = checkPass(player, entry)
+			if owned ~= nil and player.Parent and DataService.get(player) then
+				applyPass(player, entry, owned)
+			end
+		end
+	end
+end
+
+-- MarketplaceService.PromptGamePassPurchaseFinished (server): grant a live pass just bought.
+local function onPassPurchaseFinished(player: Player, passId: any, wasPurchased: any)
+	if wasPurchased ~= true then
+		return
+	end
+	local entry = MonetizationConfig.byId(passId, "GamePass")
+	if not entry then
+		return
+	end
+	applyPass(player, entry, true)
+end
+
+---------------------------------------------------------------- developer products
 
 local function purchaseKey(value: any): string?
 	if type(value) == "string" and #value > 0 and #value <= 128 then
@@ -79,14 +211,14 @@ local function decideFor(player: Player, data: { [string]: any }, id: string, pr
 		end
 		return GRANTED
 	end
-	local product = MonetizationConfig.byId(productId)
-	local grant = if product then grants[product.Kind] else nil
-	if not product or not grant then
+	local entry = MonetizationConfig.byId(productId, "Product")
+	local grant = if entry then grants[entry.Grant] else nil
+	if not entry or not grant then
 		warn(`[MonetizationService] no product / handler for product id {tostring(productId)}`)
 		return NOT_YET
 	end
 	-- grant and record with no yield in between
-	if not grant(player, data, product) then
+	if not grant(player, data, entry) then
 		return NOT_YET
 	end
 	purchases[id] = os.time()
@@ -134,11 +266,23 @@ function MonetizationService.decide(receipt: any): Enum.ProductPurchaseDecision
 	return result
 end
 
+---------------------------------------------------------------- lifecycle
+
 -- Internals for the Lune tests only (tests/MonetizationService.spec.luau).
 MonetizationService._test = {
 	setFindPlayer = function(fn: (number) -> Player?)
 		findPlayer = fn
 	end,
+	-- replaces MarketplaceService:UserOwnsGamePassAsync (it may error like the real one)
+	setOwnsGamePass = function(fn: (number, number) -> boolean)
+		ownsGamePass = fn
+	end,
+	-- replaces task.wait between the pass check tries
+	setPause = function(fn: (number) -> ())
+		pause = fn
+	end,
+	checkAll = checkAll,
+	purchaseFinished = onPassPurchaseFinished,
 	isUnsaved = function(id: string): boolean
 		return unsaved[id] == true
 	end,
@@ -152,15 +296,30 @@ MonetizationService._test = {
 	reset = function()
 		table.clear(unsaved)
 		table.clear(inFlight)
+		table.clear(passOwned)
 		findPlayer = function(userId: number): Player?
 			return Players:GetPlayerByUserId(userId)
 		end
+		ownsGamePass = function(userId: number, passId: number): boolean
+			return MarketplaceService:UserOwnsGamePassAsync(userId, passId)
+		end
+		pause = function(seconds: number)
+			task.wait(seconds)
+		end
 	end,
 	grants = grants,
+	passHandlers = passHandlers,
 }
 
 function MonetizationService.init()
-	-- grant handlers register in their own services' init()
+	-- grant handlers register in their own services' init(); the checks run after the loads
+	DataService.onLoaded(function(player: Player)
+		task.spawn(checkAll, player)
+	end)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPassPurchaseFinished)
+	Players.PlayerRemoving:Connect(function(player: Player)
+		passOwned[player] = nil
+	end)
 end
 
 function MonetizationService.start()

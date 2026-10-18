@@ -107,8 +107,9 @@ Net.Events = {
 	--   request read gets a VaultResult (see VaultService)
 	-- hoverboards (HoverboardService), anywhere: { Action = "Buy", Board } a coin board (EconomyService);
 	--   { Action = "Equip", Board } an owned board ("" = none); { Action = "Ride", On: boolean? } on / off
-	--   (nil = toggle). Every request read gets a HoverboardResult. Robux boards are bought with
-	--   MarketplaceService:PromptProductPurchase on the client (MonetizationConfig ids, never id 0)
+	--   (nil = toggle). Every request read gets a HoverboardResult. Robux boards are game passes:
+	--   MarketplaceService:PromptGamePassPurchase on the client (MonetizationConfig ids, never id 0);
+	--   MonetizationService grants them (ownership checked on load and on purchase)
 	HoverboardAction = { Rate = 4, Burst = 8 },
 	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },

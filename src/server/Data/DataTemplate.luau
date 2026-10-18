@@ -104,8 +104,10 @@ local DataTemplate = {
 	ForgeName = "", -- raw text, always filtered by TextService before showing
 
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
-	-- coins or Robux), Equipped = the board RIDE uses, "" = none
-	Hoverboards = { Owned = {}, Equipped = "" },
+	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),
+	-- Passes = { [boardId] = true } for the boards a game pass gave (a refunded
+	-- pass takes only those back)
+	Hoverboards = { Owned = {}, Equipped = "", Passes = {} },
 
 	-- monetization: purchase ids already granted (never grant twice)
 	Purchases = {}, -- [purchaseId] = os.time()

@@ -7,8 +7,9 @@
 	  anywhere. Cards: BUY sends HoverboardAction { Action = "Buy", Board }
 	  (greyed out with a lock while you can't afford it: pressing it says how
 	  much is missing), EQUIP sends { Action = "Equip" }, the Robux button
-	  prompts the developer product (MarketplaceService:PromptProductPurchase,
-	  only for MonetizationConfig ids > 0; "COMING SOON" otherwise). The cards
+	  prompts the board's game pass (MarketplaceService:PromptGamePassPurchase,
+	  only for MonetizationConfig ids > 0; "COMING SOON" otherwise; the server
+	  grants it, never this client). The cards
 	  refresh on every State. Closes with the X, B (gamepad), Backspace or
 	  the side button again; gamepads get a selected card on open.
 	- RIDE: a round button in the HUD's right menu (above BUILD: clear of the
@@ -643,11 +644,11 @@ local function onCard(card: HoverboardView.Card)
 			send({ Action = "Equip", Board = board.Id })
 		end
 	elseif state == "Robux" then
-		local id = HoverboardData.productId(board)
+		local id = HoverboardData.passId(board)
 		if HoverboardData.canPrompt(board) and id > 0 then
 			Sfx.play("UIClick")
 			pcall(function()
-				MarketplaceService:PromptProductPurchase(player, id)
+				MarketplaceService:PromptGamePassPurchase(player, id)
 			end)
 		end
 	elseif state == "Soon" then
@@ -862,9 +863,9 @@ function HoverboardController.init()
 		refresh()
 		updateRideButton()
 	end)
-	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, _productId: number, purchased: boolean)
-		-- never grant here (the server's ProcessReceipt does): only a friendly line
-		if userId == player.UserId and purchased and isOpen then
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(buyer: Player, passId: number, purchased: boolean)
+		-- never grant here (the server's MonetizationService does): only a friendly line
+		if buyer == player and purchased and isOpen and HoverboardData.byPass(passId) then
 			showMessage("Thank you! Unlocking your board...", "Reward")
 		end
 	end)

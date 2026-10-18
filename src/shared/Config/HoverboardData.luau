@@ -32,9 +32,11 @@
 	  blaster 7   5,000,000 floor 4 opens
 	The Robux boards are faster than all of them from the first minute.
 
-	Robux boards name their developer product (ProductKey); the ids live in
-	MonetizationConfig. A product whose id is still 0 is never prompted: the
-	shop shows "Coming soon".
+	Robux boards are game passes (bought once, owned forever; a refund takes
+	the board back): each names its MonetizationConfig entry (PassKey), the
+	ids live there. A pass whose id is still 0 is never prompted: the shop
+	shows "Coming soon". MonetizationService checks pass ownership on every
+	load and HoverboardService grants / revokes the board.
 
 	Model look and effects: src/shared/Builders/HoverboardBuilder.luau and
 	HoverboardFx.luau (Colors below are the board's palette there).
@@ -63,7 +65,7 @@ export type Board = {
 	Kind: Kind,
 	Price: number?, -- coins (Kind = "Coins")
 	Robux: number?, -- price shown on the button (Kind = "Robux")
-	ProductKey: string?, -- MonetizationConfig.Products key (Kind = "Robux")
+	PassKey: string?, -- MonetizationConfig.Entries key of its game pass (Kind = "Robux")
 	Speed: number, -- Humanoid.WalkSpeed while riding
 	IgnoresCarrySlow: boolean, -- true: carried items don't slow you down on it
 	Effect: Effect,
@@ -158,7 +160,7 @@ HoverboardData.List = {
 		Name = "Neon Comet",
 		Kind = "Robux",
 		Robux = HoverboardData.RobuxPrice,
-		ProductKey = "HoverboardComet",
+		PassKey = "HoverboardComet",
 		Speed = 35,
 		IgnoresCarrySlow = true,
 		Effect = "Comet",
@@ -178,7 +180,7 @@ HoverboardData.List = {
 		Name = "Royal Phoenix",
 		Kind = "Robux",
 		Robux = HoverboardData.RobuxPrice,
-		ProductKey = "HoverboardPhoenix",
+		PassKey = "HoverboardPhoenix",
 		Speed = 38,
 		IgnoresCarrySlow = true,
 		Effect = "Phoenix",
@@ -211,24 +213,25 @@ function HoverboardData.isRobux(board: Board): boolean
 	return board.Kind == "Robux"
 end
 
--- The board's developer product id (0 = not created yet, or not a Robux board).
-function HoverboardData.productId(board: Board): number
-	local product = MonetizationConfig.get(board.ProductKey)
-	return if product then product.Id else 0
+-- The board's game pass id (0 = not created yet, or not a Robux board).
+function HoverboardData.passId(board: Board): number
+	local entry = MonetizationConfig.get(board.PassKey)
+	return if entry and entry.Kind == "GamePass" then entry.Id else 0
 end
 
--- A Robux board can be prompted only once the owner has written its product id.
+-- A Robux board can be prompted only once the owner has written its pass id.
 function HoverboardData.canPrompt(board: Board): boolean
-	return board.Kind == "Robux" and MonetizationConfig.canPrompt(board.ProductKey)
+	local entry = MonetizationConfig.get(board.PassKey)
+	return board.Kind == "Robux" and entry ~= nil and entry.Kind == "GamePass" and MonetizationConfig.canPrompt(board.PassKey)
 end
 
--- The board sold as this developer product, or nil (0 / unknown ids never match).
-function HoverboardData.byProduct(productId: any): Board?
-	local product = MonetizationConfig.byId(productId)
-	if not product or product.Kind ~= "Hoverboard" then
+-- The board this game pass unlocks, or nil (0 / unknown ids never match).
+function HoverboardData.byPass(passId: any): Board?
+	local entry = MonetizationConfig.byId(passId, "GamePass")
+	if not entry or entry.Grant ~= "Hoverboard" then
 		return nil
 	end
-	return HoverboardData.get(product.BoardId)
+	return HoverboardData.get(entry.BoardId)
 end
 
 --[[

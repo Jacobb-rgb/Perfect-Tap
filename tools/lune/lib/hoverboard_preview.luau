@@ -524,7 +524,7 @@ end
 	                       the 0.62 phone scale: compact panel
 	  ui_hover_hud_phone   the phone HUD with the RIDE button and stand-ins for
 	                       Roblox's touch thumbstick and jump button
-	The Robux cards show their live R$ button (product ids simulated; with id 0
+	The Robux cards show their live R$ button (game pass ids simulated; with id 0
 	the game shows COMING SOON).
 ]]
 function Preview.buildUi(Loader: any): { [string]: any }
@@ -607,9 +607,9 @@ function Preview.buildUi(Loader: any): { [string]: any }
 
 	local exports: { [string]: any } = {}
 	local saved = {}
-	for key, product in MonetizationConfig.Products do
-		saved[key] = product.Id
-		product.Id = 9100000 + #key
+	for key, entry in MonetizationConfig.Entries do
+		saved[key] = entry.Id
+		entry.Id = 9100000 + #key
 	end
 	local ok, err = pcall(function()
 		exports.ui_hover_hud = UiExport.export(hud(pc, 1, false, false))
@@ -624,7 +624,7 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		exports.ui_hover_hud_phone = UiExport.export(phoneHud)
 	end)
 	for key, id in saved do
-		MonetizationConfig.Products[key].Id = id
+		MonetizationConfig.Entries[key].Id = id
 	end
 	if not ok then
 		error(err, 0)

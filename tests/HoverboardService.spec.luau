@@ -310,12 +310,67 @@ return function(T, Loader)
 		T.eq(record.Owned.CartCruiser, nil, "non-true values leave")
 		T.eq(record.Owned[5], nil, "non-string keys leave")
 		T.eq(record.Equipped, "", "an unowned equipped board becomes none")
+		T.eq(type(record.Passes), "table", "an old save gets the Passes record")
+		w.data.Hoverboards = {
+			Owned = { NeonComet = true },
+			Equipped = "NeonComet",
+			Passes = { NeonComet = true, RoyalPhoenix = true, Nope = true, TimberDrifter = "yes" },
+		}
+		record = HoverboardService.record(w.data)
+		T.eq(record.Passes.NeonComet, true, "a pass mark on an owned board stays")
+		T.eq(record.Passes.RoyalPhoenix, nil, "a pass mark without the board leaves")
+		T.eq(record.Passes.Nope, nil, "unknown ids leave")
+		T.eq(record.Passes.TimberDrifter, nil, "non-true values leave")
 		w.data.Hoverboards = "junk"
 		record = HoverboardService.record(w.data)
 		T.eq(type(record.Owned), "table", "rebuilt")
+		T.eq(type(record.Passes), "table", "rebuilt")
 		T.eq(record.Equipped, "", "rebuilt")
 		w.data.Hoverboards = nil
 		T.falsy(HoverboardService.owns(w.data, "TimberDrifter"), "missing record = nothing owned")
 		T.eq(HoverboardService.equipped(w.data), nil, "nothing equipped")
+	end)
+
+	withWorld("hoverboards: a game pass grants the board once and a refund takes back only it", function(w)
+		local entry = {
+			Key = "HoverboardPhoenix",
+			Kind = "GamePass",
+			Id = 1,
+			Robux = 49,
+			Name = "Royal Phoenix",
+			Grant = "Hoverboard",
+			BoardId = "RoyalPhoenix",
+		}
+		local unlocked = 0
+		local function countUnlocked()
+			unlocked = 0
+			for _, note in w.notes do
+				if note.Name == "Notify" and string.find(note.A.Text, "unlocked", 1, true) then
+					unlocked += 1
+				end
+			end
+		end
+		w.data.Hoverboards.Owned.CartCruiser = true
+		w.data.Hoverboards.Equipped = "CartCruiser"
+		T.truthy(h.grant(w.player, w.data, entry), "granted: the save changed")
+		T.falsy(h.grant(w.player, w.data, entry), "the next load: nothing new")
+		countUnlocked()
+		T.eq(unlocked, 1, "unlocked said once")
+		T.eq(w.data.Hoverboards.Equipped, "RoyalPhoenix", "the faster board is equipped")
+		T.truthy(w.act({ Action = "Ride", On = true }).Ok, "ride the pass board")
+		T.eq(w.attr(), "RoyalPhoenix", "on it")
+		T.truthy(h.revoke(w.player, w.data, entry), "refund: revoked")
+		T.eq(w.data.Hoverboards.Owned.RoyalPhoenix, nil, "the pass board left")
+		T.eq(w.data.Hoverboards.Owned.CartCruiser, true, "the coin board stays")
+		T.eq(w.data.Hoverboards.Equipped, "", "unequipped")
+		T.eq(w.attr(), nil, "got off")
+		T.eq(w.player.humanoid.HipHeight, 2, "HipHeight back")
+		T.falsy(h.revoke(w.player, w.data, entry), "a second revoke changes nothing")
+		local coinEntry = { Key = "X", Kind = "GamePass", Id = 2, Robux = 1, Name = "X", Grant = "Hoverboard", BoardId = "CartCruiser" }
+		T.falsy(h.revoke(w.player, w.data, coinEntry), "a coin board is never revoked")
+		T.eq(w.data.Hoverboards.Owned.CartCruiser, true, "still owned")
+		-- Robux boards still can't be bought for coins
+		w.data.Coins = 1e12
+		T.eq(w.act({ Action = "Buy", Board = "RoyalPhoenix" }).Reason, "Robux", "only through the pass")
 	end)
 end
