@@ -24,8 +24,8 @@
 	            the front half, so a camera at +Z sees in
 	  The model holds: Folder "RockSpawns" (parts named "RockSpawn", attribute Deep),
 	  a part "GiantSpawn", a part "Entrance" (where players arrive), the elevator
-	  stop, the ore lift and a blaster gate. Budgets: <= 3000 parts without rocks,
-	  <= 24 PointLights.
+	  stop, the ore lift and a blaster gate. Budgets in the game build: <= 2500
+	  parts without rocks (floors 1-3: <= 1800), <= 24 PointLights.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -40,7 +40,7 @@ local Railway = require(World:WaitForChild("Railway"))
 
 local MineKit = {}
 
-MineKit.PartBudget = 3000 -- floors 4-5 (far from the town, they stream on their own)
+MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-5 stream on their own, far from the town)
 MineKit.NearPartBudget = 1800 -- floors 1-3 stream in with the town: keep them light for phones
 MineKit.LightBudget = 24
 
@@ -105,12 +105,14 @@ end
 
 ---------------------------------------------------------------- rock walls
 
-export type WallOpts = { Depth: number?, Lean: number?, Glow: Color3? }
+export type WallOpts = { Depth: number?, Lean: number?, Glow: Color3?, Step: number? }
 
 --[[
 	A jagged rock wall from `from` to `to` (ground points) of tall stacked shards
 	in `colors` (Mid, Light, Dark), facing the side `face` (unit vector toward the
-	floor's open space). opts.Glow adds thin glowing veins across the wall.
+	floor's open space). opts.Glow adds thin glowing veins across the wall;
+	opts.Step is the shard spacing (default 5 studs; wider = fewer parts, for rock
+	high up or far away).
 ]]
 function MineKit.wall(parent: Instance, from: Vector3, to: Vector3, height: number, face: Vector3, colors: { Color3 }, rng: Rng.Rng, opts: WallOpts?): Model
 	local o: WallOpts = opts or {}
@@ -121,7 +123,7 @@ function MineKit.wall(parent: Instance, from: Vector3, to: Vector3, height: numb
 	local length = along.Magnitude
 	local dir = along.Unit
 	local depth = o.Depth or 6
-	local n = math.max(2, math.floor(length / 5))
+	local n = math.max(2, math.floor(length / (o.Step or 5)))
 	local step = length / n
 	for i = 0, n - 1 do
 		local p = from + dir * (step * (i + 0.5)) - face * (depth * 0.5)

@@ -27,7 +27,8 @@
 	thick (inner faces x = +-62, z = -52 back, z = +52 front), ceiling at 40.
 	Terrace z 38..52 at y 2.4 (elevator left, ore lift right, gate + stairs in
 	the middle). 24 rock spawns in the side aisles (x +-34 / +-49) and the nave,
-	9 of them deep (z < -18). About 2300 parts, 18 PointLights, 6 emitters.
+	9 of them deep (z < -18). About 2350 parts in the game build (MineKit.PartBudget
+	2500), 18 PointLights, 6 emitters.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -104,6 +105,7 @@ local COL_X = 22
 local COL_Z = { 26, 10, -6, -22, -38 }
 local COL_H = 30 -- top of a full column's capital
 local GIANT = Vector2.new(0, 4)
+local CORNICE_STEP = 9 -- shard spacing of the cave rock over the cornices (MineKit.wall default 5)
 -- the train's Mine Lift on the terrace (Railway builds it there from TrainConfig in the game)
 local LIFT_SPOT: Vector3 = MineFloors.LiftSpots[4] or Vector3.new(26, TERRACE_Y, 45)
 
@@ -363,23 +365,17 @@ local function buildFloor(parent: Instance, c: Ctx)
 		{ 18, 30, 3.6 },
 		{ -42, -12, 1.2 },
 		{ 42, 4, -1.8 },
-		{ -6, -24, 0.2 },
-		{ 30, -32, 2.2 },
-		{ -54, 24, -0.9 },
-		{ 54, -14, 2.9 },
 		{ -14, 32, -1.3 },
 		{ 16, -16, 1.5 },
 	}
 	for _, k in cracks do
-		crack(m, c, k[1], k[2], k[3], c.rng:int(3, 5), 2.6, GROUT, false)
+		crack(m, c, k[1], k[2], k[3], c.rng:int(3, 4), 2.6, GROUT, false)
 	end
 	local glowCracks = {
 		{ -54, -44, 0.5 },
 		{ 54, -44, 2.6 },
 		{ -20, -44, 1.9 },
 		{ 20, -44, 1.2 },
-		{ 54, 18, 3.3 },
-		{ -54, -14, -0.2 },
 		{ -9, 10, 2.2 },
 		{ 9, -2, -0.9 },
 	}
@@ -412,7 +408,6 @@ local function puddle(parent: Instance, c: Ctx, x: number, z: number, size: numb
 	local a = c.rng:range(0, math.pi * 2)
 	local ox, oz = math.cos(a) * size * 0.55, math.sin(a) * size * 0.55
 	disc(parent, c, x, 0.09, z, size * 1.25, 0.06, WET, nil, TINY)
-	disc(parent, c, x + ox, 0.095, z + oz, size * 0.8, 0.06, WET, nil, TINY)
 	local w = disc(parent, c, x, 0.13, z, size, 0.05, WATER, NEON, WATER_PROPS)
 	w.Name = "Water"
 	disc(parent, c, x + ox, 0.14, z + oz, size * 0.6, 0.05, WATER, NEON, WATER_PROPS)
@@ -439,7 +434,7 @@ local function runeCircle(parent: Instance, c: Ctx, x: number, y: number, z: num
 			)
 		end
 	end
-	local outer = math.clamp(math.floor(radius * 1.8), 10, 18)
+	local outer = math.clamp(math.floor(radius * 1.35), 10, 18)
 	ring(radius, outer, 0.4)
 	ring(radius * 0.74, math.max(8, math.floor(outer * 0.75)), 0.25)
 	local marks = math.floor(outer / 2)
@@ -480,9 +475,6 @@ local function banner(parent: Instance, top: CFrame, width: number, length: numb
 	local tail = width * 0.45
 	local body = if torn then length * 0.78 else length - tail
 	Geo.block(m, top, Vector3.new(width + 1.4, 0.45, 0.45), GOLD, nil, TINY)
-	for _, sx in { -1, 1 } do
-		Geo.block(m, top * CFrame.new(sx * (width / 2 + 0.85), 0, 0), Vector3.new(0.7, 0.7, 0.7), GOLD_DARK, nil, TINY)
-	end
 	local cloth = top * CFrame.new(0, -0.25, 0)
 	Geo.block(m, cloth * CFrame.new(0, -body / 2, 0), Vector3.new(width, body, 0.25), RED, nil, DECOR)
 	if torn then
@@ -619,7 +611,7 @@ local function buildWalls(parent: Instance, c: Ctx)
 			dir(c, -sx, 0, 0),
 			CAVE,
 			rng,
-			{ Depth = 5 }
+			{ Depth = 5, Step = CORNICE_STEP }
 		)
 	end
 	-- side wall bays: banners, niches, rock pushing in
@@ -669,7 +661,7 @@ local function buildWalls(parent: Instance, c: Ctx)
 			dir(c, 0, 0, 1),
 			CAVE,
 			rng,
-			{ Depth = 5 }
+			{ Depth = 5, Step = CORNICE_STEP }
 		)
 		banner(m, at(c, sx * 19.5, 25, IN_BACK + 0.5) * CFrame.Angles(0, math.pi, 0), 6.5, 19, false)
 		niche(m, at(c, sx * 33, 6.5, IN_BACK + 0.6) * CFrame.Angles(0, math.pi, 0), 6.5, 11)
@@ -740,7 +732,7 @@ local function buildWalls(parent: Instance, c: Ctx)
 			dir(c, 0, 0, -1),
 			CAVE,
 			rng,
-			{ Depth = 5 }
+			{ Depth = 5, Step = CORNICE_STEP }
 		)
 	end
 end
@@ -759,7 +751,7 @@ local function buildCeiling(parent: Instance, c: Ctx)
 		local len = s[2] - s[1]
 		Geo.block(m, at(c, 0, CEIL + 2, mid), Vector3.new(IN_X * 2 + 8, 4, len), CEILING, nil, SOLID)
 		-- rough rock hanging under it
-		for _ = 1, 9 do
+		for _ = 1, 6 do
 			local x = rng:range(-54, 54)
 			local z = rng:range(s[1] + 8, s[2] - 6)
 			local size = Vector3.new(rng:range(7, 14), rng:range(2, 4), rng:range(6, 12))
@@ -772,7 +764,7 @@ local function buildCeiling(parent: Instance, c: Ctx)
 				DECOR
 			)
 		end
-		MineKit.stalactites(m, pt(c, 0, CEIL, mid), Vector2.new(116, len - 10), CAVE, rng, 22)
+		MineKit.stalactites(m, pt(c, 0, CEIL, mid), Vector2.new(116, len - 10), CAVE, rng, 7)
 	end
 end
 
@@ -890,8 +882,8 @@ local function buildColumns(parent: Instance, c: Ctx)
 	Geo.block(fall, capCf, Vector3.new(6.6, 1.3, 6.6), STONE_LIGHT, nil, BUMP)
 	Geo.block(fall, capCf * CFrame.new(0, -1.2, 0), Vector3.new(5.3, 1.2, 5.3), MARBLE, nil, DECOR)
 	Geo.block(fall, capCf * CFrame.new(0, -0.6, 0), Vector3.new(5.9, 0.4, 5.9), GOLD, nil, DECOR)
-	rubble(fall, c, -27, 0, 23.5, 4, { MARBLE, MARBLE_DARK }, 1.1)
-	rubble(fall, c, -45, 0, 33, 4, { MARBLE, STONE_LIGHT }, 1.0)
+	rubble(fall, c, -27, 0, 23.5, 3, { MARBLE, MARBLE_DARK }, 1.1)
+	rubble(fall, c, -45, 0, 33, 2, { MARBLE, STONE_LIGHT }, 1.0)
 
 	-- the right front column snapped: pieces lie at its foot
 	local snap = group("SnappedColumn", m)
@@ -901,7 +893,7 @@ local function buildColumns(parent: Instance, c: Ctx)
 	Geo.block(snap, cap * CFrame.new(0, 1.2, 0), Vector3.new(5.3, 1.2, 5.3), MARBLE, nil, DECOR)
 	Geo.block(snap, cap * CFrame.new(0, 0.6, 0), Vector3.new(5.9, 0.4, 5.9), GOLD, nil, DECOR)
 	Geo.block(snap, at(c, 25.4, 1.4, 22.6) * CFrame.Angles(0.2, 0.9, 1.1), Vector3.new(4.0, 2.4, 3.6), MARBLE, nil, BUMP)
-	rubble(snap, c, 24.5, 0, 31.5, 5, { MARBLE, MARBLE_DARK }, 1.0)
+	rubble(snap, c, 24.5, 0, 31.5, 3, { MARBLE, MARBLE_DARK }, 1.0)
 end
 
 ---------------------------------------------------------------- the dais, throne and statue
@@ -1134,22 +1126,22 @@ local function buildCrystals(parent: Instance, c: Ctx)
 	-- { x, y, z, tilt, count, height, lavender?, light? }
 	local list: { { any } } = {
 		-- the deep back: big clusters in the corners and beside the dais
-		{ -56.5, 0.6, -48.4, A(0.3, 0, -0.3), 9, 8, false, true },
-		{ 57, 0.6, -49, A(0.35, 0, 0.15), 9, 9, false, true },
-		{ -21.4, 0, -47.6, A(0.15, 0, 0.25), 7, 6, true, false },
-		{ 21.4, 0, -47.6, A(0.15, 0, -0.25), 7, 6.5, false, false },
-		{ -33, 0.6, -50.2, A(0.25, 0, 0), 6, 5, false, false },
-		{ 33, 0.6, -50.2, A(0.25, 0, 0), 6, 5, true, false },
-		{ -16.4, 1, -44.6, A(0.1, 0, 0.2), 5, 3.4, false, false },
-		{ 16.4, 1, -44.6, A(0.1, 0, -0.2), 5, 3.4, true, false },
+		{ -56.5, 0.6, -48.4, A(0.3, 0, -0.3), 7, 8, false, true },
+		{ 57, 0.6, -49, A(0.35, 0, 0.15), 7, 9, false, true },
+		{ -21.4, 0, -47.6, A(0.15, 0, 0.25), 6, 6, true, false },
+		{ 21.4, 0, -47.6, A(0.15, 0, -0.25), 6, 6.5, false, false },
+		{ -33, 0.6, -50.2, A(0.25, 0, 0), 5, 5, false, false },
+		{ 33, 0.6, -50.2, A(0.25, 0, 0), 5, 5, true, false },
+		{ -16.4, 1, -44.6, A(0.1, 0, 0.2), 4, 3.4, false, false },
+		{ 16.4, 1, -44.6, A(0.1, 0, -0.2), 4, 3.4, true, false },
 		-- out of the rock that burst through the walls
-		{ 56.6, 3, 19.5, A(0.15, 0, 0.6), 7, 6, true, true },
-		{ -56.6, 3, -13.5, A(-0.15, 0, -0.6), 7, 6, false, true },
+		{ 56.6, 3, 19.5, A(0.15, 0, 0.6), 6, 6, true, true },
+		{ -56.6, 3, -13.5, A(-0.15, 0, -0.6), 6, 6, false, true },
 		-- small ones through cracks near the entrance and the columns
-		{ -25.8, 0, -10, A(0.1, 0, 0.2), 4, 3, true, false },
-		{ 25.8, 0, 6.2, A(-0.1, 0, -0.2), 4, 2.8, false, false },
-		{ 14.5, 0, 36.2, A(-0.2, 0, -0.15), 4, 3, false, false },
-		{ -14.5, 0, 36.2, A(-0.2, 0, 0.15), 4, 3.2, true, false },
+		{ -25.8, 0, -10, A(0.1, 0, 0.2), 3, 3, true, false },
+		{ 25.8, 0, 6.2, A(-0.1, 0, -0.2), 3, 2.8, false, false },
+		{ 14.5, 0, 36.2, A(-0.2, 0, -0.15), 3, 3, false, false },
+		{ -14.5, 0, 36.2, A(-0.2, 0, 0.15), 3, 3.2, true, false },
 	}
 	for i, k in list do
 		local root = at(c, k[1] :: number, k[2] :: number, k[3] :: number) * (k[4] :: CFrame)
@@ -1165,7 +1157,7 @@ local function buildCrystals(parent: Instance, c: Ctx)
 		MineKit.crystals(
 			m,
 			at(c, sx * (IN_X - 1.4), 27.2, p[2]) * A(0, 0, sx * 0.55),
-			5,
+			3,
 			3.4,
 			"Shell",
 			if i % 2 == 0 then CRYSTALS else CRYSTALS_LAVENDER,
@@ -1177,7 +1169,7 @@ local function buildCrystals(parent: Instance, c: Ctx)
 		MineKit.crystals(
 			m,
 			at(c, p[1], CEIL - 0.5, p[2]) * A(math.pi + 0.1 * i, 0, 0.1),
-			6,
+			4,
 			5,
 			"Shell",
 			if i % 2 == 0 then CRYSTALS_LAVENDER else CRYSTALS,
@@ -1188,14 +1180,14 @@ end
 
 local function buildDebris(parent: Instance, c: Ctx)
 	local m = group("Debris", parent)
-	rubble(m, c, -56, 0.6, 6, 4, { STONE, STONE_LIGHT }, 1.0)
-	rubble(m, c, 56, 0.6, -6, 4, { STONE, STONE_LIGHT }, 1.0)
-	rubble(m, c, 56, 0, 27.5, 4, CAVE, 1.0)
-	rubble(m, c, -55.5, 0, -22.5, 5, CAVE, 1.2)
-	rubble(m, c, -26, 0, -26, 3, { MARBLE, MARBLE_DARK }, 0.8)
-	rubble(m, c, 26, 0, -14, 3, { MARBLE, MARBLE_DARK }, 0.8)
-	rubble(m, c, 42, 0, -48.5, 4, CAVE, 1.1)
-	rubble(m, c, -42, 0, -48.5, 4, CAVE, 1.1)
+	rubble(m, c, -56, 0.6, 6, 2, { STONE, STONE_LIGHT }, 1.0)
+	rubble(m, c, 56, 0.6, -6, 2, { STONE, STONE_LIGHT }, 1.0)
+	rubble(m, c, 56, 0, 27.5, 3, CAVE, 1.0)
+	rubble(m, c, -55.5, 0, -22.5, 3, CAVE, 1.2)
+	rubble(m, c, -26, 0, -26, 2, { MARBLE, MARBLE_DARK }, 0.8)
+	rubble(m, c, 26, 0, -14, 2, { MARBLE, MARBLE_DARK }, 0.8)
+	rubble(m, c, 42, 0, -48.5, 2, CAVE, 1.1)
+	rubble(m, c, -42, 0, -48.5, 2, CAVE, 1.1)
 	-- a fallen chandelier ring in the right aisle path
 	local ring = at(c, 42, 0.25, -14.5) * CFrame.Angles(0.06, 0.4, 0.04)
 	for k = 0, 7 do

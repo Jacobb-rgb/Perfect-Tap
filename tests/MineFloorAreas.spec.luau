@@ -37,14 +37,20 @@ return function(T, Loader)
 		T.truthy(#cluster:GetChildren() >= 7, "cluster crystals")
 	end)
 
-	T.test("mine floor areas in the game: near-town floors stay light, no own ore lifts", function()
+	T.test("mine floor areas in the game: every floor <= 2500 parts, near-town floors lighter, no own ore lifts", function()
+		-- the integrator's rule: FloorParts <= 2500 BaseParts per mine floor in the game build
+		T.eq(MineKit.PartBudget, 2500, "MineKit.PartBudget")
+		T.le(MineKit.NearPartBudget, MineKit.PartBudget, "the near-town budget is the tighter one")
 		for index, name in MODULES do
 			local ok, Floor = pcall(Loader.requirePath, "ServerScriptService.Server.World.Mine." .. name)
 			if ok and Floor then
 				local folder = roblox.Instance.new("Folder")
 				local model = Floor.build(folder, CF.new(0, 0, 0), { Cutaway = false })
-				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
-				T.le(count(model, "BasePart"), budget, name .. " in-game parts")
+				local parts = count(model, "BasePart")
+				T.le(parts, MineKit.PartBudget, name .. " in-game parts")
+				if index <= 3 then
+					T.le(parts, MineKit.NearPartBudget, name .. " in-game parts (streams in with the town)")
+				end
 				local lift = model:FindFirstChild("MineLift", true)
 				T.truthy(lift == nil or not lift:HasTag("MineLift"), name .. " builds no Mine Lift of its own in the game")
 			end

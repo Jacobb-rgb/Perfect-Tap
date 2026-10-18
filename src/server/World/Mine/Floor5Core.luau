@@ -27,7 +27,8 @@
 	hoist rock (local +30 = WorldLayout.Caves.HeartstoneCore.Max.Y).
 	opts.Cutaway (preview pictures): no enclosure, so cameras outside see in.
 	Everything stays within local y -77 .. +50 (FallenPartsDestroyHeight is
-	world -500). About 2.9k parts, 19 lights.
+	world -500). About 2350 parts in the game build (MineKit.PartBudget 2500),
+	19 lights.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -429,8 +430,9 @@ local function nearOpening(isl: Island, p: Vector2): boolean
 	return false
 end
 
--- Points along the outline inset by `inset`, about `step` studs apart.
-local function perimeter(isl: Island, inset: number, step: number): { Vector2 }
+-- Points along the outline inset by `inset`, about `step` studs apart, and for each its
+-- index along its straight edge (0 = a corner of the outline, 1, 2, ... = between corners).
+local function perimeter(isl: Island, inset: number, step: number): ({ Vector2 }, { number })
 	local poly, c = isl.Poly, isl.C
 	local n = #poly
 	local ins: { Vector2 } = {}
@@ -442,19 +444,23 @@ local function perimeter(isl: Island, inset: number, step: number): { Vector2 }
 		ins[i] = cur - bis * (inset / math.max(0.5, bis:Dot(o1)))
 	end
 	local pts = {}
+	local sub = {}
 	for i = 1, n do
 		local a, b = ins[i], ins[i % n + 1]
 		local k = math.max(1, math.ceil((b - a).Magnitude / step))
 		for s = 0, k - 1 do
 			table.insert(pts, lerp2(a, b, s / k))
+			table.insert(sub, s)
 		end
 	end
-	return pts
+	return pts, sub
 end
 
 -- The light curb and the glowing low rails around an island (gaps at its openings).
+-- Open pieces in a row along one straight edge share one curb block and one rail bar;
+-- posts stand at the corners, at the rail ends and at most ~17 studs apart.
 local function rails(parent: Instance, isl: Island)
-	local pts = perimeter(isl, 0.7, 8.5)
+	local pts, sub = perimeter(isl, 0.7, 8.5)
 	local n = #pts
 	local top = isl.Top
 	local open: { boolean } = {}
@@ -463,18 +469,24 @@ local function rails(parent: Instance, isl: Island)
 	end
 	for i = 1, n do
 		local j = i % n + 1
-		local a, b = pts[i], pts[j]
-		if open[i] then
+		local prev = (i - 2) % n + 1
+		-- a run of open pieces starts here when the piece before is closed or on another edge
+		if open[i] and (sub[i] == 0 or not open[prev]) then
+			local last = j
+			while sub[last] ~= 0 and open[last] and last ~= i do
+				last = last % n + 1
+			end
+			local a, b = pts[i], pts[last]
 			local mid = (a + b) / 2
 			local pos = v3(mid, top - 0.1)
 			blk(parent, CFrame.lookAt(pos, v3(b, top - 0.1)), Vector3.new(1.4, 0.7, (b - a).Magnitude + 0.7), RIM, SMOOTH, SOLID)
 			bar(parent, v3(a, top + 2.15), v3(b, top + 2.15), 0.34, RAIL, NEON, RAILP)
 		end
-		-- a post wherever a rail piece starts or ends
-		local prev = (i - 2) % n + 1
-		if open[i] or open[prev] then
-			blk(parent, CFrame.new(v3(a, top + 1.35)), Vector3.new(0.7, 2.3, 0.7), POST, SMOOTH, SOLID)
-			blk(parent, CFrame.new(v3(a, top + 2.6)) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.55, 0.3, 0.55), RAIL, NEON, GLOW)
+		-- a post at the corners and every other point between them, and wherever a rail ends
+		if (open[i] or open[prev]) and (sub[i] % 2 == 0 or open[i] ~= open[prev]) then
+			local p = pts[i]
+			blk(parent, CFrame.new(v3(p, top + 1.35)), Vector3.new(0.7, 2.3, 0.7), POST, SMOOTH, SOLID)
+			blk(parent, CFrame.new(v3(p, top + 2.6)) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(0.55, 0.3, 0.55), RAIL, NEON, GLOW)
 		end
 	end
 end
@@ -488,7 +500,7 @@ local function pathTiles(parent: Instance, isl: Island, rng: Rng.Rng)
 			local a, b = line[s], line[s + 1]
 			local d = b - a
 			local len = d.Magnitude
-			local count = math.max(1, math.floor(len / 3.3))
+			local count = math.max(1, math.floor(len / 4))
 			local step = len / count
 			for t = 0, count - 1 do
 				local p = a + d.Unit * (step * (t + 0.5))
@@ -635,13 +647,11 @@ end
 local function glowSign(parent: Instance, cf: CFrame, text: string, width: number, height: number, frame: Color3, textColor: Color3)
 	local board = blk(parent, cf, Vector3.new(width, height, 0.5), ROCK_DARK, SMOOTH, DECOR)
 	board.Name = "Sign"
-	for _, side in { -1, 1 } do
-		local z = side * 0.3
-		blk(parent, cf * CFrame.new(0, height / 2 - 0.15, z), Vector3.new(width + 0.3, 0.3, 0.2), frame, NEON, GLOW)
-		blk(parent, cf * CFrame.new(0, -height / 2 + 0.15, z), Vector3.new(width + 0.3, 0.3, 0.2), frame, NEON, GLOW)
-		blk(parent, cf * CFrame.new(-width / 2 + 0.15, 0, z), Vector3.new(0.3, height, 0.2), frame, NEON, GLOW)
-		blk(parent, cf * CFrame.new(width / 2 - 0.15, 0, z), Vector3.new(0.3, height, 0.2), frame, NEON, GLOW)
-	end
+	-- the neon frame wraps the board's edge, so one bar per side shows on both faces
+	blk(parent, cf * CFrame.new(0, height / 2 - 0.15, 0), Vector3.new(width + 0.3, 0.3, 0.8), frame, NEON, GLOW)
+	blk(parent, cf * CFrame.new(0, -height / 2 + 0.15, 0), Vector3.new(width + 0.3, 0.3, 0.8), frame, NEON, GLOW)
+	blk(parent, cf * CFrame.new(-width / 2 + 0.15, 0, 0), Vector3.new(0.3, height, 0.8), frame, NEON, GLOW)
+	blk(parent, cf * CFrame.new(width / 2 - 0.15, 0, 0), Vector3.new(0.3, height, 0.8), frame, NEON, GLOW)
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
 		local gui = Instance.new("SurfaceGui")
 		gui.Name = if face == Enum.NormalId.Front then "FrontText" else "BackText"
@@ -686,7 +696,7 @@ local function bridge(parent: Instance, a: Vector3, b: Vector3, rise: number, ed
 		return A:Lerp(B, t) + UP * (rise * 4 * t * (1 - t) + 0.2)
 	end
 	local len = (B - A).Magnitude
-	local n = math.max(4, math.ceil(len / 4))
+	local n = math.max(4, math.ceil(len / 5))
 	local width = 9
 	for i = 0, n - 1 do
 		local p0, p1 = point(i / n), point((i + 1) / n)
@@ -699,7 +709,18 @@ local function bridge(parent: Instance, a: Vector3, b: Vector3, rise: number, ed
 		for _, side in { -1, 1 } do
 			blk(m, cf * CFrame.new(side * (width / 2 + 0.2), 0.05, 0), Vector3.new(0.42, 0.7, segLen), edge, NEON, GLOW)
 		end
-		blk(m, cf * CFrame.new(0, -1.25, 0), Vector3.new(width * 0.5, 1.0, segLen), ROCK_DARK, SMOOTH, GHOST)
+	end
+	-- the keel and its glowing underline: one straight piece under every two deck pieces,
+	-- grown upward by its sag below the arch so its top stays hidden in the deck
+	for i = 0, n - 1, 2 do
+		local i1 = math.min(i + 2, n)
+		local p0, p1 = point(i / n), point(i1 / n)
+		local seg = p1 - p0
+		local mid = (p0 + p1) / 2
+		local cf = CFrame.lookAt(mid, mid + seg, right:Cross(seg.Unit))
+		local segLen = seg.Magnitude + 0.3
+		local sag = rise * ((i1 - i) / n) ^ 2
+		blk(m, cf * CFrame.new(0, -1.25 + sag / 2, 0), Vector3.new(width * 0.5, 1.0 + sag, segLen), ROCK_DARK, SMOOTH, GHOST)
 		blk(m, cf * CFrame.new(0, -1.8, 0), Vector3.new(0.6, 0.2, segLen), under, NEON, GLOW)
 	end
 	-- rails: posts every other segment, a glowing top bar and a dark middle bar
@@ -909,7 +930,7 @@ local function voidDecor(parent: Instance, rng: Rng.Rng, blocked: Keepout)
 	local stars = model("StarMotes", m)
 	local placed = 0
 	for _ = 1, 900 do
-		if placed >= 165 then
+		if placed >= 80 then
 			break
 		end
 		local p = Vector3.new(rng:range(-80, 80), rng:range(-30, 48), rng:range(-70, 68))
@@ -930,7 +951,7 @@ local function voidDecor(parent: Instance, rng: Rng.Rng, blocked: Keepout)
 	local drift = model("Drift", m)
 	local count = 0
 	for _ = 1, 400 do
-		if count >= 28 then
+		if count >= 10 then
 			break
 		end
 		local p = Vector3.new(rng:range(-74, 74), rng:range(-22, 34), rng:range(-62, 60))
@@ -943,7 +964,6 @@ local function voidDecor(parent: Instance, rng: Rng.Rng, blocked: Keepout)
 				local s = rng:range(1.3, 3)
 				local cf = CFrame.new(p) * Geo.randomTilt(rng, 1.5)
 				blk(drift, cf, Vector3.new(s, s * 0.75, s * 0.9), Geo.vary(ROCK, rng, 0.06), SMOOTH, GHOST)
-				blk(drift, cf * CFrame.new(s * 0.2, s * 0.32, 0) * Geo.randomTilt(rng, 0.5), Vector3.new(s * 0.6, s * 0.4, s * 0.6), Geo.vary(ROCK_LIGHT, rng, 0.05), SMOOTH, GHOST)
 				if rng:chance(0.6) then
 					crystal(drift, cf * CFrame.new(0, s * 0.3, 0), s * 0.9, s * 0.24, if rng:chance(0.5) then PINK else AQUA)
 				end
@@ -1076,11 +1096,11 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	-- island bodies, rails, paths, cracks
 	local islandFolder = model("Islands", m)
 	local bodyOpts: { [string]: BodyOpts } = {
-		Landing = { Walk = true, Veins = 0.7, Crystals = 4, Spikes = 4, Debris = 3, Seam = ACCENT },
-		Hub = { Walk = true, Veins = 0.7, Crystals = 5, Spikes = 5, Debris = 3, Glow = AQUA, Seam = AQUA },
-		West = { Walk = true, Veins = 0.7, Crystals = 5, Spikes = 5, Debris = 3, Seam = ACCENT },
-		East = { Walk = true, Veins = 0.7, Crystals = 5, Spikes = 4, Debris = 3, Glow = AQUA, Seam = AQUA },
-		Deep = { Walk = true, Veins = 0.75, Crystals = 7, Spikes = 6, Debris = 3, Seam = ACCENT },
+		Landing = { Walk = true, Veins = 0.7, Crystals = 2, Spikes = 2, Seam = ACCENT },
+		Hub = { Walk = true, Veins = 0.7, Crystals = 3, Spikes = 3, Glow = AQUA, Seam = AQUA },
+		West = { Walk = true, Veins = 0.7, Crystals = 3, Spikes = 3, Seam = ACCENT },
+		East = { Walk = true, Veins = 0.7, Crystals = 3, Spikes = 2, Glow = AQUA, Seam = AQUA },
+		Deep = { Walk = true, Veins = 0.75, Crystals = 5, Spikes = 4, Seam = ACCENT },
 	}
 	for _, isl in islands do
 		local im = model(isl.Name .. "Island", islandFolder)
@@ -1129,7 +1149,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	local liftRock = model("ElevatorHoist", props)
 	local erng = Rng.new("Floor5ElevatorHoist")
 	local ec = Vector2.new(-13, 59)
-	rockBody(liftRock, ec, 33, outline(ec, 4, 4, 7, erng), 7, erng, { Band = 2, Ring = false, Debris = 1, Seam = ACCENT })
+	rockBody(liftRock, ec, 33, outline(ec, 4, 4, 6, erng), 7, erng, { Band = 2, Ring = false, Debris = 1, Seam = ACCENT })
 	crystal(liftRock, CFrame.new(-12.4, 32.8, 59.5) * CFrame.Angles(0.15, 0, -0.2), 4.2, 1.1, AQUA)
 	for _, sx in { -0.6, 0.6 } do
 		blk(liftRock, CFrame.new(-13 + sx, 26.5, 59), Vector3.new(0.14, 13, 0.14), rgb(26, 26, 30), SMOOTH, GHOST)
@@ -1142,7 +1162,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	MineKit.oreLift(m, O * Vector3.new(liftSpot.X, hub.Top + liftSpot.Y, liftSpot.Z), if MineKit.PreviewLifts then "Floor5Preview" else "HeartstoneCore")
 	local hoist = model("HoistRock", props)
 	local hrng = Rng.new("Floor5Hoist")
-	rockBody(hoist, liftAt, hub.Top + 33.5, outline(liftAt, 4.5, 4.5, 7, hrng), 10, hrng, { Band = 2, Ring = false, Debris = 1 })
+	rockBody(hoist, liftAt, hub.Top + 33.5, outline(liftAt, 4.5, 4.5, 6, hrng), 10, hrng, { Band = 2, Ring = false, Debris = 1 })
 	crystal(hoist, CFrame.new(v3(liftAt, hub.Top + 33.3)) * CFrame.Angles(0, 0, 0.2), 4, 1.1, PINK)
 	for k = 1, 5 do
 		local a = (k / 5) * math.pi * 2 + 0.3
@@ -1178,7 +1198,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 				made += 1
 				local h = drng:range(3.5, 6.5)
 				local colors = if made % 2 == 0 then { AQUA, PINK, ACCENT } else { PINK, ACCENT, AQUA }
-				MineKit.crystals(props, O * CFrame.new(v3(p, isl.Top)) * CFrame.Angles(0, drng:range(0, 6), 0), drng:int(3, 5), h, "Glow", colors, "Floor5" .. isl.Name .. i)
+				MineKit.crystals(props, O * CFrame.new(v3(p, isl.Top)) * CFrame.Angles(0, drng:range(0, 6), 0), drng:int(2, 4), h, "Glow", colors, "Floor5" .. isl.Name .. i)
 				if (lit[isl.Name] or 0) > 0 then
 					lit[isl.Name] -= 1
 					local lamp = blk(props, CFrame.new(v3(p, isl.Top + h * 0.7)), Vector3.new(0.2, 0.2, 0.2), PINK, NEON, GLOW)
@@ -1222,10 +1242,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		local frng = Rng.new("Floor5Far" .. k)
 		local c = Vector2.new(spot.X, spot.Z)
 		local r = frng:range(4, 6.5)
-		rockBody(far, c, spot.Y, outline(c, r, r * frng:range(0.7, 1), 6, frng), r * 2.2, frng, { Band = 2, Ring = false, Debris = 1 })
+		rockBody(far, c, spot.Y, outline(c, r, r * frng:range(0.7, 1), 5, frng), r * 2.2, frng, { Band = 2, Ring = false })
 		local h = frng:range(3, 5)
 		crystal(far, CFrame.new(spot + Vector3.new(0, -0.2, 0)) * CFrame.Angles(frng:range(-0.2, 0.2), 0, frng:range(-0.2, 0.2)), h, h * 0.28, if k % 2 == 0 then AQUA else PINK)
-		crystal(far, CFrame.new(spot + Vector3.new(1.5, -0.2, 1)) * CFrame.Angles(0.3, 0, -0.5), h * 0.6, h * 0.17, if k % 2 == 0 then PINK else AQUA)
 	end
 
 	-- star motes and drifting shards, kept out of islands, walkways, the heart and the front view
