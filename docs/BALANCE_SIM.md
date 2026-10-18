@@ -1,5 +1,7 @@
 # Balance simulation (2026-10-18)
 
+**Newest numbers: "Re-run with steps 6–7 modelled" below.** The sections after it are the first runs (without steps 6–7).
+
 A model of a typical player from the first minute to 10 hours, after the 36-ore roster from the owner's picture.
 Script: `tools/lune/balance_sim.luau` (`lune run tools/lune/balance_sim.luau` for today's prices,
 `... calibrate` for the price proposal); chart: `node tools/balance/chart.mjs` → `docs/screenshots/balance_chart.png`.
@@ -13,6 +15,102 @@ an optional `Scenarios` list.
 config. The one change the model sees: carrying is the Gear shop's Backpack line now (the `ToolData` shim reads
 `GearConfig`), so carry upgrades cost 800 / 5,000 / 30,000 / 180,000 / 1.1M (before: 300 / 1,500 / 6,000 /
 25,000). The rest of steps 6-7 is in the game but not in the model yet (see "Not modelled").
+
+## Re-run with steps 6–7 modelled (2026-10-18, branch fix/post-steps67)
+
+The player now also buys Boots, the coin enchants (slotted where they earn most), coin golem capsules (on expected
+gain, equipping the 3 golems that earn most), Hexa Lucky coin top-ups (when 5 minutes pay for themselves), the
+Crystal Extractor and comfort items (Lamp, Gloves, Magnet, Reach, Magnetism, Prospector: no income effect in the model,
+bought when they cost ≤ 10 % of the coins); finds artifacts (1 % per rock, deeper floors × 1.25 / × 1.5), gets shards
+from duplicates and the extractor, restores a collection's last artifact and buys Epic / Legendary tiers with shards.
+Every bonus goes through the real config (`GearConfig` / `EnchantConfig` / `GolemConfig` / `BoostConfig` /
+`ArtifactConfig .stats`, `StatConfig.combine` caps) and acts on the model: DamagePct / OverchargePct on rock time,
+walk speed on walking, ore luck on the ore draws (`BoostConfig.rarityMult`), TwinDropChance on ores per rock, SellPct on
+sales, IncomePct on podium income. Not modelled: the daily wheel, Robux items, Triple Lucky, rebirths.
+Two model fixes on the way: a player saving for the blaster still buys an item that pays back faster than the
+saving takes (it brings the blaster closer), and the calibration continues each player from where they reached the
+level before (checkpoints), so it runs in minutes.
+
+**Result: with steps 6–7 bought by a sensible player, the ~8 h journey needs about 1.3–1.8 × the earlier proposal
+from blaster 5 on.** Without the new prices the same player reaches blaster 10 at 5h40 (the steps 6–7 bonuses speed
+the game up by about a third: sell +49–59 %, income +5 %, ore luck × 1.3, damage +35 %).
+
+| Level | Today | Proposal before (no steps 6–7) | **Proposal with steps 6–7** |
+|---|---|---|---|
+| 2 | 250 | 240 | **330** |
+| 3 | 2,000 | 14,000 | **12,000** |
+| 4 | 15,000 | 370,000 | **380,000** |
+| 5 | 100,000 | 1,100,000 | **1,500,000** |
+| 6 | 700,000 | 23,000,000 | **29,000,000** |
+| 7 | 5,000,000 | 34,000,000 | **51,000,000** |
+| 8 | 35,000,000 | 810,000,000 | **1,200,000,000** |
+| 9 | 250,000,000 | 1,400,000,000 | **2,100,000,000** |
+| 10 | 1,500,000,000 | 23,000,000,000 | **35,000,000,000** |
+
+| Milestone (proposal with steps 6–7) | Typical (50 %) | Skilled (80 %) | Casual (30 %) |
+|---|---|---|---|
+| Blaster 2 | 3m 00s | 2m 10s | 4m 15s |
+| First machine bought | 4m 30s | 3m 00s | 6m 30s |
+| Blaster 3 / floor 2 | 12m 10s | 9m 10s | 16m 40s |
+| Blaster 4 | 25m 20s | 19m 35s | 33m 05s |
+| Blaster 5 / floor 3 | 46m 30s | 36m 20s | 1h 00m |
+| First Rare golem (≈ 80 %) | 1h 00m | 44m 00s | 1h 10m |
+| Blaster 6 | 1h 21m | 1h 02m | 1h 46m |
+| Blaster 7 / elevator / floor 4 | 2h 01m | 1h 37m | 2h 41m |
+| Blaster 8 | 3h 14m | 2h 37m | 4h 21m |
+| Blaster 9 / floor 5 | 5h 00m | 4h 10m | 6h 42m |
+| First collection | 6h 39m | 4h 44m | 8h 16m (27 %) |
+| Blaster 10 | 8h 02m | 6h 37m | after 10 h |
+
+Today's prices with steps 6–7: blaster 8 at 28 min, blaster 10 at 52 min (before: 1h 03m).
+
+### Where the steps 6–7 prices sit (proposal run, minutes of the Typical player's median income)
+Income then: 3h15 ≈ 290K/s (blaster 7), 5h ≈ 340K/s (blaster 8: **flat from 3h to 5h**), 8h ≈ 3.4M/s (blaster 9).
+
+| Item | at 3h15 | at 5h | at 8h |
+|---|---|---|---|
+| Each gear line, all 5 levels | < 0.1 | < 0.1 | < 0.1 |
+| Common / Uncommon enchants, every tier | < 0.1 | < 0.1 | < 0.1 |
+| Lucky III / Midas III (Rare) | 0.5 | 0.4 | < 0.1 |
+| Twin Drop I / II / III (Epic) | 0.3 / 1.7 / 10 | 0.2 / 1.5 / 8.8 | < 0.1 / 0.1 / 0.9 |
+| Overcharge I / II / III (Epic) | 0.2 / 1.4 / 8.2 | 0.2 / 1.2 / 7.0 | < 0.1 / 0.1 / 0.7 |
+| Prospector I / II / III (Legendary) | 5.7 / 34 / 206 | 4.9 / 29 / 176 | 0.5 / 3.0 / 18 |
+| Golem Bond I / II / III (Legendary) | 6.9 / 41 / 246 | 5.9 / 35 / 210 | 0.6 / 3.6 / 21 |
+| Stone capsule | < 0.1 | < 0.1 | < 0.1 |
+| Crystal capsule | 2.1 | 5.5 | 1.9 |
+| Triple Lucky 5 min (coins) | 4.3 | 11 | 3.7 |
+| Hexa Lucky 5 min (coins) | 14 | 21 | 35 |
+| Auto Cleaner / elevator | < 0.1 | < 0.1 | < 0.1 |
+
+### What the model shows
+1. **Almost every steps 6–7 coin price is pocket change in both windows** (under a minute of income). Gear, all
+   Common–Rare enchants and Stone capsules are bought in the first 1–3 hours; only the Legendary tiers, Crystal
+   capsules and the boosts cost real time there. Nothing new to aim for lands in 3h15–5h or 5h–8h.
+2. **Sell bonuses are what pays**: Midas III plus three Amethyst Acolytes (+7 % sell each, from cheap Stone
+   capsules: 56 opened by 3h15) give sell +49 %. Mining-side bonuses (Power, Overcharge, Twin Drop, Luck and Mining
+   golems) barely move the income after the first hour, because the train and the Auto Cleaners cap the delivered
+   ore, not the mining speed: the model buys Power III and stops there.
+3. **Hexa Lucky's coin top-up never pays for itself** (0 bought in 120 runs): 5 minutes cost 14–35 minutes of income
+   (ForgeShare 0.2 of the next forge) and ×2.5 luck raises the income by far less. Triple Lucky only matters to
+   someone opening many Crystal capsules.
+4. **3h → 5h stays flat** (≈ 0.3M/s): blaster 8 opens no floor, so the player only saves for blaster 9.
+5. **Casual players** (30 %) don't reach blaster 10 within 10 hours with these prices.
+
+### Per-config-key proposals (for the integrator; the sim re-runs in minutes after any change)
+- `BlasterData` `Recipe.Coins` levels 2–10: the "with steps 6–7" column above.
+- `MachineData.AutoCleaner.Price`: 5,000 → **25,000** (the first cleaner lands at 10–15 min today; ~25–30 min keeps
+  the cleaning minigame the main way to clean for the first half hour). Re-calibrate after the change.
+- `EnchantConfig` coin prices, to give the windows goals: Epic (Twin Drop, Overcharge) **× 10** (50M / 300M / 1.8B and
+  40M / 240M / 1.44B: 3 / 17 / 100 min at 3h15), Legendary (Prospector, Golem Bond) **× 10** (1B / 6B / 36B and 1.2B /
+  7.2B / 43B: about 5 / 30 / 180 min at 8h, the last tiers a post-blaster-10 goal). Shard prices unchanged (the shard
+  path stays the shortcut for collectors). Common–Rare unchanged (early-game lines).
+- `BoostConfig.CoinOffers.HexaLucky5.ForgeShare`: 0.2 → **0.02** (≈ 1.5–3.5 min of income for 5 min: a real choice
+  in the windows instead of never).
+- `CapsuleConfig.LevelScale`: unchanged (a Crystal capsule costs 2–6 min of income in the windows: a fair repeatable
+  sink). `GearConfig` prices: unchanged (gear finishes in the first 3–5 hours).
+- Bigger lever for the flat 3h–5h stretch: something that raises **delivery**, not mining (train capacity / speed
+  levels past today's last, a 5th Auto Cleaner, machine Speed / Quality upgrades), or a floor between 4 and 5. Those
+  are design calls; the sim can test any of them.
 
 ![Money and income over 10 hours](screenshots/balance_chart.png)
 
