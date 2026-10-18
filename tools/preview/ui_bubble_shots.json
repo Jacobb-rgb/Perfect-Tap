@@ -998,5 +998,123 @@
     "ui": "ui_bubble_game_phone",
     "uiInset": 116,
     "mobileControls": 2
+  },
+  "vault_ui_pc_light": {
+    "scene": "vault_shop",
+    "position": [
+      2,
+      6.8,
+      100
+    ],
+    "target": [
+      0,
+      8,
+      134
+    ],
+    "fov": 66,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "ui": "ui_vault_pc_light"
+  },
+  "vault_ui_pc_poor_light": {
+    "scene": "vault_shop",
+    "position": [
+      2,
+      6.8,
+      100
+    ],
+    "target": [
+      0,
+      8,
+      134
+    ],
+    "fov": 66,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "ui": "ui_vault_pc_poor_light"
+  },
+  "vault_ui_phone_light": {
+    "scene": "vault_shop",
+    "position": [
+      2,
+      6.8,
+      100
+    ],
+    "target": [
+      0,
+      8,
+      134
+    ],
+    "fov": 66,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "ui": "ui_vault_phone_light",
+    "uiInset": 58
+  },
+  "vault_ui_phone_small_light": {
+    "scene": "vault_shop",
+    "position": [
+      2,
+      6.8,
+      100
+    ],
+    "target": [
+      0,
+      8,
+      134
+    ],
+    "fov": 66,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "ui": "ui_vault_phone_small_light",
+    "uiInset": 163
+  },
+  "vault_ui_tv_light": {
+    "scene": "vault_shop",
+    "position": [
+      2,
+      6.8,
+      100
+    ],
+    "target": [
+      0,
+      8,
+      134
+    ],
+    "fov": 66,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24,
+    "ui": "ui_vault_tv_light",
+    "uiInset": 30
   }
 }

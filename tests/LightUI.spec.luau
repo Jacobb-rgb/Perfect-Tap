@@ -89,6 +89,30 @@ return function(T, Loader)
 		end)
 	end)
 
+	T.test("LightUI: the Vault window gets the light header and its X stays on screen", function()
+		local VaultView = ui("VaultView")
+		withLight(function()
+			for _, spec in { { false, 1280, 691 }, { true, 1000, 520 }, { true, 916, 480 } } do
+				local compact, maxW, maxH = spec[1], spec[2], spec[3]
+				local refs = VaultView.build()
+				VaultView.layout(refs, compact, maxW, maxH)
+				VaultView.setCards(refs, VaultView.cards(3, 125400))
+				T.truthy(refs.Header:FindFirstChild("HeaderIcon", true), "3D vault icon")
+				T.eq(refs.Header.Position.X.Offset, 0, "full-width band")
+				local closeHolder = refs.Close.Parent :: any
+				local closeW = closeHolder.Size.X.Offset
+				local panelW = refs.Panel.Size.X.Offset
+				-- the X's centre is 12 in from the panel's corner: it sticks out closeW/2 - 12
+				T.truthy(panelW + 2 * (closeW / 2 - 12) <= maxW, "the X fits on screen")
+				T.truthy(closeW * 0.62 >= 44 or not compact, "X >= 44 pt on phones")
+			end
+		end)
+		local plain = VaultView.build()
+		VaultView.layout(plain, false, 1280, 691)
+		T.falsy(plain.Header:FindFirstChild("HeaderIcon", true), "switch off: today's header")
+		T.eq(plain.Header.Position.X.Offset, 10, "switch off: today's layout")
+	end)
+
 	T.test("LightUI: game HUD touch sizes on phones", function()
 		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)))
 		T.truthy(layout.Compact, "a phone gets the compact layout")

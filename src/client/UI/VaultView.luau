@@ -17,6 +17,11 @@
 	pick, branch ui/light: Config/BubbleTheme + UI/Bubble). Until that lands
 	on main the same values live in VaultView.Style; switching later means
 	pointing Style at BubbleTheme (the names match).
+
+	With UIConfig.lightUI() on (the light UI, ships off) the window matches the
+	other light windows (Bubble.window): the orange header is a full-width band
+	with the 3D vault icon popping out, the red X sits on the panel's corner and
+	the coins pill shows the 3D coin.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,7 +30,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
+local UIConfig = require(Shared.Config.UIConfig)
 local UIKit = require(script.Parent.UIKit)
+local Bubble = require(script.Parent.Bubble)
 local TechShopView = require(script.Parent.TechShopView)
 
 local VaultView = {}
@@ -812,6 +819,58 @@ function VaultView.build(): Refs
 	-- the footer: the hint, or a message for a few seconds
 	local hint = ink(face, "", 16, { Name = "Hint", TextColor3 = S.InkSoft, ZIndex = 3 })
 	local message = ink(face, "", 18, { Name = "Message", Visible = false, ZIndex = 3 })
+	if UIConfig.lightUI() then
+		-- the header band: no own outline / lip / shadow, square bottom, a navy
+		-- line under it, the 3D vault icon on the left; the 3D coin in the pill
+		header.Stroke.Enabled = false
+		header.Lip.Visible = false
+		local headerShadow = header.Holder:FindFirstChild("Shadow") :: Frame?
+		if headerShadow then
+			headerShadow.Visible = false
+		end
+		local vault = S.Roles.Vault
+		header.Gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, vault.Top),
+			ColorSequenceKeypoint.new(0.5, vault.Base),
+			ColorSequenceKeypoint.new(1, vault.Base),
+		})
+		local headerCorner = header.Face:FindFirstChildOfClass("UICorner")
+		if headerCorner then
+			headerCorner.CornerRadius = UDim.new(0, 24)
+		end
+		UIKit.new("Frame", {
+			Name = "Fill", -- squares the band's bottom corners
+			BackgroundColor3 = vault.Base,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.fromScale(1, 0.5),
+			ZIndex = 2,
+		}, header.Face)
+		UIKit.new("Frame", {
+			Name = "Line",
+			BackgroundColor3 = S.Outline,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0, 1),
+			Size = UDim2.new(1, 0, 0, 3),
+			ZIndex = 3,
+		}, header.Face)
+		Bubble.icon(header.Face, "vault", 90, {
+			Name = "HeaderIcon",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 6, 0.5, -10),
+			ZIndex = 6,
+		})
+		local flatCoin = pill:FindFirstChild("Coin") :: Frame?
+		if flatCoin then
+			flatCoin.Visible = false
+		end
+		Bubble.icon(pill, "coin", 50, {
+			Name = "CoinIcon",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, 16, 0.5, 0),
+			ZIndex = 6,
+		})
+	end
 	local refs: Refs = {
 		Gui = gui,
 		Root = root,
@@ -878,21 +937,38 @@ end
 	screen divided by the UI scale, the top bar left out).
 ]]
 function VaultView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	if UIConfig.lightUI() then
+		-- the light X sits on the panel's corner: keep room for it on screen
+		local half = (if compact then 72 else 54) // 2 + 12
+		maxWidth -= half * 2
+		maxHeight -= half
+	end
 	local g = VaultView.grid(#refs.Tiles, compact, maxWidth, maxHeight)
 	local old = refs.Grid
 	refs.Grid = g
 	refs.Panel.Size = UDim2.fromOffset(g.PanelW, g.PanelH + S.Lip)
 	-- the header leaves room for the X on the panel's corner
 	local closeSize = if compact then 72 else 54
-	refs.Header.Position = UDim2.fromOffset(10, 10)
-	refs.Header.Size = UDim2.fromOffset(g.PanelW - 20 - closeSize - 6, g.HeaderH - 16 + S.Lip)
+	local light = UIConfig.lightUI()
+	if light then
+		-- a full-width band; the X sits on the panel's corner (Bubble.window)
+		refs.Header.Position = UDim2.fromOffset(0, 0)
+		refs.Header.Size = UDim2.fromOffset(g.PanelW, g.HeaderH - 14 + S.Lip)
+		refs.Title.Position = UDim2.fromOffset(104, 0)
+		refs.Title.Size = UDim2.new(0.6, -90, 1, 0)
+	else
+		refs.Header.Position = UDim2.fromOffset(10, 10)
+		refs.Header.Size = UDim2.fromOffset(g.PanelW - 20 - closeSize - 6, g.HeaderH - 16 + S.Lip)
+	end
 	refs.Title.TextSize = if compact then 36 else 34
-	refs.CoinsPill.Position = UDim2.new(1, -14, 0.5, -1)
+	refs.CoinsPill.Position = if light then UDim2.new(1, -(closeSize // 2 + 26), 0.5, -1) else UDim2.new(1, -14, 0.5, -1)
 	refs.CoinsPill.Size = UDim2.fromOffset(if compact then 220 else 190, if compact then 44 else 38)
 	refs.Coins.TextSize = if compact then 26 else 22
 	local closeHolder = refs.Close.Parent :: Frame
 	closeHolder.Size = UDim2.fromOffset(closeSize, closeSize + S.Lip)
-	closeHolder.Position = UDim2.new(1, -closeSize / 2 - 10, 0, closeSize / 2 + 8)
+	closeHolder.Position = if light
+		then UDim2.new(1, -12, 0, 10)
+		else UDim2.new(1, -closeSize / 2 - 10, 0, closeSize / 2 + 8)
 	refs.Info.TextSize = if compact then 22 else 18
 	refs.Info.Position = UDim2.fromOffset(g.Pad + 2, g.HeaderH)
 	refs.Info.Size = UDim2.fromOffset(g.PanelW - g.Pad * 2, g.InfoH)
