@@ -124,6 +124,45 @@ local function coinsPill(gui: ScreenGui, layout: Layout): (TextLabel, TextButton
 	return amount, plusFace :: TextButton, income
 end
 
+-- One BASE / LOBBY / VAULT tab (icon left on PC, on top on phones).
+function HudBubble.tab(parent: Instance, spot: MenuEntry, layout: Layout, order: number): TextButton
+	local holder, face = Bubble.body(parent, Bubble.role(spot.Role), Vector2.new(layout.TabWidth, layout.TabHeight), {
+		Name = spot.Id,
+		Corner = 16,
+		Clickable = true,
+	})
+	holder.LayoutOrder = order
+	if layout.Compact then
+		Bubble.icon(face, spot.Icon, 52, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -12) })
+		Bubble.text(face, spot.Label, 20, {
+			Name = "Label",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -4),
+			Size = UDim2.new(1, 0, 0, 24),
+			ZIndex = 4,
+		})
+	else
+		Bubble.icon(face, spot.Icon, 58, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -10, 0.5, -4) })
+		Bubble.text(face, spot.Label, 23, {
+			Name = "Label",
+			Position = UDim2.fromOffset(50, 0),
+			Size = UDim2.new(1, -56, 1, 0),
+			ZIndex = 4,
+		})
+	end
+	return face :: TextButton
+end
+
+-- The look of a teleport spot (TeleportConfig id -> icon + colour role).
+function HudBubble.spot(id: string, label: string): MenuEntry
+	for _, spot in HudBubble.Spots do
+		if spot.Id == id then
+			return spot
+		end
+	end
+	return { Id = id, Label = label, Icon = "base", Role = "Plain" }
+end
+
 local function teleportBar(gui: ScreenGui, layout: Layout): { [string]: TextButton }
 	local count = #HudBubble.Spots
 	local width = count * layout.TabWidth + (count - 1) * 14
@@ -137,31 +176,7 @@ local function teleportBar(gui: ScreenGui, layout: Layout): { [string]: TextButt
 	UIKit.list(bar, Enum.FillDirection.Horizontal, 14)
 	local tabs = {}
 	for i, spot in HudBubble.Spots do
-		local holder, face = Bubble.body(bar, Bubble.role(spot.Role), Vector2.new(layout.TabWidth, layout.TabHeight), {
-			Name = spot.Id,
-			Corner = 16,
-			Clickable = true,
-		})
-		holder.LayoutOrder = i
-		if layout.Compact then
-			Bubble.icon(face, spot.Icon, 52, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -12) })
-			Bubble.text(face, spot.Label, 20, {
-				Name = "Label",
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 1, -4),
-				Size = UDim2.new(1, 0, 0, 24),
-				ZIndex = 4,
-			})
-		else
-			Bubble.icon(face, spot.Icon, 58, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -10, 0.5, -4) })
-			Bubble.text(face, spot.Label, 23, {
-				Name = "Label",
-				Position = UDim2.fromOffset(50, 0),
-				Size = UDim2.new(1, -56, 1, 0),
-				ZIndex = 4,
-			})
-		end
-		tabs[spot.Id] = face :: TextButton
+		tabs[spot.Id] = HudBubble.tab(bar, spot, layout, i)
 	end
 	return tabs
 end
@@ -428,6 +443,360 @@ function HudBubble.build(uiScale: number): Refs
 		CarryLabel = carryLabel,
 		Toasts = toasts,
 	}
+end
+
+---------------------------------------------------------------- the game HUD (UIConfig.LightUI)
+--[[
+	buildGame / slot / floater / toast / buildOffline have the same shape as
+	HudView's, so HudController, TeleportView, BuildView and the other
+	controllers use the light HUD unchanged (HudView forwards to these while
+	UIConfig.lightUI() is on). Differences:
+	  TopBar  is empty with the attribute Bubble: TeleportView.build fills it
+	          with bubble tabs
+	  Menu    is the left tile grid with the attribute Bubble; every tile
+	          starts hidden and shows when a controller claims it
+	          (claimTile: BuildView claims BUILD, TeleportView claims LIFT),
+	          so there are never dead buttons
+	  Carry   the hotbar row; the slots show the carried ore's rarity colour
+]]
+
+-- The tiles the game menu can show (claimed by controllers).
+HudBubble.GameMenu = {
+	HudBubble.Menu[1],
+	HudBubble.Menu[2],
+	HudBubble.Menu[3],
+	HudBubble.Menu[4],
+	{ Id = "Elevator", Label = "LIFT", Icon = "lift", Role = "Base" },
+	HudBubble.Menu[5],
+} :: { MenuEntry }
+
+HudBubble.CoinsWidth = 250
+
+-- HudController's UI scale for a screen size (the same formula).
+function HudBubble.scaleFor(viewport: Vector2): number
+	return math.clamp(math.min(viewport.Y / Theme.BaseHeight, viewport.X / 1100), 0.62, 1.25)
+end
+
+-- The scale for this screen right now (1 when there is no camera yet).
+function HudBubble.screenScale(): number
+	local ok, size = pcall(function()
+		local camera = game:GetService("Workspace").CurrentCamera
+		return if camera then camera.ViewportSize else nil
+	end)
+	if ok and typeof(size) == "Vector2" and size.X > 0 and size.Y > 0 then
+		return HudBubble.scaleFor(size)
+	end
+	return 1
+end
+
+export type GameRefs = {
+	Gui: ScreenGui,
+	Coins: TextLabel,
+	CoinsPanel: Frame,
+	Income: TextLabel,
+	Floaters: Frame,
+	Zone: TextLabel,
+	Toasts: Frame,
+	CarryPanel: Frame,
+	CarrySlots: Frame,
+	CarryLabel: TextLabel,
+	ThrowBar: Frame,
+	ThrowFill: Frame,
+	Menu: Frame,
+	TopBar: Frame,
+}
+
+function HudBubble.buildGame(uiScale: number?): GameRefs
+	local layout = HudBubble.layout(uiScale or HudBubble.screenScale())
+	local gui = UIKit.screen("TerraForgeHud", 5)
+	gui:SetAttribute("Bubble", true)
+
+	-- coins (the income chip lives inside, so hiding the coins hides both)
+	local coins, plus, income = coinsPill(gui, layout)
+	local coinsFace = coins.Parent :: Frame
+	local coinsPanel = coinsFace.Parent :: Frame
+	local plusHolder = plus.Parent :: Frame
+	plusHolder.Visible = false -- no coin shop yet: no dead button
+	coins.Size = UDim2.new(1, -52, 1, 0)
+	local chipHolder = (income.Parent :: Frame).Parent :: Frame
+	chipHolder.Parent = coinsPanel
+	chipHolder.Position = if layout.Compact
+		then UDim2.new(1, 14, 0, 12)
+		else UDim2.new(0, 42, 1, 6)
+	chipHolder.ZIndex = 2
+	local floaters = UIKit.new("Frame", {
+		Name = "Floaters",
+		BackgroundTransparency = 1,
+		Position = if layout.Compact then UDim2.fromOffset(34, 90) else UDim2.fromOffset(34, 130),
+		Size = UDim2.fromOffset(HudBubble.CoinsWidth, 60),
+	}, gui)
+
+	-- top bar (TeleportView fills it), zone name and toasts under it
+	local topBar = UIKit.new("Frame", {
+		Name = "TopBar",
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 0, 12),
+		Size = UDim2.fromOffset(3 * layout.TabWidth + 3 * 14 + 40, layout.TabHeight + Theme.Lip),
+	}, gui)
+	topBar:SetAttribute("Bubble", true)
+	topBar:SetAttribute("Compact", layout.Compact)
+	UIKit.list(topBar, Enum.FillDirection.Horizontal, 14, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local below = 12 + layout.TabHeight + Theme.Lip + 10
+	local zone = Bubble.text(gui, "Emberfall", 30, {
+		Name = "Zone",
+		AnchorPoint = Vector2.new(0.5, 0),
+		FontFace = Theme.TitleFont,
+		Position = UDim2.new(0.5, 0, 0, below),
+		Size = UDim2.fromOffset(460, 36),
+		TextTransparency = 1,
+	})
+	local zoneStroke = zone:FindFirstChildOfClass("UIStroke")
+	if zoneStroke then
+		zoneStroke.Transparency = 1
+	end
+	local toasts = UIKit.new("Frame", {
+		Name = "Toasts",
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 0, below + 42),
+		Size = UDim2.fromOffset(460, 220),
+	}, gui)
+	UIKit.list(toasts, Enum.FillDirection.Vertical, 10, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
+
+	-- the left menu: every tile hidden until a controller claims it
+	local m = HudBubble.menuMetrics(layout, #HudBubble.GameMenu)
+	local menu = UIKit.new("Frame", {
+		Name = "Menu",
+		BackgroundTransparency = 1,
+		Position = if layout.Compact then m.Origin else UDim2.new(0, 18, 0.5, 24 - m.Height // 2),
+		Size = UDim2.fromOffset(m.Width, m.Height),
+	}, gui)
+	menu:SetAttribute("Bubble", true)
+	UIKit.new("UIGridLayout", {
+		CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight),
+		CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap),
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, menu)
+	for i, entry in HudBubble.GameMenu do
+		local _, holder = Bubble.tile(menu, {
+			Name = entry.Id,
+			Label = entry.Label,
+			Icon = entry.Icon,
+			Role = entry.Role,
+			Size = layout.Tile,
+			LayoutOrder = i,
+		})
+		holder.Visible = false
+	end
+
+	-- the hotbar: carried items (HudController fills the slots)
+	local carryPanel = UIKit.new("Frame", {
+		Name = "Carry",
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 1, -16),
+		Size = UDim2.fromOffset(260, layout.Slot + Theme.Lip),
+	}, gui)
+	local carryLabel = Bubble.text(carryPanel, "CARRYING 0/1", 18, {
+		Name = "Label",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0, -6),
+		Size = UDim2.fromOffset(260, 22),
+	})
+	local slots = UIKit.new("Frame", {
+		Name = "Slots",
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.new(1, 0, 0, layout.Slot + Theme.Lip),
+	}, carryPanel)
+	slots:SetAttribute("SlotSize", layout.Slot)
+	UIKit.list(slots, Enum.FillDirection.Horizontal, layout.SlotGap, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
+
+	-- throw power bar
+	local throwBar = UIKit.new("Frame", {
+		Name = "ThrowBar",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Panel,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.5, 0, 0.62, 0),
+		Size = UDim2.fromOffset(220, 22),
+		Visible = false,
+	}, gui)
+	Bubble.corner(throwBar, 11)
+	Bubble.stroke(throwBar, 3.5)
+	local throwFill = UIKit.new("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = Theme.Good,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(0, 1),
+	}, throwBar)
+	Bubble.corner(throwFill, 11)
+
+	return {
+		Gui = gui,
+		Coins = coins,
+		CoinsPanel = coinsPanel,
+		Income = income,
+		Floaters = floaters,
+		Zone = zone,
+		Toasts = toasts,
+		CarryPanel = carryPanel,
+		CarrySlots = slots,
+		CarryLabel = carryLabel,
+		ThrowBar = throwBar,
+		ThrowFill = throwFill,
+		Menu = menu,
+		TopBar = topBar,
+	}
+end
+
+-- Shows a menu tile for a controller and returns its button (its Parent is
+-- the tile holder, like UIKit.button's). Unknown ids get a new plain tile.
+function HudBubble.claimTile(menu: Instance, id: string): TextButton
+	local holder = menu:FindFirstChild(id)
+	if not holder then
+		local size = 86
+		local grid = menu:FindFirstChildOfClass("UIGridLayout")
+		if grid then
+			size = grid.CellSize.X.Offset
+		end
+		local _, created = Bubble.tile(menu, { Name = id, Label = string.upper(id), Icon = "more", Role = "Plain", Size = size, LayoutOrder = 50 })
+		holder = created
+	end
+	local frame = holder :: Frame
+	frame.Visible = true
+	return frame:FindFirstChild("Face") :: TextButton
+end
+
+-- One hotbar slot: a carried ore in its rarity colour, "?" for dirty ore,
+-- empty when nothing is carried.
+function HudBubble.slot(parent: Instance, filled: Color3?, order: number, mystery: boolean?): Frame
+	local size = (parent:GetAttribute("SlotSize") :: number?) or 70
+	local holder, face = Bubble.body(parent, Bubble.role("Plain"), Vector2.new(size, size), { Name = "Slot" .. order, Corner = 16 })
+	holder.LayoutOrder = order
+	if mystery then
+		Bubble.ink(face, "?", math.floor(size * 0.6), {
+			Name = "Mystery",
+			FontFace = Theme.TitleFont,
+			Size = UDim2.fromScale(1, 1),
+			TextColor3 = Theme.InkSoft,
+			ZIndex = 4,
+		})
+	elseif filled then
+		local gem = UIKit.new("Frame", {
+			Name = "Ore",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = filled,
+			BorderSizePixel = 0,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Rotation = 45,
+			Size = UDim2.fromScale(0.5, 0.5),
+			ZIndex = 4,
+		}, face)
+		Bubble.corner(gem, 8)
+		Bubble.stroke(gem, 3)
+		Bubble.gradient(gem, Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190))
+	end
+	return holder
+end
+
+-- A floating "+$1.2K" under the coins (HudController moves and fades it).
+function HudBubble.floater(parent: Instance, text: string): TextLabel
+	return Bubble.text(parent, text, 30, {
+		Name = "Floater",
+		FontFace = Theme.TitleFont,
+		Position = UDim2.fromOffset(44, 0),
+		Size = UDim2.fromOffset(HudBubble.CoinsWidth - 44, 36),
+		TextColor3 = Theme.Gold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+end
+
+-- A toast: a white pill with a dot in the message's colour.
+function HudBubble.toastColor(parent: Instance, text: string, color: Color3): Frame
+	local holder, face = Bubble.body(parent, Bubble.role("Plain"), Vector2.new(440, 44), { Name = "Toast", Corner = 22 })
+	local dot = UIKit.new("Frame", {
+		Name = "Dot",
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(22, 22),
+		ZIndex = 4,
+	}, face)
+	Bubble.corner(dot, 11)
+	Bubble.stroke(dot, 2.5)
+	Bubble.ink(face, text, 21, {
+		Name = "Text",
+		Position = UDim2.fromOffset(44, 0),
+		Size = UDim2.new(1, -56, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 4,
+	})
+	return holder
+end
+
+export type OfflineRefs = {
+	Gui: ScreenGui,
+	Dim: Frame,
+	Panel: Frame,
+	Amount: TextLabel,
+	Detail: TextLabel,
+	Collect: TextButton,
+}
+
+-- "WELCOME BACK!": what the podiums earned while away, and COLLECT.
+function HudBubble.buildOffline(): OfflineRefs
+	local gui = UIKit.screen("TerraForgeOffline", 30)
+	gui.Enabled = false
+	gui.IgnoreGuiInset = true
+	local dim = UIKit.new("Frame", {
+		Name = "Dim",
+		BackgroundColor3 = Theme.Shadow,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+	}, gui)
+	local window = Bubble.window(gui, {
+		Name = "Offline",
+		Title = "WELCOME BACK!",
+		Icon = "coins",
+		Role = "Shop",
+		Size = Vector2.new(560, 340),
+	})
+	local close = window.Close.Parent :: Frame
+	close.Visible = false -- COLLECT (and B / Backspace) close it
+	local body = window.Body
+	Bubble.ink(body, "While you were away you earned", 22, {
+		Name = "Lead",
+		Size = UDim2.new(1, 0, 0, 28),
+		TextColor3 = Theme.InkSoft,
+	})
+	local row = Bubble.iconText(body, "coin", "+$0", 46, {
+		Name = "AmountRow",
+		Position = UDim2.fromOffset(0, 34),
+	}, true)
+	local amount = row:FindFirstChild("Text") :: TextLabel
+	amount.FontFace = Theme.TitleFont
+	amount.Size = UDim2.fromOffset(300, 52)
+	local detail = Bubble.ink(body, "", 18, {
+		Name = "Detail",
+		Position = UDim2.fromOffset(0, 98),
+		Size = UDim2.new(1, 0, 0, 52),
+		TextColor3 = Theme.InkSoft,
+		TextWrapped = true,
+	})
+	local collect, collectHolder = Bubble.button(body, { Name = "Collect", Text = "COLLECT", Role = "Go", Size = Vector2.new(240, 62), TextSize = 30 })
+	collectHolder.AnchorPoint = Vector2.new(0.5, 1)
+	collectHolder.Position = UDim2.fromScale(0.5, 1)
+	return { Gui = gui, Dim = dim, Panel = window.Holder, Amount = amount, Detail = detail, Collect = collect }
 end
 
 return HudBubble

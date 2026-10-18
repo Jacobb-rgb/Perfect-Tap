@@ -29,7 +29,7 @@ IconAssets.Sheets = {
 			"ore_raw", "ore_copper", "ore_silver", "ingot_gold", "shard", "artifact",
 			"medal", "podium", "moon", "train", "clover", "rainbow",
 			"enchant", "check", "wheel", "book", "trophy", "helmet",
-			"cog", "lock",
+			"cog", "lock", "lift",
 		},
 	},
 	{

@@ -8,12 +8,16 @@
 	  center       throw power bar
 	  right side   menu buttons (added by later steps)
 	The "While you were away" popup is its own ScreenGui (buildOffline).
+	While UIConfig.lightUI() is on, every builder here forwards to the light
+	"Bubble" HUD (HudBubble: the same refs), so the controllers need no change.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
+local UIConfig = require(Shared.Config.UIConfig)
 local UIKit = require(script.Parent.UIKit)
+local HudBubble = require(script.Parent.HudBubble)
 
 local HudView = {}
 
@@ -63,6 +67,9 @@ end
 HudView.coinIcon = coinIcon
 
 function HudView.build(): Refs
+	if UIConfig.lightUI() then
+		return HudBubble.buildGame()
+	end
 	local gui = UIKit.screen("TerraForgeHud", 5)
 
 	-- coins and the podium income under them
@@ -209,6 +216,9 @@ end
 -- One carry slot square; color = rarity color or empty. `mystery` (dirty
 -- ore) shows a "?" instead of hinting at the rarity.
 function HudView.slot(parent: Instance, filled: Color3?, order: number, mystery: boolean?): Frame
+	if UIConfig.lightUI() then
+		return HudBubble.slot(parent, filled, order, mystery)
+	end
 	local slot = UIKit.new("Frame", {
 		Name = "Slot" .. order,
 		LayoutOrder = order,
@@ -229,6 +239,9 @@ end
 
 -- A floating "+$1.2K" (the controller moves and fades it).
 function HudView.floater(parent: Instance, text: string): TextLabel
+	if UIConfig.lightUI() then
+		return HudBubble.floater(parent, text)
+	end
 	return UIKit.label(parent, text, 28, {
 		Name = "Floater",
 		Position = UDim2.fromOffset(60, 0),
@@ -251,6 +264,9 @@ export type OfflineRefs = {
 
 -- "Welcome back! While you were away: +$12.4K" with a COLLECT button.
 function HudView.buildOffline(): OfflineRefs
+	if UIConfig.lightUI() then
+		return HudBubble.buildOffline()
+	end
 	local gui = UIKit.screen("TerraForgeOffline", 30)
 	gui.Enabled = false
 	local dim = UIKit.new("Frame", {
@@ -309,6 +325,9 @@ end
 
 -- A toast message (Kind = Info | Deny | Discovery | Reward). Returns the frame.
 function HudView.toast(parent: Instance, text: string, color: Color3): Frame
+	if UIConfig.lightUI() then
+		return HudBubble.toastColor(parent, text, color)
+	end
 	local frame = UIKit.panel(parent, {
 		Name = "Toast",
 		Size = UDim2.fromOffset(460, 44),

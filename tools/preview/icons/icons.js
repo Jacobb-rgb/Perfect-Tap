@@ -584,6 +584,27 @@ const ICONS = {
     return { model: group(parts), yaw: -14, pitch: 18 };
   },
 
+  lift() {
+    const tri = (up) => {
+      const t = new THREE.Shape();
+      t.moveTo(-0.22, 0);
+      t.lineTo(0.22, 0);
+      t.lineTo(0, up ? 0.26 : -0.26);
+      t.closePath();
+      return t;
+    };
+    const parts = [
+      box(1.5, 1.9, 0.5, 0.18, "#5b6677", steel, [0, 0, -0.05]),
+      box(1.2, 1.55, 0.2, 0.08, "#c9d3de", steel, [0, -0.1, 0.22]),
+      box(0.04, 1.5, 0.05, 0.02, "#7d8a9b", steel, [0, -0.1, 0.33]),
+      box(0.62, 0.4, 0.12, 0.08, "#2d3748", {}, [0, 0.93, 0.25]),
+      extrude(tri(true), 0.05, 0.02, "#3ddc84", glow("#18a050", 0.6), [-0.14, 0.98, 0.32]),
+      extrude(tri(false), 0.05, 0.02, "#ffc93c", glow("#d09000", 0.6), [0.14, 0.88, 0.32]),
+      box(1.7, 0.16, 0.6, 0.06, "#ffc93c", {}, [0, -1.0, 0.0]),
+    ];
+    return { model: group(parts), yaw: -18, pitch: 8 };
+  },
+
   // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
   // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
   robux() {

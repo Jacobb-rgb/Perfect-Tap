@@ -13,6 +13,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local MachineData = require(Shared.Config.MachineData)
 local UIKit = require(script.Parent.UIKit)
+local HudBubble = require(script.Parent.HudBubble)
 
 local BuildView = {}
 
@@ -358,6 +359,9 @@ end
 
 -- The BUILD button for the HUD's right-side menu (HudController.refs().Menu).
 function BuildView.menuButton(menu: Instance): TextButton
+	if menu:GetAttribute("Bubble") then
+		return HudBubble.claimTile(menu, "Build") -- the light HUD's BUILD tile
+	end
 	return UIKit.button(menu, "BUILD", Theme.Accent, Theme.AccentDark, {
 		Name = "Build",
 		LayoutOrder = 10,

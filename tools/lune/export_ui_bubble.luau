@@ -598,3 +598,25 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	EnchantBubble.boosts(gui3, spec[2], boostData)
 	write("ui_bubble_boosts_" .. spec[1], gui3)
 end
+
+---------------------------------------------------------------- the game HUD behind the switch (UIConfig.LightUI on)
+local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
+local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
+local BuildView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BuildView")
+UIConfig.LightUI = true
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local refs = HudBubble.buildGame(spec[2])
+	refs.Gui.Scale.Scale = spec[2] * spec[3]
+	TeleportView.build(refs.TopBar, refs.Menu, spec[2])
+	BuildView.menuButton(refs.Menu)
+	refs.Coins.Text = "$48.2K"
+	refs.Income.Text = "+$186/s"
+	HudView.slot(refs.CarrySlots, Color3.fromRGB(61, 165, 255), 1, false)
+	HudView.slot(refs.CarrySlots, nil, 2, true)
+	HudView.slot(refs.CarrySlots, nil, 3, false)
+	refs.CarryLabel.Text = "CARRYING 2/3"
+	HudView.toast(refs.Toasts, "New ore discovered: Sapphire!", Color3.fromRGB(61, 165, 255))
+	write("ui_bubble_game_" .. spec[1], refs.Gui)
+end
+UIConfig.LightUI = false

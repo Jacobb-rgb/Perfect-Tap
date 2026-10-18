@@ -23,6 +23,24 @@ nothing is wired into the game until the owner approves style A.
 | Backpack (Ore Pen) | `src/client/UI/BackpackBubble.luau` | `backpack_*` |
 | Robux Shop | `src/client/UI/ShopBubble.luau` | `shop_*` |
 | Build mode | `src/client/UI/BuildBubble.luau` | `build_*` |
+| Wheel (SPIN & WIN) | `src/client/UI/WheelBubble.luau` | `wheel_*` |
+| Ore Codex | `src/client/UI/CodexBubble.luau` | `codex_*` |
+| Artifacts + Journal | `src/client/UI/ArtifactsBubble.luau` | `artifacts_*`, `journal_*` |
+| Hall of Fame + Settings | `src/client/UI/BoardsBubble.luau` | `boards_*`, `settings_*` |
+| Gear Shop | `src/client/UI/GearBubble.luau` | `gear_*` |
+| Enchants + Luck Boosts | `src/client/UI/EnchantBubble.luau` | `enchants_*`, `boosts_*` |
+| **The game HUD behind the switch** | `HudBubble.buildGame` + `HudView` / `TeleportView` / `BuildView` | `game_*` |
+
+The steps 6-7 windows take their content from `integrate/steps67` (89eb9d9); diff against the final
+commit on main before coding their controllers onto them.
+
+## The switch (already in the code, OFF)
+`src/shared/Config/UIConfig.luau`: `LightUI = false`. While it is off every player sees today's UI
+(tests/LightUI.spec.luau checks it). On (the flag, or the Workspace attribute `LightUI = true` for a
+Studio test): `HudView.build / slot / floater / toast / buildOffline` forward to `HudBubble` (the same refs,
+so HudController and the other controllers are unchanged), `TeleportView.build` fills the light top bar with
+bubble tabs and a LIFT tile, `BuildView.menuButton` claims the BUILD tile. Menu tiles start hidden and show
+only when a controller claims them (`HudBubble.claimTile`), so there are no dead buttons.
 
 Pictures: `docs/screenshots/ui_bubble/` (overview: `prehled_styl_a.jpg`). Re-render:
 `lune run tools/lune/export_ui_bubble.luau` then
@@ -34,10 +52,10 @@ All builders are pure and take plain data, so the controllers fill them from con
 `tests/*Bubble.spec.luau` check the content and the >= 44 pt touch sizes at uiScale 0.62.
 
 ## Wiring it in (after the owner's YES)
-1. Owner uploads the 3 sheets → paste the ids into `IconAssets.Sheets[*].Id`.
-2. **HUD**: HudController builds `HudBubble` instead of `HudView` (coins, income, toasts, zone name,
-   floaters, the carry slots → hotbar). TeleportController drives `HudBubble` tabs (cooldown cover,
-   gamepad hint stay). The LIFT button: follow the owner's answer (side tile or 4th tab).
+1. Owner uploads the 5 sheets (`NAHRAJ_DO_ROBLOXU/ikony_ui`) → paste the ids into `IconAssets.Sheets[*].Id`,
+   then set `UIConfig.LightUI = true`.
+2. **HUD**: done behind the switch (see above). Still to do: the blaster in hotbar slot 1 (ToolService),
+   item pictures in the slots, the LIFT placement per the owner's answer (side tile or 4th tab).
 3. **Menu**: the integrator's `SideMenuView.Entries` (Group Main/More, IconName) feed
    `HudBubble.Menu` / `HudBubble.More`; SideMenuController keeps its public functions.
 4. **Windows** move onto the kit, keeping each controller's API:
