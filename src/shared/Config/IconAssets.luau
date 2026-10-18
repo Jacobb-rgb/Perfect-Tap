@@ -99,8 +99,8 @@ function IconAssets.find(name: string): (string, Vector2, Vector2)
 	return "", Vector2.zero, Vector2.zero
 end
 
--- Shows icon `name` on an ImageLabel / ImageButton.
-function IconAssets.apply(label: ImageLabel | ImageButton, name: string)
+-- Shows icon `name` on an ImageLabel.
+function IconAssets.apply(label: ImageLabel, name: string)
 	local image, offset, size = IconAssets.find(name)
 	label.Image = image
 	label.ImageRectOffset = offset
