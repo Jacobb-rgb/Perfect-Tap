@@ -67,16 +67,19 @@ const browser = await chromium.launch({
   executablePath: fs.existsSync("/opt/pw-browsers/chromium") ? undefined : undefined,
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+// RENDER_W / RENDER_H (default 1600 x 900): e.g. 1920 x 1080 for the store thumbnails
+const renderW = Number(process.env.RENDER_W || 1600);
+const renderH = Number(process.env.RENDER_H || 900);
+const page = await browser.newPage({ viewport: { width: renderW, height: renderH } });
 page.on("console", (m) => {
   if (m.type() === "error") console.error("[page]", m.text());
 });
 
 for (const name of names) {
   const t0 = Date.now();
-  // shot.width / shot.height: other screen sizes (phone renders), default 1600x900
-  const w = shots[name].width || 1600;
-  const h = shots[name].height || 900;
+  // per-shot width / height (phone renders) win over RENDER_W / RENDER_H
+  const w = shots[name].width || renderW;
+  const h = shots[name].height || renderH;
   await page.setViewportSize({ width: w, height: h });
   await page.goto(`http://127.0.0.1:${port}/index.html?scene=${sceneName}&shot=${name}&w=${w}&h=${h}`);
   await page.waitForFunction(() => window.__done || window.__error, null, { timeout: 240000 });
