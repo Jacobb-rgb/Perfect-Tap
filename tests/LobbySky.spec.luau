@@ -199,20 +199,23 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("sky: balloon, ships and airship are tagged Spin and stream as one piece", function()
+	T.test("sky: balloon and airship are tagged Spin, the ships lie still, all stream as one piece", function()
 		local root = build()
 		local expected = {
 			Balloon = { SpinSpeed = 0.05, BobHeight = 2, BobSpeed = 0.5 },
-			ShipA = { SpinSpeed = 0, BobHeight = 0.5, BobSpeed = 0.8 },
-			ShipB = { SpinSpeed = 0, BobHeight = 0.5, BobSpeed = 0.8 },
 			Airship = { SpinSpeed = 0, BobHeight = 3, BobSpeed = 0.35 },
 		}
+		-- (perf pass 1) the west-sea ships 240+ studs out: no bob, never moved per frame
+		for _, id in { "ShipA", "ShipB" } do
+			local ship = root:FindFirstChild(id)
+			T.falsy(table.find(ship:GetTags(), "Spin"), id .. " lies still (no Spin tag)")
+			T.truthy(ship.PrimaryPart and ship.PrimaryPart:IsDescendantOf(ship), id .. " has a PrimaryPart")
+			T.eq(ship.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Atomic, id .. " streams as one piece")
+		end
 		-- the airship hangs ~400 studs out, at the 384-stud StreamingTargetRadius:
 		-- Persistent, so it never pops in and out (still one piece)
 		local mode = {
 			Balloon = roblox.Enum.ModelStreamingMode.Atomic,
-			ShipA = roblox.Enum.ModelStreamingMode.Atomic,
-			ShipB = roblox.Enum.ModelStreamingMode.Atomic,
 			Airship = roblox.Enum.ModelStreamingMode.Persistent,
 		}
 		for id, attrs in expected do

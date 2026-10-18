@@ -66,6 +66,7 @@ export type Refs = {
 	PadGlyph: ImageLabel,
 	Done: Frame,
 	DoneText: TextLabel,
+	Pointer: Frame, -- the on-screen arrow at a side-menu button (a step's UiTarget)
 }
 
 TutorialView.Margin = 14 -- design units from the screen's right edge
@@ -234,8 +235,32 @@ function TutorialView.build(): Refs
 		Position = UDim2.fromOffset(16, 62),
 		Size = UDim2.new(1, -32, 0, 52),
 	})
+	-- the on-screen arrow: a chevron pointing left, at a side-menu button
+	local pointer = UIKit.new("Frame", {
+		Name = "Pointer",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(TutorialView.PointerSize, TutorialView.PointerSize),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 6,
+	}, gui)
+	for _, side in { -1, 1 } do
+		local arm = UIKit.new("Frame", {
+			Name = if side < 0 then "ArmTop" else "ArmBottom",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, side * 11),
+			Size = UDim2.fromOffset(40, 14),
+			Rotation = side * 40,
+			BackgroundColor3 = Theme.Accent,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+		}, pointer)
+		UIKit.corner(arm, 7)
+		UIKit.stroke(arm, 3)
+	end
 	local refs: Refs = {
 		Gui = gui,
+		Pointer = pointer,
 		Bubble = bubble,
 		Counter = counter,
 		Title = title,
@@ -307,6 +332,21 @@ function TutorialView.setSkipAsk(refs: Refs, asking: boolean)
 	refs.Skip.BackgroundColor3 = if asking then Theme.Bad else Theme.PanelLight
 	local holder = refs.Skip.Parent :: Frame
 	holder.BackgroundColor3 = if asking then Theme.BadDark else Theme.PanelDark
+end
+
+TutorialView.PointerSize = 56
+TutorialView.PointerGap = 8 -- design units between the button's right edge and the arrow
+
+-- Where the arrow goes for a button: right of the menu (`rightEdge`, the
+-- column's right side: a grid's other buttons stay clear), level with the
+-- button (design units in the tutorial's gui, from absolute pixels and the
+-- gui's scale).
+function TutorialView.pointerSpot(buttonPos: Vector2, buttonSize: Vector2, guiPos: Vector2, scale: number, rightEdge: number?): Vector2
+	local s = if scale > 0 then scale else 1
+	local right = math.max(buttonPos.X + buttonSize.X, rightEdge or 0)
+	local x = (right - guiPos.X) / s + TutorialView.PointerGap
+	local y = (buttonPos.Y + buttonSize.Y / 2 - guiPos.Y) / s
+	return Vector2.new(x, y)
 end
 
 -- The finish card's line ("+250 coins" when there was a reward).

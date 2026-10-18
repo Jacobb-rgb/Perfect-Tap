@@ -2,9 +2,13 @@
 	HudController: coins counter with the podium income under it, zone
 	banner, toast notifications, carry slots and UI scaling for small screens.
 
-	- Coins count up smoothly: between two State snapshots the counter keeps
-	  rising at the snapshot's Income (coins per second, at most one tick
-	  ahead), so podium money ticks up instead of jumping once a second.
+	- Coins count up smoothly: between two updates the counter keeps
+	  rising at the Income (coins per second, at most one tick ahead), so
+	  podium money ticks up instead of jumping once a second. The balance and
+	  the income come from the player attributes Coins / IncomePerSec
+	  (StateService writes them at most every 0.25 s, also for the quiet
+	  podium payouts); the State snapshot's Coins / Income are the fallback
+	  while the attributes aren't there.
 	  Bigger jumps (a sale) pop the panel. holdCoins(seconds) keeps the
 	  counter still while another screen still has to reveal a reward (the
 	  daily wheel's disc turning); releaseCoins shows it.
@@ -48,6 +52,9 @@ local OFFLINE_CLOSE = "TerraForgeOfflineClose"
 -- above the default controls, so B / Backspace close the popup first
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 20
 local FLOAT_TIME = 1.4
+-- player attributes written by StateService (CoinsAttribute / IncomeAttribute)
+local COINS_ATTRIBUTE = "Coins"
+local INCOME_ATTRIBUTE = "IncomePerSec"
 
 -- coin counter: the server's coins at the last snapshot, the income then, and when it came
 local serverCoins = 0
@@ -236,13 +243,17 @@ function HudController.releaseCoins()
 	end
 end
 
-local function onState(state: { [string]: any })
-	local coins = tonumber(state.Coins) or 0
-	if coins ~= coins then
-		coins = 0
+-- A finite number or nil.
+local function number(value: any): number?
+	local n = tonumber(value)
+	if n == nil or n ~= n or n == math.huge or n == -math.huge then
+		return nil
 	end
-	local newIncome = tonumber(state.Income) or 0
-	if newIncome ~= newIncome or newIncome < 0 then
+	return n
+end
+
+local function showCoins(coins: number, newIncome: number)
+	if newIncome < 0 then
 		newIncome = 0
 	end
 	if hasState and os.clock() < holdUntil then
@@ -258,6 +269,24 @@ local function onState(state: { [string]: any })
 	end
 	refs.Income.Text = Format.perSecond(newIncome)
 	refs.Income.TextColor3 = if newIncome > 0 then Theme.Good else Theme.TextDim
+end
+
+-- The balance and income now: the attributes first, the last snapshot's
+-- fields while an attribute is missing.
+local lastState: { [string]: any }? = nil
+local function refreshCoins()
+	local state = lastState
+	local coins = number(player:GetAttribute(COINS_ATTRIBUTE)) or (if state then number(state.Coins) else nil)
+	local newIncome = number(player:GetAttribute(INCOME_ATTRIBUTE)) or (if state then number(state.Income) else nil)
+	if coins == nil then
+		return -- nothing known yet
+	end
+	showCoins(coins, newIncome or 0)
+end
+
+local function onState(state: { [string]: any })
+	lastState = state
+	refreshCoins()
 end
 
 ---------------------------------------------------------------- Earned popups
@@ -420,6 +449,11 @@ function HudController.init()
 	end)
 
 	StateController.onChanged(onState)
+	player:GetAttributeChangedSignal(COINS_ATTRIBUTE):Connect(refreshCoins)
+	player:GetAttributeChangedSignal(INCOME_ATTRIBUTE):Connect(refreshCoins)
+	if player:GetAttribute(COINS_ATTRIBUTE) ~= nil then
+		refreshCoins()
+	end
 end
 
 function HudController.start()

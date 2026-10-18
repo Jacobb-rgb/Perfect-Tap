@@ -77,10 +77,12 @@ local StoryConfig = require(Shared.Config.StoryConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local Shards = require(script.Parent.Parent.Shards)
+local Perks = require(script.Parent.Parent.Perks)
 local MuseumBuilder = require(script.Parent.Parent.World.MuseumBuilder)
 local DataService = require(script.Parent.DataService)
 local MiningService = require(script.Parent.MiningService)
 local PlotService = require(script.Parent.PlotService)
+local PlotBuilder = require(script.Parent.Parent.World.PlotBuilder)
 
 local ArtifactService = {}
 
@@ -180,8 +182,13 @@ type Skin = { Name: string, Base: Color3, Trim: Color3, Glow: Color3 }
 
 -- The skin color for a podium part: the named parts (and the parts in their
 -- own colors) take their role, neon is the glow, a bright saturated color
--- is the trim, anything else a darker base.
+-- is the trim, anything else a darker base. The opaque holo-ring bars take
+-- the glow toned like the default ring (PlotBuilder.holoTone, perf pass 1):
+-- full strength they read as bright gizmo hexagons again.
 local function skinColor(part: BasePart, roles: { [string]: string }, skin: Skin): Color3
+	if part.Name == "HoloRing" then
+		return PlotBuilder.holoTone(skin.Glow)
+	end
 	local own = ownColor(part)
 	local role = if part.Material == Enum.Material.Neon then "Glow" else roles[colorKey(own)]
 	if role == "Glow" then
@@ -389,7 +396,8 @@ function ArtifactService.restore(player: Player, artifactId: any): (boolean, str
 		return false, "BadArtifact"
 	end
 	local level = if finite(data.BlasterLevel) then data.BlasterLevel else 1
-	local price, reason = ArtifactConfig.restoreQuote(data.Artifacts, artifactId, level, Shards.get(data))
+	local vip = Perks.has(player, "ForgeVip")
+	local price, reason = ArtifactConfig.restoreQuote(data.Artifacts, artifactId, level, Shards.get(data), vip)
 	if not price then
 		return false, reason
 	end
@@ -442,11 +450,12 @@ function ArtifactService.equip(player: Player, collectionId: any): (boolean, str
 	if collectionId ~= "" and not ArtifactConfig.isComplete(artifacts, collectionId) then
 		return false, "NotComplete"
 	end
+	-- only a real change repaints the podiums for everyone (security audit S6)
 	if artifacts.Equipped ~= collectionId then
 		artifacts.Equipped = collectionId
 		DataService.changed(player)
+		ArtifactService.applyRewards(player)
 	end
-	ArtifactService.applyRewards(player)
 	return true, nil
 end
 

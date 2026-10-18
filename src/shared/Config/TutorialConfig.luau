@@ -9,8 +9,11 @@
 	The checks are absolute and pass for any later progress too, so a player
 	who does things in another order (or an old save) isn't asked again:
 	TutorialConfig.advance walks forward past every step that is already
-	done. An Optional step is an info hint with no task: it waits for the
-	player's "Got it" (TutorialAction "Ack").
+	done. An Optional step is an info hint (steps 6-7: golems, the wheel): it
+	waits for the player's "Got it" (TutorialAction "Ack"), or passes by
+	itself once its check holds (the player already used the feature).
+	UiTarget names a side-menu button (SideMenuView.Entries Id) that an
+	on-screen arrow points at, next to the 3D guide.
 
 	Targets (TutorialConfig.Targets) are what the client's guide looks for:
 	tagged instances first (nearest, or the one on your own plot), else a
@@ -36,7 +39,7 @@ export type Signals = {
 
 export type Input = string -- "Mouse" | "Touch" | "Gamepad"
 
--- "Station" | "Rock" | "Hopper" | "Pen" | "Cleaning" | "Podium" | "Sell" | "Foundry"
+-- "Station" | "Rock" | "Hopper" | "Pen" | "Cleaning" | "Podium" | "Sell" | "Foundry" | "Capsules" | "Wheel"
 export type Target = string
 
 export type Step = {
@@ -46,7 +49,8 @@ export type Step = {
 	Hint: { [string]: string }?, -- keyed by Input -- the control for this step, per input type
 	Target: Target?, -- where the guide points
 	EmptyTarget: Target?, -- where it points while you carry nothing (overrides Target)
-	Optional: boolean?, -- an info hint: done on "Got it"
+	Optional: boolean?, -- an info hint: done on "Got it" (or when its check holds)
+	UiTarget: string?, -- a side-menu button the on-screen arrow points at (SideMenuView.Entries Id)
 	done: (data: Data, signals: Signals) -> boolean,
 }
 
@@ -133,6 +137,18 @@ function TutorialConfig.machinesBought(data: Data, starterCount: number): boolea
 end
 
 TutorialConfig.StarterMachines = 2 -- MachineData.StarterKit: Cleaning Station + Clay Furnace
+
+-- Woke a golem (a capsule opened, or one is owned).
+function TutorialConfig.golems(data: Data): boolean
+	local golems = data.Golems
+	local owned = if type(golems) == "table" then golems.Owned else nil
+	return stat(data, "CapsulesOpened") > 0 or count(owned) > 0
+end
+
+-- Spun the daily wheel at least once.
+function TutorialConfig.spun(data: Data): boolean
+	return stat(data, "WheelSpins") > 0
+end
 
 -- Sold something, or bought a machine.
 function TutorialConfig.grown(data: Data): boolean
@@ -231,6 +247,34 @@ TutorialConfig.Steps = {
 			return M.blaster(data)
 		end,
 	},
+	-- steps 6-7 hints (GOT IT, or done once the player has used the feature)
+	{
+		Id = "Golems",
+		Title = "Golem helpers",
+		Text = "Golems follow you and help you earn. Wake one from a capsule: GOLEMS in the side menu.",
+		Hint = { Mouse = "GOLEMS is on the left", Touch = "Tap MENU, then GOLEMS", Gamepad = "D-pad left, then GOLEMS" },
+		Target = "Capsules",
+		UiTarget = "Golems",
+		Optional = true,
+		done = function(data: Data, _signals: Signals): boolean
+			return M.golems(data)
+		end,
+	},
+	{
+		Id = "Wheel",
+		Title = "A free spin",
+		Text = "Spin the wheel at the SPIN & WIN chest once a day for a free prize.",
+		Hint = {
+			Mouse = "Follow the arrow to the chest",
+			Touch = "Follow the arrow to the chest",
+			Gamepad = "Follow the arrow to the chest",
+		},
+		Target = "Wheel",
+		Optional = true,
+		done = function(data: Data, _signals: Signals): boolean
+			return M.spun(data)
+		end,
+	},
 } :: { Step }
 
 TutorialConfig.Total = #TutorialConfig.Steps
@@ -255,13 +299,13 @@ function TutorialConfig.clamp(step: any): number
 end
 
 -- Walks forward from `step` past every step whose check already holds.
--- Stops at an Optional step (it waits for "Got it"). Total + 1 = all done.
+-- Stops at an Optional step whose check doesn't hold yet (it waits for "Got it"). Total + 1 = all done.
 function TutorialConfig.advance(step: number, data: Data, signals: Signals?): number
 	local s = TutorialConfig.clamp(step)
 	local known: Signals = signals or {}
 	while s <= TutorialConfig.Total do
 		local def = TutorialConfig.Steps[s]
-		if def.Optional or not def.done(data, known) then
+		if not def.done(data, known) then
 			break
 		end
 		s += 1
@@ -289,6 +333,8 @@ TutorialConfig.TargetNames = {
 	Podium = "Podium",
 	Sell = "Tobin's stall",
 	Foundry = "Foundry",
+	Capsules = "Capsule stall",
+	Wheel = "SPIN & WIN",
 } :: { [string]: string }
 
 -- How high the guide's arrow floats over the target point (studs; ArrowHeight
@@ -297,6 +343,8 @@ TutorialConfig.ArrowHeight = 5
 TutorialConfig.ArrowHeights = {
 	Station = 13,
 	Hopper = 9,
+	Capsules = 9,
+	Wheel = 7,
 } :: { [string]: number }
 
 function TutorialConfig.arrowHeight(target: Target): number
@@ -310,6 +358,8 @@ TutorialConfig.Tags = {
 	Cleaning = "Machine", -- attribute MachineId "CleaningStation", Owner = your UserId
 	Sell = "SellCounter", -- Tobin's counter in the lobby
 	Foundry = "FoundryPrompt", -- attribute PlotId = yours
+	Capsules = "CapsuleStall", -- CapsuleService.Tag (a Model in the lobby)
+	Wheel = "EmberChest", -- WheelConfig.Tag (the chest at the top of the SPIN & WIN stairs)
 } :: { [string]: string }
 
 local function plotFrame(plotId: number?): CFrame?

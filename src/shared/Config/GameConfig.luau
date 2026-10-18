@@ -28,7 +28,8 @@ local GameConfig = {
 	CellSize = 4, -- studs per grid cell
 
 	-- Physical items (performance)
-	MaxLooseItemsPerPlayer = 30, -- above this, the oldest loose item is moved to storage
+	MaxLooseItemsPerPlayer = 30, -- loose items per player on bases (machines / chutes stop below it) and, apart, away from bases (rocks stop giving ore)
+	MaxLooseItemsTotal = 60, -- the hard ceiling of one player's loose items anywhere: hand drops, throws and Pen takes stop there
 	ServerOwnershipAfter = 3, -- seconds after a drop/throw before the server takes back item physics
 	PickupRange = 11,
 	ThrowSpeedMin = 22,
@@ -111,9 +112,16 @@ local GameConfig = {
 	-- Remotes
 	DefaultRateLimit = { Rate = 8, Burst = 16 }, -- events per second per player
 
-	-- Saving
-	AutosaveInterval = 120,
+	-- Saving (docs/SAVE_AUDIT.md)
+	AutosaveInterval = 60, -- seconds: also refreshes the session lock (at most this much progress lost on a crash)
+	StaleLockSeconds = 180, -- a lock not refreshed this long belongs to a crashed server (3 missed autosaves)
 	SaveInStudio = true, -- needs "Enable Studio Access to API Services"
+	-- Studio saves into its own DataStore (TerraForge_PlayerData_Studio) so command-bar tests never
+	-- touch a real save; true = Studio reads and writes the live store (only to look into a live save)
+	StudioLiveData = false,
+	-- the highest saved level kept for any upgrade line (a junk guard): a newer build may sell more
+	-- levels, so saves keep them and the readers clamp to this build's top (docs/SAVE_AUDIT.md #1(b))
+	MaxLevelKept = 99,
 }
 
 return GameConfig

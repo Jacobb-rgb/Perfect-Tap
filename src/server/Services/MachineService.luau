@@ -20,6 +20,20 @@
 	  out of the machine's front: straight into the machine standing there
 	  when it takes them, otherwise as a loose item. Output pauses when the
 	  front machine refuses or the owner has too many loose items.
+	- The tick walks an ACTIVE list, never every placed machine: a machine
+	  stays on it while it has finished items in Out or one of its tick
+	  behaviours says it is busy (Behaviour.busy; a tick hook without busy
+	  always ticks). Spawning, register, an item handed in, pushOut and move
+	  wake a machine (MachineService.wake); MachineService.follow wakes a
+	  follower (the Robot Arm) whenever its leader wakes. Belts, poles and
+	  other machines without a tick hook or an intake never join it. A
+	  machine leaves the list at the end of a visit that found nothing to do.
+	- Status (why the output waits): a blocked reason shows at once; it
+	  clears once nothing more waits, or when the NEXT item gets out too
+	  (showBlocked / outputFlowed), so a machine that is blocked on every
+	  other retry keeps its reason instead of flipping every second.
+	- The loose-item cap check counts each owner's loose items once per tick
+	  pass (plus what the pass spawned), not once per emit.
 	- MachineAction remote: actions on your own machines (onAction).
 	- emitSide: the same hand-over or loose pop toward a side output cell
 	  (Splitter, Sorter: LogisticsService); the tick never uses it.
@@ -78,6 +92,10 @@ export type Behaviour = {
 	canAccept: ((PlacedMachine, Desc, number, Via) -> (boolean, Reason?))?,
 	insert: ((PlacedMachine, Desc, number, Via) -> ...any)?,
 	tick: ((PlacedMachine, number) -> ...any)?,
+	-- does the tick still have something to do (a queue, a running job, a
+	-- timer)? false lets the machine leave the active list until something
+	-- wakes it; without it a tick hook runs on every tick
+	busy: ((PlacedMachine, number) -> boolean)?,
 }
 
 type PlotIndex = {
@@ -97,6 +115,23 @@ local layoutCallbacks: { (Player, number) -> ...any } = {}
 local layoutPending: { [Player]: number } = {}
 local actions: { [string]: (Player, PlacedMachine, any) -> ...any } = {}
 local lastWarn: { [string]: number } = {}
+local NO_HOOKS: { Behaviour } = table.freeze({})
+
+-- the tick's active list (see the header): an array the tick walks, and a set
+local active: { PlacedMachine } = {}
+local activeSet: { [PlacedMachine]: boolean } = {}
+-- leader -> the machines that wake whenever it wakes (MachineService.follow)
+local followers: { [PlacedMachine]: { [PlacedMachine]: boolean } } = {}
+-- behaviours with a tick hook per machine type (rebuilt after register)
+local tickCache: { [string]: { Behaviour } } = {}
+-- layout version per plot: goes up on every change of which machine covers
+-- which cell (and on register), so neighbour caches know when to look again
+local versions: { [number]: number } = {}
+-- loose items per owner during one tick pass (looseNow)
+local passLoose: { [number]: number } = {}
+local inPass = false
+-- counters for the tests and the benchmark
+local stats = { Visits = 0, Hooks = 0 }
 
 -- Tick errors would repeat 10 times a second; warn about each one now and then.
 local function warnThrottled(key: string, message: string)
@@ -108,7 +143,92 @@ local function warnThrottled(key: string, message: string)
 end
 
 local function hooksOf(machineId: string): { Behaviour }
-	return behaviours[machineId] or {}
+	return behaviours[machineId] or NO_HOOKS
+end
+
+-- The behaviours of a machine type that have a tick hook.
+local function tickHooksOf(machineId: string): { Behaviour }
+	local cached = tickCache[machineId]
+	if cached then
+		return cached
+	end
+	local list: { Behaviour } = {}
+	for _, behaviour in hooksOf(machineId) do
+		if behaviour.tick then
+			table.insert(list, behaviour)
+		end
+	end
+	tickCache[machineId] = list
+	return list
+end
+
+local function bumpVersion(plotId: number)
+	versions[plotId] = (versions[plotId] or 0) + 1
+end
+
+local function hasOut(entry: Entry): boolean
+	local out = entry.Out
+	return out ~= nil and #out > 0
+end
+
+local function addActive(machine: PlacedMachine)
+	if not activeSet[machine] then
+		activeSet[machine] = true
+		table.insert(active, machine)
+	end
+end
+
+--[[
+	Puts a machine on the tick's active list (no-op when it is on it or
+	gone), and its followers with it. Safe during a tick pass: the pass
+	visits machines added meanwhile too.
+]]
+function MachineService.wake(machine: PlacedMachine)
+	if machine.Removed then
+		return
+	end
+	addActive(machine)
+	local list = followers[machine]
+	if list then
+		for follower in list do
+			if follower.Removed then
+				list[follower] = nil
+			else
+				addActive(follower)
+			end
+		end
+	end
+end
+
+-- `follower` wakes whenever `leader` wakes (until unfollow or either goes).
+function MachineService.follow(follower: PlacedMachine, leader: PlacedMachine)
+	local list = followers[leader]
+	if not list then
+		list = {}
+		followers[leader] = list
+	end
+	list[follower] = true
+end
+
+function MachineService.unfollow(follower: PlacedMachine, leader: PlacedMachine)
+	local list = followers[leader]
+	if list then
+		list[follower] = nil
+		if next(list) == nil then
+			followers[leader] = nil
+		end
+	end
+end
+
+-- Is the machine on the tick's active list (it has work, or just woke)?
+function MachineService.isActive(machine: PlacedMachine): boolean
+	return activeSet[machine] == true
+end
+
+-- Goes up whenever which machine covers which cell of the plot changes
+-- (place, move, pickup, spawn, unload) or a behaviour is registered.
+function MachineService.layoutVersion(plotId: number): number
+	return versions[plotId] or 0
 end
 
 -- The behaviour that takes items for this machine type (first one with
@@ -203,6 +323,7 @@ local function rebuildPlot(plotId: number)
 		indexCells(index, machine)
 	end
 	plots[plotId] = index
+	bumpVersion(plotId)
 end
 
 -- Layout listeners run once per player per frame, after the change is done.
@@ -244,15 +365,21 @@ function MachineService.register(machineId: string, behaviour: Behaviour)
 		behaviours[machineId] = list
 	end
 	table.insert(list, behaviour)
+	tickCache[machineId] = nil
+	local wakes = behaviour.tick ~= nil or (behaviour.canAccept ~= nil and behaviour.insert ~= nil)
 	local touched: { [number]: Player } = {}
 	for _, machine in placed do
 		if machine.Id == machineId and not machine.Removed then
 			callSpawned(machine, behaviour)
 			touched[machine.PlotId] = machine.Owner
+			if wakes then
+				MachineService.wake(machine)
+			end
 		end
 	end
 	-- the intake index depends on which machines take items
 	for plotId, owner in touched do
+		bumpVersion(plotId)
 		fireLayout(owner, plotId)
 	end
 end
@@ -320,6 +447,45 @@ function MachineService.setAttrs(machine: PlacedMachine, attrs: { [string]: any 
 		if model:GetAttribute(name) ~= value then
 			model:SetAttribute(name, value)
 		end
+	end
+end
+
+-- One attribute, written only when it changed (no table: for hot paths).
+function MachineService.setAttr(machine: PlacedMachine, name: string, value: any)
+	local model = machine.Model
+	if model:GetAttribute(name) ~= value then
+		model:SetAttribute(name, value)
+	end
+end
+
+-- Shows why the machine's output waits ("OutputBlocked", "TooManyItems"),
+-- at once; a clear still pending (outputFlowed) is called off.
+function MachineService.showBlocked(machine: PlacedMachine, reason: string)
+	machine.State.StatusClear = nil
+	if not machine.Removed then
+		MachineService.setAttr(machine, "Status", reason)
+	end
+end
+
+--[[
+	An item got out of the machine. With `drained` (nothing more waits to
+	leave) the status clears now; otherwise it clears when the next item
+	gets out too, and a block before that keeps it shown (showBlocked), so
+	a front that takes every other item doesn't flip the status every retry.
+]]
+function MachineService.outputFlowed(machine: PlacedMachine, drained: boolean)
+	if machine.Removed then
+		return
+	end
+	local state = machine.State
+	if drained or state.StatusClear then
+		state.StatusClear = nil
+		MachineService.setAttr(machine, "Status", "")
+		return
+	end
+	local status = machine.Model:GetAttribute("Status")
+	if type(status) == "string" and status ~= "" then
+		state.StatusClear = true
 	end
 end
 
@@ -401,8 +567,13 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 	local index = indexOf(plotId)
 	table.insert(index.Machines, machine)
 	indexCells(index, machine)
+	bumpVersion(plotId)
 	for _, behaviour in hooksOf(entry.Id) do
 		callSpawned(machine, behaviour)
+	end
+	-- belts, poles and the like (no tick hook, no intake) never tick
+	if #tickHooksOf(entry.Id) > 0 or intakeOf(entry.Id) ~= nil or hasOut(entry) then
+		MachineService.wake(machine)
 	end
 	return machine
 end
@@ -415,6 +586,10 @@ local function detach(machine: PlacedMachine, reason: RemoveReason)
 	callRemoved(machine, reason)
 	machine.Removed = true
 	placed[machine.Model] = nil
+	-- the tick drops it from the active array on its next visit
+	activeSet[machine] = nil
+	followers[machine] = nil
+	bumpVersion(machine.PlotId)
 	machine.Model:Destroy()
 end
 
@@ -611,6 +786,10 @@ function MachineService.move(machine: PlacedMachine, x: number, z: number, r: nu
 	MachineService.setAttrs(machine, { GridX = machine.X, GridZ = machine.Z, Rotation = machine.R })
 	layoutChanged(machine.Owner, machine.PlotId)
 	callMoved(machine)
+	-- a new front cell: a blocked output may get out now
+	if #tickHooksOf(machine.Id) > 0 or hasOut(machine.Entry) then
+		MachineService.wake(machine)
+	end
 	return true, nil
 end
 
@@ -714,6 +893,8 @@ local function deliver(machine: PlacedMachine, desc: Desc, ownerUserId: number, 
 	if insert then
 		ok, err = pcall(insert, machine, desc, ownerUserId, via)
 	end
+	-- new work: the tick looks at it again
+	MachineService.wake(machine)
 	if not ok then
 		warn(`[MachineService] {machine.Id} insert failed: {err}`)
 		local cf = MachineService.point(machine, "Output") or (machine.Model:GetPivot() + Vector3.new(0, 4, 0))
@@ -761,9 +942,47 @@ function MachineService.pushOut(machine: PlacedMachine, desc: Desc)
 	machine.Entry.Out = out
 	table.insert(out, desc)
 	if not machine.Removed then
-		MachineService.setAttrs(machine, { OutCount = #out })
+		MachineService.setAttr(machine, "OutCount", #out)
+		MachineService.wake(machine)
 	end
 	DataService.changed(player)
+end
+
+-- Loose items the owner has on / around bases now (ore lying in the mine
+-- doesn't stall the factory). During a tick pass each owner is counted
+-- once (ItemService.looseCount walks their items) plus what the pass spawned:
+-- nothing else takes loose items away or adds them while the pass runs.
+local function looseNow(owner: number): number
+	if not inPass then
+		return ItemService.looseCount(owner, "Base")
+	end
+	local n = passLoose[owner]
+	if n == nil then
+		n = ItemService.looseCount(owner, "Base")
+		passLoose[owner] = n
+	end
+	return n :: number
+end
+
+local function blockedBy(machine: PlacedMachine, reason: string, quiet: boolean?): (EmitResult, ItemService.ItemRecord?, string?)
+	if not quiet then
+		MachineService.showBlocked(machine, reason)
+	end
+	return "Blocked", nil, reason
+end
+
+-- The loose pop shared by emit and emitSide (server physics from the start,
+-- so belts and hoppers never wait on a client).
+local function popLoose(desc: Desc, owner: number, cf: CFrame, velocity: Vector3): (EmitResult, ItemService.ItemRecord?, string?)
+	local record = ItemService.spawnDesc(desc, owner, cf, velocity, true)
+	if not record then
+		return "Blocked", nil, nil
+	end
+	local n = if inPass then passLoose[owner] else nil
+	if n then
+		passLoose[owner] = n + 1
+	end
+	return "Spawned", record, nil
 end
 
 --[[
@@ -773,10 +992,12 @@ end
 	- 'Spawned': it popped out as a loose item (returned as the 2nd value).
 	- 'Blocked': the front machine refused it ('OutputBlocked'), or the owner
 	  has too many loose items ('TooManyItems'). The caller keeps the item.
+	  The reason comes back as the 3rd value and shows as the Status at once,
+	  unless `quiet` (the caller decides what to show).
 ]]
-function MachineService.emit(machine: PlacedMachine, desc: Desc): (EmitResult, ItemService.ItemRecord?)
+function MachineService.emit(machine: PlacedMachine, desc: Desc, quiet: boolean?): (EmitResult, ItemService.ItemRecord?, string?)
 	if machine.Removed then
-		return "Blocked", nil
+		return "Blocked", nil, nil
 	end
 	local owner = machine.Owner.UserId
 	local ox, oz = Grid.outputCell(machine.Id, machine.X, machine.Z, machine.R)
@@ -787,26 +1008,19 @@ function MachineService.emit(machine: PlacedMachine, desc: Desc): (EmitResult, I
 			local dx, dz = Grid.dir(machine.R)
 			if ConveyorLogic.faceAllowed(target.Entry, ox - dx, oz - dz) then
 				if MachineService.insertDesc(target, desc, owner, "Machine") then
-					return "Handed", nil
+					return "Handed", nil, nil
 				end
-				MachineService.setAttrs(machine, { Status = "OutputBlocked" })
-				return "Blocked", nil
+				return blockedBy(machine, "OutputBlocked", quiet)
 			end
 		end
 	end
-	if ItemService.looseCount(owner) >= GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom then
-		MachineService.setAttrs(machine, { Status = "TooManyItems" })
-		return "Blocked", nil
+	if looseNow(owner) >= GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom then
+		return blockedBy(machine, "TooManyItems", quiet)
 	end
 	local pivot = machine.Model:GetPivot()
 	local cf = MachineService.point(machine, "Output") or pivot
 	local velocity = pivot.LookVector * GameConfig.OutputPop.Forward + Vector3.new(0, GameConfig.OutputPop.Up, 0)
-	-- the server keeps output physics, so belts and hoppers never wait on a client
-	local record = ItemService.spawnDesc(desc, owner, cf, velocity, true)
-	if not record then
-		return "Blocked", nil
-	end
-	return "Spawned", record
+	return popLoose(desc, owner, cf, velocity)
 end
 
 -- How an item leaves a side output when nothing takes it: sideways onto the
@@ -824,11 +1038,16 @@ MachineService.SidePop = { Out = 3, Up = 1.5 }
 	  attachment, moving sideways onto the belt there (SidePop).
 	- 'Blocked': the machine in the side cell refused it ('OutputBlocked'),
 	  or the owner has too many loose items ('TooManyItems'). The caller
-	  keeps the item.
+	  keeps the item. Reason and `quiet` as in emit().
 ]]
-function MachineService.emitSide(machine: PlacedMachine, desc: Desc, side: number): (EmitResult, ItemService.ItemRecord?)
+function MachineService.emitSide(
+	machine: PlacedMachine,
+	desc: Desc,
+	side: number,
+	quiet: boolean?
+): (EmitResult, ItemService.ItemRecord?, string?)
 	if machine.Removed then
-		return "Blocked", nil
+		return "Blocked", nil, nil
 	end
 	local s = if side < 0 then -1 else 1
 	local owner = machine.Owner.UserId
@@ -839,70 +1058,116 @@ function MachineService.emitSide(machine: PlacedMachine, desc: Desc, side: numbe
 		local rx, rz = Grid.right(machine.R)
 		if ConveyorLogic.faceAllowed(target.Entry, sx - s * rx, sz - s * rz) then
 			if MachineService.insertDesc(target, desc, owner, "Machine") then
-				return "Handed", nil
+				return "Handed", nil, nil
 			end
-			MachineService.setAttrs(machine, { Status = "OutputBlocked" })
-			return "Blocked", nil
+			return blockedBy(machine, "OutputBlocked", quiet)
 		end
 	end
-	if ItemService.looseCount(owner) >= GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom then
-		MachineService.setAttrs(machine, { Status = "TooManyItems" })
-		return "Blocked", nil
+	if looseNow(owner) >= GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom then
+		return blockedBy(machine, "TooManyItems", quiet)
 	end
 	local pivot = machine.Model:GetPivot()
 	local cf = MachineService.point(machine, if s < 0 then "OutputL" else "OutputR")
 		or pivot * CFrame.new(Grid.sideOutputLocal(machine.Id, s))
 	local pop = MachineService.SidePop
 	local velocity = pivot.RightVector * (s * pop.Out) + Vector3.new(0, pop.Up, 0)
-	-- the server keeps output physics, so belts and hoppers never wait on a client
-	local record = ItemService.spawnDesc(desc, owner, cf, velocity, true)
-	if not record then
-		return "Blocked", nil
-	end
-	return "Spawned", record
+	return popLoose(desc, owner, cf, velocity)
 end
 
 ---------------------------------------------------------------- tick
 
-local function tickAll()
-	local now = os.clock()
-	local dirty: { [Player]: boolean } = {}
-	for _, machine in placed do
-		if machine.Removed then
-			continue
+-- Does a machine still need the tick after a visit? Finished items to send,
+-- or a tick behaviour that says it's busy (one without `busy` always is).
+local function stillBusy(machine: PlacedMachine, hooks: { Behaviour }, now: number): boolean
+	if machine.Removed then
+		return false
+	end
+	if hasOut(machine.Entry) then
+		return true
+	end
+	local busy = false
+	for _, behaviour in hooks do
+		local check = behaviour.busy
+		if not check then
+			busy = true
+			break
 		end
-		for _, behaviour in hooksOf(machine.Id) do
-			local hook = behaviour.tick
-			if hook then
-				local ok, err = pcall(hook, machine, now)
-				if not ok then
-					warnThrottled(machine.Id .. ".tick", `[MachineService] {machine.Id} tick failed: {err}`)
-				end
+		local ok, result = pcall(check, machine, now)
+		if not ok then
+			warnThrottled(machine.Id .. ".busy", `[MachineService] {machine.Id} busy check failed: {result}`)
+		end
+		if not ok or result then
+			busy = true
+			break
+		end
+	end
+	if not busy and machine.State.StatusClear then
+		-- nothing waits to leave any more (the Robot Arm took it, junk dropped)
+		MachineService.outputFlowed(machine, true)
+	end
+	return busy
+end
+
+-- One machine's turn: its tick hooks, then one finished item out of its front.
+local function visit(machine: PlacedMachine, now: number, dirty: { [Player]: boolean }): boolean
+	if machine.Removed then
+		return false
+	end
+	stats.Visits += 1
+	local hooks = tickHooksOf(machine.Id)
+	for _, behaviour in hooks do
+		local hook = behaviour.tick
+		if hook then
+			stats.Hooks += 1
+			local ok, err = pcall(hook, machine, now)
+			if not ok then
+				warnThrottled(machine.Id .. ".tick", `[MachineService] {machine.Id} tick failed: {err}`)
 			end
 		end
-		local out = machine.Entry.Out
-		if machine.Removed or not out or #out == 0 or now < (machine.State.NextEmit or 0) then
-			continue
-		end
+	end
+	local state = machine.State
+	local out = machine.Entry.Out
+	if not machine.Removed and out and #out > 0 and now >= (state.NextEmit or 0) then
 		local desc = out[1]
 		if not MachineLogic.isValidDesc(desc) then
 			-- junk from a damaged save: drop it so the machine doesn't jam
 			MachineLogic.popOut(machine.Entry)
 			warn(`[MachineService] dropped a bad item from {machine.Owner.Name}'s {machine.Id}`)
 			dirty[machine.Owner] = true
-			continue
-		end
-		local result = MachineService.emit(machine, desc)
-		if result == "Blocked" then
-			machine.State.NextEmit = now + GameConfig.OutputRetry
+		elseif MachineService.emit(machine, desc) == "Blocked" then
+			state.NextEmit = now + GameConfig.OutputRetry
 		else
 			MachineLogic.popOut(machine.Entry)
-			machine.State.NextEmit = now
+			state.NextEmit = now
 			local left = machine.Entry.Out
-			MachineService.setAttrs(machine, { OutCount = if left then #left else 0, Status = "" })
+			MachineService.setAttr(machine, "OutCount", if left then #left else 0)
+			MachineService.outputFlowed(machine, left == nil)
 			dirty[machine.Owner] = true
 		end
 	end
+	return stillBusy(machine, hooks, now)
+end
+
+-- One pass over the active list. Machines woken during the pass are visited
+-- in it too; a machine with nothing to do leaves the list (swap-remove).
+local function tickAll()
+	local now = os.clock()
+	local dirty: { [Player]: boolean } = {}
+	table.clear(passLoose)
+	inPass = true
+	local i = 1
+	while i <= #active do
+		local machine = active[i]
+		if visit(machine, now, dirty) then
+			i += 1
+		else
+			activeSet[machine] = nil
+			local last = #active
+			active[i] = active[last]
+			active[last] = nil
+		end
+	end
+	inPass = false
 	for player in dirty do
 		DataService.changed(player)
 	end
@@ -953,6 +1218,28 @@ MachineService._test = {
 		table.clear(layoutPending)
 		table.clear(actions)
 		table.clear(speedModifiers)
+		table.clear(active)
+		table.clear(activeSet)
+		table.clear(followers)
+		table.clear(tickCache)
+		table.clear(versions)
+		table.clear(passLoose)
+		inPass = false
+		stats.Visits = 0
+		stats.Hooks = 0
+	end,
+	-- tick counters since the last reset: machine visits and tick hook calls
+	stats = function(): { Visits: number, Hooks: number }
+		return { Visits = stats.Visits, Hooks = stats.Hooks }
+	end,
+	activeCount = function(): number
+		local n = 0
+		for machine in activeSet do
+			if not machine.Removed then
+				n += 1
+			end
+		end
+		return n
 	end,
 }
 

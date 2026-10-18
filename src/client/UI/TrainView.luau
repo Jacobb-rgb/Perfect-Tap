@@ -55,6 +55,9 @@ TrainView.ExpressPrice = 199 -- R$, the placeholder on the Express line
 TrainView.UnloadGrace = 2 -- seconds after the arrival before a train with ore still on board counts as waiting
 TrainView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a phone panel below this leaves it clear
 TrainView.MinPanelHeight = 400 -- the compact cargo card needs this much (its SEND under the state line)
+-- Why the train waits at your stop (the server's WaitReason): the state line meanwhile
+TrainView.PenFullLine = "Pen full – make room"
+TrainView.PenOverLine = "Pen over its limit – take or sell ore"
 -- Direct Unload waits (the server's UnloadWait, PenService's Train lane): the state line meanwhile
 TrainView.UnloadWaitText = {
 	Jammed = "Belt full – waiting",
@@ -75,6 +78,7 @@ export type Snapshot = {
 	TripSeconds: number,
 	AutoDepartIn: number?,
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
+	WaitReason: string?, -- why: "PenOver" (the pen holds more than it fits) | "PenFull"
 	Unloading: boolean?, -- at your stop pouring dirty ore onto your TRAIN chute's belt (Direct Unload)
 	UnloadWait: string?, -- why that pouring waits right now (a key of TrainView.UnloadWaitText)
 }
@@ -278,6 +282,7 @@ function TrainView.read(raw: any): Snapshot
 		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express)),
 		AutoDepartIn = optional(t.AutoDepartIn),
 		Waiting = t.Waiting == true,
+		WaitReason = if t.WaitReason == "PenOver" or t.WaitReason == "PenFull" then t.WaitReason else nil,
 		Unloading = t.Unloading == true,
 		UnloadWait = if type(t.UnloadWait) == "string" and TrainView.UnloadWaitText[t.UnloadWait] then t.UnloadWait else nil,
 	}
@@ -319,7 +324,8 @@ end
 	is the ore on board (Moving): on its way, unloading at your stop (with
 	Direct Unload "Unloading onto your belt", or why that waits:
 	UnloadWaitText), the phase "Waiting" there because the Ore Pen is full
-	("Pen full – make room", TrainView.waiting), then rolling back empty.
+	("Pen full – make room", TrainView.waiting) or holds more than it fits
+	(WaitReason "PenOver": PenOverLine), then rolling back empty.
 	Nothing can be sent while it is away.
 ]]
 function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Status
@@ -341,7 +347,8 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 	local moving = train.Moving
 	local arrive = train.ArriveAt
 	if TrainView.waiting(train, now) then
-		return make("Waiting", moving, "ore waiting at your pen", "Pen full – make room", Theme.Bad, false)
+		local line = if train.WaitReason == "PenOver" then TrainView.PenOverLine else TrainView.PenFullLine
+		return make("Waiting", moving, "ore waiting at your pen", line, Theme.Bad, false)
 	elseif (arrive and now < arrive) or (moving > 0 and not arrive) then
 		local depart = train.DepartAt
 		local progress = if depart and arrive and arrive > depart then math.clamp((now - depart) / (arrive - depart), 0, 1) else nil

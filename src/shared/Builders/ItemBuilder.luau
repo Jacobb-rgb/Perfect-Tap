@@ -15,6 +15,8 @@
 	  around the shape, so the look never changes the physics.
 	- display(): the same recipe with extra details (DisplayScale), anchored,
 	  for podiums and the Ore Pen pile.
+	- buildLight(): the light belt look (<= LightBudget parts, the same Body
+	  as build()), for items riding the belts (ItemService switches looks).
 	Rarity readability (ore-design skill): Common no glow, Uncommon faint
 	veins, Rare glowing veins/tips, Epic + sparkles, Legendary + light,
 	Mythic + pulse and orbiting motes. Neon only on veins and tips.
@@ -1429,6 +1431,203 @@ function ItemBuilder.build(info: ItemInfo, cf: CFrame, seed: number | string): M
 	local model = Instance.new("Model")
 	model.Name = info.Kind .. "_" .. info.OreId
 	local builder = BUILDERS[info.Kind]
+	assert(builder, "Unknown item kind " .. tostring(info.Kind))
+	builder(model, cf, info, Rng.new(seed))
+	return model
+end
+
+---------------------------------------------------------------- the light belt look
+
+--[[
+	Items riding the belts (docs/SERVER_PERF_AUDIT.md #3): at most
+	LightBudget parts (Body + 2 decor, 2 welds, no sparkles or lights), so a
+	busy factory replicates and simulates far less. The Body is exactly the
+	one build() makes for the same item and seed (size, physics, colour), so
+	ItemService can switch an item between the light and the full look
+	(carried, podiums and the pen pile are full) without changing how it
+	rolls or collides. Raw keeps its one glint (the dirty ore's only hint);
+	Clean is a chunk in the ore colour with a turned facet and a tip in the
+	rarity glow; Crushed a heap; Ingot a bar with its stamp; Alloy a bar
+	with its two bands; Gear the blade / head / helm with its inlay.
+]]
+ItemBuilder.LightBudget = 3
+
+local function lightPart(model: Model, b: BasePart, props: { [string]: any })
+	addDecor(model, b, Geo.make("Part", decorProps(props)))
+end
+
+local function rawLight(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	local ore = OreData.get(info.OreId)
+	local b = body(model, cf, Vector3.new(1.5, 1.15, 1.3), Geo.vary(ItemBuilder.DirtyCrust, rng, 0.04))
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(0, -0.04, 0) * CFrame.Angles(rng:range(-0.12, 0.12), math.pi / 4, rng:range(-0.12, 0.12)),
+		Size = Vector3.new(1.3, 1.02, 1.2),
+		Color = Geo.vary(ItemBuilder.DirtyCrust:Lerp(ItemBuilder.DirtyCrustDark, 0.35), rng, 0.03),
+		Material = SMOOTH,
+	})
+	lightPart(model, b, {
+		Name = "Glint",
+		CFrame = cf * CFrame.new(0.42, 0.42, -0.62) * CFrame.Angles(0, 0.8, 0) * VERTEX_UP,
+		Size = Vector3.one * 0.26,
+		Color = ItemBuilder.glowColor(ore.Glow),
+		Material = NEON,
+	})
+end
+
+local function cleanLight(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	local ore = OreData.get(info.OreId)
+	-- the same recipe draw as cleanOre: the same box, so the physics never change
+	local c = recipe(ore, rng:nextU32(), false)
+	local k = ItemBuilder.CleanScale
+	local mn, mx = bounds(c.Specs)
+	local extent = (mx - mn) * k
+	local boxSize = Vector3.new(math.max(extent.X - 0.08, 0.5), math.max(extent.Y - 0.08, 0.5), math.max(extent.Z - 0.08, 0.5))
+	local pal = c.Pal
+	local b = body(model, cf, boxSize, pal.Main, pal.Material)
+	b.Reflectance = pal.Reflectance
+	local volume = boxSize.X * boxSize.Y * boxSize.Z
+	b.CustomPhysicalProperties = PhysicalProperties.new(math.clamp(2.2 / volume, 0.3, 1.5), 0.5, 0.25, 1, 1)
+	local facet = Vector3.new(boxSize.X * 0.78, boxSize.Y * 0.86, boxSize.Z * 0.78)
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(0, boxSize.Y * 0.08, 0) * CFrame.Angles(0, math.pi / 4, 0),
+		Size = facet,
+		Color = pal.Light,
+		Material = pal.Material,
+		Reflectance = pal.Reflectance,
+	})
+	local tipColor, tipMaterial, _, tipT = resolve(c, "Tip")
+	local tip = math.clamp(math.min(boxSize.X, boxSize.Z) * 0.42, 0.22, 0.6)
+	lightPart(model, b, {
+		Name = "Tip",
+		CFrame = cf * CFrame.new(0, boxSize.Y / 2, 0) * VERTEX_UP,
+		Size = Vector3.one * tip,
+		Color = tipColor,
+		Material = tipMaterial,
+		Transparency = tipT,
+	})
+end
+
+local function crushedLight(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	local ore = OreData.get(info.OreId)
+	local c = makeCtx(ore, 1, false)
+	local pal = c.Pal
+	local grit = Color3.fromRGB(90, 80, 74)
+	local b = body(model, cf, Vector3.new(1.5, 0.45, 1.5), pal.Dark:Lerp(grit, 0.35))
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(0, 0.08, 0) * CFrame.Angles(0, math.pi / 4, 0),
+		Size = Vector3.new(1.25, 0.5, 1.25),
+		Color = pal.Main:Lerp(grit, 0.25),
+		Material = SMOOTH,
+	})
+	local veinColor, veinMaterial, _, veinT = resolve(c, "Vein")
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(rng:range(-0.15, 0.15), 0.42, rng:range(-0.15, 0.15)) * VERTEX_UP,
+		Size = Vector3.new(0.3, 0.3, 0.3),
+		Color = veinColor,
+		Material = veinMaterial,
+		Transparency = veinT,
+	})
+end
+
+local function ingotLight(model: Model, cf: CFrame, info: ItemInfo, _rng: Rng.Rng)
+	local ore = OreData.get(info.OreId)
+	local c = makeCtx(ore, 1, false)
+	local pal = c.Pal
+	local b = body(model, cf, Vector3.new(1.9, 0.5, 0.92), pal.Main, Enum.Material.Metal)
+	if info.Kind == "Alloy" then
+		for i, color in { Color3.fromRGB(255, 196, 60), Color3.fromRGB(70, 228, 255) } do
+			lightPart(model, b, {
+				Name = "AlloyBand",
+				CFrame = cf * CFrame.new((i - 1.5) * 0.36, 0.02, 0),
+				Size = Vector3.new(0.2, 0.56, 0.98),
+				Color = color,
+				Material = Enum.Material.Metal,
+			})
+		end
+		return
+	end
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(0, 0.3, 0),
+		Size = Vector3.new(1.6, 0.12, 0.66),
+		Color = pal.Light,
+		Material = Enum.Material.Metal,
+	})
+	local stampColor, stampMaterial, _, stampT = resolve(c, "Vein")
+	lightPart(model, b, {
+		Name = "Stamp",
+		CFrame = cf * CFrame.new(0, 0.37, 0),
+		Size = Vector3.new(0.52, 0.04, 0.26),
+		Color = if c.Order <= 1 then pal.Dark else stampColor,
+		Material = stampMaterial,
+		Transparency = stampT,
+	})
+end
+
+local function gearLight(model: Model, cf: CFrame, info: ItemInfo, _rng: Rng.Rng)
+	local ore = OreData.get(info.OreId)
+	local metal = ore.Color
+	local recipeId = info.Recipe or "Dagger"
+	if recipeId == "Dagger" or recipeId == "Greatsword" then
+		local long = recipeId == "Greatsword"
+		local bladeLength = if long then 3.4 else 1.6
+		local b = body(model, cf, Vector3.new(bladeLength + 1, 0.35, 0.6), metal, Enum.Material.Metal)
+		b.Transparency = 1
+		lightPart(model, b, {
+			CFrame = cf * CFrame.new(0.4, 0, 0),
+			Size = Vector3.new(bladeLength, 0.14, if long then 0.55 else 0.42),
+			Color = metal,
+			Material = Enum.Material.Metal,
+		})
+		lightPart(model, b, {
+			CFrame = cf * CFrame.new(0.4 - bladeLength / 2 - 0.1, 0, 0),
+			Size = Vector3.new(0.2, 0.24, if long then 1.4 else 1),
+			Color = Color3.fromRGB(220, 180, 80),
+			Material = Enum.Material.Metal,
+		})
+		return
+	end
+	local b: BasePart
+	if recipeId == "ToolHead" then
+		b = body(model, cf, Vector3.new(2.4, 0.5, 0.5), metal, Enum.Material.Metal)
+		lightPart(model, b, {
+			CFrame = cf,
+			Size = Vector3.new(0.6, 0.62, 0.62),
+			Color = metal:Lerp(Color3.new(0, 0, 0), 0.2),
+			Material = Enum.Material.Metal,
+		})
+	else -- Helm
+		b = body(model, cf, Vector3.new(1.6, 1.3, 1.6), metal, Enum.Material.Metal, Enum.PartType.Ball)
+		b.Size = Vector3.new(1.6, 1.6, 1.6)
+		lightPart(model, b, {
+			CFrame = cf * CFrame.new(0, -0.45, 0),
+			Size = Vector3.new(1.8, 0.25, 1.8),
+			Color = metal:Lerp(Color3.new(0, 0, 0), 0.15),
+			Material = Enum.Material.Metal,
+		})
+	end
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(0, 0.2, 0),
+		Size = Vector3.new(0.2, 0.2, 0.2),
+		Color = ItemBuilder.glowColor(ore.Glow),
+		Material = Enum.Material.Neon,
+	})
+end
+
+local LIGHT_BUILDERS = {
+	Raw = rawLight,
+	Clean = cleanLight,
+	Crushed = crushedLight,
+	Ingot = ingotLight,
+	Gear = gearLight,
+	Alloy = ingotLight,
+}
+
+-- The light belt look (at most LightBudget parts), a Model (not parented).
+-- The same Body as build() with the same seed.
+function ItemBuilder.buildLight(info: ItemInfo, cf: CFrame, seed: number | string): Model
+	local model = Instance.new("Model")
+	model.Name = info.Kind .. "_" .. info.OreId
+	local builder = LIGHT_BUILDERS[info.Kind]
 	assert(builder, "Unknown item kind " .. tostring(info.Kind))
 	builder(model, cf, info, Rng.new(seed))
 	return model

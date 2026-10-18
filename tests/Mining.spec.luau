@@ -474,6 +474,105 @@ return function(T, Loader)
 		T.eq(mining.target(p), nil, "the beam stopped")
 	end)
 
+	-- Runs fn with ItemService.atLooseCap answering `cap(userId)` (the tests' ItemService spawns no records).
+	local function withCap(cap: (number) -> boolean, fn: () -> ())
+		local real = rawget(ItemService, "atLooseCap")
+		rawset(ItemService, "atLooseCap", cap)
+		local ok, err = pcall(fn)
+		rawset(ItemService, "atLooseCap", real)
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	withWorld("Mining: at the loose-item cap a rock gives no ore: HP holds at 1, the ore stays inside", function(w)
+		local p = w.player
+		p.data.BlasterLevel = 10
+		local atCap = true
+		withCap(function(userId: number): boolean
+			return atCap and userId == p.UserId
+		end, function()
+			-- one ore: stages 1 and 2 hold nothing, so they still crack; the break is held at 1 HP
+			local rock = w.rock("Outcrops", { "Gold" }, 600)
+			mining.blast(p, rock.Model)
+			for _ = 1, 100 do
+				w.step() -- 10 s of beam
+			end
+			T.eq(#w.spawned, 0, "no ore dropped")
+			T.truthy(rock.Alive, "not broken")
+			T.truthy(mining.rock(rock.Model) == rock, "still standing")
+			T.near(rock.Health, 1, 1e-6, "HP stays at 1")
+			T.eq(rock.Stage, 2, "the empty stages still crack")
+			T.eq(rock.Ores[1], "Gold", "the ore stays in the rock")
+			T.eq(p.data.Stats.RocksBroken, 0, "nothing broken")
+			-- told, but not every tick
+			local told = 0
+			for _, note in w.notes do
+				if note.Name == "Notify" and note.Args[1].Text == MiningService.CapText then
+					told += 1
+				end
+			end
+			T.truthy(told >= 2 and told <= 3, "rate-limited toast (" .. told .. " in 10 s)")
+			T.truthy(count(w, "Fx", "MineBounce") >= 2, "a bounce with it")
+			-- picked some up: the next hit breaks it and the ore drops
+			atCap = false
+			w.step()
+			T.falsy(rock.Alive, "broken now")
+			T.eq(#w.spawned, 1, "the ore drops")
+			T.eq(w.spawned[1].Info.OreId, "Gold", "the very ore it held")
+			T.eq(w.spawned[1].Owner, p.UserId, "to the shooter")
+			-- three ores: even the first stage (an ore drop) is held
+			atCap = true
+			w.spawned = {}
+			local three = w.rock("Outcrops", { "Coal", "Copper", "Tin" }, 600)
+			mining.blast(p, three.Model)
+			for _ = 1, 30 do
+				w.step()
+			end
+			T.eq(#w.spawned, 0, "no ore at stage 1 either")
+			T.eq(three.Stage, 0, "held before stage 1")
+			T.near(three.Health, 400 + 1, 1e-6, "1 HP above the first stage")
+			-- a player who isn't at the cap can still break it (the ore goes to them)
+			local o = w.other
+			o.data.BlasterLevel = 10
+			o.root.Position = Vector3.new(0, 3, 6)
+			mining.blast(p, nil)
+			mining.blast(o, three.Model)
+			for _ = 1, 30 do
+				w.step()
+			end
+			T.falsy(three.Alive, "someone else broke it")
+			T.eq(#w.spawned, 3, "every ore dropped")
+			for _, drop in w.spawned do
+				T.eq(drop.Owner, o.UserId, "to the one who crossed the stages")
+			end
+		end)
+	end)
+
+	withWorld("Mining: a held rock loses nothing when its shooter leaves or it is left alone", function(w)
+		local p = w.player
+		p.data.BlasterLevel = 10
+		withCap(function(): boolean
+			return true
+		end, function()
+			local rock = w.rock("Outcrops", { "Diamond", "Gold" }, 600)
+			mining.blast(p, rock.Model)
+			for _ = 1, 40 do
+				w.step()
+			end
+			T.eq(rock.Stage, 1, "the empty first stage cracked")
+			T.near(rock.Health, 200 + 1, 1e-6, "held above the first ore's stage")
+			mining.forget(p)
+			for _ = 1, 50 do
+				w.step()
+			end
+			T.truthy(rock.Alive, "still standing")
+			T.eq(#rock.Ores, 2, "both ores still inside")
+			T.eq(#mining.respawns(), 0, "no respawn queued: nothing was lost")
+			T.eq(#w.spawned, 0, "nothing dropped")
+		end)
+	end)
+
 	withWorld("Mining: bad MineBlast input is refused and clears the target", function(w)
 		local rock = w.rock("Quarry", { "Coal" }, 1000)
 		local p = w.player

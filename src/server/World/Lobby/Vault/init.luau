@@ -8,7 +8,9 @@
 	                   hologram (Spin), the ten cases inside, the vault door,
 	                   the counter (tag VaultCounter = the shop hook), the
 	                   Blastsmith, wall decorations, a LightingZone (Preset
-	                   VaultInterior) over the inside
+	                   VaultInterior) over the inside; the interior's
+	                   raycastable parts carry the BeamIgnore tag (they
+	                   never block the mining beam's line of sight)
 	  VaultStatueWest  giant statues on pedestals, facing the plaza, the
 	  VaultStatueEast  blaster arm on the outer side
 	  VaultTrees       six jungle trees around the vault (placed relative to it)
@@ -22,6 +24,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local MovementConfig = require(Shared.Config.MovementConfig)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Style)
 local Kit = require(script.Kit)
@@ -71,6 +74,22 @@ local function embers(part: BasePart, kind: string, color: Color3, rate: number)
 	Style.emitter(part, kind, color, rate)
 end
 
+-- Every raycastable part added to `m` after its first `count` children never blocks the
+-- mining beam (MovementConfig.BeamIgnoreTag; the builders only append children).
+local function beamIgnoreAfter(m: Model, count: number)
+	local children = m:GetChildren()
+	for i = count + 1, #children do
+		local child = children[i]
+		local list = child:GetDescendants()
+		table.insert(list, child)
+		for _, d in list do
+			if d:IsA("BasePart") and d.CanQuery then
+				d:AddTag(MovementConfig.BeamIgnoreTag)
+			end
+		end
+	end
+end
+
 -- The vault building.
 function Vault.buildVault(parent: Instance): Model
 	local m = Style.model("BlasterVault", parent)
@@ -90,11 +109,13 @@ function Vault.buildVault(parent: Instance): Model
 	local pools = Building.lavaFalls(m, origin)
 	Building.forecourt(m, origin)
 	Interior.floor(m, origin)
+	local shell = #m:GetChildren()
 	Interior.cases(m, origin)
 	Interior.door(m, origin * CFrame.new(0, 18.2, -21.6), 6.6)
 	Interior.ceiling(m, origin)
 	Interior.counter(m, origin)
 	Interior.decor(m, origin)
+	beamIgnoreAfter(m, shell) -- the interior decorations
 	Interior.zone(m, origin)
 	Kit.light(m, (origin * CFrame.new(0, 17, 31)).Position, Kit.C.Fire, 22, 1)
 	Kit.scale(m, ground, Vault.Scale)

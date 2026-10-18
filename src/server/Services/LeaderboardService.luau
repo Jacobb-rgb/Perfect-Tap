@@ -71,9 +71,12 @@
 	(the rest carries over; at most MaxCredit at once), and once more on
 	leave, before the final save. DataService.changed follows each credit.
 	Only active time counts: a player is active for ActiveWindow (5 min)
-	after their last request to the server (any Net event) or after their
-	character moved MoveStuds since the last look (every ActivityTick), so
-	an idle player (AFK, an anti-AFK macro) stops climbing the board.
+	after their last server-checked action (ActivitySources: mining a chunk,
+	a pickup, a cleaning, placing a machine, a shop / gear / enchant buy, a
+	capsule) or after their character moved MoveStuds since the last look
+	(every ActivityTick), so an idle player (AFK, an anti-AFK macro) stops
+	climbing the board. Plain requests don't count: a script sending junk
+	remotes every few minutes used to (security audit S2).
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -116,6 +119,18 @@ LeaderboardService.WriteInStudio = false -- Studio reads the boards but never wr
 -- hours played count only active time
 LeaderboardService.ActiveWindow = 300 -- seconds a request or a move keeps a player active
 LeaderboardService.ActivityTick = 10 -- how often the characters' moves are checked
+-- Server-checked actions that count as play: service module -> its event hook
+-- (each hook calls back with the player first).
+LeaderboardService.ActivitySources = {
+	MiningService = "onChunkMined",
+	CarryService = "onPickup",
+	CleaningService = "onCleaned",
+	BuildService = "onPlaced",
+	ShopService = "onBought",
+	GearService = "onBought",
+	EnchantService = "onBought",
+	CapsuleService = "onOpened",
+} :: { [string]: string }
 LeaderboardService.MoveStuds = 4 -- a move this long (flat) since the last check is activity
 -- boards whose value never goes down: UpdateAsync keeps the bigger number
 LeaderboardService.Growing = { TotalEarned = true, Artifacts = true, HoursPlayed = true } :: { [string]: boolean }
@@ -270,6 +285,31 @@ function LeaderboardService.noteSpot(player: Player, position: Vector3?, now: nu
 			LeaderboardService.markActive(player, now)
 		end
 	end
+end
+
+-- Connects markActive to every ActivitySources hook found in `services`
+-- (the Services folder). Returns how many were connected.
+function LeaderboardService.hookActivity(services: Instance): number
+	local function active(player: any)
+		-- (markActive ignores anyone it isn't tracking, junk included)
+		LeaderboardService.markActive(player, os.clock())
+	end
+	local connected = 0
+	for name, hook in LeaderboardService.ActivitySources do
+		local module = services:FindFirstChild(name)
+		if module and module:IsA("ModuleScript") then
+			local ok, err = pcall(function()
+				local service: any = (require :: any)(module)
+				service[hook](active)
+			end)
+			if ok then
+				connected += 1
+			else
+				warn(`[LeaderboardService] activity hook {name}.{hook} failed: {err}`)
+			end
+		end
+	end
+	return connected
 end
 
 -- Adds the whole active seconds since the last credit to
@@ -994,14 +1034,8 @@ function LeaderboardService.init()
 	end)
 	-- (a player who never loaded has no entries to clean up)
 	DataService.beforeRelease(onRelease)
-	-- activity for the hours played: any request to the server
-	for name, limit in Net.Events do
-		if limit then
-			Net.event(name).OnServerEvent:Connect(function(player: Player)
-				LeaderboardService.markActive(player, os.clock())
-			end)
-		end
-	end
+	-- activity for the hours played: real, server-checked play only (see the header)
+	LeaderboardService.hookActivity(script.Parent)
 	game:BindToClose(function()
 		task.wait()
 		local waited = 0

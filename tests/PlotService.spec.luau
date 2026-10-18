@@ -202,6 +202,62 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("Plot (perf pass 1): nothing see-through, small trim without shadows, brick courses on the side walls", function()
+		for _, plot in WorldLayout.Plots do
+			local model = buildPlot(plot)
+			local parts, seeThrough, shadows = 0, 0, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					parts += 1
+					-- only the invisible boxes (pen intake, podium hover) are not opaque
+					if d.Transparency > 0 and d.Transparency < 1 then
+						seeThrough += 1
+					end
+					if d.CastShadow then
+						shadows += 1
+					end
+					-- trim under a stud thick and at most 3 studs long (pillar caps and
+					-- feet, the podium collars, the chimney flange) casts no shadow
+					local s = d.Size
+					local thin, long = math.min(s.X, s.Y, s.Z), math.max(s.X, s.Y, s.Z)
+					if thin < 1 and long <= 3 and d.Transparency < 1 then
+						T.falsy(d.CastShadow, `trim {d:GetFullName()} casts a shadow`)
+					end
+				end
+			end
+			T.eq(seeThrough, 0, `plot {plot.Id}: see-through parts`)
+			-- (with the 13-part Track placeholder the railway replaces in the map)
+			T.le(parts, 300, `plot {plot.Id}: parts after the perf pass (305 before)`)
+			T.le(shadows, 150, `plot {plot.Id}: shadow casters`)
+			-- the holo-rings stay glowing bars, now opaque
+			for _, podium in model.Yard:GetChildren() do
+				for _, d in podium:GetChildren() do
+					if d:IsA("BasePart") and d.Name == "HoloRing" then
+						T.eq(d.Transparency, 0, "an opaque holo-ring bar")
+						T.eq(d.Material, roblox.Enum.Material.Neon, "a glowing holo-ring bar")
+					end
+				end
+			end
+			-- the long side walls: one raised course (two bricks long) per bay
+			local line = PlotBuilder.WallLine
+			local plotCF = WorldLayout.plotCFrame(plot)
+			local courses, sideBricks = 0, 0
+			for _, d in model.Walls:GetChildren() do
+				if d:IsA("BasePart") and d.Name == "Brick" then
+					local p = plotCF:PointToObjectSpace(d.CFrame.Position)
+					if math.abs(math.abs(p.X) - line) < 0.2 then
+						sideBricks += 1
+						if d.Size.Z > 2 then
+							courses += 1
+						end
+					end
+				end
+			end
+			T.eq(courses, 5, "courses: 4 bays on the pillared side, 1 on the plain side")
+			T.eq(sideBricks, 7, "plus the two single bricks beside the yard")
+		end
+	end)
+
 	T.test("Plot: the road entrance and the YardGate stay open", function()
 		local plot = WorldLayout.Plots[1]
 		local model = buildPlot(plot)

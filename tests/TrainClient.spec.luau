@@ -1302,6 +1302,30 @@ return function(T, Loader)
 		T.eq(waiting.Color, Theme.Bad)
 		T.falsy(waiting.CanSend, "can't send a train that is away")
 		T.eq(waiting.Progress, nil, "no trip bar while it waits")
+		-- the pen holds more than its capacity: the chip says why (the server's WaitReason)
+		local over = status({
+			Cargo = 0,
+			Capacity = 8,
+			Moving = 8,
+			DepartAt = now - 60,
+			ArriveAt = now - 30,
+			Waiting = true,
+			WaitReason = "PenOver",
+		})
+		T.eq(over.Phase, "Waiting")
+		T.eq(over.Line, TrainView.PenOverLine, "over its limit")
+		T.eq(over.Color, Theme.Bad)
+		local full = status({
+			Cargo = 0,
+			Capacity = 8,
+			Moving = 8,
+			DepartAt = now - 60,
+			ArriveAt = now - 30,
+			Waiting = true,
+			WaitReason = "PenFull",
+		})
+		T.eq(full.Line, TrainView.PenFullLine, "just full")
+		T.eq(TrainView.read({ WaitReason = "Junk" }).WaitReason, nil, "junk reasons are ignored")
 		T.eq(status({ Moving = 5, Capacity = 8, DepartAt = now - 60, ArriveAt = now - 5 }).Phase, "Waiting", "still loaded long after")
 		T.eq(status({ Moving = 3, Capacity = 8, Waiting = true }).Phase, "Waiting", "Waiting alone")
 		-- the boundary: just before ArriveAt + UnloadGrace it is still unloading, at it it waits

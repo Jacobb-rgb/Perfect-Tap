@@ -220,11 +220,12 @@ elseif sceneName == "golems" or sceneName == "capsules" or sceneName == "capsule
 	for name, guis in require("./lib/capsule_preview").build(Loader, workspace, sceneName) do
 		uiExports[name] = guis
 	end
-elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" then -- the tutorial's bubble + guide in the quarry (tools/lune/lib/tutorial_preview.luau)
+elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" or sceneName == "tutorial_golems" then -- the tutorial's bubble + guide in the quarry (tools/lune/lib/tutorial_preview.luau)
 	WorldBuilder.build(workspace)
 	addNodes(workspace)
 	local TutorialPreview = require("./lib/tutorial_preview")
-	TutorialPreview.scene(Loader, workspace, if sceneName == "tutorial_hopper" then "hopper" else "station")
+	local variant = if sceneName == "tutorial_hopper" then "hopper" elseif sceneName == "tutorial_golems" then "golems" else "station"
+	TutorialPreview.scene(Loader, workspace, variant)
 	for name, guis in TutorialPreview.build(Loader) do
 		uiExports[name] = guis
 	end
