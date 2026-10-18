@@ -44,6 +44,11 @@ local function exportNode(instance): any?
 			node.ty = instance.TextYAlignment.Name
 			node.scaled = instance.TextScaled
 			node.wrap = instance.TextWrapped
+			local limit = instance:FindFirstChildOfClass("UITextSizeConstraint")
+			if limit then
+				node.maxts = limit.MaxTextSize
+				node.mints = limit.MinTextSize
+			end
 		end
 		if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then
 			node.img = tostring(instance.Image)

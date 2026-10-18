@@ -30,6 +30,7 @@ local ORDER = {
 	"VaultController", -- the Blaster Vault shop and its crate opening
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
+	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 }
 
 local loaded = {}

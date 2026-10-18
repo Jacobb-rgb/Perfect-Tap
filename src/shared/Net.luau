@@ -102,7 +102,8 @@ Net.Events = {
 	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
-	TutorialSkip = { Rate = 1, Burst = 2 },
+	TutorialAction = { Rate = 1, Burst = 3 }, -- ("Skip" | "Ack") the tutorial (TutorialService):
+	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
 	-- server -> client
@@ -112,7 +113,7 @@ Net.Events = {
 	CleanBegin = false,
 	CleanResult = false,
 	OpenUI = false,
-	Tutorial = false,
+	Tutorial = false, -- { Step, Done, Total, Reward?, How = "Step" | "Done" | "Skip" | "Load" }
 	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
