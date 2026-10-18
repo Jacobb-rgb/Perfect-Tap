@@ -7,7 +7,10 @@
 	from the client are clamped.
 
 	Carried items are welded to the HumanoidRootPart (massless, no collision),
-	so the character owns their physics. Walk speed drops a little per item.
+	so the character owns their physics. Walk speed drops a little per item:
+	CarryService.updateWalkSpeed uses the one formula HoverboardData.walkSpeed
+	(the board being ridden = the character's HoverboardData.Attribute, set by
+	HoverboardService, which calls updateWalkSpeed when it changes).
 ]]
 
 local Players = game:GetService("Players")
@@ -16,6 +19,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
+local HoverboardData = require(Shared.Config.HoverboardData)
 local ToolData = require(Shared.Config.ToolData)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
@@ -24,10 +28,6 @@ local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
 
 local CarryService = {}
-
-local BASE_WALK_SPEED = 18
-local SLOW_PER_ITEM = 0.5
-local MIN_WALK_SPEED = 13
 
 local carried: { [Player]: { ItemService.ItemRecord } } = {}
 local pickupCallbacks: { (Player, ItemService.ItemRecord) -> () } = {}
@@ -53,16 +53,20 @@ local function stackOffset(index: number): CFrame
 	return CFrame.new((column - 0.5) * 1.3, 0.2 + row * 1.15, -2.1)
 end
 
+-- Sets the Humanoid's WalkSpeed from the carried items and the board being ridden
+-- (HoverboardData.walkSpeed: one formula for walking and riding).
 local function updateWalkSpeed(player: Player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
+	if character and humanoid then
 		local count = #(carried[player] or {})
-		humanoid.WalkSpeed = math.max(MIN_WALK_SPEED, BASE_WALK_SPEED - count * SLOW_PER_ITEM)
+		humanoid.WalkSpeed = HoverboardData.walkSpeed(character:GetAttribute(HoverboardData.Attribute), count)
 	end
 	player:SetAttribute("CarryCount", #(carried[player] or {}))
 	player:SetAttribute("CarryCapacity", CarryService.capacity(player))
 end
+
+CarryService.updateWalkSpeed = updateWalkSpeed
 
 local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
 	local model = record.Model

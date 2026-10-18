@@ -5,6 +5,7 @@ return function(T, Loader)
 	local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 	local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
 	local HoverboardFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardFx")
+	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 
 	local function partsOf(model)
 		local list = {}
@@ -34,12 +35,18 @@ return function(T, Loader)
 				T.truthy(type(board.Price) == "number" and board.Price > lastPrice, board.Id .. " costs more than the coin board before")
 				lastPrice = board.Price
 				T.eq(board.Effect, "None", board.Id .. ": effects are a Robux perk")
+				T.falsy(board.IgnoresCarrySlow, board.Id .. " keeps the full carry slowdown")
 				T.falsy(HoverboardData.canPrompt(board), board.Id .. " is never prompted for Robux")
 			else
 				robux += 1
 				T.eq(board.Kind, "Robux", board.Id .. " kind")
 				T.eq(board.Robux, 49, board.Id .. " costs 49 R$")
-				T.truthy(type(board.ProductId) == "number" and board.ProductId >= 0, board.Id .. " product id (0 = TODO)")
+				local product = MonetizationConfig.get(board.ProductKey)
+				T.truthy(product ~= nil, board.Id .. " names a product in MonetizationConfig")
+				T.eq(product.Kind, "Hoverboard", board.Id .. " product kind")
+				T.eq(product.BoardId, board.Id, board.Id .. " product grants this board")
+				T.eq(product.Robux, board.Robux, board.Id .. " shown price = the product price")
+				T.truthy(board.IgnoresCarrySlow, board.Id .. " ignores the carry slowdown (owner)")
 				T.truthy(board.Effect ~= "None", board.Id .. " has a special effect")
 				T.eq(board.Price, nil, board.Id .. " is not sold for coins")
 			end
@@ -61,18 +68,68 @@ return function(T, Loader)
 		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), 28, "23 / 18 = +28%")
 	end)
 
-	T.test("hoverboards: product ids, 0 is never prompted or matched", function()
+	T.test("hoverboards: product ids live in MonetizationConfig, 0 is never prompted or matched", function()
 		T.eq(HoverboardData.byProduct(0), nil, "id 0 matches no board")
 		T.eq(HoverboardData.byProduct("12"), nil, "a string is no product id")
+		T.eq(HoverboardData.byProduct(0 / 0), nil, "NaN is no product id")
+		T.eq(MonetizationConfig.byId(-5), nil, "negative ids never match")
+		T.eq(MonetizationConfig.byId(1.5), nil, "fractions never match")
 		T.eq(HoverboardData.get(nil), nil, "nil id")
 		T.eq(HoverboardData.get("Nope"), nil, "unknown id")
+		local seen = {}
+		for key, product in MonetizationConfig.Products do
+			T.eq(product.Key, key, key .. " knows its key")
+			T.truthy(product.Id == 0 or (product.Id > 0 and product.Id == math.floor(product.Id)), key .. " id is 0 or a whole number")
+			if product.Id > 0 then
+				T.falsy(seen[product.Id], key .. " id is unique")
+				seen[product.Id] = true
+			end
+			T.eq(MonetizationConfig.canPrompt(key), product.Id > 0, key .. " prompts only with a real id")
+		end
 		for _, board in HoverboardData.List do
 			if board.Kind == "Robux" then
-				T.eq(HoverboardData.canPrompt(board), board.ProductId > 0, board.Id .. " prompts only with a real id")
-				if board.ProductId > 0 then
-					T.eq(HoverboardData.byProduct(board.ProductId), board, board.Id .. " by product id")
+				local id = HoverboardData.productId(board)
+				T.eq(HoverboardData.canPrompt(board), id > 0, board.Id .. " prompts only with a real id")
+				-- a real id (simulated) matches the board, and only that one
+				local product = MonetizationConfig.get(board.ProductKey)
+				local old = product.Id
+				product.Id = 9000000 + board.Order
+				local ok, err = pcall(function()
+					T.truthy(HoverboardData.canPrompt(board), board.Id .. " prompts once it has an id")
+					T.eq(HoverboardData.byProduct(product.Id), board, board.Id .. " by product id")
+				end)
+				product.Id = old
+				if not ok then
+					error(err, 0)
 				end
+			else
+				T.eq(HoverboardData.productId(board), 0, board.Id .. " has no product")
 			end
+		end
+	end)
+
+	T.test("hoverboards: one walk speed formula (carry slowdown, Robux boards ignore it)", function()
+		local base, slow, max = HoverboardData.BaseWalkSpeed, HoverboardData.SlowPerItem, HoverboardData.MaxSlow
+		T.eq(HoverboardData.walkSpeed(nil, 0), base, "on foot, empty hands")
+		T.eq(HoverboardData.walkSpeed("", 4), base - 4 * slow, "on foot, 4 items")
+		T.eq(HoverboardData.walkSpeed(nil, 1000), base - max, "on foot never below base - MaxSlow")
+		T.eq(HoverboardData.walkSpeed(nil, 1000), 13, "on foot never below 13 (the old CarryService floor)")
+		T.eq(HoverboardData.walkSpeed("Nope", 0), base, "an unknown board is walking")
+		T.eq(HoverboardData.walkSpeed(nil, -3), base, "negative counts are ignored")
+		T.eq(HoverboardData.walkSpeed(nil, 0 / 0), base, "NaN counts are ignored")
+		for _, board in HoverboardData.List do
+			T.eq(HoverboardData.walkSpeed(board.Id, 0), board.Speed, board.Id .. " empty hands = its speed")
+			local loaded = HoverboardData.walkSpeed(board.Id, 6)
+			if board.IgnoresCarrySlow then
+				T.eq(loaded, board.Speed, board.Id .. " ignores the carry slowdown")
+			else
+				T.eq(loaded, board.Speed - 6 * slow, board.Id .. " keeps the full carry slowdown")
+				T.eq(HoverboardData.walkSpeed(board.Id, 999), board.Speed - max, board.Id .. " slowdown capped")
+			end
+			T.truthy(
+				HoverboardData.walkSpeed(board.Id, 999) >= HoverboardData.walkSpeed(nil, 0),
+				board.Id .. " fully loaded is never slower than walking empty-handed"
+			)
 		end
 	end)
 

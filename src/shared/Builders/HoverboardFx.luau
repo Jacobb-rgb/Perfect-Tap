@@ -1,6 +1,6 @@
 --[[
 	Ride effects of the Robux hoverboards (HoverboardData.Effect), for the
-	client (HoverboardController, PHASE 2). Built once per board and reused:
+	client (HoverboardController). Built once per board and reused:
 	no instances are created while riding, only Enabled / Rate change.
 
 	  Comet    a cyan -> magenta light trail from the tail, cyan / white

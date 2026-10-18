@@ -121,8 +121,19 @@ local riding: { [Player]: boolean } = {}
 local lastCatch: { [Player]: number } = {}
 local clock: () -> number = os.clock
 local mapOverride: Instance? = nil
+local departCallbacks: { (Player) -> ...any } = {}
 
 ---------------------------------------------------------------- rules
+
+-- True while the player is riding the elevator (from "Depart" until the character arrives).
+function ElevatorService.isRiding(player: Player): boolean
+	return riding[player] == true
+end
+
+-- Listeners for a ride departing (HoverboardService gets the rider off the board).
+function ElevatorService.onDepart(callback: (Player) -> ...any)
+	table.insert(departCallbacks, callback)
+end
 
 -- True when the save says the player owns the elevator.
 function ElevatorService.owns(data: { [string]: any }): boolean
@@ -297,6 +308,9 @@ end
 local function ride(player: Player, from: number?, floorIndex: number, target: CFrame)
 	local floor = MineFloors.ByIndex[floorIndex]
 	riding[player] = true
+	for _, callback in departCallbacks do
+		task.spawn(callback, player)
+	end
 	Net.fire("ElevatorRide", player, {
 		Phase = "Depart",
 		Floor = floorIndex,

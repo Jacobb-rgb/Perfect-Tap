@@ -105,6 +105,11 @@ Net.Events = {
 	VaultBuy = { Rate = 2, Burst = 4 }, -- ({ Level: number }) buy your next blaster level at the Blaster Vault
 	--   counter for coins (BlasterData.vaultPrice, the case's ore look BlasterData.vaultOre); every
 	--   request read gets a VaultResult (see VaultService)
+	-- hoverboards (HoverboardService), anywhere: { Action = "Buy", Board } a coin board (EconomyService);
+	--   { Action = "Equip", Board } an owned board ("" = none); { Action = "Ride", On: boolean? } on / off
+	--   (nil = toggle). Every request read gets a HoverboardResult. Robux boards are bought with
+	--   MarketplaceService:PromptProductPurchase on the client (MonetizationConfig ids, never id 0)
+	HoverboardAction = { Rate = 4, Burst = 8 },
 	DailyClaim = { Rate = 1, Burst = 2 },
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
@@ -151,6 +156,9 @@ Net.Events = {
 	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
 	--   on Ok the client plays the crate opening (a State push follows)
 	VaultResult = false,
+	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
+	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change
+	HoverboardResult = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"

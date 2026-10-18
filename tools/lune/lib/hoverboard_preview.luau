@@ -367,7 +367,7 @@ local function closeUp(parent: any, boardId: string, at: any, viewer: any)
 			part(root, CF.lookAt(p, V3.new(at.X, 4, at.Z)) * CF.new(0, 0, -0.35), V3.new(0.18, 7.4, 0.1), glowColor, NEON, nil, 0.3)
 		end
 	end
-	local bank, height = 0.32, 2.6
+	local bank, height = if boardId == "RoyalPhoenix" then 0.1 else 0.32, 2.6
 	-- flight path: the board flies toward -X, curving; d studs back along the path
 	local radius = 22
 	local center = at + V3.new(0, height, -radius)
@@ -510,6 +510,126 @@ function Preview.buildRide(Loader: any, workspace: any, hero: boolean?)
 		end, viewer, 11)
 		lamp(folder, pos + V3.new(0, 0.4, 0), Data.get(boardId).Colors.Glow, 9, 1.0)
 	end
+end
+
+---------------------------------------------------------------- UI overlays
+
+--[[
+	The Boards panel and the RIDE button over the ride scene (PHASE 2 UI):
+	  ui_hover_hud         PC HUD: the BASE / LOBBY / VAULT bar, the left side
+	                       menu (Elevator + Boards), RIDE above BUILD on the right
+	  ui_hover_panel       PC HUD + the Boards panel (owns the Timber Drifter,
+	                       equipped; $120K)
+	  ui_hover_phone       an iPhone SE-sized landscape screen (667 x 375 pt) at
+	                       the 0.62 phone scale: compact panel
+	  ui_hover_hud_phone   the phone HUD with the RIDE button and stand-ins for
+	                       Roblox's touch thumbstick and jump button
+	The Robux cards show their live R$ button (product ids simulated; with id 0
+	the game shows COMING SOON).
+]]
+function Preview.buildUi(Loader: any): { [string]: any }
+	init(Loader)
+	local UiExport = require("./uiexport")
+	local Client = "StarterPlayer.StarterPlayerScripts.Client.UI."
+	local HudView = Loader.requirePath(Client .. "HudView")
+	local TeleportView = Loader.requirePath(Client .. "TeleportView")
+	local BuildView = Loader.requirePath(Client .. "BuildView")
+	local ElevatorView = Loader.requirePath(Client .. "ElevatorView")
+	local HoverboardView = Loader.requirePath(Client .. "HoverboardView")
+	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+	local UDim2 = roblox.UDim2
+
+	local pc = 1.25 -- 900 px tall render / 720 design height
+	local phone = 0.62 * 900 / 375
+
+	local function hud(scale: number, uiScale: number, riding: boolean, touch: boolean): { any }
+		local refs = HudView.build()
+		refs.Gui.Scale.Scale = scale
+		BuildView.menuButton(refs.Menu)
+		local ride = HoverboardView.rideButton(refs.Menu)
+		HoverboardView.setRiding(ride, riding, if touch then "" else "H", "")
+		local teleport = TeleportView.build(refs.TopBar, uiScale)
+		TeleportView.relayout(teleport, refs.TopBar, uiScale)
+		refs.Coins.Text = Format.money(120000)
+		refs.Income.Text = Format.perSecond(240)
+		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
+		refs.CarryLabel.Text = "HANDS 0/3"
+		local sideMenu = ElevatorView.buildSideMenu()
+		sideMenu.Gui.Scale.Scale = scale
+		local boards = HoverboardView.sideButton(sideMenu.Menu, HoverboardView.SideButtonSize)
+		boards.Holder.LayoutOrder = 20
+		return { refs.Gui, sideMenu.Gui }
+	end
+
+	local function panel(scale: number, compact: boolean, maxWidth: number, maxHeight: number): any
+		local refs = HoverboardView.build(compact)
+		refs.Gui.Scale.Scale = scale
+		refs.Gui.Enabled = true
+		HoverboardView.setCards(refs, { TimberDrifter = true }, "TimberDrifter", 120000)
+		HoverboardView.layout(refs, compact, maxWidth, maxHeight)
+		HoverboardView.pose(refs, HoverboardView.OpenTime)
+		if not compact then
+			HoverboardView.setHint(refs, "Mouse", "Click a card · H: ride · Backspace: close")
+		end
+		return refs.Gui
+	end
+
+	-- Roblox's touch controls (preview stand-ins): the thumbstick and the jump button
+	local function touchControls(): any
+		local gui = roblox.Instance.new("ScreenGui")
+		gui.Name = "RobloxTouchStandIn"
+		gui.IgnoreGuiInset = true
+		gui.DisplayOrder = 1
+		local function circle(name: string, position: any, size: number, transparency: number)
+			local f = roblox.Instance.new("Frame")
+			f.Name = name
+			f.Position = position
+			f.Size = UDim2.fromOffset(size, size)
+			f.BackgroundColor3 = C3.new(1, 1, 1)
+			f.BackgroundTransparency = transparency
+			f.Parent = gui
+			local corner = roblox.Instance.new("UICorner")
+			corner.CornerRadius = roblox.UDim.new(0.5, 0)
+			corner.Parent = f
+			local stroke = roblox.Instance.new("UIStroke")
+			stroke.Thickness = 3
+			stroke.Color = C3.new(1, 1, 1)
+			stroke.Transparency = 0.35
+			stroke.Parent = f
+		end
+		-- 900 px / 375 pt: the jump button is 70 pt at (1, -95, 1, -90) on small screens
+		local k = 900 / 375
+		circle("JumpButton", UDim2.new(1, -95 * k, 1, -90 * k), 70 * k, 0.7)
+		-- the classic thumbstick on small screens: 70 pt at (0, 25, 1, -90)
+		circle("Thumbstick", UDim2.new(0, 25 * k, 1, -90 * k), 70 * k, 0.8)
+		return gui
+	end
+
+	local exports: { [string]: any } = {}
+	local saved = {}
+	for key, product in MonetizationConfig.Products do
+		saved[key] = product.Id
+		product.Id = 9100000 + #key
+	end
+	local ok, err = pcall(function()
+		exports.ui_hover_hud = UiExport.export(hud(pc, 1, false, false))
+		local withPanel = hud(pc, 1, false, false)
+		table.insert(withPanel, panel(pc, false, 1600 / pc, 900 / pc))
+		exports.ui_hover_panel = UiExport.export(withPanel)
+		local phonePanel = hud(phone, 0.62, false, true)
+		table.insert(phonePanel, panel(phone, true, 667 / 0.62, (375 - 36) / 0.62))
+		exports.ui_hover_phone = UiExport.export(phonePanel)
+		local phoneHud = hud(phone, 0.62, true, true)
+		table.insert(phoneHud, touchControls())
+		exports.ui_hover_hud_phone = UiExport.export(phoneHud)
+	end)
+	for key, id in saved do
+		MonetizationConfig.Products[key].Id = id
+	end
+	if not ok then
+		error(err, 0)
+	end
+	return exports
 end
 
 return Preview

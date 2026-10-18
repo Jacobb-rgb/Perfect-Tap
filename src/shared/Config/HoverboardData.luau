@@ -7,8 +7,16 @@
 	- 2 boards for Robux (49 R$ each): faster than every coin board and with
 	  their own particle / trail effects (owner: "more benefits").
 	- Speed is the Humanoid WalkSpeed while riding (CarryService walks at
-	  BaseWalkSpeed = 18 without a board).
-	- Bought once and kept forever (save: data.Hoverboards, PHASE 2).
+	  BaseWalkSpeed = 18 without a board). One formula for everything,
+	  HoverboardData.walkSpeed (CarryService.updateWalkSpeed uses it): every
+	  carried item slows you by SlowPerItem, at most MaxSlow in total, on foot
+	  and on coin boards; Robux boards ignore the carry slowdown (owner:
+	  "more benefits").
+	- Bought once and kept forever: data.Hoverboards = { Owned = { [id] = true },
+	  Equipped = id or "" } (HoverboardService). While riding, the character
+	  has the attribute Attribute = the board id (the server sets it and raises
+	  the Humanoid's HipHeight by HoverboardBuilder.DeckHeight; every client
+	  builds the board under that character, HoverboardController).
 
 	Coin prices sit between the other one-time goals, so a board is always the
 	next nice thing to save for (BlasterData recipes, MineFloors.Elevator):
@@ -23,13 +31,15 @@
 	  blaster 7   5,000,000 floor 4 opens
 	The Robux boards are faster than all of them from the first minute.
 
-	Developer products: ProductId 0 = not created yet. The owner creates the
-	products on the Creator Dashboard and writes their ids here (TODO). A board
-	whose ProductId is 0 is never prompted: the shop shows "Coming soon".
+	Robux boards name their developer product (ProductKey); the ids live in
+	MonetizationConfig. A product whose id is still 0 is never prompted: the
+	shop shows "Coming soon".
 
 	Model look and effects: src/shared/Builders/HoverboardBuilder.luau and
 	HoverboardFx.luau (Colors below are the board's palette there).
 ]]
+
+local MonetizationConfig = require(script.Parent.MonetizationConfig)
 
 local HoverboardData = {}
 
@@ -51,16 +61,21 @@ export type Board = {
 	Kind: Kind,
 	Price: number?, -- coins (Kind = "Coins")
 	Robux: number?, -- price shown on the button (Kind = "Robux")
-	ProductId: number?, -- developer product id (Kind = "Robux"); 0 = TODO, never prompted
+	ProductKey: string?, -- MonetizationConfig.Products key (Kind = "Robux")
 	Speed: number, -- Humanoid.WalkSpeed while riding
+	IgnoresCarrySlow: boolean, -- true: carried items don't slow you down on it
 	Effect: Effect,
 	Colors: Colors,
 	Description: string, -- one short line on the shop card
 	Perks: { string }, -- short chips on the shop card
 }
 
-HoverboardData.BaseWalkSpeed = 18 -- CarryService BASE_WALK_SPEED (walking, no board)
+HoverboardData.BaseWalkSpeed = 18 -- walking, no board
+HoverboardData.SlowPerItem = 0.5 -- walk speed lost per carried item
+HoverboardData.MaxSlow = 5 -- at most this much in total (on foot: never below 13)
 HoverboardData.RobuxPrice = 49
+HoverboardData.Attribute = "Hoverboard" -- character attribute while riding: the board id
+HoverboardData.HipAttribute = "HoverboardHip" -- character attribute: the HipHeight before riding
 
 local rgb = Color3.fromRGB
 
@@ -72,6 +87,7 @@ HoverboardData.List = {
 		Kind = "Coins",
 		Price = 5000,
 		Speed = 23,
+		IgnoresCarrySlow = false,
 		Effect = "None",
 		Colors = {
 			Main = rgb(170, 112, 66), -- planks
@@ -90,6 +106,7 @@ HoverboardData.List = {
 		Kind = "Coins",
 		Price = 80000,
 		Speed = 27,
+		IgnoresCarrySlow = false,
 		Effect = "None",
 		Colors = {
 			Main = rgb(118, 128, 156), -- riveted steel tub
@@ -108,6 +125,7 @@ HoverboardData.List = {
 		Kind = "Coins",
 		Price = 1500000,
 		Speed = 31,
+		IgnoresCarrySlow = false,
 		Effect = "None",
 		Colors = {
 			Main = rgb(44, 38, 52), -- obsidian
@@ -125,8 +143,9 @@ HoverboardData.List = {
 		Name = "Neon Comet",
 		Kind = "Robux",
 		Robux = HoverboardData.RobuxPrice,
-		ProductId = 0, -- TODO(owner): developer product id for Neon Comet (49 R$)
+		ProductKey = "HoverboardComet",
 		Speed = 35,
+		IgnoresCarrySlow = true,
 		Effect = "Comet",
 		Colors = {
 			Main = rgb(42, 54, 140), -- night indigo
@@ -136,7 +155,7 @@ HoverboardData.List = {
 			Glow2 = rgb(255, 80, 210), -- magenta
 		},
 		Description = "A comet with a glowing core. Leaves a trail of stars.",
-		Perks = { "Faster than any coin board", "Star trail", "Glowing fins" },
+		Perks = { "Faster than any coin board", "No carry slowdown", "Star trail" },
 	},
 	{
 		Id = "RoyalPhoenix",
@@ -144,8 +163,9 @@ HoverboardData.List = {
 		Name = "Royal Phoenix",
 		Kind = "Robux",
 		Robux = HoverboardData.RobuxPrice,
-		ProductId = 0, -- TODO(owner): developer product id for Royal Phoenix (49 R$)
+		ProductKey = "HoverboardPhoenix",
 		Speed = 38,
+		IgnoresCarrySlow = true,
 		Effect = "Phoenix",
 		Colors = {
 			Main = rgb(104, 50, 186), -- royal violet
@@ -155,7 +175,7 @@ HoverboardData.List = {
 			Glow2 = rgb(255, 170, 40), -- gold flame
 		},
 		Description = "The fastest board. Golden wings, a crown crystal and a flame trail.",
-		Perks = { "Fastest board", "Flame trail", "Wing sparkles" },
+		Perks = { "Fastest board", "No carry slowdown", "Flame trail" },
 	},
 } :: { Board }
 
@@ -176,23 +196,40 @@ function HoverboardData.isRobux(board: Board): boolean
 	return board.Kind == "Robux"
 end
 
+-- The board's developer product id (0 = not created yet, or not a Robux board).
+function HoverboardData.productId(board: Board): number
+	local product = MonetizationConfig.get(board.ProductKey)
+	return if product then product.Id else 0
+end
+
 -- A Robux board can be prompted only once the owner has written its product id.
 function HoverboardData.canPrompt(board: Board): boolean
-	local id = board.ProductId
-	return board.Kind == "Robux" and type(id) == "number" and id > 0
+	return board.Kind == "Robux" and MonetizationConfig.canPrompt(board.ProductKey)
 end
 
 -- The board sold as this developer product, or nil (0 / unknown ids never match).
 function HoverboardData.byProduct(productId: any): Board?
-	if type(productId) ~= "number" or productId <= 0 then
+	local product = MonetizationConfig.byId(productId)
+	if not product or product.Kind ~= "Hoverboard" then
 		return nil
 	end
-	for _, board in HoverboardData.List do
-		if board.ProductId == productId then
-			return board
-		end
+	return HoverboardData.get(product.BoardId)
+end
+
+--[[
+	The one walk speed formula: `boardId` = the board being ridden (nil, "" or
+	an unknown id = on foot), `carried` = items in your hands. Base speed =
+	the board's Speed (or BaseWalkSpeed on foot), minus SlowPerItem per item
+	(at most MaxSlow), except on boards that ignore the carry slowdown.
+]]
+function HoverboardData.walkSpeed(boardId: any, carried: any): number
+	local board = HoverboardData.get(boardId)
+	local base = if board then board.Speed else HoverboardData.BaseWalkSpeed
+	if board and board.IgnoresCarrySlow then
+		return base
 	end
-	return nil
+	local count = if type(carried) == "number" and carried == carried and carried > 0 then math.floor(carried) else 0
+	return base - math.min(HoverboardData.MaxSlow, count * HoverboardData.SlowPerItem)
 end
 
 -- How much faster than walking, in percent (23 -> 28), for the shop card ("+28% speed").

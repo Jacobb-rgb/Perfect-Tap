@@ -45,6 +45,8 @@ local ORDER = {
 	"ShopService",
 	"ElevatorService", -- the mine elevator (after EconomyService, StateService and WorldService)
 	"VaultService", -- the Blaster Vault shop (buy the next blaster level, the crate opening)
+	"MonetizationService", -- the one ProcessReceipt callback (grant handlers register in init)
+	"HoverboardService", -- hoverboards: buy, equip, ride (after Carry, Cleaning, Elevator, Monetization)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)

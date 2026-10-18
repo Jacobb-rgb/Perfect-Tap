@@ -52,6 +52,12 @@ type Session = {
 local sessions: { [Player]: Session } = {}
 local random = Random.new()
 local cleanedCallbacks: { (Player, string, string, number) -> ...any } = {}
+local sessionStartCallbacks: { (Player) -> ...any } = {}
+
+-- Listeners for a cleaning session starting (HoverboardService gets the player off the board).
+function CleaningService.onSessionStart(callback: (Player) -> ...any)
+	table.insert(sessionStartCallbacks, callback)
+end
 
 -- Listeners: tutorial, badges, analytics. (player, oreId, grade, score)
 function CleaningService.onCleaned(callback: (Player, string, string, number) -> ...any)
@@ -123,6 +129,9 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 	sessions[player] = session
 	machine.State.Session = session
 	updatePrompts(machine)
+	for _, callback in sessionStartCallbacks do
+		task.spawn(callback, player)
+	end
 	Net.fire("CleanBegin", player, {
 		Id = session.Id,
 		OreId = session.OreId,
