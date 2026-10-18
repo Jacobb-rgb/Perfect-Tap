@@ -1,8 +1,8 @@
 # review/hory-noc: the mountains chat's night work (2026-10-18)
 
-One branch with everything from the night, on top of main fc224a5 (steps 6-7, save safety, perf pass 1). It is fast-forwardable from main.
-Map v32, 20,557 / 23,000 parts (+ the 8 yard museums at runtime). `bash tools/check.sh`: ALL CHECKS PASSED (1217 tests, PhoneBudget included).
-It goes in only after the integrator's ok **and** the owner's "ano" in the mountains chat.
+One branch with everything from the night, on top of main 39ab5d4. Map v33, 20,686 / 23,000 parts (+ the 8 yard museums
+at runtime). `bash tools/check.sh`: ALL CHECKS PASSED (1217 tests, PhoneBudget included).
+**The owner said "ano" (2026-10-18) to all of it, the loading screen and removing the belt sheds.**
 
 ## What is in it (each part still has its own branch)
 
@@ -16,6 +16,7 @@ It goes in only after the integrator's ok **and** the owner's "ano" in the mount
 | F | `fix/meadow-outcrops` (fbf7d94) | no pond or flower bed over an ore rock (a bug from map v20) | main |
 | G | review-only commit cc5e7e1 | phone trims: fewer grass tufts, lighter flower beds, 2-part fence lanterns, 4-part plaza lanterns | A, C |
 | H | review-only commit 949c5fa | the meadow ponds come back (3: south-west and south-east corners, east behind the forge); with A-F together the meadow had placed none | F (and C) |
+| J | review-only commit (sheds) | the timber sheds in the town belts removed (owner: "ano", like the town houses) | main |
 | I | review-only commit d713af0 | quiet lobby sounds: water at the waterfalls and the stream, plops and crickets at the ponds, hammer and fire at the forge, wind high up (docs/handoff/ZVUKY_LOBBY.md) | main |
 
 ## If the owner says yes to only some
