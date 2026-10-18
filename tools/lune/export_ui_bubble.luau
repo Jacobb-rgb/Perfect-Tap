@@ -275,3 +275,17 @@ for _, spec in { { "pc", 1.25, 1, false }, { "phone", 0.62, 2, true } } do
 	refs.Gui.Scale.Scale = spec[2] * spec[3]
 	write("ui_bubble_build_" .. spec[1], refs.Gui)
 end
+
+---------------------------------------------------------------- HUD with the MORE flyout open
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local refs = HudBubble.build(spec[2])
+	refs.Gui.Scale.Scale = spec[2] * spec[3]
+	refs.Coins.Text = "$1.25M"
+	refs.Income.Text = "+$12.4K/s"
+	HudBubble.setSlot(refs.Slots[1], "blaster", true)
+	HudBubble.setSlot(refs.Slots[2], "ore_raw")
+	refs.CarryLabel.Text = "CARRYING 1/3"
+	local more = HudBubble.moreMenu(refs, spec[2])
+	Bubble.badge(more.Tiles.Wheel, "!")
+	write("ui_bubble_more_" .. spec[1], refs.Gui)
+end

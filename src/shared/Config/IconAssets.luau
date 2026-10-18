@@ -33,6 +33,11 @@ IconAssets.Ids = {
 	rainbow = 0,
 	enchant = 0,
 	check = 0,
+	wheel = 0,
+	book = 0,
+	trophy = 0,
+	helmet = 0,
+	cog = 0,
 	-- golems and capsules (step 7 GolemBuilder models)
 	golem_PebbleGolem = 0,
 	golem_CopperTinker = 0,

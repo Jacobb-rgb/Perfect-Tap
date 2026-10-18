@@ -30,7 +30,7 @@ export type MenuEntry = { Id: string, Label: string, Icon: string, Role: string 
 -- The main tiles (owner: only the main 4-5 on the left, the rest behind MORE).
 HudBubble.Menu = {
 	{ Id = "Backpack", Label = "BACKPACK", Icon = "backpack", Role = "Backpack" },
-	{ Id = "Golems", Label = "GOLEMS", Icon = "golem", Role = "Golems" },
+	{ Id = "Golems", Label = "GOLEMS", Icon = "golem_GildedPorter", Role = "Golems" },
 	{ Id = "Build", Label = "BUILD", Icon = "build", Role = "Build" },
 	{ Id = "Shop", Label = "SHOP", Icon = "shop", Role = "Shop" },
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
@@ -166,22 +166,49 @@ local function teleportBar(gui: ScreenGui, layout: Layout): { [string]: TextButt
 	return tabs
 end
 
-local function menuTiles(gui: ScreenGui, layout: Layout): { [string]: TextButton }
-	local rows = math.ceil(#HudBubble.Menu / layout.Columns)
+export type MenuMetrics = {
+	Origin: UDim2, -- the menu's top-left
+	Width: number,
+	Height: number,
+	CellHeight: number,
+	RowGap: number,
+}
+
+-- Where the left menu sits (pure layout math, also used by the MORE flyout).
+function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
+	local rows = math.ceil((count or #HudBubble.Menu) / layout.Columns)
 	local cellH = layout.Tile + Theme.Lip
 	local rowGap = layout.TileGap + 8 -- room for the icons popping out of the row below
 	local width = layout.Columns * layout.Tile + (layout.Columns - 1) * layout.TileGap
 	local height = rows * cellH + (rows - 1) * rowGap
+	local origin = if layout.Compact then UDim2.fromOffset(18, 112) else UDim2.new(0, 18, 0.5, 24 - height // 2)
+	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
+end
+
+-- Top-left of menu tile `index` (1-based).
+function HudBubble.tilePosition(layout: Layout, index: number): UDim2
+	local m = HudBubble.menuMetrics(layout)
+	local col = (index - 1) % layout.Columns
+	local row = (index - 1) // layout.Columns
+	return UDim2.new(
+		m.Origin.X.Scale,
+		m.Origin.X.Offset + col * (layout.Tile + layout.TileGap),
+		m.Origin.Y.Scale,
+		m.Origin.Y.Offset + row * (m.CellHeight + m.RowGap)
+	)
+end
+
+local function menuTiles(gui: ScreenGui, layout: Layout): { [string]: TextButton }
+	local m = HudBubble.menuMetrics(layout)
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		BackgroundTransparency = 1,
-		AnchorPoint = if layout.Compact then Vector2.new(0, 0) else Vector2.new(0, 0.5),
-		Position = if layout.Compact then UDim2.fromOffset(18, 112) else UDim2.new(0, 18, 0.5, 24),
-		Size = UDim2.fromOffset(width, height),
+		Position = m.Origin,
+		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
 	UIKit.new("UIGridLayout", {
-		CellSize = UDim2.fromOffset(layout.Tile, cellH),
-		CellPadding = UDim2.fromOffset(layout.TileGap, rowGap),
+		CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight),
+		CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap),
 		FillDirection = Enum.FillDirection.Horizontal,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, menu)
@@ -236,6 +263,97 @@ local function hotbar(gui: ScreenGui, layout: Layout): ({ Frame }, TextLabel)
 		Size = UDim2.fromOffset(240, 22),
 	})
 	return slots, label
+end
+
+-- Behind MORE (owner: only the main buttons on the left, the rest here).
+HudBubble.More = {
+	{ Id = "Wheel", Label = "WHEEL", Icon = "wheel", Role = "Danger" },
+	{ Id = "Codex", Label = "CODEX", Icon = "book", Role = "Base" },
+	{ Id = "Artifacts", Label = "ARTIFACTS", Icon = "artifact", Role = "Build" },
+	{ Id = "Boards", Label = "BOARDS", Icon = "trophy", Role = "Vault" },
+	{ Id = "Gear", Label = "GEAR", Icon = "helmet", Role = "Lobby" },
+	{ Id = "Settings", Label = "SETTINGS", Icon = "cog", Role = "More" },
+} :: { MenuEntry }
+
+export type MoreRefs = { Panel: Frame, Tiles: { [string]: TextButton }, Close: TextButton }
+
+--[[
+	The MORE flyout: a white bubble right of the menu with a pointer at the
+	MORE tile and a tile per entry (3 columns). On PC its bottom lines up with
+	MORE; on phones it sits under the coins, clear of the thumbstick.
+]]
+function HudBubble.moreMenu(refs: Refs, uiScale: number): MoreRefs
+	local layout = HudBubble.layout(uiScale)
+	local m = HudBubble.menuMetrics(layout)
+	local more = HudBubble.tilePosition(layout, #HudBubble.Menu)
+	local cols = 3
+	local pad = 16
+	local head = 50
+	local rows = math.ceil(#HudBubble.More / cols)
+	local width = cols * layout.Tile + (cols - 1) * layout.TileGap + pad * 2
+	local height = head + rows * m.CellHeight + (rows - 1) * m.RowGap + pad
+	local left = m.Origin.X.Offset + m.Width + 26
+	local top = if layout.Compact
+		then UDim.new(0, 96)
+		else UDim.new(more.Y.Scale, more.Y.Offset + m.CellHeight - height)
+	local pointer = UIKit.new("Frame", {
+		Name = "MorePointer",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Panel,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, left, more.Y.Scale, more.Y.Offset + layout.Tile // 2),
+		Rotation = 45,
+		Size = UDim2.fromOffset(30, 30),
+		ZIndex = 1,
+	}, refs.Gui)
+	Bubble.corner(pointer, 6)
+	Bubble.stroke(pointer)
+	local holder, face = Bubble.body(refs.Gui, Bubble.role("Plain"), Vector2.new(width, height), {
+		Name = "MorePanel",
+		Corner = 24,
+		Gloss = false,
+	})
+	holder.Position = UDim2.new(0, left, top.Scale, top.Offset)
+	Bubble.ink(face, "MORE", 28, {
+		Name = "Title",
+		FontFace = Theme.TitleFont,
+		Position = UDim2.fromOffset(pad + 2, 8),
+		Size = UDim2.new(1, -pad * 2 - 50, 0, 34),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 4,
+	})
+	local close, closeHolder = Bubble.button(face, { Name = "Close", Text = "X", Role = "Danger", Size = Vector2.new(44, 44), TextSize = 26, Corner = 14 })
+	closeHolder.AnchorPoint = Vector2.new(1, 0)
+	closeHolder.Position = UDim2.new(1, -10, 0, 8)
+	local grid = UIKit.new("Frame", {
+		Name = "Grid",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(pad, head),
+		Size = UDim2.new(1, -pad * 2, 1, -head - pad),
+		ZIndex = 3,
+	}, face)
+	UIKit.new("UIGridLayout", {
+		CellSize = UDim2.fromOffset(layout.Tile, m.CellHeight),
+		CellPadding = UDim2.fromOffset(layout.TileGap, m.RowGap),
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, grid)
+	local tiles = {}
+	for i, entry in HudBubble.More do
+		tiles[entry.Id] = Bubble.tile(grid, {
+			Name = entry.Id,
+			Label = entry.Label,
+			Icon = entry.Icon,
+			Role = entry.Role,
+			Size = layout.Tile,
+			LayoutOrder = i,
+		})
+	end
+	local moreTile = refs.Menu.More
+	if moreTile then
+		Bubble.select(moreTile, true)
+	end
+	return { Panel = holder, Tiles = tiles, Close = close }
 end
 
 -- Puts an item icon in a hotbar slot (nil clears it); `selected` = the held slot.

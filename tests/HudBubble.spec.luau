@@ -23,6 +23,32 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("HudBubble: MORE flyout has a tile per entry and outlines MORE", function()
+		for _, scale in { 1.25, 0.62 } do
+			local refs = HudBubble.build(scale)
+			local more = HudBubble.moreMenu(refs, scale)
+			for _, entry in HudBubble.More do
+				T.truthy(more.Tiles[entry.Id], "tile " .. entry.Id)
+				T.truthy(IconAssets.Ids[entry.Icon] ~= nil, "icon listed " .. entry.Icon)
+			end
+			T.truthy(more.Close, "close")
+			T.eq(refs.Menu.More:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Gold, "MORE outlined while open")
+		end
+	end)
+
+	T.test("HudBubble: the menu math matches the grid", function()
+		local layout = HudBubble.layout(1.25)
+		local m = HudBubble.menuMetrics(layout)
+		local first = HudBubble.tilePosition(layout, 1)
+		local fifth = HudBubble.tilePosition(layout, 5)
+		T.eq(first.X.Offset, m.Origin.X.Offset, "first tile at the origin")
+		T.eq(fifth.Y.Offset - first.Y.Offset, 2 * (m.CellHeight + m.RowGap), "row 3 on PC (2 columns)")
+		local phone = HudBubble.layout(0.62)
+		local p5 = HudBubble.tilePosition(phone, 5)
+		local p1 = HudBubble.tilePosition(phone, 1)
+		T.eq(p5.Y.Offset - p1.Y.Offset, HudBubble.menuMetrics(phone).CellHeight + HudBubble.menuMetrics(phone).RowGap, "row 2 on phones (3 columns)")
+	end)
+
 	T.test("HudBubble: phone layout keeps touch targets >= 44 pt", function()
 		local layout = HudBubble.layout(0.62)
 		T.truthy(layout.Compact, "compact on phones")

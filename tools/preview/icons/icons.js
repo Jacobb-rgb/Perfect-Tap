@@ -390,6 +390,82 @@ const ICONS = {
     return { model: group([extrude(s, 0.3, 0.1, "#3ddc84", {})]), yaw: -10, pitch: 6 };
   },
 
+  wheel() {
+    const colors = ["#ff5a5a", "#ffc93c", "#3ddc84", "#4da3ff", "#b48cff", "#ff8ad8", "#ffa63c", "#22c7a9"];
+    const parts = [];
+    for (let i = 0; i < 8; i++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.18, 12, 1, false, (i * Math.PI) / 4, Math.PI / 4), mat(colors[i], {}));
+      seg.rotation.x = Math.PI / 2;
+      parts.push(seg);
+    }
+    parts.push(torus(0.98, 0.1, Math.PI * 2, GOLD, shiny, [0, 0, 0]));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      parts.push(ball(0.06, "#fff6c8", glow("#ffd040", 0.6), [Math.cos(a) * 0.98, Math.sin(a) * 0.98, 0.1]));
+    }
+    parts.push(cyl(0.2, 0.2, 0.3, GOLD, shiny, [0, 0, 0.1], [90, 0, 0]));
+    parts.push(place(new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.42, 4), mat("#ff4f6d", {})), [0, 1.12, 0.12], [0, 45, 180]));
+    parts.push(box(0.2, 0.9, 0.2, 0.06, "#7d8a9b", steel, [0, -1.2, -0.1]));
+    parts.push(box(0.9, 0.16, 0.5, 0.06, "#7d8a9b", steel, [0, -1.62, -0.1]));
+    return { model: group(parts), yaw: -16, pitch: 4 };
+  },
+
+  book() {
+    const parts = [
+      box(1.5, 1.9, 0.5, 0.08, "#2f95f5", {}, [0, 0, 0]),
+      box(1.38, 1.8, 0.38, 0.04, "#fff4dc", { coat: 0.2 }, [0.08, 0, 0]),
+      box(1.5, 1.9, 0.08, 0.04, "#2f95f5", {}, [0, 0, 0.26]),
+      box(0.16, 1.9, 0.58, 0.06, "#1c64b8", {}, [-0.72, 0, 0]),
+      box(0.3, 0.3, 0.1, 0.04, GOLD, shiny, [0.62, 0.82, 0.31]),
+      box(0.3, 0.3, 0.1, 0.04, GOLD, shiny, [0.62, -0.82, 0.31]),
+      place(new THREE.Mesh(new THREE.OctahedronGeometry(0.34), mat("#7cf0ff", glow("#25b6e6", 0.5))), [0.05, 0.1, 0.36], [0, 0, 0]),
+      box(0.16, 0.7, 0.04, 0.02, "#ff4f6d", {}, [0.35, -1.1, 0.12]),
+    ];
+    return { model: group(parts), yaw: -26, pitch: 8 };
+  },
+
+  trophy() {
+    const cup = lathe([[0, -0.1], [0.3, -0.1], [0.55, 0.15], [0.72, 0.6], [0.78, 1.0], [0.7, 1.02], [0.64, 0.62], [0.0, 0.5]], GOLD, shiny);
+    const parts = [
+      cup,
+      torus(0.3, 0.07, Math.PI, GOLD, shiny, [0.72, 0.55, 0], [0, 0, -90]),
+      torus(0.3, 0.07, Math.PI, GOLD, shiny, [-0.72, 0.55, 0], [0, 0, 90]),
+      cyl(0.12, 0.16, 0.45, GOLD_DARK, shiny, [0, -0.32, 0]),
+      box(0.95, 0.3, 0.7, 0.08, "#8a5530", {}, [0, -0.7, 0]),
+      box(0.5, 0.12, 0.05, 0.03, GOLD, shiny, [0, -0.7, 0.36]),
+      extrude(starShape(0.24, 0.1), 0.06, 0.02, "#fff1a8", shiny, [0, 0.55, 0.62]),
+    ];
+    return { model: group(parts), yaw: -12, pitch: 10 };
+  },
+
+  helmet() {
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2), mat("#ffc21a", {}));
+    const parts = [
+      dome,
+      cyl(1.08, 1.08, 0.1, "#ffb000", {}, [0, 0.02, 0.1]),
+      box(0.16, 0.5, 1.5, 0.06, "#ffd860", {}, [0, 0.6, 0]),
+      cyl(0.26, 0.3, 0.3, "#5b6677", steel, [0, 0.5, 0.78], [80, 0, 0]),
+      cyl(0.2, 0.2, 0.05, "#fff8c8", glow("#ffe060", 1.4), [0, 0.53, 0.94], [80, 0, 0]),
+    ];
+    return { model: group(parts), yaw: -26, pitch: 18 };
+  },
+
+  cog() {
+    const s = new THREE.Shape();
+    const teeth = 8;
+    for (let i = 0; i < teeth * 4; i++) {
+      const a = (i / (teeth * 4)) * Math.PI * 2;
+      const r = i % 4 === 1 || i % 4 === 2 ? 1.0 : 0.76;
+      if (i === 0) s.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else s.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    s.closePath();
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, 0.32, 0, Math.PI * 2, true);
+    s.holes.push(hole);
+    return { model: group([extrude(s, 0.32, 0.06, "#aab6c8", steel)]), yaw: -18, pitch: 12 };
+  },
+
   // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
   // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
   robux() {
