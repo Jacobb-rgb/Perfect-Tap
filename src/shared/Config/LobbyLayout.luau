@@ -74,7 +74,7 @@ LobbyLayout.Budget = {
 	-- node on every node spawn (~1,320) must stay 200 under it (the podium
 	-- and pen ores); + the concept fixes (~350: plaza miners, lanterns, stall
 	-- props, the stream with its bridge and waterfall).
-	MapParts = 22800, -- + 400 for the blaster gallery in THE GREAT FORGE (~330 parts), + 400 for the concept fixes
+	MapParts = 23000, -- integrator plan 2026-10-18 (docs/QA_NIGHT_2026-10-18.md section 7): gallery, concept fixes, night QA
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -82,7 +82,7 @@ LobbyLayout.Budget = {
 	-- parts of headroom are a deliberate buffer, so a small merge from a
 	-- parallel package session (Backdrop, Districts, Plaza, Flora) does not
 	-- break this budget; spend it on purpose, not by accident.
-	LobbyParts = 13200, -- + 400 for the blaster gallery
+	LobbyParts = 13700, -- integrator plan 2026-10-18: + the blaster gallery, + the plaza life
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,

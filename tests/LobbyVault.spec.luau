@@ -56,6 +56,17 @@ return function(T, Loader)
 		T.lt(emitters, 13, "particle emitters (" .. emitters .. ")")
 	end)
 
+	T.test("few see-through parts (phones: overdraw)", function()
+		local seeThrough = 0
+		for _, p in parts(built) do
+			if p.Transparency > 0.01 and p.Transparency < 0.99 then
+				seeThrough += 1
+			end
+		end
+		-- the glass front's panes and two light shafts; the crystals are opaque glass with glowing tips
+		T.le(seeThrough, 24, "semi-transparent parts (" .. seeThrough .. ")")
+	end)
+
 	T.test("small and neon parts cast no shadow, everything is anchored", function()
 		for _, p in parts(built) do
 			T.truthy(p.Anchored, p.Name .. " anchored")
