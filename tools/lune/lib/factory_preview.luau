@@ -108,6 +108,40 @@ function Factory.build(Loader: any, parent: any, level: number?)
 		end
 		models[i] = model
 	end
+	-- the moving parts caught mid-move, posed the way MachineFxController moves
+	-- them: the Robot Arm half way round with a Gold ingot ball in its hand,
+	-- the Splitter's flipper turned toward the side its last item left by
+	for i, entry in Factory.Machines do
+		local model = models[i]
+		local base = model.PrimaryPart
+		if entry.Id == "RobotArm" then
+			local pedestal = model:FindFirstChild("Pedestal")
+			local axis = base.CFrame:PointToObjectSpace(pedestal.CFrame.Position)
+			local pivot = CF.new(axis.X, 0, axis.Z)
+			local turn = pivot * CF.Angles(0, -1.3, 0) * pivot:Inverse()
+			local lowest = {}
+			for _, part in model:GetChildren() do
+				if part:IsA("BasePart") and part.Name == "Arm" then
+					part.CFrame = base.CFrame * turn * base.CFrame:ToObjectSpace(part.CFrame)
+					table.insert(lowest, part)
+				end
+			end
+			table.sort(lowest, function(a, b)
+				return a.CFrame.Position.Y < b.CFrame.Position.Y
+			end)
+			local hand = (lowest[1].CFrame.Position + lowest[2].CFrame.Position) / 2
+			local held = roblox.Instance.new("Part")
+			held.Shape = roblox.Enum.PartType.Ball
+			held.Size = V3.new(0.7, 0.7, 0.7)
+			held.Anchored = true
+			held.Color = roblox.Color3.fromRGB(255, 196, 40)
+			held.CFrame = CF.new(hand - V3.new(0, 0.2, 0))
+			held.Parent = root
+		elseif entry.Id == "Splitter" then
+			local flipper = model:FindFirstChild("Flipper")
+			flipper.CFrame = flipper.CFrame * CF.Angles(0, 0.55, 0)
+		end
+	end
 	for i, it in Factory.Items do
 		local cf = plotCF * Grid.localCFrame("Conveyor", it.X, it.Z, 0) * CF.new(0, 1.05, it.T * CELL)
 		local model = if it.D.K == "Clean"

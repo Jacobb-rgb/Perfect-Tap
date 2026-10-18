@@ -96,6 +96,12 @@ type Flap = { Part: BasePart, Rest: CFrame, Hinge: CFrame, T: number? }
 -- floor's CFrame to its pivot; Used = when it was last shown (os.clock).
 type ShowModel = { Model: Model, Lift: CFrame, Used: number }
 type Emitter = { Emitter: ParticleEmitter, Idle: number, Busy: number }
+-- The Robot Arm: its "Arm" parts and their rest poses relative to the Base,
+-- the Pedestal's upright axis (Base space), the ore ball it carries (client
+-- only) with its rest pose, and T = seconds into a swing (nil = resting).
+type ArmRig = { Parts: { BasePart }, Rest: { CFrame }, Pivot: CFrame, Held: Part, HeldRest: CFrame, T: number? }
+-- A Splitter / Sorter flipper turning round its own upright axis.
+type Flipper = { Part: BasePart, Rest: CFrame, Angle: number, Target: number }
 
 -- Pooled client water: Beams between Out and In, emitters at the landing
 -- point (Splash), foam rings on the water surface below it (RippleAt: the
@@ -185,6 +191,9 @@ type Fx = {
 	FailedKeys: { [string]: boolean },
 	NextBuild: number,
 	ShowAt: number?,
+	-- Robot Arm swing, Splitter / Sorter flipper
+	Arm: ArmRig?,
+	Flipper: Flipper?,
 }
 
 type Hum = { Part: Part, Sound: Sound, Target: Fx? }
@@ -236,6 +245,11 @@ local SHOW_BUILD_GAP = 1.2 -- seconds: at most one new display model per box thi
 local SCREEN_TEXT = IRON_BOX.ScreenText
 -- Cleaning Plant odds on your own plant's billboard, idle too, this close
 local ODDS_RANGE = 24
+-- Robot Arm: seconds to swing back to the machine behind, pick, swing to the front
+local ARM_BACK, ARM_PICK, ARM_FRONT = 0.4, 0.12, 0.45
+-- Splitter / Sorter: how far the flipper turns toward the side an item leaves by, and how fast
+local FLIP_ANGLE = 0.55
+local FLIP_RATE = 7 -- per second (eased)
 
 local player = Players.LocalPlayer
 local machines: { [Model]: Fx } = {}
@@ -492,6 +506,68 @@ local function capture(fx: Fx)
 		local point = base and base:FindFirstChild("ShowPoint")
 		fx.HasShowPoint = point ~= nil and point:IsA("Attachment")
 		fx.BoxDirty = true
+	elseif id == "RobotArm" then
+		local pedestal = model:FindFirstChild("Pedestal")
+		if base and pedestal and pedestal:IsA("BasePart") then
+			local parts: { BasePart } = {}
+			local rests: { CFrame } = {}
+			local lowest: { BasePart } = {}
+			for _, child in model:GetChildren() do
+				if child:IsA("BasePart") and child.Name == "Arm" then
+					table.insert(parts, child)
+					table.insert(rests, base.CFrame:ToObjectSpace(child.CFrame))
+					table.insert(lowest, child)
+				end
+			end
+			if #parts > 0 then
+				-- the hand: the two lowest arm parts (the fingers) hold the ball between them
+				table.sort(lowest, function(a: BasePart, b: BasePart): boolean
+					return a.Position.Y < b.Position.Y
+				end)
+				local hand = lowest[1].Position
+				if lowest[2] then
+					hand = (hand + lowest[2].Position) / 2
+				end
+				local held = Instance.new("Part")
+				held.Name = "ArmHeld"
+				held.Shape = Enum.PartType.Ball
+				held.Size = Vector3.new(0.7, 0.7, 0.7)
+				held.Anchored = true
+				held.CanCollide = false
+				held.CanQuery = false
+				held.CanTouch = false
+				held.CastShadow = false
+				held.Material = Enum.Material.SmoothPlastic
+				held.Transparency = 1
+				held.Parent = folder()
+				local axis = base.CFrame:PointToObjectSpace(pedestal.Position)
+				fx.Arm = {
+					Parts = parts,
+					Rest = rests,
+					Pivot = CFrame.new(axis.X, 0, axis.Z),
+					Held = held,
+					HeldRest = base.CFrame:ToObjectSpace(CFrame.new(hand - Vector3.new(0, 0.2, 0))),
+					T = nil,
+				}
+			end
+		end
+	elseif id == "Splitter" or id == "Sorter" then
+		local flipper = model:FindFirstChild("Flipper")
+		if base and flipper and flipper:IsA("BasePart") then
+			fx.Flipper = { Part = flipper, Rest = base.CFrame:ToObjectSpace(flipper.CFrame), Angle = 0, Target = 0 }
+		end
+		-- the Sorter's scan bar flashes for every item (the coin flash of a Sell Chute)
+		local bar = model:FindFirstChild("ScanBar")
+		if bar and bar:IsA("BasePart") then
+			fx.Coins = bar
+			fx.CoinsColor = bar.Color
+		end
+	elseif id == "SellBox" then
+		local coin = model:FindFirstChild("Coin")
+		if coin and coin:IsA("BasePart") then
+			fx.Coins = coin
+			fx.CoinsColor = coin.Color
+		end
 	elseif id == "SellChute" then
 		local coins = model:FindFirstChild("Coins")
 		if coins and coins:IsA("BasePart") then
@@ -1130,6 +1206,88 @@ local function swingFlap(fx: Fx, way: string)
 	end
 end
 
+---------------------------------------------------------------- Robot Arm, flippers
+
+local function smooth(t: number): number
+	t = math.clamp(t, 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
+-- The arm's turn (radians round the Pedestal) and whether it holds the ore, t seconds into a swing.
+local function armPose(t: number): (number, boolean)
+	if t < ARM_BACK then
+		return math.pi * smooth(t / ARM_BACK), false
+	elseif t < ARM_BACK + ARM_PICK then
+		return math.pi, t > ARM_BACK + ARM_PICK * 0.5
+	end
+	return math.pi * (1 - smooth((t - ARM_BACK - ARM_PICK) / ARM_FRONT)), true
+end
+
+-- Arm and flipper back in their rest poses (out of range, moved, gone).
+local function restMovers(fx: Fx)
+	local base = fx.Base
+	local arm = fx.Arm
+	if arm then
+		arm.T = nil
+		arm.Held.Transparency = 1
+		if base then
+			for i, part in arm.Parts do
+				if part.Parent then
+					part.CFrame = base.CFrame * arm.Rest[i]
+				end
+			end
+		end
+	end
+	local flipper = fx.Flipper
+	if flipper then
+		flipper.Angle, flipper.Target = 0, 0
+		if base and flipper.Part.Parent then
+			flipper.Part.CFrame = base.CFrame * flipper.Rest
+		end
+	end
+end
+
+-- One frame of the arm swing and the flipper turn (parts go into the frame's BulkMoveTo).
+local function stepMovers(fx: Fx, dt: number, parts: { BasePart }, frames: { CFrame })
+	local base = fx.Base
+	if not base then
+		return
+	end
+	local arm = fx.Arm
+	local t = arm and arm.T
+	if arm and t then
+		t += dt
+		local total = ARM_BACK + ARM_PICK + ARM_FRONT
+		local angle, holding = armPose(math.min(t, total))
+		local turn = arm.Pivot * CFrame.Angles(0, angle, 0) * arm.Pivot:Inverse()
+		for i, part in arm.Parts do
+			table.insert(parts, part)
+			table.insert(frames, base.CFrame * turn * arm.Rest[i])
+		end
+		local held = arm.Held
+		if holding and held.Transparency == 1 then
+			local ore = oreOf(fx.Attr.Holding)
+			held.Color = if ore then ore.Color else Color3.fromRGB(150, 140, 130)
+			held.Transparency = 0
+		end
+		held.CFrame = base.CFrame * turn * arm.HeldRest
+		if t >= total then
+			arm.T = nil
+			held.Transparency = 1
+			Vfx.burst("Glint", held.Position, 5)
+		else
+			arm.T = t
+		end
+	end
+	local flipper = fx.Flipper
+	if flipper and flipper.Angle ~= flipper.Target then
+		local step = (flipper.Target - flipper.Angle) * math.min(1, FLIP_RATE * dt)
+		flipper.Angle = if math.abs(flipper.Target - flipper.Angle) < 0.01 then flipper.Target else flipper.Angle + step
+		table.insert(parts, flipper.Part)
+		table.insert(frames, base.CFrame * flipper.Rest * CFrame.Angles(0, flipper.Angle, 0))
+	end
+end
+
 ---------------------------------------------------------------- one-off effects
 
 local function onQueueUp(fx: Fx)
@@ -1147,10 +1305,32 @@ local function onCyclesUp(fx: Fx)
 	if id == "IronBox" then
 		return -- the flap of the item's way swings instead (Kept / Sent)
 	end
-	if id == "SellChute" then
+	if id == "SellChute" or id == "SellBox" then
 		fx.Flash = 1
 		local coins = fx.Coins
-		Vfx.burst("Glint", if coins then coins.Position else pointOf(fx, "Intake"), 6, Color3.fromRGB(255, 214, 90))
+		local position = if coins then coins.Position else pointOf(fx, "Intake")
+		Vfx.burst("Glint", position, 6, Color3.fromRGB(255, 214, 90))
+		if id == "SellBox" then
+			Sfx.play("CoinBurst", position)
+		end
+		return
+	end
+	if id == "RobotArm" then
+		local arm = fx.Arm
+		if arm and not arm.T then
+			arm.T = 0
+		end
+		return
+	end
+	if id == "Splitter" or id == "Sorter" then
+		-- a short tick and a glint where the item leaves (LastSide: -1 left, 1 right)
+		local side = fx.Attr.LastSide
+		local position = pointOf(fx, if side == 1 then "OutputR" else "OutputL")
+		Sfx.play("Drop", position)
+		Vfx.burst("Glint", position, 4)
+		if id == "Sorter" then
+			fx.Flash = 1
+		end
 		return
 	end
 	-- Attr.WorkOre still holds the finished job's ore here: a new job's
@@ -1219,6 +1399,11 @@ local function onAttribute(fx: Fx, name: string)
 		end
 	elseif name == "LastKind" or name == "LastOre" or name == "LastGrade" then
 		fx.BoxDirty = true
+	elseif name == "LastSide" then
+		local flipper = fx.Flipper
+		if flipper and type(value) == "number" then
+			flipper.Target = math.sign(value) * FLIP_ANGLE
+		end
 	end
 end
 
@@ -1254,6 +1439,7 @@ local function setActive(fx: Fx, on: boolean)
 	end
 	clearStubs(fx)
 	restFlaps(fx)
+	restMovers(fx)
 	fx.ShowWanted = false
 	clearShown(fx)
 	local refs = fx.Billboard
@@ -1337,6 +1523,8 @@ local function register(instance: Instance)
 		FailedKeys = {},
 		NextBuild = 0,
 		ShowAt = nil,
+		Arm = nil,
+		Flipper = nil,
 	}
 	fx.Note = noteOf(fx)
 	capture(fx)
@@ -1359,6 +1547,10 @@ local function unregister(instance: Instance)
 	end
 	machines[instance :: Model] = nil
 	setActive(fx, false)
+	local arm = fx.Arm
+	if arm then
+		arm.Held:Destroy()
+	end
 	for _, connection in fx.Connections do
 		connection:Disconnect()
 	end
@@ -1615,6 +1807,10 @@ local function step(dt: number)
 					table.insert(spinFrames, base.CFrame * turn * flap.Rest)
 				end
 			end
+		end
+		-- Robot Arm swing, Splitter / Sorter flipper
+		if fx.Arm or fx.Flipper then
+			stepMovers(fx, dt, spinParts, spinFrames)
 		end
 		-- anvil
 		if fx.StubsDirty then
