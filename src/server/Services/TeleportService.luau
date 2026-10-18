@@ -33,6 +33,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Vault = require(script.Parent.Parent.World.Lobby.Vault)
+local MovementService = require(script.Parent.MovementService)
 local PlotService = require(script.Parent.PlotService)
 
 local TeleportService = {}
@@ -190,6 +191,7 @@ local function onTeleport(player: Player, destination: any)
 		humanoid.Sit = false
 	end
 	character:PivotTo(target)
+	MovementService.serverMoved(player)
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
 	reply(player, id, true, nil)

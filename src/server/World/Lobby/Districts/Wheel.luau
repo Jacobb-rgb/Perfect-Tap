@@ -341,13 +341,16 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	)
 	Kit.bit(m, at(0, top - 0.1, front + 0.2), Vector3.new(2 * hw, 0.24, 0.5), Tech.MetalLight)
 	Tech.glow(m, at(0, top - 0.4, front - 0.1), Vector3.new(2 * hw, 0.3, 0.16), Tech.Tube)
+	-- (perf pass 1: the row's first stud sat inside the top stair: the three
+	-- that show, at the same places)
+	local studStep = (hw - 0.6 - 4.4 * s) / 3
 	for _, side in { -1, 1 } do
 		Tech.studs(
 			m,
 			cf,
-			Vector3.new(side * 4.4 * s, top * 0.72, front - 0.08),
+			Vector3.new(side * (4.4 * s + studStep), top * 0.72, front - 0.08),
 			Vector3.new(side * (hw - 0.6), top * 0.72, front - 0.08),
-			4,
+			3,
 			0.4 * s
 		)
 	end
@@ -401,6 +404,13 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 		local mirrored = if q > math.pi then 2 * math.pi - q else q
 		return mirrored > HOUSING_FROM - 0.05 and mirrored < HOUSING_TO + 0.05
 	end
+	-- the chunky bottom bracket at 6 o'clock (built below the housings): its
+	-- box, so a rim chord wholly inside it is left out (perf pass 1)
+	local blockD = d.RingD + 0.6 * s
+	-- (stops short of the turning disc: every static part clears it)
+	local radial = math.min(2.5 * s, d.RingOut - d.SegmentR - 0.35 * s)
+	local blk = ringCf * CFrame.Angles(0, 0, math.pi) * CFrame.new(0, d.RingOut - radial / 2, 0)
+	local blkSize = Vector3.new(3.2 * s, radial, blockD)
 	for k = 0, n - 1 do
 		local a = k * 2 * math.pi / n
 		local seg = ringCf * CFrame.Angles(0, 0, a)
@@ -422,12 +432,15 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 			RIM
 		)
 		if not covered(a) then
-			Tech.glow(
-				m,
-				seg * CFrame.new(0, d.RingOut - tube * 0.4, -d.RingD / 2 - 0.1),
-				Vector3.new(2 * d.RingOut * tan + 0.1, tube * 0.8, 0.2),
-				RIM
-			)
+			-- (perf pass 1: a chord the bottom bracket swallows whole, at 6
+			-- o'clock, is left out)
+			local chord = seg * CFrame.new(0, d.RingOut - tube * 0.4, -d.RingD / 2 - 0.1)
+			local chordSize = Vector3.new(2 * d.RingOut * tan + 0.1, tube * 0.8, 0.2)
+			if Tech.boxInside(chord, chordSize, blk, blkSize) then
+				Tech.leaveOut(m, chord, chordSize, "RimChord")
+			else
+				Tech.glow(m, chord, chordSize, RIM)
+			end
 			if k % 2 == 1 then
 				Tech.glow(m, seg * CFrame.new(0, d.RingIn + band * 0.5, -d.RingD / 2 - 0.08), Vector3.new(0.5, 0.5, 0.14) * s, C.Fire)
 			end
@@ -474,13 +487,10 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 			Kit.block(m, tooth, Vector3.new(1.3 * s, 0.6 * s, hDepth - 0.4 * s), Tech.MetalLight, nil, Style.tiny({ CastShadow = true }))
 		end
 	end
-	-- the chunky bottom bracket at 6 o'clock (between the housings): deeper
-	-- than the ring, a light bevel cap on its outer front edge, two studs
-	local blockD = d.RingD + 0.6 * s
-	-- (stops short of the turning disc: every static part clears it)
-	local radial = math.min(2.5 * s, d.RingOut - d.SegmentR - 0.35 * s)
-	local blk = ringCf * CFrame.Angles(0, 0, math.pi) * CFrame.new(0, d.RingOut - radial / 2, 0)
-	Style.block(m, blk, Vector3.new(3.2 * s, radial, blockD), Tech.Metal, nil, Style.decor())
+	-- the chunky bottom bracket at 6 o'clock (between the housings; its box
+	-- above): deeper than the ring, a light bevel cap on its outer front
+	-- edge, two studs
+	Style.block(m, blk, blkSize, Tech.Metal, nil, Style.decor())
 	Tech.bevel(
 		m,
 		blk * CFrame.new(0, radial / 2 - 0.35 * s, -blockD / 2 - 0.3 * s),

@@ -47,8 +47,15 @@ function CodexService.prepare(data: { [string]: any }): Record
 		ready = raw.Ready == true
 		if type(raw.Seen) == "table" then
 			for oreId, on in raw.Seen do
-				if on == true and type(oreId) == "string" and OreData.ById[oreId] and found[oreId] == true then
-					seen[oreId] = true
+				if on == true and type(oreId) == "string" then
+					if OreData.ById[oreId] then
+						if found[oreId] == true then
+							seen[oreId] = true
+						end
+					elseif #oreId <= 64 then
+						-- an ore a newer build knows: kept for it (docs/SAVE_AUDIT.md #1(b))
+						seen[oreId] = true
+					end
 				end
 			end
 		end

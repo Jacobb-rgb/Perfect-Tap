@@ -13,6 +13,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Grid = require(Shared.Machines.Grid)
 local DataService = require(script.Parent.DataService)
+local MovementService = require(script.Parent.MovementService)
 local WorldService = require(script.Parent.WorldService)
 
 local PlotService = {}
@@ -71,6 +72,8 @@ end
 
 -- Half the plot pad plus a little: anything further from a plot centre is off it.
 local QUICK_REJECT = GameConfig.PlotCells * GameConfig.CellSize / 2 + 2
+-- (plotAt only ever returns a plot whose centre is this close on X and Z)
+PlotService.PlotReach = QUICK_REJECT
 local MIN_LOCAL_Y, MAX_LOCAL_Y = -3, 24
 
 -- Which plot a world position is over (any plot, owned or not), and the
@@ -164,6 +167,7 @@ function PlotService.sendHome(player: Player)
 	local character = player.Character
 	if plotId and character then
 		character:PivotTo(PlotService.homeCFrame(plotId))
+		MovementService.serverMoved(player)
 	end
 end
 

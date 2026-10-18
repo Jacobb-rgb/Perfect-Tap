@@ -371,4 +371,166 @@ return function(T, Loader)
 		intake.load(w.player, w.furnace)
 		T.eq(w.notes[#w.notes].A.Text, "Carry items here to put them in the Clay Furnace.", "empty hands")
 	end)
+	---------------------------------------------------------------- town zone index (perf pass 1)
+
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+
+	-- A zone part at a world CFrame.
+	local function zonePart(cf: any, size: any): any
+		local part = Instance.new("Part")
+		part.CFrame = cf
+		part.Size = size
+		part.Parent = Instance.new("Folder")
+		return part
+	end
+
+	local function looseAt(position: any): any
+		return { Kind = "Clean", OreId = "Copper", Owner = USER, State = "Loose", Body = { Position = position }, Trusted = true }
+	end
+
+	local function plotPoint(plotId: number, x: number, y: number, z: number): any
+		return WorldLayout.plotCFrame(WorldLayout.Plots[plotId]):PointToWorldSpace(Vector3.new(x, y, z))
+	end
+
+	-- Every plot gets a zone on its pad and one in its yard (like the pens and
+	-- the foundry hoppers), the town a SellBin, a turned box, two overlapping
+	-- boxes and one across a plot's edge.
+	local function townZones(taken: { string }): { any }
+		local zones = {}
+		local function add(name: string, cf: any, size: any)
+			local part = zonePart(cf, size)
+			IntakeService.addZone(name, part, function(record)
+				record.State = "Consumed"
+				table.insert(taken, name)
+			end)
+			table.insert(zones, { Name = name, Part = part })
+		end
+		for _, plot in WorldLayout.Plots do
+			local cf = WorldLayout.plotCFrame(plot)
+			add("Pad" .. plot.Id, cf * CFrame.new(14, 2, -6), Vector3.new(6, 4, 6))
+			add("Yard" .. plot.Id, cf * CFrame.new(0, 2, 40), Vector3.new(10, 4, 8))
+		end
+		add("SellBin", CFrame.new(0, 3, 60), Vector3.new(8, 5, 6))
+		add("Turned", CFrame.new(30, 2, -40) * CFrame.Angles(0, math.rad(35), math.rad(10)), Vector3.new(12, 4, 3))
+		add("First", CFrame.new(-20, 2, 10), Vector3.new(8, 4, 8))
+		add("Second", CFrame.new(-17, 2, 13), Vector3.new(8, 4, 8))
+		local plot1 = WorldLayout.plotCFrame(WorldLayout.Plots[1])
+		add("Edge", plot1 * CFrame.new(-26, 2, 0), Vector3.new(6, 4, 10))
+		return zones
+	end
+
+	withWorld("IntakeService: an item is tested only against the town zones of its plot or its town square", function(_w)
+		local taken = {}
+		townZones(taken)
+		-- on plot 5's pad: only the zones over plot 5
+		local onPad = intake.candidates(plotPoint(PLOT, 14, 2, -6))
+		T.eq(table.concat(onPad, ","), "Pad5", "plot 5's own zones")
+		local elsewhere = intake.candidates(plotPoint(PLOT, -10, 1, 10))
+		T.eq(table.concat(elsewhere, ","), "Pad5", "the same few anywhere on the plot")
+		-- the town: only the zones in the item's square
+		T.eq(table.concat(intake.candidates(Vector3.new(1, 2, 61)), ","), "SellBin", "next to the SellBin")
+		T.eq(#intake.candidates(Vector3.new(0, 2, -100)), 0, "an empty field: no box test at all")
+		local overlap = intake.candidates(Vector3.new(-18, 2, 12))
+		T.eq(table.concat(overlap, ","), "First,Second", "overlapping boxes in the order they were added")
+		-- the same zone still takes the item, the first added wins
+		intake.scanOne(looseAt(Vector3.new(-18, 2, 12)), 5)
+		T.eq(table.concat(taken, ","), "First", "first added wins")
+		intake.scanOne(looseAt(plotPoint(PLOT, 14, 2, -6)), 5)
+		T.eq(taken[2], "Pad5", "a zone on the plot comes before the plot's machines")
+		local sketchy = looseAt(Vector3.new(1, 2, 61))
+		sketchy.Trusted = false
+		intake.scanOne(sketchy, 5)
+		T.eq(#taken, 2, "untrusted: ignored")
+		T.eq(sketchy.State, "Loose")
+	end)
+
+	withWorld("IntakeService: the zone index takes an item exactly where testing every zone would", function(_w)
+		local taken = {}
+		local zones = townZones(taken)
+		local function reference(position: any): string?
+			for _, zone in zones do
+				local part = zone.Part
+				if part.Parent then
+					local q = part.CFrame:PointToObjectSpace(position)
+					local h = part.Size / 2
+					if math.abs(q.X) <= h.X and math.abs(q.Y) <= h.Y and math.abs(q.Z) <= h.Z then
+						return zone.Name
+					end
+				end
+			end
+			return nil
+		end
+		-- a small seeded generator (Lune has no Random)
+		local seed = 7
+		local rng = {}
+		function rng.NextNumber(_, lo: number, hi: number): number
+			seed = (seed * 1103515245 + 12345) % 2147483648
+			return lo + (hi - lo) * seed / 2147483648
+		end
+		local points = {}
+		for _ = 1, 2500 do
+			table.insert(points, Vector3.new(rng:NextNumber(-150, 150), rng:NextNumber(-1, 7), rng:NextNumber(-130, 130)))
+		end
+		for _, zone in zones do
+			local c = zone.Part.CFrame.Position
+			for _ = 1, 60 do
+				table.insert(points, c + Vector3.new(rng:NextNumber(-6, 6), rng:NextNumber(-3, 3), rng:NextNumber(-6, 6)))
+			end
+		end
+		local hits = 0
+		for i, position in points do
+			local expected = reference(position)
+			local before = #taken
+			intake.scanOne(looseAt(position), 5)
+			local got = if #taken > before then taken[#taken] else nil
+			if expected then
+				hits += 1
+			end
+			T.eq(got, expected, `point {i} at {position}`)
+		end
+		T.truthy(hits > 250, "enough points inside the zones: " .. hits)
+	end)
+
+	withWorld("IntakeService: the cached zone boxes follow a moved, resized or removed zone part", function(_w)
+		local taken = {}
+		local part = zonePart(CFrame.new(0, 3, 60), Vector3.new(8, 5, 6))
+		IntakeService.addZone("SellBin", part, function(record)
+			record.State = "Consumed"
+			table.insert(taken, "SellBin")
+		end)
+		intake.scanOne(looseAt(Vector3.new(1, 2, 61)), 5)
+		T.eq(#taken, 1, "taken where it stands")
+		-- moved (its CFrame signal marks the index)
+		part.CFrame = CFrame.new(40, 3, 60)
+		intake.invalidate()
+		intake.scanOne(looseAt(Vector3.new(1, 2, 61)), 5)
+		T.eq(#taken, 1, "not at the old place")
+		intake.scanOne(looseAt(Vector3.new(41, 2, 61)), 5)
+		T.eq(#taken, 2, "at the new place")
+		-- resized
+		part.Size = Vector3.new(30, 5, 6)
+		intake.invalidate()
+		intake.scanOne(looseAt(Vector3.new(53, 2, 61)), 5)
+		T.eq(#taken, 3, "the bigger box")
+		-- removed: skipped at once, even before the index is rebuilt
+		local parent = part.Parent
+		part.Parent = nil
+		intake.scanOne(looseAt(Vector3.new(41, 2, 61)), 5)
+		T.eq(#taken, 3, "a removed zone takes nothing")
+		intake.invalidate()
+		T.eq(#intake.candidates(Vector3.new(41, 2, 61)), 0, "and leaves the index")
+		-- back again
+		part.Parent = parent
+		intake.invalidate()
+		intake.scanOne(looseAt(Vector3.new(41, 2, 61)), 5)
+		T.eq(#taken, 4, "back in the index")
+		-- a zone added later joins the index
+		local later = zonePart(CFrame.new(-60, 3, 60), Vector3.new(4, 4, 4))
+		IntakeService.addZone("Later", later, function(record)
+			record.State = "Consumed"
+			table.insert(taken, "Later")
+		end)
+		intake.scanOne(looseAt(Vector3.new(-60, 3, 60)), 5)
+		T.eq(taken[#taken], "Later", "a new zone")
+	end)
 end

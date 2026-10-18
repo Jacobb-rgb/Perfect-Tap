@@ -19,15 +19,52 @@
 	- Descriptors: an item outside the world (storage, machine queues) is a
 	  Desc { K = kind, O = oreId, G = grade?, R = recipe? }. absorb() turns an
 	  item into a Desc, spawnDesc() turns a Desc back into an item.
-	- Performance: max GameConfig.MaxLooseItemsPerPlayer loose items per
-	  player; when exceeded the oldest one is moved into the Ore Pen (data),
-	  so nothing is ever lost. Resting items sleep in Roblox physics by themselves.
+	- Ids: a short number per server session (record.Id, getById), only used
+	  as a key and a look seed: never saved, never sent as an attribute.
+	- Attributes (all clients read): Kind, Owner, State, and for anything but
+	  dirty ore OreId, Grade?, Recipe?, Value; CarriedBy while carried.
+	- Loose items per player, counted apart by where they lie (looseCount
+	  "Base" / "Away"): machines, chutes and pen takes stop a little below
+	  GameConfig.MaxLooseItemsPerPlayer items on and around bases, and
+	  MiningService doesn't let a rock give ore while that many lie away from
+	  bases (atLooseCap). A busy factory never stops your mining and ore left
+	  in the mine never stalls your factory. One last-resort rescue: while a
+	  player is at the mine's cap, ore they left far behind (StaleAway*) or
+	  that lies stuck out of reach (StuckSeconds) goes into their pen, oldest
+	  first, with a toast, so a wedged chunk can't block mining for ever.
+	  Over everything, GameConfig.MaxLooseItemsTotal: hand drops, throws and
+	  Pen takes stop at that many loose items (atTotalCap). Resting items
+	  sleep in Roblox physics.
 	- Items that fall out of the world are put back next to their owner.
 	- Leaving players: loose and carried items go into the Ore Pen.
-	- The Ore Pen (data.Storage) holds EconomyConfig.penCapacity items;
-	  storeDesc pays Tobin's price for anything beyond that.
-	- Dirty ore hides its rarity: the replicated Value attribute of a Raw
-	  item is 0 (the real price is only paid out by the server).
+	- The Ore Pen (data.Storage) holds penCapacity items. Only RESCUE moves
+	  (storeDesc: leaving, an item lost by the engine, Placement repair, an
+	  item returned from someone else's plot) may overfill it, up to the
+	  DataStore cap GameConfig.MaxStoredItems; Tobin's price is paid beyond
+	  that. While a pen is over its capacity it takes nothing new from the
+	  player or their automation (PenService.refusal "PenOver").
+	- Dirty ore hides its rarity (Security #6): a Raw item has no OreId and
+	  no Value attribute and is named just "Raw" (the server keeps the ore in
+	  record.OreId; the cleaning, sale and pen code read it there).
+	- Light belt items (docs/SERVER_PERF_AUDIT.md #3/#4): items machines and
+	  chutes spawn (serverOwned) wear ItemBuilder.buildLight (<= 3 parts);
+	  dress() switches an item to the full look (CarryService does on every
+	  pickup). absorb() of a light loose item (a machine taking it off a belt)
+	  PARKS its model hidden where it is (anchored, invisible, not queryable,
+	  no "Item" tag) for Pool.Keep seconds; the next serverOwned spawn of the
+	  same owner within Pool.Reach (the machine's output) re-dresses that
+	  model instead of building a new one: no new model, part or weld
+	  replicates when the look stays, only the decor when it changes.
+	- Queued items can sleep (sleep / wake / wakeNear: anchored in place while
+	  they wait at a full machine); taking an item wakes the owner's sleepers
+	  around it, and none sleeps longer than SleepMax.
+	- Consumed records (Security #11) can't be mounted, released or set to
+	  another state; when a CARRIED record is consumed (the engine destroyed
+	  it), CarryService hears it (onCarriedConsumed) and drops it from the list.
+	- Hand-back (Security #8): when the server takes an item's physics back
+	  from the owner's client it keeps at most HandBackSpeed / HandBackSpin,
+	  and an item further than travelLimit or higher above its release point
+	  than riseLimit snaps back (isTrusted checks the rise too).
 	- Fast throws (Grip Gloves): CarryService.onThrow raises the item's
 	  plausible speed for that one release (allowSpeed), so isTrusted and
 	  the MaxItemTravel snap-back scale with it instead of refusing a legal
@@ -48,10 +85,15 @@
 	  clear before (and every CheckEvery seconds while) it is pulled, so
 	  curbs and railings count; a blocked item isn't tried again for
 	  CheckEvery seconds and doesn't take a pull slot (at most RayBudget
-	  rays per magnet per pass). Every CheckEvery a pull must have come
+	  rays per magnet per pass; an item still blocked while neither it nor
+	  you moved BlockedMove studs waits BlockedBackoff seconds instead: the
+	  wall is still there). Every CheckEvery a pull must have come
 	  MinProgress studs closer, and a short ground probe ahead of it (one
 	  ray per pulled item per pass) must find a floor within ProbeDrop, so
-	  nothing is pushed forever against an obstacle or over a ledge.
+	  nothing is pushed forever against an obstacle or over a ledge (no new
+	  probe while the item moved less than ProbeMove since the last one in
+	  about the same direction, nor when the probed spot is at your own feet:
+	  you stand on that floor). The ray filter is set once per magnet per pass.
 	  The magnet GIVES UP on an item (MagnetDone) that got stuck, ran to a
 	  ledge, or arrived when your hands were full; it tries again after
 	  RetryAfter seconds, or once you went out of its range and came back
@@ -73,7 +115,6 @@
 	  attribute is them).
 ]]
 
-local HttpService = game:GetService("HttpService")
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -102,7 +143,7 @@ export type Desc = ItemData.Desc
 export type StoreResult = "Stored" | "Sold" | "Lost"
 
 export type ItemRecord = {
-	Id: string,
+	Id: number, -- short, per server session (a key and the look's seed)
 	Model: Model,
 	Body: BasePart,
 	Kind: string,
@@ -111,9 +152,13 @@ export type ItemRecord = {
 	Recipe: string?,
 	Owner: number,
 	State: string, -- Loose | Carried | Machine | Consumed
-	CreatedAt: number, -- also reset when the item is dropped/ejected (loose-cap order)
+	Light: boolean, -- wears the light belt look (ItemBuilder.buildLight)
+	Asleep: number?, -- os.clock() when it was anchored in a queue (sleep), nil = awake
+	CreatedAt: number, -- also reset when the item is dropped/ejected
 	ClientOwnedUntil: number?,
 	LastNearOwner: number, -- os.clock() when the item was last near its owner or a machine
+	BaseAt: Vector3?, -- where onBase was last asked for this item (looseCount's cache)
+	OnBase: boolean?, -- its answer there
 	ReleasePos: Vector3, -- where it was last spawned or released (trust and snap-back)
 	ReleasedAt: number, -- os.clock() of that release
 	-- the flat speed (studs/s) this release may plausibly reach (a strong
@@ -131,14 +176,47 @@ export type ItemRecord = {
 	PullCheckedAt: number?, -- os.clock() of the last clear line-of-sight check
 	PullFlat: number?, -- the flat distance to the owner at that check (progress)
 	BlockedUntil: number?, -- a wall was in the way: not tried again before this os.clock()
+	BlockedEye: Vector3?, -- where the owner's eye and the item were at that check (the backoff)
+	BlockedAt: Vector3?,
+	ProbeAt: Vector3?, -- the floor probe's cache: where the item was, its way, the answer
+	ProbeDir: Vector3?,
+	ProbeOk: boolean?,
 }
 
 local records: { [Model]: ItemRecord } = {}
-local byId: { [string]: ItemRecord } = {}
+local byId: { [number]: ItemRecord } = {}
 -- owner UserId -> their records, so per-player counts don't walk every item
 local byOwner: { [number]: { [ItemRecord]: boolean } } = {}
 local folder: Folder
-local lastCapToast: { [number]: number } = {}
+local nextId = 0
+-- CarryService: a carried record was consumed (it drops it from its list)
+local carriedConsumed: ((ItemRecord) -> ())? = nil
+
+-- What the server keeps when it takes an item's physics back from a client (Security #8).
+ItemService.HandBackSpeed = 20 -- studs/s
+ItemService.HandBackSpin = 20 -- rad/s
+ItemService.Gravity = 196.2 -- studs/s² when Workspace.Gravity can't be read
+
+-- Queued items (sleep): woken around a taken item, never asleep longer than this.
+ItemService.SleepMax = 6 -- seconds
+ItemService.WakeRadius = 8 -- studs around a taken item where its owner's sleepers wake
+
+--[[
+	The parked-model pool (header): a light item a machine took stays as a
+	hidden model for Keep seconds; a serverOwned spawn of the same owner
+	within Reach studs wears it again. At most Max parked models per owner.
+]]
+ItemService.Pool = { Keep = 6, Reach = 14, Max = 8 }
+type Parked = {
+	Model: Model,
+	Body: BasePart,
+	At: number, -- os.clock() when it was parked
+	Position: Vector3,
+	Look: string, -- lookKey of what it still looks like
+	Shown: { [BasePart]: number }, -- each part's Transparency before it was hidden
+}
+local parked: { [number]: { Parked } } = {}
+local RAW_NAME = "Raw" -- every dirty ore model is called just this (Security #6)
 
 ---------------------------------------------------------------- the Ore Magnet (settings, letting go)
 
@@ -158,6 +236,11 @@ ItemService.Magnet = {
 	ProbeAhead = 0.25, -- seconds of pull ahead of an item where its floor is probed
 	ProbeDrop = 3, -- more floor than this below that point missing = a ledge (given up)
 	ProbeUp = 2.5, -- the probe starts this high above it (a ramp up to you still has floor)
+	ProbeMove = 1, -- studs an item must move (or turn ProbeTurn) before its floor is probed again
+	ProbeTurn = 0.9, -- the cos of the turn that probes again (about 25 degrees)
+	FeetReach = 3, -- a probed spot this close (flat) to your feet needs no ray: you stand there
+	BlockedMove = 2, -- studs you or a blocked item must move before it is tried again after CheckEvery
+	BlockedBackoff = 3, -- seconds a blocked item waits when neither moved
 	RetryAfter = 10, -- seconds before an item the magnet gave up on is tried again
 	BaseMargin = 4, -- studs around a base (machine grid + yard) where the magnet never pulls
 	ZoneMargin = 5, -- studs around an intake zone (magnetAvoid) a pull's way keeps clear of
@@ -223,6 +306,21 @@ local function ownerRoot(userId: number): BasePart?
 	return character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
 
+local function finiteNumber(v: number): boolean
+	return v == v and v > -math.huge and v < math.huge
+end
+
+-- Workspace.Gravity (ItemService.Gravity when it can't be read).
+local function gravity(): number
+	local ok, g = pcall(function(): any
+		return Workspace.Gravity
+	end)
+	if ok and type(g) == "number" and g > 1 and g < 10000 then
+		return g
+	end
+	return ItemService.Gravity
+end
+
 local function index(record: ItemRecord)
 	records[record.Model] = record
 	byId[record.Id] = record
@@ -235,8 +333,13 @@ local function index(record: ItemRecord)
 end
 
 local function unindex(record: ItemRecord)
-	records[record.Model] = nil
-	byId[record.Id] = nil
+	-- (a parked model may already be worn by a newer record: only our own entries go)
+	if records[record.Model] == record then
+		records[record.Model] = nil
+	end
+	if byId[record.Id] == record then
+		byId[record.Id] = nil
+	end
 	local set = byOwner[record.Owner]
 	if set then
 		set[record] = nil
@@ -268,24 +371,103 @@ local function setGroup(model: Model)
 	end
 end
 
+-- The look a model wears, as a key (a parked model with the same key is reused as it is).
+local function lookKey(kind: string, oreId: string, grade: string?, recipe: string?, light: boolean): string
+	return `{kind}|{oreId}|{grade or ""}|{recipe or ""}|{if light then "L" else "F"}`
+end
+
+local function infoOf(record: ItemRecord): ItemBuilder.ItemInfo
+	return { Kind = record.Kind, OreId = record.OreId, Grade = record.Grade, Recipe = record.Recipe }
+end
+
+local function buildLook(info: ItemBuilder.ItemInfo, cf: CFrame, seed: number, light: boolean): Model
+	if light then
+		return ItemBuilder.buildLight(info, cf, seed)
+	end
+	return ItemBuilder.build(info, cf, seed)
+end
+
+--[[
+	Puts the look of `fresh` (a just built, unparented item model) onto
+	`model`, keeping model's Body part (its CFrame, physics and every
+	reference to it stay valid). Everything in the Body (welds, sparkles, a
+	pull constraint, a carry weld) goes: callers stop pulls and weld again
+	afterwards.
+]]
+local function transplant(model: Model, body: BasePart, fresh: Model)
+	local newBody = fresh.PrimaryPart :: BasePart
+	for _, child in model:GetChildren() do
+		if child ~= body then
+			child:Destroy()
+		end
+	end
+	for _, child in body:GetChildren() do
+		child:Destroy()
+	end
+	if body:IsA("Part") and newBody:IsA("Part") then
+		body.Shape = newBody.Shape
+	end
+	body.Size = newBody.Size
+	body.CFrame = newBody.CFrame
+	body.Color = newBody.Color
+	body.Material = newBody.Material
+	body.Transparency = newBody.Transparency
+	body.Reflectance = newBody.Reflectance
+	body.CastShadow = newBody.CastShadow
+	body.CustomPhysicalProperties = newBody.CustomPhysicalProperties
+	for _, child in newBody:GetChildren() do
+		if not child:IsA("WeldConstraint") then
+			child.Parent = body
+		end
+	end
+	for _, child in fresh:GetChildren() do
+		if child ~= newBody then
+			child.Parent = model
+			if child:IsA("BasePart") then
+				child.CollisionGroup = ItemService.ItemGroup
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = body
+				weld.Part1 = child
+				weld.Parent = body
+			end
+		end
+	end
+	fresh:Destroy()
+end
+
 local function syncAttributes(record: ItemRecord)
 	local m = record.Model
-	m:SetAttribute("ItemId", record.Id)
+	local raw = record.Kind == "Raw"
 	m:SetAttribute("Kind", record.Kind)
-	m:SetAttribute("OreId", record.OreId)
-	m:SetAttribute("Grade", record.Grade)
-	m:SetAttribute("Recipe", record.Recipe)
 	m:SetAttribute("Owner", record.Owner)
 	m:SetAttribute("State", record.State)
-	-- dirty ore keeps its secret until it is cleaned
-	local value = if record.Kind == "Raw" then 0 else ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe)
-	m:SetAttribute("Value", value)
+	-- dirty ore keeps its secret until it is cleaned: no ore id, no value
+	-- (the server keeps record.OreId); a reused model loses the old ones
+	m:SetAttribute("OreId", if raw then nil else record.OreId)
+	m:SetAttribute("Grade", record.Grade)
+	m:SetAttribute("Recipe", record.Recipe)
+	m:SetAttribute("Value", if raw then nil else ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe))
+	local name = if raw then RAW_NAME else record.Kind .. "_" .. record.OreId
+	if m.Name ~= name then
+		m.Name = name
+	end
 end
 
 local function markReleased(record: ItemRecord)
 	record.ReleasePos = positionOf(record)
 	record.ReleasedAt = os.clock()
 	record.MaxSpeed = nil
+end
+
+-- Unanchors every part of a loose item (only the Body collides and touches).
+local function loosen(record: ItemRecord)
+	for _, d in record.Model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Massless = d ~= record.Body
+			d.CanCollide = d == record.Body
+			d.Anchored = false
+		end
+	end
 end
 
 function ItemService.get(model: Instance?): ItemRecord?
@@ -295,7 +477,7 @@ function ItemService.get(model: Instance?): ItemRecord?
 	return records[model :: Model]
 end
 
-function ItemService.getById(id: string): ItemRecord?
+function ItemService.getById(id: number): ItemRecord?
 	return byId[id]
 end
 
@@ -311,7 +493,12 @@ function ItemService.fromPart(part: Instance?): ItemRecord?
 	return nil
 end
 
-function ItemService.setState(record: ItemRecord, state: string)
+-- Sets an item's state (Loose | Carried | Machine). A consumed record is
+-- refused (false): it is gone for good (Security #11).
+function ItemService.setState(record: ItemRecord, state: string): boolean
+	if record.State == "Consumed" then
+		return false
+	end
 	record.State = state
 	if state ~= "Loose" then
 		-- carried, in a machine...: the magnet lets go (and its constraint
@@ -322,10 +509,29 @@ function ItemService.setState(record: ItemRecord, state: string)
 		record.MagnetDone = nil
 		record.MagnetDoneAt = nil
 		record.BlockedUntil = nil
+		record.Asleep = nil
 	end
 	if record.Model.Parent then
 		record.Model:SetAttribute("State", state)
 	end
+	return true
+end
+
+--[[
+	Switches an item between the light belt look (light = true) and the full
+	look, in place (the same Model and Body). CarryService puts on the full
+	look at every pickup, before it welds the item to the hand. False when
+	nothing changed (already dressed so, or consumed).
+]]
+function ItemService.dress(record: ItemRecord, light: boolean): boolean
+	if record.State == "Consumed" or record.Light == light then
+		return false
+	end
+	stopPull(record, true)
+	record.Pull = nil
+	transplant(record.Model, record.Body, buildLook(infoOf(record), record.Body.CFrame, record.Id, light))
+	record.Light = light
+	return true
 end
 
 -- The item as a storage descriptor (a fresh table).
@@ -333,17 +539,59 @@ function ItemService.descOf(record: ItemRecord): Desc
 	return { K = record.Kind, O = record.OreId, G = record.Grade, R = record.Recipe }
 end
 
-function ItemService.looseCount(userId: number): number
+export type LooseWhere = "Base" | "Away"
+
+-- Is this item on / around a base? Cached per item until it moved 2 studs
+-- (looseCount runs every machine tick pass and at every rock stage).
+local function recordOnBase(record: ItemRecord): boolean
+	local position = record.Body.CFrame.Position
+	local last = record.BaseAt
+	if last and (last - position).Magnitude < 2 then
+		return record.OnBase == true
+	end
+	local on = ItemService.onBase(position)
+	record.BaseAt = position
+	record.OnBase = on
+	return on
+end
+
+-- The player's loose items: all, or only those on / around a base ("Base":
+-- belts, chutes, the pen gate) or away from every base ("Away": mine drops).
+function ItemService.looseCount(userId: number, where: LooseWhere?): number
 	local count = 0
 	local set = byOwner[userId]
 	if set then
 		for record in set do
 			if record.State == "Loose" then
-				count += 1
+				if where == nil then
+					count += 1
+				else
+					if recordOnBase(record) == (where == "Base") then
+						count += 1
+					end
+				end
 			end
 		end
 	end
 	return count
+end
+
+-- Does this player have as many loose items away from bases as the world
+-- lets them have (GameConfig.MaxLooseItemsPerPlayer)? Mining stops giving
+-- ore then (MiningService); items on bases don't count (the factory's own cap).
+function ItemService.atLooseCap(userId: number): boolean
+	return ItemService.looseCount(userId, "Away") >= GameConfig.MaxLooseItemsPerPlayer
+end
+
+-- Has this player as many loose items, anywhere, as the hard ceiling
+-- (GameConfig.MaxLooseItemsTotal)? Hand drops, throws and Pen takes stop.
+function ItemService.atTotalCap(userId: number): boolean
+	return ItemService.looseCount(userId) >= GameConfig.MaxLooseItemsTotal
+end
+
+-- Room for more loose items under the hard ceiling.
+function ItemService.totalRoom(userId: number): number
+	return math.max(0, GameConfig.MaxLooseItemsTotal - ItemService.looseCount(userId))
 end
 
 -- Every loose item. A copy, so callers may destroy items while walking it.
@@ -357,16 +605,197 @@ function ItemService.looseList(): { ItemRecord }
 	return list
 end
 
-function ItemService.destroy(record: ItemRecord)
+---------------------------------------------------------------- sleeping queues
+
+local function setAnchored(record: ItemRecord, anchored: boolean)
+	for _, d in record.Model:GetDescendants() do
+		if d:IsA("BasePart") and d.Anchored ~= anchored then
+			d.Anchored = anchored
+		end
+	end
+end
+
+--[[
+	Anchors a loose item where it is while it waits in a queue at a full
+	machine (the belt code decides that), so it costs no awake physics. Not
+	while a client simulates it or the magnet pulls it. True = asleep now.
+]]
+function ItemService.sleep(record: ItemRecord): boolean
+	if record.State ~= "Loose" or record.ClientOwnedUntil ~= nil or pulling[record] then
+		return false
+	end
+	if not record.Asleep then
+		record.Asleep = os.clock()
+		setAnchored(record, true)
+	end
+	return true
+end
+
+-- Lets a sleeping item move again (true = it was asleep).
+function ItemService.wake(record: ItemRecord): boolean
+	if not record.Asleep then
+		return false
+	end
+	record.Asleep = nil
+	if record.State == "Loose" then
+		setAnchored(record, false)
+	end
+	return true
+end
+
+-- Wakes the owner's sleeping items within `radius` studs of `position`
+-- (taking an item lets the queue behind it move up). Returns how many.
+function ItemService.wakeNear(userId: number, position: Vector3, radius: number?): number
+	local set = byOwner[userId]
+	if not set then
+		return 0
+	end
+	local reach = radius or ItemService.WakeRadius
+	local woken = 0
+	for record in set do
+		if record.Asleep and (positionOf(record) - position).Magnitude <= reach then
+			ItemService.wake(record)
+			woken += 1
+		end
+	end
+	return woken
+end
+
+---------------------------------------------------------------- taking items out of the world
+
+-- Marks a record consumed and forgets it (the model is the caller's).
+local function consume(record: ItemRecord)
+	local wasCarried = record.State == "Carried"
 	record.State = "Consumed"
+	record.Asleep = nil
 	stopPull(record, true)
 	unindex(record)
+	local hook = carriedConsumed
+	if wasCarried and hook then
+		-- CarryService drops it from the hands' list (never breaks the caller)
+		local ok, err = pcall(hook :: any, record)
+		if not ok then
+			warn(`[ItemService] carried item {record.Id}: {err}`)
+		end
+	end
+end
+
+-- CarryService listens here: a record it carries was consumed.
+function ItemService.onCarriedConsumed(callback: ((ItemRecord) -> ())?)
+	carriedConsumed = callback
+end
+
+local function destroyParked(entry: Parked)
+	entry.Model:Destroy()
+end
+
+-- Hides a light belt item's model where it lies, for the next spawn near
+-- it (the pool, header). False when it can't be parked (then the caller
+-- destroys it).
+local function park(record: ItemRecord, position: Vector3): boolean
+	local model = record.Model
+	local items: Folder? = folder
+	if items == nil or model.Parent ~= items or not finiteVector(position) then
+		return false
+	end
+	local list = parked[record.Owner]
+	if not list then
+		list = {}
+		parked[record.Owner] = list
+	end
+	if #list >= ItemService.Pool.Max then
+		destroyParked(table.remove(list, 1) :: Parked)
+	end
+	local shown: { [BasePart]: number } = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			shown[d] = d.Transparency
+			d.Anchored = true
+			d.Transparency = 1
+			d.CanCollide = false
+			d.CanTouch = false
+			d.CanQuery = false
+		end
+	end
+	-- clients only look at tagged items: a parked model is nothing to them
+	model:RemoveTag("Item")
+	table.insert(list, {
+		Model = model,
+		Body = record.Body,
+		At = os.clock(),
+		Position = position,
+		Look = lookKey(record.Kind, record.OreId, record.Grade, record.Recipe, record.Light),
+		Shown = shown,
+	})
+	return true
+end
+
+-- The nearest parked model of `owner` within Pool.Reach of `position` (taken out of the pool).
+local function unpark(owner: number, position: Vector3): Parked?
+	local list = parked[owner]
+	if not list then
+		return nil
+	end
+	local best: Parked? = nil
+	local bestIndex = 0
+	local bestDistance = ItemService.Pool.Reach
+	for i, entry in list do
+		local distance = (entry.Position - position).Magnitude
+		if entry.Model.Parent ~= nil and distance <= bestDistance then
+			best, bestIndex, bestDistance = entry, i, distance
+		end
+	end
+	if best then
+		table.remove(list, bestIndex)
+		if #list == 0 then
+			parked[owner] = nil
+		end
+	end
+	return best
+end
+
+-- Parked models older than Pool.Keep go for good (the maintenance pass).
+local function expireParked(now: number)
+	for owner, list in parked do
+		for i = #list, 1, -1 do
+			local entry = list[i]
+			if now - entry.At >= ItemService.Pool.Keep or entry.Model.Parent == nil then
+				table.remove(list, i)
+				destroyParked(entry)
+			end
+		end
+		if #list == 0 then
+			parked[owner] = nil
+		end
+	end
+end
+
+-- Destroys every parked model of a user (leaving).
+local function clearParked(userId: number)
+	local list = parked[userId]
+	parked[userId] = nil
+	if list then
+		for _, entry in list do
+			destroyParked(entry)
+		end
+	end
+end
+
+-- Takes an item out of the world for good. A record consumed before is
+-- left alone (its model may already be worn again by a newer item).
+function ItemService.destroy(record: ItemRecord)
+	if record.State == "Consumed" then
+		return
+	end
+	consume(record)
 	record.Model:Destroy()
 end
 
 -- Takes an item out of the world (into a machine, a sale...) and returns
 -- what it was. Works in any state except Consumed; a carried item should
--- come off the carry stack first (CarryService.takeTop).
+-- come off the carry stack first (CarryService.takeTop). A light item
+-- taken off the ground (a belt) leaves its model parked for the next spawn
+-- near it, and wakes its owner's sleeping items around it.
 function ItemService.absorb(record: ItemRecord): Desc
 	assert(record.State ~= "Consumed", "absorb: item already consumed")
 	local desc = ItemService.descOf(record)
@@ -375,7 +804,15 @@ function ItemService.absorb(record: ItemRecord): Desc
 		weld:Destroy()
 	end
 	record.Model:SetAttribute("CarriedBy", nil)
-	ItemService.destroy(record)
+	local fromBelt = record.State == "Loose" and record.Light
+	local position = positionOf(record)
+	consume(record)
+	if not (fromBelt and park(record, position)) then
+		record.Model:Destroy()
+	end
+	if fromBelt and finiteVector(position) then
+		ItemService.wakeNear(record.Owner, position)
+	end
 	return desc
 end
 
@@ -387,14 +824,16 @@ function ItemService.penCapacity(data: { [string]: any }): number
 end
 
 --[[
-	Puts an item descriptor into the player's Ore Pen (data.Storage). These
-	are system moves (leaving, too many loose items, packing a machine up),
-	so they may fill the pen past its capacity, up to the DataStore cap
-	(GameConfig.MaxStoredItems); only beyond that is the item sold at
-	Tobin's price, so nothing is ever lost and a dirty Mythic is never sold
-	without the player choosing it. 'Lost' only when the player's data isn't
-	loaded or the descriptor is junk. With a reason, the player gets a toast.
-	(Players filling the pen by hand are refused at capacity: PenService.)
+	A RESCUE move into the player's Ore Pen (data.Storage): leaving the
+	game, an item the engine destroyed, an item returned from someone
+	else's plot (and Placement's layout repair, which writes the save
+	itself). Nothing may be lost there, so it may fill the pen past its
+	capacity, up to the DataStore cap (GameConfig.MaxStoredItems); only
+	beyond that is the item sold at Tobin's price, so a dirty Mythic is never
+	sold without the player choosing it. 'Lost' only when the player's data
+	isn't loaded or the descriptor is junk. With a reason, the player gets a
+	toast. Everything the player or their automation puts in goes through
+	PenService, which refuses at the capacity (and while the pen is over it).
 ]]
 function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): StoreResult
 	local data = DataService.get(player)
@@ -429,9 +868,13 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 	return result
 end
 
--- Moves an item into the owner's Ore Pen (or sells it if the pen is full).
--- Returns true when the item was kept (stored).
+-- Rescues an item into the owner's Ore Pen (storeDesc; sold only at the
+-- DataStore cap). Returns true when the item was kept (stored).
 function ItemService.stash(record: ItemRecord, reason: string?): boolean
+	if record.State == "Consumed" then
+		-- already taken out of the world (and kept or used): never a second copy
+		return false
+	end
 	local player = ownerPlayer(record)
 	local desc = ItemService.descOf(record)
 	ItemService.destroy(record)
@@ -439,32 +882,6 @@ function ItemService.stash(record: ItemRecord, reason: string?): boolean
 		return false
 	end
 	return ItemService.storeDesc(player, desc, reason) == "Stored"
-end
-
-local function enforceLooseLimit(userId: number)
-	local loose = {}
-	local set = byOwner[userId]
-	if set then
-		for record in set do
-			if record.State == "Loose" then
-				table.insert(loose, record)
-			end
-		end
-	end
-	if #loose <= GameConfig.MaxLooseItemsPerPlayer then
-		return
-	end
-	table.sort(loose, function(a, b)
-		return a.CreatedAt < b.CreatedAt
-	end)
-	local now = os.clock()
-	local toast = now - (lastCapToast[userId] or 0) > 20
-	if toast then
-		lastCapToast[userId] = now
-	end
-	for i = 1, #loose - GameConfig.MaxLooseItemsPerPlayer do
-		ItemService.stash(loose[i], if i == 1 and toast then "Too many loose items" else nil)
-	end
 end
 
 -- The owner's client simulates the item for a moment (smooth throws), but
@@ -486,17 +903,51 @@ local function keepServerPhysics(record: ItemRecord)
 	record.ClientOwnedUntil = nil
 end
 
+-- A parked model worn again by a new item at `cf` (the pool, header).
+local function wearParked(entry: Parked, info: ItemBuilder.ItemInfo, cf: CFrame, seed: number, light: boolean): (Model, BasePart)
+	local model, body = entry.Model, entry.Body
+	if entry.Look == lookKey(info.Kind, info.OreId, info.Grade, info.Recipe, light) then
+		-- the same look: shown again as it was
+		for part, transparency in entry.Shown do
+			if part.Parent then
+				part.Transparency = transparency
+			end
+		end
+	else
+		transplant(model, body, buildLook(info, cf, seed, light))
+	end
+	model:PivotTo(cf)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanQuery = true -- so clicking any part of the item targets it
+			d.CanTouch = d == body
+		end
+	end
+	model:AddTag("Item")
+	return model, body
+end
+
 local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean): ItemRecord?
 	if not OreData.exists(info.OreId) or not ItemData.Kinds[info.Kind] then
 		warn("[ItemService] bad item info", info.Kind, info.OreId)
 		return nil
 	end
-	local id = HttpService:GenerateGUID(false)
-	local model = ItemBuilder.build(info, cf, id)
-	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
-	model:AddTag("Item")
-	setGroup(model)
-	local body = model.PrimaryPart :: BasePart
+	nextId += 1
+	local id = nextId
+	-- machines and chutes (serverOwned) make belt items: the light look,
+	-- in a parked model of the same owner nearby when there is one
+	local light = serverOwned
+	local reuse = if light then unpark(owner, cf.Position) else nil
+	local model: Model, body: BasePart
+	if reuse then
+		model, body = wearParked(reuse, info, cf, id, light)
+	else
+		model = buildLook(info, cf, id, light)
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+		model:AddTag("Item")
+		setGroup(model)
+		body = model.PrimaryPart :: BasePart
+	end
 	local now = os.clock()
 	local record: ItemRecord = {
 		Id = id,
@@ -508,6 +959,7 @@ local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, vel
 		Recipe = info.Recipe,
 		Owner = owner,
 		State = "Loose",
+		Light = light,
 		CreatedAt = now,
 		ClientOwnedUntil = nil,
 		LastNearOwner = now,
@@ -516,23 +968,29 @@ local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, vel
 	}
 	index(record)
 	syncAttributes(record)
-	model.Parent = folder
+	if reuse then
+		loosen(record)
+	else
+		model.Parent = folder
+	end
 	markReleased(record)
 	if velocity then
 		body.AssemblyLinearVelocity = velocity
 		body.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 8
+	elseif reuse then
+		body.AssemblyLinearVelocity = Vector3.zero
+		body.AssemblyAngularVelocity = Vector3.zero
 	end
 	if serverOwned then
 		keepServerPhysics(record)
 	else
 		giveClientPhysics(record)
 	end
-	enforceLooseLimit(owner)
 	return record
 end
 
 --[[
-	Spawns a physical item.
+	Spawns a physical item (the full look; a mining drop, a cleaned ore...).
 	info = { Kind, OreId, Grade?, Recipe? }, owner = UserId.
 ]]
 function ItemService.spawn(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?): ItemRecord?
@@ -542,7 +1000,10 @@ end
 --[[
 	Spawns an item from a descriptor (machine output, storage). With
 	`serverOwned` the server keeps its physics from the start: machine
-	outputs riding belts are then never waiting on a client (see isTrusted).
+	outputs riding belts are then never waiting on a client (see isTrusted),
+	and it wears the light belt look, re-using a parked model of the same
+	owner within Pool.Reach when there is one (MachineService.emit,
+	ConveyorService's chutes: nothing to change there).
 ]]
 function ItemService.spawnDesc(desc: Desc, ownerUserId: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean?): ItemRecord?
 	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
@@ -557,18 +1018,17 @@ function ItemService.spawnFromStorage(entry: { [string]: any }, owner: number, c
 	return ItemService.spawnDesc(entry :: any, owner, cf)
 end
 
--- Makes an item loose again at a CFrame (after being carried or ejected by a machine).
-function ItemService.release(record: ItemRecord, cf: CFrame, velocity: Vector3?)
+-- Makes an item loose again at a CFrame (after being carried or ejected by
+-- a machine). A consumed record is refused (false).
+function ItemService.release(record: ItemRecord, cf: CFrame, velocity: Vector3?): boolean
+	if record.State == "Consumed" then
+		return false
+	end
 	local model = record.Model
 	model:PivotTo(cf)
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
-			d.Massless = d ~= record.Body
-			d.CanCollide = d == record.Body
-			d.Anchored = false
-		end
-	end
+	loosen(record)
 	ItemService.setState(record, "Loose")
+	record.Asleep = nil
 	record.CreatedAt = os.clock()
 	record.LastNearOwner = os.clock()
 	markReleased(record)
@@ -576,16 +1036,22 @@ function ItemService.release(record: ItemRecord, cf: CFrame, velocity: Vector3?)
 		record.Body.AssemblyLinearVelocity = velocity
 	end
 	giveClientPhysics(record)
-	enforceLooseLimit(record.Owner)
+	return true
 end
 
 -- Pops an item out of where it is (a refused item bouncing out of a hopper).
-function ItemService.eject(record: ItemRecord, velocity: Vector3)
-	ItemService.release(record, record.Model:GetPivot() + Vector3.new(0, 1.5, 0), velocity)
+function ItemService.eject(record: ItemRecord, velocity: Vector3): boolean
+	if record.State == "Consumed" then
+		return false
+	end
+	return ItemService.release(record, record.Model:GetPivot() + Vector3.new(0, 1.5, 0), velocity)
 end
 
--- Anchors an item into a machine slot (state "Machine").
-function ItemService.mount(record: ItemRecord, cf: CFrame)
+-- Anchors an item into a machine slot (state "Machine"). A consumed record is refused (false).
+function ItemService.mount(record: ItemRecord, cf: CFrame): boolean
+	if record.State == "Consumed" then
+		return false
+	end
 	local model = record.Model
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -595,6 +1061,7 @@ function ItemService.mount(record: ItemRecord, cf: CFrame)
 	model:PivotTo(cf)
 	record.ClientOwnedUntil = nil
 	ItemService.setState(record, "Machine")
+	return true
 end
 
 -- The flat speed (studs/s) the item's current release can plausibly reach.
@@ -627,12 +1094,27 @@ function ItemService.travelLimit(record: ItemRecord): number
 	return GameConfig.MaxItemTravel * maxSpeedOf(record) / GameConfig.MaxItemSpeed
 end
 
+-- How high (studs) above its release point the item can plausibly get:
+-- the top of a throw at its release's speed (straight up), plus PlausibleSlack.
+function ItemService.riseLimit(record: ItemRecord): number
+	local speed = maxSpeedOf(record)
+	return speed * speed / (2 * gravity()) + GameConfig.PlausibleSlack
+end
+
+-- Could this item have got from its release point to `position` by itself
+-- (no further than travelLimit, no higher than riseLimit)?
+local function reachable(record: ItemRecord, position: Vector3): boolean
+	return (position - record.ReleasePos).Magnitude <= ItemService.travelLimit(record)
+		and position.Y - record.ReleasePos.Y <= ItemService.riseLimit(record)
+end
+
 --[[
 	Can a machine believe where this item is? Always, while the server
 	simulates it. While the owner's client does, the owner must be close
-	(AntiTeleportRange) and the item can't have travelled further since its
+	(AntiTeleportRange), the item can't have travelled further since its
 	release than its release's speed allows (MaxItemSpeed, or a strong
-	throw's allowSpeed, plus PlausibleSlack). `now` = os.clock().
+	throw's allowSpeed, plus PlausibleSlack) nor risen above riseLimit.
+	`now` = os.clock().
 ]]
 function ItemService.isTrusted(record: ItemRecord, now: number): boolean
 	if record.ClientOwnedUntil == nil then
@@ -644,6 +1126,9 @@ function ItemService.isTrusted(record: ItemRecord, now: number): boolean
 	end
 	local position = positionOf(record)
 	if (root.Position - position).Magnitude > GameConfig.AntiTeleportRange then
+		return false
+	end
+	if position.Y - record.ReleasePos.Y > ItemService.riseLimit(record) then
 		return false
 	end
 	local flat = Vector3.new(position.X - record.ReleasePos.X, 0, position.Z - record.ReleasePos.Z).Magnitude
@@ -687,20 +1172,58 @@ local function rescue(record: ItemRecord)
 	end
 end
 
-local function maintainOne(record: ItemRecord, now: number)
+-- Caps a vector's length (a non-finite one becomes zero).
+local function capped(v: Vector3, limit: number): Vector3?
+	local length = v.Magnitude
+	if not finiteNumber(length) then
+		return Vector3.zero
+	end
+	if length > limit then
+		return v.Unit * limit
+	end
+	return nil
+end
+
+-- The server takes an item's physics back: whatever speed the client gave
+-- it, at most HandBackSpeed and HandBackSpin are kept (Security #8).
+local function capHandBack(record: ItemRecord)
+	local body = record.Body
+	-- (read safely: a body that never moved may have no velocity yet under Lune)
+	local okLinear, v = pcall(function(): Vector3
+		return body.AssemblyLinearVelocity
+	end)
+	local linear = if okLinear then capped(v, ItemService.HandBackSpeed) else nil
+	if linear then
+		body.AssemblyLinearVelocity = linear
+	end
+	local okSpin, w = pcall(function(): Vector3
+		return body.AssemblyAngularVelocity
+	end)
+	local spin = if okSpin then capped(w, ItemService.HandBackSpin) else nil
+	if spin then
+		body.AssemblyAngularVelocity = spin
+	end
+end
+
+--[[
+	One record's part of the maintenance pass. `root` is the owner's
+	character root (looked up once per owner per pass, nil = none).
+]]
+local function maintainOne(record: ItemRecord, now: number, root: BasePart?)
 	if not record.Model.Parent or not record.Body.Parent then
 		-- destroyed by the engine (fell below FallenPartsDestroyHeight): keep it in the pen
-		pulling[record] = nil
-		record.Pull = nil
-		record.PullVelocity = nil
-		unindex(record)
 		if record.State ~= "Consumed" then
-			record.State = "Consumed"
+			local desc = ItemService.descOf(record)
+			consume(record)
 			local player = ownerPlayer(record)
 			if player then
-				ItemService.storeDesc(player, ItemService.descOf(record), nil)
+				ItemService.storeDesc(player, desc, nil)
 			end
+		else
+			unindex(record)
 		end
+		record.Pull = nil
+		record.PullVelocity = nil
 		return
 	end
 	if record.State ~= "Loose" then
@@ -712,21 +1235,115 @@ local function maintainOne(record: ItemRecord, now: number)
 		rescue(record)
 		return
 	end
+	local asleep = record.Asleep
+	if asleep and now - asleep >= ItemService.SleepMax then
+		-- nothing sleeps for ever (a belt taken away under a queue)
+		ItemService.wake(record)
+	end
 	if record.ClientOwnedUntil and now > record.ClientOwnedUntil then
 		record.ClientOwnedUntil = nil
 		setNetworkOwner(record, nil)
-		-- a client moved it implausibly far while it simulated it: put it back
-		if (position - record.ReleasePos).Magnitude > ItemService.travelLimit(record) then
+		capHandBack(record)
+		-- a client moved it implausibly far (or high) while it simulated it: put it back
+		if not reachable(record, position) then
 			warn(`[ItemService] item {record.Id} of user {record.Owner} travelled too far, returning it`)
 			rescue(record)
 			return
 		end
 	end
 	-- remember when the owner was last close (machines use this against item teleporting)
-	local root = ownerRoot(record.Owner)
 	if root and (root.Position - position).Magnitude < 40 then
 		record.LastNearOwner = now
 	end
+end
+
+-- The mine cap's last resort (see the header): ore away from bases that
+-- was left behind (not near its owner for StaleAwaySeconds and further than
+-- StaleAwayStuds now) or lies stuck (StuckSeconds since it was dropped,
+-- still out of grab reach) goes into the pen, oldest first, until the
+-- player is back under the cap. Only while at the cap, every StaleCheckEvery.
+ItemService.StaleAwaySeconds = 90
+ItemService.StaleAwayStuds = 60
+ItemService.StuckSeconds = 180
+ItemService.StaleCheckEvery = 2
+local staleCheckedAt: { [number]: number } = {}
+
+local function rescueStale(owner: number, now: number, root: BasePart?)
+	if now - (staleCheckedAt[owner] or -math.huge) < ItemService.StaleCheckEvery then
+		return
+	end
+	staleCheckedAt[owner] = now
+	local set = byOwner[owner]
+	if not set then
+		return
+	end
+	local away: { ItemRecord } = {}
+	for record in set do
+		if record.State == "Loose" and not recordOnBase(record) then
+			table.insert(away, record)
+		end
+	end
+	local cap = GameConfig.MaxLooseItemsPerPlayer
+	if #away < cap then
+		return
+	end
+	local grab = GameConfig.PickupRange + 2
+	local stale: { ItemRecord } = {}
+	for _, record in away do
+		local distance = if root then (root.Position - positionOf(record)).Magnitude else math.huge
+		local leftBehind = now - record.LastNearOwner >= ItemService.StaleAwaySeconds and distance > ItemService.StaleAwayStuds
+		local stuck = now - record.CreatedAt >= ItemService.StuckSeconds and distance > grab
+		if leftBehind or stuck then
+			table.insert(stale, record)
+		end
+	end
+	if #stale == 0 then
+		return
+	end
+	table.sort(stale, function(a: ItemRecord, b: ItemRecord): boolean
+		return a.CreatedAt < b.CreatedAt
+	end)
+	local player = ownerPlayer(stale[1])
+	local moved = 0
+	for i = 1, math.min(#away - cap + 1, #stale) do
+		ItemService.stash(stale[i], nil) -- a rescue move: may overfill the pen (header)
+		moved += 1
+	end
+	if player and moved > 0 then
+		local what = if moved == 1 then "1 ore" else `{moved} ore`
+		Net.fire("Notify", player, {
+			Text = `{what} you left lying in the mine went into your Ore Pen, so your rocks give ore again.`,
+			Kind = "Info",
+		})
+	end
+end
+
+--[[
+	The maintenance pass (every 0.25 s from start; the tests call it): each
+	owner's root is looked up once, every record checked in a protected
+	call without a closure per record, old parked models dropped, and the
+	mine cap's rescue (rescueStale).
+]]
+function ItemService.maintainAll(now: number)
+	for owner, set in byOwner do
+		local root = ownerRoot(owner)
+		for record in set do
+			local ok, err = pcall(maintainOne :: any, record, now, root)
+			if not ok then
+				warn("[ItemService] maintenance error: " .. tostring(err))
+			end
+		end
+		local rescued, why = pcall(rescueStale :: any, owner, now, root)
+		if not rescued then
+			warn("[ItemService] rescue error: " .. tostring(why))
+		end
+	end
+	for owner in staleCheckedAt do
+		if not byOwner[owner] then
+			staleCheckedAt[owner] = nil
+		end
+	end
+	expireParked(now)
 end
 
 local function setupCollisionGroups()
@@ -771,8 +1388,12 @@ end
 local magnetRadiusOf: (Player) -> number = defaultMagnetRadius
 
 local rayParams: RaycastParams? = nil
+local rayCharacter: Model? = nil -- whose character the filter holds now
+local rayFolder: Folder? = nil
 
 -- The magnet's raycast filter: items and the owner's character never count.
+-- The filter is only set again when the character changes (the magnet does
+-- one player at a time: once per magnet per pass, not per ray).
 local function magnetRayParams(character: Model?): RaycastParams
 	local params = rayParams
 	if not params then
@@ -781,13 +1402,19 @@ local function magnetRayParams(character: Model?): RaycastParams
 		made.RespectCanCollide = true
 		rayParams = made
 		params = made
+		rayCharacter = nil
+		rayFolder = nil
 	end
 	local p = params :: RaycastParams
-	local ignore: { Instance } = { folder }
-	if character then
-		table.insert(ignore, character)
+	if rayCharacter ~= character or rayFolder ~= folder then
+		local ignore: { Instance } = { folder }
+		if character then
+			table.insert(ignore, character)
+		end
+		p.FilterDescendantsInstances = ignore
+		rayCharacter = character
+		rayFolder = folder
 	end
-	p.FilterDescendantsInstances = ignore
 	return p
 end
 
@@ -1001,6 +1628,7 @@ local function pullToward(record: ItemRecord, rootPos: Vector3, flat: number)
 	end
 	if not pulling[record] then
 		-- the server simulates it from now on (magnetWants checked it is plausible)
+		ItemService.wake(record)
 		keepServerPhysics(record)
 		if not pull then
 			local attachment = Instance.new("Attachment")
@@ -1087,20 +1715,61 @@ end
 
 -- Steers one pull toward the owner, unless the floor ends just ahead of
 -- the item (a ledge, a pit): then the magnet gives up on it. True = pulled.
-local function steer(record: ItemRecord, entry: Wanted, rootPos: Vector3, character: Model?, now: number): boolean
+-- No new probe while the item moved less than ProbeMove (and turned less
+-- than ProbeTurn) since its last good one, nor when the probed spot is at
+-- your feet (FeetReach, about your feet's height `feetY`: you stand there).
+local function steer(record: ItemRecord, entry: Wanted, rootPos: Vector3, feetY: number, character: Model?, now: number): boolean
 	local m = ItemService.Magnet
 	local position = entry.Position
 	local dir = Vector3.new(rootPos.X - position.X, 0, rootPos.Z - position.Z)
 	if dir.Magnitude > 1e-3 then
+		local unit = dir.Unit
 		local ahead = math.max(1, ItemService.pullSpeed(entry.Flat) * m.ProbeAhead)
-		local point = position + dir.Unit * ahead - Vector3.new(0, halfHeight(record), 0)
-		if not floorAhead(point, character) then
-			giveUp(record, now)
-			return false
+		local point = position + unit * ahead - Vector3.new(0, halfHeight(record), 0)
+		local fx, fz = rootPos.X - point.X, rootPos.Z - point.Z
+		local atFeet = fx * fx + fz * fz <= m.FeetReach * m.FeetReach and math.abs(point.Y - feetY) <= 1.5
+		local lastAt, lastDir = record.ProbeAt, record.ProbeDir
+		local fresh = record.ProbeOk == true
+			and lastAt ~= nil
+			and lastDir ~= nil
+			and (position - lastAt).Magnitude < m.ProbeMove
+			and unit:Dot(lastDir) >= m.ProbeTurn
+		if not atFeet and not fresh then
+			local ok = floorAhead(point, character)
+			record.ProbeAt = position
+			record.ProbeDir = unit
+			record.ProbeOk = ok
+			if not ok then
+				giveUp(record, now)
+				return false
+			end
 		end
 	end
 	pullToward(record, rootPos, entry.Flat)
 	return true
+end
+
+-- Is a blocked item still behind its wall? Never before BlockedUntil; after
+-- it, only while neither the owner's eye nor the item moved BlockedMove
+-- studs, and at most BlockedBackoff seconds since the check (the wall is
+-- still there: no new ray needed).
+local function stillBlocked(record: ItemRecord, eye: Vector3, position: Vector3, now: number): boolean
+	local untilAt = record.BlockedUntil
+	if not untilAt then
+		return false
+	end
+	if now < untilAt then
+		return true
+	end
+	local m = ItemService.Magnet
+	if now - (untilAt - m.CheckEvery) >= m.BlockedBackoff then
+		return false
+	end
+	local fromEye, fromAt = record.BlockedEye, record.BlockedAt
+	if not fromEye or not fromAt then
+		return false
+	end
+	return (eye - fromEye).Magnitude < m.BlockedMove and (position - fromAt).Magnitude < m.BlockedMove
 end
 
 -- One player's part of a magnet pass (see magnetStep).
@@ -1156,14 +1825,21 @@ local function magnetFor(player: Player, set: { [ItemRecord]: boolean }, root: B
 	-- only as many pulls as the hands still take: with full hands nothing
 	-- moves, nothing herds after you
 	local slots = math.min(m.MaxPulls, room)
+	if #wanted == 0 or slots <= 0 then
+		-- nothing to pull (or full hands): no zones, no rays
+		for _, entry in wanted do
+			stopPull(entry.Record)
+		end
+		return
+	end
 	local zones = zonesNear(rootPos, radius)
 	-- the line of sight runs low (RayHeight above the feet): curbs and railings count
-	local eye = Vector3.new(rootPos.X, rootPos.Y - rootHeight(humanoid, root) + m.RayHeight, rootPos.Z)
+	local feetY = rootPos.Y - rootHeight(humanoid, root)
+	local eye = Vector3.new(rootPos.X, feetY + m.RayHeight, rootPos.Z)
 	local pulled, rays = 0, 0
 	for _, entry in wanted do
 		local record = entry.Record
 		local was = pulling[record] == true
-		local blocked = record.BlockedUntil
 		local checked = record.PullCheckedAt
 		local due = not was or not checked or now - checked >= m.CheckEvery
 		local last = record.PullFlat
@@ -1172,31 +1848,35 @@ local function magnetFor(player: Player, set: { [ItemRecord]: boolean }, root: B
 		elseif #zones > 0 and ItemService.wayNearZone(entry.Position, rootPos, zones) then
 			-- never push ore into a sale or a hopper
 			stopPull(record)
-		elseif not was and blocked and now < blocked then
-			-- a wall was in the way a moment ago: not tried again yet
+		elseif not was and stillBlocked(record, eye, entry.Position, now) then
+			-- a wall was in the way a moment ago (and nothing moved since): not tried again yet
 		elseif was and due and last and last - entry.Flat < m.MinProgress then
 			-- no closer than a CheckEvery ago: stuck on something low, or you
 			-- walk away faster than it slides
 			giveUp(record, now)
 		elseif due and rays >= m.RayBudget then
 			-- no rays left this pass: a pull goes on and is checked next time
-			if was and steer(record, entry, rootPos, character, now) then
+			if was and steer(record, entry, rootPos, feetY, character, now) then
 				pulled += 1
 			end
 		elseif due then
 			rays += 1
 			if clearPath(eye, entry.Position + Vector3.new(0, 0.5, 0), character) then
 				record.BlockedUntil = nil
-				if steer(record, entry, rootPos, character, now) then
+				record.BlockedEye = nil
+				record.BlockedAt = nil
+				if steer(record, entry, rootPos, feetY, character, now) then
 					record.PullCheckedAt = now
 					record.PullFlat = entry.Flat
 					pulled += 1
 				end
 			else
 				record.BlockedUntil = now + m.CheckEvery
+				record.BlockedEye = eye
+				record.BlockedAt = entry.Position
 				stopPull(record)
 			end
-		elseif steer(record, entry, rootPos, character, now) then
+		elseif steer(record, entry, rootPos, feetY, character, now) then
 			pulled += 1
 		end
 	end
@@ -1241,20 +1921,37 @@ end
 
 -- Internals for the Lune tests only (tests/ItemService.spec.luau, tests/GearService.spec.luau).
 ItemService._test = {
-	maintain = maintainOne,
-	-- forget every item record (the models are left alone)
+	-- one record's maintenance (its owner's root looked up now)
+	maintain = function(record: ItemRecord, now: number)
+		maintainOne(record, now, ownerRoot(record.Owner))
+	end,
+	-- forget every item record and parked model (the models are left alone)
 	reset = function()
 		table.clear(records)
 		table.clear(byId)
 		table.clear(byOwner)
-		table.clear(lastCapToast)
+		table.clear(staleCheckedAt)
 		table.clear(pulling)
 		table.clear(avoidParts)
+		table.clear(parked)
 		magnetRadiusOf = defaultMagnetRadius
 		clearPath = defaultClearPath
 		floorAhead = defaultFloorAhead
 		handsRoom = nil
 		handsCatch = nil
+		carriedConsumed = nil
+		rayParams = nil
+		folder = nil :: any
+	end,
+	-- Workspace.Items in the game; the tests' own folder (items parked or
+	-- reused must live in it)
+	setFolder = function(f: Folder?)
+		folder = f :: any
+	end,
+	-- the parked models of a user (the pool)
+	parked = function(userId: number): number
+		local list = parked[userId]
+		return if list then #list else 0
 	end,
 	-- the magnet's radius per player and its line-of-sight check (nil = the
 	-- real one), and its floor probe (nil = there is always a floor: the
@@ -1289,14 +1986,14 @@ function ItemService.init()
 	end
 	setupCollisionGroups()
 
-	-- Leaving players: keep their items in the Ore Pen.
+	-- Leaving players: keep their items in the Ore Pen (a rescue move).
 	DataService.beforeRelease(function(player)
 		for _, record in ItemService.ownedBy(player.UserId) do
 			if record.State == "Loose" or record.State == "Carried" then
 				ItemService.stash(record, nil)
 			end
 		end
-		lastCapToast[player.UserId] = nil
+		clearParked(player.UserId)
 	end)
 end
 
@@ -1304,18 +2001,9 @@ function ItemService.start()
 	while true do
 		task.wait(0.25)
 		local now = os.clock()
-		for _, record in records do
-			local ok, err = pcall(function()
-				maintainOne(record, now)
-			end)
-			if not ok then
-				warn("[ItemService] maintenance error: " .. tostring(err))
-			end
-		end
+		ItemService.maintainAll(now)
 		-- the Ore Magnet (gear): own loose items slide to their owner
-		local magnetOk, magnetErr = pcall(function()
-			ItemService.magnetStep(now)
-		end)
+		local magnetOk, magnetErr = pcall(ItemService.magnetStep :: any, now)
 		if not magnetOk then
 			warn("[ItemService] magnet error: " .. tostring(magnetErr))
 		end

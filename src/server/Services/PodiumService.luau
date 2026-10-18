@@ -8,7 +8,8 @@
 	  An ore on a locked slot (perk gone) earns nothing but can be removed.
 	- Place: one matching ore out of the Ore Pen onto a free, unlocked slot
 	  (PodiumAction "Place" { Key }, or PenAction "ToPodium" via PenService).
-	  Remove: back into the pen; refused while the pen is full.
+	  Remove: back into the pen; refused (a toast, the ore stays on the
+	  podium) while the pen is full ("PenFull") or over its capacity ("PenOver").
 	  Prompts on every podium (the client shows the one that fits):
 	    "Remove"         the ore goes back into the pen
 	    "Place Ore"      opens PenView in pick mode (OpenUI "Pen" { Slot })
@@ -63,7 +64,8 @@ local PodiumService = {}
 
 type Desc = ItemData.Desc
 type ItemRecord = ItemService.ItemRecord
--- why an action was refused: NoData | BadSlot | Locked | NotClean | Taken | NotInPen | Empty | PenFull | NothingCarried
+-- why an action was refused: NoData | BadSlot | Locked | NotClean | Taken | NotInPen | Empty | PenFull |
+-- PenOver (PenService.OverReason: the pen holds more than its capacity) | NothingCarried
 export type Reason = string
 
 PodiumService.Range = 30 -- studs from a podium for PodiumAction (the hover button shows within this)
@@ -409,14 +411,42 @@ function PodiumService.remove(player: Player, slot: number): (boolean, Reason?)
 	end
 	local desc = podiumDesc(key)
 	if not desc then
+		local parts = string.split(key, "|")
+		if ItemData.parseKey(key) == nil and #parts == 4 and parts[1] ~= "" and parts[2] ~= "" then
+			-- an ore a newer build knows (docs/SAVE_AUDIT.md #1(b)): it goes into the pen as it
+			-- is (the newer build reads it there again) and the slot is free
+			local kept: Desc = {
+				K = parts[1],
+				O = parts[2],
+				G = if parts[3] ~= "" then parts[3] else nil,
+				R = if parts[4] ~= "" then parts[4] else nil,
+			} :: any
+			if not PenService.store(player, kept) then
+				local data = DataService.get(player) :: { [string]: any }
+				toast(player, `Your Ore Pen is full ({#data.Storage}/{PenService.capacityOf(data)}). Make room first.`)
+				return false, "PenFull"
+			end
+			list[slot] = ""
+			DataService.changed(player)
+			refreshPlayer(player)
+			toast(player, "This ore needs the newest version of the game. It is in your Ore Pen, rejoin to see it.", "Info")
+			return true, nil
+		end
 		-- junk that slipped past the migration: just clear it
 		list[slot] = ""
 		DataService.changed(player)
 		refreshPlayer(player)
 		return false, "Empty"
 	end
-	if not PenService.store(player, desc) then
+	-- the pen must take it (never over its capacity, never while it is over
+	-- it: "PenOver"); refused, the ore simply stays on the podium
+	local stored, refusal = PenService.store(player, desc)
+	if not stored then
 		local data = DataService.get(player) :: { [string]: any }
+		if refusal == PenService.OverReason then
+			toast(player, PenService.overText(data))
+			return false, PenService.OverReason
+		end
 		toast(player, `Your Ore Pen is full ({#data.Storage}/{PenService.capacityOf(data)}). Make room first.`)
 		return false, "PenFull"
 	end

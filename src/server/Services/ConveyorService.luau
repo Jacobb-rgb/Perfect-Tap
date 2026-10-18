@@ -386,7 +386,7 @@ local function sourceReady(plotId: number, chute: string, ownerUserId: number): 
 	if last and os.clock() - last < ConveyorService.SourceGap then
 		return false, "Jammed"
 	end
-	if ItemService.looseCount(ownerUserId) >= ConveyorService.sourceCeiling() then
+	if ItemService.looseCount(ownerUserId, "Base") >= ConveyorService.sourceCeiling() then
 		return false, "TooMany"
 	end
 	if beltBusy(belt, ownerUserId) then

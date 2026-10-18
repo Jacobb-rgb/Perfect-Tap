@@ -12,6 +12,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local Perks = require(script.Parent.Parent.Perks)
+local MovementService = require(script.Parent.MovementService)
 
 local AccessService = {}
 
@@ -31,6 +32,7 @@ function AccessService.start()
 				local pastDoor = p.X > 81 and p.X < 90 and math.abs(p.Z + 182) < 8 and p.Y < 2
 				if WorldLayout.isInBox(p, grotto.Min, grotto.Max) or pastDoor then
 					character:PivotTo(OUTSIDE)
+					MovementService.serverMoved(player)
 					Net.fire("Notify", player, { Text = "The Glimmer Grotto is for Forge VIPs.", Kind = "Deny" })
 				end
 			end
