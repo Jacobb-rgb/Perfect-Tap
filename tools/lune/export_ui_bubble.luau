@@ -512,3 +512,89 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	BoardsBubble.settings(gui2, spec[2], settingsRows, "Saved to your profile: they follow you to every device.")
 	write("ui_bubble_settings_" .. spec[1], gui2)
 end
+
+local GearBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.GearBubble")
+local EnchantBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EnchantBubble")
+local gearData = {
+	Coins = "$48.2K",
+	Note = "Ore Backpack III: you can carry 5 items!",
+	Gear = {
+		{ Id = "Boots", Name = "Miner's Boots", Icon = "boots", Level = 2, MaxLevel = 5, Text = "Walk faster everywhere.", From = "20", To = "22", Unit = "walk speed", Price = "$18K", State = "Buy", Color = rgb(255, 110, 110) },
+		{ Id = "Lamp", Name = "Helmet Lamp", Icon = "helmet", Level = 1, MaxLevel = 5, Text = "A head lamp that lights up dark caves.", From = "18", To = "26", Unit = "studs of light", Price = "$2.4K", State = "Buy", Color = rgb(255, 196, 40) },
+		{ Id = "Backpack", Name = "Ore Backpack", Icon = "backpack", Level = 3, MaxLevel = 5, Text = "Carry more ore chunks at once.", From = "5", To = "8", Unit = "items you can carry", Price = "$180K", State = "Bought", Color = rgb(61, 205, 120) },
+		{ Id = "Gloves", Name = "Grip Gloves", Icon = "gloves", Level = 0, MaxLevel = 5, Text = "Grab ore from further away, throw harder.", From = "11", To = "13", Unit = "studs reach", Price = "$600", State = "Buy", Color = rgb(255, 150, 60) },
+		{ Id = "Magnet", Name = "Ore Magnet", Icon = "magnet", Level = 1, MaxLevel = 5, Text = "Mined ore flies into your hands.", From = "14", To = "18", Unit = "studs pull", Price = "$9K", State = "Buy", Color = rgb(77, 150, 255) },
+	},
+}
+local enchantData = {
+	Header = "YOUR BLASTER · LEVEL 5 · 2 OF 4 SLOTS",
+	Coins = "$4.82M",
+	ShardCount = "135",
+	Slots = {
+		{ Id = "Power", Name = "POWER II", Effect = "+20% damage" },
+		{ Id = "Lucky", Name = "LUCKY I", Effect = "+15% ore luck" },
+		{ Id = "Slot3", Locked = "Blaster level 7" },
+		{ Id = "Slot4", Locked = "Blaster level 10" },
+	},
+	Enchants = {
+		{ Id = "Power", Name = "Power", Rarity = "Common", Color = rarity.Common, Effect = "+20% blaster damage", Price = "next $72K", Level = "II/III" },
+		{ Id = "Swift", Name = "Swift", Rarity = "Common", Color = rarity.Common, Effect = "+1 walk speed", Price = "$1.5K", New = true },
+		{ Id = "Reach", Name = "Reach", Rarity = "Uncommon", Color = rarity.Uncommon, Effect = "+2 studs blaster range", Price = "$20K", New = true },
+		{ Id = "Magnetism", Name = "Magnetism", Rarity = "Uncommon", Color = rarity.Uncommon, Effect = "Ore flies to you from further", Price = "$45K" },
+		{ Id = "Lucky", Name = "Lucky", Rarity = "Rare", Color = rarity.Rare, Effect = "+15% ore luck", Price = "next $1.2M", Level = "I/III" },
+		{ Id = "Midas", Name = "Midas", Rarity = "Rare", Color = rarity.Rare, Effect = "+10% sell value", Price = "$2.5M" },
+		{ Id = "TwinDrop", Name = "Twin Drop", Rarity = "Epic", Color = rarity.Epic, Effect = "Sometimes an ore drops twice", Price = "$30M", Level = "I/III" },
+		{ Id = "Overcharge", Name = "Overcharge", Rarity = "Epic", Color = rarity.Epic, Effect = "Faster beam after 3 s", Price = "$60M" },
+		{ Id = "Prospector", Name = "Prospector", Rarity = "Legendary", Color = rarity.Legendary, Effect = "Rare rocks show on the map", Price = "$900M" },
+		{ Id = "GolemBond", Name = "Golem Bond", Rarity = "Legendary", Color = rarity.Legendary, Effect = "+25% golem bonuses", Price = "$1.5B" },
+		{ Id = "Heartfire", Name = "Heartfire", Rarity = "Mythic", Color = rarity.Mythic, Effect = "Burning beam", Price = "20 Robux" },
+		{ Id = "Starbreaker", Name = "Starbreaker", Rarity = "Mythic", Color = rarity.Mythic, Effect = "+75% ore luck", Price = "20 Robux" },
+	},
+	Selected = "TwinDrop",
+	Description = "Sometimes an ore drops twice.",
+	Now = "+5% chance of a twin chunk",
+	Next = "+10% chance of a twin chunk",
+	Tiers = { "I: +5% chance of a twin chunk (yours)", "II: +10% chance of a twin chunk", "III: +15% chance of a twin chunk" },
+	Buy = "$30M",
+	Shards = "120",
+}
+local dark = {
+	Common = rgb(110, 118, 130), Uncommon = rgb(40, 150, 60), Rare = rgb(30, 110, 210),
+	Epic = rgb(130, 60, 210), Legendary = rgb(210, 120, 0), Mythic = rgb(220, 30, 90),
+}
+local boostData = {
+	Tab = "TripleLucky",
+	Name = "Triple Lucky",
+	Icon = "clover",
+	Active = "3:42 left",
+	Text = "Golem capsules: the rarest golems in every capsule are 3x as likely.",
+	Offers = {
+		{ Text = "+5 MIN", Price = "$7.5M" },
+		{ Text = "+15 MIN", Soon = true },
+		{ Text = "+1 HOUR", Soon = true },
+	},
+	Note = "Coins top a boost up below 10 min left. At most 2 h at once.",
+	Capsule = "Crystal Capsule",
+	Coins = "$4.82M",
+	Odds = {
+		{ Name = "Epic or better", Color = dark.Epic, Without = "13%", With = "39%" },
+		{ Name = "Starmetal Sovereign", Icon = "golem_StarmetalSovereign", Color = dark.Mythic, Without = "0.07%", With = "0.21%" },
+		{ Name = "Heartstone Colossus", Icon = "golem_HeartstoneColossus", Color = dark.Mythic, Without = "0.03%", With = "0.09%" },
+		{ Name = "Stormcore Titan", Icon = "golem_StormcoreTitan", Color = dark.Legendary, Without = "1.2%", With = "3.6%" },
+		{ Name = "Moonstone Oracle", Icon = "golem_MoonstoneOracle", Color = dark.Legendary, Without = "0.7%", With = "2.1%" },
+		{ Name = "Ruby Knight", Icon = "golem_RubyKnight", Color = dark.Epic, Without = "5%", With = "15%" },
+		{ Name = "Sapphire Sage", Icon = "golem_SapphireSage", Color = dark.Epic, Without = "3.5%", With = "10.5%" },
+		{ Name = "Diamond Duke", Icon = "golem_DiamondDuke", Color = dark.Epic, Without = "2.5%", With = "7.5%" },
+	},
+}
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	GearBubble.build(gui, spec[2], gearData)
+	write("ui_bubble_gear_" .. spec[1], gui)
+	local gui2 = windowGui(spec[2], spec[3])
+	EnchantBubble.enchants(gui2, spec[2], enchantData)
+	write("ui_bubble_enchants_" .. spec[1], gui2)
+	local gui3 = windowGui(spec[2], spec[3])
+	EnchantBubble.boosts(gui3, spec[2], boostData)
+	write("ui_bubble_boosts_" .. spec[1], gui3)
+end
