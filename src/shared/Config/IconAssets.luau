@@ -23,10 +23,41 @@ IconAssets.Ids = {
 	ore_copper = 0,
 	ore_silver = 0,
 	ingot_gold = 0,
+	-- golems and capsules (step 7 GolemBuilder models)
+	golem_PebbleGolem = 0,
+	golem_CopperTinker = 0,
+	golem_CoalChomper = 0,
+	golem_TinTumbler = 0,
+	golem_QuartzSprite = 0,
+	golem_SilverSquire = 0,
+	golem_AmethystAcolyte = 0,
+	golem_JadeGardener = 0,
+	golem_EmberImp = 0,
+	golem_CobaltDiver = 0,
+	golem_GildedPorter = 0,
+	golem_RubyKnight = 0,
+	golem_SapphireSage = 0,
+	golem_DiamondDuke = 0,
+	golem_StormcoreTitan = 0,
+	golem_MoonstoneOracle = 0,
+	golem_StarmetalSovereign = 0,
+	golem_HeartstoneColossus = 0,
+	capsule_Stone = 0,
+	capsule_Crystal = 0,
+	capsule_Royal = 0,
 } :: { [string]: number }
+
+-- Roblox's own images (no upload needed).
+IconAssets.BuiltIn = {
+	robux = "rbxasset://textures/ui/common/robux.png",
+} :: { [string]: string }
 
 -- "rbxassetid://<id>" for an icon, or "" when it has not been uploaded yet.
 function IconAssets.image(name: string): string
+	local builtIn = IconAssets.BuiltIn[name]
+	if builtIn then
+		return builtIn
+	end
 	local id = IconAssets.Ids[name]
 	if id and id > 0 then
 		return "rbxassetid://" .. tostring(id)

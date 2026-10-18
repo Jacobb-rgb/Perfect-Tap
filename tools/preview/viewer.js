@@ -608,6 +608,8 @@ async function main() {
     uiLayer.style.height = `${HEIGHT}px`;
     renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
     if (shot.mobileControls) mobileControls(uiLayer, shot.mobileControls);
+    // wait for the 3D icon pictures before the screenshot
+    await Promise.all([...uiLayer.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
     await document.fonts.ready;
   }
   window.__shot = shot;

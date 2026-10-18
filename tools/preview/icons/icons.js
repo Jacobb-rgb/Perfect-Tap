@@ -272,6 +272,28 @@ const ICONS = {
     return { model: group(parts), yaw: 0, pitch: 24 };
   },
 
+  // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
+  // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
+  robux() {
+    const hex = (r) => {
+      const s = new THREE.Shape();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + (i * Math.PI) / 3;
+        if (i === 0) s.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else s.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      s.closePath();
+      return s;
+    };
+    const ring = hex(1);
+    ring.holes.push(hex(0.62));
+    const parts = [
+      extrude(ring, 0.25, 0.05, "#e9eef2", { rough: 0.35 }),
+      extrude(hex(0.3), 0.25, 0.05, "#e9eef2", { rough: 0.35 }),
+    ];
+    return { model: group(parts), yaw: 0, pitch: 0 };
+  },
+
   vault() {
     const bolts = [];
     for (let i = 0; i < 8; i++) {
@@ -329,7 +351,7 @@ async function partsModel(file, view) {
     const metal = material === "Metal" || material === "DiamondPlate" || material === "Foil";
     const c = "#" + color;
     const m = neon
-      ? new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(1.6) })
+      ? new THREE.MeshBasicMaterial({ color: new THREE.Color(c), toneMapped: false })
       : mat(c, metal ? steel : { rough: 0.5, coat: 0.35 });
     if (transparency > 0.01) {
       m.transparent = true;
@@ -432,7 +454,10 @@ async function main() {
   rim.position.set(1, 2, -3);
   scene.add(rim);
 
-  const spec = ICONS[iconName] ? ICONS[iconName]() : await partsModel(PART_ICONS[iconName].file, PART_ICONS[iconName]);
+  // golem_<Kind> / capsule_<Id>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
+  const partSpec = PART_ICONS[iconName] || (/^(golem|capsule)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null);
+  if (!ICONS[iconName] && !partSpec) throw new Error("unknown icon " + iconName);
+  const spec = ICONS[iconName] ? ICONS[iconName]() : await partsModel(partSpec.file, partSpec);
   const holder = new THREE.Group();
   holder.add(spec.model);
   holder.rotation.set(D(spec.pitch ?? 0), D(spec.yaw ?? 0), D(spec.roll ?? 0), "XYZ");

@@ -224,4 +224,235 @@ function Bubble.tile(parent: Instance, o: TileOptions): (TextButton, Frame)
 	return face :: TextButton, holder
 end
 
+-- A role from one data colour (rarity, capsule shell): lighter top, darker lip.
+function Bubble.roleFrom(base: Color3): Role
+	local h, sat, v = base:ToHSV()
+	return {
+		Top = Color3.fromHSV(h, sat * 0.55, math.min(1, v * 1.08 + 0.1)),
+		Base = base,
+		Lip = Color3.fromHSV(h, math.min(1, sat * 1.05 + 0.05), v * 0.6),
+	}
+end
+
+local function roleOf(r: string | Role): Role
+	if type(r) == "string" then
+		return Bubble.role(r)
+	end
+	return r
+end
+
+-- Rough width of a text line (design units) for rows that centre an icon + text.
+function Bubble.textWidth(text: string, size: number): number
+	return math.ceil(#text * size * 0.56)
+end
+
+-- A centred row: a 3D icon and a text (prices: coin or Robux + amount).
+function Bubble.iconText(parent: Instance, icon: string, text: string, size: number, props: Props?, ink: boolean?): Frame
+	local row = UIKit.new("Frame", {
+		Name = "IconText",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, size + 6),
+		ZIndex = 4,
+	}, parent)
+	apply(row, props)
+	UIKit.list(row, Enum.FillDirection.Horizontal, 3, {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	Bubble.icon(row, icon, size + 8, { LayoutOrder = 1, ZIndex = 5 })
+	local textProps: Props = {
+		Name = "Text",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(Bubble.textWidth(text, size), size + 6),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	}
+	if ink then
+		Bubble.ink(row, text, size, textProps)
+	else
+		Bubble.text(row, text, size, textProps)
+	end
+	return row
+end
+
+export type ButtonOptions = {
+	Name: string?,
+	Text: string,
+	Role: string | Role,
+	Size: Vector2,
+	Icon: string?, -- 3D icon left of the text
+	Price: string?, -- second line (with PriceIcon)
+	PriceIcon: string?,
+	TextSize: number?,
+	Corner: number?,
+	LayoutOrder: number?,
+}
+
+-- Chunky button; with a Price the text sits on top and the price row under it.
+function Bubble.button(parent: Instance, o: ButtonOptions): (TextButton, Frame)
+	local holder, face = Bubble.body(parent, roleOf(o.Role), o.Size, {
+		Name = o.Name or o.Text,
+		Corner = o.Corner or 16,
+		Clickable = true,
+	})
+	holder.LayoutOrder = o.LayoutOrder or 0
+	local ts = o.TextSize or 24
+	if o.Price then
+		Bubble.text(face, o.Text, ts, {
+			Name = "Label",
+			Position = UDim2.fromOffset(0, 4),
+			Size = UDim2.new(1, 0, 0.5, -2),
+			ZIndex = 4,
+		})
+		Bubble.iconText(face, o.PriceIcon or "coin", o.Price, math.floor(ts * 0.86), {
+			Name = "Price",
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 0, 1, -6),
+		})
+	elseif o.Icon then
+		local iconSize = math.floor(o.Size.Y * 0.95)
+		Bubble.icon(face, o.Icon, iconSize, {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 2, 0.5, -3),
+		})
+		Bubble.text(face, o.Text, ts, {
+			Name = "Label",
+			Position = UDim2.fromOffset(iconSize, 0),
+			Size = UDim2.new(1, -iconSize - 8, 1, 0),
+			ZIndex = 4,
+		})
+	else
+		Bubble.text(face, o.Text, ts, { Name = "Label", Size = UDim2.fromScale(1, 1), ZIndex = 4 })
+	end
+	return face :: TextButton, holder
+end
+
+-- Flat pill with text (chances, counters): white with ink text unless a role is given.
+function Bubble.chip(parent: Instance, text: string, size: Vector2, textSize: number, role: (string | Role)?, props: Props?): Frame
+	local r = if role then roleOf(role) else nil
+	local chip = UIKit.new("Frame", {
+		Name = "Chip",
+		BackgroundColor3 = if r then r.Base else Theme.Panel,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size.X, size.Y),
+		ZIndex = 4,
+	}, parent)
+	apply(chip, props)
+	Bubble.corner(chip, size.Y // 2)
+	Bubble.stroke(chip, 2.5)
+	if r then
+		Bubble.text(chip, text, textSize, { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+	else
+		Bubble.ink(chip, text, textSize, { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+	end
+	return chip
+end
+
+export type WindowOptions = {
+	Name: string,
+	Title: string,
+	Icon: string,
+	Role: string,
+	Size: Vector2,
+	HeaderHeight: number?,
+	TitleSize: number?,
+}
+
+export type Window = {
+	Holder: Frame,
+	Panel: GuiObject,
+	Header: Frame,
+	Title: TextLabel,
+	Body: Frame,
+	Close: TextButton,
+}
+
+Bubble.WindowCorner = 26
+
+--[[
+	A window: white panel (lip + shadow), a header band in the window's own
+	colour with a 3D icon popping out on the left, the title, and a red X on the
+	top-right corner. Centred on its parent; content goes into Body (padded).
+]]
+function Bubble.window(parent: Instance, o: WindowOptions): Window
+	local hh = o.HeaderHeight or 68
+	local role = Bubble.role(o.Role)
+	local holder, panel = Bubble.body(parent, Bubble.role("Plain"), o.Size, {
+		Name = o.Name,
+		Corner = Bubble.WindowCorner,
+		Gloss = false,
+	})
+	holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	holder.Position = UDim2.fromScale(0.5, 0.5)
+	local header = UIKit.new("Frame", {
+		Name = "Header",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, hh),
+		ZIndex = 3,
+	}, panel)
+	Bubble.corner(header, Bubble.WindowCorner)
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, role.Top),
+			ColorSequenceKeypoint.new(0.5, role.Base),
+			ColorSequenceKeypoint.new(1, role.Base),
+		}),
+		Rotation = 90,
+	}, header)
+	UIKit.new("Frame", {
+		Name = "Fill", -- squares the header's bottom corners
+		BackgroundColor3 = role.Base,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0, 0.5),
+		Size = UDim2.fromScale(1, 0.5),
+		ZIndex = 3,
+	}, header)
+	UIKit.new("Frame", {
+		Name = "Line",
+		BackgroundColor3 = Theme.Outline,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(1, 0, 0, 3),
+		ZIndex = 3,
+	}, header)
+	local gloss = UIKit.new("Frame", {
+		Name = "Gloss",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.78,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(10, 5),
+		Size = UDim2.new(1, -20, 0.36, 0),
+		ZIndex = 3,
+	}, header)
+	Bubble.corner(gloss, 12)
+	local iconSize = hh + 34
+	Bubble.icon(header, o.Icon, iconSize, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, -12),
+		ZIndex = 5,
+	})
+	local title = Bubble.text(header, o.Title, o.TitleSize or 38, {
+		Name = "Title",
+		FontFace = Theme.TitleFont,
+		Position = UDim2.fromOffset(iconSize + 8, 4),
+		Size = UDim2.new(1, -iconSize - 90, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	})
+	local close, closeHolder = Bubble.button(panel, { Name = "Close", Text = "X", Role = "Danger", Size = Vector2.new(54, 54), TextSize = 32, Corner = 16 })
+	closeHolder.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeHolder.Position = UDim2.new(1, -12, 0, 10)
+	closeHolder.ZIndex = 6
+	local body = UIKit.new("Frame", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, hh + 3),
+		Size = UDim2.new(1, 0, 1, -hh - 3),
+		ZIndex = 2,
+	}, panel)
+	UIKit.padding(body, 16)
+	return { Holder = holder, Panel = panel, Header = header, Title = title, Body = body, Close = close }
+end
+
 return Bubble
