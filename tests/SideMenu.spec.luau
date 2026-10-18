@@ -1,15 +1,17 @@
 -- The side menu and its panels under Lune: SideMenuView's column layout
--- (mouse: below the coins, centred; touch: up to four columns right under
--- the coins, the thumbstick's bottom-left corner free on phones and
--- tablets; TVs: the title-safe margin; 44 pt touch targets), its badges,
--- SOON chips and hidden buttons; the ORE CODEX (entries from the save's
--- Discovered record, NEW badges, the count, where an ore is found,
--- undiscovered ores keep their secrets, the redraw fingerprint, the phone
--- layout); SETTINGS (SettingsConfig.sanitize / steps / merge,
--- SettingsService saving only sane records with DataService.changed,
--- SettingsView's slider math, texts and touch sizes) and the shared
--- MenuPanel frame (the teleport bar and coins kept clear, the gamepad
--- footer on compact layouts).
+-- (mouse: below the coins, centred; touch: one MENU button that opens a
+-- grid of up to four columns right under the coins, the thumbstick's
+-- bottom-left corner free on phones and tablets; TVs: the title-safe
+-- margin; 44 pt touch targets), its badges (added up on MENU), SOON chips
+-- inside their buttons, hidden buttons and grid cells; the ORE CODEX
+-- (entries from the save's Discovered record, NEW badges, the count, where
+-- an ore is found, sell values, undiscovered ores keep their secrets, the
+-- redraw fingerprint, the phone layout, CodexService's saved seen record,
+-- one prompt on the terminal's cabinet); SETTINGS (SettingsConfig.sanitize
+-- / steps / merge, SettingsService saving only sane records with
+-- DataService.changed, SettingsView's slider math, texts, hidden rows and
+-- touch sizes) and the shared MenuPanel frame (the teleport bar and coins
+-- kept clear, the gamepad footer on compact layouts).
 return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -17,6 +19,9 @@ return function(T, Loader)
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local SettingsService = Loader.requirePath("ServerScriptService.Server.Services.SettingsService")
+	local CodexService = Loader.requirePath("ServerScriptService.Server.Services.CodexService")
+	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local MenuPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MenuPanel")
 	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
 	local CodexView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CodexView")
@@ -89,20 +94,24 @@ return function(T, Loader)
 
 	T.test("side menu: touch screens keep the thumbstick's bottom-left corner free", function()
 		local refs = SideMenuView.build()
+		-- the open grid (MENU + the buttons) is the biggest the menu gets
+		SideMenuView.setExpanded(refs, true)
 		for _, count in { 7, 5 } do
 			for i, id in refs.Order do
 				-- 5: GOLEMS and ARTIFACTS hidden (their packages not in the game)
 				SideMenuView.setHidden(refs, id, count == 5 and (id == "Golems" or id == "Collection"))
 				T.eq(refs.Buttons[id].Parent.Visible, not refs.Hidden[id], `{id} visibility ({i})`)
 			end
-			T.eq(#SideMenuView.touchTargets(refs), count)
+			T.eq(#SideMenuView.shown(refs), count)
 			for _, screen in TOUCH_SCREENS do
 				local w, h, scale = screen[1], screen[2], screen[3]
 				local label = `{w}x{h} pt, {count} buttons`
 				local designW, designH = w / scale, (h - 58) / scale
 				local layout = SideMenuView.layout(scale, designH, { Count = count, Touch = true, DesignWidth = designW })
 				T.truthy(layout.Touch, label)
+				T.truthy(layout.Toggle, label .. ": the MENU button")
 				SideMenuView.apply(refs, layout)
+				T.eq(#SideMenuView.touchTargets(refs), count + 1, label .. ": MENU and the buttons")
 				checkTouch(SideMenuView.touchTargets(refs), scale, label)
 				local x0, y0, x1, y1 = columnBox(refs)
 				-- the thumb's resting corner: the left 40 % x the bottom 40 %
@@ -116,6 +125,69 @@ return function(T, Loader)
 		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE, { Touch = true }).Top >= SideMenuView.TopMin)
 		-- a small window (phone-sized buttons) uses the touch layout even without touch
 		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE).Touch)
+	end)
+
+	T.test("side menu: on touch screens one MENU button opens and shuts the grid", function()
+		local refs = SideMenuView.build()
+		SideMenuView.setHidden(refs, "Golems", true)
+		SideMenuView.setHidden(refs, "Collection", true)
+		local designW, designH = 667 / PHONE, (375 - 58) / PHONE
+		local layout = SideMenuView.layout(PHONE, designH, { Count = 5, Touch = true, DesignWidth = designW })
+		SideMenuView.apply(refs, layout)
+		-- shut: MENU alone, a small corner of the screen
+		local targets = SideMenuView.touchTargets(refs)
+		T.eq(#targets, 1)
+		T.eq(targets[1], refs.Toggle.Parent)
+		T.truthy(refs.Toggle.Parent.Visible)
+		for _, id in refs.Order do
+			T.falsy(refs.Buttons[id].Parent.Visible, id .. " hidden while shut")
+		end
+		checkTouch(targets, PHONE, "MENU")
+		local _, _, x1, y1 = columnBox(refs)
+		T.lt(x1, designW * 0.15, "MENU takes under 15 % of the width")
+		T.le(y1, designH * 0.6)
+		T.eq(refs.ToggleLabel.Text, "MENU")
+		T.truthy(refs.ToggleBars.Visible)
+		T.falsy(refs.ToggleX.Visible)
+		-- the badges add up on MENU while it is shut
+		SideMenuView.setBadge(refs, "Codex", 2)
+		T.truthy(refs.ToggleBadge.Visible)
+		T.eq(refs.ToggleBadge.Text, "2")
+		SideMenuView.setBadge(refs, "Golems", 5) -- hidden: not counted
+		T.eq(refs.ToggleBadge.Text, "2")
+		-- open: MENU first, then the buttons; MENU reads CLOSE
+		SideMenuView.setExpanded(refs, true)
+		T.eq(#SideMenuView.touchTargets(refs), 6)
+		T.eq(refs.ToggleLabel.Text, "CLOSE")
+		T.truthy(refs.ToggleX.Visible)
+		T.falsy(refs.ToggleBadge.Visible, "the buttons show their own badges")
+		T.truthy(refs.Badges.Codex.Visible)
+		T.eq(SideMenuView.cellOf(refs, refs.Toggle), 0)
+		T.eq(SideMenuView.cellOf(refs, refs.Buttons.Shop), 1)
+		T.eq(SideMenuView.cellOf(refs, refs.Buttons.Store.Parent), 5)
+		T.eq(SideMenuView.cellOf(refs, refs.Buttons.Golems), nil, "a hidden button has no cell")
+		T.eq(layout.Columns, 3, "MENU + 5 buttons: 3 x 2")
+		-- shut again: the badge comes back on MENU
+		SideMenuView.setExpanded(refs, false)
+		T.truthy(refs.ToggleBadge.Visible)
+		T.falsy(refs.Buttons.Shop.Parent.Visible)
+		-- a mouse layout has no MENU button: every button shows, SHOP in the first cell
+		SideMenuView.apply(refs, SideMenuView.layout(1, 684, { Count = 5 }))
+		T.falsy(refs.Toggle.Parent.Visible)
+		T.truthy(refs.Buttons.Shop.Parent.Visible)
+		T.eq(SideMenuView.cellOf(refs, refs.Buttons.Shop), 0)
+		T.eq(SideMenuView.cellOf(refs, refs.Toggle), nil)
+		T.eq(#SideMenuView.touchTargets(refs), 5)
+		-- the SOON chip sits inside its own button's top-right corner
+		SideMenuView.setSoon(refs, "Store", true)
+		local soon = refs.Soon.Store
+		T.eq(soon.Parent, refs.Buttons.Store)
+		T.truthy(soon.Visible)
+		T.eq(soon.AnchorPoint.X, 1)
+		T.eq(soon.Position.X.Scale, 1)
+		T.le(soon.Position.X.Offset, 0, "inside the right edge")
+		T.truthy(soon.Position.Y.Offset >= 0, "inside the top edge")
+		T.le(soon.Size.X.Offset, SideMenuView.Normal.Width / 2, "a corner tag, not a bridge")
 	end)
 
 	T.test("side menu: TVs keep the title-safe margin", function()
@@ -137,7 +209,9 @@ return function(T, Loader)
 		-- under the HUD: its popups and toasts show on top
 		T.lt(refs.Gui.DisplayOrder, HudView.build().Gui.DisplayOrder)
 		local layout = SideMenuView.layout(PHONE, (375 - 58) / PHONE)
+		refs.Expanded = true
 		SideMenuView.apply(refs, layout)
+		T.eq(#SideMenuView.touchTargets(refs), 8, "MENU and 7 buttons")
 		checkTouch(SideMenuView.touchTargets(refs), PHONE, "menu")
 		-- no two buttons overlap
 		local boxes = {}
@@ -235,6 +309,99 @@ return function(T, Loader)
 		T.eq(CodexView.fingerprint(nil, nil), CodexView.fingerprint("junk", {}))
 		-- the zones per ore are worked out once
 		T.truthy(rawequal(CodexView.zonesOf("Coal"), CodexView.zonesOf("Coal")))
+	end)
+
+	T.test("codex: the sell value says cleaned (Rough), Flawless and dirty", function()
+		local ore = OreData.ById.Gold
+		local text = CodexView.detailText({ Ore = ore, Found = true, New = false, Zones = {} })
+		T.truthy(text.Value:find("Sells: " .. Format.money(ItemData.value("Clean", "Gold", "Rough")), 1, true), text.Value)
+		T.truthy(text.Value:find("Flawless " .. Format.money(ItemData.value("Clean", "Gold", "Flawless")), 1, true), text.Value)
+		T.truthy(text.Value:find("dirty " .. Format.money(ItemData.value("Raw", "Gold")), 1, true), text.Value)
+		T.truthy(ItemData.value("Raw", "Gold") < ItemData.value("Clean", "Gold", "Rough"), "dirty is worth less")
+	end)
+
+	T.test("codex: the seen record is saved (NEW badges survive a rejoin)", function()
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		local player: any = { UserId = 8, Name = "Seer" }
+		local data = deepCopy(DataTemplate)
+		local changed = 0
+		patch(DataService, "get", function(p)
+			return if p == player then data else nil
+		end)
+		patch(DataService, "changed", function()
+			changed += 1
+		end)
+		local ok, err = pcall(function()
+			-- a new player: nothing seen, the record is ready
+			T.eq(type(DataTemplate.OreCodex), "table")
+			T.falsy(DataTemplate.OreCodex.Ready)
+			local fresh = CodexService.prepare(data)
+			T.truthy(fresh.Ready)
+			T.eq(next(fresh.Seen), nil)
+			-- discovered later, looked at: saved
+			data.Discovered = { Coal = true, Gold = true }
+			T.eq(CodexService.markSeen(player, { "Coal" }), 1)
+			T.eq(changed, 1)
+			T.truthy(data.OreCodex.Seen.Coal)
+			T.eq(data.OreCodex.Seen.Gold, nil, "Gold still NEW")
+			-- the next session keeps it (and Gold stays NEW)
+			local again = CodexService.prepare(data)
+			T.truthy(again.Seen.Coal)
+			T.eq(again.Seen.Gold, nil)
+			-- junk: undiscovered, unknown, not strings, too many, a metatable
+			T.eq(CodexService.markSeen(player, { "Diamond", "Bogus", 5, "Coal" }), 0, "nothing new")
+			T.eq(data.OreCodex.Seen.Diamond, nil)
+			T.eq(CodexService.markSeen(player, "Gold"), 0)
+			local many = {}
+			for i = 1, CodexService.MaxIds + 1 do
+				many[i] = "Gold"
+			end
+			T.eq(CodexService.markSeen(player, many), 0, "too many")
+			T.eq(CodexService.markSeen(player, setmetatable({ "Gold" }, {})), 0)
+			T.eq(changed, 1, "no change, no push")
+			T.eq(CodexService.markSeen({ UserId = 9 }, { "Gold" }), 0, "not loaded")
+			-- a save from before the record: what it found counts as seen, once
+			local old = deepCopy(DataTemplate)
+			old.OreCodex = nil
+			old.Discovered = { Tin = true, Bogus = true }
+			local record = CodexService.prepare(old)
+			T.truthy(record.Seen.Tin)
+			T.eq(record.Seen.Bogus, nil)
+			T.truthy(old.OreCodex.Ready)
+			old.Discovered.Iron = true
+			T.eq(CodexService.prepare(old).Seen.Iron, nil, "a later discovery is NEW")
+			-- a broken record is rebuilt
+			data.OreCodex = "broken"
+			T.eq(type(CodexService.prepare(data).Seen), "table")
+		end)
+		for i = #saved, 1, -1 do
+			rawset(saved[i][1], saved[i][2], saved[i][3])
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("codex: the prompt goes on the terminal's cabinet only", function()
+		local Instance = (require("@lune/roblox") :: any).Instance
+		local terminal = Instance.new("Model")
+		local screen = Instance.new("Part")
+		screen.Name = "Screen"
+		screen.Parent = terminal
+		-- streaming: the model came with a small part, not its cabinet yet
+		T.eq(CodexView.promptPart(terminal), nil, "no fallback onto some small part")
+		local cabinet = Instance.new("Part")
+		cabinet.Name = "Cabinet"
+		cabinet.Parent = terminal
+		T.eq(CodexView.promptPart(terminal), cabinet, "the part named Cabinet")
+		terminal.PrimaryPart = screen
+		T.eq(CodexView.promptPart(terminal), screen, "the PrimaryPart first")
+		T.eq(CodexView.promptPart(cabinet), cabinet, "a tagged part carries it itself")
+		T.eq(CodexView.promptPart(Instance.new("Folder")), nil)
 	end)
 
 	T.test("codex: an undiscovered ore keeps its secrets", function()
@@ -409,6 +576,37 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+	end)
+
+	T.test("settings: rows without a use hide and the panel closes up", function()
+		local refs = SettingsView.build(false)
+		SettingsView.layout(refs, false, 1280, 684)
+		local full = refs.Frame.Panel.Size.Y.Offset
+		T.eq(SettingsView.firstButton(refs), refs.Volumes.Sfx.Minus, "the gamepad starts on Sounds")
+		T.truthy(SettingsView.setShown(refs, "Music", false))
+		T.falsy(SettingsView.setShown(refs, "Music", false), "no change")
+		T.truthy(SettingsView.setShown(refs, "Rumble", false))
+		T.falsy(SettingsView.setShown(refs, "Nope", false))
+		T.falsy(refs.Volumes.Music.Frame.Visible)
+		T.falsy(refs.Toggles.Rumble.Frame.Visible)
+		T.eq(#SettingsView.shown(refs), 2)
+		SettingsView.layout(refs, false, 1280, 684)
+		T.lt(refs.Frame.Panel.Size.Y.Offset, full, "shorter")
+		for _, target in SettingsView.touchTargets(refs) do
+			T.truthy(target ~= MenuPanel.holderOf(refs.Volumes.Music.Minus), "a hidden row isn't a target")
+		end
+		T.eq(#SettingsView.touchTargets(refs), 1 + 3 + 1, "close, Sounds (-, +, bar), Camera shake")
+		T.eq(SettingsView.firstButton(refs), refs.Volumes.Sfx.Minus)
+		-- Sounds hidden too (never in the game): the first row that shows
+		SettingsView.setShown(refs, "Sfx", false)
+		T.eq(SettingsView.firstButton(refs), refs.Toggles.Shake.Button)
+		SettingsView.setShown(refs, "Sfx", true)
+		SettingsView.setShown(refs, "Music", true)
+		T.eq(#SettingsView.shown(refs), 3)
+		-- the phone layout with two rows still fits and keeps 44 pt
+		SettingsView.setShown(refs, "Music", false)
+		SettingsView.layout(refs, true, 667 / PHONE, (375 - 58) / PHONE)
+		checkTouch(SettingsView.touchTargets(refs), PHONE, "two rows")
 	end)
 
 	T.test("settings: the panel shows the values and its phone buttons are 44 pt", function()

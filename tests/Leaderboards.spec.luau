@@ -1,17 +1,20 @@
 -- The lobby leaderboards under Lune: LeaderboardService's values per board,
 -- the hours-played credit (whole seconds, the fraction carried, broken
--- saves), which scores are due (only changed ones; growing boards never
--- lowered, MoneyPerSec once per session, a 0 too), the 120 s write gate,
--- retries and budget, Studio test players never written, the final write
--- on leave (a round write still running lands first and isn't
--- remembered), reading the top rows (batched DisplayNames, junk keys, a
--- failed read keeps the last rows), this server's ranking without
+-- saves, idle time skipped: requests and moves keep a player active),
+-- which scores are due (only changed ones; growing boards never lowered,
+-- MoneyPerSec once per session, a 0 too), the 120 s write gate, retries
+-- and budget (a reserve for the player saves), Studio and Studio test
+-- players never written, hidden users and removeUser, the final write on
+-- leave (after LeaveDelay; a round write still running lands first and
+-- isn't remembered), reading the top rows (batched DisplayNames, junk
+-- keys, a failed read keeps the last rows), this server's ranking without
 -- DataStores, the payload with your own rank; and LeaderboardView: the
--- payload check, the row texts, one text size per board, the board /
--- panel builders (touch sizes, tabs). DataStores, players and Net are
--- small fakes.
+-- payload check, the row texts, your estimated rank, one text size per
+-- board, the board / panel builders (touch sizes, tabs). DataStores,
+-- players and Net are small fakes.
 return function(T, Loader)
 	local task = require("@lune/task")
+	local Vector3 = (require("@lune/roblox") :: any).Vector3
 	local LeaderboardConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LeaderboardConfig")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -40,7 +43,15 @@ return function(T, Loader)
 	-- failures on demand (`sets` counts the write requests; onWrite runs
 	-- inside a write, while it is on its way).
 	local function fakeStore(): any
-		local s: any = { values = {}, sets = 0, updates = 0, fail = 0, readFail = false, reads = 0, onWrite = nil }
+		local s: any = { values = {}, sets = 0, updates = 0, removes = 0, fail = 0, readFail = false, reads = 0, onWrite = nil }
+		function s:RemoveAsync(key: string)
+			self.removes += 1
+			if self.fail > 0 then
+				self.fail -= 1
+				error("DataStore request was rejected")
+			end
+			self.values[key] = nil
+		end
 		function s:SetAsync(key: string, value: number)
 			self.sets += 1
 			if self.fail > 0 then
@@ -139,6 +150,8 @@ return function(T, Loader)
 		patch(LeaderboardService, "RetryWait", 0)
 		patch(LeaderboardService, "ReadGap", 0)
 		patch(LeaderboardService, "BudgetWait", 0)
+		patch(LeaderboardService, "LeaveDelay", 0)
+		w.patch = patch
 		lb.reset()
 		lb.setLive(liveOn)
 		if liveOn then
@@ -206,6 +219,8 @@ return function(T, Loader)
 	---------------------------------------------------------------- hours played
 
 	withWorld("leaderboards: play time is credited in whole seconds, the fraction carries over", true, function(w)
+		-- (always active here: the idle rule has its own test)
+		w.patch(LeaderboardService, "ActiveWindow", math.huge)
 		local p = w.add(12, "Bo")
 		local d = w.data[p]
 		LeaderboardService.startPlay(p, 100)
@@ -228,6 +243,44 @@ return function(T, Loader)
 		-- a player that never started has nothing to credit
 		local q = w.add(13, "Cy")
 		T.eq(LeaderboardService.creditPlayTime(q, w.data[q], 999), 0)
+	end)
+
+	withWorld("leaderboards: idle time isn't play time (requests and moves keep a player active)", true, function(w)
+		local window = LeaderboardService.ActiveWindow
+		local p = w.add(14, "Idle")
+		local d = w.data[p]
+		LeaderboardService.startPlay(p, 0)
+		T.eq(LeaderboardService.creditPlayTime(p, d, 60), 60, "joining counts as activity")
+		-- no request, no move: credited up to ActiveWindow after the last activity, then nothing
+		T.eq(LeaderboardService.creditPlayTime(p, d, window + 200), window - 60, "up to the window's end")
+		T.eq(LeaderboardService.creditPlayTime(p, d, window + 260), 0, "idle")
+		T.eq(LeaderboardService.creditPlayTime(p, d, window + 320), 0, "still idle")
+		T.eq(d.Stats.PlaySeconds, window)
+		-- back (a request): the idle stretch is skipped, play counts from here
+		LeaderboardService.markActive(p, window + 350)
+		T.eq(LeaderboardService.creditPlayTime(p, d, window + 380), 30)
+		T.eq(d.Stats.PlaySeconds, window + 30)
+		-- back from idle before the next credit: the active time before the
+		-- idle stretch is credited at once, the stretch itself never
+		local changed = w.changed
+		LeaderboardService.markActive(p, 2 * window + 400)
+		T.eq(d.Stats.PlaySeconds, 2 * window, "the active tail up to the window's end")
+		T.truthy(w.changed > changed, "DataService.changed")
+		T.eq(LeaderboardService.creditPlayTime(p, d, 2 * window + 460), 60, "the idle stretch was skipped")
+		-- moves: a flat step of MoveStuds counts; jumping in place or a shuffle doesn't
+		local t = 2 * window + 460
+		LeaderboardService.noteSpot(p, Vector3.new(0, 0, 0), t)
+		LeaderboardService.noteSpot(p, Vector3.new(0, 12, 0), t + 400) -- a jump in place
+		LeaderboardService.noteSpot(p, Vector3.new(1, 0, 1), t + 410) -- a shuffle
+		T.eq(LeaderboardService.creditPlayTime(p, d, t + 500), window - 60, "only up to the window's end: no move counted")
+		LeaderboardService.noteSpot(p, Vector3.new(1 + LeaderboardService.MoveStuds, 0, 1), t + 510)
+		T.eq(LeaderboardService.creditPlayTime(p, d, t + 570), 60, "the step made the player active")
+		LeaderboardService.noteSpot(p, nil, t + 600) -- no character: nothing, no error
+		-- a player who isn't playing (not loaded) isn't tracked
+		local q = w.add(15, "Gone")
+		LeaderboardService.markActive(q, 10)
+		LeaderboardService.noteSpot(q, Vector3.new(50, 0, 50), 10)
+		T.eq(LeaderboardService.creditPlayTime(q, w.data[q], 100), 0)
 	end)
 
 	---------------------------------------------------------------- writes
@@ -316,6 +369,87 @@ return function(T, Loader)
 		T.falsy(LeaderboardService.writeScore("Nope", 35, 5))
 	end)
 
+	withWorld("leaderboards: writes leave a budget reserve for the player saves", true, function(w)
+		for i = 1, 3 do
+			w.add(500 + i, "P" .. i)
+		end
+		T.eq(LeaderboardService.reserve(), LeaderboardService.ReserveBase + 3, "the base and one per player")
+		local budgets: { [string]: number } = { GetAsync = 0, SetIncrementSortedAsync = 100 }
+		rawset(LeaderboardService, "budget", function(kind: any): number
+			return budgets[kind.Name] or 100
+		end)
+		-- exactly the reserve left: a growing board (UpdateAsync reads too) waits
+		budgets.GetAsync = LeaderboardService.reserve()
+		T.falsy(LeaderboardService.writeScore("TotalEarned", 501, 5), "the saves keep their GetAsync budget")
+		T.eq(w.stores.TotalEarned.sets, 0)
+		T.truthy(LeaderboardService.writeScore("MoneyPerSec", 501, 5), "SetAsync doesn't touch the saves' budget")
+		budgets.GetAsync = LeaderboardService.reserve() + 1
+		T.truthy(LeaderboardService.writeScore("TotalEarned", 501, 5), "one above the reserve")
+		-- the board reads have their own budget (only the leaderboards use it)
+		budgets.GetSortedAsync = 1
+		T.truthy(LeaderboardService.readBoard("TotalEarned"))
+		budgets.GetSortedAsync = 0
+		T.eq(LeaderboardService.readBoard("TotalEarned"), nil)
+	end)
+
+	withWorld("leaderboards: Studio reads the boards but never writes them", true, function(w)
+		lb.setWritable(false)
+		local p = w.add(58, "Dev")
+		w.data[p].TotalEarned = 1e9
+		T.eq(LeaderboardService.flush(p, 1e6), 0)
+		T.eq(LeaderboardService.flushValues(58, { TotalEarned = 1e9 }), 0)
+		lb.release(p, w.data[p])
+		T.eq(lb.inFlight(), 0, "no leave write")
+		T.eq(w.stores.TotalEarned.sets, 0, "the live board never saw the developer")
+		w.stores.TotalEarned.values = { ["9"] = LeaderboardConfig.encode("TotalEarned", 5000) }
+		LeaderboardService.refresh()
+		T.eq(lb.tops().TotalEarned.Rows[1].UserId, 9, "the live boards are read")
+	end)
+
+	withWorld("leaderboards: hidden users never show or get written; removeUser deletes a user", true, function(w)
+		w.patch(LeaderboardConfig.Hidden, 66, true)
+		local page = {
+			{ key = "66", value = LeaderboardConfig.encode("TotalEarned", 1e12) },
+			{ key = "67", value = LeaderboardConfig.encode("TotalEarned", 5) },
+		}
+		local rows = LeaderboardService.rowsFromPage("TotalEarned", page)
+		T.eq(#rows, 1)
+		T.eq(rows[1].UserId, 67)
+		T.eq(rows[1].Rank, 1, "ranks close up")
+		T.eq(LeaderboardService.pageSize(), LeaderboardConfig.TopCount + 1, "room for the hidden one on a page")
+		T.eq(LeaderboardService.flushValues(66, { TotalEarned = 1e12 }), 0, "never written")
+		local here = LeaderboardService.localRows("TotalEarned", {
+			{ UserId = 66, Name = "Cheat", Value = 9e9 },
+			{ UserId = 68, Name = "Fair", Value = 1 },
+		})
+		T.eq(#here, 1)
+		T.eq(here[1].UserId, 68)
+		-- removeUser: every board's entry goes (a failed request is retried), and the shown rows
+		for _, board in LeaderboardConfig.Boards do
+			w.stores[board.Id].values["69"] = 7
+			w.stores[board.Id].values["70"] = 3
+		end
+		LeaderboardService.refresh()
+		T.eq(lb.tops().Artifacts.Rows[1].UserId, 69)
+		w.stores.Artifacts.fail = 1
+		T.eq(LeaderboardService.removeUser(69), #LeaderboardConfig.Boards)
+		for _, board in LeaderboardConfig.Boards do
+			T.eq(w.stores[board.Id].values["69"], nil, board.Id .. " removed")
+			T.eq(w.stores[board.Id].values["70"], 3, board.Id .. " others kept")
+			for _, row in lb.tops()[board.Id].Rows do
+				T.truthy(row.UserId ~= 69, board.Id .. " row gone")
+			end
+		end
+		T.eq(lb.tops().Artifacts.Rows[1].UserId, 70)
+		T.eq(lb.tops().Artifacts.Rows[1].Rank, 1)
+		T.eq(w.stores.Artifacts.removes, 2, "retried once")
+		for _, bad in { 0, -5, 1.5, 0 / 0 } do
+			T.eq(LeaderboardService.removeUser(bad), 0)
+		end
+		-- the command bar's own copy opens the stores by name (none in Lune)
+		T.eq(LeaderboardService.storeOf("Nope"), nil)
+	end)
+
 	withWorld("leaderboards: a player's scores are written at most every WriteSeconds", true, function(w)
 		local p = w.add(41, "Dee")
 		w.data[p].TotalEarned = 100
@@ -382,6 +516,26 @@ return function(T, Loader)
 		T.eq(w.stores.MoneyPerSec.values["56"], 0)
 		T.eq(lb.written(56), nil, "nothing left behind")
 		T.falsy(lb.releasing(56))
+	end)
+
+	withWorld("leaderboards: the leave write waits LeaveDelay (the final save goes first)", true, function(w)
+		w.patch(LeaderboardService, "LeaveDelay", 0.2)
+		local p = w.add(57, "Lea")
+		local d = w.data[p]
+		d.TotalEarned = 800
+		LeaderboardService.beginSession(57)
+		LeaderboardService.startPlay(p, os.clock())
+		lb.release(p, d)
+		T.eq(w.stores.TotalEarned.sets, 0, "nothing sent with the leave")
+		T.eq(lb.inFlight(), 1, "on its way")
+		local waited = 0
+		while lb.inFlight() > 0 and waited < 3 do
+			task.wait(0.05)
+			waited += 0.05
+		end
+		T.eq(lb.inFlight(), 0)
+		T.truthy(waited >= 0.15, "after the delay")
+		T.eq(w.stores.TotalEarned.values["57"], LeaderboardConfig.encode("TotalEarned", 800))
 	end)
 
 	withWorld("leaderboards: without DataStores nothing is written", false, function(w)
@@ -588,13 +742,43 @@ return function(T, Loader)
 		T.eq(lines.OwnValue, "$1.3K")
 		T.eq(lines.Note, nil)
 		local outside = LeaderboardView.lines("MoneyPerSec", data, { Value = 12 }, 99, 5, true)
-		T.eq(outside.OwnRank, `#{LeaderboardConfig.TopCount + 1}+`, "outside the top 10: 11th or worse")
+		T.eq(outside.OwnRank, "~#3", "only two on the board: your live value makes you third")
 		T.eq(outside.OwnValue, "+$12/s")
 		local nothing = LeaderboardView.lines("HoursPlayed", nil, nil, 99, 5, true)
 		T.eq(nothing.OwnRank, LeaderboardView.Empty)
 		T.eq(nothing.OwnValue, "0.0 h")
 		T.eq(LeaderboardView.lines("Artifacts", { Rows = {}, Ready = false }, nil, 1, 5, true).Note, "Loading...")
 		T.eq(LeaderboardView.lines("Artifacts", data, nil, 1, 5, false).Note, LeaderboardView.LocalNote, "this server only")
+	end)
+
+	T.test("leaderboards view: your rank is estimated from your live value until the board catches up", function()
+		local rows = {}
+		for i = 1, LeaderboardConfig.TopCount do
+			table.insert(rows, { Rank = i, UserId = 100 + i, Name = "P" .. i, Value = 1000 - i * 50 })
+		end
+		local data = { Rows = rows, Ready = true }
+		-- 950, 900, 850 are worth more than 800
+		T.eq(LeaderboardView.estimateRank("Artifacts", rows, 800, 1), 4)
+		T.eq(LeaderboardView.lines("Artifacts", data, { Value = 800 }, 1, 5, true).OwnRank, "~#4")
+		T.eq(LeaderboardView.lines("Artifacts", data, { Value = 5000 }, 1, 5, true).OwnRank, "~#1")
+		T.eq(LeaderboardView.lines("Artifacts", data, { Value = 900 }, 1, 5, true).OwnRank, "~#2", "a tie: next to the equal row")
+		-- below a full page: somewhere past it
+		T.eq(LeaderboardView.estimateRank("Artifacts", rows, 100, 1), nil)
+		T.eq(LeaderboardView.lines("Artifacts", data, { Value = 100 }, 1, 5, true).OwnRank, `#{LeaderboardConfig.TopCount + 1}+`)
+		-- your own (older) row on the page doesn't count against you
+		T.eq(LeaderboardView.estimateRank("Artifacts", rows, 800, 105), 4)
+		-- the rank the server sent wins
+		T.eq(LeaderboardView.lines("Artifacts", data, { Value = 800, Rank = 6 }, 1, 5, true).OwnRank, "#6")
+		-- compared as the board stores it (hours: whole minutes)
+		local hours = { { Rank = 1, UserId = 2, Name = "H", Value = 3660 } }
+		T.eq(LeaderboardView.estimateRank("HoursPlayed", hours, 3659, 1), 2, "3659 s is stored as 60 minutes, below 61")
+		T.eq(LeaderboardView.estimateRank("HoursPlayed", hours, 3719, 1), 1, "61 minutes: a tie")
+		-- nothing to compare yet, or no value
+		T.eq(LeaderboardView.lines("Artifacts", { Rows = {}, Ready = false }, { Value = 800 }, 1, 5, true).OwnRank, `#{LeaderboardConfig.TopCount + 1}+`)
+		T.eq(LeaderboardView.estimateRank("Artifacts", rows, 0, 1), nil)
+		T.eq(LeaderboardView.lines("Artifacts", data, { Value = 0 }, 1, 5, true).OwnRank, LeaderboardView.Empty)
+		-- fewer entries than TopCount: right after the last one
+		T.eq(LeaderboardView.estimateRank("Artifacts", { rows[1], rows[2] }, 1, 1), 3)
 	end)
 
 	T.test("leaderboards view: the board canvas and the panel build and fill", function()

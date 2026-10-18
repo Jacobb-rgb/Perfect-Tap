@@ -1,15 +1,19 @@
 --[[
 	CodexController: the ORE CODEX (CodexView) on the client.
 
-	- Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (a
-	  ProximityPrompt this controller puts on every Model / BasePart tagged
-	  OreCodex as it streams in; F / gamepad Y like the other stalls) or from
-	  the side menu's CODEX button (CodexController.open / toggle).
+	- Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (one
+	  ProximityPrompt on the cabinet of every Model tagged OreCodex: its
+	  PrimaryPart or the part named Cabinet, added when it streams in; a
+	  tagged BasePart gets it itself; F / gamepad Y like the other stalls)
+	  or from the side menu's CODEX button (CodexController.open / toggle).
 	- The cards come from the State snapshot's Discovered record and update
 	  live while it is open (only when what they show changes:
-	  CodexView.fingerprint). Ores discovered since you last looked get a
-	  NEW badge; the side menu shows how many are waiting (unseen /
-	  onUnseenChanged). The first snapshot of a session counts as seen.
+	  CodexView.fingerprint). Ores discovered that you haven't looked at
+	  get a NEW badge; the side menu shows how many are waiting (unseen /
+	  onUnseenChanged). What was looked at is saved (CodexSeen ->
+	  CodexService, back as snapshot.CodexSeen), so a discovery right
+	  before leaving still shows NEW next session. (A server without
+	  snapshot.CodexSeen: the first snapshot of a session counts as seen.)
 	- Click / tap a card, or move the gamepad selection onto it, to read it.
 	- Closes with the X button, B (gamepad), Backspace, respawning or another
 	  panel opening. Other prompts are hidden while it is open.
@@ -23,7 +27,9 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Net = require(ReplicatedStorage:WaitForChild("Shared").Net)
 local CodexView = require(script.Parent.Parent.UI.CodexView)
 local MenuPanel = require(script.Parent.Parent.UI.MenuPanel)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -49,9 +55,12 @@ local refs: CodexView.Refs? = nil
 local isOpen = false
 local openedAt = 0
 local tickConnection: RBXScriptConnection? = nil
--- discovered ores the player has looked at (nil until the first snapshot)
+-- discovered ores the player has looked at, without a saved record (nil
+-- until the first snapshot)
 local seen: { [string]: boolean }? = nil
--- discovered since the last look: the NEW badges
+-- looked at here, not in the saved record yet (sent with CodexSeen)
+local lookedAt: { [string]: boolean } = {}
+-- discovered, not looked at: the NEW badges
 local fresh: { [string]: boolean } = {}
 local unseenListeners: { (number) -> () } = {}
 local entriesNow: { CodexView.Entry } = {}
@@ -88,6 +97,35 @@ end
 
 local function onState(state: { [string]: any })
 	local discovered = if type(state.Discovered) == "table" then state.Discovered else {}
+	local saved = state.CodexSeen
+	if type(saved) == "table" then
+		-- the saved record: NEW = discovered, not saved as seen, not looked at here
+		for oreId in lookedAt do
+			if saved[oreId] == true then
+				lookedAt[oreId] = nil
+			end
+		end
+		local changed = false
+		for oreId in fresh do
+			if discovered[oreId] ~= true or saved[oreId] == true or lookedAt[oreId] then
+				fresh[oreId] = nil
+				changed = true
+			end
+		end
+		for oreId, on in discovered do
+			if type(oreId) == "string" and on == true and saved[oreId] ~= true and not lookedAt[oreId] and not fresh[oreId] then
+				fresh[oreId] = true
+				changed = true
+			end
+		end
+		if changed then
+			notifyUnseen()
+		end
+		if isOpen and CodexView.fingerprint(discovered, fresh) ~= shownPrint then
+			CodexController.refresh()
+		end
+		return
+	end
 	local known = seen
 	if not known then
 		-- the first snapshot: everything already discovered counts as seen
@@ -115,17 +153,27 @@ local function onState(state: { [string]: any })
 	end
 end
 
--- The NEW badges were looked at: they count as seen now.
+-- The NEW badges were looked at: they count as seen now, and the server
+-- saves them (every one it hasn't confirmed yet, so a dropped request is
+-- sent again next time).
 local function markSeen()
-	local known = seen
-	if not known or next(fresh) == nil then
+	if next(fresh) == nil then
 		return
 	end
+	local known = seen
 	for oreId in fresh do
-		known[oreId] = true
+		lookedAt[oreId] = true
+		if known then
+			known[oreId] = true
+		end
 	end
 	table.clear(fresh)
 	notifyUnseen()
+	local ids: { string } = {}
+	for oreId in lookedAt do
+		table.insert(ids, oreId)
+	end
+	Net.send("CodexSeen", ids)
 end
 
 ---------------------------------------------------------------- view
@@ -333,27 +381,18 @@ end
 
 ---------------------------------------------------------------- the terminal prompt
 
-local function promptPart(target: Instance): BasePart?
-	if target:IsA("BasePart") then
-		return target
-	end
-	if target:IsA("Model") then
-		local primary = target.PrimaryPart
-		if primary then
-			return primary
-		end
-		local cabinet = target:FindFirstChild("Cabinet", true)
-		if cabinet and cabinet:IsA("BasePart") then
-			return cabinet
-		end
-		return target:FindFirstChildWhichIsA("BasePart", true)
-	end
-	return nil
-end
-
-local function addPrompt(part: BasePart)
+-- Puts the prompt on `part` (once), and takes any other copy off the
+-- terminal: one Ore Codex prompt per terminal.
+local function addPrompt(part: BasePart, terminal: Instance)
 	if part:FindFirstChild(CodexController.PromptName) then
 		return
+	end
+	if terminal ~= part then
+		for _, object in terminal:GetDescendants() do
+			if object.Name == CodexController.PromptName and object:IsA("ProximityPrompt") then
+				object:Destroy()
+			end
+		end
 	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = CodexController.PromptName
@@ -374,18 +413,18 @@ end
 local watched: { [Instance]: RBXScriptConnection } = {}
 
 -- A tagged terminal streamed in: its prompt goes on its cabinet. With
--- StreamingEnabled the model can stay while its parts stream out and back
--- in as new instances, so every part that arrives gets checked again (the
--- prompt is only added where it is missing).
+-- StreamingEnabled the model can arrive before its cabinet, and its parts
+-- can stream out and back in as new instances, so every part that arrives
+-- gets checked again (the prompt is only added where it is missing).
 local function attach(target: Instance)
 	if target:IsA("BasePart") then
-		addPrompt(target)
+		addPrompt(target, target)
 		return
 	end
 	local function try()
-		local part = promptPart(target)
+		local part = CodexView.promptPart(target)
 		if part then
-			addPrompt(part)
+			addPrompt(part, target)
 		end
 	end
 	try()

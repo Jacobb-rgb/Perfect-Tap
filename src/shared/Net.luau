@@ -148,6 +148,9 @@ Net.Events = {
 	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean })
 	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
 	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
+	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
+	--   discovered ores were looked at (their NEW badges go; CodexService keeps them in
+	--   data.OreCodex.Seen, sent back as snapshot.CodexSeen)
 	-- server -> client
 	Notify = false,
 	Fx = false,

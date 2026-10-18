@@ -117,6 +117,10 @@ local DataTemplate = {
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
 	-- the side menu's SETTINGS (SettingsConfig; SettingsService repairs it on load)
 	Settings = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true },
+	-- the ORE CODEX's NEW badges (CodexService): Seen = { [oreId] = true } the discovered ores
+	-- the player has looked at; Ready = false on a save made before this record (its
+	-- discovered ores then count as seen, once)
+	OreCodex = { Seen = {}, Ready = false },
 	Badges = {}, -- [badgeKey] = true (local cache, Roblox is the source of truth)
 	GroupRewardClaimed = false,
 	ForgeName = "", -- raw text, always filtered by TextService before showing

@@ -24,13 +24,27 @@
 	  Every request waits for DataStore budget
 	  (GetRequestBudgetForRequestType), is pcall'd and tried Retries times
 	  with a growing pause; a failed write is tried again on the next round.
+	  The GetAsync budget (UpdateAsync on the growing boards) is shared with
+	  the player saves (ProfileStore), so a leaderboard request leaves a
+	  reserve of ReserveBase + one per player (and per leaving player) for
+	  them; the leave write starts LeaveDelay after the leave, once the
+	  final save's request went out.
 	  A round write that ends after the player's leave started is not
-	  remembered. Studio test players (UserId <= 0) are never written.
+	  remembered. Studio never writes (WriteInStudio: a developer's real
+	  UserId and command-bar values stay off the live boards; it still
+	  reads them), nor do Studio test players (UserId <= 0) or the
+	  LeaderboardConfig.Hidden users.
 	- Every LeaderboardConfig.RefreshSeconds (60 s) the top
 	  LeaderboardConfig.TopCount of each board is read (GetSortedAsync,
-	  descending, one board at a time), and every player gets Leaderboards
-	  { Live, Boards, Own } (Net.luau). A board that can't be read keeps its
-	  last rows. A joining player gets the latest rows at once.
+	  descending, one board at a time; LeaderboardConfig.Hidden users are
+	  skipped), and every player gets Leaderboards { Live, Boards, Own }
+	  (Net.luau). A board that can't be read keeps its last rows. A joining
+	  player gets the latest rows at once.
+	- removeUser(userId): deletes a user's entries from all four stores
+	  (RemoveAsync; a cheater's or banned user's score, or an RTBF request).
+	  From the Studio command bar (API access on):
+	    require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(12345)
+	  Add the id to LeaderboardConfig.Hidden too so it never comes back.
 	- Names are DisplayNames (docs/COMPLIANCE.md 2.4): players on this server
 	  by their own, the rest from one batched
 	  UserService:GetUserInfosByUserIdsAsync call per refresh for every id
@@ -45,11 +59,16 @@
 	data.Stats.PlaySeconds grows by the whole seconds since the last credit
 	(the rest carries over; at most MaxCredit at once), and once more on
 	leave, before the final save. DataService.changed follows each credit.
+	Only active time counts: a player is active for ActiveWindow (5 min)
+	after their last request to the server (any Net event) or after their
+	character moved MoveStuds since the last look (every ActivityTick), so
+	an idle player (AFK, an anti-AFK macro) stops climbing the board.
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserService = game:GetService("UserService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -79,16 +98,28 @@ LeaderboardService.NameRetry = 300 -- a failed name lookup is tried again after 
 LeaderboardService.MaxNames = 500 -- cached names (the cache starts over past this)
 LeaderboardService.UnknownName = "Miner"
 LeaderboardService.BusyWait = 15 -- the leave write waits this long for a round write still running
+LeaderboardService.LeaveDelay = 1 -- the leave write starts this long after the leave (the final save first)
+-- the GetAsync budget a request leaves for the player saves: this + one per player (and leaving player)
+LeaderboardService.ReserveBase = 10
+LeaderboardService.WriteInStudio = false -- Studio reads the boards but never writes them
+-- hours played count only active time
+LeaderboardService.ActiveWindow = 300 -- seconds a request or a move keeps a player active
+LeaderboardService.ActivityTick = 10 -- how often the characters' moves are checked
+LeaderboardService.MoveStuds = 4 -- a move this long (flat) since the last check is activity
 -- boards whose value never goes down: UpdateAsync keeps the bigger number
 LeaderboardService.Growing = { TotalEarned = true, Artifacts = true, HoursPlayed = true } :: { [string]: boolean }
 
 local live = false
+local writable = false -- live and allowed to write (not Studio)
 local stores: { [string]: any } = {}
 local tops: { [string]: BoardData } = {}
 -- userId -> board -> the stored number this server last wrote
 local written: { [number]: { [string]: number } } = {}
 local lastWrite: { [Player]: number } = {}
 local playCredit: { [Player]: number } = {}
+-- the last request or move (os.clock) and where the character was at the last check
+local lastActive: { [Player]: number } = {}
+local lastSpot: { [Player]: Vector3 } = {}
 local names: { [number]: string } = {}
 local nameCount = 0
 local nameFailedAt: { [number]: number } = {}
@@ -141,27 +172,74 @@ end
 
 ---------------------------------------------------------------- hours played
 
--- Starts counting a player's time (on load).
+-- Starts counting a player's time (on load; joining counts as activity).
 function LeaderboardService.startPlay(player: Player, now: number)
 	playCredit[player] = now
+	lastActive[player] = now
 end
 
--- Adds the whole seconds since the last credit to data.Stats.PlaySeconds
--- (the fraction carries over). Returns the seconds added.
+-- The player did something (a request to the server, a move). Back from
+-- an idle stretch, the active time before it is credited now and the idle
+-- stretch is skipped.
+function LeaderboardService.markActive(player: Player, now: number)
+	if playCredit[player] == nil then
+		return
+	end
+	local last = lastActive[player]
+	if last and now - last > LeaderboardService.ActiveWindow then
+		local data = DataService.get(player)
+		if data and LeaderboardService.creditPlayTime(player, data, now) > 0 then
+			DataService.changed(player)
+		end
+		local since = playCredit[player]
+		if since and since < now then
+			playCredit[player] = now
+		end
+	end
+	if not last or now > last then
+		lastActive[player] = now
+	end
+end
+
+-- Activity from the character: a flat move of MoveStuds since the last
+-- look (`position` nil = no character: nothing).
+function LeaderboardService.noteSpot(player: Player, position: Vector3?, now: number)
+	if not position or playCredit[player] == nil then
+		return
+	end
+	local before = lastSpot[player]
+	lastSpot[player] = position
+	if before then
+		local flat = Vector3.new(position.X - before.X, 0, position.Z - before.Z)
+		if flat.Magnitude >= LeaderboardService.MoveStuds then
+			LeaderboardService.markActive(player, now)
+		end
+	end
+end
+
+-- Adds the whole active seconds since the last credit to
+-- data.Stats.PlaySeconds (the fraction carries over; time more than
+-- ActiveWindow after the last activity is idle and dropped). Returns the
+-- seconds added.
 function LeaderboardService.creditPlayTime(player: Player, data: { [string]: any }, now: number): number
 	local since = playCredit[player]
 	if not since then
 		return 0
 	end
-	local elapsed = now - since
-	if elapsed ~= elapsed or elapsed <= 0 then
-		return 0
+	-- active until ActiveWindow after the last request or move; the time
+	-- after that is idle and never credited
+	local active = lastActive[player] or since
+	local upTo = math.min(now, active + LeaderboardService.ActiveWindow)
+	local elapsed = upTo - since
+	local whole = if elapsed == elapsed and elapsed > 0 then math.floor(elapsed) else 0
+	if upTo < now and now > since then
+		playCredit[player] = now -- (the idle stretch is skipped, not carried)
+	elseif whole > 0 then
+		playCredit[player] = since + whole
 	end
-	local whole = math.floor(elapsed)
 	if whole <= 0 then
 		return 0
 	end
-	playCredit[player] = since + whole
 	local stats = data.Stats
 	if type(stats) ~= "table" then
 		return 0
@@ -181,9 +259,21 @@ function LeaderboardService.budget(kind: Enum.DataStoreRequestType): number
 	return if ok and type(value) == "number" then value else 0
 end
 
-local function waitBudget(kind: Enum.DataStoreRequestType): boolean
+-- The GetAsync budget a leaderboard request leaves for the player saves.
+function LeaderboardService.reserve(): number
+	local leaving = 0
+	for _ in releasing do
+		leaving += 1
+	end
+	return LeaderboardService.ReserveBase + #LeaderboardService.players() + leaving
+end
+
+-- Waits until a request of `kind` can go out with `reserve` left over
+-- (false after BudgetWait).
+local function waitBudget(kind: Enum.DataStoreRequestType, reserve: number?): boolean
+	local need = 1 + (reserve or 0)
 	local waited = 0
-	while LeaderboardService.budget(kind) < 1 do
+	while LeaderboardService.budget(kind) < need do
 		if waited >= LeaderboardService.BudgetWait then
 			return false
 		end
@@ -202,10 +292,11 @@ function LeaderboardService.writeScore(boardId: string, userId: number, stored: 
 	end
 	local growing = LeaderboardService.Growing[boardId] == true
 	for attempt = 1, LeaderboardService.Retries do
-		-- (UpdateAsync reads and writes: both budgets)
+		-- (UpdateAsync reads and writes: both budgets; GetAsync is the
+		-- player saves' too, so it keeps a reserve for them)
 		if
 			waitBudget(Enum.DataStoreRequestType.SetIncrementSortedAsync)
-			and (not growing or waitBudget(Enum.DataStoreRequestType.GetAsync))
+			and (not growing or waitBudget(Enum.DataStoreRequestType.GetAsync, LeaderboardService.reserve()))
 		then
 			local ok, err = pcall(function()
 				if growing then
@@ -260,7 +351,7 @@ end
 -- Writes a user's changed scores now (`final` = the leave write). Returns
 -- how many were written.
 function LeaderboardService.flushValues(userId: number, values: { [string]: number }, final: boolean?): number
-	if not live or userId <= 0 then
+	if not writable or userId <= 0 or LeaderboardConfig.Hidden[userId] then
 		return 0
 	end
 	if not final and releasing[userId] then
@@ -299,7 +390,7 @@ end
 -- Writes a player's scores when WriteSeconds passed since the last time.
 function LeaderboardService.flush(player: Player, now: number): number
 	local data = DataService.get(player)
-	if not data or not live or player.UserId <= 0 then
+	if not data or not writable or player.UserId <= 0 then
 		return 0
 	end
 	local last = lastWrite[player]
@@ -425,12 +516,22 @@ function LeaderboardService.rowsFromPage(boardId: string, page: any): { Row }
 		if type(entry) == "table" then
 			local userId = tonumber(entry.key)
 			local value = LeaderboardConfig.decode(boardId, entry.value)
-			if userId and userId == math.floor(userId) and value > 0 then
+			if userId and userId == math.floor(userId) and value > 0 and not LeaderboardConfig.Hidden[userId] then
 				table.insert(rows, { Rank = #rows + 1, UserId = userId, Name = "", Value = value })
 			end
 		end
 	end
 	return rows
+end
+
+-- How many entries a read asks for: TopCount, plus room for the hidden
+-- users that may sit in it (a page holds at most 100).
+function LeaderboardService.pageSize(): number
+	local hidden = 0
+	for _ in LeaderboardConfig.Hidden do
+		hidden += 1
+	end
+	return math.min(100, LeaderboardConfig.TopCount + hidden)
 end
 
 -- Reads a board's top rows (nil when it can't be read right now).
@@ -439,8 +540,9 @@ function LeaderboardService.readBoard(boardId: string): { Row }?
 	if not store or not waitBudget(Enum.DataStoreRequestType.GetSortedAsync) then
 		return nil
 	end
+	local size = LeaderboardService.pageSize()
 	local ok, result = pcall(function()
-		local pages = store:GetSortedAsync(false, LeaderboardConfig.TopCount)
+		local pages = store:GetSortedAsync(false, size)
 		return pages:GetCurrentPage()
 	end)
 	if not ok then
@@ -454,7 +556,7 @@ end
 function LeaderboardService.localRows(boardId: string, entries: { { UserId: number, Name: string, Value: number } }): { Row }
 	local list = {}
 	for _, entry in entries do
-		if entry.Value > 0 then
+		if entry.Value > 0 and not LeaderboardConfig.Hidden[entry.UserId] then
 			table.insert(list, entry)
 		end
 	end
@@ -474,6 +576,71 @@ function LeaderboardService.localRows(boardId: string, entries: { { UserId: numb
 		table.insert(rows, { Rank = i, UserId = entry.UserId, Name = entry.Name, Value = value })
 	end
 	return rows
+end
+
+---------------------------------------------------------------- removing
+
+-- The OrderedDataStore of a board (opened here when start() didn't: the
+-- command bar has its own copy of this module; swappable for the tests).
+function LeaderboardService.storeOf(boardId: string): any?
+	local store = stores[boardId]
+	if store then
+		return store
+	end
+	local board = LeaderboardConfig.ById[boardId]
+	if not board then
+		return nil
+	end
+	local ok, opened = pcall(function()
+		return DataStoreService:GetOrderedDataStore(board.Store)
+	end)
+	return if ok then opened else nil
+end
+
+-- Deletes a user's entries from every board (RemoveAsync: a cheater's or
+-- banned user's score, an RTBF request) and from the rows shown now.
+-- Returns how many boards it was removed from (every request is pcall'd,
+-- budget-aware and retried; Studio may do this, it is an admin action).
+function LeaderboardService.removeUser(userId: number): number
+	if type(userId) ~= "number" or userId ~= math.floor(userId) or userId <= 0 then
+		return 0
+	end
+	local removed = 0
+	for _, board in LeaderboardConfig.Boards do
+		local store = LeaderboardService.storeOf(board.Id)
+		if store then
+			for attempt = 1, LeaderboardService.Retries do
+				if waitBudget(Enum.DataStoreRequestType.SetIncrementSortedAsync) then
+					local ok, err = pcall(function()
+						store:RemoveAsync(tostring(userId))
+					end)
+					if ok then
+						removed += 1
+						break
+					end
+					if attempt == LeaderboardService.Retries then
+						warn(`[LeaderboardService] removing {userId} from {board.Id} failed: {err}`)
+					end
+				end
+				if attempt < LeaderboardService.Retries then
+					task.wait(LeaderboardService.RetryWait * attempt)
+				end
+			end
+		end
+		local top = tops[board.Id]
+		if top then
+			local kept: { Row } = {}
+			for _, row in top.Rows do
+				if row.UserId ~= userId then
+					row.Rank = #kept + 1
+					table.insert(kept, row)
+				end
+			end
+			top.Rows = kept
+		end
+	end
+	written[userId] = nil
+	return removed
 end
 
 ---------------------------------------------------------------- sending
@@ -614,9 +781,11 @@ local function onRelease(player: Player, data: { [string]: any })
 	local values = LeaderboardService.values(player, data)
 	playCredit[player] = nil
 	lastWrite[player] = nil
+	lastActive[player] = nil
+	lastSpot[player] = nil
 	local userId = player.UserId
 	local session = sessions[userId]
-	if not live or userId <= 0 then
+	if not writable or userId <= 0 or LeaderboardConfig.Hidden[userId] then
 		forget(userId, session)
 		return
 	end
@@ -624,6 +793,10 @@ local function onRelease(player: Player, data: { [string]: any })
 	releasing[userId] = true
 	inFlight += 1
 	task.spawn(function()
+		-- the final save's request goes out first (its budget comes first)
+		if LeaderboardService.LeaveDelay > 0 then
+			task.wait(LeaderboardService.LeaveDelay)
+		end
 		-- a round write still running lands first (MoneyPerSec is set: the
 		-- leave write must be the last)
 		local waited = 0
@@ -657,6 +830,14 @@ function LeaderboardService.init()
 	end)
 	-- (a player who never loaded has no entries to clean up)
 	DataService.beforeRelease(onRelease)
+	-- activity for the hours played: any request to the server
+	for name, limit in Net.Events do
+		if limit then
+			Net.event(name).OnServerEvent:Connect(function(player: Player)
+				LeaderboardService.markActive(player, os.clock())
+			end)
+		end
+	end
 	game:BindToClose(function()
 		task.wait()
 		local waited = 0
@@ -669,15 +850,29 @@ end
 
 function LeaderboardService.start()
 	live = openStores()
-	-- hours played
+	writable = live and (LeaderboardService.WriteInStudio or not RunService:IsStudio())
+	if live and not writable then
+		print("[LeaderboardService] Studio: the boards are read, never written")
+	end
+	-- hours played: moves every ActivityTick, the credit every PlayTick
 	task.spawn(function()
+		local sinceCredit = 0
 		while true do
-			task.wait(LeaderboardService.PlayTick)
+			task.wait(LeaderboardService.ActivityTick)
 			local now = os.clock()
 			for _, player in LeaderboardService.players() do
-				local data = DataService.get(player)
-				if data and LeaderboardService.creditPlayTime(player, data, now) > 0 then
-					DataService.changed(player)
+				local character = player.Character
+				local root = character and character:FindFirstChild("HumanoidRootPart")
+				LeaderboardService.noteSpot(player, if root and root:IsA("BasePart") then root.Position else nil, now)
+			end
+			sinceCredit += LeaderboardService.ActivityTick
+			if sinceCredit >= LeaderboardService.PlayTick then
+				sinceCredit = 0
+				for _, player in LeaderboardService.players() do
+					local data = DataService.get(player)
+					if data and LeaderboardService.creditPlayTime(player, data, now) > 0 then
+						DataService.changed(player)
+					end
 				end
 			end
 		end
@@ -712,11 +907,14 @@ end
 LeaderboardService._test = {
 	reset = function()
 		live = false
+		writable = false
 		table.clear(stores)
 		table.clear(tops)
 		table.clear(written)
 		table.clear(lastWrite)
 		table.clear(playCredit)
+		table.clear(lastActive)
+		table.clear(lastSpot)
 		table.clear(names)
 		table.clear(nameFailedAt)
 		table.clear(sessions)
@@ -728,6 +926,11 @@ LeaderboardService._test = {
 	end,
 	setLive = function(on: boolean)
 		live = on
+		writable = on
+	end,
+	-- Studio: live (reads) but not writable
+	setWritable = function(on: boolean)
+		writable = on
 	end,
 	setStore = function(boardId: string, store: any)
 		stores[boardId] = store

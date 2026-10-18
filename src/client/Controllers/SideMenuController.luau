@@ -19,13 +19,18 @@
 	buttons), or wears a "SOON" chip and answers with a toast (STORE), or
 	answers with a hint (SHOP). Pressing the button of an open panel closes
 	it.
-	Layout: SideMenuView.layout (touch screens keep the thumbstick's
-	bottom-left corner free; TVs keep the title-safe margin).
+	Layout: SideMenuView.layout (touch screens: MenuPanels.isTouch, the same
+	test the panels use; they get one MENU button that opens the grid and
+	keep the thumbstick's bottom-left corner free; TVs keep the title-safe
+	margin). The touch grid shuts again when a button runs, after
+	AutoShut seconds without a tap, when the gamepad selection leaves it or
+	when the HUD hides.
 	Input: click / tap; gamepad: D-pad Left jumps into the column (its glyph
-	shows over the menu while a gamepad is used), the D-pad moves, A opens,
-	B or D-pad Left again leaves. The menu hides whenever the HUD's own menu
-	is hidden (build mode, the cleaning minigame, the Foundry moment), and
-	the side menu's own panels (CODEX, SETTINGS, HALL OF FAME) close then.
+	shows over the menu while a gamepad is used; the touch grid opens), the
+	D-pad moves, A opens, B leaves; D-pad Left leaves from the first column
+	only (in a grid it moves left). The menu hides whenever the HUD's own
+	menu is hidden (build mode, the cleaning minigame, the Foundry moment),
+	and the side menu's own panels (CODEX, SETTINGS, HALL OF FAME) close then.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -59,6 +64,8 @@ SideMenuController.Actions = {
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.
 SideMenuController.Panels = { "CodexController", "SettingsController", "LeaderboardController" }
+-- the touch grid shuts by itself after this many seconds without a tap
+SideMenuController.AutoShut = 10
 
 local JUMP_ACTION = "TerraForgeSideMenuJump"
 local LEAVE_ACTION = "TerraForgeSideMenuLeave"
@@ -68,18 +75,56 @@ local player = Players.LocalPlayer
 local refs: SideMenuView.Refs? = nil
 local hudVisible = true
 local leaveBound = false
+local shutToken = 0
 
 function SideMenuController.refs(): SideMenuView.Refs?
 	return refs
 end
 
--- Runs a button: toggles its panel, or answers with the toast. Returns
--- what happened ("Opened" | "Closed" | "Missing").
+local function inMenu(object: GuiObject?): boolean
+	local view = refs
+	return object ~= nil and view ~= nil and object:IsDescendantOf(view.Column)
+end
+
+-- Opens or shuts the touch layout's grid (no-op on other layouts). An open
+-- grid shuts by itself after AutoShut seconds unless the gamepad
+-- selection is in it.
+function SideMenuController.setExpanded(on: boolean)
+	local view = refs
+	if not view then
+		return
+	end
+	local layout = view.Layout
+	if not layout or not layout.Toggle then
+		on = false
+	end
+	if view.Expanded ~= on then
+		SideMenuView.setExpanded(view, on)
+		-- a gamepad selection on a button that just hid goes back to MENU
+		local selected = GuiService.SelectedObject
+		if not on and layout and layout.Toggle and selected and inMenu(selected) and selected ~= view.Toggle then
+			GuiService.SelectedObject = view.Toggle
+		end
+	end
+	shutToken += 1
+	if on then
+		local token = shutToken
+		task.delay(SideMenuController.AutoShut, function()
+			if token == shutToken and not inMenu(GuiService.SelectedObject) then
+				SideMenuController.setExpanded(false)
+			end
+		end)
+	end
+end
+
+-- Runs a button: toggles its panel, or answers with the toast (the touch
+-- grid shuts). Returns what happened ("Opened" | "Closed" | "Missing").
 function SideMenuController.press(id: string): string
 	local action = SideMenuController.Actions[id]
 	if not action then
 		return "Missing"
 	end
+	SideMenuController.setExpanded(false)
 	local name = action.Controller
 	local controller = if name then MenuPanels.controller(name) else nil
 	if name and controller then
@@ -94,11 +139,6 @@ function SideMenuController.press(id: string): string
 	return "Missing"
 end
 
-local function inMenu(object: GuiObject?): boolean
-	local view = refs
-	return object ~= nil and view ~= nil and object:IsDescendantOf(view.Column)
-end
-
 local function firstButton(view: SideMenuView.Refs): TextButton
 	local shown = SideMenuView.shown(view)
 	return view.Buttons[shown[1] or view.Order[1]]
@@ -108,6 +148,7 @@ local function leave()
 	if inMenu(GuiService.SelectedObject) then
 		GuiService.SelectedObject = nil
 	end
+	SideMenuController.setExpanded(false)
 end
 
 local function onLeave(_: string, state: Enum.UserInputState): Enum.ContextActionResult
@@ -136,15 +177,22 @@ local function onJump(_: string, state: Enum.UserInputState): Enum.ContextAction
 	if state ~= Enum.UserInputState.Begin or not view or not view.Gui.Enabled then
 		return Enum.ContextActionResult.Pass
 	end
-	if inMenu(GuiService.SelectedObject) then
+	local selected = GuiService.SelectedObject
+	if selected and inMenu(selected) then
+		-- from the first column it leaves; further right it moves left in the grid
+		local layout = view.Layout
+		local cell = SideMenuView.cellOf(view, selected)
+		if layout and cell and cell % layout.Columns ~= 0 then
+			return Enum.ContextActionResult.Pass
+		end
 		leave()
 		return Enum.ContextActionResult.Sink
 	end
 	-- another panel owns the selection: leave it alone
-	local selected = GuiService.SelectedObject
 	if selected ~= nil then
 		return Enum.ContextActionResult.Pass
 	end
+	SideMenuController.setExpanded(true)
 	GuiService.SelectedObject = firstButton(view)
 	Sfx.play("UIClick")
 	return Enum.ContextActionResult.Sink
@@ -159,15 +207,17 @@ local function relayout()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local scale = HudController.uiScale()
 	local inset = GuiService:GetGuiInset()
-	SideMenuView.apply(
-		view,
-		SideMenuView.layout(scale, (size.Y - inset.Y) / scale, {
-			Count = #SideMenuView.shown(view),
-			Touch = UserInputService.TouchEnabled,
-			TenFoot = GuiService:IsTenFootInterface(),
-			DesignWidth = size.X / scale,
-		})
-	)
+	local layout = SideMenuView.layout(scale, (size.Y - inset.Y) / scale, {
+		Count = #SideMenuView.shown(view),
+		Touch = MenuPanels.isTouch(),
+		TenFoot = GuiService:IsTenFootInterface(),
+		DesignWidth = size.X / scale,
+	})
+	if not layout.Toggle then
+		-- (a mouse layout has no grid to shut; a later touch layout starts shut)
+		view.Expanded = false
+	end
+	SideMenuView.apply(view, layout)
 end
 
 local function updateGlyph()
@@ -216,6 +266,7 @@ local function followHud()
 		view.Gui.Enabled = visible
 		if not visible then
 			leave()
+			SideMenuController.setExpanded(false)
 			for _, name in SideMenuController.Panels do
 				if MenuPanels.isOpen(name) then
 					MenuPanels.call(name, "close")
@@ -235,6 +286,16 @@ function SideMenuController.init()
 			SideMenuController.press(id)
 		end)
 	end
+	view.Toggle.Activated:Connect(function()
+		Sfx.play("UIClick")
+		local open = not view.Expanded
+		SideMenuController.setExpanded(open)
+		local selected = GuiService.SelectedObject
+		if open and selected and selected == view.Toggle then
+			-- a gamepad press on MENU: on to the first button
+			GuiService.SelectedObject = firstButton(view)
+		end
+	end)
 	relayout()
 end
 

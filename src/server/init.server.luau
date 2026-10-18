@@ -48,6 +48,7 @@ local ORDER = {
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
 	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
 	"SettingsService", -- the side menu's SETTINGS record
+	"CodexService", -- the ORE CODEX's NEW badges (seen ores)
 }
 
 local loaded = {}

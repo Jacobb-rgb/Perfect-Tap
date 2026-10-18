@@ -475,6 +475,12 @@ tutorial.
     `TF_LB_Artifacts_v1`, `TF_LB_HoursPlayed_v1`
   When a board's name gets a new `_vN` suffix, add a template for the new
   name too. Add one template per extra data store you create later.
+  By hand (a request before the templates exist, or a cheater's score):
+  Studio command bar with API access on,
+  `require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(12345)`
+  deletes the user's entry from all four boards; add a cheater's UserId to
+  `LeaderboardConfig.Hidden` too so the boards never show or write it again.
+  (Studio play sessions read the live boards but never write them.)
 - **Testing in Studio:** Roblox warns that Studio access to data stores is
   dangerous for live games. Once the game is live, test in a **separate test
   place/game** or turn the setting off (see section 3).

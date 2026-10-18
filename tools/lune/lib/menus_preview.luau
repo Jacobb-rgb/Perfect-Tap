@@ -4,22 +4,28 @@
 	tools/preview/menus_shots.json). Everything is drawn with the game's own
 	builders (SideMenuView, CodexView, SettingsView, LeaderboardView,
 	HudView, TeleportView, BuildView) from sample data.
-	UI overlays (build/preview/<name>.json):
+	UI overlays (build/preview/<name>.json); the side menu as it ships now
+	(5 buttons: GOLEMS and ARTIFACTS hidden until their packages are in):
 	  ui_menu_hud        PC: the HUD with the side menu (CODEX badge, STORE's
-	                     SOON chip; all 7 buttons, as once GOLEMS and
-	                     ARTIFACTS are in the game)
-	  ui_menu_phone      667 x 375 pt phone: the touch layout (four columns
-	                     under the coins, the thumbstick's corner free)
-	  ui_menu_phone_small 568 x 320 pt phone
+	                     SOON chip)
+	  ui_menu_hud_full   PC: all 7 buttons, as once GOLEMS and ARTIFACTS are in
+	  ui_menu_phone      667 x 375 pt phone: the MENU button alone (its badge
+	                     adds up the CODEX count), the screen the game's
+	  ui_menu_phone_open 667 x 375 pt phone: MENU tapped, the grid open (the
+	                     thumbstick's corner free)
+	  ui_menu_phone_small 568 x 320 pt phone, the grid open
 	  ui_codex           PC: the codex, 14 of 30 found, Ruby selected (NEW)
 	  ui_codex_hidden    PC: an undiscovered ore selected
 	  ui_codex_phone     667 x 375 pt phone (compact)
-	  ui_settings        PC: SETTINGS
-	  ui_settings_phone  667 x 375 pt phone
+	  ui_settings        PC with a gamepad connected: SETTINGS (Sounds,
+	                     Camera shake, Gamepad rumble; Music shows once a
+	                     soundtrack plays)
+	  ui_settings_phone  667 x 375 pt phone (no gamepad: Sounds, Camera shake)
 	  ui_boards          PC: HALL OF FAME panel, TOTAL EARNED tab
 	  ui_boards_phone    667 x 375 pt phone, MONEY/S tab
 	  ui_board_closeup   the four lobby boards as the SurfaceGuis draw them
-	                     (navy board, the hall's title strip, 5 rows, YOUR line)
+	                     (navy board, the hall's title strip, 5 rows, YOUR line;
+	                     ARTIFACTS: "~#6", your live value already ranks there)
 	  ui_board_studio    one board in Studio without DataStores
 	(the 3D renderer draws one text per SurfaceGui, so the lobby boards are
 	shown as a close-up overlay)
@@ -62,7 +68,8 @@ local NAMES = {
 	"QuarryQuinn",
 }
 
--- A sample Leaderboards payload: 10 rows per board, you at rank 7 on TOTAL EARNED.
+-- A sample Leaderboards payload: 10 rows per board, you at rank 7 on TOTAL EARNED,
+-- "~#6" on ARTIFACTS (your live value passed #6 there), "#11+" on the other two.
 function Preview.payload(): any
 	local boards = {}
 	local bases = { MoneyPerSec = 4.2e9, TotalEarned = 8.2e15, Artifacts = 412, HoursPlayed = 380 * 3600 }
@@ -70,7 +77,9 @@ function Preview.payload(): any
 		local rows = {}
 		for i, name in NAMES do
 			local value = if id == "Artifacts" or id == "HoursPlayed" then math.floor(base / (1 + (i - 1) * 0.35)) else base / 3.1 ^ (i - 1)
-			table.insert(rows, { Rank = i, UserId = if i == 7 then Preview.Me else 1000 + i, Name = name, Value = value })
+			-- you are #7 on TOTAL EARNED (the rank the server sends); elsewhere you aren't in the rows
+			local mine = i == 7 and id == "TotalEarned"
+			table.insert(rows, { Rank = i, UserId = if mine then Preview.Me else 1000 + i, Name = name, Value = value })
 		end
 		boards[id] = { Rows = rows, Ready = true }
 	end
@@ -80,7 +89,8 @@ function Preview.payload(): any
 		Own = {
 			MoneyPerSec = { Value = 1840 },
 			TotalEarned = { Value = boards.TotalEarned.Rows[7].Value, Rank = 7 },
-			Artifacts = { Value = 18 },
+			-- not in the rows read yet, but worth more than #6 there: "~#6"
+			Artifacts = { Value = 150 },
 			HoursPlayed = { Value = 12.5 * 3600 },
 		},
 	}
@@ -135,11 +145,19 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
-	local function menu(renderScale: number, uiScale: number, designH: number): any
+	-- the side menu; `full` = all 7 buttons (else the 5 that ship now),
+	-- `open` = the touch layout's grid opened with MENU
+	local function menu(renderScale: number, uiScale: number, designH: number, full: boolean?, open: boolean?): any
 		local refs = SideMenuView.build()
 		refs.Gui.Scale.Scale = renderScale
+		if not full then
+			SideMenuView.setHidden(refs, "Golems", true)
+			SideMenuView.setHidden(refs, "Collection", true)
+		end
 		local touch = uiScale <= SideMenuView.CompactScale
-		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Touch = touch, DesignWidth = 1600 / renderScale }))
+		refs.Expanded = open == true
+		local count = #SideMenuView.shown(refs)
+		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Count = count, Touch = touch, DesignWidth = 1600 / renderScale }))
 		SideMenuView.setBadge(refs, "Codex", 2)
 		SideMenuView.setSoon(refs, "Store", true)
 		return refs
@@ -149,10 +167,12 @@ function Preview.build(Loader: any): { [string]: any }
 
 	-- the HUD with the side menu
 	exports.ui_menu_hud = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui })
+	exports.ui_menu_hud_full = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH, true).Gui })
 	local phoneDesignH = (900 - phoneInset) / phoneScale
 	exports.ui_menu_phone = UiExport.export({ hud(phoneScale, PHONE).Gui, menu(phoneScale, PHONE, phoneDesignH).Gui })
+	exports.ui_menu_phone_open = UiExport.export({ hud(phoneScale, PHONE).Gui, menu(phoneScale, PHONE, phoneDesignH, false, true).Gui })
 	local smallDesignH = (900 - smallInset) / smallScale
-	exports.ui_menu_phone_small = UiExport.export({ hud(smallScale, PHONE).Gui, menu(smallScale, PHONE, smallDesignH).Gui })
+	exports.ui_menu_phone_small = UiExport.export({ hud(smallScale, PHONE).Gui, menu(smallScale, PHONE, smallDesignH, false, true).Gui })
 
 	-- the codex
 	local function codex(renderScale: number, compact: boolean, maxW: number, maxH: number, select: string): any
@@ -179,20 +199,23 @@ function Preview.build(Loader: any): { [string]: any }
 	})
 
 	-- settings
-	local function settings(renderScale: number, compact: boolean, maxW: number, maxH: number): any
+	-- (no soundtrack yet: the Music row is hidden; Gamepad rumble shows with a gamepad)
+	local function settings(renderScale: number, compact: boolean, maxW: number, maxH: number, gamepad: boolean): any
 		local refs = SettingsView.build(compact)
 		refs.Gui.Scale.Scale = renderScale
 		refs.Gui.Enabled = true
+		SettingsView.setShown(refs, "Music", false)
+		SettingsView.setShown(refs, "Rumble", gamepad)
 		SettingsView.layout(refs, compact, maxW, maxH)
 		SettingsView.set(refs, SettingsConfig.sanitize({ Music = 0.6, Sfx = 0.8, Shake = true, Rumble = false }))
 		MenuPanel.setHint(refs.Frame, "Drag a bar or use - and + · Backspace: close", nil)
 		return refs
 	end
-	exports.ui_settings = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, settings(PC, false, pcW, pcH).Gui })
+	exports.ui_settings = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, settings(PC, false, pcW, pcH, true).Gui })
 	exports.ui_settings_phone = UiExport.export({
 		hud(phoneScale, PHONE).Gui,
 		menu(phoneScale, PHONE, phoneDesignH).Gui,
-		settings(phoneScale, true, 1600 / phoneScale, phoneDesignH).Gui,
+		settings(phoneScale, true, 1600 / phoneScale, phoneDesignH, false).Gui,
 	})
 
 	-- the HALL OF FAME panel

@@ -14,25 +14,31 @@
 	- Applying (simple hooks, each skipped when its target doesn't exist):
 	    Music  -> the SoundService SoundGroup SettingsConfig.MusicGroup
 	              ("TerraForgeMusic", created here: music tracks play through
-	              it; no track plays yet, the row says "coming soon")
+	              it). Its row is hidden until a track does: a Sound whose
+	              SoundGroup is it (or inside it) under SoundService or the
+	              client sound folders, or a music player calling
+	              SettingsController.setMusicAvailable(true)
 	    Sfx    -> the SoundGroup SettingsConfig.SfxGroup ("TerraForgeSfx",
 	              created here at start, Effects/Sfx plays through it); every
 	              Sound without a group under SoundService or the client
 	              sound folders (SfxFolders: Sfx's 3D pool, the machine hums,
 	              the trains) joins it, so the slider reaches every game sound
 	    Shake  -> Effects/CameraShake.setEnabled
-	    Rumble -> MiningController.setRumble
+	    Rumble -> MiningController.setRumble; turning it off also stops the
+	              gamepad motors at once (a vibration already running). The
+	              row shows only while a gamepad is connected
 	  Other code can read SettingsController.get() and listen with onChanged.
 	- Opens from the side menu (SettingsController.open / toggle); closes with
 	  the X button, B (gamepad), Backspace, respawning, another panel
 	  opening or the HUD hiding (SideMenuController). Other prompts are
 	  hidden while it is open. Mouse / touch: click or drag a bar, or the
 	  - / + buttons; gamepad: the - / + buttons and the toggles (GuiService
-	  selection).
+	  selection, starting on the Sounds row).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
+local HapticService = game:GetService("HapticService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -77,6 +83,9 @@ local isOpen = false
 local openedAt = 0
 local tickConnection: RBXScriptConnection? = nil
 local dragging: { Row: SettingsView.VolumeRow, Input: InputObject }? = nil
+-- a music track plays through the music group (the Music row shows)
+local musicAvailable = false
+local rumbleApplied: boolean? = nil
 
 function SettingsController.isOpen(): boolean
 	return isOpen
@@ -124,23 +133,52 @@ local function sfxGroup(): SoundGroup
 	return group
 end
 
+local updateRows: () -> ()
+
+-- Shows the Music row once a music track plays through the music group
+-- (found by itself for the sounds this controller watches; a music
+-- player elsewhere can say so).
+function SettingsController.setMusicAvailable(on: boolean)
+	if musicAvailable ~= on then
+		musicAvailable = on
+		updateRows()
+	end
+end
+
 -- A game Sound without a group joins the sounds group (checked a moment
--- later: the code that made it may still set its own group).
+-- later: the code that made it may still set its own group); one that
+-- plays through the music group shows the Music row.
 local function adoptSound(object: Instance)
 	if not object:IsA("Sound") then
 		return
 	end
 	local sound = object
 	task.defer(function()
-		if not sound.Parent or sound.SoundGroup ~= nil then
+		if not sound.Parent then
 			return
 		end
 		local music = SoundService:FindFirstChild(SettingsConfig.MusicGroup)
-		if music and sound:IsDescendantOf(music) then
+		if music and (sound.SoundGroup == music or sound:IsDescendantOf(music)) then
+			SettingsController.setMusicAvailable(true)
+			return
+		end
+		if sound.SoundGroup ~= nil then
 			return
 		end
 		sound.SoundGroup = sfxGroup()
 	end)
+end
+
+-- Stops every connected gamepad's motors (rumble turned off mid-vibration).
+local function stopMotors()
+	for _, pad in UserInputService:GetConnectedGamepads() do
+		pcall(function()
+			if HapticService:IsVibrationSupported(pad) then
+				HapticService:SetMotor(pad, Enum.VibrationMotor.Small, 0)
+				HapticService:SetMotor(pad, Enum.VibrationMotor.Large, 0)
+			end
+		end)
+	end
 end
 
 -- weak keys: folders that were replaced drop out by themselves
@@ -164,6 +202,10 @@ local function apply()
 	end
 	CameraShake.setEnabled(current.Shake)
 	MenuPanels.call("MiningController", "setRumble", current.Rumble)
+	if not current.Rumble and rumbleApplied ~= false then
+		stopMotors()
+	end
+	rumbleApplied = current.Rumble
 	for _, callback in listeners do
 		task.spawn(callback, table.clone(current))
 	end
@@ -236,6 +278,25 @@ local function fit(view: SettingsView.Refs)
 	local inset = GuiService:GetGuiInset()
 	local compact = MenuPanel.compactFor(MenuPanels.isTouch(), GuiService:IsTenFootInterface(), scale, size.Y)
 	SettingsView.layout(view, compact, size.X / scale, (size.Y - inset.Y) / scale)
+end
+
+-- The rows that make sense here: Music once a track plays through its
+-- group, Gamepad rumble while a gamepad is connected. An open panel
+-- closes up around a row that goes (and keeps the gamepad selection).
+updateRows = function()
+	local view = refs
+	if not view then
+		return
+	end
+	local changed = SettingsView.setShown(view, "Music", musicAvailable)
+	changed = SettingsView.setShown(view, "Rumble", UserInputService.GamepadEnabled) or changed
+	if changed and isOpen then
+		fit(view)
+		local selected = GuiService.SelectedObject
+		if MenuPanels.usingGamepad() and (not selected or not selected:IsDescendantOf(view.Gui) or not selected.Visible) then
+			GuiService.SelectedObject = SettingsView.firstButton(view)
+		end
+	end
 end
 
 local function updateGlyphs(view: SettingsView.Refs)
@@ -322,6 +383,7 @@ local function ensureView(): SettingsView.Refs
 	end)
 	refs = view
 	SettingsView.set(view, current)
+	updateRows()
 	return view
 end
 
@@ -365,6 +427,7 @@ function SettingsController.open()
 	local view = ensureView()
 	isOpen = true
 	openedAt = os.clock()
+	updateRows()
 	-- the glyphs first: the gamepad footer's room is part of the layout
 	updateGlyphs(view)
 	fit(view)
@@ -422,6 +485,12 @@ function SettingsController.init()
 	StateController.onChanged(onState)
 	player.CharacterRemoving:Connect(function()
 		SettingsController.close()
+	end)
+	UserInputService.GamepadConnected:Connect(function()
+		updateRows()
+	end)
+	UserInputService.GamepadDisconnected:Connect(function()
+		updateRows()
 	end)
 	UserInputService.LastInputTypeChanged:Connect(function()
 		local view = refs

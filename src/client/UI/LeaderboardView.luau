@@ -6,8 +6,11 @@
 	         Leaderboard), Adornee = the board, parented to PlayerGui: the
 	         title (the hall's own title strip covers it; it shows when a
 	         board has none), the top LeaderboardConfig.BoardRows rows (rank
-	         medal, name, value) and YOUR line at the bottom (rank when you
-	         are in the top LeaderboardConfig.TopCount, your live value)
+	         medal, name, value) and YOUR line at the bottom (your live
+	         value; your rank "#4" when you are in the top
+	         LeaderboardConfig.TopCount that was read, "~#4" when your live
+	         value would place you there before your next write lands,
+	         else "#11+")
 	  panel  the side menu's HALL OF FAME panel (a MenuPanel): a tab per board
 	         (LB / RB on a gamepad), the top LeaderboardConfig.TopCount and
 	         YOUR line
@@ -118,6 +121,29 @@ function LeaderboardView.sanitize(raw: any): Payload?
 	return { Live = raw.Live ~= false, Boards = boards, Own = own }
 end
 
+-- Your rank when you aren't in the rows that were read but your live value
+-- would place you there (scores are written every 120 s and read every
+-- 60 s, so a value that just passed #10 isn't on the board yet): 1 + the
+-- rows (not yours) worth more than your value as the board stores it. nil
+-- past the rows read (all TopCount of them full) or without a value.
+function LeaderboardView.estimateRank(boardId: string, rows: { RowData }, value: number, myUserId: number): number?
+	local mine = LeaderboardConfig.decode(boardId, LeaderboardConfig.encode(boardId, value))
+	if mine <= 0 then
+		return nil
+	end
+	local above = 0
+	for _, row in rows do
+		if type(row) == "table" and row.UserId ~= myUserId and type(row.Value) == "number" then
+			if row.Value > mine then
+				above += 1
+			end
+		end
+	end
+	-- (below every row of a full page: somewhere past it)
+	local rank = above + 1
+	return if rank <= LeaderboardConfig.TopCount then rank else nil
+end
+
 -- The texts for one board: `rowCount` rows (empty places as "—"), your rank
 -- and value. `live` false = the rows rank this server only (no DataStores).
 function LeaderboardView.lines(boardId: string, data: BoardData?, own: Own?, myUserId: number, rowCount: number, live: boolean): Lines
@@ -140,8 +166,12 @@ function LeaderboardView.lines(boardId: string, data: BoardData?, own: Own?, myU
 	end
 	local value = if own and type(own.Value) == "number" then own.Value else 0
 	local ownRank: string
+	local estimate = if value > 0 and data and data.Ready ~= false then LeaderboardView.estimateRank(boardId, list, value, myUserId) else nil
 	if own and type(own.Rank) == "number" then
 		ownRank = "#" .. tostring(own.Rank)
+	elseif estimate then
+		-- your live value already places you here (the board catches up after your next write)
+		ownRank = `~#{estimate}`
 	elseif value > 0 then
 		-- below the rows that were read: rank TopCount + 1 or worse
 		ownRank = `#{LeaderboardConfig.TopCount + 1}+`

@@ -10,7 +10,8 @@
 	          "?" and "???". A "NEW" badge marks ores discovered since you
 	          last looked (the controller decides which).
 	  detail  the selected card: big gem, name, rarity chip, podium income
-	          (Rough and Flawless), sell value, the blaster level it needs,
+	          (Rough and Flawless), sell value (cleaned Rough and Flawless,
+	          and dirty, before sell bonuses), the blaster level it needs,
 	          where it is found (the WorldLayout zones whose rocks hold it)
 	          and its lore. Undiscovered: "???" and how to find it.
 
@@ -216,16 +217,42 @@ function CodexView.detailText(entry: Entry): DetailText
 	end
 	local ore = entry.Ore
 	local flawless = ore.Income * ItemData.gradeMult("Flawless")
+	-- what the ore sells for (before sell bonuses): cleaned (Rough, like
+	-- the podium line) and Flawless, and as the Dirty Ore it is when mined
+	local clean = ItemData.value("Clean", ore.Id, "Rough")
+	local best = ItemData.value("Clean", ore.Id, "Flawless")
+	local dirty = ItemData.value("Raw", ore.Id)
 	local where = if #entry.Zones > 0 then table.concat(entry.Zones, ", ") else "Deep in the mines"
 	return {
 		Name = ore.Name,
 		Rarity = ore.Rarity,
 		Income = `Podium: {Format.perSecond(ore.Income)}  (Flawless {Format.perSecond(flawless)})`,
-		Value = `Sells for {Format.money(ore.Value)}`,
+		Value = `Sells: {Format.money(clean)} (Flawless {Format.money(best)}), dirty {Format.money(dirty)}`,
 		Tier = `Blaster level {ore.Tier}+`,
 		Where = `Found in: {where}`,
 		Lore = ore.Lore,
 	}
+end
+
+-- The part that carries the ROCK SCANNER terminal's "Ore Codex" prompt:
+-- the tagged part itself, or a tagged model's cabinet (its PrimaryPart, or
+-- the part named Cabinet). nil while the cabinet hasn't streamed in: never
+-- some other small part (CodexController waits for the cabinet).
+function CodexView.promptPart(target: Instance): BasePart?
+	if target:IsA("BasePart") then
+		return target
+	end
+	if target:IsA("Model") then
+		local primary = target.PrimaryPart
+		if primary then
+			return primary
+		end
+		local cabinet = target:FindFirstChild("Cabinet", true)
+		if cabinet and cabinet:IsA("BasePart") then
+			return cabinet
+		end
+	end
+	return nil
 end
 
 ---------------------------------------------------------------- builders
@@ -531,7 +558,7 @@ function CodexView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHei
 		y += lines * (size + 4) + 4
 	end
 	place(refs.DetailIncome, 2, m.Text)
-	place(refs.DetailValue, 1, m.Text)
+	place(refs.DetailValue, 2, m.Text)
 	place(refs.DetailTier, 1, m.Text)
 	place(refs.DetailWhere, 2, m.Text)
 	y += 2

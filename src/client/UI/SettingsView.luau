@@ -9,9 +9,11 @@
 
 	A slider follows a click or a drag on its bar (mouse and touch); the
 	- / + buttons move it one SettingsConfig.Step (and are what a gamepad
-	selects). Designed for 720 design units of height; the compact layout
-	(phones, TVs) makes every button at least 44 pt (SettingsView.touchTargets
-	for the tests).
+	selects; it starts on the Sounds row). A row can be hidden (setShown:
+	Music until a track plays through the music group, Gamepad rumble
+	without a gamepad); the panel closes up around it. Designed for 720
+	design units of height; the compact layout (phones, TVs) makes every
+	button at least 44 pt (SettingsView.touchTargets for the tests).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,12 +57,13 @@ export type Refs = {
 	Volumes: { [string]: VolumeRow },
 	Toggles: { [string]: ToggleRow },
 	Order: { string },
+	Hidden: { [string]: boolean },
 	Compact: boolean,
 }
 
 SettingsView.Rows = {
 	-- (no music plays yet: the volume is saved for the soundtrack)
-	{ Id = "Music", Kind = "Volume", Icon = "🎵", Title = "Music", Note = "Soundtrack coming soon" },
+	{ Id = "Music", Kind = "Volume", Icon = "🎵", Title = "Music", Note = "The soundtrack" },
 	{ Id = "Sfx", Kind = "Volume", Icon = "🔊", Title = "Sounds", Note = "Every game sound" },
 	{ Id = "Shake", Kind = "Toggle", Icon = "📷", Title = "Camera shake", Note = "When rocks crack" },
 	{ Id = "Rumble", Kind = "Toggle", Icon = "🎮", Title = "Gamepad rumble", Note = "Vibration while you blast" },
@@ -83,13 +86,40 @@ local function metrics(compact: boolean): Metrics
 	return if compact then SettingsView.Metrics.Compact else SettingsView.Metrics.Normal
 end
 
--- The panel height a layout needs (header, rows, footer; padMode = the
--- gamepad footer shows).
-function SettingsView.height(compact: boolean, padMode: boolean?): number
+-- The panel height a layout needs (header, `rows` rows (default: all),
+-- footer; padMode = the gamepad footer shows).
+function SettingsView.height(compact: boolean, padMode: boolean?, rows: number?): number
 	local m = metrics(compact)
 	local mm = if compact then MenuPanel.Metrics.Compact else MenuPanel.Metrics.Normal
 	local footer = if padMode then math.max(mm.Footer, MenuPanel.PadFooter) else mm.Footer
-	return mm.Header + #SettingsView.Rows * (m.Row + 10) + footer + 6
+	return mm.Header + (rows or #SettingsView.Rows) * (m.Row + 10) + footer + 6
+end
+
+-- The ids of the rows that show, in order.
+function SettingsView.shown(refs: Refs): { string }
+	local list = {}
+	for _, id in refs.Order do
+		if not refs.Hidden[id] then
+			table.insert(list, id)
+		end
+	end
+	return list
+end
+
+-- Shows or hides a row (call layout afterwards: the panel closes up).
+-- Returns whether it changed.
+function SettingsView.setShown(refs: Refs, id: string, shown: boolean): boolean
+	local row = refs.Volumes[id] or refs.Toggles[id]
+	if not row or (refs.Hidden[id] ~= true) == shown then
+		return false
+	end
+	if shown then
+		refs.Hidden[id] = nil
+	else
+		refs.Hidden[id] = true
+	end
+	row.Frame.Visible = shown
+	return true
 end
 
 -- A slider value (0..1) from a point's x on a bar that starts at `left` and is `width` wide.
@@ -216,6 +246,7 @@ function SettingsView.build(compact: boolean?): Refs
 		Volumes = {},
 		Toggles = {},
 		Order = {},
+		Hidden = {},
 		Compact = isCompact,
 	}
 	for i, spec in SettingsView.Rows do
@@ -235,13 +266,13 @@ end
 function SettingsView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
 	local m = metrics(compact)
-	local body = MenuPanel.layout(refs.Frame, compact, m.Width, SettingsView.height(compact, refs.Frame.PadMode), maxWidth, maxHeight)
+	local rows = math.max(1, #SettingsView.shown(refs))
+	local body = MenuPanel.layout(refs.Frame, compact, m.Width, SettingsView.height(compact, refs.Frame.PadMode, rows), maxWidth, maxHeight)
 	local rowW = body.X
 	local controlsW = math.min(math.floor(rowW * 0.56), 420)
 	local textX = 62
 	local textW = rowW - controlsW - textX - 16
 	-- a short phone screen: rows share the height they get
-	local rows = #SettingsView.Rows
 	local rowH = math.max(m.Button + 8, math.min(m.Row, math.floor((body.Y - 4 - (rows - 1) * 10) / rows)))
 	local function placeText(title: TextLabel, note: TextLabel)
 		title.TextSize = m.Title
@@ -301,15 +332,29 @@ function SettingsView.set(refs: Refs, settings: SettingsConfig.Settings)
 	end
 end
 
--- The first button a gamepad selects.
+-- The first button a gamepad selects: the Sounds row (the one most
+-- players come for; the first shown row when it is hidden).
 function SettingsView.firstButton(refs: Refs): TextButton
-	return refs.Volumes.Music.Minus
+	if not refs.Hidden.Sfx then
+		return refs.Volumes.Sfx.Minus
+	end
+	for _, id in SettingsView.shown(refs) do
+		local volume = refs.Volumes[id]
+		if volume then
+			return volume.Minus
+		end
+		local toggle = refs.Toggles[id]
+		if toggle then
+			return toggle.Button
+		end
+	end
+	return refs.Frame.Close
 end
 
--- Every tappable thing (for the touch-size tests).
+-- Every tappable thing that shows (for the touch-size tests).
 function SettingsView.touchTargets(refs: Refs): { GuiObject }
 	local list: { GuiObject } = { MenuPanel.holderOf(refs.Frame.Close) }
-	for _, id in refs.Order do
+	for _, id in SettingsView.shown(refs) do
 		local volume = refs.Volumes[id]
 		if volume then
 			table.insert(list, MenuPanel.holderOf(volume.Minus))

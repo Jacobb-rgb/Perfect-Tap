@@ -8,15 +8,23 @@
 	  Board 4  HOURS PLAYED   data.Stats.PlaySeconds
 
 	- One OrderedDataStore per board (Store, versioned: bump the _vN suffix to
-	  start a board fresh). Every RefreshSeconds the server writes the online
-	  players' values (SetAsync, only when the encoded value changed) and
-	  reads the top TopCount (GetSortedAsync descending) for the board.
+	  start a board fresh). LeaderboardService writes each player's values at
+	  most every 120 s (LeaderboardService.WriteSeconds) and once more when
+	  they leave, only the boards whose encoded value changed: the growing
+	  boards (TotalEarned, Artifacts, HoursPlayed) with UpdateAsync keeping
+	  the bigger number, MoneyPerSec with SetAsync (at least once per
+	  session). Every RefreshSeconds it reads the top TopCount of each board
+	  (GetSortedAsync descending). Studio never writes (it only reads).
+	- Hidden: UserIds that never show on a board and are never written
+	  (cheaters, banned users); LeaderboardService.removeUser(userId) deletes
+	  a user's entries from all four stores (the command bar; RTBF too).
 	- Where they show: the lobby boards (Hall, 5.4 x 5 studs, five rank rows)
 	  show the top BoardRows (5) so the rows stay readable on phones from the
-	  plaza; the side menu's Leaderboards panel shows the top TopCount (10)
-	  plus the player's own value (and their rank when they are in the top
-	  TopCount; "not ranked yet" otherwise: OrderedDataStores don't give a
-	  rank below the page that was read).
+	  plaza; the side menu's Leaderboards panel shows the top TopCount (10).
+	  Both end with YOUR line: your live value and your rank: "#4" when you
+	  are in the rows that were read, "~#4" when your live value would place
+	  you there before your next write lands (LeaderboardView.estimateRank),
+	  else "#11+" (OrderedDataStores don't give a rank below the page read).
 	- OrderedDataStore values must be whole numbers, and safely below 2^53 in
 	  Luau, but money grows past Qi (1e18). So:
 	    "Log" boards store floor(log10(1 + value) * LogScale): order-preserving
@@ -51,6 +59,9 @@ LeaderboardConfig.BoardRows = 5 -- rows on each lobby board (readable on phones)
 LeaderboardConfig.Tag = "Leaderboard"
 LeaderboardConfig.LogScale = 1e12
 LeaderboardConfig.MaxStored = 2 ^ 53 - 1
+-- UserIds kept off every board (never shown, never written): cheaters and
+-- banned users. Remove their old entries with LeaderboardService.removeUser.
+LeaderboardConfig.Hidden = {} :: { [number]: boolean }
 
 LeaderboardConfig.Boards = {
 	{
