@@ -59,6 +59,12 @@ end
 local TrainBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.TrainBuilder")
 models.train = TrainBuilder.locomotive(roblox.Color3.fromRGB(226, 72, 60))
 
+-- every roster machine (build tray cards; Soft style models from KitMachines)
+local KitMachines = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines")
+for _, entry in KitMachines.Catalog do
+	models["machine_" .. entry.Id] = KitMachines.buildAny(entry.Id)
+end
+
 fs.writeDir(root .. "/build/preview/icon_parts")
 for name, model in models do
 	local scene = Export.collect(model)

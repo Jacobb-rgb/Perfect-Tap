@@ -238,3 +238,40 @@ local boostsData = {
 local boostsGui = windowGui(1.25, 1)
 ShopBubble.build(boostsGui, 1.25, boostsData)
 write("ui_bubble_shop_boosts_pc", boostsGui)
+
+---------------------------------------------------------------- build mode
+local BuildBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BuildBubble")
+local function buildData(touch: boolean)
+	local owned = {
+		{ "Crusher", "Crusher", "Special", 1 },
+		{ "ClayFurnace", "Clay Furnace", "Furnaces", 2 },
+		{ "BrickFurnace", "Brick Furnace", "Furnaces", 1 },
+		{ "CleaningStation", "Cleaning Station", "Cleaning", 1 },
+		{ "AutoCleaner", "Cleaning Plant", "Cleaning", 1 },
+		{ "Polisher", "Polisher", "Cleaning", 1 },
+		{ "Conveyor", "Conveyor", "Transport", 24 },
+		{ "Splitter", "Splitter", "Transport", 2 },
+		{ "RobotArm", "Robot Arm", "Transport", 1 },
+		{ "SolarPanel", "Solar Panel", "Power", 2 },
+		{ "WindTurbine", "Wind Turbine", "Power", 1 },
+		{ "SellBox", "Sell Box", "Special", 1 },
+	}
+	local machines = {}
+	for _, row in owned do
+		table.insert(machines, { Id = row[1], Name = row[2], Group = row[3], Count = row[4] })
+	end
+	return {
+		Machines = machines,
+		Selected = "Crusher",
+		Group = "All",
+		Slots = "MACHINES 6/10  ·  BELTS 24/40",
+		Reason = "Needs power: put a Solar Panel nearby",
+		Hint = "R rotate  ·  Q cancel  ·  Click to place",
+		Touch = touch,
+	}
+end
+for _, spec in { { "pc", 1.25, 1, false }, { "phone", 0.62, 2, true } } do
+	local refs = BuildBubble.build(spec[2], buildData(spec[4]))
+	refs.Gui.Scale.Scale = spec[2] * spec[3]
+	write("ui_bubble_build_" .. spec[1], refs.Gui)
+end
