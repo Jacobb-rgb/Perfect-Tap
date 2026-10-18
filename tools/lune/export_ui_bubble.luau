@@ -482,3 +482,33 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	ArtifactsBubble.journal(gui2, spec[2], journalData)
 	write("ui_bubble_journal_" .. spec[1], gui2)
 end
+
+local BoardsBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoardsBubble")
+local boardEntries = {}
+for i, row in {
+	{ "EmberQueen", "$8.2Qa" }, { "RockyMiner77", "$2.65Qa" }, { "Forgekeeper_Ola", "$853T" }, { "CrystalKid", "$275T" },
+	{ "DeepHollowDan", "$88.8T" }, { "Pickaxe_Pat", "$28.6T" }, { "You_TerraFan", "$9.24T" }, { "GolemWhisperer", "$2.98T" },
+	{ "SparkyStone", "$961B" }, { "QuarryQuinn", "$310B" },
+} do
+	table.insert(boardEntries, { Rank = i, Name = row[1], Value = row[2], You = i == 7 })
+end
+local boardsData = {
+	Tab = "TotalEarned",
+	Entries = boardEntries,
+	You = { Rank = 7, Name = "YOU", Value = "$9.24T", You = true },
+	Note = "The best Forgekeepers of all servers. Updated every minute.",
+}
+local settingsRows = {
+	{ Id = "Sounds", Name = "Sounds", Hint = "Every game sound", Icon = "speaker", Kind = "Slider", Value = 0.8 },
+	{ Id = "Music", Name = "Music", Hint = "Soundtrack coming soon", Icon = "music", Kind = "Soon" },
+	{ Id = "CameraShake", Name = "Camera shake", Hint = "When rocks crack", Icon = "camera", Kind = "Toggle", On = true },
+	{ Id = "Rumble", Name = "Gamepad rumble", Hint = "Vibration while you blast", Icon = "gamepad", Kind = "Toggle", On = false },
+}
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	BoardsBubble.boards(gui, spec[2], boardsData)
+	write("ui_bubble_boards_" .. spec[1], gui)
+	local gui2 = windowGui(spec[2], spec[3])
+	BoardsBubble.settings(gui2, spec[2], settingsRows, "Saved to your profile: they follow you to every device.")
+	write("ui_bubble_settings_" .. spec[1], gui2)
+end
