@@ -97,6 +97,7 @@ local Rng = require(Shared.Util.Rng)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
+local Shards = require(script.Parent.Parent.Shards)
 local MachineService = require(script.Parent.MachineService)
 local IntakeService = require(script.Parent.IntakeService)
 local ShopService = require(script.Parent.ShopService)
@@ -438,19 +439,16 @@ local function countIngots(player: Player, outputs: { Desc })
 	end
 end
 
--- Crystal Extractor: whole shards into the owner's save (a broken or
--- negative count starts again from 0) and a toast. The caller marks the
--- save changed.
+-- Crystal Extractor: whole shards into the owner's save through Shards.add
+-- (a broken or negative count starts again from 0, never past Shards.Max)
+-- and a toast. The caller marks the save changed.
 local function giveShards(player: Player, shards: number)
 	local data = DataService.get(player)
 	if shards <= 0 or not data then
 		return
 	end
-	local before = tonumber(data.Shards)
-	if before == nil or before ~= before or before < 0 or before == math.huge then
-		before = 0
-	end
-	data.Shards = math.floor(before :: number) + shards
+	-- through Shards: broken counts read 0, whole numbers, never past Shards.Max
+	Shards.add(data, shards)
 	if player.Parent then
 		local text = if shards == 1 then SHARD_TOAST else `+{shards} Crystal Shards!`
 		Net.fire("Notify", player, { Text = text, Kind = "Reward" })

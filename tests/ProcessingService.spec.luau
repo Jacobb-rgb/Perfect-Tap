@@ -725,10 +725,17 @@ return function(T, Loader)
 		T.eq(toast.Payload.Text, "+1 Crystal Shard!", "toast text")
 		T.eq(toast.Payload.Kind, "Reward", "toast kind")
 		-- a broken or negative count starts again from 0: never negative
-		for _, broken in { -5, 0 / 0, "lots", math.huge } do
+		for _, broken in { -5, 0 / 0, "lots" } do
 			w.data.Shards = broken
 			job()
 			T.eq(w.data.Shards, 1, `from {broken}`)
+		end
+		-- through Shards.add: never past Shards.Max (an endless count is clamped too)
+		local Shards = Loader.requirePath("ServerScriptService.Server.Shards")
+		for _, full in { Shards.Max, math.huge } do
+			w.data.Shards = full
+			job()
+			T.eq(w.data.Shards, Shards.Max, `clamped at Shards.Max from {full}`)
 		end
 		w.data.Shards = 2.7
 		job()
