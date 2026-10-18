@@ -89,6 +89,8 @@ elseif sceneName == "factory" then -- a working roster factory with power cables
 	require("./lib/factory_preview").build(Loader, workspace)
 elseif sceneName == "factory_max" then -- the same at the max upgrade level (crystal)
 	require("./lib/factory_preview").build(Loader, workspace, 4)
+elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
+	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
 	require("./lib/cute_styles_gallery").build(Loader, workspace)
 elseif sceneName == "kit_machines" then -- the Factory Kit machines + upgrade crystal levels (tools/lune/lib/kit_machines_gallery.luau)
@@ -154,6 +156,8 @@ elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop wind
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
+	require("./lib/gallery_preview").build(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
@@ -211,7 +215,7 @@ elseif sceneName == "gameplay" then
 		{ "Gear", "Clean", "Dagger" },
 		{ "Gear", "Clean", "Helm" },
 	}
-	local ores = { "Copper", "Silver", "Gold", "Azurium", "Stormcore", "Heartstone" }
+	local ores = { "Copper", "Silver", "Gold", "DragonEgg", "StormPearl", "Heartstone" }
 	for r, row in rows do
 		for c, oreId in ores do
 			local cf = base * CF.new((c - 3.5) * 3.2, 0.4, (r - 4) * 3.2) * CF.Angles(0, 0.35, 0)
@@ -607,7 +611,7 @@ elseif sceneName == "ores" then
 	grid(-70, 0, 4, 0.4, ingotCell)
 
 	-- dirty ore: the same chunk for every ore (same seed), only the glint differs
-	for i, oreId in { "Coal", "Copper", "Silver", "Gold", "Ruby", "Diamond", "Solarite", "Heartstone" } do
+	for i, oreId in { "Coal", "Copper", "Silver", "Gold", "Bronze", "Diamond", "Sunstone", "Heartstone" } do
 		local x = -125 + (i - 4.5) * 3.2
 		Geo.block(gallery, CF.new(x, 0.2, 0), V3.new(2.6, 0.4, 2.6), C3.fromRGB(134, 128, 132))
 		local chunk = ItemBuilder.build({ Kind = "Raw", OreId = oreId }, CF.new(x, 0, 0) * CF.Angles(0, YAW, 0), 7)

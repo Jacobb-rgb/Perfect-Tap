@@ -1,48 +1,68 @@
 --[[
-	Sounds. Defaults are built-in Roblox client sounds (rbxasset://), which
-	are free and need no upload. For better sounds, pick audio uploaded by
-	Roblox in the Creator Store (Toolbox -> Audio) and paste the id like
-	"rbxassetid://1234567". Pitch = random range for variation (juice!).
-	See docs/ASSETS.md.
+	Sounds. Pitch = random range for variation (juice!).
+
+	Ids must play in today's Roblox clients. Only these files still ship in
+	content/sounds (rbxasset://sounds/...): action_falling.ogg,
+	action_footsteps_plastic.mp3, action_get_up.mp3, action_jump.mp3,
+	action_jump_land.mp3, action_swim.mp3, impact_explosion_03.mp3,
+	impact_water.mp3, oof.ogg, ouch.ogg, volume_slider.ogg. The classic
+	sounds (clickfast.wav, snap.wav, glassbreak.wav ...) are gone from the
+	client, but Roblox itself (user 1) uploaded them as public audio, so they
+	play by id with no upload of our own:
+	  button.wav 12221967 · clickfast.wav 12221976 · collide.wav 12221984 ·
+	  electronicpingshort.wav 12221990 · flashbulb.wav 12221996 ·
+	  glassbreak.wav 12222005 · hit.wav 12222046 · snap.wav 12222140 ·
+	  swoosh.wav 12222200 · unsheath.wav 12222225 · victory.wav 12222253
+	Other Roblox-made sounds used here: UFO Beam 162670130, Roblox Pinball
+	low bells 16480570986. Better sounds from the Creator Store go in as
+	"rbxassetid://<id>" (tests/BlasterFeel.spec.luau checks every id).
 ]]
 
 export type SoundDef = { Id: string, Volume: number, Pitch: { number }, Looped: boolean? }
 
 local SoundConfig: { [string]: SoundDef } = {
-	-- laser blaster (placeholders: paste a laser hum / zap from the Creator Store here)
-	BlasterHum = { Id = "rbxasset://sounds/action_falling.mp3", Volume = 0.22, Pitch = { 2.3, 2.4 }, Looped = true },
-	BlasterStart = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.35, Pitch = { 0.5, 0.56 } },
-	BlasterStop = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Pitch = { 0.6, 0.7 } },
-	BlastHit = { Id = "rbxasset://sounds/snap.wav", Volume = 0.22, Pitch = { 1.7, 2.0 } },
-	BlastBounce = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.5, 0.6 } },
-	NodeCrack = { Id = "rbxasset://sounds/snap.wav", Volume = 0.6, Pitch = { 0.55, 0.7 } },
-	NodeShatter = { Id = "rbxasset://sounds/glassbreak.wav", Volume = 0.55, Pitch = { 0.45, 0.6 } },
-	Pickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.5, Pitch = { 1.1, 1.3 } },
+	-- laser blaster (MiningController, Effects/BlasterFx, BlasterFeel): the hum loop and a soft beam
+	-- layer while firing, a zap when the trigger goes down, a crackle + a thud on hits, the break
+	BlasterHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.22, Pitch = { 2.3, 2.4 }, Looped = true },
+	BlasterStart = { Id = "rbxassetid://12221990", Volume = 0.35, Pitch = { 0.5, 0.56 } },
+	BlasterStop = { Id = "rbxassetid://12221976", Volume = 0.25, Pitch = { 0.6, 0.7 } },
+	BlastHit = { Id = "rbxassetid://12222140", Volume = 0.22, Pitch = { 1.7, 2.0 } },
+	BlastBounce = { Id = "rbxassetid://12221967", Volume = 0.4, Pitch = { 0.5, 0.6 } },
+	NodeCrack = { Id = "rbxassetid://12222140", Volume = 0.6, Pitch = { 0.55, 0.7 } },
+	NodeShatter = { Id = "rbxassetid://12222005", Volume = 0.55, Pitch = { 0.45, 0.6 } },
+	BlasterBeam = { Id = "rbxassetid://162670130", Volume = 0.12, Pitch = { 1.5, 1.6 }, Looped = true },
+	BlasterZap = { Id = "rbxassetid://12221996", Volume = 0.35, Pitch = { 1.15, 1.3 } },
+	BlastThud = { Id = "rbxassetid://12222046", Volume = 0.2, Pitch = { 0.85, 1.05 } },
+	RockBreak = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.4, Pitch = { 1.3, 1.45 } },
+	-- mine elevator (art/mine-floors): the arrival bell, the heavy door
+	ElevatorDing = { Id = "rbxassetid://16480570986", Volume = 0.5, Pitch = { 1.0, 1.0 } },
+	DoorThud = { Id = "rbxassetid://12221984", Volume = 0.6, Pitch = { 0.36, 0.42 } },
+	Pickup = { Id = "rbxassetid://12221976", Volume = 0.5, Pitch = { 1.1, 1.3 } },
 	Drop = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = { 0.9, 1.1 } },
-	Throw = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.45, Pitch = { 1.0, 1.25 } },
+	Throw = { Id = "rbxassetid://12222200", Volume = 0.45, Pitch = { 1.0, 1.25 } },
 	-- cleaning minigame
-	ChiselCrack = { Id = "rbxasset://sounds/snap.wav", Volume = 0.75, Pitch = { 0.8, 1.15 } },
-	ChiselScratch = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.25, Pitch = { 1.6, 1.9 } },
-	Chip = { Id = "rbxasset://sounds/collide.wav", Volume = 0.5, Pitch = { 1.5, 1.8 } },
-	Scrape = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.3, Pitch = { 0.55, 0.7 }, Looped = true },
-	DirtPop = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Pitch = { 0.7, 1.0 } },
-	Polish = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.25, Pitch = { 1.6, 2.0 } },
-	Reveal = { Id = "rbxasset://sounds/victory.wav", Volume = 0.6, Pitch = { 1.0, 1.0 } },
+	ChiselCrack = { Id = "rbxassetid://12222140", Volume = 0.75, Pitch = { 0.8, 1.15 } },
+	ChiselScratch = { Id = "rbxassetid://12222200", Volume = 0.25, Pitch = { 1.6, 1.9 } },
+	Chip = { Id = "rbxassetid://12221984", Volume = 0.5, Pitch = { 1.5, 1.8 } },
+	Scrape = { Id = "rbxassetid://12222200", Volume = 0.3, Pitch = { 0.55, 0.7 }, Looped = true },
+	DirtPop = { Id = "rbxassetid://12221976", Volume = 0.25, Pitch = { 0.7, 1.0 } },
+	Polish = { Id = "rbxassetid://12221990", Volume = 0.25, Pitch = { 1.6, 2.0 } },
+	Reveal = { Id = "rbxassetid://12222253", Volume = 0.6, Pitch = { 1.0, 1.0 } },
 	-- machines and economy
-	Sell = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5, Pitch = { 1.15, 1.3 } },
-	Furnace = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.4, Pitch = { 0.45, 0.55 } },
-	Crusher = { Id = "rbxasset://sounds/collide.wav", Volume = 0.5, Pitch = { 0.45, 0.6 } },
-	AnvilClang = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.6, Pitch = { 0.8, 1.0 } },
+	Sell = { Id = "rbxassetid://12221990", Volume = 0.5, Pitch = { 1.15, 1.3 } },
+	Furnace = { Id = "rbxassetid://12222200", Volume = 0.4, Pitch = { 0.45, 0.55 } },
+	Crusher = { Id = "rbxassetid://12221984", Volume = 0.5, Pitch = { 0.45, 0.6 } },
+	AnvilClang = { Id = "rbxassetid://12222225", Volume = 0.6, Pitch = { 0.8, 1.0 } },
 	Place = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.6, Pitch = { 0.7, 0.8 } },
 	Gulp = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.45, Pitch = { 1.3, 1.5 } },
-	MachineDone = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.55, Pitch = { 0.75, 0.85 } },
-	MachineHum = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.15, Pitch = { 0.3, 0.35 }, Looped = true },
-	Reject = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.5, 0.6 } },
-	CoinBurst = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5, Pitch = { 1.4, 1.6 } },
-	BuildRotate = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.3, Pitch = { 1.3, 1.4 } },
-	UIClick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.4, Pitch = { 1.0, 1.1 } },
-	UIDeny = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Pitch = { 0.6, 0.7 } },
-	Discovery = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.55, Pitch = { 0.9, 0.9 } },
+	MachineDone = { Id = "rbxassetid://12221976", Volume = 0.55, Pitch = { 0.75, 0.85 } },
+	MachineHum = { Id = "rbxassetid://12222200", Volume = 0.15, Pitch = { 0.3, 0.35 }, Looped = true },
+	Reject = { Id = "rbxassetid://12221967", Volume = 0.4, Pitch = { 0.5, 0.6 } },
+	CoinBurst = { Id = "rbxassetid://12221990", Volume = 0.5, Pitch = { 1.4, 1.6 } },
+	BuildRotate = { Id = "rbxassetid://12221976", Volume = 0.3, Pitch = { 1.3, 1.4 } },
+	UIClick = { Id = "rbxassetid://12221976", Volume = 0.4, Pitch = { 1.0, 1.1 } },
+	UIDeny = { Id = "rbxassetid://12221967", Volume = 0.4, Pitch = { 0.6, 0.7 } },
+	Discovery = { Id = "rbxassetid://12221990", Volume = 0.55, Pitch = { 0.9, 0.9 } },
 	-- ore trains: TrainController plays both on its own looping sounds (never the shared pool):
 	-- the chuff pulses with the wheels (Pitch = slow..fast), the whistle is a short double toot.
 	-- TODO(owner): both are the built-in falling-wind loop as a quiet, short-range stand-in (the

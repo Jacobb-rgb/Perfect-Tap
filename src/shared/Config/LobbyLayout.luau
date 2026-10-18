@@ -73,8 +73,8 @@ LobbyLayout.Budget = {
 	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
 	-- node on every node spawn (~1,320) must stay 200 under it (the podium
 	-- and pen ores); + the concept fixes (~350: plaza miners, lanterns, stall
-	-- props, the stream with its bridge and waterfall): ~230 parts of headroom.
-	MapParts = 22400,
+	-- props, the stream with its bridge and waterfall).
+	MapParts = 22800, -- + 400 for the blaster gallery in THE GREAT FORGE (~330 parts), + 400 for the concept fixes
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -82,7 +82,7 @@ LobbyLayout.Budget = {
 	-- parts of headroom are a deliberate buffer, so a small merge from a
 	-- parallel package session (Backdrop, Districts, Plaza, Flora) does not
 	-- break this budget; spend it on purpose, not by accident.
-	LobbyParts = 12800,
+	LobbyParts = 13200, -- + 400 for the blaster gallery
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
@@ -93,7 +93,7 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 1850, LobbyParts = 1850, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
+		Plaza = { Parts = 2250, LobbyParts = 2250, Lights = 11, LobbyLights = 11 }, -- + facade aprons, planters, ore carts, + the blaster gallery (~330 parts, 1 light), + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)

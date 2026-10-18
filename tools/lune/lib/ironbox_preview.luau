@@ -49,14 +49,14 @@ Preview.Discovered = {
 	"Quartz",
 	"Gold",
 	"Amethyst",
-	"Ruby",
+	"Bronze",
 	"Sapphire",
-	"Emerald",
+	"Jade",
 	"Diamond",
-	"Azurium",
-	"Stormcore",
+	"DragonEgg",
+	"StormPearl",
 }
-Preview.KeepList = { Coal = false, Copper = false, Tin = false, Iron = true, Silver = true, Gold = true, Ruby = true }
+Preview.KeepList = { Coal = false, Copper = false, Tin = false, Iron = true, Silver = true, Gold = true, Bronze = true }
 
 local function lowest(model: any): number
 	local low = math.huge

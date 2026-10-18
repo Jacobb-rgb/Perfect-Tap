@@ -51,6 +51,13 @@
 	- Upgrades is a record and Upgrades.PenAutomation a whole number
 	  0..MAX_LEVEL_KEPT (readers clamp to EconomyConfig.PenAutomation; a newer
 	  server may sell more levels).
+
+	The owner's ore picture (2026-10-18, same Version 3): ores of the old
+	roster that were replaced become their OreData.Renamed ore (same rarity)
+	before anything else runs, wherever the save names an ore: item O fields
+	(pen, machine queues, train, Foundry), storage keys ("Clean|Ruby|..." on
+	podiums and in any other string), BlasterOre, the keys of Discovered and
+	KeepList (an existing entry of the new ore wins).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -119,6 +126,56 @@ local function wellFormed(item: any): boolean
 		and (item.R == nil or type(item.R) == "string")
 end
 
+-- Ores of the old roster -> their replacements (OreData.Renamed), everywhere a save names an ore.
+local function renameOres(data: { [string]: any })
+	local renamed = OreData.Renamed
+	local function storageKey(text: string): string
+		local kind, ore, rest = string.match(text, "^([^|]*)|([^|]*)(.*)$")
+		if kind and ore and rest and ItemData.Kinds[kind] and renamed[ore] then
+			return kind .. "|" .. renamed[ore] .. rest
+		end
+		return text
+	end
+	local seen: { [any]: boolean } = {}
+	local function walk(t: { [any]: any }, depth: number)
+		if depth > 8 or seen[t] then
+			return
+		end
+		seen[t] = true
+		if type(t.O) == "string" and renamed[t.O] then
+			t.O = renamed[t.O]
+		end
+		for k, v in t do
+			if type(v) == "table" then
+				walk(v, depth + 1)
+			elseif type(v) == "string" and string.find(v, "|", 1, true) then
+				t[k] = storageKey(v)
+			end
+		end
+	end
+	walk(data, 0)
+	if type(data.BlasterOre) == "string" and renamed[data.BlasterOre] then
+		data.BlasterOre = renamed[data.BlasterOre]
+	end
+	for _, field in { "Discovered", "KeepList" } do
+		local map = data[field]
+		if type(map) == "table" then
+			local moves = {}
+			for old, new in renamed do
+				if map[old] ~= nil then
+					table.insert(moves, { old, new })
+				end
+			end
+			for _, move in moves do
+				if map[move[2]] == nil then
+					map[move[2]] = map[move[1]]
+				end
+				map[move[1]] = nil
+			end
+		end
+	end
+end
+
 -- A well-formed ingot the Foundry can hold: known ore and grade, no recipe.
 local function foundryIngot(item: any): boolean
 	return wellFormed(item)
@@ -153,6 +210,9 @@ end
 
 function Migrations.run(data: { [string]: any }): Report
 	local report: Report = { Moved = 0, Dropped = 0 }
+
+	-- replaced ores take their new ids first, so nothing below drops them
+	renameOres(data)
 
 	-- MachineInventory first, so machines sent back below add to clean counts
 	local inventory = data.MachineInventory
