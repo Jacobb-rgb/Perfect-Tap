@@ -317,6 +317,31 @@ return function(T, Loader)
 		T.eq(#w.data.Storage, before, "no item made from junk")
 	end)
 
+	withWorld("PodiumService: Remove is refused while the pen is over its capacity (PenOver); the ore stays", function(w)
+		fill(w, GOLD, 1)
+		PodiumService.place(w.player, 1, GOLD)
+		-- a rescue move overfilled the pen
+		fill(w, DIRTY, PenService.capacity(w.player) + 2)
+		local before = #w.data.Storage
+		local ok, why = PodiumService.remove(w.player, 1)
+		T.falsy(ok, "refused")
+		T.eq(why, "PenOver", "the pen's one over-capacity reason")
+		T.eq(why, PenService.OverReason, "PenService.OverReason")
+		T.eq(w.data.Podiums[1], GOLD, "the ore stays on the podium (never destroyed)")
+		T.eq(#w.data.Storage, before, "nothing added to the pen")
+		T.eq(lastNote(w, "Notify").A.Text, PenService.overText(w.data), "a toast says why")
+		-- the prompt and PodiumAction go the same way
+		podium.action(w.player, 1, "Remove")
+		T.eq(w.data.Podiums[1], GOLD, "PodiumAction refused too")
+		-- back under the capacity: it goes back in
+		for _ = 1, 3 do
+			table.remove(w.data.Storage)
+		end
+		T.truthy(PodiumService.remove(w.player, 1), "room again")
+		T.eq(w.data.Podiums[1], "", "podium empty")
+		T.eq(inPen(w, GOLD), 1, "back in the pen")
+	end)
+
 	withWorld("PodiumService: racing Place and Remove never duplicates an ore", function(w)
 		fill(w, GOLD, 1)
 		fill(w, COPPER, 1)

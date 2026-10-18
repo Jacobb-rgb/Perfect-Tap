@@ -1330,12 +1330,12 @@ return function(T, Loader)
 	withWorld("TrainService: upgrades cost the next price, stop at the top and need the coins", function(w)
 		local price = TrainConfig.nextPrice(TrainConfig.Capacity, 0)
 		w.data.Coins = price - 1
-		train.action(w.player, "Upgrade", { Kind = "Capacity" })
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 1 })
 		T.eq(w.data.Train.CapacityLevel, 0, "too poor")
 		T.eq(w.data.Coins, price - 1, "nothing paid")
 		T.truthy(lastToast(w, w.player).Text:find("You need", 1, true), "told the price")
 		w.data.Coins = price
-		train.action(w.player, "Upgrade", { Kind = "Capacity" })
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 1 })
 		T.eq(w.data.Train.CapacityLevel, 1, "level 1")
 		T.eq(w.data.Coins, 0, "paid")
 		T.eq(lastToast(w, w.player).Kind, "Reward", "celebrated")
@@ -1349,7 +1349,7 @@ return function(T, Loader)
 		end
 		w.data.Coins = total + 5
 		for _ = 1, TrainConfig.maxLevel(TrainConfig.Speed) + 2 do
-			train.action(w.player, "Upgrade", { Kind = "Speed" })
+			train.action(w.player, "Upgrade", { Kind = "Speed", Level = w.data.Train.SpeedLevel + 1 })
 		end
 		T.eq(w.data.Train.SpeedLevel, TrainConfig.maxLevel(TrainConfig.Speed), "top level")
 		T.eq(w.data.Coins, 5, "paid every level once")
@@ -1362,6 +1362,80 @@ return function(T, Loader)
 		TrainService.send(w.player)
 		local t = w.data.Train
 		T.eq(t.TripArriveAt - t.TripDepartAt, TrainConfig.Speed[#TrainConfig.Speed].Value, "fast trip")
+	end)
+
+	withWorld("TrainService: an upgrade buys exactly the level asked for, else Stale (Security #7)", function(w)
+		w.data.Coins = 1e9
+		local coins = w.data.Coins
+		local function notifyCount(): number
+			local n = 0
+			for _, note in w.notes do
+				if note.Name == "Notify" then
+					n += 1
+				end
+			end
+			return n
+		end
+		local toastsBefore = notifyCount()
+		-- no level, the current one, two ahead, junk: Stale, nothing bought, no toast
+		for _, level in { nil, 0, 2, 1.5, -1, 0 / 0, "1", 1e9 } do
+			train.action(w.player, "Upgrade", { Kind = "Capacity", Level = level })
+		end
+		T.eq(w.data.Train.CapacityLevel, 0, "nothing bought")
+		T.eq(w.data.Coins, coins, "nothing paid")
+		T.eq(notifyCount(), toastsBefore, "a stale request is quiet")
+		local ok, why = TrainService.upgrade(w.player, "Capacity", 3)
+		T.falsy(ok, "refused")
+		T.eq(why, "Stale", "Stale")
+		-- a double click: both carry Level 1, only the first buys
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 1 })
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 1 })
+		T.eq(w.data.Train.CapacityLevel, 1, "one level")
+		T.eq(coins - w.data.Coins, TrainConfig.nextPrice(TrainConfig.Capacity, 0), "paid once")
+		-- the next card says Level 2
+		ok, why = TrainService.upgrade(w.player, "Capacity", 2)
+		T.truthy(ok, "the next level")
+		T.eq(why, nil)
+		T.eq(w.data.Train.CapacityLevel, 2, "level 2")
+		-- speed counts on its own
+		T.eq(select(2, TrainService.upgrade(w.player, "Speed", 2)), "Stale", "speed is still at 0")
+		T.truthy(TrainService.upgrade(w.player, "Speed", 1), "speed level 1")
+	end)
+
+	withWorld("TrainService: a pen over its capacity takes nothing from the train (PenOver)", function(w)
+		local capacity = ItemService.penCapacity(w.data)
+		-- a rescue move overfilled it (leaving, an item returned from another plot...)
+		fillPen(w, capacity + 3)
+		dropMany(w.station, USER, GOLD, 4)
+		TrainService.send(w.player)
+		advance(w, TRIP)
+		local t = w.data.Train
+		T.eq(#t.TripCargo, 4, "the whole load waits on the train")
+		T.eq(#w.data.Storage, capacity + 3, "nothing went in")
+		local s = snapshot(w, w.player)
+		T.eq(s.Waiting, true, "waiting at the stop")
+		T.eq(s.WaitReason, "PenOver", "the chip learns why")
+		T.eq(toasts(w, w.player, TrainService.PenOverText), 1, "one toast that says so")
+		T.eq(toasts(w, w.player, TrainService.PenFullText), 0, "not 'full'")
+		-- a hopper refusal says the same
+		w.now += 6
+		T.eq(drop(w.station, USER, COAL).State, "Loose", "no loading while it waits")
+		T.eq(lastToast(w, w.player).Text, TrainService.PenOverText, "why")
+		-- taking ore out down to the capacity: still nothing fits (full, not over)
+		for _ = 1, 3 do
+			table.remove(w.data.Storage)
+		end
+		advance(w, TrainConfig.DeliveryRetry)
+		T.eq(#t.TripCargo, 4, "full now: still waiting")
+		T.eq(snapshot(w, w.player).WaitReason, "PenFull", "full, not over")
+		-- room for all: it unloads
+		for _ = 1, 4 do
+			table.remove(w.data.Storage)
+		end
+		advance(w, TrainConfig.DeliveryRetry)
+		T.eq(#t.TripCargo, 0, "unloaded")
+		T.eq(#w.data.Storage, capacity, "exactly full, never over")
+		T.eq(snapshot(w, w.player).WaitReason, nil, "no reason when not waiting")
 	end)
 
 	withWorld("TrainService: junk TrainAction input changes nothing", function(w)
@@ -1397,7 +1471,7 @@ return function(T, Loader)
 		-- no data, no plot, a stranger
 		w.online[w.player] = false
 		train.action(w.player, "Send")
-		train.action(w.player, "Upgrade", { Kind = "Speed" })
+		train.action(w.player, "Upgrade", { Kind = "Speed", Level = 1 })
 		w.online[w.player] = true
 		T.eq(#trips(w), 0, "no data: nothing")
 		T.eq(w.data.Train.SpeedLevel, 0, "no data: no upgrade")

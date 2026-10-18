@@ -312,6 +312,63 @@ return function(T, Loader)
 		T.eq(count(w, "Notify"), before, "full toast is throttled")
 	end)
 
+	withWorld("PenService: a pen over its capacity takes nothing new (PenOver); Take and Send still work", function(w)
+		local capacity = PenService.capacity(w.player)
+		-- a rescue move overfilled it (leaving, an item back from another plot...)
+		fill(w, DIRTY, capacity + 4)
+		T.truthy(PenService.isOver(w.data), "over its capacity")
+		T.eq(PenService.OverReason, "PenOver", "one reason code")
+		T.eq(PenService.refusal(w.data), "PenOver", "refusal")
+		T.falsy(PenService.hasRoom(w.player), "no room (the Iron Box keep route)")
+		local stored, why = PenService.store(w.player, { K = "Raw", O = "Coal" })
+		T.falsy(stored, "the sinks can't store")
+		T.eq(why, "PenOver", "and learn why")
+		T.eq(#w.data.Storage, capacity + 4, "nothing went in")
+		-- thrown in: bounced, with the over-capacity toast (throttled)
+		local record = itemInPen(w, USER, { K = "Clean", O = "Gold", G = "Pristine" })
+		w.zone.Handler(record)
+		T.eq(record.State, "Loose", "not taken")
+		T.falsy(insideIntake(w, record.Body.CFrame.Position), "bounced out of the gate")
+		T.eq(lastNote(w, "Notify").A.Text, PenService.overText(w.data), "says it holds too much")
+		local toasts = count(w, "Notify")
+		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
+		T.eq(count(w, "Notify"), toasts, "throttled")
+		-- Put In: refused, the hands keep everything
+		for i = 1, 2 do
+			local carried = ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, CFrame.new(i, 5, 0), nil, true)
+			carried.State = "Carried"
+			table.insert(w.carried, carried)
+		end
+		T.eq(pen.putIn(w.player, PLOT), "PenOver", "Put In refused")
+		T.eq(#w.carried, 2, "nothing taken from the hands")
+		T.eq(#w.data.Storage, capacity + 4, "nothing stored")
+		T.eq(lastNote(w, "Notify").A.Text, PenService.overText(w.data), "told why")
+		-- the State shows it (PenView turns red)
+		local snapshot = {}
+		pen.provide(w.player, w.data, snapshot)
+		T.eq(snapshot.PenOver, true, "PenOver in the State")
+		T.eq(snapshot.PenCapacity, capacity, "with the capacity")
+		-- Take still works
+		w.hands = 6
+		pen.action(w.player, "Take", { Key = DIRTY, Count = 3 })
+		T.eq(#w.data.Storage, capacity + 1, "Take works while over")
+		-- Send still works
+		pen.action(w.player, "Send", { Key = DIRTY, Count = 1 })
+		local queue = pen.queue(w.player)
+		T.truthy(queue and #queue.Pen.Intents == 1, "Send works while over")
+		pen.action(w.player, "Take", { Key = DIRTY, Count = 1 })
+		-- exactly full now: not over, just full
+		T.falsy(PenService.isOver(w.data), "back at the capacity")
+		T.eq(PenService.refusal(w.data), "PenFull", "full, not over")
+		snapshot = {}
+		pen.provide(w.player, w.data, snapshot)
+		T.eq(snapshot.PenOver, false, "PenOver off")
+		-- one below: Put In works again
+		table.remove(w.data.Storage)
+		T.eq(pen.putIn(w.player, PLOT), "PenFull", "one went in, the next one doesn't fit")
+		T.eq(#w.data.Storage, capacity, "filled up to the capacity, never over")
+	end)
+
 	---------------------------------------------------------------- prompts
 
 	withWorld("PenService: Put In stores what you carry while there is room", function(w)
@@ -1159,6 +1216,44 @@ return function(T, Loader)
 		T.eq(PenView.keyFor(rows[1], 0.5), rows[1].Key, "normal rows keep their key")
 	end)
 
+	T.test("PenView: +$X/s counts the income bonus like the podium tags (State Bonuses.IncomePct)", function()
+		local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+		local base = ItemData.income(ItemData.parseKey(GOLD))
+		T.truthy(base > 0, "gold earns on a podium")
+		T.eq(PenView.incomeMult({ IncomePct = 0.25 }), 1.25, "1 + IncomePct")
+		for _, junk in { nil, {}, { IncomePct = -1 }, { IncomePct = 0 / 0 }, { IncomePct = math.huge }, { IncomePct = "2" }, 5 } do
+			T.eq(PenView.incomeMult(junk), 1, "junk bonus: none")
+		end
+		local plain = PenView.entries({ [GOLD] = 2, [DIRTY] = 1 }, "Pen")
+		local boosted = PenView.entries({ [GOLD] = 2, [DIRTY] = 1 }, "Pen", PenView.incomeMult({ IncomePct = 0.5 }))
+		local function gold(list: { any }): any
+			for _, entry in list do
+				if entry.Key == GOLD then
+					return entry
+				end
+			end
+			return nil
+		end
+		T.near(gold(plain).Income, base, 1e-9, "no bonus: the base income")
+		T.near(gold(boosted).Income, base * 1.5, 1e-9, "with the bonus")
+		T.near(
+			gold(PenView.entries({ [GOLD] = 1 }, "Pick", PenView.incomeMult({ IncomePct = 0.5 }))).Income,
+			base * 1.5,
+			1e-9,
+			"pick mode too"
+		)
+		T.near(gold(PenView.entries({ [GOLD] = 1 }, "Pen", 0 / 0)).Income, base, 1e-9, "a junk multiplier counts as 1")
+		for _, entry in boosted do
+			if entry.Kind == "Raw" then
+				T.eq(entry.Income, 0, "dirty ore never earns")
+			end
+		end
+		-- the row shows it
+		local refs = PenView.build()
+		PenView.setEntries(refs, boosted, true)
+		T.eq(refs.Rows[GOLD].Income.Text, Format.perSecond(base * 1.5), "the row's +$X/s")
+	end)
+
 	T.test("PenView: the first free unlocked podium slot", function()
 		T.eq(PenView.freeSlot({ "", "", "", "" }, 2), 1, "slot 1")
 		T.eq(PenView.freeSlot({ GOLD, "", "", "" }, 2), 2, "slot 2")
@@ -1190,6 +1285,19 @@ return function(T, Loader)
 		T.falsy(refs.Gui.Enabled, "starts closed")
 		PenView.setHeader(refs, 37, 40)
 		T.eq(refs.Header.Text, "37 / 40", "count")
+		-- over its capacity (State PenOver): red, and the idle status line says why
+		T.falsy(PenView.isOver(40, 40), "full is not over")
+		T.truthy(PenView.isOver(44, 40), "over")
+		PenView.setSending(refs, nil, false, 0)
+		PenView.setHeader(refs, 44, 40)
+		T.eq(refs.Header.Text, "44 / 40", "over count")
+		T.eq(refs.Status.Text, PenView.OverText, "the status line says why")
+		PenView.setSending(refs, { Pen = 2, Train = 0 }, false, 0)
+		PenView.setHeader(refs, 44, 40)
+		T.truthy(refs.Status.Text:find("Sending", 1, true), "a running send keeps its line")
+		PenView.setSending(refs, nil, false, 0)
+		PenView.setHeader(refs, 37, 40)
+		T.eq(refs.Status.Text, PenView.SendIdleText, "under the capacity again: the idle line")
 		local rows = PenView.entries({ [GOLD] = 3, [DIRTY] = 5 }, "Pen")
 		local created = PenView.setEntries(refs, rows, true)
 		T.eq(#created, 2, "two rows")
