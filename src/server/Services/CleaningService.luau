@@ -15,6 +15,10 @@
 	The station has no canAccept, so IntakeService leaves it alone: its own
 	vise scan below mounts dropped raw ore. Moving the station carries the
 	vise ore along; packing it up (or leaving) stashes it.
+	The vise scan (every INTAKE_PERIOD seconds) walks only the stations:
+	a set kept by the station's spawned / removed hooks, never every placed
+	machine. Its OverlapParams filter is set again only when the Items
+	folder changes, and a pass with no empty station does no work.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -52,6 +56,9 @@ type Session = {
 local sessions: { [Player]: Session } = {}
 local random: Random? = nil -- made on first use (the Lune tests have no Random)
 local cleanedCallbacks: { (Player, string, string, number) -> ...any } = {}
+-- every Cleaning Station in the world (spawned / removed hooks)
+local stations: { [MachineService.PlacedMachine]: boolean } = {}
+local INTAKE_PERIOD = 0.3
 
 -- Listeners: tutorial, badges, analytics. (player, oreId, grade, score)
 function CleaningService.onCleaned(callback: (Player, string, string, number) -> ...any)
@@ -273,87 +280,134 @@ local function onCancel(player: Player, sessionId: any)
 	end
 end
 
--- Raw chunks dropped or thrown into the vise get mounted (owner's items only).
-local function intakeLoop()
+-- What one vise scan keeps between passes: the overlap params and the
+-- Items folder their filter was last set to.
+type IntakeScan = { Params: OverlapParams, Folder: Instance? }
+
+-- A station whose vise is empty and nobody cleans at.
+local function waiting(machine: MachineService.PlacedMachine): boolean
+	return not machine.Removed and not machine.State.Session and stationItem(machine) == nil
+end
+
+--[[
+	One vise scan: raw chunks dropped or thrown into an empty vise get
+	mounted (owner's items only). Walks the station set only; the filter is
+	set again only when the Items folder changed. Returns how many stations
+	it looked into.
+]]
+local function intakePass(scan: IntakeScan): number
+	local items = Workspace:FindFirstChild("Items")
+	if not items then
+		return 0
+	end
+	local looked = 0
+	for machine in stations do
+		if machine.Removed then
+			stations[machine] = nil
+			continue
+		end
+		if not waiting(machine) then
+			continue
+		end
+		local base = machine.Model.PrimaryPart
+		local intake = base and base:FindFirstChild("Intake") :: Attachment?
+		if not base or not intake then
+			continue
+		end
+		if scan.Folder ~= items then
+			scan.Folder = items
+			scan.Params.FilterDescendantsInstances = { items }
+		end
+		looked += 1
+		local size = intake:GetAttribute("IntakeSize") :: Vector3? or Vector3.new(3, 3, 3)
+		-- the attachment's WorldCFrame, worked out from the Base (the Lune tests can run it)
+		local box = base.CFrame * intake.CFrame
+		for _, part in Workspace:GetPartBoundsInBox(box, size, scan.Params) do
+			local record = ItemService.fromPart(part)
+			if
+				record
+				and record.State == "Loose"
+				and record.Kind == "Raw"
+				and record.Owner == machine.Owner.UserId
+				and ItemService.isTrusted(record, os.clock())
+			then
+				mount(machine, record)
+				-- start right away if the owner is close by
+				local root = Guard.rootPart(machine.Owner)
+				if root and (root.Position - (base :: BasePart).Position).Magnitude < 22 then
+					startSession(machine.Owner, machine)
+				end
+				break
+			end
+		end
+	end
+	return looked
+end
+
+local function newScan(): IntakeScan
 	local params = OverlapParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
+	return { Params = params, Folder = nil }
+end
+
+local function intakeLoop()
+	local scan = newScan()
+	local warnedAt = -math.huge
 	while true do
-		task.wait(0.3)
-		local items = Workspace:FindFirstChild("Items")
-		if items then
-			params.FilterDescendantsInstances = { items }
-			for _, machine in MachineService.all() do
-				if machine.Id == "CleaningStation" and not stationItem(machine) and not machine.State.Session then
-					local base = machine.Model.PrimaryPart
-					local intake = base and base:FindFirstChild("Intake") :: Attachment?
-					if intake then
-						local size = intake:GetAttribute("IntakeSize") :: Vector3? or Vector3.new(3, 3, 3)
-						for _, part in Workspace:GetPartBoundsInBox(intake.WorldCFrame, size, params) do
-							local record = ItemService.fromPart(part)
-							if
-								record
-								and record.State == "Loose"
-								and record.Kind == "Raw"
-								and record.Owner == machine.Owner.UserId
-								and ItemService.isTrusted(record, os.clock())
-							then
-								mount(machine, record)
-								-- start right away if the owner is close by
-								local root = Guard.rootPart(machine.Owner)
-								if root and (root.Position - (base :: BasePart).Position).Magnitude < 22 then
-									startSession(machine.Owner, machine)
-								end
-								break
-							end
-						end
-					end
-				end
-			end
+		task.wait(INTAKE_PERIOD)
+		local ok, err = pcall(intakePass, scan)
+		if not ok and os.clock() - warnedAt >= 10 then
+			warnedAt = os.clock()
+			warn("[CleaningService] vise scan failed: " .. tostring(err))
 		end
 	end
 end
 
+local stationBehaviour: MachineService.Behaviour = {
+	spawned = function(machine)
+		stations[machine] = true
+		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", 0, 0)
+		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", 0.4, 1)
+		-- its own keys (G / gamepad B; F and Y stay "Clean Ore"), and always shown next to
+		-- "Clean Ore". No other prompt uses G or B, so one press never fires two prompts.
+		take.KeyboardKeyCode = Enum.KeyCode.G
+		take.GamepadKeyCode = Enum.KeyCode.ButtonB
+		take.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
+		take.Enabled = false
+		machine.State.MainPrompt = main
+		machine.State.TakePrompt = take
+		main.Triggered:Connect(function(player)
+			onPrompt(player, machine)
+		end)
+		take.Triggered:Connect(function(player)
+			onTake(player, machine)
+		end)
+		updatePrompts(machine)
+	end,
+	-- packed up or unloaded: the same either way (the vise ore goes to Storage)
+	removed = function(machine, _reason)
+		stations[machine] = nil
+		local session = machine.State.Session :: Session?
+		if session then
+			endSession(session)
+		end
+		local record = stationItem(machine)
+		if record then
+			machine.State.Item = nil
+			ItemService.stash(record, nil)
+		end
+	end,
+	-- moved in build mode: the ore in the vise moves with the station
+	moved = function(machine)
+		local record = stationItem(machine)
+		if record then
+			mount(machine, record)
+		end
+	end,
+}
+
 function CleaningService.init()
-	MachineService.register("CleaningStation", {
-		spawned = function(machine)
-			local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", 0, 0)
-			local take = makePrompt(machine, "TakePrompt", "Take Ore Back", 0.4, 1)
-			-- its own keys (G / gamepad B; F and Y stay "Clean Ore"), and always shown next to
-			-- "Clean Ore". No other prompt uses G or B, so one press never fires two prompts.
-			take.KeyboardKeyCode = Enum.KeyCode.G
-			take.GamepadKeyCode = Enum.KeyCode.ButtonB
-			take.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
-			take.Enabled = false
-			machine.State.MainPrompt = main
-			machine.State.TakePrompt = take
-			main.Triggered:Connect(function(player)
-				onPrompt(player, machine)
-			end)
-			take.Triggered:Connect(function(player)
-				onTake(player, machine)
-			end)
-			updatePrompts(machine)
-		end,
-		-- packed up or unloaded: the same either way (the vise ore goes to Storage)
-		removed = function(machine, _reason)
-			local session = machine.State.Session :: Session?
-			if session then
-				endSession(session)
-			end
-			local record = stationItem(machine)
-			if record then
-				machine.State.Item = nil
-				ItemService.stash(record, nil)
-			end
-		end,
-		-- moved in build mode: the ore in the vise moves with the station
-		moved = function(machine)
-			local record = stationItem(machine)
-			if record then
-				mount(machine, record)
-			end
-		end,
-	})
+	MachineService.register("CleaningStation", stationBehaviour)
 	Net.on("CleanSubmit", onSubmit)
 	Net.on("CleanCancel", onCancel)
 	Players.PlayerRemoving:Connect(function(player)
@@ -390,13 +444,32 @@ end
 
 -- For the tutorial arrow.
 function CleaningService.stationOf(player: Player): Model?
-	for _, machine in MachineService.ofPlayer(player) do
-		if machine.Id == "CleaningStation" then
+	for machine in stations do
+		if machine.Owner == player and not machine.Removed then
 			return machine.Model
 		end
 	end
 	return nil
 end
+
+-- Internals for the Lune tests only (tests/CleaningService.spec.luau).
+CleaningService._test = {
+	behaviour = stationBehaviour,
+	newScan = newScan,
+	intakePass = intakePass,
+	stations = function(): { MachineService.PlacedMachine }
+		local list = {}
+		for machine in stations do
+			if not machine.Removed then
+				table.insert(list, machine)
+			end
+		end
+		return list
+	end,
+	reset = function()
+		table.clear(stations)
+	end,
+}
 
 local _ = OreData
 return CleaningService
