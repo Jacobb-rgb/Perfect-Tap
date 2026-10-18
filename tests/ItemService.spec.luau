@@ -186,12 +186,23 @@ return function(T, Loader)
 		T.eq(ItemService.storeDesc(w.player, d), "Lost", "no data loaded")
 	end)
 
-	withWorld("ItemService: dirty ore replicates no value (rarity stays hidden)", function(w)
+	withWorld("ItemService: dirty ore replicates no value, no ore id and a neutral name (rarity stays hidden)", function(w)
 		local raw = ItemService.spawnDesc({ K = "Raw", O = "Diamond" }, USER, CFrame.new(0, 5, 0))
-		T.eq(raw.Model:GetAttribute("Value"), 0, "raw Value attribute")
+		T.eq(raw.Model:GetAttribute("Value"), nil, "no raw Value attribute (clients read nil as 0)")
+		T.eq(raw.Model:GetAttribute("OreId"), nil, "no OreId attribute on dirty ore")
+		T.eq(raw.Model.Name, "Raw", "a neutral model name (not Raw_Diamond)")
 		T.eq(raw.Model:GetAttribute("Kind"), "Raw", "kind")
+		T.eq(raw.OreId, "Diamond", "the server still knows the ore")
+		T.eq(ItemService.descOf(raw).O, "Diamond", "and stores / sells / cleans it as that ore")
+		for _, belt in { true, false } do
+			local other = ItemService.spawnDesc({ K = "Raw", O = "Coal" }, USER, CFrame.new(4, 5, 0), nil, belt)
+			T.eq(other.Model.Name, raw.Model.Name, "every dirty ore has the same name")
+			T.eq(other.Model:GetAttribute("OreId"), nil, "no ore id on belts either")
+		end
 		local cleaned = ItemService.spawnDesc(clean("Clean"), USER, CFrame.new(2, 5, 0))
 		T.eq(cleaned.Model:GetAttribute("Value"), ItemData.value("Clean", "Copper", "Clean"), "clean ore shows its value")
+		T.eq(cleaned.Model:GetAttribute("OreId"), "Copper", "clean ore shows its ore")
+		T.eq(cleaned.Model:GetAttribute("ItemId"), nil, "no id attribute (only the server uses ids)")
 		-- a full pen keeps dirty ore (never sold behind the player's back) ...
 		for _ = 1, ItemService.penCapacity(w.data) do
 			table.insert(w.data.Storage, clean())
@@ -214,19 +225,24 @@ return function(T, Loader)
 		T.eq(#w.data.Storage, 1, "in storage")
 		T.eq(w.notes[1].Payload.Text, "Your item landed on another forge (moved to your Ore Pen)", "toast")
 
+		-- the loose cap: nothing is moved into the pen behind your back any
+		-- more (the sources stop instead: atLooseCap, MiningService)
 		local cap = GameConfig.MaxLooseItemsPerPlayer
-		for i = 1, cap + 2 do
+		for i = 1, cap - 1 do
 			ItemService.spawnDesc(clean(), USER, CFrame.new(i, 5, 0))
 		end
-		T.eq(ItemService.looseCount(USER), cap, "at most the cap stays loose")
-		T.eq(#w.data.Storage, 3, "the oldest two went to storage")
-		local toasts = 0
-		for _, note in w.notes do
-			if note.Payload.Text == "Too many loose items (moved to your Ore Pen)" then
-				toasts += 1
-			end
+		T.falsy(ItemService.atLooseCap(USER), "one below the cap")
+		ItemService.spawnDesc(clean(), USER, CFrame.new(cap, 5, 0))
+		T.truthy(ItemService.atLooseCap(USER), "at the cap")
+		for i = 1, 2 do
+			ItemService.spawnDesc(clean(), USER, CFrame.new(cap + i, 5, 0))
 		end
-		T.eq(toasts, 1, "one toast")
+		T.eq(ItemService.looseCount(USER), cap + 2, "every item stays where it is")
+		T.eq(#w.data.Storage, 1, "nothing went into the pen")
+		for _, note in w.notes do
+			T.falsy(tostring(note.Payload and note.Payload.Text):find("Too many loose", 1, true), "no loose-cap toast")
+		end
+		T.falsy(ItemService.atLooseCap(USER + 1), "nobody else is at the cap")
 
 		w.online = false
 		local orphan = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
@@ -301,5 +317,370 @@ return function(T, Loader)
 		local after = record.Model:GetPivot().Position
 		T.near((after - (before + Vector3.new(0, 1.5, 0))).Magnitude, 0, 1e-4, "lifted 1.5 studs")
 		T.near((record.ReleasePos - after).Magnitude, 0, 1e-4, "new release point")
+	end)
+	---------------------------------------------------------------- ids, looks, the pool (perf audit #3/#4)
+
+	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
+
+	local function partsOf(model: any): { any }
+		local out = {}
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(out, d)
+			end
+		end
+		return out
+	end
+
+	-- destroyed (Lune errors where Roblox reads a destroyed Parent as nil)
+	local function gone(instance: any): boolean
+		local ok, parent = pcall(function()
+			return instance.Parent
+		end)
+		return not ok or parent == nil
+	end
+
+	local function weldsOf(model: any): number
+		local n = 0
+		for _, d in model:GetDescendants() do
+			if d:IsA("WeldConstraint") then
+				n += 1
+			end
+		end
+		return n
+	end
+
+	T.test("ItemBuilder.buildLight: every ore and kind fits 3 parts with the full look's Body", function()
+		local ItemBuilderL = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
+		local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+		local cf = CFrame.new(3, 4, 5)
+		local function count(model: any): (number, number)
+			local parts, extras = 0, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					parts += 1
+				elseif d:IsA("ParticleEmitter") or d:IsA("Light") then
+					extras += 1
+				end
+			end
+			return parts, extras
+		end
+		local recipes = {}
+		for _, recipe in ItemData.Recipes do
+			table.insert(recipes, recipe.Id)
+		end
+		for _, ore in OreData.List do
+			local infos: { any } = {
+				{ Kind = "Raw", OreId = ore.Id },
+				{ Kind = "Clean", OreId = ore.Id, Grade = "Flawless" },
+				{ Kind = "Clean", OreId = ore.Id, Grade = "Rough" },
+				{ Kind = "Crushed", OreId = ore.Id },
+				{ Kind = "Ingot", OreId = ore.Id, Grade = "Flawless" },
+				{ Kind = "Alloy", OreId = ore.Id },
+			}
+			for _, recipe in recipes do
+				table.insert(infos, { Kind = "Gear", OreId = ore.Id, Recipe = recipe })
+			end
+			for _, info in infos do
+				local label = `{info.Kind} {ore.Id} {info.Grade or info.Recipe or ""}`
+				local light = ItemBuilderL.buildLight(info, cf, 7)
+				local full = ItemBuilderL.build(info, cf, 7)
+				local parts, extras = count(light)
+				T.le(parts, ItemBuilderL.LightBudget, label .. ": light parts")
+				T.eq(extras, 0, label .. ": no sparkles or lights on belts")
+				local a, b = light.PrimaryPart, full.PrimaryPart
+				T.eq(a.Name, "Body", label .. ": a Body")
+				T.near((a.Size - b.Size).Magnitude, 0, 1e-4, label .. ": the same Body size")
+				T.near((a.CFrame.Position - b.CFrame.Position).Magnitude, 0, 1e-4, label .. ": at the same spot")
+				T.truthy(a.CanCollide, label .. ": the Body collides")
+				for _, d in light:GetDescendants() do
+					if d:IsA("BasePart") and d ~= a then
+						T.falsy(d.CanCollide, label .. ": decor never collides")
+						T.truthy(d.Massless, label .. ": decor is massless")
+					end
+				end
+			end
+		end
+		-- dirty ore on a belt looks the same for every ore but its glint
+		local gold = ItemBuilderL.buildLight({ Kind = "Raw", OreId = "Gold" }, cf, 3)
+		local coal = ItemBuilderL.buildLight({ Kind = "Raw", OreId = "Coal" }, cf, 3)
+		T.eq(gold.PrimaryPart.Color, coal.PrimaryPart.Color, "the same crust")
+		T.eq(gold.PrimaryPart.Size, coal.PrimaryPart.Size, "the same size")
+	end)
+
+	withWorld("ItemService: short numeric ids, only used on the server", function(w)
+		local a = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+		local b = ItemService.spawnDesc(clean(), USER, CFrame.new(2, 5, 0))
+		T.eq(type(a.Id), "number", "a number, not a GUID")
+		T.truthy(a.Id ~= b.Id, "unique")
+		T.truthy(ItemService.getById(b.Id) == b, "getById")
+		T.eq(w.ids, 0, "no GUID generated")
+		for _, name in { "ItemId", "Grade", "Recipe" } do
+			T.eq(a.Model:GetAttribute(name), if name == "Grade" then "Rough" else nil, name)
+		end
+		local count = 0
+		for _ in a.Model:GetAttributes() do
+			count += 1
+		end
+		T.le(count, 6, "at most Kind, OreId, Grade, Owner, State, Value")
+	end)
+
+	withWorld("ItemService: belt items wear the light look (<= 3 parts); dress switches it in place", function(w)
+		local kinds: { any } = {
+			{ K = "Raw", O = "Gold" },
+			{ K = "Clean", O = "Diamond", G = "Flawless" },
+			{ K = "Crushed", O = "Iron" },
+			{ K = "Ingot", O = "Copper", G = "Flawless" },
+			{ K = "Alloy", O = "Copper" },
+			{ K = "Gear", O = "Iron", R = "Helm" },
+			{ K = "Gear", O = "Iron", R = "Greatsword" },
+			{ K = "Gear", O = "Iron", R = "ToolHead" },
+		}
+		for _, desc in kinds do
+			local label = `{desc.K} {desc.O} {desc.R or ""}`
+			local belt = ItemService.spawnDesc(desc, USER, CFrame.new(0, 5, 0), nil, true)
+			T.truthy(belt.Light, label .. ": machine / chute spawns are light")
+			T.le(#partsOf(belt.Model), ItemBuilder.LightBudget, label .. ": at most 3 parts on belts")
+			T.le(weldsOf(belt.Model), ItemBuilder.LightBudget - 1, label .. ": at most 2 welds")
+			local body = belt.Body
+			local size = body.Size
+			-- picked up: the full look on the same model and body
+			T.truthy(ItemService.dress(belt, false), label .. ": dressed")
+			T.falsy(belt.Light, label .. ": full now")
+			T.truthy(belt.Body == body and belt.Model.PrimaryPart == body, label .. ": the same Body")
+			T.near((belt.Body.Size - size).Magnitude, 0, 1e-4, label .. ": the same physics box")
+			local full = ItemBuilder.build({ Kind = desc.K, OreId = desc.O, Grade = desc.G, Recipe = desc.R }, CFrame.new(), belt.Id)
+			T.eq(#partsOf(belt.Model), #partsOf(full), label .. ": every part of the full look")
+			T.eq(weldsOf(belt.Model), #partsOf(full) - 1, label .. ": every decor part welded")
+			for _, part in partsOf(belt.Model) do
+				T.eq(part.CollisionGroup, ItemService.ItemGroup, label .. ": items group")
+			end
+			T.falsy(ItemService.dress(belt, false), label .. ": already full")
+			-- hand-spawned items are full from the start
+			local hand = ItemService.spawnDesc(desc, USER, CFrame.new(0, 5, 0))
+			T.falsy(hand.Light, label .. ": hand spawns are full")
+		end
+		local gone = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0), nil, true)
+		ItemService.destroy(gone)
+		T.falsy(ItemService.dress(gone, false), "a consumed item is never dressed")
+	end)
+
+	withWorld("ItemService: a machine taking a belt item parks its model; the next belt spawn nearby wears it", function(w)
+		local world = roblox.Instance.new("Folder")
+		ItemService._test.setFolder(world)
+		local pool = ItemService.Pool
+		local raw = ItemService.spawnDesc({ K = "Raw", O = "Gold" }, USER, CFrame.new(0, 5, 0), nil, true)
+		local model, body = raw.Model, raw.Body
+		T.truthy(model.Parent == world, "in the items folder")
+		T.truthy(model:HasTag("Item"), "tagged for clients")
+		local desc = ItemService.absorb(raw)
+		T.eq(desc.O, "Gold", "absorbed as gold")
+		T.eq(raw.State, "Consumed", "the record is gone")
+		T.eq(ItemService.looseCount(USER), 0, "nothing loose")
+		T.truthy(model.Parent == world, "the model stays (parked)")
+		T.falsy(model:HasTag("Item"), "clients ignore a parked model")
+		for _, part in partsOf(model) do
+			T.eq(part.Transparency, 1, "hidden")
+			T.truthy(part.Anchored, "anchored")
+			T.falsy(part.CanCollide or part.CanQuery or part.CanTouch, "no collision, query or touch")
+		end
+		T.eq(ItemService._test.parked(USER), 1, "one parked model")
+		-- the machine's output: the same model, re-dressed as the new item
+		local crushed = ItemService.spawnDesc({ K = "Crushed", O = "Gold" }, USER, CFrame.new(4, 5, 0), nil, true)
+		T.truthy(crushed.Model == model and crushed.Body == body, "the parked model is worn again")
+		T.eq(ItemService._test.parked(USER), 0, "out of the pool")
+		T.truthy(model:HasTag("Item"), "tagged again")
+		T.eq(model:GetAttribute("Kind"), "Crushed", "new kind")
+		T.eq(model:GetAttribute("OreId"), "Gold", "crushed ore shows its ore")
+		T.eq(model.Name, "Crushed_Gold", "named for its look")
+		T.le(#partsOf(model), ItemBuilder.LightBudget, "light look")
+		T.near((body.CFrame.Position - Vector3.new(4, 5, 0)).Magnitude, 0, 1e-3, "moved to the output")
+		for _, part in partsOf(model) do
+			T.falsy(part.Anchored, "unanchored")
+			T.eq(part.CanCollide, part == body, "only the Body collides")
+			T.truthy(part.CanQuery, "clickable")
+			T.truthy(part.Transparency < 1 or part == body and body.Transparency == 1, "visible again")
+		end
+		T.eq(crushed.State, "Loose", "loose")
+		T.truthy(crushed.Id ~= raw.Id, "a new id")
+		T.truthy(ItemService.get(model) == crushed, "the model maps to the new record")
+		-- the same look: shown again exactly as it was (no rebuild)
+		-- (Lune hands out a new wrapper per lookup: compare in order, by look)
+		local before = {}
+		for _, part in partsOf(model) do
+			table.insert(before, { Color = part.Color, Size = part.Size, Transparency = part.Transparency })
+		end
+		ItemService.absorb(crushed)
+		local again = ItemService.spawnDesc({ K = "Crushed", O = "Gold" }, USER, CFrame.new(2, 5, 0), nil, true)
+		T.truthy(again.Model == model, "worn again")
+		local after = partsOf(model)
+		T.eq(#after, #before, "the same parts")
+		for i, part in after do
+			T.truthy(part.Color == before[i].Color and part.Size == before[i].Size, "the very same look " .. i)
+			T.eq(part.Transparency, before[i].Transparency, "transparency restored " .. i)
+		end
+		-- dirty ore re-used from a clean model loses the clean ore's attributes
+		ItemService.absorb(again)
+		local dirty = ItemService.spawnDesc({ K = "Raw", O = "Diamond" }, USER, CFrame.new(1, 5, 0), nil, true)
+		T.truthy(dirty.Model == model, "worn again")
+		T.eq(model:GetAttribute("OreId"), nil, "no ore id left over")
+		T.eq(model:GetAttribute("Value"), nil, "no value left over")
+		T.eq(model.Name, "Raw", "neutral name")
+		-- too far away, someone else's, or a hand spawn: a new model
+		ItemService.absorb(dirty)
+		local far = ItemService.spawnDesc(clean(), USER, CFrame.new(pool.Reach + 10, 5, 0), nil, true)
+		T.truthy(far.Model ~= model, "beyond Reach: a new model")
+		local hand = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+		T.truthy(hand.Model ~= model, "a hand spawn never wears a parked belt model")
+		local theirs = ItemService.spawnDesc(clean(), USER + 1, CFrame.new(0, 5, 0), nil, true)
+		T.truthy(theirs.Model ~= model, "never another player's model")
+		T.eq(ItemService._test.parked(USER), 1, "still parked")
+		-- a full (hand) item taken by a machine is destroyed, not parked
+		ItemService.absorb(hand)
+		T.truthy(gone(hand.Model), "full items go")
+		-- parked models expire after Pool.Keep
+		ItemService.maintainAll(os.clock() + pool.Keep + 1)
+		T.eq(ItemService._test.parked(USER), 0, "expired")
+		T.truthy(gone(model), "destroyed")
+		-- at most Pool.Max per owner
+		for i = 1, pool.Max + 3 do
+			local r = ItemService.spawnDesc(clean(), USER, CFrame.new(i * 100, 5, 0), nil, true)
+			ItemService.absorb(r)
+		end
+		T.eq(ItemService._test.parked(USER), pool.Max, "the pool holds at most Max")
+	end)
+
+	withWorld("ItemService: consumed records can't be mounted, released or re-stated; CarryService hears consumed carried ones", function(w)
+		local heard = {}
+		ItemService.onCarriedConsumed(function(record)
+			table.insert(heard, record)
+		end)
+		local world = roblox.Instance.new("Folder")
+		local carried = ItemService.spawnDesc({ K = "Raw", O = "Gold" }, USER, CFrame.new(0, 5, 0))
+		carried.Model.Parent = world
+		T.truthy(ItemService.setState(carried, "Carried"), "carried")
+		-- the engine destroys it (the owner fell into the void with it)
+		carried.Model.Parent = nil
+		ItemService._test.maintain(carried, os.clock())
+		T.eq(carried.State, "Consumed", "consumed")
+		T.eq(#heard, 1, "CarryService heard it")
+		T.truthy(heard[1] == carried, "about that record")
+		T.eq(#w.data.Storage, 1, "kept in the pen once")
+		T.falsy(ItemService.setState(carried, "Machine"), "no new state")
+		T.eq(carried.State, "Consumed", "still consumed")
+		T.falsy(ItemService.mount(carried, CFrame.new()), "no mount")
+		T.falsy(ItemService.release(carried, CFrame.new()), "no release")
+		T.falsy(ItemService.eject(carried, Vector3.zero), "no eject")
+		T.eq(ItemService.looseCount(USER), 0, "never loose again")
+		-- consuming a loose item doesn't bother CarryService
+		local loose = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+		ItemService.absorb(loose)
+		T.eq(#heard, 1, "only carried ones")
+		-- a broken listener never breaks the caller
+		ItemService.onCarriedConsumed(function()
+			error("boom")
+		end)
+		local other = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+		ItemService.setState(other, "Carried")
+		T.truthy(pcall(ItemService.absorb, other), "absorb still works")
+		T.eq(other.State, "Consumed", "consumed")
+	end)
+
+	withWorld("ItemService: hand-back caps the client's speed and checks the height (Security #8)", function(w)
+		local world = roblox.Instance.new("Folder")
+		local function thrown(at: any): any
+			local r = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+			r.Model.Parent = world
+			r.Body.CFrame = CFrame.new(at)
+			r.ClientOwnedUntil = os.clock() - 1
+			return r
+		end
+		-- a client flung it: the server keeps at most HandBackSpeed / HandBackSpin
+		local flung = thrown(Vector3.new(10, 1, 0))
+		flung.Body.AssemblyLinearVelocity = Vector3.new(900, 50, 0)
+		flung.Body.AssemblyAngularVelocity = Vector3.new(0, 300, 0)
+		ItemService._test.maintain(flung, os.clock())
+		T.eq(flung.ClientOwnedUntil, nil, "the server has it")
+		T.le(flung.Body.AssemblyLinearVelocity.Magnitude, ItemService.HandBackSpeed + 1e-4, "speed capped")
+		T.le(flung.Body.AssemblyAngularVelocity.Magnitude, ItemService.HandBackSpin + 1e-4, "spin capped")
+		local slow = thrown(Vector3.new(10, 1, 0))
+		slow.Body.AssemblyLinearVelocity = Vector3.new(3, 0, 0)
+		ItemService._test.maintain(slow, os.clock())
+		T.near(slow.Body.AssemblyLinearVelocity.X, 3, 1e-4, "a slow roll is kept")
+		local broken = thrown(Vector3.new(10, 1, 0))
+		broken.Body.AssemblyLinearVelocity = Vector3.new(0 / 0, 0, 0)
+		ItemService._test.maintain(broken, os.clock())
+		T.eq(broken.Body.AssemblyLinearVelocity.Magnitude, 0, "a broken speed is zeroed")
+		-- carried onto a roof: higher than any throw reaches -> back to the owner
+		local rise = ItemService.riseLimit(slow)
+		T.truthy(rise > 10 and rise < 40, "a throw's height (" .. rise .. ")")
+		local roof = thrown(Vector3.new(5, 5 + rise + 4, 0))
+		ItemService._test.maintain(roof, os.clock())
+		local rescue = (w.root.CFrame * CFrame.new(0, 2, -4)).Position
+		T.near((roof.Body.CFrame.Position - rescue).Magnitude, 0, 1e-3, "too high: back at the owner")
+		local ledge = thrown(Vector3.new(5, 5 + rise - 2, 0))
+		ItemService._test.maintain(ledge, os.clock())
+		T.near(ledge.Body.CFrame.Position.Y, 5 + rise - 2, 1e-3, "a plausible height stays")
+		-- isTrusted checks the height too
+		local high = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+		high.Body.CFrame = CFrame.new(1, 5 + rise + 2, 0)
+		T.falsy(ItemService.isTrusted(high, high.ReleasedAt + 2), "too high to trust")
+		high.Body.CFrame = CFrame.new(1, 4, 0)
+		T.truthy(ItemService.isTrusted(high, high.ReleasedAt + 2), "on the ground: trusted")
+	end)
+
+	withWorld("ItemService: queued items sleep (anchored) and wake when the queue moves", function(w)
+		local world = roblox.Instance.new("Folder")
+		ItemService._test.setFolder(world)
+		local front = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0), nil, true)
+		local behind = ItemService.spawnDesc(clean(), USER, CFrame.new(2, 5, 0), nil, true)
+		local farAway = ItemService.spawnDesc(clean(), USER, CFrame.new(60, 5, 0), nil, true)
+		for _, r in { front, behind, farAway } do
+			T.truthy(ItemService.sleep(r), "asleep")
+			for _, part in partsOf(r.Model) do
+				T.truthy(part.Anchored, "anchored")
+			end
+		end
+		T.truthy(ItemService.sleep(behind), "sleeping twice is fine")
+		local client = ItemService.spawnDesc(clean(), USER, CFrame.new(0, 5, 0))
+		T.falsy(ItemService.sleep(client), "never while a client simulates it")
+		-- the machine takes the front one: the queue behind it wakes
+		ItemService.absorb(front)
+		T.eq(behind.Asleep, nil, "the next in line wakes")
+		T.falsy(behind.Body.Anchored, "and can move")
+		T.truthy(farAway.Asleep, "far away: still asleep")
+		-- nothing sleeps for ever (a belt taken away under it)
+		ItemService._test.maintain(farAway, (farAway.Asleep :: number) + ItemService.SleepMax + 0.1)
+		T.eq(farAway.Asleep, nil, "woken after SleepMax")
+		T.falsy(farAway.Body.Anchored, "unanchored")
+		-- picked up, released or carried: awake
+		ItemService.sleep(behind)
+		ItemService.release(behind, CFrame.new(0, 5, 0))
+		T.eq(behind.Asleep, nil, "released: awake")
+		T.falsy(behind.Body.Anchored, "unanchored")
+		T.eq(ItemService.wakeNear(USER, Vector3.zero, 100), 0, "nobody left asleep")
+	end)
+
+	withWorld("ItemService: one maintenance pass looks each owner up once (perf audit #10)", function(w)
+		local world = roblox.Instance.new("Folder")
+		for i = 1, 12 do
+			local r = ItemService.spawnDesc(clean(), USER, CFrame.new(i, 5, 0), nil, true)
+			r.Model.Parent = world
+		end
+		local lookups = 0
+		local get = Players.GetPlayerByUserId
+		rawset(Players, "GetPlayerByUserId", function(self, id)
+			lookups += 1
+			return get(self, id)
+		end)
+		local ok, err = pcall(ItemService.maintainAll, os.clock())
+		rawset(Players, "GetPlayerByUserId", get)
+		if not ok then
+			error(err, 0)
+		end
+		T.eq(lookups, 1, "one lookup for 12 items of one owner")
+		for _, r in ItemService.ownedBy(USER) do
+			T.near(r.LastNearOwner, os.clock(), 1, "near-owner time kept up to date")
+		end
 	end)
 end
