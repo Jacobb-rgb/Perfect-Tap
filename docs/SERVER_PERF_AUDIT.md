@@ -108,6 +108,19 @@ that line.
 | 9 | **Merge fix/save-safety** (60 s autosave, stale lock 180 s) into main and steps 6-7 | each player saved every 60 s instead of ~160 s, still ≤ 7 % of the budget | TERRA FORGE Roblox hra vývoj (with the save audit) |
 | 10 | Small loops: `ItemService` maintenance caches the owner root per pass and drops the per-record closure; `CleaningService` keeps a list of stations instead of scanning every machine; `refreshLocks` compares before writing; profile the Ore Magnet (≤ 640 raycasts/s) | ~3k lookups/s | TERRA FORGE Roblox hra vývoj (steps 6-7: the magnet) + Návrhy strojů (CleaningService) |
 
+**Status (branch perf/pass1, map v26).**
+- Fix 1 done: StateService coalesces at 0.5 s (the first push after a join at once), sends only the
+  sections whose fingerprint changed (Placed only after a layout edit), sends changed flat sections
+  (Storage and Foundry summaries, Stats, Train, Build...) as `Patch { Set, Clear }`, lists vanished
+  sections in `Removed`, marks the first push `Full` and keeps the steps 6-7 `Kept` list; the coin
+  balance and podium income are the player attributes `Coins` / `IncomePerSec` (at most every
+  0.25 s), which HudController reads. Busy-player estimate (tests/StateService.spec.luau): ~34.5 KB/s
+  -> ~1.3 KB/s per client (State plus every player's coin attribute).
+- Fix 5 done: IntakeService asks `plotAt` first and tests only the town zones over that plot or in
+  the item's 32-stud town square, from a cached index of zone boxes (rebuilt when a zone is added or
+  its part moves, resizes or leaves): ~26k -> ~2k box tests/s.
+- Fixes 2-4 and 6-10 are still open (other chats own ItemService, ConveyorService, DataService).
+
 Not changed on purpose: `StreamingTargetRadius` 384 keeps every plot (and its belt items) in every client's
 range. Dropping it to ~256 would cut far-plot replication, but the town would pop in on PCs; after fixes 3-4,
 measure first.
