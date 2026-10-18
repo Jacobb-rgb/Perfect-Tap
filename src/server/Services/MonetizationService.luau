@@ -217,8 +217,18 @@ local function decideFor(player: Player, data: { [string]: any }, id: string, pr
 		warn(`[MonetizationService] no product / handler for product id {tostring(productId)}`)
 		return NOT_YET
 	end
-	-- grant and record with no yield in between
-	if not grant(player, data, entry) then
+	-- grant and record with no yield in between: a handler that yields is cancelled and refused
+	local thread = coroutine.create(grant)
+	local ran, granted = coroutine.resume(thread, player, data, entry)
+	if coroutine.status(thread) ~= "dead" then
+		coroutine.close(thread)
+		warn(`[MonetizationService] the {entry.Grant} grant handler yielded: refused (handlers must not yield)`)
+		return NOT_YET
+	end
+	if not ran then
+		error(granted, 0)
+	end
+	if granted ~= true then
 		return NOT_YET
 	end
 	purchases[id] = os.time()

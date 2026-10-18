@@ -340,6 +340,21 @@ return function(T, Loader)
 		T.eq(MonetizationService.decide(w.receipt("u5", PRODUCT)), NOT_YET, "a product without an id")
 	end)
 
+	withWorld("receipts: a grant handler that yields is cancelled and refused, nothing recorded", function(w)
+		local finished = false
+		local yielded: thread? = nil
+		MonetizationService.register("TestPouch", function()
+			yielded = coroutine.running()
+			coroutine.yield() -- what task.wait or a DataStore call would do
+			finished = true
+			return true
+		end)
+		T.eq(MonetizationService.decide(w.receipt("y1", PRODUCT)), NOT_YET, "a yielding handler is refused")
+		T.eq(w.data.Purchases.y1, nil, "not recorded")
+		T.eq(yielded and coroutine.status(yielded), "dead", "the handler's thread is closed")
+		T.falsy(finished, "the cancelled handler never finishes later")
+	end)
+
 	withWorld("receipts: the same PurchaseId decided twice at once waits", function(w)
 		m.setInFlight("f1", true)
 		T.eq(MonetizationService.decide(w.receipt("f1", PRODUCT)), NOT_YET, "in flight")
