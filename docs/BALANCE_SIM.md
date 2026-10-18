@@ -4,6 +4,10 @@ A model of a typical player from the first minute to 10 hours, after the 36-ore 
 Script: `tools/lune/balance_sim.luau` (`lune run tools/lune/balance_sim.luau` for today's prices,
 `... calibrate` for the price proposal); chart: `node tools/balance/chart.mjs` → `docs/screenshots/balance_chart.png`.
 Raw output: `build/balance/sim.json`, `build/balance/proposal.json`. Nothing in the game config was changed.
+Overrides without editing the script: `lune run tools/lune/balance_sim.luau [calibrate] override=my.json`, where
+my.json is a JSON object merged into the assumptions table `A` (e.g. `IncomeMult`, `DamageMult`, `LuckMult`,
+`CleanSpeedMult` for steps 6-7 bonuses, `BlasterCoins = {"4": 400000}`, `ElevatorPrice`, `Podiums`, `Players`) and
+an optional `Scenarios` list.
 
 ![Money and income over 10 hours](screenshots/balance_chart.png)
 

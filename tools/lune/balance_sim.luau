@@ -1,6 +1,6 @@
 --[[
 	Balance simulation: a typical player from the first minute to 10 hours.
-	`lune run tools/lune/balance_sim.luau` -> build/balance/sim.json (+ a
+	`lune run tools/lune/balance_sim.luau [calibrate] [override=file.json]` -> build/balance/sim.json (+ a
 	summary on stdout); tools/balance/chart.mjs draws the chart and
 	docs/BALANCE_SIM.md explains the model and the results.
 
@@ -67,6 +67,11 @@ local A = {
 	StopLevel = nil :: number?, -- calibration: stop a run once this blaster level is reached...
 	StopTime = nil :: number?, -- ...or after this many seconds
 	ShopEvery = 30, -- seconds between machine / upgrade shopping decisions
+	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
+	IncomeMult = 1, -- podium income and every sale
+	DamageMult = 1, -- blaster damage
+	LuckMult = 1, -- the crystal-rock share (better ores)
+	CleanSpeedMult = 1, -- Auto Cleaner speed
 	CrystalMode = "Mixed", -- "Mixed": crystals = the floor's best 3 ores (70 %) + the next rarity's cheapest 3 (30 %); "NextRarity"
 }
 
@@ -149,7 +154,7 @@ local function pick(rng: any, list: { { ore: any, w: number } }): any
 end
 
 local function drawOre(rng: any, floor: any): any
-	if rng:range(0, 1) < A.CrystalShare then
+	if rng:range(0, 1) < math.min(1, A.CrystalShare * A.LuckMult) then
 		return pick(rng, floor.Crystal)
 	end
 	return pick(rng, floor.Ores)
@@ -266,7 +271,7 @@ end
 -- cleans; raw ores per second sold dirty (the cleaners can't keep up).
 local function flow(p: any): (number, number, any)
 	local floor = bestFloor(p)
-	local dps = BlasterData.damage(p.Blaster, p.BlasterOre)
+	local dps = BlasterData.damage(p.Blaster, p.BlasterOre) * A.DamageMult
 	local rockTime = floor.HP / dps + A.RockWalk * walkMult(p)
 	local perOre = (rockTime / A.OresPerRock + A.DropWalk * walkMult(p) / ToolData.carryCapacity(p.Carry, false)) / A.Efficiency
 	local cap = TrainConfig.capacity(p.TrainCap, false)
@@ -278,7 +283,7 @@ local function flow(p: any): (number, number, any)
 		return rate, 0, floor
 	end
 	local delivered = math.min(1 / perOre, trainRate)
-	local cleanRate = p.Cleaners / MachineData.ById.AutoCleaner.Time
+	local cleanRate = p.Cleaners * A.CleanSpeedMult / MachineData.ById.AutoCleaner.Time
 	local cleaned = math.min(delivered, cleanRate)
 	return cleaned, delivered - cleaned, floor
 end
@@ -299,7 +304,7 @@ local function saleRate(p: any, cleaned: number, raw: number, floor: any): numbe
 		local ingots = math.min(cleaned, f)
 		perClean = if cleaned > 0 then (ingots * 1.25 + (cleaned - ingots)) / cleaned else 0
 	end
-	return cleaned * value * grade * perClean + raw * value * ItemData.Kinds.Raw.ValueMult
+	return (cleaned * value * grade * perClean + raw * value * ItemData.Kinds.Raw.ValueMult) * A.IncomeMult
 end
 
 local function podiumIncome(p: any): number
@@ -307,7 +312,7 @@ local function podiumIncome(p: any): number
 	for _, v in p.Podium do
 		sum += v
 	end
-	return sum
+	return sum * A.IncomeMult
 end
 
 -- The cheapest generators that cover `demand` power from what the player has.
@@ -651,6 +656,30 @@ local function calibrate(): { [number]: number }
 	A.StopLevel = nil
 	A.StopTime = nil
 	return prices
+end
+
+-- `override=file.json`: a JSON object merged into the assumptions (any key of A,
+-- e.g. IncomeMult, BlasterCoins = { "4": 400000 }, Podiums); a "Scenarios" list
+-- replaces the scenario list. Works with and without `calibrate`.
+for _, arg in process.args do
+	local file = string.match(arg, "^override=(.+)$")
+	if file then
+		local override = serde.decode("json", fs.readFile(file))
+		for key, value in override do
+			if key == "Scenarios" then
+				SCENARIOS = value
+			elseif key == "BlasterCoins" then
+				local prices = {}
+				for level, coins in value do
+					prices[tonumber(level) :: number] = coins
+				end
+				A.BlasterCoins = prices
+			else
+				A[key] = value
+			end
+		end
+		print("override: " .. file)
+	end
 end
 
 local results = {}
