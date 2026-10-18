@@ -9,6 +9,7 @@ The order to take a build from Studio to a public game. It links the detailed do
 | [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md) | the few things done by hand in Studio |
 | [PERF_AUDIT.md](PERF_AUDIT.md) | phone performance numbers and the fixes still open |
 | [SUPPORT.md](SUPPORT.md) | player saves after launch: restoring a save, data-erasure (RTBF) requests, bans |
+| [SERVER_PERF_AUDIT.md](SERVER_PERF_AUDIT.md) | a full 8-player server: CPU loops, network per client, item churn, DataStore budget, top 10 fixes by chat |
 | Owner guide (Czech) | `Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/obchod/NAVOD.md`, with the logo, icons and thumbnails |
 
 ## 1. Store art (ready, nothing uploaded)

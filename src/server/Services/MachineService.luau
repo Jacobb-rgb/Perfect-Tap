@@ -628,6 +628,13 @@ function MachineService.pickup(machine: PlacedMachine): (boolean, string?)
 	if not data or not table.find(data.PlacedMachines, machine.Entry) then
 		return false, "Invalid"
 	end
+	-- the contents must fit the Ore Pen (packing a machine up is no way past
+	-- the pen's paid capacity; nothing is lost: the player makes room first)
+	local inQueue, outQueue = machine.Entry.In, machine.Entry.Out
+	local contents = (if inQueue then #inQueue else 0) + (if outQueue then #outQueue else 0)
+	if contents > 0 and #data.Storage + contents > ItemService.penCapacity(data) then
+		return false, "PenFull"
+	end
 	-- hooks first (sessions end, the vise item is stashed), then the contents
 	detach(machine, "Pickup")
 	local stored, sold = 0, 0
