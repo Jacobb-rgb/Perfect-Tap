@@ -17,6 +17,7 @@ return function(T, Loader)
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local Policy = Loader.requirePath("ServerScriptService.Server.Policy")
 	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+	local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 	local WheelService = Loader.requirePath("ServerScriptService.Server.Services.WheelService")
@@ -469,6 +470,21 @@ return function(T, Loader)
 		T.truthy(expected > 0)
 		T.eq(result.Coins, expected)
 		T.eq(w.data.Coins, expected)
+	end)
+
+	withWheel("Wheel: the full-pen ore coins include the player's sell bonus (Midas)", function(w)
+		for _ = 1, 2000 do
+			if #w.data.Storage >= GameConfig.MaxStoredItems then
+				break
+			end
+			table.insert(w.data.Storage, { K = "Raw", O = "Coal" })
+		end
+		w.data.Enchants = { Owned = { Midas = 3 }, Slots = { "Midas", "", "", "" } }
+		Bonuses.invalidate(w.player)
+		local mult = 1 + EnchantConfig.value("Midas", "SellPct", 3)
+		local base = WheelConfig.oreFallbackCoins(WheelService.oreContext(w.player, w.data))
+		local result = w.spin(rollFor(7)).A
+		T.eq(result.Coins, math.floor(base * mult + 0.5), "what Tobin would pay with Midas III")
 	end)
 
 	withWheel("Wheel: Shards go into data.Shards", function(w)

@@ -325,7 +325,8 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 			-- (the tutorial counts the pen's ore as "came home by train" only without these)
 			bump(data, "WheelOres")
 		else
-			award(player, WheelConfig.oreFallbackCoins(context), result)
+			-- what Tobin would pay this player dirty: with their sell bonus
+			award(player, Bonuses.sellAmount(Bonuses.stats(player), WheelConfig.oreFallbackCoins(context)), result)
 		end
 	elseif kind == "Shards" then
 		local amount = segment.Amount or 0

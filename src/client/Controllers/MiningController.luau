@@ -33,6 +33,7 @@ local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local StateController = require(script.Parent.StateController)
 
 local MiningController = {}
 
@@ -151,9 +152,19 @@ local function levelOf(tool: Tool?): number
 	return if type(level) == "number" then level else 1
 end
 
+-- The Reach enchant's extra studs (State.Bonuses.Reach: the same capped
+-- bonus MiningService adds to the range it accepts).
+local function bonusReach(): number
+	local state = StateController.get()
+	local bonuses = if state then state.Bonuses else nil
+	local reach = if type(bonuses) == "table" then bonuses.Reach else nil
+	return if type(reach) == "number" and reach == reach and reach > 0 then math.min(reach, 40) else 0
+end
+
 local function rangeOf(tool: Tool?): number
 	local range = tool and tool:GetAttribute("Range")
-	return if type(range) == "number" then range else BlasterData.get(levelOf(tool)).Range
+	local base = if type(range) == "number" then range else BlasterData.get(levelOf(tool)).Range
+	return base + bonusReach()
 end
 
 local function glowOf(tool: Tool?): Color3
