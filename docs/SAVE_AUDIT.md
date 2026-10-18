@@ -11,6 +11,27 @@ This audit only reads. Nothing in the game was changed. DataTemplate, Migrations
 - a save filled to every cap, measured in JSON, for #11
 - `OreData.Renamed` and `ItemData.parseKey` checked for #1
 
+## Status (branch fix/save-safety)
+
+| # | Status |
+|---|---|
+| 1 | **Gate done:** a save with `Version > Migrations.Latest` is refused untouched (no lock taken), and the player sees "The game just updated, please rejoin". PUBLISHING.md step 12 says to always Migrate To Latest Update. **Still open:** keeping unknown values in Migrations (MAX_LEVEL_KEPT, podium keys and ores). It comes after integrate/steps67 lands, since that branch rewrote Migrations. |
+| 2 | **Done:** `ProfileStore.storable` / `repair` (pure). Every save repairs in place, `OnRepair` warns with the paths, and the rest is saved. |
+| 3 | **Done:** a SessionId per load in `Lock`. `save()` writes only to its own session; a nil lock means the session is lost. |
+| 4 | **Done:** reconcile and Migrate run in a pcall. On an error only our own lock is cleared, the data is untouched, and the player is kicked. `Purchases` that isn't a table is reset (with a warn) instead of throwing. |
+| 5 | **Done:** `AutosaveInterval` 60 s, `StaleLockSeconds` 180 s (both in GameConfig). One autosave round takes 60 s. A younger lock is never taken over, so the old "half the stale time on the last try" shortcut is gone: a slow final save keeps its session. |
+| 6 | **Done:** the template is used only when nothing is stored. Any other shape gives "malformed" and nothing is written. |
+| 7 | **Done:** Studio uses `TerraForge_PlayerData_Studio` unless `GameConfig.StudioLiveData`. Test players (UserId <= 0) live in memory only. |
+| 8 | **Rules sent** to the mine-floors chat (MonetizationService already follows them). DataService now never trims purchase ids younger than 30 days. |
+| 9, 13 | **Done:** loads and releases count in `inFlight` from their first step, so BindToClose waits for each of them. |
+| 10 | **Done:** at shutdown the stores go urgent (2 attempts, 0.5 s pauses), the budget wait is at most 3 s, and the final save makes 2 attempts. |
+| 11 | **Done:** tests/SaveSize.spec.luau measures 134 KB at every cap (limit 256 KB). |
+| 12 | **Done** together with #5. |
+| 14 | **Done:** docs/SUPPORT.md. |
+
+Every scenario has a spec in tests/SaveSafety.spec.luau, with a fake store that rejects what Roblox rejects. Run
+against the old ProfileStore and DataService, 16 of its 17 first specs failed.
+
 ## What is already solid
 
 - **Session lock:** every write is an `UpdateAsync` holding a lock with `JobId` and `Time`. A second server waits 6 × 5 s and then kicks with a clear message. It never plays on a copy.

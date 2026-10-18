@@ -111,9 +111,13 @@ local GameConfig = {
 	-- Remotes
 	DefaultRateLimit = { Rate = 8, Burst = 16 }, -- events per second per player
 
-	-- Saving
-	AutosaveInterval = 120,
+	-- Saving (docs/SAVE_AUDIT.md)
+	AutosaveInterval = 60, -- seconds: also refreshes the session lock (at most this much progress lost on a crash)
+	StaleLockSeconds = 180, -- a lock not refreshed this long belongs to a crashed server (3 missed autosaves)
 	SaveInStudio = true, -- needs "Enable Studio Access to API Services"
+	-- Studio saves into its own DataStore (TerraForge_PlayerData_Studio) so command-bar tests never
+	-- touch a real save; true = Studio reads and writes the live store (only to look into a live save)
+	StudioLiveData = false,
 }
 
 return GameConfig

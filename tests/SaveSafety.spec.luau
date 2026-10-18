@@ -1,0 +1,492 @@
+-- Save-data safety (docs/SAVE_AUDIT.md): every scenario the audit found or
+-- reproduced, against the real ProfileStore / DataService with a fake
+-- DataStore that encodes like Roblox (it rejects what a real DataStore
+-- rejects: NaN / inf, userdata, functions, mixed or gapped tables,
+-- non-string keys, invalid UTF-8; values are copied through JSON).
+--   #3  a late save never writes over a newer session (SessionId lock, nil lock = lost)
+--   #6  a malformed stored value is never replaced with the template
+--   #2  an unstorable value is repaired or dropped at its path, the rest saves
+--   #4  a failing migration releases only its own lock, data untouched
+--   #5  crashed-server locks expire after StaleLockSeconds (180 s in the game)
+--   #1  a save from a newer version is refused untouched (no lock taken)
+--   #7  Studio uses its own store; test players (UserId <= 0) never touch it
+--   #8  the purchase-id trim never drops ids younger than 30 days
+--   #9 / #13  shutdown waits for every final save (left-while-loading, yielding callbacks)
+--   #10 shutdown saves are quick even when the store keeps failing
+return function(T, Loader)
+	local serde = require("@lune/serde")
+	local task = require("@lune/task")
+	local roblox = require("@lune/roblox") :: any
+	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
+	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
+	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
+
+	---------------------------------------------------------------- a Roblox-like store
+
+	-- Throws like a DataStore write would for values it can't store.
+	local function checkStorable(value: any, path: string, ancestors: { [any]: boolean })
+		local kind = type(value)
+		if kind == "number" then
+			if value ~= value or value == math.huge or value == -math.huge then
+				error(`104: Cannot store NaN / inf at {path}`)
+			end
+		elseif kind == "string" then
+			if utf8.len(value) == nil then
+				error(`104: invalid UTF-8 at {path}`)
+			end
+		elseif kind == "table" then
+			if ancestors[value] then
+				error(`104: cyclic table at {path}`)
+			end
+			ancestors[value] = true
+			local numbers, strings, maxIndex = 0, 0, 0
+			for k, v in value do
+				if type(k) == "number" then
+					numbers += 1
+					if k ~= math.floor(k) or k < 1 then
+						error(`104: Cannot convert mixed or non-array tables: keys must be strings ({path})`)
+					end
+					maxIndex = math.max(maxIndex, k)
+				elseif type(k) == "string" then
+					strings += 1
+					if utf8.len(k) == nil then
+						error(`104: invalid UTF-8 key at {path}`)
+					end
+				else
+					error(`104: Cannot convert mixed or non-array tables: keys must be strings ({path})`)
+				end
+				checkStorable(v, `{path}.{tostring(k)}`, ancestors)
+			end
+			if numbers > 0 and (strings > 0 or maxIndex ~= numbers) then
+				error(`104: Cannot convert mixed or non-array tables: keys must be strings ({path})`)
+			end
+			ancestors[value] = nil
+		elseif kind ~= "boolean" and kind ~= "nil" then
+			error(`104: Cannot store {typeof(value)} in data store ({path})`)
+		end
+	end
+
+	local function robloxStore()
+		local s = { values = {}, writes = 0, failAll = false, delay = 0 }
+		function s:UpdateAsync(key: string, transform: (any) -> any): any
+			if self.delay > 0 then
+				task.wait(self.delay)
+			end
+			if self.failAll then
+				error("502: API Services rejected request")
+			end
+			local old = self.values[key]
+			local result = transform(if old ~= nil then serde.decode("json", old) else nil)
+			if result ~= nil then
+				checkStorable(result, key, {})
+				self.values[key] = serde.encode("json", result)
+				self.writes += 1
+			end
+			return result
+		end
+		function s:get(key: string): any
+			local raw = self.values[key]
+			return if raw ~= nil then serde.decode("json", raw) else nil
+		end
+		function s:put(key: string, value: any)
+			self.values[key] = serde.encode("json", value)
+		end
+		return s
+	end
+
+	local clock = { t = 50000 }
+	local function now(): number
+		return clock.t
+	end
+	local function fakeWait(seconds: number)
+		clock.t += seconds
+	end
+
+	local template = { Version = 3, Coins = 0, Stats = { Mined = 0 }, Storage = {}, Purchases = {} }
+
+	local function server(store: any, jobId: string, extra: { [string]: any }?): any
+		local options: { [string]: any } = {
+			Store = store,
+			JobId = jobId,
+			Template = template,
+			Now = now,
+			Wait = fakeWait,
+			LockRetries = 3,
+			LockRetryDelay = 5,
+			StaleLockSeconds = 180,
+			CallRetries = 3,
+			LatestVersion = 3,
+		}
+		for k, v in extra or {} do
+			options[k] = v
+		end
+		return ProfileStore.new(options)
+	end
+
+	---------------------------------------------------------------- #3 / #6: the lock
+
+	T.test("SaveSafety #3: a late save after the lock was cleared by a newer session never writes", function()
+		local store = robloxStore()
+		local a, b = server(store, "A"), server(store, "B")
+		local pa = a:load("P")
+		pa.Data.Coins = 10
+		T.truthy(a:save(pa, false), "A saves while it owns the session")
+		clock.t += 200 -- A is stuck (DataStore outage): its lock goes stale
+		local pb = b:load("P")
+		T.truthy(pb, "B takes the stale lock over")
+		pb.Data.Coins = 500
+		T.truthy(b:save(pb, true), "B plays and leaves: the lock is cleared")
+		T.eq(store:get("P").Lock, nil, "nil lock after B's release")
+		pa.Data.Coins = 11
+		T.falsy(a:save(pa, true), "A's late final save is refused")
+		T.truthy(pa.SessionLost, "A knows it lost the session")
+		T.eq(store:get("P").Data.Coins, 500, "B's progress stays")
+	end)
+
+	T.test("SaveSafety #3: two sessions on the same server are told apart", function()
+		local store = robloxStore()
+		local a = server(store, "A")
+		local first = a:load("P")
+		first.Data.Coins = 7
+		-- the first session's final save failed (lock still ours); the player rejoins the same server
+		local second = a:load("P")
+		T.truthy(second, "the same server loads again at once")
+		T.truthy(first.SessionId ~= second.SessionId, "each load has its own SessionId")
+		second.Data.Coins = 70
+		T.truthy(a:save(second, false), "the new session saves")
+		first.Data.Coins = 8
+		T.falsy(a:save(first, true), "the old session can't write any more")
+		T.eq(store:get("P").Data.Coins, 70, "the new session's data stays")
+	end)
+
+	T.test("SaveSafety #3: a stuck save never writes after another server took over", function()
+		local store = robloxStore()
+		local a, b = server(store, "A"), server(store, "B")
+		local pa = a:load("P")
+		clock.t += 200
+		local pb = b:load("P")
+		pb.Data.Coins = 99
+		b:save(pb, false)
+		pa.Data.Coins = 1
+		T.falsy(a:save(pa, false), "refused: another session's lock")
+		T.eq(store:get("P").Data.Coins, 99)
+		T.eq(store:get("P").Lock.SessionId, pb.SessionId, "B's lock untouched")
+	end)
+
+	T.test("SaveSafety #6: a malformed stored value is never replaced with the template", function()
+		for _, bad in { "garbage", { Data = 5 }, { Data = "oops" }, {}, { Lock = { JobId = "X", Time = 1 } }, 42 } do
+			local store = robloxStore()
+			store:put("P", bad)
+			local before = store.values.P
+			local a = server(store, "A")
+			local profile, reason = a:load("P")
+			T.eq(profile, nil, "refused: " .. before)
+			T.eq(reason, "malformed", "the reason")
+			T.eq(store.values.P, before, "the stored value is untouched: " .. before)
+		end
+		-- a new player (nothing stored) still gets the template
+		local store = robloxStore()
+		local profile = server(store, "A"):load("New")
+		T.truthy(profile, "new player")
+		T.eq(profile.Data.Coins, 0)
+	end)
+
+	---------------------------------------------------------------- #2: storable
+
+	T.test("SaveSafety #2: storable() names the first bad path; good saves pass", function()
+		local good = { Coins = 5, Name = "Forge", List = { 1, 2, 3 }, Map = { a = true }, Empty = {} }
+		local ok, problems = ProfileStore.storable(good)
+		T.truthy(ok, "a clean save is storable")
+		T.eq(#problems, 0)
+		local bad = { Coins = 0 / 0, Stats = { Mined = math.huge } }
+		local ok2, problems2 = ProfileStore.storable(bad)
+		T.falsy(ok2, "NaN is not storable")
+		T.truthy(#problems2 >= 2, "both bad numbers reported")
+		T.truthy(string.find(problems2[1].Path .. problems2[2].Path, "Coins", 1, true) ~= nil, "the path names the field")
+		T.eq(bad.Coins ~= bad.Coins, true, "storable() itself changes nothing")
+	end)
+
+	T.test("SaveSafety #2: one bad value no longer blocks the save; it is repaired at its path", function()
+		local store = robloxStore()
+		local logged = {}
+		local a = server(store, "A", {
+			OnRepair = function(key: string, problems: { any })
+				table.insert(logged, { Key = key, Problems = problems })
+			end,
+		})
+		local p = a:load("P")
+		p.Data.Coins = 1234
+		p.Data.Stats.Mined = 0 / 0 -- NaN
+		p.Data.Stats.Speed = -math.huge
+		p.Data.Storage = { { K = "Clean", O = "Gold" }, { K = "Clean", O = "Jade" } }
+		p.Data.Storage[4] = { K = "Raw", O = "Copper" } -- a gap at [3]
+		p.Data.Spot = roblox.Vector3.new(1, 2, 3) -- userdata
+		p.Data.Fn = function() end
+		p.Data.Mixed = { 10, 20, Name = "x" }
+		p.Data.Keys = { [true] = 1, ok = 2 }
+		p.Data.Text = "bad \255 text"
+		local cyclic = { Name = "loop" }
+		cyclic.Self = cyclic
+		p.Data.Cycle = cyclic
+		T.truthy(a:save(p, false), "the save goes through")
+		local saved = store:get("P").Data
+		T.eq(saved.Coins, 1234, "the good fields are saved")
+		T.eq(saved.Stats.Mined, 0, "NaN -> 0")
+		T.eq(saved.Stats.Speed, 0, "-inf -> 0")
+		T.eq(#saved.Storage, 3, "the gap is closed: nothing lost")
+		T.eq(saved.Storage[3].O, "Copper", "the items keep their order")
+		T.eq(saved.Spot, nil, "the Vector3 is dropped")
+		T.eq(saved.Fn, nil, "the function is dropped")
+		T.eq(saved.Mixed["1"], 10, "mixed table: number keys kept as text")
+		T.eq(saved.Mixed.Name, "x")
+		T.eq(saved.Keys.ok, 2, "a boolean key is dropped, the rest kept")
+		T.eq(saved.Text, nil, "invalid UTF-8 text is dropped")
+		T.eq(saved.Cycle.Name, "loop", "the cyclic table is kept...")
+		T.eq(saved.Cycle.Self, nil, "...without its loop")
+		T.eq(#logged, 1, "the repair is reported once")
+		T.eq(logged[1].Key, "P")
+		T.truthy(#logged[1].Problems >= 9, "every bad path is listed")
+		-- the in-memory data is repaired too, so the next save is clean
+		T.eq(p.Data.Stats.Mined, 0, "repaired in memory")
+		logged = {}
+		T.truthy(a:save(p, false), "next save")
+		T.eq(#logged, 0, "nothing more to repair")
+	end)
+
+	---------------------------------------------------------------- #4: a failing migration
+
+	T.test("SaveSafety #4: a migration error releases only our lock and keeps the data", function()
+		local store = robloxStore()
+		store:put("P", { Data = { Version = 3, Coins = 321, Purchases = "broken" }, Saved = 1 })
+		local before = store:get("P").Data
+		local a = server(store, "A", {
+			Migrate = function(data: { [string]: any })
+				for _ in data.Purchases do -- throws on a string, like the old trim
+				end
+			end,
+		})
+		local profile, reason = a:load("P")
+		T.eq(profile, nil, "not loaded")
+		T.truthy(
+			type(reason) == "string" and string.find(reason, "migrate", 1, true) ~= nil,
+			"reason names the migration: " .. tostring(reason)
+		)
+		local after = store:get("P")
+		T.eq(after.Lock, nil, "our lock is released at once (no 10-minute lockout)")
+		T.eq(after.Data.Coins, before.Coins, "the data is untouched")
+		T.eq(after.Data.Purchases, "broken", "even the broken field (for a support fix)")
+	end)
+
+	T.test("SaveSafety #4: releasing after a failed migration never clears another server's lock", function()
+		local store = robloxStore()
+		local b = server(store, "B")
+		local a = server(store, "A", {
+			Migrate = function()
+				-- while A migrates, the lock was taken over by B (simulated): A must not clear it
+				local held = store:get("P")
+				held.Lock = { JobId = "B", SessionId = "B-1", Time = now() }
+				store:put("P", held)
+				error("boom")
+			end,
+		})
+		local profile = a:load("P")
+		T.eq(profile, nil)
+		T.eq(store:get("P").Lock.SessionId, "B-1", "B's lock stays")
+		local _ = b
+	end)
+
+	---------------------------------------------------------------- #5: crashed servers
+
+	T.test("SaveSafety #5: a crashed server's lock expires after StaleLockSeconds", function()
+		T.eq(GameConfig.AutosaveInterval, 60, "the lock is refreshed every 60 s")
+		T.eq(GameConfig.StaleLockSeconds, 180, "and counts as dead after 3 missed saves")
+		local store = robloxStore()
+		local a, b = server(store, "A"), server(store, "B")
+		local pa = a:load("P")
+		pa.Data.Coins = 40
+		a:save(pa, false)
+		clock.t += 30 -- crashed 30 s after its last save: a fresh lock
+		local early = b:load("P")
+		T.eq(early, nil, "a fresh lock still blocks (B waited 3 x 5 s)")
+		clock.t += 181
+		local late = b:load("P")
+		T.truthy(late, "after StaleLockSeconds the lock is taken over")
+		T.eq(late.Data.Coins, 40, "with the last saved data")
+	end)
+
+	T.test("SaveSafety #5: a younger lock is never taken over, not even on the last try", function()
+		-- a live server whose final save is slow keeps its session: what it still writes isn't lost
+		local store = robloxStore()
+		local a, b = server(store, "A"), server(store, "B")
+		local pa = a:load("P")
+		clock.t += 100 -- older than half of StaleLockSeconds, younger than all of it
+		local q, reason = b:load("P")
+		T.eq(q, nil, "B waits and gives up")
+		T.eq(reason, "locked")
+		pa.Data.Coins = 64
+		T.truthy(a:save(pa, true), "A's slow final save still lands")
+		T.eq(store:get("P").Data.Coins, 64)
+		T.truthy(b:load("P"), "and B loads it next")
+	end)
+
+	T.test("SaveSafety #5/#12: the autosave round refreshes every lock well inside StaleLockSeconds", function()
+		-- DataService.start: one round of AutosaveInterval, players spread over it
+		T.truthy(GameConfig.AutosaveInterval * 2 <= GameConfig.StaleLockSeconds, "two rounds fit in the stale time")
+	end)
+
+	---------------------------------------------------------------- #1: newer saves
+
+	T.test("SaveSafety #1: a save from a newer version is refused untouched, no lock taken", function()
+		local store = robloxStore()
+		store:put("P", { Data = { Version = 4, Coins = 9, BlasterLevel = 12 }, Saved = 1 })
+		local before = store.values.P
+		local a = server(store, "A")
+		local profile, reason = a:load("P")
+		T.eq(profile, nil, "refused")
+		T.eq(reason, "newer", "the reason")
+		T.eq(store.values.P, before, "byte for byte untouched")
+		-- the same version (or older) loads
+		store:put("P", { Data = { Version = 3, Coins = 9 }, Saved = 1 })
+		T.truthy(a:load("P"), "version 3 loads")
+		T.eq(DataService.kickText("newer"), "The game just updated, please rejoin", "the kick text")
+	end)
+
+	---------------------------------------------------------------- #7: Studio
+
+	T.test("SaveSafety #7: Studio uses its own store unless asked; test players never touch a real store", function()
+		T.eq(DataService.storeName(false, false), "TerraForge_PlayerData_v1", "live game")
+		T.eq(DataService.storeName(false, true), "TerraForge_PlayerData_v1", "the flag only matters in Studio")
+		T.eq(DataService.storeName(true, false), "TerraForge_PlayerData_Studio", "Studio: its own store")
+		T.eq(DataService.storeName(true, true), "TerraForge_PlayerData_v1", "Studio with StudioLiveData")
+		T.eq(GameConfig.StudioLiveData, false, "off by default")
+		T.falsy(DataService.persists(-1), "a Studio test player (UserId -1) is kept in memory")
+		T.falsy(DataService.persists(0), "UserId 0 too")
+		T.truthy(DataService.persists(123), "real players are saved")
+	end)
+
+	---------------------------------------------------------------- #8: the purchase-id trim
+
+	T.test("SaveSafety #8: the purchase trim keeps the newest 100 and never drops ids younger than 30 days", function()
+		local nowT = 1_800_000_000
+		local purchases = {}
+		for i = 1, 150 do
+			purchases["old" .. i] = nowT - 40 * 86400 - i -- 40+ days old
+		end
+		for i = 1, 120 do
+			purchases["new" .. i] = nowT - i * 60 -- the last two hours
+		end
+		DataService.trimPurchases(purchases, nowT)
+		local newKept, oldKept = 0, 0
+		for id in purchases do
+			if string.sub(id, 1, 3) == "new" then
+				newKept += 1
+			else
+				oldKept += 1
+			end
+		end
+		T.eq(newKept, 120, "every id younger than 30 days stays (even past 100)")
+		T.eq(oldKept, 0, "old ones beyond the newest 100 go")
+		local few = { a = nowT - 90 * 86400, b = nowT - 1 }
+		DataService.trimPurchases(few, nowT)
+		T.truthy(few.a and few.b, "under 100 ids nothing is trimmed")
+		T.eq(DataService.trimPurchases("broken", nowT), false, "a non-table is reported, not iterated")
+	end)
+
+	---------------------------------------------------------------- #9 / #13 / #10: shutdown
+
+	local function fakePlayer(userId: number): any
+		local p: any = { UserId = userId, Name = "P" .. userId, Parent = true, kicked = nil }
+		function p:Kick(message: string)
+			self.kicked = message
+		end
+		return p
+	end
+
+	local function realWaitServer(store: any, jobId: string): any
+		return ProfileStore.new({
+			Store = store,
+			JobId = jobId,
+			Template = template,
+			Now = now,
+			Wait = function(seconds: number)
+				task.wait(math.min(seconds, 0.01))
+			end,
+			LockRetries = 2,
+			LockRetryDelay = 0.01,
+			StaleLockSeconds = 180,
+			CallRetries = 3,
+			LatestVersion = 3,
+		})
+	end
+
+	T.test("SaveSafety #13: shutdown waits for a final save behind a yielding beforeRelease callback", function()
+		local store = robloxStore()
+		local ps = realWaitServer(store, "S")
+		DataService._test.isolate(ps, function()
+			local player = fakePlayer(501)
+			DataService._test.loadPlayer(player)
+			local data = DataService.get(player)
+			T.truthy(data, "loaded")
+			data.Coins = 777
+			DataService.beforeRelease(function()
+				task.wait(0.05) -- a callback that yields
+			end)
+			DataService._test.shutdown()
+			local saved = store:get("Player_501")
+			T.eq(saved.Data.Coins, 777, "the final save landed before shutdown returned")
+			T.eq(saved.Lock, nil, "and released the lock")
+		end)
+	end)
+
+	T.test("SaveSafety #9: shutdown waits for a player who left while loading", function()
+		local store = robloxStore()
+		store.delay = 0.05 -- every request takes a moment
+		local ps = realWaitServer(store, "S")
+		DataService._test.isolate(ps, function()
+			local player = fakePlayer(502)
+			task.spawn(DataService._test.loadPlayer, player)
+			task.wait(0.01) -- the load request is on its way
+			player.Parent = nil -- left while loading
+			DataService._test.shutdown()
+			local saved = store:get("Player_502")
+			T.truthy(saved, "the record exists")
+			T.eq(saved.Lock, nil, "the lock was put back before shutdown returned")
+		end)
+	end)
+
+	T.test("SaveSafety #10: shutdown saves stay quick when the store keeps failing", function()
+		local store = robloxStore()
+		local ps = realWaitServer(store, "S")
+		DataService._test.isolate(ps, function()
+			local player = fakePlayer(503)
+			DataService._test.loadPlayer(player)
+			store.failAll = true
+			local started = os.clock()
+			DataService._test.shutdown()
+			T.truthy(os.clock() - started < 5, `gave up quickly ({os.clock() - started} s)`)
+			T.eq(DataService._test.inFlight(), 0, "nothing left in flight")
+		end)
+	end)
+
+	T.test("SaveSafety: a test player (UserId <= 0) loads and saves in memory only", function()
+		local store = robloxStore()
+		local ps = realWaitServer(store, "S")
+		DataService._test.isolate(ps, function()
+			local player = fakePlayer(-1)
+			DataService._test.loadPlayer(player)
+			T.truthy(DataService.get(player), "the test player has data")
+			DataService.get(player).Coins = 5
+			T.truthy(DataService.saveNow(player), "saves (in memory)")
+			DataService._test.shutdown()
+			T.eq(store.writes, 0, "the real store never saw it")
+		end)
+	end)
+
+	T.test("SaveSafety: kick texts for every load failure", function()
+		T.eq(DataService.kickText("locked"), "Your Terra Forge data is still being saved on another server. Please rejoin in a minute.")
+		T.eq(DataService.kickText("newer"), "The game just updated, please rejoin")
+		T.truthy(#DataService.kickText("malformed") > 10, "malformed")
+		T.truthy(#DataService.kickText("error: migrate: x") > 10, "migrate")
+		T.truthy(#DataService.kickText("error: 502") > 10, "busy")
+	end)
+end

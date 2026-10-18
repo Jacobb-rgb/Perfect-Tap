@@ -8,6 +8,7 @@ The order to take a build from Studio to a public game. It links the detailed do
 | [COMPLIANCE.md](COMPLIANCE.md) | the Maturity & Compliance questionnaire answers (section 1), fair monetization and odds (2.6), text filtering, audience rules, **the place settings table (section 3)** and the pre-launch checklist (section 4) |
 | [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md) | the few things done by hand in Studio |
 | [PERF_AUDIT.md](PERF_AUDIT.md) | phone performance numbers and the fixes still open |
+| [SUPPORT.md](SUPPORT.md) | player saves after launch: restoring a save, data-erasure (RTBF) requests, bans |
 | Owner guide (Czech) | `Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/obchod/NAVOD.md`, with the logo, icons and thumbnails |
 
 ## 1. Store art (ready, nothing uploaded)
@@ -56,5 +57,9 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
     on PC + phone (+ controller) for 30 minutes: tutorial, mining, cleaning, podiums, train, factory, vault, saving
     after a rejoin. Fix, republish.
 11. **Public**: switch Audience to Public, post the update (STORE_PAGE.md section 7).
+12. **Every later update**: publish, then **Game Settings > Places > ... > "Migrate To Latest Update"** (or
+    "Shut Down All Servers"). Never leave old servers running: a save a newer server wrote is refused by an older
+    one ("The game just updated, please rejoin"), so players would be bounced until the old servers close.
+    An update that adds ore ids, levels or save fields bumps `DataTemplate.Version` (docs/SAVE_AUDIT.md #1).
 
 Nothing in this branch uploads or publishes anything; every step above is done by the owner.
