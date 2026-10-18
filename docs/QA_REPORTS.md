@@ -331,3 +331,26 @@ What to test in Studio:
 7. Phone (iPhone SE emulator): one row of wide cards that scrolls sideways, the NEXT card in view, BUY and X
    are easy to tap. Controller: A on the selected card buys, the row scrolls with the selection.
 8. The display cases behind the counter have the same colours as the shop's cases.
+
+## Blaster shooting feel + sounds that play (2026-10-18, branch feature/blaster-feel)
+Watcher task: a stronger beam with a muzzle flash, hit sparks and chips, a small recoil, satisfying hit and break
+sounds, the Lv7+ effects visible while firing, light on phones. Config/BlasterFeel (all tuning), Effects/BlasterFx,
+Vfx.setBeam style (width, light, the Lv7+ energy stream, the hit swell), CameraShake.kick (recoil), MiningController
+hooks (start / stop / hit), FxController (other players' beams get their tier look; your own hit crackle is local).
+Sounds: today's Roblox clients ship only 11 files in content/sounds, so most rbxasset://sounds/*.wav ids were silent.
+Every SoundConfig id is now a shipped file or Roblox's own upload of the classic sound (same keys, ids only), and
+tests/BlasterFeel.spec.luau checks every id. New keys: BlasterBeam, BlasterZap, BlastThud, RockBreak, ElevatorDing,
+DoorThud. The rock chips use the rock's crust colour (the ores inside stay secret until cleaned).
+What to test in Studio:
+1. Fire at a rock (PC): a bright flash at the muzzle when you press, the gun jumps back a little and settles, the
+   view tips up a hair; while the beam is on the rock: sparks in the beam's colour, small chips every third of a
+   second, a crackle and a soft thud. Sounds play (UI clicks too: they were silent before).
+2. A Lv7+ blaster: sparkles stream along the beam from the gun to the rock and swirl off the muzzle. Lv10: a shock
+   ring at the hit with the chips.
+3. A rock you can't mine yet (Needs Lv N): only dull grey sparks, no chips, no thud.
+4. Phone (emulator): about half the sparks, no camera kick, the gun kick still shows; no stutter on an iPhone SE.
+5. Another player fires near you: you see their beam in their level's thickness (Lv7+ with the energy stream).
+6. Equip / unequip while firing, reset while firing: the gun is back in the hand normally, no stuck offset.
+7. Listen to the new picks and swap any you dislike in SoundConfig: BlasterBeam (Roblox "UFO Beam" loop, quiet),
+   BlasterZap (flashbulb), BlastThud (hit.wav), RockBreak (the shipped explosion, high pitch), ElevatorDing
+   (Roblox pinball low bell), DoorThud (collide.wav, low pitch).
