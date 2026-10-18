@@ -331,3 +331,43 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	GolemsBubble.build(gui, spec[2], golemsData())
 	write("ui_bubble_golems_" .. spec[1], gui)
 end
+
+---------------------------------------------------------------- capsule opening
+local OpeningBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.OpeningBubble")
+local function openingGui(uiScale: number, pixels: number)
+	local gui = windowGui(uiScale, pixels)
+	gui.Dim.BackgroundTransparency = 0.45
+	return gui
+end
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = openingGui(spec[2], spec[3])
+	OpeningBubble.single(gui, spec[2], {
+		Golems = { { Id = "G1", Kind = "HeartstoneColossus", Name = "Heartstone Colossus", Rarity = "Mythic", Color = rarity.Mythic, Bonus = "+40% Mining speed", New = true } },
+		Again = "OPEN 1 AGAIN",
+		Price = "$750K",
+		Currency = "Coins",
+		Lucky = true,
+	})
+	write("ui_bubble_open1_" .. spec[1], gui)
+end
+local ten = {
+	{ "PebbleGolem", "Pebble Golem", "Common", "+3% Income", false },
+	{ "CopperTinker", "Copper Tinker", "Common", "+4% Mining", false },
+	{ "QuartzSprite", "Quartz Sprite", "Uncommon", "+5% Ore luck", true },
+	{ "CoalChomper", "Coal Chomper", "Common", "+4% Sell value", false },
+	{ "EmberImp", "Ember Imp", "Rare", "+10% Mining", true },
+	{ "TinTumbler", "Tin Tumbler", "Common", "+3% Walk speed", false },
+	{ "PebbleGolem", "Pebble Golem", "Common", "+3% Income", false },
+	{ "SilverSquire", "Silver Squire", "Uncommon", "+6% Income", false },
+	{ "CopperTinker", "Copper Tinker", "Common", "+4% Mining", false },
+	{ "JadeGardener", "Jade Gardener", "Uncommon", "+5% Walk speed", true },
+}
+local tenGolems = {}
+for i, row in ten do
+	table.insert(tenGolems, { Id = "T" .. i, Kind = row[1], Name = row[2], Rarity = row[3], Color = rarity[row[3]], Bonus = row[4], New = row[5], Best = row[1] == "EmberImp" })
+end
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = openingGui(spec[2], spec[3])
+	OpeningBubble.multi(gui, spec[2], { Golems = tenGolems, Again = "OPEN 10 AGAIN", Price = "$22.5K", Currency = "Coins" })
+	write("ui_bubble_open10_" .. spec[1], gui)
+end
