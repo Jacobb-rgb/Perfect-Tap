@@ -53,6 +53,8 @@ local ORDER = {
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
+	"BadgeService", -- badges from save data (BadgeConfig)
+	"AnalyticsService", -- onboarding funnel, progression and coin flow (Roblox AnalyticsService)
 	"WheelService", -- step 7: the free daily wheel (EmberChest prompt, WheelAction)
 	"ArtifactService", -- step 7: artifact finds, the book / journal prompts, the base museums
 	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)

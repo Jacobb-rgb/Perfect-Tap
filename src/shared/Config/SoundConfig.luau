@@ -78,6 +78,17 @@ local SoundConfig: { [string]: SoundDef } = {
 	CaseBurst = { Id = "rbxassetid://12222005", Volume = 0.75, Pitch = { 0.42, 0.48 } },
 	CaseBoom = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.35, Pitch = { 1.15, 1.25 } },
 	CaseRise = { Id = "rbxassetid://12222200", Volume = 0.5, Pitch = { 0.55, 0.62 } },
+	-- lobby ambience (AmbienceConfig, AmbienceController): quiet, positional, only shipped / Roblox-made ids.
+	-- The swim loop slowed down is running water; impact_water a plop; electronicpingshort.wav sped up
+	-- and repeated fast is a cricket's chirp; unsheath.wav a hammer ringing on the anvil; snap.wav high
+	-- and soft the fire's crackle; the falling-wind loop slowed down the mountain wind.
+	AmbWaterfall = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.4, Pitch = { 0.5, 0.56 }, Looped = true },
+	AmbBrook = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.2, Pitch = { 0.85, 0.95 }, Looped = true },
+	AmbPlop = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.12, Pitch = { 1.5, 1.9 } },
+	AmbCricket = { Id = "rbxassetid://12221990", Volume = 0.05, Pitch = { 3.2, 3.6 } },
+	AmbHammer = { Id = "rbxassetid://12222225", Volume = 0.25, Pitch = { 0.85, 1.0 } },
+	AmbCrackle = { Id = "rbxassetid://12222140", Volume = 0.07, Pitch = { 1.8, 2.6 } },
+	AmbWind = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.16, Pitch = { 0.5, 0.55 }, Looped = true },
 }
 
 return SoundConfig

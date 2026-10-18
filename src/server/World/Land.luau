@@ -298,6 +298,10 @@ end
 ]]
 type RimEdge = { along: string, inner: number, out: number, from: number, to: number }
 
+-- The south rim stays low over this x range: the stream's waterfall
+-- (Lobby/Flora/Stream, Stream.Notch) pours over it into the sea.
+Land.RimNotch = { X0 = 96, X1 = 106 }
+
 local function buildRim(parent: Instance, rng: Rng.Rng)
 	local island = WorldLayout.Island
 	local shades = { C.StoneDark, C.StoneDark, C.Stone, C.StoneDeep }
@@ -334,6 +338,10 @@ local function buildRim(parent: Instance, rng: Rng.Rng)
 			local w = math.min(math.floor(rng:range(10, 16)), edge.to - t)
 			local depth = math.floor(rng:range(8, 13))
 			local top = math.floor(rng:range(-0.8, 1.6) * 2) / 2
+			if edge.along == "x" and t < Land.RimNotch.X1 and t + w > Land.RimNotch.X0 then
+				-- low under the stream's mouth (Lobby/Flora/Stream pours over it)
+				top = math.min(top, -1)
+			end
 			local i0 = edge.inner
 			local function across(d: number): number
 				return i0 + edge.out * d
