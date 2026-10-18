@@ -11,6 +11,8 @@
 	  Lawn      grass tufts, lighter and darker grass patches, flower beds
 	            (yellow, white, purple, pink) clustered over the free lawns,
 	            bushes and small rocks; a glowing lantern on every fence end
+	  Life      koi circling in every pond, butterflies over a few flower
+	            beds (tag Spin, client-side, ~60 moving parts in all)
 
 	It runs last (WorldBuilder, after the lobby, the plots and the railway) and
 	only uses ground nothing else stands on: every built part near the ground
@@ -373,8 +375,45 @@ local function jungleTree(parent: Instance, base: Vector3, h: number, R: number,
 end
 
 -- A pond: Style.pond (deep water, water, a rim of stones) with lily pads and reeds.
+-- A small turning group around an invisible hub (tag Spin: the client's
+-- DecorController turns and bobs it; Atomic so its parts stream together).
+local function spinner(parent: Instance, name: string, hub: Vector3, speed: number, bob: number, bobSpeed: number): (Model, Part)
+	local m = Style.model(name, parent)
+	local core = Style.block(m, CFrame.new(hub), Vector3.new(0.4, 0.4, 0.4), C.Foam, nil, Style.tiny({ Transparency = 1 }))
+	core.Name = "Hub"
+	m.PrimaryPart = core
+	m:AddTag("Spin")
+	m:SetAttribute("SpinSpeed", speed)
+	m:SetAttribute("BobHeight", bob)
+	m:SetAttribute("BobSpeed", bobSpeed)
+	Style.streaming(m, "Atomic")
+	return m, core
+end
+
+-- A frame at `off` from a hub facing along the circle the hub turns it on
+-- (a hub turning by +angle moves a point (x, z) along (z, -x)).
+local function onCircle(hub: Vector3, off: Vector3): CFrame
+	local p = hub + off
+	return CFrame.lookAt(p, p + Vector3.new(off.Z, 0, -off.X).Unit)
+end
+
+-- Two koi circling under the pond's surface: body and tail. 5 parts.
+local KOI = { Color3.fromRGB(255, 122, 40), Color3.fromRGB(250, 240, 230) }
+local function koi(parent: Instance, center: Vector3, r: number, rng: Rng.Rng)
+	-- (just at the surface, like the concept's koi)
+	local hub = center + Vector3.new(0, 0.7, 0)
+	local m = spinner(parent, "Koi", hub, rng:range(0.25, 0.4), 0.04, 1)
+	for i = 0, 1 do
+		local a = i * math.pi + rng:range(-0.3, 0.3)
+		local cf = onCircle(hub, Vector3.new(math.cos(a) * r, 0, math.sin(a) * r))
+		Style.block(m, cf, Vector3.new(0.55, 0.22, 1.3), KOI[i + 1], nil, Style.tiny())
+		Style.block(m, cf * CFrame.new(0, 0, 0.85), Vector3.new(0.6, 0.12, 0.45), KOI[2 - i], nil, Style.tiny())
+	end
+end
+
 local function pond(parent: Instance, center: Vector3, sx: number, sz: number, rng: Rng.Rng): Model
 	local m = Style.pond(parent, center, sx, sz, rng)
+	koi(m, center, math.min(sx, sz) * 0.22, rng)
 	for _ = 1, 3 do
 		local q = center + Vector3.new(rng:range(-sx * 0.3, sx * 0.3), 0.7, rng:range(-sz * 0.25, sz * 0.25))
 		Geo.cylinder(m, q, 0.12, rng:range(1.6, 2.6), C.LeafGreen, nil, Style.tiny())
@@ -681,6 +720,7 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 		spots[i], spots[j] = spots[j], spots[i]
 	end
 	local count = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
+	local beds: { Vector3 } = {}
 	for _, p in spots do
 		local n = patchNoise(p.X, p.Z, seed)
 		local roll = rng:next()
@@ -707,6 +747,7 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 		-- (each kind checks its own reach against the sites and aprons)
 		if n > 0.58 and roll < 0.7 and count.Flowers < Meadow.Max.Flowers and Meadow.allowed(p, 2.4) then
 			flowerBed(m, p, FLOWERS[math.floor(n * 97 + p.X * 0.013) % #FLOWERS + 1], rng)
+			table.insert(beds, p)
 			count.Flowers += 1
 		elseif roll < 0.25 and count.Patches < Meadow.Max.Patches and Meadow.allowed(p, 3.6) and Meadow.free(index, p, 2.8, 1) then
 			local shade = if rng:chance(0.5) then C.GrassLight else C.GrassDark
@@ -715,6 +756,42 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 		elseif roll < 0.75 and count.Tufts < Meadow.Max.Tufts then
 			tuft(m, p, rng)
 			count.Tufts += 1
+		end
+	end
+	return m, beds
+end
+
+-- Butterflies fluttering in small circles over a few flower beds, spread
+-- over the town: 2-3 each, two wings per butterfly.
+Meadow.ButterflyBeds = 6
+local WINGS = { C.FlowerYellow, C.FlowerWhite, C.LeafPinkLight, C.CrystalCyan }
+local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng)
+	local m = Style.model("Butterflies", parent)
+	local chosen: { Vector3 } = {}
+	for _, p in beds do
+		if #chosen >= Meadow.ButterflyBeds then
+			break
+		end
+		local far = true
+		for _, q in chosen do
+			far = far and (p - q).Magnitude > 40
+		end
+		if far then
+			table.insert(chosen, p)
+		end
+	end
+	for _, p in chosen do
+		local hub = p + Vector3.new(0, 2.4, 0)
+		local group = spinner(m, "Flutter", hub, rng:range(0.7, 1.1), 0.5, rng:range(1.5, 2.2))
+		for i = 1, rng:int(2, 3) do
+			local a = i * 2.2 + rng:range(-0.4, 0.4)
+			local r = rng:range(1.2, 2.2)
+			local cf = onCircle(hub, Vector3.new(math.cos(a) * r, rng:range(-0.4, 0.5), math.sin(a) * r))
+			local color = WINGS[rng:int(1, #WINGS)]
+			for _, side in { -1, 1 } do
+				local wing = cf * CFrame.new(side * 0.32, 0.1, 0) * CFrame.Angles(0, 0, side * math.rad(35))
+				Style.block(group, wing, Vector3.new(0.65, 0.06, 0.55), color, nil, Style.tiny())
+			end
 		end
 	end
 	return m
@@ -731,7 +808,8 @@ function Meadow.build(map: Instance, rng: Rng.Rng): Model
 	ponds(m, index, Rng.new(`Meadow/Ponds/{rng:nextU32()}`))
 	fences(m, index, Rng.new(`Meadow/Fences/{rng:nextU32()}`))
 	jungle(m, map, index, Rng.new(`Meadow/Jungle/{rng:nextU32()}`))
-	lawn(m, index, Rng.new(`Meadow/Lawn/{rng:nextU32()}`))
+	local _, beds = lawn(m, index, Rng.new(`Meadow/Lawn/{rng:nextU32()}`))
+	butterflies(m, beds, Rng.new(`Meadow/Butterflies/{rng:nextU32()}`))
 	decorate(m)
 	return m
 end
