@@ -64,6 +64,7 @@ local GridOverlay = require(script.Parent.Parent.Effects.GridOverlay)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local StateController = require(script.Parent.StateController)
 local HudController = require(script.Parent.HudController)
 local FxController = require(script.Parent.FxController)
@@ -1644,7 +1645,7 @@ local function onKey(_: string, state: Enum.UserInputState, input: InputObject):
 end
 
 -- B / D-pad Up, bound all the time: open or close build mode.
-local function onToggle(_: string, state: Enum.UserInputState, _input: InputObject): Enum.ContextActionResult
+local function onToggle(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
 	if state ~= Enum.UserInputState.Begin then
 		return Enum.ContextActionResult.Pass
 	end
@@ -1652,7 +1653,9 @@ local function onToggle(_: string, state: Enum.UserInputState, _input: InputObje
 		PlacementController.exit()
 		return Enum.ContextActionResult.Sink
 	end
-	if CleaningController.isActive() then
+	-- D-pad Up moves a gamepad selection (the side menu, a panel's list):
+	-- it enters build mode only while no menu holds the selection
+	if CleaningController.isActive() or (input.KeyCode == Enum.KeyCode.DPadUp and GuiService.SelectedObject ~= nil) then
 		return Enum.ContextActionResult.Pass
 	end
 	task.spawn(PlacementController.enter)
@@ -1789,6 +1792,9 @@ function PlacementController.enter()
 		HudController.toast(BUSY_TEXT, "Deny")
 		return
 	end
+	-- build mode takes the screen: no panel (golems, boosts, the book, the
+	-- wheel, a shop...) stays over BuildView or keeps its keys bound
+	MenuPanels.closeAll()
 	active = true
 	plotId = id
 	plotCF = WorldLayout.plotCFrame(WorldLayout.Plots[id])

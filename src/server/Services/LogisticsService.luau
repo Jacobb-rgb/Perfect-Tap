@@ -45,8 +45,10 @@
 
 	Sell Box
 	- Intake (hopper, belts from every side, Put In) that takes the owner's
-	  items only and sells each one at once at Tobin's price
-	  (SellService.priceOf): EconomyService.award (source SellSource),
+	  items only and sells each one at once at Tobin's price with the
+	  owner's sell bonus (Bonuses.sellAmount of SellService.priceOf, the
+	  same as the counter and the SellBin): EconomyService.award (source
+	  SellSource; onSold listeners get the base price),
 	  Stats.ItemsSold + 1, DataService.changed. It never holds an item. An
 	  item it can't sell (worth nothing, the owner's save not loaded) is
 	  refused, never taken.
@@ -73,6 +75,7 @@ local Grid = require(Shared.Machines.Grid)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
 local MachineLogic = require(Shared.Machines.MachineLogic)
 local Net = require(Shared.Net)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local IntakeService = require(script.Parent.IntakeService)
@@ -521,11 +524,14 @@ end
 local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: number, _via: Via)
 	local player = machine.Owner
 	local data = DataService.get(player)
-	local price = SellService.priceOf(desc)
-	if not data or price <= 0 then
+	local base = SellService.priceOf(desc)
+	if not data or base <= 0 then
 		-- canAccept said yes a moment ago; MachineService puts the item back out
 		error("the Sell Box can't sell this right now")
 	end
+	-- the same bonus as Tobin's counter and the SellBin (Midas, SellValue
+	-- golems, collection rewards); onSold listeners still get the base price
+	local price = Bonuses.sellAmount(Bonuses.stats(player), base)
 	local sold: Desc = { K = desc.K, O = desc.O, G = desc.G, R = desc.R }
 	local stats = (data :: { [string]: any }).Stats
 	if type(stats) == "table" then
@@ -534,7 +540,7 @@ local function sellInsert(machine: PlacedMachine, desc: Desc, _ownerUserId: numb
 	end
 	EconomyService.award(player, price, LogisticsService.SellSource, true)
 	DataService.changed(player)
-	SellService.notifySold(player, sold, price)
+	SellService.notifySold(player, sold, base)
 	MachineService.setAttrs(machine, { Cycles = bump(machine) })
 	local now = os.clock()
 	addSale(machine, "SalePopup", LogisticsService.SellPopup, sold, price, now)

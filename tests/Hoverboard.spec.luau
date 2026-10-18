@@ -66,7 +66,8 @@ return function(T, Loader)
 			end
 		end
 		T.lt(fastestCoin, slowestRobux, "every Robux board beats every coin board")
-		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), 28, "23 / 18 = +28%")
+		local expected = math.floor((23 / HoverboardData.BaseWalkSpeed - 1) * 100 + 0.5)
+		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), expected, `23 vs walking {HoverboardData.BaseWalkSpeed}`)
 	end)
 
 	T.test("hoverboards: game pass ids live in MonetizationConfig, 0 is never prompted or matched", function()
@@ -86,7 +87,10 @@ return function(T, Loader)
 		for key, entry in MonetizationConfig.Entries do
 			T.eq(entry.Key, key, key .. " knows its key")
 			T.truthy(entry.Kind == "GamePass" or entry.Kind == "Product", key .. " kind")
-			T.truthy(type(entry.Grant) == "string" and #entry.Grant > 0, key .. " names its grant")
+			if entry.BoardId then
+				T.eq(entry.Grant, "Hoverboard", key .. " (a board) is granted by the Hoverboard handler")
+				T.eq(entry.Kind, "GamePass", key .. " (a board, owned forever) is a game pass")
+			end
 			T.truthy(entry.Id == 0 or MonetizationConfig.isLive(entry.Id), key .. " id is 0 or a whole number")
 			if entry.Id > 0 then
 				T.falsy(seen[entry.Id], key .. " id is unique")

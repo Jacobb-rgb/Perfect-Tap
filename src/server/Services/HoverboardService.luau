@@ -227,7 +227,7 @@ function HoverboardService.isCleaning(player: Player): boolean
 	local ok, CleaningService = pcall(function(): any
 		return require(script.Parent.CleaningService) :: any
 	end)
-	return ok and CleaningService.inSession(player) == true
+	return ok and CleaningService.isCleaning(player) == true
 end
 
 ---------------------------------------------------------------- requests

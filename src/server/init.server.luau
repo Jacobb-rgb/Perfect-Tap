@@ -47,9 +47,20 @@ local ORDER = {
 	"VaultService", -- the Blaster Vault shop (buy the next blaster level, the crate opening)
 	"MonetizationService", -- the one ProcessReceipt callback (grant handlers register in init)
 	"HoverboardService", -- hoverboards: buy, equip, ride (after Carry, Cleaning, Elevator, Monetization)
+	"GearService", -- the Gear shop at the SHOP stall (boots, lamp, backpack, gloves, magnet)
+	"BoostService", -- luck boosts (Triple / Hexa Lucky), purchase prompts, boost expiry pushes
+	"EnchantService", -- the Enchant shop at the rune table (EnchantCounter)
+	"GolemService", -- golem pets: GolemAction, the followers attribute (step 7)
+	"CapsuleService", -- golem capsules: CapsuleAction, the CapsuleStall prompt (step 7)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
+	"WheelService", -- step 7: the free daily wheel (EmberChest prompt, WheelAction)
+	"ArtifactService", -- step 7: artifact finds, the book / journal prompts, the base museums
+	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
+	"SettingsService", -- the side menu's SETTINGS record
+	"CodexService", -- the ORE CODEX's NEW badges (seen ores)
+	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 }
 
 local loaded = {}

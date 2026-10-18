@@ -94,8 +94,7 @@ end
 -- loaded on first use: it needs the whole game around it)
 function TeleportService.isCleaning(player: Player): boolean
 	local CleaningService = require(script.Parent.CleaningService) :: any
-	-- stationOf is the player's station even when idle: only a running session counts
-	return CleaningService.inSession(player)
+	return CleaningService.isCleaning(player)
 end
 
 --[[

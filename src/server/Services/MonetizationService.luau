@@ -52,6 +52,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local DataService = require(script.Parent.DataService)
+local Receipts = require(script.Parent.Parent.Receipts)
 
 local MonetizationService = {}
 
@@ -115,7 +116,7 @@ end
 local function applyPass(player: Player, entry: MonetizationConfig.Entry, owned: boolean): boolean
 	remember(player, entry.Key, owned)
 	local data = DataService.get(player)
-	local handler = passHandlers[entry.Grant]
+	local handler = passHandlers[entry.Grant or ""]
 	if not data or not handler then
 		return false
 	end
@@ -161,7 +162,7 @@ end
 -- Checks every live pass of a player whose save just loaded (yields: run it in its own task).
 local function checkAll(player: Player)
 	for _, entry in MonetizationConfig.list("GamePass") do
-		if MonetizationConfig.isLive(entry.Id) and passHandlers[entry.Grant] then
+		if MonetizationConfig.isLive(entry.Id) and passHandlers[entry.Grant or ""] then
 			local owned = checkPass(player, entry)
 			if owned ~= nil and player.Parent and DataService.get(player) then
 				applyPass(player, entry, owned)
@@ -212,7 +213,7 @@ local function decideFor(player: Player, data: { [string]: any }, id: string, pr
 		return GRANTED
 	end
 	local entry = MonetizationConfig.byId(productId, "Product")
-	local grant = if entry then grants[entry.Grant] else nil
+	local grant = if entry then grants[entry.Grant or ""] else nil
 	if not entry or not grant then
 		warn(`[MonetizationService] no product / handler for product id {tostring(productId)}`)
 		return NOT_YET
@@ -332,10 +333,33 @@ function MonetizationService.init()
 	end)
 end
 
+-- The live passes and products nothing grants yet (no handler for their Grant).
+function MonetizationService.unhandled(): { string }
+	local missing: { string } = {}
+	for _, entry in MonetizationConfig.List do
+		if MonetizationConfig.isLive(entry.Id) then
+			local grant = entry.Grant or ""
+			local handled = if entry.Kind == "GamePass" then passHandlers[grant] ~= nil else grants[grant] ~= nil
+			if not handled then
+				table.insert(missing, entry.Key)
+			end
+		end
+	end
+	return missing
+end
+
 function MonetizationService.start()
 	-- exactly one ProcessReceipt callback in the game; set after every init() registered its handler
 	MarketplaceService.ProcessReceipt = function(receipt: any): Enum.ProductPurchaseDecision
 		return MonetizationService.decide(receipt)
+	end
+	-- the receipts gate (src/server/Receipts.luau) opens only when every live pass and product
+	-- has a handler, so a live id whose grant isn't written yet (step 8) is never sold
+	local missing = MonetizationService.unhandled()
+	if #missing == 0 then
+		Receipts.setReady(true)
+	else
+		warn(`[MonetizationService] receipts stay closed: no handler for {table.concat(missing, ", ")}`)
 	end
 end
 

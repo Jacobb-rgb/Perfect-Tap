@@ -30,6 +30,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local MonetizationConfig = require(Shared:WaitForChild("Config"):WaitForChild("MonetizationConfig"))
 local HoverboardData = require(Shared.Config.HoverboardData)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
@@ -214,13 +215,20 @@ end
 
 ---------------------------------------------------------------- pure helpers
 
+-- Are Robux purchases switched on? (the receipts gate, src/server/Receipts.luau, publishes
+-- MonetizationConfig.ReceiptsAttribute; until then every Robux card says COMING SOON).
+-- Swappable for the Lune tests.
+function HoverboardView.receiptsReady(): boolean
+	return ReplicatedStorage:GetAttribute(MonetizationConfig.ReceiptsAttribute) == true
+end
+
 -- What a board's card offers: owned / equipped, else buy (coins) or Robux.
 function HoverboardView.cardState(board: HoverboardData.Board, owned: { [string]: boolean }, equipped: string, coins: any): CardState
 	local state: CardState = "BuyLocked"
 	if owned[board.Id] then
 		state = if equipped == board.Id then "Equipped" else "Equip"
 	elseif board.Kind == "Robux" then
-		state = if HoverboardData.canPrompt(board) then "Robux" else "Soon"
+		state = if HoverboardData.canPrompt(board) and HoverboardView.receiptsReady() then "Robux" else "Soon"
 	else
 		local have = if type(coins) == "number" and coins == coins then coins else 0
 		if have >= (board.Price or math.huge) then

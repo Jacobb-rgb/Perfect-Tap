@@ -26,7 +26,7 @@ local TeleportView = {}
 
 type Spot = TeleportConfig.Spot
 
-export type Layout = { Width: number, Height: number, Gap: number, IconTop: boolean }
+export type Layout = { Width: number, Height: number, Gap: number, IconTop: boolean, IconOnly: boolean }
 
 export type Refs = {
 	Buttons: { [string]: TextButton },
@@ -35,13 +35,17 @@ export type Refs = {
 }
 
 TeleportView.CompactScale = 0.75 -- at this uiScale and below the bar uses the tall phone buttons
+TeleportView.NarrowWidth = 600 -- screens narrower than this (pt) show icons only (the coins panel needs the room)
 
--- Button sizes for a uiScale (design units).
-function TeleportView.layout(uiScale: number): Layout
-	if uiScale <= TeleportView.CompactScale then
-		return { Width = 112, Height = 72, Gap = 8, IconTop = true }
+-- Button sizes for a uiScale and the screen width in pt (design units).
+function TeleportView.layout(uiScale: number, screenWidth: number?): Layout
+	if screenWidth and screenWidth < TeleportView.NarrowWidth then
+		-- small phones: square icon buttons, still >= 44 pt at uiScale 0.62
+		return { Width = 74, Height = 72, Gap = 8, IconTop = false, IconOnly = true }
+	elseif uiScale <= TeleportView.CompactScale then
+		return { Width = 112, Height = 72, Gap = 8, IconTop = true, IconOnly = false }
 	end
-	return { Width = 132, Height = 54, Gap = 10, IconTop = false }
+	return { Width = 132, Height = 54, Gap = 10, IconTop = false, IconOnly = false }
 end
 
 -- Width of the bar's buttons in a layout (design units).
@@ -55,7 +59,12 @@ local function place(button: TextButton, layout: Layout)
 	if not icon or not label then
 		return
 	end
-	if layout.IconTop then
+	label.Visible = not layout.IconOnly
+	if layout.IconOnly then
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.Position = UDim2.fromScale(0.5, 0.5)
+		icon.Size = UDim2.fromOffset(40, 40)
+	elseif layout.IconTop then
 		icon.AnchorPoint = Vector2.new(0.5, 0)
 		icon.Position = UDim2.new(0.5, 0, 0, 6)
 		icon.Size = UDim2.new(1, 0, 0, 34)
@@ -104,9 +113,9 @@ local function spotButton(parent: Instance, spot: Spot, order: number, size: Vec
 	return button, cover
 end
 
--- Fills HudView's TopBar with the bar spots (Bar = true).
-function TeleportView.build(topBar: Frame, uiScale: number): Refs
-	local layout = TeleportView.layout(uiScale)
+-- Fills HudView's TopBar with the bar spots (Bar = true; the elevator is in the left side menu).
+function TeleportView.build(topBar: Frame, uiScale: number, screenWidth: number?): Refs
+	local layout = TeleportView.layout(uiScale, screenWidth)
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
 	local hint = UIKit.new("ImageLabel", {
@@ -130,9 +139,9 @@ function TeleportView.build(topBar: Frame, uiScale: number): Refs
 	return { Buttons = buttons, Covers = covers, Hint = hint }
 end
 
--- Re-lays the bar's buttons for a new uiScale (phone <-> big screen).
-function TeleportView.relayout(refs: Refs, topBar: Frame, uiScale: number)
-	local layout = TeleportView.layout(uiScale)
+-- Re-lays the bar's buttons for a new uiScale / screen width (phone <-> big screen).
+function TeleportView.relayout(refs: Refs, topBar: Frame, uiScale: number, screenWidth: number?)
+	local layout = TeleportView.layout(uiScale, screenWidth)
 	for id, button in refs.Buttons do
 		local spot = TeleportConfig.ById[id]
 		if spot and spot.Bar then

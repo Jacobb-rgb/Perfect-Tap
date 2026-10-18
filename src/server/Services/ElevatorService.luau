@@ -290,7 +290,7 @@ end
 -- on first use, like TeleportService does: it needs the whole game around it)
 function ElevatorService.isCleaning(player: Player): boolean
 	local CleaningService = require(script.Parent.CleaningService) :: any
-	return CleaningService.inSession(player) == true
+	return CleaningService.isCleaning(player) == true
 end
 
 local function deny(player: Player, text: string)

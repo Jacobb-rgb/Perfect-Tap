@@ -43,6 +43,7 @@
 ]]
 
 local BlasterData = require(script.Parent.BlasterData)
+local GearConfig = require(script.Parent.GearConfig)
 local MonetizationConfig = require(script.Parent.MonetizationConfig)
 
 local HoverboardData = {}
@@ -74,9 +75,12 @@ export type Board = {
 	Perks: { string }, -- short chips on the shop card
 }
 
-HoverboardData.BaseWalkSpeed = 18 -- walking, no board
-HoverboardData.SlowPerItem = 0.5 -- walk speed lost per carried item
-HoverboardData.MaxSlow = 5 -- at most this much in total (on foot: never below 13)
+-- walking without boots or bonuses, and the carry slowdown: GearConfig's numbers (steps 6-7)
+HoverboardData.BaseWalkSpeed = GearConfig.value("Boots", 0)
+HoverboardData.SlowPerItem = GearConfig.CarrySlowPerItem -- walk speed lost per carried item
+HoverboardData.MaxSlow = GearConfig.CarrySlowMax -- at most this much in total
+HoverboardData.MinWalkSpeed = GearConfig.MinWalkSpeed -- on foot, never slower
+HoverboardData.MaxRideSpeed = 50 -- never faster (Bonuses.walkSpeed's cap too)
 HoverboardData.RobuxPrice = 49
 HoverboardData.Attribute = "Hoverboard" -- character attribute while riding: the board id
 HoverboardData.HipAttribute = "HoverboardHip" -- character attribute: the HipHeight before riding
@@ -235,19 +239,31 @@ function HoverboardData.byPass(passId: any): Board?
 end
 
 --[[
-	The one walk speed formula: `boardId` = the board being ridden (nil, "" or
-	an unknown id = on foot), `carried` = items in your hands. Base speed =
-	the board's Speed (or BaseWalkSpeed on foot), minus SlowPerItem per item
-	(at most MaxSlow), except on boards that ignore the carry slowdown.
+	The one walk speed formula (CarryService, the only WalkSpeed writer):
+	`boardId` = the board being ridden (nil, "" or an unknown id = on foot),
+	`carried` = items in your hands, `feet` = your own speed from boots and
+	bonuses (Bonuses.walkSpeed; default BaseWalkSpeed), `pct` = your percent
+	speed bonuses (Swift, golems: stats.WalkSpeedPct; default 0).
+	  on foot   feet minus the carry slowdown (SlowPerItem per item, at most
+	            MaxSlow), never below MinWalkSpeed (= Bonuses.carryWalkSpeed)
+	  on board  the board's Speed with your percent bonuses, never slower than
+	            your feet, minus the carry slowdown except on boards that
+	            ignore it; at most MaxRideSpeed
 ]]
-function HoverboardData.walkSpeed(boardId: any, carried: any): number
+function HoverboardData.walkSpeed(boardId: any, carried: any, feet: number?, pct: number?): number
 	local board = HoverboardData.get(boardId)
-	local base = if board then board.Speed else HoverboardData.BaseWalkSpeed
-	if board and board.IgnoresCarrySlow then
-		return base
-	end
+	local own = if type(feet) == "number" and feet == feet and feet > 0 then feet else HoverboardData.BaseWalkSpeed
 	local count = if type(carried) == "number" and carried == carried and carried > 0 then math.floor(carried) else 0
-	return base - math.min(HoverboardData.MaxSlow, count * HoverboardData.SlowPerItem)
+	local slow = math.min(HoverboardData.MaxSlow, count * HoverboardData.SlowPerItem)
+	if not board then
+		return math.max(HoverboardData.MinWalkSpeed, own - slow)
+	end
+	local bonus = if type(pct) == "number" and pct == pct and pct > 0 then pct else 0
+	local base = math.max(board.Speed * (1 + bonus), own)
+	if not board.IgnoresCarrySlow then
+		base -= slow
+	end
+	return math.min(HoverboardData.MaxRideSpeed, base)
 end
 
 -- How much faster than walking, in percent (23 -> 28), for the shop card ("+28% speed").

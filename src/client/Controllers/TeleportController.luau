@@ -20,6 +20,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TeleportConfig = require(Shared.Config.TeleportConfig)
@@ -40,6 +41,12 @@ local waiting: string? = nil -- the destination of the request in flight
 local waitToken = 0
 
 local GAMEPAD_KEY = Enum.KeyCode.DPadDown
+
+-- The screen width in pt (the camera's viewport).
+local function screenWidth(): number?
+	local camera = Workspace.CurrentCamera
+	return if camera then camera.ViewportSize.X else nil
+end
 
 local function isGamepad(inputType: Enum.UserInputType): boolean
 	return inputType.Name:sub(1, 7) == "Gamepad"
@@ -185,7 +192,7 @@ end
 
 function TeleportController.init()
 	local hud = HudController.refs()
-	local built = TeleportView.build(hud.TopBar, HudController.uiScale())
+	local built = TeleportView.build(hud.TopBar, HudController.uiScale(), screenWidth())
 	refs = built
 	for id, button in built.Buttons do
 		button.Activated:Connect(function()
@@ -208,9 +215,13 @@ function TeleportController.start()
 	local scale = hud.Gui:FindFirstChild("Scale")
 	if scale and scale:IsA("UIScale") then
 		local function relayout()
-			TeleportView.relayout(r, hud.TopBar, scale.Scale)
+			TeleportView.relayout(r, hud.TopBar, scale.Scale, screenWidth())
 		end
 		scale:GetPropertyChangedSignal("Scale"):Connect(relayout)
+		local camera = Workspace.CurrentCamera
+		if camera then
+			camera:GetPropertyChangedSignal("ViewportSize"):Connect(relayout)
+		end
 		relayout()
 	end
 	ContextActionService:BindAction("TerraForgeTeleportBar", onGamepadKey, false, GAMEPAD_KEY)

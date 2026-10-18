@@ -14,8 +14,12 @@ maturity label, and reach as many players as possible, including younger ones.
   "Game Settings".
 
 **In short:** Terra Forge has no violence, blood, scares, romance, alcohol,
-gambling, paid random items or trading, so it should get the lowest label,
-**Minimal**. That makes it eligible for **every age group**, including
+gambling or trading, so it should get the lowest label, **Minimal**.
+**Paid random items are planned (design v2, steps 6-8):** Royal golem
+capsules, the Robux Triple/Hexa Lucky packs and the Starbreaker enchant's
+pass (an odds booster). They are built as "Coming soon" placeholders (id 0
+in `MonetizationConfig.luau`); the questionnaire answer changes the day the
+first one goes live (see 1.1 #12). That makes it eligible for **every age group**, including
 Roblox Kids (5–8) and Roblox Select (9–15). The game stays 16+ until it
 passes Roblox's Kids & Select evaluation (see 2.9). The main risks are the
 public **forge name sign** (it must be filtered and limited to one change per
@@ -55,7 +59,7 @@ only what is really in the game.
 | 9 | **Social hangout** | **No** | The main activity is mining and crafting, not chatting. Keep "hangout", "chill" or "vibe" wording out of the title and description: Roblox classifies a game as a hangout if its title or description refers to one. |
 | 10 | **Free-form user creation** | **No** | This means freehand drawing, painting, writing on surfaces, or pixel canvases. Placing machines on your plot is building with 3D assets, which Roblox excludes. The forge name is a short typed name, not freehand writing, and it goes through Roblox's text filter before anyone sees it (see 2.1). Roblox also excludes anything that goes through Roblox moderation before it is shown. |
 | 11 | **Sensitive issues** (political, social, religious) | **No** | The lore is original fantasy (the Heartstone, the Forgekeepers' Guild). |
-| 12 | **Paid random items** | **No** | Nothing you pay for (Robux or coins) gives a random result. Coin pouches give a fixed amount. Shop items (pickaxes, machines, upgrades) are fixed. The **Ember Chest** daily reward is free and its rewards are fixed (see 2.6). Ore drops, bonus chunks and cleaning grades are random, but they come from playing, not from paying, and Roblox says rewards for actions that cost no Robux or currency don't count. **Careful:** Roblox counts anything random that is bought with Robux *or any other currency*, so a "mystery crate for coins" added later would be a paid random item. |
+| 12 | **Paid random items** | **No today; Yes as soon as one is live** | Today every Robux product id is a placeholder (0), so nothing random can be bought. **Answer Yes and resubmit the day the first of these goes live:** Royal golem capsules (random golem, Robux), the Triple Lucky / Hexa Lucky Robux packs (they raise the odds of capsules / ore) and the Starbreaker enchant pass (raises ore luck and the artifact chance). Roblox's definition (paid random items page): random rewards bought with Robux, or with currency or items that can be bought with Robux. Our coins can't be bought with Robux while `MonetizationConfig.CoinPacksEnabled` is false (the owner decides; the design says money comes from podiums), so coin capsules, coin luck boosts and coin enchants are **not** paid random items. **Turning coin packs on makes them all paid random items at once** (the code already switches: `coinsBuyable()`). Free random rewards don't count: the daily wheel (free, no paid spins), ore drops, artifacts, cleaning grades and capsules won on the wheel. |
 | 13 | **Paid item trading** | **No** | Players cannot trade. Every item belongs to one player: only the owner can pick it up (`ItemService`), and selling is designed to always pay the owner. |
 | 14 | **Media: players share media** (images, video, text, audio, models) with built-in game tools | **No** | There is no in-game screenshot sharing, feed or gallery. |
 | 15 | **Media: endless feeds / autoplay** | **No** | None. |
@@ -80,16 +84,26 @@ Violence and resubmit.**
 - **Not automatic:** to reach Kids and Select, you (the creator) and the game
   must also pass Roblox's Kids & Select requirements (see 2.9). Until then,
   only age-checked players aged 16+ can play.
+- **When paid random items go live** (1.1 #12 becomes Yes): resubmit, then
+  read the questionnaire preview again. **TODO:** check on the Dashboard how
+  a "Yes" for paid random items shows on the game page and whether it
+  changes Kids & Select eligibility; if it does, the owner decides whether
+  Royal capsules and the Robux luck packs are worth it.
 
 ### 1.3 Things that would change the label (avoid, or resubmit)
 
 - Enemies, combat, or damage between players → Violence.
 - Scary cave sounds, creatures or jump scares in Deep Hollow → Fear.
-- Loot crates or spin wheels paid with Robux or coins → Paid random items. You
-  would also have to show the odds and use PolicyService.
-- "Luck" boosts or lucky pickaxes (for Robux or coins) that raise the chance
-  of rare ore → Roblox requires the new odds to be shown in numbers before
-  purchase. Today pickaxes only change tier, damage and speed, never odds.
+- Loot crates or spin wheels paid with Robux (or with coins once coins can
+  be bought with Robux) → Paid random items. The Royal capsule is one (see
+  1.1 #12): show the odds, use PolicyService (2.2).
+- "Luck" items bought with Robux or coins that raise the chance of rare
+  results → Roblox requires the NEW odds to be shown in numbers before
+  purchase. Ours: Triple Lucky (capsule odds: `CapsuleConfig.odds(id, true)`
+  next to the normal odds), Hexa Lucky and the Lucky / Prospector /
+  Starbreaker enchants (`BoostConfig.preview`: per zone the chance of each
+  rare rarity now and after, plus the artifact chance per rock). The cards
+  must show those numbers before every coin, shard or Robux buy.
 - Trading or gifting items between players → Paid item trading.
 - A drawing board, paintable signs or a free-text bulletin board → Free-form
   user creation, which limits the game to players aged 16+.
@@ -184,20 +198,18 @@ ads.
 
 | Key | What it means | Does it matter for Terra Forge? |
 |---|---|---|
-| `ArePaidRandomItemsRestricted` | `true` = this player may not use paid random items (with Robux or with currency bought with Robux) | **Not today**: there are no paid random items. If you add any, you must hide, replace or block them for these players, and show the odds to everyone. |
-| `IsPaidItemTradingAllowed` | `false` = this player may not trade paid items | **Not today**: there is no trading. If you add it, block trading for these players. |
+| `ArePaidRandomItemsRestricted` | `true` = this player may not use paid random items (with Robux or with currency bought with Robux) | **Yes (steps 6-8).** Hidden and refused for these players: Royal capsules, the Robux Triple/Hexa Lucky packs and the Starbreaker pass (`MonetizationConfig` `PaidRandom`, `promptStatus` → "Restricted"; `EnchantConfig.quote` → "Restricted"). If coin packs are ever turned on, coin capsules and coin boosts too (`CapsuleConfig.isPaidRandom`, `BoostConfig.isPaidRandom`). Players who can't buy any capsule get coins instead of Triple Lucky on the free wheel. Odds are shown to everyone. |
+| `IsPaidItemTradingAllowed` | `false` = this player may not trade paid items | **Not today**: there is no trading. Golem trading is planned (design notes, round 4): golems from Robux purchases are saved with `Paid = true` so that trading can block them for these players. |
 | `AllowedExternalLinkReferences` | Legacy field. Roblox's reference says it **always returns an empty list** now. | Treat it as "no external links are ever allowed in the game" (see 2.3). |
 | `IsSubjectToChinaPolicies` | `true` = the game should apply China-related compliance changes | Nothing in Terra Forge is known to need changing. **TODO:** log how often it is `true` (analytics). If it ever is, read the DevForum post linked from the PolicyService page. |
 | `AreAdsAllowed` | `true` = immersive ads may be shown | Only needed if you add ads later. Ads have their own rules (Roblox's Advertising Standards and the immersive / rewarded video ads docs); the only allowed way to reward players for an ad is Roblox's Rewarded Video Ads feature. |
 | `IsContentSharingAllowed`, `IsEndlessContentLoadAllowed`, `IsEndlessContentAutoplayAllowed` | Media-sharing features | Not used. |
 | `IsEligibleToPurchaseSubscription`, `IsEligibleToPurchaseCommerceProduct` | Subscriptions and commerce products | Not used. Terra Forge sells only passes and developer products. |
 
-**TODO (code):** add a small `PolicyService` wrapper in `src/server/` that
-caches these values per player and exposes them as server-only attributes or
-a module. Then any future feature (crates, trading, ads) has one place to ask.
-Roblox's monetization guidelines say games must use PolicyService to check
-these rules, so build the wrapper before launch even though nothing uses it
-yet.
+**Done (code):** `src/server/Policy.luau` wraps PolicyService: it asks once
+per player (in `pcall`, retried with backoff when the call fails), caches the
+answer and gives the strictest answer until it knows. Capsules, boosts,
+enchants, the wheel and later trading all ask it.
 
 ### 2.3 No off-platform links
 
@@ -218,7 +230,8 @@ yet.
 - The forge name box says *"Please don't use your real name or any personal
   info"* (see 2.1). Roblox's filter also blocks things like phone numbers.
 - Show players by their Roblox **DisplayName** (already moderated by Roblox),
-  for example on plot ownership signs or leaderboards.
+  for example on plot ownership signs or leaderboards (`LeaderboardService`
+  looks them up with `UserService:GetUserInfosByUserIdsAsync`).
 
 ### 2.5 Chat
 
@@ -244,14 +257,22 @@ yet.
 
 ### 2.6 Fair monetization
 
-What Terra Forge sells (from `GAME_DESIGN.md`):
+What Terra Forge sells (design v2; the source of truth is
+`src/shared/Config/MonetizationConfig.luau`, every id still a placeholder 0
+= "Coming soon"):
 
-| Product | Type | Perk id in code | What it does |
-|---|---|---|---|
-| Strong Back | Game pass | `StrongBack` | 2× carry capacity |
-| Forge VIP | Game pass | `ForgeVip` | Opens the Glimmer Grotto (denser Silver/Gold/Emberite) and adds a VIP tag |
-| Workshop Expansion | Game pass | `Workshop` | +6 machine slots, +20 conveyor slots |
-| Coin pouches (small/medium/large/huge) | Developer products | — | A fixed number of coins |
+| Product | Type | Key in code | What it does | Paid random? |
+|---|---|---|---|---|
+| Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 3-4, 12 h offline earnings, 2× carrying (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
+| Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 3 and 4 | No |
+| Night Shift (99 R$) | Game pass | `OfflineExtension` | Offline earnings up to 12 h instead of 5 | No |
+| Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
+| Heartfire Enchant (20 R$) | Game pass | `EnchantHeartfire` | Mythic enchant: damage | No |
+| Starbreaker Enchant (20 R$) | Game pass | `EnchantStarbreaker` | Mythic enchant: +75 % ore luck, +50 % artifact chance | **Yes** (odds booster) |
+| Royal Capsule x1 / x3 / x10 | Developer products | `RoyalCapsule1/3/10` | Random golems | **Yes** |
+| Triple Lucky 15 min / 1 h | Developer products | `TripleLucky15/60` | Capsule odds: the rarest golems x3 | **Yes** (odds booster) |
+| Hexa Lucky 15 min / 1 h | Developer products | `HexaLucky15/60` | Ore luck x2.5 (Rare x2.5 … Mythic x9.9 weight) | **Yes** (odds booster) |
+| Coin packs | Developer products | `CoinsSmall/Medium/Large` | Coins (off: `CoinPacksEnabled = false`) | No, but they make coin capsules and coin boosts paid random items |
 
 **TODO:** set prices, write descriptions and upload icons. Pass and
 developer product icons must be at most 512×512 (.png/.jpg/.bmp) and keep
@@ -259,7 +280,8 @@ important details inside the circle.
 
 Listed passes and products can also be bought **outside the game**, on the
 game page's Store tab, so a player may join already owning one. The join
-check for passes and `ProcessReceipt` for products (below) cover this.
+check for passes and `ProcessReceipt` for products (below) cover this once
+step 8 is in; until then every game pass stays **Off Sale** (see 2.6a).
 
 **Rules to follow** (from Roblox's monetization guidelines, plus our own
 choices marked *(ours)*):
@@ -281,17 +303,26 @@ choices marked *(ours)*):
   the code does (2× carry, the Grotto, +6/+20 slots). If you change a pass,
   update the description, and never take away something buyers already have.
   **TODO:** before launch, check each description against the code that
-  applies the perk: `ToolData.carryCapacity` (Strong Back), `AccessService`
+  applies the perk: `Bonuses.carryCapacity` (Strong Back), `AccessService`
   and `MiningService` (Forge VIP), and the slot limits once machines are
   built (Workshop Expansion). The VIP tag and the slot limits aren't built
   yet, so don't promise them until they work.
+- **Luck boosts and odds boosters:** every card shows the new odds in
+  numbers before the buy (see 1.3); the Hexa Lucky and Starbreaker texts
+  say what changes ("Rare x2.5 … Mythic x9.9", "+75 % ore luck").
 - **Forge VIP and ore odds** *(to be safe)*. Roblox says paid items that
   improve the odds of random outcomes must explain the new odds in numbers
   before purchase (their example is a "magic fishing rod"). The Grotto has
-  its own ore mix (`WorldLayout.luau`: 40% Silver, 32% Emberite, 28% Gold of
-  its nodes), so put those numbers in the Forge VIP description, for example
-  "Glimmer Grotto ore: 40% Silver, 32% Emberite, 28% Gold". Update the text
-  whenever the weights change.
+  its own ore mix (`WorldLayout.luau` node weights), so the Forgemaster's
+  Pass description ends with those numbers ("Glimmer Grotto ore: 19.0%
+  Silver, 16.9% Gold, 14.8% Emberite, 14.8% Amber, ... 1.6% Crystal Rose."
+  on the 36-ore map), built from the weights by
+  `MonetizationConfig.grottoOddsText()`, so it never goes stale; copy the
+  same line into the pass description on the Creator Dashboard whenever the
+  weights change (the in-game text follows by itself, the Dashboard text
+  does not). The free daily wheel's ore prize never uses the Grotto
+  (`WheelConfig.oreOdds` leaves VIP zones out for everyone), so the pass
+  changes no free random prize.
 - **Not pay-to-win only.** Every ore is minable by everyone: Silver, Gold and
   Emberite also spawn outside the Grotto. Coin pouches only skip time. Keep
   it that way.
@@ -320,13 +351,115 @@ choices marked *(ours)*):
     "not owned" forever.
   - On `PromptGamePassPurchaseFinished`, if it succeeded and the pass id
     matches, set the perk (`Perks.set`).
-- **No paid random items, no loot boxes** (see 1.1 #12). If that ever
-  changes: show all odds as percentages before purchase and respect
-  `ArePaidRandomItemsRestricted`.
-- **Daily Ember Chest:** it's free, so it's allowed either way. To avoid
-  looking like a loot box, show the whole 7-day reward ladder in the UI
-  (day 1 … day 7 + raw Gold chunk, with the coin amounts for the player's
-  current pickaxe tier), so players see exactly what they get *(ours)*.
+- **Paid random items** (see 1.1 #12; the full list is in
+  `MonetizationConfig.luau`, `PaidRandom = true`):
+  - Show the exact odds of every result as percentages before every
+    purchase or open (capsule cards and the CapsuleStall's OddsBoard:
+    `CapsuleConfig.odds`), and for odds boosters the odds now AND the new
+    odds (`BoostConfig.preview`, `CapsuleConfig.odds(id, true)`).
+  - Hide or disable them where `ArePaidRandomItemsRestricted` is true (2.2).
+  - A Royal capsule receipt uses the Triple Lucky state the player saw at
+    the prompt (`MonetizationConfig`, step 8 contract), so the odds shown
+    are the odds given.
+  - Never sell more chances to win the free wheel: there are no paid spins.
+- **Daily wheel (SPIN & WIN):** one free spin a day (the timer runs while
+  offline), so it isn't a paid random item, but its odds are shown on the
+  wheel screen anyway, including the ore prize's own odds *(ours)*. It
+  replaced the old 7-day Ember Chest streak (retired; the EmberChest on
+  the wheel's stairs now opens the wheel). The big lobby wheel shows the
+  same 8 prizes as the wheel screen, in the same order and colours
+  (`WheelConfig.Segments`; players who can't buy capsules see their
+  substitute prize's icon), and when you spin it lands on your own
+  result (client-side, `WheelController`), so it never promises a prize
+  the wheel can't give. Its segments are equal like the screen's; the
+  odds are on the screen.
+
+### 2.6a Golem capsules: what the game does (step 7)
+
+Three capsules wake random golems (`CapsuleConfig`): **Stone** and
+**Crystal** for coins, **Royal** for Robux (`RoyalCapsule1/3/10`, still
+placeholder ids). The code (`CapsuleService`, `CapsuleController`,
+`CapsuleView`) follows these rules:
+
+- **Exact odds before every open.** The capsule screen lists every golem
+  of the selected capsule with its own chance in percent
+  (`CapsuleConfig.odds`, three significant digits, never rounded to 0),
+  its rarity and its bonus, next to the OPEN x1 / x3 / x10 buttons. With
+  Triple Lucky running, the list shows the boosted odds (marked "x3") and
+  says so; the opening screen says "TRIPLE LUCKY ODDS" (and, at its end,
+  "Triple Lucky ended: normal odds now" when OPEN AGAIN would use the
+  normal odds). The CapsuleStall's odds board in town shows each rarity's
+  total chance in big text and says that each golem's own odds are in the
+  capsule menu (filled on each player's screen with that player's odds).
+- **The odds shown are the odds rolled.** Every open sends which odds its
+  screen showed (normal or Triple Lucky); the server rolls exactly those,
+  or refuses with "The odds just changed: check them and open again" (and
+  sends the new state) when they no longer hold, for example when the boost
+  ended more than 3 seconds ago. A screen that already shows the normal
+  odds in the boost's last 1.5 seconds (the server's clock counts whole
+  seconds) gets those normal odds, not a refusal. A coin open never gets
+  better or worse odds than the ones on the screen.
+- **Royal capsules (Robux) are paid random items.** Their tab is hidden for
+  players whose `ArePaidRandomItemsRestricted` is true, and while that
+  answer isn't known yet (`Policy.prefetch` asks on join and retries); the
+  server answers a request from such a player with PurchasePrompt
+  "Restricted" and never prompts. Each of OPEN 1 / 3 / 10 is decided on
+  its own: while its product id is a placeholder (0), **or** step 8's
+  ProcessReceipt handler isn't registered yet (it calls
+  `Receipts.setReady(true)`, also reachable as
+  `CapsuleService.setReceiptsReady(true)`), the button is greyed "Coming
+  soon" and the server answers "ComingSoon" without prompting, so nobody
+  can pay Robux in the game before it can deliver. The same one gate
+  (src/server/Receipts.luau, ReplicatedStorage attribute `ReceiptsReady`)
+  holds back every other Robux sale too: the Triple / Hexa Lucky packs and
+  the Heartfire / Starbreaker passes (BoostService.promptPurchase) answer
+  "ComingSoon" and their cards show COMING SOON / "20 R$ • SOON" until
+  step 8 grants receipts and passes; with none of the three live
+  the tab shows the odds and "Coming soon!" instead of buttons.
+  **The gate only blocks in-game prompts.** Game passes (`BigPass`,
+  `Podiums`, `OfflineExtension`, `TrainExpress`, `EnchantHeartfire`,
+  `EnchantStarbreaker`) are also sold on the game page's **Store tab**
+  (website and app) with no prompt at all, and nothing grants a pass before
+  step 8 (`Perks` are set by the coming MonetizationService, the Mythic
+  enchant passes are granted by step 8). So create the passes and products
+  to get their ids, but keep every game pass **Off Sale** (Creator
+  Dashboard → Monetization → Passes → Sales) until step 8 is live and calls
+  `Receipts.setReady(true)`. Developer products go through `ProcessReceipt`
+  (also step 8); if the Dashboard offers to list one on the Store tab, leave
+  that off until then too. Nothing is
+  ever granted outside ProcessReceipt (step 8: `CapsuleService.grantProduct`).
+  A receipt rolls Triple Lucky when the prompt the player saw had it **or**
+  it runs when the receipt is processed, so a purchase never gets worse
+  odds than any screen showed, whichever way it was bought (our prompt,
+  the Store tab, a prompt opened elsewhere). A boosted prompt is kept at
+  most 2 minutes past the boost's end, so a later purchase uses the odds
+  of its own moment, and a prompt closed without buying is forgotten at
+  once (`PromptProductPurchaseFinished`). Golems bought with Robux are
+  saved with `Paid = true` (for the trading rules) and come **locked**: a
+  locked golem can't be deleted, and the delete box says "bought with
+  Robux: Robux are not refunded" when the player unlocks and deletes one.
+- **Coin capsules: our choice.** Coins can't be bought with Robux while
+  `MonetizationConfig.CoinPacksEnabled` is false, so coin capsules are
+  **not** paid random items and are shown to every player (odds still
+  shown). If the owner turns coin packs on, `CapsuleConfig.isPaidRandom`
+  becomes true for them at once: the client hides the Stone and Crystal
+  tabs for restricted players (or players whose policy isn't known), the
+  server refuses their opens ("Restricted"), and the questionnaire answer
+  for paid random items (1.1 #12) must be Yes.
+  Robux items that only raise how fast a player earns coins (the income
+  and podium game passes, Royal golems with an Income or Sell value bonus)
+  are **not** treated as buying coins: the coins still have to be earned
+  by playing, as most games read the rule. This judgment call changes if
+  a Robux item ever pays out coins directly (a coin pack, a pass or
+  product that grants a lump of coins, a "skip" that converts Robux into
+  coins): then `MonetizationConfig.coinsBuyable()` must return true
+  (today it reads `CoinPacksEnabled`) so coin capsules count as paid
+  random items.
+- **Free capsules** (the daily wheel's prize) aren't paid and always open.
+- **No pressure:** a capsule only opens after the player presses OPEN; a
+  full golem inventory (60) refuses the open before anything is spent (and
+  a Royal prompt is refused with "Your golem inventory is full: delete
+  some golems first"); every refusal names the reason.
 
 ### 2.7 Group join and like rewards: what is safe
 
@@ -434,8 +567,26 @@ tutorial.
   - Data Store: `TerraForge_PlayerData_v1`
   - Key Pattern: `Player_{UserId}` (exactly this capitalisation)
   - Scope: `global`
-  Add one template per extra data store you create later (for example
-  leaderboards → **Ordered Key**).
+  The four leaderboards (`LeaderboardConfig`, key = the player's UserId)
+  need one template each:
+  - Type: **Ordered Key**, Scope: `global`, Key Pattern: `{UserId}`
+  - Data Stores: `TF_LB_MoneyPerSec_v1`, `TF_LB_TotalEarned_v1`,
+    `TF_LB_Artifacts_v1`, `TF_LB_HoursPlayed_v1`
+  When a board's name gets a new `_vN` suffix, add a template for the new
+  name too. Add one template per extra data store you create later.
+  By hand (a request before the templates exist, or a cheater's score):
+  Studio command bar with API access on,
+  `require(game.ServerScriptService.Server.Services.LeaderboardService).removeUser(12345)`
+  deletes the user's entry from all four boards and hides the user at once
+  on every server (a runtime hidden list in the `TF_LB_Hidden_v1` data
+  store, key `Hidden`, read on start and every 5 minutes, plus a
+  MessagingService message to the running servers), so nobody writes it
+  back, even while the user plays; no deploy is needed. A server writes
+  no score before it has read that list once (a failed first read is
+  tried again within 10-30 seconds), so a server started later can't
+  bring a removed user back either.
+  `LeaderboardConfig.Hidden` is the same list in code (optional).
+  (Studio play sessions read the live boards but never write them.)
 - **Testing in Studio:** Roblox warns that Studio access to data stores is
   dangerous for live games. Once the game is live, test in a **separate test
   place/game** or turn the setting off (see section 3).
@@ -469,7 +620,7 @@ tutorial.
 | **Social links** | Dashboard → Engagement → Social Links | Optional (needs 16+ verification; see 2.3). |
 | **Icon & thumbnails** | Dashboard → Configure → Places → start place | **Icon:** square, 512×512. **Thumbnails:** up to 10 images or videos, 16:9, ideally 1920×1080, under 3 MB; keep text away from the bottom edge (the player count covers it). All of them are moderated. **TODO:** use real screenshots of the **launch build**. The files in `docs/screenshots/` (1600×900) are from development builds: only use ones that show features that work at launch (for example, no machines or shop until they exist), and treat `items.jpg` (a lineup of item models) as a showcase, not a scene players see. No fake UI, no other games' art, no "FREE ROBUX" or "ADMIN" text, no misleading promises. Videos must show real gameplay (3 uploads per month). |
 | **Badges** | Dashboard → Engagement → Badges | **TODO:** create Welcome, First Ore, First Clean, First Flawless, First Legendary, First Mythic, First Gear, Tutorial Done, Tycoon. 5 badges per game per day are free (then 100 Robux each), so spread these 9 over two days. Images (512×512) and names must follow Community Standards. |
-| **Game passes / developer products** | Dashboard → Monetization → Passes / Developer Products | **TODO:** create them and paste the ids into the config (see 2.6). |
+| **Game passes / developer products** | Dashboard → Monetization → Passes / Developer Products | **TODO:** create them and paste the ids into the config (see 2.6). Create the passes and products to get their ids, but keep every game pass **Off Sale** (Dashboard → Monetization → Passes → Sales) until step 8 is live and calls `Receipts.setReady(true)`. The gate only blocks in-game prompts, and passes are also sold on the Store tab (see 2.6a). |
 
 ---
 
@@ -495,10 +646,13 @@ tutorial.
 - [ ] One `ProcessReceipt` callback; dedupe by `PurchaseId`; grant only on the server holding the session lock; grant + save before `PurchaseGranted`; `NotProcessedYet` on any failure.
 - [ ] Tested: buy a coin pouch, leave right away, rejoin → coins arrive exactly once.
 - [ ] Passes: ownership checked on join (in `pcall`, with a retry) and on purchase; perks work as described.
+- [ ] Every game pass stayed **Off Sale** until step 8 went live (ProcessReceipt and the pass grants connected, `Receipts.setReady(true)` called); only then put them On Sale (the receipts gate only blocks in-game prompts, and the Store tab sells passes without one).
 - [ ] Pass and product descriptions match exactly what the code does; the Forge VIP description lists the Grotto's ore odds in numbers.
 - [ ] Purchase prompts only open after a player taps a button; no fake timers or fake discounts; close button easy to find on mobile.
-- [ ] No paid random items. The Ember Chest shows its fixed 7-day rewards.
-- [ ] PolicyService wrapper in place (`pcall`, strict defaults when the call fails).
+- [ ] Paid random items (Royal capsules, Robux luck packs, Starbreaker): exact odds shown before every buy, odds boosters show the new odds in numbers, hidden where `ArePaidRandomItemsRestricted` is true; questionnaire answered **Yes** once any of them is live.
+- [ ] Coin packs still off (`CoinPacksEnabled = false`), or every coin capsule / coin boost / coin odds-booster treated as a paid random item.
+- [ ] The daily wheel shows its exact odds (and the ore prize's odds); no paid spins.
+- [ ] PolicyService wrapper in place (`src/server/Policy.luau`: `pcall`, strict defaults when the call fails, retried).
 
 ### Engagement rewards
 - [ ] Group reward: button only (no pop-up on join), `PromptJoinAsync` on tap, server `IsInGroupAsync` check only when the player claims, one-time, small, saved flag, never needed to progress.
@@ -508,6 +662,7 @@ tutorial.
 ### Data and privacy
 - [ ] Save data holds only gameplay fields (`DataTemplate.luau`); analytics hold no free text.
 - [ ] RTBF deletion template created (`TerraForge_PlayerData_v1`, `Player_{UserId}`, `global`).
+- [ ] RTBF **Ordered Key** templates for the four leaderboards (`TF_LB_MoneyPerSec_v1`, `TF_LB_TotalEarned_v1`, `TF_LB_Artifacts_v1`, `TF_LB_HoursPlayed_v1`; `{UserId}`, `global`).
 - [ ] Someone checks the daily RTBF message in the Roblox inbox. **TODO:** name the person: __________
 
 ### Settings

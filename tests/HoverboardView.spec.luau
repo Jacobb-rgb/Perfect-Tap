@@ -27,8 +27,17 @@ return function(T, Loader)
 		pass.Id = 0
 		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 1e12), "Soon", "no pass id")
 		pass.Id = 777
-		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Robux", "a real pass id")
+		local realReady = HoverboardView.receiptsReady
+		rawset(HoverboardView, "receiptsReady", function()
+			return false
+		end)
+		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Soon", "a real pass id, but the receipts gate is closed")
+		rawset(HoverboardView, "receiptsReady", function()
+			return true
+		end)
+		T.eq(HoverboardView.cardState(B.NeonComet, none, "", 0), "Robux", "a real pass id, receipts open")
 		T.eq(HoverboardView.cardState(B.NeonComet, { NeonComet = true }, "", 0), "Equip", "owned Robux board")
+		rawset(HoverboardView, "receiptsReady", realReady)
 		pass.Id = old
 	end)
 
@@ -36,7 +45,7 @@ return function(T, Loader)
 		T.eq(HoverboardView.priceText(B.TimberDrifter), Format.money(B.TimberDrifter.Price :: number), "coin price")
 		T.eq(HoverboardView.priceText(B.RoyalPhoenix), "49 R$", "Robux price")
 		T.eq(HoverboardView.speedText(B.CartCruiser), "SPEED 27", "speed")
-		T.eq(HoverboardView.bonusText(B.TimberDrifter), "+28%", "bonus")
+		T.eq(HoverboardView.bonusText(B.TimberDrifter), `+{HoverboardData.speedBonus(B.TimberDrifter)}%`, "bonus")
 		T.eq(HoverboardView.buttonText("Buy", B.TimberDrifter), "BUY")
 		T.eq(HoverboardView.buttonText("BuyLocked", B.TimberDrifter), "BUY")
 		T.eq(HoverboardView.buttonText("Equip", B.TimberDrifter), "EQUIP")

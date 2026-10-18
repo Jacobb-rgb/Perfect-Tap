@@ -645,7 +645,7 @@ local function onCard(card: HoverboardView.Card)
 		end
 	elseif state == "Robux" then
 		local id = HoverboardData.passId(board)
-		if HoverboardData.canPrompt(board) and id > 0 then
+		if HoverboardData.canPrompt(board) and HoverboardView.receiptsReady() and id > 0 then
 			Sfx.play("UIClick")
 			pcall(function()
 				MarketplaceService:PromptGamePassPurchase(player, id)

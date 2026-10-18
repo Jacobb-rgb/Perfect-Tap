@@ -286,5 +286,89 @@
   ],
   "fov": 18,
   "shadowExtent": 50
+ },
+ "ore_stages_1": {
+  "scene": "ore_stages_1",
+  "preset": "Surface",
+  "position": [
+   7.5,
+   48,
+   -3.1999999999999993
+  ],
+  "target": [
+   7.5,
+   0,
+   -16.599999999999998
+  ],
+  "fov": 42,
+  "shadowExtent": 50,
+  "sunDir": [
+   -0.25,
+   1,
+   -0.15
+  ]
+ },
+ "ore_stages_2": {
+  "scene": "ore_stages_2",
+  "preset": "Surface",
+  "position": [
+   7.5,
+   48,
+   -1.8500000000000032
+  ],
+  "target": [
+   7.5,
+   0,
+   -15.250000000000004
+  ],
+  "fov": 42,
+  "shadowExtent": 50,
+  "sunDir": [
+   -0.25,
+   1,
+   -0.15
+  ]
+ },
+ "ore_stages_3": {
+  "scene": "ore_stages_3",
+  "preset": "Surface",
+  "position": [
+   7.5,
+   48,
+   -0.5000000000000018
+  ],
+  "target": [
+   7.5,
+   0,
+   -13.900000000000002
+  ],
+  "fov": 42,
+  "shadowExtent": 50,
+  "sunDir": [
+   -0.25,
+   1,
+   -0.15
+  ]
+ },
+ "cleaning_reveal_strip": {
+  "scene": "cleaning_reveal_strip",
+  "preset": "Surface",
+  "sunDir": [
+   0.2,
+   0.9,
+   0.4
+  ],
+  "position": [
+   -1.8,
+   6.3,
+   26
+  ],
+  "target": [
+   -1.8,
+   6.0,
+   0
+  ],
+  "fov": 40,
+  "shadowExtent": 40
  }
 }

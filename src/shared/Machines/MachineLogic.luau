@@ -23,7 +23,8 @@
 	  GradeUpChance  each output is one grade better with that chance
 	                 (Polisher: gradeUp; Flawless stays Flawless)
 	  ShardChance    a job also gives a crystal shard with that chance
-	                 (Crystal Extractor: rollShard; the item passes through)
+	                 (Crystal Extractor: rollShard; the item passes through;
+	                 ProcessingService rolls each crushed pile only once)
 	  "Alloy"        a job takes In[1] and the first queued ingot of another
 	                 ore (alloyPair) and gives ONE alloy of the more valuable
 	                 ore with the lower grade (alloyDesc). The last queue place

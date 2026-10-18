@@ -751,4 +751,86 @@ return function(T, Loader)
 		T.near(giant.At, w.now + MineFloors.GiantCrystal.Interval, 0.5, "back after Interval")
 		noOreLeaks(w)
 	end)
+
+	withWorld("Mining: Health replicates at most ~3 times a second, stages at once, the last value follows", function(w)
+		local rock = w.rock("Quarry", { "Coal" }, 10000)
+		local p = w.player
+		local model = rock.Model
+		local function attribute(): number
+			return model:GetAttribute("Health")
+		end
+		mining.blast(p, rock.Model)
+		w.step()
+		T.near(attribute(), rock.Health, 1e-6, "the first hit shows at once")
+		local shown = attribute()
+		w.step() -- 0.1 s later
+		T.near(attribute(), shown, 1e-6, "the next tick doesn't replicate yet")
+		T.truthy(rock.Health < shown, "(the server's HP did go down)")
+		w.step()
+		w.step()
+		w.step() -- 0.4 s after the first write (HEALTH_GAP 0.3 + a tick)
+		T.near(attribute(), rock.Health, 1e-6, "after HEALTH_GAP it catches up")
+		-- stop firing: the last damage still follows within the gap
+		w.step()
+		mining.blast(p, nil)
+		local final = rock.Health
+		w.step(0.35)
+		T.near(attribute(), final, 1e-6, "the last value follows after everyone stopped")
+		-- 10 Hz for 3 seconds: at most ~3 writes a second
+		local values = {}
+		mining.blast(p, rock.Model)
+		local previous = attribute()
+		for _ = 1, 30 do
+			w.step()
+			local now = attribute()
+			if now ~= previous then
+				table.insert(values, now)
+				previous = now
+			end
+		end
+		T.truthy(#values <= 11, `{#values} Health writes in 3 s at 10 Hz`)
+		T.truthy(#values >= 6, `but it keeps moving ({#values} writes)`)
+	end)
+
+	withWorld("Mining: a crossed stage replicates Health at once", function(w)
+		-- HP = 4 ticks of damage: the first tick takes 1/4 (no stage), the second crosses 1/3
+		local perTick = BlasterData.damage(1, "") * TICK
+		local rock = w.rock("Quarry", { "Coal", "Iron" }, perTick * 4)
+		local p = w.player
+		mining.blast(p, rock.Model)
+		w.step()
+		T.eq(rock.Stage, 0, "no stage after the first tick")
+		T.near(rock.Model:GetAttribute("Health"), rock.Health, 1e-6, "the first hit shows at once")
+		w.step() -- 0.1 s later: inside HEALTH_GAP, but this tick crosses stage 1
+		T.eq(rock.Stage, 1, "stage 1 crossed")
+		T.near(rock.Model:GetAttribute("Health"), rock.Health, 1e-6, "the stage shows at once, not after the gap")
+	end)
+
+	withWorld("Mining: the beam colour is worked out once per blaster, not every tick", function(w)
+		local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+		local realLook = BlasterBuilder.look
+		local calls = 0
+		rawset(BlasterBuilder, "look", function(...)
+			calls += 1
+			return realLook(...)
+		end)
+		local ok, err = pcall(function()
+			local rock = w.rock("Quarry", { "Coal" }, 1e9)
+			local p = w.player
+			mining.blast(p, rock.Model)
+			for _ = 1, 20 do
+				w.step()
+			end
+			T.eq(calls, 1, "20 ticks, one look")
+			p.data.BlasterLevel = 3
+			p.data.BlasterOre = "Gold"
+			w.step()
+			w.step()
+			T.eq(calls, 2, "a new blaster: one more")
+		end)
+		rawset(BlasterBuilder, "look", realLook)
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end

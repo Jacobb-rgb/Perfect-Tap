@@ -356,7 +356,7 @@ MachineData.List = {
 	{
 		Id = "CrystalExtractor",
 		Name = "Crystal Extractor",
-		Description = "Shakes crushed ore: sometimes a crystal shard pops out (shards buy enchants).",
+		Description = "Shakes each crushed pile once: sometimes a crystal shard pops out (shards buy enchants).",
 		Size = { 2, 2 },
 		Price = 80000,
 		Category = "Processing",

@@ -96,9 +96,28 @@ end
 local uiExports: { [string]: { any } } = {}
 local scene_extra: any = nil
 
+-- The artifact museum ArtifactService builds into every plot's yard at
+-- server start (MuseumBuilder), empty (the relics show near the camera for
+-- each owner's finds; yard_preview fills its plot's).
+local function addMuseums(map: any)
+	local MuseumBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MuseumBuilder")
+	local plots = map and map:FindFirstChild("Plots")
+	for _, plot in WorldLayout.Plots do
+		local model = plots and plots:FindFirstChild("Plot_" .. plot.Id)
+		local yard = model and model:FindFirstChild("Yard")
+		if yard then
+			local museum = MuseumBuilder.build(WorldLayout.plotCFrame(plot))
+			museum:SetAttribute("PlotId", plot.Id)
+			museum.Parent = yard
+		end
+	end
+end
+
 if sceneName == "world" or string.match(sceneName, "^world_") then
 	-- "world_<name>": the same world into build/preview/world_<name>.json (parallel workers)
-	addNodes(workspace, WorldBuilder.build(workspace))
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
+	addNodes(workspace, map)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)
@@ -116,6 +135,11 @@ elseif sceneName == "factory" then -- a working roster factory with power cables
 	require("./lib/factory_preview").build(Loader, workspace)
 elseif sceneName == "factory_max" then -- the same at the max upgrade level (crystal)
 	require("./lib/factory_preview").build(Loader, workspace, 4)
+elseif sceneName == "ore_stages_1" or sceneName == "ore_stages_2" or sceneName == "ore_stages_3" then
+	-- every ore through the loop's stages, one sheet per two rarities (tools/lune/lib/ore_stages.luau)
+	require("./lib/ore_stages").build(Loader, workspace, tonumber(string.sub(sceneName, -1)) :: number)
+elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common vs Mythic, 4 moments (tools/lune/lib/reveal_strip.luau)
+	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
@@ -189,6 +213,16 @@ elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Found
 	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
 		uiExports[name] = guis
 	end
+elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/wheel_artifacts_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "menus" then -- the world + the side menu, codex, settings and leaderboard overlays (tools/lune/lib/menus_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/menus_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays (tools/lune/lib/tech_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
@@ -197,6 +231,29 @@ elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays
 elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop window overlays (tools/lune/lib/vault_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the Gear shop panel overlays (tools/lune/lib/gear_shop_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/gear_shop_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "enchants" then -- the world + the Enchant shop / luck boosts overlays (tools/lune/lib/enchant_boost_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/enchant_boost_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "golems" or sceneName == "capsules" or sceneName == "capsule_reveal" or sceneName == "capsule_crack" then
+	-- step 7: golem pets, capsules and their UI (tools/lune/lib/capsule_preview.luau)
+	for name, guis in require("./lib/capsule_preview").build(Loader, workspace, sceneName) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" then -- the tutorial's bubble + guide in the quarry (tools/lune/lib/tutorial_preview.luau)
+	WorldBuilder.build(workspace)
+	addNodes(workspace)
+	local TutorialPreview = require("./lib/tutorial_preview")
+	TutorialPreview.scene(Loader, workspace, if sceneName == "tutorial_hopper" then "hopper" else "station")
+	for name, guis in TutorialPreview.build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)

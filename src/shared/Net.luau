@@ -111,12 +111,67 @@ Net.Events = {
 	--   MarketplaceService:PromptGamePassPurchase on the client (MonetizationConfig ids, never id 0);
 	--   MonetizationService grants them (ownership checked on load and on purchase)
 	HoverboardAction = { Rate = 4, Burst = 8 },
-	DailyClaim = { Rate = 1, Burst = 2 },
+	-- steps 6-7: gear, enchants, boosts, golems + capsules, wheel, artifacts (the configs in
+	-- Shared/Config document each rule). Every request the server reads (except Capsule
+	-- "Open" and Wheel "Spin", answered by CapsuleResult / WheelResult, and Robux requests,
+	-- answered by PurchasePrompt) gets one ActionResult; a refused Capsule "Open" or Wheel
+	-- "Spin" gets an ActionResult too. Successful changes push State (DataService.changed).
+	GearAction = { Rate = 3, Burst = 5 }, -- ("Buy", { Line: GearConfig line id, Level: the
+	--   level being bought, = current + 1 (GearConfig.quote, else "Stale") }); within
+	--   GearConfig.Range of a ShopCounter
+	EnchantAction = { Rate = 4, Burst = 8 }, -- (action, arg):
+	--   "Buy"  { Id: EnchantConfig id, Currency: "Coins" | "Shards" | "Robux", Tier: the tier
+	--          being bought, = current + 1 } (EnchantConfig.quote; within EnchantConfig.Range
+	--          of an EnchantCounter; "Robux" -> PurchasePrompt for the Mythic's game pass,
+	--          never granted here; "Restricted" for an odds booster where paid random items
+	--          are restricted, EnchantConfig.isPaidRandom)
+	--   "Slot" { Slot: 1..EnchantConfig.MaxSlots, Id: an owned enchant id, or nil / "" to empty
+	--          the slot } (EnchantConfig.setSlot; free, anywhere)
+	BoostAction = { Rate = 2, Burst = 4 }, -- (action, arg):
+	--   "BuyCoins" { Id: BoostConfig.CoinOffers id } (BoostConfig.coinQuote: the price at the
+	--              player's blaster level; refused "NoEffect" (BoostConfig.hasEffect false),
+	--              "CoinLimit" (BoostConfig.CoinBuyBelow or more left), "Full" (past
+	--              BoostConfig.MaxStackSeconds))
+	--   "BuyRobux" { Id: BoostConfig.RobuxOffers id } -> PurchasePrompt
+	--   refused ("Restricted") where paid random items are restricted (src/server/Policy.luau)
+	--   and the offer is one (BoostConfig.isPaidRandom)
+	CapsuleAction = { Rate = 1, Burst = 2 }, -- ("Open", { Capsule: CapsuleConfig id, Count: 1 | 3 | 10 }):
+	--   coin capsules: price CapsuleConfig.price at the player's blaster level, needs Count
+	--   free golem places (GolemConfig.room), Triple Lucky counts when active; Royal (Robux)
+	--   -> PurchasePrompt; "Restricted" where paid random items are restricted and the
+	--   capsule is one (CapsuleConfig.isPaidRandom). Answer: CapsuleResult (or an
+	--   ActionResult when refused). Anywhere (side menu or the CapsuleStall). A request the
+	--   rate limit drops gets NO answer: the client waits CapsuleConfig.ClientCooldown between
+	--   opens and gives the buttons back after CapsuleConfig.ResultTimeout, but still shows a
+	--   CapsuleResult that arrives later (same for WheelAction / WheelResult).
+	GolemAction = { Rate = 4, Burst = 8 }, -- (action, arg):
+	--   "Equip" { Id } | "Unequip" { Id } | "EquipBest" (no arg) |
+	--   "Lock" { Id, Locked: boolean } (a locked golem is never deleted) |
+	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers; locked ones are
+	--   skipped) } (GolemConfig helpers)
+	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
+	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
+	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
+	--   WheelConfig.ClientCooldown / ResultTimeout) | ("Reveal"): the open wheel screen showed
+	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise)
+	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
+	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
+	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
+	--   podium skin show (data.Artifacts.Equipped) | ("Restore", { Artifact }): buys back the
+	--   ONE missing artifact of a collection with crystal shards (ArtifactConfig.restoreQuote;
+	--   ArtifactFound { Restored = true } follows); all three answered by ActionResult
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
-	TutorialSkip = { Rate = 1, Burst = 2 },
+	TutorialAction = { Rate = 1, Burst = 3 }, -- ("Skip" | "Ack") the tutorial (TutorialService):
+	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean })
+	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
+	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
+	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
+	--   discovered ores were looked at (their NEW badges go; CodexService keeps them in
+	--   data.OreCodex.Seen, sent back as snapshot.CodexSeen)
 	-- server -> client
 	Notify = false,
 	Fx = false,
@@ -124,7 +179,7 @@ Net.Events = {
 	CleanBegin = false,
 	CleanResult = false,
 	OpenUI = false,
-	Tutorial = false,
+	Tutorial = false, -- { Step, Done, Total, Reward?, How = "Step" | "Done" | "Skip" | "Load" }
 	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
@@ -160,6 +215,39 @@ Net.Events = {
 	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
 	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change
 	HoverboardResult = false,
+	-- steps 6-7 answers:
+	-- { Action: "Gear" | "Enchant" | "Boost" | "Capsule" | "Golem" | "Wheel" | "Artifact",
+	--   Op: the action string ("Buy", "Slot", "BuyCoins", "Open", "Equip", "Spin", ...),
+	--   Ok: boolean, Reason?: a code from that config's Reasons table,
+	--   Id?: the item / line / golem id the request named, Level?: the new level or tier }
+	ActionResult = false,
+	-- a capsule opened: { Capsule, Count, Golems = { { Id, Kind } } (in opening order),
+	--   Lucky: boolean (Triple Lucky was on), Free: boolean? (a wheel prize) }
+	CapsuleResult = false,
+	-- the daily spin: { Segment: 1..8 (WheelConfig.Segments index), Id: segment id,
+	--   Kind: WheelConfig PrizeKind, Amount?: coins or shards, Boost?, Seconds?,
+	--   Capsule?, Golem?: { Id, Kind } (a capsule prize), DirtyOre?: true (a dirty Rare+ ore
+	--   went to the pen; WHICH ore stays secret until it is cleaned, the screen shows
+	--   WheelConfig.oreOdds), Coins?: coins paid instead (full pen / full golem inventory /
+	--   a boost past its cap), Full?: true (a capsule prize's coins: the golem inventory was full),
+	--   Lucky?: Triple Lucky counted for the capsule, NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
+	--   WheelConfig.segments(noCapsules): "TripleLuckyCoins" replaces "TripleLucky" there)
+	WheelResult = false,
+	-- an artifact turned up: { Artifact: id, Count: copies now, New: boolean,
+	--   Collection: id, Completed: boolean (this find completed it), Shards?: a duplicate's
+	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with
+	--   shards: ArtifactAction "Restore", no rock) }
+	ArtifactFound = false,
+	-- a Robux item was asked for: { Product: MonetizationConfig key, Status: "ComingSoon" |
+	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }
+	--   (MonetizationConfig.promptStatus; "Prompted" = MarketplaceService prompt shown)
+	PurchasePrompt = false,
+	-- the lobby leaderboards (LeaderboardService, every LeaderboardConfig.RefreshSeconds and on
+	--   join): { Live: boolean (false = no DataStores, e.g. Studio: the rows rank the players on
+	--   this server), Boards = { [boardId] = { Rows = { { Rank, UserId, Name, Value } } (top
+	--   LeaderboardConfig.TopCount, Value decoded), Ready: boolean (read at least once) } },
+	--   Own = { [boardId] = { Value: your live value, Rank: number? (only inside Rows) } } }
+	Leaderboards = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"
