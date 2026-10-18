@@ -40,6 +40,7 @@ Placement.Reasons = {
 	NoConveyorSlots = "All belt slots are used",
 	NoneOwned = "You don't have one to place",
 	Busy = "Finish using it first",
+	PenFull = "Make room in your Ore Pen for what's inside it first",
 	TooFar = "Go to your forge to build",
 	NoPlot = "You don't have a plot yet",
 	NotYours = "That's not your machine",

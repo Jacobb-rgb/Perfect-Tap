@@ -50,7 +50,7 @@ type Session = {
 }
 
 local sessions: { [Player]: Session } = {}
-local random = Random.new()
+local random: Random? = nil -- made on first use (the Lune tests have no Random)
 local cleanedCallbacks: { (Player, string, string, number) -> ...any } = {}
 
 -- Listeners: tutorial, badges, analytics. (player, oreId, grade, score)
@@ -109,7 +109,9 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 	if not record then
 		return
 	end
-	local seed = random:NextInteger(1, 2 ^ 30)
+	local rng = random or Random.new()
+	random = rng
+	local seed = rng:NextInteger(1, 2 ^ 30)
 	local session: Session = {
 		Id = HttpService:GenerateGUID(false),
 		Player = player,
@@ -377,6 +379,13 @@ function CleaningService.start()
 			end
 		end
 	end
+end
+
+-- Is a cleaning session of this player running right now? (Teleport and
+-- other systems that must wait for the minigame ask this; stationOf only
+-- says where the player's station is.)
+function CleaningService.isCleaning(player: Player): boolean
+	return sessions[player] ~= nil
 end
 
 -- For the tutorial arrow.
