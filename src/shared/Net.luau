@@ -140,9 +140,14 @@ Net.Events = {
 	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
 	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
 	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
-	--   WheelConfig.ClientCooldown / ResultTimeout)
+	--   WheelConfig.ClientCooldown / ResultTimeout) | ("Reveal"): the open wheel screen showed
+	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise)
 	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
-	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters)
+	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
+	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
+	--   podium skin show (data.Artifacts.Equipped) | ("Restore", { Artifact }): buys back the
+	--   ONE missing artifact of a collection with crystal shards (ArtifactConfig.restoreQuote;
+	--   ArtifactFound { Restored = true } follows); all three answered by ActionResult
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
 	TutorialSkip = { Rate = 1, Burst = 2 },
@@ -195,13 +200,15 @@ Net.Events = {
 	--   Kind: WheelConfig PrizeKind, Amount?: coins or shards, Boost?, Seconds?,
 	--   Capsule?, Golem?: { Id, Kind } (a capsule prize), DirtyOre?: true (a dirty Rare+ ore
 	--   went to the pen; WHICH ore stays secret until it is cleaned, the screen shows
-	--   WheelConfig.oreOdds), Coins?: coins paid instead (full pen / full golem inventory),
-	--   NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
+	--   WheelConfig.oreOdds), Coins?: coins paid instead (full pen / full golem inventory /
+	--   a boost past its cap), Full?: true (a capsule prize's coins: the golem inventory was full),
+	--   Lucky?: Triple Lucky counted for the capsule, NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
 	--   WheelConfig.segments(noCapsules): "TripleLuckyCoins" replaces "TripleLucky" there)
 	WheelResult = false,
 	-- an artifact turned up: { Artifact: id, Count: copies now, New: boolean,
 	--   Collection: id, Completed: boolean (this find completed it), Shards?: a duplicate's
-	--   shards, Position?: Vector3 where the rock broke }
+	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with
+	--   shards: ArtifactAction "Restore", no rock) }
 	ArtifactFound = false,
 	-- a Robux item was asked for: { Product: MonetizationConfig key, Status: "ComingSoon" |
 	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }

@@ -6,16 +6,26 @@
 
 	- 24 artifacts in 4 collections of 6. Each has a rarity, look hints for a
 	  parts-built model (Shape family + colors) and a lore line.
-	- Rarer artifacts turn up deeper: every zone has rarity weights
-	  (ZoneRarity) and a chance multiplier on BlasterData.Rocks.ArtifactChance
-	  (ZoneChance). Zones that aren't listed (new mine floors) use the weights
-	  of their depth class (by the zone's MinBlaster).
-	- A duplicate find gives crystal shards (DuplicateShards) instead.
+	- Rarer artifacts turn up deeper: every zone has a weight for EACH
+	  artifact of a rarity (ZoneRarity; per artifact, not per rarity, so a
+	  rarity with fewer artifacts never makes each of them easier to find:
+	  in every zone the chance of one artifact falls with its rarity) and a
+	  chance multiplier on BlasterData.Rocks.ArtifactChance (ZoneChance).
+	  Zones that aren't listed (new mine floors) use the weights of their
+	  depth class (by the zone's MinBlaster).
+	- A duplicate find gives crystal shards (DuplicateShards) instead. The
+	  ONE missing artifact of a collection can be restored with shards
+	  (RestoreShards, restoreQuote; ArtifactAction "Restore"), once a zone
+	  the player can mine turns up its rarity.
 	- Completing a collection (every artifact found at least once) unlocks its
 	  story chapter (StoryConfig, read at the Guild board / collection book)
 	  and its reward: a title, a podium skin and a small permanent bonus
 	  (Bonuses "Collections"; its IncomePct reaches the podiums through the one
-	  income bonus Bonuses adds to EconomyService).
+	  income bonus Bonuses adds to EconomyService). The title (over the
+	  player's head) and the skin (on the player's podiums) are the ones of
+	  ONE completed collection at a time: the one picked in the collection
+	  book (data.Artifacts.Equipped, "" = none), else the last completed one
+	  (ArtifactService applies them; ArtifactAction "Equip").
 	- New collections come with later updates: add a collection, its 6
 	  artifacts and a StoryConfig chapter. Saves keep artifact and chapter
 	  ids this server doesn't know (Migrations); every reader here ignores them.
@@ -34,9 +44,12 @@
 	Saved as data.Artifacts = {
 	  Found = { [artifactId] = count (whole 1..MaxCount) },
 	  Chapters = { [collectionId] = true }, -- chapters the player has read
+	  Equipped = collectionId?, -- whose title + podium skin show ("" = none, nil = the last completed)
 	}
 	plus data.Stats.ArtifactsFound (every find, duplicates too: the ARTIFACTS board).
-	ArtifactAction ("ReadChapter", { Collection }) marks a completed collection's chapter read.
+	ArtifactAction ("ReadChapter", { Collection }) marks a completed collection's chapter read;
+	ArtifactAction ("Equip", { Collection }) picks whose reward shows ("" = none);
+ArtifactAction ("Restore", { Artifact }) buys back a collection's last missing artifact.
 ]]
 
 local BlasterData = require(script.Parent.BlasterData)
@@ -81,6 +94,11 @@ ArtifactConfig.MuseumAnimateDistance = 60 -- studs: clients animate museum piece
 ArtifactConfig.Reasons = {
 	BadCollection = "That collection doesn't exist",
 	NotComplete = "Find every artifact of this collection first",
+	BadArtifact = "That artifact doesn't exist",
+	NotMissing = "You already have that artifact",
+	NotLast = "Find all the others of this collection first",
+	Locked = "Reach a mine where it turns up first",
+	NoShards = "Not enough crystal shards",
 } :: { [string]: string }
 
 -- Shape families the artifact model builder knows.
@@ -418,13 +436,16 @@ ArtifactConfig.ZoneChance = {
 	DeepHollow = 1.5,
 } :: { [string]: number }
 
--- Rarity weights of an artifact that turns up in a zone (rarer deeper).
+-- The weight of EACH artifact of a rarity once one turns up in a zone
+-- (rarer deeper; per artifact, so in every zone one artifact's chance falls
+-- with its rarity: DeepHollow, 24 artifacts: one Common 5.5 %, Uncommon
+-- 4.9 %, Rare 4.4 %, Epic 3.3 %, Legendary 1.6 %, the Mythic 0.66 %).
 ArtifactConfig.ZoneRarity = {
-	Outcrops = { Common = 70, Uncommon = 25, Rare = 5 },
-	Quarry = { Common = 55, Uncommon = 30, Rare = 12, Epic = 3 },
-	EmberCaves = { Common = 30, Uncommon = 32, Rare = 22, Epic = 12, Legendary = 4 },
-	Grotto = { Common = 30, Uncommon = 32, Rare = 22, Epic = 12, Legendary = 4 },
-	DeepHollow = { Common = 12, Uncommon = 22, Rare = 28, Epic = 22, Legendary = 12, Mythic = 4 },
+	Outcrops = { Common = 14, Uncommon = 6, Rare = 1.5 },
+	Quarry = { Common = 11, Uncommon = 6, Rare = 2.5, Epic = 0.8 },
+	EmberCaves = { Common = 7, Uncommon = 6, Rare = 4, Epic = 2.5, Legendary = 1 },
+	Grotto = { Common = 7, Uncommon = 6, Rare = 4, Epic = 2.5, Legendary = 1 },
+	DeepHollow = { Common = 5, Uncommon = 4.5, Rare = 4, Epic = 3, Legendary = 1.5, Mythic = 0.6 },
 } :: { [string]: { [string]: number } }
 
 -- Zones not listed above: the depth class of their MinBlaster (shallow < 3 <= mid < 5 <= deep).
@@ -438,6 +459,25 @@ ArtifactConfig.DuplicateShards = {
 	Epic = 8,
 	Legendary = 16,
 	Mythic = 40,
+} :: { [string]: number }
+
+--[[
+	The end of a long chase: the ONE missing artifact of a collection (all
+	the others found) can be restored with crystal shards (ArtifactAction
+	"Restore"), at this price by its rarity; only once the player's blaster
+	opens a zone where that rarity turns up (rarer stays deeper). About
+	half the shards the duplicates of an average chase pay (Deep Hollow:
+	~3.75 shards per duplicate; the Mythic's ~150 finds pay ~560), and the
+	Enchant shop wants the same shards: a real choice, never a shortcut
+	past the zones.
+]]
+ArtifactConfig.RestoreShards = {
+	Common = 20,
+	Uncommon = 30,
+	Rare = 50,
+	Epic = 80,
+	Legendary = 150,
+	Mythic = 300,
 } :: { [string]: number }
 
 ArtifactConfig.ById = {} :: { [string]: Artifact }
@@ -484,17 +524,14 @@ function ArtifactConfig.rockChance(zoneId: string): number
 end
 
 -- Exact chance of each artifact once one turns up in `zoneId` (sums to 1):
--- a rarity by the zone's weights (only rarities that have artifacts), then
--- every artifact of that rarity equally. In ArtifactConfig.List order.
+-- every artifact weighs its rarity's ZoneRarity weight (per artifact). In
+-- ArtifactConfig.List order.
 function ArtifactConfig.odds(zoneId: string): { OddsLine }
 	local weights = ArtifactConfig.rarityWeights(zoneId)
-	local byRarity: { [string]: number } = {}
-	for _, artifact in ArtifactConfig.List do
-		byRarity[artifact.Rarity] = (byRarity[artifact.Rarity] or 0) + 1
-	end
 	local total = 0
-	for rarity, weight in weights do
-		if byRarity[rarity] and weight > 0 then
+	for _, artifact in ArtifactConfig.List do
+		local weight = weights[artifact.Rarity] or 0
+		if weight > 0 then
 			total += weight
 		end
 	end
@@ -505,7 +542,7 @@ function ArtifactConfig.odds(zoneId: string): { OddsLine }
 	for _, artifact in ArtifactConfig.List do
 		local weight = weights[artifact.Rarity] or 0
 		if weight > 0 then
-			table.insert(list, { Artifact = artifact.Id, Chance = weight / total / byRarity[artifact.Rarity] })
+			table.insert(list, { Artifact = artifact.Id, Chance = weight / total })
 		end
 	end
 	return list
@@ -605,6 +642,79 @@ function ArtifactConfig.stats(artifacts: any): { [string]: number }
 		out[bonus.Stat] = (out[bonus.Stat] or 0) + bonus.Value
 	end
 	return out
+end
+
+-- The completed collection whose title + podium skin show (see the header):
+-- data.Artifacts.Equipped when it is a completed collection, nil for "" (the
+-- player hid them), else the last completed collection (nil: none yet).
+function ArtifactConfig.equipped(artifacts: any): string?
+	local pick = if type(artifacts) == "table" then artifacts.Equipped else nil
+	if pick == "" then
+		return nil
+	end
+	if type(pick) == "string" and ArtifactConfig.isComplete(artifacts, pick) then
+		return pick
+	end
+	local done = ArtifactConfig.completed(artifacts)
+	return done[#done]
+end
+
+-- The one missing artifact of a collection (nil: none or more than one missing).
+function ArtifactConfig.lastMissing(artifacts: any, collectionId: string): string?
+	local list = ArtifactConfig.ByCollection[collectionId]
+	if not list then
+		return nil
+	end
+	local missing: string? = nil
+	for _, artifact in list do
+		if ArtifactConfig.countOf(artifacts, artifact.Id) == 0 then
+			if missing then
+				return nil
+			end
+			missing = artifact.Id
+		end
+	end
+	return missing
+end
+
+-- Does a zone the player can mine (WorldLayout zone MinBlaster <= blasterLevel)
+-- turn up artifacts of this rarity?
+function ArtifactConfig.rarityOpen(rarityId: string, blasterLevel: number): boolean
+	for _, zone in WorldLayout.Zones do
+		if zone.MinBlaster <= blasterLevel and (ArtifactConfig.rarityWeights(zone.Id)[rarityId] or 0) > 0 then
+			return true
+		end
+	end
+	return false
+end
+
+--[[
+	The shard price to restore `artifactId` (RestoreShards), or nil + a
+	Reasons code: BadArtifact, NotMissing (already found), NotLast (more
+	than this one missing in its collection), Locked (no open zone turns up
+	its rarity), NoShards (`shards` < price). Pure: the server checks and
+	spends with no yield in between, the book shows the same answer.
+]]
+function ArtifactConfig.restoreQuote(artifacts: any, artifactId: string, blasterLevel: number, shards: number): (number?, string?)
+	local artifact = ArtifactConfig.ById[artifactId]
+	local price = if artifact then ArtifactConfig.RestoreShards[artifact.Rarity] else nil
+	if not artifact or not price then
+		return nil, "BadArtifact"
+	end
+	if ArtifactConfig.countOf(artifacts, artifactId) > 0 then
+		return nil, "NotMissing"
+	end
+	if ArtifactConfig.lastMissing(artifacts, artifact.Collection) ~= artifactId then
+		return nil, "NotLast"
+	end
+	local level = if type(blasterLevel) == "number" and blasterLevel == blasterLevel then blasterLevel else 1
+	if not ArtifactConfig.rarityOpen(artifact.Rarity, level) then
+		return nil, "Locked"
+	end
+	if type(shards) ~= "number" or shards ~= shards or shards < price then
+		return nil, "NoShards"
+	end
+	return price, nil
 end
 
 -- The titles a player has earned (completed collections), in order.

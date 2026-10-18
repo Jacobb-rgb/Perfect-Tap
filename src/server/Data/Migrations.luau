@@ -87,7 +87,9 @@
 	  wheel: docs/plans/V2_PLAN.md) is removed.
 	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
 	- Artifacts.Found: string ids -> whole counts 1..ArtifactConfig.MaxCount;
-	  Chapters: string ids -> true.
+	  Chapters: string ids -> true; Equipped: a string of at most
+	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
+	  equipped ignores them), anything else nil.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins are
 	  whole numbers >= 0.
 ]]
@@ -124,6 +126,8 @@ local MAX_GOLEM_ID = 2 ^ 31 - 1
 local MAX_GOLEM_FIELDS = 8
 local MAX_FIELD_KEY_LENGTH = 32
 local MAX_FIELD_TEXT_LENGTH = 64
+-- data.Artifacts.Equipped: a collection id (or "" = none) is never longer
+local MAX_EQUIPPED_LENGTH = 64
 local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 
@@ -439,6 +443,12 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 			chapters[id] = nil
 			report.Dropped += 1
 		end
+	end
+	-- whose title + podium skin show: a short string ("" = none), else nil (the last completed)
+	local pick = artifacts.Equipped
+	if pick ~= nil and (type(pick) ~= "string" or #pick > MAX_EQUIPPED_LENGTH) then
+		artifacts.Equipped = nil
+		report.Dropped += 1
 	end
 
 	-- the new stats

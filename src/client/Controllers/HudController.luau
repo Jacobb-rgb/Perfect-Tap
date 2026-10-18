@@ -5,7 +5,9 @@
 	- Coins count up smoothly: between two State snapshots the counter keeps
 	  rising at the snapshot's Income (coins per second, at most one tick
 	  ahead), so podium money ticks up instead of jumping once a second.
-	  Bigger jumps (a sale) pop the panel.
+	  Bigger jumps (a sale) pop the panel. holdCoins(seconds) keeps the
+	  counter still while another screen still has to reveal a reward (the
+	  daily wheel's disc turning); releaseCoins shows it.
 	- Earned { Amount, Source } shows a floating "+$X" under the coins;
 	  payouts closer together than EconomyConfig.Sell.ComboWindow add up
 	  into one popup. Offline earnings get the "While you were away" popup
@@ -200,6 +202,39 @@ function HudController.predictedCoins(now: number): number
 	return serverCoins + income * ahead
 end
 
+-- a reward another screen reveals later (the daily wheel while it spins):
+-- the counter holds its coins until then
+local holdUntil = 0
+local heldCoins: number? = nil
+
+local function applyCoins(coins: number)
+	-- only a change of coins restarts the count-up (other pushes in the
+	-- middle of a second must not pull the counter back)
+	if coins ~= serverCoins or not hasState then
+		serverCoins = coins
+		snapshotAt = os.clock()
+	end
+end
+
+-- Keeps the coin counter where it is for up to `seconds` (a reward another
+-- screen reveals later: the daily wheel holds it while its disc turns);
+-- releaseCoins, or the time running out, shows the newest balance.
+function HudController.holdCoins(seconds: number)
+	if type(seconds) ~= "number" or seconds ~= seconds then
+		return
+	end
+	holdUntil = math.max(holdUntil, os.clock() + math.clamp(seconds, 0, 15))
+end
+
+function HudController.releaseCoins()
+	holdUntil = 0
+	local coins = heldCoins
+	heldCoins = nil
+	if coins then
+		applyCoins(coins)
+	end
+end
+
 local function onState(state: { [string]: any })
 	local coins = tonumber(state.Coins) or 0
 	if coins ~= coins then
@@ -209,11 +244,11 @@ local function onState(state: { [string]: any })
 	if newIncome ~= newIncome or newIncome < 0 then
 		newIncome = 0
 	end
-	-- only a change of coins restarts the count-up (other pushes in the
-	-- middle of a second must not pull the counter back)
-	if coins ~= serverCoins or not hasState then
-		serverCoins = coins
-		snapshotAt = os.clock()
+	if hasState and os.clock() < holdUntil then
+		heldCoins = coins
+	else
+		heldCoins = nil
+		applyCoins(coins)
 	end
 	income = newIncome
 	if not hasState then
@@ -407,6 +442,9 @@ function HudController.start()
 	coinScale.Parent = refs.CoinsPanel
 	local shownText = ""
 	while true do
+		if heldCoins and os.clock() >= holdUntil then
+			HudController.releaseCoins()
+		end
 		local target = HudController.predictedCoins(os.clock())
 		local diff = target - shownCoins
 		if diff ~= 0 then

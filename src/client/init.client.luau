@@ -36,6 +36,8 @@ local ORDER = {
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
+	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
+	"ArtifactController", -- step 7: the found moment, the collection book, the journal
 }
 
 local loaded = {}
