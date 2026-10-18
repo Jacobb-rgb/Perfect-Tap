@@ -501,6 +501,7 @@ local function step(s: any)
 	if once("burst", stage.Burst) then
 		Sfx.loop("CaseCharge", false)
 		Sfx.play("CaseBurst")
+		Sfx.play("CaseBoom")
 		Sfx.play("NodeShatter")
 		local core = (STAGE_ORIGIN * CFrame.new(0, 2.2, 0)).Position
 		Vfx.burst("Burst", core, 40, stage.Glow)
