@@ -382,21 +382,32 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   screen showed (normal or Triple Lucky); the server rolls exactly those,
   or refuses with "The odds just changed: check them and open again" (and
   sends the new state) when they no longer hold, for example when the boost
-  ended more than 3 seconds ago. A player never gets better or worse odds
-  than the ones on the screen.
+  ended more than 3 seconds ago. A screen that already shows the normal
+  odds in the boost's last 1.5 seconds (the server's clock counts whole
+  seconds) gets those normal odds, not a refusal. A coin open never gets
+  better or worse odds than the ones on the screen.
 - **Royal capsules (Robux) are paid random items.** Their tab is hidden for
   players whose `ArePaidRandomItemsRestricted` is true, and while that
   answer isn't known yet (`Policy.prefetch` asks on join and retries); the
   server answers a request from such a player with PurchasePrompt
-  "Restricted" and never prompts. While a product id is a placeholder (0)
-  the tab shows the odds and "Coming soon!" instead of buttons, and the
-  server answers "ComingSoon". Nothing is ever granted outside
-  ProcessReceipt (step 8: `CapsuleService.grantProduct`, which opens with
-  the Triple Lucky state stored when the prompt was shown, so the odds the
-  player saw are the odds they get; a boosted prompt is kept at most 2
-  minutes past the boost's end, so a later purchase uses the odds of its
-  own moment; golems bought with Robux are saved with `Paid = true` for
-  the trading rules).
+  "Restricted" and never prompts. Each of OPEN 1 / 3 / 10 is decided on
+  its own: while its product id is a placeholder (0), **or** step 8's
+  ProcessReceipt handler isn't registered yet (it calls
+  `CapsuleService.setReceiptsReady(true)`), the button is greyed "Coming
+  soon" and the server answers "ComingSoon" without prompting, so nobody
+  can pay Robux before the game can deliver; with none of the three live
+  the tab shows the odds and "Coming soon!" instead of buttons. Nothing is
+  ever granted outside ProcessReceipt (step 8: `CapsuleService.grantProduct`).
+  A receipt rolls Triple Lucky when the prompt the player saw had it **or**
+  it runs when the receipt is processed, so a purchase never gets worse
+  odds than any screen showed, whichever way it was bought (our prompt,
+  the Store tab, a prompt opened elsewhere). A boosted prompt is kept at
+  most 2 minutes past the boost's end, so a later purchase uses the odds
+  of its own moment, and a prompt closed without buying is forgotten at
+  once (`PromptProductPurchaseFinished`). Golems bought with Robux are
+  saved with `Paid = true` (for the trading rules) and come **locked**: a
+  locked golem can't be deleted, and the delete box says "bought with
+  Robux: Robux are not refunded" when the player unlocks and deletes one.
 - **Coin capsules: our choice.** Coins can't be bought with Robux while
   `MonetizationConfig.CoinPacksEnabled` is false, so coin capsules are
   **not** paid random items and are shown to every player (odds still
@@ -417,7 +428,8 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
 - **Free capsules** (the daily wheel's prize) aren't paid and always open.
 - **No pressure:** a capsule only opens after the player presses OPEN; a
   full golem inventory (60) refuses the open before anything is spent (and
-  a Royal prompt says "Full"); every refusal names the reason.
+  a Royal prompt is refused with "Your golem inventory is full: delete
+  some golems first"); every refusal names the reason.
 
 ### 2.7 Group join and like rewards: what is safe
 

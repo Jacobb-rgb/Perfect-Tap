@@ -19,8 +19,11 @@
 	  answer (a CapsuleResult that still comes is shown anyway: the coins and
 	  golems on screen always come from the State push). A greyed-out button
 	  answers locally (not enough coins, no room) and sends nothing. Royal
-	  capsules (Robux) only have buttons while their products are live; the
-	  server answers PurchasePrompt.
+	  capsules (Robux): a button per product that is live (a real id and
+	  step 8's receipts ready: the ReplicatedStorage attribute
+	  CapsuleView.ReceiptsAttribute), the others greyed "Coming soon"; the
+	  server answers PurchasePrompt ("Full" reads: the golem inventory is
+	  full, delete some golems first).
 	- CapsuleResult plays the opening (CapsuleView.buildOpening): the
 	  capsule shakes in its glow, cracks (cracks light up, the band turns the
 	  color of the rarest golem inside), bursts with a flash, and each golem
@@ -28,6 +31,9 @@
 	  NEW! when it is the first of its kind (x1 and x3 one by one, then x3 as
 	  a row of cards; x10 straight to a grid of 10 cards popping in). Click /
 	  tap / A / Space / Enter skips a step; B / Backspace skips to the end;
+	  a gamepad's selection stays on the overlay's buttons (their
+	  SelectionGroup, and it is put back if anything moves it away), and the
+	  shop's buttons behind it do nothing while it plays;
 	  at the end OK closes and OPEN AGAIN opens the same capsules again (the
 	  note above says which odds it uses now: "TRIPLE LUCKY ODDS" or
 	  "Triple Lucky ended: normal odds"). Results that arrive while one
@@ -258,9 +264,14 @@ local function fit(view: CapsuleView.Refs)
 	CapsuleView.layout(view, compactNow(), w, h)
 end
 
+-- Step 8's receipts take Royal capsules (set by CapsuleService.setReceiptsReady).
+local function receiptsReady(): boolean
+	return ReplicatedStorage:GetAttribute(CapsuleView.ReceiptsAttribute) == true
+end
+
 -- Every card as the player sees it now.
 local function currentCards(coins: number): { CapsuleView.Card }
-	return CapsuleView.cards(StateController.get(), coins, restricted(), serverNow(), stateAt)
+	return CapsuleView.cards(StateController.get(), coins, restricted(), serverNow(), stateAt, receiptsReady())
 end
 
 -- The Triple Lucky odds the cards show now.
@@ -418,17 +429,24 @@ local function ensureView(): CapsuleView.Refs
 	end
 	local view = CapsuleView.build(compactNow())
 	view.Gui.Parent = player:WaitForChild("PlayerGui")
+	-- (while the opening plays the shop behind it does nothing)
 	view.Close.Activated:Connect(function()
+		if playing then
+			return
+		end
 		CapsuleController.close()
 		Sfx.play("UIClick")
 	end)
 	view.Golems.Activated:Connect(function()
+		if playing then
+			return
+		end
 		Sfx.play("UIClick")
 		openGolems()
 	end)
 	for id, tab in view.Tabs do
 		tab.Activated:Connect(function()
-			if view.Tab ~= id then
+			if view.Tab ~= id and not playing then
 				view.Tab = id
 				refresh()
 				Sfx.play("UIClick")
@@ -437,7 +455,7 @@ local function ensureView(): CapsuleView.Refs
 	end
 	for i, button in view.Buttons do
 		button.Activated:Connect(function()
-			if button:GetAttribute("Busy") == true then
+			if button:GetAttribute("Busy") == true or playing then
 				return
 			end
 			request(view.Tab, CapsuleConfig.Counts[i], button)
@@ -812,6 +830,27 @@ local function onSkipAll(_: string, state: Enum.UserInputState): Enum.ContextAct
 end
 
 local openingCompact: boolean? = nil -- the layout the opening was built for
+local selectionConnection: RBXScriptConnection? = nil
+
+-- While the opening plays, a gamepad's selection stays on its buttons
+-- (SKIP, or OK at the end): put back when anything moves it elsewhere.
+local function keepSelection(o: CapsuleView.OpenRefs)
+	if selectionConnection then
+		selectionConnection:Disconnect()
+	end
+	selectionConnection = GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+		local selected = GuiService.SelectedObject
+		if not playing or not selected or selected:IsDescendantOf(o.Controls) then
+			return
+		end
+		task.defer(function()
+			local now = GuiService.SelectedObject
+			if playing and now and not now:IsDescendantOf(o.Controls) then
+				GuiService.SelectedObject = if atEnd then o.Ok else o.Skip
+			end
+		end)
+	end)
+end
 
 local function ensureOpening(): CapsuleView.OpenRefs
 	local compact = compactNow()
@@ -890,6 +929,7 @@ local function play(result: Result)
 	if usingGamepad() then
 		GuiService.SelectedObject = o.Skip
 	end
+	keepSelection(o)
 	local spin = 0
 	renderConnection = RunService.RenderStepped:Connect(function(dt: number)
 		spin += dt * 14
@@ -957,6 +997,10 @@ local function play(result: Result)
 	clearHero(o)
 	atEnd = false
 	playing = false
+	if selectionConnection then
+		selectionConnection:Disconnect()
+		selectionConnection = nil
+	end
 	ContextActionService:UnbindAction(SKIP_ACTION)
 	ContextActionService:UnbindAction(SKIP_ALL_ACTION)
 	if #queue == 0 then
@@ -1045,7 +1089,10 @@ local function onPurchasePrompt(payload: any)
 	end
 	freeButton()
 	if payload.Status ~= "Prompted" then
-		local text = MonetizationConfig.StatusText[payload.Status] or "That isn't sold here."
+		-- "Full" for a capsule: the golem inventory (and how to make room)
+		local text = if payload.Status == "Full"
+			then CapsuleView.reasonText("InventoryFull")
+			else MonetizationConfig.StatusText[payload.Status] or "That isn't sold here."
 		if shown then
 			status(text, Theme.Info)
 		else
@@ -1155,6 +1202,11 @@ function CapsuleController.init()
 		end
 		table.clear(boardSeen)
 		queueBoards()
+	end)
+	ReplicatedStorage:GetAttributeChangedSignal(CapsuleView.ReceiptsAttribute):Connect(function()
+		if shown then
+			refresh()
+		end
 	end)
 	player.CharacterRemoving:Connect(function()
 		CapsuleController.close()

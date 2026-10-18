@@ -21,17 +21,23 @@
 	                   Kind } } (opening order), Lucky }.
 	    Royal (Robux)  never granted here: answered with PurchasePrompt
 	                   { Product, Status } (MonetizationConfig.promptStatus;
-	                   "Full" when the inventory can't take Count more). A
-	                   "Prompted" answer stores { Product, TripleLucky, At,
-	                   Until } for the player (the latest prompt per product):
-	                   step 8's ProcessReceipt opens the capsules with that
-	                   Triple Lucky state (grantProduct), so the odds the player
-	                   saw are the odds they get. Kept until Until =
+	                   "Full" when the inventory can't take Count more;
+	                   "ComingSoon" too for a live product id until step 8
+	                   calls CapsuleService.setReceiptsReady(true) once its
+	                   ProcessReceipt handler is registered, so nobody pays
+	                   Robux for nothing). A "Prompted" answer stores
+	                   { Product, TripleLucky, At, Until } for the player (the
+	                   latest prompt per product): step 8's ProcessReceipt
+	                   opens the capsules with the better of that Triple Lucky
+	                   state and the one at the receipt (grantProduct), so a
+	                   receipt never rolls worse odds than the card showed,
+	                   whichever way the purchase came. Kept until Until =
 	                   At + MonetizationConfig.PromptMemorySeconds, and a
 	                   boosted one at most PurchaseGrace seconds past the end of
 	                   the boost it came from (a purchase finished later uses
 	                   the odds of that moment), so a prompt never stretches a
-	                   boost.
+	                   boost; forgotten at once when the prompt closes without
+	                   a purchase (PromptProductPurchaseFinished).
 	  Paid random items (CapsuleConfig.isPaidRandom: Royal always, coin
 	  capsules only while coins can be bought with Robux) are refused
 	  ("Restricted") where PolicyService ArePaidRandomItemsRestricted is true
@@ -44,11 +50,14 @@
 	  rolls exactly the odds its client showed (Lucky): shown boosted, it is
 	  granted while Triple Lucky runs or ran out at most LuckyGrace seconds
 	  ago (sent in its last moment); shown normal, it gets the normal odds,
-	  also in that grace. Otherwise (the boost ended long ago, or started a
-	  moment ago and the client didn't know yet) the request is refused
-	  "OddsChanged" and a fresh State is pushed, so the client shows the
-	  odds that hold now. A request without Lucky (an older client) and the
-	  wheel's free capsule get the server's view (on, or within the grace).
+	  also in that grace and in the boost's last EndSlack seconds (os.time
+	  counts whole seconds, the client's server clock is fractional and may
+	  show the normal odds a moment earlier). Otherwise (the boost ended long
+	  ago, or started a moment ago and the client didn't know yet) the
+	  request is refused "OddsChanged" and a fresh State is pushed, so the
+	  client shows the odds that hold now. A request without Lucky (an older
+	  client) and the wheel's free capsule get the server's view (on, or
+	  within the grace).
 	- Rolls: a fresh Random.new() per call (seeded by the engine; swappable
 	  for the tests).
 	- Data: golems through GolemConfig.add, Stats.CapsulesOpened counts every
@@ -60,7 +69,10 @@
 	- Hooks for other packages: grantFree (the wheel's capsule prize: no
 	  price, CapsuleResult with Free = true), grantProduct (step 8 receipts:
 	  paid golems may pass the inventory cap up to GolemConfig.MaxSaved,
-	  Paid = true), promptedLucky, onOpened(callback).
+	  Paid = true and Locked = true, so a golem bought with Robux is never
+	  deleted by a slip), setReceiptsReady (step 8, see Royal above; also
+	  the ReplicatedStorage attribute ReceiptsAttribute, so the capsule card
+	  shows "Coming soon" until then), promptedLucky, onOpened(callback).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -101,9 +113,12 @@ CapsuleService.Tag = "CapsuleStall"
 CapsuleService.PromptName = "CapsulePrompt"
 CapsuleService.PointName = "CapsulePromptPoint"
 CapsuleService.LuckyGrace = 3 -- seconds a request that showed Triple Lucky still gets it after it ran out (see the header)
+CapsuleService.EndSlack = 1.5 -- seconds before the boost's end a request that showed the normal odds gets them (see the header)
 CapsuleService.PurchaseGrace = 120 -- seconds a Royal prompt shown with Triple Lucky keeps it past the boost's end
 CapsuleService.AnnounceFrom = "Legendary" -- golems this rare are announced to the server
 CapsuleService.PromptDistance = 12
+-- ReplicatedStorage attribute: true once step 8 handles Royal receipts (setReceiptsReady; CapsuleView reads it)
+CapsuleService.ReceiptsAttribute = "CapsuleReceiptsReady"
 
 local MAX_PAYLOAD = 4
 local MAX_ID_LENGTH = 32
@@ -112,6 +127,7 @@ local callbacks: { OpenedCallback } = {}
 -- player -> product key -> the prompt the player saw (step 8 contract)
 local prompts: { [Player]: { [string]: Prompt } } = {}
 local hooked: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local receiptsReady = false -- step 8's ProcessReceipt handles Royal capsules (setReceiptsReady)
 
 -- Swappable for the Lune tests.
 local clock: () -> number = os.time
@@ -127,6 +143,10 @@ end
 local prompter: (player: Player, productId: number) -> () = function(player: Player, productId: number)
 	game:GetService("MarketplaceService"):PromptProductPurchase(player, productId)
 end
+local function defaultPublish(ready: boolean)
+	ReplicatedStorage:SetAttribute(CapsuleService.ReceiptsAttribute, ready)
+end
+local publishReady: (ready: boolean) -> () = defaultPublish
 
 -- Listeners: (player, Opened) after every grant (coins, Robux or free).
 function CapsuleService.onOpened(callback: OpenedCallback)
@@ -161,7 +181,16 @@ function CapsuleService.oddsFor(player: Player, data: { [string]: any }, now: nu
 	if shown then
 		return if CapsuleService.tripleLucky(player, data, now) then true else nil
 	end
-	return if luckyNow(player, data, now) then nil else false
+	-- shown normal: refused while the boost surely runs (not in its last
+	-- EndSlack seconds) or another source of Triple Lucky is on
+	local untilTime = BoostConfig.untilOf(data.Boosts, "TripleLucky")
+	if untilTime - now > CapsuleService.EndSlack then
+		return nil
+	end
+	if untilTime <= now and luckyNow(player, data, now) then
+		return nil
+	end
+	return false
 end
 
 -- `count` golem kinds rolled from a capsule (CapsuleConfig.roll; opening order).
@@ -188,6 +217,9 @@ local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?
 	for _, kind in kinds do
 		local entry = GolemConfig.add(data.Golems, kind, overCap, paid)
 		if entry then
+			if paid then
+				entry.Locked = true -- bought with Robux: never deleted by a slip (the player may unlock it)
+			end
 			table.insert(woken, { Id = entry.Id, Kind = entry.Kind })
 		end
 	end
@@ -337,11 +369,13 @@ end
 --[[
 	Step 8: ProcessReceipt for a Royal capsule product (call it on the server
 	that holds the session lock, then save). Opens the product's capsules
-	with the Triple Lucky state stored at its prompt (else the current one);
-	the golems are paid (Paid = true) and may pass the inventory cap up to
-	GolemConfig.MaxSaved. Returns the CapsuleResult (also sent) and how many
-	golems didn't fit past MaxSaved (the receipt handler compensates those).
-	nil for a product that isn't a capsule.
+	with Triple Lucky when the stored prompt had it OR it runs now (never
+	worse odds than either screen showed: the prompt's, or the card of the
+	moment for a purchase made another way, e.g. the Store tab); the golems
+	are paid (Paid = true), locked (Locked = true) and may pass the
+	inventory cap up to GolemConfig.MaxSaved. Returns the CapsuleResult
+	(also sent) and how many golems didn't fit past MaxSaved (the receipt
+	handler compensates those). nil for a product that isn't a capsule.
 ]]
 function CapsuleService.grantProduct(player: Player, productKey: string): (Result?, number)
 	local data = DataService.get(player)
@@ -351,7 +385,7 @@ function CapsuleService.grantProduct(player: Player, productKey: string): (Resul
 	end
 	local count = math.clamp(math.floor(product.Count or 1), 1, 10)
 	local remembered = CapsuleService.promptedLucky(player, productKey)
-	local lucky = if remembered ~= nil then remembered else CapsuleService.tripleLucky(player, data, clock())
+	local lucky = remembered == true or CapsuleService.tripleLucky(player, data, clock())
 	local kinds = CapsuleService.roll(product.Capsule, count, lucky, newRandom(player))
 	local woken, missing = add(data, kinds, true, true)
 	missing += count - #kinds
@@ -364,6 +398,37 @@ function CapsuleService.grantProduct(player: Player, productKey: string): (Resul
 	Net.fire("CapsuleResult", player, result)
 	opened(player, { Capsule = product.Capsule, Count = count, Kinds = kindsOf(woken), Lucky = lucky, Source = "Robux" })
 	return result, missing
+end
+
+-- A Royal prompt closed (MarketplaceService.PromptProductPurchaseFinished):
+-- without a purchase its stored state is forgotten (a later purchase made
+-- another way uses the odds of its own moment, grantProduct).
+local function purchaseFinished(player: Player, productId: number, purchased: boolean)
+	local list = prompts[player]
+	if purchased or not list then
+		return
+	end
+	for key in list do
+		local product = MonetizationConfig.get(key)
+		if product and product.Id == productId then
+			list[key] = nil
+		end
+	end
+end
+
+--[[
+	Step 8 calls this with true once its ProcessReceipt handler takes Royal
+	capsule receipts (grantProduct). Until then a live Royal product still
+	answers "ComingSoon" and is never prompted. Also sets the
+	ReplicatedStorage attribute ReceiptsAttribute for the clients' cards.
+]]
+function CapsuleService.setReceiptsReady(ready: boolean)
+	receiptsReady = ready == true
+	publishReady(receiptsReady)
+end
+
+function CapsuleService.receiptsReady(): boolean
+	return receiptsReady
 end
 
 local function remember(player: Player, productKey: string, lucky: boolean, data: { [string]: any })
@@ -401,6 +466,9 @@ local function promptRobux(player: Player, capsuleId: string, count: number, res
 	local data = DataService.get(player)
 	local full = data ~= nil and GolemConfig.room(data.Golems) < count
 	local status = MonetizationConfig.promptStatus(key, restricted, nil, full)
+	if status == "Prompt" and not receiptsReady then
+		status = "ComingSoon" -- step 8's receipt handler isn't there yet: never take Robux for nothing
+	end
 	if status == "Prompt" and not data then
 		status = "Unknown" -- the player left while Policy answered
 	elseif status == "Prompt" and data then
@@ -559,6 +627,10 @@ CapsuleService._test = {
 	setPushState = function(fn: (Player) -> ())
 		pushState = fn
 	end,
+	setPublish = function(fn: (boolean) -> ())
+		publishReady = fn
+	end,
+	purchaseFinished = purchaseFinished,
 	announce = announce,
 	prompts = function(player: Player): { [string]: Prompt }?
 		return prompts[player]
@@ -566,6 +638,8 @@ CapsuleService._test = {
 	reset = function()
 		table.clear(callbacks)
 		table.clear(prompts)
+		receiptsReady = false
+		publishReady = defaultPublish
 		clock = os.time
 		listPlayers = function(): { Player }
 			return Players:GetPlayers()
@@ -583,6 +657,14 @@ end
 function CapsuleService.start()
 	Players.PlayerRemoving:Connect(function(player: Player)
 		prompts[player] = nil
+	end)
+	-- a Royal prompt closed without a purchase: forget its stored state
+	local market = game:GetService("MarketplaceService")
+	market.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, purchased: boolean)
+		local player = Players:GetPlayerByUserId(userId)
+		if player then
+			purchaseFinished(player, productId, purchased)
+		end
 	end)
 	-- ask PolicyService early: the client hides paid random items until it knows
 	for _, player in Players:GetPlayers() do

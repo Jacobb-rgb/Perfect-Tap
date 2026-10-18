@@ -8,7 +8,8 @@
 	  equipped  the 3 slots (portrait, name, bonus; "Empty slot"), the total
 	            bonus of the equipped golems, EQUIP BEST
 	  grid      every golem you own as a card (portrait in its rarity color,
-	            name, bonus, an E badge when equipped, a lock when locked):
+	            name, bonus, an E badge when equipped, a LOCKED chip when
+	            locked; golems bought with Robux come locked):
 	            equipped first, then the best (GolemConfig.score), then the
 	            oldest. Golems of a kind this version doesn't know show "???".
 	  detail    the selected golem: its portrait (the controller adds the 3D
@@ -16,7 +17,8 @@
 	            bonus, lore and EQUIP / UNEQUIP, LOCK / UNLOCK, DELETE.
 	            In delete mode it becomes the delete bar: how many are picked,
 	            + ALL COMMON / + ALL UNCOMMON, DELETE n, CANCEL; a confirm box
-	            asks before anything is deleted.
+	            asks before anything is deleted (and warns when a golem
+	            bought with Robux is among them).
 	  footer    the control hint or the server's last answer
 	The compact layout (phones, TVs) has 44 pt buttons and drops the lore
 	when the screen is short. Cards are pooled per golem Id.
@@ -53,6 +55,7 @@ export type Card = {
 	Lore: string,
 	Equipped: boolean,
 	Locked: boolean,
+	Paid: boolean, -- bought with Robux (saved Paid = true)
 	Order: number,
 }
 
@@ -226,6 +229,7 @@ function GolemView.card(entry: any, equipped: boolean, bondPct: number?): Card?
 		Lore = if golem then golem.Lore else "A golem from a newer update. Rejoin to see it.",
 		Equipped = equipped,
 		Locked = entry.Locked == true,
+		Paid = entry.Paid == true,
 		Order = 0,
 	}
 end
@@ -314,12 +318,15 @@ end
 
 -- The confirm text for deleting `ids` (cards = the current list).
 function GolemView.confirmText(cards: { Card }, picked: { [number]: boolean }): string
-	local n, equipped = 0, 0
+	local n, equipped, paid = 0, 0, 0
 	for _, card in cards do
 		if picked[card.Id] then
 			n += 1
 			if card.Equipped then
 				equipped += 1
+			end
+			if card.Paid then
+				paid += 1
 			end
 		end
 	end
@@ -327,7 +334,69 @@ function GolemView.confirmText(cards: { Card }, picked: { [number]: boolean }): 
 	if equipped > 0 then
 		text ..= ` ({equipped} of them {if equipped == 1 then "is" else "are"} equipped.)`
 	end
+	if paid > 0 then
+		local which = if n == 1 then "This golem was" elseif paid == 1 then "1 of them was" else `{paid} of them were`
+		text ..= ` {which} bought with Robux: Robux are not refunded.`
+	end
 	return text
+end
+
+---------------------------------------------------------------- followers (GolemController)
+
+-- The follower kinds per slot from the EquippedAttribute ("A,B,C"): slot i
+-- = the i-th kind (at most EquipSlots; unknown kinds leave their slot empty).
+function GolemView.followerKinds(attribute: any): { [number]: string }
+	local out: { [number]: string } = {}
+	if type(attribute) ~= "string" or attribute == "" then
+		return out
+	end
+	for i, kind in string.split(attribute, ",") do
+		if i > GolemConfig.EquipSlots then
+			break
+		end
+		if GolemConfig.ById[kind] then
+			out[i] = kind
+		end
+	end
+	return out
+end
+
+--[[
+	Which follower models stay when the kinds change (`have` -> `want`, both
+	slot -> kind): keep[newSlot] = the old slot whose model moves there (the
+	same kind in the same slot first, then the same kind anywhere), and the
+	slots that need a new model. An Equip / Unequip builds at most one model.
+]]
+function GolemView.matchFollowers(have: { [number]: string }, want: { [number]: string }): ({ [number]: number }, { number })
+	local keep: { [number]: number } = {}
+	local used: { [number]: boolean } = {}
+	local build: { number } = {}
+	local slots = GolemConfig.EquipSlots
+	for slot = 1, slots do
+		if want[slot] ~= nil and have[slot] == want[slot] then
+			keep[slot] = slot
+			used[slot] = true
+		end
+	end
+	for slot = 1, slots do
+		local kind = want[slot]
+		if kind ~= nil and keep[slot] == nil then
+			local found: number? = nil
+			for old = 1, slots do
+				if not used[old] and have[old] == kind then
+					found = old
+					break
+				end
+			end
+			if found then
+				keep[slot] = found
+				used[found] = true
+			else
+				table.insert(build, slot)
+			end
+		end
+	end
+	return keep, build
 end
 
 ---------------------------------------------------------------- the portrait
@@ -590,11 +659,12 @@ local function newCard(refs: Refs, card: Card, m: Metrics): CardRefs
 		TextSize = 16,
 		ZIndex = 3,
 	})
-	local lock = UIKit.chip(button, "LOCK", Theme.Info, {
+	-- a state, not a button: "LOCKED"
+	local lock = UIKit.chip(button, "LOCKED", Theme.Info, {
 		Name = "LockBadge",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -6, 0, 6),
-		Size = UDim2.fromOffset(48, 22),
+		Size = UDim2.fromOffset(62, 22),
 		TextSize = 13,
 		ZIndex = 3,
 	})

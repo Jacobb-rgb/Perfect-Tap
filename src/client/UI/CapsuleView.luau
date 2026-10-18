@@ -12,13 +12,15 @@
 	  left     the capsule (drawn from frames), its name and description, the
 	           Triple Lucky banner while it runs, OPEN x1 / x3 / x10 with the
 	           price of each (coins at the player's blaster level; Royal:
-	           Robux, or "Coming soon!" while the product id is a placeholder),
-	           a status line and the golem room ("Golems 12 / 60")
+	           Robux per button, a greyed "Coming soon" button while that
+	           product's id is a placeholder or step 8's receipts aren't
+	           ready, and "Coming soon!" instead of the buttons when none of
+	           them is live), a status line and the golem room ("Golems 12 / 60")
 	  right    the EXACT odds of every golem in the capsule: rarity color,
 	           name, rarity, bonus, chance (CapsuleConfig.odds; with Triple
 	           Lucky on, the boosted odds, the lucky golems marked "x3")
 	  footer   the control hint (not on phones)
-	cards(state, coins, restricted, now, stateAt?) says what each tab shows,
+	cards(state, coins, restricted, now, stateAt?, receipts?) says what each tab shows,
 	from the State snapshot, so the cards always match what the server
 	quotes (luckyNow: the Triple Lucky odds the client shows and sends with
 	every open). layout() sets every size, position AND text size from the
@@ -29,7 +31,9 @@
 	  a dim backdrop, rotating rarity rays, the ViewportFrame "Hero" (the
 	  controller animates the capsule and the golems in it), a full-screen
 	  flash, the name plate (name, rarity, NEW!, bonus), a counter (2 / 3),
-	  the result grid (x3: 3 cards, x10: 5 x 2) and SKIP / OK / OPEN AGAIN.
+	  the result grid (x3: 3 cards, x10: 5 x 2) and SKIP / OK / OPEN AGAIN
+	  (in the "Controls" frame, a SelectionGroup that stops at its edges: a
+	  gamepad never leaves the overlay for the shop behind it).
 
 	fillBoard(gui, capsuleId, lucky): the CapsuleStall's OddsBoard
 	SurfaceGui (a 1.9 x 3.9 stud board): the capsule's name and, big, each
@@ -59,6 +63,8 @@ CapsuleView.Columns = { 0.41, 0.25 }
 CapsuleView.MinTouch = TechShopView.MinTouch
 CapsuleView.Separator = "  •  "
 CapsuleView.BoardAttribute = "CapsuleBoard" -- on every instance fillBoard adds (old labels don't have it)
+-- ReplicatedStorage attribute: step 8's receipts take Royal capsules (= CapsuleService.ReceiptsAttribute)
+CapsuleView.ReceiptsAttribute = "CapsuleReceiptsReady"
 
 export type OddsLine = {
 	Golem: string,
@@ -88,12 +94,12 @@ export type Card = {
 	Glow: Color3,
 	Visible: boolean,
 	Robux: boolean,
-	Live: boolean, -- Robux products have real ids (coin capsules: true)
+	Live: boolean, -- at least one Robux button can be bought (real id, receipts ready; coin capsules: true)
 	Lucky: boolean, -- Triple Lucky runs: the odds include it
 	LuckySeconds: number,
 	LuckyFrom: string,
 	Buys: { Buy },
-	Note: string?, -- shown instead of the buttons ("Coming soon!")
+	Note: string?, -- shown instead of the buttons ("Coming soon!" when no Robux button is live)
 	Room: number, -- free golem places
 	Owned: number,
 	Odds: { OddsLine },
@@ -164,6 +170,7 @@ export type OpenRefs = {
 	GridLayout: UIGridLayout,
 	GridRoom: Vector2, -- the room the grid may take (layoutOpening)
 	Cells: { Cell },
+	Controls: Frame, -- SKIP / OK / OPEN AGAIN (a SelectionGroup)
 	Skip: TextButton,
 	Ok: TextButton,
 	Again: TextButton,
@@ -329,8 +336,17 @@ end
 
 -- What every capsule tab shows (see the header). `restricted`: paid random
 -- items are restricted for this player, or the policy isn't known yet.
--- `stateAt`: when the snapshot came (luckyNow).
-function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: number, stateAt: number?): { Card }
+-- `stateAt`: when the snapshot came (luckyNow). `receipts`: step 8 takes
+-- Royal receipts (ReceiptsAttribute; nil = not yet): a Robux button is
+-- live only with a real product id AND receipts.
+function CapsuleView.cards(
+	state: any,
+	coins: number,
+	restricted: boolean,
+	now: number,
+	stateAt: number?,
+	receipts: boolean?
+): { Card }
 	local level = if type(state) == "table" then state.BlasterLevel else nil
 	local room = GolemConfig.room(golemsOf(state))
 	local owned = GolemConfig.count(golemsOf(state))
@@ -341,19 +357,19 @@ function CapsuleView.cards(state: any, coins: number, restricted: boolean, now: 
 	for _, capsule in CapsuleConfig.List do
 		local robux = capsule.Currency == "Robux"
 		local buys: { Buy } = {}
-		local live = true
+		local live = not robux -- Robux: decided per button below
 		for _, count in CapsuleConfig.Counts do
 			if robux then
 				local key = CapsuleConfig.product(capsule.Id, count)
 				local product = if key then MonetizationConfig.get(key) else nil
-				local isLive = key ~= nil and MonetizationConfig.keyLive(key)
-				live = live and isLive
+				local isLive = key ~= nil and MonetizationConfig.keyLive(key) and receipts == true
+				live = live or isLive
 				local reason: string? = if not isLive then "ComingSoon" elseif room < count then "InventoryFull" else nil
 				table.insert(buys, {
 					Count = count,
 					Text = `OPEN {count}`,
 					Price = nil,
-					PriceText = if product then `R$ {product.Robux}` else "",
+					PriceText = if not isLive then "Coming soon" elseif product then `R$ {product.Robux}` else "",
 					CanBuy = reason == nil,
 					Reason = reason,
 				})
@@ -1092,11 +1108,20 @@ function CapsuleView.setHint(refs: Refs, text: string)
 end
 
 -- The first OPEN button that can be pressed (gamepad selection on open).
+-- No buttons (Royal "Coming soon!"): the odds list (a gamepad scrolls it),
+-- never X, so A right after LB / RB doesn't close the shop.
 function CapsuleView.firstButton(refs: Refs): GuiObject
 	for _, button in refs.Buttons do
 		if holderOf(button).Visible then
 			return button
 		end
+	end
+	if refs.Right.Visible then
+		return refs.List
+	end
+	local tab = refs.Tabs[refs.Tab]
+	if tab and holderOf(tab).Visible then
+		return tab
 	end
 	return refs.Close
 end
@@ -1266,20 +1291,32 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	}, grid)
 	local button = if isCompact then 76 else 60
-	local skip = UIKit.button(gui, "SKIP", Theme.PanelLight, Theme.PanelDark, {
+	-- the buttons' own selection group: a gamepad stays on the overlay
+	local controls = UIKit.new("Frame", {
+		Name = "Controls",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(1280, 720),
+		ZIndex = 6,
+		SelectionGroup = true,
+		SelectionBehaviorUp = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorDown = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
+	}, gui)
+	local skip = UIKit.button(controls, "SKIP", Theme.PanelLight, Theme.PanelDark, {
 		Name = "Skip",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Size = UDim2.fromOffset(200, button),
 		TextSize = 24,
 	})
-	local ok = UIKit.button(gui, "OK", Theme.Good, Theme.GoodDark, {
+	local ok = UIKit.button(controls, "OK", Theme.Good, Theme.GoodDark, {
 		Name = "Ok",
 		AnchorPoint = Vector2.new(1, 1),
 		Size = UDim2.fromOffset(200, button),
 		TextSize = 26,
 		Visible = false,
 	})
-	local again = UIKit.button(gui, "OPEN AGAIN", Theme.Accent, Theme.AccentDark, {
+	local again = UIKit.button(controls, "OPEN AGAIN", Theme.Accent, Theme.AccentDark, {
 		Name = "Again",
 		AnchorPoint = Vector2.new(0, 1),
 		Size = UDim2.fromOffset(if isCompact then 340 else 300, button),
@@ -1315,6 +1352,7 @@ function CapsuleView.buildOpening(compact: boolean?): OpenRefs
 		GridLayout = gridLayout,
 		GridRoom = Vector2.new(800, 400),
 		Cells = {},
+		Controls = controls,
 		Skip = skip,
 		Ok = ok,
 		Again = again,
@@ -1356,6 +1394,8 @@ function CapsuleView.layoutOpening(refs: OpenRefs, compact: boolean, width: numb
 	refs.Grid.Position = UDim2.fromOffset(width / 2, top + gridH / 2)
 	refs.Grid.Size = UDim2.fromOffset(width - 40, gridH)
 	refs.GridRoom = Vector2.new(width - 40, gridH)
+	refs.Controls.Position = UDim2.fromOffset(0, 0)
+	refs.Controls.Size = UDim2.fromOffset(width, height)
 	local skipHolder = holderOf(refs.Skip)
 	skipHolder.Position = UDim2.fromOffset(width / 2, bottom)
 	skipHolder.Size = UDim2.fromOffset(if compact then 240 else 200, button)

@@ -29,6 +29,12 @@
 	  GolemConfig.EquippedAttribute, kept by GolemService). Built here, on
 	  each client, only for players within GolemConfig.FollowerHideDistance
 	  of the camera (built again when they come back); nothing is replicated.
+	  Cheap under load: every VisibilityTick seconds at most one player's
+	  followers are built or changed (the nearest that needs it), so a
+	  teleport into a busy lobby never builds them all in one frame; an
+	  attribute change only marks the player, and its followers change at
+	  most every RebuildSeconds (Equip / Unequip spam), keeping every model
+	  whose kind stays (GolemView.matchFollowers: one Equip builds one).
 	  Models: GolemBuilder.build(kind, start, { Welded = true, Size =
 	  FollowerSize }) in a local folder, every part created in place at the
 	  start CFrame (so the welds hold the shape whenever they switch on):
@@ -81,6 +87,8 @@ GolemController.LookAround = 1.3 -- radians an idle golem may turn away from its
 GolemController.LookSeconds = { 2.5, 6 } -- how long it looks one way
 -- slots behind the owner (owner space: +X right, +Z behind)
 GolemController.Slots = { Vector3.new(-3.1, 0, 3.0), Vector3.new(3.1, 0, 3.0), Vector3.new(0, 0, 5.2) }
+GolemController.VisibilityTick = 0.2 -- seconds between two follower passes (each builds at most one player's golems)
+GolemController.RebuildSeconds = 0.4 -- a player's followers change at most this often
 -- open / close the inventory from anywhere (D-pad: Up BUILD, Down teleports,
 -- Left the side menu, Right the luck boosts; L1 is free outside panels)
 GolemController.ToggleKey = Enum.KeyCode.P
@@ -780,6 +788,7 @@ end
 ---------------------------------------------------------------- followers
 
 type Pet = {
+	Kind: string,
 	Model: Model,
 	Root: BasePart,
 	RootHeight: number,
@@ -794,7 +803,14 @@ type Pet = {
 	NextLook: number,
 	Floats: boolean, -- a Premium golem (GolemBuilder "Hover"): glides, never hops
 }
-type Follower = { Player: Player, Kinds: string, Pets: { Pet } }
+type Follower = {
+	Player: Player,
+	Kinds: string, -- the EquippedAttribute now
+	Pets: { [number]: Pet }, -- by slot
+	Shown: boolean, -- its golems are built (near the camera)
+	Dirty: boolean, -- Kinds changed since they were built
+	NextSync: number, -- os.clock(): the next change allowed
+}
 
 local followers: { [Player]: Follower } = {}
 local folder: Folder? = nil
@@ -833,6 +849,8 @@ local function clearPets(f: Follower)
 		pet.Model:Destroy()
 	end
 	table.clear(f.Pets)
+	f.Shown = false
+	f.Dirty = false
 end
 
 local function lerpAngle(a: number, b: number, t: number): number
@@ -840,48 +858,71 @@ local function lerpAngle(a: number, b: number, t: number): number
 	return a + d * t
 end
 
--- Builds the follower's golems from its kinds (at the owner's slots).
-local function buildPets(f: Follower)
-	clearPets(f)
-	local root = rootOf(f.Player)
-	if f.Kinds == "" or not root then
-		return
+-- One follower golem of `kind`, built at its slot behind the owner.
+local function newPet(f: Follower, root: BasePart, i: number, kind: string): Pet
+	local slot = GolemController.Slots[i] or Vector3.zero
+	local feet = (root.CFrame * CFrame.new(slot)).Position
+	local ground = feetY(f.Player, root)
+	local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
+	-- every part is created in place (the welds then hold this shape)
+	local start = CFrame.new(feet.X, ground, feet.Z) * CFrame.Angles(0, yaw, 0)
+	local model = GolemBuilder.build(kind, start, { Welded = true, Size = GolemController.FollowerSize })
+	local body = model.PrimaryPart :: BasePart
+	local rootHeight = (model:GetAttribute("RootHeight") :: number?) or 1
+	local hover = (model:GetAttribute("Hover") :: number?) or 0
+	model.Name = `{f.Player.Name}_{kind}`
+	model.Parent = followersFolder()
+	return {
+		Kind = kind,
+		Model = model,
+		Root = body,
+		RootHeight = rootHeight,
+		Slot = i,
+		Pos = Vector3.new(feet.X, ground, feet.Z),
+		Ground = ground,
+		NextGround = 0,
+		Yaw = yaw,
+		Phase = 0,
+		Seed = i * 1.7 + (f.Player.UserId % 97) * 0.13,
+		Look = 0,
+		NextLook = 0,
+		Floats = hover > 0,
+	}
+end
+
+--[[
+	Brings the follower's golems to its kinds: models whose kind stays are
+	kept (they walk to their new slot), the others go, missing ones are
+	built (GolemView.matchFollowers). Returns how many models it built.
+]]
+local function syncPets(f: Follower, root: BasePart): number
+	local want = GolemView.followerKinds(f.Kinds)
+	local have: { [number]: string } = {}
+	for slot, pet in f.Pets do
+		have[slot] = pet.Kind
 	end
-	local list = string.split(f.Kinds, ",")
-	for i, kind in list do
-		if i > GolemConfig.EquipSlots then
-			break
-		end
-		if GolemConfig.ById[kind] then
-			local slot = GolemController.Slots[i]
-			local feet = (root.CFrame * CFrame.new(slot)).Position
-			local ground = feetY(f.Player, root)
-			local _, yaw, _ = root.CFrame:ToEulerAnglesYXZ()
-			-- every part is created in place (the welds then hold this shape)
-			local start = CFrame.new(feet.X, ground, feet.Z) * CFrame.Angles(0, yaw, 0)
-			local model = GolemBuilder.build(kind, start, { Welded = true, Size = GolemController.FollowerSize })
-			local body = model.PrimaryPart :: BasePart
-			local rootHeight = (model:GetAttribute("RootHeight") :: number?) or 1
-			local hover = (model:GetAttribute("Hover") :: number?) or 0
-			model.Name = `{f.Player.Name}_{kind}`
-			model.Parent = followersFolder()
-			table.insert(f.Pets, {
-				Model = model,
-				Root = body,
-				RootHeight = rootHeight,
-				Slot = i,
-				Pos = Vector3.new(feet.X, ground, feet.Z),
-				Ground = ground,
-				NextGround = 0,
-				Yaw = yaw,
-				Phase = 0,
-				Seed = i * 1.7 + (f.Player.UserId % 97) * 0.13,
-				Look = 0,
-				NextLook = 0,
-				Floats = hover > 0,
-			})
+	local keep, build = GolemView.matchFollowers(have, want)
+	local pets: { [number]: Pet } = {}
+	local moved: { [number]: boolean } = {}
+	for slot, old in keep do
+		local pet = f.Pets[old]
+		pet.Slot = slot
+		pets[slot] = pet
+		moved[old] = true
+	end
+	for slot, pet in f.Pets do
+		if not moved[slot] then
+			pet.Model:Destroy()
 		end
 	end
+	for _, slot in build do
+		pets[slot] = newPet(f, root, slot, want[slot])
+	end
+	f.Pets = pets
+	f.Shown = true
+	f.Dirty = false
+	f.NextSync = os.clock() + GolemController.RebuildSeconds
+	return #build
 end
 
 -- The raycast skips every character and the followers (renewed when one spawns or leaves).
@@ -899,7 +940,7 @@ local function track(owner: Player)
 	if followers[owner] then
 		return
 	end
-	local f: Follower = { Player = owner, Kinds = "", Pets = {} }
+	local f: Follower = { Player = owner, Kinds = "", Pets = {}, Shown = false, Dirty = false, NextSync = 0 }
 	followers[owner] = f
 	owner.CharacterAdded:Connect(function()
 		task.defer(refreshFilter)
@@ -910,10 +951,9 @@ local function track(owner: Player)
 	owner:GetAttributeChangedSignal(GolemConfig.EquippedAttribute):Connect(function()
 		local kinds = owner:GetAttribute(GolemConfig.EquippedAttribute)
 		f.Kinds = if type(kinds) == "string" then kinds else ""
-		-- shown ones change now; far ones are built when they come near (refreshVisibility)
-		if #f.Pets > 0 then
-			buildPets(f)
-		end
+		-- only marked: refreshVisibility changes the models (at most every
+		-- RebuildSeconds; far ones are built when they come near)
+		f.Dirty = true
 	end)
 	local kinds = owner:GetAttribute(GolemConfig.EquippedAttribute)
 	f.Kinds = if type(kinds) == "string" then kinds else ""
@@ -928,21 +968,36 @@ local function untrack(owner: Player)
 	task.defer(refreshFilter)
 end
 
--- Builds / removes followers by distance to the camera (every half second).
-local function refreshVisibility()
+--[[
+	Every VisibilityTick: removes the followers of far players (and of
+	players with nothing equipped), then builds or changes the golems of at
+	most ONE player: the nearest whose golems aren't built yet or whose
+	kinds changed at least RebuildSeconds after the last change.
+]]
+local function refreshVisibility(): boolean
 	local camera = Workspace.CurrentCamera
 	local eye = if camera then camera.Focus.Position else Vector3.zero
+	local now = os.clock()
+	local best: Follower? = nil
+	local bestRoot: BasePart? = nil
+	local bestDistance = math.huge
 	for owner, f in followers do
 		local root = rootOf(owner)
 		local distance = if root then (root.Position - eye).Magnitude else math.huge
-		local want = f.Kinds ~= "" and distance <= GolemConfig.FollowerHideDistance
 		local far = distance > GolemConfig.FollowerHideDistance + 10
-		if want and #f.Pets == 0 then
-			buildPets(f)
-		elseif (far or f.Kinds == "" or not root) and #f.Pets > 0 then
+		if f.Shown and (far or f.Kinds == "" or not root) then
 			clearPets(f)
+		elseif root and f.Kinds ~= "" and distance <= GolemConfig.FollowerHideDistance then
+			local due = not f.Shown or (f.Dirty and now >= f.NextSync)
+			if due and distance < bestDistance then
+				best, bestRoot, bestDistance = f, root, distance
+			end
 		end
 	end
+	if best and bestRoot then
+		syncPets(best, bestRoot)
+	end
+	return true
 end
 
 local function groundAt(position: Vector3, fromY: number): number?
@@ -955,7 +1010,7 @@ local function stepPets(dt: number): boolean
 	local camera = Workspace.CurrentCamera
 	local eye = if camera then camera.Focus.Position else Vector3.zero
 	for owner, f in followers do
-		local root = if #f.Pets > 0 then rootOf(owner) else nil
+		local root = if f.Shown then rootOf(owner) else nil
 		if root then
 			local ownerCF = root.CFrame
 			local feet = feetY(owner, root)
@@ -1131,8 +1186,11 @@ function GolemController.start()
 		end
 	end)
 	while true do
-		refreshVisibility()
-		task.wait(0.5)
+		local ok, err = pcall(refreshVisibility)
+		if not ok then
+			warn("[GolemController] followers: " .. tostring(err))
+		end
+		task.wait(GolemController.VisibilityTick)
 	end
 end
 

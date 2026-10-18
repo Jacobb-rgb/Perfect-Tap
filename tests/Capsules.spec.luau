@@ -116,6 +116,9 @@ return function(T, Loader)
 		caps.setPushState(function(_p)
 			w.pushed += 1
 		end)
+		caps.setPublish(function(ready)
+			w.published = ready
+		end)
 		CapsuleService.onOpened(function(p, info)
 			table.insert(w.opened, { Player = p, Info = info })
 		end)
@@ -360,6 +363,14 @@ return function(T, Loader)
 		local pushed = w.pushed
 		refused(w, { Capsule = "Crystal", Count = 1, Lucky = false }, "OddsChanged", "shown normal while it runs")
 		T.eq(w.pushed, pushed + 1, "a fresh State goes to the client")
+		-- its last second (os.time is whole seconds, the client's clock fractional):
+		-- shown normal gets the normal odds, no "OddsChanged"
+		w.data.Boosts.TripleLuckyUntil = NOW + 1
+		local _, last = open(false)
+		T.eq(last.Lucky, false, "shown normal within EndSlack of the end")
+		T.eq(last.Golems[1].Kind, CapsuleConfig.roll("Crystal", false, r))
+		w.data.Boosts.TripleLuckyUntil = NOW + math.ceil(CapsuleService.EndSlack) + 1
+		refused(w, { Capsule = "Crystal", Count = 1, Lucky = false }, "OddsChanged", "shown normal, the boost surely runs")
 		-- just ended (within the grace): each gets what it showed
 		w.data.Boosts.TripleLuckyUntil = NOW - 1
 		local _, late = open(true)
@@ -421,6 +432,15 @@ return function(T, Loader)
 		local ok, err = pcall(function()
 			w.data.Boosts.TripleLuckyUntil = NOW + 60
 			Bonuses.invalidate(w.player)
+			-- a real id but no receipt handler yet (step 8): still Coming soon, never prompted
+			T.eq(CapsuleService.receiptsReady(), false, "not ready before step 8")
+			local _, early = act(w, "Open", { Capsule = "Royal", Count = 3 })
+			T.eq(early.Status, "ComingSoon", "live id, receipts not ready")
+			T.eq(#w.prompted, 0, "nobody pays Robux for nothing")
+			T.eq(caps.prompts(w.player), nil, "nothing stored")
+			CapsuleService.setReceiptsReady(true)
+			T.eq(w.published, true, "the clients learn it (ReplicatedStorage attribute)")
+			T.eq(CapsuleService.ReceiptsAttribute, CapsuleView.ReceiptsAttribute, "server and client read the same attribute")
 			local name, answer = act(w, "Open", { Capsule = "Royal", Count = 3 })
 			T.eq(name, "PurchasePrompt")
 			T.eq(answer.Status, "Prompted")
@@ -446,6 +466,30 @@ return function(T, Loader)
 			local _, full = act(w, "Open", { Capsule = "Royal", Count = 3 })
 			T.eq(full.Status, "Full")
 			T.eq(#w.prompted, 2, "no prompt when full")
+		end)
+		product.Id = oldId
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	withWorld("Capsules: a Royal prompt closed without a purchase is forgotten", function(w)
+		local product = MonetizationConfig.Products.RoyalCapsule3
+		local oldId = product.Id
+		product.Id = 4242
+		CapsuleService.setReceiptsReady(true)
+		local ok, err = pcall(function()
+			w.data.Boosts.TripleLuckyUntil = NOW + 60
+			Bonuses.invalidate(w.player)
+			act(w, "Open", { Capsule = "Royal", Count = 3 })
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3"), true)
+			caps.purchaseFinished(w.player, 999, false)
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3"), true, "another product's prompt: kept")
+			caps.purchaseFinished(w.player, 4242, true)
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3"), true, "bought: kept for the receipt")
+			caps.purchaseFinished(w.player, 4242, false)
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule3"), nil, "cancelled: forgotten")
+			caps.purchaseFinished(w.other, 4242, false) -- a player with no prompts: nothing happens
 		end)
 		product.Id = oldId
 		if not ok then
@@ -498,27 +542,54 @@ return function(T, Loader)
 		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.InventoryCap)
 	end)
 
-	withWorld("Capsules: grantProduct (step 8 receipts) uses the prompted odds and may pass the cap", function(w)
+	withWorld("Capsules: grantProduct (step 8 receipts) never rolls worse than shown and may pass the cap", function(w)
 		local product = MonetizationConfig.Products.RoyalCapsule10
 		local oldId = product.Id
 		product.Id = 777
+		CapsuleService.setReceiptsReady(true)
 		local ok, err = pcall(function()
-			act(w, "Open", { Capsule = "Royal", Count = 10 }) -- prompted without Triple Lucky
+			-- prompted with Triple Lucky, the boost ends before the receipt: still boosted
+			w.data.Boosts.TripleLuckyUntil = NOW + 60
+			Bonuses.invalidate(w.player)
+			act(w, "Open", { Capsule = "Royal", Count = 10 })
+			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule10"), true, "stored boosted")
+			w.data.Boosts.TripleLuckyUntil = NOW - 100
+			Bonuses.invalidate(w.player)
+			local boosted = CapsuleService.grantProduct(w.player, "RoyalCapsule10")
+			T.eq(boosted.Lucky, true, "the prompt's Triple Lucky odds, although the boost ended")
+			for _, g in boosted.Golems do
+				local entry = GolemConfig.find(w.data.Golems, g.Id)
+				T.eq(entry.Paid, true, "paid")
+				T.eq(entry.Locked, true, "bought with Robux: locked, never deleted by a slip")
+			end
+			GolemConfig.delete(w.data.Golems, { boosted.Golems[1].Id })
+			T.truthy(GolemConfig.find(w.data.Golems, boosted.Golems[1].Id), "a locked paid golem survives a delete")
+			table.clear(w.data.Golems.Owned)
+			w.data.Golems.Equipped = {}
+			-- prompted without Triple Lucky, the boost starts before the receipt:
+			-- the better odds of the card now (never worse than any screen showed)
+			act(w, "Open", { Capsule = "Royal", Count = 10 })
 			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule10"), false)
-			-- the boost starts before the receipt: the receipt still uses the prompt's odds
 			w.data.Boosts.TripleLuckyUntil = NOW + 600
 			Bonuses.invalidate(w.player)
 			fill(w.data, GolemConfig.MaxSaved - 4, nil, true)
 			local result, missing = CapsuleService.grantProduct(w.player, "RoyalCapsule10")
 			T.truthy(result)
-			T.eq(result.Lucky, false, "the odds the player saw")
+			T.eq(result.Lucky, true, "the boost runs now: its odds")
 			T.eq(#result.Golems, 4, "up to MaxSaved")
 			T.eq(missing, 6, "the rest is reported for compensation")
 			T.eq(GolemConfig.count(w.data.Golems), GolemConfig.MaxSaved)
 			for i = GolemConfig.MaxSaved - 3, GolemConfig.MaxSaved do
 				T.eq(w.data.Golems.Owned[i].Paid, true, "paid golems are marked")
+				T.eq(w.data.Golems.Owned[i].Locked, true, "and locked")
 			end
 			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule10"), nil, "the prompt is used up")
+			-- no prompt at all (Store tab, another server): the odds of the moment
+			w.data.Boosts.TripleLuckyUntil = NOW - 100
+			Bonuses.invalidate(w.player)
+			table.clear(w.data.Golems.Owned)
+			local plain = CapsuleService.grantProduct(w.player, "RoyalCapsule10")
+			T.eq(plain.Lucky, false, "no prompt, no boost: normal odds")
 			-- old prompts are forgotten
 			act(w, "Open", { Capsule = "Royal", Count = 10 })
 			T.eq(CapsuleService.promptedLucky(w.player, "RoyalCapsule10", NOW + MonetizationConfig.PromptMemorySeconds + 1), nil)
@@ -748,6 +819,41 @@ return function(T, Loader)
 			T.falsy(buy.CanBuy, "no Robux button works while not live")
 		end
 		T.truthy(#royal.Odds > 0, "its odds are shown anyway")
+		-- each button on its own: only RoyalCapsule3 live, and only once step 8 takes receipts
+		local product = MonetizationConfig.Products.RoyalCapsule3
+		local oldId = product.Id
+		product.Id = 31337
+		local ok, err = pcall(function()
+			local waiting = cardOf(CapsuleView.cards(s, 1e9, false, NOW, nil, false), "Royal")
+			T.eq(waiting.Live, false, "a real id without receipts isn't live")
+			T.eq(waiting.Note, MonetizationConfig.StatusText.ComingSoon)
+			local mixed = cardOf(CapsuleView.cards(s, 1e9, false, NOW, nil, true), "Royal")
+			T.eq(mixed.Live, true, "one live button is enough")
+			T.eq(mixed.Note, nil, "buttons instead of the note")
+			for i, buy in mixed.Buys do
+				if buy.Count == 3 then
+					T.eq(buy.CanBuy, true, "the live product")
+					T.eq(buy.PriceText, `R$ {product.Robux}`)
+				else
+					T.eq(buy.CanBuy, false, "button " .. i .. " greyed")
+					T.eq(buy.Reason, "ComingSoon")
+					T.eq(buy.PriceText, "Coming soon")
+				end
+			end
+			local refs = CapsuleView.build(false)
+			refs.Tab = "Royal"
+			CapsuleView.setCards(refs, CapsuleView.cards(s, 1e9, false, NOW, nil, true))
+			T.falsy(refs.Note.Visible)
+			for _, button in refs.Buttons do
+				T.truthy(button.Parent.Visible, "all three buttons show")
+			end
+			T.truthy(refs.Buttons[1].Text:find("Coming soon"), "the dead one says so")
+			T.truthy(refs.Buttons[2].Text:find("R%$"), "the live one shows its price")
+		end)
+		product.Id = oldId
+		if not ok then
+			error(err, 0)
+		end
 		local restricted = CapsuleView.cards(s, 1e9, true, NOW)
 		T.falsy(cardOf(restricted, "Royal").Visible, "hidden where restricted")
 		T.truthy(cardOf(restricted, "Stone").Visible, "coin capsules stay (coins can't be bought with Robux)")
@@ -829,6 +935,7 @@ return function(T, Loader)
 					T.truthy(target.Size.X.Offset * CapsuleView.PhoneScale >= CapsuleView.MinTouch - 0.5, target.Name .. " 44 pt wide")
 				end
 			end
+			T.eq(CapsuleView.firstButton(refs), refs.Buttons[1], "gamepad: the first OPEN button")
 			-- Royal (allowed, not live): the note instead of the buttons
 			refs.Tab = "Royal"
 			CapsuleView.setCards(refs, CapsuleView.cards(state(), 1e9, false, NOW))
@@ -836,6 +943,11 @@ return function(T, Loader)
 			for _, button in refs.Buttons do
 				T.falsy(button.Parent.Visible, "no Robux buttons")
 			end
+			-- RB then A on the Coming soon tab must not close the shop
+			local first = CapsuleView.firstButton(refs)
+			T.truthy(first ~= refs.Close, "never X")
+			T.eq(first, refs.List, "the odds list (a gamepad scrolls it)")
+			T.truthy(refs.List.Selectable)
 			-- nothing allowed: the empty text
 			MonetizationConfig.CoinPacksEnabled = true
 			local none = CapsuleView.setCards(refs, CapsuleView.cards(state(), 1e9, true, NOW))
@@ -942,7 +1054,15 @@ return function(T, Loader)
 			end
 			for _, target in CapsuleView.openTargets(o) do
 				T.le(target.Position.Y.Offset, h, target.Name .. " on screen")
+				T.truthy(target:IsDescendantOf(o.Controls), target.Name .. " in the overlay's selection group")
 			end
+			-- a gamepad can't leave the overlay for the shop behind it
+			T.eq(o.Controls.SelectionGroup, true)
+			for _, side in { "Up", "Down", "Left", "Right" } do
+				T.eq(o.Controls["SelectionBehavior" .. side], roblox.Enum.SelectionBehavior.Stop, side .. " stops")
+			end
+			T.eq(o.Controls.Size.X.Offset, w, "the group covers the screen (button positions unchanged)")
+			T.eq(o.Controls.Size.Y.Offset, h)
 		end
 	end)
 
@@ -1015,6 +1135,71 @@ return function(T, Loader)
 		local ids = GolemView.pickRarity(cards, "Common")
 		T.eq(#ids, 0, "locked and equipped Commons are never picked")
 		T.truthy(GolemView.confirmText(cards, { [5] = true, [3] = true }):find("1 of them is equipped"))
+		T.falsy(GolemView.confirmText(cards, { [5] = true, [3] = true }):find("Robux"), "no Robux line for coin golems")
+		-- a golem bought with Robux: the box says so
+		g.Owned[3].Paid = true
+		local paidCards = GolemView.cards(s)
+		T.truthy(GolemView.confirmText(paidCards, { [3] = true }):find("This golem was bought with Robux"))
+		T.truthy(GolemView.confirmText(paidCards, { [3] = true, [5] = true }):find("1 of them was bought with Robux"))
+		g.Owned[2].Paid = true
+		T.truthy(GolemView.confirmText(GolemView.cards(s), { [2] = true, [3] = true, [5] = true }):find("2 of them were bought with Robux"))
+	end)
+
+	T.test("Golems view: a locked card says LOCKED (a state, not the LOCK button)", function()
+		local s = state()
+		GolemConfig.add(s.Golems, "PebbleGolem")
+		s.Golems.Owned[1].Locked = true
+		local refs = GolemView.build(false)
+		local cards = GolemView.cards(s)
+		GolemView.setCards(refs, cards, nil, nil)
+		local badge = refs.Cards[1].Lock
+		T.truthy(badge.Visible)
+		T.eq(badge.Text, "LOCKED")
+		T.truthy(badge.Text ~= refs.Lock.Text, "not the action button's word")
+	end)
+
+	T.test("Golem followers: an Equip / Unequip keeps every model whose kind stays", function()
+		local kinds = GolemView.followerKinds("RubyKnight,Bogus,EmberImp,PebbleGolem")
+		T.eq(kinds[1], "RubyKnight")
+		T.eq(kinds[2], nil, "unknown kind: empty slot")
+		T.eq(kinds[3], "EmberImp")
+		T.eq(kinds[4], nil, "at most EquipSlots")
+		T.eq(next(GolemView.followerKinds("")), nil)
+		T.eq(next(GolemView.followerKinds(42)), nil)
+		-- unequip the first: the other two move up, nothing is built
+		local keep, build = GolemView.matchFollowers(
+			{ "RubyKnight", "EmberImp", "PebbleGolem" },
+			GolemView.followerKinds("EmberImp,PebbleGolem")
+		)
+		T.eq(keep[1], 2, "EmberImp moves to slot 1")
+		T.eq(keep[2], 3, "PebbleGolem moves to slot 2")
+		T.eq(#build, 0, "no model built")
+		-- equip one more: only that one is built
+		local keep2, build2 = GolemView.matchFollowers({ "EmberImp", "PebbleGolem" }, GolemView.followerKinds("EmberImp,PebbleGolem,RubyKnight"))
+		T.eq(keep2[1], 1)
+		T.eq(keep2[2], 2)
+		T.eq(#build2, 1)
+		T.eq(build2[1], 3)
+		-- two of a kind: each model is used once
+		local keep3, build3 = GolemView.matchFollowers({ "PebbleGolem" }, GolemView.followerKinds("PebbleGolem,PebbleGolem"))
+		T.eq(keep3[1], 1)
+		T.eq(keep3[2], nil)
+		T.eq(build3[1], 2)
+		-- spam: equip / unequip back and forth never builds more than one model per change
+		local have: { [number]: string } = { "RubyKnight", "EmberImp" }
+		for step = 1, 20 do
+			local want = GolemView.followerKinds(if step % 2 == 1 then "RubyKnight,EmberImp,PebbleGolem" else "RubyKnight,EmberImp")
+			local k, b = GolemView.matchFollowers(have, want)
+			T.le(#b, 1, "at most one model per change")
+			local nextHave: { [number]: string } = {}
+			for slot, old in k do
+				nextHave[slot] = have[old]
+			end
+			for _, slot in b do
+				nextHave[slot] = want[slot]
+			end
+			have = nextHave
+		end
 	end)
 
 	T.test("Golems view: the inventory fills and fits phones (44 pt buttons)", function()

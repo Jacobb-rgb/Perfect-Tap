@@ -12,12 +12,17 @@
 	    ui_capsules_shop        PC: the capsule panel, STONE tab
 	    ui_capsules_lucky       PC: CRYSTAL tab with Triple Lucky on (boosted odds)
 	    ui_capsules_phone       667 x 375 pt phone (compact layout)
+	    ui_capsules_royal       PC: ROYAL tab as it will look once two of its
+	                            products are live (preview-only ids) and step 8
+	                            takes receipts: OPEN 10 still "Coming soon"
 	    ui_capsules_grid        PC: an x10 opening's result grid
 	    ui_capsules_grid_phone  phone: the same
 	    ui_golems               PC: the golem inventory, a golem selected
 	    ui_golems_phone         phone: the inventory
-	    ui_golems_delete        PC: delete mode, three golems picked
-	    ui_golems_confirm       PC: the confirm box before deleting
+	    ui_golems_delete        PC: delete mode, three golems picked (one bought
+	                            with Robux and unlocked by the player)
+	    ui_golems_confirm       PC: the confirm box before deleting (it says
+	                            one was bought with Robux)
 	    ui_capsule_board        the stall's odds board as the game fills it: an
 	                            ENLARGED 2D overlay of the 1.9 x 3.9 stud board
 	                            (labelled so on the picture)
@@ -75,7 +80,8 @@ function Preview.state(lucky: boolean?): { [string]: any }
 		"CopperTinker",
 	}
 	for i, kind in kinds do
-		table.insert(owned, { Id = i, Kind = kind, Locked = if i == 1 or i == 5 then true else nil })
+		-- 1 and 5 locked; 4 (an Ember Imp) came from a Royal capsule, the player unlocked it
+		table.insert(owned, { Id = i, Kind = kind, Locked = if i == 1 or i == 5 then true else nil, Paid = if i == 4 then true else nil })
 	end
 	return {
 		Coins = if lucky then 2.4e6 else 48250,
@@ -327,14 +333,14 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		return refs
 	end
 
-	local function shop(uiScale: number, compact: boolean, w: number, h: number, lucky: boolean, tab: string): any
+	local function shop(uiScale: number, compact: boolean, w: number, h: number, lucky: boolean, tab: string, receipts: boolean?): any
 		local state = Preview.state(lucky)
 		local refs = CapsuleView.build(compact)
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
 		CapsuleView.layout(refs, compact, w, h)
 		refs.Tab = tab
-		CapsuleView.setCards(refs, CapsuleView.cards(state, state.Coins, false, Preview.Now))
+		CapsuleView.setCards(refs, CapsuleView.cards(state, state.Coins, false, Preview.Now, nil, receipts))
 		CapsuleView.setCoins(refs, state.Coins)
 		CapsuleView.setHint(refs, `Click OPEN to wake golems{CapsuleView.Separator}Backspace: close`)
 		return refs
@@ -372,7 +378,7 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		refs.Gui.Enabled = true
 		GolemView.layout(refs, compact, w, h)
 		local cards = GolemView.cards(state)
-		local picked = if deleting then { [6] = true, [7] = true, [9] = true } else nil
+		local picked = if deleting then { [4] = true, [6] = true, [9] = true } else nil
 		GolemView.setCards(refs, cards, if deleting then nil else 1, picked)
 		GolemView.setEquipped(refs, GolemView.equipped(state), GolemView.totals(state))
 		GolemView.setCount(refs, GolemView.countText(state), false)
@@ -393,6 +399,13 @@ function Preview.buildUi(Loader: any, which: string): { [string]: any }
 		exports.ui_capsules_shop = UiExport.export({ hud(scale, 48250).Gui, shop(scale, false, pcW, pcH, false, "Stone").Gui })
 		exports.ui_capsules_lucky = UiExport.export({ hud(scale, 2.4e6).Gui, shop(scale, false, pcW, pcH, true, "Crystal").Gui })
 		exports.ui_capsules_phone = UiExport.export({ hud(phone, 48250).Gui, shop(phone, true, phW, phH, false, "Stone").Gui })
+		-- preview-only ids: x1 and x3 live, x10 still a placeholder
+		local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+		local p1, p3 = MonetizationConfig.Products.RoyalCapsule1, MonetizationConfig.Products.RoyalCapsule3
+		local old1, old3 = p1.Id, p3.Id
+		p1.Id, p3.Id = 1, 3
+		exports.ui_capsules_royal = UiExport.export({ hud(scale, 48250).Gui, shop(scale, false, pcW, pcH, false, "Royal", true).Gui })
+		p1.Id, p3.Id = old1, old3
 
 		-- an x10 Stone opening's grid (the rarest card framed white)
 		local kinds = {
