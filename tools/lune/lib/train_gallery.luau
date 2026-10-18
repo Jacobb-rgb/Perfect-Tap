@@ -27,8 +27,8 @@ Gallery.Banners = {
 -- the three main trains in the yard
 Gallery.Trains = {
 	{ Color = { 220, 70, 50 }, Loads = { { "Copper", "Iron", "Coal" }, { "Copper", "Silver" } } },
-	{ Color = { 60, 140, 220 }, Loads = { { "Gold", "Silver" }, { "Azurium", "Iron", "Gold" } } },
-	{ Color = { 80, 180, 90 }, Loads = { { "Emerald", "Ruby", "Gold" }, { "Coal", "Copper" } } },
+	{ Color = { 60, 140, 220 }, Loads = { { "Gold", "Silver" }, { "DragonEgg", "Iron", "Gold" } } },
+	{ Color = { 80, 180, 90 }, Loads = { { "Jade", "Bronze", "Gold" }, { "Coal", "Copper" } } },
 }
 
 --[[

@@ -708,7 +708,7 @@ end
 -- thin cyan neon bars, the same on every slot and turned like the
 -- pedestal's octagons (a flat faces the yard gate). Centre height, radius
 -- of the bar centre lines and bar thickness: the inner edge clears the
--- widest ore at the ring's height (Prismite, 1.82 studs from the axis) and
+-- widest ore at the ring's height (about 1.82 studs from the axis) and
 -- the top stays below PodiumService's income tag.
 -- (round 2: thinner, a little higher and tighter: it hugs the ore instead of
 -- reading as a debug outline over the neighbours)

@@ -510,7 +510,7 @@ function Kenney.gun(Loader: any, level: number, oreId: string): (any, any, strin
 end
 
 -- The ore of every level in the showcase (BlasterBuilder gallery skins).
-Kenney.Lineup = { "", "Copper", "Azurium", "Amethyst", "Gold", "Ruby", "Sapphire", "Emerald", "Stormcore", "Heartstone" }
+Kenney.Lineup = { "", "Copper", "DragonEgg", "Amethyst", "Gold", "Bronze", "Sapphire", "Jade", "StormPearl", "Heartstone" }
 
 -- "blaster_kenney": the ten levels floating in the evening sky (two rows), and close-ups off to the side.
 function Kenney.build(Loader: any, parent: any)
