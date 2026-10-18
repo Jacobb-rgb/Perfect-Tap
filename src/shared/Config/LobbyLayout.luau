@@ -83,6 +83,9 @@ LobbyLayout.Budget = {
 	-- break this budget; spend it on purpose, not by accident.
 	LobbyParts = 13200, -- + 400 for the blaster gallery
 	LobbyLights = 45,
+	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
+	-- lobby area plus every Persistent model's parts anywhere (tests/PhoneBudget.spec.luau)
+	PhoneParts = 18000,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
