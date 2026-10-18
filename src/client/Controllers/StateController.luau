@@ -11,6 +11,9 @@
 	  section (the previous one is copied, never changed);
 	- snapshot.Full (the first push after a join) replaces everything;
 	- snapshot.Kept (steps 6-7) lists sticky records left out: copied too.
+	A partial push before any whole one (the Full push went missing) is
+	not shown: the client asks for a whole one with StateSync (at most
+	every SyncSeconds) and waits for it.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,6 +23,10 @@ local StateController = {}
 
 local snapshot: { [string]: any }? = nil
 local listeners: { ({ [string]: any }) -> () } = {}
+local lastSync = -math.huge
+
+-- Seconds between two StateSync requests while no whole push has come.
+StateController.SyncSeconds = 2
 
 function StateController.get(): { [string]: any }?
 	return snapshot
@@ -89,17 +96,39 @@ function StateController.merge(previous: { [string]: any }?, incoming: { [string
 	return merged
 end
 
+-- One push from StateService: merged into the whole snapshot, then the
+-- listeners hear it. A partial push with nothing to merge it onto asks
+-- the server for a whole one instead (StateSync).
+function StateController.receive(incoming: any)
+	if type(incoming) ~= "table" then
+		return
+	end
+	if snapshot == nil and incoming.Full ~= true then
+		local now = os.clock()
+		if now - lastSync >= StateController.SyncSeconds then
+			lastSync = now
+			Net.send("StateSync")
+		end
+		return
+	end
+	local merged = StateController.merge(snapshot, incoming)
+	snapshot = merged
+	for _, callback in listeners do
+		task.spawn(callback, merged)
+	end
+end
+
+-- Internals for the Lune tests only (tests/StateService.spec.luau).
+StateController._test = {
+	reset = function()
+		snapshot = nil
+		lastSync = -math.huge
+		table.clear(listeners)
+	end,
+}
+
 function StateController.init()
-	Net.listen("State", function(newSnapshot)
-		if type(newSnapshot) ~= "table" then
-			return
-		end
-		local merged = StateController.merge(snapshot, newSnapshot)
-		snapshot = merged
-		for _, callback in listeners do
-			task.spawn(callback, merged)
-		end
-	end)
+	Net.listen("State", StateController.receive)
 end
 
 return StateController

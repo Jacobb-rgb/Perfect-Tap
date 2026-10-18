@@ -5,8 +5,11 @@
 	Other services add fields with StateService.addProvider().
 
 	Network diet (perf pass 1, SERVER_PERF_AUDIT #1):
-	- Pushes are coalesced per player: at most one every PushSeconds (0.5 s).
-	  The first push after a join goes out at once (next resumption).
+	- Pushes are throttled per player: at most one every PushSeconds
+	  (0.5 s). A change after a quiet spell (a buy, a golem equip, the first
+	  push after a join) goes out at once (next resumption); changes that
+	  come within PushSeconds of the last push wait for the rest of it and
+	  go out together.
 	- Only the top-level sections whose content changed since the last push
 	  to that player go out (compared by fingerprint). A section the client
 	  already has is left out: the client (StateController) keeps its copy,
@@ -27,6 +30,13 @@
 	  attributes Coins and IncomePerSec (at most every AttributeSeconds,
 	  0.25 s): podium payouts and sales move the HUD counter without a
 	  snapshot. The snapshot keeps its Coins / Income fields for the menus.
+	  A balance or income that is not a finite number (no Income: the
+	  podium provider failed) writes 0, like the snapshot showed on main.
+	- What the client has is saved only after a push went out (Net.fire
+	  did not throw); a failed push makes the next one whole. A client that
+	  gets a partial push before any whole one (it missed the Full push)
+	  asks again with StateSync: the server forgets what it sent and pushes
+	  the whole snapshot (StateService.resync, throttled like any push).
 ]]
 
 local Players = game:GetService("Players")
@@ -66,6 +76,8 @@ local sent: { [Player]: { [string]: string } } = {}
 -- player -> flat section -> a copy of what that player's client has (for patches)
 local copies: { [Player]: { [string]: { [string]: any }? } } = {}
 local coinsPending: { [Player]: boolean } = {}
+-- player -> os.clock() of the last push sent (the throttle's leading edge)
+local lastSent: { [Player]: number } = {}
 
 local isSticky: { [string]: boolean } = {}
 for _, key in StateService.Sticky do
@@ -197,23 +209,25 @@ local function diff(old: { [string]: any }, new: { [string]: any }): Patch?
 	return { Set = if next(set) then set else nil, Clear = if #clear > 0 then clear else nil }
 end
 
+type Known = { [string]: string }
+type Copies = { [string]: { [string]: any }? }
+
 --[[
-	Leaves out every section this player's client already has and remembers
-	what it now has. `snapshot` is changed and returned:
+	Leaves out every section this player's client already has. `snapshot`
+	is changed and returned:
 	- unchanged sections: left out (sticky ones listed in Kept);
 	- changed flat sections with few changed keys: in Patch;
 	- sections the client has that are gone: listed in Removed;
 	- the first push to a player: whole, with Full = true.
+	Also returns what the client has once this push arrives (fingerprints,
+	flat copies): new tables, nothing is saved here.
 ]]
-function StateService.trim(player: Player, snapshot: { [string]: any }): { [string]: any }
-	local known = sent[player]
-	local full = known == nil
-	if not known then
-		known = {}
-		sent[player] = known
-	end
-	local flat: { [string]: { [string]: any }? } = if full then {} else copies[player] or {}
-	copies[player] = flat
+local function prepare(player: Player, snapshot: { [string]: any }): ({ [string]: any }, Known, Copies)
+	local previous = sent[player]
+	local full = previous == nil
+	local known: Known = if previous then table.clone(previous) else {}
+	local oldFlat = copies[player]
+	local flat: Copies = if not full and oldFlat then table.clone(oldFlat) else {}
 	local present: { string } = {}
 	for key in snapshot do
 		if type(key) == "string" and not StateService.Reserved[key] then
@@ -268,7 +282,16 @@ function StateService.trim(player: Player, snapshot: { [string]: any }): { [stri
 		table.sort(removed)
 		snapshot.Removed = removed
 	end
-	return snapshot
+	return snapshot, known, flat
+end
+
+-- Trims a snapshot for this player's client (see prepare) and remembers
+-- what the client then has.
+function StateService.trim(player: Player, snapshot: { [string]: any }): { [string]: any }
+	local trimmed, known, flat = prepare(player, snapshot)
+	sent[player] = known
+	copies[player] = flat
+	return trimmed
 end
 
 -- Has this player's client had its first (whole) snapshot?
@@ -282,6 +305,7 @@ function StateService.forget(player: Player)
 	sent[player] = nil
 	copies[player] = nil
 	coinsPending[player] = nil
+	lastSent[player] = nil
 end
 
 function StateService.addProvider(provider: Provider)
@@ -370,11 +394,12 @@ local function setAttribute(player: Player, name: string, value: number)
 	end
 end
 
--- Writes the Coins attribute now (only when it changed).
+-- Writes the Coins attribute now (only when it changed; 0 for a balance
+-- that is not a finite number, never the last good one).
 function StateService.writeCoins(player: Player)
 	local data = DataService.get(player)
-	if data and finite(data.Coins) then
-		setAttribute(player, StateService.CoinsAttribute, data.Coins)
+	if data then
+		setAttribute(player, StateService.CoinsAttribute, if finite(data.Coins) then data.Coins else 0)
 	end
 end
 
@@ -395,20 +420,35 @@ end
 ---------------------------------------------------------------- pushes
 
 -- Builds, trims and sends one snapshot now; the coin attributes follow it.
+-- What the client has is saved only once the push went out; a push that
+-- failed makes the next one whole.
 function StateService.send(player: Player)
 	local snapshot = StateService.snapshot(player)
 	if not snapshot then
 		return
 	end
+	-- no finite income (the podium provider failed): 0, never the last one
 	local income = snapshot.Income
-	if finite(income) then
-		setAttribute(player, StateService.IncomeAttribute, income)
-	end
+	setAttribute(player, StateService.IncomeAttribute, if finite(income) then income else 0)
 	StateService.writeCoins(player)
-	Net.fire("State", player, StateService.trim(player, snapshot))
+	local trimmed, known, flat = prepare(player, snapshot)
+	lastSent[player] = os.clock()
+	local ok, err = pcall(function()
+		Net.fire("State", player, trimmed)
+	end)
+	if ok then
+		sent[player] = known
+		copies[player] = flat
+	else
+		sent[player] = nil
+		copies[player] = nil
+		warn("[StateService] State push failed (the next one is whole): " .. tostring(err))
+	end
 end
 
--- Asks for a push: at most one per PushSeconds per player (the first one at once).
+-- Asks for a push: at most one per PushSeconds per player. After a quiet
+-- spell it goes out at once; within PushSeconds of the last push it waits
+-- for the rest of that time (changes in between go out with it).
 function StateService.push(player: Player)
 	if pending[player] then
 		return
@@ -420,11 +460,24 @@ function StateService.push(player: Player)
 			StateService.send(player)
 		end
 	end
-	if sent[player] then
-		task.delay(StateService.PushSeconds, flush)
-	else
+	local wait = (lastSent[player] or -math.huge) + StateService.PushSeconds - os.clock()
+	if wait <= 0 then
 		task.defer(flush)
+	else
+		task.delay(wait, flush)
 	end
+end
+
+-- The client missed the whole push (StateSync): forget what it has and
+-- push the whole snapshot (throttled like any push). Nothing to do before
+-- the first push: that one is whole anyway.
+function StateService.resync(player: Player)
+	if sent[player] == nil then
+		return
+	end
+	sent[player] = nil
+	copies[player] = nil
+	StateService.push(player)
 end
 
 -- Internals for the Lune tests only (tests/StateService.spec.luau).
@@ -434,6 +487,7 @@ StateService._test = {
 		table.clear(sent)
 		table.clear(copies)
 		table.clear(coinsPending)
+		table.clear(lastSent)
 	end,
 	-- removes the providers added after `count` (a spec's own)
 	trimProviders = function(count: number)
@@ -454,6 +508,10 @@ function StateService.init()
 	-- podium income pays quietly (no data change event): the coin attribute still follows
 	EconomyService.onEarned(function(player: Player)
 		StateService.touchCoins(player)
+	end)
+	-- the client got a partial push before any whole one (StateController)
+	Net.on("StateSync", function(player: Player)
+		StateService.resync(player)
 	end)
 	Players.PlayerRemoving:Connect(StateService.forget)
 end

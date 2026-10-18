@@ -91,6 +91,43 @@ function Tech.glow(parent: Instance, cf: CFrame, size: Vector3, color: Color3?):
 end
 local glow = Tech.glow
 
+-- Does the box (cf, size) lie wholly inside the box (outer, outerSize)?
+function Tech.boxInside(cf: CFrame, size: Vector3, outer: CFrame, outerSize: Vector3): boolean
+	local h, ho = size / 2, outerSize / 2 + Vector3.new(1e-3, 1e-3, 1e-3)
+	for _, sx in { -1, 1 } do
+		for _, sy in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				local q = outer:PointToObjectSpace((cf * CFrame.new(sx * h.X, sy * h.Y, sz * h.Z)).Position)
+				if math.abs(q.X) > ho.X or math.abs(q.Y) > ho.Y or math.abs(q.Z) > ho.Z then
+					return false
+				end
+			end
+		end
+	end
+	return true
+end
+
+--[[
+	(perf pass 1) A part a builder leaves out because another part hides it
+	(the wheel's 6 o'clock rim chord inside the bottom bracket, the mid
+	pylons' foot lip and orange band behind their showcase's stand). Builds
+	nothing; while a list is set with Tech.recordLeftOut (the Districts
+	spec) the box goes on it with its model and name, so a spec can check
+	the box is still hidden when a neighbour changes.
+]]
+export type LeftOut = { Model: Instance, CFrame: CFrame, Size: Vector3, Name: string }
+local leftOut: { LeftOut }? = nil
+function Tech.leaveOut(parent: Instance, cf: CFrame, size: Vector3, name: string)
+	local list = leftOut
+	if list then
+		table.insert(list, { Model = parent, CFrame = cf, Size = size, Name = name })
+	end
+end
+-- Starts (a list) or stops (nil) recording the parts left out.
+function Tech.recordLeftOut(list: { LeftOut }?)
+	leftOut = list
+end
+
 --[[
 	A neon tube set in a dark channel (concept v2: saturated electric blue
 	with dark lines on both sides): a MetalDeep backing strip 0.12 thick,
@@ -509,9 +546,7 @@ end
 	Returns the CFrame of the display floor (items go there). opts: Neon,
 	Stripe, Case, Light, Top (Color3: a glowing top instead of glass),
 	Plinth (Color3: a small neon plinth under the item), Backlight (Color3:
-	a glowing back panel inside the case), BackPlate (perf pass 1: one dark
-	plate behind the back panel instead of the two back corner posts, for
-	cases whose back faces a wall). 7-16 parts.
+	a glowing back panel inside the case). 7-16 parts.
 ]]
 function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: number, height: number, opts: Opts?): CFrame
 	local o: Opts = opts or {}
@@ -561,19 +596,13 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 		-- posts (no neon pane edges: the case reads as one lit box, not 4 panes)
 		for _, sx in { -1, 1 } do
 			for _, sz in { -1, 1 } do
-				if not (o.BackPlate and sz > 0) then
-					bit(
-						parent,
-						base * CFrame.new(sx * (width / 2 - 0.17), height + ch / 2, sz * (depth / 2 - 0.17)),
-						Vector3.new(0.3, ch, 0.3),
-						Tech.MetalDark
-					)
-				end
+				bit(
+					parent,
+					base * CFrame.new(sx * (width / 2 - 0.17), height + ch / 2, sz * (depth / 2 - 0.17)),
+					Vector3.new(0.3, ch, 0.3),
+					Tech.MetalDark
+				)
 			end
-		end
-		if o.BackPlate then
-			-- the back posts' faces seen through the glass, as one plate behind the back panel
-			bit(parent, base * CFrame.new(0, height + ch / 2, depth / 2 - 0.08), Vector3.new(width - 0.04, ch, 0.12), Tech.MetalDark)
 		end
 		glow(parent, base * CFrame.new(0, height + ch + 0.14, -depth / 2 - 0.06), Vector3.new(width, 0.2, 0.1), neon)
 		-- the light strip under the case lid, along its front edge: it shows

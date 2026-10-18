@@ -348,15 +348,17 @@ async function main() {
   camera.position.set(...shot.position);
   camera.lookAt(new THREE.Vector3(...shot.target));
 
-  // ---- parts, instanced by (shape, material kind, transparency) ----
+  // ---- parts, instanced by (shape, material kind, transparency, CastShadow) ----
   const groups = new Map();
   scene.parts.forEach((p, index) => {
-    const [shape, sx, sy, sz, cf, color, mat, transparency, reflectance] = p;
+    const [shape, sx, sy, sz, cf, color, mat, transparency, reflectance, castShadow] = p;
     if (Math.min(sx, sy, sz) < 1e-4) return; // flat parts give NaN normals (one NaN pixel blacks out the bloom)
     const kind = materialKind(mat, reflectance);
     const tKey = Math.round(transparency * 10) / 10;
-    const key = `${shape}|${kind}|${tKey}`;
-    if (!groups.has(key)) groups.set(key, { shape, kind, transparency: tKey, items: [] });
+    // a part with CastShadow off casts none here either (older scene files: every part casts)
+    const shadow = castShadow !== 0;
+    const key = `${shape}|${kind}|${tKey}|${shadow ? 1 : 0}`;
+    if (!groups.has(key)) groups.set(key, { shape, kind, transparency: tKey, castShadow: shadow, items: [] });
     groups.get(key).items.push({ sx, sy, sz, cf, color, index });
   });
   const partMatrices = [];
@@ -374,7 +376,7 @@ async function main() {
       const boost = g.kind === "neon" ? (isCaveShot ? 1.5 : 2.2) : 1;
       mesh.setColorAt(i, srgb(it.color, boost));
     });
-    mesh.castShadow = g.kind !== "neon" && g.transparency < 0.3;
+    mesh.castShadow = g.castShadow && g.kind !== "neon" && g.transparency < 0.3;
     mesh.receiveShadow = g.kind !== "neon";
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

@@ -521,8 +521,9 @@ return function(T, Loader)
 			end
 			return n
 		end
-		-- lit bays: one item plinth per bay, each inside a glass case (perf
-		-- pass 1: the two bays of a side share one case behind the wall)
+		-- lit bays: one item plinth per bay, each inside its window's glass
+		-- case (perf pass 1: the two bays of a side share the plinth, lid and
+		-- dark glass behind the wall, the glass case stays one per window)
 		local function bayCases(m): number
 			local cases, n = {}, 0
 			for _, d in m:GetDescendants() do
@@ -811,12 +812,13 @@ return function(T, Loader)
 			end
 			return parts, neon
 		end
-		-- (427 / 444 / 320 parts and 177 wheel neon parts before)
+		-- (427 / 444 / 320 parts and 177 wheel neon parts before; 398 / 415
+		-- with a glass case per window and the porch cases' back posts)
 		local shop = count(pkg.Shop)
 		local upgrades = count(pkg.Upgrades)
 		local wheel, wheelNeon = count(pkg.SpinWheel)
-		T.le(shop, 395, "SHOP parts")
-		T.le(upgrades, 412, "UPGRADES parts")
+		T.le(shop, 398, "SHOP parts")
+		T.le(upgrades, 415, "UPGRADES parts")
 		T.le(wheel, 317, "SPIN & WIN parts")
 		T.le(wheelNeon, 174, "SPIN & WIN neon parts")
 		-- no part lies wholly inside an opaque block (it would never be seen)
@@ -862,5 +864,190 @@ return function(T, Loader)
 				end
 			end
 		end
+	end)
+	-- Builds the SHOP and UPGRADES at a width, and the SPIN & WIN at a
+	-- footprint, recording what the builders leave out (Tech.leaveOut).
+	local function withSizes(fn: () -> ())
+		local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades"), LobbyLayout.get("SpinWheel") }
+		local sizes = {}
+		for i, piece in pieces do
+			sizes[i] = piece.Size
+		end
+		local ok, err = pcall(fn)
+		for i, piece in pieces do
+			piece.Size = sizes[i]
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	T.test("districts (perf pass 1): every part a builder leaves out stays hidden (both stall widths, both wheel sizes)", function()
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local Wheel = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Wheel")
+		local Tech = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Tech")
+		-- a sliver thinner than this never reads (the crack between a
+		-- showcase stand's back and its pylon)
+		local TOL = 0.1
+		local function opaque(m): { any }
+			local out = {}
+			for _, d in m:GetDescendants() do
+				if d:IsA("Part") and d.Shape == roblox.Enum.PartType.Block and d.Transparency == 0 then
+					table.insert(out, d)
+				end
+			end
+			return out
+		end
+		-- every point of the box (corners, edge and face middles, center)
+		-- lies inside an opaque block of its model, within TOL
+		local function shows(entry, blocks): any
+			local h = entry.Size / 2
+			for _, fx in { -1, 0, 1 } do
+				for _, fy in { -1, 0, 1 } do
+					for _, fz in { -1, 0, 1 } do
+						local p = (entry.CFrame * CFrame.new(fx * h.X, fy * h.Y, fz * h.Z)).Position
+						local inside = false
+						for _, b in blocks do
+							local q = b.CFrame:PointToObjectSpace(p)
+							local hb = b.Size / 2 + Vector3.new(TOL, TOL, TOL)
+							if math.abs(q.X) <= hb.X and math.abs(q.Y) <= hb.Y and math.abs(q.Z) <= hb.Z then
+								inside = true
+								break
+							end
+						end
+						if not inside then
+							return p
+						end
+					end
+				end
+			end
+			return nil
+		end
+		local function build(builder): { [string]: number }
+			local list = {}
+			local m = roblox.Instance.new("Model")
+			Tech.recordLeftOut(list)
+			local ok, err = pcall(builder.build, m, Rng.new("Lobby/Districts/leftout"))
+			Tech.recordLeftOut(nil)
+			if not ok then
+				error(err, 0)
+			end
+			local counts, blocksOf = {}, {}
+			for _, entry in list do
+				counts[entry.Name] = (counts[entry.Name] or 0) + 1
+				local blocks = blocksOf[entry.Model]
+				if not blocks then
+					blocks = opaque(entry.Model)
+					blocksOf[entry.Model] = blocks
+				end
+				local at = shows(entry, blocks)
+				T.falsy(at, `{entry.Model.Name}: the left-out {entry.Name} would show at {at}`)
+			end
+			return counts
+		end
+		withSizes(function()
+			local shop, upgrades = LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades")
+			for _, width in { 20, 28 } do
+				shop.Size = Vector3.new(width, 20, 14)
+				upgrades.Size = Vector3.new(width, 20, 14)
+				local counts = build(Stalls)
+				-- two stalls, a mid pylon on each side from 27 studs wide
+				local mids = if width >= 27 then 4 else 0
+				T.eq(counts.PylonLip or 0, mids, `{width} wide: mid pylon foot lips left out`)
+				T.eq(counts.PylonBand or 0, mids, `{width} wide: mid pylon bands left out`)
+			end
+			local wheel = LobbyLayout.get("SpinWheel")
+			local layoutSize = wheel.Size
+			for _, size in { layoutSize, Vector3.new(18, 26, 10), Vector3.new(26, 36, 12) } do
+				wheel.Size = size
+				local counts = build(Wheel)
+				if size == layoutSize then
+					T.eq(counts.RimChord or 0, 1, "the 6 o'clock rim chord inside the bottom bracket is left out")
+				end
+			end
+		end)
+	end)
+
+	T.test("districts (perf pass 1): the SHOP and UPGRADES facades have openings, no slits, no doubled faces (both widths)", function()
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local F = Stalls.Facade
+		withSizes(function()
+			for _, width in { 20, 28 } do
+				local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades") }
+				for _, piece in pieces do
+					piece.Size = Vector3.new(width, 20, 14)
+				end
+				local m = roblox.Instance.new("Model")
+				Stalls.build(m, Rng.new("Lobby/Districts/facade"))
+				for _, piece in pieces do
+					local frame = LobbyLayout.frame(piece)
+					local hw = width / 2
+					-- opaque boxes in the stall's frame (every part is square to it)
+					local boxes = {}
+					local walls = {}
+					for _, d in m[piece.Id]:GetDescendants() do
+						if d:IsA("BasePart") and d.Transparency == 0 then
+							local c = frame:PointToObjectSpace(d.CFrame.Position)
+							local h = frame:VectorToObjectSpace(d.CFrame:VectorToWorldSpace(d.Size / 2))
+							h = Vector3.new(math.abs(h.X), math.abs(h.Y), math.abs(h.Z))
+							local box = { Min = c - h, Max = c + h, Part = d }
+							table.insert(boxes, box)
+							-- a facade wall block: centered on the facade plane, the wall's depth
+							if math.abs(c.Z - F.Z) < 0.01 and math.abs(2 * h.Z - F.Depth) < 0.01 and d:IsA("Part") then
+								table.insert(walls, box)
+							end
+						end
+					end
+					local function covered(x: number, y: number): boolean
+						for _, b in boxes do
+							if
+								x >= b.Min.X - 1e-3
+								and x <= b.Max.X + 1e-3
+								and y >= b.Min.Y - 1e-3
+								and y <= b.Max.Y + 1e-3
+								and F.Z >= b.Min.Z
+								and F.Z <= b.Max.Z
+							then
+								return true
+							end
+						end
+						return false
+					end
+					-- every gap in the wall plane is an opening (door, window), never a slit
+					local y = F.Floor + 0.1
+					while y < F.Floor + F.DoorHeight do
+						local runStart: number? = nil
+						local x = -hw + 0.3
+						while x <= hw - 0.3 + 1e-6 do
+							local open = not covered(x, y)
+							if open and not runStart then
+								runStart = x
+							elseif not open and runStart then
+								T.truthy(
+									x - runStart >= 1.5,
+									`{piece.Id} ({width} wide): a {x - runStart} stud slit at x {runStart}, y {y}`
+								)
+								runStart = nil
+							end
+							x += 0.05
+						end
+						T.eq(runStart, nil, `{piece.Id} ({width} wide): the facade is closed at its ends (y {y})`)
+						y += 0.2
+					end
+					-- no two wall blocks share a piece of the facade's faces (z-fighting)
+					for i, a in walls do
+						for j = i + 1, #walls do
+							local b = walls[j]
+							local ox = math.min(a.Max.X, b.Max.X) - math.max(a.Min.X, b.Min.X)
+							local oy = math.min(a.Max.Y, b.Max.Y) - math.max(a.Min.Y, b.Min.Y)
+							T.falsy(
+								ox > 0.01 and oy > 0.01,
+								`{piece.Id} ({width} wide): {a.Part.Name} and {b.Part.Name} overlap in the facade plane ({ox} x {oy})`
+							)
+						end
+					end
+				end
+			end
+		end)
 	end)
 end

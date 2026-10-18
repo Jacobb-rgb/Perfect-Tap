@@ -107,7 +107,7 @@ LobbyLayout.Budget = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 2000, LobbyParts = 2000, Lights = 11, LobbyLights = 11 }, -- + facade aprons, planters, ore carts, + the blaster gallery (~330 parts, 1 light)
-		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,070 parts after perf pass 1)
+		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
 		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },

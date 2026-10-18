@@ -52,8 +52,11 @@
 	map) and one light (8 plots).
 	Perf pass 1 (phone audit fix 4): no see-through part (the holo-rings are
 	opaque), no shadow from small trim (TRIM: pillar caps and feet, podium
-	collars, the chimney flange, the platform step, the buffer stop struts),
-	a longer brick course instead of a staggered pair on the side walls.
+	collars, the chimney flange, the buffer stop struts: under a stud thick
+	and at most 3 studs long, the rule tests/PlotService.spec.luau checks),
+	none from the platform step either (STEP: 5 studs long, so outside that
+	rule; it stays queryable like the platform it steps up to), a longer
+	brick course instead of a staggered pair on the side walls.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -126,10 +129,17 @@ local NAVY = rgb(27, 29, 41) -- the podium's octagon step (deep gunmetal)
 local SHELL = rgb(44, 48, 64) -- gunmetal Space Station panels (podium base, foundry frame)
 local PODIUM_TOP = rgb(70, 76, 98) -- the podium's top plate: a dark inset in the thin glowing rim (round 2)
 local PODIUM_COLUMN = rgb(66, 72, 92)
--- the podium's holo-ring (the lobby's Tech blue rgb(40, 130, 255): no debug-cyan
--- outline); perf pass 1: opaque, so a paler tone of it reads like the old 0.4
--- see-through bars over the pale yard
-local HOLO = rgb(64, 124, 206)
+-- the podium's holo-ring: the lobby's Tech blue rgb(40, 130, 255) (no debug-cyan
+-- outline). Perf pass 1: the bars are opaque, so holoTone mixes a glow color
+-- 0.4 of the way to HOLO_BEHIND (the grey-blue the old 0.4 see-through bars
+-- let through over the yard): a darker, less saturated blue with the same soft
+-- look. A podium skin's glow on the ring goes through it too (ArtifactService).
+local HOLO_BEHIND = rgb(100, 115, 133)
+local HOLO_SEE_THROUGH = 0.4
+local function holoTone(glow: Color3): Color3
+	return glow:Lerp(HOLO_BEHIND, HOLO_SEE_THROUGH)
+end
+local HOLO = holoTone(rgb(40, 130, 255)) -- about rgb(64, 124, 206)
 local BASE_LIGHT = rgb(40, 140, 255) -- the podium base's corner lights
 local LOCK_GOLD = rgb(255, 200, 40)
 local LOCK_STEEL = rgb(230, 232, 240)
@@ -143,6 +153,9 @@ local FOUNDRY_INSET = 3.5
 
 PlotBuilder.RimGold = RIM_GOLD
 PlotBuilder.RimLocked = RIM_LOCKED
+PlotBuilder.HoloColor = HOLO
+-- A glow color as an opaque holo-ring bar shows it (see HOLO).
+PlotBuilder.holoTone = holoTone
 
 -- Border walls (plot-local): the center line of the walls around the pad
 -- (the pad's outer edge, |x| or |z|), pillars 0.1 further out so their caps
@@ -158,9 +171,13 @@ local PILLAR_LINE = WALL_LINE + 0.1
 local SOLID = { CanTouch = false } -- players and items bump into it
 local FENCE = { CanTouch = false, CanQuery = false }
 local THIN = { CanTouch = false, CanQuery = false, CastShadow = false } -- collides, too thin for a shadow
--- (perf pass 1) small trim under ~1 stud thick: pillar caps and feet, the
--- podium collar, the platform step: it still collides, but casts no shadow
+-- (perf pass 1) small trim under a stud thick and at most 3 studs long:
+-- pillar caps and feet, the podium collar, the chimney flange, the buffer
+-- stop struts: it still collides, but casts no shadow
 local TRIM = THIN
+-- (perf pass 1) the train platform's step: no shadow (a 0.5-stud riser), but
+-- solid and queryable like the platform (SOLID without the shadow)
+local STEP = { CanTouch = false, CastShadow = false }
 local GHOST = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
 
 local function model(name: string, parent: Instance): Model
@@ -435,7 +452,14 @@ local function pillar(parent: Instance, cf: CFrame, kit: WallKit, at: Vector3, o
 	local shaft =
 		Geo.block(parent, cf * CFrame.new(at.X, kit.Bottom + height / 2, at.Z), Vector3.new(width, height, width), WALL_STONE, nil, FENCE)
 	shaft.Name = "Pillar"
-	Geo.block(parent, cf * CFrame.new(at.X, top + kit.PillarCapH / 2, at.Z), Vector3.new(capWidth, kit.PillarCapH, capWidth), PILLAR_CAP, nil, TRIM)
+	Geo.block(
+		parent,
+		cf * CFrame.new(at.X, top + kit.PillarCapH / 2, at.Z),
+		Vector3.new(capWidth, kit.PillarCapH, capWidth),
+		PILLAR_CAP,
+		nil,
+		TRIM
+	)
 	if o.Foot then
 		-- brick-wall-end's wider stone foot
 		local footTop = kit.PlinthTop * 0.85
@@ -730,8 +754,9 @@ end
 -- (round 3: thinner, tighter and see-through: the big hexagons read as
 -- gizmos over the yard)
 -- (perf pass 1: opaque, so the 192 bars of the 8 bases leave the
--- transparent pass; a darker blue gives the same soft glow the 0.4
--- see-through bars had, nobody looks through a 0.09-stud bar)
+-- transparent pass; a darker, less saturated blue (holoTone) gives the
+-- same soft glow the 0.4 see-through bars had, nobody looks through a
+-- 0.09-stud bar)
 PlotBuilder.HoloRing = { Y = 5.2, Radius = 1.88, Bar = 0.09, Sides = 6, Transparency = 0 }
 
 -- The holo-ring as a closed polygon of bars (`Sides` bars, each tangent to
@@ -1010,7 +1035,7 @@ local function trainStop(yard: Model, cf: CFrame)
 		nil,
 		GHOST
 	)
-	Geo.block(m, cf * CFrame.new(0.7, 0.25, c.Z - rect.Size.Z / 2 - 0.5), Vector3.new(5, 0.5, 1), WALL_STONE, nil, { CanTouch = false, CastShadow = false })
+	Geo.block(m, cf * CFrame.new(0.7, 0.25, c.Z - rect.Size.Z / 2 - 0.5), Vector3.new(5, 0.5, 1), WALL_STONE, nil, STEP)
 	-- sign on two square stone posts (the walls' stone) just beyond the board's
 	-- ends (they never cut into its faces), a little taller than the board
 	local signZ = c.Z + 0.3

@@ -109,17 +109,29 @@ that line.
 | 10 | Small loops: `ItemService` maintenance caches the owner root per pass and drops the per-record closure; `CleaningService` keeps a list of stations instead of scanning every machine; `refreshLocks` compares before writing; profile the Ore Magnet (≤ 640 raycasts/s) | ~3k lookups/s | TERRA FORGE Roblox hra vývoj (steps 6-7: the magnet) + Návrhy strojů (CleaningService) |
 
 **Status (branch perf/pass1, map v26).**
-- Fix 1 done: StateService coalesces at 0.5 s (the first push after a join at once), sends only the
+- Fix 1 done: StateService throttles pushes to one per 0.5 s per player with a leading edge (a push
+  after a quiet spell, e.g. a buy or a golem equip, goes out at once; changes within 0.5 s of the
+  last push wait for the rest of it), sends only the
   sections whose fingerprint changed (Placed only after a layout edit), sends changed flat sections
   (Storage and Foundry summaries, Stats, Train, Build...) as `Patch { Set, Clear }`, lists vanished
   sections in `Removed`, marks the first push `Full` and keeps the steps 6-7 `Kept` list; the coin
   balance and podium income are the player attributes `Coins` / `IncomePerSec` (at most every
-  0.25 s), which HudController reads. Busy-player estimate (tests/StateService.spec.luau): ~34.5 KB/s
-  -> ~1.3 KB/s per client (State plus every player's coin attribute).
+  0.25 s; 0 when the balance or income is not a finite number), which HudController reads. What the
+  client has is saved only after `Net.fire` went through (a failed push makes the next one whole),
+  and a client that gets a partial push before any whole one asks again with `StateSync`.
+  Busy-player estimate (tests/StateService.spec.luau): ~34.5 KB/s -> ~1.3 KB/s per client (State
+  plus every player's coin attribute).
 - Fix 5 done: IntakeService asks `plotAt` first and tests only the town zones over that plot or in
   the item's 32-stud town square, from a cached index of zone boxes (rebuilt when a zone is added or
   its part moves, resizes or leaves): ~26k -> ~2k box tests/s.
 - Fixes 2-4 and 6-10 are still open (other chats own ItemService, ConveyorService, DataService).
+- Phone audit ([PERF_AUDIT.md](PERF_AUDIT.md), branch `docs/perf-audit`; update its table when it lands):
+  item 4 (plots) done: 0 see-through parts, small trim without shadows (the preview now honours
+  `CastShadow`, so shadow cuts show in renders); item 3 done for the west-sea ShipA / ShipB only
+  (the airship still bobs); **items 7-8 still open**: SPIN & WIN neon 177 -> 174 (one hidden rim chord
+  and two stair studs), the 16 inner-edge rim chords, 8 dividers and 16 segment triangles are
+  untouched; Districts neon only about -12 of 858 (the shared bay strips). A real fix for item 7 is
+  fewer, longer rim / divider neon parts on the static frame, not on the turning disc.
 
 Not changed on purpose: `StreamingTargetRadius` 384 keeps every plot (and its belt items) in every client's
 range. Dropping it to ~256 would cut far-plot replication, but the town would pop in on PCs; after fixes 3-4,

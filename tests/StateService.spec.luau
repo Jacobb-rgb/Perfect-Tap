@@ -1,10 +1,13 @@
 -- StateService network diet (perf pass 1, docs/SERVER_PERF_AUDIT.md #1):
 -- pushes carry only the sections that changed (Placed only after a layout
 -- edit), a removed section is announced, the first push after a (re)join is
--- whole and goes out at once, later pushes are coalesced, the coin
--- attributes follow the balance, the client's StateController.merge turns
--- every partial push back into the whole snapshot (steps 6-7 Kept keys too),
--- and a busy player's State bytes per second drop a lot.
+-- whole and goes out at once, a push after a quiet spell goes out at once
+-- and pushes close together are throttled, the coin attributes follow the
+-- balance (0 when it or the income is broken), the client's
+-- StateController.merge turns every partial push back into the whole
+-- snapshot (steps 6-7 Kept keys too), a failed or missed push heals (the
+-- next push is whole; StateSync), and a busy player's State bytes per
+-- second drop a lot.
 return function(T, Loader)
 	local task = require("@lune/task")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
@@ -158,7 +161,11 @@ return function(T, Loader)
 				return w.byPlayer[p]
 			end)
 			rawset(Net, "fire", function(name: string, p: any, payload: any)
-				table.insert(w.fired, { Name = name, Player = p, Payload = payload })
+				if w.failNext then
+					w.failNext = false
+					error("FireClient rejected the payload")
+				end
+				table.insert(w.fired, { Name = name, Player = p, Payload = payload, At = os.clock() })
 			end)
 			Bonuses._test.reset()
 			Bonuses._test.setClock(function()
@@ -333,21 +340,21 @@ return function(T, Loader)
 		T.eq(alone.Gear, nil)
 	end)
 
-	withState("StateService: the first push after a (re)join is whole and at once, later ones are coalesced", function(w)
-		T.eq(StateService.PushSeconds, 0.5, "default coalesce window")
-		StateService.PushSeconds = 0.15
+	withState("StateService: a push after a quiet spell goes out at once, pushes close together are throttled", function(w)
+		T.eq(StateService.PushSeconds, 0.5, "default throttle window")
+		local WINDOW = 0.3
+		StateService.PushSeconds = WINDOW
 		local data = busyData()
 		local p = fakePlayer(44)
 		w.byPlayer[p] = data
 		StateService.push(p)
-		task.wait()
 		waitUntil(function()
 			return #w.fired >= 1
 		end, 0.05)
 		T.eq(#w.fired, 1, "the first push goes out at once")
 		T.eq(w.fired[1].Payload.Full, true, "whole")
 		T.eq(#w.fired[1].Payload.Placed, 70)
-		-- a burst of changes: one push after the window
+		-- a burst right after it: held back for the rest of the window, one push
 		for _ = 1, 10 do
 			data.Coins += 1
 			StateService.push(p)
@@ -358,21 +365,44 @@ return function(T, Loader)
 			return #w.fired >= 2
 		end, 1)
 		T.eq(#w.fired, 2, "one push for the burst")
+		T.truthy(w.fired[2].At - w.fired[1].At >= WINDOW - 0.02, "not before the window ends")
 		T.eq(w.fired[2].Payload.Full, nil)
 		T.eq(w.fired[2].Payload.Coins, data.Coins, "the newest coins")
 		T.eq(w.fired[2].Payload.Placed, nil, "no Placed")
-		task.wait(0.2)
+		task.wait(WINDOW + 0.1)
 		T.eq(#w.fired, 2, "no push without a change")
+		-- a single action after a quiet spell (a buy, a golem equip): at once,
+		-- not a window later (the menus redraw from it right after the answer)
+		data.Coins -= 100
+		local asked = os.clock()
+		StateService.push(p)
+		waitUntil(function()
+			return #w.fired >= 3
+		end, 0.1)
+		T.eq(#w.fired, 3, "an isolated push goes out at once")
+		T.lt(w.fired[3].At - asked, 0.1, "within a frame or two")
+		T.eq(w.fired[3].Payload.Coins, data.Coins)
+		-- a second action right after it waits for the rest of the window
+		data.Coins -= 50
+		StateService.push(p)
+		task.wait(0.05)
+		T.eq(#w.fired, 3, "the next one is throttled")
+		waitUntil(function()
+			return #w.fired >= 4
+		end, 1)
+		T.eq(#w.fired, 4)
+		T.truthy(w.fired[4].At - w.fired[3].At >= WINDOW - 0.02, "at most one push per window")
+		T.eq(w.fired[4].Payload.Coins, data.Coins)
 		-- left and came back (PlayerRemoving -> forget): whole again, at once
 		StateService.forget(p)
 		T.falsy(StateService.hasSent(p))
 		StateService.push(p)
 		waitUntil(function()
-			return #w.fired >= 3
+			return #w.fired >= 5
 		end, 0.05)
-		T.eq(#w.fired, 3, "at once after the rejoin")
-		T.eq(w.fired[3].Payload.Full, true, "whole after the rejoin")
-		T.eq(#w.fired[3].Payload.Placed, 70, "Placed again")
+		T.eq(#w.fired, 5, "at once after the rejoin")
+		T.eq(w.fired[5].Payload.Full, true, "whole after the rejoin")
+		T.eq(#w.fired[5].Payload.Placed, 70, "Placed again")
 		-- a player who left before the push: nothing is sent
 		local gone = fakePlayer(45)
 		w.byPlayer[gone] = busyData()
@@ -413,6 +443,118 @@ return function(T, Loader)
 		w.income = 9
 		StateService.send(p)
 		T.eq(p.attrs.IncomePerSec, 9)
+		-- the podium provider failed (no Income) or gave NaN: 0, not the old
+		-- rate (the HUD would count coins up at it for ever)
+		w.income = nil
+		StateService.send(p)
+		T.eq(p.attrs.IncomePerSec, 0, "no income: 0")
+		w.income = 7
+		StateService.send(p)
+		w.income = 0 / 0
+		StateService.send(p)
+		T.eq(p.attrs.IncomePerSec, 0, "NaN income: 0")
+		-- a broken balance: 0 too, never the last good one
+		data.Coins = 0 / 0
+		StateService.writeCoins(p)
+		T.eq(p.attrs.Coins, 0, "NaN coins: 0")
+		data.Coins = 500
+		StateService.writeCoins(p)
+		T.eq(p.attrs.Coins, 500)
+	end)
+
+	withState("StateService: a push that failed is not taken as delivered; StateSync makes the next push whole", function(w)
+		StateService.PushSeconds = 0.05
+		local data = busyData()
+		local p = fakePlayer(49)
+		w.byPlayer[p] = data
+		local client: any = nil
+		local function deliver()
+			local fire = w.fired[#w.fired]
+			client = StateController.merge(client, wire(fire.Payload))
+			return fire.Payload
+		end
+		StateService.send(p)
+		deliver()
+		T.truthy(StateService.hasSent(p))
+		-- a layout edit whose push fails (FireClient threw): not remembered
+		data.PlacedMachines[2].X = 11
+		w.failNext = true
+		local fired = #w.fired
+		StateService.send(p)
+		T.eq(#w.fired, fired, "nothing reached the client")
+		T.falsy(StateService.hasSent(p), "forgotten: the next push is whole")
+		-- the next push (a coin change only) carries Placed again, whole
+		data.Coins += 5
+		StateService.send(p)
+		local push = deliver()
+		T.eq(push.Full, true, "whole after a failed push")
+		T.truthy(push.Placed and push.Placed[2].X == 11, "the edit the client missed")
+		T.truthy(deepEqual(client, StateService.snapshot(p)), "the client is whole again")
+		-- a push that went out but never got merged (the client missed it):
+		-- StateSync forgets what the server sent, the next push is whole
+		data.Coins += 1
+		StateService.send(p)
+		StateService.resync(p)
+		T.falsy(StateService.hasSent(p))
+		waitUntil(function()
+			return w.fired[#w.fired].Payload.Full == true
+		end, 1)
+		push = deliver()
+		T.eq(push.Full, true, "whole after StateSync")
+		T.eq(#push.Placed, 70)
+		-- before the first push StateSync does nothing (that push is whole anyway)
+		local newcomer = fakePlayer(50)
+		w.byPlayer[newcomer] = busyData()
+		StateService.resync(newcomer)
+		task.wait(0.1)
+		for _, fire in w.fired do
+			T.truthy(fire.Player ~= newcomer, "no push from StateSync before the first one")
+		end
+	end)
+
+	withState("StateController: a partial push before any whole one asks for StateSync instead of showing", function(w)
+		local savedSend = rawget(Net, "send")
+		local asked = 0
+		rawset(Net, "send", function(name: string)
+			if name == "StateSync" then
+				asked += 1
+			end
+		end)
+		local savedSync = StateController.SyncSeconds
+		local ok, err = pcall(function()
+			StateController._test.reset()
+			StateController.SyncSeconds = 0.1
+			local heard = 0
+			StateController.onChanged(function()
+				heard += 1
+			end)
+			-- the Full push went missing: a partial one comes first
+			StateController.receive({ Coins = 5, Kept = { "Gear" } })
+			T.eq(StateController.get(), nil, "not shown")
+			T.eq(asked, 1, "asked for a whole push")
+			StateController.receive({ Coins = 6 })
+			T.eq(asked, 1, "at most every SyncSeconds")
+			task.wait(0.15)
+			StateController.receive({ Coins = 7 })
+			T.eq(asked, 2, "asked again later")
+			T.eq(heard, 0, "the listeners heard nothing partial")
+			-- the whole push arrives: shown, partial ones merge on top again
+			StateController.receive({ Full = true, Coins = 8, Gear = { Boots = 1 } })
+			T.eq(StateController.get().Coins, 8)
+			StateController.receive({ Coins = 9, Kept = { "Gear" } })
+			local now = StateController.get()
+			T.eq(now.Coins, 9)
+			T.eq(now.Gear.Boots, 1, "merged onto the whole one")
+			T.eq(asked, 2, "no request once a whole push came")
+			task.wait()
+			T.eq(heard, 2, "the listeners heard the two whole snapshots")
+		end)
+		StateController._test.reset()
+		StateController.SyncSeconds = savedSync
+		rawset(Net, "send", savedSend)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	withState("StateService: a busy player's State bytes per second drop a lot", function(w)
