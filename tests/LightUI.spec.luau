@@ -308,6 +308,71 @@ return function(T, Loader)
 		T.eq(label.TextStrokeTransparency, 1, "the thin built-in edge is off")
 	end)
 
+	T.test("LightUI: side menu entries become light tiles and a MORE flyout", function()
+		local HudBubble = ui("HudBubble")
+		local SideMenuView = ui("SideMenuView")
+		withLight(function()
+			local hud = HudBubble.buildGame(1.25)
+			local faces = {}
+			for _, entry in SideMenuView.sorted() do
+				local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+				faces[entry.Id] = if entry.Group == "Main"
+					then HudBubble.claimTile(hud.Menu, entry.Id, spec)
+					else HudBubble.addMore(hud.Menu, entry.Id, spec)
+			end
+			local flyout = hud.Gui:FindFirstChild("MoreFlyout")
+			T.truthy(flyout, "the MORE flyout")
+			T.falsy(flyout.Visible, "starts shut")
+			T.truthy((hud.Menu:FindFirstChild("More") :: any).Visible, "MORE tile shown once it has entries")
+			for _, entry in SideMenuView.Entries do
+				local face = faces[entry.Id]
+				T.truthy(face, "tile for " .. entry.Id)
+				local icon = face:FindFirstChild("Icon")
+				T.truthy(icon and icon:GetAttribute("Icon") ~= "more", "a 3D icon for " .. entry.Id)
+				if entry.Group == "More" then
+					T.truthy(face:IsDescendantOf(flyout), entry.Id .. " behind MORE")
+				else
+					T.truthy(face:IsDescendantOf(hud.Menu), entry.Id .. " on the left")
+				end
+			end
+			T.truthy(HudBubble.toggleMore(hud.Menu), "MORE opens")
+			T.falsy(HudBubble.toggleMore(hud.Menu), "and shuts")
+			HudBubble.setTileBadge(faces.Codex, 3)
+			T.truthy(faces.Codex:FindFirstChild("Badge"), "badge")
+			HudBubble.setTileBadge(faces.Codex, 0)
+			T.falsy(faces.Codex:FindFirstChild("Badge"), "badge gone at 0")
+			HudBubble.setTileVisible(hud.Menu, "Golems", false)
+			T.falsy((hud.Menu:FindFirstChild("Golems") :: any).Visible, "hidden entry hides its tile")
+		end)
+	end)
+
+	T.test("LightUI: the steps 6-7 windows wear the light skin only with the switch on", function()
+		local function builds(): { [string]: any }
+			return {
+				Boost = ui("BoostView").build(false).Gui,
+				BoostChips = ui("BoostView").buildChips().Gui,
+				Capsule = ui("CapsuleView").build(false).Gui,
+				Opening = ui("CapsuleView").buildOpening(false).Gui,
+				Collection = ui("CollectionView").build(false).Gui,
+				Banner = ui("CollectionView").buildBanner(false).Gui,
+				Enchant = ui("EnchantView").build(false).Gui,
+				Gear = ui("GearShopView").build(false).Gui,
+				Golem = ui("GolemView").build(false).Gui,
+				Story = ui("StoryView").build(false).Gui,
+				Wheel = ui("WheelView").build(false).Gui,
+				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
+			}
+		end
+		for name, gui in builds() do
+			T.falsy(gui:GetAttribute("LightSkin"), "switch off: today's " .. name)
+		end
+		withLight(function()
+			for name, gui in builds() do
+				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
+			end
+		end)
+	end)
+
 	T.test("LightUI: game HUD touch sizes on phones", function()
 		local layout = ui("HudBubble").layout(ui("HudBubble").scaleFor(Vector2.new(844, 390)))
 		T.truthy(layout.Compact, "a phone gets the compact layout")

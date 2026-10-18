@@ -51,6 +51,7 @@ local BACKGROUNDS: { [string]: Color3 } = {
 	[key(rgb(128, 118, 110))] = Roles.Settings.Base, -- grey "off" buttons
 	[key(rgb(74, 66, 60))] = Roles.Settings.Lip,
 	[key(rgb(120, 114, 108))] = rgb(150, 158, 176), -- dirty ore grey
+	[key(rgb(26, 40, 90))] = BubbleTheme.PanelTint, -- the Hall of Fame's navy boards
 }
 
 -- old text colour -> text colour on a light background (nil = keep the colour)
@@ -141,8 +142,10 @@ local function skinText(object: GuiObject)
 			stroke.Thickness = math.min(stroke.Thickness, 1.5)
 		end
 	else
-		-- on a colour or over the world: white with a navy edge
-		if key(label.TextColor3) == key(Theme.Text) or key(label.TextColor3) == key(Theme.TextDim) then
+		-- on a colour or over the world: white with a navy edge (also text we
+		-- inked while its background was light: a row that got selected)
+		local k = key(label.TextColor3)
+		if k == key(Theme.Text) or k == key(Theme.TextDim) or PLAIN_INK[k] then
 			label.TextColor3 = BubbleTheme.White
 		end
 		if stroke then
@@ -223,6 +226,10 @@ end
 
 -- Skins root now and keeps skinning new children and colour changes.
 function LightSkin.apply(root: Instance)
+	if root:GetAttribute("LightSkin") then
+		LightSkin.refresh(root) -- already watched (a window built inside another)
+		return
+	end
 	root:SetAttribute("LightSkin", true)
 	LightSkin.refresh(root)
 	pcall(function()
@@ -230,6 +237,15 @@ function LightSkin.apply(root: Instance)
 			if d:IsA("GuiObject") then
 				d:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
 					LightSkin.skin(d)
+					-- the texts on it read their backdrop again (a row selected / deselected)
+					for _, inner in d:GetDescendants() do
+						if inner:IsA("TextLabel") or inner:IsA("TextButton") or inner:IsA("TextBox") then
+							LightSkin.skin(inner)
+						end
+					end
+					if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+						LightSkin.skin(d)
+					end
 				end)
 			end
 			if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then

@@ -679,17 +679,43 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}
 end
 
+-- The side menu's IconNames (SideMenuView.Icons keys) -> 3D icon + colour role.
+HudBubble.EntryLooks = {
+	Golems = { Icon = "golem_GildedPorter", Role = "Golems" },
+	Shop = { Icon = "shop", Role = "Shop" },
+	Codex = { Icon = "book", Role = "Codex" },
+	Artifacts = { Icon = "artifact", Role = "Artifacts" },
+	Boards = { Icon = "trophy", Role = "Boards" },
+	Settings = { Icon = "cog", Role = "Settings" },
+	Store = { Icon = "coins", Role = "Shop" },
+	Elevator = { Icon = "lift", Role = "Base" },
+	Hoverboards = { Icon = "rainbow", Role = "Lobby" },
+	Wheel = { Icon = "wheel", Role = "Wheel" },
+	Gear = { Icon = "helmet", Role = "Gear" },
+} :: { [string]: { Icon: string, Role: string } }
+
+export type TileSpec = { Label: string?, IconName: string?, Order: number? }
+
+local function tileSize(menu: Instance): number
+	local grid = menu:FindFirstChildOfClass("UIGridLayout")
+	return if grid then grid.CellSize.X.Offset else 86
+end
+
 -- Shows a menu tile for a controller and returns its button (its Parent is
--- the tile holder, like UIKit.button's). Unknown ids get a new plain tile.
-function HudBubble.claimTile(menu: Instance, id: string): TextButton
+-- the tile holder, like UIKit.button's). Unknown ids get a new tile from
+-- `spec` (label, IconName -> EntryLooks, order after the known tiles).
+function HudBubble.claimTile(menu: Instance, id: string, spec: TileSpec?): TextButton
 	local holder = menu:FindFirstChild(id)
 	if not holder then
-		local size = 86
-		local grid = menu:FindFirstChildOfClass("UIGridLayout")
-		if grid then
-			size = grid.CellSize.X.Offset
-		end
-		local _, created = Bubble.tile(menu, { Name = id, Label = string.upper(id), Icon = "more", Role = "Plain", Size = size, LayoutOrder = 50 })
+		local look = if spec and spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
+		local _, created = Bubble.tile(menu, {
+			Name = id,
+			Label = if spec and spec.Label then spec.Label else string.upper(id),
+			Icon = if look then look.Icon else "more",
+			Role = if look then look.Role else "Plain",
+			Size = tileSize(menu),
+			LayoutOrder = 10 + (if spec and spec.Order then spec.Order else 40),
+		})
 		holder = created
 	end
 	local frame = holder :: Frame
@@ -732,6 +758,107 @@ function HudBubble.linkMenu(menu: Instance): { GuiObject }
 		link("NextSelectionDown", faces[i + columns])
 	end
 	return faces
+end
+
+-- Hides / shows a claimed tile (a controller that went away, a hidden entry).
+function HudBubble.setTileVisible(menu: Instance, id: string, visible: boolean)
+	local holder = menu:FindFirstChild(id)
+	if holder and holder:IsA("Frame") and holder.Visible ~= visible then
+		holder.Visible = visible
+		HudBubble.linkMenu(menu)
+	end
+end
+
+-- A count badge on a tile's face (0 hides it).
+function HudBubble.setTileBadge(face: GuiObject, count: number)
+	local badge = face:FindFirstChild("Badge")
+	if count <= 0 then
+		if badge then
+			badge:Destroy()
+		end
+		return
+	end
+	local text = if count > 99 then "99+" else tostring(count)
+	if badge then
+		local label = badge:FindFirstChildOfClass("TextLabel")
+		if label then
+			label.Text = text
+		end
+	else
+		Bubble.badge(face, text)
+	end
+end
+
+--[[
+	The MORE flyout of the game HUD: a white bubble right of the left menu
+	with a tile per "More" entry (addMore). The MORE tile opens and shuts it
+	(toggleMore); it starts shut. Returns the entry's button.
+]]
+function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButton
+	local gui = menu.Parent :: Instance
+	local flyout = gui:FindFirstChild("MoreFlyout") :: Frame?
+	if not flyout then
+		local columns = 3
+		local size = tileSize(menu)
+		local created = UIKit.new("Frame", {
+			Name = "MoreFlyout",
+			BackgroundColor3 = Theme.Panel,
+			BorderSizePixel = 0,
+			Position = UDim2.new(
+				(menu :: any).Position.X.Scale,
+				(menu :: any).Position.X.Offset + (menu :: any).Size.X.Offset + 20,
+				(menu :: any).Position.Y.Scale,
+				(menu :: any).Position.Y.Offset
+			),
+			Size = UDim2.fromOffset(columns * size + (columns - 1) * 16 + 32, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Visible = false,
+			ZIndex = 5,
+		}, gui)
+		created:SetAttribute("Columns", columns)
+		Bubble.corner(created, 24)
+		Bubble.stroke(created)
+		local pad = UIKit.padding(created, 16)
+		pad.PaddingTop = UDim.new(0, 24)
+		UIKit.new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(size, size + Theme.Lip),
+			CellPadding = UDim2.fromOffset(16, 24),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, created)
+		flyout = created
+		local more = HudBubble.claimTile(menu, "More")
+		more.Activated:Connect(function()
+			HudBubble.toggleMore(menu)
+		end)
+	end
+	local look = if spec.IconName then HudBubble.EntryLooks[spec.IconName] else nil
+	local face = Bubble.tile(flyout :: Frame, {
+		Name = id,
+		Label = spec.Label or string.upper(id),
+		Icon = if look then look.Icon else "more",
+		Role = if look then look.Role else "Plain",
+		Size = tileSize(menu),
+		LayoutOrder = spec.Order or 50,
+	})
+	HudBubble.linkMenu(flyout :: Frame)
+	return face
+end
+
+-- Opens / shuts the MORE flyout (nil = the other way round). Returns whether it is open.
+function HudBubble.toggleMore(menu: Instance, open: boolean?): boolean
+	local gui = menu.Parent :: Instance
+	local flyout = gui:FindFirstChild("MoreFlyout") :: Frame?
+	if not flyout then
+		return false
+	end
+	local on = if open == nil then not flyout.Visible else open
+	flyout.Visible = on
+	local more = menu:FindFirstChild("More")
+	local face = more and more:FindFirstChild("Face") :: GuiObject?
+	if face then
+		Bubble.select(face, on)
+	end
+	return on
 end
 
 -- The light look's gamepad selection: a thick gold rounded outline

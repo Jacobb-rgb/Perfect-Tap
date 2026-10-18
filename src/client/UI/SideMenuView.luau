@@ -56,6 +56,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local Theme = require(Shared.Config.UITheme)
 local UIKit = require(script.Parent.UIKit)
 local BoostView = require(script.Parent.BoostView)
@@ -647,6 +648,19 @@ function SideMenuView.cellOf(refs: Refs, button: Instance): number?
 		end
 	end
 	return nil
+end
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- With the light UI on (ships off) the entries live in the light HUD's tiles
+-- and MORE flyout (SideMenuController mirrors them); this column stays hidden.
+local darkBuild = SideMenuView.build
+SideMenuView.build = function(): Refs
+	local refs = darkBuild()
+	if UIConfig.lightUI() then
+		refs.Gui.Enabled = false
+		refs.Gui:SetAttribute("HiddenByLight", true)
+	end
+	return refs
 end
 
 return SideMenuView

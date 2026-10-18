@@ -32,6 +32,9 @@ if lightUI then
 		if gui:GetAttribute("LightSkin") then
 			LightSkin.refresh(gui)
 		end
+		if gui:GetAttribute("HiddenByLight") then
+			gui.Enabled = false -- (a preview that shows the old side menu column)
+		end
 	end
 end
 

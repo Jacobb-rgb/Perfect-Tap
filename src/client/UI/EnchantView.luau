@@ -49,6 +49,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
@@ -58,6 +59,8 @@ local Theme = require(Shared.Config.UITheme)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local BoostView = require(script.Parent.BoostView)
 local TechShopView = require(script.Parent.TechShopView)
 
@@ -1719,6 +1722,20 @@ function EnchantView.touchTargets(refs: Refs): { GuiObject }
 	table.insert(list, holderOf(refs.Detail.Odds.Prev))
 	table.insert(list, holderOf(refs.Detail.Odds.Next))
 	return list
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin); windows also hide Roblox's touch controls while open.
+local darkBuild = EnchantView.build
+EnchantView.build = function(compact: boolean?): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
+	end
+	return refs
 end
 
 return EnchantView

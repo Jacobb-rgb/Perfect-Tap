@@ -135,9 +135,32 @@ function Preview.build(Loader: any): { [string]: any }
 		discovered[id] = true
 	end
 
+	-- LIGHT_UI=1 (export_scene): the light HUD, with the side menu's entries as
+	-- its tiles and MORE flyout like SideMenuController does it
+	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local HudBubble = Loader.requirePath(UI .. "HudBubble")
+	local light = UIConfig.LightUI
+
 	local function hud(renderScale: number, uiScale: number): any
-		local refs = HudView.build()
+		local refs = if light then HudBubble.buildGame(uiScale, 1600 / renderScale * uiScale) else HudView.build()
 		refs.Gui.Scale.Scale = renderScale
+		if light then
+			for _, entry in SideMenuView.sorted() do
+				local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+				local face = if entry.Group == "Main"
+					then HudBubble.claimTile(refs.Menu, entry.Id, spec)
+					else HudBubble.addMore(refs.Menu, entry.Id, spec)
+				if entry.Id == "Store" then
+					(face.Parent :: any).Visible = false
+				elseif entry.Id == "Codex" then
+					HudBubble.setTileBadge(face, 2)
+				end
+			end
+			local more = refs.Menu:FindFirstChild("More")
+			if more then
+				HudBubble.setTileBadge(more:FindFirstChild("Face"), 2)
+			end
+		end
 		BuildView.menuButton(refs.Menu)
 		-- the bar for the screen this render stands for (in pt: 568 x 320 gets
 		-- the icon-only bar, as in the game)
@@ -169,6 +192,7 @@ function Preview.build(Loader: any): { [string]: any }
 		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Count = count, Touch = touch, DesignWidth = 1600 / renderScale }))
 		SideMenuView.setBadge(refs, "Codex", 2)
 		SideMenuView.setSoon(refs, "Store", true)
+		refs.Gui.Enabled = not light -- the light UI shows the entries as HUD tiles
 		return refs
 	end
 
@@ -206,7 +230,12 @@ function Preview.build(Loader: any): { [string]: any }
 		refs.Expanded = open == true
 		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Count = #SideMenuView.shown(refs), Touch = touch, DesignWidth = designW }))
 		SideMenuView.setBadge(refs, "Codex", 2)
-		local list = { hud(renderScale, uiScale).Gui }
+		refs.Gui.Enabled = not light
+		local hudRefs = hud(renderScale, uiScale)
+		if light and open then
+			HudBubble.toggleMore(hudRefs.Menu, true) -- (the light MORE flyout stands for the open grid)
+		end
+		local list = { hudRefs.Gui }
 		for _, gui in chips(renderScale, touch, designW, designH, touch and open == true) do
 			table.insert(list, gui)
 		end
