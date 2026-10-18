@@ -4,19 +4,21 @@
 	the elevator button takes you TO the elevator, E at the elevator opens
 	the floor picker, and the ride between floors is a short animation.
 
-	- Side menu: a "SideMenu" ScreenGui at the left edge with the elevator icon
-	  button (ElevatorView.buildSideMenu; other buttons can join the stack via
-	  ElevatorController.sideMenu()), shown only while the world has a stop
-	  (Workspace attribute TeleportConfig.ElevatorAttribute). Its chevrons
-	  pulse upward while idle; it bounces on hover, press and gamepad
-	  selection. Pressing it (or D-pad Left on a gamepad) asks for the
-	  "Elevator" teleport (TeleportController.request: same fade, cooldown and
-	  refusal toasts as the top bar): the server puts you at the stop of the
-	  floor you are on, else floor 1's.
+	- Side menu: the ELEVATOR button of main's left side menu
+	  (SideMenuView entry "Elevator", SideMenuController action) calls open()
+	  / toggle(): the "Elevator" teleport (TeleportController.request: same
+	  fade, cooldown and refusal toasts as the top bar); the server puts you
+	  at the stop of the floor you are on, else floor 1's. isOpen() / close()
+	  are the floor picker's (MenuPanels: one panel at a time, build mode
+	  closes it). available() = the world has a stop (Workspace attribute
+	  TeleportConfig.ElevatorAttribute): the side menu hides the button
+	  otherwise and is refreshed when that attribute changes. (D-pad Left is
+	  the side menu's: it jumps into the column.)
 	- Prompt: every "ElevatorPrompt" shows "Use" when you own the elevator and
 	  "Buy $500K" when you don't (a local text change; refreshed on every
 	  State). Triggering it is the only way to open the panel (OpenUI
-	  "Elevator" { Stop, Floor, Owned }): the Buy page or the floor cards.
+	  "Elevator" { Stop, Floor, Owned }; openAt): the Buy page or the floor
+	  cards; the other panels close (MenuPanels.closeOthers).
 	- Panel: BUY is greyed out while you can't afford it (pressing it says how
 	  much is missing); GO sends ElevatorAction { Action = "Go", Floor },
 	  LOCKED says which blaster the floor needs. Buying switches to the floor
@@ -66,6 +68,9 @@ local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local TeleportController = require(script.Parent.TeleportController)
+local SideMenuController = require(script.Parent.SideMenuController)
+local SideMenuView = require(script.Parent.Parent.UI.SideMenuView)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PromptController = require(script.Parent.PromptController)
 local StateController = require(script.Parent.StateController)
 
@@ -75,10 +80,8 @@ local ElevatorController = {}
 ElevatorController.ReducedMotion = false
 
 local CLOSE_ACTION = "TerraForgeElevatorClose"
-local MENU_ACTION = "TerraForgeElevatorMenu"
 -- above the default player controls, so B / Backspace close the view first
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
-local MENU_KEY = Enum.KeyCode.DPadLeft
 local PROMPT_NAME = "ElevatorPrompt"
 local RANGE_CHECK = 0.25
 -- a bit more than the server's ElevatorService.Range (16), so lag never closes it early
@@ -100,7 +103,6 @@ local MESSAGE_COLORS: { [string]: Color3 } = {
 local player = Players.LocalPlayer
 local refs: ElevatorView.Refs? = nil
 local fade: ElevatorView.Fade? = nil
-local side: ElevatorView.SideMenu? = nil
 local stop: Model? = nil
 local stopFloor: number? = nil
 local isOpen = false
@@ -111,7 +113,6 @@ local rideToken = 0
 local progress: NumberValue? = nil
 local animTween: Tween? = nil
 local skipConnection: RBXScriptConnection? = nil
-local idleTweens: { Tween } = {}
 -- weak keys: prompts of stops that streamed out drop out by themselves
 local prompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
@@ -119,10 +120,14 @@ function ElevatorController.isOpen(): boolean
 	return isOpen
 end
 
--- The left side menu's stack (other buttons can join it), once the controller started.
-function ElevatorController.sideMenu(): Frame?
-	local menu = side
-	return if menu then menu.Menu else nil
+-- The left side menu (main's SideMenuController; kept for older callers).
+function ElevatorController.sideMenu(): SideMenuView.Refs?
+	return SideMenuController.refs()
+end
+
+-- True while the world has an elevator stop (the side menu shows ELEVATOR only then).
+function ElevatorController.available(): boolean
+	return Workspace:GetAttribute(TeleportConfig.ElevatorAttribute) == true
 end
 
 local function usingGamepad(): boolean
@@ -525,15 +530,17 @@ local function watchRange(model: Model)
 end
 
 --[[
-	Opens the panel. `model` = the stop whose prompt opened it (nil = the side
-	menu: no range check), `floorIndex` = the floor shown as "YOU ARE HERE".
+	Opens the panel at a stop (its prompt: OpenUI). `model` = the stop (nil =
+	not streamed in: no range check), `floorIndex` = the floor shown as "YOU
+	ARE HERE". The other panels close.
 ]]
-function ElevatorController.open(model: Model?, floorIndex: number?)
+function ElevatorController.openAt(model: Model?, floorIndex: number?)
 	if isOpen and model ~= nil and model == stop then
 		refresh()
 		return
 	end
 	ElevatorController.close(true)
+	MenuPanels.closeOthers("ElevatorController")
 	local view = ensureView()
 	isOpen = true
 	stop = model
@@ -557,118 +564,18 @@ function ElevatorController.open(model: Model?, floorIndex: number?)
 	playOpen(view)
 end
 
--- The side menu button / D-pad Left: a teleport to the elevator (the floor picker opens from its prompt).
-function ElevatorController.goToElevator()
+-- The side menu's ELEVATOR button: a teleport to the elevator (the floor picker opens from its prompt).
+function ElevatorController.open()
 	if isOpen then
 		ElevatorController.close()
 	end
+	MenuPanels.closeOthers("ElevatorController")
 	TeleportController.request("Elevator")
 end
 
----------------------------------------------------------------- the side menu
-
-local function bounce(icon: ElevatorView.IconButton, target: number, seconds: number, style: Enum.EasingStyle?)
-	TweenService:Create(icon.Scale, TweenInfo.new(seconds, style or Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = target })
-		:Play()
-end
-
-local function startIdle(icon: ElevatorView.IconButton)
-	for _, tween in idleTweens do
-		tween:Cancel()
-	end
-	table.clear(idleTweens)
-	if reducedMotion() then
-		ElevatorView.iconPose(icon, 0.5)
-		return
-	end
-	-- the chevrons pulse upward: bottom row first, then the middle, then the top
-	for i, chevron in icon.Chevrons do
-		local row = icon.ChevronRow[i]
-		local base = icon.ChevronBase[i]
-		local info = TweenInfo.new(0.55, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, (row - 1) * 0.18)
-		chevron.Position = base
-		local up =
-			TweenService:Create(chevron, info, { Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale - 0.03, base.Y.Offset) })
-		table.insert(idleTweens, up)
-		up:Play()
-		for _, bar in chevron:GetChildren() do
-			if bar:IsA("Frame") then
-				bar.BackgroundColor3 = ElevatorView.ChevronDim
-				local glow = TweenService:Create(bar, info, { BackgroundColor3 = ElevatorView.ChevronBright })
-				table.insert(idleTweens, glow)
-				glow:Play()
-			end
-		end
-	end
-end
-
-local function updateSideGlyph()
-	local menu = side
-	if not menu then
-		return
-	end
-	local glyph = menu.Elevator.Glyph
-	local gamepad = usingGamepad()
-	glyph.Visible = gamepad
-	if gamepad then
-		glyph.Image = UserInputService:GetImageForKeyCode(MENU_KEY)
-	end
-end
-
-local function onMenuKey(_: string, state: Enum.UserInputState): Enum.ContextActionResult
-	if state ~= Enum.UserInputState.Begin then
-		return Enum.ContextActionResult.Pass
-	end
-	-- while a menu has the gamepad selection the D-pad moves it: leave it alone
-	local menu = side
-	local shown = menu ~= nil and menu.Elevator.Holder.Visible
-	if not shown or isOpen or GuiService.SelectedObject ~= nil then
-		return Enum.ContextActionResult.Pass
-	end
-	ElevatorController.goToElevator()
-	return Enum.ContextActionResult.Sink
-end
-
-local function buildSide()
-	local menu = ElevatorView.buildSideMenu()
-	menu.Gui.Parent = player:WaitForChild("PlayerGui")
-	side = menu
-	local icon = menu.Elevator
-	local button = icon.Button
-	button.MouseEnter:Connect(function()
-		bounce(icon, 1.08, 0.18)
-	end)
-	button.MouseLeave:Connect(function()
-		bounce(icon, 1, 0.18)
-	end)
-	button.MouseButton1Down:Connect(function()
-		bounce(icon, 0.9, 0.08, Enum.EasingStyle.Quad)
-	end)
-	button.MouseButton1Up:Connect(function()
-		bounce(icon, 1, 0.25)
-	end)
-	button.SelectionGained:Connect(function()
-		bounce(icon, 1.08, 0.18)
-	end)
-	button.SelectionLost:Connect(function()
-		bounce(icon, 1, 0.18)
-	end)
-	button.Activated:Connect(function()
-		bounce(icon, 0.9, 0.06, Enum.EasingStyle.Quad)
-		task.delay(0.07, bounce, icon, 1, 0.3)
-		ElevatorController.goToElevator()
-	end)
-	startIdle(icon)
-	updateSideGlyph()
-	ContextActionService:BindAction(MENU_ACTION, onMenuKey, false, MENU_KEY)
-end
-
--- The button shows only while the world has an elevator stop.
-local function updateSideVisible()
-	local menu = side
-	if menu then
-		menu.Elevator.Holder.Visible = Workspace:GetAttribute(TeleportConfig.ElevatorAttribute) == true
-	end
+-- The side menu calls toggle() when open() is missing: the same teleport (the picker's own close is close()).
+function ElevatorController.toggle()
+	ElevatorController.open()
 end
 
 ---------------------------------------------------------------- the ride
@@ -890,7 +797,7 @@ function ElevatorController.init()
 		if driving then
 			return
 		end
-		ElevatorController.open(if typeof(model) == "Instance" and model:IsA("Model") then model else nil, floorIndex)
+		ElevatorController.openAt(if typeof(model) == "Instance" and model:IsA("Model") then model else nil, floorIndex)
 	end)
 	Net.listen("ElevatorRide", onRide)
 	Net.listen("Notify", function(message)
@@ -909,7 +816,6 @@ function ElevatorController.init()
 		endRide()
 	end)
 	UserInputService.LastInputTypeChanged:Connect(function()
-		updateSideGlyph()
 		local view = refs
 		if view and isOpen then
 			applyHint(view)
@@ -926,9 +832,9 @@ function ElevatorController.start()
 			applyPrompt(prompt)
 		end
 	end)
-	buildSide()
-	Workspace:GetAttributeChangedSignal(TeleportConfig.ElevatorAttribute):Connect(updateSideVisible)
-	updateSideVisible()
+	-- the side menu shows ELEVATOR only while the world has a stop
+	Workspace:GetAttributeChangedSignal(TeleportConfig.ElevatorAttribute):Connect(SideMenuController.refresh)
+	SideMenuController.refresh()
 end
 
 return ElevatorController

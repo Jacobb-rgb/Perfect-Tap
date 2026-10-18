@@ -1,7 +1,7 @@
 -- HoverboardView (pure UI builder) under Lune: what each card offers (BUY / locked BUY /
 -- EQUIP / EQUIPPED / Robux / COMING SOON), prices, speeds, the owned list from a State
 -- snapshot, five cards in a row on a PC and phones with 72-unit buttons (3 + 2 when narrow),
--- every card inside the panel, the opening poses, the side menu button and RIDE / STOP.
+-- every card inside the panel, the opening poses and RIDE / STOP.
 return function(T, Loader)
 	local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
@@ -142,12 +142,8 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("HoverboardView: side menu button and RIDE / STOP", function()
+	T.test("HoverboardView: RIDE / STOP (the panel opens from the side menu's HOVER)", function()
 		local parent = roblox.Instance.new("Frame")
-		local side = HoverboardView.sideButton(parent, HoverboardView.SideButtonSize)
-		T.eq(side.Holder.Parent, parent, "in the side menu")
-		T.eq(side.Label.Text, "Boards", "label")
-		T.eq(side.Button.Size.X.Offset, HoverboardView.SideButtonSize, "the elevator button's size")
 		local ride = HoverboardView.rideButton(parent)
 		T.eq(ride.Label.Text, "RIDE", "walking")
 		T.truthy(ride.Key.Visible, "the H chip on a keyboard")

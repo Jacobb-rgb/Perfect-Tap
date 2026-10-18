@@ -515,10 +515,11 @@ end
 ---------------------------------------------------------------- UI overlays
 
 --[[
-	The Boards panel and the RIDE button over the ride scene (PHASE 2 UI):
-	  ui_hover_hud         PC HUD: the BASE / LOBBY / VAULT bar, the left side
-	                       menu (Elevator + Boards), RIDE above BUILD on the right
-	  ui_hover_panel       PC HUD + the Boards panel (owns the Timber Drifter,
+	The hoverboards panel and the RIDE button over the ride scene (PHASE 2 UI):
+	  ui_hover_hud         PC HUD: the BASE / LOBBY / VAULT bar, main's left side
+	                       menu (ELEVATOR and HOVER among its buttons), RIDE above
+	                       BUILD on the right
+	  ui_hover_panel       PC HUD + the hoverboards panel (owns the Timber Drifter,
 	                       equipped; $120K)
 	  ui_hover_phone       an iPhone SE-sized landscape screen (667 x 375 pt) at
 	                       the 0.62 phone scale: compact panel
@@ -534,7 +535,7 @@ function Preview.buildUi(Loader: any): { [string]: any }
 	local HudView = Loader.requirePath(Client .. "HudView")
 	local TeleportView = Loader.requirePath(Client .. "TeleportView")
 	local BuildView = Loader.requirePath(Client .. "BuildView")
-	local ElevatorView = Loader.requirePath(Client .. "ElevatorView")
+	local SideMenuView = Loader.requirePath(Client .. "SideMenuView")
 	local HoverboardView = Loader.requirePath(Client .. "HoverboardView")
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 	local UDim2 = roblox.UDim2
@@ -554,11 +555,18 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		refs.Income.Text = Format.perSecond(240)
 		refs.Income.TextColor3 = C3.fromRGB(110, 214, 92)
 		refs.CarryLabel.Text = "HANDS 0/3"
-		local sideMenu = ElevatorView.buildSideMenu()
-		sideMenu.Gui.Scale.Scale = scale
-		local boards = HoverboardView.sideButton(sideMenu.Menu, HoverboardView.SideButtonSize)
-		boards.Holder.LayoutOrder = 20
-		return { refs.Gui, sideMenu.Gui }
+		-- main's left side menu (ELEVATOR and HOVER among its buttons; STORE hidden like in
+		-- today's game); phones get its MENU button
+		local side = SideMenuView.build()
+		side.Gui.Scale.Scale = scale
+		SideMenuView.setHidden(side, "Store", true)
+		local designW = if touch then 667 / uiScale else 1600 / scale
+		local designH = if touch then (375 - 36) / uiScale else (900 - 36) / scale
+		SideMenuView.apply(
+			side,
+			SideMenuView.layout(uiScale, designH, { Count = #SideMenuView.shown(side), Touch = touch, DesignWidth = designW })
+		)
+		return { refs.Gui, side.Gui }
 	end
 
 	local function panel(scale: number, compact: boolean, maxWidth: number, maxHeight: number): any
@@ -611,6 +619,11 @@ function Preview.buildUi(Loader: any): { [string]: any }
 		saved[key] = entry.Id
 		entry.Id = 9100000 + #key
 	end
+	-- the receipts gate is on in these pictures (the live game publishes it from the server)
+	local realReady = HoverboardView.receiptsReady
+	HoverboardView.receiptsReady = function(): boolean
+		return true
+	end
 	local ok, err = pcall(function()
 		exports.ui_hover_hud = UiExport.export(hud(pc, 1, false, false))
 		local withPanel = hud(pc, 1, false, false)
@@ -626,6 +639,7 @@ function Preview.buildUi(Loader: any): { [string]: any }
 	for key, id in saved do
 		MonetizationConfig.Entries[key].Id = id
 	end
+	HoverboardView.receiptsReady = realReady
 	if not ok then
 		error(err, 0)
 	end

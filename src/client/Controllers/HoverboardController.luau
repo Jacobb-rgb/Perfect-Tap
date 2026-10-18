@@ -2,20 +2,22 @@
 	HoverboardController: hoverboards on the client (the server decides
 	everything: HoverboardService, MonetizationService).
 
-	- Boards panel (HoverboardView): the "Boards" button in the left side menu
-	  (ElevatorController.sideMenu(), under the elevator button) opens it from
-	  anywhere. Cards: BUY sends HoverboardAction { Action = "Buy", Board }
+	- Hoverboards panel (HoverboardView): the HOVER button of main's left side
+	  menu (SideMenuView entry "Hoverboards", SideMenuController action: open /
+	  toggle / isOpen / close; MenuPanels: one panel at a time, build mode
+	  closes it) opens it from anywhere; it closes the other panels when it
+	  opens. Cards: BUY sends HoverboardAction { Action = "Buy", Board }
 	  (greyed out with a lock while you can't afford it: pressing it says how
 	  much is missing), EQUIP sends { Action = "Equip" }, the Robux button
 	  prompts the board's game pass (MarketplaceService:PromptGamePassPurchase,
 	  only for MonetizationConfig ids > 0; "COMING SOON" otherwise; the server
 	  grants it, never this client). The cards
 	  refresh on every State. Closes with the X, B (gamepad), Backspace or
-	  the side button again; gamepads get a selected card on open.
+	  HOVER again; gamepads get a selected card on open.
 	- RIDE: a round button in the HUD's right menu (above BUILD: clear of the
 	  touch jump button at the bottom right), the H key and the gamepad's
-	  GamepadKey (D-pad Right; D-pad Down already opens the teleport bar and
-	  D-pad Left the elevator) send { Action = "Ride", On } (no board yet:
+	  GamepadKey (L2: the D-pad is taken: Up build mode, Down the teleport
+	  bar, Left the side menu, Right the luck boosts) send { Action = "Ride", On } (no board yet:
 	  the panel opens). The button shows only while a board is equipped:
 	  RIDE / STOP, with an "H" chip or the gamepad glyph (none on touch).
 	  Refused on the client while a minigame or build mode holds the controls.
@@ -60,7 +62,7 @@ local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
 local CleaningController = require(script.Parent.CleaningController)
-local ElevatorController = require(script.Parent.ElevatorController)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 
 local HoverboardController = {}
 
@@ -70,7 +72,7 @@ HoverboardController.LodInterval = 0.3
 HoverboardController.PoolPerBoard = 3
 HoverboardController.LiteRiders = 4 -- more riders with effects than this: lite effects
 HoverboardController.Key = Enum.KeyCode.H
-HoverboardController.GamepadKey = Enum.KeyCode.DPadRight
+HoverboardController.GamepadKey = Enum.KeyCode.ButtonL2
 
 local RIDE_ACTION = "TerraForgeHoverRide"
 local CLOSE_ACTION = "TerraForgeHoverClose"
@@ -102,7 +104,6 @@ type Rider = {
 
 local player = Players.LocalPlayer
 local refs: HoverboardView.Refs? = nil
-local side: HoverboardView.SideButton? = nil
 local ride: HoverboardView.RideButton? = nil
 local isOpen = false
 local lockedUntil = 0
@@ -542,7 +543,7 @@ local function showMessage(text: string, kind: string?)
 	end)
 end
 
--- The RIDE button / H / D-pad Right: on or off the equipped board (no board: the panel opens).
+-- The RIDE button / H / L2: on or off the equipped board (no board: the panel opens).
 function HoverboardController.toggleRide()
 	local _, equipped = snapshotBoards()
 	local riding = HoverboardController.isRiding()
@@ -567,7 +568,7 @@ local function onRideKey(_: string, state: Enum.UserInputState, input: InputObje
 	if state ~= Enum.UserInputState.Begin then
 		return Enum.ContextActionResult.Pass
 	end
-	-- while a menu has the gamepad selection the D-pad moves it: leave it alone
+	-- while a menu has the gamepad selection it keeps its buttons: leave it alone
 	if input.KeyCode == HoverboardController.GamepadKey and GuiService.SelectedObject ~= nil then
 		return Enum.ContextActionResult.Pass
 	end
@@ -736,6 +737,7 @@ function HoverboardController.open()
 		return
 	end
 	isOpen = true
+	MenuPanels.closeOthers("HoverboardController")
 	fit(view)
 	HoverboardView.hideMessage(view)
 	applyHint(view)
@@ -777,7 +779,16 @@ function HoverboardController.close(instant: boolean?)
 	end)
 end
 
----------------------------------------------------------------- side menu button
+-- The side menu's HOVER button: opens the panel, or closes it when it is open.
+function HoverboardController.toggle()
+	if isOpen then
+		HoverboardController.close()
+	else
+		HoverboardController.open()
+	end
+end
+
+---------------------------------------------------------------- the RIDE button
 
 local function bounce(scale: UIScale, target: number, seconds: number)
 	TweenService:Create(scale, TweenInfo.new(seconds, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = target }):Play()
@@ -801,33 +812,6 @@ local function hookBounce(button: GuiButton, scale: UIScale)
 	end)
 	button.MouseButton1Up:Connect(function()
 		bounce(scale, 1, 0.25)
-	end)
-end
-
-local function buildSide()
-	-- ElevatorController builds the side menu in its start(): wait for it a little
-	local menu: Frame? = nil
-	for _ = 1, 60 do
-		menu = ElevatorController.sideMenu()
-		if menu then
-			break
-		end
-		task.wait(0.25)
-	end
-	if not menu then
-		warn("[HoverboardController] no side menu: the Boards button is missing")
-		return
-	end
-	local button = HoverboardView.sideButton(menu, HoverboardView.SideButtonSize)
-	button.Holder.LayoutOrder = 20
-	side = button
-	hookBounce(button.Button, button.Scale)
-	button.Button.Activated:Connect(function()
-		if isOpen then
-			HoverboardController.close()
-		else
-			HoverboardController.open()
-		end
 	end)
 end
 
@@ -876,10 +860,6 @@ function HoverboardController.init()
 			applyHint(view)
 			selectDefault(view)
 		end
-		local button = side
-		if button then
-			button.Glyph.Visible = false
-		end
 	end)
 	player.CharacterRemoving:Connect(function()
 		HoverboardController.close(true)
@@ -913,7 +893,6 @@ function HoverboardController.start()
 			end
 		end)
 	end
-	buildSide()
 end
 
 return HoverboardController

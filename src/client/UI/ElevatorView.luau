@@ -22,13 +22,13 @@
 
 	Every icon and every bit of art is drawn from Frames (rotated squares for
 	crystals, UIGradient, UIStroke, UICorner): images need uploads under the
-	owner's account. When the owner uploads the icons, set IconImage (the
-	side button) and HeaderIconImage (the panel header) to the asset ids and
-	ImageLabels are used instead.
+	owner's account. When the owner uploads the header icon, set
+	HeaderIconImage to its asset id and an ImageLabel is used instead. (The
+	side menu's ELEVATOR button is main's SideMenuView entry "Elevator": its
+	icon comes from SideMenuView.Icons, which the light-UI restyle swaps for
+	sprites; the owner's elevator_icon.webp belongs there.)
 
-	Also here: the left "SideMenu" (buildSideMenu, its own ScreenGui; later
-	buttons can join its stack) with the elevator icon button, and the ride
-	fade (buildFade).
+	Also here: the void rescue's fade (buildFade).
 
 	Designed for 720 design units of height (HudController scales every
 	TerraForge gui). The compact layout (phones, uiScale 0.62) has 72-unit
@@ -159,23 +159,6 @@ export type Fade = {
 	Name: TextLabel,
 }
 
-export type IconButton = {
-	Holder: Frame,
-	Button: TextButton,
-	Scale: UIScale,
-	Chevrons: { Frame }, -- bottom to top, left column then right column
-	ChevronBase: { UDim2 },
-	ChevronRow: { number }, -- 1 = bottom
-	Label: TextLabel,
-	Glyph: ImageLabel,
-}
-
-export type SideMenu = {
-	Gui: ScreenGui,
-	Menu: Frame,
-	Elevator: IconButton,
-}
-
 type Metrics = {
 	BuyWidth: number,
 	FloorWidth: number,
@@ -276,7 +259,6 @@ local METRICS: { [string]: Metrics } = {
 ElevatorView.Title = "ELEVATOR"
 ElevatorView.Pitch = "Ride to every floor you have unlocked. Buy once, keep forever."
 -- asset ids for the owner's uploaded icons ("" = draw them from Frames)
-ElevatorView.IconImage = "" -- the side menu button (docs/art/ui/elevator_icon.webp)
 ElevatorView.HeaderIconImage = "" -- the small icon left of the title
 -- each floor's frame and badge colour (the mock): orange, red-orange, cyan, gold, purple; grey = coming soon
 ElevatorView.FloorColors = {
@@ -2101,185 +2083,6 @@ end
 function ElevatorView.setFadeText(fade: Fade, floorIndex: number, name: string)
 	fade.Title.Text = `FLOOR {floorIndex}`
 	fade.Name.Text = name
-end
-
----------------------------------------------------------------- the side menu
-
---[[
-	The elevator icon button (after docs/art/ui/elevator_icon.webp): a glowing
-	blue rounded square, a steel shaft with a glass cabin and a blocky figure
-	inside, glowing up-chevrons on both sides, "Elevator" under it. `size` =
-	the square's side in design units (84 = 52 pt at the phone scale).
-]]
-function ElevatorView.iconButton(parent: Instance, size: number): IconButton
-	local holder: Frame = UIKit.new("Frame", {
-		Name = "ElevatorButton",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(size + 8, size + 30),
-	}, parent)
-	local button: TextButton = UIKit.new("TextButton", {
-		Name = "Button",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 4 + size / 2),
-		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "",
-		Selectable = true,
-	}, holder)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.26, 0) }, button)
-	gradient3(button, rgb(34, 60, 132), rgb(18, 32, 82), rgb(10, 18, 50))
-	ring(button, 4, NEON_BRIGHT)
-	local scale: UIScale = UIKit.new("UIScale", { Name = "Bounce", Scale = 1 }, button)
-	-- soft outer glow
-	local glow: Frame = UIKit.new("Frame", {
-		Name = "Glow",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-	}, button)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.26, 0) }, glow)
-	ring(glow, 9, NEON, 0.65)
-	local chevrons: { Frame } = {}
-	local bases: { UDim2 } = {}
-	local rows: { number } = {}
-	if ElevatorView.IconImage ~= "" then
-		UIKit.new("ImageLabel", {
-			Name = "Image",
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
-			Image = ElevatorView.IconImage,
-			ScaleType = Enum.ScaleType.Fit,
-		}, button)
-	else
-		-- little sparkles in the corners
-		for _, spot in { { 0.2, 0.2, 25 }, { 0.8, 0.17, -20 }, { 0.17, 0.84, -25 }, { 0.83, 0.85, 20 } } do
-			local sparkle = shape(button, "Sparkle", spot[1], spot[2], 0.07, 0.035, NEON_BRIGHT, spot[3], 0.3)
-			sparkle.BackgroundTransparency = 0.25
-		end
-		-- the shaft (behind the cabin) with its glowing stripes and the rail
-		local shaft = shape(button, "Shaft", 0.5, 0.5, 0.38, 0.9, WHITE, 0, 0.06)
-		UIKit.new("UIGradient", { Color = ColorSequence.new(rgb(108, 118, 146), rgb(56, 62, 86)), Rotation = 0 }, shaft)
-		shape(button, "StripeL", 0.4, 0.5, 0.04, 0.9, NEON_BRIGHT)
-		shape(button, "StripeR", 0.6, 0.5, 0.04, 0.9, NEON_BRIGHT)
-		shape(button, "Rail", 0.5, 0.5, 0.05, 0.9, rgb(28, 32, 46))
-		-- the cabin: frame, glowing top bar, glass, ceiling light, the figure, floor bar
-		local cabin = shape(button, "Cabin", 0.5, 0.56, 0.56, 0.5, WHITE, 0, 0.08)
-		gradient3(cabin, rgb(140, 148, 172), rgb(104, 112, 136), rgb(70, 76, 98))
-		ring(cabin, 2, INK)
-		local glass = shape(button, "Glass", 0.5, 0.57, 0.42, 0.38, WHITE, 0, 0.04)
-		gradient3(glass, rgb(170, 226, 255), rgb(90, 170, 255), rgb(50, 120, 236))
-		glass.BackgroundTransparency = 0.05
-		shape(button, "Light", 0.5, 0.41, 0.18, 0.025, WHITE, 0, 0.5)
-		local body = rgb(206, 238, 255)
-		shape(button, "Head", 0.5, 0.49, 0.08, 0.08, body, 0, 0.18)
-		shape(button, "Torso", 0.5, 0.6, 0.12, 0.13, body, 0, 0.1)
-		shape(button, "ArmL", 0.415, 0.6, 0.045, 0.12, body, 8, 0.3)
-		shape(button, "ArmR", 0.585, 0.6, 0.045, 0.12, body, -8, 0.3)
-		shape(button, "LegL", 0.475, 0.71, 0.05, 0.09, body, 0, 0.2)
-		shape(button, "LegR", 0.525, 0.71, 0.05, 0.09, body, 0, 0.2)
-		local top = shape(button, "TopBar", 0.5, 0.32, 0.64, 0.1, WHITE, 0, 0.2)
-		gradient3(top, rgb(150, 158, 184), rgb(112, 120, 146), rgb(78, 84, 108))
-		ring(top, 2, INK)
-		shape(top, "Strip", 0.5, 0.5, 0.62, 0.32, NEON_BRIGHT, 0, 0.5)
-		local floorBar = shape(button, "FloorBar", 0.5, 0.82, 0.64, 0.08, WHITE, 0, 0.2)
-		gradient3(floorBar, rgb(150, 158, 184), rgb(112, 120, 146), rgb(78, 84, 108))
-		ring(floorBar, 2, INK)
-		-- up-chevrons on both sides, bottom to top
-		for _, x in { 0.135, 0.865 } do
-			for row, y in { 0.7, 0.555, 0.41 } do
-				local c = chevron(button, x, y, 0.22, 0.15, rgb(200, 245, 255))
-				table.insert(chevrons, c)
-				table.insert(bases, c.Position)
-				table.insert(rows, row)
-			end
-		end
-	end
-	local label = UIKit.label(holder, "Elevator", 18, {
-		Name = "Label",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.new(1, 16, 0, 22),
-		TextColor3 = TEXT,
-		TextWrapped = false,
-	})
-	local labelStroke = label:FindFirstChildOfClass("UIStroke")
-	if labelStroke then
-		labelStroke.Color = rgb(10, 24, 70)
-		labelStroke.Thickness = 2.5
-	end
-	local glyph: ImageLabel = UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -4, 0, 6),
-		Size = UDim2.fromOffset(30, 30),
-		BackgroundTransparency = 1,
-		Visible = false,
-		ZIndex = 3,
-	}, holder)
-	return {
-		Holder = holder,
-		Button = button,
-		Scale = scale,
-		Chevrons = chevrons,
-		ChevronBase = bases,
-		ChevronRow = rows,
-		Label = label,
-		Glyph = glyph,
-	}
-end
-
---[[
-	The left "SideMenu": its own ScreenGui with a vertical stack at the left
-	edge, a little above the middle (clear of the HUD coins at the top and the
-	thumbstick at the bottom on phones). Other buttons can join the stack
-	(ElevatorController.sideMenu()); LayoutOrder sorts them.
-]]
-ElevatorView.SideButtonSize = 84
--- the chevrons' idle pulse runs between these colours (opaque: no overlap seams)
-ElevatorView.ChevronDim = rgb(70, 140, 230)
-ElevatorView.ChevronBright = rgb(200, 245, 255)
-
-function ElevatorView.buildSideMenu(): SideMenu
-	local gui = UIKit.screen("TerraForgeSideMenu", 5)
-	gui:SetAttribute("TerraForge", true)
-	pcall(function()
-		-- keep clear of notches and rounded corners on phones
-		local insets: any = gui
-		insets.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
-	end)
-	local menu: Frame = UIKit.new("Frame", {
-		Name = "SideMenu",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 14, 0.46, 0),
-		Size = UDim2.fromOffset(ElevatorView.SideButtonSize + 24, 420),
-		BackgroundTransparency = 1,
-	}, gui)
-	UIKit.list(menu, Enum.FillDirection.Vertical, 14, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-	local elevator = ElevatorView.iconButton(menu, ElevatorView.SideButtonSize)
-	elevator.Holder.LayoutOrder = 10
-	return { Gui = gui, Menu = menu, Elevator = elevator }
-end
-
--- The idle "chevrons pulse upward" pose at `phase` (0..1, loops): for previews;
--- the controller runs the same motion with looping tweens.
-function ElevatorView.iconPose(icon: IconButton, phase: number)
-	for i, c in icon.Chevrons do
-		local row = icon.ChevronRow[i]
-		-- each row lights up during half the loop, one third later than the row below
-		local p = ((phase - (row - 1) / 3) % 1) * 2
-		local lift = if p < 1 then math.sin(p * math.pi) else 0
-		local base = icon.ChevronBase[i]
-		c.Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale - 0.03 * lift, base.Y.Offset)
-		for _, bar in c:GetChildren() do
-			if bar:IsA("Frame") then
-				bar.BackgroundColor3 = ElevatorView.ChevronDim:Lerp(ElevatorView.ChevronBright, lift)
-			end
-		end
-	end
 end
 
 return ElevatorView

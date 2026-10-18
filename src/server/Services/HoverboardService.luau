@@ -8,8 +8,8 @@
 	when read: unknown ids and non-true values leave Owned and Passes, a pass
 	mark without the board leaves, an Equipped board you don't own becomes "".
 
-	HoverboardAction (Net, rate limited), from anywhere (the Boards panel opens
-	from the left side menu); every request read gets a HoverboardResult
+	HoverboardAction (Net, rate limited), from anywhere (the hoverboards panel
+	opens from the left side menu's HOVER); every request read gets a HoverboardResult
 	{ Action, Board?, Ok, Reason?, Riding? }:
 	  { Action = "Buy", Board }    a coin board you don't own: EconomyService.spend
 	                               and Owned[board] = true in one step with no
@@ -233,7 +233,7 @@ end
 ---------------------------------------------------------------- requests
 
 local DENY_TEXT: { [string]: string } = {
-	NoBoard = "Get a hoverboard first: open Boards on the left.",
+	NoBoard = "Get a hoverboard first: open HOVER in the side menu.",
 	Cleaning = "Finish cleaning first.",
 	Elevator = "Wait until the elevator stops.",
 	Seated = "Stand up first.",

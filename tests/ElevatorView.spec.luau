@@ -2,8 +2,8 @@
 -- out with a lock when you can't afford it, the note), the floor cards
 -- (states, texts, colours, mode lines, which buttons a gamepad can select),
 -- the header's coloured subtitle, the footer hint, both layouts fitting a PC
--- screen and phones with 72-unit buttons, the opening animation's poses, the
--- left side menu button and the ride fade.
+-- screen and phones with 72-unit buttons, the opening animation's poses and
+-- the ride fade. (The side menu's ELEVATOR button is main's: tests/SideMenu.spec.)
 return function(T, Loader)
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
@@ -282,27 +282,6 @@ return function(T, Loader)
 		ElevatorView.layout(refs, false, 1280, 690)
 		T.near(refs.PoseTime, 0.1, 1e-6, "pose kept")
 		T.truthy(refs.Doors.Visible, "doors still shown")
-	end)
-
-	T.test("ElevatorView: the side menu button sits at the left edge and is big enough to tap", function()
-		local side = ElevatorView.buildSideMenu()
-		T.truthy(side.Gui:GetAttribute("TerraForge"), "HUD scale applies")
-		T.eq(side.Menu.AnchorPoint.X, 0, "left anchor")
-		T.eq(side.Menu.Position.X.Scale, 0, "left edge")
-		T.truthy(side.Menu.Position.Y.Scale > 0.3 and side.Menu.Position.Y.Scale < 0.6, "about middle height")
-		local icon = side.Elevator
-		T.eq(icon.Holder.Parent, side.Menu, "in the stack")
-		T.truthy(icon.Button.Size.X.Offset * 0.62 >= 44, "at least 44 pt at the phone scale")
-		T.truthy(icon.Button.Selectable, "gamepad selectable")
-		T.eq(icon.Label.Text, "Elevator", "label")
-		T.eq(#icon.Chevrons, 6, "three chevrons on each side")
-		T.truthy(icon.Button:FindFirstChild("Cabin") ~= nil, "drawn cabin")
-		T.truthy(icon.Button:FindFirstChild("Head") ~= nil, "drawn figure")
-		-- the idle pulse lifts the chevrons row by row
-		ElevatorView.iconPose(icon, 1 / 6)
-		local bottom = icon.Chevrons[1].Position.Y.Scale
-		T.truthy(bottom < icon.ChevronBase[1].Y.Scale, "bottom chevron lifted")
-		T.near(icon.Chevrons[3].Position.Y.Scale, icon.ChevronBase[3].Y.Scale, 1e-6, "top chevron waits")
 	end)
 
 	T.test("ElevatorView: the ride fade covers the screen and names the floor", function()

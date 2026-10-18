@@ -13,13 +13,12 @@
 	           button: BUY (green) / BUY with a lock (grey: not enough coins) /
 	           EQUIP (blue) / EQUIPPED (navy, a check) / R$ 49 (green, Robux) /
 	           COMING SOON (grey: the product id is still 0)
-	  side     the "Boards" button for the left side menu (sideButton: the
-	           elevator's size and shape, violet, a little board on it)
+	  (the panel opens from main's left side menu: its HOVER entry, SideMenuView)
 	  ride     the RIDE toggle for the HUD's right menu (rideButton): RIDE /
 	           STOP with a key chip ("H") or the gamepad glyph
 
 	Every bit of art is drawn from Frames (images need uploads under the
-	owner's account; set BoardImages[boardId] / SideIconImage to asset ids
+	owner's account; set BoardImages[boardId] to asset ids
 	and ImageLabels are used instead).
 
 	Designed for 720 design units of height (HudController scales every
@@ -102,14 +101,6 @@ export type Refs = {
 	PoseTime: number,
 }
 
-export type SideButton = {
-	Holder: Frame,
-	Button: TextButton,
-	Scale: UIScale,
-	Label: TextLabel,
-	Glyph: ImageLabel,
-}
-
 export type RideButton = {
 	Holder: Frame,
 	Button: TextButton,
@@ -145,10 +136,8 @@ HoverboardView.Title = "HOVERBOARDS"
 HoverboardView.Pitch = "Ride anywhere, faster. Bought once, yours forever."
 HoverboardView.OpenTime = 0.42
 HoverboardView.CloseTime = 0.2
-HoverboardView.SideButtonSize = ElevatorView.SideButtonSize
 -- asset ids for the owner's uploaded art ("" = draw it from Frames)
 HoverboardView.BoardImages = {} :: { [string]: string }
-HoverboardView.SideIconImage = ""
 
 type Metrics = {
 	Width: number,
@@ -1321,97 +1310,6 @@ function HoverboardView.pose(refs: Refs, seconds: number)
 		local y = if type(baseY) == "number" then baseY else 0
 		card.Frame.Position = UDim2.fromOffset(card.Frame.Position.X.Offset, y - 16 * (1 - q))
 	end
-end
-
----------------------------------------------------------------- the side menu button
-
---[[
-	The "Boards" button of the left side menu (the elevator button's size and
-	shape): a violet rounded square with a glowing board on it, speed lines,
-	"Boards" under it, a gamepad glyph slot top-right.
-]]
-function HoverboardView.sideButton(parent: Instance, size: number): SideButton
-	local holder: Frame = UIKit.new("Frame", {
-		Name = "BoardsButton",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(size + 8, size + 30),
-	}, parent)
-	local button: TextButton = UIKit.new("TextButton", {
-		Name = "Button",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 4 + size / 2),
-		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "",
-		Selectable = true,
-	}, holder)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.26, 0) }, button)
-	gradient3(button, rgb(156, 92, 255), rgb(96, 44, 206), rgb(54, 20, 138))
-	ring(button, 4, rgb(214, 176, 255))
-	local scale: UIScale = UIKit.new("UIScale", { Name = "Bounce", Scale = 1 }, button)
-	local glow: Frame = UIKit.new("Frame", {
-		Name = "Glow",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-	}, button)
-	UIKit.new("UICorner", { CornerRadius = UDim.new(0.26, 0) }, glow)
-	ring(glow, 9, rgb(170, 100, 255), 0.65)
-	if HoverboardView.SideIconImage ~= "" then
-		UIKit.new("ImageLabel", {
-			Name = "Image",
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
-			Image = HoverboardView.SideIconImage,
-			ScaleType = Enum.ScaleType.Fit,
-		}, button)
-	else
-		local canvas: Frame = UIKit.new("Frame", {
-			Name = "Art",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.52),
-			Size = UDim2.fromOffset(200, 110),
-			BackgroundTransparency = 1,
-		}, button)
-		UIKit.new("UIScale", { Scale = size * 0.92 / 200 }, canvas)
-		HoverboardView.drawBoard(canvas, HoverboardData.ById.NeonComet)
-		for i = 1, 3 do
-			local line = UIKit.new("Frame", {
-				Name = "Speed",
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.fromScale(0.08, 0.2 + 0.09 * i),
-				Size = UDim2.fromScale(0.26 - 0.05 * i, 0.04),
-				BackgroundColor3 = rgb(230, 210, 255),
-				BackgroundTransparency = 0.2,
-				BorderSizePixel = 0,
-			}, button)
-			UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, line)
-		end
-	end
-	local label = UIKit.label(holder, "Boards", 18, {
-		Name = "Label",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.new(1, 16, 0, 22),
-		TextColor3 = TEXT,
-		TextWrapped = false,
-	})
-	local labelStroke = label:FindFirstChildOfClass("UIStroke")
-	if labelStroke then
-		labelStroke.Color = rgb(40, 14, 90)
-		labelStroke.Thickness = 2.5
-	end
-	local glyph: ImageLabel = UIKit.new("ImageLabel", {
-		Name = "Glyph",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -4, 0, 6),
-		Size = UDim2.fromOffset(30, 30),
-		BackgroundTransparency = 1,
-		Visible = false,
-		ZIndex = 3,
-	}, holder)
-	return { Holder = holder, Button = button, Scale = scale, Label = label, Glyph = glyph }
 end
 
 ---------------------------------------------------------------- the RIDE button
