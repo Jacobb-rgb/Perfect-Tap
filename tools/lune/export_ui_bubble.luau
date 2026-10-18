@@ -371,3 +371,65 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	OpeningBubble.multi(gui, spec[2], { Golems = tenGolems, Again = "OPEN 10 AGAIN", Price = "$22.5K", Currency = "Coins" })
 	write("ui_bubble_open10_" .. spec[1], gui)
 end
+
+---------------------------------------------------------------- steps 6-7 windows (content from integrate/steps67 89eb9d9)
+local WheelBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelBubble")
+local CodexBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CodexBubble")
+local function rgb(r, g, b)
+	return Color3.fromRGB(r, g, b)
+end
+local wheelData = {
+	Ready = true,
+	Countdown = "Your free spin is ready!",
+	Segments = {
+		{ Id = "Coins", Label = "Coins", Detail = "2 min of your podium income, at least $500: $76.8K now", Chance = "30%", Color = rgb(255, 90, 90) },
+		{ Id = "TripleLucky", Label = "Triple Lucky 10m", Detail = "+10 min of Triple Lucky: rarer golems from capsules", Chance = "12%", Color = rgb(255, 166, 60) },
+		{ Id = "StoneCapsule", Label = "Stone Capsule", Detail = "A free Stone Capsule: Common 80% · Uncommon 16.5%", Chance = "15%", Color = rgb(255, 205, 50) },
+		{ Id = "Shards", Label = "25 Shards", Detail = "25 crystal shards for the Enchant shop", Chance = "10%", Color = rgb(61, 205, 120) },
+		{ Id = "BigCoins", Label = "Big Coins", Detail = "10 min of your podium income, at least $2.5K: $384K now", Chance = "8%", Color = rgb(34, 190, 200) },
+		{ Id = "HexaLucky", Label = "Hexa Lucky 10m", Detail = "+10 min of Hexa Lucky: rarer ores from rocks", Chance = "12%", Color = rgb(77, 130, 255) },
+		{ Id = "OrePrize", Label = "Ore Prize", Detail = "A dirty Rare+ ore for your Ore Pen: Sapphire 50%", Chance = "8%", Color = rgb(166, 108, 255) },
+		{ Id = "CrystalCapsule", Label = "Crystal Capsule", Detail = "A free Crystal Capsule: Uncommon 63% · Rare 24%", Chance = "5%", Color = rgb(255, 100, 190) },
+	},
+}
+local oreRows = {
+	{ "Coal", "Common" }, { "Copper", "Common" }, { "Tin", "Common" }, { "Iron", "Common" }, { "Quartz", "Common" },
+	{ "Silver", "Uncommon" }, { "Amethyst", "Uncommon" }, { "Jade", "Uncommon" }, { "Emberite", "Uncommon" }, { "Cobalt", "Uncommon" },
+	{ "Gold", "Rare" }, { "Ruby", "Rare" }, { "Azurium", "Rare" }, { "Sapphire", "Rare" }, { "Emerald", "Rare" },
+	{ "Diamond", "Epic" }, { "Verdantine", "Epic" }, { "Obsidian", "Epic" }, { "Stormcore", "Epic" }, { "Moonstone", "Epic" },
+	{ "Bloodstone", "Epic" }, { "Solarite", "Legendary" }, { "Voidstone", "Legendary" }, { "Magmacore", "Legendary" },
+	{ "Skyglass", "Legendary" }, { "RoyalAurum", "Legendary" }, { "Prismite", "Mythic" }, { "Aetherium", "Mythic" },
+	{ "Starmetal", "Mythic" }, { "Heartstone", "Mythic" },
+}
+local codexOres = {}
+for i, row in oreRows do
+	table.insert(codexOres, {
+		Id = row[1],
+		Name = if row[1] == "RoyalAurum" then "Royal Aurum" else row[1],
+		Rarity = row[2],
+		Color = rarity[row[2]],
+		Found = i <= 14,
+		New = row[1] == "Ruby" or row[1] == "Sapphire",
+	})
+end
+local codexData = {
+	Ores = codexOres,
+	Selected = "Ruby",
+	Found = 14,
+	Total = 30,
+	Detail = {
+		Podium = "+$200/s (Flawless +$480/s)",
+		Sells = "$6K (Flawless $14.4K), dirty $2.4K",
+		Blaster = "Blaster level 3+",
+		FoundIn = "Ember Caves, Deep Hollow, Glimmer Grotto",
+		Lore = "A drop of Ember King blood, the miners say. They say a lot of things.",
+	},
+}
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	WheelBubble.build(gui, spec[2], wheelData)
+	write("ui_bubble_wheel_" .. spec[1], gui)
+	local gui2 = windowGui(spec[2], spec[3])
+	CodexBubble.build(gui2, spec[2], codexData)
+	write("ui_bubble_codex_" .. spec[1], gui2)
+end

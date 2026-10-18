@@ -8,6 +8,26 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { FontLoader } from "three/addons/loaders/FontLoader.js";
+import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
+
+let FONT = null; // helvetiker bold, loaded in main() for the enchant runes
+
+// enchant_<EnchantConfig id>: a gem in the enchant's colour with its mark
+const RUNES = {
+  enchant_Power: ["P", "e2453c"],
+  enchant_Swift: ["S", "3fa2ff"],
+  enchant_Reach: ["R", "1fbfa0"],
+  enchant_Magnetism: ["M", "8e5cf0"],
+  enchant_Lucky: ["L", "2fc95a"],
+  enchant_Midas: ["G", "f5a300"],
+  enchant_TwinDrop: ["T", "b45cff"],
+  enchant_Overcharge: ["O", "ff7a1c"],
+  enchant_Prospector: ["D", "b0784a"],
+  enchant_GolemBond: ["B", "5b7cff"],
+  enchant_Heartfire: ["H", "ff3b5c"],
+  enchant_Starbreaker: ["Star", "ff3b9a"],
+};
 
 const params = new URLSearchParams(location.search);
 const iconName = params.get("icon") || "coin";
@@ -478,6 +498,92 @@ const ICONS = {
     return { model: group(parts), yaw: -16, pitch: 8 };
   },
 
+  boots() {
+    const parts = [
+      box(0.62, 1.1, 0.7, 0.2, "#e2453c", {}, [-0.1, 0.25, 0]),
+      box(1.15, 0.5, 0.75, 0.22, "#e2453c", {}, [0.18, -0.3, 0.02]),
+      box(1.2, 0.16, 0.8, 0.07, "#5b3a22", {}, [0.18, -0.6, 0.02]),
+      box(0.68, 0.2, 0.76, 0.08, "#fff1d6", {}, [-0.1, 0.78, 0]),
+      box(0.12, 0.12, 0.05, 0.03, GOLD, shiny, [-0.1, 0.35, 0.37]),
+      box(0.12, 0.12, 0.05, 0.03, GOLD, shiny, [-0.1, 0.1, 0.37]),
+      box(0.4, 0.3, 0.06, 0.05, "#c0303a", {}, [0.45, -0.25, 0.4]),
+    ];
+    return { model: group(parts), yaw: -30, pitch: 10 };
+  },
+
+  gloves() {
+    const C = "#ff9f43";
+    const parts = [
+      box(0.95, 0.95, 0.42, 0.24, C, {}, [0, -0.1, 0]),
+      box(1.05, 0.4, 0.5, 0.15, "#c96a1c", {}, [0, -0.72, 0]),
+      ...[-0.33, -0.11, 0.11, 0.33].map((x, i) => box(0.2, 0.55 + (i === 1 || i === 2 ? 0.1 : 0), 0.36, 0.1, C, {}, [x, 0.55 + (i === 1 || i === 2 ? 0.05 : 0), 0])),
+      box(0.22, 0.5, 0.34, 0.1, C, {}, [-0.6, 0.0, 0.05], [0, 0, 35]),
+    ];
+    return { model: group(parts), yaw: -14, pitch: 6 };
+  },
+
+  magnet() {
+    const parts = [
+      torus(0.55, 0.24, Math.PI, "#e2453c", {}, [0, 0.15, 0]),
+      cyl(0.24, 0.24, 0.55, "#e2453c", {}, [-0.55, -0.12, 0]),
+      cyl(0.24, 0.24, 0.55, "#4da3ff", {}, [0.55, -0.12, 0]),
+      cyl(0.245, 0.245, 0.3, "#dfe6ee", steel, [-0.55, -0.55, 0]),
+      cyl(0.245, 0.245, 0.3, "#dfe6ee", steel, [0.55, -0.55, 0]),
+      extrude(starShape(0.16, 0.06, 4), 0.05, 0.02, "#fff1a8", glow("#ffd040", 0.5), [0.0, -0.75, 0.2]),
+    ];
+    return { model: group(parts), yaw: -10, pitch: 8, roll: 0 };
+  },
+
+  speaker() {
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.7, 0.6, 32), mat("#5b6677", steel));
+    cone.rotation.z = -Math.PI / 2;
+    cone.position.set(-0.15, 0, 0);
+    const parts = [
+      box(0.5, 0.6, 0.6, 0.12, "#4a5568", steel, [-0.55, 0, 0]),
+      cone,
+      torus(0.45, 0.07, Math.PI / 1.6, "#4da3ff", {}, [0.25, 0, 0], [0, 0, -56]),
+      torus(0.75, 0.07, Math.PI / 1.6, "#4da3ff", {}, [0.25, 0, 0], [0, 0, -56]),
+    ];
+    return { model: group(parts), yaw: -10, pitch: 6 };
+  },
+
+  music() {
+    const parts = [
+      ball(0.32, "#b48cff", {}, [-0.45, -0.6, 0], [0, 0, 20], 1.3, 1, 0.9),
+      ball(0.32, "#b48cff", {}, [0.55, -0.4, 0], [0, 0, 20], 1.3, 1, 0.9),
+      box(0.12, 1.3, 0.12, 0.05, "#8e5cf0", {}, [-0.1, 0.05, 0]),
+      box(0.12, 1.3, 0.12, 0.05, "#8e5cf0", {}, [0.9, 0.25, 0]),
+      box(1.1, 0.24, 0.14, 0.06, "#8e5cf0", {}, [0.4, 0.75, 0], [0, 0, 11]),
+    ];
+    return { model: group(parts), yaw: -12, pitch: 4 };
+  },
+
+  camera() {
+    const parts = [
+      box(1.6, 1.0, 0.7, 0.22, "#4a5568", {}, [0, 0, 0]),
+      box(0.5, 0.22, 0.5, 0.08, "#4a5568", {}, [-0.45, 0.58, 0]),
+      cyl(0.36, 0.4, 0.4, "#2d3748", steel, [0.05, -0.02, 0.45], [90, 0, 0]),
+      cyl(0.26, 0.26, 0.05, "#7cc4ff", glow("#3a8fd0", 0.4), [0.05, -0.02, 0.66], [90, 0, 0]),
+      box(0.22, 0.16, 0.06, 0.04, "#fff8c8", glow("#ffe060", 0.8), [0.55, 0.3, 0.36]),
+    ];
+    return { model: group(parts), yaw: -20, pitch: 10 };
+  },
+
+  gamepad() {
+    const parts = [
+      box(1.8, 0.75, 0.45, 0.3, "#4a5568", {}, [0, 0.1, 0]),
+      ball(0.42, "#4a5568", {}, [-0.68, -0.25, 0], [0, 0, 0], 1, 1.1, 0.75),
+      ball(0.42, "#4a5568", {}, [0.68, -0.25, 0], [0, 0, 0], 1, 1.1, 0.75),
+      box(0.36, 0.11, 0.08, 0.03, "#dfe6ee", {}, [-0.55, 0.12, 0.24]),
+      box(0.11, 0.36, 0.08, 0.03, "#dfe6ee", {}, [-0.55, 0.12, 0.24]),
+      ball(0.08, "#3ddc84", {}, [0.55, 0.28, 0.22]),
+      ball(0.08, "#ff5a5a", {}, [0.7, 0.13, 0.22]),
+      ball(0.08, "#4da3ff", {}, [0.4, 0.13, 0.22]),
+      ball(0.08, "#ffc93c", {}, [0.55, -0.02, 0.22]),
+    ];
+    return { model: group(parts), yaw: -14, pitch: 18 };
+  },
+
   // PREVIEW ONLY: a stand-in for Roblox's built-in Robux icon (never uploaded;
   // the game shows rbxasset://textures/ui/common/robux.png, see IconAssets).
   robux() {
@@ -586,7 +692,7 @@ const PART_ICONS = {
   train: { file: "train", yaw: 125, pitch: 14 },
 };
 
-window.ICON_NAMES = [...Object.keys(ICONS), ...Object.keys(PART_ICONS)];
+window.ICON_NAMES = [...Object.keys(ICONS), ...Object.keys(PART_ICONS), ...Object.keys(RUNES)];
 
 // ---------------------------------------------------------------- render
 function outlined(src, size) {
@@ -646,6 +752,7 @@ async function main() {
   renderer.toneMappingExposure = 1.05;
   document.body.appendChild(renderer.domElement);
 
+  if (RUNES[iconName]) FONT = await new FontLoader().loadAsync("/node_modules/three/examples/fonts/helvetiker_bold.typeface.json");
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -662,11 +769,34 @@ async function main() {
   scene.add(rim);
 
   // golem_<Kind> / capsule_<Id>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
+  if (RUNES[iconName]) {
+    const [mark, hex] = RUNES[iconName];
+    ICONS[iconName] = () => {
+      const c = "#" + hex;
+      const gem = new THREE.Shape();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + (i * Math.PI) / 3;
+        if (i === 0) gem.moveTo(Math.cos(a), Math.sin(a));
+        else gem.lineTo(Math.cos(a), Math.sin(a));
+      }
+      gem.closePath();
+      const parts = [extrude(gem, 0.35, 0.12, c, { coat: 0.9, rough: 0.25 })];
+      if (mark === "Star") {
+        parts.push(extrude(starShape(0.55, 0.24), 0.14, 0.04, "#fff6d8", { coat: 0.9 }, [0, 0, 0.3]));
+      } else {
+        const g = new TextGeometry(mark, { font: FONT, size: 0.95, depth: 0.14, curveSegments: 8, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.02, bevelSegments: 3 });
+        g.center();
+        parts.push(place(new THREE.Mesh(g, mat("#fff6d8", { coat: 0.9 })), [0, 0, 0.32]));
+      }
+      return { model: group(parts), yaw: -14, pitch: 8 };
+    };
+  }
   const partSpec =
     PART_ICONS[iconName] ||
     (/^(golem|capsule)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
     (/^item_/.test(iconName) ? { file: iconName, yaw: -24, pitch: 24 } : null) ||
-    (/^machine_/.test(iconName) ? { file: iconName, yaw: 145, pitch: 20 } : null);
+    (/^machine_/.test(iconName) ? { file: iconName, yaw: 145, pitch: 20 } : null) ||
+    (/^artifact_/.test(iconName) ? { file: iconName, yaw: 160, pitch: 16 } : null);
   if (!ICONS[iconName] && !partSpec) throw new Error("unknown icon " + iconName);
   const spec = ICONS[iconName] ? ICONS[iconName]() : await partsModel(partSpec.file, partSpec);
   const holder = new THREE.Group();

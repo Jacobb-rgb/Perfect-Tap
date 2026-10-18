@@ -65,6 +65,15 @@ for _, entry in KitMachines.Catalog do
 	models["machine_" .. entry.Id] = KitMachines.buildAny(entry.Id)
 end
 
+-- every ore, cleaned (the Ore Codex; in the game a live ViewportFrame)
+local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+for _, ore in OreData.List do
+	local name = "item_Clean_" .. ore.Id
+	if not models[name] then
+		models[name] = ItemBuilder.build({ Kind = "Clean", OreId = ore.Id, Grade = "Clean" }, CF.new(), name)
+	end
+end
+
 fs.writeDir(root .. "/build/preview/icon_parts")
 for name, model in models do
 	local scene = Export.collect(model)

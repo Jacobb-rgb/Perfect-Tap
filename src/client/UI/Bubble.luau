@@ -177,13 +177,16 @@ end
 
 -- Small notification badge (red unless `color`) on the top-right corner of a face.
 function Bubble.badge(face: GuiObject, text: string, color: Color3?): Frame
+	-- one or two letters: a round badge on the corner; words ("NEW"): a pill
+	-- that stays inside the face's right edge (grids clip what sticks out)
+	local wide = #text > 2
 	local badge = UIKit.new("Frame", {
 		Name = "Badge",
-		AnchorPoint = Vector2.new(0.5, 0.5),
+		AnchorPoint = if wide then Vector2.new(1, 0.5) else Vector2.new(0.5, 0.5),
 		BackgroundColor3 = color or Theme.Bad,
 		BorderSizePixel = 0,
-		Position = UDim2.new(1, -4, 0, 4),
-		Size = UDim2.fromOffset(28, 28),
+		Position = if wide then UDim2.new(1, 4, 0, 4) else UDim2.new(1, -4, 0, 4),
+		Size = UDim2.fromOffset(if wide then 16 + #text * 12 else 28, 28),
 		ZIndex = 5,
 	}, face)
 	Bubble.corner(badge, 14)
@@ -606,6 +609,129 @@ function Bubble.grid(parent: Instance, cell: Vector2, gap: Vector2, props: Props
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, scroll)
 	return scroll
+end
+
+-- The usual window size: PC 1000 x 592, phones (uiScale <= 0.75) 1300 x 520.
+function Bubble.windowSize(uiScale: number): (boolean, Vector2, number)
+	if uiScale <= 0.75 then
+		return true, Vector2.new(1300, 520), 60
+	end
+	return false, Vector2.new(1000, 592), 68
+end
+
+-- A 3D icon on a soft round glow in `color` (detail panels).
+function Bubble.glowIcon(parent: Instance, icon: string, color: Color3, size: number, props: Props?): Frame
+	local glow = UIKit.new("Frame", {
+		Name = "Glow",
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = 3,
+	}, parent)
+	apply(glow, props)
+	Bubble.corner(glow, size)
+	Bubble.icon(glow, icon, math.floor(size * 1.15), {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, -4),
+	})
+	return glow
+end
+
+-- A rounded progress bar (0..1) in `color`, with optional text on it.
+function Bubble.progress(parent: Instance, fraction: number, color: Color3, size: Vector2, text: string?, props: Props?): Frame
+	local bar = UIKit.new("Frame", {
+		Name = "Progress",
+		BackgroundColor3 = Theme.PanelTint,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size.X, size.Y),
+		ZIndex = 4,
+	}, parent)
+	apply(bar, props)
+	Bubble.corner(bar, size.Y // 2)
+	Bubble.stroke(bar, 2.5)
+	local fill = UIKit.new("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Size = UDim2.new(math.clamp(fraction, 0, 1), 0, 1, 0),
+		ZIndex = 4,
+	}, bar)
+	Bubble.corner(fill, size.Y // 2)
+	if text then
+		Bubble.text(bar, text, math.floor(size.Y * 0.72), { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+	end
+	return bar
+end
+
+-- An ON / OFF switch (a pill with a knob).
+function Bubble.toggle(parent: Instance, on: boolean, size: Vector2, props: Props?): TextButton
+	local face, holder = Bubble.button(parent, {
+		Name = "Toggle",
+		Text = if on then "ON" else "OFF",
+		Role = if on then "Go" else "Plain",
+		Size = size,
+		TextSize = math.floor(size.Y * 0.42),
+		Corner = size.Y // 2,
+	})
+	apply(holder, props)
+	local label = face:FindFirstChild("Label") :: TextLabel
+	label.Position = if on then UDim2.fromOffset(0, 0) else UDim2.fromOffset(size.Y // 2, 0)
+	label.Size = UDim2.new(1, -size.Y // 2, 1, 0)
+	if not on then
+		label.TextColor3 = Theme.InkSoft
+		local stroke = label:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Enabled = false
+			stroke.Transparency = 1
+		end
+	end
+	local knob = UIKit.new("Frame", {
+		Name = "Knob",
+		AnchorPoint = Vector2.new(if on then 1 else 0, 0.5),
+		BackgroundColor3 = Theme.White,
+		BorderSizePixel = 0,
+		Position = if on then UDim2.new(1, -5, 0.5, 0) else UDim2.new(0, 5, 0.5, 0),
+		Size = UDim2.fromOffset(size.Y - 10, size.Y - 10),
+		ZIndex = 5,
+	}, face)
+	Bubble.corner(knob, size.Y)
+	Bubble.stroke(knob, 3)
+	return face
+end
+
+-- A slider: track, fill in `color` up to `value` (0..1) and a round knob.
+function Bubble.slider(parent: Instance, value: number, color: Color3, size: Vector2, props: Props?): Frame
+	local track = UIKit.new("Frame", {
+		Name = "Slider",
+		BackgroundColor3 = Theme.PanelTint,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size.X, size.Y),
+		ZIndex = 4,
+	}, parent)
+	apply(track, props)
+	Bubble.corner(track, size.Y // 2)
+	Bubble.stroke(track, 3)
+	local fill = UIKit.new("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Size = UDim2.new(math.clamp(value, 0, 1), 0, 1, 0),
+		ZIndex = 4,
+	}, track)
+	Bubble.corner(fill, size.Y // 2)
+	local knob = UIKit.new("Frame", {
+		Name = "Knob",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.White,
+		BorderSizePixel = 0,
+		Position = UDim2.new(math.clamp(value, 0, 1), 0, 0.5, 0),
+		Size = UDim2.fromOffset(size.Y * 2, size.Y * 2),
+		ZIndex = 5,
+	}, track)
+	Bubble.corner(knob, size.Y * 2)
+	Bubble.stroke(knob, 3.5)
+	return track
 end
 
 return Bubble

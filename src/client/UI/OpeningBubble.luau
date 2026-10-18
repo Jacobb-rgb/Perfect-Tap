@@ -211,10 +211,6 @@ function OpeningBubble.multi(parent: Instance, uiScale: number, data: Data): Ref
 			Selected = golem.Best,
 			LayoutOrder = i,
 		})
-		local badge = cards[golem.Id]:FindFirstChild("Badge") :: Frame?
-		if badge then
-			badge.Size = UDim2.fromOffset(62, 30)
-		end
 	end
 	local ok, again = buttons(stage, data, small, UDim.new(1, -18))
 	return { Ok = ok, Again = again, Cards = cards }
