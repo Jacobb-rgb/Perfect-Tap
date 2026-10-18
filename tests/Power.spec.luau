@@ -31,6 +31,15 @@ return function(T, Loader)
 		return { Id = id, X = x, Z = z, R = r or 0 }
 	end
 
+	-- Waits until check() holds, at most `timeout` seconds: deferred computes can take
+	-- more than one frame when many test runs share the machine.
+	local function waitUntil(check: () -> boolean, timeout: number?)
+		local deadline = os.clock() + (timeout or 1)
+		repeat
+			task.wait()
+		until check() or os.clock() > deadline
+	end
+
 	local function speedOn(supply: number, demand: number): number
 		return UNPOWERED + (1 - UNPOWERED) * math.min(1, supply / demand)
 	end
@@ -446,7 +455,9 @@ return function(T, Loader)
 		T.truthy(old ~= turbine.Model)
 		-- the Speed level went up meanwhile: next frame's compute has it
 		w.data.MachineUpgrades.WindTurbine = { Speed = 1 }
-		task.wait()
+		waitUntil(function()
+			return turbine.Model:GetAttribute("PowerOut") == 50
+		end)
 		T.eq(turbine.Model:GetAttribute("PowerOut"), 50, "fresh compute next frame")
 		T.eq(pole.Model:GetAttribute("PowerSupply"), 50)
 	end)
@@ -468,7 +479,9 @@ return function(T, Loader)
 			Price = 1,
 		})
 		T.eq(turbine.Model:GetAttribute("PowerOut"), 40, "not in the same step")
-		task.wait()
+		waitUntil(function()
+			return turbine.Model:GetAttribute("PowerOut") == 60
+		end)
 		T.eq(turbine.Model:GetAttribute("PowerOut"), 60, "40 x 1.5")
 		T.eq(pole.Model:GetAttribute("PowerSupply"), 60)
 		-- buys that don't touch power don't compute
@@ -484,7 +497,9 @@ return function(T, Loader)
 		-- many asks in one frame compute once
 		PowerService._test.schedule(w.player)
 		PowerService._test.schedule(w.player)
-		task.wait()
+		waitUntil(function()
+			return turbine.Model:GetAttribute("PowerOut") == 70
+		end)
 		T.eq(turbine.Model:GetAttribute("PowerOut"), 70, "scheduled compute ran")
 	end)
 
@@ -589,11 +604,14 @@ return function(T, Loader)
 		local ok, err = pcall(function()
 			PowerService.init()
 			MachineService._test.spawnAll(player, 3)
-			task.wait()
 			local byId = {}
-			for _, machine in MachineService.ofPlot(3) do
-				byId[machine.Id] = machine
-			end
+			waitUntil(function()
+				for _, machine in MachineService.ofPlot(3) do
+					byId[machine.Id] = machine
+				end
+				local furnace = byId.BrickFurnace
+				return furnace ~= nil and furnace.Model:GetAttribute("PowerSpeed") ~= nil
+			end)
 			local furnace, crusher = byId.BrickFurnace, byId.RobotArm
 			T.eq(furnace.Model:GetAttribute("PowerSpeed"), 1, "18.75 for 10")
 			T.eq(furnace.Model:GetAttribute("Powered"), true)
@@ -606,13 +624,17 @@ return function(T, Loader)
 			T.eq(modifiers[1](crusher), UNPOWERED)
 			-- move the crusher into reach: the layout listener recomputes
 			T.truthy(MachineService.move(crusher, 7, 3, 0), "moved")
-			task.wait()
+			waitUntil(function()
+				return crusher.Model:GetAttribute("PowerSpeed") == 1
+			end)
 			T.eq(crusher.Model:GetAttribute("PowerSpeed"), 1, "now sharing 18.75 for 14")
 			T.eq(byId.PowerPole.Model:GetAttribute("PowerDemand"), 14)
 			T.eq(modifiers[1](crusher), 1)
 			-- the panel goes back into the Build menu: 0 for 18
 			T.truthy(MachineService.pickup(byId.SolarPanel), "picked up")
-			task.wait()
+			waitUntil(function()
+				return crusher.Model:GetAttribute("PowerSpeed") == UNPOWERED
+			end)
 			T.eq(crusher.Model:GetAttribute("PowerSpeed"), UNPOWERED, "no generator left")
 			T.eq(crusher.Model:GetAttribute("Powered"), false)
 			T.eq(modifiers[1](crusher), UNPOWERED)

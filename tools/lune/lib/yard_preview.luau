@@ -19,8 +19,8 @@ YardPreview.Plot = 5 -- an east plot: the sun lights the yard from the pad side
 -- relics this owner found (their museum shows them; ArtifactConfig ids)
 YardPreview.Artifacts = { "CrownCoin", "RoyalSeal", "GoldenSpike", "RailLantern", "LastTicket", "GolemCog", "SparkVial", "EmberRune" }
 YardPreview.Podiums = {
-	{ K = "Clean", O = "Emerald", G = "Flawless" },
-	{ K = "Clean", O = "Stormcore", G = "Pristine" }, -- a wide Epic ore inside the holo-ring
+	{ K = "Clean", O = "Jade", G = "Flawless" },
+	{ K = "Clean", O = "StormPearl", G = "Pristine" }, -- a wide Epic ore inside the holo-ring
 }
 YardPreview.Pen = {
 	["Raw|Copper||"] = 9,
@@ -28,7 +28,7 @@ YardPreview.Pen = {
 	["Clean|Silver|Clean|"] = 3,
 	["Clean|Amethyst|Pristine|"] = 2,
 	["Clean|Copper|Rough|"] = 6,
-	["Clean|Ruby|Rough|"] = 1,
+	["Clean|Bronze|Rough|"] = 1,
 	["Ingot|Iron|Clean|"] = 2,
 }
 

@@ -57,6 +57,7 @@ local ORDER = {
 	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
 	"SettingsService", -- the side menu's SETTINGS record
 	"CodexService", -- the ORE CODEX's NEW badges (seen ores)
+	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 }
 
 local loaded = {}

@@ -863,7 +863,7 @@ return function(T, Loader)
 		w.data.Coins = 1e10
 		table.clear(stock(w))
 		for _ = 1, 13 do
-			table.insert(stock(w), ingot("Solarite"))
+			table.insert(stock(w), ingot("Sunstone"))
 		end
 		local capacity = ItemService.penCapacity(w.data)
 		for _ = #w.data.Storage + 1, capacity - 0 do
@@ -1017,7 +1017,7 @@ return function(T, Loader)
 
 	withWorld("FoundryService: conservation fuzz (chute, hopper, Take, forges)", function(w)
 		local rng = Rng.new(4242)
-		local ores = { "Coal", "Copper", "Silver", "Gold", "Diamond", "Solarite", "Heartstone" }
+		local ores = { "Coal", "Copper", "Silver", "Gold", "Diamond", "Sunstone", "Heartstone" }
 		local spawned, consumed = 0, 0
 		w.data.Coins = 1e12
 		local loose: { any } = {}
@@ -1087,7 +1087,7 @@ return function(T, Loader)
 			["Ingot|Gold|Clean|"] = 2,
 			["Ingot|Gold|Rough|"] = 1,
 			["Ingot|Coal||"] = 4,
-			["Ingot|Silver|Flawless|"] = 1,
+			["Ingot|Emberite|Flawless|"] = 1,
 			["Raw|Gold||"] = 9,
 			["junk"] = 1,
 		}, 3)
@@ -1100,7 +1100,7 @@ return function(T, Loader)
 		T.le(12, FoundryView.fitTextSize(string.rep("W", 80), 50, 21), "never below 12")
 		T.eq(rows[1].TakeKey, "Ingot|Gold|Rough|", "TAKE moves the cheapest")
 		T.eq(rows[1].Detail, "2 Clean, 1 Rough")
-		T.eq(rows[2].Ore, "Silver")
+		T.eq(rows[2].Ore, "Emberite")
 		T.eq(rows[3].Ore, "Coal", "unusable last")
 		T.falsy(rows[3].Usable)
 		T.truthy(rows[3].Detail:find("Uncommon", 1, true), "says why")

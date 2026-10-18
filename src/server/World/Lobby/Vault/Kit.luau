@@ -251,9 +251,10 @@ end
 ---------------------------------------------------------------- crystals
 
 --[[
-	A glass crystal shard with a glowing core (a whole neon cluster blooms
-	into a white blob in Roblox): a square column turned 45 degrees with a
-	chisel tip. base = its foot, up = its direction. 4 parts.
+	A crystal shard: an opaque glass column turned 45 degrees with a glowing
+	chisel tip (phones: no see-through glass to overdraw, no hidden core
+	part; a whole neon cluster would bloom into a white blob, so only the
+	tip glows). base = its foot, up = its direction. 3 parts.
 ]]
 function Kit.glassShard(parent: Instance, base: Vector3, up: Vector3, s: number, length: number, color: Color3, core: Color3): { BasePart }
 	local hint = if math.abs(up.X) > 0.9 then Vector3.new(0, 0, 1) else Vector3.new(1, 0, 0)
@@ -261,27 +262,29 @@ function Kit.glassShard(parent: Instance, base: Vector3, up: Vector3, s: number,
 	local cf = CFrame.fromMatrix(base, right, up) * CFrame.Angles(0, math.pi / 4, 0)
 	local colL = length * 0.66
 	local tipL = length - colL
-	local glass = Style.tiny({ Transparency = 0.3, Reflectance = 0.15 })
-	local parts: { BasePart } = {
-		Geo.block(parent, cf * CFrame.new(0, colL / 2, 0), Vector3.new(s, colL, s), color, Kit.GLASS, glass),
-		Geo.wedge(
-			parent,
-			cf * CFrame.new(0, colL + tipL / 2, -s / 4),
-			Vector3.new(s, tipL, s / 2),
-			color,
-			Kit.GLASS,
-			Style.tiny({ Transparency = 0.3 })
-		),
-		Geo.wedge(
-			parent,
-			cf * CFrame.new(0, colL + tipL / 2, s / 4) * CFrame.Angles(0, math.pi, 0),
-			Vector3.new(s, tipL, s / 2),
-			color,
-			Kit.GLASS,
-			Style.tiny({ Transparency = 0.3 })
-		),
-		Kit.glow(parent, cf * CFrame.new(0, colL * 0.5, 0), Vector3.new(s * 0.42, colL * 0.82, s * 0.42), core),
-	}
+	-- the column takes a little of the core's glow, so it still reads as a lit crystal
+	local column = Geo.block(
+		parent,
+		cf * CFrame.new(0, colL / 2, 0),
+		Vector3.new(s, colL, s),
+		color:Lerp(core, 0.25),
+		Kit.GLASS,
+		Style.tiny({ Reflectance = 0.15 })
+	)
+	local parts: { BasePart } = { column }
+	for _, turn in { 0, math.pi } do
+		table.insert(
+			parts,
+			Geo.wedge(
+				parent,
+				cf * CFrame.new(0, colL + tipL / 2, if turn == 0 then -s / 4 else s / 4) * CFrame.Angles(0, turn, 0),
+				Vector3.new(s, tipL, s / 2),
+				core,
+				Kit.NEON,
+				Style.tiny()
+			)
+		)
+	end
 	return parts
 end
 

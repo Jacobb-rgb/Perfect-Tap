@@ -39,6 +39,7 @@ local ChiselStep = require(Cleaning.ChiselStep)
 local CameraFit = require(Cleaning.CameraFit)
 local ScrapeStep = require(Cleaning.ScrapeStep)
 local PolishStep = require(Cleaning.PolishStep)
+local RevealFx = require(Cleaning.RevealFx)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -53,6 +54,9 @@ local CleaningController = {}
 
 local player = Players.LocalPlayer
 local active: any = nil
+-- cleans in a row (CleaningView.nextStreak; cosmetic, never saved)
+local streak = 0
+local lastCleanAt: number? = nil
 -- The camera from before cleaning. Kept here, not per session: a session that starts while
 -- the last one's camera is still flying back must not save that half-restored camera.
 local restoreCF: CFrame? = nil
@@ -420,6 +424,7 @@ local function enter(ctx: any)
 	restoreCF, restoreFov = ctx.savedCameraCF, ctx.savedFov
 	camera.CameraType = Enum.CameraType.Scriptable
 	local target, fov = fitCamera(ctx, scale, compact)
+	ctx.fitFov = fov
 	TweenService:Create(camera, TweenInfo.new(pauses.Intro, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 		CFrame = target,
 		FieldOfView = fov,
@@ -543,6 +548,22 @@ local function showCard(ctx: any, result: { [string]: any })
 		math.floor((result.Polish or 0) * 100),
 		result.Chips or 0
 	)
+	-- cleans in a row: a little chip on the card (nothing saved, no reward)
+	local now = os.clock()
+	streak = CleaningView.nextStreak(streak, lastCleanAt, now)
+	lastCleanAt = now
+	CleaningView.setStreak(view, streak)
+	-- the grade stamp lands on the ore itself
+	local face = ctx.shell.WorkCF
+	local plate, stampPop = RevealFx.stamp(ctx.folder, face, OreShellBuilder.CoreFront + 1.2, grade.Name, grade.Color)
+	stampPop.Scale = RevealFx.StampFrom
+	TweenService:Create(stampPop, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	task.delay(0.16, function()
+		if plate.Parent then
+			Sfx.play("Place", plate.Position, 1.25)
+			Vfx.burst("Dust", plate.Position, 4, grade.Color)
+		end
+	end)
 	view.Card.Visible = true
 	local pop = view.Card:FindFirstChild("Pop") :: UIScale
 	pop.Scale = 0.2
@@ -613,15 +634,38 @@ local function reveal(ctx: any)
 			{ Size = Vector3.new(7, 7, 7), Transparency = 1 }
 		)
 		:Play()
+	local plan = RevealFx.plan(order)
 	Vfx.burst("Burst", center, 20 + order * 10, ctx.rarity.Color)
 	Vfx.burst("Glint", center, 12 + order * 4, ctx.ore.Glow)
 	Sfx.play("Reveal")
-	CameraShake.add(0.25 + order * 0.05)
-	ctx.flash(ctx.rarity.Color, if order >= 5 then 0.35 else 0.65)
+	if plan.Fanfare then
+		Sfx.play("Discovery", center, 0.8 + 0.1 * (order - 5))
+	end
+	-- softer on phones and tablets (the shared module still has the last word: Settings)
+	local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	CameraShake.add(plan.Shake * (if touchOnly then RevealFx.TouchShake else 1))
+	ctx.flash(ctx.rarity.Color, plan.Flash)
+	-- Legendary and Mythic: the view narrows for a moment while the spin slows down
+	local fitFov = ctx.fitFov
+	if plan.FovPunch > 0 and fitFov then
+		local camera = ctx.camera
+		TweenService:Create(camera, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			FieldOfView = fitFov - plan.FovPunch,
+		}):Play()
+		task.delay(plan.Duration * 0.6, function()
+			if not ctx.exited then
+				TweenService:Create(camera, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+					FieldOfView = fitFov,
+				}):Play()
+			end
+		end)
+	end
+	-- a shine bar slides across the ore once it has risen
+	local _, sweepAt = RevealFx.sweep(ctx.folder, shell.WorkCF, OreShellBuilder.CoreFront + 1.1, 1.5)
 	-- light rays for Legendary and Mythic
 	local rays = {}
-	if order >= 5 then
-		local count = if order >= 6 then 12 else 8
+	if plan.Rays > 0 then
+		local count = plan.Rays
 		for i = 1, count do
 			local ray = Geo.block(
 				ctx.folder,
@@ -634,13 +678,15 @@ local function reveal(ctx: any)
 			table.insert(rays, { part = ray, angle = i / count * math.pi * 2 })
 		end
 	end
-	local spins = 1 + order * 0.25
-	local duration = 2.4 + order * 0.25
+	local spins = plan.Spins
+	local duration = plan.Duration
 	local started = os.clock()
 	local connection
 	connection = RunService.RenderStepped:Connect(function()
-		local p = math.clamp((os.clock() - started) / duration, 0, 1)
-		local ease = 1 - (1 - p) ^ 3
+		local elapsed = os.clock() - started
+		local p = math.clamp(elapsed / duration, 0, 1)
+		local ease = 1 - (1 - RevealFx.warp(p, plan.SlowMo)) ^ 3
+		sweepAt((elapsed - RevealFx.SweepDelay) / RevealFx.SweepTime)
 		local lift = math.min(1, p * 2.2)
 		lift = 1 - (1 - lift) ^ 2
 		local cf = pivot * CFrame.new(0, 0.2 * lift, 0.9 * lift) * CFrame.Angles(0, 0, ease * spins * math.pi * 2)

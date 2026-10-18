@@ -42,6 +42,7 @@ local ORDER = {
 	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
 	"SideMenuController", -- the button column on the left (after the panels it opens)
+	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 }
 
 local loaded = {}
