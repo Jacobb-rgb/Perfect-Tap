@@ -33,6 +33,12 @@
 	  registered, one roll against Bonuses.artifactChance (zone chance x
 	  Prospector) calls the listeners (player, zoneId, position) on success.
 	  With no bonuses nothing extra is rolled.
+	- Loose-item cap: while the shooter has GameConfig.MaxLooseItemsPerPlayer
+	  loose items (ItemService.atLooseCap) their damage never crosses a stage
+	  that would drop an ore (or break the rock): the HP stays just above it
+	  (1 HP before the break) and they get "Pick up your ore first" (at most
+	  every CAP_TOAST_GAP seconds). The ore stays in the rock (nothing is
+	  rolled or lost); once they pick some up, the next hit goes on.
 	- Network (docs/SERVER_PERF_AUDIT.md #8): the Health attribute replicates
 	  at most every HEALTH_GAP seconds per rock (and at once when a stage is
 	  crossed or the rock breaks); the last change always follows within
@@ -68,6 +74,8 @@ local SHATTER_RADIUS = 180
 local HIT_FX_GAP = 0.25 -- BlastHit at most 4 times a second per rock and shooter
 local HEALTH_GAP = 0.3 -- the Health attribute replicates at most ~3 times a second per rock
 local TOAST_GAP = 3 -- seconds between "Needs a Level N blaster" toasts for the same rock
+local CAP_TOAST_GAP = 4 -- seconds between "Pick up your ore first" toasts per player
+MiningService.CapText = "Pick up your ore first"
 local RESPAWN_CHECK = 1 -- seconds between respawn queue checks
 
 type Rock = {
@@ -92,6 +100,7 @@ type Shooter = {
 	Target: Rock?,
 	Last: number, -- clock() of this player's last damage tick (or target change)
 	Toasts: { [Model]: number }, -- last gate toast per rock
+	CapToast: number?, -- clock() of the last "Pick up your ore first"
 }
 
 type Respawn = { At: number, Marker: BasePart }
@@ -393,8 +402,63 @@ local function crossStage(player: Player, rock: Rock, stage: number, from: Vecto
 	end
 end
 
+local function shooterOf(player: Player): Shooter
+	local shooter = shooters[player]
+	if not shooter then
+		shooter = { Target = nil, Last = clock(), Toasts = {} }
+		shooters[player] = shooter
+	end
+	return shooter
+end
+
+-- The stage a health value has reached (0..3).
+local function stageAt(rock: Rock, health: number): number
+	local lost = 1 - health / rock.MaxHealth
+	return math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
+end
+
+--[[
+	The loose-item cap (header): the health `player`'s damage may bring the
+	rock down to. Unchanged unless it would cross a stage that drops an ore
+	(or breaks the rock) while the player has the cap of loose items; then
+	it stops just above that stage (1 HP above it, less on a tiny rock),
+	never higher than the rock's health now. Second value: held.
+]]
+local function allowedHealth(player: Player, rock: Rock, health: number): (number, boolean)
+	local reached = stageAt(rock, health)
+	local drops: number? = nil
+	for stage = rock.Stage + 1, reached do
+		if stage >= 3 or stage > 3 - #rock.Ores then
+			drops = stage
+			break
+		end
+	end
+	if not drops or not ItemService.atLooseCap(player.UserId) then
+		return health, false
+	end
+	local threshold = rock.MaxHealth * (1 - drops / 3)
+	local hold = threshold + math.min(1, rock.MaxHealth / 6)
+	return math.min(rock.Health, math.max(health, hold)), true
+end
+
+-- "Pick up your ore first" (at most every CAP_TOAST_GAP seconds) and a bounce.
+local function capToast(player: Player, rock: Rock, from: Vector3, now: number)
+	local shooter = shooterOf(player)
+	local last = shooter.CapToast
+	if last and now - last < CAP_TOAST_GAP and now >= last then
+		return
+	end
+	shooter.CapToast = now
+	Net.fire("Notify", player, { Text = MiningService.CapText, Kind = "Deny" })
+	Net.fire("Fx", player, "MineBounce", hitPosition(rock, from))
+end
+
 local function damage(player: Player, data: { [string]: any }, rock: Rock, amount: number, from: Vector3, now: number)
-	rock.Health = math.max(0, rock.Health - amount)
+	local health, held = allowedHealth(player, rock, math.max(0, rock.Health - amount))
+	if held then
+		capToast(player, rock, from, now)
+	end
+	rock.Health = health
 	local lost = 1 - rock.Health / rock.MaxHealth
 	local newStage = math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
 	-- a crossed stage (or the break) shows at once; plain damage at most every HEALTH_GAP
@@ -419,15 +483,6 @@ local function damage(player: Player, data: { [string]: any }, rock: Rock, amoun
 end
 
 ---------------------------------------------------------------- blasting
-
-local function shooterOf(player: Player): Shooter
-	local shooter = shooters[player]
-	if not shooter then
-		shooter = { Target = nil, Last = clock(), Toasts = {} }
-		shooters[player] = shooter
-	end
-	return shooter
-end
 
 -- One toast per rock every TOAST_GAP seconds, plus a bounce effect.
 local function refuse(player: Player, shooter: Shooter, rock: Rock, text: string, from: Vector3, now: number)
