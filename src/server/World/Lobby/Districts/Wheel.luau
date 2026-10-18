@@ -341,13 +341,16 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 	)
 	Kit.bit(m, at(0, top - 0.1, front + 0.2), Vector3.new(2 * hw, 0.24, 0.5), Tech.MetalLight)
 	Tech.glow(m, at(0, top - 0.4, front - 0.1), Vector3.new(2 * hw, 0.3, 0.16), Tech.Tube)
+	-- (perf pass 1: the row's first stud sat inside the top stair: the three
+	-- that show, at the same places)
+	local studStep = (hw - 0.6 - 4.4 * s) / 3
 	for _, side in { -1, 1 } do
 		Tech.studs(
 			m,
 			cf,
-			Vector3.new(side * 4.4 * s, top * 0.72, front - 0.08),
+			Vector3.new(side * (4.4 * s + studStep), top * 0.72, front - 0.08),
 			Vector3.new(side * (hw - 0.6), top * 0.72, front - 0.08),
-			4,
+			3,
 			0.4 * s
 		)
 	end
@@ -422,12 +425,15 @@ function Wheel.build(parent: Instance, rng: Rng.Rng)
 			RIM
 		)
 		if not covered(a) then
-			Tech.glow(
-				m,
-				seg * CFrame.new(0, d.RingOut - tube * 0.4, -d.RingD / 2 - 0.1),
-				Vector3.new(2 * d.RingOut * tan + 0.1, tube * 0.8, 0.2),
-				RIM
-			)
+			-- (perf pass 1: not at 6 o'clock, where the bottom bracket hides it)
+			if k ~= n / 2 then
+				Tech.glow(
+					m,
+					seg * CFrame.new(0, d.RingOut - tube * 0.4, -d.RingD / 2 - 0.1),
+					Vector3.new(2 * d.RingOut * tan + 0.1, tube * 0.8, 0.2),
+					RIM
+				)
+			end
 			if k % 2 == 1 then
 				Tech.glow(m, seg * CFrame.new(0, d.RingIn + band * 0.5, -d.RingD / 2 - 0.08), Vector3.new(0.5, 0.5, 0.14) * s, C.Fire)
 			end

@@ -521,11 +521,25 @@ return function(T, Loader)
 			end
 			return n
 		end
+		-- lit bays: one item plinth per bay, each inside a glass case (perf
+		-- pass 1: the two bays of a side share one case behind the wall)
 		local function bayCases(m): number
-			local n = 0
+			local cases, n = {}, 0
 			for _, d in m:GetDescendants() do
 				if d:IsA("BasePart") and d.Name == "BayCase" then
-					n += 1
+					table.insert(cases, d)
+				end
+			end
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "BayPlinth" then
+					for _, case in cases do
+						local q = case.CFrame:PointToObjectSpace(d.CFrame.Position)
+						local h = case.Size / 2
+						if math.abs(q.X) <= h.X and math.abs(q.Y) <= h.Y and math.abs(q.Z) <= h.Z then
+							n += 1
+							break
+						end
+					end
 				end
 			end
 			return n
@@ -780,6 +794,72 @@ return function(T, Loader)
 			if a[i] ~= b[i] then
 				T.eq(b[i], a[i], "part " .. i)
 				break
+			end
+		end
+	end)
+	T.test("districts (perf pass 1): fewer parts on SHOP, UPGRADES and the wheel, nothing hidden inside another part", function()
+		local _, pkg = districts()
+		local function count(m): (number, number)
+			local parts, neon = 0, 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					parts += 1
+					if d.Material == roblox.Enum.Material.Neon then
+						neon += 1
+					end
+				end
+			end
+			return parts, neon
+		end
+		-- (427 / 444 / 320 parts and 177 wheel neon parts before)
+		local shop = count(pkg.Shop)
+		local upgrades = count(pkg.Upgrades)
+		local wheel, wheelNeon = count(pkg.SpinWheel)
+		T.le(shop, 400, "SHOP parts")
+		T.le(upgrades, 415, "UPGRADES parts")
+		T.le(wheel, 317, "SPIN & WIN parts")
+		T.le(wheelNeon, 174, "SPIN & WIN neon parts")
+		-- no part lies wholly inside an opaque block (it would never be seen)
+		for _, name in { "Shop", "Upgrades", "SpinWheel" } do
+			local parts = {}
+			for _, d in pkg[name]:GetDescendants() do
+				if d:IsA("BasePart") then
+					table.insert(parts, d)
+				end
+			end
+			for _, a in parts do
+				if a.Transparency < 1 then
+					local h = a.Size / 2
+					local points = {}
+					for _, sx in { -1, 1 } do
+						for _, sy in { -1, 1 } do
+							for _, sz in { -1, 1 } do
+								table.insert(points, (a.CFrame * CFrame.new(sx * h.X, sy * h.Y, sz * h.Z)).Position)
+							end
+						end
+					end
+					local center = a.CFrame.Position
+					for _, b in parts do
+						if
+							b ~= a
+							and (b.CFrame.Position - center).Magnitude <= b.Size.Magnitude / 2
+							and b:IsA("Part")
+							and b.Shape == roblox.Enum.PartType.Block
+							and b.Transparency == 0
+						then
+							local hb = b.Size / 2 + Vector3.new(0.001, 0.001, 0.001)
+							local inside = true
+							for _, p in points do
+								local q = b.CFrame:PointToObjectSpace(p)
+								if math.abs(q.X) > hb.X or math.abs(q.Y) > hb.Y or math.abs(q.Z) > hb.Z then
+									inside = false
+									break
+								end
+							end
+							T.falsy(inside, `{a:GetFullName()} is hidden inside {b.Name}`)
+						end
+					end
+				end
 			end
 		end
 	end)

@@ -32,6 +32,15 @@
 	build drops the mid pylons' light studs to stay part-neutral).
 	UPGRADES is the sister module: purple frames and purple/blue neon
 	accents, a violet bay glow, machine models in the showcases and bays.
+	(perf pass 1) On a two-bay side the pieces both bays have at the same
+	place run on as one longer block hidden behind the mid pylon and the
+	wall between the windows: the wall below and above the windows, the
+	jambs either side of the mid pylon, the foot strip, and inside the bays
+	the dark glass, the plinth with its neon edge and floor glow, the glass
+	case, its lid and light strip; the door jambs reach over the inner bay
+	jambs; one back wall carries both orange bands; the porch showcases
+	get one dark back plate (their backs face the pylons).
+	Shop / Upgrades: 427 / 444 -> 396 / 413 parts, the same look.
 
 	Local frame (LobbyLayout piece, 20 x 20 x 14): front = -Z (toward the
 	plaza), seen from the front local +X is on the viewer's left.
@@ -186,8 +195,20 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 
 	-- facade: the open display bays (window walls without glass) and the
 	-- wide door frame in light face panels, a lintel over them
+	-- (perf pass 1: on a two-bay side the wall pieces both bays share run on
+	-- as one block behind the mid pylon, see the header)
+	local twoBays = #windowBays == 2
+	local bayJamb = 0.5 -- (bay.W - WindowWidth) / 2
 	for _, side in { -1, 1 } do
-		for _, bay in windowBays do
+		for bi, bay in windowBays do
+			-- (the jamb toward the door is local -side, toward the outer pylon +side)
+			local noJamb: { [number]: boolean } = {}
+			if twoBays then
+				noJamb[-side] = true -- bay 1: the door jamb reaches over it; bay 2: the shared block
+				if bi == 1 then
+					noJamb[side] = true -- the shared block behind the mid pylon
+				end
+			end
 			Tech.windowWall(m, at(side * bay.X, FLOOR, FACADE_Z), bay.W, DOOR_H, 1.0, {
 				Color = FACE,
 				WindowWidth = bay.W - 1.0,
@@ -196,7 +217,38 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 				Frame = frame,
 				Glass = false,
 				FrameNeon = opts.FrameNeon,
+				NoBelow = twoBays,
+				NoAbove = twoBays,
+				NoFoot = twoBays,
+				NoJamb = noJamb,
 			})
+		end
+		if twoBays then
+			local b1, b2 = windowBays[1], windowBays[2]
+			local x0 = b1.X - b1.W / 2 + bayJamb -- the door jamb reaches this far
+			local x1 = b2.X + b2.W / 2
+			local span, mid = x1 - x0, side * (x0 + x1) / 2
+			Style.block(m, at(mid, FLOOR + BAY_Y0 / 2, FACADE_Z), Vector3.new(span, BAY_Y0, 1.0), FACE, nil, Style.solid())
+			Style.block(
+				m,
+				at(mid, FLOOR + (BAY_Y1 + DOOR_H) / 2, FACADE_Z),
+				Vector3.new(span, DOOR_H - BAY_Y1, 1.0),
+				FACE,
+				nil,
+				Style.solid()
+			)
+			-- bay 1's outer jamb, the wall behind the mid pylon and bay 2's inner jamb
+			local j0, j1 = b1.X + b1.W / 2 - bayJamb, b2.X - b2.W / 2 + bayJamb
+			Style.block(
+				m,
+				at(side * (j0 + j1) / 2, FLOOR + (BAY_Y0 + BAY_Y1) / 2, FACADE_Z),
+				Vector3.new(j1 - j0, BAY_Y1 - BAY_Y0, 1.0),
+				FACE,
+				nil,
+				Style.solid()
+			)
+			local f0 = b1.X - b1.W / 2
+			Kit.bit(m, at(side * (f0 + x1) / 2, FLOOR + 0.4, FACADE_Z - 0.7), Vector3.new(x1 - f0, 0.8, 0.4), Tech.MetalDark)
 		end
 	end
 	Tech.doorFrame(m, at(0, FLOOR, FACADE_Z), 2 * DOOR_HALF, DOOR_H, 1.0, {
@@ -205,6 +257,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 		OpeningHeight = DOOR_H,
 		Frame = frame,
 		Neon = tube,
+		JambExtra = if twoBays then bayJamb else nil,
 	})
 	-- chamfered upper corners make the door read as the concept's bevelled
 	-- opening (a frame turned upside down: its "up" points down the jambs)
@@ -244,11 +297,15 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	local backZ = BACK_Z + 0.5
 	local panelW = hw - 0.25
 	local bandY = { 0.3, 0.62 }
+	-- (perf pass 1) one wall (slab, foot, bevel) under both panels' bands
+	Tech.wall(m, at(0, FLOOR, BACK_Z) * CFrame.Angles(0, math.pi, 0), 2 * panelW, wallTall, 1.0, {
+		Cap = false,
+		Band = false,
+	})
 	for i, side in { 1, -1 } do
-		Tech.wall(m, at(side * panelW / 2, FLOOR, BACK_Z) * CFrame.Angles(0, math.pi, 0), panelW, wallTall, 1.0, {
-			Cap = false,
-			BandY = bandY[i],
-		})
+		-- (Tech.wall's band: BandY of the height, on the back face)
+		local bh = math.clamp(wallTall * 0.1, 0.5, 1.1)
+		Kit.bit(m, at(side * panelW / 2, FLOOR + bandY[i] * wallTall, BACK_Z + 0.56), Vector3.new(panelW, bh, 0.12), Tech.Band)
 	end
 	Kit.block(
 		m,
@@ -458,38 +515,50 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 	local windows: { CFrame } = {}
 	local inner: { CFrame }, outer: { CFrame } = {}, {}
 	local plinthColor: Color3 = opts.Plinth or neonLine
+	local caseTop = FLOOR + BAY_PLINTH + BAY_CASE
+	-- One bay's case furniture (`x` = center, `w` = the bay width); on a
+	-- two-bay side once for both bays together (x, w over both: the part
+	-- between them hides behind the wall between the windows).
+	local function bayCase(x: number, w: number)
+		local cw = w - 1.0 -- plinth width
+		-- opaque dark glass behind the case (the lit item is the light)
+		Kit.block(m, at(x, FLOOR + 4.15, BAY_BACK_Z), Vector3.new(w - 0.7, 4.9, 0.1), DARK_GLASS, nil, Style.tiny({ Reflectance = 0.18 })).Name =
+			"BayGlass"
+		Kit.bit(m, at(x, FLOOR + BAY_PLINTH / 2, BAY_Z), Vector3.new(cw, BAY_PLINTH, BAY_D), Tech.MetalDark)
+		Tech.glow(m, at(x, FLOOR + BAY_PLINTH - 0.12, BAY_Z - BAY_D / 2 - 0.03), Vector3.new(cw, 0.14, 0.08), neonLine)
+		Tech.glow(m, at(x, FLOOR + BAY_PLINTH + 0.03, BAY_Z), Vector3.new(cw - 0.4, 0.06, BAY_D - 0.4), Tech.CaseLight)
+		local glass = Kit.block(
+			m,
+			at(x, FLOOR + BAY_PLINTH + BAY_CASE / 2, BAY_Z),
+			Vector3.new(cw - 0.2, BAY_CASE, BAY_D - 0.2),
+			Tech.CaseGlass,
+			Kit.GLASS,
+			-- clearer than the porch cases: the bay's frame already reads as
+			-- a case, the item keeps its saturated color
+			Style.tiny({ Transparency = 0.84 })
+		)
+		glass.Name = "BayCase"
+		Kit.bit(m, at(x, caseTop + 0.12, BAY_Z), Vector3.new(cw, 0.24, BAY_D), Tech.MetalLight)
+		Tech.glow(m, at(x, caseTop - 0.08, BAY_Z - BAY_D / 2 + 0.4), Vector3.new(cw - 0.6, 0.12, 0.3), Tech.CaseLight)
+	end
+	for _, side in { 1, -1 } do
+		if twoBays then
+			local b1, b2 = windowBays[1], windowBays[2]
+			local x0, x1 = b1.X - b1.W / 2, b2.X + b2.W / 2
+			bayCase(side * (x0 + x1) / 2, x1 - x0)
+		else
+			for _, bay in windowBays do
+				bayCase(side * bay.X, bay.W)
+			end
+		end
+	end
 	for bi, bay in windowBays do
 		for _, side in { 1, -1 } do
 			local x = side * bay.X
-			local cw = bay.W - 1.0 -- plinth width
-			local caseTop = FLOOR + BAY_PLINTH + BAY_CASE
-			-- opaque dark glass behind the case (the lit item is the light)
-			Kit.block(
-				m,
-				at(x, FLOOR + 4.15, BAY_BACK_Z),
-				Vector3.new(bay.W - 0.7, 4.9, 0.1),
-				DARK_GLASS,
-				nil,
-				Style.tiny({ Reflectance = 0.18 })
-			).Name =
-				"BayGlass"
-			Kit.bit(m, at(x, FLOOR + BAY_PLINTH / 2, BAY_Z), Vector3.new(cw, BAY_PLINTH, BAY_D), Tech.MetalDark)
-			Tech.glow(m, at(x, FLOOR + BAY_PLINTH - 0.12, BAY_Z - BAY_D / 2 - 0.03), Vector3.new(cw, 0.14, 0.08), neonLine)
-			Tech.glow(m, at(x, FLOOR + BAY_PLINTH + 0.03, BAY_Z), Vector3.new(cw - 0.4, 0.06, BAY_D - 0.4), Tech.CaseLight)
-			Tech.glow(m, at(x, FLOOR + BAY_PLINTH + 0.16, BAY_Z), Vector3.new(math.min(1.9, cw - 1.0), 0.2, 1.3), plinthColor)
-			local glass = Kit.block(
-				m,
-				at(x, FLOOR + BAY_PLINTH + BAY_CASE / 2, BAY_Z),
-				Vector3.new(cw - 0.2, BAY_CASE, BAY_D - 0.2),
-				Tech.CaseGlass,
-				Kit.GLASS,
-				-- clearer than the porch cases: the bay's frame already reads as
-				-- a case, the item keeps its saturated color
-				Style.tiny({ Transparency = 0.84 })
-			)
-			glass.Name = "BayCase"
-			Kit.bit(m, at(x, caseTop + 0.12, BAY_Z), Vector3.new(cw, 0.24, BAY_D), Tech.MetalLight)
-			Tech.glow(m, at(x, caseTop - 0.08, BAY_Z - BAY_D / 2 + 0.4), Vector3.new(cw - 0.6, 0.12, 0.3), Tech.CaseLight)
+			local cw = bay.W - 1.0
+			-- the small neon plinth under each bay's item
+			Tech.glow(m, at(x, FLOOR + BAY_PLINTH + 0.16, BAY_Z), Vector3.new(math.min(1.9, cw - 1.0), 0.2, 1.3), plinthColor).Name =
+				"BayPlinth"
 			table.insert(if bi == 1 then inner else outer, at(x, FLOOR + BAY_PLINTH + 0.26, BAY_Z))
 		end
 	end
@@ -515,6 +584,7 @@ local function house(m: Model, cf: CFrame, hw: number, rng: Rng.Rng, opts: Opts)
 							Stripe = frame,
 							Plinth = plinthColor,
 							Backlight = opts.CaseBack,
+							BackPlate = true, -- (their backs face the pylons)
 						})
 					)
 				end

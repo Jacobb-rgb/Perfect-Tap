@@ -265,6 +265,9 @@ end
 	Frame (inner frame color, default the orange band), Glass (default
 	true; false = an open bay), Lit (Color3: a glowing neon pane instead of
 	glass), Foot. Returns the pane (or nil). 8-10 parts.
+	(perf pass 1) Wall pieces a caller builds as one longer block shared
+	with the next window (Stalls' two-bay sides): NoBelow, NoAbove, NoFoot,
+	NoJamb = { [side]: true } (side -1 / +1 = local -X / +X).
 ]]
 function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: number, depth: number, opts: Opts?): Part?
 	local o: Opts = opts or {}
@@ -274,17 +277,24 @@ function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: 
 	local y1 = o.WindowTop or height * 0.8
 	local jw = (width - ow) / 2
 	local p = Style.solid()
-	block(parent, base * CFrame.new(0, y0 / 2, 0), Vector3.new(width, y0, depth), color, nil, p)
-	block(parent, base * CFrame.new(0, (y1 + height) / 2, 0), Vector3.new(width, height - y1, depth), color, nil, Style.solid())
+	if not o.NoBelow then
+		block(parent, base * CFrame.new(0, y0 / 2, 0), Vector3.new(width, y0, depth), color, nil, p)
+	end
+	if not o.NoAbove then
+		block(parent, base * CFrame.new(0, (y1 + height) / 2, 0), Vector3.new(width, height - y1, depth), color, nil, Style.solid())
+	end
+	local noJamb: { [number]: boolean } = o.NoJamb or {}
 	for _, side in { -1, 1 } do
-		block(
-			parent,
-			base * CFrame.new(side * (ow / 2 + jw / 2), (y0 + y1) / 2, 0),
-			Vector3.new(jw, y1 - y0, depth),
-			color,
-			nil,
-			Style.solid()
-		)
+		if not noJamb[side] then
+			block(
+				parent,
+				base * CFrame.new(side * (ow / 2 + jw / 2), (y0 + y1) / 2, 0),
+				Vector3.new(jw, y1 - y0, depth),
+				color,
+				nil,
+				Style.solid()
+			)
+		end
 	end
 	local frame = o.Frame or Tech.Band
 	local t = 0.36
@@ -297,7 +307,7 @@ function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: 
 		bit(parent, base * CFrame.new(side * (ow / 2 - t / 2), (y0 + y1) / 2, 0), Vector3.new(t, y1 - y0 - 2 * t, fd), frame)
 	end
 	bit(parent, base * CFrame.new(0, y0 + t / 2 - 0.15, -0.14), Vector3.new(ow + 0.4, t + 0.3, fd + 0.28), frame)
-	if o.Foot ~= false then
+	if o.Foot ~= false and not o.NoFoot then
 		bit(parent, base * CFrame.new(0, 0.4, -depth / 2 - 0.2), Vector3.new(width, 0.8, 0.4), Tech.MetalDark)
 	end
 	local inner: Color3? = o.FrameNeon
@@ -329,8 +339,9 @@ end
 --[[
 	wall-door-wide-banner: two jambs, a lintel and a colored U frame around
 	a wide opening. `base` = bottom center. opts: Color, OpeningWidth,
-	OpeningHeight, Frame (color), Neon (Color3: a neon line inside the U).
-	7-10 parts.
+	OpeningHeight, Frame (color), Neon (Color3: a neon line inside the U),
+	JambExtra (perf pass 1: the jambs reach this much further out, over the
+	next window wall's jamb, which the caller then leaves out). 7-10 parts.
 ]]
 function Tech.doorFrame(parent: Instance, base: CFrame, width: number, height: number, depth: number, opts: Opts?)
 	local o: Opts = opts or {}
@@ -338,8 +349,16 @@ function Tech.doorFrame(parent: Instance, base: CFrame, width: number, height: n
 	local ow = o.OpeningWidth or width * 0.7
 	local oh = o.OpeningHeight or height * 0.75
 	local jw = (width - ow) / 2
+	local extra: number = o.JambExtra or 0
 	for _, side in { -1, 1 } do
-		block(parent, base * CFrame.new(side * (ow / 2 + jw / 2), oh / 2, 0), Vector3.new(jw, oh, depth), color, nil, Style.solid())
+		block(
+			parent,
+			base * CFrame.new(side * (ow / 2 + (jw + extra) / 2), oh / 2, 0),
+			Vector3.new(jw + extra, oh, depth),
+			color,
+			nil,
+			Style.solid()
+		)
 	end
 	if height > oh + 0.05 then
 		block(parent, base * CFrame.new(0, (oh + height) / 2, 0), Vector3.new(width, height - oh, depth), color, nil, Style.solid())
@@ -490,7 +509,9 @@ end
 	Returns the CFrame of the display floor (items go there). opts: Neon,
 	Stripe, Case, Light, Top (Color3: a glowing top instead of glass),
 	Plinth (Color3: a small neon plinth under the item), Backlight (Color3:
-	a glowing back panel inside the case). 7-16 parts.
+	a glowing back panel inside the case), BackPlate (perf pass 1: one dark
+	plate behind the back panel instead of the two back corner posts, for
+	cases whose back faces a wall). 7-16 parts.
 ]]
 function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: number, height: number, opts: Opts?): CFrame
 	local o: Opts = opts or {}
@@ -540,13 +561,19 @@ function Tech.showcase(parent: Instance, base: CFrame, width: number, depth: num
 		-- posts (no neon pane edges: the case reads as one lit box, not 4 panes)
 		for _, sx in { -1, 1 } do
 			for _, sz in { -1, 1 } do
-				bit(
-					parent,
-					base * CFrame.new(sx * (width / 2 - 0.17), height + ch / 2, sz * (depth / 2 - 0.17)),
-					Vector3.new(0.3, ch, 0.3),
-					Tech.MetalDark
-				)
+				if not (o.BackPlate and sz > 0) then
+					bit(
+						parent,
+						base * CFrame.new(sx * (width / 2 - 0.17), height + ch / 2, sz * (depth / 2 - 0.17)),
+						Vector3.new(0.3, ch, 0.3),
+						Tech.MetalDark
+					)
+				end
 			end
+		end
+		if o.BackPlate then
+			-- the back posts' faces seen through the glass, as one plate behind the back panel
+			bit(parent, base * CFrame.new(0, height + ch / 2, depth / 2 - 0.08), Vector3.new(width - 0.04, ch, 0.12), Tech.MetalDark)
 		end
 		glow(parent, base * CFrame.new(0, height + ch + 0.14, -depth / 2 - 0.06), Vector3.new(width, 0.2, 0.1), neon)
 		-- the light strip under the case lid, along its front edge: it shows
