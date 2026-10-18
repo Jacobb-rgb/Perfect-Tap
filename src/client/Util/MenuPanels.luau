@@ -17,6 +17,8 @@
 	                     panel closes itself when one appears)
 	  closeAll()         every open panel closes (CleaningController and
 	                     PlacementController call it when they take the screen)
+	  gridOpen()         the touch side menu's grid is open: the TRAIN chip and
+	                     the boost chips hide under it (setGridOpen / onGridChanged)
 	  device helpers     usingGamepad / isTouch / padName / glyph
 ]]
 
@@ -123,6 +125,40 @@ function MenuPanels.closeOthers(self: string)
 			MenuPanels.call(name, "close")
 		end
 	end
+end
+
+---------------------------------------------------------------- the side menu's touch grid
+
+-- The touch side menu's grid (SideMenuController.setExpanded) opens where the
+-- left column's TRAIN chip and boost chips are. While it is open those chips
+-- hide (TrainController / BoostController read gridOpen and listen with
+-- onGridChanged), so the grid never covers them half-way (a SEND button
+-- peeking out under it); they come back the moment it shuts.
+local gridOpen = false
+local gridListeners: { (boolean) -> () } = {}
+
+function MenuPanels.gridOpen(): boolean
+	return gridOpen
+end
+
+function MenuPanels.setGridOpen(on: boolean)
+	if gridOpen == on then
+		return
+	end
+	gridOpen = on
+	for _, listener in gridListeners do
+		local ok, err = pcall(function(): any
+			listener(on)
+			return nil
+		end)
+		if not ok then
+			warn(`[MenuPanels] grid listener failed: {err}`)
+		end
+	end
+end
+
+function MenuPanels.onGridChanged(listener: (boolean) -> ())
+	table.insert(gridListeners, listener)
 end
 
 ---------------------------------------------------------------- devices

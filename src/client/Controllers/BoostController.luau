@@ -10,7 +10,9 @@
 	  gamepad selection; B closes).
 	- The chips sit in the left column under the TRAIN chip (read from its
 	  ScreenGui, so they follow its phone / PC size) and hide with the HUD
-	  (the cleaning close-up turns the HUD off) and while a panel is open.
+	  (the cleaning close-up turns the HUD off), while a panel is open and
+	  while the touch side menu's grid is open in their place
+	  (MenuPanels.gridOpen).
 	- The cards and THE ODDS come from the State snapshot (Boosts, Bonuses,
 	  BlasterLevel, Perks), the coins on screen (counted up like the HUD)
 	  and workspace:GetServerTimeNow() for the timers, refreshed every
@@ -258,15 +260,16 @@ local function panelOpen(): boolean
 	return false
 end
 
--- The chips hide with the HUD and while a panel is open (a wide panel would
--- cut them off; the Boosts panel shows the same timers). They stay under the
--- train chip, whatever size it has.
+-- The chips hide with the HUD, while a panel is open (a wide panel would
+-- cut them off; the Boosts panel shows the same timers) and while the touch
+-- side menu's grid is open in their place (BoostView.chipsVisible). They stay
+-- under the train chip, whatever size it has.
 local function refreshChips()
 	local chips = chipRefs
 	if not chips then
 		return
 	end
-	chips.Gui.Enabled = hudShown() and not panelOpen()
+	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen())
 	BoostView.placeChips(chips, BoostView.chipsTop(trainChip(), compactHud()))
 	BoostView.setChips(chips, BoostView.chips(StateController.get(), serverNow()), launcherOn)
 end
@@ -791,6 +794,10 @@ function BoostController.init()
 		if isOpen then
 			refresh()
 		end
+	end)
+	-- the touch side menu's open grid takes the chips' place: they hide until it shuts
+	MenuPanels.onGridChanged(function()
+		refreshChips()
 	end)
 	player:GetAttributeChangedSignal(BoostView.RestrictedAttribute):Connect(function()
 		if isOpen then

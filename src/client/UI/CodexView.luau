@@ -3,8 +3,8 @@
 	Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (tag
 	OreCodex) or the side menu's CODEX button. One MenuPanel:
 
-	  header  ORE CODEX, the count chip "17 / 30 FOUND" with a progress fill
-	  grid    all 30 ores (OreData.List order: Common -> Mythic), one card
+	  header  ORE CODEX, the count chip "17 / 36 FOUND" with a progress fill
+	  grid    every ore (#OreData.List, 36; Common -> Mythic), one card
 	          each: a gem in the ore's colour with its glow, the name and a
 	          rarity strip; an ore you haven't discovered is a dark gem with
 	          "?" and "???". A "NEW" badge marks ores discovered since you
@@ -188,7 +188,7 @@ function CodexView.count(entries: { Entry }): (number, number)
 	return n, #entries
 end
 
--- "17 / 30 FOUND"
+-- "17 / 36 FOUND"
 function CodexView.countText(found: number, total: number): string
 	return `{found} / {total} FOUND`
 end
@@ -412,7 +412,7 @@ function CodexView.build(compact: boolean?): Refs
 		BorderSizePixel = 0,
 	}, chip)
 	UIKit.corner(fill, 10)
-	local count = UIKit.label(chip, "0 / 30 FOUND", 20, {
+	local count = UIKit.label(chip, `0 / {#OreData.List} FOUND`, 20, {
 		Name = "Count",
 		Size = UDim2.fromScale(1, 1),
 		TextColor3 = Theme.Text,

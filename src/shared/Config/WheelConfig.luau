@@ -41,10 +41,10 @@
 	  the OrePrize.Picks best of them, weighted OrePrize.Weights (the best one
 	  is the least likely). oreOdds(context) is the exact nested list the
 	  wheel screen shows under the segment. A day-1 player (blaster 1) wins a
-	  Gold chunk (130 coins/s on a podium, worth far more than the 500-coin
-	  segment); late players their top Rare+ ores. No candidate at all
-	  (never with today's map: the Quarry has Gold): the Coins segment's
-	  prize instead.
+	  Bronze chunk (the Quarry's Rare ore, 130 coins/s on a podium, worth far
+	  more than the 500-coin segment); late players their top Rare+ ores. No
+	  candidate at all (never with today's map: the Quarry has Bronze): the
+	  Coins segment's prize instead.
 	- Players who can't buy ANY capsule (paid random items restricted and
 	  every capsule is a paid random item: CapsuleConfig.allRestricted) would
 	  get nothing from Triple Lucky, so for them that segment pays coins
@@ -102,7 +102,7 @@ WheelConfig.ModelName = "SpinWheel"
 
 WheelConfig.OrePrize = {
 	IncomeMult = 3, -- at most this many times the best found ore's income
-	MinIncome = 130, -- ...but always up to this (Gold: a new player's prize)
+	MinIncome = 130, -- ...but always up to this (Bronze, the Quarry's Rare ore: a new player's prize)
 	Picks = 3, -- the best few candidates
 	Weights = { 1, 2, 3 }, -- best first: the best ore is the least likely
 }

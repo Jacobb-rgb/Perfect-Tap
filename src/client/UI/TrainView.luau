@@ -374,9 +374,10 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 end
 
 -- The HUD chip shows with the HUD, but not while the panel is open (it says the same; on PC its
--- edge would cover the chip's SEND).
-function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean): boolean
-	return hudShown and not panelOpen
+-- edge would cover the chip's SEND), nor while the touch side menu's grid is open in its place
+-- (MenuPanels.gridOpen: the grid would cover it half-way).
+function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean, gridOpen: boolean?): boolean
+	return hudShown and not panelOpen and gridOpen ~= true
 end
 
 -- One upgrade row from a snapshot (prices from the snapshot, else TrainConfig).

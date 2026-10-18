@@ -425,8 +425,7 @@ return function(T, Loader)
 			T.eq(typeof(golem.Glow), "Color3")
 			T.eq(typeof(golem.Trim), "Color3")
 			T.eq(typeof(golem.Material), "EnumItem")
-			-- (an ore of the coming 36-ore roster may not exist yet: its FallbackOre does)
-			T.truthy(golem.Ore == nil or OreData.ById[golem.Ore] or OreData.ById[golem.FallbackOre or ""], golem.Id .. " ore")
+			T.truthy(golem.Ore == nil or OreData.exists(golem.Ore), golem.Id .. " ore")
 		end
 		for _, info in Rarity.List do
 			T.truthy(rarities[info.Id], "a golem of rarity " .. info.Id)
@@ -526,22 +525,14 @@ return function(T, Loader)
 
 	T.test("Step67: renamed golems (the 36-ore roster names) keep their rarity, colors and saves", function()
 		local renames = {
-			{ Old = "RubyKnight", New = "RoseKnight", Name = "Rose Knight", Rarity = "Epic", Ore = "CrystalRose", Fallback = "Ruby" },
-			{
-				Old = "StormcoreTitan",
-				New = "StormTitan",
-				Name = "Storm Titan",
-				Rarity = "Legendary",
-				Ore = "StormGem",
-				Fallback = "Stormcore",
-			},
+			{ Old = "RubyKnight", New = "RoseKnight", Name = "Rose Knight", Rarity = "Epic", Ore = "CrystalRose" },
+			{ Old = "StormcoreTitan", New = "StormTitan", Name = "Storm Titan", Rarity = "Legendary", Ore = "StormGem" },
 			{
 				Old = "StarmetalSovereign",
 				New = "CelestialSovereign",
 				Name = "Celestial Sovereign",
 				Rarity = "Mythic",
 				Ore = "CelestialCore",
-				Fallback = "Starmetal",
 			},
 		}
 		for _, r in renames do
@@ -552,10 +543,12 @@ return function(T, Loader)
 			T.eq(golem.Name, r.Name)
 			T.eq(golem.Rarity, r.Rarity, r.New .. " keeps its rarity")
 			T.eq(golem.Ore, r.Ore)
-			T.eq(golem.FallbackOre, r.Fallback)
-			-- the colors come from the ore while it exists, else from the fallback
-			local colorOre = if OreData.exists(r.Ore) then r.Ore else r.Fallback
-			T.eq(golem.Glow, OreData.get(colorOre).Glow, r.New .. " glows in its ore's colors")
+			-- the 36-ore roster has the ore: the golem wears its own colors (no fallback ore)
+			T.truthy(OreData.exists(r.Ore), r.Ore .. " is in OreData")
+			T.eq(OreData.Renamed[r.Ore], nil, r.Ore .. " is a live id, not a renamed one")
+			T.eq(golem.Glow, OreData.get(r.Ore).Glow, r.New .. " glows in its ore's colors")
+			T.eq(golem.Body, OreData.get(r.Ore).Color, r.New .. " has its ore's body color")
+			T.eq((golem :: any).FallbackOre, nil, r.New .. " has no FallbackOre")
 		end
 		for old, new in GolemConfig.Renamed do
 			T.eq(GolemConfig.ById[old], nil, old .. ": an old id is never a live golem")
@@ -564,8 +557,10 @@ return function(T, Loader)
 		for _, golem in GolemConfig.List do
 			local ore = golem.Ore
 			if ore ~= nil then
-				T.truthy(OreData.exists(ore) or OreData.exists(golem.FallbackOre), golem.Id .. ": its ore or fallback exists")
+				T.truthy(OreData.exists(ore), golem.Id .. ": its ore exists")
+				T.eq(OreData.Renamed[ore], nil, golem.Id .. ": not an ore of the old roster")
 			end
+			T.eq((golem :: any).FallbackOre, nil, golem.Id .. ": no FallbackOre field")
 		end
 		for _, capsule in CapsuleConfig.List do
 			for old in GolemConfig.Renamed do
@@ -930,8 +925,17 @@ return function(T, Loader)
 		local hexa = BoostConfig.zoneOdds("DeepHollow", 2.5)
 		local capped = BoostConfig.zoneOdds("DeepHollow", StatConfig.MaxOreLuck)
 		local mythic, mythicHexa = rarityShare(plain, "Mythic"), rarityShare(hexa, "Mythic")
-		T.near(mythic, 0.175 / 100.425, 1e-12, "Mythic 0.17 % without luck")
-		T.truthy(mythicHexa > 3 * mythic, "Hexa Lucky: Mythic more than x3 (0.17 % -> 0.59 %)")
+		-- without luck: exactly the map weights (the Mythic share of Deep Hollow's weights, ~0.16 %)
+		local deepTotal, deepMythic = 0, 0
+		for oreId, weight in WorldLayout.ZoneById.DeepHollow.Ores do
+			deepTotal += weight
+			if OreData.ById[oreId].Rarity == "Mythic" then
+				deepMythic += weight
+			end
+		end
+		T.truthy(deepMythic > 0, "Deep Hollow has Mythic ores")
+		T.near(mythic, deepMythic / deepTotal, 1e-12, "Mythic share without luck")
+		T.truthy(mythicHexa > 3 * mythic, "Hexa Lucky: Mythic more than x3")
 		T.truthy(rarityShare(capped, "Mythic") > 5 * mythic, "at the luck cap: Mythic more than x5")
 		T.truthy(rarityShare(hexa, "Legendary") > 2 * rarityShare(plain, "Legendary"), "Legendary more than x2")
 		T.truthy(chanceOf(hexa, "Heartstone") > 3 * chanceOf(plain, "Heartstone"), "Heartstone more than x3")
@@ -1240,35 +1244,53 @@ return function(T, Loader)
 		local odds1 = WheelConfig.oreOdds(day1)
 		T.near(sum(odds1, "Chance"), 1, EPS, "nested odds sum to 1")
 		T.eq(#odds1, 1)
-		T.eq(odds1[1].Ore, "Gold", "a day-1 player wins a Gold chunk (the Quarry's Rare ore)")
-		T.eq(WheelConfig.pickOre(0, day1), "Gold")
-		T.eq(WheelConfig.pickOre(1, day1), "Gold")
-		T.eq(WheelConfig.OrePrize.MinIncome, OreData.ById.Gold.Income)
-		T.truthy(OreData.ById.Gold.Income * 10 > WheelConfig.ById.Coins.Min, "on a podium it beats the plain Coins prize within seconds")
-		-- nothing found yet: Gold too
-		T.eq(WheelConfig.oreOdds({ BlasterLevel = 1, BestIncome = 0 })[1].Ore, "Gold")
-		-- mid game (blaster 3, Ruby found): Ember Caves Rare+ ores up to 3x Ruby, the best the least likely
-		local mid = { BlasterLevel = 3, BestIncome = OreData.ById.Ruby.Income }
+		T.eq(odds1[1].Ore, "Bronze", "a day-1 player wins a Bronze chunk (the Quarry's Rare ore)")
+		T.eq(WheelConfig.pickOre(0, day1), "Bronze")
+		T.eq(WheelConfig.pickOre(1, day1), "Bronze")
+		T.eq(WheelConfig.OrePrize.MinIncome, OreData.ById.Bronze.Income)
+		T.truthy(OreData.ById.Bronze.Income * 10 > WheelConfig.ById.Coins.Min, "on a podium it beats the plain Coins prize within seconds")
+		-- nothing found yet: Bronze too
+		T.eq(WheelConfig.oreOdds({ BlasterLevel = 1, BestIncome = 0 })[1].Ore, "Bronze")
+		-- mid game (blaster 3, Bronze found): Ember Caves Rare+ ores up to 3x Bronze, the best the least likely
+		local mid = { BlasterLevel = 3, BestIncome = OreData.ById.Bronze.Income }
 		local seen = {}
 		local midOdds = WheelConfig.oreOdds(mid)
 		T.eq(#midOdds, 3)
 		for _, line in midOdds do
 			seen[line.Ore] = true
-			T.truthy(OreData.ById[line.Ore].Income <= OreData.ById.Ruby.Income * 3)
+			T.truthy(OreData.ById[line.Ore].Income <= OreData.ById.Bronze.Income * 3)
 		end
-		T.truthy(seen.Sapphire and seen.Azurium and seen.Ruby, "mid game prizes")
-		T.falsy(seen.Moonstone, "no Grotto ore without VIP")
-		-- a VIP who found Moonstone in the Grotto gets the same odds as anyone (no paid odds booster)
-		local vip: any = { BlasterLevel = 3, BestIncome = OreData.ById.Moonstone.Income, Vip = true }
-		local plainCtx = { BlasterLevel = 3, BestIncome = OreData.ById.Moonstone.Income }
+		T.truthy(seen.Silver and seen.Gold and seen.Jade, "mid game prizes")
+		-- the Grotto's own ores (in no zone a blaster-3 player reaches without the pass)
+		local reach3: { [string]: boolean } = {}
+		for _, zone in BoostConfig.minableZones(3, false) do
+			for oreId in zone.Ores do
+				reach3[oreId] = true
+			end
+		end
+		local grottoOnly: { [string]: boolean } = {}
+		local grottoBest = 0
+		for oreId in WorldLayout.ZoneById.Grotto.Ores do
+			if not reach3[oreId] then
+				grottoOnly[oreId] = true
+				grottoBest = math.max(grottoBest, OreData.ById[oreId].Income)
+			end
+		end
+		T.truthy(next(grottoOnly), "the Grotto has ores of its own at blaster 3")
+		for oreId in grottoOnly do
+			T.falsy(seen[oreId], `no Grotto ore ({oreId}) without VIP`)
+		end
+		-- a VIP who found the Grotto's best ore gets the same odds as anyone (no paid odds booster)
+		local vip: any = { BlasterLevel = 3, BestIncome = grottoBest, Vip = true }
+		local plainCtx = { BlasterLevel = 3, BestIncome = grottoBest }
 		local vipOdds, plainOdds = WheelConfig.oreOdds(vip), WheelConfig.oreOdds(plainCtx)
 		T.eq(#vipOdds, #plainOdds, "the same list with or without the pass")
 		for i, line in vipOdds do
 			T.eq(line.Ore, plainOdds[i].Ore)
 			T.near(line.Chance, plainOdds[i].Chance, EPS)
-			T.truthy(line.Ore ~= "Moonstone", "never the Grotto's Moonstone")
+			T.falsy(grottoOnly[line.Ore], "never one of the Grotto's own ores: " .. line.Ore)
 		end
-		T.eq(midOdds[3].Ore, "Sapphire", "the best one last")
+		T.eq(midOdds[3].Ore, "Jade", "the best one last")
 		T.truthy(midOdds[3].Chance < midOdds[1].Chance, "the best one is the least likely")
 		-- a deep ore never comes before the blaster can mine its zone
 		for level = 1, 10 do
@@ -1293,7 +1315,7 @@ return function(T, Loader)
 		T.eq(WheelConfig.bestIncome({ Coal = true, Gold = true, Fake = true }), OreData.ById.Gold.Income)
 		T.eq(WheelConfig.bestIncome("junk"), 0)
 		-- a full pen pays the prize's expected raw value: the coins don't tell which ore it was
-		T.eq(WheelConfig.oreFallbackCoins(day1), ItemData.value("Raw", "Gold"))
+		T.eq(WheelConfig.oreFallbackCoins(day1), ItemData.value("Raw", "Bronze"))
 		local expected = 0
 		for _, line in midOdds do
 			expected += line.Chance * ItemData.value("Raw", line.Ore)
@@ -1542,7 +1564,9 @@ return function(T, Loader)
 			gtotal += weight
 		end
 		for oreId, weight in grotto.Ores do
-			local pct = math.floor(weight / gtotal * 100 + 0.5)
+			-- a whole percent as a whole number, else one decimal (grottoOddsText)
+			local raw = weight / gtotal * 100
+			local pct = if math.abs(raw - math.floor(raw + 0.5)) < 1e-9 then tostring(math.floor(raw + 0.5)) else string.format("%.1f", raw)
 			T.truthy(big.Description:find(`{pct}% {OreData.ById[oreId].Name}`, 1, true), `BigPass names {oreId} at {pct}%`)
 		end
 		T.truthy(

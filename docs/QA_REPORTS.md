@@ -456,3 +456,30 @@ What to test in Studio:
 2. Walk into the hall: you can walk through the gallery (no collision), the plates read (LV n, the name) and the
    LV 11 "?" glows violet. The tool rack hangs up at the back of the right wall.
 3. Phone: no frame drop when you stand on the porch.
+
+## Steps 6-7 on top of main 49c2bac (2026-10-18, branch integrate/steps67)
+main (blaster gallery, the 36-ore roster, roster machine FX, night QA, hand-cleaning reveal, step 8 tutorial) merged
+into the steps 6-7 integration. Decisions:
+- One save chain: Migrations runs main's renameOres first (it now also renames the ORE CODEX's seen ores, so a
+  renamed ore you had looked at gets no NEW badge), then the steps 6-7 sanitizers (gear, enchants, boosts, golems
+  with GolemConfig.Renamed, wheel, artifacts, stats). Version stays 3. tests/Migration.spec.luau has a save with
+  both the old ore ids and the steps 6-7 records.
+- Golems: GolemConfig.FallbackOre is gone: Rose Knight wears Crystal Rose, Storm Titan Storm Gem, Celestial
+  Sovereign Celestial Core (all in OreData now).
+- The wheel's ore prize for a new player is the Quarry's Rare ore, Bronze (same 130 coins/s as the old Gold; no
+  balance change). The codex counts 36 ores. The Forgemaster's Pass text lists the new Grotto odds (from the map).
+- Map v25 (the steps 6-7 lobby wheel disc and yard museums on top of main's v24). Budgets: MapParts 22,800
+  (22,000 + 400 gallery + 400 museums), LobbyParts 13,200, PhoneParts 18,000 (the lobby + always-streamed parts
+  + the 8 yard museums = ~15,630).
+- Phone side menu: with the grid open (MENU -> CLOSE) the TRAIN chip and the boost chips hide; they come back when
+  the grid shuts (before, the grid half-covered the TRAIN chip and its SEND button stuck out).
+- Artifact book on phones: the detail card puts the icon beside the name whenever the tall card would cut the text,
+  so "Most often in ...: 1 in N" always shows (667 x 375 and bigger; on 568 x 320 the lore scrolls under it).
+What to test in Studio:
+1. Old save: in a test place give yourself data with Ruby / Skyglass ores (pen, podium, Discovered, the codex's
+   seen list) and a Ruby Knight golem; join: Bronze / Storm Gem everywhere, the Rose Knight still equipped, the
+   codex shows no NEW badge on Bronze.
+2. Phone emulator 667 x 375: tap MENU: the TRAIN chip and the boost chips disappear, the grid stands in their
+   place; tap CLOSE (or wait for the auto-shut): they are back. Same on 568 x 320.
+3. Phone emulator: open the artifact book, tap several artifacts: the "Most often in ..." line is always in view.
+4. The tutorial and the side menu together: the tutorial bubble (right side) never covers the left column.

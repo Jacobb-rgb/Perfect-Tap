@@ -831,6 +831,46 @@ return function(T, Loader)
 		T.truthy(board.MaxDistance > 0 and board.MaxDistance <= 100, "only near players")
 	end)
 
+	T.test("Artifacts: the book's detail text fits without scrolling on phones and PCs (the 1 in N line too)", function()
+		-- { width, height, uiScale, compact, top inset } (the smallest phones scroll: tested below)
+		local screens = {
+			{ 667, 375, 0.62, true, 58 },
+			{ 740, 360, 0.62, true, 58 },
+			{ 844, 390, 0.62, true, 58 },
+			{ 932, 430, 0.62, true, 58 },
+			{ 1024, 768, 0.8, true, 58 },
+			{ 1280, 720, 1, false, 36 },
+			{ 1600, 900, 1.25, false, 36 },
+		}
+		local none = { Found = {}, Chapters = {} }
+		for _, screen in screens do
+			local label = `{screen[1]}x{screen[2]}`
+			local refs = CollectionView.build(screen[4])
+			CollectionView.layout(refs, screen[1] / screen[3], (screen[2] - screen[5]) / screen[3])
+			for _, art in ArtifactConfig.List do
+				for _, record in { allFound(), none } do
+					refs.Collection = art.Collection
+					refs.Selected = art.Id
+					CollectionView.fill(refs, record, { Shards = 0, BlasterLevel = 1 })
+					local body = refs.DetailBody
+					local canvas = body.CanvasSize.Y.Offset
+					T.le(canvas, body.Size.Y.Offset, `{label} {art.Id}: the detail text fits`)
+					local where = refs.DetailWhere
+					T.le(where.Position.Y.Offset + where.Size.Y.Offset, body.Size.Y.Offset, `{label} {art.Id}: "1 in N" in view`)
+					-- bodyHeight measures what placeBody stacks
+					local restore = if refs.DetailRestore.Visible then refs.DetailRestore.Text else nil
+					local w = body:GetAttribute("TextWidth")
+					T.eq(CollectionView.bodyHeight(refs.Compact, refs.Short, w, refs.DetailLore.Text, where.Text, restore), canvas)
+				end
+			end
+			if screen[1] <= 932 then
+				T.truthy(refs.Short, label .. ": a phone puts the icon beside the name")
+			else
+				T.truthy(refs.DetailIcon.Size.X.Offset >= CollectionView.MinTallIcon, label .. ": the tall head keeps a big icon")
+			end
+		end
+	end)
+
 	T.test("Artifacts: the book's USE button and the scrolling detail text", function()
 		local refs = CollectionView.build(true)
 		CollectionView.layout(refs, 568 / 0.62, (320 - 58) / 0.62)

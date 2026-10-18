@@ -187,7 +187,15 @@ local METRICS: { [string]: Metrics } = {
 }
 
 CollectionView.Columns = 3
-CollectionView.ShortDetail = 260 -- a detail column shorter than this (design units) is laid out side by side
+-- The detail column's head: tall (a big icon over the name and the rarity)
+-- when the text under it still fits without scrolling for every artifact
+-- (CollectionView.detailNeed; the icon may shrink to MinTallIcon for that),
+-- else side by side (the icon beside the name: phones). Always side by side
+-- under ShortDetail design units.
+CollectionView.ShortDetail = 260
+CollectionView.MinTallIcon = 56
+CollectionView.NotFoundLore = "Break rocks to find it. Rarer artifacts turn up deeper."
+CollectionView.RestoreHint = "The last missing artifact of a collection can be restored with crystal shards."
 CollectionView.SilhouetteColor = Color3.fromRGB(34, 28, 32)
 CollectionView.MissingName = "???"
 
@@ -353,7 +361,7 @@ function CollectionView.restoreText(artifacts: any, artifactId: string, wallet: 
 		return nil
 	end
 	if ArtifactConfig.lastMissing(artifacts, art.Collection) ~= artifactId then
-		return "The last missing artifact of a collection can be restored with crystal shards."
+		return CollectionView.RestoreHint
 	end
 	local cost = Format.commas(ArtifactConfig.RestoreShards[art.Rarity] or 0)
 	local _, reason = ArtifactConfig.restoreQuote(artifacts, artifactId, wallet.BlasterLevel, wallet.Shards)
@@ -904,43 +912,90 @@ end
 -- (the tile shows "x4", a silhouette says "not found"), uses one size
 -- smaller texts and puts where (+ restore) first: the useful lines are in
 -- view, the lore follows.
-local function placeBody(refs: Refs)
-	local m = metrics(refs.Compact)
-	local width = refs.DetailBody:GetAttribute("TextWidth")
-	local w = if type(width) == "number" then width else 240
-	local short = refs.Short
+type PutBody = (which: string, size: number, y: number, h: number) -> ()
+
+-- Stacks the detail text `w` design units wide as placeBody shows it and
+-- returns its height; `put` (optional) places each piece ("Count", "Lore",
+-- "Where", "Restore") at its size, y and height.
+local function stackBody(compact: boolean, short: boolean, w: number, lore: string, where: string, restore: string?, put: PutBody?): number
+	local m = metrics(compact)
 	local loreSize = if short then m.Body - 2 else m.Body - 1
 	local whereSize = if short then m.Body - 4 else m.Body - 3
 	local y = 0
-	local function put(label: TextLabel, size: number, gap: number)
-		label.TextSize = size
-		local h = CollectionView.textHeight(label.Text, size, w)
-		label.Position = UDim2.fromOffset(4, y)
-		label.Size = UDim2.fromOffset(w, h)
+	local function add(which: string, text: string, size: number, gap: number)
+		local h = CollectionView.textHeight(text, size, w)
+		if put then
+			put(which, size, y, h)
+		end
 		y += h + gap
 	end
-	refs.DetailCount.Visible = not short
-	refs.DetailRestore.Visible = refs.DetailRestore.Text ~= ""
 	if short then
-		put(refs.DetailWhere, whereSize, 2)
-		if refs.DetailRestore.Visible then
-			put(refs.DetailRestore, whereSize, 2)
+		add("Where", where, whereSize, 2)
+		if restore then
+			add("Restore", restore, whereSize, 2)
 		end
 		y += 4
-		put(refs.DetailLore, loreSize, 4)
+		add("Lore", lore, loreSize, 4)
 	else
 		local countH = m.Body + 6
-		refs.DetailCount.Position = UDim2.fromOffset(4, y)
-		refs.DetailCount.Size = UDim2.fromOffset(w, countH)
+		if put then
+			put("Count", m.Body, y, countH)
+		end
 		y += countH + 4
-		put(refs.DetailLore, loreSize, 6)
-		put(refs.DetailWhere, whereSize, 2)
-		if refs.DetailRestore.Visible then
-			put(refs.DetailRestore, whereSize, 2)
+		add("Lore", lore, loreSize, 6)
+		add("Where", where, whereSize, 2)
+		if restore then
+			add("Restore", restore, whereSize, 2)
 		end
 		y += 2
 	end
-	refs.DetailBody.CanvasSize = UDim2.fromOffset(0, y)
+	return y
+end
+
+-- The detail text's height (design units) at `w` wide (placeBody's canvas).
+function CollectionView.bodyHeight(compact: boolean, short: boolean, w: number, lore: string, where: string, restore: string?): number
+	return stackBody(compact, short, w, lore, where, restore, nil)
+end
+
+-- The tallest detail text any artifact needs at `w` wide: found (its lore),
+-- or not (NotFoundLore and the restore hint every missing one shows), with
+-- where it turns up. (The last missing one of a collection gets a longer
+-- restore line with its price: that one rare case may scroll.)
+function CollectionView.detailNeed(compact: boolean, short: boolean, w: number): number
+	local need = 0
+	for _, art in ArtifactConfig.List do
+		local where = CollectionView.whereText(art.Id)
+		need = math.max(
+			need,
+			CollectionView.bodyHeight(compact, short, w, art.Lore, where, nil),
+			CollectionView.bodyHeight(compact, short, w, CollectionView.NotFoundLore, where, CollectionView.RestoreHint)
+		)
+	end
+	return need
+end
+
+local function placeBody(refs: Refs)
+	local width = refs.DetailBody:GetAttribute("TextWidth")
+	local w = if type(width) == "number" then width else 240
+	local short = refs.Short
+	refs.DetailCount.Visible = not short
+	refs.DetailRestore.Visible = refs.DetailRestore.Text ~= ""
+	local labels: { [string]: TextLabel } = {
+		Count = refs.DetailCount,
+		Lore = refs.DetailLore,
+		Where = refs.DetailWhere,
+		Restore = refs.DetailRestore,
+	}
+	local restore = if refs.DetailRestore.Visible then refs.DetailRestore.Text else nil
+	local height = stackBody(refs.Compact, short, w, refs.DetailLore.Text, refs.DetailWhere.Text, restore, function(which, size, y, h)
+		local label = labels[which]
+		if which ~= "Count" then
+			label.TextSize = size
+		end
+		label.Position = UDim2.fromOffset(4, y)
+		label.Size = UDim2.fromOffset(w, h)
+	end)
+	refs.DetailBody.CanvasSize = UDim2.fromOffset(0, height)
 end
 
 -- The detail name's text size: as big as fits its box.
@@ -1039,11 +1094,20 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	refs.Hint.Position = UDim2.fromOffset(pad, height - 6)
 	refs.Hint.Size = UDim2.fromOffset(width - 2 * pad, m.Hint + 4)
 	-- the detail column's inside follows its size: the icon, the name and the
-	-- rarity at the top, the scrolling text under them; a short column
-	-- (small phones) puts the icon beside the name and the rarity, so the
-	-- lore and where it turns up get the room
+	-- rarity at the top, the scrolling text under them. The tall head keeps
+	-- room for the longest text (detailNeed: "Most often in ...: 1 in N" is
+	-- never cut off), shrinking its icon down to MinTallIcon; a column where
+	-- even that doesn't fit (phones) puts the icon beside the name and the
+	-- rarity, so the lore and where it turns up get the room
 	local y: number
-	refs.Short = detailH < CollectionView.ShortDetail
+	local detailNameH = (m.Body + 3) * 2 + 4
+	local textW = detailW - 12 - 8 - 10
+	local tallIcon = math.min(
+		110,
+		math.floor(detailH * 0.24),
+		detailH - (detailNameH + 56) - CollectionView.detailNeed(refs.Compact, false, textW)
+	)
+	refs.Short = detailH < CollectionView.ShortDetail or tallIcon < CollectionView.MinTallIcon
 	if refs.Short then
 		local icon = math.min(56, math.floor(detailH * 0.28))
 		refs.DetailIcon.AnchorPoint = Vector2.new(0, 0)
@@ -1057,12 +1121,11 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 		refs.DetailChip.Position = UDim2.fromOffset(x, 38)
 		y = 8 + math.max(icon, 60) + 6
 	else
-		local icon = math.min(110, math.floor(detailH * 0.24))
+		local icon = tallIcon
 		refs.DetailIcon.AnchorPoint = Vector2.new(0.5, 0)
 		refs.DetailIcon.Position = UDim2.new(0.5, 0, 0, 10)
 		refs.DetailIcon.Size = UDim2.fromOffset(icon, icon)
 		y = 10 + icon + 6
-		local detailNameH = (m.Body + 3) * 2 + 4
 		refs.DetailName.Position = UDim2.fromOffset(10, y)
 		refs.DetailName.Size = UDim2.fromOffset(detailW - 20, detailNameH)
 		refs.DetailName.TextXAlignment = Enum.TextXAlignment.Center
@@ -1074,7 +1137,7 @@ function CollectionView.layout(refs: Refs, maxWidth: number, maxHeight: number)
 	fitName(refs)
 	refs.DetailBody.Position = UDim2.fromOffset(8, y)
 	refs.DetailBody.Size = UDim2.new(1, -12, 0, math.max(30, detailH - y - 8))
-	refs.DetailBody:SetAttribute("TextWidth", detailW - 12 - 8 - 10)
+	refs.DetailBody:SetAttribute("TextWidth", textW)
 	placeBody(refs)
 	fitReward(refs)
 end
@@ -1169,7 +1232,7 @@ function CollectionView.fill(refs: Refs, artifacts: any, wallet: Wallet?)
 		refs.DetailChip.Text = rarity.Name
 		refs.DetailChip.BackgroundColor3 = if found then rarity.Color else rarity.DarkColor
 		refs.DetailCount.Text = if found then `Found: {count}` else "Not found yet"
-		refs.DetailLore.Text = if found then art.Lore else "Break rocks to find it. Rarer artifacts turn up deeper."
+		refs.DetailLore.Text = if found then art.Lore else CollectionView.NotFoundLore
 		refs.DetailWhere.Text = CollectionView.whereText(art.Id)
 		refs.DetailRestore.Text = CollectionView.restoreText(artifacts, art.Id, purse) or ""
 		fitName(refs)

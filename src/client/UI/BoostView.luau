@@ -1881,6 +1881,14 @@ function BoostView.chipsWidth(): number
 	return math.max(width, pill("BOOSTS") + 8) + 30
 end
 
+-- Whether the chips' row shows: with the HUD, not while a panel is open (a
+-- wide panel would cut them off; the Boosts panel shows the same timers), nor
+-- while the touch side menu's grid is open over the left column
+-- (MenuPanels.gridOpen: it would cover them half-way).
+function BoostView.chipsVisible(hudShown: boolean, panelOpen: boolean, gridOpen: boolean?): boolean
+	return hudShown and not panelOpen and gridOpen ~= true
+end
+
 -- Moves the chips' row to `top` (BoostView.chipsTop).
 function BoostView.placeChips(refs: ChipRefs, top: number)
 	refs.Row.Position = UDim2.fromOffset(BoostView.ChipLeft, top)

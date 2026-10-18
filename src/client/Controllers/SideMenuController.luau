@@ -30,8 +30,10 @@
 	TRAIN chip, boost chips, then this menu, so nothing covers anything:
 	mouse layouts start under the boost chips; touch screens
 	(MenuPanels.isTouch, the same test the panels use) get one MENU button
-	first in the train chip's row that opens the grid over the chips and
-	keep the thumbstick's bottom-left corner free; TVs keep the title-safe
+	first in the train chip's row that opens the grid in the chips' place
+	(the TRAIN chip and the boost chips hide while it is open:
+	MenuPanels.setGridOpen, so it never covers them half-way) and keep the
+	thumbstick's bottom-left corner free; TVs keep the title-safe
 	margin and get bigger texts). The touch grid shuts again when a button runs, after
 	AutoShut seconds without a tap, when the gamepad selection leaves it or
 	when the HUD hides.
@@ -131,6 +133,8 @@ function SideMenuController.setExpanded(on: boolean)
 			GuiService.SelectedObject = view.Toggle
 		end
 	end
+	-- the TRAIN chip and the boost chips hide while the grid is open in their place
+	MenuPanels.setGridOpen(view.Expanded == true)
 	shutToken += 1
 	if on then
 		local token = shutToken
@@ -241,6 +245,7 @@ local function relayout()
 	if not layout.Toggle then
 		-- (a mouse layout has no grid to shut; a later touch layout starts shut)
 		view.Expanded = false
+		MenuPanels.setGridOpen(false)
 	end
 	SideMenuView.apply(view, layout)
 end

@@ -576,12 +576,12 @@ return function(T, Loader)
 			total += segment.Odds
 		end
 		T.near(total, 1, 1e-9)
-		-- the ore prize lists its own odds (a day-1 player: Gold)
+		-- the ore prize lists its own odds (a day-1 player: Bronze, the Quarry's Rare ore)
 		local ore = rows[WheelConfig.ById.OrePrize.Index]
 		for _, line in WheelConfig.oreOdds(info.Ore) do
 			T.truthy(ore.Detail:find(WheelView.percent(line.Chance), 1, true), "ore odds in the row")
 		end
-		T.truthy(ore.Detail:find("Gold"), "Gold for a new player")
+		T.truthy(ore.Detail:find("Bronze"), "Bronze for a new player")
 		-- coins at this player's income
 		T.truthy(rows[1].Detail:find("76.8K", 1, true), "2 min x $640/s")
 		-- capsules with their rarity odds, Triple Lucky changes them

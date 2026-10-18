@@ -19,8 +19,9 @@
 	                     the whole left column as it ships: coins, the TRAIN
 	                     chip, two running boost chips and the side menu (PC:
 	                     the column under the chips; phones: MENU first in the
-	                     train chip's row; open: the grid over the chips)
-	  ui_codex           PC: the codex, 14 of 30 found, Ruby selected (NEW)
+	                     train chip's row; open: the grid in the chips' place,
+	                     the TRAIN and boost chips hidden until it shuts)
+	  ui_codex           PC: the codex, 14 of 36 found, Bronze selected (NEW)
 	  ui_codex_hidden    PC: an undiscovered ore selected
 	  ui_codex_phone     667 x 375 pt phone (compact)
 	  ui_settings        PC with a gamepad connected: SETTINGS (Sounds,
@@ -54,11 +55,11 @@ Preview.Discovered = {
 	"Emberite",
 	"Cobalt",
 	"Gold",
-	"Ruby",
-	"Azurium",
+	"Bronze",
+	"DragonEgg",
 	"Sapphire",
 }
-Preview.Fresh = { Ruby = true, Sapphire = true }
+Preview.Fresh = { Bronze = true, Sapphire = true }
 Preview.Me = 9001
 
 local NAMES = {
@@ -169,11 +170,12 @@ function Preview.build(Loader: any): { [string]: any }
 	end
 
 	-- the train chip and two running boost chips under it, placed like
-	-- TrainController and BoostController place them
+	-- TrainController and BoostController place them; `gridOpen` = the touch
+	-- side menu's grid is open in their place (both hide, as in the game)
 	local BoostView = Loader.requirePath(UI .. "BoostView")
 	local TrainView = Loader.requirePath(UI .. "TrainView")
 	local NOW = 1.7e9
-	local function chips(renderScale: number, compact: boolean, designW: number, designH: number): { any }
+	local function chips(renderScale: number, compact: boolean, designW: number, designH: number, gridOpen: boolean?): { any }
 		local train = TrainView.build(compact)
 		train.Chip.Scale.Scale = renderScale
 		train.Gui.Scale.Scale = renderScale
@@ -181,12 +183,13 @@ function Preview.build(Loader: any): { [string]: any }
 		train.ChipKey.Visible = not compact
 		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
 		train.Gui.Enabled = false
-		train.Chip.Enabled = true
+		train.Chip.Enabled = TrainView.chipVisible(true, false, gridOpen)
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
 		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact))
 		local state = { Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
+		boost.Gui.Enabled = BoostView.chipsVisible(true, false, gridOpen)
 		return { train.Chip, boost.Gui }
 	end
 
@@ -201,7 +204,7 @@ function Preview.build(Loader: any): { [string]: any }
 		SideMenuView.apply(refs, SideMenuView.layout(uiScale, designH, { Count = #SideMenuView.shown(refs), Touch = touch, DesignWidth = designW }))
 		SideMenuView.setBadge(refs, "Codex", 2)
 		local list = { hud(renderScale, uiScale).Gui }
-		for _, gui in chips(renderScale, touch, designW, designH) do
+		for _, gui in chips(renderScale, touch, designW, designH, touch and open == true) do
 			table.insert(list, gui)
 		end
 		table.insert(list, refs.Gui)
@@ -240,7 +243,7 @@ function Preview.build(Loader: any): { [string]: any }
 		MenuPanel.setHint(refs.Frame, "Click an ore to read about it · Backspace: close", nil)
 		return refs
 	end
-	exports.ui_codex = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Ruby").Gui })
+	exports.ui_codex = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Bronze").Gui })
 	exports.ui_codex_hidden = UiExport.export({ hud(PC, 1).Gui, menu(PC, 1, pcH).Gui, codex(PC, false, pcW, pcH, "Heartstone").Gui })
 	exports.ui_codex_phone = UiExport.export({
 		hud(phoneScale, PHONE).Gui,

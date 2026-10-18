@@ -54,10 +54,6 @@ export type Golem = {
 	Name: string,
 	Rarity: string,
 	Ore: string?, -- OreData id the colors come from (nil = plain stone)
-	-- the ore whose colors it wears while Ore isn't in OreData yet (the
-	-- 36-ore roster renames ores: drop FallbackOre once OreData has that
-	-- roster with OreData.Renamed)
-	FallbackOre: string?,
 	Body: Color3,
 	Trim: Color3, -- darker detail color (joints, feet, visor frame)
 	Glow: Color3, -- eyes and core glow
@@ -122,12 +118,9 @@ local function rgb(r: number, g: number, b: number): Color3
 end
 
 -- One golem dressed in an ore's colors (Body = ore color, Glow = ore glow).
--- An Ore that isn't in OreData yet (the coming 36-ore roster) dresses it in
--- its FallbackOre's colors. Drop FallbackOre once OreData has the 36-ore
--- roster with OreData.Renamed.
+-- Its Ore must be an OreData id (asserted by OreData.get).
 local function oreGolem(entry: { [string]: any }): Golem
-	local oreId = if OreData.exists(entry.Ore) then entry.Ore else entry.FallbackOre
-	local ore = OreData.get(oreId)
+	local ore = OreData.get(entry.Ore)
 	entry.Body = entry.Body or ore.Color
 	entry.Glow = entry.Glow or ore.Glow
 	entry.Material = entry.Material or ore.Material
@@ -269,7 +262,6 @@ GolemConfig.List = {
 		Name = "Rose Knight",
 		Rarity = "Epic",
 		Ore = "CrystalRose",
-		FallbackOre = "Ruby",
 		Trim = rgb(110, 20, 36),
 		Accessory = "KnightHelm",
 		Scale = 1.15,
@@ -304,7 +296,6 @@ GolemConfig.List = {
 		Name = "Storm Titan",
 		Rarity = "Legendary",
 		Ore = "StormGem",
-		FallbackOre = "Stormcore",
 		Trim = rgb(40, 50, 90),
 		Accessory = "CrystalBack",
 		Scale = 1.22,
@@ -328,7 +319,6 @@ GolemConfig.List = {
 		Name = "Celestial Sovereign",
 		Rarity = "Mythic",
 		Ore = "CelestialCore",
-		FallbackOre = "Starmetal",
 		Trim = rgb(60, 50, 110),
 		Accessory = "Crown",
 		Scale = 1.3,

@@ -205,7 +205,7 @@ return function(T, Loader)
 		T.eq(#w.spawned, 1)
 		T.eq(w.spawned[1].Info.OreId, "Coal", "no luck: the rolled ore stays")
 		local plainCalls = w.calls
-		-- Hexa Lucky in the Quarry: Coal becomes Gold with chance 1 - T/T' (about 1 %)
+		-- Hexa Lucky in the Quarry: Coal becomes Bronze (its only Rare+ ore) with chance 1 - T/T' (about 1 %)
 		p.data.Boosts.HexaLuckyUntil = NOW + 600
 		Bonuses.invalidate(p)
 		local quarry = WorldLayout.ZoneById.Quarry.Ores
@@ -217,8 +217,8 @@ return function(T, Loader)
 		mining.blast(p, lucky.Model)
 		w.step()
 		T.eq(#w.spawned, 1)
-		T.eq(w.spawned[1].Info.OreId, "Gold", "upgraded with luck")
-		T.eq(w.mined[#w.mined].OreId, "Gold", "onChunkMined sees the real ore")
+		T.eq(w.spawned[1].Info.OreId, "Bronze", "upgraded with luck")
+		T.eq(w.mined[#w.mined].OreId, "Bronze", "onChunkMined sees the real ore")
 		w.spawned = {}
 		local unlucky = w.rock("Quarry", { "Coal" }, 0.01)
 		w.rolls = { chance * 1.5 }
@@ -247,7 +247,9 @@ return function(T, Loader)
 		T.eq(Bonuses.oreLuck(Bonuses.stats(p)), 2.5, "Hexa Lucky only")
 		local deep = WorldLayout.ZoneById.DeepHollow.Ores
 		local goldChance = BoostConfig.upgradeChance(deep, 2.5, "Gold")
-		T.truthy(goldChance > 0.1, "Gold gives way in Deep Hollow")
+		-- (the 36-ore roster: ~3 % with Hexa Lucky, the Uncommons there give way far more)
+		T.truthy(goldChance > 0.01, "Gold gives way in Deep Hollow")
+		T.truthy(BoostConfig.upgradeChance(deep, 2.5, "Cobalt") > goldChance, "an Uncommon gives way more than a Rare")
 		w.spawned = {}
 		local goldRock = w.rock("DeepHollow", { "Gold" }, 0.01)
 		w.rolls = { goldChance * 0.5, 0.999999 } -- upgraded, the rarest pick

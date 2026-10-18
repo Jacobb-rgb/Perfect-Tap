@@ -34,8 +34,11 @@
 	          the train chip's row, which starts right of it on these layouts
 	          (TrainView.chipLeft: MenuSlot); a tap opens the grid of buttons
 	          next to and under it (setExpanded; the badges add up on MENU
-	          while it is shut). The open grid draws over the train and boost
-	          chips (DisplayOrder OpenOrder) until it shuts again.
+	          while it is shut). The open grid takes the place of the train
+	          and boost chips: they hide while it is open (MenuPanels.
+	          gridOpen; TrainView.chipVisible, BoostView.chipsVisible), so it
+	          never covers them half-way, and come back when it shuts; the
+	          grid still draws above the HUD (DisplayOrder OpenOrder).
 	          The bottom-left corner belongs to Roblox's movement thumbstick
 	          (the DynamicThumbstick takes touches in the left 40 % of the
 	          screen, below its top third): the open grid ends above

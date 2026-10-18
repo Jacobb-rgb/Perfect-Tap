@@ -2193,7 +2193,7 @@ local function applyChip()
 	if not view then
 		return
 	end
-	view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen)
+	view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen, MenuPanels.gridOpen())
 	local hide = panelOpen and view.CoversCoins
 	local hud = HudController.refs()
 	if hud and hide ~= coinsHidden then
@@ -2684,6 +2684,10 @@ function TrainController.init()
 	FxController.register("TrainUnload", onUnload)
 	FxController.register("TrainLoad", onLoad)
 	StateController.onChanged(onState)
+	-- the touch side menu's open grid takes the chip's place: the chip hides until it shuts
+	MenuPanels.onGridChanged(function()
+		applyChip()
+	end)
 	Players.PlayerRemoving:Connect(function(leaving)
 		trips[leaving.UserId] = nil
 	end)
