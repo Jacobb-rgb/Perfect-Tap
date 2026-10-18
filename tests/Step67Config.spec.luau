@@ -7,6 +7,7 @@
 return function(T, Loader)
 	local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
+	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 	local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
 	local GearConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GearConfig")
@@ -770,13 +771,17 @@ return function(T, Loader)
 			local twoHours = BoostConfig.MaxStackSeconds / 300 * price
 			T.truthy(twoHours >= 24 * crystal, "2 h of coin Triple Lucky costs at least 24 Crystal capsules")
 		end
-		-- Hexa Lucky: 20 % of the next blaster forge (the top forge at the top), at least 2,500
+		-- Hexa Lucky: 2 % of the next blaster forge (the top forge at the top), at least 2,500
+		-- (balance pass 1: 20 % was never bought in the sim, docs/BALANCE_SIM.md)
+		local function forge(level: number): number
+			return BlasterData.ByLevel[level].Recipe.Coins
+		end
 		T.eq(BoostConfig.coinPrice("HexaLucky5", 1), 2500, "the minimum")
-		T.eq(BoostConfig.coinPrice("HexaLucky5", 3), 3000, "20 % of the 15,000 forge")
-		T.eq(BoostConfig.coinPrice("HexaLucky5", 4), 20000)
-		T.eq(BoostConfig.coinPrice("HexaLucky5", 9), 3e8)
-		T.eq(BoostConfig.coinPrice("HexaLucky5", 10), 3e8, "the level-10 forge at the top")
-		T.eq(BoostConfig.coinPrice("HexaLucky5", 99), 3e8)
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 3), math.max(2500, math.floor(forge(4) * 0.02 + 0.5)), "2 % of the level-4 forge")
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 4), math.max(2500, math.floor(forge(5) * 0.02 + 0.5)))
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 9), math.floor(forge(10) * 0.02 + 0.5))
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 10), math.floor(forge(10) * 0.02 + 0.5), "the level-10 forge at the top")
+		T.eq(BoostConfig.coinPrice("HexaLucky5", 99), math.floor(forge(10) * 0.02 + 0.5))
 		-- coins only top a boost up: the Robux packs keep their place
 		local wallet: any = { TripleLuckyUntil = 0, HexaLuckyUntil = 0 }
 		local price, why = BoostConfig.coinQuote(wallet, "TripleLucky5", 5, false, NOW)
@@ -1625,7 +1630,7 @@ return function(T, Loader)
 		end
 		-- a percent bonus can hit its cap: the pass says where (Hexa's x2.5 never does: MaxOreLuck)
 		T.truthy(MonetizationConfig.get("EnchantStarbreaker").Description:find("at most +150%", 1, true), "Starbreaker names the cap")
-		T.near((StatConfig.ById.OreLuckPct.Max :: number), 1.5, EPS, "the cap the Starbreaker text names")
+		T.near(StatConfig.ById.OreLuckPct.Max :: number, 1.5, EPS, "the cap the Starbreaker text names")
 		T.truthy(MonetizationConfig.PromptMemorySeconds >= 60, "a Royal prompt remembers the Triple Lucky state it showed")
 		for _, product in MonetizationConfig.List do
 			if product.Kind == "Product" then

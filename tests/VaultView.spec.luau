@@ -118,6 +118,15 @@ return function(T, Loader)
 						label .. " name fits: " .. tile.Name.Text
 					)
 					T.truthy(tile.Name.TextSize >= 11, "readable name")
+					-- the price fits its row next to the coin (balance pass 1: up to $140B)
+					if tile.PriceRow.Visible then
+						local row = g.Slots.Price
+						local width = row.W + tile.Price.Size.X.Offset
+						T.truthy(
+							TechShopView.fits(tile.Price.Text, width, row.H, tile.Price.TextSize, false),
+							label .. " price fits: " .. tile.Price.Text
+						)
+					end
 					T.eq(tile.Ribbon.Visible, card.State == "Next", "NEXT ribbon")
 					T.eq(tile.Check.Visible, card.State == "Owned", "owned check")
 					T.eq(tile.Icon ~= nil, card.State ~= "Soon", "case icon")
