@@ -597,5 +597,105 @@
     "maxLights": 24,
     "ui": "ui_bubble_codex_phone",
     "uiInset": 116
+  },
+  "ui_bubble_artifacts_pc": {
+    "scene": "world",
+    "position": [
+      0,
+      13,
+      58
+    ],
+    "target": [
+      -4,
+      7,
+      -50
+    ],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24,
+    "ui": "ui_bubble_artifacts_pc",
+    "uiInset": 58
+  },
+  "ui_bubble_artifacts_phone": {
+    "scene": "world",
+    "width": 1688,
+    "height": 780,
+    "position": [
+      0,
+      13,
+      58
+    ],
+    "target": [
+      -4,
+      7,
+      -50
+    ],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24,
+    "ui": "ui_bubble_artifacts_phone",
+    "uiInset": 116
+  },
+  "ui_bubble_journal_pc": {
+    "scene": "world",
+    "position": [
+      0,
+      13,
+      58
+    ],
+    "target": [
+      -4,
+      7,
+      -50
+    ],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24,
+    "ui": "ui_bubble_journal_pc",
+    "uiInset": 58
+  },
+  "ui_bubble_journal_phone": {
+    "scene": "world",
+    "width": 1688,
+    "height": 780,
+    "position": [
+      0,
+      13,
+      58
+    ],
+    "target": [
+      -4,
+      7,
+      -50
+    ],
+    "fov": 62,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 140,
+    "maxLights": 24,
+    "ui": "ui_bubble_journal_phone",
+    "uiInset": 116
   }
 }

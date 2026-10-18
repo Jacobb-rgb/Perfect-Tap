@@ -433,3 +433,52 @@ for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	CodexBubble.build(gui2, spec[2], codexData)
 	write("ui_bubble_codex_" .. spec[1], gui2)
 end
+
+local ArtifactsBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ArtifactsBubble")
+local artifactsData = {
+	Collections = {
+		{ Id = "CrownOfKaldrum", Name = "The Crown of Kaldrum", Found = 6, Total = 6, New = true },
+		{ Id = "RoyalRailway", Name = "The Royal Railway", Found = 4, Total = 6 },
+		{ Id = "Golemworks", Name = "The Golemworks", Found = 2, Total = 6 },
+		{ Id = "HeartstoneLore", Name = "The Heartstone Lore", Found = 3, Total = 6 },
+	},
+	Selected = "RoyalRailway",
+	Artifacts = {
+		{ Id = "GoldenSpike", Name = "Golden Rail Spike", Rarity = "Common", Color = rarity.Common, Found = 2 },
+		{ Id = "ConductorWhistle", Name = "Conductor's Whistle", Rarity = "Common", Color = rarity.Common, Found = 1 },
+		{ Id = "RailLantern", Name = "Rail Lantern", Rarity = "Uncommon", Color = rarity.Uncommon, Found = 1 },
+		{ Id = "LastTicket", Name = "Last Train Ticket", Rarity = "Uncommon", Color = rarity.Uncommon, Found = 0 },
+		{ Id = "RoyalTimetable", Name = "Royal Timetable", Rarity = "Rare", Color = rarity.Rare, Found = 1 },
+		{ Id = "LocomotiveCrest", Name = "Locomotive Crest", Rarity = "Epic", Color = rarity.Epic, Found = 0 },
+	},
+	Artifact = "RailLantern",
+	Lore = "It hung on the last car of the night trains so the tunnels never felt empty.",
+	Where = "Most often in Deep Hollow: 1 in 1,357 broken rocks",
+	Reward = "title Royal Conductor · Brass Rails podium skin · +10% sell value",
+	Button = "FIND ALL 6 TO UNLOCK CHAPTER 2",
+	Found = 15,
+	Total = 24,
+}
+local journalData = {
+	Chapters = {
+		{ Id = "Prologue", Name = "Prologue: The Apprentice" },
+		{ Id = "Chapter1", Name = "Chapter 1: The Ember Kings", New = true },
+		{ Id = "Chapter2", Name = "Chapter 2: Rails Under the Mountain", Locked = true },
+		{ Id = "Chapter3", Name = "Chapter 3: The Sleeping Helpers", Locked = true },
+		{ Id = "Chapter4", Name = "Chapter 4: The Shattering", Locked = true },
+	},
+	Selected = "Chapter1",
+	Kicker = "Chapter 1: The Ember Kings",
+	Title = "The Crown and the Flame",
+	Text = "The Ember Kings ruled from a throne carved over the Heartstone. At every coronation the scepter was raised over the stone, and the stone glowed brighter for its new king.",
+	Page = 2,
+	Pages = 4,
+}
+for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
+	local gui = windowGui(spec[2], spec[3])
+	ArtifactsBubble.build(gui, spec[2], artifactsData)
+	write("ui_bubble_artifacts_" .. spec[1], gui)
+	local gui2 = windowGui(spec[2], spec[3])
+	ArtifactsBubble.journal(gui2, spec[2], journalData)
+	write("ui_bubble_journal_" .. spec[1], gui2)
+end
