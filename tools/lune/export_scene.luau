@@ -153,6 +153,10 @@ elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine f
 	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
 elseif sceneName == "mine_floor" then -- one mine floor area with rocks (tools/lune/lib/mine_floor_scene.luau)
 	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or 1)
+elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
+	require("./lib/hoverboard_preview").build(Loader, workspace)
+elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor
+	require("./lib/hoverboard_preview").buildRide(Loader, workspace, sceneName == "hoverboard_hero")
 elseif sceneName == "railway" then -- the world with parked preview trains on the railway (tools/lune/lib/railway_gallery.luau)
 	require("./lib/railway_gallery").build(Loader, workspace)
 	addNodes(workspace)

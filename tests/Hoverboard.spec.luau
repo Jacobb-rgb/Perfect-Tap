@@ -1,0 +1,230 @@
+-- Hoverboards (owner, mine floors point 3): 3 coin boards that get faster, 2 Robux
+-- boards that are faster still and have effects; models from parts within budget.
+return function(T, Loader)
+	local roblox = require("@lune/roblox") :: any
+	local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
+	local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")
+	local HoverboardFx = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardFx")
+
+	local function partsOf(model)
+		local list = {}
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(list, d)
+			end
+		end
+		return list
+	end
+
+	T.test("hoverboards: 3 coin boards then 2 Robux boards, speeds rise", function()
+		T.eq(#HoverboardData.List, 5, "board count")
+		local coins, robux = 0, 0
+		local lastSpeed = HoverboardData.BaseWalkSpeed
+		local lastPrice = 0
+		for i, board in HoverboardData.List do
+			T.eq(board.Order, i, board.Id .. " order")
+			T.eq(HoverboardData.get(board.Id), board, board.Id .. " by id")
+			T.truthy(board.Speed > lastSpeed, board.Id .. " is faster than the board before (and walking)")
+			lastSpeed = board.Speed
+			T.truthy(#board.Name > 0 and #board.Description > 0, board.Id .. " has a name and a description")
+			T.truthy(#board.Perks > 0, board.Id .. " perks")
+			if board.Kind == "Coins" then
+				coins += 1
+				T.eq(robux, 0, board.Id .. ": coin boards come first")
+				T.truthy(type(board.Price) == "number" and board.Price > lastPrice, board.Id .. " costs more than the coin board before")
+				lastPrice = board.Price
+				T.eq(board.Effect, "None", board.Id .. ": effects are a Robux perk")
+				T.falsy(HoverboardData.canPrompt(board), board.Id .. " is never prompted for Robux")
+			else
+				robux += 1
+				T.eq(board.Kind, "Robux", board.Id .. " kind")
+				T.eq(board.Robux, 49, board.Id .. " costs 49 R$")
+				T.truthy(type(board.ProductId) == "number" and board.ProductId >= 0, board.Id .. " product id (0 = TODO)")
+				T.truthy(board.Effect ~= "None", board.Id .. " has a special effect")
+				T.eq(board.Price, nil, board.Id .. " is not sold for coins")
+			end
+		end
+		T.eq(coins, 3, "coin boards")
+		T.eq(robux, 2, "Robux boards")
+	end)
+
+	T.test("hoverboards: the Robux boards are the fastest", function()
+		local fastestCoin, slowestRobux = 0, math.huge
+		for _, board in HoverboardData.List do
+			if board.Kind == "Coins" then
+				fastestCoin = math.max(fastestCoin, board.Speed)
+			else
+				slowestRobux = math.min(slowestRobux, board.Speed)
+			end
+		end
+		T.lt(fastestCoin, slowestRobux, "every Robux board beats every coin board")
+		T.eq(HoverboardData.speedBonus(HoverboardData.ById.TimberDrifter), 28, "23 / 18 = +28%")
+	end)
+
+	T.test("hoverboards: product ids, 0 is never prompted or matched", function()
+		T.eq(HoverboardData.byProduct(0), nil, "id 0 matches no board")
+		T.eq(HoverboardData.byProduct("12"), nil, "a string is no product id")
+		T.eq(HoverboardData.get(nil), nil, "nil id")
+		T.eq(HoverboardData.get("Nope"), nil, "unknown id")
+		for _, board in HoverboardData.List do
+			if board.Kind == "Robux" then
+				T.eq(HoverboardData.canPrompt(board), board.ProductId > 0, board.Id .. " prompts only with a real id")
+				if board.ProductId > 0 then
+					T.eq(HoverboardData.byProduct(board.ProductId), board, board.Id .. " by product id")
+				end
+			end
+		end
+	end)
+
+	T.test("hoverboard builder: every board builds within its part budget", function()
+		for _, board in HoverboardData.List do
+			local model = HoverboardBuilder.build(board.Id)
+			local parts = partsOf(model)
+			local max = HoverboardBuilder.MaxParts[board.Kind]
+			T.le(#parts, max, board.Id .. " parts")
+			T.truthy(#parts >= 30, board.Id .. " is a real model (" .. #parts .. " parts)")
+			T.eq(model.Name, board.Id, board.Id .. " model name")
+			T.eq(model.PrimaryPart and model.PrimaryPart.Name, "Root", board.Id .. " PrimaryPart")
+			T.eq(model:GetAttribute("BoardId"), board.Id, board.Id .. " attribute")
+			T.eq(model:GetAttribute("Effect"), board.Effect, board.Id .. " effect attribute")
+			local neon, shadows = 0, 0
+			for _, p in parts do
+				T.truthy(
+					p.Anchored and not p.CanCollide and not p.CanTouch and not p.CanQuery,
+					board.Id .. " " .. p.Name .. " is a plain visual"
+				)
+				T.falsy(p:IsA("MeshPart"), board.Id .. " uses no meshes")
+				if p.Material == roblox.Enum.Material.Neon then
+					neon += 1
+				end
+				if p.CastShadow then
+					shadows += 1
+				end
+			end
+			T.truthy(neon >= 3, board.Id .. " glows")
+			T.le(shadows, 8, board.Id .. " only big parts cast shadows")
+		end
+		T.truthy(not pcall(HoverboardBuilder.build, "Nope"), "an unknown board errors")
+	end)
+
+	T.test("hoverboard builder: Robux boards are the most detailed", function()
+		local coinMax, robuxMin = 0, math.huge
+		for _, board in HoverboardData.List do
+			local n = #partsOf(HoverboardBuilder.build(board.Id))
+			if board.Kind == "Coins" then
+				coinMax = math.max(coinMax, n)
+			else
+				robuxMin = math.min(robuxMin, n)
+			end
+		end
+		T.lt(coinMax, robuxMin, "the Robux boards have more detail than any coin board")
+	end)
+
+	T.test("hoverboard builder: attachments, deck height, hover gap", function()
+		for _, board in HoverboardData.List do
+			local model = HoverboardBuilder.build(board.Id)
+			local root = model.PrimaryPart
+			for _, name in HoverboardBuilder.Attachments do
+				local a = root:FindFirstChild(name)
+				T.truthy(a and a:IsA("Attachment"), board.Id .. " attachment " .. name)
+			end
+			local exhausts = model:GetAttribute("Exhausts")
+			T.truthy(type(exhausts) == "number" and exhausts >= 1, board.Id .. " exhaust count")
+			for i = 1, exhausts do
+				local a = root:FindFirstChild("Exhaust" .. i)
+				T.truthy(a ~= nil, board.Id .. " Exhaust" .. i)
+				local back = a.CFrame.UpVector
+				T.truthy(back.Z > 0.99, board.Id .. " Exhaust" .. i .. " blows backward (+Y = +Z)")
+				T.truthy(a.CFrame.Position.Z > 2, board.Id .. " Exhaust" .. i .. " sits at the tail")
+			end
+			T.near(root.Feet.CFrame.Position.Y, HoverboardBuilder.DeckHeight, 1e-4, board.Id .. " feet on the deck")
+			T.truthy(root.Pad.CFrame.UpVector.Y < -0.99, board.Id .. " Pad points down")
+			T.truthy(
+				root.TrailLeft.CFrame.Position.X < 0 and root.TrailRight.CFrame.Position.X > 0,
+				board.Id .. " trail ends left and right"
+			)
+			T.truthy(root.TrailLeft.CFrame.Position.Z > 2, board.Id .. " trail at the tail")
+			T.truthy(root.Nose.CFrame.Position.Z < -2, board.Id .. " nose at the front")
+			T.near(model:GetAttribute("DeckHeight"), HoverboardBuilder.DeckHeight, 1e-6, board.Id .. " DeckHeight attribute")
+			-- the deck top: the highest point of the parts the feet stand on is the deck height,
+			-- the lowest point of the board is the hover pad at HoverGap
+			local low, deckTop = math.huge, -math.huge
+			for _, p in partsOf(model) do
+				if p ~= root then
+					local cf, s = p.CFrame, p.Size / 2
+					local extent = math.abs(cf.RightVector.Y) * s.X + math.abs(cf.UpVector.Y) * s.Y + math.abs(cf.LookVector.Y) * s.Z
+					low = math.min(low, cf.Position.Y - extent)
+					local pos = cf.Position
+					if math.abs(pos.X) < 0.6 and math.abs(pos.Z) < 0.6 and p.Name ~= "Crystal" and p.Name ~= "CrystalTip" then
+						deckTop = math.max(deckTop, pos.Y + extent)
+					end
+				end
+			end
+			T.near(low, HoverboardBuilder.HoverGap, 0.03, board.Id .. " floats HoverGap above the ground")
+			T.truthy(math.abs(deckTop - HoverboardBuilder.DeckHeight) <= 0.03, board.Id .. " deck top under the feet " .. deckTop)
+		end
+	end)
+
+	T.test("hoverboard builder: rig welds every part to Root", function()
+		local model = HoverboardBuilder.build("RoyalPhoenix")
+		HoverboardBuilder.rig(model)
+		local root = model.PrimaryPart
+		for _, p in partsOf(model) do
+			T.falsy(p.Anchored, p.Name .. " unanchored")
+			T.truthy(p.Massless, p.Name .. " massless")
+			if p ~= root then
+				local weld = p:FindFirstChildWhichIsA("WeldConstraint")
+				T.truthy(weld and weld.Part0 == root and weld.Part1 == p, p.Name .. " welded to Root")
+			end
+		end
+	end)
+
+	T.test("hoverboard fx: Robux boards only, mobile budget, mount and pool", function()
+		for _, board in HoverboardData.List do
+			local set = HoverboardFx.create(board.Id)
+			if board.Effect == "None" then
+				T.eq(set, nil, board.Id .. " has no effects")
+			else
+				T.truthy(set ~= nil, board.Id .. " effect set")
+				T.truthy(#set.Trails >= 1, board.Id .. " has a trail")
+				T.le(HoverboardFx.rate(set), 40, board.Id .. " particles per second")
+				local lite = HoverboardFx.create(board.Id, true)
+				T.le(HoverboardFx.rate(lite), HoverboardFx.rate(set) / 2 + 0.01, board.Id .. " lite halves the rate")
+				local model = HoverboardBuilder.build(board.Id)
+				T.truthy(HoverboardFx.mount(set, model), board.Id .. " mounts on its board")
+				for _, e in set.Emitters do
+					T.truthy(
+						e.Parent and e.Parent:IsA("Attachment") and e.Parent.Name == e:GetAttribute("Mount"),
+						e.Name .. " on its attachment"
+					)
+					T.falsy(e.Enabled, e.Name .. " starts disabled")
+				end
+				for _, t in set.Trails do
+					T.eq(t.Attachment0.Name, "TrailLeft", t.Name .. " attachment 0")
+					T.eq(t.Attachment1.Name, "TrailRight", t.Name .. " attachment 1")
+				end
+				HoverboardFx.setActive(set, true, 0.5)
+				T.truthy(set.Emitters[1].Enabled, "enabled while riding")
+				T.near(set.Emitters[1].Rate, set.Emitters[1]:GetAttribute("BaseRate") * 0.5, 1e-6, "rate follows the speed")
+				-- a board without the attachments is refused and nothing moves
+				local bare = roblox.Instance.new("Model")
+				local bareRoot = roblox.Instance.new("Part")
+				bareRoot.Parent = bare
+				bare.PrimaryPart = bareRoot
+				local other = HoverboardFx.create(board.Id)
+				T.falsy(HoverboardFx.mount(other, bare), board.Id .. " refuses a board without attachments")
+				T.eq(other.Emitters[1].Parent, nil, "nothing mounted")
+				-- release keeps it for the next rider, acquire hands the same set back
+				local before = HoverboardFx.pooled(board.Id)
+				HoverboardFx.release(set)
+				T.falsy(set.Emitters[1].Enabled, "released sets are off")
+				T.eq(set.Emitters[1].Parent, nil, "released sets are unmounted")
+				T.eq(HoverboardFx.pooled(board.Id), before + 1, "pooled")
+				HoverboardFx.release(set)
+				T.eq(HoverboardFx.pooled(board.Id), before + 1, "a double release is ignored")
+				T.eq(HoverboardFx.acquire(board.Id), set, "acquire reuses the pooled set")
+			end
+		end
+		T.eq(HoverboardFx.acquire("TimberDrifter"), nil, "coin boards acquire nothing")
+	end)
+end
