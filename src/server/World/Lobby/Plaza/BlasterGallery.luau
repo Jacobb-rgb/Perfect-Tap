@@ -73,8 +73,27 @@ end
 	`length` (barrel) x `height`, placed at `cf` (its barrel along cf's -Z).
 	Every part is a non-colliding detail with no shadow.
 ]]
+-- display detail: smaller solid bits than this (studs, after fitting) are left out (glowing ones stay)
+BlasterGallery.MinDetail = 0.25
+
 function BlasterGallery.gun(parent: Instance, cf: CFrame, level: number, oreId: string, length: number, height: number): Model
 	local model = BlasterGallery.fit(parent, Stage.blasterModel(level, oreId), cf, length, height)
+	-- display detail (the guns hang 6-10 studs from the eye): the invisible hand and effect
+	-- holders and the tiniest solid bevels go; every glowing part (rim, cracks, stars, crystals) stays
+	local drop: { BasePart } = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local size = d.Size
+			if
+				d.Transparency >= 0.99 or (d.Material ~= Enum.Material.Neon and math.max(size.X, size.Y, size.Z) < BlasterGallery.MinDetail)
+			then
+				table.insert(drop, d)
+			end
+		end
+	end
+	for _, d in drop do
+		d:Destroy()
+	end
 	model.Name = "Blaster" .. level
 	model:SetAttribute("Level", level)
 	model:SetAttribute("OreId", oreId)
