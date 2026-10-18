@@ -38,6 +38,10 @@ local ORDER = {
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal
+	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
+	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
+	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
+	"SideMenuController", -- the button column on the left (after the panels it opens)
 }
 
 local loaded = {}

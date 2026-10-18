@@ -54,6 +54,9 @@ local ORDER = {
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
 	"WheelService", -- step 7: the free daily wheel (EmberChest prompt, WheelAction)
 	"ArtifactService", -- step 7: artifact finds, the book / journal prompts, the base museums
+	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
+	"SettingsService", -- the side menu's SETTINGS record
+	"CodexService", -- the ORE CODEX's NEW badges (seen ores)
 }
 
 local loaded = {}

@@ -153,6 +153,12 @@ Net.Events = {
 	TutorialSkip = { Rate = 1, Burst = 2 },
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean })
+	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
+	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
+	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
+	--   discovered ores were looked at (their NEW badges go; CodexService keeps them in
+	--   data.OreCodex.Seen, sent back as snapshot.CodexSeen)
 	-- server -> client
 	Notify = false,
 	Fx = false,
@@ -214,6 +220,12 @@ Net.Events = {
 	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }
 	--   (MonetizationConfig.promptStatus; "Prompted" = MarketplaceService prompt shown)
 	PurchasePrompt = false,
+	-- the lobby leaderboards (LeaderboardService, every LeaderboardConfig.RefreshSeconds and on
+	--   join): { Live: boolean (false = no DataStores, e.g. Studio: the rows rank the players on
+	--   this server), Boards = { [boardId] = { Rows = { { Rank, UserId, Name, Value } } (top
+	--   LeaderboardConfig.TopCount, Value decoded), Ready: boolean (read at least once) } },
+	--   Own = { [boardId] = { Value: your live value, Rank: number? (only inside Rows) } } }
+	Leaderboards = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"
