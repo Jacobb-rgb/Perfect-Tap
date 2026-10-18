@@ -43,6 +43,7 @@ local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
@@ -76,8 +77,8 @@ local RECEIPT_COLORS: { [string]: Color3 } = {
 	Info = Theme.Info,
 	Discovery = Theme.Accent,
 }
--- panels that own the middle of the screen: one at a time
-local OTHER_PANELS = { "PenController", "SellController", "TrainController", "IronBoxController", "FoundryController" }
+-- panels that own the middle of the screen: one at a time (MenuPanels.Names,
+-- the one list of every panel controller)
 
 local player = Players.LocalPlayer
 local refs: TechShopView.Refs? = nil
@@ -117,7 +118,10 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in MenuPanels.Names do
+		if name == "TechShopController" then
+			continue
+		end
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)

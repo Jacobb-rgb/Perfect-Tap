@@ -28,7 +28,7 @@ src/shared/Config/MachineData.luau; the owner can change them.
 | Brick Furnace | processor, 4 s, Clean/Crushed -> Ingot |
 | Plasma Furnace | processor, 2.5 s, works `Batch` = 2 queued items per job (the fastest) |
 | Polisher | Clean -> Clean, `GradeUpChance` 0.5: one grade better (Rough -> Clean -> Pristine -> Flawless, Flawless stays) |
-| Crystal Extractor | Crushed -> Crushed (same item), `ShardChance` 0.15: data.Shards + 1 and a toast |
+| Crystal Extractor | Crushed -> Crushed (same item), `ShardChance` 0.15: data.Shards + 1 and a toast. Each crushed pile is rolled once (data.ShardRolls: +1 per pile a Crusher makes, -1 per extractor job), so a belt loop makes no shards |
 | Alloy Furnace | needs 2 ingots of DIFFERENT ores in its queue; one job takes both, gives 1 Alloy of the more valuable ore, grade = the lower of the two; while only one ore waits: Status "NeedsOtherOre" |
 | Splitter | takes items (belt/hopper/hand), sends them out left and right in turn (OutputL / OutputR) |
 | Sorter | Clean/Crushed/Ingot/Alloy: rarity >= its threshold (entry.C = a Rarity Order, default Rare) to the right, the rest to the left; MachineAction "SorterCycle" steps the threshold; attribute `Detail` shows it |

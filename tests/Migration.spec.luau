@@ -262,6 +262,84 @@ return function(T, Loader)
 		T.truthy(deepEqual(copy, data), "idempotent")
 	end)
 
+	T.test("Migration: an old save with replaced ores AND steps 6-7 records migrates in one chain", function()
+		local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+		local CodexService = Loader.requirePath("ServerScriptService.Server.Services.CodexService")
+		local NOW = 1_800_000_000
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 2
+		-- the old ore roster
+		data.BlasterLevel = 10
+		data.BlasterOre = "Starmetal"
+		data.Storage = { { K = "Clean", O = "Ruby", G = "Flawless" } }
+		data.Podiums = { "Clean|Skyglass|Pristine|", "", "", "" }
+		data.Discovered = { Coal = true, Ruby = true, Skyglass = true, Starmetal = true }
+		data.KeepList = { Starmetal = true }
+		-- steps 6-7 records (and the records they replace) from the same save
+		data.CarryLevel = 4
+		data.Gear = nil
+		data.Daily = { Streak = 3, LastClaim = NOW - 100 }
+		data.Golems = {
+			Owned = {
+				{ Id = 1, Kind = "RubyKnight", Locked = true },
+				{ Id = 2, Kind = "StormcoreTitan", Paid = true },
+				{ Id = 3, Kind = "StarmetalSovereign" },
+			},
+			Equipped = { 1, 3 },
+			NextId = 2,
+		}
+		data.Enchants = { Owned = { Lucky = 2, Midas = 1 }, Slots = { "Lucky", "Midas", "", "" } }
+		data.Boosts = { TripleLuckyUntil = NOW + 600, HexaLuckyUntil = 0 }
+		data.Artifacts = { Found = { CrownCoin = 2 }, Chapters = {} }
+		data.OreCodex = { Seen = { Coal = true, Ruby = true, Skyglass = true }, Ready = true }
+		Migrations.run(data, NOW)
+		T.eq(data.Version, Migrations.Latest)
+		-- the ores: renamed first, everywhere
+		T.eq(data.BlasterOre, "CelestialCore")
+		T.eq(data.Storage[1].O, "Bronze", "pen item")
+		T.eq(data.Podiums[1], "Clean|StormGem|Pristine|", "podium key")
+		T.eq(data.Discovered.Bronze, true)
+		T.eq(data.Discovered.StormGem, true)
+		T.eq(data.Discovered.CelestialCore, true)
+		T.eq(data.Discovered.Ruby, nil)
+		T.eq(data.KeepList.CelestialCore, true)
+		-- the codex's seen ores follow the rename (no NEW badge for an ore already looked at)
+		T.eq(data.OreCodex.Seen.Bronze, true, "Ruby seen -> Bronze seen")
+		T.eq(data.OreCodex.Seen.StormGem, true, "Skyglass seen -> Storm Gem seen")
+		T.eq(data.OreCodex.Seen.Ruby, nil)
+		local codex = CodexService.prepare(data)
+		T.truthy(codex.Seen.Bronze and codex.Seen.StormGem and codex.Seen.Coal, "CodexService keeps them (known + discovered)")
+		T.eq(codex.Seen.CelestialCore, nil, "found but never looked at: still NEW")
+		-- steps 6-7 after it: golems renamed (still locked / paid / equipped), gear, daily, enchants, boosts
+		local kinds = {}
+		for _, entry in data.Golems.Owned do
+			kinds[entry.Id] = entry.Kind
+			T.truthy(GolemConfig.ById[entry.Kind], entry.Kind .. " is a live golem")
+		end
+		T.eq(kinds[1], "RoseKnight")
+		T.eq(kinds[2], "StormTitan")
+		T.eq(kinds[3], "CelestialSovereign")
+		T.eq(data.Golems.Owned[1].Locked, true)
+		T.eq(data.Golems.Owned[2].Paid, true)
+		T.truthy(table.find(data.Golems.Equipped, 1) and table.find(data.Golems.Equipped, 3), "still equipped")
+		T.truthy(data.Golems.NextId > 3, "NextId above every Id")
+		T.eq(data.CarryLevel, nil)
+		T.eq(data.Gear.Backpack, 3, "CarryLevel 4 -> Backpack 3")
+		T.truthy(data.Gear.Boots >= 1)
+		T.eq(data.Daily, nil)
+		T.eq(data.Enchants.Slots[1], "Lucky")
+		T.eq(data.Boosts.TripleLuckyUntil, NOW + 600)
+		T.eq(data.Artifacts.Found.CrownCoin, 2)
+		-- the golems' ores are the new roster's
+		for _, kind in { "RoseKnight", "StormTitan", "CelestialSovereign" } do
+			T.truthy(OreData.exists(GolemConfig.ById[kind].Ore), kind .. "'s ore exists")
+		end
+		-- one chain: a second run changes nothing
+		local copy = ProfileStore.deepCopy(data)
+		Migrations.run(data, NOW)
+		T.truthy(deepEqual(copy, data), "idempotent")
+	end)
+
 	T.test("Migration: train levels, cargo and trip times are cleaned", function()
 		local data = ProfileStore.deepCopy(DataTemplate)
 		data.Train = {

@@ -12,7 +12,14 @@
 	  Polisher           Clean -> Clean, GradeUpChance: one grade better
 	                     (MachineLogic.gradeUp; Flawless stays)
 	  Crystal Extractor  Crushed -> Crushed (the same item), ShardChance: the
-	                     owner's data.Shards + 1 and a "+1 Crystal Shard!" toast
+	                     owner's data.Shards + 1 and a "+1 Crystal Shard!" toast.
+	                     Each crushed pile is shaken for a shard ONCE: every
+	                     pile another machine (the Crusher) makes adds one to
+	                     the owner's data.ShardRolls, every extractor job spends
+	                     one, and a job with none left passes the pile on
+	                     without a roll. So feeding the extractor its own
+	                     output (a belt loop, Put In again) finds nothing: at
+	                     most one roll per pile ever crushed.
 	  Alloy Furnace      Behaviour "Alloy": a job starts once the queue holds
 	                     ingots of two DIFFERENT ores and takes In[1] and the
 	                     first ingot of another ore (MachineLogic.alloyPair);
@@ -136,6 +143,8 @@ local MACHINES = {
 }
 local FIRST_INGOT = "Your first ingot! Ingots go into the Foundry (soon) to forge stronger blasters, or sell them to Tobin."
 local SHARD_TOAST = "+1 Crystal Shard!"
+-- data.ShardRolls never holds more than this (a sanity cap far above any pen)
+ProcessingService.MaxShardRolls = 100000
 local ALLOY = "Alloy" -- MachineData Behaviour of the Alloy Furnace
 local NEEDS_OTHER_ORE = "NeedsOtherOre" -- Status while an Alloy Furnace waits for a second ore
 -- speedFactor outside this range is a broken modifier (power never goes there)
@@ -394,6 +403,31 @@ local function giveShards(player: Player, shards: number)
 	end
 end
 
+-- The crushed piles of a save not shaken for a shard yet (broken = 0).
+local function shardRolls(data: { [string]: any }): number
+	local n = tonumber(data.ShardRolls) or 0
+	if n ~= n or n <= 0 then
+		return 0
+	end
+	return math.floor(math.min(n, ProcessingService.MaxShardRolls))
+end
+
+-- Crushed piles a (non-extractor) job made: each gets one shard roll later.
+local function addShardRolls(data: { [string]: any }?, outputs: { Desc })
+	if not data then
+		return
+	end
+	local crushed = 0
+	for _, desc in outputs do
+		if desc.K == "Crushed" then
+			crushed += 1
+		end
+	end
+	if crushed > 0 then
+		data.ShardRolls = math.min(ProcessingService.MaxShardRolls, shardRolls(data) + crushed)
+	end
+end
+
 local function announce(player: Player, machineId: string, input: Desc, outputs: { Desc })
 	for _, callback in processedCallbacks do
 		local copies = {}
@@ -415,10 +449,16 @@ local function rollResults(machine: PlacedMachine, job: Job): { Result }
 		return { { Input = job.Input, Outputs = { MachineLogic.alloyDesc(job.Input, second) }, Shard = false } }
 	end
 	local shardChance = machine.Info.ShardChance
+	local data = if shardChance then DataService.get(machine.Owner) else nil
 	local results: { Result } = {}
 	for _, input in job.Inputs do
 		local outputs = MachineLogic.outputs(machine.Id, input, rng:next(), job.Odds)
-		local shard = if shardChance then MachineLogic.rollShard(shardChance, rng:next()) else false
+		local shard = false
+		-- one roll per crushed pile ever made (see the header): none left = no roll
+		if shardChance and data and shardRolls(data) > 0 then
+			data.ShardRolls = shardRolls(data) - 1
+			shard = MachineLogic.rollShard(shardChance, rng:next())
+		end
 		table.insert(results, { Input = input, Outputs = outputs, Shard = shard })
 	end
 	return results
@@ -491,6 +531,9 @@ local function finishJob(machine: PlacedMachine, job: Job, sorter: Sorter?): boo
 		if machine.Info.Output ~= nil then
 			countIngots(player, list)
 			local data = DataService.get(player)
+			if not machine.Info.ShardChance then
+				addShardRolls(data, list)
+			end
 			local shards = 0
 			local results: { Result } = job.Results or {}
 			for _, result in results do

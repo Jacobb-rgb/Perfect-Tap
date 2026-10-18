@@ -158,6 +158,20 @@ return function(T, Loader)
 		T.eq(w.data.TotalEarned, value, "counted as earned")
 		T.eq(#w.data.Storage, GameConfig.MaxStoredItems, "never over the DataStore cap")
 		T.eq(w.notes[3].Payload.Text, `Too many loose items (no room left anywhere: sold it for {Format.money(value)})`, "sold toast")
+		-- the sell bonus counts here too (the same as Tobin's counter)
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		Bonuses.register("ItemSpecSell", function()
+			return { SellPct = 0.35 }
+		end)
+		local before = w.data.Coins
+		local okSell, why = pcall(function()
+			T.eq(ItemService.storeDesc(w.player, d), "Sold", "sold again")
+			T.eq(w.data.Coins, before + math.floor(value * 1.35 + 0.5), "pen-full sale pays the sell bonus")
+		end)
+		Bonuses.unregister("ItemSpecSell")
+		if not okSell then
+			error(why, 0)
+		end
 		-- a pen upgrade raises the capacity; the DataStore cap always wins
 		w.data.Upgrades.PenLevel = 2
 		T.eq(ItemService.penCapacity(w.data), capacity + 2 * EconomyConfig.Pen.PerLevel, "upgraded pen")

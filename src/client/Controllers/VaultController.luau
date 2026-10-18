@@ -50,6 +50,7 @@ local VaultView = require(script.Parent.Parent.UI.VaultView)
 local CrateOpeningView = require(script.Parent.Parent.UI.CrateOpeningView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local LightingController = require(script.Parent.LightingController)
@@ -74,9 +75,8 @@ local MESSAGE_TIME = 3.5
 local STAGE_ORIGIN = CFrame.new(6000, 3000, 6000)
 local MAX_CINEMATIC = 40 -- seconds: it ends by itself
 local LEAVE_TIME = 0.3 -- the fade to black at the end
--- panels that own the middle of the screen: one at a time
-local OTHER_PANELS =
-	{ "PenController", "SellController", "TrainController", "IronBoxController", "FoundryController", "TechShopController" }
+-- the other panels (one in the middle of the screen at a time): MenuPanels.Names,
+-- the one list of every panel controller (a name that isn't in the game is skipped)
 
 local player = Players.LocalPlayer
 local refs: VaultView.Refs? = nil
@@ -128,7 +128,10 @@ local function otherPanels(): { Panel }
 		return cached
 	end
 	local list: { Panel } = {}
-	for _, name in OTHER_PANELS do
+	for _, name in MenuPanels.Names do
+		if name == "VaultController" then
+			continue
+		end
 		local module = script.Parent:FindFirstChild(name)
 		if module and module:IsA("ModuleScript") then
 			local ok, controller = pcall(require, module :: any)
