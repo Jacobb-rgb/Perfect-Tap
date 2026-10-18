@@ -570,9 +570,9 @@ return function(T, Loader)
 		end
 		T.lt(price("Conveyor"), price("ClayFurnace"))
 		T.lt(price("ClayFurnace"), price("Crusher"))
-		T.lt(price("Crusher"), price("AutoCleaner"))
-		T.lt(price("AutoCleaner"), price("IronBox"))
-		T.lt(price("IronBox"), price("BlastFurnace"))
+		T.lt(price("Crusher"), price("IronBox"))
+		T.lt(price("IronBox"), price("AutoCleaner"))
+		T.lt(price("AutoCleaner"), price("BlastFurnace"))
 		for id in MachineData.Retired do
 			T.lt(80, MachineData.ById[id].Order, id .. " sorts after everything sold")
 		end

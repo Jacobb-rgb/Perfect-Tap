@@ -801,7 +801,7 @@ return function(T, Loader)
 		T.eq(session.Ore, "Gold", "default look")
 		T.eq(session.Hits, FoundryLogic.hits(2))
 		T.eq(session.Ingots, 3)
-		T.eq(session.Coins, 250)
+		T.eq(session.Coins, BlasterData.ByLevel[2].Recipe.Coins)
 		T.eq(session.Timeout, GameConfig.AnvilTimeout)
 		T.eq(#stock(w), 5, "nothing taken at the start")
 		T.eq(w.data.Coins, 1000)
@@ -823,7 +823,7 @@ return function(T, Loader)
 		T.eq(result.Name, BlasterData.displayName(2, "Gold"))
 		T.eq(w.data.BlasterLevel, 2)
 		T.eq(w.data.BlasterOre, "Gold")
-		T.eq(w.data.Coins, 750, "250 coins")
+		T.eq(w.data.Coins, 1000 - BlasterData.ByLevel[2].Recipe.Coins, "the level-2 forge's coins")
 		T.eq(w.data.Stats.BlastersForged, 1)
 		T.truthy(w.changed > changedBefore, "data changed (ToolService swaps the blaster)")
 		-- used: the cheap Gold + both Coal; kept: the Flawless Gold and the Copper
@@ -836,13 +836,13 @@ return function(T, Loader)
 		-- the same Strike again does nothing
 		fs.action(w.player, "Strike", { SessionId = session.Id, Times = taps(session.Hits) })
 		T.eq(w.data.BlasterLevel, 2, "one forge per session")
-		T.eq(w.data.Coins, 750)
+		T.eq(w.data.Coins, 1000 - BlasterData.ByLevel[2].Recipe.Coins)
 	end)
 
 	withWorld("FoundryService: after a forge the ingots the new next level can't use move to the pen", function(w)
 		-- level 3 -> 4 needs 6 Uncommon+; level 5 also takes Uncommon, level 6 needs Rare
 		w.data.BlasterLevel = 3
-		w.data.Coins = 20000
+		w.data.Coins = BlasterData.ByLevel[4].Recipe.Coins + 5000
 		for _ = 1, 6 do
 			table.insert(stock(w), ingot("Silver"))
 		end
@@ -860,7 +860,7 @@ return function(T, Loader)
 		T.eq(countKey(stock(w), "Ingot|Silver||"), 1)
 		-- the top level: everything left moves out (as many as fit)
 		w.data.BlasterLevel = 9
-		w.data.Coins = 1e10
+		w.data.Coins = BlasterData.ByLevel[10].Recipe.Coins * 2
 		table.clear(stock(w))
 		for _ = 1, 13 do
 			table.insert(stock(w), ingot("Sunstone"))
@@ -989,7 +989,7 @@ return function(T, Loader)
 		end
 		fs.action(w.player, "Forge", {})
 		T.eq(reason(), "NotEnough", "no coins")
-		w.data.Coins = 250
+		w.data.Coins = BlasterData.ByLevel[2].Recipe.Coins
 		fs.action(w.player, "Forge", { Ore = "Diamond" })
 		T.eq(reason(), "BadOre", "a look that isn't in the stock")
 		fs.action(w.player, "Forge", { Ore = "NotAnOre" })
@@ -1114,9 +1114,9 @@ return function(T, Loader)
 		state.FoundryStock["Ingot|Tin||"] = 3
 		status = FoundryView.status(state, nil)
 		T.eq(status.Reason, "NeedCoins")
-		T.eq(FoundryView.reasonText(status, 100), "Need $150 more")
+		T.eq(FoundryView.reasonText(status, 100), `Need ${BlasterData.ByLevel[2].Recipe.Coins - 100} more`)
 		T.eq(FoundryView.usesText(status), "Uses 1 Gold + your 2 cheapest ingots")
-		state.Coins = 300
+		state.Coins = BlasterData.ByLevel[2].Recipe.Coins + 50
 		status = FoundryView.status(state, "Tin")
 		T.truthy(status.Ready)
 		T.eq(status.Skin, "Tin")
