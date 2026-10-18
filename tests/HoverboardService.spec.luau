@@ -151,18 +151,21 @@ return function(T, Loader)
 		T.falsy(r.Ok, "no coins yet")
 		T.eq(r.Reason, "NoCoins", "reason")
 		T.eq(w.data.Hoverboards.Owned.TimberDrifter, nil, "not owned")
-		w.data.Coins = 100000
+		local p1 = HoverboardData.ById.TimberDrifter.Price :: number
+		local p2 = HoverboardData.ById.CartCruiser.Price :: number
+		local start = p1 + p2 + 15000
+		w.data.Coins = start
 		r = w.act({ Action = "Buy", Board = "TimberDrifter" })
 		T.truthy(r.Ok, "bought")
-		T.eq(w.data.Coins, 95000, "paid the price")
+		T.eq(w.data.Coins, start - p1, "paid the price")
 		T.eq(w.data.Hoverboards.Owned.TimberDrifter, true, "owned")
 		T.eq(w.data.Hoverboards.Equipped, "TimberDrifter", "equipped (the first board)")
 		r = w.act({ Action = "Buy", Board = "TimberDrifter" })
 		T.eq(r.Reason, "Owned", "a double tap buys once")
-		T.eq(w.data.Coins, 95000, "paid once")
+		T.eq(w.data.Coins, start - p1, "paid once")
 		r = w.act({ Action = "Buy", Board = "CartCruiser" })
 		T.truthy(r.Ok, "the second board")
-		T.eq(w.data.Coins, 15000, "80K paid")
+		T.eq(w.data.Coins, 15000, "the second price paid")
 		T.eq(w.data.Hoverboards.Equipped, "CartCruiser", "the faster board is equipped")
 		-- equipping the slow one back, then buying nothing faster keeps the choice
 		T.truthy(w.act({ Action = "Equip", Board = "TimberDrifter" }).Ok, "equip the old board")

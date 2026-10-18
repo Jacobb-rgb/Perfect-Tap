@@ -11,7 +11,7 @@
 	  Floor, a "Base" plate whose front is -Z, a "CallPanel" part with an
 	  Attachment "PromptPoint"), also the ones added later. Each gets one
 	  ProximityPrompt "ElevatorPrompt" (Object "Elevator", Action "Use"; the
-	  client turns the action into "Buy $500K" while the player doesn't own it).
+	  client turns the action into "Buy $3.3M" while the player doesn't own it).
 	  F / gamepad Y / tap. Triggering it opens the client's view:
 	  OpenUI "Elevator" { Stop, Floor, Owned }. This prompt is the only way in
 	  (owner 2026-10-18): the HUD's elevator button teleports you to a stop

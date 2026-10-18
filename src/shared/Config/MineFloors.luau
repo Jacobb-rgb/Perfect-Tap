@@ -9,7 +9,7 @@
 	  5 Heartstone Core     blaster 9+   elevator    Legendary / Mythic
 	  6 ???                 blaster 11   "Coming soon"
 
-	Every floor has 6 home ores. Rocks come in three kinds: Small (3 ores),
+	Every floor has 7 home ores (floor 1: 8; all 36 ores, OreData.Tier = the floor's MinBlaster). Rocks come in three kinds: Small (3 ores),
 	Big (4 ores) and Crystal (3 ores rolled from the floor's better table,
 	about 10 % of the rocks). A rock's HP is set so the weakest blaster allowed
 	on the floor breaks it in `Seconds` (about 5 s, the owner's target).
@@ -91,8 +91,17 @@ MineFloors.GiantCrystal = {
 	MinDamageShare = 0.02, -- a player must deal this share of its HP to get the reward
 }
 
+-- coins, bought once: about 2/3 of the blaster 7 price, a real goal before floor 4 (the
+-- balance sim in docs/BALANCE_SIM.md); follows the blaster prices, rounded to 2 digits
+local function elevatorPrice(): number
+	local blaster = BlasterData.ByLevel[7]
+	local raw = (if blaster and blaster.Recipe then blaster.Recipe.Coins else 3e6) * 2 / 3
+	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
+	return math.floor(raw / step + 0.5) * step
+end
+
 MineFloors.Elevator = {
-	Price = 500000, -- coins, bought once (about when players reach floor 3)
+	Price = elevatorPrice(),
 }
 
 MineFloors.ComingSoon = { Index = 6, MinBlaster = 11 }
@@ -108,8 +117,8 @@ MineFloors.List = {
 		MinBlaster = 1,
 		ViaElevator = false,
 		Lighting = "Quarry",
-		Ores = { Coal = 30, Copper = 25, Tin = 18, Iron = 13, Quartz = 9, Silver = 5 },
-		CrystalOres = { Iron = 20, Quartz = 30, Silver = 30, Amethyst = 14, Jade = 6 },
+		Ores = { Coal = 26, Copper = 21, Tin = 16, Iron = 12, Quartz = 9, Oakwood = 7, Honeycomb = 5, LeafOre = 4 },
+		CrystalOres = { Quartz = 15, Oakwood = 20, Honeycomb = 25, LeafOre = 25, Emberite = 10, Amber = 5 },
 		Palette = {
 			Mid = rgb(118, 124, 142),
 			Light = rgb(168, 176, 194),
@@ -130,8 +139,8 @@ MineFloors.List = {
 		MinBlaster = 3,
 		ViaElevator = false,
 		Lighting = "EmberCaves",
-		Ores = { Amethyst = 30, Jade = 25, Emberite = 18, Cobalt = 13, Gold = 9, Ruby = 5 },
-		CrystalOres = { Cobalt = 20, Gold = 30, Ruby = 30, Azurium = 14, Sapphire = 6 },
+		Ores = { Emberite = 28, Cobalt = 22, Amber = 17, Bronze = 13, Silver = 9, Gold = 7, DragonEgg = 4 },
+		CrystalOres = { Bronze = 20, Silver = 25, Gold = 25, DragonEgg = 15, Jade = 10, Sapphire = 5 },
 		Palette = {
 			Mid = rgb(86, 58, 54),
 			Light = rgb(124, 88, 76),
@@ -152,8 +161,8 @@ MineFloors.List = {
 		MinBlaster = 5,
 		ViaElevator = false,
 		Lighting = "Lagoon",
-		Ores = { Azurium = 30, Sapphire = 25, Emerald = 18, Diamond = 13, Verdantine = 9, Obsidian = 5 },
-		CrystalOres = { Diamond = 20, Verdantine = 30, Obsidian = 30, Stormcore = 14, Moonstone = 6 },
+		Ores = { Frostbite = 28, Bogwood = 22, Jade = 17, Sapphire = 13, Diamond = 9, Amethyst = 7, StormPearl = 4 },
+		CrystalOres = { Sapphire = 15, Diamond = 25, Amethyst = 25, StormPearl = 20, Obsidian = 10, CrystalRose = 5 },
 		Palette = {
 			Mid = rgb(52, 86, 110),
 			Light = rgb(82, 126, 152),
@@ -174,8 +183,8 @@ MineFloors.List = {
 		MinBlaster = 7,
 		ViaElevator = true,
 		Lighting = "Palace",
-		Ores = { Stormcore = 30, Moonstone = 25, Bloodstone = 18, Solarite = 13, Voidstone = 9, RoyalAurum = 5 },
-		CrystalOres = { Solarite = 20, Voidstone = 30, RoyalAurum = 30, Magmacore = 14, Skyglass = 6 },
+		Ores = { Obsidian = 28, CrystalRose = 22, GalaxyStone = 17, RoyalAurum = 13, Sunstone = 9, Moonstone = 7, StormGem = 4 },
+		CrystalOres = { RoyalAurum = 20, Sunstone = 25, Moonstone = 25, StormGem = 15, LeafGem = 10, VolcanicCore = 5 },
 		Palette = {
 			Mid = rgb(112, 98, 134),
 			Light = rgb(152, 138, 174),
@@ -196,8 +205,8 @@ MineFloors.List = {
 		MinBlaster = 9,
 		ViaElevator = true,
 		Lighting = "Core",
-		Ores = { Magmacore = 34, Skyglass = 28, Prismite = 18, Aetherium = 11, Starmetal = 6, Heartstone = 3 },
-		CrystalOres = { Prismite = 30, Aetherium = 30, Starmetal = 25, Heartstone = 15 },
+		Ores = { LeafGem = 28, VolcanicCore = 22, Aetherium = 17, PhoenixFeather = 13, DragonScale = 9, CelestialCore = 7, Heartstone = 4 },
+		CrystalOres = { Aetherium = 15, PhoenixFeather = 25, DragonScale = 25, CelestialCore = 20, Heartstone = 15 },
 		Palette = {
 			Mid = rgb(70, 58, 108),
 			Light = rgb(106, 92, 152),

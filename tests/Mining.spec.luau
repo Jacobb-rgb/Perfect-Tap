@@ -249,7 +249,7 @@ return function(T, Loader)
 		-- ore rolls walk the zone's weights in name order: roll 0 is the first ore
 		w.rolls = { 0, 0 }
 		local low = w.rock("Quarry")
-		T.eq(low.Ores[1], "Amethyst", "lowest roll = first ore by name")
+		T.eq(low.Ores[1], "Bronze", "lowest roll = first ore by name")
 		-- zones without ores grow nothing
 		local marker = Instance.new("Part")
 		marker:SetAttribute("Zone", "Emberfall")
@@ -356,7 +356,7 @@ return function(T, Loader)
 
 	withWorld("Mining: the zone's MinBlaster gate refuses with one toast per rock per 3 s", function(w)
 		local zone = WorldLayout.ZoneById.EmberCaves
-		local rock = w.rock("EmberCaves", { "Ruby" }, 1000)
+		local rock = w.rock("EmberCaves", { "Bronze" }, 1000)
 		local p = w.player
 		mining.blast(p, rock.Model)
 		w.step()

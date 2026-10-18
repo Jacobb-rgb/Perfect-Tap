@@ -42,11 +42,11 @@ Glow.Magma = {
 	Coal = true,
 	Copper = true,
 	Emberite = true,
-	Ruby = true,
+	Bronze = true,
 	Gold = true,
-	Bloodstone = true,
-	Solarite = true,
-	Magmacore = true,
+	GalaxyStone = true,
+	Sunstone = true,
+	VolcanicCore = true,
 	RoyalAurum = true,
 }
 
@@ -494,8 +494,8 @@ Glow.Lineup = {
 	{ 1, "", 1.9 },
 	{ 4, "Amethyst", 1.45 },
 	{ 7, "Emberite", 1.2 },
-	{ 10, "Stormcore", 1.2 },
-	{ 10, "Magmacore", 1.2 },
+	{ 10, "StormPearl", 1.2 },
+	{ 10, "VolcanicCore", 1.2 },
 }
 
 -- "blaster_glow": the lineup floating in the evening sky (no world, only the sky dome).
@@ -517,7 +517,7 @@ function Glow.build(Loader: any, parent: any)
 		Concepts.present(model, CF.new(spots[i]) * CF.Angles(0, -1.3, 0) * CF.Angles(0.08, 0, 0.04), entry[3], root)
 	end
 	-- one gun alone for close-ups (far to the side)
-	for i, entry in { { 10, "Magmacore" }, { 10, "Stormcore" }, { 7, "Emberite" }, { 4, "Amethyst" } } do
+	for i, entry in { { 10, "VolcanicCore" }, { 10, "StormPearl" }, { 7, "Emberite" }, { 4, "Amethyst" } } do
 		local model = Glow.gun(Loader, entry[1], entry[2])
 		Concepts.present(model, CF.new(100 + i * 40, 200, 0) * CF.Angles(0, -1.25, 0) * CF.Angles(0.1, 0, 0.05), 1.5, root)
 	end
@@ -535,7 +535,7 @@ function Glow.buildHold(Loader: any, parent: any)
 	root.Parent = parent
 	local K = Concepts.kit(root)
 	local AIM = V3.new(1, 0, 0.3)
-	for i, entry in { { 10, "Magmacore" }, { 10, "Stormcore" }, { 7, "Emberite" } } do
+	for i, entry in { { 10, "VolcanicCore" }, { 10, "StormPearl" }, { 7, "Emberite" } } do
 		local feet = V3.new(-13 + (i - 1) * 11, 0, 22)
 		local model, anchors, kind = Glow.gun(Loader, entry[1], entry[2])
 		Concepts.holdModel(K, root, feet, AIM, model, anchors, kind, "aim", Concepts.Outfits[i])

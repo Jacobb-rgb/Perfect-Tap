@@ -190,6 +190,17 @@ Bugs, Design, Music, Code, Art). What matters for us: **Art, UI, VFX, Sound, Mus
 3. **Trading:** golems and ores only (no blasters, no money). ✔
 4. **Leaderboards: 4 boards:** Money per second, Total earned, Artifacts found, and **Most hours played**.
 
+### Ore roster from the owner's picture (owner, 2026-10-18)
+The owner sent docs/art/ores_reference.webp (36 ores on a tiered neon shelf) and chose "everything like the picture":
+names, count, rarities and looks. OreData now has 36 ores: Common Coal, Copper, Tin, Iron, Quartz, Oakwood, Honeycomb;
+Uncommon Leaf Ore, Frostbite, Emberite, Cobalt, Bogwood, Amber; Rare Bronze, Silver, Gold, Jade, Sapphire, Dragon Egg;
+Epic Diamond, Amethyst, Obsidian, Crystal Rose, Storm Pearl, Galaxy Stone; Legendary Royal Aurum, Sunstone, Moonstone,
+Storm Gem, Leaf Gem, Volcanic Core; Mythic Aetherium, Phoenix Feather, Dragon Scale, Celestial Core, Heartstone Shard.
+The two unnamed ores of the picture (the black-gold gem, the violet cluster) took the old names Royal Aurum and
+Aetherium (the owner may rename them). Incomes keep the old per-rarity ranges. Replaced old ores map to a new ore of
+the same rarity (OreData.Renamed; Data/Migrations renames them in saves). Looks: ItemBuilder recipes per ore Id in
+OreShapesLow / OreShapesHigh; picture: scene `ore_showcase` (docs/screenshots/ore_showcase.jpg).
+
 ### Machine roster (owner, 2026-10-17)
 The owner accepted every proposed machine and asked for more: 24 placeable machines (cleaning/sorting, a furnace
 ladder Clay → Brick → Blast → Plasma + Alloy Furnace, Crusher, Crystal Extractor, Restoration Table, Sell Box,
@@ -206,7 +217,7 @@ The deeper you go, the harder the rocks and the better the ores. Plan: docs/plan
 data: src/shared/Config/MineFloors.luau, rocks: src/shared/Builders/RockBuilder.luau.
 1. **5 floors now**, more floors in updates (floor 6 comes with blaster 11 "Coming soon"). Proposal **A** chosen:
    1 Greystone Quarry (blaster 1+) · 2 Ember Caves (3+) · 3 Deep Hollow, re-themed as a crystal lagoon (5+) ·
-   4 Sunken Palace of Kaldrum (7+) · 5 Heartstone Core (9+). Each floor has 6 home ores; all 30 ores exist from launch.
+   4 Sunken Palace of Kaldrum (7+) · 5 Heartstone Core (9+). Each floor has 7 home ores (floor 1: 8); all 36 ores of the owner's roster (2026-10-18) exist from launch.
 2. **Route C:** floors 1–3 stay connected on foot; floors 4–5 only by an **elevator that is bought once with coins**.
 3. **Hoverboards:** 3 styles for coins (each faster) + 2 styles for ~50 Robux each that are **also faster** and have
    special effects (owner: "more benefits").

@@ -73,4 +73,33 @@ return function(T, Loader)
 			T.truthy(blades >= 3, `{tag} blades ({blades})`)
 		end
 	end)
+	T.test("MachineFx: the Robot Arm swings its Arm parts round the Pedestal", function()
+		for level = 0, KitMachines.MaxLevel do
+			local model = KitMachines.build("RobotArm", level)
+			local tag = `RobotArm L{level}`
+			local pedestal = child(model, "Pedestal")
+			T.truthy(pedestal, tag .. " Pedestal")
+			local arms, frontmost = 0, math.huge
+			for _, part in model:GetChildren() do
+				if part.Name == "Arm" and part:IsA("BasePart") then
+					arms += 1
+					frontmost = math.min(frontmost, part.CFrame.Position.Z)
+				end
+			end
+			T.truthy(arms >= 6, tag .. " arm parts (" .. arms .. ")")
+			-- at rest the hand reaches over the front (-Z), so a half turn brings it over the back
+			T.lt(frontmost, pedestal.CFrame.Position.Z - 1, tag .. " hand in front of the pedestal")
+		end
+	end)
+
+	T.test("MachineFx: Splitter / Sorter flippers, the Sorter's scan bar and the Sell Box coin", function()
+		for level = 0, KitMachines.MaxLevel do
+			for _, id in { "Splitter", "Sorter" } do
+				local model = KitMachines.build(id, level)
+				T.truthy(child(model, "Flipper"), `{id} L{level} Flipper`)
+			end
+			T.truthy(child(KitMachines.build("Sorter", level), "ScanBar"), `Sorter L{level} ScanBar`)
+		end
+		T.truthy(child(KitMachines.build("SellBox", 0), "Coin"), "Sell Box Coin")
+	end)
 end

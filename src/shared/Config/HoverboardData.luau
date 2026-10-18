@@ -19,15 +19,16 @@
 	  builds the board under that character, HoverboardController).
 
 	Coin prices sit between the other one-time goals, so a board is always the
-	next nice thing to save for (BlasterData recipes, MineFloors.Elevator):
+	next nice thing to save for. They follow the blaster recipe prices
+	(priceFrom; today's numbers, the balance sim in docs/BALANCE_SIM.md):
 	  blaster 3   2,000     floor 2 opens
-	  BOARD 1     5,000     (Timber Drifter) the first floor-1/2 treat
+	  BOARD 1     5,000     (Timber Drifter) 2.5x blaster 3: the first floor-1/2 treat
 	  blaster 4   15,000
-	  BOARD 2     80,000    (Cart Cruiser) just before blaster 5 / floor 3
+	  BOARD 2     80,000    (Cart Cruiser) 0.8x blaster 5: just before floor 3
 	  blaster 5   100,000   floor 3 opens
-	  elevator    500,000   ("about when players reach floor 3")
 	  blaster 6   700,000
-	  BOARD 3     1,500,000 (Emberglass Glider) 3x the elevator: the floor 3 -> 4 luxury
+	  elevator    3,300,000 (MineFloors.Elevator) 2/3 of blaster 7: before floor 4
+	  BOARD 3     5,000,000 (Emberglass Glider) = blaster 7: a goal past the first hour
 	  blaster 7   5,000,000 floor 4 opens
 	The Robux boards are faster than all of them from the first minute.
 
@@ -39,6 +40,7 @@
 	HoverboardFx.luau (Colors below are the board's palette there).
 ]]
 
+local BlasterData = require(script.Parent.BlasterData)
 local MonetizationConfig = require(script.Parent.MonetizationConfig)
 
 local HoverboardData = {}
@@ -79,13 +81,26 @@ HoverboardData.HipAttribute = "HoverboardHip" -- character attribute: the HipHei
 
 local rgb = Color3.fromRGB
 
+-- Coin prices follow the blaster prices (BlasterData Recipe.Coins), so a blaster re-balance
+-- moves the boards with it: `factor` x the coin price of blaster `level`, rounded to 2 digits.
+function HoverboardData.priceFrom(level: number, factor: number): number
+	local blaster = BlasterData.ByLevel[level]
+	local coins = if blaster and blaster.Recipe then blaster.Recipe.Coins else 0
+	local raw = coins * factor
+	if raw <= 0 then
+		return 0
+	end
+	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
+	return math.floor(raw / step + 0.5) * step
+end
+
 HoverboardData.List = {
 	{
 		Id = "TimberDrifter",
 		Order = 1,
 		Name = "Timber Drifter",
 		Kind = "Coins",
-		Price = 5000,
+		Price = HoverboardData.priceFrom(3, 2.5), -- right after blaster 3 (floor 2)
 		Speed = 23,
 		IgnoresCarrySlow = false,
 		Effect = "None",
@@ -104,7 +119,7 @@ HoverboardData.List = {
 		Order = 2,
 		Name = "Cart Cruiser",
 		Kind = "Coins",
-		Price = 80000,
+		Price = HoverboardData.priceFrom(5, 0.8), -- just before blaster 5 (floor 3)
 		Speed = 27,
 		IgnoresCarrySlow = false,
 		Effect = "None",
@@ -123,7 +138,7 @@ HoverboardData.List = {
 		Order = 3,
 		Name = "Emberglass Glider",
 		Kind = "Coins",
-		Price = 1500000,
+		Price = HoverboardData.priceFrom(7, 1), -- a goal past the first hour (balance sim)
 		Speed = 31,
 		IgnoresCarrySlow = false,
 		Effect = "None",

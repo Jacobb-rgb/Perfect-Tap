@@ -1,6 +1,107 @@
 {
- "factory_overview": { "scene": "factory", "preset": "Surface", "sunDir": [-0.45, 0.7, -0.55], "position": [-30, 46, -52], "target": [0, 0, 2], "fov": 48, "shadowExtent": 90 },
- "factory_power": { "scene": "factory", "preset": "Surface", "sunDir": [-0.45, 0.7, -0.55], "position": [26, 26, 52], "target": [0, 3, 12], "fov": 50, "shadowExtent": 90 },
- "factory_front": { "scene": "factory", "preset": "Surface", "sunDir": [-0.45, 0.7, -0.55], "position": [-6, 20, -38], "target": [0, 2, -8], "fov": 50, "shadowExtent": 90 },
- "factory_max_overview": { "scene": "factory_max", "preset": "Surface", "sunDir": [-0.45, 0.7, -0.55], "position": [-30, 46, -52], "target": [0, 0, 2], "fov": 48, "shadowExtent": 90 }
+ "factory_overview": {
+  "scene": "factory",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ],
+  "position": [
+   -30,
+   46,
+   -52
+  ],
+  "target": [
+   0,
+   0,
+   2
+  ],
+  "fov": 48,
+  "shadowExtent": 90
+ },
+ "factory_power": {
+  "scene": "factory",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ],
+  "position": [
+   26,
+   26,
+   52
+  ],
+  "target": [
+   0,
+   3,
+   12
+  ],
+  "fov": 50,
+  "shadowExtent": 90
+ },
+ "factory_front": {
+  "scene": "factory",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ],
+  "position": [
+   -6,
+   20,
+   -38
+  ],
+  "target": [
+   0,
+   2,
+   -8
+  ],
+  "fov": 50,
+  "shadowExtent": 90
+ },
+ "factory_max_overview": {
+  "scene": "factory_max",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ],
+  "position": [
+   -30,
+   46,
+   -52
+  ],
+  "target": [
+   0,
+   0,
+   2
+  ],
+  "fov": 48,
+  "shadowExtent": 90
+ },
+ "factory_arm": {
+  "scene": "factory",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   -0.55
+  ],
+  "position": [
+   -8,
+   10,
+   -17
+  ],
+  "target": [
+   -13.5,
+   3.5,
+   -6
+  ],
+  "fov": 40,
+  "shadowExtent": 60
+ }
 }

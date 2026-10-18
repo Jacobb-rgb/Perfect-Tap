@@ -735,13 +735,13 @@ local function stepRide(dt: number)
 	local t = state.T
 	if not state.Thud and t >= ride.Close then
 		state.Thud = true
-		Sfx.play("Place", nil, 0.8)
+		Sfx.play("DoorThud")
 		Sfx.loop("MachineHum", true)
 	end
 	if ElevatorRideView.shouldOpen(ride, t, state.Arrived) then
 		ride.OpenAt = t
 		Sfx.loop("MachineHum", false)
-		Sfx.play("Discovery")
+		Sfx.play("ElevatorDing")
 	end
 	local number = ElevatorRideView.numberAt(ride, t)
 	if number ~= state.Number then

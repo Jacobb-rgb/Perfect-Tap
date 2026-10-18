@@ -503,6 +503,7 @@ function RockFx.shatter(position: Vector3, crust: Color3, glow: Color3, floor: n
 		if giant then 0.6 else 0.3
 	)
 	Sfx.play("NodeShatter", position, if giant then 0.7 else 1)
+	Sfx.play("RockBreak", position, if giant then 0.75 else 1)
 	Sfx.play("Crusher", position, if giant then 0.7 else 1.15)
 	if RockFx.wasMine(position, r) then
 		CameraShake.add(if giant then 0.6 else 0.4)

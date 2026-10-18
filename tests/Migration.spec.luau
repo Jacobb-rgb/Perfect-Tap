@@ -2,6 +2,7 @@
 -- machine or well-formed item is ever deleted (retired machines are refunded
 -- and their contents go to the pen).
 return function(T, Loader)
+	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
@@ -208,10 +209,57 @@ return function(T, Loader)
 	T.test("Migration v3: blaster level clamped, known ore kept", function()
 		local data = ProfileStore.deepCopy(DataTemplate)
 		data.BlasterLevel = 99.7
-		data.BlasterOre = "Ruby"
+		data.BlasterOre = "Sapphire"
 		Migrations.run(data)
 		T.eq(data.BlasterLevel, 10)
-		T.eq(data.BlasterOre, "Ruby")
+		T.eq(data.BlasterOre, "Sapphire")
+	end)
+
+	T.test("Migration: ores the owner's picture replaced take their new ids everywhere", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.BlasterOre = "Ruby"
+		data.Storage = { { K = "Clean", O = "Stormcore", G = "Pristine" }, { K = "Raw", O = "Coal" } }
+		data.Podiums = { "Clean|Prismite|Flawless|", "", "Clean|Gold|Rough|", "" }
+		data.PlacedMachines = {
+			{
+				Id = "ClayFurnace",
+				X = 1,
+				Z = 1,
+				R = 0,
+				In = { { K = "Crushed", O = "Azurium" } },
+				Out = { { K = "Ingot", O = "Emerald" } },
+			},
+		}
+		data.Train.Cargo = { { K = "Raw", O = "Magmacore" } }
+		data.Foundry = { Stock = { { K = "Ingot", O = "Solarite" } } }
+		data.Discovered = { Ruby = true, Coal = true, Bronze = true, Skyglass = true }
+		data.KeepList = { Voidstone = true, Bloodstone = false, GalaxyStone = true }
+		Migrations.run(data)
+		T.eq(data.BlasterOre, "Bronze")
+		T.eq(data.Storage[1].O, "StormPearl", "pen item")
+		T.eq(data.Podiums[1], "Clean|PhoenixFeather|Flawless|", "podium key")
+		T.eq(data.Podiums[3], "Clean|Gold|Rough|", "kept ores stay")
+		local machine = data.PlacedMachines[1]
+		T.eq(machine.In[1].O, "DragonEgg", "machine queue")
+		T.eq(machine.Out[1].O, "Jade", "machine output")
+		T.eq(data.Train.Cargo[1].O, "VolcanicCore", "train cargo")
+		T.eq(data.Foundry.Stock[1].O, "Sunstone", "Foundry stock")
+		T.eq(data.Discovered.Ruby, nil)
+		T.eq(data.Discovered.Bronze, true)
+		T.eq(data.Discovered.StormGem, true, "Skyglass -> Storm Gem")
+		T.eq(data.KeepList.RoyalAurum, true, "Voidstone -> Royal Aurum")
+		T.eq(data.KeepList.GalaxyStone, true, "an existing choice for the new ore wins")
+		T.eq(data.KeepList.Bloodstone, nil)
+		for old, new in OreData.Renamed do
+			T.truthy(OreData.ById[new], old .. " -> a real ore")
+			T.eq(OreData.ById[old], nil, old .. " is gone")
+			T.eq(OreData.current(old), new)
+		end
+		T.eq(OreData.current("Coal"), "Coal")
+		T.eq(OreData.current("Unobtainium"), nil)
+		local copy = ProfileStore.deepCopy(data)
+		Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
 	end)
 
 	T.test("Migration: train levels, cargo and trip times are cleaned", function()
@@ -280,7 +328,7 @@ return function(T, Loader)
 			IronBox = { Speed = 1 },
 			[7] = { Speed = 1 },
 		}
-		data.KeepList = { Gold = true, Ruby = "yes", Unobtainium = true, Diamond = false, [3] = true, Heartstone = true }
+		data.KeepList = { Gold = true, Silver = "yes", Unobtainium = true, Diamond = false, [3] = true, Heartstone = true }
 		data.KeepMode = "Everything"
 		local stock = {}
 		for _ = 1, GameConfig.MaxFoundryStock + 3 do
@@ -291,7 +339,7 @@ return function(T, Loader)
 		table.insert(stock, 3, { K = "Ingot", O = "Unobtainium" }) -- unknown ore: to the pen
 		table.insert(stock, 4, { K = "Ingot", O = "Gold", G = "Shiny" }) -- unknown grade: to the pen
 		table.insert(stock, 5, { K = "Ingot", O = "Gold", R = "Dagger" }) -- a recipe on an ingot: to the pen
-		table.insert(stock, 6, { K = "Ingot", O = "Ruby" })
+		table.insert(stock, 6, { K = "Ingot", O = "Sapphire" })
 		data.Foundry = { Stock = stock, Extra = "kept" }
 		data.Upgrades.PenAutomation = 7.5
 		local report = Migrations.run(data)
@@ -317,7 +365,7 @@ return function(T, Loader)
 		local keep = data.KeepList
 		T.eq(keep.Gold, true)
 		T.eq(keep.Heartstone, true)
-		T.eq(keep.Ruby, nil, "only booleans count")
+		T.eq(keep.Silver, nil, "only booleans count")
 		T.eq(keep.Diamond, false, "an explicit 'send on' choice is kept")
 		T.eq(keep.Unobtainium, nil, "unknown ore")
 		T.eq(keep[3], nil)
@@ -326,7 +374,7 @@ return function(T, Loader)
 		local kept = data.Foundry.Stock
 		T.truthy(kept == stock, "same Stock table")
 		T.eq(#kept, GameConfig.MaxFoundryStock, "capped")
-		T.eq(kept[1].O, "Ruby", "the first good ingot (no grade is fine)")
+		T.eq(kept[1].O, "Sapphire", "the first good ingot (no grade is fine)")
 		for _, item in kept do
 			T.eq(item.K, "Ingot")
 		end

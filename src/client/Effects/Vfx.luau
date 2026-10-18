@@ -208,9 +208,19 @@ type BeamHandle = {
 	End: Attachment,
 	Outer: Beam,
 	Inner: Beam,
+	Energy: Beam, -- sparkles streaming along the beam (BeamStyle.Energy)
 	Light: PointLight,
 	HideAt: number?,
+	EnergyOn: boolean,
 }
+
+--[[
+	How thick and bright a beam is (Config/BlasterFeel tiers via
+	Effects/BlasterFx.beamStyle). Pulse (0..1) swells it for a moment on a hit.
+]]
+export type BeamStyle = { Width: number, Core: number, Light: number, Energy: boolean, Pulse: number }
+
+local DEFAULT_STYLE: BeamStyle = { Width = 0.5, Core = 0.16, Light = 1.6, Energy = false, Pulse = 0 }
 
 local beams: { [any]: BeamHandle } = {}
 local beamCount = 0
@@ -249,8 +259,20 @@ local function newBeam(): BeamHandle
 		return b
 	end
 	local outer = beam("Glow", 0.5, 0.3)
+	outer.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 0.35) })
 	local inner = beam("Core", 0.16, 0)
 	inner.Color = ColorSequence.new(Color3.new(1, 1, 1))
+	-- the top levels: sparkles running from the muzzle to the hit
+	local energy = beam("Energy", 0.6, 0.1)
+	energy.Texture = SPARKLE
+	energy.TextureMode = Enum.TextureMode.Static
+	energy.TextureLength = 2.2
+	energy.TextureSpeed = 2.6 -- from the muzzle (Attachment0) toward the hit
+	energy.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(0.15, 0.05),
+		NumberSequenceKeypoint.new(1, 0.2),
+	})
 	local light = Instance.new("PointLight")
 	light.Range = 9
 	light.Brightness = 1.6
@@ -264,14 +286,17 @@ local function newBeam(): BeamHandle
 		End = endAttachment,
 		Outer = outer,
 		Inner = inner,
+		Energy = energy,
 		Light = light,
 		HideAt = nil,
+		EnergyOn = false,
 	}
 end
 
 local function showBeam(handle: BeamHandle, on: boolean)
 	handle.Outer.Enabled = on
 	handle.Inner.Enabled = on
+	handle.Energy.Enabled = on and handle.EnergyOn
 	handle.Light.Enabled = on
 end
 
@@ -280,8 +305,10 @@ end
 	there is none) to `to`. With `holdSeconds` it hides itself unless it is
 	set again in time (beams of other players come from the server a few
 	times a second). Call it every frame for your own beam: the width flickers.
+	`style` = the blaster's thickness, light and Energy stream (default: the
+	plain beam).
 ]]
-function Vfx.setBeam(key: any, muzzle: Attachment?, from: Vector3, to: Vector3, color: Color3, holdSeconds: number?)
+function Vfx.setBeam(key: any, muzzle: Attachment?, from: Vector3, to: Vector3, color: Color3, holdSeconds: number?, style: BeamStyle?)
 	local handle = beams[key]
 	if not handle then
 		if beamCount >= BEAM_LIMIT then
@@ -300,21 +327,31 @@ function Vfx.setBeam(key: any, muzzle: Attachment?, from: Vector3, to: Vector3, 
 	end
 	h.Anchor.CFrame = CFrame.new(to)
 	local start = h.Start
+	local origin = start
 	if muzzle and muzzle:IsDescendantOf(Workspace) then
-		h.Outer.Attachment0 = muzzle
-		h.Inner.Attachment0 = muzzle
+		origin = muzzle
 	else
 		start.WorldPosition = from
-		h.Outer.Attachment0 = start
-		h.Inner.Attachment0 = start
 	end
-	local flicker = 0.85 + math.random() * 0.3
-	h.Outer.Width0 = 0.5 * flicker
-	h.Outer.Width1 = 0.36 * flicker
-	h.Inner.Width0 = 0.16 * flicker
-	h.Inner.Width1 = 0.12 * flicker
-	h.Outer.Color = ColorSequence.new(color)
+	h.Outer.Attachment0 = origin
+	h.Inner.Attachment0 = origin
+	h.Energy.Attachment0 = origin
+	local st = style or DEFAULT_STYLE
+	local swell = 1 + 0.35 * math.clamp(st.Pulse, 0, 1)
+	local flicker = (0.88 + math.random() * 0.24) * swell
+	h.Outer.Width0 = st.Width * flicker
+	h.Outer.Width1 = st.Width * 0.72 * flicker
+	h.Inner.Width0 = st.Core * flicker
+	h.Inner.Width1 = st.Core * 0.75 * flicker
+	h.Outer.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.12), color)
 	h.Light.Color = color
+	h.Light.Brightness = st.Light * (1 + 0.25 * math.clamp(st.Pulse, 0, 1))
+	h.EnergyOn = st.Energy
+	if st.Energy then
+		h.Energy.Width0 = st.Width * 1.25
+		h.Energy.Width1 = st.Width * 0.9
+		h.Energy.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(color, 0.35))
+	end
 	showBeam(h, true)
 	if holdSeconds then
 		local hideAt = os.clock() + holdSeconds

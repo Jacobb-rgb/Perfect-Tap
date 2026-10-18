@@ -41,6 +41,7 @@ local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
+local BlasterGallery = require(script.Parent.BlasterGallery)
 
 local C = Style.C
 local K = Common.Colors
@@ -823,12 +824,14 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	-- a second anvil to the side (a dark silhouette against the coal bed's glow)
 	Style.block(m, at(3.6, PLINTH_TOP + 0.5, 1.4), Vector3.new(1.1, 1.0, 1.1), C.WoodDark, nil, Style.solid())
 	Style.block(m, at(3.6, PLINTH_TOP + 1.3, 1.4), Vector3.new(2.0, 0.6, 0.9), IRON_DARK, nil, Style.tiny())
-	-- tool rack on the right wall (viewer's right = local -X): a board with hammers and a pick
-	Style.block(m, at(-(DOOR_HALF - 0.12), PLINTH_TOP + 4.4, -2.5), Vector3.new(0.2, 2.2, 4.4), C.Wood, nil, Style.tiny())
-	for k, z in { -4.1, -2.5, -0.9 } do
+	-- tool rack on the right wall (viewer's right = local -X): a board with hammers and a pick,
+	-- up at the back (the blaster gallery's racks take the rest of the side walls)
+	local rack = BlasterGallery.toolRackSpot()
+	Style.block(m, at(rack.X, rack.Y, rack.Z), Vector3.new(0.2, 2.2, 4.4), C.Wood, nil, Style.tiny())
+	for k, dz in { -1.6, 0, 1.6 } do
 		local tool = Style.icon(
 			m,
-			at(-(DOOR_HALF - 0.35), PLINTH_TOP + 4.2, z) * CFrame.Angles(0, -math.pi / 2, 0),
+			at(rack.X + 0.23, rack.Y - 0.2, rack.Z + dz) * CFrame.Angles(0, -math.pi / 2, 0),
 			if k == 2 then "Pickaxe" else "Hammer",
 			1.6,
 			C.IronLight,
@@ -838,6 +841,8 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 			part.Name = "RackTool"
 		end
 	end
+	-- the blaster gallery: LV 1-10 and LV 11 "coming soon" on racks along the side walls
+	BlasterGallery.build(m, frame)
 	-- two hanging lamps from the hall beams (amber core under a dark cap)
 	for _, s in { -1, 1 } do
 		Style.block(m, at(s * 3.4, DOOR_TOP - 0.95, -3), Vector3.new(0.15, 1.9, 0.15), C.Iron, nil, Style.tiny())

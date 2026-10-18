@@ -202,7 +202,7 @@ return function(T, Loader)
 	end)
 
 	T.test("scoring: touch players get extra line tolerance", function()
-		local p = Patterns.generate("Azurium", 11)
+		local p = Patterns.generate("DragonEgg", 11)
 		local mouse = Scoring.score(p, submission(p, 0.5, 1.1, 0.2, { input = "Mouse" }))
 		local touch = Scoring.score(p, submission(p, 0.5, 1.1, 0.2, { input = "Touch" }))
 		T.lt(mouse.Chisel, touch.Chisel, "touch is more lenient")

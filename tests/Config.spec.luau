@@ -318,7 +318,7 @@ return function(T, Loader)
 		T.lt(GameConfig.MaxLooseItemsPerPlayer - GameConfig.LooseHeadroom, GameConfig.MaxLooseItemsPerPlayer)
 		for _, name in { "Gulp", "MachineDone", "MachineHum", "Reject", "CoinBurst", "BuildRotate" } do
 			local sound = SoundConfig[name]
-			T.truthy(sound and sound.Id:sub(1, 11) == "rbxasset://", "sound " .. name)
+			T.truthy(sound and (sound.Id:sub(1, 11) == "rbxasset://" or sound.Id:match("^rbxassetid://%d+$") ~= nil), "sound " .. name)
 		end
 		T.truthy(SoundConfig.MachineHum.Looped, "hum loops")
 		local limits = {
