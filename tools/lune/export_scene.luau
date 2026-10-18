@@ -709,6 +709,53 @@ if sceneName == "world" and process.args[2] == "yard" then
 	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
 end
 
+---------------------------------------------------------------- scenes "yard_today" / "yard_style_a" (preview only)
+-- `lune run tools/lune/export_scene.luau world yard_today` (or `yard_style_a`): the yard
+-- scene above with every plot's Foundry building as FoundryService builds it at server
+-- start (-> build/preview/yard_today.json); yard_style_a also swaps plot 5's walls, Ore
+-- Pen, podiums, Foundry and train stop for the machines' style A proposal and marks the
+-- museum's footprint (tools/lune/lib/plot_style_a.luau, prints the part counts today vs
+-- style A) -> build/preview/yard_style_a.json. Shots: tools/preview/plot_style_a_shots.json,
+-- comparison sheets: node tools/preview/compare_style_a.mjs.
+if sceneName == "world" and (process.args[2] == "yard_today" or process.args[2] == "yard_style_a") then
+	local mode = process.args[2]
+	local YardPreview = require("./lib/yard_preview")
+	YardPreview.build(Loader, workspace)
+	local StyleA = require("./lib/plot_style_a")
+	StyleA.init(Loader)
+	local rackLevel = 3
+	StyleA.setupFoundries(workspace, rackLevel)
+	local plotId = YardPreview.Plot
+	if mode == "yard_style_a" then
+		print(`Part counts on plot {plotId} (today -> style A):`)
+		local total = { 0, 0 }
+		for _, c in StyleA.apply(workspace, plotId, rackLevel) do
+			print(string.format("  %-50s %4d -> %4d", c.Piece, c.Today, c.StyleA))
+			total[1] += c.Today
+			total[2] += c.StyleA
+		end
+		print(string.format("  %-50s %4d -> %4d", "Total", total[1], total[2]))
+	end
+	-- the SurfaceGui frames of plot 5's yard pieces and receiver, painted for the renderer
+	local plot = workspace:FindFirstChild("Map"):FindFirstChild("Plots"):FindFirstChild("Plot_" .. plotId)
+	local Gallery = require("./lib/machines_gallery")
+	Gallery.paintGuis(Loader, workspace, plot:FindFirstChild("Yard"))
+	Gallery.paintGuis(Loader, workspace, plot:FindFirstChild("FoundryReceiver"))
+	local tops = {}
+	for _, top in plot:GetDescendants() do
+		if top.Name == "ChimneyTop" and top:FindFirstChild("Smoke") then
+			table.insert(tops, top)
+		end
+	end
+	for _, top in tops do
+		Gallery.smoke(Loader, workspace, top, 0.8)
+	end
+	local styleScene = Export.collect(workspace)
+	styleScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/" .. mode .. ".json", serde.encode("json", styleScene))
+	print(string.format("Exported %s: %d parts, %d lights", mode, #styleScene.parts, #styleScene.lights))
+end
+
 ---------------------------------------------------------------- scene "penboard" (WP-CleanerBox)
 -- `lune run tools/lune/export_scene.luau world penboard`: the world above plus the
 -- Pen Automation sorting board at plot 5's Ore Pen gate -> build/preview/penboard.json

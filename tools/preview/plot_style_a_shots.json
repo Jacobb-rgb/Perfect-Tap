@@ -1,0 +1,12 @@
+{
+ "psa_overview_today": { "scene": "yard_today", "position": [58, 48, 44], "target": [122, 0, 88], "fov": 52, "preset": "Surface", "shadowExtent": 140 },
+ "psa_overview_a": { "scene": "yard_style_a", "position": [58, 48, 44], "target": [122, 0, 88], "fov": 52, "preset": "Surface", "shadowExtent": 140 },
+ "psa_pen_today": { "scene": "yard_today", "position": [122, 13, 102], "target": [141, 0, 96], "fov": 60, "preset": "Surface", "shadowExtent": 80 },
+ "psa_pen_a": { "scene": "yard_style_a", "position": [122, 13, 102], "target": [141, 0, 96], "fov": 60, "preset": "Surface", "shadowExtent": 80 },
+ "psa_podiums_today": { "scene": "yard_today", "position": [122, 9, 64], "target": [146, 3, 74], "fov": 58, "preset": "Surface", "shadowExtent": 80 },
+ "psa_podiums_a": { "scene": "yard_style_a", "position": [122, 9, 64], "target": [146, 3, 74], "fov": 58, "preset": "Surface", "shadowExtent": 80 },
+ "psa_train_today": { "scene": "yard_today", "position": [180, 14, 70], "target": [156, 2, 88], "fov": 58, "preset": "Surface", "shadowExtent": 90 },
+ "psa_train_a": { "scene": "yard_style_a", "position": [180, 14, 70], "target": [156, 2, 88], "fov": 58, "preset": "Surface", "shadowExtent": 90 },
+ "psa_entrance_today": { "scene": "yard_today", "position": [66, 9, 98], "target": [80, 2.5, 88], "fov": 55, "preset": "Surface", "shadowExtent": 70 },
+ "psa_entrance_a": { "scene": "yard_style_a", "position": [66, 9, 98], "target": [80, 2.5, 88], "fov": 55, "preset": "Surface", "shadowExtent": 70 }
+}
