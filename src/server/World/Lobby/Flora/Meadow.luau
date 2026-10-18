@@ -255,6 +255,11 @@ Meadow.ForgeBack = { Min = Vector3.new(-30, 0, -120), Max = Vector3.new(30, 0, -
 Meadow.KoiBridge = { Min = Vector3.new(-32, 0, 20), Max = Vector3.new(32, 0, 80) }
 Meadow.VaultZone = { Min = Vector3.new(-72, 0, 58), Max = Vector3.new(72, 0, 160) }
 Meadow.MaxPonds = 5
+Meadow.MinPonds = 3 -- tests/Meadow.spec.luau (owner: "more ponds")
+-- the size a pond shrinks to where its drawn size finds no room (the town's
+-- lawns are full: the stream, the plaza life and the outcrop clearances took
+-- the old spots)
+Meadow.SmallPond = Vector2.new(7.5, 6.5)
 Meadow.MaxLobbyTrees = 22
 Meadow.MaxMountainTrees = 40
 -- The pond the hamlet lane (LobbyLayout HamletLane / ToMap) now leads to,
@@ -443,10 +448,11 @@ end
 local function ponds(parent: Instance, index: Index, rng: Rng.Rng)
 	local m = Style.model("Ponds", parent)
 	local placed: { Vector3 } = {}
+	local made = 0
 	local function try(p: Vector3, sx: number, sz: number): boolean
 		local r = math.max(sx, sz) / 2 + 1.5
 		-- (ponds are low: unlike the trees they may sit in the core's lawns)
-		if not Meadow.allowed(p, r) or zoned(p, r, { Meadow.KoiBridge, Meadow.VaultZone }) or nearRail(p, r) then
+		if not Meadow.allowed(p, r) or zoned(p, r, { Meadow.KoiBridge, Meadow.VaultZone, Meadow.ForgeBack }) or nearRail(p, r) then
 			return false
 		end
 		if not Meadow.free(index, p, r, 4) then
@@ -459,28 +465,36 @@ local function ponds(parent: Instance, index: Index, rng: Rng.Rng)
 		end
 		track(index, pond(m, p, sx, sz, rng))
 		table.insert(placed, p)
+		made += 1
 		return true
 	end
-	try(Meadow.LanePond.Center, Meadow.LanePond.Size.X, Meadow.LanePond.Size.Y)
+	if not try(Meadow.LanePond.Center, Meadow.LanePond.Size.X, Meadow.LanePond.Size.Y) then
+		-- the stream's pond (Flora/Stream) is there now: keep the others as far off it
+		table.insert(placed, Meadow.LanePond.Center)
+	end
+	-- a fine grid: the free lawn left between the town's pieces comes in small windows
 	local spots: { Vector3 } = {}
 	local x = Meadow.Area.Min.X + 10
 	while x < Meadow.Area.Max.X - 10 do
 		local z = Meadow.Area.Min.Z + 10
 		while z < Meadow.Area.Max.Z - 10 do
-			table.insert(spots, Vector3.new(x + rng:range(-2, 2), 0, z + rng:range(-2, 2)))
-			z += 6
+			table.insert(spots, Vector3.new(x + rng:range(-1, 1), 0, z + rng:range(-1, 1)))
+			z += 3
 		end
-		x += 6
+		x += 3
 	end
 	for i = #spots, 2, -1 do
 		local j = rng:int(1, i)
 		spots[i], spots[j] = spots[j], spots[i]
 	end
 	for _, p in spots do
-		if #placed >= Meadow.MaxPonds then
+		if made >= Meadow.MaxPonds then
 			break
 		end
-		try(p, rng:range(9, 13), rng:range(7, 9))
+		local sx, sz = rng:range(9, 13), rng:range(7, 9)
+		if not try(p, sx, sz) then
+			try(p, Meadow.SmallPond.X, Meadow.SmallPond.Y)
+		end
 	end
 	return m
 end

@@ -1,7 +1,7 @@
 --[[
 	Flora/Meadow: nothing of the meadow (ponds, trees, fences, lawn) grows
-	where an ore rock grows at runtime (the node spawns), and it stays pure
-	decoration (non-collide, no shadows, no lights).
+	where an ore rock grows at runtime (the node spawns), it stays pure
+	decoration (non-collide, no shadows, no lights), and its ponds are there.
 ]]
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
@@ -31,5 +31,24 @@ return function(T, Loader)
 			end
 		end
 		T.eq(lights, 0, "no lights")
+	end)
+
+	T.test("meadow: the ponds are there (owner: more ponds), spread out", function()
+		local Meadow = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Meadow")
+		local ponds = meadow:FindFirstChild("Ponds")
+		local centers = {}
+		for _, pond in (if ponds then ponds:GetChildren() else {}) do
+			local water = pond:FindFirstChild("Water")
+			if water then
+				table.insert(centers, water.CFrame.Position)
+			end
+		end
+		T.truthy(#centers >= Meadow.MinPonds and #centers <= Meadow.MaxPonds, `{#centers} meadow ponds`)
+		for i, a in centers do
+			T.truthy((Vector3.new(a.X, 0, a.Z) - Meadow.LanePond.Center).Magnitude >= 32, `pond {i} keeps off the stream's pond`)
+			for j = i + 1, #centers do
+				T.truthy((a - centers[j]).Magnitude >= 32, `ponds {i} and {j} are spread out`)
+			end
+		end
 	end)
 end
