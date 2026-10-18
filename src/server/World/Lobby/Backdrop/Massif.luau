@@ -26,6 +26,8 @@ local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
+local Spectrum = require(script.Parent.Spectrum)
+local Spires = require(script.Parent.Spires)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -83,34 +85,49 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 	local rock = Style.model("Rock", m)
 	local decor = Style.model("Ledges", m)
 	local columns: { Column } = {}
+	local crng = Rng.new("Backdrop/Spectrum")
 	local south = Vector3.new(0, 0, 1)
 
 	local function column(x0: number, x1: number, z0: number, z1: number, top: number, band: string, cap: string?, accents: number?)
 		local capKind = cap or "Grass"
+		-- (shade() always runs so every theme keeps the same column shapes)
+		local color = shade(rng, band)
+		local accentColors: { Color3 }? = nil
+		local layers: ((Instance, Vector3, Vector3) -> Part)? = nil
+		local tint: Color3? = nil
+		if Spectrum.colored() then
+			color = Spectrum.color((x0 + x1) / 2, top, crng)
+			accentColors = { color:Lerp(Color3.new(1, 1, 1), 0.22), color:Lerp(Color3.new(0, 0, 0), 0.22) }
+			layers = function(parent: Instance, min: Vector3, max: Vector3): Part
+				return Spectrum.stack(parent, min, max, crng, Style.solid())
+			end
+			-- the high back tiers (and every ledge in Candy) get a pale lit top
+			local high = band == "B3" or band == "B4"
+			if capKind ~= "None" and (high or Spectrum.Theme == "Candy") then
+				tint = Spectrum.tint(color)
+			end
+		end
 		Kit.column(rock, x0, z0, x1, z1, bottomFor(x0, x1), top, rng, {
-			Color = shade(rng, band),
+			Color = color,
 			Cap = capKind,
 			Band = band ~= "B3" and band ~= "B4",
 			Front = if (accents or 0) > 0 then south else nil,
 			Accents = accents,
+			AccentColors = accentColors,
+			Layers = layers,
+			Tint = tint,
 		})
 		local front = math.max(z0, z1)
 		table.insert(columns, { x0 = x0, x1 = x1, z0 = front, z1 = math.min(z0, z1), top = top, band = band })
-		-- mossy grass drips over the front edge of the grassy ledges the town sees
+		-- mossy grass drips (or tinted icing) over the front edge of the ledges the town sees
 		if capKind == "Grass" and band ~= "B4" and x1 - x0 > 4 then
 			for _ = 1, if x1 - x0 > 10 then 2 else 1 do
 				local w = rng:range(2.4, math.min(5.5, (x1 - x0) * 0.45))
 				-- (never below the cave roof: the caves run under the massif)
 				local h = math.min(rng:range(2.4, 6), top + 0.7 - (CAVE_ROOF + 0.5))
 				local x = rng:range(x0 + w / 2 + 0.4, x1 - w / 2 - 0.4)
-				Style.block(
-					decor,
-					CFrame.new(x, top + 0.7 - h / 2, front + 0.55),
-					Vector3.new(w, h, 0.9),
-					Style.vary(if rng:chance(0.55) then C.Grass else C.GrassDark, rng, 0.05),
-					nil,
-					Style.tiny()
-				)
+				local moss = Style.vary(if rng:chance(0.55) then C.Grass else C.GrassDark, rng, 0.05)
+				Style.block(decor, CFrame.new(x, top + 0.7 - h / 2, front + 0.55), Vector3.new(w, h, 0.9), tint or moss, nil, Style.tiny())
 			end
 		end
 	end
@@ -480,6 +497,10 @@ function Massif.build(parent: Instance, rng: Rng.Rng): Model
 		Style.lantern(decor, CFrame.new(x0 - 1, y, z + 4), { Kind = "Post", Height = 6 })
 		Style.lantern(decor, CFrame.new(100, y, z + 4), { Kind = "Post", Height = 6 })
 		Style.crate(decor, CFrame.new(x0 + 2, y, z - 4), rng, 2.4)
+	end
+
+	if Spectrum.spires() then
+		Spires.build(m, Rng.new("Backdrop/Spires"))
 	end
 
 	Style.streaming(m, "Lod")

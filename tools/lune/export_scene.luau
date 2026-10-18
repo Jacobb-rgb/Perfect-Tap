@@ -129,6 +129,8 @@ elseif sceneName == "kenney_check" then -- the Kenney Blaster Kit shapes rebuilt
 	require("./lib/blaster_kenney").buildCheck(Loader, workspace)
 elseif sceneName == "blaster_kenney" then -- the ten levels: Kenney shapes with the Ore Glow skins
 	require("./lib/blaster_kenney").build(Loader, workspace)
+elseif sceneName == "horizon_kenney" then -- Kenney kit models rebuilt from boxes for the horizon (tools/lune/lib/horizon_gallery.luau)
+	require("./lib/horizon_gallery").build(Loader, workspace)
 elseif sceneName == "kit_check" then -- Space Station / Mini Dungeon / City pieces rebuilt from parts (tools/lune/lib/kenney_kit.luau)
 	require("./lib/kenney_kit").buildCheck(Loader, workspace)
 elseif sceneName == "vault_game" then -- the in-game Vault lobby package at its place (tools/lune/lib/vault_game.luau)
@@ -182,6 +184,11 @@ elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Found
 elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays (tools/lune/lib/tech_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop window overlays (tools/lune/lib/vault_shop_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "gameplay" then

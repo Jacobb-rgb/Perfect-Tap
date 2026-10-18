@@ -28,6 +28,7 @@ local ORDER = {
 	"FoundryController",
 	"TechShopController",
 	"ElevatorController",
+	"VaultController", -- the Blaster Vault shop and its crate opening
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
 }

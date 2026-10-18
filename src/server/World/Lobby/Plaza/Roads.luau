@@ -130,12 +130,86 @@ local function chevrons(m: Model, s: Common.Strip)
 	end
 end
 
+--[[
+	The main roads (the two plot roads and the rim road; owner 2026-10-18:
+	"make the roads cooler"): stone-paved like the cobble roads, with a dark
+	kerb along both edges (broken where another road or path joins) and a
+	small glowing amber stud on the kerb every StudEvery studs, so the roads
+	light up at sunset like the plaza's neon walkways.
+]]
+Roads.StudEvery = 12
+Roads.KerbColor = Color3.fromRGB(70, 66, 74)
+local function roadEdges(parent: Instance, s: Common.Strip, r: Rng.Rng)
+	local m = Style.model(s.Id .. "Edges", parent)
+	local delta = Vector3.new(s.To.X - s.From.X, 0, s.To.Z - s.From.Z)
+	local length = delta.Magnitude
+	local dir = delta / length
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local half = s.Width / 2
+	local y = (s.Lift or 0) + 0.2
+	for _, side in { -1, 1 } do
+		-- kerb runs: skip where another strip meets this edge
+		local runs: { { number } } = {}
+		local start: number? = nil
+		local t = -half
+		while t <= length + half + 0.01 do
+			local p = s.From + dir * t + right * side * (half + 0.4)
+			local joined = onPlaza(p, 0.5)
+			for _, other in Common.strips() do
+				if other.Id ~= s.Id and LobbyLayout.distanceToStrip(other.From, other.To, other.Width, p) < 0.6 then
+					joined = true
+					break
+				end
+			end
+			if not joined and not start then
+				start = t
+			elseif joined and start then
+				table.insert(runs, { start, t - 0.5 })
+				start = nil
+			end
+			t += 0.5
+		end
+		if start then
+			table.insert(runs, { start, length + half })
+		end
+		for _, run in runs do
+			local a, b = run[1], run[2]
+			if b - a < 1.5 then
+				continue
+			end
+			local mid = s.From + dir * ((a + b) / 2) + right * side * (half + 0.4)
+			local frame = CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(mid.X, y, mid.Z) + dir)
+			local kerb = Style.block(m, frame, Vector3.new(0.8, 0.4, b - a), Style.vary(Roads.KerbColor, r, 0.04), nil, Style.tiny())
+			kerb.Name = "Kerb"
+			-- glowing studs along the kerb
+			local count = math.floor((b - a) / Roads.StudEvery)
+			for i = 1, count do
+				local tt = a + (b - a) * i / (count + 1)
+				local q = s.From + dir * tt + right * side * (half + 0.4)
+				local stud = Style.block(
+					m,
+					CFrame.lookAt(Vector3.new(q.X, y + 0.24, q.Z), Vector3.new(q.X, y + 0.24, q.Z) + dir),
+					Vector3.new(0.45, 0.1, 0.9),
+					Common.Colors.Amber,
+					Enum.Material.Neon,
+					Style.tiny()
+				)
+				stud.Name = "RoadStud"
+			end
+		end
+	end
+	return m
+end
+
 -- Walkways that leave the plaza rim head-on: a threshold ramp bridges the
 -- step from the plaza floor down to their panels.
 local THRESHOLDS = { SouthRoad = true, EastSpur = true, WestSpur = true, ToWheel = true, ToFossil = true }
 
 local function paveAll(parent: Instance, rng: Rng.Rng)
 	local m = Style.model("Roads", parent)
+	-- kerbs and studs of the main roads (their own model: the Roads model
+	-- holds exactly one strip model per road segment)
+	local edges = Style.model("RoadEdges", parent)
 	for _, s in Common.strips() do
 		local cobble = s.Kind == "Cobble"
 		-- curb stones along the first ~20 studs of cobble strips that leave the plaza
@@ -156,17 +230,22 @@ local function paveAll(parent: Instance, rng: Rng.Rng)
 				end
 				continue
 			end
+			-- the main dirt roads are paved now, with kerbs and glowing studs
+			local main = s.Main and not cobble
 			Common.path(m, seg.From, seg.To, s.Width, rng, {
-				Kind = s.Kind,
+				Kind = if main then "Cobble" else s.Kind,
 				Name = s.Id,
 				Lift = s.Lift,
-				-- (dirt plot roads and the rim road: one clean strip, no loose plates)
-				TileEvery = if cobble then 4.5 elseif s.Main then 1e6 else 8,
+				-- (the other dirt paths: a few loose plates)
+				TileEvery = if cobble or main then 4.5 else 8,
 				CurbUntil = if cobble and nearPlaza and seg.From == s.From then 20 + s.Width / 2 + 6 else 0,
 				CurbSkip = function(p: Vector3): boolean
 					return onPlaza(p, 1.2)
 				end,
 			})
+			if main then
+				roadEdges(edges, s, rng)
+			end
 		end
 	end
 end

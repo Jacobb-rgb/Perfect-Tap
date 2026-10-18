@@ -1,0 +1,122 @@
+{
+  "CargoShip": {
+    "kit": "watercraft-pack",
+    "model": "ship-cargo-b",
+    "n": 22,
+    "merge": 48
+  },
+  "Galleon": {
+    "kit": "watercraft-pack",
+    "model": "ship-large",
+    "n": 22,
+    "merge": 48
+  },
+  "TugBoat": {
+    "kit": "watercraft-pack",
+    "model": "boat-tug-a",
+    "n": 11,
+    "merge": 56
+  },
+  "SailBoatA": {
+    "kit": "watercraft-pack",
+    "model": "boat-sail-a",
+    "n": 10,
+    "merge": 48
+  },
+  "SailBoatB": {
+    "kit": "watercraft-pack",
+    "model": "boat-sail-b",
+    "n": 10,
+    "merge": 48
+  },
+  "HouseBoat": {
+    "kit": "watercraft-pack",
+    "model": "boat-house-a",
+    "n": 10,
+    "merge": 48
+  },
+  "HexCastle": {
+    "kit": "hexagon-kit",
+    "model": "building-castle",
+    "n": 12,
+    "merge": 60,
+    "clipBelow": 0.2
+  },
+  "HexMill": {
+    "kit": "hexagon-kit",
+    "model": "building-mill",
+    "n": 12,
+    "merge": 60,
+    "clipBelow": 0.2
+  },
+  "HexPort": {
+    "kit": "hexagon-kit",
+    "model": "building-port",
+    "n": 12,
+    "merge": 60,
+    "clipBelow": 0.2
+  },
+  "HexWizard": {
+    "kit": "hexagon-kit",
+    "model": "building-wizard-tower",
+    "n": 12,
+    "merge": 60,
+    "clipBelow": 0.2
+  },
+  "HexMountain": {
+    "kit": "hexagon-kit",
+    "model": "stone-mountain",
+    "n": 10,
+    "merge": 60,
+    "clipBelow": 0.2
+  },
+  "HexHouse": {
+    "kit": "hexagon-kit",
+    "model": "building-house",
+    "n": 11,
+    "merge": 60,
+    "clipBelow": 0.2
+  },
+  "Tent": {
+    "kit": "survival-kit",
+    "model": "tent-canvas",
+    "n": 8,
+    "merge": 56
+  },
+  "Campfire": {
+    "kit": "survival-kit",
+    "model": "campfire-stand",
+    "n": 10,
+    "merge": 48
+  },
+  "Anvil": {
+    "kit": "survival-kit",
+    "model": "workbench-anvil",
+    "n": 8,
+    "merge": 56
+  },
+  "AutumnTree": {
+    "kit": "survival-kit",
+    "model": "tree-autumn-tall",
+    "n": 9,
+    "merge": 48
+  },
+  "RoundTree": {
+    "kit": "fantasy-town-kit",
+    "model": "tree-high-round",
+    "n": 9,
+    "merge": 48
+  },
+  "Lantern": {
+    "kit": "fantasy-town-kit",
+    "model": "lantern",
+    "n": 8,
+    "merge": 48
+  },
+  "Stall": {
+    "kit": "fantasy-town-kit",
+    "model": "stall-red",
+    "n": 10,
+    "merge": 48
+  }
+}

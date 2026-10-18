@@ -47,6 +47,34 @@ LightingConfig.Sky = {
 	CelestialBodiesShown = true,
 }
 
+--[[
+	Space skybox (owner 2026-10-17): Kenney Skyboxes Space "band" (CC0, a
+	Milky Way band over violet space), cut into Roblox's six faces by
+	tools/kenney/skybox.mjs with Yaw 97 and Tilt 18 so the band's bright core
+	arches over the northern sky (~33 degrees up, above the massif) and the
+	sunset haze stays on the horizon. Roblox can only show uploaded images:
+	the owner uploads the six PNGs (NAHRAJ_DO_ROBLOXU/obloha_mlecna_draha) and
+	pastes each asset id here. Until all six are set the place keeps
+	Roblox's default sky (LightingController.applySkybox).
+]]
+LightingConfig.Skybox = {
+	Bk = "",
+	Dn = "",
+	Ft = "",
+	Lf = "",
+	Rt = "",
+	Up = "",
+	-- how the faces were cut (the preview renderer's shot.skyboxYaw / skyboxTilt)
+	Yaw = 97,
+	Tilt = 18,
+}
+
+-- "123456", "rbxassetid://123456" or "" -> the content id or nil.
+function LightingConfig.skyboxId(value: string): string?
+	local digits = string.match(value, "^%s*(%d+)%s*$") or string.match(value, "rbxassetid://(%d+)")
+	return if digits then "rbxassetid://" .. digits else nil
+end
+
 -- Workspace.Terrain.Clouds (created by the client if the place has none).
 LightingConfig.Clouds = {
 	Cover = 0.5,
@@ -326,6 +354,35 @@ LightingConfig.Presets = {
 		},
 		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.85 },
 		SunRays = {},
+	},
+	-- The crate-opening cinematic's dark round room (VaultController,
+	-- Builders/CrateOpeningStage): almost no sun or sky light, so the case's
+	-- glow, the light pillar and the blaster carry the scene; strong bloom.
+	CrateOpening = {
+		Lighting = {
+			Brightness = 0.2,
+			Ambient = Color3.new(0.16, 0.14, 0.22),
+			OutdoorAmbient = Color3.new(0.06, 0.06, 0.1),
+			ExposureCompensation = 0.25,
+			EnvironmentDiffuseScale = 0.1,
+			EnvironmentSpecularScale = 0.8,
+		},
+		Atmosphere = {
+			Density = 0.3,
+			Offset = 0,
+			Color = Color3.new(0.1, 0.08, 0.18),
+			Decay = Color3.new(0.05, 0.04, 0.1),
+			Glare = 0,
+			Haze = 1.5,
+		},
+		ColorCorrection = {
+			Brightness = 0.02,
+			Contrast = 0.24,
+			Saturation = 0.3,
+			TintColor = Color3.new(0.96, 0.95, 1),
+		},
+		Bloom = { Intensity = 1.35, Size = 40, Threshold = 0.82 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 } :: { [string]: Preset }
 

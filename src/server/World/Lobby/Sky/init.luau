@@ -5,7 +5,7 @@
 
 	  CloudBanks          pink/orange/purple voxel cloud clusters (Clouds)
 	  SunGlitter          neon sun path on the west sea (Sea)
-	  NearSea             the near west sea deepened toward WaterDeep (Sea)
+	  NearSea             a small far sail on the south horizon (Sea)
 	  ShipA, ShipB        sailing ships with lit sterns, bobbing (Sea)
 	  CastleIsland        castle + lighthouse islet on the horizon (Sea)
 	  WestPier            stairs down the west cliff, dock, boats (Sea)

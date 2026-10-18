@@ -82,7 +82,7 @@ for (const name of names) {
     continue;
   }
   const file = path.join(outDir, `${name}.jpg`);
-  await page.screenshot({ path: file, type: "jpeg", quality: 88 });
+  await page.screenshot({ path: file, type: "jpeg", quality: 88, timeout: 180000 });
   console.log(`rendered ${name} in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${path.relative(repo, file)}`);
 }
 

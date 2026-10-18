@@ -62,19 +62,26 @@ LobbyLayout.Area = {
 -- PointLights/SpotLights whose part is inside LobbyLayout.Area.
 LobbyLayout.Budget = {
 	-- visual upgrade (concept v2): richer stalls, brick plot walls, town
-	-- buildings; + the owner-approved Blaster Vault package (~2970 parts).
-	-- tests/LobbyBudget.spec.luau: the built map (~15,800 parts with the
-	-- vault) + one ore node on every node spawn (~1,320) must stay 200 under
-	-- it (the podium and pen ores): ~170 parts of headroom.
-	MapParts = 17500,
+	-- buildings; + the owner-approved Blaster Vault package (~2970 parts);
+	-- + the owner-approved Candy mountains (~570 parts: Spectrum strata on
+	-- the massif and the Land range, the spire skyline); + the owner-approved
+	-- Horizon (~2,450 parts far out at sea and in the sky, Persistent: the
+	-- outer sea, Kenney kit isles and ships, planets, constellations); + the
+	-- owner-approved meadow and road look (~1,330 parts: grass tufts, grass
+	-- patches and flower beds on the free lawns, fences along the roads, the
+	-- main roads paved with kerbs and glowing studs).
+	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
+	-- node on every node spawn (~1,320) must stay 200 under it (the podium
+	-- and pen ores): ~250 parts of headroom.
+	MapParts = 22000,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
-	-- The lobby has ~11,200 parts with the vault: the ~200 parts of headroom
-	-- are a deliberate buffer, so a small merge from a parallel package session
-	-- (Backdrop, Districts, Plaza, Flora) does not break this budget; spend it
-	-- on purpose, not by accident.
-	LobbyParts = 11400,
+	-- The lobby has ~12,500 parts with the vault and the meadow: the ~300
+	-- parts of headroom are a deliberate buffer, so a small merge from a
+	-- parallel package session (Backdrop, Districts, Plaza, Flora) does not
+	-- break this budget; spend it on purpose, not by accident.
+	LobbyParts = 12800,
 	LobbyLights = 45,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
@@ -84,16 +91,16 @@ LobbyLayout.Budget = {
 	-- outcrops, the quarry rim) is ~360 parts and 8 lights; the rest is spare.
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
-		Backdrop = { Parts = 1800, LobbyParts = 500, Lights = 10, LobbyLights = 3 },
+		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
 		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
-		Flora = { Parts = 2550, LobbyParts = 2350, Lights = 8, LobbyLights = 8 }, -- + town buildings, the town-edge tree belts
+		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
 	-- Land.luau (the Backdrop package restyles it) had 1775 parts before the
 	-- lobby pass and may grow by at most LandExtraParts.
 	LandBaselineParts = 1775,
-	LandExtraParts = 300,
+	LandExtraParts = 450, -- + Spectrum strata on the mountain columns
 }
 
 -- Where the low evening sun should sit (unit vector toward the sun):
@@ -677,7 +684,7 @@ LobbyLayout.Pieces = {
 		Size = v(160, 12, 560), -- (12 tall: a small far sail on its south end)
 		Facing = v(0, 0, 1),
 		Walkable = true,
-		Note = "Decor only: the near west sea deepened toward WaterDeep in soft bands out from the cliff (the sun glitter runs on over it), and a small far sail on the south horizon.",
+		Note = "Decor only: a small far sail on the south horizon (the deep-water bands were removed: they read as a dark rectangle next to the horizon sea).",
 	},
 } :: { Piece }
 

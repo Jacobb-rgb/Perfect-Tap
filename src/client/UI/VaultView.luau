@@ -1,0 +1,1066 @@
+--[[
+	The Blaster Vault shop window (VaultController opens it at the vault
+	counter). Pure builders (only Instance creation), so the Lune preview
+	draws it with the same code.
+
+	One card per blaster level 2..10 (+ level 11 "Coming soon"): the weapon
+	case drawn in its ore colours, LV, the blaster's name, its damage, the
+	price and one button: BUY on your next level (greyed with the price in
+	red while you can't afford it), OWNED below it, LOCKED above it. You can
+	only buy your next level (VaultService.refusal), so the next card wears
+	the gold outline and a NEXT ribbon.
+
+	PC: the cards in a 5 x 2 grid. Phones, tablets and TVs (compact): one row
+	of bigger cards that scrolls sideways, every button at least 44 pt.
+
+	The look is the light "Bubble" style the UI chat is building (owner's
+	pick, branch ui/light: Config/BubbleTheme + UI/Bubble). Until that lands
+	on main the same values live in VaultView.Style; switching later means
+	pointing Style at BubbleTheme (the names match).
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
+local CaseBuilder = require(Shared.Builders.CaseBuilder)
+local Format = require(Shared.Util.Format)
+local UIKit = require(script.Parent.UIKit)
+local TechShopView = require(script.Parent.TechShopView)
+
+local VaultView = {}
+
+local rgb = Color3.fromRGB
+
+export type Role = { Top: Color3, Base: Color3, Lip: Color3 }
+
+local function role(top: Color3, base: Color3, lip: Color3): Role
+	return { Top = top, Base = base, Lip = lip }
+end
+
+-- = Config/BubbleTheme on branch ui/light (the UI chat's light look)
+VaultView.Style = {
+	Font = Font.fromEnum(Enum.Font.FredokaOne),
+	TitleFont = Font.fromEnum(Enum.Font.LuckiestGuy),
+	Outline = rgb(27, 29, 51),
+	Shadow = rgb(15, 18, 40),
+	ShadowTransparency = 0.72,
+	Panel = rgb(255, 255, 255),
+	PanelTint = rgb(234, 241, 251),
+	Ink = rgb(38, 48, 79),
+	InkSoft = rgb(104, 117, 150),
+	White = rgb(255, 255, 255),
+	Gold = rgb(255, 203, 46),
+	Good = rgb(62, 214, 98),
+	Bad = rgb(255, 77, 92),
+	Corner = 18,
+	Stroke = 3.5,
+	TextStroke = 2.5,
+	Lip = 5,
+	GlossTransparency = 0.72,
+	Roles = {
+		Vault = role(rgb(255, 182, 102), rgb(255, 138, 31), rgb(196, 90, 0)),
+		Go = role(rgb(128, 240, 140), rgb(47, 201, 90), rgb(27, 143, 60)),
+		Danger = role(rgb(255, 140, 140), rgb(255, 77, 92), rgb(188, 34, 52)),
+		Plain = role(rgb(255, 255, 255), rgb(236, 241, 249), rgb(176, 188, 208)),
+	} :: { [string]: Role },
+}
+local S = VaultView.Style
+
+VaultView.PhoneScale = 0.62 -- HudController's floor (phones)
+VaultView.MinTouch = 44 -- points
+VaultView.CloseRange = 24 -- studs from the counter: the window closes (VaultService.Range is 30)
+VaultView.FirstLevel = 2
+VaultView.Separator = "   ·   "
+
+-- what a refusal (VaultResult.Reason, VaultService.Reasons) says
+VaultView.ReasonText = {
+	Owned = "You have this blaster already",
+	Locked = "Buy the level before it first",
+	Max = "You have the best blaster!",
+	NoCoins = "Not enough coins",
+	TooFar = "Walk back to the counter",
+	BadLevel = "That case isn't for sale",
+	NoData = "Your save is still loading",
+	Waiting = "Wait a moment...",
+	NoAnswer = "No answer from the server: try again",
+} :: { [string]: string }
+
+function VaultView.reasonText(reason: any): string
+	return if type(reason) == "string" and VaultView.ReasonText[reason]
+		then VaultView.ReasonText[reason]
+		else "You can't buy that right now"
+end
+
+---------------------------------------------------------------- the cards (pure)
+
+export type CardState = "Owned" | "Next" | "Locked" | "Soon"
+
+export type Card = {
+	Level: number,
+	Ore: string,
+	Name: string,
+	Damage: number,
+	Price: number?,
+	State: CardState,
+	CanBuy: boolean,
+	Reason: string?, -- why BUY can't buy (VaultService.Reasons)
+}
+
+--[[
+	The cards for a player at blaster `level` with `coins` (the same rules as
+	VaultService.refusal: only the next level, coins only).
+]]
+function VaultView.cards(level: number, coins: number): { Card }
+	local current = BlasterData.get(level).Level
+	local list: { Card } = {}
+	for lv = VaultView.FirstLevel, BlasterData.MaxLevel do
+		local ore = BlasterData.vaultOre(lv)
+		local price = BlasterData.vaultPrice(lv)
+		local state: CardState = if lv <= current then "Owned" elseif lv == current + 1 then "Next" else "Locked"
+		local reason: string? = nil
+		if state == "Owned" then
+			reason = "Owned"
+		elseif state == "Locked" then
+			reason = "Locked"
+		elseif not price or coins < price then
+			reason = "NoCoins"
+		end
+		table.insert(list, {
+			Level = lv,
+			Ore = ore,
+			Name = BlasterData.displayName(lv, ore),
+			Damage = BlasterData.damage(lv, ore),
+			Price = price,
+			State = state,
+			CanBuy = reason == nil,
+			Reason = reason,
+		})
+	end
+	local soon = BlasterData.ByLevel[BlasterData.MaxLevel + 1]
+	if soon and soon.ComingSoon then
+		table.insert(list, {
+			Level = soon.Level,
+			Ore = "",
+			Name = "Coming soon",
+			Damage = 0,
+			Price = nil,
+			State = "Soon",
+			CanBuy = false,
+			Reason = if current >= BlasterData.MaxLevel then "Max" else "Locked",
+		})
+	end
+	return list
+end
+
+-- The button text of a card.
+function VaultView.buttonText(card: Card): string
+	if card.State == "Owned" then
+		return "OWNED"
+	elseif card.State == "Locked" then
+		return "LOCKED"
+	elseif card.State == "Soon" then
+		return "SOON"
+	end
+	return "BUY"
+end
+
+---------------------------------------------------------------- layout math (pure)
+
+export type Rect = { X: number, Y: number, W: number, H: number }
+
+-- Where everything sits on a card (design units, from the card face's top left).
+export type Slots = {
+	Pill: Rect,
+	Icon: Rect,
+	Name: Rect,
+	Damage: Rect,
+	Price: Rect,
+	Button: Rect, -- the button's face (its lip shows S.Lip below)
+	NameSize: number,
+	DamageSize: number,
+	PriceSize: number,
+	ButtonSize: number,
+}
+
+export type Grid = {
+	Compact: boolean, -- phones, tablets, TVs: wide cards in one row that scrolls
+	Cols: number,
+	Rows: number,
+	TileW: number,
+	TileH: number, -- the card face (the holder is S.Lip taller)
+	Gap: number,
+	Pad: number,
+	HeaderH: number,
+	InfoH: number,
+	HintH: number,
+	PanelW: number,
+	PanelH: number, -- the panel face
+	ViewW: number, -- the visible width of the cards area
+	CanvasW: number, -- the whole row
+	Slots: Slots,
+}
+
+-- Phones, tablets and TVs: bigger cards in one row (the same rule as the Tech shop).
+function VaultView.compactFor(touch: boolean, tenFoot: boolean, scale: number, viewportHeight: number): boolean
+	return touch or tenFoot or scale <= 0.75 or viewportHeight < 520
+end
+
+local function rect(x: number, y: number, w: number, h: number): Rect
+	return { X = x, Y = y, W = w, H = h }
+end
+
+-- PC: a tall card (pill, case, name, damage, price, BUY under each other).
+local function tallSlots(w: number): Slots
+	local iconW = math.floor(w * 0.72)
+	local iconH = math.floor(iconW * 0.62)
+	local iconY = 34
+	local nameY = iconY + iconH + 6
+	local nameH = math.ceil(16 * 2.25)
+	local damageY = nameY + nameH
+	local priceY = damageY + 20
+	local buttonY = priceY + 28
+	return {
+		Pill = rect(8, 8, 56, 26),
+		Icon = rect(math.floor((w - iconW) / 2), iconY, iconW, iconH),
+		Name = rect(8, nameY, w - 16, nameH),
+		Damage = rect(8, damageY, w - 16, 18),
+		Price = rect(12, priceY, w - 24, 24),
+		Button = rect(8, buttonY, w - 16, 42),
+		NameSize = 16,
+		DamageSize = 14,
+		PriceSize = 19,
+		ButtonSize = 22,
+	}
+end
+
+-- Compact: a wide card (the case left, the texts right, price + a big BUY at the bottom).
+local function wideSlots(w: number): Slots
+	local iconW = 124
+	local iconH = math.floor(iconW * 0.62)
+	local textX = iconW + 22
+	local bottomY = 44 + iconH + 10
+	local buttonW = math.floor((w - 20) * 0.55)
+	return {
+		Pill = rect(10, 10, 66, 30),
+		Icon = rect(12, 44, iconW, iconH),
+		Name = rect(textX, 44, w - textX - 10, math.ceil(20 * 2.25)),
+		Damage = rect(textX, 44 + math.ceil(20 * 2.25) + 2, w - textX - 10, 22),
+		Price = rect(14, bottomY + 21, w - buttonW - 36, 30),
+		Button = rect(w - buttonW - 10, bottomY, buttonW, 72), -- 72 units = 44.6 pt at the phones' 0.62
+		NameSize = 20,
+		DamageSize = 17,
+		PriceSize = 24,
+		ButtonSize = 30,
+	}
+end
+
+--[[
+	The panel and card sizes for `count` cards in maxWidth x maxHeight design
+	units (the screen divided by the UI scale, the top bar left out).
+]]
+function VaultView.grid(count: number, compact: boolean, maxWidth: number, maxHeight: number): Grid
+	local g: Grid
+	if compact then
+		local w = 316
+		local slots = wideSlots(w)
+		local panelW = math.min(math.floor(maxWidth - 24), 1180)
+		local pad = 16
+		g = {
+			Compact = true,
+			Cols = 1,
+			Rows = 1,
+			TileW = w,
+			TileH = slots.Button.Y + slots.Button.H + S.Lip + 10,
+			Gap = 14,
+			Pad = pad,
+			HeaderH = 74,
+			InfoH = 36,
+			HintH = 0,
+			PanelW = panelW,
+			PanelH = 0,
+			ViewW = panelW - pad * 2,
+			CanvasW = count * (w + 14) - 14,
+			Slots = slots,
+		}
+		g.Cols = math.max(1, math.floor((g.ViewW + g.Gap) / (w + g.Gap)))
+	else
+		local w = 150
+		local slots = tallSlots(w)
+		local cols = 5
+		local pad = 18
+		local viewW = cols * w + (cols - 1) * 12
+		g = {
+			Compact = false,
+			Cols = cols,
+			Rows = math.max(1, math.ceil(count / cols)),
+			TileW = w,
+			TileH = slots.Button.Y + slots.Button.H + S.Lip + 8,
+			Gap = 12,
+			Pad = pad,
+			HeaderH = 68,
+			InfoH = 30,
+			HintH = 28,
+			PanelW = viewW + pad * 2,
+			PanelH = 0,
+			ViewW = viewW,
+			CanvasW = viewW,
+			Slots = slots,
+		}
+	end
+	g.PanelH = g.HeaderH + g.InfoH + VaultView.rowsHeight(g) + g.HintH + 10
+	return g
+end
+
+-- The height of the cards area (the rows, their lips, room for the shadow / scroll bar).
+function VaultView.rowsHeight(g: Grid): number
+	return g.Rows * (g.TileH + S.Lip) + (g.Rows - 1) * g.Gap + 12
+end
+
+-- Where card `i` (1-based) sits inside the cards area.
+function VaultView.tilePosition(g: Grid, i: number): Vector2
+	if g.Compact then
+		return Vector2.new((i - 1) * (g.TileW + g.Gap), 0)
+	end
+	local col = (i - 1) % g.Cols
+	local row = math.floor((i - 1) / g.Cols)
+	return Vector2.new(col * (g.TileW + g.Gap), row * (g.TileH + S.Lip + g.Gap))
+end
+
+---------------------------------------------------------------- the bubble kit
+
+local function corner(parent: Instance, radius: number?): UICorner
+	return UIKit.new("UICorner", { CornerRadius = UDim.new(0, radius or S.Corner) }, parent)
+end
+
+local function stroke(parent: Instance, thickness: number?, color: Color3?): UIStroke
+	return UIKit.new("UIStroke", {
+		Thickness = thickness or S.Stroke,
+		Color = color or S.Outline,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, parent)
+end
+
+local function gradient(parent: Instance, top: Color3, bottom: Color3): UIGradient
+	return UIKit.new("UIGradient", { Color = ColorSequence.new(top, bottom), Rotation = 90 }, parent)
+end
+
+-- White text with the dark outline (on coloured faces).
+local function text(parent: Instance, value: string, size: number, props: UIKit.Props?): TextLabel
+	local label = UIKit.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = value,
+		TextSize = size,
+		TextColor3 = S.White,
+		FontFace = S.Font,
+		TextWrapped = false,
+	}, parent)
+	if props then
+		for key, v in props do
+			(label :: any)[key] = v
+		end
+	end
+	UIKit.new("UIStroke", {
+		Thickness = if size >= 26 then 3 else S.TextStroke,
+		Color = S.Outline,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+	}, label)
+	return label
+end
+
+-- Dark text with no outline (on white).
+local function ink(parent: Instance, value: string, size: number, props: UIKit.Props?): TextLabel
+	local label = UIKit.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = value,
+		TextSize = size,
+		TextColor3 = S.Ink,
+		FontFace = S.Font,
+		TextWrapped = false,
+	}, parent)
+	if props then
+		for key, v in props do
+			(label :: any)[key] = v
+		end
+	end
+	return label
+end
+
+export type Body = { Holder: Frame, Face: GuiObject, Lip: Frame, Gradient: UIGradient, Stroke: UIStroke }
+
+--[[
+	A chunky "bubble": a soft shadow, a darker lip (the 3D edge), the face
+	(a gradient, the navy outline) and a gloss strip. The holder is S.Lip
+	taller than the face.
+]]
+local function body(parent: Instance, r: Role, name: string, clickable: boolean, radius: number?): Body
+	local holder = UIKit.new("Frame", { Name = name, BackgroundTransparency = 1 }, parent)
+	local shadow = UIKit.new("Frame", {
+		Name = "Shadow",
+		BackgroundColor3 = S.Shadow,
+		BackgroundTransparency = S.ShadowTransparency,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, S.Lip + 4),
+		Size = UDim2.new(1, 0, 1, -S.Lip),
+		ZIndex = 1,
+	}, holder)
+	corner(shadow, radius)
+	local lip = UIKit.new("Frame", {
+		Name = "Lip",
+		BackgroundColor3 = r.Lip,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, S.Lip),
+		Size = UDim2.new(1, 0, 1, -S.Lip),
+		ZIndex = 1,
+	}, holder)
+	corner(lip, radius)
+	stroke(lip)
+	local face: GuiObject = UIKit.new(if clickable then "TextButton" else "Frame", {
+		Name = "Face",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, -S.Lip),
+		ZIndex = 2,
+	}, holder)
+	if clickable then
+		local button = face :: TextButton
+		button.AutoButtonColor = false
+		button.Text = ""
+	end
+	corner(face, radius)
+	local outline = stroke(face)
+	local grad = gradient(face, r.Top, r.Base)
+	local gloss = UIKit.new("Frame", {
+		Name = "Gloss",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = S.GlossTransparency,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(5, 4),
+		Size = UDim2.new(1, -10, 0.4, 0),
+		ZIndex = 2,
+	}, face)
+	corner(gloss, math.max(4, (radius or S.Corner) - 5))
+	return { Holder = holder, Face = face, Lip = lip, Gradient = grad, Stroke = outline }
+end
+
+local function paint(b: Body, r: Role)
+	b.Lip.BackgroundColor3 = r.Lip
+	b.Gradient.Color = ColorSequence.new(r.Top, r.Base)
+end
+
+-- A gold coin (left of prices).
+local function coin(parent: Instance, size: number, props: UIKit.Props?): Frame
+	local frame = UIKit.new("Frame", {
+		Name = "Coin",
+		BackgroundColor3 = S.Gold,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = 4,
+	}, parent)
+	if props then
+		for key, v in props do
+			(frame :: any)[key] = v
+		end
+	end
+	corner(frame, size)
+	stroke(frame, 2.5)
+	gradient(frame, rgb(255, 228, 120), rgb(245, 172, 20))
+	local inner = UIKit.new("Frame", {
+		Name = "Rim",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.62, 0.62),
+		BackgroundColor3 = rgb(255, 214, 80),
+		BorderSizePixel = 0,
+		ZIndex = 4,
+	}, frame)
+	corner(inner, size)
+	UIKit.new("UIStroke", { Thickness = 1.5, Color = rgb(214, 140, 10) }, inner)
+	return frame
+end
+
+---------------------------------------------------------------- the case icon
+
+--[[
+	A weapon case drawn with frames in its ore look (CaseBuilder.look): the
+	body, the lid with its raised panel, the glowing band, straps, the latch
+	and the glowing diamond; lava cracks on hot ores, stars on the others.
+	`w` = width in design units (height ~0.62 w).
+]]
+function VaultView.caseIcon(parent: Instance, level: number, oreId: string, w: number): Frame
+	local bodyColor, panelColor, glowColor, hot = CaseBuilder.look(oreId)
+	local h = math.floor(w * 0.62)
+	local root = UIKit.new("Frame", {
+		Name = "CaseIcon",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(w, h),
+		ZIndex = 3,
+	}, parent)
+	local function box(name: string, x: number, y: number, bw: number, bh: number, color: Color3, z: number, radius: number?): Frame
+		local f = UIKit.new("Frame", {
+			Name = name,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(math.floor(x * w), math.floor(y * h)),
+			Size = UDim2.fromOffset(math.max(1, math.floor(bw * w)), math.max(1, math.floor(bh * h))),
+			ZIndex = z,
+		}, root)
+		if radius then
+			corner(f, radius)
+		end
+		return f
+	end
+	-- a soft glow under the case
+	local glow = box("Glow", 0.06, 0.78, 0.88, 0.2, glowColor, 3, 40)
+	glow.BackgroundTransparency = 0.55
+	-- feet, body and lid
+	box("FootL", 0.12, 0.86, 0.12, 0.1, S.Outline, 3, 3)
+	box("FootR", 0.76, 0.86, 0.12, 0.1, S.Outline, 3, 3)
+	local base = box("Base", 0.04, 0.42, 0.92, 0.48, bodyColor, 4, 8)
+	stroke(base, 3)
+	gradient(base, bodyColor:Lerp(Color3.new(1, 1, 1), 0.18), bodyColor)
+	local lid = box("Lid", 0.02, 0.14, 0.96, 0.34, bodyColor:Lerp(panelColor, 0.6), 5, 10)
+	stroke(lid, 3)
+	gradient(lid, panelColor:Lerp(Color3.new(1, 1, 1), 0.25), bodyColor:Lerp(panelColor, 0.4))
+	local inset = box("LidPanel", 0.2, 0.2, 0.6, 0.2, panelColor, 6, 5)
+	inset.BackgroundTransparency = 0.1
+	-- the glowing band where the lid meets the base, the straps, the latch
+	local band = box("Band", 0.05, 0.47, 0.9, 0.07, glowColor, 6, 3)
+	gradient(band, Color3.new(1, 1, 1):Lerp(glowColor, 0.45), glowColor)
+	box("StrapL", 0.2, 0.14, 0.07, 0.76, S.Outline:Lerp(bodyColor, 0.4), 7, 2)
+	box("StrapR", 0.73, 0.14, 0.07, 0.76, S.Outline:Lerp(bodyColor, 0.4), 7, 2)
+	local latch = box("Latch", 0.44, 0.42, 0.12, 0.16, S.Gold, 8, 3)
+	stroke(latch, 2)
+	-- the emblem: a glowing diamond on the lid
+	local d = math.floor(h * 0.2)
+	local gem = UIKit.new("Frame", {
+		Name = "Emblem",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(math.floor(w * 0.5), math.floor(h * 0.3)),
+		Size = UDim2.fromOffset(d, d),
+		Rotation = 45,
+		BackgroundColor3 = glowColor,
+		BorderSizePixel = 0,
+		ZIndex = 9,
+	}, root)
+	corner(gem, 3)
+	stroke(gem, 2.5)
+	gradient(gem, Color3.new(1, 1, 1):Lerp(glowColor, 0.35), glowColor)
+	-- lava cracks (hot ores) or stars (cool ores) on the base
+	if hot then
+		for i, c in { { 0.1, 0.66, 0.14, -18 }, { 0.3, 0.72, 0.1, 24 }, { 0.6, 0.64, 0.12, -30 }, { 0.8, 0.74, 0.08, 12 } } do
+			local crack = box("Crack" .. i, c[1], c[2], c[3], 0.035, glowColor, 6)
+			crack.Rotation = c[4]
+		end
+	else
+		for i, c in { { 0.1, 0.62 }, { 0.32, 0.76 }, { 0.62, 0.66 }, { 0.84, 0.78 }, { 0.5, 0.82 } } do
+			local star = box("Star" .. i, c[1], c[2], 0.025, 0.04, Color3.new(1, 1, 1):Lerp(glowColor, 0.4), 6, 2)
+			star.BackgroundTransparency = 0.15
+		end
+	end
+	-- crystal shards from level 4 (more at 7 and 10), like the 3D case
+	local shards = if level >= 10 then 3 elseif level >= 7 then 2 elseif level >= 4 then 1 else 0
+	for i = 1, shards do
+		local x = ({ 0.86, 0.1, 0.5 })[i]
+		local tall = ({ 0.34, 0.26, 0.22 })[i]
+		local shard = UIKit.new("Frame", {
+			Name = "Shard" .. i,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromOffset(math.floor(x * w), math.floor(h * (if i == 3 then 0.12 else 0.16))),
+			Size = UDim2.fromOffset(math.floor(w * 0.07), math.floor(h * tall)),
+			Rotation = ({ 14, -12, 0 })[i],
+			BackgroundColor3 = glowColor,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+		}, root)
+		corner(shard, 3)
+		stroke(shard, 2)
+		gradient(shard, Color3.new(1, 1, 1):Lerp(glowColor, 0.4), glowColor)
+	end
+	return root
+end
+
+---------------------------------------------------------------- building
+
+export type Tile = {
+	Level: number,
+	Holder: Frame,
+	Body: Body,
+	Face: GuiObject,
+	Icon: Frame?,
+	Lv: TextLabel,
+	LvPill: Frame,
+	Name: TextLabel,
+	Damage: TextLabel,
+	PriceRow: Frame,
+	Price: TextLabel,
+	Button: TextButton,
+	ButtonBody: Body,
+	ButtonText: TextLabel,
+	Ribbon: Frame,
+	Check: Frame,
+	Dim: Frame,
+	Card: Card?,
+}
+
+export type Refs = {
+	Gui: ScreenGui,
+	Root: Frame,
+	Panel: Frame,
+	PanelBody: Body,
+	Header: Frame,
+	Title: TextLabel,
+	CoinsPill: Frame,
+	Coins: TextLabel,
+	Close: TextButton,
+	Info: TextLabel,
+	Cards: ScrollingFrame,
+	Tiles: { Tile },
+	Hint: TextLabel,
+	Message: TextLabel,
+	Grid: Grid?,
+	Level: number, -- the level the cards were built for
+}
+
+local function buildTile(parent: Instance, index: number): Tile
+	local plain = S.Roles.Plain
+	local b = body(parent, plain, "Card" .. index, false, S.Corner)
+	local face = b.Face
+	b.Gradient.Color = ColorSequence.new(S.Panel, S.PanelTint)
+	-- dims a locked card
+	local dim = UIKit.new("Frame", {
+		Name = "Dim",
+		BackgroundColor3 = rgb(200, 208, 224),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 12,
+		Visible = false,
+	}, face)
+	corner(dim)
+	-- LV pill (top left)
+	local pill = UIKit.new("Frame", {
+		Name = "LvPill",
+		BackgroundColor3 = S.Roles.Vault.Base,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.fromOffset(56, 26),
+		ZIndex = 10,
+	}, face)
+	corner(pill, 13)
+	stroke(pill, 2.5)
+	gradient(pill, S.Roles.Vault.Top, S.Roles.Vault.Base)
+	local lv = text(pill, "LV 2", 17, { Name = "Lv", Size = UDim2.fromScale(1, 1), ZIndex = 11 })
+	-- NEXT ribbon (top right) and the owned check
+	local ribbon = UIKit.new("Frame", {
+		Name = "Ribbon",
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = S.Gold,
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -8, 0, 8),
+		Size = UDim2.fromOffset(58, 26),
+		ZIndex = 10,
+		Visible = false,
+	}, face)
+	corner(ribbon, 13)
+	stroke(ribbon, 2.5)
+	gradient(ribbon, rgb(255, 236, 140), S.Gold)
+	text(ribbon, "NEXT", 17, { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 11 })
+	local check = UIKit.new("Frame", {
+		Name = "Check",
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = S.Good,
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -8, 0, 8),
+		Size = UDim2.fromOffset(28, 28),
+		ZIndex = 10,
+		Visible = false,
+	}, face)
+	corner(check, 14)
+	stroke(check, 2.5)
+	text(check, "✓", 18, { Name = "Text", Size = UDim2.fromScale(1, 1), ZIndex = 11 })
+	-- the texts
+	local name = ink(face, "", 17, {
+		Name = "BlasterName",
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		ZIndex = 10,
+	})
+	local damage = ink(face, "", 15, { Name = "Damage", TextColor3 = S.InkSoft, ZIndex = 10 })
+	local priceRow = UIKit.new("Frame", { Name = "PriceRow", BackgroundTransparency = 1, ZIndex = 10 }, face)
+	coin(priceRow, 22, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) })
+	local price = ink(priceRow, "", 20, {
+		Name = "Price",
+		Position = UDim2.fromOffset(28, 0),
+		Size = UDim2.new(1, -28, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 10,
+	})
+	-- the button
+	local bb = body(face, S.Roles.Go, "BuyButton", true, 14)
+	bb.Holder.ZIndex = 10
+	for _, d in bb.Holder:GetDescendants() do
+		if d:IsA("GuiObject") then
+			d.ZIndex += 10
+		end
+	end
+	local button = bb.Face :: TextButton
+	button.Name = "Buy"
+	local buttonText = text(button, "BUY", 22, { Name = "Label", Size = UDim2.fromScale(1, 1), ZIndex = 14 })
+	return {
+		Level = 0,
+		Holder = b.Holder,
+		Body = b,
+		Face = face,
+		Icon = nil,
+		Lv = lv,
+		LvPill = pill,
+		Name = name,
+		Damage = damage,
+		PriceRow = priceRow,
+		Price = price,
+		Button = button,
+		ButtonBody = bb,
+		ButtonText = buttonText,
+		Ribbon = ribbon,
+		Check = check,
+		Dim = dim,
+		Card = nil,
+	}
+end
+
+function VaultView.build(): Refs
+	local gui = UIKit.screen("TerraForgeVault", 16)
+	gui:SetAttribute("TerraForge", true)
+	gui.Enabled = false
+	local root = UIKit.new("Frame", {
+		Name = "Root",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+	}, gui)
+	local panelBody = body(root, S.Roles.Plain, "Panel", false, 24)
+	local panel = panelBody.Holder
+	panel.AnchorPoint = Vector2.new(0.5, 0.5)
+	panel.Position = UDim2.fromScale(0.5, 0.5)
+	panelBody.Gradient.Color = ColorSequence.new(S.Panel, S.Panel)
+	local panelGloss = panelBody.Face:FindFirstChild("Gloss")
+	if panelGloss then
+		panelGloss:Destroy()
+	end
+	panel.SelectionGroup = true
+	local face = panelBody.Face
+	-- the orange header with the title and your coins
+	local header = body(face, S.Roles.Vault, "Header", false, 20)
+	header.Holder.Position = UDim2.fromOffset(10, 10)
+	local title = text(header.Face, "BLASTER VAULT", 34, {
+		Name = "Title",
+		FontFace = S.TitleFont,
+		Position = UDim2.fromOffset(20, 0),
+		Size = UDim2.new(0.6, 0, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 4,
+	})
+	local pill = UIKit.new("Frame", {
+		Name = "CoinsPill",
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = S.Panel,
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -72, 0.5, 0),
+		Size = UDim2.fromOffset(190, 40),
+		ZIndex = 4,
+	}, header.Face)
+	corner(pill, 20)
+	stroke(pill, 3)
+	coin(pill, 32, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 4, 0.5, 0), ZIndex = 5 })
+	local coins = ink(pill, "$0", 22, {
+		Name = "Coins",
+		Position = UDim2.fromOffset(42, 0),
+		Size = UDim2.new(1, -50, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+	})
+	-- the close button (red X) on the panel's corner
+	local closeBody = body(face, S.Roles.Danger, "CloseButton", true, 14)
+	closeBody.Holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeBody.Holder.ZIndex = 20
+	for _, d in closeBody.Holder:GetDescendants() do
+		if d:IsA("GuiObject") then
+			d.ZIndex += 20
+		end
+	end
+	local close = closeBody.Face :: TextButton
+	close.Name = "Close"
+	text(close, "X", 28, { Name = "Label", FontFace = S.TitleFont, Size = UDim2.fromScale(1, 1), ZIndex = 24 })
+	-- your blaster now
+	local info = ink(face, "", 18, {
+		Name = "Info",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 3,
+	})
+	-- the cards
+	local cards = UIKit.new("ScrollingFrame", {
+		Name = "Cards",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 8,
+		ScrollBarImageColor3 = S.InkSoft,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+		ClipsDescendants = true,
+		ZIndex = 3,
+	}, face)
+	-- the footer: the hint, or a message for a few seconds
+	local hint = ink(face, "", 16, { Name = "Hint", TextColor3 = S.InkSoft, ZIndex = 3 })
+	local message = ink(face, "", 18, { Name = "Message", Visible = false, ZIndex = 3 })
+	local refs: Refs = {
+		Gui = gui,
+		Root = root,
+		Panel = panel,
+		PanelBody = panelBody,
+		Header = header.Holder,
+		Title = title,
+		CoinsPill = pill,
+		Coins = coins,
+		Close = close,
+		Info = info,
+		Cards = cards,
+		Tiles = {},
+		Hint = hint,
+		Message = message,
+		Grid = nil,
+		Level = 0,
+	}
+	for i = 1, BlasterData.MaxLevel - VaultView.FirstLevel + 2 do
+		table.insert(refs.Tiles, buildTile(cards, i))
+	end
+	return refs
+end
+
+---------------------------------------------------------------- layout
+
+local function setRect(gui: GuiObject, r: Rect, lipped: boolean?)
+	gui.Position = UDim2.fromOffset(r.X, r.Y)
+	gui.Size = UDim2.fromOffset(r.W, r.H + (if lipped then S.Lip else 0))
+end
+
+local function placeTile(tile: Tile, g: Grid, i: number)
+	local slots = g.Slots
+	local p = VaultView.tilePosition(g, i)
+	tile.Holder.Position = UDim2.fromOffset(p.X, p.Y)
+	tile.Holder.Size = UDim2.fromOffset(g.TileW, g.TileH + S.Lip)
+	setRect(tile.LvPill, slots.Pill)
+	tile.Lv.TextSize = if g.Compact then 20 else 17
+	local icon = tile.Icon
+	if icon then
+		icon.Position = UDim2.fromOffset(slots.Icon.X, slots.Icon.Y)
+	end
+	setRect(tile.Name, slots.Name)
+	TechShopView.fitText(tile.Name, slots.Name.W, slots.Name.H, slots.NameSize, math.floor(slots.NameSize * 0.7))
+	tile.Name.TextXAlignment = if g.Compact then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
+	setRect(tile.Damage, slots.Damage)
+	tile.Damage.TextSize = slots.DamageSize
+	tile.Damage.TextXAlignment = tile.Name.TextXAlignment
+	setRect(tile.PriceRow, slots.Price)
+	tile.Price.TextSize = slots.PriceSize
+	local coinIcon = tile.PriceRow:FindFirstChild("Coin") :: Frame?
+	local coinSize = if g.Compact then 26 else 22
+	if coinIcon then
+		coinIcon.Size = UDim2.fromOffset(coinSize, coinSize)
+	end
+	tile.Price.Position = UDim2.fromOffset(coinSize + 6, 0)
+	tile.Price.Size = UDim2.new(1, -(coinSize + 6), 1, 0)
+	setRect(tile.ButtonBody.Holder, slots.Button, true)
+	tile.ButtonText.TextSize = slots.ButtonSize
+end
+
+--[[
+	Sizes everything for the screen: maxWidth x maxHeight design units (the
+	screen divided by the UI scale, the top bar left out).
+]]
+function VaultView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
+	local g = VaultView.grid(#refs.Tiles, compact, maxWidth, maxHeight)
+	local old = refs.Grid
+	refs.Grid = g
+	refs.Panel.Size = UDim2.fromOffset(g.PanelW, g.PanelH + S.Lip)
+	-- the header leaves room for the X on the panel's corner
+	local closeSize = if compact then 72 else 54
+	refs.Header.Position = UDim2.fromOffset(10, 10)
+	refs.Header.Size = UDim2.fromOffset(g.PanelW - 20 - closeSize - 6, g.HeaderH - 16 + S.Lip)
+	refs.Title.TextSize = if compact then 36 else 34
+	refs.CoinsPill.Position = UDim2.new(1, -14, 0.5, -1)
+	refs.CoinsPill.Size = UDim2.fromOffset(if compact then 220 else 190, if compact then 44 else 38)
+	refs.Coins.TextSize = if compact then 26 else 22
+	local closeHolder = refs.Close.Parent :: Frame
+	closeHolder.Size = UDim2.fromOffset(closeSize, closeSize + S.Lip)
+	closeHolder.Position = UDim2.new(1, -closeSize / 2 - 10, 0, closeSize / 2 + 8)
+	refs.Info.TextSize = if compact then 22 else 18
+	refs.Info.Position = UDim2.fromOffset(g.Pad + 2, g.HeaderH)
+	refs.Info.Size = UDim2.fromOffset(g.PanelW - g.Pad * 2, g.InfoH)
+	refs.Cards.Position = UDim2.fromOffset(g.Pad, g.HeaderH + g.InfoH + 4)
+	refs.Cards.Size = UDim2.fromOffset(g.ViewW, VaultView.rowsHeight(g))
+	refs.Cards.CanvasSize = UDim2.fromOffset(g.CanvasW, 0)
+	refs.Cards.ScrollingEnabled = g.CanvasW > g.ViewW
+	refs.Cards.ScrollBarThickness = if g.CanvasW > g.ViewW then 8 else 0
+	for i, tile in refs.Tiles do
+		local card = tile.Card
+		if card and old and old.Slots.Icon.W ~= g.Slots.Icon.W then
+			-- the case icon is drawn at its size: draw it again
+			tile.Card = nil
+			placeTile(tile, g, i)
+			VaultView.fillTile(tile, card, g)
+		else
+			placeTile(tile, g, i)
+		end
+	end
+	local footY = g.PanelH - (if g.HintH > 0 then g.HintH + 4 else 0)
+	refs.Hint.Visible = g.HintH > 0 and not refs.Message.Visible
+	refs.Hint.Position = UDim2.fromOffset(g.Pad, footY)
+	refs.Hint.Size = UDim2.fromOffset(g.PanelW - g.Pad * 2, g.HintH)
+	-- a message: in the footer on PC, over the "Your blaster" line on compact screens
+	refs.Message.Position = if g.HintH > 0 then UDim2.fromOffset(g.Pad, footY) else refs.Info.Position
+	refs.Message.Size = if g.HintH > 0 then UDim2.fromOffset(g.PanelW - g.Pad * 2, g.HintH) else refs.Info.Size
+	refs.Message.TextSize = if compact then 22 else 18
+end
+
+---------------------------------------------------------------- filling in
+
+function VaultView.fillTile(tile: Tile, card: Card, g: Grid?)
+	local fresh = tile.Card == nil or tile.Card.Level ~= card.Level or tile.Card.Ore ~= card.Ore
+	tile.Card = card
+	tile.Level = card.Level
+	tile.Holder.Visible = true
+	if fresh then
+		local old = tile.Icon
+		if old then
+			old:Destroy()
+			tile.Icon = nil
+		end
+		if card.State ~= "Soon" then
+			local slot = if g then g.Slots.Icon else rect(17, 34, 108, 66)
+			local icon = VaultView.caseIcon(tile.Face, card.Level, card.Ore, slot.W)
+			for _, d in icon:GetDescendants() do
+				if d:IsA("GuiObject") then
+					d.ZIndex += 2
+				end
+			end
+			icon.ZIndex += 2
+			icon.Position = UDim2.fromOffset(slot.X, slot.Y)
+			tile.Icon = icon
+		end
+	end
+	tile.Lv.Text = "LV " .. card.Level
+	tile.Name.Text = if card.State == "Soon" then "???" else card.Name
+	-- long names ("Heartstone Shard Heartlance") get smaller to stay on 2 lines
+	local nameMax = if g then g.Slots.NameSize else 16
+	TechShopView.fitText(tile.Name, tile.Name.Size.X.Offset, tile.Name.Size.Y.Offset, nameMax, math.floor(nameMax * 0.7))
+	tile.Damage.Text = if card.State == "Soon" then "Coming soon" else Format.big(card.Damage) .. " DMG/s"
+	local priced = card.Price ~= nil and card.State ~= "Owned"
+	tile.PriceRow.Visible = priced
+	tile.Price.Text = if card.Price then Format.money(card.Price) else ""
+	tile.Price.TextColor3 = if card.Reason == "NoCoins" then S.Bad else S.Ink
+	tile.ButtonText.Text = VaultView.buttonText(card)
+	paint(tile.ButtonBody, if card.CanBuy then S.Roles.Go else S.Roles.Plain)
+	-- BUY: white with the outline; the others: soft grey ink, no outline
+	tile.ButtonText.TextColor3 = if card.CanBuy then S.White else S.InkSoft
+	local outline = tile.ButtonText:FindFirstChildOfClass("UIStroke")
+	if outline then
+		outline.Enabled = card.CanBuy
+		outline.Transparency = if card.CanBuy then 0 else 1
+	end
+	tile.Ribbon.Visible = card.State == "Next"
+	tile.Check.Visible = card.State == "Owned"
+	tile.Dim.Visible = card.State == "Locked" or card.State == "Soon"
+	-- the next card: a gold outline
+	tile.Body.Stroke.Color = if card.State == "Next" then S.Gold else S.Outline
+	tile.Body.Stroke.Thickness = if card.State == "Next" then 5 else S.Stroke
+	tile.Button.Selectable = true
+end
+
+-- Fills the cards (VaultView.cards) in; extra tiles hide.
+function VaultView.setCards(refs: Refs, cards: { Card })
+	for i, tile in refs.Tiles do
+		local card = cards[i]
+		if card then
+			VaultView.fillTile(tile, card, refs.Grid)
+		else
+			tile.Holder.Visible = false
+		end
+	end
+end
+
+function VaultView.setCoins(refs: Refs, coins: number)
+	refs.Coins.Text = Format.money(coins)
+end
+
+-- "Your blaster: LV 3 Cobalt Spark Blaster · 16 DMG/s"
+function VaultView.setCurrent(refs: Refs, level: number, oreId: string)
+	refs.Level = level
+	refs.Info.Text = string.format(
+		"Your blaster: LV %d %s%s%s DMG/s",
+		level,
+		BlasterData.displayName(level, oreId),
+		VaultView.Separator,
+		Format.big(BlasterData.damage(level, oreId))
+	)
+end
+
+function VaultView.setHint(refs: Refs, value: string)
+	refs.Hint.Text = value
+end
+
+-- A message in the footer (nil = back to the hint).
+function VaultView.setMessage(refs: Refs, value: string?, color: Color3?)
+	local g = refs.Grid
+	refs.Message.Visible = value ~= nil
+	refs.Message.Text = value or ""
+	refs.Message.TextColor3 = color or S.Ink
+	refs.Hint.Visible = value == nil and (g == nil or g.HintH > 0)
+	refs.Info.Visible = value == nil or (g ~= nil and g.HintH > 0)
+end
+
+-- The tile showing `level`.
+function VaultView.tileFor(refs: Refs, level: number): Tile?
+	for _, tile in refs.Tiles do
+		if tile.Level == level and tile.Holder.Visible then
+			return tile
+		end
+	end
+	return nil
+end
+
+-- The button a gamepad selects on open: your next card's, else the first.
+function VaultView.firstButton(refs: Refs): TextButton
+	for _, tile in refs.Tiles do
+		local card = tile.Card
+		if card and card.State == "Next" and tile.Holder.Visible then
+			return tile.Button
+		end
+	end
+	return refs.Tiles[1].Button
+end
+
+-- Scrolls the row so `tile` is in view (compact layout; gamepad selection).
+function VaultView.scrollTo(refs: Refs, tile: Tile)
+	local g = refs.Grid
+	if not g or not g.Compact then
+		return
+	end
+	local x = tile.Holder.Position.X.Offset
+	local left = refs.Cards.CanvasPosition.X
+	if x < left then
+		refs.Cards.CanvasPosition = Vector2.new(x, 0)
+	elseif x + g.TileW > left + g.ViewW then
+		refs.Cards.CanvasPosition = Vector2.new(x + g.TileW - g.ViewW, 0)
+	end
+end
+
+-- Every button (touch-size tests: VaultView.MinTouch at VaultView.PhoneScale).
+function VaultView.touchTargets(refs: Refs): { GuiObject }
+	local list: { GuiObject } = { refs.Close.Parent :: GuiObject }
+	for _, tile in refs.Tiles do
+		table.insert(list, tile.ButtonBody.Holder)
+	end
+	return list
+end
+
+return VaultView

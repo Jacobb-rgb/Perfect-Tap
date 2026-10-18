@@ -44,6 +44,7 @@ local ORDER = {
 	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
 	"ElevatorService", -- the mine elevator (after EconomyService, StateService and WorldService)
+	"VaultService", -- the Blaster Vault shop (buy the next blaster level, the crate opening)
 	"BuildService",
 	"AccessService",
 	"TeleportService", -- the quick teleports (BASE / LOBBY / VAULT / elevator)
