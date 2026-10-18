@@ -25,6 +25,7 @@ local ORDER = {
 	"StateService",
 	"ItemService",
 	"ToolService",
+	"MovementService", -- the movement check: samples characters, trustedPosition for range checks (logging only)
 	"MiningService",
 	"CarryService",
 	"PlotService",

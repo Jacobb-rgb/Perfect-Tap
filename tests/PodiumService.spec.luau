@@ -315,6 +315,77 @@ return function(T, Loader)
 		T.falsy(PodiumService.remove(w.player, 1), "junk")
 		T.eq(w.data.Podiums[1], "", "junk cleared")
 		T.eq(#w.data.Storage, before, "no item made from junk")
+		-- an ore a newer build knows (a key this server can't read) goes into the pen as it is
+		w.data.Podiums[1] = "Clean|Zzzium|Pristine|"
+		fill(w, DIRTY, PenService.capacity(w.player) - #w.data.Storage)
+		local full, fullWhy = PodiumService.remove(w.player, 1)
+		T.falsy(full, "not into a full pen")
+		T.eq(fullWhy, "PenFull", "pen full")
+		T.eq(w.data.Podiums[1], "Clean|Zzzium|Pristine|", "still on the podium (docs/SAVE_AUDIT.md #1(b))")
+		table.remove(w.data.Storage)
+		before = #w.data.Storage
+		T.truthy(PodiumService.remove(w.player, 1), "taken off")
+		T.eq(w.data.Podiums[1], "", "the slot is free")
+		T.eq(#w.data.Storage, before + 1, "one item in the pen")
+		local kept = w.data.Storage[#w.data.Storage]
+		T.eq(ItemData.storageKey(kept), "Clean|Zzzium|Pristine|", "the same key: the newer build reads it back")
+		T.eq(kept.R, nil, "no empty recipe field")
+		T.truthy(lastNote(w, "Notify").A.Text:find("newest version", 1, true), "told why it can't be seen")
+		-- a key-shaped one with a recipe keeps every part
+		w.data.Podiums[2] = "Relic|Zzzium||Halo"
+		table.remove(w.data.Storage, 1) -- (room for it)
+		T.truthy(PodiumService.remove(w.player, 2), "taken off")
+		kept = w.data.Storage[#w.data.Storage]
+		T.eq(ItemData.storageKey(kept), "Relic|Zzzium||Halo", "kind, ore and recipe kept")
+		T.eq(kept.G, nil, "no empty grade field")
+	end)
+
+	withWorld("PodiumService: Place and Put On Podium never cover an ore a newer build put there", function(w)
+		local unknown = "Clean|Zzzium|Pristine|"
+		w.data.Podiums[1] = unknown
+		fill(w, GOLD, 1)
+		local ok, why = PodiumService.place(w.player, 1, GOLD)
+		T.falsy(ok, "place refused")
+		T.eq(why, "Taken", "the slot counts as taken")
+		T.eq(w.data.Podiums[1], unknown, "the unknown ore stays")
+		T.eq(inPen(w, GOLD), 1, "the gold stays in the pen")
+		local gold = carry(w, { K = "Clean", O = "Gold", G = "Pristine" })
+		local put, putWhy = PodiumService.placeFromHands(w.player, 1)
+		T.falsy(put, "put refused")
+		T.eq(putWhy, "Taken", "taken")
+		T.eq(gold.State, "Carried", "the gold stays in hand")
+		T.eq(w.data.Podiums[1], unknown, "still the unknown ore")
+		podium.prompt(w.player, PLOT, 1, "Place")
+		local open = lastNote(w, "OpenUI")
+		T.falsy(open and open.A == "Pen", "no pen picker for that slot")
+		PodiumService.refreshPlot(PLOT)
+		T.eq(podium.shown(PLOT, 1).Model, nil, "nothing shown for it (this build can't draw it)")
+		T.eq(w.data.Podiums[1], unknown, "a refresh keeps it too")
+	end)
+
+	withWorld("PodiumService: Remove is refused while the pen is over its capacity (PenOver); the ore stays", function(w)
+		fill(w, GOLD, 1)
+		PodiumService.place(w.player, 1, GOLD)
+		-- a rescue move overfilled the pen
+		fill(w, DIRTY, PenService.capacity(w.player) + 2)
+		local before = #w.data.Storage
+		local ok, why = PodiumService.remove(w.player, 1)
+		T.falsy(ok, "refused")
+		T.eq(why, "PenOver", "the pen's one over-capacity reason")
+		T.eq(why, PenService.OverReason, "PenService.OverReason")
+		T.eq(w.data.Podiums[1], GOLD, "the ore stays on the podium (never destroyed)")
+		T.eq(#w.data.Storage, before, "nothing added to the pen")
+		T.eq(lastNote(w, "Notify").A.Text, PenService.overText(w.data), "a toast says why")
+		-- the prompt and PodiumAction go the same way
+		podium.action(w.player, 1, "Remove")
+		T.eq(w.data.Podiums[1], GOLD, "PodiumAction refused too")
+		-- back under the capacity: it goes back in
+		for _ = 1, 3 do
+			table.remove(w.data.Storage)
+		end
+		T.truthy(PodiumService.remove(w.player, 1), "room again")
+		T.eq(w.data.Podiums[1], "", "podium empty")
+		T.eq(inPen(w, GOLD), 1, "back in the pen")
 	end)
 
 	withWorld("PodiumService: racing Place and Remove never duplicates an ore", function(w)

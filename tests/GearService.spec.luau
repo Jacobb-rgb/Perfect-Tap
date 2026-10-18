@@ -743,16 +743,63 @@ return function(T, Loader)
 		w.clear = true
 		ItemService.magnetStep(m.CheckEvery / 2)
 		T.falsy(pulled(item), "a blocked item isn't tried again at once")
+		-- nobody moved: the wall is still there, so no new ray yet (BlockedBackoff)
 		ItemService.magnetStep(m.CheckEvery)
+		T.falsy(pulled(item), "standing still: not tried again yet")
+		-- you stepped aside: tried again (CheckEvery has passed)
+		local moved = w.player.root.Position + Vector3.new(0, 0, m.BlockedMove + 0.5)
+		w.player.root.Position = moved
+		w.player.root.CFrame = CFrame.new(moved)
+		ItemService.magnetStep(m.CheckEvery + 0.01)
 		T.truthy(pulled(item), "clear: pulled")
 		w.clear = false
 		ItemService.magnetStep(m.CheckEvery * 1.5)
 		T.truthy(pulled(item), "not checked again yet")
 		-- (it slid closer meanwhile: progress)
 		item.Body.CFrame = CFrame.new(root + Vector3.new(10 - 2 * m.MinProgress, -2, 0))
-		ItemService.magnetStep(m.CheckEvery * 2 + 0.01)
+		ItemService.magnetStep(m.CheckEvery * 2 + 0.02)
 		T.falsy(pulled(item), "a wall now: let go")
 		T.falsy(item.MagnetDone, "blocked is not given up on")
+	end)
+
+	withWorld("Ore Magnet: an item behind a wall costs one ray per BlockedBackoff while nothing moves (perf audit #10)", function(w)
+		magnetWorld(w, 20, false)
+		local m = ItemService.Magnet
+		local root = w.player.root.Position
+		local rays = 0
+		ItemService._test.setMagnet(function(p)
+			return if p == w.player then w.radius else 0
+		end, function()
+			rays += 1
+			return false
+		end)
+		local items = {}
+		for i = 1, 4 do
+			table.insert(items, chunk(w, USER, root + Vector3.new(8 + i, -2, i)))
+		end
+		-- 12 seconds standing still next to the wall, a pass every 0.25 s
+		local t = 0
+		while t <= 12 do
+			ItemService.magnetStep(t)
+			t += 0.25
+		end
+		local before = 4 * (math.floor(12 / m.CheckEvery) + 1)
+		T.le(rays, 4 * (math.floor(12 / m.BlockedBackoff) + 1), "one ray per item per BlockedBackoff")
+		T.lt(rays, before, `fewer rays than one per CheckEvery ({rays} < {before})`)
+		-- walking along the wall: tried again every CheckEvery, as before
+		rays = 0
+		local start = t
+		while t <= start + 4 do
+			local p = w.player.root.Position + Vector3.new(0, 0, 0.75)
+			w.player.root.Position = p
+			w.player.root.CFrame = CFrame.new(p)
+			ItemService.magnetStep(t)
+			t += 0.25
+		end
+		T.truthy(rays >= 4 * 3, `walking: every CheckEvery again ({rays})`)
+		for _, item in items do
+			T.falsy(pulled(item), "never through the wall")
+		end
 	end)
 
 	withWorld("Ore Magnet: the nearest clear items get the slots, within a ray budget", function(w)
@@ -1216,19 +1263,69 @@ return function(T, Loader)
 		T.near(ray.From.Y, root.Y - 3 + m.RayHeight, 1e-6, "from RayHeight above the feet")
 		T.near(ray.From.X, root.X, 1e-6)
 		T.near(ray.To.Y, at.Y + 0.5, 1e-6, "to the item")
-		-- floor all the way: pulled, and every pass probes again
+		-- floor all the way: pulled, and every pass it slid on probes again
 		floor = true
 		item.MagnetDone = nil
 		ItemService.magnetStep(0.25)
 		T.truthy(pulled(item), "a floor: pulled")
 		local before = #probes
+		local function slide(dx: number)
+			local p = item.Body.CFrame.Position
+			item.Body.CFrame = CFrame.new(p - Vector3.new(dx, 0, 0))
+		end
+		slide(2)
 		ItemService.magnetStep(0.5)
-		T.eq(#probes, before + 1, "probed every pass")
+		T.eq(#probes, before + 1, "probed again after sliding on")
+		-- held up for a moment (it didn't move): that floor is still there, no new ray
+		ItemService.magnetStep(0.75)
+		T.eq(#probes, before + 1, "no new probe while it stands still")
 		-- the floor ends under way: let go
 		floor = false
-		ItemService.magnetStep(0.75)
+		slide(2)
+		ItemService.magnetStep(1.0)
 		T.falsy(pulled(item), "a ledge ahead: let go")
 		T.truthy(item.MagnetDone)
+	end)
+
+	withWorld("Ore Magnet: a real pull probes the floor every pass it moves, never at your feet (perf audit #10)", function(w)
+		magnetWorld(w, 30)
+		local m = ItemService.Magnet
+		local root = w.player.root.Position
+		local probes, rays = 0, 0
+		ItemService._test.setMagnet(function(p)
+			return if p == w.player then w.radius else 0
+		end, function()
+			rays += 1
+			return true
+		end, function()
+			probes += 1
+			return true
+		end)
+		local items = {}
+		for i = 1, m.MaxPulls do
+			table.insert(items, chunk(w, USER, root + Vector3.new(6 + 2 * i, -2, i - 4)))
+		end
+		-- every pass, every pulled item slides toward you at its pull speed (the physics)
+		local pulls = 0
+		local t = 0
+		for _ = 1, 40 do
+			ItemService.magnetStep(t)
+			for _, item in ItemService._test.pulling() do
+				pulls += 1
+				local p = item.Body.CFrame.Position
+				local flat = Vector3.new(root.X - p.X, 0, root.Z - p.Z)
+				local step = math.min(flat.Magnitude, ItemService.pullSpeed(flat.Magnitude) * 0.25)
+				item.Body.CFrame = CFrame.new(p + flat.Unit * step)
+			end
+			t += 0.25
+		end
+		T.truthy(pulls > 0, "items were pulled")
+		T.eq(#ItemService._test.pulling(), 0, "every item arrived")
+		T.le(probes, pulls, `at most one probe per pulled pass ({probes} probes, {pulls} pulled passes, {rays} rays)`)
+		for _, item in items do
+			local p = item.Body.CFrame.Position
+			T.le(Vector3.new(root.X - p.X, 0, root.Z - p.Z).Magnitude, m.StartDistance + 0.01, "arrived at your feet")
+		end
 	end)
 
 	---------------------------------------------------------------- the view
@@ -1864,6 +1961,143 @@ return function(T, Loader)
 			end
 		end)
 		CarryService._test.setReach(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	withWorld("Carry: hand drops and throws stop at the hard ceiling of loose items; death drops go into the pen", function(w)
+		magnetWorld(w, 0)
+		local rootPart = Instance.new("Part")
+		rootPart.Size = Vector3.new(2, 2, 1)
+		rootPart.CFrame = CFrame.new(w.player.root.Position)
+		rootPart.Position = w.player.root.Position
+		rootPart.AssemblyLinearVelocity = Vector3.zero
+		w.player.root = rootPart
+		local at = rootPart.CFrame.Position
+		w.data.Gear.Backpack = 5
+		Bonuses.invalidate(w.player)
+		CarryService._test.setDropSpot(function(_, root)
+			return root.CFrame * CFrame.new(0, 0, -3)
+		end)
+		local fireNear = rawget(Net, "fireNear")
+		rawset(Net, "fireNear", function() end)
+		local ok, err = pcall(function()
+			local total = GameConfig.MaxLooseItemsTotal
+			-- a player pouring items out: Take into the hands, drop, again and again
+			local dropped = 0
+			for _ = 1, total + 20 do
+				local item = chunk(w, USER, at + Vector3.new(1, -1, 0))
+				T.truthy(CarryService.pickup(w.player, item), "picked up")
+				CarryService._test.drop(w.player)
+				if item.State == "Loose" then
+					dropped += 1
+				else
+					break
+				end
+			end
+			T.eq(ItemService.looseCount(USER), total, "never more than the ceiling")
+			T.truthy(ItemService.atTotalCap(USER), "at the ceiling")
+			T.eq(#CarryService.list(w.player), 1, "the refused one stays in the hands")
+			T.eq(dropped, total, "every drop up to the ceiling went through")
+			-- a throw is refused the same way
+			CarryService._test.throw(w.player, Vector3.new(0, 0, -1), 0.5)
+			T.eq(#CarryService.list(w.player), 1, "no throw either")
+			T.eq(ItemService.looseCount(USER), total, "still at the ceiling")
+			-- dying at the ceiling: what was in the hands goes into the pen, not onto the ground
+			local before = #w.data.Storage
+			CarryService.dropAll(w.player)
+			T.eq(ItemService.looseCount(USER), total, "nothing more on the ground")
+			T.eq(#w.data.Storage, before + 1, "kept in the pen")
+			-- picking one up makes room for one drop
+			local any: any = nil
+			for _, record in ItemService.ownedBy(USER) do
+				if record.State == "Loose" then
+					any = record
+					break
+				end
+			end
+			T.truthy(any, "a loose item")
+			T.truthy(CarryService.pickup(w.player, any), "picked up")
+			CarryService._test.drop(w.player)
+			T.eq(any.State, "Loose", "room again: dropped")
+			T.eq(ItemService.totalRoom(USER), 0, "back at the ceiling")
+		end)
+		rawset(Net, "fireNear", fireNear)
+		CarryService._test.setDropSpot(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	withWorld("Carry: a pickup wears the full look; consumed items leave the hands; drops pass on at most CharacterSpeedCap", function(w)
+		magnetWorld(w, 0)
+		-- a real root part (the carry weld needs an Instance)
+		local rootPart = Instance.new("Part")
+		rootPart.Size = Vector3.new(2, 2, 1)
+		rootPart.CFrame = CFrame.new(w.player.root.Position)
+		rootPart.Position = w.player.root.Position
+		rootPart.AssemblyLinearVelocity = Vector3.zero
+		w.player.root = rootPart
+		local at = rootPart.CFrame.Position
+		w.data.Gear.Backpack = 2
+		Bonuses.invalidate(w.player)
+		ItemService.onCarriedConsumed(CarryService.forget)
+		CarryService._test.setDropSpot(function(_, root)
+			return root.CFrame * CFrame.new(0, 0, -3)
+		end)
+		local fireNear = rawget(Net, "fireNear")
+		rawset(Net, "fireNear", function() end)
+		local ok, err = pcall(function()
+			-- a belt item (light) picked up: the full look, then the weld
+			local belt = chunk(w, USER, at + Vector3.new(2, -1, 0))
+			T.truthy(belt.Light, "light on the ground")
+			T.truthy(CarryService.pickup(w.player, belt), "picked up")
+			T.falsy(belt.Light, "full look in the hands")
+			local weld = belt.Body:FindFirstChild("CarryWeld")
+			T.truthy(weld and weld.Part1 == belt.Body, "welded to the (kept) Body after dressing")
+			T.eq(#CarryService.list(w.player), 1, "in the hands")
+			-- the engine destroyed it while carried: out of the hands at once (Security #11)
+			belt.Model.Parent = nil
+			ItemService._test.maintain(belt, os.clock())
+			T.eq(belt.State, "Consumed", "consumed")
+			T.eq(#CarryService.list(w.player), 0, "CarryService forgot it")
+			T.eq(w.player.attrs.CarryCount, 0, "the HUD count follows")
+			-- consumed without a word (any other path): never taken, never cleaned twice
+			local second = chunk(w, USER, at + Vector3.new(2, -1, 0))
+			T.truthy(CarryService.pickup(w.player, second), "picked up")
+			second.State = "Consumed"
+			T.eq(
+				CarryService.takeTop(w.player, function(r)
+					return r.Kind == "Clean"
+				end),
+				nil,
+				"a consumed record is never handed out"
+			)
+			T.eq(#CarryService.list(w.player), 0, "and dropped from the list")
+			-- drops and throws: the character's own speed counts at most CharacterSpeedCap
+			local cap = CarryService.CharacterSpeedCap
+			rootPart.AssemblyLinearVelocity = Vector3.new(500, 0, 0)
+			T.near(CarryService.characterVelocity(rootPart).Magnitude, cap, 1e-4, "a spoofed run is capped")
+			rootPart.AssemblyLinearVelocity = Vector3.new(0 / 0, 0, 0)
+			T.eq(CarryService.characterVelocity(rootPart).Magnitude, 0, "a broken one counts as standing")
+			rootPart.AssemblyLinearVelocity = Vector3.new(10, 0, 0)
+			T.near(CarryService.characterVelocity(rootPart).X, 10, 1e-4, "a real run is kept")
+			rootPart.AssemblyLinearVelocity = Vector3.new(500, 0, 0)
+			local dropped = chunk(w, USER, at + Vector3.new(2, -1, 0))
+			CarryService.pickup(w.player, dropped)
+			CarryService._test.drop(w.player)
+			T.eq(dropped.State, "Loose", "dropped")
+			T.le(dropped.Body.AssemblyLinearVelocity.Magnitude, cap + 4 + 1e-3, "drop: at most the cap + the push")
+			local thrown = chunk(w, USER, at + Vector3.new(2, -1, 0))
+			CarryService.pickup(w.player, thrown)
+			CarryService._test.throw(w.player, Vector3.new(0, 0, -1), 0)
+			T.eq(thrown.State, "Loose", "thrown")
+			local most = GameConfig.ThrowSpeedMin * Bonuses.throwMult(Bonuses.stats(w.player)) + 8 + cap * 0.5
+			T.le(thrown.Body.AssemblyLinearVelocity.Magnitude, most + 1e-3, "throw: half the capped run at most")
+		end)
+		rawset(Net, "fireNear", fireNear)
+		CarryService._test.setDropSpot(nil)
 		if not ok then
 			error(err, 0)
 		end

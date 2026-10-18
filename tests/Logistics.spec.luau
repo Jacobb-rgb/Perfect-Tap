@@ -513,6 +513,13 @@ return function(T, Loader)
 			seen[entry.Desc] = true
 		end
 		T.truthy(seen[a] and seen[b] and seen[c], "never lost")
+		-- dirty ore: the hand never tells which ore it is (security #6)
+		furnace.Entry.Out = { item("Raw", "Diamond") }
+		now += interval
+		tick(arm, now)
+		T.eq(#log, 4, "the raw chunk moved")
+		T.eq(attr(arm, "Holding"), "", "no ore id for dirty ore")
+		T.eq(attr(arm, "Working"), true, "but the arm shows it working")
 		-- faster with Speed
 		w.data.MachineUpgrades.RobotArm = { Speed = 3 }
 		T.near(LogisticsService.interval(arm, LogisticsService.ArmInterval), 1.5 * MachineData.speedMult(3), 1e-9, "Speed 3")
@@ -670,6 +677,35 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+	end)
+
+	withWorld("Logistics: the Sell Box pays as the very last step (a failure before it pays nothing)", function(w)
+		local m = place(w, "SellBox", 5, 5, 0)
+		local coins = w.data.Coins
+		local sold = w.data.Stats.ItemsSold
+		-- the popup batch looks up where the box's intake is: make that fail
+		local point = MachineService.point
+		rawset(MachineService, "point", function(machine: any, name: string)
+			if name == "Intake" then
+				error("broken intake")
+			end
+			return point(machine, name)
+		end)
+		local ok, err = pcall(function()
+			local d = item("Clean", "Gold", "Pristine")
+			T.truthy(MachineService.insertDesc(m, d, USER, "Belt"), "accepted (the insert step failed after)")
+			T.eq(w.data.Coins, coins, "nothing paid")
+			T.eq(w.data.Stats.ItemsSold, sold, "not counted as sold")
+			T.eq(#w.spawns, 1, "the item came back out")
+			T.truthy(w.spawns[1].Desc == d, "that very item")
+		end)
+		rawset(MachineService, "point", point)
+		if not ok then
+			error(err, 0)
+		end
+		-- working again: paid
+		T.truthy(MachineService.insertDesc(m, item("Clean", "Gold", "Pristine"), USER, "Belt"), "sold")
+		T.lt(coins, w.data.Coins, "paid")
 	end)
 
 	withWorld("Logistics: LogisticsService registers every roster logistics machine", function(w)

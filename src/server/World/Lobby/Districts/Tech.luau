@@ -91,6 +91,43 @@ function Tech.glow(parent: Instance, cf: CFrame, size: Vector3, color: Color3?):
 end
 local glow = Tech.glow
 
+-- Does the box (cf, size) lie wholly inside the box (outer, outerSize)?
+function Tech.boxInside(cf: CFrame, size: Vector3, outer: CFrame, outerSize: Vector3): boolean
+	local h, ho = size / 2, outerSize / 2 + Vector3.new(1e-3, 1e-3, 1e-3)
+	for _, sx in { -1, 1 } do
+		for _, sy in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				local q = outer:PointToObjectSpace((cf * CFrame.new(sx * h.X, sy * h.Y, sz * h.Z)).Position)
+				if math.abs(q.X) > ho.X or math.abs(q.Y) > ho.Y or math.abs(q.Z) > ho.Z then
+					return false
+				end
+			end
+		end
+	end
+	return true
+end
+
+--[[
+	(perf pass 1) A part a builder leaves out because another part hides it
+	(the wheel's 6 o'clock rim chord inside the bottom bracket, the mid
+	pylons' foot lip and orange band behind their showcase's stand). Builds
+	nothing; while a list is set with Tech.recordLeftOut (the Districts
+	spec) the box goes on it with its model and name, so a spec can check
+	the box is still hidden when a neighbour changes.
+]]
+export type LeftOut = { Model: Instance, CFrame: CFrame, Size: Vector3, Name: string }
+local leftOut: { LeftOut }? = nil
+function Tech.leaveOut(parent: Instance, cf: CFrame, size: Vector3, name: string)
+	local list = leftOut
+	if list then
+		table.insert(list, { Model = parent, CFrame = cf, Size = size, Name = name })
+	end
+end
+-- Starts (a list) or stops (nil) recording the parts left out.
+function Tech.recordLeftOut(list: { LeftOut }?)
+	leftOut = list
+end
+
 --[[
 	A neon tube set in a dark channel (concept v2: saturated electric blue
 	with dark lines on both sides): a MetalDeep backing strip 0.12 thick,
@@ -265,6 +302,9 @@ end
 	Frame (inner frame color, default the orange band), Glass (default
 	true; false = an open bay), Lit (Color3: a glowing neon pane instead of
 	glass), Foot. Returns the pane (or nil). 8-10 parts.
+	(perf pass 1) Wall pieces a caller builds as one longer block shared
+	with the next window (Stalls' two-bay sides): NoBelow, NoAbove, NoFoot,
+	NoJamb = { [side]: true } (side -1 / +1 = local -X / +X).
 ]]
 function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: number, depth: number, opts: Opts?): Part?
 	local o: Opts = opts or {}
@@ -274,17 +314,24 @@ function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: 
 	local y1 = o.WindowTop or height * 0.8
 	local jw = (width - ow) / 2
 	local p = Style.solid()
-	block(parent, base * CFrame.new(0, y0 / 2, 0), Vector3.new(width, y0, depth), color, nil, p)
-	block(parent, base * CFrame.new(0, (y1 + height) / 2, 0), Vector3.new(width, height - y1, depth), color, nil, Style.solid())
+	if not o.NoBelow then
+		block(parent, base * CFrame.new(0, y0 / 2, 0), Vector3.new(width, y0, depth), color, nil, p)
+	end
+	if not o.NoAbove then
+		block(parent, base * CFrame.new(0, (y1 + height) / 2, 0), Vector3.new(width, height - y1, depth), color, nil, Style.solid())
+	end
+	local noJamb: { [number]: boolean } = o.NoJamb or {}
 	for _, side in { -1, 1 } do
-		block(
-			parent,
-			base * CFrame.new(side * (ow / 2 + jw / 2), (y0 + y1) / 2, 0),
-			Vector3.new(jw, y1 - y0, depth),
-			color,
-			nil,
-			Style.solid()
-		)
+		if not noJamb[side] then
+			block(
+				parent,
+				base * CFrame.new(side * (ow / 2 + jw / 2), (y0 + y1) / 2, 0),
+				Vector3.new(jw, y1 - y0, depth),
+				color,
+				nil,
+				Style.solid()
+			)
+		end
 	end
 	local frame = o.Frame or Tech.Band
 	local t = 0.36
@@ -297,7 +344,7 @@ function Tech.windowWall(parent: Instance, base: CFrame, width: number, height: 
 		bit(parent, base * CFrame.new(side * (ow / 2 - t / 2), (y0 + y1) / 2, 0), Vector3.new(t, y1 - y0 - 2 * t, fd), frame)
 	end
 	bit(parent, base * CFrame.new(0, y0 + t / 2 - 0.15, -0.14), Vector3.new(ow + 0.4, t + 0.3, fd + 0.28), frame)
-	if o.Foot ~= false then
+	if o.Foot ~= false and not o.NoFoot then
 		bit(parent, base * CFrame.new(0, 0.4, -depth / 2 - 0.2), Vector3.new(width, 0.8, 0.4), Tech.MetalDark)
 	end
 	local inner: Color3? = o.FrameNeon
@@ -329,8 +376,9 @@ end
 --[[
 	wall-door-wide-banner: two jambs, a lintel and a colored U frame around
 	a wide opening. `base` = bottom center. opts: Color, OpeningWidth,
-	OpeningHeight, Frame (color), Neon (Color3: a neon line inside the U).
-	7-10 parts.
+	OpeningHeight, Frame (color), Neon (Color3: a neon line inside the U),
+	JambExtra (perf pass 1: the jambs reach this much further out, over the
+	next window wall's jamb, which the caller then leaves out). 7-10 parts.
 ]]
 function Tech.doorFrame(parent: Instance, base: CFrame, width: number, height: number, depth: number, opts: Opts?)
 	local o: Opts = opts or {}
@@ -338,8 +386,16 @@ function Tech.doorFrame(parent: Instance, base: CFrame, width: number, height: n
 	local ow = o.OpeningWidth or width * 0.7
 	local oh = o.OpeningHeight or height * 0.75
 	local jw = (width - ow) / 2
+	local extra: number = o.JambExtra or 0
 	for _, side in { -1, 1 } do
-		block(parent, base * CFrame.new(side * (ow / 2 + jw / 2), oh / 2, 0), Vector3.new(jw, oh, depth), color, nil, Style.solid())
+		block(
+			parent,
+			base * CFrame.new(side * (ow / 2 + (jw + extra) / 2), oh / 2, 0),
+			Vector3.new(jw + extra, oh, depth),
+			color,
+			nil,
+			Style.solid()
+		)
 	end
 	if height > oh + 0.05 then
 		block(parent, base * CFrame.new(0, (oh + height) / 2, 0), Vector3.new(width, height - oh, depth), color, nil, Style.solid())

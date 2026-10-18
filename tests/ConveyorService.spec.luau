@@ -79,6 +79,11 @@ return function(T, Loader)
 			table.insert(saved, { t, key, rawget(t, key) })
 			rawset(t, key, value)
 		end
+		-- every loose item here stands for one at the base (belts, chutes, the
+		-- pen gate): the factory's loose cap counts only those (looseCount "Base")
+		patch(ItemService, "onBase", function()
+			return true
+		end)
 		patch(DataService, "get", function(p)
 			return if p == w.player then w.data else nil
 		end)

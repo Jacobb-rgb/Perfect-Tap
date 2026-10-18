@@ -27,8 +27,29 @@ local SettingsService = {}
 -- The saved settings of a loaded save (a missing or broken record is
 -- replaced by a whole, valid one).
 function SettingsService.read(data: { [string]: any }): SettingsConfig.Settings
-	local clean = SettingsConfig.sanitize(data.Settings)
-	data.Settings = clean
+	local raw = data.Settings
+	local clean = SettingsConfig.sanitize(raw)
+	-- settings a newer build added stay in the save (docs/SAVE_AUDIT.md #1(b)):
+	-- short keys with a boolean, a finite number or a short string
+	local stored: { [string]: any } = table.clone(clean) :: any
+	if type(raw) == "table" then
+		local extra = 0
+		for key, value in raw do
+			if
+				type(key) == "string"
+				and #key <= 32
+				and stored[key] == nil
+				and (type(value) == "boolean" or (type(value) == "number" and value == value and math.abs(value) < math.huge) or (type(
+					value
+				) == "string" and #value <= 64))
+				and extra < 16
+			then
+				stored[key] = value
+				extra += 1
+			end
+		end
+	end
+	data.Settings = stored
 	return clean
 end
 
@@ -43,7 +64,16 @@ function SettingsService.apply(player: Player, raw: any): boolean
 	if SettingsConfig.equal(wanted, saved) then
 		return false
 	end
-	data.Settings = wanted
+	-- (the settings a newer build added, kept by read, stay)
+	local stored: { [string]: any } = table.clone(wanted) :: any
+	if type(data.Settings) == "table" then
+		for key, value in data.Settings do
+			if stored[key] == nil then
+				stored[key] = value
+			end
+		end
+	end
+	data.Settings = stored
 	DataService.changed(player)
 	return true
 end

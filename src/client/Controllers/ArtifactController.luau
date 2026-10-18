@@ -245,14 +245,16 @@ local function wallet(): CollectionView.Wallet
 	local state = StateController.get()
 	local level = if state then tonumber(state.BlasterLevel) else nil
 	local shards = if state then tonumber(state.Shards) else nil
+	local perks = if state then state.Perks else nil
 	return {
 		BlasterLevel = if level and level == level then level else 1,
 		Shards = if shards and shards == shards then shards else 0,
+		Vip = type(perks) == "table" and perks.ForgeVip == true,
 	}
 end
 
 local function walletKey(w: CollectionView.Wallet): string
-	return `{w.BlasterLevel}/{w.Shards}`
+	return `{w.BlasterLevel}/{w.Shards}/{w.Vip}`
 end
 
 local function refreshBook()

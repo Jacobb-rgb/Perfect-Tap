@@ -43,6 +43,7 @@ local RevealFx = require(Cleaning.RevealFx)
 local CleaningView = require(script.Parent.Parent.UI.CleaningView)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
+local StateController = require(script.Parent.StateController)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local LightingController = require(script.Parent.LightingController)
@@ -540,7 +541,9 @@ local function showCard(ctx: any, result: { [string]: any })
 	view.CardStars.Text = stars(grade.Level)
 	view.CardOre.Text = `{ctx.ore.Name}  ({ctx.rarity.Name})`
 	view.CardOre.TextColor3 = ctx.rarity.Color
-	view.CardValue.Text = `Worth {Format.commas(result.Value or 0)} coins`
+	-- what Tobin pays for it with the player's sell bonus (result.Value is the base price)
+	local worth = math.floor((result.Value or 0) * StateController.sellMult() + 0.5)
+	view.CardValue.Text = `Worth {Format.commas(worth)} coins`
 	view.CardDetail.Text = string.format(
 		"Chisel %d%%  ·  Scrape %d%%  ·  Polish %d%%  ·  Chips %d",
 		math.floor((result.Chisel or 0) * 100),

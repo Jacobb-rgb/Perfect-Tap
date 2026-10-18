@@ -15,6 +15,7 @@
 -- players and Net are small fakes.
 return function(T, Loader)
 	local task = require("@lune/task")
+	local fs = require("@lune/fs")
 	local Vector3 = (require("@lune/roblox") :: any).Vector3
 	local LeaderboardConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LeaderboardConfig")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
@@ -282,6 +283,44 @@ return function(T, Loader)
 		LeaderboardService.markActive(q, 10)
 		LeaderboardService.noteSpot(q, Vector3.new(50, 0, 50), 10)
 		T.eq(LeaderboardService.creditPlayTime(q, w.data[q], 100), 0)
+	end)
+
+	withWorld("leaderboards: only server-checked play counts as activity, not plain requests (audit S2)", true, function(w)
+		local services = Loader.find("ServerScriptService.Server.Services")
+		local hooked: { [string]: (any) -> () } = {}
+		local saved = {}
+		for name, hook in LeaderboardService.ActivitySources do
+			local service = Loader.requirePath("ServerScriptService.Server.Services." .. name)
+			T.eq(type(service[hook]), "function", name .. "." .. hook .. " exists")
+			table.insert(saved, { service, hook, service[hook] })
+			service[hook] = function(callback: any)
+				hooked[name] = callback
+			end
+		end
+		local ok, err = pcall(function()
+			local count = 0
+			for _ in LeaderboardService.ActivitySources do
+				count += 1
+			end
+			T.eq(LeaderboardService.hookActivity(services), count, "every source connected")
+			local window = LeaderboardService.ActiveWindow
+			local p = w.add(16, "Miner")
+			local d = w.data[p]
+			LeaderboardService.startPlay(p, os.clock() - 2 * window)
+			T.eq(LeaderboardService.creditPlayTime(p, d, os.clock()), window, "idle after the window")
+			hooked.MiningService(p, "Coal", 1) -- a mined chunk: active again
+			T.truthy(LeaderboardService.creditPlayTime(p, d, os.clock() + 30) >= 29, "mining counts as play")
+			hooked.CarryService("not a player") -- junk arguments are ignored
+		end)
+		for _, entry in saved do
+			entry[1][entry[2]] = entry[3]
+		end
+		if not ok then
+			error(err, 0)
+		end
+		-- the server no longer counts any remote as activity
+		local source = fs.readFile("src/server/Services/LeaderboardService.luau")
+		T.falsy(source:find("OnServerEvent", 1, true), "no listener on every remote")
 	end)
 
 	---------------------------------------------------------------- writes

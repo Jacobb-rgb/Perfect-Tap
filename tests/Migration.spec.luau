@@ -8,6 +8,8 @@ return function(T, Loader)
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
+	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 
 	local function deepEqual(a: any, b: any): boolean
 		if type(a) ~= type(b) then
@@ -117,7 +119,7 @@ return function(T, Loader)
 		for i = 3, #data.Storage do
 			rescued[data.Storage[i].O] = true
 		end
-		T.truthy(rescued.Unobtainium, "unknown ore moved to Storage unchanged")
+		T.truthy(rescued.Unobtainium, "a newer build's ore waits in the pen (the machine would drop it)")
 		T.truthy(rescued.Silver, "contents of a dropped unknown machine are kept")
 		T.truthy(rescued.Gold, "contents of a machine sent to the inventory are kept")
 		local blast = data.PlacedMachines[1]
@@ -125,7 +127,7 @@ return function(T, Loader)
 		T.eq(blast.In, nil, "non-table In becomes nil")
 		T.eq(blast.Out, nil, "empty Out becomes nil")
 		local crusher = data.PlacedMachines[2]
-		T.eq(crusher.In, nil, "both queue items left the Crusher")
+		T.eq(crusher.In, nil, "both queue items left the Crusher (one to the pen, the malformed one dropped)")
 		local future = data.PlacedMachines[3]
 		T.eq(future.Id, "FutureMachine", "unknown ids with a position are kept")
 		T.eq(#future.In, 1, "unknown machines keep well-formed contents")
@@ -191,12 +193,13 @@ return function(T, Loader)
 		T.eq(data.Pickaxe, nil)
 		T.eq(data.OwnedPickaxes, nil)
 		T.eq(data.BlasterLevel, 1)
-		T.eq(data.BlasterOre, "", "unknown blaster ore reset")
-		T.eq(#data.Podiums, 4, "exactly 4 podium slots")
+		T.eq(data.BlasterOre, "Unobtainium", "a blaster ore this server doesn't know is kept (a newer build's)")
+		T.eq(#data.Podiums, 5, "the 4 podium slots and a newer build's 5th")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
 		T.eq(data.Podiums[3], "")
 		T.eq(data.Podiums[4], "")
+		T.eq(data.Podiums[5], "Clean|Nope|Rough|", "a four-part 5th slot stays as it is (docs/SAVE_AUDIT.md #1(b))")
 		T.eq(data.TotalEarned, 0)
 		T.eq(data.LastSeen, 0)
 		T.truthy(report.Moved > 0 and report.Dropped > 0)
@@ -206,13 +209,17 @@ return function(T, Loader)
 		T.eq(report.Moved + report.Dropped, 0)
 	end)
 
-	T.test("Migration v3: blaster level clamped, known ore kept", function()
+	T.test("Migration v3: blaster level floored and kept above this server's top (readers clamp)", function()
 		local data = ProfileStore.deepCopy(DataTemplate)
-		data.BlasterLevel = 99.7
+		data.BlasterLevel = 12.7
 		data.BlasterOre = "Sapphire"
 		Migrations.run(data)
-		T.eq(data.BlasterLevel, 10)
+		T.eq(data.BlasterLevel, 12, "a newer build's level 12 stays")
+		T.eq(BlasterData.get(data.BlasterLevel).Level, BlasterData.MaxLevel, "read as this server's top level")
 		T.eq(data.BlasterOre, "Sapphire")
+		data.BlasterLevel = 1e9
+		Migrations.run(data)
+		T.eq(data.BlasterLevel, 99, "junk-sized levels are capped at 99")
 	end)
 
 	T.test("Migration: ores the owner's picture replaced take their new ids everywhere", function()
@@ -351,10 +358,10 @@ return function(T, Loader)
 			TripArriveAt = 12345,
 		}
 		local report = Migrations.run(data)
-		T.eq(data.Train.CapacityLevel, 5, "clamped to the top level")
+		T.eq(data.Train.CapacityLevel, 99, "floored, kept above this server's top (TrainConfig clamps for the readers)")
 		T.eq(data.Train.SpeedLevel, 0)
 		T.eq(#data.Train.Cargo, 1, "the coal stays in the cargo")
-		T.eq(data.Storage[#data.Storage].O, "Unobtainium", "unknown ore went to the pen")
+		T.eq(data.Storage[#data.Storage].O, "Unobtainium", "a newer build's ore waits in the pen")
 		T.eq(data.Train.TripDepartAt, 0)
 		T.eq(data.Train.TripArriveAt, 0, "no trip without cargo on the move")
 		T.truthy(report.Dropped > 0 and report.Moved > 0)
@@ -414,8 +421,8 @@ return function(T, Loader)
 		end
 		table.insert(stock, 1, { K = "Clean", O = "Gold", G = "Rough" }) -- not an ingot: to the pen
 		table.insert(stock, 2, "junk")
-		table.insert(stock, 3, { K = "Ingot", O = "Unobtainium" }) -- unknown ore: to the pen
-		table.insert(stock, 4, { K = "Ingot", O = "Gold", G = "Shiny" }) -- unknown grade: to the pen
+		table.insert(stock, 3, { K = "Ingot", O = "Unobtainium" }) -- an ore this server doesn't know: stays
+		table.insert(stock, 4, { K = "Ingot", O = "Gold", G = "Shiny" }) -- a grade it doesn't know: stays
 		table.insert(stock, 5, { K = "Ingot", O = "Gold", R = "Dagger" }) -- a recipe on an ingot: to the pen
 		table.insert(stock, 6, { K = "Ingot", O = "Sapphire" })
 		data.Foundry = { Stock = stock, Extra = "kept" }
@@ -445,20 +452,26 @@ return function(T, Loader)
 		T.eq(keep.Heartstone, true)
 		T.eq(keep.Silver, nil, "only booleans count")
 		T.eq(keep.Diamond, false, "an explicit 'send on' choice is kept")
-		T.eq(keep.Unobtainium, nil, "unknown ore")
+		T.eq(keep.Unobtainium, true, "an ore this server doesn't know is kept (a newer build's)")
 		T.eq(keep[3], nil)
-		T.eq(data.KeepMode, MachineData.Keep.Default, "unknown keep mode")
+		T.eq(data.KeepMode, "Everything", "a mode this server doesn't know is kept...")
+		T.truthy(
+			MachineData.keepsOre(data.KeepMode, keep, "Gold") == MachineData.keepsOre(MachineData.Keep.Default, keep, "Gold"),
+			"...and read as the default"
+		)
 
 		local kept = data.Foundry.Stock
 		T.truthy(kept == stock, "same Stock table")
 		T.eq(#kept, GameConfig.MaxFoundryStock, "capped")
-		T.eq(kept[1].O, "Sapphire", "the first good ingot (no grade is fine)")
+		T.eq(kept[1].O, "Unobtainium", "a newer build's ingot stays in the stock")
+		T.eq(kept[2].G, "Shiny", "so does an unknown grade")
+		T.eq(kept[3].O, "Sapphire", "no grade is fine")
 		for _, item in kept do
 			T.eq(item.K, "Ingot")
 		end
 		T.eq(data.Foundry.Extra, "kept", "other Foundry fields are left alone")
-		-- pen: coal + 4 bad stock items + 4 overflow ingots
-		T.eq(#data.Storage, 1 + 4 + 4, "pen got the rest")
+		-- pen: coal + 2 non-ingots (the clean gold, the recipe ingot) + 6 overflow ingots
+		T.eq(#data.Storage, 1 + 2 + 6, "pen got the rest")
 		T.eq(data.Storage[2].K, "Clean", "the clean gold, in stock order")
 		T.eq(data.Storage[#data.Storage].O, "Iron", "overflow ingots")
 
@@ -516,5 +529,199 @@ return function(T, Loader)
 		local report = Migrations.run(old)
 		T.eq(report.Moved + report.Dropped, 0, "nothing to repair")
 		T.truthy(deepEqual(old, DataTemplate), "same as a fresh save")
+	end)
+
+	-- What a newer build may have written: ids, grades, kinds, modes, levels
+	-- and slots this server doesn't know (docs/SAVE_AUDIT.md #1(b)).
+	local NEWER_NOW = 1_800_000_000
+	local function newerSave(): { [string]: any }
+		local now = NEWER_NOW
+		local data = ProfileStore.deepCopy(DataTemplate)
+		Migrations.run(data, now) -- a clean baseline
+		-- what a newer build may have written: ids, grades, kinds, modes and levels this server doesn't know
+		data.Version = Migrations.Latest + 1
+		data.BlasterLevel = 12
+		data.BlasterOre = "Zzzium"
+		-- six podiums: a newer build sells two more (a readable gold on the 5th)
+		data.Podiums = { "Clean|Zzzium|Pristine|", "Clean|Gold|Mythical|", "Clean|Gold|Pristine|", "", "Clean|Gold|Pristine|", "" }
+		data.KeepMode = "Smart"
+		data.KeepList = { Zzzium = true, Gold = false }
+		data.Discovered = { Zzzium = true, Gold = true }
+		data.Storage = { { K = "Gem", O = "Zzzium" }, { K = "Clean", O = "Gold", G = "Mythical" } }
+		data.Foundry.Stock = { { K = "Ingot", O = "Zzzium", G = "Shiny" }, { K = "Ingot", O = "Gold" } }
+		data.Train.CapacityLevel = 8
+		data.Train.SpeedLevel = 9
+		data.Train.Cargo = { { K = "Raw", O = "Coal" } }
+		data.PlacedMachines = {
+			{ Id = "HyperForge", X = 1, Z = 1, R = 0, C = 12, In = { { K = "Raw", O = "Gold" } } },
+			{ Id = "Crusher", X = 4, Z = 4, R = 1 },
+		}
+		data.MachineInventory = { HyperForge = 2, Crusher = 1 }
+		data.MachineUpgrades = { HyperForge = { Warp = 4 }, Crusher = { Speed = 7 } }
+		data.Upgrades.PenAutomation = 6
+		data.Gear.Boots = 7
+		data.Gear.Jetpack = 3
+		-- six enchant slots: the newer build's 5th is empty, its 6th holds an owned enchant
+		data.Enchants = { Owned = { Voidfire = 2, Power = 1, Starlight = 1 }, Slots = { "Voidfire", "Power", "", "", "", "Starlight" } }
+		data.Boosts.MegaLuckyUntil = now + 100
+		data.Golems = { Owned = { { Id = 1, Kind = "VoidGolem", Shiny = true } }, Equipped = { 1 }, NextId = 2 }
+		data.Tutorial = { Step = 14, Done = false } -- the newer build's tutorial has more steps
+		data.Artifacts = { Found = { VoidRelic = 1 }, Chapters = { VoidChapter = true } }
+		data.Stats.VoidOres = 5
+		data.Hoverboards = { Owned = { "Comet" } } -- a whole record this server has never heard of
+		data.Artifacts.Equipped = "VoidCollection"
+		data.Wheel.NextSpinAt = now + 60
+		data.Settings.Language = "cs"
+		data.OreCodex = { Seen = { Zzzium = true, Gold = true }, Ready = true }
+		data.LastSeen = now
+		return data
+	end
+
+	T.test("Migration #1(b): a save from a newer build goes through unchanged (nothing it names is 'repaired' away)", function()
+		local now = NEWER_NOW
+		local data = newerSave()
+		local before = ProfileStore.deepCopy(data)
+		local report = Migrations.run(data, now)
+		for key, value in before do
+			T.truthy(deepEqual(value, data[key]), `{key} is unchanged`)
+		end
+		T.truthy(deepEqual(before, data), "the whole save is unchanged")
+		T.eq(report.Moved, 0, "nothing moved")
+		T.eq(report.Dropped, 0, "nothing dropped")
+		-- a newer build's items inside machines and on the train wait in the pen (the runtime would drop them there)
+		data.PlacedMachines[1].In = { { K = "Gem", O = "Zzzium", G = "Shiny", R = "Halo" } }
+		data.Train.Cargo = { { K = "Gem", O = "Zzzium" } }
+		local pen = #data.Storage
+		Migrations.run(data, now)
+		T.eq(#data.Storage, pen + 2, "both kept, in the pen")
+		T.eq(data.Storage[#data.Storage].O, "Zzzium")
+	end)
+
+	T.test("Migration #1(b): a newer build's save survives the load hooks and a State snapshot unchanged", function()
+		local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
+		local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
+		local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
+		local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
+		local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
+		local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
+		local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
+		local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
+		local BuildService = Loader.requirePath("ServerScriptService.Server.Services.BuildService")
+		local CodexService = Loader.requirePath("ServerScriptService.Server.Services.CodexService")
+		local SettingsService = Loader.requirePath("ServerScriptService.Server.Services.SettingsService")
+		local TutorialService = Loader.requirePath("ServerScriptService.Server.Services.TutorialService")
+		local GolemService = Loader.requirePath("ServerScriptService.Server.Services.GolemService")
+		local GearService = Loader.requirePath("ServerScriptService.Server.Services.GearService")
+		local ArtifactService = Loader.requirePath("ServerScriptService.Server.Services.ArtifactService")
+		local Players = Loader.game:GetService("Players")
+		local data = newerSave()
+		local before = ProfileStore.deepCopy(data)
+		local player: any = { UserId = 1901, Name = "Newer", Parent = true, attributes = {} }
+		player.GetAttribute = function(self, key)
+			return self.attributes[key]
+		end
+		player.SetAttribute = function(self, key, value)
+			self.attributes[key] = value
+		end
+		local saved = {}
+		local function patch(t: any, key: string, value: any)
+			table.insert(saved, { t, key, rawget(t, key) })
+			rawset(t, key, value)
+		end
+		patch(DataService, "get", function(p)
+			return if p == player then data else nil
+		end)
+		patch(DataService, "changed", function() end)
+		patch(Net, "fire", function() end)
+		patch(PlotService, "plotOf", function()
+			return nil
+		end)
+		patch(Players, "GetPlayers", function()
+			return { player }
+		end)
+		PodiumService._test.setClock(function()
+			return NEWER_NOW
+		end)
+		TrainService._test.setClock(function()
+			return NEWER_NOW
+		end, function()
+			return 100
+		end, function() end)
+		local ok, err = pcall(function()
+			Migrations.run(data, NEWER_NOW)
+			-- every DataService.onLoaded hook that reads or repairs the save
+			CodexService.prepare(data)
+			SettingsService.read(data)
+			GolemService.refresh(player)
+			GearService.refreshLamp(player)
+			ArtifactService.applyRewards(player)
+			PodiumService._test.loaded(player, data)
+			TrainService._test.loaded(player, data)
+			TutorialService._test.loaded(player, data)
+			-- the State snapshot and its providers
+			local snapshot = StateService.snapshot(player) :: any
+			TrainService._test.provide(player, data, snapshot)
+			PenService._test.provide(player, data, snapshot)
+			BuildService._test.provide(player, data, snapshot)
+			T.eq(snapshot.Train.Capacity, TrainConfig.Capacity[#TrainConfig.Capacity].Value, "read as this build's top")
+			T.eq(snapshot.BlasterLevel, BlasterData.MaxLevel, "read as this build's top")
+		end)
+		for i = #saved, 1, -1 do
+			rawset(saved[i][1], saved[i][2], saved[i][3])
+		end
+		PodiumService._test.reset()
+		TrainService._test.reset()
+		TutorialService._test.reset()
+		Bonuses.invalidate(player)
+		if not ok then
+			error(err, 0)
+		end
+		for key, value in before do
+			T.truthy(deepEqual(value, data[key]), `{key} is unchanged`)
+		end
+		T.truthy(deepEqual(before, data), "the whole save is unchanged")
+	end)
+
+	T.test("Migration #1(b): podium and enchant slots past this build's count: kept when well-formed, junk dropped", function()
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.BlasterLevel = 12
+		data.Podiums = { "", "", "", "", 7, "Clean|Gold|Pristine|", "junk", { "table" } }
+		data.Enchants = { Owned = { Power = 1, Lucky = 1 }, Slots = { "Power", "", "", "", "Power", 5, "Lucky", "NotOwned" } }
+		local report = Migrations.run(data)
+		T.eq(#data.Podiums, 6, "up to the last well-formed slot")
+		T.eq(data.Podiums[5], "", "junk before it becomes empty")
+		T.eq(data.Podiums[6], "Clean|Gold|Pristine|", "a newer build's 6th podium stays")
+		T.eq(data.Podiums[7], nil, "junk after it is dropped")
+		T.eq(#data.Enchants.Slots, 7, "up to the last well-formed slot")
+		T.eq(data.Enchants.Slots[5], "", "an enchant slotted twice is slotted once")
+		T.eq(data.Enchants.Slots[6], "", "junk becomes empty")
+		T.eq(data.Enchants.Slots[7], "Lucky", "an owned enchant in a newer build's 7th slot stays")
+		T.eq(data.Enchants.Slots[8], nil, "an enchant that isn't owned is dropped")
+		T.eq(report.Dropped, 6, "5 junk entries and a double")
+		local copy = ProfileStore.deepCopy(data)
+		Migrations.run(data)
+		T.truthy(deepEqual(copy, data), "idempotent")
+		local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
+		T.eq(EnchantConfig.stats(data.Enchants, data.BlasterLevel).OreLuckPct, nil, "this build reads only its own slots")
+	end)
+
+	T.test("Migration #1(b): the ORE CODEX and the settings keep what a newer build added", function()
+		local CodexService = Loader.requirePath("ServerScriptService.Server.Services.CodexService")
+		local SettingsService = Loader.requirePath("ServerScriptService.Server.Services.SettingsService")
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Discovered = { Gold = true }
+		data.OreCodex = { Ready = true, Seen = { Gold = true, Zzzium = true, Silver = true, [3] = true } }
+		CodexService.prepare(data)
+		T.eq(data.OreCodex.Seen.Gold, true, "a found, seen ore")
+		T.eq(data.OreCodex.Seen.Zzzium, true, "an ore a newer build knows stays seen")
+		T.eq(data.OreCodex.Seen.Silver, nil, "a known ore that was never found isn't seen")
+		T.eq(data.OreCodex.Seen[3], nil, "junk key")
+		data.Settings = { Music = 0.5, Sfx = 0.8, Shake = true, Rumble = false, Language = "cs", Subtitles = true, [1] = "x" }
+		local clean = SettingsService.read(data)
+		T.eq(clean.Music, 0.5, "the known settings")
+		T.eq(clean.Language, nil, "(the record handed to the game has only known keys)")
+		T.eq(data.Settings.Language, "cs", "a setting a newer build added stays in the save")
+		T.eq(data.Settings.Subtitles, true)
+		T.eq(data.Settings[1], nil, "junk key")
 	end)
 end

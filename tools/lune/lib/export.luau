@@ -72,6 +72,8 @@ function Export.collect(root: any, scene: any?)
 					d.Material.Name,
 					round(d.Transparency),
 					round(d.Reflectance),
+					-- CastShadow (1 / 0): the viewer draws a shadow only where Roblox would
+					if d.CastShadow then 1 else 0,
 				}
 				table.insert(scene.parts, entry)
 				local partIndex = #scene.parts - 1
