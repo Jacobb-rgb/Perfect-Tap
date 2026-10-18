@@ -4,6 +4,19 @@
 	running it again changes nothing. Pure (no services), so the Lune tests
 	run it.
 
+	Newer saves (docs/SAVE_AUDIT.md #1(b)): anything a newer build may have
+	written that this server doesn't know is KEPT, never "repaired" away:
+	ore ids, grades, recipes, item kinds, keep modes, golem kinds, enchant /
+	gear / boost / artifact ids, and levels above what this server sells
+	(clamped only to MAX_LEVEL_KEPT, a junk guard). Unknown items in machine
+	queues and on the train move to the pen (the runtime drops queue items
+	it can't read), where they wait. The readers clamp or ignore what they
+	don't know (BlasterData.get / skin, TrainConfig levels,
+	MachineData.keepsOre, PodiumService.podiumDesc, ...). Only junk types
+	are dropped. tests/Migration.spec.luau runs a "future" save through and
+	requires it unchanged. (DataService refuses saves with a higher Version
+	outright; this is the second line for content added without a bump.)
+
 	Version 2 (step d): PlacedMachines entries may carry In/Out queues.
 	- MachineInventory: only string ids with whole counts >= 1 stay; a count
 	  above MachineData.MaxInventory (999) is capped to it, never dropped.
@@ -11,26 +24,29 @@
 	- PlacedMachines: junk entries are dropped. X/Z are floored and R
 	  becomes 0-3. A known machine without usable X/Z goes back to the
 	  inventory (refunded at its Price when that type is at the cap).
-	  In/Out items need a string K and O; well-formed items of an unknown
-	  kind or ore move to Storage instead of being lost.
+	  In/Out items need a string K and O; well-formed items of a kind or
+	  ore this server doesn't know move to Storage (kept: the machines would
+	  drop queue items they can't read).
 	- Storage: entries that aren't tables are dropped.
 	Layout repair (off the plot, overlapping) is NOT done here:
 	Placement.sanitize does it when the plot spawns, so the player gets a toast.
 
 	Version 3 (design v2):
 	- Pickaxes are gone: Pickaxe/OwnedPickaxes are removed, BlasterLevel is a
-	  whole number 1..BlasterData.MaxLevel and BlasterOre a known ore id or "".
+	  whole number 1..MAX_LEVEL_KEPT and BlasterOre a short id string or "".
 	- Retired machines (MachineData.Retired: Storage Crate, Sell Chute, Anvil)
 	  leave the plot and the inventory; their queued items go to the pen
 	  (data.Storage) and each machine is refunded at its price.
 	- Podiums is a list of exactly 4 strings: a storage key of a cleaned
-	  ore, or "". Anything else on a podium moves to the pen.
+	  ore, or "". A readable non-clean item on a podium moves to the pen; a
+	  four-part key this server can't read stays.
 	- Coins, TotalEarned and LastSeen are finite numbers >= 0.
 
 	Trains (step 2, same Version 3; DataTemplate fills the record in):
-	- Train levels are whole numbers in range; Cargo and TripCargo keep
-	  well-formed items of known kinds/ores (unknown ones go to the pen),
-	  together at most TrainConfig.MaxCargoSaved (the rest goes to the pen);
+	- Train levels are whole numbers 0..MAX_LEVEL_KEPT; Cargo and TripCargo
+	  keep well-formed items of known kinds/ores (unknown ones wait in the
+	  pen), together at most TrainConfig.MaxCargoSaved (the rest goes to
+	  the pen);
 	  trip times are finite and >= 0, and 0 when nothing is on the move.
 
 	Machines + automation (step 3, same Version 3; DataTemplate fills the
@@ -42,11 +58,11 @@
 	  (EconomyConfig.upgradeLevel, MachineData.speedMult / gradeOdds).
 	  Retired machines, non-string keys and non-number levels are dropped,
 	  empty records removed.
-	- KeepMode is one of MachineData.Keep.Modes (else the default);
-	  KeepList keeps only known ore ids mapped to a boolean (true keep,
-	  false send on; MachineData.keepsOre).
-	- Foundry.Stock: well-formed ingots (kind Ingot, known ore and grade, no
-	  recipe), at most GameConfig.MaxFoundryStock; other well-formed items
+	- KeepMode is a short mode name (else the default; an unknown one reads
+	  as the default); KeepList keeps short ore ids mapped to a boolean (true
+	  keep, false send on; MachineData.keepsOre).
+	- Foundry.Stock: well-formed ingots (kind Ingot, no recipe, any ore and
+	  grade), at most GameConfig.MaxFoundryStock; other well-formed items
 	  and the overflow go to the pen, junk is dropped.
 	- Upgrades is a record and Upgrades.PenAutomation a whole number
 	  0..MAX_LEVEL_KEPT (readers clamp to EconomyConfig.PenAutomation; a newer
@@ -117,7 +133,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
-local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GameConfig = require(Shared.Config.GameConfig)
@@ -149,6 +164,24 @@ local MAX_FIELD_TEXT_LENGTH = 64
 local MAX_EQUIPPED_LENGTH = 64
 local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
 local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
+-- ids this server doesn't know (a newer build's ores, grades, kinds, modes)
+-- are kept when they are short strings (docs/SAVE_AUDIT.md #1(b))
+local MAX_ID_LENGTH = 64
+local MAX_KEY_LENGTH = 160 -- a storage key "Kind|Ore|Grade|Recipe"
+
+-- A short string id (known to this server or not).
+local function idLike(v: any): boolean
+	return type(v) == "string" and v ~= "" and #v <= MAX_ID_LENGTH
+end
+
+-- A storage key of four parts with a kind and an ore (known to this server or not).
+local function keyLike(v: any): boolean
+	if type(v) ~= "string" or #v > MAX_KEY_LENGTH then
+		return false
+	end
+	local parts = string.split(v, "|")
+	return #parts == 4 and parts[1] ~= "" and parts[2] ~= ""
+end
 
 local function isFinite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
@@ -248,13 +281,10 @@ local function renameOres(data: { [string]: any })
 	end
 end
 
--- A well-formed ingot the Foundry can hold: known ore and grade, no recipe.
+-- A well-formed ingot the Foundry can hold: an ingot without a recipe (an ore
+-- or grade this server doesn't know too: a newer build's ingots stay).
 local function foundryIngot(item: any): boolean
-	return wellFormed(item)
-		and item.K == "Ingot"
-		and OreData.ById[item.O] ~= nil
-		and (item.G == nil or ItemData.GradeById[item.G] ~= nil)
-		and item.R == nil
+	return wellFormed(item) and item.K == "Ingot" and item.R == nil
 end
 
 -- The keys of a table (so entries can be removed while walking them).
@@ -554,6 +584,8 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 		elseif ItemData.Kinds[item.K] and OreData.ById[item.O] then
 			table.insert(kept, item)
 		else
+			-- a newer build's kind or ore: into the pen, where it waits safely
+			-- (MachineService / ProcessingService drop queue items they can't read)
 			table.insert(storage, item)
 			report.Moved += 1
 		end
@@ -632,9 +664,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		end
 		entry.In = cleanQueue(entry.In, storage, report)
 		entry.Out = cleanQueue(entry.Out, storage, report)
-		-- the machine's own setting (Sorter threshold): a whole number 1..9 or nothing
+		-- the machine's own setting (Sorter threshold): a whole number or nothing
+		-- (readers clamp to the rarities they know; a newer build may have more)
 		if entry.C ~= nil then
-			entry.C = if isFinite(entry.C) then math.clamp(math.floor(entry.C), 1, 9) else nil
+			entry.C = if isFinite(entry.C) then math.clamp(math.floor(entry.C), 1, MAX_LEVEL_KEPT) else nil
 		end
 		if isFinite(entry.X) and isFinite(entry.Z) then
 			entry.X = math.floor(entry.X)
@@ -707,13 +740,17 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	-- v3: blasters instead of pickaxes
 	data.Pickaxe = nil
 	data.OwnedPickaxes = nil
+	-- a level above this server's top and an ore it doesn't know stay (a newer
+	-- build's; BlasterData.get and BlasterData.skin clamp / fall back for the readers)
 	local level = data.BlasterLevel
-	data.BlasterLevel = if isFinite(level) then math.clamp(math.floor(level), 1, BlasterData.MaxLevel) else 1
-	if type(data.BlasterOre) ~= "string" or (data.BlasterOre ~= "" and not OreData.ById[data.BlasterOre]) then
+	data.BlasterLevel = if isFinite(level) then math.clamp(math.floor(level), 1, MAX_LEVEL_KEPT) else 1
+	if data.BlasterOre ~= "" and not idLike(data.BlasterOre) then
 		data.BlasterOre = ""
 	end
 
-	-- v3: exactly 4 podium strings, each a cleaned ore or ""
+	-- v3: exactly 4 podium strings, each a cleaned ore or "". A key this server
+	-- can't read (a newer build's ore or grade) stays as it is: PodiumService
+	-- shows that slot empty, and the newer server reads it again.
 	local podiums = data.Podiums
 	local slots = {}
 	for i = 1, PODIUM_SLOTS do
@@ -721,11 +758,14 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		local desc = if type(key) == "string" and key ~= "" then ItemData.parseKey(key) else nil
 		if desc and desc.K == "Clean" then
 			slots[i] = ItemData.storageKey(desc)
+		elseif desc then
+			table.insert(storage, desc)
+			report.Moved += 1
+			slots[i] = ""
+		elseif keyLike(key) then
+			slots[i] = key
 		else
-			if desc then
-				table.insert(storage, desc)
-				report.Moved += 1
-			elseif key ~= nil and key ~= "" then
+			if key ~= nil and key ~= "" then
 				report.Dropped += 1
 			end
 			slots[i] = ""
@@ -750,10 +790,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		train = {}
 		data.Train = train
 	end
+	-- levels above what this server sells stay (TrainConfig clamps for the readers)
 	for _, field in { "CapacityLevel", "SpeedLevel" } do
-		local list = if field == "CapacityLevel" then TrainConfig.Capacity else TrainConfig.Speed
 		local v = train[field]
-		train[field] = if isFinite(v) then math.clamp(math.floor(v), 0, TrainConfig.maxLevel(list)) else 0
+		train[field] = if isFinite(v) then math.clamp(math.floor(v), 0, MAX_LEVEL_KEPT) else 0
 	end
 	local cargoKept = 0
 	for _, field in { "Cargo", "TripCargo" } do
@@ -764,6 +804,7 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 				if not wellFormed(item) then
 					report.Dropped += 1
 				elseif not (ItemData.Kinds[item.K] and OreData.ById[item.O]) or cargoKept >= TrainConfig.MaxCargoSaved then
+					-- a newer build's item waits in the pen (the unload can't store what it can't read), so does the overflow
 					table.insert(storage, item)
 					report.Moved += 1
 				else
@@ -828,8 +869,9 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		end
 	end
 
-	-- step 3: the keep mode is a known mode, the keep list maps known ore ids to booleans
-	if not MachineData.isKeepMode(data.KeepMode) then
+	-- step 3: the keep mode is a mode name (a newer build's too: MachineData
+	-- treats an unknown one as Keep.Default), the keep list maps ore ids to booleans
+	if not MachineData.isKeepMode(data.KeepMode) and not idLike(data.KeepMode) then
 		if data.KeepMode ~= nil then
 			report.Dropped += 1
 		end
@@ -848,7 +890,7 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		table.insert(keepKeys, oreId)
 	end
 	for _, oreId in keepKeys do
-		if type(oreId) ~= "string" or not OreData.ById[oreId] or type(keepList[oreId]) ~= "boolean" then
+		if not idLike(oreId) or type(keepList[oreId]) ~= "boolean" then
 			keepList[oreId] = nil
 			report.Dropped += 1
 		end

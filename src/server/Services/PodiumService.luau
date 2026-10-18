@@ -409,6 +409,12 @@ function PodiumService.remove(player: Player, slot: number): (boolean, Reason?)
 	end
 	local desc = podiumDesc(key)
 	if not desc then
+		local parts = string.split(key, "|")
+		if ItemData.parseKey(key) == nil and #parts == 4 and parts[1] ~= "" and parts[2] ~= "" then
+			-- an ore a newer build knows (docs/SAVE_AUDIT.md #1(b)): it stays for that build
+			toast(player, "This ore needs the newest version of the game. Rejoin to see it.")
+			return false, "Empty"
+		end
 		-- junk that slipped past the migration: just clear it
 		list[slot] = ""
 		DataService.changed(player)

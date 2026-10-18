@@ -315,6 +315,12 @@ return function(T, Loader)
 		T.falsy(PodiumService.remove(w.player, 1), "junk")
 		T.eq(w.data.Podiums[1], "", "junk cleared")
 		T.eq(#w.data.Storage, before, "no item made from junk")
+		-- an ore a newer build knows (a key this server can't read) is never cleared
+		w.data.Podiums[1] = "Clean|Zzzium|Pristine|"
+		T.falsy(PodiumService.remove(w.player, 1), "can't be taken off here")
+		T.eq(w.data.Podiums[1], "Clean|Zzzium|Pristine|", "kept for the newer build (docs/SAVE_AUDIT.md #1(b))")
+		T.eq(#w.data.Storage, before, "no item made from it")
+		w.data.Podiums[1] = ""
 	end)
 
 	withWorld("PodiumService: racing Place and Remove never duplicates an ore", function(w)
