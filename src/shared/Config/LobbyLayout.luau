@@ -72,8 +72,9 @@ LobbyLayout.Budget = {
 	-- main roads paved with kerbs and glowing studs).
 	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
 	-- node on every node spawn (~1,320) must stay 200 under it (the podium
-	-- and pen ores): ~250 parts of headroom.
-	MapParts = 22000,
+	-- and pen ores); + the concept fixes (~350: plaza miners, lanterns, stall
+	-- props, the stream with its bridge and waterfall): ~230 parts of headroom.
+	MapParts = 22400,
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
@@ -92,7 +93,7 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 1600, LobbyParts = 1600, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts
+		Plaza = { Parts = 1850, LobbyParts = 1850, Lights = 10, LobbyLights = 10 }, -- + facade aprons, planters, ore carts + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
 		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)

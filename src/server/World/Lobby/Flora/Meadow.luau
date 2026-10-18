@@ -216,6 +216,10 @@ local function track(index: Index, model: Instance)
 	end
 end
 
+-- Adds every part of `model` to the index (other builders that run before
+-- the meadow use this too: Plaza/Life, Flora/Stream).
+Meadow.track = track
+
 local function decorate(model: Instance)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
