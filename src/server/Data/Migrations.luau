@@ -56,15 +56,74 @@
 	roster that were replaced become their OreData.Renamed ore (same rarity)
 	before anything else runs, wherever the save names an ore: item O fields
 	(pen, machine queues, train, Foundry), storage keys ("Clean|Ruby|..." on
-	podiums and in any other string), BlasterOre, the keys of Discovered and
-	KeepList (an existing entry of the new ore wins).
+	podiums and in any other string), BlasterOre, the keys of Discovered,
+	KeepList and OreCodex.Seen (steps 6-7; an existing entry of the new ore
+	wins). This is the first step of run(): everything below (the steps 6-7
+	records included) already sees the new ids. Golem kinds named after
+	replaced ores are renamed by migrateSteps67 (GolemConfig.Renamed).
+
+	Steps 6-7 (same Version 3; DataTemplate fills the records in; `now` =
+	os.time() unless the caller passes one, for the time caps). As with
+	MachineInventory and MachineUpgrades, well-formed entries this server
+	doesn't know are KEPT (Roblox keeps old servers running after an update:
+	a player who joins one must not lose the golems, enchants, artifacts or
+	gear levels a newer server gave them, paid ones included). Only junk
+	types are dropped; the config readers clamp or ignore what they don't
+	know (GearConfig.level, EnchantConfig.tierOf, GolemConfig.stats/equip,
+	ArtifactConfig.countOf).
+	- Gear: string keys with whole levels 0..MAX_LEVEL_KEPT (the five lines
+	  this server sells always exist, broken = 0; other junk keys dropped).
+	  The old CarryLevel N (1..5) folds into Backpack level N - 1 (same
+	  capacity; the higher of the two wins) and CarryLevel is removed. A
+	  save that still has CarryLevel is from before the Gear shop, when
+	  everyone walked at 18: it gets Boots level 1 (18, GearConfig) at
+	  least, so nobody walks slower after the update.
+	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
+	  Enchants.Slots: exactly EnchantConfig.MaxSlots strings; a slot keeps an
+	  owned id only once, and only when the blaster level has opened it.
+	- Boosts: finite whole os.time() seconds >= 0, at most now +
+	  BoostConfig.MaxSavedSeconds (a year: a junk guard only; paid boost
+	  time beyond MaxStackSeconds is kept, it is never lost).
+	- Golems.Owned: entries { Id, Kind, ... } with a whole unique Id
+	  1..MAX_GOLEM_ID and a string Kind (unknown kinds too), at most
+	  GolemConfig.MaxSaved. Paid and Locked must be booleans (else dropped).
+	  Other fields a newer server adds (trading flags, sources) are KEPT when
+	  they are well-formed scalars: a string key of at most
+	  MAX_FIELD_KEY_LENGTH characters with a boolean, finite number or string
+	  of at most MAX_FIELD_TEXT_LENGTH characters; at most MAX_GOLEM_FIELDS of
+	  them per entry (the first by name); anything else is dropped. A Kind
+	  in GolemConfig.Renamed (RubyKnight, StormcoreTitan, StarmetalSovereign:
+	  the 36-ore roster's names) becomes its new id. Equipped:
+	  at most GolemConfig.EquipSlots unique owned ids of known kinds. NextId
+	  is a whole number above every owned Id.
+	- Daily (the retired 7-day Ember Chest streak, replaced by the daily
+	  wheel: docs/plans/V2_PLAN.md) is removed.
+	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
+	- Artifacts.Found: string ids -> whole counts 1..ArtifactConfig.MaxCount;
+	  Chapters: string ids -> true; Equipped: a string of at most
+	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
+	  equipped ignores them), anything else nil.
+	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
+	  WheelOres are whole numbers >= 0.
+	- Not here: Settings (SettingsService.read) and OreCodex
+	  (CodexService.prepare) are repaired by their services once per load
+	  (DataService.onLoaded, after this chain), next to the code that owns
+	  their rules.
+	Every step above runs once per load, in this order, inside run(); the
+	Version stays 3 (all of it is additive and idempotent).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local BlasterData = require(Shared.Config.BlasterData)
+local BoostConfig = require(Shared.Config.BoostConfig)
+local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GameConfig = require(Shared.Config.GameConfig)
+local GearConfig = require(Shared.Config.GearConfig)
+local GolemConfig = require(Shared.Config.GolemConfig)
+local WheelConfig = require(Shared.Config.WheelConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
 local TrainConfig = require(Shared.Config.TrainConfig)
@@ -81,6 +140,15 @@ local MAX_INVENTORY = MachineData.MaxInventory
 -- Highest saved level of a step 3 upgrade (readers clamp to what is sold).
 local MAX_LEVEL_KEPT = 99
 local PODIUM_SLOTS = 4
+local MAX_GOLEM_ID = 2 ^ 31 - 1
+-- extra golem entry fields a newer server may add (see the header)
+local MAX_GOLEM_FIELDS = 8
+local MAX_FIELD_KEY_LENGTH = 32
+local MAX_FIELD_TEXT_LENGTH = 64
+-- data.Artifacts.Equipped: a collection id (or "" = none) is never longer
+local MAX_EQUIPPED_LENGTH = 64
+local GOLEM_FLAGS = { Paid = true, Locked = true } -- booleans or nothing
+local OLD_CARRY_LEVELS = 5 -- the retired ToolData carry levels 1..5
 
 local function isFinite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
@@ -157,8 +225,12 @@ local function renameOres(data: { [string]: any })
 	if type(data.BlasterOre) == "string" and renamed[data.BlasterOre] then
 		data.BlasterOre = renamed[data.BlasterOre]
 	end
-	for _, field in { "Discovered", "KeepList" } do
-		local map = data[field]
+	-- ore-keyed maps: Discovered, KeepList and the ORE CODEX's seen ores (steps 6-7,
+	-- so a renamed ore the player had looked at gets no NEW badge again)
+	local codex = data.OreCodex
+	local maps = { data.Discovered, data.KeepList, if type(codex) == "table" then codex.Seen else nil }
+	for i = 1, 3 do
+		local map = maps[i]
 		if type(map) == "table" then
 			local moves = {}
 			for old, new in renamed do
@@ -185,6 +257,287 @@ local function foundryIngot(item: any): boolean
 		and item.R == nil
 end
 
+-- The keys of a table (so entries can be removed while walking them).
+local function keysOf(t: { [any]: any }): { any }
+	local keys = {}
+	for k in t do
+		table.insert(keys, k)
+	end
+	return keys
+end
+
+local function deepCopy(v: any): any
+	if type(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in v do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+-- data[field] as a table: anything else is replaced by a copy of the
+-- template's record (counted as dropped when it wasn't nil).
+local function record(data: { [string]: any }, field: string, report: Report): { [any]: any }
+	local t = data[field]
+	if type(t) ~= "table" then
+		if t ~= nil then
+			report.Dropped += 1
+		end
+		t = deepCopy((DataTemplate :: any)[field])
+		data[field] = t
+	end
+	return t
+end
+
+-- t[field] as a table (a fresh empty one when missing or junk).
+local function subTable(t: { [any]: any }, field: string, report: Report): { [any]: any }
+	local sub = t[field]
+	if type(sub) ~= "table" then
+		if sub ~= nil then
+			report.Dropped += 1
+		end
+		sub = {}
+		t[field] = sub
+	end
+	return sub
+end
+
+-- A whole number in lo..hi from a finite number (floored, clamped); nil for junk.
+local function wholeIn(v: any, lo: number, hi: number): number?
+	if not isFinite(v) then
+		return nil
+	end
+	return math.clamp(math.floor(v), lo, hi)
+end
+
+-- One well-formed golem entry: Id and Kind, Paid / Locked when they are
+-- booleans, and the extra scalar fields a newer server added (header).
+local function cleanGolem(entry: { [any]: any }, id: number, kind: string, report: Report): { [string]: any }
+	local clean: { [string]: any } = { Id = id, Kind = kind }
+	local extras = {}
+	for key, value in entry do
+		if key == "Id" or key == "Kind" then
+			continue
+		end
+		if GOLEM_FLAGS[key] then
+			if type(value) == "boolean" then
+				clean[key] = value
+			else
+				report.Dropped += 1
+			end
+		elseif
+			type(key) == "string"
+			and #key <= MAX_FIELD_KEY_LENGTH
+			and (type(value) == "boolean" or isFinite(value) or (type(value) == "string" and #value <= MAX_FIELD_TEXT_LENGTH))
+		then
+			table.insert(extras, key)
+		else
+			report.Dropped += 1
+		end
+	end
+	table.sort(extras)
+	for i, key in extras do
+		if i > MAX_GOLEM_FIELDS then
+			report.Dropped += 1
+		else
+			clean[key] = entry[key]
+		end
+	end
+	return clean
+end
+
+-- Steps 6-7: gear, enchants, boosts, golems, wheel, artifacts, new stats.
+local function migrateSteps67(data: { [string]: any }, now: number, report: Report)
+	-- the retired 7-day Ember Chest streak (the daily wheel replaced it)
+	if data.Daily ~= nil then
+		data.Daily = nil
+	end
+
+	-- gear levels (unknown lines and levels kept); the old CarryLevel N becomes Backpack level N - 1
+	local gear = record(data, "Gear", report)
+	for _, key in keysOf(gear) do
+		local v = gear[key]
+		local level = if type(key) == "string" then wholeIn(v, 0, MAX_LEVEL_KEPT) else nil
+		if level == nil then
+			-- junk (a known line comes back as 0 below)
+			report.Dropped += 1
+			gear[key] = nil
+		elseif level ~= v then
+			gear[key] = level
+		end
+	end
+	for _, lineId in GearConfig.LineIds do
+		if gear[lineId] == nil then
+			gear[lineId] = 0
+		end
+	end
+	local carry = data.CarryLevel
+	if carry ~= nil then
+		if isFinite(carry) then
+			-- the old levels were 1..OLD_CARRY_LEVELS: higher junk never gives more
+			local backpack = math.clamp(math.floor(carry) - 1, 0, OLD_CARRY_LEVELS - 1)
+			gear.Backpack = math.max(gear.Backpack, backpack)
+		end
+		data.CarryLevel = nil
+		-- from before the Gear shop: the old walk speed (18) is Boots I now
+		gear.Boots = math.max(gear.Boots, 1)
+	end
+
+	-- enchants: owned tiers (unknown ids and tiers kept), then slots (owned, unique, opened by the blaster level)
+	local enchants = record(data, "Enchants", report)
+	local owned = subTable(enchants, "Owned", report)
+	for _, id in keysOf(owned) do
+		local tier = owned[id]
+		local whole = if type(id) == "string" and isFinite(tier) and tier >= 1 then wholeIn(tier, 1, MAX_LEVEL_KEPT) else nil
+		if whole == nil then
+			owned[id] = nil
+			report.Dropped += 1
+		elseif whole ~= tier then
+			owned[id] = whole
+		end
+	end
+	local slots = enchants.Slots
+	if slots ~= nil and type(slots) ~= "table" then
+		report.Dropped += 1
+	end
+	local open = EnchantConfig.unlockedSlots(data.BlasterLevel)
+	local cleanSlots = {}
+	local slotted: { [string]: boolean } = {}
+	for i = 1, EnchantConfig.MaxSlots do
+		local id = if type(slots) == "table" then slots[i] else nil
+		if type(id) == "string" and id ~= "" and i <= open and owned[id] ~= nil and not slotted[id] then
+			slotted[id] = true
+			cleanSlots[i] = id
+		else
+			if id ~= nil and id ~= "" then
+				report.Dropped += 1
+			end
+			cleanSlots[i] = ""
+		end
+	end
+	enchants.Slots = cleanSlots
+
+	-- boosts: whole os.time() seconds, never absurdly far ahead (MaxSavedSeconds
+	-- is a junk guard: paid time stacked past MaxStackSeconds is kept)
+	local boosts = record(data, "Boosts", report)
+	for _, kindId in BoostConfig.KindIds do
+		local field = BoostConfig.Kinds[kindId].Field
+		local v = boosts[field]
+		if not isFinite(v) or v < 0 then
+			if v ~= nil then
+				report.Dropped += 1
+			end
+			boosts[field] = 0
+		else
+			boosts[field] = math.min(math.floor(v), now + BoostConfig.MaxSavedSeconds)
+		end
+	end
+
+	-- golems: well-formed unique entries (unknown kinds kept), equipped ids of
+	-- known kinds that exist, NextId above them all
+	local golems = record(data, "Golems", report)
+	local ownedGolems = {}
+	local kinds: { [number]: string } = {}
+	local maxId = 0
+	local list = golems.Owned
+	if type(list) == "table" then
+		for _, entry in values(list) do
+			local id = if type(entry) == "table" then entry.Id else nil
+			local kind = if type(entry) == "table" then entry.Kind else nil
+			-- a renamed kind (GolemConfig.Renamed) takes its new id
+			local renamed = if type(kind) == "string" then GolemConfig.Renamed[kind] else nil
+			if renamed then
+				kind = renamed
+			end
+			if
+				isFinite(id)
+				and id >= 1
+				and id <= MAX_GOLEM_ID
+				and id == math.floor(id)
+				and not kinds[id]
+				and type(kind) == "string"
+				and kind ~= ""
+				and #ownedGolems < GolemConfig.MaxSaved
+			then
+				kinds[id] = kind
+				maxId = math.max(maxId, id)
+				table.insert(ownedGolems, cleanGolem(entry, id, kind, report))
+			else
+				report.Dropped += 1
+			end
+		end
+	elseif list ~= nil then
+		report.Dropped += 1
+	end
+	golems.Owned = ownedGolems
+	local equipped = {}
+	local wearing = golems.Equipped
+	if type(wearing) == "table" then
+		for _, id in values(wearing) do
+			local kind = if type(id) == "number" then kinds[id] else nil
+			if kind and GolemConfig.ById[kind] and not table.find(equipped, id) and #equipped < GolemConfig.EquipSlots then
+				table.insert(equipped, id)
+			else
+				report.Dropped += 1
+			end
+		end
+	elseif wearing ~= nil then
+		report.Dropped += 1
+	end
+	golems.Equipped = equipped
+	local nextId = golems.NextId
+	local wholeNext = if isFinite(nextId) then math.floor(nextId) else 1
+	golems.NextId = math.clamp(math.max(wholeNext, maxId + 1), 1, MAX_GOLEM_ID + 1)
+
+	-- the daily wheel: a whole time, at most one cooldown ahead
+	local wheel = record(data, "Wheel", report)
+	local spinAt = wheel.NextSpinAt
+	if not isFinite(spinAt) or spinAt < 0 then
+		if spinAt ~= nil then
+			report.Dropped += 1
+		end
+		wheel.NextSpinAt = 0
+	else
+		wheel.NextSpinAt = math.min(math.floor(spinAt), now + WheelConfig.CooldownSeconds)
+	end
+
+	-- artifacts: string ids with whole counts, chapters read (unknown ids kept)
+	local artifacts = record(data, "Artifacts", report)
+	local found = subTable(artifacts, "Found", report)
+	for _, id in keysOf(found) do
+		local n = found[id]
+		local whole = if type(id) == "string" and isFinite(n) and n >= 1 then wholeIn(n, 1, ArtifactConfig.MaxCount) else nil
+		if whole == nil then
+			found[id] = nil
+			report.Dropped += 1
+		elseif whole ~= n then
+			found[id] = whole
+		end
+	end
+	local chapters = subTable(artifacts, "Chapters", report)
+	for _, id in keysOf(chapters) do
+		if type(id) ~= "string" or chapters[id] ~= true then
+			chapters[id] = nil
+			report.Dropped += 1
+		end
+	end
+	-- whose title + podium skin show: a short string ("" = none), else nil (the last completed)
+	local pick = artifacts.Equipped
+	if pick ~= nil and (type(pick) ~= "string" or #pick > MAX_EQUIPPED_LENGTH) then
+		artifacts.Equipped = nil
+		report.Dropped += 1
+	end
+
+	-- the new stats
+	local stats = record(data, "Stats", report)
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
+		local v = stats[field]
+		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+end
+
 -- Cleans one machine queue. Returns the kept items, or nil when none are left.
 local function cleanQueue(queue: any, storage: { any }, report: Report): { any }?
 	if queue == nil then
@@ -208,8 +561,9 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 	return if #kept > 0 then kept else nil
 end
 
-function Migrations.run(data: { [string]: any }): Report
+function Migrations.run(data: { [string]: any }, now: number?): Report
 	local report: Report = { Moved = 0, Dropped = 0 }
+	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
 	-- replaced ores take their new ids first, so nothing below drops them
 	renameOres(data)
@@ -346,6 +700,9 @@ function Migrations.run(data: { [string]: any }): Report
 
 	-- crystal shards: a whole number >= 0
 	data.Shards = if isFinite(data.Shards) and data.Shards > 0 then math.floor(data.Shards) else 0
+	-- shard rolls of crushed piles (ProcessingService): a whole number >= 0
+	local rolls = data.ShardRolls
+	data.ShardRolls = if isFinite(rolls) and rolls > 0 then math.floor(math.min(rolls, 100000)) else 0
 
 	-- v3: blasters instead of pickaxes
 	data.Pickaxe = nil
@@ -538,6 +895,9 @@ function Migrations.run(data: { [string]: any }): Report
 	end
 	local automation = bought.PenAutomation
 	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, MAX_LEVEL_KEPT) else 0
+
+	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots)
+	migrateSteps67(data, clock, report)
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

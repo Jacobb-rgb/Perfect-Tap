@@ -82,13 +82,24 @@ function TutorialConfig.loaded(data: Data): boolean
 	return count(t.Cargo) > 0 or count(t.TripCargo) > 0 or stat(data, "TrainTrips") > 0
 end
 
--- Ore at home: a train trip unloaded, or the Ore Pen holds something.
+-- Ore at home: a train trip unloaded, or the Ore Pen holds ore that came
+-- home some other way (carried by hand, a save from before the train). The
+-- daily wheel's ore prize goes straight into the pen (Stats.WheelOres), so
+-- the pen counts only with more in it than the wheel ever gave: a new
+-- player's wheel ore never skips the mine, hopper and train steps.
 function TutorialConfig.home(data: Data): boolean
-	return stat(data, "TrainTrips") > 0 or count(data.Storage) > 0
+	return stat(data, "TrainTrips") > 0 or count(data.Storage) > stat(data, "WheelOres")
 end
 
 function TutorialConfig.cleaned(data: Data): boolean
 	return stat(data, "OresCleaned") > 0
+end
+
+-- Cleaned more ores than the wheel gave, so one of them came out of a rock:
+-- the first four steps' shortcut for an old save (cleaning a wheel ore early
+-- teaches cleaning, not mining or the train).
+function TutorialConfig.cleanedMined(data: Data): boolean
+	return stat(data, "OresCleaned") > stat(data, "WheelOres")
 end
 
 -- Something on a podium now, or a podium has earned before.
@@ -144,7 +155,7 @@ TutorialConfig.Steps = {
 		Text = "Walk to the Mine Station down in the quarry.",
 		Target = "Station",
 		done = function(data: Data, signals: Signals): boolean
-			return signals.NearStation == true or M.mined(data) or M.loaded(data) or M.home(data) or M.cleaned(data)
+			return signals.NearStation == true or M.mined(data) or M.loaded(data) or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
@@ -154,7 +165,7 @@ TutorialConfig.Steps = {
 		Hint = { Mouse = "Click a rock · E grabs", Touch = "Tap a rock · tap Grab", Gamepad = "R2 blasts · X grabs" },
 		Target = "Rock",
 		done = function(data: Data, signals: Signals): boolean
-			return (signals.Carrying or 0) > 0 or M.loaded(data) or M.home(data) or M.cleaned(data)
+			return (signals.Carrying or 0) > 0 or M.loaded(data) or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
@@ -164,7 +175,7 @@ TutorialConfig.Steps = {
 		Hint = { Mouse = "Hold Q, then let go", Touch = "Hold Throw, then let go", Gamepad = "Hold R1, then let go" },
 		Target = "Hopper",
 		done = function(data: Data, _signals: Signals): boolean
-			return M.loaded(data) or M.home(data) or M.cleaned(data)
+			return M.loaded(data) or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
@@ -174,7 +185,7 @@ TutorialConfig.Steps = {
 		Hint = { Mouse = "BASE at the top takes you home", Touch = "Tap BASE at the top", Gamepad = "D-pad down, then BASE" },
 		Target = "Pen",
 		done = function(data: Data, _signals: Signals): boolean
-			return M.home(data) or M.cleaned(data)
+			return M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{

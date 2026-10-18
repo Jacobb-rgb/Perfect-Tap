@@ -70,11 +70,19 @@ function Dummy.build(parent, CFrame, root, pose, colors, pickaxeTool)
 	return m
 end
 
--- Same stack layout as CarryService (two columns in front of the chest).
+-- Same stack layout as CarryService.stackOffset (three columns in front of
+-- the chest from the middle out, then a bundle on the back).
+local COLUMN_ORDER = { 0, -1, 1 }
 function Dummy.stackOffset(CFrame, index)
-	local column = (index - 1) % 2
-	local row = math.floor((index - 1) / 2)
-	return CFrame.new((column - 0.5) * 1.3, 0.2 + row * 1.15, -2.1)
+	local i = math.max(0, index - 1)
+	if i < 9 then
+		return CFrame.new(COLUMN_ORDER[i % 3 + 1] * 1.3, 0.2 + math.floor(i / 3) * 1.12, -2.1)
+	end
+	local j = i - 9
+	local layer = math.floor(j / 6)
+	local k = j % 6
+	return CFrame.new(COLUMN_ORDER[k % 3 + 1] * 1.2, -0.3 + math.floor(k / 3) * 1.05, 1.6 + (layer % 3) * 0.3)
+		* CFrame.Angles(0, layer * 0.6, 0)
 end
 
 return Dummy

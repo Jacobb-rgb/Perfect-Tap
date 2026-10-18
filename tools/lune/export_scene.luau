@@ -82,8 +82,26 @@ end
 local uiExports: { [string]: { any } } = {}
 local scene_extra: any = nil
 
+-- The artifact museum ArtifactService builds into every plot's yard at
+-- server start (MuseumBuilder), empty (the relics show near the camera for
+-- each owner's finds; yard_preview fills its plot's).
+local function addMuseums(map: any)
+	local MuseumBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MuseumBuilder")
+	local plots = map and map:FindFirstChild("Plots")
+	for _, plot in WorldLayout.Plots do
+		local model = plots and plots:FindFirstChild("Plot_" .. plot.Id)
+		local yard = model and model:FindFirstChild("Yard")
+		if yard then
+			local museum = MuseumBuilder.build(WorldLayout.plotCFrame(plot))
+			museum:SetAttribute("PlotId", plot.Id)
+			museum.Parent = yard
+		end
+	end
+end
+
 if sceneName == "world" then
-	WorldBuilder.build(workspace)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
 	addNodes(workspace)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
@@ -164,6 +182,16 @@ elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Found
 	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
 		uiExports[name] = guis
 	end
+elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/wheel_artifacts_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "menus" then -- the world + the side menu, codex, settings and leaderboard overlays (tools/lune/lib/menus_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/menus_preview").build(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays (tools/lune/lib/tech_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/tech_shop_preview").build(Loader) do
@@ -172,6 +200,21 @@ elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays
 elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop window overlays (tools/lune/lib/vault_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the Gear shop panel overlays (tools/lune/lib/gear_shop_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/gear_shop_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "enchants" then -- the world + the Enchant shop / luck boosts overlays (tools/lune/lib/enchant_boost_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/enchant_boost_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "golems" or sceneName == "capsules" or sceneName == "capsule_reveal" or sceneName == "capsule_crack" then
+	-- step 7: golem pets, capsules and their UI (tools/lune/lib/capsule_preview.luau)
+	for name, guis in require("./lib/capsule_preview").build(Loader, workspace, sceneName) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" then -- the tutorial's bubble + guide in the quarry (tools/lune/lib/tutorial_preview.luau)

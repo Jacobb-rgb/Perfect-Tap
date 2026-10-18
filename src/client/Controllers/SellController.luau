@@ -33,6 +33,7 @@ local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local SellView = require(script.Parent.Parent.UI.SellView)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -419,6 +420,7 @@ function SellController.open(part: BasePart, handsSummary: any)
 		return
 	end
 	SellController.close()
+	MenuPanels.closeOthers("SellController") -- one panel at a time
 	local view = ensureView()
 	counter = part
 	fit(view)

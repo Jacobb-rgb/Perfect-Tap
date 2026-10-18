@@ -26,6 +26,10 @@ HudView.DirtyColor = Color3.fromRGB(120, 114, 108) -- dirty ore: no rarity color
 HudView.TopBarY = 10 -- the teleport bar at the top centre (design units)
 HudView.TopBarWidth = 440
 HudView.TopBarHeight = 58
+-- carry squares drawn at most: a bigger backpack (24 with Strong Back) shows
+-- "+N" on the last one, so the panel never covers the touch controls
+HudView.MaxCarrySlots = 8
+HudView.CarryPanelHeight = 74
 
 export type Refs = {
 	Gui: ScreenGui,
@@ -211,6 +215,32 @@ function HudView.build(): Refs
 		Menu = menu,
 		TopBar = topBar,
 	}
+end
+
+--[[
+	How the carry panel shows `count` carried items of `capacity`: the
+	squares drawn (at most MaxCarrySlots), how many of them show an item,
+	the "+N" on the last square (0 = none: everything fits) and the panel's
+	width (design units). The text says the whole count ("CARRYING 12/24").
+]]
+function HudView.carryLayout(capacity: number, count: number): (number, number, number, number)
+	local cap = if type(capacity) == "number" and capacity == capacity then math.max(1, math.floor(capacity)) else 1
+	local carried = if type(count) == "number" and count == count then math.max(0, math.floor(count)) else 0
+	local squares = math.min(cap, HudView.MaxCarrySlots)
+	local shown = math.min(carried, squares)
+	local more = 0
+	if carried > squares then
+		shown = squares - 1
+		more = carried - shown
+	end
+	return squares, shown, more, math.max(200, squares * 40 + 24)
+end
+
+-- The last carry square when more items are carried than squares are drawn: "+N".
+function HudView.moreSlot(parent: Instance, more: number, order: number): Frame
+	local slot = HudView.slot(parent, Theme.PanelLight, order)
+	UIKit.label(slot, `+{more}`, if more >= 100 then 14 else 18, { Name = "More", Size = UDim2.fromScale(1, 1) })
+	return slot
 end
 
 -- One carry slot square; color = rarity color or empty. `mystery` (dirty

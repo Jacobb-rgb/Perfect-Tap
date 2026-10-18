@@ -34,6 +34,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MachineData = require(Shared.Config.MachineData)
 local Net = require(Shared.Net)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local IronBoxView = require(script.Parent.Parent.UI.IronBoxView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local HudController = require(script.Parent.HudController)
@@ -295,6 +296,7 @@ end
 ]]
 function IronBoxController.open(target: Model?, at: Vector3?)
 	IronBoxController.close()
+	MenuPanels.closeOthers("IronBoxController") -- one panel at a time
 	local view = ensureView()
 	fit(view)
 	updateHint(view)

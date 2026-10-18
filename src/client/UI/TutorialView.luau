@@ -18,7 +18,9 @@
 	  touch     the top-right corner: the bottom right is the jump and throw
 	            buttons, the bottom left the thumbstick. As wide as the room
 	            right of the teleport bar allows (MinWidth .. MaxWidth); the
-	            buttons are RowTouch tall (>= 44 pt at uiScale 0.62)
+	            buttons are RowTouch tall (>= 44 pt at uiScale 0.62). The
+	            FREE SPIN! chip's spot: the chip waits while the bubble shows
+	            (WheelView.chipVisible)
 	SKIP asks once more ("SURE?") before it counts. GOT IT shows only on an
 	info step (TutorialConfig Optional), the hint line on the others.
 	A step-done pop and the finish card are tweens in the controller.
@@ -85,6 +87,24 @@ TutorialView.BodyMin = 40 -- the text shrinks to this before the bubble reaches 
 TutorialView.MenuGap = 8 -- touch: room kept above the right-side menu's top button
 TutorialView.SkipWidth = 84
 TutorialView.AckWidth = 112
+
+-- The panels the steps send the player to (the Ore Pen for Clean, Tobin's
+-- counter and the Tech shop for Grow, the Foundry for Blaster): the bubble
+-- stays up beside them. Any other open panel (MenuPanels.Names: the side
+-- menu's CODEX, GOLEMS, ARTIFACTS, BOOSTS, SETTINGS, HALL OF FAME, the
+-- wheel, the shops...) has the screen: the bubble and the guide hide and
+-- R3 is free (TutorialController).
+TutorialView.StepPanels = { "PenController", "SellController", "TechShopController", "FoundryController" }
+
+-- Does one of these open panels hide the bubble?
+function TutorialView.panelHides(open: { string }): boolean
+	for _, name in open do
+		if not table.find(TutorialView.StepPanels, name) then
+			return true
+		end
+	end
+	return false
+end
 
 -- The bubble's height for a text height and a button row height.
 function TutorialView.height(body: number, row: number): number

@@ -16,8 +16,15 @@
 	    real thing hasn't streamed in. The beam fades out within
 	    ArriveRadius; the arrow stays
 	  - everything hides while the cleaning minigame runs
-	    (CleaningController.isActive) or something holds the controls
-	    (PlayerControls: build mode, the Foundry, the crate opening)
+	    (CleaningController.isActive), something holds the controls
+	    (PlayerControls: build mode, the Foundry, the crate opening) or a
+	    panel other than the steps' own is open (TutorialView.panelHides:
+	    the side menu's CODEX, GOLEMS, ARTIFACTS, BOOSTS, SETTINGS, HALL OF
+	    FAME, the wheel, ...); R3 is unbound meanwhile, so it can't arm SKIP
+	    inside a panel
+	  - on touch the bubble sits in the HUD's top row right of the teleport
+	    bar, where the FREE SPIN! chip goes too: inTopRow / onTopRowChanged
+	    tell WheelController to keep the chip away while the bubble is there
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -36,6 +43,7 @@ local Net = require(Shared.Net)
 local TutorialView = require(script.Parent.Parent.UI.TutorialView)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
 local StateController = require(script.Parent.StateController)
@@ -56,6 +64,9 @@ local visible = false
 local bound = false
 local cardShown = false -- the finish card shows once
 local lastKind: Input? = nil
+local touchLayout = false -- the bubble uses the touch layout (the top row, right of the teleport bar)
+local inTopRow = false -- the bubble shows there (what onTopRowChanged listeners last heard)
+local topRowListeners: { (boolean) -> () } = {}
 
 local PAD_KEY = Enum.KeyCode.ButtonR3
 local ACTION = "TerraForgeTutorial"
@@ -131,7 +142,26 @@ local function relayout()
 		uiScale.Scale = scale
 	end
 	local touch = inputKind() == "Touch"
+	touchLayout = touch
 	TutorialView.apply(r, TutorialView.layout(scale, screenSize(), touch, tenFoot(), menuTop(scale)))
+end
+
+-- Tells the listeners when the bubble comes into or leaves the top row.
+local function topRowChanged()
+	local now = visible and touchLayout
+	if now == inTopRow then
+		return
+	end
+	inTopRow = now
+	for _, listener in topRowListeners do
+		local ok, err = pcall(function(): any
+			listener(now)
+			return nil
+		end)
+		if not ok then
+			warn(`[TutorialController] top row listener failed: {err}`)
+		end
+	end
 end
 
 ---------------------------------------------------------------- the bubble
@@ -511,13 +541,24 @@ end
 
 ---------------------------------------------------------------- state
 
+-- The panels open right now (MenuPanels.Names; the missing ones are skipped).
+local function openPanels(): { string }
+	local list = {}
+	for _, name in MenuPanels.Names do
+		if MenuPanels.isOpen(name) then
+			table.insert(list, name)
+		end
+	end
+	return list
+end
+
 local function update()
 	local r = refs
 	if not r then
 		return
 	end
 	local def = currentDef()
-	local blocked = CleaningController.isActive() or PlayerControls.owner() ~= nil
+	local blocked = CleaningController.isActive() or PlayerControls.owner() ~= nil or TutorialView.panelHides(openPanels())
 	local show = def ~= nil and not blocked
 	if show ~= visible then
 		visible = show
@@ -527,6 +568,7 @@ local function update()
 		end
 	end
 	setBound(show)
+	topRowChanged()
 	if asking > 0 and os.clock() > asking then
 		asking = 0
 		TutorialView.setSkipAsk(r, false)
@@ -609,6 +651,7 @@ function TutorialController.start()
 			lastKind = kind
 			relayout()
 			fill()
+			topRowChanged()
 		end
 	end)
 	task.spawn(function()
@@ -622,6 +665,19 @@ end
 -- Is the bubble on screen? (other controllers may want to keep clear)
 function TutorialController.isShown(): boolean
 	return visible
+end
+
+-- Is the bubble on screen in the HUD's top row, right of the teleport bar
+-- (the touch layout)? The FREE SPIN! chip's spot: WheelController keeps
+-- the chip away meanwhile.
+function TutorialController.inTopRow(): boolean
+	return visible and touchLayout
+end
+
+-- Calls listener(inTopRow) whenever that changes (in the same frame, so
+-- the chip and the bubble never show together).
+function TutorialController.onTopRowChanged(listener: (boolean) -> ())
+	table.insert(topRowListeners, listener)
 end
 
 return TutorialController

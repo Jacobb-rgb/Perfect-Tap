@@ -5,7 +5,8 @@
 	docs/BALANCE_SIM.md explains the model and the results.
 
 	It reads the real config (OreData, BlasterData, ItemData, MachineData,
-	EconomyConfig, ToolData, TrainConfig, MachineData power rules) and models
+	EconomyConfig, ToolData (the Gear shop's Backpack levels and prices since
+	steps 6-7), TrainConfig, MachineData power rules) and models
 	the mine floors the way the mine-floors chat built them (branch
 	art/mine-floors, MineFloors.luau): 5 floors with blaster gates 1/3/5/7/9,
 	floors 4-5 only by the elevator ($500K), rocks that the floor's weakest
@@ -13,7 +14,10 @@
 	rocks rolling from the next rarity. Floor ore tables follow its plan:
 	floor N = the Nth rarity (Common .. Legendary), crystals one rarity up
 	(floor 5's crystals = Mythic). Hoverboards ($5K / $80K / $1.5M) shorten
-	walking. Golems, boosts and rebirths are not on main yet: not modelled.
+	walking. Steps 6-7 are merged but not modelled yet: gear except the
+	Backpack (everyone walks at Boots 0), golems, boosts, enchants, capsules,
+	the daily wheel, artifacts (the IncomeMult / DamageMult / LuckMult /
+	CleanSpeedMult overrides stand in for their bonuses); rebirths neither.
 
 	Everything the player does is an expected-value loop per 5 s step with
 	random ore draws (seeded), run for many players; medians are reported.
