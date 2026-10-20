@@ -382,4 +382,58 @@ return function(T, Loader)
 		T.truthy(layout.Compact, "a phone gets the compact layout")
 		T.truthy(layout.Tile * 0.62 >= 44 and layout.Slot * 0.62 >= 44 and layout.TabHeight * 0.62 >= 44, ">= 44 pt")
 	end)
+
+	T.test("LightUI: emoji stand-ins until the icon sheets are uploaded, one elevator tile", function()
+		local Bubble = ui("Bubble")
+		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+		local HudBubble = ui("HudBubble")
+		local SideMenuView = ui("SideMenuView")
+		local holder = Instance.new("Frame")
+		for _, name in { "backpack", "golem_PebbleGolem", "machine_Crusher", "artifact_CrownCoin", "lift" } do
+			local icon = Bubble.icon(holder, name, 60)
+			local stand = icon:FindFirstChild("Fallback")
+			T.truthy(stand and stand:GetAttribute("IconFallback"), "a stand-in for " .. name)
+			T.eq(stand.Text, IconAssets.fallback(name), "its emoji")
+		end
+		local robux = Bubble.icon(holder, "robux", 60)
+		T.falsy(robux:FindFirstChild("Fallback"), "Roblox's own robux picture needs none")
+		local sheet = IconAssets.Sheets[1]
+		local before = sheet.Id
+		sheet.Id = 123
+		local ok, err = pcall(function()
+			T.falsy(Bubble.icon(holder, "backpack", 60):FindFirstChild("Fallback"), "none once uploaded")
+		end)
+		sheet.Id = before
+		if not ok then
+			error(err, 0)
+		end
+
+		withLight(function()
+			local entries = SideMenuView.Entries
+			local had = SideMenuView.hasEntry("Elevator")
+			local added = false
+			if not had then
+				table.insert(entries, { Id = "Elevator", Label = "ELEVATOR", IconName = "lift", Group = "Main", Order = 50 })
+				added = true
+			end
+			local done, problem = pcall(function()
+				local refs = HudBubble.buildGame(1.25)
+				local teleport = TeleportView.build(refs.TopBar, refs.Menu, 1.25)
+				T.falsy(teleport.Side, "the LIFT teleport leaves the tile to the side menu's Elevator")
+				local count = 0
+				for _, child in refs.Menu:GetChildren() do
+					if child.Name == "Elevator" then
+						count += 1
+					end
+				end
+				T.eq(count, 1, "one ELEVATOR tile")
+			end)
+			if added then
+				table.remove(entries, #entries)
+			end
+			if not done then
+				error(problem, 0)
+			end
+		end)
+	end)
 end
