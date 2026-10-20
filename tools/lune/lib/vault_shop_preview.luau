@@ -114,7 +114,7 @@ function Preview.build(Loader: any): { [string]: any }
 		view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, 9, 1.52e11, "A: buy   B: close").Gui,
 	})
 	UIConfig.LightUI = UIConfig.Default
-	if light then
+	if process.env.LIGHT_UI == "1" then -- (the "_light" names: export_scene LIGHT_UI=1 only)
 		local renamed = {}
 		for name, guis in exports do
 			renamed[name .. "_light"] = guis

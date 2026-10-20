@@ -38,7 +38,7 @@ return function(T, Loader)
 		end
 		T.falsy(StoreConfig.sells("Nope"), "unknown key")
 		T.falsy(StoreConfig.sells(42), "junk")
-		T.truthy(MonetizationConfig.coinsBuyable(), "coin packs are on (owner)")
+		T.truthy(MonetizationConfig.CoinPacksDefault, "coin packs ship on (owner)")
 		local spec = StoreConfig.ById.Blaster
 		T.eq(StoreConfig.blasterKey(spec, 1), "BlasterNextA", "LV 1 -> next 2")
 		T.eq(StoreConfig.blasterKey(spec, 3), "BlasterNextA", "LV 3 -> next 4")

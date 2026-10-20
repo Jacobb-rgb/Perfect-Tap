@@ -481,7 +481,8 @@ local LIST: { Product } = {
 
 -- Coin packs: on since the owner's go (2026-10-20, "money for Robux").
 -- It decides the paid-random-items rules (see the header).
-MonetizationConfig.CoinPacksEnabled = true
+MonetizationConfig.CoinPacksDefault = true -- what ships (specs switch CoinPacksEnabled to test both)
+MonetizationConfig.CoinPacksEnabled = MonetizationConfig.CoinPacksDefault
 
 -- Seconds a "Prompted" Royal capsule remembers the Triple Lucky state the
 -- player saw (step 8 contract above).

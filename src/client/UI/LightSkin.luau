@@ -1,23 +1,25 @@
 --[[
-	LightSkin: dresses a window built with the old dark kit (UIKit + UITheme) in
-	the light "Bubble" look, without touching the window's code or layout.
-	Used while UIConfig.lightUI() is on (the light UI, ships off) by the older
-	windows: SellView, TechShopView, TrainView, IronBoxView, FoundryView,
-	CleaningView.
+	LightSkin: dresses a window built with the old dark kit (UIKit + UITheme:
+	brown panels) in the game's current look, the dark "Store card" style
+	(owner 2026-10-20, Config/BubbleTheme + Config/CardTheme), without
+	touching the window's code or layout. Used while UIConfig.lightUI() is
+	on by the older windows (SellView, TechShopView, TrainView, IronBoxView,
+	FoundryView, CleaningView, the steps 6-7 windows, MenuPanel windows).
 
-	  backgrounds  the dark panel colours become white / light tints; the
-	               button colours become the light button colours (green, red,
-	               orange, blue); everything else (ore and rarity colours)
-	               stays
-	  outlines     the dark brown outlines become navy
-	  text         on a light background: dark ink, no outline (the dim text a
-	               soft ink, green / orange / gold a darker shade); on a colour
-	               or over the world: white with a navy outline
+	  backgrounds  the brown panels become dark slate; the button colours
+	               become the kit's button colours (green, red, orange, blue);
+	               everything else (ore and rarity colours) stays
+	  outlines     the dark brown outlines become near black
+	  text         on the dark panels or over the world: cream with a dark
+	               edge (the dim text a soft grey); on a light face (a yellow
+	               button): dark ink, no edge (green / orange / gold a darker
+	               shade)
 
 	apply(root) skins everything under root now and keeps skinning: new
 	children and later colour changes (a controller setting Theme.Text again)
 	are mapped too. refresh(root) skins again once (Lune previews, where
-	Roblox signals don't run).
+	Roblox signals don't run). (The name stays from the light look it first
+	made, 2026-10-18.)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -38,7 +40,7 @@ end
 local BACKGROUNDS: { [string]: Color3 } = {
 	[key(Theme.Panel)] = BubbleTheme.Panel,
 	[key(Theme.PanelLight)] = BubbleTheme.PanelTint,
-	[key(Theme.PanelDark)] = rgb(214, 224, 240),
+	[key(Theme.PanelDark)] = rgb(20, 22, 27),
 	[key(Theme.Good)] = Roles.Go.Base,
 	[key(Theme.GoodDark)] = Roles.Go.Lip,
 	[key(Theme.Bad)] = Roles.Danger.Base,
@@ -57,20 +59,23 @@ local BACKGROUNDS: { [string]: Color3 } = {
 	[key(rgb(70, 62, 58))] = Roles.Settings.Lip,
 }
 
--- old text colour -> text colour on a light background (nil = keep the colour)
+-- old text colour -> text colour on a light face (nil = keep the colour)
+local SOFT_DARK = rgb(70, 82, 112)
 local INK: { [string]: Color3 } = {
-	[key(Theme.Text)] = BubbleTheme.Ink,
-	[key(rgb(255, 255, 255))] = BubbleTheme.Ink,
-	[key(Theme.TextDim)] = BubbleTheme.InkSoft,
+	[key(Theme.Text)] = BubbleTheme.DarkInk,
+	[key(rgb(255, 255, 255))] = BubbleTheme.DarkInk,
+	[key(BubbleTheme.Ink)] = BubbleTheme.DarkInk,
+	[key(Theme.TextDim)] = SOFT_DARK,
+	[key(BubbleTheme.InkSoft)] = SOFT_DARK,
 	[key(Theme.Good)] = rgb(30, 160, 70),
 	[key(Theme.Accent)] = rgb(226, 112, 0),
 	[key(Theme.Coin)] = rgb(206, 132, 0),
 	[key(Theme.Info)] = rgb(30, 120, 210),
 }
--- these stay without an outline on light backgrounds (plain dark text)
+-- these stay without an outline on light faces (plain dark text)
 local PLAIN_INK: { [string]: boolean } = {
-	[key(BubbleTheme.Ink)] = true,
-	[key(BubbleTheme.InkSoft)] = true,
+	[key(BubbleTheme.DarkInk)] = true,
+	[key(SOFT_DARK)] = true,
 }
 
 local LIGHT_GRADIENT = ColorSequence.new(Color3.new(1, 1, 1), rgb(236, 241, 249))
@@ -104,7 +109,7 @@ end
 local function readable(c: Color3): Color3
 	local h, sat, v = c:ToHSV()
 	if sat < 0.25 then
-		return BubbleTheme.Ink
+		return BubbleTheme.DarkInk
 	end
 	return Color3.fromHSV(h, math.max(sat, 0.75), math.min(v, 0.66))
 end
@@ -156,11 +161,14 @@ local function skinText(object: GuiObject)
 			stroke.Thickness = math.min(stroke.Thickness, 1.5)
 		end
 	else
-		-- on a colour or over the world: white with a navy edge (also text we
-		-- inked while its background was light: a row that got selected)
+		-- on the dark panels, a colour or over the world: cream with a dark
+		-- edge (also text we inked while its background was light: a row
+		-- that got selected)
 		local k = key(label.TextColor3)
-		if k == key(Theme.Text) or k == key(Theme.TextDim) or PLAIN_INK[k] then
-			label.TextColor3 = BubbleTheme.White
+		if k == key(Theme.Text) or k == key(BubbleTheme.DarkInk) then
+			label.TextColor3 = BubbleTheme.Ink
+		elseif k == key(Theme.TextDim) or k == key(SOFT_DARK) then
+			label.TextColor3 = BubbleTheme.InkSoft
 		end
 		if stroke then
 			stroke.Enabled = true
@@ -192,6 +200,163 @@ function LightSkin.skin(instance: Instance)
 	end
 end
 
+--[[
+	The store-card header band (owner 2026-10-20: every window like the store
+	photos): a window whose panel has a big title (a "Title" label in the old
+	title font) gets a band across the panel's top in the window's own colour
+	(BandRoles by the ScreenGui's name, else orange) with faint diagonal
+	stripes; the title turns cream with a dark edge in the comic font. The
+	band follows the title when the window's layout moves it.
+]]
+LightSkin.BandRoles = {
+	TerraForgeCodex = "Codex",
+	TerraForgeSettings = "Settings",
+	TerraForgeHallOfFame = "Boards",
+	TerraForgeRebirth = "Rebirth",
+	TerraForgeWheel = "Wheel",
+	TerraForgeArtifacts = "Artifacts",
+	TerraForgeJournal = "Artifacts",
+	TerraForgeEnchants = "Enchant",
+	TerraForgeBoosts = "Boosts",
+	TerraForgeCapsules = "Golems",
+	TerraForgeGolems = "Golems",
+	TerraForgeGearShop = "Gear",
+	TerraForgeSell = "Shop",
+	TerraForgeTechShop = "Build",
+	TerraForgeTrain = "Lobby",
+	TerraForgeTrainPanel = "Lobby",
+	TerraForgeIronBox = "Settings",
+	TerraForgeFoundry = "Vault",
+	TerraForgePen = "Backpack",
+} :: { [string]: string }
+
+local BAND = "SkinBand"
+
+local function bandHeight(title: GuiObject): number
+	local bottom = title.Position.Y.Offset + title.Size.Y.Offset
+	return math.max(48, bottom + 10)
+end
+
+local function sizeBand(band: GuiObject)
+	local parent = band.Parent
+	local title = if parent then parent:FindFirstChild("Title") else nil
+	if title and title:IsA("GuiObject") then
+		local height = bandHeight(title)
+		-- the line under the title rides in the band too
+		local subtitle = if parent then parent:FindFirstChild("Subtitle") else nil
+		if subtitle and subtitle:IsA("GuiObject") and subtitle.Visible and subtitle.Position.Y.Offset >= title.Position.Y.Offset then
+			height = math.max(height, bandHeight(subtitle) - 4)
+		end
+		band.Size = UDim2.new(1, 0, 0, height)
+	end
+end
+
+local function addBand(title: TextLabel, roleName: string)
+	local panel = title.Parent :: GuiObject
+	if panel:FindFirstChild(BAND) then
+		return
+	end
+	local role = Roles[roleName] or Roles.Vault
+	local corner = panel:FindFirstChildOfClass("UICorner")
+	local band = Instance.new("Frame")
+	band.Name = BAND
+	band.BackgroundColor3 = Color3.new(1, 1, 1)
+	band.BorderSizePixel = 0
+	band.ClipsDescendants = true
+	band.ZIndex = 0 -- under every other part of the window
+	local colours = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, role.Base),
+		ColorSequenceKeypoint.new(0.6, role.Base:Lerp(role.Top, 0.5)),
+		ColorSequenceKeypoint.new(1, role.Top),
+	})
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = colours
+	gradient.Parent = band
+	if corner then
+		local round = Instance.new("UICorner")
+		round.CornerRadius = corner.CornerRadius
+		round.Parent = band
+		-- the band's bottom corners stay square
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.BackgroundColor3 = Color3.new(1, 1, 1)
+		fill.BorderSizePixel = 0
+		fill.AnchorPoint = Vector2.new(0, 1)
+		fill.Position = UDim2.fromScale(0, 1)
+		fill.Size = UDim2.new(1, 0, 0.5, 0)
+		fill.ZIndex = 0
+		local fillGradient = Instance.new("UIGradient")
+		fillGradient.Color = colours
+		fillGradient.Parent = fill
+		fill.Parent = band
+	end
+	for i = 0, 60 do
+		local stripe = Instance.new("Frame")
+		stripe.Name = "Stripe"
+		stripe.AnchorPoint = Vector2.new(0.5, 0.5)
+		stripe.BackgroundColor3 = Color3.new(1, 1, 1)
+		stripe.BackgroundTransparency = 0.86
+		stripe.BorderSizePixel = 0
+		stripe.Position = UDim2.new(0, 14 + i * 26, 0.5, 0)
+		stripe.Rotation = 35
+		stripe.Size = UDim2.new(0, 8, 2, 0)
+		stripe.ZIndex = 0
+		stripe.Parent = band
+	end
+	local line = Instance.new("Frame")
+	line.Name = "Line"
+	line.BackgroundColor3 = BubbleTheme.Outline
+	line.BorderSizePixel = 0
+	line.AnchorPoint = Vector2.new(0, 1)
+	line.Position = UDim2.fromScale(0, 1)
+	line.Size = UDim2.new(1, 0, 0, 3)
+	line.ZIndex = 0
+	line.Parent = band
+	band.Parent = panel
+	sizeBand(band)
+	title.FontFace = BubbleTheme.CardFont
+	title.TextColor3 = BubbleTheme.Ink
+	local edge = textStroke(title)
+	if not edge then
+		local made = Instance.new("UIStroke")
+		made.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		made.Parent = title
+		edge = made
+	end
+	local stroke = edge :: UIStroke
+	stroke.Enabled = true
+	stroke.Color = BubbleTheme.Outline
+	stroke.Thickness = 3
+	stroke.Transparency = 0
+	pcall(function()
+		title:GetPropertyChangedSignal("Position"):Connect(function()
+			sizeBand(band)
+		end)
+		title:GetPropertyChangedSignal("Size"):Connect(function()
+			sizeBand(band)
+		end)
+	end)
+end
+
+-- Adds the header band to the window(s) under root (see BandRoles).
+function LightSkin.bands(root: Instance)
+	local gui = if root:IsA("ScreenGui") then root else root:FindFirstAncestorOfClass("ScreenGui")
+	local roleName = if gui then LightSkin.BandRoles[gui.Name] else nil
+	for _, d in root:GetDescendants() do
+		if d.Name == "Title" and d:IsA("TextLabel") then
+			local parent = d.Parent
+			local family = d.FontFace.Family
+			local titleFont = string.find(family, "Luckiest") ~= nil or string.find(family, "ComicNeue") ~= nil
+			-- (a window title: big, on an opaque panel; card titles are smaller)
+			if titleFont and d.TextSize >= 28 and parent and parent:IsA("Frame") and parent.BackgroundTransparency < 0.5 then
+				addBand(d, roleName or "Vault")
+			end
+		elseif d.Name == BAND and d:IsA("GuiObject") then
+			sizeBand(d)
+		end
+	end
+end
+
 -- Skins everything under root once (backgrounds first, then the texts that read them).
 function LightSkin.refresh(root: Instance)
 	local all = root:GetDescendants()
@@ -206,6 +371,7 @@ function LightSkin.refresh(root: Instance)
 			LightSkin.skin(d)
 		end
 	end
+	LightSkin.bands(root)
 end
 
 --[[

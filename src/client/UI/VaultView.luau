@@ -41,35 +41,32 @@ local rgb = Color3.fromRGB
 
 export type Role = { Top: Color3, Base: Color3, Lip: Color3 }
 
-local function role(top: Color3, base: Color3, lip: Color3): Role
-	return { Top = top, Base = base, Lip = lip }
-end
-
--- = Config/BubbleTheme on branch ui/light (the UI chat's light look)
+-- = Config/BubbleTheme: the game's look (the store-card style, owner 2026-10-20)
+local Kit = require(Shared.Config.BubbleTheme)
 VaultView.Style = {
-	Font = Font.fromEnum(Enum.Font.FredokaOne),
-	TitleFont = Font.fromEnum(Enum.Font.LuckiestGuy),
-	Outline = rgb(27, 29, 51),
-	Shadow = rgb(15, 18, 40),
-	ShadowTransparency = 0.72,
-	Panel = rgb(255, 255, 255),
-	PanelTint = rgb(234, 241, 251),
-	Ink = rgb(38, 48, 79),
-	InkSoft = rgb(104, 117, 150),
-	White = rgb(255, 255, 255),
-	Gold = rgb(255, 203, 46),
-	Good = rgb(62, 214, 98),
-	Bad = rgb(255, 77, 92),
-	Corner = 18,
-	Stroke = 3.5,
-	TextStroke = 2.5,
-	Lip = 5,
-	GlossTransparency = 0.72,
+	Font = Kit.Font,
+	TitleFont = Kit.TitleFont,
+	Outline = Kit.Outline,
+	Shadow = Kit.Shadow,
+	ShadowTransparency = Kit.ShadowTransparency,
+	Panel = Kit.Panel,
+	PanelTint = Kit.PanelTint,
+	Ink = Kit.Ink,
+	InkSoft = Kit.InkSoft,
+	White = Kit.White,
+	Gold = Kit.Gold,
+	Good = Kit.Good,
+	Bad = Kit.Bad,
+	Corner = Kit.Corner,
+	Stroke = Kit.Stroke,
+	TextStroke = Kit.TextStroke,
+	Lip = Kit.Lip,
+	GlossTransparency = Kit.GlossTransparency,
 	Roles = {
-		Vault = role(rgb(255, 182, 102), rgb(255, 138, 31), rgb(196, 90, 0)),
-		Go = role(rgb(128, 240, 140), rgb(47, 201, 90), rgb(27, 143, 60)),
-		Danger = role(rgb(255, 140, 140), rgb(255, 77, 92), rgb(188, 34, 52)),
-		Plain = role(rgb(255, 255, 255), rgb(236, 241, 249), rgb(176, 188, 208)),
+		Vault = Kit.Roles.Vault,
+		Go = Kit.Roles.Go,
+		Danger = Kit.Roles.Danger,
+		Plain = Kit.Roles.Plain,
 	} :: { [string]: Role },
 }
 local S = VaultView.Style

@@ -136,7 +136,7 @@ function styleElement(el, node, w, h) {
   }
   if (node.rot) el.style.transform = `rotate(${node.rot}deg)`;
   if (node.clip) el.style.overflow = "hidden";
-  el.style.zIndex = String(node.z || 1);
+  el.style.zIndex = String(node.z ?? 1);
 
   if (isText && node.text !== "") {
     const span = document.createElement("div");

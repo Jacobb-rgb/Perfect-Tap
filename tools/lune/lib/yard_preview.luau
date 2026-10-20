@@ -206,7 +206,7 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	offline.Detail.Text = "Away 3h 05m. Podiums pay 50% while you're offline, for up to 5 hours."
 	exports.ui_offline = UiExport.export({ hud().Gui, offline.Gui })
 	UIConfig.LightUI = UIConfig.Default
-	if light then
+	if require("@lune/process").env.LIGHT_UI == "1" then -- (the "_light" names: export_scene LIGHT_UI=1 only)
 		local renamed = {}
 		for name, guis in exports do
 			renamed[name .. "_light"] = guis
