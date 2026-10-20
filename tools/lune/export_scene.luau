@@ -46,10 +46,37 @@ local function presetToJson(preset)
 	return out
 end
 
-local function addNodes(parent)
+local function addNodes(parent, map)
 	local folder = roblox.Instance.new("Folder")
 	folder.Name = "Nodes"
 	folder.Parent = parent
+	-- the mine floors' rocks (RockBuilder) on their NodeSpawn markers
+	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
+	local markers = map and map:FindFirstChild("NodeSpawns")
+	if markers then
+		for _, marker in markers:GetChildren() do
+			local floorIndex = marker:GetAttribute("Floor")
+			if type(floorIndex) == "number" then
+				local index = marker:GetAttribute("SpawnIndex") or 0
+				local rng = Rng.new(index * 131 + 7)
+				local floor = MineFloors.get(floorIndex)
+				local kind = marker:GetAttribute("Kind")
+				if kind ~= "Giant" then
+					local roll = rng:next()
+					local deep = marker:GetAttribute("Deep") == true
+					kind = if roll < (if deep then 0.25 else 0.1) then "Crystal" elseif roll < 0.42 then "Big" else "Small"
+				end
+				local weights = if kind == "Crystal" then floor.CrystalOres else floor.Ores
+				local ores = {}
+				for _ = 1, MineFloors.OreCount[kind] or 3 do
+					table.insert(ores, rng:weighted(weights))
+				end
+				local ground = marker.CFrame.Position - roblox.Vector3.new(0, marker.Size.Y / 2, 0)
+				RockBuilder.build(floorIndex, kind, ores, roblox.CFrame.new(ground), index).Parent = folder
+			end
+		end
+	end
 	for index, spawn in WorldBuilder.generateNodeSpawns() do
 		local zone = WorldLayout.ZoneById[spawn.Zone]
 		local rng = Rng.new(index * 97 + 5)
@@ -86,10 +113,11 @@ local function addMuseums(map: any)
 	end
 end
 
-if sceneName == "world" then
+if sceneName == "world" or string.match(sceneName, "^world_") then
+	-- "world_<name>": the same world into build/preview/world_<name>.json (parallel workers)
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
-	addNodes(workspace)
+	addNodes(workspace, map)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)
@@ -147,6 +175,22 @@ elseif sceneName == "blaster_hold_tool" or sceneName == "blaster_hold_aim" then 
 	require("./lib/blaster_concepts").buildHold(Loader, workspace, if sceneName == "blaster_hold_aim" then "aim" else "tool")
 elseif sceneName == "trains" then -- the ore train gallery (tools/lune/lib/train_gallery.luau)
 	require("./lib/train_gallery").build(Loader, workspace)
+elseif sceneName == "mine_rocks" then -- mine floor rocks, giant crystals, breaking storyboard (tools/lune/lib/mine_concepts.luau)
+	require("./lib/mine_concepts").buildRocks(Loader, workspace)
+elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine floor rocks
+	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
+elseif sceneName == "mine_floor" then -- one mine floor area with rocks (tools/lune/lib/mine_floor_scene.luau)
+	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or 1)
+elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
+	require("./lib/hoverboard_preview").build(Loader, workspace)
+elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)
+	local HoverboardPreview = require("./lib/hoverboard_preview")
+	HoverboardPreview.buildRide(Loader, workspace, sceneName == "hoverboard_hero")
+	if sceneName == "hoverboard_ride" then
+		for name, guis in HoverboardPreview.buildUi(Loader) do
+			uiExports[name] = guis
+		end
+	end
 elseif sceneName == "railway" then -- the world with parked preview trains on the railway (tools/lune/lib/railway_gallery.luau)
 	require("./lib/railway_gallery").build(Loader, workspace)
 	addNodes(workspace)
@@ -211,6 +255,10 @@ elseif sceneName == "tutorial" or sceneName == "tutorial_hopper" or sceneName ==
 	local variant = if sceneName == "tutorial_hopper" then "hopper" elseif sceneName == "tutorial_golems" then "golems" else "station"
 	TutorialPreview.scene(Loader, workspace, variant)
 	for name, guis in TutorialPreview.build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading_preview.luau); the screen is opaque, no world
+	for name, guis in require("./lib/loading_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
@@ -727,7 +775,9 @@ if scene_extra then
 end
 
 fs.writeDir(root .. "/build/preview")
-local outName = if sceneName == "cleaning"
+local outName = if sceneName == "mine_floor"
+	then "mine_floor_" .. (process.args[2] or "1")
+	elseif sceneName == "cleaning"
 	then "cleaning_" .. (process.args[3] or "chisel") .. (if process.args[4] == "phone" then "_phone" else "")
 	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
@@ -761,6 +811,46 @@ if sceneName == "world" and process.args[2] == "yard" then
 		print("Exported UI " .. name)
 	end
 	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
+end
+
+---------------------------------------------------------------- scene "yard_ingame" (plot style A)
+-- `lune run tools/lune/export_scene.luau world yard_ingame`: the yard scene above
+-- with every plot's Foundry building and FOUNDRY chute receiver as FoundryService
+-- builds them at server start (their SurfaceGui frames painted for the renderer,
+-- plot 5's chimney smoking) -> build/preview/yard_ingame.json. Shots:
+-- tools/preview/plot_style_a_shots.json (the in-game pictures of the plot pieces
+-- in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
+if sceneName == "world" and process.args[2] == "yard_ingame" then
+	local YardPreview = require("./lib/yard_preview")
+	YardPreview.build(Loader, workspace)
+	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
+	local Gallery = require("./lib/machines_gallery")
+	local plots = workspace:FindFirstChild("Map"):FindFirstChild("Plots")
+	for _, plot in WorldLayout.Plots do
+		local model = plots:FindFirstChild("Plot_" .. plot.Id)
+		local yard = model and model:FindFirstChild("Yard")
+		local old = yard and yard:FindFirstChild("Foundry")
+		if old then
+			local plotCF = WorldLayout.plotCFrame(plot)
+			old:Destroy()
+			local building = FoundryBuilder.build(plotCF, 3)
+			building.Parent = yard
+			local receiver = FoundryBuilder.receiver(plotCF)
+			receiver.Parent = model
+			Gallery.paintGuis(Loader, workspace, building)
+			Gallery.paintGuis(Loader, workspace, receiver)
+			if plot.Id == YardPreview.Plot then
+				local top = building:FindFirstChild("ChimneyTop", true)
+				if top then
+					Gallery.smoke(Loader, workspace, top, 0.8)
+				end
+			end
+		end
+	end
+	local ingameScene = Export.collect(workspace)
+	ingameScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/yard_ingame.json", serde.encode("json", ingameScene))
+	print(string.format("Exported yard_ingame: %d parts, %d lights", #ingameScene.parts, #ingameScene.lights))
 end
 
 ---------------------------------------------------------------- scene "penboard" (WP-CleanerBox)

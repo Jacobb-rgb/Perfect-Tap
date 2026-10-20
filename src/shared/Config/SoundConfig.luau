@@ -37,6 +37,25 @@ local SoundConfig: { [string]: SoundDef } = {
 	-- mine elevator (art/mine-floors): the arrival bell, the heavy door
 	ElevatorDing = { Id = "rbxassetid://16480570986", Volume = 0.5, Pitch = { 1.0, 1.0 } },
 	DoorThud = { Id = "rbxassetid://12221984", Volume = 0.6, Pitch = { 0.36, 0.42 } },
+	-- the arrival sting with the floor banner, 0.2 s after the ding (victory.wav a little brighter)
+	ElevatorArrive = { Id = "rbxassetid://12222253", Volume = 0.3, Pitch = { 1.2, 1.2 } },
+	-- mine ambience (Config/MineAmbience; the lobby's AmbienceController plays them): quiet,
+	-- positional, only shipped / Roblox-made ids. impact_water pitched way up is a thin drip,
+	-- slowed down a thick lava blorp; the explosion slowed to a crawl a far rumble; the swim
+	-- loop slowed down lapping water; swoosh.wav slowed a hollow breath through a hall and the
+	-- pinball low bells lower still a far chime; the UFO beam slowed a crystal's hum and
+	-- glassbreak.wav sped up its tinkle; the falling-wind loop slowed right down a low lava roar.
+	-- (Not AmbPlop / AmbWaterfall / AmbBrook / ...: review/hory-noc has those names.)
+	AmbDrip = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.1, Pitch = { 2.6, 3.2 } },
+	AmbRumble = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.2, Pitch = { 0.28, 0.34 } },
+	AmbLap = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.12, Pitch = { 0.66, 0.72 }, Looped = true },
+	AmbRipple = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.06, Pitch = { 1.0, 1.2 } },
+	AmbEcho = { Id = "rbxassetid://12222200", Volume = 0.06, Pitch = { 0.3, 0.36 } },
+	AmbChime = { Id = "rbxassetid://16480570986", Volume = 0.05, Pitch = { 0.6, 0.66 } },
+	AmbHum = { Id = "rbxassetid://162670130", Volume = 0.07, Pitch = { 0.62, 0.68 }, Looped = true },
+	AmbTink = { Id = "rbxassetid://12222005", Volume = 0.03, Pitch = { 2.6, 3.0 } },
+	AmbBubble = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.12, Pitch = { 0.42, 0.55 } },
+	AmbLavaFlow = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.14, Pitch = { 0.3, 0.34 }, Looped = true },
 	Pickup = { Id = "rbxassetid://12221976", Volume = 0.5, Pitch = { 1.1, 1.3 } },
 	Drop = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = { 0.9, 1.1 } },
 	Throw = { Id = "rbxassetid://12222200", Volume = 0.45, Pitch = { 1.0, 1.25 } },
@@ -78,6 +97,17 @@ local SoundConfig: { [string]: SoundDef } = {
 	CaseBurst = { Id = "rbxassetid://12222005", Volume = 0.75, Pitch = { 0.42, 0.48 } },
 	CaseBoom = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.35, Pitch = { 1.15, 1.25 } },
 	CaseRise = { Id = "rbxassetid://12222200", Volume = 0.5, Pitch = { 0.55, 0.62 } },
+	-- lobby ambience (AmbienceConfig, AmbienceController): quiet, positional, only shipped / Roblox-made ids.
+	-- The swim loop slowed down is running water; impact_water a plop; electronicpingshort.wav sped up
+	-- and repeated fast is a cricket's chirp; unsheath.wav a hammer ringing on the anvil; snap.wav high
+	-- and soft the fire's crackle; the falling-wind loop slowed down the mountain wind.
+	AmbWaterfall = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.4, Pitch = { 0.5, 0.56 }, Looped = true },
+	AmbBrook = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.2, Pitch = { 0.85, 0.95 }, Looped = true },
+	AmbPlop = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.12, Pitch = { 1.5, 1.9 } },
+	AmbCricket = { Id = "rbxassetid://12221990", Volume = 0.05, Pitch = { 3.2, 3.6 } },
+	AmbHammer = { Id = "rbxassetid://12222225", Volume = 0.25, Pitch = { 0.85, 1.0 } },
+	AmbCrackle = { Id = "rbxassetid://12222140", Volume = 0.07, Pitch = { 1.8, 2.6 } },
+	AmbWind = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.16, Pitch = { 0.5, 0.55 }, Looped = true },
 }
 
 return SoundConfig

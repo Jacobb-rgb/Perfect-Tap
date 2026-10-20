@@ -71,6 +71,7 @@ local StoryView = require(script.Parent.Parent.UI.StoryView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local Loading = require(script.Parent.Parent.Util.Loading)
 local CleaningController = require(script.Parent.CleaningController)
 local HudController = require(script.Parent.HudController)
 local PromptController = require(script.Parent.PromptController)
@@ -822,6 +823,14 @@ local function onBannerClose(_: string, state: Enum.UserInputState, input: Input
 end
 
 local function showBanner(found: { [string]: any })
+	-- never under the loading screen (Util/Loading)
+	if not Loading.isDone() then
+		task.spawn(function()
+			Loading.wait()
+			showBanner(found)
+		end)
+		return
+	end
 	local view = ensureBanner()
 	bannerToken += 1
 	local token = bannerToken

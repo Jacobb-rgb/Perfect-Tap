@@ -1,0 +1,4 @@
+{
+ "mine_kit": { "scene": "mine_floor_0", "position": [0, 22, 52], "target": [0, 7, -6], "fov": 55, "preset": "EmberCaves", "shadowExtent": 90, "maxLights": 12 },
+ "mine_kit_elevator": { "scene": "mine_floor_0", "position": [-22, 12, 22], "target": [-30, 7, 0], "fov": 55, "preset": "EmberCaves", "shadowExtent": 40 }
+}

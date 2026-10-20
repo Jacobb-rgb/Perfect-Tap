@@ -548,3 +548,30 @@ What to test in Studio:
 6. Gamepad: during the tutorial open the CODEX (or GOLEMS, the wheel...): the bubble and the guide beam go, R3 does
    nothing (no "SURE?"); close it: the bubble is back. In the Ore Pen (the Clean step) the bubble stays.
 7. ORE CODEX: Bronze reads "Blaster level 1+", Sapphire, Dragon Egg and Diamond "Blaster level 3+".
+
+## The owner-approved Kenney-shape blasters in the game (2026-10-18; owner's yes 2026-10-20, branch art/kenney-blasters)
+The blasters the owner approved on 2026-10-17 (the Kenney Blaster Kit shapes, the Ore Glow lava / galaxy skins,
+crystals from Lv 4, flames / sparks from Lv 7) as the game's held guns. The prototype
+(tools/lune/lib/blaster_kenney.luau) had 139-408 parts per gun, so tools/kenney/blaster_lite.py traces lighter shapes
+(Builders/KenneyShapes). Each region is covered by a few overlapping boxes and wedges instead of being sliced into
+strips, which gives 22-62 parts for the shapes and 8-23 for the black silhouettes. Builders/KenneyBlaster adds the
+skin (a glowing rim on the main panel, lava cracks or stars), the crystals, the Lv 7+ emitter, the MuzzleGlow and
+the Muzzle. Every level in every ore stays within 90 parts (tests/KenneyBlaster.spec.luau; the classic guns had
+25). BlasterBuilder.build makes the new guns; the classic guns (buildClassic, its kit pieces and the before /
+after compare previews) are gone since the owner's yes. The held tool, the Vault's crate opening, the Great Forge
+gallery and the Foundry's NEXT rack (BlasterBuilder.silhouette) all use them. Effects/BlasterFx still finds its
+Muzzle.
+With it (owner 2026-10-20): the Vault's case colours follow the rarity. BlasterData.Vault.Ores is LV 4 Emberite,
+LV 6 Sapphire, LV 7 Amethyst (was Amethyst, Emberite, Sapphire), so the cases, the Vault's display cases and the
+gallery guns go Common, Uncommon, Uncommon, Rare, Rare, Epic, Epic, Legendary, Mythic (tests/VaultService.spec.luau
+pins "never a rarer ore below a commoner one"). Saves keep the BlasterOre a player already has.
+Budgets (main 19e3303 + this): map v35, 28,435 baked parts with the mine floors (20,860 without them), Plaza 2,176 of
+2,250 (the gallery's guns at display detail), LobbyParts 13,700 and MapParts 23,000 unchanged.
+At join the tutorial bubble and its guide wait for the loading screen (Loading.wait; shown either way after it).
+What to test in Studio:
+1. Equip the blaster at levels 1, 4, 7 and 10 (Studio dev kit): the gun sits in the hand, the barrel points
+   forward, the beam leaves the barrel's tip, the muzzle flash shows at the tip.
+2. Lv 7+: slow flames (hot ores) or sparks around the gun. Lv 10: the crystal crown around the barrel.
+3. Phone emulator with 10+ players holding guns: no frame drop.
+4. The Vault's crate opening and the Great Forge gallery show the new guns; the Foundry's NEXT rack shows the
+   new black silhouette.

@@ -63,10 +63,10 @@ return function(T, Loader)
 		local hd = SideMenuView.layout(1.25, (1080 - 36) / 1.25, { Count = 6 })
 		T.eq(hd.Columns, 1)
 		T.eq(hd.Rows, 6)
-		-- a big screen centres it
-		local tall = SideMenuView.layout(1, 1200)
+		-- a big screen centres it (nine buttons: a tall one)
+		local tall = SideMenuView.layout(1, 1400)
 		T.eq(tall.Columns, 1)
-		T.near(tall.Top + tall.Size.Y / 2, 600, 1, "centred")
+		T.near(tall.Top + tall.Size.Y / 2, 700, 1, "centred")
 	end)
 
 	-- The column's box on the screen (design units under the top bar), from
@@ -99,10 +99,12 @@ return function(T, Loader)
 		local refs = SideMenuView.build()
 		-- the open grid (MENU + the buttons) is the biggest the menu gets
 		SideMenuView.setExpanded(refs, true)
-		for _, count in { 7, 5 } do
+		for _, count in { 9, 8, 6 } do
 			for i, id in refs.Order do
-				-- 5: GOLEMS and ARTIFACTS hidden (their packages not in the game)
-				SideMenuView.setHidden(refs, id, count == 5 and (id == "Golems" or id == "Collection"))
+				-- 9: every button; 8: STORE hidden (step 8 isn't in the game: today's menu);
+				-- 6: GOLEMS and ARTIFACTS hidden too (their packages not in the game)
+				local hide = (count <= 8 and id == "Store") or (count <= 6 and (id == "Golems" or id == "Collection"))
+				SideMenuView.setHidden(refs, id, hide)
 				T.eq(refs.Buttons[id].Parent.Visible, not refs.Hidden[id], `{id} visibility ({i})`)
 			end
 			T.eq(#SideMenuView.shown(refs), count)
@@ -139,8 +141,10 @@ return function(T, Loader)
 
 	T.test("side menu: on touch screens one MENU button opens and shuts the grid", function()
 		local refs = SideMenuView.build()
-		SideMenuView.setHidden(refs, "Golems", true)
-		SideMenuView.setHidden(refs, "Collection", true)
+		-- five buttons: SHOP, CODEX, BOARDS, SETTINGS, STORE
+		for _, id in { "Golems", "Collection", "Elevator", "Hoverboards" } do
+			SideMenuView.setHidden(refs, id, true)
+		end
 		local designW, designH = 667 / PHONE, (375 - 58) / PHONE
 		local layout = SideMenuView.layout(PHONE, designH, { Count = 5, Touch = true, DesignWidth = designW })
 		SideMenuView.apply(refs, layout)
@@ -244,7 +248,8 @@ return function(T, Loader)
 			T.eq(trainRect.X, expected.X, label .. ": train chip x")
 			T.eq(trainRect.W, expected.W, label .. ": train chip width")
 			-- the boost chips' row under it (BoostController: chipsTop of the real frame), at its widest
-			local chips = { X = BoostView.ChipLeft, Y = BoostView.chipsTop(frame, touch), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
+			local chips =
+				{ X = BoostView.ChipLeft, Y = BoostView.chipsTop(frame, touch), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
 			T.eq(chips.Y, SideMenuView.chipsRect(touch).Y, label .. ": chips where the side menu expects them")
 			T.falsy(overlaps(trainRect, chips), label .. ": train chip and boost chips")
 			T.falsy(overlaps(coins, trainRect), label .. ": coins and train chip")
@@ -324,6 +329,54 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("side menu: ELEVATOR (a teleport, hidden without a stop) and HOVER (the hoverboards panel)", function()
+		local byId: { [string]: any } = {}
+		for _, entry in SideMenuView.Entries do
+			byId[entry.Id] = entry
+		end
+		local elevator, hover = byId.Elevator, byId.Hoverboards
+		T.truthy(elevator and hover, "both entries")
+		T.truthy(elevator.Group == "Main" and elevator.Order == 3 and elevator.Label == "ELEVATOR", "ELEVATOR: Main 3")
+		T.truthy(hover.Group == "More" and hover.Order == 6 and hover.Label == "HOVER", "HOVER: More 6 (BOARDS is the leaderboards)")
+		T.eq(SideMenuView.Icons.Elevator, "🛗")
+		T.eq(SideMenuView.Icons.Hoverboards, "🛹")
+		-- the controllers need a LocalPlayer, so their sources are read as text
+		local fs = require("@lune/fs")
+		local menu = fs.readFile("src/client/Controllers/SideMenuController.luau")
+		for id, controller in { Elevator = "ElevatorController", Hoverboards = "HoverboardController" } do
+			local action = string.match(menu, "\n\t" .. id .. " = (%b{})")
+			T.truthy(action, id .. " action")
+			T.truthy(string.find(action :: string, `Controller = "{controller}"`, 1, true), id .. " opens " .. controller)
+			T.truthy(string.find(action :: string, "Hide = true", 1, true), id .. " hides while its controller is missing")
+		end
+		T.truthy(string.find(menu, "unavailable(controller)", 1, true), "updateSoon also hides an unavailable feature")
+		T.truthy(string.find(menu, "function SideMenuController.refresh()", 1, true), "refresh for available() changes")
+		local MenuPanels = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.MenuPanels")
+		T.truthy(table.find(MenuPanels.Names, "ElevatorController"), "the floor picker is a panel (one at a time, build mode closes it)")
+		T.truthy(table.find(MenuPanels.Names, "HoverboardController"), "the hoverboards panel too")
+		local elevatorSource = fs.readFile("src/client/Controllers/ElevatorController.luau")
+		for _, fn in { "open", "toggle", "isOpen", "close", "available", "openAt" } do
+			T.truthy(string.find(elevatorSource, `function ElevatorController.{fn}(`, 1, true), "ElevatorController." .. fn)
+		end
+		T.truthy(string.find(elevatorSource, 'TeleportController.request("Elevator")', 1, true), "ELEVATOR teleports to the stop")
+		T.truthy(string.find(elevatorSource, "SideMenuController.refresh", 1, true), "the stop's attribute refreshes the menu")
+		T.truthy(string.find(elevatorSource, 'MenuPanels.closeOthers("ElevatorController")', 1, true), "the picker closes the other panels")
+		T.falsy(string.find(elevatorSource, "DPadLeft", 1, true), "D-pad Left is the side menu's")
+		local hoverSource = fs.readFile("src/client/Controllers/HoverboardController.luau")
+		for _, fn in { "open", "toggle", "isOpen", "close" } do
+			T.truthy(string.find(hoverSource, `function HoverboardController.{fn}(`, 1, true), "HoverboardController." .. fn)
+		end
+		T.truthy(string.find(hoverSource, 'MenuPanels.closeOthers("HoverboardController")', 1, true), "HOVER closes the other panels")
+		-- one left column: nothing else builds a ScreenGui of the side menu's name
+		local ElevatorView = fs.readFile("src/client/UI/ElevatorView.luau")
+		T.falsy(string.find(ElevatorView, "TerraForgeSideMenu", 1, true), "no second left stack")
+		T.falsy(string.find(fs.readFile("src/client/UI/HoverboardView.luau"), "sideButton", 1, true), "no own HOVER button")
+		-- the RIDE key: free on a gamepad (the D-pad's four directions are taken)
+		T.truthy(string.find(hoverSource, "GamepadKey = Enum.KeyCode.ButtonL2", 1, true), "RIDE on L2")
+		local boost = fs.readFile("src/client/Controllers/BoostController.luau")
+		T.falsy(string.find(boost, "ButtonL2", 1, true), "the boosts don't use L2")
+	end)
+
 	T.test("side menu: TVs read from the couch (labels and SOON chips at least 18 px)", function()
 		local scale = 1.25
 		local designW, designH = 1920 / scale, (1080 - 36) / scale
@@ -371,12 +424,12 @@ return function(T, Loader)
 		end
 		T.eq(SideMenuView.icon("NoSuchIcon"), "")
 		table.sort(mains)
-		T.eq(table.concat(mains, ","), "Golems,Shop", "GOLEMS and SHOP are the main tiles")
+		T.eq(table.concat(mains, ","), "Elevator,Golems,Shop", "GOLEMS, ELEVATOR and SHOP are the main tiles")
 		local order = {}
 		for _, entry in SideMenuView.sorted() do
 			table.insert(order, entry.Id)
 		end
-		T.eq(table.concat(order, ","), "Golems,Shop,Codex,Collection,Boards,Settings,Store")
+		T.eq(table.concat(order, ","), "Golems,Elevator,Shop,Codex,Collection,Boards,Settings,Store,Hoverboards")
 		local refs = SideMenuView.build()
 		T.eq(table.concat(refs.Order, ","), table.concat(order, ","), "the buttons follow the sorted entries")
 		T.eq(refs.Buttons.Golems:GetAttribute("MenuGroup"), "Main")
@@ -386,8 +439,8 @@ return function(T, Loader)
 
 	T.test("side menu: the view places every button, badges, SOON chips and hidden buttons", function()
 		local refs = SideMenuView.build()
-		T.eq(#refs.Order, 7)
-		for _, id in { "Shop", "Golems", "Codex", "Collection", "Boards", "Settings", "Store" } do
+		T.eq(#refs.Order, 9)
+		for _, id in { "Shop", "Golems", "Elevator", "Codex", "Collection", "Boards", "Settings", "Store", "Hoverboards" } do
 			T.truthy(refs.Buttons[id], id)
 		end
 		-- under the HUD: its popups and toasts show on top
@@ -395,7 +448,7 @@ return function(T, Loader)
 		local layout = SideMenuView.layout(PHONE, (375 - 58) / PHONE)
 		refs.Expanded = true
 		SideMenuView.apply(refs, layout)
-		T.eq(#SideMenuView.touchTargets(refs), 8, "MENU and 7 buttons")
+		T.eq(#SideMenuView.touchTargets(refs), 10, "MENU and 9 buttons")
 		checkTouch(SideMenuView.touchTargets(refs), PHONE, "menu")
 		-- no two buttons overlap
 		local boxes = {}
@@ -427,14 +480,14 @@ return function(T, Loader)
 		SideMenuView.setBadge(refs, "Nope", 1) -- unknown ids are ignored
 		-- a hidden button leaves no gap: the next one takes its place
 		SideMenuView.apply(refs, SideMenuView.layout(1, 684))
-		local codexY = refs.Buttons.Codex.Parent.Position.Y.Offset
+		local codexCell = SideMenuView.cellOf(refs, refs.Buttons.Codex) :: number
 		SideMenuView.setHidden(refs, "Golems", true)
-		T.eq(SideMenuView.shown(refs)[2], "Codex")
+		T.eq(SideMenuView.shown(refs)[1], "Elevator", "ELEVATOR moves into GOLEMS' cell")
 		SideMenuView.apply(refs, SideMenuView.layout(1, 684, { Count = #SideMenuView.shown(refs) }))
-		T.lt(refs.Buttons.Codex.Parent.Position.Y.Offset, codexY, "CODEX moved up")
+		T.eq(SideMenuView.cellOf(refs, refs.Buttons.Codex), codexCell - 1, "CODEX moved up a cell")
 		T.falsy(refs.Buttons.Golems.Parent.Visible)
 		SideMenuView.setHidden(refs, "Golems", false)
-		T.eq(#SideMenuView.shown(refs), 7)
+		T.eq(#SideMenuView.shown(refs), 9)
 		SideMenuView.setHidden(refs, "Nope", true) -- unknown ids are ignored
 	end)
 

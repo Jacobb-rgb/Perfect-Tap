@@ -10,9 +10,11 @@
 	equips it. The local beam is drawn every frame from the tool's Muzzle to
 	the hit point; the server only hears about target changes (MineBlast,
 	at most every BlasterData.Beam.ClientRetarget seconds, nil = stop) and
-	decides all damage. Rocks you can't mine yet show "Needs Lv N"; the rock
-	you blast shows its HP. Cleaning and build mode set busy (setBusy) and
-	nothing fires while PlayerControls is claimed (anvil, build mode).
+	decides all damage. Every rock near you wears a name + HP label
+	(UI/RockLabels); the one you aim at gets a note there ("Needs Lv N",
+	"VIP only", "Get closer"). Hits make the rock tremble and cracks /
+	shatters play Effects/RockFx. Cleaning and build mode set busy (setBusy)
+	and nothing fires while PlayerControls is claimed (anvil, build mode).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -30,7 +32,9 @@ local MovementConfig = require(Shared.Config.MovementConfig)
 local Theme = require(Shared.Config.UITheme)
 local Net = require(Shared.Net)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
+local RockLabels = require(script.Parent.Parent.UI.RockLabels)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
+local RockFx = require(script.Parent.Parent.Effects.RockFx)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local BlasterFx = require(script.Parent.Parent.Effects.BlasterFx)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
@@ -70,7 +74,6 @@ local aimRock: Model? = nil -- the rock the player aims at (also when not firing
 local aimTooFar = false
 local seenStage = 0
 local sparkAt, dustAt = 0, 0
-local lastHitAt = -math.huge
 local savedAutoRotate: boolean? = nil
 local device: Device = "Mouse"
 
@@ -84,10 +87,6 @@ local fireButton: TextButton
 local hint: Frame
 local hintIcon: ImageLabel
 local hintText: TextLabel
-local info: BillboardGui
-local infoLabel: TextLabel
-local infoBar: Frame
-local infoFill: Frame
 
 function MiningController.setBusy(value: boolean)
 	busy = value
@@ -153,6 +152,13 @@ local function levelOf(tool: Tool?): number
 	return if type(level) == "number" then level else 1
 end
 
+-- The player's blaster level: the saved one from the State snapshot (what the server gates on), else the tool's.
+local function blasterLevel(tool: Tool?): number
+	local state = StateController.get()
+	local level = state and state.BlasterLevel
+	return if type(level) == "number" then level else levelOf(tool)
+end
+
 -- The Reach enchant's extra studs (State.Bonuses.Reach: the same capped
 -- bonus MiningService adds to the range it accepts).
 local function bonusReach(): number
@@ -201,7 +207,7 @@ local function gateText(rock: Model, tool: Tool?): string
 		return "VIP only"
 	end
 	local needed = rock:GetAttribute("MinBlaster")
-	if type(needed) == "number" and needed > levelOf(tool) then
+	if type(needed) == "number" and needed > blasterLevel(tool) then
 		return "Needs Lv " .. needed
 	end
 	return ""
@@ -546,40 +552,9 @@ local function buildUI()
 	UIKit.gradient(fireButton, Color3.new(1, 1, 1), Color3.fromRGB(215, 215, 215))
 	UIKit.textStroke(fireButton)
 
-	-- over the aimed rock: "Needs Lv 3" or the HP bar of the rock you blast
-	info = UIKit.new("BillboardGui", {
-		Name = "TerraForgeRockInfo",
-		Size = UDim2.fromOffset(170, 54),
-		StudsOffsetWorldSpace = Vector3.new(0, 4.5, 0),
-		AlwaysOnTop = true,
-		Enabled = false,
-		LightInfluence = 0,
-		MaxDistance = 90,
-		ResetOnSpawn = false,
-	})
-	infoLabel = UIKit.label(info, "", 22, { Size = UDim2.new(1, 0, 0, 28), TextColor3 = Theme.Bad })
-	infoBar = UIKit.new("Frame", {
-		Name = "Bar",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 32),
-		Size = UDim2.fromOffset(120, 14),
-		BackgroundColor3 = Theme.PanelDark,
-		BorderSizePixel = 0,
-	}, info)
-	UIKit.corner(infoBar, 7)
-	UIKit.stroke(infoBar, 2)
-	infoFill = UIKit.new("Frame", {
-		Name = "Fill",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Accent,
-		BorderSizePixel = 0,
-	}, infoBar)
-	UIKit.corner(infoFill, 7)
-
 	local playerGui = player:WaitForChild("PlayerGui")
 	gui.Parent = playerGui
 	touchGui.Parent = playerGui
-	info.Parent = playerGui
 end
 
 local function layoutFireButton()
@@ -622,38 +597,18 @@ local function updateHint(show: boolean)
 	hintText.Size = UDim2.new(1, if hintIcon.Visible then -50 else -20, 1, 0)
 end
 
-local function updateInfo(now: number, tool: Tool?)
+-- The aimed / blasted rock's label gets a note: why you can't mine it, or "Get closer".
+local function updateFocus(tool: Tool?)
 	local rock = if firing and target then target else aimRock
 	if not rock or not rock.Parent or not rock.PrimaryPart then
-		info.Enabled = false
+		RockLabels.setFocus(nil, "")
 		return
 	end
-	local gate = gateText(rock, tool)
-	local recent = now - lastHitAt < 1.5
-	local showBar = gate == "" and (firing or recent) and rock == (target or aimRock)
-	if gate == "" and not showBar and not aimTooFar then
-		info.Enabled = false
-		return
+	local note = gateText(rock, tool)
+	if note == "" and aimTooFar and not firing then
+		note = "Get closer"
 	end
-	info.Adornee = rock.PrimaryPart
-	info.StudsOffsetWorldSpace = Vector3.new(0, radiusOf(rock) + 2.5, 0)
-	info.Enabled = true
-	if gate ~= "" then
-		infoLabel.Text = gate
-		infoLabel.TextColor3 = Theme.Bad
-		infoBar.Visible = false
-	elseif aimTooFar and not firing then
-		infoLabel.Text = "Get closer"
-		infoLabel.TextColor3 = Theme.TextDim
-		infoBar.Visible = false
-	else
-		infoLabel.Text = ""
-		infoBar.Visible = true
-		local health = rock:GetAttribute("Health")
-		local maxHealth = rock:GetAttribute("MaxHealth")
-		local ratio = if type(health) == "number" and type(maxHealth) == "number" and maxHealth > 0 then health / maxHealth else 1
-		infoFill.Size = UDim2.fromScale(math.clamp(ratio, 0, 1), 1)
-	end
+	RockLabels.setFocus(rock, note)
 end
 
 ---------------------------------------------------------------- input
@@ -782,7 +737,9 @@ local function update(dt: number)
 			BlasterFx.hit(point, glow, from - point, gated, if primary then primary.Color else nil)
 		end
 		if rock and not gated then
-			lastHitAt = now
+			-- the rock trembles right away (other players' hits arrive as Health drops, RockLabels)
+			RockFx.markShooter(rock)
+			RockFx.shake(rock)
 			if now - dustAt >= DUST_GAP then
 				dustAt = now
 				local primary = rock.PrimaryPart
@@ -832,8 +789,7 @@ local function slowUpdate()
 			aimRock = findAssist(root, range)
 		end
 	end
-	local now = os.clock()
-	updateInfo(now, someTool)
+	updateFocus(someTool)
 	updateHint(near and someTool ~= nil and (aimRock ~= nil or device ~= "Mouse"))
 	local touchGui = fireHolder.Parent :: ScreenGui
 	touchGui.Enabled = device == "Touch" and canUse() and someTool ~= nil and (tool ~= nil or near)
@@ -883,6 +839,12 @@ function MiningController.start()
 		stopFiring()
 	end)
 	refreshFilter()
+	RockLabels.onHealthDrop(function(rock: Model)
+		RockFx.shake(rock)
+	end)
+	RockLabels.start(function(): number
+		return blasterLevel(anyTool())
+	end)
 	RunService.RenderStepped:Connect(update)
 	while true do
 		local ok, err = pcall(function()

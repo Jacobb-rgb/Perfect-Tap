@@ -36,6 +36,7 @@ local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
+local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
 local MachineService = require(script.Parent.MachineService)
@@ -59,6 +60,13 @@ local cleanedCallbacks: { (Player, string, string, number) -> ...any } = {}
 -- every Cleaning Station in the world (spawned / removed hooks)
 local stations: { [MachineService.PlacedMachine]: boolean } = {}
 local INTAKE_PERIOD = 0.3
+
+local sessionStartCallbacks: { (Player) -> ...any } = {}
+
+-- Listeners for a cleaning session starting (HoverboardService gets the player off the board).
+function CleaningService.onSessionStart(callback: (Player) -> ...any)
+	table.insert(sessionStartCallbacks, callback)
+end
 
 -- Listeners: tutorial, badges, analytics. (player, oreId, grade, score)
 function CleaningService.onCleaned(callback: (Player, string, string, number) -> ...any)
@@ -137,6 +145,9 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 	sessions[player] = session
 	machine.State.Session = session
 	updatePrompts(machine)
+	for _, callback in sessionStartCallbacks do
+		task.spawn(callback, player)
+	end
 	Net.fire("CleanBegin", player, {
 		Id = session.Id,
 		OreId = session.OreId,
@@ -243,6 +254,11 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		)
 		return
 	end
+
+	-- scripted runs keep at most Pristine: FLAWLESS needs real hands (CleaningGuard, audit #4)
+	local verdict = CleaningGuard.check(payload)
+	CleaningGuard.note(player, verdict, result.Grade)
+	result.Grade = CleaningGuard.gradeFor(result.Grade, verdict)
 
 	-- success: raw chunk becomes clean ore on the output tray
 	machine.State.Item = nil
