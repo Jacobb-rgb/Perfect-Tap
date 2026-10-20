@@ -98,6 +98,24 @@ function Bubble.icon(parent: Instance, name: string, size: number, props: Props?
 	IconAssets.apply(image, name)
 	image:SetAttribute("Icon", name)
 	apply(image, props)
+	if image.Image == "" then
+		-- not uploaded yet: an emoji in its place (IconAssets.fallback)
+		local emoji = IconAssets.fallback(name)
+		if emoji then
+			local label = UIKit.new("TextLabel", {
+				Name = "Fallback",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.62, 0.62),
+				Text = emoji,
+				TextScaled = true,
+				FontFace = Theme.Font,
+				ZIndex = image.ZIndex,
+			}, image)
+			label:SetAttribute("IconFallback", true)
+		end
+	end
 	return image
 end
 

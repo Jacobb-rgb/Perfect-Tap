@@ -24,16 +24,18 @@ return function(T, Loader)
 
 	-- runs fn with the flag on, always switching it back
 	local function withLight(fn: () -> ())
+		local before = UIConfig.LightUI
 		UIConfig.LightUI = true
 		local ok, err = pcall(fn)
-		UIConfig.LightUI = false
+		UIConfig.LightUI = before
 		if not ok then
 			error(err, 0)
 		end
 	end
 
-	T.test("LightUI: off by default, today's HUD", function()
-		T.falsy(UIConfig.LightUI, "the flag ships OFF")
+	T.test("LightUI: switched off, today's HUD", function()
+		T.eq(type(UIConfig.Default), "boolean", "the switch that ships")
+		T.falsy(UIConfig.LightUI, "the runner tests the dark paths unless a spec switches it on")
 		T.falsy(UIConfig.lightUI(), "no test attribute in Lune")
 		local refs = HudView.build()
 		T.falsy(refs.TopBar:GetAttribute("Bubble"), "old top bar")

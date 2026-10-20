@@ -132,6 +132,16 @@ SideMenuView.Entries = {
 	{ Id = "Store", Label = "STORE", Group = "More", Order = 5, IconName = "Store", Color = rgb(72, 200, 150), Dark = rgb(28, 120, 86) },
 } :: { Entry }
 
+-- Is there an entry with this id (e.g. the mine floors' Elevator)?
+function SideMenuView.hasEntry(id: string): boolean
+	for _, entry in SideMenuView.Entries do
+		if entry.Id == id then
+			return true
+		end
+	end
+	return false
+end
+
 -- An IconName's icon ("" for a name the table doesn't know).
 function SideMenuView.icon(name: string): string
 	return SideMenuView.Icons[name] or ""

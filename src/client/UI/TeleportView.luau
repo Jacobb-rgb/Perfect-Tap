@@ -23,6 +23,7 @@ local TeleportConfig = require(Shared.Config.TeleportConfig)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
 local HudBubble = require(script.Parent.HudBubble)
+local SideMenuView = require(script.Parent.SideMenuView)
 
 local TeleportView = {}
 
@@ -153,7 +154,9 @@ local function buildBubble(topBar: Frame, menu: Frame?, uiScale: number): Refs
 			local face = HudBubble.tab(topBar, HudBubble.spot(spot.Id, spot.Label), layout, order)
 			face:SetAttribute("Teleport", spot.Id)
 			buttons[spot.Id], covers[spot.Id] = face, cover(face)
-		elseif menu then
+		elseif menu and not SideMenuView.hasEntry(spot.Id) then
+			-- (once the side menu has its own Elevator entry, that tile is the one
+			-- elevator button and the LIFT teleport steps back)
 			local face = HudBubble.claimTile(menu, spot.Id)
 			face:SetAttribute("Teleport", spot.Id)
 			local holder = face.Parent :: Frame

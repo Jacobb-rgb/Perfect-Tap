@@ -125,6 +125,38 @@ function IconAssets.find(name: string): (string, Vector2, Vector2)
 	return "", Vector2.zero, Vector2.zero
 end
 
+-- Until the owner uploads the sheets: an emoji stands in for an icon
+-- (Bubble.icon shows it), so tiles and tabs never look empty.
+IconAssets.Fallbacks = {
+	coin = "🪙", coins = "💰", backpack = "🎒", golem = "🤖", build = "🔨", shop = "🛒",
+	more = "➕", base = "🏠", lobby = "⛲", vault = "🏦", blaster = "⚡", shard = "💎",
+	artifact = "👑", medal = "🏅", podium = "🏆", moon = "🌙", train = "🚂", clover = "🍀",
+	rainbow = "🌈", enchant = "✨", check = "✔️", wheel = "🎡", book = "📖", trophy = "🏆",
+	helmet = "⛑️", cog = "⚙️", lock = "🔒", lift = "🛗", rebirth = "🔁", star_token = "⭐",
+	boots = "👢", gloves = "🧤", magnet = "🧲", speaker = "🔊", music = "🎵", camera = "📷",
+	gamepad = "🎮",
+} :: { [string]: string }
+
+-- prefix -> emoji for the big families (golem_*, capsule_*, machine_*, ...)
+local FAMILY: { [string]: string } = {
+	golem_ = "🤖", capsule_ = "🥚", machine_ = "⚙️", artifact_ = "🏺", item_ = "💎",
+	ore_ = "🪨", ingot_ = "🧈", enchant_ = "✨", blaster_ = "⚡",
+}
+
+-- The emoji standing in for an icon (nil: none), used while its sheet has no id.
+function IconAssets.fallback(name: string): string?
+	local exact = IconAssets.Fallbacks[name]
+	if exact then
+		return exact
+	end
+	for prefix, emoji in FAMILY do
+		if string.sub(name, 1, #prefix) == prefix then
+			return emoji
+		end
+	end
+	return nil
+end
+
 -- Shows icon `name` on an ImageLabel.
 function IconAssets.apply(label: ImageLabel, name: string)
 	local image, offset, size = IconAssets.find(name)

@@ -21,6 +21,9 @@ local function safe(instance, prop)
 end
 
 local function exportNode(instance): any?
+	if instance:GetAttribute("IconFallback") then
+		return nil -- the preview draws the rendered 3D icon instead of the stand-in emoji
+	end
 	local class = instance.ClassName
 	local node: { [string]: any } = { c = class, n = instance.Name }
 	if instance:IsA("GuiObject") then
