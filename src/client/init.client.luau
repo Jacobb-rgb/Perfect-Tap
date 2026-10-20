@@ -18,6 +18,7 @@ local ORDER = {
 	"AccessController",
 	"PromptController",
 	"CleaningController",
+	"CleaningLookController", -- the store-card spray look (Cleaning/CardLook) on the cleaning minigame
 	"MachineFxController",
 	"PowerController", -- cables between poles and the machines they power
 	"PenController",
