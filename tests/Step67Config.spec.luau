@@ -141,16 +141,12 @@ return function(T, Loader)
 			add(product.Name)
 			add(product.Description)
 		end
-		-- the LIMITED EDITION golem proposals (not in the game list yet)
+		-- the LIMITED EDITION sets (their golems are in GolemConfig.List)
 		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
-		for _, theme in LimitedGolems.Themes do
-			add(theme.Title)
-			add(theme.Tagline)
-			for _, golem in theme.Golems do
-				add(golem.Name)
-				add(golem.Id)
-				add(golem.Lore)
-			end
+		for _, set in LimitedGolems.Sets do
+			add(set.Id)
+			add(set.Title)
+			add(set.Tagline)
 		end
 		return names
 	end
@@ -423,8 +419,16 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- golems + capsules
 
-	T.test("Step67: 18 original golems from Common to Mythic", function()
-		T.eq(#GolemConfig.List, 18)
+	T.test("Step67: 18 original golems from Common to Mythic, 6 limited Dragonforge ones", function()
+		T.eq(#GolemConfig.List, 24)
+		local editions = {}
+		for _, golem in GolemConfig.List do
+			if golem.Edition then
+				editions[golem.Edition] = (editions[golem.Edition] or 0) + 1
+			end
+		end
+		T.eq(editions.Dragonforge, 6, "the Dragonforge set")
+		T.eq(#GolemConfig.List - 6, 18, "the capsule golems")
 		local names, rarities = {}, {}
 		for _, golem in GolemConfig.List do
 			T.falsy(names[golem.Name], "unique name " .. golem.Name)
@@ -651,7 +655,10 @@ return function(T, Loader)
 	end)
 
 	T.test("Step67: capsules: exact odds sum to 1, Triple Lucky triples the rarest and keeps the sum", function()
-		T.eq(#CapsuleConfig.List, 3)
+		T.eq(#CapsuleConfig.List, 4)
+		T.eq(#CapsuleConfig.Stall, 3, "the limited capsule is shop-only")
+		T.eq(CapsuleConfig.ById.Dragonforge.Currency, "Robux")
+		T.eq(CapsuleConfig.ById.Dragonforge.Limited, "Dragonforge")
 		T.eq(CapsuleConfig.ById.Stone.Currency, "Coins")
 		T.eq(CapsuleConfig.ById.Crystal.Currency, "Coins")
 		T.eq(CapsuleConfig.ById.Royal.Currency, "Robux")

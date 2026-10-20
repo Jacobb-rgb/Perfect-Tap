@@ -6,6 +6,9 @@
 	  Stone Capsule    coins, cheap         mostly Common golems
 	  Crystal Capsule  coins, expensive     Uncommon..Mythic
 	  Royal Capsule    Robux (placeholder)  Rare..Mythic, the best odds
+	  Dragonforge      Robux, LIMITED       the Dragonforge set (Config/LimitedGolems):
+	                                        only in the Robux shop's banner while
+	                                        its edition runs; never at the stall
 
 	- Exact odds per golem (each capsule's Odds sum to 1). Open 1, 3 or 10 at
 	  once; x10 costs 10 x Price x TenDiscount (a small discount).
@@ -28,8 +31,13 @@
 	  PolicyService ArePaidRandomItemsRestricted is true (src/server/Policy.luau).
 	  Odds are shown before every open, paid or not. Capsules given free by the
 	  daily wheel are not paid and may always be opened.
-	CapsuleAction ("Open", { Capsule, Count }) opens coin capsules; Royal
-	capsules are Robux products (the server answers with PurchasePrompt).
+	- Limited capsules (Limited = a LimitedGolems set): shop-only (Stall
+	  lists the others: the capsule panel's tabs and the stall's board), Robux
+	  packs of 1 / 3 / 10 / 50 (MaxCount), prompted only while their edition
+	  is on sale (LimitedGolems.onSale; "Ended" after), granted always.
+	CapsuleAction ("Open", { Capsule, Count }) opens coin capsules; Royal and
+	limited capsules are Robux products (the server answers with
+	PurchasePrompt).
 	A rate-limited "Open" is dropped without an answer (Net): the client keeps
 	its own ClientCooldown between opens and gives the buttons back after
 	ResultTimeout seconds. That does NOT mean nothing was spent: a slow
@@ -55,6 +63,8 @@ export type Capsule = {
 	Color: Color3, -- shell color
 	Glow: Color3, -- ring / core glow
 	Description: string,
+	Limited: string?, -- a LIMITED EDITION's capsule: the LimitedGolems set id (shop-only, see the header)
+	Shell: Color3?, -- the top shell's color (default: Color lightened)
 }
 
 export type OddsLine = { Golem: string, Chance: number }
@@ -62,6 +72,12 @@ export type OddsLine = { Golem: string, Chance: number }
 local CapsuleConfig = {}
 
 CapsuleConfig.Counts = { 1, 3, 10 }
+CapsuleConfig.MaxCount = 50 -- the biggest pack (a limited capsule x50; Robux only)
+-- A Robux pack is prompted while the inventory has room for this many of it
+-- (all of a small one): paid golems may pass InventoryCap up to MaxSaved and
+-- the rest wait in the pending-golem credit (CapsuleService), so a x50 pack
+-- doesn't need 50 free places.
+CapsuleConfig.PromptRoom = 10
 CapsuleConfig.TenDiscount = 0.9 -- x10 pays 9 capsules' price
 CapsuleConfig.TripleLucky = 3
 CapsuleConfig.ClientCooldown = 1 -- seconds between two "Open" requests from the client
@@ -78,6 +94,7 @@ CapsuleConfig.Reasons = {
 	InventoryFull = "Your golem inventory is full: delete some golems first",
 	Restricted = "Capsules aren't available where you play",
 	Robux = "Robux purchase", -- the server answers with PurchasePrompt instead
+	Ended = "This limited edition has ended", -- a limited capsule after its edition (LimitedGolems)
 } :: { [string]: string }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -159,11 +176,43 @@ CapsuleConfig.List = {
 			HeartstoneColossus = 0.008,
 		},
 	},
+	{
+		Id = "Dragonforge",
+		Name = "Dragonforge Capsule",
+		Currency = "Robux",
+		Products = {
+			[1] = "DragonforgeCapsule1",
+			[3] = "DragonforgeCapsule3",
+			[10] = "DragonforgeCapsule10",
+			[50] = "DragonforgeCapsule50",
+		},
+		Limited = "Dragonforge",
+		LuckyFrom = "Legendary",
+		Color = rgb(56, 30, 36),
+		Shell = rgb(232, 120, 40),
+		Glow = rgb(255, 120, 30),
+		Description = "A dragon egg from the heart of the volcano. LIMITED EDITION: the Dragonforge golems, only while the edition runs.",
+		Odds = {
+			CinderWhelp = 0.34,
+			EmberHatchling = 0.28,
+			ScaleKnight = 0.2,
+			Flamewing = 0.12,
+			MagmaWyvern = 0.05,
+			DragonKing = 0.01,
+		},
+	},
 } :: { Capsule }
 
 CapsuleConfig.ById = {} :: { [string]: Capsule }
+-- The capsules of the stall and the capsule panel: every one but the limited editions'.
+CapsuleConfig.Stall = {} :: { Capsule }
 for _, capsule in CapsuleConfig.List do
 	CapsuleConfig.ById[capsule.Id] = capsule
+	if capsule.Limited == nil then
+		table.insert(CapsuleConfig.Stall, capsule)
+	else
+		assert(capsule.Currency == "Robux" and capsule.Products, "CapsuleConfig: a limited capsule is a Robux one " .. capsule.Id)
+	end
 	for golemId in capsule.Odds do
 		assert(GolemConfig.ById[golemId], `CapsuleConfig: unknown golem {golemId} in {capsule.Id}`)
 	end

@@ -22,12 +22,12 @@
 	                              local -Z, +Y up). At most MaxParts (20)
 	                              parts: the body, the accessory, the aura,
 	                              then the vein while the budget allows.
-	                              LIMITED EDITION golems (Config/
-	                              LimitedGolems, a prototype not in the
-	                              game list yet) build from that list with
-	                              their themed gear (GolemGearLimited) and
+	                              LIMITED EDITION golems (GolemConfig
+	                              Edition, Config/LimitedGolems) wear their
+	                              set's themed gear (GolemGearLimited) and
 	                              may use LimitedMaxParts (25 = GolemConfig.
-	                              MaxParts, the hard cap) instead.
+	                              MaxParts, the hard cap) instead; their
+	                              Height is measured from the parts.
 	                              PrimaryPart = "Body" (the torso); the
 	                              model's attribute "RootHeight" is the Body
 	                              center's height above the base (the hover
@@ -59,7 +59,6 @@
 local CapsuleConfig = require(script.Parent.Parent.Config.CapsuleConfig)
 local GolemConfig = require(script.Parent.Parent.Config.GolemConfig)
 local GolemGearLimited = require(script.Parent.GolemGearLimited)
-local LimitedGolems = require(script.Parent.Parent.Config.LimitedGolems)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 
 local GolemBuilder = {}
@@ -209,10 +208,9 @@ local function lighter(c: Color3, amount: number): Color3
 	return c:Lerp(WHITE, amount)
 end
 
--- The look of a kind: a capsule golem, then a limited edition one (a plain
--- stone golem for an unknown kind).
+-- The look of a kind (a plain stone golem for an unknown kind).
 local function lookOf(kind: string): GolemConfig.Golem
-	local golem = GolemConfig.ById[kind] or LimitedGolems.ById[kind]
+	local golem = GolemConfig.ById[kind]
 	if golem then
 		return golem
 	end
@@ -432,7 +430,8 @@ end
 
 -- The part budget of a kind: LimitedMaxParts for a limited edition golem.
 function GolemBuilder.budget(kind: string): number
-	if not GolemConfig.ById[kind] and LimitedGolems.ById[kind] then
+	local golem = GolemConfig.ById[kind]
+	if golem and golem.Edition ~= nil then
 		return GolemBuilder.LimitedMaxParts
 	end
 	return GolemBuilder.MaxParts
@@ -562,13 +561,12 @@ end
 
 -- Is `kind` a Premium golem (Legendary or rarer: it hovers on an aura)?
 function GolemBuilder.premium(kind: string): boolean
-	local golem = GolemConfig.ById[kind] or LimitedGolems.ById[kind]
+	local golem = GolemConfig.ById[kind]
 	if not golem then
 		return false
 	end
 	local info = Rarity.ById[GolemBuilder.PremiumFrom]
-	local own = Rarity.ById[golem.Rarity]
-	return info ~= nil and own ~= nil and own.Order >= info.Order
+	return info ~= nil and GolemConfig.order(kind) >= info.Order
 end
 
 -- The highest point of a model's parts over `ground` (studs, along its up).
@@ -622,7 +620,7 @@ function GolemBuilder.capsule(capsuleId: string, base: CFrame?): Model
 		return p
 	end
 	local root = pivot(model, "Root")
-	local shell = lighter(color, 0.55)
+	local shell = if capsule and capsule.Shell then capsule.Shell else lighter(color, 0.55)
 	upright(top, "Shell", center * CFrame.new(0, mid / 2, 0), mid, 2 * r, shell)
 	part(top, "Dome", center * CFrame.new(0, mid, 0), Vector3.new(2 * r, 2 * r, 2 * r), shell, nil, Enum.PartType.Ball)
 	-- a small window on the front of the top shell

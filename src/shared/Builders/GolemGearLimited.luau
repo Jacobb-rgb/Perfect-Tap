@@ -1,26 +1,35 @@
 --[[
-	The LIMITED EDITION golems' gear (PROTOTYPE, Config/LimitedGolems): the
-	accessories of the four themed sets, registered into GolemBuilder's
-	ACCESSORIES (GolemBuilder calls GolemGearLimited.accessories with its own
-	part helpers). Pure: only creates Instances.
+	The LIMITED EDITION golems' gear (GolemConfig Edition, Config/
+	LimitedGolems): the themed accessories of each set, registered into
+	GolemBuilder's ACCESSORIES (GolemBuilder calls GolemGearLimited.
+	accessories with its own part helpers). Pure: only creates Instances.
 
 	Every accessory follows GolemBuilder's contract: it adds its parts to
 	c.Model (positions in unscaled golem units from the feet: c.At / c.V)
-	and returns the top of what it added. Some also re-dress the body's own
-	parts (Boulder, Crystal, Brow: shoulder spikes, pads, ice shards, snow
-	brows) so a theme reads at no part cost. Parts beyond the first few are
-	added in priority order only while c.Room() says the golem's part budget
-	allows (a limited golem: GolemBuilder.LimitedMaxParts; a capsule golem
-	wearing this gear: GolemBuilder.MaxParts), so every accessory builds on
-	every golem.
+	and returns the top of what it added. They also re-dress the body's own
+	parts (Boulder, Crystal, Core, Fists: shoulder spikes, a lava core, lava
+	hands) so the theme reads at no part cost. Parts beyond the first few
+	are added in priority order only while c.Room() says the golem's part
+	budget allows (a limited golem: GolemBuilder.LimitedMaxParts = 25; a
+	capsule golem wearing this gear: GolemBuilder.MaxParts), so every
+	accessory builds on every golem.
 
-	  A Dragonforge   DragonHorns, DragonEgg, DragonHelm, DragonWings, DragonCrown
-	  B Galaxy        SpaceHelmet, Comet, Orbiters, StarHat, StarCrown, NebulaCrown
-	  C Mecha Neon    NeonVisor, Headset, MechaCrest, Rockets, JetPack, OmegaFrame
-	  D Frost Titans  IcicleHair, Beanie, FrostHelm, SnowCloud, IcicleCrown, AuroraCrown
+	  Dragonforge (October / November 2026):
+	    DragonHorns   Cinder Whelp: curved ivory horns, little bat wings, a
+	                  snout, a tail with a glowing tip
+	    DragonEgg     Ember Hatchling: the top of its dragon egg as a cap
+	                  (a broken zigzag rim, spots), stubby wings, a tail
+	    DragonHelm    Dragonscale Knight: a closed helm shaped like a dragon's
+	                  head (the upper jaw over the eye slit, horns, a glowing
+	                  crest) and a dragon shield
+	    DragonWings   Flamewing (Epic): big fiery two-pointed wings, horns, a
+	                  snout; Magma Wyvern (Legendary): bigger wings, a tail,
+	                  lava hands
+	    DragonCrown   Dragon King: a crown of flames on a gold band and huge
+	                  gold-boned two-pointed wings
 
-	When the owner picks one theme, delete the other three sections here and
-	their names in GolemConfig.Accessories / Faces.
+	A new edition adds its own section (and its names to GolemConfig.
+	Accessories / Faces); an old one stays: its golems live on in the saves.
 ]]
 
 local GolemConfig = require(script.Parent.Parent.Config.GolemConfig)
@@ -66,86 +75,52 @@ export type Kit = {
 }
 
 -- Gear that covers the face (GolemBuilder.Faces): "Closed" = no stone brow,
--- the eyes sit a little forward (they glow through a slit or over a visor).
+-- the eyes sit a little forward (they glow through a slit).
 GolemGearLimited.Faces = {
 	DragonHelm = "Closed",
-	NeonVisor = "Closed",
-	MechaCrest = "Closed",
-	JetPack = "Closed",
-	OmegaFrame = "Closed",
-	FrostHelm = "Closed",
 } :: { [string]: string }
 
 local rgb = Color3.fromRGB
 local M = Enum.Material
 local NEON = M.Neon
 local BALL = Enum.PartType.Ball
-local CYLINDER = Enum.PartType.Cylinder
 local PI = math.pi
 
 local GOLD = rgb(255, 196, 56)
-local IVORY = rgb(240, 226, 196)
-local SHELL = rgb(252, 242, 218)
-local DARK_GLASS = rgb(18, 22, 34)
-local CHROME = rgb(214, 220, 232)
-local ICE = rgb(196, 242, 255)
-local SNOW = rgb(246, 250, 255)
-local WOOL_RED = rgb(226, 54, 66)
-local MOON = rgb(206, 200, 226)
+local IVORY = rgb(244, 230, 200)
+local SHELL = rgb(252, 240, 214)
+local SPOT = rgb(240, 120, 40)
+local FLAME_HOT = rgb(255, 214, 70)
+local FLAME = rgb(255, 120, 24)
 
 function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
-	local part, upright, facing, wedge = kit.part, kit.upright, kit.facing, kit.wedge
+	local part, upright, wedge = kit.part, kit.upright, kit.wedge
 	local darker, lighter = kit.darker, kit.lighter
 	local A: { [string]: (Ctx) -> number } = {}
 
-	-- one of the body's own parts, re-dressed (nil when it isn't there)
-	local function redress(c: Ctx, name: string, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material, shape: Enum.PartType?)
+	-- one of the body's own parts, re-dressed (nothing when it isn't there)
+	local function redress(c: Ctx, name: string, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material)
 		local p = c.Model:FindFirstChild(name)
 		if p and p:IsA("Part") then
 			p.CFrame = cf
 			p.Size = size
 			p.Color = color
 			p.Material = material
-			p.Shape = shape or Enum.PartType.Block
 		end
 	end
 
-	-- a small glowing diamond on a front face (stars, gems, cracks)
-	local function diamond(c: Ctx, name: string, x: number, y: number, z: number, size: number, color: Color3?)
-		part(c.Model, name, c.At(x, y, z) * CFrame.Angles(0, 0, PI / 4), c.V(size, size, 0.05), color or c.Glow, NEON)
+	local function recolor(c: Ctx, name: string, color: Color3, material: Enum.Material)
+		local p = c.Model:FindFirstChild(name)
+		if p and p:IsA("BasePart") then
+			p.Color = color
+			p.Material = material
+		end
 	end
 
-	-- a cylinder along X (ear cups, ear lights)
-	local function sideways(
-		c: Ctx,
-		name: string,
-		x: number,
-		y: number,
-		z: number,
-		length: number,
-		diameter: number,
-		color: Color3,
-		material: Enum.Material?
-	)
-		part(c.Model, name, c.At(x, y, z), c.V(length, diameter, diameter), color, material, CYLINDER)
-	end
+	---------------------------------------------------------------- Dragonforge
 
-	local function ball(
-		c: Ctx,
-		name: string,
-		x: number,
-		y: number,
-		z: number,
-		diameter: number,
-		color: Color3,
-		material: Enum.Material?
-	): Part
-		return part(c.Model, name, c.At(x, y, z), c.V(diameter, diameter, diameter), color, material, BALL)
-	end
-
-	---------------------------------------------------------------- A: Dragonforge
-
-	-- every dragon: shoulder spikes (the boulder in the trim, the crystal glowing like lava)
+	-- every dragon: shoulder spikes (the boulder in the trim, the crystal
+	-- glowing like lava) and a bigger glowing lava core on the chest
 	local function dragonBody(c: Ctx)
 		redress(
 			c,
@@ -163,6 +138,7 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 			c.Glow,
 			NEON
 		)
+		redress(c, "Core", c.At(0, 0.98, -0.445) * CFrame.Angles(0, 0, PI / 4), c.V(0.34, 0.34, 0.06), c.Glow, NEON)
 	end
 
 	-- one curved horn on `side`: a thick base growing out of the head's
@@ -188,6 +164,7 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 		return y + h1 * 0.5 + h2 * 0.99
 	end
 
+	-- a pair of curved horns (4 parts)
 	local function horns(
 		c: Ctx,
 		x: number,
@@ -205,12 +182,34 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 		return top
 	end
 
-	-- a dragon snout on the lower face with two glowing nostrils (3 parts)
-	local function snout(c: Ctx)
-		part(c.Model, "Snout", c.At(0, 1.74, -0.74), c.V(0.78, 0.38, 0.24), lighter(c.Look.Body, 0.08), M.Slate)
-		for i, x in { -0.16, 0.16 } do
-			part(c.Model, "Nostril" .. i, c.At(x, 1.8, -0.87), c.V(0.1, 0.08, 0.04), c.Glow, NEON)
+	-- a dragon snout on the lower face (1 part; `nostrils` adds two glowing ones)
+	local function snout(c: Ctx, nostrils: boolean)
+		part(c.Model, "Snout", c.At(0, 1.74, -0.74), c.V(0.8, 0.38, 0.26), lighter(c.Look.Body, 0.08), M.Slate)
+		if nostrils and c.Room() >= 2 then
+			for i, x in { -0.16, 0.16 } do
+				part(c.Model, "Nostril" .. i, c.At(x, 1.8, -0.88), c.V(0.1, 0.08, 0.04), c.Glow, NEON)
+			end
 		end
+	end
+
+	-- A dragon tail curling out from behind the hip to the golem's left and
+	-- forward, ending in a spade (2 parts), so it shows from the front.
+	local function tail(c: Ctx, size: number, color: Color3, tipColor: Color3, tipMaterial: Enum.Material)
+		local s = c.S
+		local endX, endZ = 0.32 + 0.95 * size, 0.42 - 0.6 * size
+		local from = c.At(0.32, 0.46, 0.42).Position
+		local to = c.At(endX, 0.22, endZ).Position
+		local length = (to - from).Magnitude
+		part(c.Model, "Tail", CFrame.lookAt((from + to) / 2, to), Vector3.new(0.24 * s, 0.22 * s, length + 0.1 * s), color, M.Slate)
+		-- the spade faces the front, a diamond standing on the tail's end
+		part(
+			c.Model,
+			"TailTip",
+			c.At(endX + 0.1 * size, 0.24 + 0.17 * size, endZ - 0.04) * CFrame.Angles(0, 0, PI / 4),
+			c.V(0.3 * size, 0.3 * size, 0.08),
+			tipColor,
+			tipMaterial
+		)
 	end
 
 	-- A bat wing's frame on `side`: the shoulder blade (turned a little
@@ -224,8 +223,8 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 	-- A bat wing on `side`: the arm bone runs from the shoulder blade up and
 	-- out to the wrist (`arm` long), the outer edge from the wrist down and
 	-- out to the tip (`finger` long); the membrane is the right-angled wedge
-	-- between them (its right angle the wrist). 2 parts. Returns the wrist's
-	-- height (unscaled).
+	-- between them (its right angle the wrist). 2 parts, or 1 without a
+	-- bone. Returns the wrist's height (unscaled).
 	local function wing(
 		c: Ctx,
 		i: number,
@@ -234,8 +233,8 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 		finger: number,
 		angle: number,
 		membrane: Color3,
-		bone: Color3,
-		boneMaterial: Enum.Material
+		bone: Color3?,
+		boneMaterial: Enum.Material?
 	): number
 		local s = c.S
 		local root, up, out = wingFrame(c, side, angle)
@@ -248,14 +247,16 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 			membrane,
 			M.Slate
 		)
-		part(
-			c.Model,
-			"WingBone" .. i,
-			root * CFrame.new(up * (arm * s / 2)) * CFrame.Angles(0, 0, side * angle),
-			c.V(arm + 0.1, 0.12, 0.12),
-			bone,
-			boneMaterial
-		)
+		if bone then
+			part(
+				c.Model,
+				"WingBone" .. i,
+				root * CFrame.new(up * (arm * s / 2)) * CFrame.Angles(0, 0, side * angle),
+				c.V(arm + 0.1, 0.12, 0.12),
+				bone,
+				boneMaterial
+			)
+		end
 		return 1.5 + arm * math.sin(angle) + 0.1
 	end
 
@@ -278,50 +279,114 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 		)
 	end
 
+	-- a pair of wings (bones: 4 parts, without: 2), then their lobes while the budget allows
+	local function wings(
+		c: Ctx,
+		arm: number,
+		finger: number,
+		angle: number,
+		membrane: Color3,
+		bone: Color3?,
+		boneMaterial: Enum.Material?
+	): number
+		local top = 0
+		for i, side in { -1, 1 } do
+			top = wing(c, i, side, arm, finger, angle, membrane, bone, boneMaterial)
+		end
+		return top
+	end
+
+	local function lobes(c: Ctx, arm: number, finger: number, angle: number, membrane: Color3)
+		if c.Room() >= 2 then
+			for i, side in { -1, 1 } do
+				wingLobe(c, i, side, arm, finger, angle, membrane)
+			end
+		end
+	end
+
 	A.DragonHorns = function(c)
+		-- Cinder Whelp: a baby dragon
 		dragonBody(c)
 		local top = horns(c, 0.66, 2.5, 0.1, 1, IVORY, IVORY, M.Slate)
-		if c.Room() >= 3 then
-			snout(c)
+		local membrane = c.Look.Trim:Lerp(c.Look.Glow, 0.4)
+		if c.Room() >= 4 then
+			top = math.max(top, wings(c, 1.05, 0.92, 0.9, membrane, c.Glow, NEON))
+		end
+		if c.Room() >= 1 then
+			snout(c, false)
+		end
+		if c.Room() >= 2 then
+			tail(c, 1, c.Look.Trim, c.Glow, NEON)
 		end
 		return top
 	end
 
 	A.DragonEgg = function(c)
+		-- Ember Hatchling: the top of its egg still on its head
 		dragonBody(c)
-		-- the top of the shell sits on the head like a cap, its broken rim zigzags over the forehead
-		ball(c, "Shell", 0, 2.66, 0.02, 1.5, SHELL, M.SmoothPlastic)
-		for i, x in { -0.5, -0.17, 0.17, 0.5 } do
+		part(c.Model, "Shell", c.At(0, 2.66, 0.02), c.V(1.5, 1.5, 1.5), SHELL, M.SmoothPlastic, BALL)
+		for i, x in { -0.42, 0, 0.42 } do
 			if c.Room() >= 1 then
 				part(
 					c.Model,
 					"ShellPoint" .. i,
 					c.At(x, 2.56, -0.69) * CFrame.Angles(0, 0, PI / 4),
-					c.V(0.28, 0.28, 0.06),
+					c.V(0.32, 0.32, 0.06),
 					SHELL,
 					M.SmoothPlastic
 				)
 			end
 		end
+		-- stubby wings (no bones) and a little tail
+		if c.Room() >= 2 then
+			wings(c, 0.85, 0.75, 0.85, c.Look.Glow:Lerp(c.Look.Trim, 0.35))
+		end
+		if c.Room() >= 2 then
+			tail(c, 0.8, c.Look.Trim, c.Glow, NEON)
+		end
 		-- orange spots on the shell
-		for i, k in { { -0.3, 3.0, -0.52, 0.3 }, { 0.34, 3.2, -0.34, 0.24 }, { 0.05, 3.38, 0.1, 0.22 } } do
+		for i, k in { { -0.32, 3.0, -0.52, 0.32 }, { 0.36, 3.2, -0.32, 0.26 } } do
 			if c.Room() >= 1 then
-				ball(c, "Spot" .. i, k[1], k[2], k[3], k[4], rgb(240, 120, 40), M.SmoothPlastic)
+				part(c.Model, "Spot" .. i, c.At(k[1], k[2], k[3]), c.V(k[4], k[4], k[4]), SPOT, M.SmoothPlastic, BALL)
 			end
 		end
-		return 2.66 + 0.75
+		return 2.66 + 0.76
 	end
 
 	A.DragonHelm = function(c)
+		-- Dragonscale Knight: a helm shaped like a dragon's head, a dragon shield
 		dragonBody(c)
-		-- a closed helm of dragon scales; the eyes glow through its slit
-		part(c.Model, "Helm", c.At(0, 2.1, 0.02), c.V(1.62, 1.36, 1.42), c.Look.Trim, M.Metal)
-		part(c.Model, "Slit", c.At(0, 2.06, -0.71), c.V(1.12, 0.24, 0.04), rgb(20, 14, 18))
+		local trim = c.Look.Trim
+		part(c.Model, "Helm", c.At(0, 2.1, 0.02), c.V(1.62, 1.36, 1.42), trim, M.Metal)
+		part(c.Model, "Slit", c.At(0, 2.02, -0.71), c.V(1.12, 0.22, 0.04), rgb(20, 14, 18))
+		-- the dragon's upper jaw jutting out over the eyes
+		part(c.Model, "Jaw", c.At(0, 2.32, -0.88) * CFrame.Angles(-0.12, 0, 0), c.V(1.08, 0.3, 0.46), darker(trim, 0.2), M.Metal)
 		local top = horns(c, 0.72, 2.4, 0.1, 1.3, GOLD, IVORY, M.Slate)
+		-- the shield on the left arm, turned half to the front: a heater shield with a dragon's eye
+		if c.Room() >= 3 then
+			local shield = c.At(-1.02, 0.98, -0.28) * CFrame.Angles(0, PI / 4, 0)
+			part(c.Model, "Shield", shield, c.V(0.82, 0.62, 0.12), darker(trim, 0.1), M.Metal)
+			part(
+				c.Model,
+				"ShieldPoint",
+				shield * CFrame.new(0, -0.3 * c.S, 0) * CFrame.Angles(0, 0, PI / 4),
+				c.V(0.58, 0.58, 0.11),
+				darker(trim, 0.1),
+				M.Metal
+			)
+			part(
+				c.Model,
+				"ShieldEye",
+				shield * CFrame.new(0, -0.08 * c.S, -0.07 * c.S) * CFrame.Angles(0, 0, PI / 4),
+				c.V(0.26, 0.26, 0.04),
+				c.Glow,
+				NEON
+			)
+		end
 		-- a glowing crest of scales over the top
 		for i, z in { -0.25, 0.25 } do
 			if c.Room() >= 1 then
-				part(c.Model, "Crest" .. i, c.At(0, 2.86, z) * CFrame.Angles(PI / 4, 0, 0), c.V(0.1, 0.34, 0.34), c.Glow, NEON)
+				part(c.Model, "Crest" .. i, c.At(0, 2.86, z) * CFrame.Angles(PI / 4, 0, 0), c.V(0.1, 0.36, 0.36), c.Glow, NEON)
 			end
 		end
 		return top
@@ -330,526 +395,68 @@ function GolemGearLimited.accessories(kit: Kit): { [string]: (Ctx) -> number }
 	A.DragonWings = function(c)
 		dragonBody(c)
 		local premium = c.Look.Rarity == "Legendary" or c.Look.Rarity == "Mythic"
-		local arm, finger = if premium then 1.4 else 1.25, if premium then 1.25 else 1.05
-		local membrane = c.Look.Trim:Lerp(c.Look.Glow, if premium then 0.32 else 0.5)
+		local arm, finger, angle = if premium then 1.5 else 1.3, if premium then 1.35 else 1.12, 0.9
+		local membrane = c.Look.Trim:Lerp(c.Look.Glow, if premium then 0.34 else 0.5)
+		local top = wings(c, arm, finger, angle, membrane, c.Glow, NEON)
 		if premium then
-			-- lava hands
+			-- Magma Wyvern: lava hands, a tail, little horns
 			for _, name in { "Fist1", "Fist2" } do
-				local fist = c.Model:FindFirstChild(name)
-				if fist and fist:IsA("BasePart") then
-					fist.Color = c.Look.Trim:Lerp(c.Look.Glow, 0.7)
-					fist.Material = NEON
+				recolor(c, name, c.Look.Trim:Lerp(c.Look.Glow, 0.7), NEON)
+			end
+			lobes(c, arm, finger, angle, membrane)
+			if c.Room() >= 2 then
+				tail(c, 1.15, darker(c.Look.Body, 0.1), c.Glow, NEON)
+			end
+			for i, side in { -1, 1 } do
+				if c.Room() >= 1 then
+					part(
+						c.Model,
+						"Horn" .. i,
+						c.At(side * 0.62, 2.82, 0.12) * CFrame.Angles(0.45, 0, side * -0.55),
+						c.V(0.22, 0.6, 0.22),
+						IVORY,
+						M.Slate
+					)
 				end
 			end
+			return math.max(top, 3.3)
 		end
-		local top = 0
-		for i, side in { -1, 1 } do
-			top = wing(c, i, side, arm, finger, 0.9, membrane, c.Glow, NEON)
-		end
-		-- small horns
+		-- Flamewing: two-pointed fiery wings, horns, a snout
+		lobes(c, arm, finger, angle, membrane)
 		if c.Room() >= 4 then
 			top = math.max(top, horns(c, 0.66, 2.5, 0.1, 0.85, IVORY, IVORY, M.Slate))
 		end
-		if premium then
-			for i, side in { -1, 1 } do
-				if c.Room() >= 1 then
-					wingLobe(c, i, side, arm, finger, 0.9, membrane)
-				end
-			end
-		end
-		if c.Room() >= 3 then
-			snout(c)
+		if c.Room() >= 1 then
+			snout(c, true)
 		end
 		return top
 	end
 
 	A.DragonCrown = function(c)
+		-- the Dragon King: a crown of flames, huge gold-boned wings
 		dragonBody(c)
-		-- the Dragon King: a big gold crown, gold-boned wings, ivory horns
-		upright(c.Model, "CrownBand", c.At(0, 2.86, 0), 0.28 * c.S, 1.2 * c.S, GOLD, M.Foil)
-		local top = 0
-		for i, side in { -1, 1 } do
-			top = wing(c, i, side, 1.6, 1.4, 0.88, rgb(150, 26, 34), GOLD, M.Foil)
-		end
-		for i, k in { { -0.4, -0.25, 0.6 }, { 0, -0.46, 0 }, { 0.4, -0.25, -0.6 } } do
+		upright(c.Model, "CrownBand", c.At(0, 2.86, 0), 0.3 * c.S, 1.24 * c.S, GOLD, M.Foil)
+		local arm, finger, angle = 1.7, 1.5, 0.88
+		local membrane = rgb(160, 28, 36)
+		local top = wings(c, arm, finger, angle, membrane, GOLD, M.Foil)
+		-- the flames: the middle one tallest, hot yellow; the sides orange
+		local colors = { FLAME, FLAME_HOT, FLAME }
+		for i, k in { { -0.4, -0.22, 0.48, 0.3 }, { 0, -0.48, 0.66, 0 }, { 0.4, -0.22, 0.48, -0.3 } } do
 			if c.Room() >= 1 then
+				local height = k[3]
 				part(
 					c.Model,
-					"CrownPoint" .. i,
-					c.At(k[1], 3.08, k[2]) * CFrame.Angles(0, k[3], 0) * CFrame.Angles(0, 0, PI / 4),
-					c.V(0.28, 0.28, 0.08),
-					GOLD,
-					M.Foil
-				)
-			end
-		end
-		for i, side in { -1, 1 } do
-			if c.Room() >= 1 then
-				wingLobe(c, i, side, 1.6, 1.4, 0.88, rgb(150, 26, 34))
-			end
-		end
-		if c.Room() >= 4 then
-			horns(c, 0.66, 2.5, 0.1, 0.9, IVORY, IVORY, M.Slate)
-		end
-		if c.Room() >= 1 then
-			part(c.Model, "CrownGem", c.At(0, 2.86, -0.61) * CFrame.Angles(0, 0, PI / 4), c.V(0.18, 0.18, 0.06), c.Glow, NEON)
-		end
-		return math.max(top, 3.3)
-	end
-
-	---------------------------------------------------------------- B: Galaxy
-
-	-- every space golem: a little moon on one shoulder, a star on the other
-	local function cosmicBody(c: Ctx)
-		redress(c, "Boulder", c.At(-0.62, 1.6, 0.12), c.V(0.5, 0.5, 0.5), MOON, M.Slate, BALL)
-		redress(c, "Crystal", c.At(0.6, 1.66, 0.14) * CFrame.Angles(0, 0, PI / 4), c.V(0.34, 0.34, 0.34), lighter(c.Look.Glow, 0.15), NEON)
-	end
-
-	-- star specks on the chest, while the budget allows
-	local function specks(c: Ctx, list: { { number } })
-		for i, k in list do
-			if c.Room() >= 1 then
-				diamond(c, "Speck" .. i, k[1], k[2], -0.45, k[3], lighter(c.Glow, 0.3))
-			end
-		end
-	end
-
-	-- a planet ring: a thin glowing disc round the head (the head hides its middle)
-	local function planetRing(c: Ctx, y: number, diameter: number, color: Color3, transparency: number, tilt: number): Part
-		local ring = upright(c.Model, "Ring", c.At(0, y, 0) * CFrame.Angles(tilt, 0, 0.16), 0.04 * c.S, diameter * c.S, color, NEON)
-		ring.Transparency = transparency
-		return ring
-	end
-
-	A.SpaceHelmet = function(c)
-		cosmicBody(c)
-		-- a glass bubble round the head on a white collar
-		local bubble = ball(c, "Bubble", 0, 2.12, 0, 2.3, rgb(200, 236, 255), M.Glass)
-		bubble.Transparency = 0.6
-		upright(c.Model, "Collar", c.At(0, 1.46, 0), 0.18 * c.S, 1.56 * c.S, CHROME, M.Metal)
-		if c.Room() >= 2 then
-			part(c.Model, "Antenna", c.At(0.42, 3.24, 0.1) * CFrame.Angles(0, 0, -0.25), c.V(0.07, 0.42, 0.07), CHROME, M.Metal)
-			ball(c, "AntennaTip", 0.48, 3.48, 0.1, 0.2, c.Glow, NEON)
-		end
-		specks(c, { { -0.3, 1.24, 0.12 }, { 0.32, 0.78, 0.09 } })
-		return 3.58
-	end
-
-	A.Comet = function(c)
-		cosmicBody(c)
-		-- a comet sits on the head, its glowing tail streams up and away
-		ball(c, "Comet", -0.22, 2.98, -0.15, 0.56, c.Glow, NEON)
-		for i, k in { { 0.16, 3.22, 0.0, 0.44, 0.15 }, { 0.5, 3.46, 0.12, 0.34, 0.35 }, { 0.8, 3.68, 0.22, 0.24, 0.55 } } do
-			if c.Room() >= 1 then
-				local tail = ball(c, "Tail" .. i, k[1], k[2], k[3], k[4], lighter(c.Glow, 0.2 + i * 0.1), NEON)
-				tail.Transparency = k[5]
-			end
-		end
-		specks(c, { { -0.3, 1.24, 0.12 }, { 0.32, 0.78, 0.09 } })
-		return 3.82
-	end
-
-	A.Orbiters = function(c)
-		cosmicBody(c)
-		planetRing(c, 2.5, 2.7, c.Glow, 0.6, 0.32)
-		-- two little moons riding the ring
-		if c.Room() >= 2 then
-			ball(c, "MoonA", -1.22, 2.36, -0.45, 0.44, rgb(255, 150, 90), M.SmoothPlastic)
-			ball(c, "MoonB", 1.2, 2.72, 0.35, 0.34, rgb(120, 255, 200), M.SmoothPlastic)
-		end
-		specks(c, { { -0.3, 1.24, 0.12 }, { 0.32, 0.78, 0.09 } })
-		return 3.0
-	end
-
-	A.StarHat = function(c)
-		cosmicBody(c)
-		-- a pointed wizard hat with a bent tip and a big star
-		local hat = rgb(70, 52, 170)
-		upright(c.Model, "Brim", c.At(0, 2.74, 0), 0.08 * c.S, 2.04 * c.S, darker(hat, 0.3))
-		upright(c.Model, "Hat1", c.At(0, 2.99, 0), 0.46 * c.S, 1.22 * c.S, hat)
-		upright(c.Model, "Hat2", c.At(0.05, 3.42, 0.02), 0.42 * c.S, 0.86 * c.S, hat)
-		upright(c.Model, "Hat3", c.At(0.12, 3.8, 0.04), 0.38 * c.S, 0.54 * c.S, hat)
-		part(c.Model, "HatTip", c.At(0.36, 4.06, 0.06) * CFrame.Angles(0, 0, -0.95), c.V(0.26, 0.46, 0.26), hat)
-		if c.Room() >= 1 then
-			part(c.Model, "HatStar", c.At(0, 3.02, -0.63) * CFrame.Angles(0, 0, PI / 4), c.V(0.36, 0.36, 0.06), GOLD, NEON)
-		end
-		if c.Room() >= 1 then
-			diamond(c, "HatSpeck", 0.24, 3.44, -0.44, 0.14, lighter(c.Glow, 0.3))
-		end
-		specks(c, { { -0.3, 1.24, 0.12 }, { 0.32, 0.78, 0.09 } })
-		return 4.25
-	end
-
-	-- a ring of star points floating over the head (`count` parts)
-	local function starCrown(c: Ctx, count: number, y: number, r: number, color: Color3)
-		for i = 1, count do
-			if c.Room() >= 1 then
-				local a = PI / 2 + (i - (count + 1) / 2) * (PI / (count + 1)) * 1.6
-				part(
-					c.Model,
-					"StarPoint" .. i,
-					c.At(math.cos(a) * r, y + (if i == (count + 1) / 2 then 0.12 else 0), -math.sin(a) * r * 0.6)
-						* CFrame.Angles(0, 0, PI / 4),
-					c.V(0.24, 0.24, 0.08),
-					color,
-					NEON
-				)
-			end
-		end
-	end
-
-	A.StarCrown = function(c)
-		cosmicBody(c)
-		planetRing(c, 2.45, 3.0, c.Glow, 0.6, 0.3)
-		starCrown(c, 5, 3.08, 0.62, GOLD)
-		specks(c, { { -0.3, 1.24, 0.12 }, { 0.32, 0.78, 0.09 } })
-		return 3.3
-	end
-
-	A.NebulaCrown = function(c)
-		cosmicBody(c)
-		-- a nebula glowing behind the head, a planet ring, two planets, a crown of stars
-		local pink = ball(c, "NebulaA", -0.5, 2.7, 0.75, 2.0, rgb(200, 50, 170), NEON)
-		pink.Transparency = 0.88
-		local violet = ball(c, "NebulaB", 0.55, 2.95, 0.8, 1.7, rgb(90, 60, 220), NEON)
-		violet.Transparency = 0.88
-		planetRing(c, 2.45, 3.1, rgb(80, 200, 240), 0.6, 0.3)
-		if c.Room() >= 2 then
-			ball(c, "PlanetA", -1.36, 2.3, -0.4, 0.5, rgb(255, 170, 80), M.SmoothPlastic)
-			ball(c, "PlanetB", 1.32, 2.68, 0.4, 0.38, rgb(110, 255, 210), M.SmoothPlastic)
-		end
-		starCrown(c, 3, 3.08, 0.5, GOLD)
-		specks(c, { { -0.3, 1.24, 0.12 }, { 0.32, 0.78, 0.09 } })
-		return 3.8
-	end
-
-	---------------------------------------------------------------- C: Mecha Neon
-
-	-- every robot: square shoulder pads in the trim
-	local function mechaBody(c: Ctx)
-		for _, side in { -1, 1 } do
-			redress(
-				c,
-				if side < 0 then "Boulder" else "Crystal",
-				c.At(side * 0.74, 1.52, 0.02) * CFrame.Angles(0, 0, -side * 0.18),
-				c.V(0.6, 0.34, 0.7),
-				c.Look.Trim,
-				M.Metal
-			)
-		end
-	end
-
-	-- a dark visor band across the face (the eyes glow on it)
-	local function visor(c: Ctx)
-		part(c.Model, "VisorBand", c.At(0, 2.04, -0.69), c.V(1.4, 0.46, 0.06), DARK_GLASS, M.SmoothPlastic)
-	end
-
-	-- a V-fin crest with a gem in the middle (3 parts)
-	local function vFin(c: Ctx, color: Color3, size: number)
-		for i, side in { -1, 1 } do
-			part(
-				c.Model,
-				"Fin" .. i,
-				c.At(side * 0.26 * size, 2.62 + 0.26 * size, -0.68) * CFrame.Angles(0, 0, -side * 0.85),
-				c.V(0.14, 0.78 * size, 0.08),
-				color,
-				M.Metal
-			)
-		end
-		if c.Room() >= 1 then
-			part(c.Model, "Gem", c.At(0, 2.6, -0.72) * CFrame.Angles(0, 0, PI / 4), c.V(0.24, 0.24, 0.07), c.Glow, NEON)
-		end
-	end
-
-	-- glowing flames under the feet (jet boots), in the hover gap
-	local function bootFlames(c: Ctx, color: Color3)
-		for i, x in { -0.3, 0.3 } do
-			if c.Room() >= 1 then
-				local flame =
-					part(c.Model, "BootFlame" .. i, c.At(x, -0.1, 0.02) * CFrame.Angles(0, PI / 4, 0), c.V(0.3, 0.18, 0.3), color, NEON)
-				flame.Transparency = 0.15
-			end
-		end
-	end
-
-	-- twin boosters on the back with short wings
-	local function boosters(c: Ctx, wings: boolean)
-		for i, side in { -1, 1 } do
-			if c.Room() >= 1 then
-				upright(c.Model, "Booster" .. i, c.At(side * 0.34, 1.05, 0.62), 0.86 * c.S, 0.42 * c.S, c.Look.Trim, M.Metal)
-			end
-		end
-		if wings then
-			for i, side in { -1, 1 } do
-				if c.Room() >= 1 then
-					wedge(
-						c.Model,
-						"JetWing" .. i,
-						c.At(side * 0.95, 1.2, 0.62) * CFrame.Angles(0, 0, side * 0.35) * CFrame.Angles(0, side * PI / 2, 0),
-						c.V(0.08, 0.5, 1.0),
-						lighter(c.Look.Body, 0.1),
-						M.Metal
-					)
-				end
-			end
-		end
-	end
-
-	A.NeonVisor = function(c)
-		mechaBody(c)
-		visor(c)
-		sideways(c, "EarLight1", -0.78, 2.05, 0, 0.1, 0.44, c.Glow, NEON)
-		sideways(c, "EarLight2", 0.78, 2.05, 0, 0.1, 0.44, c.Glow, NEON)
-		if c.Room() >= 2 then
-			part(c.Model, "Antenna", c.At(0.42, 2.98, 0), c.V(0.07, 0.56, 0.07), CHROME, M.Metal)
-			ball(c, "AntennaTip", 0.42, 3.3, 0, 0.22, c.Glow, NEON)
-		end
-		if c.Room() >= 1 then
-			part(c.Model, "ChestLight", c.At(0, 1.28, -0.44), c.V(0.7, 0.07, 0.05), c.Glow, NEON)
-		end
-		return 3.41
-	end
-
-	A.Headset = function(c)
-		mechaBody(c)
-		-- big headphones: a band over the head, ear cups with neon rings
-		local band = c.Look.Trim
-		part(c.Model, "Headband", c.At(0, 2.84, 0), c.V(1.74, 0.16, 0.26), band, M.Metal)
-		for i, side in { -1, 1 } do
-			sideways(c, "EarCup" .. i, side * 0.86, 2.12, 0, 0.24, 0.74, band, M.Metal)
-			if c.Room() >= 1 then
-				sideways(c, "EarRing" .. i, side * 0.99, 2.12, 0, 0.04, 0.52, c.Glow, NEON)
-			end
-		end
-		for i, side in { -1, 1 } do
-			if c.Room() >= 1 then
-				part(c.Model, "BandSide" .. i, c.At(side * 0.84, 2.62, 0), c.V(0.14, 0.46, 0.22), band, M.Metal)
-			end
-		end
-		if c.Room() >= 1 then
-			part(c.Model, "ChestLight", c.At(0, 1.28, -0.44), c.V(0.7, 0.07, 0.05), c.Glow, NEON)
-		end
-		return 2.92
-	end
-
-	A.MechaCrest = function(c)
-		mechaBody(c)
-		visor(c)
-		vFin(c, GOLD, 1)
-		for i, side in { -1, 1 } do
-			if c.Room() >= 1 then
-				part(
-					c.Model,
-					"EarFin" .. i,
-					c.At(side * 0.8, 2.42, 0.12) * CFrame.Angles(0.45, 0, 0),
-					c.V(0.1, 0.56, 0.26),
-					c.Look.Trim,
-					M.Metal
-				)
-			end
-		end
-		if c.Room() >= 1 then
-			part(c.Model, "ChestLight", c.At(0, 1.28, -0.44), c.V(0.7, 0.07, 0.05), c.Glow, NEON)
-		end
-		return 2.62 + 0.26 + 0.39
-	end
-
-	A.Rockets = function(c)
-		-- rocket pods on the shoulders (the shoulder parts), glowing rocket noses
-		for _, side in { -1, 1 } do
-			redress(
-				c,
-				if side < 0 then "Boulder" else "Crystal",
-				c.At(side * 0.78, 1.72, 0.06),
-				c.V(0.56, 0.56, 0.86),
-				c.Look.Trim,
-				M.Metal
-			)
-		end
-		for i, k in { { -0.88, 1.82 }, { -0.68, 1.62 }, { 0.68, 1.62 }, { 0.88, 1.82 } } do
-			if c.Room() >= 1 then
-				facing(c.Model, "Rocket" .. i, c.At(k[1], k[2], -0.4), 0.08 * c.S, 0.18 * c.S, c.Glow, NEON)
-			end
-		end
-		-- a row of three glowing dino spikes over the head
-		for i, k in { { -0.42, 0.34 }, { 0, 0.46 }, { 0.42, 0.34 } } do
-			if c.Room() >= 1 then
-				part(c.Model, "Spike" .. i, c.At(k[1], 2.7, 0.05) * CFrame.Angles(0, 0, PI / 4), c.V(k[2], k[2], 0.12), c.Glow, NEON)
-			end
-		end
-		return 2.7 + 0.46 * 0.71
-	end
-
-	A.JetPack = function(c)
-		mechaBody(c)
-		visor(c)
-		vFin(c, CHROME, 0.8)
-		bootFlames(c, rgb(255, 150, 40))
-		boosters(c, true)
-		return 2.62 + 0.26 * 0.8 + 0.32
-	end
-
-	A.OmegaFrame = function(c)
-		mechaBody(c)
-		visor(c)
-		vFin(c, GOLD, 1.25)
-		boosters(c, true)
-		bootFlames(c, c.Glow)
-		if c.Room() >= 1 then
-			part(c.Model, "ChestLight", c.At(0, 1.28, -0.44), c.V(0.7, 0.07, 0.05), c.Glow, NEON)
-		end
-		return 2.62 + 0.26 * 1.25 + 0.5
-	end
-
-	---------------------------------------------------------------- D: Frost Titans
-
-	-- every ice golem: a snowy brow, snow on one shoulder, an ice shard on the other
-	local function frostBody(c: Ctx)
-		local brow = c.Model:FindFirstChild("Brow")
-		if brow and brow:IsA("BasePart") then
-			brow.Color = SNOW
-			brow.Material = M.Snow
-		end
-		redress(c, "Boulder", c.At(-0.6, 1.5, 0.12) * CFrame.Angles(0.1, 0.4, 0.2), c.V(0.6, 0.36, 0.56), SNOW, M.Snow)
-		redress(
-			c,
-			"Crystal",
-			c.At(0.58, 1.74, 0.18) * CFrame.Angles(0.2, 0.785, -0.42) * CFrame.Angles(0, PI / 4, 0),
-			c.V(0.3, 0.86, 0.3),
-			ICE,
-			M.Glass
-		)
-	end
-
-	-- an icicle standing on the head (a diamond-section spike)
-	local function icicle(c: Ctx, name: string, x: number, y: number, z: number, height: number, lean: number, color: Color3?)
-		part(
-			c.Model,
-			name,
-			c.At(x, y + height / 2, z) * CFrame.Angles(0, 0, lean) * CFrame.Angles(0, PI / 4, 0),
-			c.V(0.2, height, 0.2),
-			color or ICE,
-			M.Glass
-		)
-	end
-
-	A.IcicleHair = function(c)
-		frostBody(c)
-		for i, k in { { -0.48, 0.5, 0.45 }, { -0.24, 0.7, 0.2 }, { 0, 0.86, 0 }, { 0.24, 0.66, -0.2 }, { 0.48, 0.48, -0.45 } } do
-			if c.Room() >= 1 then
-				icicle(c, "Icicle" .. i, k[1], 2.62, 0, k[2], k[3])
-			end
-		end
-		return 2.62 + 0.86
-	end
-
-	A.Beanie = function(c)
-		frostBody(c)
-		-- a knitted beanie with a pom-pom, and a scarf
-		part(c.Model, "Beanie", c.At(0, 2.78, 0.02), c.V(1.58, 0.52, 1.4), WOOL_RED)
-		part(c.Model, "BeanieFold", c.At(0, 2.56, 0.02), c.V(1.66, 0.22, 1.48), SNOW, M.Fabric)
-		ball(c, "PomPom", 0, 3.18, 0.02, 0.5, SNOW, M.Fabric)
-		if c.Room() >= 2 then
-			part(c.Model, "Scarf", c.At(0, 1.5, 0), c.V(1.32, 0.24, 0.98), WOOL_RED, M.Fabric)
-			part(c.Model, "ScarfEnd", c.At(0.34, 1.16, -0.5) * CFrame.Angles(0, 0, 0.12), c.V(0.28, 0.56, 0.08), WOOL_RED, M.Fabric)
-		end
-		return 3.43
-	end
-
-	A.FrostHelm = function(c)
-		frostBody(c)
-		-- a closed helm of ice; the eyes glow through its slit; an icicle sword
-		part(c.Model, "Helm", c.At(0, 2.1, 0.02), c.V(1.62, 1.36, 1.42), lighter(c.Look.Body, 0.35), M.Ice)
-		part(c.Model, "Slit", c.At(0, 2.06, -0.71), c.V(1.12, 0.24, 0.04), rgb(16, 30, 60))
-		for i, k in { { -0.4, 0.5, 0.3 }, { 0, 0.72, 0 }, { 0.4, 0.5, -0.3 } } do
-			if c.Room() >= 1 then
-				icicle(c, "HelmSpike" .. i, k[1], 2.7, 0.05, k[2], k[3])
-			end
-		end
-		if c.Room() >= 2 then
-			part(c.Model, "SwordGuard", c.At(0.86, 0.94, -0.12), c.V(0.5, 0.1, 0.16), c.Look.Trim, M.Metal)
-			part(c.Model, "Sword", c.At(0.86, 1.62, -0.12) * CFrame.Angles(0, PI / 4, 0), c.V(0.16, 1.26, 0.16), ICE, M.Glass)
-		end
-		return 2.7 + 0.72
-	end
-
-	A.SnowCloud = function(c)
-		frostBody(c)
-		-- a hood with a glowing snowflake, and its own little snow cloud
-		part(c.Model, "Hood", c.At(0, 2.42, 0.12), c.V(1.68, 0.9, 1.3), c.Look.Trim)
-		part(c.Model, "HoodPeak", c.At(0, 2.92, 0.2), c.V(1.2, 0.2, 1.0), darker(c.Look.Trim, 0.15))
-		for i = 1, 3 do
-			if c.Room() >= 1 then
-				part(
-					c.Model,
-					"Flake" .. i,
-					c.At(0, 2.66, -0.55) * CFrame.Angles(0, 0, (i - 1) * PI / 3),
-					c.V(0.06, 0.36, 0.04),
-					c.Glow,
-					NEON
-				)
-			end
-		end
-		for i, k in { { -0.3, 3.62, 0.56 }, { 0.12, 3.74, 0.64 }, { 0.46, 3.6, 0.5 } } do
-			if c.Room() >= 1 then
-				ball(c, "Cloud" .. i, k[1], k[2], 0.1, k[3], SNOW, M.SmoothPlastic)
-			end
-		end
-		return 4.06
-	end
-
-	-- a crown of icicles round a band of ice (1 + `count` parts)
-	local function iceCrown(c: Ctx, count: number, tallest: number)
-		upright(c.Model, "CrownBand", c.At(0, 2.84, 0), 0.24 * c.S, 1.2 * c.S, ICE, M.Glass)
-		for i = 1, count do
-			if c.Room() >= 1 then
-				local t = (i - 1) / (count - 1) * 2 - 1 -- -1 .. 1 across the front
-				local a = PI / 2 + t * 1.15
-				local height = tallest * (1 - 0.42 * math.abs(t))
-				icicle(c, "CrownSpike" .. i, math.cos(a) * 0.5, 2.9, -math.sin(a) * 0.5 + 0.05, height, -t * 0.32, lighter(ICE, 0.2))
-			end
-		end
-	end
-
-	A.IcicleCrown = function(c)
-		frostBody(c)
-		iceCrown(c, 5, 0.95)
-		-- ice shards growing from the back
-		for i, k in { { -0.34, 1.7, 0.5, 0.9, -0.4 }, { 0.3, 1.8, 0.55, 1.1, 0.35 } } do
-			if c.Room() >= 1 then
-				part(
-					c.Model,
-					"BackShard" .. i,
-					c.At(k[1], k[2], k[3]) * CFrame.Angles(0.4, 0, k[5]) * CFrame.Angles(0, PI / 4, 0),
-					c.V(0.3, k[4], 0.3),
-					ICE,
-					M.Glass
-				)
-			end
-		end
-		return 2.9 + 0.95
-	end
-
-	A.AuroraCrown = function(c)
-		frostBody(c)
-		iceCrown(c, 3, 0.9)
-		-- the northern lights: glowing ribbons fanned round the head like a halo
-		local green, cyan, violet = rgb(40, 220, 130), rgb(30, 170, 220), rgb(140, 80, 240)
-		local colors = { cyan, green, violet, violet, green }
-		for i, lean in { 0, -0.6, 0.6, -1.2, 1.2 } do
-			if c.Room() >= 1 then
-				local ribbon = part(
-					c.Model,
-					"Aurora" .. i,
-					c.At(-math.sin(lean) * 1.25, 2.1 + math.cos(lean) * 1.25, 0.78) * CFrame.Angles(0, 0, lean),
-					c.V(0.5, 1.6, 0.04),
+					"Flame" .. i,
+					c.At(k[1], 3.0, k[2]) * CFrame.Angles(0, 0, k[4]) * CFrame.Angles(0, 0, PI / 4),
+					c.V(height, height, 0.1),
 					colors[i],
 					NEON
 				)
-				ribbon.Transparency = 0.4
+				top = math.max(top, 3.0 + height * 0.71)
 			end
 		end
-		return 2.1 + 1.25 + 0.8
+		lobes(c, arm, finger, angle, membrane)
+		return math.max(top, 3.4)
 	end
 
 	return A

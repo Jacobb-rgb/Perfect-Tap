@@ -40,10 +40,13 @@ IconAssets.Sheets = {
 		Icons = {
 			"golem_PebbleGolem", "golem_CopperTinker", "golem_CoalChomper", "golem_TinTumbler",
 			"golem_QuartzSprite", "golem_SilverSquire", "golem_AmethystAcolyte", "golem_JadeGardener",
-			"golem_EmberImp", "golem_CobaltDiver", "golem_GildedPorter", "golem_RubyKnight",
-			"golem_SapphireSage", "golem_DiamondDuke", "golem_StormcoreTitan", "golem_MoonstoneOracle",
-			"golem_StarmetalSovereign", "golem_HeartstoneColossus",
+			"golem_EmberImp", "golem_CobaltDiver", "golem_GildedPorter", "golem_RoseKnight",
+			"golem_SapphireSage", "golem_DiamondDuke", "golem_StormTitan", "golem_MoonstoneOracle",
+			"golem_CelestialSovereign", "golem_HeartstoneColossus",
 			"capsule_Stone", "capsule_Crystal", "capsule_Royal",
+			-- the limited Dragonforge edition (Config/LimitedGolems)
+			"golem_CinderWhelp", "golem_EmberHatchling", "golem_ScaleKnight", "golem_Flamewing",
+			"golem_MagmaWyvern", "golem_DragonKing", "capsule_Dragonforge",
 		},
 	},
 	{

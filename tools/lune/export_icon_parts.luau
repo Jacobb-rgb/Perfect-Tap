@@ -100,11 +100,15 @@ for name, make in CashBuilder.Pictures do
 	models[name] = make()
 end
 
--- the LIMITED EDITION golems (Config/LimitedGolems; the shop banner's cards)
-local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+-- every golem and capsule (IconAssets' Golems sheet; the shop banner's cards)
+local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
-for id in LimitedGolems.ById do
-	models["golem_" .. id] = GolemBuilder.build(id)
+for _, golem in GolemConfig.List do
+	models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
+end
+for _, capsule in CapsuleConfig.List do
+	models["capsule_" .. capsule.Id] = GolemBuilder.capsule(capsule.Id)
 end
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
