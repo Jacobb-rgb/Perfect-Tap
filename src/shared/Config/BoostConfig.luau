@@ -198,7 +198,7 @@ BoostConfig.KindIds = { "TripleLucky", "HexaLucky" }
 
 BoostConfig.CoinOffers = {
 	{ Id = "TripleLucky5", Boost = "TripleLucky", Seconds = 300, PriceCapsule = "Crystal", PriceCount = 2 },
-	{ Id = "HexaLucky5", Boost = "HexaLucky", Seconds = 300, ForgeShare = 0.2, MinPrice = 2500 },
+	{ Id = "HexaLucky5", Boost = "HexaLucky", Seconds = 300, ForgeShare = 0.02, MinPrice = 2500 },
 } :: { Offer }
 
 BoostConfig.RobuxOffers = {

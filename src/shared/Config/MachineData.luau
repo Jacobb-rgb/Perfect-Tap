@@ -166,9 +166,9 @@ MachineData.List = {
 		Name = "Cleaning Plant",
 		Description = "Cleans dirty ore by itself, no scrubbing needed. Upgrade it to clean faster and better, up to Flawless.",
 		Size = { 2, 2 },
-		Price = 5000,
+		Price = 25000, -- balance pass 1 (docs/BALANCE_SIM.md): 5K automated the cleaning minigame within minutes
 		Category = "Processing",
-		Order = 5,
+		Order = 6,
 		Accepts = { Raw = true },
 		Time = 8,
 		Output = "Clean",
@@ -187,7 +187,7 @@ MachineData.List = {
 		Size = { 2, 2 },
 		Price = 12000,
 		Category = "Processing",
-		Order = 6,
+		Order = 5,
 		-- only clean ore is kept or sent on by the player's setting; dirty ore,
 		-- crushed ore and ingots always pass on (MachineData.keeps)
 		Accepts = { Raw = true, Clean = true, Crushed = true, Ingot = true },
