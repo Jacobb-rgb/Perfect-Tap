@@ -70,7 +70,8 @@ LobbyLayout.Budget = {
 	-- owner-approved meadow and road look (~1,330 parts: grass tufts, grass
 	-- patches and flower beds on the free lawns, fences along the roads, the
 	-- main roads paved with kerbs and glowing studs).
-	-- + the blaster gallery in THE GREAT FORGE's hall (Plaza/BlasterGallery, ~330 parts).
+	-- (the blaster gallery in THE GREAT FORGE's hall went with the hall, 2026-10-20: the open
+	-- passage and the bridge garden took its place)
 	-- + the artifact museums (steps 6-7: ArtifactService builds one into
 	-- every plot's yard at server start, MuseumBuilder, ~44 structure parts
 	-- each = ~350; the relics the owners found are NOT on the server: the
@@ -109,7 +110,7 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700) + facade aprons, planters, ore carts, + the blaster gallery (~500 parts with the Kenney-shape guns at display detail, 1 light), + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
+		Plaza = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- (2026-10-20: the blaster gallery, ~500 parts, went with THE GREAT FORGE's hall; the open passage's stone pillars and the bridge garden under and behind the roof came, ~700) + facade aprons, planters, ore carts, + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
 		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)

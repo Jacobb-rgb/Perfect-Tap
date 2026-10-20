@@ -41,7 +41,6 @@ local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Common)
-local BlasterGallery = require(script.Parent.BlasterGallery)
 
 local C = Style.C
 local K = Common.Colors
@@ -85,6 +84,13 @@ GreatForge.BannerBottom = 13.9 -- ... down to the door's middle (about 60% of a 
 -- (Plaza/BridgeGarden) runs underneath to the quarry and the DEPTHS
 GreatForge.Passage = true
 GreatForge.PassageCut = 18.5 -- every part reaching below this (but the banners) goes
+-- the passage's wide side roofs (owner: "widen the roof, make it even"): from
+-- under the nave roof's eaves out to the footprint's edge at a gentler pitch,
+-- the full depth of the nave roof, one even eave line on both sides
+GreatForge.SideRoofFrom = 14.2 -- local x where a side roof tucks under the nave's eave
+GreatForge.SideRoofTo = 21 -- its eave (the footprint's edge)
+GreatForge.SideRoofTop = 20.8 -- its top edge under the nave's eave (NaveEave 21.1)
+GreatForge.SideRoofPitch = 0.5
 -- (lobby fix round 3) the gable's front planes, back to front: the infill
 -- (GableZ), the bargeboards (GableZ - 0.2) and THE GREAT FORGE board in
 -- front of both (SignZ: its back face clears the bargeboards' front face)
@@ -322,101 +328,117 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	end
 
 	------------------------------------------------------------ wings
-	for _, s in { -1, 1 } do
-		local wingX = s * WING_X
-		local wingDepth = WALL_BACK - (WING_FRONT + 2)
-		Style.block(
-			m,
-			at(wingX, PLINTH_TOP + (WING_EAVE - PLINTH_TOP) / 2, (WING_FRONT + 2 + WALL_BACK) / 2),
-			Vector3.new(11, WING_EAVE - PLINTH_TOP, wingDepth),
-			Style.vary(C.Stone, rng, 0.03),
-			nil,
-			Style.solid()
-		)
-		Style.stoneWall(m, at(wingX, PLINTH_TOP, WING_FRONT + 1), Vector3.new(11, WING_EAVE - PLINTH_TOP, 2), rng, { Density = 0.3 })
-		Style.stoneWall(
-			m,
-			at(s * 19.9, PLINTH_TOP, (WING_FRONT + 2 + WALL_BACK) / 2) * CFrame.Angles(0, -s * math.pi / 2, 0),
-			Vector3.new(wingDepth, WING_EAVE - PLINTH_TOP, 1),
-			rng,
-			{ Density = 0.22, Cap = false }
-		)
-		-- front corner pillar
-		Style.pillar(m, at(s * 19.2, PLINTH_TOP, WING_FRONT + 0.7), WING_EAVE - PLINTH_TOP + 0.4, rng, { Width = 2.4 })
-		-- warm timber band under the eave (a wood panel on a dark beam)
-		Style.block(
-			m,
-			at(wingX - s * 0.4, WING_EAVE - 1.05, WING_FRONT - 0.2),
-			Vector3.new(9.6, 1.9, 0.3),
-			Style.vary(C.Wood, rng, 0.04),
-			nil,
-			Style.tiny()
-		)
-		Style.block(m, at(wingX - s * 0.4, WING_EAVE - 2.1, WING_FRONT - 0.3), Vector3.new(10.2, 0.5, 0.4), C.WoodDark, nil, Style.tiny())
-		-- lit windows: one on the front (outside the banner), one on the outer side
-		-- (lobby fix round 3: a bigger lit window and a wall lantern on the
-		-- corner pillar: the wings glow too)
-		Style.window(m, at(s * 16.2, PLINTH_TOP + 4.6, WING_FRONT - 0.45), 3, 4.4, { Color = K.WindowGlow })
-		local lampY = PLINTH_TOP + 6.3
-		local lampZ = WING_FRONT + 0.7 - 1.2 -- the corner pillar's front face
-		Style.block(m, at(s * 19.2, lampY + 0.85, lampZ - 0.3), Vector3.new(0.3, 0.3, 1.2), K.MetalDark, nil, Style.tiny())
-		Style.block(m, at(s * 19.2, lampY, lampZ - 0.85), Vector3.new(0.9, 1.3, 0.9), K.MetalDark, nil, Style.tiny())
-		Style.block(m, at(s * 19.2, lampY + 0.75, lampZ - 0.85), Vector3.new(1.2, 0.2, 1.2), K.Metal, nil, Style.tiny())
-		Style.block(m, at(s * 19.2, lampY, lampZ - 1.33), Vector3.new(0.32, 0.9, 0.06), K.SlotAmber, NEON, Style.tiny()).Name =
-			"WingLantern"
-		for _, wz in { 1, 10 } do
-			Style.window(m, at(s * 20.45, PLINTH_TOP + 4.6, wz) * CFrame.Angles(0, -s * math.pi / 2, 0), 2.6, 3.4, { Color = K.WindowGlow })
-		end
-		-- dark slate wing roof (ridge along X), brick-red eaves, timber infill in
-		-- the outer gable end; its inner end and ridge stay under the nave roof
-		local depth = WING_ROOF_Z1 - WING_ROOF_Z0
-		local roofW = WING_ROOF_X1 - WING_ROOF_X0
-		local wingRoof = at(s * (WING_ROOF_X0 + WING_ROOF_X1) / 2, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2)
-		Style.gableRoof(m, wingRoof, roofW, depth, WING_ROOF_H, WING_ROOF)
-		-- shingle joints on the front slope (seen from the plaza), courses only at the back
-		roofCourses(wingRoof, roofW, depth, WING_ROOF_H, { -1 }, 4, 3)
-		roofCourses(wingRoof, roofW, depth, WING_ROOF_H, { 1 }, 4)
-		-- the brick-red shoulder: a ridge cap along the wing roof up to the nave roof
-		Style.block(
-			m,
-			at(s * (WING_ROOF_X0 + WING_ROOF_X1) / 2, WING_EAVE + WING_ROOF_H + 0.12, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2),
-			Vector3.new(roofW + 0.2, 0.5, 1.1),
-			K.BrickRed,
-			nil,
-			Style.tiny()
-		).Name =
-			"RoofShoulder"
-		local infillHalf = depth / 2 - 1.8
-		triangle(
-			at(s * 20.65, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2) * CFrame.Angles(0, -s * math.pi / 2, 0),
-			infillHalf,
-			infillHalf * WING_ROOF_H / (depth / 2),
-			0.3,
-			C.WoodDark
-		)
+	-- (the open passage has no wings: GreatForge.openPassage lays wide side roofs instead)
+	if not GreatForge.Passage then
+		for _, s in { -1, 1 } do
+			local wingX = s * WING_X
+			local wingDepth = WALL_BACK - (WING_FRONT + 2)
+			Style.block(
+				m,
+				at(wingX, PLINTH_TOP + (WING_EAVE - PLINTH_TOP) / 2, (WING_FRONT + 2 + WALL_BACK) / 2),
+				Vector3.new(11, WING_EAVE - PLINTH_TOP, wingDepth),
+				Style.vary(C.Stone, rng, 0.03),
+				nil,
+				Style.solid()
+			)
+			Style.stoneWall(m, at(wingX, PLINTH_TOP, WING_FRONT + 1), Vector3.new(11, WING_EAVE - PLINTH_TOP, 2), rng, { Density = 0.3 })
+			Style.stoneWall(
+				m,
+				at(s * 19.9, PLINTH_TOP, (WING_FRONT + 2 + WALL_BACK) / 2) * CFrame.Angles(0, -s * math.pi / 2, 0),
+				Vector3.new(wingDepth, WING_EAVE - PLINTH_TOP, 1),
+				rng,
+				{ Density = 0.22, Cap = false }
+			)
+			-- front corner pillar
+			Style.pillar(m, at(s * 19.2, PLINTH_TOP, WING_FRONT + 0.7), WING_EAVE - PLINTH_TOP + 0.4, rng, { Width = 2.4 })
+			-- warm timber band under the eave (a wood panel on a dark beam)
+			Style.block(
+				m,
+				at(wingX - s * 0.4, WING_EAVE - 1.05, WING_FRONT - 0.2),
+				Vector3.new(9.6, 1.9, 0.3),
+				Style.vary(C.Wood, rng, 0.04),
+				nil,
+				Style.tiny()
+			)
+			Style.block(
+				m,
+				at(wingX - s * 0.4, WING_EAVE - 2.1, WING_FRONT - 0.3),
+				Vector3.new(10.2, 0.5, 0.4),
+				C.WoodDark,
+				nil,
+				Style.tiny()
+			)
+			-- lit windows: one on the front (outside the banner), one on the outer side
+			-- (lobby fix round 3: a bigger lit window and a wall lantern on the
+			-- corner pillar: the wings glow too)
+			Style.window(m, at(s * 16.2, PLINTH_TOP + 4.6, WING_FRONT - 0.45), 3, 4.4, { Color = K.WindowGlow })
+			local lampY = PLINTH_TOP + 6.3
+			local lampZ = WING_FRONT + 0.7 - 1.2 -- the corner pillar's front face
+			Style.block(m, at(s * 19.2, lampY + 0.85, lampZ - 0.3), Vector3.new(0.3, 0.3, 1.2), K.MetalDark, nil, Style.tiny())
+			Style.block(m, at(s * 19.2, lampY, lampZ - 0.85), Vector3.new(0.9, 1.3, 0.9), K.MetalDark, nil, Style.tiny())
+			Style.block(m, at(s * 19.2, lampY + 0.75, lampZ - 0.85), Vector3.new(1.2, 0.2, 1.2), K.Metal, nil, Style.tiny())
+			Style.block(m, at(s * 19.2, lampY, lampZ - 1.33), Vector3.new(0.32, 0.9, 0.06), K.SlotAmber, NEON, Style.tiny()).Name =
+				"WingLantern"
+			for _, wz in { 1, 10 } do
+				Style.window(
+					m,
+					at(s * 20.45, PLINTH_TOP + 4.6, wz) * CFrame.Angles(0, -s * math.pi / 2, 0),
+					2.6,
+					3.4,
+					{ Color = K.WindowGlow }
+				)
+			end
+			-- dark slate wing roof (ridge along X), brick-red eaves, timber infill in
+			-- the outer gable end; its inner end and ridge stay under the nave roof
+			local depth = WING_ROOF_Z1 - WING_ROOF_Z0
+			local roofW = WING_ROOF_X1 - WING_ROOF_X0
+			local wingRoof = at(s * (WING_ROOF_X0 + WING_ROOF_X1) / 2, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2)
+			Style.gableRoof(m, wingRoof, roofW, depth, WING_ROOF_H, WING_ROOF)
+			-- shingle joints on the front slope (seen from the plaza), courses only at the back
+			roofCourses(wingRoof, roofW, depth, WING_ROOF_H, { -1 }, 4, 3)
+			roofCourses(wingRoof, roofW, depth, WING_ROOF_H, { 1 }, 4)
+			-- the brick-red shoulder: a ridge cap along the wing roof up to the nave roof
+			Style.block(
+				m,
+				at(s * (WING_ROOF_X0 + WING_ROOF_X1) / 2, WING_EAVE + WING_ROOF_H + 0.12, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2),
+				Vector3.new(roofW + 0.2, 0.5, 1.1),
+				K.BrickRed,
+				nil,
+				Style.tiny()
+			).Name =
+				"RoofShoulder"
+			local infillHalf = depth / 2 - 1.8
+			triangle(
+				at(s * 20.65, WING_EAVE, (WING_ROOF_Z0 + WING_ROOF_Z1) / 2) * CFrame.Angles(0, -s * math.pi / 2, 0),
+				infillHalf,
+				infillHalf * WING_ROOF_H / (depth / 2),
+				0.3,
+				C.WoodDark
+			)
 
-		-- a short dark slate chimney behind the wing's ridge (world x +-15,
-		-- z -71.5): from the plaza only its top shows over the wing roof, under
-		-- the gable's apex, so the roof line stays clean round the emblem
-		local chimney = Style.model("Chimney", m)
-		local cz = 13.5
-		local cx = s * 15
-		local shaftTop = GreatForge.ChimneyTop - 1.6
-		Style.block(
-			chimney,
-			at(cx, (PLINTH_TOP + shaftTop) / 2, cz),
-			Vector3.new(3.4, shaftTop - PLINTH_TOP, 3.4),
-			Style.vary(K.RoofSlateDark, rng, 0.03),
-			nil,
-			Style.solid()
-		)
-		-- a brick-red cap band and a dark crown
-		Style.block(chimney, at(cx, shaftTop - 0.9, cz), Vector3.new(3.7, 1, 3.7), K.BrickRed)
-		Style.block(chimney, at(cx, shaftTop + 0.6, cz), Vector3.new(4.1, 1.2, 4.1), Style.vary(K.MetalDark, rng, 0.04))
-		local top = Style.block(chimney, at(cx, shaftTop + 1.4, cz), Vector3.new(2.6, 0.4, 2.6), C.Ember, NEON, Style.tiny())
-		top.Name = "ChimneyGlow"
-		Style.emitter(top, "Smoke", nil, 3)
-		Style.emitter(top, "Embers", C.Ember, 2)
+			-- a short dark slate chimney behind the wing's ridge (world x +-15,
+			-- z -71.5): from the plaza only its top shows over the wing roof, under
+			-- the gable's apex, so the roof line stays clean round the emblem
+			local chimney = Style.model("Chimney", m)
+			local cz = 13.5
+			local cx = s * 15
+			local shaftTop = GreatForge.ChimneyTop - 1.6
+			Style.block(
+				chimney,
+				at(cx, (PLINTH_TOP + shaftTop) / 2, cz),
+				Vector3.new(3.4, shaftTop - PLINTH_TOP, 3.4),
+				Style.vary(K.RoofSlateDark, rng, 0.03),
+				nil,
+				Style.solid()
+			)
+			-- a brick-red cap band and a dark crown
+			Style.block(chimney, at(cx, shaftTop - 0.9, cz), Vector3.new(3.7, 1, 3.7), K.BrickRed)
+			Style.block(chimney, at(cx, shaftTop + 0.6, cz), Vector3.new(4.1, 1.2, 4.1), Style.vary(K.MetalDark, rng, 0.04))
+			local top = Style.block(chimney, at(cx, shaftTop + 1.4, cz), Vector3.new(2.6, 0.4, 2.6), C.Ember, NEON, Style.tiny())
+			top.Name = "ChimneyGlow"
+			Style.emitter(top, "Smoke", nil, 3)
+			Style.emitter(top, "Embers", C.Ember, 2)
+		end
 	end
 
 	------------------------------------------------------------ crimson banners beside the entrance
@@ -831,27 +853,6 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 	-- a second anvil to the side (a dark silhouette against the coal bed's glow)
 	Style.block(m, at(3.6, PLINTH_TOP + 0.5, 1.4), Vector3.new(1.1, 1.0, 1.1), C.WoodDark, nil, Style.solid())
 	Style.block(m, at(3.6, PLINTH_TOP + 1.3, 1.4), Vector3.new(2.0, 0.6, 0.9), IRON_DARK, nil, Style.tiny())
-	-- tool rack on the right wall (viewer's right = local -X): a board with hammers and a pick,
-	-- up at the back (the blaster gallery's racks take the rest of the side walls)
-	local rack = BlasterGallery.toolRackSpot()
-	Style.block(m, at(rack.X, rack.Y, rack.Z), Vector3.new(0.2, 2.2, 4.4), C.Wood, nil, Style.tiny())
-	for k, dz in { -1.6, 0, 1.6 } do
-		local tool = Style.icon(
-			m,
-			at(rack.X + 0.23, rack.Y - 0.2, rack.Z + dz) * CFrame.Angles(0, -math.pi / 2, 0),
-			if k == 2 then "Pickaxe" else "Hammer",
-			1.6,
-			C.IronLight,
-			METAL
-		)
-		for _, part in tool do
-			part.Name = "RackTool"
-		end
-	end
-	-- the blaster gallery: LV 1-10 and LV 11 "coming soon" on racks along the side walls
-	if not GreatForge.Passage then
-		BlasterGallery.build(m, frame)
-	end
 	-- two hanging lamps from the hall beams (amber core under a dark cap)
 	for _, s in { -1, 1 } do
 		Style.block(m, at(s * 3.4, DOOR_TOP - 0.95, -3), Vector3.new(0.15, 1.9, 0.15), C.Iron, nil, Style.tiny())
@@ -994,6 +995,9 @@ function GreatForge.openPassage(m: Model, frame: CFrame, rng: Rng.Rng)
 		Style.block(frameModel, at(x + o.X * 0.7, y - 0.45, z + o.Z * 0.7), size2, Style.vary(LINTEL, rng, 0.03), nil, Style.tiny())
 	end
 	local wingX = 18.9
+	-- the side roofs' underside over the outer pillars
+	local sideTop = GreatForge.SideRoofTop - (wingX - GreatForge.SideRoofFrom) * GreatForge.SideRoofPitch
+	local wingTop = sideTop - 1.2
 	local frontZ = NAVE_FRONT - 0.2
 	local backZ = WALL_BACK - 0.5
 	for _, s in { -1, 1 } do
@@ -1002,14 +1006,14 @@ function GreatForge.openPassage(m: Model, frame: CFrame, rng: Rng.Rng)
 		pillar(s * NAVE, backZ, NAVE_EAVE, 3)
 		-- the wings' outer eaves: front, middle, back
 		for _, z in { WING_FRONT, (WING_FRONT + WALL_BACK) / 2, backZ } do
-			pillar(s * wingX, z, WING_EAVE, 2.4)
-			corbel(s * wingX, z, WING_EAVE - 1, 1, true)
-			corbel(s * wingX, z, WING_EAVE - 1, -1, true)
+			pillar(s * wingX, z, wingTop - 1.4, 2.4)
+			corbel(s * wingX, z, wingTop - 2.4, 1, true)
+			corbel(s * wingX, z, wingTop - 2.4, -1, true)
 		end
 		-- stone lintels along the wing eaves and the nave's sides
 		Style.block(
 			frameModel,
-			at(s * wingX, WING_EAVE - 0.7, (WING_FRONT + WALL_BACK) / 2),
+			at(s * wingX, wingTop - 0.7, (WING_FRONT + WALL_BACK) / 2),
 			Vector3.new(2, 1.4, WALL_BACK - WING_FRONT + 2),
 			Style.vary(LINTEL, rng, 0.03),
 			nil,
@@ -1027,7 +1031,7 @@ function GreatForge.openPassage(m: Model, frame: CFrame, rng: Rng.Rng)
 		for _, z in { WING_FRONT, backZ } do
 			Style.block(
 				frameModel,
-				at(s * (NAVE + wingX) / 2, WING_EAVE - 1.6, z),
+				at(s * (NAVE + wingX) / 2, wingTop - 1.6, z),
 				Vector3.new(wingX - NAVE, 1, 1.2),
 				Style.vary(LINTEL, rng, 0.03),
 				nil,
@@ -1036,6 +1040,57 @@ function GreatForge.openPassage(m: Model, frame: CFrame, rng: Rng.Rng)
 		end
 		corbel(s * NAVE, frontZ, LINTEL_TOP - 1, -s, false)
 		corbel(s * NAVE, backZ, NAVE_EAVE - 1, -s, false)
+		-- the wide side roof: one slate slope from under the nave's eave out to the edge
+		do
+			local x0, x1 = GreatForge.SideRoofFrom, GreatForge.SideRoofTo
+			local pitch = GreatForge.SideRoofPitch
+			local ang = math.atan(pitch)
+			local run = x1 - x0 - 0.35
+			local slope = run / math.cos(ang)
+			local z0, z1 = NAVE_ROOF_Z0 + 0.6, NAVE_ROOF_Z1
+			local zc, depth = (z0 + z1) / 2, z1 - z0
+			local mid = at(s * (x0 + run / 2), GreatForge.SideRoofTop - pitch * run / 2 - 0.45, zc) * CFrame.Angles(0, 0, -s * ang)
+			local slab = Style.block(frameModel, mid, Vector3.new(slope, 0.9, depth), K.RoofSlate, nil, Style.ghost())
+			slab.Name = "Roof"
+			-- thin shingle courses along the slope (like the nave's)
+			for k = 1, 4 do
+				local u = -slope / 2 + slope * k / 5
+				Style.block(
+					frameModel,
+					mid * CFrame.new(s * u, 0.47, 0),
+					Vector3.new(0.12, 0.08, depth - 0.4),
+					K.RoofSlateDark,
+					nil,
+					Style.tiny()
+				)
+			end
+			-- brick-red eave trim and a bargeboard on the front edge
+			Style.block(
+				frameModel,
+				mid * CFrame.new(s * (slope / 2 - 0.25), -0.15, 0),
+				Vector3.new(0.5, 0.9, depth + 0.2),
+				K.BrickRed,
+				nil,
+				Style.tiny()
+			)
+			Style.block(
+				frameModel,
+				mid * CFrame.new(0, 0.05, -depth / 2 - 0.15),
+				Vector3.new(slope, 0.8, 0.3),
+				K.BrickRed,
+				nil,
+				Style.tiny()
+			)
+			-- a dark underside so the slope reads thick from below
+			Style.block(
+				frameModel,
+				mid * CFrame.new(0, -0.55, 0),
+				Vector3.new(slope - 0.6, 0.2, depth - 0.6),
+				K.RoofSlateDark,
+				nil,
+				Style.tiny()
+			)
+		end
 		-- crystals at the front pillars' feet (outside, toward the banners)
 		Style.crystalCluster(frameModel, at(s * (NAVE + 2.6), 0.6, frontZ + 1.6), 5.2, K.NeonOrange, rng, { Count = 3 })
 		Style.crystalCluster(frameModel, at(s * (wingX - 1.8), 0.5, WING_FRONT - 1.8), 4.2, C.CrystalPurple, rng, { Count = 3 })

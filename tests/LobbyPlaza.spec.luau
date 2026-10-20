@@ -646,7 +646,8 @@ return function(T, Loader)
 					table.insert(stairs, part)
 				end
 			end
-			T.eq(roofs, 6, "three slate gable roofs")
+			-- three slate gable roofs, or (the open passage) the nave's gable and two wide side roofs
+			T.eq(roofs, if GreatForge.Passage then 4 else 6, "the slate roofs")
 			-- a low, wide hall under one big gable (concept v2), not a two-storey house
 			T.truthy(GreatForge.NaveEave - GreatForge.PlinthTop <= 11.5, "the gable starts right over the entrance")
 			T.truthy(GreatForge.NaveRoofHeight / (GreatForge.NaveEave + GreatForge.NaveRoofHeight) >= 0.4, "the gable is ~half the facade")

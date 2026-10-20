@@ -1,7 +1,0 @@
-{
-  "gallery_hero": {"scene": "blaster_gallery", "position": [0, 135, 255], "target": [4, 12, -28], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 300, "maxLights": 32},
-  "gallery_spawn": {"scene": "blaster_gallery", "position": [0, 13, 58], "target": [-4, 7, -50], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 140, "maxLights": 24},
-  "gallery_stairs": {"scene": "blaster_gallery", "position": [0, 14.2, -40], "target": [0, 13.2, -62], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 60, "maxLights": 24},
-  "gallery_inside": {"scene": "blaster_gallery", "position": [-3, 14.6, -53.5], "target": [5, 13, -62], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 40, "maxLights": 24},
-  "gallery_forge": {"scene": "blaster_gallery", "position": [0, 13, -10], "target": [0, 15, -52], "fov": 64, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24}
-}
