@@ -46,17 +46,18 @@ Pictures:
   `{ Action = "Equip", Id }` switches weapons ("" = the forged blaster).
 - **In the hand:** ToolService builds `BlasterBuilder.buildStar`. It uses the star's shape and glow, the forged
   level's Range and Level, and the attribute `Star`; the beam effects use the top tier.
-- **Jewellery (owner 2026-10-20: "they're paid weapons, they must be mega cool"):** KenneyBlaster Tier 4
-  (BlasterBuilder.starSkin) puts everything LV 10 has on the gun, plus jewels. The extras are added in priority order
-  while the gun stays within MaxParts (90): the crystals and the crown first, then the gems, the side clusters and
-  the gold trim.
-  - On top: a bigger crystal cluster in a gold setting, with two more crystals fanned out.
-  - On each side: crystal clusters.
-  - At the muzzle: a crown of six crystals (every other one in the gem color) on a gold collar.
-  - On the main panel: up to three cut gems in gold bezels (StarBlasterData.Gem: a sapphire, an aquamarine, a
-    topaz, a ruby and a pink rhodolite).
-  - Gold trim inside the glowing rim.
+- **Jewellery (owner 2026-10-20: "paid weapons must be mega cool", then "more rounded, cleaner, perfect"):**
+  KenneyBlaster Tier 4 (BlasterBuilder.starSkin) is clean, round jewellery on the approved Kenney shapes, built
+  from Part cylinders and balls:
+  - On top: three smooth crystals, round columns with round tips (the tall one in the middle, two leaning forward
+    and back), in a round gold cup. StarFit.Crystal keeps the tips under the head.
+  - On the main panel: one clean row of round gems (StarBlasterData.Gem: a sapphire, an aquamarine, a topaz, a ruby
+    and a pink rhodolite) in round gold bezels, 3, 2 or 1 depending on the panel.
+  - At the muzzle: a round glowing disc. A single slim barrel (StarFit.Ring) also gets a round gold ring set with
+    four round gems.
+  - Nothing busy: no stars, cracks, side crystals or spikes. The glowing rim stays.
   - The held tool carries a StarGlow PointLight in the star's color (range 8, no shadows).
+  - Parts per held tool: Comet 57, Nebula 44, Pulsar 78, Supernova 51, Singularity 47 (MaxParts 90).
 - **Held size:** KenneyBlaster.scale gives a star LV 10's length unless that makes it bigger than the biggest level
   bodies (`KenneyBlaster.StarFit`: 2.3 tall, 1.25 wide, 1.9 behind the hand). The stubby shapes (Nebula, Supernova)
   come out shorter. A KenneyBlaster.spec test keeps every level and star inside that budget. The picture is

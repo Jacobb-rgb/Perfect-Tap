@@ -17,11 +17,13 @@
 	  detail   grows with the level: 4+ an ore crystal cluster on top, 7+ more
 	           crystals (top, both sides) and flames / sparks around the gun,
 	           10 a crown of crystals around the barrel; the STAR blasters
-	           (Tier 4, BlasterBuilder.starSkin) are jewellery on top of
-	           that: a bigger cluster in a gold setting, a crown of six,
-	           a gold collar at the muzzle, three cut gems in gold bezels on
-	           the panel (skin.Gem) and gold trim inside the glowing rim
-	           (the extras only while the gun stays within MaxParts)
+	           (Tier 4, BlasterBuilder.starSkin) are clean, round jewellery
+	           (owner 2026-10-20: "more rounded, cleaner, perfect"): three
+	           smooth crystals (round columns, round tips) in a round gold
+	           cup, a round gold ring round the barrel's front set with four
+	           round gems, one row of round gems in round gold bezels on the
+	           panel (skin.Gem), a round glowing muzzle disc; no stars,
+	           cracks or side crystals (only while within MaxParts)
 	  holding  the Handle is an invisible block at the hand point (Tool.Grip
 	           = identity: the barrel along the arm), every part is welded to
 	           it, the Muzzle attachment sits at the barrel's tip and a glowing
@@ -144,7 +146,9 @@ end
 
 -- The STAR blasters' (models 11-15) held size: the envelope of the biggest level bodies
 -- (LV 7 / LV 9), so a stubby Kenney shape never grows into the character (studs).
-KenneyBlaster.StarFit = { Height = 2.3, Width = 1.25, Behind = 1.9 }
+-- (Crystal: the top cluster's biggest crystal, so the tips stay under the head when held; Ring: the
+-- widest barrel front, in scale units, that gets the round gold ring)
+KenneyBlaster.StarFit = { Height = 2.3, Width = 1.25, Behind = 1.9, Crystal = 1.55, Ring = 0.2 }
 
 -- Kenney meters -> held studs for a level: every gun gets its level's length. A STAR
 -- blaster gets LV 10's length unless that makes it taller, wider or longer behind the
@@ -338,10 +342,32 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 		return made + n <= KenneyBlaster.MaxParts - 1
 	end
 	local jewels = skin.Tier >= 4 and skin.Gem ~= nil
-	-- (the gems, then the gold trim, go on last: the crystals and the crown come first)
-	local gemsLater: { () -> () } = {}
-	local sideLater: { () -> () } = {}
-	local trimLater: { () -> () } = {}
+	-- round pieces for the STAR blasters' jewels (a Part's cylinder runs along its X axis)
+	local function shaped(p: any, kind: Enum.PartType): any
+		if typeof(p) == "Instance" and p:IsA("Part") then
+			p.Shape = kind
+		end
+		return p
+	end
+	local function cylinder(
+		name: string,
+		at: Vector3,
+		axis: Vector3,
+		length: number,
+		diameter: number,
+		color: Color3,
+		material: Enum.Material
+	)
+		local hint = if math.abs(axis.Y) > 0.9 then Vector3.zAxis else Vector3.yAxis
+		local up = (hint - axis * hint:Dot(axis)).Unit
+		shaped(
+			part(name, CFrame.fromMatrix(at, axis, up), Vector3.new(length, diameter, diameter), color, material),
+			Enum.PartType.Cylinder
+		)
+	end
+	local function ball(name: string, at: Vector3, diameter: number, color: Color3, material: Enum.Material)
+		shaped(part(name, CFrame.new(at), Vector3.new(diameter, diameter, diameter), color, material), Enum.PartType.Ball)
+	end
 	local b = shape.bounds
 	local hand = KenneyBlaster.Hands[KenneyBlaster.model(level)]
 	local hz, hy = hand[1] * S, hand[2] * S
@@ -360,20 +386,32 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 	end
 
 	-- the barrel's tip: the front of the gun, at the height of the front-most boxes
+	-- (and the front's cross-section: a STAR blaster's round collar fits round it)
 	local zFront = b[1]
 	local sum, n = 0, 0
+	local frontLo, frontHi, frontW = math.huge, -math.huge, 0
 	for _, region in shape.regions do
 		for _, p in region.prims do
 			if p[1] == "b" and (p[2] :: number) <= zFront + 0.02 then
 				sum += ((p[4] :: number) + (p[5] :: number)) / 2
 				n += 1
 			end
+			if p[1] == "b" and (p[2] :: number) <= zFront + 0.06 then
+				frontLo = math.min(frontLo, p[4] :: number)
+				frontHi = math.max(frontHi, p[5] :: number)
+				frontW = math.max(frontW, region.w)
+			end
 		end
 	end
 	local muzzleY = if n > 0 then sum / n else (b[3] + b[4]) / 2
 	local muzzle = at(0, muzzleY, zFront)
 	local anchors: Anchors = { Hand = Vector3.zero, Muzzle = muzzle, BarrelY = muzzle.Y, BarrelZ = muzzle.Z, BarrelR = 0.05 * S }
-	part("MuzzleGlow", CFrame.new(muzzle + Vector3.new(0, 0, 0.03)), Vector3.new(0.05 * S, 0.05 * S, 0.04), skin.Glow, NEON)
+	if jewels then
+		-- a round glowing disc on the bore
+		cylinder("MuzzleGlow", muzzle + Vector3.new(0, 0, 0.03), Vector3.zAxis, 0.04, 0.075 * S, skin.Glow, NEON)
+	else
+		part("MuzzleGlow", CFrame.new(muzzle + Vector3.new(0, 0, 0.03)), Vector3.new(0.05 * S, 0.05 * S, 0.04), skin.Glow, NEON)
+	end
 
 	-- the skin on the biggest body panel: a glowing rim (the longest edges) and lava cracks / stars
 	local panel = main
@@ -435,28 +473,10 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 				nz, ny = -nz, -ny
 			end
 			strip(z0 + tz * d + nz * d, y0 + ty * d + ny * d, z1 - tz * d + nz * d, y1 - ty * d + ny * d, rimThick, skin.Rim, "Rim")
-			-- STAR blasters: a gold line just inside the two longest glowing edges
-			if jewels and k <= 4 then
-				local g = d + rimThick * 1.9
-				table.insert(trimLater, function()
-					if room(1) then
-						strip(
-							z0 + tz * g + nz * g,
-							y0 + ty * g + ny * g,
-							z1 - tz * g + nz * g,
-							y1 - ty * g + ny * g,
-							rimThick * 0.9,
-							GOLD,
-							"GoldTrim",
-							PLASTIC
-						)
-					end
-				end)
-			end
 		end
 		-- the pattern: a few lava cracks (magma) or stars (galaxy), more with the level
 		local rand = rng(level * 7919 + #oreId * 104729 + 31)
-		local count = ({ 2, 3, 4, 5, 2 })[math.clamp(skin.Tier, 0, 4) + 1] -- (STAR blasters: the gems are the sparkle)
+		local count = ({ 2, 3, 4, 5, 0 })[math.clamp(skin.Tier, 0, 4) + 1] -- (STAR blasters: clean, the gems are the sparkle)
 		local z0, z1, y0, y1 = bbox(loops)
 		local margin = 0.04 * S / 4
 		for _ = 1, count do
@@ -515,41 +535,35 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 		end
 		anchors.Top = Vector3.new(0, topY - hy, zt - hz)
 		anchors.Side = Vector3.new(x + panel.w * S / 2, (py0 + py1) / 2 - hy, pz0 + (pz1 - pz0) * 0.3 - hz)
-		-- STAR blasters: three cut gems in gold bezels along the panel (both sides)
+		-- STAR blasters: round gems in round gold bezels, in one clean row along the panel (both sides)
 		local gem = if skin.Gem then tame(skin.Gem) else nil -- (neon shows the gem's color, not white)
 		if jewels and gem then
-			local gs = 0.038 * S
+			local mid = (py0 + py1) / 2
 			local ph = py1 - py0
-			table.insert(gemsLater, function()
-				-- up to three spots on the panel, from the middle out, a bezel apart (smaller gems
-				-- on a small panel)
-				local placed: { { number } } = {}
-				for _, size in { gs, gs * 0.72 } do
-					for _, f in { 0.5, 0.25, 0.75, 0.38, 0.62, 0.15, 0.85 } do
-						if #placed >= 3 then
-							break
-						end
-						local z = pz0 + (pz1 - pz0) * f
-						for _, dy in { 0, 0.15, -0.15, 0.3, -0.3 } do
-							local y = (py0 + py1) / 2 + ph * dy
-							local free = true
-							for _, q in placed do
-								local gap = (q[3] + size) * 1.0
-								if math.abs(q[1] - z) < gap and math.abs(q[2] - y) < gap then
-									free = false
-								end
+			local function rowFits(fs: { number }, y: number, size: number): boolean
+				for _, f in fs do
+					if not deepInside(loops, pz0 + (pz1 - pz0) * f, y, size * 0.85) then
+						return false
+					end
+				end
+				return true
+			end
+			local done = false
+			for _, size in { 0.04 * S, 0.03 * S, 0.024 * S } do
+				for _, fs in { { 0.3, 0.5, 0.7 }, { 0.38, 0.62 }, { 0.42, 0.58 }, { 0.5 } } do
+					for _, dy in { 0, 0.12, -0.12, 0.24, -0.24 } do
+						local y = mid + ph * dy
+						if not done and rowFits(fs, y, size) and room(2 * #fs) then
+							for _, f in fs do
+								local p = Vector3.new(x, y - hy, pz0 + (pz1 - pz0) * f - hz)
+								cylinder("GemBezel", p, Vector3.xAxis, through + 0.02, size * 1.5, GOLD, PLASTIC)
+								cylinder("Gem", p, Vector3.xAxis, through + 0.06, size, gem, NEON)
 							end
-							if free and deepInside(loops, z, y, size * 0.8) and room(2) then
-								local cf = CFrame.new(x, y - hy, z - hz) * CFrame.Angles(math.pi / 4, 0, 0)
-								part("GemBezel", cf, Vector3.new(through + 0.02, size * 1.5, size * 1.5), GOLD, PLASTIC)
-								part("Gem", cf, Vector3.new(through + 0.06, size, size), gem, NEON)
-								table.insert(placed, { z, y, size })
-								break
-							end
+							done = true
 						end
 					end
 				end
-			end)
+			end
 		end
 	end
 
@@ -573,64 +587,57 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 	local top, side = anchors.Top, anchors.Side
 	if tier >= 1 and top then
 		local size = (0.36 + 0.14 * tier) * k
-		shard(top - Vector3.yAxis * 0.04 * k, Vector3.yAxis, size * 0.3, size)
-		shard(top + Vector3.new(0, -0.04 * k, -size * 0.2), Vector3.new(0, 1, -0.75).Unit, size * 0.24, size * 0.66)
-		if tier >= 2 then
-			shard(top + Vector3.new(0, -0.04 * k, size * 0.18), Vector3.new(0, 1, 0.6).Unit, size * 0.2, size * 0.5)
-		end
 		if jewels then
-			-- a gold setting under the cluster and two more crystals fanned out to the sides
-			if room(1) then
-				part(
-					"CrystalSetting",
-					CFrame.new(top + Vector3.new(0, -0.01 * k, 0)),
-					Vector3.new(size * 0.5, 0.07 * k, size * 0.62),
-					GOLD,
-					PLASTIC
-				)
+			-- STAR blasters: three smooth crystals (round columns with round tips) in a round gold cup
+			size = math.min(size, KenneyBlaster.StarFit.Crystal)
+			local function capsule(base: Vector3, up: Vector3, d: number, length: number)
+				local column = length - d / 2
+				cylinder("Crystal", base + up * column / 2, up, column, d, skin.Shard, NEON)
+				ball("CrystalTip", base + up * column, d, skin.ShardTip, NEON)
 			end
-			for _, sx in { -1, 1 } do
-				if room(2) then
-					shard(top + Vector3.new(sx * size * 0.12, -0.04 * k, 0), Vector3.new(sx * 0.65, 1, 0).Unit, size * 0.17, size * 0.46)
-				end
+			local d = size * 0.36
+			cylinder("CrystalSetting", top + Vector3.new(0, 0.03 * k, 0), Vector3.yAxis, 0.1 * k, d * 2.8, GOLD, PLASTIC)
+			capsule(top, Vector3.yAxis, d, size * 0.85)
+			-- (the two smaller ones lean forward and back: they show from the side)
+			for _, sz in { -1, 1 } do
+				capsule(top + Vector3.new(0, 0, sz * d * 0.8), Vector3.new(0, 1, sz * 0.5).Unit, d * 0.78, size * 0.58)
+			end
+		else
+			shard(top - Vector3.yAxis * 0.04 * k, Vector3.yAxis, size * 0.3, size)
+			shard(top + Vector3.new(0, -0.04 * k, -size * 0.2), Vector3.new(0, 1, -0.75).Unit, size * 0.24, size * 0.66)
+			if tier >= 2 then
+				shard(top + Vector3.new(0, -0.04 * k, size * 0.18), Vector3.new(0, 1, 0.6).Unit, size * 0.2, size * 0.5)
 			end
 		end
 	end
-	if tier >= 2 and side then
+	if tier >= 2 and side and not jewels then -- (STAR blasters stay clean: no side crystals)
 		for _, sx in { -1, 1 } do
 			local p = Vector3.new(side.X * sx, side.Y, side.Z)
 			local out = Vector3.new(sx, 0.5, 0).Unit
 			shard(p - out * 0.04 * k, out, (0.26 + 0.06 * tier) * 0.25 * k, (0.26 + 0.06 * tier) * k)
-			-- STAR blasters: a second, smaller crystal swept back (a cluster on each side; after the gems)
-			if jewels then
-				table.insert(sideLater, function()
-					if room(2) then
-						local back = Vector3.new(sx, 0.35, 0.6).Unit
-						shard(p - back * 0.04 * k, back, (0.26 + 0.06 * tier) * 0.18 * k, (0.26 + 0.06 * tier) * 0.7 * k)
-					end
-				end)
-			end
 		end
 	end
-	if tier >= 3 then
-		-- the crown: crystals around the barrel, swept forward (six for a STAR blaster, its gems
-		-- between them, on a gold collar)
-		local r = anchors.BarrelR * 1.4
-		local crown = if jewels then 6 else 4
-		if jewels and room(1) then
-			part(
-				"Collar",
-				CFrame.new(0, anchors.BarrelY, anchors.BarrelZ + 0.33 * k),
-				Vector3.new(r * 2.1, r * 2.1, 0.1 * k),
-				GOLD,
-				PLASTIC
-			)
-		end
-		for i = 0, crown - 1 do
-			if not room(1) then
-				break
+	local ringD = math.max((frontHi - frontLo) * S, frontW * S) * 1.12
+	if tier >= 3 and jewels and skin.Gem then
+		-- STAR blasters: a round gold ring round a single, slim barrel's front, set with four round
+		-- gems (a wide front, twin or many barrels, would wear it as a gold plate: none there)
+		if ringD <= KenneyBlaster.StarFit.Ring * S then
+			local ringY = (frontLo + frontHi) / 2 * S - hy
+			local ringZ = zFront * S - hz + 0.14 * k
+			cylinder("Collar", Vector3.new(0, ringY, ringZ), Vector3.zAxis, 0.14 * k, ringD, GOLD, PLASTIC)
+			for i = 0, 3 do
+				if room(1) then
+					local t = i / 4 * math.pi * 2 + math.pi / 4
+					local o = Vector3.new(math.cos(t), math.sin(t), 0) * ringD * 0.36
+					ball("CrownGem", Vector3.new(0, ringY, ringZ - 0.08 * k) + o, ringD * 0.16, tame(skin.Gem), NEON)
+				end
 			end
-			local t = i / crown * math.pi * 2 + math.pi / 4
+		end
+	elseif tier >= 3 then
+		-- the crown: crystals around the barrel, swept forward
+		local r = anchors.BarrelR * 1.4
+		for i = 0, 3 do
+			local t = i / 4 * math.pi * 2 + math.pi / 4
 			local o = Vector3.new(math.cos(t), math.sin(t), 0)
 			local base = Vector3.new(0, anchors.BarrelY, anchors.BarrelZ + 0.35 * k) + o * r
 			local dir = (o * 0.8 + Vector3.new(0, 0, -1)).Unit
@@ -640,19 +647,10 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 				"CrownCrystal",
 				CFrame.fromMatrix(base + dir * 0.18 * k, right, dir),
 				Vector3.new(0.09 * k, 0.4 * k, 0.09 * k),
-				if jewels and i % 2 == 1 and skin.Gem then skin.Gem else skin.ShardTip,
+				skin.ShardTip,
 				NEON
 			)
 		end
-	end
-	for _, add in gemsLater do
-		add()
-	end
-	for _, add in sideLater do
-		add()
-	end
-	for _, add in trimLater do
-		add()
 	end
 	return anchors
 end
