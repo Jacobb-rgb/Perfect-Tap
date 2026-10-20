@@ -295,6 +295,8 @@ elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading
 	for name, guis in require("./lib/loading_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced by the bridge garden (tools/lune/lib/forge_bridge_preview.luau; arg 2 = A / B / C)
+	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
 elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
 	require("./lib/gallery_preview").build(Loader, workspace)
 elseif sceneName == "gameplay" then
@@ -483,7 +485,14 @@ elseif sceneName == "cleaning" then
 		local rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng").new(5)
 		for _ = 1, 9 do
 			local offset = workCf:VectorToWorldSpace(roblox.Vector3.new(rng:range(-0.5, 0.5), rng:range(-0.4, 0.5), rng:range(0.1, 0.6)))
-			Geo.ball(fx, hit + offset, rng:range(0.05, 0.1), SprayParts.JetColor, roblox.Enum.Material.Neon, { CanCollide = false, Transparency = 0.3 })
+			Geo.ball(
+				fx,
+				hit + offset,
+				rng:range(0.05, 0.1),
+				SprayParts.JetColor,
+				roblox.Enum.Material.Neon,
+				{ CanCollide = false, Transparency = 0.3 }
+			)
 		end
 		view.Instruction.Text = if #pattern.Crystals > 0
 			then "Wash the dirt off. Don't blast the glowing crystals!"
@@ -733,8 +742,9 @@ end
 fs.writeDir(root .. "/build/preview")
 local outName = if sceneName == "mine_floor"
 	then "mine_floor_" .. (process.args[2] or "1")
-	elseif sceneName == "cleaning"
-	then "cleaning_" .. (process.args[3] or "spray") .. (if process.args[4] == "phone" then "_phone" else "")
+	elseif sceneName == "cleaning" then "cleaning_" .. (process.args[3] or "spray") .. (if process.args[4] == "phone"
+		then "_phone"
+		else "")
 	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do
