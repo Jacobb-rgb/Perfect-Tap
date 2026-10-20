@@ -314,6 +314,9 @@ local function show(rider: Rider): boolean
 		model:Destroy()
 		return false
 	end
+	-- put the board under the rider before it enters the world (a pooled or freshly
+	-- built model sits wherever it was made; owner's playtest 2026-10-20: board unseen)
+	model:PivotTo(root.CFrame * offset)
 	local weld = Instance.new("Weld")
 	weld.Name = "HoverboardWeld"
 	weld.Part0 = root
