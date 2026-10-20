@@ -208,7 +208,8 @@ return function(T, Loader)
 		T.eq(#toast, 1, "one toast")
 		T.eq(toast[1].A.Kind, "Reward")
 		T.eq(toast[1].A.Text, "Hexa Lucky: +5:00 (5:00 left)")
-		T.eq(w.policyCalls, 0, "coin boosts aren't paid random items while coins can't be bought: no policy call")
+		-- coins can be bought with Robux (CoinPacksEnabled): a coin boost is a paid random item too
+		T.eq(w.policyCalls, if MonetizationConfig.coinsBuyable() then 1 else 0, "the policy is read only while coins can be bought")
 		-- a second top-up while less than 10 min is left adds to the end
 		w.now = NOW + 100
 		w.data.Coins = price

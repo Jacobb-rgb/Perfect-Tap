@@ -21,6 +21,7 @@ function mulHex(a, b) {
 function fontFamily(family) {
   if (!family) return "Fredoka One";
   if (family.includes("Luckiest")) return "Luckiest Guy";
+  if (family.includes("ComicNeue")) return "Comic Neue Angular"; // Enum.Font.Cartoon
   return "Fredoka One";
 }
 
@@ -101,16 +102,37 @@ function styleElement(el, node, w, h) {
   for (const s of (node.ch || []).filter((c) => c.c === "UIStroke")) {
     const contextualText = isText && s.mode === "Contextual";
     if (!contextualText && s.t < 0.999) {
-      el.style.boxShadow = `0 0 0 ${s.th}px ${rgba(s.col, 1 - s.t)}`;
+      const sg = child(s, "UIGradient");
+      if (sg && sg.keys && sg.keys.length >= 2) {
+        // a gradient stroke (UIStroke > UIGradient): a ring painted with the gradient
+        const ring = document.createElement("div");
+        const r = parseFloat(el.style.borderRadius || "0");
+        ring.style.cssText = `position:absolute;inset:${-s.th}px;padding:${s.th}px;border-radius:${r + s.th}px;pointer-events:none;z-index:${(node.z || 1) + 1};`;
+        ring.style.backgroundImage = `linear-gradient(${sg.rot + 90}deg, ${gradientStops(sg, s.col, 1 - s.t)})`;
+        ring.style.webkitMask = "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)";
+        ring.style.webkitMaskComposite = "xor";
+        ring.style.maskComposite = "exclude";
+        el.appendChild(ring);
+      } else {
+        el.style.boxShadow = `0 0 0 ${s.th}px ${rgba(s.col, 1 - s.t)}`;
+      }
     }
   }
   if (node.icon) {
     // 3D UI icon (tools/preview/render_icons.mjs output), ScaleType Fit
-    const img = document.createElement("img");
-    img.src = `/scenes/icons/${node.icon}.png`;
-    img.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;";
-    img.style.opacity = String(1 - (node.it || 0));
-    el.appendChild(img);
+    if (node.ic && node.ic !== "ffffff") {
+      // ImageColor3 tints the picture (Roblox multiplies; a flat tint is close enough here)
+      const tint = document.createElement("div");
+      const url = `url(/scenes/icons/${node.icon}.png)`;
+      tint.style.cssText = `position:absolute;inset:0;background:${rgba(node.ic, 1 - (node.it || 0))};-webkit-mask:${url} center/contain no-repeat;mask:${url} center/contain no-repeat;`;
+      el.appendChild(tint);
+    } else {
+      const img = document.createElement("img");
+      img.src = `/scenes/icons/${node.icon}.png`;
+      img.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;";
+      img.style.opacity = String(1 - (node.it || 0));
+      el.appendChild(img);
+    }
   }
   if (node.rot) el.style.transform = `rotate(${node.rot}deg)`;
   if (node.clip) el.style.overflow = "hidden";
@@ -218,6 +240,13 @@ function layoutChildren(node, el, w, h) {
       const x = pl + k.pos[0] * cw + k.pos[1] - k.anchor[0] * sz.w;
       const y = pt + k.pos[2] * ch + k.pos[3] - k.anchor[1] * sz.h;
       placed.push({ k, x, y, w: sz.w, h: sz.h });
+    }
+  }
+  if (node.cp) {
+    // a scrolled ScrollingFrame: its content moves by the canvas position
+    for (const p of placed) {
+      p.x -= node.cp[0];
+      p.y -= node.cp[1];
     }
   }
   for (const p of placed) {

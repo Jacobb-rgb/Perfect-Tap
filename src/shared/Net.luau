@@ -126,6 +126,10 @@ Net.Events = {
 	--   RebirthConfig.quote) or { Action = "Glow", Color } (the Plot Glow colour, "" = off).
 	--   Every request read gets a RebirthResult
 	RebirthAction = { Rate = 2, Burst = 4 },
+	-- the Robux STORE window (StoreService): { Action = "Buy", Key: a MonetizationConfig key the
+	--   Store sells } -> PurchasePrompt { Product, Status }; StoreService only prompts (grants:
+	--   MonetizationService). Capsule / Boost products go through CapsuleAction / BoostAction.
+	StoreAction = { Rate = 2, Burst = 4 },
 	-- steps 6-7: gear, enchants, boosts, golems + capsules, wheel, artifacts (the configs in
 	-- Shared/Config document each rule). Every request the server reads (except Capsule
 	-- "Open" and Wheel "Spin", answered by CapsuleResult / WheelResult, and Robux requests,

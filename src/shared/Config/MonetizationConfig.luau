@@ -24,13 +24,12 @@
 	  (src/server/Policy.luau), and the exact odds (for odds boosters: the
 	  odds now and the NEW odds, BoostConfig.preview / CapsuleConfig.odds)
 	  are shown in numbers before buying.
-	- Coin packs (CoinsSmall/Medium/Large) wait for the owner: the design notes
-	  say "Money comes only from podiums", so CoinPacksEnabled is false. While
-	  it is false the packs are never offered (promptStatus "Unknown") and
-	  coins can't be bought with Robux, so coin capsules and coin boosts are
-	  NOT paid random items (CapsuleConfig.isPaidRandom, BoostConfig.isPaidRandom
-	  read coinsBuyable()). Turning it on makes every coin capsule and coin
-	  boost a paid random item at once (hidden where restricted).
+	- Coin packs (CoinsSmall .. CoinsMega): on since the owner's go
+	  (2026-10-20), CoinPacksEnabled = true. With coins buyable for Robux,
+	  every coin capsule and coin boost is a paid random item too
+	  (CapsuleConfig.isPaidRandom, BoostConfig.isPaidRandom read
+	  coinsBuyable(): hidden where restricted). Turning it off again: the
+	  packs are never offered (promptStatus "Unknown") and those rules relax.
 	- One-time things are game passes, never developer products: the two
 	  Mythic enchants (EnchantHeartfire / EnchantStarbreaker) are passes, so
 	  Roblox itself never sells them twice. Step 8 grants a pass's Enchant /
@@ -49,6 +48,12 @@
 	    "Boost"      products: Seconds of Boost, uncapped (BoostService)
 	    "CoinPack"   products: coinPackAmount coins, only while
 	                 CoinPacksEnabled (PodiumService: the income)
+	    "BlasterLevel" products: the player's next blaster level, when it is
+	                 within the entry's MinLevel..MaxLevel band (VaultService;
+	                 a bought level never pays Rebirth stars)
+	    "ServerBoost" products: Seconds of the ServerBoost effect for everyone
+	                 on the server (ServerBoostService; not saved: it ends
+	                 with the server)
 	  Every grant is recorded in data.Purchases[PurchaseId] = os.time() and
 	  data.PurchaseLog[PurchaseId] = { Product = Key, At = os.time() }.
 
@@ -121,6 +126,9 @@ export type Product = {
 	MinCoins: number?, -- ...but at least this many coins
 	Grant: string?, -- the MonetizationService handler that gives it (header: "Perks", "Capsule", ...)
 	BoardId: string?, -- Grant "Hoverboard": the HoverboardData id it unlocks
+	MinLevel: number?, -- Grant "BlasterLevel": the player's next blaster level must be
+	MaxLevel: number?, -- within MinLevel..MaxLevel (the price band; VaultService)
+	ServerBoost: string?, -- Grant "ServerBoost": the server-wide effect ("Luck")
 }
 -- (MonetizationService's name for a pass or product)
 export type Entry = Product
@@ -252,6 +260,18 @@ local LIST: { Product } = {
 		Count = 3,
 	},
 	{
+		Key = "RoyalCapsule5",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 229,
+		Name = "Royal Capsule x5",
+		Description = "Wakes 5 golems from Royal Capsules (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Royal",
+		Count = 5,
+	},
+	{
 		Key = "RoyalCapsule10",
 		Grant = "Capsule",
 		Kind = "Product",
@@ -335,17 +355,19 @@ local LIST: { Product } = {
 		Enchant = "Starbreaker",
 	},
 	---------------------------------------------------------------- coin packs
+	-- five tiers like popular simulators' stores (owner 2026-10-20); the
+	-- bigger the pack, the more coins per Robux
 	{
 		Key = "CoinsSmall",
 		Grant = "CoinPack",
 		Kind = "Product",
 		CoinPack = true,
 		Id = 0,
-		Robux = 49,
-		Name = "Pouch of Coins",
-		Description = "10 minutes of your podium income (at least 5,000 coins).",
-		CoinSeconds = 600,
-		MinCoins = 5000,
+		Robux = 19,
+		Name = "Handful of Coins",
+		Description = "5 minutes of your podium income (at least 2,500 coins).",
+		CoinSeconds = 300,
+		MinCoins = 2500,
 	},
 	{
 		Key = "CoinsMedium",
@@ -353,11 +375,11 @@ local LIST: { Product } = {
 		Kind = "Product",
 		CoinPack = true,
 		Id = 0,
-		Robux = 149,
-		Name = "Chest of Coins",
-		Description = "40 minutes of your podium income (at least 25,000 coins).",
-		CoinSeconds = 2400,
-		MinCoins = 25000,
+		Robux = 49,
+		Name = "Pouch of Coins",
+		Description = "15 minutes of your podium income (at least 10,000 coins).",
+		CoinSeconds = 900,
+		MinCoins = 10000,
 	},
 	{
 		Key = "CoinsLarge",
@@ -365,17 +387,101 @@ local LIST: { Product } = {
 		Kind = "Product",
 		CoinPack = true,
 		Id = 0,
-		Robux = 399,
-		Name = "Vault of Coins",
+		Robux = 99,
+		Name = "Stack of Coins",
+		Description = "40 minutes of your podium income (at least 30,000 coins).",
+		CoinSeconds = 2400,
+		MinCoins = 30000,
+	},
+	{
+		Key = "CoinsHuge",
+		Grant = "CoinPack",
+		Kind = "Product",
+		CoinPack = true,
+		Id = 0,
+		Robux = 249,
+		Name = "Sack of Coins",
 		Description = "2 hours of your podium income (at least 100,000 coins).",
 		CoinSeconds = 7200,
 		MinCoins = 100000,
 	},
+	{
+		Key = "CoinsMega",
+		Grant = "CoinPack",
+		Kind = "Product",
+		CoinPack = true,
+		Id = 0,
+		Robux = 499,
+		Name = "Chest of Coins",
+		Description = "5 hours of your podium income (at least 300,000 coins).",
+		CoinSeconds = 18000,
+		MinCoins = 300000,
+	},
+	---------------------------------------------------------------- the blaster, by price band
+	-- (the next level for Robux, like the Vault sells it for coins; the
+	-- Store shows only the band of the player's next level)
+	{
+		Key = "BlasterNextA",
+		Grant = "BlasterLevel",
+		Kind = "Product",
+		Id = 0,
+		Robux = 49,
+		Name = "Next Blaster",
+		Description = "Your next blaster level (LV 2-4) right now. Kept after a rebirth.",
+		MinLevel = 2,
+		MaxLevel = 4,
+	},
+	{
+		Key = "BlasterNextB",
+		Grant = "BlasterLevel",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "Next Blaster",
+		Description = "Your next blaster level (LV 5-7) right now. Kept after a rebirth.",
+		MinLevel = 5,
+		MaxLevel = 7,
+	},
+	{
+		Key = "BlasterNextC",
+		Grant = "BlasterLevel",
+		Kind = "Product",
+		Id = 0,
+		Robux = 199,
+		Name = "Next Blaster",
+		Description = "Your next blaster level (LV 8-9) right now. Kept after a rebirth.",
+		MinLevel = 8,
+		MaxLevel = 9,
+	},
+	{
+		Key = "BlasterNextD",
+		Grant = "BlasterLevel",
+		Kind = "Product",
+		Id = 0,
+		Robux = 399,
+		Name = "Next Blaster",
+		Description = "The top blaster (LV 10) right now. Kept after a rebirth.",
+		MinLevel = 10,
+		MaxLevel = 10,
+	},
+	---------------------------------------------------------------- server luck
+	{
+		Key = "ServerLuck15",
+		Grant = "ServerBoost",
+		Kind = "Product",
+		PaidRandom = true, -- better ore odds
+		Id = 0,
+		Robux = 49,
+		Name = "Server Luck",
+		Description = "x2 ore luck for everyone on this server while it runs: +15 minutes each time. With Hexa Lucky on, the bigger one counts.",
+		ServerBoost = "Luck",
+		Seconds = 900,
+	},
 }
 
--- Coin packs wait for the owner's decision (see the header). Keep false
--- until the owner confirms them; it decides the paid-random-items rules.
-MonetizationConfig.CoinPacksEnabled = false
+-- Coin packs: on since the owner's go (2026-10-20, "money for Robux").
+-- It decides the paid-random-items rules (see the header).
+MonetizationConfig.CoinPacksEnabled = true
 
 -- Seconds a "Prompted" Royal capsule remembers the Triple Lucky state the
 -- player saw (step 8 contract above).

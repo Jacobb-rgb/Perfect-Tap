@@ -1611,8 +1611,8 @@ return function(T, Loader)
 		for _, status in { "ComingSoon", "Restricted", "Owned", "Full", "Unknown" } do
 			T.truthy(MonetizationConfig.StatusText[status], status .. " text")
 		end
-		T.eq(MonetizationConfig.coinPackAmount("CoinsSmall", 0), 5000)
-		T.eq(MonetizationConfig.coinPackAmount("CoinsSmall", 100), 60000)
+		T.eq(MonetizationConfig.coinPackAmount("CoinsSmall", 0), 2500)
+		T.eq(MonetizationConfig.coinPackAmount("CoinsSmall", 100), 30000)
 		T.eq(MonetizationConfig.coinPackAmount("BigPass", 100), nil)
 		-- one-time things are game passes (Roblox never sells a pass twice)
 		for _, key in { "EnchantHeartfire", "EnchantStarbreaker" } do

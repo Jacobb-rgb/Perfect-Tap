@@ -53,6 +53,9 @@ local function exportNode(instance): any?
 				node.mints = limit.MinTextSize
 			end
 		end
+		if instance:IsA("ScrollingFrame") then
+			node.cp = { instance.CanvasPosition.X, instance.CanvasPosition.Y } -- where it is scrolled to
+		end
 		if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then
 			node.img = tostring(instance.Image)
 			node.it = instance.ImageTransparency
