@@ -2,7 +2,11 @@
 	The light "Bubble" HUD (owner's pick A, 2026-10-18). Pure builder; a
 	controller fills it in.
 
-	  top-left      coins pill (3D coin, amount, + button) and the income chip
+	  bottom-left   the money: a big green amount (K / M / B...) with the cash
+	                icon and the income per second over it (owner 2026-10-20,
+	                his phone photo); the game HUD (buildGame) only
+	  left          the green "Shop" pill with the cart (opens the Robux STORE)
+	                over the menu tiles
 	  top-centre    the teleport bar: BASE / LOBBY / VAULT tabs with 3D icons
 	  left          the main menu tiles: BACKPACK, GOLEMS, BUILD, SHOP + MORE
 	                (2 columns on PC, 3 columns on phones so the tiles stay above
@@ -20,6 +24,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.BubbleTheme)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
+local Card = require(script.Parent.Card)
+local CardTheme = require(Shared.Config.CardTheme)
 
 local HudBubble = {}
 
@@ -32,7 +38,8 @@ HudBubble.Menu = {
 	{ Id = "Backpack", Label = "BACKPACK", Icon = "backpack", Role = "Backpack" },
 	{ Id = "Golems", Label = "GOLEMS", Icon = "golem_GildedPorter", Role = "Golems" },
 	{ Id = "Build", Label = "BUILD", Icon = "build", Role = "Build" },
-	{ Id = "Shop", Label = "SHOP", Icon = "shop", Role = "Shop" },
+	-- (the luck boosts: BoostController; "Shop" is the green pill, the Robux STORE)
+	{ Id = "Shop", Label = "BOOSTS", Icon = "clover", Role = "Boosts" },
 	{ Id = "More", Label = "MORE", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
@@ -130,6 +137,59 @@ local function coinsPill(gui: ScreenGui, layout: Layout): (TextLabel, TextButton
 	return amount, plusFace :: TextButton, income
 end
 
+HudBubble.MoneyGreen = Color3.fromRGB(110, 236, 70)
+HudBubble.MoneyEdge = Color3.fromRGB(18, 60, 12)
+
+--[[
+	The money at the bottom-left (owner 2026-10-20: "green and plain, K for
+	thousand, M for million, bottom-left"): the cash icon, the big green
+	amount and the income per second above it. Returns (panel, amount,
+	income); the panel pops on big gains (HudController).
+]]
+local function money(gui: ScreenGui, layout: Layout): (Frame, TextLabel, TextLabel)
+	local size = if layout.Compact then 40 else 46
+	local panel = UIKit.new("Frame", {
+		Name = "Coins",
+		AnchorPoint = Vector2.new(0, 1),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 20, 1, if layout.Compact then -24 else -18),
+		Size = UDim2.fromOffset(HudBubble.CoinsWidth + 30, size + 34),
+	}, gui)
+	Bubble.icon(panel, "coins", size + 14, {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, -4, 1, 4),
+	})
+	local amount = Card.text(panel, "$0", size, {
+		Name = "Amount",
+		AnchorPoint = Vector2.new(0, 1),
+		FontFace = CardTheme.NumberFont,
+		Position = UDim2.new(0, size + 14, 1, 0),
+		Size = UDim2.new(1, -(size + 14), 0, size + 6),
+		TextColor3 = HudBubble.MoneyGreen,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
+	})
+	local amountEdge = amount:FindFirstChildOfClass("UIStroke") :: UIStroke
+	amountEdge.Color = HudBubble.MoneyEdge
+	amountEdge.Thickness = 3.5
+	local income = Card.text(panel, "+$0/s", math.floor(size * 0.5), {
+		Name = "Income",
+		AnchorPoint = Vector2.new(0, 1),
+		FontFace = CardTheme.NumberFont,
+		Position = UDim2.new(0, size + 16, 1, -(size + 4)),
+		Size = UDim2.new(1, -(size + 16), 0, math.floor(size * 0.5) + 6),
+		TextColor3 = Color3.fromRGB(196, 255, 170),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
+	})
+	local incomeEdge = income:FindFirstChildOfClass("UIStroke") :: UIStroke
+	incomeEdge.Color = HudBubble.MoneyEdge
+	return panel, amount, income
+end
+
+-- The green "Shop" pill with the cart (owner's phone photo): opens the Robux STORE.
+HudBubble.ShopPill = Vector2.new(176, 56)
+
 -- One BASE / LOBBY / VAULT tab (icon left on PC, on top on phones).
 function HudBubble.tab(parent: Instance, spot: MenuEntry, layout: Layout, order: number): TextButton
 	local holder, face = Bubble.body(parent, Bubble.role(spot.Role), Vector2.new(layout.TabWidth, layout.TabHeight), {
@@ -206,7 +266,8 @@ function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	local height = rows * cellH + (rows - 1) * rowGap
 	-- phones: under the coins and the income chip (it sits under the pill so
 	-- it never meets the teleport bar on narrow phones)
-	local origin = if layout.Compact then UDim2.fromOffset(18, 136) else UDim2.new(0, 18, 0.5, 24 - height // 2)
+	-- phones: under the Shop pill at the top-left (the money is at the bottom-left)
+	local origin = if layout.Compact then UDim2.fromOffset(18, 18 + HudBubble.ShopPill.Y + 16) else UDim2.new(0, 18, 0.5, 24 - height // 2)
 	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
 end
 
@@ -534,21 +595,13 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		(gui :: any).ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	end)
 
-	-- coins (the income chip lives inside, so hiding the coins hides both)
-	local coins, plus, income = coinsPill(gui, layout)
-	local coinsFace = coins.Parent :: Frame
-	local coinsPanel = coinsFace.Parent :: Frame
-	local plusHolder = plus.Parent :: Frame
-	plusHolder.Visible = false -- no coin shop yet: no dead button
-	coins.Size = UDim2.new(1, -52, 1, 0)
-	local chipHolder = (income.Parent :: Frame).Parent :: Frame
-	chipHolder.Parent = coinsPanel
-	chipHolder.Position = UDim2.new(0, 42, 1, 6) -- under the pill (beside it would meet the tabs on small phones)
-	chipHolder.ZIndex = 2
+	-- the money, bottom-left (the income line lives inside, so hiding the money hides both)
+	local coinsPanel, coins, income = money(gui, layout)
 	local floaters = UIKit.new("Frame", {
 		Name = "Floaters",
+		AnchorPoint = Vector2.new(0, 1),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(if layout.Compact then 190 else 34, if layout.Compact then 92 else 130),
+		Position = UDim2.new(0, 20 + 60, 1, -(coinsPanel.Size.Y.Offset + 30)),
 		Size = UDim2.fromOffset(HudBubble.CoinsWidth, 60),
 	}, gui)
 
@@ -597,6 +650,12 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Position = if layout.Compact then m.Origin else UDim2.new(0, 18, 0.5, 24 - m.Height // 2),
 		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
+	local pill = HudBubble.ShopPill
+	local shop = Card.pill(gui, "Shop", "cart", Color3.fromRGB(110, 226, 52), Color3.fromRGB(34, 110, 20), pill, {
+		Name = "ShopPill",
+		Position = UDim2.new(menu.Position.X.Scale, menu.Position.X.Offset, menu.Position.Y.Scale, menu.Position.Y.Offset - pill.Y - 16),
+	})
+	shop:SetAttribute("Opens", "StoreController")
 	menu:SetAttribute("Bubble", true)
 	menu:SetAttribute("Columns", layout.Columns)
 	UIKit.new("UIGridLayout", {
@@ -684,7 +743,7 @@ end
 -- The side menu's IconNames (SideMenuView.Icons keys) -> 3D icon + colour role.
 HudBubble.EntryLooks = {
 	Golems = { Icon = "golem_GildedPorter", Role = "Golems" },
-	Shop = { Icon = "shop", Role = "Shop" },
+	Shop = { Icon = "clover", Role = "Boosts" }, -- the luck boosts (the Robux STORE is the green Shop pill)
 	Codex = { Icon = "book", Role = "Codex" },
 	Artifacts = { Icon = "artifact", Role = "Artifacts" },
 	Boards = { Icon = "trophy", Role = "Boards" },

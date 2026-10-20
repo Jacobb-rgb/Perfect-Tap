@@ -59,7 +59,7 @@ only what is really in the game.
 | 9 | **Social hangout** | **No** | The main activity is mining and crafting, not chatting. Keep "hangout", "chill" or "vibe" wording out of the title and description: Roblox classifies a game as a hangout if its title or description refers to one. |
 | 10 | **Free-form user creation** | **No** | This means freehand drawing, painting, writing on surfaces, or pixel canvases. Placing machines on your plot is building with 3D assets, which Roblox excludes. The forge name is a short typed name, not freehand writing, and it goes through Roblox's text filter before anyone sees it (see 2.1). Roblox also excludes anything that goes through Roblox moderation before it is shown. |
 | 11 | **Sensitive issues** (political, social, religious) | **No** | The lore is original fantasy (the Heartstone, the Forgekeepers' Guild). |
-| 12 | **Paid random items** | **No today; Yes as soon as one is live** | Today every Robux product id is a placeholder (0), so nothing random can be bought. **Answer Yes and resubmit the day the first of these goes live:** Royal golem capsules (random golem, Robux), the Triple Lucky / Hexa Lucky Robux packs (they raise the odds of capsules / ore) and the Starbreaker enchant pass (raises ore luck and the artifact chance). Roblox's definition (paid random items page): random rewards bought with Robux, or with currency or items that can be bought with Robux. Our coins can't be bought with Robux while `MonetizationConfig.CoinPacksEnabled` is false (the owner decides; the design says money comes from podiums), so coin capsules, coin luck boosts and coin enchants are **not** paid random items. **Turning coin packs on makes them all paid random items at once** (the code already switches: `coinsBuyable()`). Free random rewards don't count: the daily wheel (free, no paid spins), ore drops, artifacts, cleaning grades and capsules won on the wheel. |
+| 12 | **Paid random items** | **No today; Yes as soon as one is live** | Today every Robux product id is a placeholder (0), so nothing random can be bought. **Answer Yes and resubmit the day the first of these goes live:** Royal golem capsules (random golem, Robux), the Triple Lucky / Hexa Lucky Robux packs (they raise the odds of capsules / ore) and the Starbreaker enchant pass (raises ore luck and the artifact chance). Roblox's definition (paid random items page): random rewards bought with Robux, or with currency or items that can be bought with Robux. **Coins can be bought with Robux** since the owner turned coin packs on (2026-10-20, `MonetizationConfig.CoinPacksEnabled = true`), so coin capsules, coin luck boosts and coin enchants **are paid random items too** (`coinsBuyable()`: hidden and refused where restricted, exact odds shown before every buy in the capsule and boost windows). Server Luck (`ServerLuck15`, x2 ore luck for the whole server) is a paid odds booster as well. Free random rewards don't count: the daily wheel (free, no paid spins), ore drops, artifacts, cleaning grades and capsules won on the wheel. |
 | 13 | **Paid item trading** | **No** | Players cannot trade. Every item belongs to one player: only the owner can pick it up (`ItemService`), and selling is designed to always pay the owner. |
 | 14 | **Media: players share media** (images, video, text, audio, models) with built-in game tools | **No** | There is no in-game screenshot sharing, feed or gallery. |
 | 15 | **Media: endless feeds / autoplay** | **No** | None. |
@@ -198,7 +198,7 @@ ads.
 
 | Key | What it means | Does it matter for Terra Forge? |
 |---|---|---|
-| `ArePaidRandomItemsRestricted` | `true` = this player may not use paid random items (with Robux or with currency bought with Robux) | **Yes (steps 6-8).** Hidden and refused for these players: Royal capsules, the Robux Triple/Hexa Lucky packs and the Starbreaker pass (`MonetizationConfig` `PaidRandom`, `promptStatus` → "Restricted"; `EnchantConfig.quote` → "Restricted"). If coin packs are ever turned on, coin capsules and coin boosts too (`CapsuleConfig.isPaidRandom`, `BoostConfig.isPaidRandom`). Players who can't buy any capsule get coins instead of Triple Lucky on the free wheel. Odds are shown to everyone. |
+| `ArePaidRandomItemsRestricted` | `true` = this player may not use paid random items (with Robux or with currency bought with Robux) | **Yes (steps 6-8).** Hidden and refused for these players: Royal capsules, the Robux Triple/Hexa Lucky packs and the Starbreaker pass (`MonetizationConfig` `PaidRandom`, `promptStatus` → "Restricted"; `EnchantConfig.quote` → "Restricted"). With coin packs on (owner 2026-10-20), coin capsules and coin boosts too (`CapsuleConfig.isPaidRandom`, `BoostConfig.isPaidRandom`), and Server Luck. Players who can't buy any capsule get coins instead of Triple Lucky on the free wheel. Odds are shown to everyone. |
 | `IsPaidItemTradingAllowed` | `false` = this player may not trade paid items | **Not today**: there is no trading. Golem trading is planned (design notes, round 4): golems from Robux purchases are saved with `Paid = true` so that trading can block them for these players. |
 | `AllowedExternalLinkReferences` | Legacy field. Roblox's reference says it **always returns an empty list** now. | Treat it as "no external links are ever allowed in the game" (see 2.3). |
 | `IsSubjectToChinaPolicies` | `true` = the game should apply China-related compliance changes | Nothing in Terra Forge is known to need changing. **TODO:** log how often it is `true` (analytics). If it ever is, read the DevForum post linked from the PolicyService page. |
@@ -269,10 +269,12 @@ What Terra Forge sells (design v2; the source of truth is
 | Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
 | Heartfire Enchant (20 R$) | Game pass | `EnchantHeartfire` | Mythic enchant: damage | No |
 | Starbreaker Enchant (20 R$) | Game pass | `EnchantStarbreaker` | Mythic enchant: +75 % ore luck, +50 % artifact chance | **Yes** (odds booster) |
-| Royal Capsule x1 / x3 / x10 | Developer products | `RoyalCapsule1/3/10` | Random golems | **Yes** |
+| Royal Capsule x1 / x3 / x5 / x10 | Developer products | `RoyalCapsule1/3/5/10` | Random golems (x5: the Store) | **Yes** |
 | Triple Lucky 15 min / 1 h | Developer products | `TripleLucky15/60` | Capsule odds: the rarest golems x3 | **Yes** (odds booster) |
 | Hexa Lucky 15 min / 1 h | Developer products | `HexaLucky15/60` | Ore luck x2.5 (Rare x2.5 … Mythic x9.9 weight) | **Yes** (odds booster) |
-| Coin packs | Developer products | `CoinsSmall/Medium/Large` | Coins (off: `CoinPacksEnabled = false`) | No, but they make coin capsules and coin boosts paid random items |
+| Coin packs (19 / 49 / 99 / 249 / 499 R$) | Developer products | `CoinsSmall/Medium/Large/Huge/Mega` | Coins: minutes of the player's podium income (on: `CoinPacksEnabled = true`; bought coins survive a rebirth, `PaidCoins`) | No, but they make coin capsules and coin boosts paid random items |
+| Next Blaster (49 / 99 / 199 / 399 R$) | Developer products | `BlasterNextA/B/C/D` | The next blaster level, by price band (kept after a rebirth; never pays Forge Stars) | No |
+| Server Luck 15 min (49 R$) | Developer product | `ServerLuck15` | x2 ore luck for everyone on the server while it runs | **Yes** (odds booster) |
 
 **TODO:** set prices, write descriptions and upload icons. Pass and
 developer product icons must be at most 512×512 (.png/.jpg/.bmp) and keep
@@ -465,14 +467,13 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   saved with `Paid = true` (for the trading rules) and come **locked**: a
   locked golem can't be deleted, and the delete box says "bought with
   Robux: Robux are not refunded" when the player unlocks and deletes one.
-- **Coin capsules: our choice.** Coins can't be bought with Robux while
-  `MonetizationConfig.CoinPacksEnabled` is false, so coin capsules are
-  **not** paid random items and are shown to every player (odds still
-  shown). If the owner turns coin packs on, `CapsuleConfig.isPaidRandom`
-  becomes true for them at once: the client hides the Stone and Crystal
-  tabs for restricted players (or players whose policy isn't known), the
-  server refuses their opens ("Restricted"), and the questionnaire answer
-  for paid random items (1.1 #12) must be Yes.
+- **Coin capsules: paid random items** since the owner turned coin packs
+  on (2026-10-20, `MonetizationConfig.CoinPacksEnabled = true`):
+  `CapsuleConfig.isPaidRandom` is true for them, the client hides the
+  Stone and Crystal tabs for restricted players (or players whose policy
+  isn't known), the server refuses their opens ("Restricted"), the exact
+  odds are shown before every open, and the questionnaire answer for paid
+  random items (1.1 #12) must be Yes.
   Robux items that only raise how fast a player earns coins (the income
   and podium game passes, Royal golems with an Income or Sell value bonus)
   are **not** treated as buying coins: the coins still have to be earned
@@ -677,7 +678,7 @@ tutorial.
 - [ ] Pass and product descriptions match exactly what the code does; the Forge VIP description lists the Grotto's ore odds in numbers.
 - [ ] Purchase prompts only open after a player taps a button; no fake timers or fake discounts; close button easy to find on mobile.
 - [ ] Paid random items (Royal capsules, Robux luck packs, Starbreaker): exact odds shown before every buy, odds boosters show the new odds in numbers, hidden where `ArePaidRandomItemsRestricted` is true; questionnaire answered **Yes** once any of them is live.
-- [ ] Coin packs still off (`CoinPacksEnabled = false`), or every coin capsule / coin boost / coin odds-booster treated as a paid random item.
+- [ ] Coin packs are on (`CoinPacksEnabled = true`): every coin capsule / coin boost / coin odds-booster is treated as a paid random item (hidden where restricted, odds shown).
 - [ ] The daily wheel shows its exact odds (and the ore prize's odds); no paid spins.
 - [ ] PolicyService wrapper in place (`src/server/Policy.luau`: `pcall`, strict defaults when the call fails, retried).
 

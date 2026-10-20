@@ -109,8 +109,8 @@ local function refresh()
 			local fits = StoreConfig.blasterKey(spec, level)
 			if fits then
 				key = fits
-				local now = if type(level) == "number" then math.floor(level) else 1
-				StoreView.setBig(view, id, `LV {now + 1}`)
+				local current = if type(level) == "number" then math.floor(level) else 1
+				StoreView.setBig(view, id, `LV {current + 1}`)
 			else
 				cardState = "Hidden"
 			end
@@ -382,6 +382,12 @@ function StoreController.init()
 end
 
 function StoreController.start()
+	-- the HUD's green Shop pill (the game HUD, HudBubble.buildGame)
+	local hud = HudController.refs()
+	local pill = if hud then hud.Gui:FindFirstChild("ShopPill") else nil
+	if pill and pill:IsA("GuiButton") then
+		pill.Activated:Connect(StoreController.toggle)
+	end
 	StateController.onChanged(function()
 		if isOpen then
 			refresh()

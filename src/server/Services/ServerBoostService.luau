@@ -62,13 +62,29 @@ function ServerBoostService.full(seconds: number, now: number?): boolean
 	return ServerBoostService.left(now) + seconds > ServerBoostService.MaxSeconds
 end
 
+-- A ReplicatedStorage attribute for the clients (the Lune tests' stand-in has none).
+local function share(name: string, value: any)
+	pcall(function()
+		ReplicatedStorage:SetAttribute(name, value)
+	end)
+end
+
 local function publish(now: number)
 	local left = ServerBoostService.left(now)
-	ReplicatedStorage:SetAttribute(ServerBoostService.UntilAttribute, if left > 0 then Workspace:GetServerTimeNow() + left else 0)
+	local ok, serverNow = pcall(function(): number
+		return Workspace:GetServerTimeNow()
+	end)
+	local base = if ok then serverNow else now
+	share(ServerBoostService.UntilAttribute, if left > 0 then base + left else 0)
+end
+
+-- (tests swap the player list)
+local everyone: () -> { Player } = function()
+	return Players:GetPlayers()
 end
 
 local function refreshAll()
-	for _, player in Players:GetPlayers() do
+	for _, player in everyone() do
 		Bonuses.invalidate(player)
 		StateService.push(player)
 	end
@@ -99,7 +115,7 @@ function ServerBoostService.extend(seconds: number, buyer: Player?): number
 	luckUntil = math.min(start + seconds, now + ServerBoostService.MaxSeconds)
 	publish(now)
 	if buyer then
-		ReplicatedStorage:SetAttribute(ServerBoostService.ByAttribute, buyer.DisplayName)
+		share(ServerBoostService.ByAttribute, buyer.DisplayName)
 	end
 	refreshAll()
 	plan()
@@ -133,7 +149,7 @@ function ServerBoostService.init()
 		end
 		return {}
 	end)
-	ReplicatedStorage:SetAttribute(ServerBoostService.UntilAttribute, 0)
+	share(ServerBoostService.UntilAttribute, 0)
 end
 
 function ServerBoostService.start() end
@@ -149,6 +165,9 @@ ServerBoostService._test = {
 	reset = function()
 		luckUntil = 0
 		plannedFor = 0
+	end,
+	setPlayers = function(fn: () -> { Player })
+		everyone = fn
 	end,
 	grant = grantServerBoost,
 }

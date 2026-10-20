@@ -269,7 +269,7 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("LightUI: on a small phone the coins and the teleport bar don't meet", function()
+	T.test("LightUI: on a small phone the Shop pill, the tabs, the money and the hotbar don't meet", function()
 		local HudBubble = ui("HudBubble")
 		withLight(function()
 			for _, screen in { Vector2.new(667, 375), Vector2.new(568, 320), Vector2.new(932, 430) } do
@@ -277,8 +277,14 @@ return function(T, Loader)
 				local refs = HudBubble.buildGame(scale, screen.X)
 				local width = screen.X / scale
 				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
-				local coinsRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
-				T.truthy(coinsRight < barLeft, `coins clear of the tabs at {screen.X} x {screen.Y}`)
+				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
+				T.truthy(pill, "the green Shop pill")
+				local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
+				T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
+				-- the money sits bottom-left, the hotbar bottom-centre
+				local moneyRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
+				local hotbarLeft = width / 2 - refs.CarryPanel.Size.X.Offset / 2
+				T.truthy(moneyRight < hotbarLeft, `the money clear of the hotbar at {screen.X} x {screen.Y}`)
 			end
 		end)
 	end)
