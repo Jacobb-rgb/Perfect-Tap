@@ -7,8 +7,10 @@
 	  ui_vault_pc           PC: a level 3 player who can buy level 4
 	  ui_vault_pc_poor      PC: level 6 next, not enough coins (red price, the message)
 	  ui_vault_phone        667 x 375 pt phone (compact: one row that scrolls)
-	  ui_vault_phone_small  568 x 320 pt phone
-	  ui_vault_tv           1080p TV (console, HUD scale 1.25): the compact layout
+	  ui_vault_phone_small  568 x 320 pt phone: level 8 next ($4.8B)
+	  ui_vault_tv           1080p TV (console, HUD scale 1.25): the compact
+	                        layout, the top case next ($140B)
+	The coins fit the prices of balance pass 1 (4x the Foundry coins).
 ]]
 
 local UiExport = require("./uiexport")
@@ -20,6 +22,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
 	local VaultView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.VaultView")
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+	local UDim2 = Loader.roblox.UDim2
 
 	local scale = 1.25 -- 900 px tall render / 720 design height
 	local phoneScale = VaultView.PhoneScale * 900 / 375
@@ -56,6 +59,20 @@ function Preview.build(Loader: any): { [string]: any }
 		VaultView.setCoins(refs, coins)
 		VaultView.setCurrent(refs, level, BlasterData.vaultOre(level))
 		VaultView.setHint(refs, hint)
+		-- the next card in view, as VaultController does when it opens (the compact row scrolls;
+		-- the exporter draws no CanvasPosition, so the tiles move by it instead)
+		for _, tile in refs.Tiles do
+			if tile.Card and tile.Card.State == "Next" then
+				VaultView.scrollTo(refs, tile)
+			end
+		end
+		local shift = refs.Cards.CanvasPosition.X
+		if shift > 0 then
+			for _, tile in refs.Tiles do
+				local p = tile.Holder.Position
+				tile.Holder.Position = UDim2.fromOffset(p.X.Offset - shift, p.Y.Offset)
+			end
+		end
 		return refs
 	end
 
@@ -63,29 +80,29 @@ function Preview.build(Loader: any): { [string]: any }
 	local pcWidth, pcHeight = 1600 / scale, (900 - 36) / scale
 	local pcHint = `Click BUY on the next case{VaultView.Separator}Backspace: close`
 
-	-- level 3 with 125K: level 4 (60K) can be bought
-	exports.ui_vault_pc = UiExport.export({ hud(scale, 125400).Gui, view(scale, false, pcWidth, pcHeight, 3, 125400, pcHint).Gui })
+	-- level 3 with 2.1M: level 4 ($1.52M) can be bought
+	exports.ui_vault_pc = UiExport.export({ hud(scale, 2.1e6).Gui, view(scale, false, pcWidth, pcHeight, 3, 2.1e6, pcHint).Gui })
 
-	-- level 5 with 1.9M: level 6 costs 2.8M (red), BUY tells why
+	-- level 5 with 1.9M: level 6 costs $116M (red), BUY tells why
 	local poor = view(scale, false, pcWidth, pcHeight, 5, 1.9e6, pcHint)
 	VaultView.setMessage(poor, VaultView.reasonText("NoCoins"), VaultView.Style.Bad)
 	exports.ui_vault_pc_poor = UiExport.export({ hud(scale, 1.9e6).Gui, poor.Gui })
 
 	-- phones: the compact layout
 	exports.ui_vault_phone = UiExport.export({
-		hud(phoneScale, 125400).Gui,
-		view(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, 3, 125400, "Tap BUY").Gui,
+		hud(phoneScale, 2.1e6).Gui,
+		view(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, 3, 2.1e6, "Tap BUY").Gui,
 	})
 	exports.ui_vault_phone_small = UiExport.export({
-		hud(smallScale, 4.2e9).Gui,
-		view(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, 7, 4.2e9, "Tap BUY").Gui,
+		hud(smallScale, 5.3e9).Gui,
+		view(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale, 7, 5.3e9, "Tap BUY").Gui,
 	})
 
 	-- a console on a 1080p TV
 	local tvScale = 1.25 * 900 / 1080
 	exports.ui_vault_tv = UiExport.export({
-		hud(tvScale, 9e9).Gui,
-		view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, 9, 9e9, "A: buy   B: close").Gui,
+		hud(tvScale, 1.52e11).Gui,
+		view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, 9, 1.52e11, "A: buy   B: close").Gui,
 	})
 	return exports
 end

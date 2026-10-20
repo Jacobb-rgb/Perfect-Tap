@@ -16,6 +16,16 @@ config. The one change the model sees: carrying is the Gear shop's Backpack line
 `GearConfig`), so carry upgrades cost 800 / 5,000 / 30,000 / 180,000 / 1.1M (before: 300 / 1,500 / 6,000 /
 25,000). The rest of steps 6-7 is in the game but not in the model yet (see "Not modelled").
 
+## Applied (balance pass 1, 2026-10-18)
+The integrator applied the agreed proposals from the section below:
+- BlasterData Recipe.Coins L2-L10: 330 / 12K / 380K / 1.5M / 29M / 51M / 1.2B / 2.1B / 35B (Typical blaster 10 at ~8 h).
+- MachineData.AutoCleaner.Price 5,000 -> 25,000; in the Tech shop the Iron Box (12K) now comes before the Auto Cleaner.
+- EnchantConfig coins x10 for the Epic (Twin Drop, Overcharge) and Legendary (Prospector, Golem Bond) enchants.
+- BoostConfig HexaLucky5 ForgeShare 0.2 -> 0.02.
+Waiting for the owner: the flat 3h-5h stretch (option 3 Tech Speed/Quality upgrades at higher prices, option 4 a floor
+between 4 and 5, or both). The Foundry curve is re-calibrated to ~8 h after that choice, and the Quality upgrade
+prices go up whichever option is picked.
+
 ## Re-run with steps 6–7 modelled (2026-10-18, branch fix/post-steps67)
 
 The player now also buys Boots, the coin enchants (slotted where they earn most), coin golem capsules (on expected
