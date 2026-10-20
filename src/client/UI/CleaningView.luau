@@ -1,10 +1,11 @@
 --[[
-	Cleaning minigame UI (pure builder).
-	  top      step banner (STEP 1/3 · CHISEL + instruction) and step pips
+	Cleaning minigame UI (pure builder), the default look's frame (a look
+	module may hide parts of it and draw its own).
+	  top      banner (SPRAY + instruction)
 	  left     Leave button
-	  right    live QUALITY meter (grade zones) + chips counter
-	  center   feedback pop text ("Perfect!", "Slow down!", "CHIP!")
-	  bottom   device hint, polish speed gauge (green = CleaningScoring band), "Easy polish" toggle
+	  right    live QUALITY meter (grade zones)
+	  center   feedback pop text ("Crystal cracked!", "Sparkling!")
+	  bottom   "% CLEAN" bar, device hint
 	  card     grade reveal (grade, ore, value, stars, details, Collect)
 ]]
 
@@ -13,7 +14,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UIConfig = require(Shared.Config.UIConfig)
 local Theme = require(Shared.Config.UITheme)
 local ItemData = require(Shared.Config.ItemData)
-local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local UIKit = require(script.Parent.UIKit)
 local LightSkin = require(script.Parent.LightSkin)
 
@@ -22,25 +22,19 @@ local CleaningView = {}
 export type Refs = {
 	Gui: ScreenGui,
 	Banner: Frame,
-	PipRow: Frame,
 	StepLabel: TextLabel,
 	Title: TextLabel,
 	Instruction: TextLabel,
-	Pips: { Frame },
 	Leave: TextButton,
 	Meter: Frame,
 	MeterFill: Frame,
 	MeterMarker: Frame,
 	MeterGrade: TextLabel,
-	Chips: TextLabel,
 	Feedback: TextLabel,
 	Hint: TextLabel,
-	Progress: TextLabel,
-	Gauge: Frame,
-	GaugeNeedle: Frame,
-	Shine: Frame,
-	ShineFill: Frame,
-	RubToggle: TextButton,
+	Progress: TextLabel, -- "62% CLEAN" on the bar
+	CleanBar: Frame,
+	CleanFill: Frame,
 	Cursor: Frame,
 	Card: Frame,
 	CardGrade: TextLabel,
@@ -56,8 +50,8 @@ export type Refs = {
 local METER_HEIGHT = 300
 
 -- Design-unit layout numbers the controller needs to keep the ore in view.
-CleaningView.BannerBottom = 152 -- banner + step pips, from the top
-CleaningView.BottomReserved = 150 -- progress / speed gauge / shine bar, from the bottom
+CleaningView.BannerBottom = 128 -- the banner, from the top
+CleaningView.BottomReserved = 110 -- the "% CLEAN" bar and the hint, from the bottom
 CleaningView.CompactWidth = 300 -- banner width in compact mode (top-left, under Leave)
 
 export type Options = {
@@ -85,46 +79,24 @@ function CleaningView.build(options: Options?): Refs
 		Position = UDim2.new(0.5, 0, 0, 12),
 		Size = UDim2.fromOffset(470, 108),
 	})
-	local stepLabel = UIKit.label(banner, "STEP 1 / 3", 16, {
+	local stepLabel = UIKit.label(banner, "CLEANING", 16, {
 		Name = "Step",
 		Position = UDim2.fromOffset(0, 8),
 		Size = UDim2.new(1, 0, 0, 18),
 		TextColor3 = Theme.TextDim,
 	})
-	local title = UIKit.label(banner, "CHISEL", 40, {
+	local title = UIKit.label(banner, "SPRAY", 40, {
 		Name = "Title",
 		Position = UDim2.fromOffset(0, 24),
 		Size = UDim2.new(1, 0, 0, 44),
 		FontFace = Theme.TitleFont,
 		TextColor3 = Theme.Accent,
 	})
-	local instruction = UIKit.label(banner, "Trace the glowing line", 18, {
+	local instruction = UIKit.label(banner, "Wash the dirt off", 18, {
 		Name = "Instruction",
 		Position = UDim2.fromOffset(12, 70),
 		Size = UDim2.new(1, -24, 0, 30),
 	})
-	local pipRow = UIKit.new("Frame", {
-		Name = "Pips",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 126),
-		Size = UDim2.fromOffset(120, 18),
-		BackgroundTransparency = 1,
-	}, gui)
-	UIKit.list(pipRow, Enum.FillDirection.Horizontal, 12, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
-	local pips = {}
-	for i = 1, 3 do
-		local pip = UIKit.new("Frame", {
-			Name = "Pip" .. i,
-			LayoutOrder = i,
-			Size = UDim2.fromOffset(18, 18),
-			BackgroundColor3 = Theme.PanelDark,
-			BorderSizePixel = 0,
-		}, pipRow)
-		UIKit.corner(pip, 9)
-		UIKit.stroke(pip, 2.5)
-		table.insert(pips, pip)
-	end
-
 	-- leave
 	local leave = UIKit.button(gui, "Leave", Theme.Bad, Theme.BadDark, {
 		Name = "Leave",
@@ -138,7 +110,7 @@ function CleaningView.build(options: Options?): Refs
 		Name = "Quality",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -18, 0.5, 0),
-		Size = UDim2.fromOffset(92, METER_HEIGHT + 96),
+		Size = UDim2.fromOffset(92, METER_HEIGHT + 70),
 	})
 	UIKit.label(meter, "QUALITY", 16, {
 		Position = UDim2.fromOffset(0, 8),
@@ -192,14 +164,7 @@ function CleaningView.build(options: Options?): Refs
 		Position = UDim2.fromOffset(0, METER_HEIGHT + 38),
 		Size = UDim2.new(1, 0, 0, 20),
 	})
-	local chips = UIKit.label(meter, "Chips: 0", if touch then 18 else 15, {
-		Name = "Chips",
-		Position = UDim2.fromOffset(0, METER_HEIGHT + 62),
-		Size = UDim2.new(1, 0, 0, 20),
-		TextColor3 = Theme.TextDim,
-	})
-
-	-- feedback pop + progress
+	-- feedback pop
 	local feedback = UIKit.label(gui, "", 44, {
 		Name = "Feedback",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -209,13 +174,6 @@ function CleaningView.build(options: Options?): Refs
 		TextTransparency = 1,
 	})
 	UIKit.new("UIScale", { Name = "Pop", Scale = 1 }, feedback)
-	local progress = UIKit.label(gui, "", 20, {
-		Name = "Progress",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -96),
-		Size = UDim2.fromOffset(500, 26),
-		TextColor3 = Theme.Accent,
-	})
 	local hint = UIKit.label(gui, "", if touch then 19 else 17, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -224,72 +182,29 @@ function CleaningView.build(options: Options?): Refs
 		TextColor3 = Theme.TextDim,
 	})
 
-	-- polish: speed gauge + shine
-	local gauge = UIKit.panel(gui, {
-		Name = "Gauge",
+	-- "% CLEAN" bar
+	local cleanBar = UIKit.new("Frame", {
+		Name = "CleanBar",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -46),
-		Size = UDim2.fromOffset(340, 42),
-		Visible = false,
-	})
-	UIKit.label(
-		gauge,
-		"SPEED",
-		if touch then 17 else 13,
-		{ Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(60, 42), TextColor3 = Theme.TextDim }
-	)
-	local gaugeTrack = UIKit.new("Frame", {
-		Name = "Track",
-		Position = UDim2.fromOffset(72, 13),
-		Size = UDim2.fromOffset(254, 16),
-		BackgroundColor3 = Theme.Bad,
-		BorderSizePixel = 0,
-	}, gauge)
-	UIKit.corner(gaugeTrack, 8)
-	local green = CleaningScoring.GaugeGreen
-	UIKit.new("Frame", {
-		Name = "Sweet",
-		Position = UDim2.fromScale(green.From, 0),
-		Size = UDim2.fromScale(green.To - green.From, 1),
-		BackgroundColor3 = Theme.Good,
-		BorderSizePixel = 0,
-	}, gaugeTrack)
-	local needle = UIKit.new("Frame", {
-		Name = "Needle",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.fromOffset(6, 28),
-		BackgroundColor3 = Theme.Text,
-		BorderSizePixel = 0,
-	}, gaugeTrack)
-	UIKit.corner(needle, 3)
-	UIKit.stroke(needle, 2)
-	local shine = UIKit.new("Frame", {
-		Name = "Shine",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -134),
-		Size = UDim2.fromOffset(300, 14),
+		Position = UDim2.new(0.5, 0, 1, -50),
+		Size = UDim2.fromOffset(if touch then 380 else 340, if touch then 40 else 34),
 		BackgroundColor3 = Theme.PanelDark,
 		BorderSizePixel = 0,
-		Visible = false,
 	}, gui)
-	UIKit.corner(shine, 7)
-	UIKit.stroke(shine, 2.5)
-	local shineFill = UIKit.new("Frame", {
+	UIKit.corner(cleanBar, 12)
+	UIKit.stroke(cleanBar, 2.5)
+	local cleanFill = UIKit.new("Frame", {
 		Name = "Fill",
 		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Color3.fromRGB(255, 240, 170),
+		BackgroundColor3 = Color3.fromRGB(110, 205, 255),
 		BorderSizePixel = 0,
-	}, shine)
-	UIKit.corner(shineFill, 7)
-
-	local rub = UIKit.button(gui, "Easy polish: OFF", Theme.PanelLight, Theme.PanelDark, {
-		Name = "Rub",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 16, 1, -16),
-		Size = if touch then UDim2.fromOffset(240, 72) else UDim2.fromOffset(210, 44),
-		TextSize = if touch then 22 else 16,
-		Visible = false,
+	}, cleanBar)
+	UIKit.corner(cleanFill, 12)
+	local progress = UIKit.label(cleanBar, "0% CLEAN", if touch then 22 else 19, {
+		Name = "Progress",
+		Size = UDim2.fromScale(1, 1),
+		FontFace = Theme.TitleFont,
+		ZIndex = 3,
 	})
 
 	-- gamepad cursor
@@ -367,25 +282,19 @@ function CleaningView.build(options: Options?): Refs
 	return {
 		Gui = gui,
 		Banner = banner,
-		PipRow = pipRow,
 		StepLabel = stepLabel,
 		Title = title,
 		Instruction = instruction,
-		Pips = pips,
 		Leave = leave,
 		Meter = meter,
 		MeterFill = fill,
 		MeterMarker = marker,
 		MeterGrade = meterGrade,
-		Chips = chips,
 		Feedback = feedback,
 		Hint = hint,
 		Progress = progress,
-		Gauge = gauge,
-		GaugeNeedle = needle,
-		Shine = shine,
-		ShineFill = shineFill,
-		RubToggle = rub,
+		CleanBar = cleanBar,
+		CleanFill = cleanFill,
 		Cursor = cursor,
 		Card = card,
 		CardGrade = cardGrade,
@@ -411,13 +320,11 @@ function CleaningView.setMeter(refs: Refs, score: number)
 	refs.MeterGrade.TextColor3 = grade.Color
 end
 
-function CleaningView.setStep(refs: Refs, index: number, title: string, instruction: string)
-	refs.StepLabel.Text = `STEP {index} / 3`
-	refs.Title.Text = title
-	refs.Instruction.Text = instruction
-	for i, pip in refs.Pips do
-		pip.BackgroundColor3 = if i < index then Theme.Good elseif i == index then Theme.Accent else Theme.PanelDark
-	end
+-- The "% CLEAN" bar: 0..1 of the job done.
+function CleaningView.setClean(refs: Refs, fraction: number)
+	local f = math.clamp(fraction, 0, 1)
+	refs.CleanFill.Size = UDim2.fromScale(f, 1)
+	refs.Progress.Text = `{math.floor(f * 100 + 1e-6)}% CLEAN`
 end
 
 --[[
@@ -426,33 +333,27 @@ end
 	clear. On big screens the banner sits top-center.
 ]]
 function CleaningView.setCompact(refs: Refs, compact: boolean, leaveHeight: number?)
-	local banner, pips = refs.Banner, refs.PipRow
+	local banner = refs.Banner
 	if compact then
 		local top = 16 + (leaveHeight or 48) + 12
 		banner.AnchorPoint = Vector2.new(0, 0)
 		banner.Position = UDim2.fromOffset(16, top)
 		banner.Size = UDim2.fromOffset(CleaningView.CompactWidth, 140)
 		refs.Instruction.Size = UDim2.new(1, -24, 0, 62)
-		pips.AnchorPoint = Vector2.new(0.5, 0)
-		pips.Position = UDim2.fromOffset(16 + CleaningView.CompactWidth / 2, top + 146)
 	else
 		banner.AnchorPoint = Vector2.new(0.5, 0)
 		banner.Position = UDim2.new(0.5, 0, 0, 12)
 		banner.Size = UDim2.fromOffset(470, 108)
 		refs.Instruction.Size = UDim2.new(1, -24, 0, 30)
-		pips.AnchorPoint = Vector2.new(0.5, 0)
-		pips.Position = UDim2.new(0.5, 0, 0, 126)
 	end
 end
 
--- Header while the ore rises out of the rock (all three steps done).
+-- Header while the ore rises out of the clump (all the dirt is off).
 function CleaningView.setReveal(refs: Refs, instruction: string)
-	refs.StepLabel.Text = "ALL STEPS DONE"
+	refs.StepLabel.Text = "ALL CLEAN"
 	refs.Title.Text = "REVEAL"
 	refs.Instruction.Text = instruction
-	for _, pip in refs.Pips do
-		pip.BackgroundColor3 = Theme.Good
-	end
+	CleaningView.setClean(refs, 1)
 end
 
 -- Cleans in a row (each within StreakWindow seconds of the last one): purely
@@ -477,7 +378,6 @@ function CleaningView.setStreak(view: Refs, streak: number)
 	view.CardStreak.Text = text
 	view.CardStreak.Visible = text ~= ""
 end
-
 
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
 -- While the light UI is on (ships off), the same window wears the light

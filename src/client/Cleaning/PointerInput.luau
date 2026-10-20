@@ -3,7 +3,7 @@
 	  Mouse   : position = mouse, down = left button
 	  Touch   : position = first finger, down while touching
 	  Gamepad : a virtual cursor moved with the left stick, down = A or R2;
-	            the raw stick is also exposed (polishing uses its angle)
+	            the raw stick is also exposed
 	Positions are viewport pixels (what Camera:ViewportPointToRay expects).
 ]]
 
@@ -140,7 +140,7 @@ function PointerInput.update(self: Pointer, dt: number)
 	self.Moved = (self.Position - before).Magnitude > 0.5
 end
 
--- Places the gamepad cursor (e.g. at the start of a guide line).
+-- Places the gamepad cursor (e.g. on the clump).
 function PointerInput.warp(self: Pointer, position: Vector2)
 	if self.Kind == "Gamepad" then
 		self.Position = position

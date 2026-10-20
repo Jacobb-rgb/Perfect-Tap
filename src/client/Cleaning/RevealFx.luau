@@ -33,6 +33,10 @@ RevealFx.SweepTime = 0.4
 RevealFx.SweepColor = Color3.fromRGB(255, 252, 240)
 RevealFx.StampTilt = math.rad(-12)
 RevealFx.TouchShake = 0.3 -- phones and tablets get this share of the camera shake
+-- Studs the treasure rises in the reveal (in the face's frame): up, clear of the card, and a little
+-- toward the camera. The light rays tilt back behind it, so they never cross the ore.
+RevealFx.Rise = Vector3.new(0, 0.55, 0.45)
+RevealFx.RayTilt = -0.35
 
 function RevealFx.plan(order: number): Plan
 	local big = order >= 5

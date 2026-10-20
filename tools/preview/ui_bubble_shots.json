@@ -1728,8 +1728,8 @@
     "ui": "ui_train_hud_phone_light",
     "uiInset": 58
   },
-  "clean_chisel_light": {
-    "scene": "cleaning_chisel",
+  "clean_spray_light": {
+    "scene": "cleaning_spray",
     "position": [
       0,
       0,
@@ -1744,55 +1744,7 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_chisel_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_scrape_light": {
-    "scene": "cleaning_scrape",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_scrape_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_polish_light": {
-    "scene": "cleaning_polish",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_polish_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
+    "ui": "ui_clean_spray_light"
   },
   "clean_reveal_light": {
     "scene": "cleaning_reveal",
@@ -1810,14 +1762,10 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_reveal_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
+    "ui": "ui_clean_reveal_light"
   },
-  "clean_chisel_phone_light": {
-    "scene": "cleaning_chisel_phone",
+  "clean_spray_phone_light": {
+    "scene": "cleaning_spray_phone",
     "position": [
       0,
       0,
@@ -1832,55 +1780,7 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_chisel_phone_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_scrape_phone_light": {
-    "scene": "cleaning_scrape_phone",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_scrape_phone_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_polish_phone_light": {
-    "scene": "cleaning_polish_phone",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_polish_phone_light",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
+    "ui": "ui_clean_spray_phone_light"
   },
   "sell_pc": {
     "scene": "world",
