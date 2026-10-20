@@ -1,5 +1,5 @@
 --[[
-	Quiet mine ambience for the five mine floors (2026-10-18). What plays where:
+	Quiet mine ambience for the mine floors (2026-10-18). What plays where:
 
 	  MineDrip    water dripping now and then        floor 1 by the crystals on the
 	                                                 side and back walls, floor 3 from
@@ -13,8 +13,12 @@
 	  CrystalHum  a soft hum and a crystal tinkle    every floor's Giant Crystal spot and
 	                                                 the big hero crystals
 	  LavaBubble  lava blorping and a low flow       floor 2 along the lava river and at
-	              roar                               the lava fall, floor 5 at the
+	              roar                               the lava fall, floor 6 at the
 	                                                 Heartstone (the living ember)
+	  StormCrackle  sparks crackling and a sharp     floor 5, the Stormglass Rift, at its
+	              electric zap now and then (one-    tesla pylons and the storm catcher;
+	              shots only: no loop)               its thunder is MineRumble under the
+	                                                 Storm Crown
 
 	The floor builders (World/Mine/Floor*.luau) mark the spots with
 	MineKit.ambience: an Attachment on a part that is already there (no new
@@ -100,15 +104,22 @@ MineAmbience.Kinds = {
 		{ Sound = "AmbLavaFlow", Loop = true, MinDistance = 6, MaxDistance = 32 },
 		{ Sound = "AmbBubble", Every = { 1.2, 3.5 }, Burst = { 1, 3 }, Gap = 0.22, MinDistance = 5, MaxDistance = 30 },
 	},
+
+	StormCrackle = {
+		{ Sound = "AmbSpark", Every = { 2.5, 6 }, Burst = { 2, 5 }, Gap = 0.07, MinDistance = 4, MaxDistance = 24 },
+		{ Sound = "AmbZap", Every = { 6, 14 }, Burst = { 1, 2 }, Gap = 0.18, MinDistance = 6, MaxDistance = 36 },
+	},
 } :: { [string]: { Layer } }
 
--- The kinds each floor uses (floor index -> kinds); the builders place exactly these.
+-- The kinds each floor uses (MineFloors Id -> kinds, not by index: a new floor can go in
+-- between and the others renumber); the builders place exactly these.
 MineAmbience.Floors = {
-	{ "MineDrip", "MineRumble", "CrystalHum" },
-	{ "LavaBubble", "MineRumble", "CrystalHum" },
-	{ "LagoonLap", "MineDrip", "CrystalHum" },
-	{ "PalaceEcho", "MineRumble", "CrystalHum" },
-	{ "LavaBubble", "CrystalHum" },
-} :: { { string } }
+	Quarry = { "MineDrip", "MineRumble", "CrystalHum" },
+	EmberCaves = { "LavaBubble", "MineRumble", "CrystalHum" },
+	DeepHollow = { "LagoonLap", "MineDrip", "CrystalHum" },
+	SunkenPalace = { "PalaceEcho", "MineRumble", "CrystalHum" },
+	StormglassRift = { "StormCrackle", "MineRumble", "CrystalHum" },
+	HeartstoneCore = { "LavaBubble", "CrystalHum" },
+} :: { [string]: { string } }
 
 return MineAmbience

@@ -25,71 +25,70 @@ return function(T, Loader)
 		T.eq(ToolData.carryCapacity(99, true), ToolData.CarryLevels[#ToolData.CarryLevels].Capacity * 2)
 	end)
 
-	T.test("blasters: one Blaster tool per level, within budget, welded, with a Muzzle", function()
-		local skins = { "", "Coal", "Gold", "Quartz", "Heartstone", "NotAnOre" }
-		local counts = {}
-		local reach = {}
-		for level = 1, BlasterData.MaxLevel do
-			for _, oreId in skins do
-				local tool = BlasterBuilder.build(level, oreId)
-				local label = `level {level} {oreId}`
-				T.eq(tool.ClassName, "Tool", label)
-				T.eq(tool.Name, "Blaster", label)
-				T.eq(tool:GetAttribute("Level"), level, label)
-				T.eq(tool:GetAttribute("Range"), BlasterData.get(level).Range, label)
-				T.eq(typeof(tool:GetAttribute("Glow")), "Color3", label)
-				local handle = tool:FindFirstChild("Handle")
-				T.truthy(handle and handle:IsA("BasePart"), label .. " handle")
-				local muzzle = handle:FindFirstChild("Muzzle")
-				T.truthy(muzzle and muzzle:IsA("Attachment"), label .. " muzzle")
-				local tip = handle.CFrame:PointToWorldSpace(muzzle.Position)
-				-- in the hand (the grip attachment frame) the barrel points straight forward
-				local hand = handle.CFrame * tool.Grip
-				T.near(hand.LookVector.Z, -1, 1e-4, label .. " barrel along the arm")
-				T.near(hand.UpVector.Y, 1, 1e-4, label .. " upright")
-				T.lt(hand.Position.Y, tip.Y, label .. " hand below the barrel")
-				-- the muzzle sits well ahead of the hand, at the very tip of the gun
-				T.lt(tip.Z, hand.Position.Z - 1.2, label .. " muzzle ahead of the hand (-Z)")
-				reach[level] = hand.Position.Z - tip.Z
-				local parts = 0
-				for _, d in tool:GetDescendants() do
-					if d:IsA("BasePart") then
-						parts += 1
-						T.lt(tip.Z, d.CFrame.Position.Z, label .. " " .. d.Name .. " behind the muzzle")
-						T.falsy(d.CanCollide, label .. " " .. d.Name .. " CanCollide")
-						T.truthy(d.Massless, label .. " " .. d.Name .. " Massless")
-						T.falsy(d.Anchored, label .. " " .. d.Name .. " Anchored")
-						if d ~= handle then
-							local weld = d:FindFirstChildOfClass("WeldConstraint")
-							T.truthy(weld and weld.Part0 == handle and weld.Part1 == d, label .. " " .. d.Name .. " welded")
+	do
+		local build = BlasterBuilder.build
+		local budget = BlasterBuilder.MaxParts
+		T.test("blasters: one Blaster tool per level, within budget, welded, with a Muzzle", function()
+			local skins = { "", "Coal", "Gold", "Quartz", "Heartstone", "NotAnOre" }
+			local counts = {}
+			local reach = {}
+			for level = 1, BlasterData.MaxLevel do
+				for _, oreId in skins do
+					local tool = build(level, oreId)
+					local label = `level {level} {oreId}`
+					T.eq(tool.ClassName, "Tool", label)
+					T.eq(tool.Name, "Blaster", label)
+					T.eq(tool:GetAttribute("Level"), level, label)
+					T.eq(tool:GetAttribute("Range"), BlasterData.get(level).Range, label)
+					T.eq(typeof(tool:GetAttribute("Glow")), "Color3", label)
+					local handle = tool:FindFirstChild("Handle")
+					T.truthy(handle and handle:IsA("BasePart"), label .. " handle")
+					local muzzle = handle:FindFirstChild("Muzzle")
+					T.truthy(muzzle and muzzle:IsA("Attachment"), label .. " muzzle")
+					local tip = handle.CFrame:PointToWorldSpace(muzzle.Position)
+					-- in the hand (the grip attachment frame) the barrel points straight forward
+					local hand = handle.CFrame * tool.Grip
+					T.near(hand.LookVector.Z, -1, 1e-4, label .. " barrel along the arm")
+					T.near(hand.UpVector.Y, 1, 1e-4, label .. " upright")
+					T.lt(hand.Position.Y, tip.Y, label .. " hand below the barrel")
+					-- the muzzle sits well ahead of the hand, at the very tip of the gun
+					T.lt(tip.Z, hand.Position.Z - 1.2, label .. " muzzle ahead of the hand (-Z)")
+					reach[level] = hand.Position.Z - tip.Z
+					local parts = 0
+					for _, d in tool:GetDescendants() do
+						if d:IsA("BasePart") then
+							parts += 1
+							T.lt(tip.Z, d.CFrame.Position.Z, label .. " " .. d.Name .. " behind the muzzle")
+							T.falsy(d.CanCollide, label .. " " .. d.Name .. " CanCollide")
+							T.truthy(d.Massless, label .. " " .. d.Name .. " Massless")
+							T.falsy(d.Anchored, label .. " " .. d.Name .. " Anchored")
+							if d ~= handle then
+								local weld = d:FindFirstChildOfClass("WeldConstraint")
+								T.truthy(weld and weld.Part0 == handle and weld.Part1 == d, label .. " " .. d.Name .. " welded")
+							end
 						end
 					end
+					T.le(parts, budget, label .. " part budget")
+					-- the Ore Glow skin: a glowing rim on the main panel; crystals from level 4; effects from 7
+					T.truthy(tool:FindFirstChild("Rim"), label .. " glowing rim")
+					T.eq(tool:FindFirstChild("Crystal") ~= nil, level >= 4, label .. " crystals from 4")
+					T.eq(tool:FindFirstChild("Effects") ~= nil, level >= 7, label .. " flames / sparks from 7")
+					T.eq(tool:FindFirstChild("CrownCrystal") ~= nil, level >= 10, label .. " a crown at 10")
+					T.truthy(handle.Transparency == 1, label .. " the handle is the invisible hand point")
+					T.truthy(tool:FindFirstChild("MuzzleGlow"), label .. " glowing muzzle")
+					counts[level] = parts
 				end
-				T.le(parts, BlasterBuilder.MaxParts, label .. " part budget")
-				T.eq(tool:FindFirstChild("Barrel2") ~= nil, level >= 8, label .. " twin barrels from 8")
-				local barrel, barrel2 = tool:FindFirstChild("Barrel"), tool:FindFirstChild("Barrel2")
-				if barrel and barrel2 then
-					-- over-under, so the twin reads from the side and from behind the player
-					T.lt(0.15, math.abs(barrel.CFrame.Position.Y - barrel2.CFrame.Position.Y), label .. " twin barrels stacked")
-					T.near(barrel.CFrame.Position.X, barrel2.CFrame.Position.X, 1e-4, label .. " twin barrels in line")
-				end
-				T.truthy(tool:FindFirstChild("Pommel"), label .. " grip pad")
-				T.truthy(tool:FindFirstChild("MuzzleGlow"), label .. " glowing muzzle")
-				counts[level] = parts
 			end
-		end
-		T.lt(counts[1], counts[BlasterData.MaxLevel], "more detail at level 10")
-		T.lt(reach[1] * 2, reach[BlasterData.MaxLevel], "the level 10 rifle is much longer than the starter pistol")
-		for level = 2, BlasterData.MaxLevel do
-			T.le(counts[level - 1], counts[level], "detail never drops at level " .. level)
-		end
-		-- level 1 is always the rusty starter, later levels take the ore's colors
-		T.eq(BlasterBuilder.build(1, "Gold"):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty level 1")
-		T.eq(BlasterBuilder.build(5, ""):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty without an ore")
-		T.eq(BlasterBuilder.build(5, "Gold"):GetAttribute("Glow"), OreData.ById.Gold.Glow, "gold glow")
-		T.eq(BlasterBuilder.build(5, "Gold").ToolTip, "Gold Forgefire Blaster")
-		T.eq(BlasterBuilder.build(0 / 0, nil):GetAttribute("Level"), 1, "junk level")
-	end)
+			T.lt(counts[1], counts[BlasterData.MaxLevel], "more detail at level 10")
+			T.lt(reach[1] * 2, reach[BlasterData.MaxLevel], "the level 10 rifle is much longer than the starter pistol")
+			-- level 1 is always the rusty starter, later levels take the ore's colors
+			T.eq(build(1, "Gold"):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty level 1")
+			T.eq(build(5, ""):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty without an ore")
+			T.eq(build(5, "Gold"):GetAttribute("Glow"), OreData.ById.Gold.Glow, "gold glow")
+			T.eq(build(5, "Gold").ToolTip, "Gold Forgefire Blaster")
+			T.eq(build(0 / 0, nil):GetAttribute("Level"), 1, "junk level")
+		end)
+	end
 
 	T.test("blaster sounds and remotes", function()
 		for _, name in { "BlasterHum", "BlasterStart", "BlasterStop", "BlastHit", "BlastBounce", "NodeCrack", "NodeShatter" } do

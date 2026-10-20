@@ -548,3 +548,98 @@ What to test in Studio:
 6. Gamepad: during the tutorial open the CODEX (or GOLEMS, the wheel...): the bubble and the guide beam go, R3 does
    nothing (no "SURE?"); close it: the bubble is back. In the Ore Pen (the Clean step) the bubble stays.
 7. ORE CODEX: Bronze reads "Blaster level 1+", Sapphire, Dragon Egg and Diamond "Blaster level 3+".
+
+## The owner-approved Kenney-shape blasters in the game (2026-10-18; owner's yes 2026-10-20, branch art/kenney-blasters)
+The blasters the owner approved on 2026-10-17 (the Kenney Blaster Kit shapes, the Ore Glow lava / galaxy skins,
+crystals from Lv 4, flames / sparks from Lv 7) as the game's held guns. The prototype
+(tools/lune/lib/blaster_kenney.luau) had 139-408 parts per gun, so tools/kenney/blaster_lite.py traces lighter shapes
+(Builders/KenneyShapes). Each region is covered by a few overlapping boxes and wedges instead of being sliced into
+strips, which gives 22-62 parts for the shapes and 8-23 for the black silhouettes. Builders/KenneyBlaster adds the
+skin (a glowing rim on the main panel, lava cracks or stars), the crystals, the Lv 7+ emitter, the MuzzleGlow and
+the Muzzle. Every level in every ore stays within 90 parts (tests/KenneyBlaster.spec.luau; the classic guns had
+25). BlasterBuilder.build makes the new guns; the classic guns (buildClassic, its kit pieces and the before /
+after compare previews) are gone since the owner's yes. The held tool, the Vault's crate opening, the Great Forge
+gallery and the Foundry's NEXT rack (BlasterBuilder.silhouette) all use them. Effects/BlasterFx still finds its
+Muzzle.
+With it (owner 2026-10-20): the Vault's case colours follow the rarity. BlasterData.Vault.Ores is LV 4 Emberite,
+LV 6 Sapphire, LV 7 Amethyst (was Amethyst, Emberite, Sapphire), so the cases, the Vault's display cases and the
+gallery guns go Common, Uncommon, Uncommon, Rare, Rare, Epic, Epic, Legendary, Mythic (tests/VaultService.spec.luau
+pins "never a rarer ore below a commoner one"). Saves keep the BlasterOre a player already has.
+Budgets (main 19e3303 + this): map v35, 28,435 baked parts with the mine floors (20,860 without them), Plaza 2,176 of
+2,250 (the gallery's guns at display detail), LobbyParts 13,700 and MapParts 23,000 unchanged.
+At join the tutorial bubble and its guide wait for the loading screen (Loading.wait; shown either way after it).
+What to test in Studio:
+1. Equip the blaster at levels 1, 4, 7 and 10 (Studio dev kit): the gun sits in the hand, the barrel points
+   forward, the beam leaves the barrel's tip, the muzzle flash shows at the tip.
+2. Lv 7+: slow flames (hot ores) or sparks around the gun. Lv 10: the crystal crown around the barrel.
+3. Phone emulator with 10+ players holding guns: no frame drop.
+4. The Vault's crate opening and the Great Forge gallery show the new guns; the Foundry's NEXT rack shows the
+   new black silhouette.
+
+## Platforms, Belt Lift and Slide (2026-10-20, docs/plans/PLATFORMS_PLAN.md phases 1-2)
+Owner's YES: a second building level on the plot. Platform (a 2x2 deck 5 studs up), Belt Lift (items up), Slide
+(items down); flat belts may run under a deck, other ground machines may not.
+What to test in Studio:
+1. Buy a Platform, a Belt Lift, a Slide and belts (Tech shop). Place the platform, then a belt and a Brick Furnace on
+   it (over a deck cell the ghost jumps up onto the deck). A furnace under the deck is red: "Only belts fit under a
+   platform".
+2. Place a Belt Lift with its high end against the deck (the amber plate shows the deck cell it must reach), a ground
+   belt into its low end and a deck belt where it arrives. Drop ore on the ground belt: it rides up the lift onto the
+   deck belt (watch the 1-stud gaps at both ends and the slope's grip). The same down a Slide.
+3. With a belt held over a deck cell press V (PC), D-pad Up (gamepad) or the DECK / GROUND button (touch): the ghost
+   goes under the deck. B on a gamepad still leaves build mode.
+4. Pack up a platform with something on it: "Clear the platform first". Empty, it packs up.
+5. Rejoin: deck machines come back on the deck; a deck machine whose platform is gone waits in the Build menu.
+6. Phone emulator: the DECK / GROUND button sits with the other big buttons and is easy to tap.
+
+## Rebirth B "STAR FORGE" (2026-10-20, owner's pick, branch feature/rebirth)
+Option B of the rebirth proposal: an optional restart that keeps the factory and pays Forge Stars for the Star Shop.
+- Rules (Shared/Config/RebirthConfig): a rebirth needs blaster LV MinBlaster (top - 4 = 6). It resets coins, the
+  blaster (LV 1, or Head Start's LV 2 / 3 / 4 in that level's Vault look), the floors with it and the elevator,
+  Bellows and every Tech shop level, the train's levels, the Backpack, and every ore you own (pen, podiums unless
+  Podium Keeper, the Foundry's ingots, the train cargo, the machines' queues, loose and carried items). It keeps the
+  placed factory, machine slots, the pen size and automation, the other gear, golems, enchants, artifacts, codex,
+  hoverboards, shards, stats, leaderboard totals and every Robux item (Purchases, PurchaseLog, Enchants.Passes,
+  Golems.Pending, the session perks are never touched).
+- Stars per rebirth follow the blaster prices: MinStars (2) at MinBlaster, MaxStars (10) at the top, the levels
+  between by the log share of their total Foundry coins (today 2 / 3 / 6 / 7 / 10 for LV 6-10). tests/Rebirth.spec
+  pins the relationships (x10 prices keep the curve, a dearer level never pays fewer stars, the whole shop is 8-25
+  typical rebirths, its cheapest perk costs at most MinStars, Head Start never reaches MinBlaster, no perk outgrows
+  its StatConfig cap), not the numbers.
+- Star Shop: Golden Touch (+10 % podium income and sell value, 10 levels), Head Start (3), Lucky Rocks (+5 % ore luck,
+  5), Deep Pockets (+1 carry, 3), Express Rails (train trips -10 %, 3: StatConfig TrainTimeCutPct through
+  TrainConfig.tripSeconds), Podium Keeper (1). The stat perks reach the game through Bonuses' built-in "Rebirth"
+  provider. Not built yet: the plot glow colour perk (cosmetic) and a prompt at THE GREAT FORGE's crystal.
+- Server: RebirthService (RebirthAction Rebirth / Buy -> RebirthResult). The rebirth runs in one step:
+  PlotService.reload takes the plot down and up on the same plot (machines respawn from the save with empty
+  queues), items leave the world, TrainService.resetRun, the podiums redraw, saveNow, the character goes home after
+  the moment. Saves: Rebirths, Stars, StarPerks, Stats.StarsEarned (Migrations keeps a newer build's perks and
+  levels; the Migration newerSave guard covers them).
+- Client: the STAR FORGE window (REBIRTH: YOU LOSE / YOU KEEP / YOU GET and REBIRTH! with a SURE? second press;
+  STAR SHOP cards), the moment (flash, "REBIRTH n!", +stars, falling stars), a gold "⭐ n" over every player's name,
+  REBIRTH in the side menu's More group with a badge while a rebirth is ready.
+- Side menu: on a 568 x 320 phone, STORE and REBIRTH together (11 cells with MENU) fit no grid at 44 pt. STORE is
+  hidden until its controller ships, so today's menu fits; decide when STORE lands.
+- Review fixes: the welcome-back payout still waiting at a rebirth is settled first (PodiumService.settleOffline: it
+  can't land in the new run), no rebirth during an elevator ride ("Busy"), other players' clients see the
+  announced train empty and roll back (Fx TrainUnload, 0), a slotted enchant stays in a slot the blaster level hasn't
+  opened (Migrations; EnchantConfig.stats reads open slots only, so a rebirth never unslots, paid ones included),
+  a failure after the reset still reports the rebirth (each later step on its own), "Failed" when taking the plot
+  down breaks, and the Golden Touch / Lucky Rocks cards say they count up to the bonus caps.
+- Second review fixes (the integrator's reviewer): dusty relics are artifacts, never lost (a carried / loose relic is
+  stashed through the relic keeper; relics in the pen, the train and machine queues such as the Restoration Table
+  stay in the pen at the reset and go to the keeper); after the first rebirth the stars count only a blaster level
+  FORGED at the Foundry in the run (Stats.RunForged; Vault cases + Podium Keeper made stars a few minutes of idle
+  income), "NotForged" otherwise; Stats.BestBlaster keeps the highest level ever, and every coin price that grows
+  with the blaster (capsules, coin boosts, the wheel's capsule fallback, their client cards via State.PriceLevel)
+  follows BlasterData.priceLevel, so a rebirth never makes them cheaper; the enchants stay slotted with the paid
+  ones (Enchants.Passes) moved first into the open slots, and YOU LOSE lists the closed enchant slots.
+- Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
+What to test in Studio:
+1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now
+   pays ⭐ 6", REBIRTH! asks SURE?, the second press plays the moment and sends you home.
+2. After it: coins 0, blaster LV 1, the factory stands where it stood with empty machines, pen / podiums / Foundry /
+   train empty, your carried ore gone, Robux items and golems still there, the star over your name.
+3. STAR SHOP: buy Golden Touch (podium income +10 %), Deep Pockets (carry +1), Express Rails (the train panel's trip
+   time drops), Head Start (the next rebirth starts at LV 2), Podium Keeper (the podium ores stay).
+4. Phone emulator 568 x 320 and 667 x 375: the window fits, the tabs sit in the header, every button is easy to tap.

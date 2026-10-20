@@ -385,6 +385,7 @@ return function(T, Loader)
 			SolarPanel = true,
 			WindTurbine = true,
 			FusionReactor = true,
+			RestorationTable = true, -- cleans relics faster
 		}
 		for _, machine in MachineData.List do
 			local upgrades = machine.Upgrades
@@ -410,15 +411,21 @@ return function(T, Loader)
 		T.eq(MachineData.upgradeMax("Nope", "Speed"), 0)
 		T.eq(MachineData.upgradeMax("AutoCleaner", "Nope"), 0)
 		T.eq(MachineData.upgradePrices("Crusher", "Quality"), nil)
-		-- the base curves
+		-- the base curves (balance option 3, docs/BALANCE_SIM.md)
 		local curves = MachineData.UpgradeCurves
-		for i, price in { 2000, 12000, 70000, 400000, 2.5e6 } do
+		for i, price in { 20000, 400000, 8e6, 150e6, 2.5e9 } do
 			T.eq(curves.Speed[i], price, "Speed curve " .. i)
 		end
-		for i, price in { 5000, 40000, 300000, 2e6, 15e6 } do
+		for i, price in { 50000, 2e6, 50e6, 600e6, 6e9 } do
 			T.eq(curves.Quality[i], price, "Quality curve " .. i)
 		end
-		T.eq(MachineData.ById.AutoCleaner.Upgrades.Quality[1], 5000)
+		T.eq(MachineData.ById.AutoCleaner.Upgrades.Quality[1], 50000)
+		-- every level costs a lot more than the one before (goals across the journey)
+		for _, curve in { curves.Speed, curves.Quality } do
+			for i = 2, #curve do
+				T.truthy(curve[i] >= curve[i - 1] * 10, "level " .. i .. " at least x10")
+			end
+		end
 	end)
 
 	T.test("Step 3: Speed levels shorten jobs, never under MinProcessTime", function()

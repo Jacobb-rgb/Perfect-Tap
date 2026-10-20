@@ -31,7 +31,7 @@ local DataTemplate = {
 		-- (readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
 		-- the mine elevator (ElevatorService), bought once for MineFloors.Elevator.Price:
-		-- rides to every unlocked floor (floors 4-5 are reachable only this way)
+		-- rides to every unlocked floor (floors 4-6 are reachable only this way)
 		Elevator = false,
 	},
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
@@ -95,8 +95,9 @@ local DataTemplate = {
 	-- luck boosts: os.time() second each one runs out (0 = never ran)
 	Boosts = { TripleLuckyUntil = 0, HexaLuckyUntil = 0 },
 	-- golem pets: Owned = { { Id = number, Kind = golemId } }, Equipped = { Id }
-	-- (at most GolemConfig.EquipSlots), NextId = the next Id to hand out
-	Golems = { Owned = {}, Equipped = {}, NextId = 1 },
+	-- (at most GolemConfig.EquipSlots), NextId = the next Id to hand out, Pending = paid
+	-- golems a Royal capsule receipt rolled past GolemConfig.MaxSaved (CapsuleService wakes them)
+	Golems = { Owned = {}, Equipped = {}, NextId = 1, Pending = {} },
 	-- the daily wheel: os.time() second the next free spin is ready (0 = now)
 	Wheel = { NextSpinAt = 0 },
 	-- artifacts: Found = { [artifactId] = count }, Chapters = { [collectionId] = true } (read)
@@ -120,6 +121,9 @@ local DataTemplate = {
 		CapsulesOpened = 0, -- golems woken from capsules (also free ones)
 		WheelSpins = 0,
 		WheelOres = 0, -- dirty ores the wheel's ore prize put into the Ore Pen (the tutorial doesn't count them)
+		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
+		BestBlaster = 0, -- the highest blaster level before a rebirth (BlasterData.priceLevel)
+		RunForged = 0, -- the highest blaster level forged at the Foundry this rebirth run
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
@@ -133,6 +137,12 @@ local DataTemplate = {
 	GroupRewardClaimed = false,
 	ForgeName = "", -- raw text, always filtered by TextService before showing
 
+	-- rebirth "STAR FORGE" (RebirthConfig, RebirthService): how many rebirths, the
+	-- unspent Forge Stars and the Star Shop perks { [perkId] = level }
+	Rebirths = 0,
+	Stars = 0,
+	StarPerks = {},
+
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
 	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),
 	-- Passes = { [boardId] = true } for the boards a game pass gave (a refunded
@@ -141,6 +151,9 @@ local DataTemplate = {
 
 	-- monetization: purchase ids already granted (never grant twice)
 	Purchases = {}, -- [purchaseId] = os.time()
+	-- what each granted receipt was (support re-grants after a restore, docs/SUPPORT.md):
+	-- [purchaseId] = { Product = MonetizationConfig key, At = os.time() }; trimmed with Purchases
+	PurchaseLog = {},
 	PurchaseCount = 0,
 }
 

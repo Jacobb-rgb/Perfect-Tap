@@ -84,8 +84,10 @@ BlasterData.Rocks = {
 ]]
 BlasterData.Vault = {
 	PriceMultiplier = 4, -- x the level's Foundry coin price (Recipe.Coins)
-	-- the ore look of each level's case (ores kept in the 36-ore roster too)
-	Ores = { "", "Copper", "Cobalt", "Amethyst", "Gold", "Emberite", "Sapphire", "Obsidian", "RoyalAurum", "Heartstone" },
+	-- the ore look of each level's case (ores kept in the 36-ore roster too); the
+	-- ores' rarity never falls as the level rises (owner 2026-10-20: LV 4 Emberite,
+	-- LV 6 Sapphire, LV 7 Amethyst, so the case colours follow the rarity)
+	Ores = { "", "Copper", "Cobalt", "Emberite", "Gold", "Sapphire", "Amethyst", "Obsidian", "RoyalAurum", "Heartstone" },
 }
 
 -- The coin price of a level's case in the Blaster Vault (nil for level 1 and unknown levels).
@@ -109,6 +111,20 @@ end
 BlasterData.ByLevel = {} :: { [number]: Blaster }
 for _, blaster in BlasterData.Levels do
 	BlasterData.ByLevel[blaster.Level] = blaster
+end
+
+-- The level coin prices that grow with the blaster follow (capsules, coin
+-- boosts, the wheel's capsule fallback): the highest level the save ever
+-- had (Stats.BestBlaster, written by a rebirth) or the level now, so a
+-- rebirth never makes them cheaper (rebirth B keeps the income).
+function BlasterData.priceLevel(data: any): number
+	local level = BlasterData.get(if type(data) == "table" then data.BlasterLevel else nil).Level
+	local stats = if type(data) == "table" then data.Stats else nil
+	local best = if type(stats) == "table" then stats.BestBlaster else nil
+	if type(best) == "number" and best == best and best > level then
+		level = math.min(math.floor(best), BlasterData.MaxLevel)
+	end
+	return level
 end
 
 -- The blaster for a saved level (clamped to 1..MaxLevel).

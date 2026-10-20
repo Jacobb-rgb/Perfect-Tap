@@ -1,10 +1,12 @@
 --[[
 	BuildService: the server side of build mode.
 
-	Handles BuildPlace / BuildMove / BuildPickup and always answers with
-	BuildResult { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? } (Reason is a
-	Placement.Reasons code). Checks, in this order:
-	  1. argument types and ranges ('BadInput')
+	Handles BuildPlace (seq, machineId, x, z, r, level?) / BuildMove (seq,
+	model, x, z, r, level?) / BuildPickup (seq, model) and always answers
+	with BuildResult { Seq, Op, Ok, Reason?, Id?, X?, Z?, R?, L? } (Reason
+	is a Placement.Reasons code). `level` is nil or 0 for the ground, 1 for
+	a platform's deck (docs/plans/PLATFORMS_PLAN.md). Checks, in this order:
+	  1. argument types and ranges ('BadInput'; a level other than nil / 0 / 1 too)
 	  2. data loaded and a plot assigned ('NoPlot')
 	  3. standing within BuildRange of your plot ('TooFar')
 	  4. moves and pickups: the model is one of your machines ('NotYours')
@@ -13,11 +15,14 @@
 
 	- A machine placed or moved onto players lifts them onto its roof, and
 	  loose items there are lifted too, so nothing ends up inside a machine.
+	  On a deck only what is up at deck level is lifted (not the belt under
+	  it); a new platform lifts players onto its deck, never the items on
+	  the belts under it.
 	- Other players nearby see dust (Fx 'Placed' / 'PackedUp'); the builder
 	  plays their own effects locally.
 	- Stored items live in the Ore Pen on the base yard (design v2), so no
 	  machine is needed to reach them.
-	- StateService gets Placed {{Id,X,Z,R}} and Build {MachineSlots,
+	- StateService gets Placed {{Id,X,Z,R,L?}} and Build {MachineSlots,
 	  ConveyorSlots, MachinesUsed, ConveyorsUsed} for the HUD and the
 	  build-mode ghost.
 ]]
@@ -27,6 +32,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
+local MachineData = require(Shared.Config.MachineData)
 local Grid = require(Shared.Machines.Grid)
 local Placement = require(Shared.Machines.Placement)
 local Net = require(Shared.Net)
@@ -57,7 +63,18 @@ function BuildService.onPlaced(callback: (Player, string) -> ...any)
 	table.insert(placedCallbacks, callback)
 end
 
-local function reply(player: Player, seq: number, op: Op, ok: boolean, reason: string?, id: string?, x: number?, z: number?, r: number?)
+local function reply(
+	player: Player,
+	seq: number,
+	op: Op,
+	ok: boolean,
+	reason: string?,
+	id: string?,
+	x: number?,
+	z: number?,
+	r: number?,
+	level: number?
+)
 	Net.fire("BuildResult", player, {
 		Seq = seq,
 		Op = op,
@@ -67,7 +84,17 @@ local function reply(player: Player, seq: number, op: Op, ok: boolean, reason: s
 		X = x,
 		Z = z,
 		R = r,
+		L = if level == 1 then 1 else nil,
 	})
+end
+
+-- The optional level argument: nil / 0 = the ground (0), 1 = a deck (1),
+-- anything else nil (BadInput).
+local function levelArg(value: any): number?
+	if value == nil then
+		return 0
+	end
+	return Guard.integer(value, 0, MachineData.MaxLevel)
 end
 
 -- Checks 2 and 3: the player's plot, if they may build on it right now.
@@ -110,10 +137,11 @@ local function modelTop(model: Model): number
 	return if top > -math.huge then top else model:GetPivot().Position.Y
 end
 
--- Is a world position over one of the given cells of the plot?
-local function overCells(plotId: number, cells: { [number]: boolean }, position: Vector3): boolean
+-- Is a world position over one of the given cells of the plot, at least
+-- `minY` studs over the pad (plot-local)?
+local function overCells(plotId: number, cells: { [number]: boolean }, position: Vector3, minY: number): boolean
 	local at, localPos = PlotService.plotAt(position)
-	if at ~= plotId or not localPos then
+	if at ~= plotId or not localPos or localPos.Y < minY then
 		return false
 	end
 	local gx, gz = Grid.cellFromLocal(localPos)
@@ -121,27 +149,34 @@ local function overCells(plotId: number, cells: { [number]: boolean }, position:
 end
 
 -- Puts characters and loose items standing in a machine's footprint on
--- top of it (they would otherwise be stuck inside its parts).
+-- top of it (they would otherwise be stuck inside its parts). On a deck
+-- only what is up there; a platform lifts players, not the items riding
+-- the belts under it.
 local function liftOccupants(machine: PlacedMachine)
 	local cells: { [number]: boolean } = {}
 	for _, k in Placement.cells(machine.Id, machine.X, machine.Z, machine.R) do
 		cells[k] = true
 	end
+	local minY = if machine.L == 1 then MachineService.DeckItemY else -math.huge
+	local liftItems = machine.Info.Behaviour ~= "Platform"
 	local top = modelTop(machine.Model)
 	for _, other in Players:GetPlayers() do
 		local root = Guard.rootPart(other)
 		local character = other.Character
-		if root and character and overCells(machine.PlotId, cells, root.Position) then
+		if root and character and overCells(machine.PlotId, cells, root.Position, minY) then
 			local position = root.Position
 			local turn = root.CFrame - position
 			character:PivotTo(CFrame.new(position.X, top + CHARACTER_LIFT, position.Z) * turn)
 			MovementService.serverMoved(other)
 		end
 	end
+	if not liftItems then
+		return
+	end
 	for _, record in ItemService.looseList() do
 		if record.State == "Loose" then
 			local position = record.Body.CFrame.Position
-			if overCells(machine.PlotId, cells, position) then
+			if overCells(machine.PlotId, cells, position, minY) then
 				-- release() moves it, wakes its physics and resets its trust point
 				ItemService.release(record, CFrame.new(position.X, top + ITEM_LIFT, position.Z), Vector3.new(0, -1, 0))
 			end
@@ -155,28 +190,29 @@ end
 
 ---------------------------------------------------------------- handlers
 
-local function onPlace(player: Player, seqArg: any, idArg: any, xArg: any, zArg: any, rArg: any)
+local function onPlace(player: Player, seqArg: any, idArg: any, xArg: any, zArg: any, rArg: any, levelValue: any)
 	local seq = Guard.integer(seqArg, 0, MAX_SEQ) or -1
 	local id = Guard.string(idArg, MAX_ID_LENGTH)
 	local x, z, r = Guard.integer(xArg, 0, LAST_CELL), Guard.integer(zArg, 0, LAST_CELL), Guard.integer(rArg, 0, 3)
-	if seq < 0 or not id or not x or not z or not r then
+	local level = levelArg(levelValue)
+	if seq < 0 or not id or not x or not z or not r or not level then
 		reply(player, seq, "Place", false, "BadInput")
 		return
 	end
 	local plotId, code = plotFor(player)
 	if not plotId then
-		reply(player, seq, "Place", false, code, id, x, z, r)
+		reply(player, seq, "Place", false, code, id, x, z, r, level)
 		return
 	end
-	local machine, reason = MachineService.place(player, id, x, z, r)
+	local machine, reason = MachineService.place(player, id, x, z, r, level)
 	if not machine then
-		reply(player, seq, "Place", false, reason or "Invalid", id, x, z, r)
+		reply(player, seq, "Place", false, reason or "Invalid", id, x, z, r, level)
 		return
 	end
 	if not machine.Info.IsConveyor then
 		liftOccupants(machine)
 	end
-	reply(player, seq, "Place", true, nil, machine.Id, machine.X, machine.Z, machine.R)
+	reply(player, seq, "Place", true, nil, machine.Id, machine.X, machine.Z, machine.R, machine.L)
 	puff(player, "Placed", machine.Model:GetPivot().Position, machine.Id)
 	for _, callback in placedCallbacks do
 		local ok, err = pcall(callback, player, machine.Id)
@@ -186,32 +222,33 @@ local function onPlace(player: Player, seqArg: any, idArg: any, xArg: any, zArg:
 	end
 end
 
-local function onMove(player: Player, seqArg: any, modelArg: any, xArg: any, zArg: any, rArg: any)
+local function onMove(player: Player, seqArg: any, modelArg: any, xArg: any, zArg: any, rArg: any, levelValue: any)
 	local seq = Guard.integer(seqArg, 0, MAX_SEQ) or -1
 	local x, z, r = Guard.integer(xArg, 0, LAST_CELL), Guard.integer(zArg, 0, LAST_CELL), Guard.integer(rArg, 0, 3)
-	if seq < 0 or not x or not z or not r then
+	local level = levelArg(levelValue)
+	if seq < 0 or not x or not z or not r or not level then
 		reply(player, seq, "Move", false, "BadInput")
 		return
 	end
 	local plotId, code = plotFor(player)
 	if not plotId then
-		reply(player, seq, "Move", false, code, nil, x, z, r)
+		reply(player, seq, "Move", false, code, nil, x, z, r, level)
 		return
 	end
 	local machine = ownMachine(player, plotId, modelArg)
 	if not machine then
-		reply(player, seq, "Move", false, "NotYours", nil, x, z, r)
+		reply(player, seq, "Move", false, "NotYours", nil, x, z, r, level)
 		return
 	end
-	local ok, reason = MachineService.move(machine, x, z, r)
+	local ok, reason = MachineService.move(machine, x, z, r, level)
 	if not ok then
-		reply(player, seq, "Move", false, reason or "Invalid", machine.Id, x, z, r)
+		reply(player, seq, "Move", false, reason or "Invalid", machine.Id, x, z, r, level)
 		return
 	end
 	if not machine.Info.IsConveyor then
 		liftOccupants(machine)
 	end
-	reply(player, seq, "Move", true, nil, machine.Id, machine.X, machine.Z, machine.R)
+	reply(player, seq, "Move", true, nil, machine.Id, machine.X, machine.Z, machine.R, machine.L)
 	puff(player, "Placed", machine.Model:GetPivot().Position, machine.Id)
 end
 
@@ -231,27 +268,28 @@ local function onPickup(player: Player, seqArg: any, modelArg: any)
 		reply(player, seq, "Pickup", false, "NotYours")
 		return
 	end
-	local id, x, z, r = machine.Id, machine.X, machine.Z, machine.R
+	local id, x, z, r, level = machine.Id, machine.X, machine.Z, machine.R, machine.L
 	local position = machine.Model:GetPivot().Position
 	local ok, reason = MachineService.pickup(machine)
 	if not ok then
-		reply(player, seq, "Pickup", false, reason or "Invalid", id, x, z, r)
+		reply(player, seq, "Pickup", false, reason or "Invalid", id, x, z, r, level)
 		return
 	end
-	reply(player, seq, "Pickup", true, nil, id, x, z, r)
+	reply(player, seq, "Pickup", true, nil, id, x, z, r, level)
 	puff(player, "PackedUp", position, id)
 end
 
 ---------------------------------------------------------------- state for the client
 
--- Placed = {Id,X,Z,R} of every saved machine (the ghost checks against it);
--- Build = slot limits and usage for the build-mode chip.
+-- Placed = {Id,X,Z,R,L?} of every saved machine (the ghost checks against
+-- it; L only for deck entries); Build = slot limits and usage for the
+-- build-mode chip.
 local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
 	local placed = {}
 	if type(data.PlacedMachines) == "table" then
 		for _, entry in data.PlacedMachines do
 			if type(entry) == "table" then
-				table.insert(placed, { Id = entry.Id, X = entry.X, Z = entry.Z, R = entry.R })
+				table.insert(placed, { Id = entry.Id, X = entry.X, Z = entry.Z, R = entry.R, L = if entry.L == 1 then 1 else nil })
 			end
 		end
 	end

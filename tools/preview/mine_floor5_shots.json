@@ -1,9 +1,16 @@
 {
- "mine_floor5_overview": { "scene": "mine_floor_5", "position": [0, 50, 128], "target": [0, 10, -16], "fov": 55, "preset": "Core", "shadowExtent": 180, "maxLights": 40 },
- "mine_floor5_entrance": { "scene": "mine_floor_5", "position": [3, 9.5, 70], "target": [0, 8, 6], "fov": 66, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
- "mine_floor5_heart": { "scene": "mine_floor_5", "position": [-30, 30, -14], "target": [0, 34, -58], "fov": 62, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
- "mine_floor5_side": { "scene": "mine_floor_5", "position": [118, 6, 54], "target": [0, -2, -6], "fov": 52, "preset": "Core", "shadowExtent": 180, "maxLights": 40 },
- "mine_floor5_deep": { "scene": "mine_floor_5", "position": [34, 20, -2], "target": [0, 6, -38], "fov": 60, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
- "mine_floor5_hub": { "scene": "mine_floor_5", "position": [-32, 18, 46], "target": [4, 2, 14], "fov": 60, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
- "mine_floor5_detail": { "scene": "mine_floor_5", "position": [-22, 7, 38], "target": [-9, 2, 22], "fov": 60, "preset": "Core", "shadowExtent": 80, "maxLights": 40 }
+ "mine_floor_storm_overview": { "scene": "mine_floor_5", "position": [0, 44, 92], "target": [0, 3, -14], "fov": 55, "preset": "Storm", "shadowExtent": 180, "maxLights": 40 },
+ "mine_floor_storm_entrance": { "scene": "mine_floor_5", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40 },
+ "mine_floor_storm_crown": { "scene": "mine_floor_5", "position": [0, 5, 9], "target": [0, 21, -24], "fov": 68, "preset": "Storm", "shadowExtent": 120, "maxLights": 40 },
+ "mine_floor_storm_rocks": { "scene": "mine_floor_5", "position": [-8, 6.5, 16], "target": [-32, 2, 31], "fov": 56, "preset": "Storm", "shadowExtent": 80, "maxLights": 40 },
+ "mine_floor_storm_phone": { "scene": "mine_floor_5", "position": [0, 10, 62], "target": [0, 7, 18], "fov": 70, "preset": "Storm", "shadowExtent": 120, "maxLights": 40 },
+ "mine_rocks_storm": { "scene": "mine_rocks", "position": [0, 15, -193], "target": [0, 2, -227], "fov": 58, "preset": "Storm", "shadowExtent": 70 },
+ "mine_rocks_all6": { "scene": "mine_rocks", "position": [0, 175, 70], "target": [0, 0, -140], "fov": 50, "preset": "Surface", "shadowExtent": 300, "maxLights": 30 },
+ "mine_giants_storm": { "scene": "mine_rocks", "position": [395, 22, 50], "target": [395, 9, 0], "fov": 52, "preset": "Storm", "shadowExtent": 160, "maxLights": 10 },
+ "world_storm_arrival": { "scene": "world_f5", "position": [4, -291, -746], "target": [-2, -293, -780], "fov": 70, "preset": "Storm", "shadowExtent": 140, "maxLights": 40 },
+ "world_storm_crown": { "scene": "world_f5", "position": [0, -295, -791], "target": [0, -279, -824], "fov": 68, "preset": "Storm", "shadowExtent": 140, "maxLights": 40 },
+ "elevator_floors_pc": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_pc" },
+ "elevator_floors_phone": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_floors_phone", "uiInset": 86 },
+ "elevator_ride_floor5": { "scene": "elevator_ui", "position": [6, 12, 69], "target": [-5, 8.5, 30], "fov": 64, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_ride_pc" },
+ "elevator_banner_floor5": { "scene": "elevator_ui", "position": [0, 9, 60], "target": [0, 7, 20], "fov": 66, "preset": "Storm", "shadowExtent": 120, "maxLights": 40, "ui": "ui_elevator_banner_pc" }
 }

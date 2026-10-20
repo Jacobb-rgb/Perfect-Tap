@@ -318,8 +318,10 @@ local function gradientStrip(gui: SurfaceGui, name: string, x: number, width: nu
 	gradient.Parent = frame
 end
 
--- `n` hazard dashes (orange / dark) as gradient keypoints.
+-- `n` hazard dashes (orange / dark) as gradient keypoints: from time 0 to
+-- exactly 1, two per dash, so at most 10 dashes (Roblox allows 20 keypoints).
 local function hazardKeys(n: number): { ColorSequenceKeypoint }
+	assert(n <= 10, "hazardKeys: at most 10 dashes per gradient")
 	local keys = {}
 	for s = 0, n - 1 do
 		local color = if s % 2 == 0 then C.Hazard else C.HazardDark
@@ -1127,8 +1129,8 @@ local function blastFurnace(): Model
 	-- hazard dashes round the plinth's top edge (painted, no parts)
 	local pad = surface(plinth, "PlinthFace", Enum.NormalId.Top, 90)
 	local edgeX, edgeZ = 0.4 / plinth.Size.X, 0.4 / plinth.Size.Z
-	gradientStrip(pad, "HazardL", 0, edgeX, hazardKeys(12))
-	gradientStrip(pad, "HazardR", 1 - edgeX, edgeX, hazardKeys(12))
+	gradientStrip(pad, "HazardL", 0, edgeX, hazardKeys(10))
+	gradientStrip(pad, "HazardR", 1 - edgeX, edgeX, hazardKeys(10))
 	for _, y in { 0, 1 - edgeZ } do
 		local strip = Instance.new("Frame")
 		strip.Name = "HazardEnd"
@@ -1139,7 +1141,7 @@ local function blastFurnace(): Model
 		strip.Parent = pad
 		local gradient = Instance.new("UIGradient")
 		gradient.Rotation = 0
-		gradient.Color = ColorSequence.new(hazardKeys(11))
+		gradient.Color = ColorSequence.new(hazardKeys(9))
 		gradient.Parent = strip
 	end
 
@@ -1857,7 +1859,7 @@ function MachineBuilder.sortingBoard(): Model
 	local low =
 		Geo.block(model, CFrame.new(0, y0 - 0.09, -0.02), Vector3.new(postX * 2 + 0.2, 0.18, 0.36), C.Steel, nil, prop({ Name = "Rail" }))
 	local band = surface(low, "Hazard", Enum.NormalId.Front, 60)
-	gradientStrip(band, "Dashes", 0.06, 0.88, hazardKeys(11))
+	gradientStrip(band, "Dashes", 0.06, 0.88, hazardKeys(9))
 	-- the name plate on top, between the brass caps
 	sign(model, CFrame.new(0, y1 + 0.55, -0.02), "KEEP LIST", 2.7, true)
 	attach(base, "Prompt", CFrame.new(0, 2.5, -1.0))
@@ -2099,6 +2101,12 @@ function MachineBuilder.build(id: string, level: number?): Model
 	local model: Model
 	if id == "Conveyor" or id == "ExpressConveyor" then
 		model = KitMachines.conveyor(nil, id == "ExpressConveyor")
+	elseif id == "Platform" then
+		model = KitMachines.platform()
+	elseif id == "BeltLift" or id == "Slide" then
+		-- 3 cells long, rising one deck (MachineData.DeckHeight), inside its footprint
+		local info = MachineData.ById[id]
+		model = KitMachines.slope(id == "BeltLift", info.Size[2] * GameConfig.CellSize, MachineData.DeckHeight, true)
 	else
 		local builder = BUILDERS[id]
 		assert(builder, "No model for machine " .. tostring(id))

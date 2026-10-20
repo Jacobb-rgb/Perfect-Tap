@@ -11,6 +11,7 @@ return function(T, Loader)
 	local CFrame = Loader.CFrame
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
+	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
@@ -136,8 +137,14 @@ return function(T, Loader)
 		end
 		T.eq(#BlasterData.Vault.Ores, BlasterData.MaxLevel, "one case look per level")
 		T.eq(BlasterData.vaultOre(1), "", "level 1 is the rusty starter")
+		local lastOrder = 0
 		for level = 2, BlasterData.MaxLevel do
-			T.truthy(OreData.exists(BlasterData.vaultOre(level)), "level " .. level .. " case ore exists")
+			local ore = BlasterData.vaultOre(level)
+			T.truthy(OreData.exists(ore), "level " .. level .. " case ore exists")
+			-- the case colours follow the rarity (owner 2026-10-20): never a rarer ore below a commoner one
+			local order = Rarity.ById[OreData.get(ore).Rarity].Order
+			T.truthy(order >= lastOrder, `level {level}'s {ore} is at least as rare as the level below`)
+			lastOrder = order
 		end
 		-- the ores the new 36-ore roster drops are never used
 		local dropped = {

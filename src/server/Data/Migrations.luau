@@ -30,6 +30,8 @@
 	- Storage: entries that aren't tables are dropped.
 	Layout repair (off the plot, overlapping) is NOT done here:
 	Placement.sanitize does it when the plot spawns, so the player gets a toast.
+	Platforms (same Version 3): an entry's level L is a whole number >= 1 or
+	nil (the ground); 0 and junk become nil. Saves without L are unchanged.
 
 	Version 3 (design v2):
 	- Pickaxes are gone: Pickaxe/OwnedPickaxes are removed, BlasterLevel is a
@@ -97,7 +99,8 @@
 	  least, so nobody walks slower after the update.
 	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
 	  Enchants.Slots: at least EnchantConfig.MaxSlots strings; a slot keeps an
-	  owned id only once, and only when the blaster level has opened it.
+	  owned id only once (also in a slot the blaster level hasn't opened yet:
+	  the readers count open slots only, so a rebirth never unslots).
 	  Slots past MaxSlots (a newer build's, up to MAX_ENCHANT_SLOTS_KEPT)
 	  stay when "" or an owned id not slotted before (readers skip them).
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
@@ -124,13 +127,25 @@
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
 	  equipped ignores them), anything else nil.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
-	  WheelOres are whole numbers >= 0.
+	  WheelOres / StarsEarned / BestBlaster / RunForged are whole numbers >= 0.
+	- Rebirth (RebirthConfig): Rebirths and Stars are whole numbers >= 0;
+	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
+	  newer build's perks and levels kept, junk and levels below 1 dropped).
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
 	  their rules.
 	Every step above runs once per load, in this order, inside run(); the
 	Version stays 3 (all of it is additive and idempotent).
+
+	Step 8 (Robux receipts, same Version 3):
+	- PurchaseLog: [purchaseId] = { Product = a short string, At = finite
+	  >= 0 } (other fields kept); entries whose id left Purchases (trimmed
+	  together) and junk are dropped.
+	- Golems.Pending (when present): { Kind = a short string, Paid =
+	  boolean? } entries, renamed kinds renamed, at most
+	  GolemConfig.MaxPending; junk dropped.
+	- Enchants.Passes (when present): owned enchant ids -> true.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -441,12 +456,13 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	if slots ~= nil and type(slots) ~= "table" then
 		report.Dropped += 1
 	end
-	local open = EnchantConfig.unlockedSlots(data.BlasterLevel)
 	local cleanSlots = {}
 	local slotted: { [string]: boolean } = {}
 	for i = 1, EnchantConfig.MaxSlots do
 		local id = if type(slots) == "table" then slots[i] else nil
-		if type(id) == "string" and id ~= "" and i <= open and owned[id] ~= nil and not slotted[id] then
+		-- (a slot the blaster level hasn't opened keeps its enchant: EnchantConfig.stats reads
+		-- open slots only, so it works again once the level opens it, e.g. after a rebirth)
+		if type(id) == "string" and id ~= "" and owned[id] ~= nil and not slotted[id] then
 			slotted[id] = true
 			cleanSlots[i] = id
 		else
@@ -485,6 +501,22 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		end
 	end
 	enchants.Slots = cleanSlots
+	-- step 8: the Mythic enchants a game pass gave (string ids -> true; a refund takes back
+	-- only these); a mark for an enchant that isn't owned is dropped
+	local passes = enchants.Passes
+	if passes ~= nil then
+		if type(passes) ~= "table" then
+			enchants.Passes = {}
+			report.Dropped += 1
+		else
+			for _, id in keysOf(passes) do
+				if type(id) ~= "string" or passes[id] ~= true or owned[id] == nil then
+					passes[id] = nil
+					report.Dropped += 1
+				end
+			end
+		end
+	end
 
 	-- boosts: whole os.time() seconds, never absurdly far ahead (MaxSavedSeconds
 	-- is a junk guard: paid time stacked past MaxStackSeconds is kept)
@@ -558,6 +590,31 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	local nextId = golems.NextId
 	local wholeNext = if isFinite(nextId) then math.floor(nextId) else 1
 	golems.NextId = math.clamp(math.max(wholeNext, maxId + 1), 1, MAX_GOLEM_ID + 1)
+	-- step 8: paid golems waiting past MaxSaved (a Royal capsule receipt's credit):
+	-- { Kind, Paid? } entries (unknown kinds kept, renamed ones renamed), at most MaxPending
+	local pending = golems.Pending
+	if pending ~= nil then
+		local waiting = {}
+		if type(pending) == "table" then
+			for _, entry in values(pending) do
+				local kind = if type(entry) == "table" then entry.Kind else nil
+				local paid = if type(entry) == "table" then entry.Paid else nil
+				if type(kind) == "string" and GolemConfig.Renamed[kind] then
+					kind = GolemConfig.Renamed[kind]
+				end
+				if idLike(kind) and (paid == nil or type(paid) == "boolean") and #waiting < GolemConfig.MaxPending then
+					entry.Kind = kind -- (the entry itself: fields a newer build adds stay)
+					table.insert(waiting, entry)
+				else
+					report.Dropped += 1
+				end
+			end
+			refill(pending, waiting)
+		else
+			golems.Pending = waiting
+			report.Dropped += 1
+		end
+	end
 
 	-- the daily wheel: a whole time, at most one cooldown ahead
 	local wheel = record(data, "Wheel", report)
@@ -600,9 +657,52 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 
 	-- the new stats
 	local stats = record(data, "Stats", report)
-	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres", "StarsEarned", "BestBlaster", "RunForged" } do
 		local v = stats[field]
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+
+	-- rebirth: whole counts, Star Shop levels by short ids (unknown perks and levels kept)
+	for _, field in { "Rebirths", "Stars" } do
+		local v = data[field]
+		if v ~= nil and not isFinite(v) then
+			report.Dropped += 1
+		end
+		data[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+	local perks = record(data, "StarPerks", report)
+	for _, id in keysOf(perks) do
+		local level = perks[id]
+		local whole = if idLike(id) and isFinite(level) and level >= 1 then wholeIn(level, 1, MAX_LEVEL_KEPT) else nil
+		if whole == nil then
+			perks[id] = nil
+			report.Dropped += 1
+		elseif whole ~= level then
+			perks[id] = whole
+		end
+	end
+end
+
+-- Step 8: data.PurchaseLog[purchaseId] = { Product, At } for the granted
+-- receipts (MonetizationService). Entries need a short string Product and a
+-- finite At >= 0 (other fields a newer build adds stay); an entry whose id
+-- isn't in Purchases any more (trimmed with it, DataService.trimPurchases)
+-- or that is junk is dropped.
+local function migrateStep8(data: { [string]: any }, report: Report)
+	local log = record(data, "PurchaseLog", report)
+	local purchases = if type(data.Purchases) == "table" then data.Purchases else {}
+	for _, id in keysOf(log) do
+		local entry = log[id]
+		local ok = (type(id) == "string" or type(id) == "number")
+			and purchases[id] ~= nil
+			and type(entry) == "table"
+			and idLike(entry.Product)
+			and isFinite(entry.At)
+			and entry.At >= 0
+		if not ok then
+			log[id] = nil
+			report.Dropped += 1
+		end
 	end
 end
 
@@ -619,7 +719,8 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 	for _, item in values(queue) do
 		if not wellFormed(item) then
 			report.Dropped += 1
-		elseif ItemData.Kinds[item.K] and OreData.ById[item.O] then
+		elseif ItemData.Kinds[item.K] and (OreData.ById[item.O] or (item.K == "Relic" and ArtifactConfig.ById[item.O])) then
+			-- (a dusty relic in a Restoration Table or Cleaning Station queue stays there)
 			table.insert(kept, item)
 		else
 			-- a newer build's kind or ore: into the pen, where it waits safely
@@ -706,6 +807,14 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		-- (readers clamp to the rarities they know; a newer build may have more)
 		if entry.C ~= nil then
 			entry.C = if isFinite(entry.C) then math.clamp(math.floor(entry.C), 1, MAX_LEVEL_KEPT) else nil
+		end
+		-- the level (platforms): a whole number >= 1 or nothing (the ground);
+		-- 0 and junk become nothing, a newer build's higher level is kept
+		-- (Placement.sanitize sends an entry on a level this server doesn't
+		-- know back to the inventory when the plot spawns)
+		if entry.L ~= nil then
+			local level = entry.L
+			entry.L = if isFinite(level) and level == math.floor(level) and level >= 1 then math.min(level, MAX_LEVEL_KEPT) else nil
 		end
 		if isFinite(entry.X) and isFinite(entry.Z) then
 			entry.X = math.floor(entry.X)
@@ -1000,6 +1109,7 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 
 	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots)
 	migrateSteps67(data, clock, report)
+	migrateStep8(data, report)
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then

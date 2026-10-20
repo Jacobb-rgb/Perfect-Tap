@@ -36,6 +36,10 @@
 	                      -- Id: whole, unique, >= 1
 	  Equipped = { Id, ... }, -- at most EquipSlots ids from Owned
 	  NextId = number,        -- > every Id in Owned
+	  Pending = { { Kind = golemId, Paid = true } }, -- step 8: paid golems a Royal
+	                          -- capsule receipt rolled past MaxSaved (a credit, never
+	                          -- coins); CapsuleService wakes them into Owned as soon
+	                          -- as there is room (at most MaxPending)
 	}
 	GolemAction ("Equip", { Id }) ("Unequip", { Id }) ("EquipBest")
 	            ("Lock", { Id, Locked: boolean }) ("Delete", { Ids = { Id, ... } })
@@ -71,6 +75,7 @@ local GolemConfig = {}
 GolemConfig.EquipSlots = 3
 GolemConfig.InventoryCap = 60
 GolemConfig.MaxSaved = 80 -- Migrations hard cap (see above)
+GolemConfig.MaxPending = 200 -- paid golems waiting past MaxSaved (Golems.Pending; more: the receipt waits)
 GolemConfig.MaxDelete = 60 -- ids per "Delete"
 GolemConfig.MaxParts = 25 -- parts in one golem model (see the header)
 GolemConfig.EquippedAttribute = "EquippedGolems" -- comma-separated kinds, set by the server

@@ -60,9 +60,10 @@ function PlotService.model(plotId: number): Model?
 end
 
 -- World CFrame of a machine footprint's centre (gx, gz = min corner cell),
--- turned so the machine's front faces Grid.dir(rotation).
-function PlotService.footprintCFrame(plotId: number, machineId: string, gx: number, gz: number, rotation: number): CFrame
-	return PlotService.plotCFrame(plotId) * Grid.localCFrame(machineId, gx, gz, rotation)
+-- turned so the machine's front faces Grid.dir(rotation), on `level`
+-- (nil / 0 = the pad, 1 = a platform's deck top).
+function PlotService.footprintCFrame(plotId: number, machineId: string, gx: number, gz: number, rotation: number, level: number?): CFrame
+	return PlotService.plotCFrame(plotId) * Grid.localCFrame(machineId, gx, gz, rotation, level)
 end
 
 -- Grid cell under a world position on a plot (or nil when off the plot).
@@ -153,6 +154,35 @@ local function release(player: Player)
 		model:SetAttribute("OwnerUserId", nil)
 	end
 	PlotService.setSignText(plotId, "Free Plot")
+end
+
+--[[
+	Takes the plot's things down, runs `between` and puts them back up, on
+	the same plot (a rebirth: RebirthService). The released callbacks run
+	first (the machines unload, the pen's intents, the Foundry, the boards),
+	then `between` (the save may change), then the assigned callbacks (the
+	machines spawn from the save). The plot stays this player's the whole
+	time, so nobody can take it in between.
+]]
+function PlotService.reload(player: Player, between: () -> ())
+	local plotId = plotOfPlayer[player]
+	if plotId then
+		for _, callback in releasedCallbacks do
+			local ok, err = pcall(callback, player, plotId)
+			if not ok then
+				warn("[PlotService] release callback failed: " .. tostring(err))
+			end
+		end
+	end
+	local ok, err = pcall(between :: any)
+	if plotId then
+		for _, callback in assignedCallbacks do
+			task.spawn(callback, player, plotId)
+		end
+	end
+	if not ok then
+		error(err, 0)
+	end
 end
 
 -- Where a character stands at the front of a plot, facing it (joining, the BASE teleport).

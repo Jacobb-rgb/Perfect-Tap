@@ -13,12 +13,13 @@
 	  StatConfig.combine (Add stats summed, Mult stats multiplied, each total
 	  capped at its Max). A provider that errors or returns junk counts as
 	  nothing (warned once).
-	- The five built-in providers read the save (pure config functions):
+	- The six built-in providers read the save (pure config functions):
 	    "Gear"        GearConfig.stats(data.Gear)
 	    "Enchants"    EnchantConfig.stats(data.Enchants, data.BlasterLevel)
 	    "Golems"      GolemConfig.stats(data.Golems, Golem Bond from enchants + collections)
 	    "Boosts"      BoostConfig.stats(data.Boosts, now)
 	    "Collections" ArtifactConfig.stats(data.Artifacts)
+	    "Rebirth"     RebirthConfig.stats(data.StarPerks) (the Star Shop perks)
 	  register(name, provider) replaces a provider of the same name (so a
 	  package can never count one source twice) or adds a new source (passes,
 	  rebirth, events). Packages ONLY call register: they never add income
@@ -28,9 +29,10 @@
 	  (incomePct). So golems, enchants, collections and any later provider
 	  reach the podiums exactly once.
 	- Cache: stats(player) is kept per player until the save changes
-	  (DataService.onChanged -> invalidate), the next running boost runs out,
-	  or MaxCacheSeconds pass, whichever comes first; register / unregister
-	  clear every cache. A provider that depends on something outside the
+	  (DataService.onChangedNow -> invalidate, inside changed() itself, so a
+	  read right after a change never gets the old totals), the next running
+	  boost runs out, or MaxCacheSeconds pass, whichever comes first;
+	  register / unregister clear every cache. A provider that depends on something outside the
 	  save (a game pass bought mid-session, an event) calls invalidate(player)
 	  when that changes. The returned table is shared: read it, never write it.
 	- The getters below turn totals into the numbers the services use.
@@ -45,6 +47,7 @@ local BoostConfig = require(Shared.Config.BoostConfig)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GearConfig = require(Shared.Config.GearConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StatConfig = require(Shared.Config.StatConfig)
 local Perks = require(script.Parent.Perks)
 local DataService = require(script.Parent.Services.DataService)
@@ -139,9 +142,15 @@ local BUILT_IN: { { Name: string, Provider: Provider } } = {
 			return ArtifactConfig.stats(data.Artifacts)
 		end,
 	},
+	{
+		Name = "Rebirth",
+		Provider = function(_player, data, _now)
+			return RebirthConfig.stats(data.StarPerks)
+		end,
+	},
 }
 
--- Puts the five built-in providers back (and drops every other one).
+-- Puts the six built-in providers back (and drops every other one).
 function Bonuses.resetProviders()
 	table.clear(providers)
 	table.clear(warned)
@@ -373,8 +382,9 @@ function Bonuses.summary(player: Player): { [string]: any }
 	}
 end
 
--- A save change may change any bonus: drop the cached totals.
-DataService.onChanged(function(player: Player)
+-- A save change may change any bonus: drop the cached totals at once (not at
+-- the deferred onChanged flush: a read in the same frame must see the change).
+DataService.onChangedNow(function(player: Player)
 	Bonuses.invalidate(player)
 end)
 Bonuses.attachIncome()

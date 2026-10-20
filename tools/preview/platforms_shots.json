@@ -1,0 +1,38 @@
+{
+ "platforms_game_overview": {
+  "scene": "platforms_game",
+  "preset": "Surface",
+  "sunDir": [-0.45, 0.7, -0.55],
+  "position": [-26, 30, -40],
+  "target": [2, 4, 2],
+  "fov": 44,
+  "shadowExtent": 90
+ },
+ "platforms_game_side": {
+  "scene": "platforms_game",
+  "preset": "Surface",
+  "sunDir": [-0.45, 0.7, -0.55],
+  "position": [-30, 10, 2],
+  "target": [0, 4, 2],
+  "fov": 46,
+  "shadowExtent": 90
+ },
+ "platforms_game_deck": {
+  "scene": "platforms_game",
+  "preset": "Surface",
+  "sunDir": [-0.45, 0.7, -0.55],
+  "position": [-14, 17, -14],
+  "target": [0, 6, 0],
+  "fov": 44,
+  "shadowExtent": 90
+ },
+ "platforms_build": {
+  "scene": "platforms_build",
+  "preset": "Surface",
+  "sunDir": [-0.45, 0.7, -0.55],
+  "position": [2, 30, -24],
+  "target": [0, 3, 1],
+  "fov": 50,
+  "shadowExtent": 90
+ }
+}

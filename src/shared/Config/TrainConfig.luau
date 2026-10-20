@@ -97,15 +97,17 @@ TrainConfig.PortalInset = 6 -- the quarry tunnel mouths stand this far in front 
 TrainConfig.BufferGap = 1.7 -- the coastal buffer stops' face, past the coastal lines' ends
 
 -- Mine Lifts: throw ore in down in the caves, it goes into your train's cargo.
--- One per mine floor 2-5, where the floor area leaves room for it (MineFloors.LiftSpots).
-local function liftAt(index: number): Vector3
-	return MineFloors.liftPosition(index) or Vector3.zero
+-- One per mine floor 2-6, where the floor area leaves room for it (MineFloors.LiftSpots), found
+-- by the floor's Id (a lift's Id is its floor's Id), so a new floor in between renumbers safely.
+local function liftAt(floorId: string): Vector3
+	return MineFloors.liftPosition(MineFloors.get(floorId).Index) or Vector3.zero
 end
 TrainConfig.Lifts = {
-	{ Id = "EmberCaves", Position = liftAt(2), Size = Vector3.new(6, 5, 6) },
-	{ Id = "DeepHollow", Position = liftAt(3), Size = Vector3.new(6, 5, 6) },
-	{ Id = "SunkenPalace", Position = liftAt(4), Size = Vector3.new(6, 5, 6) },
-	{ Id = "HeartstoneCore", Position = liftAt(5), Size = Vector3.new(6, 5, 6) },
+	{ Id = "EmberCaves", Position = liftAt("EmberCaves"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "DeepHollow", Position = liftAt("DeepHollow"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "SunkenPalace", Position = liftAt("SunkenPalace"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "StormglassRift", Position = liftAt("StormglassRift"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "HeartstoneCore", Position = liftAt("HeartstoneCore"), Size = Vector3.new(6, 5, 6) },
 }
 
 -- (Rocks and big decorations stay off the track, the station and the lifts:
@@ -128,11 +130,14 @@ function TrainConfig.capacity(level: any, express: boolean): number
 	return if express then math.floor(base * TrainConfig.Express.CapacityMult) else base
 end
 
--- Trip seconds for a speed level (Express halves it), never under MinTripSeconds.
-function TrainConfig.tripSeconds(level: any, express: boolean): number
+-- Trip seconds for a speed level (Express halves it; `cut` = the share cut off,
+-- the rebirth's Express Rails: Bonuses TrainTimeCutPct, at most half), never
+-- under MinTripSeconds.
+function TrainConfig.tripSeconds(level: any, express: boolean, cut: number?): number
 	local base = levelOf(TrainConfig.Speed, level).Value
 	local seconds = if express then base / TrainConfig.Express.SpeedMult else base
-	return math.max(TrainConfig.MinTripSeconds, seconds)
+	local share = if type(cut) == "number" and cut == cut then math.clamp(cut, 0, 0.5) else 0
+	return math.max(TrainConfig.MinTripSeconds, seconds * (1 - share))
 end
 
 -- Price of the next level of an upgrade (nil when maxed).

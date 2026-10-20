@@ -438,6 +438,80 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("FLAWLESS guard: a bot with the real client's pauses keeps Pristine, jittery human timing keeps Flawless", function()
+		local Guard = Loader.requirePath("ServerScriptService.Server.CleaningGuard")
+		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+		local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
+		local P = Scoring.ClientPauses
+		local real = {
+			Intro = P.Intro,
+			Crack = P.HitStop + P.Crack,
+			ToScrape = P.HitStop + P.LastCrack + P.Crack + P.StepGap,
+			ToPolish = P.ScrapeFinish + P.StepGap,
+		}
+		local logged = {}
+		Guard._test.reset()
+		Guard._test.setLog(function(line)
+			table.insert(logged, line)
+		end)
+		local ok, err = pcall(function()
+			for seed = 1, 4 do
+				local p = Patterns.generate("Gold", seed * 104729)
+				local bot = botRun(p, real)
+				local result = Scoring.score(p, bot)
+				T.truthy(result.Valid, "the bot run is valid")
+				T.eq(result.Grade, "Flawless", "it scores Flawless")
+				local verdict = Guard.check(bot)
+				T.truthy(verdict.Synthetic, "computed timestamps: synthetic")
+				T.eq(Guard.gradeFor(result.Grade, verdict), Guard.Config.CapGrade, "keeps Pristine")
+				T.truthy(table.find(verdict.Soft, "Speed") ~= nil, "and its even speed is noted")
+				Guard.note("bot", verdict, result.Grade)
+				-- the same moves on real frames: every timestamp a little off (os.clock on a frame)
+				local rng = Rng.new(seed)
+				local human = table.clone(bot)
+				local function jitter(samples: { number }, stride: number, offset: number): { number }
+					local out = table.clone(samples)
+					local last = -math.huge
+					for i = offset, #out, stride do
+						local t = out[i] + rng:range(-0.003, 0.003)
+						t = math.max(t, last + 0.0005)
+						out[i] = t
+						last = t
+					end
+					return out
+				end
+				human.Cuts = {}
+				for i, cut in bot.Cuts do
+					human.Cuts[i] = { Samples = jitter(cut.Samples, 3, 3) }
+				end
+				human.Scrape = { Samples = jitter(bot.Scrape.Samples, 3, 3) }
+				human.Polish = { Samples = jitter(bot.Polish.Samples, 2, 1), Mode = "Circle" }
+				local hv = Guard.check(human)
+				T.falsy(hv.Synthetic, "real frame times are never synthetic")
+				T.eq(#hv.Soft, 0, "nor inhumanly even")
+				T.eq(Guard.gradeFor("Flawless", hv), "Flawless", "a real Flawless stays Flawless")
+				-- a gamepad's even stick never counts as a soft signal
+				local pad = table.clone(human)
+				pad.Input = "Gamepad"
+				T.eq(#Guard.check(pad).Soft, 0)
+			end
+			-- grades below Flawless never change; soft signals only log while SoftEnforce is off
+			T.eq(Guard.gradeFor("Pristine", { Synthetic = true, Soft = {} }), "Pristine")
+			T.eq(Guard.gradeFor("Flawless", { Synthetic = false, Soft = { "Speed" } }), "Flawless", "soft: logged only")
+			T.eq(#logged, 1, "one log line per player per LogEvery")
+			T.truthy(logged[1]:find("synthetic", 1, true), "the line says what fired")
+			T.eq(Guard._test.counts("bot").Runs, 4, "every run counted")
+			T.truthy(ItemData.GradeById[Guard.Config.CapGrade], "the cap is a real grade")
+			-- junk never errors
+			T.falsy(Guard.check(nil).Synthetic)
+			T.falsy(Guard.check({ Cuts = { { Samples = { 0 / 0, 1, "x" } } } }).Synthetic)
+		end)
+		Guard._test.reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("anti-cheat: careful honest runs with the real pauses always fit", function()
 		local P = Scoring.ClientPauses
 		for _, ore in OreData.List do

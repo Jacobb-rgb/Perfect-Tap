@@ -18,7 +18,8 @@
 	               paid random items are restricted, "Full" when the pack
 	               would pass MaxStackSeconds, else MarketplaceService's
 	               prompt and "Prompted"). NEVER granted here: step 8's
-	               ProcessReceipt adds the time (BoostService.add, uncapped).
+	               ProcessReceipt adds the time (the "Boost" handler,
+	               registerGrants: BoostConfig.extend uncapped).
 	  Every other request the server reads gets one ActionResult
 	  { Action = "Boost", Op, Ok, Reason?, Id? } (Reason: a
 	  BoostConfig.Reasons code); a successful buy also pushes State
@@ -55,6 +56,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Format = require(Shared.Util.Format)
@@ -66,6 +68,7 @@ local Policy = require(script.Parent.Parent.Policy)
 local Receipts = require(script.Parent.Parent.Receipts)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local MonetizationService = require(script.Parent.MonetizationService)
 local StateService = require(script.Parent.StateService)
 
 local BoostService = {}
@@ -254,6 +257,39 @@ function BoostService.add(player: Player, kindId: string, seconds: number, cappe
 	return untilTime
 end
 
+--[[
+	The "Boost" receipt handler (MonetizationService.register; step 8
+	contract): the product's Seconds of its Boost kind, added uncapped
+	(BoostConfig.extend capped = false: paid time is never lost) from now or
+	from the end of the running boost. False (nothing written) for an entry
+	without a known kind or seconds. No yield.
+]]
+local function grantBoost(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local kindId = entry.Boost
+	local seconds = entry.Seconds
+	local kind = if kindId then BoostConfig.Kinds[kindId] else nil
+	if not kind or not kindId or type(seconds) ~= "number" or seconds <= 0 then
+		return false
+	end
+	local boosts = data.Boosts
+	if type(boosts) ~= "table" then
+		boosts = {}
+		data.Boosts = boosts
+	end
+	local now = clock()
+	local untilTime = BoostConfig.extend(boosts, kindId, seconds, now, false)
+	Net.fire("Notify", player, {
+		Text = `{kind.Name}: +{timeText(seconds)} ({timeText(untilTime - now)} left). Thank you!`,
+		Kind = "Reward",
+	})
+	return true
+end
+
+-- Registers the "Boost" receipt handler (init(); idempotent).
+function BoostService.registerGrants()
+	MonetizationService.register("Boost", grantBoost)
+end
+
 ---------------------------------------------------------------- requests
 
 -- BoostAction "BuyCoins" { Id }.
@@ -280,7 +316,7 @@ local function buyCoins(player: Player, id: string)
 	-- from here on: no yield
 	local now = clock()
 	local vip = Perks.has(player, "ForgeVip")
-	local price, reason = BoostConfig.coinQuote(data.Boosts, id, data.BlasterLevel, vip, now)
+	local price, reason = BoostConfig.coinQuote(data.Boosts, id, data.BlasterLevel, vip, now, BlasterData.priceLevel(data))
 	if price == nil then
 		answer(player, "BuyCoins", false, reason or "BadOffer", id)
 		return
@@ -379,6 +415,8 @@ function BoostService.init()
 	-- what is coming soon is known once the services are loaded (the client reads it)
 	ReplicatedStorage:SetAttribute(BoostService.SoonAttribute, table.concat(BoostService.soonIds(), ","))
 	Net.on("BoostAction", onBoostAction)
+	-- step 8: Triple / Hexa Lucky receipts (uncapped paid time)
+	BoostService.registerGrants()
 	-- the running boosts' stats (the same provider as Bonuses' built-in one,
 	-- under the same name: counted once)
 	Bonuses.register("Boosts", function(_player, data, now)

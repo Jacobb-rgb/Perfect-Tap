@@ -25,13 +25,21 @@
 	  second (EconomyService.award, quiet), Stats.PodiumEarned grows,
 	  LastSeen = now, and DataService.changed runs once (only when paid).
 	- Offline: on load, EconomyConfig.offlineEarnings(income, now - LastSeen,
-	  OfflineExtension perk) is paid (after OFFLINE_DELAY, so perks and the
-	  HUD are ready) and the client shows "While you were away"
+	  OfflineExtension perk) is paid after OfflineDelay, once the passes
+	  giving the OfflinePerks (Night Shift's 12 h, the Podiums pass's slots)
+	  answered (MonetizationService.perkAtJoin), else when the load's first
+	  check round is done or at most PassWait seconds more. Paid while such
+	  a check kept failing: a later check that says the player owned the
+	  pass pays the difference (topUpOffline, a toast). The client
+	  shows "While you were away"
 	  (OpenUI "Offline" { Amount, Seconds, Hours }). LastSeen is written on
 	  load, every tick and in beforeRelease. A LastSeen in the future (clock
 	  skew between servers) or older than MIN_VALID_TIME pays nothing.
 	- StateService gets Income (per second), PodiumSlots (2 or 4) and
 	  PodiumIncome (per slot).
+	- Step 8: the "CoinPack" receipt handler (registerGrants): coin packs
+	  pay MonetizationConfig.coinPackAmount at the income now, only while
+	  CoinPacksEnabled.
 	Studio: perks are player attributes, e.g. Players.<you>:SetAttribute("Perk_Podiums", true).
 ]]
 
@@ -41,6 +49,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
@@ -57,6 +66,7 @@ local StateService = require(script.Parent.StateService)
 local EconomyService = require(script.Parent.EconomyService)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
+local MonetizationService = require(script.Parent.MonetizationService)
 local PlotService = require(script.Parent.PlotService)
 local PenService = require(script.Parent.PenService)
 
@@ -71,6 +81,8 @@ export type Reason = string
 PodiumService.Range = 30 -- studs from a podium for PodiumAction (the hover button shows within this)
 PodiumService.PromptTag = "PodiumPrompt"
 PodiumService.OfflineDelay = 3 -- seconds after loading before offline earnings are paid
+-- at most this many seconds more for the load's game pass checks (Night Shift's 12 h)
+PodiumService.PassWait = 30
 local RANGE_SLACK = 4
 local TAG_HEIGHT = 2.6 -- studs from the ore point up to the income tag
 local MIN_VALID_TIME = 1.5e9 -- os.time() of 2017: anything older is a broken LastSeen
@@ -86,6 +98,17 @@ local pendingOffline: { [Player]: number } = {} -- seconds away, paid after Offl
 -- when each player last got a State push from podium income alone
 local lastPush: { [Player]: number } = {}
 local perkConnections: { [Player]: RBXScriptConnection } = {}
+-- players whose offline payout waits for their pass checks
+local waitingPasses: { [Player]: boolean } = {}
+-- an offline payout made while a pass check for an offline perk kept failing
+-- (the absence, what was paid, the income without / with podiums 3-4, the perks it counted)
+type TopUp = { Seconds: number, Paid: number, Income: number, IncomeAll: number, Extended: boolean, Podiums: boolean }
+local topUps: { [Player]: TopUp } = {}
+-- Swappable for the Lune tests: did a pass the player owned when they joined give `perk`?
+-- (nil while its check hasn't answered)
+local perkAtJoin: (player: Player, perk: string) -> boolean? = function(player: Player, perk: string): boolean?
+	return MonetizationService.perkAtJoin(player, perk)
+end
 
 local function toast(player: Player, text: string, kind: string?)
 	Net.fire("Notify", player, { Text = text, Kind = kind or "Deny" })
@@ -138,6 +161,20 @@ function PodiumService.slotIncome(player: Player, data: { [string]: any }, slot:
 		return 0
 	end
 	return ItemData.income(desc) * (multiplier or EconomyService.incomeMultiplier(player))
+end
+
+-- Coins per second from all MAX podiums, locked or not (an offline top-up for a Podiums pass known late).
+local function incomeAllSlots(player: Player, data: { [string]: any }): number
+	local multiplier = EconomyService.incomeMultiplier(player)
+	local list = podiumsOf(data)
+	local total = 0
+	for slot = 1, MAX do
+		local desc = podiumDesc(list[slot])
+		if desc then
+			total += ItemData.income(desc) * multiplier
+		end
+	end
+	return total
 end
 
 -- Coins per second from all podiums.
@@ -664,6 +701,16 @@ function PodiumService.offlineSeconds(lastSeen: any, now: number): number
 	return elapsed
 end
 
+-- Have the passes giving the offline perks (MonetizationService.OfflinePerks) answered?
+local function offlineKnown(player: Player): boolean
+	for _, perk in MonetizationService.OfflinePerks do
+		if perkAtJoin(player, perk) == nil then
+			return false
+		end
+	end
+	return true
+end
+
 -- Pays the offline earnings that were waiting for this player. Returns the amount.
 local function payOffline(player: Player, popup: boolean): number
 	local seconds = pendingOffline[player]
@@ -673,8 +720,24 @@ local function payOffline(player: Player, popup: boolean): number
 		return 0
 	end
 	local extended = Perks.has(player, "OfflineExtension")
-	local amount = EconomyConfig.offlineEarnings(PodiumService.incomeOf(player, data), seconds, extended)
-	if amount < 0.001 or amount > EconomyConfig.MaxAward then
+	local income = PodiumService.incomeOf(player, data)
+	local amount = EconomyConfig.offlineEarnings(income, seconds, extended)
+	if amount ~= amount or amount > EconomyConfig.MaxAward then
+		return 0
+	end
+	if popup and player.Parent and not offlineKnown(player) then
+		-- a check of a pass giving an offline perk kept failing: what it would add
+		-- follows once a later check says the player owned it (topUpOffline)
+		topUps[player] = {
+			Seconds = seconds,
+			Paid = if amount >= 0.001 then amount else 0,
+			Income = income,
+			IncomeAll = incomeAllSlots(player, data),
+			Extended = extended,
+			Podiums = Perks.has(player, "Podiums"),
+		}
+	end
+	if amount < 0.001 then
 		return 0
 	end
 	EconomyService.award(player, amount, "Offline")
@@ -693,6 +756,68 @@ local function payOffline(player: Player, popup: boolean): number
 	return amount
 end
 
+--[[
+	The rest of an offline payout made while a check of a pass giving an
+	offline perk kept failing, once a later check says the player owned that
+	pass when they joined (never for a pass bought in this session): the
+	absence counted again with Night Shift's hours and podiums 3-4, minus
+	what was paid. Returns the amount.
+]]
+local function topUpOffline(player: Player): number
+	local record = topUps[player]
+	if not record then
+		return 0
+	end
+	local data = DataService.get(player)
+	if not data or not player.Parent then
+		topUps[player] = nil
+		return 0
+	end
+	if offlineKnown(player) then
+		topUps[player] = nil
+	end
+	local extended = record.Extended or perkAtJoin(player, "OfflineExtension") == true
+	local podiums = record.Podiums or perkAtJoin(player, "Podiums") == true
+	if extended == record.Extended and podiums == record.Podiums then
+		return 0
+	end
+	record.Extended = extended
+	record.Podiums = podiums
+	local income = if podiums then record.IncomeAll else record.Income
+	local full = EconomyConfig.offlineEarnings(income, record.Seconds, extended)
+	local extra = full - record.Paid
+	if full ~= full or full > EconomyConfig.MaxAward or extra < 0.001 then
+		return 0
+	end
+	record.Paid = full
+	EconomyService.award(player, extra, "Offline")
+	local stats = data.Stats
+	if type(stats) == "table" then
+		stats.PodiumEarned = (tonumber(stats.PodiumEarned) or 0) + extra
+	end
+	toast(player, `Your pass counted for your time away: +{Format.big(extra)} coins`, "Reward")
+	return extra
+end
+
+-- OfflineDelay after the load: pay now when the passes giving the offline perks answered,
+-- else when the load's first check round is done (onPassesChecked) or after PassWait.
+local function offlineDue(player: Player)
+	if not pendingOffline[player] then
+		return
+	end
+	if offlineKnown(player) then
+		payOffline(player, true)
+		return
+	end
+	waitingPasses[player] = true
+	task.delay(PodiumService.PassWait, function()
+		waitingPasses[player] = nil
+		if pendingOffline[player] then
+			payOffline(player, true)
+		end
+	end)
+end
+
 local function onLoaded(player: Player, data: { [string]: any })
 	local now = clock()
 	podiumsOf(data)
@@ -701,11 +826,64 @@ local function onLoaded(player: Player, data: { [string]: any })
 	if seconds >= EconomyConfig.Offline.MinSeconds then
 		pendingOffline[player] = seconds
 		task.delay(PodiumService.OfflineDelay, function()
-			if pendingOffline[player] then
-				payOffline(player, true)
-			end
+			offlineDue(player)
 		end)
 	end
+end
+
+-- MonetizationService.onPassesChecked: a payout that waited for the pass checks goes now;
+-- a later round's answer tops up a payout made while a check kept failing.
+local function onPassesChecked(player: Player)
+	if not waitingPasses[player] then
+		topUpOffline(player)
+		return
+	end
+	waitingPasses[player] = nil
+	if pendingOffline[player] then
+		payOffline(player, true)
+	end
+end
+
+--[[
+	The "CoinPack" receipt handler (MonetizationService.register; step 8
+	contract): only while MonetizationConfig.CoinPacksEnabled (else false:
+	the receipt waits, never coins while coins aren't buyable), coins =
+	MonetizationConfig.coinPackAmount at the player's podium income now.
+	No yield.
+]]
+local function grantCoins(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	if not MonetizationConfig.coinsBuyable() or not entry.CoinPack or DataService.get(player) ~= data then
+		return false
+	end
+	local amount = MonetizationConfig.coinPackAmount(entry.Key, PodiumService.incomeOf(player, data))
+	if not amount or amount <= 0 then
+		return false
+	end
+	amount = math.min(amount, EconomyConfig.MaxAward)
+	local before = EconomyService.balance(player)
+	if EconomyService.award(player, amount, "CoinPack:" .. entry.Key) <= before then
+		return false
+	end
+	toast(player, `+{Format.big(amount)} coins. Thank you!`, "Reward")
+	return true
+end
+
+-- Registers the "CoinPack" receipt handler (init(); idempotent).
+function PodiumService.registerGrants()
+	MonetizationService.register("CoinPack", grantCoins)
+end
+
+--[[
+	A rebirth (RebirthService) is about to reset the coins: the welcome-back
+	payout still waiting is paid now (no popup) and any later top-up or pass
+	wait is dropped, so nothing earned before the rebirth lands in the new run.
+]]
+function PodiumService.settleOffline(player: Player)
+	if pendingOffline[player] then
+		payOffline(player, false)
+	end
+	topUps[player] = nil
+	waitingPasses[player] = nil
 end
 
 local function onRelease(player: Player, data: { [string]: any })
@@ -713,6 +891,7 @@ local function onRelease(player: Player, data: { [string]: any })
 	if pendingOffline[player] then
 		payOffline(player, false)
 	end
+	topUps[player] = nil
 	data.LastSeen = clock()
 end
 
@@ -730,6 +909,18 @@ PodiumService._test = {
 	pending = function(player: Player): number?
 		return pendingOffline[player]
 	end,
+	setPerkAtJoin = function(fn: (Player, string) -> boolean?)
+		perkAtJoin = fn
+	end,
+	topUp = topUpOffline,
+	hasTopUp = function(player: Player): boolean
+		return topUps[player] ~= nil
+	end,
+	waiting = function(player: Player): boolean
+		return waitingPasses[player] == true
+	end,
+	passesChecked = onPassesChecked,
+	offlineDue = offlineDue,
 	shown = function(plotId: number, slot: number): Shown?
 		local perPlot = shown[plotId]
 		return perPlot and perPlot[slot]
@@ -746,7 +937,12 @@ PodiumService._test = {
 		table.clear(shown)
 		table.clear(lastPush)
 		table.clear(pendingOffline)
+		table.clear(waitingPasses)
+		table.clear(topUps)
 		clock = os.time
+		perkAtJoin = function(player: Player, perk: string): boolean?
+			return MonetizationService.perkAtJoin(player, perk)
+		end
 	end,
 }
 
@@ -782,6 +978,10 @@ function PodiumService.init()
 	end
 	DataService.onLoaded(onLoaded)
 	DataService.beforeRelease(onRelease)
+	-- step 8: coin pack receipts (off while CoinPacksEnabled is false); the offline payout
+	-- waits for the pass checks (Night Shift)
+	PodiumService.registerGrants()
+	MonetizationService.onPassesChecked(onPassesChecked)
 	PlotService.onAssigned(function(_, plotId)
 		PodiumService.refreshPlot(plotId)
 	end)
@@ -804,6 +1004,8 @@ function PodiumService.init()
 		-- whose order against this handler is not guaranteed); drop leftovers later
 		task.delay(10, function()
 			pendingOffline[player] = nil
+			waitingPasses[player] = nil
+			topUps[player] = nil
 		end)
 		lastPush[player] = nil
 		local connection = perkConnections[player]

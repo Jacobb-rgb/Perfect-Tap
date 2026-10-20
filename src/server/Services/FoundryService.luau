@@ -632,6 +632,9 @@ local function commit(player: Player, session: Session): (boolean, string?)
 	if type(stats) == "table" then
 		local forged = stats.BlastersForged
 		stats.BlastersForged = (if type(forged) == "number" and forged == forged then forged else 0) + 1
+		-- the highest level forged here in this rebirth run (RebirthConfig.reachedOf: the stars)
+		local run = stats.RunForged
+		stats.RunForged = math.max(if type(run) == "number" and run == run then run else 0, level + 1)
 	end
 	moveUnusable(data)
 	DataService.changed(player)

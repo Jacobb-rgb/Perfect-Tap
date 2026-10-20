@@ -653,9 +653,9 @@ return function(T, Loader)
 		T.falsy(ok, "dirty ore")
 		T.eq(reason, "Wrong", "refused")
 		local ups, jobs, now = 0, 400, 0
-		local better = { Rough = "Clean", Pristine = "Flawless" }
+		local better = { Rough = "Clean", Clean = "Pristine" }
 		for i = 1, jobs do
-			local grade = if i % 2 == 0 then "Rough" else "Pristine"
+			local grade = if i % 2 == 0 then "Rough" else "Clean"
 			T.truthy(MachineService.insertDesc(m, item("Clean", "Gold", grade), USER, "Belt"), "clean in")
 			tick(m, now)
 			now += MachineData.ById.Polisher.Time
@@ -675,7 +675,15 @@ return function(T, Loader)
 			tick(m, now)
 			T.eq(MachineLogic.popOut(m.Entry).G, "Flawless", "Flawless stays Flawless")
 		end
-		T.eq(attr(m, "Cycles"), jobs + 20, "Cycles")
+		-- the Polisher tops out at Pristine: a belt loop never makes Flawless (owner, 2026-10-20)
+		for _ = 1, 20 do
+			MachineService.insertDesc(m, item("Clean", "Gold", "Pristine"), USER, "Belt")
+			tick(m, now)
+			now += MachineData.ById.Polisher.Time
+			tick(m, now)
+			T.eq(MachineLogic.popOut(m.Entry).G, "Pristine", "Pristine stays Pristine")
+		end
+		T.eq(attr(m, "Cycles"), jobs + 40, "Cycles")
 		T.eq(w.data.Stats.IngotsSmelted, 0, "polishing is not smelting")
 	end)
 

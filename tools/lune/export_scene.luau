@@ -156,6 +156,8 @@ elseif sceneName == "ore_stages_1" or sceneName == "ore_stages_2" or sceneName =
 	require("./lib/ore_stages").build(Loader, workspace, tonumber(string.sub(sceneName, -1)) :: number)
 elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common vs Mythic, 4 moments (tools/lune/lib/reveal_strip.luau)
 	require("./lib/reveal_strip").build(Loader, workspace)
+elseif sceneName == "platforms_game" or sceneName == "platforms_build" then -- platforms in the game: lift, deck, slide (tools/lune/lib/platforms_scene.luau)
+	require("./lib/platforms_scene").build(Loader, workspace, sceneName == "platforms_build")
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
@@ -197,6 +199,10 @@ elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine f
 	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
 elseif sceneName == "mine_floor" then -- one mine floor area with rocks (tools/lune/lib/mine_floor_scene.luau)
 	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or 1)
+elseif sceneName == "elevator_ui" then -- the elevator's floor list (7 cards) and the ride to floor 5 over the Stormglass Rift (tools/lune/lib/elevator_preview.luau)
+	for name, guis in require("./lib/elevator_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
 elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)
@@ -229,6 +235,8 @@ elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Found
 	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
 		uiExports[name] = guis
 	end
+elseif sceneName == "relic_flow" then -- dusty relic -> hand / Restoration Table cleaning -> museum (tools/lune/lib/relic_flow_preview.luau)
+	require("./lib/relic_flow_preview").build(Loader, workspace)
 elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/wheel_artifacts_preview").build(Loader, workspace) do
@@ -247,6 +255,11 @@ elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays
 elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop window overlays (tools/lune/lib/vault_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays (tools/lune/lib/rebirth_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/rebirth_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the Gear shop panel overlays (tools/lune/lib/gear_shop_preview.luau)
@@ -828,6 +841,46 @@ if sceneName == "world" and process.args[2] == "yard" then
 		print("Exported UI " .. name)
 	end
 	print(string.format("Exported yard: %d parts, %d lights", #yardScene.parts, #yardScene.lights))
+end
+
+---------------------------------------------------------------- scene "yard_ingame" (plot style A)
+-- `lune run tools/lune/export_scene.luau world yard_ingame`: the yard scene above
+-- with every plot's Foundry building and FOUNDRY chute receiver as FoundryService
+-- builds them at server start (their SurfaceGui frames painted for the renderer,
+-- plot 5's chimney smoking) -> build/preview/yard_ingame.json. Shots:
+-- tools/preview/plot_style_a_shots.json (the in-game pictures of the plot pieces
+-- in the machines' style A, docs/screenshots/plot_style_a/ingame_*.jpg).
+if sceneName == "world" and process.args[2] == "yard_ingame" then
+	local YardPreview = require("./lib/yard_preview")
+	YardPreview.build(Loader, workspace)
+	local FoundryBuilder = Loader.requirePath("ServerScriptService.Server.World.FoundryBuilder")
+	local Gallery = require("./lib/machines_gallery")
+	local plots = workspace:FindFirstChild("Map"):FindFirstChild("Plots")
+	for _, plot in WorldLayout.Plots do
+		local model = plots:FindFirstChild("Plot_" .. plot.Id)
+		local yard = model and model:FindFirstChild("Yard")
+		local old = yard and yard:FindFirstChild("Foundry")
+		if old then
+			local plotCF = WorldLayout.plotCFrame(plot)
+			old:Destroy()
+			local building = FoundryBuilder.build(plotCF, 3)
+			building.Parent = yard
+			local receiver = FoundryBuilder.receiver(plotCF)
+			receiver.Parent = model
+			Gallery.paintGuis(Loader, workspace, building)
+			Gallery.paintGuis(Loader, workspace, receiver)
+			if plot.Id == YardPreview.Plot then
+				local top = building:FindFirstChild("ChimneyTop", true)
+				if top then
+					Gallery.smoke(Loader, workspace, top, 0.8)
+				end
+			end
+		end
+	end
+	local ingameScene = Export.collect(workspace)
+	ingameScene.presets = scene.presets
+	fs.writeFile(root .. "/build/preview/yard_ingame.json", serde.encode("json", ingameScene))
+	print(string.format("Exported yard_ingame: %d parts, %d lights", #ingameScene.parts, #ingameScene.lights))
 end
 
 ---------------------------------------------------------------- scene "penboard" (WP-CleanerBox)
