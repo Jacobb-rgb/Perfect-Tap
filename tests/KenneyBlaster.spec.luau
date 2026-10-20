@@ -194,12 +194,33 @@ return function(T, Loader)
 			T.truthy(h <= HEIGHT, `{label}: {string.format("%.2f", h)} tall`)
 			T.truthy(behind <= BEHIND, `{label}: {string.format("%.2f", behind)} behind the hand`)
 		end
+		-- the jewels too: no crystal tip grows over the head (the highest visible part above the hand)
+		local function tipHeight(tool: any): number
+			local hi = -math.huge
+			for _, p in parts(tool) do
+				if p.Transparency < 1 then
+					local h = p.Size / 2
+					for _, sx in { -1, 1 } do
+						for _, sy in { -1, 1 } do
+							for _, sz in { -1, 1 } do
+								hi = math.max(hi, (p.CFrame * Loader.roblox.Vector3.new(h.X * sx, h.Y * sy, h.Z * sz)).Y)
+							end
+						end
+					end
+				end
+			end
+			return hi
+		end
+		local TIPS = 3.2
 		for level = 1, BlasterData.MaxLevel do
-			check("LV " .. level, BlasterBuilder.build(level, if level > 1 then "Gold" else ""))
+			local tool = BlasterBuilder.build(level, if level > 1 then "Gold" else "")
+			check("LV " .. level, tool)
+			T.truthy(tipHeight(tool) <= TIPS, `LV {level}: tips {string.format("%.2f", tipHeight(tool))} over the hand`)
 		end
 		for _, star in StarBlasterData.List do
 			local tool = BlasterBuilder.buildStar(star, 10, "")
 			check(star.Id, tool)
+			T.truthy(tipHeight(tool) <= TIPS, `{star.Id}: tips {string.format("%.2f", tipHeight(tool))} over the hand`)
 			-- still a real gun: at least LV 4's length ahead of the hand
 			local muzzle = (tool:FindFirstChild("Handle") :: any):FindFirstChild("Muzzle")
 			T.truthy(muzzle.Position.Z < -1.5, `{star.Id}: the barrel reaches {string.format("%.2f", -muzzle.Position.Z)} ahead`)

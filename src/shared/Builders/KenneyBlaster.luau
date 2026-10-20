@@ -144,7 +144,8 @@ end
 
 -- The STAR blasters' (models 11-15) held size: the envelope of the biggest level bodies
 -- (LV 7 / LV 9), so a stubby Kenney shape never grows into the character (studs).
-KenneyBlaster.StarFit = { Height = 2.3, Width = 1.25, Behind = 1.9 }
+KenneyBlaster.StarFit = { Height = 2.3, Width = 1.25, Behind = 1.9, Crystal = 1.55 } -- (Crystal: the top cluster's
+-- biggest crystal, so the tips stay under the head when held)
 
 -- Kenney meters -> held studs for a level: every gun gets its level's length. A STAR
 -- blaster gets LV 10's length unless that makes it taller, wider or longer behind the
@@ -573,6 +574,9 @@ function KenneyBlaster.parts(level: number, oreId: string, skin: Skin, partFn: P
 	local top, side = anchors.Top, anchors.Side
 	if tier >= 1 and top then
 		local size = (0.36 + 0.14 * tier) * k
+		if jewels then
+			size = math.min(size, KenneyBlaster.StarFit.Crystal)
+		end
 		shard(top - Vector3.yAxis * 0.04 * k, Vector3.yAxis, size * 0.3, size)
 		shard(top + Vector3.new(0, -0.04 * k, -size * 0.2), Vector3.new(0, 1, -0.75).Unit, size * 0.24, size * 0.66)
 		if tier >= 2 then
