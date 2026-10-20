@@ -101,8 +101,9 @@ local DataTemplate = {
 	-- (at most GolemConfig.EquipSlots), NextId = the next Id to hand out, Pending = paid
 	-- golems a Royal capsule receipt rolled past GolemConfig.MaxSaved (CapsuleService wakes them)
 	Golems = { Owned = {}, Equipped = {}, NextId = 1, Pending = {} },
-	-- the daily wheel: os.time() second the next free spin is ready (0 = now)
-	Wheel = { NextSpinAt = 0 },
+	-- the daily wheel: os.time() second the next free spin is ready (0 = now);
+	-- Spins = the bought spins held (Robux, WheelService; used after the free one)
+	Wheel = { NextSpinAt = 0, Spins = 0 },
 	-- artifacts: Found = { [artifactId] = count }, Chapters = { [collectionId] = true } (read)
 	Artifacts = { Found = {}, Chapters = {} },
 
@@ -134,7 +135,7 @@ local DataTemplate = {
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
 	-- the side menu's SETTINGS (SettingsConfig; SettingsService repairs it on load)
-	Settings = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true },
+	Settings = { Music = 0.6, Sfx = 0.8, Shake = true, Rumble = true, FastSpin = false },
 	-- the ORE CODEX's NEW badges (CodexService): Seen = { [oreId] = true } the discovered ores
 	-- the player has looked at; Ready = false on a save made before this record (its
 	-- discovered ores then count as seen, once)

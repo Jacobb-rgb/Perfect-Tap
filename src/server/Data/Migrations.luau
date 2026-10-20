@@ -122,6 +122,9 @@
 	- Daily (the retired 7-day Ember Chest streak, replaced by the daily
 	  wheel: docs/plans/V2_PLAN.md) is removed.
 	- Wheel.NextSpinAt: finite whole >= 0, at most now + WheelConfig.CooldownSeconds.
+	  Wheel.Spins (the bought spins held): a whole number >= 0 (junk = 0), at
+	  most WheelConfig.MaxSavedSpins (a junk guard no purchase gets near:
+	  bought spins are never cut).
 	- Artifacts.Found: string ids -> whole counts 1..ArtifactConfig.MaxCount;
 	  Chapters: string ids -> true; Equipped: a string of at most
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
@@ -631,6 +634,16 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		wheel.NextSpinAt = 0
 	else
 		wheel.NextSpinAt = math.min(math.floor(spinAt), now + WheelConfig.CooldownSeconds)
+	end
+	-- the bought spins held: a whole count (paid: kept, only junk repaired)
+	local spins = wheel.Spins
+	if spins == nil then
+		wheel.Spins = 0
+	elseif not isFinite(spins) or spins < 0 then
+		wheel.Spins = 0
+		report.Dropped += 1
+	else
+		wheel.Spins = math.min(math.floor(spins), WheelConfig.MaxSavedSpins)
 	end
 
 	-- artifacts: string ids with whole counts, chapters read (unknown ids kept)

@@ -12,14 +12,20 @@
 	            relic (the one the banner shows, Last Train Ticket) hovering
 	            over it
 	UI overlays (the real views, filled like the controllers do):
-	  ui_wheel            PC: the wheel screen, a free spin ready
+	  ui_wheel            PC: the Spin & Win screen (Pop look): BUY SPINS, the
+	                      wheel, the jackpot card, SPIN (3) (free + 2 bought)
+	  ui_wheel_odds       PC: ALL ODDS (Details), Fast Spin on
+	  ui_wheel_buy        PC: the buy step of x5 (every segment's odds, the price)
+	  ui_wheel_restricted PC: paid random items restricted: no BUY SPINS rows
 	  ui_wheel_won        PC: the wheel stopped, the prize card and confetti
-	                      (the button back to its countdown)
-	  ui_wheel_wait       PC: spun today, the countdown
+	                      (the line back to its countdown, SPIN (2))
+	  ui_wheel_wait       PC: spun today, no bought spins: SPIN (0)
 	  ui_wheel_info       PC: a capsule row's details card (every golem's odds)
 	  ui_wheel_phone      667 x 375 pt phone: the compact wheel screen
-	  ui_wheel_phone_small 568 x 320 pt phone (all 8 odds tiles in view)
+	  ui_wheel_phone_small 568 x 320 pt phone, the free spin in 14:44
+	  ui_wheel_buy_phone  568 x 320 pt phone: the buy step of x10
 	  ui_wheel_info_phone 568 x 320 pt phone: the details card
+	  ui_wheel_won_phone  568 x 320 pt phone: a golem won
 	  ui_chip             the HUD with the FREE SPIN! chip (no BOOK button: the side menu has the book)
 	  ui_chip_phone       the same on a phone
 	  ui_chip_phone_small 568 x 320 pt phone: the icon-only bar, the chip after it
@@ -206,6 +212,7 @@ end
 
 Preview.Coins = 184500
 Preview.Income = 640
+Preview.BoughtSpins = 2 -- spins bought with Robux (the wheel shows SPIN (3) with the free one)
 Preview.Wallet = { BlasterLevel = 4, Shards = 120 } -- RESTORE in the book
 
 -- The wheel screen's info for a mid-game player (WheelController.info).
@@ -238,8 +245,10 @@ function Preview.ui(Loader: any): { [string]: any }
 		refs.Gui.Enabled = true
 		WheelView.setRows(refs, WheelView.rows(Preview.wheelInfo()))
 		WheelView.layout(refs, maxW, maxH)
-		WheelView.setReady(refs, true, 0)
-		refs.Hint.Text = "Click a row for details  ·  Backspace: close"
+		-- the free spin ready and 2 bought spins: SPIN (3)
+		WheelView.setReady(refs, true, 0, false, Preview.BoughtSpins)
+		WheelView.setFast(refs, false)
+		WheelView.setHint(refs, if compact then "Tap a row for details" else "Click a row for details  ·  Backspace: back")
 		return refs
 	end
 
@@ -248,29 +257,52 @@ function Preview.ui(Loader: any): { [string]: any }
 	local w1 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	exports.ui_wheel = UiExport.export({ h1.Gui, w1.Gui })
 
+	-- PC: ALL ODDS (Details), Fast Spin on
+	local h1b = hudAt(scale)
+	local w1b = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	WheelView.setFast(w1b, true)
+	WheelView.showOdds(w1b)
+	WheelView.highlight(w1b, "OrePrize")
+	exports.ui_wheel_odds = UiExport.export({ h1b.Gui, w1b.Gui })
+
+	-- PC: the buy step of x5 (every segment's odds and what it pays, then the price)
+	local h1d = hudAt(scale)
+	local w1d = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	WheelView.showBuy(w1d, 5)
+	WheelView.setHint(w1d, "The odds of every spin")
+	exports.ui_wheel_buy = UiExport.export({ h1d.Gui, w1d.Gui })
+
+	-- PC: where paid random items are restricted (no BUY SPINS rows; the free spin only)
+	local h1c = hudAt(scale)
+	local w1c = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	WheelView.setBuy(w1c, true)
+	WheelView.setReady(w1c, true, 0, false, 0)
+	exports.ui_wheel_restricted = UiExport.export({ h1c.Gui, w1c.Gui })
+
 	-- PC: stopped on the Ore Prize, the prize card
 	local h2 = hudAt(scale)
 	local w2 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
 	local index = WheelConfig.ById.OrePrize.Index
 	w2.Disc.Rotation = WheelView.spinTarget(0, index, 8, 5, 0.15)
-	-- after the spin: the button counts down to tomorrow's spin
-	WheelView.setReady(w2, false, WheelConfig.CooldownSeconds - 6, false)
+	-- after the free spin: the 2 bought spins are left, the line counts down to tomorrow's
+	WheelView.setReady(w2, false, WheelConfig.CooldownSeconds - 6, false, Preview.BoughtSpins)
 	WheelView.highlight(w2, "OrePrize")
 	local prize, detail = WheelView.prizeText({ Kind = "Ore", DirtyOre = true })
-	WheelView.showResult(w2, prize, detail, WheelConfig.ById.OrePrize.Color)
+	WheelView.showResult(w2, prize, detail, WheelView.faceColor(WheelConfig.ById.OrePrize.Index))
 	WheelView.confetti(w2, 7)
 	exports.ui_wheel_won = UiExport.export({ h2.Gui, w2.Gui })
 
-	-- PC: spun today
+	-- PC: spun today, no bought spins: SPIN (0) and the countdown
 	local h3 = hudAt(scale)
 	local w3 = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
-	WheelView.setReady(w3, false, 13 * 3600 + 42 * 60 + 10)
+	WheelView.setReady(w3, false, 13 * 3600 + 42 * 60 + 10, false, 0)
 	w3.Disc.Rotation = WheelView.restAngle(WheelConfig.ById.Shards.Index, 8)
 	exports.ui_wheel_wait = UiExport.export({ h3.Gui, w3.Gui })
 
 	-- PC: a capsule row's details card
 	local h3b = hudAt(scale)
 	local w3b = wheel(scale, false, 1600 / scale, (900 - 36) / scale)
+	WheelView.showOdds(w3b)
 	WheelView.showInfo(w3b, "StoneCapsule")
 	WheelView.highlight(w3b, nil)
 	exports.ui_wheel_info = UiExport.export({ h3b.Gui, w3b.Gui })
@@ -278,17 +310,29 @@ function Preview.ui(Loader: any): { [string]: any }
 	-- phones
 	local h4 = hudAt(phoneScale)
 	local w4 = wheel(phoneScale, true, 1600 / phoneScale, (900 - phoneInset) / phoneScale)
-	w4.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
 	exports.ui_wheel_phone = UiExport.export({ h4.Gui, w4.Gui })
 	local h5 = hudAt(smallScale)
 	local w5 = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
-	w5.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
+	WheelView.setReady(w5, false, 14 * 60 + 44, false, 0)
 	exports.ui_wheel_phone_small = UiExport.export({ h5.Gui, w5.Gui })
+	local h5c = hudAt(smallScale)
+	local w5c = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
+	WheelView.showBuy(w5c, 10)
+	WheelView.setHint(w5c, "The odds of every spin")
+	exports.ui_wheel_buy_phone = UiExport.export({ h5c.Gui, w5c.Gui })
 	local h5b = hudAt(smallScale)
 	local w5b = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
-	w5b.Hint.Text = "Tap a row for details  ·  Tap SPIN!"
+	WheelView.showOdds(w5b)
 	WheelView.showInfo(w5b, "CrystalCapsule")
 	exports.ui_wheel_info_phone = UiExport.export({ h5b.Gui, w5b.Gui })
+	-- the prize card on a small phone
+	local h5d = hudAt(smallScale)
+	local w5d = wheel(smallScale, true, 1600 / smallScale, (900 - smallInset) / smallScale)
+	w5d.Disc.Rotation = WheelView.spinTarget(0, WheelConfig.ById.CrystalCapsule.Index, 8, 5, -0.1)
+	local prize2, detail2 = WheelView.prizeText({ Kind = "Capsule", Capsule = "Crystal", Golem = { Id = 3, Kind = "SapphireSage" } })
+	WheelView.showResult(w5d, prize2, detail2, WheelView.faceColor(WheelConfig.ById.CrystalCapsule.Index))
+	WheelView.confetti(w5d, 11)
+	exports.ui_wheel_won_phone = UiExport.export({ h5d.Gui, w5d.Gui })
 
 	-- the HUD chip
 	local h6 = hudAt(scale)
