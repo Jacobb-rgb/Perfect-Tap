@@ -21,3 +21,107 @@ Tick the boxes as you go.
       Ore grows at the invisible `Map.NodeSpawns` markers: duplicate/move them to add spots.
 
 More items (game passes, badges, icon) are added in `PUBLISHING.md`.
+
+## What to test in Studio (state 2026-10-20)
+
+Everything that landed since 2026-10-16 (main `claude/keen-wozniak-mx7azn` b68dd28, map v39). Open
+`build/TerraForge.rbxl`. The long versions of these lists are in **docs/QA_REPORTS.md**; the numbers come from
+docs/SERVER_PERF_AUDIT.md and docs/BALANCE_SIM.md. Write down anything odd (a picture helps) and send it to Claude.
+
+**Handy Studio tools:** the **Device emulator** (Test tab) for phones: try 568 x 320, 667 x 375 and an iPad
+1024 x 768. A plugged-in **controller** for the gamepad checks. **Test → Clients and Servers** (Local Server, pick the
+number of players) starts test players: they always start as **new players** (their saves live in memory only),
+which is perfect for the tutorial. To skip ahead (coins, a blaster level) ask Claude for a one-line command for the
+command bar.
+
+### A. Side menu and the steps 6-7 windows (PC, phone, controller)
+1. PC: open every side-menu tile: GOLEMS, SHOP (boosts), CODEX, ARTIFACTS, BOARDS, SETTINGS, REBIRTH, ELEVATOR,
+   HOVER. Also the Gear shop, the Enchant table and the SPIN & WIN wheel. Each opens, reads well and closes with X.
+2. Only one window at a time: open the Vault, then press P: the vault closes, the golems open.
+3. Phone (568 x 320 and 667 x 375): tap MENU, every window fits, every button is easy to tap; the tutorial bubble
+   and the FREE SPIN! chip never sit on top of each other.
+4. Controller: D-pad Left jumps into the side menu, Up / Down move inside it, A opens, B closes / leaves.
+   Outside the menu D-pad Up still enters build mode on your plot.
+5. SETTINGS: Camera shake off → firing the blaster no longer tips the view; the sound slider also changes the
+   lobby's ambience.
+
+### B. Tutorial 1-10 (a new player)
+1. Join as a new player: the loading screen first, then the tutorial bubble.
+2. Follow it: 1 To the mine! → 2 Blast a rock → 3 Load the train → 4 Off it goes! → 5 Clean your ore →
+   6 Show it off (podium) → 7 Grow your forge → 8 A stronger blaster → 9 Golem helpers (GOT IT) → 10 A free spin
+   (GOT IT). Finishing pays 250 coins; skipping pays nothing.
+3. Open the CODEX or GOLEMS during the tutorial: the bubble hides and comes back when you close it.
+4. Repeat on a phone and with a controller (R3 skips with a SURE? second press).
+
+### C. Saving (Studio uses its own test store, never the live saves)
+1. Game Settings → Security → Enable Studio Access to API Services = ON (see the top of this file).
+2. Play, earn some coins, put an ore on a podium, place a machine. Stop. Play again: everything is back.
+3. Stop the test right after buying something: after the next Play it is still yours.
+4. Leave, wait a minute, rejoin: the welcome-back earnings popup shows after the loading screen.
+5. The Output window shows no red errors about saving; test players from Clients and Servers starting fresh
+   each time is expected.
+
+### D. Blaster Vault, crate opening and the gallery
+1. Walk to the vault counter, press F (controller Y): your levels say OWNED, the next one NEXT with a green BUY,
+   the rest LOCKED, LV 11 SOON.
+2. Too few coins: the price is red, "Not enough coins". Enough coins: the crate-opening cinematic plays (the case
+   drops, bursts, the blaster spins, AWESOME!), then you hold the new blaster. No HUD or walking during it; a tap
+   skips to the burst.
+3. Phone: one row of wide cards that scrolls sideways; controller: A buys.
+4. THE GREAT FORGE's hall: walk through the gallery, the guns show their ore colours, the plates read, LV 11 "?"
+   glows violet. Equip levels 1, 4, 7 and 10: the gun sits right in the hand, the beam leaves the barrel's tip.
+
+### E. Mine floors, elevator and hoverboards
+1. Walk floors 1-3 (Greystone Quarry, Ember Caves, Deep Hollow); a rock you can't mine yet says Needs Lv N.
+2. Buy the elevator at its station next to the Mine Station and ride it to the Sunken Palace, the Stormglass Rift
+   (blaster 8) and the Heartstone Core (blaster 9). The LIFT icon takes you to the lowest elevator stop.
+3. Listen in each floor: drips, rumbles, crystal hums, the elevator's arrival ding.
+4. HOVER in the side menu: buy a coin hoverboard, ride it (H, controller L2, or tap). The 2 Robux boards say
+   Coming soon. Phone: no frame drop on the Rift and in the Core.
+
+### F. Dusty relics and the Restoration Table
+1. Mine until a rock drops a dusty relic ("A dusty relic! Clean it at a Cleaning Station, or put it into a
+   Restoration Table.").
+2. Carry it to a Cleaning Station: the cleaning minigame, then the relic's reveal and card; it shows in the
+   ARTIFACTS book and the yard museum.
+3. Buy a Restoration Table (Tech shop, 75K, it needs power), give it a relic (Clean Relic prompt or a belt):
+   about 20 s later the relic is clean and in your collection, no minigame.
+4. A relic can't be sold, stored in the pen, put on a podium or loaded on the train.
+
+### G. Platforms, Belt Lift and Slide
+1. Buy a Platform, a Belt Lift, a Slide and belts (Tech shop). Place the platform, then a belt and a Brick
+   Furnace on it. A furnace under the deck is red ("Only belts fit under a platform").
+2. **The big question:** put a Belt Lift's high end against the deck, a ground belt into its low end and a deck belt
+   where it arrives. Drop ore on the ground belt: **does it ride all the way up the 26.6° lift onto the deck?**
+   Watch the small gaps at both ends. Then the same down a Slide. If ore slides back or gets stuck, send a video.
+3. V (PC), D-pad Up (controller) or the DECK / GROUND button (phone) switches a held belt between deck and ground.
+4. Pack up a platform with something on it: "Clear the platform first". Rejoin: deck machines are back on the deck.
+
+### H. Rebirth (STAR FORGE)
+1. With blaster LV 8: the REBIRTH tile shows its badge. Open it: YOU LOSE / YOU KEEP / YOU GET, "a rebirth now pays
+   ⭐ 6"; REBIRTH! asks SURE?, the second press plays the moment and sends you home.
+2. After it: coins 0, blaster LV 1, the factory still stands (machines empty), pen / podiums / Foundry / train empty;
+   golems, artifacts, relics, hoverboards and Robux items are still yours; a gold star over your name.
+3. STAR SHOP: buy Golden Touch, Deep Pockets, Express Rails, Head Start and Podium Keeper and check each one works.
+4. Phone 568 x 320 and 667 x 375: the window fits.
+
+### I. New prices (feel check)
+1. Foundry and Vault: the Vault's next blaster costs 4x the Foundry's coins (the Foundry also wants ingots).
+2. Tech shop: Speed and Quality upgrades are much pricier now (option 3: Speed I starts at 20K and Quality I at
+   50K, times each machine's own factor); the Auto Cleaner itself costs 25K.
+3. Say which prices feel too cheap or too steep. The final Foundry curve is still being tuned for 6 floors.
+
+### J. Loading screen, music and sounds
+1. Join: the TERRA FORGE logo on dark stone and lava, a progress bar, tips, a Skip button. The welcome-back popup,
+   the FREE SPIN! chip and the tutorial wait until it is gone. Try it on a phone too.
+2. Music is still a placeholder (every track id is 0), so **silence is expected** until you upload the 4 tracks.
+3. Lobby ambience: waterfalls, ponds, the stream and the forge have quiet sounds; the frog and the plaza murmur stay
+   silent until you pick them.
+
+### K. Network numbers with 8 players
+1. Test → Clients and Servers: Local Server, **8 players**, Start (a strong PC helps).
+2. In each client window build a busy factory (machines, belts, ore riding) and keep a train running.
+3. Open the Network stats in one client window (View tab → the Stats group → Network) and write down **data
+   received (KB/s)** after two minutes. The goal is well under **50 KB/s** per player.
+4. On the server window: View → Script Performance (or the MicroProfiler, Ctrl+F6): no script stays red.
+5. Send the numbers to Claude: they go into docs/SERVER_PERF_AUDIT.md (today's numbers there are estimates).
