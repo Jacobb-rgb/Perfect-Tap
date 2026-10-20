@@ -692,7 +692,8 @@ local function cleanQueue(queue: any, storage: { any }, report: Report): { any }
 	for _, item in values(queue) do
 		if not wellFormed(item) then
 			report.Dropped += 1
-		elseif ItemData.Kinds[item.K] and OreData.ById[item.O] then
+		elseif ItemData.Kinds[item.K] and (OreData.ById[item.O] or (item.K == "Relic" and ArtifactConfig.ById[item.O])) then
+			-- (a dusty relic in a Restoration Table or Cleaning Station queue stays there)
 			table.insert(kept, item)
 		else
 			-- a newer build's kind or ore: into the pen, where it waits safely

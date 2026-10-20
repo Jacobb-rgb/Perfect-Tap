@@ -385,6 +385,7 @@ return function(T, Loader)
 			SolarPanel = true,
 			WindTurbine = true,
 			FusionReactor = true,
+			RestorationTable = true, -- cleans relics faster
 		}
 		for _, machine in MachineData.List do
 			local upgrades = machine.Upgrades

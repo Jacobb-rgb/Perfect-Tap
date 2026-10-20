@@ -11,9 +11,18 @@
 	  with no yield: ArtifactConfig.add into data.Artifacts, Stats.ArtifactsFound
 	  + 1 (duplicates too: the ARTIFACTS board), a duplicate's
 	  ArtifactConfig.DuplicateShards (Shards.add), DataService.changed.
-	  Chosen on purpose (the simpler, robust way): the find goes straight
-	  into the collection, there is no relic item in the world to pick up,
-	  so nothing can be lost, stolen, duplicated or left behind in a mine.
+	  With DustyRelics off the find goes straight into the collection.
+	Dusty relics (DustyRelics on, owner's YES 2026-10-20)
+	  The rock drops a dusty relic item instead ({ K = "Relic", O = the
+	  artifact id, picked when the rock breaks}, ItemData): the player
+	  carries it to a Cleaning Station (the minigame, CleaningService) or
+	  puts it into a Restoration Table (a sorter machine: it takes the relic
+	  when its job ends), and cleanRelic records the find then (the same
+	  moment as below, at the station or the table). Nothing is lost: a
+	  relic that a rescue move would put into the pen (leaving the game, a
+	  lost item...) is cleaned on the way (ItemService.setRelicKeeper); if
+	  the item can't be spawned, the find is recorded at once. A relic is
+	  never sold, stored, put on a podium or loaded on the train.
 	  ArtifactFound { Artifact, Count, New, Collection, Completed, Shards?,
 	  Position } then lets the finder's client play the moment: a relic pops
 	  out of the rock and flies to the player, then a toast (a copy), a
@@ -83,10 +92,17 @@ local DataService = require(script.Parent.DataService)
 local MiningService = require(script.Parent.MiningService)
 local PlotService = require(script.Parent.PlotService)
 local PlotBuilder = require(script.Parent.Parent.World.PlotBuilder)
+local ItemService = require(script.Parent.ItemService)
+local MachineService = require(script.Parent.MachineService)
+local ProcessingService = require(script.Parent.ProcessingService)
 
 local ArtifactService = {}
 
 ArtifactService.PromptDistance = 12
+ArtifactService.DustyRelics = true -- rocks drop a dusty relic to clean (see the header)
+ArtifactService.RestorationTable = "RestorationTable" -- the machine that cleans relics on its own
+ArtifactService.RelicHint = "A dusty relic! Clean it at a Cleaning Station, or put it into a Restoration Table."
+ArtifactService.RelicHintEvery = 300 -- seconds between two of those hints per player
 ArtifactService.PromptTag = "ArtifactPrompt" -- every prompt this service adds (tests, the client)
 
 export type Found = {
@@ -110,6 +126,7 @@ end
 local random: () -> number = nextRoll
 
 local hooked: { [Instance]: boolean } = {}
+local relicHintAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 local foundCallbacks: { (Player, Found) -> () } = {}
 
 local function finite(n: any): boolean
@@ -382,6 +399,52 @@ function ArtifactService.find(player: Player, zoneId: string, position: Vector3?
 	return record(player, data, id, position, false)
 end
 
+-- Cleans a dusty relic of `player` (the Cleaning Station, the Restoration
+-- Table, a rescue move): its artifact goes into the collection with the find
+-- moment at `position`. nil when there is no save or the id is unknown.
+function ArtifactService.cleanRelic(player: Player, artifactId: any, position: Vector3?): Found?
+	local data = DataService.get(player)
+	if not data or type(artifactId) ~= "string" or not ArtifactConfig.ById[artifactId] then
+		return nil
+	end
+	return record(player, data, artifactId, position, false)
+end
+
+-- A rock that held an artifact drops its dusty relic (the artifact is
+-- picked now, rarer deeper). If the item can't be made, the find is
+-- recorded at once: never lost.
+function ArtifactService.dropRelic(player: Player, zoneId: string, position: Vector3): Found?
+	local id = ArtifactConfig.pick(zoneId, random())
+	if not id then
+		return nil
+	end
+	local cf = CFrame.new(position + Vector3.new(0, 2.5, 0))
+	local push = Vector3.new((random() - 0.5) * 8, 14, (random() - 0.5) * 8)
+	local item = ItemService.spawnDesc({ K = "Relic", O = id }, player.UserId, cf, push)
+	if not item then
+		return ArtifactService.find(player, zoneId, position, id)
+	end
+	local now = os.clock()
+	if player.Parent and now - (relicHintAt[player] or -math.huge) >= ArtifactService.RelicHintEvery then
+		relicHintAt[player] = now
+		Net.fire("Notify", player, { Text = ArtifactService.RelicHint, Kind = "Reward" })
+	end
+	return nil
+end
+
+-- The Restoration Table: a sorter that takes the relic when its job ends
+-- and cleans it (ProcessingService.sorterBehaviour; no yield in take).
+ArtifactService.restorer = {
+	take = function(machine: any, desc: any): boolean
+		if desc.K ~= "Relic" then
+			return false
+		end
+		local base = machine.Model and machine.Model.PrimaryPart
+		local at = if base then base.CFrame.Position + Vector3.new(0, 3, 0) else nil
+		return ArtifactService.cleanRelic(machine.Owner, desc.O, at) ~= nil
+	end,
+}
+
 --[[
 	ArtifactAction "Restore" { Artifact }: buys back the one missing artifact
 	of a collection with crystal shards (ArtifactConfig.restoreQuote; check,
@@ -590,8 +653,17 @@ ArtifactService._test = {
 function ArtifactService.init()
 	Net.on("ArtifactAction", onAction)
 	MiningService.onArtifactRoll(function(player: Player, zoneId: string, position: Vector3)
-		ArtifactService.find(player, zoneId, position, nil)
+		if ArtifactService.DustyRelics then
+			ArtifactService.dropRelic(player, zoneId, position)
+		else
+			ArtifactService.find(player, zoneId, position, nil)
+		end
 	end)
+	-- a relic a rescue move would store is cleaned on the way (never lost)
+	ItemService.setRelicKeeper(function(player: Player, artifactId: string, position: Vector3?): boolean
+		return ArtifactService.cleanRelic(player, artifactId, position) ~= nil
+	end)
+	MachineService.register(ArtifactService.RestorationTable, ProcessingService.sorterBehaviour(ArtifactService.restorer))
 	for _, plot in WorldLayout.Plots do
 		local ok, err = pcall(setupPlot, plot.Id)
 		if not ok then

@@ -5,6 +5,11 @@
 	  (ore.Value = ore.Income * OreData.SellSeconds: what Tobin pays)
 	income = ore.Income * grade multiplier, for cleaned ore on a podium
 	Raw ore is "Dirty Ore": its name and rarity stay hidden until it is cleaned.
+	A dusty relic (K = "Relic", O = its ArtifactConfig id) drops from a rock
+	that held an artifact; cleaning it (Cleaning Station by hand, or the
+	Restoration Table) puts the artifact into the collection. It is never
+	sold, stored in the pen or put on a podium (value and income 0, and
+	parseKey refuses it, so no summary lists it).
 ]]
 
 local OreData = require(script.Parent.OreData)
@@ -21,7 +26,11 @@ ItemData.Kinds = {
 	-- Alloy Furnace: two ingots of different ores -> one alloy of the more
 	-- valuable ore, worth more than both ingots (2 x 1.25)
 	Alloy = { Id = "Alloy", Name = "Alloy", ValueMult = 3.2 },
+	Relic = { Id = "Relic", Name = "Dusty Relic", ValueMult = 0 }, -- O = an ArtifactConfig id (see the header)
 }
+
+ItemData.RelicName = "Dusty Relic"
+ItemData.RelicRefused = "A dusty relic doesn't go in here: clean it at a Cleaning Station or put it into a Restoration Table." -- pens, train hoppers
 
 -- Quality grades from the cleaning minigame (index = grade level).
 ItemData.Grades = {
@@ -154,6 +163,8 @@ function ItemData.displayName(kind: string, oreId: string, gradeId: string?, rec
 	local oreName = ore and ore.Name or oreId
 	if kind == "Raw" then
 		return ItemData.DirtyName
+	elseif kind == "Relic" then
+		return ItemData.RelicName
 	elseif kind == "Clean" then
 		return (gradeId or "Rough") .. " " .. oreName
 	elseif kind == "Crushed" then

@@ -31,6 +31,8 @@ local Format = require(Shared.Util.Format)
 local CleaningPatterns = require(Shared.Cleaning.CleaningPatterns)
 local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local OreShellBuilder = require(Shared.Builders.OreShellBuilder)
+local ArtifactBuilder = require(Shared.Builders.ArtifactBuilder)
+local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local Geo = require(Shared.Builders.Geo)
 
 local Cleaning = script.Parent.Parent.Cleaning
@@ -169,6 +171,23 @@ local function makeContext(data: { [string]: any }, station: Model): any
 	local workCF = CFrame.lookAt(orePoint.Position, orePoint.Position - toCamera)
 	local shell = OreShellBuilder.build(pattern, workCF, folder)
 	OreShellBuilder.workLight(workCF, folder)
+	-- a dusty relic: the real relic waits inside the rock (hidden until the reveal)
+	local relicId = if type(data.Relic) == "string" and ArtifactConfig.ById[data.Relic] then data.Relic else nil
+	local relicParts: { BasePart } = {}
+	if relicId then
+		local corePoint = workCF * CFrame.new(0, -0.55, OreShellBuilder.CoreFront - 0.4)
+		local relicModel = ArtifactBuilder.build(relicId, corePoint, 0.8, true)
+		if relicModel then
+			relicModel.Parent = folder
+			for _, d in relicModel:GetDescendants() do
+				if d:IsA("BasePart") then
+					d:SetAttribute("ShowAs", d.Transparency)
+					d.Transparency = 1
+					table.insert(relicParts, d)
+				end
+			end
+		end
+	end
 	local view = CleaningView.build({ Touch = UserInputService.TouchEnabled })
 	view.Gui:SetAttribute("TerraForge", true)
 
@@ -181,6 +200,8 @@ local function makeContext(data: { [string]: any }, station: Model): any
 		pointer = pointer,
 		folder = folder,
 		shell = shell,
+		relic = relicId,
+		relicParts = relicParts,
 		view = view,
 		camera = camera,
 		camPoint = camPoint,
@@ -533,7 +554,35 @@ local function stars(level: number): string
 	return string.rep("★", level) .. string.rep("☆", 4 - level)
 end
 
+-- The card for a cleaned dusty relic: its name, rarity and "into your collection".
+local function showRelicCard(ctx: any, result: { [string]: any })
+	local view = ctx.view
+	local art = ArtifactConfig.ById[ctx.relic]
+	local rarity = Rarity.get(art.Rarity)
+	view.CardGrade.Text = "RELIC CLEANED"
+	view.CardGrade.TextColor3 = rarity.Color
+	view.CardStars.Text = ""
+	view.CardOre.Text = `{art.Name}  ({rarity.Name})`
+	view.CardOre.TextColor3 = rarity.Color
+	view.CardValue.Text = if result.Collected then "Added to your collection" else "Your relic is safe"
+	view.CardDetail.Text = string.format(
+		"Chisel %d%%  ·  Scrape %d%%  ·  Polish %d%%",
+		math.floor((result.Chisel or 0) * 100),
+		math.floor((result.Scrape or 0) * 100),
+		math.floor((result.Polish or 0) * 100)
+	)
+	view.Card.Visible = true
+	local pop = view.Card:FindFirstChild("Pop") :: UIScale
+	pop.Scale = 0.2
+	TweenService:Create(pop, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	ctx.flash(rarity.Color, 0.4)
+end
+
 local function showCard(ctx: any, result: { [string]: any })
+	if ctx.relic and result.Relic == ctx.relic then
+		showRelicCard(ctx, result)
+		return
+	end
 	local view = ctx.view
 	local grade = ItemData.GradeById[result.Grade] or ItemData.Grades[1]
 	view.CardGrade.Text = string.upper(grade.Name)
@@ -603,6 +652,17 @@ local function reveal(ctx: any)
 	end
 	for _, p in shell.Fragile do
 		if p.Parent then
+			table.insert(parts, p)
+		end
+	end
+	-- a relic: the ore stand-in fades and the real relic rises and spins instead
+	if ctx.relic and #ctx.relicParts > 0 then
+		for _, p in parts do
+			p.Transparency = 1
+		end
+		parts = {}
+		for _, p in ctx.relicParts do
+			p.Transparency = (p:GetAttribute("ShowAs") :: number?) or 0
 			table.insert(parts, p)
 		end
 	end

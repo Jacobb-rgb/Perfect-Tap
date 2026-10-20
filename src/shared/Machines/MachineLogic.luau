@@ -37,6 +37,7 @@
 	'Foreign' and 'Mixed' mean it is pushed back out.
 ]]
 
+local ArtifactConfig = require(script.Parent.Parent.Config.ArtifactConfig)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local ItemData = require(script.Parent.Parent.Config.ItemData)
 local MachineData = require(script.Parent.Parent.Config.MachineData)
@@ -75,6 +76,10 @@ function MachineLogic.isValidDesc(desc: any): boolean
 	local kind, oreId, gradeId, recipeId = desc.K, desc.O, desc.G, desc.R
 	if type(kind) ~= "string" or not ItemData.Kinds[kind] then
 		return false
+	end
+	-- a dusty relic carries its artifact id, never a grade or recipe
+	if kind == "Relic" then
+		return type(oreId) == "string" and ArtifactConfig.ById[oreId] ~= nil and gradeId == nil and recipeId == nil
 	end
 	if type(oreId) ~= "string" or not OreData.ById[oreId] then
 		return false
