@@ -34,7 +34,7 @@ return function(T, Loader)
 	-- Waits until check() holds, at most `timeout` seconds: deferred computes can take
 	-- more than one frame when many test runs share the machine.
 	local function waitUntil(check: () -> boolean, timeout: number?)
-		local deadline = os.clock() + (timeout or 1)
+		local deadline = os.clock() + (timeout or 5) -- generous: returns as soon as the check holds
 		repeat
 			task.wait()
 		until check() or os.clock() > deadline

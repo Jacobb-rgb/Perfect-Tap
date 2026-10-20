@@ -591,7 +591,7 @@ return function(T, Loader)
 		lb.release(cheat, w.data[cheat])
 		T.eq(lb.inFlight(), 1, "the leave write waits for the hidden list")
 		local waited = 0
-		while lb.inFlight() > 0 and waited < 3 do
+		while lb.inFlight() > 0 and waited < 10 do
 			task.wait(0.1)
 			waited += 0.1
 		end
@@ -622,7 +622,7 @@ return function(T, Loader)
 		T.eq(lb.inFlight(), 1)
 		T.truthy(LeaderboardService.loadHidden())
 		waited = 0
-		while lb.inFlight() > 0 and waited < 3 do
+		while lb.inFlight() > 0 and waited < 10 do
 			task.wait(0.1)
 			waited += 0.1
 		end
@@ -687,7 +687,7 @@ return function(T, Loader)
 		-- rounds skip a leaving player
 		T.eq(LeaderboardService.flushValues(56, { TotalEarned = 7000 }), 0)
 		local waited = 0
-		while lb.inFlight() > 0 and waited < 3 do
+		while lb.inFlight() > 0 and waited < 10 do
 			task.wait(0.1)
 			waited += 0.1
 		end
@@ -705,16 +705,18 @@ return function(T, Loader)
 		d.TotalEarned = 800
 		LeaderboardService.beginSession(57)
 		LeaderboardService.startPlay(p, os.clock())
+		local started = os.clock()
 		lb.release(p, d)
 		T.eq(w.stores.TotalEarned.sets, 0, "nothing sent with the leave")
 		T.eq(lb.inFlight(), 1, "on its way")
 		local waited = 0
-		while lb.inFlight() > 0 and waited < 3 do
+		while lb.inFlight() > 0 and waited < 10 do
 			task.wait(0.05)
 			waited += 0.05
 		end
 		T.eq(lb.inFlight(), 0)
-		T.truthy(waited >= 0.15, "after the delay")
+		-- real time: counting 0.05 s steps undercounts when each step runs long
+		T.truthy(os.clock() - started >= 0.15, "after the delay")
 		T.eq(w.stores.TotalEarned.values["57"], LeaderboardConfig.encode("TotalEarned", 800))
 	end)
 

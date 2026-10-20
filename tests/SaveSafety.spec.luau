@@ -86,9 +86,17 @@ return function(T, Loader)
 			gates = {},
 			errorAfter = nil :: string?, -- "before" / "after": the transform runs, then the call errors (before / after storing)
 			errorCount = 0, -- how many calls do that
+			holdNext = 0, -- the next N requests write, then hold their answer on their own gate (openHeld lets it through)
+			held = {},
+			whileWaiting = nil :: (() -> ())?, -- runs while a delayed request waits (before its transform)
 		}
 		function s:openGates()
 			for _, gate in self.gates do
+				gate.open = true
+			end
+		end
+		function s:openHeld()
+			for _, gate in self.held do
 				gate.open = true
 			end
 		end
@@ -96,6 +104,9 @@ return function(T, Loader)
 			self.calls += 1
 			if self.delay > 0 then
 				task.wait(self.delay)
+			end
+			if self.whileWaiting then
+				self.whileWaiting()
 			end
 			while self.hang do
 				task.wait(0.01)
@@ -136,6 +147,15 @@ return function(T, Loader)
 			end
 			if self.after > 0 then
 				task.wait(self.after) -- the write's round trip: the caller hears back later
+			end
+			if self.holdNext > 0 then
+				-- the write landed; its answer waits until the test lets it through (no race with real time)
+				self.holdNext -= 1
+				local gate = { open = false }
+				table.insert(self.held, gate)
+				while not gate.open do
+					task.wait(0.01)
+				end
 			end
 			return result
 		end
@@ -499,7 +519,7 @@ return function(T, Loader)
 		DataService._test.isolate(ps, function()
 			local player = fakePlayer(502)
 			task.spawn(DataService._test.loadPlayer, player)
-			task.wait(0.01) -- the load request is on its way
+			T.eq(store.calls, 1, "the load request is on its way (it waits 0.05 s)")
 			player.Parent = nil -- left while loading
 			DataService._test.shutdown()
 			local saved = store:get("Player_502")
@@ -517,7 +537,8 @@ return function(T, Loader)
 			store.failAll = true
 			local started = os.clock()
 			DataService._test.shutdown()
-			T.truthy(os.clock() - started < 5, `gave up quickly ({os.clock() - started} s)`)
+			-- urgent: ~1 s; the normal final save's pauses alone would be 2 + 4 + 6 = 12 s
+			T.truthy(os.clock() - started < 8, `gave up quickly ({os.clock() - started} s)`)
 			T.eq(DataService._test.inFlight(), 0, "nothing left in flight")
 		end)
 	end)
@@ -573,9 +594,11 @@ return function(T, Loader)
 		end, callbackLimit)
 	end
 
+	-- Bounded wait: up to `limit` (10) seconds of 0.01 s steps; a loaded
+	-- machine only makes each step longer, so the cap never gets tighter.
 	local function waitUntil(condition: () -> boolean, limit: number?): boolean
 		local waited = 0
-		while not condition() and waited < (limit or 2) do
+		while not condition() and waited < (limit or 10) do
 			task.wait(0.01)
 			waited += 0.01
 		end
@@ -604,7 +627,12 @@ return function(T, Loader)
 				end),
 				"P2 loads"
 			)
-			task.wait(0.1) -- (P1's stale load had every chance to take the lock)
+			T.truthy(
+				waitUntil(function()
+					return DataService._test.inFlight() == 0
+				end),
+				"P1's stale load has ended (it had every chance to take the lock)"
+			)
 			T.eq(DataService.get(p1), nil, "P1 never got a session")
 			local lock = store:get("Player_601").Lock
 			T.truthy(lock and string.sub(lock.SessionId, 1, 2) == "S#", "the lock is this server's")
@@ -689,16 +717,27 @@ return function(T, Loader)
 			local p = fakePlayer(604)
 			DataService._test.loadPlayer(p)
 			local lockTime = store:get("Player_604").Lock.Time
+			local inside, gate = false, false
 			DataService.beforeRelease(function()
-				task.wait(0.2)
+				inside = true
+				local since = os.clock()
+				while not gate and os.clock() - since < 30 do -- yields until the test lets it go
+					task.wait(0.01)
+				end
 			end)
 			-- (during PlayerRemoving the player is still parented: only the release itself can stop the autosave)
 			task.spawn(DataService._test.releasePlayer, p)
-			task.wait(0.02) -- inside the callback
+			T.truthy(
+				waitUntil(function()
+					return inside
+				end),
+				"inside the callback"
+			)
 			clock.t += 500
 			DataService._test.autosaveStep(clock.t)
 			task.wait(0.05)
 			T.eq(store:get("Player_604").Lock.Time, lockTime, "no autosave for a player who left")
+			gate = true
 			T.truthy(
 				waitUntil(function()
 					return DataService._test.inFlight() == 0
@@ -717,14 +756,22 @@ return function(T, Loader)
 			local p = fakePlayer(605)
 			DataService._test.loadPlayer(p)
 			DataService.get(p).Coins = 42
+			local stuck, finished = true, false
 			DataService.beforeRelease(function()
-				task.wait(1) -- stuck (longer than the limit)
+				local since = os.clock()
+				while stuck and os.clock() - since < 30 do -- stuck (far longer than the limit)
+					task.wait(0.01)
+				end
+				finished = true
 			end)
 			p.Parent = nil
 			local started = os.clock()
 			DataService._test.releasePlayer(p)
-			T.truthy(os.clock() - started < 0.6, `the final save started after the callback limit ({os.clock() - started} s)`)
+			T.falsy(finished, "the final save didn't wait for the stuck callback")
+			-- (0.2 s limit; the game's 5 s default would show here)
+			T.truthy(os.clock() - started < 3, `the final save started after the callback limit ({os.clock() - started} s)`)
 			T.eq(store:get("Player_605").Data.Coins, 42, "saved")
+			stuck = false
 		end)
 	end)
 
@@ -749,16 +796,15 @@ return function(T, Loader)
 		store.delay = 0.02 -- the request yields before the transform, like the real network read
 		local a = lifeServer(store, "A")
 		local p = a:load("P")
-		local writing = true
-		task.spawn(function()
-			while writing do
-				p.Data.Spot = roblox.Vector3.new(1, 2, 3) -- a buggy writer, every 5 ms
-				task.wait(0.005)
-			end
-		end)
+		local writes = 0
+		store.whileWaiting = function()
+			writes += 1
+			p.Data.Spot = roblox.Vector3.new(1, 2, 3) -- a buggy writer, while the request waits
+		end
 		p.Data.Coins = 77
 		local ok = a:save(p, false)
-		writing = false
+		store.whileWaiting = nil
+		T.truthy(writes >= 1, "the bad value was written while the request waited")
 		T.truthy(ok, "saved: the repair runs inside the transform, on what is written")
 		T.eq(store:get("P").Data.Coins, 77)
 		T.eq(store:get("P").Data.Spot, nil, "the Vector3 never reaches the store")
@@ -813,7 +859,7 @@ return function(T, Loader)
 	T.test("SaveSafety: a load still waiting at shutdown stops at once and takes no lock", function()
 		local store = robloxStore()
 		store:put("Player_607", { Data = { Version = 3, Coins = 1 }, Lock = { JobId = "X", SessionId = "X#1", Time = now() }, Saved = 1 })
-		local ps = lifeServer(store, "S", 400)
+		local ps = lifeServer(store, "S", 1000) -- the retries would take >= 10 s
 		DataService._test.isolate(ps, function()
 			local p = fakePlayer(607)
 			task.spawn(DataService._test.loadPlayer, p)
@@ -821,7 +867,7 @@ return function(T, Loader)
 			local started = os.clock()
 			local calls = store.calls
 			DataService._test.shutdown()
-			T.truthy(os.clock() - started < 1, `shutdown didn't wait for the retries ({os.clock() - started} s)`)
+			T.truthy(os.clock() - started < 5, `shutdown didn't wait for the retries ({os.clock() - started} s)`)
 			T.truthy(store.calls - calls <= 2, "at most the request already on its way")
 			T.eq(store:get("Player_607").Lock.SessionId, "X#1", "X's lock untouched, none taken")
 		end)
@@ -846,6 +892,19 @@ return function(T, Loader)
 	T.test("SaveSafety #5/#12: the real autosave keeps every lock fresh and retries a failed refresh soon", function()
 		local store = robloxStore()
 		local ps = lifeServer(store, "S")
+		-- counts running saves: each 5 s step waits for its autosaves (a failing one
+		-- retries with real waits) before the fake clock moves on
+		local saving = 0
+		local realSave = ps.save
+		ps.save = function(self: any, ...: any): any
+			saving += 1
+			local results = table.pack(pcall(realSave, self, ...))
+			saving -= 1
+			if not results[1] then
+				error(results[2], 0)
+			end
+			return table.unpack(results, 2, results.n)
+		end
 		DataService._test.isolate(ps, function()
 			DataService._test.setClock(now)
 			local interval = GameConfig.AutosaveInterval
@@ -888,6 +947,12 @@ return function(T, Loader)
 				end
 				DataService._test.autosaveStep(clock.t)
 				task.wait(0.005)
+				T.truthy(
+					waitUntil(function()
+						return saving == 0
+					end),
+					`step {step}: the autosaves finish`
+				)
 				if not store.failAll then
 					check()
 				end
@@ -906,17 +971,25 @@ return function(T, Loader)
 
 	T.test("SaveSafety R1 (write round trip): a same-server load during the lock write waits; the first keeps its lock", function()
 		local store = robloxStore()
-		store.after = 0.03 -- the write's round trip: the lock is stored before the caller hears back
+		store.holdNext = 1 -- the write's round trip: the lock is stored before the caller hears back
 		local ps = lifeServer(store, "S", 400)
 		local first
 		task.spawn(function()
 			first = ps:load("Player_611")
 		end)
-		task.wait(0.01) -- the first load's lock is written, its answer still on the way
+		T.truthy(
+			waitUntil(function()
+				return #store.held == 1
+			end),
+			"the first load's lock is written, its answer still on the way"
+		)
+		T.truthy(store:get("Player_611").Lock, "(stored)")
 		ps.lockRetries = 2 -- (the second load on the same server gives up quickly)
 		local second, reason = ps:load("Player_611")
 		T.eq(second, nil, "the second load waits on the live session")
 		T.eq(reason, "locked")
+		T.eq(first, nil, "(the first load's answer was still on the way)")
+		store:openHeld()
 		T.truthy(
 			waitUntil(function()
 				return first ~= nil
@@ -934,21 +1007,27 @@ return function(T, Loader)
 			local p1 = fakePlayer(612)
 			DataService._test.loadPlayer(p1)
 			DataService.get(p1).Coins = 321
-			store.after = 0.2 -- the final save's answer takes a while
+			store.holdNext = 1 -- the final save's answer takes a while
 			p1.Parent = nil
 			task.spawn(DataService._test.releasePlayer, p1)
-			task.wait(0.02)
+			T.truthy(
+				waitUntil(function()
+					return #store.held == 1
+				end),
+				"the final save is written, its answer on the way"
+			)
 			local p2 = fakePlayer(612)
 			task.spawn(DataService._test.loadPlayer, p2)
 			task.wait(0.05) -- P2 waits on the running release...
+			T.eq(DataService._test.inFlight(), 2, "(the release and P2's load both still running)")
 			p2.Parent = nil -- ...and leaves
+			store:openHeld()
 			T.truthy(
 				waitUntil(function()
 					return DataService._test.inFlight() == 0
 				end),
 				"everything settles"
 			)
-			store.after = 0
 			local saved = store:get("Player_612")
 			T.eq(saved.Data.Coins, 321, "the final save landed")
 			T.eq(saved.Lock, nil, "no lock taken for P2")
@@ -957,13 +1036,19 @@ return function(T, Loader)
 
 	T.test("SaveSafety S1: a player who leaves during the lock write's round trip gets the lock put back", function()
 		local store = robloxStore()
-		store.after = 0.05
+		store.holdNext = 1
 		local ps = lifeServer(store, "S")
 		DataService._test.isolate(ps, function()
 			local p = fakePlayer(613)
 			task.spawn(DataService._test.loadPlayer, p)
-			task.wait(0.02) -- the transform ran (lock written), the answer is on its way
+			T.truthy(
+				waitUntil(function()
+					return #store.held == 1
+				end),
+				"the transform ran (lock written), the answer is on its way"
+			)
 			p.Parent = nil
+			store:openHeld()
 			T.truthy(
 				waitUntil(function()
 					return DataService._test.inFlight() == 0
@@ -1224,18 +1309,28 @@ return function(T, Loader)
 
 	T.test("SaveSafety Z3: a hung put-back (left during the lock write) is given up like a release", function()
 		local store = robloxStore()
-		store.after = 0.05 -- the lock write's round trip
+		store.holdNext = 1 -- the lock write's round trip
 		local ps = lifeServer(store, "S")
 		DataService._test.isolate(ps, function()
 			quickTimings(0.1)
 			DataService._test.setClock(now)
 			local p = fakePlayer(623)
 			task.spawn(DataService._test.loadPlayer, p)
-			task.wait(0.02) -- the lock is written, the answer still on its way
+			T.truthy(
+				waitUntil(function()
+					return #store.held == 1
+				end),
+				"the lock is written, the answer still on its way"
+			)
 			p.Parent = nil
 			store.hangNext = 1 -- the put-back's request hangs
-			task.wait(0.1)
-			store.after = 0
+			store:openHeld()
+			T.truthy(
+				waitUntil(function()
+					return #store.gates == 1
+				end),
+				"the put-back's request hangs"
+			)
 			clock.t += GameConfig.StaleLockSeconds + 1
 			local value = store:get("Player_623") -- another server took the stale lock over and left
 			value.Lock = nil

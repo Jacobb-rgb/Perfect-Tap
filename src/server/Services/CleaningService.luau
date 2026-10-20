@@ -377,8 +377,11 @@ local stationBehaviour: MachineService.Behaviour = {
 		stations[machine] = true
 		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", 0, 0)
 		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", 0.4, 1)
-		-- its own keys (G / gamepad B; F and Y stay "Clean Ore"), and always shown next to
-		-- "Clean Ore". No other prompt uses G or B, so one press never fires two prompts.
+		-- keys G / gamepad B (F and Y stay "Clean Ore"), always shown next to "Clean Ore".
+		-- G / B are shared: the Pen, Foundry, Train Send, Iron Box and Logistics (Sorter)
+		-- prompts use them too, on their own machines / anchors (8-10 studs reach, default
+		-- OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the station)
+		-- a G press in reach of one of those too fires both.
 		take.KeyboardKeyCode = Enum.KeyCode.G
 		take.GamepadKeyCode = Enum.KeyCode.ButtonB
 		take.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
