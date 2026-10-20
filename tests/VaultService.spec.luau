@@ -205,6 +205,145 @@ return function(T, Loader)
 		T.eq(buy(w, { Level = BlasterData.MaxLevel + 1 }).Reason, "Max", "nothing past the top")
 	end)
 
+	withWorld("VaultService: a Robux blaster gives the next level in its band, else only counts it (never refuses)", function(w)
+		-- the STORE's bands (MonetizationConfig entries with Grant "BlasterLevel")
+		local bandA = { Key = "BlasterNextA", Grant = "BlasterLevel", MinLevel = 2, MaxLevel = 4 }
+		local bandD = { Key = "BlasterNextD", Grant = "BlasterLevel", MinLevel = 10, MaxLevel = 10 }
+		w.data.BlasterLevel = 2
+		w.data.Coins = 777
+		T.eq(VaultService.paidStatus(w.data, bandA), "Prompt", "next level 3 is in band A")
+		T.eq(VaultService.paidStatus(w.data, bandD), "Full", "band D is for LV 10 only")
+		T.truthy(vault.grantPaid(w.player, w.data, bandA), "granted")
+		T.eq(w.data.BlasterLevel, 3)
+		T.eq(w.data.BlasterOre, BlasterData.vaultOre(3), "that level's case look")
+		T.eq(w.data.Coins, 777, "no coins taken")
+		T.eq(w.data.Stats.BlastersPaid, 1)
+		T.eq(w.data.Stats.BlastersBought, 0, "a Vault (coins) buy counts elsewhere")
+		T.eq(w.data.Stats.RunPaid, true, "this rebirth run is paid (no stars for it)")
+		local r = results(w)[#results(w)]
+		T.truthy(r.Ok and r.Paid and r.Level == 3, "the crate opening plays (Paid)")
+		-- off band (a stale or client-made prompt): its Robux are banked, never a level from a cheaper band now
+		-- (with no band entries in MonetizationConfig nothing converts: the credit just waits)
+		w.data.BlasterLevel = 9
+		bandA.Robux = 49
+		T.eq(VaultService.paidStatus(w.data, bandA), "Full")
+		T.truthy(vault.grantPaid(w.player, w.data, bandA), "the receipt is still taken (never a retry loop)")
+		T.eq(w.data.BlasterLevel, 9, "band A never buys LV 10")
+		T.eq(w.data.Stats.BlastersPaid, 1, "no lift without a band price to check")
+		T.eq(w.data.Stats.BlasterCredit, 49, "banked")
+		w.data.BlasterLevel = BlasterData.MaxLevel
+		T.eq(VaultService.paidStatus(w.data, bandD), "Full", "the store hides it at the top")
+		-- a save that isn't this player's live one is left to MonetizationService (not processed yet)
+		T.falsy(vault.grantPaid(w.player, deepCopy(w.data), bandD))
+		-- the coin Vault goes through the same setter
+		w.data.BlasterLevel = 3
+		w.data.Coins = 1e12
+		w.data.Stats.RunPaid = false
+		vault.buy(w.player, { Level = 4 })
+		T.eq(w.data.BlasterLevel, 4)
+		T.eq(w.data.Stats.BlastersBought, 1)
+		T.eq(w.data.Stats.RunPaid, false, "coins don't mark the run paid")
+	end)
+
+	-- the STORE's four bands (they live in MonetizationConfig on ui/store), added for a test
+	local function withBands(fn: () -> ())
+		local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+		local bands = {
+			{ Key = "TestBandA", Kind = "Product", Grant = "BlasterLevel", Id = 0, Robux = 49, MinLevel = 2, MaxLevel = 4 },
+			{ Key = "TestBandB", Kind = "Product", Grant = "BlasterLevel", Id = 0, Robux = 99, MinLevel = 5, MaxLevel = 7 },
+			{ Key = "TestBandC", Kind = "Product", Grant = "BlasterLevel", Id = 0, Robux = 199, MinLevel = 8, MaxLevel = 9 },
+			{ Key = "TestBandD", Kind = "Product", Grant = "BlasterLevel", Id = 0, Robux = 399, MinLevel = 10, MaxLevel = 10 },
+		}
+		for _, band in bands do
+			MonetizationConfig.Products[band.Key] = band :: any
+		end
+		local ok, err = pcall(fn, bands)
+		for _, band in bands do
+			MonetizationConfig.Products[band.Key] = nil
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	withWorld("VaultService: banked Robux buy start lifts only at the band price of the start they make", function(w)
+		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+		withBands(function(bands: any)
+			local A, D = bands[1], bands[4]
+			w.data.Rebirths = 1
+			w.data.BlasterLevel = 9
+			w.data.Stats.RunForged = 9
+			-- a stale A (LV 2-4) at LV 9: 49 R$ make the start LV 2, priced like buying LV 2
+			T.truthy(vault.grantPaid(w.player, w.data, A))
+			T.eq(w.data.Stats.BlastersPaid, 1)
+			T.eq(w.data.Stats.BlasterCredit, 0)
+			T.eq(RebirthConfig.startFor(w.data), 2)
+			-- a stale D (399 R$) at the top level: lifts at 49 + 49 + 99 + 99 + 99 (starts 3..7), 4 R$ left
+			w.data.BlasterLevel = 10
+			w.data.Stats.RunForged = 10
+			T.truthy(vault.grantPaid(w.player, w.data, D))
+			T.eq(w.data.BlasterLevel, 10)
+			T.eq(w.data.Stats.BlastersPaid, 6)
+			T.eq(w.data.Stats.BlasterCredit, 4)
+			T.eq(RebirthConfig.startFor(w.data), 7)
+			local note = w.notes[#w.notes]
+			T.truthy(note.Name == "Notify" and string.find(note.A.Text, "LV 7", 1, true), "it says the new start")
+			-- the cheapest band never buys a high start: start 8 costs a C (199)
+			T.truthy(vault.grantPaid(w.player, w.data, A))
+			T.eq(w.data.Stats.BlastersPaid, 6, "49 + 4 R$ don't make LV 8")
+			T.eq(w.data.Stats.BlasterCredit, 53)
+			-- past the cap (start LV 9) nothing more converts
+			w.data.Stats.BlastersPaid = 8
+			T.eq(VaultService.spendCredit(w.data), 0)
+		end)
+	end)
+
+	withWorld("VaultService: the top level waits for the Foundry while a run has forged no rebirth level", function(w)
+		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+		withBands(function(bands: any)
+			local D = bands[4]
+			-- a lifted run: Robux levels start it at LV 9, nothing forged yet
+			w.data.Rebirths = 3
+			w.data.Stats.BlastersPaid = 8
+			w.data.Stats.RunPaid = true
+			w.data.Stats.RunForged = 0
+			w.data.BlasterLevel = 9
+			w.data.Coins = 1e13
+			T.truthy(RebirthConfig.topBlocked(w.data))
+			T.eq(VaultService.paidStatus(w.data, D), "Full", "the STORE doesn't sell LV 10")
+			T.truthy(vault.grantPaid(w.player, w.data, D), "a stale receipt is still taken")
+			T.eq(w.data.BlasterLevel, 9, "banked, not the top level")
+			local r = buy(w, { Level = 10 })
+			T.eq(r.Reason, "ForgeFirst", "the coin Vault waits too")
+			T.eq(w.data.BlasterLevel, 9)
+			-- forging LV 10 at the Foundry earns the rebirth
+			w.data.BlasterLevel = 10
+			w.data.Stats.RunForged = 10
+			T.truthy(RebirthConfig.canRebirth(w.data))
+			-- with a rebirth level forged, the top level is for sale
+			w.data.BlasterLevel = 9
+			w.data.Stats.RunForged = 7
+			T.falsy(RebirthConfig.topBlocked(w.data))
+			T.eq(VaultService.paidStatus(w.data, D), "Prompt")
+		end)
+	end)
+
+	withWorld("VaultService: a Robux level on the first run keeps the levels the grace counted", function(w)
+		local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+		withBands(function(bands: any)
+			local C = bands[3]
+			-- the first run: LV 7 from Vault cases, nothing forged; the grace counts LV 7
+			w.data.BlasterLevel = 7
+			T.eq(RebirthConfig.reachedOf(w.data), 7)
+			T.truthy(vault.grantPaid(w.player, w.data, C))
+			T.eq(w.data.BlasterLevel, 8)
+			T.eq(RebirthConfig.reachedOf(w.data), 7, "the bought LV 8 pays nothing, LV 7 still counts")
+			T.truthy(RebirthConfig.canRebirth(w.data), "the rebirth the player had stays")
+			T.truthy(vault.grantPaid(w.player, w.data, C))
+			T.eq(RebirthConfig.reachedOf(w.data), 7, "a second Robux level: still 7")
+		end)
+	end)
+
 	withWorld("VaultService: refusals change nothing", function(w)
 		w.data.Coins = 1e12
 		w.data.BlasterLevel = 3

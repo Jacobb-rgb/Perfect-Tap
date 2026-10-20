@@ -5,13 +5,20 @@
 
 	- Needs your blaster at MinBlaster or higher, FORGED at the Foundry in
 	  this run (reachedOf: Stats.RunForged, which FoundryService raises and
-	  the reset clears; the first run counts the blaster level as it is).
+	  the reset clears; the first run counts the blaster level as it is,
+	  unless a level was bought with Robux in it: Stats.RunPaid, set by
+	  VaultService.grantNext "Robux" (which first keeps the levels the grace
+	  counted so far in RunForged) and by a start the Robux levels lift).
+	  The top level is left to the Foundry while nothing was forged
+	  (topBlocked: the Vault says "ForgeFirst", the STORE "Full"), and a save
+	  that still got there unforged may rebirth for starsFor(reachedOf) (0).
 	  Vault cases are bought with coins only, and Podium Keeper keeps the
 	  income: counting them would make the stars a few minutes of idle
 	  income each. Rebirth is never forced, never sold for Robux, and
 	  nothing in it is random.
 	- Resets (reset(), one step on the save): the earned coins, the blaster (level 1, or
-	  Head Start's level in that level's Vault look), the mine floors with it
+	  Head Start's level, lifted one level per blaster level ever bought with
+	  Robux: startFor, in that level's Vault look), the mine floors with it
 	  (MineFloors opens them by blaster level) and the elevator, the machine
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
 	  capacity and speed, the Backpack, and every ore you own: the Ore Pen,
@@ -27,6 +34,12 @@
 	  the other gear lines, golems, enchants, artifacts, the codex,
 	  hoverboards, shards, every Robux item, the unspent Robux-bought coins
 	  (PaidCoins, below), stats and the leaderboard totals.
+	- Robux blaster levels come back (owner 2026-10-20, "don't lose what you
+	  paid for"): every level bought with Robux (Stats.BlastersPaid,
+	  VaultService) lifts the fresh blaster of EVERY later rebirth one level
+	  (startFor), up to MaxLevel - 1: one level is always left to forge at
+	  the Foundry, or the next rebirth could never be earned. They never pay
+	  stars (Stats.RunPaid).
 	- Pays: starsFor(reachedOf), Rebirths + 1. Stats.BestBlaster keeps the
 	  highest level ever reached: coin prices that grow with the blaster
 	  follow it (BlasterData.priceLevel), so a rebirth never makes capsules
@@ -249,9 +262,13 @@ function RebirthConfig.starsOf(data: any): number
 end
 
 -- The cost of buying the next level of `id` for this save, or nil + "BadPerk" | "Max" | "NoStars".
+-- (Head Start is "Max" once the Robux levels already lift the start to MaxLevel - 1: it would add nothing.)
 function RebirthConfig.quote(data: any, id: any): (number?, string?)
 	if type(id) ~= "string" or not RebirthConfig.ById[id] then
 		return nil, "BadPerk"
+	end
+	if id == "HeadStart" and RebirthConfig.startFor(data) >= BlasterData.MaxLevel - 1 then
+		return nil, "Max"
 	end
 	local perks = if type(data) == "table" then data.StarPerks else nil
 	local cost = RebirthConfig.nextCost(perks, id)
@@ -333,10 +350,24 @@ function RebirthConfig.nextGlow(perks: any, current: any): string
 	return ""
 end
 
--- The blaster level a rebirth starts you with (Head Start).
+-- The blaster level a rebirth starts you with from Head Start alone.
 function RebirthConfig.startLevel(perks: any): number
 	local level = RebirthConfig.levelOf(perks, "HeadStart")
 	return if level > 0 then RebirthConfig.HeadStartLevels[level] else 1
+end
+
+-- Blaster levels the save ever bought with Robux (Stats.BlastersPaid, whole, >= 0).
+function RebirthConfig.paidOf(data: any): number
+	local stats = if type(data) == "table" then data.Stats else nil
+	local v = if type(stats) == "table" then stats.BlastersPaid else nil
+	return if finite(v) and v > 0 then math.floor(v) else 0
+end
+
+-- The blaster level a rebirth starts this save with: Head Start's, plus one
+-- per Robux level, up to MaxLevel - 1 (a level is left to forge).
+function RebirthConfig.startFor(data: any): number
+	local base = RebirthConfig.startLevel(if type(data) == "table" then data.StarPerks else nil)
+	return math.max(base, math.min(base + RebirthConfig.paidOf(data), BlasterData.MaxLevel - 1))
 end
 
 ---------------------------------------------------------------- the rebirth
@@ -355,10 +386,11 @@ function RebirthConfig.reachedOf(data: any): number
 		return 0
 	end
 	local level = BlasterData.get(data.BlasterLevel).Level
-	if RebirthConfig.countOf(data) == 0 then
+	local stats = data.Stats
+	local paid = type(stats) == "table" and stats.RunPaid == true
+	if RebirthConfig.countOf(data) == 0 and not paid then
 		return level
 	end
-	local stats = data.Stats
 	local run = if type(stats) == "table" then stats.RunForged else nil
 	return if finite(run) and run > 0 then math.min(math.floor(run), level) else 0
 end
@@ -369,13 +401,30 @@ function RebirthConfig.canRebirth(data: any): (boolean, string?)
 	if type(data) ~= "table" then
 		return false, "NoData"
 	end
-	if BlasterData.get(data.BlasterLevel).Level < RebirthConfig.MinBlaster then
+	local level = BlasterData.get(data.BlasterLevel).Level
+	if level < RebirthConfig.MinBlaster then
 		return false, "Locked"
 	end
-	if RebirthConfig.reachedOf(data) < RebirthConfig.MinBlaster then
+	-- (at the top level nothing is left to forge: a save that got there unforged (Vault
+	-- cases before topBlocked existed) may rebirth for starsFor(reachedOf), 0 stars)
+	if RebirthConfig.reachedOf(data) < RebirthConfig.MinBlaster and level < BlasterData.MaxLevel then
 		return false, "NotForged"
 	end
 	return true, nil
+end
+
+-- Would buying the next blaster level (Vault coins, Robux) make the top level with no
+-- rebirth level forged this run? Then nothing would be left to forge and the run could
+-- never rebirth with stars: the Vault and the STORE leave that level to the Foundry.
+function RebirthConfig.topBlockedFor(level: number, reached: number): boolean
+	return level + 1 == BlasterData.MaxLevel and reached < RebirthConfig.MinBlaster
+end
+
+function RebirthConfig.topBlocked(data: any): boolean
+	if type(data) ~= "table" then
+		return false
+	end
+	return RebirthConfig.topBlockedFor(BlasterData.get(data.BlasterLevel).Level, RebirthConfig.reachedOf(data))
 end
 
 local function record(data: { [string]: any }, key: string): { [string]: any }
@@ -401,6 +450,7 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	-- the highest level ever (BlasterData.priceLevel: prices never drop), a new run
 	stats.BestBlaster = math.max(if finite(stats.BestBlaster) then math.floor(stats.BestBlaster) else 0, level)
 	stats.RunForged = 0
+	stats.RunPaid = false
 	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper)
 	local relics = {}
 	local function keepRelics(list: any)
@@ -438,7 +488,11 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	data.Coins = keep
 	data.PaidCoins = keep
 	data.ShardRolls = 0
-	local start = RebirthConfig.startLevel(perks)
+	-- the Robux blaster levels come back: they lift the new blaster (no stars for them)
+	local start = RebirthConfig.startFor(data)
+	if start > RebirthConfig.startLevel(perks) then
+		stats.RunPaid = true
+	end
 	data.BlasterLevel = start
 	data.BlasterOre = if start > 1 then BlasterData.vaultOre(start) else ""
 	-- machine speed, the elevator, the train, the backpack

@@ -127,6 +127,9 @@ local DataTemplate = {
 		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
 		BestBlaster = 0, -- the highest blaster level before a rebirth (BlasterData.priceLevel)
 		RunForged = 0, -- the highest blaster level forged at the Foundry this rebirth run
+		RunPaid = false, -- a blaster level was bought with Robux this run (RebirthConfig.reachedOf)
+		BlastersPaid = 0, -- blaster levels bought with Robux (VaultService.grantNext "Robux")
+		BlasterCredit = 0, -- Robux of off-band blaster receipts not yet spent on start lifts (VaultService.spendCredit)
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)

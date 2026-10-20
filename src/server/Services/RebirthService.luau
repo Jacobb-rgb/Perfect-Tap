@@ -51,7 +51,7 @@
 	Start, Podium Keeper). The player attribute ForgeStars (every star ever
 	earned, Stats.StarsEarned) puts the gold star over the name
 	(RebirthController). State: snapshot.Rebirth { Count, Stars, Earned,
-	Perks, Ready, StarsNow, MinBlaster, Weapons = { [id] = true },
+	Perks, Ready, StarsNow, Start, MinBlaster, Weapons = { [id] = true },
 	Weapon = the equipped id or "" }.
 ]]
 
@@ -458,6 +458,7 @@ function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 		Glow = RebirthConfig.glowOf(data),
 		StarsNow = RebirthConfig.starsFor(RebirthConfig.reachedOf(data)),
 		Reached = RebirthConfig.reachedOf(data),
+		Start = RebirthConfig.startFor(data),
 		MinBlaster = RebirthConfig.MinBlaster,
 		Weapons = weapons,
 		Weapon = if StarBlasterData.equipped(data) then data.StarBlaster else "",

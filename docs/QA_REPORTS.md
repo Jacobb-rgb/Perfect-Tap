@@ -653,6 +653,47 @@ What to test in Studio:
    sees it; leaving frees the plot without it.
 6. Walk to the plaza's fire crystal: "Star Forge" (F / Y) opens the window.
 
+## Robux blaster levels for the STORE (2026-10-20, branch feature/blaster-robux)
+The owner wants the Robux STORE to sell blasters. The UI chat's STORE card sells the NEXT blaster level as a developer
+product in four price bands (MonetizationConfig entries, added on ui/store; Grant "BlasterLevel", MinLevel / MaxLevel =
+the next levels a product covers). The owner's prices (2026-10-20):
+
+| Product | Next level | Price (R$) |
+|---|---|---|
+| BlasterNextA | 2-4 | 49 |
+| BlasterNextB | 5-7 | 99 |
+| BlasterNextC | 8-9 | 199 |
+| BlasterNextD | 10 | 399 |
+
+(Bands, not one flat price: the Foundry curve runs from 330 coins at LV 2 to 35B at LV 10, so a flat price would make
+LV 10 as cheap as LV 2 and skip the whole ~8 h curve for ~700 R$.)
+- VaultService.grantNext is the one level setter for the coin Vault and Robux. A Robux level: the next level in that
+  level's case look, Stats.BlastersPaid + 1, and the crate opening (VaultResult Paid). No coins ever (the
+  no-Robux-to-coins rule, docs/COMPLIANCE.md).
+- Rebirth: a run with a bought level pays stars only for Foundry-forged levels (Stats.RunPaid; also in the first run,
+  whose grace otherwise counts the blaster as it is). No paid stars.
+- Bought levels come back (the owner, 2026-10-20: "Vrátí se mu"; the store sells BlasterNext AND the star blasters):
+  every Robux level (Stats.BlastersPaid) lifts the fresh blaster of EVERY later rebirth one level
+  (RebirthConfig.startFor), up to MaxLevel - 1 so one level is always left to forge (otherwise the next rebirth could
+  never be earned). The k-th Robux level is always LV k + 1 or higher, so the bands keep their prices across rebirths.
+- The handler never refuses: MonetizationService never acknowledges a receipt without the item, and clients can
+  prompt any product. At the top level, off the product's band, or while the top level waits (below), its Robux are
+  banked (Stats.BlasterCredit) and buy start lifts only at the band price of the start level they make
+  (VaultService.spendCredit: a client-made 49 R$ prompt never buys a LV 8 start). The store asks
+  VaultService.paidStatus first ("Full" at the top / off band / topBlocked).
+- The top level is never sold while the run has forged no rebirth level (RebirthConfig.topBlocked: the STORE says
+  "Full", the coin Vault "ForgeFirst" with a FOUNDRY button): otherwise nothing is left to forge and the run could never
+  rebirth. A save already stuck at LV 10 that way (the coin Vault, before this) may rebirth for 0 stars.
+- A Robux level on the first run keeps the levels the first-run grace counted (RunForged = the level before it); only
+  the bought levels pay nothing. Head Start is not sold once the Robux levels already start the blaster at LV 9.
+- Integrator review 2026-10-20 (#1 high, #2, #3, #5, #6, #15) fixed; the crate opening closes every panel (the STORE).
+What to test in Studio (with test product ids):
+1. Buy BlasterNextA at LV 2: LV 3 with the crate opening, coins unchanged.
+2. At LV 10: the card is hidden; a forced prompt is counted with a thank-you toast, and the next rebirths start one
+   level higher.
+3. After buying a level, rebirth needs a blaster forged at the Foundry (NotForged otherwise).
+4. Buy two levels, rebirth twice: both rebirths start at LV 3 (the window's YOU LOSE row says "back to LV 3").
+
 ## Spray-washing replaces chisel / scrape / polish (2026-10-20, machines chat; ui/store #5)
 The owner picked spray-only cleaning (his pressure-washer video). The machines chat built the mechanic and its server
 side; the UI chat ("Nový UI design") builds the final look on top through `CleaningController.setLook`.
