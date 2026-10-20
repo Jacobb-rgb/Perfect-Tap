@@ -39,10 +39,10 @@ value is broken (not a save) or its lock is stale (a crashed server).
 **Robux purchases made after that version are undone by a restore.** Roblox never delivers an acknowledged receipt
 again, so the snippet keeps every purchase id of the current save. After the write it prints the ones the old
 version didn't have. **Send those printed lines to the developer**: the player paid for them and must get them back.
-Today a save stores only the receipt id and its time, not which product it was, so the developer looks the receipt
-up (Creator Dashboard > Monetization > Sales). Step 8's receipts should record the product id with each receipt,
-for example in a `PurchaseLog { [id] = { Product, At } }` next to `Purchases`, and come with a helper that grants a
-product on an offline save. Then this becomes one command:
+Since step 8 a save also records which product each receipt was: `PurchaseLog { [id] = { Product, At } }` next to
+`Purchases` (Product = the MonetizationConfig key, e.g. `RoyalCapsule3`), so the printed lines name the product.
+Older receipts have no log entry: look those up (Creator Dashboard > Monetization > Sales). A helper that grants a
+product on an offline save doesn't exist yet. The snippet:
 
 ```lua
 local store = game:GetService("DataStoreService"):GetDataStore("TerraForge_PlayerData_v1")
@@ -66,7 +66,13 @@ local written = store:UpdateAsync(key, function(current)
 		for id, at in current.Data.Purchases do
 			if data.Purchases[id] == nil then
 				data.Purchases[id] = at
-				table.insert(regrant, `RE-GRANT purchase {id} {os.date("!%Y-%m-%d %H:%M", tonumber(at) or 0)}`)
+				local log = if type(current.Data.PurchaseLog) == "table" then current.Data.PurchaseLog[id] else nil
+				local product = if type(log) == "table" then tostring(log.Product) else "?"
+				if type(log) == "table" then
+					data.PurchaseLog = if type(data.PurchaseLog) == "table" then data.PurchaseLog else {}
+					data.PurchaseLog[id] = log
+				end
+				table.insert(regrant, `RE-GRANT purchase {id} ({product}) {os.date("!%Y-%m-%d %H:%M", tonumber(at) or 0)}`)
 			end
 		end
 	end

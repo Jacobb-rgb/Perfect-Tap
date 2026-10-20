@@ -178,7 +178,7 @@ The leaderboards already avoid this (`WriteInStudio`). The player save doesn't.
 
 ### 8 · Medium · Robux receipts: rules for step 8's ProcessReceipt
 
-There is no ProcessReceipt yet, and the Receipts gate blocks prompts, so there is no risk today. These are the rules that keep a grant from being lost or doubled when it is built:
+**Status (step 8):** done in `MonetizationService` with a handler for every `MonetizationConfig` entry (`Grant`); each grant also writes `PurchaseLog[PurchaseId] = { Product, At }` (trimmed with `Purchases`). Specs: tests/MonetizationService.spec.luau and tests/Step8Receipts.spec.luau (every grant kind: first grant, duplicate, failed save then one grant on the retry, player not in the server, passes on join and on purchase). The rules it follows:
 1. The player isn't in the server, or `DataService.get` is nil (not loaded, Released or SessionLost): return **NotProcessedYet**.
 2. `data.Purchases[receipt.PurchaseId]` is already set: return **PurchaseGranted** and grant nothing.
 3. Grant **and** set `Purchases[PurchaseId] = os.time()` (plus `PurchaseCount += 1`) in the same synchronous step, with no yield between them.

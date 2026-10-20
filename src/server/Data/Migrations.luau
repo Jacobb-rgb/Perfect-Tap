@@ -131,6 +131,15 @@
 	  their rules.
 	Every step above runs once per load, in this order, inside run(); the
 	Version stays 3 (all of it is additive and idempotent).
+
+	Step 8 (Robux receipts, same Version 3):
+	- PurchaseLog: [purchaseId] = { Product = a short string, At = finite
+	  >= 0 } (other fields kept); entries whose id left Purchases (trimmed
+	  together) and junk are dropped.
+	- Golems.Pending (when present): { Kind = a short string, Paid =
+	  boolean? } entries, renamed kinds renamed, at most
+	  GolemConfig.MaxPending; junk dropped.
+	- Enchants.Passes (when present): owned enchant ids -> true.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -485,6 +494,22 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		end
 	end
 	enchants.Slots = cleanSlots
+	-- step 8: the Mythic enchants a game pass gave (string ids -> true; a refund takes back
+	-- only these); a mark for an enchant that isn't owned is dropped
+	local passes = enchants.Passes
+	if passes ~= nil then
+		if type(passes) ~= "table" then
+			enchants.Passes = {}
+			report.Dropped += 1
+		else
+			for _, id in keysOf(passes) do
+				if type(id) ~= "string" or passes[id] ~= true or owned[id] == nil then
+					passes[id] = nil
+					report.Dropped += 1
+				end
+			end
+		end
+	end
 
 	-- boosts: whole os.time() seconds, never absurdly far ahead (MaxSavedSeconds
 	-- is a junk guard: paid time stacked past MaxStackSeconds is kept)
@@ -558,6 +583,31 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	local nextId = golems.NextId
 	local wholeNext = if isFinite(nextId) then math.floor(nextId) else 1
 	golems.NextId = math.clamp(math.max(wholeNext, maxId + 1), 1, MAX_GOLEM_ID + 1)
+	-- step 8: paid golems waiting past MaxSaved (a Royal capsule receipt's credit):
+	-- { Kind, Paid? } entries (unknown kinds kept, renamed ones renamed), at most MaxPending
+	local pending = golems.Pending
+	if pending ~= nil then
+		local waiting = {}
+		if type(pending) == "table" then
+			for _, entry in values(pending) do
+				local kind = if type(entry) == "table" then entry.Kind else nil
+				local paid = if type(entry) == "table" then entry.Paid else nil
+				if type(kind) == "string" and GolemConfig.Renamed[kind] then
+					kind = GolemConfig.Renamed[kind]
+				end
+				if idLike(kind) and (paid == nil or type(paid) == "boolean") and #waiting < GolemConfig.MaxPending then
+					entry.Kind = kind -- (the entry itself: fields a newer build adds stay)
+					table.insert(waiting, entry)
+				else
+					report.Dropped += 1
+				end
+			end
+			refill(pending, waiting)
+		else
+			golems.Pending = waiting
+			report.Dropped += 1
+		end
+	end
 
 	-- the daily wheel: a whole time, at most one cooldown ahead
 	local wheel = record(data, "Wheel", report)
@@ -603,6 +653,29 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
 		local v = stats[field]
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+end
+
+-- Step 8: data.PurchaseLog[purchaseId] = { Product, At } for the granted
+-- receipts (MonetizationService). Entries need a short string Product and a
+-- finite At >= 0 (other fields a newer build adds stay); an entry whose id
+-- isn't in Purchases any more (trimmed with it, DataService.trimPurchases)
+-- or that is junk is dropped.
+local function migrateStep8(data: { [string]: any }, report: Report)
+	local log = record(data, "PurchaseLog", report)
+	local purchases = if type(data.Purchases) == "table" then data.Purchases else {}
+	for _, id in keysOf(log) do
+		local entry = log[id]
+		local ok = (type(id) == "string" or type(id) == "number")
+			and purchases[id] ~= nil
+			and type(entry) == "table"
+			and idLike(entry.Product)
+			and isFinite(entry.At)
+			and entry.At >= 0
+		if not ok then
+			log[id] = nil
+			report.Dropped += 1
+		end
 	end
 end
 
@@ -1001,6 +1074,7 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 
 	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots)
 	migrateSteps67(data, clock, report)
+	migrateStep8(data, report)
 
 	local version = data.Version
 	if type(version) ~= "number" or version ~= version or version < Migrations.Latest then
