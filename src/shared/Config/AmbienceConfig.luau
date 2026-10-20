@@ -6,8 +6,8 @@
 	  Brook      a gentle trickle at the stream's humped bridge
 	  Pond       a plop now and then and crickets at every pond (frogs once
 	             the owner picks a croak: Id 0 = silent)
-	  Forge      hammer blows on the anvil and a fire crackle at THE GREAT
-	             FORGE's furnace
+	  Forge      the fire crackling in the two fire bowls at THE GREAT
+	             FORGE's passage (the hall and its anvil are gone, 2026-10-20)
 	  Plaza      a low crowd murmur on the plaza (Id 0 until the owner picks
 	             one: no shipped Roblox sound sounds like people talking)
 	  Wind       a 2D wind that fades in as the camera climbs the mountains
@@ -78,7 +78,6 @@ AmbienceConfig.Kinds = {
 		{ Id = 0, Volume = 0.15, Pitch = { 0.9, 1.1 }, Every = { 7, 16 }, MinDistance = 5, MaxDistance = 36 },
 	},
 	Forge = {
-		{ Sound = "AmbHammer", Every = { 1.8, 3.4 }, Burst = { 1, 3 }, Gap = 0.45, MinDistance = 10, MaxDistance = 75 },
 		{ Sound = "AmbCrackle", Every = { 0.15, 0.7 }, MinDistance = 6, MaxDistance = 35 },
 	},
 	Plaza = {

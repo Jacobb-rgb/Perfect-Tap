@@ -372,9 +372,8 @@ local function bridge(parent: Instance, look: Look, rng: Rng.Rng): Model
 end
 
 -- The flagstone path: big slabs in two shades with a dark border, from the bridge to the quarry ramp.
-local function path(parent: Instance, look: Look, rng: Rng.Rng): Model
+local function path(parent: Instance, look: Look, rng: Rng.Rng, z0: number, z1: number): Model
 	local m = Style.model("StonePath", parent)
-	local z0, z1 = BridgeGarden.BridgeTo.Z - 0.5, BridgeGarden.PathEnd
 	local w = BridgeGarden.PathWidth
 	Style.block(m, CFrame.new(0, 0.08, (z0 + z1) / 2), Vector3.new(w + 1.2, 0.16, z0 - z1), look.SlabDark, nil, Style.solid())
 	local z = z0
@@ -397,6 +396,9 @@ local function path(parent: Instance, look: Look, rng: Rng.Rng): Model
 		z -= len
 	end
 	-- the landing off the plaza: three wide steps
+	if z0 < -40 then
+		return m
+	end
 	for i = 0, 2 do
 		Style.block(
 			m,
@@ -410,9 +412,87 @@ local function path(parent: Instance, look: Look, rng: Rng.Rng): Model
 	return m
 end
 
-function BridgeGarden.build(parent: Instance, rng: Rng.Rng, styleId: string?): Model
+-- The passage under THE GREAT FORGE's roof (GreatForge.Passage): no roof of
+-- its own; the pond, the bridge and the hanging lanterns sit under the forge.
+BridgeGarden.Passage = {
+	Forecourt = { -38, -54 }, -- the stone forecourt off the plaza, under the board
+	BridgeFrom = Vector3.new(0, 0, -54),
+	BridgeTo = Vector3.new(0, 0, -85),
+	Pond = { Center = Vector3.new(0, 0, -69.5), Size = Vector2.new(34, 26) },
+	BeamY = 18, -- just under the forge's nave beams (GreatForge LINTEL_TOP 18.9)
+	LanternZ = { -60, -69.5, -79 },
+	SidePonds = {
+		{ Center = Vector3.new(-14.5, 0, -98), Size = Vector2.new(10, 12) },
+		{ Center = Vector3.new(14.5, 0, -98), Size = Vector2.new(10, 12) },
+	},
+	BambooZ = { -90, -105 },
+	LampZ = { -88, -95, -102, -109 },
+	Trees = { { X = 19, Z = -89, Scale = 1.1 }, { X = 19.5, Z = -110, Scale = 1.05 } },
+}
+
+local function hanging(parent: Instance, at: Vector3, top: number, look: Look, light: boolean)
+	Style.block(parent, CFrame.new(at.X, (top + at.Y) / 2 + 0.5, at.Z), Vector3.new(0.14, top - at.Y - 1, 0.14), C.Iron, nil, Style.tiny())
+	Style.block(parent, CFrame.new(at + Vector3.new(0, 0.75, 0)), Vector3.new(1.2, 0.2, 1.2), look.RoofDark, nil, Style.tiny())
+	local g = Style.block(parent, CFrame.new(at), Vector3.new(0.95, 1.3, 0.95), look.Lamp, NEON, Style.tiny())
+	g.Name = "LanternGlow"
+	Style.block(parent, CFrame.new(at - Vector3.new(0, 0.75, 0)), Vector3.new(0.6, 0.2, 0.6), look.RoofDark, nil, Style.tiny())
+	if light then
+		Style.light(g, look.Lamp, 16, 1.3)
+	end
+end
+
+local function finish(m: Model)
+	-- water and leaves are decoration; the deck, the steps and the path stay walkable
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency > 0 then
+			d.CanCollide = false
+		end
+	end
+end
+
+local function passage(m: Model, look: Look, rng: Rng.Rng)
+	local P = BridgeGarden.Passage
+	pond(m, P.Pond.Center, P.Pond.Size, 12, rng)
+	for _, q in { Vector3.new(-11, 0, -62), Vector3.new(-9, 0, -76), Vector3.new(10, 0, -63), Vector3.new(12, 0, -75) } do
+		Style.block(m, CFrame.new(q + Vector3.new(0, 0.62, 0)), Vector3.new(1.1, 0.2, 1.1), C.WoodDark, nil, Style.tiny())
+		Style.block(m, CFrame.new(q + Vector3.new(0, 1.05, 0)), Vector3.new(0.7, 0.7, 0.7), look.Lamp, NEON, Style.tiny())
+	end
+	local deck = Style.archBridge(m, P.BridgeFrom, P.BridgeTo, BridgeGarden.BridgeWidth, 1.6, rng)
+	deck.Name = "Deck"
+	-- the forecourt and the path on to the quarry ramp
+	path(m, look, rng, P.Forecourt[1], P.Forecourt[2])
+	path(m, look, rng, P.BridgeTo.Z - 0.5, BridgeGarden.PathEnd)
+	-- lanterns hanging from cross beams under the forge's roof, both sides of the deck
+	for i, z in P.LanternZ do
+		Style.block(m, CFrame.new(0, P.BeamY, z), Vector3.new(18.5, 0.6, 0.6), look.Beam, nil, Style.tiny())
+		for _, side in { -1, 1 } do
+			hanging(m, Vector3.new(side * 5.2, 11.5, z), P.BeamY, look, i == 2)
+		end
+	end
+	for _, p in P.SidePonds do
+		pond(m, p.Center, p.Size, 4, rng)
+	end
+	for _, side in { -1, 1 } do
+		for _, z in P.BambooZ do
+			BridgeGarden.bamboo(m, Vector3.new(side * 6.6, 0, z), 4, rng)
+		end
+		for i, z in P.LampZ do
+			postLantern(m, Vector3.new(side * 4.2, 0, z), look, i == 2)
+		end
+		for k, t in P.Trees do
+			Style.tree(m, CFrame.new(side * t.X, 0, t.Z), look.Trees[k], rng, t.Scale)
+		end
+	end
+end
+
+function BridgeGarden.build(parent: Instance, rng: Rng.Rng, styleId: string?, layout: string?): Model
 	local look = BridgeGarden.Styles[styleId or "A"] or BridgeGarden.Styles.A
 	local m = Style.model("BridgeGarden", parent)
+	if layout == "Passage" then
+		passage(m, look, rng)
+		finish(m)
+		return m
+	end
 	pond(m, BridgeGarden.Pond.Center, BridgeGarden.Pond.Size, 12, rng)
 	-- floating lanterns on the big pond
 	for _, q in { Vector3.new(-12, 0, -52), Vector3.new(-8, 0, -60), Vector3.new(10, 0, -51), Vector3.new(13, 0, -59) } do
@@ -420,31 +500,22 @@ function BridgeGarden.build(parent: Instance, rng: Rng.Rng, styleId: string?): M
 		Style.block(m, CFrame.new(q + Vector3.new(0, 1.05, 0)), Vector3.new(0.7, 0.7, 0.7), look.Lamp, NEON, Style.tiny())
 	end
 	bridge(m, look, rng)
-	path(m, look, rng)
+	path(m, look, rng, BridgeGarden.BridgeTo.Z - 0.5, BridgeGarden.PathEnd)
 	for _, p in BridgeGarden.SidePonds do
 		pond(m, p.Center, p.Size, 5, rng)
 	end
-	-- bamboo along the path (both sides, gaps for the lanterns)
 	for _, side in { -1, 1 } do
 		for _, z in { -73, -81, -97, -105 } do
 			BridgeGarden.bamboo(m, Vector3.new(side * 6.6, 0, z), 4, rng)
 		end
-		-- lantern posts on both sides of the path
 		for i, z in { -70, -77.5, -85, -92.5, -100, -107.5 } do
 			postLantern(m, Vector3.new(side * 4.2, 0, z), look, i == 2 or i == 5)
 		end
-		-- big trees at the corners
 		Style.tree(m, CFrame.new(side * 19, 0, -72), look.Trees[1], rng, 1.2)
 		Style.tree(m, CFrame.new(side * 19.5, 0, -106), look.Trees[2], rng, 1.15)
-		-- stone lanterns at the pond's plaza corners
 		postLantern(m, Vector3.new(side * 8.5, 0, -44.5), look, false)
 	end
-	-- water and leaves are decoration; the deck, the steps and the path stay walkable
-	for _, d in m:GetDescendants() do
-		if d:IsA("BasePart") and d.Transparency > 0 then
-			d.CanCollide = false
-		end
-	end
+	finish(m)
 	return m
 end
 

@@ -113,10 +113,15 @@ return function(T, Loader)
 		T.eq(#Gallery.spots(), BlasterData.MaxLevel + 1, "ten plaques and LV 11")
 	end)
 
-	T.test("BlasterGallery: the Great Forge builds it", function()
+	T.test("BlasterGallery: the Great Forge builds it (unless it is the open passage)", function()
 		local m = roblox.Instance.new("Model")
 		GreatForge.build(m, Loader.requirePath("ReplicatedStorage.Shared.Util.Rng").new("Lobby/Plaza"))
 		local gallery = m:FindFirstChild("BlasterGallery", true)
+		if GreatForge.Passage then
+			-- (owner 2026-10-20) the forge is an open passage now: no hall, no gallery
+			T.eq(gallery, nil, "no gallery in the passage")
+			return
+		end
 		T.truthy(gallery, "in the forge")
 		T.eq(#parts(gallery), #parts(built), "the same gallery")
 	end)

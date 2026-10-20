@@ -236,7 +236,9 @@ return function(T, Loader)
 				T.truthy(top >= 29 and top <= 34.5, "chimney top between 29 and 34.5")
 			end
 		end
-		T.eq(chimneys, 2, "two chimneys")
+		local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
+		-- (the open passage has no furnace, so no chimneys)
+		T.eq(chimneys, if GreatForge.Passage then 0 else 2, "two chimneys (none over the open passage)")
 	end)
 
 	T.test("plaza: roads and paths are flat walk-over strips", function()
@@ -607,199 +609,242 @@ return function(T, Loader)
 		return out
 	end
 
-	T.test("plaza v2: the Great Forge has slate roofs with brick-red trim, banners, a framed emblem and monumental stairs", function()
-		local forge = world().plaza.GreatForge
-		local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
-		local roofs, glow, hammers = 0, 0, 0
-		local stairs = {}
-		local apex = GreatForge.NaveEave + GreatForge.NaveRoofHeight
-		local pitch = GreatForge.NaveRoofHeight / GreatForge.NaveRoofHalf
-		for _, part in parts(forge) do
-			if part.Name == "Roof" then
-				roofs += 1
-				T.truthy(part.Color.B >= part.Color.R, "dark slate roof (not red)")
-				T.lt(luma(part.Color), 0.4, "the roof is dark")
-			elseif part.Name == "EmblemGlow" or part.Name == "EmblemHammers" or part.Name == "Emblem" or part.Name == "EmblemBorder" then
-				if part.Name == "EmblemGlow" then
-					T.eq(part.Material, NEON, "the emblem halo glows")
-					T.truthy(part.Color.G < 0.7 and part.Color.B < 0.2, "a deep-gold glow, not white")
-					glow += 1
-				elseif part.Name == "EmblemHammers" then
-					T.truthy(part.Material ~= NEON, "solid gold hammers in front of the glow")
-					hammers += 1
-				end
-				-- inside the gable triangle, above THE GREAT FORGE board
-				for _, c in corners(part) do
-					T.truthy(c.Y <= apex - pitch * math.abs(c.X) + 0.05, `{part.Name} inside the gable at ({c.X}, {c.Y})`)
-					T.truthy(c.Y >= GreatForge.SignY + 2.2, part.Name .. " above the sign")
-				end
-			elseif part.Name == "Stair" then
-				table.insert(stairs, part)
-			end
-		end
-		T.eq(roofs, 6, "three slate gable roofs")
-		-- a low, wide hall under one big gable (concept v2), not a two-storey house
-		T.truthy(GreatForge.NaveEave - GreatForge.PlinthTop <= 11.5, "the gable starts right over the entrance")
-		T.truthy(GreatForge.NaveRoofHeight / (GreatForge.NaveEave + GreatForge.NaveRoofHeight) >= 0.4, "the gable is ~half the facade")
-		T.truthy(GreatForge.EmblemSize >= GreatForge.NaveRoofHalf * 2 * 0.24, "a big emblem (~1/4 of the gable's width)")
-		-- slate roofs with thin shingle courses (no thick rows or rafter seams)
-		local courses = 0
-		for _, part in parts(forge) do
-			if part.Color == Common.Colors.RoofSlateDark then
-				courses += 1
-				T.truthy(math.min(part.Size.X, part.Size.Y, part.Size.Z) <= 0.2, "thin shingle courses and joints")
-			end
-		end
-		T.truthy(courses >= 20, "shingle courses on the slate roofs")
-		T.truthy(glow >= 4 and hammers >= 4, "a big glowing crossed-hammers emblem")
-		-- brick-red trim (eaves, bargeboards) frames the slate roofs
-		local trim = 0
-		for _, part in parts(forge) do
-			local c = part.Color
-			if not part:FindFirstAncestor("Banner") and part.Material ~= NEON and c.R > 0.5 and c.R < 0.7 and c.G < 0.25 and c.B < 0.2 then
-				trim += 1
-			end
-		end
-		T.truthy(trim >= 8, "brick-red eaves and bargeboards")
-		-- nothing pokes up over the gable apex (no ridge stub), the board stays on the gable
-		for _, part in parts(forge) do
-			if not part:FindFirstAncestor("Chimney") then
-				local _, hi = bounds(part)
-				T.lt(hi.Y, apex + 0.5, part.Name .. " stays under the apex (only the bargeboards meet over it)")
-			end
-		end
-		local sign = forge:FindFirstChild("ForgeSign")
-		T.truthy(sign, "THE GREAT FORGE board")
-		T.near(sign.CFrame.Position.Y, GreatForge.SignY, 0.01, "the board stays on the gable")
-		T.truthy(sign.CFrame.Position.Y + sign.Size.Y / 2 > GreatForge.NaveEave, "the board reaches over the gable's foot")
-		T.truthy(sign.Size.X <= GreatForge.NaveRoofHalf * 2 - 4, "the board is no wider than the nave front (no floating billboard)")
-		-- two crimson banners with gold hammers left and right of the entrance
-		local banners = {}
-		for _, child in forge:GetChildren() do
-			if child.Name == "Banner" then
-				table.insert(banners, child)
-			end
-		end
-		T.eq(#banners, 2, "two banners")
-		local sides = 0
-		local cloths = {}
-		for _, banner in banners do
-			local cloth = banner:FindFirstChild("BannerCloth")
-			T.truthy(cloth, "banner cloth")
-			local c = cloth.Color
-			T.truthy(c.R > 0.55 and c.G < 0.12 and c.B < c.R * 0.4, "crimson banner cloth (not orange)")
-			table.insert(cloths, cloth)
-			local lo, hi = bounds(cloth)
-			T.truthy(hi.Y - lo.Y > 8 and hi.Y - lo.Y < 13, "a banner from the sign's level to about the door's middle (not a red pillar)")
-			T.truthy((hi.Y - lo.Y) / GreatForge.BannerWidth > 2.7, "a long, narrow banner (concept: ~3.5 : 1)")
-			T.truthy(hi.Y >= GreatForge.NaveEave - 1.5, "it hangs from just under the gable's eave")
-			T.lt(lo.Y, GreatForge.DoorTop - 2, "down to about the door's middle")
-			local cx = LobbyLayout.get("GreatForge").Center.X
-			T.lt(math.min(math.abs(lo.X - cx), math.abs(hi.X - cx)), 10.5, "right beside the door pillars")
-			local icon = 0
-			for _, part in parts(banner) do
-				if part.Name == "BannerIcon" then
-					icon += 1
-					T.truthy(part.Material ~= NEON, "matte gold icon (no bloom)")
+	T.test(
+		"plaza v2: the Great Forge has slate roofs with brick-red trim, banners, a framed emblem and monumental stairs (or the open passage)",
+		function()
+			local forge = world().plaza.GreatForge
+			local GreatForge = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.GreatForge")
+			local roofs, glow, hammers = 0, 0, 0
+			local stairs = {}
+			local apex = GreatForge.NaveEave + GreatForge.NaveRoofHeight
+			local pitch = GreatForge.NaveRoofHeight / GreatForge.NaveRoofHalf
+			for _, part in parts(forge) do
+				if part.Name == "Roof" then
+					roofs += 1
+					T.truthy(part.Color.B >= part.Color.R, "dark slate roof (not red)")
+					T.lt(luma(part.Color), 0.4, "the roof is dark")
+				elseif
+					part.Name == "EmblemGlow"
+					or part.Name == "EmblemHammers"
+					or part.Name == "Emblem"
+					or part.Name == "EmblemBorder"
+				then
+					if part.Name == "EmblemGlow" then
+						T.eq(part.Material, NEON, "the emblem halo glows")
+						T.truthy(part.Color.G < 0.7 and part.Color.B < 0.2, "a deep-gold glow, not white")
+						glow += 1
+					elseif part.Name == "EmblemHammers" then
+						T.truthy(part.Material ~= NEON, "solid gold hammers in front of the glow")
+						hammers += 1
+					end
+					-- inside the gable triangle, above THE GREAT FORGE board
+					for _, c in corners(part) do
+						T.truthy(c.Y <= apex - pitch * math.abs(c.X) + 0.05, `{part.Name} inside the gable at ({c.X}, {c.Y})`)
+						T.truthy(c.Y >= GreatForge.SignY + 2.2, part.Name .. " above the sign")
+					end
+				elseif part.Name == "Stair" then
+					table.insert(stairs, part)
 				end
 			end
-			T.truthy(icon >= 4, "gold hammers on the banner")
-			sides += if cloth.CFrame.Position.X > 0 then 1 else -1
-		end
-		T.eq(sides, 0, "one banner on each side of the entrance")
-		-- no plaza light reaches the banners (warm light would turn them orange)
-		for _, d in world().plaza:GetDescendants() do
-			if d:IsA("PointLight") then
-				local p = d.Parent.CFrame.Position
-				for _, cloth in cloths do
-					local lo, hi = bounds(cloth)
-					local q = Vector3.new(math.clamp(p.X, lo.X, hi.X), math.clamp(p.Y, lo.Y, hi.Y), math.clamp(p.Z, lo.Z, hi.Z))
-					T.truthy((q - p).Magnitude > d.Range, `{d.Parent:GetFullName()}'s light reaches a banner`)
+			T.eq(roofs, 6, "three slate gable roofs")
+			-- a low, wide hall under one big gable (concept v2), not a two-storey house
+			T.truthy(GreatForge.NaveEave - GreatForge.PlinthTop <= 11.5, "the gable starts right over the entrance")
+			T.truthy(GreatForge.NaveRoofHeight / (GreatForge.NaveEave + GreatForge.NaveRoofHeight) >= 0.4, "the gable is ~half the facade")
+			T.truthy(GreatForge.EmblemSize >= GreatForge.NaveRoofHalf * 2 * 0.24, "a big emblem (~1/4 of the gable's width)")
+			-- slate roofs with thin shingle courses (no thick rows or rafter seams)
+			local courses = 0
+			for _, part in parts(forge) do
+				if part.Color == Common.Colors.RoofSlateDark then
+					courses += 1
+					T.truthy(math.min(part.Size.X, part.Size.Y, part.Size.Z) <= 0.2, "thin shingle courses and joints")
 				end
 			end
-		end
-		-- a monumental, walkable flight of stairs up to a raised, tall doorway
-		table.sort(stairs, function(a: any, b: any): boolean
-			return a.Size.Y < b.Size.Y
-		end)
-		T.eq(#stairs, GreatForge.StairSteps - 1, "the stair blocks")
-		T.truthy(GreatForge.StairSteps >= 9 and GreatForge.PlinthTop >= 4.5, "a tall flight (>= 9 risers up to a raised porch)")
-		local last = 0.4
-		for _, step in stairs do
-			local lo, hi = bounds(step)
-			T.truthy(step.CanCollide, "the steps are solid")
-			T.truthy(hi.X - lo.X >= 15, "a wide flight")
-			T.lt(hi.Y - last, 0.5, "each riser is easy to walk up")
-			last = hi.Y
-		end
-		T.lt(GreatForge.PlinthTop - last, 0.5, "the last riser reaches the porch")
-		T.truthy(GreatForge.DoorTop - GreatForge.PlinthTop >= 7.5, "the doorway keeps its clearance")
-		-- stone cheeks with handrails (orange neon undersides) and a lit lantern pillar on each
-		local rails, lanterns = 0, 0
-		for _, part in parts(forge) do
-			if part.Name == "StairGlow" and part.Material == NEON and isOrange(part.Color) then
-				rails += 1
+			T.truthy(courses >= 20, "shingle courses on the slate roofs")
+			T.truthy(glow >= 4 and hammers >= 4, "a big glowing crossed-hammers emblem")
+			-- brick-red trim (eaves, bargeboards) frames the slate roofs
+			local trim = 0
+			for _, part in parts(forge) do
+				local c = part.Color
+				if
+					not part:FindFirstAncestor("Banner")
+					and part.Material ~= NEON
+					and c.R > 0.5
+					and c.R < 0.7
+					and c.G < 0.25
+					and c.B < 0.2
+				then
+					trim += 1
+				end
+			end
+			T.truthy(trim >= 8, "brick-red eaves and bargeboards")
+			-- nothing pokes up over the gable apex (no ridge stub), the board stays on the gable
+			for _, part in parts(forge) do
+				if not part:FindFirstAncestor("Chimney") then
+					local _, hi = bounds(part)
+					T.lt(hi.Y, apex + 0.5, part.Name .. " stays under the apex (only the bargeboards meet over it)")
+				end
+			end
+			local sign = forge:FindFirstChild("ForgeSign")
+			T.truthy(sign, "THE GREAT FORGE board")
+			T.near(sign.CFrame.Position.Y, GreatForge.SignY, 0.01, "the board stays on the gable")
+			T.truthy(sign.CFrame.Position.Y + sign.Size.Y / 2 > GreatForge.NaveEave, "the board reaches over the gable's foot")
+			T.truthy(sign.Size.X <= GreatForge.NaveRoofHalf * 2 - 4, "the board is no wider than the nave front (no floating billboard)")
+			-- two crimson banners with gold hammers left and right of the entrance
+			local banners = {}
+			for _, child in forge:GetChildren() do
+				if child.Name == "Banner" then
+					table.insert(banners, child)
+				end
+			end
+			T.eq(#banners, 2, "two banners")
+			local sides = 0
+			local cloths = {}
+			for _, banner in banners do
+				local cloth = banner:FindFirstChild("BannerCloth")
+				T.truthy(cloth, "banner cloth")
+				local c = cloth.Color
+				T.truthy(c.R > 0.55 and c.G < 0.12 and c.B < c.R * 0.4, "crimson banner cloth (not orange)")
+				table.insert(cloths, cloth)
+				local lo, hi = bounds(cloth)
+				T.truthy(
+					hi.Y - lo.Y > 8 and hi.Y - lo.Y < 13,
+					"a banner from the sign's level to about the door's middle (not a red pillar)"
+				)
+				T.truthy((hi.Y - lo.Y) / GreatForge.BannerWidth > 2.7, "a long, narrow banner (concept: ~3.5 : 1)")
+				T.truthy(hi.Y >= GreatForge.NaveEave - 1.5, "it hangs from just under the gable's eave")
+				T.lt(lo.Y, GreatForge.DoorTop - 2, "down to about the door's middle")
+				local cx = LobbyLayout.get("GreatForge").Center.X
+				T.lt(math.min(math.abs(lo.X - cx), math.abs(hi.X - cx)), 10.5, "right beside the door pillars")
+				local icon = 0
+				for _, part in parts(banner) do
+					if part.Name == "BannerIcon" then
+						icon += 1
+						T.truthy(part.Material ~= NEON, "matte gold icon (no bloom)")
+					end
+				end
+				T.truthy(icon >= 4, "gold hammers on the banner")
+				sides += if cloth.CFrame.Position.X > 0 then 1 else -1
+			end
+			T.eq(sides, 0, "one banner on each side of the entrance")
+			-- no plaza light reaches the banners (warm light would turn them orange)
+			for _, d in world().plaza:GetDescendants() do
+				if d:IsA("PointLight") then
+					local p = d.Parent.CFrame.Position
+					for _, cloth in cloths do
+						local lo, hi = bounds(cloth)
+						local q = Vector3.new(math.clamp(p.X, lo.X, hi.X), math.clamp(p.Y, lo.Y, hi.Y), math.clamp(p.Z, lo.Z, hi.Z))
+						T.truthy((q - p).Magnitude > d.Range, `{d.Parent:GetFullName()}'s light reaches a banner`)
+					end
+				end
+			end
+			if GreatForge.Passage then
+				-- (owner 2026-10-20) an open passage: no plinth, stairs, walls or hall, posts carry the roofs
+				local cut = LobbyLayout.get("GreatForge").Center.Y + GreatForge.PassageCut
+				local posts, fires = 0, 0
+				for _, part in parts(forge) do
+					T.falsy(part.Name == "Stair" or part.Name == "BackWall" or part.Name == "HallWall", part.Name .. " is gone")
+					local lo = bounds(part)
+					local frame = part:FindFirstAncestor("PassageFrame")
+					if not frame and not part:FindFirstAncestor("Banner") then
+						T.truthy(lo.Y >= cut - 0.01, part.Name .. " stays up in the roof (the passage is open)")
+					end
+					if frame and part.Size.Y > 8 then
+						posts += 1
+						T.truthy(part.CanCollide, "a solid post")
+					end
+					if part.Name == "ForgeGlow" then
+						fires += 1
+						T.eq(part.Material, NEON, "a glowing fire bowl")
+						T.truthy(part.Color.G < 0.45, "deep orange fire")
+					end
+				end
+				T.truthy(posts >= 10, `timber posts carry the roofs ({posts})`)
+				T.eq(fires, 2, "two fire bowls at the passage")
+			else
+				-- a monumental, walkable flight of stairs up to a raised, tall doorway
+				table.sort(stairs, function(a: any, b: any): boolean
+					return a.Size.Y < b.Size.Y
+				end)
+				T.eq(#stairs, GreatForge.StairSteps - 1, "the stair blocks")
+				T.truthy(GreatForge.StairSteps >= 9 and GreatForge.PlinthTop >= 4.5, "a tall flight (>= 9 risers up to a raised porch)")
+				local last = 0.4
+				for _, step in stairs do
+					local lo, hi = bounds(step)
+					T.truthy(step.CanCollide, "the steps are solid")
+					T.truthy(hi.X - lo.X >= 15, "a wide flight")
+					T.lt(hi.Y - last, 0.5, "each riser is easy to walk up")
+					last = hi.Y
+				end
+				T.lt(GreatForge.PlinthTop - last, 0.5, "the last riser reaches the porch")
+				T.truthy(GreatForge.DoorTop - GreatForge.PlinthTop >= 7.5, "the doorway keeps its clearance")
+				-- stone cheeks with handrails (orange neon undersides) and a lit lantern pillar on each
+				local rails, lanterns = 0, 0
+				for _, part in parts(forge) do
+					if part.Name == "StairGlow" and part.Material == NEON and isOrange(part.Color) then
+						rails += 1
+					end
+				end
+				for _, d in forge:GetChildren() do
+					if d.Name == "Lantern" and d.PrimaryPart and d.PrimaryPart:FindFirstChildWhichIsA("PointLight") then
+						lanterns += 1
+					end
+				end
+				T.eq(rails, 2, "a handrail with an orange neon underside on each cheek")
+				T.eq(lanterns, 2, "a lit lantern pillar on each stair cheek")
+				-- a busy, glowing workshop behind the doorway
+				local mouths = 0
+				for _, part in parts(forge) do
+					if (part.Name == "ForgeGlow" or part.Name == "FurnaceGlow") and part.Material == NEON then
+						mouths += 1
+						T.truthy(part.Color.G < 0.45, "deep orange furnace glow (not a yellow-white wall)")
+					end
+				end
+				T.truthy(mouths >= 3, "three glowing furnace mouths")
+				-- recessed behind grate bars in a warm-orange furnace wall, under an arched doorway
+				local grates, arches = 0, 0
+				for _, part in parts(forge) do
+					if part.Name == "FurnaceGrate" then
+						grates += 1
+					elseif part.Name == "DoorArch" then
+						arches += 1
+					end
+				end
+				T.eq(grates, 0, "no grate bars (no dark shopfront grille in the doorway)")
+				T.eq(arches, 2, "an arched doorway (two haunches)")
+				-- a dark brick back wall: the glow stays on the hearth and a few window strips (no flat bright wall)
+				local back = forge:FindFirstChild("BackWall")
+				T.truthy(back and back.Material ~= NEON and luma(back.Color) < 0.2, "a dark brick back wall behind the hearth")
+				T.truthy(back.Size.X >= GreatForge.DoorHalf * 2 - 0.5, "the back wall fills the doorway")
+				T.falsy(forge:FindFirstChild("DoorGlow"), "no flat glowing back wall")
+				T.truthy(forge:FindFirstChild("StairLipGlow"), "light spills onto the top step")
+				for _, wallPart in forge:GetChildren() do
+					if wallPart.Name == "HallWall" then
+						T.truthy(wallPart.Color.B >= wallPart.Color.R, "dark stone hall walls (not red)")
+					end
+				end
+			end
+			-- warm timber beams round a framed crest (dark plate, glowing orange edge)
+			local beams = 0
+			for _, part in parts(forge) do
+				if part.Name == "GableBeam" then
+					beams += 1
+					T.truthy(part.Color.R > 0.4 and part.Color.R > part.Color.B * 1.8, "warm timber")
+				end
+			end
+			T.truthy(beams >= 3, "a collar beam and braces in the gable")
+			local border = forge:FindFirstChild("EmblemBorder")
+			T.truthy(border.Material == NEON and isOrange(border.Color), "a glowing orange edge round the crest plate")
+			-- the banners: a dark pier behind each, a rod with gold finials, a gold border
+			for _, banner in banners do
+				for _, name in { "BannerPier", "BannerRod", "BannerFinial", "BannerBorder" } do
+					T.truthy(banner:FindFirstChild(name), "banner " .. name)
+				end
+				local pier, cloth = banner.BannerPier, banner.BannerCloth
+				T.truthy(luma(pier.Color) < 0.2, "a dark pier behind the crimson")
+				T.truthy(math.abs(pier.CFrame.Position.Z - cloth.CFrame.Position.Z) > 0.5, "it hangs in front of its pier")
 			end
 		end
-		for _, d in forge:GetChildren() do
-			if d.Name == "Lantern" and d.PrimaryPart and d.PrimaryPart:FindFirstChildWhichIsA("PointLight") then
-				lanterns += 1
-			end
-		end
-		T.eq(rails, 2, "a handrail with an orange neon underside on each cheek")
-		T.eq(lanterns, 2, "a lit lantern pillar on each stair cheek")
-		-- a busy, glowing workshop behind the doorway
-		local mouths = 0
-		for _, part in parts(forge) do
-			if (part.Name == "ForgeGlow" or part.Name == "FurnaceGlow") and part.Material == NEON then
-				mouths += 1
-				T.truthy(part.Color.G < 0.45, "deep orange furnace glow (not a yellow-white wall)")
-			end
-		end
-		T.truthy(mouths >= 3, "three glowing furnace mouths")
-		-- recessed behind grate bars in a warm-orange furnace wall, under an arched doorway
-		local grates, arches = 0, 0
-		for _, part in parts(forge) do
-			if part.Name == "FurnaceGrate" then
-				grates += 1
-			elseif part.Name == "DoorArch" then
-				arches += 1
-			end
-		end
-		T.eq(grates, 0, "no grate bars (no dark shopfront grille in the doorway)")
-		T.eq(arches, 2, "an arched doorway (two haunches)")
-		-- a dark brick back wall: the glow stays on the hearth and a few window strips (no flat bright wall)
-		local back = forge:FindFirstChild("BackWall")
-		T.truthy(back and back.Material ~= NEON and luma(back.Color) < 0.2, "a dark brick back wall behind the hearth")
-		T.truthy(back.Size.X >= GreatForge.DoorHalf * 2 - 0.5, "the back wall fills the doorway")
-		T.falsy(forge:FindFirstChild("DoorGlow"), "no flat glowing back wall")
-		T.truthy(forge:FindFirstChild("StairLipGlow"), "light spills onto the top step")
-		for _, wallPart in forge:GetChildren() do
-			if wallPart.Name == "HallWall" then
-				T.truthy(wallPart.Color.B >= wallPart.Color.R, "dark stone hall walls (not red)")
-			end
-		end
-		-- warm timber beams round a framed crest (dark plate, glowing orange edge)
-		local beams = 0
-		for _, part in parts(forge) do
-			if part.Name == "GableBeam" then
-				beams += 1
-				T.truthy(part.Color.R > 0.4 and part.Color.R > part.Color.B * 1.8, "warm timber")
-			end
-		end
-		T.truthy(beams >= 3, "a collar beam and braces in the gable")
-		local border = forge:FindFirstChild("EmblemBorder")
-		T.truthy(border.Material == NEON and isOrange(border.Color), "a glowing orange edge round the crest plate")
-		-- the banners: a dark pier behind each, a rod with gold finials, a gold border
-		for _, banner in banners do
-			for _, name in { "BannerPier", "BannerRod", "BannerFinial", "BannerBorder" } do
-				T.truthy(banner:FindFirstChild(name), "banner " .. name)
-			end
-			local pier, cloth = banner.BannerPier, banner.BannerCloth
-			T.truthy(luma(pier.Color) < 0.2, "a dark pier behind the crimson")
-			T.truthy(math.abs(pier.CFrame.Position.Z - cloth.CFrame.Position.Z) > 0.5, "it hangs in front of its pier")
-		end
-	end)
+	)
 
 	T.test("plaza: every neon strip on the roads lies within 0.1 stud of the road's top", function()
 		local roads = world().plaza.Roads

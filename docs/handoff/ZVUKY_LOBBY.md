@@ -8,7 +8,7 @@ ztiší. Všechny zvuky jsou od Robloxu, takže fungují hned a nic se nenahráv
 | **Vodopády** (potok na jihu, vodopády v horách a u lomu) | šumění vody |
 | **Potok u mostku** | tiché zurčení |
 | **Rybníky** (koi, lekníny, rybníky na loukách, u potoka) | občas žbluňknutí a cvrčci |
-| **Velká výheň** | rány kladiva na kovadlinu a praskání ohně |
+| **Velká výheň** (průchod pod střechou) | praskání ohně ve dvou ohništích |
 | **Vysoko v horách** | vítr, který sílí, čím výš jsi |
 | **Náměstí** | zatím ticho (viz níže) |
 

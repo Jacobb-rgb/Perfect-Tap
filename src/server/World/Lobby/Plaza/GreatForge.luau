@@ -78,6 +78,13 @@ GreatForge.BannerX = 11.9 -- banner centers (local x = +-11.9), just outside the
 GreatForge.BannerWidth = 3.4 -- the border plate (the crimson cloth is 0.4 narrower)
 GreatForge.BannerTop = 23.8 -- the cloth hangs from the sign's level ...
 GreatForge.BannerBottom = 13.9 -- ... down to the door's middle (about 60% of a full-height banner), a V-notched foot
+-- (owner 2026-10-20) the building is an open passage now: the big roof, the
+-- gable with the crossed hammers, THE GREAT FORGE board and the banners stay
+-- where they were; the plinth, the stairs, the walls, the hall and the blaster
+-- gallery are gone, timber posts carry the roofs, and the bridge garden
+-- (Plaza/BridgeGarden) runs underneath to the quarry and the DEPTHS
+GreatForge.Passage = true
+GreatForge.PassageCut = 18.5 -- every part reaching below this (but the banners) goes
 -- (lobby fix round 3) the gable's front planes, back to front: the infill
 -- (GableZ), the bargeboards (GableZ - 0.2) and THE GREAT FORGE board in
 -- front of both (SignZ: its back face clears the bargeboards' front face)
@@ -842,7 +849,9 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		end
 	end
 	-- the blaster gallery: LV 1-10 and LV 11 "coming soon" on racks along the side walls
-	BlasterGallery.build(m, frame)
+	if not GreatForge.Passage then
+		BlasterGallery.build(m, frame)
+	end
 	-- two hanging lamps from the hall beams (amber core under a dark cap)
 	for _, s in { -1, 1 } do
 		Style.block(m, at(s * 3.4, DOOR_TOP - 0.95, -3), Vector3.new(0.15, 1.9, 0.15), C.Iron, nil, Style.tiny())
@@ -922,6 +931,108 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 				Style.tiny()
 			)
 		end
+	end
+	if GreatForge.Passage then
+		GreatForge.openPassage(m, frame)
+	end
+end
+
+--[[
+	Opens the building into a passage: drops every part that reaches below
+	PassageCut (the plinth, stairs, walls, hall, furnace, props) except the
+	banners and their piers, drops the chimneys (no furnace any more), and
+	stands warm timber posts on stone feet under the roofs, with beams along
+	the eaves and across the front and the back.
+]]
+function GreatForge.openPassage(m: Model, frame: CFrame)
+	local function at(x: number, y: number, z: number): CFrame
+		return frame * CFrame.new(x, y, z)
+	end
+	local doomed: { Instance } = {}
+	for _, d in m:GetDescendants() do
+		if d:IsA("Model") and d.Name == "Chimney" then
+			table.insert(doomed, d)
+		elseif d:IsA("BasePart") and not d:FindFirstAncestor("Chimney") then
+			local bottom = d.CFrame.Position.Y - d.Size.Y / 2
+			local banner = d:FindFirstAncestor("Banner")
+			if bottom < frame.Position.Y + GreatForge.PassageCut and not banner then
+				table.insert(doomed, d)
+			end
+		end
+	end
+	for _, d in doomed do
+		d:Destroy()
+	end
+	for _, child in m:GetChildren() do
+		if child:IsA("Model") and #child:GetChildren() == 0 then
+			child:Destroy()
+		end
+	end
+	local frameModel = Style.model("PassageFrame", m)
+	local function post(x: number, z: number, top: number)
+		Style.block(frameModel, at(x, 0.6, z), Vector3.new(2.4, 1.2, 2.4), C.StoneDark, nil, Style.decor())
+		Style.block(frameModel, at(x, (1.2 + top) / 2, z), Vector3.new(1.5, top - 1.2, 1.5), TIMBER, nil, Style.decor())
+		Style.block(frameModel, at(x, top - 0.6, z), Vector3.new(2, 0.5, 2), K.BrickRed, nil, Style.tiny())
+		Style.block(frameModel, at(x, 2.2, z), Vector3.new(1.7, 0.3, 1.7), K.MetalDark, nil, Style.tiny())
+	end
+	local wingX = 19.6
+	for _, s in { -1, 1 } do
+		-- the nave's front and back corners (the passage's opening under the board's beam band)
+		post(s * NAVE, NAVE_FRONT - 0.2, LINTEL_TOP)
+		post(s * NAVE, WALL_BACK - 0.5, NAVE_EAVE)
+		-- the wings' outer eaves: front, middle, back
+		for _, z in { WING_FRONT, (WING_FRONT + WALL_BACK) / 2, WALL_BACK - 0.5 } do
+			post(s * wingX, z, WING_EAVE)
+		end
+		-- beams along the wing eaves and the nave's sides
+		Style.block(
+			frameModel,
+			at(s * wingX, WING_EAVE - 0.45, (WING_FRONT + WALL_BACK) / 2),
+			Vector3.new(1.2, 0.9, WALL_BACK - WING_FRONT + 1.6),
+			C.WoodDark,
+			nil,
+			Style.ghost()
+		)
+		Style.block(
+			frameModel,
+			at(s * NAVE, LINTEL_TOP - 0.45, (NAVE_FRONT + WALL_BACK) / 2),
+			Vector3.new(1.2, 0.9, WALL_BACK - NAVE_FRONT),
+			C.WoodDark,
+			nil,
+			Style.ghost()
+		)
+		-- ties from the nave posts out to the wings
+		for _, z in { WING_FRONT, WALL_BACK - 0.5 } do
+			Style.block(
+				frameModel,
+				at(s * (NAVE + wingX) / 2, WING_EAVE - 1.2, z),
+				Vector3.new(wingX - NAVE, 0.6, 0.7),
+				C.WoodDark,
+				nil,
+				Style.tiny()
+			)
+		end
+	end
+	-- beams across the front (under the board's beam band) and the back
+	Style.block(
+		frameModel,
+		at(0, LINTEL_TOP - 0.45, NAVE_FRONT - 0.2),
+		Vector3.new(NAVE * 2 + 1.5, 0.9, 1.2),
+		C.WoodDark,
+		nil,
+		Style.ghost()
+	)
+	Style.block(frameModel, at(0, NAVE_EAVE - 0.45, WALL_BACK - 0.5), Vector3.new(NAVE * 2 + 1.5, 0.9, 1.2), C.WoodDark, nil, Style.ghost())
+	-- two fire bowls at the front posts (the forge's fire lives on; ForgeGlow: the ambience spot)
+	for _, s in { -1, 1 } do
+		local base = at(s * (NAVE - 2.4), 0, NAVE_FRONT - 0.5)
+		Style.block(frameModel, base * CFrame.new(0, 0.7, 0), Vector3.new(1.2, 1.4, 1.2), K.MetalDark, nil, Style.decor())
+		Style.block(frameModel, base * CFrame.new(0, 1.65, 0), Vector3.new(2.2, 0.5, 2.2), K.MetalDark, nil, Style.tiny())
+		local fire = Style.block(frameModel, base * CFrame.new(0, 2.15, 0), Vector3.new(1.7, 0.6, 1.7), C.Ember, NEON, Style.tiny())
+		fire.Name = "ForgeGlow"
+		Style.emitter(fire, "Fire", C.Fire, 5)
+		Style.emitter(fire, "Embers", C.Ember, 3)
+		-- (no PointLight: it would turn the crimson banners orange; the garden's lanterns light the passage)
 	end
 end
 
