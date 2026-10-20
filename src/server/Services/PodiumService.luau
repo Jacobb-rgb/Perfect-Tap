@@ -864,6 +864,9 @@ local function grantCoins(player: Player, data: { [string]: any }, entry: Moneti
 	if EconomyService.award(player, amount, "CoinPack:" .. entry.Key) <= before then
 		return false
 	end
+	-- bought coins survive a rebirth while unspent (owner 2026-10-20)
+	local paid = if type(data.PaidCoins) == "number" and data.PaidCoins == data.PaidCoins then data.PaidCoins else 0
+	data.PaidCoins = math.min(paid + amount, data.Coins)
 	toast(player, `+{Format.big(amount)} coins. Thank you!`, "Reward")
 	return true
 end

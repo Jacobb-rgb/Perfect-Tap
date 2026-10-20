@@ -129,10 +129,13 @@
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
 	  WheelOres / StarsEarned / BestBlaster / RunForged / BlastersPaid are
 	  whole numbers >= 0; Stats.RunPaid is a boolean.
-	- Rebirth (RebirthConfig): Rebirths, Stars and BlasterCredits are whole numbers >= 0;
+	- Rebirth (RebirthConfig): Rebirths and Stars are whole numbers >= 0;
 	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
 	  newer build's perks and levels kept, junk and levels below 1 dropped);
 	  PlotGlow is a short id or "" (a colour this build doesn't know stays).
+	- Star blasters (StarBlasterData): RebirthWeapons and RebirthWeaponPasses
+	  map short string ids to true (a newer build's weapons kept, junk
+	  dropped); StarBlaster is a short id or "".
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
@@ -670,7 +673,7 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	end
 
 	-- rebirth: whole counts, Star Shop levels by short ids (unknown perks and levels kept)
-	for _, field in { "Rebirths", "Stars", "BlasterCredits" } do
+	for _, field in { "Rebirths", "Stars" } do
 		local v = data[field]
 		if v ~= nil and not isFinite(v) then
 			report.Dropped += 1
@@ -694,6 +697,22 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		elseif whole ~= level then
 			perks[id] = whole
 		end
+	end
+	-- the star blasters: sets of short ids (a newer build's weapons kept), the equipped id or ""
+	for _, field in { "RebirthWeapons", "RebirthWeaponPasses" } do
+		local set = record(data, field, report)
+		for _, id in keysOf(set) do
+			if not idLike(id) or set[id] ~= true then
+				set[id] = nil
+				report.Dropped += 1
+			end
+		end
+	end
+	if data.StarBlaster ~= nil and data.StarBlaster ~= "" and not idLike(data.StarBlaster) then
+		report.Dropped += 1
+		data.StarBlaster = ""
+	elseif data.StarBlaster == nil then
+		data.StarBlaster = ""
 	end
 end
 
@@ -962,6 +981,12 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		if not isFinite(v) or v < 0 then
 			data[field] = 0
 		end
+	end
+	-- Robux-bought coins not spent yet: finite, 0..Coins
+	if not isFinite(data.PaidCoins) or data.PaidCoins < 0 then
+		data.PaidCoins = 0
+	elseif data.PaidCoins > data.Coins then
+		data.PaidCoins = data.Coins
 	end
 
 	-- trains: levels in range, clean cargo lists, sane trip times

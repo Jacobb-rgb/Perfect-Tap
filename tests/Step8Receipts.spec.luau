@@ -34,6 +34,7 @@ return function(T, Loader)
 	local EnchantService = Loader.requirePath("ServerScriptService.Server.Services.EnchantService")
 	local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 	local HoverboardService = Loader.requirePath("ServerScriptService.Server.Services.HoverboardService")
+	local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
 
 	local GRANTED = Enum.ProductPurchaseDecision.PurchaseGranted
 	local NOT_YET = Enum.ProductPurchaseDecision.NotProcessedYet
@@ -48,6 +49,11 @@ return function(T, Loader)
 		TrainExpress = "Perks",
 		HoverboardComet = "Hoverboard",
 		HoverboardPhoenix = "Hoverboard",
+		StarComet = "RebirthWeapon",
+		StarNebula = "RebirthWeapon",
+		StarPulsar = "RebirthWeapon",
+		StarSupernova = "RebirthWeapon",
+		StarSingularity = "RebirthWeapon",
 		EnchantHeartfire = "Enchant",
 		EnchantStarbreaker = "Enchant",
 		RoyalCapsule1 = "Capsule",
@@ -81,6 +87,10 @@ return function(T, Loader)
 		EnchantService.registerGrants()
 		PodiumService.registerGrants()
 		MonetizationService.registerPass("Hoverboard", { grant = HoverboardService._test.grant, revoke = HoverboardService._test.revoke })
+		MonetizationService.registerPass(
+			"RebirthWeapon",
+			{ grant = RebirthService._test.grantWeapon, revoke = RebirthService._test.revokeWeapon }
+		)
 	end
 
 	local function setup(): any
@@ -296,6 +306,8 @@ return function(T, Loader)
 				T.truthy(entry.Kind == "GamePass" and entry.Enchant, `{entry.Key}: a pass with an enchant`)
 			elseif entry.Grant == "Hoverboard" then
 				T.truthy(entry.Kind == "GamePass" and entry.BoardId, `{entry.Key}: a pass with a board`)
+			elseif entry.Grant == "RebirthWeapon" then
+				T.truthy(entry.Kind == "GamePass" and entry.WeaponId, `{entry.Key}: a pass with a star blaster`)
 			elseif entry.Grant == "Capsule" then
 				T.truthy(entry.Kind == "Product" and entry.Capsule and entry.Count, `{entry.Key}: capsules`)
 			elseif entry.Grant == "Boost" then
@@ -326,6 +338,8 @@ return function(T, Loader)
 		initCalls("src/server/Services/PodiumService.luau", "PodiumService", "PodiumService.registerGrants()")
 		local hover = fs.readFile("src/server/Services/HoverboardService.luau")
 		T.truthy(string.find(hover, 'MonetizationService.registerPass("Hoverboard"', 1, true) ~= nil, "HoverboardService registers")
+		local rebirth = fs.readFile("src/server/Services/RebirthService.luau")
+		T.truthy(string.find(rebirth, 'MonetizationService.registerPass("RebirthWeapon"', 1, true) ~= nil, "RebirthService registers")
 	end)
 
 	withWorld("Step 8: the receipts gate stays closed while a live id has no handler", function(w)
@@ -496,6 +510,7 @@ return function(T, Loader)
 
 	withWorld("Step 8: coin packs wait while CoinPacksEnabled is false, then follow the receipt rules", function(w)
 		MonetizationConfig.CoinPacksEnabled = false
+		w.data.Coins += 777 -- earned coins: never counted as bought
 		local coins = w.data.Coins
 		T.eq(w.decide("k1", "CoinsSmall"), NOT_YET, "coin packs off: the receipt waits (never dropped)")
 		T.eq(w.data.Coins, coins, "no coins")
@@ -511,6 +526,8 @@ return function(T, Loader)
 		end, "CoinsMedium")
 		T.eq(w.decide("k1", "CoinsSmall"), GRANTED, "the waiting receipt is granted once coin packs are on")
 		T.eq(w.data.Coins - coins, 2 * each + 5000, "its coins")
+		-- bought coins are counted in PaidCoins (kept through a rebirth while unspent)
+		T.eq(w.data.PaidCoins, 2 * each + 5000, "only the bought coins are counted")
 	end)
 
 	---------------------------------------------------------------- off policy: ids

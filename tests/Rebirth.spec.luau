@@ -95,6 +95,9 @@ return function(T, Loader)
 		data.Artifacts = { Found = { CrownCoin = 2 }, Chapters = {} }
 		data.Discovered = { Gold = true, Coal = true }
 		data.Hoverboards = { Owned = { Comet = true }, Equipped = "Comet", Passes = {} }
+		data.RebirthWeapons = { Comet = true, Nebula = true } -- star blasters (one by a pass)
+		data.RebirthWeaponPasses = { Nebula = true }
+		data.StarBlaster = "Comet"
 		data.KeepMode = "List"
 		data.KeepList = { Gold = true }
 		data.Stats.OresMined = 500
@@ -257,6 +260,9 @@ return function(T, Loader)
 				"Settings",
 				"Tutorial",
 				"Purchases",
+				"RebirthWeapons",
+				"RebirthWeaponPasses",
+				"StarBlaster",
 			}
 		do
 			T.truthy(deepEqual(before[key], data[key]), key .. " is kept")
@@ -399,7 +405,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Rebirth: Robux blaster levels never pay stars; banked credits lift the next start", function()
+	T.test("Rebirth: Robux blaster levels never pay stars and come back at every rebirth", function()
 		-- a first run with a level bought with Robux counts only Foundry-forged levels
 		local data = midRun()
 		data.Stats.RunPaid = true
@@ -407,26 +413,36 @@ return function(T, Loader)
 		T.eq(select(2, RebirthConfig.canRebirth(data)), "NotForged")
 		data.Stats.RunForged = 7
 		T.eq(RebirthConfig.reachedOf(data), 7, "forged levels still count")
-		-- credits (receipts that came at the top level) lift the new blaster, one level each
-		data.BlasterCredits = 2
+		-- every Robux level lifts the fresh blaster one level, at every rebirth
+		data.Stats.BlastersPaid = 2
+		T.eq(RebirthConfig.startFor(data), 3)
 		RebirthConfig.reset(data)
-		T.eq(data.BlasterLevel, 3, "LV 1 + 2 banked levels")
+		T.eq(data.BlasterLevel, 3, "LV 1 + 2 Robux levels")
 		T.eq(data.BlasterOre, BlasterData.vaultOre(3))
-		T.eq(data.BlasterCredits, 0)
+		T.eq(data.Stats.BlastersPaid, 2, "kept: they come back next time too")
 		T.eq(data.Stats.RunPaid, true, "the lifted run is paid (no stars for it)")
-		-- with Head Start, never above the top; the rest stays banked
-		data.Stats.RunForged = TOP
+		T.eq(RebirthConfig.reachedOf(data), 0, "the lifted level isn't forged: no stars for it")
 		data.BlasterLevel = TOP
-		data.StarPerks = { HeadStart = 3 }
-		data.BlasterCredits = 9
-		RebirthConfig.reset(data)
-		T.eq(data.BlasterLevel, TOP)
-		T.eq(data.BlasterCredits, 9 - (TOP - RebirthConfig.HeadStartLevels[3]), "the rest waits")
-		-- no credits: a clean, unpaid run
-		data.BlasterCredits = 0
 		data.Stats.RunForged = TOP
 		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, 3, "the second rebirth lifts it again")
+		-- with Head Start, never past MaxLevel - 1: a level is left to forge, so a rebirth can be earned again
+		data.StarPerks = { HeadStart = 3 }
+		data.Stats.BlastersPaid = 40
+		data.BlasterLevel = TOP
+		data.Stats.RunForged = TOP
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, TOP - 1)
+		data.BlasterLevel = TOP
+		data.Stats.RunForged = TOP
+		T.truthy(RebirthConfig.canRebirth(data), "forging the top level earns the next rebirth")
+		-- Head Start alone: an unpaid run
+		data.Stats.BlastersPaid = 0
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, RebirthConfig.HeadStartLevels[3])
 		T.eq(data.Stats.RunPaid, false)
+		T.eq(RebirthConfig.startFor({ Stats = { BlastersPaid = 0 / 0 } }), 1, "junk")
+		T.eq(RebirthConfig.startFor(nil), 1)
 	end)
 
 	T.test("Rebirth: Head Start and Podium Keeper", function()
@@ -686,5 +702,56 @@ return function(T, Loader)
 		T.eq(#w.results, count, "junk gets no answer and changes nothing")
 		T.eq(w.data.Stars, 2)
 		T.eq(w.data.Rebirths, 0)
+	end)
+
+	T.test("Rebirth: Robux-bought coins that are still unspent stay; bought coins are spent last", function()
+		local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
+		-- the reset keeps only PaidCoins (never more than the balance)
+		local data = midRun()
+		data.PaidCoins = 1.5e6
+		RebirthConfig.reset(data)
+		T.eq(data.Coins, 1.5e6, "the unspent bought coins stay")
+		T.eq(data.PaidCoins, 1.5e6)
+		local poor = midRun()
+		poor.Coins = 200
+		poor.PaidCoins = 5000
+		RebirthConfig.reset(poor)
+		T.eq(poor.Coins, 200, "never more than the balance")
+		T.eq(poor.PaidCoins, 200)
+		local none = midRun()
+		RebirthConfig.reset(none)
+		T.eq(none.Coins, 0, "earned coins go")
+		T.eq(none.PaidCoins, 0)
+		-- Migrations: junk and too-big values are repaired
+		local junk = ProfileStore.deepCopy(DataTemplate)
+		junk.Coins = 100
+		junk.PaidCoins = 0 / 0
+		Migrations.run(junk)
+		T.eq(junk.PaidCoins, 0)
+		junk.PaidCoins = 500
+		Migrations.run(junk)
+		T.eq(junk.PaidCoins, 100, "PaidCoins <= Coins")
+		-- spending takes the earned coins first
+		local player = { Name = "Payer", UserId = 41 }
+		local wallet = ProfileStore.deepCopy(DataTemplate)
+		wallet.Coins = 1000
+		wallet.PaidCoins = 600
+		local oldGet, oldChanged = DataService.get, DataService.changed
+		DataService.get = function(p: any)
+			return if p == player then wallet else nil
+		end :: any
+		DataService.changed = function() end :: any
+		local ok, err = pcall(function()
+			T.truthy(EconomyService.spend(player :: any, 300, "test"))
+			T.eq(wallet.Coins, 700)
+			T.eq(wallet.PaidCoins, 600, "300 earned coins went first")
+			T.truthy(EconomyService.spend(player :: any, 400, "test"))
+			T.eq(wallet.Coins, 300)
+			T.eq(wallet.PaidCoins, 300, "then the bought ones")
+		end)
+		DataService.get, DataService.changed = oldGet, oldChanged
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end

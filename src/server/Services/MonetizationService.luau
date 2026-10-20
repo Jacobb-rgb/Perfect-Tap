@@ -163,6 +163,12 @@ function MonetizationService.owns(player: Player, key: string): boolean
 	return known ~= nil and known[key] == true
 end
 
+-- True once this session knows whether the player owns the pass `key` (a check answered).
+function MonetizationService.known(player: Player, key: string): boolean
+	local known = passOwned[player]
+	return known ~= nil and known[key] ~= nil
+end
+
 ---------------------------------------------------------------- game passes
 
 local function mark(map: { [Player]: { [string]: boolean } }, player: Player, key: string, value: boolean)

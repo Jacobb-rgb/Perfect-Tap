@@ -640,7 +640,7 @@ Option B of the rebirth proposal: an optional restart that keeps the factory and
   data.PlotGlow, the card's COLOR button cycles the unlocked colours and off) and a "Star Forge" prompt (F / Y) at
   THE GREAT FORGE plaza's fire crystal that opens the window (OpenUI "Rebirth"; an invisible anchor on the crystal's
   axis, no map change). The PC Star Shop fits all 7 cards (panel 650, cards 134 tall, buttons 46).
-- Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
+- Owner's answer (2026-10-20): Robux-bought coins that are still unspent stay through a rebirth (data.PaidCoins, spent last; earned coins reset).
 What to test in Studio:
 1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now
    pays ⭐ 6", REBIRTH! asks SURE?, the second press plays the moment and sends you home.
@@ -672,14 +672,17 @@ LV 10 as cheap as LV 2 and skip the whole ~8 h curve for ~700 R$.)
   no-Robux-to-coins rule, docs/COMPLIANCE.md).
 - Rebirth: a run with a bought level pays stars only for Foundry-forged levels (Stats.RunPaid; also in the first run,
   whose grace otherwise counts the blaster as it is). No paid stars.
+- Bought levels come back (the owner, 2026-10-20: "Vrátí se mu"; the store sells BlasterNext AND the star blasters):
+  every Robux level (Stats.BlastersPaid) lifts the fresh blaster of EVERY later rebirth one level
+  (RebirthConfig.startFor), up to MaxLevel - 1 so one level is always left to forge (otherwise the next rebirth could
+  never be earned). The k-th Robux level is always LV k + 1 or higher, so the bands keep their prices across rebirths.
 - The handler never refuses: MonetizationService never acknowledges a receipt without the item, and clients can
-  prompt any product. At the top level or off the product's band it banks data.BlasterCredits (at most 9); the next
-  rebirth's start spends them, one level each (only there, so a cheap band can never buy a high level). The store
-  asks VaultService.paidStatus first ("Full" at the top / off band) and greys the card while a purchase is pending.
-- Open for the owner, together with the coin packs: a rebirth resets the blaster, so a bought level is gone after a
-  rebirth (the STORE card says "resets if you rebirth"). Should bought levels come back after a rebirth instead?
+  prompt any product. At the top level or off the product's band it only counts the level (BlastersPaid + 1: the
+  rebirths' start rises; a cheap band never buys a high level now). The store asks VaultService.paidStatus first
+  ("Full" at the top / off band) and greys the card while a purchase is pending; the card says "Kept after a rebirth".
 What to test in Studio (with test product ids):
 1. Buy BlasterNextA at LV 2: LV 3 with the crate opening, coins unchanged.
-2. At LV 10: the card is hidden; a forced prompt banks a credit with a thank-you toast, and the next rebirth starts
-   one level higher.
+2. At LV 10: the card is hidden; a forced prompt is counted with a thank-you toast, and the next rebirths start one
+   level higher.
 3. After buying a level, rebirth needs a blaster forged at the Foundry (NotForged otherwise).
+4. Buy two levels, rebirth twice: both rebirths start at LV 3 (the window's YOU LOSE row says "back to LV 3").

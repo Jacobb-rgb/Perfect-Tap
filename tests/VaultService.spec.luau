@@ -205,7 +205,7 @@ return function(T, Loader)
 		T.eq(buy(w, { Level = BlasterData.MaxLevel + 1 }).Reason, "Max", "nothing past the top")
 	end)
 
-	withWorld("VaultService: a Robux blaster gives the next level in its band, else banks a credit (never refuses)", function(w)
+	withWorld("VaultService: a Robux blaster gives the next level in its band, else only counts it (never refuses)", function(w)
 		-- the STORE's bands (MonetizationConfig entries with Grant "BlasterLevel")
 		local bandA = { Key = "BlasterNextA", Grant = "BlasterLevel", MinLevel = 2, MaxLevel = 4 }
 		local bandD = { Key = "BlasterNextD", Grant = "BlasterLevel", MinLevel = 10, MaxLevel = 10 }
@@ -222,18 +222,16 @@ return function(T, Loader)
 		T.eq(w.data.Stats.RunPaid, true, "this rebirth run is paid (no stars for it)")
 		local r = results(w)[#results(w)]
 		T.truthy(r.Ok and r.Paid and r.Level == 3, "the crate opening plays (Paid)")
-		-- off band (a stale or client-made prompt): a banked credit, never a level from a cheaper band
+		-- off band (a stale or client-made prompt): only counted (it lifts the rebirths' start), never a level from a cheaper band
 		w.data.BlasterLevel = 9
 		T.eq(VaultService.paidStatus(w.data, bandA), "Full")
 		T.truthy(vault.grantPaid(w.player, w.data, bandA), "the receipt is still taken (never a retry loop)")
 		T.eq(w.data.BlasterLevel, 9, "band A never buys LV 10")
-		T.eq(w.data.BlasterCredits, 1, "banked for the next rebirth")
-		-- the top level: a credit too, at most MaxCredits
+		T.eq(w.data.Stats.BlastersPaid, 2, "counted: the next rebirths start a level higher")
+		-- the top level: counted too (the start stops at MaxLevel - 1: RebirthConfig.startFor)
 		w.data.BlasterLevel = BlasterData.MaxLevel
-		for _ = 1, 12 do
-			T.truthy(vault.grantPaid(w.player, w.data, bandD))
-		end
-		T.eq(w.data.BlasterCredits, VaultService.MaxCredits, "capped")
+		T.truthy(vault.grantPaid(w.player, w.data, bandD))
+		T.eq(w.data.Stats.BlastersPaid, 3)
 		T.eq(w.data.BlasterLevel, BlasterData.MaxLevel)
 		T.eq(VaultService.paidStatus(w.data, bandD), "Full", "the store hides it at the top")
 		-- a save that isn't this player's live one is left to MonetizationService (not processed yet)

@@ -73,10 +73,15 @@ local function glowOf(tool: Tool): Color3
 	return if typeof(value) == "Color3" then value else glow
 end
 
-local function levelOf(tool: Tool): number
-	local value = tool:GetAttribute("Level")
+-- The level a blaster's effects look like: its Level, a STAR blaster's the top tier (10).
+function BlasterFx.levelOf(tool: Instance?): number
+	if tool and tool:GetAttribute("Star") ~= nil then
+		return 10
+	end
+	local value = tool and tool:GetAttribute("Level")
 	return if type(value) == "number" then value else 1
 end
+local levelOf = BlasterFx.levelOf
 
 local function muzzleOf(tool: Tool): Attachment?
 	local handle = tool:FindFirstChild("Handle")

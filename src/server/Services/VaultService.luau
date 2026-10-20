@@ -18,17 +18,19 @@
 	swaps the blaster). Every request read gets a VaultResult
 	{ Level, Ok, Reason?, Ore?, Name?, Paid? }; the client plays the crate opening on Ok.
 
-	Robux (step 8 STORE, MonetizationConfig products with Grant "BlasterLevel"
-	and MinLevel / MaxLevel = the next levels a product covers, priced in
-	bands): the "BlasterLevel" receipt handler gives the next level through
-	the same setter (grantNext "Robux": Stats.BlastersPaid + 1, Stats.RunPaid
-	so the rebirth run pays stars only for Foundry-forged levels) and the
-	crate opening plays (VaultResult Paid = true). It never refuses (the
-	receipt would come back forever and the player paid for nothing): at the
-	top level, or when the next level isn't in the product's band (a stale or
-	client-made prompt), it banks a credit (data.BlasterCredits, at most
-	MaxCredits) that the next rebirth spends at its start (RebirthConfig.reset:
-	only there, so a cheap band can never buy a high level). Never coins.
+	Robux (the STORE's BlasterNextA-D, MonetizationConfig products with Grant
+	"BlasterLevel" and MinLevel / MaxLevel = the next levels a product
+	covers, priced in bands 49 / 99 / 199 / 399 R$): the "BlasterLevel"
+	receipt handler gives the next level through the same setter (grantNext
+	"Robux": Stats.BlastersPaid + 1, Stats.RunPaid so the rebirth run pays
+	stars only for Foundry-forged levels) and the crate opening plays
+	(VaultResult Paid = true). Every Robux level comes back at every later
+	rebirth (RebirthConfig.startFor lifts the fresh blaster one level per
+	BlastersPaid, up to MaxLevel - 1). It never refuses (the receipt would
+	come back forever and the player paid for nothing): at the top level, or
+	when the next level isn't in the product's band (a stale or client-made
+	prompt), the level is only counted (BlastersPaid + 1: it lifts the next
+	rebirths' start; a cheap band never buys a high level now). Never coins.
 	The store asks paidStatus first ("Full" at the top / off-band).
 ]]
 
@@ -52,7 +54,6 @@ VaultService.PromptName = "VaultShopPrompt"
 VaultService.PointName = "VaultShopPromptPoint"
 
 VaultService.Reasons = { "BadLevel", "Owned", "Locked", "Max", "TooFar", "NoCoins", "NoData" }
-VaultService.MaxCredits = 9 -- banked Robux blaster levels a save keeps (one per level above 1)
 
 local PROMPT_DISTANCE = 12
 local MAX_PAYLOAD = 4
@@ -202,7 +203,7 @@ end
 
 --[[
 	The "BlasterLevel" receipt handler (MonetizationService.register): the
-	next level when the product's band holds it, else a banked credit (see
+	next level when the product's band holds it, else the level only counted (see
 	the header). Never refuses a loaded save; no yield.
 ]]
 local function grantPaid(player: Player, data: { [string]: any }, entry: any): boolean
@@ -214,10 +215,15 @@ local function grantPaid(player: Player, data: { [string]: any }, entry: any): b
 		answer(player, level, true, nil, true)
 		return true
 	end
-	data.BlasterCredits = math.min(whole(data.BlasterCredits) + 1, VaultService.MaxCredits)
+	local stats = data.Stats
+	if type(stats) ~= "table" then
+		stats = {}
+		data.Stats = stats
+	end
+	stats.BlastersPaid = whole(stats.BlastersPaid) + 1
 	DataService.changed(player)
 	Net.fire("Notify", player, {
-		Text = "Thank you! Your blaster is past this case, so it waits for your next rebirth: it lifts your new blaster a level.",
+		Text = "Thank you! Your blaster is past this level, so it waits for your rebirths: each one starts your new blaster a level higher.",
 		Kind = "Reward",
 	})
 	return true

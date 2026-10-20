@@ -9,6 +9,9 @@ local DataTemplate = {
 	Version = 3, -- Data/Migrations brings older saves up to this
 
 	Coins = 0, -- may hold fractions (podium income per second)
+	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
+	-- last, kept through a rebirth: owner 2026-10-20)
+	PaidCoins = 0,
 	-- crystal shards (the Crystal Extractor finds them; the Enchant shop spends them)
 	Shards = 0,
 	-- crushed piles a Crusher made that the Crystal Extractor hasn't shaken yet
@@ -146,9 +149,13 @@ local DataTemplate = {
 	StarPerks = {},
 	-- the Plot Glow colour the plot shows (a RebirthConfig.GlowColors id, "" = off)
 	PlotGlow = "",
-	-- Robux blaster levels banked for the next rebirth (VaultService: a receipt that
-	-- came at the top level or off its band; RebirthConfig.reset spends them)
-	BlasterCredits = 0,
+	-- the STAR blasters (StarBlasterData, RebirthService), kept through every rebirth:
+	-- RebirthWeapons = { [id] = true } the ones you own, RebirthWeaponPasses = { [id] = true }
+	-- the ones a game pass gave (a refund takes back only those), StarBlaster = the
+	-- equipped one ("" = your forged blaster)
+	RebirthWeapons = {},
+	RebirthWeaponPasses = {},
+	StarBlaster = "",
 
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
 	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),

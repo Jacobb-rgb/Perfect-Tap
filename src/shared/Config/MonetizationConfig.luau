@@ -45,6 +45,8 @@
 	                 (MonetizationService itself, src/server/Perks.luau)
 	    "Enchant"    passes: the Mythic enchant, forever (EnchantService)
 	    "Hoverboard" passes: the BoardId board (HoverboardService)
+	    "RebirthWeapon" passes: the WeaponId star blaster (RebirthService;
+	                 built from StarBlasterData, so the prices stay equal)
 	    "Capsule"    products: Count golems of Capsule (CapsuleService)
 	    "Boost"      products: Seconds of Boost, uncapped (BoostService)
 	    "CoinPack"   products: coinPackAmount coins, only while
@@ -97,6 +99,7 @@
 ]]
 
 local OreData = require(script.Parent.OreData)
+local StarBlasterData = require(script.Parent.StarBlasterData)
 local WorldLayout = require(script.Parent.WorldLayout)
 
 export type Kind = "GamePass" | "Product"
@@ -121,6 +124,7 @@ export type Product = {
 	MinCoins: number?, -- ...but at least this many coins
 	Grant: string?, -- the MonetizationService handler that gives it (header: "Perks", "Capsule", ...)
 	BoardId: string?, -- Grant "Hoverboard": the HoverboardData id it unlocks
+	WeaponId: string?, -- Grant "RebirthWeapon": the StarBlasterData id it gives
 }
 -- (MonetizationService's name for a pass or product)
 export type Entry = Product
@@ -372,6 +376,20 @@ local LIST: { Product } = {
 		MinCoins = 100000,
 	},
 }
+-- the five STAR blasters (StarBlasterData): one-time passes, kept through every rebirth;
+-- they open at their rebirth count (a pass bought earlier waits). Keys StarComet ... StarSingularity.
+for _, star in StarBlasterData.List do
+	table.insert(LIST, {
+		Key = "Star" .. star.Id,
+		Kind = "GamePass",
+		Id = 0,
+		Robux = star.Robux,
+		Name = star.Name,
+		Description = `The {star.Name} star blaster: x{star.Mult} the power of your blaster level, kept forever. Opens at rebirth {star.Unlock}.`,
+		Grant = "RebirthWeapon",
+		WeaponId = star.Id,
+	})
+end
 
 -- Coin packs wait for the owner's decision (see the header). Keep false
 -- until the owner confirms them; it decides the paid-random-items rules.
