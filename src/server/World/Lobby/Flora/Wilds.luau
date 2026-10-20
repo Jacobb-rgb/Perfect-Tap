@@ -768,39 +768,47 @@ function Wilds.build(map: Instance, rng: Rng.Rng): (Model, { [string]: Vector3 }
 	table.sort(low, function(a: BasePart, b: BasePart): boolean
 		return a.CFrame.Position.Y < b.CFrame.Position.Y
 	end)
-	for _, name in Wilds.SecretOrder do
-		local r = Wilds.SecretRadius[name]
-		local at: Vector3? = nil
-		if Wilds.SecretWhere[name] == "Town" then
-			for _, p in spots do
-				if
-					spaced(taken, p, Wilds.SecretSpacing)
-					and edgeDistance(index, p) < Wilds.SecretEdge
-					and not inBox(p, Meadow.Core, r + 6)
-					and not inBox(p, Meadow.ForgeBack, r)
-					and not inBox(p, Meadow.VaultZone, r)
-					and Meadow.allowed(p, r, ground)
-					and Meadow.free(index, p, r, 7)
-				then
-					at = p
-					break
-				end
+	local function townSpot(r: number, spacing: number): Vector3?
+		for _, p in spots do
+			if
+				spaced(taken, p, spacing)
+				and edgeDistance(index, p) < Wilds.SecretEdge
+				and not inBox(p, Meadow.Core, r + 6)
+				and not inBox(p, Meadow.ForgeBack, r)
+				and not inBox(p, Meadow.VaultZone, r)
+				and Meadow.allowed(p, r, ground)
+				and Meadow.free(index, p, r, 7)
+			then
+				return p
 			end
-		else
-			for _, cap in low do
-				if math.min(cap.Size.X, cap.Size.Z) / 2 >= r + 0.5 then
-					local p = capTop(cap, 0, 0)
-					if
-						spaced(taken, p, Wilds.SecretSpacing)
-						and not WorldLayout.isKeepOut(p, r)
-						and Meadow.freeBand(index, p, r, p.Y + 0.05, p.Y + 7)
-					then
-						at = p
-						break
-					end
+		end
+		return nil
+	end
+	local function mountainSpot(r: number, spacing: number): Vector3?
+		for _, cap in low do
+			if math.min(cap.Size.X, cap.Size.Z) / 2 >= r + 0.5 then
+				local p = capTop(cap, 0, 0)
+				if spaced(taken, p, spacing) and not WorldLayout.isKeepOut(p, r) and Meadow.freeBand(index, p, r, p.Y + 0.05, p.Y + 7) then
+					return p
 				end
 			end
 		end
+		return nil
+	end
+	-- the biggest first; where the drawn place has no room left, closer to the
+	-- others, then the other kind of place
+	local order = table.clone(Wilds.SecretOrder)
+	table.sort(order, function(a: string, b: string): boolean
+		return Wilds.SecretRadius[a] > Wilds.SecretRadius[b]
+	end)
+	for _, name in order do
+		local r = Wilds.SecretRadius[name]
+		local town = Wilds.SecretWhere[name] == "Town"
+		local at: Vector3? = nil
+		for _, spacing in { Wilds.SecretSpacing, Wilds.SecretSpacing / 2 } do
+			at = at or (if town then townSpot(r, spacing) else mountainSpot(r, spacing))
+		end
+		at = at or (if town then mountainSpot(r, Wilds.SecretSpacing / 2) else townSpot(r, Wilds.SecretSpacing / 2))
 		if at then
 			local s = Wilds.Secrets[name](secrets, at, Rng.new(`Wilds/{name}/{rng:nextU32()}`))
 			Meadow.track(index, s)

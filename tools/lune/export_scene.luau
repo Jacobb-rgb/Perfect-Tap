@@ -134,9 +134,6 @@ if sceneName == "world" or string.match(sceneName, "^world_") then
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
 	addNodes(workspace, map)
-	if sceneName == "world_wilds" then -- proposals: + the Wilds (tools/lune/lib/nature_wilds_preview.luau)
-		require("./lib/nature_wilds_preview").addWilds(Loader, map)
-	end
 elseif sceneName == "hall" then -- the world + stand-in champions on the giant HALL OF FAME (tools/lune/lib/hall_preview.luau)
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
@@ -309,7 +306,7 @@ elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading
 	end
 elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced by the bridge garden (tools/lune/lib/forge_bridge_preview.luau; arg 2 = A / B / C)
 	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
-elseif sceneName == "nature_kit" then -- proposals: the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
+elseif sceneName == "nature_kit" then -- the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
 	require("./lib/nature_wilds_preview").kit(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
