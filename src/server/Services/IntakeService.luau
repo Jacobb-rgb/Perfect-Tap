@@ -34,6 +34,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Grid = require(Shared.Machines.Grid)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
@@ -416,24 +417,22 @@ local function loadFromHands(player: Player, machine: PlacedMachine)
 end
 
 --[[
-	The 'Put In' prompt (F / gamepad Y) on the machine's Prompt attachment.
-	The server never changes its Enabled after this: the client shows it only
-	while you carry something (PromptController).
+	The 'Put In' prompt (E / gamepad Y, PromptConfig "Main") on the machine's
+	Prompt attachment, in slot `order`. The server never changes its Enabled
+	after this: the client shows it only while you carry something
+	(PromptController).
 ]]
 function IntakeService.addLoadPrompt(machine: PlacedMachine, actionText: string, order: number): ProximityPrompt
 	local base = machine.Model.PrimaryPart :: BasePart
 	local attachment = base:FindFirstChild("Prompt") or base
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "LoadPrompt"
-	prompt.ActionText = actionText
-	prompt.ObjectText = machine.Info.Name
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, order * 72)
-	prompt.Parent = attachment
+	local prompt = PromptConfig.make({
+		Name = "LoadPrompt",
+		ActionText = actionText,
+		ObjectText = machine.Info.Name,
+		Distance = 10,
+		Slot = order,
+		Parent = attachment,
+	})
 	prompt.Triggered:Connect(function(player)
 		loadFromHands(player, machine)
 	end)

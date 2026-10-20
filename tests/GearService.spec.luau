@@ -26,6 +26,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local GearConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GearConfig")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
@@ -217,8 +218,8 @@ return function(T, Loader)
 		local prompt = point:FindFirstChild(GearService.PromptName)
 		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "prompt")
 		T.eq(prompt.ActionText, "Gear Shop")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard)
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
 		T.eq(prompt.HoldDuration, 0)
 		T.falsy(prompt.RequiresLineOfSight, "no line of sight needed")
 		T.eq(GearService.Tag, "ShopCounter", "the lobby's SHOP hook")
@@ -1073,7 +1074,7 @@ return function(T, Loader)
 
 	T.test("Ore Magnet: every level fetches ore from beyond your grab reach (no dead levels)", function()
 		local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
-		-- E grabs within the Gloves reach (11 without Gloves) + 2 studs of lag slack
+		-- F grabs within the Gloves reach (11 without Gloves) + 2 studs of lag slack
 		local grab = GearConfig.value("Gloves", 0) + 2
 		for level = 1, GearConfig.MaxLevel do
 			local radius = GearConfig.value("Magnet", level)

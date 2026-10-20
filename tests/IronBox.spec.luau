@@ -6,6 +6,7 @@
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
@@ -204,8 +205,8 @@ return function(T, Loader)
 		local keep = anchor:FindFirstChild(IronBoxService.PromptName)
 		T.truthy(keep, "Keep List prompt")
 		T.eq(keep.ActionText, "Keep List")
-		T.truthy(keep.KeyboardKeyCode == roblox.Enum.KeyCode.G, "G on keyboards")
-		T.truthy(keep.GamepadKeyCode == roblox.Enum.KeyCode.ButtonB, "B on gamepads")
+		T.truthy(keep.KeyboardKeyCode == PromptConfig.Keys.Second.Keyboard, "G on keyboards")
+		T.truthy(keep.GamepadKeyCode == PromptConfig.Keys.Second.Gamepad, "B on gamepads")
 		T.eq(keep.UIOffset.Y, 72, "under the Put In prompt")
 		T.eq(keep.HoldDuration, 0)
 	end)
@@ -723,7 +724,8 @@ return function(T, Loader)
 		T.eq(prompt.ActionText, "Keep List")
 		-- its own keys: G / B is the gate's "Open Pen" a few steps away (one
 		-- prompt per key shows, so both must differ to show at the gate)
-		T.truthy(prompt.KeyboardKeyCode == roblox.Enum.KeyCode.F and prompt.GamepadKeyCode == roblox.Enum.KeyCode.ButtonY, "F / Y")
+		local main = PromptConfig.Keys.Main
+		T.truthy(prompt.KeyboardKeyCode == main.Keyboard and prompt.GamepadKeyCode == main.Gamepad, "E / Y")
 		T.truthy(board.ModelStreamingMode == roblox.Enum.ModelStreamingMode.Atomic, "streams in whole, like machines")
 		T.truthy(prompt:HasTag(PenService.PromptTag), "tagged like the pen's prompts (PenController: owner only)")
 		T.eq(prompt:GetAttribute("PlotId"), PLOT)

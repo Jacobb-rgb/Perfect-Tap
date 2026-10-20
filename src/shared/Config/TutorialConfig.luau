@@ -192,7 +192,7 @@ TutorialConfig.Steps = {
 		Id = "Mine",
 		Title = "Blast a rock",
 		Text = "Blast a rock with your blaster, then grab the dirty ore.",
-		Hint = { Mouse = "Click a rock · E grabs", Touch = "Tap a rock · tap Grab", Gamepad = "R2 blasts · X grabs" },
+		Hint = { Mouse = "Click a rock · F grabs", Touch = "Tap a rock · tap Grab", Gamepad = "R2 blasts · X grabs" },
 		Target = "Rock",
 		done = function(data: Data, signals: Signals): boolean
 			return (signals.Carrying or 0) > 0 or M.loaded(data) or M.home(data) or M.cleanedMined(data)
@@ -223,9 +223,10 @@ TutorialConfig.Steps = {
 		Title = "Clean your ore",
 		Text = "Take an ore out of your Ore Pen and clean it at the Cleaning Station.",
 		Hint = {
-			Mouse = "F opens the pen and the station",
+			-- the pen's "Open Pen" is the second prompt (G / B), the station's "Clean Ore" the main one (E / Y)
+			Mouse = "G opens the pen · E cleans it",
 			Touch = "Tap the buttons that pop up",
-			Gamepad = "Y opens the pen and the station",
+			Gamepad = "B opens the pen · Y cleans it",
 		},
 		Target = "Cleaning",
 		EmptyTarget = "Pen",
@@ -237,7 +238,7 @@ TutorialConfig.Steps = {
 		Id = "Podium",
 		Title = "Show it off",
 		Text = "Put your clean ore on a podium. It earns coins every second!",
-		Hint = { Mouse = "F at the podium", Touch = "Tap Place at the podium", Gamepad = "Y at the podium" },
+		Hint = { Mouse = "E at the podium", Touch = "Tap Place at the podium", Gamepad = "Y at the podium" },
 		Target = "Podium",
 		done = function(data: Data, _signals: Signals): boolean
 			return M.podium(data)

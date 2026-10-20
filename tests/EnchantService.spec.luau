@@ -20,6 +20,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local EnchantConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EnchantConfig")
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
@@ -231,8 +232,8 @@ return function(T, Loader)
 		local prompt = point:FindFirstChild(EnchantService.PromptName)
 		T.truthy(prompt and prompt:IsA("ProximityPrompt"), "prompt")
 		T.eq(prompt.ActionText, "Enchant")
-		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard)
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
 		T.falsy(prompt.RequiresLineOfSight)
 		shop.hookCounter(w.counter)
 		local n = 0

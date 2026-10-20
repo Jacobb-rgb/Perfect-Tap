@@ -59,7 +59,7 @@
 	  moment as a find (ArtifactFound { Restored = true }, rewards, museum),
 	  but no Stats.ArtifactsFound (no rock was broken). ActionResult
 	  { Action = "Artifact", Op = "Restore", Ok, Reason?, Id }.
-	Prompts (F / gamepad Y)
+	Prompts (E / gamepad Y)
 	  FossilDig (lobby)  "Collection Book" at the dig's gate side and "Read
 	                     Journal" at the story screen at its back
 	  GuildBoard (lobby) "Read Journal"
@@ -81,6 +81,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local StatConfig = require(Shared.Config.StatConfig)
 local StoryConfig = require(Shared.Config.StoryConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -553,15 +554,13 @@ local function makePrompt(part: BasePart, name: string, offset: CFrame, action: 
 	point.Name = name
 	point.CFrame = offset
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "Prompt"
-	prompt.ActionText = action
-	prompt.ObjectText = object
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = ArtifactService.PromptDistance
-	prompt.RequiresLineOfSight = sight == true
+	local prompt = PromptConfig.make({
+		Name = "Prompt",
+		ActionText = action,
+		ObjectText = object,
+		Distance = ArtifactService.PromptDistance,
+		Sight = sight == true,
+	})
 	prompt:AddTag(ArtifactService.PromptTag)
 	prompt.Parent = point
 	prompt.Triggered:Connect(function(player: Player)

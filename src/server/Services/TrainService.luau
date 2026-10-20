@@ -24,8 +24,8 @@
 	  hook gets two ProximityPrompts at the "PromptPoint" attachment of its
 	  station / lift (searched from the ancestor tagged "TrainStation" or
 	  "MineLift"), tagged "TrainPrompt", with attributes Action = "Load" |
-	  "Send" and Slot (UIOffset = (0, Slot * 72), the machine prompts' step):
-	    slot 0 (0, 0)    "TrainLoadPrompt"  "Load Train"  F / gamepad Y
+	  "Send" and Slot (UIOffset = (0, Slot * 72), PromptConfig.SlotHeight):
+	    slot 0 (0, 0)    "TrainLoadPrompt"  "Load Train"  E / gamepad Y
 	    slot 1 (0, 72)   "TrainSendPrompt"  "Send Train"  G / gamepad B
 	    slot 2 (0, 144)  kept free for the client's own "Train" panel prompt
 	                     (it must not stay at the default offset (0, 0))
@@ -111,6 +111,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
@@ -933,20 +934,18 @@ local function makePrompt(
 	action: string,
 	text: string,
 	objectText: string,
-	key: Enum.KeyCode,
-	pad: Enum.KeyCode,
+	role: PromptConfig.Role,
 	slot: number
 ): ProximityPrompt
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = name
-	prompt.ActionText = text
-	prompt.ObjectText = objectText
-	prompt.KeyboardKeyCode = key
-	prompt.GamepadKeyCode = pad
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, slot * TrainService.PromptSlotHeight)
+	-- UIOffset = (0, slot * PromptSlotHeight): TrainConfig's step is PromptConfig.SlotHeight
+	local prompt = PromptConfig.make({
+		Role = role,
+		Name = name,
+		ActionText = text,
+		ObjectText = objectText,
+		Distance = 10,
+		Slot = slot,
+	})
 	prompt:SetAttribute("Action", action)
 	prompt:SetAttribute("Slot", slot)
 	prompt:AddTag(TrainService.PromptTag)
@@ -1020,11 +1019,11 @@ local function setupHook(part: BasePart): Hook
 	end)
 	local anchor: Instance = point or part
 	local slots = TrainService.PromptSlots
-	local load = makePrompt(anchor, "TrainLoadPrompt", "Load", "Load Train", name, Enum.KeyCode.F, Enum.KeyCode.ButtonY, slots.Load)
+	local load = makePrompt(anchor, "TrainLoadPrompt", "Load", "Load Train", name, "Main", slots.Load)
 	load.Triggered:Connect(function(player: Player)
 		loadFromHands(player, hook)
 	end)
-	local send = makePrompt(anchor, "TrainSendPrompt", "Send", "Send Train", name, Enum.KeyCode.G, Enum.KeyCode.ButtonB, slots.Send)
+	local send = makePrompt(anchor, "TrainSendPrompt", "Send", "Send Train", name, "Second", slots.Send)
 	send.Triggered:Connect(function(player: Player)
 		TrainService.send(player)
 	end)
