@@ -2,15 +2,15 @@
 	UI switches.
 
 	LightUI: the owner's light "Bubble" look (style A, src/client/UI/Bubble*.luau).
-	Default is what ships; while it is false every player sees exactly
-	yesterday's dark UI. To try the light UI in Studio without changing code,
-	set the Workspace attribute "LightUI" = true before pressing Play. To turn
-	it back off fast: Default = false (docs/handoff/UI_LIGHT_SWITCH_ON.md).
+	Default is what ships (on since 2026-10-20). To turn it back off fast:
+	Default = false, and every player sees the dark UI again
+	(docs/handoff/UI_LIGHT_SWITCH_ON.md). With it off, the Workspace attribute
+	"LightUI" = true still turns it on for a Studio test.
 ]]
 
 local UIConfig = {}
 
-UIConfig.Default = false -- the switch (true once the owner's ANO lands)
+UIConfig.Default = true -- the switch: the light UI is on (owner's go, 2026-10-20)
 UIConfig.LightUI = UIConfig.Default
 UIConfig.Attribute = "LightUI" -- Workspace attribute that turns it on for testing
 

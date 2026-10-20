@@ -27,8 +27,8 @@ function Preview.build(Loader: any): { [string]: any }
 	local UDim2 = Loader.roblox.UDim2
 
 	local process = require("@lune/process")
-	local light = process.env.LIGHT_UI == "1"
 	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local light = process.env.LIGHT_UI == "1" or UIConfig.Default
 	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 	UIConfig.LightUI = light
 
@@ -113,7 +113,7 @@ function Preview.build(Loader: any): { [string]: any }
 		hud(tvScale, 1.52e11).Gui,
 		view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, 9, 1.52e11, "A: buy   B: close").Gui,
 	})
-	UIConfig.LightUI = false
+	UIConfig.LightUI = UIConfig.Default
 	if light then
 		local renamed = {}
 		for name, guis in exports do

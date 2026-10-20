@@ -134,7 +134,7 @@ IconAssets.Fallbacks = {
 	rainbow = "🌈", enchant = "✨", check = "✔️", wheel = "🎡", book = "📖", trophy = "🏆",
 	helmet = "⛑️", cog = "⚙️", lock = "🔒", lift = "🛗", rebirth = "🔁", star_token = "⭐",
 	boots = "👢", gloves = "🧤", magnet = "🧲", speaker = "🔊", music = "🎵", camera = "📷",
-	gamepad = "🎮",
+	gamepad = "🎮", hoverboard = "🛹",
 } :: { [string]: string }
 
 -- prefix -> emoji for the big families (golem_*, capsule_*, machine_*, ...)

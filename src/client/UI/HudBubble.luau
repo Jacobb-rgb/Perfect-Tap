@@ -691,9 +691,10 @@ HudBubble.EntryLooks = {
 	Settings = { Icon = "cog", Role = "Settings" },
 	Store = { Icon = "coins", Role = "Shop" },
 	Elevator = { Icon = "lift", Role = "Base" },
-	Hoverboards = { Icon = "rainbow", Role = "Lobby" },
+	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: the emoji stands in)
 	Wheel = { Icon = "wheel", Role = "Wheel" },
 	Gear = { Icon = "helmet", Role = "Gear" },
+	Rebirth = { Icon = "rebirth", Role = "Rebirth" }, -- STAR FORGE
 } :: { [string]: { Icon: string, Role: string } }
 
 export type TileSpec = { Label: string?, IconName: string?, Order: number? }

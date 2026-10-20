@@ -52,6 +52,9 @@ local BACKGROUNDS: { [string]: Color3 } = {
 	[key(rgb(74, 66, 60))] = Roles.Settings.Lip,
 	[key(rgb(120, 114, 108))] = rgb(150, 158, 176), -- dirty ore grey
 	[key(rgb(26, 40, 90))] = BubbleTheme.PanelTint, -- the Hall of Fame's navy boards
+	[key(rgb(160, 168, 255))] = Roles.Rebirth.Base, -- the STAR FORGE window (RebirthView.Colors)
+	[key(rgb(120, 108, 100))] = Roles.Settings.Base,
+	[key(rgb(70, 62, 58))] = Roles.Settings.Lip,
 }
 
 -- old text colour -> text colour on a light background (nil = keep the colour)
@@ -95,6 +98,17 @@ local function isLight(c: Color3?): boolean
 	return c ~= nil and luminance(c :: Color3) > 0.72
 end
 
+-- A light text colour meant for the dark panels, readable on white: near
+-- white / grey becomes ink, a bright hue (a rarity or grade colour) keeps
+-- its hue a shade darker. Idempotent (the result maps to itself).
+local function readable(c: Color3): Color3
+	local h, sat, v = c:ToHSV()
+	if sat < 0.25 then
+		return BubbleTheme.Ink
+	end
+	return Color3.fromHSV(h, math.max(sat, 0.75), math.min(v, 0.66))
+end
+
 local function skinBackground(gui: GuiObject)
 	local mapped = BACKGROUNDS[key(gui.BackgroundColor3)]
 	if mapped then
@@ -131,7 +145,7 @@ local function skinText(object: GuiObject)
 		if mapped then
 			label.TextColor3 = mapped
 		elseif luminance(colour) > 0.6 then
-			label.TextColor3 = BubbleTheme.Ink -- a light colour meant for the dark panels
+			label.TextColor3 = readable(colour)
 		end
 		-- body text is plain; only titles (LuckiestGuy) keep a thin navy edge
 		local title = string.find(label.FontFace.Family, "Luckiest") ~= nil

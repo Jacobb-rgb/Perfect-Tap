@@ -143,8 +143,8 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 
 	-- HUD as a player with two podiums would see it
 	-- LIGHT_UI=1: the same overlays with the light UI on, names ending in "_light"
-	local light = require("@lune/process").env.LIGHT_UI == "1"
 	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local light = require("@lune/process").env.LIGHT_UI == "1" or UIConfig.Default
 	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 	UIConfig.LightUI = light
 
@@ -205,7 +205,7 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	offline.Amount.Text = "+" .. Format.money(income * 0.5 * 3 * 3600)
 	offline.Detail.Text = "Away 3h 05m. Podiums pay 50% while you're offline, for up to 5 hours."
 	exports.ui_offline = UiExport.export({ hud().Gui, offline.Gui })
-	UIConfig.LightUI = false
+	UIConfig.LightUI = UIConfig.Default
 	if light then
 		local renamed = {}
 		for name, guis in exports do

@@ -331,6 +331,7 @@ local function buildLight(): Refs
 		Move = lightAction(actions, "Move", "MOVE", "Plain", 104, 3),
 		PackUp = lightAction(actions, "PackUp", "PACK UP", "Plain", 124, 4),
 		Place = lightAction(actions, "Place", "PLACE", "Go", 140, 5),
+		Layer = lightAction(actions, "Layer", BuildView.LayerText.Deck, "Lobby", 124, 0),
 		Done = done,
 		OnPick = nil,
 	}
@@ -569,7 +570,13 @@ end
 
 -- The Deck / Ground toggle shows the layer it works on now.
 function BuildView.setLayer(refs: Refs, ground: boolean)
-	refs.Layer.Text = if ground then BuildView.LayerText.Ground else BuildView.LayerText.Deck
+	local text = if ground then BuildView.LayerText.Ground else BuildView.LayerText.Deck
+	local label = refs.Layer:FindFirstChild("Label")
+	if label and label:IsA("TextLabel") then
+		label.Text = text -- the light button's text sits on its Label
+	else
+		refs.Layer.Text = text
+	end
 end
 
 -- The BUILD button for the HUD's right-side menu (HudController.refs().Menu).
