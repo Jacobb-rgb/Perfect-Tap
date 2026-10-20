@@ -6,7 +6,7 @@
 	                icon and the income per second over it (owner 2026-10-20,
 	                his phone photo); the game HUD (buildGame) only
 	  bottom-left   over the money: the green "Shop" pill with the cart (opens
-	                the Robux STORE)
+	                the Robux STORE); on phones and tablets it sits top-right
 	  top-centre    the teleport bar: BASE / LOBBY / VAULT tabs with 3D icons
 	  left          the main menu tiles: BACKPACK, GOLEMS, BUILD, SHOP + MORE
 	                (2 columns on PC, 3 columns on phones so the tiles stay above
@@ -266,9 +266,20 @@ function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	local height = rows * cellH + (rows - 1) * rowGap
 	-- phones: under the coins and the income chip (it sits under the pill so
 	-- it never meets the teleport bar on narrow phones)
-	-- phones: under the TRAIN chip's row at the top-left (the money and the Shop pill are bottom-left)
-	local origin = if layout.Compact then UDim2.fromOffset(18, 136) else UDim2.new(0, 18, 0.5, 24 - height // 2)
+	-- the top-left, right under Roblox's top bar; the TRAIN chip (and the boost
+	-- chips beside it) go under the tiles (ChipTop), the Shop pill and the money
+	-- at the bottom-left
+	local origin = UDim2.fromOffset(18, HudBubble.MenuTop)
 	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
+end
+
+HudBubble.MenuTop = 8 -- the tiles' top under Roblox's top bar (CoreUISafeInsets)
+HudBubble.ChipGap = 12
+
+-- The TRAIN chip's top: under the game menu's tiles (design units, CoreUISafeInsets).
+function HudBubble.chipTop(layout: Layout): number
+	local m = HudBubble.menuMetrics(layout, #HudBubble.GameMenu)
+	return HudBubble.MenuTop + m.Height + HudBubble.ChipGap
 end
 
 -- Top-left of menu tile `index` (1-based).
@@ -590,9 +601,10 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	local layout = HudBubble.layout(uiScale or HudBubble.screenScale(), screenWidth or HudBubble.screenWidth())
 	local gui = UIKit.screen("TerraForgeHud", 5)
 	gui:SetAttribute("Bubble", true)
-	-- TVs and notched phones: keep clear of the unsafe edges
+	-- TVs and notched phones: keep clear of the unsafe edges and of Roblox's top
+	-- bar (CoreUISafeInsets: the same frame as the TRAIN and boost chips' guis)
 	pcall(function()
-		(gui :: any).ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+		(gui :: any).ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
 	end)
 
 	-- the money, bottom-left (the income line lives inside, so hiding the money hides both)
@@ -647,28 +659,33 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		BackgroundTransparency = 1,
-		Position = if layout.Compact then m.Origin else UDim2.new(0, 18, 0.5, 24 - m.Height // 2),
+		Position = m.Origin,
 		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
-	-- the green Shop pill over the money (the owner's phone photo: Shop above the money,
-	-- bottom-left; the TRAIN and boost chips keep the top-left)
+	-- where the TRAIN chip goes (TrainView.HudChipTop, set by HudController)
+	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
+	-- the green Shop pill: on big screens over the money (the owner's phone photo: Shop
+	-- above the money, bottom-left); on phones and tablets the left column is full
+	-- (tiles, the TRAIN chip, the money), so it sits at the top-right, under Roblox's top bar
 	local pill = HudBubble.ShopPill
 	local moneyTop = -coinsPanel.Position.Y.Offset + coinsPanel.Size.Y.Offset
 	local shop = Card.pill(gui, "Shop", "cart", Color3.fromRGB(110, 226, 52), Color3.fromRGB(34, 110, 20), pill, {
 		Name = "ShopPill",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 20, 1, -(moneyTop + 12)),
+		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
+		Position = if layout.Compact then UDim2.new(1, -18, 0, HudBubble.MenuTop) else UDim2.new(0, 20, 1, -(moneyTop + 12)),
 	})
 	shop:SetAttribute("Opens", "StoreController")
-	-- Server Luck running (StoreController fills it from ServerLuckUntil): over the pill
+	-- Server Luck running (StoreController fills it from ServerLuckUntil): next to the pill
 	Card.text(gui, "", 22, {
 		Name = "ServerLuck",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
+		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
+		Position = if layout.Compact
+			then UDim2.new(1, -18, 0, HudBubble.MenuTop + pill.Y + 8)
+			else UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
 		Size = UDim2.fromOffset(420, 28),
 		FontFace = CardTheme.NumberFont,
 		TextColor3 = Color3.fromRGB(140, 255, 120),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = if layout.Compact then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
 		TextWrapped = false,
 		Visible = false,
 	})

@@ -69,6 +69,8 @@ IconAssets.Sheets = {
 			"enchant_Midas", "enchant_TwinDrop", "enchant_Overcharge", "enchant_Prospector",
 			"enchant_GolemBond", "enchant_Heartfire", "enchant_Starbreaker",
 			"rebirth", "star_token", -- the blaster chat's rebirth window
+			-- the Robux STORE (owner 2026-10-20) and the HUD's Shop pill
+			"coin_pile", "coin_sack", "coin_chest", "cart", "hoverboard", "pass_crown", "luck_server",
 		},
 	},
 	{
@@ -134,7 +136,8 @@ IconAssets.Fallbacks = {
 	rainbow = "🌈", enchant = "✨", check = "✔️", wheel = "🎡", book = "📖", trophy = "🏆",
 	helmet = "⛑️", cog = "⚙️", lock = "🔒", lift = "🛗", rebirth = "🔁", star_token = "⭐",
 	boots = "👢", gloves = "🧤", magnet = "🧲", speaker = "🔊", music = "🎵", camera = "📷",
-	gamepad = "🎮", hoverboard = "🛹",
+	gamepad = "🎮", hoverboard = "🛹", coin_pile = "💰", coin_sack = "💰", coin_chest = "🧰", cart = "🛒",
+	pass_crown = "👑", luck_server = "🍀",
 } :: { [string]: string }
 
 -- prefix -> emoji for the big families (golem_*, capsule_*, machine_*, ...)

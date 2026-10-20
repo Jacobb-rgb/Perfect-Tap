@@ -48,6 +48,8 @@ TrainView.PhoneScale = 0.62 -- HudController's floor (phones)
 TrainView.MinTouch = 44 -- points
 TrainView.ChipLeft = 16 -- lines up with the coins panel
 TrainView.ChipTop = 136 -- under the coins panel (16..90) and its "+$X" popups (96..130)
+-- the light HUD (HudBubble): the chip goes under its menu tiles (HudController sets it from the HUD)
+TrainView.HudChipTop = nil :: number?
 -- compact (touch) layouts: the side menu's MENU button sits first in the chip's
 -- row (SideMenuView), so the chip starts this far right of ChipLeft (chipLeft)
 TrainView.MenuSlot = 88 -- MENU (84 wide at x 12) and a gap
@@ -202,7 +204,15 @@ local CHIP: { [string]: ChipMetrics } = {
 -- Where the chip's left edge goes (design units): ChipLeft, or right of the
 -- side menu's MENU button on compact (touch) layouts.
 function TrainView.chipLeft(compact: boolean): number
+	if TrainView.HudChipTop then
+		return TrainView.ChipLeft -- the light HUD has no MENU button there
+	end
 	return TrainView.ChipLeft + (if compact then TrainView.MenuSlot else 0)
+end
+
+-- Where the chip's top goes (design units): under the light HUD's tiles, or ChipTop.
+function TrainView.chipTop(): number
+	return TrainView.HudChipTop or TrainView.ChipTop
 end
 
 -- The chip's size on a layout (design units).
@@ -509,7 +519,7 @@ local function buildChip(): (ScreenGui, { [string]: any })
 	gui:SetAttribute("TerraForge", true)
 	local frame = UIKit.panel(gui, {
 		Name = "TrainChip",
-		Position = UDim2.fromOffset(TrainView.ChipLeft, TrainView.ChipTop),
+		Position = UDim2.fromOffset(TrainView.ChipLeft, TrainView.chipTop()),
 	})
 	-- the left part opens the panel (mouse, touch, gamepad selection)
 	local open = UIKit.new("TextButton", {
@@ -861,7 +871,7 @@ end
 function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
 	placeChip(refs, if compact then CHIP.Compact else CHIP.Normal)
-	refs.ChipFrame.Position = UDim2.fromOffset(TrainView.chipLeft(compact), TrainView.ChipTop)
+	refs.ChipFrame.Position = UDim2.fromOffset(TrainView.chipLeft(compact), TrainView.chipTop())
 
 	local m = if compact then PANEL.Compact else PANEL.Normal
 	local width = math.max(620, math.min(m.Width, maxWidth - 24))

@@ -1879,6 +1879,9 @@ end
 	and never above the coins' "+$X" popups.
 ]]
 function BoostView.chipsTop(trainChip: GuiObject?, compact: boolean): number
+	if TrainView.HudChipTop and trainChip then
+		return trainChip.Position.Y.Offset -- the light HUD: the chips beside the train chip
+	end
 	local bottom: number
 	if trainChip then
 		bottom = trainChip.Position.Y.Offset + trainChip.Size.Y.Offset * (1 - trainChip.AnchorPoint.Y)
@@ -1910,9 +1913,18 @@ function BoostView.chipsVisible(hudShown: boolean, panelOpen: boolean, gridOpen:
 	return hudShown and not panelOpen and gridOpen ~= true
 end
 
--- Moves the chips' row to `top` (BoostView.chipsTop).
-function BoostView.placeChips(refs: ChipRefs, top: number)
-	refs.Row.Position = UDim2.fromOffset(BoostView.ChipLeft, top)
+-- Where the chips' row starts (design units): ChipLeft, or right of the train
+-- chip on the light HUD (the left column holds the menu tiles there).
+function BoostView.chipsLeft(trainChip: GuiObject?): number
+	if TrainView.HudChipTop and trainChip then
+		return trainChip.Position.X.Offset + trainChip.Size.X.Offset + BoostView.ChipGap
+	end
+	return BoostView.ChipLeft
+end
+
+-- Moves the chips' row to `top` (BoostView.chipsTop), at `left` (BoostView.chipsLeft).
+function BoostView.placeChips(refs: ChipRefs, top: number, left: number?)
+	refs.Row.Position = UDim2.fromOffset(left or BoostView.ChipLeft, top)
 end
 
 --[[

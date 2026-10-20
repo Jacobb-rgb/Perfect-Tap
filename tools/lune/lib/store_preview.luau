@@ -59,7 +59,9 @@ function Preview.build(Loader: any): { [string]: any }
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 	local NOW = 1.7e9
-	local function chips(renderScale: number, compact: boolean, designW: number, designH: number): { any }
+	local function chips(renderScale: number, compact: boolean, designW: number, designH: number, hudGui: any): { any }
+		-- the light HUD puts the chip under its tiles (HudController does this in the game)
+		TrainView.HudChipTop = hudGui:GetAttribute("ChipTop")
 		local train = TrainView.build(compact)
 		train.Chip.Scale.Scale = renderScale
 		train.Gui.Scale.Scale = renderScale
@@ -70,8 +72,8 @@ function Preview.build(Loader: any): { [string]: any }
 		train.Chip.Enabled = true
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
-		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact))
-		local state = { Boosts = { TripleLuckyUntil = NOW + 222 } }
+		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact), BoostView.chipsLeft(train.ChipFrame))
+		local state = { Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
 		boost.Gui.Enabled = true
 		return { train.Chip, boost.Gui }
@@ -101,15 +103,26 @@ function Preview.build(Loader: any): { [string]: any }
 	StoreView.showDetail(odds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Glow = "Red" })
 	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
 	-- the HUD with a train (review #16: the Shop pill clear of the TRAIN chip) and Server Luck on
+	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
 	local function hudWithChips(uiScale: number, compact: boolean, w: number, h: number): { any }
 		local refs = hud(uiScale)
+		-- the left tiles as the controllers claim them in the game (SideMenuController, BuildView)
+		HudBubble.claimTile(refs.Menu, "Build")
+		for _, entry in SideMenuView.sorted() do
+			local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+			if entry.Group == "Main" then
+				HudBubble.claimTile(refs.Menu, entry.Id, spec)
+			else
+				HudBubble.addMore(refs.Menu, entry.Id, spec)
+			end
+		end
 		local luck = refs.Gui:FindFirstChild("ServerLuck")
 		if luck then
 			luck.Text = "🍀 Server Luck x2 · 14:32 · thanks Kuba"
 			luck.Visible = true
 		end
 		local list = { refs.Gui }
-		for _, gui in chips(uiScale, compact, w, h) do
+		for _, gui in chips(uiScale, compact, w, h, refs.Gui) do
 			table.insert(list, gui)
 		end
 		return list

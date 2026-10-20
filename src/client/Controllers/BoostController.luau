@@ -270,7 +270,8 @@ local function refreshChips()
 		return
 	end
 	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen())
-	BoostView.placeChips(chips, BoostView.chipsTop(trainChip(), compactHud()))
+	local train = trainChip()
+	BoostView.placeChips(chips, BoostView.chipsTop(train, compactHud()), BoostView.chipsLeft(train))
 	BoostView.setChips(chips, BoostView.chips(StateController.get(), serverNow()), launcherOn)
 end
 

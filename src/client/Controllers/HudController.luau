@@ -40,6 +40,7 @@ local Loading = require(script.Parent.Parent.Util.Loading)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
+local TrainView = require(script.Parent.Parent.UI.TrainView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local StateController = require(script.Parent.StateController)
 
@@ -423,6 +424,11 @@ end
 
 function HudController.init()
 	refs = HudView.build()
+	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles
+	local chipTop = refs.Gui:GetAttribute("ChipTop")
+	if type(chipTop) == "number" then
+		TrainView.HudChipTop = chipTop
+	end
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")
 	if refs.Gui:GetAttribute("Bubble") then

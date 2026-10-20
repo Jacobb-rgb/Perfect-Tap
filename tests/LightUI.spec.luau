@@ -288,12 +288,31 @@ return function(T, Loader)
 				local refs = HudBubble.buildGame(scale, screen[1] / scale)
 				local height = screen[2] / scale
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
-				local pillTop = height * pill.Position.Y.Scale + pill.Position.Y.Offset - pill.Size.Y.Offset
-				local chipBottom = screen[3] / scale + TrainView.ChipTop + 66
-				T.truthy(pillTop > chipBottom, `pill under the TRAIN chip at {screen[1]} x {screen[2]}`)
+				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
+				height -= screen[3] / scale
+				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") == 3
+				local chipTop = refs.Gui:GetAttribute("ChipTop")
+				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
+				local chipBottom = chipTop + TrainView.chipSize(compact).Y
+				if compact then
+					-- phones and tablets: the pill at the top-right, clear of the tabs and the chips' row
+					local width = screen[1] / scale
+					local pillLeft = width - 18 - pill.Size.X.Offset
+					local barRight = width / 2 + refs.TopBar.Size.X.Offset / 2
+					T.truthy(pillLeft > barRight, `pill right of the tabs at {screen[1]} x {screen[2]}`)
+					local BoostView = ui("BoostView")
+					local chipsRight = TrainView.ChipLeft + TrainView.chipSize(true).X + 12 + BoostView.chipsWidth()
+					T.truthy(pillLeft > chipsRight or chipTop > HudBubble.MenuTop + pill.Size.Y.Offset, `pill clear of the chips at {screen[1]} x {screen[2]}`)
+				else
+					local pillTop = height * pill.Position.Y.Scale + pill.Position.Y.Offset - pill.Size.Y.Offset
+					T.truthy(pillTop > chipBottom, `pill under the TRAIN chip at {screen[1]} x {screen[2]}`)
+				end
+				-- the money (bottom-left) under the TRAIN chip
+				local moneyTop = height + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset
+				T.truthy(moneyTop > chipBottom, `the money under the TRAIN chip at {screen[1]} x {screen[2]}`)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
-				T.truthy(pillTop > menuBottom, `pill under the menu tiles at {screen[1]} x {screen[2]}`)
+				T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
 			end
 		end)
 	end)
