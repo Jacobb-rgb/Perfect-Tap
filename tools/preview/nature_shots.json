@@ -1,0 +1,684 @@
+{
+  "nature_kit_kamenky": {
+    "scene": "nature_kit",
+    "position": [
+      11.0,
+      8.67857142857143,
+      19.28571428571429
+    ],
+    "target": [
+      11.0,
+      0.9,
+      0
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_trava": {
+    "scene": "nature_kit",
+    "position": [
+      9.0,
+      7.392857142857144,
+      46.42857142857143
+    ],
+    "target": [
+      9.0,
+      0.9,
+      30
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_kvetiny": {
+    "scene": "nature_kit",
+    "position": [
+      9.5,
+      7.714285714285714,
+      77.14285714285714
+    ],
+    "target": [
+      9.5,
+      0.9,
+      60
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_keriky": {
+    "scene": "nature_kit",
+    "position": [
+      11.5,
+      9.0,
+      110.0
+    ],
+    "target": [
+      11.5,
+      0.9,
+      90
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_drevo_houby": {
+    "scene": "nature_kit",
+    "position": [
+      12.0,
+      9.321428571428573,
+      140.71428571428572
+    ],
+    "target": [
+      12.0,
+      0.9,
+      120
+    ],
+    "fov": 42,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_camp": {
+    "scene": "nature_kit",
+    "position": [
+      5.5,
+      5.5,
+      177.5
+    ],
+    "target": [
+      0,
+      1,
+      170
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_chest": {
+    "scene": "nature_kit",
+    "position": [
+      35.5,
+      5.5,
+      177.5
+    ],
+    "target": [
+      30,
+      1,
+      170
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_fairy": {
+    "scene": "nature_kit",
+    "position": [
+      65.5,
+      5.5,
+      177.5
+    ],
+    "target": [
+      60,
+      1,
+      170
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_fossil": {
+    "scene": "nature_kit",
+    "position": [
+      95.5,
+      5.5,
+      177.5
+    ],
+    "target": [
+      90,
+      1,
+      170
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "nature_kit_rune": {
+    "scene": "nature_kit",
+    "position": [
+      125.5,
+      6,
+      177.5
+    ],
+    "target": [
+      120,
+      2.6,
+      170
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 60,
+    "maxLights": 24
+  },
+  "wilds_pred_louka_jz": {
+    "scene": "world_pred",
+    "position": [
+      -162,
+      7,
+      123
+    ],
+    "target": [
+      -148,
+      0.8,
+      123
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_louka_jz": {
+    "scene": "world_wilds",
+    "position": [
+      -162,
+      7,
+      123
+    ],
+    "target": [
+      -148,
+      0.8,
+      123
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_tulipany": {
+    "scene": "world_pred",
+    "position": [
+      -115,
+      10,
+      116
+    ],
+    "target": [
+      -101,
+      0.8,
+      116
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_tulipany": {
+    "scene": "world_wilds",
+    "position": [
+      -115,
+      10,
+      116
+    ],
+    "target": [
+      -101,
+      0.8,
+      116
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_houby_jv": {
+    "scene": "world_pred",
+    "position": [
+      122,
+      11,
+      146
+    ],
+    "target": [
+      136,
+      1,
+      146
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_houby_jv": {
+    "scene": "world_wilds",
+    "position": [
+      122,
+      11,
+      146
+    ],
+    "target": [
+      136,
+      1,
+      146
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_kvetiny_kovarna": {
+    "scene": "world_pred",
+    "position": [
+      31,
+      11,
+      -73
+    ],
+    "target": [
+      44,
+      1,
+      -67
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_kvetiny_kovarna": {
+    "scene": "world_wilds",
+    "position": [
+      31,
+      11,
+      -73
+    ],
+    "target": [
+      44,
+      1,
+      -67
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_parez": {
+    "scene": "world_pred",
+    "position": [
+      41,
+      11,
+      74
+    ],
+    "target": [
+      55,
+      1,
+      74
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_parez": {
+    "scene": "world_wilds",
+    "position": [
+      41,
+      11,
+      74
+    ],
+    "target": [
+      55,
+      1,
+      74
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_hora_parez": {
+    "scene": "world_pred",
+    "position": [
+      82,
+      34,
+      -187
+    ],
+    "target": [
+      96,
+      24.8,
+      -187
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_hora_parez": {
+    "scene": "world_wilds",
+    "position": [
+      82,
+      34,
+      -187
+    ],
+    "target": [
+      96,
+      24.8,
+      -187
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_hora_keriky": {
+    "scene": "world_pred",
+    "position": [
+      134,
+      35,
+      -167
+    ],
+    "target": [
+      148,
+      25.8,
+      -167
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_hora_keriky": {
+    "scene": "world_wilds",
+    "position": [
+      134,
+      35,
+      -167
+    ],
+    "target": [
+      148,
+      25.8,
+      -167
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_pred_hora_houby": {
+    "scene": "world_pred",
+    "position": [
+      -127,
+      29,
+      -197
+    ],
+    "target": [
+      -113,
+      19.8,
+      -197
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_po_hora_houby": {
+    "scene": "world_wilds",
+    "position": [
+      -127,
+      29,
+      -197
+    ],
+    "target": [
+      -113,
+      19.8,
+      -197
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 90,
+    "maxLights": 24
+  },
+  "wilds_s_camp": {
+    "scene": "world_wilds",
+    "position": [
+      -95,
+      10,
+      147
+    ],
+    "target": [
+      -81,
+      1,
+      147
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "wilds_s_chest": {
+    "scene": "world_wilds",
+    "position": [
+      -116,
+      10,
+      -118
+    ],
+    "target": [
+      -102,
+      0.8,
+      -118
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "wilds_s_fairy": {
+    "scene": "world_wilds",
+    "position": [
+      168,
+      19,
+      -182
+    ],
+    "target": [
+      182,
+      9.8,
+      -182
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "wilds_s_fossil": {
+    "scene": "world_wilds",
+    "position": [
+      98,
+      10,
+      146
+    ],
+    "target": [
+      112,
+      0.6,
+      146
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  },
+  "wilds_s_rune": {
+    "scene": "world_wilds",
+    "position": [
+      -142,
+      32,
+      -192
+    ],
+    "target": [
+      -128,
+      22.5,
+      -192
+    ],
+    "fov": 50,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 80,
+    "maxLights": 24
+  }
+}
