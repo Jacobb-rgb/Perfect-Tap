@@ -376,10 +376,16 @@ return function(T, Loader)
 		data.Coins -= 100
 		local asked = os.clock()
 		StateService.push(p)
-		waitUntil(function()
-			return #w.fired >= 3
-		end)
+		-- counted in scheduler steps, not seconds: a deferred send lands within
+		-- a step or two however loaded the machine is (3 leaves room for the
+		-- Lune race), while any debounce would take many more
+		local steps = 0
+		repeat
+			task.wait()
+			steps += 1
+		until #w.fired >= 3 or steps > 100
 		T.eq(#w.fired, 3, "an isolated push goes out at once")
+		T.truthy(steps <= 3, "at the next resumption")
 		-- (a throttled push would leave >= WINDOW later; a loaded machine's slow
 		-- step can't push a deferred one that far)
 		T.lt(w.fired[3].At - asked, WINDOW, "not a window later")

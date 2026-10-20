@@ -705,6 +705,12 @@ return function(T, Loader)
 		d.TotalEarned = 800
 		LeaderboardService.beginSession(57)
 		LeaderboardService.startPlay(p, os.clock())
+		-- when the write actually happens (load only makes it later; an
+		-- immediate write lands at ~0 s whatever the machine does)
+		local wroteAt: number? = nil
+		w.stores.TotalEarned.onWrite = function()
+			wroteAt = wroteAt or os.clock()
+		end
 		local started = os.clock()
 		lb.release(p, d)
 		T.eq(w.stores.TotalEarned.sets, 0, "nothing sent with the leave")
@@ -715,8 +721,7 @@ return function(T, Loader)
 			waited += 0.05
 		end
 		T.eq(lb.inFlight(), 0)
-		-- real time: counting 0.05 s steps undercounts when each step runs long
-		T.truthy(os.clock() - started >= 0.15, "after the delay")
+		T.truthy(wroteAt ~= nil and (wroteAt :: number) - started >= 0.15, "after the delay")
 		T.eq(w.stores.TotalEarned.values["57"], LeaderboardConfig.encode("TotalEarned", 800))
 	end)
 

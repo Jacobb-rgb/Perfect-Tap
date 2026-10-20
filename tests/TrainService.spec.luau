@@ -21,7 +21,7 @@ return function(T, Loader)
 	local Enum = roblox.Enum
 	local CFrame = Loader.CFrame
 
-	-- Waits until check() holds, at most `timeout` seconds (<= 1): deferred
+	-- Waits until check() holds, at most `timeout` seconds (<= 5): deferred
 	-- hooks can take more than one frame when many test runs share the machine.
 	local function waitUntil(check: () -> boolean, timeout: number?)
 		local deadline = os.clock() + math.min(timeout or 5, 5) -- generous: returns as soon as the check holds
