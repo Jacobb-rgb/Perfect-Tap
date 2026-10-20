@@ -18,6 +18,10 @@
 	  the other gear lines, golems, enchants, artifacts, the codex,
 	  hoverboards, shards, every Robux item, stats and the leaderboard totals.
 	- Pays: starsFor(the blaster level you reached), Rebirths + 1.
+	- Coins bought with a Robux coin pack are plain coins: a rebirth resets
+	  them like any coins. The packs are off today (MonetizationConfig
+	  CoinPacksEnabled); whether a rebirth should keep bought coins is the
+	  owner's call if they are ever enabled (docs/QA_REPORTS.md).
 
 	Stars follow the blaster prices (the machines chat recalibrates them):
 	MinStars at MinBlaster, MaxStars at the top level, and in between by how
