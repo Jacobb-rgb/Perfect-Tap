@@ -21,7 +21,13 @@
 	  - PromptGamePassPurchaseFinished(player, passId, wasPurchased) on the
 	    server: grant when wasPurchased and passId is a live pass entry.
 	  - MonetizationService.owns(player, key): the session's answer (true only
-	    once Roblox or a purchase said so).
+	    once Roblox or a purchase said so). passesChecked(player) /
+	    onPassesChecked(fn): the load's checks are done (PodiumService waits
+	    for them before the offline payout, so Night Shift counts).
+	  - Grant "Perks" (registered here, registerPerks): the entry's Perks list
+	    as player attributes (src/server/Perks.luau). Session-only, set again
+	    on every load, never consumed; a revoke clears only the perks no
+	    other pass the player owns gives.
 	  - DataService.changed after every change (the saves don't need an extra
 	    write: ownership is checked again on the next load).
 
@@ -37,10 +43,21 @@
 	    save again first; still failing -> NotProcessedYet)
 	  - not a live "Product" entry, no handler, or the handler refuses
 	                                                 -> NotProcessedYet
-	  - else: grant, data.Purchases[PurchaseId] = os.time(), PurchaseCount + 1,
-	    DataService.changed, DataService.saveNow; PurchaseGranted only when the
-	    save succeeded, else NotProcessedYet (Roblox calls again; the id is
-	    already recorded, so the next call only retries the save)
+	  - else: grant, data.Purchases[PurchaseId] = os.time(),
+	    data.PurchaseLog[PurchaseId] = { Product = Key, At = os.time() },
+	    PurchaseCount + 1 (all in one step with no yield), DataService.changed,
+	    DataService.saveNow; PurchaseGranted only when the save succeeded,
+	    else NotProcessedYet (Roblox calls again; the id is already recorded,
+	    so the next call only retries the save)
+	  Off policy (MonetizationConfig's step 8 contract): a known product is
+	  granted whatever the player's PolicyService answer (a paid random
+	  product for a restricted player is granted and logged); a receipt no
+	  live entry matches (an id still 0 here, an unknown id), a missing
+	  handler or a handler that can't take it yet is never acknowledged
+	  without the item (NotProcessedYet, Roblox delivers it again) and
+	  logged once per purchase and reason with the player id, product id and
+	  purchase id. Clients can prompt any product themselves: nothing here
+	  trusts a prompt.
 	Game passes never go through ProcessReceipt. Nothing is granted from
 	PromptProductPurchaseFinished. DataService keeps Purchases bounded.
 ]]
@@ -52,6 +69,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local DataService = require(script.Parent.DataService)
+local Perks = require(script.Parent.Parent.Perks)
+local Policy = require(script.Parent.Parent.Policy)
 local Receipts = require(script.Parent.Parent.Receipts)
 
 local MonetizationService = {}
@@ -73,6 +92,12 @@ local passOwned: { [Player]: { [string]: boolean } } = {}
 local unsaved: { [string]: boolean } = {}
 -- purchase ids being decided right now (Roblox may call again while a save yields)
 local inFlight: { [string]: boolean } = {}
+-- off-policy lines already logged in this server ("purchaseId|reason")
+local logged: { [string]: boolean } = {}
+local loggedCount = 0
+-- players whose load-time pass checks are done, and who waits for that
+local checked: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local checkedCallbacks: { (Player) -> () } = {}
 
 -- test seams (MonetizationService._test)
 local findPlayer: (userId: number) -> Player? = function(userId: number): Player?
@@ -83,6 +108,27 @@ local ownsGamePass: (userId: number, passId: number) -> boolean = function(userI
 end
 local pause: (seconds: number) -> () = function(seconds: number)
 	task.wait(seconds)
+end
+local logLine: (text: string) -> () = function(text: string)
+	warn(text)
+end
+
+-- Logs a receipt that arrived off policy, once per purchase and reason (Roblox delivers
+-- a pending receipt again and again): player id, product id, purchase id, why.
+local function offPolicy(userId: any, productId: any, purchaseId: string, reason: string)
+	local key = `{purchaseId}|{reason}`
+	if logged[key] then
+		return
+	end
+	if loggedCount >= 1000 then
+		table.clear(logged)
+		loggedCount = 0
+	end
+	logged[key] = true
+	loggedCount += 1
+	logLine(
+		`[MonetizationService] receipt off policy ({reason}): player {tostring(userId)}, product {tostring(productId)}, purchase {purchaseId}`
+	)
 end
 
 -- Registers the ProcessReceipt handler of a developer product Grant.
@@ -161,6 +207,7 @@ end
 
 -- Checks every live pass of a player whose save just loaded (yields: run it in its own task).
 local function checkAll(player: Player)
+	checked[player] = nil
 	for _, entry in MonetizationConfig.list("GamePass") do
 		if MonetizationConfig.isLive(entry.Id) and passHandlers[entry.Grant or ""] then
 			local owned = checkPass(player, entry)
@@ -169,6 +216,65 @@ local function checkAll(player: Player)
 			end
 		end
 	end
+	checked[player] = true
+	for _, callback in checkedCallbacks do
+		task.spawn(callback, player)
+	end
+end
+
+-- Are the pass checks of this player's load done (owned passes granted)?
+function MonetizationService.passesChecked(player: Player): boolean
+	return checked[player] == true
+end
+
+-- callback(player) once the pass checks of a load are done.
+function MonetizationService.onPassesChecked(callback: (Player) -> ())
+	table.insert(checkedCallbacks, callback)
+end
+
+---------------------------------------------------------------- the "Perks" passes
+
+-- Does another pass the player owns (this session) give `perk`?
+local function perkFromOther(player: Player, perk: string, exceptKey: string): boolean
+	for _, other in MonetizationConfig.list("GamePass") do
+		if other.Key ~= exceptKey and other.Grant == "Perks" and other.Perks and table.find(other.Perks, perk) then
+			if MonetizationService.owns(player, other.Key) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Pass handler "Perks" grant: the entry's perks as attributes. True when one changed.
+local function grantPerks(player: Player, _data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local changed = false
+	local perks: { string } = entry.Perks or {}
+	for _, perk in perks do
+		if not Perks.has(player, perk) then
+			Perks.set(player, perk, true)
+			changed = true
+		end
+	end
+	return changed
+end
+
+-- Pass handler "Perks" revoke: clears the entry's perks no other owned pass gives.
+local function revokePerks(player: Player, _data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local changed = false
+	local perks: { string } = entry.Perks or {}
+	for _, perk in perks do
+		if Perks.has(player, perk) and not perkFromOther(player, perk, entry.Key) then
+			Perks.set(player, perk, false)
+			changed = true
+		end
+	end
+	return changed
+end
+
+-- Registers the "Perks" pass handler (init(); idempotent).
+function MonetizationService.registerPerks()
+	MonetizationService.registerPass("Perks", { grant = grantPerks, revoke = revokePerks })
 end
 
 -- MarketplaceService.PromptGamePassPurchaseFinished (server): grant a live pass just bought.
@@ -213,10 +319,21 @@ local function decideFor(player: Player, data: { [string]: any }, id: string, pr
 		return GRANTED
 	end
 	local entry = MonetizationConfig.byId(productId, "Product")
-	local grant = if entry then grants[entry.Grant or ""] else nil
-	if not entry or not grant then
-		warn(`[MonetizationService] no product / handler for product id {tostring(productId)}`)
+	if not entry then
+		-- an id still 0 in MonetizationConfig, or one this build doesn't sell: kept pending
+		offPolicy(player.UserId, productId, id, "no live product with this id: paste it into MonetizationConfig")
 		return NOT_YET
+	end
+	local grant = grants[entry.Grant or ""]
+	if not grant then
+		offPolicy(player.UserId, productId, id, `no handler for {entry.Key} (Grant {tostring(entry.Grant)})`)
+		return NOT_YET
+	end
+	local policy = Policy.cached(player)
+	if entry.PaidRandom and policy.PaidRandomRestricted then
+		-- the player paid: granted anyway (a client can prompt any product itself)
+		local why = if policy.Known then "the player's policy restricts them" else "the player's policy isn't known yet"
+		offPolicy(player.UserId, productId, id, `{entry.Key} is a paid random item and {why}; granted`)
 	end
 	-- grant and record with no yield in between: a handler that yields is cancelled and refused
 	local thread = coroutine.create(grant)
@@ -230,8 +347,15 @@ local function decideFor(player: Player, data: { [string]: any }, id: string, pr
 		error(granted, 0)
 	end
 	if granted ~= true then
+		offPolicy(player.UserId, productId, id, `the {entry.Grant} handler can't take {entry.Key} yet`)
 		return NOT_YET
 	end
+	local log = data.PurchaseLog
+	if type(log) ~= "table" then
+		log = {}
+		data.PurchaseLog = log
+	end
+	log[id] = { Product = entry.Key, At = os.time() }
 	purchases[id] = os.time()
 	local count = tonumber(data.PurchaseCount)
 	data.PurchaseCount = (if count and count == count then math.floor(count) else 0) + 1
@@ -292,6 +416,10 @@ MonetizationService._test = {
 	setPause = function(fn: (number) -> ())
 		pause = fn
 	end,
+	-- replaces warn for the off-policy and gate lines
+	setLog = function(fn: (string) -> ())
+		logLine = fn
+	end,
 	checkAll = checkAll,
 	purchaseFinished = onPassPurchaseFinished,
 	isUnsaved = function(id: string): boolean
@@ -308,6 +436,12 @@ MonetizationService._test = {
 		table.clear(unsaved)
 		table.clear(inFlight)
 		table.clear(passOwned)
+		table.clear(logged)
+		loggedCount = 0
+		table.clear(checked)
+		logLine = function(text: string)
+			warn(text)
+		end
 		findPlayer = function(userId: number): Player?
 			return Players:GetPlayerByUserId(userId)
 		end
@@ -323,13 +457,16 @@ MonetizationService._test = {
 }
 
 function MonetizationService.init()
-	-- grant handlers register in their own services' init(); the checks run after the loads
+	-- grant handlers register in their own services' init() (the "Perks" passes here);
+	-- the checks run after the loads
+	MonetizationService.registerPerks()
 	DataService.onLoaded(function(player: Player)
 		task.spawn(checkAll, player)
 	end)
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPassPurchaseFinished)
 	Players.PlayerRemoving:Connect(function(player: Player)
 		passOwned[player] = nil
+		checked[player] = nil
 	end)
 end
 
@@ -348,19 +485,36 @@ function MonetizationService.unhandled(): { string }
 	return missing
 end
 
+--[[
+	Opens the receipts gate (src/server/Receipts.luau) only when every live
+	pass and product has a handler, so a live id nothing grants is never
+	sold; otherwise it stays (or goes) closed. Returns whether it is open.
+	Also warns about a live coin pack while CoinPacksEnabled is false (its
+	receipts would wait: never sold in game, but a client can prompt it).
+]]
+function MonetizationService.openGate(): boolean
+	local missing = MonetizationService.unhandled()
+	local open = #missing == 0
+	Receipts.setReady(open)
+	if not open then
+		logLine(`[MonetizationService] receipts stay closed: no handler for {table.concat(missing, ", ")}`)
+	end
+	if not MonetizationConfig.coinsBuyable() then
+		for _, entry in MonetizationConfig.List do
+			if entry.CoinPack and MonetizationConfig.isLive(entry.Id) then
+				logLine(`[MonetizationService] coin pack {entry.Key} has a live id but CoinPacksEnabled is false: its receipts wait`)
+			end
+		end
+	end
+	return open
+end
+
 function MonetizationService.start()
 	-- exactly one ProcessReceipt callback in the game; set after every init() registered its handler
 	MarketplaceService.ProcessReceipt = function(receipt: any): Enum.ProductPurchaseDecision
 		return MonetizationService.decide(receipt)
 	end
-	-- the receipts gate (src/server/Receipts.luau) opens only when every live pass and product
-	-- has a handler, so a live id whose grant isn't written yet (step 8) is never sold
-	local missing = MonetizationService.unhandled()
-	if #missing == 0 then
-		Receipts.setReady(true)
-	else
-		warn(`[MonetizationService] receipts stay closed: no handler for {table.concat(missing, ", ")}`)
-	end
+	MonetizationService.openGate()
 end
 
 return MonetizationService

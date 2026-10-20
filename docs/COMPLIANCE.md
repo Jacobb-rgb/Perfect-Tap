@@ -343,14 +343,38 @@ choices marked *(ours)*):
   - Never grant from `PromptProductPurchaseFinished`. Roblox warns that it
     firing doesn't mean the purchase succeeded.
   - Roblox doesn't keep per-player purchase history for you. The `Purchases`
-    table is your record. **TODO:** cap it (for example the last 100 ids) so
-    the save stays small.
+    table is your record (capped: the newest 100 ids, and never one younger
+    than 30 days, `DataService.trimPurchases`); `PurchaseLog` says which
+    product each id was and is trimmed with it.
 - **Game passes:**
   - On join, check `MarketplaceService:UserOwnsGamePassAsync` inside `pcall`.
     If the check errors, retry a bit later instead of treating the player as
     "not owned" forever.
   - On `PromptGamePassPurchaseFinished`, if it succeeded and the pass id
     matches, set the perk (`Perks.set`).
+- **What step 8 wires (status).** `MonetizationService` holds the one
+  `ProcessReceipt` and the pass checks, and every entry in
+  `MonetizationConfig` names its handler in `Grant`, registered in the
+  owning service's `init()`: `Perks` (Forgemaster's Pass, Two More Podiums,
+  Night Shift, Express Train: player perks, set again on every join and on
+  `PromptGamePassPurchaseFinished`, never consumed), `Enchant` (Heartfire /
+  Starbreaker: the Mythic enchant forever, `EnchantService`), `Hoverboard`
+  (`HoverboardService`), `Capsule` (Royal x1/x3/x10: paid, locked golems,
+  the Triple Lucky odds stored at the prompt, golems past the save cap kept
+  as a pending credit that wakes when there is room, never coins,
+  `CapsuleService`), `Boost` (Triple / Hexa Lucky: paid time added
+  uncapped, `BoostService`) and `CoinPack` (only while `CoinPacksEnabled`,
+  `PodiumService`). Each grant is written together with
+  `Purchases[PurchaseId]` and `PurchaseLog[PurchaseId] = { Product, At }`,
+  saved, and only then answered `PurchaseGranted`. Receipts that arrive off
+  policy (a paid random product for a restricted player: granted; an id
+  still 0 or unknown, or a coin pack while packs are off: kept pending with
+  `NotProcessedYet`, never acknowledged without the item) are logged with
+  the player id, product id and purchase id. The receipts gate opens only
+  when every live id has a handler (`MonetizationService.unhandled()` is
+  empty; tests/Step8Receipts.spec.luau). Every id is still 0: the owner
+  creates the passes and products and pastes each id into
+  `MonetizationConfig` at the entry with the matching `Key` (table above).
 - **Paid random items** (see 1.1 #12; the full list is in
   `MonetizationConfig.luau`, `PaidRandom = true`):
   - Show the exact odds of every result as percentages before every
