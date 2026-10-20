@@ -565,8 +565,9 @@ With it (owner 2026-10-20): the Vault's case colours follow the rarity. BlasterD
 LV 6 Sapphire, LV 7 Amethyst (was Amethyst, Emberite, Sapphire), so the cases, the Vault's display cases and the
 gallery guns go Common, Uncommon, Uncommon, Rare, Rare, Epic, Epic, Legendary, Mythic (tests/VaultService.spec.luau
 pins "never a rarer ore below a commoner one"). Saves keep the BlasterOre a player already has.
-Budgets (main 1e6f696 + this): the map 20,860 parts (map v34), Plaza 2,176 of 2,250 (the gallery's guns at display
-detail), LobbyParts 13,700 and MapParts 23,000 unchanged.
+Budgets (main 19e3303 + this): map v35, 28,435 baked parts with the mine floors (20,860 without them), Plaza 2,176 of
+2,250 (the gallery's guns at display detail), LobbyParts 13,700 and MapParts 23,000 unchanged.
+At join the tutorial bubble and its guide wait for the loading screen (Loading.wait; shown either way after it).
 What to test in Studio:
 1. Equip the blaster at levels 1, 4, 7 and 10 (Studio dev kit): the gun sits in the hand, the barrel points
    forward, the beam leaves the barrel's tip, the muzzle flash shows at the tip.

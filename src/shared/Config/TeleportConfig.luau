@@ -1,9 +1,11 @@
 --[[
 	Quick teleports (owner 2026-10-17): a bar at the top centre of the HUD
 	with BASE (your own plot), LOBBY (the town spawn) and VAULT (the Blaster
-	Vault), and an ELEVATOR icon on the side (the mine elevator; it shows
-	only when the world has one). TeleportService moves the character,
-	TeleportController / TeleportView draw the buttons.
+	Vault). TeleportService moves the character, TeleportController /
+	TeleportView draw the bar. The "Elevator" spot (Bar = false) has no
+	button here: ElevatorController's left side button (shown only while the
+	world has a stop: ElevatorAttribute) sends it, and the stop's prompt then
+	opens the floor picker (owner 2026-10-18).
 ]]
 
 local rgb = Color3.fromRGB
@@ -18,7 +20,7 @@ export type Spot = {
 	Icon: string,
 	Color: Color3,
 	Dark: Color3,
-	Bar: boolean, -- true = the top bar, false = the side icon
+	Bar: boolean, -- true = the top bar; false = no bar button (the elevator: ElevatorController's side button)
 }
 
 TeleportConfig.Spots = {

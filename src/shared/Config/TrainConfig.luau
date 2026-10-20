@@ -13,6 +13,7 @@
 
 local WorldLayout = require(script.Parent.WorldLayout)
 local BaseLayout = require(script.Parent.BaseLayout)
+local MineFloors = require(script.Parent.MineFloors)
 
 export type Level = { Value: number, Price: number }
 
@@ -96,9 +97,15 @@ TrainConfig.PortalInset = 6 -- the quarry tunnel mouths stand this far in front 
 TrainConfig.BufferGap = 1.7 -- the coastal buffer stops' face, past the coastal lines' ends
 
 -- Mine Lifts: throw ore in down in the caves, it goes into your train's cargo.
+-- One per mine floor 2-5, where the floor area leaves room for it (MineFloors.LiftSpots).
+local function liftAt(index: number): Vector3
+	return MineFloors.liftPosition(index) or Vector3.zero
+end
 TrainConfig.Lifts = {
-	{ Id = "EmberCaves", Position = Vector3.new(22, QUARRY_Y, -258), Size = Vector3.new(6, 5, 6) },
-	{ Id = "DeepHollow", Position = Vector3.new(16, WorldLayout.Caves.DeepHollow.Min.Y, -402), Size = Vector3.new(6, 5, 6) },
+	{ Id = "EmberCaves", Position = liftAt(2), Size = Vector3.new(6, 5, 6) },
+	{ Id = "DeepHollow", Position = liftAt(3), Size = Vector3.new(6, 5, 6) },
+	{ Id = "SunkenPalace", Position = liftAt(4), Size = Vector3.new(6, 5, 6) },
+	{ Id = "HeartstoneCore", Position = liftAt(5), Size = Vector3.new(6, 5, 6) },
 }
 
 -- (Rocks and big decorations stay off the track, the station and the lifts:

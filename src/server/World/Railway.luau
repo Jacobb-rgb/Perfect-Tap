@@ -1430,4 +1430,7 @@ function Railway.build(map: Instance): Folder
 	return root
 end
 
+-- The Mine Lift builder, also used by the mine floor areas (src/server/World/Mine).
+Railway.buildLift = buildLift
+
 return Railway

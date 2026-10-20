@@ -30,6 +30,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local SoundConfig = require(Shared.Config.SoundConfig)
+local MineAmbience = require(Shared.Config.MineAmbience)
 
 export type Layer = {
 	Sound: string?, -- a SoundConfig key
@@ -85,6 +86,15 @@ AmbienceConfig.Kinds = {
 		{ Id = 0, Volume = 0.2, Pitch = { 1, 1 }, Loop = true, MinDistance = 25, MaxDistance = 85 },
 	},
 } :: { [string]: { Layer } }
+
+-- The lobby's own kinds (tests/Ambience.spec scopes its lobby checks to these).
+AmbienceConfig.LobbyKinds = { "Waterfall", "Brook", "Pond", "Forge", "Plaza" }
+
+-- The mine floors' kinds (MineAmbience: the floors place their own spots), so def(),
+-- the controller and the spec's layer checks see them too.
+for kind, layers in MineAmbience.Kinds do
+	AmbienceConfig.Kinds[kind] = layers :: any
+end
 
 -- The 2D wind: silent below Low, full at High (camera height, inside the lobby only).
 AmbienceConfig.Wind = { Sound = "AmbWind", Low = 45, High = 120 }

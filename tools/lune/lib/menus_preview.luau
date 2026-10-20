@@ -142,7 +142,7 @@ function Preview.build(Loader: any): { [string]: any }
 		-- the bar for the screen this render stands for (in pt: 568 x 320 gets
 		-- the icon-only bar, as in the game)
 		local screenWidth = 1600 / renderScale * uiScale
-		local teleport = TeleportView.build(refs.TopBar, refs.Menu, uiScale, screenWidth)
+		local teleport = TeleportView.build(refs.TopBar, uiScale, screenWidth)
 		TeleportView.relayout(teleport, refs.TopBar, uiScale, screenWidth)
 		refs.Coins.Text = Format.money(4.82e6)
 		refs.Income.Text = Format.perSecond(1840)

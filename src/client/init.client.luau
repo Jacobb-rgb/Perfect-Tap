@@ -27,7 +27,9 @@ local ORDER = {
 	"TrainController",
 	"FoundryController",
 	"TechShopController",
+	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
+	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board
 	"GearShopController", -- the Gear shop at the SHOP stall
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins

@@ -1,0 +1,7 @@
+{
+ "world_f5_overview": { "scene": "world_f5", "position": [0, -350, -710], "target": [0, -392, -816], "fov": 62, "preset": "Core", "shadowExtent": 180, "maxLights": 40 },
+ "world_f5_entrance": { "scene": "world_f5", "position": [3, -390.5, -730], "target": [0, -392, -794], "fov": 66, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
+ "world_f5_side": { "scene": "world_f5", "position": [95, -394, -746], "target": [0, -402, -806], "fov": 62, "preset": "Core", "shadowExtent": 180, "maxLights": 40 },
+ "world_f5_heart": { "scene": "world_f5", "position": [-30, -370, -814], "target": [0, -366, -858], "fov": 62, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
+ "world_f5_hub": { "scene": "world_f5", "position": [-32, -382, -754], "target": [12, -396, -775], "fov": 60, "preset": "Core", "shadowExtent": 120, "maxLights": 40 }
+}

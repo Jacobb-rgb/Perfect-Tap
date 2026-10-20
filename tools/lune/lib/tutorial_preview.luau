@@ -180,7 +180,7 @@ function Preview.build(Loader: any): { [string]: any }
 			HudView.slot(refs.CarrySlots, nil, i)
 		end
 		refs.Toasts:ClearAllChildren()
-		local bar = TeleportView.build(refs.TopBar, refs.Menu, screen.Ui, screen.Pt.X)
+		local bar = TeleportView.build(refs.TopBar, screen.Ui, screen.Pt.X)
 		TeleportView.relayout(bar, refs.TopBar, screen.Ui, screen.Pt.X)
 		return refs
 	end
