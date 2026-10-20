@@ -84,8 +84,10 @@ BlasterData.Rocks = {
 ]]
 BlasterData.Vault = {
 	PriceMultiplier = 4, -- x the level's Foundry coin price (Recipe.Coins)
-	-- the ore look of each level's case (ores kept in the 36-ore roster too)
-	Ores = { "", "Copper", "Cobalt", "Amethyst", "Gold", "Emberite", "Sapphire", "Obsidian", "RoyalAurum", "Heartstone" },
+	-- the ore look of each level's case (ores kept in the 36-ore roster too); the
+	-- ores' rarity never falls as the level rises (owner 2026-10-20: LV 4 Emberite,
+	-- LV 6 Sapphire, LV 7 Amethyst, so the case colours follow the rarity)
+	Ores = { "", "Copper", "Cobalt", "Emberite", "Gold", "Sapphire", "Amethyst", "Obsidian", "RoyalAurum", "Heartstone" },
 }
 
 -- The coin price of a level's case in the Blaster Vault (nil for level 1 and unknown levels).

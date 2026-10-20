@@ -8,13 +8,15 @@
 	- A product whose Id is 0 is NOT live: show "Coming soon", never prompt a
 	  purchase and never grant it (MonetizationConfig.isLive(id) is false).
 	- Prompts and grants go only through MarketplaceService with these ids.
-	  The real ProcessReceipt / game pass checks arrive in step 8
-	  (MonetizationService). Until then a feature that is asked to sell a Robux
-	  item answers the client with PurchasePrompt { Product, Status }
+	  Step 8 (MonetizationService) holds the one ProcessReceipt and the game
+	  pass checks. A feature that is asked to sell a Robux item answers the
+	  client with PurchasePrompt { Product, Status }
 	  (MonetizationConfig.promptStatus), and the one receipts gate
 	  (src/server/Receipts.luau) turns "Prompt" into "ComingSoon" for every
-	  product and pass, live id or not, until step 8 calls
-	  Receipts.setReady(true) (ReceiptsAttribute tells the clients).
+	  product and pass, live id or not, until MonetizationService.start
+	  calls Receipts.setReady(true): only when every live id has a handler
+	  (MonetizationService.unhandled() is empty; ReceiptsAttribute tells the
+	  clients).
 	- PaidRandom = true: buying it gives a random result (Royal capsules) or
 	  changes the odds of one (the Triple / Hexa Lucky packs, the Starbreaker
 	  enchant's pass: ore luck and artifact chance), so it is hidden/disabled
@@ -38,8 +40,17 @@
 	  keep them equal.
 	- Grant names the MonetizationService handler that gives an entry
 	  (register(grant, fn) for products, registerPass(grant, ...) for
-	  passes): the Robux hoverboards are game passes with Grant "Hoverboard"
-	  and the BoardId they unlock (HoverboardService).
+	  passes; every entry has one, registered in its owner's init()):
+	    "Perks"      passes: the entry's Perks list as player attributes
+	                 (MonetizationService itself, src/server/Perks.luau)
+	    "Enchant"    passes: the Mythic enchant, forever (EnchantService)
+	    "Hoverboard" passes: the BoardId board (HoverboardService)
+	    "Capsule"    products: Count golems of Capsule (CapsuleService)
+	    "Boost"      products: Seconds of Boost, uncapped (BoostService)
+	    "CoinPack"   products: coinPackAmount coins, only while
+	                 CoinPacksEnabled (PodiumService: the income)
+	  Every grant is recorded in data.Purchases[PurchaseId] = os.time() and
+	  data.PurchaseLog[PurchaseId] = { Product = Key, At = os.time() }.
 
 	Contract for step 8 (ProcessReceipt, developer products):
 	- A receipt is never stranded: it is granted (on the server that holds the
@@ -60,7 +71,13 @@
 	- Receipts that arrive "off policy" (a paid random product for a player
 	  whose policy restricts it, a product whose id is 0 here, an unknown
 	  product id) are still granted or compensated, never dropped, and logged
-	  with the player id, product id and purchase id for review.
+	  with the player id, product id and purchase id for review. A known
+	  product is granted whatever the policy says. A receipt no entry matches
+	  (id 0 here, unknown) or that its handler can't take yet (a coin pack
+	  while CoinPacksEnabled is false, a golem credit past
+	  GolemConfig.MaxPending) is answered NotProcessedYet: never
+	  acknowledged without the item, so Roblox delivers it again and it is
+	  granted once the id is pasted here / the handler can take it.
 	- Clients can prompt any product themselves (exploiters, restricted
 	  regions): the server never trusts that a prompt came from its own UI.
 	- Royal capsules and Triple Lucky: the odds the player saw are the odds
@@ -68,7 +85,9 @@
 	  stores { Product, TripleLucky = Bonuses.tripleLucky at that moment, At }
 	  for the player (the latest prompt per product, kept PromptMemorySeconds);
 	  ProcessReceipt opens the capsules with that stored TripleLucky state,
-	  even if the boost has started or ended since. With no stored prompt (a
+	  even if the boost has ended since (and with Triple Lucky when it runs
+	  at the receipt: never worse odds than any card showed,
+	  CapsuleService.grantProduct). With no stored prompt (a
 	  purchase from the Store tab, another server, a rejoin) it uses the
 	  state when the receipt is processed, and the capsule card always says
 	  which odds a purchase uses ("Triple Lucky odds" / "normal odds").
@@ -100,7 +119,7 @@ export type Product = {
 	Enchant: string?, -- EnchantConfig id (a game pass that grants the enchant)
 	CoinSeconds: number?, -- coin packs: seconds of the player's podium income...
 	MinCoins: number?, -- ...but at least this many coins
-	Grant: string?, -- the MonetizationService handler that gives it ("Hoverboard")
+	Grant: string?, -- the MonetizationService handler that gives it (header: "Perks", "Capsule", ...)
 	BoardId: string?, -- Grant "Hoverboard": the HoverboardData id it unlocks
 }
 -- (MonetizationService's name for a pass or product)
@@ -147,6 +166,7 @@ local LIST: { Product } = {
 	---------------------------------------------------------------- game passes
 	{
 		Key = "BigPass",
+		Grant = "Perks",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 560,
@@ -157,6 +177,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "Podiums",
+		Grant = "Perks",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 100,
@@ -166,6 +187,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "OfflineExtension",
+		Grant = "Perks",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 99,
@@ -175,6 +197,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "TrainExpress",
+		Grant = "Perks",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 199,
@@ -206,6 +229,7 @@ local LIST: { Product } = {
 	---------------------------------------------------------------- golem capsules
 	{
 		Key = "RoyalCapsule1",
+		Grant = "Capsule",
 		Kind = "Product",
 		Id = 0,
 		Robux = 49,
@@ -217,6 +241,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "RoyalCapsule3",
+		Grant = "Capsule",
 		Kind = "Product",
 		Id = 0,
 		Robux = 139,
@@ -228,6 +253,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "RoyalCapsule10",
+		Grant = "Capsule",
 		Kind = "Product",
 		Id = 0,
 		Robux = 429,
@@ -240,6 +266,7 @@ local LIST: { Product } = {
 	---------------------------------------------------------------- luck boosts
 	{
 		Key = "TripleLucky15",
+		Grant = "Boost",
 		Kind = "Product",
 		Id = 0,
 		Robux = 39,
@@ -251,6 +278,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "TripleLucky60",
+		Grant = "Boost",
 		Kind = "Product",
 		Id = 0,
 		Robux = 129,
@@ -262,6 +290,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "HexaLucky15",
+		Grant = "Boost",
 		Kind = "Product",
 		Id = 0,
 		Robux = 39,
@@ -273,6 +302,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "HexaLucky60",
+		Grant = "Boost",
 		Kind = "Product",
 		Id = 0,
 		Robux = 129,
@@ -285,6 +315,7 @@ local LIST: { Product } = {
 	---------------------------------------------------------------- the two rarest enchants (one-time: game passes)
 	{
 		Key = "EnchantHeartfire",
+		Grant = "Enchant",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 20,
@@ -294,6 +325,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "EnchantStarbreaker",
+		Grant = "Enchant",
 		Kind = "GamePass",
 		Id = 0,
 		Robux = 20,
@@ -305,6 +337,7 @@ local LIST: { Product } = {
 	---------------------------------------------------------------- coin packs
 	{
 		Key = "CoinsSmall",
+		Grant = "CoinPack",
 		Kind = "Product",
 		CoinPack = true,
 		Id = 0,
@@ -316,6 +349,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "CoinsMedium",
+		Grant = "CoinPack",
 		Kind = "Product",
 		CoinPack = true,
 		Id = 0,
@@ -327,6 +361,7 @@ local LIST: { Product } = {
 	},
 	{
 		Key = "CoinsLarge",
+		Grant = "CoinPack",
 		Kind = "Product",
 		CoinPack = true,
 		Id = 0,

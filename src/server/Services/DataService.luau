@@ -32,6 +32,13 @@
 
 	Other services: DataService.get(player) -> data table or nil (not loaded yet).
 	After changing data call DataService.changed(player) so the client HUD updates.
+	changed() is cheap: it marks the player and ONE deferred flush per player per
+	frame runs every onChanged listener once, in registration order (many changes
+	in one frame -> one call each). A listener's error is warned about and never
+	stops the others; a listener that yields never holds the others up; a player
+	whose data is gone by then (left and saved) is skipped. So an onChanged
+	listener runs later in the same frame, not inside changed(): work that must
+	see the change at once (dropping a cache) uses onChangedNow.
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -77,6 +84,8 @@ end
 local loadedCallbacks: { (Player, { [string]: any }) -> ...any } = {}
 local releaseCallbacks: { (Player, { [string]: any }) -> ...any } = {}
 local changedCallbacks: { (Player) -> ...any } = {}
+local changedNowCallbacks: { (Player) -> ...any } = {}
+local changePending: { [Player]: boolean } = {} -- player -> a flush of the onChanged listeners is deferred
 local shuttingDown = false
 local store: any = nil
 local inMemory = false
@@ -263,13 +272,74 @@ function DataService.beforeRelease(callback: (Player, { [string]: any }) -> ...a
 	table.insert(releaseCallbacks, callback)
 end
 
+-- Runs once per player per frame after any changed() (deferred, in registration order).
 function DataService.onChanged(callback: (Player) -> ...any)
 	table.insert(changedCallbacks, callback)
 end
 
-function DataService.changed(player: Player)
+-- Runs inside every changed() call, before it returns: only for cheap work
+-- that never yields and must not see stale data (Bonuses drops its cache).
+function DataService.onChangedNow(callback: (Player) -> ...any)
+	table.insert(changedNowCallbacks, callback)
+end
+
+--[[
+	The onChanged listeners run on a reused thread (the GoodSignal pattern): a
+	listener that returns hands the thread on to the next one; one that yields
+	keeps it and the next listener gets a new thread, so a yield never holds
+	the others up and a flush normally creates no thread at all.
+]]
+local freeRunner: thread? = nil
+
+local function listenerFailed(err: any): string
+	return debug.traceback(tostring(err), 2)
+end
+
+local function runListener(callback: (Player) -> ...any, player: Player)
+	local runner = freeRunner
+	freeRunner = nil
+	local ok, err = xpcall(callback, listenerFailed, player)
+	if not ok then
+		warn(`[DataService] onChanged listener failed for {player.Name}: {err}`)
+	end
+	freeRunner = runner
+end
+
+local function runnerLoop()
+	while true do
+		runListener(coroutine.yield())
+	end
+end
+
+local function newRunner(): thread
+	local runner = coroutine.create(runnerLoop)
+	coroutine.resume(runner) -- to its first yield: it waits for a listener
+	freeRunner = runner
+	return runner
+end
+
+-- The deferred flush: every onChanged listener once, unless the player's data is gone.
+-- (`pending` is the table that scheduled it: the Lune tests' isolate swaps the tables.)
+local function flushChanged(player: Player, pending: { [Player]: boolean })
+	pending[player] = nil
+	if DataService.get(player) == nil then
+		return
+	end
 	for _, callback in changedCallbacks do
-		task.spawn(callback, player)
+		task.spawn(freeRunner or newRunner(), callback, player)
+	end
+end
+
+function DataService.changed(player: Player)
+	for _, callback in changedNowCallbacks do
+		local ok, err = pcall(callback, player)
+		if not ok then
+			warn(`[DataService] onChangedNow listener failed for {player.Name}: {err}`)
+		end
+	end
+	if not changePending[player] then
+		changePending[player] = true
+		task.defer(flushChanged, player, changePending)
 	end
 end
 
@@ -636,6 +706,8 @@ DataService._test = {
 			loadedCallbacks,
 			releaseCallbacks,
 			changedCallbacks,
+			changedNowCallbacks,
+			changePending,
 		}
 		profileStore = store
 		memoryProfileStore = ProfileStore.new({
@@ -652,12 +724,14 @@ DataService._test = {
 		profiles, loading, releasing, closing, nextSave = {}, {}, {}, {}, {}
 		inFlight, shuttingDown, inMemory = 0, false, false
 		loadedCallbacks, releaseCallbacks, changedCallbacks = {}, {}, {}
+		changedNowCallbacks, changePending = {}, {}
 		local ok, err = pcall(fn :: any)
 		profileStore, memoryProfileStore = saved[1], saved[2]
 		profiles, loading, releasing, closing, nextSave = saved[3], saved[4], saved[5], saved[6], saved[7]
 		clock, random, releaseWait, pause, callbackLimit = saved[8], saved[9], saved[10], saved[11], saved[12]
 		inFlight, shuttingDown, inMemory = saved[13], saved[14], saved[15]
 		loadedCallbacks, releaseCallbacks, changedCallbacks = saved[16], saved[17], saved[18]
+		changedNowCallbacks, changePending = saved[19], saved[20]
 		if not ok then
 			error(err, 0)
 		end

@@ -1,0 +1,8 @@
+{
+ "ingame_overview": { "scene": "yard_ingame", "position": [58, 48, 44], "target": [122, 0, 88], "fov": 52, "preset": "Surface", "shadowExtent": 140 },
+ "ingame_pen": { "scene": "yard_ingame", "position": [122, 13, 102], "target": [141, 0, 96], "fov": 60, "preset": "Surface", "shadowExtent": 80 },
+ "ingame_podiums": { "scene": "yard_ingame", "position": [122, 9, 64], "target": [146, 3, 74], "fov": 58, "preset": "Surface", "shadowExtent": 80 },
+ "ingame_train": { "scene": "yard_ingame", "position": [180, 14, 70], "target": [156, 2, 88], "fov": 58, "preset": "Surface", "shadowExtent": 90 },
+ "ingame_entrance": { "scene": "yard_ingame", "position": [66, 9, 98], "target": [80, 2.5, 88], "fov": 55, "preset": "Surface", "shadowExtent": 70 },
+ "ingame_foundry": { "scene": "yard_ingame", "position": [137, 6, 72], "target": [148, 3.5, 70], "fov": 58, "preset": "Surface", "shadowExtent": 60 }
+}

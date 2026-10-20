@@ -6,15 +6,14 @@
 
 	It reads the real config (OreData, BlasterData, ItemData, MachineData,
 	EconomyConfig, ToolData (the Gear shop's Backpack levels and prices since
-	steps 6-7), TrainConfig, MachineData power rules) and models
-	the mine floors the way the mine-floors chat built them (branch
-	art/mine-floors, MineFloors.luau): 5 floors with blaster gates 1/3/5/7/9,
-	floors 4-5 only by the elevator ($500K), rocks that the floor's weakest
-	allowed blaster breaks in about 4.5 s, 3.3 ores per rock, 10 % crystal
-	rocks rolling from the next rarity. Floor ore tables follow its plan:
-	floor N = the Nth rarity (Common .. Legendary), crystals one rarity up
-	(floor 5's crystals = Mythic). Hoverboards ($5K / $80K / $1.5M) shorten
-	walking.
+	steps 6-7), TrainConfig, MachineData power rules) and reads the mine
+	floors straight from MineFloors.List (Ores / CrystalOres weights,
+	MinBlaster gates, ViaElevator), the rock mix (SpawnChance, Seconds,
+	OreCount: the floor's weakest blaster breaks a rock in ~4.5 s, ~3.3 ores
+	per rock, 10 % Crystal rocks rolling from CrystalOres), the elevator price
+	(2/3 of the blaster 7 forge) and the coin hoverboards (HoverboardData:
+	walking x 16 / board speed, prices following their blaster level).
+	A.FloorTables replaces the floors with a proposal of the same shape.
 
 	Steps 6-7 (A.Steps67 = true, the default): the player also buys Boots,
 	the coin enchants (put into the open slots where they help most), coin
@@ -62,6 +61,19 @@ local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemCon
 local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 local ArtifactConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.ArtifactConfig")
+local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
+local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+
+-- The real rock mix (MineFloors): Small / Big / Crystal shares, seconds and ores per rock.
+local spawn = MineFloors.SpawnChance
+local smallShare = 1 - (spawn.Big or 0) - (spawn.Crystal or 0)
+local mixSeconds = smallShare * MineFloors.Seconds.Small
+	+ (spawn.Big or 0) * MineFloors.Seconds.Big
+	+ (spawn.Crystal or 0) * MineFloors.Seconds.Crystal
+local mixOres = smallShare * MineFloors.OreCount.Small
+	+ (spawn.Big or 0) * MineFloors.OreCount.Big
+	+ (spawn.Crystal or 0) * MineFloors.OreCount.Crystal
 
 ---------------------------------------------------------------- assumptions
 
@@ -69,9 +81,9 @@ local A = {
 	Hours = 10,
 	Step = 5, -- seconds per simulation step
 	Players = 120, -- simulated players (seeds 1..N), medians reported
-	RockSeconds = 0.6 * 4 + 0.3 * 5 + 0.1 * 6, -- the floor's weakest blaster per rock (Small/Big/Crystal mix)
-	OresPerRock = 0.6 * 3 + 0.3 * 4 + 0.1 * 3,
-	CrystalShare = 0.1, -- rocks rolling from the next rarity
+	RockSeconds = mixSeconds, -- the floor's weakest blaster per rock (MineFloors: Small / Big / Crystal mix)
+	OresPerRock = mixOres,
+	CrystalShare = spawn.Crystal or 0.1, -- Crystal rocks roll from the floor's CrystalOres
 	RockWalk = 2.5, -- seconds from one rock to the next
 	DropWalk = 12, -- seconds to carry a load to the floor's Mine Station (train) and back
 	HandClean = 18, -- seconds per ore in the cleaning minigame
@@ -80,17 +92,18 @@ local A = {
 	TrainLoad = 5, -- seconds the train waits / loads at the station
 	HandGrades = { Rough = 0.1, Clean = 0.4, Pristine = 0.35, Flawless = 0.15 }, -- a typical player
 	Podiums = 2, -- free podiums (3 and 4 are a Robux perk)
-	Hoverboards = { { Price = 5000, Walk = 0.8 }, { Price = 80000, Walk = 0.65 }, { Price = 1.5e6, Walk = 0.5 } },
-	Elevator = 500000,
-	FloorGates = { 1, 3, 5, 7, 9 },
-	FloorElevator = { false, false, false, true, true },
+	-- the coin hoverboards: the blaster level each price follows (HoverboardData.priceFrom), in board order
+	HoverboardLevels = { 3, 5, 7 },
+	-- the floors: MineFloors.List, or a proposal (a list of { MinBlaster, ViaElevator, Ores = { [oreId] = weight },
+	-- CrystalOres = { [oreId] = weight }, ZoneId? } in floor order)
+	FloorTables = nil :: { any }?,
 	Payback = 20 * 60, -- a machine or upgrade is bought when it pays back within this many seconds
 	PolePrice = 500,
 	MaxCleaners = 4,
 	MaxFurnaces = 3,
 	Efficiency = 1, -- share of the player's own actions done well (mining, carrying, hand cleaning); machines run full
 	BlasterCoins = nil :: { [number]: number }?, -- Foundry coin price per level instead of BlasterData's (Vault = 4x)
-	ElevatorPrice = nil :: number?,
+	ElevatorPrice = nil :: number?, -- nil = MineFloors' rule: 2/3 of the blaster 7 forge (the sim's price)
 	StopLevel = nil :: number?, -- calibration: stop a run once this blaster level is reached...
 	StopTime = nil :: number?, -- ...or after this many seconds
 	ShopEvery = 30, -- seconds between machine / upgrade shopping decisions
@@ -103,7 +116,7 @@ local A = {
 	TrainSpeedExtra = nil :: { { Value: number, Price: number } }?, -- train trip seconds levels after the config's last
 	MachineUpgrades = false, -- buy the Tech shop's Speed / Quality upgrades (Auto Cleaner, Crusher)
 	UpgradePriceMult = nil :: { [string]: number }?, -- "Speed" / "Quality" -> multiplier on the upgrade prices
-	ExtraFloor = nil :: { Gate: number, Elevator: boolean, LegendaryShare: number }?, -- a floor between 4 and 5
+	UpgradeCurves = nil :: { [string]: { number } }?, -- "Speed" / "Quality" -> a new base curve (each machine keeps its factor)
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
 	IncomeMult = 1, -- podium income and every sale
 	DamageMult = 1, -- blaster damage
@@ -115,7 +128,7 @@ local A = {
 	BaseWalk = 16, -- studs/s the walk times above assume (Boots 0)
 	CapsulePrices = nil :: { [string]: number }?, -- coin capsule base price (x LevelScale) instead of CapsuleConfig's
 	LevelScale = nil :: { number }?, -- capsule price multiplier per blaster level instead of CapsuleConfig's
-	CrystalMode = "Mixed", -- "Mixed": crystals = the floor's best 3 ores (70 %) + the next rarity's cheapest 3 (30 %); "NextRarity"
+	CrystalMode = "Mixed", -- a label only (the floors come from MineFloors / FloorTables; kept for old override files)
 }
 
 -- Scenarios run one after the other (each overrides some assumptions).
@@ -130,40 +143,6 @@ local SCENARIOS = {
 local rarityOrder: { [string]: number } = {}
 for _, r in Rarity.List do
 	rarityOrder[r.Id] = r.Order
-end
-local byRarity: { [number]: { any } } = {}
-for _, ore in OreData.List do
-	local o = rarityOrder[ore.Rarity]
-	byRarity[o] = byRarity[o] or {}
-	table.insert(byRarity[o], ore)
-end
-
--- Weighted table of one rarity: cheaper ores are commoner (weight 1 / rank^0.8).
-local function tableOf(order: number): { { ore: any, w: number } }
-	local list = {}
-	for i, ore in byRarity[order] or {} do
-		table.insert(list, { ore = ore, w = 1 / i ^ 0.8 })
-	end
-	return list
-end
-
--- Crystal rocks: the floor's best 3 ores (70 %) and the next rarity's cheapest 3 (30 %).
-local function crystalTable(order: number): { { ore: any, w: number } }
-	if A.CrystalMode == "NextRarity" then
-		return tableOf(math.min(6, order + 1))
-	end
-	local list = {}
-	local own = byRarity[order] or {}
-	for i = math.max(1, #own - 2), #own do
-		table.insert(list, { ore = own[i], w = 0.7 / 3 })
-	end
-	local up = byRarity[math.min(6, order + 1)] or {}
-	if order < 6 then
-		for i = 1, math.min(3, #up) do
-			table.insert(list, { ore = up[i], w = 0.3 / 3 })
-		end
-	end
-	return list
 end
 
 local floors = {}
@@ -186,49 +165,57 @@ local function combined(ores: { { ore: any, w: number } }, crystal: { { ore: any
 	return out
 end
 
+-- A { [oreId] = weight } table as a list (cheapest first; unknown ores skipped).
+local function weighted(map: { [string]: number }): { { ore: any, w: number } }
+	local list = {}
+	for oreId, w in map do
+		local ore = OreData.ById[oreId]
+		if ore and w > 0 then
+			table.insert(list, { ore = ore, w = w })
+		end
+	end
+	table.sort(list, function(x, y)
+		return x.ore.Income < y.ore.Income
+	end)
+	return list
+end
+
+-- The artifact zone of a floor: its WorldLayout zone, else the depth class of its gate.
+local function artifactZone(def: any): string
+	if def.ZoneId and WorldLayout.ZoneById[def.ZoneId] then
+		return def.ZoneId
+	end
+	return if def.MinBlaster >= 5 then "DeepHollow" elseif def.MinBlaster >= 3 then "EmberCaves" else "Quarry"
+end
+
+-- The floors from MineFloors.List (or the proposal in A.FloorTables), in order.
 local function buildFloors()
 	table.clear(floors)
-	for i = 1, 5 do
-		local ores, crystal = tableOf(i), crystalTable(i)
+	for i, def in A.FloorTables or MineFloors.List do
+		local ores, crystal = weighted(def.Ores), weighted(def.CrystalOres)
 		floors[i] = {
 			Index = i,
 			Name = "Floor " .. i,
-			Gate = A.FloorGates[i],
-			Elevator = A.FloorElevator[i],
+			Gate = def.MinBlaster,
+			Elevator = def.ViaElevator == true,
 			Ores = ores,
 			Crystal = crystal,
 			Odds = combined(ores, crystal),
-			-- artifacts: the depth class of the floor's gate (ArtifactConfig.rarityWeights)
-			ArtifactZone = if A.FloorGates[i] >= 5 then "DeepHollow" elseif A.FloorGates[i] >= 3 then "EmberCaves" else "Quarry",
-			-- HP: the floor's weakest allowed (rusty) blaster needs RockSeconds
-			HP = BlasterData.damage(A.FloorGates[i], "") * A.RockSeconds,
+			ArtifactZone = artifactZone(def),
+			-- HP: the floor's weakest allowed (rusty) blaster needs RockSeconds (MineFloors.rockHealth)
+			HP = BlasterData.damage(def.MinBlaster, "") * A.RockSeconds,
 		}
 	end
-	-- option: a floor between 4 and 5 (the best Epic ores mixed with the
-	-- cheapest Legendary ones; its crystal rocks roll Legendary)
-	local extra = A.ExtraFloor
-	if extra then
-		local ores = {}
-		local epic, legendary = byRarity[4] or {}, byRarity[5] or {}
-		for i = math.max(1, #epic - 2), #epic do
-			table.insert(ores, { ore = epic[i], w = (1 - extra.LegendaryShare) / 3 })
+end
+
+-- The first floor only the elevator reaches (nil: none).
+local function elevatorFloor(): any
+	for _, floor in floors do
+		if floor.Elevator then
+			return floor
 		end
-		for i = 1, math.min(3, #legendary) do
-			table.insert(ores, { ore = legendary[i], w = extra.LegendaryShare / 3 })
-		end
-		local crystal = tableOf(5)
-		table.insert(floors, 5, {
-			Index = 4.5,
-			Name = "Floor 4.5",
-			Gate = extra.Gate,
-			Elevator = extra.Elevator,
-			Ores = ores,
-			Crystal = crystal,
-			Odds = combined(ores, crystal),
-			ArtifactZone = "DeepHollow",
-			HP = BlasterData.damage(extra.Gate, "") * A.RockSeconds,
-		})
 	end
+	return nil
 end
 
 -- The floor's ore chances at ore luck `luck` (every ore's chance x
@@ -312,6 +299,43 @@ local GENERATORS = {
 	{ Id = "WindTurbine", Out = MachineData.ById.WindTurbine.PowerOut, Price = MachineData.ById.WindTurbine.Price },
 	{ Id = "FusionReactor", Out = MachineData.ById.FusionReactor.PowerOut, Price = MachineData.ById.FusionReactor.Price },
 }
+
+-- The Foundry coins of a blaster level in this run (A.BlasterCoins or BlasterData).
+local function forgeCoins(level: number): number
+	local entry = BlasterData.ByLevel[level]
+	return (A.BlasterCoins and A.BlasterCoins[level]) or (entry and entry.Recipe and entry.Recipe.Coins) or 0
+end
+
+-- 2 significant digits, the way MineFloors and HoverboardData round their prices.
+local function round2(raw: number): number
+	if raw <= 0 then
+		return 0
+	end
+	local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
+	return math.floor(raw / step + 0.5) * step
+end
+
+-- The elevator's price: 2/3 of the blaster 7 forge (MineFloors' rule) unless overridden.
+local function elevatorPrice(): number
+	return A.ElevatorPrice or round2(forgeCoins(7) * 2 / 3)
+end
+
+-- The coin hoverboards in order: { Price, Walk } (price follows its blaster level like
+-- HoverboardData.priceFrom; Walk = the time factor against Boots 0 walking).
+local function hoverboards(): { { Price: number, Walk: number } }
+	local list = {}
+	local i = 0
+	for _, board in HoverboardData.List do
+		if board.Kind == "Coins" and board.Price then
+			i += 1
+			local level = A.HoverboardLevels[i]
+			local configCoins = if level then BlasterData.ByLevel[level].Recipe.Coins else 0
+			local price = if level and configCoins > 0 then round2(board.Price / configCoins * forgeCoins(level)) else board.Price
+			table.insert(list, { Price = price, Walk = A.BaseWalk / board.Speed })
+		end
+	end
+	return list
+end
 
 local function machinePrice(id: string): number
 	return (A.MachinePrices and A.MachinePrices[id]) or MachineData.ById[id].Price
@@ -471,7 +495,7 @@ local function walkMult(p: any): number
 	local base = if (stats.WalkSpeed or 0) > 0 then stats.WalkSpeed else A.BaseWalk
 	local speed = math.clamp(base * (1 + (stats.WalkSpeedPct or 0)), 8, 50)
 	local boots = A.BaseWalk / speed
-	local hover = if p.Hover > 0 then A.Hoverboards[p.Hover].Walk else 1
+	local hover = if p.Hover > 0 then hoverboards()[p.Hover].Walk else 1
 	return math.min(boots, hover)
 end
 
@@ -750,7 +774,14 @@ local function candidates(p: any): { any }
 		} do
 			local prices = MachineData.upgradePrices(up.Machine, up.Kind)
 			local mult = (A.UpgradePriceMult and A.UpgradePriceMult[up.Kind]) or 1
-			local price = prices and prices[p.Upgrades[up.Key] + 1]
+			local level = p.Upgrades[up.Key] + 1
+			local price = prices and prices[level]
+			local curve = A.UpgradeCurves and A.UpgradeCurves[up.Kind]
+			if price and curve and prices then
+				-- the machine's factor on the base curve, applied to the new curve
+				local factor = prices[1] / MachineData.UpgradeCurves[up.Kind][1]
+				price = curve[level] and curve[level] * factor or nil
+			end
 			price = if price then price * mult else nil
 			if up.Needs and price then
 				table.insert(list, {
@@ -1165,14 +1196,15 @@ local function simulate(seed: number, start: any?): any
 			end
 		end
 		-- 2) the elevator once floor 4 is in reach
-		local elevatorPrice = A.ElevatorPrice or A.Elevator
-		if not p.Elevator and p.Blaster >= floors[4].Gate and p.Coins >= elevatorPrice then
-			buy(p, "Elevator", elevatorPrice, t)
+		local liftFloor = elevatorFloor()
+		local liftPrice = elevatorPrice()
+		if not p.Elevator and liftFloor and p.Blaster >= liftFloor.Gate and p.Coins >= liftPrice then
+			buy(p, "Elevator", liftPrice, t)
 			p.Elevator = true
 			mark(p, "Elevator bought", t)
 		end
 		-- 3) hoverboards when they cost at most a quarter of the coins
-		local hover = A.Hoverboards[p.Hover + 1]
+		local hover = hoverboards()[p.Hover + 1]
 		if hover and hover.Price <= p.Coins * 0.25 then
 			buy(p, "Hoverboard " .. (p.Hover + 1), hover.Price, t)
 			p.Hover += 1
@@ -1575,7 +1607,7 @@ local function priceWindows(result: any): { any }
 		return machinePrice("AutoCleaner")
 	end)
 	row("Elevator", function()
-		return A.ElevatorPrice or A.Elevator
+		return elevatorPrice()
 	end)
 	return rows
 end

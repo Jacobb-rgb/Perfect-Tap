@@ -227,9 +227,37 @@ return function(T, Loader)
 		T.eq(phoenixTries, 3, "the third try answered")
 		T.eq(w.boards().Owned.RoyalPhoenix, true, "granted after the retry")
 		T.eq(w.boards().Equipped, "RoyalPhoenix", "the faster board is equipped")
-		T.eq(w.calls, MonetizationService.CheckTries + 3, "Comet tried CheckTries times, Phoenix 3 times")
+		T.eq(
+			w.calls,
+			MonetizationService.CheckTries * (1 + MonetizationService.Rechecks) + 3,
+			"Comet tried CheckTries times in the load round and every later round, Phoenix 3 times"
+		)
 		T.eq(w.pauses[1], MonetizationService.RetryDelay, "first pause")
 		T.eq(w.pauses[2], MonetizationService.RetryDelay * 2, "the pause doubles")
+		T.eq(w.pauses[6], MonetizationService.RecheckDelay, "the failing pass is asked again later")
+		T.truthy(MonetizationService.passesChecked(w.player), "the load's first round is done")
+	end)
+
+	withWorld("passes: a board bought while its check is in flight keeps the purchase (Roblox's stale 'not owned')", function(w)
+		w.owned[PHOENIX] = false
+		w.owned[COMET] = function()
+			-- the player buys the pass while Roblox works on the check, which answers from before it
+			m.purchaseFinished(w.player, COMET, true)
+			return false
+		end
+		m.checkAll(w.player)
+		T.eq(w.boards().Owned.NeonComet, true, "still owned")
+		T.eq(w.boards().Passes.NeonComet, true, "the pass mark stays")
+		T.eq(w.boards().Equipped, "NeonComet", "still equipped")
+		T.truthy(MonetizationService.owns(w.player, "HoverboardComet"), "session cache: owned")
+		-- a later round in this session (a cached answer) never takes it either
+		w.owned[COMET] = false
+		m.checkAll(w.player)
+		T.eq(w.boards().Owned.NeonComet, true, "kept for the session")
+		-- the next session: a refund is seen
+		m.forget(w.player)
+		m.checkAll(w.player)
+		T.eq(w.boards().Owned.NeonComet, nil, "refunded: revoked on the next load")
 	end)
 
 	withWorld("passes: a player who leaves stops the checks quietly; no save = no change", function(w)

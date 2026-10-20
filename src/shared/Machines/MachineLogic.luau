@@ -20,8 +20,9 @@
 	  Batch          one job works up to Batch queued items from In[1] at
 	                 once, one result each (Plasma Furnace: batch), never more
 	                 results than fit in Out
-	  GradeUpChance  each output is one grade better with that chance
-	                 (Polisher: gradeUp; Flawless stays Flawless)
+	  GradeUpChance  each output is one grade better with that chance, never
+	                 past MaxGrade (Polisher: gradeUp up to Pristine; Flawless
+	                 stays Flawless, it only comes from cleaning by hand)
 	  ShardChance    a job also gives a crystal shard with that chance
 	                 (Crystal Extractor: rollShard; the item passes through;
 	                 ProcessingService rolls each crushed pile only once)
@@ -203,7 +204,7 @@ function MachineLogic.outputs(id: string, input: Desc, roll: number, odds: { [st
 		grade = input.G or "Rough"
 	end
 	if info.GradeUpChance then
-		grade = MachineLogic.gradeUp(grade, info.GradeUpChance, roll)
+		grade = MachineLogic.gradeUp(grade, info.GradeUpChance, roll, info.MaxGrade)
 	end
 	for _ = 1, info.OutputCount or 1 do
 		table.insert(list, { K = kind, O = input.O, G = grade })
@@ -223,10 +224,14 @@ end
 
 -- Polisher: `gradeId` one grade better when roll < chance, else as it is
 -- (nil or unknown counts as Rough). A broken chance or roll never
--- upgrades; a chance above 1 counts as 1.
-function MachineLogic.gradeUp(gradeId: string?, chance: number?, roll: number): string
+-- upgrades; a chance above 1 counts as 1. Never past `maxGrade` (a grade
+-- already at or above it stays as it is: Flawless stays Flawless).
+function MachineLogic.gradeUp(gradeId: string?, chance: number?, roll: number, maxGrade: string?): string
 	local grade = if gradeId and ItemData.GradeById[gradeId] then gradeId else "Rough"
 	local odds = if isFinite(chance) then math.clamp(chance :: number, 0, 1) else 0
+	if maxGrade and ItemData.GradeById[maxGrade] and ItemData.gradeLevel(grade) >= ItemData.gradeLevel(maxGrade) then
+		return grade
+	end
 	if isFinite(roll) and roll < odds then
 		return MachineLogic.nextGrade(grade)
 	end

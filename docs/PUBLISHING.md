@@ -50,6 +50,16 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
 5. **Monetization**: create the passes and products, paste their ids (the blaster chat's
    `NAHRAJ_DO_ROBLOXU/robux_produkty/`). **Any paid random item (e.g. Robux capsules) must show its odds before
    buying** (COMPLIANCE.md 2.6).
+   What is wired (step 8): `MonetizationService` has the one `ProcessReceipt` (grant + `Purchases` +
+   `PurchaseLog` in one step, save, then `PurchaseGranted`) and checks every game pass on join and on
+   `PromptGamePassPurchaseFinished`; each `MonetizationConfig` entry's `Grant` has a handler (perk passes, the
+   Mythic enchant passes, hoverboards, Royal capsules, Triple / Hexa Lucky, coin packs only while
+   `CoinPacksEnabled`). Every id is still a placeholder `0`, so everything shows "Coming soon". The ids go into
+   `src/shared/Config/MonetizationConfig.luau`, each into the `Id` of the entry whose `Key` matches the product
+   (`BigPass`, `RoyalCapsule3`, ...; table in COMPLIANCE.md 2.6), passes as `Kind = "GamePass"`, products as
+   `"Product"`, with the same Robux price. Keep coin packs at `0` while `CoinPacksEnabled` is false (their
+   receipts would wait). The receipts gate opens by itself when every live id has a handler; put the passes
+   On Sale only after that build is live.
 6. **Badges**: `NAHRAJ_DO_ROBLOXU/odznaky/NAVOD.md` (11 badges, 5 a day free; ids go into BadgeConfig).
 7. **Music**: `NAHRAJ_DO_ROBLOXU/hudba/NAVOD.md` (4 tracks; ids go into MusicConfig).
 8. **Sky** (optional): `NAHRAJ_DO_ROBLOXU/obloha_mlecna_draha/NAVOD.md` (6 faces; ids go into LightingConfig.Skybox).

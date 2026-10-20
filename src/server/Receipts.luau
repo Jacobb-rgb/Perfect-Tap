@@ -11,7 +11,9 @@
 	- CapsuleService (Royal capsules; its setReceiptsReady / receiptsReady
 	  are this same switch).
 
-	- setReady(true) is called by step 8 once its handlers are connected.
+	- setReady(true) is called by MonetizationService.start (openGate) only
+	  when every live id in MonetizationConfig has a grant handler
+	  (MonetizationService.unhandled() empty); one missing keeps it false.
 	  It also sets the ReplicatedStorage attribute
 	  MonetizationConfig.ReceiptsAttribute, which the client cards read
 	  (CapsuleView, BoostView, EnchantView: "Coming soon" while it isn't true).

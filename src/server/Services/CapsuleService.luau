@@ -69,7 +69,9 @@
 	  "Discovery").
 	- Hooks for other packages: grantFree (the wheel's capsule prize: no
 	  price, CapsuleResult with Free = true; quiet = true leaves sending it
-	  to the caller, QuietFree says this service honors that), grantProduct (step 8 receipts:
+	  to the caller, QuietFree says this service honors that), registerGrants (the
+	  "Capsule" receipt handler: grantProduct, then the golems past MaxSaved wait
+	  in data.Golems.Pending, woken by wakePending on load / change), grantProduct (step 8 receipts:
 	  paid golems may pass the inventory cap up to GolemConfig.MaxSaved,
 	  Paid = true and Locked = true, so a golem bought with Robux is never
 	  deleted by a slip), setReceiptsReady (step 8, see Royal above; also
@@ -94,6 +96,7 @@ local Policy = require(script.Parent.Parent.Policy)
 local Receipts = require(script.Parent.Parent.Receipts)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local MonetizationService = require(script.Parent.MonetizationService)
 local StateService = require(script.Parent.StateService)
 
 local CapsuleService = {}
@@ -205,14 +208,15 @@ function CapsuleService.roll(capsuleId: string, count: number, lucky: boolean, r
 end
 
 -- Adds already-rolled kinds to the save (pure on `data`; the caller calls
--- DataService.changed). Returns the woken golems and how many didn't fit
+-- DataService.changed). Returns the woken golems, how many didn't fit
 -- (only with `overCap`, past GolemConfig.MaxSaved; otherwise the caller
--- checked the room first).
-local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?, paid: boolean?): ({ Woken }, number)
+-- checked the room first) and those kinds.
+local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?, paid: boolean?): ({ Woken }, number, { string })
 	if type(data.Golems) ~= "table" then
 		data.Golems = { Owned = {}, Equipped = {}, NextId = 1 }
 	end
 	local woken: { Woken } = {}
+	local left: { string } = {}
 	for _, kind in kinds do
 		local entry = GolemConfig.add(data.Golems, kind, overCap, paid)
 		if entry then
@@ -220,6 +224,8 @@ local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?
 				entry.Locked = true -- bought with Robux: never deleted by a slip (the player may unlock it)
 			end
 			table.insert(woken, { Id = entry.Id, Kind = entry.Kind })
+		else
+			table.insert(left, kind)
 		end
 	end
 	if type(data.Stats) ~= "table" then
@@ -227,7 +233,7 @@ local function add(data: { [string]: any }, kinds: { string }, overCap: boolean?
 	end
 	local opened = tonumber(data.Stats.CapsulesOpened) or 0
 	data.Stats.CapsulesOpened = (if opened == opened and opened >= 0 then math.floor(opened) else 0) + #woken
-	return woken, #kinds - #woken
+	return woken, #kinds - #woken, left
 end
 
 -- Tells the other players about a Legendary+ golem. Returns the text (nil: nothing to tell).
@@ -379,22 +385,22 @@ end
 	moment for a purchase made another way, e.g. the Store tab); the golems
 	are paid (Paid = true), locked (Locked = true) and may pass the
 	inventory cap up to GolemConfig.MaxSaved. Returns the CapsuleResult
-	(also sent) and how many golems didn't fit past MaxSaved (the receipt
-	handler keeps those as a pending-golem credit, never coins:
+	(also sent), how many golems didn't fit past MaxSaved and their kinds
+	(the receipt handler keeps those as a pending-golem credit, never coins:
 	MonetizationConfig's step 8 contract). nil for a product that isn't a
 	capsule.
 ]]
-function CapsuleService.grantProduct(player: Player, productKey: string): (Result?, number)
+function CapsuleService.grantProduct(player: Player, productKey: string): (Result?, number, { string })
 	local data = DataService.get(player)
 	local product = MonetizationConfig.get(productKey)
 	if not data or not product or not product.Capsule or not CapsuleConfig.ById[product.Capsule] then
-		return nil, 0
+		return nil, 0, {}
 	end
 	local count = math.clamp(math.floor(product.Count or 1), 1, 10)
 	local remembered = CapsuleService.promptedLucky(player, productKey)
 	local lucky = remembered == true or CapsuleService.tripleLucky(player, data, clock())
 	local kinds = CapsuleService.roll(product.Capsule, count, lucky, newRandom(player))
-	local woken, missing = add(data, kinds, true, true)
+	local woken, missing, left = add(data, kinds, true, true)
 	missing += count - #kinds
 	local list = prompts[player]
 	if list then
@@ -404,7 +410,106 @@ function CapsuleService.grantProduct(player: Player, productKey: string): (Resul
 	local result: Result = { Capsule = product.Capsule, Count = count, Golems = woken, Lucky = lucky }
 	Net.fire("CapsuleResult", player, result)
 	opened(player, { Capsule = product.Capsule, Count = count, Kinds = kindsOf(woken), Lucky = lucky, Source = "Robux" })
-	return result, missing
+	return result, missing, left
+end
+
+-- data.Golems.Pending as a list (made when missing or junk).
+local function pendingOf(data: { [string]: any }): { { [string]: any } }
+	local golems = data.Golems
+	if type(golems) ~= "table" then
+		golems = { Owned = {}, Equipped = {}, NextId = 1 }
+		data.Golems = golems
+	end
+	if type(golems.Pending) ~= "table" then
+		golems.Pending = {}
+	end
+	return golems.Pending
+end
+
+--[[
+	The "Capsule" receipt handler (MonetizationService.register; step 8
+	contract): opens the product's capsules with grantProduct (paid, locked,
+	past InventoryCap up to MaxSaved; the stored prompt's Triple Lucky) and
+	keeps the golems that don't fit past MaxSaved as a pending-golem credit
+	(data.Golems.Pending, { Kind, Paid = true }), never coins. Refused
+	(false, nothing written: the receipt waits) when even the credit has no
+	room (GolemConfig.MaxPending). No yield.
+]]
+local function grantCapsule(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	if not entry.Capsule or not CapsuleConfig.ById[entry.Capsule] or DataService.get(player) ~= data then
+		return false
+	end
+	local count = math.clamp(math.floor(entry.Count or 1), 1, 10)
+	local fits = math.max(0, GolemConfig.MaxSaved - GolemConfig.count(data.Golems))
+	local waiting = if type(data.Golems) == "table" and type(data.Golems.Pending) == "table" then #data.Golems.Pending else 0
+	if count - fits > GolemConfig.MaxPending - waiting then
+		return false
+	end
+	local result, _missing, left = CapsuleService.grantProduct(player, entry.Key)
+	if not result then
+		return false
+	end
+	if #left > 0 then
+		local pending = pendingOf(data)
+		for _, kind in left do
+			table.insert(pending, { Kind = kind, Paid = true })
+		end
+		Net.fire("Notify", player, {
+			Text = `Your golem inventory is full: {#left} golem{if #left == 1 then "" else "s"} will wake as soon as there is room.`,
+			Kind = "Info",
+		})
+	end
+	return true
+end
+
+--[[
+	Wakes the pending-golem credit (data.Golems.Pending) into the inventory
+	while there is room (paid golems: up to MaxSaved), oldest first, Paid
+	and Locked. Kinds this server doesn't know stay waiting. Returns how
+	many woke. Runs on every load and save change; no yield.
+]]
+function CapsuleService.wakePending(player: Player): number
+	local data = DataService.get(player)
+	local golems = if data then data.Golems else nil
+	local pending = if type(golems) == "table" then golems.Pending else nil
+	if not data or type(pending) ~= "table" or #pending == 0 then
+		return 0
+	end
+	local kinds: { string } = {}
+	local stay = {}
+	local room = GolemConfig.MaxSaved - GolemConfig.count(golems)
+	for _, entry in pending do
+		local kind = if type(entry) == "table" then entry.Kind else nil
+		if #kinds < room and type(kind) == "string" and GolemConfig.ById[kind] then
+			table.insert(kinds, kind)
+		else
+			table.insert(stay, entry)
+		end
+	end
+	if #kinds == 0 then
+		return 0
+	end
+	local woken, _missing, left = add(data, kinds, true, true)
+	for _, kind in left do
+		table.insert(stay, { Kind = kind, Paid = true })
+	end
+	table.clear(pending)
+	for i, entry in stay do
+		pending[i] = entry
+	end
+	if #woken > 0 then
+		DataService.changed(player)
+		Net.fire("Notify", player, {
+			Text = `{#woken} golem{if #woken == 1 then "" else "s"} from your Royal Capsules woke up!`,
+			Kind = "Reward",
+		})
+	end
+	return #woken
+end
+
+-- Registers the "Capsule" receipt handler (init(); idempotent).
+function CapsuleService.registerGrants()
+	MonetizationService.register("Capsule", grantCapsule)
 end
 
 -- A Royal prompt closed (MarketplaceService.PromptProductPurchaseFinished):
@@ -658,6 +763,14 @@ CapsuleService._test = {
 
 function CapsuleService.init()
 	Net.on("CapsuleAction", onCapsuleAction)
+	-- step 8: Royal capsule receipts; the pending-golem credit wakes when there is room
+	CapsuleService.registerGrants()
+	DataService.onLoaded(function(player: Player)
+		CapsuleService.wakePending(player)
+	end)
+	DataService.onChanged(function(player: Player)
+		CapsuleService.wakePending(player)
+	end)
 end
 
 function CapsuleService.start()
