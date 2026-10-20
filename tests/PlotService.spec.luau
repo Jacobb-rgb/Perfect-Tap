@@ -202,7 +202,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Plot (perf pass 1): nothing see-through, small trim without shadows, brick courses on the side walls", function()
+	T.test("Plot (perf pass 1): nothing see-through, small trim without shadows, one soft run per side wall", function()
 		for _, plot in WorldLayout.Plots do
 			local model = buildPlot(plot)
 			local parts, seeThrough, shadows = 0, 0, 0
@@ -238,23 +238,24 @@ return function(T, Loader)
 					end
 				end
 			end
-			-- the long side walls: one raised course (two bricks long) per bay
+			-- (style A) the long side walls: one soft run each (plinth, glow strip,
+			-- body, lid) under the posts, no raised bricks or mortar lines any more
 			local line = PlotBuilder.WallLine
 			local plotCF = WorldLayout.plotCFrame(plot)
-			local courses, sideBricks = 0, 0
+			local sideBodies = 0
+			for _, d in model:GetDescendants() do
+				T.falsy(d:IsA("BasePart") and (d.Name == "Brick" or d.Name == "Mortar"), `{d:GetFullName()}: no bricks in style A`)
+			end
 			for _, d in model.Walls:GetChildren() do
-				if d:IsA("BasePart") and d.Name == "Brick" then
+				if d:IsA("BasePart") and d.Name == "Body" then
 					local p = plotCF:PointToObjectSpace(d.CFrame.Position)
 					if math.abs(math.abs(p.X) - line) < 0.2 then
-						sideBricks += 1
-						if d.Size.Z > 2 then
-							courses += 1
-						end
+						sideBodies += 1
+						T.lt(line * 2 - 1, d.Size.Z, "a side wall runs from the road to the yard's back corner")
 					end
 				end
 			end
-			T.eq(courses, 5, "courses: 4 bays on the pillared side, 1 on the plain side")
-			T.eq(sideBricks, 7, "plus the two single bricks beside the yard")
+			T.eq(sideBodies, 2, "one run per side wall")
 		end
 	end)
 
@@ -283,7 +284,7 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Plot: brick walls close the border of pad and yard, except the openings", function()
+	T.test("Plot: soft walls close the border of pad and yard, except the openings", function()
 		local plot = WorldLayout.Plots[2]
 		local model = buildPlot(plot)
 		local plotCF = WorldLayout.plotCFrame(plot)
@@ -335,61 +336,64 @@ return function(T, Loader)
 			end
 		end
 		T.lt(150, samples, "border samples")
-		-- every wall run is brick: plinth, red band, a rounded cap (a low slab
-		-- overhanging both faces with a bullnose cylinder along it); long runs
-		-- go on under the pillars that stand on them
-		local caps, rounds = 0, 0
-		for _, d in model.Walls:GetDescendants() do
-			if d:IsA("BasePart") and d.Name == "Cap" then
-				caps += 1
-				T.lt(PlotBuilder.WallBand + 0.2, d.Size.X, "cap overhangs the brick band")
-				T.lt(d.Size.Y, d.Size.X, "cap is a low slab")
-			elseif d:IsA("BasePart") and d.Name == "CapRound" then
-				rounds += 1
-				-- (round 3: a square stone coping, no round grey rail)
-				T.truthy(d.Shape == roblox.Enum.PartType.Block, "the cap's coping is square stone")
-				T.lt(PlotBuilder.WallBand * 0.8, d.Size.X, "a chunky coping")
-			end
-		end
-		T.le(6, caps, "pad wall runs: two front, two sides, two pad/yard")
-		T.eq(rounds, caps, "every cap slab has its bullnose")
-		for _, folder in { model.Yard.Fence, model.Yard.Pen } do
-			local n = 0
+		-- (style A) every wall run is soft: a slate plinth, a cream body and a
+		-- round cream lid along the run, a little wider than the body; the plot
+		-- walls carry a glowing strip through the plinth, the lower pen walls not
+		local P = Loader.requirePath("ReplicatedStorage.Shared.Builders.KitMachines").Palette
+		local function runs(folder: any): (number, number, number, number)
+			local plinths, bodies, lids, glows = 0, 0, 0, 0
 			for _, d in folder:GetChildren() do
-				if d:IsA("BasePart") and d.Name == "CapRound" then
-					n += 1
+				if d:IsA("BasePart") and d.Name == "Plinth" then
+					plinths += 1
+					T.eq(d.Color, P.Frame, "a slate plinth")
+				elseif d:IsA("BasePart") and d.Name == "Body" then
+					bodies += 1
+					T.eq(d.Color, P.Body, "a cream body")
+				elseif d:IsA("BasePart") and d.Name == "Lid" then
+					lids += 1
+					T.truthy(d.Shape == roblox.Enum.PartType.Cylinder, "the lid is round")
+					T.eq(d.Color, P.Body, "a cream lid")
+					-- a cylinder's axis is its X: the lid runs along the wall
+					T.lt(d.Size.Y, d.Size.X, "the lid runs along the wall")
+				elseif d:IsA("BasePart") and d.Name == "WallGlow" then
+					glows += 1
+					T.eq(d.Material, roblox.Enum.Material.Neon, "the strip glows")
+					T.falsy(d.CanCollide or d.CastShadow, "the strip neither collides nor casts a shadow")
 				end
 			end
-			T.le(4, n, `rounded caps on the {folder.Name} runs`)
+			return plinths, bodies, lids, glows
 		end
-		-- raised bricks on the border (pad and yard) and the pen
-		for _, folder in { model.Walls, model.Yard.Fence, model.Yard.Pen } do
-			local bricks = 0
-			for _, d in folder:GetChildren() do
-				if d:IsA("BasePart") and d.Name == "Brick" then
-					bricks += 1
-					T.falsy(d.CastShadow, "raised bricks cast no shadow")
-					T.lt(PlotBuilder.WallBand * 0.7, d.Size.X, "a raised brick shows on both faces")
-				end
-			end
-			T.lt(1, bricks, `raised bricks in {folder.Name}`)
+		for _, folder in { model.Walls, model.Yard.Fence } do
+			local plinths, bodies, lids, glows = runs(folder)
+			T.le(4, plinths, `wall runs in {folder.Name}`)
+			T.eq(bodies, plinths, `every {folder.Name} run has its body`)
+			T.eq(lids, plinths, `every {folder.Name} run has its round lid`)
+			T.eq(glows, plinths, `every {folder.Name} run has its glowing strip`)
 		end
-		-- the road-facing front walls show a staggered pair (lower and upper row) in their bay
-		local front: { [number]: { any } } = { [-1] = {}, [1] = {} }
+		T.le(6, (runs(model.Walls)), "pad wall runs: two front, two sides, two pad/yard")
+		local penPlinths, penBodies, penLids, penGlows = runs(model.Yard.Pen)
+		T.le(4, penPlinths, "pen wall runs")
+		T.eq(penBodies, penPlinths, "every pen run has its body")
+		T.eq(penLids, penPlinths, "every pen run has its round lid")
+		T.eq(penGlows, 0, "the low pen walls have no strip")
 		for _, d in model.Walls:GetChildren() do
-			if d:IsA("BasePart") and d.Name == "Brick" then
-				local p = plotCF:PointToObjectSpace(d.CFrame.Position)
-				if math.abs(p.Z + line) < 0.2 then
-					table.insert(front[if p.X < 0 then -1 else 1], p)
-				end
+			if d:IsA("BasePart") and d.Name == "Lid" then
+				T.lt(PlotBuilder.WallBand, d.Size.Y, "the lid is wider than the body")
 			end
 		end
-		for _, s in { -1, 1 } do
-			local pair = front[s]
-			T.eq(#pair, 2, "a brick pair on the front wall")
-			T.lt(0.3, math.abs(pair[1].Y - pair[2].Y), "the pair is on two rows")
-			T.lt(0.3, math.abs(pair[1].X - pair[2].X), "the pair is staggered")
+		-- the road entrance and the yard gate posts: round, a glowing lamp ball on top
+		-- (the left entrance one carries the plot's only light)
+		local lamps = 0
+		for _, d in model.Walls:GetChildren() do
+			if d:IsA("BasePart") and d.Name == "Lamp" then
+				lamps += 1
+				T.eq(d.Material, roblox.Enum.Material.Neon, "a glowing lamp")
+				T.falsy(d.CanCollide or d.CastShadow, "the lamp neither collides nor casts a shadow")
+			elseif d:IsA("BasePart") and d.Name == "Pillar" then
+				T.truthy(d.Shape == roblox.Enum.PartType.Cylinder, "round posts")
+			end
 		end
+		T.eq(lamps, 4, "lamps on the two entrance and the two gate posts")
 		-- a pillar about every 12.5 studs along the pillared side and the pad/yard wall
 		local pillars = {}
 		for _, d in model.Walls:GetChildren() do
@@ -439,14 +443,16 @@ return function(T, Loader)
 					T.falsy(d.Color == PlotBuilder.RimGold, `{d.Name} glows gold beside the rim`)
 				end
 			end
-			-- a two-tier bevelled octagon pedestal: two octagons of four strips each below the column
-			local strips = 0
-			for _, d in podium:GetChildren() do
-				if d:IsA("BasePart") and d.Material ~= roblox.Enum.Material.Neon and d.CFrame.Position.Y - plotY < 1.1 and d.Size.X > 3 then
-					strips += 1
-				end
-			end
-			T.eq(strips, 8, "two octagon tiers")
+			-- (style A) a round slate base with a glowing ring, a cream drum on it
+			local base, column = podium.Base, podium.Column
+			T.truthy(base.Shape == roblox.Enum.PartType.Cylinder, "a round base")
+			T.near(base.CFrame.UpVector.Y, 0, 1e-4, "an upright cylinder (its axis, X, points up)")
+			T.lt(base.CFrame.Position.Y - plotY + base.Size.X / 2, 1.1, "a low base")
+			T.truthy(column and column.Shape == roblox.Enum.PartType.Cylinder, "a round drum")
+			T.lt(column.Size.Y, base.Size.Y, "the drum is narrower than the base")
+			T.lt(column.Size.Y, podium.Top.Size.Y, "the top plate overhangs the drum")
+			local glow = podium:FindFirstChild("BaseGlow")
+			T.truthy(glow and glow.Material == roblox.Enum.Material.Neon, "a glowing ring on the base")
 			-- no glass case any more: a holo-ring around the ore that never blocks or
 			-- catches the mouse, and an invisible hover box over the ore that does
 			local top = podium.Top

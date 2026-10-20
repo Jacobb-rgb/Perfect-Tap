@@ -49,9 +49,19 @@ return function(T, Loader)
 			local full = #parts(BlasterBuilder.build(level, ore))
 			T.le(#parts(gun), full, "never more than the real gun")
 			T.truthy(#parts(gun) >= full * 0.6, "most of the real gun")
+			local solid, lit = 0, 0
 			for _, p in parts(gun) do
 				T.truthy(p.Transparency < 0.99, "no invisible parts on show")
+				if p.Material ~= roblox.Enum.Material.Neon then
+					solid += 1
+					local _, _, value = p.Color:ToHSV()
+					if value >= Gallery.DisplayMinValue - 1e-3 then
+						lit += 1
+					end
+				end
 			end
+			-- the solid parts read as colored shapes against the dark plaques (not black silhouettes)
+			T.eq(lit, solid, "level " .. level .. ": every solid part bright enough on show")
 			T.eq(plateText(piece, "LevelPlate"), "LV " .. level, "level plate")
 			T.eq(plateText(piece, "NamePlate"), string.upper(BlasterData.displayName(level, ore)), "name plate")
 		end

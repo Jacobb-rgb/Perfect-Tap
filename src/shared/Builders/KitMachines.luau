@@ -143,6 +143,11 @@ local function style(part: BasePart, role: string, flags: Props?, name: string?)
 	return part
 end
 
+-- Colours a part in a palette role (Kit attribute, colour, material, see-through
+-- and shine of the role, then `flags`): the world pieces in style A use it too
+-- (SoftKit: plot walls, Ore Pen, podiums, train stop, Foundry).
+KitMachines.style = style
+
 local function block(m: Instance, cf: CFrame, size: Vector3, role: string, flags: Props?, name: string?): BasePart
 	return style(Geo.make("Part", { CFrame = cf, Size = size }, m), role, flags, name)
 end
