@@ -1,5 +1,21 @@
 # Terra Forge v2 – build plan (2026-10-16)
 
+> **Status 2026-10-20** (main `claude/keen-wozniak-mx7azn` b68dd28, map v39, 1433 Lune tests; details in
+> docs/HANDOFF.md). The plan below is unchanged.
+> - **Done:** steps 1-3 (36 ores from the owner's picture instead of 30, blasters, Ore Pen, podiums, trains,
+>   24 roster machines + belts + power, Foundry); step 4 (lobby: mountains, horizon, meadow, forest, plaza life,
+>   ambience, loading screen); step 5 as the owner chose it (machines in the Soft style, Kenney-shape blasters);
+>   Blaster Vault + crate opening + gallery; steps 6-7 (gear, enchants, boosts, golem capsules, wheel, artifacts +
+>   museum, leaderboards, codex, settings, side menu); step 8 except trading (10-step tutorial, monetization with every id 0, badges, analytics,
+>   music, PUBLISHING.md, COMPLIANCE update, save safety, security audit, perf passes 1-2). Beyond the plan:
+>   6 mine floors with the Stormglass Rift, elevator and hoverboards; platforms + Belt Lift + Slide; dusty relics +
+>   Restoration Table; Rebirth B "Star Forge" (step 9's "later updates").
+> - **Open:** the light UI flip (`ui/light`, waits for the owner's "ano"); the final Foundry price curve on the
+>   6-floor tables (`balance/foundry-6floors`); trading and the STORE tile; the owner's uploads (skybox, music,
+>   badges, UI icon sheets, game passes and products, logo / thumbnails); movement check rollout steps 2-3 and the
+>   FLAWLESS guard's soft signals after real logs; step 9 (the owner tests in Studio with
+>   docs/STUDIO_CHECKLIST.md, then publishes).
+
 Source: the owner's design in docs/DESIGN_V2_NOTES.md (overrides GAME_DESIGN.md where they conflict) and the old
 "Next steps" in docs/HANDOFF.md. This file says what stays, what changes, what is new, and the order of work.
 Every step ends with: `bash tools/check.sh` (ALL CHECKS PASSED), QA review, docs/QA_REPORTS.md "test in Studio" list,

@@ -22,8 +22,11 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local Theme = require(Shared.Config.UITheme)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local TeleportView = require(script.Parent.TeleportView)
 
@@ -273,6 +276,20 @@ function MenuPanel.style(button: TextButton, color: Color3, dark: Color3)
 	if holder and holder:IsA("Frame") then
 		holder.BackgroundColor3 = dark
 	end
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin); windows also hide Roblox's touch controls while open.
+local darkBuild = MenuPanel.build
+MenuPanel.build = function(name: string, title: string, subtitle: string, displayOrder: number?): Refs
+	local refs = darkBuild(name, title, subtitle, displayOrder)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
+	end
+	return refs
 end
 
 return MenuPanel

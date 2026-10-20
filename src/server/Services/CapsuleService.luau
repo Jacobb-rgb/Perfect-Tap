@@ -84,6 +84,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
@@ -292,7 +293,7 @@ function CapsuleService.openCoins(player: Player, capsuleId: string, count: numb
 	if not CapsuleConfig.validCount(count) then
 		return false, "BadCount", nil
 	end
-	local price = CapsuleConfig.price(capsuleId, count, data.BlasterLevel)
+	local price = CapsuleConfig.price(capsuleId, count, BlasterData.priceLevel(data))
 	if price == nil then
 		return false, "BadCapsule", nil
 	end

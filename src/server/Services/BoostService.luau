@@ -56,6 +56,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Format = require(Shared.Util.Format)
@@ -315,7 +316,7 @@ local function buyCoins(player: Player, id: string)
 	-- from here on: no yield
 	local now = clock()
 	local vip = Perks.has(player, "ForgeVip")
-	local price, reason = BoostConfig.coinQuote(data.Boosts, id, data.BlasterLevel, vip, now)
+	local price, reason = BoostConfig.coinQuote(data.Boosts, id, data.BlasterLevel, vip, now, BlasterData.priceLevel(data))
 	if price == nil then
 		answer(player, "BuyCoins", false, reason or "BadOffer", id)
 		return

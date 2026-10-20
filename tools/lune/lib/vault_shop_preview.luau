@@ -11,6 +11,8 @@
 	  ui_vault_tv           1080p TV (console, HUD scale 1.25): the compact
 	                        layout, the top case next ($140B)
 	The coins fit the prices of balance pass 1 (4x the Foundry coins).
+	With LIGHT_UI=1 in the environment the same overlays use the light UI
+	(UIConfig.LightUI on) and their names end in "_light".
 ]]
 
 local UiExport = require("./uiexport")
@@ -24,13 +26,20 @@ function Preview.build(Loader: any): { [string]: any }
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local UDim2 = Loader.roblox.UDim2
 
+	local process = require("@lune/process")
+	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local light = process.env.LIGHT_UI == "1" or UIConfig.Default
+	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+	UIConfig.LightUI = light
+
 	local scale = 1.25 -- 900 px tall render / 720 design height
 	local phoneScale = VaultView.PhoneScale * 900 / 375
 	local smallScale = VaultView.PhoneScale * 900 / 320
 	local smallInset = math.floor(58 * 900 / 320)
 
 	local function hud(uiScale: number, coins: number): any
-		local refs = HudView.build()
+		-- the light HUD picks its phone layout from the screen (no camera in Lune)
+		local refs = if light then HudBubble.buildGame(if uiScale > 1.4 then 0.62 else 1.25) else HudView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(2400)
@@ -104,6 +113,14 @@ function Preview.build(Loader: any): { [string]: any }
 		hud(tvScale, 1.52e11).Gui,
 		view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, 9, 1.52e11, "A: buy   B: close").Gui,
 	})
+	UIConfig.LightUI = UIConfig.Default
+	if light then
+		local renamed = {}
+		for name, guis in exports do
+			renamed[name .. "_light"] = guis
+		end
+		return renamed
+	end
 	return exports
 end
 

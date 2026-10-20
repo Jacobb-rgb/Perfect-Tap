@@ -825,6 +825,7 @@ return function(T, Loader)
 		T.eq(w.data.BlasterOre, "Gold")
 		T.eq(w.data.Coins, 1000 - BlasterData.ByLevel[2].Recipe.Coins, "the level-2 forge's coins")
 		T.eq(w.data.Stats.BlastersForged, 1)
+		T.eq(w.data.Stats.RunForged, w.data.BlasterLevel, "the rebirth run counts a forged level (RebirthConfig.reachedOf)")
 		T.truthy(w.changed > changedBefore, "data changed (ToolService swaps the blaster)")
 		-- used: the cheap Gold + both Coal; kept: the Flawless Gold and the Copper
 		T.eq(#stock(w), 2)

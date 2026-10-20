@@ -22,6 +22,22 @@ Loader.init(root)
 
 local sceneName = process.args[1] or "world"
 
+-- LIGHT_UI=1: every UI overlay with the light UI switched on (UIConfig.LightUI),
+-- written as "<name>_light"; skinned old windows are re-skinned right before export.
+local lightUI = process.env.LIGHT_UI == "1"
+if lightUI then
+	Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig").LightUI = true
+	local LightSkin = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LightSkin")
+	UiExport.before = function(gui)
+		if gui:GetAttribute("LightSkin") then
+			LightSkin.refresh(gui)
+		end
+		if gui:GetAttribute("HiddenByLight") then
+			gui.Enabled = false -- (a preview that shows the old side menu column)
+		end
+	end
+end
+
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 local LightingConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.LightingConfig")
@@ -239,6 +255,12 @@ elseif sceneName == "tech_shop" then -- the world + the Tech shop panel overlays
 elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop window overlays (tools/lune/lib/vault_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/vault_shop_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays (tools/lune/lib/rebirth_preview.luau)
+	WorldBuilder.build(workspace)
+	require("./lib/rebirth_preview").buildWorld(Loader, workspace)
+	for name, guis in require("./lib/rebirth_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the Gear shop panel overlays (tools/lune/lib/gear_shop_preview.luau)
@@ -790,8 +812,9 @@ local outName = if sceneName == "mine_floor"
 	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do
-	fs.writeFile(root .. "/build/preview/" .. name .. ".json", serde.encode("json", guis))
-	print("Exported UI " .. name)
+	local out = if lightUI and not name:match("_light$") then name .. "_light" else name
+	fs.writeFile(root .. "/build/preview/" .. out .. ".json", serde.encode("json", guis))
+	print("Exported UI " .. out)
 end
 print(
 	string.format(

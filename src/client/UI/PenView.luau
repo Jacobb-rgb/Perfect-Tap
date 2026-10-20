@@ -23,6 +23,10 @@
 	box (bottom centre), and on phones it sits at the top, right of the
 	coins.
 	PenView.entries() turns the State snapshot into sorted rows (pure, tested).
+	With UIConfig.lightUI() on (the light UI, ships off) the same panel wears
+	the light "Bubble" look (skinLight / skinRow): a white panel with a blue
+	header band and the 3D backpack, the X on the corner, light rows, chunky
+	buttons in the light colours, dark text. Layout and behaviour are unchanged.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34,7 +38,11 @@ local OreData = require(Shared.Config.OreData)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local Rng = require(Shared.Util.Rng)
+local UIConfig = require(Shared.Config.UIConfig)
+local BubbleTheme = require(Shared.Config.BubbleTheme)
 local UIKit = require(script.Parent.UIKit)
+local Bubble = require(script.Parent.Bubble)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local PenView = {}
 
@@ -108,6 +116,7 @@ PenView.MinRows = 2
 PenView.HudTop = 90
 PenView.HudLeft = 252
 PenView.HudBottom = 90
+PenView.HudLeftLight = 300 -- the light HUD's coins pill (34 + 250) and its menu column
 local HUD_GAP = 8
 
 local PAD = 16
@@ -420,6 +429,166 @@ local function fillColor(fraction: number): Color3
 	return Theme.Good
 end
 
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+
+local LIGHT_GOOD = Color3.fromRGB(30, 160, 70) -- income text on the light rows
+
+local function isLight(refs: Refs): boolean
+	return refs.Gui:GetAttribute("Bubble") == true
+end
+
+-- Dark text without an outline (on the white panel and rows).
+local function inkText(label: TextLabel, color: Color3?)
+	label.TextColor3 = color or BubbleTheme.Ink
+	local outline = label:FindFirstChildOfClass("UIStroke")
+	if outline then
+		outline.Enabled = false
+		outline.Transparency = 1
+	end
+end
+
+-- A UIKit.button in a light colour: navy outline, white text with a navy edge.
+local function lightButton(button: TextButton, role: BubbleTheme.Role)
+	local holder = button.Parent :: Frame
+	holder.BackgroundColor3 = role.Lip
+	button.BackgroundColor3 = role.Base
+	button.TextColor3 = BubbleTheme.White
+	local parts: { GuiObject } = { holder, button }
+	for _, d in parts do
+		for _, child in d:GetChildren() do
+			if child:IsA("UIStroke") then
+				child.Color = BubbleTheme.Outline
+				if child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+					child.Thickness = BubbleTheme.Stroke
+				end
+			end
+		end
+	end
+end
+
+local function skinRow(row: Row)
+	row.Frame.BackgroundColor3 = BubbleTheme.PanelTint
+	local outline = row.Frame:FindFirstChildOfClass("UIStroke")
+	if outline then
+		outline.Color = BubbleTheme.Outline
+		outline.Thickness = 3
+	end
+	local iconOutline = row.Icon:FindFirstChildOfClass("UIStroke")
+	if iconOutline then
+		iconOutline.Color = BubbleTheme.Outline
+	end
+	local mysteryOutline = row.Mystery:FindFirstChildOfClass("UIStroke")
+	if mysteryOutline then
+		mysteryOutline.Color = BubbleTheme.Outline
+	end
+	inkText(row.Name)
+	inkText(row.Count)
+	local gradeOutline = row.Grade:FindFirstChildOfClass("UIStroke")
+	if gradeOutline then
+		gradeOutline.Color = BubbleTheme.Outline
+	end
+	for _, child in row.Grade:GetChildren() do
+		if child:IsA("UIStroke") then
+			child.Color = BubbleTheme.Outline
+		end
+	end
+	lightButton(row.Take, BubbleTheme.Roles.Go)
+	lightButton(row.Send, BubbleTheme.Roles.Lobby)
+	lightButton(row.Podium, BubbleTheme.Roles.Vault)
+end
+
+local function skinLight(refs: Refs)
+	refs.Gui:SetAttribute("Bubble", true)
+	local panel = refs.Panel
+	panel.BackgroundColor3 = BubbleTheme.Panel
+	local panelGradient = panel:FindFirstChildOfClass("UIGradient")
+	if panelGradient then
+		panelGradient.Color = ColorSequence.new(BubbleTheme.Panel, BubbleTheme.Panel)
+	end
+	local panelCorner = panel:FindFirstChildOfClass("UICorner")
+	if panelCorner then
+		panelCorner.CornerRadius = UDim.new(0, 26)
+	end
+	local panelOutline = panel:FindFirstChildOfClass("UIStroke")
+	if panelOutline then
+		panelOutline.Color = BubbleTheme.Outline
+		panelOutline.Thickness = BubbleTheme.Stroke
+	end
+	-- the blue header band behind the title, with the 3D backpack
+	local role = BubbleTheme.Roles.Backpack
+	local band = UIKit.new("Frame", {
+		Name = "Band",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 40),
+		ZIndex = 1,
+	}, panel)
+	Bubble.corner(band, 26)
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, role.Top),
+			ColorSequenceKeypoint.new(0.5, role.Base),
+			ColorSequenceKeypoint.new(1, role.Base),
+		}),
+		Rotation = 90,
+	}, band)
+	UIKit.new("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = role.Base,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0, 0.5),
+		Size = UDim2.fromScale(1, 0.5),
+		ZIndex = 1,
+	}, band)
+	UIKit.new("Frame", {
+		Name = "Line",
+		BackgroundColor3 = BubbleTheme.Outline,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(1, 0, 0, 3),
+		ZIndex = 1,
+	}, band)
+	Bubble.icon(panel, "backpack", 74, {
+		Name = "HeaderIcon",
+		Position = UDim2.fromOffset(4, -18),
+		ZIndex = 4,
+	})
+	refs.Title.Position = UDim2.fromOffset(86, 2)
+	refs.Title.TextColor3 = BubbleTheme.White
+	refs.Title.ZIndex = 3
+	local titleOutline = refs.Title:FindFirstChildOfClass("UIStroke")
+	if titleOutline then
+		titleOutline.Color = BubbleTheme.Outline
+		titleOutline.Thickness = 3
+	end
+	inkText(refs.Header)
+	refs.Bar.BackgroundColor3 = BubbleTheme.PanelTint
+	local barOutline = refs.Bar:FindFirstChildOfClass("UIStroke")
+	if barOutline then
+		barOutline.Color = BubbleTheme.Outline
+		barOutline.Thickness = 2.5
+	end
+	-- the X on the panel's corner, like the other light windows
+	lightButton(refs.Close, BubbleTheme.Roles.Danger)
+	local closeHolder = refs.Close.Parent :: Frame
+	closeHolder.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeHolder.Position = UDim2.new(1, -12, 0, 10)
+	closeHolder.ZIndex = 6
+	lightButton(refs.AutoSort, BubbleTheme.Roles.Go)
+	lightButton(refs.SendDirty, BubbleTheme.Roles.Lobby)
+	lightButton(refs.SendUnkept, BubbleTheme.Roles.Lobby)
+	lightButton(refs.StopSend, BubbleTheme.Roles.Danger)
+	inkText(refs.Status, BubbleTheme.InkSoft)
+	inkText(refs.Empty, BubbleTheme.InkSoft)
+	inkText(refs.Hint, BubbleTheme.InkSoft)
+	for _, child in refs.PadHint:GetChildren() do
+		if child:IsA("TextLabel") then
+			inkText(child, BubbleTheme.InkSoft)
+		end
+	end
+	refs.List.ScrollBarImageColor3 = BubbleTheme.InkSoft
+end
+
 function PenView.build(): Refs
 	local gui = UIKit.screen("TerraForgePen", 15)
 	gui.Enabled = false
@@ -604,6 +773,10 @@ function PenView.build(): Refs
 		Mode = "Pen",
 		Slot = nil,
 	}
+	if UIConfig.lightUI() then
+		skinLight(refs)
+		TouchControls.follow(gui)
+	end
 	PenView.setCompact(refs, false)
 	PenView.setMode(refs, "Pen", nil)
 	return refs
@@ -702,6 +875,9 @@ local function newRow(refs: Refs, key: string): Row
 		Podium = podium,
 	}
 	refs.Rows[key] = row
+	if isLight(refs) then
+		skinRow(row)
+	end
 	layoutRow(refs, row)
 	return row
 end
@@ -744,7 +920,11 @@ function PenView.setEntries(refs: Refs, list: { Entry }, canPodium: boolean): { 
 			then Format.perSecond(entry.Income)
 			elseif entry.Mystery then "Clean it to see what it is"
 			else ""
-		row.Income.TextColor3 = if entry.Income > 0 then Theme.Good else Theme.TextDim
+		if isLight(refs) then
+			row.Income.TextColor3 = if entry.Income > 0 then LIGHT_GOOD else BubbleTheme.InkSoft
+		else
+			row.Income.TextColor3 = if entry.Income > 0 then Theme.Good else Theme.TextDim
+		end
 		row.Count.Text = "x" .. Format.big(entry.Count)
 		local takeHolder = row.Take.Parent :: Frame
 		local sendHolder = row.Send.Parent :: Frame
@@ -787,7 +967,7 @@ function PenView.setHeader(refs: Refs, count: number, capacity: number)
 	refs.BarFill.Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1)
 	local color = fillColor(fraction)
 	refs.BarFill.BackgroundColor3 = color
-	refs.Header.TextColor3 = if fraction >= 0.8 then color else Theme.Text
+	refs.Header.TextColor3 = if fraction >= 0.8 then color elseif isLight(refs) then BubbleTheme.Ink else Theme.Text
 	if PenView.isOver(count, capacity) and refs.Status.Text == PenView.SendIdleText then
 		refs.Status.Text = PenView.OverText
 		refs.Status.TextColor3 = Theme.Bad
@@ -816,13 +996,16 @@ end
 function PenView.setSending(refs: Refs, send: any, canUnkept: boolean, dirty: number)
 	local text, waiting, _, pen = PenView.sendText(send)
 	refs.Status.Text = text
-	refs.Status.TextColor3 = if waiting then Theme.Accent else Theme.TextDim
+	refs.Status.TextColor3 = if waiting then Theme.Accent elseif isLight(refs) then BubbleTheme.InkSoft else Theme.TextDim
 	-- STOP stops the pen's sends (the train's Direct Unload goes on)
 	local stop = refs.StopSend.Parent :: Frame
 	stop.Visible = pen > 0
 	local unkept = refs.SendUnkept.Parent :: Frame
 	unkept.Visible = canUnkept
-	refs.SendDirty.BackgroundColor3 = if dirty > 0 then PenView.SendColor else Theme.PanelLight
+	local light = isLight(refs)
+	refs.SendDirty.BackgroundColor3 = if dirty > 0
+		then (if light then BubbleTheme.Roles.Lobby.Base else PenView.SendColor)
+		else (if light then BubbleTheme.Roles.Plain.Base else Theme.PanelLight)
 	refs.SendDirty.TextTransparency = if dirty > 0 then 0 else 0.4
 end
 
@@ -836,8 +1019,14 @@ function PenView.setAutoSort(refs: Refs, visible: boolean, on: boolean)
 	local changed = holder.Visible ~= show
 	holder.Visible = show
 	refs.AutoSort.Text = if on then "AUTO-SORT ON" else "AUTO-SORT OFF"
-	refs.AutoSort.BackgroundColor3 = if on then Theme.Good else PenView.OffColor
-	holder.BackgroundColor3 = if on then Theme.GoodDark else PenView.OffDark
+	if isLight(refs) then
+		local role = if on then BubbleTheme.Roles.Go else BubbleTheme.Roles.Settings
+		refs.AutoSort.BackgroundColor3 = role.Base
+		holder.BackgroundColor3 = role.Lip
+	else
+		refs.AutoSort.BackgroundColor3 = if on then Theme.Good else PenView.OffColor
+		holder.BackgroundColor3 = if on then Theme.GoodDark else PenView.OffDark
+	end
 	if changed then
 		-- the fill bar makes room for it
 		local l = layoutOf(refs)
@@ -866,7 +1055,8 @@ local function placePanel(refs: Refs, width: number)
 	local room = refs.Room
 	if refs.Compact and room then
 		-- centre it in the room right of the coins, never off the right edge
-		local want = PenView.HudLeft + HUD_GAP + width / 2 - room.X / 2
+		local left = if isLight(refs) then PenView.HudLeftLight else PenView.HudLeft
+		local want = left + HUD_GAP + width / 2 - room.X / 2
 		local most = room.X / 2 - width / 2 - HUD_GAP
 		refs.Panel.AnchorPoint = Vector2.new(0.5, 0)
 		refs.Panel.Position = UDim2.new(0.5, math.max(0, math.min(want, most)), 0, HUD_GAP)

@@ -43,6 +43,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
@@ -51,6 +52,8 @@ local Rarity = require(Shared.Config.Rarity)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local GolemView = require(script.Parent.GolemView)
 local TechShopView = require(script.Parent.TechShopView)
@@ -360,7 +363,8 @@ function CapsuleView.cards(
 	stateAt: number?,
 	receipts: boolean?
 ): { Card }
-	local level = if type(state) == "table" then state.BlasterLevel else nil
+	-- coin prices follow State.PriceLevel (BlasterData.priceLevel: a rebirth never lowers them)
+	local level = if type(state) == "table" then (if state.PriceLevel ~= nil then state.PriceLevel else state.BlasterLevel) else nil
 	local room = GolemConfig.room(golemsOf(state))
 	local owned = GolemConfig.count(golemsOf(state))
 	local luckySeconds = CapsuleView.luckySeconds(state, now)
@@ -1651,6 +1655,29 @@ function CapsuleView.fillBoard(gui: Instance, capsuleId: string, lucky: boolean)
 			Enum.TextXAlignment.Right
 		)
 	end
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin); windows also hide Roblox's touch controls while open.
+local darkBuild = CapsuleView.build
+CapsuleView.build = function(compact: boolean?): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
+	end
+	return refs
+end
+
+local darkBuildOpening = CapsuleView.buildOpening
+CapsuleView.buildOpening = function(compact: boolean?): OpenRefs
+	local refs = darkBuildOpening(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return CapsuleView

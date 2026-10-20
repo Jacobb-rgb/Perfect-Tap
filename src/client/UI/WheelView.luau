@@ -41,6 +41,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
@@ -51,6 +52,8 @@ local WheelConfig = require(Shared.Config.WheelConfig)
 local Format = require(Shared.Util.Format)
 local TeleportView = require(script.Parent.TeleportView)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local WheelView = {}
 
@@ -1254,6 +1257,29 @@ function WheelView.placeChip(chip: ChipRefs, uiScale: number, screenWidth: numbe
 		holder.Position = UDim2.new(0.5, offset.X, 0, offset.Y)
 		holder.Size = UDim2.fromOffset(size.X, size.Y)
 	end
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin); windows also hide Roblox's touch controls while open.
+local darkBuild = WheelView.build
+WheelView.build = function(compact: boolean): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
+	end
+	return refs
+end
+
+local darkBuildChip = WheelView.buildChip
+WheelView.buildChip = function(uiScale: number, screenWidth: number?): ChipRefs
+	local refs = darkBuildChip(uiScale, screenWidth)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return WheelView

@@ -20,6 +20,8 @@
 	             game, step 8)
 	  HOVER      HoverboardController (the hoverboards panel; its RIDE button
 	             and the H key stay in the HUD)
+	  REBIRTH    RebirthController (STAR FORGE; badge: a rebirth is ready
+	             and the window wasn't opened since)
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
@@ -61,6 +63,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local SideMenuView = require(script.Parent.Parent.UI.SideMenuView)
+local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local HudController = require(script.Parent.HudController)
@@ -94,11 +97,12 @@ SideMenuController.Actions = {
 	Hoverboards = { Controller = "HoverboardController", Missing = "Hoverboards are coming soon!", Soon = false, Hide = true },
 	-- hidden until step 8's StoreController is in the game (no dead buttons); it comes back by itself
 	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = true },
+	Rebirth = { Controller = "RebirthController", Missing = "Rebirth is coming soon!", Soon = false, Hide = true },
 } :: { [string]: Action }
 
 -- Buttons whose controller has onUnseenChanged(callback(count)): its count
 -- is the button's badge.
-SideMenuController.Badges = { "Codex", "Collection" }
+SideMenuController.Badges = { "Codex", "Collection", "Rebirth" }
 
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.
@@ -118,6 +122,9 @@ local LEAVE_PRIORITY = Enum.ContextActionPriority.High.Value + 5
 
 local player = Players.LocalPlayer
 local refs: SideMenuView.Refs? = nil
+-- the light UI (the HUD's menu is the light tile grid): id -> the light tile's
+-- button; the side menu's own column stays hidden and the tiles mirror it
+local light: { [string]: TextButton }? = nil
 local hudVisible = true
 local leaveBound = false
 local shutToken = 0
@@ -221,6 +228,17 @@ end
 
 local function onJump(_: string, state: Enum.UserInputState): Enum.ContextActionResult
 	local view = refs
+	if light and state == Enum.UserInputState.Begin and GuiService.SelectedObject == nil then
+		-- the light UI: D-pad Left jumps onto the first light tile
+		local hud = HudController.refs()
+		local faces = if hud then HudBubble.linkMenu(hud.Menu) else {}
+		if faces[1] then
+			GuiService.SelectedObject = faces[1]
+			Sfx.play("UIClick")
+			return Enum.ContextActionResult.Sink
+		end
+		return Enum.ContextActionResult.Pass
+	end
 	if state ~= Enum.UserInputState.Begin or not view or not view.Gui.Enabled then
 		return Enum.ContextActionResult.Pass
 	end
@@ -279,6 +297,66 @@ local function updateGlyph()
 	view.PadGlyph.Image = image
 end
 
+-- The light tiles follow the side menu's state: hidden entries hide, the
+-- badge counts show on the tiles (and the MORE tile adds up its flyout's).
+local function mirrorLight()
+	local view, tiles = refs, light
+	local hud = HudController.refs()
+	if not view or not tiles or not hud then
+		return
+	end
+	local more = 0
+	for _, entry in SideMenuView.Entries do
+		local face = tiles[entry.Id]
+		if face then
+			local hidden = view.Hidden[entry.Id] == true
+			if entry.Group == "Main" then
+				HudBubble.setTileVisible(hud.Menu, entry.Id, not hidden)
+			else
+				local holder = face.Parent :: Frame
+				holder.Visible = not hidden
+			end
+			local count = if hidden then 0 else (view.Counts[entry.Id] or 0)
+			HudBubble.setTileBadge(face, count)
+			if entry.Group == "More" then
+				more += count
+			end
+		end
+	end
+	local moreTile = hud.Menu:FindFirstChild("More")
+	local moreFace = moreTile and moreTile:FindFirstChild("Face") :: GuiObject?
+	if moreFace then
+		HudBubble.setTileBadge(moreFace, more)
+	end
+end
+
+-- The light UI: the entries become tiles of the HUD's light menu ("Main") and
+-- of its MORE flyout ("More"); they press the same actions.
+local function buildLight(view: SideMenuView.Refs)
+	local hud = HudController.refs()
+	if not hud or not hud.Menu:GetAttribute("Bubble") then
+		return
+	end
+	view.Gui.Enabled = false
+	local tiles: { [string]: TextButton } = {}
+	for _, entry in SideMenuView.sorted() do
+		local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+		local face = if entry.Group == "Main"
+			then HudBubble.claimTile(hud.Menu, entry.Id, spec)
+			else HudBubble.addMore(hud.Menu, entry.Id, spec)
+		face.Activated:Connect(function()
+			Sfx.play("UIClick")
+			if entry.Group == "More" then
+				HudBubble.toggleMore(hud.Menu, false)
+			end
+			SideMenuController.press(entry.Id)
+		end)
+		tiles[entry.Id] = face
+	end
+	light = tiles
+	mirrorLight()
+end
+
 -- Is a controller's feature there right now? (available() when it has one,
 -- e.g. ElevatorController: false while the world has no elevator stop)
 local function unavailable(controller: any): boolean
@@ -310,6 +388,7 @@ local function updateSoon()
 	if changed then
 		relayout()
 	end
+	mirrorLight()
 end
 
 -- Re-checks which buttons show (a controller's available() changed: the
@@ -329,7 +408,10 @@ local function followHud()
 	local visible = hud.Gui.Enabled and hud.Menu.Visible
 	if visible ~= hudVisible then
 		hudVisible = visible
-		view.Gui.Enabled = visible
+		view.Gui.Enabled = visible and light == nil -- (the light tiles live in the HUD itself)
+		if light and not visible then
+			HudBubble.toggleMore(hud.Menu, false)
+		end
 		if not visible then
 			leave()
 			SideMenuController.setExpanded(false)
@@ -363,6 +445,7 @@ function SideMenuController.init()
 		end
 	end)
 	relayout()
+	buildLight(view)
 end
 
 function SideMenuController.start()
@@ -389,6 +472,7 @@ function SideMenuController.start()
 				local current = refs
 				if current then
 					SideMenuView.setBadge(current, id, count)
+					mirrorLight()
 				end
 			end)
 		end

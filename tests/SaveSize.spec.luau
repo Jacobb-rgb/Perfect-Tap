@@ -24,6 +24,8 @@ return function(T, Loader)
 		return best
 	end
 
+	local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
+
 	local function maxedSave(): { [string]: any }
 		local d = ProfileStore.deepCopy(DataTemplate)
 		local ore = longestOre()
@@ -61,6 +63,11 @@ return function(T, Loader)
 			d.Purchases[`1234567890123_{i}_abcdefabcdefabcdefabcdef`] = 1760000000 + i
 		end
 		d.ForgeName = string.rep("W", 30)
+		-- rebirth: every Star Shop perk at its top
+		d.Rebirths, d.Stars = 999, 99999
+		for _, perk in RebirthConfig.Perks do
+			d.StarPerks[perk.Id] = #perk.Costs
+		end
 		return d
 	end
 

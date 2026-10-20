@@ -37,6 +37,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local BlasterData = require(Shared.Config.BlasterData)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
@@ -46,6 +47,7 @@ local Theme = require(Shared.Config.UITheme)
 local FoundryLogic = require(Shared.Machines.FoundryLogic)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
 
 local FoundryView = {}
 
@@ -1293,6 +1295,28 @@ function FoundryView.showCard(refs: ForgeRefs, level: number, ore: string?, prev
 	refs.Sub.Visible = false
 	refs.Banner.Visible = false
 	refs.Feedback.TextTransparency = 1
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+local darkBuild = FoundryView.build
+FoundryView.build = function(): Refs
+	local refs = darkBuild()
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
+end
+
+local darkBuildForge = FoundryView.buildForge
+FoundryView.buildForge = function(touch: boolean): ForgeRefs
+	local refs = darkBuildForge(touch)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return FoundryView

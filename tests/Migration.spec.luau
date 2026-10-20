@@ -574,6 +574,12 @@ return function(T, Loader)
 		data.Settings.Language = "cs"
 		data.OreCodex = { Seen = { Zzzium = true, Gold = true }, Ready = true }
 		data.LastSeen = now
+		-- rebirth: a perk level above this build's top and a perk this build doesn't sell
+		data.Rebirths = 4
+		data.Stars = 7
+		data.StarPerks = { GoldenTouch = 12, StarMagnet = 3 }
+		data.PlotGlow = "Aurora" -- a colour this build doesn't know
+		data.Stats.StarsEarned = 30
 		return data
 	end
 
@@ -613,6 +619,7 @@ return function(T, Loader)
 		local GolemService = Loader.requirePath("ServerScriptService.Server.Services.GolemService")
 		local GearService = Loader.requirePath("ServerScriptService.Server.Services.GearService")
 		local ArtifactService = Loader.requirePath("ServerScriptService.Server.Services.ArtifactService")
+		local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
 		local Players = Loader.game:GetService("Players")
 		local data = newerSave()
 		local before = ProfileStore.deepCopy(data)
@@ -663,6 +670,8 @@ return function(T, Loader)
 			TrainService._test.provide(player, data, snapshot)
 			PenService._test.provide(player, data, snapshot)
 			BuildService._test.provide(player, data, snapshot)
+			snapshot.Rebirth = RebirthService.snapshot(data)
+			T.eq(snapshot.Rebirth.Count, 4, "the newer build's rebirths")
 			T.eq(snapshot.Train.Capacity, TrainConfig.Capacity[#TrainConfig.Capacity].Value, "read as this build's top")
 			T.eq(snapshot.BlasterLevel, BlasterData.MaxLevel, "read as this build's top")
 		end)

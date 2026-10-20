@@ -113,6 +113,20 @@ for _, blaster in BlasterData.Levels do
 	BlasterData.ByLevel[blaster.Level] = blaster
 end
 
+-- The level coin prices that grow with the blaster follow (capsules, coin
+-- boosts, the wheel's capsule fallback): the highest level the save ever
+-- had (Stats.BestBlaster, written by a rebirth) or the level now, so a
+-- rebirth never makes them cheaper (rebirth B keeps the income).
+function BlasterData.priceLevel(data: any): number
+	local level = BlasterData.get(if type(data) == "table" then data.BlasterLevel else nil).Level
+	local stats = if type(data) == "table" then data.Stats else nil
+	local best = if type(stats) == "table" then stats.BestBlaster else nil
+	if type(best) == "number" and best == best and best > level then
+		level = math.min(math.floor(best), BlasterData.MaxLevel)
+	end
+	return level
+end
+
 -- The blaster for a saved level (clamped to 1..MaxLevel).
 function BlasterData.get(level: any): Blaster
 	local n = if type(level) == "number" and level == level then math.floor(level) else 1

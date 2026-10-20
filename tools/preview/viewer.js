@@ -310,6 +310,20 @@ function sunsetSky(preset, shot, camera, fogColor, fogAway, spaceTex) {
   return sky;
 }
 
+// Roblox's touch controls on phone renders (small-screen sizes from Roblox's
+// TouchThumbstick / TouchJump: a 90 pt stick bottom-left, a 70 pt jump button
+// bottom-right), drawn at `px` pixels per point.
+function mobileControls(layer, px) {
+  const add = (css) => {
+    const d = document.createElement("div");
+    d.style.cssText = "position:absolute;border-radius:50%;" + css;
+    layer.appendChild(d);
+  };
+  add(`left:${35 * px}px;bottom:${20 * px}px;width:${90 * px}px;height:${90 * px}px;background:rgba(0,0,0,0.25);border:${2 * px}px solid rgba(255,255,255,0.45);`);
+  add(`left:${60 * px}px;bottom:${45 * px}px;width:${40 * px}px;height:${40 * px}px;background:rgba(255,255,255,0.55);`);
+  add(`right:${25 * px}px;bottom:${20 * px}px;width:${70 * px}px;height:${70 * px}px;background:rgba(0,0,0,0.25);border:${2 * px}px solid rgba(255,255,255,0.45);`);
+}
+
 async function main() {
   await document.fonts.load('40px "Fredoka One"');
   await document.fonts.load('40px "Luckiest Guy"');
@@ -591,7 +605,13 @@ async function main() {
   composer.render();
   if (shot.ui) {
     const guis = await fetch(`/scenes/${shot.ui}.json`).then((r) => r.json());
-    renderUI(document.getElementById("ui"), guis, WIDTH, HEIGHT, shot.uiInset);
+    const uiLayer = document.getElementById("ui");
+    uiLayer.style.width = `${WIDTH}px`;
+    uiLayer.style.height = `${HEIGHT}px`;
+    renderUI(uiLayer, guis, WIDTH, HEIGHT, shot.uiInset);
+    if (shot.mobileControls) mobileControls(uiLayer, shot.mobileControls);
+    // wait for the 3D icon pictures before the screenshot
+    await Promise.all([...uiLayer.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
     await document.fonts.ready;
   }
   window.__shot = shot;

@@ -142,9 +142,15 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	end
 
 	-- HUD as a player with two podiums would see it
+	-- LIGHT_UI=1: the same overlays with the light UI on, names ending in "_light"
+	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local light = require("@lune/process").env.LIGHT_UI == "1" or UIConfig.Default
+	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+	UIConfig.LightUI = light
+
 	local scale = 1.25 -- 900 px tall render / 720 design height
 	local function hud(uiScale: number?, screenWidth: number?): any
-		local refs = HudView.build()
+		local refs = if light then HudBubble.buildGame(uiScale or 1.25, screenWidth) else HudView.build()
 		refs.Gui.Scale.Scale = scale
 		-- the quick-teleport bar (layout for the real uiScale and screen width in
 		-- pt: 0.62 on phones, icon-only under 600 pt) and the right side menu with
@@ -199,6 +205,14 @@ function YardPreview.build(Loader: any, workspace: any): { [string]: any }
 	offline.Amount.Text = "+" .. Format.money(income * 0.5 * 3 * 3600)
 	offline.Detail.Text = "Away 3h 05m. Podiums pay 50% while you're offline, for up to 5 hours."
 	exports.ui_offline = UiExport.export({ hud().Gui, offline.Gui })
+	UIConfig.LightUI = UIConfig.Default
+	if light then
+		local renamed = {}
+		for name, guis in exports do
+			renamed[name .. "_light"] = guis
+		end
+		return renamed
+	end
 	return exports
 end
 

@@ -32,11 +32,14 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 
 local TrainView = {}
@@ -73,6 +76,7 @@ export type Snapshot = {
 	NextSpeedPrice: number?,
 	Express: boolean,
 	TripSeconds: number,
+	TripCut: number, -- the share the rebirth's Express Rails cut off every trip (0..0.5)
 	AutoDepartIn: number?,
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
 	WaitReason: string?, -- why: "PenOver" (the pen holds more than it fits) | "PenFull"
@@ -276,7 +280,8 @@ function TrainView.read(raw: any): Snapshot
 		NextCapacityPrice = optional(t.NextCapacityPrice),
 		NextSpeedPrice = optional(t.NextSpeedPrice),
 		Express = express,
-		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express)),
+		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express, optional(t.TripCut))),
+		TripCut = math.clamp(num(t.TripCut, 0), 0, 0.5),
 		AutoDepartIn = optional(t.AutoDepartIn),
 		Waiting = t.Waiting == true,
 		WaitReason = if t.WaitReason == "PenOver" or t.WaitReason == "PenFull" then t.WaitReason else nil,
@@ -401,10 +406,10 @@ function TrainView.upgrade(train: Snapshot, kind: Kind, coins: number): Upgrade
 		local now = TrainConfig.capacity(level, train.Express)
 		detail = if maxed then `Cargo {now} (max)` else `Cargo {now} → {TrainConfig.capacity(level + 1, train.Express)}`
 	else
-		local now = TrainView.seconds(TrainConfig.tripSeconds(level, train.Express))
+		local now = TrainView.seconds(TrainConfig.tripSeconds(level, train.Express, train.TripCut))
 		detail = if maxed
 			then `Trip {now} (max)`
-			else `Trip {now} → {TrainView.seconds(TrainConfig.tripSeconds(level + 1, train.Express))}`
+			else `Trip {now} → {TrainView.seconds(TrainConfig.tripSeconds(level + 1, train.Express, train.TripCut))}`
 	end
 	return {
 		Kind = kind,
@@ -1049,6 +1054,21 @@ end
 function TrainView.setColor(refs: Refs, color: Color3)
 	TrainView.setIconColor(refs.ChipIcon, color)
 	TrainView.setIconColor(refs.CardIcon, color)
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+local darkBuild = TrainView.build
+TrainView.build = function(compact: boolean?): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Chip)
+		TouchControls.follow(refs.Gui)
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return TrainView

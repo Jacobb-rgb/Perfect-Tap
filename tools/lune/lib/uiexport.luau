@@ -21,6 +21,9 @@ local function safe(instance, prop)
 end
 
 local function exportNode(instance): any?
+	if instance:GetAttribute("IconFallback") then
+		return nil -- the preview draws the rendered 3D icon instead of the stand-in emoji
+	end
 	local class = instance.ClassName
 	local node: { [string]: any } = { c = class, n = instance.Name }
 	if instance:IsA("GuiObject") then
@@ -54,13 +57,14 @@ local function exportNode(instance): any?
 			node.img = tostring(instance.Image)
 			node.it = instance.ImageTransparency
 			node.ic = hex(instance.ImageColor3)
+			node.icon = instance:GetAttribute("Icon") -- 3D UI icon name (tools/preview/icons), shown from build/preview/icons
 		end
 	elseif class == "UICorner" then
 		node.r = { instance.CornerRadius.Scale, instance.CornerRadius.Offset }
 	elseif class == "UIStroke" then
 		node.th = instance.Thickness
 		node.col = hex(instance.Color)
-		node.t = instance.Transparency
+		node.t = if safe(instance, "Enabled") == false then 1 else instance.Transparency -- a disabled stroke draws nothing
 		node.mode = instance.ApplyStrokeMode.Name
 	elseif class == "UIGradient" then
 		local keys = {}
@@ -116,9 +120,17 @@ local function exportNode(instance): any?
 	return node
 end
 
+-- Called with every ScreenGui right before it is exported (export_scene sets it
+-- for LIGHT_UI=1: LightSkin.refresh, since Roblox signals don't run in Lune).
+UiExport.before = nil :: ((any) -> ())?
+
 function UiExport.export(screenGuis: { any }): { any }
 	local out = {}
+	local before = UiExport.before
 	for _, gui in screenGuis do
+		if before then
+			before(gui)
+		end
 		table.insert(out, exportNode(gui))
 	end
 	return out

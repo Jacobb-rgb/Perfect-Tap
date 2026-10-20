@@ -99,7 +99,8 @@
 	  least, so nobody walks slower after the update.
 	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
 	  Enchants.Slots: at least EnchantConfig.MaxSlots strings; a slot keeps an
-	  owned id only once, and only when the blaster level has opened it.
+	  owned id only once (also in a slot the blaster level hasn't opened yet:
+	  the readers count open slots only, so a rebirth never unslots).
 	  Slots past MaxSlots (a newer build's, up to MAX_ENCHANT_SLOTS_KEPT)
 	  stay when "" or an owned id not slotted before (readers skip them).
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
@@ -126,7 +127,11 @@
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
 	  equipped ignores them), anything else nil.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
-	  WheelOres are whole numbers >= 0.
+	  WheelOres / StarsEarned / BestBlaster / RunForged are whole numbers >= 0.
+	- Rebirth (RebirthConfig): Rebirths and Stars are whole numbers >= 0;
+	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
+	  newer build's perks and levels kept, junk and levels below 1 dropped);
+	  PlotGlow is a short id or "" (a colour this build doesn't know stays).
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
@@ -452,12 +457,13 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	if slots ~= nil and type(slots) ~= "table" then
 		report.Dropped += 1
 	end
-	local open = EnchantConfig.unlockedSlots(data.BlasterLevel)
 	local cleanSlots = {}
 	local slotted: { [string]: boolean } = {}
 	for i = 1, EnchantConfig.MaxSlots do
 		local id = if type(slots) == "table" then slots[i] else nil
-		if type(id) == "string" and id ~= "" and i <= open and owned[id] ~= nil and not slotted[id] then
+		-- (a slot the blaster level hasn't opened keeps its enchant: EnchantConfig.stats reads
+		-- open slots only, so it works again once the level opens it, e.g. after a rebirth)
+		if type(id) == "string" and id ~= "" and owned[id] ~= nil and not slotted[id] then
 			slotted[id] = true
 			cleanSlots[i] = id
 		else
@@ -652,9 +658,36 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 
 	-- the new stats
 	local stats = record(data, "Stats", report)
-	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres", "StarsEarned", "BestBlaster", "RunForged" } do
 		local v = stats[field]
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+
+	-- rebirth: whole counts, Star Shop levels by short ids (unknown perks and levels kept)
+	for _, field in { "Rebirths", "Stars" } do
+		local v = data[field]
+		if v ~= nil and not isFinite(v) then
+			report.Dropped += 1
+		end
+		data[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+	-- the Plot Glow pick: a short id (a newer build's colour kept) or "" (off)
+	if data.PlotGlow ~= nil and data.PlotGlow ~= "" and not idLike(data.PlotGlow) then
+		report.Dropped += 1
+		data.PlotGlow = ""
+	elseif data.PlotGlow == nil then
+		data.PlotGlow = ""
+	end
+	local perks = record(data, "StarPerks", report)
+	for _, id in keysOf(perks) do
+		local level = perks[id]
+		local whole = if idLike(id) and isFinite(level) and level >= 1 then wholeIn(level, 1, MAX_LEVEL_KEPT) else nil
+		if whole == nil then
+			perks[id] = nil
+			report.Dropped += 1
+		elseif whole ~= level then
+			perks[id] = whole
+		end
 	end
 end
 
