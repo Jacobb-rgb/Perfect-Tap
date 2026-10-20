@@ -50,6 +50,8 @@ local Meadow = {}
 Meadow.Area = { Min = Vector3.new(-168, 0, -118), Max = Vector3.new(168, 0, 148) }
 Meadow.VaultClear = { Min = Vector3.new(-28, 0, 72), Max = Vector3.new(28, 0, 156) }
 Meadow.SpawnClear = 12
+-- the bridge garden under and behind THE GREAT FORGE's roof (Plaza/BridgeGarden, owner 2026-10-20)
+Meadow.BridgeGarden = { Min = Vector3.new(-22, 0, -114), Max = Vector3.new(22, 0, -38) }
 -- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
 Meadow.Max = { Tufts = 100, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
@@ -187,7 +189,7 @@ end
 -- Allowed for the meadow at all: in the town area, off the plots and their
 -- yards, the keep-outs, the spawn and the vault approach.
 function Meadow.allowed(p: Vector3, r: number): boolean
-	if not inBox(p, Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) then
+	if not inBox(p, Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
 		return false
 	end
 	if Vector3.new(p.X - WorldLayout.SpawnPoint.X, 0, p.Z - WorldLayout.SpawnPoint.Z).Magnitude < Meadow.SpawnClear + r then
@@ -498,6 +500,9 @@ local function ponds(parent: Instance, index: Index, rng: Rng.Rng)
 	end
 	return m
 end
+
+-- (Plaza/BridgeGarden plants the same jungle trees)
+Meadow.jungleTree = jungleTree
 
 local function jungle(parent: Instance, map: Instance, index: Index, rng: Rng.Rng)
 	local m = Style.model("Jungle", parent)

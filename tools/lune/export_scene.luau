@@ -306,8 +306,8 @@ elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading
 	for name, guis in require("./lib/loading_preview").build(Loader) do
 		uiExports[name] = guis
 	end
-elseif sceneName == "blaster_gallery" then -- the world + the blaster gallery in THE GREAT FORGE (tools/lune/lib/gallery_preview.luau)
-	require("./lib/gallery_preview").build(Loader, workspace)
+elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced by the bridge garden (tools/lune/lib/forge_bridge_preview.luau; arg 2 = A / B / C)
+	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
