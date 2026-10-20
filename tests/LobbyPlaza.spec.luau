@@ -13,6 +13,7 @@ return function(T, Loader)
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 	local Plaza = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza")
 	local Common = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.Common")
+	local StreetLampPlan = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.StreetLampPlan")
 
 	local cached: any = nil
 	local function world(): any
@@ -261,7 +262,15 @@ return function(T, Loader)
 	T.test("plaza: lanterns stand off the roads and the other packages' pieces", function()
 		local plaza = world().plaza
 		local count = 0
-		for _, group in { plaza.RoadLanterns, plaza.EntranceLanterns } do
+		-- (2026-10-20: the street lamps replace the road lanterns)
+		local groups = { plaza.EntranceLanterns }
+		for _, name in { "RoadLanterns", "StreetLamps" } do
+			local group = plaza:FindFirstChild(name)
+			if group then
+				table.insert(groups, group)
+			end
+		end
+		for _, group in groups do
 			for _, lantern in group:GetChildren() do
 				count += 1
 				-- the post/pillar foot is the lantern's first, lowest part
@@ -559,7 +568,11 @@ return function(T, Loader)
 	T.test("plaza v2: dark metal lantern pillars with glowing orange slots by the plaza", function()
 		local plaza = world().plaza
 		local pillars = 0
-		for _, group in { plaza.EntranceLanterns, plaza.RoadLanterns } do
+		local groups = { plaza.EntranceLanterns }
+		if plaza:FindFirstChild("RoadLanterns") then
+			table.insert(groups, plaza.RoadLanterns)
+		end
+		for _, group in groups do
 			for _, lantern in group:GetChildren() do
 				local slots = 0
 				for _, part in parts(lantern) do
@@ -586,7 +599,8 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.truthy(pillars >= 12, "lantern pillars along the walkways and at the entrances")
+		-- (with the street lamps on, the pillars stand at the plaza entrances only)
+		T.truthy(pillars >= (if StreetLampPlan.Enabled then 5 else 12), "lantern pillars along the walkways and at the entrances")
 		-- the south entrance pair by the spawn glows without a light (the dark walkway stays dark)
 		for _, lantern in plaza.EntranceLanterns:GetChildren() do
 			if lantern.PrimaryPart.CFrame.Position.Z > 36 then
@@ -883,7 +897,7 @@ return function(T, Loader)
 		T.truthy(#cases >= 8, "the SHOP and UPGRADES porch showcases")
 		local lanterns = {}
 		for _, d in w.plaza:GetDescendants() do
-			if d:IsA("Model") and d.Name == "Lantern" then
+			if d:IsA("Model") and (d.Name == "Lantern" or d.Name == "StreetLamp") then
 				table.insert(lanterns, d)
 			end
 		end
@@ -902,6 +916,99 @@ return function(T, Loader)
 				T.truthy(gap >= 2, `{lantern:GetFullName()} stands {gap} studs from {case.name}`)
 			end
 		end
+	end)
+
+	T.test("plaza: every road and path is a neon walkway (owner 2026-10-20)", function()
+		local roads = world().plaza.Roads
+		for _, strip in Common.strips() do
+			T.truthy(strip.Neon, strip.Id .. " is paved as a neon walkway")
+			local model = roads:FindFirstChild(strip.Id)
+			T.truthy(model and model:FindFirstChild("PathBase"), strip.Id .. " has its dark walkway slab")
+		end
+		-- the long roads glow along both edges
+		for _, id in { "EastPlotRoad", "WestPlotRoad", "RimRoad", "ToNextArea" } do
+			local glows = 0
+			for _, part in parts(roads:FindFirstChild(id)) do
+				if part.Name == "EdgeGlow" then
+					glows += 1
+				end
+			end
+			T.truthy(glows >= 2, id .. " has orange neon edge strips")
+		end
+		-- no kerbs and studs left over from the cobble roads
+		local edges = world().plaza:FindFirstChild("RoadEdges")
+		T.eq(if edges then #parts(edges) else 0, 0, "no kerbs or road studs")
+		-- slabs never stack where two walkways meet (one wins the junction)
+		local function slab(id: string): any
+			return roads:FindFirstChild(id):FindFirstChild("PathBase")
+		end
+		for _, pair in { { "EastSpur", "EastPlotRoad" }, { "ForgePathWest", "RimRoad" }, { "MineLane", "WestPlotRoad" } } do
+			local alo, ahi = bounds(slab(pair[1]))
+			local blo, bhi = bounds(slab(pair[2]))
+			local ox = math.min(ahi.X, bhi.X) - math.max(alo.X, blo.X)
+			local oz = math.min(ahi.Z, bhi.Z) - math.max(alo.Z, blo.Z)
+			T.truthy(ox <= 0.3 or oz <= 0.3, `{pair[1]} ends at the edge of {pair[2]}`)
+		end
+	end)
+
+	T.test("plaza: street lamps along every road (the owner's lamp picture)", function()
+		if not StreetLampPlan.Enabled then
+			T.falsy(world().plaza:FindFirstChild("StreetLamps"), "no street lamps while they are off")
+			return
+		end
+		local lamps = world().plaza:FindFirstChild("StreetLamps")
+		T.truthy(lamps, "the street lamps are built")
+		local list = lamps:GetChildren()
+		T.truthy(#list >= 30, `lamps all over the map ({#list})`)
+		T.le(lamps:GetAttribute("Skipped"), 3, "few planned lamps left out")
+		local perRoad: { [string]: number } = {}
+		local lit = 0
+		local feet = {}
+		for _, lamp in list do
+			local road = lamp:GetAttribute("Road")
+			perRoad[road] = (perRoad[road] or 0) + 1
+			T.le(#parts(lamp), 14, lamp:GetFullName() .. " stays light (phones)")
+			local foot = lamp:FindFirstChild("Foot")
+			local p = Vector3.new(foot.CFrame.Position.X, 0, foot.CFrame.Position.Z)
+			for _, other in feet do
+				T.truthy((other - p).Magnitude >= StreetLampPlan.MinGap - 0.01, `lamps at {p} and {other} stand apart`)
+			end
+			table.insert(feet, p)
+			for _, strip in Common.strips() do
+				T.truthy(LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, p) > 0.3, `lamp foot at {p} stands off {strip.Id}`)
+			end
+			-- the glowing head hangs over its road, above head height
+			local glow = lamp.PrimaryPart
+			T.eq(glow.Name, "LampGlow", "the warm panel under the head")
+			T.eq(glow.Material, NEON, "the panel glows")
+			T.truthy(glow.Color.R > 0.9 and glow.Color.B < 0.5, "a warm panel, not white")
+			local spec = StreetLampPlan.Sizes[lamp:GetAttribute("Size")]
+			T.truthy(glow.CFrame.Position.Y > spec.Height - 0.5, "the head sits at the top of the arm")
+			T.truthy(glow.CFrame.Position.Y > 5.5, "above head height")
+			local strip = Common.strip(road)
+			local headAt = Vector3.new(glow.CFrame.Position.X, 0, glow.CFrame.Position.Z)
+			T.lt(LobbyLayout.distanceToStrip(strip.From, strip.To, strip.Width, headAt), 0.01, `{lamp:GetFullName()} hangs over {road}`)
+			local slot = lamp:FindFirstChild("PoleSlot")
+			T.truthy(slot and slot.Material == NEON, "an orange neon slot up the pole")
+			local light = glow:FindFirstChildWhichIsA("PointLight")
+			if light then
+				lit += 1
+				T.falsy(light.Shadows, "no shadows (phones)")
+			end
+		end
+		-- (every other lamp of each road, starting with the first: a one-lamp lane is lit)
+		T.truthy(lit >= #list * 0.4 and lit <= #list * 0.6, `every other lamp lights the road ({lit} of {#list})`)
+		for road in StreetLampPlan.Roads do
+			T.truthy((perRoad[road] or 0) >= 1, road .. " has street lamps")
+		end
+		T.truthy((perRoad.EastPlotRoad or 0) >= 6 and (perRoad.WestPlotRoad or 0) >= 6, "the plot roads are lit end to end")
+		-- they replace the road lanterns, the belt lantern posts and the west street's posts
+		T.falsy(world().plaza:FindFirstChild("RoadLanterns"), "no road lanterns besides the street lamps")
+		local flora = world().map.Emberfall.Lobby.Flora
+		local belt = flora:FindFirstChild("TownBelt", true)
+		T.falsy(belt and belt:FindFirstChild("Lantern"), "no belt lantern posts")
+		local street = flora:FindFirstChild("WestStreet", true)
+		T.falsy(street and street:FindFirstChild("LampPost", true), "no west street posts")
 	end)
 
 	T.test("plaza: parts and lights inside the package budget", function()
