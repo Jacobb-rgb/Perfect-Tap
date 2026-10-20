@@ -97,27 +97,42 @@ WorldLayout.Quarry = {
 	RampWidth = 16,
 }
 
--- Enclosed caves: rooms with walls and a ceiling.
+-- Enclosed caves: the mine floors 2-3 (src/server/World/Mine, MineFloors.Placement) and the
+-- VIP grotto. Boxes are the floors' inner spaces (Railway hangs the Mine Lifts' cables to Max.Y).
 WorldLayout.Caves = {
 	EmberCaves = {
-		Min = Vector3.new(-64, -12, -352),
-		Max = Vector3.new(64, 22, -244),
+		Min = Vector3.new(-68, -12, -360),
+		Max = Vector3.new(68, 22, -240), -- the ForgeMountain massif rests on the roof at y 22
 		Entrance = { Position = Vector3.new(0, -12, -240), Width = 18, Height = 16 },
-		LavaPools = 5,
+		LavaPools = 0,
 	},
 	DeepHollow = {
-		Min = Vector3.new(-74, -40, -488),
-		Max = Vector3.new(74, -2, -380),
-		Entrance = { Position = Vector3.new(0, -12, -356), Width = 18, Height = 16 },
-		RampFrom = Vector3.new(0, -12, -352),
-		RampTo = Vector3.new(0, -40, -392),
-		CrystalClusters = 9,
+		Min = Vector3.new(-68, -40, -502),
+		Max = Vector3.new(68, 0, -386),
+		Entrance = { Position = Vector3.new(0, -12, -360), Width = 22, Height = 16 },
+		RampFrom = Vector3.new(0, -12, -354),
+		RampTo = Vector3.new(0, -40, -394),
+		CrystalClusters = 0,
 	},
 	Grotto = {
 		Min = Vector3.new(88, -12, -214),
 		Max = Vector3.new(146, 10, -150),
 		Entrance = { Position = Vector3.new(80, -12, -182), Width = 12, Height = 13 },
 		CrystalClusters = 5,
+	},
+	-- the elevator-only floors (MineFloors.Placement 4 and 5): the palace hall under its
+	-- ceiling, and the Heartstone Core's islands up to the floating rock the lift hangs from
+	SunkenPalace = {
+		Min = Vector3.new(-66, -220, -856),
+		Max = Vector3.new(66, -176, -744),
+		Entrance = { Position = Vector3.new(0, -220, -748), Width = 18, Height = 16 },
+		CrystalClusters = 0,
+	},
+	HeartstoneCore = {
+		Min = Vector3.new(-80, -431, -870),
+		Max = Vector3.new(80, -370, -730),
+		Entrance = { Position = Vector3.new(0, -400, -740), Width = 18, Height = 16 },
+		CrystalClusters = 0,
 	},
 }
 
@@ -152,8 +167,8 @@ WorldLayout.Zones = {
 	{
 		Id = "Quarry",
 		Name = "Greystone Quarry",
-		Min = Vector3.new(-72, -14, -238),
-		Max = Vector3.new(72, 60, -122),
+		Min = Vector3.new(-72, -14, -240),
+		Max = Vector3.new(72, 60, -120),
 		Lighting = "Quarry",
 		FloorY = -12,
 		Ores = {
@@ -168,7 +183,7 @@ WorldLayout.Zones = {
 			Frostbite = 3,
 			Bronze = 0.7,
 		},
-		NodeCount = 26,
+		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
 		MinBlaster = 1,
 		RockHealth = 24,
 		Priority = 1,
@@ -176,8 +191,8 @@ WorldLayout.Zones = {
 	{
 		Id = "EmberCaves",
 		Name = "Ember Caves",
-		Min = Vector3.new(-66, -14, -354),
-		Max = Vector3.new(66, 24, -238),
+		Min = Vector3.new(-70, -14, -362),
+		Max = Vector3.new(70, 24, -240),
 		Lighting = "EmberCaves",
 		FloorY = -12,
 		Ores = {
@@ -199,7 +214,7 @@ WorldLayout.Zones = {
 			DragonEgg = 0.5,
 			Diamond = 0.2,
 		},
-		NodeCount = 24,
+		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
 		MinBlaster = 3,
 		RockHealth = 120,
 		Priority = 2,
@@ -207,9 +222,9 @@ WorldLayout.Zones = {
 	{
 		Id = "DeepHollow",
 		Name = "Deep Hollow",
-		Min = Vector3.new(-76, -42, -490),
-		Max = Vector3.new(76, 0, -354),
-		Lighting = "DeepHollow",
+		Min = Vector3.new(-70, -42, -504),
+		Max = Vector3.new(70, 2, -362),
+		Lighting = "Lagoon", -- mine floor 3, the crystal lagoon
 		FloorY = -40,
 		Ores = {
 			Cobalt = 12,
@@ -239,7 +254,7 @@ WorldLayout.Zones = {
 			CelestialCore = 0.02,
 			Heartstone = 0.012,
 		},
-		NodeCount = 26,
+		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
 		MinBlaster = 5,
 		RockHealth = 700,
 		Priority = 3,
@@ -269,6 +284,33 @@ WorldLayout.Zones = {
 		VipOnly = true,
 		Priority = 4,
 	},
+	-- the elevator-only floors deep below (MineFloors.Placement 4 and 5)
+	{
+		Id = "SunkenPalace",
+		Name = "Sunken Palace",
+		Min = Vector3.new(-70, -224, -860),
+		Max = Vector3.new(70, -172, -740),
+		Lighting = "Palace",
+		FloorY = -220,
+		Ores = {},
+		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
+		MinBlaster = 7,
+		RockHealth = 700,
+		Priority = 5,
+	},
+	{
+		Id = "HeartstoneCore",
+		Name = "Heartstone Core",
+		Min = Vector3.new(-90, -460, -880),
+		Max = Vector3.new(90, -310, -720),
+		Lighting = "Core",
+		FloorY = -400,
+		Ores = {},
+		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
+		MinBlaster = 9,
+		RockHealth = 700,
+		Priority = 6,
+	},
 } :: { Zone }
 
 WorldLayout.ZoneById = {} :: { [string]: Zone }
@@ -294,12 +336,14 @@ WorldLayout.OutcropSpots = {
 WorldLayout.KeepOut = {
 	{ Min = Vector3.new(-10, -50, -160), Max = Vector3.new(10, 10, -110) }, -- quarry ramp
 	{ Min = Vector3.new(-12, -50, -250), Max = Vector3.new(12, 10, -228) }, -- cave entrance
-	{ Min = Vector3.new(-12, -50, -400), Max = Vector3.new(12, 10, -344) }, -- hollow ramp
+	{ Min = Vector3.new(-12, -50, -404), Max = Vector3.new(12, 10, -346) }, -- hollow ramp
 	{ Min = Vector3.new(60, -50, -192), Max = Vector3.new(100, 10, -172) }, -- grotto door
 	-- ore trains (TrainConfig): the quarry track + Mine Station, and the two Mine Lifts
 	{ Min = Vector3.new(-74, -50, -162), Max = Vector3.new(74, 10, -141) },
-	{ Min = Vector3.new(14, -50, -266), Max = Vector3.new(30, 10, -250) },
-	{ Min = Vector3.new(8, -50, -410), Max = Vector3.new(24, 10, -394) },
+	{ Min = Vector3.new(38, -50, -268), Max = Vector3.new(54, 10, -252) }, -- EmberCaves lift (MineFloors.LiftSpots[2])
+	{ Min = Vector3.new(42, -50, -450), Max = Vector3.new(58, 10, -434) }, -- DeepHollow lift (MineFloors.LiftSpots[3])
+	{ Min = Vector3.new(18, -230, -763), Max = Vector3.new(34, -205, -747) }, -- SunkenPalace lift (MineFloors.LiftSpots[4])
+	{ Min = Vector3.new(4, -410, -783), Max = Vector3.new(20, -385, -767) }, -- HeartstoneCore lift (MineFloors.LiftSpots[5])
 }
 
 function WorldLayout.isInBox(position: Vector3, min: Vector3, max: Vector3): boolean

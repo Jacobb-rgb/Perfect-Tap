@@ -25,10 +25,13 @@ return function(T, Loader)
 		local workspace = game:GetService("Workspace")
 		local map = WorldBuilder.build(workspace)
 		local mapParts, lobbyParts = 0, 0
+		-- the mine floors count in the map budget (each also within MineKit.PartBudget,
+		-- tests/MineFloorAreas.spec.luau), not in the lobby's
+		local mine = map:FindFirstChild("MineFloors")
 		for _, d in map:GetDescendants() do
 			if d:IsA("BasePart") then
 				mapParts += 1
-				if LobbyLayout.inArea(d.CFrame.Position) then
+				if LobbyLayout.inArea(d.CFrame.Position) and not (mine and d:IsDescendantOf(mine)) then
 					lobbyParts += 1
 				end
 			end

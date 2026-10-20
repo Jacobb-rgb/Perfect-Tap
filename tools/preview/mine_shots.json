@@ -1,0 +1,266 @@
+{
+ "mine_rocks_all": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   150,
+   80
+  ],
+  "target": [
+   0,
+   0,
+   -112
+  ],
+  "fov": 50,
+  "preset": "Surface",
+  "shadowExtent": 260,
+  "maxLights": 24
+ },
+ "mine_floor1": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   15,
+   31
+  ],
+  "target": [
+   0,
+   2,
+   -3
+  ],
+  "fov": 58,
+  "preset": "Quarry",
+  "shadowExtent": 70
+ },
+ "mine_floor2": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   15,
+   -25
+  ],
+  "target": [
+   0,
+   2,
+   -59
+  ],
+  "fov": 58,
+  "preset": "EmberCaves",
+  "shadowExtent": 70
+ },
+ "mine_floor3": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   15,
+   -81
+  ],
+  "target": [
+   0,
+   2,
+   -115
+  ],
+  "fov": 58,
+  "preset": "Lagoon",
+  "shadowExtent": 70
+ },
+ "mine_floor4": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   15,
+   -137
+  ],
+  "target": [
+   0,
+   2,
+   -171
+  ],
+  "fov": 58,
+  "preset": "Palace",
+  "shadowExtent": 70
+ },
+ "mine_floor5": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   15,
+   -193
+  ],
+  "target": [
+   0,
+   2,
+   -227
+  ],
+  "fov": 58,
+  "preset": "Core",
+  "shadowExtent": 70
+ },
+ "mine_giants": {
+  "scene": "mine_rocks",
+  "position": [
+   320,
+   34,
+   78
+  ],
+  "target": [
+   320,
+   7,
+   0
+  ],
+  "fov": 55,
+  "preset": "Palace",
+  "shadowExtent": 160,
+  "maxLights": 10
+ },
+ "mine_giant3": {
+  "scene": "mine_rocks",
+  "position": [
+   328,
+   12,
+   30
+  ],
+  "target": [
+   322,
+   8,
+   -2
+  ],
+  "fov": 55,
+  "preset": "Lagoon",
+  "shadowExtent": 60,
+  "maxLights": 6
+ },
+ "mine_giant5": {
+  "scene": "mine_rocks",
+  "position": [
+   388,
+   12,
+   30
+  ],
+  "target": [
+   382,
+   8,
+   -2
+  ],
+  "fov": 55,
+  "preset": "Core",
+  "shadowExtent": 60,
+  "maxLights": 6
+ },
+ "mine_break": {
+  "scene": "mine_rocks",
+  "position": [
+   0,
+   13,
+   96
+  ],
+  "target": [
+   0,
+   2.5,
+   58
+  ],
+  "fov": 58,
+  "preset": "EmberCaves",
+  "shadowExtent": 70
+ },
+ "mine_break_close": {
+  "scene": "mine_rocks",
+  "position": [
+   16,
+   9,
+   80
+  ],
+  "target": [
+   16,
+   2.5,
+   58
+  ],
+  "fov": 55,
+  "preset": "EmberCaves",
+  "shadowExtent": 50
+ },
+ "showcase_front": {
+  "scene": "mine_showcase",
+  "position": [
+   0,
+   36,
+   46
+  ],
+  "target": [
+   0,
+   20,
+   -30
+  ],
+  "fov": 48,
+  "preset": "Palace",
+  "shadowExtent": 120,
+  "maxLights": 48
+ },
+ "showcase_top": {
+  "scene": "mine_showcase",
+  "position": [
+   0,
+   44,
+   -20
+  ],
+  "target": [
+   0,
+   34,
+   -52
+  ],
+  "fov": 50,
+  "preset": "Palace",
+  "shadowExtent": 60,
+  "maxLights": 32
+ },
+ "showcase_low": {
+  "scene": "mine_showcase",
+  "position": [
+   -6,
+   17,
+   24
+  ],
+  "target": [
+   0,
+   11,
+   -14
+  ],
+  "fov": 50,
+  "preset": "Palace",
+  "shadowExtent": 60,
+  "maxLights": 32
+ },
+ "showcase_mid": {
+  "scene": "mine_showcase",
+  "position": [
+   0,
+   30,
+   4
+  ],
+  "target": [
+   0,
+   22,
+   -30
+  ],
+  "fov": 50,
+  "preset": "Palace",
+  "shadowExtent": 60,
+  "maxLights": 32
+ },
+ "mine_floor1_close": {
+  "scene": "mine_rocks",
+  "position": [
+   -14,
+   8,
+   15
+  ],
+  "target": [
+   -14,
+   2.8,
+   -3
+  ],
+  "fov": 50,
+  "preset": "Quarry",
+  "shadowExtent": 40
+ }
+}

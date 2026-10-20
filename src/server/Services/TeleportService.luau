@@ -5,8 +5,12 @@
 	  "Base"      the front of your own plot (PlotService.homeCFrame)
 	  "Lobby"     the town spawn (the TownSpawn SpawnLocation, else WorldLayout.SpawnPoint)
 	  "Vault"     in front of the Blaster Vault's steps (Lobby/Vault: Vault.origin())
-	  "Elevator"  in front of the lowest mine elevator stop (Models tagged
-	              TeleportConfig.ElevatorTag); refused while the world has none
+	  "Elevator"  in front of the mine elevator stop (Models tagged
+	              TeleportConfig.ElevatorTag) of the mine floor you are on
+	              (WorldLayout zone -> MineFloors floor), else floor 1's stop,
+	              else the lowest one; refused while the world has none. The
+	              HUD's elevator button (ElevatorController) sends this; the
+	              floor picker opens from the stop's prompt (owner 2026-10-18)
 	Unknown names are ignored. Every other request gets a TeleportResult
 	{ Destination, Ok, Reason? } (Reason = a TeleportConfig.Reasons code):
 	  Cooldown  within ServerCooldown of your last teleport
@@ -30,6 +34,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TeleportConfig = require(Shared.Config.TeleportConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
+local MineFloors = require(Shared.Config.MineFloors)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Vault = require(script.Parent.Parent.World.Lobby.Vault)
@@ -93,18 +98,49 @@ function TeleportService.isCleaning(player: Player): boolean
 	return CleaningService.isCleaning(player)
 end
 
--- The lowest mine elevator stop in the world (its Base plate), if any.
-function TeleportService.elevatorStop(): BasePart?
+--[[
+	Picks a stop's Base plate from `stops`: the stop of `floor` when there is
+	one, else floor 1's, else the lowest floor's (nil = no usable stop).
+]]
+function TeleportService.pickStop(stops: { Instance }, floor: number?): BasePart?
 	local best: BasePart? = nil
 	local bestFloor = math.huge
-	for _, stop in CollectionService:GetTagged(TeleportConfig.ElevatorTag) do
+	local wanted: BasePart? = nil
+	local first: BasePart? = nil
+	for _, stop in stops do
 		local base = stop:FindFirstChild("Base")
-		local floor = tonumber(stop:GetAttribute("Floor")) or math.huge
-		if base and base:IsA("BasePart") and stop:IsDescendantOf(Workspace) and floor < bestFloor then
-			best, bestFloor = base, floor
+		local index = tonumber(stop:GetAttribute("Floor")) or math.huge
+		if base and base:IsA("BasePart") and stop.Parent then
+			if floor and index == floor then
+				wanted = base
+			end
+			if index == 1 then
+				first = base
+			end
+			if index < bestFloor then
+				best, bestFloor = base, index
+			end
 		end
 	end
-	return best
+	return wanted or first or best
+end
+
+-- The elevator stop for a floor (see pickStop; no floor = floor 1's or the lowest), if any.
+function TeleportService.elevatorStop(floor: number?): BasePart?
+	local stops: { Instance } = {}
+	for _, stop in CollectionService:GetTagged(TeleportConfig.ElevatorTag) do
+		if stop:IsDescendantOf(Workspace) then
+			table.insert(stops, stop)
+		end
+	end
+	return TeleportService.pickStop(stops, floor)
+end
+
+-- The mine floor whose area holds `position` (WorldLayout zone -> MineFloors), if any.
+function TeleportService.floorAt(position: Vector3): number?
+	local zone = WorldLayout.zoneAt(position)
+	local floor = zone and MineFloors.ByZone[zone.Id]
+	return if floor then floor.Index else nil
 end
 
 -- Where the town spawn is.
@@ -134,7 +170,8 @@ function TeleportService.targetOf(player: Player, destination: Destination): (CF
 		local front = TeleportService.VaultPodiumFront * Vault.Scale + TeleportConfig.VaultFront
 		return standAt((origin * CFrame.new(0, 0, front)).Position, origin.Position, TeleportConfig.Spread), nil
 	elseif destination == "Elevator" then
-		local base = TeleportService.elevatorStop()
+		local root = Guard.rootPart(player)
+		local base = TeleportService.elevatorStop(if root then TeleportService.floorAt(root.CFrame.Position) else nil)
 		if not base then
 			return nil, "NotHere"
 		end
