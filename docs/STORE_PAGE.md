@@ -20,7 +20,7 @@ from the description.
 | Claim on the page | Build step (see `PLAN.md`) | Works in the live build? |
 |---|---|---|
 | Blast ore rocks with the laser blaster, physical chunks, carry them home | b, V2 | [ ] TODO |
-| Cleaning Station: chisel, scrape, polish, grades up to Flawless | c | [ ] TODO |
+| Cleaning Station: spray-wash the dirt off, grades up to Flawless | c | [ ] TODO |
 | 36 ores to discover | V2 | [ ] TODO |
 | Podiums that earn coins every second | V2 | [ ] TODO |
 | Your own ore train and the Ore Pen | V2 | [ ] TODO |
@@ -122,7 +122,7 @@ The Heartstone, the heart of Terra, has shattered into glowing ore. Join the For
 
 ⛏️ HOW IT WORKS
 • Blast ore rocks with your laser blaster and carry the chunks home
-• Clean each ore by hand: chisel, scrape, polish. Can you get Flawless?
+• Clean each ore by hand: blast the dirt off with your spray wand. Can you get Flawless?
 • Show your best ores on podiums: they earn coins every second
 • Ride your own ore train, fill the Ore Pen, build machines, belts and power
 • Smelt ingots and forge blasters up to level 10, or buy the next one in the Blaster Vault
@@ -151,9 +151,8 @@ on-screen hints.
 | Throw (hold to charge, release) | Q | "Throw" button | R1 |
 | Use the Cleaning Station | F | Tap the prompt | Y |
 | Take the raw ore back out of the station | G | Tap "Take Ore Back" | B |
-| Cleaning: chisel / scrape / polish | Hold left mouse button and drag | Drag with your finger | Left stick moves the tool, hold A (or R2) |
-| Polish without circling (accessibility, max 75% polish) | "Easy polish" toggle or R | "Easy polish" button | Y |
-| Leave cleaning (press twice once a cut is done) / collect the result | Leave button or Backspace / E or Enter | Leave / Collect buttons | B / A |
+| Cleaning: spray the dirt off | Hold left mouse button and drag | Hold your finger on the dirt and drag | Left stick moves the ring, hold A (or R2) |
+| Leave cleaning (press twice once some dirt is off) / collect the result | Leave button or Backspace / E or Enter | Leave / Collect buttons | B / A |
 | Other machines, build mode | TODO (step d) | TODO | TODO |
 
 Sources in code: `src/client/Controllers/InteractController.luau`, `CleaningController.luau`,
@@ -182,7 +181,7 @@ Srdce světa Terra se roztříštilo na zářící rudu. Přidej se ke strážc�
 
 ⛏️ JAK SE HRAJE
 • Rozstřílej skály s rudou laserovým blasterem a odnes kusy domů
-• Každou rudu ručně vyčisti: otesej dlátem, oškrábej a vylešti. Zvládneš Flawless?
+• Každou rudu ručně vyčisti: smyj z ní hlínu tlakovou vodou. Zvládneš Flawless?
 • Vystav nejlepší rudy na podstavce: každou sekundu ti vydělávají
 • Jezdi vlastním vlakem s rudou, plň Ore Pen, stav stroje, pásy a elektřinu
 • Taveninu proměň v ingoty a ukovej blastery až do úrovně 10, nebo si další kup v Blaster Vaultu
@@ -228,7 +227,7 @@ That is TERRA FORGE's loop: gather and process ore, sell it, upgrade, and grow y
 
 ### Keywords
 
-Already in the descriptions: mining, ore, blaster, crafting, tycoon, clean, polish, smelt, ingots, forge, train, podiums, factory, machines, belts.
+Already in the descriptions: mining, ore, blaster, crafting, tycoon, clean, spray, wash, smelt, ingots, forge, train, podiums, factory, machines, belts.
 
 **Search ads** (Ads Manager → new campaign with the **Visits** objective → ad set placement **Search Experience**;
 up to **10 keywords per ad set**, and an ad only shows when the search exactly matches a keyword).
@@ -237,7 +236,7 @@ Choose from the suggestions Roblox shows while you type; if a word isn't suggest
 | Ad set | Keywords (English) |
 |---|---|
 | Core | mining, mine, ore, blaster, forge, blacksmith, crafting, smelting, mining tycoon, mining game |
-| Feel | satisfying, cleaning, polishing, crystals, factory, conveyor, furnace, train, podium, cozy |
+| Feel | satisfying, cleaning, washing, crystals, factory, conveyor, furnace, train, podium, cozy |
 
 | Sada | Klíčová slova (čeština) |
 |---|---|
@@ -314,12 +313,12 @@ coins raining, dollar signs, gift boxes, arrows, red circles, shocked face, bran
 ```
 
 **Icon A – "Flawless Ore" (recommended)**
-A single cracked ore chunk with a shining gold core, held in the Cleaning Station's metal vise (as in
-`cleaning_reveal.jpg`). It shows the clean-it-yourself idea in one glance.
+A single ore chunk half washed out of a dirt clump, its gold glowing where the water hit, held in the Cleaning
+Station's metal vise (as in `spray_cleaning/reveal.jpg`). It shows the clean-it-yourself idea in one glance.
 
 ```text
 Square game icon, 1:1, 512x512, low-poly 3D render. One chunky ore rock split open in the center, its core
-glowing bright gold with soft bloom and light rays, clean chisel cuts glowing along its edges, clamped in a dark
+glowing bright gold with soft bloom and light rays, the last wet clumps of dirt sliding off its edges, clamped in a dark
 metal vise on a wooden workbench. A few golden sparkles float upward. Warm forge-orange to deep brown radial background, strong rim light,
 flat-shaded faces, chunky blocky shapes, saturated warm colors, bold silhouette that still reads at 150x150,
 subject fills about 70% of the frame, centered.
@@ -361,19 +360,19 @@ distorted hands, cluttered composition, important details in the bottom 15 perce
 ```
 
 **1 – "Flawless!" (the Cleaning Station reveal)**
-Moment: the last polish stroke and the reveal. Real reference: `docs/screenshots/cleaning_reveal.jpg` (Solarite).
+Moment: the last dirt washes off and the reveal. Real reference: `docs/screenshots/spray_cleaning/reveal.jpg` (Gold).
 Use a Legendary or Mythic ore: the light rays only appear for those. Paste the real FLAWLESS result card into the
 empty middle area, with the word FLAWLESS well above the bottom 15% (the player count can cover the bottom).
 
 ```text
 16:9 widescreen game screenshot, 1920x1080, low-poly 3D, chunky blocky shapes, flat-shaded faces, warm forge glow,
 soft bloom, saturated colors. Close view over a wooden workbench with a dark metal vise holding a large faceted ore
-chunk that has just been cleaned and polished: its golden core blazes with light rays and bloom, clean glowing cut
-lines around its edges. Tools hang on the back wall: a chisel, a brush, a hammer. Warm amber workshop light, softly
-blurred background. Keep the center below the ore calm and empty for an in-game result card.
+chunk that has just been washed clean: its golden crystals blaze with light rays and bloom, a few water droplets in
+the air, a yellow spray wand at the side. Tools hang on the back wall: a brush, a hammer. Warm amber workshop light,
+sharp detail everywhere. Keep the center below the ore calm and empty for an in-game result card.
 ```
 
-Alt text: "A polished golden Solarite ore glows on the Cleaning Station after a Flawless clean."
+Alt text: "A golden ore glows on the Cleaning Station after a Flawless spray-wash."
 
 **2 – "First Strike" (mining in Greystone Quarry)**
 Moment: a node breaking in its last crack stage while a chunk pops out. A node drops one chunk per crack stage, so
@@ -447,7 +446,7 @@ public (private games can't have a video preview). TODO: confirm the limit in th
 | 0:00–0:03 | Slow push over Emberfall at sunset toward the glowing Great Forge | – | Music starts soft |
 | 0:03–0:07 | Quarry: pickaxe hits, the node cracks in 3 stages, chunks pop out | "Mine it" | Rock hits on the beat |
 | 0:07–0:10 | Player grabs chunks, the stack grows in their arms, a charged throw lands next to the Cleaning Station | – | Thud |
-| 0:10–0:17 | Cleaning: chisel along the glowing line ("Great cut!"), dirt patches pop off ("Spotless!"), polish circles ("Gleaming!"), FLAWLESS card | "Clean it by hand" | Scrape and polish sounds, reveal chime |
+| 0:10–0:17 | Cleaning: the spray wand blasts the dirt off, "% CLEAN" fills, the ore rises and spins ("Sparkling!"), FLAWLESS card | "Clean it by hand" | Water hiss, dirt pops, reveal chime |
 | 0:17–0:21 | Furnace glow, an ingot comes out, anvil hammering, the helm appears; quick shot of the conveyor line (TODO after step d) | "Forge it" | Clangs |
 | 0:21–0:24 | Fast cuts: Ember Caves lava glow, Deep Hollow crystals, a glowing Heartstone node | – | Music peaks |
 | 0:24–0:27 | Logo end card over the Great Forge | TERRA FORGE | Music ends |
@@ -534,13 +533,13 @@ Díky, že hrajete a hlásíte chyby! – TODO název studia/komunity
 
 ```text
 Your ore is dirty. Fix that. ⛏️
-Chisel, scrape and polish every chunk by hand in TERRA FORGE, then smelt it and forge it into gear.
+Spray the dirt off every chunk by hand in TERRA FORGE, then smelt it and forge it into gear.
 Now on Roblox. Link: TODO (use a Roblox share link so you can track visits)
 ```
 
 ```text
 Tvoje ruda je špinavá. Tak s tím něco udělej. ⛏️
-V TERRA FORGE každý kus ručně otešeš dlátem, oškrábeš a vyleštíš, pak ho roztavíš a ukuješ z něj výbavu.
+V TERRA FORGE z každého kusu ručně smyješ hlínu tlakovou vodou, pak ho roztavíš a ukuješ z něj výbavu.
 Nově na Robloxu. Odkaz: TODO (použij Roblox share link, ať vidíš, kolik návštěv přinese)
 ```
 

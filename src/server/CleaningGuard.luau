@@ -1,32 +1,33 @@
 --[[
 	CleaningGuard: keeps scripted cleaning from turning every dirty ore
 	Flawless (security audit #4, owner's YES 2026-10-20). CleaningService runs
-	it on every valid submission, after CleaningScoring.
+	it on every valid spray submission, after SprayScoring.
 
 	- HARD signal (enforced): synthetic timestamps. The real client stamps
 	  every sample with os.clock() on its own frames, so two intervals in a
-	  row are never equal to the microsecond, let alone RunLength in a row. A
-	  script that computes its timestamps (t += step) does exactly that. Such
-	  a run keeps its grade up to Pristine: FLAWLESS needs real hands. Nothing
-	  else changes (no rejection), so even a false positive costs a little.
-	- SOFT signals (logged only while SoftEnforce is false): a perfectly
-	  even pointer speed along a cut, or a perfectly even polish rotation,
-	  from a mouse or touch (a gamepad stick can move the cursor evenly, so
-	  it never counts). One warn line per player every LogEvery seconds with
-	  the counts, so the owner can look at real numbers before enforcing.
+	  row are never equal to the microsecond, let alone RunLength in a row
+	  (or EqualShare of them all). A script that computes its timestamps
+	  (t += step) does exactly that. Such a run keeps its grade up to
+	  Pristine: FLAWLESS needs real hands. Nothing else changes (no
+	  rejection), so even a false positive costs a little.
+	- SOFT signal (logged only while SoftEnforce is false): a perfectly even
+	  nozzle speed over all the strokes, from a mouse or touch (a gamepad
+	  stick can move the cursor evenly, so it never counts). One warn line
+	  per player every LogEvery seconds with the counts, so the owner can
+	  look at real numbers before enforcing.
 
 	Pure apart from the per-player log counters: check() reads only the
-	submission (the shapes of CleaningScoring's header).
+	submission (the shape in SprayScoring's header).
 ]]
 
 local CleaningGuard = {}
 
 CleaningGuard.Config = {
 	RunLength = 25, -- consecutive near-equal sample intervals that only computed timestamps give
+	EqualShare = 0.5, -- or this share of all the intervals equal to the one before (many short strokes)
 	EqualStep = 1e-6, -- seconds: two intervals closer than this count as equal
-	MinSamples = 20, -- a soft signal needs at least this many samples in a stream
-	SpeedSpread = 0.02, -- soft: pointer speed's spread (median absolute deviation / median) below this is inhumanly even
-	PolishSpread = 0.02, -- soft: polish angular speed's spread below this
+	MinSamples = 20, -- a signal needs at least this many samples
+	SpeedSpread = 0.02, -- soft: nozzle speed's spread (median absolute deviation / median) below this is inhumanly even
 	HardEnforce = true, -- synthetic timestamps: Flawless becomes Pristine
 	SoftEnforce = false, -- soft signals: logged only (owner: enforce once real logs show no false positives)
 	LogEvery = 60, -- seconds between two log lines per player
@@ -35,28 +36,30 @@ CleaningGuard.Config = {
 
 export type Verdict = {
 	Synthetic: boolean, -- the hard signal
-	Soft: { string }, -- names of the soft signals that fired ("Speed", "Polish")
+	Soft: { string }, -- names of the soft signals that fired ("Speed")
 }
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n > -math.huge and n < math.huge
 end
 
--- The longest run of consecutive near-equal intervals in a list of timestamps.
-local function longestEqualRun(times: { number }): number
-	local best, run = 0, 0
+-- The longest run of consecutive near-equal intervals in a list of timestamps,
+-- and how many intervals equal the one before.
+local function longestEqualRun(times: { number }): (number, number)
+	local best, run, equal = 0, 0, 0
 	local previous: number? = nil
 	for i = 2, #times do
 		local dt = times[i] - times[i - 1]
 		if previous and dt > 0 and math.abs(dt - previous) < CleaningGuard.Config.EqualStep then
 			run += 1
+			equal += 1
 			best = math.max(best, run)
 		else
 			run = 0
 		end
 		previous = dt
 	end
-	return best
+	return best, equal
 end
 
 local function median(values: { number }): number
@@ -100,7 +103,7 @@ local function column(flat: any, stride: number, offset: number): { number }?
 	return out
 end
 
--- The pointer speeds between consecutive (u, v, t) samples.
+-- The nozzle speeds between consecutive (u, v, t) samples.
 local function speeds(flat: any): { number }
 	local out = {}
 	if type(flat) ~= "table" then
@@ -116,69 +119,36 @@ local function speeds(flat: any): { number }
 	return out
 end
 
--- The polish angular speeds between consecutive (t, angle) samples.
-local function turnRates(flat: any): { number }
-	local out = {}
-	if type(flat) ~= "table" then
-		return out
-	end
-	for i = 3, #flat - 1, 2 do
-		local t0, a0, t1, a1 = flat[i - 2], flat[i - 1], flat[i], flat[i + 1]
-		if finite(t0) and finite(a0) and finite(t1) and finite(a1) and t1 > t0 then
-			local d = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
-			table.insert(out, math.abs(d) / (t1 - t0))
-		end
-	end
-	return out
-end
-
 -- What the submission's timing says (see the header).
 function CleaningGuard.check(submission: any): Verdict
 	local verdict: Verdict = { Synthetic = false, Soft = {} }
-	if type(submission) ~= "table" then
+	if type(submission) ~= "table" or type(submission.Strokes) ~= "table" then
 		return verdict
 	end
 	local cfg = CleaningGuard.Config
-	local streams: { { number } } = {}
-	local cuts = if type(submission.Cuts) == "table" then submission.Cuts else {}
-	for _, cut in cuts do
-		local times = column(type(cut) == "table" and cut.Samples or nil, 3, 3)
-		if times then
-			table.insert(streams, times)
+	-- every stroke's timestamps in order, as one stream (the gaps between strokes break runs)
+	local times: { number } = {}
+	for _, stroke in submission.Strokes do
+		local stamps = column(stroke, 3, 3)
+		if stamps then
+			table.move(stamps, 1, #stamps, #times + 1, times)
 		end
 	end
-	local scrape = column(type(submission.Scrape) == "table" and submission.Scrape.Samples or nil, 3, 3)
-	if scrape then
-		table.insert(streams, scrape)
+	local run, equal = longestEqualRun(times)
+	if run >= cfg.RunLength or (#times > cfg.MinSamples and equal >= (#times - 1) * cfg.EqualShare) then
+		verdict.Synthetic = true
 	end
-	local polishSamples = if type(submission.Polish) == "table" then submission.Polish.Samples else nil
-	local polishTimes = column(polishSamples, 2, 1)
-	if polishTimes then
-		table.insert(streams, polishTimes)
-	end
-	for _, times in streams do
-		if longestEqualRun(times) >= cfg.RunLength then
-			verdict.Synthetic = true
-			break
-		end
-	end
-	-- soft signals: never for a gamepad (its stick moves the cursor evenly)
+	-- soft signal: never for a gamepad (its stick moves the cursor evenly)
 	if submission.Input ~= "Gamepad" then
-		-- every cut's pointer speeds together (one cut alone is often too short to judge)
 		local all: { number } = {}
-		for _, cut in cuts do
-			for _, v in speeds(type(cut) == "table" and cut.Samples or nil) do
+		for _, stroke in submission.Strokes do
+			for _, v in speeds(stroke) do
 				table.insert(all, v)
 			end
 		end
 		local even = if #all >= cfg.MinSamples then spread(all) else nil
 		if even and even < cfg.SpeedSpread then
 			table.insert(verdict.Soft, "Speed")
-		end
-		local rates = turnRates(polishSamples)
-		local s = if #rates >= cfg.MinSamples then spread(rates) else nil
-		if s and s < cfg.PolishSpread then
-			table.insert(verdict.Soft, "Polish")
 		end
 	end
 	return verdict
