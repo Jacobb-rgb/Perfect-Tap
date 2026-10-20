@@ -8,7 +8,10 @@
 -- first grant, the same PurchaseId again, a failed save (NotProcessedYet, then one grant
 -- on the retry), the player not in this server; PurchaseLog next to Purchases; off-policy
 -- receipts (restricted player, id 0, unknown id) granted or kept pending and logged; the
--- Migrations sanitizing of the new fields. Players, saves, Net and Roblox are fakes.
+-- Migrations sanitizing of the new fields. Pass checks: a pass bought while its check is in
+-- flight keeps the purchase, the offline perk passes go first, a check that kept failing is
+-- asked again and tops up the offline payout (never for a pass bought this session).
+-- Players, saves, Net and Roblox are fakes.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local fs = require("@lune/fs") :: any
@@ -17,6 +20,7 @@ return function(T, Loader)
 	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
 	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
+	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
 	local Bonuses = Loader.requirePath("ServerScriptService.Server.Bonuses")
@@ -136,8 +140,12 @@ return function(T, Loader)
 		m.setFindPlayer(function(userId)
 			return if userId == w.player.UserId then w.player else nil
 		end)
+		-- Roblox's answers: w.owned[passId] = true / false, nil (error) or a function
 		m.setOwnsGamePass(function(_userId, passId)
 			local answer = w.owned[passId]
+			if type(answer) == "function" then
+				return answer()
+			end
 			if answer == nil then
 				error("HTTP 500 (fake)")
 			end
@@ -576,10 +584,10 @@ return function(T, Loader)
 
 	withWorld("Step 8: the offline payout waits for the pass checks (Night Shift)", function(w)
 		local podium = PodiumService._test
-		local known = false
+		local known: boolean? = nil
 		local oldWait = PodiumService.PassWait
 		PodiumService.PassWait = 0 -- (the fallback runs at once, after the test)
-		podium.setPassesKnown(function()
+		podium.setPerkAtJoin(function()
 			return known
 		end)
 		podium.setClock(function()
@@ -594,9 +602,11 @@ return function(T, Loader)
 			T.truthy(podium.pending(w.player) ~= nil, "not paid yet")
 			-- the checks finish (Night Shift owned): paid now, with the perk
 			w.player.attrs.Perk_OfflineExtension = true
+			known = true
 			podium.passesChecked(w.player)
 			T.falsy(podium.waiting(w.player), "done waiting")
 			T.eq(podium.pending(w.player), nil, "paid")
+			T.falsy(podium.hasTopUp(w.player), "every answer was in: nothing to top up")
 			podium.passesChecked(w.player)
 			T.eq(podium.pending(w.player), nil, "a second signal pays nothing")
 			-- checks already done at OfflineDelay: paid at once
@@ -635,6 +645,11 @@ return function(T, Loader)
 		w.owned[w.ids.EnchantHeartfire] = false
 		m.checkAll(w.player)
 		T.eq(w.data.Enchants.Owned.Starbreaker, 1, "the coin-bought one stays")
+		T.eq(w.data.Enchants.Owned.Heartfire, 1, "bought this session: a 'not owned' answer can't take it")
+		-- the next session (PlayerRemoving dropped the session's answers): the refund shows
+		m.forget(w.player)
+		m.checkAll(w.player)
+		T.eq(w.data.Enchants.Owned.Starbreaker, 1, "the coin-bought one still stays")
 		T.eq(w.data.Enchants.Owned.Heartfire, nil, "the refunded pass's enchant is taken back")
 		T.eq(w.data.Enchants.Slots[1], "", "and its slot emptied")
 		T.eq(w.data.Enchants.Passes.Heartfire, nil, "mark cleared")
@@ -646,6 +661,165 @@ return function(T, Loader)
 		local before = deepCopy(w.data.Enchants)
 		Migrations.run(w.data, NOW)
 		T.eq(w.data.Enchants.Passes.Heartfire, before.Passes.Heartfire, "the mark survives a load")
+	end)
+
+	---------------------------------------------------------------- pass check timing
+
+	withWorld("Step 8: a pass bought while its check is in flight keeps the purchase (Roblox's stale 'not owned')", function(w)
+		for _, key in { "EnchantHeartfire", "TrainExpress" } do
+			local id = w.ids[key]
+			w.owned[id] = function()
+				-- bought while Roblox works on the check, which answers from before the purchase
+				m.purchaseFinished(w.player, id, true)
+				return false
+			end
+		end
+		m.checkAll(w.player)
+		T.eq(w.data.Enchants.Owned.Heartfire, 1, "the Mythic stays")
+		T.eq(w.data.Enchants.Passes.Heartfire, true, "marked as the pass's")
+		T.eq(w.data.Enchants.Slots[1], "Heartfire", "still slotted")
+		T.truthy(MonetizationService.owns(w.player, "EnchantHeartfire"), "owned this session")
+		T.eq(w.player.attrs.Perk_TrainExpress, true, "the perk stays")
+		T.truthy(MonetizationService.owns(w.player, "TrainExpress"), "owned this session")
+		T.eq(MonetizationService.perkAtJoin(w.player, "TrainExpress"), false, "bought now: not owned at join")
+		-- a later check in this session (a cached answer) takes nothing either
+		w.owned[w.ids.EnchantHeartfire] = false
+		w.owned[w.ids.TrainExpress] = false
+		m.checkAll(w.player)
+		T.eq(w.data.Enchants.Owned.Heartfire, 1, "kept for the session")
+		T.eq(w.player.attrs.Perk_TrainExpress, true, "kept for the session")
+		-- the next session: Roblox's "not owned" is a refund
+		m.forget(w.player)
+		m.checkAll(w.player)
+		T.eq(w.data.Enchants.Owned.Heartfire, nil, "refunded: taken back on the next load")
+		T.eq(w.player.attrs.Perk_TrainExpress, nil, "refunded: the perk is gone")
+	end)
+
+	withWorld("Step 8: the passes giving the offline perks are checked first", function(w)
+		local keyOf = {}
+		for key, id in w.ids do
+			keyOf[id] = key
+		end
+		local order = {}
+		m.setOwnsGamePass(function(_userId, passId)
+			table.insert(order, keyOf[passId])
+			return false
+		end)
+		m.checkAll(w.player)
+		T.eq(#order, #MonetizationConfig.list("GamePass"), "every live pass once")
+		T.eq(order[1], "BigPass", "the big pass first")
+		T.eq(order[2], "OfflineExtension", "then Night Shift")
+		T.eq(order[3], "Podiums", "then the Podiums pass")
+		T.eq(order[4], "EnchantHeartfire", "then the rest by key")
+		T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), false, "known: not owned")
+	end)
+
+	-- One join with podium income, 20 h away, Night Shift's (and the Podiums pass's) check failing in the
+	-- load round. `inRound` runs after the load round (base paid); then the re-check answers `owned`.
+	local function lateNightShift(w: any, owned: boolean, inRound: (() -> ())?): any
+		local podium = PodiumService._test
+		local r: any = {}
+		podium.setClock(function()
+			return NOW
+		end)
+		w.data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Gold|Pristine|", "" }
+		r.income = PodiumService.incomeOf(w.player, w.data)
+		w.player.attrs.Perk_Podiums = true
+		r.incomeAll = PodiumService.incomeOf(w.player, w.data)
+		w.player.attrs.Perk_Podiums = nil
+		T.truthy(r.income > 0 and r.incomeAll > r.income, "podium 3 counts only with the Podiums perk")
+		r.coins = w.data.Coins
+		w.data.LastSeen = NOW - 20 * 3600
+		podium.loaded(w.player, w.data)
+		podium.offlineDue(w.player)
+		T.truthy(podium.waiting(w.player), "no answers yet: the payout waits")
+		local outage = true
+		for _, key in { "OfflineExtension", "Podiums" } do
+			w.owned[w.ids[key]] = function()
+				if outage then
+					error("HTTP 503 (fake)")
+				end
+				return owned
+			end
+		end
+		m.setPause(function(seconds)
+			if seconds == MonetizationService.RecheckDelay and outage then
+				-- the load round is done (its onPassesChecked): the base payout goes now
+				T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), nil, "Night Shift not known")
+				podium.passesChecked(w.player)
+				T.falsy(podium.waiting(w.player), "paid after the load round")
+				T.eq(podium.pending(w.player), nil, "paid")
+				r.base = w.data.Coins - r.coins
+				T.truthy(podium.hasTopUp(w.player), "the rest waits for a later answer")
+				if inRound then
+					inRound()
+				end
+				outage = false
+			end
+		end)
+		m.checkAll(w.player)
+		-- the re-check answered (its onPassesChecked)
+		podium.passesChecked(w.player)
+		r.total = w.data.Coins - r.coins
+		return r
+	end
+
+	withWorld("Step 8: Night Shift's check failing at join: the base payout now, the difference once a re-check says owned", function(w)
+		local podium = PodiumService._test
+		local ok, err = pcall(function()
+			local o = EconomyConfig.Offline
+			local r = lateNightShift(w, true)
+			local base = r.income * o.Rate * o.BaseHours * 3600
+			local full = r.incomeAll * o.Rate * o.ExtendedHours * 3600
+			T.near(r.base, base, base * 1e-9, "the base: 5 h, podiums 1-2")
+			T.eq(w.player.attrs.Perk_OfflineExtension, true, "the re-check granted Night Shift")
+			T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), true, "owned at join")
+			T.near(r.total, full, full * 1e-9, "the absence counted with 12 h and podiums 3-4")
+			T.falsy(podium.hasTopUp(w.player), "done")
+			T.near(w.data.Stats.PodiumEarned, full, full * 1e-9, "counted as podium money")
+			local toasts = 0
+			for _, note in w.notesOf("Notify") do
+				if string.find(note.A.Text, "time away", 1, true) then
+					toasts += 1
+				end
+			end
+			T.eq(toasts, 1, "the player is told once")
+			podium.passesChecked(w.player)
+			T.eq(podium.topUp(w.player), 0, "never twice")
+			T.near(w.data.Coins - r.coins, full, full * 1e-9, "nothing more")
+		end)
+		podium.reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	withWorld("Step 8: no top-up when the late answer is 'not owned', or for Night Shift bought this session", function(w)
+		local podium = PodiumService._test
+		local ok, err = pcall(function()
+			local r = lateNightShift(w, false)
+			T.near(r.total, r.base, 1e-6, "not owned: the base stays")
+			T.falsy(podium.hasTopUp(w.player), "settled")
+			podium.reset()
+			m.forget(w.player)
+			w.player.attrs = {}
+			-- bought in game after the base payout: Roblox now says owned, but it wasn't at join
+			local id = w.ids.OfflineExtension
+			r = lateNightShift(w, true, function()
+				m.purchaseFinished(w.player, id, true)
+			end)
+			T.eq(w.player.attrs.Perk_OfflineExtension, true, "the bought perk")
+			T.eq(MonetizationService.perkAtJoin(w.player, "OfflineExtension"), false, "not owned at join")
+			T.eq(w.player.attrs.Perk_Podiums, true, "the Podiums pass the re-check found")
+			local o = EconomyConfig.Offline
+			local expected = r.incomeAll * o.Rate * o.BaseHours * 3600
+			T.near(r.total, expected, expected * 1e-9, "podiums 3-4 count, the bought Night Shift doesn't")
+			T.falsy(podium.hasTopUp(w.player), "settled")
+		end)
+		podium.reset()
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	---------------------------------------------------------------- Migrations

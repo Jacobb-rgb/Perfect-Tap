@@ -349,9 +349,12 @@ choices marked *(ours)*):
 - **Game passes:**
   - On join, check `MarketplaceService:UserOwnsGamePassAsync` inside `pcall`.
     If the check errors, retry a bit later instead of treating the player as
-    "not owned" forever.
+    "not owned" forever (here: 4 tries per round, then up to 5 more rounds a
+    minute apart while the player stays).
   - On `PromptGamePassPurchaseFinished`, if it succeeded and the pass id
-    matches, set the perk (`Perks.set`).
+    matches, set the perk (`Perks.set`). A "not owned" answer never takes
+    back a pass bought in the same session: the answer can be from before the
+    purchase (a check in flight, Roblox's cache). A refund shows on a later join.
 - **What step 8 wires (status).** `MonetizationService` holds the one
   `ProcessReceipt` and the pass checks, and every entry in
   `MonetizationConfig` names its handler in `Grant`, registered in the

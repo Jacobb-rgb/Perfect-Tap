@@ -16,14 +16,22 @@
 	    MarketplaceService:UserOwnsGamePassAsync for each live pass, in pcall,
 	    up to CheckTries times with a growing pause (RetryDelay, x2), never
 	    holding the load up and giving up quietly when the player leaves.
-	    Owned -> grant. A successful "not owned" -> revoke. A check that keeps
-	    failing changes nothing.
+	    The passes giving an OfflinePerks perk go first (the offline payout
+	    waits for them), then by key. Owned -> grant. A successful "not
+	    owned" -> revoke, except for a pass bought in this session (Roblox
+	    may answer from before the purchase: a check in flight while the
+	    player bought it; a refund shows on a later load). A check that
+	    keeps failing changes nothing and is asked again RecheckDelay later,
+	    up to Rechecks more rounds while the player stays.
 	  - PromptGamePassPurchaseFinished(player, passId, wasPurchased) on the
 	    server: grant when wasPurchased and passId is a live pass entry.
 	  - MonetizationService.owns(player, key): the session's answer (true only
-	    once Roblox or a purchase said so). passesChecked(player) /
-	    onPassesChecked(fn): the load's checks are done (PodiumService waits
-	    for them before the offline payout, so Night Shift counts).
+	    once Roblox or a purchase said so). passesChecked(player): the load's
+	    first round is done. onPassesChecked(fn): after that round, and after
+	    every later round that answered a pass. perkAtJoin(player, perk): did
+	    a pass the player owned when they joined give the perk (nil while
+	    unknown)? PodiumService's offline payout uses it, so Night Shift and
+	    the Podiums pass count even when a check is late.
 	  - Grant "Perks" (registered here, registerPerks): the entry's Perks list
 	    as player attributes (src/server/Perks.luau). Session-only, set again
 	    on every load, never consumed; a revoke clears only the perks no
@@ -83,11 +91,19 @@ export type PassHandler = {
 
 MonetizationService.CheckTries = 4 -- UserOwnsGamePassAsync attempts per pass and load
 MonetizationService.RetryDelay = 2 -- seconds before the 2nd attempt (then x2)
+MonetizationService.RecheckDelay = 60 -- seconds before a pass whose check kept failing is asked again
+MonetizationService.Rechecks = 5 -- such later rounds per load (then: the next load)
+-- the perks the offline payout depends on (PodiumService): passes giving them are checked first
+MonetizationService.OfflinePerks = { "OfflineExtension", "Podiums" }
 
 local grants: { [string]: Grant } = {}
 local passHandlers: { [string]: PassHandler } = {}
 -- the session's pass answers: [player][entry key] = owned (nil = not known yet)
 local passOwned: { [Player]: { [string]: boolean } } = {}
+-- passes bought in this session (PromptGamePassPurchaseFinished): [player][entry key] = true
+local bought: { [Player]: { [string]: boolean } } = {}
+-- the checks' answers only (never a purchase): [player][entry key] = owned when they joined
+local joinOwned: { [Player]: { [string]: boolean } } = {}
 -- purchase ids granted in this server whose save hasn't gone through yet
 local unsaved: { [string]: boolean } = {}
 -- purchase ids being decided right now (Roblox may call again while a save yields)
@@ -149,13 +165,22 @@ end
 
 ---------------------------------------------------------------- game passes
 
-local function remember(player: Player, key: string, owned: boolean)
-	local known = passOwned[player]
+local function mark(map: { [Player]: { [string]: boolean } }, player: Player, key: string, value: boolean)
+	local known = map[player]
 	if not known then
 		known = {}
-		passOwned[player] = known
+		map[player] = known
 	end
-	known[key] = owned
+	known[key] = value
+end
+
+local function remember(player: Player, key: string, owned: boolean)
+	mark(passOwned, player, key, owned)
+end
+
+local function boughtNow(player: Player, key: string): boolean
+	local mine = bought[player]
+	return mine ~= nil and mine[key] == true
 end
 
 -- Applies a pass answer to the save: grant when owned, revoke otherwise. True when the save changed.
@@ -200,25 +225,91 @@ local function checkPass(player: Player, entry: MonetizationConfig.Entry): boole
 		end
 	end
 	if player.Parent then
-		warn(`[MonetizationService] couldn't check pass {entry.Key} for {player.Name}; trying again next load`)
+		warn(`[MonetizationService] couldn't check pass {entry.Key} for {player.Name}; trying again later`)
 	end
 	return nil
 end
 
--- Checks every live pass of a player whose save just loaded (yields: run it in its own task).
-local function checkAll(player: Player)
-	checked[player] = nil
+-- Does the pass give one of these perks?
+local function givesAny(entry: MonetizationConfig.Entry, perks: { string }): boolean
+	local own = entry.Perks
+	if not own then
+		return false
+	end
+	for _, perk in perks do
+		if table.find(own, perk) then
+			return true
+		end
+	end
+	return false
+end
+
+-- The live passes with a handler, in check order: the ones giving an OfflinePerks perk
+-- first (the offline payout waits for them), then the rest, each part by key.
+local function checkList(): { MonetizationConfig.Entry }
+	local first: { MonetizationConfig.Entry } = {}
+	local rest: { MonetizationConfig.Entry } = {}
 	for _, entry in MonetizationConfig.list("GamePass") do
 		if MonetizationConfig.isLive(entry.Id) and passHandlers[entry.Grant or ""] then
-			local owned = checkPass(player, entry)
-			if owned ~= nil and player.Parent and DataService.get(player) then
-				applyPass(player, entry, owned)
+			if givesAny(entry, MonetizationService.OfflinePerks) then
+				table.insert(first, entry)
+			else
+				table.insert(rest, entry)
 			end
 		end
 	end
-	checked[player] = true
+	for _, entry in rest do
+		table.insert(first, entry)
+	end
+	return first
+end
+
+-- Asks Roblox about each pass and applies the answers. Returns the passes whose check kept failing.
+local function checkRound(player: Player, entries: { MonetizationConfig.Entry }): { MonetizationConfig.Entry }
+	local failed: { MonetizationConfig.Entry } = {}
+	for _, entry in entries do
+		if not player.Parent then
+			break
+		end
+		local owned = checkPass(player, entry)
+		if owned == nil then
+			table.insert(failed, entry)
+		elseif player.Parent and DataService.get(player) and not boughtNow(player, entry.Key) then
+			-- (a pass bought while or before this check ran keeps its purchase: Roblox may
+			-- answer from before it; a refund shows on a later load)
+			mark(joinOwned, player, entry.Key, owned)
+			applyPass(player, entry, owned)
+		end
+	end
+	return failed
+end
+
+local function notifyChecked(player: Player)
 	for _, callback in checkedCallbacks do
 		task.spawn(callback, player)
+	end
+end
+
+-- Checks every live pass of a player whose save just loaded, then asks again later
+-- for the ones whose check kept failing (yields: run it in its own task).
+local function checkAll(player: Player)
+	checked[player] = nil
+	local failed = checkRound(player, checkList())
+	checked[player] = true
+	notifyChecked(player)
+	for _ = 1, MonetizationService.Rechecks do
+		if #failed == 0 or not player.Parent then
+			return
+		end
+		pause(MonetizationService.RecheckDelay)
+		if not player.Parent then
+			return
+		end
+		local before = #failed
+		failed = checkRound(player, failed)
+		if #failed < before then
+			notifyChecked(player)
+		end
 	end
 end
 
@@ -227,9 +318,35 @@ function MonetizationService.passesChecked(player: Player): boolean
 	return checked[player] == true
 end
 
--- callback(player) once the pass checks of a load are done.
+-- callback(player) once the first round of a load's pass checks is done, and again after
+-- every later round that answered a pass whose check had failed.
 function MonetizationService.onPassesChecked(callback: (Player) -> ())
 	table.insert(checkedCallbacks, callback)
+end
+
+--[[
+	Did the player own a pass giving `perk` when they joined? true once a check
+	said so; false once every live pass giving it answered "not owned" (a pass
+	bought in this session counts as not owned then: Roblox sells a pass once);
+	nil while one of them hasn't answered (not checked yet, or its check kept
+	failing). PodiumService's offline payout waits for it, and tops up when a
+	late answer says owned.
+]]
+function MonetizationService.perkAtJoin(player: Player, perk: string): boolean?
+	local answers = joinOwned[player]
+	local unknown = false
+	for _, entry in MonetizationConfig.list("GamePass") do
+		local perks = entry.Perks
+		if perks and table.find(perks, perk) and MonetizationConfig.isLive(entry.Id) and passHandlers[entry.Grant or ""] then
+			local answer = if answers then answers[entry.Key] else nil
+			if answer == true then
+				return true
+			elseif answer == nil and not boughtNow(player, entry.Key) then
+				unknown = true
+			end
+		end
+	end
+	return if unknown then nil else false
 end
 
 ---------------------------------------------------------------- the "Perks" passes
@@ -286,6 +403,7 @@ local function onPassPurchaseFinished(player: Player, passId: any, wasPurchased:
 	if not entry then
 		return
 	end
+	mark(bought, player, entry.Key, true)
 	applyPass(player, entry, true)
 end
 
@@ -403,6 +521,14 @@ end
 
 ---------------------------------------------------------------- lifecycle
 
+-- The player left: drop their session's pass answers.
+local function forget(player: Player)
+	passOwned[player] = nil
+	bought[player] = nil
+	joinOwned[player] = nil
+	checked[player] = nil
+end
+
 -- Internals for the Lune tests only (tests/MonetizationService.spec.luau).
 MonetizationService._test = {
 	setFindPlayer = function(fn: (number) -> Player?)
@@ -422,6 +548,8 @@ MonetizationService._test = {
 	end,
 	checkAll = checkAll,
 	purchaseFinished = onPassPurchaseFinished,
+	-- what PlayerRemoving does (a later load of the same fake player is a new session)
+	forget = forget,
 	isUnsaved = function(id: string): boolean
 		return unsaved[id] == true
 	end,
@@ -436,6 +564,8 @@ MonetizationService._test = {
 		table.clear(unsaved)
 		table.clear(inFlight)
 		table.clear(passOwned)
+		table.clear(bought)
+		table.clear(joinOwned)
 		table.clear(logged)
 		loggedCount = 0
 		table.clear(checked)
@@ -464,10 +594,7 @@ function MonetizationService.init()
 		task.spawn(checkAll, player)
 	end)
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPassPurchaseFinished)
-	Players.PlayerRemoving:Connect(function(player: Player)
-		passOwned[player] = nil
-		checked[player] = nil
-	end)
+	Players.PlayerRemoving:Connect(forget)
 end
 
 -- The live passes and products nothing grants yet (no handler for their Grant).
