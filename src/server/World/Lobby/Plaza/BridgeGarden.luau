@@ -30,6 +30,7 @@ local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
+local VaultStatue = require(script.Parent.Parent.Vault.Statue)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -429,6 +430,9 @@ BridgeGarden.Passage = {
 	BambooZ = { -90, -105 },
 	LampZ = { -88, -95, -102, -109 },
 	Jungle = { { X = 17.5, Z = -90, H = 12, R = 4.4, Pink = true }, { X = 17, Z = -107, H = 15, R = 5.2, Pink = false } },
+	-- (owner 2026-10-20: "stone statues on the free lawn in front, the stone kings again")
+	-- two small stone kings guard the forecourt's steps, facing the plaza, blasters outward
+	Kings = { X = 8.8, Z = -44.5, Scale = 0.42 },
 	FenceX = 21.3, -- along the forge roads (x +-21.5 .. 30.5), behind the roof
 	FenceZ = { -87, -111 },
 	Crystals = {
@@ -541,6 +545,16 @@ local function passage(m: Model, look: Look, rng: Rng.Rng)
 			nil,
 			Style.tiny()
 		)
+	end
+	for _, side in { -1, 1 } do
+		local king = VaultStatue.buildScaled(
+			m,
+			CFrame.new(side * P.Kings.X, 0, P.Kings.Z),
+			side,
+			if side < 0 then "ForgeKingWest" else "ForgeKingEast",
+			P.Kings.Scale
+		)
+		king:SetAttribute("Guardian", true)
 	end
 	for _, c in P.Crystals do
 		Style.crystalCluster(m, CFrame.new(c.X, 0, c.Z), c.Size, CRYSTAL[c.Color] or C.CrystalPurple, rng, { Count = 3 })

@@ -288,4 +288,24 @@ function Statue.build(parent: Instance, ground: CFrame, arm: number, name: strin
 	return m
 end
 
+-- The same king at `scale` (THE GREAT FORGE's passage guardians, owner 2026-10-20): built at
+-- full size, then every part's size and its offset from `ground` scaled (text plates keep
+-- their PixelsPerStud, so their letters shrink with them).
+function Statue.buildScaled(parent: Instance, ground: CFrame, arm: number, name: string, scale: number): Model
+	local m = Statue.build(parent, ground, arm, name)
+	if scale == 1 then
+		return m
+	end
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") then
+			local rel = ground:ToObjectSpace(d.CFrame)
+			d.Size *= scale
+			d.CFrame = ground * (CFrame.new(rel.Position * scale) * (rel - rel.Position))
+		elseif d:IsA("SurfaceGui") then
+			d.PixelsPerStud /= scale
+		end
+	end
+	return m
+end
+
 return Statue
