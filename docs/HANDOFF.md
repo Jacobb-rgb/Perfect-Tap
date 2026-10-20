@@ -1,126 +1,149 @@
-# TERRA FORGE – handoff (state on 2026-10-16)
+# TERRA FORGE – handoff (state on 2026-10-20)
 
 This file lets a new Claude Code session (or a new account) continue exactly where the last one stopped.
-Read CLAUDE.md first (project rules and commands), then this file.
+Read CLAUDE.md first (project rules and commands), then this file, then **docs/DESIGN_V2_NOTES.md** (the owner's v2
+design; it overrides GAME_DESIGN.md) and **docs/plans/V2_PLAN.md** (order of work, status block at the top).
 
-> **IMPORTANT (2026-10-16): the owner changed the core design** (trains bring ore to the base, an ore pen, two podiums
-> with money per second, laser blasters instead of pickaxes, ~30 ores, a foundry that crafts stronger blasters).
-> Read **docs/DESIGN_V2_NOTES.md** first; it overrides GAME_DESIGN.md where they conflict. The new order of work is in
-> **docs/plans/V2_PLAN.md** (2026-10-16): it replaces section 4 below, which is kept for the details of each item.
+**Main** = branch `claude/keen-wozniak-mx7azn` (there is no branch called `main`; "main" in every chat means this
+branch), at **b68dd28** on 2026-10-20, pushed to https://github.com/Jacobb-rgb/Perfect-Tap.
+`bash tools/check.sh` on b68dd28: strict luau-lsp "no problems found", **1433 Lune tests passed** (~1430),
+map **v39** baked with 29,860 parts, ALL CHECKS PASSED. Save `Version` = 3 (`DataTemplate.Version` =
+`Migrations.Latest`). CLAUDE.md's opening loop text and "Version = 2" are from v1: this file wins.
 
-## 1. The request (owner's brief, summarised)
-Build **TERRA FORGE**, a Roblox mining/crafting game in Luau via Rojo, all the way to a **published, public** game.
-- Mix: The Forge (stylized low-poly, warm forge lighting, progression feel) + Hydroneer (physical ore chunks you carry
-  and throw, placeable machines, conveyors) + Fishing Chef rib cutting, used for **cleaning ore** (chisel along guide
-  lines → scrape → polish, grades Rough/Clean/Pristine/Flawless, chips when off the line but never a hard fail, juice,
-  a reveal, PC/mobile/controller, harder for rarer ores, later an Auto Cleaner capped at a lower grade).
-- Technical: server-authoritative, rate-limited remotes, modular ModuleScripts + data configs, DataStore with retries,
-  session locking and BindToClose, mobile performance, StreamingEnabled, simple Rojo setup, git commits after each step,
-  a checklist of manual Studio steps.
-- Publishing: game settings, Roblox rules (TextService filtering), Maturity questionnaire answers, fair monetization
-  (game passes: 2x carry, VIP area, extra machine slots; coin developer products) with a safe ProcessReceipt and
-  placeholder IDs in one config file, daily login reward, tutorial under 3 minutes (first ore → clean → smelt → sell),
-  milestone badges, optional group reward, AnalyticsService (tutorial funnel + economy), store page EN + CZ with
-  icon/thumbnail ideas, and a final PUBLISHING.md with launch steps and a post-launch update plan.
-- Process: game-designer plans, luau-dev implements, qa-tester checks after every step; build order a → f (below);
-  after each step explain the changes simply (in Czech) with script paths, and **send pictures from the game**.
-- Later owner requests:
-  1. The lobby must look like **docs/art/lobby_concept.webp** ("exactly like this").
-  2. Smelters, furnaces, pipes, fuel tanks, conveyors, cleaning stations "and everything" in the style of the
-     **Kenney Factory Kit** (see docs/KENNEY_FACTORY_KIT.md), so the game looks better than all others.
-  3. The owner has a "my games" folder with more reference material; ask them to upload it (zip) if it isn't here.
+## 1. The owner's brief (short)
+Build TERRA FORGE, an original Roblox mining/crafting game in Luau via Rojo, all the way to a **published, public**
+game: server-authoritative, rate-limited remotes, safe saves, mobile performance, PC / phone / Xbox / PlayStation,
+fair monetization with placeholder ids, Roblox rules (docs/COMPLIANCE.md). The owner speaks Czech (answer in Czech,
+simple words), wants **pictures** often, and drives the look with concept images (docs/art/, the lobby concept, the
+Kenney kits rebuilt from parts, the 36-ore picture). Code, comments, docs and commits stay in English.
 
-## 2. What is done (all on branch `claude/keen-wozniak-mx7azn`, checks pass: strict types clean, 197 Lune tests, place builds)
-| Step | Status | Where |
+## 2. What the game is now (design v2, all on main)
+Loop: blast rocks with a laser blaster → dirty ore drops → throw it into the hopper at the mine station → your train
+brings it home → Ore Pen → clean it (by hand or machines) → best ores on podiums earn coins per second (also offline)
+→ machines, gear, upgrades → ingots → the Foundry forges the next blaster → deeper floors, rarer ores, relics.
+
+| Area | What is in | Where / landed |
 |---|---|---|
-| 0 setup | ✔ Rojo project, tooling, docs, subagents | default.project.json, rokit.toml, tools/, .claude/agents/ |
-| a world + lighting | ✔ generated low-poly island: Emberfall town, 8 plots, Greystone Quarry, Ember Caves, Deep Hollow, Glimmer Grotto (VIP) | src/server/World/*, src/shared/Config/{WorldLayout,LightingConfig}.luau |
-| b ore + carrying | ✔ node crack stages, physical chunks, pick up/drop/throw (E/Q, X/RB, touch buttons), fall rescue, item caps | Services/{ItemService,MiningService,CarryService,ToolService}, Controllers/{MiningController,InteractController} |
-| c Cleaning Station | ✔ + two QA rounds: deterministic patterns, server re-scores the client recording (CutTracker/CutRecorder, ScrapeTracker, timeline + ClientPauses lower bound), phone layout (CameraFit, compact banner), touch tolerance 2.0, chisel resume, polish gauge, Easy polish, reveal | src/shared/Cleaning/*, src/client/Cleaning/*, Controllers/CleaningController, UI/CleaningView, Services/CleaningService |
-| data | ✔ ProfileStore (session lock, retries, stale-lock takeover), DataService (autosave 120 s, BindToClose waits, quick-rejoin), Migrations (save Version 2) | src/server/Data/*, Services/DataService |
-| d machines | **partly**: P0 contracts ✔, P1 core ✔, WP-Build (build mode) ✔, WP-Process (furnaces, crusher, auto cleaner + juice) ✔. Missing: StorageSell (WIP branch), Conveyor, Anvil, integration QA | see §4 |
-| lobby | art direction ✔ (style bible, layout, style kit, loader); the 5 builder packages are NOT built yet, so the town still looks like the old one | docs/ART_DIRECTION.md, docs/plans/LOBBY_PLAN.md, src/server/World/Lobby/Style.luau, src/shared/Config/LobbyLayout.luau |
-| store page + compliance | ✔ reviewed against current Roblox rules | docs/STORE_PAGE.md (EN+CZ), docs/COMPLIANCE.md |
-| e economy / shop | not started (EconomyService exists only in the StorageSell WIP) | |
-| f tutorial, monetization, badges, analytics, PUBLISHING.md | not started (save fields exist in DataTemplate) | |
-| Kenney machine restyle | not started; spec in docs/ART_DIRECTION.md "Machines" + docs/KENNEY_FACTORY_KIT.md | |
+| Blasters | LV 1-10 (+ LV 11 "Coming soon"), hold to fire, Kenney-shape guns (owner's yes), shooting feel (flash, recoil, sparks, sounds that play) | BlasterData, BlasterFeel, MiningService, Effects/BlasterFx; 04bb2e9, 274f77f |
+| Ores | 36 ores from the owner's picture; rocks hold 1-3 hidden ores; `OreData.Renamed` maps old saves | OreData; 9b6235a |
+| Trains, pen, podiums | per-player train (mine hopper → base station → Ore Pen), podiums with income/s and offline earnings | TrainService, PenService, PodiumService |
+| Machines | 24 roster machines in the owner's Soft style, belts, power poles + cables, Iron Box, Sell Box; Polisher stops at Pristine | MachineData, MachineService, LogisticsService, PowerService; df5171d, 417c7c9, 25a184c |
+| Platforms | Platform deck 5 studs up, Belt Lift (items up a 26.6° slope), Slide; Deck / Ground toggle in build mode | docs/plans/PLATFORMS_PLAN.md phases 1-2; ee3f4d3 |
+| Foundry + Vault | Foundry forges the next level from ingots + coins; Blaster Vault sells the next level for coins (4x the Foundry price) with the crate-opening cinematic; blaster gallery in THE GREAT FORGE's hall | FoundryService, VaultService, UI/CrateOpeningView; 6090647, 32616e9, a671e5a |
+| Steps 6-7 | gear, enchants, boosts, golem capsules, daily wheel, artifacts + story + yard museums, leaderboards, codex, settings, the left side menu | GearService, EnchantService, BoostService, CapsuleService, GolemService, WheelService, ArtifactService, LeaderboardService, CodexService, SettingsService, UI/SideMenuView; 9be848a |
+| Relics | rocks drop a **dusty relic**: clean it at a Cleaning Station or put it into a **Restoration Table**; never sold or lost | ArtifactService (DustyRelics), MachineData RestorationTable; 35e7eab |
+| Tutorial | 10 steps: Station, Mine, Load, Train, Clean, Podium, Grow, Blaster, then GOT IT hints Golems and Wheel; 250 coins for finishing; waits for the loading screen | TutorialConfig, TutorialService, TutorialController; 49c2bac, a2d2650, ac43977 |
+| Rebirth | option B **STAR FORGE**: optional reset from blaster LV 6, keeps the factory, pays Forge Stars for the Star Shop (6 perks) | RebirthConfig, RebirthService, RebirthController, tests/Rebirth.spec.luau; b68dd28 |
+| Mine floors | 6 floors: Greystone Quarry, Ember Caves, Deep Hollow (walk in); Sunken Palace, **Stormglass Rift** (blaster 8), Heartstone Core (by elevator); floor 7 "Coming soon"; elevator; 5 hoverboards (3 coins, 2 Robux; H / L2); mine ambience | MineFloors, src/server/World/Mine/*, ElevatorService, HoverboardService, MineAmbience; cf5089c, 91ca653, bec327b |
+| Lobby | candy mountains, horizon, meadow + paved roads, forest, plaza life, koi + butterflies, lobby ambience (follows the SETTINGS sound slider), teleport bar BASE / LOBBY / VAULT + LIFT | src/server/World/Lobby/*, AmbienceConfig, TeleportService; 70cd6c5 … 1e6f696 |
+| Loading screen | logo on dark stone and lava, progress from streaming, tips, Skip; join popups and the tutorial wait for it (`Loading.wait`, 15 s time-out) | src/first/*, src/client/Util/Loading.luau; 1e6f696, 19e3303 |
+| Music, badges, analytics | MusicController (zones, crossfades), BadgeService, AnalyticsService (tutorial funnel + economy); **every music and badge id is 0** until the owner uploads (ambience plays shipped sounds; 2 owner slots are 0) | MusicConfig, BadgeConfig, AmbienceConfig; 1e6f696 |
+| Step 8 monetization | one `ProcessReceipt` (grant + Purchases + PurchaseLog, save, then PurchaseGranted), game passes checked on join and after purchase, a grant handler per entry, receipts gate; **every pass / product id is 0** = "Coming soon"; `CoinPacksEnabled = false` | MonetizationService, MonetizationConfig, src/server/Receipts.luau; c309076 |
+| Save safety | SessionId locks, storable repair inside UpdateAsync, newer / malformed saves refused untouched ("The game just updated, please rejoin"), keep-unknown migrations, Studio uses `TerraForge_PlayerData_Studio`, test players in memory only | DataService, Data/*, tests/SaveSafety.spec.luau; 953b542, 66867ba; docs/SAVE_AUDIT.md |
+| Security | audit + fixes; movement check **rollout step 1 = logging only** (`MovementConfig.Enforce = false`, `PullBack = false`, beam line of sight on); FLAWLESS guard: synthetic timestamps cap a run at Pristine, soft signals only logged (`CleaningGuard` `SoftEnforce = false`) | bd6a277, 2480d0f, 25a184c; docs/SECURITY_AUDIT.md, docs/plans/MOVEMENT_CHECK_PLAN.md |
+| Performance | phone budget spec (18,000 parts), mining network diet, perf pass 1 (State pushes by section, ~34.5 → ~1.3 KB/s per busy client, estimate), perf pass 2 (one `DataService.changed` flush per player per frame), floor trims, Rift lights 21 → 11, gradient keypoint rules | 54b13c8, 308d257, fc224a5, dc38f52, bec327b, 9ca2270; docs/PERF_AUDIT.md, docs/SERVER_PERF_AUDIT.md |
+| Balance | pass 1 (blaster curve ~8 h to LV 10), option 3 (pricier Tech Speed / Quality upgrades, owner's yes), Vault prices follow the Foundry | 38393e6, aa0077e, 39ab5d4; docs/BALANCE_SIM.md, tools/lune/balance_sim.luau |
 
-Nothing has been tested in real Roblox Studio yet: verification so far = luau-lsp strict analysis, Lune unit/simulation
-tests (tests/*.spec.luau) and three.js preview renders. Studio test lists are in docs/QA_REPORTS.md.
+## 3. How to verify
+```bash
+bash tools/check.sh > /tmp/check.log 2>&1; echo "exit $?"   # must be 0 and the log must end with ALL CHECKS PASSED
+```
+Save the **full, unfiltered** log and gate every commit or merge on its exit code (a flaky run once left no log).
+`bash tools/build.sh` rebakes `build/TerraForge.rbxl`; the branch's owning chat rebakes once after merging main,
+workflow workers never commit it (binary merge conflicts). Pictures: tools/preview (three.js approximations of
+Roblox lighting; always say so).
+Owner tests in Studio: docs/STUDIO_CHECKLIST.md "What to test in Studio (state 2026-10-20)" + docs/QA_REPORTS.md.
 
-## 3. Branches
-- `claude/keen-wozniak-mx7azn`: main line, everything above merged. **Pushed to GitHub**
-  (https://github.com/Jacobb-rgb/Perfect-Tap, this branch). Continue on it (or merge it into `main` first).
-- `stepd/wp-storagesell-wip`: unfinished WP-StorageSell (EconomyService, SellService, StorageService,
-  SellController, StorageController, StorageView). Never checked; continue from it or rebuild from the plan.
-- Already merged (kept for history): `stepd/wp-build`, `stepd/wp-process`, `lobby/art-direction`.
-All branches above are on GitHub too.
+## 4. Parallel chats and who owns what
+The owner runs several Claude chats at once. Each works in its own worktree / branch and touches only its files.
 
-## 4. Next steps, in order
-1. **Finish step d** from docs/plans/STEP_D_PLAN.md (contracts are in force; P0/P1 deviations and requests are listed
-   in docs/handoff/agent_reports_step_d_and_lobby.txt, read them):
-   - WP-StorageSell: Storage Crate (shared pool 60 per crate, max 300, count sign, take-out UI), selling at Pell's
-     SellBin/SellCounter in town (tags kept in TownLegacy/Lobby), Sell Chute pays the item owner, EconomyService.award,
-     "+N" popups and coin burst. Start from `stepd/wp-storagesell-wip`.
-   - WP-Conveyor: ConveyorService (belts move loose items, hand-off through IntakeService belt handler, players walk
-     through, corners don't snag, cheap on mobile).
-   - WP-Anvil: AnvilService/AnvilController/AnvilView (ingots on the anvil, Forge prompt, pick a recipe, tap to hammer:
-     every tap counts, timing only changes the PERFECT/GOOD effect; server validates strikes; gear pops out).
-   - The init ORDER lists already contain these modules (missing ones are skipped with a warning).
-   - Then integrate, `bash tools/check.sh`, rebake, QA review (errors, exploits/dup, DataStore, mobile), fix,
-     update docs/QA_REPORTS.md + docs/STUDIO_CHECKLIST.md + docs/PLAN.md.
-2. **Lobby** from docs/plans/LOBBY_PLAN.md: five packages (Sky, Backdrop, Plaza, Districts, Flora) with owned files
-   and detailed briefs (their text says "start from branch lobby-direction (70dd8ba)": that commit is now merged,
-   so start from the main branch). Hero shot `lobby_hero` in tools/preview/lobby_shots.json matches the concept angle.
-   After building: integrate, render all lobby shots, compare with docs/art/lobby_concept.webp, fix (2 rounds),
-   bump WorldBuilder.Version, rebake, send the owner pictures. Gameplay hooks to keep: SellCounter, SellBin (+ part
-   "Intake"), ShopCounter (SHOP), UpgradeCounter (UPGRADES), EmberChest (SPIN & WIN wheel = free daily reward),
-   OreCodex (ROCK SCANNER), FossilDig, GuildBoard, Spin, TownSpawn.
-3. **Kenney-style machine restyle** (after step d): rebuild MachineBuilder visuals keeping every attachment/tag/footprint
-   (docs/KENNEY_FACTORY_KIT.md has the mapping), render machines on a plot, send pictures.
-4. **Step e**: economy and shop: pickaxes (Tool Smithy at UPGRADES), carry levels, machines (SHOP), Bellows, slot
-   upgrades, Ore Codex UI at the ROCK SCANNER, coins in the HUD, balance check (first sale is ~10 coins vs a 200-coin
-   pickaxe: tune).
-5. **Step f**: tutorial (< 3 min: mine → carry → clean → smelt → sell, guide beam, skip), daily reward wheel (free, show
-   odds), group reward (PromptJoinAsync + server IsInGroupAsync on Claim; no like/favorite rewards), forge name
-   (TextService, 1-minute rate limit), MonetizationService (passes StrongBack / ForgeVip / Workshop as Perk_ attributes,
-   coin pouch dev products, ProcessReceipt: record purchaseId in the profile, save, grant only on the session-lock
-   holder, then PurchaseGranted), MonetizationConfig with placeholder IDs, BadgeConfig (9 badges; only 5 free per day),
-   AnalyticsService (onboarding funnel + economy events), PUBLISHING.md (README already links it), final
-   STUDIO_CHECKLIST, icons/thumbnails from real captures (docs/STORE_PAGE.md has concepts and AI prompts).
-6. Owner testing in Studio (docs/QA_REPORTS.md lists), then publish.
+| Chat | Owns |
+|---|---|
+| **TERRA FORGE Roblox hra vývoj** (integrator) | landing on `claude/keen-wozniak-mx7azn`, the push, DataTemplate / Migrations / DataService, IntakeService, cross-chat decisions |
+| **Zlepšení hor v pozadí** | lobby, backdrop mountains, horizon, flora, sky, lobby ambience, loading screen |
+| **Úrovně a vzhled min** | mine floors, elevator, hoverboards, MonetizationService |
+| **Design zbraní a blasterů** | blasters, Blaster Vault, gallery, tutorial, save safety, rebirth |
+| **Návrhy strojů** | machines, belts, platforms, relic flow, security, balance sim |
+| **Nový UI design** | light UI (style A) on branch `ui/light` |
+| **Terra Forge Roblox hlídač ostatních chatu** | the watcher: reads all chats overnight, sends pictures, hands out next tasks |
 
-## 5. Important design decisions already made
-- Step d plan items A–K are approved (machine contents saved in the placed entry, Version 2 migration, 1-stud plot border,
-  shared storage pool, intake = hopper on top or belts into any side except the output front, machines hand output to
-  the machine in their front cell, Auto Cleaner 60% Rough / 40% Clean, every anvil tap counts, players walk through
-  belts, 2-wide machines output from the right front cell, Studio-only dev kit when saves are in memory).
-- Cleaning accepted risks: the client says which input it used (tolerance) and whether Easy polish was used, and a
-  modified client could omit crystal hits; none of this gains more than a perfect synthetic run, which no server can
-  detect. The timeline lower bound makes bots take as long as a perfect player through the real client.
-- Kenney models: rebuilt from parts, not imported as meshes (see docs/KENNEY_FACTORY_KIT.md).
-- Fossil Dig and Rock Scanner from the concept: Rock Scanner = Ore Codex terminal; Fossil Dig is decoration first,
-  a possible post-launch minigame (reuse the scrape step).
+### Landing protocol
+1. The owning chat merges main into its branch, runs `bash tools/check.sh`, saves the **full log** and rebakes.
+2. It pings the integrator with the branch, the commit id and the log path.
+3. The integrator checks that main fast-forwards to that commit and that the log ends with ALL CHECKS PASSED
+   (exit 0), says ok, fast-forwards `claude/keen-wozniak-mx7azn`, pushes, and answers "done".
+4. Never push from a feature chat, never `git add -A`, never a bare `git stash`; ping the other chats before main
+   moves under them.
 
-## 6. Pictures for the owner
-Preview renders (tools/preview, see CLAUDE.md) are three.js approximations of Roblox lighting; always say so.
-Existing pictures: docs/screenshots/*.jpg; art references docs/art/*.
+## 5. What is still open
+1. **Light UI flip** (in progress, chat "Nový UI design"): branch `ui/light` (a1a240d, 31 commits not on main) has a
+   light path for every window behind the switch `UIConfig.Default = false` (flip prep c27abc4; the Workspace
+   attribute `LightUI` = true previews it in Studio); flip it after the owner's "ano" (that branch's
+   docs/handoff/UI_LIGHT_SWITCH_ON.md and docs/plans/UI_LIGHT_PLAN.md).
+2. **Final Foundry price curve**: docs/BALANCE_SIM.md "Option 3 … and the 6-floor tables" must be re-run on the
+   Stormglass Rift's real tables, then the Foundry L2-L10 coins set (machines chat, branch `balance/foundry-6floors`).
+3. **Owner uploads** (guides in `Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/`, steps in docs/PUBLISHING.md
+   section 3 and docs/COMPLIANCE.md 2.6). Paste each id into its config:
+   - skybox, 6 images → `LightingConfig.Skybox` (`obloha_mlecna_draha/`)
+   - music, 4 tracks → `MusicConfig` (`hudba/`, docs/handoff/HUDBA_NAVOD.md)
+   - 2 lobby ambience slots (frog croak, plaza murmur) → `AmbienceConfig` (`zvuky/`, docs/handoff/ZVUKY_LOBBY.md)
+   - badges → `BadgeConfig` (`odznaky/`, docs/handoff/ODZNAKY_NAVOD.md)
+   - 5 UI icon sheets → `IconAssets.Sheets[*].Id` (file on `ui/light`; `ikony_ui/`)
+   - game passes (incl. the 2 Robux hoverboards) and Robux products → `MonetizationConfig` (`robux_produkty/`);
+     keep coin packs at 0 while `CoinPacksEnabled` is false; passes On Sale only after that build is live
+   - logo, icon, thumbnails, store text → Creator Dashboard (`obchod/`, docs/STORE_PAGE.md); paste
+     `MonetizationConfig.grottoOddsText()` into the Forgemaster's Pass description
+4. **Movement check rollout steps 2-3** (enforce, then pull back) only after real server logs
+   (docs/plans/MOVEMENT_CHECK_PLAN.md; branch `docs/movement-check` has the integrator's review notes).
+5. **FLAWLESS guard soft signals** stay log-only until real logs show no false positives.
+6. **Studio checks** by the owner: docs/STUDIO_CHECKLIST.md, then Playtesters → Public (PUBLISHING.md section 3, items 10-11).
+7. Smaller: trading (V2_PLAN step 8) is not built; the side menu's STORE stays hidden until a StoreController
+   exists (on a 568 x 320 phone STORE + REBIRTH need a menu decision); rebirth's plot glow perk and a crystal
+   prompt at THE GREAT FORGE are not built; perf leftovers (`PenService.markBoard`, PERF_AUDIT items 7-8 and the
+   device test, item 10); the owner decides whether Robux coin packs are ever enabled.
+8. Preview / proposal branches kept for reference, not to merge: `art/plot-style-a`, `art/relic-flow-preview`,
+   `art/platforms-preview`, `docs/rebirth-proposal`, `mock/rebirth`.
 
-## 7. Moving to a new account / machine
-1. Get the code: clone https://github.com/Jacobb-rgb/Perfect-Tap and check out `claude/keen-wozniak-mx7azn`
-   (or use the handoff zip's `projekt/` folder, which is the same git repo with all branches).
-2. For Claude Code on the web, the new account needs GitHub connected (https://claude.ai/connect-github) and the
-   Claude GitHub App installed on the repo (https://github.com/apps/claude/installations/select_target).
-   For Claude Code on the owner's computer, just open the project folder.
-3. Tools: install Rokit (https://github.com/rojo-rbx/rokit) and run `rokit install` in the project; Node.js for the
-   preview renderer (`cd tools/preview && npm install && npx playwright install chromium`).
-4. Run `bash tools/check.sh`: it must end with ALL CHECKS PASSED.
+## 6. Key docs
+| Doc | What |
+|---|---|
+| docs/plans/V2_PLAN.md | v2 order of work (steps 1-9) + status block |
+| docs/DESIGN_V2_NOTES.md | the owner's v2 design (wins over GAME_DESIGN.md) |
+| docs/PUBLISHING.md | launch steps, where every uploaded id goes, update rules (save version bump, fix forward) |
+| docs/COMPLIANCE.md | Roblox rules, questionnaire, place settings, product table (2.6) |
+| docs/SAVE_AUDIT.md | save safety findings and status |
+| docs/SUPPORT.md | helping a player's save after launch (Studio command bar) |
+| docs/SECURITY_AUDIT.md | exploit audit and fixes |
+| docs/SERVER_PERF_AUDIT.md, docs/PERF_AUDIT.md | 8-player server audit, phone / client audit |
+| docs/BALANCE_SIM.md | the 10-hour player model, price calibration |
+| docs/QA_REPORTS.md, docs/QA_NIGHT_2026-10-18.md | QA per feature with "What to test in Studio" lists |
+| docs/STUDIO_CHECKLIST.md | manual Studio steps + the 2026-10-20 test list |
+| docs/STORE_PAGE.md | store text EN + CZ, icon / thumbnail ideas |
+| docs/plans/* | LOBBY, MACHINES, MACHINES_GAME, MINE_FLOORS, MINE_STEP, STORM_FLOOR, PLATFORMS, MOVEMENT_CHECK, VISUAL_UPGRADE, STEP1-3, STEP_D |
+| docs/ART_DIRECTION.md, docs/KENNEY_FACTORY_KIT.md | style bible, Kenney look rebuilt from parts |
+| docs/handoff/* | Czech owner guides (music, badges, lobby sounds), night review notes, example workflow scripts |
+
+## 7. Decisions to keep
+- Kenney models are rebuilt from parts, never imported as meshes (uploads would need the owner's account).
+- Flawless comes only from cleaning by hand; machines stop at Pristine. Any paid random item shows its odds first.
+- Floor logic keys on a floor's `Id`, never its index, so a floor can go in between (the Rift did).
+- A save a newer build wrote is never opened by an older build; every update that adds anything a save can name bumps
+  `DataTemplate.Version` and `Migrations.Latest` together, and broken updates are fixed forward (PUBLISHING.md section 3, item 12).
+- After publishing an update: "Migrate To Latest Update" so no old servers keep running.
+
+## 8. Moving to a new account / machine
+1. Clone https://github.com/Jacobb-rgb/Perfect-Tap and check out `claude/keen-wozniak-mx7azn` (or use the KIT
+   folder's `projekt/`, the same git repo with all branches).
+2. Claude Code on the web needs GitHub connected (https://claude.ai/connect-github) and the Claude GitHub App on the
+   repo; on the owner's computer just open the project folder.
+3. Tools: Rokit (`rokit install`: rojo, lune, luau-lsp, stylua from rokit.toml); Node.js for the preview renderer
+   (`cd tools/preview && npm install && npx playwright install chromium`).
+4. `bash tools/check.sh` must end with ALL CHECKS PASSED.
 5. Tell Claude: "Read CLAUDE.md and docs/HANDOFF.md and continue with the next step."
 
-## 8. Workflow notes for Claude
-- Big steps used multi-agent workflows (example scripts with placeholders in docs/handoff/workflows/): a plan with work
-  packages that own disjoint files → parallel luau-dev agents in git worktrees → an integrator that merges and runs
-  checks → qa-tester review with an adversarial verify pass → fixes. Workers must not commit build/TerraForge.rbxl
-  (binary merge conflicts); only the integrator rebakes it.
-- Usage limits interrupted long workflows several times; commit work in small, checkable steps.
-- In git worktrees copy build/globalTypes.d.luau or let tools/check.sh download the definitions pinned to luau-lsp 1.53.0.
+## 9. Workflow notes for Claude
+- Big steps use multi-agent workflows (examples in docs/handoff/workflows/): a plan with packages that own disjoint
+  files → parallel workers in git worktrees → an integrator merges and runs checks → QA review with an adversarial
+  verify pass → fixes. Workers never commit `build/TerraForge.rbxl`; the chat rebakes after its merge.
+- Usage limits can cut long runs: commit in small, checkable steps.
+- In a git worktree copy `build/globalTypes.d.luau`, or let tools/check.sh download it (pinned to luau-lsp 1.53.0).
