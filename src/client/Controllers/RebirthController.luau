@@ -13,6 +13,14 @@
 	  closes the window and plays the moment (a white flash, the banner
 	  "REBIRTH n!" with the stars it paid and falling stars, the Reveal
 	  sound); the server sends the character home after it.
+	- BLASTERS (the STAR blasters, StarBlasterData): the ⭐ button sends
+	  "Weapon" (buy with Forge Stars, it is equipped at once), EQUIP /
+	  EQUIPPED send "Equip" (EQUIPPED goes back to the forged blaster), a
+	  grey 🔒 REBIRTH n says when it opens; the R$ button prompts the
+	  weapon's game pass (MarketplaceService:PromptGamePassPurchase, only
+	  for a live id while the receipts gate is open, else "soon"; the
+	  server grants it). The guns in the cards are built the first time
+	  the page shows (RebirthView.fillPicture).
 	- The side menu's REBIRTH badge (onUnseenChanged: 1 while a rebirth is
 	  ready and the window wasn't opened since) and a one-time toast
 	  "Rebirth ready!" when the blaster reaches MinBlaster.
@@ -22,6 +30,7 @@
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,6 +40,8 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local RebirthConfig = require(Shared.Config.RebirthConfig)
+local StarBlasterData = require(Shared.Config.StarBlasterData)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local BlasterData = require(Shared.Config.BlasterData)
 local Net = require(Shared.Net)
 local RebirthView = require(script.Parent.Parent.UI.RebirthView)
@@ -58,6 +69,15 @@ RebirthController.Reasons = {
 	NoStars = "Not enough Forge Stars yet.",
 	Max = "That perk is at its top level.",
 	BadPerk = "That perk isn't in the shop.",
+	NoData = "Your data is still loading.",
+}
+-- (the "Weapon" / "Equip" answers)
+RebirthController.WeaponReasons = {
+	Locked = "Rebirth more to open that blaster.",
+	Owned = "That blaster is yours already.",
+	NoStars = "Not enough Forge Stars yet.",
+	BadWeapon = "That blaster isn't in the forge.",
+	Checking = "Checking your Robux passes. Try again in a moment.",
 	NoData = "Your data is still loading.",
 }
 
@@ -163,6 +183,50 @@ local function onRebirthPressed()
 	task.delay(RebirthConfig.ConfirmSeconds + 0.05, refresh)
 end
 
+local function robuxOn(): boolean
+	return ReplicatedStorage:GetAttribute(MonetizationConfig.ReceiptsAttribute) == true
+end
+
+-- A weapon card's big button: buy with stars, equip / unequip, or say when it opens.
+local function onWeaponMain(id: string)
+	local star = StarBlasterData.get(id)
+	if not star then
+		return
+	end
+	local shown = RebirthView.weaponCard(info, star)
+	Sfx.play("UIClick")
+	if shown.State == "Buy" then
+		if info.Stars < star.Stars then
+			HudController.toast(`The {star.Name} costs ⭐ {star.Stars}. You have ⭐ {info.Stars}.`, "Deny")
+		else
+			send({ Action = "Weapon", Id = id })
+		end
+	elseif shown.State == "Owned" then
+		send({ Action = "Equip", Id = id })
+	elseif shown.State == "Equipped" then
+		send({ Action = "Equip", Id = "" })
+	else
+		HudController.toast(`The {star.Name} opens at rebirth {star.Unlock}.`, "Info")
+	end
+end
+
+-- A weapon card's R$ button: the game pass prompt (the server grants it).
+local function onWeaponRobux(id: string)
+	local star = StarBlasterData.get(id)
+	if not star then
+		return
+	end
+	Sfx.play("UIClick")
+	local entry = MonetizationConfig.get("Star" .. id)
+	if entry and MonetizationConfig.isLive(entry.Id) and robuxOn() then
+		pcall(function()
+			MarketplaceService:PromptGamePassPurchase(player, entry.Id)
+		end)
+	else
+		HudController.toast(`Robux sales open soon. The {star.Name} is ⭐ {star.Stars} now!`, "Info")
+	end
+end
+
 local function ensureView(): RebirthView.Refs
 	if refs then
 		return refs :: RebirthView.Refs
@@ -176,7 +240,20 @@ local function ensureView(): RebirthView.Refs
 	for _, id in RebirthView.TabIds do
 		view.Tabs[id].Activated:Connect(function()
 			RebirthView.setTab(view, id)
+			if id == "Blasters" then
+				for _, card in view.Weapons do
+					RebirthView.fillPicture(card)
+				end
+			end
 			Sfx.play("UIClick")
+		end)
+	end
+	for _, card in view.Weapons do
+		card.Main.Activated:Connect(function()
+			onWeaponMain(card.Id)
+		end)
+		card.Robux.Activated:Connect(function()
+			onWeaponRobux(card.Id)
 		end)
 	end
 	view.Rebirth.Activated:Connect(onRebirthPressed)
@@ -314,6 +391,18 @@ local function onResult(result: any)
 		if not result.Ok then
 			HudController.toast("Unlock that colour in the STAR SHOP first.", "Deny")
 		end
+	elseif result.Action == "Weapon" or result.Action == "Equip" then
+		local star = StarBlasterData.get(result.Id)
+		if not result.Ok then
+			HudController.toast(RebirthController.WeaponReasons[result.Reason] or "Not now.", "Deny")
+		elseif result.Action == "Weapon" and star then
+			Sfx.play("Discovery")
+			HudController.toast(`The {star.Name} is yours and equipped!`, "Reward")
+		elseif star then
+			HudController.toast(`{star.Name} equipped: x{star.Mult} damage!`, "Reward")
+		else
+			HudController.toast("Back to your forged blaster.", "Info")
+		end
 	elseif result.Action == "Buy" then
 		if result.Ok then
 			Sfx.play("Discovery")
@@ -344,6 +433,9 @@ local function onState(state: { [string]: any })
 		StarsNow = tonumber(r.StarsNow) or 0,
 		Reached = tonumber(r.Reached),
 		Glow = if type(r.Glow) == "string" then r.Glow else "",
+		Weapons = if type(r.Weapons) == "table" then r.Weapons else {},
+		Weapon = if type(r.Weapon) == "string" then r.Weapon else "",
+		RobuxOn = robuxOn(),
 	}
 	if info.Ready and not wasReady then
 		seenReady = isOpen
@@ -447,6 +539,11 @@ function RebirthController.start()
 		watchPlayer(other)
 	end
 	Players.PlayerRemoving:Connect(hideBoard)
+	-- Robux sales switching on (the receipts gate) light the R$ buttons
+	ReplicatedStorage:GetAttributeChangedSignal(MonetizationConfig.ReceiptsAttribute):Connect(function()
+		info.RobuxOn = robuxOn()
+		refresh()
+	end)
 	local camera = Workspace.CurrentCamera
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()

@@ -44,6 +44,8 @@
 	                 (MonetizationService itself, src/server/Perks.luau)
 	    "Enchant"    passes: the Mythic enchant, forever (EnchantService)
 	    "Hoverboard" passes: the BoardId board (HoverboardService)
+	    "RebirthWeapon" passes: the WeaponId star blaster (RebirthService;
+	                 built from StarBlasterData, so the prices stay equal)
 	    "Capsule"    products: Count golems of Capsule (CapsuleService)
 	    "Boost"      products: Seconds of Boost, uncapped (BoostService)
 	    "CoinPack"   products: coinPackAmount coins, only while
@@ -102,6 +104,7 @@
 ]]
 
 local OreData = require(script.Parent.OreData)
+local StarBlasterData = require(script.Parent.StarBlasterData)
 local WorldLayout = require(script.Parent.WorldLayout)
 
 export type Kind = "GamePass" | "Product"
@@ -129,6 +132,7 @@ export type Product = {
 	MinLevel: number?, -- Grant "BlasterLevel": the player's next blaster level must be
 	MaxLevel: number?, -- within MinLevel..MaxLevel (the price band; VaultService)
 	ServerBoost: string?, -- Grant "ServerBoost": the server-wide effect ("Luck")
+	WeaponId: string?, -- Grant "RebirthWeapon": the StarBlasterData id it gives
 }
 -- (MonetizationService's name for a pass or product)
 export type Entry = Product
@@ -478,6 +482,20 @@ local LIST: { Product } = {
 		Seconds = 900,
 	},
 }
+-- the five STAR blasters (StarBlasterData): one-time passes, kept through every rebirth;
+-- they open at their rebirth count (a pass bought earlier waits). Keys StarComet ... StarSingularity.
+for _, star in StarBlasterData.List do
+	table.insert(LIST, {
+		Key = "Star" .. star.Id,
+		Kind = "GamePass",
+		Id = 0,
+		Robux = star.Robux,
+		Name = star.Name,
+		Description = `The {star.Name} star blaster: x{star.Mult} the power of your blaster level, kept forever. Opens at rebirth {star.Unlock}.`,
+		Grant = "RebirthWeapon",
+		WeaponId = star.Id,
+	})
+end
 
 -- Coin packs: on since the owner's go (2026-10-20, "money for Robux").
 -- It decides the paid-random-items rules (see the header).

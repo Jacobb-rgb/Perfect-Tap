@@ -95,6 +95,9 @@ return function(T, Loader)
 		data.Artifacts = { Found = { CrownCoin = 2 }, Chapters = {} }
 		data.Discovered = { Gold = true, Coal = true }
 		data.Hoverboards = { Owned = { Comet = true }, Equipped = "Comet", Passes = {} }
+		data.RebirthWeapons = { Comet = true, Nebula = true } -- star blasters (one by a pass)
+		data.RebirthWeaponPasses = { Nebula = true }
+		data.StarBlaster = "Comet"
 		data.KeepMode = "List"
 		data.KeepList = { Gold = true }
 		data.Stats.OresMined = 500
@@ -257,6 +260,9 @@ return function(T, Loader)
 				"Settings",
 				"Tutorial",
 				"Purchases",
+				"RebirthWeapons",
+				"RebirthWeaponPasses",
+				"StarBlaster",
 			}
 		do
 			T.truthy(deepEqual(before[key], data[key]), key .. " is kept")

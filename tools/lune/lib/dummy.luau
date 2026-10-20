@@ -19,7 +19,9 @@ local function block(parent, cf, size, color, material)
 	return p
 end
 
--- root: CFrame at the feet, facing LookVector. pose: "swing" | "carry" | "idle"
+-- root: CFrame at the feet, facing LookVector. pose: "swing" | "carry" | "idle" | "hold"
+-- ("hold": the right arm forward like Roblox's tool hold, `pickaxeTool` = a Tool whose
+-- parts are in its grip frame (the hand at the origin, barrel -Z) placed in that hand)
 function Dummy.build(parent, CFrame, root, pose, colors, pickaxeTool)
 	local m = Instance.new("Model")
 	m.Name = "Dummy"
@@ -55,6 +57,19 @@ function Dummy.build(parent, CFrame, root, pose, colors, pickaxeTool)
 			for _, d in pickaxeTool:GetDescendants() do
 				if d:IsA("BasePart") then
 					d.CFrame = handleCf * d.CFrame
+					d.Anchored = true
+				end
+			end
+			pickaxeTool.Parent = m
+		end
+	elseif pose == "hold" then
+		arm(-1, 0.1, 0.05)
+		local hand = arm(1, math.pi / 2, 0)
+		if pickaxeTool then
+			local grip = CFrame.new(hand.Position) * root.Rotation
+			for _, d in pickaxeTool:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.CFrame = grip * d.CFrame
 					d.Anchored = true
 				end
 			end

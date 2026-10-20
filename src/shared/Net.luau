@@ -123,7 +123,10 @@ Net.Events = {
 	HoverboardAction = { Rate = 4, Burst = 8 },
 	-- rebirth "STAR FORGE" (RebirthService), anywhere: { Action = "Rebirth" } (RebirthConfig.canRebirth:
 	--   the whole reset in one step on the server), { Action = "Buy", Perk } (a Star Shop level,
-	--   RebirthConfig.quote) or { Action = "Glow", Color } (the Plot Glow colour, "" = off).
+	--   RebirthConfig.quote), { Action = "Glow", Color } (the Plot Glow colour, "" = off),
+	--   { Action = "Weapon", Id } (a STAR blaster for Forge Stars, StarBlasterData.quote) or
+	--   { Action = "Equip", Id } (the star blaster to fight with, "" = the forged one; Robux ones
+	--   are game passes: MarketplaceService:PromptGamePassPurchase on the client, ids > 0 only).
 	--   Every request read gets a RebirthResult
 	RebirthAction = { Rate = 2, Burst = 4 },
 	-- the Robux STORE window (StoreService): { Action = "Buy", Key: a MonetizationConfig key the

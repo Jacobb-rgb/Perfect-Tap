@@ -1,7 +1,9 @@
 --[[
 	ToolService: every character gets exactly one Blaster tool, built for the
-	save's BlasterLevel + BlasterOre (BlasterBuilder). It is rebuilt when those
-	change (Foundry, step 3) and given again after every respawn. If the old
+	save's BlasterLevel + BlasterOre (BlasterBuilder), or the equipped STAR
+	blaster (StarBlasterData.equipped: BlasterBuilder.buildStar, with the
+	forged level's range). It is rebuilt when those change (Foundry, the
+	Vault, the Star Forge) and given again after every respawn. If the old
 	blaster was in the player's hand, the new one is equipped right away.
 ]]
 
@@ -11,11 +13,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
+local StarBlasterData = require(Shared.Config.StarBlasterData)
 local DataService = require(script.Parent.DataService)
 
 local ToolService = {}
 
--- "level|ore" of the blaster each player was given (nil = none yet)
+-- "level|ore|star" of the blaster each player was given (nil = none yet)
 local given: { [Player]: string } = {}
 
 -- Tool names that are ours (old saves had a pickaxe in the backpack).
@@ -27,7 +30,8 @@ local function oreOf(data: { [string]: any }): string
 end
 
 local function signature(data: { [string]: any }): string
-	return tostring(BlasterData.get(data.BlasterLevel).Level) .. "|" .. oreOf(data)
+	local star = StarBlasterData.equipped(data)
+	return tostring(BlasterData.get(data.BlasterLevel).Level) .. "|" .. oreOf(data) .. "|" .. (if star then star.Id else "")
 end
 
 local function removeTools(player: Player)
@@ -60,7 +64,10 @@ function ToolService.refresh(player: Player)
 	end
 	local wasEquipped = ToolService.equipped(player) ~= nil
 	removeTools(player)
-	local tool = BlasterBuilder.build(data.BlasterLevel, oreOf(data))
+	local star = StarBlasterData.equipped(data)
+	local tool = if star
+		then BlasterBuilder.buildStar(star, data.BlasterLevel, oreOf(data))
+		else BlasterBuilder.build(data.BlasterLevel, oreOf(data))
 	tool.Parent = backpack
 	given[player] = signature(data)
 	if wasEquipped then
@@ -93,7 +100,7 @@ function ToolService.init()
 			ToolService.refresh(player)
 		end
 	end)
-	-- a new blaster level or ore (Foundry) swaps the tool; other changes are ignored
+	-- a new blaster level, ore or star blaster swaps the tool; other changes are ignored
 	DataService.onChanged(function(player)
 		local data = DataService.get(player)
 		local current = given[player]

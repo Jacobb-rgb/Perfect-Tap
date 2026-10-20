@@ -33,8 +33,24 @@ local Shapes = require(script.Parent.KenneyShapes)
 
 local KenneyBlaster = {}
 
-KenneyBlaster.Models =
-	{ "blaster-b", "blaster-c", "blaster-a", "blaster-j", "blaster-m", "blaster-g", "blaster-r", "blaster-p", "blaster-d", "blaster-e" }
+-- the ten levels, then the five STAR blasters (Config/StarBlasterData: shape 10 + Index)
+KenneyBlaster.Models = {
+	"blaster-b",
+	"blaster-c",
+	"blaster-a",
+	"blaster-j",
+	"blaster-m",
+	"blaster-g",
+	"blaster-r",
+	"blaster-p",
+	"blaster-d",
+	"blaster-e",
+	"blaster-h",
+	"blaster-l",
+	"blaster-f",
+	"blaster-o",
+	"blaster-q",
+}
 KenneyBlaster.MaxParts = 90 -- per gun, every level (phones: every player holds one)
 KenneyBlaster.ShortLength = 2.2 -- level 1's length (studs)
 KenneyBlaster.LongLength = 5.9 -- level 10's length
@@ -51,6 +67,12 @@ KenneyBlaster.Hands = {
 	["blaster-p"] = { 0.21, -0.02 },
 	["blaster-d"] = { 0.14, -0.02 },
 	["blaster-e"] = { 0.97, -0.06 },
+	-- the star blasters (on the rear grip's top, like the levels')
+	["blaster-h"] = { 0.24, -0.07 },
+	["blaster-l"] = { 0.15, -0.03 },
+	["blaster-f"] = { 0.32, -0.04 },
+	["blaster-o"] = { 0.115, -0.03 }, -- (on the rear grip, z 0.085-0.145)
+	["blaster-q"] = { 0.25, -0.03 },
 } :: { [string]: { number } }
 
 local NEON = Enum.Material.Neon
@@ -113,13 +135,25 @@ function KenneyBlaster.model(level: number): string
 	return KenneyBlaster.Models[math.clamp(level, 1, #KenneyBlaster.Models)]
 end
 
--- Kenney meters -> held studs for a level: every gun gets its level's length.
+-- The STAR blasters' (models 11-15) held size: the envelope of the biggest level bodies
+-- (LV 7 / LV 9), so a stubby Kenney shape never grows into the character (studs).
+KenneyBlaster.StarFit = { Height = 2.3, Width = 1.25, Behind = 1.9 }
+
+-- Kenney meters -> held studs for a level: every gun gets its level's length. A STAR
+-- blaster gets LV 10's length unless that makes it taller, wider or longer behind the
+-- hand than StarFit (bounds = z, y, x min / max).
 function KenneyBlaster.scale(level: number): number
-	local shape = Shapes[KenneyBlaster.model(level)]
-	local b = shape.bounds
+	local name = KenneyBlaster.model(level)
+	local b = Shapes[name].bounds
 	local t = (math.clamp(level, 1, 10) - 1) / 9
 	local length = KenneyBlaster.ShortLength + (KenneyBlaster.LongLength - KenneyBlaster.ShortLength) * t
-	return length / (b[2] - b[1])
+	local S = length / (b[2] - b[1])
+	if level > 10 then
+		local fit = KenneyBlaster.StarFit
+		local behind = math.max(b[2] - KenneyBlaster.Hands[name][1], 1e-3)
+		S = math.min(S, fit.Height / (b[4] - b[3]), fit.Width / (b[6] - b[5]), fit.Behind / behind)
+	end
+	return S
 end
 
 ---------------------------------------------------------------- 2D helpers (side profile: z, y)

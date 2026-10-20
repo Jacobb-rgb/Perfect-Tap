@@ -14,6 +14,11 @@
 	              at the hand (Tool.Grip = identity: the barrel straight along
 	              the arm), every part welded to it, the Muzzle attachment at
 	              the barrel's tip (the client beam starts there)
+	  buildStar   a STAR blaster (StarBlasterData) in the player's hand:
+	              its own Kenney shape (KenneyBlaster.Models 11-15) and sky
+	              skin (starSkin, the previews use it too), the forged
+	              level's Range and Level (the client's range and gates),
+	              the star's Glow as the beam, attribute Star = its id
 	  silhouette  a level's black outline (the Foundry's NEXT rack, the
 	              gallery's LV 11)
 
@@ -23,6 +28,7 @@
 local Geo = require(script.Parent.Geo)
 local KenneyBlaster = require(script.Parent.KenneyBlaster)
 local BlasterData = require(script.Parent.Parent.Config.BlasterData)
+local StarBlasterData = require(script.Parent.Parent.Config.StarBlasterData)
 
 local BlasterBuilder = {}
 
@@ -138,33 +144,25 @@ function BlasterBuilder.look(level: any, oreId: string?): Look
 	}
 end
 
---[[
-	The blaster tool of a level in an ore's look: the owner-approved Kenney
-	Blaster Kit shapes with the Ore Glow skins (Builders/KenneyBlaster, at
-	most BlasterBuilder.MaxParts parts). The Handle is an invisible block at
-	the hand (Tool.Grip = identity: the barrel straight along the arm), every
-	part is welded to it, the Muzzle attachment sits at the barrel's tip.
-	From level 7 a slow GunFlame / GunSpark emitter rides along the gun.
-]]
-function BlasterBuilder.build(level: any, oreId: string?): Tool
-	local info = BlasterData.get(level)
-	local lv = info.Level
-	local look = BlasterBuilder.look(lv, oreId)
-	local ore = if look.Rusty or not oreId then "" else oreId
-	local skin = KenneyBlaster.skin(lv, ore, look)
-
+-- A new Blaster tool (no parts yet) with the attributes the client reads.
+local function newTool(tip: string, level: number, oreId: string?, glow: Color3): Tool
 	local tool = Instance.new("Tool")
 	tool.Name = BlasterBuilder.ToolName
-	tool.ToolTip = BlasterData.displayName(lv, oreId)
+	tool.ToolTip = tip
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 	tool.ManualActivationOnly = true
 	tool.Grip = CFrame.identity
-	tool:SetAttribute("Level", lv)
+	tool:SetAttribute("Level", level)
 	tool:SetAttribute("OreId", if oreId then oreId else "")
-	tool:SetAttribute("Range", info.Range)
-	tool:SetAttribute("Glow", look.Glow)
+	tool:SetAttribute("Range", BlasterData.get(level).Range)
+	tool:SetAttribute("Glow", glow)
+	return tool
+end
 
+-- The gun's parts on an invisible Handle (model = KenneyBlaster's shape 1-15).
+local function assemble(tool: Tool, model: number, ore: string, skin: KenneyBlaster.Skin): Tool
+	local lv = model
 	local handle = Geo.make("Part", {
 		Name = "Handle",
 		Size = Vector3.new(0.3, 0.6, 0.3),
@@ -230,6 +228,46 @@ function BlasterBuilder.build(level: any, oreId: string?): Tool
 	muzzle.Position = anchors.Muzzle
 	muzzle.Parent = handle
 	return tool
+end
+
+--[[
+	The blaster tool of a level in an ore's look: the owner-approved Kenney
+	Blaster Kit shapes with the Ore Glow skins (Builders/KenneyBlaster, at
+	most BlasterBuilder.MaxParts parts). The Handle is an invisible block at
+	the hand (Tool.Grip = identity: the barrel straight along the arm), every
+	part is welded to it, the Muzzle attachment sits at the barrel's tip.
+	From level 7 a slow GunFlame / GunSpark emitter rides along the gun.
+]]
+function BlasterBuilder.build(level: any, oreId: string?): Tool
+	local lv = BlasterData.get(level).Level
+	local look = BlasterBuilder.look(lv, oreId)
+	local ore = if look.Rusty or not oreId then "" else oreId
+	local skin = KenneyBlaster.skin(lv, ore, look)
+	return assemble(newTool(BlasterData.displayName(lv, oreId), lv, oreId, look.Glow), lv, ore, skin)
+end
+
+--[[
+	A STAR blaster's shape and skin: (KenneyBlaster model 11-15, the ore key
+	its skin is made with, the skin). One small crystal cluster (Tier 1):
+	the shape and the glow carry the look.
+]]
+function BlasterBuilder.starSkin(star: StarBlasterData.StarBlaster): (number, string, KenneyBlaster.Skin)
+	local model = 10 + star.Index
+	-- (only CaseBuilder.HotOres matters: Emberite burns, StarCore is a cool sky)
+	local ore = if star.Magma then "Emberite" else "StarCore"
+	local skin = KenneyBlaster.skin(model, ore, { Body = star.Body, Glow = star.Glow, Rusty = false })
+	skin.Tier = 1
+	return model, ore, skin
+end
+
+-- A STAR blaster for a player whose forged blaster is `level` in `oreId`
+-- (the range and the client's level gates follow the forged one).
+function BlasterBuilder.buildStar(star: StarBlasterData.StarBlaster, level: any, oreId: string?): Tool
+	local lv = BlasterData.get(level).Level
+	local model, ore, skin = BlasterBuilder.starSkin(star)
+	local tool = newTool(star.Name, lv, oreId, star.Glow)
+	tool:SetAttribute("Star", star.Id)
+	return assemble(tool, model, ore, skin)
 end
 
 --[[

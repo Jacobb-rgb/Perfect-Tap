@@ -147,6 +147,13 @@ local DataTemplate = {
 	StarPerks = {},
 	-- the Plot Glow colour the plot shows (a RebirthConfig.GlowColors id, "" = off)
 	PlotGlow = "",
+	-- the STAR blasters (StarBlasterData, RebirthService), kept through every rebirth:
+	-- RebirthWeapons = { [id] = true } the ones you own, RebirthWeaponPasses = { [id] = true }
+	-- the ones a game pass gave (a refund takes back only those), StarBlaster = the
+	-- equipped one ("" = your forged blaster)
+	RebirthWeapons = {},
+	RebirthWeaponPasses = {},
+	StarBlaster = "",
 
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
 	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),

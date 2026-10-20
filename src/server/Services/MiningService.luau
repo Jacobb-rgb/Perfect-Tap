@@ -22,7 +22,8 @@
 	- MineBlast(rock | nil): the client aims its held beam at a rock (or stops).
 	  It only sets the player's target; nothing is damaged by the remote itself.
 	- Every BlasterData.Beam.ServerTick the server damages each firing player's
-	  target by BlasterData.damage(level, ore) * dt (dt = time since that
+	  target by BlasterData.damage(level, ore) * dt (x the equipped STAR
+	  blaster's Mult, StarBlasterData; dt = time since that
 	  player's last tick, capped at Beam.MaxTickGap so lag never bursts), while
 	  the Blaster is in the character's hand, the rock is alive, the rock surface
 	  is within the blaster Range + Beam.RangeSlack, the zone's MinBlaster <= the
@@ -71,6 +72,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local StarBlasterData = require(Shared.Config.StarBlasterData)
 local MovementConfig = require(Shared.Config.MovementConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
@@ -406,17 +408,22 @@ local function hitPosition(rock: Rock, from: Vector3): Vector3
 	return rock.Center + direction * rock.Radius * 0.7 + Vector3.new(0, 0.5, 0)
 end
 
--- The beam color of a player's blaster (rusty = orange).
+-- The beam color of a player's blaster (rusty = orange; a star blaster's own glow).
 local function glowOf(data: { [string]: any }): Color3
+	local star = StarBlasterData.equipped(data)
+	if star then
+		return star.Glow
+	end
 	local ore = data.BlasterOre
 	return BlasterBuilder.look(data.BlasterLevel, if type(ore) == "string" then ore else "").Glow
 end
 
--- glowOf for a firing player, cached until their blaster level or ore changes (it runs every tick).
+-- glowOf for a firing player, cached until their blaster level, ore or star blaster changes (it runs every tick).
 local glowCache: { [Player]: { Key: string, Glow: Color3 } } = {}
 local function cachedGlow(player: Player, data: { [string]: any }): Color3
 	local ore = data.BlasterOre
-	local key = tostring(data.BlasterLevel) .. "|" .. (if type(ore) == "string" then ore else "")
+	local star = StarBlasterData.equipped(data)
+	local key = tostring(data.BlasterLevel) .. "|" .. (if type(ore) == "string" then ore else "") .. "|" .. (if star then star.Id else "")
 	local cached = glowCache[player]
 	if cached and cached.Key == key then
 		return cached.Glow
@@ -767,7 +774,8 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		return
 	end
 	local ore = data.BlasterOre
-	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * dt
+	-- (a STAR blaster hits Mult x the forged level's damage: StarBlasterData, power A)
+	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * StarBlasterData.mult(data) * dt
 	amount *= Bonuses.damageMult(stats, rock.Stage >= 2)
 	damage(player, data, rock, amount, from, now)
 end

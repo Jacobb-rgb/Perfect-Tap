@@ -132,6 +132,9 @@
 	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
 	  newer build's perks and levels kept, junk and levels below 1 dropped);
 	  PlotGlow is a short id or "" (a colour this build doesn't know stays).
+	- Star blasters (StarBlasterData): RebirthWeapons and RebirthWeaponPasses
+	  map short string ids to true (a newer build's weapons kept, junk
+	  dropped); StarBlaster is a short id or "".
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
@@ -688,6 +691,22 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 		elseif whole ~= level then
 			perks[id] = whole
 		end
+	end
+	-- the star blasters: sets of short ids (a newer build's weapons kept), the equipped id or ""
+	for _, field in { "RebirthWeapons", "RebirthWeaponPasses" } do
+		local set = record(data, field, report)
+		for _, id in keysOf(set) do
+			if not idLike(id) or set[id] ~= true then
+				set[id] = nil
+				report.Dropped += 1
+			end
+		end
+	end
+	if data.StarBlaster ~= nil and data.StarBlaster ~= "" and not idLike(data.StarBlaster) then
+		report.Dropped += 1
+		data.StarBlaster = ""
+	elseif data.StarBlaster == nil then
+		data.StarBlaster = ""
 	end
 end
 

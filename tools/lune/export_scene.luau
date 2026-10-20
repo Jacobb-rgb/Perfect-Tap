@@ -272,6 +272,10 @@ elseif sceneName == "store" then -- the world + the Robux STORE window overlays 
 	for name, guis in require("./lib/store_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif sceneName == "star_blasters" then -- the five STAR blasters on a starry stage (tools/lune/lib/star_blasters_preview.luau)
+	require("./lib/star_blasters_preview").build(Loader, workspace)
+elseif sceneName == "star_blasters_held" then -- LV 10 and the five STAR blasters in a dummy's hand (same file)
+	require("./lib/star_blasters_preview").buildHeld(Loader, workspace)
 elseif sceneName == "gear_shop" then -- the world + miners with head lamps + the Gear shop panel overlays (tools/lune/lib/gear_shop_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/gear_shop_preview").build(Loader, workspace) do
