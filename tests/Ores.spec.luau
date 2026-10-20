@@ -248,15 +248,19 @@ return function(T, Loader)
 				local shell = OreShellBuilder.build(pattern, CF.new(0, 5, 0))
 				local label = `{ore.Id} seed {seed}`
 				T.truthy(#pattern.Cells >= 100, label .. " has dirt to wash")
-				T.truthy(#shell.Core > 0, label .. " has an ore face")
-				for _, part in shell.Core do
-					T.eq(part.Color, ore.Color, label .. " the face under the dirt is the ore's colour")
-				end
+				T.truthy(#shell.Core > 0, label .. " the real ore waits under the dirt")
+				T.truthy(shell.Treasure:FindFirstChildWhichIsA("BasePart") ~= nil, label .. " in its podium look")
 				for _, cell in pattern.Cells do
 					T.truthy(shell.Dirt[cell.Index] ~= nil, label .. " every cell has its dirt block")
 				end
-				for _, rim in shell.CoreRim do
-					T.eq(rim.Color, ItemBuilder.glowColor(ore.Glow), label .. " rim glows in the ore's color")
+				-- the ore sits behind the dirt (nothing pokes through) and inside the clump
+				local work = CF.new(0, 5, 0)
+				for _, part in shell.Core do
+					if part.Transparency < 1 then
+						local at = work:PointToObjectSpace(part.CFrame.Position)
+						T.truthy(at.Z < OreShellBuilder.CoreFront, label .. " behind the dirt")
+						T.truthy(math.sqrt(at.X * at.X + at.Y * at.Y) < 1.3 * OreShellBuilder.Scale, label .. " inside the clump")
+					end
 				end
 			end
 		end

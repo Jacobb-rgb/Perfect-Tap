@@ -197,11 +197,7 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_spray",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
+    "ui": "ui_clean_spray"
   },
   "station": {
     "scene": "cleaning_spray",
@@ -235,11 +231,7 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_reveal",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
+    "ui": "ui_clean_reveal"
   },
   "clean_spray_phone": {
     "scene": "cleaning_spray_phone",
@@ -257,11 +249,7 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_spray_phone",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
+    "ui": "ui_clean_spray_phone"
   },
   "plot_machines": {
     "scene": "cleaning_reveal",

@@ -327,13 +327,10 @@ local function enter(ctx: any)
 	ctx.View.Cursor.Visible = ctx.pointer.Kind == "Gamepad"
 	updateButtonLabels(ctx)
 	ctx.popLighting = LightingController.push("Workbench", 0.6)
+	-- everything stays sharp (owner, 2026-10-20: no blurred close-up); a blur another feature left on goes off
 	local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
 	if dof then
-		dof.FocusDistance = (ctx.CamPoint.Position - ctx.OrePoint.Position).Magnitude
-		dof.InFocusRadius = 2.5
-		dof.FarIntensity = 0.75
-		dof.NearIntensity = 0
-		dof.Enabled = true
+		dof.Enabled = false
 	end
 	setRawItemHidden(ctx, true)
 	local camera = ctx.Camera
@@ -447,9 +444,17 @@ end
 
 ---------------------------------------------------------------- spraying
 
--- One recorded sample: into the submission and through the shared tracker.
+-- One recorded sample: into the submission and through the shared tracker. At a cap of the
+-- server's (a very long or dabbed run) the session ends with a word instead of freezing.
 local function record(ctx: any, uv: Vector2, t: number)
-	if ctx.samples >= SprayScoring.MaxSamples or #ctx.submission.Strokes > SprayScoring.MaxStrokes then
+	if ctx.samples >= SprayScoring.MaxSamples or (not ctx.stroke and #ctx.submission.Strokes >= SprayScoring.MaxStrokes) then
+		if not ctx.capped then
+			ctx.capped = true
+			ctx.feedback("Too long! Start again.", Theme.Bad)
+			task.delay(1.2, function()
+				cancel(ctx)
+			end)
+		end
 		return
 	end
 	if not ctx.stroke then
@@ -476,7 +481,16 @@ local function record(ctx: any, uv: Vector2, t: number)
 end
 
 local function lift(ctx: any)
-	if ctx.stroke then
+	local stroke = ctx.stroke
+	if stroke then
+		-- a one-sample tap sprays nothing (the server's replay is the same without it)
+		if #stroke == 3 then
+			local strokes = ctx.submission.Strokes
+			if strokes[#strokes] == stroke then
+				table.remove(strokes)
+				ctx.samples -= 1
+			end
+		end
 		ctx.stroke = nil
 		ctx.tracker:lift()
 	end
@@ -485,9 +499,9 @@ end
 -- Every frame while the session runs: the pointer on the face, the spray on or off.
 local function sprayFrame(ctx: any)
 	local pointer = ctx.pointer
+	-- one reach for the recording and every look: past it the pointer is off the clump
 	local uv = ctx.faceAt(pointer.Position, OreShellBuilder.DirtFront)
-	local reach = SprayScoring.MaxReach - 0.1
-	if uv and (math.abs(uv.X) > reach or math.abs(uv.Y) > reach) then
+	if uv and uv.Magnitude > SprayScoring.AimReach then
 		uv = nil
 	end
 	local spraying = ctx.live and not ctx.done and pointer.Down and uv ~= nil and not leaveConfirming(ctx)

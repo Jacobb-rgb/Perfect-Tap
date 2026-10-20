@@ -350,7 +350,7 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.9 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
-	-- Close-up while cleaning ore: soft focus, extra warmth.
+	-- Close-up while cleaning ore: extra warmth (no blur: the owner wants it sharp).
 	Workbench = {
 		Lighting = {},
 		Atmosphere = {},

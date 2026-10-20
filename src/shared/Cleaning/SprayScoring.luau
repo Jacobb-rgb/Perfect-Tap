@@ -40,11 +40,20 @@ SprayScoring.Radius = 0.24 -- face units the spray reaches around the nozzle poi
 -- Spray radius multiplier per input: a finger hides what it sprays and a stick is slower to aim.
 SprayScoring.InputLeniency = { Mouse = 1.0, Touch = 1.25, Gamepad = 1.15 }
 SprayScoring.SampleStep = 0.05 -- the client records a sample at most this often while spraying
+-- Two samples of one stroke closer than this can't come from the client (frame slack below SampleStep).
+-- With the timeline check this ties the replay's work to real session time (server load, review 10-20).
+SprayScoring.MinGap = SprayScoring.SampleStep - 0.01
+SprayScoring.AimReach = 1.8 -- face units from the clump's middle: the pointer farther out is off the clump
 SprayScoring.MaxStep = 0.1 -- a longer gap between two samples sprays only this long
 SprayScoring.MaxSubsteps = 24 -- a long jump of the nozzle is split into this many sprays at most
 SprayScoring.MaxReach = 3 -- face units: samples farther out are broken input
 SprayScoring.MaxSamples = 4000 -- 200 s of spraying at 20 samples per second
-SprayScoring.MaxStrokes = 600
+SprayScoring.MaxStrokes = 1500 -- quick dabs (one-sample taps are dropped by the client)
+-- Replay work budget: sprays per sample so far (+ slack). An honest run needs about 1-2 per
+-- sample (one more per ~2.4 face units per second of nozzle speed: frantic scribbling at 9 needs
+-- about 4.5, so 6 leaves room up to ~13); a forged zig-zag across the clump needs ~20.
+SprayScoring.SubstepsPerSample = 6
+SprayScoring.SubstepSlack = 200
 SprayScoring.CrystalRadius = 0.1 -- face units: the nozzle point this close heats a crystal
 SprayScoring.CrystalHeat = 0.35 -- seconds point-blank before a crystal cracks (a slow pass over it is fine)
 SprayScoring.CrystalCool = 1.5 -- heat lost per second away from it
@@ -97,6 +106,7 @@ export type Tracker = typeof(setmetatable(
 		heatT: { number },
 		cracked: { [number]: boolean },
 		cracks: number,
+		substeps: number,
 		sprayTime: number,
 		wasteTime: number,
 		firstT: number?, -- the first spray that hit dirt
@@ -129,6 +139,7 @@ function SprayTracker.new(pattern: CleaningPatterns.Pattern, input: any): Tracke
 		heatT = heatT,
 		cracked = {},
 		cracks = 0,
+		substeps = 0,
 		sprayTime = 0,
 		wasteTime = 0,
 		firstT = nil,
@@ -232,6 +243,7 @@ function SprayTracker.add(self: Tracker, u: number, v: number, t: number): ({ nu
 	local distance = math.sqrt(du * du + dv * dv)
 	local steps = math.clamp(math.ceil(distance / (self.radius * 0.5)), 1, SprayScoring.MaxSubsteps)
 	local each = dt / steps
+	self.substeps += steps
 	for k = 1, steps do
 		local f = (k - 0.5) / steps
 		spray(self, fromU + du * f, fromV + dv * f, each, fromT + (k - 1) * each, cleanedNow, crackedNow)
@@ -313,8 +325,11 @@ function SprayScoring.score(pattern: CleaningPatterns.Pattern, submission: any):
 	end
 	local tracker = SprayTracker.new(pattern, submission.Input)
 	local count = 0
+	local replayed = 0
 	local lastT = -1
-	for _, stroke in strokes do
+	local reach = SprayScoring.MaxReach
+	for s = 1, #strokes do
+		local stroke = strokes[s]
 		if type(stroke) ~= "table" or #stroke % 3 ~= 0 then
 			return invalid("bad stroke")
 		end
@@ -327,12 +342,19 @@ function SprayScoring.score(pattern: CleaningPatterns.Pattern, submission: any):
 			if not (finite(u) and finite(v) and finite(t)) then
 				return invalid("non-finite sample")
 			end
-			local reach = SprayScoring.MaxReach
 			if math.abs(u) > reach or math.abs(v) > reach or t < lastT - 1e-6 or t < 0 or t > SprayScoring.MaxSampleTime then
 				return invalid("sample out of range")
 			end
+			-- inside a stroke the client records at most every SampleStep
+			if i > 1 and t - lastT < SprayScoring.MinGap then
+				return invalid("samples too close")
+			end
 			lastT = t
 			tracker:add(u, v, t)
+			replayed += 1
+			if tracker.substeps > replayed * SprayScoring.SubstepsPerSample + SprayScoring.SubstepSlack then
+				return invalid("too much spray")
+			end
 		end
 		tracker:lift()
 	end
@@ -353,20 +375,42 @@ function SprayScoring.score(pattern: CleaningPatterns.Pattern, submission: any):
 end
 
 --[[
-	The server's timing check for a submission that score() accepted.
-	elapsed = seconds since the server started the session. The client's clock
-	starts later (when CleanBegin arrives), sprays only after the intro and
-	sends the recording only after the finish pause, so an honest run always
-	has first >= MinGaps.FirstSpray and elapsed >= latest + MinGaps.ToSubmit.
+	The server's cheap check, run BEFORE the replay (score). Shape-safe and
+	O(samples): only the timestamps are read. elapsed = seconds since the
+	server started the session. The client's clock starts later (when
+	CleanBegin arrives), sprays only after the intro and sends the recording
+	only after the finish pause, so an honest run always has
+	first >= MinGaps.FirstSpray and elapsed >= latest + MinGaps.ToSubmit.
 	A bot therefore needs at least as long as a perfect player going through
-	the real client (and the spray itself washes only so fast).
+	the real client, and with MinGap a heavy recording needs as much real
+	session time (the replay's work follows the time a player really spent).
 ]]
 function SprayScoring.fitsSession(submission: any, elapsed: number): (boolean, string?)
+	if type(submission) ~= "table" or type(submission.Strokes) ~= "table" then
+		return false, "bad submission"
+	end
+	local strokes = submission.Strokes
+	if #strokes > SprayScoring.MaxStrokes then
+		return false, "too many strokes"
+	end
 	local first, latest = math.huge, -math.huge
-	for _, stroke in submission.Strokes do
+	local count = 0
+	for s = 1, #strokes do
+		local stroke = strokes[s]
+		if type(stroke) ~= "table" or #stroke % 3 ~= 0 then
+			return false, "bad stroke"
+		end
+		count += #stroke // 3
+		if count > SprayScoring.MaxSamples then
+			return false, "too many samples"
+		end
 		for i = 3, #stroke, 3 do
-			first = math.min(first, stroke[i])
-			latest = math.max(latest, stroke[i])
+			local t = stroke[i]
+			if not finite(t) then
+				return false, "non-finite sample"
+			end
+			first = math.min(first, t)
+			latest = math.max(latest, t)
 		end
 	end
 	if first == math.huge then

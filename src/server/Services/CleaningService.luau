@@ -263,19 +263,17 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Net.fire("CleanResult", player, { Id = sessionId, Ok = false, Reason = "The ore is gone." })
 		return
 	end
+	-- The cheap checks first, the replay only after them: the time really spent, then every
+	-- timestamp inside it, after the real client's intro and before its finish pause
+	-- (SprayScoring.fitsSession, shape-safe). So a bot needs at least as long as a perfect
+	-- player going through the real client, and a heavy recording as much real session time.
 	local elapsed = os.clock() - session.StartedAt
-	local result = SprayScoring.score(session.Pattern, payload)
-	if result.Valid and elapsed < GameConfig.CleaningMinSeconds then
-		result = { Valid = false, Reason = "too fast" } :: any
-	end
-	if result.Valid then
-		-- Every timestamp must fit inside the real session time, after the real client's
-		-- intro and before its finish pause (SprayScoring.fitsSession). So a bot needs at
-		-- least as long as a perfect player going through the real client.
+	local result: any
+	if elapsed < GameConfig.CleaningMinSeconds then
+		result = { Valid = false, Reason = "too fast" }
+	else
 		local fits, why = SprayScoring.fitsSession(payload, elapsed)
-		if not fits then
-			result = { Valid = false, Reason = why } :: any
-		end
+		result = if fits then SprayScoring.score(session.Pattern, payload) else { Valid = false, Reason = why }
 	end
 	if not result.Valid then
 		warn(`[CleaningService] rejected cleaning from {player.Name}: {result.Reason}`)

@@ -288,7 +288,7 @@ return function(T, Loader)
 		T.eq(half.Reason, "dirt left")
 	end)
 
-	T.test("spray anti-cheat: a frame hitch or a jump sprays only MaxStep, faked speed can't wash", function()
+	T.test("spray anti-cheat: a frame hitch sprays only MaxStep, compressed time is refused", function()
 		local p = Patterns.generate("Gold", 11)
 		-- one sample, then the next 5 s later at the same spot: only MaxStep of spray
 		local tracker = Scoring.SprayTracker.new(p, "Mouse")
@@ -304,8 +304,72 @@ return function(T, Loader)
 			end
 		end
 		local fast = Scoring.score(p, sub)
-		T.falsy(fast.Valid, "compressed time washes less")
-		T.eq(fast.Reason, "dirt left")
+		T.falsy(fast.Valid, "compressed time can't come from the client")
+		T.eq(fast.Reason, "samples too close")
+	end)
+
+	T.test("spray anti-cheat: forged heavy payloads are rejected cheaply, honest runs unchanged", function()
+		local p = Patterns.generate(byRarity.Mythic, 12345)
+		local function zigzag(count: number, gap: number, input: string)
+			local stroke = {}
+			local t = 1
+			for i = 1, count do
+				local side = if i % 2 == 0 then 1.2 else -1.2
+				table.insert(stroke, side)
+				table.insert(stroke, side)
+				table.insert(stroke, t)
+				t += gap
+			end
+			return { Strokes = { stroke }, Input = input }, t
+		end
+		local function timed(fn): (number, any)
+			local started = os.clock()
+			local result = fn()
+			return (os.clock() - started) * 1000, result
+		end
+		-- 1. samples packed 1e-7 s apart: the real client never records closer than SampleStep
+		local dense = zigzag(Scoring.MaxSamples, 1e-7, "Touch")
+		local ms, r = timed(function()
+			return Scoring.score(p, dense)
+		end)
+		T.falsy(r.Valid)
+		T.eq(r.Reason, "samples too close")
+		T.truthy(ms < 20, `dense payload rejected in {ms} ms`)
+		-- 2. client-like spacing that never finishes: the cheap check wants the matching real time ...
+		local slow, last = zigzag(Scoring.MaxSamples, Scoring.SampleStep, "Touch")
+		T.falsy(Scoring.fitsSession(slow, 3.1), "200 s of samples in a 3 s session")
+		local cheap
+		cheap, r = timed(function()
+			return { Scoring.fitsSession(slow, 3.1) }
+		end)
+		T.truthy(cheap < 20, `the pre-check is cheap ({cheap} ms)`)
+		-- ... and even after waiting it out, the replay stops at its work budget
+		T.truthy(Scoring.fitsSession(slow, last + 1))
+		ms, r = timed(function()
+			return Scoring.score(p, slow)
+		end)
+		T.falsy(r.Valid)
+		T.eq(r.Reason, "too much spray")
+		T.truthy(ms < 30, `budget-limited replay in {ms} ms`)
+		-- 3. a string-keyed stroke list can't skip the stroke cap: nothing in it counts
+		T.falsy(Scoring.score(p, { Strokes = { a = dense.Strokes[1] } }).Valid)
+		T.falsy(Scoring.fitsSession({ Strokes = { a = dense.Strokes[1] } }, 300))
+		T.falsy(Scoring.fitsSession({ Strokes = { { 0, 0, "x" } } }, 300), "junk timestamps never error")
+		T.falsy(Scoring.fitsSession({ Strokes = { 5 } }, 300))
+		T.falsy(Scoring.fitsSession(nil, 300))
+		-- 4. an honest sweep is unchanged and cheap
+		local honest, tracker = goodSweep(p)
+		ms, r = timed(function()
+			return Scoring.score(p, honest)
+		end)
+		T.truthy(r.Valid)
+		T.eq(r.Grade, "Flawless")
+		local samples = 0
+		for _, stroke in honest.Strokes do
+			samples += #stroke // 3
+		end
+		T.truthy(tracker.substeps <= 2 * samples, `about one spray per sample ({tracker.substeps} for {samples})`)
+		T.truthy(ms < 50, `honest replay in {ms} ms`)
 	end)
 
 	T.test("spray timeline: the client's pauses and the server's gaps agree", function()

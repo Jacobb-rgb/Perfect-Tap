@@ -407,6 +407,9 @@ elseif sceneName == "cleaning" then
 	local workCf = CF.lookAt(orePoint.Position, orePoint.Position - (camPos - orePoint.Position).Unit)
 	local shell = OreShellBuilder.build(pattern, workCf, workspace)
 	local stage = process.args[3] or "spray"
+	if stage ~= "spray" and stage ~= "reveal" then
+		error("cleaning stage must be spray or reveal, got " .. stage)
+	end
 	local fx = roblox.Instance.new("Folder")
 	fx.Parent = workspace
 	local workLight = OreShellBuilder.workLight(workCf, fx)
@@ -506,29 +509,32 @@ elseif sceneName == "cleaning" then
 		view.Card.Visible = true
 		view.CleanBar.Visible = false -- like DefaultLook: the card sits where the bar was
 		-- the ore lifted out and glowing, rays around it
-		local lift = workCf:VectorToWorldSpace(roblox.Vector3.new(0, 0.2, 0.9))
+		local RevealFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Cleaning.RevealFx")
+		local lift = workCf:VectorToWorldSpace(RevealFx.Rise)
 		for _, part in shell.Core do
 			part.CFrame = part.CFrame + lift
 		end
-		for _, part in shell.CoreRim do
-			part.CFrame = part.CFrame + lift
-			part.Transparency = 0.6
-		end
+		-- the crystals sparkled off with the dirt (DefaultLook.finished)
 		for _, part in shell.Fragile do
-			part.CFrame = part.CFrame + lift
+			part:Destroy()
 		end
-		local center = orePoint.Position + (camPos - orePoint.Position).Unit * 0.6
+		for _, d in shell.Model:GetChildren() do
+			if d:IsA("BasePart") and d.Name == "CrystalBase" then
+				d:Destroy()
+			end
+		end
+		local center = shell.TreasurePivot.Position
 		local rayCount = if rarity.Order >= 6 then 12 else 8
 		for i = 1, rayCount do
 			local a = i / rayCount * math.pi * 2 + 0.8
-			local dir = workCf:VectorToWorldSpace(roblox.Vector3.new(math.cos(a), math.sin(a), 0.15))
+			local dir = workCf:VectorToWorldSpace(roblox.Vector3.new(math.cos(a), math.sin(a), RevealFx.RayTilt))
 			Geo.block(
 				fx,
 				CF.lookAt(center + dir * 3.2, center + dir * 4),
 				roblox.Vector3.new(0.12, 0.12, 6),
 				rarity.Color,
 				roblox.Enum.Material.Neon,
-				{ CanCollide = false, Transparency = 0.7 }
+				{ CanCollide = false, Transparency = 0.75 }
 			)
 		end
 		-- the glow light stays at the vise (behind the lifted ore), like the look's holder
@@ -543,7 +549,7 @@ elseif sceneName == "cleaning" then
 		local light = roblox.Instance.new("PointLight")
 		light.Color = ore.Glow
 		light.Range = 18
-		light.Brightness = 2
+		light.Brightness = 1.2
 		light.Parent = holder
 	end
 	local suffix = if phone then "_phone" else ""

@@ -82,12 +82,8 @@ function Strip.build(Loader: any, parent: any)
 			for _, patch in shell.Dirt do
 				patch:Destroy()
 			end
-			for _, part in shell.CoreRim do
-				part.Transparency = if f >= 2 then 0.6 else 0
-			end
-			for _, part in shell.Core do
-				part.Color = ore.Color
-				part.Reflectance = 0.25
+			for _, shard in shell.Fragile do
+				shard:Destroy()
 			end
 			if r == 1 then
 				label(CF.new(x, y + 3.4, 0.5), 3.4, frame, C3.fromRGB(255, 214, 120))
@@ -123,16 +119,9 @@ function Strip.build(Loader: any, parent: any)
 				local p = if f == 3 then 0.45 else 1
 				local ease = 1 - (1 - RevealFx.warp(p, plan.SlowMo)) ^ 3
 				local lift = 1 - (1 - math.min(1, p * 2.2)) ^ 2
-				local pivot = workCf * CF.new(0, 0, OreShellBuilder.CoreFront - 0.4)
-				local turn = pivot * CF.new(0, 0.2 * lift, 0.9 * lift) * CF.Angles(0, 0, ease * plan.Spins * math.pi * 2)
-				local parts = {}
+				local pivot = shell.TreasurePivot
+				local turn = pivot * CF.new(RevealFx.Rise * lift) * CF.Angles(0, ease * plan.Spins * math.pi * 2, 0)
 				for _, part in shell.Core do
-					table.insert(parts, part)
-				end
-				for _, part in shell.CoreRim do
-					table.insert(parts, part)
-				end
-				for _, part in parts do
 					part.CFrame = turn * pivot:ToObjectSpace(part.CFrame)
 				end
 			end

@@ -8,14 +8,16 @@
 	camera. World = WorkCF * (u * Scale, v * Scale, z).
 
 	Layers (front to back):
-	  dirt cells   one block per pattern cell, from the ore face out to about
+	  dirt cells   one block per pattern cell, from z +0.11 out to about
 	               DirtFront (thicker dirt sticks out more); crystals (Neon,
 	               on a pale base) lean out to about z +0.31 so they read on
 	               a phone
-	  ore face     z +0.12 .. -1.0 in the ore's colour (it shows as the dirt
-	               washes off), a thin rim that glows in the reveal
-	  clump body   the outline shape in dark dirt, front at z = -0.25, plus
-	               lumps behind
+	  treasure     the real ore (ItemBuilder.display, the podium look) or the
+	               dusty relic (ArtifactBuilder), turned three-quarters to the
+	               camera and scaled to TreasureSize, its front just behind
+	               the dirt: it shows as the dirt washes off
+	  clump body   the outline shape in dark dirt, front at z = BodyFront,
+	               plus lumps behind
 ]]
 
 local Geo = require(script.Parent.Geo)
@@ -23,6 +25,7 @@ local Rng = require(script.Parent.Parent.Util.Rng)
 local OreData = require(script.Parent.Parent.Config.OreData)
 local Geometry2D = require(script.Parent.Parent.Cleaning.Geometry2D)
 local ItemBuilder = require(script.Parent.ItemBuilder)
+local ArtifactBuilder = require(script.Parent.ArtifactBuilder)
 
 local OreShellBuilder = {}
 
@@ -31,6 +34,9 @@ OreShellBuilder.CoreFront = 0.12
 OreShellBuilder.DirtFront = 0.2 -- the spray plane (the front of an average dirt cell)
 OreShellBuilder.DirtDepth = { Min = 0.05, Max = 0.16 } -- studs of dirt over the ore face, thin to thick cells
 OreShellBuilder.CellOverlap = 1.18 -- dirt blocks are a little bigger than their cells (no gaps)
+OreShellBuilder.BodyFront = -0.7 -- the clump's dark body behind the treasure
+OreShellBuilder.TreasureSize = 1.85 -- studs across: the ore (or relic) under the dirt
+OreShellBuilder.TreasureTurn = CFrame.Angles(-0.22, math.pi - 0.55, 0) -- three-quarters toward the camera
 OreShellBuilder.CrystalBaseSize = 0.2 -- face units; the pale base under a crystal
 OreShellBuilder.CrystalLean = 45 -- degrees out of the face, toward the camera
 OreShellBuilder.DirtColors = { Color3.fromRGB(104, 78, 54), Color3.fromRGB(90, 68, 50), Color3.fromRGB(116, 88, 60) }
@@ -39,8 +45,9 @@ export type Shell = {
 	Model: Model,
 	WorkCF: CFrame,
 	Scale: number,
-	Core: { BasePart },
-	CoreRim: { BasePart },
+	Treasure: Model, -- the ore (or relic) under the dirt
+	Core: { BasePart }, -- the treasure's parts (they rise and spin in the reveal)
+	TreasurePivot: CFrame, -- the treasure's middle, in the face's frame
 	Dirt: { [number]: BasePart }, -- cell index -> its dirt block (attribute "FullSize": its size untouched)
 	Fragile: { [number]: BasePart }, -- crystal index -> its glowing shard
 	BackRock: { BasePart },
@@ -88,11 +95,68 @@ local function prism(
 	return parts
 end
 
+-- The visible parts' box in the face's frame (studs): min, max.
+local function faceBox(model: Instance, workCF: CFrame): (Vector3, Vector3)
+	local x0, y0, z0 = math.huge, math.huge, math.huge
+	local x1, y1, z1 = -math.huge, -math.huge, -math.huge
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			local h = d.Size / 2
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local p = workCF:PointToObjectSpace(d.CFrame:PointToWorldSpace(Vector3.new(h.X * sx, h.Y * sy, h.Z * sz)))
+						x0, y0, z0 = math.min(x0, p.X), math.min(y0, p.Y), math.min(z0, p.Z)
+						x1, y1, z1 = math.max(x1, p.X), math.max(y1, p.Y), math.max(z1, p.Z)
+					end
+				end
+			end
+		end
+	end
+	return Vector3.new(x0, y0, z0), Vector3.new(x1, y1, z1)
+end
+
+local function forParts(model: Instance, fn: (BasePart) -> ())
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			fn(d)
+		end
+	end
+end
+
+--[[
+	Fits the treasure behind the dirt: centred on the face, TreasureSize
+	across (its box's corners inside the clump), its front just behind the
+	dirt blocks.
+]]
+function OreShellBuilder.fitTreasure(model: Model, workCF: CFrame, pattern: any)
+	local mn, mx = faceBox(model, workCF)
+	local size = mx - mn
+	local k = OreShellBuilder.TreasureSize / math.max(size.X, size.Y, 1e-3)
+	local radius = math.huge
+	for _, p in pattern.Outline do
+		radius = math.min(radius, p.Magnitude)
+	end
+	local diagonal = math.sqrt(size.X * size.X + size.Y * size.Y)
+	k = math.min(k, 2 * 0.95 * radius * OreShellBuilder.Scale / math.max(diagonal, 1e-3))
+	local pivot = CFrame.new(workCF:PointToWorldSpace((mn + mx) / 2))
+	forParts(model, function(part)
+		local rel = pivot:ToObjectSpace(part.CFrame)
+		part.Size *= k
+		part.CFrame = pivot * CFrame.new(rel.Position * k) * (rel - rel.Position)
+	end)
+	mn, mx = faceBox(model, workCF)
+	local shift = workCF:VectorToWorldSpace(Vector3.new(-(mn.X + mx.X) / 2, -(mn.Y + mx.Y) / 2, OreShellBuilder.CoreFront - 0.03 - mx.Z))
+	forParts(model, function(part)
+		part.CFrame = part.CFrame + shift
+	end)
+end
+
 --[[
 	workCF: CFrame at the ore center; its -LookVector points at the camera
 	(build it with CFrame.lookAt(center, center - toCamera)).
 ]]
-function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?): Shell
+function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?, relicId: string?): Shell
 	local ore = OreData.get(pattern.OreId)
 	local rng = Rng.new(pattern.Seed + 17)
 	local scale = OreShellBuilder.Scale
@@ -101,11 +165,20 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 
 	-- clump body: the outline extruded backwards in dark dirt, plus lumps behind
 	local bodyColor = ItemBuilder.DirtyCrustDark:Lerp(Color3.fromRGB(70, 52, 38), 0.4)
-	local backRock =
-		prism(model, workCF, scale, pattern.Outline, -0.25, 1.15, bodyColor, Enum.Material.SmoothPlastic, { Name = "RockBody" })
+	local backRock = prism(
+		model,
+		workCF,
+		scale,
+		pattern.Outline,
+		OreShellBuilder.BodyFront,
+		1,
+		bodyColor,
+		Enum.Material.SmoothPlastic,
+		{ Name = "RockBody" }
+	)
 	for _ = 1, 3 do
 		local a = rng:range(0, math.pi * 2)
-		local offset = Vector3.new(math.cos(a) * 0.55 * scale, math.sin(a) * 0.5 * scale, -1.15)
+		local offset = Vector3.new(math.cos(a) * 0.55 * scale, math.sin(a) * 0.5 * scale, OreShellBuilder.BodyFront - 0.95)
 		table.insert(
 			backRock,
 			Geo.block(
@@ -119,30 +192,24 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 		)
 	end
 
-	-- the ore face under the dirt (a little inside the outline) + a rim that glows in the reveal
-	local face = {}
-	for _, p in pattern.Outline do
-		table.insert(face, p * 0.97)
+	-- the treasure under the dirt: the real ore in its podium look, or the dusty relic
+	local turn = workCF * OreShellBuilder.TreasureTurn
+	local treasure: Model? = if relicId then ArtifactBuilder.build(relicId, turn, 1, true) else nil
+	if not treasure then
+		treasure = ItemBuilder.display({ K = "Clean", O = pattern.OreId }, turn, pattern.Seed)
 	end
+	local found = treasure :: Model
+	found.Name = "Treasure"
+	found.Parent = model
+	OreShellBuilder.fitTreasure(found, workCF, pattern)
+	local core: { BasePart } = {}
+	forParts(found, function(part)
+		part.CastShadow = false
+		table.insert(core, part)
+	end)
+	local tmn, tmx = faceBox(found, workCF)
+	local treasurePivot = workCF * CFrame.new(0, 0, (tmn.Z + tmx.Z) / 2)
 	local glow = ItemBuilder.glowColor(ore.Glow)
-	local core =
-		prism(model, workCF, scale, face, OreShellBuilder.CoreFront, 1.1, ore.Color, Enum.Material.SmoothPlastic, { Name = "Core" })
-	local rim: { BasePart } = {}
-	for i = 1, #face do
-		local a2 = face[i]
-		local b2 = face[i % #face + 1]
-		local a = workCF:PointToWorldSpace(Vector3.new(a2.X * scale, a2.Y * scale, OreShellBuilder.CoreFront - 0.05))
-		local b = workCF:PointToWorldSpace(Vector3.new(b2.X * scale, b2.Y * scale, OreShellBuilder.CoreFront - 0.05))
-		local edge = Geo.block(
-			model,
-			CFrame.lookAt((a + b) / 2, b),
-			Vector3.new(0.09, 0.09, (b - a).Magnitude),
-			glow,
-			Enum.Material.Neon,
-			props({ Name = "CoreRim", CastShadow = false, Transparency = 1 })
-		)
-		table.insert(rim, edge)
-	end
 
 	-- one dirt block per cell: thicker dirt sticks out more and is darker
 	local most = 0
@@ -206,8 +273,9 @@ function OreShellBuilder.build(pattern: any, workCF: CFrame, parent: Instance?):
 		Model = model,
 		WorkCF = workCF,
 		Scale = scale,
+		Treasure = found,
 		Core = core,
-		CoreRim = rim,
+		TreasurePivot = treasurePivot,
 		Dirt = dirt,
 		Fragile = fragile,
 		BackRock = backRock,

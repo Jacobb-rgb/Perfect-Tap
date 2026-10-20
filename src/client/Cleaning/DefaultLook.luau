@@ -21,7 +21,6 @@ local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local OreShellBuilder = require(Shared.Builders.OreShellBuilder)
-local ArtifactBuilder = require(Shared.Builders.ArtifactBuilder)
 local Geo = require(Shared.Builders.Geo)
 
 local RevealFx = require(script.Parent.RevealFx)
@@ -61,24 +60,9 @@ function DefaultLook.begin(ctx: any)
 	local state: any = {}
 	ctx.LookState = state
 	local folder = ctx.Folder
-	state.shell = OreShellBuilder.build(ctx.Pattern, ctx.WorkCF, folder)
+	-- the real ore (or the dusty relic) waits under the dirt
+	state.shell = OreShellBuilder.build(ctx.Pattern, ctx.WorkCF, folder, ctx.Relic)
 	OreShellBuilder.workLight(ctx.WorkCF, folder)
-	-- a dusty relic: the real relic waits inside the clump (hidden until the reveal)
-	state.relicParts = {}
-	if ctx.Relic then
-		local corePoint = ctx.WorkCF * CFrame.new(0, -0.55, OreShellBuilder.CoreFront - 0.4)
-		local relicModel = ArtifactBuilder.build(ctx.Relic, corePoint, 0.8, true)
-		if relicModel then
-			relicModel.Parent = folder
-			for _, d in relicModel:GetDescendants() do
-				if d:IsA("BasePart") then
-					d:SetAttribute("ShowAs", d.Transparency)
-					d.Transparency = 1
-					table.insert(state.relicParts, d)
-				end
-			end
-		end
-	end
 	for _, block in state.shell.Dirt do
 		block:SetAttribute("FullCF", block.CFrame)
 	end
@@ -141,7 +125,7 @@ function DefaultLook.spray(uv: Vector2?, hit: Vector3?, active: boolean, ctx: an
 	end
 	local workCF: CFrame = ctx.WorkCF
 	-- a lifted finger has no hover: no wand without a touch
-	if not uv or not hit or uv.Magnitude > 1.8 or (not active and ctx.Input == "Touch") then
+	if not uv or not hit or (not active and ctx.Input == "Touch") then
 		SprayParts.placeWand(state.wand, nil)
 		state.jet.Transparency = 1
 		state.mist.Enabled = false
@@ -265,32 +249,21 @@ function DefaultLook.finished(ctx: any)
 	local rarity = ctx.Rarity
 	local order = rarity.Order
 	local shell = state.shell
-	-- everything that is the ore rises out of the clump and spins
-	local parts: { BasePart } = {}
-	for _, p in shell.Core do
-		table.insert(parts, p)
-	end
-	for _, p in shell.CoreRim do
-		table.insert(parts, p)
-		TweenService:Create(p, TweenInfo.new(0.4), { Transparency = 0.6 }):Play()
-	end
-	for _, p in shell.Fragile do
-		if p.Parent then
-			table.insert(parts, p)
+	-- the crystals that made it sparkle off with the dirt
+	for _, shard in shell.Fragile do
+		if shard.Parent then
+			Vfx.burst("Glint", shard.Position, 6, ctx.Ore.Glow)
+			shard:Destroy()
 		end
 	end
-	-- a relic: the ore stand-in fades and the real relic rises and spins instead
-	if ctx.Relic and #state.relicParts > 0 then
-		for _, p in parts do
-			p.Transparency = 1
-		end
-		parts = {}
-		for _, p in state.relicParts do
-			p.Transparency = (p:GetAttribute("ShowAs") :: number?) or 0
-			table.insert(parts, p)
+	for _, d in shell.Model:GetChildren() do
+		if d:IsA("BasePart") and d.Name == "CrystalBase" then
+			d:Destroy()
 		end
 	end
-	local pivot = shell.WorkCF * CFrame.new(0, 0, OreShellBuilder.CoreFront - 0.4)
+	-- the ore (or relic) rises out of the clump and turns like on a turntable
+	local parts: { BasePart } = shell.Core
+	local pivot = shell.TreasurePivot
 	local offsets = {}
 	for i, p in parts do
 		offsets[i] = pivot:ToObjectSpace(p.CFrame)
@@ -308,9 +281,9 @@ function DefaultLook.finished(ctx: any)
 	light.Brightness = 0
 	light.Shadows = false
 	light.Parent = holder
-	TweenService:Create(light, TweenInfo.new(0.25), { Brightness = 6 + order }):Play()
+	TweenService:Create(light, TweenInfo.new(0.25), { Brightness = 3 + order * 0.5 }):Play()
 	task.delay(0.35, function()
-		TweenService:Create(light, TweenInfo.new(1.2), { Brightness = 2 }):Play()
+		TweenService:Create(light, TweenInfo.new(1.2), { Brightness = 1.2 }):Play()
 	end)
 	local burst = Geo.ball(ctx.Folder, center, 0.6, rarity.Color, Enum.Material.Neon, props({ Transparency = 0.2 }))
 	TweenService
@@ -370,7 +343,7 @@ function DefaultLook.finished(ctx: any)
 		sweepAt((elapsed - RevealFx.SweepDelay) / RevealFx.SweepTime)
 		local lift = math.min(1, p * 2.2)
 		lift = 1 - (1 - lift) ^ 2
-		local cf = pivot * CFrame.new(0, 0.2 * lift, 0.9 * lift) * CFrame.Angles(0, 0, ease * plan.Spins * math.pi * 2)
+		local cf = pivot * CFrame.new(RevealFx.Rise * lift) * CFrame.Angles(0, ease * plan.Spins * math.pi * 2, 0)
 		for i, part in parts do
 			if part.Parent then
 				part.CFrame = cf * offsets[i]
@@ -378,7 +351,7 @@ function DefaultLook.finished(ctx: any)
 		end
 		for _, r in rays do
 			local a = r.angle + p * 1.5
-			local dir = shell.WorkCF:VectorToWorldSpace(Vector3.new(math.cos(a), math.sin(a), 0.15))
+			local dir = shell.WorkCF:VectorToWorldSpace(Vector3.new(math.cos(a), math.sin(a), RevealFx.RayTilt))
 			r.part.CFrame = CFrame.lookAt(center + dir * 3.2, center + dir * 4)
 			r.part.Transparency = 0.3 + 0.7 * p
 		end
@@ -466,8 +439,18 @@ function DefaultLook.done(result: { [string]: any }, ctx: any)
 	end
 end
 
-function DefaultLook.cancel(_ctx: any)
+-- The session ended without a result (Leave, death, a timeout): the spray stops at once.
+function DefaultLook.cancel(ctx: any)
 	Sfx.loop("Spray", false)
+	local state = ctx.LookState
+	if not state or not state.wand then
+		return
+	end
+	state.finished = true
+	SprayParts.placeWand(state.wand, nil)
+	state.jet.Transparency = 1
+	state.mist.Enabled = false
+	state.drops.Enabled = false
 end
 
 return DefaultLook
