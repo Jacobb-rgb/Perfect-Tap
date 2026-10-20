@@ -37,7 +37,7 @@
 	                              base to the top of the head gear) and
 	                              "Hover" (studs; 0 unless Premium).
 	    opts.Size     extra scale (1 = the golem's own Scale)
-	    opts.Welded   followers: every part but Body is unanchored, massless
+	    opts.Welded   followers (no PointLight): every part but Body is unanchored, massless
 	                  and welded to the anchored Body (moving Body moves the
 	                  golem: one CFrame write per frame)
 	    No part collides, touches or is queried; only Body and Head cast
@@ -541,6 +541,13 @@ function GolemBuilder.build(kind: string, base: CFrame?, opts: Opts?): Model
 	model:SetAttribute("Height", (top + hover) * s)
 	model:SetAttribute("Hover", hover * s)
 	if opts and opts.Welded then
+		-- a follower keeps no light (the opening and the pictures do): many
+		-- followers may walk round one phone, lights cost the most
+		for _, d in model:GetDescendants() do
+			if d:IsA("PointLight") then
+				d:Destroy()
+			end
+		end
 		for _, child in model:GetChildren() do
 			if child:IsA("BasePart") and child ~= torso then
 				child.Anchored = false

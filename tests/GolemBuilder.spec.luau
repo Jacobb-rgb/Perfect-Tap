@@ -332,4 +332,21 @@ return function(T, Loader)
 			T.le(GolemBuilder.partCount(shard), GolemBuilder.ShardMaxParts, id .. " shard parts")
 		end
 	end)
+
+	T.test("GolemBuilder: limited followers carry no light, the full build does", function()
+		local full = GolemBuilder.build("DragonKing")
+		local follower = GolemBuilder.build("DragonKing", CFrame.new(), { Welded = true })
+		local function lights(m: any): number
+			local n = 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("PointLight") then
+					n += 1
+				end
+			end
+			return n
+		end
+		T.eq(lights(full), 1, "the Mythic's one light")
+		T.eq(lights(follower), 0, "none on a follower")
+		T.eq(GolemBuilder.partCount(follower), GolemBuilder.partCount(full), "the same costume")
+	end)
 end
