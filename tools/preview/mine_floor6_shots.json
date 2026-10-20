@@ -1,0 +1,9 @@
+{
+ "mine_floor6_overview": { "scene": "mine_floor_6", "position": [0, 50, 128], "target": [0, 10, -16], "fov": 55, "preset": "Core", "shadowExtent": 180, "maxLights": 40 },
+ "mine_floor6_entrance": { "scene": "mine_floor_6", "position": [3, 9.5, 70], "target": [0, 8, 6], "fov": 66, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
+ "mine_floor6_heart": { "scene": "mine_floor_6", "position": [-30, 30, -14], "target": [0, 34, -58], "fov": 62, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
+ "mine_floor6_side": { "scene": "mine_floor_6", "position": [118, 6, 54], "target": [0, -2, -6], "fov": 52, "preset": "Core", "shadowExtent": 180, "maxLights": 40 },
+ "mine_floor6_deep": { "scene": "mine_floor_6", "position": [34, 20, -2], "target": [0, 6, -38], "fov": 60, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
+ "mine_floor6_hub": { "scene": "mine_floor_6", "position": [-32, 18, 46], "target": [4, 2, 14], "fov": 60, "preset": "Core", "shadowExtent": 120, "maxLights": 40 },
+ "mine_floor6_detail": { "scene": "mine_floor_6", "position": [-22, 7, 38], "target": [-9, 2, 22], "fov": 60, "preset": "Core", "shadowExtent": 80, "maxLights": 40 }
+}

@@ -1,8 +1,7 @@
 --[[
 	Mine floor concepts for the owner (2026-10-17, docs/plans/MINE_FLOORS_PLAN.md):
 	the rocks of all 5 floors (RockBuilder) side by side, the Giant Crystals, and a
-	storyboard of a rock breaking; row 6 / the last giant is the new Stormglass Rift
-	(built, not in MineFloors yet: mine_floor_scene's stand-in floor). Scene "mine_rocks"
+	storyboard of a rock breaking (rows and giants: all MineFloors floors). Scene "mine_rocks"
 	(lune run tools/lune/export_scene.luau mine_rocks), shots in
 	tools/preview/mine_shots.json.
 
@@ -132,12 +131,10 @@ function MineConcepts.buildRocks(Loader, workspace)
 
 	---------------------------------------------------------------- floor rows
 	-- i = the row (and seed base), key = how MineFloors / RockBuilder find the floor
-	local storm = require("./mine_floor_scene").stormFloor(Loader)
 	local rows = {}
 	for _, floor in MineFloors.List do
 		table.insert(rows, { Floor = floor, I = floor.Index, Key = floor.Index })
 	end
-	table.insert(rows, { Floor = storm, I = 6, Key = storm.Id, Title = "NEW" })
 	for _, spec in rows do
 		local floor, i, key = spec.Floor, spec.I, spec.Key
 		local pal = floor.Palette
@@ -148,7 +145,7 @@ function MineConcepts.buildRocks(Loader, workspace)
 		Geo.block(row, CF.new(0, -0.5, z - 2), V3.new(66, 1, 30), pal.Ground)
 		Geo.block(row, CF.new(0, 8, z - 14), V3.new(70, 18, 2), pal.Dark)
 		local lampColor = C3.fromRGB(255, 238, 220):Lerp(pal.Light, 0.25)
-		local power = if i == 1 then 0.5 elseif i == 5 then 2.2 elseif i == 6 then 2.0 else 1.8
+		local power = if i == 1 then 0.5 elseif floor.Id == "HeartstoneCore" then 2.2 elseif floor.Id == "StormglassRift" then 2.0 else 1.8
 		for _, lx in { -20, 0, 20 } do
 			lamp(Geo, CF, row, V3.new(lx, 10, z + 8), lampColor, 30, power)
 		end
@@ -166,7 +163,7 @@ function MineConcepts.buildRocks(Loader, workspace)
 			label(Geo, CF, row, CF.new(x, 0.32, z + 4.2) * CF.Angles(-1.05, 0, 0), 8.6, 0.9, KIND_TEXT[kind] .. hp, TEXT)
 		end
 		person(row, 30.5, z - 1)
-		local title = string.format("%s · %s · Blaster %d+%s", spec.Title or tostring(i), string.upper(floor.Name), floor.MinBlaster, if floor.ViaElevator then " · elevator" else "")
+		local title = string.format("%s · %s · Blaster %d+%s", tostring(i), string.upper(floor.Name), floor.MinBlaster, if floor.ViaElevator then " · elevator" else "")
 		label(Geo, CF, row, CF.new(0, 0.32, z + 7.4) * CF.Angles(-1.05, 0, 0), 30, 1.3, title, TEXT)
 	end
 
@@ -274,7 +271,7 @@ end
 --[[
 	The ore-shelf showcase (after the owner's reference picture): a stepped
 	display in a dark hall, one shelf per floor with a neon edge in the floor's
-	color, floor 1 at the top back and floor 5 at the front, the six rock kinds
+	color, floor 1 at the top back and the deepest floor at the front, the six rock kinds
 	of each floor on it with name plates. Scene "mine_showcase".
 ]]
 local SHELF_COLORS = {
@@ -282,6 +279,7 @@ local SHELF_COLORS = {
 	C3.fromRGB(255, 96, 40),
 	C3.fromRGB(70, 214, 255),
 	C3.fromRGB(196, 130, 255),
+	C3.fromRGB(255, 222, 90),
 	C3.fromRGB(255, 70, 160),
 }
 local PLATE_TEXT = {
@@ -331,7 +329,7 @@ function MineConcepts.buildShowcase(Loader, workspace)
 	label(Geo, CF, root, CF.new(0, 47, -62.9), 52, 6.5, "TERRA FORGE  ·  MINE FLOORS", C3.fromRGB(255, 190, 90))
 
 	for _, floor in MineFloors.List do
-		local r = 5 - floor.Index -- floor 5 in front (r = 0), floor 1 at the top back (r = 4)
+		local r = #MineFloors.List - floor.Index -- the deepest floor in front (r = 0), floor 1 at the top back
 		local top = (r + 1) * H
 		local front = -r * D
 		local color = SHELF_COLORS[floor.Index]

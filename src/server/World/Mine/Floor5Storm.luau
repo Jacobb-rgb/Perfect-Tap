@@ -1,10 +1,10 @@
 --[[
-	Mine floor STORMGLASS RIFT (blaster 8+, reached only by the elevator), the
-	new floor between the Sunken Palace and the Heartstone Core (the balance
-	study's 3h-5h stretch). Phase A: built and previewed, NOT in the game yet
-	(MineFloors, WorldBuilder, TrainConfig and WorldLayout don't know it);
-	phase B inserts it as floor 5 and the core becomes floor 6. Contract:
-	MineKit's header.
+	Mine floor 5, STORMGLASS RIFT (blaster 8+, reached only by the elevator),
+	between the Sunken Palace and the Heartstone Core (the balance study's
+	3h-5h stretch, docs/plans/STORM_FLOOR_PLAN.md). MineFloors entry
+	"StormglassRift", MineFloors.Placement[5] (0, -300, -800), WorldLayout zone
+	and cave "StormglassRift", its Mine Lift TrainConfig "StormglassRift" at
+	MineFloors.LiftSpots[5]. Contract: MineKit's header.
 
 	A deep storm cavern of dark indigo stone where an ancient storm still
 	rages: electric yellow-white stormglass crystals, silver-steel storm
@@ -53,29 +53,22 @@ local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
 
 local Floor = {}
 
-Floor.Index = 5 -- the index phase B gives it (the Heartstone Core moves to 6)
-Floor.Id = "StormglassRift"
+local ENTRY = MineFloors.get("StormglassRift")
+
+Floor.Id = ENTRY.Id
+Floor.Index = ENTRY.Index
 Floor.Size = Vector3.new(136, 56, 120)
-Floor.MinBlaster = 8
+Floor.MinBlaster = ENTRY.MinBlaster
 
 local rgb = Color3.fromRGB
 
--- The floor's MineFloors palette. Phase B moves it into MineFloors.List (Id StormglassRift)
--- and reads it back from there like the other floors; RockBuilder's "StormglassRift" look
--- and the preview's stand-in floor table use these colors.
-Floor.Palette = {
-	Mid = rgb(58, 66, 104), -- rock body: dark indigo
-	Light = rgb(92, 102, 150), -- rock tops
-	Dark = rgb(36, 40, 70), -- rock feet, cracks
-	Crystal = rgb(255, 236, 120), -- electric yellow storm crystals
-	Crystal2 = rgb(255, 250, 215), -- yellow-white sparks
-	Accent = rgb(226, 132, 72), -- the copper coils
-	Ground = rgb(54, 62, 100),
-} :: MineFloors.Palette
+-- The floor's MineFloors palette: dark indigo rock, electric yellow / yellow-white storm
+-- crystals, copper coils (RockBuilder's "StormglassRift" look uses the same).
+Floor.Palette = ENTRY.Palette
 
--- The train's Mine Lift on the landing (phase B: MineFloors.LiftSpots / TrainConfig.Lifts);
--- its cable hangs from the crane beam at LIFT_SPOT.Y + 30 (WorldLayout.Caves Max.Y).
-Floor.LiftSpot = Vector3.new(28, 2.4, 47)
+-- The train's Mine Lift on the landing (MineFloors.LiftSpots, TrainConfig.Lifts "StormglassRift");
+-- its cable hangs from the crane beam at LIFT_SPOT.Y + 30 (WorldLayout.Caves.StormglassRift.Max.Y).
+Floor.LiftSpot = MineFloors.LiftSpots[ENTRY.Index] or Vector3.new(28, 2.4, 47)
 
 ---------------------------------------------------------------- palette and part presets
 

@@ -14,7 +14,7 @@ return function(T, Loader)
 	local SoundConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SoundConfig")
 	local MineKit = Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
-	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Core" }
+	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Storm", "Floor6Core" }
 	local KINDS = { "MineDrip", "MineRumble", "LagoonLap", "PalaceEcho", "CrystalHum", "LavaBubble", "StormCrackle" }
 	-- AmbienceConfig's own kinds (review/hory-noc): the mine kinds are merged into the same table
 	local LOBBY_KINDS = { "Waterfall", "Brook", "Pond", "Forge", "Plaza" }
@@ -92,14 +92,14 @@ return function(T, Loader)
 	end
 
 	-- a floor's box: its footprint (Floor.Size X, Z around the origin), from half its height
-	-- below the ground up to its height (floor 5's void islands reach below the origin)
+	-- below the ground up to its height (floor 6's void islands reach below the origin)
 	local function inBox(Floor, origin, p): boolean
 		local q = origin:PointToObjectSpace(p)
 		local s = Floor.Size
 		return math.abs(q.X) <= s.X / 2 and math.abs(q.Z) <= s.Z / 2 and q.Y >= -s.Y / 2 and q.Y <= s.Y
 	end
 
-	-- the game build of all five floors (WorldBuilder removes the rock spawns and markers)
+	-- the game build of all the floors (WorldBuilder removes the rock spawns and markers)
 	local built: any = nil
 	local function mine(): any
 		if not built then
@@ -146,12 +146,11 @@ return function(T, Loader)
 		end
 		T.eq(seen, #KINDS, "seven mine kinds")
 		local used: { [string]: boolean } = {}
-		-- keyed by floor Id (a new floor can go in between): every floor in MineFloors has a
-		-- list, and the one extra list is the Stormglass Rift's (built, not in the game yet)
+		-- keyed by floor Id (a new floor can go in between): every floor in MineFloors has a list
 		local lists = 0
 		for id, kinds in MineAmbience.Floors do
 			lists += 1
-			T.truthy(MineFloors.ById[id] ~= nil or id == "StormglassRift", `kind list for a known floor ({id})`)
+			T.truthy(MineFloors.ById[id] ~= nil, `kind list for a known floor ({id})`)
 			for _, kind in kinds do
 				T.truthy(MineAmbience.Kinds[kind], `floor {id} kind {kind}`)
 				used[kind] = true
@@ -160,7 +159,7 @@ return function(T, Loader)
 		for _, floor in MineFloors.List do
 			T.truthy(MineAmbience.Floors[floor.Id], floor.Id .. " has a kind list")
 		end
-		T.le(lists, #MineFloors.List + 1, "no stray kind lists")
+		T.eq(lists, #MineFloors.List, "a kind list per floor, no strays")
 		for _, kind in KINDS do
 			T.truthy(used[kind], kind .. " is on a floor")
 		end

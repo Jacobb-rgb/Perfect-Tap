@@ -1,12 +1,12 @@
 -- Mine floor areas (src/server/World/Mine): the shared MineKit pieces and every floor
--- builder that exists keep the contract in MineKit's header (spawns, markers, budgets),
--- the Stormglass Rift too (built, not in the game yet).
+-- builder that exists keep the contract in MineKit's header (spawns, markers, budgets), and
+-- the floors' boxes in the world keep clear of each other (the elevator-only ones).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
 	local MineKit = Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit")
-	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Core" }
+	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Storm", "Floor6Core" }
 
 	local function count(model, className)
 		local n = 0
@@ -97,9 +97,58 @@ return function(T, Loader)
 		end
 	end)
 
-	---------------------------------------------------------------- the Stormglass Rift (phase A)
-	-- Built and previewed, not in the game yet (phase B inserts it as floor 5 between the
-	-- palace and the core): the same contract, its own budgets and height band.
+	-- the world-space box of a whole floor model (min, max)
+	local function modelBox(model): (any, any)
+		local lo, hi = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = d.CFrame:GetComponents()
+				local h = d.Size / 2
+				local e = V3.new(
+					math.abs(r00) * h.X + math.abs(r01) * h.Y + math.abs(r02) * h.Z,
+					math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z,
+					math.abs(r20) * h.X + math.abs(r21) * h.Y + math.abs(r22) * h.Z
+				)
+				lo = lo:Min(d.CFrame.Position - e)
+				hi = hi:Max(d.CFrame.Position + e)
+			end
+		end
+		return lo, hi
+	end
+
+	T.test("mine floor areas in the world: the elevator-only floors' boxes keep clear of every other floor", function()
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		T.eq(#MODULES, #MineFloors.List, "a builder per floor")
+		local boxes = {}
+		for index, name in MODULES do
+			local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine." .. name)
+			T.eq(Floor.Index, index, name .. " index = its MineFloors index")
+			local model = Floor.build(roblox.Instance.new("Folder"), MineFloors.Placement[index], { Cutaway = false })
+			local lo, hi = modelBox(model)
+			boxes[index] = { Lo = lo, Hi = hi }
+		end
+		local GAP = 2 -- studs of air at least between two floors
+		for i = 1, #boxes do
+			for j = i + 1, #boxes do
+				-- (floors 1-3 are walked into each other: their tunnels and ramps may touch)
+				if MineFloors.List[i].ViaElevator or MineFloors.List[j].ViaElevator then
+					local a, b = boxes[i], boxes[j]
+					local apart = a.Hi.X + GAP <= b.Lo.X
+						or b.Hi.X + GAP <= a.Lo.X
+						or a.Hi.Y + GAP <= b.Lo.Y
+						or b.Hi.Y + GAP <= a.Lo.Y
+						or a.Hi.Z + GAP <= b.Lo.Z
+						or b.Hi.Z + GAP <= a.Lo.Z
+					T.truthy(apart, `{MineFloors.List[i].Id} and {MineFloors.List[j].Id} keep {GAP} studs apart`)
+				end
+			end
+		end
+		-- the Rift sits between the palace above and the core's void enclosure below
+		T.truthy(boxes[5].Hi.Y < boxes[4].Lo.Y and boxes[5].Lo.Y > boxes[6].Hi.Y, "the Rift between floors 4 and 6")
+	end)
+
+	---------------------------------------------------------------- the Stormglass Rift
+	-- Floor 5 (gate 8) between the palace and the core: its own budgets and height band.
 	local STORM_PARTS = 2400 -- the phase A target, under MineKit.PartBudget
 	local STORM_Y = { -25, 60 } -- local height band: clear of floor 4 above and the core below
 
@@ -119,11 +168,11 @@ return function(T, Loader)
 		local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
 		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 		T.eq(Floor.Id, "StormglassRift", "floor id")
-		T.eq(Floor.Index, 5, "the index phase B gives it")
+		T.eq(Floor.Index, 5, "floor 5")
 		T.eq(Floor.MinBlaster, 8, "blaster gate 8")
-		T.eq(MineFloors.ById[Floor.Id], nil, "not wired into MineFloors yet (phase B)")
-		T.truthy(Floor.Palette.Mid and Floor.Palette.Crystal and Floor.Palette.Ground, "palette for MineFloors")
-		local origin = CF.new(0, -310, -800) -- about where phase B puts it
+		T.eq(MineFloors.get(5).Id, Floor.Id, "MineFloors floor 5")
+		T.eq(Floor.Palette, MineFloors.get(Floor.Id).Palette, "its palette lives in MineFloors")
+		local origin = MineFloors.Placement[Floor.Index]
 		for _, cutaway in { false, true } do
 			local label = "StormglassRift" .. (if cutaway then " (cutaway)" else "")
 			local model = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = cutaway })
@@ -170,7 +219,17 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- in the game the floor only marks the lift's spot (phase B: TrainConfig.Lifts at Floor.LiftSpot)
+		-- in the game the floor only marks the lift's spot: Railway builds TrainConfig's "StormglassRift" lift there
+		local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
+		local liftCfg = nil
+		for _, cfg in TrainConfig.Lifts do
+			if cfg.Id == Floor.Id then
+				liftCfg = cfg
+			end
+		end
+		T.truthy(liftCfg ~= nil, "TrainConfig has the Rift's lift")
+		T.eq(Floor.LiftSpot, MineFloors.LiftSpots[Floor.Index], "MineFloors.LiftSpots[5]")
+		T.truthy((liftCfg.Position - origin:PointToWorldSpace(Floor.LiftSpot)).Magnitude < 0.01, "the lift stands on the Rift's spot")
 		local built = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = false })
 		local spot = built:FindFirstChild("OreLiftSpot", true)
 		T.truthy(spot ~= nil and spot:GetAttribute("LiftId") == "StormglassRift", "ore lift spot")
@@ -183,7 +242,8 @@ return function(T, Loader)
 	T.test("stormglass rift: 4-8 ambience spots of its kinds, at most 3 loops anywhere, no extra parts", function()
 		local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
 		local MineAmbience = Loader.requirePath("ReplicatedStorage.Shared.Config.MineAmbience")
-		local origin = CF.new(0, -310, -800)
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local origin = MineFloors.Placement[Floor.Index]
 		local model = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = false })
 		local kinds = MineAmbience.Floors[Floor.Id]
 		T.truthy(kinds ~= nil, "MineAmbience.Floors.StormglassRift")
@@ -247,10 +307,6 @@ return function(T, Loader)
 		local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
 		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 		local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
-		-- a stand-in MineFloors entry (phase B adds the real one), removed again afterwards
-		local stand = table.clone(MineFloors.List[4])
-		stand.Id, stand.Index, stand.Palette, stand.MinBlaster = Floor.Id, Floor.Index, Floor.Palette, Floor.MinBlaster
-		MineFloors.ById[Floor.Id] = stand
 		local ok, err = pcall(function()
 			for _, kind in { "Small", "Big", "Crystal", "Golden", "Geode", "Artifact", "Giant" } do
 				for seed = 1, 6 do
@@ -282,7 +338,6 @@ return function(T, Loader)
 			T.truthy(glass >= 3, "stormglass crystals on a storm rock")
 			T.eq(veins, 4, "two zig-zag lightning cracks")
 		end)
-		MineFloors.ById[Floor.Id] = nil
 		if not ok then
 			error(err, 0)
 		end

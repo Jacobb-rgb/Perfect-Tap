@@ -546,7 +546,7 @@ local function palace(c: Ctx, oreIds: { string })
 	glints(c, oreIds)
 end
 
--- Floor 5, Heartstone Core: a dark floating rock around a pink heart glow, orbiting debris, glowing crystals.
+-- Floor 6, Heartstone Core: a dark floating rock around a pink heart glow, orbiting debris, glowing crystals.
 local function core(c: Ctx, oreIds: { string })
 	local rng = c.rng
 	body(c, { Float = 1.1, Core = c.pal.Crystal, Chunks = 5 })
@@ -596,15 +596,16 @@ end
 
 --[[
 	Every floor's rock look by its MineFloors Id (FloorLook above). Tier, Core,
-	Float and Carved of floors 1-5 are what their Index used to give, so their
-	rocks stay exactly as they were; a floor without an entry gets the quarry's.
+	Float and Carved of the first five floors are what their Index gave before the
+	Rift went in, so their rocks stay exactly as they were; a floor without an
+	entry gets the quarry's.
 ]]
 local LOOKS: { [string]: FloorLook } = {
 	Quarry = { Build = quarry, Tier = 1, CrystalLook = "Tipped", GiantLook = "Tipped" },
 	EmberCaves = { Build = ember, Tier = 2, CrystalLook = "Shell", GiantLook = "Shell", Core = "Accent" },
 	DeepHollow = { Build = lagoon, Tier = 3, CrystalLook = "Shell", GiantLook = "Shell", Core = "Crystal" },
 	SunkenPalace = { Build = palace, Tier = 4, CrystalLook = "Glow", GiantLook = "Shell", Core = "Accent", Carved = true },
-	-- between the palace and the core (blaster 8+): stormglass everywhere, richer on its Crystal rocks
+	-- floor 5, between the palace and the core (blaster 8+): stormglass everywhere, richer on its Crystal rocks
 	StormglassRift = { Build = storm, Tier = 4.5, CrystalLook = "Storm", GiantLook = "Storm", Core = "Crystal" },
 	HeartstoneCore = { Build = core, Tier = 5, CrystalLook = "Glow", GiantLook = "Glow", Core = "Crystal", Float = true },
 }

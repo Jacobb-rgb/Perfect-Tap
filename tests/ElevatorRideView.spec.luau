@@ -110,7 +110,16 @@ return function(T, Loader)
 		RideView.setRide(refs, r)
 		T.eq(refs.BannerText.Text, "FLOOR 4 · SUNKEN PALACE", "banner text")
 		T.eq(refs.BannerStroke.Color, ElevatorView.floorColor(4), "floor colour")
-		T.eq(RideView.bannerText(5, "Heartstone Core"), "FLOOR 5 · HEARTSTONE CORE")
+		T.eq(RideView.bannerText(5, "Stormglass Rift"), "FLOOR 5 · STORMGLASS RIFT")
+		T.eq(RideView.bannerText(6, "Heartstone Core"), "FLOOR 6 · HEARTSTONE CORE")
+		local rift = ride(1, 5)
+		RideView.setRide(refs, rift)
+		T.eq(refs.BannerText.Text, "FLOOR 5 · STORMGLASS RIFT", "the Rift's banner")
+		T.eq(refs.BannerStroke.Color, ElevatorView.floorColor(5), "in the Rift's colour")
+		T.eq(RideView.shaftColors(5).Vein, RideView.VeinColors.StormglassRift, "electric yellow veins in the Rift's shaft")
+		local core = ride(1, 6)
+		RideView.setRide(refs, core)
+		T.eq(refs.BannerText.Text, "FLOOR 6 · HEARTSTONE CORE", "the core is floor 6")
 	end)
 
 	T.test("ElevatorRide: the pose follows the timeline", function()
@@ -171,7 +180,8 @@ return function(T, Loader)
 		local seen = {}
 		for floor = 1, #MineFloors.List do
 			local colors = RideView.shaftColors(floor)
-			T.eq(colors.Vein, MineFloors.get(floor).Palette.Accent, "veins in the floor's accent " .. floor)
+			local vein = RideView.VeinColors[MineFloors.get(floor).Id] or MineFloors.get(floor).Palette.Accent
+			T.eq(colors.Vein, vein, "veins in the floor's accent (or its own vein colour) " .. floor)
 			T.eq(colors.Glint, MineFloors.get(floor).Palette.Crystal, "glints in its crystal colour " .. floor)
 			local mid = colors.Bands[1]
 			local id = string.format("%.2f,%.2f,%.2f", mid.R, mid.G, mid.B)

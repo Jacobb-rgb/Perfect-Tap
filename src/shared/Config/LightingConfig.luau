@@ -287,7 +287,7 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 1.05, Size = 32, Threshold = 0.92 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
-	-- Floor 5, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
+	-- Floor 6, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
 	Core = {
 		Lighting = {
 			Brightness = 0.3,
@@ -322,8 +322,8 @@ LightingConfig.Presets = {
 			MidAngle = 22,
 		},
 	},
-	-- Stormglass Rift (built, not in the game yet: phase B points its zone here): a dark
-	-- indigo storm cavern lit by yellow-white lightning, cool navy shadows.
+	-- Floor 5, Stormglass Rift: a dark indigo storm cavern lit by yellow-white lightning,
+	-- cool navy shadows.
 	Storm = {
 		Lighting = {
 			Brightness = 0.35,

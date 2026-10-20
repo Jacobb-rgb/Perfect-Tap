@@ -1,6 +1,6 @@
 --[[
 	MineKit: shared pieces of the mine floor areas (docs/plans/MINE_FLOORS_PLAN.md).
-	Every floor builder (Floor1Quarry ... Floor5Core) uses these so the parts that
+	Every floor builder (Floor1Quarry ... Floor6Core) uses these so the parts that
 	work the same on every floor also look the same:
 
 	  MineKit.elevator(parent, cf, floorIndex)   the elevator stop (bought once, goes
@@ -49,7 +49,7 @@ local Railway = require(World:WaitForChild("Railway"))
 
 local MineKit = {}
 
-MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-5 stream on their own, far from the town)
+MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-6 stream on their own, far from the town)
 MineKit.NearPartBudget = 1250 -- floors 1-3 stream in with the town (the quarry rim on phones): keep them light
 MineKit.LightBudget = 24
 

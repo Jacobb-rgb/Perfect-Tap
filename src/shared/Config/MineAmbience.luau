@@ -13,12 +13,12 @@
 	  CrystalHum  a soft hum and a crystal tinkle    every floor's Giant Crystal spot and
 	                                                 the big hero crystals
 	  LavaBubble  lava blorping and a low flow       floor 2 along the lava river and at
-	              roar                               the lava fall, floor 5 at the
+	              roar                               the lava fall, floor 6 at the
 	                                                 Heartstone (the living ember)
-	  StormCrackle  sparks crackling and a sharp     the Stormglass Rift (built, not in
-	              electric zap now and then (one-    the game yet) at its tesla pylons
-	              shots only: no loop)               and the storm catcher; its thunder
-	                                                 is MineRumble under the Storm Crown
+	  StormCrackle  sparks crackling and a sharp     floor 5, the Stormglass Rift, at its
+	              electric zap now and then (one-    tesla pylons and the storm catcher;
+	              shots only: no loop)               its thunder is MineRumble under the
+	                                                 Storm Crown
 
 	The floor builders (World/Mine/Floor*.luau) mark the spots with
 	MineKit.ambience: an Attachment on a part that is already there (no new
@@ -112,8 +112,7 @@ MineAmbience.Kinds = {
 } :: { [string]: { Layer } }
 
 -- The kinds each floor uses (MineFloors Id -> kinds, not by index: a new floor can go in
--- between and the others renumber); the builders place exactly these. StormglassRift's
--- builder (World/Mine/Floor5Storm.luau) is not in the game yet.
+-- between and the others renumber); the builders place exactly these.
 MineAmbience.Floors = {
 	Quarry = { "MineDrip", "MineRumble", "CrystalHum" },
 	EmberCaves = { "LavaBubble", "MineRumble", "CrystalHum" },
