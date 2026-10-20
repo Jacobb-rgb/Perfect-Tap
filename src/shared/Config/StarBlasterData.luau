@@ -35,6 +35,7 @@ export type StarBlaster = {
 	Mult: number, -- damage x the forged level's (POWER A)
 	Body: Color3,
 	Glow: Color3,
+	Gem: Color3, -- the cut gems in gold bezels and half the crown (KenneyBlaster Tier 4)
 	Magma: boolean, -- lava cracks and flames (else stars and sparks)
 	Robux: number, -- the Game Pass price (MonetizationConfig: keep them equal)
 	Stars: number, -- the Forge Stars price
@@ -54,6 +55,7 @@ StarBlasterData.List = {
 		Mult = 1.2,
 		Body = rgb(44, 82, 160),
 		Glow = rgb(150, 226, 255),
+		Gem = rgb(60, 130, 255), -- a sapphire
 		Magma = false,
 		Robux = 75,
 		Stars = 20,
@@ -67,6 +69,7 @@ StarBlasterData.List = {
 		Mult = 1.35,
 		Body = rgb(98, 40, 150),
 		Glow = rgb(255, 120, 225),
+		Gem = rgb(50, 205, 255), -- an aquamarine
 		Magma = false,
 		Robux = 125,
 		Stars = 30,
@@ -80,6 +83,7 @@ StarBlasterData.List = {
 		Mult = 1.5,
 		Body = rgb(20, 84, 104),
 		Glow = rgb(80, 255, 220),
+		Gem = rgb(255, 180, 30), -- a topaz
 		Magma = false,
 		Robux = 199,
 		Stars = 45,
@@ -93,6 +97,7 @@ StarBlasterData.List = {
 		Mult = 1.65,
 		Body = rgb(40, 22, 18),
 		Glow = rgb(255, 170, 60),
+		Gem = rgb(255, 35, 55), -- a ruby
 		Magma = true,
 		Robux = 299,
 		Stars = 65,
@@ -106,6 +111,7 @@ StarBlasterData.List = {
 		Mult = 1.8,
 		Body = rgb(38, 26, 70),
 		Glow = rgb(176, 110, 255),
+		Gem = rgb(255, 70, 190), -- a pink rhodolite
 		Magma = false,
 		Robux = 449,
 		Stars = 90,
