@@ -97,6 +97,24 @@ return function(T, Loader)
 			T.eq(ChampionService._test.standing(1), 33, "a new #1")
 			T.eq(ChampionService._test.standing(2), 0, "board 2 cleared")
 			T.falsy(list[2].Parent:FindFirstChild("ChampionAvatar2"), "its avatar gone")
+			-- one player leading three boards: one avatar download, cloned
+			local downloads = #built
+			ChampionService.update(tops({ 77, 77, 77, 0 }))
+			task.wait()
+			T.eq(#built, downloads + 1, "one download for three boards")
+			for i = 1, 3 do
+				T.eq(ChampionService._test.standing(i), 77, "board " .. i)
+				T.truthy(list[i].Parent:FindFirstChild("ChampionAvatar" .. i), "an avatar on board " .. i)
+			end
+			-- a name that arrives after the avatar went up reaches the sign
+			local late = tops({ 77, 77, 77, 0 })
+			for _, top in late do
+				if top.Rows[1] then
+					top.Rows[1].Name = "Kuba"
+				end
+			end
+			ChampionService.update(late)
+			T.eq(#built, downloads + 1, "no new download for a name")
 		end)
 		ChampionService._test.reset()
 		if not ok then

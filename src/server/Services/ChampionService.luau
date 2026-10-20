@@ -34,8 +34,9 @@ ChampionService.ModelName = "ChampionAvatar"
 ChampionService.HopHeight = 1.1 -- studs
 ChampionService.HopSpeed = 3.4
 
--- board index -> the UserId standing there now (0 = none)
+-- board index -> the UserId standing there now (0 = none) and the name on its sign
 local standing: { [number]: number } = {}
+local standingName: { [number]: string } = {}
 local building: { [number]: boolean } = {}
 
 -- (tests swap the avatar maker)
@@ -72,6 +73,17 @@ function ChampionService.standCFrame(pedestal: BasePart, height: number, facing:
 	return CFrame.lookAt(position, position + look)
 end
 
+-- The sign over a champion's head.
+function ChampionService.signText(name: string): string
+	return if name ~= "" then `#1  {name}` else "#1"
+end
+
+-- Board `index`'s avatar (nil when nobody stands there).
+local function avatarOf(index: number): Instance?
+	local pedestal = ChampionService.pedestal(index)
+	return if pedestal and pedestal.Parent then pedestal.Parent:FindFirstChild(ChampionService.ModelName .. index) else nil
+end
+
 -- Makes `model` a still, harmless statue that the client makes hop.
 function ChampionService.dress(model: Model, name: string, userId: number)
 	model.Name = ChampionService.ModelName
@@ -90,6 +102,9 @@ function ChampionService.dress(model: Model, name: string, userId: number)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		pcall(function()
+			humanoid.EvaluateStateMachine = false -- a statue: no physics states
+		end)
 	end
 	pcall(function()
 		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
@@ -106,7 +121,8 @@ function ChampionService.dress(model: Model, name: string, userId: number)
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.fromScale(1, 1)
-		label.Text = `#1  {name}`
+		label.Name = "Name"
+		label.Text = ChampionService.signText(name)
 		label.TextScaled = true
 		label.TextColor3 = Color3.fromRGB(255, 214, 80)
 		label.TextStrokeTransparency = 0
@@ -156,34 +172,60 @@ function ChampionService.clear(index: number)
 		old:Destroy()
 	end
 	standing[index] = 0
+	standingName[index] = nil
 end
 
--- The leaderboards refreshed: a new #1 on a board gets its avatar built.
+-- The leaderboards refreshed: a new #1 on a board gets its avatar built (one
+-- avatar download per player per refresh: a player leading several boards is
+-- cloned), a #1 whose name came late gets it on the sign.
 function ChampionService.update(tops: { [string]: any })
+	local wanted: { [number]: { { Index: number, Name: string } } } = {}
 	for index, board in LeaderboardConfig.Boards do
 		local top = tops[board.Id]
 		local first = if type(top) == "table" and type(top.Rows) == "table" then top.Rows[1] else nil
 		local userId = if type(first) == "table" and type(first.UserId) == "number" then first.UserId else 0
+		local name = if type(first) == "table" and type(first.Name) == "string" then first.Name else ""
 		if userId <= 0 then
 			if (standing[index] or 0) ~= 0 then
 				ChampionService.clear(index)
 			end
-		elseif standing[index] ~= userId and not building[index] then
+		elseif standing[index] == userId then
+			if standingName[index] ~= name then
+				-- the name was resolved after the avatar went up
+				local avatar = avatarOf(index)
+				local label = if avatar then avatar:FindFirstChild("Name", true) else nil
+				if label and label:IsA("TextLabel") then
+					label.Text = ChampionService.signText(name)
+				end
+				standingName[index] = name
+			end
+		elseif not building[index] then
 			building[index] = true
-			local name = if type(first.Name) == "string" then first.Name else ""
-			task.spawn(function()
-				local model = makeAvatar(userId)
-				building[index] = nil
+			local list = wanted[userId]
+			if not list then
+				list = {}
+				wanted[userId] = list
+			end
+			table.insert(list, { Index = index, Name = name })
+		end
+	end
+	for userId, boards in wanted do
+		task.spawn(function()
+			local model = makeAvatar(userId)
+			for i, spot in boards do
+				building[spot.Index] = nil
 				if model then
-					ChampionService.dress(model, name, userId)
-					if ChampionService.place(index, model) then
-						standing[index] = userId
+					local copy = if i < #boards then model:Clone() else model
+					ChampionService.dress(copy, spot.Name, userId)
+					if ChampionService.place(spot.Index, copy) then
+						standing[spot.Index] = userId
+						standingName[spot.Index] = spot.Name
 					else
-						model:Destroy()
+						copy:Destroy()
 					end
 				end
-			end)
-		end
+			end
+		end)
 	end
 end
 
@@ -206,6 +248,7 @@ ChampionService._test = {
 	end,
 	reset = function()
 		table.clear(standing)
+		table.clear(standingName)
 		table.clear(building)
 	end,
 	standing = function(index: number): number
