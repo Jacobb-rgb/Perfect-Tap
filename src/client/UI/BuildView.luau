@@ -4,7 +4,8 @@
 	  top right     DONE
 	  bottom        tray of machine cards you own (MachineData order, 'x2')
 	  above tray    reason / warning line, and a key hint line
-	  bottom right  big touch buttons: Cancel, Rotate, Move, Pack Up, Place
+	  bottom right  big touch buttons: Deck / Ground (while the plot has
+	                platforms), Cancel, Rotate, Move, Pack Up, Place
 	The Gui has the TerraForge attribute, so the HUD's UIScale applies.
 ]]
 
@@ -39,6 +40,7 @@ export type Refs = {
 	Move: TextButton,
 	PackUp: TextButton,
 	Place: TextButton,
+	Layer: TextButton, -- the Deck / Ground toggle (platforms)
 	Done: TextButton,
 	OnPick: ((string) -> ())?,
 }
@@ -50,7 +52,11 @@ BuildView.CategoryColors = {
 	Storage = rgb(176, 124, 74),
 	Logistics = rgb(90, 160, 230),
 	Selling = rgb(110, 214, 92),
+	Power = rgb(250, 204, 70),
 } :: { [string]: Color3 }
+
+-- The Deck / Ground toggle's text for each layer (BuildView.setLayer).
+BuildView.LayerText = { Deck = "DECK", Ground = "GROUND" }
 
 BuildView.ReasonColors = {
 	Bad = Theme.Bad,
@@ -233,6 +239,7 @@ function BuildView.build(): Refs
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 	})
+	local layer = actionButton(actions, "Layer", BuildView.LayerText.Deck, rgb(90, 160, 230), rgb(50, 104, 170), 120, 0)
 	local cancel = actionButton(actions, "Cancel", "Cancel", Theme.Bad, Theme.BadDark, 104, 1)
 	local rotate = actionButton(actions, "Rotate", "Rotate", Theme.Info, rgb(60, 120, 190), 104, 2)
 	local move = actionButton(actions, "Move", "Move", Theme.Accent, Theme.AccentDark, 104, 3)
@@ -253,6 +260,7 @@ function BuildView.build(): Refs
 		Move = move,
 		PackUp = packUp,
 		Place = place,
+		Layer = layer,
 		Done = done,
 		OnPick = nil,
 	}
@@ -319,8 +327,10 @@ local function holderOf(button: TextButton): GuiObject?
 end
 
 -- Shows the touch buttons that fit the mode (touch only) and makes room
--- for them next to the tray.
-function BuildView.setMode(refs: Refs, mode: Mode, isTouch: boolean)
+-- for them next to the tray. `layers`: the plot has platforms, so the
+-- Deck / Ground toggle shows too (in every mode: it also picks what a tap
+-- selects on a deck).
+function BuildView.setMode(refs: Refs, mode: Mode, isTouch: boolean, layers: boolean?)
 	local wanted = MODE_BUTTONS[mode] or {}
 	local shown = 0
 	local width = 0
@@ -330,9 +340,10 @@ function BuildView.setMode(refs: Refs, mode: Mode, isTouch: boolean)
 		Move = refs.Move,
 		PackUp = refs.PackUp,
 		Place = refs.Place,
+		Layer = refs.Layer,
 	}
 	for name, button in buttons do
-		local visible = isTouch and wanted[name] == true
+		local visible = isTouch and (wanted[name] == true or (name == "Layer" and layers == true))
 		local holder = holderOf(button)
 		if holder then
 			holder.Visible = visible
@@ -354,6 +365,11 @@ function BuildView.setMode(refs: Refs, mode: Mode, isTouch: boolean)
 		refs.Tray.Position = UDim2.new(0.5, 0, 1, -12)
 		refs.Tray.Size = UDim2.new(1, -2 * EDGE, 0, BuildView.TrayHeight)
 	end
+end
+
+-- The Deck / Ground toggle shows the layer it works on now.
+function BuildView.setLayer(refs: Refs, ground: boolean)
+	refs.Layer.Text = if ground then BuildView.LayerText.Ground else BuildView.LayerText.Deck
 end
 
 -- The BUILD button for the HUD's right-side menu (HudController.refs().Menu).

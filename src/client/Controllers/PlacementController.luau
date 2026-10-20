@@ -29,6 +29,19 @@
 	refused request shakes the ghost and says why. A placed belt moves the
 	cursor one cell forward, so pressing Place again lays a line.
 
+	Platforms (docs/plans/PLATFORMS_PLAN.md): the deck cells get plates at
+	deck height while a machine is held. The ghost goes up onto the deck
+	when the cell under the cursor is a deck cell and the machine may stand
+	there (not a platform, a Belt Lift or a Slide); the cursor reads the
+	deck's height there, so the cell under the pointer on a deck is the one
+	you see. The Deck / Ground toggle (V, gamepad D-pad Up while building,
+	the touch button) puts a flat belt under the deck instead, and makes
+	picking and selecting prefer what is under the decks. A belt line keeps
+	the level it started on. A Belt Lift / Slide shows the deck cell its
+	top end must reach (amber), and every refusal says the Placement reason
+	("That needs a platform under it", "Only belts fit under a platform",
+	"Clear the platform first"...).
+
 	Chutes (step 3, BaseLayout.Chutes): the three chute cells on the back
 	row get a plate in their colour with their label floating over it (PEN,
 	TRAIN, FOUNDRY; "turn the belt" in red while a belt on a Source chute
@@ -89,6 +102,7 @@ type Request = {
 	X: number,
 	Z: number,
 	R: number,
+	L: number, -- level: 0 = the ground, 1 = a deck
 	From: Entry?, -- Move / Pickup: where the machine stood
 	Model: Model?,
 	Sent: boolean,
@@ -97,7 +111,7 @@ type Request = {
 }
 
 type Pointer = { Start: Vector2, Last: Vector2, Began: number, Moved: boolean }
-type Stroke = { X: number, Z: number, Moved: boolean }
+type Stroke = { X: number, Z: number, Moved: boolean, L: number } -- L: the level the line started on
 
 local CELL = GameConfig.CellSize
 local CELLS = GameConfig.PlotCells
@@ -192,6 +206,22 @@ local plotId: number? = nil
 local plotCF = CFrame.identity
 
 local pickId: string? = nil -- machine being placed (Placing)
+-- Platforms: everything build mode knows about decks, in one table (this
+-- file is near Luau's limit of 200 locals in one scope)
+local Deck = {}
+Deck.Y = MachineData.DeckHeight
+Deck.Color = Color3.fromRGB(120, 200, 255)
+Deck.Lift = 0.02 -- deck plates sit just over the deck top, under a ghost's footprint plate
+-- the Deck / Ground toggle, added to the hint while the plot has decks
+Deck.Hints = {
+	Mouse = "V: deck / ground",
+	Gamepad = "D-pad Up: deck / ground",
+} :: { [string]: string }
+-- the Deck / Ground toggle: true = flat belts go under the decks, picking prefers the ground
+Deck.Ground = false
+-- the deck cells of our layout (Grid.key -> platform), refreshed with the visuals
+Deck.Cells = {} :: { [number]: Entry }
+Deck.Shown = {} :: { [number]: boolean }
 local selected: Model? = nil -- placed machine (Selected / Moving)
 local rotation = 0
 local cursorX, cursorZ = math.floor(CELLS / 2), math.floor(CELLS / 2)
@@ -305,7 +335,16 @@ end
 ---------------------------------------------------------------- layout (snapshot + our requests)
 
 local function sameSpot(entry: Entry, spot: Entry): boolean
-	return entry.Id == spot.Id and entry.X == spot.X and entry.Z == spot.Z and entry.R == spot.R
+	return entry.Id == spot.Id
+		and entry.X == spot.X
+		and entry.Z == spot.Z
+		and entry.R == spot.R
+		and Placement.levelOf(entry) == Placement.levelOf(spot)
+end
+
+-- A saved-style entry (L only on a deck).
+function Deck.spotEntry(id: string, x: number, z: number, r: number, level: number): Entry
+	return { Id = id, X = x, Z = z, R = r, L = if level == 1 then 1 else nil }
 end
 
 local function findSpot(entries: { Entry }, spot: Entry): number?
@@ -337,7 +376,7 @@ local function layout(): ({ Entry }, { [string]: number }, Placement.Limits?)
 					and type(e.Z) == "number"
 					and type(e.R) == "number"
 				then
-					table.insert(entries, { Id = e.Id, X = e.X, Z = e.Z, R = e.R })
+					table.insert(entries, Deck.spotEntry(e.Id, e.X, e.Z, e.R, if e.L == 1 then 1 else 0))
 				end
 			end
 		end
@@ -355,14 +394,14 @@ local function layout(): ({ Entry }, { [string]: number }, Placement.Limits?)
 	end
 	for _, request in requests do
 		if request.Op == "Place" then
-			table.insert(entries, { Id = request.Id, X = request.X, Z = request.Z, R = request.R })
+			table.insert(entries, Deck.spotEntry(request.Id, request.X, request.Z, request.R, request.L))
 			inventory[request.Id] = (inventory[request.Id] or 0) - 1
 		else
 			local from = request.From
 			local index = if from then findSpot(entries, from) else nil
 			if index then
 				if request.Op == "Move" then
-					entries[index] = { Id = request.Id, X = request.X, Z = request.Z, R = request.R }
+					entries[index] = Deck.spotEntry(request.Id, request.X, request.Z, request.R, request.L)
 				else
 					table.remove(entries, index)
 					inventory[request.Id] = (inventory[request.Id] or 0) + 1
@@ -408,10 +447,10 @@ local function spotOf(model: Model): Entry?
 	if type(id) ~= "string" or type(x) ~= "number" or type(z) ~= "number" or type(r) ~= "number" then
 		return nil
 	end
-	local spot: Entry = { Id = id, X = x, Z = z, R = r }
+	local spot: Entry = Deck.spotEntry(id, x, z, r, if model:GetAttribute("GridL") == 1 then 1 else 0)
 	for _, request in requests do
 		if request.Model == model and request.Op == "Move" then
-			spot = { Id = request.Id, X = request.X, Z = request.Z, R = request.R }
+			spot = Deck.spotEntry(request.Id, request.X, request.Z, request.R, request.L)
 		end
 	end
 	return spot
@@ -425,49 +464,97 @@ local function covers(spot: Entry, gx: number, gz: number): boolean
 	return gx >= spot.X and gx < spot.X + w and gz >= spot.Z and gz < spot.Z + d
 end
 
+-- Which of the things on one cell picking prefers (lower first): with the
+-- Deck layer the deck entry, then the platform, then the ground; with the
+-- Ground layer the ground entry (a belt under the deck), then the platform.
+function Deck.pickRank(spot: Entry): number
+	if Placement.isPlatform(spot.Id) then
+		return 2
+	end
+	local onDeck = Placement.levelOf(spot) == 1
+	return if onDeck == Deck.Ground then 3 else 1
+end
+
 local function modelAtCell(gx: number, gz: number): Model?
+	local best: Model? = nil
+	local bestRank = math.huge
 	for _, model in myMachines() do
 		local spot = spotOf(model)
 		if spot and covers(spot, gx, gz) then
-			return model
+			local rank = Deck.pickRank(spot)
+			if rank < bestRank then
+				best, bestRank = model, rank
+			end
 		end
 	end
-	return nil
+	return best
 end
 
 ---------------------------------------------------------------- screen to plot
 
-local function footprintCFrame(id: string, x: number, z: number, r: number): CFrame
-	return plotCF * Grid.localCFrame(id, x, z, r)
+local function footprintCFrame(id: string, x: number, z: number, r: number, level: number?): CFrame
+	return plotCF * Grid.localCFrame(id, x, z, r, level)
 end
 
--- Plot surface point at the middle of a block of cells.
-local function cellsCFrame(x: number, z: number, w: number, d: number): CFrame
-	return plotCF * CFrame.new(-HALF + (x + w / 2) * CELL, 0, -HALF + (z + d / 2) * CELL)
+-- Plot surface point at the middle of a block of cells (on a deck: its top).
+local function cellsCFrame(x: number, z: number, w: number, d: number, level: number?): CFrame
+	return plotCF * CFrame.new(-HALF + (x + w / 2) * CELL, Grid.levelY(level), -HALF + (z + d / 2) * CELL)
 end
 
--- Plot-local point where a screen ray meets the plot surface.
-local function groundAt(screen: Vector2): Vector3?
+-- Plot-local point where a screen ray meets the plane `y` studs over the plot surface.
+local function planeAt(screen: Vector2, y: number): Vector3?
 	local ray = camera():ViewportPointToRay(screen.X, screen.Y)
 	local origin = plotCF:PointToObjectSpace(ray.Origin)
 	local direction = plotCF:VectorToObjectSpace(ray.Direction)
 	if direction.Y > -1e-3 then
 		return nil
 	end
-	return origin + direction * (-origin.Y / direction.Y)
+	return origin + direction * ((y - origin.Y) / direction.Y)
 end
 
--- Grid cell under a screen point (raw: may be off the plot).
-local function rawCellAt(screen: Vector2): (number?, number?)
-	local p = groundAt(screen)
+-- Grid cell under a screen point on the plane `y` high (raw: may be off the plot).
+local function rawCellAt(screen: Vector2, y: number?): (number?, number?)
+	local p = planeAt(screen, y or 0)
 	if not p then
 		return nil, nil
 	end
 	return math.floor((p.X + HALF) / CELL), math.floor((p.Z + HALF) / CELL)
 end
 
+-- Does the cursor read the decks' height (a deck cell under the pointer is
+-- the cell you see on the deck)? Not with the Ground layer, nor while a
+-- machine that only stands on the ground is held.
+function Deck.readsDecks(): boolean
+	if Deck.Ground or next(Deck.Cells) == nil then
+		return false
+	end
+	local id = pickId
+	if mode == "Moving" and selected then
+		local spot = spotOf(selected)
+		id = if spot then spot.Id else nil
+	elseif mode ~= "Placing" then
+		id = nil
+	end
+	return id == nil or Placement.fitsOnDeck(id)
+end
+
+-- The deck cell under a screen point (on the deck's top), if any.
+function Deck.deckCellAt(screen: Vector2): (number?, number?)
+	local gx, gz = rawCellAt(screen, Deck.Y)
+	if gx and gz and onPlot(gx, gz) and Deck.Cells[Grid.key(gx, gz)] then
+		return gx, gz
+	end
+	return nil, nil
+end
+
 -- Cursor cell for a screen point: clamped onto the plot, nil far off it.
 local function cursorCellAt(screen: Vector2): (number?, number?)
+	if Deck.readsDecks() then
+		local dx, dz = Deck.deckCellAt(screen)
+		if dx and dz then
+			return dx, dz
+		end
+	end
 	local gx, gz = rawCellAt(screen)
 	if not gx or not gz then
 		return nil, nil
@@ -497,11 +584,24 @@ local function machineUnder(screen: Vector2): Model?
 	local node: Instance? = if hit then hit.Instance else nil
 	while node do
 		if node:IsA("Model") and table.find(mine, node :: Model) then
+			local spot = spotOf(node :: Model)
+			if hit and spot and Placement.isPlatform(spot.Id) then
+				-- a platform's deck: what the layer prefers on that cell (a belt under it)
+				local gx, gz = Grid.cellFromLocal(plotCF:PointToObjectSpace(hit.Position))
+				local preferred = if gx and gz then modelAtCell(gx, gz) else nil
+				return preferred or node :: Model
+			end
 			return node :: Model
 		end
 		node = node.Parent
 	end
 	local gx, gz = rawCellAt(screen)
+	if Deck.readsDecks() then
+		local dx, dz = Deck.deckCellAt(screen)
+		if dx and dz then
+			gx, gz = dx, dz
+		end
+	end
 	if gx and gz and onPlot(gx, gz) then
 		return modelAtCell(gx, gz)
 	end
@@ -706,20 +806,58 @@ local function setFaded(on: boolean)
 	end
 end
 
-local function showOutput(name: string, id: string, x: number, z: number, r: number)
+-- The amber plate where the machine's results come out (on its level), or
+-- for a Belt Lift / Slide the deck cell its top end must reach.
+local function showOutput(name: string, id: string, x: number, z: number, r: number, level: number)
+	local ex, ez = Placement.deckEdgeCell(id, x, z, r)
+	if ex and ez and onPlot(ex, ez) then
+		GridOverlay.plate(name, cellsCFrame(ex, ez, 1, 1, 1) * CFrame.new(0, Deck.Lift * 2, 0), CELL, CELL, OUT_COLOR)
+		return
+	end
 	local ox, oz = Grid.outputCell(id, x, z, r)
 	if ox and oz then
-		GridOverlay.plate(name, cellsCFrame(ox, oz, 1, 1), CELL, CELL, OUT_COLOR)
+		GridOverlay.plate(name, cellsCFrame(ox, oz, 1, 1, level), CELL, CELL, OUT_COLOR)
 	else
 		GridOverlay.hidePlate(name)
 	end
 end
 
+-- The level a held machine goes on with its footprint around cell (gx, gz):
+-- the deck when that cell is a deck cell and the machine may stand on one
+-- (the Ground layer keeps a flat belt under it), else the ground.
+function Deck.levelAt(id: string, gx: number, gz: number): number
+	if not Placement.fitsOnDeck(id) or not onPlot(gx, gz) or not Deck.Cells[Grid.key(gx, gz)] then
+		return 0
+	end
+	if Deck.Ground and Placement.fitsUnderDeck(id) then
+		return 0
+	end
+	return 1
+end
+
+-- Deck plates at deck height (while a machine is held), or none.
+function Deck.showDecks(on: boolean)
+	for k in Deck.Shown do
+		if not on or not Deck.Cells[k] then
+			GridOverlay.hidePlate("Deck" .. k)
+			Deck.Shown[k] = nil
+		end
+	end
+	if not on then
+		return
+	end
+	for k in Deck.Cells do
+		GridOverlay.plate("Deck" .. k, cellsCFrame(k % CELLS, k // CELLS, 1, 1, 1) * CFrame.new(0, Deck.Lift, 0), CELL, CELL, Deck.Color)
+		Deck.Shown[k] = true
+	end
+end
+
 ---------------------------------------------------------------- checks
 
--- Yellow notes for a spot that is allowed but probably not what you want.
-local function warningFor(entries: { Entry }, id: string, x: number, z: number, r: number, ignore: Entry?): string?
-	local me: Entry = { Id = id, X = x, Z = z, R = r }
+-- Yellow notes for a spot that is allowed but probably not what you want
+-- (everything on the spot's own level; a Belt Lift delivers onto the deck).
+local function warningFor(entries: { Entry }, id: string, x: number, z: number, r: number, ignore: Entry?, level: number): string?
+	local me: Entry = Deck.spotEntry(id, x, z, r, level)
 	local others: { Entry } = {}
 	for _, entry in entries do
 		if entry ~= ignore and info(entry.Id) then
@@ -731,7 +869,7 @@ local function warningFor(entries: { Entry }, id: string, x: number, z: number, 
 	-- my results go into a machine side that takes nothing
 	local ox, oz = Grid.outputCell(id, x, z, r)
 	if ox and oz and onPlot(ox, oz) then
-		local target = occupied[Grid.key(ox, oz)]
+		local target = occupied[Placement.key(ox, oz, level)]
 		local targetInfo = target and MachineData.ById[target.Id]
 		if target and targetInfo and not targetInfo.IsConveyor then
 			local dx, dz = Grid.dir(r)
@@ -745,11 +883,11 @@ local function warningFor(entries: { Entry }, id: string, x: number, z: number, 
 		if otherInfo.IsConveyor then
 			-- a belt that runs into a side of mine that takes nothing
 			local dx, dz = Grid.dir(other.R)
-			local fx, fz = other.X + dx, other.Z + dz
-			if not myInfo.IsConveyor and covers(me, fx, fz) and not ConveyorLogic.faceAllowed(me, other.X, other.Z) then
+			local fx, fz, fl = ConveyorLogic.frontOf(other)
+			if not myInfo.IsConveyor and fl == level and covers(me, fx, fz) and not ConveyorLogic.faceAllowed(me, fx - dx, fz - dz) then
 				return "A belt runs into a side that takes nothing"
 			end
-		else
+		elseif Placement.levelOf(other) == level then
 			-- another machine's results would land on a side of mine that takes nothing
 			local px, pz = Grid.outputCell(other.Id, other.X, other.Z, other.R)
 			if px and pz and not myInfo.IsConveyor and covers(me, px, pz) then
@@ -762,7 +900,7 @@ local function warningFor(entries: { Entry }, id: string, x: number, z: number, 
 	end
 	if myInfo.IsConveyor then
 		-- a Source chute's belt must not run off the grid (its item would fall into the yard)
-		local chute = BaseLayout.chuteAt(x, z)
+		local chute = if level == 0 then BaseLayout.chuteAt(x, z) else nil
 		if chute and BaseLayout.Chutes[chute].Kind == "Source" and not BaseLayout.sourceFeeds(r) then
 			return YARD_TEXT
 		end
@@ -774,10 +912,10 @@ local function warningFor(entries: { Entry }, id: string, x: number, z: number, 
 			end
 		end
 		local dx, dz = Grid.dir(r)
-		local fx, fz = x + dx, z + dz
-		local front = if onPlot(fx, fz) then occupied[Grid.key(fx, fz)] else nil
+		local fx, fz, fl = ConveyorLogic.frontOf(me)
+		local front = if onPlot(fx, fz) then occupied[Placement.key(fx, fz, fl)] else nil
 		local frontInfo = front and MachineData.ById[front.Id]
-		if front and frontInfo and not frontInfo.IsConveyor and not ConveyorLogic.faceAllowed(front, x, z) then
+		if front and frontInfo and not frontInfo.IsConveyor and not ConveyorLogic.faceAllowed(front, fx - dx, fz - dz) then
 			return "That side takes nothing"
 		end
 	end
@@ -785,12 +923,12 @@ local function warningFor(entries: { Entry }, id: string, x: number, z: number, 
 end
 
 --[[
-	Can `id` go at (x, z, r) right now? Same rules as the server
+	Can `id` go at (x, z, r) on `level` right now? Same rules as the server
 	(Placement.validate) on our layout. `ignore` is the spot of a machine
 	being moved (moves never fail on slots or inventory).
 	Returns (ok, reason code, warning text).
 ]]
-local function check(id: string, x: number, z: number, r: number, ignore: Entry?): (boolean, string?, string?)
+local function check(id: string, x: number, z: number, r: number, ignore: Entry?, level: number): (boolean, string?, string?)
 	local entries, inventory, limits = layout()
 	local ignoreEntry: Entry? = nil
 	if ignore then
@@ -799,11 +937,11 @@ local function check(id: string, x: number, z: number, r: number, ignore: Entry?
 	elseif (inventory[id] or 0) < 1 then
 		return false, "NoneOwned", nil
 	end
-	local ok, code = Placement.validate(entries, id, x, z, r, if ignore then nil else limits, ignoreEntry)
+	local ok, code = Placement.validate(entries, id, x, z, r, if ignore then nil else limits, ignoreEntry, level)
 	if not ok then
 		return false, code, nil
 	end
-	return true, nil, warningFor(entries, id, x, z, r, ignoreEntry)
+	return true, nil, warningFor(entries, id, x, z, r, ignoreEntry, level)
 end
 
 ---------------------------------------------------------------- visuals
@@ -813,13 +951,19 @@ local function hintFor(): string?
 	if not hints then
 		return nil
 	end
+	local text = hints[mode]
 	if mode == "Placing" then
 		local placing = info(pickId)
 		if placing and placing.IsConveyor and hints.PlacingBelt then
-			return hints.PlacingBelt
+			text = hints.PlacingBelt
 		end
 	end
-	return hints[mode]
+	-- the Deck / Ground toggle (not in Idle: that line is long already)
+	local layer = Deck.Hints[kind]
+	if text and layer and mode ~= "Idle" and next(Deck.Cells) ~= nil then
+		text = `{text}   •   {layer}`
+	end
+	return text
 end
 
 local function refreshUI()
@@ -833,7 +977,9 @@ local function refreshUI()
 	end)
 	local machines, conveyors = Placement.counts(entries)
 	BuildView.setCounts(refs, machines, if limits then limits.Machines else 0, conveyors, if limits then limits.Conveyors else 0)
-	BuildView.setMode(refs, mode, kind == "Touch")
+	Deck.Cells = Placement.decks(entries)
+	BuildView.setMode(refs, mode, kind == "Touch", next(Deck.Cells) ~= nil)
+	BuildView.setLayer(refs, Deck.Ground)
 	BuildView.setHint(refs, hintFor())
 end
 
@@ -868,7 +1014,10 @@ local function updateVisuals()
 	if not active or not refs then
 		return
 	end
-	updateChutes((layout()))
+	local entries = layout()
+	Deck.Cells = Placement.decks(entries)
+	updateChutes(entries)
+	Deck.showDecks(mode == "Placing" or mode == "Moving")
 	local id: string? = nil
 	local ignore: Entry? = nil
 	if mode == "Placing" then
@@ -883,12 +1032,14 @@ local function updateVisuals()
 	if id and info(id) then
 		showGhost(id)
 		local x, z = Placement.clampOrigin(id, cursorX, cursorZ, rotation)
-		local ok, code, warning = check(id, x, z, rotation, ignore)
-		ghostTarget = footprintCFrame(id, x, z, rotation)
+		local level = Deck.levelAt(id, cursorX, cursorZ)
+		local ok, code, warning = check(id, x, z, rotation, ignore, level)
+		ghostTarget = footprintCFrame(id, x, z, rotation, level)
 		local w, d = Grid.footprint(id, rotation)
 		local color = if not ok then BAD_COLOR elseif warning then WARN_COLOR else OK_COLOR
-		GridOverlay.plate("Footprint", cellsCFrame(x, z, w, d), w * CELL, d * CELL, color)
-		showOutput("Out", id, x, z, rotation)
+		local lift = if level == 1 then Deck.Lift * 3 else 0
+		GridOverlay.plate("Footprint", cellsCFrame(x, z, w, d, level) * CFrame.new(0, lift, 0), w * CELL, d * CELL, color)
+		showOutput("Out", id, x, z, rotation, level)
 		GridOverlay.hidePlate("Cursor")
 		GridOverlay.hidePlate("Selected")
 		GridOverlay.hidePlate("SelectedOut")
@@ -913,14 +1064,18 @@ local function updateVisuals()
 	ghostTarget = nil
 	GridOverlay.hidePlate("Footprint")
 	GridOverlay.hidePlate("Out")
-	GridOverlay.plate("Cursor", cellsCFrame(cursorX, cursorZ, 1, 1), CELL, CELL, CURSOR_COLOR)
+	local onDeck = Deck.readsDecks() and Deck.Cells[Grid.key(cursorX, cursorZ)] ~= nil
+	GridOverlay.plate("Cursor", cellsCFrame(cursorX, cursorZ, 1, 1, if onDeck then 1 else 0), CELL, CELL, CURSOR_COLOR)
 	local model = selected
 	local spot = if mode == "Selected" and model then spotOf(model) else nil
 	local spotInfo = spot and info(spot.Id)
 	if model and spot and spotInfo then
 		local w, d = Grid.footprint(spot.Id, spot.R)
-		GridOverlay.plate("Selected", cellsCFrame(spot.X, spot.Z, w, d), w * CELL, d * CELL, SELECT_COLOR)
-		showOutput("SelectedOut", spot.Id, spot.X, spot.Z, spot.R)
+		local level = Placement.levelOf(spot)
+		-- a platform's plate on its deck, where it can be seen
+		local plateLevel = if Placement.isPlatform(spot.Id) then 1 else level
+		GridOverlay.plate("Selected", cellsCFrame(spot.X, spot.Z, w, d, plateLevel), w * CELL, d * CELL, SELECT_COLOR)
+		showOutput("SelectedOut", spot.Id, spot.X, spot.Z, spot.R, level)
 		if model:GetAttribute("Busy") == true then
 			BuildView.setReason(refs, `{spotInfo.Name}: {Placement.Reasons.Busy}`, "Warn")
 		else
@@ -957,9 +1112,9 @@ local function send(request: Request)
 	request.Sent = true
 	request.At = os.clock()
 	if request.Op == "Place" then
-		Net.send("BuildPlace", request.Seq, request.Id, request.X, request.Z, request.R)
+		Net.send("BuildPlace", request.Seq, request.Id, request.X, request.Z, request.R, request.L)
 	elseif request.Op == "Move" then
-		Net.send("BuildMove", request.Seq, request.Model, request.X, request.Z, request.R)
+		Net.send("BuildMove", request.Seq, request.Model, request.X, request.Z, request.R, request.L)
 	else
 		Net.send("BuildPickup", request.Seq, request.Model)
 	end
@@ -987,7 +1142,7 @@ local function pump()
 	end)
 end
 
-local function request(op: Op, id: string, x: number, z: number, r: number, from: Entry?, model: Model?)
+local function request(op: Op, id: string, x: number, z: number, r: number, level: number, from: Entry?, model: Model?)
 	local seq = nextSeq
 	nextSeq = if nextSeq >= MAX_SEQ then 1 else nextSeq + 1
 	local entry: Request = {
@@ -997,6 +1152,7 @@ local function request(op: Op, id: string, x: number, z: number, r: number, from
 		X = x,
 		Z = z,
 		R = r,
+		L = if level == 1 then 1 else 0,
 		From = from,
 		Model = model,
 		Sent = false,
@@ -1009,8 +1165,8 @@ local function request(op: Op, id: string, x: number, z: number, r: number, from
 	pump()
 end
 
-local function effectPosition(id: string, x: number, z: number, r: number): Vector3
-	return footprintCFrame(id, x, z, r).Position + Vector3.new(0, 1, 0)
+local function effectPosition(id: string, x: number, z: number, r: number, level: number): Vector3
+	return footprintCFrame(id, x, z, r, level).Position + Vector3.new(0, 1, 0)
 end
 
 local function onResult(result: any)
@@ -1032,7 +1188,7 @@ local function onResult(result: any)
 		entry.Done = true
 		entry.At = os.clock()
 		if info(entry.Id) then
-			local position = effectPosition(entry.Id, entry.X, entry.Z, entry.R)
+			local position = effectPosition(entry.Id, entry.X, entry.Z, entry.R, entry.L)
 			if entry.Op == "Pickup" then
 				Sfx.play("Place", position, 1.35)
 				Vfx.burst("Dust", position, 8)
@@ -1165,10 +1321,10 @@ local function rotationOf(dx: number, dz: number): number
 	return 0
 end
 
--- Asks for a placement if our layout allows it. `quiet` only shakes the
--- ghost on refusal (belt painting over occupied cells).
-local function tryPlace(id: string, x: number, z: number, r: number, quiet: boolean): (boolean, string?)
-	local ok, code = check(id, x, z, r, nil)
+-- Asks for a placement on `level` if our layout allows it. `quiet` only
+-- shakes the ghost on refusal (belt painting over occupied cells).
+local function tryPlace(id: string, x: number, z: number, r: number, quiet: boolean, level: number): (boolean, string?)
+	local ok, code = check(id, x, z, r, nil, level)
 	if not ok then
 		if quiet then
 			shake()
@@ -1177,7 +1333,7 @@ local function tryPlace(id: string, x: number, z: number, r: number, quiet: bool
 		end
 		return false, code
 	end
-	request("Place", id, x, z, r, nil, nil)
+	request("Place", id, x, z, r, level, nil, nil)
 	return true, nil
 end
 
@@ -1235,7 +1391,17 @@ local function packUp()
 		deny("Busy")
 		return
 	end
-	request("Pickup", spot.Id, spot.X, spot.Z, spot.R, spot, model)
+	-- a platform with things on its deck stays (the server says the same)
+	local entries = layout()
+	local index = findSpot(entries, spot)
+	if index then
+		local free, why = Placement.canPickup(entries, entries[index])
+		if not free then
+			deny(why)
+			return
+		end
+	end
+	request("Pickup", spot.Id, spot.X, spot.Z, spot.R, Placement.levelOf(spot), spot, model)
 	setMode("Idle")
 end
 
@@ -1248,7 +1414,7 @@ local function commit()
 			return
 		end
 		local x, z = Placement.clampOrigin(id, cursorX, cursorZ, rotation)
-		if not tryPlace(id, x, z, rotation, false) then
+		if not tryPlace(id, x, z, rotation, false, Deck.levelAt(id, cursorX, cursorZ)) then
 			return
 		end
 		if placing.IsConveyor then
@@ -1265,7 +1431,8 @@ local function commit()
 			return
 		end
 		local x, z = Placement.clampOrigin(spot.Id, cursorX, cursorZ, rotation)
-		if x == spot.X and z == spot.Z and rotation == spot.R then
+		local level = Deck.levelAt(spot.Id, cursorX, cursorZ)
+		if x == spot.X and z == spot.Z and rotation == spot.R and level == Placement.levelOf(spot) then
 			setMode("Selected")
 			return
 		end
@@ -1273,12 +1440,12 @@ local function commit()
 			deny("Busy")
 			return
 		end
-		local ok, code = check(spot.Id, x, z, rotation, spot)
+		local ok, code = check(spot.Id, x, z, rotation, spot, level)
 		if not ok then
 			deny(code)
 			return
 		end
-		request("Move", spot.Id, x, z, rotation, spot, model)
+		request("Move", spot.Id, x, z, rotation, level, spot, model)
 		setMode("Selected")
 	elseif mode == "Selected" then
 		startMove()
@@ -1292,6 +1459,18 @@ local function rotate()
 	rotation = (rotation + 1) % 4
 	Sfx.play("BuildRotate")
 	dirty = true
+end
+
+-- Deck / Ground (V, D-pad Up, the touch button): where a flat belt goes on
+-- a deck cell, and what picking prefers on a cell with a deck.
+function Deck.toggleLayer()
+	Deck.Ground = not Deck.Ground
+	Sfx.play("UIClick")
+	dirty = true
+	if kind == "Gamepad" then
+		hoverSelect()
+	end
+	refreshUI()
 end
 
 -- Steps back one level. False when there was nothing to cancel.
@@ -1356,7 +1535,7 @@ local function paintTo(gx: number, gz: number)
 		local dx = if gx > stroke.X then 1 elseif gx < stroke.X then -1 else 0
 		local dz = if dx ~= 0 then 0 elseif gz > stroke.Z then 1 else -1
 		rotation = rotationOf(dx, dz)
-		local _, code = tryPlace(id, stroke.X, stroke.Z, rotation, true)
+		local _, code = tryPlace(id, stroke.X, stroke.Z, rotation, true, stroke.L)
 		if code == "NoneOwned" or code == "NoConveyorSlots" then
 			deny(code)
 			painting = nil
@@ -1377,7 +1556,7 @@ local function paintEnd()
 	if not stroke or mode ~= "Placing" or not id then
 		return
 	end
-	local ok = tryPlace(id, stroke.X, stroke.Z, rotation, stroke.Moved)
+	local ok = tryPlace(id, stroke.X, stroke.Z, rotation, stroke.Moved, stroke.L)
 	if ok then
 		advance(stroke.X, stroke.Z, rotation)
 	end
@@ -1392,8 +1571,10 @@ local function onPrimaryDown(position: Vector2)
 	end
 	if mode == "Placing" then
 		local placing = info(pickId)
-		if placing and placing.IsConveyor then
-			painting = { X = cursorX, Z = cursorZ, Moved = false }
+		local id = pickId
+		if placing and placing.IsConveyor and id then
+			-- the line keeps the level it starts on
+			painting = { X = cursorX, Z = cursorZ, Moved = false, L = Deck.levelAt(id, cursorX, cursorZ) }
 		else
 			commit()
 		end
@@ -1616,6 +1797,9 @@ local function onPad(_: string, state: Enum.UserInputState, input: InputObject):
 			cycleTray(-1)
 		elseif key == Enum.KeyCode.ButtonR1 then
 			cycleTray(1)
+		elseif key == Enum.KeyCode.DPadUp then
+			-- while building D-pad Up is the Deck / Ground toggle (B closes build mode)
+			Deck.toggleLayer()
 		end
 	elseif ended and key == Enum.KeyCode.ButtonY then
 		-- a short press on a selected machine picks it up to move it
@@ -1640,6 +1824,8 @@ local function onKey(_: string, state: Enum.UserInputState, input: InputObject):
 		packUp()
 	elseif key == Enum.KeyCode.C then
 		cancel()
+	elseif key == Enum.KeyCode.V then
+		Deck.toggleLayer()
 	end
 	return Enum.ContextActionResult.Sink
 end
@@ -1863,7 +2049,8 @@ function PlacementController.enter()
 		Enum.KeyCode.ButtonL2,
 		Enum.KeyCode.ButtonR2,
 		Enum.KeyCode.Thumbstick1,
-		Enum.KeyCode.Thumbstick2
+		Enum.KeyCode.Thumbstick2,
+		Enum.KeyCode.DPadUp
 	)
 	ContextActionService:BindActionAtPriority(
 		"TerraForgeBuildKeys",
@@ -1874,7 +2061,8 @@ function PlacementController.enter()
 		Enum.KeyCode.M,
 		Enum.KeyCode.X,
 		Enum.KeyCode.Delete,
-		Enum.KeyCode.C
+		Enum.KeyCode.C,
+		Enum.KeyCode.V
 	)
 	connect(UserInputService.InputBegan, onInputBegan)
 	connect(UserInputService.InputChanged, onInputChanged)
@@ -1953,6 +2141,7 @@ function PlacementController.exit()
 	selected = nil
 	setFaded(false)
 	showGhost(nil)
+	Deck.showDecks(false)
 	ghostTarget = nil
 	local highlight = selectHighlight
 	if highlight then
@@ -2069,6 +2258,7 @@ function PlacementController.start()
 	refs.Place.Activated:Connect(commit)
 	refs.Move.Activated:Connect(startMove)
 	refs.PackUp.Activated:Connect(packUp)
+	refs.Layer.Activated:Connect(Deck.toggleLayer)
 
 	local hud = HudController.refs()
 	if hud then

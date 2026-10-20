@@ -1408,7 +1408,7 @@ local function onAttribute(fx: Fx, name: string)
 		applySignal(fx)
 	elseif name == "Status" then
 		applySignal(fx)
-	elseif name == "GridX" or name == "GridZ" or name == "Rotation" then
+	elseif name == "GridX" or name == "GridZ" or name == "Rotation" or name == "GridL" then
 		-- moved: the server put every part back in its rest pose
 		fx.Angle = 0
 		fx.StubsDirty = true
