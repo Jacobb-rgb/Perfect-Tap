@@ -285,7 +285,7 @@ return function(T, Loader)
 			} do
 				local viewport = Vector2.new(screen[1], screen[2])
 				local scale = HudBubble.scaleFor(viewport)
-				local refs = HudBubble.buildGame(scale, screen[1] / scale)
+				local refs = HudBubble.buildGame(scale, screen[1]) -- (the screen width in points)
 				local height = screen[2] / scale
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
 				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
@@ -300,6 +300,8 @@ return function(T, Loader)
 					local pillLeft = width - 18 - pill.Size.X.Offset
 					local barRight = width / 2 + refs.TopBar.Size.X.Offset / 2
 					T.truthy(pillLeft > barRight, `pill right of the tabs at {screen[1]} x {screen[2]}`)
+					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
+					T.truthy(width - 18 - luck.Size.X.Offset > barRight, `the Server Luck line right of the tabs at {screen[1]} x {screen[2]}`)
 					local BoostView = ui("BoostView")
 					local chipsRight = TrainView.ChipLeft + TrainView.chipSize(true).X + 12 + BoostView.chipsWidth()
 					T.truthy(pillLeft > chipsRight or chipTop > HudBubble.MenuTop + pill.Size.Y.Offset, `pill clear of the chips at {screen[1]} x {screen[2]}`)
@@ -313,6 +315,10 @@ return function(T, Loader)
 				local menu = refs.Menu
 				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
 				T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				-- the tiles (top-left) clear of the BASE / LOBBY / VAULT tabs (top centre)
+				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
+				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
+				T.truthy(menuRight < tabsLeft, `the tiles left of the tabs at {screen[1]} x {screen[2]}`)
 			end
 		end)
 	end)

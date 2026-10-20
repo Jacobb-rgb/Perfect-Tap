@@ -26,8 +26,11 @@ function Preview.build(Loader: any): { [string]: any }
 	local scale = 1.25 -- 900 px tall render / 720 design height
 	local phoneScale = 0.62 * 900 / 375
 
+	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local function hud(uiScale: number): any
 		local refs = HudBubble.buildGame(if uiScale > 1.4 then 0.62 else 1.25)
+		-- the BASE / LOBBY / VAULT tabs (TeleportController fills the top bar in the game)
+		TeleportView.build(refs.TopBar, if uiScale > 1.4 then 0.62 else 1.25, 1600 / uiScale)
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(4.82e6)
 		refs.Income.Text = Format.perSecond(1840)

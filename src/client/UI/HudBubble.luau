@@ -682,7 +682,9 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Position = if layout.Compact
 			then UDim2.new(1, -18, 0, HudBubble.MenuTop + pill.Y + 8)
 			else UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
-		Size = UDim2.fromOffset(420, 28),
+		-- (phones: no wider than the pill's corner, clear of the tabs; the text shrinks to fit)
+		Size = if layout.Compact then UDim2.fromOffset(HudBubble.ShopPill.X + 90, 26) else UDim2.fromOffset(420, 28),
+		TextScaled = layout.Compact,
 		FontFace = CardTheme.NumberFont,
 		TextColor3 = Color3.fromRGB(140, 255, 120),
 		TextXAlignment = if layout.Compact then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
