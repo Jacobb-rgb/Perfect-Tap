@@ -26,15 +26,32 @@
 	it is assigned and whenever the pick changes, gone when the plot is
 	freed. THE GREAT FORGE plaza's fire crystal gets a "Star Forge" prompt
 	(CrystalPrompt, F / gamepad Y) that opens the window (OpenUI "Rebirth").
+	  { Action = "Weapon", Id } buys a STAR blaster with Forge Stars
+	                           (StarBlasterData.quote / buy: "BadWeapon" |
+	                           "Owned" | "Locked" | "NoStars") and equips it.
+	  { Action = "Equip", Id } the star blaster to fight with ("" = your
+	                           forged blaster; "Locked" for one you don't
+	                           own or that hasn't opened yet).
 	Every request read gets a RebirthResult { Action, Ok, Reason?, Perk?,
-	Level?, Stars?, Rebirths? }.
+	Level?, Stars?, Rebirths?, Id? }.
+
+	STAR blasters by Robux: the game passes StarComet..StarSingularity
+	(Grant "RebirthWeapon", MonetizationService.registerPass, checked on
+	every load and on a purchase). Grant = RebirthWeapons[id] and
+	RebirthWeaponPasses[id] (equipped when it is open and you hold none);
+	a weapon already bought with stars stays a star one (a refund of the
+	pass never takes it). Revoke (Roblox says the pass isn't owned, e.g. a
+	refund) = only a pass-given weapon goes, unequipped. ToolService hands
+	the equipped one out, MiningService multiplies the damage
+	(StarBlasterData.equipped / mult).
 
 	The perks act through Bonuses (the built-in "Rebirth" provider: income,
 	sell value, ore luck, carry capacity, train trips), the reset (Head
 	Start, Podium Keeper). The player attribute ForgeStars (every star ever
 	earned, Stats.StarsEarned) puts the gold star over the name
 	(RebirthController). State: snapshot.Rebirth { Count, Stars, Earned,
-	Perks, Ready, StarsNow, MinBlaster }.
+	Perks, Ready, StarsNow, MinBlaster, Weapons = { [id] = true },
+	Weapon = the equipped id or "" }.
 ]]
 
 local Players = game:GetService("Players")
@@ -43,6 +60,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local RebirthConfig = require(Shared.Config.RebirthConfig)
+local StarBlasterData = require(Shared.Config.StarBlasterData)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local BlasterData = require(Shared.Config.BlasterData)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
@@ -55,6 +74,7 @@ local TrainService = require(script.Parent.TrainService)
 local PlotGlow = require(script.Parent.Parent.World.PlotGlow)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local ElevatorService = require(script.Parent.ElevatorService)
+local MonetizationService = require(script.Parent.MonetizationService)
 
 local RebirthService = {}
 
@@ -277,6 +297,87 @@ function RebirthService.buy(player: Player, perkId: any): (boolean, any)
 	return true, level
 end
 
+---------------------------------------------------------------- star blasters
+
+local function weaponSet(data: { [string]: any }, key: string): { [string]: any }
+	local t = data[key]
+	if type(t) ~= "table" then
+		t = {}
+		data[key] = t
+	end
+	return t
+end
+
+-- Buys a STAR blaster with Forge Stars and equips it. Returns (true) or (false, reason).
+function RebirthService.buyWeapon(player: Player, id: any): (boolean, string?)
+	local data = DataService.get(player)
+	if not data then
+		return false, "NoData"
+	end
+	local _, reason = StarBlasterData.quote(data, id)
+	if reason then
+		return false, reason
+	end
+	StarBlasterData.buy(data, id)
+	DataService.changed(player)
+	return true, nil
+end
+
+-- Equips a STAR blaster you own that is open ("" = your forged blaster). Returns (true) or (false, reason).
+function RebirthService.equipWeapon(player: Player, id: any): (boolean, string?)
+	local data = DataService.get(player)
+	if not data then
+		return false, "NoData"
+	end
+	if id ~= "" and not (StarBlasterData.owns(data, id) and StarBlasterData.unlocked(data, id)) then
+		return false, "Locked"
+	end
+	if data.StarBlaster ~= id then
+		data.StarBlaster = id
+		DataService.changed(player)
+	end
+	return true, nil
+end
+
+-- Pass handler "RebirthWeapon" grant (idempotent: runs on every load). True when the save changed.
+local function grantWeapon(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local star = StarBlasterData.get(entry.WeaponId)
+	if not star then
+		return false
+	end
+	local owned = weaponSet(data, "RebirthWeapons")
+	if owned[star.Id] then
+		-- bought with stars, or this pass gave it on an earlier load
+		return false
+	end
+	owned[star.Id] = true
+	weaponSet(data, "RebirthWeaponPasses")[star.Id] = true
+	local open = StarBlasterData.unlocked(data, star.Id)
+	if open and StarBlasterData.equipped(data) == nil then
+		data.StarBlaster = star.Id
+	end
+	local line = if open
+		then `{star.Name} unlocked! Thank you! Equip it in the Star Forge.`
+		else `{star.Name} is yours! Thank you! It opens at rebirth {star.Unlock}.`
+	Net.fire("Notify", player, { Text = line, Kind = "Reward" })
+	return true
+end
+
+-- Pass handler "RebirthWeapon" revoke: only a weapon this pass gave goes (unequipped). True when the save changed.
+local function revokeWeapon(_player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local star = StarBlasterData.get(entry.WeaponId)
+	local passes = weaponSet(data, "RebirthWeaponPasses")
+	if not star or not passes[star.Id] then
+		return false
+	end
+	passes[star.Id] = nil
+	weaponSet(data, "RebirthWeapons")[star.Id] = nil
+	if data.StarBlaster == star.Id then
+		data.StarBlaster = ""
+	end
+	return true
+end
+
 local function onAction(player: Player, raw: any)
 	local args = Guard.table(raw, MAX_PAYLOAD)
 	local action = if args then Guard.string(args.Action, 16) else nil
@@ -302,6 +403,15 @@ local function onAction(player: Player, raw: any)
 		local color = if args then Guard.string(args.Color, 16) else nil
 		local ok, reason = RebirthService.setGlow(player, color)
 		answer(player, { Action = "Glow", Ok = ok, Color = color, Reason = reason })
+	elseif action == "Weapon" or action == "Equip" then
+		local id = if args then Guard.string(args.Id, 32) else nil
+		local ok, reason
+		if action == "Weapon" then
+			ok, reason = RebirthService.buyWeapon(player, id)
+		else
+			ok, reason = RebirthService.equipWeapon(player, id)
+		end
+		answer(player, { Action = action, Ok = ok, Id = id, Reason = reason })
 	end
 end
 
@@ -309,6 +419,12 @@ end
 function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 	local ready = RebirthConfig.canRebirth(data)
 	local perks = if type(data.StarPerks) == "table" then data.StarPerks else {}
+	local weapons = {}
+	for _, star in StarBlasterData.List do
+		if StarBlasterData.owns(data, star.Id) then
+			weapons[star.Id] = true
+		end
+	end
 	return {
 		Count = RebirthConfig.countOf(data),
 		Stars = RebirthConfig.starsOf(data),
@@ -319,12 +435,16 @@ function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 		StarsNow = RebirthConfig.starsFor(RebirthConfig.reachedOf(data)),
 		Reached = RebirthConfig.reachedOf(data),
 		MinBlaster = RebirthConfig.MinBlaster,
+		Weapons = weapons,
+		Weapon = if StarBlasterData.equipped(data) then data.StarBlaster else "",
 	}
 end
 
 -- Internals for the Lune tests only (tests/Rebirth.spec.luau).
 RebirthService._test = {
 	action = onAction,
+	grantWeapon = grantWeapon,
+	revokeWeapon = revokeWeapon,
 	reset = function()
 		table.clear(busy)
 	end,
@@ -332,6 +452,7 @@ RebirthService._test = {
 
 function RebirthService.init()
 	Net.on("RebirthAction", onAction)
+	MonetizationService.registerPass("RebirthWeapon", { grant = grantWeapon, revoke = revokeWeapon })
 	StateService.addProvider(function(_player: Player, data: { [string]: any }, snapshot: { [string]: any })
 		snapshot.Rebirth = RebirthService.snapshot(data)
 		-- coin prices that grow with the blaster follow the best level ever (CapsuleView, BoostView)

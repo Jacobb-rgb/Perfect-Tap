@@ -90,7 +90,7 @@ handlers.BlastHit = function(position: any, glow: any, _stage: any, shooter: any
 	if from and not mine then
 		-- their blaster's tier look (thickness, the Lv7+ energy stream)
 		local tool = muzzle and muzzle.Parent and muzzle.Parent.Parent
-		local level = if tool then tool:GetAttribute("Level") else nil
+		local level = if tool then BlasterFx.levelOf(tool) else nil
 		Vfx.setBeam(shooter, muzzle, from, position, color, OTHER_BEAM_HOLD, BlasterFx.styleFor(level))
 	end
 	Vfx.impact(position, color, if from then from - position else nil, if mine then 2 else 5)
