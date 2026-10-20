@@ -335,19 +335,19 @@ local function bridge(parent: Instance, look: Look, rng: Rng.Rng): Model
 	local span = BridgeGarden.BridgeWidth + 10
 	roof(m, center, length + 7, span, look, rng)
 	-- string lights along both eaves
-	local z = from.Z + 2.5
-	while z > to.Z - 3 do
+	local bulbZ = from.Z + 2.5
+	while bulbZ > to.Z - 3 do
 		for _, side in { -1, 1 } do
 			Style.block(
 				m,
-				CFrame.new(side * (span / 2 + 0.25), roofY - look.RoofThick * 0.4, z),
+				CFrame.new(side * (span / 2 + 0.25), roofY - look.RoofThick * 0.4, bulbZ),
 				Vector3.new(0.35, 0.35, 0.35),
 				look.Lamp,
 				NEON,
 				Style.tiny()
 			)
 		end
-		z -= 2.4
+		bulbZ -= 2.4
 	end
 	-- lanterns hanging from the eave beams, 3 per side
 	for i = 1, 3 do
