@@ -124,6 +124,8 @@ local DataTemplate = {
 		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
 		BestBlaster = 0, -- the highest blaster level before a rebirth (BlasterData.priceLevel)
 		RunForged = 0, -- the highest blaster level forged at the Foundry this rebirth run
+		RunPaid = false, -- a blaster level was bought with Robux this run (RebirthConfig.reachedOf)
+		BlastersPaid = 0, -- blaster levels bought with Robux (VaultService.grantNext "Robux")
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
@@ -144,6 +146,9 @@ local DataTemplate = {
 	StarPerks = {},
 	-- the Plot Glow colour the plot shows (a RebirthConfig.GlowColors id, "" = off)
 	PlotGlow = "",
+	-- Robux blaster levels banked for the next rebirth (VaultService: a receipt that
+	-- came at the top level or off its band; RebirthConfig.reset spends them)
+	BlasterCredits = 0,
 
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
 	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),

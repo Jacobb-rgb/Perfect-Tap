@@ -16,7 +16,20 @@
 	("NoCoins", EconomyService.spend). Then BlasterLevel = Level, BlasterOre =
 	the case's ore, Stats.BlastersBought + 1, DataService.changed (ToolService
 	swaps the blaster). Every request read gets a VaultResult
-	{ Level, Ok, Reason?, Ore?, Name? }; the client plays the crate opening on Ok.
+	{ Level, Ok, Reason?, Ore?, Name?, Paid? }; the client plays the crate opening on Ok.
+
+	Robux (step 8 STORE, MonetizationConfig products with Grant "BlasterLevel"
+	and MinLevel / MaxLevel = the next levels a product covers, priced in
+	bands): the "BlasterLevel" receipt handler gives the next level through
+	the same setter (grantNext "Robux": Stats.BlastersPaid + 1, Stats.RunPaid
+	so the rebirth run pays stars only for Foundry-forged levels) and the
+	crate opening plays (VaultResult Paid = true). It never refuses (the
+	receipt would come back forever and the player paid for nothing): at the
+	top level, or when the next level isn't in the product's band (a stale or
+	client-made prompt), it banks a credit (data.BlasterCredits, at most
+	MaxCredits) that the next rebirth spends at its start (RebirthConfig.reset:
+	only there, so a cheap band can never buy a high level). Never coins.
+	The store asks paidStatus first ("Full" at the top / off-band).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -28,6 +41,7 @@ local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local MonetizationService = require(script.Parent.MonetizationService)
 
 local VaultService = {}
 
@@ -38,6 +52,7 @@ VaultService.PromptName = "VaultShopPrompt"
 VaultService.PointName = "VaultShopPromptPoint"
 
 VaultService.Reasons = { "BadLevel", "Owned", "Locked", "Max", "TooFar", "NoCoins", "NoData" }
+VaultService.MaxCredits = 9 -- banked Robux blaster levels a save keeps (one per level above 1)
 
 local PROMPT_DISTANCE = 12
 local MAX_PAYLOAD = 4
@@ -119,18 +134,61 @@ function VaultService.buy(player: Player, level: number): (boolean, string?)
 	if not EconomyService.spend(player, price, "Vault") then
 		return false, "NoCoins"
 	end
-	data.BlasterLevel = level
-	data.BlasterOre = BlasterData.vaultOre(level)
-	local stats = data.Stats
-	if type(stats) == "table" then
-		local bought = stats.BlastersBought
-		stats.BlastersBought = (if type(bought) == "number" and bought == bought then bought else 0) + 1
-	end
-	DataService.changed(player)
+	VaultService.grantNext(player, data, "Coins")
 	return true, nil
 end
 
-local function answer(player: Player, level: number, ok: boolean, reason: string?)
+local function whole(v: any): number
+	return if type(v) == "number" and v == v and v > 0 and v < math.huge then math.floor(v) else 0
+end
+
+--[[
+	The one level setter (no yield): the player's next blaster level in that
+	level's case look. "Coins" (the Vault) counts Stats.BlastersBought;
+	"Robux" counts Stats.BlastersPaid and marks the rebirth run as paid
+	(Stats.RunPaid: RebirthConfig.reachedOf). Returns the new level, or nil
+	at the top level.
+]]
+function VaultService.grantNext(player: Player, data: { [string]: any }, source: string): number?
+	local current = levelOf(data)
+	if current >= BlasterData.MaxLevel then
+		return nil
+	end
+	local level = current + 1
+	data.BlasterLevel = level
+	data.BlasterOre = BlasterData.vaultOre(level)
+	local stats = data.Stats
+	if type(stats) ~= "table" then
+		stats = {}
+		data.Stats = stats
+	end
+	if source == "Robux" then
+		stats.BlastersPaid = whole(stats.BlastersPaid) + 1
+		stats.RunPaid = true
+	else
+		stats.BlastersBought = whole(stats.BlastersBought) + 1
+	end
+	DataService.changed(player)
+	return level
+end
+
+-- What the STORE answers before prompting a "BlasterLevel" product: "Prompt"
+-- when its band holds the player's next level, else "Full" (MonetizationConfig.promptStatus).
+function VaultService.paidStatus(data: any, entry: any): string
+	if type(data) ~= "table" or type(entry) ~= "table" then
+		return "Full"
+	end
+	local current = levelOf(data)
+	local nextLevel = current + 1
+	local lo = tonumber(entry.MinLevel) or 2
+	local hi = tonumber(entry.MaxLevel) or BlasterData.MaxLevel
+	if current >= BlasterData.MaxLevel or nextLevel < lo or nextLevel > hi then
+		return "Full"
+	end
+	return "Prompt"
+end
+
+local function answer(player: Player, level: number, ok: boolean, reason: string?, paid: boolean?)
 	local ore = if ok then BlasterData.vaultOre(level) else nil
 	Net.fire("VaultResult", player, {
 		Level = level,
@@ -138,7 +196,36 @@ local function answer(player: Player, level: number, ok: boolean, reason: string
 		Reason = reason,
 		Ore = ore,
 		Name = if ok then BlasterData.displayName(level, ore) else nil,
+		Paid = if paid then true else nil,
 	})
+end
+
+--[[
+	The "BlasterLevel" receipt handler (MonetizationService.register): the
+	next level when the product's band holds it, else a banked credit (see
+	the header). Never refuses a loaded save; no yield.
+]]
+local function grantPaid(player: Player, data: { [string]: any }, entry: any): boolean
+	if DataService.get(player) ~= data then
+		return false
+	end
+	if VaultService.paidStatus(data, entry) == "Prompt" then
+		local level = VaultService.grantNext(player, data, "Robux") :: number
+		answer(player, level, true, nil, true)
+		return true
+	end
+	data.BlasterCredits = math.min(whole(data.BlasterCredits) + 1, VaultService.MaxCredits)
+	DataService.changed(player)
+	Net.fire("Notify", player, {
+		Text = "Thank you! Your blaster is past this case, so it waits for your next rebirth: it lifts your new blaster a level.",
+		Kind = "Reward",
+	})
+	return true
+end
+
+-- Registers the "BlasterLevel" receipt handler (init(); idempotent).
+function VaultService.registerGrants()
+	MonetizationService.register("BlasterLevel", grantPaid)
 end
 
 -- VaultBuy { Level }: every request read gets a VaultResult.
@@ -231,6 +318,7 @@ end
 -- Internals for the Lune tests only (tests/VaultService.spec.luau).
 VaultService._test = {
 	buy = onBuy,
+	grantPaid = grantPaid,
 	hookCounter = hookCounter,
 	unhookCounter = unhookCounter,
 	open = openView,
@@ -244,6 +332,7 @@ VaultService._test = {
 
 function VaultService.init()
 	Net.on("VaultBuy", onBuy)
+	VaultService.registerGrants()
 end
 
 function VaultService.start()

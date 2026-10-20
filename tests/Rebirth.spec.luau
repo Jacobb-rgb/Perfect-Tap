@@ -399,6 +399,36 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("Rebirth: Robux blaster levels never pay stars; banked credits lift the next start", function()
+		-- a first run with a level bought with Robux counts only Foundry-forged levels
+		local data = midRun()
+		data.Stats.RunPaid = true
+		T.eq(RebirthConfig.reachedOf(data), 0, "the first-run grace is gone once a level was bought")
+		T.eq(select(2, RebirthConfig.canRebirth(data)), "NotForged")
+		data.Stats.RunForged = 7
+		T.eq(RebirthConfig.reachedOf(data), 7, "forged levels still count")
+		-- credits (receipts that came at the top level) lift the new blaster, one level each
+		data.BlasterCredits = 2
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, 3, "LV 1 + 2 banked levels")
+		T.eq(data.BlasterOre, BlasterData.vaultOre(3))
+		T.eq(data.BlasterCredits, 0)
+		T.eq(data.Stats.RunPaid, true, "the lifted run is paid (no stars for it)")
+		-- with Head Start, never above the top; the rest stays banked
+		data.Stats.RunForged = TOP
+		data.BlasterLevel = TOP
+		data.StarPerks = { HeadStart = 3 }
+		data.BlasterCredits = 9
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, TOP)
+		T.eq(data.BlasterCredits, 9 - (TOP - RebirthConfig.HeadStartLevels[3]), "the rest waits")
+		-- no credits: a clean, unpaid run
+		data.BlasterCredits = 0
+		data.Stats.RunForged = TOP
+		RebirthConfig.reset(data)
+		T.eq(data.Stats.RunPaid, false)
+	end)
+
 	T.test("Rebirth: Head Start and Podium Keeper", function()
 		local data = midRun()
 		data.StarPerks = { HeadStart = 3, PodiumKeeper = 1 }

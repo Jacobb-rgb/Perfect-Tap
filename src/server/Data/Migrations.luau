@@ -127,8 +127,9 @@
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
 	  equipped ignores them), anything else nil.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
-	  WheelOres / StarsEarned / BestBlaster / RunForged are whole numbers >= 0.
-	- Rebirth (RebirthConfig): Rebirths and Stars are whole numbers >= 0;
+	  WheelOres / StarsEarned / BestBlaster / RunForged / BlastersPaid are
+	  whole numbers >= 0; Stats.RunPaid is a boolean.
+	- Rebirth (RebirthConfig): Rebirths, Stars and BlasterCredits are whole numbers >= 0;
 	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
 	  newer build's perks and levels kept, junk and levels below 1 dropped);
 	  PlotGlow is a short id or "" (a colour this build doesn't know stays).
@@ -658,13 +659,18 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 
 	-- the new stats
 	local stats = record(data, "Stats", report)
-	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres", "StarsEarned", "BestBlaster", "RunForged" } do
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres", "StarsEarned", "BestBlaster", "RunForged", "BlastersPaid" } do
 		local v = stats[field]
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
 	end
 
+	if stats.RunPaid ~= nil and type(stats.RunPaid) ~= "boolean" then
+		stats.RunPaid = false
+		report.Dropped += 1
+	end
+
 	-- rebirth: whole counts, Star Shop levels by short ids (unknown perks and levels kept)
-	for _, field in { "Rebirths", "Stars" } do
+	for _, field in { "Rebirths", "Stars", "BlasterCredits" } do
 		local v = data[field]
 		if v ~= nil and not isFinite(v) then
 			report.Dropped += 1

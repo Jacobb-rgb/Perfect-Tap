@@ -5,7 +5,9 @@
 
 	- Needs your blaster at MinBlaster or higher, FORGED at the Foundry in
 	  this run (reachedOf: Stats.RunForged, which FoundryService raises and
-	  the reset clears; the first run counts the blaster level as it is).
+	  the reset clears; the first run counts the blaster level as it is,
+	  unless a level was bought with Robux in it: Stats.RunPaid, set by
+	  VaultService.grantNext "Robux" and by spending banked credits).
 	  Vault cases are bought with coins only, and Podium Keeper keeps the
 	  income: counting them would make the stars a few minutes of idle
 	  income each. Rebirth is never forced, never sold for Robux, and
@@ -352,10 +354,11 @@ function RebirthConfig.reachedOf(data: any): number
 		return 0
 	end
 	local level = BlasterData.get(data.BlasterLevel).Level
-	if RebirthConfig.countOf(data) == 0 then
+	local stats = data.Stats
+	local paid = type(stats) == "table" and stats.RunPaid == true
+	if RebirthConfig.countOf(data) == 0 and not paid then
 		return level
 	end
-	local stats = data.Stats
 	local run = if type(stats) == "table" then stats.RunForged else nil
 	return if finite(run) and run > 0 then math.min(math.floor(run), level) else 0
 end
@@ -398,6 +401,7 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	-- the highest level ever (BlasterData.priceLevel: prices never drop), a new run
 	stats.BestBlaster = math.max(if finite(stats.BestBlaster) then math.floor(stats.BestBlaster) else 0, level)
 	stats.RunForged = 0
+	stats.RunPaid = false
 	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper)
 	local relics = {}
 	local function keepRelics(list: any)
@@ -426,6 +430,16 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	data.Coins = 0
 	data.ShardRolls = 0
 	local start = RebirthConfig.startLevel(perks)
+	-- banked Robux blaster levels (VaultService: a receipt that came at the top level) lift the
+	-- new blaster here, one level each; they count as paid (no stars for them)
+	local credits = data.BlasterCredits
+	local banked = if finite(credits) and credits > 0 then math.floor(credits) else 0
+	local lift = math.min(banked, BlasterData.MaxLevel - start)
+	if lift > 0 then
+		start += lift
+		data.BlasterCredits = banked - lift
+		stats.RunPaid = true
+	end
 	data.BlasterLevel = start
 	data.BlasterOre = if start > 1 then BlasterData.vaultOre(start) else ""
 	-- machine speed, the elevator, the train, the backpack

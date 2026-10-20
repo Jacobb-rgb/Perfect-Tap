@@ -652,3 +652,34 @@ What to test in Studio:
 5. Buy Plot Glow: the ribbon shows on your plot's walls at once; COLOR cycles your colours and OFF; another player
    sees it; leaving frees the plot without it.
 6. Walk to the plaza's fire crystal: "Star Forge" (F / Y) opens the window.
+
+## Robux blaster levels for the STORE (2026-10-20, branch feature/blaster-robux)
+The owner wants the Robux STORE to sell blasters. The UI chat's STORE card sells the NEXT blaster level as a developer
+product in four price bands (MonetizationConfig entries, added on ui/store; Grant "BlasterLevel", MinLevel / MaxLevel =
+the next levels a product covers). Placeholder prices, for the owner to decide:
+
+| Product | Next level | Price (R$) |
+|---|---|---|
+| BlasterNextA | 2-4 | 49 |
+| BlasterNextB | 5-7 | 99 |
+| BlasterNextC | 8-9 | 199 |
+| BlasterNextD | 10 | 399 |
+
+(Bands, not one flat price: the Foundry curve runs from 330 coins at LV 2 to 35B at LV 10, so a flat price would make
+LV 10 as cheap as LV 2 and skip the whole ~8 h curve for ~700 R$.)
+- VaultService.grantNext is the one level setter for the coin Vault and Robux. A Robux level: the next level in that
+  level's case look, Stats.BlastersPaid + 1, and the crate opening (VaultResult Paid). No coins ever (the
+  no-Robux-to-coins rule, docs/COMPLIANCE.md).
+- Rebirth: a run with a bought level pays stars only for Foundry-forged levels (Stats.RunPaid; also in the first run,
+  whose grace otherwise counts the blaster as it is). No paid stars.
+- The handler never refuses: MonetizationService never acknowledges a receipt without the item, and clients can
+  prompt any product. At the top level or off the product's band it banks data.BlasterCredits (at most 9); the next
+  rebirth's start spends them, one level each (only there, so a cheap band can never buy a high level). The store
+  asks VaultService.paidStatus first ("Full" at the top / off band) and greys the card while a purchase is pending.
+- Open for the owner, together with the coin packs: a rebirth resets the blaster, so a bought level is gone after a
+  rebirth (the STORE card says "resets if you rebirth"). Should bought levels come back after a rebirth instead?
+What to test in Studio (with test product ids):
+1. Buy BlasterNextA at LV 2: LV 3 with the crate opening, coins unchanged.
+2. At LV 10: the card is hidden; a forced prompt banks a credit with a thank-you toast, and the next rebirth starts
+   one level higher.
+3. After buying a level, rebirth needs a blaster forged at the Foundry (NotForged otherwise).

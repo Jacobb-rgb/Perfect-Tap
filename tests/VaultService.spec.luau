@@ -205,6 +205,49 @@ return function(T, Loader)
 		T.eq(buy(w, { Level = BlasterData.MaxLevel + 1 }).Reason, "Max", "nothing past the top")
 	end)
 
+	withWorld("VaultService: a Robux blaster gives the next level in its band, else banks a credit (never refuses)", function(w)
+		-- the STORE's bands (MonetizationConfig entries with Grant "BlasterLevel")
+		local bandA = { Key = "BlasterNextA", Grant = "BlasterLevel", MinLevel = 2, MaxLevel = 4 }
+		local bandD = { Key = "BlasterNextD", Grant = "BlasterLevel", MinLevel = 10, MaxLevel = 10 }
+		w.data.BlasterLevel = 2
+		w.data.Coins = 777
+		T.eq(VaultService.paidStatus(w.data, bandA), "Prompt", "next level 3 is in band A")
+		T.eq(VaultService.paidStatus(w.data, bandD), "Full", "band D is for LV 10 only")
+		T.truthy(vault.grantPaid(w.player, w.data, bandA), "granted")
+		T.eq(w.data.BlasterLevel, 3)
+		T.eq(w.data.BlasterOre, BlasterData.vaultOre(3), "that level's case look")
+		T.eq(w.data.Coins, 777, "no coins taken")
+		T.eq(w.data.Stats.BlastersPaid, 1)
+		T.eq(w.data.Stats.BlastersBought, 0, "a Vault (coins) buy counts elsewhere")
+		T.eq(w.data.Stats.RunPaid, true, "this rebirth run is paid (no stars for it)")
+		local r = results(w)[#results(w)]
+		T.truthy(r.Ok and r.Paid and r.Level == 3, "the crate opening plays (Paid)")
+		-- off band (a stale or client-made prompt): a banked credit, never a level from a cheaper band
+		w.data.BlasterLevel = 9
+		T.eq(VaultService.paidStatus(w.data, bandA), "Full")
+		T.truthy(vault.grantPaid(w.player, w.data, bandA), "the receipt is still taken (never a retry loop)")
+		T.eq(w.data.BlasterLevel, 9, "band A never buys LV 10")
+		T.eq(w.data.BlasterCredits, 1, "banked for the next rebirth")
+		-- the top level: a credit too, at most MaxCredits
+		w.data.BlasterLevel = BlasterData.MaxLevel
+		for _ = 1, 12 do
+			T.truthy(vault.grantPaid(w.player, w.data, bandD))
+		end
+		T.eq(w.data.BlasterCredits, VaultService.MaxCredits, "capped")
+		T.eq(w.data.BlasterLevel, BlasterData.MaxLevel)
+		T.eq(VaultService.paidStatus(w.data, bandD), "Full", "the store hides it at the top")
+		-- a save that isn't this player's live one is left to MonetizationService (not processed yet)
+		T.falsy(vault.grantPaid(w.player, deepCopy(w.data), bandD))
+		-- the coin Vault goes through the same setter
+		w.data.BlasterLevel = 3
+		w.data.Coins = 1e12
+		w.data.Stats.RunPaid = false
+		vault.buy(w.player, { Level = 4 })
+		T.eq(w.data.BlasterLevel, 4)
+		T.eq(w.data.Stats.BlastersBought, 1)
+		T.eq(w.data.Stats.RunPaid, false, "coins don't mark the run paid")
+	end)
+
 	withWorld("VaultService: refusals change nothing", function(w)
 		w.data.Coins = 1e12
 		w.data.BlasterLevel = 3
