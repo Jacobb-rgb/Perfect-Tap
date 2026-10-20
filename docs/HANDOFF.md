@@ -64,7 +64,7 @@ The owner runs several Claude chats at once. Each works in its own worktree / br
 | **Úrovně a vzhled min** | mine floors, elevator, hoverboards, MonetizationService |
 | **Design zbraní a blasterů** | blasters, Blaster Vault, gallery, tutorial, save safety, rebirth |
 | **Návrhy strojů** | machines, belts, platforms, relic flow, security, balance sim |
-| **Nový UI design** | light UI (style A) on branch `ui/light` |
+| **Nový UI design** | light UI (style A), on main since aad1769 (`ui/light` merged) |
 | **Terra Forge Roblox hlídač ostatních chatu** | the watcher: reads all chats overnight, sends pictures, hands out next tasks |
 
 ### Landing protocol
@@ -76,19 +76,19 @@ The owner runs several Claude chats at once. Each works in its own worktree / br
    moves under them.
 
 ## 5. What is still open
-1. **Light UI flip** (in progress, chat "Nový UI design"): branch `ui/light` (a1a240d, 31 commits not on main) has a
-   light path for every window behind the switch `UIConfig.Default = false` (flip prep c27abc4; the Workspace
-   attribute `LightUI` = true previews it in Studio); flip it after the owner's "ano" (that branch's
-   docs/handoff/UI_LIGHT_SWITCH_ON.md and docs/plans/UI_LIGHT_PLAN.md).
-2. **Final Foundry price curve**: docs/BALANCE_SIM.md "Option 3 … and the 6-floor tables" must be re-run on the
-   Stormglass Rift's real tables, then the Foundry L2-L10 coins set (machines chat, branch `balance/foundry-6floors`).
+1. ~~Light UI flip~~ **done** (aad1769, 2026-10-20): the light UI "Bubliny" is ON (`UIConfig.Default = true` in
+   src/shared/Config/UIConfig.luau; set it to false to turn it off). The elevator window/ride, the hoverboard panel, the
+   crate opening and the loading screen keep their own look on purpose. Icons are emoji stand-ins until the 5 sheet ids.
+2. ~~Final Foundry price curve~~ **done** (25cc26e): L2-L10 = 350 / 17K / 710K / 2.1M / 73M / 130M / 2.2B / 31B / 290B on
+   the 6 real floors with the option 3 Tech prices; typical blaster 10 at ~8 h (docs/BALANCE_SIM.md top section).
+   Rebirth stars and the Vault prices derive from BlasterData and follow it.
 3. **Owner uploads** (guides in `Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/`, steps in docs/PUBLISHING.md
    section 3 and docs/COMPLIANCE.md 2.6). Paste each id into its config:
    - skybox, 6 images → `LightingConfig.Skybox` (`obloha_mlecna_draha/`)
    - music, 4 tracks → `MusicConfig` (`hudba/`, docs/handoff/HUDBA_NAVOD.md)
    - 2 lobby ambience slots (frog croak, plaza murmur) → `AmbienceConfig` (`zvuky/`, docs/handoff/ZVUKY_LOBBY.md)
    - badges → `BadgeConfig` (`odznaky/`, docs/handoff/ODZNAKY_NAVOD.md)
-   - 5 UI icon sheets → `IconAssets.Sheets[*].Id` (file on `ui/light`; `ikony_ui/`)
+   - 5 UI icon sheets → `IconAssets.Sheets[*].Id` (src/shared/Config/IconAssets.luau; `ikony_ui/`)
    - game passes (incl. the 2 Robux hoverboards) and Robux products → `MonetizationConfig` (`robux_produkty/`);
      keep coin packs at 0 while `CoinPacksEnabled` is false; passes On Sale only after that build is live
    - logo, icon, thumbnails, store text → Creator Dashboard (`obchod/`, docs/STORE_PAGE.md); paste
@@ -98,8 +98,9 @@ The owner runs several Claude chats at once. Each works in its own worktree / br
 5. **FLAWLESS guard soft signals** stay log-only until real logs show no false positives.
 6. **Studio checks** by the owner: docs/STUDIO_CHECKLIST.md, then Playtesters → Public (PUBLISHING.md section 3, items 10-11).
 7. Smaller: trading (V2_PLAN step 8) is not built; the side menu's STORE stays hidden until a StoreController
-   exists (on a 568 x 320 phone STORE + REBIRTH need a menu decision); rebirth's plot glow perk and a crystal
-   prompt at THE GREAT FORGE are not built; perf leftovers (`PenService.markBoard`, PERF_AUDIT items 7-8 and the
+   exists (on a 568 x 320 phone STORE + REBIRTH need a menu decision); rebirth's Plot Glow perk and the Star Forge
+   prompt at the fire crystal are built (9d0589b); platforms phase 3 (Tech card order, tutorial hint, steps, cables
+   to the deck) is open (machines chat); perf leftovers (`PenService.markBoard`, PERF_AUDIT items 7-8 and the
    device test, item 10); the owner decides whether Robux coin packs are ever enabled.
 8. Preview / proposal branches kept for reference, not to merge: `art/plot-style-a`, `art/relic-flow-preview`,
    `art/platforms-preview`, `docs/rebirth-proposal`, `mock/rebirth`.
