@@ -16,7 +16,9 @@
 	           "Robux" (the two Mythics' 20 R$ game passes) is answered with
 	           PurchasePrompt (BoostService.promptPurchase: "ComingSoon"
 	           while the pass id is 0) and NEVER granted here (step 8 grants
-	           a pass's enchant on join and after the purchase).
+	           a pass's enchant on join and after the purchase: the "Enchant"
+	           pass handler, registerGrants; data.Enchants.Passes marks what
+	           a pass gave, so a refund takes back only that).
 	           A newly bought enchant goes into the first free open slot.
 	    "Slot" { Slot = 1..MaxSlots, Id = an owned enchant id, or nil / ""
 	           to empty the slot } (EnchantConfig.setSlot): free, anywhere.
@@ -52,6 +54,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EnchantConfig = require(Shared.Config.EnchantConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
 local Guard = require(script.Parent.Parent.Guard)
@@ -60,6 +63,7 @@ local Shards = require(script.Parent.Parent.Shards)
 local BoostService = require(script.Parent.BoostService)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local MonetizationService = require(script.Parent.MonetizationService)
 
 local EnchantService = {}
 
@@ -226,6 +230,76 @@ function EnchantService.buy(player: Player, id: any, currency: any, tier: any): 
 	return true, nil, newTier, if before == 0 then slot else nil
 end
 
+---------------------------------------------------------------- the Mythic passes (step 8)
+
+-- data.Enchants.Passes: [enchantId] = true for the enchants a game pass gave.
+local function passesOf(enchants: { [string]: any }): { [string]: boolean }
+	if type(enchants.Passes) ~= "table" then
+		enchants.Passes = {}
+	end
+	return enchants.Passes
+end
+
+--[[
+	Pass handler "Enchant" grant (MonetizationService.registerPass): the
+	entry's Mythic enchant, forever. Idempotent (it runs on every load): an
+	enchant already owned changes nothing (one bought with coins is never
+	marked, so a refund can't take it); a new one is owned at tier 1, put
+	into the first free open slot and marked as the pass's
+	(data.Enchants.Passes). True when the save changed. No yield.
+]]
+local function grantEnchant(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local id = entry.Enchant
+	if not id or not EnchantConfig.ById[id] then
+		return false
+	end
+	local enchants = enchantsOf(data)
+	if EnchantConfig.tierOf(enchants, id) >= 1 then
+		return false
+	end
+	local tier = EnchantConfig.grant(enchants, id)
+	if tier < 1 then
+		return false
+	end
+	passesOf(enchants)[id] = true
+	local slot = slotOf(enchants, data.BlasterLevel, id)
+	if not slot then
+		local free = EnchantConfig.firstFreeSlot(enchants, data.BlasterLevel)
+		if free and EnchantConfig.setSlot(enchants, data.BlasterLevel, free, id) then
+			slot = free
+		end
+	end
+	Net.fire("Notify", player, { Text = `Thank you! {EnchantService.boughtText(id, tier, slot)}`, Kind = "Reward" })
+	return true
+end
+
+-- Pass handler "Enchant" revoke (Roblox says the pass isn't owned: a refund): takes back
+-- only an enchant this pass gave, and its slot. True when the save changed.
+local function revokeEnchant(_player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local id = entry.Enchant
+	local enchants = data.Enchants
+	if not id or type(enchants) ~= "table" or type(enchants.Passes) ~= "table" or not enchants.Passes[id] then
+		return false
+	end
+	enchants.Passes[id] = nil
+	if type(enchants.Owned) == "table" then
+		enchants.Owned[id] = nil
+	end
+	if type(enchants.Slots) == "table" then
+		for i, slotted in enchants.Slots do
+			if slotted == id then
+				enchants.Slots[i] = ""
+			end
+		end
+	end
+	return true
+end
+
+-- Registers the "Enchant" pass handler (init(); idempotent).
+function EnchantService.registerGrants()
+	MonetizationService.registerPass("Enchant", { grant = grantEnchant, revoke = revokeEnchant })
+end
+
 local function onBuy(player: Player, args: { [any]: any }?)
 	local id = if args then Guard.string(args.Id, MAX_ID_LENGTH) else nil
 	local currency = if args then Guard.string(args.Currency, 8) else nil
@@ -389,6 +463,8 @@ EnchantService._test = {
 
 function EnchantService.init()
 	Net.on("EnchantAction", onEnchantAction)
+	-- step 8: the Heartfire / Starbreaker game passes
+	EnchantService.registerGrants()
 	-- the slotted enchants' stats (the same provider as Bonuses' built-in
 	-- one, under the same name: counted once)
 	Bonuses.register("Enchants", function(_player, data, _now)

@@ -29,9 +29,10 @@
 	  (incomePct). So golems, enchants, collections and any later provider
 	  reach the podiums exactly once.
 	- Cache: stats(player) is kept per player until the save changes
-	  (DataService.onChanged -> invalidate), the next running boost runs out,
-	  or MaxCacheSeconds pass, whichever comes first; register / unregister
-	  clear every cache. A provider that depends on something outside the
+	  (DataService.onChangedNow -> invalidate, inside changed() itself, so a
+	  read right after a change never gets the old totals), the next running
+	  boost runs out, or MaxCacheSeconds pass, whichever comes first;
+	  register / unregister clear every cache. A provider that depends on something outside the
 	  save (a game pass bought mid-session, an event) calls invalidate(player)
 	  when that changes. The returned table is shared: read it, never write it.
 	- The getters below turn totals into the numbers the services use.
@@ -381,8 +382,9 @@ function Bonuses.summary(player: Player): { [string]: any }
 	}
 end
 
--- A save change may change any bonus: drop the cached totals.
-DataService.onChanged(function(player: Player)
+-- A save change may change any bonus: drop the cached totals at once (not at
+-- the deferred onChanged flush: a read in the same frame must see the change).
+DataService.onChangedNow(function(player: Player)
 	Bonuses.invalidate(player)
 end)
 Bonuses.attachIncome()

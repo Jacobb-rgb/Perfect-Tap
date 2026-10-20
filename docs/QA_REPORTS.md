@@ -575,3 +575,41 @@ What to test in Studio:
 3. Phone emulator with 10+ players holding guns: no frame drop.
 4. The Vault's crate opening and the Great Forge gallery show the new guns; the Foundry's NEXT rack shows the
    new black silhouette.
+
+## Rebirth B "STAR FORGE" (2026-10-20, owner's pick, branch feature/rebirth)
+Option B of the rebirth proposal: an optional restart that keeps the factory and pays Forge Stars for the Star Shop.
+- Rules (Shared/Config/RebirthConfig): a rebirth needs blaster LV MinBlaster (top - 4 = 6). It resets coins, the
+  blaster (LV 1, or Head Start's LV 2 / 3 / 4 in that level's Vault look), the floors with it and the elevator,
+  Bellows and every Tech shop level, the train's levels, the Backpack, and every ore you own (pen, podiums unless
+  Podium Keeper, the Foundry's ingots, the train cargo, the machines' queues, loose and carried items). It keeps the
+  placed factory, machine slots, the pen size and automation, the other gear, golems, enchants, artifacts, codex,
+  hoverboards, shards, stats, leaderboard totals and every Robux item (Purchases, PurchaseLog, Enchants.Passes,
+  Golems.Pending, the session perks are never touched).
+- Stars per rebirth follow the blaster prices: MinStars (2) at MinBlaster, MaxStars (10) at the top, the levels
+  between by the log share of their total Foundry coins (today 2 / 3 / 6 / 7 / 10 for LV 6-10). tests/Rebirth.spec
+  pins the relationships (x10 prices keep the curve, a dearer level never pays fewer stars, the whole shop is 8-25
+  typical rebirths, its cheapest perk costs at most MinStars, Head Start never reaches MinBlaster, no perk outgrows
+  its StatConfig cap), not the numbers.
+- Star Shop: Golden Touch (+10 % podium income and sell value, 10 levels), Head Start (3), Lucky Rocks (+5 % ore luck,
+  5), Deep Pockets (+1 carry, 3), Express Rails (train trips -10 %, 3: StatConfig TrainTimeCutPct through
+  TrainConfig.tripSeconds), Podium Keeper (1). The stat perks reach the game through Bonuses' built-in "Rebirth"
+  provider. Not built yet: the plot glow colour perk (cosmetic) and a prompt at THE GREAT FORGE's crystal.
+- Server: RebirthService (RebirthAction Rebirth / Buy -> RebirthResult). The rebirth runs in one step:
+  PlotService.reload takes the plot down and up on the same plot (machines respawn from the save with empty
+  queues), items leave the world, TrainService.resetRun, the podiums redraw, saveNow, the character goes home after
+  the moment. Saves: Rebirths, Stars, StarPerks, Stats.StarsEarned (Migrations keeps a newer build's perks and
+  levels; the Migration newerSave guard covers them).
+- Client: the STAR FORGE window (REBIRTH: YOU LOSE / YOU KEEP / YOU GET and REBIRTH! with a SURE? second press;
+  STAR SHOP cards), the moment (flash, "REBIRTH n!", +stars, falling stars), a gold "⭐ n" over every player's name,
+  REBIRTH in the side menu's More group with a badge while a rebirth is ready.
+- Side menu: on a 568 x 320 phone, STORE and REBIRTH together (11 cells with MENU) fit no grid at 44 pt. STORE is
+  hidden until its controller ships, so today's menu fits; decide when STORE lands.
+- Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
+What to test in Studio:
+1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now
+   pays ⭐ 6", REBIRTH! asks SURE?, the second press plays the moment and sends you home.
+2. After it: coins 0, blaster LV 1, the factory stands where it stood with empty machines, pen / podiums / Foundry /
+   train empty, your carried ore gone, Robux items and golems still there, the star over your name.
+3. STAR SHOP: buy Golden Touch (podium income +10 %), Deep Pockets (carry +1), Express Rails (the train panel's trip
+   time drops), Head Start (the next rebirth starts at LV 2), Podium Keeper (the podium ores stay).
+4. Phone emulator 568 x 320 and 667 x 375: the window fits, the tabs sit in the header, every button is easy to tap.

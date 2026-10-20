@@ -160,6 +160,37 @@ return function(T, Loader)
 		}
 	end
 
+	-- Lets deferred work (the layout listeners) run. Lune's task.wait() can (rarely)
+	-- resume before a deferred thread ran: wait until `check` holds (at most 5 s),
+	-- then a few more steps before counting.
+	local function settle(check: () -> boolean)
+		local since = os.clock()
+		repeat
+			task.wait()
+		until check() or os.clock() - since > 5
+		for _ = 1, 3 do
+			task.wait()
+		end
+	end
+
+	-- Waits for the delayed toasts (MachineService TOAST_DELAY 3 s): until 3.1 s
+	-- have passed since `since` AND `want` Notify notes arrived, at most 10 s.
+	-- (A fixed 3.1 s wait raced the 3 s delay's timer on a loaded machine.)
+	local function waitForToasts(w: any, since: number, want: number)
+		local function toasts(): number
+			local n = 0
+			for _, note in w.notes do
+				if note.Name == "Notify" then
+					n += 1
+				end
+			end
+			return n
+		end
+		repeat
+			task.wait(0.05)
+		until (os.clock() - since >= 3.1 and toasts() >= want) or os.clock() - since > 10
+	end
+
 	local function count(log: { any }, kind: string): number
 		local n = 0
 		for _, e in log do
@@ -217,7 +248,9 @@ return function(T, Loader)
 		-- already spawned: nothing happens
 		internals.spawnAll(w.player, PLOT)
 		T.eq(#MachineService.ofPlot(PLOT), #MachineData.StarterKit, "spawned once")
-		task.wait()
+		settle(function()
+			return #layouts >= 1
+		end)
 		T.eq(#layouts, 1, "layout listeners ran once")
 		T.eq(layouts[1], PLOT, "for the plot")
 	end)
@@ -259,6 +292,7 @@ return function(T, Loader)
 			{ Id = "Anvil", X = 11, Z = 0, R = 0 }, -- sticks out of the plot
 		}
 		w.data[w.player] = data
+		local since = os.clock()
 		internals.spawnAll(w.player, PLOT)
 		local list = MachineService.ofPlot(PLOT)
 		T.eq(#list, 1, "only the furnace spawns")
@@ -270,7 +304,7 @@ return function(T, Loader)
 		T.eq(data.MachineInventory.Anvil, 1, "anvil back in the inventory")
 		T.eq(#data.Storage, 1, "the crusher's output went to Storage")
 		-- one toast, a moment later (the client HUD may still be starting)
-		task.wait(3.1)
+		waitForToasts(w, since, 1)
 		local toasts = 0
 		for _, note in w.notes do
 			if note.Name == "Notify" then
@@ -289,13 +323,14 @@ return function(T, Loader)
 			{ Id = "ClayFurnace", X = 11, Z = 0, R = 0 }, -- sticks out of the plot
 		}
 		w.data[w.player] = data
+		local since = os.clock()
 		internals.spawnAll(w.player, PLOT)
 		local list = MachineService.ofPlot(PLOT)
 		T.eq(#list, 1, "only the belt spawns")
 		T.eq(list[1].Id, "Conveyor")
 		T.eq(data.MachineInventory.Crusher, 1, "crusher back in the inventory")
 		T.eq(data.MachineInventory.ClayFurnace, 1, "furnace back in the inventory")
-		task.wait(3.1)
+		waitForToasts(w, since, 2)
 		local texts = {}
 		for _, note in w.notes do
 			if note.Name == "Notify" then
@@ -726,7 +761,9 @@ return function(T, Loader)
 			layouts += 1
 		end)
 		internals.spawnAll(w.player, PLOT)
-		task.wait()
+		settle(function()
+			return layouts >= 1
+		end)
 		T.eq(layouts, 1, "spawn layout")
 		local seen = {}
 		MachineService.register("CleaningStation", {
@@ -736,7 +773,9 @@ return function(T, Loader)
 		})
 		T.eq(#seen, 1, "the StarterKit station got the spawned hook")
 		T.eq(seen[1].Id, "CleaningStation", "station")
-		task.wait()
+		settle(function()
+			return layouts >= 2
+		end)
 		T.eq(layouts, 2, "the plot's layout listeners ran again")
 	end)
 
