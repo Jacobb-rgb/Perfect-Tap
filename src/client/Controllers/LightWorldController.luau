@@ -1,16 +1,21 @@
 --[[
-	LightWorldController: the in-world labels and the prompts in the light
-	"Bubble" look. Does nothing unless UIConfig.lightUI() is on (the light UI
-	ships off).
+	LightWorldController: the in-world labels in the light "Bubble" look.
+	Does nothing unless UIConfig.lightUI() is on (it ships on since
+	2026-10-20).
 
 	- Labels: every BillboardGui in the world and in the PlayerGui (podium
 	  income tags, machine signs, sell pop-ups, item hints, the foundry's pen
 	  tag, the podium Remove button...) gets LightSkin.world: navy outlines and
 	  text edges, dark panels white. Labels other sessions own are left alone
-	  (LightWorldController.Skip: the mine floors' rock name + HP labels).
-	- Prompts: every ProximityPrompt switches to the Custom style on this
-	  screen and shows LightPrompt (the key in a gold circle, the action and
-	  object on a white pill, a green hold bar). Touch: tap the pill.
+	  (LightWorldController.Skip: the mine floors' rock name + HP labels),
+	  and so is Roblox's own prompt UI (the "Prompt" BillboardGuis its core
+	  script puts in PlayerGui.ProximityPrompts): no navy edges on it.
+	- Prompts: the stock Roblox prompt (owner 2026-10-20; PromptConfig makes
+	  every prompt in the Default style). Only with UIConfig.CustomPrompts on
+	  does every ProximityPrompt switch to the Custom style on this screen
+	  and show LightPrompt (the key in a gold circle, the action and object
+	  on a white pill, a green hold bar; touch: tap the pill). That pill
+	  ignores UIOffset and never updates its text, so it stays off.
 ]]
 
 local Players = game:GetService("Players")
@@ -32,11 +37,21 @@ local player = Players.LocalPlayer
 -- BillboardGui names the light skin leaves alone (their owners style them).
 LightWorldController.Skip = {
 	RockLabel = true, -- art/mine-floors: the rock name + HP labels
-	TerraForgePrompt = true, -- our own prompt pills
+	TerraForgePrompt = true, -- our own prompt pills (UIConfig.CustomPrompts)
 } :: { [string]: boolean }
 
-local function skinLabel(gui: Instance)
+-- The ScreenGui Roblox's prompt core script keeps its prompt UI in (PlayerGui).
+LightWorldController.StockPromptFolder = "ProximityPrompts"
+
+-- The light skin for one world label (BillboardGui), once. Roblox's own
+-- prompt UI is left alone: its core script parents a BillboardGui "Prompt"
+-- into the PlayerGui's ScreenGui "ProximityPrompts" (a generic name, so the
+-- folder is the check, not Skip).
+function LightWorldController.skinLabel(gui: Instance)
 	if not gui:IsA("BillboardGui") or LightWorldController.Skip[gui.Name] then
+		return
+	end
+	if gui:FindFirstAncestor(LightWorldController.StockPromptFolder) then
 		return
 	end
 	if gui:GetAttribute("LightSkin") then
@@ -44,6 +59,7 @@ local function skinLabel(gui: Instance)
 	end
 	LightSkin.world(gui)
 end
+local skinLabel = LightWorldController.skinLabel
 
 ---------------------------------------------------------------- prompts
 
@@ -175,7 +191,9 @@ function LightWorldController.start()
 	playerGui.DescendantAdded:Connect(function(d)
 		task.defer(skinLabel, d)
 	end)
-	startPrompts()
+	if UIConfig.CustomPrompts then
+		startPrompts()
+	end
 end
 
 return LightWorldController

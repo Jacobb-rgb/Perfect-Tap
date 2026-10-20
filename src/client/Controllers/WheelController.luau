@@ -714,7 +714,7 @@ function WheelController.open()
 	local view = ensureView()
 	open = true
 	openedAt = os.clock()
-	-- like every panel: no world prompt (the Cleaning Station's F / Y) fires behind it
+	-- like every panel: no world prompt (the Cleaning Station's E / Y) fires behind it
 	PromptController.setSuppressed("Wheel", true)
 	fit(view)
 	updateHint(view)

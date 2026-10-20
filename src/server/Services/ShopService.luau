@@ -46,6 +46,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MachineData = require(Shared.Config.MachineData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Placement = require(Shared.Machines.Placement)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
@@ -329,16 +330,13 @@ local function hookCounter(counter: Instance)
 	point.Name = ShopService.PointName
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 0.6, -part.Size.Z / 2)
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = ShopService.PromptName
-	prompt.ActionText = "Tech Shop"
-	prompt.ObjectText = "Machines & Upgrades"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = PROMPT_DISTANCE
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = ShopService.PromptName,
+		ActionText = "Tech Shop",
+		ObjectText = "Machines & Upgrades",
+		Distance = PROMPT_DISTANCE,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, part)
 	end)

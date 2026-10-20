@@ -18,7 +18,7 @@
 	  player can always get back under it. The State shows it: PenOver =
 	  true next to StorageCount / PenCapacity (PenView turns red).
 	- In: drop or throw your own items into the pen (the yard's Pen.Intake
-	  box, an IntakeService zone), or press "Put In" (F / gamepad Y) at the
+	  box, an IntakeService zone), or press "Put In" (E / gamepad Y) at the
 	  pen gate while carrying items. Items of other players are not taken:
 	  they bounce back out of the gate. A full pen bounces items too (toast).
 	- Out: "Open Pen" (G / gamepad B) opens PenView (OpenUI "Pen"). PenAction:
@@ -105,6 +105,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Geo = require(Shared.Builders.Geo)
@@ -463,20 +464,17 @@ local function makePrompt(
 	plotId: number,
 	name: string,
 	action: string,
-	key: Enum.KeyCode,
-	pad: Enum.KeyCode,
+	role: PromptConfig.Role,
 	order: number
 ): ProximityPrompt
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = name
-	prompt.ActionText = action
-	prompt.ObjectText = "Ore Pen"
-	prompt.KeyboardKeyCode = key
-	prompt.GamepadKeyCode = pad
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, order * 72)
+	local prompt = PromptConfig.make({
+		Role = role,
+		Name = name,
+		ActionText = action,
+		ObjectText = "Ore Pen",
+		Distance = 10,
+		Slot = order,
+	})
 	prompt:SetAttribute("PlotId", plotId)
 	prompt:AddTag(PenService.PromptTag)
 	prompt.Parent = parent
@@ -496,11 +494,11 @@ local function setupPen(plotId: number): boolean
 		onIntake(plotId, record)
 	end)
 	local anchor = intake:FindFirstChild("Prompt") or intake
-	local put = makePrompt(anchor, plotId, "PenPutIn", "Put In", Enum.KeyCode.F, Enum.KeyCode.ButtonY, 0)
+	local put = makePrompt(anchor, plotId, "PenPutIn", "Put In", "Main", 0)
 	put.Triggered:Connect(function(player: Player)
 		putIn(player, plotId)
 	end)
-	local open = makePrompt(anchor, plotId, "PenOpen", "Open Pen", Enum.KeyCode.G, Enum.KeyCode.ButtonB, 1)
+	local open = makePrompt(anchor, plotId, "PenOpen", "Open Pen", "Second", 1)
 	open.Triggered:Connect(function(player: Player)
 		openPen(player, plotId)
 	end)

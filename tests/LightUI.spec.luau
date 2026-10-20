@@ -401,9 +401,10 @@ return function(T, Loader)
 		local LightPrompt = ui("LightPrompt")
 		local LightSkin = ui("LightSkin")
 		local BubbleTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.BubbleTheme")
-		local prompt = LightPrompt.build("Open Shop", "Tobin's Ore Stall", "F")
+		-- (the pill is off: UIConfig.CustomPrompts; the stock Roblox prompt ships)
+		local prompt = LightPrompt.build("Open Shop", "Tobin's Ore Stall", "E")
 		T.eq(prompt.Action.Text, "OPEN SHOP", "action in capitals")
-		T.eq(prompt.Key.Text, "F", "key letter")
+		T.eq(prompt.Key.Text, "E", "key letter")
 		T.truthy(prompt.Gui:FindFirstChild("Pill"), "the pill")
 		T.truthy(LightPrompt.Height * 0.62 >= 38, "big enough to tap at the phone scale")
 		LightPrompt.setKey(prompt, "TAP", nil)
@@ -423,6 +424,76 @@ return function(T, Loader)
 		local stroke = label:FindFirstChildOfClass("UIStroke")
 		T.truthy(stroke and stroke.Color == BubbleTheme.Outline and stroke.Thickness >= 4, "bold navy edge")
 		T.eq(label.TextStrokeTransparency, 1, "the thin built-in edge is off")
+	end)
+
+	T.test("LightUI: the stock Roblox prompt ships and the label skin leaves its UI alone", function()
+		local fs = require("@lune/fs")
+		local Players = Loader.game:GetService("Players")
+		T.eq(UIConfig.CustomPrompts, false, "the stock Roblox prompt, not our pill (owner 2026-10-20)")
+		-- a client module: it reads Players.LocalPlayer when it loads
+		local hadLocal = rawget(Players, "LocalPlayer")
+		rawset(Players, "LocalPlayer", { UserId = 1 })
+		local loaded, LightWorldController =
+			pcall(Loader.requirePath, "StarterPlayer.StarterPlayerScripts.Client.Controllers.LightWorldController")
+		rawset(Players, "LocalPlayer", hadLocal)
+		T.truthy(loaded, "LightWorldController loads: " .. tostring(LightWorldController))
+		T.falsy(LightWorldController.Skip.Prompt, "no generic 'Prompt' in Skip (ProximityPrompts use that name too)")
+		-- Roblox's core script: a ScreenGui "ProximityPrompts" in the PlayerGui with a
+		-- BillboardGui "Prompt" per shown prompt (a Frame, the key text, the action and
+		-- object texts) and a BillboardGui "Indicator". Its frame starts clear (it fades
+		-- in to 0.2), so the label skin would give every text a navy UIStroke.
+		local function stockShaped(name: string, parent: any): any
+			local gui = Instance.new("BillboardGui")
+			gui.Name = name
+			local frame = Instance.new("Frame")
+			frame.BackgroundTransparency = 1
+			frame.Parent = gui
+			for _, text in { "ButtonText", "ActionText", "ObjectText" } do
+				local label = Instance.new("TextLabel")
+				label.Name = text
+				label.BackgroundTransparency = 1
+				label.TextSize = 19
+				label.Text = text
+				label.Parent = frame
+			end
+			gui.Parent = parent
+			return gui
+		end
+		local function strokes(gui: any): number
+			local count = 0
+			for _, d in gui:GetDescendants() do
+				if d:IsA("UIStroke") then
+					count += 1
+				end
+			end
+			return count
+		end
+		local playerGui = Instance.new("Folder")
+		playerGui.Name = "PlayerGui"
+		local folder = Instance.new("ScreenGui")
+		folder.Name = LightWorldController.StockPromptFolder
+		folder.Parent = playerGui
+		T.eq(folder.Name, "ProximityPrompts", "the core script's ScreenGui")
+		for _, name in { "Prompt", "Indicator" } do
+			local gui = stockShaped(name, folder)
+			LightWorldController.skinLabel(gui)
+			T.eq(strokes(gui), 0, name .. ": no navy edges on Roblox's own prompt")
+			T.eq(gui:GetAttribute("LightSkin"), nil, name .. ": not skinned")
+		end
+		-- our own world labels still get the skin, even one named "Prompt"
+		local hud = Instance.new("ScreenGui")
+		hud.Name = "Hud"
+		hud.Parent = playerGui
+		for _, name in { "Prompt", "PodiumTag" } do
+			local gui = stockShaped(name, hud)
+			LightWorldController.skinLabel(gui)
+			T.truthy(strokes(gui) > 0, name .. " outside ProximityPrompts gets the light skin")
+		end
+		-- the pill (and its Custom style) only behind the switch
+		local source = fs.readFile("src/client/Controllers/LightWorldController.luau")
+		T.truthy(string.find(source, "if UIConfig.CustomPrompts then\n\t\tstartPrompts()", 1, true), "startPrompts behind CustomPrompts")
+		local _, calls = string.gsub(source, "startPrompts%(%)", "")
+		T.eq(calls, 2, "startPrompts: defined once, called once (behind the switch)")
 	end)
 
 	T.test("LightUI: side menu entries become light tiles and a MORE flyout", function()

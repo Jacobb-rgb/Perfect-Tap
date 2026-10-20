@@ -2,8 +2,8 @@
 	VaultService: the Blaster Vault shop at the end of the lobby's south road
 	(the owner-approved Forge Vault, src/server/World/Lobby/Vault).
 
-	The counter (tag "VaultCounter") gets a "Blaster Vault" prompt (F /
-	gamepad Y, like the other shop counters: E is the game's grab key) that
+	The counter (tag "VaultCounter") gets a "Blaster Vault" prompt (E /
+	gamepad Y, like every prompt: PromptConfig "Main"; F is the grab key) that
 	opens the shop on the client (OpenUI "Vault" { Counter }).
 
 	VaultBuy { Level } (Net, rate limited) buys your NEXT blaster level for
@@ -44,6 +44,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Net = require(Shared.Net)
@@ -351,16 +352,13 @@ local function hookCounter(counter: Instance)
 	point.Name = VaultService.PointName
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 1.2, part.Size.Z / 2)
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = VaultService.PromptName
-	prompt.ActionText = "Blaster Vault"
-	prompt.ObjectText = "Blaster Cases"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = PROMPT_DISTANCE
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = VaultService.PromptName,
+		ActionText = "Blaster Vault",
+		ObjectText = "Blaster Cases",
+		Distance = PROMPT_DISTANCE,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, part)
 	end)

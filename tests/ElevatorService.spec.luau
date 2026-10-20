@@ -12,6 +12,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
@@ -207,8 +208,8 @@ return function(T, Loader)
 			T.eq(prompt.Name, ElevatorService.PromptName, "name")
 			T.eq(prompt.ObjectText, "Elevator", "object text")
 			T.eq(prompt.ActionText, "Use", "action text")
-			T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F, "F")
-			T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY, "gamepad Y")
+			T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard, "E")
+			T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad, "gamepad Y")
 			T.eq(prompt.HoldDuration, 0, "tap")
 			T.falsy(prompt.RequiresLineOfSight, "no line of sight needed")
 			T.eq(ElevatorService.floorOf(model), index, "floor attribute")

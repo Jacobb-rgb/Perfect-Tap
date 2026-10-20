@@ -90,6 +90,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Grid = require(Shared.Machines.Grid)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
@@ -342,17 +343,15 @@ end
 -- threshold like SorterCycle. Owner only; the prompt's range is the check.
 local function addSortPrompt(machine: PlacedMachine)
 	local base = machine.Model.PrimaryPart :: BasePart
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = LogisticsService.SortPromptName
-	prompt.ActionText = "Change Sort"
-	prompt.ObjectText = LogisticsService.sorterText(LogisticsService.threshold(machine))
-	prompt.KeyboardKeyCode = Enum.KeyCode.G
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonB
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, 72)
-	prompt.Parent = base:FindFirstChild("Prompt") or base
+	local prompt = PromptConfig.make({
+		Role = "Second",
+		Name = LogisticsService.SortPromptName,
+		ActionText = "Change Sort",
+		ObjectText = LogisticsService.sorterText(LogisticsService.threshold(machine)),
+		Distance = 10,
+		Slot = 1,
+		Parent = base:FindFirstChild("Prompt") or base,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		if player == machine.Owner then
 			onSorterCycle(player, machine, 1)

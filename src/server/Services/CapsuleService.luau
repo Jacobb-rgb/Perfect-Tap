@@ -89,6 +89,7 @@ local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Rarity = require(Shared.Config.Rarity)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -699,16 +700,13 @@ local function hookStall(instance: Instance)
 	point.Name = CapsuleService.PointName
 	point.CFrame = offset
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = CapsuleService.PromptName
-	prompt.ActionText = "Capsules"
-	prompt.ObjectText = "Golem Capsules"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = CapsuleService.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = CapsuleService.PromptName,
+		ActionText = "Capsules",
+		ObjectText = "Golem Capsules",
+		Distance = CapsuleService.PromptDistance,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, stall)
 	end)

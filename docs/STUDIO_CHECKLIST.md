@@ -62,7 +62,7 @@ command bar.
    each time is expected.
 
 ### D. Blaster Vault, crate opening and the gallery
-1. Walk to the vault counter, press F (controller Y): your levels say OWNED, the next one NEXT with a green BUY,
+1. Walk to the vault counter, press E (controller Y): your levels say OWNED, the next one NEXT with a green BUY,
    the rest LOCKED, LV 11 SOON.
 2. Too few coins: the price is red, "Not enough coins". Enough coins: the crate-opening cinematic plays (the case
    drops, bursts, the blaster spins, AWESOME!), then you hold the new blaster. No HUD or walking during it; a tap
@@ -125,3 +125,16 @@ command bar.
    received (KB/s)** after two minutes. The goal is well under **50 KB/s** per player.
 4. On the server window: View → Script Performance (or the MicroProfiler, Ctrl+F6): no script stays red.
 5. Send the numbers to Claude: they go into docs/SERVER_PERF_AUDIT.md (today's numbers there are estimates).
+
+### L. Prompts on E, Grab on F, the stock Roblox prompt (owner 2026-10-20)
+1. PC: every prompt (the shops, the Sell counter, the vault, the wheel chest, the codex, machines, the pen, the
+   podiums, the elevator) shows Roblox's own grey prompt and opens with **E**. Controller: the same prompts on **Y**.
+2. The Mine Station: Load Train (E), Send Train (G) and Train (T) stand one under the other, never on top of each
+   other. Same at the pen gate (Put In E, Open Pen G) and the Foundry (Put In E, Open Foundry G).
+3. Pick-up is **F** now (controller X stays): stand next to a podium or a machine with an ore on the ground, press F:
+   you pick the ore up and no prompt fires. The item hint says "[F] Pick up".
+4. The stock prompt has no dark outlines on its text (the light UI skin leaves it alone), also while it fades in
+   and out and during the 0.4 s hold of "Take Ore Back".
+5. Live text: put raw ore on the Cleaning Station ("Place Raw Ore" turns into "Clean Ore" while you watch it), step
+   the Sorter (Change Sort), walk up to a locked podium ("Locked" / the price): the prompt text changes in place.
+6. Cleaning: on the result card, E collects and the station's "Clean Ore" does not start again behind it.

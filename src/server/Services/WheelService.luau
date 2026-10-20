@@ -4,7 +4,7 @@
 
 	- EmberChest (tag WheelConfig.Tag, the chest at the top of the SPIN & WIN
 	  stairs inside the SpinWheel model): this service adds a "Spin & Win"
-	  prompt (F / gamepad Y) on it; it opens the wheel screen (OpenUI "Wheel"
+	  prompt (E / gamepad Y) on it; it opens the wheel screen (OpenUI "Wheel"
 	  { Chest }). The screen shows the 8 segments with their exact odds
 	  (and the ore prize's and the capsules' own odds) and the countdown.
 	  The spin itself works from anywhere (the HUD's FREE SPIN! chip).
@@ -69,6 +69,7 @@ local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -442,16 +443,13 @@ local function hookChest(instance: Instance)
 	point.Name = WheelService.PointName
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 1, 0)
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = WheelService.PromptName
-	prompt.ActionText = "Spin & Win"
-	prompt.ObjectText = "Daily Wheel"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = WheelService.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = WheelService.PromptName,
+		ActionText = "Spin & Win",
+		ObjectText = "Daily Wheel",
+		Distance = WheelService.PromptDistance,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, part)
 	end)

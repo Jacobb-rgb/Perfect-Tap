@@ -1,10 +1,11 @@
 --[[
 	InteractController: pick up / drop / throw physical items.
 
-	  Grab / Drop : E        | gamepad X  | touch button "Grab"
+	  Grab / Drop : F        | gamepad X  | touch button "Grab"
 	  Throw       : hold Q   | gamepad RB | touch button "Throw" (hold to charge)
-	  (machine prompts use F / gamepad Y; the Cleaning Station's "Take Ore
-	  Back" uses G / gamepad B)
+	  (every prompt, shops and machines, is on E / gamepad Y; the second one
+	  on a spot, like the Cleaning Station's "Take Ore Back", on G / gamepad
+	  B: PromptConfig. E stays free for them, owner 2026-10-20)
 
 	The nearest item you own (or the one under the mouse) is highlighted with
 	its rarity color and a small hint shows its name and value. The server
@@ -213,7 +214,7 @@ local function updateHint()
 	local key = if UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled
 		then "X"
 		elseif UserInputService.TouchEnabled then "Grab"
-		else "E"
+		else "F"
 	hintAction.Text = if kind == "Relic"
 		then `[{key}] Pick up   •   clean it at a Cleaning Station or Restoration Table`
 		elseif dirty then `[{key}] Pick up   •   clean it to see what it is`
@@ -311,7 +312,7 @@ end
 
 function InteractController.start()
 	bindGrab = function()
-		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.E, Enum.KeyCode.ButtonX)
+		ContextActionService:BindAction("TerraForgeGrab", grab, true, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
 		ContextActionService:SetTitle("TerraForgeGrab", "Grab")
 		ContextActionService:SetPosition("TerraForgeGrab", UDim2.new(1, -170, 1, -150))
 		updateBindings()
