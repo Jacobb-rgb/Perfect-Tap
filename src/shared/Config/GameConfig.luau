@@ -34,7 +34,7 @@ local GameConfig = {
 	PickupRange = 11,
 	ThrowSpeedMin = 22,
 	ThrowSpeedMax = 52,
-	ItemFallKillY = -60, -- items below this fell out of the world and are rescued (lowest floor is -40)
+	ItemFallKillY = -550, -- items below this fell out of the world and are rescued (below the deepest mine floor, -477; above Workspace.FallenPartsDestroyHeight -700 in default.project.json)
 
 	-- Machines
 	MachineIntakeQueue = 4, -- items a machine can buffer (includes the item being worked)

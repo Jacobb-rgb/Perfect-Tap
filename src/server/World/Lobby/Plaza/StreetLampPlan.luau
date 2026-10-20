@@ -30,10 +30,12 @@ StreetLampPlan.Enabled = true
 
 export type SizeSpec = { Height: number, Arm: number, Range: number }
 -- Height: top of the pole (the arm leaves it there); Arm: pole to head.
+-- Range: the lit lamps' PointLight (phones, integrator 2026-10-21: <= 14,
+-- short-range lights are cheap on Voxel/compatibility lighting).
 StreetLampPlan.Sizes = {
-	Small = { Height = 6.2, Arm = 2.3, Range = 14 },
-	Medium = { Height = 8.4, Arm = 3.1, Range = 18 },
-	Tall = { Height = 10.6, Arm = 3.9, Range = 22 },
+	Small = { Height = 6.2, Arm = 2.3, Range = 12 },
+	Medium = { Height = 8.4, Arm = 3.1, Range = 13 },
+	Tall = { Height = 10.6, Arm = 3.9, Range = 14 },
 } :: { [string]: SizeSpec }
 
 -- Side: "Inner" = toward the plaza center, "Outer" = away from it, "Both" =

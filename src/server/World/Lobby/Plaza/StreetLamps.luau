@@ -34,7 +34,7 @@ StreetLamps.Colors = {
 	Light = rgb(255, 190, 110),
 }
 StreetLamps.ArmTilt = math.rad(9)
-StreetLamps.Brightness = 1.5
+StreetLamps.Brightness = 1.2 -- (phones: <= 1.2, integrator 2026-10-21)
 
 --[[
 	One lamp. `base`: ground point under the pole, LookVector = toward the
