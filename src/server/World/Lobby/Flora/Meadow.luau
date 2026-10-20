@@ -8,8 +8,11 @@
 	            lawns (one at the end of the hamlet lane, where the MAP hamlet stood)
 	  Jungle    light jungle trees (the Blaster Vault's look, 14 parts each) on
 	            the free lawns and on the grassy tops of the Land mountains
-	  Lawn      grass tufts, lighter and darker grass patches and flower beds
-	            (yellow, white, purple, pink) clustered over the free lawns
+	  Lawn      grass tufts, lighter and darker grass patches, flower beds
+	            (yellow, white, purple, pink) clustered over the free lawns,
+	            bushes and small rocks; a glowing lantern on every fence end
+	  Life      koi circling in every pond, butterflies over a few flower
+	            beds (tag Spin, client-side, ~60 moving parts in all)
 
 	It runs last (WorldBuilder, after the lobby, the plots and the railway) and
 	only uses ground nothing else stands on: every built part near the ground
@@ -47,7 +50,8 @@ local Meadow = {}
 Meadow.Area = { Min = Vector3.new(-168, 0, -118), Max = Vector3.new(168, 0, 148) }
 Meadow.VaultClear = { Min = Vector3.new(-28, 0, 72), Max = Vector3.new(28, 0, 156) }
 Meadow.SpawnClear = 12
-Meadow.Max = { Tufts = 140, Flowers = 50, Patches = 60 }
+-- (phone trims 2026-10-18: fewer tufts, flower beds of 3 single-block flowers on a 1-part mound)
+Meadow.Max = { Tufts = 100, Flowers = 50, Patches = 60, Bushes = 36, Rocks = 24 }
 -- Roads and paths that get fences (the walkways at the plaza's stalls and the
 -- south road to the vault do not).
 Meadow.FencedStrips = {
@@ -194,6 +198,13 @@ function Meadow.allowed(p: Vector3, r: number): boolean
 			return false
 		end
 	end
+	-- the ore outcrops: their rocks grow there at runtime (not in the index)
+	local flat = Vector3.new(p.X, 0, p.Z)
+	for _, spot in WorldLayout.OutcropSpots do
+		if (flat - Vector3.new(spot.X, 0, spot.Z)).Magnitude < r + 6 then
+			return false
+		end
+	end
 	for _, site in Town.Sites do
 		if p.X > site.Min.X - r - 0.5 and p.X < site.Max.X + r + 0.5 and p.Z > site.Min.Y - r - 0.5 and p.Z < site.Max.Y + r + 0.5 then
 			return false
@@ -214,6 +225,10 @@ local function track(index: Index, model: Instance)
 		end
 	end
 end
+
+-- Adds every part of `model` to the index (other builders that run before
+-- the meadow use this too: Plaza/Life, Flora/Stream).
+Meadow.track = track
 
 local function decorate(model: Instance)
 	for _, d in model:GetDescendants() do
@@ -240,11 +255,18 @@ Meadow.ForgeBack = { Min = Vector3.new(-30, 0, -120), Max = Vector3.new(30, 0, -
 Meadow.KoiBridge = { Min = Vector3.new(-32, 0, 20), Max = Vector3.new(32, 0, 80) }
 Meadow.VaultZone = { Min = Vector3.new(-72, 0, 58), Max = Vector3.new(72, 0, 160) }
 Meadow.MaxPonds = 5
+Meadow.MinPonds = 3 -- tests/Meadow.spec.luau (owner: "more ponds")
+-- the size a pond shrinks to where its drawn size finds no room (the town's
+-- lawns are full: the stream, the plaza life and the outcrop clearances took
+-- the old spots)
+Meadow.SmallPond = Vector2.new(7.5, 6.5)
 Meadow.MaxLobbyTrees = 22
 Meadow.MaxMountainTrees = 40
 -- The pond the hamlet lane (LobbyLayout HamletLane / ToMap) now leads to,
 -- where the MAP tower and its hamlet stood.
 Meadow.LanePond = { Center = Vector3.new(101, 0, 127), Size = Vector2.new(17, 12) }
+
+local AUTUMN = { "Yellow", "Orange", "Pink", "Red" }
 
 -- the Blaster Vault's jungle tree colours (Vault/Kit)
 local JUNGLE = {
@@ -294,50 +316,19 @@ local function nearRail(p: Vector3, r: number): boolean
 	return false
 end
 
--- The eyes the planets are framed for (the town eye and the spawn camera, tests/LobbySky).
-Meadow.SkyEyes = { Planets.Town, Vector3.new(0, 13, 58) }
-
--- Does the segment from `a` to `b` pass through the axis-aligned box `lo`..`hi`?
-local function segmentHitsBox(a: Vector3, b: Vector3, lo: Vector3, hi: Vector3): boolean
-	local d = b - a
-	local tmin, tmax = 0, 1
-	for _, axis in { "X", "Y", "Z" } do
-		local o, v = (a :: any)[axis] :: number, (d :: any)[axis] :: number
-		local l, h = (lo :: any)[axis] :: number, (hi :: any)[axis] :: number
-		if math.abs(v) < 1e-9 then
-			if o < l or o > h then
-				return false
-			end
-		else
-			local t1, t2 = (l - o) / v, (h - o) / v
-			if t1 > t2 then
-				t1, t2 = t2, t1
-			end
-			tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
-			if tmin > tmax then
-				return false
-			end
-		end
-	end
-	return true
-end
-
--- Would a tree at `base` (crown radius R, `top` studs tall) stand in front of a
--- planet's centre or rim seen from the town or the spawn? (the mountain caps
--- change with the map, so the trees check the sky lines themselves)
-function Meadow.blocksSky(base: Vector3, R: number, top: number): boolean
-	local lo = base - Vector3.new(R, 0, R)
-	local hi = base + Vector3.new(R, top, R)
+-- Would a tree crown at `p` (trunk h, canopy R) hide one of the Sky
+-- package's planets from the town (Planets.Town)?
+local function hidesPlanet(p: Vector3, h: number, R: number): boolean
+	local crown = p + Vector3.new(0, h + 5, 0)
+	local toCrown = crown - Planets.Town
+	local crownAngle = math.asin(math.min(1, (R + 3) / math.max(toCrown.Magnitude, 1)))
 	for _, spec in Planets.Specs do
-		local c = Planets.center(spec)
-		local r = Planets.diameter(spec) / 2 * 0.95
-		local points = { c, c - Vector3.new(0, r, 0), c + Vector3.new(0, r, 0), c - Vector3.new(r, 0, 0), c + Vector3.new(r, 0, 0) }
-		for _, eye in Meadow.SkyEyes do
-			for _, q in points do
-				if segmentHitsBox(eye, q, lo, hi) then
-					return true
-				end
-			end
+		local toPlanet = Planets.center(spec) - Planets.Town
+		local ringed = if spec.Ring then spec.Ring.Outer else 1.1
+		local planetAngle = math.atan(Planets.diameter(spec) / 2 * ringed / toPlanet.Magnitude)
+		local apart = math.acos(math.clamp(toPlanet.Unit:Dot(toCrown.Unit), -1, 1))
+		if apart < crownAngle + planetAngle + 0.03 then
+			return true
 		end
 	end
 	return false
@@ -346,8 +337,11 @@ end
 -- A light jungle tree in the Vault's blocky Minecraft-jungle style: a root
 -- flare and a thick trunk, three octagonal canopy layers, two branches with
 -- leaf clumps, two hanging vines. 14 parts.
-local function jungleTree(parent: Instance, base: Vector3, h: number, R: number, rng: Rng.Rng): Model
+local function jungleTree(parent: Instance, base: Vector3, h: number, R: number, rng: Rng.Rng, tint: { Color3 }?): Model
 	local m = Style.model("JungleTree", parent)
+	-- leaf, lit leaf (an autumn tree takes a Style.TreeKinds palette, like the concept's colourful crowns)
+	local leaf = if tint then tint[2] else JUNGLE.Leaf
+	local leafLight = if tint then tint[1] else JUNGLE.LeafLight
 	local T = math.clamp(h * 0.12, 2.2, 3.6)
 	Style.block(
 		m,
@@ -361,7 +355,7 @@ local function jungleTree(parent: Instance, base: Vector3, h: number, R: number,
 		local w = 2 * R * k
 		local th = 3.4
 		local c = base + Vector3.new(rng:range(-1, 1), y + th / 2 - 0.5, rng:range(-1, 1))
-		local a, b = if i == 2 then JUNGLE.LeafLight else JUNGLE.Leaf, if i == 2 then JUNGLE.Leaf else JUNGLE.LeafLight
+		local a, b = if i == 2 then leafLight else leaf, if i == 2 then leaf else leafLight
 		Style.block(m, CFrame.new(c), Vector3.new(w, th, w), Style.vary(a, rng, 0.04))
 		Style.block(
 			m,
@@ -377,7 +371,7 @@ local function jungleTree(parent: Instance, base: Vector3, h: number, R: number,
 		local from = base + Vector3.new(0, h * (0.55 + 0.15 * i), 0)
 		local tip = from + Vector3.new(0, 2.5, 0) + d * (R * 0.75)
 		Style.block(m, CFrame.lookAt((from + tip) / 2, tip), Vector3.new(1.1, 1.1, (tip - from).Magnitude), JUNGLE.Bark)
-		Style.block(m, CFrame.new(tip + Vector3.new(0, 0.6, 0)), Vector3.new(R * 0.55, R * 0.4, R * 0.55), JUNGLE.Leaf)
+		Style.block(m, CFrame.new(tip + Vector3.new(0, 0.6, 0)), Vector3.new(R * 0.55, R * 0.4, R * 0.55), leaf)
 	end
 	for _ = 1, 2 do
 		local ang = rng:range(0, math.pi * 2)
@@ -394,8 +388,45 @@ local function jungleTree(parent: Instance, base: Vector3, h: number, R: number,
 end
 
 -- A pond: Style.pond (deep water, water, a rim of stones) with lily pads and reeds.
+-- A small turning group around an invisible hub (tag Spin: the client's
+-- DecorController turns and bobs it; Atomic so its parts stream together).
+local function spinner(parent: Instance, name: string, hub: Vector3, speed: number, bob: number, bobSpeed: number): (Model, Part)
+	local m = Style.model(name, parent)
+	local core = Style.block(m, CFrame.new(hub), Vector3.new(0.4, 0.4, 0.4), C.Foam, nil, Style.tiny({ Transparency = 1 }))
+	core.Name = "Hub"
+	m.PrimaryPart = core
+	m:AddTag("Spin")
+	m:SetAttribute("SpinSpeed", speed)
+	m:SetAttribute("BobHeight", bob)
+	m:SetAttribute("BobSpeed", bobSpeed)
+	Style.streaming(m, "Atomic")
+	return m, core
+end
+
+-- A frame at `off` from a hub facing along the circle the hub turns it on
+-- (a hub turning by +angle moves a point (x, z) along (z, -x)).
+local function onCircle(hub: Vector3, off: Vector3): CFrame
+	local p = hub + off
+	return CFrame.lookAt(p, p + Vector3.new(off.Z, 0, -off.X).Unit)
+end
+
+-- Two koi circling under the pond's surface: body and tail. 5 parts.
+local KOI = { Color3.fromRGB(255, 122, 40), Color3.fromRGB(250, 240, 230) }
+local function koi(parent: Instance, center: Vector3, r: number, rng: Rng.Rng)
+	-- (just at the surface, like the concept's koi)
+	local hub = center + Vector3.new(0, 0.7, 0)
+	local m = spinner(parent, "Koi", hub, rng:range(0.25, 0.4), 0.04, 1)
+	for i = 0, 1 do
+		local a = i * math.pi + rng:range(-0.3, 0.3)
+		local cf = onCircle(hub, Vector3.new(math.cos(a) * r, 0, math.sin(a) * r))
+		Style.block(m, cf, Vector3.new(0.55, 0.22, 1.3), KOI[i + 1], nil, Style.tiny())
+		Style.block(m, cf * CFrame.new(0, 0, 0.85), Vector3.new(0.6, 0.12, 0.45), KOI[2 - i], nil, Style.tiny())
+	end
+end
+
 local function pond(parent: Instance, center: Vector3, sx: number, sz: number, rng: Rng.Rng): Model
 	local m = Style.pond(parent, center, sx, sz, rng)
+	koi(m, center, math.min(sx, sz) * 0.22, rng)
 	for _ = 1, 3 do
 		local q = center + Vector3.new(rng:range(-sx * 0.3, sx * 0.3), 0.7, rng:range(-sz * 0.25, sz * 0.25))
 		Geo.cylinder(m, q, 0.12, rng:range(1.6, 2.6), C.LeafGreen, nil, Style.tiny())
@@ -417,10 +448,11 @@ end
 local function ponds(parent: Instance, index: Index, rng: Rng.Rng)
 	local m = Style.model("Ponds", parent)
 	local placed: { Vector3 } = {}
+	local made = 0
 	local function try(p: Vector3, sx: number, sz: number): boolean
 		local r = math.max(sx, sz) / 2 + 1.5
 		-- (ponds are low: unlike the trees they may sit in the core's lawns)
-		if not Meadow.allowed(p, r) or zoned(p, r, { Meadow.KoiBridge, Meadow.VaultZone }) or nearRail(p, r) then
+		if not Meadow.allowed(p, r) or zoned(p, r, { Meadow.KoiBridge, Meadow.VaultZone, Meadow.ForgeBack }) or nearRail(p, r) then
 			return false
 		end
 		if not Meadow.free(index, p, r, 4) then
@@ -433,28 +465,36 @@ local function ponds(parent: Instance, index: Index, rng: Rng.Rng)
 		end
 		track(index, pond(m, p, sx, sz, rng))
 		table.insert(placed, p)
+		made += 1
 		return true
 	end
-	try(Meadow.LanePond.Center, Meadow.LanePond.Size.X, Meadow.LanePond.Size.Y)
+	if not try(Meadow.LanePond.Center, Meadow.LanePond.Size.X, Meadow.LanePond.Size.Y) then
+		-- the stream's pond (Flora/Stream) is there now: keep the others as far off it
+		table.insert(placed, Meadow.LanePond.Center)
+	end
+	-- a fine grid: the free lawn left between the town's pieces comes in small windows
 	local spots: { Vector3 } = {}
 	local x = Meadow.Area.Min.X + 10
 	while x < Meadow.Area.Max.X - 10 do
 		local z = Meadow.Area.Min.Z + 10
 		while z < Meadow.Area.Max.Z - 10 do
-			table.insert(spots, Vector3.new(x + rng:range(-2, 2), 0, z + rng:range(-2, 2)))
-			z += 6
+			table.insert(spots, Vector3.new(x + rng:range(-1, 1), 0, z + rng:range(-1, 1)))
+			z += 3
 		end
-		x += 6
+		x += 3
 	end
 	for i = #spots, 2, -1 do
 		local j = rng:int(1, i)
 		spots[i], spots[j] = spots[j], spots[i]
 	end
 	for _, p in spots do
-		if #placed >= Meadow.MaxPonds then
+		if made >= Meadow.MaxPonds then
 			break
 		end
-		try(p, rng:range(9, 13), rng:range(7, 9))
+		local sx, sz = rng:range(9, 13), rng:range(7, 9)
+		if not try(p, sx, sz) then
+			try(p, Meadow.SmallPond.X, Meadow.SmallPond.Y)
+		end
 	end
 	return m
 end
@@ -498,8 +538,8 @@ local function jungle(parent: Instance, map: Instance, index: Index, rng: Rng.Rn
 			and Meadow.allowed(p, reach)
 			and not zoned(p, reach, { Meadow.Core, Meadow.ForgeBack, Meadow.KoiBridge, Meadow.VaultZone })
 			and not nearRail(p, reach)
-			and not Meadow.blocksSky(p, reach, h + 12)
 			and Meadow.free(index, p, reach, h + 10)
+			and not hidesPlanet(p, h, R)
 		then
 			track(index, jungleTree(m, p, h, R, rng))
 			table.insert(placed, p)
@@ -544,16 +584,40 @@ local function jungle(parent: Instance, map: Instance, index: Index, rng: Rng.Rn
 				and not inBox(p, Meadow.Area, 4)
 				and not WorldLayout.isKeepOut(p, R)
 				and not nearRail(p, R + 2)
-				and not Meadow.blocksSky(p, R + 1, h + 12)
 				and Meadow.freeBand(index, p, R + 1, top + 0.05, top + h + 12)
+				and not hidesPlanet(p, h, R)
 			then
-				track(index, jungleTree(m, p, h, R, rng))
+				-- about a third of the mountain trees wear autumn colours
+				local tint: { Color3 }? = nil
+				if rng:chance(0.35) then
+					tint = Style.TreeKinds[AUTUMN[rng:int(1, #AUTUMN)]]
+				end
+				track(index, jungleTree(m, p, h, R, rng, tint))
 				table.insert(placed, p)
 				count += 1
 			end
 		end
 	end
 	return m
+end
+
+-- A small glowing lantern on a fence's end and middle posts (the concept's
+-- warm lights along every fence): an amber glass and an iron cap. 2 parts,
+-- glow only (no light).
+local function fenceLantern(parent: Instance, foot: Vector3)
+	local m = Style.model("FenceLantern", parent)
+	local h = Meadow.FenceHeight
+	-- (phones: 2 parts, an amber glass and an iron cap; the post carries it)
+	local glass = Style.block(
+		m,
+		CFrame.new(foot + Vector3.new(0, h + 0.5, 0)),
+		Vector3.new(0.85, 1, 0.85),
+		Common.Colors.AmberGlass,
+		Enum.Material.Neon,
+		Style.tiny()
+	)
+	glass.Name = "LanternGlow"
+	Style.block(m, CFrame.new(foot + Vector3.new(0, h + 1.1, 0)), Vector3.new(1.1, 0.22, 1.1), C.Iron, nil, Style.tiny())
 end
 
 local function fences(parent: Instance, index: Index, rng: Rng.Rng)
@@ -597,6 +661,9 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 					local b = math.min(run[2], a + Meadow.FenceRun)
 					local pa = Vector3.new(s.From.X, 0, s.From.Z) + dir * a + right * side * offset
 					local pb = Vector3.new(s.From.X, 0, s.From.Z) + dir * b + right * side * offset
+					for _, q in { pa, (pa + pb) / 2, pb } do
+						fenceLantern(m, q)
+					end
 					local fence = Style.fence(m, pa, pb, {
 						Height = Meadow.FenceHeight,
 						PostEvery = 4,
@@ -613,21 +680,23 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 	return m
 end
 
--- An octagonal flat patch (a square and its twin turned 45 degrees).
-local function patch(parent: Instance, p: Vector3, w: number, h: number, color: Color3, rng: Rng.Rng)
+-- A flat patch (octagonal: a square and its twin turned 45 degrees).
+local function patch(parent: Instance, p: Vector3, w: number, h: number, color: Color3, rng: Rng.Rng, octagon: boolean?)
 	local cf = CFrame.new(p + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, rng:range(0, math.pi / 2), 0)
 	Style.block(parent, cf, Vector3.new(w, h, w * rng:range(0.75, 1)), color, nil, Style.tiny())
-	Style.block(parent, cf * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.85, h * 0.98, w * 0.7), color, nil, Style.tiny())
+	if octagon then
+		Style.block(parent, cf * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(w * 0.85, h * 0.98, w * 0.7), color, nil, Style.tiny())
+	end
 end
 
--- A grass tuft: three blades fanned out, the middle one tallest.
+-- A grass tuft: two blades fanned out, one taller. 2 parts.
 local function tuft(parent: Instance, p: Vector3, rng: Rng.Rng)
 	local h = rng:range(1.3, 2.1)
 	local color = Style.vary(if rng:chance(0.5) then C.GrassLight else C.LeafGreenLight, rng, 0.06)
 	local base = CFrame.new(p) * CFrame.Angles(0, rng:range(0, math.pi), 0)
-	for i = -1, 1 do
-		local bh = h * (if i == 0 then 1 else 0.72)
-		local blade = base * CFrame.Angles(0, 0, math.rad(i * 18)) * CFrame.new(i * 0.25, bh / 2, 0)
+	for _, i in { -0.5, 0.5 } do
+		local bh = h * (if i < 0 then 1 else 0.75)
+		local blade = base * CFrame.Angles(0, 0, math.rad(i * 30)) * CFrame.new(i * 0.4, bh / 2, 0)
 		Style.block(parent, blade, Vector3.new(0.28, bh, 0.5), color, nil, Style.tiny())
 	end
 end
@@ -635,7 +704,7 @@ end
 -- A flower bed: a leafy mound and 4-6 flowers (a plus-shaped head on top).
 local function flowerBed(parent: Instance, p: Vector3, color: Color3, rng: Rng.Rng)
 	patch(parent, p, rng:range(2.4, 3.2), 0.45, Style.vary(C.LeafGreenDark, rng, 0.05), rng)
-	for _ = 1, rng:int(3, 5) do
+	for _ = 1, 3 do
 		local q = p + Vector3.new(rng:range(-1.1, 1.1), rng:range(0.75, 1.15), rng:range(-1.1, 1.1))
 		local s = rng:range(0.75, 1.0)
 		local head = CFrame.new(q) * CFrame.Angles(0, rng:range(0, math.pi), 0)
@@ -672,13 +741,35 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 		local j = rng:int(1, i)
 		spots[i], spots[j] = spots[j], spots[i]
 	end
-	local count = { Tufts = 0, Flowers = 0, Patches = 0 }
+	local count = { Tufts = 0, Flowers = 0, Patches = 0, Bushes = 0, Rocks = 0 }
+	local beds: { Vector3 } = {}
 	for _, p in spots do
 		local n = patchNoise(p.X, p.Z, seed)
 		local roll = rng:next()
+		-- bushes and small rocks (the concept's busy ground), a few of each first
+		if roll > 0.9 and count.Bushes < Meadow.Max.Bushes and Meadow.allowed(p, 2.4) and Meadow.free(index, p, 2, 3) then
+			Style.bush(m, p, Style.vary(if rng:chance(0.7) then C.LeafGreen else C.LeafGreenDark, rng, 0.05), rng, rng:range(1.8, 2.6))
+			count.Bushes += 1
+			continue
+		elseif roll > 0.84 and count.Rocks < Meadow.Max.Rocks and Meadow.allowed(p, 1.8) then
+			local s = rng:range(1, 1.8)
+			local cf = CFrame.new(p + Vector3.new(0, s * 0.35, 0)) * CFrame.Angles(0, rng:range(0, math.pi), rng:range(-0.2, 0.2))
+			Style.block(m, cf, Vector3.new(s * 1.3, s * 0.8, s), Style.vary(C.Stone, rng, 0.06), nil, Style.tiny())
+			Style.block(
+				m,
+				cf * CFrame.new(s * 0.6, -s * 0.15, s * 0.3),
+				Vector3.new(s * 0.6, s * 0.5, s * 0.6),
+				Style.vary(C.StoneLight, rng, 0.06),
+				nil,
+				Style.tiny()
+			)
+			count.Rocks += 1
+			continue
+		end
 		-- (each kind checks its own reach against the sites and aprons)
 		if n > 0.58 and roll < 0.7 and count.Flowers < Meadow.Max.Flowers and Meadow.allowed(p, 2.4) then
 			flowerBed(m, p, FLOWERS[math.floor(n * 97 + p.X * 0.013) % #FLOWERS + 1], rng)
+			table.insert(beds, p)
 			count.Flowers += 1
 		elseif roll < 0.25 and count.Patches < Meadow.Max.Patches and Meadow.allowed(p, 3.6) and Meadow.free(index, p, 2.8, 1) then
 			local shade = if rng:chance(0.5) then C.GrassLight else C.GrassDark
@@ -687,6 +778,42 @@ local function lawn(parent: Instance, index: Index, rng: Rng.Rng)
 		elseif roll < 0.75 and count.Tufts < Meadow.Max.Tufts then
 			tuft(m, p, rng)
 			count.Tufts += 1
+		end
+	end
+	return m, beds
+end
+
+-- Butterflies fluttering in small circles over a few flower beds, spread
+-- over the town: 2-3 each, two wings per butterfly.
+Meadow.ButterflyBeds = 6
+local WINGS = { C.FlowerYellow, C.FlowerWhite, C.LeafPinkLight, C.CrystalCyan }
+local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng)
+	local m = Style.model("Butterflies", parent)
+	local chosen: { Vector3 } = {}
+	for _, p in beds do
+		if #chosen >= Meadow.ButterflyBeds then
+			break
+		end
+		local far = true
+		for _, q in chosen do
+			far = far and (p - q).Magnitude > 40
+		end
+		if far then
+			table.insert(chosen, p)
+		end
+	end
+	for _, p in chosen do
+		local hub = p + Vector3.new(0, 2.4, 0)
+		local group = spinner(m, "Flutter", hub, rng:range(0.7, 1.1), 0.5, rng:range(1.5, 2.2))
+		for i = 1, rng:int(2, 3) do
+			local a = i * 2.2 + rng:range(-0.4, 0.4)
+			local r = rng:range(1.2, 2.2)
+			local cf = onCircle(hub, Vector3.new(math.cos(a) * r, rng:range(-0.4, 0.5), math.sin(a) * r))
+			local color = WINGS[rng:int(1, #WINGS)]
+			for _, side in { -1, 1 } do
+				local wing = cf * CFrame.new(side * 0.32, 0.1, 0) * CFrame.Angles(0, 0, side * math.rad(35))
+				Style.block(group, wing, Vector3.new(0.65, 0.06, 0.55), color, nil, Style.tiny())
+			end
 		end
 	end
 	return m
@@ -703,7 +830,8 @@ function Meadow.build(map: Instance, rng: Rng.Rng): Model
 	ponds(m, index, Rng.new(`Meadow/Ponds/{rng:nextU32()}`))
 	fences(m, index, Rng.new(`Meadow/Fences/{rng:nextU32()}`))
 	jungle(m, map, index, Rng.new(`Meadow/Jungle/{rng:nextU32()}`))
-	lawn(m, index, Rng.new(`Meadow/Lawn/{rng:nextU32()}`))
+	local _, beds = lawn(m, index, Rng.new(`Meadow/Lawn/{rng:nextU32()}`))
+	butterflies(m, beds, Rng.new(`Meadow/Butterflies/{rng:nextU32()}`))
 	decorate(m)
 	return m
 end

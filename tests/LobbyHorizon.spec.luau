@@ -90,6 +90,17 @@ return function(T, Loader)
 			end
 		end
 		T.eq(horizon.ModelStreamingMode, roblox.Enum.ModelStreamingMode.Persistent, "Horizon streams Persistent")
+		-- phones: the client moves every Spin part each frame; out here only the
+		-- lighthouse beams turn (perf audit 2026-10-18)
+		local moving = 0
+		for _, d in horizon:GetDescendants() do
+			if table.find(d:GetTags(), "Spin") then
+				for _, part in parts(d) do
+					moving += 1
+				end
+			end
+		end
+		T.le(moving, 20, "parts the client turns every frame")
 	end)
 
 	T.test("the horizon keeps off the island and the Sky pieces", function()
