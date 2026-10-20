@@ -1319,6 +1319,12 @@ end
 -- A rebirth (RebirthService) emptied the train in the save: forget the trip on
 -- the way and start over from the save, as at a join.
 function TrainService.resetRun(player: Player)
+	local old = runtimes[player]
+	local plotId = PlotService.plotOf(player)
+	if old and old.Announced and plotId then
+		-- everyone saw this train on its way or waiting at the stop: it empties and rolls back
+		Net.fireAll("Fx", "TrainUnload", plotId, 0)
+	end
 	sessionTrips[player.UserId] = nil
 	runtimes[player] = nil
 	local data = DataService.get(player)

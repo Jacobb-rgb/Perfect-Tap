@@ -873,6 +873,19 @@ function PodiumService.registerGrants()
 	MonetizationService.register("CoinPack", grantCoins)
 end
 
+--[[
+	A rebirth (RebirthService) is about to reset the coins: the welcome-back
+	payout still waiting is paid now (no popup) and any later top-up or pass
+	wait is dropped, so nothing earned before the rebirth lands in the new run.
+]]
+function PodiumService.settleOffline(player: Player)
+	if pendingOffline[player] then
+		payOffline(player, false)
+	end
+	topUps[player] = nil
+	waitingPasses[player] = nil
+end
+
 local function onRelease(player: Player, data: { [string]: any })
 	-- left before the welcome-back payout: pay it now (no popup)
 	if pendingOffline[player] then

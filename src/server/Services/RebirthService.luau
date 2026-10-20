@@ -44,6 +44,7 @@ local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local PodiumService = require(script.Parent.PodiumService)
 local TrainService = require(script.Parent.TrainService)
+local ElevatorService = require(script.Parent.ElevatorService)
 
 local RebirthService = {}
 
@@ -73,10 +74,14 @@ local function answer(player: Player, result: { [string]: any })
 	Net.fire("RebirthResult", player, result)
 end
 
--- The whole rebirth (after canRebirth). Returns the stars paid and the new count.
+-- The rebirth on the save and in the world (after canRebirth), in one step:
+-- the plot comes down, the waiting welcome-back payout is settled (so it can't
+-- land in the new run), the player's items leave the world, the save resets,
+-- the plot comes back up. Returns the stars paid and the new count.
 local function doRebirth(player: Player, data: { [string]: any }): (number, number)
 	local stars, count = 0, 0
 	PlotService.reload(player, function()
+		PodiumService.settleOffline(player)
 		-- every item the player owns leaves the world (the unload above already
 		-- stashed the vise ore: the reset empties the pen with it)
 		for _, record in ItemService.ownedBy(player.UserId) do
@@ -86,36 +91,33 @@ local function doRebirth(player: Player, data: { [string]: any }): (number, numb
 		end
 		stars, count = RebirthConfig.reset(data)
 	end)
-	TrainService.resetRun(player)
-	local plotId = PlotService.plotOf(player)
-	if plotId then
-		PodiumService.refreshPlot(plotId)
-	end
-	showStars(player, data)
-	DataService.changed(player)
 	return stars, count
 end
 
---[[
-	Rebirths the player now (the RebirthAction "Rebirth" handler, and the
-	tests). Returns (true, stars, rebirths) or (false, reason).
-]]
-function RebirthService.rebirth(player: Player): (boolean, any, number?)
-	local data = DataService.get(player)
-	local ok, reason = RebirthConfig.canRebirth(data)
-	if not ok or not data then
-		return false, reason
+-- The steps after the save changed: each on its own, so one failing never
+-- hides the rebirth that already happened.
+local function afterRebirth(player: Player, data: { [string]: any })
+	local steps: { () -> () } = {
+		function()
+			TrainService.resetRun(player)
+		end,
+		function()
+			local plotId = PlotService.plotOf(player)
+			if plotId then
+				PodiumService.refreshPlot(plotId)
+			end
+		end,
+		function()
+			showStars(player, data)
+		end,
+	}
+	for _, step in steps do
+		local ok, err = pcall(step :: any)
+		if not ok then
+			warn(`[RebirthService] after the rebirth of {player.Name}: {err}`)
+		end
 	end
-	if busy[player] then
-		return false, "Busy"
-	end
-	busy[player] = true
-	local done, stars, count = pcall(doRebirth, player, data)
-	busy[player] = nil
-	if not done then
-		warn(`[RebirthService] rebirth of {player.Name} failed: {stars}`)
-		return false, "Busy"
-	end
+	DataService.changed(player)
 	task.spawn(function()
 		DataService.saveNow(player)
 	end)
@@ -124,6 +126,32 @@ function RebirthService.rebirth(player: Player): (boolean, any, number?)
 			PlotService.sendHome(player)
 		end
 	end)
+end
+
+--[[
+	Rebirths the player now (the RebirthAction "Rebirth" handler, and the
+	tests). Returns (true, stars, rebirths) or (false, reason): "Locked",
+	"NoData", "Busy" (one is running, or the elevator is taking you to a
+	floor: it would land after the trip home), "Failed" (taking the plot down
+	or the reset broke: nothing was paid).
+]]
+function RebirthService.rebirth(player: Player): (boolean, any, number?)
+	local data = DataService.get(player)
+	local ok, reason = RebirthConfig.canRebirth(data)
+	if not ok or not data then
+		return false, reason
+	end
+	if busy[player] or ElevatorService.isRiding(player) then
+		return false, "Busy"
+	end
+	busy[player] = true
+	local done, stars, count = pcall(doRebirth, player, data)
+	busy[player] = nil
+	if not done then
+		warn(`[RebirthService] rebirth of {player.Name} failed: {stars}`)
+		return false, "Failed"
+	end
+	afterRebirth(player, data)
 	return true, stars, count
 end
 

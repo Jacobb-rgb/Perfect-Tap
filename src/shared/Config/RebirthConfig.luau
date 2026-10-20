@@ -56,14 +56,14 @@ RebirthConfig.MinBlaster = BlasterData.MaxLevel - 4
 RebirthConfig.MinStars = 2 -- a rebirth at MinBlaster
 RebirthConfig.MaxStars = 10 -- a rebirth at the top level
 RebirthConfig.ConfirmSeconds = 4 -- the REBIRTH! button's "SURE?" waits this long for the second press
-RebirthConfig.Reasons = { "NoData", "Locked", "Busy", "BadPerk", "Max", "NoStars" }
+RebirthConfig.Reasons = { "NoData", "Locked", "Busy", "Failed", "BadPerk", "Max", "NoStars" }
 
 RebirthConfig.Perks = {
 	{
 		Id = "GoldenTouch",
 		Name = "Golden Touch",
 		Icon = "💰",
-		Text = "+10% money from podiums and selling",
+		Text = "+10% podium and sell money (up to the bonus caps)",
 		Costs = { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5 },
 		Stats = { IncomePct = 0.1, SellPct = 0.1 },
 	},
@@ -78,7 +78,7 @@ RebirthConfig.Perks = {
 		Id = "LuckyRocks",
 		Name = "Lucky Rocks",
 		Icon = "🍀",
-		Text = "+5% ore luck",
+		Text = "+5% ore luck (up to the luck cap)",
 		Costs = { 2, 2, 2, 2, 2 },
 		Stats = { OreLuckPct = 0.05 },
 	},

@@ -97,7 +97,8 @@
 	  least, so nobody walks slower after the update.
 	- Enchants.Owned: string ids -> whole tiers 1..MAX_LEVEL_KEPT.
 	  Enchants.Slots: at least EnchantConfig.MaxSlots strings; a slot keeps an
-	  owned id only once, and only when the blaster level has opened it.
+	  owned id only once (also in a slot the blaster level hasn't opened yet:
+	  the readers count open slots only, so a rebirth never unslots).
 	  Slots past MaxSlots (a newer build's, up to MAX_ENCHANT_SLOTS_KEPT)
 	  stay when "" or an owned id not slotted before (readers skip them).
 	- Boosts: finite whole os.time() seconds >= 0, at most now +
@@ -453,12 +454,13 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 	if slots ~= nil and type(slots) ~= "table" then
 		report.Dropped += 1
 	end
-	local open = EnchantConfig.unlockedSlots(data.BlasterLevel)
 	local cleanSlots = {}
 	local slotted: { [string]: boolean } = {}
 	for i = 1, EnchantConfig.MaxSlots do
 		local id = if type(slots) == "table" then slots[i] else nil
-		if type(id) == "string" and id ~= "" and i <= open and owned[id] ~= nil and not slotted[id] then
+		-- (a slot the blaster level hasn't opened keeps its enchant: EnchantConfig.stats reads
+		-- open slots only, so it works again once the level opens it, e.g. after a rebirth)
+		if type(id) == "string" and id ~= "" and owned[id] ~= nil and not slotted[id] then
 			slotted[id] = true
 			cleanSlots[i] = id
 		else

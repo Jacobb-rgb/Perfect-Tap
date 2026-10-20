@@ -604,6 +604,12 @@ Option B of the rebirth proposal: an optional restart that keeps the factory and
   REBIRTH in the side menu's More group with a badge while a rebirth is ready.
 - Side menu: on a 568 x 320 phone, STORE and REBIRTH together (11 cells with MENU) fit no grid at 44 pt. STORE is
   hidden until its controller ships, so today's menu fits; decide when STORE lands.
+- Review fixes: the welcome-back payout still waiting at a rebirth is settled first (PodiumService.settleOffline: it
+  can't land in the new run), no rebirth during an elevator ride ("Busy"), other players' clients see the
+  announced train empty and roll back (Fx TrainUnload, 0), a slotted enchant stays in a slot the blaster level hasn't
+  opened (Migrations; EnchantConfig.stats reads open slots only, so a rebirth never unslots, paid ones included),
+  a failure after the reset still reports the rebirth (each later step on its own), "Failed" when taking the plot
+  down breaks, and the Golden Touch / Lucky Rocks cards say they count up to the bonus caps.
 - Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
 What to test in Studio:
 1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now
