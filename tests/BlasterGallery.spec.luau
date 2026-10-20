@@ -45,7 +45,13 @@ return function(T, Loader)
 			local gun = piece:FindFirstChild("Blaster" .. level)
 			T.truthy(gun, "gun " .. level)
 			T.eq(gun:GetAttribute("OreId"), ore, "gun ore")
-			T.eq(#parts(gun), #parts(BlasterBuilder.build(level, ore)), "the real gun, every part")
+			-- the real gun at display detail: the tiniest solid bevels and the invisible holders left out
+			local full = #parts(BlasterBuilder.build(level, ore))
+			T.le(#parts(gun), full, "never more than the real gun")
+			T.truthy(#parts(gun) >= full * 0.6, "most of the real gun")
+			for _, p in parts(gun) do
+				T.truthy(p.Transparency < 0.99, "no invisible parts on show")
+			end
 			T.eq(plateText(piece, "LevelPlate"), "LV " .. level, "level plate")
 			T.eq(plateText(piece, "NamePlate"), string.upper(BlasterData.displayName(level, ore)), "name plate")
 		end
@@ -61,7 +67,7 @@ return function(T, Loader)
 
 	T.test("BlasterGallery: budget and mobile finish", function()
 		local list = parts(built)
-		T.le(#list, 360, "parts (Plaza budget +400)")
+		T.le(#list, 540, "parts (the Kenney-shape guns at display detail)")
 		local lights = 0
 		for _, d in built:GetDescendants() do
 			if d:IsA("Light") then

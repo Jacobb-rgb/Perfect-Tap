@@ -36,6 +36,7 @@ local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
+local Loading = require(script.Parent.Parent.Util.Loading)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -370,6 +371,14 @@ function HudController.offlineDetail(seconds: number, hours: number): string
 end
 
 function HudController.showOffline(amount: number, seconds: number, hours: number)
+	-- never under the loading screen: wait for it (Util/Loading, at most MaxWait)
+	if not Loading.isDone() then
+		task.spawn(function()
+			Loading.wait()
+			HudController.showOffline(amount, seconds, hours)
+		end)
+		return
+	end
 	local view = offline
 	if not view then
 		local built = HudView.buildOffline()

@@ -601,8 +601,8 @@ end
 --[[
 	Shows blaster level `level` as a black silhouette on the shadow board (a
 	level past BlasterData.MaxLevel: the "?" and COMING SOON). Rebuilds only
-	the "Silhouette" model; the parts keep their BlasterBuilder shapes,
-	scaled to fit the board.
+	the "Silhouette" model; the parts keep their BlasterBuilder.silhouette
+	shapes, scaled to fit the board.
 ]]
 function FoundryBuilder.setRack(building: Model, level: number)
 	local old = building:FindFirstChild("Silhouette")
@@ -626,7 +626,7 @@ function FoundryBuilder.setRack(building: Model, level: number)
 	if comingSoon or not base or not mountPoint or not mountPoint:IsA("Attachment") then
 		return
 	end
-	local tool = BlasterBuilder.build(math.max(2, level), "")
+	local tool = BlasterBuilder.silhouette(math.max(2, level))
 	local parts: { BasePart } = {}
 	local minP = Vector3.new(math.huge, math.huge, math.huge)
 	local maxP = -minP

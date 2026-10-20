@@ -25,6 +25,9 @@
 	  - on touch the bubble sits in the HUD's top row right of the teleport
 	    bar, where the FREE SPIN! chip goes too: inTopRow / onTopRowChanged
 	    tell WheelController to keep the chip away while the bubble is there
+	  - at join nothing shows under the loading screen: the bubble and the
+	    guide wait for Loading.wait() (done, or its MaxWait time-out) and
+	    then show either way
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -43,6 +46,7 @@ local Net = require(Shared.Net)
 local TutorialView = require(script.Parent.Parent.UI.TutorialView)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
+local Loading = require(script.Parent.Parent.Util.Loading)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
 local HudController = require(script.Parent.HudController)
@@ -68,6 +72,7 @@ local lastKind: Input? = nil
 local touchLayout = false -- the bubble uses the touch layout (the top row, right of the teleport bar)
 local inTopRow = false -- the bubble shows there (what onTopRowChanged listeners last heard)
 local topRowListeners: { (boolean) -> () } = {}
+local loaded = false -- the loading screen is gone (or Loading.wait timed out)
 
 local PAD_KEY = Enum.KeyCode.ButtonR3
 local ACTION = "TerraForgeTutorial"
@@ -591,7 +596,7 @@ local function update()
 	end
 	local def = currentDef()
 	local blocked = CleaningController.isActive() or PlayerControls.owner() ~= nil or TutorialView.panelHides(openPanels())
-	local show = def ~= nil and not blocked
+	local show = loaded and def ~= nil and not blocked
 	if show ~= visible then
 		visible = show
 		r.Bubble.Visible = show
@@ -702,6 +707,12 @@ function TutorialController.start()
 			update()
 			task.wait(UPDATE)
 		end
+	end)
+	-- the first bubble waits for the loading screen (shown either way after the wait)
+	task.spawn(function()
+		Loading.wait()
+		loaded = true
+		update()
 	end)
 end
 
