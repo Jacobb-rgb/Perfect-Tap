@@ -510,6 +510,7 @@ return function(T, Loader)
 
 	withWorld("Step 8: coin packs wait while CoinPacksEnabled is false, then follow the receipt rules", function(w)
 		MonetizationConfig.CoinPacksEnabled = false
+		w.data.Coins += 777 -- earned coins: never counted as bought
 		local coins = w.data.Coins
 		T.eq(w.decide("k1", "CoinsSmall"), NOT_YET, "coin packs off: the receipt waits (never dropped)")
 		T.eq(w.data.Coins, coins, "no coins")
@@ -525,6 +526,8 @@ return function(T, Loader)
 		end, "CoinsMedium")
 		T.eq(w.decide("k1", "CoinsSmall"), GRANTED, "the waiting receipt is granted once coin packs are on")
 		T.eq(w.data.Coins - coins, 2 * each + 5000, "its coins")
+		-- bought coins are counted in PaidCoins (kept through a rebirth while unspent)
+		T.eq(w.data.PaidCoins, 2 * each + 5000, "only the bought coins are counted")
 	end)
 
 	---------------------------------------------------------------- off policy: ids

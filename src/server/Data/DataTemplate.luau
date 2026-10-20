@@ -9,6 +9,9 @@ local DataTemplate = {
 	Version = 3, -- Data/Migrations brings older saves up to this
 
 	Coins = 0, -- may hold fractions (podium income per second)
+	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
+	-- last, kept through a rebirth: owner 2026-10-20)
+	PaidCoins = 0,
 	-- crystal shards (the Crystal Extractor finds them; the Enchant shop spends them)
 	Shards = 0,
 	-- crushed piles a Crusher made that the Crystal Extractor hasn't shaken yet

@@ -976,6 +976,12 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 			data[field] = 0
 		end
 	end
+	-- Robux-bought coins not spent yet: finite, 0..Coins
+	if not isFinite(data.PaidCoins) or data.PaidCoins < 0 then
+		data.PaidCoins = 0
+	elseif data.PaidCoins > data.Coins then
+		data.PaidCoins = data.Coins
+	end
 
 	-- trains: levels in range, clean cargo lists, sane trip times
 	local train = data.Train

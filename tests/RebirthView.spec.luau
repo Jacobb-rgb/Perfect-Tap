@@ -41,6 +41,8 @@ return function(T, Loader)
 		T.truthy(string.find(kept.Lose[2], "LV " .. RebirthConfig.HeadStartLevels[2], 1, true), "Head Start's level")
 		T.truthy(string.find(kept.Lose[7], "podiums stay", 1, true), "Podium Keeper")
 		T.truthy(string.find(plain.Keep[1], "factory", 1, true), "the factory stays")
+		T.truthy(string.find(plain.Lose[1], "Earned coins", 1, true), "earned coins go")
+		T.truthy(table.find(plain.Keep, "💰  Coins bought with Robux"), "bought coins stay")
 		-- the bottom line
 		T.truthy(string.find(RebirthView.needText(info(3, {}, 0)), "Reach blaster LV " .. RebirthConfig.MinBlaster, 1, true))
 		T.truthy(string.find(RebirthView.needText(info(8, {}, 0)), "⭐ " .. RebirthConfig.starsFor(8), 1, true))
