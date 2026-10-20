@@ -84,6 +84,11 @@ return function(T, Loader)
 		WheelSpins1 = "WheelSpins",
 		WheelSpins5 = "WheelSpins",
 		WheelSpins10 = "WheelSpins",
+		-- the limited Dragonforge edition (owner 2026-10-20)
+		DragonforgeCapsule1 = "Capsule",
+		DragonforgeCapsule3 = "Capsule",
+		DragonforgeCapsule10 = "Capsule",
+		DragonforgeCapsule50 = "Capsule",
 	}
 
 	local function deepCopy(v: any): any
@@ -503,6 +508,23 @@ return function(T, Loader)
 		T.eq(w.loggedWith("can't take RoyalCapsule3"), 1, "logged")
 		T.eq(w.decide("f2", "RoyalCapsule1"), GRANTED, "one still fits")
 		T.eq(#w.data.Golems.Pending, GolemConfig.MaxPending - 1, "into the credit")
+	end)
+
+	withWorld("Step 8: a limited capsule's receipt is granted after its edition ended (a x50 too)", function(w)
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		T.truthy(NOW > LimitedGolems.Current.EndsAt, "this world's clock is after the Dragonforge edition")
+		receiptRules(w, "DragonforgeCapsule1", function()
+			return GolemConfig.count(w.data.Golems)
+		end, "DragonforgeCapsule1")
+		for _, entry in w.data.Golems.Owned do
+			T.eq(GolemConfig.ById[entry.Kind].Edition, "Dragonforge", entry.Kind)
+		end
+		-- a x50: past the cap up to MaxSaved, the rest waits in the pending credit
+		T.eq(w.decide("big", "DragonforgeCapsule50"), GRANTED)
+		T.eq(GolemConfig.count(w.data.Golems), 52, "all 50 fit under MaxSaved here")
+		T.eq(w.decide("big2", "DragonforgeCapsule50"), GRANTED, "a second x50")
+		T.eq(GolemConfig.count(w.data.Golems), GolemConfig.MaxSaved, "up to MaxSaved")
+		T.eq(#w.data.Golems.Pending, 102 - GolemConfig.MaxSaved, "the rest as the pending credit, never coins")
 	end)
 
 	withWorld("Step 8: a paid random product for a restricted player is granted and logged", function(w)

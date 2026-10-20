@@ -1242,7 +1242,7 @@ return function(T, Loader)
 		end
 		T.truthy(string.find(refs.JackpotFooter.Text, WheelView.percent(segment.Odds), 1, true), "its chance on the wheel")
 		T.eq(WheelView.golemIcon("PebbleGolem"), "golem_PebbleGolem")
-		T.eq(WheelView.golemIcon("RoseKnight"), "golem_RubyKnight", "a renamed golem's picture")
+		T.eq(WheelView.golemIcon("RoseKnight"), "golem_RoseKnight", "the sheet lists the renamed golems by their new ids")
 		-- Triple Lucky changes the tiles
 		local _, lucky = WheelView.jackpot(true)
 		T.truthy(lucky[#lucky].Chance ~= lines[#lines].Chance, "the boosted odds")

@@ -35,10 +35,13 @@ return function(T, Loader)
 	T.test("GolemBuilder: every golem kind builds within the part budget", function()
 		T.eq(GolemBuilder.MaxParts, 20, "the package budget: 20 parts")
 		T.le(GolemBuilder.MaxParts, GolemConfig.MaxParts, "within GolemConfig.MaxParts")
+		T.le(GolemBuilder.LimitedMaxParts, GolemConfig.MaxParts, "a limited edition golem too")
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
 			local n = GolemBuilder.partCount(model)
-			T.le(n, GolemBuilder.MaxParts, golem.Id .. " parts")
+			local budget = if golem.Edition then GolemBuilder.LimitedMaxParts else GolemBuilder.MaxParts
+			T.eq(GolemBuilder.budget(golem.Id), budget, golem.Id .. " budget")
+			T.le(n, budget, golem.Id .. " parts")
 			T.truthy(n >= 14, golem.Id .. " has its body, head, limbs and gear")
 			T.eq(model:GetAttribute("Golem"), golem.Id)
 			T.truthy(model.PrimaryPart and model.PrimaryPart.Name == "Body", golem.Id .. " PrimaryPart = Body")
@@ -130,7 +133,7 @@ return function(T, Loader)
 					T.truthy(part.Name == "Body" or part.Name == "Head", "only Body and Head cast shadows")
 				end
 			end
-			T.le(neon, 9, golem.Id .. " glowing parts")
+			T.le(neon, if golem.Edition then 12 else 9, golem.Id .. " glowing parts")
 			T.truthy(neon >= 3, golem.Id .. " eyes and core glow")
 		end
 	end)
@@ -166,10 +169,10 @@ return function(T, Loader)
 	end)
 
 	T.test("GolemBuilder: golems read as rock: brow, rock fists, boulder, crystal and an ore vein", function()
-		local veins = 0
+		local noVein = 0
 		for _, golem in GolemConfig.List do
 			local model = GolemBuilder.build(golem.Id)
-			local covered = golem.Accessory == "KnightHelm" or golem.Accessory == "Visor"
+			local covered = GolemBuilder.Faces[golem.Accessory] ~= nil
 			T.eq(model:FindFirstChild("Brow") ~= nil, not covered, golem.Id .. " stone brow (unless the face is covered)")
 			T.falsy(model:FindFirstChild("Face"), golem.Id .. " no robot face plate")
 			for _, name in { "Boulder", "Crystal", "Fist1", "Fist2" } do
@@ -183,11 +186,12 @@ return function(T, Loader)
 				bodyMaterial ~= roblox.Enum.Material.SmoothPlastic and bodyMaterial ~= roblox.Enum.Material.Glass,
 				golem.Id .. " body is no plastic or glass"
 			)
-			if model:FindFirstChild("Vein") then
-				veins += 1
+			-- (a limited edition golem spends its budget on its gear first)
+			if not model:FindFirstChild("Vein") and not golem.Edition then
+				noVein += 1
 			end
 		end
-		T.truthy(veins >= #GolemConfig.List - 4, "nearly every golem has its ore vein (the budget allows)")
+		T.truthy(noVein <= 4, "nearly every capsule golem has its ore vein (the budget allows)")
 	end)
 
 	T.test("GolemBuilder: Legendary and Mythic golems float on a glowing aura", function()

@@ -17,7 +17,7 @@
 	  calls Receipts.setReady(true): only when every live id has a handler
 	  (MonetizationService.unhandled() is empty; ReceiptsAttribute tells the
 	  clients).
-	- PaidRandom = true: buying it gives a random result (Royal capsules, the
+	- PaidRandom = true: buying it gives a random result (Royal and limited capsules, the
 	  Spin & Win wheel's bought spins) or
 	  changes the odds of one (the Triple / Hexa Lucky packs, the Starbreaker
 	  enchant's pass: ore luck and artifact chance), so it is hidden/disabled
@@ -292,6 +292,56 @@ local LIST: { Product } = {
 		PaidRandom = true,
 		Capsule = "Royal",
 		Count = 10,
+	},
+	-- the LIMITED EDITION capsule (Config/LimitedGolems: sold only while its
+	-- edition runs; a receipt is always granted)
+	{
+		Key = "DragonforgeCapsule1",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "Dragonforge Capsule",
+		Description = "Wakes 1 golem of the limited Dragonforge edition (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 1,
+	},
+	{
+		Key = "DragonforgeCapsule3",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 249,
+		Name = "Dragonforge Capsule x3",
+		Description = "Wakes 3 golems of the limited Dragonforge edition (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 3,
+	},
+	{
+		Key = "DragonforgeCapsule10",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 799,
+		Name = "Dragonforge Capsule x10",
+		Description = "Wakes 10 golems of the limited Dragonforge edition (odds shown before buying).",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 10,
+	},
+	{
+		Key = "DragonforgeCapsule50",
+		Grant = "Capsule",
+		Kind = "Product",
+		Id = 0,
+		Robux = 3499,
+		Name = "Dragonforge Capsule x50",
+		Description = "Wakes 50 golems of the limited Dragonforge edition (odds shown before buying). Golems that don't fit wake as soon as there is room.",
+		PaidRandom = true,
+		Capsule = "Dragonforge",
+		Count = 50,
 	},
 	---------------------------------------------------------------- luck boosts
 	{

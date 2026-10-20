@@ -5,7 +5,9 @@
 	Shop panel (ScreenGui "TerraForgeCapsules"):
 	  header   GOLEM CAPSULES, a line about odds, your coins, MY GOLEMS, X
 	  tabs     one per capsule the player may open (LB / RB on a gamepad):
-	           STONE · CRYSTAL · ROYAL. Hidden where it isn't allowed: the
+	           STONE · CRYSTAL · ROYAL (CapsuleConfig.Stall: a limited
+	           edition's capsule is sold only in the Robux shop's banner,
+	           but its opening plays here). Hidden where it isn't allowed: the
 	           Royal capsule (Robux) where paid random items are restricted
 	           or the policy isn't known yet, coin capsules too while coins
 	           can be bought with Robux (CapsuleConfig.isPaidRandom).
@@ -31,7 +33,8 @@
 	  a dim backdrop, rotating rarity rays, the ViewportFrame "Hero" (the
 	  controller animates the capsule and the golems in it), a full-screen
 	  flash, the name plate (name, rarity, NEW!, bonus), a counter (2 / 3),
-	  the result grid (x3: 3 cards, x10: 5 x 2) and SKIP / OK / OPEN AGAIN
+	  the result grid (x3: 3 cards, x10: 5 x 2, more: a card per kind with
+	  its count, summary) and SKIP / OK / OPEN AGAIN
 	  (in the "Controls" frame, a SelectionGroup that stops at its edges: a
 	  gamepad never leaves the overlay for the shop behind it).
 
@@ -371,7 +374,7 @@ function CapsuleView.cards(
 	local lucky = CapsuleView.luckyNow(state, now, stateAt)
 	local cash = num(coins)
 	local cards: { Card } = {}
-	for _, capsule in CapsuleConfig.List do
+	for _, capsule in CapsuleConfig.Stall do
 		local robux = capsule.Currency == "Robux"
 		local buys: { Buy } = {}
 		local live = not robux -- Robux: decided per button below
@@ -456,7 +459,7 @@ function CapsuleView.art(parent: Instance, capsuleId: string, w: number, h: numb
 	local capsule = CapsuleConfig.ById[capsuleId]
 	local color = if capsule then capsule.Color else rgb(150, 140, 130)
 	local glow = if capsule then capsule.Glow else rgb(255, 170, 80)
-	local top = color:Lerp(Color3.new(1, 1, 1), 0.55)
+	local top = if capsule and capsule.Shell then capsule.Shell else color:Lerp(Color3.new(1, 1, 1), 0.55)
 	local box = UIKit.new("Frame", {
 		Name = "Art",
 		Size = UDim2.fromOffset(w, h),
@@ -676,7 +679,7 @@ function CapsuleView.build(compact: boolean?): Refs
 	local tabBar = UIKit.new("Frame", { Name = "TabBar", BackgroundTransparency = 1 }, panel)
 	UIKit.list(tabBar, Enum.FillDirection.Horizontal, GAP, { VerticalAlignment = Enum.VerticalAlignment.Center })
 	local tabs: { [string]: TextButton } = {}
-	for i, capsule in CapsuleConfig.List do
+	for i, capsule in CapsuleConfig.Stall do
 		tabs[capsule.Id] = UIKit.button(tabBar, string.upper(capsule.Id), capsule.Color, capsule.Color:Lerp(DARK, 0.45), {
 			Name = "Tab" .. capsule.Id,
 			LayoutOrder = i,
@@ -845,7 +848,7 @@ function CapsuleView.build(compact: boolean?): Refs
 		Rows = {},
 		Hint = hint,
 		Empty = empty,
-		Tab = CapsuleConfig.List[1].Id,
+		Tab = CapsuleConfig.Stall[1].Id,
 		ArtFor = nil,
 		Compact = isCompact,
 	}
@@ -1476,12 +1479,51 @@ function CapsuleView.best(kinds: { string }): string?
 	return best
 end
 
+-- More golems than this (a limited capsule's x50) show one card per kind with its count.
+CapsuleView.GridMax = 10
+
+--[[
+	A big opening as one card per kind (summary of `kinds` / `new`): the
+	kinds rarest first (GolemConfig.score), how many of each woke and
+	whether any of them is NEW.
+]]
+function CapsuleView.summary(kinds: { string }, new: { [number]: boolean }): ({ string }, { [number]: boolean }, { [number]: number })
+	local order: { string } = {}
+	local counts: { [string]: number } = {}
+	local fresh: { [string]: boolean } = {}
+	for i, kind in kinds do
+		if counts[kind] == nil then
+			table.insert(order, kind)
+			counts[kind] = 0
+		end
+		counts[kind] += 1
+		if new[i] then
+			fresh[kind] = true
+		end
+	end
+	table.sort(order, function(a: string, b: string): boolean
+		local sa, sb = GolemConfig.score(a), GolemConfig.score(b)
+		if sa ~= sb then
+			return sa > sb
+		end
+		return a < b
+	end)
+	local outNew: { [number]: boolean } = {}
+	local outCounts: { [number]: number } = {}
+	for i, kind in order do
+		outNew[i] = fresh[kind] == true
+		outCounts[i] = counts[kind]
+	end
+	return order, outNew, outCounts
+end
+
 --[[
 	The result grid: one card per woken golem (opening order), hidden until
 	the controller pops them; `new` marks kinds the player didn't own
-	before. 1-3 golems: one row of big cards; more: 5 per row.
+	before. 1-3 golems: one row of big cards; more: 5 per row. `counts`
+	(CapsuleView.summary): each card is a kind, "x12" on it.
 ]]
-function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]: boolean }, best: number?)
+function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]: boolean }, best: number?, counts: { [number]: number }?)
 	for _, cell in refs.Cells do
 		cell.Frame:Destroy()
 	end
@@ -1548,6 +1590,17 @@ function CapsuleView.setGrid(refs: OpenRefs, kinds: { string }, new: { [number]:
 				Position = UDim2.fromOffset(6, 6),
 				Size = UDim2.fromOffset(52, 22),
 				TextSize = 14,
+				ZIndex = 6,
+			})
+		end
+		local count = if counts then counts[i] else nil
+		if count and count > 1 then
+			UIKit.chip(frame, `x{count}`, color, {
+				Name = "Count",
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -6, 0, 6),
+				Size = UDim2.fromOffset(46, 22),
+				TextSize = 15,
 				ZIndex = 6,
 			})
 		end

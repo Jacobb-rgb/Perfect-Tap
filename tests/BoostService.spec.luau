@@ -707,9 +707,15 @@ return function(T, Loader)
 			T.near(sumAfter, 1, 1e-9)
 			T.truthy(t.Summary.Change > 0, capsule.Id .. ": the lucky golems grow")
 		end
-		-- the capsules shown: the Royal one (Robux) is hidden where restricted
-		T.eq(#BoostView.capsules(false), #CapsuleConfig.List)
-		T.falsy(table.find(BoostView.capsules(true), "Royal"), "no Royal where restricted")
+		-- the capsules shown: the Royal one (Robux) is hidden where restricted; a
+		-- limited edition's capsule only while it is on sale
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		local during = LimitedGolems.Current.EndsAt - 3600
+		T.eq(#BoostView.capsules(false, during), #CapsuleConfig.List)
+		T.truthy(table.find(BoostView.capsules(false, during), "Dragonforge"), "the limited capsule while it runs")
+		T.eq(#BoostView.capsules(false, LimitedGolems.Current.EndsAt + 1), #CapsuleConfig.List - 1, "not after its end")
+		T.falsy(table.find(BoostView.capsules(true, during), "Royal"), "no Royal where restricted")
+		T.falsy(table.find(BoostView.capsules(true, during), "Dragonforge"), "no limited capsule where restricted")
 		-- the zone a table starts on
 		T.eq(BoostView.defaultZone(s, "Quarry"), "Quarry", "where you stand")
 		T.eq(BoostView.defaultZone(s, "Emberfall"), "DeepHollow", "in town: the hardest zone you can mine")
