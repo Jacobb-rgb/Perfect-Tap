@@ -464,6 +464,24 @@ MachineData.List = {
 		PowerOut = 200,
 		Upgrades = { Speed = scaled(SPEED_CURVE, 40) },
 	},
+	{
+		-- a sorter (Time, no Output): when its job ends ArtifactService's
+		-- restorer takes the relic and the artifact goes into the collection
+		Id = "RestorationTable",
+		Name = "Restoration Table",
+		Description = "Cleans dusty relics on its own: the artifact goes into your collection and your museum.",
+		Size = { 2, 2 },
+		Price = 75000,
+		Category = "Processing",
+		Order = 22,
+		Accepts = { Relic = true },
+		Time = 20,
+		LoadText = "Clean Relic",
+		WrongHint = "The Restoration Table only takes DUSTY RELICS.",
+		ConveyorFaces = "NoFront",
+		Power = 10,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 2) },
+	},
 } :: { Machine }
 
 MachineData.ById = {} :: { [string]: Machine }

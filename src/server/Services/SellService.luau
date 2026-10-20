@@ -526,6 +526,11 @@ end
 local function binHandler(bin: BasePart): (ItemRecord) -> ()
 	return function(record: ItemRecord)
 		local position = bin.CFrame.Position + Vector3.new(0, bin.Size.Y / 2, 0)
+		-- a dusty relic: Tobin passes it to the guild, who clean it into the owner's collection
+		if record.Kind == "Relic" and record.State == "Loose" then
+			ItemService.stash(record, nil)
+			return
+		end
 		if SellService.sellRecord(record, position) > 0 then
 			return
 		end

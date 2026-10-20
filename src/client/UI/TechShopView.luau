@@ -934,6 +934,14 @@ local DRAW: { [string]: (Frame) -> () } = {
 		bit(a, "Glow", 0.4, 0.62, 0.6, 0.86, C.Glow, 0.4)
 		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, C.Hazard)
 	end,
+	RestorationTable = function(a: Frame)
+		bit(a, "Body", 0.1, 0.56, 0.9, 0.9, C.HousingLight, 0.2)
+		bit(a, "Top", 0.06, 0.5, 0.94, 0.6, C.HousingDark, 0.3)
+		bit(a, "Bell", 0.3, 0.16, 0.7, 0.5, rgb(170, 220, 255), 0.5)
+		bit(a, "Relic", 0.42, 0.3, 0.58, 0.48, rgb(146, 128, 108), 0.3)
+		bit(a, "Lamp", 0.74, 0.08, 0.86, 0.2, C.Glow, 0.5)
+		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, C.Hazard)
+	end,
 	Polisher = function(a: Frame)
 		bit(a, "Body", 0.1, 0.5, 0.9, 0.9, C.HousingLight, 0.2)
 		bit(a, "Table", 0.2, 0.42, 0.8, 0.52, C.Hazard, 0.5)
