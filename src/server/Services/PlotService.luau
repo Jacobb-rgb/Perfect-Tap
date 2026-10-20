@@ -60,9 +60,10 @@ function PlotService.model(plotId: number): Model?
 end
 
 -- World CFrame of a machine footprint's centre (gx, gz = min corner cell),
--- turned so the machine's front faces Grid.dir(rotation).
-function PlotService.footprintCFrame(plotId: number, machineId: string, gx: number, gz: number, rotation: number): CFrame
-	return PlotService.plotCFrame(plotId) * Grid.localCFrame(machineId, gx, gz, rotation)
+-- turned so the machine's front faces Grid.dir(rotation), on `level`
+-- (nil / 0 = the pad, 1 = a platform's deck top).
+function PlotService.footprintCFrame(plotId: number, machineId: string, gx: number, gz: number, rotation: number, level: number?): CFrame
+	return PlotService.plotCFrame(plotId) * Grid.localCFrame(machineId, gx, gz, rotation, level)
 end
 
 -- Grid cell under a world position on a plot (or nil when off the plot).

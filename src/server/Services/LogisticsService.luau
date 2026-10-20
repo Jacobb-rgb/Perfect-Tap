@@ -386,9 +386,10 @@ local sorterBehaviour: MachineService.Behaviour = {
 
 ---------------------------------------------------------------- Robot Arm
 
--- The other machine covering the cell (dx, dz) away from the arm, if any.
+-- The other machine covering the cell (dx, dz) away from the arm on the
+-- arm's own level (a deck arm works the deck), if any.
 local function besideArm(arm: PlacedMachine, dx: number, dz: number): PlacedMachine?
-	local machine = MachineService.atCell(arm.PlotId, arm.X + dx, arm.Z + dz)
+	local machine = MachineService.atCell(arm.PlotId, arm.X + dx, arm.Z + dz, arm.L)
 	if machine and machine ~= arm and not machine.Removed and machine.Owner == arm.Owner then
 		return machine
 	end

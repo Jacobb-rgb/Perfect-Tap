@@ -576,6 +576,22 @@ What to test in Studio:
 4. The Vault's crate opening and the Great Forge gallery show the new guns; the Foundry's NEXT rack shows the
    new black silhouette.
 
+## Platforms, Belt Lift and Slide (2026-10-20, docs/plans/PLATFORMS_PLAN.md phases 1-2)
+Owner's YES: a second building level on the plot. Platform (a 2x2 deck 5 studs up), Belt Lift (items up), Slide
+(items down); flat belts may run under a deck, other ground machines may not.
+What to test in Studio:
+1. Buy a Platform, a Belt Lift, a Slide and belts (Tech shop). Place the platform, then a belt and a Brick Furnace on
+   it (over a deck cell the ghost jumps up onto the deck). A furnace under the deck is red: "Only belts fit under a
+   platform".
+2. Place a Belt Lift with its high end against the deck (the amber plate shows the deck cell it must reach), a ground
+   belt into its low end and a deck belt where it arrives. Drop ore on the ground belt: it rides up the lift onto the
+   deck belt (watch the 1-stud gaps at both ends and the slope's grip). The same down a Slide.
+3. With a belt held over a deck cell press V (PC), D-pad Up (gamepad) or the DECK / GROUND button (touch): the ghost
+   goes under the deck. B on a gamepad still leaves build mode.
+4. Pack up a platform with something on it: "Clear the platform first". Empty, it packs up.
+5. Rejoin: deck machines come back on the deck; a deck machine whose platform is gone waits in the Build menu.
+6. Phone emulator: the DECK / GROUND button sits with the other big buttons and is easy to tap.
+
 ## Rebirth B "STAR FORGE" (2026-10-20, owner's pick, branch feature/rebirth)
 Option B of the rebirth proposal: an optional restart that keeps the factory and pays Forge Stars for the Star Shop.
 - Rules (Shared/Config/RebirthConfig): a rebirth needs blaster LV MinBlaster (top - 4 = 6). It resets coins, the
