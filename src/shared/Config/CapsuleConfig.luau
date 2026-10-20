@@ -178,7 +178,7 @@ CapsuleConfig.List = {
 	},
 	{
 		Id = "Dragonforge",
-		Name = "Dragonforge Capsule",
+		Name = "Dragonforge Shard",
 		Currency = "Robux",
 		Products = {
 			[1] = "DragonforgeCapsule1",

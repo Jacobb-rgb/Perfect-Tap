@@ -271,7 +271,7 @@ What Terra Forge sells (design v2; the source of truth is
 | Heartfire Enchant (20 R$) | Game pass | `EnchantHeartfire` | Mythic enchant: damage | No |
 | Starbreaker Enchant (20 R$) | Game pass | `EnchantStarbreaker` | Mythic enchant: +75 % ore luck, +50 % artifact chance | **Yes** (odds booster) |
 | Royal Capsule x1 / x3 / x5 / x10 | Developer products | `RoyalCapsule1/3/5/10` | Random golems (x5: the Store) | **Yes** |
-| Dragonforge Capsule x1 / x3 / x10 / x50 (99 / 249 / 799 / 3499 R$) | Developer products | `DragonforgeCapsule1/3/10/50` | LIMITED EDITION: random golems of the Dragonforge set, sold only in the Store's banner until the edition's real end date (see "Limited editions" below) | **Yes** |
+| Dragonforge Shard (egg-shaped capsule) x1 / x3 / x10 / x50 (99 / 249 / 799 / 3499 R$) | Developer products | `DragonforgeCapsule1/3/10/50` | LIMITED EDITION: random golems of the Dragonforge set, sold only in the Store's banner until the edition's real end date (see "Limited editions" below) | **Yes** |
 | Triple Lucky 15 min / 1 h | Developer products | `TripleLucky15/60` | Capsule odds: the rarest golems x3 | **Yes** (odds booster) |
 | Hexa Lucky 15 min / 1 h | Developer products | `HexaLucky15/60` | Ore luck x2.5 (Rare x2.5 … Mythic x9.9 weight) | **Yes** (odds booster) |
 | Coin packs (19 / 49 / 99 / 249 / 499 R$) | Developer products | `CoinsSmall/Medium/Large/Huge/Mega` | Coins: minutes of the player's podium income (on: `CoinPacksEnabled = true`; bought coins survive a rebirth, `PaidCoins`) | No, but they make coin capsules and coin boosts paid random items |
