@@ -57,6 +57,32 @@ function fitText(text, font, maxW, maxH, wrap) {
   return lo;
 }
 
+// A UIGradient's CSS stops: its colour keys times `base`, its transparency keys times `alpha`.
+function gradientStops(grad, base, alpha) {
+  const lerp = (keys, t, mix) => {
+    if (t <= keys[0][0]) return keys[0][1];
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) {
+        const [t0, v0] = keys[i - 1];
+        const [t1, v1] = keys[i];
+        return mix(v0, v1, (t - t0) / Math.max(1e-6, t1 - t0));
+      }
+    }
+    return keys[keys.length - 1][1];
+  };
+  const mixHex = (a, b, f) =>
+    [0, 2, 4].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - f) + parseInt(b.slice(i, i + 2), 16) * f).toString(16).padStart(2, "0")).join("");
+  const fades = grad.tkeys && grad.tkeys.length >= 2 ? grad.tkeys : [[0, 0], [1, 0]];
+  const times = [...new Set([...grad.keys.map((k) => k[0]), ...fades.map((k) => k[0])])].sort((a, b) => a - b);
+  return times
+    .map((t) => {
+      const c = lerp(grad.keys, t, mixHex);
+      const tr = lerp(fades, t, (a, b, f) => a + (b - a) * f);
+      return `${rgba(mulHex(base, c), alpha * (1 - tr))} ${t * 100}%`;
+    })
+    .join(", ");
+}
+
 function styleElement(el, node, w, h) {
   const corner = child(node, "UICorner");
   if (corner) {
@@ -67,8 +93,7 @@ function styleElement(el, node, w, h) {
   if (node.bgt < 0.999) {
     const grad = child(node, "UIGradient");
     if (grad && grad.keys && grad.keys.length >= 2) {
-      const stops = grad.keys.map(([t, c]) => `${rgba(mulHex(node.bg, c), 1 - node.bgt)} ${t * 100}%`).join(", ");
-      el.style.backgroundImage = `linear-gradient(${grad.rot + 90}deg, ${stops})`;
+      el.style.backgroundImage = `linear-gradient(${grad.rot + 90}deg, ${gradientStops(grad, node.bg, 1 - node.bgt)})`;
     } else {
       el.style.backgroundColor = rgba(node.bg, 1 - node.bgt);
     }
@@ -116,6 +141,24 @@ function styleElement(el, node, w, h) {
       span.style.paintOrder = "stroke fill";
     }
     span.textContent = node.text;
+    const textGrad = child(node, "UIGradient");
+    if (textGrad && textGrad.keys && textGrad.keys.length >= 2 && node.tt < 0.99) {
+      // a gradient on text colours the glyphs; the stroke stays outside them (a copy underneath)
+      if (span.style.webkitTextStroke) {
+        const under = span.cloneNode(true);
+        under.style.color = "transparent";
+        el.appendChild(under);
+        span.style.webkitTextStroke = "";
+      }
+      const inner = document.createElement("span");
+      inner.textContent = node.text;
+      inner.style.backgroundImage = `linear-gradient(${textGrad.rot + 90}deg, ${gradientStops(textGrad, node.tc, 1 - node.tt)})`;
+      inner.style.webkitBackgroundClip = "text";
+      inner.style.backgroundClip = "text";
+      inner.style.color = "transparent";
+      span.textContent = "";
+      span.appendChild(inner);
+    }
     el.appendChild(span);
   }
 }

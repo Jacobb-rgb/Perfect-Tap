@@ -32,7 +32,8 @@ local function pillar(parent: Instance, x: number, z: number, size: number, bott
 	if x - h < -EDGE or x + h > EDGE then
 		return -- keep on the island
 	end
-	Kit.box(parent, Vector3.new(x - h, bottom, z - h), Vector3.new(x + h, top, z + h), color, nil, Style.ghost())
+	-- (no shadows: the spires stand behind the massif, their shadows never reach the town)
+	Kit.box(parent, Vector3.new(x - h, bottom, z - h), Vector3.new(x + h, top, z + h), color, nil, Style.ghost({ CastShadow = false }))
 	Kit.box(
 		parent,
 		Vector3.new(x - h - 0.2, top, z - h - 0.2),

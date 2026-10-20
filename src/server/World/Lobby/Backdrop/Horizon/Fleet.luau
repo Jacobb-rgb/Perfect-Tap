@@ -3,8 +3,9 @@
 	the big ocean liner, a pirate galleon (the kit's ship-large with its
 	sails dyed black and a white skull on the main sail), a container ship,
 	a tug and a houseboat off the port isle, two little sailing boats.
-	Rebuilt from boxes (Blocks + Kenney/*); each one bobs on the swell (tag
-	Spin, SpinSpeed 0; client DecorController). Unreachable decoration. The
+	Rebuilt from boxes (Blocks + Kenney/*); they lie still (perf audit
+	2026-10-18: a bob 400+ studs out is invisible, and moving ~620 parts
+	every frame cost phones more than anything else). Unreachable decoration. The
 	liner is rebuilt by hand from the kit model's measurements (cleaner).
 ]]
 
@@ -152,10 +153,6 @@ local function ship(parent: Instance, spot: Spot, rng: Rng.Rng): Model
 		local p = Place.at(spot.Az, spot.Dist, Place.Sea - Fleet.LinerWaterline * s)
 		local m = liner(parent, Place.heading(p, spot.Heading + rng:range(-3, 3)), spot.Length)
 		m.PrimaryPart = m:FindFirstChild("Keel") :: BasePart
-		m:AddTag("Spin")
-		m:SetAttribute("SpinSpeed", 0)
-		m:SetAttribute("BobHeight", 0.6)
-		m:SetAttribute("BobSpeed", 0.4)
 		return m
 	end
 	local data = model(spot.Model)
@@ -183,7 +180,7 @@ local function ship(parent: Instance, spot: Spot, rng: Rng.Rng): Model
 			end
 		end
 	end
-	-- bob around the biggest block (the hull)
+	-- the biggest block (the hull) is the pivot
 	local hull: BasePart? = nil
 	for _, d in m:GetChildren() do
 		if d:IsA("BasePart") and (not hull or d.Size.Magnitude > (hull :: BasePart).Size.Magnitude) then
@@ -191,10 +188,6 @@ local function ship(parent: Instance, spot: Spot, rng: Rng.Rng): Model
 		end
 	end
 	m.PrimaryPart = hull
-	m:AddTag("Spin")
-	m:SetAttribute("SpinSpeed", 0)
-	m:SetAttribute("BobHeight", math.clamp(spot.Length * 0.008, 0.3, 1))
-	m:SetAttribute("BobSpeed", 0.5 + rng:range(0, 0.3))
 	return m
 end
 

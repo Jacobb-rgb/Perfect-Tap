@@ -72,6 +72,11 @@ local function exportNode(instance): any?
 			table.insert(keys, { k.Time, hex(k.Value) })
 		end
 		node.keys = keys
+		local fade = {}
+		for _, k in instance.Transparency.Keypoints do
+			table.insert(fade, { k.Time, k.Value })
+		end
+		node.tkeys = fade
 		node.rot = instance.Rotation
 	elseif class == "UIListLayout" then
 		node.dir = instance.FillDirection.Name

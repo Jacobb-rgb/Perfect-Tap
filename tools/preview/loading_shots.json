@@ -1,0 +1,77 @@
+{
+  "loading_pc": {
+    "scene": "loading",
+    "position": [
+      0,
+      10,
+      20
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "fov": 60,
+    "ui": "ui_loading_pc"
+  },
+  "loading_start": {
+    "scene": "loading",
+    "position": [
+      0,
+      10,
+      20
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "fov": 60,
+    "ui": "ui_loading_start"
+  },
+  "loading_phone": {
+    "scene": "loading",
+    "position": [
+      0,
+      10,
+      20
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "fov": 60,
+    "ui": "ui_loading_phone"
+  },
+  "loading_phone_small": {
+    "scene": "loading",
+    "position": [
+      0,
+      10,
+      20
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "fov": 60,
+    "ui": "ui_loading_phone_small"
+  },
+  "loading_tv": {
+    "scene": "loading",
+    "position": [
+      0,
+      10,
+      20
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "fov": 60,
+    "ui": "ui_loading_tv"
+  }
+}
