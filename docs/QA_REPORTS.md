@@ -677,9 +677,16 @@ LV 10 as cheap as LV 2 and skip the whole ~8 h curve for ~700 R$.)
   (RebirthConfig.startFor), up to MaxLevel - 1 so one level is always left to forge (otherwise the next rebirth could
   never be earned). The k-th Robux level is always LV k + 1 or higher, so the bands keep their prices across rebirths.
 - The handler never refuses: MonetizationService never acknowledges a receipt without the item, and clients can
-  prompt any product. At the top level or off the product's band it only counts the level (BlastersPaid + 1: the
-  rebirths' start rises; a cheap band never buys a high level now). The store asks VaultService.paidStatus first
-  ("Full" at the top / off band) and greys the card while a purchase is pending; the card says "Kept after a rebirth".
+  prompt any product. At the top level, off the product's band, or while the top level waits (below), its Robux are
+  banked (Stats.BlasterCredit) and buy start lifts only at the band price of the start level they make
+  (VaultService.spendCredit: a client-made 49 R$ prompt never buys a LV 8 start). The store asks
+  VaultService.paidStatus first ("Full" at the top / off band / topBlocked).
+- The top level is never sold while the run has forged no rebirth level (RebirthConfig.topBlocked: the STORE says
+  "Full", the coin Vault "ForgeFirst" with a FOUNDRY button): otherwise nothing is left to forge and the run could never
+  rebirth. A save already stuck at LV 10 that way (the coin Vault, before this) may rebirth for 0 stars.
+- A Robux level on the first run keeps the levels the first-run grace counted (RunForged = the level before it); only
+  the bought levels pay nothing. Head Start is not sold once the Robux levels already start the blaster at LV 9.
+- Integrator review 2026-10-20 (#1 high, #2, #3, #5, #6, #15) fixed; the crate opening closes every panel (the STORE).
 What to test in Studio (with test product ids):
 1. Buy BlasterNextA at LV 2: LV 3 with the crate opening, coins unchanged.
 2. At LV 10: the card is hidden; a forced prompt is counted with a thank-you toast, and the next rebirths start one

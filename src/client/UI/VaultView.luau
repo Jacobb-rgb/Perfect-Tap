@@ -3,7 +3,9 @@
 	counter). Pure builders (only Instance creation), so the Lune preview
 	draws it with the same code.
 
-	One card per blaster level 2..10 (+ level 11 "Coming soon"): the weapon
+	One card per blaster level 2..10 (+ "STAR BLASTERS": the Star Forge's
+	weapons above them, REBIRTH tells where; the top level says FOUNDRY
+	while a rebirth run hasn't forged its level, "ForgeFirst"): the weapon
 	case drawn in its ore colours, LV, the blaster's name, its damage, the
 	price and one button: BUY on your next level (greyed with the price in
 	red while you can't afford it), OWNED below it, LOCKED above it. You can
@@ -28,6 +30,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
 local UIConfig = require(Shared.Config.UIConfig)
@@ -85,6 +88,8 @@ VaultView.ReasonText = {
 	Owned = "You have this blaster already",
 	Locked = "Buy the level before it first",
 	Max = "You have the best blaster!",
+	ForgeFirst = "Forge LV 10 at the Foundry: a rebirth needs one forged level",
+	StarForge = "Star blasters wait in the Star Forge after a rebirth",
 	NoCoins = "Not enough coins",
 	TooFar = "Walk back to the counter",
 	BadLevel = "That case isn't for sale",
@@ -116,9 +121,11 @@ export type Card = {
 
 --[[
 	The cards for a player at blaster `level` with `coins` (the same rules as
-	VaultService.refusal: only the next level, coins only).
+	VaultService.refusal: only the next level, coins only; `reached` = the
+	State's Rebirth.Reached: the top level waits for the Foundry while it is
+	short, "ForgeFirst").
 ]]
-function VaultView.cards(level: number, coins: number): { Card }
+function VaultView.cards(level: number, coins: number, reached: number?): { Card }
 	local current = BlasterData.get(level).Level
 	local list: { Card } = {}
 	for lv = VaultView.FirstLevel, BlasterData.MaxLevel do
@@ -130,6 +137,8 @@ function VaultView.cards(level: number, coins: number): { Card }
 			reason = "Owned"
 		elseif state == "Locked" then
 			reason = "Locked"
+		elseif reached and RebirthConfig.topBlockedFor(current, reached) then
+			reason = "ForgeFirst"
 		elseif not price or coins < price then
 			reason = "NoCoins"
 		end
@@ -149,12 +158,12 @@ function VaultView.cards(level: number, coins: number): { Card }
 		table.insert(list, {
 			Level = soon.Level,
 			Ore = "",
-			Name = "Coming soon",
+			Name = "Star blasters",
 			Damage = 0,
 			Price = nil,
 			State = "Soon",
 			CanBuy = false,
-			Reason = if current >= BlasterData.MaxLevel then "Max" else "Locked",
+			Reason = "StarForge",
 		})
 	end
 	return list
@@ -167,7 +176,9 @@ function VaultView.buttonText(card: Card): string
 	elseif card.State == "Locked" then
 		return "LOCKED"
 	elseif card.State == "Soon" then
-		return "SOON"
+		return "REBIRTH"
+	elseif card.Reason == "ForgeFirst" then
+		return "FOUNDRY"
 	end
 	return "BUY"
 end
@@ -1025,11 +1036,11 @@ function VaultView.fillTile(tile: Tile, card: Card, g: Grid?)
 		end
 	end
 	tile.Lv.Text = "LV " .. card.Level
-	tile.Name.Text = if card.State == "Soon" then "???" else card.Name
+	tile.Name.Text = if card.State == "Soon" then "STAR BLASTERS" else card.Name
 	-- long names ("Heartstone Shard Heartlance") get smaller to stay on 2 lines
 	local nameMax = if g then g.Slots.NameSize else 16
 	TechShopView.fitText(tile.Name, tile.Name.Size.X.Offset, tile.Name.Size.Y.Offset, nameMax, math.floor(nameMax * 0.7))
-	tile.Damage.Text = if card.State == "Soon" then "Coming soon" else Format.big(card.Damage) .. " DMG/s"
+	tile.Damage.Text = if card.State == "Soon" then "In the Star Forge" else Format.big(card.Damage) .. " DMG/s"
 	local priced = card.Price ~= nil and card.State ~= "Owned"
 	tile.PriceRow.Visible = priced
 	tile.Price.Text = if card.Price then Format.money(card.Price) else ""

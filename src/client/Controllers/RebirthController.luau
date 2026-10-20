@@ -63,7 +63,7 @@ local STARS_ATTRIBUTE = "ForgeStars" -- RebirthService.StarsAttribute
 RebirthController.StarDistance = 80
 RebirthController.Reasons = {
 	Locked = `Reach blaster LV {RebirthConfig.MinBlaster} first.`,
-	NotForged = `Forge blaster LV {RebirthConfig.MinBlaster} at the Foundry first.`,
+	NotForged = "Forge your next blaster level at the Foundry first.", -- (the window says which: RebirthView.forgeText)
 	Busy = "Not right now: finish your ride or the rebirth on its way.",
 	Failed = "The rebirth didn't go through. Nothing changed, try again.",
 	NoStars = "Not enough Forge Stars yet.",
@@ -165,7 +165,10 @@ local function onRebirthPressed()
 	if not view or not info.Ready then
 		if view then
 			local reason = if info.Level >= RebirthConfig.MinBlaster then "NotForged" else "Locked"
-			RebirthView.setMessage(view, RebirthController.Reasons[reason])
+			RebirthView.setMessage(
+				view,
+				if reason == "NotForged" then RebirthView.forgeText(info.Level) else RebirthController.Reasons[reason]
+			)
 		end
 		Sfx.play("UIClick")
 		return
@@ -385,7 +388,10 @@ local function onResult(result: any)
 			RebirthController.close()
 			moment(tonumber(result.Rebirths) or 1, tonumber(result.Stars) or 0)
 		elseif view then
-			RebirthView.setMessage(view, RebirthController.Reasons[result.Reason] or "Not now.")
+			local text = if result.Reason == "NotForged"
+				then RebirthView.forgeText(info.Level)
+				else RebirthController.Reasons[result.Reason]
+			RebirthView.setMessage(view, text or "Not now.")
 		end
 	elseif result.Action == "Glow" then
 		if not result.Ok then

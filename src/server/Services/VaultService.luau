@@ -26,12 +26,17 @@
 	stars only for Foundry-forged levels) and the crate opening plays
 	(VaultResult Paid = true). Every Robux level comes back at every later
 	rebirth (RebirthConfig.startFor lifts the fresh blaster one level per
-	BlastersPaid, up to MaxLevel - 1). It never refuses (the receipt would
-	come back forever and the player paid for nothing): at the top level, or
-	when the next level isn't in the product's band (a stale or client-made
-	prompt), the level is only counted (BlastersPaid + 1: it lifts the next
-	rebirths' start; a cheap band never buys a high level now). Never coins.
-	The store asks paidStatus first ("Full" at the top / off-band).
+	BlastersPaid, up to MaxLevel - 1). On the first run the levels the grace
+	counted so far stay counted (RunForged), only the bought ones pay no
+	stars. The top level is never sold while this run has forged no rebirth
+	level (RebirthConfig.topBlocked: the coin Vault says "ForgeFirst"), or
+	nothing would be left to forge. It never refuses (the receipt would come
+	back forever and the player paid for nothing): at the top level, off the
+	product's band (a stale or client-made prompt) or while the top level
+	waits, the Robux it cost are banked (Stats.BlasterCredit) and buy start
+	lifts only at the band price of the start level they make (spendCredit:
+	a cheap band never buys a high start). Never coins. The store asks
+	paidStatus first ("Full" at the top / off-band / topBlocked).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -39,6 +44,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
@@ -53,7 +60,7 @@ VaultService.Tag = "VaultCounter"
 VaultService.PromptName = "VaultShopPrompt"
 VaultService.PointName = "VaultShopPromptPoint"
 
-VaultService.Reasons = { "BadLevel", "Owned", "Locked", "Max", "TooFar", "NoCoins", "NoData" }
+VaultService.Reasons = { "BadLevel", "Owned", "Locked", "Max", "ForgeFirst", "TooFar", "NoCoins", "NoData" }
 
 local PROMPT_DISTANCE = 12
 local MAX_PAYLOAD = 4
@@ -96,9 +103,11 @@ end
 
 --[[
 	Why `level` can't be bought by a player at `current` with `coins`, or nil
-	when it can (pure: the client's cards use it too).
+	when it can (pure: the client's cards use it too). `reached` = the level
+	this rebirth run counts (RebirthConfig.reachedOf): the top level waits for
+	the Foundry while it is short ("ForgeFirst": RebirthConfig.topBlockedFor).
 ]]
-function VaultService.refusal(level: number, current: number, coins: number): string?
+function VaultService.refusal(level: number, current: number, coins: number, reached: number?): string?
 	if current >= BlasterData.MaxLevel and level > current then
 		return "Max"
 	end
@@ -110,6 +119,8 @@ function VaultService.refusal(level: number, current: number, coins: number): st
 		return "Owned"
 	elseif level > current + 1 then
 		return "Locked"
+	elseif reached and RebirthConfig.topBlockedFor(current, reached) then
+		return "ForgeFirst"
 	elseif coins < price then
 		return "NoCoins"
 	end
@@ -127,7 +138,7 @@ function VaultService.buy(player: Player, level: number): (boolean, string?)
 		return false, "NoData"
 	end
 	local current = levelOf(data)
-	local reason = VaultService.refusal(level, current, EconomyService.balance(player))
+	local reason = VaultService.refusal(level, current, EconomyService.balance(player), RebirthConfig.reachedOf(data))
 	if reason then
 		return false, reason
 	end
@@ -164,6 +175,11 @@ function VaultService.grantNext(player: Player, data: { [string]: any }, source:
 		data.Stats = stats
 	end
 	if source == "Robux" then
+		-- the first run's grace counted the blaster as it was: keep those levels
+		-- (only the bought ones pay nothing)
+		if RebirthConfig.countOf(data) == 0 and stats.RunPaid ~= true then
+			stats.RunForged = math.max(whole(stats.RunForged), current)
+		end
 		stats.BlastersPaid = whole(stats.BlastersPaid) + 1
 		stats.RunPaid = true
 	else
@@ -174,7 +190,8 @@ function VaultService.grantNext(player: Player, data: { [string]: any }, source:
 end
 
 -- What the STORE answers before prompting a "BlasterLevel" product: "Prompt"
--- when its band holds the player's next level, else "Full" (MonetizationConfig.promptStatus).
+-- when its band holds the player's next level, else "Full" (MonetizationConfig.promptStatus;
+-- also while the top level must be forged first: RebirthConfig.topBlocked).
 function VaultService.paidStatus(data: any, entry: any): string
 	if type(data) ~= "table" or type(entry) ~= "table" then
 		return "Full"
@@ -183,10 +200,49 @@ function VaultService.paidStatus(data: any, entry: any): string
 	local nextLevel = current + 1
 	local lo = tonumber(entry.MinLevel) or 2
 	local hi = tonumber(entry.MaxLevel) or BlasterData.MaxLevel
-	if current >= BlasterData.MaxLevel or nextLevel < lo or nextLevel > hi then
+	if current >= BlasterData.MaxLevel or nextLevel < lo or nextLevel > hi or RebirthConfig.topBlocked(data) then
 		return "Full"
 	end
 	return "Prompt"
+end
+
+-- The "BlasterLevel" product whose band holds `level` (MonetizationConfig, the STORE's bands).
+local function bandFor(level: number): MonetizationConfig.Entry?
+	for _, entry in MonetizationConfig.list("Product") do
+		local band: any = entry
+		local lo = tonumber(band.MinLevel) or 2
+		local hi = tonumber(band.MaxLevel) or BlasterData.MaxLevel
+		if entry.Grant == "BlasterLevel" and level >= lo and level <= hi then
+			return entry
+		end
+	end
+	return nil
+end
+
+--[[
+	Turns banked Robux (Stats.BlasterCredit) into rebirth start lifts while it
+	covers the band price of the start level the next lift makes
+	(RebirthConfig.startFor + 1, up to MaxLevel - 1): a cheap band never buys
+	a high start. Returns the lifts added.
+]]
+function VaultService.spendCredit(data: { [string]: any }): number
+	local stats = data.Stats
+	if type(stats) ~= "table" then
+		return 0
+	end
+	local lifts = 0
+	while true do
+		local target = RebirthConfig.startFor(data) + 1
+		local band = if target <= BlasterData.MaxLevel - 1 then bandFor(target) else nil
+		local price = if band then whole(band.Robux) else 0
+		if price <= 0 or whole(stats.BlasterCredit) < price then
+			break
+		end
+		stats.BlasterCredit = whole(stats.BlasterCredit) - price
+		stats.BlastersPaid = whole(stats.BlastersPaid) + 1
+		lifts += 1
+	end
+	return lifts
 end
 
 local function answer(player: Player, level: number, ok: boolean, reason: string?, paid: boolean?)
@@ -203,8 +259,9 @@ end
 
 --[[
 	The "BlasterLevel" receipt handler (MonetizationService.register): the
-	next level when the product's band holds it, else the level only counted (see
-	the header). Never refuses a loaded save; no yield.
+	next level when the product's band holds it, else its Robux banked as
+	start-lift credit (spendCredit; see the header). Never refuses a loaded
+	save; no yield.
 ]]
 local function grantPaid(player: Player, data: { [string]: any }, entry: any): boolean
 	if DataService.get(player) ~= data then
@@ -220,12 +277,15 @@ local function grantPaid(player: Player, data: { [string]: any }, entry: any): b
 		stats = {}
 		data.Stats = stats
 	end
-	stats.BlastersPaid = whole(stats.BlastersPaid) + 1
+	-- off band / at the top / the top level waits for the Foundry: the Robux it cost are banked
+	-- and buy rebirth start lifts at the band prices (spendCredit)
+	stats.BlasterCredit = whole(stats.BlasterCredit) + whole(entry.Robux)
+	local lifts = VaultService.spendCredit(data)
 	DataService.changed(player)
-	Net.fire("Notify", player, {
-		Text = "Thank you! Your blaster is past this level, so it waits for your rebirths: each one starts your new blaster a level higher.",
-		Kind = "Reward",
-	})
+	local text = if lifts > 0
+		then `Thank you! Every rebirth now starts your new blaster at LV {RebirthConfig.startFor(data)}.`
+		else "Thank you! It is saved as credit: it lifts the blaster your rebirths start with."
+	Net.fire("Notify", player, { Text = text, Kind = "Reward" })
 	return true
 end
 

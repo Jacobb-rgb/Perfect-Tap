@@ -7,7 +7,11 @@
 	  this run (reachedOf: Stats.RunForged, which FoundryService raises and
 	  the reset clears; the first run counts the blaster level as it is,
 	  unless a level was bought with Robux in it: Stats.RunPaid, set by
-	  VaultService.grantNext "Robux" and by a start the Robux levels lift).
+	  VaultService.grantNext "Robux" (which first keeps the levels the grace
+	  counted so far in RunForged) and by a start the Robux levels lift).
+	  The top level is left to the Foundry while nothing was forged
+	  (topBlocked: the Vault says "ForgeFirst", the STORE "Full"), and a save
+	  that still got there unforged may rebirth for starsFor(reachedOf) (0).
 	  Vault cases are bought with coins only, and Podium Keeper keeps the
 	  income: counting them would make the stars a few minutes of idle
 	  income each. Rebirth is never forced, never sold for Robux, and
@@ -258,9 +262,13 @@ function RebirthConfig.starsOf(data: any): number
 end
 
 -- The cost of buying the next level of `id` for this save, or nil + "BadPerk" | "Max" | "NoStars".
+-- (Head Start is "Max" once the Robux levels already lift the start to MaxLevel - 1: it would add nothing.)
 function RebirthConfig.quote(data: any, id: any): (number?, string?)
 	if type(id) ~= "string" or not RebirthConfig.ById[id] then
 		return nil, "BadPerk"
+	end
+	if id == "HeadStart" and RebirthConfig.startFor(data) >= BlasterData.MaxLevel - 1 then
+		return nil, "Max"
 	end
 	local perks = if type(data) == "table" then data.StarPerks else nil
 	local cost = RebirthConfig.nextCost(perks, id)
@@ -393,13 +401,30 @@ function RebirthConfig.canRebirth(data: any): (boolean, string?)
 	if type(data) ~= "table" then
 		return false, "NoData"
 	end
-	if BlasterData.get(data.BlasterLevel).Level < RebirthConfig.MinBlaster then
+	local level = BlasterData.get(data.BlasterLevel).Level
+	if level < RebirthConfig.MinBlaster then
 		return false, "Locked"
 	end
-	if RebirthConfig.reachedOf(data) < RebirthConfig.MinBlaster then
+	-- (at the top level nothing is left to forge: a save that got there unforged (Vault
+	-- cases before topBlocked existed) may rebirth for starsFor(reachedOf), 0 stars)
+	if RebirthConfig.reachedOf(data) < RebirthConfig.MinBlaster and level < BlasterData.MaxLevel then
 		return false, "NotForged"
 	end
 	return true, nil
+end
+
+-- Would buying the next blaster level (Vault coins, Robux) make the top level with no
+-- rebirth level forged this run? Then nothing would be left to forge and the run could
+-- never rebirth with stars: the Vault and the STORE leave that level to the Foundry.
+function RebirthConfig.topBlockedFor(level: number, reached: number): boolean
+	return level + 1 == BlasterData.MaxLevel and reached < RebirthConfig.MinBlaster
+end
+
+function RebirthConfig.topBlocked(data: any): boolean
+	if type(data) ~= "table" then
+		return false
+	end
+	return RebirthConfig.topBlockedFor(BlasterData.get(data.BlasterLevel).Level, RebirthConfig.reachedOf(data))
 end
 
 local function record(data: { [string]: any }, key: string): { [string]: any }

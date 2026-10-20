@@ -26,8 +26,9 @@ return function(T, Loader)
 
 	T.test("VaultView: the cards follow the server's rules", function()
 		for current = 1, BlasterData.MaxLevel do
-			for _, coins in { 0, 1e5, 1e15 } do
-				local cards = VaultView.cards(current, coins)
+			for _, case in { { 0 }, { 1e5 }, { 1e15 }, { 1e15, 0 }, { 1e15, 9 } } do
+				local coins, reached = case[1], case[2]
+				local cards = VaultView.cards(current, coins, reached)
 				T.eq(#cards, BlasterData.MaxLevel - VaultView.FirstLevel + 2, "levels 2..10 + coming soon")
 				local nexts = 0
 				for _, card in cards do
@@ -35,7 +36,7 @@ return function(T, Loader)
 						T.falsy(card.CanBuy, "coming soon can't be bought")
 						continue
 					end
-					local expected = VaultService.refusal(card.Level, current, coins)
+					local expected = VaultService.refusal(card.Level, current, coins, reached)
 					T.eq(card.CanBuy, expected == nil, string.format("LV %d at %d with %d", card.Level, current, coins))
 					if expected and expected ~= "Max" then
 						T.eq(card.Reason, expected, "same reason as the server")
@@ -48,13 +49,23 @@ return function(T, Loader)
 					end
 					T.eq(
 						VaultView.buttonText(card),
-						if card.State == "Owned" then "OWNED" elseif card.State == "Locked" then "LOCKED" else "BUY",
+						if card.State == "Owned"
+							then "OWNED"
+							elseif card.State == "Locked" then "LOCKED"
+							elseif card.Reason == "ForgeFirst" then "FOUNDRY"
+							else "BUY",
 						"button text"
 					)
 				end
 				T.eq(nexts, if current < BlasterData.MaxLevel then 1 else 0, "one NEXT card")
 			end
 		end
+		-- the top level waits for the Foundry while a rebirth run has forged no rebirth level
+		local top = VaultView.cards(BlasterData.MaxLevel - 1, 1e15, 0)
+		T.eq(top[#top - 1].Reason, "ForgeFirst")
+		T.eq(VaultView.buttonText(top[#top - 1]), "FOUNDRY")
+		T.eq(top[#top].Reason, "StarForge", "the last card points to the Star Forge")
+		T.eq(VaultView.buttonText(top[#top]), "REBIRTH")
 		T.eq(VaultView.reasonText("NoCoins"), "Not enough coins", "reason text")
 		T.truthy(#VaultView.reasonText("???") > 0, "unknown reasons still say something")
 	end)
