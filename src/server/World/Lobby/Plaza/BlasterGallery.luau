@@ -75,11 +75,23 @@ end
 ]]
 -- display detail: smaller solid bits than this (studs, after fitting) are left out (glowing ones stay)
 BlasterGallery.MinDetail = 0.25
+-- the Ore Glow skins' near-black bodies vanish against the dark plaques in the hall: on display the
+-- solid parts lean this far toward the ore's body color and are never darker than DisplayMinValue
+BlasterGallery.DisplayTint = 0.65
+BlasterGallery.DisplayMinValue = 0.78
+
+-- A solid part's color on display (`body` = the ore's body color, BlasterBuilder.look).
+function BlasterGallery.displayColor(color: Color3, body: Color3): Color3
+	local hue, sat, value = color:Lerp(body, BlasterGallery.DisplayTint):ToHSV()
+	return Color3.fromHSV(hue, sat, math.max(value, BlasterGallery.DisplayMinValue))
+end
 
 function BlasterGallery.gun(parent: Instance, cf: CFrame, level: number, oreId: string, length: number, height: number): Model
 	local model = BlasterGallery.fit(parent, Stage.blasterModel(level, oreId), cf, length, height)
 	-- display detail (the guns hang 6-10 studs from the eye): the invisible hand and effect
 	-- holders and the tiniest solid bevels go; every glowing part (rim, cracks, stars, crystals) stays
+	-- and the solid ones take the ore's color, so the guns read as colored shapes from the door
+	local body = BlasterBuilder.look(level, oreId).Body
 	local drop: { BasePart } = {}
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -88,6 +100,8 @@ function BlasterGallery.gun(parent: Instance, cf: CFrame, level: number, oreId: 
 				d.Transparency >= 0.99 or (d.Material ~= Enum.Material.Neon and math.max(size.X, size.Y, size.Z) < BlasterGallery.MinDetail)
 			then
 				table.insert(drop, d)
+			elseif d.Material ~= Enum.Material.Neon then
+				d.Color = BlasterGallery.displayColor(d.Color, body)
 			end
 		end
 	end
