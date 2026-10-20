@@ -10,7 +10,7 @@
 	  income: counting them would make the stars a few minutes of idle
 	  income each. Rebirth is never forced, never sold for Robux, and
 	  nothing in it is random.
-	- Resets (reset(), one step on the save): coins, the blaster (level 1, or
+	- Resets (reset(), one step on the save): the earned coins, the blaster (level 1, or
 	  Head Start's level in that level's Vault look), the mine floors with it
 	  (MineFloors opens them by blaster level) and the elevator, the machine
 	  speed (Bellows and every Tech shop Speed / Quality level), the train's
@@ -25,15 +25,18 @@
 	- Keeps: the placed factory (every machine and belt where it stands), the
 	  machines in your inventory, machine slots, the pen size and automation,
 	  the other gear lines, golems, enchants, artifacts, the codex,
-	  hoverboards, shards, every Robux item, stats and the leaderboard totals.
+	  hoverboards, shards, every Robux item, the unspent Robux-bought coins
+	  (PaidCoins, below), stats and the leaderboard totals.
 	- Pays: starsFor(reachedOf), Rebirths + 1. Stats.BestBlaster keeps the
 	  highest level ever reached: coin prices that grow with the blaster
 	  follow it (BlasterData.priceLevel), so a rebirth never makes capsules
 	  or coin boosts cheaper.
-	- Coins bought with a Robux coin pack are plain coins: a rebirth resets
-	  them like any coins. The packs are off today (MonetizationConfig
-	  CoinPacksEnabled); whether a rebirth should keep bought coins is the
-	  owner's call if they are ever enabled (docs/QA_REPORTS.md).
+	- Coins bought with a Robux coin pack stay while unspent (owner
+	  2026-10-20): data.PaidCoins counts them (0 <= PaidCoins <= Coins;
+	  PodiumService's CoinPack grant adds to it, EconomyService.spend spends
+	  them last, Migrations repairs it) and reset() keeps exactly
+	  Coins = PaidCoins = min(PaidCoins, Coins). The packs are off today
+	  (MonetizationConfig CoinPacksEnabled).
 
 	Stars follow the blaster prices (the machines chat recalibrates them):
 	MinStars at MinBlaster, MaxStars at the top level, and in between by how

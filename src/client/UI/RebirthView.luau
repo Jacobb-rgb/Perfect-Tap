@@ -120,6 +120,7 @@ function RebirthView.lists(perks: any): { [string]: { string } }
 			"🏺  Artifacts and codex",
 			"🛹  Boards and gear",
 			"💎  Shards, Robux items",
+			"💰  Coins bought with Robux",
 			"🏆  Stats and records",
 		},
 		Get = {
