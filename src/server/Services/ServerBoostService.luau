@@ -5,8 +5,9 @@
 	says "while it runs").
 
 	- The "ServerBoost" receipt handler (MonetizationService.register)
-	  extends LuckUntil by the product's Seconds, stacking, at most
-	  MaxSeconds ahead, and thanks the buyer in a server-wide Notify.
+	  extends LuckUntil by the product's Seconds, stacking and never cut (a
+	  paid receipt always gets its time); MaxSeconds is only the Store's
+	  prompt-time "Full" (full()). It thanks the buyer in a server-wide Notify.
 	  MonetizationService writes the buyer's PurchaseLog as for every grant.
 	- The effect is a Bonuses provider "ServerLuck": OreLuckMult x2 while it
 	  runs. OreLuckMult is capped at x2.5 (StatConfig), the same stat Hexa
@@ -108,11 +109,13 @@ local function plan()
 	end)
 end
 
--- Adds `seconds` of Server Luck (capped at MaxSeconds ahead). Returns the seconds left.
-function ServerBoostService.extend(seconds: number, buyer: Player?): number
+-- Adds `seconds` of Server Luck. A paid receipt is never cut (`uncapped`: two
+-- prompts racing near the cap both get their full time); otherwise at most
+-- MaxSeconds ahead. Returns the seconds left.
+function ServerBoostService.extend(seconds: number, buyer: Player?, uncapped: boolean?): number
 	local now = clock()
 	local start = math.max(now, luckUntil)
-	luckUntil = math.min(start + seconds, now + ServerBoostService.MaxSeconds)
+	luckUntil = if uncapped then start + seconds else math.min(start + seconds, now + ServerBoostService.MaxSeconds)
 	publish(now)
 	if buyer then
 		share(ServerBoostService.ByAttribute, buyer.DisplayName)
@@ -128,7 +131,7 @@ local function grantServerBoost(player: Player, _data: { [string]: any }, entry:
 	if entry.ServerBoost ~= "Luck" or type(seconds) ~= "number" or seconds <= 0 then
 		return false
 	end
-	local left = ServerBoostService.extend(seconds, player)
+	local left = ServerBoostService.extend(seconds, player, true)
 	Net.fireAll("Notify", {
 		Text = `Server Luck x{ServerBoostService.Mult}: {math.ceil(left / 60)} min for everyone. Thanks, {player.DisplayName}!`,
 		Kind = "Reward",

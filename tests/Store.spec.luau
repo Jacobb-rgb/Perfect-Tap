@@ -37,6 +37,13 @@ return function(T, Loader)
 			T.truthy(StoreConfig.sells(key), key .. " is sold")
 		end
 		T.falsy(StoreConfig.sells("Nope"), "unknown key")
+		-- (review #12) the pass opens the Glimmer Grotto: its odds show before the buy
+		T.truthy(StoreConfig.ById.BigPass.Odds, "the Forgemaster's Pass card shows the Grotto odds first")
+		-- (review #4/#11) the blaster texts say what a rebirth really does
+		for _, key in { "BlasterNextA", "BlasterNextB", "BlasterNextC", "BlasterNextD" } do
+			T.truthy(string.find(MonetizationConfig.get(key).Description, "1 level higher", 1, true) ~= nil, key .. " text")
+		end
+		T.eq(StoreConfig.ById.Blaster.Note, "+1 start LV every rebirth")
 		T.falsy(StoreConfig.sells(42), "junk")
 		T.truthy(MonetizationConfig.CoinPacksDefault, "coin packs ship on (owner)")
 		local spec = StoreConfig.ById.Blaster
@@ -197,10 +204,13 @@ return function(T, Loader)
 				ServerBoostService.extend(900, nil)
 			end
 			T.eq(ServerBoostService.left(), ServerBoostService.MaxSeconds, "capped")
+			-- (review #13) a receipt that lands at the cap still gets its full 15 minutes
+			ServerBoostService._test.grant(buyer, {}, entry)
+			T.eq(ServerBoostService.left(), ServerBoostService.MaxSeconds + 900, "a paid receipt is never cut")
 			local stats = Bonuses.compute(deepCopy(DataTemplate), now, nil)
 			T.eq(stats.OreLuckMult, ServerBoostService.Mult, "x2 ore luck while it runs")
 			-- the clock runs past the end: the last timer ends it
-			now += ServerBoostService.MaxSeconds + 1
+			now += ServerBoostService.MaxSeconds + 901
 			for _, timer in timers do
 				timer.Fn()
 			end

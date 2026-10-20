@@ -269,6 +269,35 @@ return function(T, Loader)
 		end)
 	end)
 
+	-- (review #16) the Shop pill never sits under the TRAIN chip (its own gui, under the
+	-- Roblox top bar, drawn over the HUD) nor on the menu tiles, on PC screens and phones
+	T.test("LightUI: the Shop pill clear of the TRAIN chip and the menu", function()
+		local HudBubble = ui("HudBubble")
+		local TrainView = ui("TrainView")
+		withLight(function()
+			for _, screen in {
+				{ 1280, 720, 58 },
+				{ 1920, 1080, 58 },
+				{ 1920, 1010, 58 },
+				{ 1440, 900, 58 },
+				{ 667, 375, 58 },
+				{ 568, 320, 58 },
+			} do
+				local viewport = Vector2.new(screen[1], screen[2])
+				local scale = HudBubble.scaleFor(viewport)
+				local refs = HudBubble.buildGame(scale, screen[1] / scale)
+				local height = screen[2] / scale
+				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
+				local pillTop = height * pill.Position.Y.Scale + pill.Position.Y.Offset - pill.Size.Y.Offset
+				local chipBottom = screen[3] / scale + TrainView.ChipTop + 66
+				T.truthy(pillTop > chipBottom, `pill under the TRAIN chip at {screen[1]} x {screen[2]}`)
+				local menu = refs.Menu
+				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
+				T.truthy(pillTop > menuBottom, `pill under the menu tiles at {screen[1]} x {screen[2]}`)
+			end
+		end)
+	end)
+
 	T.test("LightUI: on a small phone the Shop pill, the tabs, the money and the hotbar don't meet", function()
 		local HudBubble = ui("HudBubble")
 		withLight(function()

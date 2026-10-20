@@ -55,6 +55,28 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
+	-- the TRAIN and boost chips over the HUD (TrainController / BoostController place them)
+	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
+	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+	local NOW = 1.7e9
+	local function chips(renderScale: number, compact: boolean, designW: number, designH: number): { any }
+		local train = TrainView.build(compact)
+		train.Chip.Scale.Scale = renderScale
+		train.Gui.Scale.Scale = renderScale
+		TrainView.layout(train, compact, designW, designH)
+		train.ChipKey.Visible = not compact
+		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
+		train.Gui.Enabled = false
+		train.Chip.Enabled = true
+		local boost = BoostView.buildChips()
+		boost.Gui.Scale.Scale = renderScale
+		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact))
+		local state = { Boosts = { TripleLuckyUntil = NOW + 222 } }
+		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
+		boost.Gui.Enabled = true
+		return { train.Chip, boost.Gui }
+	end
+
 	local exports: { [string]: any } = {}
 	local pcW, pcH = 1600 / scale, (900 - 36) / scale
 	exports.ui_store_pc = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH).Gui })
@@ -78,6 +100,27 @@ function Preview.build(Loader: any): { [string]: any }
 	end
 	StoreView.showDetail(odds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Glow = "Red" })
 	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
+	-- the HUD with a train (review #16: the Shop pill clear of the TRAIN chip) and Server Luck on
+	local function hudWithChips(uiScale: number, compact: boolean, w: number, h: number): { any }
+		local refs = hud(uiScale)
+		local luck = refs.Gui:FindFirstChild("ServerLuck")
+		if luck then
+			luck.Text = "🍀 Server Luck x2 · 14:32 · thanks Kuba"
+			luck.Visible = true
+		end
+		local list = { refs.Gui }
+		for _, gui in chips(uiScale, compact, w, h) do
+			table.insert(list, gui)
+		end
+		return list
+	end
+	exports.ui_store_hud_pc = UiExport.export(hudWithChips(scale, false, pcW, pcH))
+	exports.ui_store_hud_phone = UiExport.export(hudWithChips(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale))
+	-- the odds panel on a phone (compact sizes)
+	local phoneOdds = store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, 1580)
+	StoreView.layout(phoneOdds, 1600 / phoneScale, (900 - 58) / phoneScale, true)
+	StoreView.showDetail(phoneOdds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Glow = "Red" })
+	exports.ui_store_phone_odds = UiExport.export({ hud(phoneScale).Gui, phoneOdds.Gui })
 	exports.ui_store_phone = UiExport.export({
 		hud(phoneScale).Gui,
 		store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale).Gui,

@@ -273,7 +273,7 @@ What Terra Forge sells (design v2; the source of truth is
 | Triple Lucky 15 min / 1 h | Developer products | `TripleLucky15/60` | Capsule odds: the rarest golems x3 | **Yes** (odds booster) |
 | Hexa Lucky 15 min / 1 h | Developer products | `HexaLucky15/60` | Ore luck x2.5 (Rare x2.5 … Mythic x9.9 weight) | **Yes** (odds booster) |
 | Coin packs (19 / 49 / 99 / 249 / 499 R$) | Developer products | `CoinsSmall/Medium/Large/Huge/Mega` | Coins: minutes of the player's podium income (on: `CoinPacksEnabled = true`; bought coins survive a rebirth, `PaidCoins`) | No, but they make coin capsules and coin boosts paid random items |
-| Next Blaster (49 / 99 / 199 / 399 R$) | Developer products | `BlasterNextA/B/C/D` | The next blaster level, by price band (kept after a rebirth; never pays Forge Stars) | No |
+| Next Blaster (49 / 99 / 199 / 399 R$) | Developer products | `BlasterNextA/B/C/D` | The next blaster level, by price band (each bought level starts every later rebirth's blaster 1 level higher, up to LV 9; never pays Forge Stars) | No |
 | Server Luck 15 min (49 R$) | Developer product | `ServerLuck15` | x2 ore luck for everyone on the server while it runs | **Yes** (odds booster) |
 
 **TODO:** set prices, write descriptions and upload icons. Pass and

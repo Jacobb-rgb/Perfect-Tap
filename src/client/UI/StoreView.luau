@@ -310,7 +310,12 @@ function StoreView.build(): Refs
 	UIKit.new("UIScale", { Name = "FitScale", Scale = 1 }, holder)
 	local size = StoreView.windowSize(1280, 720)
 	local window = Card.window(holder, StoreConfig.Title, size, StoreView.Header)
+	-- a gamepad selection never wanders out to the HUD
 	window.Root.SelectionGroup = true
+	window.Root.SelectionBehaviorUp = Enum.SelectionBehavior.Stop
+	window.Root.SelectionBehaviorDown = Enum.SelectionBehavior.Stop
+	window.Root.SelectionBehaviorLeft = Enum.SelectionBehavior.Stop
+	window.Root.SelectionBehaviorRight = Enum.SelectionBehavior.Stop
 	local canvas = StoreView.canvasSize()
 	local scroller = UIKit.new("ScrollingFrame", {
 		Name = "Cards",
@@ -347,16 +352,36 @@ function StoreView.build(): Refs
 		ZIndex = 3,
 	})
 
-	-- the odds panel (paid random items show their odds before the buy)
+	-- the odds panel (paid random items show their odds before the buy); a
+	-- dim blocker under it keeps taps and the D-pad off the cards behind
+	local blocker = UIKit.new("TextButton", {
+		Name = "Blocker",
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Text = "",
+		Selectable = false,
+		Visible = false,
+		ZIndex = 19,
+	}, window.Body)
+	UIKit.corner(blocker, CardTheme.CardCorner)
 	local detail = UIKit.new("Frame", {
 		Name = "Detail",
+		Active = true,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = CardTheme.Card,
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(520, 380),
+		Size = UDim2.fromOffset(560, 420),
 		Visible = false,
 		ZIndex = 20,
+		SelectionGroup = true,
+		SelectionBehaviorUp = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorDown = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
+		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, window.Body)
 	UIKit.corner(detail, CardTheme.CardCorner)
 	local detailEdge = UIKit.new("UIStroke", { Color = CardTheme.Glows.Purple.Edge, Thickness = CardTheme.EdgeThickness }, detail)
@@ -366,10 +391,24 @@ function StoreView.build(): Refs
 		Size = UDim2.new(1, 0, 0, 36),
 		ZIndex = 21,
 	})
-	local detailLines = Card.text(detail, "", 17, {
-		Name = "Lines",
+	-- the odds can run long (Triple Lucky: every capsule): they scroll
+	local linesScroll = UIKit.new("ScrollingFrame", {
+		Name = "LinesScroll",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(24, 58),
-		Size = UDim2.new(1, -48, 1, -140),
+		Size = UDim2.new(1, -40, 1, -140),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 8,
+		ScrollBarImageColor3 = CardTheme.InkSoft,
+		ZIndex = 21,
+	}, detail)
+	local detailLines = Card.text(linesScroll, "", 17, {
+		Name = "Lines",
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, -12, 0, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		ZIndex = 21,
@@ -414,14 +453,36 @@ function StoreView.build(): Refs
 	return refs
 end
 
--- Fits the window into a w x h design-unit screen.
-function StoreView.layout(refs: Refs, w: number, h: number)
+-- Sizes for the big screens and for phones / TVs (compact: TechShopView.compactFor):
+-- on a phone the HUD scale is small, so the X, the odds and their buttons grow.
+StoreView.Metrics = {
+	Normal = { Close = 50, Lines = 17, Note = 15, Button = Vector2.new(190, 54), Detail = Vector2.new(560, 420) },
+	Compact = { Close = 72, Lines = 24, Note = 19, Button = Vector2.new(240, 72), Detail = Vector2.new(760, 470) },
+}
+
+-- Fits the window into a w x h design-unit screen (compact: the phone sizes).
+function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 	local size, fit = StoreView.windowSize(w, h)
 	refs.Window.Root.Size = UDim2.fromOffset(size.X, size.Y)
 	local holder = refs.Window.Root.Parent
 	local scale = if holder then holder:FindFirstChild("FitScale") else nil
 	if scale and scale:IsA("UIScale") then
 		scale.Scale = fit
+	end
+	local m = if compact then StoreView.Metrics.Compact else StoreView.Metrics.Normal
+	refs.Window.Close.Size = UDim2.fromOffset(m.Close, m.Close)
+	refs.Window.Close.TextSize = math.floor(m.Close * 0.62)
+	refs.Detail.Size = UDim2.fromOffset(m.Detail.X, m.Detail.Y)
+	refs.DetailLines.TextSize = m.Lines
+	for _, button in { refs.DetailBuy, refs.DetailBack } do
+		button.Size = UDim2.fromOffset(m.Button.X, m.Button.Y)
+		button.TextSize = math.floor(m.Button.Y * 0.48)
+	end
+	for _, card in refs.Cards do
+		local description = card.Description
+		if description and (card.Spec.Look == "Item" or card.Spec.Look == "Star") then
+			description.TextSize = m.Note
+		end
 	end
 end
 
@@ -480,6 +541,10 @@ end
 -- The odds panel before a paid random buy (nil hides it).
 function StoreView.showDetail(refs: Refs, detail: Detail?)
 	refs.Detail.Visible = detail ~= nil
+	local blocker = refs.Window.Body:FindFirstChild("Blocker")
+	if blocker and blocker:IsA("GuiObject") then
+		blocker.Visible = detail ~= nil
+	end
 	if not detail then
 		return
 	end
@@ -494,6 +559,8 @@ function StoreView.showDetail(refs: Refs, detail: Detail?)
 		edge.Color = glow.Edge
 	end
 	refs.DetailLines.Text = table.concat(detail.Lines, "\n")
+	-- (AutomaticSize grows it in the game; the height also from the lines for the previews)
+	refs.DetailLines.Size = UDim2.new(1, -12, 0, #detail.Lines * math.ceil(refs.DetailLines.TextSize * 1.3) + 8)
 	refs.DetailBuy.Text = `BUY  {detail.Robux} R$`
 end
 

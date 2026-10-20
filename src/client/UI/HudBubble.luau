@@ -5,8 +5,8 @@
 	  bottom-left   the money: a big green amount (K / M / B...) with the cash
 	                icon and the income per second over it (owner 2026-10-20,
 	                his phone photo); the game HUD (buildGame) only
-	  left          the green "Shop" pill with the cart (opens the Robux STORE)
-	                over the menu tiles
+	  bottom-left   over the money: the green "Shop" pill with the cart (opens
+	                the Robux STORE)
 	  top-centre    the teleport bar: BASE / LOBBY / VAULT tabs with 3D icons
 	  left          the main menu tiles: BACKPACK, GOLEMS, BUILD, SHOP + MORE
 	                (2 columns on PC, 3 columns on phones so the tiles stay above
@@ -266,8 +266,8 @@ function HudBubble.menuMetrics(layout: Layout, count: number?): MenuMetrics
 	local height = rows * cellH + (rows - 1) * rowGap
 	-- phones: under the coins and the income chip (it sits under the pill so
 	-- it never meets the teleport bar on narrow phones)
-	-- phones: under the Shop pill at the top-left (the money is at the bottom-left)
-	local origin = if layout.Compact then UDim2.fromOffset(18, 18 + HudBubble.ShopPill.Y + 16) else UDim2.new(0, 18, 0.5, 24 - height // 2)
+	-- phones: under the TRAIN chip's row at the top-left (the money and the Shop pill are bottom-left)
+	local origin = if layout.Compact then UDim2.fromOffset(18, 136) else UDim2.new(0, 18, 0.5, 24 - height // 2)
 	return { Origin = origin, Width = width, Height = height, CellHeight = cellH, RowGap = rowGap }
 end
 
@@ -650,12 +650,28 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 		Position = if layout.Compact then m.Origin else UDim2.new(0, 18, 0.5, 24 - m.Height // 2),
 		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
+	-- the green Shop pill over the money (the owner's phone photo: Shop above the money,
+	-- bottom-left; the TRAIN and boost chips keep the top-left)
 	local pill = HudBubble.ShopPill
+	local moneyTop = -coinsPanel.Position.Y.Offset + coinsPanel.Size.Y.Offset
 	local shop = Card.pill(gui, "Shop", "cart", Color3.fromRGB(110, 226, 52), Color3.fromRGB(34, 110, 20), pill, {
 		Name = "ShopPill",
-		Position = UDim2.new(menu.Position.X.Scale, menu.Position.X.Offset, menu.Position.Y.Scale, menu.Position.Y.Offset - pill.Y - 16),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 20, 1, -(moneyTop + 12)),
 	})
 	shop:SetAttribute("Opens", "StoreController")
+	-- Server Luck running (StoreController fills it from ServerLuckUntil): over the pill
+	Card.text(gui, "", 22, {
+		Name = "ServerLuck",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
+		Size = UDim2.fromOffset(420, 28),
+		FontFace = CardTheme.NumberFont,
+		TextColor3 = Color3.fromRGB(140, 255, 120),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
+		Visible = false,
+	})
 	menu:SetAttribute("Bubble", true)
 	menu:SetAttribute("Columns", layout.Columns)
 	UIKit.new("UIGridLayout", {

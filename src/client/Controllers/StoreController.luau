@@ -19,6 +19,7 @@
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -37,6 +38,9 @@ local Net = require(Shared.Net)
 local StoreView = require(script.Parent.Parent.UI.StoreView)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local RebirthView = require(script.Parent.Parent.UI.RebirthView)
+local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
+local EnchantView = require(script.Parent.Parent.UI.EnchantView)
+local TechShopView = require(script.Parent.Parent.UI.TechShopView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
@@ -50,12 +54,17 @@ local NAME = "StoreController"
 local CLOSE_ACTION = "TerraForgeStoreClose"
 local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local PROMPT_MEMORY = 10 -- seconds a buy waits for its PurchasePrompt answer
+local BLASTER_WAIT = 30 -- seconds the blaster card stays greyed after its prompt (until the level changes)
 
 local player = Players.LocalPlayer
 local refs: StoreView.Refs? = nil
 local isOpen = false
 local pending: { [string]: number } = {} -- product key -> os.clock() of the buy
 local detailKey: string? = nil
+local detailFrom: GuiObject? = nil -- the card that opened the odds panel (BACK selects it again)
+local stateAt: number? = nil -- server time of the last State (CapsuleView.luckyNow)
+-- a blaster level bought: its card stays greyed until the level changes (or BLASTER_WAIT)
+local blasterWait: { Key: string, Level: number, Until: number }? = nil
 
 function StoreController.isOpen(): boolean
 	return isOpen
@@ -92,7 +101,27 @@ local function owns(product: MonetizationConfig.Product): boolean
 		local enchants = state().Enchants
 		return EnchantConfig.tierOf(enchants, product.Enchant) >= 1
 	end
+	if product.BoardId then
+		local boards = state().Hoverboards
+		local owned = if type(boards) == "table" then boards.Owned else nil
+		return type(owned) == "table" and table.find(owned, product.BoardId) ~= nil
+	end
 	return false
+end
+
+local function serverNow(): number
+	return workspace:GetServerTimeNow()
+end
+
+-- Does Triple Lucky count for a capsule opened now? (the capsule window's own rule)
+local function tripleLuckyNow(): boolean
+	return CapsuleView.luckyNow(StateController.get(), serverNow(), stateAt)
+end
+
+-- Seconds of Server Luck left (0 = off; ServerBoostService's attribute).
+local function serverLuckLeft(): number
+	local untilTime = ReplicatedStorage:GetAttribute("ServerLuckUntil")
+	return if type(untilTime) == "number" then math.max(0, untilTime - serverNow()) else 0
 end
 
 -- The STAR blasters' save fields as StarBlasterData reads them (from the State's Rebirth snapshot).
@@ -147,6 +176,14 @@ local function refresh()
 		local cardState = "Buy"
 		if #spec.Keys > 1 then
 			local fits = StoreConfig.blasterKey(spec, level)
+			local wait = blasterWait
+			if wait and (level ~= wait.Level or now > wait.Until) then
+				blasterWait = nil -- the level came (or the purchase was never made)
+				wait = nil
+			end
+			if wait then
+				cardState = "Pending"
+			end
 			if fits then
 				key = fits
 				local current = if type(level) == "number" then math.floor(level) else 1
@@ -162,7 +199,9 @@ local function refresh()
 				cardState = "Pending"
 			end
 		elseif cardState ~= "Hidden" then
-			if product.PaidRandom and restricted() then
+			if cardState == "Pending" then
+				-- (the blaster: waiting for its level)
+			elseif product.PaidRandom and restricted() then
 				cardState = "Hidden"
 			elseif owns(product) then
 				cardState = "Owned"
@@ -209,13 +248,31 @@ local function luckLines(delta: { [string]: number }): { string }
 	return lines
 end
 
-local function tripleLuckyNow(): boolean
-	local bonuses = state().Bonuses
-	return type(bonuses) == "table" and type(bonuses.CapsuleLuckMult) == "number" and bonuses.CapsuleLuckMult > 1
+-- An odds table (BoostView / EnchantView) as panel lines.
+local function tableLines(tbl: BoostView.OddsTable?): { string }
+	local lines: { string } = {}
+	if not tbl then
+		return lines
+	end
+	table.insert(lines, `{tbl.Title}  ({tbl.BeforeHeader} → {tbl.AfterHeader})`)
+	local summary = tbl.Summary
+	if summary then
+		table.insert(lines, `   {summary.Name}:  {summary.Before}  →  {summary.After}`)
+	end
+	for _, row in tbl.Rows do
+		table.insert(lines, `   {row.Name}:  {row.Before}  →  {row.After}`)
+	end
+	if tbl.Note ~= "" then
+		table.insert(lines, tbl.Note)
+	end
+	return lines
 end
 
--- The odds panel's lines for a paid random product.
+-- The odds panel's lines for a paid random product (or one that opens odds: the pass's Grotto).
 local function oddsFor(product: MonetizationConfig.Product): { string }
+	if product.Key == "BigPass" then
+		return { "The pass opens the Glimmer Grotto:", MonetizationConfig.grottoOddsText() }
+	end
 	if product.Capsule then
 		local lucky = tripleLuckyNow()
 		local head = `{product.Name}: each golem is one of (odds{if lucky then " with Triple Lucky" else ""}):`
@@ -226,9 +283,12 @@ local function oddsFor(product: MonetizationConfig.Product): { string }
 		return lines
 	end
 	if product.Boost == "TripleLucky" then
-		local lines = { "Royal Capsule odds now → with Triple Lucky:" }
-		for _, line in capsuleLines("Royal", false, true) do
-			table.insert(lines, "   " .. line)
+		-- every capsule it changes (coin capsules too: coins can be bought with Robux)
+		local lines: { string } = {}
+		for _, capsuleId in BoostView.capsules(restricted()) do
+			for _, line in tableLines(BoostView.tripleOdds(capsuleId)) do
+				table.insert(lines, line)
+			end
 		end
 		return lines
 	end
@@ -236,9 +296,22 @@ local function oddsFor(product: MonetizationConfig.Product): { string }
 		return luckLines({ OreLuckMult = BoostConfig.Kinds.HexaLucky.Mult })
 	end
 	if product.ServerBoost == "Luck" then
+		local left = serverLuckLeft()
+		if left > 0 then
+			-- running already: a buy adds time, the odds stay
+			local lines = { `Server Luck is on ({math.ceil(left / 60)} min left): this adds 15 minutes, the odds stay the same.` }
+			for _, line in luckLines({}) do
+				table.insert(lines, line)
+			end
+			return lines
+		end
 		return luckLines({ OreLuckMult = 2 })
 	end
 	if product.Enchant then
+		local tbl = EnchantView.odds(state(), product.Enchant, nil, os.time(), nil)
+		if tbl then
+			return tableLines(tbl)
+		end
 		return luckLines(EnchantConfig.nextDelta(state().Enchants, state().BlasterLevel or 1, product.Enchant))
 	end
 	return { product.Description }
@@ -252,6 +325,10 @@ local function buy(key: string)
 		return
 	end
 	pending[key] = os.clock()
+	if product.Grant == "BlasterLevel" then
+		local level = state().BlasterLevel
+		blasterWait = { Key = key, Level = if type(level) == "number" then level else 1, Until = os.clock() + BLASTER_WAIT }
+	end
 	if product.Grant == "Capsule" and product.Capsule then
 		Net.send("CapsuleAction", "Open", { Capsule = product.Capsule, Count = product.Count, Lucky = tripleLuckyNow() })
 	elseif product.Grant == "Boost" then
@@ -271,8 +348,9 @@ local function onCard(id: string)
 		return
 	end
 	local product = MonetizationConfig.Products[card.Key]
-	if product.PaidRandom then
+	if product.PaidRandom or card.Spec.Odds then
 		detailKey = card.Key
+		detailFrom = card.Button
 		StoreView.showDetail(view, {
 			Title = card.Spec.Title or product.Name,
 			Lines = oddsFor(product),
@@ -295,6 +373,10 @@ local function onPurchasePrompt(payload: any)
 		return -- another window's buy
 	end
 	pending[key] = nil
+	local wait = blasterWait
+	if wait and wait.Key == key and payload.Status ~= "Prompted" then
+		blasterWait = nil
+	end
 	local view = refs
 	if view and payload.Status ~= "Prompted" then
 		local text = MonetizationConfig.StatusText[payload.Status] or MonetizationConfig.StatusText.Unknown
@@ -312,7 +394,8 @@ local function fit(view: StoreView.Refs)
 	local scale = HudController.uiScale()
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	local inset = GuiService:GetGuiInset()
-	StoreView.layout(view, size.X / scale, (size.Y - inset.Y) / scale)
+	local compact = TechShopView.compactFor(MenuPanels.isTouch(), GuiService:IsTenFootInterface(), scale, size.Y)
+	StoreView.layout(view, size.X / scale, (size.Y - inset.Y) / scale, compact)
 end
 
 local function ensureView(): StoreView.Refs
@@ -333,6 +416,9 @@ local function ensureView(): StoreView.Refs
 	view.DetailBack.Activated:Connect(function()
 		detailKey = nil
 		StoreView.showDetail(view, nil)
+		if MenuPanels.usingGamepad() and detailFrom then
+			GuiService.SelectedObject = detailFrom
+		end
 		Sfx.play("UIClick")
 	end)
 	view.DetailBuy.Activated:Connect(function()
@@ -383,6 +469,9 @@ local function onClose(_: string, inputState: Enum.UserInputState): Enum.Context
 	if view and view.Detail.Visible then
 		detailKey = nil
 		StoreView.showDetail(view, nil)
+		if MenuPanels.usingGamepad() and detailFrom then
+			GuiService.SelectedObject = detailFrom
+		end
 	else
 		StoreController.close()
 	end
@@ -428,6 +517,31 @@ end
 
 function StoreController.init()
 	Net.listen("PurchasePrompt", onPurchasePrompt)
+	-- a capsule / boost buy refused before its prompt (the odds changed, a full inventory...)
+	Net.listen("ActionResult", function(result: any)
+		if type(result) ~= "table" or result.Ok ~= false then
+			return
+		end
+		local kind = if result.Action == "Capsule" then "Capsule" elseif result.Action == "Boost" then "Boost" else nil
+		if not kind then
+			return
+		end
+		local cleared = false
+		for key in pending do
+			local product = MonetizationConfig.Products[key]
+			if product and product.Grant == kind then
+				pending[key] = nil
+				cleared = true
+			end
+		end
+		local view = refs
+		if cleared and view and isOpen then
+			local reasons = if kind == "Capsule" then CapsuleConfig.Reasons else BoostConfig.Reasons
+			local text = if type(result.Reason) == "string" and reasons and reasons[result.Reason] then reasons[result.Reason] else "Not now."
+			StoreView.setStatus(view, text)
+			refresh()
+		end
+	end)
 	Net.listen("OpenUI", function(kind)
 		if kind == "Store" then
 			StoreController.open()
@@ -436,15 +550,54 @@ function StoreController.init()
 end
 
 function StoreController.start()
+	if StateController.get() then
+		stateAt = serverNow()
+	end
+	-- a blaster prompt closed without a purchase: its card is buyable again
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(_, productId, purchased)
+		local wait = blasterWait
+		local product = if wait then MonetizationConfig.get(wait.Key) else nil
+		if wait and product and product.Id == productId and not purchased then
+			blasterWait = nil
+			if isOpen then
+				refresh()
+			end
+		end
+	end)
 	-- the HUD's green Shop pill (the game HUD, HudBubble.buildGame)
 	local hud = HudController.refs()
 	local pill = if hud then hud.Gui:FindFirstChild("ShopPill") else nil
 	if pill and pill:IsA("GuiButton") then
 		pill.Activated:Connect(StoreController.toggle)
 	end
+	-- the Server Luck line over the pill while it runs: "Server Luck x2 · 14:59 · thanks Kuba"
+	local luckLabel = if hud then hud.Gui:FindFirstChild("ServerLuck") else nil
+	if luckLabel and luckLabel:IsA("TextLabel") then
+		local label = luckLabel :: TextLabel
+		task.spawn(function()
+			while label.Parent do
+				local left = serverLuckLeft()
+				label.Visible = left > 0
+				if left > 0 then
+					local by = ReplicatedStorage:GetAttribute("ServerLuckBy")
+					local clock = string.format("%d:%02d", math.floor(left / 60), math.floor(left % 60))
+					label.Text = `🍀 Server Luck x{BoostView.ServerLuckMult} · {clock}` .. (if type(by) == "string" and by ~= "" then ` · thanks {by}` else "")
+				end
+				task.wait(if left > 0 then 0.5 else 2)
+			end
+		end)
+	end
 	StateController.onChanged(function()
+		stateAt = serverNow()
 		if isOpen then
 			refresh()
+			-- the odds panel follows the State too (a boost started or ran out)
+			local view = refs
+			local key = detailKey
+			if view and key and view.Detail.Visible then
+				local product = MonetizationConfig.Products[key]
+				view.DetailLines.Text = table.concat(oddsFor(product), "\n")
+			end
 		end
 	end)
 	player:GetAttributeChangedSignal("PaidRandomRestricted"):Connect(refresh)

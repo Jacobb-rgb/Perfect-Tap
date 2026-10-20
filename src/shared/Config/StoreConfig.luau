@@ -36,6 +36,7 @@ export type CardSpec = {
 	Big: string?, -- Boost: the big effect line
 	Note: string?, -- Boost / Capsule: the gold line under it
 	Short: string?, -- Item: a shorter text than the product's description (the odds panel shows the rest)
+	Odds: boolean?, -- tapping shows the odds panel first (paid random products always do)
 	Star: string?, -- Star: the StarBlasterData id
 	GlowColor: Color3?, -- instead of a CardTheme glow: the border in this colour
 }
@@ -65,6 +66,7 @@ StoreConfig.Cards = {
 		Cols = 6,
 		Rows = 2,
 		Title = "Forgemaster's Pass",
+		Odds = true, -- it opens the Glimmer Grotto: its ore odds show before the buy (COMPLIANCE "Forge VIP and ore odds")
 		Lines = { "Podiums 3 and 4", "12 h offline earnings", "Double carrying", "The Glimmer Grotto", "Extra machine slots" },
 	}),
 	-- coins: three on top, two wide ones under them (like the photos)
@@ -107,7 +109,7 @@ StoreConfig.Cards = {
 		Rows = 2,
 		Title = "Next Blaster",
 		Big = "LV +1", -- (StoreController shows the next level: "LV 5")
-		Note = "Kept after a rebirth",
+		Note = "+1 start LV every rebirth",
 	}),
 	-- passes and boards
 	card({ Id = "Podiums", Keys = { "Podiums" }, Look = "Item", Glow = "Orange", Icon = "podium", Col = 31, Row = 0, Cols = 5, Rows = 1 }),

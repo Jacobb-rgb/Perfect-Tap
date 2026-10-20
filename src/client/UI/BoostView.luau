@@ -346,12 +346,24 @@ end
 -- What a luck card compares, from a State snapshot (State.Bonuses: the
 -- capped totals the server applies). Hexa Lucky's part counts only while
 -- it still runs at `now` (a snapshot can be a moment older than its end).
+-- Server Luck's ore luck now (x2 while ReplicatedStorage ServerLuckUntil is
+-- ahead of the server clock: ServerBoostService; 1 = off).
+BoostView.ServerLuckMult = 2
+function BoostView.serverLuck(): number
+	local ok, on = pcall(function(): boolean
+		local untilTime = game:GetService("ReplicatedStorage"):GetAttribute("ServerLuckUntil")
+		return type(untilTime) == "number" and untilTime > workspace:GetServerTimeNow()
+	end)
+	return if ok and on then BoostView.ServerLuckMult else 1
+end
+
 function BoostView.context(rawState: any, now: number?): BoostConfig.LuckContext
 	local state = safeState(rawState)
 	local bonuses = bonusesOf(state)
 	local mult = math.max(1, num(bonuses.OreLuckMult, 1))
 	if now and mult > 1 and not BoostConfig.active(state.Boosts, "HexaLucky", now) then
-		mult = 1
+		-- the multiplier without Hexa Lucky: Server Luck's while it runs (the State can lag)
+		mult = math.min(mult, BoostView.serverLuck())
 	end
 	return {
 		BlasterLevel = levelOf(state),
