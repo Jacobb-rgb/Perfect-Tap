@@ -36,6 +36,7 @@ local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
+local CleaningGuard = require(script.Parent.Parent.CleaningGuard)
 local ItemService = require(script.Parent.ItemService)
 local CarryService = require(script.Parent.CarryService)
 local MachineService = require(script.Parent.MachineService)
@@ -254,6 +255,11 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		return
 	end
 
+	-- scripted runs keep at most Pristine: FLAWLESS needs real hands (CleaningGuard, audit #4)
+	local verdict = CleaningGuard.check(payload)
+	CleaningGuard.note(player, verdict, result.Grade)
+	result.Grade = CleaningGuard.gradeFor(result.Grade, verdict)
+
 	-- success: raw chunk becomes clean ore on the output tray
 	machine.State.Item = nil
 	ItemService.destroy(record)
@@ -387,8 +393,11 @@ local stationBehaviour: MachineService.Behaviour = {
 		stations[machine] = true
 		local main = makePrompt(machine, "CleanPrompt", "Place Raw Ore", 0, 0)
 		local take = makePrompt(machine, "TakePrompt", "Take Ore Back", 0.4, 1)
-		-- its own keys (G / gamepad B; F and Y stay "Clean Ore"), and always shown next to
-		-- "Clean Ore". No other prompt uses G or B, so one press never fires two prompts.
+		-- keys G / gamepad B (F and Y stay "Clean Ore"), always shown next to "Clean Ore".
+		-- G / B are shared: the Pen, Foundry, Train Send, Iron Box and Logistics (Sorter)
+		-- prompts use them too, on their own machines / anchors (8-10 studs reach, default
+		-- OnePerButton). This one is AlwaysShow, so while it is enabled (ore on the station)
+		-- a G press in reach of one of those too fires both.
 		take.KeyboardKeyCode = Enum.KeyCode.G
 		take.GamepadKeyCode = Enum.KeyCode.ButtonB
 		take.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow

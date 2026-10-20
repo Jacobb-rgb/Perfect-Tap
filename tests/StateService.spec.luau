@@ -196,7 +196,7 @@ return function(T, Loader)
 	end
 
 	local function waitUntil(check: () -> boolean, timeout: number?)
-		local deadline = os.clock() + (timeout or 1)
+		local deadline = os.clock() + (timeout or 5) -- generous: returns as soon as the check holds
 		repeat
 			task.wait()
 		until check() or os.clock() > deadline
@@ -359,11 +359,11 @@ return function(T, Loader)
 			data.Coins += 1
 			StateService.push(p)
 		end
-		task.wait(0.05)
+		task.wait() -- one step (a real 0.05 s wait could overrun the window on a loaded machine)
 		T.eq(#w.fired, 1, "held back")
 		waitUntil(function()
 			return #w.fired >= 2
-		end, 1)
+		end, 5)
 		T.eq(#w.fired, 2, "one push for the burst")
 		T.truthy(w.fired[2].At - w.fired[1].At >= WINDOW - 0.02, "not before the window ends")
 		T.eq(w.fired[2].Payload.Full, nil)
@@ -376,20 +376,28 @@ return function(T, Loader)
 		data.Coins -= 100
 		local asked = os.clock()
 		StateService.push(p)
-		waitUntil(function()
-			return #w.fired >= 3
-		end, 0.1)
+		-- counted in scheduler steps, not seconds: a deferred send lands within
+		-- a step or two however loaded the machine is (3 leaves room for the
+		-- Lune race), while any debounce would take many more
+		local steps = 0
+		repeat
+			task.wait()
+			steps += 1
+		until #w.fired >= 3 or steps > 100
 		T.eq(#w.fired, 3, "an isolated push goes out at once")
-		T.lt(w.fired[3].At - asked, 0.1, "within a frame or two")
+		T.truthy(steps <= 3, "at the next resumption")
+		-- (a throttled push would leave >= WINDOW later; a loaded machine's slow
+		-- step can't push a deferred one that far)
+		T.lt(w.fired[3].At - asked, WINDOW, "not a window later")
 		T.eq(w.fired[3].Payload.Coins, data.Coins)
 		-- a second action right after it waits for the rest of the window
 		data.Coins -= 50
 		StateService.push(p)
-		task.wait(0.05)
+		task.wait() -- one step (see above)
 		T.eq(#w.fired, 3, "the next one is throttled")
 		waitUntil(function()
 			return #w.fired >= 4
-		end, 1)
+		end, 5)
 		T.eq(#w.fired, 4)
 		T.truthy(w.fired[4].At - w.fired[3].At >= WINDOW - 0.02, "at most one push per window")
 		T.eq(w.fired[4].Payload.Coins, data.Coins)
@@ -432,7 +440,7 @@ return function(T, Loader)
 		T.eq(p.writes, writes, "not yet")
 		waitUntil(function()
 			return p.attrs.Coins == data.Coins
-		end, 1)
+		end, 5)
 		T.eq(p.attrs.Coins, data.Coins, "the newest balance")
 		T.eq(p.writes, writes + 1, "one write for the burst")
 		-- unchanged: no write
@@ -498,7 +506,7 @@ return function(T, Loader)
 		T.falsy(StateService.hasSent(p))
 		waitUntil(function()
 			return w.fired[#w.fired].Payload.Full == true
-		end, 1)
+		end, 5)
 		push = deliver()
 		T.eq(push.Full, true, "whole after StateSync")
 		T.eq(#push.Placed, 70)
@@ -546,6 +554,9 @@ return function(T, Loader)
 			T.eq(now.Coins, 9)
 			T.eq(now.Gear.Boots, 1, "merged onto the whole one")
 			T.eq(asked, 2, "no request once a whole push came")
+			waitUntil(function() -- (deferred: Lune's task.wait() can rarely resume first)
+				return heard >= 2
+			end)
 			task.wait()
 			T.eq(heard, 2, "the listeners heard the two whole snapshots")
 		end)

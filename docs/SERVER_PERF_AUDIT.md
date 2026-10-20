@@ -124,7 +124,17 @@ that line.
 - Fix 5 done: IntakeService asks `plotAt` first and tests only the town zones over that plot or in
   the item's 32-stud town square, from a cached index of zone boxes (rebuilt when a zone is added or
   its part moves, resizes or leaves): ~26k -> ~2k box tests/s.
-- Fix 2 (DataService.changed coalescing) is still open; #3, #4, #6, #7 and #10 are done by the machines chat (below).
+- Fix 2 done (perf pass 2, branch `work/perf2`, 2026-10-20): `DataService.changed` only marks the player; one
+  `task.defer` flush per player per frame runs every `onChanged` listener once, in registration order, on a
+  reused runner thread (an error is warned with its traceback, a yielding listener gets its own thread, so
+  neither stops the others) and skips a player whose data is gone (left and saved). Many changes in a frame ->
+  one call per listener; the 600-900 `task.spawn`/s (one new thread per change per listener) become one
+  deferred task per changed player per frame, with no new thread unless a listener yields. The one listener that
+  needed the change at once, Bonuses' cache drop, moved to the new `DataService.onChangedNow` (runs inside
+  `changed()`, cheap, never yields), so a read right after a change never sees old totals; the gear buy and
+  golem equip already apply their effects directly. Specs: tests/DataChanged.spec.luau. Left: `PenService.markBoard`
+  still reacts to every flush (not only keep / send / layout changes).
+- #3, #4, #6, #7 and #10 are done by the machines chat (below).
 - Phone audit ([PERF_AUDIT.md](PERF_AUDIT.md), branch `docs/perf-audit`; update its table when it lands):
   item 4 (plots) done: 0 see-through parts, small trim without shadows (the preview now honours
   `CastShadow`, so shadow cuts show in renders); item 3 done for the west-sea ShipA / ShipB only

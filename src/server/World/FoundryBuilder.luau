@@ -1,27 +1,34 @@
 --[[
-	The Foundry on every base yard (step 3), in the Kenney Factory Kit look
-	of the restyled machines (MachineBuilder: forged-iron bodies with lighter
-	tops and frames, sparse orange trims, copper pipes, glass pipes with
-	molten metal, warning lights). Pure builder: only Instance creation, so
-	the Lune tests and the preview tools build it too.
+	The Foundry on every base yard (step 3), in the machines' style A "Soft"
+	(owner 2026-10-20, from the preview on art/plot-style-a; SoftKit with
+	KitMachines' palette and roles: cream bodies, slate frames and lids,
+	orange trims, glowing orange strips, soft round shapes, orange letters
+	on slate). Pure builder: only Instance creation, so the Lune tests and
+	the preview tools build it too.
 
 	FoundryService builds it at server start and puts it in place of the
 	PlotBuilder placeholder (Plot_<id>.Yard.Foundry); PlotBuilder itself is
 	not changed. It stands in BaseLayout.Foundry (plot-local x 5..21,
 	z 41..52, at most 16 studs high so the trains' ore arcs clear it), on a
-	concrete platform whose front meets the gravel apron PlotBuilder lays:
+	slate platform (painted seams, a glowing strip along its front, a
+	striped hazard edge) whose front meets the gravel apron PlotBuilder lays:
 
-	  back wall        iron panels with the FOUNDRY sign on top, a warning
-	                   beacon at each end (WarnLight: the client blinks them
-	                   while the owner forges, attribute Forging)
-	  crucible furnace an octagonal furnace (back left as you look at it) with
-	                   a glowing mouth, a hopper on top (the Intake box takes
-	                   thrown ingots) and a chimney; the copper pipe beside it
-	                   rises out of the floor: the ingots from the FOUNDRY
-	                   chute arrive through it
+	  back wall        a cream wall with painted soft insets and bolts under a
+	                   slate lid with a glowing strip, the FOUNDRY sign on top,
+	                   a warning beacon at each end (WarnLight: glowing balls on
+	                   slate cups the client blinks while the owner forges,
+	                   attribute Forging)
+	  crucible furnace a round cream crucible (back left as you look at it) on
+	                   a slate plinth with a glow ring, a slate lid, an arched
+	                   glowing door (Glow, a Hot core, a grate bar), a round
+	                   bowl hopper on top (the Intake box takes thrown ingots)
+	                   and a fat slate chimney (ChimneyTop smokes); the slate
+	                   feed pipe beside it rises out of the floor: the ingots
+	                   from the FOUNDRY chute arrive through it
 	  glass pipe       molten metal runs from the furnace through a glass pipe
-	                   into a sloped casting channel
-	  blaster mould    the channel pours into a blaster-shaped mould on a table
+	                   into a sloped casting channel (a dark slide, orange lips)
+	  blaster mould    the channel pours into a blaster-shaped mould on a cream
+	                   table
 	  anvil            front right: AnvilPoint (top centre), CamPoint (the
 	                   hammer close-up camera, looking at the anvil) and the
 	                   Prompt attachment ("Open Foundry", "Put In")
@@ -34,58 +41,45 @@
 	refused one pops out), RackMount.
 
 	receiver(): the FOUNDRY chute's receiver at BaseLayout.FoundryIntake: a
-	hood over the end of the sink belt, leaning on the plot's back wall, with
-	a glowing throat and a pipe that goes down into the ground. Mouth =
-	where a taken item flies in; the PenFull billboard says "Ore Pen full"
-	while an item has to wait. Nothing in it collides or blocks raycasts.
+	slate hood over the end of the sink belt, leaning on the plot's back
+	wall, with a glowing throat, an orange roof and cream cheeks, a striped
+	lintel and a slate pipe with an orange collar that goes down into the
+	ground. Mouth = where a taken item flies in; the PenFull billboard says
+	"Ore Pen full" while an item has to wait. Nothing in it collides or
+	blocks raycasts.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Geo = require(Shared.Builders.Geo)
+local SoftKit = require(Shared.Builders.SoftKit)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local BaseLayout = require(Shared.Config.BaseLayout)
 local BlasterData = require(Shared.Config.BlasterData)
 
 local FoundryBuilder = {}
 
-type Props = { [string]: any }
+type Paint = SoftKit.Paint
 
 local rgb = Color3.fromRGB
-local NEON = Enum.Material.Neon
-local GLASS = Enum.Material.Glass
-local METAL = Enum.Material.Metal
-local TAN8 = math.tan(math.pi / 8)
+local P = SoftKit.Palette
+local SOLID, PROP, TINY = SoftKit.SOLID, SoftKit.PROP, SoftKit.TINY
+local part, cylUp, cylX, ball, rod = SoftKit.part, SoftKit.cylUp, SoftKit.cylX, SoftKit.ball, SoftKit.rod
 
--- the restyled machines' palette (MachineBuilder), plus the platform and the board
+-- the colours outside the machines' palette
 local C = {
-	Housing = rgb(122, 128, 146),
-	HousingTop = rgb(156, 162, 180),
-	HousingLight = rgb(184, 188, 200),
-	HousingDark = rgb(86, 90, 106),
-	Recess = rgb(40, 40, 50),
-	Copper = rgb(198, 112, 62),
-	Hazard = rgb(255, 150, 36),
-	HazardDark = rgb(40, 36, 40),
-	Molten = rgb(236, 96, 22),
-	Glow = rgb(230, 90, 20),
-	Ember = rgb(120, 52, 30),
-	Glass = rgb(176, 222, 240),
-	Iron = rgb(70, 72, 82),
-	Steel = rgb(104, 108, 122),
-	AnvilSteel = rgb(178, 184, 198), -- the anvil's face and horn (light, so it reads from the yard at dusk)
-	Concrete = rgb(166, 158, 148),
-	ConcreteDark = rgb(132, 124, 116),
-	Board = rgb(236, 220, 190), -- the shadow board behind the silhouette
+	Steel = rgb(200, 206, 220), -- the anvil's face and horn (light, so it reads from the yard at dusk)
+	Board = rgb(240, 234, 222), -- the shadow board behind the silhouette
+	Inset = rgb(222, 214, 200), -- the wall's soft panel insets
 	Silhouette = rgb(30, 26, 32),
-	Sign = rgb(255, 150, 50),
-	Beacon = rgb(255, 150, 20),
 	Alert = rgb(255, 92, 70),
 }
 
 FoundryBuilder.Colors = C
 FoundryBuilder.MaxParts = 110 -- the building with the silhouette (a mobile budget)
+-- style A must not use more parts than the Kenney-look building did (69 without the silhouette)
+FoundryBuilder.BuildingParts = 69
 FoundryBuilder.ReceiverMaxParts = 10
 
 -- Plot-local frame of the building: the platform's front edge centre.
@@ -98,7 +92,7 @@ local WIDTH, DEPTH = 16, 11
 local ANVIL = Vector3.new(-3.8, 0, 3.0)
 local ANVIL_TOP = 2.6
 local FURNACE = Vector3.new(4.6, 0, 6.6)
-local FURNACE_ACROSS = 4.6
+local FURNACE_D = 4.6 -- the crucible's diameter
 local FURNACE_TOP = 5.1
 local HOPPER_Y = FURNACE_TOP + 0.8 -- bottom of the hopper (on the lid)
 local MOULD = Vector3.new(0.4, 0, 3.0)
@@ -110,314 +104,108 @@ FoundryBuilder.AnvilLocal = ORIGIN + ANVIL + Vector3.new(0, ANVIL_TOP, 0)
 FoundryBuilder.PromptLocal = ORIGIN + ANVIL + Vector3.new(0, 3.1, -0.8)
 FoundryBuilder.Height = 14.2 -- the chimney's top (the trains' ore arcs need <= BaseLayout.Foundry.Size.Y)
 
----------------------------------------------------------------- kit
-
-local function merge(props: Props, extra: Props?): Props
-	if extra then
-		for k, v in extra do
-			props[k] = v
-		end
-	end
-	return props
-end
-
-local function solid(extra: Props?): Props
-	return merge({ CanTouch = false }, extra)
-end
-
-local function prop(extra: Props?): Props
-	return merge({ CanTouch = false, CanQuery = false, CanCollide = false }, extra)
-end
-
-local function tiny(extra: Props?): Props
-	return merge({ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }, extra)
-end
-
-local function glow(extra: Props?): Props
-	return tiny(extra)
-end
-
--- Cylinder along the frame's local axis ("X", "Y" or "Z").
-local AXIS = {
-	X = CFrame.new(),
-	Y = CFrame.Angles(0, 0, math.pi / 2),
-	Z = CFrame.Angles(0, math.pi / 2, 0),
-}
-local function cyl(
-	parent: Instance,
-	cf: CFrame,
-	axis: "X" | "Y" | "Z",
-	length: number,
-	d: number,
-	color: Color3,
-	material: Enum.Material?,
-	props: Props?
-): Part
-	local part = Geo.block(parent, cf * AXIS[axis], Vector3.new(length, d, d), color, material, props or prop())
-	part.Shape = Enum.PartType.Cylinder
-	return part
-end
-
--- Cylinder from a to b (any direction).
-local function pipeBetween(
-	parent: Instance,
-	a: Vector3,
-	b: Vector3,
-	d: number,
-	color: Color3,
-	material: Enum.Material?,
-	props: Props?
-): Part
-	local part = Geo.block(
-		parent,
-		CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.pi / 2, 0),
-		Vector3.new((b - a).Magnitude, d, d),
-		color,
-		material,
-		props or prop()
-	)
-	part.Shape = Enum.PartType.Cylinder
-	return part
-end
-
--- Block from a to b with a w x h cross-section (a -> b must not be vertical).
-local function barBetween(
-	parent: Instance,
-	a: Vector3,
-	b: Vector3,
-	w: number,
-	h: number,
-	color: Color3,
-	material: Enum.Material?,
-	props: Props?
-): Part
-	return Geo.block(parent, CFrame.lookAt((a + b) / 2, b), Vector3.new(w, h, (b - a).Magnitude), color, material, props or prop())
-end
-
--- Upright octagonal prism (4 crossed bars), `cf` = its centre.
-local function octPrism(parent: Instance, cf: CFrame, across: number, height: number, color: Color3, props: Props?)
-	for k = 0, 3 do
-		Geo.block(
-			parent,
-			cf * CFrame.Angles(0, k * math.pi / 4, 0),
-			Vector3.new(across, height, across * TAN8 + 0.02),
-			color,
-			nil,
-			props or solid()
-		)
-	end
-end
-
 local function attach(base: BasePart, name: string, world: CFrame): Attachment
-	local a = Instance.new("Attachment")
-	a.Name = name
-	a.CFrame = base.CFrame:ToObjectSpace(world)
-	a.Parent = base
-	return a
-end
-
-local function surface(part: BasePart, name: string, face: Enum.NormalId, pixelsPerStud: number, light: number): SurfaceGui
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = name
-	gui.Face = face
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = pixelsPerStud
-	gui.LightInfluence = light
-	gui.MaxDistance = 140
-	gui.Parent = part
-	return gui
-end
-
--- A painted rectangle (x, y, w, h in face scale from the top left).
-local function paint(gui: SurfaceGui, name: string, x: number, y: number, w: number, h: number, color: Color3, round: boolean?)
-	local frame = Instance.new("Frame")
-	frame.Name = name
-	frame.BorderSizePixel = 0
-	frame.BackgroundColor3 = color
-	frame.Position = UDim2.fromScale(x, y)
-	frame.Size = UDim2.fromScale(w, h)
-	frame.Parent = gui
-	if round then
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0.5, 0)
-		corner.Parent = frame
-	end
-end
-
--- Hazard dashes across a face (a horizontal gradient, no extra parts).
-local function hazard(gui: SurfaceGui, dashes: number)
-	local frame = Instance.new("Frame")
-	frame.Name = "Hazard"
-	frame.BorderSizePixel = 0
-	frame.BackgroundColor3 = Color3.new(1, 1, 1)
-	frame.Size = UDim2.fromScale(1, 1)
-	frame.Parent = gui
-	local keys = {}
-	for s = 0, dashes - 1 do
-		local color = if s % 2 == 0 then C.Hazard else C.HazardDark
-		table.insert(keys, ColorSequenceKeypoint.new(if s == 0 then 0 else s / dashes + 0.002, color))
-		table.insert(keys, ColorSequenceKeypoint.new((s + 1) / dashes, color))
-	end
-	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new(keys)
-	gradient.Rotation = 0
-	gradient.Parent = frame
-end
-
-local function text(gui: SurfaceGui, name: string, value: string, color: Color3, font: Enum.Font?): TextLabel
-	local label = Instance.new("TextLabel")
-	label.Name = name
-	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromScale(0.04, 0.1)
-	label.Size = UDim2.fromScale(0.92, 0.8)
-	label.Text = value
-	label.TextScaled = true
-	label.TextColor3 = color
-	label.FontFace = Font.fromEnum(font or Enum.Font.LuckiestGuy)
-	label.Parent = gui
-	return label
+	return SoftKit.attachment(base, name, base.CFrame:ToObjectSpace(world))
 end
 
 ---------------------------------------------------------------- the building
 
 local function platform(m: Model, F: CFrame): Part
-	local base =
-		Geo.block(m, F * CFrame.new(0, FLOOR - 0.25, DEPTH / 2), Vector3.new(WIDTH, 0.5, DEPTH), C.Concrete, nil, solid({ Name = "Base" }))
-	base.Name = "Base"
-	-- a darker plinth course under it (the yard ground slopes a little)
-	Geo.block(m, F * CFrame.new(0, -0.15, DEPTH / 2), Vector3.new(WIDTH + 0.3, 0.3, DEPTH + 0.3), C.ConcreteDark, nil, prop())
-	-- hazard dashes along the front edge and painted floor tiles (no parts)
-	local top = surface(base, "Floor", Enum.NormalId.Top, 8, 1)
+	local base = part(m, F * CFrame.new(0, FLOOR - 0.25, DEPTH / 2), Vector3.new(WIDTH, 0.5, DEPTH), "Floor", SOLID, "Base")
+	local seams: { Paint } = {}
 	for i = 1, 3 do
-		paint(top, "Seam", i / 4 - 0.002, 0, 0.004, 1, C.ConcreteDark)
+		table.insert(seams, { x = i / 4 - 0.002, y = 0, w = 0.004, h = 1, color = P.Frame })
 	end
-	paint(top, "SeamZ", 0, 0.5, 1, 0.006, C.ConcreteDark)
-	local edge =
-		Geo.block(m, F * CFrame.new(0, FLOOR + 0.01, 0.3), Vector3.new(WIDTH, 0.04, 0.6), C.Hazard, nil, tiny({ Name = "HazardEdge" }))
-	hazard(surface(edge, "Dashes", Enum.NormalId.Top, 8, 1), 16)
+	table.insert(seams, { x = 0, y = 0.5, w = 1, h = 0.006, color = P.Frame })
+	SoftKit.paint(base, Enum.NormalId.Top, seams)
+	-- the glowing strip along the front face and the hazard edge on top
+	part(m, F * CFrame.new(0, FLOOR - 0.25, -0.03), Vector3.new(WIDTH - 0.8, 0.12, 0.06), "Neon", TINY, "FrontGlow")
+	local edge = part(m, F * CFrame.new(0, FLOOR + 0.01, 0.3), Vector3.new(WIDTH, 0.04, 0.6), "Trim", TINY, "HazardEdge")
+	SoftKit.paint(edge, Enum.NormalId.Top, { { x = 0, y = 0, w = 1, h = 1, color = P.Trim, stripes = 24 } })
 	return base
 end
 
 local function backWall(m: Model, F: CFrame)
 	local z = DEPTH - 0.3
-	local wall = Geo.block(m, F * CFrame.new(0, FLOOR + 3.4, z), Vector3.new(WIDTH, 6.8, 0.6), C.Housing, nil, solid({ Name = "Wall" }))
-	-- Kenney panel insets with brass rivets, painted (no parts)
-	local face = surface(wall, "Panels", Enum.NormalId.Front, 10, 1)
+	local wallH = 6.8
+	local w = part(m, F * CFrame.new(0, FLOOR + wallH / 2, z), Vector3.new(WIDTH, wallH, 0.6), "Body", SOLID, "Wall")
+	-- painted panels: a slate skirting, soft insets with bolts, the slate frame behind the rack
+	local items: { Paint } = { { x = 0, y = 0.9, w = 1, h = 0.1, color = P.Frame } }
 	for i = 0, 3 do
-		local x = 0.02 + i * 0.245
-		paint(face, "Inset", x, 0.08, 0.225, 0.72, C.HousingDark)
-		paint(face, "Brace", x, 0.42, 0.225, 0.04, C.HousingTop)
-		for _, cx in { x + 0.012, x + 0.2 } do
-			paint(face, "Rivet", cx, 0.11, 0.012, 0.03, C.HousingLight, true)
-		end
+		local x = 0.025 + i * 0.245
+		table.insert(items, { x = x, y = 0.08, w = 0.22, h = 0.74, color = C.Inset })
+		table.insert(items, { x = x + 0.012, y = 0.11, w = 0.014, h = 0.03, color = P.Bolt, round = true })
+		table.insert(items, { x = x + 0.194, y = 0.11, w = 0.014, h = 0.03, color = P.Bolt, round = true })
 	end
-	paint(face, "Trim", 0, 0.88, 1, 0.12, C.Hazard)
-	-- a light cap with an orange trim under it
-	Geo.block(m, F * CFrame.new(0, FLOOR + 6.95, z), Vector3.new(WIDTH + 0.4, 0.4, 1.0), C.HousingLight, nil, solid())
-	-- the FOUNDRY sign standing on the cap (both faces: the yard and the train side)
-	local sign = Geo.block(m, F * CFrame.new(0, FLOOR + 7.95, z), Vector3.new(7.6, 1.6, 0.3), C.HousingDark, nil, prop({ Name = "Sign" }))
-	for _, normal in { Enum.NormalId.Front, Enum.NormalId.Back } do
-		local gui = surface(sign, "Gui", normal, 40, 0.2)
-		text(gui, "Text", "FOUNDRY", C.Sign)
+	-- the rack's frame (the wall's front face runs from +X at x = 0 to -X at x = 1)
+	local rackU = 0.5 - RACK.X / WIDTH
+	table.insert(items, { x = rackU - 0.215, y = 1 - (RACK.Y - FLOOR + 2.0) / wallH, w = 0.43, h = 4.1 / wallH, color = P.Frame })
+	SoftKit.paint(w, Enum.NormalId.Front, items)
+	-- the train side: the same soft insets (no rack frame)
+	local back: { Paint } = { { x = 0, y = 0.9, w = 1, h = 0.1, color = P.Frame } }
+	for i = 0, 3 do
+		table.insert(back, { x = 0.025 + i * 0.245, y = 0.08, w = 0.22, h = 0.74, color = C.Inset })
 	end
-	-- warning beacons on both ends of the cap (the client blinks WarnLight)
+	SoftKit.paint(w, Enum.NormalId.Back, back)
+	-- a slate lid with a glowing strip, the FOUNDRY sign standing on it (both faces: the yard and the train side)
+	part(m, F * CFrame.new(0, FLOOR + wallH + 0.15, z), Vector3.new(WIDTH + 0.4, 0.4, 1.0), "Frame", SOLID, "WallLid")
+	part(m, F * CFrame.new(0, FLOOR + wallH + 0.15, z - 0.53), Vector3.new(WIDTH - 0.2, 0.12, 0.06), "Neon", TINY, "WallGlow")
+	SoftKit.sign(m, F * CFrame.new(0, FLOOR + 7.95, z), Vector3.new(7.6, 1.6, 0.3), "FOUNDRY", true)
+	-- warning beacons: glowing balls on slate cups (the client blinks WarnLight)
 	for _, side in { -1, 1 } do
 		local x = side * (WIDTH / 2 - 0.6)
-		Geo.block(m, F * CFrame.new(x, FLOOR + 7.35, z), Vector3.new(0.7, 0.4, 0.7), C.HazardDark, nil, tiny())
-		local lamp = Geo.ball(m, (F * CFrame.new(x, FLOOR + 7.8, z)).Position, 0.75, C.Beacon, NEON, glow({ Name = "WarnLight" }))
-		lamp.Name = "WarnLight"
+		cylUp(m, F * CFrame.new(x, FLOOR + 7.35, z), 0.4, 0.8, "Frame", TINY)
+		ball(m, (F * CFrame.new(x, FLOOR + 7.8, z)).Position, 0.75, "Neon", TINY, "WarnLight")
 	end
+end
+
+-- An arched door on the frame `face` (bottom centre at y0, facing -Z): orange frame, glow, hot core, a grate bar.
+local function door(m: Model, face: CFrame, y0: number, w: number, straight: number)
+	local function arch(width: number, z: number, depth: number, role: string, flags: SoftKit.Props, name: string?)
+		part(m, face * CFrame.new(0, y0 + straight / 2, z), Vector3.new(width, straight, depth), role, flags, name)
+		SoftKit.cylZ(m, face * CFrame.new(0, y0 + straight, z), depth, width, role, flags, name)
+	end
+	-- the frame stands 0.35 proud of the face (it sinks into the round body at its sides)
+	arch(w + 0.7, 0.1, 0.9, "Trim", SOLID)
+	arch(w, -0.38, 0.06, "Glow", TINY, "Glow")
+	part(m, face * CFrame.new(0, y0 + 0.75, -0.42), Vector3.new(w * 0.5, 1.3, 0.04), "Hot", TINY, "GlowCore")
+	part(m, face * CFrame.new(0, y0 + 0.5, -0.46), Vector3.new(w * 0.95, 0.16, 0.1), "Dark", TINY)
 end
 
 local function furnace(m: Model, F: CFrame)
 	local at = F * CFrame.new(FURNACE.X, 0, FURNACE.Z)
-	local height = FURNACE_TOP - FLOOR
-	octPrism(m, at * CFrame.new(0, FLOOR + height / 2, 0), FURNACE_ACROSS, height, C.Housing)
-	-- orange base band, light collar, the lid
-	cyl(m, at * CFrame.new(0, FLOOR + 0.3, 0), "Y", 0.6, FURNACE_ACROSS * 1.07, C.Hazard, nil, prop())
-	cyl(m, at * CFrame.new(0, FURNACE_TOP + 0.2, 0), "Y", 0.4, FURNACE_ACROSS * 1.08, C.HousingLight, nil, solid())
-	cyl(m, at * CFrame.new(0, FURNACE_TOP + 0.55, 0), "Y", 0.3, FURNACE_ACROSS * 0.8, C.HousingTop, nil, solid())
-	-- the furnace mouth on the front flat: a light frame, the molten glow, a grate
-	local front = at * CFrame.new(0, 0, -FURNACE_ACROSS / 2)
-	local w, bottom, top = 2.0, FLOOR + 0.7, FLOOR + 2.7
-	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			front * CFrame.new(side * (w / 2 + 0.22), (bottom + top + 0.4) / 2, -0.15),
-			Vector3.new(0.44, top - bottom + 0.4, 0.5),
-			C.HousingLight,
-			nil,
-			prop()
-		)
-	end
-	Geo.block(m, front * CFrame.new(0, top + 0.2, -0.15), Vector3.new(w + 0.88, 0.4, 0.5), C.HousingLight, nil, prop())
-	local mouth = Geo.block(
-		m,
-		front * CFrame.new(0, (bottom + top) / 2, 0.02),
-		Vector3.new(w, top - bottom, 0.1),
-		C.Glow,
-		NEON,
-		glow({ Name = "Glow" })
-	)
-	mouth.Name = "Glow"
-	Geo.block(m, front * CFrame.new(0, (bottom + top) / 2, -0.12), Vector3.new(0.16, top - bottom, 0.14), C.Iron, nil, tiny())
-	-- the hopper on the lid (Kenney hopper-square): a tapered neck of four
-	-- upside-down wedges, a light collar, an open copper cup with a dark floor
-	local hopper = at * CFrame.new(0, HOPPER_Y, 0)
-	local bottomW, topW, taperH = 1.5, 3.2, 1.0
-	local run = (topW - bottomW) / 2
-	for i = 0, 3 do
-		Geo.wedge(
-			m,
-			hopper
-				* CFrame.Angles(0, i * math.pi / 2, 0)
-				* CFrame.new(0, taperH / 2, -(bottomW / 2 + run / 2))
-				* CFrame.Angles(0, 0, math.pi),
-			Vector3.new(topW, taperH, run),
-			C.HousingTop,
-			nil,
-			solid()
-		)
-	end
-	Geo.block(m, hopper * CFrame.new(0, taperH + 0.2, 0), Vector3.new(topW + 0.3, 0.4, topW + 0.3), C.HousingLight, nil, solid())
-	local cupY, cupH, wall = taperH + 0.4, 0.75, 0.28
-	for _, side in { -1, 1 } do
-		Geo.block(
-			m,
-			hopper * CFrame.new(0, cupY + cupH / 2, side * (topW / 2 - wall / 2)),
-			Vector3.new(topW, cupH, wall),
-			C.Copper,
-			nil,
-			solid()
-		)
-		Geo.block(
-			m,
-			hopper * CFrame.new(side * (topW / 2 - wall / 2), cupY + cupH / 2, 0),
-			Vector3.new(wall, cupH, topW - 2 * wall),
-			C.Copper,
-			nil,
-			solid()
-		)
-	end
-	Geo.block(
-		m,
-		hopper * CFrame.new(0, cupY + 0.05, 0),
-		Vector3.new(topW - 2 * wall, 0.1, topW - 2 * wall),
-		C.Recess,
-		nil,
-		solid({ Name = "HopperFloor" })
-	)
-	-- the chimney behind it: a copper flange and an ember mouth (a little smoke)
+	-- slate plinth with a glow ring, the cream crucible, a slate lid
+	local plinthH = 0.6
+	cylUp(m, at * CFrame.new(0, FLOOR + plinthH / 2, 0), plinthH, FURNACE_D + 0.6, "Frame", SOLID)
+	cylUp(m, at * CFrame.new(0, FLOOR + plinthH / 2, 0), 0.14, FURNACE_D + 0.66, "Neon", TINY)
+	local bodyBottom = FLOOR + plinthH
+	cylUp(m, at * CFrame.new(0, (bodyBottom + FURNACE_TOP) / 2, 0), FURNACE_TOP - bodyBottom, FURNACE_D, "Body", SOLID, "Crucible")
+	cylUp(m, at * CFrame.new(0, FURNACE_TOP + 0.2, 0), 0.45, FURNACE_D + 0.3, "Frame", SOLID, "Lid")
+	-- the arched door on the front
+	door(m, at * CFrame.new(0, 0, -FURNACE_D / 2), bodyBottom + 0.05, 2.0, 1.5)
+	-- the bowl hopper on the lid (KitMachines bowl): slate neck, cream bowl, glow ring, orange rim, dark mouth
+	local hd = 3.4
+	local y = FURNACE_TOP + 0.42
+	local neck = 0.5
+	cylUp(m, at * CFrame.new(0, y + neck / 2, 0), neck, hd * 0.56, "Frame", SOLID)
+	y += neck
+	local bowlH = hd * 0.34
+	cylUp(m, at * CFrame.new(0, y + bowlH / 2, 0), bowlH, hd, "Body", SOLID, "Hopper")
+	cylUp(m, at * CFrame.new(0, y + bowlH * 0.3, 0), 0.12, hd + 0.14, "Neon", TINY)
+	cylUp(m, at * CFrame.new(0, y + bowlH + 0.05, 0), 0.26, hd + 0.28, "Trim", SOLID)
+	cylUp(m, at * CFrame.new(0, y + bowlH + 0.19, 0), 0.04, hd * 0.8, "Dark", TINY, "HopperFloor")
+	-- the fat chimney behind it (KitMachines chimney): slate stack, orange band, slate cap with a glow ring, smoke
 	local stack = F * CFrame.new(FURNACE.X + 1.8, 0, FURNACE.Z + 2.4)
-	local stackBottom, stackTop = FURNACE_TOP - 0.4, FoundryBuilder.Height - 0.06
-	cyl(m, stack * CFrame.new(0, (stackBottom + stackTop) / 2, 0), "Y", stackTop - stackBottom, 1.5, C.Housing, nil, solid())
-	cyl(m, stack * CFrame.new(0, stackTop - 2.2, 0), "Y", 0.4, 1.95, C.Copper, nil, prop())
-	local ember = cyl(m, stack * CFrame.new(0, stackTop + 0.03, 0), "Y", 0.06, 1.1, C.Ember, NEON, glow({ Name = "Glow" }))
-	ember.Name = "Glow"
+	local stackBottom, capY = FURNACE_TOP - 0.4, FoundryBuilder.Height - 0.55
+	cylUp(m, stack * CFrame.new(0, (stackBottom + capY) / 2, 0), capY - stackBottom, 1.5, "Pipe", SOLID)
+	cylUp(m, stack * CFrame.new(0, stackBottom + (capY - stackBottom) * 0.55, 0), 0.32, 1.62, "Trim", TINY)
+	cylUp(m, stack * CFrame.new(0, capY + 0.22, 0), 0.45, 2.05, "Frame", SOLID)
+	cylUp(m, stack * CFrame.new(0, capY + 0.22, 0), 0.14, 2.12, "Neon", TINY)
+	local mouth = cylUp(m, stack * CFrame.new(0, capY + 0.46, 0), 0.04, 1.3, "Dark", TINY, "ChimneyTop")
 	local smoke = Instance.new("ParticleEmitter")
 	smoke.Name = "Smoke"
 	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
-	smoke.Color = ColorSequence.new(rgb(150, 140, 135))
+	smoke.Color = ColorSequence.new(P.Smoke)
 	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 3.2) })
 	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1) })
 	smoke.Lifetime = NumberRange.new(2, 3)
@@ -425,64 +213,53 @@ local function furnace(m: Model, F: CFrame)
 	smoke.SpreadAngle = Vector2.new(10, 10)
 	smoke.Rate = 2
 	smoke.LightInfluence = 1
-	smoke.Parent = ember
-	-- the copper feed pipe from the FOUNDRY chute: up out of the floor, into the furnace's side
-	local px, pz = FURNACE.X + FURNACE_ACROSS / 2 + 0.75, FURNACE.Z - 0.9
+	smoke.Parent = mouth
+	-- the feed pipe from the FOUNDRY chute: an orange sleeve, a slate pipe up, an orange joint, into the side
+	local px, pz = FURNACE.X + FURNACE_D / 2 + 0.75, FURNACE.Z - 0.9
 	local bendY = FURNACE_TOP - 0.9
-	cyl(m, F * CFrame.new(px, FLOOR + 0.12, pz), "Y", 0.24, 1.05, C.HousingLight, nil, tiny())
-	cyl(m, F * CFrame.new(px, (FLOOR + bendY) / 2, pz), "Y", bendY - FLOOR, 0.7, C.Copper, nil, prop({ Name = "FeedPipe" }))
+	cylUp(m, F * CFrame.new(px, FLOOR + 0.15, pz), 0.3, 1.0, "Trim", TINY)
+	cylUp(m, F * CFrame.new(px, (FLOOR + bendY) / 2, pz), bendY - FLOOR, 0.7, "Pipe", PROP, "FeedPipe")
 	local bend = (F * CFrame.new(px, bendY, pz)).Position
-	local inlet = (F * CFrame.new(FURNACE.X + FURNACE_ACROSS / 2 - 0.4, bendY, pz)).Position
-	Geo.ball(m, bend, 0.7, C.Copper, nil, prop({ Name = "PipeJoint" }))
-	pipeBetween(m, bend, inlet, 0.7, C.Copper)
+	local inlet = (F * CFrame.new(FURNACE.X + FURNACE_D / 2 - 0.4, bendY, pz)).Position
+	ball(m, bend, 0.86, "Trim", TINY, "PipeJoint")
+	rod(m, bend, inlet, 0.7, "Pipe", PROP)
 end
 
 -- Glass pipe from the furnace, the casting channel and the blaster mould.
 local function casting(m: Model, F: CFrame)
 	local pipeY = FLOOR + 3.3
-	local fromX = FURNACE.X - FURNACE_ACROSS / 2 + 0.2
+	local fromX = FURNACE.X - FURNACE_D / 2 + 0.2
 	local turnX = MOULD.X + 0.2
 	local z = FURNACE.Z
 	local a = (F * CFrame.new(fromX, pipeY, z)).Position
 	local b = (F * CFrame.new(turnX, pipeY, z)).Position
-	local outer = pipeBetween(m, a, b, 0.9, C.Glass, GLASS, prop({ Transparency = 0.45, Name = "GlassPipe" }))
-	outer.Name = "GlassPipe"
-	local core = pipeBetween(m, a, b, 0.42, C.Molten, NEON, glow({ Name = "Molten" }))
-	core.Name = "Molten"
-	cyl(m, F * CFrame.new(fromX - 0.15, pipeY, z), "X", 0.25, 1.25, C.HousingLight, nil, tiny())
-	Geo.ball(m, b, 0.95, C.HousingLight, nil, prop({ Name = "PipeJoint" }))
+	rod(m, a, b, 0.9, "Glass", PROP, "GlassPipe")
+	rod(m, a, b, 0.42, "Molten", TINY, "Molten")
+	cylX(m, F * CFrame.new(fromX - 0.2, pipeY, z), 0.3, 1.2, "Trim", TINY)
+	ball(m, b, 0.98, "Frame", TINY, "PipeJoint")
 	-- down into the channel
 	local spoutY = FLOOR + 2.25
 	local c = (F * CFrame.new(turnX, spoutY, z)).Position
-	local down = pipeBetween(m, b, c, 0.8, C.Glass, GLASS, prop({ Transparency = 0.45 }))
-	down.Name = "GlassPipe"
-	local downCore = pipeBetween(m, b, c, 0.36, C.Molten, NEON, glow())
-	downCore.Name = "Molten"
-	-- the sloped casting channel: an open trough with molten metal in it, on a leg
+	rod(m, b, c, 0.8, "Glass", PROP, "GlassPipe")
+	rod(m, b, c, 0.36, "Molten", TINY, "Molten")
+	-- the sloped casting channel (KitMachines chute: a dark slide with orange lips) with molten metal, on a leg
 	local mouldTop = FLOOR + 1.45
 	local from = (F * CFrame.new(turnX, spoutY - 0.25, z + 0.2)).Position
 	local to = (F * CFrame.new(MOULD.X + 0.2, mouldTop + 0.18, MOULD.Z + 0.9)).Position
 	local frame = CFrame.lookAt((from + to) / 2, to)
 	local length = (to - from).Magnitude
-	Geo.block(m, frame * CFrame.new(0, -0.12, 0), Vector3.new(0.9, 0.12, length), C.HousingDark, nil, prop({ Name = "Channel" }))
+	part(m, frame * CFrame.new(0, -0.12, 0), Vector3.new(0.9, 0.12, length), "Dark", PROP, "Channel")
 	for _, side in { -1, 1 } do
-		Geo.block(m, frame * CFrame.new(side * 0.4, 0.06, 0), Vector3.new(0.12, 0.34, length), C.HousingLight, nil, tiny())
+		part(m, frame * CFrame.new(side * 0.42, 0.04, 0), Vector3.new(0.14, 0.32, length), "Trim", TINY)
 	end
-	local stream = Geo.block(m, frame * CFrame.new(0, -0.04, 0), Vector3.new(0.6, 0.05, length), C.Molten, NEON, glow())
-	stream.Name = "Molten"
-	cyl(m, F * CFrame.new(turnX, (FLOOR + spoutY - 0.4) / 2, z + 0.2), "Y", spoutY - 0.4 - FLOOR, 0.36, C.Iron, nil, tiny())
-	-- the mould table with a blaster-shaped cavity of molten metal
-	local table_ = F * CFrame.new(MOULD.X, 0, MOULD.Z)
-	Geo.block(
-		m,
-		table_ * CFrame.new(0, (FLOOR + mouldTop - 0.2) / 2, 0),
-		Vector3.new(3.6, mouldTop - 0.2 - FLOOR, 2.4),
-		C.Housing,
-		nil,
-		solid({ Name = "MouldTable" })
-	)
-	Geo.block(m, table_ * CFrame.new(0, FLOOR + 0.25, 0), Vector3.new(3.7, 0.3, 2.5), C.Hazard, nil, prop())
-	Geo.block(m, table_ * CFrame.new(0, mouldTop - 0.1, 0), Vector3.new(3.3, 0.2, 2.1), C.Iron, METAL, solid({ Name = "Mould" }))
+	part(m, frame * CFrame.new(0, -0.04, 0), Vector3.new(0.6, 0.05, length), "Molten", TINY, "Molten")
+	cylUp(m, F * CFrame.new(turnX, (FLOOR + spoutY - 0.4) / 2, z + 0.2), spoutY - 0.4 - FLOOR, 0.36, "Frame", TINY)
+	-- the mould table: a cream body, a glowing strip, the slate mould with the blaster cavity
+	local tableCF = F * CFrame.new(MOULD.X, 0, MOULD.Z)
+	local tableTop = mouldTop - 0.2
+	part(m, tableCF * CFrame.new(0, (FLOOR + tableTop) / 2, 0), Vector3.new(3.6, tableTop - FLOOR, 2.4), "Body", SOLID, "MouldTable")
+	part(m, tableCF * CFrame.new(0, FLOOR + 0.35, -1.23), Vector3.new(3.2, 0.12, 0.06), "Neon", TINY)
+	part(m, tableCF * CFrame.new(0, mouldTop - 0.1, 0), Vector3.new(3.4, 0.2, 2.2), "Frame", SOLID, "Mould")
 	-- the cavity: a blaster lying on its side, seen from above (muzzle block,
 	-- barrel, body with a sight, rear block, the grip slanting toward the yard)
 	local y = mouldTop + 0.005
@@ -496,62 +273,52 @@ local function casting(m: Model, F: CFrame)
 		{ 0.1, -0.26, 0.12, 0.26, 0.3 }, -- trigger
 	}
 	for _, piece in cavity do
-		local part = Geo.block(
+		part(
 			m,
-			table_ * CFrame.new(piece[1], y, piece[2]) * CFrame.Angles(0, piece[5], 0),
+			tableCF * CFrame.new(piece[1], y, piece[2]) * CFrame.Angles(0, piece[5], 0),
 			Vector3.new(piece[3], 0.03, piece[4]),
-			C.Molten,
-			NEON,
-			glow()
+			"Molten",
+			TINY,
+			"Molten"
 		)
-		part.Name = "Molten"
 	end
 end
 
 local function anvil(m: Model, F: CFrame)
 	local at = F * CFrame.new(ANVIL.X, 0, ANVIL.Z)
-	-- a stout iron stand with an orange band, the waist, the big light steel
+	-- a slate stand with an orange band, the dark waist, the big light steel
 	-- face and horn (they read from the yard next to the mould table)
 	local face, faceH = Vector3.new(2.6, 0.6, 1.2), 0.6
-	Geo.block(m, at * CFrame.new(0, FLOOR + 0.45, 0), Vector3.new(1.9, 0.9, 1.5), C.HousingDark, nil, solid({ Name = "AnvilBase" }))
-	Geo.block(m, at * CFrame.new(0, FLOOR + 0.25, 0), Vector3.new(1.98, 0.3, 1.58), C.Hazard, nil, prop())
-	local waistBottom = FLOOR + 0.9
-	local waistTop = ANVIL_TOP - faceH
-	Geo.block(m, at * CFrame.new(0, (waistBottom + waistTop) / 2, 0), Vector3.new(0.95, waistTop - waistBottom, 0.85), C.Iron, nil, solid())
-	local top = Geo.block(m, at * CFrame.new(0, ANVIL_TOP - faceH / 2, 0), face, C.AnvilSteel, nil, solid({ Name = "Anvil" }))
-	top.Name = "Anvil"
+	part(m, at * CFrame.new(0, FLOOR + 0.45, 0), Vector3.new(1.9, 0.9, 1.5), "Frame", SOLID, "AnvilBase")
+	part(m, at * CFrame.new(0, FLOOR + 0.2, 0), Vector3.new(2.0, 0.24, 1.6), "Trim", TINY)
+	local waistBottom, waistTop = FLOOR + 0.9, ANVIL_TOP - faceH
+	part(m, at * CFrame.new(0, (waistBottom + waistTop) / 2, 0), Vector3.new(0.95, waistTop - waistBottom, 0.85), "Dark", SOLID)
+	part(m, at * CFrame.new(0, ANVIL_TOP - faceH / 2, 0), face, C.Steel, SOLID, "Anvil")
 	-- the horn: a wedge with its flat side on top, tapering to the left (-X)
-	Geo.wedge(
+	SoftKit.wedge(
 		m,
 		at * CFrame.new(-face.X / 2 - 0.55, ANVIL_TOP - faceH / 2, 0) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi),
 		Vector3.new(face.Z, faceH, 1.1),
-		C.AnvilSteel,
-		nil,
-		solid()
+		C.Steel,
+		SOLID
 	)
 end
 
 local function rack(m: Model, F: CFrame)
-	local board =
-		Geo.block(m, F * CFrame.new(RACK.X, RACK.Y, RACK.Z), Vector3.new(6.2, 3.4, 0.2), C.Board, nil, prop({ Name = "RackBoard" }))
-	board.Name = "RackBoard"
+	local board = part(m, F * CFrame.new(RACK.X, RACK.Y, RACK.Z), Vector3.new(6.2, 3.4, 0.2), C.Board, PROP, "RackBoard")
 	-- a big "?" for the level after the top one (shown by setRack)
-	local gui = surface(board, "Mystery", Enum.NormalId.Front, 30, 0.4)
+	local gui = SoftKit.label(board, Enum.NormalId.Front, "?", C.Silhouette, 0.4)
+	gui.Name = "Mystery"
 	gui.Enabled = false
-	local mark = text(gui, "Mark", "?", C.Silhouette)
-	mark.Position = UDim2.fromScale(0.3, 0.05)
-	mark.Size = UDim2.fromScale(0.4, 0.9)
-	Geo.block(m, F * CFrame.new(RACK.X, RACK.Y + 1.85, RACK.Z - 0.05), Vector3.new(6.6, 0.3, 0.35), C.HousingLight, nil, tiny())
-	local plate = Geo.block(
-		m,
-		F * CFrame.new(RACK.X, RACK.Y - 1.95, RACK.Z - 0.08),
-		Vector3.new(6.6, 0.6, 0.4),
-		C.HousingDark,
-		nil,
-		tiny({ Name = "RackSign" })
-	)
-	plate.Name = "RackSign"
-	text(surface(plate, "Gui", Enum.NormalId.Front, 40, 0.3), "Text", "NEXT: LV 2", C.Sign)
+	local mark = gui:FindFirstChildOfClass("TextLabel")
+	if mark then
+		mark.Name = "Mark"
+		mark.Position = UDim2.fromScale(0.3, 0.05)
+		mark.Size = UDim2.fromScale(0.4, 0.9)
+	end
+	cylX(m, F * CFrame.new(RACK.X, RACK.Y + 1.85, RACK.Z - 0.05), 6.6, 0.36, "Trim", TINY)
+	local plate = part(m, F * CFrame.new(RACK.X, RACK.Y - 1.95, RACK.Z - 0.08), Vector3.new(6.6, 0.6, 0.4), "Frame", TINY, "RackSign")
+	SoftKit.label(plate, Enum.NormalId.Front, "NEXT: LV 2", SoftKit.Text)
 end
 
 local function mount(base: BasePart, F: CFrame)
@@ -584,9 +351,9 @@ function FoundryBuilder.build(plotCF: CFrame, nextLevel: number?): Model
 		m,
 		F * CFrame.new(FURNACE.X, HOPPER_Y + 2.25, FURNACE.Z),
 		Vector3.new(3.8, 2.9, 3.8),
-		C.Recess,
+		P.Dark,
 		nil,
-		tiny({ Name = "Intake", Transparency = 1 })
+		{ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 1 }
 	)
 	intake.Name = "Intake"
 	for _, d in m:GetDescendants() do
@@ -601,8 +368,8 @@ end
 --[[
 	Shows blaster level `level` as a black silhouette on the shadow board (a
 	level past BlasterData.MaxLevel: the "?" and COMING SOON). Rebuilds only
-	the "Silhouette" model; the parts keep their BlasterBuilder shapes,
-	scaled to fit the board.
+	the "Silhouette" model; the parts keep their BlasterBuilder.silhouette
+	shapes, scaled to fit the board.
 ]]
 function FoundryBuilder.setRack(building: Model, level: number)
 	local old = building:FindFirstChild("Silhouette")
@@ -626,7 +393,7 @@ function FoundryBuilder.setRack(building: Model, level: number)
 	if comingSoon or not base or not mountPoint or not mountPoint:IsA("Attachment") then
 		return
 	end
-	local tool = BlasterBuilder.build(math.max(2, level), "")
+	local tool = BlasterBuilder.silhouette(math.max(2, level))
 	local parts: { BasePart } = {}
 	local minP = Vector3.new(math.huge, math.huge, math.huge)
 	local maxP = -minP
@@ -654,23 +421,23 @@ function FoundryBuilder.setRack(building: Model, level: number)
 	local frame = base.CFrame * mountPoint.CFrame * CFrame.new(0, 0, -extent.X * scale / 2 - 0.02) * CFrame.Angles(0, math.pi / 2, 0)
 	local silhouette = Instance.new("Model")
 	silhouette.Name = "Silhouette"
-	for _, part in parts do
-		for _, child in part:GetChildren() do
+	for _, piece in parts do
+		for _, child in piece:GetChildren() do
 			child:Destroy()
 		end
-		local rel = part.CFrame
-		part.Size *= scale
-		part.CFrame = frame * CFrame.new((rel.Position - center) * scale) * rel.Rotation
-		part.Anchored = true
-		part.Massless = false
-		part.CanCollide = false
-		part.CanQuery = false
-		part.CanTouch = false
-		part.CastShadow = false
-		part.Color = C.Silhouette
-		part.Material = Enum.Material.SmoothPlastic
-		part.Transparency = 0
-		part.Parent = silhouette
+		local rel = piece.CFrame
+		piece.Size *= scale
+		piece.CFrame = frame * CFrame.new((rel.Position - center) * scale) * rel.Rotation
+		piece.Anchored = true
+		piece.Massless = false
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.CanTouch = false
+		piece.CastShadow = false
+		piece.Color = C.Silhouette
+		piece.Material = Enum.Material.SmoothPlastic
+		piece.Transparency = 0
+		piece.Parent = silhouette
 	end
 	tool:Destroy()
 	silhouette.Parent = building
@@ -678,7 +445,7 @@ end
 
 ---------------------------------------------------------------- the chute receiver
 
--- The FOUNDRY chute's receiver (plot-local BaseLayout.FoundryIntake).
+-- The FOUNDRY chute's receiver (plot-local BaseLayout.FoundryIntake), in style A.
 function FoundryBuilder.receiver(plotCF: CFrame): Model
 	local zone = BaseLayout.FoundryIntake.Zone
 	local m = Instance.new("Model")
@@ -687,32 +454,35 @@ function FoundryBuilder.receiver(plotCF: CFrame): Model
 	local front = zone.Center.Z - zone.Size.Z / 2 + 0.08
 	local wall = zone.Center.Z + 0.4 -- the hood's back plate leans on the plot wall
 	local w = zone.Size.X - 0.1
-	local hood = Geo.block(m, plotCF * CFrame.new(cx, 1.55, wall - 0.15), Vector3.new(w, 3.1, 0.3), C.Housing, nil, tiny({ Name = "Hood" }))
-	hood.Name = "Hood"
+	local hood = part(m, plotCF * CFrame.new(cx, 1.55, wall - 0.15), Vector3.new(w, 3.1, 0.3), "Frame", TINY, "Hood")
 	m.PrimaryPart = hood
-	local throat =
-		Geo.block(m, plotCF * CFrame.new(cx, 1.5, wall - 0.32), Vector3.new(w - 1.1, 1.2, 0.05), C.Glow, NEON, glow({ Name = "Glow" }))
-	throat.Name = "Glow"
+	part(m, plotCF * CFrame.new(cx, 1.5, wall - 0.32), Vector3.new(w - 1.1, 1.2, 0.05), "Glow", TINY, "Glow")
 	-- the roof leans from the wall down over the belt's end
-	local roofBack = plotCF * CFrame.new(cx, 3.22, wall)
-	local roofFront = plotCF * CFrame.new(cx, 2.5, front)
-	barBetween(m, roofFront.Position, roofBack.Position, zone.Size.X, 0.18, C.Copper, nil, tiny({ Name = "Roof" }))
+	local roofBack = (plotCF * CFrame.new(cx, 3.22, wall)).Position
+	local roofFront = (plotCF * CFrame.new(cx, 2.5, front)).Position
+	part(
+		m,
+		CFrame.lookAt((roofFront + roofBack) / 2, roofBack),
+		Vector3.new(zone.Size.X, 0.18, (roofBack - roofFront).Magnitude),
+		"Trim",
+		TINY,
+		"Roof"
+	)
 	for _, side in { -1, 1 } do
-		Geo.block(
+		part(
 			m,
 			plotCF * CFrame.new(cx + side * (zone.Size.X / 2 - 0.13), 1.85, (front + wall - 0.3) / 2),
 			Vector3.new(0.25, 1.5, wall - 0.3 - front),
-			C.HousingLight,
-			nil,
-			tiny()
+			"Body",
+			TINY
 		)
 	end
-	local lintel = Geo.block(m, plotCF * CFrame.new(cx, 2.25, front + 0.09), Vector3.new(zone.Size.X, 0.3, 0.18), C.Hazard, nil, tiny())
-	hazard(surface(lintel, "Dashes", Enum.NormalId.Front, 16, 1), 8)
+	local lintel = part(m, plotCF * CFrame.new(cx, 2.25, front + 0.09), Vector3.new(zone.Size.X, 0.3, 0.18), "Trim", TINY, "Lintel")
+	SoftKit.paint(lintel, Enum.NormalId.Front, { { x = 0, y = 0, w = 1, h = 1, color = P.Trim, stripes = 8 } })
 	-- the pipe the belt's end drops into, going down into the ground
 	local pipe = plotCF * CFrame.new(cx, 0, wall - 0.3)
-	cyl(m, pipe * CFrame.new(0, 0.1, 0), "Y", 1.4, 1.35, C.Copper, nil, tiny({ Name = "Pipe" }))
-	cyl(m, pipe * CFrame.new(0, 0.12, 0), "Y", 0.22, 1.58, C.HousingLight, nil, tiny())
+	cylUp(m, pipe * CFrame.new(0, 0.1, 0), 1.4, 1.35, "Pipe", TINY, "Pipe")
+	cylUp(m, pipe * CFrame.new(0, 0.12, 0), 0.22, 1.58, "Trim", TINY)
 	for _, d in m:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = true

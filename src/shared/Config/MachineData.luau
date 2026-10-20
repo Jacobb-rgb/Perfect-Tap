@@ -69,8 +69,14 @@ local FURNACE_HINT = "Furnaces melt CLEAN or CRUSHED ore. Clean dirty ore at you
 
 -- Base upgrade price curves (exponential: players must not get everything at
 -- once). Each machine scales them (cheap machines cheaper, big ones dearer).
-local SPEED_CURVE = { 2000, 12000, 70000, 400000, 2.5e6 }
-local QUALITY_CURVE = { 5000, 40000, 300000, 2e6, 15e6 }
+-- Balance option 3 (owner's YES, 2026-10-20; docs/BALANCE_SIM.md): the Tech
+-- upgrades are goals across the whole journey, not pocket change. A typical
+-- player (sim, with the floors' real tables): Auto Cleaner Speed I ~25 min,
+-- Quality I ~45 min, II ~1h20, III ~2h35, IV ~3h20-5h; Quality V and the top
+-- Speed levels of the big machines are goals past blaster 10. Each machine
+-- keeps its factor on these base curves (scaled).
+local SPEED_CURVE = { 20000, 400000, 8e6, 150e6, 2.5e9 }
+local QUALITY_CURVE = { 50000, 2e6, 50e6, 600e6, 6e9 }
 
 local function scaled(curve: { number }, factor: number): { number }
 	local list = {}
@@ -310,7 +316,7 @@ MachineData.List = {
 	{
 		Id = "Polisher",
 		Name = "Polisher",
-		Description = "Polishes clean ore: half the time it comes out one grade better (worth more on a podium).",
+		Description = "Polishes clean ore: half the time it comes out one grade better, up to Pristine (worth more on a podium). Flawless only comes from cleaning by hand.",
 		Size = { 2, 2 },
 		Price = 25000,
 		Category = "Processing",
@@ -320,6 +326,7 @@ MachineData.List = {
 		Output = "Clean",
 		OutputCount = 1,
 		GradeUpChance = 0.5,
+		MaxGrade = "Pristine", -- Flawless only by hand (owner, 2026-10-20: a belt loop must not polish everything Flawless)
 		LoadText = "Polish Ore",
 		WrongHint = "The Polisher only takes CLEAN ore.",
 		ConveyorFaces = "NoFront",

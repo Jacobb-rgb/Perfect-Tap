@@ -671,11 +671,9 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(rings > 0, "the podium has its holo-ring")
-		T.eq(
-			PlotBuilder.holoTone(roblox.Color3.fromRGB(40, 130, 255)),
-			PlotBuilder.HoloColor,
-			"the default ring is the same tone of the Tech blue"
-		)
+		-- (style A, 2026-10-20: the soft cyan of the machines' Fusion Reactor instead of the Tech blue)
+		T.eq(PlotBuilder.HoloGlow, roblox.Color3.fromRGB(90, 200, 255), "the ring glows in style A's soft cyan")
+		T.eq(PlotBuilder.holoTone(PlotBuilder.HoloGlow), PlotBuilder.HoloColor, "the default ring is the same tone of its glow")
 		-- a second completed collection: the newest shows, Equip picks the other back
 		for _, art in ArtifactConfig.ByCollection.CrownOfKaldrum do
 			ArtifactService.find(w.player, "Quarry", nil, art.Id)

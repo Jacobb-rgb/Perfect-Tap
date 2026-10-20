@@ -26,6 +26,22 @@ Waiting for the owner: the flat 3h-5h stretch (option 3 Tech Speed/Quality upgra
 between 4 and 5, or both). The Foundry curve is re-calibrated to ~8 h after that choice, and the Quality upgrade
 prices go up whichever option is picked.
 
+## Option 3 (pricier Tech upgrades) and the 6-floor tables (2026-10-20)
+
+The owner picked both fixes for the flat 3h–5h stretch: option 3 (pricier Tech Speed / Quality upgrades, this change)
+and option 4 (the Stormglass Rift, gate 8, by the mine-floors chat). The sim now reads the real `MineFloors.List`
+(the real tables reach about one rarity higher than the old "floor N = rarity N" model: with today's 5 floors a typical
+player would reach blaster 10 at ~2h45, so the Foundry curve is re-calibrated once the Rift is in).
+
+- `MachineData` base curves: Speed { 20K, 400K, 8M, 150M, 2.5B } (was { 2K, 12K, 70K, 400K, 2.5M }), Quality
+  { 50K, 2M, 50M, 600M, 6B } (was { 5K, 40K, 300K, 2M, 15M }); each machine keeps its factor. With the 6-floor tables
+  (variant A2, sent to the mine chat) a typical player buys Auto Cleaner Speed I at ~25 min, Quality I ~45 min,
+  II ~1h20, III ~2h35, IV ~3h20 (between blaster 8 and 9); Quality V and the big machines' top Speed levels are goals
+  past blaster 10.
+- Calibrated with option 3 and the A2 tables (to be re-run on the Rift's real tables): Foundry L2–L10 ≈ 350 / 17K /
+  710K / 2.1M / 73M / 130M / 3.0B / 38B / 290B; typical player: Rift (blaster 8) 3h16, Heartstone Core (blaster 9)
+  5h01, blaster 10 7h57; skilled 5h32; casual reaches blaster 9 at 7h21.
+
 ## Re-run with steps 6–7 modelled (2026-10-18, branch fix/post-steps67)
 
 The player now also buys Boots, the coin enchants (slotted where they earn most), coin golem capsules (on expected
