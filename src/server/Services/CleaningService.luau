@@ -536,6 +536,22 @@ end
 -- Internals for the Lune tests only (tests/CleaningService.spec.luau).
 CleaningService._test = {
 	behaviour = stationBehaviour,
+	mount = function(machine: MachineService.PlacedMachine, record: ItemService.ItemRecord): boolean
+		return mount(machine, record)
+	end,
+	start = function(player: Player, machine: MachineService.PlacedMachine)
+		startSession(player, machine)
+	end,
+	submit = function(player: Player, sessionId: any, payload: any)
+		onSubmit(player, sessionId, payload)
+	end,
+	session = function(player: Player): any
+		return sessions[player]
+	end,
+	-- the session seed source (the Lune tests have no Random): anything with NextInteger
+	setRandom = function(r: any)
+		random = r
+	end,
 	newScan = newScan,
 	intakePass = intakePass,
 	stations = function(): { MachineService.PlacedMachine }
