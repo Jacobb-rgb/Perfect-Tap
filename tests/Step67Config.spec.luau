@@ -141,6 +141,17 @@ return function(T, Loader)
 			add(product.Name)
 			add(product.Description)
 		end
+		-- the LIMITED EDITION golem proposals (not in the game list yet)
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		for _, theme in LimitedGolems.Themes do
+			add(theme.Title)
+			add(theme.Tagline)
+			for _, golem in theme.Golems do
+				add(golem.Name)
+				add(golem.Id)
+				add(golem.Lore)
+			end
+		end
 		return names
 	end
 

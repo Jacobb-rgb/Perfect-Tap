@@ -106,6 +106,31 @@ GolemConfig.Accessories = {
 	KnightHelm = true, -- a closed helm with a slit
 	Halo = true, -- a floating ring of light
 	Crown = true, -- a little crown
+	-- LIMITED EDITION gear (prototype, Config/LimitedGolems; built by
+	-- Builders/GolemGearLimited within the golem's part budget)
+	DragonHorns = true, -- curved ivory horns and a dragon snout
+	DragonEgg = true, -- a cracked dragon eggshell as a hat
+	DragonHelm = true, -- a closed horned helm of dragon scales
+	DragonWings = true, -- bat wings with glowing bones, small horns, a snout (Legendary: two-pointed wings, lava hands)
+	DragonCrown = true, -- a gold crown and big gold-boned wings (the Dragon King)
+	SpaceHelmet = true, -- a glass bubble helmet with an antenna
+	Comet = true, -- a comet with a glowing tail on the head
+	Orbiters = true, -- two little moons on a ring around the head
+	StarHat = true, -- a pointed wizard hat with stars
+	StarCrown = true, -- a planet ring and a crown of star points
+	NebulaCrown = true, -- a nebula glow, a planet ring, planets and stars
+	NeonVisor = true, -- a dark visor, an antenna, ear lights
+	Headset = true, -- big headphones with neon rings
+	MechaCrest = true, -- a V-fin crest with a gem and a visor
+	Rockets = true, -- two rocket pods on the shoulders
+	JetPack = true, -- jet boosters with flames
+	OmegaFrame = true, -- V-fin, visor, boosters with flames (the Omega Mech)
+	IcicleHair = true, -- icicles standing up like spiky hair
+	Beanie = true, -- a knitted hat with a pom-pom and a scarf
+	FrostHelm = true, -- a closed ice helm with icicle spikes
+	SnowCloud = true, -- a hood with a snowflake and a little snow cloud
+	IcicleCrown = true, -- a crown of tall icicles and ice shards on the back
+	AuroraCrown = true, -- an ice crown with northern lights behind it
 } :: { [string]: boolean }
 
 -- GolemAction / ActionResult reason codes -> text for the player

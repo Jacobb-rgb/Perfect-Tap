@@ -113,6 +113,7 @@ end
 
 local uiExports: { [string]: { any } } = {}
 local scene_extra: any = nil
+local scene_surface: any = nil -- a scene's own "Surface" preset (its sky and light), replacing LightingConfig's in its JSON
 
 -- The artifact museum ArtifactService builds into every plot's yard at
 -- server start (MuseumBuilder), empty (the relics show near the camera for
@@ -758,6 +759,13 @@ elseif sceneName == "ores" then
 			label(CF.new(x, 0.4, z + 4.4) * CF.Angles(-1.05, 0, 0), 6.5, 0.8, text, C3.fromRGB(240, 226, 200))
 		end
 	end
+elseif string.match(sceneName, "^limited_") then -- the LIMITED EDITION golem proposals (tools/lune/lib/limited_golems_preview.luau)
+	local themeId = string.sub(sceneName, #"limited_" + 1)
+	local LimitedPreview = require("./lib/limited_golems_preview")
+	scene_surface, scene_extra = LimitedPreview.build(Loader, workspace, themeId)
+	uiExports["ui_" .. sceneName] = LimitedPreview.ui(Loader, themeId)
+	fs.writeDir(root .. "/build/preview")
+	fs.writeFile(root .. "/build/preview/" .. sceneName .. "_info.json", serde.encode("json", LimitedPreview.info(Loader, themeId)))
 else
 	error("Unknown scene: " .. sceneName)
 end
@@ -766,6 +774,9 @@ local scene = Export.collect(workspace)
 local presets = {}
 for name, preset in LightingConfig.Presets do
 	presets[name] = presetToJson(preset)
+end
+if scene_surface then
+	presets.Surface = presetToJson(scene_surface)
 end
 scene.presets = presets
 if scene_extra then

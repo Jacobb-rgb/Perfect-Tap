@@ -94,6 +94,13 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
+-- the LIMITED EDITION golem proposals (Config/LimitedGolems; the shop banner's cards)
+local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+for id in LimitedGolems.ById do
+	models["golem_" .. id] = GolemBuilder.build(id)
+end
+
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
 if #only > 0 then
