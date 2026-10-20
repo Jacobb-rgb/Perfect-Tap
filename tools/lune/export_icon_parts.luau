@@ -94,6 +94,13 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
+-- the hoppers (the HOPPERS shop cards; in the game a live ViewportFrame)
+local HopperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.HopperConfig")
+local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
+for _, hopper in HopperConfig.List do
+	models["hopper_" .. hopper.Id] = HopperBuilder.build(hopper.Id, CF.new())
+end
+
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
 if #only > 0 then

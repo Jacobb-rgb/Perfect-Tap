@@ -1,0 +1,259 @@
+{
+ "hoppers_lineup": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 70,
+  "maxLights": 12,
+  "position": [
+   0,
+   15,
+   64
+  ],
+  "target": [
+   0,
+   8,
+   -2
+  ],
+  "fov": 50
+ },
+ "hoppers_small": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 50,
+  "maxLights": 12,
+  "position": [
+   -29,
+   11.5,
+   34
+  ],
+  "target": [
+   -29,
+   7.0,
+   -2
+  ],
+  "fov": 50
+ },
+ "hoppers_mid": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 50,
+  "maxLights": 12,
+  "position": [
+   0.7,
+   13.5,
+   36
+  ],
+  "target": [
+   0.7,
+   9.0,
+   -2
+  ],
+  "fov": 50
+ },
+ "hoppers_big": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 50,
+  "maxLights": 12,
+  "position": [
+   29,
+   15.5,
+   42
+  ],
+  "target": [
+   29,
+   11.5,
+   -2
+  ],
+  "fov": 52
+ },
+ "hopper_terra_close": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 40,
+  "maxLights": 12,
+  "position": [
+   44,
+   11,
+   24
+  ],
+  "target": [
+   37.1,
+   10,
+   -2
+  ],
+  "fov": 50
+ },
+ "hoppers_day": {
+  "scene": "hoppers",
+  "preset": "Surface",
+  "sunDir": [
+   -0.5,
+   0.75,
+   0.45
+  ],
+  "exposure": 1.1,
+  "shadowExtent": 80,
+  "maxLights": 12,
+  "position": [
+   0,
+   19,
+   80
+  ],
+  "target": [
+   0,
+   9,
+   -2
+  ],
+  "fov": 52
+ },
+ "hopshop_pc": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 50,
+  "maxLights": 12,
+  "position": [
+   0.7,
+   13.5,
+   36
+  ],
+  "target": [
+   0.7,
+   9.0,
+   -2
+  ],
+  "fov": 50,
+  "ui": "ui_hoppers_pc"
+ },
+ "hopshop_pc_more": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 50,
+  "maxLights": 12,
+  "position": [
+   0.7,
+   13.5,
+   36
+  ],
+  "target": [
+   0.7,
+   9.0,
+   -2
+  ],
+  "fov": 50,
+  "ui": "ui_hoppers_pc_more"
+ },
+ "hopshop_phone": {
+  "scene": "hoppers",
+  "preset": "Workbench",
+  "sunDir": [
+   0.3,
+   0.7,
+   0.65
+  ],
+  "exposure": 0.95,
+  "shadowExtent": 50,
+  "maxLights": 12,
+  "position": [
+   0.7,
+   13.5,
+   36
+  ],
+  "target": [
+   0.7,
+   9.0,
+   -2
+  ],
+  "fov": 50,
+  "ui": "ui_hoppers_phone",
+  "uiInset": 58
+ },
+ "hopshop_front": {
+  "scene": "hopper_shop",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   0.55
+  ],
+  "exposure": 1.2,
+  "shadowExtent": 90,
+  "maxLights": 12,
+  "position": [
+   12,
+   17,
+   56
+  ],
+  "target": [
+   0,
+   10,
+   -8
+  ],
+  "fov": 55
+ },
+ "hopshop_side": {
+  "scene": "hopper_shop",
+  "preset": "Surface",
+  "sunDir": [
+   -0.45,
+   0.7,
+   0.55
+  ],
+  "exposure": 1.2,
+  "shadowExtent": 90,
+  "maxLights": 12,
+  "position": [
+   -42,
+   26,
+   44
+  ],
+  "target": [
+   -2,
+   11,
+   -10
+  ],
+  "fov": 50
+ }
+}

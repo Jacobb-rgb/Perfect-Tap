@@ -162,6 +162,13 @@ elseif sceneName == "cleaning_reveal_strip" then -- the cleaning reveal, Common 
 	require("./lib/reveal_strip").build(Loader, workspace)
 elseif sceneName == "platforms_game" or sceneName == "platforms_build" then -- platforms in the game: lift, deck, slide (tools/lune/lib/platforms_scene.luau)
 	require("./lib/platforms_scene").build(Loader, workspace, sceneName == "platforms_build")
+elseif sceneName == "hopper_shop" then -- the HOPPER WORKS shop building (tools/lune/lib/hopper_preview.luau)
+	require("./lib/hopper_preview").buildShop(Loader, workspace)
+elseif sceneName == "hoppers" then -- the seven hopper concepts on a showroom stage (tools/lune/lib/hopper_preview.luau)
+	require("./lib/hopper_preview").build(Loader, workspace)
+	for name, guis in require("./lib/hopper_preview").ui(Loader) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "ore_showcase" then -- every ore in one picture on a tiered shelf (tools/lune/lib/ore_showcase.luau)
 	require("./lib/ore_showcase").build(Loader, workspace)
 elseif sceneName == "cute_styles" then -- the machine style exploration A / B / C (tools/lune/lib/cute_styles_gallery.luau)
