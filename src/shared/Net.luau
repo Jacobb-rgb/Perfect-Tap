@@ -34,8 +34,8 @@ Net.Events = {
 	CleanSubmit = { Rate = 2, Burst = 3 },
 	CleanCancel = { Rate = 2, Burst = 3 },
 	-- machines / building (payloads: docs/plans/STEP_D_PLAN.md, "Remotes")
-	BuildPlace = { Rate = 8, Burst = 12 }, -- (seq, machineId, x, z, r); fast enough to paint belts
-	BuildMove = { Rate = 4, Burst = 6 }, -- (seq, model, x, z, r)
+	BuildPlace = { Rate = 8, Burst = 12 }, -- (seq, machineId, x, z, r, level?); fast enough to paint belts (level: nil / 0 ground, 1 deck)
+	BuildMove = { Rate = 4, Burst = 6 }, -- (seq, model, x, z, r, level?)
 	BuildPickup = { Rate = 6, Burst = 10 }, -- (seq, model)
 	MachineAction = { Rate = 8, Burst = 12 }, -- (model, action, arg?)
 	-- anvil forging
@@ -193,7 +193,7 @@ Net.Events = {
 	CleanResult = false,
 	OpenUI = false,
 	Tutorial = false, -- { Step, Done, Total, Reward?, How = "Step" | "Done" | "Skip" | "Load" }
-	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
+	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R?, L? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? (a short per-session number) }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)

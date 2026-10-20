@@ -30,6 +30,8 @@
 	- Storage: entries that aren't tables are dropped.
 	Layout repair (off the plot, overlapping) is NOT done here:
 	Placement.sanitize does it when the plot spawns, so the player gets a toast.
+	Platforms (same Version 3): an entry's level L is a whole number >= 1 or
+	nil (the ground); 0 and junk become nil. Saves without L are unchanged.
 
 	Version 3 (design v2):
 	- Pickaxes are gone: Pickaxe/OwnedPickaxes are removed, BlasterLevel is a
@@ -780,6 +782,14 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		-- (readers clamp to the rarities they know; a newer build may have more)
 		if entry.C ~= nil then
 			entry.C = if isFinite(entry.C) then math.clamp(math.floor(entry.C), 1, MAX_LEVEL_KEPT) else nil
+		end
+		-- the level (platforms): a whole number >= 1 or nothing (the ground);
+		-- 0 and junk become nothing, a newer build's higher level is kept
+		-- (Placement.sanitize sends an entry on a level this server doesn't
+		-- know back to the inventory when the plot spawns)
+		if entry.L ~= nil then
+			local level = entry.L
+			entry.L = if isFinite(level) and level == math.floor(level) and level >= 1 then math.min(level, MAX_LEVEL_KEPT) else nil
 		end
 		if isFinite(entry.X) and isFinite(entry.Z) then
 			entry.X = math.floor(entry.X)

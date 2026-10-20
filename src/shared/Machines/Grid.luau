@@ -42,6 +42,10 @@ local NO_FRONT_OUTPUT = {
 	SolarPanel = true,
 	WindTurbine = true,
 	FusionReactor = true,
+	-- platforms: a deck carries, the Belt Lift and the Slide are belts
+	Platform = true,
+	BeltLift = true,
+	Slide = true,
 }
 
 local DIRS = {
@@ -87,11 +91,18 @@ function Grid.right(r: number): (number, number)
 	return -dz, dx
 end
 
--- Plot-local CFrame of a footprint centre, turned to face Grid.dir(r).
+-- Plot-local height of a level (0 = the plot pad, 1 = a platform's deck top).
+function Grid.levelY(level: number?): number
+	return (if level == 1 then 1 else 0) * MachineData.DeckHeight
+end
+
+-- Plot-local CFrame of a footprint centre, turned to face Grid.dir(r), on
+-- `level` (nil / 0 = the pad, 1 = a deck: MachineData.DeckHeight up).
 -- PlotService.footprintCFrame and the build-mode ghost both use this.
-function Grid.localCFrame(id: string, x: number, z: number, r: number): CFrame
+function Grid.localCFrame(id: string, x: number, z: number, r: number, level: number?): CFrame
 	local w, d = Grid.footprint(id, r)
-	return CFrame.new(-HALF + (x + w / 2) * CELL, 0, -HALF + (z + d / 2) * CELL) * CFrame.Angles(0, -rot(r) * math.pi / 2, 0)
+	return CFrame.new(-HALF + (x + w / 2) * CELL, Grid.levelY(level), -HALF + (z + d / 2) * CELL)
+		* CFrame.Angles(0, -rot(r) * math.pi / 2, 0)
 end
 
 -- Cell under a plot-local position, or nil when it's off the grid.
@@ -160,6 +171,23 @@ function Grid.outputCell(id: string, x: number, z: number, r: number): (number?,
 	local ahead = d / 2 + 0.5
 	local px = x + fw / 2 + across * rx + ahead * dx
 	local pz = z + fd / 2 + across * rz + ahead * dz
+	return math.floor(px), math.floor(pz)
+end
+
+-- The cell just in front of (`ahead` 1) or behind (`ahead` -1) the
+-- footprint, in line with its output column (the middle of a 1-wide belt
+-- or slope). Raw numbers: it may be off the plot. Unlike outputCell this
+-- answers for every machine (the Belt Lift's top end, the Slide's back).
+function Grid.endCell(id: string, x: number, z: number, r: number, ahead: number): (number, number)
+	local info = machine(id)
+	local w, d = info.Size[1], info.Size[2]
+	local fw, fd = Grid.footprint(id, r)
+	local dx, dz = Grid.dir(r)
+	local rx, rz = Grid.right(r)
+	local across = math.floor(w / 2) + 0.5 - w / 2
+	local along = (if ahead < 0 then -1 else 1) * (d / 2 + 0.5)
+	local px = x + fw / 2 + across * rx + along * dx
+	local pz = z + fd / 2 + across * rz + along * dz
 	return math.floor(px), math.floor(pz)
 end
 

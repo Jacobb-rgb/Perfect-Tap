@@ -981,6 +981,30 @@ local DRAW: { [string]: (Frame) -> () } = {
 		bit(a, "Glow", 0.36, 0.56, 0.64, 0.88, rgb(186, 110, 255), 0.4)
 		bit(a, "Trim", 0.08, 0.86, 0.92, 0.96, rgb(186, 110, 255))
 	end,
+	-- platforms (docs/plans/PLATFORMS_PLAN.md): a deck on legs, a belt up, a belt down
+	Platform = function(a: Frame)
+		bit(a, "Deck", 0.06, 0.24, 0.94, 0.38, C.HousingLight, 0.3)
+		bit(a, "Glow", 0.1, 0.38, 0.9, 0.43, C.Hazard)
+		bit(a, "LegL", 0.14, 0.42, 0.24, 0.88, C.HousingDark)
+		bit(a, "LegR", 0.76, 0.42, 0.86, 0.88, C.HousingDark)
+		bit(a, "FootL", 0.1, 0.86, 0.28, 0.94, C.Hazard, 0.4)
+		bit(a, "FootR", 0.72, 0.86, 0.9, 0.94, C.Hazard, 0.4)
+		bit(a, "Belt", 0.3, 0.72, 0.7, 0.86, C.Belt, 0.4)
+	end,
+	BeltLift = function(a: Frame)
+		bit(a, "Deck", 0.62, 0.22, 0.98, 0.32, C.HousingLight, 0.3)
+		local belt = bit(a, "Belt", 0.04, 0.48, 0.96, 0.62, C.Belt, 0.5)
+		belt.Rotation = -32
+		bit(a, "Leg", 0.62, 0.32, 0.7, 0.9, C.HousingDark)
+		glyph(a, "^", 0.06, 0.62, 0.36, 0.94, C.Green)
+	end,
+	Slide = function(a: Frame)
+		bit(a, "Deck", 0.02, 0.22, 0.38, 0.32, C.HousingLight, 0.3)
+		local belt = bit(a, "Belt", 0.04, 0.48, 0.96, 0.62, C.Belt, 0.5)
+		belt.Rotation = 32
+		bit(a, "Leg", 0.3, 0.32, 0.38, 0.9, C.HousingDark)
+		glyph(a, "v", 0.64, 0.62, 0.94, 0.94, rgb(255, 110, 90))
+	end,
 	PowerPole = function(a: Frame)
 		bit(a, "Pole", 0.45, 0.2, 0.55, 0.9, C.HousingDark)
 		bit(a, "Arm", 0.2, 0.24, 0.8, 0.3, C.HousingDark)

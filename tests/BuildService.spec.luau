@@ -385,6 +385,67 @@ return function(T, Loader)
 		T.eq(#data.Storage, 1, "Ore Pen untouched")
 	end)
 
+	withWorld("BuildService: levels (platforms): deck places and moves, bad levels, DeckInUse, lifting, the snapshot", function(w)
+		w.data.MachineInventory.Platform = 1
+		build.place(w.player, 1, "Platform", 4, 4, 0)
+		T.truthy(result(w, 1, "Place").Ok, "platform placed")
+		local platform = MachineService.ofPlot(PLOT)[1]
+		-- the builder stands up on the deck, the neighbour under it
+		w.player.stand(cellPosition(4, 4, 6))
+		w.other.stand(cellPosition(5, 5, 2))
+		local onDeck = { State = "Loose", Body = { CFrame = CFrame.new(cellPosition(5, 4, 5.5)) } }
+		local under = { State = "Loose", Body = { CFrame = CFrame.new(cellPosition(5, 5, 0.8)) } }
+		w.loose = { onDeck, under }
+		local pivots = #w.pivots
+		build.place(w.player, 2, "ClayFurnace", 4, 4, 0, 1)
+		local reply = result(w, 2, "Place")
+		T.truthy(reply.Ok, "furnace on the deck")
+		T.eq(reply.L, 1, "the reply names the deck")
+		local furnace = MachineService.ofPlot(PLOT)[2]
+		T.eq(furnace.L, 1, "deck level")
+		T.eq(furnace.Entry.L, 1, "saved level")
+		T.eq(#w.pivots, pivots + 1, "only the player up on the deck is lifted")
+		T.truthy(w.pivots[#w.pivots].Player == w.player, "the one on the deck")
+		T.eq(#w.released, 1, "only the item on the deck is lifted")
+		T.truthy(w.released[1].Record == onDeck, "not the one under the deck")
+		-- bad levels are refused before anything else
+		for i, bad in { 2, -1, 0.5, "1", true } do
+			build.place(w.player, 10 + i, "Conveyor", 0, 0, 0, bad)
+			T.eq(result(w, 10 + i, "Place").Reason, "BadInput", "level " .. tostring(bad))
+		end
+		build.place(w.player, 20, "Conveyor", 0, 0, 0, 0)
+		T.truthy(result(w, 20, "Place").Ok, "level 0 is the ground")
+		build.place(w.player, 21, "ClayFurnace", 4, 4, 0)
+		T.eq(result(w, 21, "Place").Reason, "UnderDeck", "a machine under the deck")
+		-- the platform stays while the furnace stands on it
+		build.pickup(w.player, 22, platform.Model)
+		T.eq(result(w, 22, "Pickup").Reason, "DeckInUse", "deck in use")
+		build.move(w.player, 23, platform.Model, 8, 8, 0)
+		T.eq(result(w, 23, "Move").Reason, "DeckInUse", "can't move it away")
+		-- the snapshot carries L for deck entries only
+		local snapshot: any = {}
+		build.provide(w.player, w.data, snapshot)
+		local levels = {}
+		for _, entry in snapshot.Placed do
+			levels[entry.Id] = entry.L
+		end
+		T.eq(levels.ClayFurnace, 1, "deck entry L")
+		T.eq(levels.Platform, nil, "ground entries have none")
+		-- the furnace comes down (no level = the ground), then the platform can go
+		build.move(w.player, 24, furnace.Model, 8, 8, 0)
+		T.truthy(result(w, 24, "Move").Ok, "moved down")
+		T.eq(furnace.L, 0, "ground level")
+		T.eq(furnace.Entry.L, nil, "no L saved")
+		build.move(w.player, 25, furnace.Model, 4, 4, 0, 1)
+		T.truthy(result(w, 25, "Move").Ok, "and up again")
+		T.eq(furnace.Entry.L, 1, "on the deck again")
+		build.move(w.player, 26, furnace.Model, 8, 8, 0, 9)
+		T.eq(result(w, 26, "Move").Reason, "BadInput", "bad move level")
+		build.move(w.player, 27, furnace.Model, 8, 8, 0)
+		build.pickup(w.player, 28, platform.Model)
+		T.truthy(result(w, 28, "Pickup").Ok, "empty deck: packed up")
+	end)
+
 	withWorld("BuildService: the State provider sends the layout and slot usage", function(w)
 		local m = placedOne(w, "ClayFurnace", 2, 3, 1)
 		m.Entry.In = { { K = "Clean", O = "Copper", G = "Rough" } }

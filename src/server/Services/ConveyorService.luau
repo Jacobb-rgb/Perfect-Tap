@@ -3,11 +3,14 @@
 	step 3 "WP-Belts", docs/plans/STEP3_PLAN.md).
 
 	Belts (MachineService.register for every MachineData entry with
-	IsConveyor: the Conveyor and the Express Conveyor)
+	IsConveyor: the Conveyor, the Express Conveyor, the Belt Lift and the
+	Slide)
 	- A belt's Belt part is an anchored conveyor surface: its
 	  AssemblyLinearVelocity = LookVector * beltSpeed(belt), set when it
 	  spawns and after every move. beltSpeed = GameConfig.ConveyorSpeed *
 	  the belt's SpeedMult (MachineData; the Express Conveyor runs at 2x).
+	  The Belt Lift's and the Slide's Belt part is tilted (KitMachines.slope),
+	  so the same LookVector carries items up the lift and down the slide.
 	  Anchored-part velocity replicates, so there is no client code and
 	  nothing runs per frame per part.
 	- Every part of a belt is in the "Conveyors" collision group, which does
@@ -18,7 +21,8 @@
 	- Jams (IntakeService.setBeltHandler, 5 Hz, only for items riding a belt
 	  that no hopper or belt end took): a server-simulated item slower than
 	  ConveyorStuckSpeed for ConveyorStuckSeconds gets a nudge along the belt
-	  (dir * beltSpeed + 1 up), which also wakes items that fell asleep;
+	  (its Belt part's LookVector * beltSpeed + 1 up: up a Belt Lift's
+	  slope, down a Slide's), which also wakes items that fell asleep;
 	  ConveyorMaxNudges nudges within ConveyorNudgeWindow push it off the
 	  belt's side (BeltRejectPop). An item that waits behind another item of
 	  the same line (a queue in front of a full machine or a sink) is not
@@ -26,7 +30,8 @@
 	  items get nudged and pushed off, which clears the jam. The items ahead
 	  come from a cell index of the loose items, built once per IntakeService
 	  pass and only when an item is slow: a check looks at the 3 x 3 cells
-	  around the belt, never at every item on the server.
+	  around the belt (the machine under an item ahead is the one at its
+	  height: MachineService.atHeight), never at every item on the server.
 
 	Chutes (BaseLayout.Chutes, three fixed cells on the back grid row)
 	- Sources (PEN, TRAIN): sourceReady / spawnAtSource put an item onto the
@@ -615,10 +620,13 @@ end
 
 ---------------------------------------------------------------- jams
 
--- Is an item on cell (cx, cz) of the belt's plot (just ahead) part of the
--- same line: on a belt that doesn't run against this one, or at a machine?
-local function sameLine(belt: PlacedMachine, cx: number, cz: number, dir: Vector3): boolean
-	local machine = MachineService.atCell(belt.PlotId, cx, cz)
+-- Is an item on cell (cx, cz) of the belt's plot (just ahead, `y` world
+-- studs high) part of the same line: on a belt that doesn't run against
+-- this one, or at a machine? (The machine at the item's height: a deck
+-- belt's line goes on over the deck, a lift's onto it.)
+local function sameLine(belt: PlacedMachine, cx: number, cz: number, y: number, dir: Vector3): boolean
+	local localY = y - PlotService.plotCFrame(belt.PlotId).Position.Y
+	local machine = MachineService.atHeight(belt.PlotId, cx, cz, localY)
 	if not machine or machine.Removed then
 		return false
 	end
@@ -642,8 +650,11 @@ local function queued(belt: PlacedMachine, record: ItemRecord, dir: Vector3, now
 	local position = record.Body.CFrame.Position
 	local x, y, z = position.X, position.Y, position.Z
 	local dx, dz = dir.X, dir.Z
-	for cz = math.max(0, belt.Z - 1), math.min(CELLS - 1, belt.Z + 1) do
-		for cx = math.max(0, belt.X - 1), math.min(CELLS - 1, belt.X + 1) do
+	-- the cells around the item (a Belt Lift is 3 cells long), else around the belt
+	local ix, iz = Grid.cellFromLocal(PlotService.plotCFrame(belt.PlotId):PointToObjectSpace(position))
+	local mx, mz = ix or belt.X, iz or belt.Z
+	for cz = math.max(0, mz - 1), math.min(CELLS - 1, mz + 1) do
+		for cx = math.max(0, mx - 1), math.min(CELLS - 1, mx + 1) do
 			local list = cells[Grid.key(cx, cz)]
 			if not list then
 				continue
@@ -655,7 +666,7 @@ local function queued(belt: PlacedMachine, record: ItemRecord, dir: Vector3, now
 					local sx, sz = ox - dx * along, oz - dz * along
 					local other = looseCache[i]
 					if sx * sx + sz * sz <= AHEAD_WIDTH * AHEAD_WIDTH and other ~= record and other.State == "Loose" then
-						if sameLine(belt, cx, cz, dir) then
+						if sameLine(belt, cx, cz, looseY[i], dir) then
 							return true
 						end
 					end
@@ -722,7 +733,10 @@ local function unjam(belt: PlacedMachine, record: ItemRecord, now: number)
 		end
 		return
 	end
-	record.Body.AssemblyLinearVelocity = dir * ConveyorService.beltSpeed(belt) + Vector3.new(0, 1, 0)
+	-- along the belt surface: up a Belt Lift's slope, down a Slide's
+	local surface = beltPart(belt)
+	local along = if surface then surface.CFrame.LookVector else dir
+	record.Body.AssemblyLinearVelocity = along * ConveyorService.beltSpeed(belt) + Vector3.new(0, 1, 0)
 end
 
 -- IntakeService calls this for every trusted loose item riding a belt that no
@@ -1014,7 +1028,7 @@ ConveyorService._test = {
 	end,
 }
 
--- Every belt type (MachineData IsConveyor: Conveyor, ExpressConveyor), in List order.
+-- Every belt type (MachineData IsConveyor: Conveyor, ExpressConveyor, BeltLift, Slide), in List order.
 function ConveyorService.beltIds(): { string }
 	local list = {}
 	for _, info in MachineData.List do
