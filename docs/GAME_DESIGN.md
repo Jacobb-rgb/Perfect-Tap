@@ -28,7 +28,8 @@ Places:
    **physical raw ore chunks**.
 2. Pick chunks up, carry them (stacked in your arms) or throw them.
 3. Put a raw chunk on your **Cleaning Station** → close-up minigame:
-   **Chisel** along dotted lines → **Scrape** off dirt → **Polish** → reveal + grade.
+   **spray-wash** the dirt off (owner's pick, 2026-10-20: like his pressure-washer video) →
+   "% CLEAN" fills → the ore rises and spins → grade (speed, aim, cracked crystals).
 4. Optional **Crusher** (1 clean ore → 2 crushed piles = more ingots).
 5. **Furnace** smelts clean or crushed ore into an **ingot**.
 6. **Anvil** forges ingots into **gear** (worth the most).
@@ -36,16 +37,18 @@ Places:
    better pickaxes, carry upgrades, machines and speed upgrades.
 
 ## Rarities
-| Rarity | Color | Chisel cuts | Line tolerance | Dirt grid | Fragile spots | Polish turns |
-|---|---|---|---|---|---|---|
-| Common | light grey | 2 | wide | 5×5 | 0 | 2.5 |
-| Uncommon | green | 3 | | 6×6 | 0 | 3 |
-| Rare | blue | 3 (1 notch) | | 6×6 | 2 | 3.5 |
-| Epic | purple | 4 (1 notch) | | 7×7 | 3 | 4 |
-| Legendary | gold | 5 (2 notches) | | 7×7 | 4 | 4.5 |
-| Mythic | pink-red | 6 (3 notches) | narrow | 8×8 | 5 | 5 |
+| Rarity | Color | Dirt thickness | Crystals | A good clean |
+|---|---|---|---|---|
+| Common | light grey | 1.0 | 0 | ~9 s |
+| Uncommon | green | 1.12 | 0 | ~10 s |
+| Rare | blue | 1.25 | 2 | ~11 s |
+| Epic | purple | 1.4 | 3 | ~12 s |
+| Legendary | gold | 1.55 | 4 | ~13 s |
+| Mythic | pink-red | 1.7 | 5 | ~15 s |
 
-A *notch* is a V-shaped cut (two straight lines meeting at a corner).
+The dirt is a 14×14 grid of cells over the clump (CleaningPatterns); the spray washes every cell within its reach
+(SprayScoring). Spraying a glowing crystal point-blank for a third of a second cracks it. A steady sweep at par pace
+is Flawless, a slow careful one Pristine, scribbling with the spray always on Clean (tools/lune/spray_calibrate.luau).
 
 ## Ores
 | Ore | Rarity | Pickaxe tier | Base value | Node HP | Where |

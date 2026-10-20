@@ -178,7 +178,7 @@ return function(T, Loader)
 	end)
 
 	withWorld("Relics: cleaned by hand at the Cleaning Station, the artifact goes into the collection", function(w)
-		local CleaningScoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningScoring")
+		local SprayScoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.SprayScoring")
 		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 		local MachineService = Loader.requirePath("ServerScriptService.Server.Services.MachineService")
 		local cleaning = CleaningService._test
@@ -206,10 +206,10 @@ return function(T, Loader)
 				return if a then base.CFrame * a.CFrame else nil
 			end)
 			-- the minigame itself is tested in Cleaning.spec: here a valid run
-			patch(CleaningScoring, "score", function()
-				return { Valid = true, Score = 0.95, Grade = "Flawless", Chisel = 1, Scrape = 1, Polish = 1, Chips = 0 }
+			patch(SprayScoring, "score", function()
+				return { Valid = true, Score = 0.95, Grade = "Flawless", Speed = 1, Aim = 1, Cracks = 0, Time = 9 }
 			end)
-			patch(CleaningScoring, "fitsSession", function()
+			patch(SprayScoring, "fitsSession", function()
 				return true
 			end)
 			patch(GameConfig, "CleaningMinSeconds", 0)
@@ -235,7 +235,7 @@ return function(T, Loader)
 			T.eq(begin.Relic, RELIC, "the client learns it is a relic")
 			T.eq(begin.OreId, CleaningService.relicOre(RELIC), "the pattern of an ore of its rarity")
 			local session = cleaning.session(w.player)
-			cleaning.submit(w.player, session.Id, { Cuts = {} })
+			cleaning.submit(w.player, session.Id, { Strokes = {} })
 			local result: any = nil
 			for _, r in w.replies do
 				if r.Event == "CleanResult" then

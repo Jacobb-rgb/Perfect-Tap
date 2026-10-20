@@ -12,14 +12,9 @@ export type RarityInfo = {
 	-- Mining
 	RespawnTime: number, -- seconds before a shattered node regrows
 	BonusChunkChance: number, -- chance of 1 extra chunk when the node shatters
-	-- Cleaning minigame
-	Cuts: number, -- number of chisel cuts
-	Notches: number, -- how many of those cuts are V-shaped (two segments)
-	Tolerance: number, -- allowed distance from the guide line (face radius units)
-	MaxCutSpeed: number, -- faster than this (face radius units / s) = rough cut
-	DirtGrid: number, -- dirt patches per side (N x N grid, clipped to the ore core)
-	FragileSpots: number, -- glinting spots you should not scrape
-	PolishTurns: number, -- full circles needed to polish
+	-- Cleaning minigame (spray-washing, CleaningPatterns / SprayScoring)
+	DirtThickness: number, -- how thick the dirt is (1 = a Common clump; more = longer to wash off)
+	FragileSpots: number, -- glowing crystals in the dirt: spraying one point-blank too long cracks it
 	Reveal: number, -- 1..3, how fancy the final reveal is
 }
 
@@ -34,13 +29,8 @@ Rarity.List = {
 		DarkColor = Color3.fromRGB(92, 99, 107),
 		RespawnTime = 18,
 		BonusChunkChance = 0.35,
-		Cuts = 2,
-		Notches = 0,
-		Tolerance = 0.11,
-		MaxCutSpeed = 7,
-		DirtGrid = 5,
+		DirtThickness = 1.0,
 		FragileSpots = 0,
-		PolishTurns = 2.5,
 		Reveal = 1,
 	},
 	{
@@ -51,13 +41,8 @@ Rarity.List = {
 		DarkColor = Color3.fromRGB(32, 110, 44),
 		RespawnTime = 28,
 		BonusChunkChance = 0.3,
-		Cuts = 3,
-		Notches = 0,
-		Tolerance = 0.095,
-		MaxCutSpeed = 6.2,
-		DirtGrid = 6,
+		DirtThickness = 1.12,
 		FragileSpots = 0,
-		PolishTurns = 3,
 		Reveal = 1,
 	},
 	{
@@ -68,13 +53,8 @@ Rarity.List = {
 		DarkColor = Color3.fromRGB(20, 72, 140),
 		RespawnTime = 45,
 		BonusChunkChance = 0.25,
-		Cuts = 3,
-		Notches = 1,
-		Tolerance = 0.082,
-		MaxCutSpeed = 5.5,
-		DirtGrid = 6,
+		DirtThickness = 1.25,
 		FragileSpots = 2,
-		PolishTurns = 3.5,
 		Reveal = 2,
 	},
 	{
@@ -85,13 +65,8 @@ Rarity.List = {
 		DarkColor = Color3.fromRGB(80, 30, 130),
 		RespawnTime = 65,
 		BonusChunkChance = 0.2,
-		Cuts = 4,
-		Notches = 1,
-		Tolerance = 0.072,
-		MaxCutSpeed = 5,
-		DirtGrid = 7,
+		DirtThickness = 1.4,
 		FragileSpots = 3,
-		PolishTurns = 4,
 		Reveal = 2,
 	},
 	{
@@ -102,13 +77,8 @@ Rarity.List = {
 		DarkColor = Color3.fromRGB(140, 80, 0),
 		RespawnTime = 95,
 		BonusChunkChance = 0.15,
-		Cuts = 5,
-		Notches = 2,
-		Tolerance = 0.062,
-		MaxCutSpeed = 4.4,
-		DirtGrid = 7,
+		DirtThickness = 1.55,
 		FragileSpots = 4,
-		PolishTurns = 4.5,
 		Reveal = 3,
 	},
 	{
@@ -119,13 +89,8 @@ Rarity.List = {
 		DarkColor = Color3.fromRGB(130, 10, 50),
 		RespawnTime = 150,
 		BonusChunkChance = 0.1,
-		Cuts = 6,
-		Notches = 3,
-		Tolerance = 0.052,
-		MaxCutSpeed = 3.8,
-		DirtGrid = 8,
+		DirtThickness = 1.7,
 		FragileSpots = 5,
-		PolishTurns = 5,
 		Reveal = 3,
 	},
 } :: { RarityInfo }

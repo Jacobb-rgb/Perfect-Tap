@@ -63,7 +63,8 @@ local SoundConfig: { [string]: SoundDef } = {
 	Pickup = { Id = "rbxassetid://12221976", Volume = 0.5, Pitch = { 1.1, 1.3 } },
 	Drop = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = { 0.9, 1.1 } },
 	Throw = { Id = "rbxassetid://12222200", Volume = 0.45, Pitch = { 1.0, 1.25 } },
-	-- cleaning minigame
+	-- cleaning minigame (spray-washing; the chisel / scrape / polish keys stay: other packages may play them)
+	Spray = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.35, Pitch = { 1.55, 1.7 }, Looped = true }, -- the hiss of the wand
 	ChiselCrack = { Id = "rbxassetid://12222140", Volume = 0.75, Pitch = { 0.8, 1.15 } },
 	ChiselScratch = { Id = "rbxassetid://12222200", Volume = 0.25, Pitch = { 1.6, 1.9 } },
 	Chip = { Id = "rbxassetid://12221984", Volume = 0.5, Pitch = { 1.5, 1.8 } },

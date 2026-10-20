@@ -3,7 +3,7 @@
 	in tools/preview/ore_shots.json): a Common ore (Coal) on the top row and a
 	Mythic one (Heartstone Shard) below, four moments each, built with the same
 	parts CleaningController plays (OreShellBuilder, RevealFx):
-	  1 CLEANED  the dirt is gone, the ore waits in the rock
+	  1 CLEANED  the dirt is washed off, the ore waits in the clump
 	  2 REVEAL   the rarity burst (Mythic: 12 rays, a strong light)
 	  3 SHINE    the ore rises and spins (Mythic in slow motion), the shine bar crosses it
 	  4 STAMP    the grade stamp lands on the ore
@@ -79,20 +79,11 @@ function Strip.build(Loader: any, parent: any)
 			local workCf = CF.lookAt(pos, pos + V3.new(0, 0, -1))
 			local pattern = Patterns.generate(row.Ore, 4242)
 			local shell = OreShellBuilder.build(pattern, workCf, root)
-			for _, caps in shell.Caps do
-				for _, cap in caps do
-					cap:Destroy()
-				end
-			end
 			for _, patch in shell.Dirt do
 				patch:Destroy()
 			end
-			for _, part in shell.CoreRim do
-				part.Transparency = if f >= 2 then 0.6 else 0
-			end
-			for _, part in shell.Core do
-				part.Color = ore.Color
-				part.Reflectance = 0.25
+			for _, shard in shell.Fragile do
+				shard:Destroy()
 			end
 			if r == 1 then
 				label(CF.new(x, y + 3.4, 0.5), 3.4, frame, C3.fromRGB(255, 214, 120))
@@ -128,16 +119,9 @@ function Strip.build(Loader: any, parent: any)
 				local p = if f == 3 then 0.45 else 1
 				local ease = 1 - (1 - RevealFx.warp(p, plan.SlowMo)) ^ 3
 				local lift = 1 - (1 - math.min(1, p * 2.2)) ^ 2
-				local pivot = workCf * CF.new(0, 0, OreShellBuilder.CoreFront - 0.4)
-				local turn = pivot * CF.new(0, 0.2 * lift, 0.9 * lift) * CF.Angles(0, 0, ease * plan.Spins * math.pi * 2)
-				local parts = {}
+				local pivot = shell.TreasurePivot
+				local turn = pivot * CF.new(RevealFx.Rise * lift) * CF.Angles(0, ease * plan.Spins * math.pi * 2, 0)
 				for _, part in shell.Core do
-					table.insert(parts, part)
-				end
-				for _, part in shell.CoreRim do
-					table.insert(parts, part)
-				end
-				for _, part in parts do
 					part.CFrame = turn * pivot:ToObjectSpace(part.CFrame)
 				end
 			end

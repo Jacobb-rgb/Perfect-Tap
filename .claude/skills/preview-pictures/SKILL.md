@@ -11,7 +11,7 @@ always say so ("náhled z herního kódu").
 `cd tools/preview && npm install && npx playwright install chromium && cd ../..`
 
 ## Render
-- Export a scene: `lune run tools/lune/export_scene.luau world` (others: `gameplay`, `cleaning <OreId> <chisel|scrape|polish|reveal> [phone]`).
+- Export a scene: `lune run tools/lune/export_scene.luau world` (others: `gameplay`, `cleaning <OreId> <spray|reveal> [phone]`).
 - Render shots from tools/preview/shots.json: `node tools/preview/render.mjs world town_overview great_forge`.
 - Extra/private shots without editing shots.json: `SHOTS_EXTRA=path/to/my_shots.json node tools/preview/render.mjs world myshot`
   (shot: `{"scene":"world","position":[x,y,z],"target":[x,y,z],"fov":60,"preset":"Surface","shadowExtent":160}`; UI overlay via `"ui"`).

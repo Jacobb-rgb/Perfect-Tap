@@ -5,11 +5,13 @@
 	1. Raw ore gets onto the station: the owner uses the station prompt while
 	   carrying raw ore, or drops/throws a raw chunk into the vise.
 	2. The server starts a session with a random seed and tells the client
-	   (CleanBegin). The client builds the same pattern from the seed.
-	3. The client sends its recorded input (CleanSubmit). The server re-scores
-	   it with the shared CleaningScoring code (it never trusts a client grade),
-	   sanity-checks the timing, and turns the raw chunk into a clean ore of
-	   that grade on the station's output tray.
+	   (CleanBegin). The client builds the same dirt (CleaningPatterns) from
+	   the seed and the player sprays it off.
+	3. The client sends its recorded spray (CleanSubmit). The server replays
+	   it with the shared SprayScoring code (it never trusts a client grade),
+	   sanity-checks the timing, lets CleaningGuard cap a scripted Flawless,
+	   and turns the raw chunk into a clean ore of that grade on the
+	   station's output tray (a dusty relic goes into the collection).
 	Cancelling leaves the ore in the vise; "Take Ore Back" (G / gamepad B)
 	gives it back.
 	The station has no canAccept, so IntakeService leaves it alone: its own
@@ -33,7 +35,7 @@ local OreData = require(Shared.Config.OreData)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local Net = require(Shared.Net)
 local CleaningPatterns = require(Shared.Cleaning.CleaningPatterns)
-local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
+local SprayScoring = require(Shared.Cleaning.SprayScoring)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local Discovery = require(script.Parent.Parent.Discovery)
@@ -261,19 +263,17 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Net.fire("CleanResult", player, { Id = sessionId, Ok = false, Reason = "The ore is gone." })
 		return
 	end
+	-- The cheap checks first, the replay only after them: the time really spent, then every
+	-- timestamp inside it, after the real client's intro and before its finish pause
+	-- (SprayScoring.fitsSession, shape-safe). So a bot needs at least as long as a perfect
+	-- player going through the real client, and a heavy recording as much real session time.
 	local elapsed = os.clock() - session.StartedAt
-	local result = CleaningScoring.score(session.Pattern, payload)
-	if result.Valid and elapsed < GameConfig.CleaningMinSeconds then
-		result = { Valid = false, Reason = "too fast" } :: any
-	end
-	if result.Valid then
-		-- Every timestamp must fit inside the real session time, with the steps in order and
-		-- the real client's pauses between them (CleaningScoring.fitsSession). So a bot needs
-		-- at least as long as a perfect player going through the real client.
-		local fits, why = CleaningScoring.fitsSession(payload, elapsed)
-		if not fits then
-			result = { Valid = false, Reason = why } :: any
-		end
+	local result: any
+	if elapsed < GameConfig.CleaningMinSeconds then
+		result = { Valid = false, Reason = "too fast" }
+	else
+		local fits, why = SprayScoring.fitsSession(payload, elapsed)
+		result = if fits then SprayScoring.score(session.Pattern, payload) else { Valid = false, Reason = why }
 	end
 	if not result.Valid then
 		warn(`[CleaningService] rejected cleaning from {player.Name}: {result.Reason}`)
@@ -304,10 +304,10 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 			Relic = relic,
 			Grade = result.Grade,
 			Score = result.Score,
-			Chisel = result.Chisel,
-			Scrape = result.Scrape,
-			Polish = result.Polish,
-			Chips = result.Chips,
+			Speed = result.Speed,
+			Aim = result.Aim,
+			Cracks = result.Cracks,
+			Time = result.Time,
 			Collected = found, -- the artifact went into the collection (the ArtifactFound moment follows)
 		})
 		for _, callback in cleanedCallbacks do
@@ -339,10 +339,10 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 		Ok = true,
 		Grade = result.Grade,
 		Score = result.Score,
-		Chisel = result.Chisel,
-		Scrape = result.Scrape,
-		Polish = result.Polish,
-		Chips = result.Chips,
+		Speed = result.Speed,
+		Aim = result.Aim,
+		Cracks = result.Cracks,
+		Time = result.Time,
 		Value = value,
 		OreId = session.OreId,
 		ItemId = if clean then clean.Id else nil,

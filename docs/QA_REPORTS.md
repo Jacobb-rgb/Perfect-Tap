@@ -656,7 +656,7 @@ What to test in Studio:
 ## Robux blaster levels for the STORE (2026-10-20, branch feature/blaster-robux)
 The owner wants the Robux STORE to sell blasters. The UI chat's STORE card sells the NEXT blaster level as a developer
 product in four price bands (MonetizationConfig entries, added on ui/store; Grant "BlasterLevel", MinLevel / MaxLevel =
-the next levels a product covers). Placeholder prices, for the owner to decide:
+the next levels a product covers). The owner's prices (2026-10-20):
 
 | Product | Next level | Price (R$) |
 |---|---|---|
@@ -686,3 +686,35 @@ What to test in Studio (with test product ids):
    level higher.
 3. After buying a level, rebirth needs a blaster forged at the Foundry (NotForged otherwise).
 4. Buy two levels, rebirth twice: both rebirths start at LV 3 (the window's YOU LOSE row says "back to LV 3").
+
+## Spray-washing replaces chisel / scrape / polish (2026-10-20, machines chat; ui/store #5)
+The owner picked spray-only cleaning (his pressure-washer video). The machines chat built the mechanic and its server
+side; the UI chat ("Nový UI design") builds the final look on top through `CleaningController.setLook`.
+- Shared: `CleaningPatterns` makes the dirt from the seed (a 14×14 grid of cells over the clump, thicker in the
+  middle and on rarer ores: `Rarity.DirtThickness`; glowing crystals: `Rarity.FragileSpots`; the last 2 % of the cells
+  wash off by themselves). `SprayScoring.SprayTracker` replays the spray: a sample at most every 50 ms while the
+  spray is on, the nozzle sprays along the line between two samples for their time (at most 0.1 s: a hitch never
+  sprays longer), cells within 0.24 face units lose dirt, spray with no dirt in reach is wasted, a crystal sprayed
+  point-blank for 0.35 s cracks. Score = 1 − slow (log scale over par, up to 0.4) − waste (over 25 %, up to 0.2) −
+  0.12 per cracked crystal. Touch / gamepad get a wider spray and a matching shorter par.
+- Server: `CleaningService` scores with `SprayScoring.score` + `fitsSession` (no spray before the intro, the
+  recording after the finish pause), then `CleaningGuard` (hard: 25 equal intervals in a row or half of all of
+  them → Flawless becomes Pristine; soft, logged only: an even nozzle speed). CleanResult now carries Speed, Aim,
+  Cracks, Time (no Chisel / Scrape / Polish / Chips). The Polisher cap, relics, isCleaning / onSessionStart /
+  onCleaned, Discovery and FlawlessCleans are unchanged.
+- Client: `CleaningController` (camera, input, recording, Leave / Collect, the look hooks), `DefaultLook` (the clump
+  from OreShellBuilder, the wand + jet + splash from SprayParts, thinning / popping dirt, cracked crystals, the
+  "% CLEAN" bar and QUALITY meter, the rise-and-spin reveal and the card), `CleaningView` (banner, % CLEAN bar,
+  meter, card; no step pips, polish gauge or chips any more).
+- Tests: tests/Cleaning.spec.luau (patterns, scoring on every rarity with simulated players from
+  tools/lune/lib/spray_players.luau, broken input, a hitch / compressed time, the timeline, the guard, the look's
+  parts); CleaningPlay.spec (chisel / polish) is gone. Calibration: `lune run tools/lune/spray_calibrate.luau`.
+What to test in Studio:
+1. Clean a Coal chunk with the mouse: hold the left button and sweep the dirt in rows. The dirt thins and pops off,
+   "% CLEAN" fills, at 100 % the ore rises and spins and the card shows the grade, Time and Aim. Collect (or E).
+2. Spray with the button held over empty air next to the clump for a while: Aim drops on the card.
+3. A Rare or better ore: hold the spray on a glowing crystal: "Crystal cracked!", the card says Cracked 1.
+4. Phone emulator: drag a finger over the dirt; the wand shows only while the finger is down. Controller: the left
+   stick moves the ring, A or R2 sprays, B leaves (twice once some dirt is off).
+5. A dusty relic at the Cleaning Station: wash it, the relic rises, the card says RELIC CLEANED.
+6. Leave half way: the ore stays in the vise; F starts again with new dirt.

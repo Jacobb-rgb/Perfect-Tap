@@ -1,8 +1,8 @@
 # TERRA FORGE
 
 A cozy-but-epic Roblox mining and crafting game. Mine glowing ore, carry the chunks
-by hand, **clean them on your workbench in a satisfying chisel → scrape → polish
-minigame**, smelt them, forge gear and grow your workshop.
+by hand, **clean them on your workbench in a satisfying spray-washing minigame**,
+smelt them, forge gear and grow your workshop.
 
 ![Emberfall](docs/screenshots/town_overview.jpg)
 

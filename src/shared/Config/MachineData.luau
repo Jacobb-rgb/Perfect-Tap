@@ -104,7 +104,7 @@ MachineData.List = {
 	{
 		Id = "CleaningStation",
 		Name = "Cleaning Station",
-		Description = "Chisel, scrape and polish raw ore by hand. The better you clean, the more it's worth.",
+		Description = "Spray the dirt off raw ore by hand. The better you clean, the more it's worth.",
 		Size = { 3, 2 },
 		Price = 250,
 		Category = "Processing",
