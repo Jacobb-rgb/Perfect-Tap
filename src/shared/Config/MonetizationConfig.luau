@@ -17,7 +17,8 @@
 	  calls Receipts.setReady(true): only when every live id has a handler
 	  (MonetizationService.unhandled() is empty; ReceiptsAttribute tells the
 	  clients).
-	- PaidRandom = true: buying it gives a random result (Royal capsules) or
+	- PaidRandom = true: buying it gives a random result (Royal capsules, the
+	  Spin & Win wheel's bought spins) or
 	  changes the odds of one (the Triple / Hexa Lucky packs, the Starbreaker
 	  enchant's pass: ore luck and artifact chance), so it is hidden/disabled
 	  for players whose PolicyService ArePaidRandomItemsRestricted is true
@@ -56,6 +57,10 @@
 	    "ServerBoost" products: Seconds of the ServerBoost effect for everyone
 	                 on the server (ServerBoostService; not saved: it ends
 	                 with the server)
+	    "WheelSpins" products: Spins bought spins of the Spin & Win wheel,
+	                 held in data.Wheel.Spins (WheelService). The prompt
+	                 answers "Full" past WheelConfig.MaxSpins held; a receipt
+	                 is never refused and always credits all of them
 	  Every grant is recorded in data.Purchases[PurchaseId] = os.time() and
 	  data.PurchaseLog[PurchaseId] = { Product = Key, At = os.time() }.
 
@@ -133,6 +138,7 @@ export type Product = {
 	MaxLevel: number?, -- within MinLevel..MaxLevel (the price band; VaultService)
 	ServerBoost: string?, -- Grant "ServerBoost": the server-wide effect ("Luck")
 	WeaponId: string?, -- Grant "RebirthWeapon": the StarBlasterData id it gives
+	Spins: number?, -- Grant "WheelSpins": bought spins of the Spin & Win wheel (WheelService)
 }
 -- (MonetizationService's name for a pass or product)
 export type Entry = Product
@@ -480,6 +486,47 @@ local LIST: { Product } = {
 		Description = "x2 ore luck for everyone on this server while it runs: +15 minutes each time. With Hexa Lucky on, the bigger one counts.",
 		ServerBoost = "Luck",
 		Seconds = 900,
+	},
+	---------------------------------------------------------------- Spin & Win wheel spins
+	-- (owner 2026-10-20: "yes, sell spins for Robux"; the left BUY SPINS panel
+	-- of the wheel screen). A bought spin turns the same wheel as the free
+	-- daily spin, so it is a paid random item: every segment's exact odds
+	-- are on the wheel's face and in Details before buying, it is hidden and
+	-- refused where paid random items are restricted (WheelService), and the
+	-- free daily spin stays free. Bought spins are held in data.Wheel.Spins
+	-- and never expire; the free spin is used first.
+	{
+		Key = "WheelSpins1",
+		Grant = "WheelSpins",
+		Kind = "Product",
+		Id = 0,
+		Robux = 25,
+		Name = "1 Wheel Spin",
+		Description = "1 spin of the Spin & Win wheel (odds shown before buying).",
+		PaidRandom = true,
+		Spins = 1,
+	},
+	{
+		Key = "WheelSpins5",
+		Grant = "WheelSpins",
+		Kind = "Product",
+		Id = 0,
+		Robux = 99,
+		Name = "5 Wheel Spins",
+		Description = "5 spins of the Spin & Win wheel (odds shown before buying).",
+		PaidRandom = true,
+		Spins = 5,
+	},
+	{
+		Key = "WheelSpins10",
+		Grant = "WheelSpins",
+		Kind = "Product",
+		Id = 0,
+		Robux = 179,
+		Name = "10 Wheel Spins",
+		Description = "10 spins of the Spin & Win wheel (odds shown before buying).",
+		PaidRandom = true,
+		Spins = 10,
 	},
 }
 -- the five STAR blasters (StarBlasterData): one-time passes, kept through every rebirth;

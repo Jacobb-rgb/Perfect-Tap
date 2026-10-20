@@ -5,7 +5,7 @@
 	Ember Chest streak is retired (docs/plans/V2_PLAN.md: "Daily Ember Chest
 	-> Wheel of fortune"; data.Daily and the DailyClaim remote are gone).
 
-	- One free spin every 24 h. data.Wheel.NextSpinAt is the os.time() second
+	- One free spin every 24 h (plus the bought spins, below). data.Wheel.NextSpinAt is the os.time() second
 	  the next free spin is ready (0 = ready now), so the timer keeps running
 	  while the player is offline. A spin sets it to now + CooldownSeconds.
 	- 8 segments with exact odds (sum 1), shown on the wheel SCREEN before
@@ -50,16 +50,33 @@
 	  get nothing from Triple Lucky, so for them that segment pays coins
 	  (Substitutes); segments(noCapsules) / odds(noCapsules) / pick(roll,
 	  noCapsules) give the wheel they see and spin.
-	- The spin is free and can't be bought, so it isn't a paid random item;
-	  its odds are still shown (Roblox: odds for any random reward). There are
-	  no paid spins and no rewards for likes or favorites.
+	- Bought spins (owner 2026-10-20: spins are sold for Robux, the wheel
+	  screen's BUY SPINS panel: MonetizationConfig WheelSpins1 / 5 / 10, 25 /
+	  99 / 179 R$, Packs below). With them the wheel is a PAID RANDOM ITEM:
+	    * the exact odds are always visible: every segment's chance on the
+	      wheel's face, and the whole list (what each pays this player, the
+	      capsules' golem odds, the ore prize's odds) in Details, before any
+	      buy and any spin;
+	    * PolicyService gates them (src/server/Policy.luau): where paid random
+	      items are restricted the BUY SPINS panel is hidden and a "Buy"
+	      answers "Restricted" (never sold there), and spins bought earlier
+	      are kept in the save but can't be spun there ("Restricted");
+	    * a receipt is never refused: it always credits all its spins
+	      (MaxSpins is only the prompt's "Full"; the receipt of a player who
+	      is restricted now still credits, MonetizationService logs it);
+	    * the free daily spin stays free for everyone (restricted players
+	      too): it can't be bought, and it is always used first.
+	  data.Wheel.Spins = the bought spins held (whole >= 0); a bought spin
+	  ignores the 24 h cooldown and leaves NextSpinAt alone.
+	- No rewards for likes or favorites.
 	- A rate-limited "Spin" is dropped without an answer (Net): the client
 	  keeps ClientCooldown between requests and gives the button back after
 	  ResultTimeout seconds, but a WheelResult that arrives later is still
 	  shown (a slow first policy fetch or server lag: the spin happened) and
 	  the State push brings the saved NextSpinAt either way.
 	WheelResult { Segment, Id, Kind, Amount?, Boost?, Seconds?, Capsule?,
-	Golem?, DirtyOre?, Coins?, NextSpinAt } tells the client where the wheel stops.
+	Golem?, DirtyOre?, Coins?, NextSpinAt, Paid, Spins } tells the client where
+	the wheel stops (Paid: a bought spin was used; Spins: bought spins left).
 ]]
 
 local CapsuleConfig = require(script.Parent.CapsuleConfig)
@@ -93,6 +110,19 @@ local WheelConfig = {}
 
 WheelConfig.CooldownSeconds = 24 * 3600
 WheelConfig.SpinSeconds = 5 -- how long the wheel screen spins before showing the prize
+WheelConfig.FastSpinSeconds = 1.2 -- the same with Fast Spin on (the player's setting, SettingsConfig.FastSpin)
+-- bought spins held: a "Buy" past this answers "Full" (a receipt still credits past it)
+WheelConfig.MaxSpins = 500
+-- Migrations' junk guard on data.Wheel.Spins (no real purchase gets near it: 179 R$ per 10)
+WheelConfig.MaxSavedSpins = 1_000_000
+-- the BUY SPINS panel's rows, top to bottom (prices: MonetizationConfig)
+WheelConfig.Packs = {
+	{ Count = 1, Product = "WheelSpins1" },
+	{ Count = 5, Product = "WheelSpins5" },
+	{ Count = 10, Product = "WheelSpins10" },
+} :: { { Count: number, Product: string } }
+-- the right-hand panel shows what this segment can give (the rarest prize)
+WheelConfig.JackpotId = "CrystalCapsule"
 WheelConfig.ClientCooldown = 1 -- seconds between two "Spin" requests from the client
 WheelConfig.ResultTimeout = 5 -- seconds the client waits for WheelResult
 WheelConfig.FallbackShare = 0.25 -- share of a capsule's price paid when the golem inventory is full
@@ -109,7 +139,8 @@ WheelConfig.OrePrize = {
 
 -- WheelAction / ActionResult reason codes -> text for the player
 WheelConfig.Reasons = {
-	NotReady = "Your next free spin isn't ready yet",
+	NotReady = "No spins: buy some or wait for your free spin",
+	Restricted = "Bought spins can't be used where you play. Your free spin comes every day.",
 } :: { [string]: string }
 
 local rgb = Color3.fromRGB
@@ -228,6 +259,32 @@ function WheelConfig.secondsLeft(nextSpinAt: any, now: number): number
 		return 0
 	end
 	return math.max(0, nextSpinAt - now)
+end
+
+-- The bought spins a data.Wheel record holds (a whole number >= 0; junk = 0).
+function WheelConfig.heldSpins(wheel: any): number
+	local spins = if type(wheel) == "table" then wheel.Spins else nil
+	if not finite(spins) or spins < 1 then
+		return 0
+	end
+	return math.floor(spins)
+end
+
+-- The spins a player can spin now: the free one when it is ready, plus the
+-- bought ones unless paid random items are restricted for them (SPIN (n)).
+function WheelConfig.spinsNow(wheel: any, now: number, restricted: boolean): number
+	local free = if WheelConfig.ready(if type(wheel) == "table" then wheel.NextSpinAt else nil, now) then 1 else 0
+	return free + (if restricted then 0 else WheelConfig.heldSpins(wheel))
+end
+
+-- The BUY SPINS row for a spin count (1, 5, 10), nil for anything else.
+function WheelConfig.packFor(count: any): { Count: number, Product: string }?
+	for _, pack in WheelConfig.Packs do
+		if pack.Count == count then
+			return pack
+		end
+	end
+	return nil
 end
 
 -- Coins a Coins segment pays at this podium income (0 for other segments).

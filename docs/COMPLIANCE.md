@@ -59,7 +59,7 @@ only what is really in the game.
 | 9 | **Social hangout** | **No** | The main activity is mining and crafting, not chatting. Keep "hangout", "chill" or "vibe" wording out of the title and description: Roblox classifies a game as a hangout if its title or description refers to one. |
 | 10 | **Free-form user creation** | **No** | This means freehand drawing, painting, writing on surfaces, or pixel canvases. Placing machines on your plot is building with 3D assets, which Roblox excludes. The forge name is a short typed name, not freehand writing, and it goes through Roblox's text filter before anyone sees it (see 2.1). Roblox also excludes anything that goes through Roblox moderation before it is shown. |
 | 11 | **Sensitive issues** (political, social, religious) | **No** | The lore is original fantasy (the Heartstone, the Forgekeepers' Guild). |
-| 12 | **Paid random items** | **No today; Yes as soon as one is live** | Today every Robux product id is a placeholder (0), so nothing random can be bought. **Answer Yes and resubmit the day the first of these goes live:** Royal golem capsules (random golem, Robux), the Triple Lucky / Hexa Lucky Robux packs (they raise the odds of capsules / ore) and the Starbreaker enchant pass (raises ore luck and the artifact chance). Roblox's definition (paid random items page): random rewards bought with Robux, or with currency or items that can be bought with Robux. **Coins can be bought with Robux** since the owner turned coin packs on (2026-10-20, `MonetizationConfig.CoinPacksEnabled = true`), so coin capsules, coin luck boosts and coin enchants **are paid random items too** (`coinsBuyable()`: hidden and refused where restricted, exact odds shown before every buy in the capsule and boost windows). Server Luck (`ServerLuck15`, x2 ore luck for the whole server) is a paid odds booster as well. Free random rewards don't count: the daily wheel (free, no paid spins), ore drops, artifacts, cleaning grades and capsules won on the wheel. |
+| 12 | **Paid random items** | **No today; Yes as soon as one is live** | Today every Robux product id is a placeholder (0), so nothing random can be bought. **Answer Yes and resubmit the day the first of these goes live:** Royal golem capsules (random golem, Robux), the Triple Lucky / Hexa Lucky Robux packs (they raise the odds of capsules / ore) and the Starbreaker enchant pass (raises ore luck and the artifact chance). Roblox's definition (paid random items page): random rewards bought with Robux, or with currency or items that can be bought with Robux. **Coins can be bought with Robux** since the owner turned coin packs on (2026-10-20, `MonetizationConfig.CoinPacksEnabled = true`), so coin capsules, coin luck boosts and coin enchants **are paid random items too** (`coinsBuyable()`: hidden and refused where restricted, exact odds shown before every buy in the capsule and boost windows). Server Luck (`ServerLuck15`, x2 ore luck for the whole server) is a paid odds booster as well. **Spin & Win spins are sold** (owner 2026-10-20: `WheelSpins1/5/10`), so the wheel is a paid random item too (see 2.6 "Spin & Win"). Free random rewards don't count: the free daily spin, ore drops, artifacts, cleaning grades and capsules won on the wheel. |
 | 13 | **Paid item trading** | **No** | Players cannot trade. Every item belongs to one player: only the owner can pick it up (`ItemService`), and selling is designed to always pay the owner. |
 | 14 | **Media: players share media** (images, video, text, audio, models) with built-in game tools | **No** | There is no in-game screenshot sharing, feed or gallery. |
 | 15 | **Media: endless feeds / autoplay** | **No** | None. |
@@ -95,8 +95,9 @@ Violence and resubmit.**
 - Enemies, combat, or damage between players → Violence.
 - Scary cave sounds, creatures or jump scares in Deep Hollow → Fear.
 - Loot crates or spin wheels paid with Robux (or with coins once coins can
-  be bought with Robux) → Paid random items. The Royal capsule is one (see
-  1.1 #12): show the odds, use PolicyService (2.2).
+  be bought with Robux) → Paid random items. The Royal capsule is one, and
+  so are the Spin & Win spins sold since 2026-10-20 (see 1.1 #12): show
+  the odds, use PolicyService (2.2).
 - "Luck" items bought with Robux or coins that raise the chance of rare
   results → Roblox requires the NEW odds to be shown in numbers before
   purchase. Ours: Triple Lucky (capsule odds: `CapsuleConfig.odds(id, true)`
@@ -198,7 +199,7 @@ ads.
 
 | Key | What it means | Does it matter for Terra Forge? |
 |---|---|---|
-| `ArePaidRandomItemsRestricted` | `true` = this player may not use paid random items (with Robux or with currency bought with Robux) | **Yes (steps 6-8).** Hidden and refused for these players: Royal capsules, the Robux Triple/Hexa Lucky packs and the Starbreaker pass (`MonetizationConfig` `PaidRandom`, `promptStatus` → "Restricted"; `EnchantConfig.quote` → "Restricted"). With coin packs on (owner 2026-10-20), coin capsules and coin boosts too (`CapsuleConfig.isPaidRandom`, `BoostConfig.isPaidRandom`), and Server Luck. Players who can't buy any capsule get coins instead of Triple Lucky on the free wheel. Odds are shown to everyone. |
+| `ArePaidRandomItemsRestricted` | `true` = this player may not use paid random items (with Robux or with currency bought with Robux) | **Yes (steps 6-8).** Hidden and refused for these players: Royal capsules, the Robux Triple/Hexa Lucky packs and the Starbreaker pass (`MonetizationConfig` `PaidRandom`, `promptStatus` → "Restricted"; `EnchantConfig.quote` → "Restricted"). With coin packs on (owner 2026-10-20), coin capsules and coin boosts too (`CapsuleConfig.isPaidRandom`, `BoostConfig.isPaidRandom`), and Server Luck. The Spin & Win spins for Robux: the BUY SPINS panel hides, a "Buy" answers "Restricted", and spins bought earlier stay saved but can't be spun there (`WheelService`); their free daily spin still works. Players who can't buy any capsule get coins instead of Triple Lucky on the wheel. Odds are shown to everyone. |
 | `IsPaidItemTradingAllowed` | `false` = this player may not trade paid items | **Not today**: there is no trading. Golem trading is planned (design notes, round 4): golems from Robux purchases are saved with `Paid = true` so that trading can block them for these players. |
 | `AllowedExternalLinkReferences` | Legacy field. Roblox's reference says it **always returns an empty list** now. | Treat it as "no external links are ever allowed in the game" (see 2.3). |
 | `IsSubjectToChinaPolicies` | `true` = the game should apply China-related compliance changes | Nothing in Terra Forge is known to need changing. **TODO:** log how often it is `true` (analytics). If it ever is, read the DevForum post linked from the PolicyService page. |
@@ -275,6 +276,7 @@ What Terra Forge sells (design v2; the source of truth is
 | Coin packs (19 / 49 / 99 / 249 / 499 R$) | Developer products | `CoinsSmall/Medium/Large/Huge/Mega` | Coins: minutes of the player's podium income (on: `CoinPacksEnabled = true`; bought coins survive a rebirth, `PaidCoins`) | No, but they make coin capsules and coin boosts paid random items |
 | Next Blaster (49 / 99 / 199 / 399 R$) | Developer products | `BlasterNextA/B/C/D` | The next blaster level, by price band (each bought level starts every later rebirth's blaster 1 level higher, up to LV 9; never pays Forge Stars) | No |
 | Server Luck 15 min (49 R$) | Developer product | `ServerLuck15` | x2 ore luck for everyone on the server while it runs | **Yes** (odds booster) |
+| Spin & Win spins x1 / x5 / x10 (25 / 99 / 179 R$) | Developer products | `WheelSpins1/5/10` | Spins of the Spin & Win wheel, held in `data.Wheel.Spins` (never expire; the free daily spin is used first) | **Yes** |
 
 **TODO:** set prices, write descriptions and upload icons. Pass and
 developer product icons must be at most 512×512 (.png/.jpg/.bmp) and keep
@@ -390,18 +392,42 @@ choices marked *(ours)*):
   - A Royal capsule receipt uses the Triple Lucky state the player saw at
     the prompt (`MonetizationConfig`, step 8 contract), so the odds shown
     are the odds given.
-  - Never sell more chances to win the free wheel: there are no paid spins.
-- **Daily wheel (SPIN & WIN):** one free spin a day (the timer runs while
-  offline), so it isn't a paid random item, but its odds are shown on the
-  wheel screen anyway, including the ore prize's own odds *(ours)*. It
-  replaced the old 7-day Ember Chest streak (retired; the EmberChest on
+  - Spin & Win spins are sold (owner's decision, 2026-10-20; the rule
+    before was "no paid spins"): see the next point.
+- **Spin & Win (the daily wheel and its bought spins):** one free spin a
+  day (the timer runs while offline) for everyone, plus spins bought with
+  Robux (`WheelSpins1/5/10`, 25 / 99 / 179 R$, the BUY SPINS panel). With
+  spins for sale the wheel is a **paid random item**:
+  - **Odds before every buy and every spin.** Every segment's exact chance
+    is printed on the wheel's face, and the BUY step itself (a BUY SPINS
+    row opens it before any prompt: `WheelView.showBuy`) lists all 8
+    segments with their exact % and what each pays this player (coins at
+    their income, the capsules' rarity odds, the ore prize's own odds);
+    Details shows the same list and every capsule golem's chance. The
+    jackpot card shows the Crystal Capsule's golem odds.
+  - **Same odds for paid and free spins.** A bought spin draws from the
+    same server table as the free one (`WheelConfig.pick`,
+    `WheelConfig.Segments`); there are no paid-only prizes.
+  - **PolicyService.** Where `ArePaidRandomItemsRestricted` is true, or
+    while the policy isn't known (strict default), the BUY SPINS rows are
+    hidden, a "Buy" answers "Restricted" (`MonetizationConfig.promptStatus`
+    through `BoostService.promptPurchase`, the capsules' path), and spins
+    bought earlier stay saved but can't be spun (`WheelService.spin`
+    answers "Restricted"). The free daily spin stays free for everyone.
+  - **Receipts.** The "WheelSpins" grant only banks the spins in
+    `data.Wheel.Spins` (MonetizationService: once per PurchaseId, saved
+    before PurchaseGranted); nothing spins inside ProcessReceipt. A
+    receipt is never refused (past `WheelConfig.MaxSpins` held only the
+    prompt says "Full"); a receipt that arrives for a restricted player
+    is credited and logged like every off-policy receipt.
+  It replaced the old 7-day Ember Chest streak (retired; the EmberChest on
   the wheel's stairs now opens the wheel). The big lobby wheel shows the
-  same 8 prizes as the wheel screen, in the same order and colours
-  (`WheelConfig.Segments`; players who can't buy capsules see their
-  substitute prize's icon), and when you spin it lands on your own
-  result (client-side, `WheelController`), so it never promises a prize
-  the wheel can't give. Its segments are equal like the screen's; the
-  odds are on the screen.
+  same 8 prizes as the wheel screen, in the same order (`WheelConfig.
+  Segments`; the screen paints them in its own bright faces; players who
+  can't buy capsules see their substitute prize's icon), and when you
+  spin it lands on your own result (client-side, `WheelController`), so
+  it never promises a prize the wheel can't give. Its segments are equal
+  like the screen's; the odds are on the screen.
 
 ### 2.6a Golem capsules: what the game does (step 7)
 
@@ -679,7 +705,7 @@ tutorial.
 - [ ] Purchase prompts only open after a player taps a button; no fake timers or fake discounts; close button easy to find on mobile.
 - [ ] Paid random items (Royal capsules, Robux luck packs, Starbreaker): exact odds shown before every buy, odds boosters show the new odds in numbers, hidden where `ArePaidRandomItemsRestricted` is true; questionnaire answered **Yes** once any of them is live.
 - [ ] Coin packs are on (`CoinPacksEnabled = true`): every coin capsule / coin boost / coin odds-booster is treated as a paid random item (hidden where restricted, odds shown).
-- [ ] The daily wheel shows its exact odds (and the ore prize's odds); no paid spins.
+- [ ] Spin & Win: the wheel's face shows every segment's exact %, the BUY step (before every spin purchase) lists all 8 segments with their % and what each pays, bought and free spins use the same odds, the BUY SPINS panel is hidden and "Buy" refused where `ArePaidRandomItemsRestricted` is true (or unknown), the free daily spin works for everyone; the questionnaire says **Yes** for paid random items once `WheelSpins1/5/10` are live.
 - [ ] PolicyService wrapper in place (`src/server/Policy.luau`: `pcall`, strict defaults when the call fails, retried).
 
 ### Engagement rewards

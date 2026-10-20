@@ -476,7 +476,6 @@ return function(T, Loader)
 				Gear = ui("GearShopView").build(false).Gui,
 				Golem = ui("GolemView").build(false).Gui,
 				Story = ui("StoryView").build(false).Gui,
-				Wheel = ui("WheelView").build(false).Gui,
 				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
 			}
 		end
@@ -487,6 +486,27 @@ return function(T, Loader)
 			for name, gui in builds() do
 				T.truthy(gui:GetAttribute("LightSkin"), "switch on: light " .. name)
 			end
+		end)
+	end)
+
+	-- the Spin & Win screen wears the Pop look (owner 2026-10-20): never the LightSkin
+	-- recolouring, switch on or off (the chip neither)
+	T.test("LightUI: the Spin & Win wheel and its chip keep the Pop look", function()
+		local WheelView = ui("WheelView")
+		local function check(label: string)
+			for _, compact in { false, true } do
+				local gui = WheelView.build(compact).Gui
+				T.falsy(gui:GetAttribute("LightSkin"), `{label}: no LightSkin on the wheel`)
+				T.truthy(gui:GetAttribute("PopSkin"), `{label}: the Pop wheel`)
+				gui:Destroy()
+			end
+			local chip = WheelView.buildChip(1)
+			T.falsy(chip.Gui:GetAttribute("LightSkin"), `{label}: no LightSkin on the chip`)
+			chip.Gui:Destroy()
+		end
+		check("switch off")
+		withLight(function()
+			check("switch on")
 		end)
 	end)
 

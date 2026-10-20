@@ -37,6 +37,9 @@ return function(T, Loader)
 	local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
 	local ServerBoostService = Loader.requirePath("ServerScriptService.Server.Services.ServerBoostService")
 	local VaultService = Loader.requirePath("ServerScriptService.Server.Services.VaultService")
+	local WheelService = Loader.requirePath("ServerScriptService.Server.Services.WheelService")
+	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
+	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 
 	local GRANTED = Enum.ProductPurchaseDecision.PurchaseGranted
 	local NOT_YET = Enum.ProductPurchaseDecision.NotProcessedYet
@@ -77,6 +80,10 @@ return function(T, Loader)
 		BlasterNextC = "BlasterLevel",
 		BlasterNextD = "BlasterLevel",
 		ServerLuck15 = "ServerBoost",
+		-- the Spin & Win wheel's bought spins (owner 2026-10-20)
+		WheelSpins1 = "WheelSpins",
+		WheelSpins5 = "WheelSpins",
+		WheelSpins10 = "WheelSpins",
 	}
 
 	local function deepCopy(v: any): any
@@ -104,6 +111,7 @@ return function(T, Loader)
 		)
 		ServerBoostService.registerGrants()
 		VaultService.registerGrants()
+		WheelService.registerGrants()
 	end
 
 	local function setup(): any
@@ -331,6 +339,12 @@ return function(T, Loader)
 				T.truthy(entry.Kind == "Product" and entry.MinLevel and entry.MaxLevel and entry.MinLevel <= entry.MaxLevel, `{entry.Key}: a level band`)
 			elseif entry.Grant == "ServerBoost" then
 				T.truthy(entry.Kind == "Product" and entry.ServerBoost and entry.Seconds and entry.PaidRandom, `{entry.Key}: a paid random server boost`)
+			elseif entry.Grant == "WheelSpins" then
+				T.truthy(
+					entry.Kind == "Product" and entry.Spins and entry.Spins >= 1 and entry.PaidRandom,
+					`{entry.Key}: paid random wheel spins`
+				)
+				T.truthy(string.find(entry.Description, "odds shown before buying", 1, true) ~= nil, `{entry.Key} promises the odds`)
 			end
 		end
 		local expected = 0
@@ -355,6 +369,7 @@ return function(T, Loader)
 		initCalls("src/server/Services/PodiumService.luau", "PodiumService", "PodiumService.registerGrants()")
 		initCalls("src/server/Services/ServerBoostService.luau", "ServerBoostService", "ServerBoostService.registerGrants()")
 		initCalls("src/server/Services/VaultService.luau", "VaultService", "VaultService.registerGrants()")
+		initCalls("src/server/Services/WheelService.luau", "WheelService", "WheelService.registerGrants()")
 		local hover = fs.readFile("src/server/Services/HoverboardService.luau")
 		T.truthy(string.find(hover, 'MonetizationService.registerPass("Hoverboard"', 1, true) ~= nil, "HoverboardService registers")
 		local rebirth = fs.readFile("src/server/Services/RebirthService.luau")
@@ -526,6 +541,44 @@ return function(T, Loader)
 		-- the time survives a load (Migrations clips only past MaxSavedSeconds)
 		Migrations.run(w.data, NOW)
 		T.eq(BoostConfig.untilOf(w.data.Boosts, "HexaLucky"), NOW + BoostConfig.MaxStackSeconds + 7200, "kept on load")
+	end)
+
+	---------------------------------------------------------------- Spin & Win spins
+
+	withWorld("Step 8: wheel spin receipts bank the spins once (never a spin inside the receipt)", function(w)
+		receiptRules(w, "WheelSpins5", function()
+			return WheelConfig.heldSpins(w.data.Wheel) // 5
+		end, "WheelSpins5")
+		T.eq(w.data.Wheel.Spins, 10, "two receipts: 10 spins banked")
+		T.eq(#w.notesOf("Notify"), 2, "a thank-you per grant")
+		T.eq(#w.notesOf("WheelResult"), 0, "nothing spun inside ProcessReceipt")
+		T.eq(w.data.Stats.WheelSpins, 0, "no spin counted")
+		T.eq(w.data.Wheel.NextSpinAt, DataTemplate.Wheel.NextSpinAt, "the free spin untouched")
+		-- the same PurchaseId again: never doubled
+		T.eq(w.decide("WheelSpins5-1", "WheelSpins5"), GRANTED, "a duplicate receipt")
+		T.eq(w.data.Wheel.Spins, 10, "not doubled")
+		-- past MaxSpins a receipt still credits all of them (only the prompt says Full)
+		w.data.Wheel.Spins = WheelConfig.MaxSpins
+		T.eq(w.decide("big-1", "WheelSpins10"), GRANTED, "never refused")
+		T.eq(w.data.Wheel.Spins, WheelConfig.MaxSpins + 10, "never cut")
+		-- bought spins survive a rejoin: the saved record loads with them (Migrations + reconcile)
+		local saved = ProfileStore.deepCopy(w.data)
+		Migrations.run(saved, NOW + 86400)
+		ProfileStore.reconcile(saved, DataTemplate)
+		T.eq(saved.Wheel.Spins, WheelConfig.MaxSpins + 10, "kept on the next load")
+		T.eq(w.loggedWith("off policy"), 0, "nothing off policy")
+	end)
+
+	withWorld("Step 8: a wheel spin receipt for a restricted player is credited and logged", function(w)
+		Policy._test.reset()
+		w.restricted = true
+		Policy._test.setFetcher(function()
+			return { ArePaidRandomItemsRestricted = true, IsPaidItemTradingAllowed = false }
+		end)
+		Policy.fetch(w.player)
+		T.eq(w.decide("s1", "WheelSpins1"), GRANTED, "granted all the same")
+		T.eq(w.data.Wheel.Spins, 1, "banked (they can't spin it there: WheelService)")
+		T.eq(w.loggedWith("paid random item"), 1, "logged")
 	end)
 
 	---------------------------------------------------------------- coin packs
