@@ -34,6 +34,7 @@ local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local IconAssets = require(Shared.Config.IconAssets)
 local Format = require(Shared.Util.Format)
 local PictureModels = require(Shared.Builders.PictureModels)
+local Rarity = require(Shared.Config.Rarity)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
 
@@ -60,6 +61,26 @@ export type Detail = {
 	Paint: string?,
 }
 
+-- The limited edition in the FEATURED banner (LimitedGolems.current: the
+-- golem chat's config; this view only reads these fields).
+export type Edition = {
+	Id: string,
+	Title: string,
+	Tagline: string,
+	Backdrop: { SkyTop: Color3, SkyHorizon: Color3, Ground: Color3, Accent: Color3, Title: { Color3 } },
+	Golems: { { Id: string, Name: string, Rarity: string } }, -- the set's order (the rarest last)
+	Odds: { [string]: number },
+	Products: { [number]: string }, -- count -> MonetizationConfig key
+	EndsAt: number,
+}
+
+export type BannerRefs = {
+	Frame: Frame,
+	Timer: TextLabel,
+	Buys: { [number]: TextButton }, -- count -> its green price button
+	Edition: Edition,
+}
+
 export type Refs = {
 	Gui: ScreenGui,
 	Group: Frame, -- the window and the tabs beside it
@@ -76,6 +97,7 @@ export type Refs = {
 	DetailBuy: TextButton,
 	DetailBack: TextButton,
 	Tops: { [string]: number }, -- section id -> its top in the scrolled list
+	Banner: BannerRefs?, -- the limited edition (FEATURED), nil when none runs
 }
 
 StoreView.Header = 76
@@ -344,6 +366,13 @@ function StoreView.relayout(refs: Refs): number
 		local rows = StoreConfig.rows(section.Id)
 		local inner = StoreView.HeadingHeight
 		local any = false
+		local banner = refs.Banner
+		if banner and banner.Frame.Parent == frame then
+			-- the limited edition opens the FEATURED section
+			banner.Frame.Position = UDim2.fromOffset(0, inner)
+			inner += StoreView.BannerHeight + gap
+			any = true
+		end
 		for r, row in rows do
 			local shown: { CardRefs } = {}
 			local spans = 0
@@ -383,6 +412,307 @@ function StoreView.relayout(refs: Refs): number
 	local total = y + 8
 	refs.Scroller.CanvasSize = UDim2.fromOffset(StoreView.CardsWidth, total)
 	return total
+end
+
+StoreView.BannerHeight = 372
+StoreView.BannerCounts = { 50, 10, 3, 1 } -- the buy buttons, left to right (the photo)
+
+-- "29d 21h 15m" (days) or "21h 15m 57s" (the last day).
+function StoreView.countdown(seconds: number): string
+	local s = math.max(0, math.floor(seconds))
+	local d, h, m = s // 86400, (s // 3600) % 24, (s // 60) % 60
+	if d > 0 then
+		return `{d}d {h}h {m}m`
+	end
+	return `{h}h {m}m {s % 60}s`
+end
+
+-- A dark mountain peak (a turned square whose lower half the ground hides).
+local function peak(parent: Instance, x: number, base: number, size: number, color: Color3, z: number)
+	local frame = UIKit.new("Frame", {
+		Name = "Peak",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(x, base),
+		Rotation = 45,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z,
+	}, parent)
+	UIKit.corner(frame, math.floor(size * 0.08))
+end
+
+--[[
+	The limited edition banner (owner 2026-10-20: "like the Halloween egg:
+	a cool background, the golems with their %, buy 1 / 3 / 10 / 50, the time
+	left"): the edition's sky with a big moon, light rays, glowing embers and
+	dark volcano peaks over a lava glow; "New!" and the title top-left, the
+	time left top-right; a tile per golem with its live 3D model and its
+	chance; four green buttons (50 / 10 / 3 / 1) with their counts.
+]]
+local function buildBanner(parent: Instance, edition: Edition): BannerRefs
+	local w, h = StoreView.CardsWidth, StoreView.BannerHeight
+	local b = edition.Backdrop
+	local frame = UIKit.new("Frame", {
+		Name = "Limited",
+		ClipsDescendants = true,
+		Size = UDim2.fromOffset(w, h),
+		ZIndex = 2,
+	}, parent)
+	local sky = Pop.face(frame, { Top = b.SkyTop, Bottom = b.SkyHorizon, Edge = PopTheme.Outline }, PopTheme.Corner, false)
+	-- (the sky glows from the middle down: the horizon colour reaches the peaks)
+	sky.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, b.SkyTop),
+		ColorSequenceKeypoint.new(0.3, b.SkyTop:Lerp(b.SkyHorizon, 0.45)),
+		ColorSequenceKeypoint.new(0.58, b.SkyHorizon),
+		ColorSequenceKeypoint.new(1, b.SkyHorizon),
+	})
+	local edge = frame:FindFirstChild("Border") :: UIStroke
+	edge.Thickness = 4
+	-- the moon, its rays, the embers
+	local moonAt = UDim2.fromOffset(math.floor(w * 0.66), 120)
+	Pop.rays(frame, moonAt, 10, 520, 0.8, 2)
+	local moon = UIKit.new("Frame", {
+		Name = "Moon",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = b.Accent:Lerp(Color3.fromRGB(255, 240, 200), 0.55),
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		Position = moonAt,
+		Size = UDim2.fromOffset(230, 230),
+		ZIndex = 2,
+	}, frame)
+	UIKit.corner(moon, 999)
+	local halo = UIKit.new("Frame", {
+		Name = "MoonGlow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = b.Accent,
+		BackgroundTransparency = 0.75,
+		BorderSizePixel = 0,
+		Position = moonAt,
+		Size = UDim2.fromOffset(290, 290),
+		ZIndex = 2,
+	}, frame)
+	UIKit.corner(halo, 999)
+	local seed = 7
+	local function next01(): number
+		seed = (seed * 16807) % 2147483647
+		return seed / 2147483647
+	end
+	for i = 1, 40 do
+		local size = 3 + math.floor(next01() * 6)
+		local ember = UIKit.new("Frame", {
+			Name = "Ember" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = b.Accent:Lerp(Color3.fromRGB(255, 230, 120), next01()),
+			BackgroundTransparency = 0.1 + next01() * 0.4,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(math.floor(next01() * w), math.floor(20 + next01() * (h - 150))),
+			Size = UDim2.fromOffset(size, size),
+			ZIndex = 3,
+		}, frame)
+		UIKit.corner(ember, 999)
+	end
+	-- the volcano peaks over a lava glow, the ground the golems stand on
+	local ground = h - 152
+	local lava = UIKit.new("Frame", {
+		Name = "Lava",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, ground - 40),
+		Size = UDim2.new(1, 0, 0, 44),
+		ZIndex = 3,
+	}, frame)
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new(b.Accent:Lerp(Color3.fromRGB(255, 220, 90), 0.4), b.Accent),
+		Transparency = NumberSequence.new(1, 0.15),
+		Rotation = 90,
+	}, lava)
+	local dark = b.Ground:Lerp(b.SkyTop, 0.35)
+	peak(frame, math.floor(w * 0.12), ground + 20, 170, dark, 3)
+	peak(frame, math.floor(w * 0.3), ground + 30, 120, dark:Lerp(b.SkyHorizon, 0.15), 3)
+	peak(frame, math.floor(w * 0.9), ground + 10, 200, dark, 3)
+	peak(frame, math.floor(w * 0.52), ground + 40, 100, dark:Lerp(b.SkyHorizon, 0.2), 3)
+	-- a river of lava along the foot of the peaks
+	local river = UIKit.new("Frame", {
+		Name = "River",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, ground - 6),
+		Size = UDim2.new(1, 0, 0, 16),
+		ZIndex = 5,
+	}, frame)
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, b.Accent),
+			ColorSequenceKeypoint.new(0.5, b.Accent:Lerp(Color3.fromRGB(255, 236, 120), 0.7)),
+			ColorSequenceKeypoint.new(1, b.Accent),
+		}),
+	}, river)
+	local floor = UIKit.new("Frame", {
+		Name = "Ground",
+		BackgroundColor3 = b.Ground,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, ground),
+		Size = UDim2.new(1, 0, 0, h - ground),
+		ZIndex = 4,
+	}, frame)
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new(b.Ground:Lerp(b.Accent, 0.25), b.Ground:Lerp(Color3.new(0, 0, 0), 0.35)),
+		Rotation = 90,
+	}, floor)
+	-- "New!", the title and the tagline (top-left), the time left (top-right)
+	Pop.tag(frame, "New!", "Red", Vector2.new(96, 40), {
+		Position = UDim2.fromOffset(14, 14),
+		ZIndex = 8,
+	})
+	Pop.text(frame, "LIMITED EDITION GOLEMS", 18, {
+		Name = "Kind",
+		Position = UDim2.fromOffset(124, 8),
+		Size = UDim2.fromOffset(420, 22),
+		TextColor3 = Color3.fromRGB(255, 226, 120),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 8,
+	})
+	Pop.title(frame, edition.Title, 50, b.Title, {
+		Name = "Title",
+		FontFace = PopTheme.Heavy,
+		Position = UDim2.fromOffset(122, 26),
+		Size = UDim2.fromOffset(520, 56),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 8,
+	})
+	Pop.text(frame, edition.Tagline .. "  Limited time!", 21, {
+		Name = "Tagline",
+		Position = UDim2.fromOffset(18, 84),
+		Size = UDim2.fromOffset(620, 26),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 8,
+	})
+	Pop.text(frame, "ENDS IN", 16, {
+		Name = "EndsIn",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, 10),
+		Size = UDim2.fromOffset(240, 20),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 8,
+	})
+	local timer = Pop.text(frame, "", 32, {
+		Name = "Timer",
+		AnchorPoint = Vector2.new(1, 0),
+		FontFace = PopTheme.Heavy,
+		Position = UDim2.new(1, -16, 0, 30),
+		Size = UDim2.fromOffset(300, 38),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 8,
+	})
+	-- a tile per golem: its live model and its chance (the rarest bigger, in the middle)
+	local count = #edition.Golems
+	local tile = 108
+	local gap = 10
+	local rowW = (count - 1) * (tile + gap) + math.floor(tile * 1.25)
+	local x = math.floor((w - rowW) / 2)
+	local order: { number } = {}
+	-- (the photo: the rarest golem in the middle of the row)
+	for i = 1, count - 1 do
+		table.insert(order, i)
+	end
+	table.insert(order, math.ceil(count / 2), count)
+	for _, index in order do
+		local golem = edition.Golems[index]
+		local big = index == count
+		local size = if big then math.floor(tile * 1.25) else tile
+		local rarity = Rarity.get(golem.Rarity)
+		local holder = UIKit.new("Frame", {
+			Name = "Golem" .. index,
+			BackgroundColor3 = rarity.DarkColor,
+			BackgroundTransparency = 0.25,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(x, ground - size + 34),
+			Size = UDim2.fromOffset(size, size),
+			ZIndex = 5,
+		}, frame)
+		UIKit.corner(holder, 8)
+		Pop.border(holder, 3, rarity.Color)
+		local model, from = PictureModels.build("golem_" .. golem.Id)
+		Pop.model(holder, "golem_" .. golem.Id, size - 8, model, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.48),
+			ZIndex = 6,
+		}, from)
+		local chance = edition.Odds[golem.Id] or 0
+		Pop.text(holder, StoreView.percent(chance), if big then 26 else 22, {
+			Name = "Chance",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -4, 1, 0),
+			Size = UDim2.new(1, -6, 0, 28),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 7,
+		})
+		x += size + gap
+	end
+	-- the buy buttons: 50 / 10 / 3 / 1, the count under each
+	local buys: { [number]: TextButton } = {}
+	local buttonW, buttonH = 196, 54
+	local buyGap = math.floor((w - 4 * buttonW) / 5)
+	for i, n in StoreView.BannerCounts do
+		local key = edition.Products[n]
+		local product = if key then MonetizationConfig.Products[key] else nil
+		if product then
+			local bx = buyGap + (i - 1) * (buttonW + buyGap)
+			local button = Pop.price(frame, product.Robux, Vector2.new(buttonW, buttonH), {
+				Name = "Buy" .. n,
+				Position = UDim2.fromOffset(bx, h - buttonH - 34),
+				ZIndex = 8,
+			})
+			if n == StoreView.BannerCounts[1] then
+				Pop.repaint(button, "Red") -- (the photo: the biggest pack stands out)
+			end
+			Pop.text(frame, `{n} Golem{if n == 1 then "" else "s"}`, 20, {
+				Name = "Count" .. n,
+				Position = UDim2.fromOffset(bx, h - 32),
+				Size = UDim2.fromOffset(buttonW, 26),
+				ZIndex = 8,
+			})
+			buys[n] = button
+		end
+	end
+	return { Frame = frame, Timer = timer, Buys = buys, Edition = edition }
+end
+
+-- "12.5%" / "0.5%" / "1%" (the banner's chances).
+function StoreView.percent(chance: number): string
+	local text = string.format("%.2f", chance * 100)
+	text = text:gsub("0+$", ""):gsub("%.$", "")
+	return text .. "%"
+end
+
+--[[
+	Shows the limited edition at the top of FEATURED (nil removes it).
+	Returns its refs (the controller wires the buttons and the timer).
+]]
+function StoreView.setEdition(refs: Refs, edition: Edition?): BannerRefs?
+	local old = refs.Banner
+	if old and edition and old.Edition.Id == edition.Id then
+		return old
+	end
+	if old then
+		old.Frame:Destroy()
+		refs.Banner = nil
+	end
+	if edition then
+		refs.Banner = buildBanner(refs.Sections.Featured, edition)
+	end
+	StoreView.relayout(refs)
+	return refs.Banner
+end
+
+-- The banner's time left (seconds; 0 = ended).
+function StoreView.setTimer(refs: Refs, secondsLeft: number)
+	local banner = refs.Banner
+	if banner then
+		banner.Timer.Text = StoreView.countdown(secondsLeft)
+	end
 end
 
 function StoreView.build(): Refs
@@ -594,6 +924,7 @@ function StoreView.build(): Refs
 		DetailBuy = buy,
 		DetailBack = back,
 		Tops = {},
+		Banner = nil,
 	}
 	StoreView.relayout(refs)
 	StoreView.layout(refs, 1280, 720)

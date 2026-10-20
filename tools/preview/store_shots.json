@@ -232,5 +232,28 @@
     "shadowExtent": 120,
     "maxLights": 24,
     "ui": "ui_store_pc_passes"
+  },
+  "store_pc_limited": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_limited"
   }
 }
