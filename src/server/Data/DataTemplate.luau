@@ -31,7 +31,7 @@ local DataTemplate = {
 		-- (readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
 		-- the mine elevator (ElevatorService), bought once for MineFloors.Elevator.Price:
-		-- rides to every unlocked floor (floors 4-5 are reachable only this way)
+		-- rides to every unlocked floor (floors 4-6 are reachable only this way)
 		Elevator = false,
 	},
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):

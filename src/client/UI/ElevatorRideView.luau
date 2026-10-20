@@ -324,10 +324,17 @@ end
 -- The shaft colours of a floor (MineFloors palette; floors past the list use the last one).
 export type Shaft = { Back: Color3, Bands: { Color3 }, Vein: Color3, Glint: Color3, Glint2: Color3, Lamp: Color3 }
 
+-- Veins in another colour than the palette's Accent, by floor Id: the Stormglass Rift's rock
+-- glows with electric yellow lightning (its Accent is the copper of its storm catchers).
+ElevatorRideView.VeinColors = {
+	StormglassRift = Color3.fromRGB(255, 226, 90),
+} :: { [string]: Color3 }
+
 function ElevatorRideView.shaftColors(floor: number): Shaft
 	local list = MineFloors.List
 	local index = math.clamp(floor, 1, #list)
 	local p = list[index].Palette
+	local vein = ElevatorRideView.VeinColors[list[index].Id] or p.Accent
 	return {
 		Back = p.Dark:Lerp(BLACK, 0.2),
 		Bands = {
@@ -337,10 +344,10 @@ function ElevatorRideView.shaftColors(floor: number): Shaft
 			p.Mid:Lerp(p.Light, 0.4),
 			p.Dark:Lerp(p.Mid, 0.25),
 		},
-		Vein = p.Accent,
+		Vein = vein,
 		Glint = p.Crystal,
 		Glint2 = p.Crystal2,
-		Lamp = p.Accent:Lerp(WHITE, 0.55),
+		Lamp = vein:Lerp(WHITE, 0.55),
 	}
 end
 

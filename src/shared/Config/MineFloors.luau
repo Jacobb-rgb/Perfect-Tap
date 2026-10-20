@@ -1,15 +1,20 @@
 --[[
-	The mine floors (owner, 2026-10-17): 5 floors now, more in updates. The
-	deeper the floor, the harder its rocks and the better its ores.
+	The mine floors (owner, 2026-10-17; the Stormglass Rift added 2026-10-20,
+	docs/plans/STORM_FLOOR_PLAN.md): 6 floors now, more in updates. The deeper
+	the floor, the harder its rocks and the better its ores.
 
 	  1 Greystone Quarry    blaster 1+   walk        Common
 	  2 Ember Caves         blaster 3+   walk        Uncommon
 	  3 Deep Hollow         blaster 5+   walk        Rare (re-themed as a crystal lagoon)
 	  4 Sunken Palace       blaster 7+   elevator    Epic
-	  5 Heartstone Core     blaster 9+   elevator    Legendary / Mythic
-	  6 ???                 blaster 11   "Coming soon"
+	  5 Stormglass Rift     blaster 8+   elevator    Epic / Legendary
+	  6 Heartstone Core     blaster 9+   elevator    Legendary / Mythic
+	  7 ???                 blaster 11   "Coming soon"
 
-	Every floor has 7 home ores (floor 1: 8; all 36 ores, OreData.Tier = the floor's MinBlaster). Rocks come in three kinds: Small (3 ores),
+	Floor logic keys on a floor's Id (RockBuilder looks, MineAmbience kinds,
+	TrainConfig lifts), never on its Index: a floor can go in between.
+
+	Every floor has 5-8 home ores (variant A2 of the balance sim; all 36 ores, OreData.Tier = the floor's MinBlaster). Rocks come in three kinds: Small (3 ores),
 	Big (4 ores) and Crystal (3 ores rolled from the floor's better table,
 	about 10 % of the rocks). A rock's HP is set so the weakest blaster allowed
 	on the floor breaks it in `Seconds` (about 5 s, the owner's target).
@@ -104,7 +109,7 @@ MineFloors.Elevator = {
 	Price = elevatorPrice(),
 }
 
-MineFloors.ComingSoon = { Index = 6, MinBlaster = 11 }
+MineFloors.ComingSoon = { Index = 7, MinBlaster = 11 }
 
 MineFloors.List = {
 	{
@@ -118,7 +123,7 @@ MineFloors.List = {
 		ViaElevator = false,
 		Lighting = "Quarry",
 		Ores = { Coal = 26, Copper = 21, Tin = 16, Iron = 12, Quartz = 9, Oakwood = 7, Honeycomb = 5, LeafOre = 4 },
-		CrystalOres = { Quartz = 15, Oakwood = 20, Honeycomb = 25, LeafOre = 25, Emberite = 10, Amber = 5 },
+		CrystalOres = { Quartz = 15, Oakwood = 20, Honeycomb = 25, LeafOre = 25, Frostbite = 10, Emberite = 5 },
 		Palette = {
 			Mid = rgb(118, 124, 142),
 			Light = rgb(168, 176, 194),
@@ -139,8 +144,8 @@ MineFloors.List = {
 		MinBlaster = 3,
 		ViaElevator = false,
 		Lighting = "EmberCaves",
-		Ores = { Emberite = 28, Cobalt = 22, Amber = 17, Bronze = 13, Silver = 9, Gold = 7, DragonEgg = 4 },
-		CrystalOres = { Bronze = 20, Silver = 25, Gold = 25, DragonEgg = 15, Jade = 10, Sapphire = 5 },
+		Ores = { Frostbite = 28, Emberite = 22, Cobalt = 17, Bogwood = 13, Amber = 9, Bronze = 7, Silver = 4 },
+		CrystalOres = { Amber = 20, Bronze = 30, Silver = 30, Gold = 15, Jade = 5 },
 		Palette = {
 			Mid = rgb(86, 58, 54),
 			Light = rgb(124, 88, 76),
@@ -161,8 +166,8 @@ MineFloors.List = {
 		MinBlaster = 5,
 		ViaElevator = false,
 		Lighting = "Lagoon",
-		Ores = { Frostbite = 28, Bogwood = 22, Jade = 17, Sapphire = 13, Diamond = 9, Amethyst = 7, StormPearl = 4 },
-		CrystalOres = { Sapphire = 15, Diamond = 25, Amethyst = 25, StormPearl = 20, Obsidian = 10, CrystalRose = 5 },
+		Ores = { Gold = 22, Jade = 20, Sapphire = 18, DragonEgg = 16, Diamond = 13, Amethyst = 11 },
+		CrystalOres = { Diamond = 20, Amethyst = 30, Obsidian = 30, CrystalRose = 20 },
 		Palette = {
 			Mid = rgb(52, 86, 110),
 			Light = rgb(82, 126, 152),
@@ -183,8 +188,8 @@ MineFloors.List = {
 		MinBlaster = 7,
 		ViaElevator = true,
 		Lighting = "Palace",
-		Ores = { Obsidian = 28, CrystalRose = 22, GalaxyStone = 17, RoyalAurum = 13, Sunstone = 9, Moonstone = 7, StormGem = 4 },
-		CrystalOres = { RoyalAurum = 20, Sunstone = 25, Moonstone = 25, StormGem = 15, LeafGem = 10, VolcanicCore = 5 },
+		Ores = { Obsidian = 12, CrystalRose = 18, StormPearl = 22, GalaxyStone = 24, RoyalAurum = 24 },
+		CrystalOres = { RoyalAurum = 30, Sunstone = 35, Moonstone = 35 },
 		Palette = {
 			Mid = rgb(112, 98, 134),
 			Light = rgb(152, 138, 174),
@@ -197,6 +202,29 @@ MineFloors.List = {
 	},
 	{
 		Index = 5,
+		Id = "StormglassRift",
+		RockName = "Stormrock",
+		CrystalName = "Thunder Shard",
+		Name = "Stormglass Rift",
+		ZoneId = "StormglassRift",
+		MinBlaster = 8,
+		ViaElevator = true,
+		Lighting = "Storm",
+		Ores = { Sunstone = 16, Moonstone = 22, StormGem = 26, LeafGem = 22, VolcanicCore = 14 },
+		CrystalOres = { VolcanicCore = 30, Aetherium = 40, PhoenixFeather = 30 },
+		-- dark indigo stone, electric yellow-white storm crystals, copper coils (World/Mine/Floor5Storm.luau)
+		Palette = {
+			Mid = rgb(58, 66, 104),
+			Light = rgb(92, 102, 150),
+			Dark = rgb(36, 40, 70),
+			Crystal = rgb(255, 236, 120),
+			Crystal2 = rgb(255, 250, 215),
+			Accent = rgb(226, 132, 72),
+			Ground = rgb(54, 62, 100),
+		},
+	},
+	{
+		Index = 6,
 		Id = "HeartstoneCore",
 		RockName = "Void Rock",
 		CrystalName = "Heart Shard",
@@ -205,8 +233,8 @@ MineFloors.List = {
 		MinBlaster = 9,
 		ViaElevator = true,
 		Lighting = "Core",
-		Ores = { LeafGem = 28, VolcanicCore = 22, Aetherium = 17, PhoenixFeather = 13, DragonScale = 9, CelestialCore = 7, Heartstone = 4 },
-		CrystalOres = { Aetherium = 15, PhoenixFeather = 25, DragonScale = 25, CelestialCore = 20, Heartstone = 15 },
+		Ores = { Aetherium = 30, PhoenixFeather = 25, DragonScale = 20, CelestialCore = 15, Heartstone = 10 },
+		CrystalOres = { DragonScale = 30, CelestialCore = 35, Heartstone = 35 },
 		Palette = {
 			Mid = rgb(70, 58, 108),
 			Light = rgb(106, 92, 152),
@@ -220,13 +248,16 @@ MineFloors.List = {
 } :: { Floor }
 
 -- Where each floor area stands in the world (ground center; +Z = front/entrance), see
--- docs/plans/MINE_STEP_PLAN.md: floors 1-3 replace the old quarry and caves; 4-5 lie deep below
+-- docs/plans/MINE_STEP_PLAN.md: floors 1-3 replace the old quarry and caves; 4-6 lie deep below
 -- and far north (beyond the streaming radius of the town, above FallenPartsDestroyHeight -500).
+-- The Rift (local y -11.5 .. +50) sits between the palace (its ground at -222) and the core's
+-- void enclosure (its top at -316).
 MineFloors.Placement = {
 	CFrame.new(0, -12, -180),
 	CFrame.new(0, -12, -300),
 	CFrame.new(0, -40, -444),
 	CFrame.new(0, -220, -800),
+	CFrame.new(0, -300, -800),
 	CFrame.new(0, -400, -800),
 } :: { CFrame }
 
@@ -236,7 +267,8 @@ MineFloors.LiftSpots = {
 	[2] = Vector3.new(46, 0, 40),
 	[3] = Vector3.new(50, 0, 2),
 	[4] = Vector3.new(26, 2.4, 45),
-	[5] = Vector3.new(12, 0, 25),
+	[5] = Vector3.new(28, 2.4, 47), -- on the Rift's landing deck, under its crane beam
+	[6] = Vector3.new(12, 0, 25),
 } :: { [number]: Vector3 }
 
 -- The world position of a floor's Mine Lift (nil for floor 1).

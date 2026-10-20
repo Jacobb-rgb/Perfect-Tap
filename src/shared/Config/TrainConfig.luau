@@ -97,15 +97,17 @@ TrainConfig.PortalInset = 6 -- the quarry tunnel mouths stand this far in front 
 TrainConfig.BufferGap = 1.7 -- the coastal buffer stops' face, past the coastal lines' ends
 
 -- Mine Lifts: throw ore in down in the caves, it goes into your train's cargo.
--- One per mine floor 2-5, where the floor area leaves room for it (MineFloors.LiftSpots).
-local function liftAt(index: number): Vector3
-	return MineFloors.liftPosition(index) or Vector3.zero
+-- One per mine floor 2-6, where the floor area leaves room for it (MineFloors.LiftSpots), found
+-- by the floor's Id (a lift's Id is its floor's Id), so a new floor in between renumbers safely.
+local function liftAt(floorId: string): Vector3
+	return MineFloors.liftPosition(MineFloors.get(floorId).Index) or Vector3.zero
 end
 TrainConfig.Lifts = {
-	{ Id = "EmberCaves", Position = liftAt(2), Size = Vector3.new(6, 5, 6) },
-	{ Id = "DeepHollow", Position = liftAt(3), Size = Vector3.new(6, 5, 6) },
-	{ Id = "SunkenPalace", Position = liftAt(4), Size = Vector3.new(6, 5, 6) },
-	{ Id = "HeartstoneCore", Position = liftAt(5), Size = Vector3.new(6, 5, 6) },
+	{ Id = "EmberCaves", Position = liftAt("EmberCaves"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "DeepHollow", Position = liftAt("DeepHollow"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "SunkenPalace", Position = liftAt("SunkenPalace"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "StormglassRift", Position = liftAt("StormglassRift"), Size = Vector3.new(6, 5, 6) },
+	{ Id = "HeartstoneCore", Position = liftAt("HeartstoneCore"), Size = Vector3.new(6, 5, 6) },
 }
 
 -- (Rocks and big decorations stay off the track, the station and the lifts:

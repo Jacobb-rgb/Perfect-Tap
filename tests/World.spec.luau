@@ -53,7 +53,8 @@ return function(T, Loader)
 		local parts = 0
 		-- the mine floors count too (each also within MineKit.PartBudget, tests/MineFloorAreas.spec.luau)
 		local mine = map:FindFirstChild("MineFloors")
-		T.truthy(mine and #mine:GetChildren() == 5, "map has the five mine floors")
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		T.truthy(mine and #mine:GetChildren() == #MineFloors.List, "map has every mine floor")
 		for _, d in map:GetDescendants() do
 			if d:IsA("BasePart") then
 				parts += 1

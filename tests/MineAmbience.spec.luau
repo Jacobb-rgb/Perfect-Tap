@@ -14,8 +14,8 @@ return function(T, Loader)
 	local SoundConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SoundConfig")
 	local MineKit = Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
-	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Core" }
-	local KINDS = { "MineDrip", "MineRumble", "LagoonLap", "PalaceEcho", "CrystalHum", "LavaBubble" }
+	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Storm", "Floor6Core" }
+	local KINDS = { "MineDrip", "MineRumble", "LagoonLap", "PalaceEcho", "CrystalHum", "LavaBubble", "StormCrackle" }
 	-- AmbienceConfig's own kinds (review/hory-noc): the mine kinds are merged into the same table
 	local LOBBY_KINDS = { "Waterfall", "Brook", "Pond", "Forge", "Plaza" }
 
@@ -92,14 +92,14 @@ return function(T, Loader)
 	end
 
 	-- a floor's box: its footprint (Floor.Size X, Z around the origin), from half its height
-	-- below the ground up to its height (floor 5's void islands reach below the origin)
+	-- below the ground up to its height (floor 6's void islands reach below the origin)
 	local function inBox(Floor, origin, p): boolean
 		local q = origin:PointToObjectSpace(p)
 		local s = Floor.Size
 		return math.abs(q.X) <= s.X / 2 and math.abs(q.Z) <= s.Z / 2 and q.Y >= -s.Y / 2 and q.Y <= s.Y
 	end
 
-	-- the game build of all five floors (WorldBuilder removes the rock spawns and markers)
+	-- the game build of all the floors (WorldBuilder removes the rock spawns and markers)
 	local built: any = nil
 	local function mine(): any
 		if not built then
@@ -144,15 +144,22 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(seen, #KINDS, "six mine kinds")
+		T.eq(seen, #KINDS, "seven mine kinds")
 		local used: { [string]: boolean } = {}
-		T.eq(#MineAmbience.Floors, #MODULES, "a kind list per floor")
-		for i, kinds in MineAmbience.Floors do
+		-- keyed by floor Id (a new floor can go in between): every floor in MineFloors has a list
+		local lists = 0
+		for id, kinds in MineAmbience.Floors do
+			lists += 1
+			T.truthy(MineFloors.ById[id] ~= nil, `kind list for a known floor ({id})`)
 			for _, kind in kinds do
-				T.truthy(MineAmbience.Kinds[kind], `floor {i} kind {kind}`)
+				T.truthy(MineAmbience.Kinds[kind], `floor {id} kind {kind}`)
 				used[kind] = true
 			end
 		end
+		for _, floor in MineFloors.List do
+			T.truthy(MineAmbience.Floors[floor.Id], floor.Id .. " has a kind list")
+		end
+		T.eq(lists, #MineFloors.List, "a kind list per floor, no strays")
 		for _, kind in KINDS do
 			T.truthy(used[kind], kind .. " is on a floor")
 		end
@@ -179,7 +186,7 @@ return function(T, Loader)
 				local kind = spot:GetAttribute(MineAmbience.Attribute)
 				local label = `{name} {spot.Name}`
 				T.truthy(type(kind) == "string" and MineAmbience.Kinds[kind], label .. " has a known kind")
-				T.truthy(table.find(MineAmbience.Floors[i], kind), `{label}: {kind} belongs on floor {i}`)
+				T.truthy(table.find(MineAmbience.Floors[MineFloors.get(i).Id], kind), `{label}: {kind} belongs on floor {i}`)
 				kinds[kind] = (kinds[kind] or 0) + 1
 				T.eq(spot.Name, "Ambience" .. kind, label .. " name")
 				T.truthy(spot:HasTag(MineAmbience.Tag), label .. " tagged")
@@ -193,7 +200,7 @@ return function(T, Loader)
 				T.le((at - host.CFrame.Position).Magnitude, host.Size.Magnitude / 2 + 8, label .. " near its host's middle")
 				T.truthy(inBox(Floor, origin, at), label .. " inside the floor's box")
 			end
-			for _, kind in MineAmbience.Floors[i] do
+			for _, kind in MineAmbience.Floors[MineFloors.get(i).Id] do
 				T.truthy(kinds[kind], `{name} plays {kind}`)
 			end
 		end

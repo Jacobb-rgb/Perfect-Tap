@@ -82,9 +82,10 @@ LobbyLayout.Budget = {
 	-- tests/LobbyBudget.spec.luau: the built map (perf pass 1 cut ~110 parts)
 	-- + one ore node on every node spawn (~1,320) + the 8 empty museums (~350)
 	-- must stay 200 under it (the podium and pen ores).
-	-- + the five mine floor areas (integrator 2026-10-18: ≤ 2,500 parts each,
-	-- MineKit.PartBudget; ~8,160 in all after the trims; floors 4-5 sit far
-	-- north and deep and never stream in near the town).
+	-- + the six mine floor areas (integrator 2026-10-18: ≤ 2,500 parts each,
+	-- MineKit.PartBudget; ~8,160 in all after the trims, + ~1,900 for the
+	-- Stormglass Rift; floors 4-6 sit far north and deep and never stream in
+	-- near the town).
 	MapParts = 32200, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
