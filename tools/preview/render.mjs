@@ -21,7 +21,7 @@ const scenesDir = path.join(repo, "build/preview");
 const outDir = path.join(repo, "build/preview/shots");
 fs.mkdirSync(outDir, { recursive: true });
 
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2", ".woff": "font/woff", ".png": "image/png" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".woff2": "font/woff2", ".woff": "font/woff", ".png": "image/png", ".ttf": "font/ttf" };
 
 // Extra shots from a private file (SHOTS_EXTRA=path), merged over shots.json, so parallel
 // workers can add camera angles without editing the shared file.

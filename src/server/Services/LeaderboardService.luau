@@ -886,6 +886,13 @@ function LeaderboardService.broadcast()
 	end
 end
 
+-- Called after every refresh with the tops ({ [boardId]: BoardData }), each in its own
+-- thread (ChampionService: the #1 avatars on the HALL OF FAME).
+local refreshed: { (tops: { [string]: BoardData }) -> () } = {}
+function LeaderboardService.onRefreshed(callback: (tops: { [string]: BoardData }) -> ())
+	table.insert(refreshed, callback)
+end
+
 -- Reads every board (or ranks this server's players without DataStores) and sends the result.
 function LeaderboardService.refresh()
 	if live then
@@ -936,6 +943,9 @@ function LeaderboardService.refresh()
 			end
 			tops[board.Id] = { Rows = LeaderboardService.localRows(board.Id, entries), Ready = true }
 		end
+	end
+	for _, callback in refreshed do
+		task.spawn(callback, tops)
 	end
 	LeaderboardService.broadcast()
 end

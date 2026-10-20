@@ -35,6 +35,8 @@ return function(T, Loader)
 	local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 	local HoverboardService = Loader.requirePath("ServerScriptService.Server.Services.HoverboardService")
 	local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
+	local ServerBoostService = Loader.requirePath("ServerScriptService.Server.Services.ServerBoostService")
+	local VaultService = Loader.requirePath("ServerScriptService.Server.Services.VaultService")
 
 	local GRANTED = Enum.ProductPurchaseDecision.PurchaseGranted
 	local NOT_YET = Enum.ProductPurchaseDecision.NotProcessedYet
@@ -66,6 +68,15 @@ return function(T, Loader)
 		CoinsSmall = "CoinPack",
 		CoinsMedium = "CoinPack",
 		CoinsLarge = "CoinPack",
+		-- the Robux STORE (owner 2026-10-20)
+		RoyalCapsule5 = "Capsule",
+		CoinsHuge = "CoinPack",
+		CoinsMega = "CoinPack",
+		BlasterNextA = "BlasterLevel",
+		BlasterNextB = "BlasterLevel",
+		BlasterNextC = "BlasterLevel",
+		BlasterNextD = "BlasterLevel",
+		ServerLuck15 = "ServerBoost",
 	}
 
 	local function deepCopy(v: any): any
@@ -91,6 +102,8 @@ return function(T, Loader)
 			"RebirthWeapon",
 			{ grant = RebirthService._test.grantWeapon, revoke = RebirthService._test.revokeWeapon }
 		)
+		ServerBoostService.registerGrants()
+		VaultService.registerGrants()
 	end
 
 	local function setup(): any
@@ -314,6 +327,10 @@ return function(T, Loader)
 				T.truthy(entry.Kind == "Product" and BoostConfig.Kinds[entry.Boost] and entry.Seconds, `{entry.Key}: a boost`)
 			elseif entry.Grant == "CoinPack" then
 				T.truthy(entry.Kind == "Product" and entry.CoinPack and entry.CoinSeconds, `{entry.Key}: a coin pack`)
+			elseif entry.Grant == "BlasterLevel" then
+				T.truthy(entry.Kind == "Product" and entry.MinLevel and entry.MaxLevel and entry.MinLevel <= entry.MaxLevel, `{entry.Key}: a level band`)
+			elseif entry.Grant == "ServerBoost" then
+				T.truthy(entry.Kind == "Product" and entry.ServerBoost and entry.Seconds and entry.PaidRandom, `{entry.Key}: a paid random server boost`)
 			end
 		end
 		local expected = 0
@@ -336,6 +353,8 @@ return function(T, Loader)
 		initCalls("src/server/Services/BoostService.luau", "BoostService", "BoostService.registerGrants()")
 		initCalls("src/server/Services/EnchantService.luau", "EnchantService", "EnchantService.registerGrants()")
 		initCalls("src/server/Services/PodiumService.luau", "PodiumService", "PodiumService.registerGrants()")
+		initCalls("src/server/Services/ServerBoostService.luau", "ServerBoostService", "ServerBoostService.registerGrants()")
+		initCalls("src/server/Services/VaultService.luau", "VaultService", "VaultService.registerGrants()")
 		local hover = fs.readFile("src/server/Services/HoverboardService.luau")
 		T.truthy(string.find(hover, 'MonetizationService.registerPass("Hoverboard"', 1, true) ~= nil, "HoverboardService registers")
 		local rebirth = fs.readFile("src/server/Services/RebirthService.luau")
@@ -371,8 +390,11 @@ return function(T, Loader)
 		T.falsy(MonetizationService.openGate(), "closed")
 		registerAll()
 		T.truthy(MonetizationService.openGate(), "open again")
-		-- a live coin pack while coin packs are off is reported
-		T.truthy(w.loggedWith("CoinPacksEnabled is false") >= 3, "the three coin packs are reported")
+		-- a live coin pack while coin packs are off is reported (set here: the
+		-- world restores the shipped value afterwards)
+		MonetizationConfig.CoinPacksEnabled = false
+		MonetizationService.openGate()
+		T.truthy(w.loggedWith("CoinPacksEnabled is false") >= 3, "the coin packs are reported")
 	end)
 
 	---------------------------------------------------------------- Royal capsules
@@ -520,14 +542,14 @@ return function(T, Loader)
 		T.eq(w.loggedWith("can't take CoinsSmall"), 1, "logged once")
 		MonetizationConfig.CoinPacksEnabled = true
 		local each = MonetizationConfig.coinPackAmount("CoinsMedium", 0)
-		T.eq(each, 25000, "no income: the minimum")
+		T.eq(each, 10000, "no income: the minimum")
 		receiptRules(w, "CoinsMedium", function()
 			return math.floor((w.data.Coins - coins) / each + 0.5)
 		end, "CoinsMedium")
 		T.eq(w.decide("k1", "CoinsSmall"), GRANTED, "the waiting receipt is granted once coin packs are on")
-		T.eq(w.data.Coins - coins, 2 * each + 5000, "its coins")
+		T.eq(w.data.Coins - coins, 2 * each + 2500, "its coins")
 		-- bought coins are counted in PaidCoins (kept through a rebirth while unspent)
-		T.eq(w.data.PaidCoins, 2 * each + 5000, "only the bought coins are counted")
+		T.eq(w.data.PaidCoins, 2 * each + 2500, "only the bought coins are counted")
 	end)
 
 	---------------------------------------------------------------- off policy: ids

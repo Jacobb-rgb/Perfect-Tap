@@ -141,7 +141,7 @@ CapsuleConfig.List = {
 		Id = "Royal",
 		Name = "Royal Capsule",
 		Currency = "Robux",
-		Products = { [1] = "RoyalCapsule1", [3] = "RoyalCapsule3", [10] = "RoyalCapsule10" },
+		Products = { [1] = "RoyalCapsule1", [3] = "RoyalCapsule3", [5] = "RoyalCapsule5", [10] = "RoyalCapsule10" }, -- (x5: the Store)
 		LuckyFrom = "Legendary",
 		Color = rgb(255, 196, 60),
 		Glow = rgb(255, 90, 120),

@@ -3,7 +3,9 @@
 	counter). Pure builders (only Instance creation), so the Lune preview
 	draws it with the same code.
 
-	One card per blaster level 2..10 (+ level 11 "Coming soon"): the weapon
+	One card per blaster level 2..10 (+ "STAR BLASTERS": the Star Forge's
+	weapons above them, REBIRTH tells where; the top level says FOUNDRY
+	while a rebirth run hasn't forged its level, "ForgeFirst"): the weapon
 	case drawn in its ore colours, LV, the blaster's name, its damage, the
 	price and one button: BUY on your next level (greyed with the price in
 	red while you can't afford it), OWNED below it, LOCKED above it. You can
@@ -28,6 +30,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
 local CaseBuilder = require(Shared.Builders.CaseBuilder)
 local Format = require(Shared.Util.Format)
 local UIConfig = require(Shared.Config.UIConfig)
@@ -41,35 +44,32 @@ local rgb = Color3.fromRGB
 
 export type Role = { Top: Color3, Base: Color3, Lip: Color3 }
 
-local function role(top: Color3, base: Color3, lip: Color3): Role
-	return { Top = top, Base = base, Lip = lip }
-end
-
--- = Config/BubbleTheme on branch ui/light (the UI chat's light look)
+-- = Config/BubbleTheme: the game's look (the store-card style, owner 2026-10-20)
+local Kit = require(Shared.Config.BubbleTheme)
 VaultView.Style = {
-	Font = Font.fromEnum(Enum.Font.FredokaOne),
-	TitleFont = Font.fromEnum(Enum.Font.LuckiestGuy),
-	Outline = rgb(27, 29, 51),
-	Shadow = rgb(15, 18, 40),
-	ShadowTransparency = 0.72,
-	Panel = rgb(255, 255, 255),
-	PanelTint = rgb(234, 241, 251),
-	Ink = rgb(38, 48, 79),
-	InkSoft = rgb(104, 117, 150),
-	White = rgb(255, 255, 255),
-	Gold = rgb(255, 203, 46),
-	Good = rgb(62, 214, 98),
-	Bad = rgb(255, 77, 92),
-	Corner = 18,
-	Stroke = 3.5,
-	TextStroke = 2.5,
-	Lip = 5,
-	GlossTransparency = 0.72,
+	Font = Kit.Font,
+	TitleFont = Kit.TitleFont,
+	Outline = Kit.Outline,
+	Shadow = Kit.Shadow,
+	ShadowTransparency = Kit.ShadowTransparency,
+	Panel = Kit.Panel,
+	PanelTint = Kit.PanelTint,
+	Ink = Kit.Ink,
+	InkSoft = Kit.InkSoft,
+	White = Kit.White,
+	Gold = Kit.Gold,
+	Good = Kit.Good,
+	Bad = Kit.Bad,
+	Corner = Kit.Corner,
+	Stroke = Kit.Stroke,
+	TextStroke = Kit.TextStroke,
+	Lip = Kit.Lip,
+	GlossTransparency = Kit.GlossTransparency,
 	Roles = {
-		Vault = role(rgb(255, 182, 102), rgb(255, 138, 31), rgb(196, 90, 0)),
-		Go = role(rgb(128, 240, 140), rgb(47, 201, 90), rgb(27, 143, 60)),
-		Danger = role(rgb(255, 140, 140), rgb(255, 77, 92), rgb(188, 34, 52)),
-		Plain = role(rgb(255, 255, 255), rgb(236, 241, 249), rgb(176, 188, 208)),
+		Vault = Kit.Roles.Vault,
+		Go = Kit.Roles.Go,
+		Danger = Kit.Roles.Danger,
+		Plain = Kit.Roles.Plain,
 	} :: { [string]: Role },
 }
 local S = VaultView.Style
@@ -85,6 +85,8 @@ VaultView.ReasonText = {
 	Owned = "You have this blaster already",
 	Locked = "Buy the level before it first",
 	Max = "You have the best blaster!",
+	ForgeFirst = "Forge LV 10 at the Foundry: a rebirth needs one forged level",
+	StarForge = "Star blasters wait in the Star Forge after a rebirth",
 	NoCoins = "Not enough coins",
 	TooFar = "Walk back to the counter",
 	BadLevel = "That case isn't for sale",
@@ -116,9 +118,11 @@ export type Card = {
 
 --[[
 	The cards for a player at blaster `level` with `coins` (the same rules as
-	VaultService.refusal: only the next level, coins only).
+	VaultService.refusal: only the next level, coins only; `reached` = the
+	State's Rebirth.Reached: the top level waits for the Foundry while it is
+	short, "ForgeFirst").
 ]]
-function VaultView.cards(level: number, coins: number): { Card }
+function VaultView.cards(level: number, coins: number, reached: number?): { Card }
 	local current = BlasterData.get(level).Level
 	local list: { Card } = {}
 	for lv = VaultView.FirstLevel, BlasterData.MaxLevel do
@@ -130,6 +134,8 @@ function VaultView.cards(level: number, coins: number): { Card }
 			reason = "Owned"
 		elseif state == "Locked" then
 			reason = "Locked"
+		elseif reached and RebirthConfig.topBlockedFor(current, reached) then
+			reason = "ForgeFirst"
 		elseif not price or coins < price then
 			reason = "NoCoins"
 		end
@@ -149,12 +155,12 @@ function VaultView.cards(level: number, coins: number): { Card }
 		table.insert(list, {
 			Level = soon.Level,
 			Ore = "",
-			Name = "Coming soon",
+			Name = "Star blasters",
 			Damage = 0,
 			Price = nil,
 			State = "Soon",
 			CanBuy = false,
-			Reason = if current >= BlasterData.MaxLevel then "Max" else "Locked",
+			Reason = "StarForge",
 		})
 	end
 	return list
@@ -167,7 +173,9 @@ function VaultView.buttonText(card: Card): string
 	elseif card.State == "Locked" then
 		return "LOCKED"
 	elseif card.State == "Soon" then
-		return "SOON"
+		return "REBIRTH"
+	elseif card.Reason == "ForgeFirst" then
+		return "FOUNDRY"
 	end
 	return "BUY"
 end
@@ -1025,11 +1033,11 @@ function VaultView.fillTile(tile: Tile, card: Card, g: Grid?)
 		end
 	end
 	tile.Lv.Text = "LV " .. card.Level
-	tile.Name.Text = if card.State == "Soon" then "???" else card.Name
+	tile.Name.Text = if card.State == "Soon" then "STAR BLASTERS" else card.Name
 	-- long names ("Heartstone Shard Heartlance") get smaller to stay on 2 lines
 	local nameMax = if g then g.Slots.NameSize else 16
 	TechShopView.fitText(tile.Name, tile.Name.Size.X.Offset, tile.Name.Size.Y.Offset, nameMax, math.floor(nameMax * 0.7))
-	tile.Damage.Text = if card.State == "Soon" then "Coming soon" else Format.big(card.Damage) .. " DMG/s"
+	tile.Damage.Text = if card.State == "Soon" then "In the Star Forge" else Format.big(card.Damage) .. " DMG/s"
 	local priced = card.Price ~= nil and card.State ~= "Owned"
 	tile.PriceRow.Visible = priced
 	tile.Price.Text = if card.Price then Format.money(card.Price) else ""

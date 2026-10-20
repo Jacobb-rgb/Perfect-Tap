@@ -392,9 +392,11 @@ export type Window = {
 Bubble.WindowCorner = 26
 
 --[[
-	A window: white panel (lip + shadow), a header band in the window's own
-	colour with a 3D icon popping out on the left, the title, and a red X on the
-	top-right corner. Centred on its parent; content goes into Body (padded).
+	A window in the store-card look (owner 2026-10-20): the dark slate panel
+	(lip + shadow), a header band in the window's own colour with faint
+	diagonal stripes, a 3D icon popping out on the left, the cream comic-font
+	title with a dark edge, and a red X on the top-right corner. Centred on
+	its parent; content goes into Body (padded).
 ]]
 function Bubble.window(parent: Instance, o: WindowOptions): Window
 	local hh = o.HeaderHeight or 68
@@ -411,58 +413,69 @@ function Bubble.window(parent: Instance, o: WindowOptions): Window
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, hh),
+		ClipsDescendants = true,
 		ZIndex = 3,
 	}, panel)
 	Bubble.corner(header, Bubble.WindowCorner)
-	UIKit.new("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, role.Top),
-			ColorSequenceKeypoint.new(0.5, role.Base),
-			ColorSequenceKeypoint.new(1, role.Base),
-		}),
-		Rotation = 90,
-	}, header)
-	UIKit.new("Frame", {
+	-- the band runs from the window's colour to its lighter top, left to right
+	local band = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, role.Base),
+		ColorSequenceKeypoint.new(0.6, role.Base:Lerp(role.Top, 0.5)),
+		ColorSequenceKeypoint.new(1, role.Top),
+	})
+	UIKit.new("UIGradient", { Color = band }, header)
+	local fill = UIKit.new("Frame", {
 		Name = "Fill", -- squares the header's bottom corners
-		BackgroundColor3 = role.Base,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0, 0.5),
 		Size = UDim2.fromScale(1, 0.5),
 		ZIndex = 3,
 	}, header)
+	UIKit.new("UIGradient", { Color = band }, fill)
+	for i = 0, math.ceil(o.Size.X / 26) do
+		UIKit.new("Frame", {
+			Name = "Stripe",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.86,
+			BorderSizePixel = 0,
+			Position = UDim2.new(0, 14 + i * 26, 0.5, 0),
+			Rotation = 35,
+			Size = UDim2.new(0, 8, 0, hh * 2),
+			ZIndex = 3,
+		}, header)
+	end
 	UIKit.new("Frame", {
 		Name = "Line",
 		BackgroundColor3 = Theme.Outline,
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0, 1),
+		Position = UDim2.new(0, 0, 1, -3),
 		Size = UDim2.new(1, 0, 0, 3),
-		ZIndex = 3,
+		ZIndex = 4,
 	}, header)
-	local gloss = UIKit.new("Frame", {
-		Name = "Gloss",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(10, 5),
-		Size = UDim2.new(1, -20, 0.36, 0),
-		ZIndex = 3,
-	}, header)
-	Bubble.corner(gloss, 12)
 	local iconSize = hh + 34
-	Bubble.icon(header, o.Icon, iconSize, {
+	-- (the icon pops out of the band: it sits on the panel over the header)
+	Bubble.icon(panel, o.Icon, iconSize, {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 4, 0.5, -12),
+		Position = UDim2.new(0, 4, 0, hh // 2 - 12),
 		ZIndex = 5,
 	})
 	local title = Bubble.text(header, o.Title, o.TitleSize or 38, {
 		Name = "Title",
-		FontFace = Theme.TitleFont,
-		Position = UDim2.fromOffset(iconSize + 8, 4),
+		FontFace = Theme.CardFont,
+		TextColor3 = Theme.Ink,
+		Position = UDim2.fromOffset(iconSize + 8, 2),
 		Size = UDim2.new(1, -iconSize - 90, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
 	})
-	local close, closeHolder = Bubble.button(panel, { Name = "Close", Text = "X", Role = "Danger", Size = Vector2.new(54, 54), TextSize = 32, Corner = 16 })
+	local titleEdge = title:FindFirstChildOfClass("UIStroke")
+	if titleEdge then
+		titleEdge.Thickness = 3.5
+		titleEdge.Color = Theme.Outline
+	end
+	local close, closeHolder = Bubble.button(panel, { Name = "Close", Text = "X", Role = "Danger", Size = Vector2.new(54, 54), TextSize = 32, Corner = 12 })
 	closeHolder.AnchorPoint = Vector2.new(0.5, 0.5)
 	closeHolder.Position = UDim2.new(1, -12, 0, 10)
 	closeHolder.ZIndex = 6
@@ -495,15 +508,30 @@ export type CardOptions = {
 	LayoutOrder: number?,
 }
 
--- Grid card: 3D icon popping out of the top, the name, a chip on the bottom edge.
+-- Grid card (the store-card look): a dark card with a glowing border in its
+-- colour (rarity, data), a soft glow behind the 3D icon popping out of the top,
+-- the name, a chip on the bottom edge.
 function Bubble.card(parent: Instance, o: CardOptions): (TextButton, Frame)
 	local size = o.Size
-	local holder, face = Bubble.body(parent, Bubble.roleFrom(o.Color), Vector2.new(size.X, size.Y - Theme.Lip), {
+	local holder, face = Bubble.body(parent, Bubble.role("Plain"), Vector2.new(size.X, size.Y - Theme.Lip), {
 		Name = o.Name,
-		Corner = 16,
+		Corner = 12,
 		Clickable = true,
+		Gloss = false,
 	})
 	holder.LayoutOrder = o.LayoutOrder or 0
+	Bubble.glow(face, o.Color)
+	local halo = UIKit.new("Frame", {
+		Name = "Halo",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = o.Color,
+		BackgroundTransparency = 0.84,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.5, 0, 0.42, 0),
+		Size = UDim2.fromOffset(math.floor(size.X * 0.7), math.floor(size.X * 0.7)),
+		ZIndex = 2,
+	}, face)
+	Bubble.corner(halo, 999)
 	local iconSize = math.floor(size.X * 0.66)
 	Bubble.icon(face, o.Icon, iconSize, {
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -539,11 +567,22 @@ function Bubble.card(parent: Instance, o: CardOptions): (TextButton, Frame)
 	return face :: TextButton, holder
 end
 
--- Gold outline on the selected tab / card / slot (false = the plain outline).
+-- A card's glowing border in `color` (kept when it is selected and deselected).
+function Bubble.glow(face: GuiObject, color: Color3)
+	face:SetAttribute("Glow", color)
+	local stroke = face:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = color
+		stroke.Thickness = Theme.Stroke
+	end
+end
+
+-- Gold outline on the selected tab / card / slot (false = its glow or the plain outline).
 function Bubble.select(face: GuiObject, selected: boolean)
 	local stroke = face:FindFirstChildOfClass("UIStroke")
 	if stroke then
-		stroke.Color = if selected then Theme.Gold else Theme.Outline
+		local glow = face:GetAttribute("Glow")
+		stroke.Color = if selected then Theme.Gold elseif typeof(glow) == "Color3" then glow else Theme.Outline
 		stroke.Thickness = if selected then 5 else Theme.Stroke
 	end
 end

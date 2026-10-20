@@ -29,7 +29,8 @@ return function(T, Loader)
 			end
 			T.eq(refs.Cards.A:FindFirstChild("Chance", true):FindFirstChild("Text").Text, "$4.8K", "value chip")
 			T.eq(refs.Cards.B:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Gold, "selected card")
-			T.eq(refs.Cards.A:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Outline, "other cards plain")
+			-- (the store-card look: the other cards keep their glow colour)
+			T.eq(refs.Cards.A:FindFirstChildOfClass("UIStroke").Color, refs.Cards.A:GetAttribute("Glow"), "other cards keep their glow")
 			T.truthy(refs.Sell and refs.Podium and refs.Keep, "actions")
 		end
 	end)

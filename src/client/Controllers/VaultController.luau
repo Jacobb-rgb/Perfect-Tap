@@ -174,7 +174,9 @@ local function refresh()
 	local cash = coins()
 	VaultView.setCoins(view, cash)
 	VaultView.setCurrent(view, myLevel(), myOre())
-	VaultView.setCards(view, VaultView.cards(myLevel(), cash))
+	local state = StateController.get()
+	local rebirth = if state and type(state.Rebirth) == "table" then state.Rebirth else nil
+	VaultView.setCards(view, VaultView.cards(myLevel(), cash, if rebirth then tonumber(rebirth.Reached) else nil))
 	local wait = pending
 	if wait then
 		local tile = VaultView.tileFor(view, wait.Level)
@@ -235,7 +237,10 @@ local function buy(tile: VaultView.Tile)
 		reason = "NoCoins"
 	end
 	if reason then
-		message(VaultView.reasonText(reason), if reason == "Owned" then VaultView.Style.InkSoft else VaultView.Style.Bad)
+		message(
+			VaultView.reasonText(reason),
+			if reason == "Owned" or reason == "StarForge" then VaultView.Style.InkSoft else VaultView.Style.Bad
+		)
 		Sfx.play("UIDeny")
 		return
 	end
@@ -545,6 +550,8 @@ function VaultController.play(level: number, oreId: string): boolean
 		HudController.toast("New blaster: " .. name .. "!", "Reward")
 		return false
 	end
+	-- every panel goes (the STORE a Robux blaster was bought in too), then the stage owns the screen
+	MenuPanels.closeAll()
 	VaultController.close()
 	local camera = Workspace.CurrentCamera :: Camera
 	local folder = Instance.new("Folder")

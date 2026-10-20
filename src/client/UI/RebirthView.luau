@@ -30,6 +30,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
+local BlasterData = require(Shared.Config.BlasterData)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local KenneyBlaster = require(Shared.Builders.KenneyBlaster)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
@@ -52,6 +53,7 @@ export type Info = {
 	Ready: boolean,
 	StarsNow: number, -- what a rebirth now pays
 	Reached: number?, -- the level this run counts (RebirthConfig.reachedOf)
+	Start: number?, -- the level a rebirth starts with (RebirthConfig.startFor: Head Start + Robux levels)
 	Glow: string?, -- the Plot Glow colour shown ("" = off)
 	Weapons: { [string]: boolean }?, -- the STAR blasters owned
 	Weapon: string?, -- the one equipped ("" = the forged blaster)
@@ -139,9 +141,10 @@ RebirthView.TitleRoom = 250
 -- the star count's room right of the tabs (design units)
 RebirthView.StarsRoom = 120
 
--- The rows of the three columns for a save (Head Start's level, Podium Keeper).
-function RebirthView.lists(perks: any): { [string]: { string } }
-	local start = RebirthConfig.startLevel(perks)
+-- The rows of the three columns for a save (Head Start's level, Podium Keeper;
+-- `lifted` = the level the rebirth starts with when Robux levels lift it: RebirthConfig.startFor).
+function RebirthView.lists(perks: any, lifted: number?): { [string]: { string } }
+	local start = lifted or RebirthConfig.startLevel(perks)
 	local open = EnchantConfig.unlockedSlots(start)
 	local enchantRow = if open < EnchantConfig.MaxSlots
 		then `✨  Enchant slots {open + 1}-{EnchantConfig.MaxSlots} for now`
@@ -177,23 +180,32 @@ end
 -- What the bottom line says (the requirement, or what a rebirth pays now).
 function RebirthView.needText(info: Info): string
 	local reached = info.Reached or info.Level
+	if info.Ready and info.StarsNow <= 0 then
+		-- at the top with nothing forged this run: a rebirth is allowed, for no stars
+		return "Nothing left to forge: a rebirth now pays no stars"
+	end
 	if info.Ready then
 		return `Blaster LV {reached}: a rebirth now pays ⭐ {info.StarsNow}`
 	end
 	if info.Level >= RebirthConfig.MinBlaster then
-		-- a level from the Vault: after the first rebirth the stars want a forged one
-		return `Forge blaster LV {RebirthConfig.MinBlaster} at the Foundry to rebirth (Vault cases don't count)`
+		return RebirthView.forgeText(info.Level)
 	end
 	return `Reach blaster LV {RebirthConfig.MinBlaster} to rebirth (you have LV {info.Level})`
 end
 
--- A perk card's level text and BUY button text (and whether it can be bought).
-function RebirthView.cardText(perks: any, stars: number, id: string): (string, string, boolean)
+-- What a run past MinBlaster with no rebirth level forged needs (bought levels never count).
+function RebirthView.forgeText(level: number): string
+	return `Forge blaster LV {math.min(level + 1, BlasterData.MaxLevel)} at the Foundry to rebirth (bought levels don't count)`
+end
+
+-- A perk card's level text and BUY button text (and whether it can be bought). `start` =
+-- the level a rebirth starts with (RebirthConfig.startFor): Head Start adds nothing at MaxLevel - 1.
+function RebirthView.cardText(perks: any, stars: number, id: string, start: number?): (string, string, boolean)
 	local perk = RebirthConfig.ById[id]
 	local level = RebirthConfig.levelOf(perks, id)
 	local top = if perk then #perk.Costs else 0
 	local cost = RebirthConfig.nextCost(perks, id)
-	if not cost then
+	if not cost or (id == "HeadStart" and start and start >= BlasterData.MaxLevel - 1) then
 		return `{level}/{top}`, "MAX", false
 	end
 	return `{level}/{top}`, `⭐ {cost}  BUY`, stars >= cost
@@ -677,7 +689,7 @@ end
 
 -- Fills both pages.
 function RebirthView.setInfo(refs: Refs, info: Info)
-	local lists = RebirthView.lists(info.Perks)
+	local lists = RebirthView.lists(info.Perks, info.Start)
 	lists.Get[1] = if info.Ready then `⭐  {info.StarsNow} Forge Stars` else `⭐  Stars from LV {RebirthConfig.MinBlaster}`
 	lists.Get[2] = `🔁  Rebirth #{info.Count + 1}`
 	for id, column in refs.Columns do
@@ -696,7 +708,7 @@ function RebirthView.setInfo(refs: Refs, info: Info)
 	refs.Stars.Text = `⭐ {info.Stars}`
 	refs.Tabs.Shop.Text = "STAR SHOP"
 	for _, card in refs.Cards do
-		local level, buy, affordable = RebirthView.cardText(info.Perks, info.Stars, card.Id)
+		local level, buy, affordable = RebirthView.cardText(info.Perks, info.Stars, card.Id, info.Start)
 		card.Level.Text = level
 		card.Buy.Text = buy
 		local pick = card.Pick

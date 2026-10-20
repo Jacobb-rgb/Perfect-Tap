@@ -337,6 +337,10 @@ local function buildLight(view: SideMenuView.Refs)
 	if not hud or not hud.Menu:GetAttribute("Bubble") then
 		return
 	end
+	-- the MORE flyout opens over the TRAIN / boost chips' row: they hide meanwhile
+	HudBubble.onMoreToggled = function(open: boolean)
+		MenuPanels.setGridOpen(open)
+	end
 	view.Gui.Enabled = false
 	local tiles: { [string]: TextButton } = {}
 	for _, entry in SideMenuView.sorted() do

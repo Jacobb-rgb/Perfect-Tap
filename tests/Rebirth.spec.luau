@@ -405,6 +405,77 @@ return function(T, Loader)
 		end
 	end)
 
+	T.test("Rebirth: Robux blaster levels never pay stars and come back at every rebirth", function()
+		-- a first run with a level bought with Robux counts only Foundry-forged levels
+		local data = midRun()
+		data.Stats.RunPaid = true
+		T.eq(RebirthConfig.reachedOf(data), 0, "the first-run grace is gone once a level was bought")
+		T.eq(select(2, RebirthConfig.canRebirth(data)), "NotForged")
+		data.Stats.RunForged = 7
+		T.eq(RebirthConfig.reachedOf(data), 7, "forged levels still count")
+		-- every Robux level lifts the fresh blaster one level, at every rebirth
+		data.Stats.BlastersPaid = 2
+		T.eq(RebirthConfig.startFor(data), 3)
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, 3, "LV 1 + 2 Robux levels")
+		T.eq(data.BlasterOre, BlasterData.vaultOre(3))
+		T.eq(data.Stats.BlastersPaid, 2, "kept: they come back next time too")
+		T.eq(data.Stats.RunPaid, true, "the lifted run is paid (no stars for it)")
+		T.eq(RebirthConfig.reachedOf(data), 0, "the lifted level isn't forged: no stars for it")
+		data.BlasterLevel = TOP
+		data.Stats.RunForged = TOP
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, 3, "the second rebirth lifts it again")
+		-- with Head Start, never past MaxLevel - 1: a level is left to forge, so a rebirth can be earned again
+		data.StarPerks = { HeadStart = 3 }
+		data.Stats.BlastersPaid = 40
+		data.BlasterLevel = TOP
+		data.Stats.RunForged = TOP
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, TOP - 1)
+		data.BlasterLevel = TOP
+		data.Stats.RunForged = TOP
+		T.truthy(RebirthConfig.canRebirth(data), "forging the top level earns the next rebirth")
+		-- Head Start alone: an unpaid run
+		data.Stats.BlastersPaid = 0
+		RebirthConfig.reset(data)
+		T.eq(data.BlasterLevel, RebirthConfig.HeadStartLevels[3])
+		T.eq(data.Stats.RunPaid, false)
+		T.eq(RebirthConfig.startFor({ Stats = { BlastersPaid = 0 / 0 } }), 1, "junk")
+		T.eq(RebirthConfig.startFor(nil), 1)
+		-- Head Start adds nothing once the Robux levels reach the cap: not sold then
+		local capped = midRun()
+		capped.Stars = 99
+		capped.Stats.BlastersPaid = 8
+		T.eq(select(2, RebirthConfig.quote(capped, "HeadStart")), "Max")
+		capped.Stats.BlastersPaid = 5
+		capped.StarPerks = { HeadStart = 2 }
+		T.eq(
+			RebirthConfig.quote(capped, "HeadStart"),
+			RebirthConfig.nextCost(capped.StarPerks, "HeadStart"),
+			"LV 3 + 5 < 9: it still helps"
+		)
+		T.eq(RebirthConfig.quote(capped, "GoldenTouch"), RebirthConfig.nextCost(capped.StarPerks, "GoldenTouch"), "other perks unchanged")
+	end)
+
+	T.test("Rebirth: a save stuck at the top level with nothing forged may still rebirth, for no stars", function()
+		-- (the coin Vault could sell LV 10 on a rebirth run before topBlocked existed)
+		local data = midRun()
+		data.Rebirths = 2
+		data.BlasterLevel = TOP
+		data.Stats.RunForged = 3
+		T.truthy(RebirthConfig.canRebirth(data), "not locked out for good")
+		local stars, count = RebirthConfig.reset(data)
+		T.eq(stars, 0, "no stars: nothing was forged")
+		T.eq(count, 3)
+		-- below the top, an unforged run still has to forge
+		data.BlasterLevel = TOP - 1
+		data.Stats.RunForged = 0
+		T.eq(select(2, RebirthConfig.canRebirth(data)), "NotForged")
+		T.truthy(RebirthConfig.topBlocked(data), "and the top level waits for the Foundry")
+		T.falsy(RebirthConfig.topBlockedFor(TOP - 2, 0), "only the step to the top waits")
+	end)
+
 	T.test("Rebirth: Head Start and Podium Keeper", function()
 		local data = midRun()
 		data.StarPerks = { HeadStart = 3, PodiumKeeper = 1 }

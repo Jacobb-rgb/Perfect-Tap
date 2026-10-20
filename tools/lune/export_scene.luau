@@ -134,6 +134,10 @@ if sceneName == "world" or string.match(sceneName, "^world_") then
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
 	addNodes(workspace, map)
+elseif sceneName == "hall" then -- the world + stand-in champions on the giant HALL OF FAME (tools/lune/lib/hall_preview.luau)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
+	require("./lib/hall_preview").build(Loader, map)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)
@@ -261,6 +265,11 @@ elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays
 	WorldBuilder.build(workspace)
 	require("./lib/rebirth_preview").buildWorld(Loader, workspace)
 	for name, guis in require("./lib/rebirth_preview").build(Loader) do
+		uiExports[name] = guis
+	end
+elseif sceneName == "store" then -- the world + the Robux STORE window overlays (tools/lune/lib/store_preview.luau)
+	WorldBuilder.build(workspace)
+	for name, guis in require("./lib/store_preview").build(Loader) do
 		uiExports[name] = guis
 	end
 elseif sceneName == "star_blasters" then -- the five STAR blasters on a starry stage (tools/lune/lib/star_blasters_preview.luau)
@@ -499,6 +508,33 @@ elseif sceneName == "cleaning" then
 			else "Wash all the dirt off the ore!"
 		CleaningView.setClean(view, tracker:progress())
 		CleaningView.setMeter(view, tracker:parts(stopAt).Score)
+		-- the game's look (Cleaning/CardLook): the green bar and dirt chunks in flight
+		local CardLook = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Cleaning.CardLook")
+		CardLook.styleBar(view)
+		do
+			local seed = 7
+			local function r(): number
+				seed = (seed * 16807) % 2147483647
+				return seed / 2147483647
+			end
+			local dirt = roblox.Color3.fromRGB(120, 86, 56)
+			for c = 1, 7 do
+				local from = hit + workCf:VectorToWorldSpace(roblox.Vector3.new((r() - 0.5) * 0.8, (r() - 0.5) * 0.8, 0.05))
+				local velocity = CardLook.throw(workCf, r)
+				for k = 1, 2 do
+					local t = 0.05 + (c % 3) * 0.06 + k * 0.05
+					local s = 0.12 + r() * 0.16
+					Geo.block(
+						fx,
+						CF.new(CardLook.chunkAt(from, velocity, t)) * CF.Angles(r() * 3, r() * 3, r() * 3),
+						roblox.Vector3.new(s, s * 0.8, s),
+						dirt,
+						nil,
+						{ CanCollide = false }
+					)
+				end
+			end
+		end
 		view.Hint.Text = if phone then "Hold your finger on the dirt and drag" else "Hold the left mouse button to spray"
 	elseif stage == "reveal" then
 		local lamp: any = workLight:FindFirstChildOfClass("PointLight")
@@ -521,6 +557,10 @@ elseif sceneName == "cleaning" then
 		view.CardDetail.Text = "Time 9.4s  ·  Aim 97%"
 		view.Card.Visible = true
 		view.CleanBar.Visible = false -- like DefaultLook: the card sits where the bar was
+		-- the game's look (Cleaning/CardLook): the card glows in the rarity colour, the NEW ORE banner
+		local CardLook = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Cleaning.CardLook")
+		CardLook.glowCard(view, rarity.Color)
+		CardLook.banner(view, "NEW ORE DISCOVERED!", roblox.Color3.fromRGB(255, 196, 46))
 		-- the ore lifted out and glowing, rays around it
 		local RevealFx = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Cleaning.RevealFx")
 		local lift = workCf:VectorToWorldSpace(RevealFx.Rise)

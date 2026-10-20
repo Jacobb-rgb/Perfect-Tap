@@ -6,6 +6,8 @@
 	UI overlays (build/preview/<name>.json):
 	  ui_vault_pc           PC: a level 3 player who can buy level 4
 	  ui_vault_pc_poor      PC: level 6 next, not enough coins (red price, the message)
+	  ui_vault_pc_forge     PC: a rebirth run at LV 9 with nothing forged: LV 10 says FOUNDRY, the
+	                        last card STAR BLASTERS (REBIRTH: they are in the Star Forge)
 	  ui_vault_phone        667 x 375 pt phone (compact: one row that scrolls)
 	  ui_vault_phone_small  568 x 320 pt phone: level 8 next ($4.8B)
 	  ui_vault_tv           1080p TV (console, HUD scale 1.25): the compact
@@ -58,13 +60,14 @@ function Preview.build(Loader: any): { [string]: any }
 		maxHeight: number,
 		level: number,
 		coins: number,
-		hint: string
+		hint: string,
+		reached: number?
 	): any
 		local refs = VaultView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
 		VaultView.layout(refs, compact, maxWidth, maxHeight)
-		VaultView.setCards(refs, VaultView.cards(level, coins))
+		VaultView.setCards(refs, VaultView.cards(level, coins, reached))
 		VaultView.setCoins(refs, coins)
 		VaultView.setCurrent(refs, level, BlasterData.vaultOre(level))
 		VaultView.setHint(refs, hint)
@@ -92,6 +95,11 @@ function Preview.build(Loader: any): { [string]: any }
 	-- level 3 with 2.1M: level 4 ($1.52M) can be bought
 	exports.ui_vault_pc = UiExport.export({ hud(scale, 2.1e6).Gui, view(scale, false, pcWidth, pcHeight, 3, 2.1e6, pcHint).Gui })
 
+	-- a rebirth run at LV 9 with nothing forged: LV 10 waits for the Foundry (FOUNDRY), the last card is the Star Forge's
+	local forge = view(scale, false, pcWidth, pcHeight, 9, 2e13, pcHint, 0)
+	VaultView.setMessage(forge, VaultView.reasonText("ForgeFirst"), VaultView.Style.Bad)
+	exports.ui_vault_pc_forge = UiExport.export({ hud(scale, 2e13).Gui, forge.Gui })
+
 	-- level 5 with 1.9M: level 6 costs $116M (red), BUY tells why
 	local poor = view(scale, false, pcWidth, pcHeight, 5, 1.9e6, pcHint)
 	VaultView.setMessage(poor, VaultView.reasonText("NoCoins"), VaultView.Style.Bad)
@@ -114,7 +122,7 @@ function Preview.build(Loader: any): { [string]: any }
 		view(tvScale, true, 1600 / tvScale, (900 - 36 * 900 / 1080) / tvScale, 9, 1.52e11, "A: buy   B: close").Gui,
 	})
 	UIConfig.LightUI = UIConfig.Default
-	if light then
+	if process.env.LIGHT_UI == "1" then -- (the "_light" names: export_scene LIGHT_UI=1 only)
 		local renamed = {}
 		for name, guis in exports do
 			renamed[name .. "_light"] = guis

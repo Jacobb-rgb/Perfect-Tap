@@ -346,12 +346,24 @@ end
 -- What a luck card compares, from a State snapshot (State.Bonuses: the
 -- capped totals the server applies). Hexa Lucky's part counts only while
 -- it still runs at `now` (a snapshot can be a moment older than its end).
+-- Server Luck's ore luck now (x2 while ReplicatedStorage ServerLuckUntil is
+-- ahead of the server clock: ServerBoostService; 1 = off).
+BoostView.ServerLuckMult = 2
+function BoostView.serverLuck(): number
+	local ok, on = pcall(function(): boolean
+		local untilTime = game:GetService("ReplicatedStorage"):GetAttribute("ServerLuckUntil")
+		return type(untilTime) == "number" and untilTime > workspace:GetServerTimeNow()
+	end)
+	return if ok and on then BoostView.ServerLuckMult else 1
+end
+
 function BoostView.context(rawState: any, now: number?): BoostConfig.LuckContext
 	local state = safeState(rawState)
 	local bonuses = bonusesOf(state)
 	local mult = math.max(1, num(bonuses.OreLuckMult, 1))
 	if now and mult > 1 and not BoostConfig.active(state.Boosts, "HexaLucky", now) then
-		mult = 1
+		-- the multiplier without Hexa Lucky: Server Luck's while it runs (the State can lag)
+		mult = math.min(mult, BoostView.serverLuck())
 	end
 	return {
 		BlasterLevel = levelOf(state),
@@ -532,7 +544,7 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 		end
 		local keyLine: string
 		if kind.Target == "Mining" then
-			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct)
+			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
 			keyLine = `Your ore luck: {BoostView.mult(without)} → {BoostView.mult(with)}`
 			if not effect then
 				keyLine = BoostConfig.Reasons.NoEffect
@@ -605,7 +617,7 @@ end
 ]]
 function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local ctx = BoostView.context(rawState, nil)
-	local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct)
+	local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
 	local zone = if zoneId then WorldLayout.ZoneById[zoneId] else nil
 	local rows: { OddsRow } = {}
 	local summary: OddsRow? = nil
@@ -1867,6 +1879,9 @@ end
 	and never above the coins' "+$X" popups.
 ]]
 function BoostView.chipsTop(trainChip: GuiObject?, compact: boolean): number
+	if TrainView.HudChipTop and trainChip then
+		return trainChip.Position.Y.Offset -- the light HUD: the chips beside the train chip
+	end
 	local bottom: number
 	if trainChip then
 		bottom = trainChip.Position.Y.Offset + trainChip.Size.Y.Offset * (1 - trainChip.AnchorPoint.Y)
@@ -1898,9 +1913,18 @@ function BoostView.chipsVisible(hudShown: boolean, panelOpen: boolean, gridOpen:
 	return hudShown and not panelOpen and gridOpen ~= true
 end
 
--- Moves the chips' row to `top` (BoostView.chipsTop).
-function BoostView.placeChips(refs: ChipRefs, top: number)
-	refs.Row.Position = UDim2.fromOffset(BoostView.ChipLeft, top)
+-- Where the chips' row starts (design units): ChipLeft, or right of the train
+-- chip on the light HUD (the left column holds the menu tiles there).
+function BoostView.chipsLeft(trainChip: GuiObject?): number
+	if TrainView.HudChipTop and trainChip then
+		return trainChip.Position.X.Offset + trainChip.Size.X.Offset + BoostView.ChipGap
+	end
+	return BoostView.ChipLeft
+end
+
+-- Moves the chips' row to `top` (BoostView.chipsTop), at `left` (BoostView.chipsLeft).
+function BoostView.placeChips(refs: ChipRefs, top: number, left: number?)
+	refs.Row.Position = UDim2.fromOffset(left or BoostView.ChipLeft, top)
 end
 
 --[[

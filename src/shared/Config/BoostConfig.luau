@@ -403,9 +403,14 @@ end
 -- The ore luck with and without Hexa Lucky for a player whose other luck is
 -- `oreLuckPct` (Lucky enchant + Luck golems, capped): what a Hexa Lucky card
 -- compares. Both are StatConfig.oreLuck (at most StatConfig.MaxOreLuck).
-function BoostConfig.hexaLuck(oreLuckPct: number): (number, number)
+-- `baseMult`: another OreLuckMult running without Hexa (Server Luck, x2): the
+-- "without" side counts it and the two multipliers combine as the server does
+-- (StatConfig.oreLuck caps them).
+function BoostConfig.hexaLuck(oreLuckPct: number, baseMult: number?): (number, number)
 	local hexa = BoostConfig.Kinds.HexaLucky.Mult
-	return StatConfig.oreLuck(oreLuckPct, 1), StatConfig.oreLuck(oreLuckPct, hexa)
+	local cap = StatConfig.ById.OreLuckMult.Max or math.huge -- the server caps the multiplier first
+	local base = math.min(if type(baseMult) == "number" and baseMult > 1 then baseMult else 1, cap)
+	return StatConfig.oreLuck(oreLuckPct, base), StatConfig.oreLuck(oreLuckPct, math.min(hexa * base, cap))
 end
 
 -- Ore weights with luck: every ore's weight x oreMult (luck <= 1 or not

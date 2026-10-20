@@ -626,7 +626,8 @@ local function onCapsuleAction(player: Player, action: any, arg: any)
 		return
 	end
 	local count = if args then Guard.integer(args.Count, 1, 10) else nil
-	if not count or not CapsuleConfig.validCount(count) then
+	-- (a Robux capsule may also come in the Store's own counts: Royal x5)
+	if not count or not (CapsuleConfig.validCount(count) or CapsuleConfig.product(capsuleId, count) ~= nil) then
 		refuse(player, "BadCount", capsuleId)
 		return
 	end

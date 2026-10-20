@@ -16,6 +16,7 @@
 	                           Nebula to buy, Pulsar short of stars, two still locked (the R$
 	                           buttons as they look once the passes are live)
 	  ui_rebirth_blasters_phone 667 x 375 pt phone, the same
+	  ui_rebirth_paid_pc       PC: two blaster levels bought with Robux come back: "Blaster back to LV 3"
 	World: buildWorld puts the Plot Glow on plot 2 (Gold) and plot 3 (Prism).
 ]]
 
@@ -145,6 +146,12 @@ function Preview.build(Loader: any): { [string]: any }
 	for entry, id in ids do
 		entry.Id = id
 	end
+	local paidInfo = info(8, 3, perks, 1)
+	paidInfo.Start = RebirthConfig.startFor({ StarPerks = perks, Stats = { BlastersPaid = 2 } })
+	exports.ui_rebirth_paid_pc = UiExport.export({
+		hud(scale, 1.4e9).Gui,
+		view(scale, false, pcWidth, pcHeight, paidInfo, "Rebirth", pcHint).Gui,
+	})
 	local moment = RebirthView.buildMoment(2, RebirthConfig.starsFor(8), 11)
 	moment.Flash.BackgroundTransparency = 0.82 -- the flash fading out
 	exports.ui_rebirth_moment = UiExport.export({ hud(scale, 0).Gui, moment.Gui })

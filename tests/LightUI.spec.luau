@@ -182,7 +182,7 @@ return function(T, Loader)
 		T.falsy(plain.Panel:FindFirstChild("HeaderIcon"), "switch off: no light header")
 	end)
 
-	T.test("LightSkin: old dark panels become light, text stays readable", function()
+	T.test("LightSkin: old windows get the dark card look, text stays readable", function()
 		local LightSkin = ui("LightSkin")
 		local UIKit = ui("UIKit")
 		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
@@ -195,14 +195,14 @@ return function(T, Loader)
 		local over = UIKit.label(gui, "Over the world", 18)
 		LightSkin.apply(gui)
 		T.truthy(gui:GetAttribute("LightSkin"), "marked")
-		T.eq(panel.BackgroundColor3, BubbleTheme.Panel, "white panel")
-		T.eq(panel:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Outline, "navy outline")
-		T.eq(body.TextColor3, BubbleTheme.Ink, "dark body text")
-		T.falsy(body:FindFirstChildOfClass("UIStroke").Enabled, "no outline on body text")
-		T.truthy(title:FindFirstChildOfClass("UIStroke").Enabled, "titles keep a thin edge")
-		T.eq(button.BackgroundColor3, BubbleTheme.Roles.Go.Base, "light green button")
-		T.eq(button.TextColor3, BubbleTheme.White, "white text on the button")
-		T.eq(over.TextColor3, BubbleTheme.White, "white text over the world")
+		T.eq(panel.BackgroundColor3, BubbleTheme.Panel, "dark slate panel")
+		T.eq(panel:FindFirstChildOfClass("UIStroke").Color, BubbleTheme.Outline, "near-black outline")
+		T.eq(body.TextColor3, BubbleTheme.Ink, "cream body text")
+		T.truthy(body:FindFirstChildOfClass("UIStroke").Enabled, "with a dark edge, like the store cards")
+		T.truthy(title:FindFirstChildOfClass("UIStroke").Enabled, "titles keep their edge")
+		T.eq(button.BackgroundColor3, BubbleTheme.Roles.Go.Base, "the kit's green button")
+		T.eq(button.TextColor3, BubbleTheme.Ink, "cream text on the button")
+		T.eq(over.TextColor3, BubbleTheme.Ink, "cream text over the world")
 		-- a controller setting the old colour again (Lune: refresh stands in for the signal)
 		body.TextColor3 = Theme.Text
 		LightSkin.refresh(gui)
@@ -269,7 +269,95 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("LightUI: on a small phone the coins and the teleport bar don't meet", function()
+	-- (review #16) the Shop pill never sits under the TRAIN chip (its own gui, under the
+	-- Roblox top bar, drawn over the HUD) nor on the menu tiles, on PC screens and phones
+	T.test("LightUI: the Shop pill clear of the TRAIN chip and the menu", function()
+		local HudBubble = ui("HudBubble")
+		local TrainView = ui("TrainView")
+		withLight(function()
+			for _, screen in {
+				{ 1280, 720, 58 },
+				{ 1920, 1080, 58 },
+				{ 1920, 1010, 58 },
+				{ 1440, 900, 58 },
+				{ 667, 375, 58 },
+				{ 568, 320, 58 },
+			} do
+				local viewport = Vector2.new(screen[1], screen[2])
+				local scale = HudBubble.scaleFor(viewport)
+				local refs = HudBubble.buildGame(scale, screen[1]) -- (the screen width in points)
+				local height = screen[2] / scale
+				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
+				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
+				height -= screen[3] / scale
+				local compact = refs.Gui:FindFirstChild("Menu"):GetAttribute("Columns") == 3
+				local chipTop = refs.Gui:GetAttribute("ChipTop")
+				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
+				local chipBottom = chipTop + TrainView.chipSize(compact).Y
+				if compact then
+					-- phones and tablets: the pill at the top-right, clear of the tabs and the chips' row
+					local width = screen[1] / scale
+					local pillLeft = width - 18 - pill.Size.X.Offset
+					local barRight = width / 2 + refs.TopBar.Size.X.Offset / 2
+					T.truthy(pillLeft > barRight, `pill right of the tabs at {screen[1]} x {screen[2]}`)
+					local luck = refs.Gui:FindFirstChild("ServerLuck") :: any
+					T.truthy(width - 18 - luck.Size.X.Offset > barRight, `the Server Luck line right of the tabs at {screen[1]} x {screen[2]}`)
+					local BoostView = ui("BoostView")
+					local chipsRight = TrainView.ChipLeft + TrainView.chipSize(true).X + 12 + BoostView.chipsWidth()
+					T.truthy(pillLeft > chipsRight or chipTop > HudBubble.MenuTop + pill.Size.Y.Offset, `pill clear of the chips at {screen[1]} x {screen[2]}`)
+				else
+					local pillTop = height * pill.Position.Y.Scale + pill.Position.Y.Offset - pill.Size.Y.Offset
+					T.truthy(pillTop > chipBottom, `pill under the TRAIN chip at {screen[1]} x {screen[2]}`)
+				end
+				-- the money (bottom-left) under the TRAIN chip
+				local moneyTop = height + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset
+				T.truthy(moneyTop > chipBottom, `the money under the TRAIN chip at {screen[1]} x {screen[2]}`)
+				local menu = refs.Menu
+				local menuBottom = height * menu.Position.Y.Scale + menu.Position.Y.Offset + menu.Size.Y.Offset
+				T.truthy(chipTop > menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
+				-- the tiles (top-left) clear of the BASE / LOBBY / VAULT tabs (top centre)
+				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
+				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
+				T.truthy(menuRight < tabsLeft, `the tiles left of the tabs at {screen[1]} x {screen[2]}`)
+			end
+		end)
+	end)
+
+	-- (review: the phone pill once sat on the touch tutorial bubble and the FREE SPIN chip)
+	T.test("LightUI: the phone Shop pill and Server Luck line clear of the tutorial bubble and FREE SPIN", function()
+		local HudBubble = ui("HudBubble")
+		local TutorialView = ui("TutorialView")
+		local WheelView = ui("WheelView")
+		local function overlap(aPos: any, aSize: any, bPos: any, bSize: any): boolean
+			return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
+		end
+		withLight(function()
+			for _, size in { { 568, 320 }, { 667, 375 }, { 736, 414 }, { 844, 390 } } do
+				local screen = Vector2.new(size[1], size[2])
+				local scale = HudBubble.scaleFor(screen)
+				local refs = HudBubble.buildGame(scale, size[1])
+				local width = size[1] / scale
+				local function rect(gui: any): (any, any)
+					local s = gui.Size
+					local x = width * gui.Position.X.Scale + gui.Position.X.Offset - gui.AnchorPoint.X * s.X.Offset
+					local y = gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset
+					return Vector2.new(x, y), Vector2.new(s.X.Offset, s.Y.Offset)
+				end
+				local pillPos, pillSize = rect(refs.Gui:FindFirstChild("ShopPill"))
+				local luckPos, luckSize = rect(refs.Gui:FindFirstChild("ServerLuck"))
+				local bubble = TutorialView.layout(scale, screen, true)
+				local bubblePos = Vector2.new(bubble.Position.X - bubble.AnchorPoint.X * bubble.Width, bubble.Position.Y)
+				local bubbleSize = Vector2.new(bubble.Width, bubble.Height)
+				local spinPos, spinSize = WheelView.chipRect(scale, screen)
+				for name, r in { pill = { pillPos, pillSize }, luck = { luckPos, luckSize } } do
+					T.falsy(overlap(r[1], r[2], bubblePos, bubbleSize), `{name} on the tutorial bubble at {size[1]} x {size[2]}`)
+					T.falsy(overlap(r[1], r[2], spinPos, spinSize), `{name} on the FREE SPIN chip at {size[1]} x {size[2]}`)
+				end
+			end
+		end)
+	end)
+
+	T.test("LightUI: on a small phone the Shop pill, the tabs, the money and the hotbar don't meet", function()
 		local HudBubble = ui("HudBubble")
 		withLight(function()
 			for _, screen in { Vector2.new(667, 375), Vector2.new(568, 320), Vector2.new(932, 430) } do
@@ -277,8 +365,14 @@ return function(T, Loader)
 				local refs = HudBubble.buildGame(scale, screen.X)
 				local width = screen.X / scale
 				local barLeft = width / 2 - refs.TopBar.Size.X.Offset / 2
-				local coinsRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
-				T.truthy(coinsRight < barLeft, `coins clear of the tabs at {screen.X} x {screen.Y}`)
+				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
+				T.truthy(pill, "the green Shop pill")
+				local pillRight = pill.Position.X.Offset + pill.Size.X.Offset
+				T.truthy(pillRight < barLeft, `the Shop pill clear of the tabs at {screen.X} x {screen.Y}`)
+				-- the money sits bottom-left, the hotbar bottom-centre
+				local moneyRight = refs.CoinsPanel.Position.X.Offset + refs.CoinsPanel.Size.X.Offset
+				local hotbarLeft = width / 2 - refs.CarryPanel.Size.X.Offset / 2
+				T.truthy(moneyRight < hotbarLeft, `the money clear of the hotbar at {screen.X} x {screen.Y}`)
 			end
 		end)
 	end)

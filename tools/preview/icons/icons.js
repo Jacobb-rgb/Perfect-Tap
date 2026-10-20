@@ -11,7 +11,8 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { FontLoader } from "three/addons/loaders/FontLoader.js";
 import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
 
-let FONT = null; // helvetiker bold, loaded in main() for the enchant runes
+let FONT = null; // helvetiker bold, loaded in main() for the enchant runes and TEXT_ICONS
+const TEXT_ICONS = ["luck_server"]; // ICONS that draw text
 
 // enchant_<EnchantConfig id>: a gem in the enchant's colour with its mark
 const RUNES = {
@@ -114,6 +115,26 @@ function group(children, pos, rot) {
   const g = new THREE.Group();
   for (const c of children) g.add(c);
   return place(g, pos, rot);
+}
+
+// a gold star coin lying flat (the coins() look), radius 1.02 * s
+function goldCoin(s, pos, rot) {
+  const rim = lathe(
+    [[0, -0.1], [0.8, -0.1], [0.9, -0.17], [1.0, -0.12], [1.02, 0], [1.0, 0.12], [0.9, 0.17], [0.8, 0.1], [0, 0.1]],
+    GOLD, shiny,
+  );
+  const star = extrude(starShape(0.48, 0.22), 0.05, 0.03, "#ffd75e", shiny, [0, 0.13, 0], [-90, 0, 0]);
+  const g = group([rim, star], pos, rot);
+  g.scale.setScalar(s);
+  return g;
+}
+
+// 4-point sparkle
+const sparkle = (r, pos) => extrude(starShape(r, r * 0.4, 4), 0.06, 0.02, "#fff1a8", glow("#ffd040", 0.5), pos);
+
+// repeatable pseudo-random numbers in [0, 1) (piles look the same every render)
+function seeded(seed) {
+  return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 }
 
 // ---------------------------------------------------------------- palette
@@ -677,6 +698,262 @@ const ICONS = {
     ];
     return { model: group([disc, inner, star, ...sparkles]), yaw: -18, pitch: 8 };
   },
+
+  // ---- Robux store cards
+
+  // coin tier: short coin stacks of different heights, loose coins in front
+  coin_pile() {
+    const rnd = seeded(11);
+    const stack = (n, x, z) =>
+      Array.from({ length: n }, (_, i) =>
+        goldCoin(0.5, [x + (rnd() - 0.5) * 0.07, i * 0.15, z + (rnd() - 0.5) * 0.07], [0, rnd() * 360, 0]),
+      );
+    const parts = [
+      ...stack(6, -0.62, -0.3),
+      ...stack(9, 0.1, -0.45),
+      ...stack(4, 0.78, -0.08),
+      ...stack(3, -0.2, 0.42),
+      goldCoin(0.5, [0.7, 0.0, 1.0], [8, 0, 6]),
+      goldCoin(0.5, [-0.92, 0.28, 0.5], [64, 0, -12]),
+    ];
+    return { model: group(parts), yaw: -18, pitch: 20 };
+  },
+
+  // coin tier: a plump cloth money sack tied with rope, star coin emblem
+  coin_sack() {
+    const SACK = "#f2672e";
+    const ROPE = "#d99a52";
+    const cloth = { rough: 0.55, coat: 0.35 };
+    const body = lathe(
+      [
+        [0, -1.0], [0.45, -0.98], [0.82, -0.86], [1.0, -0.56], [1.04, -0.2], [0.96, 0.16], [0.74, 0.44],
+        [0.44, 0.62], [0.3, 0.7], [0.33, 0.8], [0.5, 0.94], [0.64, 1.06], [0.56, 1.12], [0.3, 1.04], [0, 1.02],
+      ],
+      SACK, cloth, [0, 0, 0], [0, 180, 0],
+    );
+    // gathered pleats toward the neck and a wavy cloth top
+    const p = body.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const k = 1 + 0.1 * Math.min(1, Math.max(0, (y - 0.1) / 0.6)) * Math.sin(Math.atan2(x, z) * 8);
+      p.setXYZ(i, x * k, y, z * k);
+    }
+    body.geometry.computeVertexNormals();
+    const parts = [
+      body,
+      torus(0.35, 0.085, Math.PI * 2, ROPE, {}, [0, 0.72, 0], [90, 0, 0]),
+      ball(0.13, ROPE, {}, [0.1, 0.7, 0.36]),
+      cyl(0.06, 0.06, 0.36, ROPE, {}, [0.2, 0.52, 0.4], [0, 0, 28]),
+      cyl(0.06, 0.06, 0.3, ROPE, {}, [0.0, 0.53, 0.42], [0, 0, -18]),
+      group([goldCoin(0.38, [0, -0.18, 1.03], [78, 0, 0])], [0, 0, 0], [0, 18, 0]),
+      goldCoin(0.36, [0.85, -0.94, 0.7], [0, 20, 0]),
+      goldCoin(0.36, [0.42, -0.9, 1.05], [10, 0, -8]),
+      goldCoin(0.36, [-0.88, -0.66, 0.66], [66, 0, -18]),
+    ];
+    return { model: group(parts), yaw: -18, pitch: 12 };
+  },
+
+  // top coin tier: an open treasure chest overflowing with glowing gold coins
+  coin_chest() {
+    const WOOD = "#a0582a";
+    const WOOD_IN = "#6b3418";
+    const wood = { rough: 0.55, coat: 0.35 };
+    const W = 2.0, H = 0.95, DP = 1.3, TOP = H / 2;
+    const half = new THREE.Shape();
+    half.absarc(0, 0, DP / 2, 0, Math.PI, false);
+    half.closePath();
+    // lid built closed around the hinge (back top edge), then swung open
+    const lid = group(
+      [
+        extrude(half, W - 0.08, 0.04, WOOD, wood, [0, DP / 4, DP / 2], [0, 90, 0]),
+        box(W - 0.16, 0.04, DP - 0.16, 0.02, WOOD_IN, wood, [0, -0.02, DP / 2]),
+        box(W + 0.05, 0.12, 0.14, 0.05, GOLD, shiny, [0, 0.02, DP - 0.05]),
+        ...[-0.62, 0.62].map((x) => torus(DP / 2 + 0.01, 0.06, Math.PI, GOLD, shiny, [x, 0, DP / 2], [0, 90, 0])),
+        ...[-0.98, 0.98].map((x) => torus(DP / 2 + 0.01, 0.06, Math.PI, GOLD, shiny, [x, 0, DP / 2], [0, 90, 0])),
+      ],
+      [0, TOP, -DP / 2],
+      [-112, 0, 0],
+    );
+    // heaped coins: a glowing gold dome covered in coins that follow its slope
+    const rnd = seeded(5);
+    const pile = [];
+    for (let i = 0; i < 20; i++) {
+      const x = (rnd() - 0.5) * 1.7, z = (rnd() - 0.5) * 1.0;
+      const h = Math.max(0.3, Math.sqrt(Math.max(0, 1 - (x / 0.9) ** 2 - (z / 0.55) ** 2)));
+      pile.push(goldCoin(0.32, [x, TOP + 0.6 * h, z], [(z / 0.55) * 35 + (rnd() - 0.5) * 30, rnd() * 360, -(x / 0.9) * 35 + (rnd() - 0.5) * 30]));
+    }
+    pile.push(goldCoin(0.34, [-0.3, TOP + 0.66, 0.2], [62, 0, 12]), goldCoin(0.34, [0.38, TOP + 0.6, 0.22], [68, 0, -10]));
+    const parts = [
+      box(W, H, DP, 0.08, WOOD, wood, [0, 0, 0]),
+      box(W + 0.05, 0.14, DP + 0.05, 0.05, GOLD, shiny, [0, TOP - 0.07, 0]),
+      box(W + 0.05, 0.12, DP + 0.05, 0.05, GOLD, shiny, [0, -TOP + 0.06, 0]),
+      ...[-0.62, 0.62].map((x) => box(0.18, H + 0.04, DP + 0.05, 0.05, GOLD, shiny, [x, 0, 0])),
+      box(0.38, 0.44, 0.1, 0.06, GOLD, shiny, [0, 0.08, DP / 2 + 0.03]),
+      cyl(0.07, 0.07, 0.04, "#5b3a1a", {}, [0, 0.13, DP / 2 + 0.08], [90, 0, 0]),
+      box(0.06, 0.14, 0.04, 0.02, "#5b3a1a", {}, [0, 0.03, DP / 2 + 0.08]),
+      lid,
+      box(W - 0.14, 0.36, DP - 0.14, 0.16, GOLD, glow("#ffb000", 0.35), [0, TOP, 0]),
+      ball(1, GOLD, glow("#ffb000", 0.35), [0, TOP, 0], [0, 0, 0], 0.9, 0.58, 0.55),
+      ...pile,
+      goldCoin(0.3, [0.98, TOP + 0.02, DP / 2 + 0.08], [60, 0, 14]),
+      goldCoin(0.3, [1.25, -TOP + 0.05, 0.75], [0, 30, 0]),
+      goldCoin(0.3, [-1.22, -TOP + 0.28, 0.58], [70, 0, -16]),
+      sparkle(0.2, [-0.7, TOP + 0.75, 0.3]),
+      sparkle(0.14, [0.8, TOP + 0.62, 0.4]),
+    ];
+    return { model: group(parts), yaw: -22, pitch: 16 };
+  },
+
+  // Shop button: a shopping cart (wire basket, black wheels, red grip), side-front view
+  cart() {
+    const WIRE = "#f2f5f9";
+    const PANEL = "#b8c6d8";
+    const wire = { metal: 0.3, rough: 0.3, coat: 0.7 };
+    const v = (x, y, z) => new THREE.Vector3(x, y, z);
+    const rod = (a, b, r, color = WIRE, o = wire) => {
+      const d = new THREE.Vector3().subVectors(b, a);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 16), mat(color, o));
+      m.position.copy(a).addScaledVector(d, 0.5);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+      return m;
+    };
+    const lerp = (a, b, t) => a.clone().lerp(b, t);
+    // a wire panel a-b (top edge) / d-c (bottom edge) with an nu x nv grid
+    const panel = (a, b, c, d, nu, nv) => {
+      const g = new THREE.BufferGeometry().setFromPoints([a, b, c, a, c, d]);
+      g.computeVertexNormals();
+      const m = mat(PANEL, { rough: 0.5 });
+      m.side = THREE.DoubleSide;
+      const parts = [new THREE.Mesh(g, m)];
+      for (let i = 1; i < nu; i++) parts.push(rod(lerp(a, b, i / nu), lerp(d, c, i / nu), 0.024));
+      for (let j = 1; j < nv; j++) parts.push(rod(lerp(a, d, j / nv), lerp(b, c, j / nv), 0.024));
+      return parts;
+    };
+    const TBL = v(-0.95, 0.55, -0.6), TBR = v(-0.95, 0.55, 0.6), TFL = v(1.05, 0.55, -0.6), TFR = v(1.05, 0.55, 0.6);
+    const BBL = v(-0.75, -0.3, -0.48), BBR = v(-0.75, -0.3, 0.48), BFL = v(0.75, -0.3, -0.48), BFR = v(0.75, -0.3, 0.48);
+    const HL = v(-1.32, 0.86, -0.6), HR = v(-1.32, 0.86, 0.6);
+    const parts = [
+      ...panel(TBR, TFR, BFR, BBR, 7, 4),
+      ...panel(TBL, TFL, BFL, BBL, 7, 4),
+      ...panel(TFR, TFL, BFL, BFR, 5, 4),
+      ...panel(TBL, TBR, BBR, BBL, 5, 4),
+      ...panel(BBR, BFR, BFL, BBL, 6, 4),
+      ...[[TBL, TFL], [TFL, TFR], [TFR, TBR], [TBR, TBL]].map(([a, b]) => rod(a, b, 0.055)),
+      ...[[BBL, BFL], [BFL, BFR], [BFR, BBR], [BBR, BBL]].map(([a, b]) => rod(a, b, 0.04)),
+      ...[[TBL, BBL], [TBR, BBR], [TFL, BFL], [TFR, BFR]].map(([a, b]) => rod(a, b, 0.04)),
+      rod(TBL, HL, 0.05),
+      rod(TBR, HR, 0.05),
+      rod(v(-1.32, 0.86, -0.68), v(-1.32, 0.86, 0.68), 0.085, "#ff4f5a", shiny),
+    ];
+    for (const z of [-0.45, 0.45]) {
+      parts.push(rod(v(-0.95, 0.5, z), v(-0.92, -0.62, z), 0.045));
+      parts.push(rod(v(0.75, -0.3, z), v(0.8, -0.62, z), 0.04));
+      parts.push(rod(v(-1.0, -0.62, z), v(0.86, -0.62, z), 0.045));
+      for (const x of [-0.86, 0.76]) {
+        parts.push(cyl(0.17, 0.17, 0.13, "#2d3142", { rough: 0.6 }, [x, -0.84, z], [90, 0, 0]));
+        parts.push(cyl(0.07, 0.07, 0.15, STEEL, steel, [x, -0.84, z], [90, 0, 0]));
+        parts.push(rod(v(x, -0.62, z), v(x, -0.84, z), 0.035));
+      }
+    }
+    return { model: group(parts), yaw: -28, pitch: 14 };
+  },
+
+  // hoverboard (mine floors pass): a rounded deck with cyan underglow and thrusters
+  hoverboard() {
+    const stadium = (len, w) => {
+      const s = new THREE.Shape();
+      const h = len / 2 - w / 2;
+      s.absarc(h, 0, w / 2, -Math.PI / 2, Math.PI / 2, false);
+      s.absarc(-h, 0, w / 2, Math.PI / 2, Math.PI * 1.5, false);
+      s.closePath();
+      return s;
+    };
+    const flat = [90, 0, 0];
+    const NEON = "#bff8ff";
+    const neon = glow(GLOW_CYAN, 2);
+    const parts = [
+      extrude(stadium(2.5, 0.84), 0.06, 0.05, "#2d3748", {}, [0, -0.1, 0], flat),
+      extrude(stadium(2.6, 0.94), 0.05, 0.02, NEON, neon, [0, -0.02, 0], flat),
+      extrude(stadium(2.5, 0.84), 0.06, 0.06, "#7b61ff", shiny, [0, 0.07, 0], flat),
+      extrude(stadium(1.9, 0.56), 0.02, 0.02, "#4b3bb0", { rough: 0.7, coat: 0.2 }, [0, 0.165, 0], flat),
+      extrude(stadium(1.6, 0.1), 0.02, 0.015, NEON, neon, [0, 0.19, 0], flat),
+    ];
+    // thrusters with a hover ring under each
+    for (const x of [-0.7, 0.7]) {
+      parts.push(cyl(0.22, 0.17, 0.14, "#5b6677", steel, [x, -0.2, 0]));
+      parts.push(cyl(0.15, 0.15, 0.04, NEON, neon, [x, -0.28, 0]));
+      parts.push(torus(0.26, 0.045, Math.PI * 2, NEON, neon, [x, -0.52, 0], [90, 0, 0]));
+    }
+    return { model: group(parts, [0, 0, 0], [14, 0, 20]), yaw: -18, pitch: 16 };
+  },
+
+  // Forgemaster's Pass (VIP bundle): a big gold crown with red and blue gems
+  pass_crown() {
+    const R = 0.95;
+    const RED = "#ff3b5c";
+    const BLUE = "#3f8cff";
+    const spike = new THREE.Shape();
+    spike.moveTo(-0.36, 0);
+    spike.quadraticCurveTo(-0.08, 0.22, 0, 0.72);
+    spike.quadraticCurveTo(0.08, 0.22, 0.36, 0);
+    spike.closePath();
+    const parts = [
+      lathe([[R - 0.08, -0.42], [R + 0.06, -0.42], [R + 0.06, 0.2], [R - 0.08, 0.2]], GOLD, shiny),
+      torus(R + 0.05, 0.09, Math.PI * 2, GOLD, shiny, [0, -0.42, 0], [90, 0, 0]),
+      torus(R + 0.03, 0.07, Math.PI * 2, GOLD, shiny, [0, 0.2, 0], [90, 0, 0]),
+      ball(R - 0.06, "#c8243f", { rough: 0.6, coat: 0.3 }, [0, 0.1, 0], [0, 0, 0], 1, 0.62, 1),
+    ];
+    for (let i = 0; i < 8; i++) {
+      const a = i * 45;
+      const gem = i === 0 ? 0.17 : i % 2 ? 0.1 : 0.13;
+      parts.push(
+        group([
+          extrude(spike, 0.08, 0.06, GOLD, shiny, [0, 0.55, R], [10, 0, 0]),
+          ball(0.11, GOLD, shiny, [0, 0.98, R + 0.08]),
+          ball(gem, i % 2 ? BLUE : RED, glow(i % 2 ? "#1a5fd0" : "#c01838", 0.35), [0, -0.12, R + 0.08], [0, 0, 0], 1, 1.15, 0.55),
+          torus(gem, 0.035, Math.PI * 2, GOLD_DARK, shiny, [0, -0.12, R + 0.06], [0, 0, 0]),
+        ], [0, 0, 0], [0, a, 0]),
+      );
+    }
+    parts.push(sparkle(0.22, [1.05, 1.0, 0.5]));
+    parts.push(sparkle(0.14, [-1.15, 0.65, 0.5]));
+    return { model: group(parts), yaw: 0, pitch: 16 };
+  },
+
+  // Luck server (Robux): a four-leaf clover with a gold "2x" badge and sparkles
+  luck_server() {
+    // half a heart leaf (tip at the origin, midrib on +Y), folded back along the midrib
+    const halfLeaf = (side) => {
+      const s = new THREE.Shape();
+      s.moveTo(0, 0);
+      s.bezierCurveTo(0.2 * side, 0.2, 0.58 * side, 0.38, 0.52 * side, 0.7);
+      s.bezierCurveTo(0.46 * side, 1.0, 0.08 * side, 1.02, 0, 0.76);
+      s.closePath();
+      const g = new THREE.ExtrudeGeometry(s, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 5, curveSegments: 32 });
+      g.translate(0, 0, -0.04);
+      return place(new THREE.Mesh(g, mat("#3ddc84")), [0, 0, 0], [0, side * 12, 0]);
+    };
+    const parts = [];
+    for (const a of [30, 120, 210, 300]) {
+      const leaf = group([halfLeaf(1), halfLeaf(-1)], [Math.cos(D(a)) * 0.24, Math.sin(D(a)) * 0.24, 0], [0, 0, a - 90]);
+      leaf.scale.set(0.9, 1, 1);
+      parts.push(leaf);
+    }
+    parts.push(torus(1.2, 0.085, D(55), "#25a85a", {}, [0.96, -0.9, -0.1], [0, 0, 143]));
+    parts.push(ball(0.2, "#9df2b8", {}, [0, 0, 0.08]));
+    const g = new TextGeometry("2x", { font: FONT, size: 0.36, depth: 0.08, curveSegments: 8, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.015, bevelSegments: 3 });
+    g.center();
+    parts.push(
+      group([
+        lathe([[0, -0.1], [0.4, -0.1], [0.46, -0.05], [0.48, 0], [0.46, 0.05], [0.4, 0.1], [0, 0.1]], GOLD, shiny, [0, 0, 0], [90, 0, 0]),
+        cyl(0.36, 0.36, 0.04, "#f59a1c", shiny, [0, 0, 0.1], [90, 0, 0]),
+        place(new THREE.Mesh(g, mat("#ffffff", { coat: 0.9 })), [0, 0, 0.16]),
+      ], [0.72, -0.72, 0.3]),
+    );
+    parts.push(sparkle(0.22, [-0.95, 0.85, 0.2]));
+    parts.push(sparkle(0.15, [0.95, 0.75, 0.2]));
+    return { model: group(parts), yaw: -14, pitch: 8 };
+  },
 };
 
 // ---------------------------------------------------------------- part models (exported from the game)
@@ -799,7 +1076,7 @@ async function main() {
   renderer.toneMappingExposure = 1.05;
   document.body.appendChild(renderer.domElement);
 
-  if (RUNES[iconName]) FONT = await new FontLoader().loadAsync("/node_modules/three/examples/fonts/helvetiker_bold.typeface.json");
+  if (RUNES[iconName] || TEXT_ICONS.includes(iconName)) FONT = await new FontLoader().loadAsync("/node_modules/three/examples/fonts/helvetiker_bold.typeface.json");
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
