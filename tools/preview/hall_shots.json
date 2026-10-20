@@ -1,0 +1,4 @@
+{
+  "hall_front": {"scene": "hall", "position": [3, 9, 2], "target": [14, 9.5, -25], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 90, "maxLights": 24},
+  "hall_plaza": {"scene": "hall", "position": [-12, 12, 24], "target": [12, 9, -26], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24}
+}

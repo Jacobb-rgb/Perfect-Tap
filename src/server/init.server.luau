@@ -61,6 +61,7 @@ local ORDER = {
 	"WheelService", -- step 7: the free daily wheel (EmberChest prompt, WheelAction)
 	"ArtifactService", -- step 7: artifact finds, the book / journal prompts, the base museums
 	"LeaderboardService", -- the 4 lobby leaderboards + hours played (after PodiumService)
+	"ChampionService", -- the #1 avatars hopping on the HALL OF FAME (after LeaderboardService)
 	"SettingsService", -- the side menu's SETTINGS record
 	"CodexService", -- the ORE CODEX's NEW badges (seen ores)
 	"RebirthService", -- rebirth STAR FORGE: the reset, Forge Stars, the Star Shop (after Plot, Train, Podium)

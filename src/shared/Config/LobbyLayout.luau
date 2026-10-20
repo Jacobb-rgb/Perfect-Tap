@@ -304,10 +304,12 @@ LobbyLayout.Pieces = {
 		-- (round 3: off the south-east rim, where it hid the FOSSIL DIG and the
 		-- ROCK SCANNER; the outcrops leave no room by the east plot road, so a
 		-- compact board stands beside the forge porch opposite the guild board)
-		Center = v(14, 0, -30),
-		Size = v(13.6, 16, 3.5),
-		Facing = v(-math.sin(math.rad(15)), 0, math.cos(math.rad(15))),
-		Note = "Design v2: four leaderboards (Money per second, Total earned, Artifacts found, Hours played) in a compact 2 x 2 display wall beside the forge porch, mirroring the guild board. Each board is a BasePart named Board1..Board4 with tag Leaderboard and attribute Board = 1..4; a HALL OF FAME header.",
+		Center = v(14, 0, -25),
+		-- (owner 2026-10-20: the giant hall: four tall boards side by side, the
+		-- champions' avatars hopping on pedestals over the HALL OF FAME sign)
+		Size = v(22, 21, 4),
+		Facing = v(-math.sin(math.rad(28)), 0, math.cos(math.rad(28))), -- (2026-10-20: 5 studs forward, turned 13 deg more to the plaza: the giant hall clears the forge east path)
+		Note = "Design v2: four leaderboards (Money per second, Total earned, Artifacts found, Hours played) side by side in a giant hall wall beside the forge porch (owner 2026-10-20: massive, the best player's avatar hops on top). Each board is a BasePart named Board1..Board4 with tag Leaderboard and attribute Board = 1..4; a HALL OF FAME sign; over it pedestals Champion1..Champion4 (tag LeaderChampion, attribute Board) for the #1 players' avatars.",
 	},
 	------------------------------------------------------------ Flora package
 	{

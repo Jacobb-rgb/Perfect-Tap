@@ -134,6 +134,10 @@ if sceneName == "world" or string.match(sceneName, "^world_") then
 	local map = WorldBuilder.build(workspace)
 	addMuseums(map)
 	addNodes(workspace, map)
+elseif sceneName == "hall" then -- the world + stand-in champions on the giant HALL OF FAME (tools/lune/lib/hall_preview.luau)
+	local map = WorldBuilder.build(workspace)
+	addMuseums(map)
+	require("./lib/hall_preview").build(Loader, map)
 elseif sceneName == "style" then
 	-- the lobby style kit (src/server/World/Lobby/Style.luau), one of each helper
 	require("./lib/style_gallery").build(Loader, workspace)

@@ -6,6 +6,8 @@
 	    SpinSpeed  radians per second (default 0.8; 0 = no spin)
 	    BobHeight  studs (default 0.4; 0 = no bob)
 	    BobSpeed   (default 1.4)
+	    Hop        true: hops up from its place instead of bobbing round it
+	               (the HALL OF FAME champions, ChampionService)
 	  A wheel spins around its axle when its pivot's Y axis is the axle.
 	  Each spinner keeps its own angle (dt x SpinSpeed per frame), so another
 	  controller can take it over: hold(instance) stops the idle turn and
@@ -42,6 +44,7 @@ type Spinner = {
 	speed: number,
 	bob: number,
 	bobSpeed: number,
+	hop: boolean, -- hops up from its place (abs of the wave) instead of bobbing round it
 	angle: number, -- radians, about the pivot's Y axis
 	held: boolean, -- another controller drives the angle (hold / setAngle)
 	tier: number, -- 0 = skip, 1 = every frame, 2 = every 2nd frame
@@ -127,6 +130,7 @@ local function addSpinner(instance: Instance)
 		speed = speed,
 		bob = bob,
 		bobSpeed = numberAttribute(instance, "BobSpeed", 1.4),
+		hop = instance:GetAttribute("Hop") == true,
 		angle = 0,
 		held = false,
 		tier = 1,
@@ -135,7 +139,9 @@ end
 
 -- Moves a spinner's parts to its angle and bob at time `t`.
 local function place(s: Spinner, t: number)
-	local cf = s.pivot * CFrame.new(0, math.sin(t * s.bobSpeed + s.phase) * s.bob, 0) * CFrame.Angles(0, s.angle, 0)
+	local wave = math.sin(t * s.bobSpeed + s.phase)
+	local lift = if s.hop then math.abs(wave) * s.bob else wave * s.bob
+	local cf = s.pivot * CFrame.new(0, lift, 0) * CFrame.Angles(0, s.angle, 0)
 	local cframes = s.cframes
 	for i, offset in s.offsets do
 		cframes[i] = cf * offset
