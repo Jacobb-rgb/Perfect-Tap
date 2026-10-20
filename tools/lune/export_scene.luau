@@ -19,6 +19,8 @@ local UiExport = require("./lib/uiexport")
 
 local root = process.cwd
 Loader.init(root)
+-- previews draw every icon (IconAssets.shows: the uploaded look)
+Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets").Previewing = true
 
 local sceneName = process.args[1] or "world"
 

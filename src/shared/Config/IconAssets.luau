@@ -5,7 +5,8 @@
 	NAHRAJ_DO_ROBLOXU/ikony_ui): 6 x 6 cells of Cell px, so the owner uploads 3
 	images instead of ~80 and pastes 3 ids into Sheets[*].Id. An ImageLabel
 	shows one cell with ImageRectOffset / ImageRectSize (IconAssets.apply).
-	A sheet without an id shows nothing (the button text still shows).
+	A sheet without an id shows nothing: the button's word still shows, and
+	never an emoji (owner 2026-10-20: "bez emoji, jenom text").
 
 	Ore Pen items (item_*) are not here: in the game they are live 3D
 	ViewportFrames of the item model.
@@ -127,37 +128,17 @@ function IconAssets.find(name: string): (string, Vector2, Vector2)
 	return "", Vector2.zero, Vector2.zero
 end
 
--- Until the owner uploads the sheets: an emoji stands in for an icon
--- (Bubble.icon shows it), so tiles and tabs never look empty.
-IconAssets.Fallbacks = {
-	coin = "🪙", coins = "💰", backpack = "🎒", golem = "🤖", build = "🔨", shop = "🛒",
-	more = "➕", base = "🏠", lobby = "⛲", vault = "🏦", blaster = "⚡", shard = "💎",
-	artifact = "👑", medal = "🏅", podium = "🏆", moon = "🌙", train = "🚂", clover = "🍀",
-	rainbow = "🌈", enchant = "✨", check = "✔️", wheel = "🎡", book = "📖", trophy = "🏆",
-	helmet = "⛑️", cog = "⚙️", lock = "🔒", lift = "🛗", rebirth = "🔁", star_token = "⭐",
-	boots = "👢", gloves = "🧤", magnet = "🧲", speaker = "🔊", music = "🎵", camera = "📷",
-	gamepad = "🎮", hoverboard = "🛹", coin_pile = "💰", coin_sack = "💰", coin_chest = "🧰", cart = "🛒",
-	pass_crown = "👑", luck_server = "🍀",
-} :: { [string]: string }
+-- The preview tools set this: they draw every icon from build/preview/icons,
+-- so layouts that differ without an uploaded picture use the uploaded look.
+IconAssets.Previewing = false
 
--- prefix -> emoji for the big families (golem_*, capsule_*, machine_*, ...)
-local FAMILY: { [string]: string } = {
-	golem_ = "🤖", capsule_ = "🥚", machine_ = "⚙️", artifact_ = "🏺", item_ = "💎",
-	ore_ = "🪨", ingot_ = "🧈", enchant_ = "✨", blaster_ = "⚡",
-}
-
--- The emoji standing in for an icon (nil: none), used while its sheet has no id.
-function IconAssets.fallback(name: string): string?
-	local exact = IconAssets.Fallbacks[name]
-	if exact then
-		return exact
+-- Will icon `name` show a picture (its sheet is uploaded, or a preview)?
+function IconAssets.shows(name: string): boolean
+	if IconAssets.Previewing then
+		return IconAssets.has(name)
 	end
-	for prefix, emoji in FAMILY do
-		if string.sub(name, 1, #prefix) == prefix then
-			return emoji
-		end
-	end
-	return nil
+	local image = IconAssets.find(name)
+	return image ~= ""
 end
 
 -- Shows icon `name` on an ImageLabel.

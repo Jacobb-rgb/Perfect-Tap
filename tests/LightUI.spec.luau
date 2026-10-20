@@ -496,25 +496,24 @@ return function(T, Loader)
 		T.truthy(layout.Tile * 0.62 >= 44 and layout.Slot * 0.62 >= 44 and layout.TabHeight * 0.62 >= 44, ">= 44 pt")
 	end)
 
-	T.test("LightUI: emoji stand-ins until the icon sheets are uploaded, one elevator tile", function()
+	T.test("LightUI: no emoji stand-ins (owner: text only), one elevator tile", function()
 		local Bubble = ui("Bubble")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 		local HudBubble = ui("HudBubble")
 		local SideMenuView = ui("SideMenuView")
 		local holder = Instance.new("Frame")
+		T.eq(IconAssets.fallback, nil, "no emoji table")
 		for _, name in { "backpack", "golem_PebbleGolem", "machine_Crusher", "artifact_CrownCoin", "lift" } do
 			local icon = Bubble.icon(holder, name, 60)
-			local stand = icon:FindFirstChild("Fallback")
-			T.truthy(stand and stand:GetAttribute("IconFallback"), "a stand-in for " .. name)
-			T.eq(stand.Text, IconAssets.fallback(name), "its emoji")
+			T.eq(#icon:GetChildren(), 0, "nothing stands in for " .. name)
+			T.eq(icon.Image, "", "empty until uploaded: " .. name)
+			T.falsy(IconAssets.shows(name), "not shown yet: " .. name)
 		end
-		local robux = Bubble.icon(holder, "robux", 60)
-		T.falsy(robux:FindFirstChild("Fallback"), "Roblox's own robux picture needs none")
 		local sheet = IconAssets.Sheets[1]
 		local before = sheet.Id
 		sheet.Id = 123
 		local ok, err = pcall(function()
-			T.falsy(Bubble.icon(holder, "backpack", 60):FindFirstChild("Fallback"), "none once uploaded")
+			T.truthy(IconAssets.shows("backpack"), "shown once uploaded")
 		end)
 		sheet.Id = before
 		if not ok then
