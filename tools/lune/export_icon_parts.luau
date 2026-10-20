@@ -31,26 +31,28 @@ models.ingot_gold = ItemBuilder.build({ Kind = "Ingot", OreId = "Gold", Grade = 
 
 -- Ore Pen items for the backpack window (in the game these show as live 3D
 -- ViewportFrames, so they need no uploads; the preview uses these pictures)
-for _, row in {
-	{ "Clean", "Ruby", "Pristine" },
-	{ "Clean", "Silver", "Flawless" },
-	{ "Ingot", "Gold", "Pristine" },
-	{ "Clean", "Diamond", "Clean" },
-	{ "Raw", "Copper" },
-	{ "Clean", "Copper", "Rough" },
-	{ "Clean", "Amethyst", "Clean" },
-	{ "Ingot", "Silver", "Clean" },
-	{ "Raw", "Stormcore" },
-	{ "Clean", "Jade", "Pristine" },
-	{ "Clean", "Stormcore", "Flawless" },
-	{ "Crushed", "Iron", "Clean" },
-	{ "Clean", "Quartz", "Clean" },
-	{ "Clean", "Heartstone", "Pristine" },
-	{ "Raw", "Silver" },
-	{ "Ingot", "Copper", "Clean" },
-	{ "Clean", "Emerald", "Clean" },
-	{ "Clean", "Coal", "Rough" },
-} do
+for _, row in
+	{
+		{ "Clean", "Ruby", "Pristine" },
+		{ "Clean", "Silver", "Flawless" },
+		{ "Ingot", "Gold", "Pristine" },
+		{ "Clean", "Diamond", "Clean" },
+		{ "Raw", "Copper" },
+		{ "Clean", "Copper", "Rough" },
+		{ "Clean", "Amethyst", "Clean" },
+		{ "Ingot", "Silver", "Clean" },
+		{ "Raw", "Stormcore" },
+		{ "Clean", "Jade", "Pristine" },
+		{ "Clean", "Stormcore", "Flawless" },
+		{ "Crushed", "Iron", "Clean" },
+		{ "Clean", "Quartz", "Clean" },
+		{ "Clean", "Heartstone", "Pristine" },
+		{ "Raw", "Silver" },
+		{ "Ingot", "Copper", "Clean" },
+		{ "Clean", "Emerald", "Clean" },
+		{ "Clean", "Coal", "Rough" },
+	}
+do
 	local name = "item_" .. row[1] .. "_" .. row[2]
 	local ok, model = pcall(ItemBuilder.build, { Kind = row[1], OreId = row[2], Grade = row[3] }, CF.new(), name)
 	if ok then

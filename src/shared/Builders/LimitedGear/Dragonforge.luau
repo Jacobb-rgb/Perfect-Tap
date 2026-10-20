@@ -424,7 +424,14 @@ local function scaleKnight(c: Ctx): number
 	-- the flaming sword in the right fist
 	if c.Room() >= 3 then
 		local hilt = Vector3.new(0.9, 0.7, -0.12)
-		T.seg(c.Model, "Blade", T.P(c, 0.92, 0.84, -0.2), T.P(c, 1.08, 2.6, -0.8), 0.2 * c.S, 0.06 * c.S, FLAME_HOT, NEON)
+		-- a steel blade with fire running up its middle
+		local from, to = T.P(c, 0.92, 0.9, -0.22), T.P(c, 1.1, 2.6, -0.8)
+		T.seg(c.Model, "Blade", from, to, 0.24 * c.S, 0.05 * c.S, rgb(214, 220, 232), M.Metal)
+		if c.Room() >= 4 then
+			local dir = (to - from).Unit
+			local out = dir:Cross(Vector3.yAxis).Unit * (0.03 * c.S)
+			T.seg(c.Model, "BladeFire", from + dir * (0.15 * c.S) - out, to - dir * (0.1 * c.S) - out, 0.1 * c.S, 0.07 * c.S, FLAME, NEON)
+		end
 		T.seg(c.Model, "Guard", T.P(c, 0.62, 0.8, -0.16), T.P(c, 1.22, 0.86, -0.2), 0.1 * c.S, 0.1 * c.S, GOLD, M.Foil)
 		K.part(c.Model, "Pommel", c.At(hilt.X, 0.42, -0.04), c.V(0.16, 0.16, 0.16), GOLD, M.Foil, BALL)
 	end
@@ -550,8 +557,8 @@ local function magmaWyvern(c: Ctx): number
 		horns(
 			c,
 			{ Vector3.new(0.52, 2.62, 0.18), Vector3.new(0.7, 3.0, 0.4), Vector3.new(0.78, 3.18, 0.86), Vector3.new(0.74, 3.12, 1.3) },
-			{ 0.26, 0.18, 0.11 },
-			{ OBSIDIAN, IVORY_DARK, IVORY },
+			{ 0.28, 0.2, 0.13 },
+			{ IVORY_DARK, IVORY, IVORY },
 			{ M.Basalt, M.Slate, M.Slate }
 		)
 	)
@@ -664,10 +671,10 @@ local function dragonKing(c: Ctx): number
 	end
 	-- the sceptre in the right fist: a gold staff, a dragon-claw head, a fire orb
 	if c.Room() >= 3 then
-		T.seg(c.Model, "Staff", T.P(c, 0.94, 0.05, -0.2), T.P(c, 0.94, 2.2, -0.2), 0.1 * c.S, 0.1 * c.S, GOLD, M.Foil)
-		diamond(c.Model, "StaffHead", c.At(0.94, 2.28, -0.2), 0.34 * c.S, 0.34 * c.S, 0.12 * c.S, GOLD, M.Foil)
-		K.part(c.Model, "Orb", c.At(0.94, 2.5, -0.2), c.V(0.3, 0.3, 0.3), FLAME_HOT, NEON, BALL)
-		top = math.max(top, 2.65)
+		T.seg(c.Model, "Staff", T.P(c, 1.08, 0.05, -0.42), T.P(c, 1.08, 2.3, -0.42), 0.1 * c.S, 0.1 * c.S, GOLD, M.Foil)
+		diamond(c.Model, "StaffHead", c.At(1.08, 2.4, -0.42), 0.4 * c.S, 0.4 * c.S, 0.12 * c.S, GOLD, M.Foil)
+		K.part(c.Model, "Orb", c.At(1.08, 2.66, -0.42), c.V(0.38, 0.38, 0.38), FLAME_HOT, NEON, BALL)
+		top = math.max(top, 2.85)
 	end
 	for i, side in { -1, 1 } do
 		if c.Room() >= 1 then

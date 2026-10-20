@@ -424,6 +424,63 @@ function Preview.build(Loader: any, workspace: any, setId: string): ({ [string]:
 		}
 end
 
+-- Builds scene "limitedshard_<setId>": the set's SHARD (GolemBuilder.shard)
+-- on the Mythic's pedestal, a cracked one shaking on the left, a burst one
+-- on the right with the Mythic stepping out; returns the preset and camera.
+function Preview.buildShard(Loader: any, workspace: any, setId: string): ({ [string]: any }, { [string]: any })
+	local CF = Loader.CFrame
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
+	local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
+	local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+	assert(SETS[setId], "unknown limited set " .. tostring(setId))
+	local set = LimitedGolems.Sets[setId]
+	local capsuleId = set.CapsuleId
+	local folder = Instance.new("Model")
+	folder.Name = "Shard" .. setId
+	folder.Parent = workspace
+	local kit: Kit = { Folder = folder, CF = CF, Rng = Rng.new(2026), Geo = Geo }
+	local look = SETS[setId](kit)
+	local top = Preview.StageTop
+	block(kit, CF.new(0, top / 2, 5), Vector3.new(84, top, 26), look.Stage, look.StageMaterial).CastShadow = false
+	block(kit, CF.new(0, top + 0.02, -8.05), Vector3.new(84, 0.06, 0.16), look.Rim, M.Neon)
+	local pedestal = Preview.PedestalTop - top
+	disc(kit, CF.new(0, top + pedestal / 2, -3.5), pedestal, 6, look.Pedestal, look.StageMaterial)
+	disc(kit, CF.new(0, Preview.PedestalTop - 0.25, -3.5), 0.12, 6.2, look.Rim, M.Neon)
+	light(kit, Vector3.new(0, 14, -16), rgb(255, 255, 255), 30, 0.8)
+	light(kit, Vector3.new(-12, 9, -10), rgb(255, 255, 255), 24, 1.0)
+	light(kit, Vector3.new(12, 9, -10), rgb(255, 255, 255), 24, 1.0)
+	local r = 1.25
+	-- the hero shard on the pedestal, turned a little to the camera
+	GolemBuilder.capsule(capsuleId, CF.new(0, Preview.PedestalTop + r, -3.5) * CF.Angles(0, 0.25, 0)).Parent = folder
+	-- right (on screen): shaking, its cracks lit
+	local cracked = GolemBuilder.capsule(capsuleId, CF.new(5.2, top + r, -6.5) * CF.Angles(0, -0.5, 0.12))
+	for _, d in cracked:GetDescendants() do
+		if d:IsA("BasePart") and string.sub(d.Name, 1, 5) == "Crack" then
+			d.Transparency = 0
+		end
+	end
+	cracked.Parent = folder
+	-- left (on screen): burst open, the Mythic stepping out of the lower shell
+	local burst = GolemBuilder.capsule(capsuleId, CF.new(-5.4, top + r, -6.5) * CF.Angles(0, 0.4, 0))
+	local upper = burst:FindFirstChild("Top")
+	if upper then
+		upper:PivotTo(CF.new(-7.4, top + r + 3.6, -6.0) * CF.Angles(0.3, 0.6, 0.9))
+	end
+	burst.Parent = folder
+	local mythic = LimitedGolems.golems(setId)[6]
+	if mythic then
+		GolemBuilder.build(mythic.Id, CF.new(-5.4, top + 0.7, -6.7) * CF.Angles(0, 0.35, 0), { Size = 0.8 }).Parent = folder
+	end
+	local _ = CapsuleConfig
+	return look.Preset, {
+		camera = { 0, 5.8, -21 },
+		target = { 0, 4.0, 0 },
+		fov = 40,
+	}
+end
+
 -- The set's data for the picture sheet (tools/preview/limited_sheet.mjs):
 -- build/preview/limited_<setId>_info.json.
 function Preview.info(Loader: any, setId: string): { [string]: any }
