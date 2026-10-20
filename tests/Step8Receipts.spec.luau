@@ -103,14 +103,7 @@ return function(T, Loader)
 			{ grant = RebirthService._test.grantWeapon, revoke = RebirthService._test.revokeWeapon }
 		)
 		ServerBoostService.registerGrants()
-		-- the blaster bands' handler is VaultService's (the blaster chat's branch); a
-		-- stand-in until it is on this branch
-		if not (VaultService :: any).grantNext then
-			MonetizationService.register("BlasterLevel", function(_, data)
-				data.BlasterLevel = (data.BlasterLevel or 1) + 1
-				return true
-			end)
-		end
+		VaultService.registerGrants()
 	end
 
 	local function setup(): any
@@ -361,6 +354,7 @@ return function(T, Loader)
 		initCalls("src/server/Services/EnchantService.luau", "EnchantService", "EnchantService.registerGrants()")
 		initCalls("src/server/Services/PodiumService.luau", "PodiumService", "PodiumService.registerGrants()")
 		initCalls("src/server/Services/ServerBoostService.luau", "ServerBoostService", "ServerBoostService.registerGrants()")
+		initCalls("src/server/Services/VaultService.luau", "VaultService", "VaultService.registerGrants()")
 		local hover = fs.readFile("src/server/Services/HoverboardService.luau")
 		T.truthy(string.find(hover, 'MonetizationService.registerPass("Hoverboard"', 1, true) ~= nil, "HoverboardService registers")
 		local rebirth = fs.readFile("src/server/Services/RebirthService.luau")

@@ -513,8 +513,16 @@ end
 -- A Star card's note ("Opens at rebirth 3", "Owned: opens at rebirth 5").
 function StoreView.setNote(refs: Refs, id: string, text: string)
 	local card = refs.Cards[id]
-	if card and card.Description then
+	if not card then
+		return
+	end
+	if card.Description then
 		card.Description.Text = text
+		return
+	end
+	local note = card.Button:FindFirstChild("Note") -- a Boost card's gold line (the blaster)
+	if note and note:IsA("TextLabel") then
+		note.Text = text
 	end
 end
 

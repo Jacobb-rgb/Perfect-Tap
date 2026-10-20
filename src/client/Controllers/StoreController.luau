@@ -33,6 +33,7 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local StoreConfig = require(Shared.Config.StoreConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
+local RebirthConfig = require(Shared.Config.RebirthConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local StoreView = require(script.Parent.Parent.UI.StoreView)
@@ -188,6 +189,15 @@ local function refresh()
 				key = fits
 				local current = if type(level) == "number" then math.floor(level) else 1
 				StoreView.setBig(view, id, `LV {current + 1}`)
+				-- LV 10 waits for one forged level this run (a rebirth needs it): the Vault's rule
+				local rebirth = state().Rebirth
+				local reached = if type(rebirth) == "table" and type(rebirth.Reached) == "number" then rebirth.Reached else 0
+				if RebirthConfig.topBlockedFor(current, reached) then
+					cardState = "Locked"
+					StoreView.setNote(view, id, "Forge LV 10 at the Foundry first")
+				else
+					StoreView.setNote(view, id, spec.Note or "")
+				end
 			else
 				cardState = "Hidden"
 			end
@@ -199,8 +209,8 @@ local function refresh()
 				cardState = "Pending"
 			end
 		elseif cardState ~= "Hidden" then
-			if cardState == "Pending" then
-				-- (the blaster: waiting for its level)
+			if cardState == "Pending" or cardState == "Locked" then
+				-- (the blaster: waiting for its level, or LV 10 before a forged level)
 			elseif product.PaidRandom and restricted() then
 				cardState = "Hidden"
 			elseif owns(product) then
