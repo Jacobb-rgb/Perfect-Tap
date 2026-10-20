@@ -397,7 +397,7 @@ local function onResult(result: any)
 			HudController.toast(RebirthController.WeaponReasons[result.Reason] or "Not now.", "Deny")
 		elseif result.Action == "Weapon" and star then
 			Sfx.play("Discovery")
-			HudController.toast(`The {star.Name} is yours! It's in your hand now.`, "Reward")
+			HudController.toast(`The {star.Name} is yours and equipped!`, "Reward")
 		elseif star then
 			HudController.toast(`{star.Name} equipped: x{star.Mult} damage!`, "Reward")
 		else

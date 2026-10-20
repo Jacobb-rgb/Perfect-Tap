@@ -131,6 +131,7 @@ function Preview.build(Loader: any, workspace: any)
 				else "rbxasset://textures/particles/sparkles_main.dds"
 			emitter.Color = roblox.ColorSequence.new(star.Glow)
 			emitter.LightEmission = 1
+			emitter.Name = if star.Magma then "GunFlame" else "GunSpark" -- (the renderer's small gun effects, as held)
 			emitter.Rate = 8
 			emitter.Lifetime = roblox.NumberRange.new(0.3, 0.6)
 			emitter.Speed = roblox.NumberRange.new(0.3, 1)
@@ -154,6 +155,50 @@ function Preview.build(Loader: any, workspace: any)
 			{ `REBIRTH {star.Unlock} · R$ {star.Robux} · ⭐ {star.Stars}` },
 			Color3.new(1, 1, 1)
 		)
+	end
+end
+
+--[[
+	Scene "star_blasters_held": LV 10's blaster and the five STAR blasters
+	in a dummy's hand (Roblox's tool hold: the right arm forward), the
+	held tools as ToolService gives them (BlasterBuilder.build / buildStar),
+	so their size next to the body shows.
+]]
+function Preview.buildHeld(Loader: any, workspace: any)
+	local roblox = Loader.roblox
+	local CFrame = Loader.CFrame
+	local Vector3 = roblox.Vector3
+	local Color3 = roblox.Color3
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+	local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
+	local Dummy = require("./dummy")
+	local rgb = Color3.fromRGB
+	local stage = roblox.Instance.new("Model")
+	stage.Name = "HeldStage"
+	stage.Parent = workspace
+	Geo.make("Part", {
+		Name = "Floor",
+		CFrame = CFrame.new(0, -0.5, 0),
+		Size = Vector3.new(80, 1, 30),
+		Color = rgb(70, 74, 92),
+		Anchored = true,
+	}, stage)
+	Geo.make("Part", {
+		Name = "Wall",
+		CFrame = CFrame.new(0, 10, -8),
+		Size = Vector3.new(80, 22, 1),
+		Color = rgb(36, 34, 58),
+		Anchored = true,
+	}, stage)
+	local tools = { BlasterBuilder.build(10, "Amethyst") }
+	for _, star in StarBlasterData.List do
+		table.insert(tools, BlasterBuilder.buildStar(star, 10, "Gold"))
+	end
+	for i, tool in tools do
+		-- facing the camera's right (+X), the gun hand toward the camera
+		local root = CFrame.new((i - 3.5) * 8 - 2, 0, 0) * CFrame.Angles(0, -math.pi / 2, 0)
+		Dummy.build(stage, CFrame, root, "hold", nil, tool)
 	end
 end
 

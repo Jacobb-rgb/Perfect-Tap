@@ -221,7 +221,7 @@ function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): 
 			RobuxOn = false,
 		}
 	elseif state == "Equipped" then
-		return { State = state, Line = `{power} · in your hand`, Main = "EQUIPPED ✓", Style = "Equipped", RobuxOn = false }
+		return { State = state, Line = `{power} · equipped`, Main = "EQUIPPED ✓", Style = "Equipped", RobuxOn = false }
 	elseif state == "Owned" then
 		return { State = state, Line = `{power} · yours`, Main = "EQUIP", Style = "Equip", RobuxOn = false }
 	end

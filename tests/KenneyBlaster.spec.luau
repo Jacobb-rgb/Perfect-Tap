@@ -149,4 +149,51 @@ return function(T, Loader)
 			T.truthy(anchors.Muzzle.Z < -1, star.Id .. ": the muzzle is ahead of the hand")
 		end
 	end)
+
+	-- The held size of a tool's body (Body / Bevel parts; the hand at the origin, the barrel along -Z):
+	-- width (X), height (Y) and how far it reaches behind the hand (+Z).
+	local function heldSize(tool: any): (number, number, number)
+		local lo = { math.huge, math.huge, math.huge }
+		local hi = { -math.huge, -math.huge, -math.huge }
+		for _, p in parts(tool) do
+			if string.match(p.Name, "^Body") or string.match(p.Name, "^Bevel") then
+				local h = p.Size / 2
+				for _, sx in { -1, 1 } do
+					for _, sy in { -1, 1 } do
+						for _, sz in { -1, 1 } do
+							local c = p.CFrame * Loader.roblox.Vector3.new(h.X * sx, h.Y * sy, h.Z * sz)
+							local v = { c.X, c.Y, c.Z }
+							for i = 1, 3 do
+								lo[i] = math.min(lo[i], v[i])
+								hi[i] = math.max(hi[i], v[i])
+							end
+						end
+					end
+				end
+			end
+		end
+		return hi[1] - lo[1], hi[2] - lo[2], hi[3]
+	end
+
+	T.test("KenneyBlaster: every gun fits the hand (levels and STAR blasters: width, height, behind the hand)", function()
+		local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
+		-- the biggest level bodies (LV 7 / LV 9) set the budget
+		local WIDTH, HEIGHT, BEHIND = 1.3, 2.8, 1.95
+		local function check(label: string, tool: any)
+			local w, h, behind = heldSize(tool)
+			T.truthy(w <= WIDTH, `{label}: {string.format("%.2f", w)} wide`)
+			T.truthy(h <= HEIGHT, `{label}: {string.format("%.2f", h)} tall`)
+			T.truthy(behind <= BEHIND, `{label}: {string.format("%.2f", behind)} behind the hand`)
+		end
+		for level = 1, BlasterData.MaxLevel do
+			check("LV " .. level, BlasterBuilder.build(level, if level > 1 then "Gold" else ""))
+		end
+		for _, star in StarBlasterData.List do
+			local tool = BlasterBuilder.buildStar(star, 10, "")
+			check(star.Id, tool)
+			-- still a real gun: at least LV 4's length ahead of the hand
+			local muzzle = (tool:FindFirstChild("Handle") :: any):FindFirstChild("Muzzle")
+			T.truthy(muzzle.Position.Z < -1.5, `{star.Id}: the barrel reaches {string.format("%.2f", -muzzle.Position.Z)} ahead`)
+		end
+	end)
 end

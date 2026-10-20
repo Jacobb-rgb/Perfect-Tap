@@ -310,8 +310,9 @@ local function weaponSet(data: { [string]: any }, key: string): { [string]: any 
 end
 
 -- Buys a STAR blaster with Forge Stars and equips it. Returns (true) or (false, reason):
--- a StarBlasterData.quote reason, or "Checking" while Roblox hasn't said yet whether
--- the player owns its live game pass (so nobody pays stars for a pass they bought).
+-- a StarBlasterData.quote reason, or "Checking" while the load's first round of pass
+-- checks runs and hasn't answered its live game pass yet (so nobody pays stars for a pass
+-- they bought; a later "owned" answer gives the stars back: grantWeapon).
 function RebirthService.buyWeapon(player: Player, id: any): (boolean, string?)
 	local data = DataService.get(player)
 	if not data then
@@ -322,7 +323,12 @@ function RebirthService.buyWeapon(player: Player, id: any): (boolean, string?)
 		return false, reason
 	end
 	local entry = MonetizationConfig.get("Star" .. tostring(id))
-	if entry and MonetizationConfig.isLive(entry.Id) and not MonetizationService.known(player, entry.Key) then
+	if
+		entry
+		and MonetizationConfig.isLive(entry.Id)
+		and not MonetizationService.known(player, entry.Key)
+		and not MonetizationService.passesChecked(player)
+	then
 		return false, "Checking"
 	end
 	StarBlasterData.buy(data, id)
@@ -369,11 +375,13 @@ local function grantWeapon(player: Player, data: { [string]: any }, entry: Monet
 	owned[star.Id] = true
 	passes[star.Id] = true
 	local open = StarBlasterData.unlocked(data, star.Id)
-	if open and StarBlasterData.equipped(data) == nil then
+	local equipNow = open and StarBlasterData.equipped(data) == nil
+	if equipNow then
 		data.StarBlaster = star.Id
 	end
-	local line = if open
-		then `{star.Name} unlocked! Thank you! Equip it in the Star Forge.`
+	local line = if equipNow
+		then `{star.Name} unlocked and equipped! Thank you!`
+		elseif open then `{star.Name} unlocked! Thank you! Equip it in the Star Forge.`
 		else `{star.Name} is yours! Thank you! It opens at rebirth {star.Unlock}.`
 	Net.fire("Notify", player, { Text = line, Kind = "Reward" })
 	return true
