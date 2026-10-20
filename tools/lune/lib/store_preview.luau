@@ -98,37 +98,11 @@ function Preview.build(Loader: any): { [string]: any }
 	StoreView.setCard(stars, "StarSupernova", "StarSupernova", "Locked")
 	StoreView.setCard(stars, "StarSingularity", "StarSingularity", "Locked")
 	exports.ui_store_pc_stars = UiExport.export({ hud(scale).Gui, stars.Gui })
-	-- the limited edition banner (FEATURED; LimitedGolems.current in the game)
+	-- the limited edition banner (FEATURED): the game's own edition, 9 days before its end
+	local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
 	local function edition(): any
-		local rgb = (require("@lune/roblox") :: any).Color3.fromRGB
-		local golems = {
-			{ Id = "CinderWhelp", Name = "Cinder Whelp", Rarity = "Rare" },
-			{ Id = "EmberHatchling", Name = "Ember Hatchling", Rarity = "Rare" },
-			{ Id = "ScaleKnight", Name = "Dragonscale Knight", Rarity = "Epic" },
-			{ Id = "Flamewing", Name = "Flamewing", Rarity = "Epic" },
-			{ Id = "MagmaWyvern", Name = "Magma Wyvern", Rarity = "Legendary" },
-			{ Id = "DragonKing", Name = "Dragon King", Rarity = "Mythic" },
-		}
-		local odds = {}
-		for i, g in golems do
-			odds[g.Id] = ({ 0.34, 0.28, 0.2, 0.12, 0.05, 0.01 })[i]
-		end
-		return {
-			Id = "Dragonforge",
-			Title = "DRAGONFORGE",
-			Tagline = "Golems forged in dragon fire!",
-			Backdrop = {
-				SkyTop = rgb(36, 10, 30),
-				SkyHorizon = rgb(255, 96, 40),
-				Ground = rgb(40, 30, 34),
-				Accent = rgb(255, 128, 30),
-				Title = { rgb(255, 236, 110), rgb(255, 90, 20) },
-			},
-			Golems = golems,
-			Odds = odds,
-			Products = { [1] = "RoyalCapsule1", [3] = "RoyalCapsule3", [10] = "RoyalCapsule10", [50] = "RoyalCapsule10" },
-			EndsAt = 0,
-		}
+		local now = LimitedGolems.Current.EndsAt - (29 * 86400 + 21 * 3600 + 15 * 60)
+		return LimitedGolems.current(now)
 	end
 	local limited = store(scale, pcW, pcH)
 	StoreView.setEdition(limited, edition())
