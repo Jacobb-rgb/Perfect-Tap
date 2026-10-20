@@ -128,11 +128,14 @@ function TrainConfig.capacity(level: any, express: boolean): number
 	return if express then math.floor(base * TrainConfig.Express.CapacityMult) else base
 end
 
--- Trip seconds for a speed level (Express halves it), never under MinTripSeconds.
-function TrainConfig.tripSeconds(level: any, express: boolean): number
+-- Trip seconds for a speed level (Express halves it; `cut` = the share cut off,
+-- the rebirth's Express Rails: Bonuses TrainTimeCutPct, at most half), never
+-- under MinTripSeconds.
+function TrainConfig.tripSeconds(level: any, express: boolean, cut: number?): number
 	local base = levelOf(TrainConfig.Speed, level).Value
 	local seconds = if express then base / TrainConfig.Express.SpeedMult else base
-	return math.max(TrainConfig.MinTripSeconds, seconds)
+	local share = if type(cut) == "number" and cut == cut then math.clamp(cut, 0, 0.5) else 0
+	return math.max(TrainConfig.MinTripSeconds, seconds * (1 - share))
 end
 
 -- Price of the next level of an upgrade (nil when maxed).

@@ -73,6 +73,7 @@ export type Snapshot = {
 	NextSpeedPrice: number?,
 	Express: boolean,
 	TripSeconds: number,
+	TripCut: number, -- the share the rebirth's Express Rails cut off every trip (0..0.5)
 	AutoDepartIn: number?,
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
 	WaitReason: string?, -- why: "PenOver" (the pen holds more than it fits) | "PenFull"
@@ -276,7 +277,8 @@ function TrainView.read(raw: any): Snapshot
 		NextCapacityPrice = optional(t.NextCapacityPrice),
 		NextSpeedPrice = optional(t.NextSpeedPrice),
 		Express = express,
-		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express)),
+		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express, optional(t.TripCut))),
+		TripCut = math.clamp(num(t.TripCut, 0), 0, 0.5),
 		AutoDepartIn = optional(t.AutoDepartIn),
 		Waiting = t.Waiting == true,
 		WaitReason = if t.WaitReason == "PenOver" or t.WaitReason == "PenFull" then t.WaitReason else nil,
@@ -401,10 +403,10 @@ function TrainView.upgrade(train: Snapshot, kind: Kind, coins: number): Upgrade
 		local now = TrainConfig.capacity(level, train.Express)
 		detail = if maxed then `Cargo {now} (max)` else `Cargo {now} → {TrainConfig.capacity(level + 1, train.Express)}`
 	else
-		local now = TrainView.seconds(TrainConfig.tripSeconds(level, train.Express))
+		local now = TrainView.seconds(TrainConfig.tripSeconds(level, train.Express, train.TripCut))
 		detail = if maxed
 			then `Trip {now} (max)`
-			else `Trip {now} → {TrainView.seconds(TrainConfig.tripSeconds(level + 1, train.Express))}`
+			else `Trip {now} → {TrainView.seconds(TrainConfig.tripSeconds(level + 1, train.Express, train.TripCut))}`
 	end
 	return {
 		Kind = kind,

@@ -124,7 +124,10 @@
 	  MAX_EQUIPPED_LENGTH characters (unknown ids kept: ArtifactConfig.
 	  equipped ignores them), anything else nil.
 	- Stats is a record; Stats.ArtifactsFound / CapsulesOpened / WheelSpins /
-	  WheelOres are whole numbers >= 0.
+	  WheelOres / StarsEarned are whole numbers >= 0.
+	- Rebirth (RebirthConfig): Rebirths and Stars are whole numbers >= 0;
+	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
+	  newer build's perks and levels kept, junk and levels below 1 dropped).
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
@@ -600,9 +603,29 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 
 	-- the new stats
 	local stats = record(data, "Stats", report)
-	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres" } do
+	for _, field in { "ArtifactsFound", "CapsulesOpened", "WheelSpins", "WheelOres", "StarsEarned" } do
 		local v = stats[field]
 		stats[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+
+	-- rebirth: whole counts, Star Shop levels by short ids (unknown perks and levels kept)
+	for _, field in { "Rebirths", "Stars" } do
+		local v = data[field]
+		if v ~= nil and not isFinite(v) then
+			report.Dropped += 1
+		end
+		data[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+	local perks = record(data, "StarPerks", report)
+	for _, id in keysOf(perks) do
+		local level = perks[id]
+		local whole = if idLike(id) and isFinite(level) and level >= 1 then wholeIn(level, 1, MAX_LEVEL_KEPT) else nil
+		if whole == nil then
+			perks[id] = nil
+			report.Dropped += 1
+		elseif whole ~= level then
+			perks[id] = whole
+		end
 	end
 end
 

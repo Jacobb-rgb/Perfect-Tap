@@ -120,6 +120,7 @@ local DataTemplate = {
 		CapsulesOpened = 0, -- golems woken from capsules (also free ones)
 		WheelSpins = 0,
 		WheelOres = 0, -- dirty ores the wheel's ore prize put into the Ore Pen (the tutorial doesn't count them)
+		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)
@@ -132,6 +133,12 @@ local DataTemplate = {
 	Badges = {}, -- [badgeKey] = true (local cache, Roblox is the source of truth)
 	GroupRewardClaimed = false,
 	ForgeName = "", -- raw text, always filtered by TextService before showing
+
+	-- rebirth "STAR FORGE" (RebirthConfig, RebirthService): how many rebirths, the
+	-- unspent Forge Stars and the Star Shop perks { [perkId] = level }
+	Rebirths = 0,
+	Stars = 0,
+	StarPerks = {},
 
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
 	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),

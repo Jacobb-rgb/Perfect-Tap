@@ -121,6 +121,10 @@ Net.Events = {
 	--   MarketplaceService:PromptGamePassPurchase on the client (MonetizationConfig ids, never id 0);
 	--   MonetizationService grants them (ownership checked on load and on purchase)
 	HoverboardAction = { Rate = 4, Burst = 8 },
+	-- rebirth "STAR FORGE" (RebirthService), anywhere: { Action = "Rebirth" } (RebirthConfig.canRebirth:
+	--   the whole reset in one step on the server) or { Action = "Buy", Perk } (a Star Shop level,
+	--   RebirthConfig.quote). Every request read gets a RebirthResult
+	RebirthAction = { Rate = 2, Burst = 4 },
 	-- steps 6-7: gear, enchants, boosts, golems + capsules, wheel, artifacts (the configs in
 	-- Shared/Config document each rule). Every request the server reads (except Capsule
 	-- "Open" and Wheel "Spin", answered by CapsuleResult / WheelResult, and Robux requests,
@@ -228,6 +232,10 @@ Net.Events = {
 	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
 	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change
 	HoverboardResult = false,
+	-- the answer to a RebirthAction: { Action, Ok, Reason?: a RebirthConfig.Reasons code, Perk?,
+	--   Level? (the perk's new level), Stars? (paid by the rebirth), Rebirths? (the new count) };
+	--   on a rebirth the client plays the moment, the server sends the character home after it
+	RebirthResult = false,
 	-- steps 6-7 answers:
 	-- { Action: "Gear" | "Enchant" | "Boost" | "Capsule" | "Golem" | "Wheel" | "Artifact",
 	--   Op: the action string ("Buy", "Slot", "BuyCoins", "Open", "Equip", "Spin", ...),

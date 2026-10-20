@@ -117,6 +117,7 @@ local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local DataService = require(script.Parent.DataService)
 local WorldService = require(script.Parent.WorldService)
 local StateService = require(script.Parent.StateService)
@@ -325,12 +326,18 @@ local function hasExpress(player: Player): boolean
 	return Perks.has(player, "TrainExpress")
 end
 
+-- The share the rebirth's Express Rails cut off every trip (Bonuses TrainTimeCutPct).
+local function tripCut(player: Player): number
+	local ok, stats = pcall(Bonuses.stats, player)
+	return if ok and type(stats) == "table" then tonumber(stats.TrainTimeCutPct) or 0 else 0
+end
+
 local function capacityOf(player: Player, train: Train): number
 	return TrainConfig.capacity(train.CapacityLevel, hasExpress(player))
 end
 
 local function tripSecondsOf(player: Player, train: Train): number
-	return TrainConfig.tripSeconds(train.SpeedLevel, hasExpress(player))
+	return TrainConfig.tripSeconds(train.SpeedLevel, hasExpress(player), tripCut(player))
 end
 
 -- The empty train is still rolling back after unloading.
@@ -1118,7 +1125,7 @@ function TrainService.upgrade(player: Player, kind: string, expected: number?): 
 	local express = hasExpress(player)
 	local text = if isCapacity
 		then `Train upgraded: {TrainConfig.capacity(level + 1, express)} cargo slots!`
-		else `Train upgraded: {string.format("%g", TrainConfig.tripSeconds(level + 1, express))} s trips!`
+		else `Train upgraded: {string.format("%g", TrainConfig.tripSeconds(level + 1, express, tripCut(player)))} s trips!`
 	toast(player, text, "Reward")
 	return true, nil
 end
@@ -1309,6 +1316,17 @@ local function onLoaded(player: Player, data: { [string]: any })
 	DataService.changed(player)
 end
 
+-- A rebirth (RebirthService) emptied the train in the save: forget the trip on
+-- the way and start over from the save, as at a join.
+function TrainService.resetRun(player: Player)
+	sessionTrips[player.UserId] = nil
+	runtimes[player] = nil
+	local data = DataService.get(player)
+	if data then
+		onLoaded(player, data)
+	end
+end
+
 ---------------------------------------------------------------- state snapshot
 
 local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
@@ -1342,7 +1360,8 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		NextCapacityPrice = TrainConfig.nextPrice(TrainConfig.Capacity, train.CapacityLevel),
 		NextSpeedPrice = TrainConfig.nextPrice(TrainConfig.Speed, train.SpeedLevel),
 		Express = express,
-		TripSeconds = TrainConfig.tripSeconds(train.SpeedLevel, express),
+		TripSeconds = TrainConfig.tripSeconds(train.SpeedLevel, express, tripCut(player)),
+		TripCut = tripCut(player),
 		AutoDepartIn = autoIn,
 		Waiting = waiting,
 		-- why it waits: the pen is over its capacity, or full
