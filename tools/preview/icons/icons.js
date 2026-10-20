@@ -1092,7 +1092,7 @@ async function main() {
   rim.position.set(1, 2, -3);
   scene.add(rim);
 
-  // golem_<Kind> / capsule_<Id>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
+  // golem_<Kind> / capsule_<Id> / shard_<Set>: the step 7 GolemBuilder models (front = -Z, turned to the camera)
   if (RUNES[iconName]) {
     const [mark, hex] = RUNES[iconName];
     ICONS[iconName] = () => {
@@ -1117,7 +1117,7 @@ async function main() {
   }
   const partSpec =
     PART_ICONS[iconName] ||
-    (/^(golem|capsule)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
+    (/^(golem|capsule|shard)_/.test(iconName) ? { file: iconName, yaw: 158, pitch: 10 } : null) ||
     (/^item_/.test(iconName) ? { file: iconName, yaw: -24, pitch: 24 } : null) ||
     (/^machine_/.test(iconName) ? { file: iconName, yaw: 145, pitch: 20 } : null) ||
     (/^star_/.test(iconName) ? { file: iconName, yaw: 90, pitch: 12, roll: 0 } : null) ||
