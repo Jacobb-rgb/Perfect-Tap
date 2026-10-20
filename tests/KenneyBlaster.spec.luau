@@ -26,7 +26,14 @@ return function(T, Loader)
 	end
 
 	T.test("KenneyBlaster: the light shape data is well formed", function()
-		T.eq(#KenneyBlaster.Models, BlasterData.MaxLevel, "one model per level")
+		-- one model per level, then one per STAR blaster (Config/StarBlasterData: 10 + Index)
+		local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
+		T.eq(#KenneyBlaster.Models, BlasterData.MaxLevel + #StarBlasterData.List, "one model per level and star blaster")
+		local seen = {}
+		for _, name in KenneyBlaster.Models do
+			T.falsy(seen[name], name .. " used once")
+			seen[name] = true
+		end
 		for _, name in KenneyBlaster.Models do
 			local shape = Shapes[name]
 			T.truthy(shape, name)
@@ -120,6 +127,26 @@ return function(T, Loader)
 			for _, p in list do
 				T.truthy(p.Anchored and not p.CanCollide and not p.CastShadow, "decor")
 			end
+		end
+	end)
+
+	T.test("KenneyBlaster: the five STAR blasters stay within the part budget", function()
+		local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
+		for _, star in StarBlasterData.List do
+			local level = BlasterData.MaxLevel + star.Index
+			local skin = KenneyBlaster.skin(
+				level,
+				if star.Magma then "Emberite" else "StarCore",
+				{ Body = star.Body, Glow = star.Glow, Rusty = false }
+			)
+			skin.Tier = 1
+			local count = 0
+			local anchors = KenneyBlaster.parts(level, "StarCore", skin, function(_name, cf, size)
+				count += 1
+				return { CFrame = cf, Size = size } :: any
+			end)
+			T.truthy(count <= KenneyBlaster.MaxParts, `{star.Id}: {count} parts`)
+			T.truthy(anchors.Muzzle.Z < -1, star.Id .. ": the muzzle is ahead of the hand")
 		end
 	end)
 end
