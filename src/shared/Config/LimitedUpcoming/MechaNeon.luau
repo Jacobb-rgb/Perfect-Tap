@@ -91,7 +91,7 @@ return {
 			Id = "JetStriker",
 			Name = "Jet Striker",
 			Rarity = "Legendary",
-			Body = rgb(60, 66, 90),
+			Body = rgb(72, 88, 130),
 			Trim = rgb(24, 26, 40),
 			Glow = rgb(0, 220, 255),
 			Material = M.Metal,
