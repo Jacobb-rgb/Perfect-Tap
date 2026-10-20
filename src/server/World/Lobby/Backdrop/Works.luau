@@ -2,8 +2,8 @@
 	ForgeWorks, Crane and Beacon (LOBBY_PLAN 6.2 items 4, 8, 9).
 
 	ForgeWorks sits on the cave roof right of the DEPTHS portal: a stone and
-	iron block house with lit windows, THE FORGE sign with crossed hammers on
-	a timber frame, a lattice derrick with a red beacon and the PWR board, an
+	iron block house with lit windows (no name board: "The Forge" is another
+	game's title, owner 2026-10-20), a lattice derrick with a red beacon and the PWR board, an
 	ore conveyor and chute down to the quarry floor, flanged pipes, and the
 	lower step of the summit cascade feeding the sluice of QuarryFallsEast.
 	The Crane stands on the massif's crane ledge, its jib over the cart track;
@@ -110,21 +110,6 @@ function Works.buildForgeWorks(parent: Instance, rng: Rng.Rng): Model
 	for _, x in { 22.6, 27, 31.4 } do
 		Style.window(m, Kit.facing(Vector3.new(x, DECK + 7.6, h.Max.Z + 0.05), SOUTH), 2.4, 2.2, { Frame = C.IronLight })
 	end
-
-	---------------------------------------------------------------- THE FORGE sign
-	-- big enough to read from the hero camera ~430 studs away (concept: one of
-	-- the landmark boards over the mountain)
-	local signY, signZ = 44.5, -245.2
-	-- (x 11.1..50.6: the massif's tier-1 columns east of the deck stand in front of x > 51)
-	Style.sign(m, Kit.facing(Vector3.new(35.5, signY, signZ), SOUTH), "THE FORGE", 30, 8.5, { Kind = "Wood", Depth = 0.8 })
-	local iconBoard = Style.sign(m, Kit.facing(Vector3.new(15.5, signY, signZ), SOUTH), "", 8.5, 8.5, { Kind = "Wood", Depth = 0.8 })
-	iconBoard.Name = "IconBoard"
-	Style.icon(m, Kit.facing(Vector3.new(15.5, signY, signZ + 0.65), SOUTH), "CrossedHammers", 6.6, C.SignText)
-	for _, x in { 11.9, 50.0 } do
-		Kit.box(m, Vector3.new(x - 0.5, DECK, signZ - 1.3), Vector3.new(x + 0.5, signY + 4.8, signZ - 0.4), C.WoodDark, nil, Style.decor())
-	end
-	Kit.box(m, Vector3.new(33.6, h.Max.Y + 0.8, signZ - 1.3), Vector3.new(34.4, signY + 4.8, signZ - 0.4), C.WoodDark, nil, Style.tiny())
-	Kit.box(m, Vector3.new(11.2, signY - 4.9, signZ - 1.2), Vector3.new(50.3, signY - 4.3, signZ - 0.4), C.WoodDark, nil, Style.tiny())
 
 	---------------------------------------------------------------- derrick with beacon and the PWR board
 	local derrickBase = CFrame.new(31, h.Max.Y + 0.8, -251.5)
