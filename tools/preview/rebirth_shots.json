@@ -6,5 +6,7 @@
   "rebirth_phone": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_phone", "uiInset": 58},
   "rebirth_phone_small": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_phone_small", "uiInset": 163},
   "rebirth_shop_phone": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_shop_phone", "uiInset": 58},
-  "rebirth_moment": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_moment"}
+  "rebirth_moment": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_moment"},
+  "rebirth_glow": {"scene": "rebirth", "position": [-58, 26, 2], "target": [-104, 1, 0], "fov": 62, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 140, "maxLights": 24},
+  "rebirth_shop_glow": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_shop_glow"}
 }

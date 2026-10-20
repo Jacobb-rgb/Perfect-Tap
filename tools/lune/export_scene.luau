@@ -243,6 +243,7 @@ elseif sceneName == "vault_shop" then -- the world + the Blaster Vault shop wind
 	end
 elseif sceneName == "rebirth" then -- the world + the STAR FORGE window overlays (tools/lune/lib/rebirth_preview.luau)
 	WorldBuilder.build(workspace)
+	require("./lib/rebirth_preview").buildWorld(Loader, workspace)
 	for name, guis in require("./lib/rebirth_preview").build(Loader) do
 		uiExports[name] = guis
 	end

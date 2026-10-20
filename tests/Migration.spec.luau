@@ -578,6 +578,7 @@ return function(T, Loader)
 		data.Rebirths = 4
 		data.Stars = 7
 		data.StarPerks = { GoldenTouch = 12, StarMagnet = 3 }
+		data.PlotGlow = "Aurora" -- a colour this build doesn't know
 		data.Stats.StarsEarned = 30
 		return data
 	end

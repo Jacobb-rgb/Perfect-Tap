@@ -20,6 +20,12 @@
 	                           meanwhile).
 	  { Action = "Buy", Perk } a Star Shop level (RebirthConfig.quote / buy:
 	                           "BadPerk" | "Max" | "NoStars").
+	  { Action = "Glow", Color } the Plot Glow colour to show ("" = off;
+	                           "Locked" for a colour the perk hasn't unlocked).
+	The Plot Glow (World/PlotGlow) follows the save: built into the plot when
+	it is assigned and whenever the pick changes, gone when the plot is
+	freed. THE GREAT FORGE plaza's fire crystal gets a "Star Forge" prompt
+	(CrystalPrompt, F / gamepad Y) that opens the window (OpenUI "Rebirth").
 	Every request read gets a RebirthResult { Action, Ok, Reason?, Perk?,
 	Level?, Stars?, Rebirths? }.
 
@@ -32,6 +38,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -45,11 +52,15 @@ local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local PodiumService = require(script.Parent.PodiumService)
 local TrainService = require(script.Parent.TrainService)
+local PlotGlow = require(script.Parent.Parent.World.PlotGlow)
+local LobbyLayout = require(Shared.Config.LobbyLayout)
 local ElevatorService = require(script.Parent.ElevatorService)
 
 local RebirthService = {}
 
 RebirthService.StarsAttribute = "ForgeStars"
+RebirthService.CrystalPrompt = "StarForgePrompt"
+RebirthService.CrystalRange = 16 -- studs from the crystal's axis (the ring is 10.2 out, the walk-in base 12.4)
 RebirthService.MomentSeconds = 3.2 -- the client's flash + banner, then the character goes home
 
 local MAX_PAYLOAD = 4
@@ -69,6 +80,87 @@ local function showStars(player: Player, data: { [string]: any })
 	if player:GetAttribute(RebirthService.StarsAttribute) ~= value then
 		player:SetAttribute(RebirthService.StarsAttribute, value)
 	end
+end
+
+---------------------------------------------------------------- the plot glow
+
+-- Builds, swaps or removes the owner's Plot Glow to match their save.
+function RebirthService.refreshGlow(player: Player)
+	local plotId = PlotService.plotOf(player)
+	local plot = if plotId then PlotService.model(plotId) else nil
+	if not plotId or not plot then
+		return
+	end
+	local data = DataService.get(player)
+	local want = if data then RebirthConfig.glowOf(data) else ""
+	local shown = plot:FindFirstChild(PlotGlow.Name)
+	if shown and shown:GetAttribute("Color") == want then
+		return
+	end
+	if shown then
+		shown:Destroy()
+	end
+	if want ~= "" then
+		PlotGlow.build(plot, PlotService.plotCFrame(plotId), want)
+	end
+end
+
+local function clearGlow(plotId: number)
+	local plot = PlotService.model(plotId)
+	local shown = plot and plot:FindFirstChild(PlotGlow.Name)
+	if shown then
+		shown:Destroy()
+	end
+end
+
+-- Sets the Plot Glow colour to show. Returns (true) or (false, "NoData" | "Locked").
+function RebirthService.setGlow(player: Player, colorId: any): (boolean, string?)
+	local data = DataService.get(player)
+	if not data then
+		return false, "NoData"
+	end
+	if type(colorId) ~= "string" or not RebirthConfig.glowUnlocked(data.StarPerks, colorId) then
+		return false, "Locked"
+	end
+	data.PlotGlow = colorId
+	RebirthService.refreshGlow(player)
+	DataService.changed(player)
+	return true, nil
+end
+
+---------------------------------------------------------------- the crystal prompt
+
+--[[
+	The "Star Forge" prompt at THE GREAT FORGE plaza's fire crystal: an
+	invisible anchored part on the crystal's axis at chest height (the
+	crystal itself spins on the clients), under `parent`. Returns the prompt.
+]]
+function RebirthService.setupCrystal(parent: Instance, center: Vector3, floorY: number): ProximityPrompt
+	local anchor = Instance.new("Part")
+	anchor.Name = RebirthService.CrystalPrompt
+	anchor.Size = Vector3.new(1, 1, 1)
+	anchor.CFrame = CFrame.new(center.X, floorY + 3, center.Z)
+	anchor.Transparency = 1
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanTouch = false
+	anchor.CanQuery = false
+	anchor.CastShadow = false
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Prompt"
+	prompt.ActionText = "Star Forge"
+	prompt.ObjectText = "Rebirth"
+	prompt.KeyboardKeyCode = Enum.KeyCode.F
+	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = RebirthService.CrystalRange
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = anchor
+	prompt.Triggered:Connect(function(player: Player)
+		Net.fire("OpenUI", player, "Rebirth")
+	end)
+	anchor.Parent = parent
+	return prompt
 end
 
 local function answer(player: Player, result: { [string]: any })
@@ -199,10 +291,17 @@ local function onAction(player: Player, raw: any)
 		local perk = if args then Guard.string(args.Perk, 32) else nil
 		local ok, result = RebirthService.buy(player, perk)
 		if ok then
+			if perk == "PlotGlow" then
+				RebirthService.refreshGlow(player)
+			end
 			answer(player, { Action = "Buy", Ok = true, Perk = perk, Level = result })
 		else
 			answer(player, { Action = "Buy", Ok = false, Perk = perk, Reason = result })
 		end
+	elseif action == "Glow" then
+		local color = if args then Guard.string(args.Color, 16) else nil
+		local ok, reason = RebirthService.setGlow(player, color)
+		answer(player, { Action = "Glow", Ok = ok, Color = color, Reason = reason })
 	end
 end
 
@@ -216,6 +315,7 @@ function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 		Earned = earnedOf(data),
 		Perks = perks,
 		Ready = ready,
+		Glow = RebirthConfig.glowOf(data),
 		StarsNow = RebirthConfig.starsFor(RebirthConfig.reachedOf(data)),
 		Reached = RebirthConfig.reachedOf(data),
 		MinBlaster = RebirthConfig.MinBlaster,
@@ -243,8 +343,25 @@ function RebirthService.init()
 	Players.PlayerRemoving:Connect(function(player: Player)
 		busy[player] = nil
 	end)
+	PlotService.onAssigned(function(player: Player)
+		RebirthService.refreshGlow(player)
+	end)
+	PlotService.onReleased(function(_player: Player, plotId: number)
+		clearGlow(plotId)
+	end)
 end
 
-function RebirthService.start() end
+function RebirthService.start()
+	-- the "Star Forge" prompt at the plaza's fire crystal (the lobby is built by now)
+	local map = Workspace:FindFirstChild("Map")
+	local ring = map and map:FindFirstChild("FireCrystalRing", true)
+	local ok, piece = pcall(LobbyLayout.get, "FireCrystal")
+	if ring and ok and piece then
+		-- (the plaza's slate tiles top out 0.43 over the piece's centre: Plaza/Common.TileTop)
+		RebirthService.setupCrystal(ring, piece.Center, piece.Center.Y + 0.43)
+	else
+		warn("[RebirthService] no FireCrystalRing in the map: no Star Forge prompt")
+	end
+end
 
 return RebirthService

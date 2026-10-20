@@ -11,11 +11,21 @@
 	  ui_rebirth_phone_small   568 x 320 pt phone
 	  ui_rebirth_shop_phone    667 x 375 pt phone, the STAR SHOP
 	  ui_rebirth_moment        the moment: "REBIRTH 2!", +6 Forge Stars, falling stars
+	  ui_rebirth_shop_glow     PC: the STAR SHOP with Plot Glow III, GOLD on its COLOR button
+	World: buildWorld puts the Plot Glow on plot 2 (Gold) and plot 3 (Prism).
 ]]
 
 local UiExport = require("./uiexport")
 
 local Preview = {}
+
+-- The Plot Glow on two plots of the built world (Gold, Prism).
+function Preview.buildWorld(Loader: any, workspace: any)
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
+	local PlotGlow = Loader.requirePath("ServerScriptService.Server.World.PlotGlow")
+	PlotGlow.build(workspace, WorldLayout.plotCFrame(WorldLayout.Plots[2]), "Gold")
+	PlotGlow.build(workspace, WorldLayout.plotCFrame(WorldLayout.Plots[3]), "Prism")
+end
 
 function Preview.build(Loader: any): { [string]: any }
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
@@ -97,6 +107,11 @@ function Preview.build(Loader: any): { [string]: any }
 		hud(phoneScale, 1.4e9).Gui,
 		view(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, info(8, 9, shopPerks, 3), "Shop", "").Gui,
 	})
+	local glowShop = view(scale, false, pcWidth, pcHeight, info(8, 6, { GoldenTouch = 4, PlotGlow = 3 }, 3), "Shop", pcHint)
+	local glowInfo = info(8, 6, { GoldenTouch = 4, PlotGlow = 3 }, 3)
+	glowInfo.Glow = "Gold"
+	RebirthView.setInfo(glowShop, glowInfo)
+	exports.ui_rebirth_shop_glow = UiExport.export({ hud(scale, 1.4e9).Gui, glowShop.Gui })
 	local moment = RebirthView.buildMoment(2, RebirthConfig.starsFor(8), 11)
 	moment.Flash.BackgroundTransparency = 0.82 -- the flash fading out
 	exports.ui_rebirth_moment = UiExport.export({ hud(scale, 0).Gui, moment.Gui })

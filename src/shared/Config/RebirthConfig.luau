@@ -51,6 +51,9 @@
 	  DeepPockets   +1 item carried per level (Bonuses)
 	  ExpressRails  train trips 10 % shorter per level (Bonuses: TrainTimeCutPct)
 	  PodiumKeeper  the podium ores stay through rebirths
+	  PlotGlow      a glowing ribbon round your plot: each level unlocks a
+	                colour (GlowColors), data.PlotGlow is the one you show
+	                ("" = off; RebirthService builds it, cosmetic only)
 	Pure: rules and save math only (server and client both read it).
 ]]
 
@@ -122,7 +125,25 @@ RebirthConfig.Perks = {
 		Text = "your podium ores stay through rebirths",
 		Costs = { 6 },
 	},
+	{
+		Id = "PlotGlow",
+		Name = "Plot Glow",
+		Icon = "🌈",
+		Text = "a glowing ribbon round your plot, a new colour per level",
+		Costs = { 1, 1, 1, 1, 1 },
+	},
 } :: { Perk }
+
+export type GlowColor = { Id: string, Name: string, Color: Color3 }
+
+-- The Plot Glow colours, one per PlotGlow level (Prism: a rainbow round the plot).
+RebirthConfig.GlowColors = {
+	{ Id = "Bronze", Name = "Bronze", Color = Color3.fromRGB(214, 132, 62) },
+	{ Id = "Silver", Name = "Silver", Color = Color3.fromRGB(206, 218, 236) },
+	{ Id = "Gold", Name = "Gold", Color = Color3.fromRGB(255, 206, 72) },
+	{ Id = "Diamond", Name = "Diamond", Color = Color3.fromRGB(120, 232, 255) },
+	{ Id = "Prism", Name = "Prism", Color = Color3.fromRGB(200, 120, 255) },
+} :: { GlowColor }
 
 RebirthConfig.ById = {} :: { [string]: Perk }
 for _, perk in RebirthConfig.Perks do
@@ -251,6 +272,10 @@ function RebirthConfig.buy(data: { [string]: any }, id: string): number
 	local level = RebirthConfig.levelOf(perks, id) + 1
 	perks[id] = level
 	data.Stars = RebirthConfig.starsOf(data) - cost
+	if id == "PlotGlow" then
+		-- a new colour shows at once (the COLOR button picks another)
+		data.PlotGlow = RebirthConfig.GlowColors[level].Id
+	end
 	return level
 end
 
@@ -266,6 +291,43 @@ function RebirthConfig.stats(perks: any): { [string]: number }
 		end
 	end
 	return out
+end
+
+-- Is a Plot Glow colour unlocked for these perks? ("" = off: always)
+function RebirthConfig.glowUnlocked(perks: any, colorId: any): boolean
+	if colorId == "" then
+		return true
+	end
+	local level = RebirthConfig.levelOf(perks, "PlotGlow")
+	for i, color in RebirthConfig.GlowColors do
+		if color.Id == colorId then
+			return i <= level
+		end
+	end
+	return false
+end
+
+-- The Plot Glow colour a save shows: its pick when unlocked, else "" (off).
+function RebirthConfig.glowOf(data: any): string
+	if type(data) ~= "table" or type(data.PlotGlow) ~= "string" then
+		return ""
+	end
+	return if RebirthConfig.glowUnlocked(data.StarPerks, data.PlotGlow) then data.PlotGlow else ""
+end
+
+-- The next pick after `current`: "" (off), then every unlocked colour in order, then off again.
+function RebirthConfig.nextGlow(perks: any, current: any): string
+	local level = RebirthConfig.levelOf(perks, "PlotGlow")
+	local index = 0
+	for i, color in RebirthConfig.GlowColors do
+		if color.Id == current then
+			index = i
+		end
+	end
+	if index + 1 <= level then
+		return RebirthConfig.GlowColors[index + 1].Id
+	end
+	return ""
 end
 
 -- The blaster level a rebirth starts you with (Head Start).

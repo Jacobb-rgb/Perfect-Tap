@@ -42,6 +42,7 @@ export type Info = {
 	Ready: boolean,
 	StarsNow: number, -- what a rebirth now pays
 	Reached: number?, -- the level this run counts (RebirthConfig.reachedOf)
+	Glow: string?, -- the Plot Glow colour shown ("" = off)
 }
 
 export type Column = { Frame: Frame, Chip: TextLabel, Rows: { TextLabel } }
@@ -53,6 +54,7 @@ export type Card = {
 	Text: TextLabel,
 	Level: TextLabel,
 	Buy: TextButton,
+	Pick: TextButton?, -- Plot Glow: the colour shown (a tap picks the next unlocked one)
 }
 
 export type Refs = {
@@ -86,7 +88,7 @@ RebirthView.Colors = {
 
 RebirthView.Metrics = {
 	-- design units: the wanted panel, a column row, the tab row, the REBIRTH! bar
-	Normal = { Width = 980, Height = 560, Row = 34, Text = 18, Chip = 34, Tab = 46, Bar = 86, Card = 150, Button = 54 },
+	Normal = { Width = 980, Height = 650, Row = 34, Text = 18, Chip = 34, Tab = 46, Bar = 86, Card = 134, Button = 46 },
 	Compact = { Width = 1180, Height = 600, Row = 38, Text = 21, Chip = 40, Tab = 76, Bar = 96, Card = 176, Button = 76 },
 }
 
@@ -196,7 +198,8 @@ local function newCard(parent: Instance, perk: RebirthConfig.Perk, order: number
 	})
 	local level = UIKit.label(frame, "0/0", 16, { Name = "Level", TextColor3 = RebirthView.Colors.Star, TextWrapped = false })
 	local buy = chunky(frame, "BUY", Theme.Good, Theme.GoodDark, "Buy")
-	return { Id = perk.Id, Frame = frame, Icon = icon, Name = name, Text = text, Level = level, Buy = buy }
+	local pick = if perk.Id == "PlotGlow" then chunky(frame, "OFF", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "Pick") else nil
+	return { Id = perk.Id, Frame = frame, Icon = icon, Name = name, Text = text, Level = level, Buy = buy, Pick = pick }
 end
 
 function RebirthView.build(): Refs
@@ -383,6 +386,11 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		TechShopView.fitText(card.Text, cardW - 70, m.Card - 38 - m.Button - 14, m.Text - 2, m.Text - 6)
 		place(card.Buy, cardW - 190, m.Card - m.Button - 8, 182, m.Button)
 		card.Buy.TextSize = m.Text + 2
+		local pick = card.Pick
+		if pick then
+			place(pick, 8, m.Card - m.Button - 8, cardW - 190 - 16, m.Button)
+			pick.TextSize = m.Text
+		end
 	end
 end
 
@@ -447,6 +455,25 @@ function RebirthView.setInfo(refs: Refs, info: Info)
 		local level, buy, affordable = RebirthView.cardText(info.Perks, info.Stars, card.Id)
 		card.Level.Text = level
 		card.Buy.Text = buy
+		local pick = card.Pick
+		if pick then
+			local shown = info.Glow or ""
+			local color: RebirthConfig.GlowColor? = nil
+			for _, c in RebirthConfig.GlowColors do
+				if c.Id == shown then
+					color = c
+				end
+			end
+			local picked = color
+			if picked then
+				pick.Text = string.upper(picked.Name)
+				MenuPanel.style(pick, picked.Color:Lerp(Color3.new(0, 0, 0), 0.15), picked.Color:Lerp(Color3.new(0, 0, 0), 0.5))
+			else
+				pick.Text = "OFF"
+				MenuPanel.style(pick, RebirthView.Colors.Off, RebirthView.Colors.OffDark)
+			end
+			MenuPanel.holderOf(pick).Visible = RebirthConfig.levelOf(info.Perks, card.Id) > 0
+		end
 		if buy == "MAX" then
 			MenuPanel.style(card.Buy, RebirthView.Colors.Star, Theme.AccentDark)
 		elseif affordable then
@@ -514,6 +541,9 @@ function RebirthView.buttons(refs: Refs): { TextButton }
 	local list = { refs.Tabs.Rebirth, refs.Tabs.Shop, refs.Rebirth }
 	for _, card in refs.Cards do
 		table.insert(list, card.Buy)
+		if card.Pick then
+			table.insert(list, card.Pick)
+		end
 	end
 	return list
 end

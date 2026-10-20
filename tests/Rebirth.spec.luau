@@ -31,6 +31,9 @@ return function(T, Loader)
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
 	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
 	local ElevatorService = Loader.requirePath("ServerScriptService.Server.Services.ElevatorService")
+	local PlotGlow = Loader.requirePath("ServerScriptService.Server.World.PlotGlow")
+	local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
+	local roblox = require("@lune/roblox") :: any
 
 	local MIN, TOP = RebirthConfig.MinBlaster, BlasterData.MaxLevel
 
@@ -333,6 +336,69 @@ return function(T, Loader)
 		T.eq(data.Stats.BestBlaster, 8, "never lowered")
 	end)
 
+	T.test("Rebirth: Plot Glow colours unlock by level, the pick cycles, a buy shows the new one", function()
+		T.eq(#RebirthConfig.GlowColors, #RebirthConfig.ById.PlotGlow.Costs, "one colour per level")
+		local data: any = { Stars = 5, StarPerks = {}, PlotGlow = "" }
+		T.truthy(RebirthConfig.glowUnlocked(data.StarPerks, ""), "off is always allowed")
+		T.falsy(RebirthConfig.glowUnlocked(data.StarPerks, "Bronze"), "nothing unlocked yet")
+		T.eq(RebirthConfig.nextGlow(data.StarPerks, ""), "", "nothing to cycle to")
+		T.eq(RebirthConfig.buy(data, "PlotGlow"), 1)
+		T.eq(data.PlotGlow, "Bronze", "the new colour shows at once")
+		RebirthConfig.buy(data, "PlotGlow")
+		T.eq(data.PlotGlow, "Silver")
+		T.eq(RebirthConfig.nextGlow(data.StarPerks, "Silver"), "", "after the last unlocked: off")
+		T.eq(RebirthConfig.nextGlow(data.StarPerks, ""), "Bronze", "then from the first again")
+		T.eq(RebirthConfig.nextGlow(data.StarPerks, "Bronze"), "Silver")
+		T.falsy(RebirthConfig.glowUnlocked(data.StarPerks, "Prism"))
+		data.PlotGlow = "Prism" -- (a newer build's pick, or junk): shown as off here
+		T.eq(RebirthConfig.glowOf(data), "")
+		data.PlotGlow = "Silver"
+		T.eq(RebirthConfig.glowOf(data), "Silver")
+		T.eq(RebirthConfig.stats(data.StarPerks).IncomePct, nil, "cosmetic: no stats")
+	end)
+
+	T.test("Rebirth: the Plot Glow model: 8 neon parts on the walls, safe for phones", function()
+		local folder = roblox.Instance.new("Folder")
+		local cf = Loader.CFrame.new(40, 0, -60)
+		T.eq(PlotGlow.build(folder, cf, ""), nil, "off: nothing")
+		T.eq(PlotGlow.build(folder, cf, "Nope"), nil, "unknown: nothing")
+		for _, color in RebirthConfig.GlowColors do
+			local model = PlotGlow.build(folder, cf, color.Id)
+			T.truthy(model, color.Id)
+			T.eq(model.Name, PlotGlow.Name)
+			T.eq(model:GetAttribute("Color"), color.Id)
+			local parts, hues = 0, {}
+			for _, part in model:GetDescendants() do
+				if part:IsA("BasePart") then
+					parts += 1
+					hues[part.Color:ToHex()] = true
+					T.eq(part.Material, roblox.Enum.Material.Neon)
+					T.truthy(
+						part.Anchored and not part.CanCollide and not part.CanQuery and not part.CanTouch and not part.CastShadow,
+						"decor only"
+					)
+					local p = cf:PointToObjectSpace(part.CFrame.Position)
+					T.truthy(
+						math.abs(p.X) <= PlotBuilder.WallLine + 0.5 and math.abs(p.Z) <= PlotBuilder.WallLine + 0.5,
+						"on the pad's border"
+					)
+					T.truthy(p.Y > 2 and p.Y < 5, "on the walls, under head height")
+				end
+			end
+			T.eq(parts, PlotGlow.MaxParts, color.Id .. " part count")
+			local distinct = 0
+			for _ in hues do
+				distinct += 1
+			end
+			if color.Id == "Prism" then
+				T.truthy(distinct >= 4, "Prism is a rainbow")
+			else
+				T.eq(distinct, 1, color.Id .. " is one colour")
+			end
+			model:Destroy()
+		end
+	end)
+
 	T.test("Rebirth: Head Start and Podium Keeper", function()
 		local data = midRun()
 		data.StarPerks = { HeadStart = 3, PodiumKeeper = 1 }
@@ -531,6 +597,44 @@ return function(T, Loader)
 		T.eq(w.refreshed, 1, "the later steps still ran")
 		task.wait()
 		T.eq(w.saves, 1, "and it was saved")
+	end)
+
+	withWorld("RebirthService: the Plot Glow follows the save; the crystal prompt opens the window", function(w)
+		local plot = roblox.Instance.new("Model")
+		rawset(PlotService, "model", function()
+			return plot
+		end)
+		rawset(PlotService, "plotCFrame", function()
+			return Loader.CFrame.new()
+		end)
+		local action = RebirthService._test.action
+		w.data.Stars = 3
+		action(w.player, { Action = "Glow", Color = "Bronze" })
+		T.eq(w.results[#w.results].Reason, "Locked", "not unlocked yet")
+		action(w.player, { Action = "Buy", Perk = "PlotGlow" })
+		T.truthy(w.results[#w.results].Ok)
+		local shown = plot:FindFirstChild(PlotGlow.Name)
+		T.truthy(shown, "built at once")
+		T.eq(shown:GetAttribute("Color"), "Bronze")
+		action(w.player, { Action = "Glow", Color = "" })
+		T.truthy(w.results[#w.results].Ok)
+		T.eq(plot:FindFirstChild(PlotGlow.Name), nil, "off: gone")
+		T.eq(w.data.PlotGlow, "")
+		action(w.player, { Action = "Glow", Color = "Bronze" })
+		T.eq(plot:FindFirstChild(PlotGlow.Name):GetAttribute("Color"), "Bronze", "back on")
+		action(w.player, { Action = "Glow", Color = 5 })
+		T.eq(w.results[#w.results].Reason, "Locked", "junk")
+		T.eq(w.data.PlotGlow, "Bronze", "junk changes nothing")
+		-- the crystal prompt
+		local ring = roblox.Instance.new("Model")
+		local prompt = RebirthService.setupCrystal(ring, roblox.Vector3.new(0, 0, 0), 0.43)
+		T.eq(prompt.ActionText, "Star Forge")
+		T.eq(prompt.KeyboardKeyCode, roblox.Enum.KeyCode.F)
+		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompt.MaxActivationDistance, RebirthService.CrystalRange)
+		local anchor = ring:FindFirstChild(RebirthService.CrystalPrompt)
+		T.truthy(anchor and anchor.Transparency == 1 and anchor.Anchored and not anchor.CanCollide, "an invisible anchor")
+		T.near(anchor.CFrame.Position.Y, 3.43, 1e-3, "chest height over the plaza tiles")
 	end)
 
 	withWorld("RebirthService: the Star Shop and junk input", function(w)

@@ -184,6 +184,13 @@ local function ensureView(): RebirthView.Refs
 		card.Buy.Activated:Connect(function()
 			send({ Action = "Buy", Perk = card.Id })
 		end)
+		local pick = card.Pick
+		if pick then
+			pick.Activated:Connect(function()
+				send({ Action = "Glow", Color = RebirthConfig.nextGlow(info.Perks, info.Glow or "") })
+				Sfx.play("UIClick")
+			end)
+		end
 	end
 	RebirthView.setTab(view, "Rebirth")
 	refs = view
@@ -303,6 +310,10 @@ local function onResult(result: any)
 		elseif view then
 			RebirthView.setMessage(view, RebirthController.Reasons[result.Reason] or "Not now.")
 		end
+	elseif result.Action == "Glow" then
+		if not result.Ok then
+			HudController.toast("Unlock that colour in the STAR SHOP first.", "Deny")
+		end
 	elseif result.Action == "Buy" then
 		if result.Ok then
 			Sfx.play("Discovery")
@@ -332,6 +343,7 @@ local function onState(state: { [string]: any })
 		Ready = r.Ready == true,
 		StarsNow = tonumber(r.StarsNow) or 0,
 		Reached = tonumber(r.Reached),
+		Glow = if type(r.Glow) == "string" then r.Glow else "",
 	}
 	if info.Ready and not wasReady then
 		seenReady = isOpen
@@ -411,6 +423,12 @@ end
 function RebirthController.init()
 	StateController.onChanged(onState)
 	Net.listen("RebirthResult", onResult)
+	-- the "Star Forge" prompt at the plaza's fire crystal
+	Net.listen("OpenUI", function(kind)
+		if kind == "Rebirth" then
+			RebirthController.open()
+		end
+	end)
 	player.CharacterRemoving:Connect(function()
 		RebirthController.close()
 	end)

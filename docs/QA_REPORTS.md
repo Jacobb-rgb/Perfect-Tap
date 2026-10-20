@@ -634,6 +634,12 @@ Option B of the rebirth proposal: an optional restart that keeps the factory and
   with the blaster (capsules, coin boosts, the wheel's capsule fallback, their client cards via State.PriceLevel)
   follows BlasterData.priceLevel, so a rebirth never makes them cheaper; the enchants stay slotted with the paid
   ones (Enchants.Passes) moved first into the open slots, and YOU LOSE lists the closed enchant slots.
+- Extras (2026-10-20, the watcher's list): the Plot Glow perk (5 levels, 1 star each: Bronze, Silver, Gold,
+  Diamond, Prism; World/PlotGlow: a neon ribbon on the pad's side and front walls and a crystal beacon on each corner,
+  8 parts, no lights, no shadows, nothing collides; built at runtime into the owner's plot, the pick in
+  data.PlotGlow, the card's COLOR button cycles the unlocked colours and off) and a "Star Forge" prompt (F / Y) at
+  THE GREAT FORGE plaza's fire crystal that opens the window (OpenUI "Rebirth"; an invisible anchor on the crystal's
+  axis, no map change). The PC Star Shop fits all 7 cards (panel 650, cards 134 tall, buttons 46).
 - Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
 What to test in Studio:
 1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now
@@ -643,3 +649,6 @@ What to test in Studio:
 3. STAR SHOP: buy Golden Touch (podium income +10 %), Deep Pockets (carry +1), Express Rails (the train panel's trip
    time drops), Head Start (the next rebirth starts at LV 2), Podium Keeper (the podium ores stay).
 4. Phone emulator 568 x 320 and 667 x 375: the window fits, the tabs sit in the header, every button is easy to tap.
+5. Buy Plot Glow: the ribbon shows on your plot's walls at once; COLOR cycles your colours and OFF; another player
+   sees it; leaving frees the plot without it.
+6. Walk to the plaza's fire crystal: "Star Forge" (F / Y) opens the window.

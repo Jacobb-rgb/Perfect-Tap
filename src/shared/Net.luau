@@ -122,8 +122,9 @@ Net.Events = {
 	--   MonetizationService grants them (ownership checked on load and on purchase)
 	HoverboardAction = { Rate = 4, Burst = 8 },
 	-- rebirth "STAR FORGE" (RebirthService), anywhere: { Action = "Rebirth" } (RebirthConfig.canRebirth:
-	--   the whole reset in one step on the server) or { Action = "Buy", Perk } (a Star Shop level,
-	--   RebirthConfig.quote). Every request read gets a RebirthResult
+	--   the whole reset in one step on the server), { Action = "Buy", Perk } (a Star Shop level,
+	--   RebirthConfig.quote) or { Action = "Glow", Color } (the Plot Glow colour, "" = off).
+	--   Every request read gets a RebirthResult
 	RebirthAction = { Rate = 2, Burst = 4 },
 	-- steps 6-7: gear, enchants, boosts, golems + capsules, wheel, artifacts (the configs in
 	-- Shared/Config document each rule). Every request the server reads (except Capsule

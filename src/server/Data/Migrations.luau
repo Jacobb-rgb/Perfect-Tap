@@ -130,7 +130,8 @@
 	  WheelOres / StarsEarned / BestBlaster / RunForged are whole numbers >= 0.
 	- Rebirth (RebirthConfig): Rebirths and Stars are whole numbers >= 0;
 	  StarPerks maps short string ids to whole levels 1..MAX_LEVEL_KEPT (a
-	  newer build's perks and levels kept, junk and levels below 1 dropped).
+	  newer build's perks and levels kept, junk and levels below 1 dropped);
+	  PlotGlow is a short id or "" (a colour this build doesn't know stays).
 	- Not here: Settings (SettingsService.read) and OreCodex
 	  (CodexService.prepare) are repaired by their services once per load
 	  (DataService.onLoaded, after this chain), next to the code that owns
@@ -669,6 +670,13 @@ local function migrateSteps67(data: { [string]: any }, now: number, report: Repo
 			report.Dropped += 1
 		end
 		data[field] = if isFinite(v) and v > 0 then math.floor(math.min(v, 1e15)) else 0
+	end
+	-- the Plot Glow pick: a short id (a newer build's colour kept) or "" (off)
+	if data.PlotGlow ~= nil and data.PlotGlow ~= "" and not idLike(data.PlotGlow) then
+		report.Dropped += 1
+		data.PlotGlow = ""
+	elseif data.PlotGlow == nil then
+		data.PlotGlow = ""
 	end
 	local perks = record(data, "StarPerks", report)
 	for _, id in keysOf(perks) do

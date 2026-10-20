@@ -142,6 +142,8 @@ local DataTemplate = {
 	Rebirths = 0,
 	Stars = 0,
 	StarPerks = {},
+	-- the Plot Glow colour the plot shows (a RebirthConfig.GlowColors id, "" = off)
+	PlotGlow = "",
 
 	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
 	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),
