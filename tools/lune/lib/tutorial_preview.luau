@@ -170,8 +170,12 @@ function Preview.build(Loader: any): { [string]: any }
 	local PHONE: Screen = { Px = 0.62 * 900 / 375, Ui = 0.62, Pt = Vector2.new(667, 375 - 24), Touch = true }
 	local SMALL: Screen = { Px = 0.62 * 900 / 320, Ui = 0.62, Pt = Vector2.new(568, 320 - 58), Touch = true }
 
+	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+
 	local function hud(screen: Screen): any
-		local refs = HudView.build()
+		-- the light HUD (LIGHT_UI=1) lays out for the real uiScale and screen width
+		local refs = if UIConfig.LightUI then HudBubble.buildGame(screen.Ui, screen.Pt.X) else HudView.build()
 		refs.Gui.Scale.Scale = screen.Px
 		refs.Coins.Text = Format.money(120)
 		refs.Income.Text = Format.perSecond(0)
@@ -193,7 +197,9 @@ function Preview.build(Loader: any): { [string]: any }
 	local function bubble(screen: Screen, index: number, input: string): any
 		local refs = TutorialView.build()
 		refs.Gui.Scale.Scale = screen.Px
-		TutorialView.apply(refs, TutorialView.layout(screen.Ui, screen.Pt, screen.Touch, screen.TenFoot, menuTop(screen)))
+		-- the light HUD has no right-side menu (its tiles are on the left)
+		local top = if UIConfig.LightUI then nil else menuTop(screen)
+		TutorialView.apply(refs, TutorialView.layout(screen.Ui, screen.Pt, screen.Touch, screen.TenFoot, top))
 		local step = TutorialConfig.get(index)
 		TutorialView.setStep(refs, index, step, if step.Hint then step.Hint[input] else nil)
 		refs.Bubble.Visible = true

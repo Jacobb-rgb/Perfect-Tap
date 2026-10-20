@@ -21,6 +21,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local TeleportConfig = require(Shared.Config.TeleportConfig)
 local UIKit = require(script.Parent.UIKit)
+local Bubble = require(script.Parent.Bubble)
+local HudBubble = require(script.Parent.HudBubble)
 
 local TeleportView = {}
 
@@ -113,8 +115,68 @@ local function spotButton(parent: Instance, spot: Spot, order: number, size: Vec
 	return button, cover
 end
 
+-- The light HUD (UIConfig.LightUI): bubble tabs in the top bar with a dark
+-- cover showing the seconds left over each (the elevator's tile comes from the
+-- side menu's Elevator entry, SideMenuController).
+local function buildBubble(topBar: Frame, uiScale: number): Refs
+	local layout = HudBubble.layout(uiScale)
+	if topBar:GetAttribute("Compact") ~= nil then
+		local narrow = topBar:GetAttribute("Narrow") == true
+		layout = HudBubble.layout(if topBar:GetAttribute("Compact") then 0.62 else 1, if narrow then 0 else nil)
+	end
+	local buttons: { [string]: TextButton } = {}
+	local covers: { [string]: TextLabel } = {}
+	local hint = UIKit.new("ImageLabel", {
+		Name = "GamepadHint",
+		LayoutOrder = 0,
+		Size = UDim2.fromOffset(34, 34),
+		BackgroundTransparency = 1,
+		Visible = false,
+	}, topBar)
+	local function cover(face: GuiObject): TextLabel
+		local label = Bubble.text(face, "", 30, {
+			Name = "Cooldown",
+			BackgroundColor3 = Color3.fromRGB(15, 18, 40),
+			BackgroundTransparency = 0.4,
+			Size = UDim2.fromScale(1, 1),
+			Visible = false,
+			ZIndex = 8,
+		})
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0, 16) }, label)
+		return label
+	end
+	for order, spot in TeleportConfig.Spots do
+		if spot.Bar then
+			local face = HudBubble.tab(topBar, HudBubble.spot(spot.Id, spot.Label), layout, order)
+			face:SetAttribute("Teleport", spot.Id)
+			buttons[spot.Id], covers[spot.Id] = face, cover(face)
+		end
+	end
+	-- gamepad: left / right along the tabs
+	local order: { TextButton } = {}
+	for _, spot in TeleportConfig.Spots do
+		local tab = buttons[spot.Id]
+		if spot.Bar and tab then
+			table.insert(order, tab)
+		end
+	end
+	for i, tab in order do
+		local links: any = tab
+		pcall(function() -- (Lune's instances can't hold a nil Ref)
+			links.NextSelectionLeft = order[i - 1]
+		end)
+		pcall(function()
+			links.NextSelectionRight = order[i + 1]
+		end)
+	end
+	return { Buttons = buttons, Covers = covers, Hint = hint }
+end
+
 -- Fills HudView's TopBar with the bar spots (Bar = true; the elevator is in the left side menu).
 function TeleportView.build(topBar: Frame, uiScale: number, screenWidth: number?): Refs
+	if topBar:GetAttribute("Bubble") then
+		return buildBubble(topBar, uiScale)
+	end
 	local layout = TeleportView.layout(uiScale, screenWidth)
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
@@ -141,6 +203,9 @@ end
 
 -- Re-lays the bar's buttons for a new uiScale / screen width (phone <-> big screen).
 function TeleportView.relayout(refs: Refs, topBar: Frame, uiScale: number, screenWidth: number?)
+	if topBar:GetAttribute("Bubble") then
+		return -- the light tabs keep the layout they were built with
+	end
 	local layout = TeleportView.layout(uiScale, screenWidth)
 	for id, button in refs.Buttons do
 		local spot = TeleportConfig.ById[id]

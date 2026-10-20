@@ -32,11 +32,14 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 
 local TrainView = {}
@@ -1051,6 +1054,21 @@ end
 function TrainView.setColor(refs: Refs, color: Color3)
 	TrainView.setIconColor(refs.ChipIcon, color)
 	TrainView.setIconColor(refs.CardIcon, color)
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+local darkBuild = TrainView.build
+TrainView.build = function(compact: boolean?): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Chip)
+		TouchControls.follow(refs.Gui)
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return TrainView

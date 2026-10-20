@@ -87,6 +87,9 @@ local function loadAll(path: string)
 		end
 	end
 end
+-- the specs test today's dark UI paths unless they switch the light UI on
+-- themselves (tests/LightUI.spec.luau), whatever UIConfig.Default ships
+Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig").LightUI = false
 loadAll("ReplicatedStorage.Shared")
 T.test("load WorldBuilder", function()
 	Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")

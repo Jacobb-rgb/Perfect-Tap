@@ -18,10 +18,13 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local StoryConfig = require(Shared.Config.StoryConfig)
 local Theme = require(Shared.Config.UITheme)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 
 local StoryView = {}
 
@@ -402,6 +405,20 @@ function StoryView.showPage(refs: Refs, entry: Entry, index: number)
 	if nextHolder and nextHolder:IsA("Frame") then
 		nextHolder.Visible = entry.Unlocked and i < count
 	end
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin); windows also hide Roblox's touch controls while open.
+local darkBuild = StoryView.build
+StoryView.build = function(compact: boolean): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
+	end
+	return refs
 end
 
 return StoryView

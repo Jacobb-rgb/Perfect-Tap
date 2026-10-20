@@ -10,10 +10,12 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local Theme = require(Shared.Config.UITheme)
 local ItemData = require(Shared.Config.ItemData)
 local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
 
 local CleaningView = {}
 
@@ -474,6 +476,19 @@ function CleaningView.setStreak(view: Refs, streak: number)
 	local text = CleaningView.streakText(streak)
 	view.CardStreak.Text = text
 	view.CardStreak.Visible = text ~= ""
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin: white panels, navy outlines, dark text, light buttons).
+local darkBuild = CleaningView.build
+CleaningView.build = function(options: Options?): Refs
+	local refs = darkBuild(options)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+	end
+	return refs
 end
 
 return CleaningView

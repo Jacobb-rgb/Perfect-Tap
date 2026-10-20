@@ -39,6 +39,7 @@ local Format = require(Shared.Util.Format)
 local Loading = require(script.Parent.Parent.Util.Loading)
 local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
+local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local StateController = require(script.Parent.StateController)
 
@@ -268,7 +269,12 @@ local function showCoins(coins: number, newIncome: number)
 		shownCoins = coins
 	end
 	refs.Income.Text = Format.perSecond(newIncome)
-	refs.Income.TextColor3 = if newIncome > 0 then Theme.Good else Theme.TextDim
+	if refs.Gui:GetAttribute("Bubble") then
+		-- the light HUD: white on the green income chip (green text would vanish on it)
+		refs.Income.TextTransparency = if newIncome > 0 then 0 else 0.35
+	else
+		refs.Income.TextColor3 = if newIncome > 0 then Theme.Good else Theme.TextDim
+	end
 end
 
 -- The balance and income now: the attributes first, the last snapshot's
@@ -419,6 +425,11 @@ function HudController.init()
 	refs = HudView.build()
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")
+	if refs.Gui:GetAttribute("Bubble") then
+		-- the light UI: a gold outline around the gamepad's selection
+		local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
+		playerGui.SelectionImageObject = HudBubble.selectionImage()
+	end
 
 	Net.listen("Notify", function(message)
 		if type(message) ~= "table" or type(message.Text) ~= "string" then

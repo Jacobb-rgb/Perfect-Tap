@@ -38,10 +38,13 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UIConfig = require(Shared.Config.UIConfig)
 local GearConfig = require(Shared.Config.GearConfig)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
+local LightSkin = require(script.Parent.LightSkin)
+local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local TechShopView = require(script.Parent.TechShopView)
 
@@ -1399,6 +1402,20 @@ function GearShopView.touchTargets(refs: Refs): { GuiObject }
 		table.insert(list, holderOf(slot.Button))
 	end
 	return list
+end
+
+
+---------------------------------------------------------------- the light look (UIConfig.LightUI)
+-- While the light UI is on (ships off), the same window wears the light
+-- look (LightSkin); windows also hide Roblox's touch controls while open.
+local darkBuild = GearShopView.build
+GearShopView.build = function(compact: boolean?): Refs
+	local refs = darkBuild(compact)
+	if UIConfig.lightUI() then
+		LightSkin.apply(refs.Gui)
+		TouchControls.follow(refs.Gui)
+	end
+	return refs
 end
 
 return GearShopView

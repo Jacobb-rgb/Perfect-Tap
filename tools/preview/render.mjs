@@ -77,7 +77,11 @@ page.on("console", (m) => {
 
 for (const name of names) {
   const t0 = Date.now();
-  await page.goto(`http://127.0.0.1:${port}/index.html?scene=${sceneName}&shot=${name}&w=${renderW}&h=${renderH}`);
+  // per-shot width / height (phone renders) win over RENDER_W / RENDER_H
+  const w = shots[name].width || renderW;
+  const h = shots[name].height || renderH;
+  await page.setViewportSize({ width: w, height: h });
+  await page.goto(`http://127.0.0.1:${port}/index.html?scene=${sceneName}&shot=${name}&w=${w}&h=${h}`);
   await page.waitForFunction(() => window.__done || window.__error, null, { timeout: 240000 });
   const err = await page.evaluate(() => window.__error);
   if (err) {

@@ -39,8 +39,13 @@ function Preview.build(Loader: any): { [string]: any }
 	local smallScale = MenuPanel.PhoneScale * 900 / 320
 	local smallInset = math.floor(58 * 900 / 320)
 
+	local UIConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.UIConfig")
+	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
+	local light = UIConfig.lightUI()
+
 	local function hud(uiScale: number, coins: number): any
-		local refs = HudView.build()
+		-- the light HUD picks its phone layout from the screen (no camera in Lune)
+		local refs = if light then HudBubble.buildGame(if uiScale > 1.4 then 0.62 else 1.25) else HudView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Coins.Text = Format.money(coins)
 		refs.Income.Text = Format.perSecond(2400)
