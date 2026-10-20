@@ -406,114 +406,18 @@ elseif sceneName == "cleaning" then
 	local pattern = Patterns.generate(oreId, 4242)
 	local workCf = CF.lookAt(orePoint.Position, orePoint.Position - (camPos - orePoint.Position).Unit)
 	local shell = OreShellBuilder.build(pattern, workCf, workspace)
-	local stage = process.args[3] or "chisel"
+	local stage = process.args[3] or "spray"
 	local fx = roblox.Instance.new("Folder")
 	fx.Parent = workspace
-	local scrapedCount = 0
 	local workLight = OreShellBuilder.workLight(workCf, fx)
-	if stage == "reveal" then
-		local lamp: any = workLight:FindFirstChildOfClass("PointLight")
-		lamp.Brightness = 0.4
-	end
-	if stage == "chisel" then
-		local cut = pattern.Cuts[1]
-		OreShellBuilder.guideDots(shell, cut, roblox.Color3.fromRGB(255, 230, 140), fx)
-		OreShellBuilder.updateGroove(shell, cut, 0.45, 1, {}, fx, roblox.Color3.fromRGB(255, 160, 60))
-		-- like ChiselStep once a cut started: the start end is dark and the far end stays as
-		-- the goal ("phone" shows the finger lifted: no tool, a white ball at the groove tip)
-		local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
-		local Geometry2D = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.Geometry2D")
-		local function marker(p, size, color)
-			local world = workCf:PointToWorldSpace(
-				roblox.Vector3.new(p.X * OreShellBuilder.Scale, p.Y * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.03)
-			)
-			Geo.ball(fx, world, size, color, roblox.Enum.Material.Neon, { CanCollide = false, CastShadow = false })
-		end
-		marker(cut.Line[#cut.Line], 0.2, roblox.Color3.fromRGB(255, 232, 150))
-		if process.args[4] == "phone" then
-			marker(Geometry2D.pointAt(cut.Line, cut.Length * 0.45), 0.2, roblox.Color3.fromRGB(255, 255, 255))
-		end
-	elseif stage == "scrape" or stage == "polish" or stage == "reveal" then
-		for _, caps in shell.Caps do
-			for _, cap in caps do
-				cap:Destroy()
-			end
-		end
-		for _, part in shell.CoreRim do
-			part.Transparency = 0
-		end
-		if stage == "scrape" then
-			local i = 0
-			for _, patch in shell.Dirt do
-				i += 1
-				if i % 3 ~= 0 then
-					patch:Destroy()
-					scrapedCount += 1
-				end
-			end
-		else
-			for _, patch in shell.Dirt do
-				patch:Destroy()
-			end
-			local ore = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData").get(oreId)
-			for _, part in shell.Core do
-				part.Color = ore.Color
-				part.Reflectance = 0.25
-			end
-		end
-	end
-	-- tool in hand + UI overlay, as the real controller would show it
-	local Geometry2D = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.Geometry2D")
-	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local CleaningView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CleaningView")
+	local SprayParts = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Cleaning.SprayParts")
+	local Scoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.SprayScoring")
+	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local ore = OreData.get(oreId)
-	local function toolAt(u, v, kind)
-		local tip =
-			workCf:PointToWorldSpace(roblox.Vector3.new(u * OreShellBuilder.Scale, v * OreShellBuilder.Scale, OreShellBuilder.DotZ + 0.05))
-		local axis = workCf:VectorToWorldSpace(roblox.Vector3.new(0.35, 0.5, 0.8)).Unit
-		local right = axis:Cross(workCf.LookVector * -1).Unit
-		local back = right:Cross(axis).Unit
-		local cf = CF.fromMatrix(tip, right, axis, back)
-		-- a working (pressed) chisel is see-through, like CleaningController.updateTool
-		local props = { CanCollide = false, Transparency = if kind == "Chisel" then 0.55 else 0 }
-		if kind == "Chisel" then
-			Geo.wedge(
-				fx,
-				cf * CF.new(0, 0.12, 0) * CF.Angles(math.pi, 0, 0),
-				roblox.Vector3.new(0.16, 0.24, 0.12),
-				roblox.Color3.fromRGB(200, 205, 215),
-				roblox.Enum.Material.Metal,
-				props
-			)
-			Geo.block(
-				fx,
-				cf * CF.new(0, 0.5, 0),
-				roblox.Vector3.new(0.16, 0.55, 0.12),
-				roblox.Color3.fromRGB(170, 176, 188),
-				roblox.Enum.Material.Metal,
-				props
-			)
-			Geo.block(fx, cf * CF.new(0, 1.1, 0), roblox.Vector3.new(0.24, 0.7, 0.24), roblox.Color3.fromRGB(150, 98, 56), nil, props)
-		elseif kind == "Brush" then
-			for x = -1, 1 do
-				Geo.block(
-					fx,
-					cf * CF.new(x * 0.11, 0.1, 0),
-					roblox.Vector3.new(0.08, 0.22, 0.32),
-					roblox.Color3.fromRGB(230, 205, 140),
-					nil,
-					props
-				)
-			end
-			Geo.block(fx, cf * CF.new(0, 0.3, 0), roblox.Vector3.new(0.42, 0.18, 0.4), roblox.Color3.fromRGB(150, 98, 56), nil, props)
-			Geo.block(fx, cf * CF.new(0, 0.75, 0.05), roblox.Vector3.new(0.16, 0.8, 0.16), roblox.Color3.fromRGB(120, 80, 48), nil, props)
-		else
-			Geo.block(fx, cf * CF.new(0, 0.1, 0), roblox.Vector3.new(0.6, 0.18, 0.5), roblox.Color3.fromRGB(240, 222, 190), nil, props)
-		end
-	end
 	-- "phone": an iPhone SE-sized screen (375 pt tall) scaled up to the 900 px render
 	local phone = process.args[4] == "phone"
 	local pxPerPoint = 900 / 375
@@ -535,49 +439,57 @@ elseif sceneName == "cleaning" then
 		CamPoint = camPoint,
 		OrePoint = orePoint.Position,
 	})
-	if stage == "chisel" then
-		local p = Geometry2D.pointAt(pattern.Cuts[1].Line, pattern.Cuts[1].Length * 0.45)
-		if not phone then
-			toolAt(p.X, p.Y, "Chisel")
+	if stage == "spray" then
+		-- a good player part of the way through (the same tracker the game uses)
+		local Players = require("./lib/spray_players")(Loader)
+		local _, full = Players.sweep(pattern, { Speed = 1.6 })
+		local stopAt = full.firstT + (full.doneT - full.firstT) * 0.55
+		local tracker = Scoring.SprayTracker.new(pattern, if phone then "Touch" else "Mouse")
+		local sub = Players.sweep(pattern, { Speed = 1.6, Input = if phone then "Touch" else "Mouse" })
+		local nozzle = nil
+		for _, stroke in sub.Strokes do
+			for i = 1, #stroke, 3 do
+				if stroke[i + 2] <= stopAt then
+					tracker:add(stroke[i], stroke[i + 1], stroke[i + 2])
+					nozzle = roblox.Vector2.new(stroke[i], stroke[i + 1])
+				end
+			end
+			tracker:lift()
 		end
-		CleaningView.setStep(view, 1, "CHISEL", "Cut 1 of " .. #pattern.Cuts .. ": trace the glowing line.")
-		CleaningView.setMeter(view, 0.94)
-		view.Progress.Text = "Cut 1 / " .. #pattern.Cuts
-		view.Feedback.TextTransparency = 0
-		if phone then
-			-- the long hint at the size CleaningController.feedback gives it
-			view.Feedback.Text = "Continue from the glowing tip!"
-			view.Feedback.TextSize = 28
-			view.Feedback.TextColor3 = roblox.Color3.fromRGB(255, 200, 90)
-		else
-			view.Feedback.Text = "Great cut!"
-			view.Feedback.TextColor3 = roblox.Color3.fromRGB(160, 255, 170)
+		for index, block in shell.Dirt do
+			local left = tracker:left(index)
+			if tracker.cleaned[index] then
+				block:Destroy()
+			elseif left < 1 then
+				SprayParts.thin(block, left)
+			end
 		end
-		view.Hint.Text = if phone then "Drag with your finger" else "Hold the left mouse button and drag"
-	elseif stage == "scrape" then
-		toolAt(-0.15, 0.1, "Brush")
-		CleaningView.setStep(view, 2, "SCRAPE", "Brush away the dirt. Careful: don't scrape the glowing crystals!")
-		CleaningView.setMeter(view, 0.9)
-		view.Chips.Text = "Chips: 1"
-		view.Progress.Text = "Dirt: " .. scrapedCount .. " / " .. pattern.DirtCount
-		view.Hint.Text = "Drag with your finger"
-	elseif stage == "polish" then
-		toolAt(0.35, -0.3, "Cloth")
-		CleaningView.setStep(view, 3, "POLISH", "Rub in circles around the ore. Keep the SPEED needle in the green!")
-		CleaningView.setMeter(view, 0.88)
-		view.Chips.Text = "Chips: 1"
-		view.Progress.Text = "Shine: 72%"
-		view.Gauge.Visible = true
-		local Scoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningScoring")
-		view.GaugeNeedle.Position = roblox.UDim2.fromScale(Scoring.needleFor(Scoring.PolishBand.Demo), 0.5)
-		view.RubToggle.Text = "Easy polish (R): OFF"
-		view.Shine.Visible = true
-		view.ShineFill.Size = roblox.UDim2.fromScale(0.72, 1)
-		view.RubToggle.Parent.Visible = true
-		view.Feedback.Text = "Shiny!"
-		view.Feedback.TextTransparency = 0
-		view.Feedback.TextColor3 = roblox.Color3.fromRGB(255, 240, 170)
+		-- the wand and its jet at the nozzle point
+		local hit = workCf:PointToWorldSpace(
+			roblox.Vector3.new(nozzle.X * OreShellBuilder.Scale, nozzle.Y * OreShellBuilder.Scale, OreShellBuilder.DirtFront)
+		)
+		local wand = SprayParts.wand(fx)
+		local wandCf, tip = SprayParts.wandFrame(workCf, hit, true)
+		SprayParts.placeWand(wand, wandCf)
+		SprayParts.placeJet(SprayParts.jet(fx), tip, hit)
+		-- a few droplets around the hit (the splash emitter, frozen)
+		local rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng").new(5)
+		for _ = 1, 9 do
+			local offset = workCf:VectorToWorldSpace(roblox.Vector3.new(rng:range(-0.5, 0.5), rng:range(-0.4, 0.5), rng:range(0.1, 0.6)))
+			Geo.ball(fx, hit + offset, rng:range(0.05, 0.1), SprayParts.JetColor, roblox.Enum.Material.Neon, { CanCollide = false, Transparency = 0.3 })
+		end
+		view.Instruction.Text = if #pattern.Crystals > 0
+			then "Wash the dirt off. Don't blast the glowing crystals!"
+			else "Wash all the dirt off the ore!"
+		CleaningView.setClean(view, tracker:progress())
+		CleaningView.setMeter(view, tracker:parts(stopAt).Score)
+		view.Hint.Text = if phone then "Hold your finger on the dirt and drag" else "Hold the left mouse button to spray"
 	elseif stage == "reveal" then
+		local lamp: any = workLight:FindFirstChildOfClass("PointLight")
+		lamp.Brightness = 0.4
+		for _, block in shell.Dirt do
+			block:Destroy()
+		end
 		CleaningView.setReveal(view, "Let's see what you uncovered...")
 		-- Leave is hidden during the reveal (only Collect works)
 		view.Leave.Parent.Visible = false
@@ -590,9 +502,10 @@ elseif sceneName == "cleaning" then
 		view.CardOre.Text = ore.Name .. "  (" .. rarity.Name .. ")"
 		view.CardOre.TextColor3 = rarity.Color
 		view.CardValue.Text = "Worth " .. ItemData.value("Clean", oreId, "Flawless") .. " coins"
-		view.CardDetail.Text = "Chisel 96%  ·  Scrape 100%  ·  Polish 91%  ·  Chips 0"
+		view.CardDetail.Text = "Time 9.4s  ·  Aim 97%"
 		view.Card.Visible = true
-		-- core lifted out and glowing, rays around it
+		view.CleanBar.Visible = false -- like DefaultLook: the card sits where the bar was
+		-- the ore lifted out and glowing, rays around it
 		local lift = workCf:VectorToWorldSpace(roblox.Vector3.new(0, 0.2, 0.9))
 		for _, part in shell.Core do
 			part.CFrame = part.CFrame + lift
@@ -600,6 +513,9 @@ elseif sceneName == "cleaning" then
 		for _, part in shell.CoreRim do
 			part.CFrame = part.CFrame + lift
 			part.Transparency = 0.6
+		end
+		for _, part in shell.Fragile do
+			part.CFrame = part.CFrame + lift
 		end
 		local center = orePoint.Position + (camPos - orePoint.Position).Unit * 0.6
 		local rayCount = if rarity.Order >= 6 then 12 else 8
@@ -615,7 +531,7 @@ elseif sceneName == "cleaning" then
 				{ CanCollide = false, Transparency = 0.7 }
 			)
 		end
-		-- the glow light stays at the vise (behind the lifted core), like the controller's holder
+		-- the glow light stays at the vise (behind the lifted ore), like the look's holder
 		local holder = Geo.ball(
 			fx,
 			workCf:PointToWorldSpace(roblox.Vector3.new(0, 0, OreShellBuilder.CoreFront - 0.4)),
@@ -808,7 +724,7 @@ fs.writeDir(root .. "/build/preview")
 local outName = if sceneName == "mine_floor"
 	then "mine_floor_" .. (process.args[2] or "1")
 	elseif sceneName == "cleaning"
-	then "cleaning_" .. (process.args[3] or "chisel") .. (if process.args[4] == "phone" then "_phone" else "")
+	then "cleaning_" .. (process.args[3] or "spray") .. (if process.args[4] == "phone" then "_phone" else "")
 	else sceneName
 fs.writeFile(root .. "/build/preview/" .. outName .. ".json", serde.encode("json", scene))
 for name, guis in uiExports do

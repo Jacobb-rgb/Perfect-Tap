@@ -181,8 +181,8 @@
     "preset": "Surface",
     "shadowExtent": 40
   },
-  "clean_chisel": {
-    "scene": "cleaning_chisel",
+  "clean_spray": {
+    "scene": "cleaning_spray",
     "position": [
       0,
       0,
@@ -197,58 +197,14 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_chisel",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_scrape": {
-    "scene": "cleaning_scrape",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_scrape",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_polish": {
-    "scene": "cleaning_polish",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_polish",
+    "ui": "ui_clean_spray",
     "dof": {
       "aperture": 0.0035,
       "maxblur": 0.008
     }
   },
   "station": {
-    "scene": "cleaning_chisel",
+    "scene": "cleaning_spray",
     "position": [
       -82,
       14,
@@ -285,8 +241,8 @@
       "maxblur": 0.008
     }
   },
-  "clean_chisel_phone": {
-    "scene": "cleaning_chisel_phone",
+  "clean_spray_phone": {
+    "scene": "cleaning_spray_phone",
     "position": [
       0,
       0,
@@ -301,51 +257,7 @@
     "fov": 40,
     "preset": "Workbench",
     "shadowExtent": 20,
-    "ui": "ui_clean_chisel_phone",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_scrape_phone": {
-    "scene": "cleaning_scrape_phone",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_scrape_phone",
-    "dof": {
-      "aperture": 0.0035,
-      "maxblur": 0.008
-    }
-  },
-  "clean_polish_phone": {
-    "scene": "cleaning_polish_phone",
-    "position": [
-      0,
-      0,
-      0
-    ],
-    "target": [
-      0,
-      0,
-      0
-    ],
-    "useSceneCamera": true,
-    "fov": 40,
-    "preset": "Workbench",
-    "shadowExtent": 20,
-    "ui": "ui_clean_polish_phone",
+    "ui": "ui_clean_spray_phone",
     "dof": {
       "aperture": 0.0035,
       "maxblur": 0.008

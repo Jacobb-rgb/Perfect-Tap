@@ -1,454 +1,335 @@
--- Cleaning minigame: patterns are valid and deterministic; scoring rewards
--- accuracy, punishes chips, and rejects impossible (cheated) input.
+-- Spray-washing: the dirt patterns are valid and deterministic; the shared
+-- tracker scores speed, aim and cracked crystals; broken or impossible input
+-- is rejected; the FLAWLESS guard caps computed timestamps.
 return function(T, Loader)
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local Geometry2D = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.Geometry2D")
 	local Patterns = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningPatterns")
-	local Scoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.CleaningScoring")
+	local Scoring = Loader.requirePath("ReplicatedStorage.Shared.Cleaning.SprayScoring")
+	local Players = require("../tools/lune/lib/spray_players")(Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector2 = roblox.Vector2
 
-	-- Simulated player. offset = distance from the line in tolerance units (inward if negative).
-	-- t0 = session clock when the cut starts (all steps share one clock).
-	local function traceCut(cut, speed, offset, tol, jitter, t0)
-		local samples = {}
-		local t = t0 or 0
-		local step = 1 / 60
-		local s = 0
-		while s <= cut.Length do
-			local p, tangent = Geometry2D.pointAt(cut.Line, s)
-			local normal = Vector2.new(-tangent.Y, tangent.X)
-			-- make +offset point away from the core (outward), -offset into the core
-			if normal:Dot(p) < 0 then
-				normal = -normal
-			end
-			local wobble = if jitter then math.sin(s * 37) * jitter * tol else 0
-			local q = p + normal * (offset * tol + wobble)
-			table.insert(samples, q.X)
-			table.insert(samples, q.Y)
-			table.insert(samples, t)
-			s += speed * step
-			t += step
-		end
-		local last = cut.Line[#cut.Line]
-		table.insert(samples, last.X)
-		table.insert(samples, last.Y)
-		table.insert(samples, t)
-		return samples
+	local P = Scoring.ClientPauses
+
+	-- one ore of every rarity
+	local byRarity = {}
+	for _, ore in OreData.List do
+		byRarity[ore.Rarity] = byRarity[ore.Rarity] or ore.Id
 	end
 
-	-- Records brush positions like the client: feed every position to the
-	-- shared tracker, keep only the ones that removed dirt or snapped a crystal.
-	local function recordBrush(pattern, points)
-		local tracker = Scoring.ScrapeTracker.new(pattern)
-		local samples = {}
-		for _, point in points do
-			local removed, snapped = tracker:add(point.p, point.t)
-			if #removed > 0 or #snapped > 0 then
-				table.insert(samples, point.p.X)
-				table.insert(samples, point.p.Y)
-				table.insert(samples, point.t)
+	-- a good player: steady rows at par pace (slower on thicker dirt), from the end of the intro
+	local function goodSweep(pattern, opts)
+		local o = opts or {}
+		local thick = Rarity.get(pattern.Rarity).DirtThickness
+		o.Speed = o.Speed or 1.9 / thick
+		o.Start = o.Start or P.Intro
+		return Players.sweep(pattern, o)
+	end
+
+	-- the latest timestamp of a submission
+	local function latest(sub): number
+		local last = 0
+		for _, stroke in sub.Strokes do
+			if #stroke > 0 then
+				last = math.max(last, stroke[#stroke])
 			end
 		end
-		return { Samples = samples }, tracker
+		return last
 	end
 
-	-- Brush onto each dirt patch in turn (and onto the crystals if clumsy).
-	local function scrapeAll(pattern, perSecond, hitFragile, t0)
-		local points = {}
-		local t = (t0 or 0) + 0.2
-		for _, d in pattern.Dirt do
-			if not d.Fragile or hitFragile then
-				table.insert(points, { p = d.Center, t = t })
-				t += 1 / perSecond
-			end
-		end
-		local scrape = recordBrush(pattern, points)
-		return scrape, t
-	end
-
-	-- Zig-zag scrubbing over the whole core at `speed` face units per second, 60 fps.
-	local function scrub(pattern, speed, t0)
-		local points = {}
-		local t = t0 or 0
-		local minU, maxU, minV, maxV = math.huge, -math.huge, math.huge, -math.huge
-		for _, p in pattern.Core do
-			minU, maxU = math.min(minU, p.X), math.max(maxU, p.X)
-			minV, maxV = math.min(minV, p.Y), math.max(maxV, p.Y)
-		end
-		local rows = math.ceil((maxV - minV) / 0.2) + 1
-		for row = 0, rows do
-			local v = minV + row * (maxV - minV) / rows
-			local fromU, toU = minU, maxU
-			if row % 2 == 1 then
-				fromU, toU = maxU, minU
-			end
-			local length = math.abs(toU - fromU)
-			local steps = math.max(1, math.ceil(length / (speed / 60)))
-			for i = 0, steps do
-				table.insert(points, { p = Vector2.new(fromU + (toU - fromU) * i / steps, v), t = t })
-				t += 1 / 60
-			end
-		end
-		return recordBrush(pattern, points)
-	end
-
-	local function polishCircles(turns, radPerSecond, mode, t0)
-		local samples = {}
-		local t, angle = t0 or 0, 0
-		local total = 0
-		while total < turns * math.pi * 2 do
-			local wrapped = math.atan2(math.sin(angle), math.cos(angle))
-			table.insert(samples, t)
-			table.insert(samples, wrapped)
-			t += 1 / 30
-			angle += radPerSecond / 30
-			total += radPerSecond / 30
-		end
-		return { Samples = samples, Mode = mode or "Circle" }
-	end
-
-	-- A whole honest session on one clock: cuts one after another, then scrape, then polish.
-	local function submission(pattern, speedFactor, offset, jitter, opts)
-		opts = opts or {}
-		local clock = opts.start or 1
-		local cuts = {}
-		for _, cut in pattern.Cuts do
-			local samples = traceCut(cut, pattern.MaxCutSpeed * speedFactor, offset, pattern.Tolerance, jitter, clock)
-			table.insert(cuts, { Samples = samples })
-			clock = samples[#samples] + 1.2 -- the crack animation
-		end
-		local scrape, scrapeEnd = scrapeAll(pattern, opts.scrapeRate or 12, opts.hitFragile, clock)
-		return {
-			Cuts = cuts,
-			Scrape = scrape,
-			Polish = polishCircles(pattern.PolishTurns + 0.2, opts.polishSpeed or 4.5, opts.polishMode, scrapeEnd + 1),
-			Input = opts.input or "Mouse",
-		}
-	end
-
-	T.test("patterns: every ore and many seeds give valid, convex, solvable jobs", function()
+	T.test("spray patterns: every ore and many seeds give valid, washable jobs", function()
 		for _, ore in OreData.List do
 			local rarity = Rarity.get(ore.Rarity)
-			for seed = 1, 40 do
-				local p = Patterns.generate(ore.Id, seed * 7919)
-				T.truthy(#p.Cuts >= math.max(2, rarity.Cuts - 1), `{ore.Id} seed {seed}: cuts {#p.Cuts}`)
-				T.truthy(math.abs(Geometry2D.area(p.Core)) > 0.45, `{ore.Id} seed {seed}: core too small`)
-				T.truthy(Geometry2D.containsConvex(p.Core, Vector2.zero), `{ore.Id} seed {seed}: center not in core`)
-				T.truthy(p.DirtCount >= 6, `{ore.Id} seed {seed}: dirt {p.DirtCount}`)
-				for _, cut in p.Cuts do
-					T.truthy(cut.Length > 0.3, "cut length")
-					T.truthy(#cut.Caps >= 1, "cut removes crust")
+			for seed = 1, 6 do
+				local p = Patterns.generate(ore.Id, seed * 7907)
+				local label = `{ore.Id} seed {seed}`
+				T.truthy(#p.Cells >= 100, label .. ": a clump full of dirt")
+				T.truthy(p.Required <= #p.Cells and p.Required >= #p.Cells - 3, label .. ": only a few specks wash off by themselves")
+				local total = 0
+				for i, cell in p.Cells do
+					T.eq(cell.Index, i)
+					T.truthy(cell.Amount > 0, label .. ": every cell has dirt")
+					T.truthy(Geometry2D.containsConvex(p.Outline, cell.Center), label .. ": cells sit on the clump")
+					T.eq(p.CellAt[Patterns.key(p.Grid, cell.Gx, cell.Gy)], i, label .. ": the grid finds the cell")
+					total += cell.Amount
 				end
-			end
-		end
-	end)
-
-	T.test("patterns: same seed -> identical pattern (client == server)", function()
-		local a = Patterns.generate("Gold", 123456)
-		local b = Patterns.generate("Gold", 123456)
-		T.eq(#a.Cuts, #b.Cuts)
-		for i, cut in a.Cuts do
-			for j, point in cut.Line do
-				T.eq(point, b.Cuts[i].Line[j])
-			end
-		end
-		T.eq(#a.Dirt, #b.Dirt)
-	end)
-
-	T.test("scoring: careful player gets Flawless on every rarity", function()
-		for _, ore in OreData.List do
-			local p = Patterns.generate(ore.Id, 2024)
-			local r = Scoring.score(p, submission(p, 0.5, 0, 0.1))
-			T.truthy(r.Valid, `{ore.Id}: {r.Reason}`)
-			T.eq(r.Grade, "Flawless", `{ore.Id} grade (score {r.Score})`)
-			T.eq(r.Chips, 0, ore.Id .. " chips")
-		end
-	end)
-
-	T.test("scoring: sloppy lines give a lower grade, never a fail", function()
-		local p = Patterns.generate("Silver", 77)
-		local careful = Scoring.score(p, submission(p, 0.5, 0, 0.1))
-		local sloppy = Scoring.score(p, submission(p, 0.5, 1.4, 0.8))
-		T.truthy(sloppy.Valid, sloppy.Reason)
-		T.lt(sloppy.Score, careful.Score, "sloppy < careful")
-		T.truthy(sloppy.Grade ~= "Flawless", "sloppy is not flawless")
-	end)
-
-	T.test("scoring: cutting into the core chips the ore", function()
-		local p = Patterns.generate("Emberite", 5)
-		local r = Scoring.score(p, submission(p, 0.5, -2.2, 0))
-		T.truthy(r.Valid, r.Reason)
-		T.truthy(r.Chips >= 1, "chips counted")
-	end)
-
-	T.test("scoring: rushing the chisel and hitting fragile spots costs grade", function()
-		local p = Patterns.generate("Gold", 99)
-		local calm = Scoring.score(p, submission(p, 0.5, 0, 0.1))
-		local rushed = Scoring.score(p, submission(p, 1.6, 0, 0.1))
-		T.truthy(rushed.Valid, rushed.Reason)
-		T.lt(rushed.Chisel, calm.Chisel, "too fast lowers chisel score")
-		local clumsy = Scoring.score(p, submission(p, 0.5, 0, 0.1, { hitFragile = true }))
-		T.truthy(clumsy.FragileHits >= 1, "fragile hits counted")
-		T.lt(clumsy.Scrape, calm.Scrape, "fragile hits lower scrape score")
-	end)
-
-	T.test("scoring: rub mode (accessibility) works but caps polish", function()
-		local p = Patterns.generate("Copper", 3)
-		local r = Scoring.score(p, submission(p, 0.5, 0, 0.1, { polishMode = "Rub" }))
-		T.truthy(r.Valid, r.Reason)
-		T.le(r.Polish, 0.75, "rub polish capped")
-	end)
-
-	T.test("scoring: touch players get extra line tolerance", function()
-		local p = Patterns.generate("DragonEgg", 11)
-		local mouse = Scoring.score(p, submission(p, 0.5, 1.1, 0.2, { input = "Mouse" }))
-		local touch = Scoring.score(p, submission(p, 0.5, 1.1, 0.2, { input = "Touch" }))
-		T.lt(mouse.Chisel, touch.Chisel, "touch is more lenient")
-	end)
-
-	T.test("anti-cheat: impossible or broken input is rejected", function()
-		local p = Patterns.generate("Heartstone", 42)
-		-- teleport-speed cut
-		local bot = submission(p, 0.5, 0, 0)
-		for _, cut in bot.Cuts do
-			for i = 3, #cut.Samples, 3 do
-				cut.Samples[i] = 0
-			end
-		end
-		T.falsy(Scoring.score(p, bot).Valid, "zero-time cuts rejected")
-		-- NaN
-		local nan = submission(p, 0.5, 0, 0)
-		nan.Cuts[1].Samples[1] = 0 / 0
-		T.falsy(Scoring.score(p, nan).Valid, "NaN rejected")
-		-- skipped dirt (drop the last brush position)
-		local lazy = submission(p, 0.5, 0, 0)
-		for _ = 1, 3 do
-			table.remove(lazy.Scrape.Samples)
-		end
-		T.falsy(Scoring.score(p, lazy).Valid, "dirt left rejected")
-		-- brush positions far off the ore
-		local far = submission(p, 0.5, 0, 0)
-		far.Scrape.Samples[1] = 7
-		T.falsy(Scoring.score(p, far).Valid, "far brush rejected")
-		-- instant scraping
-		local instant = submission(p, 0.5, 0, 0, { scrapeRate = 10000 })
-		T.falsy(Scoring.score(p, instant).Valid, "instant scrape rejected")
-		-- not enough polishing
-		local dull = submission(p, 0.5, 0, 0)
-		dull.Polish = polishCircles(1, 4)
-		T.falsy(Scoring.score(p, dull).Valid, "unpolished rejected")
-		-- wrong shape / garbage
-		T.falsy(Scoring.score(p, { Cuts = {} }).Valid, "missing cuts rejected")
-		T.falsy(Scoring.score(p, "hello").Valid, "garbage rejected")
-		-- cut started in the middle (skipping half the line) never completes
-		local skip = submission(p, 0.5, 0, 0)
-		local samples = skip.Cuts[1].Samples
-		local half = math.floor(#samples / 6) * 3
-		local trimmed = {}
-		for i = half + 1, #samples do
-			table.insert(trimmed, samples[i])
-		end
-		skip.Cuts[1].Samples = trimmed
-		T.falsy(Scoring.score(p, skip).Valid, "half cut rejected")
-		-- timestamps after the session could have ended
-		local late = submission(p, 0.5, 0, 0, { start = Scoring.MaxSampleTime })
-		T.falsy(Scoring.score(p, late).Valid, "impossible timestamps rejected")
-	end)
-
-	T.test("scoring: slow players (several minutes) are still graded", function()
-		for _, ore in OreData.List do
-			local p = Patterns.generate(ore.Id, 314)
-			local r = Scoring.score(p, submission(p, 0.5, 0, 0.1, { start = 240 }))
-			T.truthy(r.Valid, `{ore.Id}: {r.Reason}`)
-		end
-	end)
-
-	T.test("scoring: fast honest scrubbing is never rejected", function()
-		local runs, covered = 0, 0
-		for _, ore in OreData.List do
-			for seed = 1, 25 do
-				local p = Patterns.generate(ore.Id, seed * 104729)
-				for _, speed in { 4, 8, 12 } do
-					local sub = submission(p, 0.5, 0, 0.1)
-					local scrape, tracker = scrub(p, speed, sub.Cuts[#sub.Cuts].Samples[#sub.Cuts[#sub.Cuts].Samples] + 1.3)
-					runs += 1
-					if tracker:complete() then
-						covered += 1
-						sub.Scrape = scrape
-						sub.Polish = polishCircles(p.PolishTurns + 0.2, 4.5, nil, scrape.Samples[#scrape.Samples] + 1)
-						local r = Scoring.score(p, sub)
-						T.truthy(r.Valid, `{ore.Id} seed {seed} at {speed} u/s: {r.Reason}`)
+				T.truthy(math.abs(total - p.TotalAmount) < 1e-9, label .. ": total dirt adds up")
+				T.truthy(#p.Crystals <= rarity.FragileSpots, label .. ": no more crystals than the rarity has")
+				if rarity.FragileSpots > 0 then
+					T.truthy(#p.Crystals >= 1, label .. ": the rarity's crystals are there")
+				end
+				for i, crystal in p.Crystals do
+					T.truthy(crystal.Center.Magnitude < Patterns.CrystalZone, label .. ": crystals near the middle")
+					for _, cell in p.Cells do
+						T.truthy((cell.Center - crystal.Center).Magnitude > 1e-6, label .. ": a crystal's cell holds no dirt")
+					end
+					for j = i + 1, #p.Crystals do
+						T.truthy((p.Crystals[j].Center - crystal.Center).Magnitude >= Patterns.CrystalGap, label .. ": crystals apart")
 					end
 				end
 			end
 		end
-		-- the zig-zag must actually clear the dirt in most runs for this test to mean anything
-		T.truthy(covered >= runs * 0.8, `scrub covered {covered}/{runs}`)
 	end)
 
-	T.test("scoring: crystals are found from the brush path, not reported by the client", function()
-		local p = Patterns.generate("Heartstone", 42)
-		local careful = submission(p, 0.5, 0, 0.1)
-		local clumsy = submission(p, 0.5, 0, 0.1, { hitFragile = true })
-		local fragileCount = 0
-		for _, d in p.Dirt do
-			if d.Fragile then
-				fragileCount += 1
-			end
+	T.test("spray patterns: the same seed gives the same dirt (client == server)", function()
+		local a = Patterns.generate("Gold", 4242)
+		local b = Patterns.generate("Gold", 4242)
+		T.eq(#a.Cells, #b.Cells)
+		for i, cell in a.Cells do
+			T.eq(cell.Amount, b.Cells[i].Amount)
+			T.eq(cell.Center, b.Cells[i].Center)
 		end
-		T.truthy(fragileCount > 0, "Heartstone has crystals")
-		local a, b = Scoring.score(p, careful), Scoring.score(p, clumsy)
-		T.truthy(a.Valid and b.Valid, tostring(a.Reason) .. " / " .. tostring(b.Reason))
-		T.eq(a.FragileHits, 0, "careful brushing snaps nothing")
-		T.eq(b.FragileHits, fragileCount, "every crystal brushed is counted")
-		T.lt(b.Scrape, a.Scrape, "snapped crystals cost scrape score")
+		T.eq(#a.Crystals, #b.Crystals)
+		local c = Patterns.generate("Gold", 4243)
+		T.truthy(c.TotalAmount ~= a.TotalAmount, "another seed, other dirt")
 	end)
 
-	T.test("scoring: polishing too fast scores low instead of failing", function()
-		local p = Patterns.generate("Copper", 8)
-		local frantic = Scoring.score(p, submission(p, 0.5, 0, 0.1, { polishSpeed = 28 }))
-		T.truthy(frantic.Valid, frantic.Reason)
-		T.lt(frantic.Polish, 0.5, "fast polish loses points")
-		local bot = Scoring.score(p, submission(p, 0.5, 0, 0.1, { polishSpeed = 400 }))
-		T.falsy(bot.Valid, "inhuman polish speed rejected")
-	end)
-
-	T.test("timeline: steps must be in order and the latest time is reported", function()
-		local p = Patterns.generate("Silver", 21)
-		local sub = submission(p, 0.5, 0, 0.1)
-		local ordered, latest = Scoring.timeline(sub)
-		T.truthy(ordered, "honest run is in order")
-		T.eq(latest, sub.Polish.Samples[#sub.Polish.Samples - 1], "latest = last polish sample")
-		-- polishing claimed before scraping
-		local early = submission(p, 0.5, 0, 0.1)
-		early.Polish = polishCircles(p.PolishTurns + 0.2, 4.5, nil, 0)
-		local ok = Scoring.timeline(early)
-		T.falsy(ok, "polish before scrape is out of order")
-		-- each real client pause is required
-		local gaps = Scoring.MinGaps
-		T.falsy(Scoring.timeline(submission(p, 0.5, 0, 0.1, { start = gaps.FirstCut - 0.1 })), "first cut before the camera intro")
-		local squeezed = submission(p, 0.5, 0, 0.1)
-		local first, second = squeezed.Cuts[1].Samples, squeezed.Cuts[2].Samples
-		local shift = second[3] - (first[#first] + gaps.BetweenCuts - 0.05)
-		for i = 3, #second, 3 do
-			second[i] -= shift
-		end
-		T.falsy(Scoring.timeline(squeezed), "next cut during the crack")
-	end)
-
-	T.test("timeline: the client's fixed pauses and the server's gaps agree", function()
-		local P, G = Scoring.ClientPauses, Scoring.MinGaps
-		T.lt(G.FirstCut, P.Intro, "intro")
-		T.lt(G.BetweenCuts, P.HitStop + P.Crack, "crack")
-		T.lt(G.ToScrape, P.HitStop + P.LastCrack + P.Crack + P.StepGap, "last crack + step gap")
-		T.lt(G.ToPolish, P.ScrapeFinish + P.StepGap, "scrape finish + step gap")
-		T.lt(G.ToSubmit, P.PolishFinish + P.StepGap, "polish finish + step gap")
-		for name, gap in G do
-			T.truthy(gap > 0.3, name .. " is a real pause")
-		end
-	end)
-
-	-- A scripted run as short as the scoring physics allow (reviewer's bot): cuts right on the
-	-- line just under MaxCutSpeed, scrape at the dirt centres in DirtCount/200 s, polish 60% in
-	-- the band and the rest near MaxPolishSpeed. `gaps` = pauses between the steps.
-	local function botRun(p, gaps)
-		local t = gaps.Intro
-		local cuts = {}
-		for i, cut in p.Cuts do
-			if i > 1 then
-				t += gaps.Crack
-			end
-			local samples = traceCut(cut, p.MaxCutSpeed * 0.999, 0, p.Tolerance, nil, t)
-			table.insert(cuts, { Samples = samples })
-			t = samples[#samples]
-		end
-		t += gaps.ToScrape
-		-- only the dirt centres that remove something, spread over the shortest allowed time
-		local probe = Scoring.ScrapeTracker.new(p)
-		local centres = {}
-		for _, d in p.Dirt do
-			if not d.Fragile and #probe:add(d.Center, 0) > 0 then
-				table.insert(centres, d.Center)
-			end
-		end
-		local window = p.DirtCount / 200 + 0.002
-		local points = {}
-		for i, c in centres do
-			table.insert(points, { p = c, t = t + window * (i - 1) / math.max(1, #centres - 1) })
-		end
-		local scrape = recordBrush(p, points)
-		t += window + gaps.ToPolish
-		local samples = { t, 0 }
-		local angle, done = 0, 0
-		local need = p.PolishTurns * math.pi * 2
-		for _, segment in { { 0.6, 8.4 }, { 0.4, 59 } } do
-			local target = done + need * segment[1]
-			while done < target do
-				local d = math.min(segment[2] / 60, 2.2)
-				t += d / segment[2]
-				angle += d
-				done += d
-				table.insert(samples, t)
-				table.insert(samples, math.atan2(math.sin(angle), math.cos(angle)))
-			end
-		end
-		return { Cuts = cuts, Scrape = scrape, Polish = { Samples = samples, Mode = "Circle" }, Input = "Touch" }, t
-	end
-
-	T.test("anti-cheat: a compressed bot run is rejected, the real client's timing passes", function()
-		local P = Scoring.ClientPauses
-		local none = { Intro = 0, Crack = 0, ToScrape = 0, ToPolish = 0 }
-		local real = {
-			Intro = P.Intro,
-			Crack = P.HitStop + P.Crack,
-			ToScrape = P.HitStop + P.LastCrack + P.Crack + P.StepGap,
-			ToPolish = P.ScrapeFinish + P.StepGap,
-		}
-		local atRule = {
-			Intro = Scoring.MinGaps.FirstCut,
-			Crack = Scoring.MinGaps.BetweenCuts,
-			ToScrape = Scoring.MinGaps.ToScrape,
-			ToPolish = Scoring.MinGaps.ToPolish,
-		}
-		for _, ore in OreData.List do
-			for seed = 1, 5 do
-				local p = Patterns.generate(ore.Id, seed * 7919)
-				local label = `{ore.Id} seed {seed}`
-				-- the compressed bot scores perfectly, but its timeline can't come from the client
-				local bot, botLatest = botRun(p, none)
-				local r = Scoring.score(p, bot)
-				T.truthy(r.Valid, label .. ": bot input is physically possible: " .. tostring(r.Reason))
-				T.falsy(Scoring.fitsSession(bot, botLatest + 0.6 + 1e-3), label .. ": compressed bot rejected")
-				T.falsy(Scoring.fitsSession(bot, botLatest + 60), label .. ": waiting before sending doesn't help")
-				-- the same moves at the real client's pace pass, even submitted at the earliest moment
-				local honest, latest = botRun(p, real)
-				T.truthy(Scoring.score(p, honest).Valid, label .. ": padded run valid")
-				local fits, why = Scoring.fitsSession(honest, latest + P.PolishFinish + P.StepGap)
-				T.truthy(fits, label .. ": real client timing accepted: " .. tostring(why))
-				T.falsy(Scoring.fitsSession(honest, latest + 0.3), label .. ": sent before the polish finish")
-				-- a bot padding to the exact rule saves only the frame slack
-				local padded, paddedLatest = botRun(p, atRule)
-				T.truthy(Scoring.fitsSession(padded, paddedLatest + Scoring.MinGaps.ToSubmit + 1e-6), label .. ": padded bot fits")
-				local floor = paddedLatest + Scoring.MinGaps.ToSubmit
-				local client = latest + P.PolishFinish + P.StepGap
-				T.truthy(floor >= client - 0.05 * (#p.Cuts + 3) - 1e-6, `{label}: bot {floor}s vs real client {client}s`)
+	T.test("spray scoring: a steady sweep at par pace is Flawless on every rarity", function()
+		for _, info in Rarity.List do
+			for seed = 1, 3 do
+				local p = Patterns.generate(byRarity[info.Id], seed * 977)
+				local sub, tracker = goodSweep(p, { Seed = seed })
+				local r = Scoring.score(p, sub)
+				T.truthy(r.Valid, `{info.Id}: {r.Reason}`)
+				T.eq(r.Grade, "Flawless", `{info.Id} seed {seed}: score {r.Score}, {r.Time}s`)
+				T.eq(r.Cracks, 0, info.Id .. ": a quick pass never cracks a crystal")
+				-- the client's live tracker and the server's replay agree exactly
+				T.eq(tracker:parts().Score, r.Score, info.Id .. ": client == server")
+				T.truthy(r.Time > 5 and r.Time < 20, `{info.Id}: a clean takes {r.Time}s`)
 			end
 		end
 	end)
 
-	T.test("FLAWLESS guard: a bot with the real client's pauses keeps Pristine, jittery human timing keeps Flawless", function()
+	T.test("spray scoring: slow careful washing is Pristine, scribbling Clean or lower, never a fail", function()
+		for _, info in Rarity.List do
+			local p = Patterns.generate(byRarity[info.Id], 31337)
+			local slow = Scoring.score(p, goodSweep(p, { Speed = 1.2 / info.DirtThickness }))
+			T.truthy(slow.Valid, info.Id)
+			T.eq(slow.Grade, "Pristine", `{info.Id}: slow sweep {slow.Score}`)
+			local scribble = Scoring.score(p, (Players.scribble(p, { Speed = 3, Start = P.Intro, Seed = 3 })))
+			T.truthy(scribble.Valid, info.Id .. ": " .. tostring(scribble.Reason))
+			T.truthy(scribble.Score < slow.Score, info.Id .. ": scribbling scores lower")
+			T.truthy(scribble.Grade == "Clean" or scribble.Grade == "Rough", `{info.Id}: scribble {scribble.Grade}`)
+			T.truthy(scribble.Aim < 0.7, info.Id .. ": scribbling wastes water")
+		end
+		-- several minutes of slow washing are still graded
+		local p = Patterns.generate("Coal", 5)
+		local crawl = Scoring.score(p, goodSweep(p, { Speed = 0.2 }))
+		T.truthy(crawl.Valid, tostring(crawl.Reason))
+		T.truthy(crawl.Time > 40, "it really took long")
+		T.truthy(crawl.Grade == "Clean" or crawl.Grade == "Rough", crawl.Grade)
+	end)
+
+	T.test("spray scoring: spraying past the clump wastes water and costs grade", function()
+		local p = Patterns.generate("Gold", 99)
+		local tidy = Scoring.score(p, goodSweep(p))
+		local wide = Scoring.score(p, goodSweep(p, { Margin = 1.2 }))
+		T.truthy(wide.Valid)
+		T.truthy(wide.Aim < tidy.Aim - 0.2, `aim {wide.Aim} vs {tidy.Aim}`)
+		T.truthy(wide.Score < tidy.Score, "and the grade drops")
+	end)
+
+	T.test("spray scoring: a crystal cracks only when sprayed point-blank too long", function()
+		local p
+		for seed = 1, 50 do
+			p = Patterns.generate(byRarity.Mythic, seed)
+			if #p.Crystals >= 2 then
+				break
+			end
+		end
+		local crystal = p.Crystals[1].Center
+		-- a quick pass right over it: fine
+		local tracker = Scoring.SprayTracker.new(p, "Mouse")
+		local t = 1
+		local u = crystal.X - 0.4
+		while u < crystal.X + 0.4 do
+			tracker:add(u, crystal.Y, t)
+			u += 0.1
+			t += 0.05
+		end
+		T.eq(tracker.cracks, 0, "a pass at 2 face units per second")
+		-- holding still on it: cracks once, the crystal's crack is reported once
+		tracker:lift()
+		local cracked = {}
+		for _ = 1, 20 do
+			t += 0.05
+			local _, now = tracker:add(crystal.X, crystal.Y, t)
+			for _, index in now do
+				table.insert(cracked, index)
+			end
+		end
+		T.eq(tracker.cracks, 1, "a second point-blank cracks it")
+		T.eq(#cracked, 1)
+		T.eq(cracked[1], 1)
+		-- short bursts with cooling in between never add up
+		local again = Scoring.SprayTracker.new(p, "Mouse")
+		local c2 = p.Crystals[2].Center
+		t = 1
+		for _ = 1, 10 do
+			again:add(c2.X, c2.Y, t)
+			again:add(c2.X, c2.Y, t + 0.15)
+			again:lift()
+			t += 1
+		end
+		T.eq(again.cracks, 0, "taps with pauses cool off")
+		-- a cracked crystal costs grade
+		local clean = Scoring.score(p, goodSweep(p, { Start = 2 }))
+		local sub = goodSweep(p, { Start = 2 })
+		local hold = {}
+		local t0 = 1
+		for i = 0, 10 do
+			table.insert(hold, crystal.X)
+			table.insert(hold, crystal.Y)
+			table.insert(hold, t0 + i * 0.05 + 0.001 * (i % 3))
+		end
+		table.insert(sub.Strokes, 1, hold)
+		local hurt = Scoring.score(p, sub)
+		T.truthy(hurt.Valid, tostring(hurt.Reason))
+		T.eq(hurt.Cracks, 1)
+		T.truthy(hurt.Score <= clean.Score - Scoring.Weights.Crack + 0.05, `{hurt.Score} vs {clean.Score}`)
+	end)
+
+	T.test("spray scoring: a touch player's wider spray helps aim, not the score", function()
+		local p = Patterns.generate("Gold", 2024)
+		local mouse = Scoring.score(p, goodSweep(p))
+		local touch = Scoring.score(p, goodSweep(p, { Input = "Touch" }))
+		T.truthy(touch.Valid)
+		T.eq(touch.Grade, "Flawless")
+		T.truthy(math.abs(touch.Score - mouse.Score) < 0.06, `{touch.Score} vs {mouse.Score}`)
+		T.truthy(Scoring.par(p, "Touch") < Scoring.par(p, "Mouse"), "the wider spray is expected to be quicker")
+	end)
+
+	T.test("spray anti-cheat: broken or impossible input is rejected", function()
+		local p = Patterns.generate("Gold", 7)
+		local good = goodSweep(p)
+		T.truthy(Scoring.score(p, good).Valid)
+		local function with(edit)
+			local copy = { Input = good.Input, Strokes = {} }
+			for i, stroke in good.Strokes do
+				copy.Strokes[i] = table.clone(stroke)
+			end
+			edit(copy)
+			return Scoring.score(p, copy)
+		end
+		T.falsy(Scoring.score(p, nil).Valid, "nil")
+		T.falsy(Scoring.score(p, { Strokes = "x" }).Valid, "no strokes")
+		T.falsy(
+			with(function(s)
+				table.insert(s.Strokes[1], 0.5)
+			end).Valid,
+			"a stroke that isn't u, v, t triples"
+		)
+		T.falsy(
+			with(function(s)
+				s.Strokes[1][1] = 0 / 0
+			end).Valid,
+			"NaN"
+		)
+		T.falsy(
+			with(function(s)
+				s.Strokes[1][1] = math.huge
+			end).Valid,
+			"inf"
+		)
+		T.falsy(
+			with(function(s)
+				s.Strokes[1][2] = 9
+			end).Valid,
+			"far off the clump"
+		)
+		T.falsy(
+			with(function(s)
+				local last = s.Strokes[#s.Strokes]
+				last[#last] = 0.1
+			end).Valid,
+			"time going backwards"
+		)
+		T.falsy(
+			with(function(s)
+				s.Strokes[1][3] = -1
+			end).Valid,
+			"negative time"
+		)
+		T.falsy(
+			with(function(s)
+				s.Strokes[#s.Strokes + 1] = { 0, 0, Scoring.MaxSampleTime + 1 }
+			end).Valid,
+			"after any session could end"
+		)
+		T.falsy(
+			with(function(s)
+				for _ = 1, Scoring.MaxStrokes + 1 do
+					table.insert(s.Strokes, {})
+				end
+			end).Valid,
+			"too many strokes"
+		)
+		T.falsy(
+			with(function(s)
+				local big = {}
+				local t = 200
+				for _ = 1, Scoring.MaxSamples + 1 do
+					table.insert(big, 3)
+					table.insert(big, 3)
+					table.insert(big, t)
+				end
+				table.insert(s.Strokes, big)
+			end).Valid,
+			"too many samples"
+		)
+		local half = with(function(s)
+			for i = #s.Strokes, math.floor(#s.Strokes / 2), -1 do
+				table.remove(s.Strokes, i)
+			end
+		end)
+		T.falsy(half.Valid, "dirt left")
+		T.eq(half.Reason, "dirt left")
+	end)
+
+	T.test("spray anti-cheat: a frame hitch or a jump sprays only MaxStep, faked speed can't wash", function()
+		local p = Patterns.generate("Gold", 11)
+		-- one sample, then the next 5 s later at the same spot: only MaxStep of spray
+		local tracker = Scoring.SprayTracker.new(p, "Mouse")
+		local cell = p.Cells[math.floor(#p.Cells / 2)]
+		tracker:add(cell.Center.X, cell.Center.Y, 1)
+		tracker:add(cell.Center.X, cell.Center.Y, 6)
+		T.truthy(math.abs(tracker.sprayTime - Scoring.MaxStep) < 1e-9, "a hitch sprays MaxStep")
+		-- squeezing a whole sweep into a tenth of the time leaves the dirt on
+		local sub = goodSweep(p)
+		for _, stroke in sub.Strokes do
+			for i = 3, #stroke, 3 do
+				stroke[i] = P.Intro + (stroke[i] - P.Intro) * 0.1
+			end
+		end
+		local fast = Scoring.score(p, sub)
+		T.falsy(fast.Valid, "compressed time washes less")
+		T.eq(fast.Reason, "dirt left")
+	end)
+
+	T.test("spray timeline: the client's pauses and the server's gaps agree", function()
+		for _, info in Rarity.List do
+			local p = Patterns.generate(byRarity[info.Id], 2718)
+			local sub = goodSweep(p)
+			local last = latest(sub)
+			local fits, why = Scoring.fitsSession(sub, last + P.Finish)
+			T.truthy(fits, `{info.Id}: {why}`)
+			T.falsy(Scoring.fitsSession(sub, last + P.Finish - 0.1), info.Id .. ": sent before the finish pause")
+			-- spraying before the camera intro can't come from the client
+			local early = goodSweep(p, { Start = 0.2 })
+			T.falsy(Scoring.fitsSession(early, latest(early) + 10), info.Id .. ": sprayed during the intro")
+		end
+		T.falsy(Scoring.fitsSession({ Strokes = {} }, 100), "no spray at all")
+		T.truthy(
+			Scoring.MinGaps.FirstSpray < P.Intro and Scoring.MinGaps.ToSubmit < P.Finish,
+			"frame slack, never stricter than the client"
+		)
+	end)
+
+	T.test("FLAWLESS guard: computed timestamps keep Pristine, real frame times keep Flawless", function()
 		local Guard = Loader.requirePath("ServerScriptService.Server.CleaningGuard")
-		local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 		local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
-		local P = Scoring.ClientPauses
-		local real = {
-			Intro = P.Intro,
-			Crack = P.HitStop + P.Crack,
-			ToScrape = P.HitStop + P.LastCrack + P.Crack + P.StepGap,
-			ToPolish = P.ScrapeFinish + P.StepGap,
-		}
 		local logged = {}
 		Guard._test.reset()
 		Guard._test.setLog(function(line)
@@ -457,35 +338,17 @@ return function(T, Loader)
 		local ok, err = pcall(function()
 			for seed = 1, 4 do
 				local p = Patterns.generate("Gold", seed * 104729)
-				local bot = botRun(p, real)
+				-- a script: the same moves with t += SampleStep
+				local bot = goodSweep(p, { Even = true, Seed = seed })
 				local result = Scoring.score(p, bot)
 				T.truthy(result.Valid, "the bot run is valid")
 				T.eq(result.Grade, "Flawless", "it scores Flawless")
 				local verdict = Guard.check(bot)
 				T.truthy(verdict.Synthetic, "computed timestamps: synthetic")
 				T.eq(Guard.gradeFor(result.Grade, verdict), Guard.Config.CapGrade, "keeps Pristine")
-				T.truthy(table.find(verdict.Soft, "Speed") ~= nil, "and its even speed is noted")
 				Guard.note("bot", verdict, result.Grade)
-				-- the same moves on real frames: every timestamp a little off (os.clock on a frame)
-				local rng = Rng.new(seed)
-				local human = table.clone(bot)
-				local function jitter(samples: { number }, stride: number, offset: number): { number }
-					local out = table.clone(samples)
-					local last = -math.huge
-					for i = offset, #out, stride do
-						local t = out[i] + rng:range(-0.003, 0.003)
-						t = math.max(t, last + 0.0005)
-						out[i] = t
-						last = t
-					end
-					return out
-				end
-				human.Cuts = {}
-				for i, cut in bot.Cuts do
-					human.Cuts[i] = { Samples = jitter(cut.Samples, 3, 3) }
-				end
-				human.Scrape = { Samples = jitter(bot.Scrape.Samples, 3, 3) }
-				human.Polish = { Samples = jitter(bot.Polish.Samples, 2, 1), Mode = "Circle" }
+				-- a real player: frame times
+				local human = goodSweep(p, { Seed = seed })
 				local hv = Guard.check(human)
 				T.falsy(hv.Synthetic, "real frame times are never synthetic")
 				T.eq(#hv.Soft, 0, "nor inhumanly even")
@@ -495,6 +358,35 @@ return function(T, Loader)
 				pad.Input = "Gamepad"
 				T.eq(#Guard.check(pad).Soft, 0)
 			end
+			-- many short strokes with computed timestamps: no long run, but most intervals equal
+			local short = { Strokes = {}, Input = "Mouse" }
+			local t = 1
+			for s = 1, 40 do
+				local stroke = {}
+				for i = 0, 5 do
+					table.insert(stroke, -0.5 + i * 0.1)
+					table.insert(stroke, -0.5 + s * 0.02)
+					table.insert(stroke, t)
+					t += 0.05
+				end
+				table.insert(short.Strokes, stroke)
+				t += 0.05
+			end
+			T.truthy(Guard.check(short).Synthetic, "short strokes don't hide computed timestamps")
+			-- a nozzle moving at an exactly even speed (positions computed from frame times): noted
+			local even = { Strokes = { {} }, Input = "Mouse" }
+			local tt = 1
+			for i = 0, 60 do
+				table.insert(even.Strokes[1], -0.9 + 1.5 * (tt - 1))
+				table.insert(even.Strokes[1], 0)
+				table.insert(even.Strokes[1], tt)
+				tt += 0.05 + (i * 7 % 5) * 0.003
+			end
+			local soft = Guard.check(even)
+			T.falsy(soft.Synthetic, "frame-like intervals")
+			T.truthy(table.find(soft.Soft, "Speed") ~= nil, "the even speed is noted")
+			even.Input = "Gamepad"
+			T.eq(#Guard.check(even).Soft, 0, "never for a gamepad")
 			-- grades below Flawless never change; soft signals only log while SoftEnforce is off
 			T.eq(Guard.gradeFor("Pristine", { Synthetic = true, Soft = {} }), "Pristine")
 			T.eq(Guard.gradeFor("Flawless", { Synthetic = false, Soft = { "Speed" } }), "Flawless", "soft: logged only")
@@ -504,7 +396,8 @@ return function(T, Loader)
 			T.truthy(ItemData.GradeById[Guard.Config.CapGrade], "the cap is a real grade")
 			-- junk never errors
 			T.falsy(Guard.check(nil).Synthetic)
-			T.falsy(Guard.check({ Cuts = { { Samples = { 0 / 0, 1, "x" } } } }).Synthetic)
+			T.falsy(Guard.check({ Strokes = { { 0 / 0, 1, "x" } } }).Synthetic)
+			T.falsy(Guard.check({ Strokes = "x" }).Synthetic)
 		end)
 		Guard._test.reset()
 		if not ok then
@@ -512,14 +405,32 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("anti-cheat: careful honest runs with the real pauses always fit", function()
-		local P = Scoring.ClientPauses
-		for _, ore in OreData.List do
-			local p = Patterns.generate(ore.Id, 2718)
-			local sub = submission(p, 0.5, 0, 0.1, { start = P.Intro })
-			local _, latest = Scoring.timeline(sub)
-			local fits, why = Scoring.fitsSession(sub, latest + P.PolishFinish + P.StepGap)
-			T.truthy(fits, `{ore.Id}: {why}`)
+	T.test("spray look: crystals glow and stick out of the dirt, one dirt block per cell", function()
+		local OreShellBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreShellBuilder")
+		local CF = Loader.CFrame
+		for seed = 1, 3 do
+			local p = Patterns.generate(byRarity.Mythic, seed * 13)
+			local work = CF.new(0, 5, 0)
+			local shell = OreShellBuilder.build(p, work)
+			local count = 0
+			for _ in shell.Dirt do
+				count += 1
+			end
+			T.eq(count, #p.Cells, "every cell has a block")
+			for _, block in shell.Dirt do
+				local back = work:PointToObjectSpace(block.CFrame.Position).Z - block.Size.Z / 2
+				T.truthy(math.abs(back - (OreShellBuilder.CoreFront - 0.01)) < 1e-3, "dirt sits on the ore face")
+				T.truthy(block:GetAttribute("FullSize") == block.Size, "the look knows its full size")
+			end
+			for index, crystal in p.Crystals do
+				local shard = shell.Fragile[index]
+				T.truthy(shard ~= nil, "every crystal is built")
+				T.eq(shard.Material, roblox.Enum.Material.Neon, "it glows")
+				local at = work:PointToObjectSpace(shard.CFrame.Position)
+				T.truthy(at.Z > OreShellBuilder.CoreFront + OreShellBuilder.DirtDepth.Max * 0.5, "it sticks out of the dirt")
+				local uv = Vector2.new(at.X, at.Y) / OreShellBuilder.Scale
+				T.truthy((uv - crystal.Center).Magnitude < 0.25, "drawn where it cracks")
+			end
 		end
 	end)
 end

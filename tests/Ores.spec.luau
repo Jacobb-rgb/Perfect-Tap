@@ -247,18 +247,16 @@ return function(T, Loader)
 				local pattern = Patterns.generate(ore.Id, seed * 131)
 				local shell = OreShellBuilder.build(pattern, CF.new(0, 5, 0))
 				local label = `{ore.Id} seed {seed}`
-				T.truthy(#pattern.Cuts >= 1, label .. " has cuts")
-				T.truthy(#shell.Core > 0, label .. " has a core")
-				for _, cut in pattern.Cuts do
-					T.truthy(#shell.Caps[cut.Index] >= 1, label .. " cut " .. cut.Index .. " removes crust")
+				T.truthy(#pattern.Cells >= 100, label .. " has dirt to wash")
+				T.truthy(#shell.Core > 0, label .. " has an ore face")
+				for _, part in shell.Core do
+					T.eq(part.Color, ore.Color, label .. " the face under the dirt is the ore's colour")
+				end
+				for _, cell in pattern.Cells do
+					T.truthy(shell.Dirt[cell.Index] ~= nil, label .. " every cell has its dirt block")
 				end
 				for _, rim in shell.CoreRim do
 					T.eq(rim.Color, ItemBuilder.glowColor(ore.Glow), label .. " rim glows in the ore's color")
-				end
-				for _, d in shell.Model:GetDescendants() do
-					if d:IsA("BasePart") and d.Name == "Crust" then
-						T.truthy(d.Color ~= ore.Crust, label .. " crust is the Dirty Ore crust")
-					end
 				end
 			end
 		end

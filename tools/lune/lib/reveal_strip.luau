@@ -3,7 +3,7 @@
 	in tools/preview/ore_shots.json): a Common ore (Coal) on the top row and a
 	Mythic one (Heartstone Shard) below, four moments each, built with the same
 	parts CleaningController plays (OreShellBuilder, RevealFx):
-	  1 CLEANED  the dirt is gone, the ore waits in the rock
+	  1 CLEANED  the dirt is washed off, the ore waits in the clump
 	  2 REVEAL   the rarity burst (Mythic: 12 rays, a strong light)
 	  3 SHINE    the ore rises and spins (Mythic in slow motion), the shine bar crosses it
 	  4 STAMP    the grade stamp lands on the ore
@@ -79,11 +79,6 @@ function Strip.build(Loader: any, parent: any)
 			local workCf = CF.lookAt(pos, pos + V3.new(0, 0, -1))
 			local pattern = Patterns.generate(row.Ore, 4242)
 			local shell = OreShellBuilder.build(pattern, workCf, root)
-			for _, caps in shell.Caps do
-				for _, cap in caps do
-					cap:Destroy()
-				end
-			end
 			for _, patch in shell.Dirt do
 				patch:Destroy()
 			end

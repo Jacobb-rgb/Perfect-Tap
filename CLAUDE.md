@@ -7,8 +7,8 @@ Read this first, then **docs/HANDOFF.md** (exact status, branches, next steps) a
 ## What this is
 TERRA FORGE is an original Roblox mining/crafting game in Luau, built with Rojo. The goal is a
 **published, public Roblox game**. Loop: mine ore nodes → physical ore chunks drop → carry/throw
-them → clean them in the signature **Cleaning Station minigame** (chisel along guide lines → scrape
-dirt → polish → reveal, grades Rough/Clean/Pristine/Flawless) → crush/smelt/forge on machines
+them → clean them in the signature **Cleaning Station minigame** (spray-wash the dirt off → reveal,
+grades Rough/Clean/Pristine/Flawless) → crush/smelt/forge on machines
 placed on your own plot (conveyors, build mode) → sell → upgrade.
 Inspirations (feel only, nothing copied): The Forge (stylized low-poly, forge warmth), Hydroneer
 (physical chunks, placeable machines, conveyors), Fishing Chef (step-by-step tactile minigame).
@@ -61,7 +61,7 @@ bash tools/build.sh           # rebuild + bake build/TerraForge.rbxl (commit it:
 Preview renders (pictures for the owner, no Studio needed):
 ```bash
 cd tools/preview && npm install && npx playwright install chromium && cd ../..   # once
-lune run tools/lune/export_scene.luau world                  # or: cleaning Gold chisel [phone] / gameplay / ...
+lune run tools/lune/export_scene.luau world                  # or: cleaning Gold spray|reveal [phone] / gameplay / ...
 node tools/preview/render.mjs world town_overview great_forge  # shots in tools/preview/shots.json → build/preview/shots/*.jpg
 SHOTS_EXTRA=tools/preview/lobby_shots.json node tools/preview/render.mjs world lobby_hero
 ```
