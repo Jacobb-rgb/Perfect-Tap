@@ -35,7 +35,8 @@
 
 	Everything stays within local y -11.5 .. +50 (the walls' and the rift's
 	foot, the roof's top). About 1900 parts in the game build (MineKit.PartBudget
-	2500, the phase A target 2400), 21 PointLights, 3 emitters, 6 ambience
+	2500, the phase A target 2400), 11 PointLights (phones: the neon of the
+	bolts, arcs, crystals, rain and lamps glows on its own), 3 emitters, 6 ambience
 	spots. opts.Cutaway (preview pictures): no front wall and no ceiling over
 	the front half (z > 0).
 ]]
@@ -602,10 +603,10 @@ local function buildRift(parent: Instance, rng: Rng.Rng): { BasePart }
 	for _, b in BRIDGES do
 		catwalk(m, b.X, b.W)
 	end
-	-- its glow lights the walls and the catwalks from below
+	-- its glow lights the walls and the catwalks from below (two lights for the whole rift)
 	local lights: { BasePart } = {}
-	for _, x in { -36, 0, 36 } do
-		table.insert(lights, lightAt(m, Vector3.new(x, -3, mid), ARC_BLUE, 26, 1.8))
+	for _, x in { -30, 30 } do
+		table.insert(lights, lightAt(m, Vector3.new(x, -3, mid), ARC_BLUE, 34, 1.9))
 	end
 	return lights
 end
@@ -709,8 +710,9 @@ local function buildLanding(parent: Instance, rng: Rng.Rng)
 		blk(m, CFrame.new(base + Vector3.new(0, 5.4, 0)), Vector3.new(1.2, 0.4, 1.2), STEEL, METAL, DECOR)
 		local lamp = diamond(m, base + Vector3.new(0, 6.2, 0), 1.0, SPARK, 0.4)
 		lamp.Name = "Lamp"
-		pointLight(lamp, rgb(255, 240, 200), 20, 1.3)
 	end
+	-- one light over the arrival ring for both lamps (their neon glows on its own)
+	lightAt(m, Vector3.new(0, DECK_Y + 7, 46), rgb(255, 240, 200), 26, 1.4)
 	-- the arrival ring where players step out
 	local center = Vector3.new(0, DECK_Y + 0.02, 48.5)
 	for k = 0, 7 do
@@ -812,9 +814,9 @@ local function buildCrown(parent: Instance, plaza: Plaza, rng: Rng.Rng): Model
 	-- the eye: a cluster of storm crystals hanging from the ceiling in the ring's middle
 	MineKit.crystals(m, O * CFrame.new(v3(PLAZA, CEIL - 0.2)) * CFrame.Angles(math.pi, 0, 0), 7, 7, "Glow", { STORM, SPARK }, "StormEye")
 	-- the underside glow lights the plaza, the crown's bolts and the field around it
-	for k = 0, 2 do
-		local a = k / 3 * math.pi * 2 + 0.6
-		lightAt(m, center + Vector3.new(math.cos(a) * 12, -3, math.sin(a) * 12), rgb(255, 236, 170), 44, 1.25)
+	for k = 0, 1 do
+		local a = k * math.pi + 0.6
+		lightAt(m, center + Vector3.new(math.cos(a) * 11, -3, math.sin(a) * 11), rgb(255, 236, 170), 50, 1.45)
 	end
 	return m
 end
@@ -834,9 +836,8 @@ local function buildPylonPairs(parent: Instance, rng: Rng.Rng): { Vector3 }
 	for _, p in pairs do
 		local a = pylon(m, p[1], 6.5, 4)
 		local b = pylon(m, p[2], 6.5, 4)
-		local mid = arc(m, a, b, rng)
-		table.insert(mids, mid)
-		lightAt(m, mid, rgb(255, 238, 170), 20, 1.3)
+		-- (no light: the arc's neon glows on its own)
+		table.insert(mids, arc(m, a, b, rng))
 	end
 	return mids
 end
@@ -930,17 +931,10 @@ end
 
 local function buildRainClouds(parent: Instance, rng: Rng.Rng)
 	local m = model("RainClouds", parent)
-	local spots = {
-		{ P = Vector3.new(-42, 35, 28), Lit = true },
-		{ P = Vector3.new(44, 36, -34), Lit = true },
-		{ P = Vector3.new(-46, 37, -36), Lit = false },
-	}
-	for _, s in spots do
-		puff(m, s.P, 0.72, rng:range(0, math.pi), rng)
-		rain(m, s.P, Vector2.new(7, 5), 9, 7, 16, rng)
-		if s.Lit then
-			lightAt(m, s.P + Vector3.new(0, -4, 0), RAIN, 30, 1.1)
-		end
+	-- (no lights: the rain's neon and the clouds' glowing bellies carry them)
+	for _, p in { Vector3.new(-42, 35, 28), Vector3.new(44, 36, -34), Vector3.new(-46, 37, -36) } do
+		puff(m, p, 0.72, rng:range(0, math.pi), rng)
+		rain(m, p, Vector2.new(7, 5), 9, 7, 16, rng)
 	end
 end
 
@@ -955,7 +949,7 @@ local function buildCrystals(parent: Instance): { BasePart }
 		{ -22, 0, -53, A(0.2, 0, 0.2), 5, 5.5, "Storm", false },
 		{ 23, 0, -53, A(0.2, 0, -0.2), 5, 5, "Storm", false },
 		-- out of the side walls
-		{ -60, 3, -24, A(0, 0, -0.6), 5, 6, "Storm", true },
+		{ -60, 3, -24, A(0, 0, -0.6), 5, 6, "Storm", false },
 		{ 60, 3, 8, A(0, 0, 0.6), 5, 6, "Storm", false },
 		{ -60, 2, 20, A(0, 0, -0.5), 4, 4.5, "Storm", false },
 		{ 60, 2, -40, A(0, 0, 0.5), 4, 5, "Storm", false },
@@ -1004,8 +998,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	local litClusters = buildCrystals(m)
 	-- a soft cool wash over each field
 	local wash = model("Wash", m)
-	lightAt(wash, Vector3.new(0, 26, 28), rgb(190, 200, 255), 60, 1.3)
-	lightAt(wash, Vector3.new(0, 24, -38), rgb(190, 200, 255), 60, 1.2)
+	lightAt(wash, Vector3.new(0, 26, 28), rgb(190, 200, 255), 60, 1.5)
+	lightAt(wash, Vector3.new(0, 24, -38), rgb(190, 200, 255), 60, 1.4)
 
 	-- gameplay pieces: the elevator (the only way in), the gate, the ore lift
 	MineKit.elevator(m, O * CFrame.new(-28, DECK_Y, 48.5) * CFrame.Angles(0, -math.pi / 2, 0), Floor.Index)

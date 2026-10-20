@@ -151,6 +151,7 @@ return function(T, Loader)
 	-- Floor 5 (gate 8) between the palace and the core: its own budgets and height band.
 	local STORM_PARTS = 2400 -- the phase A target, under MineKit.PartBudget
 	local STORM_Y = { -25, 60 } -- local height band: clear of floor 4 above and the core below
+	local STORM_LIGHTS = 12 -- the integrator's phone trim (2026-10-20); the other floors keep MineKit.LightBudget
 
 	-- the world-space box of a part (min, max)
 	local function bounds(part): (any, any)
@@ -202,6 +203,8 @@ return function(T, Loader)
 			T.le(parts, STORM_PARTS, label .. " parts")
 			T.le(parts, MineKit.PartBudget, label .. " parts (MineKit.PartBudget)")
 			T.le(count(model, "PointLight"), MineKit.LightBudget, label .. " lights")
+			-- (phones: about a dozen lights in the Rift, its neon carries the rest)
+			T.le(count(model, "PointLight"), STORM_LIGHTS, label .. " lights (phones)")
 			for _, d in model:GetDescendants() do
 				if d:IsA("BasePart") then
 					if not d.Anchored then
