@@ -13,7 +13,7 @@ for (let i = 0; i + 1 < rest.length; i += 2) {
   const data = fs.readFileSync(path.resolve(root, rest[i])).toString("base64");
   cells.push({ src: `data:image/jpeg;base64,${data}`, caption: rest[i + 1] });
 }
-const cols = cells.length === 4 ? 2 : cells.length;
+const cols = Number(process.env.SHEET_COLS) || (cells.length === 4 ? 2 : cells.length); // SHEET_COLS=2: a grid
 const W = 1920, cellW = (W - 30 * (cols + 1)) / cols, cellH = cellW * 9 / 16;
 const rows = Math.ceil(cells.length / cols);
 const H = rows * (cellH + 120) + 30;

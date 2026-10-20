@@ -4,6 +4,8 @@
 	(KitMachines.Catalog) at level 0 on a metal floor, one row per group
 	(Cleaning, Furnaces, Special, Transport, Power) with a name sign in front
 	of each machine. Belts are shown as short runs, the poles with cables.
+	The Platform (a buildable deck, not in the roster catalog) joins the
+	Transport row, so the showroom has every machine a player can build.
 ]]
 
 local roblox = require("@lune/roblox") :: any
@@ -63,6 +65,7 @@ function Showroom.layout(KitMachines: any, CELL: number): { [string]: { any } }
 		end
 		table.insert(rows[entry.Group], { entry = entry, w = w, d = d })
 	end
+	table.insert(rows.Transport, { entry = { Id = "Platform", Name = "Platform", Group = "Transport", Upgrades = false } })
 	return rows
 end
 
@@ -141,7 +144,9 @@ function Showroom.build(Loader: any, parent: any, level: number?)
 				end
 				counts[id] = 0
 			else
-				local model = KitMachines.buildAny(id, if it.entry.Upgrades then level or 0 else 0)
+				local model = if id == "Platform"
+					then KitMachines.platform()
+					else KitMachines.buildAny(id, if it.entry.Upgrades then level or 0 else 0)
 				local turn = if id == "BeltLift" or id == "Slide" then CF.Angles(0, math.pi / 2, 0) else CF.new()
 				model:PivotTo(CF.new(cx, 0, z + 2) * turn)
 				model.Parent = root
