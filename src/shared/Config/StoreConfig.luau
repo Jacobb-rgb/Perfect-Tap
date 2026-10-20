@@ -12,11 +12,14 @@
 	  Boost    title, picture, a big effect line ("x2") and a gold note
 	  Item     title, picture on the left, the description on the right
 	  Capsule  title, picture, the count; tapping shows the odds first
+	  Star     a STAR blaster (StarBlasterData, its pass): the live gun, its
+	           power, "Opens at rebirth N" until the player's rebirths reach it
 	A card with several Keys shows the first that fits the player (the
 	blaster: the price band of the player's next level).
 ]]
 
 local MonetizationConfig = require(script.Parent.MonetizationConfig)
+local StarBlasterData = require(script.Parent.StarBlasterData)
 
 export type CardSpec = {
 	Id: string, -- the card's name in the view
@@ -32,6 +35,9 @@ export type CardSpec = {
 	Lines: { string }?, -- Bundle: the "Includes:" lines
 	Big: string?, -- Boost: the big effect line
 	Note: string?, -- Boost / Capsule: the gold line under it
+	Short: string?, -- Item: a shorter text than the product's description (the odds panel shows the rest)
+	Star: string?, -- Star: the StarBlasterData id
+	GlowColor: Color3?, -- instead of a CardTheme glow: the border in this colour
 }
 
 local StoreConfig = {}
@@ -110,8 +116,45 @@ StoreConfig.Cards = {
 	card({ Id = "Phoenix", Keys = { "HoverboardPhoenix" }, Look = "Item", Glow = "Purple", Icon = "hoverboard", Col = 36, Row = 1, Cols = 5, Rows = 1, Title = "Royal Phoenix" }),
 	card({ Id = "Train", Keys = { "TrainExpress" }, Look = "Item", Glow = "Green", Icon = "train", Col = 41, Row = 0, Cols = 5, Rows = 1 }),
 	card({ Id = "Heartfire", Keys = { "EnchantHeartfire" }, Look = "Item", Glow = "Red", Icon = "enchant_Heartfire", Col = 41, Row = 1, Cols = 5, Rows = 1 }),
-	card({ Id = "Starbreaker", Keys = { "EnchantStarbreaker" }, Look = "Item", Glow = "Rainbow", Icon = "enchant_Starbreaker", Col = 46, Row = 0, Cols = 4, Rows = 2 }),
+	card({
+		Id = "Starbreaker",
+		Keys = { "EnchantStarbreaker" },
+		Look = "Item",
+		Glow = "Rainbow",
+		Icon = "enchant_Starbreaker",
+		Col = 46,
+		Row = 0,
+		Cols = 4,
+		Rows = 2,
+		Short = "The Mythic enchant, yours forever: +75% ore luck, +50% artifact chance. Tap for the new odds.",
+	}),
 } :: { CardSpec }
+
+-- the five STAR blasters (the blaster chat's passes): two rows at the end of the row
+do
+	local col = StoreConfig.Cards[#StoreConfig.Cards].Col + StoreConfig.Cards[#StoreConfig.Cards].Cols
+	for i, star in StarBlasterData.List do
+		local key = "Star" .. star.Id
+		if MonetizationConfig.Products[key] then
+			table.insert(StoreConfig.Cards, {
+				Id = key,
+				Keys = { key },
+				Look = "Star",
+				Glow = "Purple",
+				GlowColor = star.Glow,
+				Icon = "star_" .. star.Id,
+				Col = col + ((i - 1) // 2) * 4,
+				Row = (i - 1) % 2,
+				Cols = 4,
+				Rows = 1,
+				Title = star.Name,
+				Big = `x{star.Mult} power`,
+				Note = `Opens at rebirth {star.Unlock}`,
+				Star = star.Id,
+			})
+		end
+	end
+end
 
 StoreConfig.ById = {} :: { [string]: CardSpec }
 for _, spec in StoreConfig.Cards do

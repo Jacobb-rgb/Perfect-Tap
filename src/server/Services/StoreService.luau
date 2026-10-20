@@ -19,6 +19,8 @@
 	                  (VaultService.paidStatus when present, else the same
 	                  rule here)
 	  ServerBoost     "Full" when it would pass ServerBoostService.MaxSeconds
+	  RebirthWeapon   a STAR blaster's pass: "Full" until the player's rebirths
+	                  reach it (StarBlasterData.unlocked), "Owned" once owned
 	  Perks, Hoverboard (passes), CoinPack: promptStatus with owns()
 	Paid random products read the player's policy first (it may yield).
 ]]
@@ -29,6 +31,7 @@ local BlasterData = require(Shared.Config.BlasterData)
 local EnchantConfig = require(Shared.Config.EnchantConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local StoreConfig = require(Shared.Config.StoreConfig)
+local StarBlasterData = require(Shared.Config.StarBlasterData)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
@@ -114,6 +117,9 @@ function StoreService.buy(player: Player, key: string)
 	local full = false
 	if grant == "BlasterLevel" then
 		full = StoreService.blasterStatus(data, product) ~= "Prompt"
+	elseif grant == "RebirthWeapon" then
+		-- a STAR blaster is sold once the player's rebirths reach it
+		full = not StarBlasterData.unlocked(data, product.WeaponId)
 	elseif grant == "ServerBoost" then
 		local ServerBoostService = require(script.Parent.ServerBoostService) :: any
 		full = ServerBoostService.full(product.Seconds or 0)

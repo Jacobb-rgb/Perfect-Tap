@@ -113,8 +113,8 @@ end
 local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: number): CardRefs
 	local product = productOf(spec)
 	local pos, size = StoreView.cardRect(spec)
-	local glow = CardTheme.Glows[spec.Glow] or CardTheme.Glows.Orange
-	local button = Card.card(parent, spec.Glow, {
+	local glow = if spec.GlowColor then Card.glowFrom(spec.GlowColor) else (CardTheme.Glows[spec.Glow] or CardTheme.Glows.Orange)
+	local button = Card.card(parent, glow, {
 		Name = spec.Id,
 		Position = UDim2.fromOffset(pos.X, pos.Y),
 		Size = UDim2.fromOffset(size.X, size.Y),
@@ -135,7 +135,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: num
 	}
 	local title = spec.Title or product.Name
 	if spec.Look == "Bundle" then
-		refs.Title = Card.title(button, title, 34, spec.Glow, {
+		refs.Title = Card.title(button, title, 34, glow, {
 			Position = UDim2.fromOffset(0, 14),
 			Size = UDim2.new(1, 0, 0, 42),
 		})
@@ -175,7 +175,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: num
 			Position = UDim2.fromScale(0.5, 0.56),
 		})
 	elseif spec.Look == "Boost" then
-		refs.Title = Card.title(button, title, 32, spec.Glow, {
+		refs.Title = Card.title(button, title, 32, glow, {
 			Position = UDim2.fromOffset(0, 16),
 			Size = UDim2.new(1, 0, 0, 40),
 		})
@@ -200,7 +200,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: num
 			TextColor3 = glow.Top,
 		})
 	elseif spec.Look == "Item" then
-		refs.Title = Card.title(button, title, 28, spec.Glow, {
+		refs.Title = Card.title(button, title, 28, glow, {
 			Position = UDim2.fromOffset(0, 10),
 			Size = UDim2.new(1, 0, 0, 36),
 		})
@@ -210,7 +210,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: num
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 16, 0.56, 0),
 		})
-		refs.Description = Card.text(button, product.Description, 15, {
+		refs.Description = Card.text(button, spec.Short or product.Description, 15, {
 			Name = "Description",
 			Position = UDim2.fromOffset(pic + 26, 50),
 			Size = UDim2.new(1, -(pic + 36), 1, -96),
@@ -219,7 +219,7 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: num
 			TextColor3 = CardTheme.Ink,
 		})
 	elseif spec.Look == "Capsule" then
-		refs.Title = Card.title(button, "Royal Capsule", 22, spec.Glow, {
+		refs.Title = Card.title(button, "Royal Capsule", 22, glow, {
 			Position = UDim2.fromOffset(0, 10),
 			Size = UDim2.new(1, 0, 0, 28),
 		})
@@ -236,6 +236,51 @@ local function buildCard(parent: Instance, spec: StoreConfig.CardSpec, seed: num
 			Position = UDim2.new(0, 12, 1, -6),
 			Size = UDim2.fromOffset(80, 40),
 			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+	elseif spec.Look == "Star" then
+		refs.Title = Card.title(button, title, 22, glow, {
+			Position = UDim2.fromOffset(0, 8),
+			Size = UDim2.new(1, 0, 0, 28),
+		})
+		-- the live gun (RebirthView.fillPicture fills the ViewportFrame in the
+		-- game; the picture's Icon is the preview's rendered gun)
+		local pic = math.floor(math.min(size.X * 0.55, size.Y * 0.5))
+		Card.halo(button, UDim2.new(0, 14 + pic / 2, 0.52, 0), pic)
+		local picture = UIKit.new("ImageLabel", {
+			Name = "Picture",
+			AnchorPoint = Vector2.new(0, 0.5),
+			BackgroundTransparency = 1,
+			Image = "",
+			Position = UDim2.new(0, 14, 0.52, 0),
+			Size = UDim2.fromOffset(pic, pic),
+			ScaleType = Enum.ScaleType.Fit,
+			ZIndex = 3,
+		}, button)
+		picture:SetAttribute("Icon", spec.Icon)
+		UIKit.new("ViewportFrame", {
+			Name = "View",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Ambient = Color3.fromRGB(150, 150, 170),
+			LightColor = Color3.new(1, 1, 1),
+			LightDirection = Vector3.new(-1, -1, -0.4),
+			ZIndex = 3,
+		}, picture)
+		Card.text(button, spec.Big or "", 24, {
+			Name = "Big",
+			AnchorPoint = Vector2.new(0, 0),
+			Position = UDim2.new(0, pic + 22, 0, 46),
+			Size = UDim2.new(1, -(pic + 30), 0, 30),
+			FontFace = CardTheme.NumberFont,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		refs.Description = Card.text(button, spec.Note or "", 15, {
+			Name = "Note",
+			Position = UDim2.new(0, pic + 22, 0, 80),
+			Size = UDim2.new(1, -(pic + 30), 0, 40),
+			TextColor3 = glow.Top,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
 		})
 	end
 	return refs
@@ -382,6 +427,7 @@ end
 
 -- Which product a card shows and how: "Buy" (price), "Owned" (a pass the
 -- player has: the OWNED chip), "Pending" (a purchase on its way: greyed),
+-- "Locked" (not yet: a STAR blaster before its rebirth; greyed, no price),
 -- "Hidden" (nothing to sell: the blaster at the top level).
 function StoreView.setCard(refs: Refs, id: string, key: string, state: string)
 	local card = refs.Cards[id]
@@ -392,14 +438,23 @@ function StoreView.setCard(refs: Refs, id: string, key: string, state: string)
 	card.Key = key
 	card.PriceAmount.Text = tostring(product.Robux)
 	card.PriceAmount.Size = UDim2.fromOffset(Card.digitsWidth(card.PriceAmount.Text, card.PriceAmount.TextSize), card.PriceAmount.Size.Y.Offset)
-	if card.Description then
-		card.Description.Text = product.Description
+	if card.Description and card.Spec.Look ~= "Star" then
+		card.Description.Text = card.Spec.Short or product.Description
 	end
 	card.Button.Visible = state ~= "Hidden"
 	card.Price.Visible = state == "Buy" or state == "Pending"
 	card.Owned.Visible = state == "Owned"
 	card.Button.Active = state == "Buy"
-	card.Button.BackgroundTransparency = if state == "Pending" then 0.35 else 0
+	-- greyed while a buy is on its way or until it opens (a STAR blaster's rebirths)
+	card.Button.BackgroundTransparency = if state == "Pending" or state == "Locked" then 0.35 else 0
+end
+
+-- A Star card's note ("Opens at rebirth 3", "Owned: opens at rebirth 5").
+function StoreView.setNote(refs: Refs, id: string, text: string)
+	local card = refs.Cards[id]
+	if card and card.Description then
+		card.Description.Text = text
+	end
 end
 
 -- A Boost card's big line ("LV 5" on the blaster card).

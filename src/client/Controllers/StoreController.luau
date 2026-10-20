@@ -31,10 +31,12 @@ local EnchantConfig = require(Shared.Config.EnchantConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local StoreConfig = require(Shared.Config.StoreConfig)
+local StarBlasterData = require(Shared.Config.StarBlasterData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local StoreView = require(script.Parent.Parent.UI.StoreView)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
+local RebirthView = require(script.Parent.Parent.UI.RebirthView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
@@ -93,6 +95,44 @@ local function owns(product: MonetizationConfig.Product): boolean
 	return false
 end
 
+-- The STAR blasters' save fields as StarBlasterData reads them (from the State's Rebirth snapshot).
+local function starData(): { [string]: any }
+	local rebirth = state().Rebirth
+	if type(rebirth) ~= "table" then
+		return {}
+	end
+	return {
+		Rebirths = rebirth.Count,
+		Stars = rebirth.Stars,
+		RebirthWeapons = rebirth.Weapons,
+		StarBlaster = rebirth.Weapon,
+	}
+end
+
+-- A STAR blaster card's state and note.
+local function starCard(view: StoreView.Refs, id: string, spec: StoreConfig.CardSpec): string
+	local star = StarBlasterData.get(spec.Star)
+	if not star then
+		return "Hidden"
+	end
+	local cardState = StarBlasterData.cardState(starData(), star.Id)
+	if cardState == "Locked" then
+		StoreView.setNote(view, id, `Opens at rebirth {star.Unlock}`)
+		return "Locked"
+	elseif cardState == "Waiting" then
+		StoreView.setNote(view, id, `Yours! Opens at rebirth {star.Unlock}`)
+		return "Owned"
+	elseif cardState == "Equipped" then
+		StoreView.setNote(view, id, "In your hands")
+		return "Owned"
+	elseif cardState == "Owned" then
+		StoreView.setNote(view, id, "Equip it in the STAR FORGE")
+		return "Owned"
+	end
+	StoreView.setNote(view, id, "Kept forever, every rebirth")
+	return "Buy"
+end
+
 -- Which product each card shows and its state.
 local function refresh()
 	local view = refs
@@ -116,7 +156,12 @@ local function refresh()
 			end
 		end
 		local product = MonetizationConfig.Products[key]
-		if cardState ~= "Hidden" then
+		if spec.Look == "Star" then
+			cardState = starCard(view, id, spec)
+			if cardState == "Buy" and pending[key] and now - pending[key] < PROMPT_MEMORY then
+				cardState = "Pending"
+			end
+		elseif cardState ~= "Hidden" then
 			if product.PaidRandom and restricted() then
 				cardState = "Hidden"
 			elseif owns(product) then
@@ -299,6 +344,15 @@ local function ensureView(): StoreView.Refs
 		end
 	end)
 	TouchControls.follow(view.Gui)
+	-- the STAR blasters' live guns (the Star Forge's own builder)
+	for _, card in view.Cards do
+		local star = card.Spec.Star
+		local picture = if star then card.Button:FindFirstChild("Picture") else nil
+		local viewport = if picture then picture:FindFirstChild("View") else nil
+		if star and viewport then
+			pcall(RebirthView.fillPicture, { Id = star, View = viewport } :: any)
+		end
+	end
 	refs = view
 	return view
 end

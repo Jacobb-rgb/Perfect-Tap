@@ -65,8 +65,8 @@ function Card.text(parent: Instance, text: string, size: number, props: Props?):
 end
 
 -- Comic-font title in a glow's colour gradient (top -> bottom) with a dark edge.
-function Card.title(parent: Instance, text: string, size: number, glowName: string, props: Props?): TextLabel
-	local glow = CardTheme.Glows[glowName] or CardTheme.Glows.Orange
+function Card.title(parent: Instance, text: string, size: number, glowName: string | CardTheme.Glow, props: Props?): TextLabel
+	local glow = if type(glowName) == "table" then glowName else (CardTheme.Glows[glowName] or CardTheme.Glows.Orange)
 	local label = Card.text(parent, text, size, { Name = "Title", TextColor3 = Color3.new(1, 1, 1), TextWrapped = false })
 	UIKit.new("UIGradient", {
 		Color = ColorSequence.new(glow.Top, glow.Bottom),
@@ -117,8 +117,13 @@ end
 	glow in the middle (behind the picture) and sparkles. Its children go on
 	top (ZIndex 3+). Returns the button.
 ]]
-function Card.card(parent: Instance, glowName: string, props: Props?): TextButton
-	local glow = CardTheme.Glows[glowName] or CardTheme.Glows.Orange
+-- A glow from one colour (a data colour: a star blaster's light).
+function Card.glowFrom(color: Color3): CardTheme.Glow
+	return { Edge = color, Top = color:Lerp(Color3.new(1, 1, 1), 0.55), Bottom = color }
+end
+
+function Card.card(parent: Instance, glowName: string | CardTheme.Glow, props: Props?): TextButton
+	local glow = if type(glowName) == "table" then glowName else (CardTheme.Glows[glowName] or CardTheme.Glows.Orange)
 	local button = UIKit.new("TextButton", {
 		Name = "Card",
 		AutoButtonColor = false,

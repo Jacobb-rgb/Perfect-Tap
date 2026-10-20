@@ -5,6 +5,7 @@
 	(StoreView, HudBubble). UI overlays (build/preview/<name>.json):
 	  ui_store_pc          PC: the first cards (the pass, coins, luck)
 	  ui_store_pc_more     PC: scrolled on (capsules, the blaster, passes)
+	  ui_store_pc_stars    PC: the end of the row, the five STAR blasters (3 rebirths)
 	  ui_store_pc_odds     PC: the odds panel before a Royal Capsule x5 buy
 	  ui_store_phone       667 x 375 pt phone
 ]]
@@ -58,6 +59,17 @@ function Preview.build(Loader: any): { [string]: any }
 	local pcW, pcH = 1600 / scale, (900 - 36) / scale
 	exports.ui_store_pc = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH).Gui })
 	exports.ui_store_pc_more = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, 1580).Gui })
+	-- the end of the row: the STAR blasters for a player with 3 rebirths
+	local stars = store(scale, pcW, pcH, 3560)
+	StoreView.setCard(stars, "StarComet", "StarComet", "Owned")
+	StoreView.setNote(stars, "StarComet", "In your hands")
+	StoreView.setCard(stars, "StarNebula", "StarNebula", "Owned")
+	StoreView.setNote(stars, "StarNebula", "Equip it in the STAR FORGE")
+	StoreView.setCard(stars, "StarPulsar", "StarPulsar", "Buy")
+	StoreView.setNote(stars, "StarPulsar", "Kept forever, every rebirth")
+	StoreView.setCard(stars, "StarSupernova", "StarSupernova", "Locked")
+	StoreView.setCard(stars, "StarSingularity", "StarSingularity", "Locked")
+	exports.ui_store_pc_stars = UiExport.export({ hud(scale).Gui, stars.Gui })
 	local odds = store(scale, pcW, pcH, 1580)
 	local lines = { "Royal Capsule x5: 5 golems, each one of:" }
 	for _, line in CapsuleConfig.odds("Royal", false) do
