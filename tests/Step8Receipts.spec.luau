@@ -511,6 +511,8 @@ return function(T, Loader)
 		end, "CoinsMedium")
 		T.eq(w.decide("k1", "CoinsSmall"), GRANTED, "the waiting receipt is granted once coin packs are on")
 		T.eq(w.data.Coins - coins, 2 * each + 5000, "its coins")
+		-- bought coins are counted in PaidCoins (kept through a rebirth while unspent)
+		T.eq(w.data.PaidCoins, math.min(2 * each + 5000, w.data.Coins), "the bought coins are counted")
 	end)
 
 	---------------------------------------------------------------- off policy: ids

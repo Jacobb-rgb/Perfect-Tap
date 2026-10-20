@@ -423,7 +423,17 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 		end
 	end
 	-- money and the blaster (the floors and the enchant slots follow the blaster level)
-	data.Coins = 0
+	-- only Robux-bought coins that are still unspent stay (owner 2026-10-20)
+	local paidCoins = data.PaidCoins
+	local coins = data.Coins
+	local keep = if type(paidCoins) == "number" and paidCoins == paidCoins and paidCoins > 0 then paidCoins else 0
+	if type(coins) == "number" and coins == coins then
+		keep = math.min(keep, math.max(coins, 0))
+	else
+		keep = 0
+	end
+	data.Coins = keep
+	data.PaidCoins = keep
 	data.ShardRolls = 0
 	local start = RebirthConfig.startLevel(perks)
 	data.BlasterLevel = start

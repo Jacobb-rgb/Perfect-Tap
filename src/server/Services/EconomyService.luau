@@ -93,6 +93,12 @@ function EconomyService.spend(player: Player, amount: number, reason: string): b
 		return false
 	end
 	data.Coins = balance - amount
+	-- coins bought with Robux are spent last: whatever is left of them stays
+	-- in PaidCoins (kept through a rebirth)
+	local paid = data.PaidCoins
+	if type(paid) == "number" and paid > data.Coins then
+		data.PaidCoins = data.Coins
+	end
 	DataService.changed(player)
 	for _, callback in spentCallbacks do
 		task.spawn(callback, player, amount, reason)
