@@ -4,6 +4,11 @@
 	Group then Order).
 
 	  GOLEMS     GolemController (hidden while it isn't in the game)
+	  ELEVATOR   ElevatorController: a teleport to the mine elevator stop of
+	             your floor (its open(); the floor picker then opens from the
+	             stop's prompt); hidden while the world has no stop (its
+	             available(): Workspace attribute TeleportConfig.ElevatorAttribute;
+	             ElevatorController calls SideMenuController.refresh when it changes)
 	  SHOP       BoostController (Triple / Hexa Lucky) when it is in the game,
 	             else a hint to visit the SHOP stall
 	  CODEX      CodexController (badge: ores discovered since you last looked)
@@ -13,13 +18,17 @@
 	  SETTINGS   SettingsController
 	  STORE      StoreController (Robux items; hidden while it isn't in the
 	             game, step 8)
+	  HOVER      HoverboardController (the hoverboards panel; its RIDE button
+	             and the H key stay in the HUD)
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
 	exist), so the menu works before the packages that add them merge: a
 	button whose controller is missing is hidden (GOLEMS, ARTIFACTS, STORE:
 	no dead buttons), or answers with a hint (SHOP). (An entry with Soon and
-	without Hide would wear a "SOON" chip and answer with a toast.) Pressing the button of an open panel closes
+	without Hide would wear a "SOON" chip and answer with a toast.) A
+	controller with available() that returns false hides its button too
+	(ELEVATOR without a stop). Pressing the button of an open panel closes
 	it.
 	One entry per panel: the side menu is THE entry for the panels it
 	opens, so the controllers leave out their own HUD buttons while it is
@@ -81,6 +90,9 @@ SideMenuController.Actions = {
 		Hide = false,
 	},
 	Settings = { Controller = "SettingsController", Missing = "Settings are coming soon!", Soon = false, Hide = false },
+	-- a teleport to the elevator stop (hidden while the world has none: ElevatorController.available)
+	Elevator = { Controller = "ElevatorController", Missing = "The mine elevator isn't open yet.", Soon = false, Hide = true },
+	Hoverboards = { Controller = "HoverboardController", Missing = "Hoverboards are coming soon!", Soon = false, Hide = true },
 	-- hidden until step 8's StoreController is in the game (no dead buttons); it comes back by itself
 	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = true },
 } :: { [string]: Action }
@@ -91,7 +103,13 @@ SideMenuController.Badges = { "Codex", "Collection" }
 
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.
-SideMenuController.Panels = { "CodexController", "SettingsController", "LeaderboardController" }
+SideMenuController.Panels = {
+	"CodexController",
+	"SettingsController",
+	"LeaderboardController",
+	"ElevatorController",
+	"HoverboardController",
+}
 -- the touch grid shuts by itself after this many seconds without a tap
 SideMenuController.AutoShut = 10
 
@@ -336,7 +354,18 @@ local function buildLight(view: SideMenuView.Refs)
 	mirrorLight()
 end
 
--- Buttons whose controller isn't in the game: hidden, or a SOON chip.
+-- Is a controller's feature there right now? (available() when it has one,
+-- e.g. ElevatorController: false while the world has no elevator stop)
+local function unavailable(controller: any): boolean
+	if type(controller) ~= "table" or type(controller.available) ~= "function" then
+		return false
+	end
+	local ok, there = pcall(controller.available)
+	return ok and there == false
+end
+
+-- Buttons whose controller isn't in the game: hidden, or a SOON chip; and
+-- buttons whose controller says it isn't available: hidden.
 local function updateSoon()
 	local view = refs
 	if not view then
@@ -344,9 +373,10 @@ local function updateSoon()
 	end
 	local changed = false
 	for id, action in SideMenuController.Actions do
-		local missing = action.Controller == nil or MenuPanels.controller(action.Controller) == nil
+		local controller = if action.Controller then MenuPanels.controller(action.Controller) else nil
+		local missing = controller == nil
 		SideMenuView.setSoon(view, id, action.Soon and missing)
-		local hide = action.Hide and missing
+		local hide = (action.Hide and missing) or unavailable(controller)
 		if (view.Hidden[id] == true) ~= hide then
 			SideMenuView.setHidden(view, id, hide)
 			changed = true
@@ -356,6 +386,12 @@ local function updateSoon()
 		relayout()
 	end
 	mirrorLight()
+end
+
+-- Re-checks which buttons show (a controller's available() changed: the
+-- elevator stop appeared or went).
+function SideMenuController.refresh()
+	updateSoon()
 end
 
 -- The menu follows the HUD's own right-side menu (hidden in build mode,

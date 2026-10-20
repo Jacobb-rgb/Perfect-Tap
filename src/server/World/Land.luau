@@ -484,178 +484,39 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		child.Name = "Boundary"
 	end
 
-	---------------------------------------------------------------- quarry
+	---------------------------------------------------------------- quarry (mine floor 1)
+	-- The quarry pit is mine floor 1 (src/server/World/Mine/Floor1Quarry, built by WorldBuilder at
+	-- MineFloors.Placement[1]); Land keeps the town edge: the south cliff down to the quarry floor
+	-- with the ramp gap, and the ramp from the rim road.
 	local quarry = WorldLayout.Quarry
 	local q = Instance.new("Model")
 	q.Name = "Quarry"
 	q.Parent = land
-	boxPart(
-		q,
-		Vector3.new(quarry.Min.X - 4, quarry.Min.Y - 6, quarry.Min.Z - 2),
-		Vector3.new(quarry.Max.X + 4, quarry.Min.Y, quarry.Max.Z),
-		Palette.QuarryFloor
-	).Name =
-		"Floor"
-	-- dusty floor patches
-	for _ = 1, 40 do
-		local x = rng:range(quarry.Min.X + 4, quarry.Max.X - 4)
-		local z = rng:range(quarry.Min.Z + 4, quarry.Max.Z - 4)
-		local s = Vector3.new(rng:range(6, 16), 0.25, rng:range(6, 16))
-		Geo.block(
-			q,
-			CFrame.new(x, quarry.Min.Y + 0.05, z) * CFrame.Angles(0, rng:range(0, 6.28), 0),
-			s,
-			Geo.vary(Palette.StoneWarm, rng, 0.05),
-			nil,
-			decor({ CastShadow = false, CanCollide = false })
-		)
-	end
-	-- walls: south cliff (ground edge), west, east (grotto gap), north (cave gap);
-	-- axis-aligned voxel stone, grass on the walls players see from the town
-	local qBottom, qTop = quarry.Min.Y - 2, 4
-	local wallShades = { C.Stone, C.StoneDark, C.StoneDark }
-	local grassy: WallLook = { aligned = true, colors = wallShades, grass = true }
 	rockWall(
 		q,
 		Vector3.new(quarry.Min.X, 0, quarry.Max.Z),
 		Vector3.new(quarry.Max.X, 0, quarry.Max.Z),
 		Vector3.new(0, 0, -1),
-		qBottom,
+		quarry.Min.Y - 2,
 		1,
 		C.StoneDark,
 		rng,
 		{ { -quarry.Min.X, 10 } },
-		grassy
-	)
-	rockWall(
-		q,
-		Vector3.new(quarry.Min.X, 0, quarry.Min.Z),
-		Vector3.new(quarry.Min.X, 0, quarry.Max.Z),
-		Vector3.new(1, 0, 0),
-		qBottom,
-		qTop + 8,
-		C.StoneDark,
-		rng,
-		nil,
-		grassy
-	)
-	rockWall(
-		q,
-		Vector3.new(quarry.Max.X, 0, quarry.Min.Z),
-		Vector3.new(quarry.Max.X, 0, quarry.Max.Z),
-		Vector3.new(-1, 0, 0),
-		qBottom,
-		qTop + 8,
-		C.StoneDark,
-		rng,
-		{ { -182 - quarry.Min.Z, 7 } },
-		grassy
-	)
-	-- the north wall stands under the ForgeMountain massif (no grass)
-	rockWall(
-		q,
-		Vector3.new(quarry.Min.X, 0, quarry.Min.Z),
-		Vector3.new(quarry.Max.X, 0, quarry.Min.Z),
-		Vector3.new(0, 0, 1),
-		qBottom,
-		qTop + 14,
-		C.StoneDark,
-		rng,
-		{ { -quarry.Min.X, 10 } },
-		{ aligned = true, colors = { C.StoneDark, C.StoneDeep } }
+		{ aligned = true, colors = { C.Stone, C.StoneDark, C.StoneDark }, grass = true }
 	)
 	ramp(q, Vector3.new(0, 0, quarry.Max.Z), Vector3.new(0, quarry.Min.Y, quarry.Max.Z - 26), quarry.RampWidth, Palette.Dirt)
-	-- wooden scaffolding + mine cart rails for flavor
-	for i = 0, 3 do
-		local x = -50 + i * 32
-		Props.crate(q, CFrame.new(x + rng:range(-3, 3), quarry.Min.Y, quarry.Max.Z - 10), rng)
-	end
-	Props.lantern(q, CFrame.new(-11, quarry.Min.Y, -150) * CFrame.Angles(0, math.pi / 2, 0), true)
-	Props.lantern(q, CFrame.new(11, quarry.Min.Y, -150) * CFrame.Angles(0, -math.pi / 2, 0), true)
-	-- (the DEPTHS portal of Lobby/Backdrop frames the cave entrance: no sign or lanterns here)
+	-- (the DEPTHS portal of Lobby/Backdrop frames the cave entrance in the quarry's back wall)
 
-	---------------------------------------------------------------- caves
+	---------------------------------------------------------------- caves (mine floors 2 and 3)
+	-- Ember Caves and Deep Hollow are mine floors 2 and 3 (WorldBuilder builds them at
+	-- MineFloors.Placement); Land keeps the sloped tunnel between them and the ramp down it.
 	local caves = WorldLayout.Caves
 	local ember = caves.EmberCaves
-	local emberRoom = caveRoom(land, "EmberCaves", ember.Min, ember.Max, Palette.CaveRock, Palette.CaveRockDark, rng, {
-		south = { { -ember.Min.X, 9 } },
-		north = { { -ember.Min.X, 9 } },
-	})
-	tunnel(land, Vector3.new(-11, ember.Min.Y, ember.Max.Z), Vector3.new(11, 6, quarry.Min.Z), true, Palette.CaveRock)
-	boxPart(land, Vector3.new(-12, ember.Min.Y - 6, ember.Max.Z - 1), Vector3.new(12, ember.Min.Y, quarry.Min.Z + 1), Palette.CaveRockDark)
-
-	-- lava pools (positions saved as attributes so nodes avoid them)
-	local pools = folder("LavaPools", emberRoom)
-	local placed: { Vector3 } = {}
-	local tries = 0
-	while #placed < ember.LavaPools and tries < 200 do
-		tries += 1
-		local x = rng:range(ember.Min.X + 14, ember.Max.X - 14)
-		local z = rng:range(ember.Min.Z + 14, ember.Max.Z - 14)
-		local p = Vector3.new(x, ember.Min.Y, z)
-		local ok = not WorldLayout.isKeepOut(p, 10) and clearOfNodes(p, 14)
-		for _, other in placed do
-			if (other - p).Magnitude < 26 then
-				ok = false
-			end
-		end
-		if ok then
-			table.insert(placed, p)
-			local d = rng:range(10, 15)
-			Geo.cylinder(pools, p + Vector3.new(0, 0.25, 0), 0.5, d + 2.5, Palette.LavaCrust, nil, solid({ CastShadow = false }))
-			local lava = Geo.cylinder(
-				pools,
-				p + Vector3.new(0, 0.32, 0),
-				0.5,
-				d,
-				Palette.Lava,
-				Enum.Material.Neon,
-				decor({ CastShadow = false, CanCollide = false })
-			)
-			lava.Name = "Lava"
-			Props.pointLight(lava, Palette.ForgeGlow, 28, 2.2)
-			Props.emitter(lava, "Embers", Palette.Ember, 5)
-			for _ = 1, 3 do
-				local a = rng:range(0, 6.28)
-				Geo.rock(
-					pools,
-					CFrame.new(p + Vector3.new(math.cos(a), 0, math.sin(a)) * (d / 2 + 1.5)),
-					Vector3.new(2.5, 2, 2.5),
-					Palette.LavaCrust,
-					rng,
-					nil,
-					solid()
-				)
-			end
-		end
-	end
-	emberRoom:SetAttribute("PoolCount", #placed)
-	-- braziers along the walls so the cave stays readable on small screens
-	for i = 1, 6 do
-		local side = if i % 2 == 0 then 1 else -1
-		local z = ember.Max.Z - 14 - (i - 1) * ((ember.Max.Z - ember.Min.Z - 28) / 5)
-		local p = Vector3.new(side * (ember.Max.X - 7), ember.Min.Y, z)
-		if clearOfNodes(p, 6) then
-			Props.brazier(emberRoom, CFrame.new(p), true)
-		end
-	end
-
 	local hollow = caves.DeepHollow
-	local hollowRoom = caveRoom(land, "DeepHollow", hollow.Min, hollow.Max, Palette.HollowRock, Palette.HollowRockDark, rng, {
-		south = { { -hollow.Min.X, 9 } },
-	})
-	tunnel(land, Vector3.new(-11, hollow.Min.Y, hollow.Max.Z), Vector3.new(11, 4, ember.Min.Z), true, Palette.HollowRock)
-	-- starts where the Ember Caves floor slab ends (it overhangs the room by 8) and fills the tunnel
-	ramp(land, Vector3.new(0, ember.Min.Y, ember.Min.Z - 8), Vector3.new(0, hollow.Min.Y, hollow.Max.Z - 14), 22, Palette.HollowRockDark)
+	tunnel(land, Vector3.new(-12, hollow.Min.Y, hollow.Max.Z), Vector3.new(12, 4, ember.Min.Z), true, Palette.HollowRock)
+	ramp(land, hollow.RampFrom, hollow.RampTo, 22, Palette.HollowRockDark)
 
-	-- glowing crystal clusters
-	local crystalColors = {
-		Color3.fromRGB(90, 255, 160),
-		Color3.fromRGB(110, 230, 255),
-		Color3.fromRGB(150, 120, 255),
-		Color3.fromRGB(255, 244, 190),
-		Color3.fromRGB(255, 90, 140),
-	}
+	-- glowing crystal clusters (the VIP grotto)
 	local function crystalCluster(parent: Instance, p: Vector3, color: Color3, size: number)
 		local cluster = Instance.new("Model")
 		cluster.Name = "CrystalCluster"
@@ -688,30 +549,6 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 			Props.pointLight(biggest, color, 30, 1.6)
 		end
 	end
-	for i = 1, hollow.CrystalClusters do
-		for _ = 1, 25 do
-			local side = rng:int(1, 4)
-			local p: Vector3
-			if side == 1 then
-				p = Vector3.new(rng:range(hollow.Min.X + 6, hollow.Max.X - 6), hollow.Min.Y, hollow.Min.Z + 8)
-			elseif side == 2 then
-				p = Vector3.new(hollow.Min.X + 8, hollow.Min.Y, rng:range(hollow.Min.Z + 6, hollow.Max.Z - 6))
-			elseif side == 3 then
-				p = Vector3.new(hollow.Max.X - 8, hollow.Min.Y, rng:range(hollow.Min.Z + 6, hollow.Max.Z - 6))
-			else
-				p = Vector3.new(
-					rng:range(hollow.Min.X + 30, hollow.Max.X - 30),
-					hollow.Min.Y,
-					rng:range(hollow.Min.Z + 20, hollow.Max.Z - 40)
-				)
-			end
-			if clearOfNodes(p, 9) and not WorldLayout.isKeepOut(p, 6) then
-				crystalCluster(hollowRoom, p, crystalColors[(i - 1) % #crystalColors + 1], rng:range(9, 16))
-				break
-			end
-		end
-	end
-
 	local grotto = caves.Grotto
 	local grottoRoom = caveRoom(land, "Grotto", grotto.Min, grotto.Max, Palette.GrottoRock, Palette.HollowRockDark, rng, {
 		west = { { -182 - grotto.Min.Z, 6 } },

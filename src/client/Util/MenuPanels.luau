@@ -46,6 +46,8 @@ MenuPanels.Names = {
 	"CodexController",
 	"SettingsController",
 	"LeaderboardController",
+	"ElevatorController",
+	"HoverboardController",
 }
 
 local cache: { [string]: any } = {}

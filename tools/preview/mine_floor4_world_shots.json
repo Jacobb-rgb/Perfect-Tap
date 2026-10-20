@@ -1,0 +1,5 @@
+{
+ "mine_floor4_world_inside": {"scene": "world_f4", "position": [0, -210.5, -751], "target": [0, -213, -830], "fov": 70, "preset": "Palace", "shadowExtent": 160, "maxLights": 24},
+ "mine_floor4_world_lift": {"scene": "world_f4", "position": [-6, -208, -770], "target": [30, -210, -754], "fov": 66, "preset": "Palace", "shadowExtent": 160, "maxLights": 24},
+ "mine_floor4_world_dais": {"scene": "world_f4", "position": [0, -206, -810], "target": [0, -207, -846], "fov": 60, "preset": "Palace", "shadowExtent": 120, "maxLights": 24}
+}

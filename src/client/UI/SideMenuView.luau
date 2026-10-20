@@ -3,13 +3,16 @@
 	SideMenuController fills it in and handles input), like the button
 	columns of popular simulators:
 
-	  GOLEMS · SHOP · CODEX · ARTIFACTS · BOARDS · SETTINGS · STORE
+	  GOLEMS · ELEVATOR · SHOP · CODEX · ARTIFACTS · BOARDS · SETTINGS · STORE · HOVER
 
 	The entries are data (SideMenuView.Entries) for the coming light-UI
 	restyle: each has a Group ("Main": the tiles that stay on screen;
 	"More": the ones behind a MORE flyout), a stable Order inside its group
-	(Main follows the light HUD's tiles BACKPACK 1, GOLEMS 2, BUILD 3, SHOP 4;
-	BACKPACK and BUILD have no side menu controller yet) and an IconName
+	(Main follows the light HUD's tiles BACKPACK 1, GOLEMS 2, SHOP 4; order 3,
+	which the light UI had reserved for BUILD, is ELEVATOR since the mine
+	floors (2026-10-18), so BUILD needs another slot; BACKPACK has no side
+	menu controller yet; HOVER, the hoverboards, is "More" order 6: "BOARDS"
+	is the leaderboards) and an IconName
 	that ONE table (SideMenuView.Icons) maps to today's emoji. There is no
 	MORE flyout yet, so every entry shows, sorted by Group then Order
 	(SideMenuView.sorted).
@@ -96,10 +99,23 @@ SideMenuView.Icons = {
 	Boards = "🏆",
 	Settings = "⚙️",
 	Store = "💰",
+	Elevator = "🛗",
+	Hoverboards = "🛹",
 } :: { [string]: string }
 
 SideMenuView.Entries = {
 	{ Id = "Golems", Label = "GOLEMS", Group = "Main", Order = 2, IconName = "Golems", Color = rgb(110, 214, 92), Dark = rgb(52, 136, 50) },
+	-- the mine elevator: a teleport to the stop of your floor (ElevatorController.open), in
+	-- the elevator's neon blue; hidden while the world has no stop (ElevatorController.available)
+	{
+		Id = "Elevator",
+		Label = "ELEVATOR",
+		Group = "Main",
+		Order = 3,
+		IconName = "Elevator",
+		Color = rgb(70, 160, 255),
+		Dark = rgb(28, 78, 190),
+	},
 	{ Id = "Shop", Label = "SHOP", Group = "Main", Order = 4, IconName = "Shop", Color = rgb(255, 120, 168), Dark = rgb(178, 58, 108) },
 	{ Id = "Codex", Label = "CODEX", Group = "More", Order = 1, IconName = "Codex", Color = rgb(96, 186, 255), Dark = rgb(38, 110, 186) },
 	{
@@ -130,17 +146,17 @@ SideMenuView.Entries = {
 		Dark = rgb(88, 80, 74),
 	},
 	{ Id = "Store", Label = "STORE", Group = "More", Order = 5, IconName = "Store", Color = rgb(72, 200, 150), Dark = rgb(28, 120, 86) },
+	-- the hoverboards panel (HoverboardController); "BOARDS" is the leaderboards
+	{
+		Id = "Hoverboards",
+		Label = "HOVER",
+		Group = "More",
+		Order = 6,
+		IconName = "Hoverboards",
+		Color = rgb(150, 96, 255),
+		Dark = rgb(78, 40, 176),
+	},
 } :: { Entry }
-
--- Is there an entry with this id (e.g. the mine floors' Elevator)?
-function SideMenuView.hasEntry(id: string): boolean
-	for _, entry in SideMenuView.Entries do
-		if entry.Id == id then
-			return true
-		end
-	end
-	return false
-end
 
 -- An IconName's icon ("" for a name the table doesn't know).
 function SideMenuView.icon(name: string): string
@@ -174,7 +190,7 @@ SideMenuView.ChipsGap = 8 -- between the boost chips' touch area and the mouse c
 SideMenuView.TopMin = BoostView.chipsTop(nil, false) + BoostView.ChipHit + SideMenuView.ChipsGap
 SideMenuView.TopTight = 98 -- nothing of the menu ever goes above this (the coins panel ends at 90)
 SideMenuView.BottomMargin = 12
--- the HUD's right-side menu (BUILD, LIFT: 84 wide, 14 from the edge) and a gap:
+-- the HUD's right-side menu (RIDE, BUILD: 84 wide, 14 from the edge) and a gap:
 -- the open touch grid never reaches it
 SideMenuView.RightReserve = 14 + 84 + 8
 -- the ScreenGui's DisplayOrder: under the HUD (5) while shut, its "+$X"
@@ -247,9 +263,11 @@ export type Refs = {
 -- higher: the train and boost chips own the column above TopMin).
 SideMenuView.Fits = { { 1, SideMenuView.TopMin }, { 2, SideMenuView.TopMin }, { 3, SideMenuView.TopMin }, { 4, SideMenuView.TopMin } }
 -- Touch (the open grid, MENU in its first cell, in the train chip's row):
--- must end above TouchBottom; narrower before wider; one row as the last
--- resort (the top comes from touchTop).
-SideMenuView.TouchFits = { { 1 }, { 2 }, { 3 }, { 4 }, { 8 } }
+-- must end above TouchBottom; narrower before wider; one row of every cell
+-- as the last resort (the top comes from touchTop), its buttons narrowed to
+-- reach no further than the right-side menu allows (never under 44 pt: the
+-- smallest phones with nine buttons).
+SideMenuView.TouchFits = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 }, { 16 } }
 
 -- The touch layout's top: MENU (`h` tall) centred on the compact train
 -- chip's row (TrainView.ChipTop), the badges' Drop above it.
@@ -303,6 +321,10 @@ function SideMenuView.layout(uiScale: number, designHeight: number, options: Opt
 		if topMin + SideMenuView.Drop + height <= floor and (not touch or wide <= right) then
 			break
 		end
+	end
+	-- touch, one row as the last resort: narrower buttons when it reaches the right-side menu
+	if touch and left + columns * w + (columns - 1) * m.Gap > right then
+		w = math.max(math.ceil(minSide), math.floor((right - left - (columns - 1) * m.Gap) / columns))
 	end
 	-- mouse: centred in the room under the boost chips; touch: in the train chip's row
 	local top = if touch then topMin else math.max(topMin, math.floor((designHeight - height) / 2))

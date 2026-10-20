@@ -44,7 +44,10 @@ local ORDER = {
 	"LogisticsService", -- Splitter, Sorter, Robot Arm, Sell Box
 	"PowerService", -- power networks: machine speeds, cable attributes
 	"ShopService",
+	"ElevatorService", -- the mine elevator (after EconomyService, StateService and WorldService)
 	"VaultService", -- the Blaster Vault shop (buy the next blaster level, the crate opening)
+	"MonetizationService", -- the one ProcessReceipt callback (grant handlers register in init)
+	"HoverboardService", -- hoverboards: buy, equip, ride (after Carry, Cleaning, Elevator, Monetization)
 	"GearService", -- the Gear shop at the SHOP stall (boots, lamp, backpack, gloves, magnet)
 	"BoostService", -- luck boosts (Triple / Hexa Lucky), purchase prompts, boost expiry pushes
 	"EnchantService", -- the Enchant shop at the rune table (EnchantCounter)

@@ -608,7 +608,7 @@ UIConfig.LightUI = true
 for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
 	local refs = HudBubble.buildGame(spec[2])
 	refs.Gui.Scale.Scale = spec[2] * spec[3]
-	TeleportView.build(refs.TopBar, refs.Menu, spec[2])
+	TeleportView.build(refs.TopBar, spec[2])
 	BuildView.menuButton(refs.Menu)
 	refs.Coins.Text = "$48.2K"
 	refs.Income.Text = "+$186/s"
@@ -698,7 +698,7 @@ for _, d in DEVICES do
 	local uiScale = HudBubble.scaleFor(Vector2.new(w, h))
 	local hud = HudBubble.buildGame(uiScale, w)
 	hud.Gui.Scale.Scale = uiScale * px
-	TeleportView.build(hud.TopBar, hud.Menu, uiScale, w)
+	TeleportView.build(hud.TopBar, uiScale, w)
 	BuildView.menuButton(hud.Menu)
 	hud.Coins.Text = "$48.2K"
 	hud.Income.Text = "+$64/s"

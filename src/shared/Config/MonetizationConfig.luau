@@ -36,6 +36,10 @@
 	  PromptGamePassPurchaseFinished.
 	- Prices (Robux) are for display; the Dashboard price is the real one:
 	  keep them equal.
+	- Grant names the MonetizationService handler that gives an entry
+	  (register(grant, fn) for products, registerPass(grant, ...) for
+	  passes): the Robux hoverboards are game passes with Grant "Hoverboard"
+	  and the BoardId they unlock (HoverboardService).
 
 	Contract for step 8 (ProcessReceipt, developer products):
 	- A receipt is never stranded: it is granted (on the server that holds the
@@ -96,7 +100,11 @@ export type Product = {
 	Enchant: string?, -- EnchantConfig id (a game pass that grants the enchant)
 	CoinSeconds: number?, -- coin packs: seconds of the player's podium income...
 	MinCoins: number?, -- ...but at least this many coins
+	Grant: string?, -- the MonetizationService handler that gives it ("Hoverboard")
+	BoardId: string?, -- Grant "Hoverboard": the HoverboardData id it unlocks
 }
+-- (MonetizationService's name for a pass or product)
+export type Entry = Product
 
 local MonetizationConfig = {}
 
@@ -173,6 +181,27 @@ local LIST: { Product } = {
 		Name = "Express Train",
 		Description = "Your ore train runs twice as fast and carries half as much again.",
 		Perks = { "TrainExpress" },
+	},
+	-- the two Robux hoverboards (HoverboardData, art/mine-floors): owned forever, so passes
+	{
+		Key = "HoverboardComet",
+		Kind = "GamePass",
+		Id = 0,
+		Robux = 49,
+		Name = "Neon Comet Hoverboard",
+		Description = "The Neon Comet hoverboard: speed 35, no carry slowdown, a trail of stars.",
+		Grant = "Hoverboard",
+		BoardId = "NeonComet",
+	},
+	{
+		Key = "HoverboardPhoenix",
+		Kind = "GamePass",
+		Id = 0,
+		Robux = 49,
+		Name = "Royal Phoenix Hoverboard",
+		Description = "The fastest hoverboard: speed 38, no carry slowdown, golden wings and a flame trail.",
+		Grant = "Hoverboard",
+		BoardId = "RoyalPhoenix",
 	},
 	---------------------------------------------------------------- golem capsules
 	{
@@ -326,6 +355,8 @@ MonetizationConfig.Products = {} :: { [string]: Product }
 for _, product in LIST do
 	MonetizationConfig.Products[product.Key] = product
 end
+-- (the same map under MonetizationService's name)
+MonetizationConfig.Entries = MonetizationConfig.Products
 
 -- PurchasePrompt.Status codes -> text for the player
 MonetizationConfig.StatusText = {
@@ -339,7 +370,7 @@ MonetizationConfig.StatusText = {
 
 -- A real (non-placeholder) pass/product id.
 function MonetizationConfig.isLive(id: any): boolean
-	return type(id) == "number" and id == id and id ~= 0
+	return type(id) == "number" and id == id and id > 0 and id == math.floor(id) and id < 2 ^ 53
 end
 
 function MonetizationConfig.get(key: any): Product?
@@ -356,6 +387,38 @@ end
 function MonetizationConfig.keyLive(key: any): boolean
 	local product = MonetizationConfig.get(key)
 	return product ~= nil and MonetizationConfig.isLive(product.Id)
+end
+
+-- May `key` be prompted? (= keyLive: a real id; prompts also wait for the receipts gate)
+function MonetizationConfig.canPrompt(key: any): boolean
+	return MonetizationConfig.keyLive(key)
+end
+
+-- The entry with this id (of this kind, when given), or nil (0, junk and unknown ids never match).
+function MonetizationConfig.byId(id: any, kind: Kind?): Product?
+	if not MonetizationConfig.isLive(id) or id ~= math.floor(id) then
+		return nil
+	end
+	for _, product in MonetizationConfig.Products do
+		if product.Id == id and (kind == nil or product.Kind == kind) then
+			return product
+		end
+	end
+	return nil
+end
+
+-- Every entry of a kind, sorted by key (a stable order for checks and tests).
+function MonetizationConfig.list(kind: Kind): { Product }
+	local out: { Product } = {}
+	for _, product in MonetizationConfig.Products do
+		if product.Kind == kind then
+			table.insert(out, product)
+		end
+	end
+	table.sort(out, function(a: Product, b: Product): boolean
+		return a.Key < b.Key
+	end)
+	return out
 end
 
 -- What to answer when a player asks to buy `key` (PurchasePrompt.Status):

@@ -13,6 +13,8 @@ return function(T, Loader)
 	local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
+	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
+	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
@@ -677,6 +679,175 @@ return function(T, Loader)
 		for i, drop in w.spawned do
 			T.eq(drop.Info.OreId, ores[i])
 		end
+		noOreLeaks(w)
+	end)
+
+	---------------------------------------------------------------- mine floors (MineFloors + RockBuilder)
+
+	-- a floor rock marker (Floor attribute) at `position`; RockBuilder.applyStage is recorded
+	local function floorMarker(w: any, floorIndex: number, position: any?, deep: boolean?, kind: string?): any
+		local marker = Instance.new("Part")
+		marker.Size = Vector3.new(2, 2, 2)
+		marker.CFrame = CFrame.new((position or Vector3.new(0, 0, 0)) + Vector3.new(0, 1, 0))
+		marker:SetAttribute("Zone", MineFloors.get(floorIndex).ZoneId)
+		marker:SetAttribute("Floor", floorIndex)
+		marker:SetAttribute("Deep", deep == true)
+		if kind then
+			marker:SetAttribute("Kind", kind)
+		end
+		marker.Parent = w.markers
+		return marker
+	end
+
+	local function withFloorWorld(name: string, fn: (any) -> ())
+		withWorld(name, function(w)
+			local realApply = RockBuilder.applyStage
+			rawset(RockBuilder, "applyStage", function(model, stage, _seed)
+				table.insert(w.stages, { Model = model, Stage = stage })
+				return {}
+			end)
+			local ok, err = pcall(fn, w)
+			rawset(RockBuilder, "applyStage", realApply)
+			if not ok then
+				error(err, 0)
+			end
+		end)
+	end
+
+	T.test("Mining: floor rock kinds follow MineFloors.SpawnChance, deep spawns roll richer", function()
+		T.eq(MiningService.rollKind(0, false), "Golden", "the lowest roll is the rarest special")
+		T.eq(MiningService.rollKind(0.999, false), "Small", "the highest roll is a small rock")
+		local function share(deep: boolean, kind: string): number
+			local n = 0
+			for i = 0, 9999 do
+				if MiningService.rollKind(i / 10000, deep) == kind then
+					n += 1
+				end
+			end
+			return n / 10000
+		end
+		T.near(share(false, "Crystal"), MineFloors.SpawnChance.Crystal, 0.002, "10 % crystals")
+		T.near(share(false, "Big"), MineFloors.SpawnChance.Big, 0.002, "big rocks")
+		T.near(share(true, "Crystal"), MineFloors.SpawnChance.Crystal * 2, 0.002, "deep spawns: twice the crystals")
+		T.truthy(share(true, "Golden") > share(false, "Golden"), "deep spawns: more golden rocks")
+	end)
+
+	withFloorWorld("Mining: floor rocks roll their kind, ores, HP and gate from MineFloors", function(w)
+		for index = 1, 5 do
+			local floor = MineFloors.get(index)
+			for _, case in { { roll = 0.99, kind = "Small" }, { roll = 0.3, kind = "Big" }, { roll = 0.1, kind = "Crystal" } } do
+				w.rolls = { case.roll }
+				local rock = mining.spawnRock(floorMarker(w, index))
+				T.truthy(rock, floor.Id .. " " .. case.kind .. " spawned")
+				local model = rock.Model
+				T.eq(rock.Kind, case.kind, floor.Id .. " kind for roll " .. case.roll)
+				T.eq(#rock.Ores, MineFloors.OreCount[case.kind], floor.Id .. " " .. case.kind .. " ore count")
+				local weights = if case.kind == "Crystal" then floor.CrystalOres else floor.Ores
+				for _, oreId in rock.Ores do
+					T.truthy(weights[oreId], oreId .. " comes from the floor's table")
+				end
+				T.eq(rock.MaxHealth, MineFloors.rockHealth(index, case.kind), "HP")
+				T.eq(rock.Stages, #rock.Ores, "one stage per ore")
+				T.eq(model:GetAttribute("Floor"), index)
+				T.eq(model:GetAttribute("Kind"), case.kind)
+				T.eq(model:GetAttribute("MinBlaster"), floor.MinBlaster)
+				T.eq(model:GetAttribute("Zone"), floor.ZoneId)
+				T.eq(model:GetAttribute("OreId"), nil, "no ore id on the model")
+				T.truthy(model:HasTag(MiningService.RockTag), "tagged")
+			end
+		end
+		-- a Giant marker grows nothing on its own (its event does)
+		T.eq(mining.spawnRock(floorMarker(w, 2, nil, false, "Giant")), nil, "no giant from spawnRock")
+		noOreLeaks(w)
+	end)
+
+	withFloorWorld("Mining: a floor rock drops one ore per stage, the last at the shatter", function(w)
+		local p = w.player
+		p.data.BlasterLevel = 10
+		local perTick = BlasterData.damage(10, "") * TICK
+		for _, kind in { "Small", "Big" } do
+			w.spawned, w.notes, w.stages = {}, {}, {}
+			w.rolls = { if kind == "Small" then 0.99 else 0.3 }
+			local rock = mining.spawnRock(floorMarker(w, 1))
+			local n = #rock.Ores
+			rock.MaxHealth = perTick * n - 1 -- one stage per tick
+			rock.Health = rock.MaxHealth
+			local model = rock.Model
+			local ores = table.clone(rock.Ores)
+			for stage = 1, n do
+				mining.blast(p, model)
+				w.step()
+				mining.blast(p, nil)
+				T.eq(#w.spawned, stage, kind .. ": ore " .. stage .. " dropped at stage " .. stage)
+				T.eq(w.spawned[stage].Info.OreId, ores[stage], kind .. ": the next rolled ore")
+			end
+			T.eq(mining.rock(model), nil, kind .. ": shattered at the last stage")
+			T.eq(count(w, "Fx", "NodeCrack"), n - 1, kind .. ": a crack per stage before the shatter")
+			T.eq(#w.stages, n - 1, kind .. ": RockBuilder.applyStage per crack")
+			local crack = last(w, "Fx", "NodeCrack")
+			T.eq(crack.Args[6], n, kind .. ": NodeCrack tells the stage count")
+			local boom = last(w, "Fx", "NodeShatter")
+			T.eq(boom.Args[5], 1, "NodeShatter tells the floor")
+			T.eq(boom.Args[6], kind, "NodeShatter tells the kind")
+			noOreLeaks(w)
+		end
+	end)
+
+	withFloorWorld("Mining: deeper floors need stronger blasters", function(w)
+		local p = w.player
+		p.data.BlasterLevel = 5
+		w.rolls = { 0.99 }
+		local rock = mining.spawnRock(floorMarker(w, 4))
+		mining.blast(p, rock.Model)
+		w.step()
+		T.eq(rock.Health, rock.MaxHealth, "level 5 can't hurt a floor 4 rock")
+		T.eq(last(w, "Notify").Args[1].Text, "Needs a Level 7 blaster")
+		p.data.BlasterLevel = 7
+		w.step(3.1)
+		T.truthy(rock.Health < rock.MaxHealth, "level 7 mines floor 4")
+	end)
+
+	withFloorWorld("Mining: the Giant Crystal appears, is shared, and rewards everyone who helped", function(w)
+		local a, b = w.player, w.other
+		a.data.BlasterLevel = 10
+		b.data.BlasterLevel = 10
+		b.root.Position = Vector3.new(0, 3, 6)
+		mining.addGiant(floorMarker(w, 3, nil, false, "Giant"))
+		local giant = mining.giants()[1]
+		T.truthy(giant and giant.Rock == nil, "no giant yet")
+		w.step(MineFloors.GiantCrystal.Interval * 0.5 + 1)
+		local rock = giant.Rock
+		T.truthy(rock and rock.Kind == "Giant", "the Giant Crystal appeared")
+		T.eq(rock.MaxHealth, MineFloors.rockHealth(3, "Giant"), "giant HP")
+		local model = rock.Model
+		-- b deals a tiny share first, a does the rest
+		rock.MaxHealth = 10000
+		rock.Health = 10000
+		mining.blast(b, model)
+		w.step()
+		mining.blast(b, nil)
+		T.truthy(rock.Damage[b] < rock.MaxHealth * MineFloors.GiantCrystal.MinDamageShare, "b's share is tiny")
+		mining.blast(a, model)
+		local ticks = 0
+		while mining.rock(model) and ticks < 200 do
+			w.step()
+			ticks += 1
+		end
+		T.eq(mining.rock(model), nil, "the giant shattered")
+		local toA, toB = 0, 0
+		for _, drop in w.spawned do
+			local weights = MineFloors.get(3).CrystalOres
+			T.truthy(weights[drop.Info.OreId], "giant ores are crystal ores")
+			if drop.Owner == a.UserId then
+				toA += 1
+			elseif drop.Owner == b.UserId then
+				toB += 1
+			end
+		end
+		T.eq(toA, MineFloors.OreCount.Giant, "the main helper gets the giant's ores")
+		T.eq(toB, 0, "a tiny share gets nothing")
+		T.eq(giant.Rock, nil, "the spot waits for the next giant")
+		T.near(giant.At, w.now + MineFloors.GiantCrystal.Interval, 0.5, "back after Interval")
 		noOreLeaks(w)
 	end)
 

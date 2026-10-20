@@ -476,7 +476,7 @@ HudBubble.GameMenu = {
 	HudBubble.Menu[2],
 	HudBubble.Menu[3],
 	HudBubble.Menu[4],
-	{ Id = "Elevator", Label = "LIFT", Icon = "lift", Role = "Base" },
+	{ Id = "Elevator", Label = "ELEVATOR", Icon = "lift", Role = "Base" }, -- the side menu's Elevator entry claims it
 	HudBubble.Menu[5],
 } :: { MenuEntry }
 

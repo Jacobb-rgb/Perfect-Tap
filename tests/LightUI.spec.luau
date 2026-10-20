@@ -70,19 +70,16 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("LightUI: teleport tabs, LIFT tile and BUILD tile", function()
+	T.test("LightUI: teleport tabs and BUILD tile", function()
 		withLight(function()
 			for _, scale in { 1.25, 0.62 } do
 				local refs = ui("HudBubble").buildGame(scale)
-				local teleport = TeleportView.build(refs.TopBar, refs.Menu, scale)
+				local teleport = TeleportView.build(refs.TopBar, scale)
 				for _, id in { "Base", "Lobby", "Vault" } do
 					T.truthy(teleport.Buttons[id], "tab " .. id)
 					T.eq(teleport.Buttons[id]:GetAttribute("Teleport"), id, "teleport id")
 				end
-				T.truthy(teleport.Side, "LIFT tile")
-				T.falsy((teleport.Side.Parent :: any).Visible, "LIFT hidden until an elevator exists")
-				TeleportView.setSideVisible(teleport, true)
-				T.truthy((teleport.Side.Parent :: any).Visible, "LIFT shows with an elevator")
+				T.falsy(teleport.Buttons.Elevator, "the elevator's tile is the side menu's")
 				TeleportView.setCooldown(teleport, 3)
 				T.truthy(teleport.Covers.Base.Visible, "cooldown cover")
 				T.eq(teleport.Covers.Base.Text, "3", "seconds left")
@@ -242,7 +239,7 @@ return function(T, Loader)
 			T.eq(build.NextSelectionDown, lift, "down the column")
 			T.eq(lift.NextSelectionUp, build, "up the column")
 			T.truthy(shop.NextSelectionRight ~= lift, "the row ends at SHOP")
-			local teleport = TeleportView.build(refs.TopBar, refs.Menu, 1.25)
+			local teleport = TeleportView.build(refs.TopBar, 1.25)
 			T.eq(teleport.Buttons.Base.NextSelectionRight, teleport.Buttons.Lobby, "BASE -> LOBBY")
 			T.eq(teleport.Buttons.Vault.NextSelectionLeft, teleport.Buttons.Lobby, "VAULT -> LOBBY")
 			local outline = HudBubble.selectionImage()
@@ -409,31 +406,23 @@ return function(T, Loader)
 		end
 
 		withLight(function()
-			local entries = SideMenuView.Entries
-			local had = SideMenuView.hasEntry("Elevator")
-			local added = false
-			if not had then
-				table.insert(entries, { Id = "Elevator", Label = "ELEVATOR", IconName = "lift", Group = "Main", Order = 50 })
-				added = true
-			end
-			local done, problem = pcall(function()
-				local refs = HudBubble.buildGame(1.25)
-				local teleport = TeleportView.build(refs.TopBar, refs.Menu, 1.25)
-				T.falsy(teleport.Side, "the LIFT teleport leaves the tile to the side menu's Elevator")
-				local count = 0
-				for _, child in refs.Menu:GetChildren() do
-					if child.Name == "Elevator" then
-						count += 1
-					end
+			local refs = HudBubble.buildGame(1.25)
+			TeleportView.build(refs.TopBar, 1.25)
+			for _, entry in SideMenuView.sorted() do
+				local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+				if entry.Group == "Main" then
+					HudBubble.claimTile(refs.Menu, entry.Id, spec)
 				end
-				T.eq(count, 1, "one ELEVATOR tile")
-			end)
-			if added then
-				table.remove(entries, #entries)
 			end
-			if not done then
-				error(problem, 0)
+			local count = 0
+			for _, child in refs.Menu:GetChildren() do
+				if child.Name == "Elevator" then
+					count += 1
+				end
 			end
+			T.eq(count, 1, "one ELEVATOR tile (the side menu's Elevator entry)")
+			local label = refs.Menu.Elevator:FindFirstChild("Label", true)
+			T.eq(label and label.Text, "ELEVATOR", "named like the side menu entry")
 		end)
 	end)
 end

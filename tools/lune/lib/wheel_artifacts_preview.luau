@@ -197,7 +197,7 @@ local function hud(Loader: any, renderScale: number, uiScale: number): any
 		HudView.slot(refs.CarrySlots, nil, i)
 	end
 	refs.Toasts:ClearAllChildren()
-	TeleportView.build(refs.TopBar, refs.Menu, uiScale, 1600 / renderScale * uiScale)
+	TeleportView.build(refs.TopBar, uiScale, 1600 / renderScale * uiScale)
 	local BuildView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BuildView")
 	BuildView.menuButton(refs.Menu)
 	-- (no BOOK button: with the side menu in the game its ARTIFACTS button is the book's one entry)

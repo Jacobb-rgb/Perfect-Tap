@@ -72,6 +72,7 @@ local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PlayerControls = require(script.Parent.Parent.Util.PlayerControls)
+local Loading = require(script.Parent.Parent.Util.Loading)
 local CleaningController = require(script.Parent.CleaningController)
 local DecorController = require(script.Parent.DecorController)
 local HudController = require(script.Parent.HudController)
@@ -764,7 +765,8 @@ local function updateChip()
 	local ready = isReady()
 	local busyScreen = screenBusy()
 	local tutorial = tutorialInTopRow()
-	local show = WheelView.chipVisible(ready, open, busy, busyScreen, tutorial)
+	-- (the FREE SPIN chip waits for the loading screen: Util/Loading)
+	local show = Loading.isDone() and WheelView.chipVisible(ready, open, busy, busyScreen, tutorial)
 	if c.Gui.Enabled ~= show then
 		c.Gui.Enabled = show
 	end
@@ -888,6 +890,10 @@ function WheelController.init()
 end
 
 function WheelController.start()
+	task.spawn(function()
+		Loading.wait()
+		updateChip()
+	end)
 	buildChip()
 	-- the touch tutorial bubble takes the chip's spot: the chip steps aside at once
 	local tutorial = MenuPanels.controller("TutorialController")

@@ -1,0 +1,8 @@
+{
+ "mine_floor1_overview": {"scene": "mine_floor_1", "position": [0, 55, 95], "target": [0, 0, -10], "fov": 55, "preset": "Quarry", "shadowExtent": 160, "maxLights": 24, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_entrance": {"scene": "mine_floor_1", "position": [-1.5, 7.5, 47.5], "target": [1, 4.5, -10], "fov": 62, "preset": "Quarry", "shadowExtent": 120, "maxLights": 24, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_tunnel": {"scene": "mine_floor_1", "position": [-5, 9, -12], "target": [0, 8, -42], "fov": 55, "preset": "Quarry", "shadowExtent": 80, "maxLights": 24, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_high": {"scene": "mine_floor_1", "position": [-70, 80, 100], "target": [0, 0, -5], "fov": 50, "preset": "Quarry", "shadowExtent": 170, "maxLights": 24, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_walls_left": {"scene": "mine_floor_1", "position": [-10, 16, 30], "target": [-46, 8, 0], "fov": 60, "preset": "Quarry", "shadowExtent": 100, "maxLights": 24, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_walls_right": {"scene": "mine_floor_1", "position": [12, 14, 26], "target": [46, 12, 0], "fov": 60, "preset": "Quarry", "shadowExtent": 100, "maxLights": 24, "sunDir": [-0.5, 0.72, 0.48]}
+}

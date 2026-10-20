@@ -1,8 +1,10 @@
 -- Quick teleports: TeleportService's destinations (BASE at the front of
 -- your plot, LOBBY at the town spawn, VAULT in front of the Blaster Vault,
 -- the elevator stop), its refusals (cooldown, no base, closed place, dead,
--- cleaning, junk input) and TeleportView's layout (phone touch size, the
--- bar fitting next to the coins, cooldown covers, the side icon).
+-- cleaning, junk input), which elevator stop the "Elevator" jump picks (the
+-- floor you are on, else floor 1's, else the lowest) and TeleportView's
+-- layout (phone touch size, the bar fitting next to the coins, cooldown
+-- covers; no elevator button: that is ElevatorController's side button).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Instance = roblox.Instance
@@ -65,7 +67,8 @@ return function(T, Loader)
 			patch(TeleportService, "groundAt", function(p: any)
 				return Vector3.new(p.X, 0, p.Z)
 			end)
-			patch(TeleportService, "elevatorStop", function()
+			patch(TeleportService, "elevatorStop", function(floor: number?)
+				w.askedFloor = floor
 				return w.elevator
 			end)
 			TeleportService._test.reset()
@@ -158,6 +161,51 @@ return function(T, Loader)
 		T.near(localPos.X, 0, 1e-6, "no spread at the elevator")
 	end)
 
+	withWorld("Teleport: the elevator jump asks for the stop of the mine floor you are on", function(w)
+		local base = Instance.new("Part")
+		base.Size = Vector3.new(10, 1, 8)
+		base.CFrame = CFrame.new(40, -20, 60)
+		w.elevator = base
+		-- standing in Ember Caves (floor 2)
+		local caves = WorldLayout.ZoneById.EmberCaves
+		w.root.CFrame = CFrame.new((caves.Min + caves.Max) / 2)
+		T.truthy(w.go("Elevator").Ok)
+		T.eq(w.askedFloor, 2, "floor 2's stop")
+		-- in town: no floor (floor 1's stop, else the lowest)
+		TeleportService._test.reset()
+		w.root.CFrame = CFrame.new(WorldLayout.SpawnPoint)
+		T.truthy(w.go("Elevator").Ok)
+		T.eq(w.askedFloor, nil, "no floor in town")
+		T.eq(TeleportService.floorAt(WorldLayout.SpawnPoint), nil, "the town is no mine floor")
+		local palace = WorldLayout.ZoneById.SunkenPalace
+		T.eq(TeleportService.floorAt((palace.Min + palace.Max) / 2), 4, "Sunken Palace = floor 4")
+	end)
+
+	T.test("Teleport: pickStop takes the floor's stop, else floor 1's, else the lowest", function()
+		local folder = Instance.new("Folder")
+		local function stop(floor: number, withBase: boolean?): any
+			local model = Instance.new("Model")
+			model:SetAttribute("Floor", floor)
+			model.Parent = folder
+			if withBase ~= false then
+				local base = Instance.new("Part")
+				base.Name = "Base"
+				base.Parent = model
+			end
+			return model
+		end
+		local s1, s2, s3 = stop(1), stop(2), stop(3)
+		local broken = stop(4, false)
+		local list = { s3, broken, s2, s1 }
+		T.eq(TeleportService.pickStop(list, 2), s2.Base, "the floor's own stop")
+		T.eq(TeleportService.pickStop(list, 4), s1.Base, "a stop without a Base doesn't count: floor 1's")
+		T.eq(TeleportService.pickStop(list, nil), s1.Base, "no floor: floor 1's")
+		T.eq(TeleportService.pickStop({ s3, s2 }, 5), s2.Base, "no floor 1: the lowest")
+		s2.Parent = nil
+		T.eq(TeleportService.pickStop({ s3, s2 }, 2), s3.Base, "a stop that left the world doesn't count")
+		T.eq(TeleportService.pickStop({}, 1), nil, "no stops")
+	end)
+
 	withWorld("Teleport: dead, cleaning and junk requests", function(w)
 		local before = w.at()
 		w.cleaning = true
@@ -223,31 +271,24 @@ return function(T, Loader)
 		T.falsy(TeleportView.layout(0.62, 667).IconOnly, "667 pt keeps the names")
 	end)
 
-	T.test("TeleportView: three bar buttons, a hidden side icon, cooldown covers", function()
+	T.test("TeleportView: three bar buttons (no elevator icon: the side menu has it), cooldown covers", function()
 		local gui = Instance.new("ScreenGui")
 		local topBar = Instance.new("Frame")
 		topBar.Parent = gui
 		Instance.new("UIListLayout").Parent = topBar
-		local menu = Instance.new("Frame")
-		menu.Parent = gui
-		local refs = TeleportView.build(topBar, menu, 1)
+		local refs = TeleportView.build(topBar, 1)
 		local count = 0
 		for id, button in refs.Buttons do
 			local spot = TeleportConfig.ById[id]
 			T.truthy(spot, id)
-			if spot.Bar then
-				count += 1
-				T.truthy(button:IsDescendantOf(topBar), id .. " in the bar")
-				T.eq(button:FindFirstChild("Label").Text, spot.Label)
-			else
-				T.truthy(button:IsDescendantOf(menu), id .. " on the side")
-			end
+			T.truthy(spot.Bar, id .. " is a bar spot")
+			count += 1
+			T.truthy(button:IsDescendantOf(topBar), id .. " in the bar")
+			T.eq(button:FindFirstChild("Label").Text, spot.Label)
 		end
 		T.eq(count, 3, "BASE, LOBBY, VAULT")
-		T.truthy(refs.Side, "the elevator icon")
-		T.falsy(refs.Side.Parent.Visible, "hidden until there is an elevator")
-		TeleportView.setSideVisible(refs, true)
-		T.truthy(refs.Side.Parent.Visible, "shown")
+		T.eq(refs.Buttons.Elevator, nil, "no LIFT icon (ElevatorController's side button sends the jump)")
+		T.truthy(TeleportConfig.ById.Elevator, "the Elevator destination still exists")
 		TeleportView.setCooldown(refs, 2.4)
 		for _, cover in refs.Covers do
 			T.truthy(cover.Visible, "cover on")

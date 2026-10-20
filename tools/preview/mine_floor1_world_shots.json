@@ -1,0 +1,8 @@
+{
+ "mine_floor1_world_town": {"scene": "world_f1", "position": [0, 40, -95], "target": [0, -8, -190], "fov": 55, "preset": "Quarry", "shadowExtent": 200, "maxLights": 32, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_world_inside": {"scene": "world_f1", "position": [-3, -5.5, -174], "target": [1, -6, -235], "fov": 62, "preset": "Quarry", "shadowExtent": 140, "maxLights": 32, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_world_high": {"scene": "world_f1", "position": [-90, 60, -110], "target": [0, -10, -185], "fov": 50, "preset": "Quarry", "shadowExtent": 220, "maxLights": 32, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_world_lobby_hero": {"scene": "world_f1", "position": [5.1, 70.1, 151.3], "target": [9, 23, -40], "fov": 42, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 280, "maxLights": 32},
+ "mine_floor1_world_grotto": {"scene": "world_f1", "position": [22, -2, -168], "target": [66, -7, -182], "fov": 58, "preset": "Quarry", "shadowExtent": 120, "maxLights": 32, "sunDir": [-0.5, 0.72, 0.48]},
+ "mine_floor1_world_portal": {"scene": "world_f1", "position": [-30, -2, -170], "target": [-70, -5, -156], "fov": 58, "preset": "Quarry", "shadowExtent": 120, "maxLights": 32, "sunDir": [-0.5, 0.72, 0.48]}
+}

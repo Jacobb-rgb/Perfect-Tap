@@ -41,7 +41,15 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(kinds, 5, "waterfall, brook, pond, forge, plaza")
+		local MineAmbience = Loader.requirePath("ReplicatedStorage.Shared.Config.MineAmbience")
+		local mineKinds = 0
+		for _ in MineAmbience.Kinds do
+			mineKinds += 1
+		end
+		T.eq(kinds, #AmbienceConfig.LobbyKinds + mineKinds, "the lobby's 5 kinds + the mine floors' (MineAmbience)")
+		for _, kind in AmbienceConfig.LobbyKinds do
+			T.truthy(AmbienceConfig.Kinds[kind], kind .. " is a lobby kind")
+		end
 		local wind = SoundConfig[AmbienceConfig.Wind.Sound]
 		T.truthy(wind and wind.Looped, "the wind loops")
 	end)
@@ -76,7 +84,9 @@ return function(T, Loader)
 		local count: { [string]: number } = {}
 		local total = 0
 		for _, d in map:GetDescendants() do
-			if d.ClassName == "Attachment" and table.find(d:GetTags(), AmbienceConfig.Tag) then
+			local lobbyKind = d.ClassName == "Attachment" and table.find(AmbienceConfig.LobbyKinds, d:GetAttribute(AmbienceConfig.Attribute))
+			-- (the mine floors' spots: tests/MineAmbience.spec.luau)
+			if lobbyKind and table.find(d:GetTags(), AmbienceConfig.Tag) then
 				total += 1
 				local kind = d:GetAttribute(AmbienceConfig.Attribute)
 				T.truthy(type(kind) == "string" and AmbienceConfig.Kinds[kind], `{d.Name} has a known kind`)
