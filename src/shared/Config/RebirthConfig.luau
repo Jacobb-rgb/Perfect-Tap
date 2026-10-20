@@ -3,8 +3,13 @@
 	docs/plans/REBIRTH_PROPOSAL.md): an optional restart that keeps your
 	factory and pays Forge Stars, spent in the Star Shop on lasting perks.
 
-	- Needs your blaster at MinBlaster or higher. Rebirth is never forced,
-	  never sold for Robux, and nothing in it is random.
+	- Needs your blaster at MinBlaster or higher, FORGED at the Foundry in
+	  this run (reachedOf: Stats.RunForged, which FoundryService raises and
+	  the reset clears; the first run counts the blaster level as it is).
+	  Vault cases are bought with coins only, and Podium Keeper keeps the
+	  income: counting them would make the stars a few minutes of idle
+	  income each. Rebirth is never forced, never sold for Robux, and
+	  nothing in it is random.
 	- Resets (reset(), one step on the save): coins, the blaster (level 1, or
 	  Head Start's level in that level's Vault look), the mine floors with it
 	  (MineFloors opens them by blaster level) and the elevator, the machine
@@ -12,12 +17,19 @@
 	  capacity and speed, the Backpack, and every ore you own: the Ore Pen,
 	  the podiums (unless Podium Keeper), the Foundry's ingots, the train's
 	  cargo, the machines' queues (RebirthService also takes your loose and
-	  carried items out of the world).
+	  carried items out of the world). Dusty relics are artifacts, never
+	  ore: the ones in those lists wait in the pen (RebirthService hands them
+	  to the relic keeper, which adds them to the collection). The enchants
+	  stay slotted, the paid ones (Enchants.Passes) moved first into the
+	  slots the new blaster level opens.
 	- Keeps: the placed factory (every machine and belt where it stands), the
 	  machines in your inventory, machine slots, the pen size and automation,
 	  the other gear lines, golems, enchants, artifacts, the codex,
 	  hoverboards, shards, every Robux item, stats and the leaderboard totals.
-	- Pays: starsFor(the blaster level you reached), Rebirths + 1.
+	- Pays: starsFor(reachedOf), Rebirths + 1. Stats.BestBlaster keeps the
+	  highest level ever reached: coin prices that grow with the blaster
+	  follow it (BlasterData.priceLevel), so a rebirth never makes capsules
+	  or coin boosts cheaper.
 	- Coins bought with a Robux coin pack are plain coins: a rebirth resets
 	  them like any coins. The packs are off today (MonetizationConfig
 	  CoinPacksEnabled); whether a rebirth should keep bought coins is the
@@ -43,6 +55,7 @@
 ]]
 
 local BlasterData = require(script.Parent.BlasterData)
+local EnchantConfig = require(script.Parent.EnchantConfig)
 
 export type Perk = {
 	Id: string,
@@ -60,7 +73,7 @@ RebirthConfig.MinBlaster = BlasterData.MaxLevel - 4
 RebirthConfig.MinStars = 2 -- a rebirth at MinBlaster
 RebirthConfig.MaxStars = 10 -- a rebirth at the top level
 RebirthConfig.ConfirmSeconds = 4 -- the REBIRTH! button's "SURE?" waits this long for the second press
-RebirthConfig.Reasons = { "NoData", "Locked", "Busy", "Failed", "BadPerk", "Max", "NoStars" }
+RebirthConfig.Reasons = { "NoData", "Locked", "NotForged", "Busy", "Failed", "BadPerk", "Max", "NoStars" }
 
 RebirthConfig.Perks = {
 	{
@@ -263,7 +276,30 @@ end
 
 ---------------------------------------------------------------- the rebirth
 
--- Can this save rebirth now? (false + "NoData" | "Locked")
+-- A save's rebirth count (whole, >= 0).
+function RebirthConfig.countOf(data: any): number
+	local v = if type(data) == "table" then data.Rebirths else nil
+	return if finite(v) and v > 0 then math.floor(v) else 0
+end
+
+-- The blaster level this run counts for the stars: the highest one forged at
+-- the Foundry in it (Stats.RunForged, at most the level now); the first run
+-- (no rebirth yet) counts the blaster level as it is.
+function RebirthConfig.reachedOf(data: any): number
+	if type(data) ~= "table" then
+		return 0
+	end
+	local level = BlasterData.get(data.BlasterLevel).Level
+	if RebirthConfig.countOf(data) == 0 then
+		return level
+	end
+	local stats = data.Stats
+	local run = if type(stats) == "table" then stats.RunForged else nil
+	return if finite(run) and run > 0 then math.min(math.floor(run), level) else 0
+end
+
+-- Can this save rebirth now? (false + "NoData" | "Locked" (the blaster is
+-- below MinBlaster) | "NotForged" (it is, but this run forged no such level))
 function RebirthConfig.canRebirth(data: any): (boolean, string?)
 	if type(data) ~= "table" then
 		return false, "NoData"
@@ -271,13 +307,10 @@ function RebirthConfig.canRebirth(data: any): (boolean, string?)
 	if BlasterData.get(data.BlasterLevel).Level < RebirthConfig.MinBlaster then
 		return false, "Locked"
 	end
+	if RebirthConfig.reachedOf(data) < RebirthConfig.MinBlaster then
+		return false, "NotForged"
+	end
 	return true, nil
-end
-
--- A save's rebirth count (whole, >= 0).
-function RebirthConfig.countOf(data: any): number
-	local v = if type(data) == "table" then data.Rebirths else nil
-	return if finite(v) and v > 0 then math.floor(v) else 0
 end
 
 local function record(data: { [string]: any }, key: string): { [string]: any }
@@ -296,9 +329,37 @@ end
 	train on its way) is RebirthService's job.
 ]]
 function RebirthConfig.reset(data: { [string]: any }): (number, number)
-	local reached = BlasterData.get(data.BlasterLevel).Level
-	local stars = RebirthConfig.starsFor(reached)
+	local level = BlasterData.get(data.BlasterLevel).Level
+	local stars = RebirthConfig.starsFor(RebirthConfig.reachedOf(data))
 	local perks = data.StarPerks
+	local stats = record(data, "Stats")
+	-- the highest level ever (BlasterData.priceLevel: prices never drop), a new run
+	stats.BestBlaster = math.max(if finite(stats.BestBlaster) then math.floor(stats.BestBlaster) else 0, level)
+	stats.RunForged = 0
+	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper)
+	local relics = {}
+	local function keepRelics(list: any)
+		if type(list) == "table" then
+			for _, item in list do
+				if type(item) == "table" and item.K == "Relic" and type(item.O) == "string" then
+					table.insert(relics, { K = "Relic", O = item.O, G = item.G, R = item.R })
+				end
+			end
+		end
+	end
+	keepRelics(data.Storage)
+	if type(data.Train) == "table" then
+		keepRelics(data.Train.Cargo)
+		keepRelics(data.Train.TripCargo)
+	end
+	if type(data.PlacedMachines) == "table" then
+		for _, entry in data.PlacedMachines do
+			if type(entry) == "table" then
+				keepRelics(entry.In)
+				keepRelics(entry.Out)
+			end
+		end
+	end
 	-- money and the blaster (the floors and the enchant slots follow the blaster level)
 	data.Coins = 0
 	data.ShardRolls = 0
@@ -319,7 +380,7 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	train.TripArriveAt = 0
 	record(data, "Gear").Backpack = 0
 	-- every ore you own (the factory itself stays where it stands)
-	data.Storage = {}
+	data.Storage = relics
 	record(data, "Foundry").Stock = {}
 	if RebirthConfig.levelOf(perks, "PodiumKeeper") < 1 and type(data.Podiums) == "table" then
 		for i, key in data.Podiums do
@@ -336,11 +397,28 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 			end
 		end
 	end
+	-- the enchants stay slotted: the paid ones first, into the slots the new level opens
+	local enchants = data.Enchants
+	if type(enchants) == "table" and type(enchants.Slots) == "table" then
+		local slots = enchants.Slots
+		local passes = if type(enchants.Passes) == "table" then enchants.Passes else {}
+		local ordered = {}
+		for _, paid in { true, false } do
+			for i = 1, EnchantConfig.MaxSlots do
+				local id = slots[i]
+				if type(id) == "string" and id ~= "" and (passes[id] == true) == paid then
+					table.insert(ordered, id)
+				end
+			end
+		end
+		for i = 1, EnchantConfig.MaxSlots do
+			slots[i] = ordered[i] or ""
+		end
+	end
 	-- the reward
 	data.Stars = RebirthConfig.starsOf(data) + stars
 	local count = RebirthConfig.countOf(data) + 1
 	data.Rebirths = count
-	local stats = record(data, "Stats")
 	stats.StarsEarned = (if finite(stats.StarsEarned) and stats.StarsEarned > 0 then math.floor(stats.StarsEarned) else 0) + stars
 	return stars, count
 end

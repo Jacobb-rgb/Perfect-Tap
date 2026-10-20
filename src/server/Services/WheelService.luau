@@ -65,6 +65,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
@@ -310,7 +311,7 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 				}
 			end
 		else
-			award(player, WheelConfig.capsuleFallbackCoins(capsuleId, data.BlasterLevel), result)
+			award(player, WheelConfig.capsuleFallbackCoins(capsuleId, BlasterData.priceLevel(data)), result)
 			if opened.Full then
 				result.Full = true
 			end

@@ -122,6 +122,8 @@ local DataTemplate = {
 		WheelSpins = 0,
 		WheelOres = 0, -- dirty ores the wheel's ore prize put into the Ore Pen (the tutorial doesn't count them)
 		StarsEarned = 0, -- every Forge Star a rebirth paid (RebirthConfig.reset)
+		BestBlaster = 0, -- the highest blaster level before a rebirth (BlasterData.priceLevel)
+		RunForged = 0, -- the highest blaster level forged at the Foundry this rebirth run
 	},
 	Tutorial = { Step = 1, Done = false },
 	-- (Daily, the 7-day Ember Chest streak, is retired: the daily wheel replaced it, Migrations removes it)

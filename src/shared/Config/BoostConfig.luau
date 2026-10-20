@@ -312,7 +312,14 @@ end
 -- player, or nil + "BadOffer" | "NoEffect" | "CoinLimit" | "Full"
 -- (Reasons). The caller then checks the coins ("NoCoins"), pays and
 -- extend()s with capped = true, all without yielding.
-function BoostConfig.coinQuote(boosts: any, offerId: any, blasterLevel: any, vip: boolean?, now: number): (number?, string?)
+function BoostConfig.coinQuote(
+	boosts: any,
+	offerId: any,
+	blasterLevel: any,
+	vip: boolean?,
+	now: number,
+	priceLevel: any?
+): (number?, string?)
 	local offer = if type(offerId) == "string" then BoostConfig.OfferById[offerId] else nil
 	if not offer or offer.Product ~= nil then
 		return nil, "BadOffer"
@@ -326,7 +333,8 @@ function BoostConfig.coinQuote(boosts: any, offerId: any, blasterLevel: any, vip
 	if not BoostConfig.canExtend(boosts, offer.Boost, offer.Seconds, now) then
 		return nil, "Full"
 	end
-	return BoostConfig.coinPrice(offer.Id, blasterLevel), nil
+	-- (the price follows BlasterData.priceLevel when given: a rebirth never lowers it)
+	return BoostConfig.coinPrice(offer.Id, if priceLevel ~= nil then priceLevel else blasterLevel), nil
 end
 
 -- Is buying this offer a paid random item? Robux packs always; coin offers

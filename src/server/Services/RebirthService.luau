@@ -36,6 +36,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local RebirthConfig = require(Shared.Config.RebirthConfig)
+local BlasterData = require(Shared.Config.BlasterData)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
@@ -83,13 +84,26 @@ local function doRebirth(player: Player, data: { [string]: any }): (number, numb
 	PlotService.reload(player, function()
 		PodiumService.settleOffline(player)
 		-- every item the player owns leaves the world (the unload above already
-		-- stashed the vise ore: the reset empties the pen with it)
+		-- stashed the vise ore: the reset empties the pen with it); a dusty
+		-- relic is an artifact: stashed (the relic keeper adds it to the collection)
 		for _, record in ItemService.ownedBy(player.UserId) do
 			if record.State ~= "Consumed" then
-				ItemService.destroy(record)
+				if record.Kind == "Relic" then
+					ItemService.stash(record, nil)
+				else
+					ItemService.destroy(record)
+				end
 			end
 		end
 		stars, count = RebirthConfig.reset(data)
+		-- the relics the reset kept in the pen (from queues, the train, the pen) go to the keeper
+		local storage = data.Storage
+		for i = #storage, 1, -1 do
+			local item = storage[i]
+			if type(item) == "table" and item.K == "Relic" and ItemService.keepRelic(player, item.O) then
+				table.remove(storage, i)
+			end
+		end
 	end)
 	return stars, count
 end
@@ -202,7 +216,8 @@ function RebirthService.snapshot(data: { [string]: any }): { [string]: any }
 		Earned = earnedOf(data),
 		Perks = perks,
 		Ready = ready,
-		StarsNow = RebirthConfig.starsFor(data.BlasterLevel),
+		StarsNow = RebirthConfig.starsFor(RebirthConfig.reachedOf(data)),
+		Reached = RebirthConfig.reachedOf(data),
 		MinBlaster = RebirthConfig.MinBlaster,
 	}
 end
@@ -219,6 +234,8 @@ function RebirthService.init()
 	Net.on("RebirthAction", onAction)
 	StateService.addProvider(function(_player: Player, data: { [string]: any }, snapshot: { [string]: any })
 		snapshot.Rebirth = RebirthService.snapshot(data)
+		-- coin prices that grow with the blaster follow the best level ever (CapsuleView, BoostView)
+		snapshot.PriceLevel = BlasterData.priceLevel(data)
 	end)
 	DataService.onLoaded(function(player: Player, data: { [string]: any })
 		showStars(player, data)

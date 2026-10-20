@@ -24,6 +24,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.Config.UITheme)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
+local EnchantConfig = require(Shared.Config.EnchantConfig)
 local Rng = require(Shared.Util.Rng)
 local UIKit = require(script.Parent.UIKit)
 local MenuPanel = require(script.Parent.MenuPanel)
@@ -40,6 +41,7 @@ export type Info = {
 	Level: number, -- the blaster level now
 	Ready: boolean,
 	StarsNow: number, -- what a rebirth now pays
+	Reached: number?, -- the level this run counts (RebirthConfig.reachedOf)
 }
 
 export type Column = { Frame: Frame, Chip: TextLabel, Rows: { TextLabel } }
@@ -95,6 +97,10 @@ RebirthView.TitleRoom = 250
 -- The rows of the three columns for a save (Head Start's level, Podium Keeper).
 function RebirthView.lists(perks: any): { [string]: { string } }
 	local start = RebirthConfig.startLevel(perks)
+	local open = EnchantConfig.unlockedSlots(start)
+	local enchantRow = if open < EnchantConfig.MaxSlots
+		then `✨  Enchant slots {open + 1}-{EnchantConfig.MaxSlots} for now`
+		else "✨  Enchant slots stay open"
 	local keepsPodiums = RebirthConfig.levelOf(perks, "PodiumKeeper") > 0
 	return {
 		Lose = {
@@ -102,8 +108,8 @@ function RebirthView.lists(perks: any): { [string]: { string } }
 			`🔫  Blaster back to LV {start}`,
 			"⛏️  Floors and elevator",
 			"⚙️  Machine speed",
-			"🚂  Train upgrades",
-			"🎒  Backpack upgrades",
+			"🚂  Train and backpack levels",
+			enchantRow,
 			if keepsPodiums then "🪨  Ore (podiums stay)" else "🪨  All your ore",
 		},
 		Keep = {
@@ -124,8 +130,13 @@ end
 
 -- What the bottom line says (the requirement, or what a rebirth pays now).
 function RebirthView.needText(info: Info): string
+	local reached = info.Reached or info.Level
 	if info.Ready then
-		return `Blaster LV {info.Level}: a rebirth now pays ⭐ {info.StarsNow}`
+		return `Blaster LV {reached}: a rebirth now pays ⭐ {info.StarsNow}`
+	end
+	if info.Level >= RebirthConfig.MinBlaster then
+		-- a level from the Vault: after the first rebirth the stars want a forged one
+		return `Forge blaster LV {RebirthConfig.MinBlaster} at the Foundry to rebirth (Vault cases don't count)`
 	end
 	return `Reach blaster LV {RebirthConfig.MinBlaster} to rebirth (you have LV {info.Level})`
 end

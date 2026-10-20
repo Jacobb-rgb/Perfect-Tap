@@ -27,6 +27,9 @@ return function(T, Loader)
 	local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 	local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
 	local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
+	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
+	local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
 	local ElevatorService = Loader.requirePath("ServerScriptService.Server.Services.ElevatorService")
 
 	local MIN, TOP = RebirthConfig.MinBlaster, BlasterData.MaxLevel
@@ -67,15 +70,24 @@ return function(T, Loader)
 		data.PlacedMachines = {
 			{ Id = "Crusher", X = 1, Z = 1, R = 0, In = { { K = "Raw", O = "Gold" } }, Out = { { K = "Crushed", O = "Gold" } } },
 			{ Id = "Sorter", X = 4, Z = 1, R = 1, C = 3 },
+			-- a dusty relic queued at the Restoration Table
+			{ Id = "RestorationTable", X = 7, Z = 1, R = 0, In = { { K = "Relic", O = "CrownCoin" } } },
 		}
 		data.StarterKitGiven = true
-		data.Storage = { { K = "Clean", O = "Gold", G = "Pristine" }, { K = "Raw", O = "Coal" } }
+		data.Storage = { { K = "Clean", O = "Gold", G = "Pristine" }, { K = "Raw", O = "Coal" }, { K = "Relic", O = "AncientGear" } }
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "" }
 		data.Foundry.Stock = { { K = "Ingot", O = "Gold", G = "Clean" } }
-		data.Train =
-			{ CapacityLevel = 3, SpeedLevel = 4, Cargo = { { K = "Raw", O = "Coal" } }, TripCargo = {}, TripDepartAt = 0, TripArriveAt = 0 }
+		data.Train = {
+			CapacityLevel = 3,
+			SpeedLevel = 4,
+			Cargo = { { K = "Raw", O = "Coal" }, { K = "Relic", O = "MinersLamp" } },
+			TripCargo = {},
+			TripDepartAt = 0,
+			TripArriveAt = 0,
+		}
 		data.Gear = { Boots = 3, HelmetLamp = 2, Backpack = 4, Gloves = 1, Magnet = 2 }
-		data.Enchants = { Owned = { Lucky = 2 }, Slots = { "Lucky", "", "", "" } }
+		-- slot 2 holds a paid enchant (a game pass gave it)
+		data.Enchants = { Owned = { Lucky = 2, Midas = 3 }, Slots = { "Lucky", "Midas", "", "" }, Passes = { Midas = true } }
 		data.Golems = { Owned = { { Id = 1, Kind = "PebbleGolem" } }, Equipped = { 1 }, NextId = 2 }
 		data.Artifacts = { Found = { CrownCoin = 2 }, Chapters = {} }
 		data.Discovered = { Gold = true, Coal = true }
@@ -210,7 +222,11 @@ return function(T, Loader)
 		T.eq(data.Train.SpeedLevel, 0)
 		T.eq(#data.Train.Cargo, 0)
 		T.eq(data.Gear.Backpack, 0, "the backpack")
-		T.eq(#data.Storage, 0, "the pen")
+		-- the pen keeps only dusty relics (artifacts, never ore): from the pen, the train and the queues
+		T.eq(#data.Storage, 3, "the pen holds just the relics")
+		for _, item in data.Storage do
+			T.eq(item.K, "Relic", "only relics")
+		end
 		T.eq(#data.Foundry.Stock, 0, "the Foundry's ingots")
 		for i = 1, 4 do
 			T.eq(data.Podiums[i], "", "podium " .. i)
@@ -218,7 +234,7 @@ return function(T, Loader)
 		T.eq(data.PlacedMachines[1].In, nil, "queues")
 		T.eq(data.PlacedMachines[1].Out, nil)
 		-- kept: the factory and everything outside the list
-		T.eq(#data.PlacedMachines, 2, "the factory stays")
+		T.eq(#data.PlacedMachines, 3, "the factory stays")
 		T.eq(data.PlacedMachines[2].C, 3, "machine settings stay")
 		T.eq(data.PlacedMachines[1].X, 1)
 		for _, key in
@@ -227,7 +243,6 @@ return function(T, Loader)
 				"TotalEarned",
 				"MachineInventory",
 				"StarterKitGiven",
-				"Enchants",
 				"Golems",
 				"Artifacts",
 				"Discovered",
@@ -249,10 +264,19 @@ return function(T, Loader)
 			T.eq(data.Gear[key], before.Gear[key], key .. " is kept")
 		end
 		T.eq(data.Stats.OresMined, 500, "stats stay")
+		-- the enchants stay slotted, the paid one first (blaster LV 1 opens slot 1 only)
+		T.eq(data.Enchants.Slots[1], "Midas", "the paid enchant takes the open slot")
+		T.eq(data.Enchants.Slots[2], "Lucky", "the other waits in a slot that opens later")
+		T.truthy(deepEqual(data.Enchants.Owned, before.Enchants.Owned), "every enchant owned still")
+		T.truthy(deepEqual(data.Enchants.Passes, before.Enchants.Passes), "pass records untouched")
+		-- the best level is kept for the prices, the run starts with nothing forged
+		T.eq(data.Stats.BestBlaster, 8)
+		T.eq(data.Stats.RunForged, 0)
 		-- a rebirth right away is locked (blaster 1)
 		T.eq(select(2, RebirthConfig.canRebirth(data)), "Locked")
-		-- the next one adds up, and the save stays clean through Migrations
+		-- the next one adds up (a level forged at the Foundry this run), and the save stays clean through Migrations
 		data.BlasterLevel = TOP
+		data.Stats.RunForged = TOP
 		local more = RebirthConfig.reset(data)
 		T.eq(more, RebirthConfig.MaxStars)
 		T.eq(data.Rebirths, 2)
@@ -264,6 +288,50 @@ return function(T, Loader)
 		T.eq(report.Dropped, 0)
 	end)
 
+	T.test("Rebirth: no star farming with Vault levels; a rebirth never makes a coin price cheaper", function()
+		-- the first run counts the blaster as it is (players from before rebirth keep their way there)
+		local data = midRun()
+		data.StarPerks = { PodiumKeeper = 1 }
+		T.eq(RebirthConfig.reachedOf(data), 8, "first run: the level as it is")
+		local function prices(save: any): { number }
+			local level = BlasterData.priceLevel(save)
+			local list = {}
+			for _, capsule in CapsuleConfig.List do
+				local price = CapsuleConfig.price(capsule.Id, 10, level)
+				if price then
+					table.insert(list, price)
+				end
+			end
+			for _, offer in BoostConfig.CoinOffers do
+				local price = BoostConfig.coinPrice(offer.Id, level)
+				if price then
+					table.insert(list, price)
+				end
+			end
+			table.insert(list, WheelConfig.capsuleFallbackCoins("Crystal", level))
+			return list
+		end
+		local before = prices(data)
+		T.truthy(#before > 2, "some coin prices to compare")
+		RebirthConfig.reset(data)
+		T.truthy(deepEqual(prices(data), before), "the same coin prices right after the rebirth (BlasterData.priceLevel)")
+		-- run 2: Vault cases up to MinBlaster (coins only, the kept podiums pay for them)
+		data.BlasterLevel = MIN
+		T.eq(RebirthConfig.reachedOf(data), 0, "nothing forged this run")
+		local ok, reason = RebirthConfig.canRebirth(data)
+		T.falsy(ok)
+		T.eq(reason, "NotForged", "Vault levels don't count after the first rebirth")
+		T.eq(RebirthConfig.starsFor(RebirthConfig.reachedOf(data)), 0)
+		-- forged at the Foundry: it counts (never above the level held)
+		data.Stats.RunForged = MIN
+		T.truthy(RebirthConfig.canRebirth(data))
+		data.Stats.RunForged = TOP
+		T.eq(RebirthConfig.reachedOf(data), MIN, "at most the level held")
+		T.eq(RebirthConfig.reset(data), RebirthConfig.starsFor(MIN))
+		T.truthy(deepEqual(prices(data), before), "still the same prices two rebirths on")
+		T.eq(data.Stats.BestBlaster, 8, "never lowered")
+	end)
+
 	T.test("Rebirth: Head Start and Podium Keeper", function()
 		local data = midRun()
 		data.StarPerks = { HeadStart = 3, PodiumKeeper = 1 }
@@ -272,7 +340,7 @@ return function(T, Loader)
 		T.eq(data.BlasterOre, BlasterData.vaultOre(data.BlasterLevel), "in that level's Vault look")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|", "the podium ores stay")
 		T.eq(data.Podiums[3], "Clean|Copper|Rough|")
-		T.eq(#data.Storage, 0, "the pen still empties")
+		T.eq(#data.Storage, 3, "the pen still empties (only the relics wait there)")
 	end)
 
 	---------------------------------------------------------------- the service
@@ -308,10 +376,21 @@ return function(T, Loader)
 			end
 		end)
 		w.items = {
-			{ State = "Loose", Owner = 4401 },
-			{ State = "Carried", Owner = 4401 },
-			{ State = "Consumed", Owner = 4401 },
+			{ State = "Loose", Owner = 4401, Kind = "Raw" },
+			{ State = "Carried", Owner = 4401, Kind = "Clean" },
+			{ State = "Consumed", Owner = 4401, Kind = "Raw" },
+			{ State = "Carried", Owner = 4401, Kind = "Relic", OreId = "GoldenIdol" },
 		}
+		w.stashed, w.kept = {}, {}
+		patch(ItemService, "stash", function(record)
+			table.insert(w.stashed, record)
+			record.State = "Consumed"
+			return true
+		end)
+		patch(ItemService, "keepRelic", function(_, artifactId)
+			table.insert(w.kept, artifactId)
+			return true
+		end)
 		patch(ItemService, "ownedBy", function(userId)
 			return if userId == 4401 then w.items else {}
 		end)
@@ -372,7 +451,16 @@ return function(T, Loader)
 		T.eq(result.Stars, RebirthConfig.starsFor(8))
 		T.eq(result.Rebirths, 1)
 		T.eq(w.reloads, 1, "the plot came down and up once")
-		T.eq(#w.destroyed, 2, "the loose and the carried item left the world (the consumed one was gone)")
+		T.eq(#w.destroyed, 2, "the loose and the carried ore left the world (the consumed one was gone)")
+		T.eq(#w.stashed, 1, "the carried relic was stashed (the keeper adds it to the collection)")
+		T.eq(w.stashed[1].OreId, "GoldenIdol")
+		table.sort(w.kept)
+		T.eq(
+			table.concat(w.kept, ","),
+			"AncientGear,CrownCoin,MinersLamp",
+			"the relics from the pen, the train and the Restoration Table went to the keeper"
+		)
+		T.eq(#w.data.Storage, 0, "nothing left in the pen")
 		T.eq(w.trainResets, 1, "the train starts over")
 		T.eq(w.refreshed, 1, "the podiums redraw")
 		T.eq(#w.settledAt, 1, "the welcome-back payout was settled")
@@ -412,6 +500,7 @@ return function(T, Loader)
 		T.eq(w.data.Rebirths, 1, "one rebirth")
 		-- a failing step: refused, and the next try is not stuck on Busy
 		w.data.BlasterLevel = TOP
+		w.data.Stats.RunForged = TOP
 		rawset(PlotService, "reload", function()
 			error("plot broke")
 		end)

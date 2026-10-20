@@ -360,7 +360,8 @@ function CapsuleView.cards(
 	stateAt: number?,
 	receipts: boolean?
 ): { Card }
-	local level = if type(state) == "table" then state.BlasterLevel else nil
+	-- coin prices follow State.PriceLevel (BlasterData.priceLevel: a rebirth never lowers them)
+	local level = if type(state) == "table" then (if state.PriceLevel ~= nil then state.PriceLevel else state.BlasterLevel) else nil
 	local room = GolemConfig.room(golemsOf(state))
 	local owned = GolemConfig.count(golemsOf(state))
 	local luckySeconds = CapsuleView.luckySeconds(state, now)

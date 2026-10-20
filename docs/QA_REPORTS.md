@@ -610,6 +610,14 @@ Option B of the rebirth proposal: an optional restart that keeps the factory and
   opened (Migrations; EnchantConfig.stats reads open slots only, so a rebirth never unslots, paid ones included),
   a failure after the reset still reports the rebirth (each later step on its own), "Failed" when taking the plot
   down breaks, and the Golden Touch / Lucky Rocks cards say they count up to the bonus caps.
+- Second review fixes (the integrator's reviewer): dusty relics are artifacts, never lost (a carried / loose relic is
+  stashed through the relic keeper; relics in the pen, the train and machine queues such as the Restoration Table
+  stay in the pen at the reset and go to the keeper); after the first rebirth the stars count only a blaster level
+  FORGED at the Foundry in the run (Stats.RunForged; Vault cases + Podium Keeper made stars a few minutes of idle
+  income), "NotForged" otherwise; Stats.BestBlaster keeps the highest level ever, and every coin price that grows
+  with the blaster (capsules, coin boosts, the wheel's capsule fallback, their client cards via State.PriceLevel)
+  follows BlasterData.priceLevel, so a rebirth never makes them cheaper; the enchants stay slotted with the paid
+  ones (Enchants.Passes) moved first into the open slots, and YOU LOSE lists the closed enchant slots.
 - Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
 What to test in Studio:
 1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now

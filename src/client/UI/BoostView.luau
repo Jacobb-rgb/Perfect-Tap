@@ -329,6 +329,12 @@ local function levelOf(state: { [string]: any }): number
 	return if finite(level) then level else 1
 end
 
+-- The level coin prices follow (State.PriceLevel: BlasterData.priceLevel, never lowered by a rebirth).
+local function priceLevelOf(state: { [string]: any }): number
+	local level = state.PriceLevel
+	return if finite(level) then level else levelOf(state)
+end
+
 local function vipOf(state: { [string]: any }): boolean
 	local perks = state.Perks
 	return type(perks) == "table" and perks.ForgeVip == true
@@ -472,9 +478,9 @@ local function offerOf(
 			reason = "ComingSoon"
 		end
 	else
-		price = BoostConfig.coinPrice(offer.Id, levelOf(state))
+		price = BoostConfig.coinPrice(offer.Id, priceLevelOf(state))
 		priceText = Format.money(price or 0)
-		local _, quoteReason = BoostConfig.coinQuote(boosts, offer.Id, levelOf(state), vipOf(state), now)
+		local _, quoteReason = BoostConfig.coinQuote(boosts, offer.Id, levelOf(state), vipOf(state), now, priceLevelOf(state))
 		reason = quoteReason
 		if reason == nil and price ~= nil and coins < price then
 			reason = "NoCoins"
