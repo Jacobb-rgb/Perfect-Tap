@@ -310,7 +310,7 @@ MachineData.List = {
 	{
 		Id = "Polisher",
 		Name = "Polisher",
-		Description = "Polishes clean ore: half the time it comes out one grade better (worth more on a podium).",
+		Description = "Polishes clean ore: half the time it comes out one grade better, up to Pristine (worth more on a podium). Flawless only comes from cleaning by hand.",
 		Size = { 2, 2 },
 		Price = 25000,
 		Category = "Processing",
@@ -320,6 +320,7 @@ MachineData.List = {
 		Output = "Clean",
 		OutputCount = 1,
 		GradeUpChance = 0.5,
+		MaxGrade = "Pristine", -- Flawless only by hand (owner, 2026-10-20: a belt loop must not polish everything Flawless)
 		LoadText = "Polish Ore",
 		WrongHint = "The Polisher only takes CLEAN ore.",
 		ConveyorFaces = "NoFront",
