@@ -94,6 +94,12 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
+-- the 3D banknotes (the HUD's money, the shop's coin packs; in the game live ViewportFrames)
+local CashBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CashBuilder")
+for name, make in CashBuilder.Pictures do
+	models[name] = make()
+end
+
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
 if #only > 0 then

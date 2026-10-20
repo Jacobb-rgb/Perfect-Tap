@@ -54,17 +54,18 @@ return function(T, Loader)
 		T.eq(StoreConfig.blasterKey(spec, 9), "BlasterNextD", "LV 9 -> the top")
 		T.eq(StoreConfig.blasterKey(spec, 10), nil, "nothing at the top")
 		T.eq(StoreConfig.blasterKey(spec, nil), "BlasterNextA", "no level: LV 1")
-		-- the cards never overlap on the grid
-		local taken: { [string]: string } = {}
+		-- (owner 2026-10-20 evening: sections one under the other) every card sits in a known
+		-- section, every section has cards, and a section's rows fill 1..n
+		local seen: { [string]: number } = {}
 		for _, card in StoreConfig.Cards do
-			for c = card.Col, card.Col + card.Cols - 1 do
-				for r = card.Row, card.Row + card.Rows - 1 do
-					local cell = `{c},{r}`
-					T.eq(taken[cell], nil, `{card.Id} overlaps {taken[cell] or ""}`)
-					taken[cell] = card.Id
-				end
+			T.truthy(StoreConfig.SectionById[card.Section], card.Id .. " in a known section")
+			seen[card.Section] = (seen[card.Section] or 0) + 1
+		end
+		for _, section in StoreConfig.Sections do
+			T.truthy((seen[section.Id] or 0) > 0, section.Id .. " has cards")
+			for _, row in StoreConfig.rows(section.Id) do
+				T.truthy(#row >= 1 and #row <= 4, section.Id .. ": 1 to 4 cards a row")
 			end
-			T.le(card.Row + card.Rows, StoreConfig.Rows, card.Id .. " within the rows")
 		end
 	end)
 
@@ -100,7 +101,7 @@ return function(T, Loader)
 		T.eq((refs.Cards.CoinsSmall.Amount :: any).Text, "$2.5K", "no income: the minimum")
 		StoreView.setCoins(refs, 1000)
 		T.eq((refs.Cards.CoinsMega.Amount :: any).Text, "$18M", "5 hours of 1,000/s")
-		StoreView.showDetail(refs, { Title = "Royal Capsule x5", Lines = { "a", "b" }, Robux = 229, Glow = "Red" })
+		StoreView.showDetail(refs, { Title = "Royal Capsule x5", Lines = { "a", "b" }, Robux = 229, Paint = "Pink" })
 		T.truthy(refs.Detail.Visible, "the odds panel")
 		T.eq(refs.DetailLines.Text, "a\nb")
 		StoreView.showDetail(refs, nil)
@@ -110,6 +111,17 @@ return function(T, Loader)
 		local _, fitPhone = StoreView.windowSize(600, 300)
 		T.eq(fitTall, 1, "a PC screen: full size")
 		T.lt(fitPhone, 1, "a short screen: fitted")
+		-- a hidden card closes its row up; a section with nothing to show folds away with its tab
+		local before = refs.Cards.Blaster.Button.Position
+		StoreView.setCard(refs, "Blaster", "BlasterNextD", "Hidden")
+		T.eq(refs.Cards.StarComet.Button.Position.X.Offset, 0, "the next card moves to the row's start")
+		T.eq(before.X.Offset, 0, "the blaster card was first")
+		for _, id in { "Royal1", "Royal3", "Royal5", "Royal10" } do
+			StoreView.setCard(refs, id, refs.Cards[id].Key, "Hidden")
+		end
+		T.falsy(refs.Sections.Eggs.Visible, "no capsules: the section folds")
+		T.falsy((refs.Tabs.Eggs.Parent :: any).Visible, "and its tab hides")
+		T.truthy(StoreView.sectionTop(refs, "Blasters") > StoreView.sectionTop(refs, "Luck"), "sections run top to bottom")
 	end)
 
 	-- StoreService with fakes: the save, Net answers and the prompts it asks for

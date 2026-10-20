@@ -56,7 +56,7 @@ end
 
 -- The black edge thickness for a text size.
 function Pop.edgeFor(size: number): number
-	return if size >= 44 then 4 elseif size >= 26 then 3 elseif size >= 16 then 2.5 else 2
+	return if size >= 44 then 4 elseif size >= 26 then 3 elseif size >= 20 then 2.5 else 1.6
 end
 
 -- A black edge around a text's glyphs.
@@ -475,11 +475,11 @@ end
 
 -- The tilted gold "BEST VALUE!" ribbon over a card's top-right corner.
 function Pop.ribbon(parent: Instance, text: string, width: number): Frame
-	local ribbon = Pop.tag(parent, text, "Yellow", Vector2.new(width, 34), {
+	local ribbon = Pop.tag(parent, text, "Yellow", Vector2.new(width, 30), {
 		Name = "Ribbon",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -math.floor(width * 0.32), 0, 22),
-		Rotation = 12,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -8, 0, 12),
+		Rotation = 8,
 		ZIndex = 8,
 	})
 	local label = ribbon:FindFirstChild("Label") :: TextLabel
@@ -602,6 +602,48 @@ function Pop.show(view: ViewportFrame, model: Model, from: Vector3?)
 	pcall(function()
 		view.CurrentCamera = camera
 	end)
+end
+
+--[[
+	A bright HUD pill: a picture and a word ("Shop" with the cart, the owner's
+	photo). With no uploaded picture the word fills the pill (no emoji).
+	Returns the button.
+]]
+function Pop.pill(parent: Instance, text: string, icon: string, paint: string | Paint, size: Vector2, props: Props?): TextButton
+	local button = UIKit.new("TextButton", {
+		Name = "Pill",
+		AutoButtonColor = true,
+		Text = "",
+		Size = UDim2.fromOffset(size.X, size.Y),
+		Selectable = true,
+		ZIndex = 3,
+	}, parent)
+	Pop.face(button, paint)
+	local pic = math.floor(size.Y * 0.84)
+	local shows = IconAssets.shows(icon)
+	local image = UIKit.new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 6, 0.5, 0),
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(pic, pic),
+		Visible = shows,
+		ZIndex = 4,
+	}, button)
+	IconAssets.apply(image, icon)
+	image:SetAttribute("Icon", icon)
+	local left = if shows then pic + 10 else 8
+	Pop.text(button, text, math.floor(size.Y * 0.56), {
+		Name = "Label",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, left, 0.5, 0),
+		Size = UDim2.new(1, -(left + 8), 1, 0),
+		TextXAlignment = if shows then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
+		ZIndex = 4,
+	})
+	apply(button, props)
+	return button
 end
 
 export type TileSpec = {

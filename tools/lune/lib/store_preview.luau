@@ -42,18 +42,18 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
-	local function store(uiScale: number, w: number, h: number, scroll: number?): any
+	local function store(uiScale: number, w: number, h: number, section: string?, compact: boolean?): any
 		local refs = StoreView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
-		StoreView.layout(refs, w, h)
+		StoreView.layout(refs, w, h, compact)
 		StoreView.setCoins(refs, 1840)
 		local blaster = StoreConfig.ById.Blaster
 		StoreView.setCard(refs, "Blaster", StoreConfig.blasterKey(blaster, 4) or blaster.Keys[1], "Buy")
 		StoreView.setBig(refs, "Blaster", "LV 5")
 		StoreView.setCard(refs, "Podiums", "Podiums", "Owned")
-		if scroll then
-			refs.Scroller.CanvasPosition = (require("@lune/roblox") :: any).Vector2.new(scroll, 0)
+		if section then
+			refs.Scroller.CanvasPosition = (require("@lune/roblox") :: any).Vector2.new(0, StoreView.sectionTop(refs, section))
 		end
 		return refs
 	end
@@ -85,9 +85,10 @@ function Preview.build(Loader: any): { [string]: any }
 	local exports: { [string]: any } = {}
 	local pcW, pcH = 1600 / scale, (900 - 36) / scale
 	exports.ui_store_pc = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH).Gui })
-	exports.ui_store_pc_more = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, 1580).Gui })
+	exports.ui_store_pc_more = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, "Luck").Gui })
+	exports.ui_store_pc_passes = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, "Passes").Gui })
 	-- the end of the row: the STAR blasters for a player with 3 rebirths
-	local stars = store(scale, pcW, pcH, 3560)
+	local stars = store(scale, pcW, pcH, "Blasters")
 	StoreView.setCard(stars, "StarComet", "StarComet", "Owned")
 	StoreView.setNote(stars, "StarComet", "In your hands")
 	StoreView.setCard(stars, "StarNebula", "StarNebula", "Owned")
@@ -97,13 +98,13 @@ function Preview.build(Loader: any): { [string]: any }
 	StoreView.setCard(stars, "StarSupernova", "StarSupernova", "Locked")
 	StoreView.setCard(stars, "StarSingularity", "StarSingularity", "Locked")
 	exports.ui_store_pc_stars = UiExport.export({ hud(scale).Gui, stars.Gui })
-	local odds = store(scale, pcW, pcH, 1580)
+	local odds = store(scale, pcW, pcH, "Eggs")
 	local lines = { "Royal Capsule x5: 5 golems, each one of:" }
 	for _, line in CapsuleConfig.odds("Royal", false) do
 		local golem = GolemConfig.ById[line.Golem]
 		table.insert(lines, string.format("   %s  %.2f%%", if golem then golem.Name else line.Golem, line.Chance * 100))
 	end
-	StoreView.showDetail(odds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Glow = "Red" })
+	StoreView.showDetail(odds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Paint = "Pink" })
 	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
 	-- the HUD with a train (review #16: the Shop pill clear of the TRAIN chip) and Server Luck on
 	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
@@ -122,7 +123,7 @@ function Preview.build(Loader: any): { [string]: any }
 		local luck = refs.Gui:FindFirstChild("ServerLuck")
 		if luck then
 			-- (as StoreController writes it: phones drop "thanks name")
-			luck.Text = if refs.Gui:GetAttribute("ShortLuck") then "🍀 Server Luck x2 · 14:32" else "🍀 Server Luck x2 · 14:32 · thanks Kuba"
+			luck.Text = if refs.Gui:GetAttribute("ShortLuck") then "Server Luck x2 · 14:32" else "Server Luck x2 · 14:32 · thanks Kuba"
 			luck.Visible = true
 		end
 		local list = { refs.Gui }
@@ -153,13 +154,12 @@ function Preview.build(Loader: any): { [string]: any }
 	end
 	exports.ui_store_hud_phone = UiExport.export(hudWithChips(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale))
 	-- the odds panel on a phone (compact sizes)
-	local phoneOdds = store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, 1580)
-	StoreView.layout(phoneOdds, 1600 / phoneScale, (900 - 58) / phoneScale, true)
-	StoreView.showDetail(phoneOdds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Glow = "Red" })
+	local phoneOdds = store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, "Eggs", true)
+	StoreView.showDetail(phoneOdds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Paint = "Pink" })
 	exports.ui_store_phone_odds = UiExport.export({ hud(phoneScale).Gui, phoneOdds.Gui })
 	exports.ui_store_phone = UiExport.export({
 		hud(phoneScale).Gui,
-		store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale).Gui,
+		store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, nil, true).Gui,
 	})
 	return exports
 end

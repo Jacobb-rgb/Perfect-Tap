@@ -23,6 +23,8 @@ local TeleportConfig = require(Shared.Config.TeleportConfig)
 local UIKit = require(script.Parent.UIKit)
 local Bubble = require(script.Parent.Bubble)
 local HudBubble = require(script.Parent.HudBubble)
+local Pop = require(script.Parent.Pop)
+local PopTheme = require(Shared.Config.PopTheme)
 
 local TeleportView = {}
 
@@ -172,9 +174,84 @@ local function buildBubble(topBar: Frame, uiScale: number): Refs
 	return { Buttons = buttons, Covers = covers, Hint = hint }
 end
 
+-- The bar's colours (owner's BASE / MINE / SPAWN photo: blue, teal, purple).
+TeleportView.Paints = { Base = "Blue", Lobby = "Teal", Vault = "Purple" } :: { [string]: string }
+
+--[[
+	The Pop bar (owner 2026-10-20): a dark rounded strip at the very top with
+	a bright button per spot, a light rim inside each, the word in white with
+	a black edge; text only. A dark cover shows the seconds left.
+]]
+local function buildPop(topBar: Frame): Refs
+	local compact = topBar:GetAttribute("Compact") == true
+	local narrow = topBar:GetAttribute("Narrow") == true
+	local layout = HudBubble.layout(if compact then 0.62 else 1, if narrow then 0 else nil)
+	local size = HudBubble.topBarButton(layout)
+	local buttons: { [string]: TextButton } = {}
+	local covers: { [string]: TextLabel } = {}
+	local hint = UIKit.new("ImageLabel", {
+		Name = "GamepadHint",
+		LayoutOrder = 0,
+		Size = UDim2.fromOffset(0, 0),
+		BackgroundTransparency = 1,
+		Visible = false,
+	}, topBar)
+	local order: { TextButton } = {}
+	for i, spot in TeleportConfig.Spots do
+		if spot.Bar then
+			local paint = Pop.paint(TeleportView.Paints[spot.Id] or "Slate")
+			local button = Pop.button(topBar, spot.Label, paint, size, {
+				Name = spot.Id,
+				LayoutOrder = i,
+			})
+			button:SetAttribute("Teleport", spot.Id)
+			local label = button:FindFirstChild("Label") :: TextLabel
+			label.TextSize = if narrow then 24 elseif compact then 28 else 26
+			-- the light rim inside the black border (the photo's glow)
+			local rim = UIKit.new("Frame", {
+				Name = "Rim",
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(3, 3),
+				Size = UDim2.new(1, -6, 1, -6),
+				ZIndex = 5,
+			}, button)
+			UIKit.corner(rim, 4)
+			UIKit.new("UIStroke", {
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+				Color = paint.Top:Lerp(Color3.new(1, 1, 1), 0.55),
+				Thickness = 2,
+				Transparency = 0.15,
+			}, rim)
+			local cover = Pop.text(button, "", 26, {
+				Name = "Cooldown",
+				BackgroundColor3 = PopTheme.Outline,
+				BackgroundTransparency = 0.35,
+				Size = UDim2.fromScale(1, 1),
+				Visible = false,
+				ZIndex = 8,
+			})
+			UIKit.corner(cover, PopTheme.Corner)
+			buttons[spot.Id], covers[spot.Id] = button, cover
+			table.insert(order, button)
+		end
+	end
+	for i, button in order do
+		local links: any = button
+		pcall(function() -- (Lune's instances can't hold a nil Ref)
+			links.NextSelectionLeft = order[i - 1]
+		end)
+		pcall(function()
+			links.NextSelectionRight = order[i + 1]
+		end)
+	end
+	return { Buttons = buttons, Covers = covers, Hint = hint }
+end
+
 -- Fills HudView's TopBar with the bar spots (Bar = true; the elevator is in the left side menu).
 function TeleportView.build(topBar: Frame, uiScale: number, screenWidth: number?): Refs
-	if topBar:GetAttribute("Bubble") then
+	if topBar:GetAttribute("Pop") then
+		return buildPop(topBar)
+	elseif topBar:GetAttribute("Bubble") then
 		return buildBubble(topBar, uiScale)
 	end
 	local layout = TeleportView.layout(uiScale, screenWidth)

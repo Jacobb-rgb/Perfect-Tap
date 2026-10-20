@@ -370,7 +370,7 @@ end
 
 -- The chip's text for a streak ("" below 2: no chip).
 function CleaningView.streakText(streak: number): string
-	return if streak >= 2 then `🔥 Streak x{streak}` else ""
+	return if streak >= 2 then `STREAK x{streak}` else ""
 end
 
 function CleaningView.setStreak(view: Refs, streak: number)

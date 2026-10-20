@@ -1,6 +1,7 @@
 --[[
-	The Robux STORE window (owner 2026-10-20): opened by the side menu's
-	STORE entry, the HUD's green Shop button and OpenUI "Store".
+	The Robux Shop window (owner 2026-10-20; the bright egg-game look the same
+	evening): opened by the side menu's STORE entry, the HUD's green Shop
+	button and OpenUI "Store". A section tab scrolls the list to its section.
 
 	- A card buys its product (StoreView.setCard picks which: the blaster
 	  shows the price band of the player's next level, hidden at the top).
@@ -370,7 +371,7 @@ local function onCard(id: string)
 			Title = card.Spec.Title or product.Name,
 			Lines = oddsFor(product),
 			Robux = product.Robux,
-			Glow = card.Spec.Glow,
+			Paint = card.Spec.Paint,
 		})
 		GuiService.SelectedObject = if MenuPanels.usingGamepad() then view.DetailBuy else nil
 		Sfx.play("UIClick")
@@ -426,6 +427,17 @@ local function ensureView(): StoreView.Refs
 	for id, card in view.Cards do
 		card.Button.Activated:Connect(function()
 			onCard(id)
+		end)
+		card.Price.Activated:Connect(function()
+			onCard(id)
+		end)
+	end
+	-- a section tab scrolls the list to its section
+	for sectionId, tab in view.Tabs do
+		tab.Activated:Connect(function()
+			local target = Vector2.new(0, StoreView.sectionTop(view, sectionId))
+			TweenService:Create(view.Scroller, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target }):Play()
+			Sfx.play("UIClick")
 		end)
 	end
 	view.DetailBack.Activated:Connect(function()
@@ -588,7 +600,7 @@ function StoreController.start()
 					local by = ReplicatedStorage:GetAttribute("ServerLuckBy")
 					local clock = string.format("%d:%02d", math.floor(left / 60), math.floor(left % 60))
 					local short = hud and hud.Gui:GetAttribute("ShortLuck") == true
-					label.Text = `🍀 Server Luck x{BoostView.ServerLuckMult} · {clock}`
+					label.Text = `Server Luck x{BoostView.ServerLuckMult} · {clock}`
 						.. (if not short and type(by) == "string" and by ~= "" then ` · thanks {by}` else "")
 				end
 				task.wait(if left > 0 then 0.5 else 2)

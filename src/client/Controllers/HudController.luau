@@ -136,6 +136,12 @@ local function updateScale()
 			uiScale.Scale = scale
 		end
 	end
+	-- the Pop teleport bar sits in Roblox's top bar row: lift it by the real inset
+	local topBar = refs and refs.TopBar
+	if topBar and topBar:GetAttribute("Pop") then
+		local inset = GuiService:GetGuiInset()
+		topBar.Position = UDim2.new(0.5, 0, 0, HudBubble.topBarY(inset.Y, scale))
+	end
 end
 
 local function rarityColorOfItem(model: Instance): Color3

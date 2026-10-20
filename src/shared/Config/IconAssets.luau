@@ -72,6 +72,8 @@ IconAssets.Sheets = {
 			"rebirth", "star_token", -- the blaster chat's rebirth window
 			-- the Robux STORE (owner 2026-10-20) and the HUD's Shop pill
 			"coin_pile", "coin_sack", "coin_chest", "cart", "hoverboard", "pass_crown", "luck_server",
+			-- the Pop shop's money (3D banknotes; in the game live ViewportFrames, CashBuilder)
+			"cash_stack", "cash_pile",
 		},
 	},
 	{
