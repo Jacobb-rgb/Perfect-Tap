@@ -69,7 +69,7 @@ return function(T, Loader)
 		data.MachineInventory = { Conveyor = 12 }
 		data.PlacedMachines = {
 			{ Id = "Crusher", X = 1, Z = 1, R = 0, In = { { K = "Raw", O = "Gold" } }, Out = { { K = "Crushed", O = "Gold" } } },
-			{ Id = "Sorter", X = 4, Z = 1, R = 1, C = 3 },
+			{ Id = "Sorter", X = 4, Z = 1, R = 1, C = 3, L = 1 }, -- on a platform's deck
 			-- a dusty relic queued at the Restoration Table
 			{ Id = "RestorationTable", X = 7, Z = 1, R = 0, In = { { K = "Relic", O = "CrownCoin" } } },
 		}
@@ -236,6 +236,7 @@ return function(T, Loader)
 		-- kept: the factory and everything outside the list
 		T.eq(#data.PlacedMachines, 3, "the factory stays")
 		T.eq(data.PlacedMachines[2].C, 3, "machine settings stay")
+		T.eq(data.PlacedMachines[2].L, 1, "a deck machine stays on its deck")
 		T.eq(data.PlacedMachines[1].X, 1)
 		for _, key in
 			{
