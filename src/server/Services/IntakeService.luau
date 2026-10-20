@@ -9,6 +9,8 @@
 	  the machine's cell, so it works wherever the item comes to rest.
 	- Town zones (Tobin's SellBin, the Ore Pens) are added with addZone().
 	- Items on a belt that no box takes go to the belt handler (ConveyorService).
+	  The belt is the one at the item's height (MachineService.atHeight):
+	  up at deck level the deck's belt, under a deck the ground one.
 	- Items lying on someone else's plot go back to their owner's Storage
 	  after ForeignItemReturn seconds.
 	- Put In prompts (addLoadPrompt): load what you carry into a machine.
@@ -31,6 +33,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
+local MachineData = require(Shared.Config.MachineData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Grid = require(Shared.Machines.Grid)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
@@ -148,16 +151,21 @@ local function hopperZone(machine: PlacedMachine): Zone?
 	}
 end
 
--- Belt-local box: x +/-2, y 0..4, z from -2 - FeedReachInto (into the
--- machine's cell) to -2 + FeedReachBelt (back onto the belt).
+-- Belt-local box at the belt's front end (-front, front = half its length:
+-- 2 on a 1x1 belt, 6 on a Belt Lift / Slide): x +/-2, y 0..4 over where
+-- the items arrive (a Belt Lift's front end is up at the deck), z from
+-- -front - FeedReachInto (into the machine's cell) to -front +
+-- FeedReachBelt (back onto the belt).
 local function feederZone(belt: PlacedMachine, target: PlacedMachine): Zone
-	local zMin = -CELL / 2 - GameConfig.FeedReachInto
-	local zMax = -CELL / 2 + GameConfig.FeedReachBelt
+	local front = belt.Info.Size[2] * CELL / 2
+	local zMin = -front - GameConfig.FeedReachInto
+	local zMax = -front + GameConfig.FeedReachBelt
+	local up = if belt.Info.Slope == "Up" then MachineData.DeckHeight else 0
 	return {
 		Kind = "Feeder",
 		Machine = target,
 		Belt = belt,
-		CFrame = belt.Model:GetPivot() * CFrame.new(0, 2, (zMin + zMax) / 2),
+		CFrame = belt.Model:GetPivot() * CFrame.new(0, up + 2, (zMin + zMax) / 2),
 		Half = Vector3.new(CELL / 2, 2, (zMax - zMin) / 2),
 	}
 end
@@ -314,7 +322,7 @@ local function beltUnder(record: ItemRecord): PlacedMachine?
 		return nil
 	end
 	local cx, cz = Grid.cellFromLocal(localPos)
-	local machine = if cx and cz then MachineService.atCell(plotId, cx, cz) else nil
+	local machine = if cx and cz then MachineService.atHeight(plotId, cx, cz, localPos.Y) else nil
 	if machine and machine.Info.IsConveyor then
 		return machine
 	end
@@ -473,8 +481,8 @@ local function scanOne(record: ItemRecord, now: number)
 			end
 		end
 	end
-	-- 4. riding a belt
-	local cellMachine = if cx and cz then MachineService.atCell(plotId, cx, cz) else nil
+	-- 4. riding a belt (the one at the item's height: deck or ground)
+	local cellMachine = if cx and cz then MachineService.atHeight(plotId, cx, cz, localPos.Y) else nil
 	local handler = beltHandler
 	if handler and cellMachine and cellMachine.Info.IsConveyor and not cellMachine.Removed then
 		local ok, err = pcall(handler, cellMachine, record, cellMachine.Model:GetPivot():PointToObjectSpace(position), now)

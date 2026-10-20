@@ -50,7 +50,7 @@ export type Machine = {
 	Retired: boolean?, -- design v2 removed it: not sold, migrations take it off plots
 	-- the machine roster (docs/plans/MACHINES_PLAN.md, MACHINES_GAME_PLAN.md):
 	Behaviour: string?, -- server behaviour of machines that are not plain processors:
-	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole"
+	-- "Alloy" | "Splitter" | "Sorter" | "RobotArm" | "SellBox" | "Generator" | "Pole" | "Platform"
 	NoIntake: boolean?, -- no hopper / intake (generators, poles, the robot arm)
 	SideOutputs: boolean?, -- results leave the left / right side (OutputL / OutputR), not the front
 	Inputs: number?, -- items one job takes (Alloy Furnace: 2 ingots of different ores)
@@ -61,6 +61,10 @@ export type Machine = {
 	Power: number?, -- power used on a powered network (nil / 0 = needs none)
 	PowerOut: number?, -- generators: power made at Speed level 0
 	IsPole: boolean?, -- power pole: links poles, generators and machines in reach; uses a belt slot
+	-- platforms (docs/plans/PLATFORMS_PLAN.md): a sloped belt (IsConveyor) between the
+	-- ground and a deck: "Up" (Belt Lift: its front end is up at the deck) or "Down"
+	-- (Slide: its back end is up at the deck)
+	Slope: ("Up" | "Down")?,
 }
 
 local MachineData = {}
@@ -470,6 +474,63 @@ MachineData.List = {
 		PowerOut = 200,
 		Upgrades = { Speed = scaled(SPEED_CURVE, 40) },
 	},
+	{
+		-- a sorter (Time, no Output): when its job ends ArtifactService's
+		-- restorer takes the relic and the artifact goes into the collection
+		Id = "RestorationTable",
+		Name = "Restoration Table",
+		Description = "Cleans dusty relics on its own: the artifact goes into your collection and your museum.",
+		Size = { 2, 2 },
+		Price = 75000,
+		Category = "Processing",
+		Order = 22,
+		Accepts = { Relic = true },
+		Time = 20,
+		LoadText = "Clean Relic",
+		WrongHint = "The Restoration Table only takes DUSTY RELICS.",
+		ConveyorFaces = "NoFront",
+		Power = 10,
+		Upgrades = { Speed = scaled(SPEED_CURVE, 2) },
+	},
+	-- the second building level (owner's YES 2026-10-20, docs/plans/PLATFORMS_PLAN.md):
+	-- a 2x2 deck on legs (DeckHeight up) that belts and machines stand on, flat
+	-- belts run under it; the Belt Lift carries items up onto a deck, the Slide
+	-- brings them down (both are belts: belt slots, a tilted Belt part)
+	{
+		Id = "Platform",
+		Name = "Platform",
+		Description = "A deck on legs one level up: belts and machines stand on it, belts can run under it.",
+		Size = { 2, 2 },
+		Price = 2500,
+		Category = "Logistics",
+		Order = 23,
+		Behaviour = "Platform",
+		NoIntake = true,
+	},
+	{
+		Id = "BeltLift",
+		Name = "Belt Lift",
+		Description = "Carries items up onto a platform. Its top end goes against a platform's edge.",
+		Size = { 1, 3 },
+		Price = 150,
+		Category = "Logistics",
+		Order = 24,
+		IsConveyor = true,
+		SlotFree = true,
+		Slope = "Up",
+	},
+	{
+		Id = "Slide",
+		Name = "Slide",
+		Description = "Brings items down from a platform. Its top end goes against a platform's edge.",
+		Size = { 1, 3 },
+		Price = 150,
+		Category = "Logistics",
+		Order = 25,
+		IsConveyor = true,
+		SlotFree = true,
+		Slope = "Down",
+	},
 } :: { Machine }
 
 MachineData.ById = {} :: { [string]: Machine }
@@ -505,6 +566,12 @@ MachineData.WorkshopPassConveyors = 20
 
 -- Finished items a machine holds while its front is blocked.
 MachineData.MaxOutBuffer = 4
+
+-- Platforms: the deck top is this many studs over the plot pad (the Belt
+-- Lift rises this much; the approved preview's Platforms.Level). An entry's
+-- level L (nil / 0 = the ground, 1 = a deck) raises it by L * DeckHeight.
+MachineData.DeckHeight = 5
+MachineData.MaxLevel = 1
 
 -- Most machines of one type data.MachineInventory holds (DataStore safety).
 -- The Tech shop refuses a buy past it ("MaxOwned"), Placement refunds a

@@ -30,6 +30,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local Net = require(Shared.Net)
 local CleaningPatterns = require(Shared.Cleaning.CleaningPatterns)
 local CleaningScoring = require(Shared.Cleaning.CleaningScoring)
@@ -48,11 +49,33 @@ type Session = {
 	Player: Player,
 	Machine: MachineService.PlacedMachine,
 	Item: ItemService.ItemRecord,
-	OreId: string,
+	OreId: string, -- the ore cleaned (a relic: the stand-in ore its pattern uses)
+	Relic: string?, -- a dusty relic's artifact id (nil: ore)
 	Seed: number,
 	Pattern: CleaningPatterns.Pattern,
 	StartedAt: number,
 }
+
+-- The vise takes dirty ore and dusty relics.
+local function cleanable(record: ItemService.ItemRecord): boolean
+	return record.Kind == "Raw" or record.Kind == "Relic"
+end
+
+-- A relic's minigame: the pattern of the cheapest ore of its rarity (rarer
+-- relics are harder to clean, like ore).
+function CleaningService.relicOre(artifactId: string): string?
+	local art = ArtifactConfig.ById[artifactId]
+	if not art then
+		return nil
+	end
+	local best: OreData.Ore? = nil
+	for _, ore in OreData.List do
+		if ore.Rarity == art.Rarity and (best == nil or ore.Income < (best :: OreData.Ore).Income) then
+			best = ore
+		end
+	end
+	return if best then best.Id else nil
+end
 
 local sessions: { [Player]: Session } = {}
 local random: Random? = nil -- made on first use (the Lune tests have no Random)
@@ -132,14 +155,20 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 	local rng = random or Random.new()
 	random = rng
 	local seed = rng:NextInteger(1, 2 ^ 30)
+	local relic = if record.Kind == "Relic" then record.OreId else nil
+	local oreId = if relic then CleaningService.relicOre(relic) else record.OreId
+	if not oreId then
+		return
+	end
 	local session: Session = {
 		Id = HttpService:GenerateGUID(false),
 		Player = player,
 		Machine = machine,
 		Item = record,
-		OreId = record.OreId,
+		OreId = oreId,
+		Relic = relic,
 		Seed = seed,
-		Pattern = CleaningPatterns.generate(record.OreId, seed),
+		Pattern = CleaningPatterns.generate(oreId, seed),
 		StartedAt = os.clock(),
 	}
 	sessions[player] = session
@@ -151,6 +180,7 @@ local function startSession(player: Player, machine: MachineService.PlacedMachin
 	Net.fire("CleanBegin", player, {
 		Id = session.Id,
 		OreId = session.OreId,
+		Relic = relic, -- the relic shows in the vise (its shape: no secret left to keep)
 		Seed = seed,
 		Station = machine.Model,
 	})
@@ -167,10 +197,10 @@ local function onPrompt(player: Player, machine: MachineService.PlacedMachine)
 	if not stationItem(machine) then
 		-- only a chunk really in the hands (CarryService.takeTop skips others too: #11)
 		local record = CarryService.takeTop(player, function(r)
-			return r.Kind == "Raw" and r.State == "Carried"
+			return cleanable(r) and r.State == "Carried"
 		end)
 		if not record then
-			Net.fire("Notify", player, { Text = "Bring a raw ore chunk to clean it.", Kind = "Info" })
+			Net.fire("Notify", player, { Text = "Bring a raw ore chunk or a dusty relic to clean it.", Kind = "Info" })
 			return
 		end
 		if not mount(machine, record) then
@@ -259,6 +289,32 @@ local function onSubmit(player: Player, sessionId: any, payload: any)
 	local verdict = CleaningGuard.check(payload)
 	CleaningGuard.note(player, verdict, result.Grade)
 	result.Grade = CleaningGuard.gradeFor(result.Grade, verdict)
+
+	-- a dusty relic: the artifact goes into the collection (the find moment at the station)
+	local relic = session.Relic
+	if relic then
+		machine.State.Item = nil
+		ItemService.destroy(record)
+		updatePrompts(machine)
+		local at = (MachineService.point(machine, "Output") or machine.Model:GetPivot()).Position
+		local found = ItemService.keepRelic(player, relic, at)
+		Net.fire("CleanResult", player, {
+			Id = sessionId,
+			Ok = true,
+			Relic = relic,
+			Grade = result.Grade,
+			Score = result.Score,
+			Chisel = result.Chisel,
+			Scrape = result.Scrape,
+			Polish = result.Polish,
+			Chips = result.Chips,
+			Collected = found, -- the artifact went into the collection (the ArtifactFound moment follows)
+		})
+		for _, callback in cleanedCallbacks do
+			task.spawn(callback, player, session.OreId, result.Grade, result.Score)
+		end
+		return
+	end
 
 	-- success: raw chunk becomes clean ore on the output tray
 	machine.State.Item = nil
@@ -351,7 +407,7 @@ local function intakePass(scan: IntakeScan): number
 			if
 				record
 				and record.State == "Loose"
-				and record.Kind == "Raw"
+				and cleanable(record)
 				and record.Owner == machine.Owner.UserId
 				and ItemService.isTrusted(record, os.clock())
 			then
@@ -483,6 +539,22 @@ end
 -- Internals for the Lune tests only (tests/CleaningService.spec.luau).
 CleaningService._test = {
 	behaviour = stationBehaviour,
+	mount = function(machine: MachineService.PlacedMachine, record: ItemService.ItemRecord): boolean
+		return mount(machine, record)
+	end,
+	start = function(player: Player, machine: MachineService.PlacedMachine)
+		startSession(player, machine)
+	end,
+	submit = function(player: Player, sessionId: any, payload: any)
+		onSubmit(player, sessionId, payload)
+	end,
+	session = function(player: Player): any
+		return sessions[player]
+	end,
+	-- the session seed source (the Lune tests have no Random): anything with NextInteger
+	setRandom = function(r: any)
+		random = r
+	end,
 	newScan = newScan,
 	intakePass = intakePass,
 	stations = function(): { MachineService.PlacedMachine }

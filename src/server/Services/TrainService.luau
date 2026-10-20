@@ -853,6 +853,11 @@ local function onIntake(hook: Hook, record: ItemRecord)
 		bounceOut(hook, record)
 		return
 	end
+	-- a dusty relic is cleaned, never shipped (ArtifactService)
+	if record.Kind == "Relic" then
+		refuse(hook, record, owner, ItemData.RelicRefused)
+		return
+	end
 	local train = trainOf(data)
 	if isAway(owner, train) then
 		refuse(hook, record, owner, awayText(owner, train))
@@ -897,7 +902,8 @@ local function loadFromHands(player: Player, hook: Hook)
 			break
 		end
 		local record = CarryService.takeTop(player, function(r: ItemRecord): boolean
-			return r.Owner == player.UserId and r.State == "Carried"
+			-- (a dusty relic stays in the hands: it is cleaned, never shipped)
+			return r.Owner == player.UserId and r.State == "Carried" and r.Kind ~= "Relic"
 		end)
 		if not record then
 			break

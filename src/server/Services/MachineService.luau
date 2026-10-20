@@ -37,6 +37,12 @@
 	- MachineAction remote: actions on your own machines (onAction).
 	- emitSide: the same hand-over or loose pop toward a side output cell
 	  (Splitter, Sorter: LogisticsService); the tick never uses it.
+	- Levels (docs/plans/PLATFORMS_PLAN.md): an entry with L = 1 stands on
+	  a platform's deck, MachineData.DeckHeight up (its model, attribute
+	  GridL). The plot index is keyed by cell and level (atCell); deckAt
+	  says which platform holds a cell's deck, atHeight finds the machine an
+	  item at some height is on. Emits, side outputs and the Robot Arm's
+	  neighbours look on the machine's own level.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -78,6 +84,7 @@ export type PlacedMachine = {
 	X: number,
 	Z: number,
 	R: number,
+	L: number, -- level: 0 = the ground, 1 = a platform's deck
 	State: { [string]: any }, -- per-type runtime state (timers, sessions...)
 	Entry: Entry, -- the saved table in data.PlacedMachines
 	Info: MachineData.Machine,
@@ -100,7 +107,10 @@ export type Behaviour = {
 
 type PlotIndex = {
 	Machines: { PlacedMachine }, -- in saved order
-	Cells: { [number]: PlacedMachine }, -- Grid.key -> machine covering the cell
+	-- Placement.key (cell and level) -> machine covering the cell; on the
+	-- ground a belt under a platform wins over the platform's legs
+	Cells: { [number]: PlacedMachine },
+	Decks: { [number]: PlacedMachine }, -- Grid.key -> the platform whose deck covers it
 }
 
 local CELLS = GameConfig.PlotCells
@@ -282,10 +292,21 @@ local function onPlot(gx: number, gz: number): boolean
 	return gx >= 0 and gz >= 0 and gx < CELLS and gz < CELLS
 end
 
+local function isPlatform(machine: PlacedMachine): boolean
+	return machine.Info.Behaviour == "Platform"
+end
+
 local function indexCells(index: PlotIndex, machine: PlacedMachine)
+	local platform = isPlatform(machine)
+	-- deck keys come after the ground keys (Placement.key)
+	local offset = if machine.L == 1 then CELLS * CELLS else 0
 	for _, k in Placement.cells(machine.Id, machine.X, machine.Z, machine.R) do
-		if index.Cells[k] == nil then
-			index.Cells[k] = machine
+		local had = index.Cells[k + offset]
+		if had == nil or (not platform and offset == 0 and isPlatform(had)) then
+			index.Cells[k + offset] = machine
+		end
+		if platform and index.Decks[k] == nil then
+			index.Decks[k] = machine
 		end
 	end
 end
@@ -293,7 +314,7 @@ end
 local function indexOf(plotId: number): PlotIndex
 	local index = plots[plotId]
 	if not index then
-		index = { Machines = {}, Cells = {} }
+		index = { Machines = {}, Cells = {}, Decks = {} }
 		plots[plotId] = index
 	end
 	return index
@@ -318,7 +339,7 @@ local function rebuildPlot(plotId: number)
 			return (order[a.Entry] or math.huge) < (order[b.Entry] or math.huge)
 		end)
 	end
-	local index: PlotIndex = { Machines = list, Cells = {} }
+	local index: PlotIndex = { Machines = list, Cells = {}, Decks = {} }
 	for _, machine in list do
 		indexCells(index, machine)
 	end
@@ -420,13 +441,43 @@ function MachineService.ofPlot(plotId: number): { PlacedMachine }
 	return if index then table.clone(index.Machines) else {}
 end
 
--- The machine covering a grid cell of a plot, if any.
-function MachineService.atCell(plotId: number, gx: number, gz: number): PlacedMachine?
+-- The machine covering a grid cell of a plot on `level` (nil / 0 = the
+-- ground, 1 = a deck), if any. On the ground a belt under a platform
+-- comes before the platform's legs.
+function MachineService.atCell(plotId: number, gx: number, gz: number, level: number?): PlacedMachine?
 	local index = plots[plotId]
 	if not index or not onPlot(gx, gz) then
 		return nil
 	end
-	return index.Cells[Grid.key(gx, gz)]
+	return index.Cells[Placement.key(gx, gz, level)]
+end
+
+-- The platform whose deck covers a grid cell of a plot, if any.
+function MachineService.deckAt(plotId: number, gx: number, gz: number): PlacedMachine?
+	local index = plots[plotId]
+	if not index or not onPlot(gx, gz) then
+		return nil
+	end
+	return index.Decks[Grid.key(gx, gz)]
+end
+
+-- Items at least this high over the pad (plot-local Y) are up at deck level.
+MachineService.DeckItemY = MachineData.DeckHeight - 1
+
+--[[
+	The machine an item at plot-local height `localY` over cell (gx, gz) is
+	on: up at deck level the one on the deck (nil over a bare deck: the item
+	lies on it, not on the belt under it), else the ground one (an item high
+	up a Belt Lift is still on the lift: no deck covers its cells).
+]]
+function MachineService.atHeight(plotId: number, gx: number, gz: number, localY: number): PlacedMachine?
+	if localY >= MachineService.DeckItemY then
+		local up = MachineService.atCell(plotId, gx, gz, 1)
+		if up or MachineService.deckAt(plotId, gx, gz) then
+			return up
+		end
+	end
+	return MachineService.atCell(plotId, gx, gz, 0)
 end
 
 -- World CFrame of a named attachment on the machine's Base
@@ -540,12 +591,14 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 	local own = if type(upgrades) == "table" then upgrades[entry.Id] else nil
 	local level = MachineData.lookLevel(if type(own) == "table" then own.Speed else 0)
 	local model = MachineBuilder.build(entry.Id, level)
-	model:PivotTo(PlotService.footprintCFrame(plotId, entry.Id, entry.X, entry.Z, entry.R))
+	local deck = Placement.levelOf(entry)
+	model:PivotTo(PlotService.footprintCFrame(plotId, entry.Id, entry.X, entry.Z, entry.R, deck))
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("Owner", player.UserId)
 	model:SetAttribute("GridX", entry.X)
 	model:SetAttribute("GridZ", entry.Z)
 	model:SetAttribute("Rotation", entry.R)
+	model:SetAttribute("GridL", deck)
 	model:SetAttribute("OutCount", if entry.Out then #entry.Out else 0)
 	model:SetAttribute("Status", "")
 	model:AddTag("Machine")
@@ -558,6 +611,7 @@ local function spawnMachine(player: Player, plotId: number, entry: Entry): Place
 		X = entry.X,
 		Z = entry.Z,
 		R = entry.R,
+		L = deck,
 		State = {},
 		Entry = entry,
 		Info = info,
@@ -743,15 +797,15 @@ end
 
 ---------------------------------------------------------------- place / move / pickup
 
--- Places a machine from the player's inventory. Returns the machine or a
--- Placement.Reasons code.
-function MachineService.place(player: Player, machineId: string, x: number, z: number, r: number): (PlacedMachine?, string?)
+-- Places a machine from the player's inventory on `level` (nil / 0 = the
+-- ground, 1 = a deck). Returns the machine or a Placement.Reasons code.
+function MachineService.place(player: Player, machineId: string, x: number, z: number, r: number, level: number?): (PlacedMachine?, string?)
 	local plotId = PlotService.plotOf(player)
 	local data = DataService.get(player)
 	if not plotId or not data then
 		return nil, "NoPlot"
 	end
-	local entry, code = Placement.commitPlace(data, machineId, x, z, r, MachineService.limits(player))
+	local entry, code = Placement.commitPlace(data, machineId, x, z, r, MachineService.limits(player), level)
 	if not entry then
 		return nil, code
 	end
@@ -765,8 +819,9 @@ function MachineService.place(player: Player, machineId: string, x: number, z: n
 	return machine, nil
 end
 
--- Moves or turns a placed machine. Its contents and running job stay.
-function MachineService.move(machine: PlacedMachine, x: number, z: number, r: number): (boolean, string?)
+-- Moves or turns a placed machine, onto `level` (nil / 0 = the ground,
+-- 1 = a deck). Its contents and running job stay.
+function MachineService.move(machine: PlacedMachine, x: number, z: number, r: number, level: number?): (boolean, string?)
 	if machine.Removed then
 		return false, "Invalid"
 	end
@@ -777,13 +832,14 @@ function MachineService.move(machine: PlacedMachine, x: number, z: number, r: nu
 	if not data then
 		return false, "Invalid"
 	end
-	local ok, code = Placement.commitMove(data, machine.Entry, x, z, r)
+	local ok, code = Placement.commitMove(data, machine.Entry, x, z, r, level)
 	if not ok then
 		return false, code
 	end
 	machine.X, machine.Z, machine.R = machine.Entry.X, machine.Entry.Z, machine.Entry.R
-	machine.Model:PivotTo(PlotService.footprintCFrame(machine.PlotId, machine.Id, machine.X, machine.Z, machine.R))
-	MachineService.setAttrs(machine, { GridX = machine.X, GridZ = machine.Z, Rotation = machine.R })
+	machine.L = Placement.levelOf(machine.Entry)
+	machine.Model:PivotTo(PlotService.footprintCFrame(machine.PlotId, machine.Id, machine.X, machine.Z, machine.R, machine.L))
+	MachineService.setAttrs(machine, { GridX = machine.X, GridZ = machine.Z, Rotation = machine.R, GridL = machine.L })
 	layoutChanged(machine.Owner, machine.PlotId)
 	callMoved(machine)
 	-- a new front cell: a blocked output may get out now
@@ -806,6 +862,11 @@ function MachineService.pickup(machine: PlacedMachine): (boolean, string?)
 	local data = DataService.get(player)
 	if not data or not table.find(data.PlacedMachines, machine.Entry) then
 		return false, "Invalid"
+	end
+	-- a platform with things on its deck stays (nothing is left floating)
+	local free, why = Placement.canPickup(data.PlacedMachines, machine.Entry)
+	if not free then
+		return false, why
 	end
 	-- the contents must fit the Ore Pen (packing a machine up is no way past
 	-- the pen's paid capacity; nothing is lost: the player makes room first)
@@ -1002,7 +1063,7 @@ function MachineService.emit(machine: PlacedMachine, desc: Desc, quiet: boolean?
 	local owner = machine.Owner.UserId
 	local ox, oz = Grid.outputCell(machine.Id, machine.X, machine.Z, machine.R)
 	if ox and oz then
-		local target = MachineService.atCell(machine.PlotId, ox, oz)
+		local target = MachineService.atCell(machine.PlotId, ox, oz, machine.L)
 		if target and target ~= machine and not target.Info.IsConveyor then
 			-- the item comes from the source's own front cell
 			local dx, dz = Grid.dir(machine.R)
@@ -1052,7 +1113,7 @@ function MachineService.emitSide(
 	local s = if side < 0 then -1 else 1
 	local owner = machine.Owner.UserId
 	local sx, sz = Grid.sideOutputCell(machine.Id, machine.X, machine.Z, machine.R, s)
-	local target = MachineService.atCell(machine.PlotId, sx, sz)
+	local target = MachineService.atCell(machine.PlotId, sx, sz, machine.L)
 	if target and target ~= machine and not target.Info.IsConveyor then
 		-- the item comes from the source's own cell beside the side cell
 		local rx, rz = Grid.right(machine.R)

@@ -28,6 +28,7 @@ local OreData = require(script.Parent.Parent.Config.OreData)
 local Rarity = require(script.Parent.Parent.Config.Rarity)
 local OreShapesLow = require(script.Parent.OreShapesLow)
 local OreShapesHigh = require(script.Parent.OreShapesHigh)
+local ArtifactBuilder = require(script.Parent.ArtifactBuilder)
 
 local ItemBuilder = {}
 
@@ -1417,6 +1418,54 @@ local function alloy(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
 	end
 end
 
+--[[
+	Dusty relic (K = "Relic", OreId = its ArtifactConfig id): a clump of
+	crust (the Body, what collides) with the relic's own shape on it, every
+	part painted in dust (ArtifactBuilder, no glow, no light): the cleaning
+	reveals its colours. At most 1 + ArtifactConfig.MaxParts parts.
+]]
+ItemBuilder.RelicDust = {
+	Color3.fromRGB(122, 106, 92),
+	Color3.fromRGB(146, 128, 108),
+	Color3.fromRGB(92, 78, 66),
+}
+ItemBuilder.RelicScale = 0.75
+
+local function relicBody(model: Model, cf: CFrame, rng: Rng.Rng): Part
+	return body(model, cf, Vector3.new(1.3, 0.45, 1.3), Geo.vary(ItemBuilder.DirtyCrust, rng, 0.04), Enum.Material.Slate)
+end
+
+local function relic(model: Model, cf: CFrame, info: ItemInfo, rng: Rng.Rng)
+	local b = relicBody(model, cf, rng)
+	local art = ArtifactBuilder.build(info.OreId, cf * CFrame.new(0, 0.2, 0), ItemBuilder.RelicScale, true)
+	if not art then
+		return
+	end
+	local i = 0
+	for _, d in art:GetDescendants() do
+		if d:IsA("BasePart") then
+			i += 1
+			local dust = ItemBuilder.RelicDust[(i % #ItemBuilder.RelicDust) + 1]
+			d.Name = if d.Name == "Body" then "Relic" else d.Name
+			d.Color = dust:Lerp(d.Color, 0.12)
+			d.Material = Enum.Material.Slate
+			d.Transparency = 0
+			local decor: any = d
+			for key, value in DECOR do
+				decor[key] = value
+			end
+		elseif d:IsA("Light") or d:IsA("ParticleEmitter") then
+			d:Destroy()
+		end
+	end
+	for _, d in art:GetDescendants() do
+		if d:IsA("BasePart") then
+			addDecor(model, b, d)
+		end
+	end
+	art:Destroy()
+end
+
 local BUILDERS = {
 	Raw = rawChunk,
 	Clean = cleanOre,
@@ -1424,6 +1473,7 @@ local BUILDERS = {
 	Ingot = ingot,
 	Gear = gear,
 	Alloy = alloy,
+	Relic = relic,
 }
 
 -- Returns a Model (not parented). `seed` only changes the random details.
@@ -1613,6 +1663,25 @@ local function gearLight(model: Model, cf: CFrame, info: ItemInfo, _rng: Rng.Rng
 	})
 end
 
+-- A relic riding a belt (into the Restoration Table): the crust clump and a
+-- dusty lump on it.
+local function relicLight(model: Model, cf: CFrame, _info: ItemInfo, rng: Rng.Rng)
+	local b = relicBody(model, cf, rng)
+	lightPart(model, b, {
+		Name = "Relic",
+		CFrame = cf * CFrame.new(0, 0.5, 0) * CFrame.Angles(0, math.pi / 4, 0),
+		Size = Vector3.new(0.75, 0.6, 0.75),
+		Color = Geo.vary(ItemBuilder.RelicDust[2], rng, 0.04),
+		Material = Enum.Material.Slate,
+	})
+	lightPart(model, b, {
+		CFrame = cf * CFrame.new(0.15, 0.85, 0) * CFrame.Angles(0, 0, 0.4),
+		Size = Vector3.new(0.3, 0.35, 0.3),
+		Color = ItemBuilder.RelicDust[3],
+		Material = Enum.Material.Slate,
+	})
+end
+
 local LIGHT_BUILDERS = {
 	Raw = rawLight,
 	Clean = cleanLight,
@@ -1620,6 +1689,7 @@ local LIGHT_BUILDERS = {
 	Ingot = ingotLight,
 	Gear = gearLight,
 	Alloy = ingotLight,
+	Relic = relicLight,
 }
 
 -- The light belt look (at most LightBudget parts), a Model (not parented).

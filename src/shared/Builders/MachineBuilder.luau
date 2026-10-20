@@ -2101,6 +2101,12 @@ function MachineBuilder.build(id: string, level: number?): Model
 	local model: Model
 	if id == "Conveyor" or id == "ExpressConveyor" then
 		model = KitMachines.conveyor(nil, id == "ExpressConveyor")
+	elseif id == "Platform" then
+		model = KitMachines.platform()
+	elseif id == "BeltLift" or id == "Slide" then
+		-- 3 cells long, rising one deck (MachineData.DeckHeight), inside its footprint
+		local info = MachineData.ById[id]
+		model = KitMachines.slope(id == "BeltLift", info.Size[2] * GameConfig.CellSize, MachineData.DeckHeight, true)
 	else
 		local builder = BUILDERS[id]
 		assert(builder, "No model for machine " .. tostring(id))

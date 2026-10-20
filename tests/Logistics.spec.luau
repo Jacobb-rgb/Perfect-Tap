@@ -708,6 +708,45 @@ return function(T, Loader)
 		T.lt(coins, w.data.Coins, "paid")
 	end)
 
+	withWorld("Logistics: on a deck the Robot Arm and the Splitter only see their own level", function(w)
+		w.data.MachineInventory.Platform = 3
+		-- three platforms in a row: deck cells x 4-5, z 2-7
+		for _, z in { 2, 4, 6 } do
+			place(w, "Platform", 4, z, 0)
+		end
+		local function deck(id: string, x: number, z: number, r: number?): any
+			local m, why = MachineService.place(w.player, id, x, z, r or 0, 1)
+			assert(m, `deck {id}: {why}`)
+			return m
+		end
+		-- the arm line of armLine(), up on the deck
+		local furnace = deck("ClayFurnace", 4, 6) -- output cell (5, 5)
+		local arm = deck("RobotArm", 5, 5) -- back (5, 6), front (5, 4)
+		local crusher = deck("Crusher", 4, 3)
+		furnace.Entry.Out = { item("Ingot", "Copper", "Clean") }
+		logi.arm.tick(arm, 300)
+		T.eq(#w.logs.Crusher, 1, "the deck arm moved it")
+		T.truthy(w.logs.Crusher[1].Machine == crusher, "into the deck crusher")
+		-- a ground arm beside the deck: behind it on the ground are only the platform's legs
+		local groundArm = place(w, "RobotArm", 6, 6, 1) -- faces +X: back (5, 6) = deck furnace's cell, front (7, 6)
+		local groundFurnace = place(w, "ClayFurnace", 7, 6, 0)
+		furnace.Entry.Out = { item("Ingot", "Iron", "Clean") }
+		logi.arm.tick(groundArm, 400)
+		T.eq(#w.logs.ClayFurnace, 0, "the ground arm can't reach the deck furnace")
+		T.eq(#furnace.Entry.Out, 1, "the item waits on the deck")
+		T.truthy(groundFurnace, "ground furnace placed")
+		-- a deck Splitter's side cell off the deck: the ground Crusher there gets nothing
+		local splitter = deck("Splitter", 4, 5)
+		local groundCrusher = place(w, "Crusher", 2, 5, 0) -- covers (3, 5), the splitter's left cell
+		local sx, sz = Grid.sideOutputCell("Splitter", 4, 5, 0, -1)
+		T.truthy(sx == 3 and sz == 5, "left side cell")
+		local before = #w.logs.Crusher
+		local result = MachineService.emitSide(splitter, item("Clean", "Copper", "Rough"), -1)
+		T.eq(result, "Spawned", "it pops out on the deck's edge instead")
+		T.eq(#w.logs.Crusher, before, "the ground crusher took nothing")
+		T.truthy(groundCrusher, "ground crusher placed")
+	end)
+
 	withWorld("Logistics: LogisticsService registers every roster logistics machine", function(w)
 		local m = place(w, "Splitter", 1, 1, 0)
 		local s = place(w, "Sorter", 3, 1, 0)

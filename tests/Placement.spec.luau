@@ -74,13 +74,17 @@ return function(T, Loader)
 					for z = -1, CELLS do
 						local fits = x >= 0 and z >= 0 and x + w <= CELLS and z + d <= CELLS
 						-- only belts may cover a chute cell (Step3Config.spec has the details)
-						local chute = fits and not machine.IsConveyor and Placement.chuteUnder(machine.Id, x, z, r) ~= nil
+						local chute = fits and not Placement.fitsUnderDeck(machine.Id) and Placement.chuteUnder(machine.Id, x, z, r) ~= nil
+						-- a Belt Lift / Slide needs a platform at its top end (none on an empty plot)
+						local edge = fits and not chute and machine.Slope ~= nil
 						local ok, code = Placement.validate({}, machine.Id, x, z, r)
-						T.eq(ok, fits and not chute, `{machine.Id} r{r} at {x},{z}`)
+						T.eq(ok, fits and not chute and not edge, `{machine.Id} r{r} at {x},{z}`)
 						if not fits then
 							T.eq(code, "OutOfBounds", `{machine.Id} r{r} at {x},{z} code`)
 						elseif chute then
 							T.eq(code, "Chute", `{machine.Id} r{r} at {x},{z} code`)
+						elseif edge then
+							T.eq(code, "DeckEdge", `{machine.Id} r{r} at {x},{z} code`)
 						end
 						T.eq(Placement.inBounds(machine.Id, x, z, r), fits)
 					end

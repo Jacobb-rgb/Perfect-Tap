@@ -94,6 +94,7 @@ KitMachines.Palette = {
 	Cyan = rgb(70, 228, 255), -- end game glow (plasma, fusion)
 	Brick = rgb(222, 126, 92), -- the Brick Furnace's terracotta dome
 	Gem = rgb(90, 214, 255),
+	Metal = rgb(176, 182, 198), -- a platform's deck top
 }
 local P = KitMachines.Palette
 
@@ -1331,7 +1332,7 @@ local function rail(m: Instance, cf: CFrame, length: number, side: number, name:
 	return part
 end
 
-type CapOpts = { arrow: string?, beacon: boolean? }
+type CapOpts = { arrow: string?, beacon: boolean?, slim: boolean? } -- slim: no hub balls (stays inside a 1-wide footprint)
 
 --[[
 	A belt end cap at `cf` (centre of the belt end on the belt surface; the
@@ -1348,7 +1349,9 @@ local function beltCap(m: Instance, cf: CFrame, o: CapOpts?)
 		local at = (drumC * CFrame.new(side * RAIL_X, 0, 0)).Position
 		cyl(m, at, cf.RightVector, 0.5, 1.25, "Trim", PROP)
 		cyl(m, at + cf.RightVector * side * 0.27, cf.RightVector, 0.1, 0.55, "Frame", TINY)
-		ball(m, at + cf.RightVector * side * 0.33, 0.3, "Trim", TINY)
+		if not opts.slim then
+			ball(m, at + cf.RightVector * side * 0.33, 0.3, "Trim", TINY)
+		end
 	end
 	if opts.arrow then
 		local box = cf * CFrame.new(-(RAIL_X + 0.95), 0.2, 0.2)
@@ -1475,19 +1478,25 @@ end
 
 --[[
 	A belt slope `length` long rising `rise` (the Belt Lift carries items up,
-	the Slide down; preview models, not in MachineData yet): a tilted
-	segmented belt with round orange markers between tilted rails, round
-	slate legs on orange feet with a cross brace under the high end, drums
-	at both ends and the control box where items get on (green up arrow at
-	the bottom of the lift, red down arrow at the top of the slide). Items
-	travel toward -Z.
+	the Slide down): a tilted segmented belt with round orange markers
+	between tilted rails, round slate legs on orange feet with a cross brace
+	under the high end, drums at both ends and the control box where items
+	get on (green up arrow at the bottom of the lift, red down arrow at the
+	top of the slide). Items travel toward -Z. The Belt part is a belt like
+	the flat ones (tag ConveyorBelt, the same grippy physics, so items ride
+	up the slope): ConveyorService moves it along its tilted LookVector.
+	`fit` (the game's Belt Lift / Slide, MachineData 1x3): everything stays
+	inside the 1-cell-wide footprint, so the control box hangs under the
+	leg brace at the high end (its arrow facing down the slope) instead of
+	beside the belt, the feet are slimmer and the drum hubs plain.
 ]]
-function KitMachines.slope(up: boolean, length: number?, rise: number?): Model
+function KitMachines.slope(up: boolean, length: number?, rise: number?, fit: boolean?): Model
 	local L = length or 12
 	local H = rise or 5
 	local model = Instance.new("Model")
 	model.Name = if up then "BeltLift" else "Slide"
-	local base = block(model, CFrame.new(0, 0.05, 0), Vector3.new(0.1, 0.1, 0.1), "Frame", TINY, "Base")
+	-- the pivot where a flat belt's is (its Base centre), so both ends line up with flat belts
+	local base = block(model, CFrame.new(0, 0.15, 0), Vector3.new(0.1, 0.1, 0.1), "Frame", TINY, "Base")
 	base.Transparency = 1
 	model.PrimaryPart = base :: any
 	local startZ, finishZ = L / 2 - 1, -L / 2 + 1
@@ -1497,7 +1506,12 @@ function KitMachines.slope(up: boolean, length: number?, rise: number?): Model
 	local b = Vector3.new(0, finishY, finishZ)
 	local len = (b - a).Magnitude
 	local frame = CFrame.lookAt((a + b) / 2, b)
-	local belt = block(model, frame * CFrame.new(0, -0.25, 0), Vector3.new(BELT_W, 0.5, len), "Rubber", SOLID, "Belt")
+	local belt = block(model, frame * CFrame.new(0, -0.25, 0), Vector3.new(BELT_W, 0.5, len), "Rubber", {
+		CanTouch = true,
+		CastShadow = false,
+		CustomPhysicalProperties = PhysicalProperties.new(0.7, 1.2, 0, 100, 100),
+	}, "Belt")
+	belt:AddTag("ConveyorBelt")
 	beltPaint(belt, len, true)
 	for _, side in { -1, 1 } do
 		rail(model, frame * CFrame.new(side * RAIL_X, -0.35, 0), len, side, nil, SOLID)
@@ -1507,10 +1521,11 @@ function KitMachines.slope(up: boolean, length: number?, rise: number?): Model
 	local highY = BELT_TOP + H
 	local legZ = highZ + (if up then 1.0 else -1.0)
 	local legTop = highY - 1.0
+	local foot = if fit then 0.64 else 1.0
 	for _, side in { -1, 1 } do
 		cyl(model, Vector3.new(side * RAIL_X, (legTop + 0.4) / 2, legZ), UP, legTop - 0.4, 0.55, "Frame", SOLID)
-		cyl(model, Vector3.new(side * RAIL_X, 0.25, legZ), UP, 0.5, 1.0, "Trim", SOLID)
-		cyl(model, Vector3.new(side * RAIL_X, 0.25, legZ), UP, 0.12, 1.06, "Neon", TINY)
+		cyl(model, Vector3.new(side * RAIL_X, 0.25, legZ), UP, 0.5, foot, "Trim", SOLID)
+		cyl(model, Vector3.new(side * RAIL_X, 0.25, legZ), UP, 0.12, foot + 0.06, "Neon", TINY)
 	end
 	local yb = (legTop + 0.4) / 2
 	local span = (legTop - 0.4) * 0.38
@@ -1519,10 +1534,76 @@ function KitMachines.slope(up: boolean, length: number?, rise: number?): Model
 	end
 	rod(model, Vector3.new(-RAIL_X - 0.2, legTop, legZ), Vector3.new(RAIL_X + 0.2, legTop, legZ), 0.5, "Frame", SOLID)
 	-- drums at both ends, the control box where items get on
-	beltCap(model, CFrame.new(a), { arrow = if up then "up" else "down" })
-	beltCap(model, CFrame.new(b) * CFrame.Angles(0, math.pi, 0), nil)
+	local arrow = if up then "up" else "down"
+	if fit then
+		beltCap(model, CFrame.new(a), { slim = true })
+		-- the control box under the brace, its arrow screen facing down the slope
+		local toward = if up then 1 else -1
+		local box = CFrame.lookAt(Vector3.new(0, legTop - 1.0, legZ), Vector3.new(0, legTop - 1.0, legZ + toward))
+		block(model, box, Vector3.new(1.3, 1.1, 0.5), "Frame", PROP, "ControlBox")
+		local screen = block(model, box * CFrame.new(0, 0.05, -0.27), Vector3.new(0.8, 0.8, 0.05), "Screen", TINY, "ArrowScreen")
+		local color = if up then P.Green else P.Red
+		local upArrow = up
+		paint(screen, Enum.NormalId.Front, {
+			{ x = 0.44, y = 0.22, w = 0.12, h = 0.56, color = color },
+			{ x = 0.28, y = if upArrow then 0.26 else 0.64, w = 0.44, h = 0.1, color = color },
+			{ x = 0.38, y = if upArrow then 0.16 else 0.74, w = 0.24, h = 0.1, color = color },
+		})
+		beltCap(model, CFrame.new(b) * CFrame.Angles(0, math.pi, 0), { slim = true })
+	else
+		beltCap(model, CFrame.new(a), { arrow = arrow })
+		beltCap(model, CFrame.new(b) * CFrame.Angles(0, math.pi, 0), nil)
+	end
 	model:SetAttribute("MachineId", model.Name)
 	attach(base, "Prompt", CFrame.new(0, 1.5, startZ))
+	return model
+end
+
+--[[
+	A platform (MachineData Platform, 2x2 cells): a deck one level up (its
+	top surface at MachineData.DeckHeight) on four round slate legs with
+	orange feet: a cream slab with a light metal top ("Deck"), glowing orange
+	strips on its four edges and two slate braces crossing under it. The
+	approved preview's look (style A) in 17 parts, small parts without
+	shadows. No rails (decks join side by side and Belt Lifts reach their
+	edges) and nothing between the legs below the deck, so belts and items
+	pass under it.
+]]
+function KitMachines.platform(): Model
+	local H = MachineData.DeckHeight
+	local info = MachineData.ById.Platform
+	local size = (if info then info.Size[1] else 2) * GameConfig.CellSize
+	local model = Instance.new("Model")
+	model.Name = "Platform"
+	-- the pivot right on the pad, so the deck top lands exactly DeckHeight up
+	local base = block(model, CFrame.new(0, 0, 0), Vector3.new(0.1, 0.1, 0.1), "Frame", TINY, "Base")
+	base.Transparency = 1
+	model.PrimaryPart = base :: any
+	-- slim legs right in the footprint's corners: a belt under the deck keeps
+	-- its whole surface (they only touch the outer rails' edge), and the feet
+	-- stay under the belts' surface
+	local half = size / 2 - 0.25
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			cyl(model, Vector3.new(sx * half, (H - 0.6) / 2, sz * half), UP, H - 0.6, 0.5, "Frame", SOLID, "Leg")
+			cyl(model, Vector3.new(sx * half, 0.15, sz * half), UP, 0.3, 0.72, "Trim", TINY, "Foot")
+		end
+	end
+	-- the deck: cream slab, metal top, glow strips on its four edges
+	block(model, CFrame.new(0, H - 0.45, 0), Vector3.new(size - 0.1, 0.7, size - 0.1), "Body", SOLID, "Slab")
+	local top = block(model, CFrame.new(0, H - 0.05, 0), Vector3.new(size - 0.5, 0.1, size - 0.5), "Metal", SOLID, "Deck")
+	top.Reflectance = 0.04
+	for _, side in { -1, 1 } do
+		block(model, CFrame.new(0, H - 0.55, side * (size / 2 - 0.02)), Vector3.new(size - 0.6, 0.14, 0.06), "Neon", TINY, "DeckGlow")
+		block(model, CFrame.new(side * (size / 2 - 0.02), H - 0.55, 0), Vector3.new(0.06, 0.14, size - 0.6), "Neon", TINY, "DeckGlow")
+	end
+	-- two braces crossing under the slab, from leg top to leg top (over every belt and item)
+	local y = H - 1.0
+	for _, s in { -1, 1 } do
+		rod(model, Vector3.new(-half, y, -s * half), Vector3.new(half, y, s * half), 0.32, "Frame", TINY, "Brace")
+	end
+	model:SetAttribute("MachineId", model.Name)
+	attach(base, "Prompt", CFrame.new(0, H + 0.5, 0))
 	return model
 end
 

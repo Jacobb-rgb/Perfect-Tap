@@ -199,7 +199,7 @@ local function updateHint()
 	local recipe = target:GetAttribute("Recipe") :: string?
 	local ore = OreData.ById[oreId]
 	-- dirty ore keeps its secret: no rarity color, no price (design v2)
-	local dirty = kind == "Raw"
+	local dirty = kind == "Raw" or kind == "Relic"
 	local color = if ore and not dirty then Rarity.get(ore.Rarity).Color else Theme.Text
 	highlight.Adornee = target
 	highlight.OutlineColor = color
@@ -214,8 +214,9 @@ local function updateHint()
 		then "X"
 		elseif UserInputService.TouchEnabled then "Grab"
 		else "E"
-	hintAction.Text = if dirty
-		then `[{key}] Pick up   •   clean it to see what it is`
+	hintAction.Text = if kind == "Relic"
+		then `[{key}] Pick up   •   clean it at a Cleaning Station or Restoration Table`
+		elseif dirty then `[{key}] Pick up   •   clean it to see what it is`
 		else `[{key}] Pick up   •   {Format.money(value)}`
 end
 
