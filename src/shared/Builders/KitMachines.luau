@@ -62,6 +62,8 @@ local GLASS = Enum.Material.Glass
 local FLOOR = 0.3 -- top of the Base plate
 
 KitMachines.MaxLevel = 4
+-- hard stripes per UIGradient: two keypoints each, Roblox allows 20 (paint)
+KitMachines.StripesPerGradient = 10
 
 KitMachines.Palette = {
 	Body = rgb(232, 226, 214), -- cream bodies
@@ -216,19 +218,35 @@ local function paint(part: BasePart, face: Enum.NormalId, items: { Paint }, name
 			corner.Parent = frame
 		end
 		if it.stripes then
-			-- hazard stripes: hard orange / dark steps
-			local keys = {}
-			local n = it.stripes
-			for i = 0, n - 1 do
-				local color = if i % 2 == 0 then P.Trim else P.Dark
-				local t0, t1 = i / n, (i + 1) / n
-				table.insert(keys, ColorSequenceKeypoint.new(t0, color))
-				table.insert(keys, ColorSequenceKeypoint.new(math.max(t0, t1 - 0.001), color))
+			-- hazard stripes: hard orange / dark steps. Roblox allows 20
+			-- keypoints per ColorSequence, from time 0 to exactly 1 (two per
+			-- hard stripe), so long runs are split into frames of at most
+			-- KitMachines.StripesPerGradient stripes side by side.
+			local n = math.max(1, math.floor(it.stripes))
+			local chunks = math.ceil(n / KitMachines.StripesPerGradient)
+			local from = 0
+			frame.BackgroundTransparency = 1
+			for c = 1, chunks do
+				local to = math.floor(n * c / chunks + 0.5)
+				local k = to - from
+				local keys = {}
+				for j = 0, k - 1 do
+					local color = if (from + j) % 2 == 0 then P.Trim else P.Dark
+					table.insert(keys, ColorSequenceKeypoint.new(j / k, color))
+					table.insert(keys, ColorSequenceKeypoint.new(if j == k - 1 then 1 else (j + 1) / k - 0.001, color))
+				end
+				local chunk = Instance.new("Frame")
+				chunk.Name = "Stripes"
+				chunk.BorderSizePixel = 0
+				chunk.BackgroundColor3 = WHITE
+				chunk.Position = UDim2.fromScale(from / n, 0)
+				chunk.Size = UDim2.fromScale(k / n, 1)
+				local gradient = Instance.new("UIGradient")
+				gradient.Color = ColorSequence.new(keys)
+				gradient.Parent = chunk
+				chunk.Parent = frame
+				from = to
 			end
-			local gradient = Instance.new("UIGradient")
-			gradient.Color = ColorSequence.new(keys)
-			gradient.Parent = frame
-			frame.BackgroundColor3 = WHITE
 		end
 		frame.Parent = gui
 	end
