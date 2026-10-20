@@ -28,7 +28,7 @@ brings it home → Ore Pen → clean it (by hand or machines) → best ores on p
 | Ores | 36 ores from the owner's picture; rocks hold 1-3 hidden ores; `OreData.Renamed` maps old saves | OreData; 9b6235a |
 | Trains, pen, podiums | per-player train (mine hopper → base station → Ore Pen), podiums with income/s and offline earnings | TrainService, PenService, PodiumService |
 | Machines | 24 roster machines in the owner's Soft style, belts, power poles + cables, Iron Box, Sell Box; Polisher stops at Pristine | MachineData, MachineService, LogisticsService, PowerService; df5171d, 417c7c9, 25a184c |
-| Platforms | Platform deck 5 studs up, Belt Lift (items up a 26.6° slope), Slide; Deck / Ground toggle in build mode | docs/plans/PLATFORMS_PLAN.md phases 1-2; ee3f4d3 |
+| Platforms | Platform deck 5 studs up, Belt Lift (items up a 26.6° slope), Slide; Deck / Ground toggle in build mode | docs/plans/PLATFORMS_PLAN.md phases 1-3; ee3f4d3, c7b2ca8 |
 | Foundry + Vault | Foundry forges the next level from ingots + coins; Blaster Vault sells the next level for coins (4x the Foundry price) with the crate-opening cinematic; blaster gallery in THE GREAT FORGE's hall | FoundryService, VaultService, UI/CrateOpeningView; 6090647, 32616e9, a671e5a |
 | Steps 6-7 | gear, enchants, boosts, golem capsules, daily wheel, artifacts + story + yard museums, leaderboards, codex, settings, the left side menu | GearService, EnchantService, BoostService, CapsuleService, GolemService, WheelService, ArtifactService, LeaderboardService, CodexService, SettingsService, UI/SideMenuView; 9be848a |
 | Relics | rocks drop a **dusty relic**: clean it at a Cleaning Station or put it into a **Restoration Table**; never sold or lost | ArtifactService (DustyRelics), MachineData RestorationTable; 35e7eab |
@@ -99,9 +99,10 @@ The owner runs several Claude chats at once. Each works in its own worktree / br
 6. **Studio checks** by the owner: docs/STUDIO_CHECKLIST.md, then Playtesters → Public (PUBLISHING.md section 3, items 10-11).
 7. Smaller: trading (V2_PLAN step 8) is not built; the side menu's STORE stays hidden until a StoreController
    exists (on a 568 x 320 phone STORE + REBIRTH need a menu decision); rebirth's Plot Glow perk and the Star Forge
-   prompt at the fire crystal are built (9d0589b); platforms phase 3 (Tech card order, tutorial hint, steps, cables
-   to the deck) is open (machines chat); perf leftovers (`PenService.markBoard`, PERF_AUDIT items 7-8 and the
-   device test, item 10); the owner decides whether Robux coin packs are ever enabled.
+   prompt at the fire crystal are built (9d0589b); platforms phase 3 is built (c7b2ca8: Tech card order, tutorial
+   hint, cables to the deck, no steps; the Studio Lift check is the owner's); perf leftovers
+   (`PenService.markBoard`, PERF_AUDIT items 7-8 and the device test, item 10); the owner decides whether Robux coin
+   packs are ever enabled.
 8. Preview / proposal branches kept for reference, not to merge: `art/plot-style-a`, `art/relic-flow-preview`,
    `art/platforms-preview`, `docs/rebirth-proposal`, `mock/rebirth`.
 
