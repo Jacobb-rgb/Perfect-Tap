@@ -218,8 +218,15 @@ return function(T, Loader)
 				texts[d.Text] = true
 			end
 		end
-		for _, text in { "DEPTHS", "THE FORGE", "PWR", "MINE" } do
+		for _, text in { "DEPTHS", "PWR", "MINE" } do
 			T.truthy(texts[text], "sign " .. text)
+		end
+		-- no board may carry another game's title (owner 2026-10-20: "The Forge" is one)
+		for _, d in map:GetDescendants() do
+			if d:IsA("TextLabel") then
+				local plain = string.upper(string.gsub(d.Text, "%s+", " "))
+				T.falsy(plain == "THE FORGE", `{d:GetFullName()} reads "THE FORGE"`)
+			end
 		end
 		local mouth = backdrop.MineEntrance:FindFirstChild("MineMouth")
 		T.truthy(mouth and mouth:IsA("BasePart"), "MineMouth part")
