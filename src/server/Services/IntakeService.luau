@@ -17,6 +17,13 @@
 	change, so the 5 Hz scan costs a few box tests per item and no spatial
 	queries. Items a client may have moved implausibly (ItemService.isTrusted)
 	are skipped until the server has them back.
+
+	Town zones (perf pass 1, SERVER_PERF_AUDIT #5): their boxes (CFrame, half
+	size) are cached in an index, rebuilt when a zone is added or a zone
+	part moves, resizes or leaves; an item on a plot (plotAt first) is
+	tested only against the zones over that plot, any other item only
+	against the zones in its TOWN_CELL square. The first zone in the order
+	they were added still wins, as before.
 ]]
 
 local Players = game:GetService("Players")
@@ -24,6 +31,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Grid = require(Shared.Machines.Grid)
 local ConveyorLogic = require(Shared.Machines.ConveyorLogic)
 local Net = require(Shared.Net)
@@ -46,7 +54,13 @@ type Zone = {
 	CFrame: CFrame, -- box centre, world space
 	Half: Vector3, -- half the box size
 }
-type StaticZone = { Name: string, Part: BasePart, Handler: (ItemRecord) -> ...any }
+type StaticZone = {
+	Name: string,
+	Part: BasePart,
+	Handler: (ItemRecord) -> ...any,
+	CFrame: CFrame, -- cached box (rebuildStatic)
+	Half: Vector3,
+}
 export type BeltHandler = (belt: PlacedMachine, record: ItemRecord, localPos: Vector3, now: number) -> ...any
 
 local CELL = GameConfig.CellSize
@@ -61,6 +75,11 @@ local WARN_COOLDOWN = 10
 -- plotId -> cell key -> zones on that cell (hoppers before feeders)
 local plotZones: { [number]: { [number]: { Zone } } } = {}
 local staticZones: { StaticZone } = {}
+-- the town zone index: zones over each plot's square, the rest by town square
+local TOWN_CELL = 32
+local staticDirty = true
+local plotStatic: { [number]: { StaticZone } } = {}
+local townStatic: { [number]: { StaticZone } } = {}
 local beltHandler: BeltHandler? = nil
 local lastReject: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
 local foreignSince: { [ItemRecord]: number } = setmetatable({}, { __mode = "k" }) :: any
@@ -176,12 +195,91 @@ local function rebuild(plotId: number)
 	end
 end
 
+---------------------------------------------------------------- town zone index
+
+local function townKey(cx: number, cz: number): number
+	return cx * 65536 + cz
+end
+
+-- World-space box around a zone: (min, max).
+local function bounds(cf: CFrame, half: Vector3): (Vector3, Vector3)
+	local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+	local extent = Vector3.new(
+		math.abs(r.X) * half.X + math.abs(u.X) * half.Y + math.abs(l.X) * half.Z,
+		math.abs(r.Y) * half.X + math.abs(u.Y) * half.Y + math.abs(l.Y) * half.Z,
+		math.abs(r.Z) * half.X + math.abs(u.Z) * half.Y + math.abs(l.Z) * half.Z
+	)
+	return cf.Position - extent, cf.Position + extent
+end
+
+-- Caches every zone's box and files it under the plots it lies over and
+-- the town squares it touches (in the order the zones were added).
+local function rebuildStatic()
+	staticDirty = false
+	table.clear(plotStatic)
+	table.clear(townStatic)
+	local reach = PlotService.PlotReach
+	for _, zone in staticZones do
+		local part = zone.Part
+		if not part.Parent then
+			continue -- gone (it comes back with a rebuild when it is parented again)
+		end
+		zone.CFrame = part.CFrame
+		zone.Half = part.Size / 2
+		local min, max = bounds(zone.CFrame, zone.Half)
+		for _, plot in WorldLayout.Plots do
+			local c = plot.Center
+			if max.X >= c.X - reach and min.X <= c.X + reach and max.Z >= c.Z - reach and min.Z <= c.Z + reach then
+				local list = plotStatic[plot.Id]
+				if not list then
+					list = {}
+					plotStatic[plot.Id] = list
+				end
+				table.insert(list, zone)
+			end
+		end
+		for cx = math.floor(min.X / TOWN_CELL), math.floor(max.X / TOWN_CELL) do
+			for cz = math.floor(min.Z / TOWN_CELL), math.floor(max.Z / TOWN_CELL) do
+				local key = townKey(cx, cz)
+				local list = townStatic[key]
+				if not list then
+					list = {}
+					townStatic[key] = list
+				end
+				table.insert(list, zone)
+			end
+		end
+	end
+end
+
+local function markStatic()
+	staticDirty = true
+end
+
+-- The town zones an item at `position` can be in (`plotId`: plotAt's answer).
+local function staticNear(position: Vector3, plotId: number?): { StaticZone }?
+	if staticDirty then
+		rebuildStatic()
+	end
+	if plotId then
+		return plotStatic[plotId]
+	end
+	return townStatic[townKey(math.floor(position.X / TOWN_CELL), math.floor(position.Z / TOWN_CELL))]
+end
+
 ---------------------------------------------------------------- public API
 
 -- A fixed box in the world (not on a plot) that takes trusted loose items,
--- e.g. Tobin's SellBin. The handler owns the item from then on.
+-- e.g. Tobin's SellBin. The handler owns the item from then on. The Ore
+-- Magnet never pulls items into or past the zone (ItemService.magnetAvoid).
 function IntakeService.addZone(name: string, part: BasePart, handler: (ItemRecord) -> ...any)
-	table.insert(staticZones, { Name = name, Part = part, Handler = handler })
+	table.insert(staticZones, { Name = name, Part = part, Handler = handler, CFrame = part.CFrame, Half = part.Size / 2 })
+	staticDirty = true
+	-- the cached box follows the part
+	part:GetPropertyChangedSignal("CFrame"):Connect(markStatic)
+	part:GetPropertyChangedSignal("Size"):Connect(markStatic)
+	part.AncestryChanged:Connect(markStatic)
+	ItemService.magnetAvoid(part)
 end
 
 -- Called for every trusted loose item on a belt cell that no hopper or belt
@@ -338,18 +436,20 @@ end
 
 local function scanOne(record: ItemRecord, now: number)
 	local position = record.Body.Position
-	-- 1. town zones
-	for _, zone in staticZones do
-		local part = zone.Part
-		if part.Parent and inBox(part.CFrame, part.Size / 2, position) then
-			if ItemService.isTrusted(record, now) then
-				zone.Handler(record)
+	-- 1. which plot (if any), then the town zones there: the first box holding the item wins
+	local plotId, localPos = PlotService.plotAt(position)
+	local nearby = staticNear(position, plotId)
+	if nearby then
+		for _, zone in nearby do
+			if zone.Part.Parent and inBox(zone.CFrame, zone.Half, position) then
+				if ItemService.isTrusted(record, now) then
+					zone.Handler(record)
+				end
+				return
 			end
-			return
 		end
 	end
-	-- 2. which plot and cell
-	local plotId, localPos = PlotService.plotAt(position)
+	-- 2. on a plot: which cell
 	if not plotId or not localPos then
 		foreignSince[record] = nil
 		return
@@ -404,9 +504,7 @@ local function scan()
 	local now = os.clock()
 	for _, record in ItemService.looseList() do
 		if record.State == "Loose" then
-			local ok, err = pcall(function()
-				scanOne(record, now)
-			end)
+			local ok, err = pcall(scanOne :: any, record, now)
 			if not ok then
 				warnThrottled("scan", "[IntakeService] scan failed: " .. tostring(err))
 			end
@@ -426,6 +524,23 @@ IntakeService._test = {
 		table.clear(staticZones)
 		table.clear(hintTimes)
 		beltHandler = nil
+		staticDirty = true
+	end,
+	-- what a zone part's CFrame / Size / AncestryChanged signal does
+	invalidate = markStatic,
+	-- the names of the town zones an item at `position` is tested against
+	candidates = function(position: Vector3): { string }
+		local plotId = PlotService.plotAt(position)
+		local names = {}
+		local list = staticNear(position, plotId)
+		if list then
+			for _, zone in list do
+				if zone.Part.Parent then
+					table.insert(names, zone.Name)
+				end
+			end
+		end
+		return names
 	end,
 	zonesAt = function(plotId: number, gx: number, gz: number): { Zone }
 		local cells = plotZones[plotId]

@@ -77,7 +77,8 @@
 	  tap the chip, press T or gamepad L3, or use the "Train" prompt (UIOffset
 	  slot 2 under the server's Load / Send prompts on every Mine Station and
 	  Mine Lift PromptPoint) to open the panel: cargo, trip time, SEND,
-	  Capacity / Speed upgrades with BUY (TrainAction "Upgrade" { Kind }) and
+	  Capacity / Speed upgrades with BUY (TrainAction "Upgrade" { Kind, Level =
+	  the level bought }) and
 	  the Express perk placeholder; the header shows your coins. X, B or
 	  Backspace (or T / L3 again) close it; gamepads get a selected button
 	  and the selection stays inside the panel. Opening it closes the Pen and
@@ -128,6 +129,7 @@ local Theme = require(Shared.Config.UITheme)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local TrainBuilder = require(Shared.Builders.TrainBuilder)
 local Net = require(Shared.Net)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TrainView = require(script.Parent.Parent.UI.TrainView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -2192,7 +2194,7 @@ local function applyChip()
 	if not view then
 		return
 	end
-	view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen)
+	view.Chip.Enabled = TrainView.chipVisible(hudShown, panelOpen, MenuPanels.gridOpen())
 	local hide = panelOpen and view.CoversCoins
 	local hud = HudController.refs()
 	if hud and hide ~= coinsHidden then
@@ -2283,7 +2285,12 @@ local function send()
 		if current.Phase == "Moving" or current.Phase == "Unloading" then
 			deny("Your train is on its way. It comes back after the delivery.")
 		elseif current.Phase == "Waiting" then
-			deny("Your Ore Pen is full: make room so your train can unload.")
+			local train = snapshot
+			if train and train.WaitReason == "PenOver" then
+				deny("Your Ore Pen holds more than it fits: take, sell or send some so your train can unload.")
+			else
+				deny("Your Ore Pen is full: make room so your train can unload.")
+			end
 		elseif current.Phase == "Returning" then
 			deny("Your train is on its way back to the Mine.")
 		else
@@ -2313,7 +2320,10 @@ local function buy(kind: TrainView.Kind)
 	end
 	buyLockedUntil = os.clock() + 0.6
 	Sfx.play("UIClick")
-	Net.send("TrainAction", "Upgrade", { Kind = kind })
+	-- the level this card buys: the server buys only exactly that one (a
+	-- double click or a lagging card never buys two levels)
+	local level = if kind == "Capacity" then train.CapacityLevel else train.SpeedLevel
+	Net.send("TrainAction", "Upgrade", { Kind = kind, Level = level + 1 })
 end
 
 local CLOSE_ACTION = "TerraForgeTrainClose"
@@ -2395,6 +2405,7 @@ function TrainController.open()
 	if SellController.isOpen() then
 		SellController.close()
 	end
+	MenuPanels.closeOthers("TrainController") -- and every other panel (MenuPanels.Names)
 	panelOpen = true
 	openedAt = os.clock()
 	fit()
@@ -2682,6 +2693,10 @@ function TrainController.init()
 	FxController.register("TrainUnload", onUnload)
 	FxController.register("TrainLoad", onLoad)
 	StateController.onChanged(onState)
+	-- the touch side menu's open grid takes the chip's place: the chip hides until it shuts
+	MenuPanels.onGridChanged(function()
+		applyChip()
+	end)
 	Players.PlayerRemoving:Connect(function(leaving)
 		trips[leaving.UserId] = nil
 	end)

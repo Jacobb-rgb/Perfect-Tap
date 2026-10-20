@@ -21,6 +21,34 @@
 	  "new ore" toasts here (CleaningService does that).
 	- A shattered rock grows back after the rarest contained ore's RespawnTime.
 	- Only players who are firing are looked at each tick (no loops over parts).
+	- Bonuses (steps 6-7, src/server/Bonuses.luau) of the player whose damage
+	  counts: damage x Bonuses.damageMult (Overcharge in the last third), range
+	  + Bonuses.reach; ore luck (Lucky enchant, Luck golems, Hexa Lucky:
+	  Bonuses.oreLuck above 1, growing with rarity) only UPGRADES a dropped
+	  ore: an ore whose share grows with the luck always stays, one whose
+	  share drops may become a rarer ore of the zone (BoostConfig.upgradeOre:
+	  every chunk then has exactly the chances BoostConfig.oreOdds shows); a
+	  chunk drops a twin with chance
+	  Bonuses.twinDrop. When a rock shatters and an onArtifactRoll listener is
+	  registered, one roll against Bonuses.artifactChance (zone chance x
+	  Prospector) calls the listeners (player, zoneId, position) on success.
+	  With no bonuses nothing extra is rolled.
+	- Loose-item cap: while the shooter has GameConfig.MaxLooseItemsPerPlayer
+	  loose items (ItemService.atLooseCap) their damage never crosses a stage
+	  that would drop an ore (or break the rock): the HP stays just above it
+	  (1 HP before the break) and they get "Pick up your ore first" (at most
+	  every CAP_TOAST_GAP seconds). The ore stays in the rock (nothing is
+	  rolled or lost); once they pick some up, the next hit goes on.
+	- Network (docs/SERVER_PERF_AUDIT.md #8): the Health attribute replicates
+	  at most every HEALTH_GAP seconds per rock (and at once when a stage is
+	  crossed or the rock breaks); the last change always follows within
+	  HEALTH_GAP (the tick flushes it). The shooter's beam colour is cached
+	  until their blaster level or ore changes.
+	- Movement check (docs/plans/MOVEMENT_CHECK_PLAN.md): with
+	  MovementConfig.Enforce on the range is measured from
+	  MovementService.trustedPosition (off today: the live position); with
+	  MovementConfig.BeamLos on a tick deals no damage while BeamSight says a
+	  wall stands between the head and the rock (no toast).
 ]]
 
 local Players = game:GetService("Players")
@@ -29,16 +57,20 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BlasterData = require(Shared.Config.BlasterData)
+local MovementConfig = require(Shared.Config.MovementConfig)
 local OreData = require(Shared.Config.OreData)
 local Rarity = require(Shared.Config.Rarity)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local BlasterBuilder = require(Shared.Builders.BlasterBuilder)
 local OreNodeBuilder = require(Shared.Builders.OreNodeBuilder)
 local Net = require(Shared.Net)
+local BeamSight = require(script.Parent.Parent.BeamSight)
+local Bonuses = require(script.Parent.Parent.Bonuses)
 local Guard = require(script.Parent.Parent.Guard)
 local Perks = require(script.Parent.Parent.Perks)
 local DataService = require(script.Parent.DataService)
 local ItemService = require(script.Parent.ItemService)
+local MovementService = require(script.Parent.MovementService)
 local WorldService = require(script.Parent.WorldService)
 
 local MiningService = {}
@@ -48,7 +80,11 @@ MiningService.RockTag = "Rock"
 local FX_RADIUS = 150 -- players this close see hits and cracks
 local SHATTER_RADIUS = 180
 local HIT_FX_GAP = 0.25 -- BlastHit at most 4 times a second per rock and shooter
+local HEALTH_GAP = 0.3 -- the Health attribute replicates at most ~3 times a second per rock
 local TOAST_GAP = 3 -- seconds between "Needs a Level N blaster" toasts for the same rock
+local CAP_TOAST_GAP = 4 -- seconds between "Pick up your ore first" toasts per player
+MiningService.CapText = "Pick up your ore first"
+MiningService.NoSightText = "No clear shot: something is in the way" -- the beam has no line of sight (BeamSight)
 local RESPAWN_CHECK = 1 -- seconds between respawn queue checks
 
 type Rock = {
@@ -66,12 +102,14 @@ type Rock = {
 	Radius: number,
 	Crust: Color3,
 	HitFx: { [Player]: number },
+	HealthSentAt: number?, -- clock() of the last Health attribute write (nil = at spawn)
 }
 
 type Shooter = {
 	Target: Rock?,
 	Last: number, -- clock() of this player's last damage tick (or target change)
 	Toasts: { [Model]: number }, -- last gate toast per rock
+	CapToast: number?, -- clock() of the last "Pick up your ore first"
 }
 
 type Respawn = { At: number, Marker: BasePart }
@@ -94,6 +132,14 @@ end
 local minedCallbacks: { (Player, string, number) -> () } = {}
 function MiningService.onChunkMined(callback: (player: Player, oreId: string, count: number) -> ())
 	table.insert(minedCallbacks, callback)
+end
+
+-- The Artifacts package listens here: (player, zoneId, position) when a
+-- shattered rock's artifact roll succeeds (see the header).
+export type ArtifactCallback = (player: Player, zoneId: string, position: Vector3) -> ()
+local artifactCallbacks: { ArtifactCallback } = {}
+function MiningService.onArtifactRoll(callback: ArtifactCallback)
+	table.insert(artifactCallbacks, callback)
 end
 
 ---------------------------------------------------------------- rocks
@@ -210,9 +256,35 @@ local function glowOf(data: { [string]: any }): Color3
 	return BlasterBuilder.look(data.BlasterLevel, if type(ore) == "string" then ore else "").Glow
 end
 
+-- glowOf for a firing player, cached until their blaster level or ore changes (it runs every tick).
+local glowCache: { [Player]: { Key: string, Glow: Color3 } } = {}
+local function cachedGlow(player: Player, data: { [string]: any }): Color3
+	local ore = data.BlasterOre
+	local key = tostring(data.BlasterLevel) .. "|" .. (if type(ore) == "string" then ore else "")
+	local cached = glowCache[player]
+	if cached and cached.Key == key then
+		return cached.Glow
+	end
+	local glow = glowOf(data)
+	glowCache[player] = { Key = key, Glow = glow }
+	return glow
+end
+
+-- Rocks whose Health changed since the attribute was last written (the tick flushes them).
+local healthDirty: { [Rock]: boolean } = {}
+
+-- Writes the Health attribute now (it replicates to every client near the rock).
+local function sendHealth(rock: Rock, now: number)
+	healthDirty[rock] = nil
+	rock.HealthSentAt = now
+	if rock.Alive then
+		rock.Model:SetAttribute("Health", rock.Health)
+	end
+end
+
 ---------------------------------------------------------------- drops and stages
 
-local function dropChunk(player: Player, rock: Rock, oreId: string, from: Vector3)
+local function spawnChunk(player: Player, rock: Rock, oreId: string, from: Vector3)
 	local toward = (from - rock.Center) * Vector3.new(1, 0, 1)
 	local forward = if toward.Magnitude > 0.1 then toward.Unit else Vector3.new(0, 0, 1)
 	-- fly roughly toward the shooter, spread up to ~60 degrees to each side
@@ -228,6 +300,29 @@ local function dropChunk(player: Player, rock: Rock, oreId: string, from: Vector
 	end
 	for _, callback in minedCallbacks do
 		task.spawn(callback, player, oreId, 1)
+	end
+end
+
+-- Bonuses: ore luck may upgrade the rock's ore, Twin Drop may add a second chunk.
+local function dropChunk(player: Player, rock: Rock, rolled: string, from: Vector3)
+	local stats = Bonuses.stats(player)
+	local oreId = Bonuses.rollOre(stats, rock.Zone.Ores, rolled, random)
+	spawnChunk(player, rock, oreId, from)
+	local twin = Bonuses.twinDrop(stats)
+	if twin > 0 and random() < twin then
+		spawnChunk(player, rock, oreId, from)
+	end
+end
+
+-- Bonuses: one artifact roll per shattered rock (only with a listener).
+local function rollArtifact(player: Player, rock: Rock)
+	if #artifactCallbacks == 0 then
+		return
+	end
+	if random() < Bonuses.artifactChance(Bonuses.stats(player), rock.Zone.Id) then
+		for _, callback in artifactCallbacks do
+			task.spawn(callback, player, rock.Zone.Id, rock.Center)
+		end
 	end
 end
 
@@ -280,6 +375,7 @@ local function shatter(player: Player, rock: Rock, glow: Color3)
 		data.Stats.RocksBroken = (tonumber(data.Stats.RocksBroken) or 0) + 1
 		DataService.changed(player)
 	end
+	rollArtifact(player, rock)
 	Net.fireNear("Fx", rock.Center, SHATTER_RADIUS, nil, "NodeShatter", rock.Center, rock.Crust, glow)
 	rock.Model:Destroy()
 	-- the rarest ore inside decides how long the rock takes to grow back
@@ -315,12 +411,72 @@ local function crossStage(player: Player, rock: Rock, stage: number, from: Vecto
 	end
 end
 
+local function shooterOf(player: Player): Shooter
+	local shooter = shooters[player]
+	if not shooter then
+		shooter = { Target = nil, Last = clock(), Toasts = {} }
+		shooters[player] = shooter
+	end
+	return shooter
+end
+
+-- The stage a health value has reached (0..3).
+local function stageAt(rock: Rock, health: number): number
+	local lost = 1 - health / rock.MaxHealth
+	return math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
+end
+
+--[[
+	The loose-item cap (header): the health `player`'s damage may bring the
+	rock down to. Unchanged unless it would cross a stage that drops an ore
+	(or breaks the rock) while the player has the cap of loose items; then
+	it stops just above that stage (1 HP above it, less on a tiny rock),
+	never higher than the rock's health now. Second value: held.
+]]
+local function allowedHealth(player: Player, rock: Rock, health: number): (number, boolean)
+	local reached = stageAt(rock, health)
+	local drops: number? = nil
+	for stage = rock.Stage + 1, reached do
+		if stage >= 3 or stage > 3 - #rock.Ores then
+			drops = stage
+			break
+		end
+	end
+	if not drops or not ItemService.atLooseCap(player.UserId) then
+		return health, false
+	end
+	local threshold = rock.MaxHealth * (1 - drops / 3)
+	local hold = threshold + math.min(1, rock.MaxHealth / 6)
+	return math.min(rock.Health, math.max(health, hold)), true
+end
+
+-- "Pick up your ore first" (at most every CAP_TOAST_GAP seconds) and a bounce.
+local function capToast(player: Player, rock: Rock, from: Vector3, now: number)
+	local shooter = shooterOf(player)
+	local last = shooter.CapToast
+	if last and now - last < CAP_TOAST_GAP and now >= last then
+		return
+	end
+	shooter.CapToast = now
+	Net.fire("Notify", player, { Text = MiningService.CapText, Kind = "Deny" })
+	Net.fire("Fx", player, "MineBounce", hitPosition(rock, from))
+end
+
 local function damage(player: Player, data: { [string]: any }, rock: Rock, amount: number, from: Vector3, now: number)
-	rock.Health = math.max(0, rock.Health - amount)
-	rock.Model:SetAttribute("Health", rock.Health)
+	local health, held = allowedHealth(player, rock, math.max(0, rock.Health - amount))
+	if held then
+		capToast(player, rock, from, now)
+	end
+	rock.Health = health
 	local lost = 1 - rock.Health / rock.MaxHealth
 	local newStage = math.clamp(math.floor(lost * 3 + 1e-6), 0, 3)
-	local glow = glowOf(data)
+	-- a crossed stage (or the break) shows at once; plain damage at most every HEALTH_GAP
+	if newStage > rock.Stage or now - (rock.HealthSentAt or -math.huge) >= HEALTH_GAP then
+		sendHealth(rock, now)
+	else
+		healthDirty[rock] = true
+	end
+	local glow = cachedGlow(player, data)
 	local last = rock.HitFx[player]
 	if not last or now - last >= HIT_FX_GAP then
 		rock.HitFx[player] = now
@@ -336,15 +492,6 @@ local function damage(player: Player, data: { [string]: any }, rock: Rock, amoun
 end
 
 ---------------------------------------------------------------- blasting
-
-local function shooterOf(player: Player): Shooter
-	local shooter = shooters[player]
-	if not shooter then
-		shooter = { Target = nil, Last = clock(), Toasts = {} }
-		shooters[player] = shooter
-	end
-	return shooter
-end
 
 -- One toast per rock every TOAST_GAP seconds, plus a bounce effect.
 local function refuse(player: Player, shooter: Shooter, rock: Rock, text: string, from: Vector3, now: number)
@@ -403,9 +550,10 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		return -- the blaster must be in hand
 	end
 	local blaster = BlasterData.get(data.BlasterLevel)
+	local stats = Bonuses.stats(player)
 	local from = root.Position
-	local distance = (from - rock.Center).Magnitude - rock.Radius
-	if distance > blaster.Range + BlasterData.Beam.RangeSlack then
+	local distance = (MovementService.rangeOrigin(player, from) - rock.Center).Magnitude - rock.Radius
+	if distance > blaster.Range + Bonuses.reach(stats) + BlasterData.Beam.RangeSlack then
 		return
 	end
 	local zone = rock.Zone
@@ -417,8 +565,14 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		refuse(player, shooter, rock, "Needs a Level " .. zone.MinBlaster .. " blaster", from, now)
 		return
 	end
+	if MovementConfig.BeamLos and not BeamSight.canHit(player, character, root, rock.Model, now) then
+		-- a wall between: no damage this tick, and the player learns why (throttled per rock)
+		refuse(player, shooter, rock, MiningService.NoSightText, from, now)
+		return
+	end
 	local ore = data.BlasterOre
 	local amount = BlasterData.damage(blaster.Level, if type(ore) == "string" then ore else "") * dt
+	amount *= Bonuses.damageMult(stats, rock.Stage >= 2)
 	damage(player, data, rock, amount, from, now)
 end
 
@@ -431,6 +585,14 @@ local function tick(now: number)
 			warn("[MiningService] tick failed for " .. player.Name .. ": " .. tostring(err))
 			shooter.Target = nil
 			active[player] = nil
+		end
+	end
+	-- the last damage of a rock follows within HEALTH_GAP, also after everyone stopped
+	for rock in healthDirty do
+		if not rock.Alive then
+			healthDirty[rock] = nil
+		elseif now - (rock.HealthSentAt or -math.huge) >= HEALTH_GAP then
+			sendHealth(rock, now)
 		end
 	end
 	if now >= nextRespawnCheck and #respawns > 0 then
@@ -450,6 +612,8 @@ end
 local function forgetPlayer(player: Player)
 	shooters[player] = nil
 	active[player] = nil
+	glowCache[player] = nil
+	BeamSight.forget(player)
 	for _, rock in rocks do
 		rock.HitFx[player] = nil
 	end
@@ -507,6 +671,10 @@ MiningService._test = {
 		table.clear(active)
 		table.clear(respawns)
 		table.clear(minedCallbacks)
+		table.clear(artifactCallbacks)
+		table.clear(glowCache)
+		table.clear(healthDirty)
+		BeamSight._test.reset() -- an empty world (BeamSight._test.setRaycast adds walls)
 		nextRespawnCheck = 0
 		brokenStages = false
 		rocksFolder = folder

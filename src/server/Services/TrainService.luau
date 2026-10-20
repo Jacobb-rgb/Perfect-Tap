@@ -72,13 +72,20 @@
 	  waiting; empty trains rolling back are left out: Count 0 never happens).
 	  For JoinGrace seconds a full cargo does not leave by itself (perks such
 	  as Express may still be on their way).
-	- Upgrades: TrainAction "Upgrade" { Kind = "Capacity" | "Speed" } buys
-	  the next level (TrainConfig.nextPrice, EconomyService.spend). The
+	- Upgrades: TrainAction "Upgrade" { Kind = "Capacity" | "Speed", Level }
+	  buys the next level (TrainConfig.nextPrice, EconomyService.spend).
+	  Level must be exactly the level being bought (current + 1, the one
+	  the card shows), else nothing happens ("Stale", quietly: a double
+	  click or a lagging card never buys two levels; Security #7). The
 	  Express perk (Perks "TrainExpress") adds cargo and speed.
+	- Over capacity: while the Ore Pen holds more than its capacity
+	  (PenService.isOver, after a rescue move) nothing unloads into it: the
+	  cargo waits at the stop as with a full pen, and the snapshot's
+	  WaitReason says why ("PenOver", else "PenFull") so the chip can tell.
 	- StateService gets Train = { Cargo, Capacity, Moving, DepartAt?,
 	  ArriveAt?, CapacityLevel, SpeedLevel, NextCapacityPrice?,
 	  NextSpeedPrice?, Express, TripSeconds, AutoDepartIn?, Waiting,
-	  Unloading, UnloadWait? }.
+	  WaitReason? ("PenOver" | "PenFull" while Waiting), Unloading, UnloadWait? }.
 	  DepartAt / ArriveAt (server time) are there while the train is on a
 	  trip, waiting at a full pen or rolling back: it is back at the station
 	  at ArriveAt + TrainConfig.ReturnSeconds. ArriveAt is the TrainTrip
@@ -201,6 +208,7 @@ TrainService.FullText = "Your train is full – press Send"
 TrainService.AwayText = "Your train is on its way"
 TrainService.ReturnText = "Your train is coming back"
 TrainService.PenFullText = "Your Ore Pen is full – make room"
+TrainService.PenOverText = "Your Ore Pen holds too much – take, sell or send some"
 TrainService.ChuteText = "Your train is unloading at your TRAIN chute"
 TrainService.EmptyText = "Your train is empty. Throw ore into a train hopper first."
 TrainService.HandsText = "Carry ore here to load your train."
@@ -283,8 +291,10 @@ local function finite(v: any): boolean
 	return type(v) == "number" and v == v and v > -math.huge and v < math.huge
 end
 
-local function wholeLevel(v: any, list: { TrainConfig.Level }): number
-	return if finite(v) then math.clamp(math.floor(v), 0, TrainConfig.maxLevel(list)) else 0
+-- A saved level as a whole number. A level above this build's top (a newer
+-- build's) stays: TrainConfig.capacity / tripSeconds / nextPrice clamp it.
+local function wholeLevel(v: any): number
+	return if finite(v) then math.clamp(math.floor(v), 0, GameConfig.MaxLevelKept) else 0
 end
 
 -- data.Train in the right shape (repaired in place; Migrations does the deep clean on load).
@@ -300,8 +310,8 @@ local function trainOf(data: { [string]: any }): Train
 	if type(train.TripCargo) ~= "table" then
 		train.TripCargo = {}
 	end
-	train.CapacityLevel = wholeLevel(train.CapacityLevel, TrainConfig.Capacity)
-	train.SpeedLevel = wholeLevel(train.SpeedLevel, TrainConfig.Speed)
+	train.CapacityLevel = wholeLevel(train.CapacityLevel)
+	train.SpeedLevel = wholeLevel(train.SpeedLevel)
 	for _, field in { "TripDepartAt", "TripArriveAt" } do
 		local v = train[field]
 		if not finite(v) or v < 0 then
@@ -421,6 +431,10 @@ end
 -- TRAIN chute, coming back or on its way.
 local function awayText(player: Player, train: Train): string
 	if isWaiting(player, train) then
+		local data = DataService.get(player)
+		if data and PenService.isOver(data) then
+			return TrainService.PenOverText
+		end
 		return TrainService.PenFullText
 	elseif isUnloading(player, train) then
 		return TrainService.ChuteText
@@ -690,7 +704,9 @@ local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 		r.NextRetry = now + (if r.Chute then CHUTE_RETRY else TrainConfig.DeliveryRetry)
 		-- (shares the throttle with the bounce toasts that say the same)
 		if newlyFull then
-			throttledToast(player, TrainService.PenFullText, TrainService.PenFullText)
+			-- over its capacity (a rescue overfilled it) or just full: one toast that says which
+			local text = if PenService.isOver(data) then TrainService.PenOverText else TrainService.PenFullText
+			throttledToast(player, text, text)
 		end
 		if r.Waiting then
 			if moved > 0 or was ~= `{r.Chute}/{r.PenFull}` then
@@ -1063,7 +1079,12 @@ end
 
 ---------------------------------------------------------------- TrainAction
 
-function TrainService.upgrade(player: Player, kind: string): (boolean, string?)
+--[[
+	Buys the next Capacity / Speed level. `expected` is the level the
+	player's card shows to buy (current + 1); anything else is "Stale" and
+	changes nothing, without a toast (the State push shows the real level).
+]]
+function TrainService.upgrade(player: Player, kind: string, expected: number?): (boolean, string?)
 	local data = DataService.get(player)
 	if not data then
 		return false, "NoData"
@@ -1075,6 +1096,9 @@ function TrainService.upgrade(player: Player, kind: string): (boolean, string?)
 	local isCapacity = kind == "Capacity"
 	local list = if isCapacity then TrainConfig.Capacity else TrainConfig.Speed
 	local level = if isCapacity then train.CapacityLevel else train.SpeedLevel
+	if expected ~= level + 1 then
+		return false, "Stale"
+	end
 	local price = TrainConfig.nextPrice(list, level)
 	if not price then
 		toast(player, "Your train is already at the top level.", "Info")
@@ -1099,7 +1123,7 @@ function TrainService.upgrade(player: Player, kind: string): (boolean, string?)
 	return true, nil
 end
 
--- TrainAction ("Send") or ("Upgrade", { Kind = "Capacity" | "Speed" })
+-- TrainAction ("Send") or ("Upgrade", { Kind = "Capacity" | "Speed", Level = the level bought })
 local function onAction(player: Player, actionArg: any, argArg: any)
 	local action = Guard.string(actionArg, 16)
 	if not action or not DataService.get(player) then
@@ -1110,8 +1134,10 @@ local function onAction(player: Player, actionArg: any, argArg: any)
 	elseif action == "Upgrade" then
 		local arg = Guard.table(argArg, 4)
 		local kind = if arg then Guard.string(arg.Kind, 16) else nil
+		-- (a level that isn't a whole number in range is never the next one: Stale)
+		local level = if arg then Guard.integer(arg.Level, 1, 1000) else nil
 		if kind == "Capacity" or kind == "Speed" then
-			TrainService.upgrade(player, kind)
+			TrainService.upgrade(player, kind, level)
 		end
 	end
 end
@@ -1304,6 +1330,7 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		autoIn = math.max(0, lastLoad + TrainConfig.AutoDepartSeconds - now)
 	end
 	local unloading = isUnloading(player, train)
+	local waiting = isWaiting(player, train)
 	snapshot.Train = {
 		Cargo = #train.Cargo,
 		Capacity = TrainConfig.capacity(train.CapacityLevel, express),
@@ -1317,7 +1344,9 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 		Express = express,
 		TripSeconds = TrainConfig.tripSeconds(train.SpeedLevel, express),
 		AutoDepartIn = autoIn,
-		Waiting = isWaiting(player, train),
+		Waiting = waiting,
+		-- why it waits: the pen is over its capacity, or full
+		WaitReason = if waiting then (if PenService.isOver(data) then PenService.OverReason else "PenFull") else nil,
 		Unloading = unloading,
 		UnloadWait = if unloading then PenService.laneWait(player, "Train") else nil,
 	}

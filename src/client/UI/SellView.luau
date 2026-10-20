@@ -38,7 +38,9 @@ export type Entry = {
 	Keys: { [string]: number }, -- storage keys in this row -> count
 	Name: string,
 	Count: number,
-	Price: number?, -- nil = unknown (Dirty Ore)
+	Price: number?, -- coins per item with the sell bonus, as Tobin pays it (nil = unknown: Dirty Ore)
+	Base: number?, -- coins per item before the sell bonus
+	Mult: number, -- the sell bonus (State.Bonuses.SellMult) the prices use
 	Color: Color3, -- icon colour
 	Edge: Color3, -- icon outline (rarity colour, grey for Dirty Ore)
 	ChipText: string?,
@@ -96,6 +98,17 @@ export type Plan = {
 
 -- one item in a plan
 type Unit = { Section: Section, Desc: ItemData.Desc, Income: number, Price: number }
+
+-- A sell bonus from State.Bonuses.SellMult (anything broken = 1).
+local function cleanMult(mult: any): number
+	return if type(mult) == "number" and mult == mult and mult >= 1 and mult < math.huge then mult else 1
+end
+
+-- Coins Tobin pays for items whose base price adds up to `base` with the sell
+-- bonus `mult`: rounded once, like Bonuses.sellAmount on the server.
+function SellView.withBonus(base: number, mult: number): number
+	return math.floor(base * cleanMult(mult) + 0.5)
+end
 
 SellView.MaxRows = 120 -- per section
 SellView.ConfirmCount = 10 -- selling more than this asks first
@@ -182,9 +195,12 @@ end
 --[[
 	A State summary (storage key -> count) as rows: junk keys and zero counts
 	are skipped, all Dirty Ore is one row (first), the rest by price, then name.
+	`sellMult` (State.Bonuses.SellMult, nil = 1): the prices are what Tobin
+	really pays with the player's sell bonus.
 ]]
-function SellView.entries(summary: any, section: Section): { Entry }
+function SellView.entries(summary: any, section: Section, sellMult: number?): { Entry }
 	local list: { Entry } = {}
+	local mult = cleanMult(sellMult)
 	if type(summary) ~= "table" then
 		return list
 	end
@@ -203,6 +219,7 @@ function SellView.entries(summary: any, section: Section): { Entry }
 						Name = ItemData.DirtyName,
 						Count = 0,
 						Price = nil,
+						Mult = mult,
 						Color = SellView.DirtyColor,
 						Edge = Theme.TextDim,
 						ChipText = "Unknown",
@@ -219,13 +236,16 @@ function SellView.entries(summary: any, section: Section): { Entry }
 				local order, edge = rarityOf(desc.O)
 				local ore = OreData.ById[desc.O]
 				local grade = desc.G and ItemData.GradeById[desc.G]
+				local base = ItemData.value(desc.K, desc.O, desc.G, desc.R)
 				table.insert(list, {
 					Id = section .. "/" .. key,
 					Section = section,
 					Keys = { [key] = count },
 					Name = ItemData.displayName(desc.K, desc.O, desc.G, desc.R),
 					Count = count,
-					Price = ItemData.value(desc.K, desc.O, desc.G, desc.R),
+					Price = SellView.withBonus(base, mult),
+					Base = base,
+					Mult = mult,
 					Color = if ore then ore.Color else Theme.TextDim,
 					Edge = edge,
 					ChipText = if grade then grade.Name else nil,
@@ -277,9 +297,10 @@ end
 	What SellAll { Filter, From? } would sell from these summaries, with the
 	server's rules: "Dirty" = all Dirty Ore; "AllButBest" = everything else
 	except the KeepBest cleaned ores with the highest income. Hands first,
-	at most EconomyConfig.Sell.MaxPerRequest items.
+	at most EconomyConfig.Sell.MaxPerRequest items. Total includes the sell
+	bonus `sellMult` (nil = 1), rounded once like SellService.
 ]]
-function SellView.plan(pen: any, hands: any, filter: string, from: Section?): Plan
+function SellView.plan(pen: any, hands: any, filter: string, from: Section?, sellMult: number?): Plan
 	local units: { Unit } = {}
 	local function add(summary: any, section: Section)
 		if type(summary) ~= "table" then
@@ -350,6 +371,7 @@ function SellView.plan(pen: any, hands: any, filter: string, from: Section?): Pl
 			end
 		end
 	end
+	plan.Total = SellView.withBonus(plan.Total, cleanMult(sellMult))
 	return plan
 end
 
@@ -367,7 +389,7 @@ function SellView.confirmRowText(entry: Entry, count: number): string
 	if entry.Dirty then
 		return `Sell {Format.commas(count)} {ItemData.DirtyName}? Tobin pays the raw price, and then you'll see what it was.`
 	end
-	local price = (entry.Price or 0) * count
+	local price = SellView.withBonus((entry.Base or entry.Price or 0) * count, entry.Mult)
 	local rarity = ""
 	if entry.RarityOrder >= SellView.ConfirmRarity then
 		local info = Rarity.List[entry.RarityOrder]

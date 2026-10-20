@@ -138,7 +138,15 @@ return function(T, Loader)
 	end
 
 	local tick = processing.behaviour.tick
+	local MachineBillboard = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MachineBillboard")
+	-- the old job attributes ride in the one packed Job attribute now
+	-- (ProcessingService.jobText), read the way the client reads it
+	local JOB_FIELDS = { Working = "Working", WorkStart = "Start", WorkTime = "Time", WorkOre = "Ore", Cycles = "Cycles" }
 	local function attr(m: any, name: string): any
+		local field = JOB_FIELDS[name]
+		if field then
+			return (MachineBillboard.decodeJob(m.Model:GetAttribute("Job")) :: any)[field]
+		end
 		return m.Model:GetAttribute(name)
 	end
 	local function count(list: any): number
@@ -676,6 +684,8 @@ return function(T, Loader)
 		local m = place(w, "CrystalExtractor", 0, 0)
 		local info = MachineData.ById.CrystalExtractor
 		local real = info.ShardChance
+		-- every pile here counts as freshly crushed (one roll each; the loop test checks the budget)
+		w.data.ShardRolls = ProcessingService.MaxShardRolls
 		T.eq(select(2, MachineService.insertDesc(m, item("Clean"), USER, "Hand")), "Wrong", "only crushed ore")
 		local now = 0
 		-- one whole job; its item is taken out of Out, so Out never fills up
@@ -715,10 +725,17 @@ return function(T, Loader)
 		T.eq(toast.Payload.Text, "+1 Crystal Shard!", "toast text")
 		T.eq(toast.Payload.Kind, "Reward", "toast kind")
 		-- a broken or negative count starts again from 0: never negative
-		for _, broken in { -5, 0 / 0, "lots", math.huge } do
+		for _, broken in { -5, 0 / 0, "lots" } do
 			w.data.Shards = broken
 			job()
 			T.eq(w.data.Shards, 1, `from {broken}`)
+		end
+		-- through Shards.add: never past Shards.Max (an endless count is clamped too)
+		local Shards = Loader.requirePath("ServerScriptService.Server.Shards")
+		for _, full in { Shards.Max, math.huge } do
+			w.data.Shards = full
+			job()
+			T.eq(w.data.Shards, Shards.Max, `clamped at Shards.Max from {full}`)
 		end
 		w.data.Shards = 2.7
 		job()
@@ -742,6 +759,53 @@ return function(T, Loader)
 		T.near(w.data.Shards / jobs, real, 0.04, "share of jobs with a shard")
 		T.eq(toasts() - shown, w.data.Shards, "one toast per shard")
 		T.eq(w.data.Stats.IngotsSmelted, 0, "no ingots")
+	end)
+
+	withWorld("ProcessingService: each crushed pile is shaken for a shard once (no extractor loop)", function(w)
+		stock(w, { "CrystalExtractor" })
+		local crusher = place(w, "Crusher", 0, 0)
+		local m = place(w, "CrystalExtractor", 4, 0)
+		local info = MachineData.ById.CrystalExtractor
+		w.patch(info, "ShardChance", 1) -- every allowed roll gives a shard
+		w.data.Shards = 0
+		T.eq(w.data.ShardRolls, 0, "a fresh save has no rolls")
+		local now = 0
+		local function shake(desc: any): any
+			T.truthy(MachineService.insertDesc(m, desc, USER, "Belt"), "crushed in")
+			tick(m, now)
+			now += info.Time
+			tick(m, now)
+			local out = MachineLogic.popOut(m.Entry)
+			T.truthy(out and out.K == "Crushed" and out.O == desc.O, "passed through")
+			return out
+		end
+		-- a pile that no Crusher made for this save (or a looped one): no roll
+		shake(item("Crushed", "Iron", "Rough"))
+		T.eq(w.data.Shards, 0, "no roll without a crushed pile behind it")
+		-- the Crusher makes 2 piles: 2 rolls
+		MachineService.insertDesc(crusher, item("Clean", "Gold", "Clean"), USER, "Drop")
+		tick(crusher, now)
+		now += 10
+		tick(crusher, now)
+		T.eq(w.data.ShardRolls, 2, "one roll per pile crushed")
+		local a = MachineLogic.popOut(crusher.Entry)
+		local b = MachineLogic.popOut(crusher.Entry)
+		local outA = shake(a)
+		T.eq(w.data.Shards, 1, "first pile rolled")
+		shake(b)
+		T.eq(w.data.Shards, 2, "second pile rolled")
+		T.eq(w.data.ShardRolls, 0, "both rolls spent")
+		-- feeding the extractor its own output back finds nothing, however often
+		local looped = outA
+		for _ = 1, 20 do
+			looped = shake(looped)
+		end
+		T.eq(w.data.Shards, 2, "a loop makes no shards")
+		T.eq(w.data.ShardRolls, 0, "never negative")
+		-- junk counts as none
+		w.data.ShardRolls = 0 / 0
+		shake(looped)
+		T.eq(w.data.Shards, 2, "NaN rolls = none")
 	end)
 
 	withWorld("ProcessingService: the Alloy Furnace waits for a second ore, then makes one alloy", function(w)
@@ -890,6 +954,7 @@ return function(T, Loader)
 
 	withWorld("ProcessingService: roster processors conserve items over random jobs", function(w)
 		stock(w, ROSTER)
+		w.data.ShardRolls = ProcessingService.MaxShardRolls -- the fed piles count as freshly crushed
 		local rng = Rng.new(4242)
 		local machines = {
 			place(w, "BrickFurnace", 0, 0),

@@ -25,11 +25,10 @@ return function(T, Loader)
 		T.eq(ToolData.carryCapacity(99, true), ToolData.CarryLevels[#ToolData.CarryLevels].Capacity * 2)
 	end)
 
-	-- (art/kenney-blasters) the classic guns stay buildable for the before / after comparison
-	for _, style in { "Kenney", "Classic" } do
-		local build = if style == "Kenney" then BlasterBuilder.build else BlasterBuilder.buildClassic
-		local budget = if style == "Kenney" then BlasterBuilder.MaxParts else BlasterBuilder.ClassicMaxParts
-		T.test("blasters (" .. style .. "): one Blaster tool per level, within budget, welded, with a Muzzle", function()
+	do
+		local build = BlasterBuilder.build
+		local budget = BlasterBuilder.MaxParts
+		T.test("blasters: one Blaster tool per level, within budget, welded, with a Muzzle", function()
 			local skins = { "", "Coal", "Gold", "Quartz", "Heartstone", "NotAnOre" }
 			local counts = {}
 			local reach = {}
@@ -70,34 +69,18 @@ return function(T, Loader)
 						end
 					end
 					T.le(parts, budget, label .. " part budget")
-					if style == "Classic" then
-						T.eq(tool:FindFirstChild("Barrel2") ~= nil, level >= 8, label .. " twin barrels from 8")
-						local barrel, barrel2 = tool:FindFirstChild("Barrel"), tool:FindFirstChild("Barrel2")
-						if barrel and barrel2 then
-							-- over-under, so the twin reads from the side and from behind the player
-							T.lt(0.15, math.abs(barrel.CFrame.Position.Y - barrel2.CFrame.Position.Y), label .. " twin barrels stacked")
-							T.near(barrel.CFrame.Position.X, barrel2.CFrame.Position.X, 1e-4, label .. " twin barrels in line")
-						end
-						T.truthy(tool:FindFirstChild("Pommel"), label .. " grip pad")
-					else
-						-- the Ore Glow skin: a glowing rim on the main panel; crystals from level 4; effects from 7
-						T.truthy(tool:FindFirstChild("Rim"), label .. " glowing rim")
-						T.eq(tool:FindFirstChild("Crystal") ~= nil, level >= 4, label .. " crystals from 4")
-						T.eq(tool:FindFirstChild("Effects") ~= nil, level >= 7, label .. " flames / sparks from 7")
-						T.eq(tool:FindFirstChild("CrownCrystal") ~= nil, level >= 10, label .. " a crown at 10")
-						T.truthy(handle.Transparency == 1, label .. " the handle is the invisible hand point")
-					end
+					-- the Ore Glow skin: a glowing rim on the main panel; crystals from level 4; effects from 7
+					T.truthy(tool:FindFirstChild("Rim"), label .. " glowing rim")
+					T.eq(tool:FindFirstChild("Crystal") ~= nil, level >= 4, label .. " crystals from 4")
+					T.eq(tool:FindFirstChild("Effects") ~= nil, level >= 7, label .. " flames / sparks from 7")
+					T.eq(tool:FindFirstChild("CrownCrystal") ~= nil, level >= 10, label .. " a crown at 10")
+					T.truthy(handle.Transparency == 1, label .. " the handle is the invisible hand point")
 					T.truthy(tool:FindFirstChild("MuzzleGlow"), label .. " glowing muzzle")
 					counts[level] = parts
 				end
 			end
 			T.lt(counts[1], counts[BlasterData.MaxLevel], "more detail at level 10")
 			T.lt(reach[1] * 2, reach[BlasterData.MaxLevel], "the level 10 rifle is much longer than the starter pistol")
-			if style == "Classic" then
-				for level = 2, BlasterData.MaxLevel do
-					T.le(counts[level - 1], counts[level], "detail never drops at level " .. level)
-				end
-			end
 			-- level 1 is always the rusty starter, later levels take the ore's colors
 			T.eq(build(1, "Gold"):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty level 1")
 			T.eq(build(5, ""):GetAttribute("Glow"), BlasterData.RustySkin.Glow, "rusty without an ore")

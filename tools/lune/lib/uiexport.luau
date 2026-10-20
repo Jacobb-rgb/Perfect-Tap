@@ -44,6 +44,11 @@ local function exportNode(instance): any?
 			node.ty = instance.TextYAlignment.Name
 			node.scaled = instance.TextScaled
 			node.wrap = instance.TextWrapped
+			local limit = instance:FindFirstChildOfClass("UITextSizeConstraint")
+			if limit then
+				node.maxts = limit.MaxTextSize
+				node.mints = limit.MinTextSize
+			end
 		end
 		if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then
 			node.img = tostring(instance.Image)
@@ -63,6 +68,11 @@ local function exportNode(instance): any?
 			table.insert(keys, { k.Time, hex(k.Value) })
 		end
 		node.keys = keys
+		local fade = {}
+		for _, k in instance.Transparency.Keypoints do
+			table.insert(fade, { k.Time, k.Value })
+		end
+		node.tkeys = fade
 		node.rot = instance.Rotation
 	elseif class == "UIListLayout" then
 		node.dir = instance.FillDirection.Name

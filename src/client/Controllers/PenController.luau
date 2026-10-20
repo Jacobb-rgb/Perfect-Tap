@@ -52,6 +52,7 @@ local ItemData = require(Shared.Config.ItemData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Net = require(Shared.Net)
+local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local PenView = require(script.Parent.Parent.UI.PenView)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Vfx = require(script.Parent.Parent.Effects.Vfx)
@@ -250,7 +251,8 @@ local function refresh(state: { [string]: any }?)
 	if not view or not isOpen then
 		return
 	end
-	local entries = PenView.entries(state and state.Storage, view.Mode)
+	-- "+$X/s" with the income bonus, like the podium tags and the HUD
+	local entries = PenView.entries(state and state.Storage, view.Mode, PenView.incomeMult(state and state.Bonuses))
 	table.clear(shownEntries)
 	for _, entry in entries do
 		shownEntries[entry.Key] = entry
@@ -420,6 +422,7 @@ function PenController.open(slot: number?)
 		return
 	end
 	PenController.close()
+	MenuPanels.closeOthers("PenController") -- one panel at a time
 	local view = ensureView()
 	local scale = HudController.uiScale()
 	PenView.setCompact(view, scale <= 0.75, screenRoom(scale))

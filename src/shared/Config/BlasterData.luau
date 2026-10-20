@@ -33,15 +33,15 @@ local BlasterData = {}
 
 BlasterData.Levels = {
 	{ Level = 1, Name = "Rusty Blaster", Damage = 5, Range = 22 },
-	{ Level = 2, Name = "Scrap Blaster", Damage = 9, Range = 24, Recipe = { Ingots = 3, MinRarity = "Common", Coins = 250 } },
-	{ Level = 3, Name = "Spark Blaster", Damage = 16, Range = 26, Recipe = { Ingots = 5, MinRarity = "Common", Coins = 2000 } },
-	{ Level = 4, Name = "Ember Blaster", Damage = 29, Range = 28, Recipe = { Ingots = 6, MinRarity = "Uncommon", Coins = 15000 } },
-	{ Level = 5, Name = "Forgefire Blaster", Damage = 52, Range = 30, Recipe = { Ingots = 8, MinRarity = "Uncommon", Coins = 100000 } },
-	{ Level = 6, Name = "Sunlance", Damage = 94, Range = 32, Recipe = { Ingots = 8, MinRarity = "Rare", Coins = 700000 } },
-	{ Level = 7, Name = "Stormlance", Damage = 170, Range = 34, Recipe = { Ingots = 10, MinRarity = "Rare", Coins = 5e6 } },
-	{ Level = 8, Name = "Starlance", Damage = 305, Range = 36, Recipe = { Ingots = 10, MinRarity = "Epic", Coins = 35e6 } },
-	{ Level = 9, Name = "Royal Sunlance", Damage = 550, Range = 38, Recipe = { Ingots = 12, MinRarity = "Epic", Coins = 250e6 } },
-	{ Level = 10, Name = "Heartlance", Damage = 990, Range = 40, Recipe = { Ingots = 12, MinRarity = "Legendary", Coins = 1.5e9 } },
+	{ Level = 2, Name = "Scrap Blaster", Damage = 9, Range = 24, Recipe = { Ingots = 3, MinRarity = "Common", Coins = 330 } },
+	{ Level = 3, Name = "Spark Blaster", Damage = 16, Range = 26, Recipe = { Ingots = 5, MinRarity = "Common", Coins = 12000 } },
+	{ Level = 4, Name = "Ember Blaster", Damage = 29, Range = 28, Recipe = { Ingots = 6, MinRarity = "Uncommon", Coins = 380000 } },
+	{ Level = 5, Name = "Forgefire Blaster", Damage = 52, Range = 30, Recipe = { Ingots = 8, MinRarity = "Uncommon", Coins = 1.5e6 } },
+	{ Level = 6, Name = "Sunlance", Damage = 94, Range = 32, Recipe = { Ingots = 8, MinRarity = "Rare", Coins = 29e6 } },
+	{ Level = 7, Name = "Stormlance", Damage = 170, Range = 34, Recipe = { Ingots = 10, MinRarity = "Rare", Coins = 51e6 } },
+	{ Level = 8, Name = "Starlance", Damage = 305, Range = 36, Recipe = { Ingots = 10, MinRarity = "Epic", Coins = 1.2e9 } },
+	{ Level = 9, Name = "Royal Sunlance", Damage = 550, Range = 38, Recipe = { Ingots = 12, MinRarity = "Epic", Coins = 2.1e9 } },
+	{ Level = 10, Name = "Heartlance", Damage = 990, Range = 40, Recipe = { Ingots = 12, MinRarity = "Legendary", Coins = 35e9 } },
 	{ Level = 11, Name = "???", Damage = 0, Range = 0, ComingSoon = true },
 } :: { Blaster }
 
@@ -84,8 +84,10 @@ BlasterData.Rocks = {
 ]]
 BlasterData.Vault = {
 	PriceMultiplier = 4, -- x the level's Foundry coin price (Recipe.Coins)
-	-- the ore look of each level's case (ores kept in the 36-ore roster too)
-	Ores = { "", "Copper", "Cobalt", "Amethyst", "Gold", "Emberite", "Sapphire", "Obsidian", "RoyalAurum", "Heartstone" },
+	-- the ore look of each level's case (ores kept in the 36-ore roster too); the
+	-- ores' rarity never falls as the level rises (owner 2026-10-20: LV 4 Emberite,
+	-- LV 6 Sapphire, LV 7 Amethyst, so the case colours follow the rarity)
+	Ores = { "", "Copper", "Cobalt", "Emberite", "Gold", "Sapphire", "Amethyst", "Obsidian", "RoyalAurum", "Heartstone" },
 }
 
 -- The coin price of a level's case in the Blaster Vault (nil for level 1 and unknown levels).

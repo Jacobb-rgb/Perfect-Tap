@@ -177,6 +177,29 @@ return function(T, Loader)
 		T.eq(reply and reply.Reason, "Dead", "no character")
 	end)
 
+	T.test("Teleport: only a running cleaning session blocks it, not owning a Cleaning Station", function()
+		local CleaningService = Loader.requirePath("ServerScriptService.Server.Services.CleaningService")
+		local player: any = { UserId = 702, Name = "P702", Parent = true }
+		T.falsy(CleaningService.isCleaning(player), "no session")
+		local savedStation, savedCleaning = CleaningService.stationOf, CleaningService.isCleaning
+		local ok, err = pcall(function()
+			-- every player owns a station (the starter kit): that alone must not block
+			rawset(CleaningService, "stationOf", function()
+				return Instance.new("Model")
+			end)
+			T.falsy(TeleportService.isCleaning(player), "a station without a session")
+			rawset(CleaningService, "isCleaning", function()
+				return true
+			end)
+			T.truthy(TeleportService.isCleaning(player), "a running session")
+		end)
+		rawset(CleaningService, "stationOf", savedStation)
+		rawset(CleaningService, "isCleaning", savedCleaning)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	---------------------------------------------------------------- TeleportView
 
 	T.test("TeleportView: phone buttons are big enough to tap and the bar fits next to the coins", function()
@@ -191,6 +214,13 @@ return function(T, Loader)
 		local half = TeleportView.barWidth(phone, 3) * 0.62 / 2
 		T.truthy(667 / 2 - half > coinsRight + 8, "clear of the coins panel")
 		T.eq(TeleportView.barWidth(big, 3), 3 * big.Width + 2 * big.Gap)
+		-- the smallest phones (568 pt wide): icons only, still big enough to tap, clear of the coins
+		local tiny = TeleportView.layout(0.62, 568)
+		T.truthy(tiny.IconOnly, "icons only below NarrowWidth")
+		T.truthy(tiny.Height * 0.62 >= 44 and tiny.Width * 0.62 >= 44, "44 pt targets")
+		local tinyHalf = TeleportView.barWidth(tiny, 3) * 0.62 / 2
+		T.truthy(568 / 2 - tinyHalf > coinsRight + 12, "clear of the coins panel at 568 pt")
+		T.falsy(TeleportView.layout(0.62, 667).IconOnly, "667 pt keeps the names")
 	end)
 
 	T.test("TeleportView: three bar buttons, a hidden side icon, cooldown covers", function()
@@ -230,5 +260,10 @@ return function(T, Loader)
 		TeleportView.relayout(refs, topBar, 0.62)
 		local base = refs.Buttons.Base.Parent
 		T.eq(base.Size.Y.Offset, TeleportView.layout(0.62).Height, "phone height after a relayout")
+		TeleportView.relayout(refs, topBar, 0.62, 568)
+		T.falsy(refs.Buttons.Base:FindFirstChild("Label").Visible, "names hidden on the smallest phones")
+		T.eq(base.Size.X.Offset, TeleportView.layout(0.62, 568).Width)
+		TeleportView.relayout(refs, topBar, 1, 1920)
+		T.truthy(refs.Buttons.Base:FindFirstChild("Label").Visible, "names back on a big screen")
 	end)
 end

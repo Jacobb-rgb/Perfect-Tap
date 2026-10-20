@@ -6,6 +6,16 @@
 
 	Client -> server events carry *intents* only ("I swung at this node").
 	The server validates everything (see Guard) before changing state.
+
+	- An event from a player who already left (player.Parent ~= Players:
+	  it arrived after PlayerRemoving) is dropped before its rate limit or
+	  handler, so no per-player state is ever made again for them. The
+	  rate-limit buckets are weak-keyed besides (Net.forget clears them).
+	- Every remote with no Net.on handler (server -> client events, and
+	  client -> server entries nothing handles yet) gets a do-nothing
+	  listener from setupServer that only counts the drop
+	  (Net.droppedCount / Net.unhandledCount), so a client firing them can't
+	  fill the server's event queue or its logs. Net.on replaces it.
 ]]
 
 local Net = {}
@@ -56,7 +66,7 @@ Net.Events = {
 	--   just drops the intents: there is nothing to put back.
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
-	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed" }?)
+	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed", Level = the level bought }?: "Stale" unless Level = current + 1)
 	-- automation + Foundry (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
@@ -99,12 +109,70 @@ Net.Events = {
 	VaultBuy = { Rate = 2, Burst = 4 }, -- ({ Level: number }) buy your next blaster level at the Blaster Vault
 	--   counter for coins (BlasterData.vaultPrice, the case's ore look BlasterData.vaultOre); every
 	--   request read gets a VaultResult (see VaultService)
-	DailyClaim = { Rate = 1, Burst = 2 },
+	-- steps 6-7: gear, enchants, boosts, golems + capsules, wheel, artifacts (the configs in
+	-- Shared/Config document each rule). Every request the server reads (except Capsule
+	-- "Open" and Wheel "Spin", answered by CapsuleResult / WheelResult, and Robux requests,
+	-- answered by PurchasePrompt) gets one ActionResult; a refused Capsule "Open" or Wheel
+	-- "Spin" gets an ActionResult too. Successful changes push State (DataService.changed).
+	GearAction = { Rate = 3, Burst = 5 }, -- ("Buy", { Line: GearConfig line id, Level: the
+	--   level being bought, = current + 1 (GearConfig.quote, else "Stale") }); within
+	--   GearConfig.Range of a ShopCounter
+	EnchantAction = { Rate = 4, Burst = 8 }, -- (action, arg):
+	--   "Buy"  { Id: EnchantConfig id, Currency: "Coins" | "Shards" | "Robux", Tier: the tier
+	--          being bought, = current + 1 } (EnchantConfig.quote; within EnchantConfig.Range
+	--          of an EnchantCounter; "Robux" -> PurchasePrompt for the Mythic's game pass,
+	--          never granted here; "Restricted" for an odds booster where paid random items
+	--          are restricted, EnchantConfig.isPaidRandom)
+	--   "Slot" { Slot: 1..EnchantConfig.MaxSlots, Id: an owned enchant id, or nil / "" to empty
+	--          the slot } (EnchantConfig.setSlot; free, anywhere)
+	BoostAction = { Rate = 2, Burst = 4 }, -- (action, arg):
+	--   "BuyCoins" { Id: BoostConfig.CoinOffers id } (BoostConfig.coinQuote: the price at the
+	--              player's blaster level; refused "NoEffect" (BoostConfig.hasEffect false),
+	--              "CoinLimit" (BoostConfig.CoinBuyBelow or more left), "Full" (past
+	--              BoostConfig.MaxStackSeconds))
+	--   "BuyRobux" { Id: BoostConfig.RobuxOffers id } -> PurchasePrompt
+	--   refused ("Restricted") where paid random items are restricted (src/server/Policy.luau)
+	--   and the offer is one (BoostConfig.isPaidRandom)
+	CapsuleAction = { Rate = 1, Burst = 2 }, -- ("Open", { Capsule: CapsuleConfig id, Count: 1 | 3 | 10 }):
+	--   coin capsules: price CapsuleConfig.price at the player's blaster level, needs Count
+	--   free golem places (GolemConfig.room), Triple Lucky counts when active; Royal (Robux)
+	--   -> PurchasePrompt; "Restricted" where paid random items are restricted and the
+	--   capsule is one (CapsuleConfig.isPaidRandom). Answer: CapsuleResult (or an
+	--   ActionResult when refused). Anywhere (side menu or the CapsuleStall). A request the
+	--   rate limit drops gets NO answer: the client waits CapsuleConfig.ClientCooldown between
+	--   opens and gives the buttons back after CapsuleConfig.ResultTimeout, but still shows a
+	--   CapsuleResult that arrives later (same for WheelAction / WheelResult).
+	GolemAction = { Rate = 4, Burst = 8 }, -- (action, arg):
+	--   "Equip" { Id } | "Unequip" { Id } | "EquipBest" (no arg) |
+	--   "Lock" { Id, Locked: boolean } (a locked golem is never deleted) |
+	--   "Delete" { Ids: { Id } (1..GolemConfig.MaxDelete whole numbers; locked ones are
+	--   skipped) } (GolemConfig helpers)
+	WheelAction = { Rate = 1, Burst = 2 }, -- ("Spin"): the free daily spin when
+	--   WheelConfig.ready(data.Wheel.NextSpinAt, now); answer WheelResult (the player's wheel:
+	--   WheelConfig.pick(roll, CapsuleConfig.allRestricted(restricted)); client timing:
+	--   WheelConfig.ClientCooldown / ResultTimeout) | ("Reveal"): the open wheel screen showed
+	--   a capsule prize: that spin's CapsuleResult { Free } comes once (no answer otherwise)
+	ArtifactAction = { Rate = 2, Burst = 4 }, -- ("ReadChapter", { Collection }): marks a
+	--   completed collection's StoryConfig chapter read (data.Artifacts.Chapters) |
+	--   ("Equip", { Collection: a completed collection id, or "" for none }): whose title +
+	--   podium skin show (data.Artifacts.Equipped) | ("Restore", { Artifact }): buys back the
+	--   ONE missing artifact of a collection with crystal shards (ArtifactConfig.restoreQuote;
+	--   ArtifactFound { Restored = true } follows); all three answered by ActionResult
 	GroupClaim = { Rate = 1, Burst = 2 },
 	SetForgeName = { Rate = 0.5, Burst = 2 },
-	TutorialSkip = { Rate = 1, Burst = 2 },
+	TutorialAction = { Rate = 1, Burst = 3 }, -- ("Skip" | "Ack") the tutorial (TutorialService):
+	--   Skip ends it (no reward), Ack is "Got it" on an info step; answered by Tutorial
 	Teleport = { Rate = 1, Burst = 3 }, -- (destination: "Base" | "Lobby" | "Vault" | "Elevator") the quick
 	--   teleports (TeleportConfig); the server answers every request it reads with TeleportResult
+	SettingsSave = { Rate = 1, Burst = 4 }, -- ({ Music: 0..1, Sfx: 0..1, Shake: boolean, Rumble: boolean })
+	--   the side menu's SETTINGS (SettingsConfig.sanitize; saved in data.Settings, sent back
+	--   as snapshot.Settings); the client sends it SettingsConfig.SaveDelay after the last change
+	CodexSeen = { Rate = 0.5, Burst = 3 }, -- ({ oreId, ... }) the ORE CODEX closed: these
+	--   discovered ores were looked at (their NEW badges go; CodexService keeps them in
+	--   data.OreCodex.Seen, sent back as snapshot.CodexSeen)
+	StateSync = { Rate = 0.5, Burst = 2 }, -- (no arg) the client got a partial State push before
+	--   any whole one (it missed the Full push): the server forgets what it sent and pushes the
+	--   whole snapshot (StateService.resync; StateController asks at most every SyncSeconds)
 	-- server -> client
 	Notify = false,
 	Fx = false,
@@ -112,10 +180,10 @@ Net.Events = {
 	CleanBegin = false,
 	CleanResult = false,
 	OpenUI = false,
-	Tutorial = false,
+	Tutorial = false, -- { Step, Done, Total, Reward?, How = "Step" | "Done" | "Skip" | "Load" }
 	BuildResult = false, -- { Seq, Op, Ok, Reason?, Id?, X?, Z?, R? }
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
-	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? }
+	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? (a short per-session number) }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
 	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
 	-- the Foundry's hammer moment starts: { Id: SessionId, Level: the blaster level being forged,
@@ -139,6 +207,39 @@ Net.Events = {
 	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
 	--   on Ok the client plays the crate opening (a State push follows)
 	VaultResult = false,
+	-- steps 6-7 answers:
+	-- { Action: "Gear" | "Enchant" | "Boost" | "Capsule" | "Golem" | "Wheel" | "Artifact",
+	--   Op: the action string ("Buy", "Slot", "BuyCoins", "Open", "Equip", "Spin", ...),
+	--   Ok: boolean, Reason?: a code from that config's Reasons table,
+	--   Id?: the item / line / golem id the request named, Level?: the new level or tier }
+	ActionResult = false,
+	-- a capsule opened: { Capsule, Count, Golems = { { Id, Kind } } (in opening order),
+	--   Lucky: boolean (Triple Lucky was on), Free: boolean? (a wheel prize) }
+	CapsuleResult = false,
+	-- the daily spin: { Segment: 1..8 (WheelConfig.Segments index), Id: segment id,
+	--   Kind: WheelConfig PrizeKind, Amount?: coins or shards, Boost?, Seconds?,
+	--   Capsule?, Golem?: { Id, Kind } (a capsule prize), DirtyOre?: true (a dirty Rare+ ore
+	--   went to the pen; WHICH ore stays secret until it is cleaned, the screen shows
+	--   WheelConfig.oreOdds), Coins?: coins paid instead (full pen / full golem inventory /
+	--   a boost past its cap), Full?: true (a capsule prize's coins: the golem inventory was full),
+	--   Lucky?: Triple Lucky counted for the capsule, NextSpinAt: os.time() of the next free spin } (Segment/Id from the player's wheel,
+	--   WheelConfig.segments(noCapsules): "TripleLuckyCoins" replaces "TripleLucky" there)
+	WheelResult = false,
+	-- an artifact turned up: { Artifact: id, Count: copies now, New: boolean,
+	--   Collection: id, Completed: boolean (this find completed it), Shards?: a duplicate's
+	--   shards, Position?: Vector3 where the rock broke, Restored?: true (bought back with
+	--   shards: ArtifactAction "Restore", no rock) }
+	ArtifactFound = false,
+	-- a Robux item was asked for: { Product: MonetizationConfig key, Status: "ComingSoon" |
+	--   "Restricted" | "Owned" | "Full" | "Unknown" | "Prompted" }
+	--   (MonetizationConfig.promptStatus; "Prompted" = MarketplaceService prompt shown)
+	PurchasePrompt = false,
+	-- the lobby leaderboards (LeaderboardService, every LeaderboardConfig.RefreshSeconds and on
+	--   join): { Live: boolean (false = no DataStores, e.g. Studio: the rows rank the players on
+	--   this server), Boards = { [boardId] = { Rows = { { Rank, UserId, Name, Value } } (top
+	--   LeaderboardConfig.TopCount, Value decoded), Ready: boolean (read at least once) } },
+	--   Own = { [boardId] = { Value: your live value, Rank: number? (only inside Rows) } } }
+	Leaderboards = false,
 } :: { [string]: Limit | false }
 
 local FOLDER_NAME = "Remotes"
@@ -195,18 +296,55 @@ function Net.event(name: string): RemoteEvent
 	return remote
 end
 
--- Server: create every remote up front so clients never wait.
-function Net.setupServer()
-	for name in Net.Events do
-		Net.event(name)
-	end
-end
-
 ---------------------------------------------------------------- server
 
 type Bucket = { tokens: number, last: number }
-local buckets: { [Player]: { [string]: Bucket } } = {}
-local dropped: { [Player]: number } = {}
+-- weak keys: a Player the game let go of never stays here
+local buckets: { [Player]: { [string]: Bucket } } = setmetatable({}, { __mode = "k" }) :: any
+local dropped: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+-- remotes with a Net.on handler, and the do-nothing listeners on the others
+local handled: { [string]: boolean } = {}
+local sinks: { [string]: RBXScriptConnection } = {}
+local unhandled = 0
+
+local playersService: Instance? = nil
+
+-- Is the player still in the game? (An event can arrive after PlayerRemoving.)
+local function present(player: Player): boolean
+	local service = playersService
+	if not service then
+		service = game:GetService("Players")
+		playersService = service
+	end
+	return player.Parent == service
+end
+
+local function countDrop(player: Player)
+	if present(player) then
+		dropped[player] = (dropped[player] or 0) + 1
+	end
+end
+
+-- The do-nothing listener of a remote nothing handles: a client firing it
+-- costs one counter, never a queued event or a warning.
+local function connectSink(name: string)
+	if handled[name] or sinks[name] then
+		return
+	end
+	sinks[name] = Net.event(name).OnServerEvent:Connect(function(player: Player)
+		unhandled += 1
+		countDrop(player)
+	end)
+end
+
+-- Server: create every remote up front so clients never wait, and give
+-- every one without a handler (yet) its do-nothing listener.
+function Net.setupServer()
+	for name in Net.Events do
+		Net.event(name)
+		connectSink(name)
+	end
+end
 
 local function allow(player: Player, name: string, limit: Limit): boolean
 	local perPlayer = buckets[player]
@@ -231,10 +369,16 @@ local function allow(player: Player, name: string, limit: Limit): boolean
 end
 
 -- Server: listen to a client event with rate limiting and error isolation.
+-- Events from a player who already left are dropped first (no bucket, no
+-- handler: nothing per player is made again after PlayerRemoving).
 function Net.on(name: string, handler: (player: Player, ...any) -> ...any)
 	local limit = Net.Events[name]
 	assert(limit, name .. " is not a client->server event")
+	handled[name] = true
 	Net.event(name).OnServerEvent:Connect(function(player: Player, ...)
+		if not present(player) then
+			return
+		end
 		if not allow(player, name, limit :: Limit) then
 			return
 		end
@@ -243,6 +387,12 @@ function Net.on(name: string, handler: (player: Player, ...any) -> ...any)
 			warn(`[Net] {name} from {player.Name} failed: {err}`)
 		end
 	end)
+	-- the handler is connected: the do-nothing listener can go
+	local sink = sinks[name]
+	if sink then
+		sinks[name] = nil
+		sink:Disconnect()
+	end
 end
 
 function Net.fire(name: string, player: Player, ...: any)
@@ -272,9 +422,41 @@ function Net.forget(player: Player)
 	dropped[player] = nil
 end
 
+-- Events of this player the server dropped: over a rate limit, or fired
+-- at a remote nothing handles.
 function Net.droppedCount(player: Player): number
 	return dropped[player] or 0
 end
+
+-- Events fired at remotes nothing handles, from anyone, since the start.
+function Net.unhandledCount(): number
+	return unhandled
+end
+
+-- Internals for the Lune tests only (tests/Net.spec.luau).
+Net._test = {
+	hasBucket = function(player: Player): boolean
+		return buckets[player] ~= nil
+	end,
+	weakKeys = function(): boolean
+		local a, b = getmetatable(buckets :: any), getmetatable(dropped :: any)
+		return a ~= nil and a.__mode == "k" and b ~= nil and b.__mode == "k"
+	end,
+	hasSink = function(name: string): boolean
+		local sink: RBXScriptConnection? = sinks[name]
+		return sink ~= nil
+	end,
+	reset = function()
+		table.clear(buckets)
+		table.clear(dropped)
+		table.clear(handled)
+		for _, sink in sinks do
+			sink:Disconnect()
+		end
+		table.clear(sinks)
+		unhandled = 0
+	end,
+}
 
 ---------------------------------------------------------------- client
 

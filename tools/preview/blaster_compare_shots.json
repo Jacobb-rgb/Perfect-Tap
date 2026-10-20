@@ -1,5 +1,0 @@
-{
-  "compare_all": {"scene": "blaster_compare", "position": [0, 0, 74], "target": [0, 0, 0], "fov": 34, "preset": "Surface", "sunDir": [0.25, 0.55, 0.8], "shadowExtent": 70, "maxLights": 4},
-  "compare_left": {"scene": "blaster_compare", "position": [-20, 0, 38], "target": [-20, 0, 0], "fov": 34, "preset": "Surface", "sunDir": [0.25, 0.55, 0.8], "shadowExtent": 70, "maxLights": 4},
-  "compare_right": {"scene": "blaster_compare", "position": [20, 0, 38], "target": [20, 0, 0], "fov": 34, "preset": "Surface", "sunDir": [0.25, 0.55, 0.8], "shadowExtent": 70, "maxLights": 4}
-}

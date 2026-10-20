@@ -86,6 +86,8 @@ type Desc = MachineService.Desc
 IronBoxService.MachineId = "IronBox"
 IronBoxService.PromptName = "KeepListPrompt"
 IronBoxService.PenFullText = "Your Ore Pen is full: the Iron Box sends the ore you keep out of its front."
+IronBoxService.PenOverText =
+	"Your Ore Pen is over its limit: the Iron Box sends the ore you keep out of its front until you take or sell some."
 IronBoxService.BoardName = "SortingBoard"
 IronBoxService.BoardPromptName = "SortingBoardPrompt"
 IronBoxService.BoardModeText = {
@@ -241,7 +243,9 @@ local function penFullHint(player: Player)
 	end
 	penFullShown[player] = true
 	penFullAt[player] = now
-	Net.fire("Notify", player, { Text = IronBoxService.PenFullText, Kind = "Info" })
+	local data = DataService.get(player)
+	local over = data ~= nil and PenService.isOver(data)
+	Net.fire("Notify", player, { Text = if over then IronBoxService.PenOverText else IronBoxService.PenFullText, Kind = "Info" })
 end
 
 -- The box's PenFull attribute (its billboard says "Ore Pen full").

@@ -70,19 +70,32 @@ LobbyLayout.Budget = {
 	-- owner-approved meadow and road look (~1,330 parts: grass tufts, grass
 	-- patches and flower beds on the free lawns, fences along the roads, the
 	-- main roads paved with kerbs and glowing studs).
-	-- tests/LobbyBudget.spec.luau: the built map (~20,200 parts) + one ore
-	-- node on every node spawn (~1,320) must stay 200 under it (the podium
-	-- and pen ores): ~250 parts of headroom.
-	MapParts = 23000, -- (integrator 2026-10-18) + the pending lobby work (hory-noc, the gallery's Kenney-shape guns); the mine floors get their own model
+	-- + the blaster gallery in THE GREAT FORGE's hall (Plaza/BlasterGallery, ~330 parts).
+	-- + the artifact museums (steps 6-7: ArtifactService builds one into
+	-- every plot's yard at server start, MuseumBuilder, ~44 structure parts
+	-- each = ~350; the relics the owners found are NOT on the server: the
+	-- clients build them only for museums near the camera, at most
+	-- ArtifactConfig.MaxParts each, so a full collection never touches
+	-- this budget).
+	-- + the concept fixes (~350: plaza miners, lanterns, stall props, the
+	-- stream with its bridge and waterfall) and the meadow ponds.
+	-- tests/LobbyBudget.spec.luau: the built map (perf pass 1 cut ~110 parts)
+	-- + one ore node on every node spawn (~1,320) + the 8 empty museums (~350)
+	-- must stay 200 under it (the podium and pen ores).
+	MapParts = 23000, -- integrator plan 2026-10-18 (docs/QA_NIGHT_2026-10-18.md section 7) + the yard museums
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
-	-- The lobby has ~12,500 parts with the vault and the meadow: the ~300
-	-- parts of headroom are a deliberate buffer, so a small merge from a
-	-- parallel package session (Backdrop, Districts, Plaza, Flora) does not
-	-- break this budget; spend it on purpose, not by accident.
-	LobbyParts = 13700, -- (integrator 2026-10-18) + hory-noc, the gallery's Kenney-shape guns, room for steps 6-7 fixes
+	-- The 8 yard museums (steps 6-7) are inside the area and counted too. The
+	-- headroom is a deliberate buffer, so a small merge from a parallel
+	-- package session (Backdrop, Districts, Plaza, Flora) does not break this
+	-- budget; spend it on purpose, not by accident.
+	LobbyParts = 13700, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
 	LobbyLights = 45,
+	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
+	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
+	-- (steps 6-7): ~15,510 parts (tests/PhoneBudget.spec.luau, map v26)
+	PhoneParts = 18000,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,
@@ -92,8 +105,8 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 2300, LobbyParts = 2300, Lights = 11, LobbyLights = 11 }, -- + facade aprons, planters, ore carts, + the blaster gallery (~510 parts with the Kenney-shape guns at display detail, 1 light)
-		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look
+		Plaza = { Parts = 2250, LobbyParts = 2250, Lights = 11, LobbyLights = 11 }, -- + facade aprons, planters, ore carts, + the blaster gallery (~500 parts with the Kenney-shape guns at display detail, 1 light), + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
+		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
 		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)
 	} :: { [string]: { Parts: number, LobbyParts: number, Lights: number, LobbyLights: number } },
@@ -260,7 +273,7 @@ LobbyLayout.Pieces = {
 		Center = v(43, 0, 69),
 		Size = v(12, 11, 10),
 		Facing = v(-0.6, 0, 0.8).Unit,
-		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign: the Ore Codex of all 30 ores. Tag OreCodex on the terminal.",
+		Note = "Stone platform, terminal with a glowing blue screen ring, sample rocks, ROCK SCANNER sign: the Ore Codex of all 36 ores. Tag OreCodex on the terminal.",
 	},
 	{
 		Id = "CapsuleStall",

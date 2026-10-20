@@ -1,5 +1,5 @@
 --[[
-	ROCK SCANNER: the Ore Codex of the 30 ores, at the end of the ToScanner
+	ROCK SCANNER: the Ore Codex of the 36 ores, at the end of the ToScanner
 	path, in the concept v2 metal and neon language. A floor-panel platform
 	with blue neon edges, a terminal (computer-screen look: cabinet, bezel,
 	glowing screen, slanted console with buttons; Model tag OreCodex,

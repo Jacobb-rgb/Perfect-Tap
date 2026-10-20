@@ -1,6 +1,7 @@
 --[[
-	Sky package, on the sea: the sun path glitter, two sailing ships, the
-	castle islet on the horizon and the west pier with its boats
+	Sky package, on the sea: the sun path glitter, two sailing ships (they
+	lie still: no Spin bob, perf pass 1), the castle islet on the horizon
+	and the west pier with its boats
 	(docs/plans/LOBBY_PLAN.md 6.1, items 4, 5, 6, 10).
 ]]
 
@@ -126,12 +127,12 @@ local function rigging(m: Model, frame: CFrame, from: Vector3, to: Vector3)
 	Kit.beam(m, (frame * CFrame.new(from)).Position, (frame * CFrame.new(to)).Position, 0.18, C.WoodDark)
 end
 
-local function bobbing(m: Model, primary: BasePart)
+-- (perf pass 1, phone audit fix 3) The ships lie still: a 0.5-stud bob 240+
+-- studs out was barely visible but DecorController moved every part of
+-- both ships (79) each frame. Like the horizon fleet: no Spin tag; the
+-- keel stays the PrimaryPart and the ship streams as one piece.
+local function lieStill(m: Model, primary: BasePart)
 	m.PrimaryPart = primary
-	m:AddTag("Spin")
-	m:SetAttribute("SpinSpeed", 0)
-	m:SetAttribute("BobHeight", 0.5)
-	m:SetAttribute("BobSpeed", 0.8)
 	Style.streaming(m, "Atomic")
 end
 
@@ -158,7 +159,7 @@ function Sea.shipA(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	Kit.box(m, frame, Vector3.new(0, deckY + 5.8, len * 0.43 + 1.1), Vector3.new(0.15, 1.4, 2), C.AwningRed)
 	Kit.box(m, frame, Vector3.new(-2.6, deckY + 0.9, 3.8), Vector3.new(1.6, 1.6, 1.6), C.WoodLight)
 	Kit.box(m, frame, Vector3.new(2.4, deckY + 0.8, 5), Vector3.new(1.4, 1.4, 1.4), C.Wood)
-	bobbing(m, keel)
+	lieStill(m, keel)
 	return m
 end
 
@@ -173,7 +174,7 @@ function Sea.shipB(parent: Instance, piece: Piece, rng: Rng.Rng): Model
 	rigging(m, frame, Vector3.new(0, deckY + 15.5, -2), Vector3.new(0, deckY + 3, len * 0.42))
 	sternLights(m, frame, len, beam, deckY, 2)
 	Kit.box(m, frame, Vector3.new(1.6, deckY + 0.8, 2.6), Vector3.new(1.4, 1.4, 1.4), C.WoodLight)
-	bobbing(m, keel)
+	lieStill(m, keel)
 	return m
 end
 

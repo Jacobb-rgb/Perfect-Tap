@@ -561,7 +561,10 @@ function OreShapesHigh.register(shapes: { [string]: (any) -> () }, kit: any)
 	shapes.DragonScale = function(c: Ctx)
 		local f = A(0, FACE, 0)
 		-- the lava the scales lie on (it glows in every gap between them)
-		ball(c, (f * P(0, 0.56, -0.24)).Position, 1.04, "Neon")
+		-- (the physical item is mostly seen from above: a smaller lava core and
+		-- scales lying flatter, so it reads as black scales there too)
+		ball(c, (f * P(0, 0.5, -0.24)).Position, if c.Full then 0.84 else 0.6, "Neon")
+		local lean = if c.Full then -0.22 else -0.85
 		-- fish-scale rows: each row lies over the top of the row below, so only the lower
 		-- curve of every scale shows; side scales turn outwards and upper rows lean back,
 		-- so the scales wrap round a mound. (x, y, size) in the face's frame
@@ -578,7 +581,7 @@ function OreShapesHigh.register(shapes: { [string]: (any) -> () }, kit: any)
 		end
 		for i, s in scales do
 			local row = (s.Y - 0.3) / 0.3
-			local cf = f * P(s.X, s.Y, 0.3 + row * 0.02 - math.abs(s.X) * 0.3) * A(-0.22 - row * 0.12, s.X * 0.9, 0)
+			local cf = f * P(s.X, s.Y, 0.3 + row * 0.02 - math.abs(s.X) * 0.3) * A(lean - row * 0.12, s.X * 0.9, 0)
 			cyl(c, cf * A(PI / 2, 0, 0), 0.12, s.Z, if i == 2 or i == 6 then "Main" else "Light")
 		end
 		if c.Full then

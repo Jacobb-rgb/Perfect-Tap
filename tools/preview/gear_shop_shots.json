@@ -1,0 +1,13 @@
+{
+  "gear_stall": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24},
+  "gear_miners": {"scene": "gear_shop", "position": [-34.6, 6.4, -16.5], "target": [-43, 4.4, -20.6], "fov": 50, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 60, "maxLights": 24},
+  "gear_ui_pc": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_pc"},
+  "gear_ui_new": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_new"},
+  "gear_ui_status": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_status"},
+  "gear_ui_max": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_max"},
+  "gear_ui_phone": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_phone", "uiInset": 58},
+  "gear_ui_phone_small": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_phone_small", "uiInset": 163},
+  "gear_ui_tv": {"scene": "gear_shop", "position": [-26, 5, -12], "target": [-46, 5, -22], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 80, "maxLights": 24, "ui": "ui_gear_tv", "uiInset": 30},
+  "gear_carry": {"scene": "gear_shop", "position": [-11.96, 6.15, -9.07], "target": [-21.37, 4.15, -10.24], "fov": 55, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 60, "maxLights": 24},
+  "gear_carry_phone": {"scene": "gear_shop", "position": [-11.96, 6.15, -9.07], "target": [-21.37, 4.15, -10.24], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 60, "maxLights": 24, "ui": "ui_gear_carry_phone", "uiInset": 58}
+}

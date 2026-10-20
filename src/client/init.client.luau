@@ -28,8 +28,23 @@ local ORDER = {
 	"FoundryController",
 	"TechShopController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
+	"GearShopController", -- the Gear shop at the SHOP stall
+	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
+	"BoostController", -- luck boosts view + the boost chips under the HUD coins
+	"EnchantController", -- the Enchant shop at the rune table
+	"GolemController", -- golem inventory + followers (step 7; the side menu's GOLEMS opens it)
+	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
+	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)
+	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
+	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
+	"ArtifactController", -- step 7: the found moment, the collection book, the journal
+	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
+	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
+	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
+	"SideMenuController", -- the button column on the left (after the panels it opens)
+	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 }
 
 local loaded = {}

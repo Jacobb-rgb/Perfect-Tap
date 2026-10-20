@@ -3,7 +3,8 @@
 	fills it in). Two ScreenGuis:
 
 	  chip    a small HUD panel under the coins (top-left, below the "+$X"
-	          popups): a locomotive icon in your banner color, "TRAIN 6/8",
+	          popups; on compact / touch layouts right of the side menu's
+	          MENU button, chipLeft): a locomotive icon in your banner color, "TRAIN 6/8",
 	          the state ("On its way 0:12", "Pen full – make room",
 	          "Returning", "Full – Send!"...), a cargo / trip bar and a SEND
 	          button. While the train is away the count is the ore on board
@@ -44,10 +45,16 @@ TrainView.PhoneScale = 0.62 -- HudController's floor (phones)
 TrainView.MinTouch = 44 -- points
 TrainView.ChipLeft = 16 -- lines up with the coins panel
 TrainView.ChipTop = 136 -- under the coins panel (16..90) and its "+$X" popups (96..130)
+-- compact (touch) layouts: the side menu's MENU button sits first in the chip's
+-- row (SideMenuView), so the chip starts this far right of ChipLeft (chipLeft)
+TrainView.MenuSlot = 88 -- MENU (84 wide at x 12) and a gap
 TrainView.ExpressPrice = 199 -- R$, the placeholder on the Express line
 TrainView.UnloadGrace = 2 -- seconds after the arrival before a train with ore still on board counts as waiting
 TrainView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a phone panel below this leaves it clear
 TrainView.MinPanelHeight = 400 -- the compact cargo card needs this much (its SEND under the state line)
+-- Why the train waits at your stop (the server's WaitReason): the state line meanwhile
+TrainView.PenFullLine = "Pen full – make room"
+TrainView.PenOverLine = "Pen over its limit – take or sell ore"
 -- Direct Unload waits (the server's UnloadWait, PenService's Train lane): the state line meanwhile
 TrainView.UnloadWaitText = {
 	Jammed = "Belt full – waiting",
@@ -68,6 +75,7 @@ export type Snapshot = {
 	TripSeconds: number,
 	AutoDepartIn: number?,
 	Waiting: boolean, -- at your stop with ore it can't unload (the Ore Pen is full)
+	WaitReason: string?, -- why: "PenOver" (the pen holds more than it fits) | "PenFull"
 	Unloading: boolean?, -- at your stop pouring dirty ore onto your TRAIN chute's belt (Direct Unload)
 	UnloadWait: string?, -- why that pouring waits right now (a key of TrainView.UnloadWaitText)
 }
@@ -187,6 +195,18 @@ local CHIP: { [string]: ChipMetrics } = {
 	Compact = { Width = 384, Height = 84, Icon = 56, Title = 26, Line = 18, SendWidth = 112, SendHeight = 72, SendText = 24, Key = 0 },
 }
 
+-- Where the chip's left edge goes (design units): ChipLeft, or right of the
+-- side menu's MENU button on compact (touch) layouts.
+function TrainView.chipLeft(compact: boolean): number
+	return TrainView.ChipLeft + (if compact then TrainView.MenuSlot else 0)
+end
+
+-- The chip's size on a layout (design units).
+function TrainView.chipSize(compact: boolean): Vector2
+	local m = if compact then CHIP.Compact else CHIP.Normal
+	return Vector2.new(m.Width, m.Height)
+end
+
 local PANEL: { [string]: PanelMetrics } = {
 	Normal = {
 		Width = 860,
@@ -259,6 +279,7 @@ function TrainView.read(raw: any): Snapshot
 		TripSeconds = num(t.TripSeconds, TrainConfig.tripSeconds(speedLevel, express)),
 		AutoDepartIn = optional(t.AutoDepartIn),
 		Waiting = t.Waiting == true,
+		WaitReason = if t.WaitReason == "PenOver" or t.WaitReason == "PenFull" then t.WaitReason else nil,
 		Unloading = t.Unloading == true,
 		UnloadWait = if type(t.UnloadWait) == "string" and TrainView.UnloadWaitText[t.UnloadWait] then t.UnloadWait else nil,
 	}
@@ -300,7 +321,8 @@ end
 	is the ore on board (Moving): on its way, unloading at your stop (with
 	Direct Unload "Unloading onto your belt", or why that waits:
 	UnloadWaitText), the phase "Waiting" there because the Ore Pen is full
-	("Pen full – make room", TrainView.waiting), then rolling back empty.
+	("Pen full – make room", TrainView.waiting) or holds more than it fits
+	(WaitReason "PenOver": PenOverLine), then rolling back empty.
 	Nothing can be sent while it is away.
 ]]
 function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Status
@@ -322,7 +344,8 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 	local moving = train.Moving
 	local arrive = train.ArriveAt
 	if TrainView.waiting(train, now) then
-		return make("Waiting", moving, "ore waiting at your pen", "Pen full – make room", Theme.Bad, false)
+		local line = if train.WaitReason == "PenOver" then TrainView.PenOverLine else TrainView.PenFullLine
+		return make("Waiting", moving, "ore waiting at your pen", line, Theme.Bad, false)
 	elseif (arrive and now < arrive) or (moving > 0 and not arrive) then
 		local depart = train.DepartAt
 		local progress = if depart and arrive and arrive > depart then math.clamp((now - depart) / (arrive - depart), 0, 1) else nil
@@ -358,9 +381,10 @@ function TrainView.status(train: Snapshot, now: number, autoLeft: number?): Stat
 end
 
 -- The HUD chip shows with the HUD, but not while the panel is open (it says the same; on PC its
--- edge would cover the chip's SEND).
-function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean): boolean
-	return hudShown and not panelOpen
+-- edge would cover the chip's SEND), nor while the touch side menu's grid is open in its place
+-- (MenuPanels.gridOpen: the grid would cover it half-way).
+function TrainView.chipVisible(hudShown: boolean, panelOpen: boolean, gridOpen: boolean?): boolean
+	return hudShown and not panelOpen and gridOpen ~= true
 end
 
 -- One upgrade row from a snapshot (prices from the snapshot, else TrainConfig).
@@ -832,6 +856,7 @@ end
 function TrainView.layout(refs: Refs, compact: boolean, maxWidth: number, maxHeight: number)
 	refs.Compact = compact
 	placeChip(refs, if compact then CHIP.Compact else CHIP.Normal)
+	refs.ChipFrame.Position = UDim2.fromOffset(TrainView.chipLeft(compact), TrainView.ChipTop)
 
 	local m = if compact then PANEL.Compact else PANEL.Normal
 	local width = math.max(620, math.min(m.Width, maxWidth - 24))

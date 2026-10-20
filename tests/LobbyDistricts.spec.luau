@@ -225,6 +225,100 @@ return function(T, Loader)
 		T.truthy(math.abs(axle:Dot(frame.LookVector)) > 0.999, "hub Y axis = the axle (facing the plaza)")
 	end)
 
+	T.test("districts: the SPIN & WIN disc shows the daily wheel's prizes clockwise and lands where the screen does", function()
+		local WheelConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.WheelConfig")
+		local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
+		local _, pkg = districts()
+		local wheel = pkg.SpinWheel.Wheel
+		local hub = wheel.PrimaryPart.CFrame
+		local frame = LobbyLayout.frame(LobbyLayout.get("SpinWheel"))
+		local axle = hub.Position
+		-- the viewer in the plaza looks at the front (-Z of the frame): their right is the frame's -X
+		local function clockwiseFromTop(p: any): number
+			local q = p - axle
+			local right = q:Dot(-frame.RightVector)
+			local up = q:Dot(frame.UpVector)
+			return math.deg(math.atan2(right, up)) % 360
+		end
+		local function centre(model: any): any
+			local sum, n = Vector3.zero, 0
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					sum += d.CFrame.Position
+					n += 1
+				end
+			end
+			return sum / math.max(n, 1)
+		end
+		local n = #WheelConfig.Segments
+		local step = 360 / n
+		for _, segment in WheelConfig.Segments do
+			local holder = wheel:FindFirstChild("Icon" .. segment.Id)
+			T.truthy(holder and holder:IsA("Model"), segment.Id .. ": its icon on the disc")
+			T.eq(holder:GetAttribute("Segment"), segment.Index)
+			local angle = clockwiseFromTop(centre(holder))
+			local expected = (segment.Index - 1) * step
+			local off = math.abs((angle - expected + 180) % 360 - 180)
+			T.lt(off, step / 2, `{segment.Id}: {expected} degrees clockwise from the top as seen (is {angle})`)
+			-- its colour on the disc
+			local coloured = 0
+			for _, d in wheel:GetChildren() do
+				if d:IsA("BasePart") and d.Color == segment.Color then
+					coloured += 1
+				end
+			end
+			T.truthy(coloured >= 2, segment.Id .. ": the segment in its WheelConfig colour")
+			-- DecorController turns the model by psi about the hub's Y axis: at
+			-- psi = restAngle(k) the segment sits under the pointer (the top)
+			local psi = math.rad(WheelView.restAngle(segment.Index, n))
+			local turned = (hub * roblox.CFrame.Angles(0, psi, 0) * hub:Inverse()) * centre(holder)
+			local landed = clockwiseFromTop(turned)
+			T.lt(math.abs((landed + 180) % 360 - 180), 1, `{segment.Id} lands under the pointer at restAngle (at {landed})`)
+		end
+		-- the substitute prizes are there, hidden (the client shows them to players who can't buy capsules)
+		for id, substitute in WheelConfig.Substitutes do
+			local holder = wheel:FindFirstChild("Icon" .. substitute.Id)
+			T.truthy(holder, id .. ": its substitute's icon")
+			T.eq(holder:GetAttribute("Substitute"), true)
+			T.eq(holder:GetAttribute("Segment"), substitute.Index)
+			for _, d in holder:GetDescendants() do
+				if d:IsA("BasePart") then
+					T.eq(d.Transparency, 1, "hidden until the client shows it")
+				end
+			end
+		end
+		-- no made-up prizes: one icon per prize (and its substitute)
+		local icons = 0
+		for _, child in wheel:GetChildren() do
+			if child:IsA("Model") and child:GetAttribute("Segment") ~= nil then
+				icons += 1
+			end
+		end
+		local subs = 0
+		for _ in WheelConfig.Substitutes do
+			subs += 1
+		end
+		T.eq(icons, n + subs, "one icon per prize")
+		-- the crown and the hub rim stay on the frame (the disc stops at any angle)
+		local rim = pkg.SpinWheel:FindFirstChild("HubRim", true)
+		T.truthy(rim and not rim:IsDescendantOf(wheel), "the hub rim is on the frame")
+	end)
+
+	T.test("districts: DecorController moves only what is near and on screen", function()
+		local DecorController = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.DecorController")
+		T.eq(DecorController.tier(30, true), 1, "near: every frame")
+		T.eq(DecorController.tier(200, true), 2, "mid-range: every 2nd frame")
+		T.eq(DecorController.tier(200, true, true), 1, "a held wheel lands smoothly")
+		T.eq(DecorController.tier(400, true), 0, "far: not at all")
+		T.eq(DecorController.tier(30, false), 0, "off screen: not at all")
+		local Vector2 = roblox.Vector2
+		local view = Vector2.new(1600, 900)
+		T.truthy(DecorController.sphereInView(Vector3.new(800, 450, 50), 5, view, 70), "in the middle")
+		T.falsy(DecorController.sphereInView(Vector3.new(800, 450, -50), 5, view, 70), "behind the camera")
+		T.falsy(DecorController.sphereInView(Vector3.new(4000, 450, 50), 5, view, 70), "far to the side")
+		T.truthy(DecorController.sphereInView(Vector3.new(1700, 450, 50), 20, view, 70), "a big model whose edge is in view")
+	end)
+
 	T.test("districts: four leaderboards in an arc face the Hall of Fame's front", function()
 		local map, pkg = districts()
 		local boards = tagged(map, "Leaderboard")
@@ -427,11 +521,26 @@ return function(T, Loader)
 			end
 			return n
 		end
+		-- lit bays: one item plinth per bay, each inside its window's glass
+		-- case (perf pass 1: the two bays of a side share the plinth, lid and
+		-- dark glass behind the wall, the glass case stays one per window)
 		local function bayCases(m): number
-			local n = 0
+			local cases, n = {}, 0
 			for _, d in m:GetDescendants() do
 				if d:IsA("BasePart") and d.Name == "BayCase" then
-					n += 1
+					table.insert(cases, d)
+				end
+			end
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "BayPlinth" then
+					for _, case in cases do
+						local q = case.CFrame:PointToObjectSpace(d.CFrame.Position)
+						local h = case.Size / 2
+						if math.abs(q.X) <= h.X and math.abs(q.Y) <= h.Y and math.abs(q.Z) <= h.Z then
+							n += 1
+							break
+						end
+					end
 				end
 			end
 			return n
@@ -688,5 +797,257 @@ return function(T, Loader)
 				break
 			end
 		end
+	end)
+	T.test("districts (perf pass 1): fewer parts on SHOP, UPGRADES and the wheel, nothing hidden inside another part", function()
+		local _, pkg = districts()
+		local function count(m): (number, number)
+			local parts, neon = 0, 0
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					parts += 1
+					if d.Material == roblox.Enum.Material.Neon then
+						neon += 1
+					end
+				end
+			end
+			return parts, neon
+		end
+		-- (427 / 444 / 320 parts and 177 wheel neon parts before; 398 / 415
+		-- with a glass case per window and the porch cases' back posts)
+		local shop = count(pkg.Shop)
+		local upgrades = count(pkg.Upgrades)
+		local wheel, wheelNeon = count(pkg.SpinWheel)
+		T.le(shop, 398, "SHOP parts")
+		T.le(upgrades, 415, "UPGRADES parts")
+		T.le(wheel, 317, "SPIN & WIN parts")
+		T.le(wheelNeon, 174, "SPIN & WIN neon parts")
+		-- no part lies wholly inside an opaque block (it would never be seen)
+		for _, name in { "Shop", "Upgrades", "SpinWheel" } do
+			local parts = {}
+			for _, d in pkg[name]:GetDescendants() do
+				if d:IsA("BasePart") then
+					table.insert(parts, d)
+				end
+			end
+			for _, a in parts do
+				if a.Transparency < 1 then
+					local h = a.Size / 2
+					local points = {}
+					for _, sx in { -1, 1 } do
+						for _, sy in { -1, 1 } do
+							for _, sz in { -1, 1 } do
+								table.insert(points, (a.CFrame * CFrame.new(sx * h.X, sy * h.Y, sz * h.Z)).Position)
+							end
+						end
+					end
+					local center = a.CFrame.Position
+					for _, b in parts do
+						if
+							b ~= a
+							and (b.CFrame.Position - center).Magnitude <= b.Size.Magnitude / 2
+							and b:IsA("Part")
+							and b.Shape == roblox.Enum.PartType.Block
+							and b.Transparency == 0
+						then
+							local hb = b.Size / 2 + Vector3.new(0.001, 0.001, 0.001)
+							local inside = true
+							for _, p in points do
+								local q = b.CFrame:PointToObjectSpace(p)
+								if math.abs(q.X) > hb.X or math.abs(q.Y) > hb.Y or math.abs(q.Z) > hb.Z then
+									inside = false
+									break
+								end
+							end
+							T.falsy(inside, `{a:GetFullName()} is hidden inside {b.Name}`)
+						end
+					end
+				end
+			end
+		end
+	end)
+	-- Builds the SHOP and UPGRADES at a width, and the SPIN & WIN at a
+	-- footprint, recording what the builders leave out (Tech.leaveOut).
+	local function withSizes(fn: () -> ())
+		local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades"), LobbyLayout.get("SpinWheel") }
+		local sizes = {}
+		for i, piece in pieces do
+			sizes[i] = piece.Size
+		end
+		local ok, err = pcall(fn)
+		for i, piece in pieces do
+			piece.Size = sizes[i]
+		end
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	T.test("districts (perf pass 1): every part a builder leaves out stays hidden (both stall widths, both wheel sizes)", function()
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local Wheel = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Wheel")
+		local Tech = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Tech")
+		-- a sliver thinner than this never reads (the crack between a
+		-- showcase stand's back and its pylon)
+		local TOL = 0.1
+		local function opaque(m): { any }
+			local out = {}
+			for _, d in m:GetDescendants() do
+				if d:IsA("Part") and d.Shape == roblox.Enum.PartType.Block and d.Transparency == 0 then
+					table.insert(out, d)
+				end
+			end
+			return out
+		end
+		-- every point of the box (corners, edge and face middles, center)
+		-- lies inside an opaque block of its model, within TOL
+		local function shows(entry, blocks): any
+			local h = entry.Size / 2
+			for _, fx in { -1, 0, 1 } do
+				for _, fy in { -1, 0, 1 } do
+					for _, fz in { -1, 0, 1 } do
+						local p = (entry.CFrame * CFrame.new(fx * h.X, fy * h.Y, fz * h.Z)).Position
+						local inside = false
+						for _, b in blocks do
+							local q = b.CFrame:PointToObjectSpace(p)
+							local hb = b.Size / 2 + Vector3.new(TOL, TOL, TOL)
+							if math.abs(q.X) <= hb.X and math.abs(q.Y) <= hb.Y and math.abs(q.Z) <= hb.Z then
+								inside = true
+								break
+							end
+						end
+						if not inside then
+							return p
+						end
+					end
+				end
+			end
+			return nil
+		end
+		local function build(builder): { [string]: number }
+			local list = {}
+			local m = roblox.Instance.new("Model")
+			Tech.recordLeftOut(list)
+			local ok, err = pcall(builder.build, m, Rng.new("Lobby/Districts/leftout"))
+			Tech.recordLeftOut(nil)
+			if not ok then
+				error(err, 0)
+			end
+			local counts, blocksOf = {}, {}
+			for _, entry in list do
+				counts[entry.Name] = (counts[entry.Name] or 0) + 1
+				local blocks = blocksOf[entry.Model]
+				if not blocks then
+					blocks = opaque(entry.Model)
+					blocksOf[entry.Model] = blocks
+				end
+				local at = shows(entry, blocks)
+				T.falsy(at, `{entry.Model.Name}: the left-out {entry.Name} would show at {at}`)
+			end
+			return counts
+		end
+		withSizes(function()
+			local shop, upgrades = LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades")
+			for _, width in { 20, 28 } do
+				shop.Size = Vector3.new(width, 20, 14)
+				upgrades.Size = Vector3.new(width, 20, 14)
+				local counts = build(Stalls)
+				-- two stalls, a mid pylon on each side from 27 studs wide
+				local mids = if width >= 27 then 4 else 0
+				T.eq(counts.PylonLip or 0, mids, `{width} wide: mid pylon foot lips left out`)
+				T.eq(counts.PylonBand or 0, mids, `{width} wide: mid pylon bands left out`)
+			end
+			local wheel = LobbyLayout.get("SpinWheel")
+			local layoutSize = wheel.Size
+			for _, size in { layoutSize, Vector3.new(18, 26, 10), Vector3.new(26, 36, 12) } do
+				wheel.Size = size
+				local counts = build(Wheel)
+				if size == layoutSize then
+					T.eq(counts.RimChord or 0, 1, "the 6 o'clock rim chord inside the bottom bracket is left out")
+				end
+			end
+		end)
+	end)
+
+	T.test("districts (perf pass 1): the SHOP and UPGRADES facades have openings, no slits, no doubled faces (both widths)", function()
+		local Stalls = Loader.requirePath("ServerScriptService.Server.World.Lobby.Districts.Stalls")
+		local F = Stalls.Facade
+		withSizes(function()
+			for _, width in { 20, 28 } do
+				local pieces = { LobbyLayout.get("Shop"), LobbyLayout.get("Upgrades") }
+				for _, piece in pieces do
+					piece.Size = Vector3.new(width, 20, 14)
+				end
+				local m = roblox.Instance.new("Model")
+				Stalls.build(m, Rng.new("Lobby/Districts/facade"))
+				for _, piece in pieces do
+					local frame = LobbyLayout.frame(piece)
+					local hw = width / 2
+					-- opaque boxes in the stall's frame (every part is square to it)
+					local boxes = {}
+					local walls = {}
+					for _, d in m[piece.Id]:GetDescendants() do
+						if d:IsA("BasePart") and d.Transparency == 0 then
+							local c = frame:PointToObjectSpace(d.CFrame.Position)
+							local h = frame:VectorToObjectSpace(d.CFrame:VectorToWorldSpace(d.Size / 2))
+							h = Vector3.new(math.abs(h.X), math.abs(h.Y), math.abs(h.Z))
+							local box = { Min = c - h, Max = c + h, Part = d }
+							table.insert(boxes, box)
+							-- a facade wall block: centered on the facade plane, the wall's depth
+							if math.abs(c.Z - F.Z) < 0.01 and math.abs(2 * h.Z - F.Depth) < 0.01 and d:IsA("Part") then
+								table.insert(walls, box)
+							end
+						end
+					end
+					local function covered(x: number, y: number): boolean
+						for _, b in boxes do
+							if
+								x >= b.Min.X - 1e-3
+								and x <= b.Max.X + 1e-3
+								and y >= b.Min.Y - 1e-3
+								and y <= b.Max.Y + 1e-3
+								and F.Z >= b.Min.Z
+								and F.Z <= b.Max.Z
+							then
+								return true
+							end
+						end
+						return false
+					end
+					-- every gap in the wall plane is an opening (door, window), never a slit
+					local y = F.Floor + 0.1
+					while y < F.Floor + F.DoorHeight do
+						local runStart: number? = nil
+						local x = -hw + 0.3
+						while x <= hw - 0.3 + 1e-6 do
+							local open = not covered(x, y)
+							if open and not runStart then
+								runStart = x
+							elseif not open and runStart then
+								T.truthy(
+									x - runStart >= 1.5,
+									`{piece.Id} ({width} wide): a {x - runStart} stud slit at x {runStart}, y {y}`
+								)
+								runStart = nil
+							end
+							x += 0.05
+						end
+						T.eq(runStart, nil, `{piece.Id} ({width} wide): the facade is closed at its ends (y {y})`)
+						y += 0.2
+					end
+					-- no two wall blocks share a piece of the facade's faces (z-fighting)
+					for i, a in walls do
+						for j = i + 1, #walls do
+							local b = walls[j]
+							local ox = math.min(a.Max.X, b.Max.X) - math.max(a.Min.X, b.Min.X)
+							local oy = math.min(a.Max.Y, b.Max.Y) - math.max(a.Min.Y, b.Min.Y)
+							T.falsy(
+								ox > 0.01 and oy > 0.01,
+								`{piece.Id} ({width} wide): {a.Part.Name} and {b.Part.Name} overlap in the facade plane ({ox} x {oy})`
+							)
+						end
+					end
+				end
+			end
+		end)
 	end)
 end
