@@ -13,5 +13,6 @@
   "rebirth_pc_light": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_pc_light"},
   "rebirth_phone_small_light": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_phone_small_light", "uiInset": 163},
   "rebirth_blasters_pc_light": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_blasters_pc_light"},
-  "rebirth_blasters_phone_light": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_blasters_phone_light", "uiInset": 58}
+  "rebirth_blasters_phone_light": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_blasters_phone_light", "uiInset": 58},
+  "rebirth_paid_pc_light": {"scene": "rebirth", "position": [6, 9, 42], "target": [0, 6, -12], "fov": 60, "preset": "Surface", "sunDir": [-0.965, 0.225, 0.136], "shadowExtent": 120, "maxLights": 24, "ui": "ui_rebirth_paid_pc_light"}
 }
