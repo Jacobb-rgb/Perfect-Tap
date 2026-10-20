@@ -103,6 +103,7 @@ local A = {
 	TrainSpeedExtra = nil :: { { Value: number, Price: number } }?, -- train trip seconds levels after the config's last
 	MachineUpgrades = false, -- buy the Tech shop's Speed / Quality upgrades (Auto Cleaner, Crusher)
 	UpgradePriceMult = nil :: { [string]: number }?, -- "Speed" / "Quality" -> multiplier on the upgrade prices
+	UpgradeCurves = nil :: { [string]: { number } }?, -- "Speed" / "Quality" -> a new base curve (each machine keeps its factor)
 	ExtraFloor = nil :: { Gate: number, Elevator: boolean, LegendaryShare: number }?, -- a floor between 4 and 5
 	-- bonus hooks (steps 6-7: golems, boosts, enchants, gear, artifact sets): 1 = none
 	IncomeMult = 1, -- podium income and every sale
@@ -750,7 +751,14 @@ local function candidates(p: any): { any }
 		} do
 			local prices = MachineData.upgradePrices(up.Machine, up.Kind)
 			local mult = (A.UpgradePriceMult and A.UpgradePriceMult[up.Kind]) or 1
-			local price = prices and prices[p.Upgrades[up.Key] + 1]
+			local level = p.Upgrades[up.Key] + 1
+			local price = prices and prices[level]
+			local curve = A.UpgradeCurves and A.UpgradeCurves[up.Kind]
+			if price and curve and prices then
+				-- the machine's factor on the base curve, applied to the new curve
+				local factor = prices[1] / MachineData.UpgradeCurves[up.Kind][1]
+				price = curve[level] and curve[level] * factor or nil
+			end
 			price = if price then price * mult else nil
 			if up.Needs and price then
 				table.insert(list, {
