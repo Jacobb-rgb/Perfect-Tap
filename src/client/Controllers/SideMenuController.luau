@@ -20,6 +20,8 @@
 	             game, step 8)
 	  HOVER      HoverboardController (the hoverboards panel; its RIDE button
 	             and the H key stay in the HUD)
+	  REBIRTH    RebirthController (STAR FORGE; badge: a rebirth is ready
+	             and the window wasn't opened since)
 
 	Every other controller is called defensively (MenuPanels: required by
 	name with pcall, its open / toggle / isOpen / close used when they
@@ -94,11 +96,12 @@ SideMenuController.Actions = {
 	Hoverboards = { Controller = "HoverboardController", Missing = "Hoverboards are coming soon!", Soon = false, Hide = true },
 	-- hidden until step 8's StoreController is in the game (no dead buttons); it comes back by itself
 	Store = { Controller = "StoreController", Missing = "The Robux store is coming soon!", Soon = true, Hide = true },
+	Rebirth = { Controller = "RebirthController", Missing = "Rebirth is coming soon!", Soon = false, Hide = true },
 } :: { [string]: Action }
 
 -- Buttons whose controller has onUnseenChanged(callback(count)): its count
 -- is the button's badge.
-SideMenuController.Badges = { "Codex", "Collection" }
+SideMenuController.Badges = { "Codex", "Collection", "Rebirth" }
 
 -- The side menu's own panels: they close when the HUD hides (build mode,
 -- the cleaning minigame...), like the menu itself.

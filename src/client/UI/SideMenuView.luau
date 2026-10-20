@@ -100,6 +100,7 @@ SideMenuView.Icons = {
 	Store = "💰",
 	Elevator = "🛗",
 	Hoverboards = "🛹",
+	Rebirth = "⭐",
 } :: { [string]: string }
 
 SideMenuView.Entries = {
@@ -154,6 +155,16 @@ SideMenuView.Entries = {
 		IconName = "Hoverboards",
 		Color = rgb(150, 96, 255),
 		Dark = rgb(78, 40, 176),
+	},
+	-- rebirth STAR FORGE (RebirthController), in the indigo of the rebirth window
+	{
+		Id = "Rebirth",
+		Label = "REBIRTH",
+		Group = "More",
+		Order = 7,
+		IconName = "Rebirth",
+		Color = rgb(124, 132, 250),
+		Dark = rgb(60, 64, 172),
 	},
 } :: { Entry }
 

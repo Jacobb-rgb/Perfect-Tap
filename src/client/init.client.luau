@@ -45,6 +45,7 @@ local ORDER = {
 	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
 	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
+	"RebirthController", -- rebirth STAR FORGE: the window, the moment, the stars over names
 	"SideMenuController", -- the button column on the left (after the panels it opens)
 	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 }
