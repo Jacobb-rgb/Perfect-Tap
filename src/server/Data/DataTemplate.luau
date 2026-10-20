@@ -30,6 +30,9 @@ local DataTemplate = {
 		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
 		-- (readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
+		-- the mine elevator (ElevatorService), bought once for MineFloors.Elevator.Price:
+		-- rides to every unlocked floor (floors 4-5 are reachable only this way)
+		Elevator = false,
 	},
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
 	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)
@@ -129,6 +132,12 @@ local DataTemplate = {
 	Badges = {}, -- [badgeKey] = true (local cache, Roblox is the source of truth)
 	GroupRewardClaimed = false,
 	ForgeName = "", -- raw text, always filtered by TextService before showing
+
+	-- hoverboards (HoverboardService): Owned = { [boardId] = true } (bought once,
+	-- coins or a game pass), Equipped = the board RIDE uses ("" = none),
+	-- Passes = { [boardId] = true } for the boards a game pass gave (a refunded
+	-- pass takes only those back)
+	Hoverboards = { Owned = {}, Equipped = "", Passes = {} },
 
 	-- monetization: purchase ids already granted (never grant twice)
 	Purchases = {}, -- [purchaseId] = os.time()

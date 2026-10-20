@@ -97,6 +97,12 @@ Net.Events = {
 	--   one step with no yield (FoundryResult "NotEnough" if either is gone by
 	--   then); in that same step the stock ingots the new next level can't use
 	--   move to the pen (as many as fit). Cancel, Timeout and BadStrikes cost nothing.
+	-- mine elevator (ElevatorService), only within ElevatorService.Range of a stop:
+	--   ({ Action = "Buy" }) buys it once for MineFloors.Elevator.Price coins (data.Upgrades.Elevator);
+	--   ({ Action = "Go", Floor }) rides to that floor's stop: owned, whole Floor 1..#MineFloors.List,
+	--   unlocked (BlasterLevel >= MinBlaster), not that stop's own floor, not while cleaning,
+	--   not right after the last ride. Refusals answer with a "Deny" Notify; a ride with ElevatorRide.
+	ElevatorAction = { Rate = 3, Burst = 5 },
 	-- economy / meta
 	ShopBuy = { Rate = 3, Burst = 5 }, -- ({ Shop = "Tech", Item: string, Count: number?, Level: number? }), Item:
 	--   <machineId> (Count 1..EconomyConfig.TechShop.MaxCount; at most TechShop.MaxOwned of a type
@@ -109,6 +115,12 @@ Net.Events = {
 	VaultBuy = { Rate = 2, Burst = 4 }, -- ({ Level: number }) buy your next blaster level at the Blaster Vault
 	--   counter for coins (BlasterData.vaultPrice, the case's ore look BlasterData.vaultOre); every
 	--   request read gets a VaultResult (see VaultService)
+	-- hoverboards (HoverboardService), anywhere: { Action = "Buy", Board } a coin board (EconomyService);
+	--   { Action = "Equip", Board } an owned board ("" = none); { Action = "Ride", On: boolean? } on / off
+	--   (nil = toggle). Every request read gets a HoverboardResult. Robux boards are game passes:
+	--   MarketplaceService:PromptGamePassPurchase on the client (MonetizationConfig ids, never id 0);
+	--   MonetizationService grants them (ownership checked on load and on purchase)
+	HoverboardAction = { Rate = 4, Burst = 8 },
 	-- steps 6-7: gear, enchants, boosts, golems + capsules, wheel, artifacts (the configs in
 	-- Shared/Config document each rule). Every request the server reads (except Capsule
 	-- "Open" and Wheel "Spin", answered by CapsuleResult / WheelResult, and Robux requests,
@@ -201,12 +213,21 @@ Net.Events = {
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,
 	--   Count?: machines bought }; a State push follows a successful buy
 	ShopResult = false,
+	-- an elevator ride (ElevatorService): { Phase = "Depart", Floor, From?, Name, Duration, DoorsClose }
+	--   starts the client's full-screen ride (the doors shut within DoorsClose seconds, the
+	--   counter runs at least Duration seconds); { Phase = "Arrive", Floor, Name, Ok } once the
+	--   character stands at the target stop (the doors open); { Phase = "Arrive", Rescue = true }
+	--   after a VoidCatcher rescue (a short fade, no ride)
+	ElevatorRide = false,
 	-- the answer to a Teleport: { Destination, Ok, Reason?: a TeleportConfig.Reasons code }
 	TeleportResult = false,
 	-- the answer to a VaultBuy: { Level, Ok, Reason?: "BadLevel" | "Owned" | "Locked" | "Max" |
 	--   "TooFar" | "NoCoins" | "NoData", Ore?: the new BlasterOre, Name?: BlasterData.displayName };
 	--   on Ok the client plays the crate opening (a State push follows)
 	VaultResult = false,
+	-- the answer to a HoverboardAction: { Action, Board?, Ok, Reason?: a HoverboardService.Reasons
+	--   code, Riding?: boolean }; a State push (Hoverboards) follows a change
+	HoverboardResult = false,
 	-- steps 6-7 answers:
 	-- { Action: "Gear" | "Enchant" | "Boost" | "Capsule" | "Golem" | "Wheel" | "Artifact",
 	--   Op: the action string ("Buy", "Slot", "BuyCoins", "Open", "Equip", "Spin", ...),

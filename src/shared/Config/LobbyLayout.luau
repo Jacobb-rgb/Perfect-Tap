@@ -77,21 +77,23 @@ LobbyLayout.Budget = {
 	-- clients build them only for museums near the camera, at most
 	-- ArtifactConfig.MaxParts each, so a full collection never touches
 	-- this budget).
-	-- tests/LobbyBudget.spec.luau: the built map (~20,560 parts after the
-	-- perf pass 1 cuts, map v26) + one ore node on every node spawn (~1,320)
-	-- + the 8 empty museums (~350) = ~22,220 must stay 200 under it (the
-	-- podium and pen ores): ~380 parts of headroom.
-	MapParts = 22800, -- 22,000 + 400 for the blaster gallery + 400 for the yard museums
+	-- + the concept fixes (~350: plaza miners, lanterns, stall props, the
+	-- stream with its bridge and waterfall) and the meadow ponds.
+	-- tests/LobbyBudget.spec.luau: the built map (perf pass 1 cut ~110 parts)
+	-- + one ore node on every node spawn (~1,320) + the 8 empty museums (~350)
+	-- must stay 200 under it (the podium and pen ores).
+	-- + the five mine floor areas (integrator 2026-10-18: ≤ 2,500 parts each,
+	-- MineKit.PartBudget; ~8,160 in all after the trims; floors 4-5 sit far
+	-- north and deep and never stream in near the town).
+	MapParts = 32200, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
-	-- The lobby has ~12,370 parts with the vault, the meadow and the blaster
-	-- gallery, ~12,720 with the 8 yard museums (steps 6-7, inside the area:
-	-- counted by tests/LobbyBudget.spec.luau; map v26): the ~480 parts of headroom
-	-- are a deliberate buffer, so a small merge from a parallel package session
-	-- (Backdrop, Districts, Plaza, Flora) does not break this budget; spend
-	-- it on purpose, not by accident.
-	LobbyParts = 13200,
+	-- The 8 yard museums (steps 6-7) are inside the area and counted too. The
+	-- headroom is a deliberate buffer, so a small merge from a parallel
+	-- package session (Backdrop, Districts, Plaza, Flora) does not break this
+	-- budget; spend it on purpose, not by accident.
+	LobbyParts = 13700, -- integrator plan 2026-10-18: + the blaster gallery, + the plaza life, + the yard museums
 	LobbyLights = 45,
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
@@ -106,7 +108,7 @@ LobbyLayout.Budget = {
 	Packages = {
 		Sky = { Parts = 1800, LobbyParts = 200, Lights = 6, LobbyLights = 2 },
 		Backdrop = { Parts = 4800, LobbyParts = 500, Lights = 10, LobbyLights = 3 }, -- + Spectrum strata and spires (Candy mountains), + Horizon (~2,450)
-		Plaza = { Parts = 2000, LobbyParts = 2000, Lights = 11, LobbyLights = 11 }, -- + facade aprons, planters, ore carts, + the blaster gallery (~330 parts, 1 light)
+		Plaza = { Parts = 2250, LobbyParts = 2250, Lights = 11, LobbyLights = 11 }, -- + facade aprons, planters, ore carts, + the blaster gallery (~330 parts, 1 light), + Plaza/Life (~220: miners, hanging lanterns, stall-front props)
 		Districts = { Parts = 2400, LobbyParts = 2400, Lights = 11, LobbyLights = 11 }, -- + v2 stalls, concept v2 look (~2,080 parts after perf pass 1)
 		Flora = { Parts = 3500, LobbyParts = 3100, Lights = 8, LobbyLights = 8 }, -- the town-edge tree belts, the scatter, the Meadow (~1,770: lawns, fences, ponds, jungle trees on the lawns and the mountains; the town houses went 2026-10-18)
 		Vault = { Parts = 3500, LobbyParts = 3500, Lights = 6, LobbyLights = 6 }, -- the Blaster Vault, its statues and jungle trees (~2970 parts, 5 lights)

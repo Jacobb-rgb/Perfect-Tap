@@ -6,8 +6,8 @@
 	           buttons in the spot colours (TeleportConfig.Spots, Bar = true),
 	           the icon left of the name; on phones (compact) the icon sits on
 	           top so the button is tall enough to tap (>= 44 pt at uiScale 0.62)
-	  side     the ELEVATOR icon in HudView's right-side Menu (under BUILD),
-	           hidden until the world has an elevator
+	  (the elevator's button is not here: ElevatorController draws it in the
+	  left side menu and sends the "Elevator" teleport; owner 2026-10-18)
 	  hint     the gamepad glyph left of the bar (D-pad down jumps into the bar)
 	  cooldown a dark cover with the seconds left over each button after a teleport
 	  fade     its own ScreenGui: the screen goes dark during the jump
@@ -32,12 +32,10 @@ export type Refs = {
 	Buttons: { [string]: TextButton },
 	Covers: { [string]: TextLabel },
 	Hint: ImageLabel,
-	Side: TextButton?,
 }
 
 TeleportView.CompactScale = 0.75 -- at this uiScale and below the bar uses the tall phone buttons
 TeleportView.NarrowWidth = 600 -- screens narrower than this (pt) show icons only (the coins panel needs the room)
-TeleportView.SideSize = Vector2.new(84, 64) -- like the BUILD button
 
 -- Button sizes for a uiScale and the screen width in pt (design units).
 function TeleportView.layout(uiScale: number, screenWidth: number?): Layout
@@ -115,8 +113,8 @@ local function spotButton(parent: Instance, spot: Spot, order: number, size: Vec
 	return button, cover
 end
 
--- Fills HudView's TopBar (and puts the side icon into its Menu).
-function TeleportView.build(topBar: Frame, menu: Frame?, uiScale: number, screenWidth: number?): Refs
+-- Fills HudView's TopBar with the bar spots (Bar = true; the elevator is in the left side menu).
+function TeleportView.build(topBar: Frame, uiScale: number, screenWidth: number?): Refs
 	local layout = TeleportView.layout(uiScale, screenWidth)
 	local buttons: { [string]: TextButton } = {}
 	local covers: { [string]: TextLabel } = {}
@@ -127,26 +125,18 @@ function TeleportView.build(topBar: Frame, menu: Frame?, uiScale: number, screen
 		BackgroundTransparency = 1,
 		Visible = false,
 	}, topBar)
-	local side: TextButton? = nil
 	for order, spot in TeleportConfig.Spots do
 		if spot.Bar then
 			local button, cover = spotButton(topBar, spot, order, Vector2.new(layout.Width, layout.Height))
 			place(button, layout)
 			buttons[spot.Id], covers[spot.Id] = button, cover
-		elseif menu then
-			local button, cover = spotButton(menu, spot, 20 + order, TeleportView.SideSize)
-			place(button, { Width = TeleportView.SideSize.X, Height = TeleportView.SideSize.Y, Gap = 0, IconTop = true, IconOnly = false })
-			local holder = button.Parent :: Frame
-			holder.Visible = false
-			buttons[spot.Id], covers[spot.Id] = button, cover
-			side = button
 		end
 	end
 	local list = topBar:FindFirstChildOfClass("UIListLayout")
 	if list then
 		list.Padding = UDim.new(0, layout.Gap)
 	end
-	return { Buttons = buttons, Covers = covers, Hint = hint, Side = side }
+	return { Buttons = buttons, Covers = covers, Hint = hint }
 end
 
 -- Re-lays the bar's buttons for a new uiScale / screen width (phone <-> big screen).
@@ -173,14 +163,6 @@ function TeleportView.setCooldown(refs: Refs, seconds: number)
 	for _, cover in refs.Covers do
 		cover.Visible = seconds > 0
 		cover.Text = text
-	end
-end
-
--- The elevator icon on the side shows only while the world has an elevator.
-function TeleportView.setSideVisible(refs: Refs, visible: boolean)
-	local side = refs.Side
-	if side and side.Parent then
-		(side.Parent :: Frame).Visible = visible
 	end
 end
 

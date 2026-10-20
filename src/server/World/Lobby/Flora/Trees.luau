@@ -13,7 +13,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local Geo = require(Shared.Builders.Geo)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -212,64 +211,12 @@ local function beltLantern(parent: Instance, foot: Vector3, h: number)
 end
 
 --[[
-	(lobby fix round 3) A small timber shed in the belt: plank walls on a
-	stone foot, a terracotta gable roof (two wedges), a dark door and a
-	small warm window on the side the hero camera sees (south), a crate.
-	`base` = ground center, LookVector = the door side. 8 parts.
-]]
-Trees.ShedSpots = { -96, -74, -18, 14, 22, 34, 101, 108 }
-Trees.ShedX = 61.6
-local function shed(parent: Instance, base: CFrame, side: number, rng: Rng.Rng)
-	local m = Style.model("Shed", parent)
-	local w, d, h = 4.4, 3.6, 3.0
-	Style.block(m, base * CFrame.new(0, 0.2, 0), Vector3.new(w + 0.4, 0.4, d + 0.4), C.StoneDark, nil, Style.solid())
-	Style.block(m, base * CFrame.new(0, 0.4 + h / 2, 0), Vector3.new(w, h, d), Style.vary(C.Plank, rng, 0.05), nil, Style.solid())
-	local roofH = 1.6
-	for _, side in { -1, 1 } do
-		-- two wedges, their tall sides meeting over the ridge (ridge along the door's axis)
-		Geo.wedge(
-			m,
-			base * CFrame.new(side * (w / 4 + 0.15), 0.4 + h + roofH / 2, 0) * CFrame.Angles(0, -side * math.pi / 2, 0),
-			Vector3.new(d + 0.6, roofH, w / 2 + 0.3),
-			Style.vary(C.RoofTerracotta, rng, 0.04),
-			Enum.Material.SmoothPlastic,
-			Style.ghost()
-		)
-	end
-	Style.block(m, base * CFrame.new(0, 0.4 + h + roofH + 0.05, 0), Vector3.new(0.4, 0.3, d + 0.7), C.RoofTerracottaDark, nil, Style.tiny())
-	Style.block(m, base * CFrame.new(0, 0.4 + 1.0, -d / 2 - 0.06), Vector3.new(1.3, 2.0, 0.12), C.WoodDark, nil, Style.tiny())
-	-- (local +X points south on the east side, north on the west side)
-	Style.block(
-		m,
-		base * CFrame.new(side * (w / 2 + 0.06), 0.4 + 1.9, 0) * CFrame.Angles(0, math.pi / 2, 0),
-		Vector3.new(1.0, 0.8, 0.1),
-		Color3.fromRGB(255, 130, 40),
-		Enum.Material.Neon,
-		Style.tiny()
-	)
-	Style.crate(m, base * CFrame.new(-side * (w / 2 + 1.1), 0, -0.6), rng, 1.4)
-	return m
-end
-
---[[
 	The two town-edge belts. `sites`: the town building rectangles (the
 	belt keeps its crowns off them). Returns the model.
 ]]
 function Trees.belt(parent: Instance, rng: Rng.Rng, sites: { Kit.Box }): Model
 	local m = Style.model("TownBelt", parent)
-	-- (round 3) a few timber sheds in the belt on each side (the trees keep off them)
-	for _, side in { -1, 1 } do
-		local count = 0
-		for _, z in Trees.ShedSpots do
-			local p = Vector3.new(side * Trees.ShedX, 0, z)
-			if count < 3 and beltClear(p, 3.4, 3.4, sites) then
-				-- the door faces the plot road, the window the south (hero camera)
-				shed(m, CFrame.lookAt(p, p + Vector3.new(side, 0, 0)), side, rng)
-				count += 1
-				table.insert(sites, { Min = Vector2.new(p.X - 3.4, p.Z - 3.4), Max = Vector2.new(p.X + 3.4, p.Z + 3.4) })
-			end
-		end
-	end
+	-- (the round 3 timber sheds are gone: the owner, 2026-10-18, like the town houses)
 	for _, side in { -1, 1 } do
 		local townSide: { number } = {}
 		for _, row in Trees.BeltRows do

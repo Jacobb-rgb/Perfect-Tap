@@ -10,8 +10,12 @@
 	so the character owns their physics.
 
 	Walk speed: this service is the ONLY writer of Humanoid.WalkSpeed. It is
-	Bonuses.carryWalkSpeed (Boots, Swift and WalkSpeed golems minus a capped
-	slowdown per carried item, GearConfig). It is set again on every pickup
+	HoverboardData.walkSpeed, the one formula for walking and riding: on foot
+	it equals Bonuses.carryWalkSpeed (Boots, Swift and WalkSpeed golems minus
+	a capped slowdown per carried item, GearConfig); on a board (the
+	character's HoverboardData.Attribute, set by HoverboardService, which
+	calls updateWalkSpeed when it changes) the board's speed with the percent
+	bonuses (Robux boards ignore the carry slowdown). It is set again on every pickup
 	or drop, on spawn, after every save change (DataService.onChanged: a gear
 	buy, a golem equipped...) and whenever refreshWalkSpeed(player) is called.
 
@@ -57,6 +61,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
 local GearConfig = require(Shared.Config.GearConfig)
+local HoverboardData = require(Shared.Config.HoverboardData)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -173,12 +178,27 @@ function CarryService.stackOffset(index: number): CFrame
 end
 local stackOffset = CarryService.stackOffset
 
+-- Sets the Humanoid's WalkSpeed from the carried items and the board being ridden
+-- (HoverboardData.walkSpeed: one formula for walking and riding).
 local function updateWalkSpeed(player: Player)
 	local count = #(carried[player] or {})
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		local speed = Bonuses.carryWalkSpeed(Bonuses.stats(player), count)
+	if character and humanoid then
+		local stats = Bonuses.stats(player)
+		-- the board being ridden (HoverboardService's character attribute; nil on foot)
+		local ok, board = pcall(function(): any
+			return (character :: any):GetAttribute(HoverboardData.Attribute)
+		end)
+		if not ok then
+			board = nil
+		end
+		local speed = HoverboardData.walkSpeed(
+			board,
+			count,
+			Bonuses.walkSpeed(stats),
+			stats.WalkSpeedPct
+		)
 		if humanoid.WalkSpeed ~= speed then
 			humanoid.WalkSpeed = speed
 		end
@@ -194,6 +214,8 @@ end
 function CarryService.refreshWalkSpeed(player: Player)
 	updateWalkSpeed(player)
 end
+
+CarryService.updateWalkSpeed = updateWalkSpeed
 
 local function attach(player: Player, root: BasePart, record: ItemService.ItemRecord, index: number)
 	-- in the hands an item wears its full look (a belt item was light)

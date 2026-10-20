@@ -27,7 +27,9 @@ local ORDER = {
 	"TrainController",
 	"FoundryController",
 	"TechShopController",
+	"ElevatorController",
 	"VaultController", -- the Blaster Vault shop and its crate opening
+	"HoverboardController", -- the hoverboards panel (the side menu's HOVER), RIDE, every rider's board
 	"GearShopController", -- the Gear shop at the SHOP stall
 	"GearFxController", -- head lamps on characters, the Ore Magnet's pull lines
 	"BoostController", -- luck boosts view + the boost chips under the HUD coins
@@ -36,6 +38,8 @@ local ORDER = {
 	"CapsuleController", -- capsule shop, the opening, the stall's odds board (step 7)
 	"PlacementController",
 	"TeleportController", -- the quick-teleport bar at the top centre (after HudController)
+	"MusicController", -- background music per zone (MusicConfig; volume = the TerraForgeMusic SoundGroup)
+	"AmbienceController", -- quiet lobby sounds at the waterfalls, ponds, forge (AmbienceConfig; volume = the TerraForgeAmbience SoundGroup)
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal
 	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
