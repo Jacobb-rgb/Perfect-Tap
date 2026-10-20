@@ -12,6 +12,10 @@
 	  ui_rebirth_shop_phone    667 x 375 pt phone, the STAR SHOP
 	  ui_rebirth_moment        the moment: "REBIRTH 2!", +6 Forge Stars, falling stars
 	  ui_rebirth_shop_glow     PC: the STAR SHOP with Plot Glow III, GOLD on its COLOR button
+	  ui_rebirth_blasters_pc   PC: BLASTERS after rebirth 3 with 40 stars: Comet equipped,
+	                           Nebula to buy, Pulsar short of stars, two still locked (the R$
+	                           buttons as they look once the passes are live)
+	  ui_rebirth_blasters_phone 667 x 375 pt phone, the same
 	World: buildWorld puts the Plot Glow on plot 2 (Gold) and plot 3 (Prism).
 ]]
 
@@ -117,6 +121,30 @@ function Preview.build(Loader: any): { [string]: any }
 	glowInfo.Glow = "Gold"
 	RebirthView.setInfo(glowShop, glowInfo)
 	exports.ui_rebirth_shop_glow = UiExport.export({ hud(scale, 1.4e9).Gui, glowShop.Gui })
+	-- the BLASTERS page (the R$ buttons as they look once the passes have real ids)
+	local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+	local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
+	local ids = {}
+	for i, star in StarBlasterData.List do
+		local entry = MonetizationConfig.get("Star" .. star.Id)
+		ids[entry] = entry.Id
+		entry.Id = 1000 + i
+	end
+	local blasterInfo = info(8, 40, perks, 3)
+	blasterInfo.Weapons = { Comet = true }
+	blasterInfo.Weapon = "Comet"
+	blasterInfo.RobuxOn = true
+	exports.ui_rebirth_blasters_pc = UiExport.export({
+		hud(scale, 1.4e9).Gui,
+		view(scale, false, pcWidth, pcHeight, blasterInfo, "Blasters", pcHint).Gui,
+	})
+	exports.ui_rebirth_blasters_phone = UiExport.export({
+		hud(phoneScale, 1.4e9).Gui,
+		view(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale, blasterInfo, "Blasters", "").Gui,
+	})
+	for entry, id in ids do
+		entry.Id = id
+	end
 	local moment = RebirthView.buildMoment(2, RebirthConfig.starsFor(8), 11)
 	moment.Flash.BackgroundTransparency = 0.82 -- the flash fading out
 	exports.ui_rebirth_moment = UiExport.export({ hud(scale, 0).Gui, moment.Gui })

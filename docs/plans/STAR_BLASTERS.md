@@ -1,55 +1,56 @@
-# Star blasters (proposal, 2026-10-20)
+# Star blasters (built 2026-10-20, the owner's picks)
 
-The owner's idea, replacing "buy the next blaster level for Robux": five new weapons above LV 10 that open only after
-rebirths. They can be bought for Robux, and they are **kept through every later rebirth**, because losing something
+This was the owner's idea: five new weapons above LV 10 that open only after rebirths. Each one is bought **once**,
+with Robux (a game pass) or with Forge Stars, and is **kept through every later rebirth**, because losing something
 you paid for isn't fair.
 
 Pictures:
-- `build/preview/shots/star_lineup.jpg`: all five
-- `build/preview/shots/star_close_a.jpg`, `star_close_b.jpg`: close-ups
+- `build/preview/shots/star_lineup.jpg`: all five (scene `star_blasters`, `tools/lune/lib/star_blasters_preview.luau`)
+- `build/preview/shots/rebirth_blasters_pc_light.jpg`, `rebirth_blasters_phone_light.jpg`: the Star Forge's
+  BLASTERS tab (scene `rebirth`, `LIGHT_UI=1`). The card pictures are the icons `star_<id>`
+  (`lune run tools/lune/export_icon_parts.luau star_Comet ...`, then `node tools/preview/render_icons.mjs star_Comet ...`).
 
-They come from `tools/lune/lib/star_blasters_preview.luau` (scene `star_blasters`).
+## The owner's picks
 
-## The five
+- **Power A:** a star blaster hits Mult × the damage of the blaster level you forged (x1.2 to x1.8). The floors, the
+  range and the rebirth stars still follow the forged level, so a rebirth run is never skipped.
+- **Earning 2:** Robux **or** Forge Stars.
+- **Prices** (Robux halved from the first draft):
 
-Each one uses a Kenney Blaster Kit shape the levels don't use, in its own sky skin with sparks or flames.
-
-| Weapon | Kenney shape | Opens at rebirth | Power (option A) | Robux (placeholder) | Forge Stars (option 2) |
+| Weapon | Kenney shape | Opens at rebirth | Power | Robux | Forge Stars |
 |---|---|---|---|---|---|
-| Comet Launcher | blaster-h (launcher) | 1 | x1.2 | 149 R$ | 20 |
-| Nebula Twin | blaster-l (twin barrels) | 2 | x1.35 | 249 R$ | 30 |
-| Pulsar Rifle | blaster-f (long rifle) | 3 | x1.5 | 399 R$ | 45 |
-| Supernova Gatling | blaster-o (four barrels) | 5 | x1.65 | 599 R$ | 65 |
-| Singularity Rail | blaster-q (twin rails) | 8 | x1.8 | 899 R$ | 90 |
+| Comet Launcher | blaster-h (launcher) | 1 | x1.2 | 75 R$ | 20 |
+| Nebula Twin | blaster-l (twin barrels) | 2 | x1.35 | 125 R$ | 30 |
+| Pulsar Rifle | blaster-f (long rifle) | 3 | x1.5 | 199 R$ | 45 |
+| Supernova Gatling | blaster-o (four barrels) | 5 | x1.65 | 299 R$ | 65 |
+| Singularity Rail | blaster-q (twin rails) | 8 | x1.8 | 449 R$ | 90 |
 
-The data is in `src/shared/Config/StarBlasterData.luau`. The shapes are KenneyBlaster models 11-15, traced by
-`tools/kenney/blaster_lite.py`; level guns 1-10 are unchanged.
+## How it works
 
-## The owner's choices
+- **Data:** `src/shared/Config/StarBlasterData.luau` holds the list and the rules: unlocked, owns, equipped, mult,
+  quote, buy and cardState. The shapes are KenneyBlaster models 11-15, traced by `tools/kenney/blaster_lite.py`.
+- **Save:**
+  - `RebirthWeapons = { [id] = true }` lists the weapons you own.
+  - `RebirthWeaponPasses = { [id] = true }` lists the ones a pass gave.
+  - `StarBlaster` is the equipped id ("" = the forged blaster).
+  - RebirthConfig.reset never touches these fields. Migrations keeps a newer build's short ids.
+- **Game passes:** MonetizationConfig `StarComet` … `StarSingularity` are built from StarBlasterData, so their
+  prices always match. They have Grant "RebirthWeapon" and a WeaponId. RebirthService registers the handler:
+  - Grant: the weapon is owned and marked as given by the pass. It is equipped when it is open and nothing else is
+    in hand. A pass bought before its rebirth waits, and the card says "Yours! It opens at rebirth N".
+  - A weapon already bought with stars stays a star weapon; the pass never takes it over.
+  - Revoke (a refund) takes back only a weapon the pass gave.
+- **Stars:** RebirthAction `{ Action = "Weapon", Id }` buys with stars once Rebirths ≥ Unlock and equips the weapon.
+  `{ Action = "Equip", Id }` switches weapons ("" = the forged blaster).
+- **In the hand:** ToolService builds `BlasterBuilder.buildStar`. It uses the star's shape and glow, the forged
+  level's Range and Level, and the attribute `Star`; the beam effects use the top tier.
+- **Damage:** MiningService multiplies by `StarBlasterData.mult`. The beam takes the star's Glow.
+- **Window:** the Star Forge gets a 3rd tab, BLASTERS. Each card shows a live 3D gun (ViewportFrame) and
+  ⭐ price + R$ price, EQUIP / EQUIPPED, or 🔒 REBIRTH n. The R$ button shows only once the weapon is open, and it
+  prompts only for a live pass id while the receipts gate is open.
+- **Coins:** the weapons never give coins (the no-Robux-to-coins rule).
+- **Tests:** `tests/StarBlasters.spec.luau`, plus the keep list in `tests/Rebirth.spec.luau` and the pass list in
+  `tests/Step8Receipts.spec.luau`.
 
-**Power**
-- **A (recommended):** the star blaster hits Mult × the damage of the blaster level you forged. It is the best gun at
-  every level, and after a rebirth it doesn't skip the run: the floors still open with your forged level, and the
-  stars still count only Foundry levels.
-- **B:** a fixed power above LV 10 at any level. A rebirth run becomes trivial with it, so it is pay-to-win.
-
-**Earning without Robux**
-- **1:** Robux only.
-- **2 (recommended):** Robux OR Forge Stars in the Star Shop (prices above). Free players get them too, just later.
-- **3:** free at a higher rebirth count (for example Comet at rebirth 3). Robux opens it as early as its own rebirth
-  count.
-
-**Prices**
-- The prices above are placeholders: one-time game passes, owned forever.
-
-## How it works in the game (agreed with the integrator, to build after the picks)
-
-- **Game passes:** one-time passes with Grant "RebirthWeapon" and a WeaponId (MonetizationService.registerPass:
-  granted on every join and on a purchase; a refund takes it back).
-- **Ownership:** data.RebirthWeapons { [id] = true }. RebirthConfig.reset never touches it.
-- **Unlocking:** a weapon can be sold and equipped once Rebirths >= Unlock. A pass bought on the game page before
-  that waits, and its card says "opens at rebirth N".
-- **Equipping:** data.StarBlaster = the equipped id, or "" for your forged blaster. VaultService / ToolService hand
-  it out. Its beam takes the weapon's glow. With power A, the damage is BlasterData.damage(your level) × Mult.
-- **Stars:** star weapons never change what a rebirth pays (RebirthConfig.reachedOf counts Foundry-forged levels).
-- **Coins:** none ever (the no-Robux-to-coins rule).
+The owner still needs to create the 5 game passes on the Creator Dashboard, paste their ids into
+MonetizationConfig and keep them Off Sale until step 8 opens the receipts gate (docs/COMPLIANCE.md 2.6a).

@@ -2,7 +2,7 @@
 	Exports game models that become 3D UI icons (hotbar blaster, ore chunks)
 	to build/preview/icon_parts/<name>.json for tools/preview/render_icons.mjs.
 
-	  lune run tools/lune/export_icon_parts.luau
+	  lune run tools/lune/export_icon_parts.luau [names...]   (no names: every model)
 ]]
 
 local fs = require("@lune/fs")
@@ -84,6 +84,23 @@ local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.Mac
 for _, id in { "StorageCrate", "Anvil", "SellChute" } do
 	if not models["machine_" .. id] then
 		models["machine_" .. id] = MachineBuilder.build(id)
+	end
+end
+
+-- the STAR blasters (the Star Forge's BLASTERS cards; in the game a live ViewportFrame)
+local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
+local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
+for _, star in StarBlasterData.List do
+	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
+end
+
+-- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
+local only = process.args
+if #only > 0 then
+	for name in models do
+		if not table.find(only, name) then
+			models[name] = nil
+		end
 	end
 end
 

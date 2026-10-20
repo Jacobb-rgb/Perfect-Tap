@@ -1,10 +1,10 @@
 --[[
-	The five STAR blasters (Config/StarBlasterData, a proposal for the owner)
+	The five STAR blasters (Config/StarBlasterData, the owner's picks)
 	on a starry stage: scene "star_blasters" for tools/lune/export_scene.luau,
 	shots in tools/preview/star_blasters_shots.json.
 	  each gun floats over a dark pedestal with a glowing ring in its glow
 	  colour, turned toward the camera; a plate under it names it, the
-	  rebirth that opens it and the placeholder prices (R$ / Forge Stars).
+	  rebirth that opens it and its prices (R$ / Forge Stars).
 	The guns are the game's own Kenney shapes (KenneyBlaster.parts, shapes 11-15)
 	with KenneyBlaster's skins, crystals, crown and the level 10 sparks / flames.
 ]]
@@ -21,6 +21,7 @@ function Preview.build(Loader: any, workspace: any)
 	local Enum = roblox.Enum
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
 	local KenneyBlaster = Loader.requirePath("ReplicatedStorage.Shared.Builders.KenneyBlaster")
+	local BlasterBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlasterBuilder")
 	local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 
@@ -93,10 +94,7 @@ function Preview.build(Loader: any, workspace: any)
 			block("Ring", base * CFrame.new(edge[1], 2.43, edge[2]), Vector3.new(edge[3], 0.08, edge[4]), star.Glow, Enum.Material.Neon)
 		end
 		-- the gun, turned to the camera, floating over it
-		local level = 10 + star.Index
-		local ore = if star.Magma then "Emberite" else "StarCore"
-		local skin = KenneyBlaster.skin(level, ore, { Body = star.Body, Glow = star.Glow, Rusty = false })
-		skin.Tier = 1 -- one small crystal cluster: the shape and the glow carry the look
+		local level, ore, skin = BlasterBuilder.starSkin(star) -- the game's own skin
 		local frame = base * CFrame.new(0, 5.4, 0) * CFrame.Angles(0, -math.pi / 2 + 0.3, 0) * CFrame.Angles(0.06, 0, 0)
 		local gun = Instance.new("Model")
 		gun.Name = star.Id
@@ -153,7 +151,7 @@ function Preview.build(Loader: any, workspace: any)
 		plate(
 			base * CFrame.new(0, 0.75, 1.75),
 			Vector3.new(5.6, 0.8, 0.2),
-			{ `REBIRTH {star.Unlock} · R$ {star.Robux}` },
+			{ `REBIRTH {star.Unlock} · R$ {star.Robux} · ⭐ {star.Stars}` },
 			Color3.new(1, 1, 1)
 		)
 	end

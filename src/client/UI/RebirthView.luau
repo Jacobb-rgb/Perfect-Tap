@@ -161,7 +161,7 @@ function RebirthView.lists(perks: any): { [string]: { string } }
 			"🏭  Your whole factory",
 			"🤖  Golems and enchants",
 			"🏺  Artifacts and codex",
-			"🛹  Boards and gear",
+			"🛹  Boards, gear, star blasters",
 			"💎  Shards, Robux items",
 			"💰  Coins bought with Robux",
 			"🏆  Stats and records",
@@ -207,7 +207,7 @@ function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): 
 	if state == "Locked" then
 		return {
 			State = state,
-			Line = `{power} · opens at rebirth {star.Unlock}`,
+			Line = power,
 			Main = `🔒 REBIRTH {star.Unlock}`,
 			Style = "Off",
 			RobuxOn = false,
@@ -343,7 +343,7 @@ end
 	Builds the live gun into a weapon card's ViewportFrame (once; the
 	controller calls it when the BLASTERS page first shows): the game's own
 	star blaster parts (BlasterBuilder.starSkin, KenneyBlaster.parts), seen
-	from the side with the barrel to the right, a little from above.
+	from the side with the barrel to the left, a little from above.
 ]]
 function RebirthView.fillPicture(card: WeaponCard)
 	local star = StarBlasterData.get(card.Id)
@@ -378,8 +378,8 @@ function RebirthView.fillPicture(card: WeaponCard)
 	local radius = math.max(0.5, (hi - lo).Magnitude * 0.5)
 	local camera = Instance.new("Camera")
 	camera.FieldOfView = 30
-	-- from +X the barrel (-Z) points to the right of the picture
-	local from = Vector3.new(1, 0.3, 0.18).Unit * (radius / math.sin(math.rad(15)) * 0.92)
+	-- from -X the barrel (-Z) points to the left of the picture (like the blaster icons)
+	local from = Vector3.new(-1, 0.3, 0.18).Unit * (radius / math.sin(math.rad(15)) * 0.92)
 	camera.CFrame = CFrame.lookAt(center + from, center)
 	camera.Parent = view
 	view.CurrentCamera = camera
