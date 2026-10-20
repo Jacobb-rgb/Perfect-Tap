@@ -1,6 +1,7 @@
 --[[
-	WheelService: the free daily wheel of fortune (step 7, SPIN & WIN in
-	town; every rule and number lives in Shared/Config/WheelConfig).
+	WheelService: the daily wheel of fortune (step 7, SPIN & WIN in town;
+	every rule and number lives in Shared/Config/WheelConfig): the free
+	daily spin and the spins bought with Robux (owner 2026-10-20).
 
 	- EmberChest (tag WheelConfig.Tag, the chest at the top of the SPIN & WIN
 	  stairs inside the SpinWheel model): this service adds a "Spin & Win"
@@ -8,20 +9,40 @@
 	  { Chest }). The screen shows the 8 segments with their exact odds
 	  (and the ore prize's and the capsules' own odds) and the countdown.
 	  The spin itself works from anywhere (the HUD's FREE SPIN! chip).
-	- WheelAction ("Spin"): when WheelConfig.ready(data.Wheel.NextSpinAt):
+	- WheelAction ("Spin"): when the free spin is ready
+	  (WheelConfig.ready(data.Wheel.NextSpinAt)) or the player holds bought
+	  spins (data.Wheel.Spins):
 	    1. the paid-random policy (src/server/Policy.luau; it may yield on the
 	       first ask, so it is asked BEFORE the check and write step): players
 	       who can't buy any capsule spin the wheel with Substitutes
 	       (WheelConfig.segments(CapsuleConfig.allRestricted(restricted)));
-	    2. with no yield from here on: check ready, save NextSpinAt = now +
-	       CooldownSeconds and Stats.WheelSpins + 1 BEFORE granting, pick the
-	       segment (a seeded Random), grant the prize, DataService.changed;
-	    3. WheelResult (Net) tells the client where the wheel stops.
-	  Not ready (or no save): ActionResult { Action = "Wheel", Op = "Spin",
-	  Ok = false, Reason = "NotReady" }. Junk actions are dropped. Two quick
-	  Spins can't both pass: the check and the write happen in one step.
-	  The cooldown and the prize live in the same save, so a crash before the
-	  next autosave loses both together (never a prize without the cooldown).
+	    2. with no yield from here on: check again; the FREE spin first (save
+	       NextSpinAt = now + CooldownSeconds), else ONE bought spin
+	       (Spins - 1; it ignores the cooldown and leaves NextSpinAt alone;
+	       refused with "Restricted" where paid random items are restricted:
+	       the bought spins stay in the save), then Stats.WheelSpins + 1, all
+	       BEFORE granting; pick the segment (a seeded Random), grant the
+	       prize, DataService.changed;
+	    3. WheelResult (Net) tells the client where the wheel stops (Paid,
+	       Spins = bought spins left).
+	  No spin to use (or no save): ActionResult { Action = "Wheel", Op =
+	  "Spin", Ok = false, Reason = "NotReady" | "Restricted" }. Junk actions
+	  are dropped. Two quick Spins can't both pass: the check and the write
+	  happen in one step. The spin used and the prize live in the same save,
+	  so a crash before the next autosave loses both together (never a prize
+	  without the cooldown or the bought spin).
+	- WheelAction ("Buy", { Count = 1 | 5 | 10 }): the BUY SPINS row's
+	  product (WheelConfig.Packs -> MonetizationConfig WheelSpins1/5/10) is
+	  prompted through BoostService.promptPurchase (the policy first: a paid
+	  random item, "Restricted" where restricted; "Full" when the spins held
+	  would pass WheelConfig.MaxSpins; "ComingSoon" while the id is 0 or the
+	  receipts gate is shut), answered with PurchasePrompt { Product, Status }.
+	  Nothing is granted here. Junk counts are dropped.
+	- The "WheelSpins" receipt handler (MonetizationService.register,
+	  registerGrants in init): Spins += the product's Spins, never refused
+	  and never cut (MaxSpins is only the prompt's "Full"; a receipt of a
+	  player who is restricted now still credits: MonetizationService logs
+	  it), a thank-you Notify; MonetizationService saves and records it.
 	- WheelAction ("Reveal"): the wheel screen showed a capsule prize's card
 	  (the client sends it only while the screen is open): the server sends
 	  that spin's CapsuleResult { Free = true } once, so the capsule opening
@@ -56,8 +77,9 @@
 	             value (oreFallbackCoins); no candidate: the Coins segment's
 	             coins (both as WheelResult.Coins)
 	    Shards   Shards.add(data, Amount)
-	  The free spin is not a paid random item (it can't be bought), but its
-	  odds are always shown; no rewards for likes or favorites.
+	  The free spin can't be bought; bought spins make the wheel a paid
+	  random item (WheelConfig header): its odds are always shown, on the
+	  wheel and in Details; no rewards for likes or favorites.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -69,13 +91,17 @@ local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
+local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
 local Bonuses = require(script.Parent.Parent.Bonuses)
+local Guard = require(script.Parent.Parent.Guard)
 local Policy = require(script.Parent.Parent.Policy)
 local Shards = require(script.Parent.Parent.Shards)
+local BoostService = require(script.Parent.BoostService)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local MonetizationService = require(script.Parent.MonetizationService)
 local PenService = require(script.Parent.PenService)
 local PodiumService = require(script.Parent.PodiumService)
 
@@ -130,6 +156,8 @@ export type Result = {
 	DirtyOre: boolean?,
 	Coins: number?,
 	Full: boolean?, -- a capsule prize paid as coins because the golem inventory was full
+	Paid: boolean, -- a bought spin was used (else the free one)
+	Spins: number, -- bought spins left
 }
 
 -- How a free capsule opened (openFree).
@@ -337,28 +365,47 @@ local function grant(player: Player, data: { [string]: any }, segment: WheelConf
 end
 
 --[[
-	The free daily spin for `player` (see the header). Returns the result, or
-	nil + "NotReady". Yields only before the check (the policy answer).
+	One spin for `player` (see the header): the free one when it is ready,
+	else one bought spin. Returns the result, or nil + "NotReady" (no spin to
+	use) / "Restricted" (only bought spins, and paid random items are
+	restricted for this player). Yields only before the check (the policy
+	answer).
 ]]
 function WheelService.spin(player: Player): (Result?, string?)
-	-- a spin that isn't ready never reaches PolicyService (security audit S1)
+	-- nothing to spin never reaches PolicyService (security audit S1)
 	local before = DataService.get(player)
-	if not before or not WheelConfig.ready(record(before, "Wheel").NextSpinAt, math.floor(clock())) then
+	if not before then
+		return nil, "NotReady"
+	end
+	local held = record(before, "Wheel")
+	if not WheelConfig.ready(held.NextSpinAt, math.floor(clock())) and WheelConfig.heldSpins(held) <= 0 then
 		return nil, "NotReady"
 	end
 	local restricted = Policy.paidRandomRestricted(player)
 	local noCapsules = CapsuleConfig.allRestricted(restricted)
-	-- from here on nothing yields: check, save the cooldown, grant
+	-- from here on nothing yields: check, save the spin used, grant
 	local data = DataService.get(player)
 	if not data or not player.Parent then
 		return nil, "NotReady"
 	end
 	local wheel = record(data, "Wheel")
 	local now = math.floor(clock())
-	if not WheelConfig.ready(wheel.NextSpinAt, now) then
-		return nil, "NotReady"
+	local paid = false
+	if WheelConfig.ready(wheel.NextSpinAt, now) then
+		-- the free spin first (restricted players too: it can't be bought)
+		wheel.NextSpinAt = now + WheelConfig.CooldownSeconds
+	else
+		local spins = WheelConfig.heldSpins(wheel)
+		if spins <= 0 then
+			return nil, "NotReady"
+		elseif restricted then
+			-- a paid random item: kept in the save, never spun where restricted
+			return nil, "Restricted"
+		end
+		-- a bought spin ignores the cooldown (NextSpinAt stays)
+		wheel.Spins = spins - 1
+		paid = true
 	end
-	wheel.NextSpinAt = now + WheelConfig.CooldownSeconds
 	bump(data, "WheelSpins")
 	openings[player] = nil -- an older capsule prize's opening never plays after a new spin
 	local segment = WheelConfig.pick(random(), noCapsules)
@@ -367,10 +414,50 @@ function WheelService.spin(player: Player): (Result?, string?)
 		Id = segment.Id,
 		Kind = segment.Kind,
 		NextSpinAt = wheel.NextSpinAt,
+		Paid = paid,
+		Spins = WheelConfig.heldSpins(wheel),
 	}
 	grant(player, data, segment, result, now)
 	DataService.changed(player)
 	return result, nil
+end
+
+---------------------------------------------------------------- bought spins
+
+-- The "WheelSpins" receipt handler: all of the product's spins, never refused
+-- for a big count and never cut (MaxSpins is only the prompt's "Full"). No yield.
+local function grantSpins(player: Player, data: { [string]: any }, entry: MonetizationConfig.Entry): boolean
+	local spins = entry.Spins
+	if type(spins) ~= "number" or spins < 1 or spins ~= math.floor(spins) or DataService.get(player) ~= data then
+		return false
+	end
+	local wheel = record(data, "Wheel")
+	local total = WheelConfig.heldSpins(wheel) + spins
+	wheel.Spins = total
+	Net.fire("Notify", player, {
+		Text = `+{spins} wheel spin{if spins == 1 then "" else "s"}: you have {total}. Thank you!`,
+		Kind = "Reward",
+	})
+	return true
+end
+
+-- Registers the "WheelSpins" receipt handler (init(); idempotent).
+function WheelService.registerGrants()
+	MonetizationService.register("WheelSpins", grantSpins)
+end
+
+-- "Buy" { Count }: prompts the BUY SPINS row's product (the policy, "Full"
+-- and the receipts gate first; PurchasePrompt answers). Returns the status
+-- (nil: no such row, nothing answered).
+function WheelService.buy(player: Player, count: number): string?
+	local pack = WheelConfig.packFor(count)
+	if not pack then
+		return nil
+	end
+	local data = DataService.get(player)
+	local held = if data then WheelConfig.heldSpins(data.Wheel) else 0
+	local full = held + pack.Count > WheelConfig.MaxSpins
+	return BoostService.promptPurchase(player, pack.Product, false, full)
 end
 
 -- "Reveal": the waiting CapsuleResult of this player's capsule prize, once.
@@ -382,9 +469,17 @@ local function reveal(player: Player)
 	end
 end
 
-local function onAction(player: Player, action: any)
+local function onAction(player: Player, action: any, payload: any)
 	if action == "Reveal" then
 		reveal(player)
+		return
+	end
+	if action == "Buy" then
+		local args = Guard.table(payload, 2)
+		local count = if args then Guard.integer(args.Count, 1, 10) else nil
+		if count and WheelConfig.packFor(count) then
+			WheelService.buy(player, count)
+		end
 		return
 	end
 	if action ~= "Spin" then
@@ -473,6 +568,7 @@ WheelService._test = {
 	action = onAction,
 	hookChest = hookChest,
 	open = openView,
+	grantSpins = grantSpins,
 	setClock = function(fn: () -> number)
 		clock = fn
 	end,
@@ -500,6 +596,8 @@ WheelService._test = {
 
 function WheelService.init()
 	Net.on("WheelAction", onAction)
+	-- step 8: the bought spins' receipts
+	WheelService.registerGrants()
 end
 
 function WheelService.start()

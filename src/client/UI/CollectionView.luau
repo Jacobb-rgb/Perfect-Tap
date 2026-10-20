@@ -696,7 +696,7 @@ function CollectionView.build(compact: boolean): Refs
 		TextWrapped = false,
 	})
 	-- the journal (the Prologue is always open), left of the X
-	local journal = UIKit.button(panel, "📜 JOURNAL", Theme.PanelLight, Theme.PanelDark, {
+	local journal = UIKit.button(panel, "JOURNAL", Theme.PanelLight, Theme.PanelDark, {
 		Name = "Journal",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -(m.Close + 20), 0, if compact then 8 else 12),
@@ -1679,7 +1679,7 @@ function CollectionView.menuButton(menu: Instance): MenuRefs
 		LayoutOrder = 30,
 		Size = UDim2.fromOffset(84, 64),
 	})
-	UIKit.label(button, "📖", 26, {
+	UIKit.label(button, "", 26, {
 		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 4),

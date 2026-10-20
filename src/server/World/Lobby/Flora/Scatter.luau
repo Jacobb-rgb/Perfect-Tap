@@ -42,6 +42,9 @@ Scatter.TreeFreeBoxes = {
 	-- the SPIN & WIN wheel's silhouette (behind the ring and beside its sign)
 	-- and its stair base (the Smithy's old spot behind the SHOP stays open)
 	{ Min = Vector2.new(-72, -112), Max = Vector2.new(-24, -38) },
+	-- the bridge garden under and behind THE GREAT FORGE's roof (Plaza/BridgeGarden:
+	-- the pond, the bridge and the stone path to the quarry ramp stay open)
+	{ Min = Vector2.new(-24, -114), Max = Vector2.new(24, -38) },
 	-- the MINE's portal, its yard and lane in the south-west corner (seen
 	-- from the hero camera over the Blaster Vault)
 	{ Min = Vector2.new(-92, 116), Max = Vector2.new(-58, 149) },
@@ -119,8 +122,13 @@ end
 
 type Counts = { Trees: number, Bushes: number, Flowers: number, Boulders: number }
 
+-- the bridge garden (Plaza/BridgeGarden) keeps its own bamboo and lanterns: no bushes or flowers there either
+local function inGarden(p: Vector3): boolean
+	return p.X > -26 and p.X < 26 and p.Z > -116 and p.Z < -36
+end
+
 local function bush(m: Instance, placer: Kit.Placer, counts: Counts, p: Vector3, rng: Rng.Rng, color: Color3?): boolean
-	if counts.Bushes >= Scatter.Limits.Bushes or not Kit.free(placer, p, 2.3) then
+	if counts.Bushes >= Scatter.Limits.Bushes or inGarden(p) or not Kit.free(placer, p, 2.3) then
 		return false
 	end
 	Kit.take(placer, p, 1.8)
@@ -130,7 +138,7 @@ local function bush(m: Instance, placer: Kit.Placer, counts: Counts, p: Vector3,
 end
 
 local function flowers(m: Instance, placer: Kit.Placer, counts: Counts, p: Vector3, rng: Rng.Rng): boolean
-	if counts.Flowers >= Scatter.Limits.Flowers or not Kit.free(placer, p, 2.5) then
+	if counts.Flowers >= Scatter.Limits.Flowers or inGarden(p) or not Kit.free(placer, p, 2.5) then
 		return false
 	end
 	Kit.take(placer, p, 1.6)

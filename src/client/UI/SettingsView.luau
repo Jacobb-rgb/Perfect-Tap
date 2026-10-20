@@ -63,10 +63,10 @@ export type Refs = {
 
 SettingsView.Rows = {
 	-- (no music plays yet: the volume is saved for the soundtrack)
-	{ Id = "Music", Kind = "Volume", Icon = "🎵", Title = "Music", Note = "The soundtrack" },
-	{ Id = "Sfx", Kind = "Volume", Icon = "🔊", Title = "Sounds", Note = "Every game sound" },
-	{ Id = "Shake", Kind = "Toggle", Icon = "📷", Title = "Camera shake", Note = "When rocks crack" },
-	{ Id = "Rumble", Kind = "Toggle", Icon = "🎮", Title = "Gamepad rumble", Note = "Vibration while you blast" },
+	{ Id = "Music", Kind = "Volume", Icon = "", Title = "Music", Note = "The soundtrack" },
+	{ Id = "Sfx", Kind = "Volume", Icon = "", Title = "Sounds", Note = "Every game sound" },
+	{ Id = "Shake", Kind = "Toggle", Icon = "", Title = "Camera shake", Note = "When rocks crack" },
+	{ Id = "Rumble", Kind = "Toggle", Icon = "", Title = "Gamepad rumble", Note = "Vibration while you blast" },
 } :: { RowSpec }
 
 type Metrics = { Width: number, Row: number, Button: number, Toggle: number, Title: number, Note: number, Value: number }

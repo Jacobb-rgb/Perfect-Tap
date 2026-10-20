@@ -94,7 +94,13 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
--- the LIMITED EDITION golem proposals (Config/LimitedGolems; the shop banner's cards)
+-- the 3D banknotes (the HUD's money, the shop's coin packs; in the game live ViewportFrames)
+local CashBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.CashBuilder")
+for name, make in CashBuilder.Pictures do
+	models[name] = make()
+end
+
+-- the LIMITED EDITION golems (Config/LimitedGolems; the shop banner's cards)
 local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
 local GolemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.GolemBuilder")
 for id in LimitedGolems.ById do
