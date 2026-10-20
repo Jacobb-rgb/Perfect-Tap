@@ -99,7 +99,7 @@ function Preview.build(Loader: any, workspace: any)
 		local gun = Instance.new("Model")
 		gun.Name = star.Id
 		gun.Parent = stage
-		local k = 1.25 -- a little bigger than held, so the shapes read on the stage
+		local k = 1.5 -- bigger than held, so the jewels read on the stage
 		local function scaled(cf: any): any
 			return CFrame.new(cf.Position * k) * cf.Rotation
 		end
@@ -138,11 +138,19 @@ function Preview.build(Loader: any, workspace: any)
 			emitter.Size = roblox.NumberSequence.new(if star.Magma then 0.35 else 0.18)
 			emitter.Parent = holder
 		end
+		-- the gun's own glow (BlasterBuilder.buildStar's StarGlow light)
+		local glowLight = Instance.new("PointLight")
+		glowLight.Color = star.Glow
+		glowLight.Range = 8
+		glowLight.Brightness = 1.2
+		local glowHolder = block("GlowLight", frame, Vector3.new(0.1, 0.1, 0.1), star.Glow)
+		glowHolder.Transparency = 1
+		glowLight.Parent = glowHolder
 		-- a soft white fill in front of the gun (its body reads) and a glow light under it
 		local fill = Instance.new("PointLight")
 		fill.Color = Color3.new(1, 1, 1)
 		fill.Range = 12
-		fill.Brightness = 2.2
+		fill.Brightness = 1.3 -- (the jewels glow on their own)
 		local lamp = block("Fill", base * CFrame.new(0, 6.5, 4.5), Vector3.new(0.1, 0.1, 0.1), rgb(255, 255, 255))
 		lamp.Transparency = 1
 		fill.Parent = lamp

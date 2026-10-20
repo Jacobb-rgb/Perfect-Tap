@@ -46,6 +46,17 @@ Pictures:
   `{ Action = "Equip", Id }` switches weapons ("" = the forged blaster).
 - **In the hand:** ToolService builds `BlasterBuilder.buildStar`. It uses the star's shape and glow, the forged
   level's Range and Level, and the attribute `Star`; the beam effects use the top tier.
+- **Jewellery (owner 2026-10-20: "they're paid weapons, they must be mega cool"):** KenneyBlaster Tier 4
+  (BlasterBuilder.starSkin) puts everything LV 10 has on the gun, plus jewels. The extras are added in priority order
+  while the gun stays within MaxParts (90): the crystals and the crown first, then the gems, the side clusters and
+  the gold trim.
+  - On top: a bigger crystal cluster in a gold setting, with two more crystals fanned out.
+  - On each side: crystal clusters.
+  - At the muzzle: a crown of six crystals (every other one in the gem color) on a gold collar.
+  - On the main panel: up to three cut gems in gold bezels (StarBlasterData.Gem: a sapphire, an aquamarine, a
+    topaz, a ruby and a pink rhodolite).
+  - Gold trim inside the glowing rim.
+  - The held tool carries a StarGlow PointLight in the star's color (range 8, no shadows).
 - **Held size:** KenneyBlaster.scale gives a star LV 10's length unless that makes it bigger than the biggest level
   bodies (`KenneyBlaster.StarFit`: 2.3 tall, 1.25 wide, 1.9 behind the hand). The stubby shapes (Nebula, Supernova)
   come out shorter. A KenneyBlaster.spec test keeps every level and star inside that budget. The picture is

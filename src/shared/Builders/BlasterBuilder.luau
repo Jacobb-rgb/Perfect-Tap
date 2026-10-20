@@ -33,6 +33,7 @@ local BlasterBuilder = {}
 
 BlasterBuilder.ToolName = "Blaster"
 BlasterBuilder.MaxParts = KenneyBlaster.MaxParts
+BlasterBuilder.StarLightRange = 8 -- studs: a STAR blaster's own glow
 
 local IRON = Color3.fromRGB(58, 60, 68)
 local IRON_LIGHT = Color3.fromRGB(96, 100, 110)
@@ -247,15 +248,17 @@ end
 
 --[[
 	A STAR blaster's shape and skin: (KenneyBlaster model 11-15, the ore key
-	its skin is made with, the skin). One small crystal cluster (Tier 1):
-	the shape and the glow carry the look.
+	its skin is made with, the skin): Tier 4, the jewellery (KenneyBlaster:
+	a bigger cluster in a gold setting, a crown of six on a gold collar, the
+	star's cut gems in gold bezels, gold trim). They are paid weapons.
 ]]
 function BlasterBuilder.starSkin(star: StarBlasterData.StarBlaster): (number, string, KenneyBlaster.Skin)
 	local model = 10 + star.Index
 	-- (only CaseBuilder.HotOres matters: Emberite burns, StarCore is a cool sky)
 	local ore = if star.Magma then "Emberite" else "StarCore"
 	local skin = KenneyBlaster.skin(model, ore, { Body = star.Body, Glow = star.Glow, Rusty = false })
-	skin.Tier = 1
+	skin.Tier = 4
+	skin.Gem = star.Gem
 	return model, ore, skin
 end
 
@@ -266,7 +269,19 @@ function BlasterBuilder.buildStar(star: StarBlasterData.StarBlaster, level: any,
 	local model, ore, skin = BlasterBuilder.starSkin(star)
 	local tool = newTool(star.Name, lv, oreId, star.Glow)
 	tool:SetAttribute("Star", star.Id)
-	return assemble(tool, model, ore, skin)
+	assemble(tool, model, ore, skin)
+	-- a paid weapon glows: a soft light in its color around the player (no shadows: phones)
+	local handle = tool:FindFirstChild("Handle")
+	if handle then
+		local light = Instance.new("PointLight")
+		light.Name = "StarGlow"
+		light.Color = star.Glow
+		light.Range = BlasterBuilder.StarLightRange
+		light.Brightness = 1.2
+		light.Shadows = false
+		light.Parent = handle
+	end
+	return tool
 end
 
 --[[

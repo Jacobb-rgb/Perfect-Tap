@@ -130,24 +130,33 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("KenneyBlaster: the five STAR blasters stay within the part budget", function()
+	T.test("KenneyBlaster: the five STAR blasters wear their jewels within the part budget", function()
 		local StarBlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.StarBlasterData")
 		for _, star in StarBlasterData.List do
-			local level = BlasterData.MaxLevel + star.Index
-			local skin = KenneyBlaster.skin(
-				level,
-				if star.Magma then "Emberite" else "StarCore",
-				{ Body = star.Body, Glow = star.Glow, Rusty = false }
-			)
-			skin.Tier = 1
-			local count = 0
-			local anchors = KenneyBlaster.parts(level, "StarCore", skin, function(_name, cf, size)
+			local level, ore, skin = BlasterBuilder.starSkin(star)
+			T.eq(skin.Tier, 4, star.Id .. ": the jewellery tier")
+			local count, names = 0, {}
+			local anchors = KenneyBlaster.parts(level, ore, skin, function(name, cf, size)
 				count += 1
+				names[name] = (names[name] or 0) + 1
 				return { CFrame = cf, Size = size } :: any
 			end)
 			T.truthy(count <= KenneyBlaster.MaxParts, `{star.Id}: {count} parts`)
 			T.truthy(anchors.Muzzle.Z < -1, star.Id .. ": the muzzle is ahead of the hand")
+			-- the jewellery: gems in gold bezels, a gold collar, a big cluster, the crown
+			T.truthy((names.Gem or 0) >= 2, `{star.Id}: {names.Gem or 0} gems`)
+			T.eq(names.Gem, names.GemBezel, star.Id .. ": every gem in a bezel")
+			T.eq(names.Collar, 1, star.Id .. ": the gold collar")
+			T.truthy((names.CrownCrystal or 0) >= 4, star.Id .. ": the crown")
+			T.truthy((names.Crystal or 0) >= 5, `{star.Id}: {names.Crystal or 0} crystals`)
 		end
+		-- the levels never get jewels
+		local plain = {}
+		KenneyBlaster.parts(10, "Gold", KenneyBlaster.skin(10, "Gold", BlasterBuilder.look(10, "Gold")), function(name, cf, size)
+			plain[name] = true
+			return { CFrame = cf, Size = size } :: any
+		end)
+		T.falsy(plain.Gem or plain.Collar or plain.GoldTrim, "LV 10 wears no jewels")
 	end)
 
 	-- The held size of a tool's body (Body / Bevel parts; the hand at the origin, the barrel along -Z):
