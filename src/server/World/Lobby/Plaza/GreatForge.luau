@@ -933,7 +933,7 @@ function GreatForge.build(parent: Instance, rng: Rng.Rng)
 		end
 	end
 	if GreatForge.Passage then
-		GreatForge.openPassage(m, frame)
+		GreatForge.openPassage(m, frame, rng)
 	end
 end
 
@@ -944,7 +944,7 @@ end
 	stands warm timber posts on stone feet under the roofs, with beams along
 	the eaves and across the front and the back.
 ]]
-function GreatForge.openPassage(m: Model, frame: CFrame)
+function GreatForge.openPassage(m: Model, frame: CFrame, rng: Rng.Rng)
 	local function at(x: number, y: number, z: number): CFrame
 		return frame * CFrame.new(x, y, z)
 	end
@@ -968,67 +968,125 @@ function GreatForge.openPassage(m: Model, frame: CFrame)
 			child:Destroy()
 		end
 	end
+	-- (owner: "it looks weak, give it proper stone") massive stone pillars on
+	-- stepped feet, stone lintels along the eaves and across both ends, stone
+	-- corbels under the lintels, glowing crystals at the front pillars' feet
 	local frameModel = Style.model("PassageFrame", m)
-	local function post(x: number, z: number, top: number)
-		Style.block(frameModel, at(x, 0.6, z), Vector3.new(2.4, 1.2, 2.4), C.StoneDark, nil, Style.decor())
-		Style.block(frameModel, at(x, (1.2 + top) / 2, z), Vector3.new(1.5, top - 1.2, 1.5), TIMBER, nil, Style.decor())
-		Style.block(frameModel, at(x, top - 0.6, z), Vector3.new(2, 0.5, 2), K.BrickRed, nil, Style.tiny())
-		Style.block(frameModel, at(x, 2.2, z), Vector3.new(1.7, 0.3, 1.7), K.MetalDark, nil, Style.tiny())
+	local STONE = C.Stone
+	local LINTEL = C.StoneDark
+	local function pillar(x: number, z: number, top: number, width: number)
+		Style.block(
+			frameModel,
+			at(x, 0.35, z),
+			Vector3.new(width + 1.2, 0.7, width + 1.2),
+			Style.vary(C.StoneDeep, rng, 0.03),
+			nil,
+			Style.solid()
+		)
+		Style.pillar(frameModel, at(x, 0.7, z), top - 0.7, rng, { Width = width, Color = STONE, Glow = K.NeonOrange })
 	end
-	local wingX = 19.6
+	local function corbel(x: number, z: number, y: number, side: number, alongZ: boolean)
+		-- a stepped stone bracket under a lintel: two blocks, the upper one wider
+		local o = if alongZ then Vector3.new(0, 0, side) else Vector3.new(side, 0, 0)
+		local size1 = if alongZ then Vector3.new(1.6, 0.8, 1.2) else Vector3.new(1.2, 0.8, 1.6)
+		local size2 = if alongZ then Vector3.new(1.4, 0.7, 2.2) else Vector3.new(2.2, 0.7, 1.4)
+		Style.block(frameModel, at(x + o.X * 0.9, y - 1.1, z + o.Z * 0.9), size1, Style.vary(LINTEL, rng, 0.03), nil, Style.tiny())
+		Style.block(frameModel, at(x + o.X * 0.7, y - 0.45, z + o.Z * 0.7), size2, Style.vary(LINTEL, rng, 0.03), nil, Style.tiny())
+	end
+	local wingX = 18.9
+	local frontZ = NAVE_FRONT - 0.2
+	local backZ = WALL_BACK - 0.5
 	for _, s in { -1, 1 } do
-		-- the nave's front and back corners (the passage's opening under the board's beam band)
-		post(s * NAVE, NAVE_FRONT - 0.2, LINTEL_TOP)
-		post(s * NAVE, WALL_BACK - 0.5, NAVE_EAVE)
+		-- the nave's front and back corners: the big pillars of the passage
+		pillar(s * NAVE, frontZ, LINTEL_TOP, 3)
+		pillar(s * NAVE, backZ, NAVE_EAVE, 3)
 		-- the wings' outer eaves: front, middle, back
-		for _, z in { WING_FRONT, (WING_FRONT + WALL_BACK) / 2, WALL_BACK - 0.5 } do
-			post(s * wingX, z, WING_EAVE)
+		for _, z in { WING_FRONT, (WING_FRONT + WALL_BACK) / 2, backZ } do
+			pillar(s * wingX, z, WING_EAVE, 2.4)
+			corbel(s * wingX, z, WING_EAVE - 1, 1, true)
+			corbel(s * wingX, z, WING_EAVE - 1, -1, true)
 		end
-		-- beams along the wing eaves and the nave's sides
+		-- stone lintels along the wing eaves and the nave's sides
 		Style.block(
 			frameModel,
-			at(s * wingX, WING_EAVE - 0.45, (WING_FRONT + WALL_BACK) / 2),
-			Vector3.new(1.2, 0.9, WALL_BACK - WING_FRONT + 1.6),
-			C.WoodDark,
+			at(s * wingX, WING_EAVE - 0.7, (WING_FRONT + WALL_BACK) / 2),
+			Vector3.new(2, 1.4, WALL_BACK - WING_FRONT + 2),
+			Style.vary(LINTEL, rng, 0.03),
 			nil,
 			Style.ghost()
 		)
 		Style.block(
 			frameModel,
-			at(s * NAVE, LINTEL_TOP - 0.45, (NAVE_FRONT + WALL_BACK) / 2),
-			Vector3.new(1.2, 0.9, WALL_BACK - NAVE_FRONT),
-			C.WoodDark,
+			at(s * NAVE, LINTEL_TOP - 0.7, (NAVE_FRONT + WALL_BACK) / 2),
+			Vector3.new(2, 1.4, WALL_BACK - NAVE_FRONT),
+			Style.vary(LINTEL, rng, 0.03),
 			nil,
 			Style.ghost()
 		)
-		-- ties from the nave posts out to the wings
-		for _, z in { WING_FRONT, WALL_BACK - 0.5 } do
+		-- ties from the nave pillars out to the wings
+		for _, z in { WING_FRONT, backZ } do
 			Style.block(
 				frameModel,
-				at(s * (NAVE + wingX) / 2, WING_EAVE - 1.2, z),
-				Vector3.new(wingX - NAVE, 0.6, 0.7),
-				C.WoodDark,
+				at(s * (NAVE + wingX) / 2, WING_EAVE - 1.6, z),
+				Vector3.new(wingX - NAVE, 1, 1.2),
+				Style.vary(LINTEL, rng, 0.03),
 				nil,
 				Style.tiny()
 			)
 		end
+		corbel(s * NAVE, frontZ, LINTEL_TOP - 1, -s, false)
+		corbel(s * NAVE, backZ, NAVE_EAVE - 1, -s, false)
+		-- crystals at the front pillars' feet (outside, toward the banners)
+		Style.crystalCluster(frameModel, at(s * (NAVE + 2.6), 0.6, frontZ + 1.6), 5.2, K.NeonOrange, rng, { Count = 3 })
+		Style.crystalCluster(frameModel, at(s * (wingX - 1.8), 0.5, WING_FRONT - 1.8), 4.2, C.CrystalPurple, rng, { Count = 3 })
 	end
-	-- beams across the front (under the board's beam band) and the back
+	-- heavy stone lintels across the front (under the board's beam band) and the back
 	Style.block(
 		frameModel,
-		at(0, LINTEL_TOP - 0.45, NAVE_FRONT - 0.2),
-		Vector3.new(NAVE * 2 + 1.5, 0.9, 1.2),
-		C.WoodDark,
+		at(0, LINTEL_TOP - 0.7, frontZ),
+		Vector3.new(NAVE * 2 + 3, 1.4, 2),
+		Style.vary(LINTEL, rng, 0.03),
 		nil,
 		Style.ghost()
 	)
-	Style.block(frameModel, at(0, NAVE_EAVE - 0.45, WALL_BACK - 0.5), Vector3.new(NAVE * 2 + 1.5, 0.9, 1.2), C.WoodDark, nil, Style.ghost())
-	-- two fire bowls at the front posts (the forge's fire lives on; ForgeGlow: the ambience spot)
+	Style.block(
+		frameModel,
+		at(0, NAVE_EAVE - 0.7, backZ),
+		Vector3.new(NAVE * 2 + 3, 1.4, 2),
+		Style.vary(LINTEL, rng, 0.03),
+		nil,
+		Style.ghost()
+	)
+	-- a thin orange glow line under the front lintel (the forge's warmth)
+	Style.block(frameModel, at(0, LINTEL_TOP - 1.45, frontZ - 0.6), Vector3.new(NAVE * 2 - 3, 0.18, 0.18), K.NeonOrange, NEON, Style.tiny())
+	-- two stone fire bowls at the front pillars (the forge's fire lives on; ForgeGlow: the ambience spot)
 	for _, s in { -1, 1 } do
-		local base = at(s * (NAVE - 2.4), 0, NAVE_FRONT - 0.5)
-		Style.block(frameModel, base * CFrame.new(0, 0.7, 0), Vector3.new(1.2, 1.4, 1.2), K.MetalDark, nil, Style.decor())
-		Style.block(frameModel, base * CFrame.new(0, 1.65, 0), Vector3.new(2.2, 0.5, 2.2), K.MetalDark, nil, Style.tiny())
-		local fire = Style.block(frameModel, base * CFrame.new(0, 2.15, 0), Vector3.new(1.7, 0.6, 1.7), C.Ember, NEON, Style.tiny())
+		local base = at(s * (NAVE - 2.6), 0, NAVE_FRONT - 0.5)
+		Style.block(
+			frameModel,
+			base * CFrame.new(0, 0.5, 0),
+			Vector3.new(2.2, 1, 2.2),
+			Style.vary(C.StoneDark, rng, 0.03),
+			nil,
+			Style.decor()
+		)
+		Style.block(
+			frameModel,
+			base * CFrame.new(0, 1.3, 0),
+			Vector3.new(1.4, 0.8, 1.4),
+			Style.vary(C.Stone, rng, 0.03),
+			nil,
+			Style.decor()
+		)
+		Style.block(
+			frameModel,
+			base * CFrame.new(0, 2, 0),
+			Vector3.new(2.4, 0.6, 2.4),
+			Style.vary(C.StoneDark, rng, 0.03),
+			nil,
+			Style.tiny()
+		)
+		local fire = Style.block(frameModel, base * CFrame.new(0, 2.5, 0), Vector3.new(1.8, 0.5, 1.8), C.Ember, NEON, Style.tiny())
 		fire.Name = "ForgeGlow"
 		Style.emitter(fire, "Fire", C.Fire, 5)
 		Style.emitter(fire, "Embers", C.Ember, 3)

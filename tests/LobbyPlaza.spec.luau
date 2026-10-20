@@ -748,9 +748,8 @@ return function(T, Loader)
 					if not frame and not part:FindFirstAncestor("Banner") then
 						T.truthy(lo.Y >= cut - 0.01, part.Name .. " stays up in the roof (the passage is open)")
 					end
-					if frame and part.Size.Y > 8 then
-						posts += 1
-						T.truthy(part.CanCollide, "a solid post")
+					if frame and part:FindFirstAncestor("Pillar") and part.Material ~= NEON then
+						T.truthy(part.CanCollide, "solid stone pillars")
 					end
 					if part.Name == "ForgeGlow" then
 						fires += 1
@@ -758,7 +757,12 @@ return function(T, Loader)
 						T.truthy(part.Color.G < 0.45, "deep orange fire")
 					end
 				end
-				T.truthy(posts >= 10, `timber posts carry the roofs ({posts})`)
+				for _, d in forge:GetDescendants() do
+					if d.Name == "Pillar" and d:FindFirstAncestor("PassageFrame") then
+						posts += 1
+					end
+				end
+				T.truthy(posts >= 10, `stone pillars carry the roofs ({posts})`)
 				T.eq(fires, 2, "two fire bowls at the passage")
 			else
 				-- a monumental, walkable flight of stairs up to a raised, tall doorway

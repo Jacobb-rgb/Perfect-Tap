@@ -29,6 +29,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
 local Style = require(script.Parent.Parent.Style)
+local Meadow = require(script.Parent.Parent.Flora.Meadow)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -427,7 +428,25 @@ BridgeGarden.Passage = {
 	},
 	BambooZ = { -90, -105 },
 	LampZ = { -88, -95, -102, -109 },
-	Trees = { { X = 19, Z = -89, Scale = 1.1 }, { X = 19.5, Z = -110, Scale = 1.05 } },
+	Jungle = { { X = 17.5, Z = -90, H = 12, R = 4.4, Pink = true }, { X = 17, Z = -107, H = 15, R = 5.2, Pink = false } },
+	FenceX = 21.3, -- along the forge roads (x +-21.5 .. 30.5), behind the roof
+	FenceZ = { -87, -111 },
+	Crystals = {
+		{ X = -9, Z = -59, Size = 4.3, Color = "Cyan" },
+		{ X = 9.5, Z = -79, Size = 4.6, Color = "Purple" },
+		{ X = -10, Z = -80, Size = 3.5, Color = "Pink" },
+		{ X = 8.8, Z = -97.5, Size = 3.2, Color = "Cyan" },
+		{ X = -8.8, Z = -98.5, Size = 3.5, Color = "Purple" },
+		{ X = 9.5, Z = -110, Size = 4.9, Color = "Amber" },
+		{ X = -9.5, Z = -109.5, Size = 4.3, Color = "Pink" },
+	},
+}
+
+local CRYSTAL = {
+	Cyan = C.CrystalCyan,
+	Purple = C.CrystalPurple,
+	Pink = C.CrystalPink,
+	Amber = C.Fire,
 }
 
 local function hanging(parent: Instance, at: Vector3, top: number, look: Look, light: boolean)
@@ -479,8 +498,164 @@ local function passage(m: Model, look: Look, rng: Rng.Rng)
 		for i, z in P.LampZ do
 			postLantern(m, Vector3.new(side * 4.2, 0, z), look, i == 2)
 		end
-		for k, t in P.Trees do
-			Style.tree(m, CFrame.new(side * t.X, 0, t.Z), look.Trees[k], rng, t.Scale)
+		for _, t in P.Jungle do
+			Meadow.jungleTree(m, Vector3.new(side * t.X, 0, t.Z), t.H, t.R, rng, if t.Pink then Style.TreeKinds.Pink else nil)
+		end
+		-- a timber fence with lantern posts along the forge road, behind the roof
+		local x = side * P.FenceX
+		Style.fence(m, Vector3.new(x, 0, P.FenceZ[1]), Vector3.new(x, 0, P.FenceZ[2]), { Height = 2.4, PostEvery = 4, Caps = true })
+		local z = P.FenceZ[1]
+		while z >= P.FenceZ[2] - 0.1 do
+			Style.block(m, CFrame.new(x, 2.95, z), Vector3.new(0.85, 1, 0.85), look.Lamp, NEON, Style.tiny()).Name = "LanternGlow"
+			Style.block(m, CFrame.new(x, 3.55, z), Vector3.new(1.1, 0.22, 1.1), C.Iron, nil, Style.tiny())
+			z -= 8
+		end
+		-- stone abutments at both ends of the bridge
+		for _, bz in { P.BridgeFrom.Z, P.BridgeTo.Z } do
+			Style.block(
+				m,
+				CFrame.new(side * (BridgeGarden.BridgeWidth / 2 + 0.9), 0.9, bz),
+				Vector3.new(1.8, 1.8, 2.4),
+				Style.vary(C.StoneDark, rng, 0.04),
+				nil,
+				Style.decor()
+			)
+			Style.block(
+				m,
+				CFrame.new(side * (BridgeGarden.BridgeWidth / 2 + 0.9), 1.95, bz),
+				Vector3.new(2.2, 0.3, 2.8),
+				Style.vary(C.Stone, rng, 0.04),
+				nil,
+				Style.tiny()
+			)
+		end
+	end
+	-- stone piers under the deck in the pond
+	for _, t in { 0.33, 0.67 } do
+		local pz = P.BridgeFrom.Z + (P.BridgeTo.Z - P.BridgeFrom.Z) * t
+		Style.block(
+			m,
+			CFrame.new(0, 0.7, pz),
+			Vector3.new(BridgeGarden.BridgeWidth - 1, 1.4, 1.6),
+			Style.vary(C.StoneDark, rng, 0.04),
+			nil,
+			Style.tiny()
+		)
+	end
+	for _, c in P.Crystals do
+		Style.crystalCluster(m, CFrame.new(c.X, 0, c.Z), c.Size, CRYSTAL[c.Color] or C.CrystalPurple, rng, { Count = 3 })
+	end
+	BridgeGarden.lawn(m, rng)
+end
+
+-- The garden's own lawn behind the roof: grass tufts, lusher patches, little
+-- flower beds and mossy rocks, off the path, the ponds, the bamboo and the trees.
+BridgeGarden.LawnArea = { MinX = -20.4, MaxX = 20.4, MinZ = -111, MaxZ = -87 }
+function BridgeGarden.lawnFree(p: Vector3, r: number): boolean
+	local P = BridgeGarden.Passage
+	if math.abs(p.X) < 5.2 + r then
+		return false -- the path and its lanterns
+	end
+	for _, pond in P.SidePonds do
+		if math.abs(p.X - pond.Center.X) < pond.Size.X / 2 + r and math.abs(p.Z - pond.Center.Z) < pond.Size.Y / 2 + r then
+			return false
+		end
+	end
+	for _, z in P.BambooZ do
+		if math.abs(math.abs(p.X) - 6.6) < 2 + r and math.abs(p.Z - z) < 2 + r then
+			return false
+		end
+	end
+	for _, t in P.Jungle do
+		if math.abs(math.abs(p.X) - t.X) < 2.6 + r and math.abs(p.Z - t.Z) < 2.6 + r then
+			return false
+		end
+	end
+	for _, c in P.Crystals do
+		if math.abs(p.X - c.X) < c.Size * 0.4 + r and math.abs(p.Z - c.Z) < c.Size * 0.4 + r then
+			return false
+		end
+	end
+	return true
+end
+
+function BridgeGarden.lawn(parent: Instance, rng: Rng.Rng)
+	local m = Style.model("GardenLawn", parent)
+	local a = BridgeGarden.LawnArea
+	local function spot(r: number): Vector3?
+		for _ = 1, 20 do
+			local p = Vector3.new(rng:range(a.MinX, a.MaxX), 0, rng:range(a.MinZ, a.MaxZ))
+			if BridgeGarden.lawnFree(p, r) then
+				return p
+			end
+		end
+		return nil
+	end
+	-- lusher grass patches (flat, two greens)
+	for i = 1, 12 do
+		local p = spot(1.5)
+		if p then
+			local green = if i % 2 == 0 then C.GrassLight else C.LeafGreen
+			Style.block(
+				m,
+				CFrame.new(p + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, rng:range(0, 1.5), 0),
+				Vector3.new(rng:range(2.4, 4), 0.1, rng:range(2, 3.4)),
+				Style.vary(green, rng, 0.04),
+				nil,
+				Style.tiny()
+			)
+		end
+	end
+	-- grass tufts: three blades
+	for _ = 1, 26 do
+		local p = spot(0.5)
+		if p then
+			for k = -1, 1 do
+				local h = rng:range(0.7, 1.3)
+				Style.block(
+					m,
+					CFrame.new(p + Vector3.new(k * 0.25, h / 2, rng:range(-0.2, 0.2))) * CFrame.Angles(0, 0, k * 0.25),
+					Vector3.new(0.18, h, 0.18),
+					Style.vary(C.GrassDark, rng, 0.06),
+					nil,
+					Style.tiny()
+				)
+			end
+		end
+	end
+	-- flower beds: four blooms on a dark soil pad
+	local blooms = { C.FlowerPink, C.FlowerYellow, C.FlowerWhite, C.FlowerPurple }
+	for i = 1, 6 do
+		local p = spot(1.3)
+		if p then
+			Style.block(m, CFrame.new(p + Vector3.new(0, 0.1, 0)), Vector3.new(2.2, 0.2, 2.2), C.DirtDark, nil, Style.tiny())
+			for k = 1, 4 do
+				local q = p + Vector3.new(rng:range(-0.8, 0.8), 0.45, rng:range(-0.8, 0.8))
+				Style.block(m, CFrame.new(q), Vector3.new(0.45, 0.45, 0.45), blooms[(i + k) % #blooms + 1], nil, Style.tiny())
+			end
+		end
+	end
+	-- mossy rocks
+	for _ = 1, 6 do
+		local p = spot(1.2)
+		if p then
+			local size = rng:range(1.2, 2)
+			Style.block(
+				m,
+				CFrame.new(p + Vector3.new(0, size * 0.35, 0)) * CFrame.Angles(0, rng:range(0, 1.5), 0),
+				Vector3.new(size, size * 0.7, size * 0.9),
+				Style.vary(C.Stone, rng, 0.05),
+				nil,
+				Style.tiny()
+			)
+			Style.block(
+				m,
+				CFrame.new(p + Vector3.new(0, size * 0.72, 0)),
+				Vector3.new(size * 0.8, 0.16, size * 0.7),
+				Style.vary(C.LeafGreenDark, rng, 0.05),
+				nil,
+				Style.tiny()
+			)
 		end
 	end
 end

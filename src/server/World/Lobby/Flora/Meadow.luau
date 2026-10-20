@@ -501,6 +501,9 @@ local function ponds(parent: Instance, index: Index, rng: Rng.Rng)
 	return m
 end
 
+-- (Plaza/BridgeGarden plants the same jungle trees)
+Meadow.jungleTree = jungleTree
+
 local function jungle(parent: Instance, map: Instance, index: Index, rng: Rng.Rng)
 	local m = Style.model("Jungle", parent)
 	local placed: { Vector3 } = {}
