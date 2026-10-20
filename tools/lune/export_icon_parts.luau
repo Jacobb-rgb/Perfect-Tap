@@ -110,6 +110,14 @@ end
 for _, capsule in CapsuleConfig.List do
 	models["capsule_" .. capsule.Id] = GolemBuilder.capsule(capsule.Id)
 end
+-- the upcoming limited editions' golems and every set's shard (previews)
+local LimitedUpcoming = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedUpcoming")
+for _, set in LimitedUpcoming.Sets do
+	for _, golem in set.Golems do
+		models["golem_" .. golem.Id] = GolemBuilder.build(golem.Id)
+	end
+	models["shard_" .. set.Id] = GolemBuilder.shard(set.Id, nil, set.Backdrop.Ground, set.Backdrop.Accent)
+end
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args
