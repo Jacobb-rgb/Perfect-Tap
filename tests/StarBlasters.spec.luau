@@ -252,26 +252,39 @@ return function(T, Loader)
 		local comet = MonetizationConfig.get("StarComet")
 		T.truthy(grant(w.player, w.data, comet))
 		T.eq(w.data.StarBlaster, "Comet")
+		T.truthy(string.find(w.notes[#w.notes], "equipped", 1, true), "it says it is equipped already")
 		-- a live pass not checked yet: no stars are spent on it ("Checking")
 		w.data.Rebirths = 3
 		w.data.Stars = 50
 		local pulsar = MonetizationConfig.get("StarPulsar")
 		local knownNow = false
-		local oldId, oldKnown = pulsar.Id, rawget(MonetizationService, "known")
+		local roundDone = false
+		local oldId, oldKnown, oldChecked = pulsar.Id, rawget(MonetizationService, "known"), rawget(MonetizationService, "passesChecked")
 		pulsar.Id = 4242
 		rawset(MonetizationService, "known", function(p, key)
 			return p == w.player and key == "StarPulsar" and knownNow
+		end)
+		rawset(MonetizationService, "passesChecked", function(p)
+			return p == w.player and roundDone
 		end)
 		local ok, err = pcall(function()
 			RebirthService._test.action(w.player, { Action = "Weapon", Id = "Pulsar" })
 			T.eq(w.results[#w.results].Reason, "Checking")
 			T.eq(w.data.Stars, 50, "nothing spent")
+			-- the first round is over but this pass's check kept failing: never "Checking" all session
+			roundDone = true
+			local before = { Stars = w.data.Stars, StarBlaster = w.data.StarBlaster }
+			T.truthy(RebirthService.buyWeapon(w.player, "Pulsar"), "not blocked once the first round is done")
+			w.data.RebirthWeapons.Pulsar = nil -- (undone: the answered check below buys it again)
+			w.data.Stars, w.data.StarBlaster = before.Stars, before.StarBlaster
+			roundDone = false
 			knownNow = true
 			RebirthService._test.action(w.player, { Action = "Weapon", Id = "Pulsar" })
 			T.truthy(w.results[#w.results].Ok, "the check answered: stars work")
 		end)
 		pulsar.Id = oldId
 		rawset(MonetizationService, "known", oldKnown)
+		rawset(MonetizationService, "passesChecked", oldChecked)
 		if not ok then
 			error(err, 0)
 		end

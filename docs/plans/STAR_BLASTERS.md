@@ -6,6 +6,7 @@ you paid for isn't fair.
 
 Pictures:
 - `build/preview/shots/star_lineup.jpg`: all five (scene `star_blasters`, `tools/lune/lib/star_blasters_preview.luau`)
+- `build/preview/shots/star_held.jpg`, `star_held_front.jpg`: LV 10 and the five held (scene `star_blasters_held`)
 - `build/preview/shots/rebirth_blasters_pc_light.jpg`, `rebirth_blasters_phone_light.jpg`: the Star Forge's
   BLASTERS tab (scene `rebirth`, `LIGHT_UI=1`). The card pictures are the icons `star_<id>`
   (`lune run tools/lune/export_icon_parts.luau star_Comet ...`, then `node tools/preview/render_icons.mjs star_Comet ...`).
@@ -45,6 +46,10 @@ Pictures:
   `{ Action = "Equip", Id }` switches weapons ("" = the forged blaster).
 - **In the hand:** ToolService builds `BlasterBuilder.buildStar`. It uses the star's shape and glow, the forged
   level's Range and Level, and the attribute `Star`; the beam effects use the top tier.
+- **Held size:** KenneyBlaster.scale gives a star LV 10's length unless that makes it bigger than the biggest level
+  bodies (`KenneyBlaster.StarFit`: 2.3 tall, 1.25 wide, 1.9 behind the hand). The stubby shapes (Nebula, Supernova)
+  come out shorter. A KenneyBlaster.spec test keeps every level and star inside that budget. The picture is
+  `build/preview/shots/star_held.jpg` (scene `star_blasters_held`: LV 10 and the five in a dummy's hand).
 - **Damage:** MiningService multiplies by `StarBlasterData.mult`. The beam takes the star's Glow.
 - **Window:** the Star Forge gets a 3rd tab, BLASTERS. Each card shows a live 3D gun (ViewportFrame) and
   ⭐ price + R$ price, EQUIP / EQUIPPED, or 🔒 REBIRTH n. The R$ button shows only once the weapon is open, and it
