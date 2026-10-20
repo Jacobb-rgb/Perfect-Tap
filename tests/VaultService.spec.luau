@@ -222,15 +222,22 @@ return function(T, Loader)
 		T.eq(w.data.Stats.RunPaid, true, "this rebirth run is paid (no stars for it)")
 		local r = results(w)[#results(w)]
 		T.truthy(r.Ok and r.Paid and r.Level == 3, "the crate opening plays (Paid)")
-		-- off band (a stale or client-made prompt): its Robux are banked, never a level from a cheaper band now
-		-- (with no band entries in MonetizationConfig nothing converts: the credit just waits)
+		-- off band (a stale or client-made prompt): its Robux are banked, never a level from a cheaper band now;
+		-- the STORE's band entries (MonetizationConfig BlasterNextA-D, ui/store) turn the credit into a
+		-- start lift at the band's price (without them nothing converts: the credit just waits)
 		w.data.BlasterLevel = 9
 		bandA.Robux = 49
 		T.eq(VaultService.paidStatus(w.data, bandA), "Full")
 		T.truthy(vault.grantPaid(w.player, w.data, bandA), "the receipt is still taken (never a retry loop)")
 		T.eq(w.data.BlasterLevel, 9, "band A never buys LV 10")
-		T.eq(w.data.Stats.BlastersPaid, 1, "no lift without a band price to check")
-		T.eq(w.data.Stats.BlasterCredit, 49, "banked")
+		local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+		if MonetizationConfig.get("BlasterNextA") then
+			T.eq(w.data.Stats.BlastersPaid, 2, "the banked 49 R$ lift a later start at band A's price")
+			T.eq(w.data.Stats.BlasterCredit, 0, "spent")
+		else
+			T.eq(w.data.Stats.BlastersPaid, 1, "no lift without a band price to check")
+			T.eq(w.data.Stats.BlasterCredit, 49, "banked")
+		end
 		w.data.BlasterLevel = BlasterData.MaxLevel
 		T.eq(VaultService.paidStatus(w.data, bandD), "Full", "the store hides it at the top")
 		-- a save that isn't this player's live one is left to MonetizationService (not processed yet)
