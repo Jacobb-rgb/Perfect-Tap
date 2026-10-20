@@ -186,12 +186,14 @@ return function(T, Loader)
 	end)
 
 	withWorld("VaultService: buying the next level takes the coins and gives the blaster", function(w)
-		w.data.Coins = 1e12
+		-- enough for every level up to the top (4 x the forge curve)
+		local start = 1e13
+		w.data.Coins = start
 		local r = buy(w, { Level = 2 })
 		T.eq(r.Ok, true, "bought")
 		T.eq(w.data.BlasterLevel, 2, "new level")
 		T.eq(w.data.BlasterOre, BlasterData.vaultOre(2), "the case's ore look")
-		T.eq(w.data.Coins, 1e12 - BlasterData.vaultPrice(2), "paid")
+		T.eq(w.data.Coins, start - BlasterData.vaultPrice(2), "paid")
 		T.eq(w.data.Stats.BlastersBought, 1, "counted")
 		T.eq(r.Name, BlasterData.displayName(2, BlasterData.vaultOre(2)), "the name for the cinematic")
 		T.truthy(w.changed > 0, "the save changed")

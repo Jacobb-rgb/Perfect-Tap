@@ -26,6 +26,25 @@ Waiting for the owner: the flat 3h-5h stretch (option 3 Tech Speed/Quality upgra
 between 4 and 5, or both). The Foundry curve is re-calibrated to ~8 h after that choice, and the Quality upgrade
 prices go up whichever option is picked.
 
+## Foundry curve on the real 6 floors (2026-10-20, applied)
+
+Calibrated on the live `MineFloors.List` (Stormglass Rift as floor 5, gate 8) with the option 3 Tech curves modelled
+(the sim buys them by default now): BlasterData `Recipe.Coins` L2–L10 = **350 / 17K / 710K / 2.1M / 73M / 130M / 2.2B /
+31B / 290B** (the elevator follows: 2/3 of L7 ≈ 87M; the coin hoverboards follow their levels).
+
+| Milestone | Typical (50 %) | Skilled (80 %) | Casual (30 %) |
+|---|---|---|---|
+| Blaster 2 | 3m 00s | 2m 10s | 4m 15s |
+| Blaster 4 | 27m 20s | 20m 25s | 35m 00s |
+| Blaster 6 | 1h 20m | 1h 00m | 1h 47m |
+| Elevator / floor 4 | 2h 21m | 1h 48m | 3h 13m |
+| Blaster 8 / Stormglass Rift | 3h 16m | 2h 25m | 4h 40m |
+| Blaster 9 / Heartstone Core | 5h 00m | 3h 30m | 7h 11m |
+| Blaster 10 | **8h 00m** | 5h 26m | after 10 h |
+
+Income 3h → 5h (typical): 0.79M/s → 5.2M/s (×6.6: no flat stretch any more). Tech upgrades of the typical player:
+Auto Cleaner Speed I 27 min, Quality I 46 min, II 1h21, III 2h34, IV 5h01; Crusher Speed I 2h00.
+
 ## Option 3 (pricier Tech upgrades) and the 6-floor tables (2026-10-20)
 
 The owner picked both fixes for the flat 3h–5h stretch: option 3 (pricier Tech Speed / Quality upgrades, this change)
