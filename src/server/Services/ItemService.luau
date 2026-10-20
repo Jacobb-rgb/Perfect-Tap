@@ -126,6 +126,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local ArtifactConfig = require(Shared.Config.ArtifactConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
@@ -437,7 +438,8 @@ end
 
 local function syncAttributes(record: ItemRecord)
 	local m = record.Model
-	local raw = record.Kind == "Raw"
+	-- dirty ore and dusty relics keep their secret until they are cleaned
+	local raw = record.Kind == "Raw" or record.Kind == "Relic"
 	m:SetAttribute("Kind", record.Kind)
 	m:SetAttribute("Owner", record.Owner)
 	m:SetAttribute("State", record.State)
@@ -447,7 +449,7 @@ local function syncAttributes(record: ItemRecord)
 	m:SetAttribute("Grade", record.Grade)
 	m:SetAttribute("Recipe", record.Recipe)
 	m:SetAttribute("Value", if raw then nil else ItemData.value(record.Kind, record.OreId, record.Grade, record.Recipe))
-	local name = if raw then RAW_NAME else record.Kind .. "_" .. record.OreId
+	local name = if record.Kind == "Relic" then "Relic" elseif raw then RAW_NAME else record.Kind .. "_" .. record.OreId
 	if m.Name ~= name then
 		m.Name = name
 	end
@@ -835,6 +837,21 @@ end
 	toast. Everything the player or their automation puts in goes through
 	PenService, which refuses at the capacity (and while the pen is over it).
 ]]
+-- Who takes a dusty relic that a rescue move would store (ArtifactService:
+-- it is cleaned on the way, the artifact goes into the collection).
+local relicKeeper: ((Player, string, Vector3?) -> boolean)? = nil
+
+function ItemService.setRelicKeeper(keeper: ((Player, string, Vector3?) -> boolean)?)
+	relicKeeper = keeper
+end
+
+-- Cleans a dusty relic of `player` through the keeper (the Cleaning Station):
+-- true when its artifact went into the collection.
+function ItemService.keepRelic(player: Player, artifactId: string, position: Vector3?): boolean
+	local keeper = relicKeeper
+	return keeper ~= nil and keeper(player, artifactId, position)
+end
+
 function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): StoreResult
 	local data = DataService.get(player)
 	if not data then
@@ -843,6 +860,14 @@ function ItemService.storeDesc(player: Player, desc: Desc, reason: string?): Sto
 	if type(desc) ~= "table" or type(desc.K) ~= "string" or type(desc.O) ~= "string" then
 		warn("[ItemService] storeDesc got a bad item for " .. player.Name)
 		return "Lost"
+	end
+	-- a dusty relic never waits in the pen: the keeper cleans it on the way
+	-- (nothing is lost); without a keeper it waits there as data
+	if desc.K == "Relic" then
+		local keeper = relicKeeper
+		if keeper and keeper(player, desc.O) then
+			return "Stored"
+		end
 	end
 	local result: StoreResult
 	local value = 0
@@ -928,7 +953,9 @@ local function wearParked(entry: Parked, info: ItemBuilder.ItemInfo, cf: CFrame,
 end
 
 local function create(info: ItemBuilder.ItemInfo, owner: number, cf: CFrame, velocity: Vector3?, serverOwned: boolean): ItemRecord?
-	if not OreData.exists(info.OreId) or not ItemData.Kinds[info.Kind] then
+	-- a dusty relic carries an artifact id where ore carries its ore
+	local known = if info.Kind == "Relic" then ArtifactConfig.ById[info.OreId] ~= nil else OreData.exists(info.OreId)
+	if not known or not ItemData.Kinds[info.Kind] then
 		warn("[ItemService] bad item info", info.Kind, info.OreId)
 		return nil
 	end

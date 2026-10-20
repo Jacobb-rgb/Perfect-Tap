@@ -371,6 +371,12 @@ local function onIntake(plotId: number, record: ItemRecord)
 		bounceOut(plotId, record)
 		return
 	end
+	-- a dusty relic is cleaned, never stored (ArtifactService)
+	if record.Kind == "Relic" then
+		bounceOut(plotId, record)
+		toast(owner, ItemData.RelicRefused, "Info")
+		return
+	end
 	local why = PenService.refusal(data)
 	if why then
 		bounceOut(plotId, record)
@@ -417,7 +423,10 @@ local function putIn(player: Player, plotId: number): string?
 		if PenService.refusal(data) then
 			break
 		end
-		local record = CarryService.takeTop(player)
+		-- (a dusty relic stays in the hands: it is cleaned, never stored)
+		local record = CarryService.takeTop(player, function(r: ItemRecord): boolean
+			return r.Kind ~= "Relic"
+		end)
 		if not record then
 			break
 		end

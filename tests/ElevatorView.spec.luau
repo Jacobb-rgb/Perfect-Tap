@@ -38,7 +38,7 @@ return function(T, Loader)
 		T.truthy(refs.Panel.ClipsDescendants, "the doors stay inside the frame")
 		T.eq(refs.Close.Parent, refs.CloseLook.Holder, "X on its lip")
 		T.eq(refs.CloseLook.Style, "Close", "red X")
-		T.eq(refs.Caption.Text, "Floors 4 and 5 can only be reached by elevator.", "caption")
+		T.eq(refs.Caption.Text, "Floors 4, 5 and 6 can only be reached by elevator.", "caption")
 	end)
 
 	T.test("ElevatorView: BUY is greyed out with a lock until you can afford it", function()
@@ -65,23 +65,26 @@ return function(T, Loader)
 
 	T.test("ElevatorView: floor entries follow the blaster level and the floor you are on", function()
 		local list = ElevatorView.entries(5, 2)
-		T.eq(#list, 6, "five floors and coming soon")
+		T.eq(#list, 7, "six floors and coming soon")
 		local states = {}
 		for i, entry in list do
 			states[i] = entry.State
 		end
-		T.eq(table.concat(states, ","), "Open,Here,Open,Locked,Locked,Soon", "states")
+		T.eq(table.concat(states, ","), "Open,Here,Open,Locked,Locked,Locked,Soon", "states")
 		T.eq(list[4].Requirement, "Blaster 7+", "requirement text")
 		T.eq(list[4].Name, MineFloors.get(4).Name, "name")
-		T.truthy(list[4].ElevatorOnly and list[5].ElevatorOnly, "4 and 5 by elevator only")
+		T.eq(list[5].Name, "Stormglass Rift", "the Rift is floor 5")
+		T.eq(list[5].Requirement, "Blaster 8+", "the Rift's gate")
+		T.eq(list[6].Name, "Heartstone Core", "the core is floor 6")
+		T.truthy(list[4].ElevatorOnly and list[5].ElevatorOnly and list[6].ElevatorOnly, "4-6 by elevator only")
 		T.falsy(list[1].ElevatorOnly or list[2].ElevatorOnly or list[3].ElevatorOnly, "1-3 walkable")
-		T.eq(list[6].Name, "Coming soon")
-		T.eq(list[6].Index, MineFloors.ComingSoon.Index)
-		T.eq(list[6].Requirement, "Blaster " .. MineFloors.ComingSoon.MinBlaster .. "+")
-		for i = 1, 5 do
+		T.eq(list[7].Name, "Coming soon")
+		T.eq(list[7].Index, MineFloors.ComingSoon.Index)
+		T.eq(list[7].Requirement, "Blaster " .. MineFloors.ComingSoon.MinBlaster .. "+")
+		for i = 1, 6 do
 			T.eq(list[i].Color, ElevatorView.FloorColors[i], "floor colour " .. i)
 		end
-		T.eq(list[6].Color, ElevatorView.SoonColor, "grey coming soon")
+		T.eq(list[7].Color, ElevatorView.SoonColor, "grey coming soon")
 		T.truthy(list[3].Met, "level 5 meets floor 3")
 		T.falsy(list[4].Met, "level 5 doesn't meet floor 4")
 		-- junk level reads as 1; no floor = nothing is "here"
@@ -89,10 +92,12 @@ return function(T, Loader)
 		T.eq(fresh[1].State, "Open", "floor 1 always open")
 		T.eq(fresh[2].State, "Locked", "floor 2 locked at 1")
 		local maxed = ElevatorView.entries(10, nil)
-		for i = 1, 5 do
+		for i = 1, 6 do
 			T.eq(maxed[i].State, "Open", "all open at 10: " .. i)
 		end
-		T.eq(maxed[6].State, "Soon", "coming soon stays locked")
+		T.eq(maxed[7].State, "Soon", "coming soon stays locked")
+		T.eq(ElevatorView.entries(8, nil)[5].State, "Open", "blaster 8 opens the Rift")
+		T.eq(ElevatorView.entries(8, nil)[6].State, "Locked", "but not the core")
 	end)
 
 	T.test("ElevatorView: the cards look like the mock", function()
@@ -106,9 +111,9 @@ return function(T, Loader)
 			texts[i] = card.Look.Label.Text
 			styles[i] = card.Look.Style
 		end
-		T.eq(table.concat(texts, ","), "GO,GO,YOU ARE HERE,GO,LOCKED,COMING SOON", "button texts")
-		T.eq(table.concat(styles, ","), "Go,Go,Here,Go,Locked,Soon", "button styles")
-		local icons = { "Arrow", "Arrow", "Pin", "Arrow", "Lock", "Clock" }
+		T.eq(table.concat(texts, ","), "GO,GO,YOU ARE HERE,GO,LOCKED,LOCKED,COMING SOON", "button texts")
+		T.eq(table.concat(styles, ","), "Go,Go,Here,Go,Locked,Locked,Soon", "button styles")
+		local icons = { "Arrow", "Arrow", "Pin", "Arrow", "Lock", "Lock", "Clock" }
 		for i, card in refs.Cards do
 			T.eq(card.Button.Selectable, card.Entry.State == "Open", "selectable only when open: " .. card.Index)
 			T.truthy(card.Look.Icons[icons[i]].Visible, "button icon " .. icons[i])
@@ -117,17 +122,20 @@ return function(T, Loader)
 		T.truthy(refs.Cards[3].Glow.Visible, "the current floor glows")
 		T.falsy(refs.Cards[1].Glow.Visible, "the others don't")
 		T.eq(refs.Cards[3].Stroke.Thickness, 4, "brighter, thicker frame")
-		T.eq(refs.Cards[5].Chip.Text, "Blaster 9+", "pill")
+		T.eq(refs.Cards[5].Chip.Text, "Blaster 8+", "pill")
+		T.eq(refs.Cards[6].Chip.Text, "Blaster 9+", "pill")
 		T.truthy(midColor(refs.Cards[5].ChipGradient).R > 0.8, "unmet pill is red")
 		T.truthy(midColor(refs.Cards[1].ChipGradient).G > 0.6, "met pill is green")
-		T.eq(midColor(refs.Cards[6].ChipGradient), ElevatorView.SoonColor, "coming soon pill is grey")
+		T.eq(midColor(refs.Cards[7].ChipGradient), ElevatorView.SoonColor, "coming soon pill is grey")
 		T.eq(refs.Cards[1].ModeText.Text, "Walk or ride")
 		T.truthy(refs.Cards[1].ModeIcons.Walk.Visible, "walker")
 		T.eq(refs.Cards[4].ModeText.Text, "Elevator only")
 		T.truthy(refs.Cards[4].ModeIcons.Crown.Visible, "crown")
-		T.eq(refs.Cards[6].ModeText.Text, "Next update")
-		T.truthy(refs.Cards[6].ModeIcons.Clock.Visible, "clock")
-		T.eq(refs.Cards[6].Number.Text, "?", "coming soon badge")
+		T.eq(refs.Cards[7].ModeText.Text, "Next update")
+		T.truthy(refs.Cards[7].ModeIcons.Clock.Visible, "clock")
+		T.eq(refs.Cards[7].Number.Text, "?", "coming soon badge")
+		T.eq(refs.Cards[5].Name.Text, "Stormglass Rift", "the Rift's card")
+		T.truthy(refs.Cards[5].Canvas:FindFirstChild("Bolt") and refs.Cards[5].Canvas:FindFirstChild("Belly"), "the Rift's art: a storm cloud and a bolt")
 		T.eq(refs.Cards[4].Name.Text, MineFloors.get(4).Name, "floor name")
 		T.eq(ElevatorView.firstGo(refs), refs.Cards[1].Button, "first GO for the gamepad")
 		for _, card in refs.Cards do
@@ -184,18 +192,32 @@ return function(T, Loader)
 		T.truthy(refs.HintIcons.Touch.Visible, "tap icon")
 	end)
 
-	-- every card's badge and button fit inside the card, cards inside the panel
+	-- every card's badge, name and button fit inside the card; the cards fit the page's width
+	-- (no sideways scroll), the first two rows show without scrolling, the rest is in the
+	-- scroll's canvas; the page sits inside the panel
 	local function checkCards(refs: any, label: string)
 		local pw, ph = panelSize(refs)
-		for _, card in refs.Cards do
+		local page = refs.FloorPage
+		local pageW = pw + page.Size.X.Offset
+		local pageH = ph + page.Size.Y.Offset
+		T.truthy(page.Position.X.Offset >= 0 and page.Position.X.Offset + pageW <= pw + 0.5, label .. ": page inside the panel width")
+		T.truthy(page.Position.Y.Offset >= 0 and page.Position.Y.Offset + pageH <= ph + 0.5, label .. ": page inside the panel height")
+		local canvasH = math.max(refs.FloorScroll.CanvasSize.Y.Offset, pageH)
+		for i, card in refs.Cards do
 			local f = card.Frame
 			local w, h = f.Size.X.Offset, f.Size.Y.Offset
-			local x = f.Position.X.Offset - w / 2 + refs.FloorPage.Position.X.Offset
-			local y = f.Position.Y.Offset - h / 2 + refs.FloorPage.Position.Y.Offset
-			T.truthy(x >= 0 and x + w <= pw + 0.5, label .. ": card inside the panel width " .. card.Index)
-			T.truthy(y >= 0 and y + h <= ph + 0.5, label .. ": card inside the panel height " .. card.Index)
+			local x = f.Position.X.Offset - w / 2
+			local y = f.Position.Y.Offset - h / 2
+			T.truthy(x >= 0 and x + w <= pageW + 0.5, label .. ": card inside the page width " .. card.Index)
+			T.truthy(y >= 0 and y + h <= canvasH + 0.5, label .. ": card inside the scroll canvas " .. card.Index)
+			if math.floor((i - 1) / refs.Columns) < 2 then
+				T.truthy(y + h <= pageH + 0.5, label .. ": card shows without scrolling " .. card.Index)
+			end
 			local bh = card.Look.Holder.Size.Y.Offset
 			T.le(12 + card.Badge.Size.Y.Offset + bh + 12, h, label .. ": badge + button fit card " .. card.Index)
+			local room = w - (12 + card.Badge.Size.Y.Offset + 12) - 10
+			T.le(ElevatorView.measure(card.Name.Text, card.Name.TextSize), room + 0.5, label .. ": the name fits card " .. card.Index)
+			T.truthy(card.Name.TextSize >= ElevatorView.MinNameSize, label .. ": the name stays readable " .. card.Index)
 		end
 	end
 
@@ -210,6 +232,10 @@ return function(T, Loader)
 		T.le(w, 1280 - 24, "Floors width")
 		T.le(h, 690 - 16, "Floors height")
 		checkCards(refs, "PC")
+		T.eq(refs.Columns, 4, "PC: four cards a row (4 + 3)")
+		T.falsy(refs.FloorScroll.ScrollingEnabled, "PC: every card shows, nothing scrolls")
+		local first, last = refs.Cards[5].Frame.Position.X.Offset, refs.Cards[7].Frame.Position.X.Offset
+		T.truthy(first > refs.Cards[1].Frame.Position.X.Offset and last < refs.Cards[4].Frame.Position.X.Offset, "PC: the short last row sits in the middle")
 		T.truthy(refs.Footer.Visible, "footer pill on PC")
 	end)
 
@@ -231,6 +257,10 @@ return function(T, Loader)
 			T.truthy(card.Look.Holder.Size.Y.Offset >= 72, "card button is a thumb target " .. card.Index)
 		end
 		checkCards(refs, "phone")
+		T.eq(refs.Columns, 3, "phone: three cards a row")
+		T.truthy(refs.FloorScroll.ScrollingEnabled, "phone: the last row scrolls into view")
+		T.eq(refs.FloorScroll.ScrollingDirection, roblox.Enum.ScrollingDirection.Y, "up and down only")
+		T.falsy(refs.FloorScroll.Selectable, "the gamepad selects the buttons, not the scroll")
 		T.falsy(refs.Footer.Visible, "no key hint on phones")
 		-- a small 568 x 320 pt phone still fits (smaller cards, no mode line)
 		local smallW, smallH = 568 / 0.62, (320 - 36) / 0.62
@@ -260,7 +290,7 @@ return function(T, Loader)
 		T.truthy(refs.DoorLeft.Position.X.Scale < 0 and refs.DoorLeft.Position.X.Scale > -0.56, "doors parting")
 		T.truthy(refs.Pop.Scale > 1, "overshoot")
 		T.truthy(refs.Cards[1].Frame.Visible, "first card dropping")
-		T.falsy(refs.Cards[6].Frame.Visible, "last card waits")
+		T.falsy(refs.Cards[#refs.Cards].Frame.Visible, "last card waits")
 		local dropping = refs.Cards[1].Frame.Position.Y.Offset < refs.DropIns.Floors[1].Base.Y.Offset
 		T.truthy(dropping, "the first card comes from above")
 		ElevatorView.pose(refs, ElevatorView.OpenTime)

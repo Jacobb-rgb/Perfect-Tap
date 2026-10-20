@@ -287,7 +287,7 @@ LightingConfig.Presets = {
 		Bloom = { Intensity = 1.05, Size = 32, Threshold = 0.92 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
-	-- Floor 5, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
+	-- Floor 6, Heartstone Core: floating rocks in a starry violet void, pink heart glow.
 	Core = {
 		Lighting = {
 			Brightness = 0.3,
@@ -321,6 +321,34 @@ LightingConfig.Presets = {
 			Sun = Color3.fromRGB(255, 120, 190),
 			MidAngle = 22,
 		},
+	},
+	-- Floor 5, Stormglass Rift: a dark indigo storm cavern lit by yellow-white lightning,
+	-- cool navy shadows.
+	Storm = {
+		Lighting = {
+			Brightness = 0.35,
+			Ambient = Color3.new(0.26, 0.28, 0.4),
+			OutdoorAmbient = Color3.new(0.12, 0.14, 0.22),
+			ExposureCompensation = 0.5,
+			EnvironmentDiffuseScale = 0.2,
+			EnvironmentSpecularScale = 1,
+		},
+		Atmosphere = {
+			Density = 0.38,
+			Offset = 0,
+			Color = Color3.new(0.2, 0.24, 0.4),
+			Decay = Color3.new(0.1, 0.12, 0.26),
+			Glare = 0,
+			Haze = 2,
+		},
+		ColorCorrection = {
+			Brightness = 0.03,
+			Contrast = 0.22,
+			Saturation = 0.3,
+			TintColor = Color3.new(0.96, 0.98, 1),
+		},
+		Bloom = { Intensity = 1.1, Size = 32, Threshold = 0.9 },
+		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 	-- Close-up while cleaning ore: soft focus, extra warmth.
 	Workbench = {

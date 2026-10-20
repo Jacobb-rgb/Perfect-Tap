@@ -8,14 +8,16 @@
 	           subtitle ("Your blaster: Lv 7. ..." with "Lv 7" in yellow);
 	           a red X top-right; a footer pill with the control hint
 	           ("Click GO to ride · Backspace: close") hanging on the bottom edge
-	  Floors   (owned) a card per floor, 3 x 2: a coloured frame per floor,
+	  Floors   (owned) a card per floor and Coming soon: 4 + 3 when the panel
+	           is wide enough (PC), else 3 columns that scroll (phones: two
+	           rows show, the last row is a swipe away); a coloured frame per floor,
 	           a big number badge, the name, a "Blaster 7+" pill (green when
 	           your blaster is enough, red when not, grey for Coming soon), a
 	           mode line (walker "Walk or ride", crown "Elevator only", clock
 	           "Next update"), themed art on the right half and the card's
 	           button: "→ GO" / pin "YOU ARE HERE" / lock "LOCKED" / clock
-	           "COMING SOON" (the sixth card is MineFloors.ComingSoon)
-	  Buy      (not owned) the pitch, the floor chips 1-5 + "?", the price and
+	           "COMING SOON" (the last card is MineFloors.ComingSoon)
+	  Buy      (not owned) the pitch, the floor chips 1-6 + "?", the price and
 	           a BUY button greyed out (with a lock) while you can't afford it
 	  doors    two steel door halves with a glowing seam over the panel: the
 	           opening animation slides them apart (ElevatorView.pose)
@@ -128,8 +130,10 @@ export type Refs = {
 	BuyButton: TextButton,
 	BuyLook: ButtonRefs,
 	Note: TextLabel,
-	-- the Floors page
+	-- the Floors page (the cards ride a ScrollingFrame: it scrolls when they don't all fit)
 	FloorPage: Frame,
+	FloorScroll: ScrollingFrame,
+	Columns: number, -- the cards per row of the last layout
 	Cards: { Card },
 	-- footer pill
 	Footer: Frame,
@@ -207,7 +211,7 @@ local INK = rgb(10, 12, 26) -- outlines
 local METRICS: { [string]: Metrics } = {
 	Normal = {
 		BuyWidth = 720,
-		FloorWidth = 960,
+		FloorWidth = 1250, -- four cards a row on a 1280-wide screen
 		FloorHeight = 540,
 		Pad = 20,
 		Header = 106,
@@ -232,7 +236,7 @@ local METRICS: { [string]: Metrics } = {
 	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
 		BuyWidth = 880,
-		FloorWidth = 1040,
+		FloorWidth = 1060,
 		FloorHeight = 520,
 		Pad = 18,
 		Header = 92,
@@ -260,14 +264,22 @@ ElevatorView.Title = "ELEVATOR"
 ElevatorView.Pitch = "Ride to every floor you have unlocked. Buy once, keep forever."
 -- asset ids for the owner's uploaded icons ("" = draw them from Frames)
 ElevatorView.HeaderIconImage = "" -- the small icon left of the title
--- each floor's frame and badge colour (the mock): orange, red-orange, cyan, gold, purple; grey = coming soon
+-- each floor's frame and badge colour (the mock): orange, red-orange, cyan, gold, electric
+-- indigo (the Stormglass Rift), purple; grey = coming soon
 ElevatorView.FloorColors = {
 	rgb(255, 150, 40),
 	rgb(255, 92, 46),
 	rgb(40, 196, 255),
 	rgb(255, 190, 40),
+	rgb(98, 112, 255),
 	rgb(176, 72, 236),
 } :: { Color3 }
+-- a card is at least this wide in a row of four (else three a row, scrolling)
+ElevatorView.MinCardWidth = 260
+-- the floor name shrinks to fit its card, never under this
+ElevatorView.MinNameSize = 18
+-- how much of the next row shows under the cards when they scroll (design units)
+ElevatorView.ScrollPeek = 34
 ElevatorView.SoonColor = rgb(118, 124, 146)
 ElevatorView.LockedColor = rgb(52, 58, 78)
 -- the opening animation (ElevatorView.pose): doors part, the panel pops, the cards drop in
@@ -522,7 +534,7 @@ function ElevatorView.floorColor(index: number): Color3
 end
 
 --[[
-	The six cards: MineFloors.List in order, then the "Coming soon" floor.
+	The cards: MineFloors.List in order, then the "Coming soon" floor.
 	`level` = the player's blaster level, `here` = the floor of the stop the
 	panel was opened at (nil = none of them).
 ]]
@@ -948,7 +960,36 @@ local ART: { (Frame) -> () } = {
 		column(c, 122, 44, 58, light, dark)
 		column(c, 154, 22, 80, light, dark)
 	end,
-	-- 5 Heartstone Core: the pink heart crystal on its pedestal
+	-- 5 Stormglass Rift: a thundercloud with a glowing belly, a bolt striking yellow storm crystals
+	function(c: Frame)
+		backdrop(c, 62, 6, 112, 102, rgb(18, 22, 64), 0.1)
+		glowDot(c, 124, 80, 84, rgb(255, 214, 80), 0.8)
+		-- frozen rain behind the cloud
+		for i, x in { 80, 96, 150, 162 } do
+			local streak = block(c, "Rain", x, 40 + (i % 2) * 6, 2, 26, rgb(176, 200, 255), 8)
+			streak.BackgroundTransparency = 0.45
+		end
+		-- the cloud: stepped puffs, darker below, a glowing underside
+		block(c, "Cloud", 74, 16, 92, 22, rgb(70, 78, 130), 0, 10)
+		block(c, "Cloud", 84, 4, 44, 26, rgb(98, 106, 160), 0, 12)
+		block(c, "Cloud", 118, 8, 40, 22, rgb(88, 96, 150), 0, 11)
+		block(c, "Belly", 80, 34, 80, 5, rgb(255, 214, 110), 0, 2)
+		-- the bolt: three zig-zag strokes from the cloud down to the crystals
+		local bolt, core = rgb(255, 236, 120), rgb(255, 252, 226)
+		block(c, "Bolt", 116, 36, 6, 24, bolt, 24, 1)
+		block(c, "Bolt", 106, 56, 18, 6, bolt, -24, 1)
+		block(c, "Bolt", 112, 60, 6, 24, bolt, 24, 1)
+		block(c, "BoltCore", 117, 39, 2, 18, core, 24)
+		glowDot(c, 112, 84, 14, core, 0.2)
+		-- rock and the yellow storm crystals
+		block(c, "Rock", 84, 94, 70, 16, rgb(52, 60, 100), 0, 6)
+		local yellow, light = rgb(255, 214, 60), rgb(255, 250, 210)
+		crystal(c, 96, 104, 12, 22, -22, rgb(84, 98, 184), rgb(150, 162, 236))
+		crystal(c, 114, 104, 16, 30, -6, yellow, light)
+		crystal(c, 134, 104, 20, 40, 6, yellow, light)
+		crystal(c, 154, 104, 12, 24, 22, rgb(84, 98, 184), rgb(150, 162, 236))
+	end,
+	-- 6 Heartstone Core: the pink heart crystal on its pedestal
 	function(c: Frame)
 		backdrop(c, 66, 6, 108, 100, rgb(40, 14, 64), 0.1)
 		block(c, "Float", 74, 22, 18, 12, rgb(70, 40, 100), 12, 3)
@@ -965,7 +1006,7 @@ local ART: { (Frame) -> () } = {
 		crystal(c, 96, 104, 10, 18, -18, rgb(170, 80, 240), rgb(230, 190, 255))
 		crystal(c, 160, 104, 10, 22, 16, rgb(170, 80, 240), rgb(230, 190, 255))
 	end,
-	-- 6 Coming soon: dim pillars and a big "?"
+	-- 7 Coming soon: dim pillars and a big "?"
 	function(c: Frame)
 		local grey = rgb(84, 90, 110)
 		column(c, 82, 34, 68, grey:Lerp(WHITE, 0.15), grey:Lerp(BLACK, 0.2))
@@ -992,6 +1033,7 @@ local ART_TINT = {
 	rgb(156, 56, 34),
 	rgb(20, 112, 156),
 	rgb(44, 74, 168),
+	rgb(44, 52, 150),
 	rgb(116, 40, 156),
 	rgb(66, 70, 94),
 }
@@ -1208,7 +1250,7 @@ local function newPill(parent: Instance): (Frame, TextLabel, UIGradient, UIStrok
 	return pill, label, g, rim
 end
 
-local function newCard(page: Frame, entry: FloorEntry): Card
+local function newCard(page: GuiObject, entry: FloorEntry): Card
 	local frame: Frame = UIKit.new("Frame", {
 		Name = "Floor" .. entry.Index,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1235,7 +1277,7 @@ local function newCard(page: Frame, entry: FloorEntry): Card
 	}, frame)
 	UIKit.corner(artBack, 12)
 	local artGradient: UIGradient = UIKit.new("UIGradient", {
-		Color = ColorSequence.new(NAVY_CARD, ART_TINT[entry.Index] or ART_TINT[6]),
+		Color = ColorSequence.new(NAVY_CARD, ART_TINT[entry.Index] or ART_TINT[#ART_TINT]),
 		Rotation = 0,
 	}, artBack)
 	local canvas: Frame = UIKit.new("Frame", {
@@ -1245,7 +1287,7 @@ local function newCard(page: Frame, entry: FloorEntry): Card
 		Size = UDim2.fromOffset(170, 120),
 	}, frame)
 	local canvasScale: UIScale = UIKit.new("UIScale", { Scale = 1 }, canvas)
-	local draw = ART[entry.Index] or ART[6]
+	local draw = ART[entry.Index] or ART[#ART]
 	draw(canvas)
 	-- badge, name, pill, mode line
 	local badge: Frame = UIKit.new("Frame", {
@@ -1622,9 +1664,23 @@ function ElevatorView.build(compact: boolean?): Refs
 		BackgroundTransparency = 1,
 		Visible = false,
 	}, panel)
+	-- the cards scroll when they don't all fit (phones); a gamepad selection scrolls it too
+	local floorScroll: ScrollingFrame = UIKit.new("ScrollingFrame", {
+		Name = "FloorScroll",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = NEON,
+		ScrollBarImageTransparency = 0.2,
+		VerticalScrollBarInset = Enum.ScrollBarInset.None,
+		CanvasSize = UDim2.new(),
+		Selectable = false,
+	}, floorPage)
 	local cards: { Card } = {}
 	for _, entry in ElevatorView.entries(1, nil) do
-		table.insert(cards, newCard(floorPage, entry))
+		table.insert(cards, newCard(floorScroll, entry))
 	end
 
 	local doors, doorLeft, doorRight, seam = newDoors(panel)
@@ -1671,6 +1727,8 @@ function ElevatorView.build(compact: boolean?): Refs
 		BuyLook = buyLook,
 		Note = note,
 		FloorPage = floorPage,
+		FloorScroll = floorScroll,
+		Columns = 4,
 		Cards = cards,
 		Footer = footer,
 		Hint = hint,
@@ -1752,7 +1810,7 @@ local function fillCard(card: Card, entry: FloorEntry, m: Metrics)
 	card.Stroke.Thickness = if here then 4 else 3
 	card.Glow.Visible = here
 	card.Frame.BackgroundColor3 = if here then rgb(20, 34, 74) else NAVY_CARD
-	card.ArtGradient.Color = ColorSequence.new(card.Frame.BackgroundColor3, ART_TINT[card.Index] or ART_TINT[6])
+	card.ArtGradient.Color = ColorSequence.new(card.Frame.BackgroundColor3, ART_TINT[card.Index] or ART_TINT[#ART_TINT])
 	local style = if entry.State == "Open" then "Go" elseif here then "Here" elseif soon then "Soon" else "Locked"
 	local long = here or soon
 	styleButton(card.Look, style, ElevatorView.buttonText(entry.State), if long then m.ButtonText - 4 else m.ButtonText + 4)
@@ -1882,7 +1940,10 @@ local function layoutCard(card: Card, m: Metrics, cardWidth: number, cardHeight:
 	local nameHeight = math.floor(badge * 0.5)
 	card.Name.Position = UDim2.fromOffset(left, 12)
 	card.Name.Size = UDim2.new(1, -(left + 10), 0, nameHeight)
-	card.Name.TextSize = m.CardName
+	-- the name shrinks to fit a narrow card (never under MinNameSize)
+	local room = cardWidth - left - 10
+	local wide = ElevatorView.measure(card.Name.Text, m.CardName)
+	card.Name.TextSize = if wide > room then math.max(ElevatorView.MinNameSize, math.floor(m.CardName * room / wide)) else m.CardName
 	local chipText = m.ChipText
 	card.Chip.TextSize = chipText
 	card.Pill.Position = UDim2.fromOffset(left, 12 + nameHeight + 2)
@@ -1909,25 +1970,53 @@ local function layoutCard(card: Card, m: Metrics, cardWidth: number, cardHeight:
 	card.Canvas.Position = UDim2.new(1, -4 - 85 * artScale, 0, 4 + 60 * artScale)
 end
 
+-- the room round the cards inside the scroll (the current floor's glow ring is not clipped)
+local CARD_MARGIN = 6
+
+--[[
+	The cards: four a row when each is at least MinCardWidth wide (PC: 4 + 3, the
+	short last row centred, nothing scrolls), else three a row; two rows always
+	show, the top of the next one peeks in under them (ScrollPeek) and it
+	scrolls into view (phones: the Coming soon card is a swipe away).
+]]
 local function layoutFloors(refs: Refs, m: Metrics, width: number, height: number)
 	local top = m.Header
 	local bottom = if refs.Compact then m.Pad else m.Pad + 14
 	refs.FloorPage.Position = UDim2.fromOffset(m.Pad, top)
 	refs.FloorPage.Size = UDim2.new(1, -m.Pad * 2, 1, -(top + bottom))
-	local columns = 3
-	local rows = math.ceil(#refs.Cards / columns)
-	local cardWidth = math.floor((width - m.Pad * 2 - m.Gap * (columns - 1)) / columns)
-	local cardHeight = math.floor((height - top - bottom - m.Gap * (rows - 1)) / rows)
+	local inner = width - m.Pad * 2 - CARD_MARGIN * 2
+	local count = #refs.Cards
+	local columns = if (inner - m.Gap * 3) / 4 >= ElevatorView.MinCardWidth then 4 else 3
+	refs.Columns = columns
+	local rows = math.ceil(count / columns)
+	local shown = math.min(rows, 2)
+	local pageHeight = height - top - bottom
+	local scrolls = rows > shown
+	-- room for the scroll bar on the right when the cards scroll
+	local barRoom = if scrolls then refs.FloorScroll.ScrollBarThickness + 4 else 0
+	local cardWidth = math.floor((inner - barRoom - m.Gap * (columns - 1)) / columns)
+	-- when the cards scroll, the next row peeks in under the last full one (there is more)
+	local peek = if scrolls then ElevatorView.ScrollPeek else 0
+	local cardHeight = math.floor((pageHeight - CARD_MARGIN * 2 - m.Gap * (shown - 1) - peek) / shown)
 	for i, card in refs.Cards do
 		local column = (i - 1) % columns
 		local row = math.floor((i - 1) / columns)
+		-- a short last row sits in the middle
+		local inRow = math.min(columns, count - row * columns)
+		local shift = (columns - inRow) * (cardWidth + m.Gap) / 2
 		-- centred anchors: the drop-in UIScale grows from the middle
-		local base = UDim2.fromOffset(column * (cardWidth + m.Gap) + cardWidth / 2, row * (cardHeight + m.Gap) + cardHeight / 2)
+		local base = UDim2.fromOffset(
+			CARD_MARGIN + shift + column * (cardWidth + m.Gap) + cardWidth / 2,
+			CARD_MARGIN + row * (cardHeight + m.Gap) + cardHeight / 2
+		)
 		refs.DropIns.Floors[i].Base = base
 		card.Frame.Position = base
 		card.Frame.Size = UDim2.fromOffset(cardWidth, cardHeight)
 		layoutCard(card, m, cardWidth, cardHeight)
 	end
+	refs.FloorScroll.CanvasSize = UDim2.fromOffset(0, CARD_MARGIN * 2 + rows * cardHeight + (rows - 1) * m.Gap)
+	refs.FloorScroll.ScrollingEnabled = scrolls
+	refs.FloorScroll.ScrollBarImageTransparency = if scrolls then 0.2 else 1
 end
 
 --[[

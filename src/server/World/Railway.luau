@@ -82,7 +82,7 @@ local WorldLayout = require(Shared.Config.WorldLayout)
 
 local Railway = {}
 
-Railway.MaxParts = 600 -- the whole railway (tests/Railway.spec.luau)
+Railway.MaxParts = 660 -- the whole railway with its 5 Mine Lifts (tests/Railway.spec.luau)
 Railway.RunLength = 24 -- longest rail part
 -- Quarry portals: the mouth stands this far in front of the line's end, and
 -- the coastal buffer stops' face this far past theirs (shared with the

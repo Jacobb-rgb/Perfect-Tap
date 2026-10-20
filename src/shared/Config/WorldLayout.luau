@@ -120,12 +120,19 @@ WorldLayout.Caves = {
 		Entrance = { Position = Vector3.new(80, -12, -182), Width = 12, Height = 13 },
 		CrystalClusters = 5,
 	},
-	-- the elevator-only floors (MineFloors.Placement 4 and 5): the palace hall under its
-	-- ceiling, and the Heartstone Core's islands up to the floating rock the lift hangs from
+	-- the elevator-only floors (MineFloors.Placement 4-6): the palace hall under its ceiling,
+	-- the Stormglass Rift's cavern up to the crane beam its lift hangs from, and the
+	-- Heartstone Core's islands up to the floating rock the lift hangs from
 	SunkenPalace = {
 		Min = Vector3.new(-66, -220, -856),
 		Max = Vector3.new(66, -176, -744),
 		Entrance = { Position = Vector3.new(0, -220, -748), Width = 18, Height = 16 },
+		CrystalClusters = 0,
+	},
+	StormglassRift = {
+		Min = Vector3.new(-64, -300, -856),
+		Max = Vector3.new(64, -267.6, -744), -- the lift's crane beam (LiftSpots[5].Y + 30)
+		Entrance = { Position = Vector3.new(0, -297.6, -744), Width = 18, Height = 16 },
 		CrystalClusters = 0,
 	},
 	HeartstoneCore = {
@@ -284,7 +291,7 @@ WorldLayout.Zones = {
 		VipOnly = true,
 		Priority = 4,
 	},
-	-- the elevator-only floors deep below (MineFloors.Placement 4 and 5)
+	-- the elevator-only floors deep below (MineFloors.Placement 4-6)
 	{
 		Id = "SunkenPalace",
 		Name = "Sunken Palace",
@@ -299,17 +306,30 @@ WorldLayout.Zones = {
 		Priority = 5,
 	},
 	{
+		Id = "StormglassRift",
+		Name = "Stormglass Rift",
+		Min = Vector3.new(-70, -313, -862),
+		Max = Vector3.new(70, -246, -738),
+		Lighting = "Storm",
+		FloorY = -300,
+		Ores = {},
+		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
+		MinBlaster = 8,
+		RockHealth = 700,
+		Priority = 6,
+	},
+	{
 		Id = "HeartstoneCore",
 		Name = "Heartstone Core",
 		Min = Vector3.new(-90, -460, -880),
-		Max = Vector3.new(90, -310, -720),
+		Max = Vector3.new(90, -314, -720), -- under the Rift (its zone from -313)
 		Lighting = "Core",
 		FloorY = -400,
 		Ores = {},
 		NodeCount = 0, -- rocks grow on the floor area's RockSpawns (WorldBuilder)
 		MinBlaster = 9,
 		RockHealth = 700,
-		Priority = 6,
+		Priority = 7,
 	},
 } :: { Zone }
 
@@ -343,7 +363,8 @@ WorldLayout.KeepOut = {
 	{ Min = Vector3.new(38, -50, -268), Max = Vector3.new(54, 10, -252) }, -- EmberCaves lift (MineFloors.LiftSpots[2])
 	{ Min = Vector3.new(42, -50, -450), Max = Vector3.new(58, 10, -434) }, -- DeepHollow lift (MineFloors.LiftSpots[3])
 	{ Min = Vector3.new(18, -230, -763), Max = Vector3.new(34, -205, -747) }, -- SunkenPalace lift (MineFloors.LiftSpots[4])
-	{ Min = Vector3.new(4, -410, -783), Max = Vector3.new(20, -385, -767) }, -- HeartstoneCore lift (MineFloors.LiftSpots[5])
+	{ Min = Vector3.new(20, -310, -761), Max = Vector3.new(36, -285, -745) }, -- StormglassRift lift (MineFloors.LiftSpots[5])
+	{ Min = Vector3.new(4, -410, -783), Max = Vector3.new(20, -385, -767) }, -- HeartstoneCore lift (MineFloors.LiftSpots[6])
 }
 
 function WorldLayout.isInBox(position: Vector3, min: Vector3, max: Vector3): boolean

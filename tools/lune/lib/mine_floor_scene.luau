@@ -14,7 +14,7 @@ local roblox = require("@lune/roblox") :: any
 
 local MineFloorScene = {}
 
-MineFloorScene.Modules = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Core" }
+MineFloorScene.Modules = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Storm", "Floor6Core" }
 
 -- index 0: the shared MineKit pieces side by side (elevator, gate, ore lift, wall, crystals)
 local function buildKit(Loader, workspace)
@@ -100,13 +100,13 @@ function MineFloorScene.build(Loader, workspace, index: number)
 			table.insert(ores, rng:weighted(weights))
 		end
 		local pos = p.CFrame.Position
-		local rock = RockBuilder.build(index, kind, ores, CF.new(pos.X, pos.Y, pos.Z), index * 77 + i)
+		local rock = RockBuilder.build(floor.Id, kind, ores, CF.new(pos.X, pos.Y, pos.Z), index * 77 + i)
 		rock.Parent = rocks
 	end
 	local giant = model:FindFirstChild("GiantSpawn")
 	if giant then
 		local pos = giant.CFrame.Position
-		RockBuilder.build(index, "Giant", {}, CF.new(pos.X, pos.Y, pos.Z), index * 13).Parent = rocks
+		RockBuilder.build(floor.Id, "Giant", {}, CF.new(pos.X, pos.Y, pos.Z), index * 13).Parent = rocks
 	end
 	local entrance = model:FindFirstChild("Entrance")
 	if entrance then

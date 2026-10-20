@@ -56,6 +56,10 @@ local SoundConfig: { [string]: SoundDef } = {
 	AmbTink = { Id = "rbxassetid://12222005", Volume = 0.03, Pitch = { 2.6, 3.0 } },
 	AmbBubble = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.12, Pitch = { 0.42, 0.55 } },
 	AmbLavaFlow = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.14, Pitch = { 0.3, 0.34 }, Looped = true },
+	-- the Stormglass Rift's StormCrackle: snap.wav sped right up and soft is a spark's crackle,
+	-- flashbulb.wav a little higher an electric zap
+	AmbSpark = { Id = "rbxassetid://12222140", Volume = 0.05, Pitch = { 3.0, 3.6 } },
+	AmbZap = { Id = "rbxassetid://12221996", Volume = 0.06, Pitch = { 1.5, 1.8 } },
 	Pickup = { Id = "rbxassetid://12221976", Volume = 0.5, Pitch = { 1.1, 1.3 } },
 	Drop = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = { 0.9, 1.1 } },
 	Throw = { Id = "rbxassetid://12222200", Volume = 0.45, Pitch = { 1.0, 1.25 } },

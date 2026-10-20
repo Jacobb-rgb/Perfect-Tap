@@ -1,6 +1,6 @@
 --[[
 	MineKit: shared pieces of the mine floor areas (docs/plans/MINE_FLOORS_PLAN.md).
-	Every floor builder (Floor1Quarry ... Floor5Core) uses these so the parts that
+	Every floor builder (Floor1Quarry ... Floor6Core) uses these so the parts that
 	work the same on every floor also look the same:
 
 	  MineKit.elevator(parent, cf, floorIndex)   the elevator stop (bought once, goes
@@ -30,7 +30,7 @@
 	  a part "GiantSpawn", a part "Entrance" (where players arrive), the elevator
 	  stop, the ore lift and a blaster gate. Budgets in the game build: <= 2500
 	  parts without rocks (floors 1-3: <= 1250), <= 24 PointLights. In the game
-	  build too: 4-8 ambience spots of the floor's MineAmbience.Floors kinds, each
+	  build too: 4-8 ambience spots of the floor's MineAmbience.Floors[Id] kinds, each
 	  an Attachment on an existing part inside the floor's box, never on a
 	  RockSpawn or the GiantSpawn marker (WorldBuilder removes those).
 ]]
@@ -49,7 +49,7 @@ local Railway = require(World:WaitForChild("Railway"))
 
 local MineKit = {}
 
-MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-5 stream on their own, far from the town)
+MineKit.PartBudget = 2500 -- every floor in the game build (floors 4-6 stream on their own, far from the town)
 MineKit.NearPartBudget = 1250 -- floors 1-3 stream in with the town (the quarry rim on phones): keep them light
 MineKit.LightBudget = 24
 
@@ -107,7 +107,7 @@ end
 ---------------------------------------------------------------- crystals
 
 -- A decoration crystal cluster that matches the rocks; root = bottom, up = growth direction.
--- look: "Matte" | "Tipped" | "Shell" | "Glow".
+-- look: "Matte" | "Tipped" | "Shell" | "Glow" | "Storm" (the Stormglass Rift's smoky glass).
 function MineKit.crystals(parent: Instance, root: CFrame, count: number, height: number, look: string, colors: { Color3 }, seed: number | string): Model
 	local m = RockBuilder.decorCluster(parent, root, count, height, look, colors, seed)
 	m:AddTag(MovementConfig.BeamIgnoreTag) -- solid decoration: never blocks the mining beam

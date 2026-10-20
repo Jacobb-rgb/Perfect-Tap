@@ -3,7 +3,7 @@
 
 	Owner's rules: the elevator is bought ONCE with coins
 	(MineFloors.Elevator.Price, saved as data.Upgrades.Elevator) and then rides
-	to any unlocked floor. Floors 1-3 can also be walked; floors 4-5 are
+	to any unlocked floor. Floors 1-3 can also be walked; floors 4-6 are
 	reachable only by elevator. A floor is unlocked when the player's blaster
 	level (data.BlasterLevel) is at least its MinBlaster.
 
@@ -41,7 +41,7 @@
 	- Target of a floor: its elevator stop, else the "Entrance" marker part of
 	  the floor model "MineFloor<N>" under Workspace.Map.
 	- Void catcher: parts tagged "VoidCatcher" (attribute Floor) under floor
-	  5's floating islands. A character's HumanoidRootPart touching one (or
+	  6's floating islands. A character's HumanoidRootPart touching one (or
 	  found inside / below it by a 0.5 s check over the players, in case a
 	  fast fall skips the touch) goes back to that floor's target, at most once
 	  per CatchDebounce seconds.

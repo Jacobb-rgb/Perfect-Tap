@@ -181,6 +181,10 @@ elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine f
 	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
 elseif sceneName == "mine_floor" then -- one mine floor area with rocks (tools/lune/lib/mine_floor_scene.luau)
 	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or 1)
+elseif sceneName == "elevator_ui" then -- the elevator's floor list (7 cards) and the ride to floor 5 over the Stormglass Rift (tools/lune/lib/elevator_preview.luau)
+	for name, guis in require("./lib/elevator_preview").build(Loader, workspace) do
+		uiExports[name] = guis
+	end
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
 elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)
@@ -213,6 +217,8 @@ elseif sceneName == "foundry" or sceneName == "foundry_moment" then -- the Found
 	for name, guis in require("./lib/foundry_preview").build(Loader, workspace, sceneName == "foundry_moment") do
 		uiExports[name] = guis
 	end
+elseif sceneName == "relic_flow" then -- dusty relic -> hand / Restoration Table cleaning -> museum (tools/lune/lib/relic_flow_preview.luau)
+	require("./lib/relic_flow_preview").build(Loader, workspace)
 elseif sceneName == "wheel_artifacts" then -- the museum, the relic gallery and the wheel / book / journal overlays (tools/lune/lib/wheel_artifacts_preview.luau)
 	WorldBuilder.build(workspace)
 	for name, guis in require("./lib/wheel_artifacts_preview").build(Loader, workspace) do

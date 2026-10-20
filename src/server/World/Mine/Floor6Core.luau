@@ -1,5 +1,5 @@
 --[[
-	Mine floor 5, HEARTSTONE CORE (blaster 9+, reached only by the elevator):
+	Mine floor 6, HEARTSTONE CORE (blaster 9+, reached only by the elevator):
 	the heart of the world, a starry violet void (docs/plans/MINE_FLOORS_PLAN.md,
 	story: the Heartstone, the living ember at the world's core, cracked in the
 	Shattering). Contract: MineKit's header.
@@ -18,12 +18,12 @@
 	veins, crystals and hanging shards. Glowing bridges (pink/aqua edges) join
 	them; star motes, floating shards and far islets fill the void.
 
-	In the game (MineFloors.Placement[5], elevator only) the floor sits inside a
+	In the game (MineFloors.Placement[6], elevator only) the floor sits inside a
 	closed void enclosure: a few huge dark violet neon panels in a sky gradient
 	(the normal sky and sun never show), and an invisible "VoidCatcher" part
-	(attribute Floor = 5) under the islands sends fallen players back to the
+	(attribute Floor = 6) under the islands sends fallen players back to the
 	elevator (ElevatorService). The Mine Lift is built by Railway from
-	TrainConfig at MineFloors.LiftSpots[5]; its cable hangs into the floating
+	TrainConfig at MineFloors.LiftSpots[6]; its cable hangs into the floating
 	hoist rock (local +30 = WorldLayout.Caves.HeartstoneCore.Max.Y).
 	opts.Cutaway (preview pictures): no enclosure, so cameras outside see in.
 	Everything stays within local y -77 .. +50 (FallenPartsDestroyHeight is
@@ -43,13 +43,16 @@ local MineKit = require(World:WaitForChild("Mine"):WaitForChild("MineKit"))
 
 local Floor = {}
 
-Floor.Index = 5
+local ENTRY = MineFloors.get("HeartstoneCore")
+
+Floor.Id = ENTRY.Id
+Floor.Index = ENTRY.Index -- 6 since the Stormglass Rift went in above it (2026-10-20)
 Floor.Size = Vector3.new(160, 80, 140)
 
 ---------------------------------------------------------------- palette and part presets
 
 local rgb = Color3.fromRGB
-local PAL = MineFloors.get(5).Palette
+local PAL = ENTRY.Palette
 local SMOOTH = Enum.Material.SmoothPlastic
 local NEON = Enum.Material.Neon
 
@@ -1037,8 +1040,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	-- opts.Cutaway (preview pictures): no void enclosure around the floor
 	local cutaway = opts ~= nil and opts.Cutaway == true
 	local rng = Rng.new("Floor5Core")
-	local m = model("MineFloor5", parent)
-	m:SetAttribute("Floor", 5)
+	local m = model("MineFloor" .. Floor.Index, parent)
+	m:SetAttribute("Floor", Floor.Index)
+	m:SetAttribute("FloorId", Floor.Id)
 	local spawns = MineKit.spawns(m)
 
 	-- islands (top center, half size, top height, underside depth)
@@ -1084,7 +1088,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	deep.Paths = { { anchor(5, false), Vector2.new(-18, -22), anchor(4, false), Vector2.new(18, -22), anchor(6, false) } }
 
 	-- set pieces that keep rock spawns away
-	local liftSpot = MineFloors.LiftSpots[5]
+	local liftSpot = MineFloors.LiftSpots[Floor.Index]
 	local liftAt = Vector2.new(liftSpot.X, liftSpot.Z)
 	local runeAt = Vector2.new(-12, 25)
 	local giantAt = Vector2.new(0, -35)
@@ -1131,9 +1135,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	local props = model("Props", m)
 	MineKit.elevator(m, O * CFrame.new(-13, 0, 59), Floor.Index)
 	local gatePos = v3(gateAt, 0)
-	MineKit.gate(m, O * CFrame.lookAt(gatePos, gatePos + Vector3.new(0, 0, 1)), 12, MineFloors.get(5).MinBlaster, { ROCK, ROCK_LIGHT, ROCK_DARK })
+	MineKit.gate(m, O * CFrame.lookAt(gatePos, gatePos + Vector3.new(0, 0, 1)), 12, ENTRY.MinBlaster, { ROCK, ROCK_LIGHT, ROCK_DARK })
 	local entrance = MineKit.marker(m, "Entrance", O * CFrame.new(0, 0, 60))
-	entrance:SetAttribute("Floor", 5)
+	entrance:SetAttribute("Floor", Floor.Index)
 	-- a glowing arrival ring inlaid around the entrance
 	for k = 0, 7 do
 		local a0, a1 = k / 8 * math.pi * 2, (k + 1) / 8 * math.pi * 2

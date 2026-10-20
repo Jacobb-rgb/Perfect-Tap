@@ -1,4 +1,4 @@
--- Mine floors (owner, 2026-10-17): 5 floors, 7 home ores each (floor 1: 8), rocks Small/Big/Crystal
+-- Mine floors (owner, 2026-10-17; the Stormglass Rift 2026-10-20): 6 floors, 5-8 home ores each, rocks Small/Big/Crystal
 -- that the floor's weakest blaster breaks in about 5 s, special rocks, and their builder.
 return function(T, Loader)
 	local CF = Loader.CFrame
@@ -39,21 +39,32 @@ return function(T, Loader)
 		return sum / total
 	end
 
-	T.test("mine floors: 5 floors in order, deeper = stronger blaster", function()
-		T.eq(#MineFloors.List, 5, "floor count")
+	T.test("mine floors: 6 floors in order, deeper = stronger blaster", function()
+		T.eq(#MineFloors.List, 6, "floor count")
+		local order = {}
+		for _, floor in MineFloors.List do
+			table.insert(order, floor.Id)
+		end
+		T.eq(table.concat(order, ","), "Quarry,EmberCaves,DeepHollow,SunkenPalace,StormglassRift,HeartstoneCore", "floor order")
+		T.eq(MineFloors.get("StormglassRift").MinBlaster, 8, "the Rift opens at blaster 8")
 		local last = 0
 		for i, floor in MineFloors.List do
 			T.eq(floor.Index, i, floor.Id .. " index")
 			T.truthy(floor.MinBlaster > last, floor.Id .. " needs a stronger blaster than the floor above")
 			T.truthy(floor.MinBlaster <= BlasterData.MaxLevel, floor.Id .. " blaster exists")
 			T.truthy(LightingConfig.Presets[floor.Lighting] ~= nil, floor.Id .. " lighting preset " .. floor.Lighting)
-			T.eq(floor.ViaElevator, i >= 4, floor.Id .. " elevator only for floors 4-5")
+			T.eq(floor.ViaElevator, i >= 4, floor.Id .. " elevator only for floors 4-6")
+			T.truthy(MineFloors.Placement[i] ~= nil, floor.Id .. " placement")
+			T.eq(MineFloors.ById[floor.Id], floor, floor.Id .. " by id")
+			T.eq(MineFloors.ByIndex[i], floor, floor.Id .. " by index")
 			last = floor.MinBlaster
 		end
-		T.truthy(MineFloors.ComingSoon.MinBlaster > BlasterData.MaxLevel, "floor 6 waits for blaster 11")
+		T.eq(#MineFloors.Placement, #MineFloors.List, "a placement per floor")
+		T.eq(MineFloors.ComingSoon.Index, #MineFloors.List + 1, "coming soon after the last floor")
+		T.truthy(MineFloors.ComingSoon.MinBlaster > BlasterData.MaxLevel, "floor 7 waits for blaster 11")
 	end)
 
-	T.test("mine floors: every ore has exactly one home floor, 7-8 per floor, better deeper", function()
+	T.test("mine floors: every ore has exactly one home floor, 5-8 per floor, better deeper", function()
 		local home = {}
 		local lastAverage = 0
 		for _, floor in MineFloors.List do
@@ -65,7 +76,7 @@ return function(T, Loader)
 				home[oreId] = floor.Index
 				n += 1
 			end
-			T.eq(n, if floor.Index == 1 then 8 else 7, floor.Id .. " home ores")
+			T.truthy(n >= 5 and n <= 8, floor.Id .. " has 5-8 home ores (" .. n .. ")")
 			for oreId in floor.CrystalOres do
 				T.truthy(OreData.ById[oreId] ~= nil, floor.Id .. " crystal ore " .. oreId .. " exists")
 			end
