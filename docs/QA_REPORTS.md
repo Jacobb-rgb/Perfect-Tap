@@ -640,7 +640,7 @@ Option B of the rebirth proposal: an optional restart that keeps the factory and
   data.PlotGlow, the card's COLOR button cycles the unlocked colours and off) and a "Star Forge" prompt (F / Y) at
   THE GREAT FORGE plaza's fire crystal that opens the window (OpenUI "Rebirth"; an invisible anchor on the crystal's
   axis, no map change). The PC Star Shop fits all 7 cards (panel 650, cards 134 tall, buttons 46).
-- Open for the owner: Robux coin packs (not enabled yet) become plain coins, which a rebirth resets.
+- Owner's answer (2026-10-20): Robux-bought coins that are still unspent stay through a rebirth (data.PaidCoins, spent last; earned coins reset).
 What to test in Studio:
 1. Studio dev kit, blaster LV 8: the REBIRTH tile shows its badge and a toast. Open it: the lists, "a rebirth now
    pays ⭐ 6", REBIRTH! asks SURE?, the second press plays the moment and sends you home.

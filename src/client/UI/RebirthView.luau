@@ -106,7 +106,7 @@ function RebirthView.lists(perks: any): { [string]: { string } }
 	local keepsPodiums = RebirthConfig.levelOf(perks, "PodiumKeeper") > 0
 	return {
 		Lose = {
-			"💰  Your coins",
+			"💰  Earned coins",
 			`🔫  Blaster back to LV {start}`,
 			"⛏️  Floors and elevator",
 			"⚙️  Machine speed",
@@ -120,6 +120,7 @@ function RebirthView.lists(perks: any): { [string]: { string } }
 			"🏺  Artifacts and codex",
 			"🛹  Boards and gear",
 			"💎  Shards, Robux items",
+			"💰  Coins bought with Robux",
 			"🏆  Stats and records",
 		},
 		Get = {

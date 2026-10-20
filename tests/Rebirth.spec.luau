@@ -657,4 +657,55 @@ return function(T, Loader)
 		T.eq(w.data.Stars, 2)
 		T.eq(w.data.Rebirths, 0)
 	end)
+
+	T.test("Rebirth: Robux-bought coins that are still unspent stay; bought coins are spent last", function()
+		local EconomyService = Loader.requirePath("ServerScriptService.Server.Services.EconomyService")
+		-- the reset keeps only PaidCoins (never more than the balance)
+		local data = midRun()
+		data.PaidCoins = 1.5e6
+		RebirthConfig.reset(data)
+		T.eq(data.Coins, 1.5e6, "the unspent bought coins stay")
+		T.eq(data.PaidCoins, 1.5e6)
+		local poor = midRun()
+		poor.Coins = 200
+		poor.PaidCoins = 5000
+		RebirthConfig.reset(poor)
+		T.eq(poor.Coins, 200, "never more than the balance")
+		T.eq(poor.PaidCoins, 200)
+		local none = midRun()
+		RebirthConfig.reset(none)
+		T.eq(none.Coins, 0, "earned coins go")
+		T.eq(none.PaidCoins, 0)
+		-- Migrations: junk and too-big values are repaired
+		local junk = ProfileStore.deepCopy(DataTemplate)
+		junk.Coins = 100
+		junk.PaidCoins = 0 / 0
+		Migrations.run(junk)
+		T.eq(junk.PaidCoins, 0)
+		junk.PaidCoins = 500
+		Migrations.run(junk)
+		T.eq(junk.PaidCoins, 100, "PaidCoins <= Coins")
+		-- spending takes the earned coins first
+		local player = { Name = "Payer", UserId = 41 }
+		local wallet = ProfileStore.deepCopy(DataTemplate)
+		wallet.Coins = 1000
+		wallet.PaidCoins = 600
+		local oldGet, oldChanged = DataService.get, DataService.changed
+		DataService.get = function(p: any)
+			return if p == player then wallet else nil
+		end :: any
+		DataService.changed = function() end :: any
+		local ok, err = pcall(function()
+			T.truthy(EconomyService.spend(player :: any, 300, "test"))
+			T.eq(wallet.Coins, 700)
+			T.eq(wallet.PaidCoins, 600, "300 earned coins went first")
+			T.truthy(EconomyService.spend(player :: any, 400, "test"))
+			T.eq(wallet.Coins, 300)
+			T.eq(wallet.PaidCoins, 300, "then the bought ones")
+		end)
+		DataService.get, DataService.changed = oldGet, oldChanged
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end
