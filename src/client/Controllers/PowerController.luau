@@ -151,7 +151,14 @@ function PowerController.drawCables(models: { Model }): { Instance }
 	for _, model in models do
 		local cell = cellOf(model)
 		if cell and model.PrimaryPart then
-			byCell[cell] = model
+			-- a deck machine shares its cell with the platform or a belt under it:
+			-- the cable goes to whatever uses power there (or a pole), never to those
+			local info = infoOf(model)
+			local powered = isPole(model) or (info ~= nil and (info.Power or 0) > 0)
+			local existing: Model? = byCell[cell]
+			if powered or not existing then
+				byCell[cell] = model
+			end
 			if isPole(model) then
 				table.insert(poles, model)
 			end

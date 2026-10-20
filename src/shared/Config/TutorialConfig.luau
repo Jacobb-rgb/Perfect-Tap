@@ -164,6 +164,20 @@ end
 
 local M = TutorialConfig
 
+-- Has the player built a Platform (the "Build upward" hint passes by itself)?
+function TutorialConfig.hasPlatform(data: Data): boolean
+	local placed = data.PlacedMachines
+	if type(placed) ~= "table" then
+		return false
+	end
+	for _, entry in placed do
+		if type(entry) == "table" and entry.Id == "Platform" then
+			return true
+		end
+	end
+	return false
+end
+
 TutorialConfig.Steps = {
 	{
 		Id = "Station",
@@ -273,6 +287,21 @@ TutorialConfig.Steps = {
 		Optional = true,
 		done = function(data: Data, _signals: Signals): boolean
 			return M.spun(data)
+		end,
+	},
+	-- platforms (owner's YES, 2026-10-20): GOT IT, or done once a Platform stands on the plot
+	{
+		Id = "Platforms",
+		Title = "Build upward",
+		Text = "Out of room? Build a Platform: a Belt Lift carries ore up, a Slide brings it down.",
+		Hint = {
+			Mouse = "B builds · V: deck or ground",
+			Touch = "BUILD, then the DECK button",
+			Gamepad = "D-pad up: build, then deck/ground",
+		},
+		Optional = true,
+		done = function(data: Data, _signals: Signals): boolean
+			return M.hasPlatform(data)
 		end,
 	},
 } :: { Step }

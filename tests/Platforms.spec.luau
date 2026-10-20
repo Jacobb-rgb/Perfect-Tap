@@ -762,4 +762,22 @@ return function(T, Loader)
 		T.truthy(MachineService.pickup(platform), "empty: packed up")
 		T.eq(w.data.MachineInventory.Platform, 6, "back in the build menu")
 	end)
+	T.test("Platforms: the Tech shop lists the platform, the Belt Lift and the Slide right after the belts", function()
+		local MD = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+		local express = MD.ById.ExpressConveyor.Order
+		T.eq(MD.ById.Platform.Order, express + 1, "Platform after the Express Conveyor")
+		T.eq(MD.ById.BeltLift.Order, express + 2, "then the Belt Lift")
+		T.eq(MD.ById.Slide.Order, express + 3, "then the Slide")
+	end)
+
+	T.test("Platforms: the tutorial's GOT IT hint passes once a Platform stands on the plot", function()
+		local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
+		local step = TutorialConfig.ById.Platforms
+		T.truthy(step and step.Optional, "an info hint")
+		T.truthy(step.Hint and step.Hint.Mouse and step.Hint.Touch and step.Hint.Gamepad, "a line for every input")
+		T.falsy(step.done({ PlacedMachines = { { Id = "Conveyor", X = 0, Z = 0, R = 0 } } }, {}), "not yet")
+		T.truthy(step.done({ PlacedMachines = { { Id = "Platform", X = 2, Z = 2, R = 0 } } }, {}), "done")
+		T.falsy(step.done({}, {}), "no layout")
+	end)
+
 end

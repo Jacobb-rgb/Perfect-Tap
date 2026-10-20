@@ -79,12 +79,15 @@ return function(T, Loader)
 		Wheel = function(data: any, _signals: any)
 			data.Stats.WheelSpins += 1
 		end,
+		Platforms = function(data: any, _signals: any)
+			table.insert(data.PlacedMachines, { Id = "Platform", X = 9, Z = 9, R = 0 })
+		end,
 	}
 
 	---------------------------------------------------------------- config
 
 	T.test("Tutorial: the steps are complete, short and point somewhere", function()
-		T.eq(TOTAL, 10, "eight task steps and the two steps 6-7 hints")
+		T.eq(TOTAL, 11, "eight task steps, the two steps 6-7 hints and the platform hint")
 		T.truthy(TutorialConfig.ById.Golems.Optional and TutorialConfig.ById.Wheel.Optional, "the hints are info steps (GOT IT)")
 		T.eq(TutorialConfig.ById.Golems.UiTarget, "Golems", "the golem hint points at the side menu's GOLEMS")
 		local seen = {}
@@ -143,7 +146,9 @@ return function(T, Loader)
 		DO.Golems(data, signals)
 		T.eq(TutorialConfig.advance(9, data, signals), 10, "a golem woken: the hint passes by itself")
 		DO.Wheel(data, signals)
-		T.eq(TutorialConfig.advance(10, data, signals), TOTAL + 1, "a spin: the wheel hint too")
+		T.eq(TutorialConfig.advance(10, data, signals), 11, "a spin: the wheel hint too")
+		DO.Platforms(data, signals)
+		T.eq(TutorialConfig.advance(11, data, signals), TOTAL + 1, "a platform built: the platform hint too")
 		-- carrying the ore home by hand (no train) passes Load and Train
 		local walk, s2 = fresh(), {}
 		DO.Station(walk, s2)

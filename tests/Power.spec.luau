@@ -686,6 +686,38 @@ return function(T, Loader)
 		return (attachment.Parent.CFrame * attachment.CFrame).Position
 	end
 
+	T.test("PowerController: the cable goes up to a deck machine, not to the platform under it", function()
+		local roblox = require("@lune/roblox") :: any
+		local pole = placeModel("PowerPole", 2, 2)
+		local furnace = placeModel("BrickFurnace", 3, 4)
+		furnace:PivotTo(furnace:GetPivot() + roblox.Vector3.new(0, MachineData.DeckHeight or 5, 0))
+		furnace:SetAttribute("GridL", 1)
+		-- the platform under it shares the cell (and comes later in the list)
+		local platform = roblox.Instance.new("Model")
+		local base = roblox.Instance.new("Part")
+		base.CFrame = furnace:GetPivot() - roblox.Vector3.new(0, MachineData.DeckHeight or 5, 0)
+		base.Parent = platform
+		platform.PrimaryPart = base
+		platform:SetAttribute("MachineId", "Platform")
+		platform:SetAttribute("GridX", 3)
+		platform:SetAttribute("GridZ", 4)
+		pole:SetAttribute("Feeds", "3,4")
+		local made = PowerController.drawCables({ pole, furnace, platform })
+		local toFurnace, toPlatform = 0, 0
+		for _, instance in made do
+			if instance:IsA("Beam") then
+				if instance.Attachment1.Parent == furnace.PrimaryPart then
+					toFurnace += 1
+				elseif instance.Attachment1.Parent == base then
+					toPlatform += 1
+				end
+			end
+		end
+		T.eq(toFurnace, 1, "one cable up to the deck furnace")
+		T.eq(toPlatform, 0, "none to the platform")
+		PowerController.clearCables(made)
+	end)
+
 	T.test("PowerController: cables between linked poles and to the machines they feed", function()
 		local poleA = placeModel("PowerPole", 2, 2)
 		local poleB = placeModel("PowerPole", 6, 2)

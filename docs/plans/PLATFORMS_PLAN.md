@@ -91,3 +91,11 @@ preview the owner approved: branch `art/platforms-preview` (`tools/lune/lib/plat
 - Left for phase 3: Tech shop card polish (order / section of the three), a tutorial hint, a ladder or steps (players
   can jump the 5 studs), power cables drawn up to deck machines (they are powered by distance already), a Studio check
   of items riding up the Lift (friction 1.2 on a 26.6 degree slope) and across its 1-stud end gaps.
+
+## Built (phase 3, 2026-10-20)
+- Tech shop: Platform, Belt Lift and Slide come right after the Express Conveyor (Orders 9 / 10 / 11; the rest moved
+  up by 3).
+- Tutorial: an optional GOT IT hint "Build upward" at the end (passes by itself once a Platform stands on the plot).
+- Power cables: on a deck cell the cable goes to the powered machine, never to the platform or a belt under it.
+- No steps or ladder: a character jumps 7.5 studs and the deck is 5 up; steps inside the footprint would block the
+  belts under the deck. The Studio check of items riding up the Lift stays on the owner's list (QA_REPORTS).
