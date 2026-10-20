@@ -143,12 +143,14 @@ return function(T, Loader)
 			end)
 			T.truthy(count <= KenneyBlaster.MaxParts, `{star.Id}: {count} parts`)
 			T.truthy(anchors.Muzzle.Z < -1, star.Id .. ": the muzzle is ahead of the hand")
-			-- the jewellery: gems in gold bezels, a gold collar, a big cluster, the crown
-			T.truthy((names.Gem or 0) >= 2, `{star.Id}: {names.Gem or 0} gems`)
+			-- the jewellery, clean and round: a row of gems in gold bezels, the ring with its four gems,
+			-- three smooth crystals in a gold cup; no stars, cracks or side crystals
+			T.truthy((names.Gem or 0) >= 1, `{star.Id}: {names.Gem or 0} gems`)
 			T.eq(names.Gem, names.GemBezel, star.Id .. ": every gem in a bezel")
-			T.eq(names.Collar, 1, star.Id .. ": the gold collar")
-			T.truthy((names.CrownCrystal or 0) >= 4, star.Id .. ": the crown")
-			T.truthy((names.Crystal or 0) >= 5, `{star.Id}: {names.Crystal or 0} crystals`)
+			T.eq(names.CrownGem, if names.Collar == 1 then 4 else nil, star.Id .. ": a ring has its four gems")
+			T.eq(names.Crystal, 3, star.Id .. ": three crystals")
+			T.eq(names.CrystalSetting, 1, star.Id .. ": in a gold cup")
+			T.falsy(names.Star or names.Crack or names.CrownCrystal or names.GoldTrim, star.Id .. ": nothing busy")
 		end
 		-- the levels never get jewels
 		local plain = {}
