@@ -77,6 +77,7 @@ RebirthController.WeaponReasons = {
 	Owned = "That blaster is yours already.",
 	NoStars = "Not enough Forge Stars yet.",
 	BadWeapon = "That blaster isn't in the forge.",
+	Checking = "Checking your Robux passes. Try again in a moment.",
 	NoData = "Your data is still loading.",
 }
 

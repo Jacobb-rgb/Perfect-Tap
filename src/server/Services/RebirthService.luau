@@ -39,8 +39,9 @@
 	(Grant "RebirthWeapon", MonetizationService.registerPass, checked on
 	every load and on a purchase). Grant = RebirthWeapons[id] and
 	RebirthWeaponPasses[id] (equipped when it is open and you hold none);
-	a weapon already bought with stars stays a star one (a refund of the
-	pass never takes it). Revoke (Roblox says the pass isn't owned, e.g. a
+	a weapon bought with stars too (before the check answered) gets its
+	stars back and the pass holds it; buying with stars waits for the
+	check ("Checking"). Revoke (Roblox says the pass isn't owned, e.g. a
 	refund) = only a pass-given weapon goes, unequipped. ToolService hands
 	the equipped one out, MiningService multiplies the damage
 	(StarBlasterData.equipped / mult).
@@ -308,7 +309,9 @@ local function weaponSet(data: { [string]: any }, key: string): { [string]: any 
 	return t
 end
 
--- Buys a STAR blaster with Forge Stars and equips it. Returns (true) or (false, reason).
+-- Buys a STAR blaster with Forge Stars and equips it. Returns (true) or (false, reason):
+-- a StarBlasterData.quote reason, or "Checking" while Roblox hasn't said yet whether
+-- the player owns its live game pass (so nobody pays stars for a pass they bought).
 function RebirthService.buyWeapon(player: Player, id: any): (boolean, string?)
 	local data = DataService.get(player)
 	if not data then
@@ -317,6 +320,10 @@ function RebirthService.buyWeapon(player: Player, id: any): (boolean, string?)
 	local _, reason = StarBlasterData.quote(data, id)
 	if reason then
 		return false, reason
+	end
+	local entry = MonetizationConfig.get("Star" .. tostring(id))
+	if entry and MonetizationConfig.isLive(entry.Id) and not MonetizationService.known(player, entry.Key) then
+		return false, "Checking"
 	end
 	StarBlasterData.buy(data, id)
 	DataService.changed(player)
@@ -346,12 +353,21 @@ local function grantWeapon(player: Player, data: { [string]: any }, entry: Monet
 		return false
 	end
 	local owned = weaponSet(data, "RebirthWeapons")
-	if owned[star.Id] then
-		-- bought with stars, or this pass gave it on an earlier load
+	local passes = weaponSet(data, "RebirthWeaponPasses")
+	if owned[star.Id] and passes[star.Id] then
+		-- this pass gave it on an earlier load
 		return false
 	end
+	if owned[star.Id] then
+		-- bought with stars as well (before the pass check answered): the stars go back,
+		-- the pass holds it from now on
+		data.Stars = RebirthConfig.starsOf(data) + star.Stars
+		passes[star.Id] = true
+		Net.fire("Notify", player, { Text = `You own the {star.Name} pass: your ⭐ {star.Stars} are back!`, Kind = "Reward" })
+		return true
+	end
 	owned[star.Id] = true
-	weaponSet(data, "RebirthWeaponPasses")[star.Id] = true
+	passes[star.Id] = true
 	local open = StarBlasterData.unlocked(data, star.Id)
 	if open and StarBlasterData.equipped(data) == nil then
 		data.StarBlaster = star.Id

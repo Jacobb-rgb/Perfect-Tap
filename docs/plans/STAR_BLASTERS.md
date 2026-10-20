@@ -38,7 +38,8 @@ Pictures:
   prices always match. They have Grant "RebirthWeapon" and a WeaponId. RebirthService registers the handler:
   - Grant: the weapon is owned and marked as given by the pass. It is equipped when it is open and nothing else is
     in hand. A pass bought before its rebirth waits, and the card says "Yours! It opens at rebirth N".
-  - A weapon already bought with stars stays a star weapon; the pass never takes it over.
+  - Buying with stars waits until Roblox has answered the weapon's live pass check ("Checking"). If a weapon was
+    bought with stars too, its stars come back once and from then on the pass holds the weapon.
   - Revoke (a refund) takes back only a weapon the pass gave.
 - **Stars:** RebirthAction `{ Action = "Weapon", Id }` buys with stars once Rebirths ≥ Unlock and equips the weapon.
   `{ Action = "Equip", Id }` switches weapons ("" = the forged blaster).

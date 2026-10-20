@@ -422,14 +422,8 @@ end
 local glowCache: { [Player]: { Key: string, Glow: Color3 } } = {}
 local function cachedGlow(player: Player, data: { [string]: any }): Color3
 	local ore = data.BlasterOre
-	local star = data.StarBlaster
-	local key = tostring(data.BlasterLevel)
-		.. "|"
-		.. (if type(ore) == "string" then ore else "")
-		.. "|"
-		.. (if type(star) == "string" then star else "")
-		.. "|"
-		.. tostring(data.Rebirths)
+	local star = StarBlasterData.equipped(data)
+	local key = tostring(data.BlasterLevel) .. "|" .. (if type(ore) == "string" then ore else "") .. "|" .. (if star then star.Id else "")
 	local cached = glowCache[player]
 	if cached and cached.Key == key then
 		return cached.Glow

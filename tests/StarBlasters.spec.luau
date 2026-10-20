@@ -18,6 +18,7 @@ return function(T, Loader)
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
+	local MonetizationService = Loader.requirePath("ServerScriptService.Server.Services.MonetizationService")
 	local RebirthView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.RebirthView")
 	local MenuPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MenuPanel")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
@@ -251,17 +252,46 @@ return function(T, Loader)
 		local comet = MonetizationConfig.get("StarComet")
 		T.truthy(grant(w.player, w.data, comet))
 		T.eq(w.data.StarBlaster, "Comet")
-		-- a weapon bought with stars stays a star one: the pass never takes it over
+		-- a live pass not checked yet: no stars are spent on it ("Checking")
 		w.data.Rebirths = 3
 		w.data.Stars = 50
-		RebirthService._test.action(w.player, { Action = "Weapon", Id = "Pulsar" })
-		T.truthy(w.results[#w.results].Ok)
 		local pulsar = MonetizationConfig.get("StarPulsar")
-		T.falsy(grant(w.player, w.data, pulsar), "owned already")
-		T.eq(w.data.RebirthWeaponPasses.Pulsar, nil)
-		T.falsy(revoke(w.player, w.data, pulsar), "a refund of that pass takes nothing")
+		local knownNow = false
+		local oldId, oldKnown = pulsar.Id, rawget(MonetizationService, "known")
+		pulsar.Id = 4242
+		rawset(MonetizationService, "known", function(p, key)
+			return p == w.player and key == "StarPulsar" and knownNow
+		end)
+		local ok, err = pcall(function()
+			RebirthService._test.action(w.player, { Action = "Weapon", Id = "Pulsar" })
+			T.eq(w.results[#w.results].Reason, "Checking")
+			T.eq(w.data.Stars, 50, "nothing spent")
+			knownNow = true
+			RebirthService._test.action(w.player, { Action = "Weapon", Id = "Pulsar" })
+			T.truthy(w.results[#w.results].Ok, "the check answered: stars work")
+		end)
+		pulsar.Id = oldId
+		rawset(MonetizationService, "known", oldKnown)
+		if not ok then
+			error(err, 0)
+		end
+		T.eq(w.data.Stars, 5)
+		-- bought with stars AND the pass: the stars go back once, the pass holds it from then on
+		T.truthy(grant(w.player, w.data, pulsar), "the stars come back")
+		T.eq(w.data.Stars, 50)
+		T.eq(w.data.RebirthWeaponPasses.Pulsar, true)
+		T.truthy(string.find(w.notes[#w.notes], "45", 1, true), "it says so")
+		T.falsy(grant(w.player, w.data, pulsar), "only once")
+		T.eq(w.data.Stars, 50)
 		T.eq(w.data.RebirthWeapons.Pulsar, true)
 		T.eq(w.data.StarBlaster, "Pulsar")
+		-- a weapon bought with stars only is never taken by a refund
+		w.data.Rebirths = 5
+		w.data.Stars = 100
+		RebirthService._test.action(w.player, { Action = "Weapon", Id = "Supernova" })
+		T.truthy(w.results[#w.results].Ok)
+		T.falsy(revoke(w.player, w.data, MonetizationConfig.get("StarSupernova")), "a refund of that pass takes nothing")
+		T.eq(w.data.RebirthWeapons.Supernova, true)
 		-- a refund takes back the pass weapon (unequipped if in hand)
 		RebirthService._test.action(w.player, { Action = "Equip", Id = "Nebula" })
 		T.eq(w.data.StarBlaster, "Nebula")
