@@ -456,8 +456,8 @@ end
 -- Sizes for the big screens and for phones / TVs (compact: TechShopView.compactFor):
 -- on a phone the HUD scale is small, so the X, the odds and their buttons grow.
 StoreView.Metrics = {
-	Normal = { Close = 50, Lines = 17, Note = 15, Button = Vector2.new(190, 54), Detail = Vector2.new(560, 420) },
-	Compact = { Close = 72, Lines = 24, Note = 19, Button = Vector2.new(240, 72), Detail = Vector2.new(760, 470) },
+	Normal = { Close = 50, Lines = 17, Note = 15, Status = 17, Button = Vector2.new(190, 54), Detail = Vector2.new(560, 420) },
+	Compact = { Close = 72, Lines = 24, Note = 19, Status = 22, Button = Vector2.new(240, 72), Detail = Vector2.new(760, 470) },
 }
 
 -- Fits the window into a w x h design-unit screen (compact: the phone sizes).
@@ -470,13 +470,17 @@ function StoreView.layout(refs: Refs, w: number, h: number, compact: boolean?)
 		scale.Scale = fit
 	end
 	local m = if compact then StoreView.Metrics.Compact else StoreView.Metrics.Normal
-	refs.Window.Close.Size = UDim2.fromOffset(m.Close, m.Close)
-	refs.Window.Close.TextSize = math.floor(m.Close * 0.62)
-	refs.Detail.Size = UDim2.fromOffset(m.Detail.X, m.Detail.Y)
-	refs.DetailLines.TextSize = m.Lines
+	-- (compact: the touch targets and texts keep their size through the fit shrink)
+	local k = if compact then 1 / math.max(fit, 0.5) else 1
+	local close = math.floor(m.Close * k)
+	refs.Window.Close.Size = UDim2.fromOffset(close, close)
+	refs.Window.Close.TextSize = math.floor(close * 0.62)
+	refs.Detail.Size = UDim2.fromOffset(math.min(m.Detail.X * k, size.X - 40), math.min(m.Detail.Y * k, size.Y - StoreView.Header - 40))
+	refs.DetailLines.TextSize = math.floor(m.Lines * k)
+	refs.Status.TextSize = math.floor(m.Status * k)
 	for _, button in { refs.DetailBuy, refs.DetailBack } do
-		button.Size = UDim2.fromOffset(m.Button.X, m.Button.Y)
-		button.TextSize = math.floor(m.Button.Y * 0.48)
+		button.Size = UDim2.fromOffset(math.floor(m.Button.X * k), math.floor(m.Button.Y * k))
+		button.TextSize = math.floor(m.Button.Y * k * 0.48)
 	end
 	for _, card in refs.Cards do
 		local description = card.Description

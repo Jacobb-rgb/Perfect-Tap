@@ -185,5 +185,29 @@
   "maxLights": 24,
   "ui": "ui_store_phone_odds",
   "uiInset": 58
+ },
+ "store_hud_phone_busy": {
+  "scene": "store",
+  "position": [
+   6,
+   9,
+   42
+  ],
+  "target": [
+   0,
+   6,
+   -12
+  ],
+  "fov": 60,
+  "preset": "Surface",
+  "sunDir": [
+   -0.965,
+   0.225,
+   0.136
+  ],
+  "shadowExtent": 120,
+  "maxLights": 24,
+  "ui": "ui_store_hud_phone_busy",
+  "uiInset": 58
  }
 }

@@ -1191,7 +1191,15 @@ return function(T, Loader)
 		T.eq(why, "Robux")
 		_, why = EnchantConfig.quote(none, "Heartfire", "Robux", 1, true)
 		T.eq(why, "Robux", "Heartfire changes no odds")
-		T.eq(EnchantConfig.quote(none, "Starbreaker", "Coins", 1, true), 1e12, "coins can't be bought with Robux")
+		-- a coin buy of an odds booster: fine while coins can't be bought with Robux,
+		-- a paid random item (restricted) while they can (both set here)
+		MonetizationConfig.CoinPacksEnabled = false
+		local offPrice = EnchantConfig.quote(none, "Starbreaker", "Coins", 1, true)
+		MonetizationConfig.CoinPacksEnabled = true
+		local _, onWhy = EnchantConfig.quote(none, "Starbreaker", "Coins", 1, true)
+		MonetizationConfig.CoinPacksEnabled = MonetizationConfig.CoinPacksDefault
+		T.eq(offPrice, 1e12, "coins can't be bought with Robux")
+		T.eq(onWhy, "Restricted", "coins buyable: a paid random item")
 		T.eq(MonetizationConfig.promptStatus("EnchantStarbreaker", true), "Restricted")
 		T.eq(MonetizationConfig.promptStatus("EnchantHeartfire", true), "ComingSoon")
 		T.truthy(EnchantConfig.Reasons.Restricted)
@@ -1638,8 +1646,10 @@ return function(T, Loader)
 				T.falsy(product.Perks, product.Key .. ": perks come from passes")
 			end
 		end
-		-- coin packs wait for the owner: off, never offered, coins not buyable
-		T.eq(MonetizationConfig.CoinPacksEnabled, false)
+		-- coin packs ship on (owner 2026-10-20); switched off they are never offered and
+		-- coins aren't buyable (both states set here, the shipped one restored)
+		T.eq(MonetizationConfig.CoinPacksDefault, true, "coin packs ship on")
+		MonetizationConfig.CoinPacksEnabled = false
 		T.falsy(MonetizationConfig.coinsBuyable())
 		for _, key in { "CoinsSmall", "CoinsMedium", "CoinsLarge" } do
 			T.truthy(MonetizationConfig.get(key).CoinPack)
@@ -1654,8 +1664,10 @@ return function(T, Loader)
 			T.truthy(CapsuleConfig.allRestricted(true))
 		end)
 		MonetizationConfig.CoinPacksEnabled = false
+		local offStone = CapsuleConfig.isPaidRandom("Stone")
+		MonetizationConfig.CoinPacksEnabled = MonetizationConfig.CoinPacksDefault
 		T.truthy(ok, tostring(err))
-		T.falsy(CapsuleConfig.isPaidRandom("Stone"))
+		T.falsy(offStone, "coin capsules aren't paid random while coins can't be bought")
 		T.truthy(CapsuleConfig.isPaidRandom("Royal"))
 	end)
 

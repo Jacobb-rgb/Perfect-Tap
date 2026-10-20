@@ -34,14 +34,15 @@ local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local StoreConfig = require(Shared.Config.StoreConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
+local BlasterData = require(Shared.Config.BlasterData)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Net = require(Shared.Net)
 local StoreView = require(script.Parent.Parent.UI.StoreView)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local RebirthView = require(script.Parent.Parent.UI.RebirthView)
 local CapsuleView = require(script.Parent.Parent.UI.CapsuleView)
-local EnchantView = require(script.Parent.Parent.UI.EnchantView)
 local TechShopView = require(script.Parent.Parent.UI.TechShopView)
+local CardOdds = require(script.Parent.Parent.UI.CardOdds)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local MenuPanels = require(script.Parent.Parent.Util.MenuPanels)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
@@ -192,9 +193,12 @@ local function refresh()
 				-- LV 10 waits for one forged level this run (a rebirth needs it): the Vault's rule
 				local rebirth = state().Rebirth
 				local reached = if type(rebirth) == "table" and type(rebirth.Reached) == "number" then rebirth.Reached else 0
+				local start = if type(rebirth) == "table" and type(rebirth.Start) == "number" then rebirth.Start else 1
 				if RebirthConfig.topBlockedFor(current, reached) then
 					cardState = "Locked"
 					StoreView.setNote(view, id, "Forge LV 10 at the Foundry first")
+				elseif start >= BlasterData.MaxLevel - 1 then
+					StoreView.setNote(view, id, "Rebirth start is max (LV 9)")
 				else
 					StoreView.setNote(view, id, spec.Note or "")
 				end
@@ -258,24 +262,14 @@ local function luckLines(delta: { [string]: number }): { string }
 	return lines
 end
 
--- An odds table (BoostView / EnchantView) as panel lines.
-local function tableLines(tbl: BoostView.OddsTable?): { string }
-	local lines: { string } = {}
-	if not tbl then
-		return lines
-	end
-	table.insert(lines, `{tbl.Title}  ({tbl.BeforeHeader} → {tbl.AfterHeader})`)
-	local summary = tbl.Summary
-	if summary then
-		table.insert(lines, `   {summary.Name}:  {summary.Before}  →  {summary.After}`)
-	end
-	for _, row in tbl.Rows do
-		table.insert(lines, `   {row.Name}:  {row.Before}  →  {row.After}`)
-	end
-	if tbl.Note ~= "" then
-		table.insert(lines, tbl.Note)
-	end
-	return lines
+local tableLines = CardOdds.tableLines
+
+-- The coming-soon set the boost and enchant windows use (BoostView.soonNow).
+local function soonNow(): { [string]: boolean }
+	return BoostView.soonNow(
+		ReplicatedStorage:GetAttribute(BoostView.SoonAttribute),
+		ReplicatedStorage:GetAttribute(MonetizationConfig.ReceiptsAttribute)
+	)
 end
 
 -- The odds panel's lines for a paid random product (or one that opens odds: the pass's Grotto).
@@ -318,11 +312,7 @@ local function oddsFor(product: MonetizationConfig.Product): { string }
 		return luckLines({ OreLuckMult = 2 })
 	end
 	if product.Enchant then
-		local tbl = EnchantView.odds(state(), product.Enchant, nil, os.time(), nil)
-		if tbl then
-			return tableLines(tbl)
-		end
-		return luckLines(EnchantConfig.nextDelta(state().Enchants, state().BlasterLevel or 1, product.Enchant))
+		return CardOdds.enchantLines(state(), product.Enchant, os.time(), soonNow())
 	end
 	return { product.Description }
 end
@@ -349,6 +339,21 @@ local function buy(key: string)
 	Sfx.play("UIClick")
 	refresh()
 	task.delay(PROMPT_MEMORY + 0.1, refresh)
+end
+
+-- Hides the odds panel; a gamepad selection goes back to the card that opened it
+-- (or the first card), never to the HUD behind the dim.
+local function hideDetail()
+	local view = refs
+	detailKey = nil
+	if not view then
+		return
+	end
+	StoreView.showDetail(view, nil)
+	if MenuPanels.usingGamepad() then
+		local first = view.Cards[view.Order[1]]
+		GuiService.SelectedObject = detailFrom or (if first then first.Button else nil)
+	end
 end
 
 local function onCard(id: string)
@@ -424,17 +429,12 @@ local function ensureView(): StoreView.Refs
 		end)
 	end
 	view.DetailBack.Activated:Connect(function()
-		detailKey = nil
-		StoreView.showDetail(view, nil)
-		if MenuPanels.usingGamepad() and detailFrom then
-			GuiService.SelectedObject = detailFrom
-		end
+		hideDetail()
 		Sfx.play("UIClick")
 	end)
 	view.DetailBuy.Activated:Connect(function()
 		local key = detailKey
-		detailKey = nil
-		StoreView.showDetail(view, nil)
+		hideDetail()
 		if key then
 			buy(key)
 		end
@@ -477,11 +477,7 @@ local function onClose(_: string, inputState: Enum.UserInputState): Enum.Context
 	end
 	local view = refs
 	if view and view.Detail.Visible then
-		detailKey = nil
-		StoreView.showDetail(view, nil)
-		if MenuPanels.usingGamepad() and detailFrom then
-			GuiService.SelectedObject = detailFrom
-		end
+		hideDetail()
 	else
 		StoreController.close()
 	end
@@ -591,7 +587,9 @@ function StoreController.start()
 				if left > 0 then
 					local by = ReplicatedStorage:GetAttribute("ServerLuckBy")
 					local clock = string.format("%d:%02d", math.floor(left / 60), math.floor(left % 60))
-					label.Text = `🍀 Server Luck x{BoostView.ServerLuckMult} · {clock}` .. (if type(by) == "string" and by ~= "" then ` · thanks {by}` else "")
+					local short = hud and hud.Gui:GetAttribute("ShortLuck") == true
+					label.Text = `🍀 Server Luck x{BoostView.ServerLuckMult} · {clock}`
+						.. (if not short and type(by) == "string" and by ~= "" then ` · thanks {by}` else "")
 				end
 				task.wait(if left > 0 then 0.5 else 2)
 			end

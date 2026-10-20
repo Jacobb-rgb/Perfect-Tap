@@ -323,6 +323,40 @@ return function(T, Loader)
 		end)
 	end)
 
+	-- (review: the phone pill once sat on the touch tutorial bubble and the FREE SPIN chip)
+	T.test("LightUI: the phone Shop pill and Server Luck line clear of the tutorial bubble and FREE SPIN", function()
+		local HudBubble = ui("HudBubble")
+		local TutorialView = ui("TutorialView")
+		local WheelView = ui("WheelView")
+		local function overlap(aPos: any, aSize: any, bPos: any, bSize: any): boolean
+			return aPos.X < bPos.X + bSize.X and bPos.X < aPos.X + aSize.X and aPos.Y < bPos.Y + bSize.Y and bPos.Y < aPos.Y + aSize.Y
+		end
+		withLight(function()
+			for _, size in { { 568, 320 }, { 667, 375 }, { 736, 414 }, { 844, 390 } } do
+				local screen = Vector2.new(size[1], size[2])
+				local scale = HudBubble.scaleFor(screen)
+				local refs = HudBubble.buildGame(scale, size[1])
+				local width = size[1] / scale
+				local function rect(gui: any): (any, any)
+					local s = gui.Size
+					local x = width * gui.Position.X.Scale + gui.Position.X.Offset - gui.AnchorPoint.X * s.X.Offset
+					local y = gui.Position.Y.Offset - gui.AnchorPoint.Y * s.Y.Offset
+					return Vector2.new(x, y), Vector2.new(s.X.Offset, s.Y.Offset)
+				end
+				local pillPos, pillSize = rect(refs.Gui:FindFirstChild("ShopPill"))
+				local luckPos, luckSize = rect(refs.Gui:FindFirstChild("ServerLuck"))
+				local bubble = TutorialView.layout(scale, screen, true)
+				local bubblePos = Vector2.new(bubble.Position.X - bubble.AnchorPoint.X * bubble.Width, bubble.Position.Y)
+				local bubbleSize = Vector2.new(bubble.Width, bubble.Height)
+				local spinPos, spinSize = WheelView.chipRect(scale, screen)
+				for name, r in { pill = { pillPos, pillSize }, luck = { luckPos, luckSize } } do
+					T.falsy(overlap(r[1], r[2], bubblePos, bubbleSize), `{name} on the tutorial bubble at {size[1]} x {size[2]}`)
+					T.falsy(overlap(r[1], r[2], spinPos, spinSize), `{name} on the FREE SPIN chip at {size[1]} x {size[2]}`)
+				end
+			end
+		end)
+	end)
+
 	T.test("LightUI: on a small phone the Shop pill, the tabs, the money and the hotbar don't meet", function()
 		local HudBubble = ui("HudBubble")
 		withLight(function()

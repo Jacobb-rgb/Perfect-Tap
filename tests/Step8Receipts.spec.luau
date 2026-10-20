@@ -390,8 +390,11 @@ return function(T, Loader)
 		T.falsy(MonetizationService.openGate(), "closed")
 		registerAll()
 		T.truthy(MonetizationService.openGate(), "open again")
-		-- a live coin pack while coin packs are off is reported
-		T.truthy(w.loggedWith("CoinPacksEnabled is false") >= 3, "the three coin packs are reported")
+		-- a live coin pack while coin packs are off is reported (set here: the
+		-- world restores the shipped value afterwards)
+		MonetizationConfig.CoinPacksEnabled = false
+		MonetizationService.openGate()
+		T.truthy(w.loggedWith("CoinPacksEnabled is false") >= 3, "the coin packs are reported")
 	end)
 
 	---------------------------------------------------------------- Royal capsules

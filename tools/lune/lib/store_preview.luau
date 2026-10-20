@@ -121,7 +121,8 @@ function Preview.build(Loader: any): { [string]: any }
 		end
 		local luck = refs.Gui:FindFirstChild("ServerLuck")
 		if luck then
-			luck.Text = "🍀 Server Luck x2 · 14:32 · thanks Kuba"
+			-- (as StoreController writes it: phones drop "thanks name")
+			luck.Text = if refs.Gui:GetAttribute("ShortLuck") then "🍀 Server Luck x2 · 14:32" else "🍀 Server Luck x2 · 14:32 · thanks Kuba"
 			luck.Visible = true
 		end
 		local list = { refs.Gui }
@@ -131,6 +132,25 @@ function Preview.build(Loader: any): { [string]: any }
 		return list
 	end
 	exports.ui_store_hud_pc = UiExport.export(hudWithChips(scale, false, pcW, pcH))
+	-- a 667 x 375 phone with the tutorial bubble and the FREE SPIN chip (review: the pill clear of both)
+	do
+		local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
+		local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
+		local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
+		local list = hudWithChips(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale)
+		local tutorial = TutorialView.build()
+		tutorial.Gui.Scale.Scale = phoneScale
+		TutorialView.apply(tutorial, TutorialView.layout(0.62, (require("@lune/roblox") :: any).Vector2.new(667, 375), true, false, nil))
+		local step = TutorialConfig.get(2)
+		TutorialView.setStep(tutorial, 2, step, if step.Hint then step.Hint.Touch else nil)
+		tutorial.Bubble.Visible = true
+		table.insert(list, tutorial.Gui)
+		local spin = WheelView.buildChip(0.62, 667)
+		spin.Gui.Scale.Scale = phoneScale
+		spin.Gui.Enabled = true
+		table.insert(list, spin.Gui)
+		exports.ui_store_hud_phone_busy = UiExport.export(list)
+	end
 	exports.ui_store_hud_phone = UiExport.export(hudWithChips(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale))
 	-- the odds panel on a phone (compact sizes)
 	local phoneOdds = store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, 1580)

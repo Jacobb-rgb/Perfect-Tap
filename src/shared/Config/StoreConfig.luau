@@ -109,7 +109,7 @@ StoreConfig.Cards = {
 		Rows = 2,
 		Title = "Next Blaster",
 		Big = "LV +1", -- (StoreController shows the next level: "LV 5")
-		Note = "+1 start LV every rebirth",
+		Note = "+1 rebirth start LV (max 9)",
 	}),
 	-- passes and boards
 	card({ Id = "Podiums", Keys = { "Podiums" }, Look = "Item", Glow = "Orange", Icon = "podium", Col = 31, Row = 0, Cols = 5, Rows = 1 }),

@@ -6,7 +6,9 @@
 	                icon and the income per second over it (owner 2026-10-20,
 	                his phone photo); the game HUD (buildGame) only
 	  bottom-left   over the money: the green "Shop" pill with the cart (opens
-	                the Robux STORE); on phones and tablets it sits top-right
+	                the Robux STORE); on phones and tablets at the right end
+	                of the TRAIN chip's row (the top-right holds the tutorial
+	                bubble and the FREE SPIN chip)
 	  top-centre    the teleport bar: BASE / LOBBY / VAULT tabs with 3D icons
 	  left          the main menu tiles: BACKPACK, GOLEMS, BUILD, SHOP + MORE
 	                (2 columns on PC, 3 columns on phones so the tiles stay above
@@ -666,21 +668,23 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
 	-- the green Shop pill: on big screens over the money (the owner's phone photo: Shop
 	-- above the money, bottom-left); on phones and tablets the left column is full
-	-- (tiles, the TRAIN chip, the money), so it sits at the top-right, under Roblox's top bar
+	-- (tiles, the TRAIN chip, the money) and the top-right holds the tutorial bubble
+	-- and the FREE SPIN chip, so it sits at the right end of the TRAIN chip's row
 	local pill = HudBubble.ShopPill
 	local moneyTop = -coinsPanel.Position.Y.Offset + coinsPanel.Size.Y.Offset
 	local shop = Card.pill(gui, "Shop", "cart", Color3.fromRGB(110, 226, 52), Color3.fromRGB(34, 110, 20), pill, {
 		Name = "ShopPill",
 		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
-		Position = if layout.Compact then UDim2.new(1, -18, 0, HudBubble.MenuTop) else UDim2.new(0, 20, 1, -(moneyTop + 12)),
+		Position = if layout.Compact then UDim2.new(1, -18, 0, HudBubble.chipTop(layout)) else UDim2.new(0, 20, 1, -(moneyTop + 12)),
 	})
 	shop:SetAttribute("Opens", "StoreController")
+	gui:SetAttribute("ShortLuck", layout.Compact) -- (phones: the Server Luck line without "thanks name")
 	-- Server Luck running (StoreController fills it from ServerLuckUntil): next to the pill
 	Card.text(gui, "", 22, {
 		Name = "ServerLuck",
 		AnchorPoint = if layout.Compact then Vector2.new(1, 0) else Vector2.new(0, 1),
 		Position = if layout.Compact
-			then UDim2.new(1, -18, 0, HudBubble.MenuTop + pill.Y + 8)
+			then UDim2.new(1, -18, 0, HudBubble.chipTop(layout) + pill.Y + 8)
 			else UDim2.new(0, 22, 1, -(moneyTop + 12 + pill.Y + 8)),
 		-- (phones: no wider than the pill's corner, clear of the tabs; the text shrinks to fit)
 		Size = if layout.Compact then UDim2.fromOffset(HudBubble.ShopPill.X + 90, 26) else UDim2.fromOffset(420, 28),
@@ -941,6 +945,9 @@ function HudBubble.addMore(menu: Instance, id: string, spec: TileSpec): TextButt
 	return face
 end
 
+-- Called with the MORE flyout's new state (SideMenuController sets it).
+HudBubble.onMoreToggled = nil :: ((boolean) -> ())?
+
 -- Opens / shuts the MORE flyout (nil = the other way round). Returns whether it is open.
 function HudBubble.toggleMore(menu: Instance, open: boolean?): boolean
 	local gui = menu.Parent :: Instance
@@ -950,6 +957,10 @@ function HudBubble.toggleMore(menu: Instance, open: boolean?): boolean
 	end
 	local on = if open == nil then not flyout.Visible else open
 	flyout.Visible = on
+	local hook = HudBubble.onMoreToggled
+	if hook then
+		hook(on) -- (SideMenuController: MenuPanels.setGridOpen, the chips hide while it is open)
+	end
 	local more = menu:FindFirstChild("More")
 	local face = more and more:FindFirstChild("Face") :: GuiObject?
 	if face then

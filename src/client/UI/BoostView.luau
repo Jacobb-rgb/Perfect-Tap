@@ -544,7 +544,7 @@ function BoostView.cards(rawState: any, coins: number, now: number, restricted: 
 		end
 		local keyLine: string
 		if kind.Target == "Mining" then
-			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct)
+			local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
 			keyLine = `Your ore luck: {BoostView.mult(without)} → {BoostView.mult(with)}`
 			if not effect then
 				keyLine = BoostConfig.Reasons.NoEffect
@@ -617,7 +617,7 @@ end
 ]]
 function BoostView.hexaOdds(rawState: any, zoneId: string?): OddsTable
 	local ctx = BoostView.context(rawState, nil)
-	local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct)
+	local without, with = BoostConfig.hexaLuck(ctx.OreLuckPct, BoostView.serverLuck())
 	local zone = if zoneId then WorldLayout.ZoneById[zoneId] else nil
 	local rows: { OddsRow } = {}
 	local summary: OddsRow? = nil

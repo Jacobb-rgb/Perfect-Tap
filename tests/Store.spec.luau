@@ -43,7 +43,7 @@ return function(T, Loader)
 		for _, key in { "BlasterNextA", "BlasterNextB", "BlasterNextC", "BlasterNextD" } do
 			T.truthy(string.find(MonetizationConfig.get(key).Description, "1 level higher", 1, true) ~= nil, key .. " text")
 		end
-		T.eq(StoreConfig.ById.Blaster.Note, "+1 start LV every rebirth")
+		T.eq(StoreConfig.ById.Blaster.Note, "+1 rebirth start LV (max 9)")
 		T.falsy(StoreConfig.sells(42), "junk")
 		T.truthy(MonetizationConfig.CoinPacksDefault, "coin packs ship on (owner)")
 		local spec = StoreConfig.ById.Blaster
@@ -65,6 +65,16 @@ return function(T, Loader)
 				end
 			end
 			T.le(card.Row + card.Rows, StoreConfig.Rows, card.Id .. " within the rows")
+		end
+	end)
+
+	T.test("Store: the Starbreaker odds show the change in every zone with Rare ores (review: never only Starter)", function()
+		local CardOdds = ui("CardOdds")
+		for level = 3, 10 do
+			local state = { BlasterLevel = level, Enchants = { Owned = {}, Slots = {} }, Bonuses = {} }
+			local text = table.concat(CardOdds.enchantLines(state, "Starbreaker", 1.7e9, {}), "\n")
+			T.truthy(string.find(text, "Rare or better", 1, true) ~= nil, `LV {level}: the Rare or better line`)
+			T.falsy(string.find(text, "No Rare ores", 1, true), `LV {level}: never "No Rare ores"`)
 		end
 	end)
 
