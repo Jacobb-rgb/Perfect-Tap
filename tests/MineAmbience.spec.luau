@@ -15,7 +15,7 @@ return function(T, Loader)
 	local MineKit = Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
 	local MODULES = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Core" }
-	local KINDS = { "MineDrip", "MineRumble", "LagoonLap", "PalaceEcho", "CrystalHum", "LavaBubble" }
+	local KINDS = { "MineDrip", "MineRumble", "LagoonLap", "PalaceEcho", "CrystalHum", "LavaBubble", "StormCrackle" }
 	-- AmbienceConfig's own kinds (review/hory-noc): the mine kinds are merged into the same table
 	local LOBBY_KINDS = { "Waterfall", "Brook", "Pond", "Forge", "Plaza" }
 
@@ -144,15 +144,23 @@ return function(T, Loader)
 				end
 			end
 		end
-		T.eq(seen, #KINDS, "six mine kinds")
+		T.eq(seen, #KINDS, "seven mine kinds")
 		local used: { [string]: boolean } = {}
-		T.eq(#MineAmbience.Floors, #MODULES, "a kind list per floor")
-		for i, kinds in MineAmbience.Floors do
+		-- keyed by floor Id (a new floor can go in between): every floor in MineFloors has a
+		-- list, and the one extra list is the Stormglass Rift's (built, not in the game yet)
+		local lists = 0
+		for id, kinds in MineAmbience.Floors do
+			lists += 1
+			T.truthy(MineFloors.ById[id] ~= nil or id == "StormglassRift", `kind list for a known floor ({id})`)
 			for _, kind in kinds do
-				T.truthy(MineAmbience.Kinds[kind], `floor {i} kind {kind}`)
+				T.truthy(MineAmbience.Kinds[kind], `floor {id} kind {kind}`)
 				used[kind] = true
 			end
 		end
+		for _, floor in MineFloors.List do
+			T.truthy(MineAmbience.Floors[floor.Id], floor.Id .. " has a kind list")
+		end
+		T.le(lists, #MineFloors.List + 1, "no stray kind lists")
 		for _, kind in KINDS do
 			T.truthy(used[kind], kind .. " is on a floor")
 		end
@@ -179,7 +187,7 @@ return function(T, Loader)
 				local kind = spot:GetAttribute(MineAmbience.Attribute)
 				local label = `{name} {spot.Name}`
 				T.truthy(type(kind) == "string" and MineAmbience.Kinds[kind], label .. " has a known kind")
-				T.truthy(table.find(MineAmbience.Floors[i], kind), `{label}: {kind} belongs on floor {i}`)
+				T.truthy(table.find(MineAmbience.Floors[MineFloors.get(i).Id], kind), `{label}: {kind} belongs on floor {i}`)
 				kinds[kind] = (kinds[kind] or 0) + 1
 				T.eq(spot.Name, "Ambience" .. kind, label .. " name")
 				T.truthy(spot:HasTag(MineAmbience.Tag), label .. " tagged")
@@ -193,7 +201,7 @@ return function(T, Loader)
 				T.le((at - host.CFrame.Position).Magnitude, host.Size.Magnitude / 2 + 8, label .. " near its host's middle")
 				T.truthy(inBox(Floor, origin, at), label .. " inside the floor's box")
 			end
-			for _, kind in MineAmbience.Floors[i] do
+			for _, kind in MineAmbience.Floors[MineFloors.get(i).Id] do
 				T.truthy(kinds[kind], `{name} plays {kind}`)
 			end
 		end

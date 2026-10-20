@@ -1,7 +1,8 @@
 --[[
 	Mine floor concepts for the owner (2026-10-17, docs/plans/MINE_FLOORS_PLAN.md):
 	the rocks of all 5 floors (RockBuilder) side by side, the Giant Crystals, and a
-	storyboard of a rock breaking. Scene "mine_rocks"
+	storyboard of a rock breaking; row 6 / the last giant is the new Stormglass Rift
+	(built, not in MineFloors yet: mine_floor_scene's stand-in floor). Scene "mine_rocks"
 	(lune run tools/lune/export_scene.luau mine_rocks), shots in
 	tools/preview/mine_shots.json.
 
@@ -130,8 +131,15 @@ function MineConcepts.buildRocks(Loader, workspace)
 	local TEXT = C3.fromRGB(246, 232, 206)
 
 	---------------------------------------------------------------- floor rows
+	-- i = the row (and seed base), key = how MineFloors / RockBuilder find the floor
+	local storm = require("./mine_floor_scene").stormFloor(Loader)
+	local rows = {}
 	for _, floor in MineFloors.List do
-		local i = floor.Index
+		table.insert(rows, { Floor = floor, I = floor.Index, Key = floor.Index })
+	end
+	table.insert(rows, { Floor = storm, I = 6, Key = storm.Id, Title = "NEW" })
+	for _, spec in rows do
+		local floor, i, key = spec.Floor, spec.I, spec.Key
 		local pal = floor.Palette
 		local z = -(i - 1) * ROW
 		local row = roblox.Instance.new("Model")
@@ -140,7 +148,7 @@ function MineConcepts.buildRocks(Loader, workspace)
 		Geo.block(row, CF.new(0, -0.5, z - 2), V3.new(66, 1, 30), pal.Ground)
 		Geo.block(row, CF.new(0, 8, z - 14), V3.new(70, 18, 2), pal.Dark)
 		local lampColor = C3.fromRGB(255, 238, 220):Lerp(pal.Light, 0.25)
-		local power = if i == 1 then 0.5 elseif i == 5 then 2.2 else 1.8
+		local power = if i == 1 then 0.5 elseif i == 5 then 2.2 elseif i == 6 then 2.0 else 1.8
 		for _, lx in { -20, 0, 20 } do
 			lamp(Geo, CF, row, V3.new(lx, 10, z + 8), lampColor, 30, power)
 		end
@@ -149,25 +157,25 @@ function MineConcepts.buildRocks(Loader, workspace)
 			local count = MineFloors.OreCount[kind]
 			local weights = if kind == "Crystal" or kind == "Golden" then floor.CrystalOres else floor.Ores
 			local ores = rollOres(Rng, weights, count, i * 100 + col)
-			local rock = RockBuilder.build(i, kind, ores, CF.new(x, 0, z - 3), i * 31 + col * 7)
+			local rock = RockBuilder.build(key, kind, ores, CF.new(x, 0, z - 3), i * 31 + col * 7)
 			rock.Parent = row
-			local maxHp = MineFloors.rockHealth(i, kind)
+			local maxHp = MineFloors.rockHealth(key, kind)
 			local hp = if col == 2 then math.ceil(maxHp * 0.55) else maxHp
-			rockLabel(Geo, CF, row, x, topOf(rock) + 1.3, z - 1, MineFloors.rockName(i, kind), MineFloors.labelColor(i, kind), (if hp >= 1e4 then string.format("%.1fK", hp / 1000) else tostring(hp)) .. " HP", hp / maxHp)
-			local hp = if kind == "Small" or kind == "Big" or kind == "Crystal" then " · " .. hpText(MineFloors, i, kind) else ""
+			rockLabel(Geo, CF, row, x, topOf(rock) + 1.3, z - 1, MineFloors.rockName(key, kind), MineFloors.labelColor(key, kind), (if hp >= 1e4 then string.format("%.1fK", hp / 1000) else tostring(hp)) .. " HP", hp / maxHp)
+			local hp = if kind == "Small" or kind == "Big" or kind == "Crystal" then " · " .. hpText(MineFloors, key, kind) else ""
 			label(Geo, CF, row, CF.new(x, 0.32, z + 4.2) * CF.Angles(-1.05, 0, 0), 8.6, 0.9, KIND_TEXT[kind] .. hp, TEXT)
 		end
 		person(row, 30.5, z - 1)
-		local title = string.format("%d · %s · Blaster %d+%s", i, string.upper(floor.Name), floor.MinBlaster, if floor.ViaElevator then " · elevator" else "")
+		local title = string.format("%s · %s · Blaster %d+%s", spec.Title or tostring(i), string.upper(floor.Name), floor.MinBlaster, if floor.ViaElevator then " · elevator" else "")
 		label(Geo, CF, row, CF.new(0, 0.32, z + 7.4) * CF.Angles(-1.05, 0, 0), 30, 1.3, title, TEXT)
 	end
 
 	---------------------------------------------------------------- giant crystals
-	for _, floor in MineFloors.List do
-		local i = floor.Index
+	for _, r in rows do
+		local floor, i = r.Floor, r.I
 		local x = MineConcepts.GIANT_X + (i - 3) * MineConcepts.GIANT_GAP
 		Geo.block(root, CF.new(x, -0.5, 0), V3.new(30, 1, 30), floor.Palette.Ground)
-		local giant = RockBuilder.build(i, "Giant", {}, CF.new(x, 0, -2), i * 13)
+		local giant = RockBuilder.build(r.Key, "Giant", {}, CF.new(x, 0, -2), i * 13)
 		giant.Parent = root
 		person(root, x + 8.5, 4)
 		label(Geo, CF, root, CF.new(x, 0.32, 10.5) * CF.Angles(-1.05, 0, 0), 20, 1.2, floor.Name .. " · Giant Crystal", TEXT)

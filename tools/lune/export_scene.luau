@@ -180,7 +180,7 @@ elseif sceneName == "mine_rocks" then -- mine floor rocks, giant crystals, break
 elseif sceneName == "mine_showcase" then -- the ore-shelf showcase of the mine floor rocks
 	require("./lib/mine_concepts").buildShowcase(Loader, workspace)
 elseif sceneName == "mine_floor" then -- one mine floor area with rocks (tools/lune/lib/mine_floor_scene.luau)
-	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or 1)
+	require("./lib/mine_floor_scene").build(Loader, workspace, tonumber(process.args[2]) or process.args[2] or 1)
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
 elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)

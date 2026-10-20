@@ -5,11 +5,14 @@
 	between them (lava, ice, gold, heart glow per floor) and
 	dense clusters of slim, two-tone faceted crystals with glowing tips and
 	twinkles. The crystals get clearer and brighter the deeper the floor
-	(matte -> glowing tips -> glassy shells with a glowing core -> pure glow).
+	(matte -> glowing tips -> glassy shells with a glowing core -> pure glow;
+	the Stormglass Rift's smoky indigo glass with lightning trapped inside).
 	The ores inside stay secret: one small glint per ore in its glow color.
+	Each floor's look is keyed by its MineFloors Id (LOOKS below), never by its
+	Index, so a new floor can go in between and the others renumber safely.
 
 	  RockBuilder.build(floor, kind, oreIds, base, seed) -> Model "Rock"
-	    floor   MineFloors index or id
+	    floor   MineFloors index or id (the look is chosen by the floor's Id)
 	    kind    Small (3 ores) | Big (4) | Crystal (3 better ores, mostly crystal)
 	            | Golden | Geode | Artifact | Giant (the server-wide crystal)
 	    base    CFrame on the ground (bottom center)
@@ -55,7 +58,7 @@ RockBuilder.Special = {
 	Rune = Color3.fromRGB(90, 255, 214),
 }
 
-type Look = "Matte" | "Tipped" | "Shell" | "Glow"
+type Look = "Matte" | "Tipped" | "Shell" | "Glow" | "Storm"
 
 type Ctx = {
 	model: Model,
@@ -72,6 +75,30 @@ type Ctx = {
 	ring: number, -- radius of the ring of shards
 	top: number, -- half width of the central shard's top
 	gaps: { number }, -- yaw of the gaps between ring shards
+	look: FloorLook,
+}
+
+--[[
+	How a floor's rocks look (LOOKS, keyed by the floor's MineFloors Id):
+	  Build        the floor's Small / Big rock
+	  Tier         how deep it is for sizes and glow (the floor's index when its
+	               rocks were made; the deeper, the taller the crystals and the
+	               brighter their lights; fractions are fine)
+	  CrystalLook  crystal look of its Crystal rocks (one step up from Build's)
+	  GiantLook    crystal look of its Giant Crystal
+	  Core         the palette color glowing between the shards of its Crystal
+	               rocks and Giant Crystal (nil: the floor's crystal color)
+	  Float        floating rocks (the void)
+	  Carved       upright pillar shards with flat gold-trimmed tops (the palace)
+]]
+type FloorLook = {
+	Build: (Ctx, { string }) -> (),
+	Tier: number,
+	CrystalLook: Look,
+	GiantLook: Look,
+	Core: ("Accent" | "Crystal")?,
+	Float: boolean?,
+	Carved: boolean?,
 }
 
 local SOLID = { CanTouch = false, CanQuery = true, CanCollide = true }
@@ -83,19 +110,8 @@ local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
 local FOIL = Enum.Material.Foil
 local VERTEX_UP = CFrame.Angles(0, 0, math.atan(math.sqrt(2))) * CFrame.Angles(0, math.pi / 4, 0)
-
--- Crystal look per floor; Crystal rocks and specials use the next one up.
-local function lookFor(floor: MineFloors.Floor, upgrade: boolean): Look
-	local index = floor.Index + (if upgrade then 1 else 0)
-	if index <= 1 then
-		return "Matte"
-	elseif index == 2 then
-		return "Tipped"
-	elseif index <= 4 then
-		return "Shell"
-	end
-	return "Glow"
-end
+-- the smoky indigo glass of the Stormglass Rift's crystals (look "Storm")
+local STORM_GLASS = Color3.fromRGB(84, 98, 184)
 
 local function glow(color: Color3): Color3
 	return ItemBuilder.glowColor(color)
@@ -117,8 +133,9 @@ end
 	a diamond-section body with a darker octagon facet block through it
 	(alternating light and dark faces, like a cut gem), a ridge tip, and for
 	`hero` crystals a true 4-sided pointed tip (exact triangles). Shell looks
-	are see-through with a glowing core. `base` = bottom center, up = growth.
-	Parts: small 3, big 4-5, hero 11-12.
+	are see-through with a glowing core; Storm looks are smoky indigo glass
+	(`color` only tints it) with a bright core in `color` and neon tips.
+	`base` = bottom center, up = growth. Parts: small 3, big 4-5, hero 11-12.
 ]]
 local function crystal(parent: Model, base: CFrame, height: number, width: number, color: Color3, look: Look, hero: boolean?): BasePart
 	local group = Instance.new("Model")
@@ -137,6 +154,9 @@ local function crystal(parent: Model, base: CFrame, height: number, width: numbe
 	elseif look == "Glow" then
 		bodyColor, facetColor, bodyMat = glow(color:Lerp(WHITE, 0.1)), glow(color:Lerp(BLACK, 0.25)), NEON
 		tipA, tipB, tipMat = glow(color:Lerp(WHITE, 0.4)), glow(color:Lerp(WHITE, 0.15)), NEON
+	elseif look == "Storm" then
+		bodyColor, facetColor, transparency = STORM_GLASS:Lerp(color, 0.14), STORM_GLASS:Lerp(BLACK, 0.3), 0.38
+		tipA, tipB, tipMat = glow(color:Lerp(WHITE, 0.15)), glow(color:Lerp(BLACK, 0.08)), NEON
 	end
 	local shadow = look ~= "Glow"
 	local bodyCf = base * CFrame.Angles(0, math.pi / 4, 0)
@@ -158,8 +178,10 @@ local function crystal(parent: Model, base: CFrame, height: number, width: numbe
 		})
 		facet.Name = "CrystalFacet"
 	end
-	if look == "Shell" and (hero or width >= 0.7) then
-		local core = Geo.block(group, bodyCf * CFrame.new(0, bodyH * 0.5, 0), Vector3.new(width * 0.4, bodyH * 0.9, width * 0.4), glow(color), NEON, GLOW)
+	-- (stormglass: only the thicker crystals, so the rocks keep their part budgets)
+	if (look == "Shell" and (hero or width >= 0.7)) or (look == "Storm" and (hero or width >= 1.15)) then
+		local k = if look == "Storm" then 0.5 else 0.4
+		local core = Geo.block(group, bodyCf * CFrame.new(0, bodyH * 0.5, 0), Vector3.new(width * k, bodyH * 0.9, width * k), glow(color), NEON, GLOW)
 		core.Name = "CrystalCore"
 	end
 	if hero then
@@ -547,31 +569,72 @@ local function core(c: Ctx, oreIds: { string })
 	glints(c, oreIds)
 end
 
-local FLOOR_LOOK: { (Ctx, { string }) -> () } = { quarry, ember, lagoon, palace, core }
+-- Stormglass Rift: dark indigo shards around trapped lightning (a yellow glow in the gaps),
+-- glowing zig-zag cracks down the outer shards, a crown of stormglass crystals (smoky indigo
+-- glass, a bright core, yellow-white neon tips) and a spark at the top.
+local function storm(c: Ctx, oreIds: { string })
+	local rng = c.rng
+	body(c, { Core = c.pal.Crystal, Chunks = 5 })
+	-- lightning cracks: two neon strips meeting at a sharp bend, flat on the rock's face
+	local crackColor = glow(c.pal.Crystal:Lerp(WHITE, 0.35))
+	for i = 1, 2 do
+		local a = c.start + 1.2 + i * 2.5
+		local face = surface(c, a, rng:range(-0.2, 0.3), -0.3) * CFrame.Angles(0, -a + math.pi / 2, 0)
+		local roll = rng:range(0.9, 1.25) * (if i == 1 then 1 else -1)
+		local len1, len2 = rng:range(0.9, 1.2), rng:range(0.8, 1.1)
+		local first = face * CFrame.Angles(0, 0, roll) * CFrame.new(-len1 / 2, 0, 0)
+		local a1 = Geo.block(c.model, first, Vector3.new(len1, 0.2, 0.14), crackColor, NEON, GLOW)
+		a1.Name = "Vein"
+		local second = face * CFrame.Angles(0, 0, roll) * CFrame.Angles(0, 0, -roll * 1.7) * CFrame.new(len2 / 2 - 0.05, 0, 0)
+		local a2 = Geo.block(c.model, second, Vector3.new(len2, 0.18, 0.14), crackColor, NEON, GLOW)
+		a2.Name = "Vein"
+	end
+	local tallest = rockClusters(c, "Storm", 3.7, { c.pal.Crystal, c.pal.Crystal2 }, { c.pal.Crystal2, c.pal.Crystal })
+	twinkle(c, tipOf(tallest), 1.0, glow(c.pal.Crystal2))
+	glints(c, oreIds)
+end
+
+--[[
+	Every floor's rock look by its MineFloors Id (FloorLook above). Tier, Core,
+	Float and Carved of floors 1-5 are what their Index used to give, so their
+	rocks stay exactly as they were; a floor without an entry gets the quarry's.
+]]
+local LOOKS: { [string]: FloorLook } = {
+	Quarry = { Build = quarry, Tier = 1, CrystalLook = "Tipped", GiantLook = "Tipped" },
+	EmberCaves = { Build = ember, Tier = 2, CrystalLook = "Shell", GiantLook = "Shell", Core = "Accent" },
+	DeepHollow = { Build = lagoon, Tier = 3, CrystalLook = "Shell", GiantLook = "Shell", Core = "Crystal" },
+	SunkenPalace = { Build = palace, Tier = 4, CrystalLook = "Glow", GiantLook = "Shell", Core = "Accent", Carved = true },
+	-- between the palace and the core (blaster 8+): stormglass everywhere, richer on its Crystal rocks
+	StormglassRift = { Build = storm, Tier = 4.5, CrystalLook = "Storm", GiantLook = "Storm", Core = "Crystal" },
+	HeartstoneCore = { Build = core, Tier = 5, CrystalLook = "Glow", GiantLook = "Glow", Core = "Crystal", Float = true },
+}
+
+local function lookOf(floor: MineFloors.Floor): FloorLook
+	return LOOKS[floor.Id] or LOOKS.Quarry
+end
 
 -- The glowing core color of a floor's rocks (nil = solid rock).
 local function coreColor(c: Ctx): Color3?
-	local index = c.floor.Index
-	if index == 1 then
-		return nil
-	elseif index == 2 or index == 4 then
+	if c.look.Core == "Accent" then
 		return c.pal.Accent
+	elseif c.look.Core == "Crystal" then
+		return c.pal.Crystal
 	end
-	return c.pal.Crystal
+	return nil
 end
 
 ---------------------------------------------------------------- special kinds
 
 -- Crystal rock: a low rock with a dense crystal cluster in the floor's colors and a pointed hero crystal.
 local function crystalRock(c: Ctx)
-	local index = c.floor.Index
-	local look: Look = lookFor(c.floor, true)
-	body(c, { Scale = 0.8, Flat = 0.45, Chunks = 4, Float = if index == 5 then 0.8 else 0, Carved = index == 4, Core = coreColor(c) or c.pal.Crystal })
-	local mainH = 5 + index * 0.5
+	local tier = c.look.Tier
+	local look: Look = c.look.CrystalLook
+	body(c, { Scale = 0.8, Flat = 0.45, Chunks = 4, Float = if c.look.Float then 0.8 else 0, Carved = c.look.Carved == true, Core = coreColor(c) or c.pal.Crystal })
+	local mainH = 5 + tier * 0.5
 	local main = cluster(c, topRoot(c, c.start, 0.05, 0), 9, mainH, look, { c.pal.Crystal, c.pal.Crystal2, c.pal.Crystal:Lerp(WHITE, 0.2) }, true)
 	cluster(c, gapRoot(c, 2, 0.35, 0.6), 4, mainH * 0.45, look, { c.pal.Crystal2, c.pal.Crystal })
-	light(main, glow(c.pal.Crystal), 14 + index, 1 + index * 0.12)
-	sparkle(main, glow(c.pal.Crystal:Lerp(WHITE, 0.3)), 2 + index * 0.5, 0.6)
+	light(main, glow(c.pal.Crystal), 14 + tier, 1 + tier * 0.12)
+	sparkle(main, glow(c.pal.Crystal:Lerp(WHITE, 0.3)), 2 + tier * 0.5, 0.6)
 	twinkle(c, tipOf(main), 1.2, glow(c.pal.Crystal2:Lerp(WHITE, 0.4)))
 	twinkle(c, (main.CFrame * CFrame.new(main.Size.X * 0.9, -main.Size.Y * 0.1, 0)).Position, 0.8, glow(c.pal.Crystal:Lerp(WHITE, 0.5)))
 end
@@ -581,7 +644,7 @@ local function goldenRock(c: Ctx)
 	local S = RockBuilder.Special
 	local rng = c.rng
 	body(c, {
-		Float = if c.floor.Index == 5 then 1.1 else 0,
+		Float = if c.look.Float then 1.1 else 0,
 		Core = S.Gold,
 		Colors = { S.Gold:Lerp(S.GoldDeep, 0.45), S.Gold:Lerp(WHITE, 0.2), S.GoldDeep:Lerp(BLACK, 0.25) },
 	})
@@ -601,7 +664,7 @@ end
 local function geodeRock(c: Ctx)
 	local S = RockBuilder.Special
 	local rng = c.rng
-	local float = if c.floor.Index == 5 then 1.1 else 0
+	local float = if c.look.Float then 1.1 else 0
 	local shell = S.GeodeShell:Lerp(c.pal.Mid, 0.35)
 	local s = rng:range(3.8, 4.2)
 	local gap = 0.9
@@ -645,7 +708,7 @@ end
 -- Artifact rock: the floor rock with a glowing rune stone and a royal crown sticking out.
 local function artifactRock(c: Ctx, oreIds: { string })
 	local S = RockBuilder.Special
-	body(c, { Float = if c.floor.Index == 5 then 1.1 else 0, Carved = c.floor.Index == 4, Chunks = 4 })
+	body(c, { Float = if c.look.Float then 1.1 else 0, Carved = c.look.Carved == true, Chunks = 4 })
 	local a = c.start + 2.4
 	local face = CFrame.new((c.mainCf * CFrame.new(math.cos(a) * c.mainSize.X * 0.5, c.mainSize.Y * 0.05, math.sin(a) * c.mainSize.Z * 0.5)).Position) * CFrame.Angles(0, -a, 0)
 	local plate = Geo.block(c.model, face * CFrame.Angles(math.pi / 4, 0, 0), Vector3.new(0.4, 2.1, 2.1), c.pal.Light:Lerp(WHITE, 0.25), SMOOTH, GLOW)
@@ -680,10 +743,9 @@ end
 -- Giant Crystal: the floor's server-wide event crystal on a broken rock base.
 local function giantRock(c: Ctx)
 	local rng, pal = c.rng, c.pal
-	local index = c.floor.Index
-	local look: Look = if index <= 1 then "Tipped" elseif index >= 5 then "Glow" else "Shell"
-	body(c, { Scale = 2.3, Flat = 0.4, Chunks = 6, Carved = index == 4, Core = coreColor(c) or pal.Crystal })
-	local mainH = 15 + index
+	local look: Look = c.look.GiantLook
+	body(c, { Scale = 2.3, Flat = 0.4, Chunks = 6, Carved = c.look.Carved == true, Core = coreColor(c) or pal.Crystal })
+	local mainH = 15 + c.look.Tier
 	local main = cluster(c, topRoot(c, c.start, 0.0, 0), 11, mainH, look, { pal.Crystal, pal.Crystal2, pal.Crystal:Lerp(WHITE, 0.2) }, true)
 	for i = 1, #c.gaps do
 		cluster(c, gapRoot(c, i, 0.45, 0.7), 3, rng:range(3, 4.4), "Glow", { if i % 2 == 0 then pal.Crystal2 else pal.Crystal, pal.Crystal })
@@ -697,7 +759,7 @@ end
 ---------------------------------------------------------------- decoration
 
 -- A crystal cluster on its own, for cave decorations that match the rocks (MineKit.crystals).
--- look: "Matte" | "Tipped" | "Shell" | "Glow"; tall clusters (height >= 4) get a pointed hero crystal.
+-- look: "Matte" | "Tipped" | "Shell" | "Glow" | "Storm"; tall clusters (height >= 4) get a pointed hero crystal.
 function RockBuilder.decorCluster(parent: Instance, root: CFrame, count: number, height: number, look: string, colors: { Color3 }, seed: number | string): Model
 	local model = Instance.new("Model")
 	model.Name = "CrystalCluster"
@@ -718,8 +780,9 @@ function RockBuilder.decorCluster(parent: Instance, root: CFrame, count: number,
 		ring = 1,
 		top = 1,
 		gaps = {},
+		look = lookOf(floor),
 	}
-	local l: Look = if look == "Matte" then "Matte" elseif look == "Tipped" then "Tipped" elseif look == "Glow" then "Glow" else "Shell"
+	local l: Look = if look == "Matte" then "Matte" elseif look == "Tipped" then "Tipped" elseif look == "Glow" then "Glow" elseif look == "Storm" then "Storm" else "Shell"
 	local tallest = cluster(c, root, math.max(1, count), height, l, colors, height >= 4)
 	if l ~= "Matte" then
 		twinkle(c, tipOf(tallest), math.clamp(height * 0.28, 0.6, 2.4), glow(colors[1]:Lerp(WHITE, 0.4)))
@@ -749,6 +812,7 @@ function RockBuilder.build(floorKey: number | string, kind: MineFloors.RockKind,
 		ring = 1,
 		top = 1,
 		gaps = {},
+		look = lookOf(floor),
 	}
 	if kind == "Crystal" then
 		crystalRock(c)
@@ -761,7 +825,7 @@ function RockBuilder.build(floorKey: number | string, kind: MineFloors.RockKind,
 	elseif kind == "Giant" then
 		giantRock(c)
 	else
-		FLOOR_LOOK[floor.Index](c, oreIds)
+		c.look.Build(c, oreIds)
 	end
 	local rock1 = model:FindFirstChild("Rock1")
 	if rock1 and rock1:IsA("BasePart") then

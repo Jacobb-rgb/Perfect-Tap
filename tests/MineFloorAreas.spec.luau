@@ -1,5 +1,6 @@
 -- Mine floor areas (src/server/World/Mine): the shared MineKit pieces and every floor
--- builder that exists keep the contract in MineKit's header (spawns, markers, budgets).
+-- builder that exists keep the contract in MineKit's header (spawns, markers, budgets),
+-- the Stormglass Rift too (built, not in the game yet).
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local CF = Loader.CFrame
@@ -93,6 +94,197 @@ return function(T, Loader)
 					end
 				end
 			end
+		end
+	end)
+
+	---------------------------------------------------------------- the Stormglass Rift (phase A)
+	-- Built and previewed, not in the game yet (phase B inserts it as floor 5 between the
+	-- palace and the core): the same contract, its own budgets and height band.
+	local STORM_PARTS = 2400 -- the phase A target, under MineKit.PartBudget
+	local STORM_Y = { -25, 60 } -- local height band: clear of floor 4 above and the core below
+
+	-- the world-space box of a part (min, max)
+	local function bounds(part): (any, any)
+		local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = part.CFrame:GetComponents()
+		local h = part.Size / 2
+		local e = V3.new(
+			math.abs(r00) * h.X + math.abs(r01) * h.Y + math.abs(r02) * h.Z,
+			math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z,
+			math.abs(r20) * h.X + math.abs(r21) * h.Y + math.abs(r22) * h.Z
+		)
+		return part.CFrame.Position - e, part.CFrame.Position + e
+	end
+
+	T.test("stormglass rift: contract, spawns, markers, budgets and its height band", function()
+		local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		T.eq(Floor.Id, "StormglassRift", "floor id")
+		T.eq(Floor.Index, 5, "the index phase B gives it")
+		T.eq(Floor.MinBlaster, 8, "blaster gate 8")
+		T.eq(MineFloors.ById[Floor.Id], nil, "not wired into MineFloors yet (phase B)")
+		T.truthy(Floor.Palette.Mid and Floor.Palette.Crystal and Floor.Palette.Ground, "palette for MineFloors")
+		local origin = CF.new(0, -310, -800) -- about where phase B puts it
+		for _, cutaway in { false, true } do
+			local label = "StormglassRift" .. (if cutaway then " (cutaway)" else "")
+			local model = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = cutaway })
+			T.eq(model.Name, "MineFloor5", label .. " model name")
+			T.eq(model:GetAttribute("FloorId"), "StormglassRift", label .. " FloorId")
+			local spawns = model:FindFirstChild("RockSpawns")
+			T.truthy(spawns ~= nil, label .. " RockSpawns")
+			local total, deep = 0, 0
+			for _, p in spawns:GetChildren() do
+				total += 1
+				if p:GetAttribute("Deep") == true then
+					deep += 1
+				end
+				local q = origin:PointToObjectSpace(p.CFrame.Position)
+				T.truthy(math.abs(q.Y) < 0.01, label .. " spawn on the ground")
+				T.eq(p:GetAttribute("Deep") == true, q.Z < 2, label .. " deep exactly past the rift")
+			end
+			T.truthy(total >= 24 and total <= 28, label .. " about 26 rock spawns (" .. total .. ")")
+			T.truthy(deep >= 10, label .. " >= 10 deep spawns (" .. deep .. ")")
+			T.truthy(model:FindFirstChild("GiantSpawn") ~= nil, label .. " GiantSpawn")
+			T.truthy(model:FindFirstChild("Entrance") ~= nil, label .. " Entrance")
+			local elevator = model:FindFirstChild("Elevator", true)
+			T.truthy(elevator ~= nil and elevator:GetAttribute("Floor") == 5, label .. " elevator stop")
+			local gate = model:FindFirstChild("BlasterGate", true)
+			T.truthy(gate ~= nil and gate:GetAttribute("MinBlaster") == 8, label .. " BLASTER LV 8+ gate")
+			local parts = count(model, "BasePart")
+			T.le(parts, STORM_PARTS, label .. " parts")
+			T.le(parts, MineKit.PartBudget, label .. " parts (MineKit.PartBudget)")
+			T.le(count(model, "PointLight"), MineKit.LightBudget, label .. " lights")
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					if not d.Anchored then
+						error(label .. " unanchored part " .. d:GetFullName())
+					end
+					local lo, hi = bounds(d)
+					local a, b = origin:PointToObjectSpace(lo), origin:PointToObjectSpace(hi)
+					if a.Y < STORM_Y[1] or b.Y > STORM_Y[2] then
+						error(`{label} {d:GetFullName()} leaves the height band ({a.Y} .. {b.Y})`)
+					end
+					local s = Floor.Size
+					if a.X < -s.X / 2 - 0.5 or b.X > s.X / 2 + 0.5 or a.Z < -s.Z / 2 - 0.5 or b.Z > s.Z / 2 + 0.5 then
+						error(`{label} {d:GetFullName()} leaves the footprint`)
+					end
+				end
+			end
+		end
+		-- in the game the floor only marks the lift's spot (phase B: TrainConfig.Lifts at Floor.LiftSpot)
+		local built = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = false })
+		local spot = built:FindFirstChild("OreLiftSpot", true)
+		T.truthy(spot ~= nil and spot:GetAttribute("LiftId") == "StormglassRift", "ore lift spot")
+		local at = origin:PointToObjectSpace(spot.PrimaryPart.CFrame.Position)
+		T.truthy((at - (Floor.LiftSpot + V3.new(0, 0.5, 0))).Magnitude < 0.01, "the spot is Floor.LiftSpot")
+		local lift = built:FindFirstChild("MineLift", true)
+		T.truthy(lift == nil or not lift:HasTag("MineLift"), "no Mine Lift of its own in the game")
+	end)
+
+	T.test("stormglass rift: 4-8 ambience spots of its kinds, at most 3 loops anywhere, no extra parts", function()
+		local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
+		local MineAmbience = Loader.requirePath("ReplicatedStorage.Shared.Config.MineAmbience")
+		local origin = CF.new(0, -310, -800)
+		local model = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = false })
+		local kinds = MineAmbience.Floors[Floor.Id]
+		T.truthy(kinds ~= nil, "MineAmbience.Floors.StormglassRift")
+		local spots = {}
+		for _, d in model:GetDescendants() do
+			if d.ClassName == "Attachment" and d:HasTag(MineAmbience.Tag) then
+				table.insert(spots, d)
+			end
+		end
+		T.truthy(#spots >= MineAmbience.SpotsPerFloor[1] and #spots <= MineAmbience.SpotsPerFloor[2], `4-8 spots ({#spots})`)
+		local seen: { [string]: boolean } = {}
+		local loops = {}
+		local s = Floor.Size
+		for _, spot in spots do
+			local kind = spot:GetAttribute(MineAmbience.Attribute)
+			T.truthy(table.find(kinds, kind), `{spot.Name}: {kind} is a Stormglass Rift kind`)
+			T.eq(spot.Name, "Ambience" .. kind, spot.Name .. " name")
+			seen[kind] = true
+			local host = spot.Parent
+			T.truthy(host:IsA("BasePart") and host:IsDescendantOf(model), spot.Name .. " rides on a part of the floor")
+			T.truthy(host.Name ~= "RockSpawn" and host.Name ~= "GiantSpawn", spot.Name .. " not on a marker")
+			local p = (host.CFrame * spot.CFrame).Position
+			local q = origin:PointToObjectSpace(p)
+			T.truthy(math.abs(q.X) <= s.X / 2 and math.abs(q.Z) <= s.Z / 2 and q.Y >= -s.Y / 2 and q.Y <= s.Y, spot.Name .. " inside the floor's box")
+			for _, layer in MineAmbience.Kinds[kind] do
+				if layer.Loop then
+					table.insert(loops, { At = p, Reach = layer.MaxDistance })
+				end
+			end
+		end
+		for _, kind in kinds do
+			T.truthy(seen[kind], "plays " .. kind)
+		end
+		local worst = 0
+		for x = -s.X / 2, s.X / 2, 4 do
+			for z = -s.Z / 2, s.Z / 2, 4 do
+				for y = -10, 46, 4 do
+					local p = origin:PointToWorldSpace(V3.new(x, y, z))
+					local heard = 0
+					for _, loop in loops do
+						if (loop.At - p).Magnitude < loop.Reach then
+							heard += 1
+						end
+					end
+					worst = math.max(worst, heard)
+				end
+			end
+		end
+		T.le(worst, MineAmbience.MaxLoops, "loops heard at one point")
+		local real = MineKit.ambience
+		MineKit.ambience = function(_host, _kind, _at)
+			return roblox.Instance.new("Attachment")
+		end
+		local ok, without = pcall(Floor.build, roblox.Instance.new("Folder"), origin, { Cutaway = false })
+		MineKit.ambience = real
+		T.truthy(ok, "builds without spots: " .. tostring(without))
+		T.eq(count(model, "BasePart"), count(without, "BasePart"), "the spots add no parts")
+	end)
+
+	T.test("stormglass rift: storm rocks keep the rock budgets", function()
+		local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
+		local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+		local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
+		-- a stand-in MineFloors entry (phase B adds the real one), removed again afterwards
+		local stand = table.clone(MineFloors.List[4])
+		stand.Id, stand.Index, stand.Palette, stand.MinBlaster = Floor.Id, Floor.Index, Floor.Palette, Floor.MinBlaster
+		MineFloors.ById[Floor.Id] = stand
+		local ok, err = pcall(function()
+			for _, kind in { "Small", "Big", "Crystal", "Golden", "Geode", "Artifact", "Giant" } do
+				for seed = 1, 6 do
+					local ores = if kind == "Giant" then {} else { "StormGem", "Moonstone", "Sunstone", "LeafGem" }
+					while #ores > MineFloors.OreCount[kind] do
+						table.remove(ores)
+					end
+					local rock = RockBuilder.build(Floor.Id, kind, ores, CF.new(0, 0, 0), seed * 11)
+					T.le(count(rock, "BasePart"), RockBuilder.Budget[kind], `storm {kind} rock parts (seed {seed})`)
+					T.le(count(rock, "PointLight"), 1, `storm {kind} rock lights`)
+					T.eq(rock:GetAttribute("Floor"), Floor.Index, "rock floor")
+					if kind ~= "Giant" then
+						for stage = 1, MineFloors.OreCount[kind] - 1 do
+							RockBuilder.applyStage(rock, stage, seed)
+						end
+					end
+				end
+			end
+			-- the storm look is its own: stormglass crystals (see-through indigo) and lightning cracks
+			local small = RockBuilder.build(Floor.Id, "Small", { "StormGem", "StormGem", "StormGem" }, CF.new(0, 0, 0), 3)
+			local glass, veins = 0, 0
+			for _, d in small:GetDescendants() do
+				if d:IsA("BasePart") and d.Name == "Crystal" and d.Transparency > 0.2 then
+					glass += 1
+				elseif d:IsA("BasePart") and d.Name == "Vein" then
+					veins += 1
+				end
+			end
+			T.truthy(glass >= 3, "stormglass crystals on a storm rock")
+			T.eq(veins, 4, "two zig-zag lightning cracks")
+		end)
+		MineFloors.ById[Floor.Id] = nil
+		if not ok then
+			error(err, 0)
 		end
 	end)
 end

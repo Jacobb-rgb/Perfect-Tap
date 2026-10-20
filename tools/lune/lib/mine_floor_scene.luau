@@ -5,6 +5,11 @@
 	-> build/preview/mine_floor_<N>.json; shots in tools/preview/mine_floor<N>_shots.json
 	(scene "mine_floor_<N>").
 
+	`mine_floor storm`: the Stormglass Rift (Floor5Storm.luau), built but not in
+	MineFloors yet (phase A); MineFloorScene.stormFloor stands in for its
+	MineFloors entry -> build/preview/mine_floor_storm.json, shots in
+	tools/preview/mine_floor_storm_shots.json (scene "mine_floor_storm").
+
 	Rock kinds on the spawns (fixed seed per spawn): the back ("Deep") spawns get
 	more crystals; every floor shows one golden rock, one geode, one artifact rock,
 	and the Giant Crystal on GiantSpawn.
@@ -15,6 +20,40 @@ local roblox = require("@lune/roblox") :: any
 local MineFloorScene = {}
 
 MineFloorScene.Modules = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Core" }
+-- floors built but not in MineFloors yet, by scene name
+MineFloorScene.Named = { storm = "Floor5Storm" }
+
+--[[
+	A stand-in MineFloors entry for the Stormglass Rift (phase B adds the real
+	one to MineFloors.List), registered in MineFloors.ById for this preview
+	process only, so RockBuilder.build / MineFloors.rockName / rockHealth find
+	it by its Id. The ores only color the rock glints here; phase B sets the
+	real ore tables.
+]]
+function MineFloorScene.stormFloor(Loader)
+	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor5Storm")
+	local existing = MineFloors.ById[Floor.Id]
+	if existing then
+		return existing
+	end
+	local floor = {
+		Index = Floor.Index,
+		Id = Floor.Id,
+		Name = "Stormglass Rift",
+		ZoneId = Floor.Id,
+		MinBlaster = Floor.MinBlaster,
+		ViaElevator = true,
+		Lighting = "Storm",
+		Ores = { StormGem = 24, Moonstone = 20, Sunstone = 18, LeafGem = 14, VolcanicCore = 10, StormPearl = 8, Aetherium = 6 },
+		CrystalOres = { StormGem = 25, Sunstone = 20, LeafGem = 20, VolcanicCore = 20, Aetherium = 15 },
+		Palette = Floor.Palette,
+		RockName = "Stormrock",
+		CrystalName = "Thunder Shard",
+	}
+	MineFloors.ById[floor.Id] = floor
+	return floor
+end
 
 -- index 0: the shared MineKit pieces side by side (elevator, gate, ore lift, wall, crystals)
 local function buildKit(Loader, workspace)
@@ -46,18 +85,22 @@ local function buildKit(Loader, workspace)
 	return m
 end
 
-function MineFloorScene.build(Loader, workspace, index: number)
-	if index == 0 then
+-- key: a floor index (0 = the MineKit gallery) or a MineFloorScene.Named scene name ("storm")
+function MineFloorScene.build(Loader, workspace, key: number | string)
+	if key == 0 then
 		return buildKit(Loader, workspace)
 	end
 	local CF = Loader.CFrame
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
-	local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine." .. MineFloorScene.Modules[index])
+	local named = MineFloorScene.Named[key]
+	local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine." .. (named or MineFloorScene.Modules[key]))
 	-- the preview shows the floor's own Mine Lift (in the game Railway builds it from TrainConfig)
 	Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit").PreviewLifts = true
-	local floor = MineFloors.get(index)
+	local floor = if named then MineFloorScene.stormFloor(Loader) else MineFloors.get(key)
+	-- rock seeds per floor (the numbered floors keep theirs)
+	local index = if type(key) == "number" then key else 55
 	local model = Floor.build(workspace, CF.new(0, 0, 0), { Cutaway = true })
 
 	local spawns = model:FindFirstChild("RockSpawns")
@@ -100,13 +143,13 @@ function MineFloorScene.build(Loader, workspace, index: number)
 			table.insert(ores, rng:weighted(weights))
 		end
 		local pos = p.CFrame.Position
-		local rock = RockBuilder.build(index, kind, ores, CF.new(pos.X, pos.Y, pos.Z), index * 77 + i)
+		local rock = RockBuilder.build(floor.Id, kind, ores, CF.new(pos.X, pos.Y, pos.Z), index * 77 + i)
 		rock.Parent = rocks
 	end
 	local giant = model:FindFirstChild("GiantSpawn")
 	if giant then
 		local pos = giant.CFrame.Position
-		RockBuilder.build(index, "Giant", {}, CF.new(pos.X, pos.Y, pos.Z), index * 13).Parent = rocks
+		RockBuilder.build(floor.Id, "Giant", {}, CF.new(pos.X, pos.Y, pos.Z), index * 13).Parent = rocks
 	end
 	local entrance = model:FindFirstChild("Entrance")
 	if entrance then
