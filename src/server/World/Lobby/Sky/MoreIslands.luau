@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
@@ -31,14 +32,17 @@ local NEON = Enum.Material.Neon
 
 local MoreIslands = {}
 
--- ground points (the top of each island's grass)
+-- ground points (the top of each island's grass); the ones off the east and west coasts
+-- move out with the coast, the south ones south with the south band (WorldLayout.PlotGrid)
+local CS = WorldLayout.PlotGrid.CoastShift
+local SS = WorldLayout.PlotGrid.SouthShift
 MoreIslands.Spots = {
-	CrystalIsle = Vector3.new(-232, 92, -34),
-	BlossomIsle = Vector3.new(-214, 74, 118),
-	WindmillIsle = Vector3.new(224, 84, 120),
+	CrystalIsle = Vector3.new(-232 - CS, 92, -34),
+	BlossomIsle = Vector3.new(-214 - CS, 74, 118 + SS),
+	WindmillIsle = Vector3.new(224 + CS, 84, 120 + SS),
 	LavaIsle = Vector3.new(-44, 182, -318),
-	TwinIslets = Vector3.new(240, 60, 8),
-	JungleIsle = Vector3.new(206, 150, -156),
+	TwinIslets = Vector3.new(240 + CS, 60, 8),
+	JungleIsle = Vector3.new(240 + CS, 138, -70), -- (clear of the gas giant in the hero shot)
 }
 
 local LAVA = Color3.fromRGB(255, 110, 30)

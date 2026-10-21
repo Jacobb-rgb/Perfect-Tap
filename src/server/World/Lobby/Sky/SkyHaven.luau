@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Meadow = require(script.Parent.Parent.Flora.Meadow)
@@ -25,9 +26,12 @@ local NEON = Enum.Material.Neon
 
 local SkyHaven = {}
 
-SkyHaven.Center = Vector3.new(150, 72, 232) -- the island's ground point
+-- the south coast (WorldLayout.Island follows the plot size): the spire stands in the sea
+-- 36 studs out from it, the island floats beyond the spire
+SkyHaven.CoastZ = WorldLayout.Island.Max.Z
+SkyHaven.Spire = Vector3.new(150, 0, SkyHaven.CoastZ + 36) -- the rock spire in the sea
+SkyHaven.Center = SkyHaven.Spire + Vector3.new(0, 72, 46) -- the island's ground point
 SkyHaven.Size = Vector2.new(64, 52)
-SkyHaven.Spire = Vector3.new(150, 0, 186) -- the rock spire in the sea
 SkyHaven.SpireRadius = 9
 SkyHaven.StepRadius = 16 -- the stones' path round the spire
 SkyHaven.StepRise = 3.4 -- studs up per stone (a plain jump clears ~7)
@@ -99,7 +103,7 @@ local function parkour(m: Model, rng: Rng.Rng): { Vector3 }
 	end
 	-- a plank bridge from the lobby's rim to the first stone
 	local first = stones[1]
-	local shore = Vector3.new(first.X, 0.6, 160)
+	local shore = Vector3.new(first.X, 0.6, SkyHaven.CoastZ + 10)
 	local dir = Vector3.new(0, 0, first.Z - shore.Z)
 	local len = dir.Magnitude
 	local mid = (shore + first) / 2
@@ -165,6 +169,10 @@ local function eggPodium(m: Model, base: CFrame, rng: Rng.Rng)
 		end
 	end
 	local top = base * CFrame.new(0, 3.3, 0)
+	-- the egg's stall hook for the capsule side (CapsuleConfig "Sky": prompt, odds board)
+	local hook = Style.block(m, top * CFrame.new(0, 0.5, 0), Vector3.new(7, 1, 7), C.StoneLight, nil, Style.tiny({ Transparency = 1 }))
+	hook.Name = "SkyEggPodium"
+	hook:SetAttribute("Capsule", "Sky")
 	-- a thin glowing ring round the egg's plinth (four strips, not a glowing slab)
 	for k = 0, 3 do
 		Style.block(

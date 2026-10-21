@@ -91,7 +91,7 @@ LobbyLayout.Budget = {
 	-- near the town).
 	-- (bigger plots 2026-10-21, 16x16 grid: the map 31,773 + nodes 294 + museums 352 = 32,419 measured,
 	-- + 200 for the podium and pen ores, + ~250 headroom; 32,200 at 12 cells)
-	MapParts = 32850, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots
+	MapParts = 33750, -- 23,000 (integrator plan 2026-10-18, docs/QA_NIGHT_2026-10-18.md section 7, + the yard museums) + the mine floors + the bigger plots + the six more floating islands and SKY HAVEN (~860, 2026-10-21)
 	-- 5000 for the lobby art + about 1200 for the 8 player bases with their
 	-- yards (design v2) + room for the coastal railway (step 2) + the Blaster
 	-- Vault. Plots stream in and out with StreamingEnabled like everything else.
