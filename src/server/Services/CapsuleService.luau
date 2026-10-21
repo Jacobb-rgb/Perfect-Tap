@@ -78,7 +78,8 @@
 	  "Discovery").
 	- Hooks for other packages: grantFree (the wheel's capsule prize: no
 	  price, CapsuleResult with Free = true; quiet = true leaves sending it
-	  to the caller, QuietFree says this service honors that), registerGrants (the
+	  to the caller, QuietFree says this service honors that; paid = true for
+	  a bought spin's prize: Paid and Locked golems), registerGrants (the
 	  "Capsule" receipt handler: grantProduct, then the golems past MaxSaved wait
 	  in data.Golems.Pending, woken by wakePending on load / change), grantProduct (step 8 receipts:
 	  paid golems may pass the inventory cap up to GolemConfig.MaxSaved,
@@ -113,7 +114,7 @@ local StateService = require(script.Parent.StateService)
 
 local CapsuleService = {}
 
-export type Source = "Coins" | "Robux" | "Free"
+export type Source = "Coins" | "Robux" | "Free" | "PaidSpin" -- (PaidSpin: a bought wheel spin's capsule)
 export type Woken = { Id: number, Kind: string }
 export type Result = {
 	Capsule: string,
@@ -344,10 +345,14 @@ end
 	CapsuleResult (Free = true) and sends it, unless `quiet`: then the
 	caller sends it when its own screen is ready (WheelService sends it on
 	the wheel's "Reveal", so the opening never spoils the turning disc).
+	`paid`: the prize of a wheel spin bought with Robux: the golems are
+	saved Paid = true and Locked like every golem from a Robux purchase
+	(within the inventory cap: the wheel refuses a bought spin when full),
+	and the opening's Source is "PaidSpin".
 ]]
 CapsuleService.QuietFree = true -- grantFree honors `quiet` (WheelService reads this)
 
-function CapsuleService.grantFree(player: Player, capsuleId: string, count: number?, quiet: boolean?): (Result?, string?)
+function CapsuleService.grantFree(player: Player, capsuleId: string, count: number?, quiet: boolean?, paid: boolean?): (Result?, string?)
 	local data = DataService.get(player)
 	local n = count or 1
 	if not data or not CapsuleConfig.ById[capsuleId] or type(n) ~= "number" or n < 1 or n > 10 or n ~= math.floor(n) then
@@ -361,13 +366,20 @@ function CapsuleService.grantFree(player: Player, capsuleId: string, count: numb
 	if #kinds ~= n then
 		return nil, "BadCapsule"
 	end
-	local woken = add(data, kinds)
+	local bought = paid == true
+	local woken = add(data, kinds, false, bought)
 	DataService.changed(player)
 	local result: Result = { Capsule = capsuleId, Count = n, Golems = woken, Lucky = lucky, Free = true }
 	if quiet ~= true then
 		Net.fire("CapsuleResult", player, result)
 	end
-	opened(player, { Capsule = capsuleId, Count = n, Kinds = kindsOf(woken), Lucky = lucky, Source = "Free" })
+	opened(player, {
+		Capsule = capsuleId,
+		Count = n,
+		Kinds = kindsOf(woken),
+		Lucky = lucky,
+		Source = if bought then "PaidSpin" else "Free",
+	})
 	return result, nil
 end
 

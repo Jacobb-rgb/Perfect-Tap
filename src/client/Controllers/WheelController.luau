@@ -31,7 +31,12 @@
 	  known (the server's PaidRandomRestricted attribute; unknown = strict),
 	  the rows hide and nothing is sent (the server refuses with
 	  "Restricted" all the same). The spins arrive with the receipt's State
-	  push and a thank-you Notify.
+	  push and a thank-you Notify. With a full golem inventory a bought
+	  spin can't be used (the server refuses it, "InventoryFull"): the BUY
+	  step's hint says so, a "Full" answer reads WheelConfig.Reasons.
+	  InventoryFull (else MaxSpins), and SPIN with only bought spins left
+	  says it without asking; the rows (WheelView.info: GolemRoom, PenFull)
+	  say what the capsule / ore prizes pay instead.
 	- Details (or the jackpot card) opens ALL ODDS: a row opens its details
 	  card (the whole text, a capsule's chance of every golem); X, B or the
 	  row again close it.
@@ -86,6 +91,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
+local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local Net = require(Shared.Net)
@@ -241,19 +247,19 @@ local function noCapsules(): boolean
 end
 
 -- What the odds rows need (WheelView.Info) from the latest State snapshot.
+-- (also the golem room and a full Ore Pen: the rows say what those prizes pay then)
 function WheelController.info(state: { [string]: any }?, restrictedNow: boolean): WheelView.Info
-	local s: { [string]: any } = state or {}
-	local bonuses = if type(s.Bonuses) == "table" then s.Bonuses else {}
-	local income = tonumber(s.Income) or 0
-	return {
-		NoCapsules = restrictedNow,
-		Income = if income == income then income else 0,
-		Ore = {
-			BlasterLevel = tonumber(s.BlasterLevel) or 1,
-			BestIncome = WheelConfig.bestIncome(s.Discovered),
-		},
-		TripleLucky = bonuses.TripleLucky == true,
-	}
+	return WheelView.info(state, restrictedNow)
+end
+
+-- No room in the golem inventory for a bought spin's capsule (the server
+-- refuses that spin: WheelConfig.Reasons.InventoryFull).
+local function inventoryBlocks(): boolean
+	local state = StateController.get()
+	if not state or type(state.Golems) ~= "table" or CapsuleConfig.allRestricted(false) then
+		return false
+	end
+	return GolemConfig.room(state.Golems) < 1
 end
 
 local function wheelRecord(): { [string]: any }?
@@ -617,7 +623,8 @@ openBuy = function(count: number)
 		return
 	end
 	WheelView.showBuy(view, count)
-	WheelView.setHint(view, "The odds of every spin")
+	-- a full golem inventory: said before buying (the server answers "Full")
+	WheelView.setHint(view, if inventoryBlocks() then WheelConfig.Reasons.InventoryFull else "The odds of every spin")
 	if usingGamepad() then
 		GuiService.SelectedObject = view.OddsBuy
 	end
@@ -665,6 +672,10 @@ local function onPurchasePrompt(payload: any)
 		return
 	end
 	local text = MonetizationConfig.StatusText[payload.Status] or MonetizationConfig.StatusText.Unknown
+	if payload.Status == "Full" then
+		-- the wheel's two "Full"s: no golem room for a bought spin's prize, or the most spins held
+		text = if inventoryBlocks() then WheelConfig.Reasons.InventoryFull else WheelConfig.Reasons.MaxSpins
+	end
 	if WheelView.oddsOpen(view) then
 		WheelView.setHint(view, text)
 	end
@@ -824,6 +835,12 @@ onSpin = function()
 	end
 	if spinsNow() <= 0 then
 		view.Status.Text = WheelConfig.Reasons.NotReady
+		Sfx.play("UIDeny")
+		return
+	end
+	if not isReady() and inventoryBlocks() then
+		-- only bought spins left and no golem room: the server would refuse it
+		view.Status.Text = WheelConfig.Reasons.InventoryFull
 		Sfx.play("UIDeny")
 		return
 	end

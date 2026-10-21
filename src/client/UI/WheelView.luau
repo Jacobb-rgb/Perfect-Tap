@@ -34,7 +34,10 @@
 	           label and exact chance; on a PC also one line of what it pays
 	           THIS player (coins at their income, the ore prize's own odds,
 	           the capsule's rarity odds with their Triple Lucky), from rows()
-	           (pure, tested). Phones and TVs (compact) show the rows as a
+	           (pure, tested). With a full golem inventory the capsule rows,
+	           and with a full Ore Pen the ore row, start with what they pay
+	           instead ("Golem inventory full: pays $X coins instead",
+	           fullNote: the real fallback amounts), on the BUY step too. Phones and TVs (compact) show the rows as a
 	           2 x 4 grid of 72-unit tiles. Every row is a button: its details
 	           card covers the window's body (the whole text and, for a
 	           capsule, the exact chance of EVERY golem in it); X / B / the row
@@ -61,6 +64,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local BlasterData = require(Shared.Config.BlasterData)
 local BoostConfig = require(Shared.Config.BoostConfig)
 local CapsuleConfig = require(Shared.Config.CapsuleConfig)
 local GolemConfig = require(Shared.Config.GolemConfig)
@@ -90,6 +94,12 @@ export type Info = {
 	Income: number, -- podium income per second (State.Income)
 	Ore: WheelConfig.OreContext,
 	TripleLucky: boolean,
+	-- what a prize pays when there is no room (the rows say so before any spin
+	-- or buy; nil: not known, no note)
+	GolemRoom: number?, -- free golem inventory places (GolemConfig.room)
+	PenFull: boolean?, -- the Ore Pen can't take one more item (PenService.refusal)
+	PriceLevel: number?, -- BlasterData.priceLevel: the capsule fallback coins
+	SellMult: number?, -- the player's sell bonus (Bonuses SellMult): the ore fallback coins
 }
 
 -- A BUY SPINS row: its frame, the count label and the Robux price button.
@@ -465,6 +475,66 @@ local function rarityLine(odds: { [string]: number }): string
 	return table.concat(parts, " · ")
 end
 
+-- Is the Ore Pen full in a State snapshot (StorageCount / PenCapacity /
+-- PenOver, as PenService.refusal decides one more item)? nil: not known.
+function WheelView.penFull(state: { [string]: any }): boolean?
+	local count = tonumber(state.StorageCount)
+	local capacity = tonumber(state.PenCapacity)
+	if not count or not capacity then
+		return nil
+	end
+	return state.PenOver == true or count + 1 > capacity
+end
+
+-- What rows() needs from a State snapshot (WheelController passes the
+-- latest one and whether paid random items are restricted).
+function WheelView.info(state: { [string]: any }?, restricted: boolean): Info
+	local s: { [string]: any } = state or {}
+	local bonuses = if type(s.Bonuses) == "table" then s.Bonuses else {}
+	local income = tonumber(s.Income) or 0
+	local sell = tonumber(bonuses.SellMult)
+	return {
+		NoCapsules = restricted,
+		Income = if income == income then income else 0,
+		Ore = {
+			BlasterLevel = tonumber(s.BlasterLevel) or 1,
+			BestIncome = WheelConfig.bestIncome(s.Discovered),
+		},
+		TripleLucky = bonuses.TripleLucky == true,
+		GolemRoom = if type(s.Golems) == "table" then GolemConfig.room(s.Golems) else nil,
+		PenFull = WheelView.penFull(s),
+		PriceLevel = BlasterData.priceLevel(s),
+		SellMult = if sell and sell == sell and sell > 0 then sell else 1,
+	}
+end
+
+-- The coins a capsule prize pays with a full golem inventory, and the ore
+-- prize with a full Ore Pen (the server's WheelService amounts).
+function WheelView.capsuleFallback(info: Info, capsuleId: string): number
+	return WheelConfig.capsuleFallbackCoins(capsuleId, info.PriceLevel or 1)
+end
+
+function WheelView.oreFallback(info: Info): number
+	local base = WheelConfig.oreFallbackCoins(info.Ore)
+	if base <= 0 then
+		return 0
+	end
+	return math.floor(base * (info.SellMult or 1) + 0.5)
+end
+
+-- "Golem inventory full: pays $X coins instead · " before a capsule row,
+-- "Ore Pen full: pays $X coins instead · " before the ore row ("" when
+-- there is room or it isn't known).
+function WheelView.fullNote(segment: Segment, info: Info): string
+	if segment.Kind == "Capsule" and info.GolemRoom ~= nil and info.GolemRoom < 1 then
+		local coins = WheelView.capsuleFallback(info, segment.Capsule or "")
+		return `Golem inventory full: pays {Format.money(coins)} coins instead · `
+	elseif segment.Kind == "Ore" and info.PenFull == true then
+		return `Ore Pen full: pays {Format.money(WheelView.oreFallback(info))} coins instead · `
+	end
+	return ""
+end
+
 -- What a segment pays this player (the odds list's second line).
 function WheelView.detail(segment: Segment, info: Info): string
 	if segment.Kind == "Coins" then
@@ -483,7 +553,8 @@ function WheelView.detail(segment: Segment, info: Info): string
 		local name = if capsule then capsule.Name else "capsule"
 		local line = rarityLine(CapsuleConfig.rarityOdds(segment.Capsule or "", info.TripleLucky))
 		local lucky = if info.TripleLucky then " (Triple Lucky on)" else ""
-		return `A free {name}{lucky}: {line}`
+		-- (the note leads the line: a cut row never hides it)
+		return WheelView.fullNote(segment, info) .. `A free {name}{lucky}: {line}`
 	elseif segment.Kind == "Ore" then
 		local parts = {}
 		for _, line in WheelConfig.oreOdds(info.Ore) do
@@ -493,7 +564,7 @@ function WheelView.detail(segment: Segment, info: Info): string
 		if #parts == 0 then
 			return "Coins instead: no Rare ore in your mines yet"
 		end
-		return "A dirty Rare+ ore for your Ore Pen: " .. table.concat(parts, " · ")
+		return WheelView.fullNote(segment, info) .. "A dirty Rare+ ore for your Ore Pen: " .. table.concat(parts, " · ")
 	elseif segment.Kind == "Shards" then
 		return `{segment.Amount or 0} crystal shards for the Enchant shop`
 	end

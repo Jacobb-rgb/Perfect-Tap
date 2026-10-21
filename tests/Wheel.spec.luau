@@ -35,6 +35,9 @@ return function(T, Loader)
 	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
+	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
+	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
+	local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
 
 	local NOW = 1_800_000_000
 	local DAY = WheelConfig.CooldownSeconds
@@ -702,6 +705,164 @@ return function(T, Loader)
 		end
 	end)
 
+	-- (review 269fd39 #1) a bought spin never swaps a golem for coins; the rows say what a full pen pays
+	local function fillGolems(w: any)
+		for _ = 1, GolemConfig.InventoryCap do
+			GolemConfig.add(w.data.Golems, GolemConfig.List[1].Id)
+		end
+		T.eq(GolemConfig.room(w.data.Golems), 0, "the golem inventory is full")
+	end
+
+	local function fillPen(w: any)
+		for _ = 1, 5000 do
+			if PenService.refusal(w.data) then
+				break
+			end
+			table.insert(w.data.Storage, { K = "Raw", O = "Coal" })
+		end
+		T.truthy(PenService.refusal(w.data) ~= nil, "the Ore Pen is full")
+	end
+
+	-- The State the client would get for this save (the fields WheelView.info reads).
+	local function stateOf(w: any): any
+		return {
+			Golems = w.data.Golems,
+			BlasterLevel = w.data.BlasterLevel,
+			Stats = w.data.Stats,
+			Discovered = w.data.Discovered,
+			StorageCount = #w.data.Storage,
+			PenCapacity = PenService.capacityOf(w.data),
+			PenOver = PenService.isOver(w.data),
+			Bonuses = { SellMult = 1, TripleLucky = false },
+		}
+	end
+
+	withWheel("Wheel: a bought spin with a full golem inventory is refused and stays saved", function(w)
+		w.data.Wheel.NextSpinAt = NOW + DAY -- only bought spins
+		w.data.Wheel.Spins = 3
+		fillGolems(w)
+		local coins = w.data.Coins
+		local refused = w.spin(rollFor(3))
+		T.eq(refused.Event, "ActionResult")
+		T.eq(refused.A.Reason, "InventoryFull")
+		T.truthy(WheelConfig.Reasons.InventoryFull, "a reason text")
+		T.eq(w.data.Wheel.Spins, 3, "the bought spin stays saved")
+		T.eq(w.data.Stats.WheelSpins, 0, "nothing spun")
+		T.eq(w.data.Coins, coins, "no coins instead of the prize")
+		T.eq(w.data.Wheel.NextSpinAt, NOW + DAY)
+		-- room again: the bought spin goes, its golem is a paid one
+		table.remove(w.data.Golems.Owned)
+		local result = w.spin(rollFor(3), 0.0).A
+		T.eq(result.Paid, true)
+		T.eq(result.Capsule, "Stone")
+		T.truthy(result.Golem, "the golem, not coins")
+		T.eq(w.data.Wheel.Spins, 2)
+	end)
+
+	withWheel("Wheel: a free spin with a full golem inventory still pays coins (bought spins untouched)", function(w)
+		w.data.Wheel.Spins = 2
+		fillGolems(w)
+		local result = w.spin(rollFor(3)).A
+		T.eq(result.Paid, false, "the free spin")
+		T.eq(result.Kind, "Capsule")
+		T.falsy(result.Golem)
+		T.eq(result.Full, true)
+		local share = WheelConfig.capsuleFallbackCoins("Stone", BlasterData.priceLevel(w.data))
+		T.eq(result.Coins, share, "the coin share as before")
+		T.eq(w.data.Wheel.Spins, 2, "no bought spin used")
+		-- the row said so before the spin, with the same amount
+		local info = WheelView.info(stateOf(w), false)
+		T.eq(info.GolemRoom, 0)
+		T.eq(WheelView.capsuleFallback(info, "Stone"), share, "the row's amount is what the server pays")
+		T.truthy(
+			string.find(WheelView.detail(WheelConfig.ById.StoneCapsule, info), `pays {Format.money(share)} coins instead`, 1, true),
+			"the capsule row says it"
+		)
+	end)
+
+	withWheel("Wheel: a full Ore Pen is disclosed in the rows with the coins the server pays", function(w)
+		fillPen(w)
+		local info = WheelView.info(stateOf(w), false)
+		T.eq(info.PenFull, true, "the client sees the full pen")
+		local detail = WheelView.detail(WheelConfig.ById.OrePrize, info)
+		local note = `Ore Pen full: pays {Format.money(WheelView.oreFallback(info))} coins instead`
+		T.eq(detail:sub(1, #note), note, "the ore row starts with the note (a cut row never hides it)")
+		local result = w.spin(rollFor(7)).A
+		T.falsy(result.DirtyOre)
+		T.eq(result.Coins, WheelView.oreFallback(info), "the server pays what the row said")
+		-- a free pen, room for golems, or nothing known: no note
+		local clear = WheelView.info({ Golems = { Owned = {} }, StorageCount = 0, PenCapacity = 30 }, false)
+		T.eq(clear.PenFull, false)
+		T.eq(clear.GolemRoom, GolemConfig.InventoryCap)
+		for _, segment in WheelConfig.Segments do
+			T.falsy(string.find(WheelView.detail(segment, clear), "full: pays", 1, true), segment.Id .. ": no note")
+			T.falsy(
+				string.find(WheelView.detail(segment, WheelView.info(nil, false)), "full: pays", 1, true),
+				segment.Id .. ": unknown, no note"
+			)
+		end
+	end)
+
+	withWheel("Wheel: Buy answers Full when the golem inventory has no room", function(w)
+		fillGolems(w)
+		local before = #w.replies
+		WheelService._test.action(w.player, "Buy", { Count = 5 })
+		local reply = w.replies[#w.replies]
+		T.truthy(#w.replies > before)
+		T.eq(reply.Event, "PurchasePrompt")
+		T.eq(reply.A.Status, "Full", "a bought spin couldn't be used")
+		T.truthy(WheelService.inventoryBlocks(w.data))
+		table.remove(w.data.Golems.Owned)
+		T.falsy(WheelService.inventoryBlocks(w.data), "room again")
+		WheelService._test.action(w.player, "Buy", { Count = 5 })
+		T.eq(w.replies[#w.replies].A.Status, "ComingSoon", "id 0: offered again")
+		-- the client says which Full it is
+		local source = fs.readFile("src/client/Controllers/WheelController.luau")
+		T.truthy(source:find("then WheelConfig.Reasons.InventoryFull else WheelConfig.Reasons.MaxSpins", 1, true), "the Full text")
+	end)
+
+	-- (review 269fd39 #2) golems from bought spins are Robux golems
+	withWheel("Wheel: a bought spin's golem is saved Paid and Locked (the free spin's isn't)", function(w)
+		-- the wheel's own opening (no capsule package)
+		w.data.Wheel.Spins = 1
+		local free = w.spin(rollFor(3), 0.0).A
+		T.eq(free.Paid, false)
+		local freeGolem = GolemConfig.find(w.data.Golems, free.Golem.Id)
+		T.falsy(freeGolem.Paid, "a free spin's golem is not paid")
+		T.falsy(freeGolem.Locked)
+		local bought = w.spin(rollFor(3), 0.0).A
+		T.eq(bought.Paid, true)
+		local paidGolem = GolemConfig.find(w.data.Golems, bought.Golem.Id)
+		T.eq(paidGolem.Paid, true, "Paid")
+		T.eq(paidGolem.Locked, true, "Locked")
+		-- through the real capsule package: the same, and its opening says PaidSpin
+		local CapsuleService = Loader.requirePath("ServerScriptService.Server.Services.CapsuleService")
+		WheelService._test.setCapsules(CapsuleService :: any)
+		local sources: { string } = {}
+		CapsuleService.onOpened(function(_p: any, info: any)
+			table.insert(sources, info.Source)
+		end)
+		local ok, err = pcall(function()
+			w.data.Wheel.Spins = 1
+			w.data.Wheel.NextSpinAt = NOW + DAY
+			local result = w.spin(rollFor(8)).A
+			T.eq(result.Paid, true)
+			local golem = GolemConfig.find(w.data.Golems, result.Golem.Id)
+			T.eq(golem.Paid, true, "Paid (CapsuleService)")
+			T.eq(golem.Locked, true, "Locked (CapsuleService)")
+			T.eq(sources[#sources], "PaidSpin", "analytics: from a paid spin")
+			w.now += DAY
+			local again = w.spin(rollFor(3)).A
+			T.eq(again.Paid, false)
+			T.falsy(GolemConfig.find(w.data.Golems, again.Golem.Id).Paid, "the free spin's golem")
+			T.eq(sources[#sources], "Free")
+		end)
+		CapsuleService._test.reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("Wheel: Migrations keep bought spins whole and sane (idempotent)", function()
 		local cases: { { any } } = {
 			{ "none", 0 },
@@ -1020,7 +1181,10 @@ return function(T, Loader)
 			local tile = grid.CellSize.Y.Offset
 			local gap = grid.CellPadding.Y.Offset
 			T.truthy(rowsN * tile + (rowsN - 1) * gap <= refs.JackpotTiles.Size.Y.Offset, `{name}: every golem tile in the card`)
-			T.truthy(columns * grid.CellSize.X.Offset + (columns - 1) * grid.CellPadding.X.Offset <= refs.JackpotTiles.Size.X.Offset, `{name}: tiles wide`)
+			T.truthy(
+				columns * grid.CellSize.X.Offset + (columns - 1) * grid.CellPadding.X.Offset <= refs.JackpotTiles.Size.X.Offset,
+				`{name}: tiles wide`
+			)
 			-- the X: at the wheel's top right, its red square off the painted faces, clear of the cards
 			local close = box(refs.Close)
 			local face = refs.Close:FindFirstChild("Face")
@@ -1139,7 +1303,10 @@ return function(T, Loader)
 		T.truthy(source:find("local seconds = WheelView.spinSeconds(fast)", 1, true), "Fast Spin's time")
 		T.truthy(source:find("landLobby(segment.Index, jitter, seconds, turns)", 1, true), "the lobby wheel lands the same way")
 		T.truthy(source:find('SettingsController.set("FastSpin", fast)', 1, true), "saved with the settings")
-		T.truthy(source:find("WheelView.setReady(view, isReady(), secondsLeft(), busy, usableSpins())", 1, true), "SPIN (n) counts the bought spins")
+		T.truthy(
+			source:find("WheelView.setReady(view, isReady(), secondsLeft(), busy, usableSpins())", 1, true),
+			"SPIN (n) counts the bought spins"
+		)
 		refs.Gui:Destroy()
 	end)
 
@@ -1251,7 +1418,11 @@ return function(T, Loader)
 
 	T.test("WheelView: text only, no emoji anywhere (owner)", function()
 		local function isEmoji(cp: number): boolean
-			return cp >= 0x1F000 or (cp >= 0x2600 and cp <= 0x27BF) or (cp >= 0x2B00 and cp <= 0x2BFF) or cp == 0xFE0F or (cp >= 0x2190 and cp <= 0x21FF)
+			return cp >= 0x1F000
+				or (cp >= 0x2600 and cp <= 0x27BF)
+				or (cp >= 0x2B00 and cp <= 0x2BFF)
+				or cp == 0xFE0F
+				or (cp >= 0x2190 and cp <= 0x21FF)
 		end
 		local function scan(root: any, label: string)
 			for _, d in root:GetDescendants() do
@@ -1313,14 +1484,16 @@ return function(T, Loader)
 
 	T.test("WheelView: the chip follows the bar on every screen width (icon-only bar under 600 pt)", function()
 		local Vector2 = (require("@lune/roblox") :: any).Vector2
-		for _, screen in {
-			{ Name = "phone 568x320", Size = Vector2.new(568, 320) },
-			{ Name = "phone 667x375", Size = Vector2.new(667, 375) },
-			{ Name = "phone 844x390", Size = Vector2.new(844, 390) },
-			{ Name = "tablet 1024x768", Size = Vector2.new(1024, 768) },
-			{ Name = "PC 1280x720", Size = Vector2.new(1280, 720) },
-			{ Name = "PC 1920x1080", Size = Vector2.new(1920, 1080) },
-		} do
+		for _, screen in
+			{
+				{ Name = "phone 568x320", Size = Vector2.new(568, 320) },
+				{ Name = "phone 667x375", Size = Vector2.new(667, 375) },
+				{ Name = "phone 844x390", Size = Vector2.new(844, 390) },
+				{ Name = "tablet 1024x768", Size = Vector2.new(1024, 768) },
+				{ Name = "PC 1280x720", Size = Vector2.new(1280, 720) },
+				{ Name = "PC 1920x1080", Size = Vector2.new(1920, 1080) },
+			}
+		do
 			local scale = math.clamp(math.min(screen.Size.Y / 720, screen.Size.X / 1100), 0.62, 1.25)
 			local w = screen.Size.X / scale
 			-- the bar as TeleportController lays it out (screen width in pt)
@@ -1349,7 +1522,10 @@ return function(T, Loader)
 		local fs = require("@lune/fs")
 		local source = fs.readFile("src/client/Controllers/WheelController.luau")
 		T.truthy(source:find("WheelView.buildChip(HudController.uiScale(), screenWidth())", 1, true), "built for the screen width")
-		T.truthy(source:find("WheelView.placeChip(c, HudController.uiScale(), screenWidth())", 1, true), "placed again on a new screen size")
+		T.truthy(
+			source:find("WheelView.placeChip(c, HudController.uiScale(), screenWidth())", 1, true),
+			"placed again on a new screen size"
+		)
 		T.truthy(source:find("WheelView.chipVisible(ready, open, busy, busyScreen, tutorial)", 1, true), "reads the tutorial bubble")
 		T.truthy(source:find("tutorial.onTopRowChanged(updateChip)", 1, true), "steps aside the moment the bubble comes")
 	end)
