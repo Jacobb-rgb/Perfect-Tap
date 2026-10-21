@@ -474,7 +474,7 @@ return function(T, Loader)
 		T.falsy(MoveRules.visible(20, false), "off screen")
 		T.falsy(MoveRules.visible(MoveConfig.Range + 1, true), "too far")
 		T.falsy(MoveRules.visible(0 / 0, true), "NaN distance")
-		T.eq(MoveRules.substitute("BigCelebrate", true), "Celebrate", "Reduce Motion: no spin jump")
+		T.eq(MoveRules.substitute("BigCelebrate", true), "CelebrateCalm", "Reduce Motion: no spin jump")
 		T.eq(MoveRules.substitute("BigCelebrate", false), "BigCelebrate", "the full move otherwise")
 		T.eq(MoveRules.substitute("Throw", true), "Throw", "the rest stays")
 	end)
@@ -738,6 +738,107 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+	end)
+
+	---------------------------------------------------------------- review fixes (anim/all #4, #6)
+
+	-- #6: the game's Reduce motion (and Roblox's) calms the celebrations and skips the extras
+	T.test("moves: Reduce Motion calms celebrations, skips the extras, keeps the feedback moves", function()
+		T.eq(MoveRules.substitute("BigCelebrate", true), "CelebrateCalm", "BigCelebrate becomes the plain, calm celebration")
+		T.eq(MoveRules.substitute("Celebrate", true), "CelebrateCalm", "Celebrate gets calmer")
+		T.eq(MoveRules.substitute("CashToss", true), "CashTossCalm", "the money toss gets calmer")
+		for name in MoveConfig.Extras do
+			T.eq(MoveRules.substitute(name, true), nil, name .. ": an optional extra is skipped")
+			T.eq(MoveRules.substitute(name, false), name, name .. ": played without Reduce Motion")
+		end
+		T.truthy(MoveConfig.Extras.Wave and MoveConfig.Extras.Shrug, "Wave and Shrug are the extras")
+		for _, name in { "Carry", "Throw", "Recoil", "Spray", "Hammer" } do
+			T.eq(MoveRules.substitute(name, true), name, name .. " stays (gameplay feedback)")
+			T.falsy(MoveConfig.Extras[name], name .. " is no extra")
+		end
+		for from, to in MoveConfig.ReducedMotion do
+			T.truthy(MoveConfig.Moves[from] and MoveConfig.Moves[to], `{from} -> {to}: both exist`)
+			T.eq(MoveConfig.ReducedMotion[to], nil, to .. ": no chains")
+			T.falsy(MoveConfig.Extras[to], to .. " is no extra")
+			T.eq(MoveConfig.Moves[to].Slot, MoveConfig.Moves[from].Slot, to .. ": the same slot")
+		end
+		-- the calm moves: a smaller hop, no crouch dip, no spin
+		local function rootRange(name: string): (number, number, number)
+			local move = MoveConfig.Moves[name]
+			local high, low, turn = -math.huge, math.huge, 0
+			for f = 0, 60 do
+				local pose, offset = MoveMath.evaluate(move, move.Duration * f / 60, 1, {})
+				high = math.max(high, offset.Y)
+				low = math.min(low, offset.Y)
+				local root = pose.Root
+				if root then
+					local look = root.LookVector
+					turn = math.max(turn, math.abs(math.atan2(-look.X, -look.Z)))
+				end
+			end
+			return high, low, turn
+		end
+		local bigHigh = rootRange("BigCelebrate")
+		local celebrateHigh, celebrateLow = rootRange("Celebrate")
+		for _, name in { "CelebrateCalm", "CashTossCalm" } do
+			local high, low, turn = rootRange(name)
+			T.truthy(high <= 0.3, name .. ": a small hop at most")
+			T.truthy(high < celebrateHigh and high < bigHigh, name .. ": smaller than the full celebrations")
+			T.truthy(low >= -0.01, name .. ": no crouch dip")
+			T.truthy(turn < 1 * DEG, name .. ": no spin")
+		end
+		T.truthy(celebrateLow < -0.1, "(the full Celebrate does dip: the check above means something)")
+		-- the controller reads the game's toggle as well as Roblox's
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MoveController.luau")
+		T.truthy(controller:find("SettingsController.onChanged", 1, true), "subscribes to the SETTINGS panel")
+		T.truthy(controller:find("current.ReduceMotion", 1, true), "reads SettingsConfig.ReduceMotion")
+		T.truthy(controller:find("ReducedMotionEnabled", 1, true), "and Roblox's own setting")
+		T.truthy(controller:find("MoveRules.substitute(name, reducedMotion())", 1, true), "start() swaps by both")
+		local SettingsConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.SettingsConfig")
+		T.eq(SettingsConfig.Defaults.ReduceMotion, false, "the SETTINGS toggle exists (off by default)")
+	end)
+
+	-- #4: an extra never takes the arm holding the blaster; firing masks every move's arms
+	T.test("moves: the blaster arm stays on target (extras skipped, arms masked while firing)", function()
+		for name in MoveConfig.Extras do
+			T.truthy(MoveRules.usesArms(name), name .. " overrides an arm")
+			T.truthy(MoveRules.skipArmed(name, true, false), name .. ": skipped with a tool in hand")
+			T.truthy(MoveRules.skipArmed(name, false, true), name .. ": skipped while the blaster fires")
+			T.falsy(MoveRules.skipArmed(name, false, false), name .. ": plays with empty hands")
+		end
+		for _, name in { "Throw", "Celebrate", "BigCelebrate", "CashToss", "Carry", "Recoil" } do
+			T.falsy(MoveRules.skipArmed(name, true, true), name .. ": never skipped (feedback / celebration)")
+		end
+		T.falsy(MoveRules.usesArms("Recoil"), "Recoil only adds to the arms")
+		T.truthy(MoveRules.maskArms("Action", true), "firing: an action leaves the arms alone")
+		T.truthy(MoveRules.maskArms("Loop", true), "firing: a loop leaves the arms alone")
+		T.falsy(MoveRules.maskArms("Kick", true), "the recoil kick still moves the gun arm")
+		T.falsy(MoveRules.maskArms("Action", false), "not firing: the arms move")
+		for joint in MoveRules.ArmJoints do
+			T.truthy(JOINTS[joint] and (joint:find("Shoulder") or joint:find("Elbow") or joint:find("Wrist")), joint .. " is an arm joint")
+		end
+		-- MoveRig: a masked layer leaves the tool-hold pose of the arm alone, the body still moves
+		local motors = fakeMotors()
+		local rig = MoveRig.fromMotors(motors)
+		local hold = CFrame.Angles(90 * DEG, 0, 0)
+		local shrug = MoveMath.evaluate(MoveConfig.Moves.Shrug, 0.4, 1, {})
+		local layer = {
+			Pose = shrug,
+			Weight = 1,
+			Override = MoveMath.overrides(MoveConfig.Moves.Shrug),
+			Mask = MoveRules.ArmJoints,
+		}
+		local kick = { Pose = { RightShoulder = CFrame.Angles(5 * DEG, 0, 0) }, Weight = 1, Override = {}, Mask = nil }
+		motors.RightShoulder.Transform = hold
+		MoveRig.step(rig, { layer, kick }, 2)
+		T.truthy(near(motors.RightShoulder.Transform, hold * kick.Pose.RightShoulder, 1e-3), "the gun arm: the hold plus the kick only")
+		T.eq(motors.LeftElbow.Transform, CFrame.identity, "the other arm is left alone too")
+		T.truthy(near(motors.Neck.Transform, shrug.Neck, 1e-3), "the head tilt still plays")
+		-- the controller checks both places: what you send, and what you show of the others
+		local controller = fs.readFile(Loader.root .. "/src/client/Controllers/MoveController.luau")
+		local _, checks = controller:gsub("MoveRules%.skipArmed%(", "")
+		T.eq(checks, 2, "playLocal and onMoveAttribute skip extras on the gun arm")
+		T.truthy(controller:find("MoveRules.maskArms(", 1, true), "every frame: the arms masked while firing")
 	end)
 
 	---------------------------------------------------------------- the integrator's rules (static)

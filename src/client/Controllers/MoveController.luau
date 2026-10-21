@@ -33,10 +33,22 @@
 	a Scriptable camera or PlayerControls claimed). R6 characters are
 	skipped. Range / on-screen / state are checked every
 	MoveConfig.CheckInterval; characters farther than MoveConfig.Range or
-	off screen cost nothing per frame. The player's Roblox "Reduce Motion"
-	(GuiService.ReducedMotionEnabled) swaps the spin jump for the plain
-	celebration (MoveConfig.ReducedMotion). setEnabled(false) turns every
-	move off (for a settings toggle).
+	off screen cost nothing per frame. setEnabled(false) turns every move off.
+
+	Reduce Motion (the game's SETTINGS toggle, SettingsController's
+	ReduceMotion, or Roblox's own GuiService.ReducedMotionEnabled) changes
+	what YOU see on every character: Celebrate / BigCelebrate / CashToss
+	become their calm versions (a small bounce, no crouch, no spin:
+	MoveConfig.ReducedMotion), the optional extras (Wave, Shrug) are
+	skipped; Carry, Throw, Recoil, Spray and Hammer stay. Your own extras
+	are still sent, so players without the setting see them.
+
+	The blaster arm: an extra (Wave, Shrug) never plays while you hold a
+	tool or fire (it would swing the gun and the beam that starts at its
+	muzzle away); you don't send it then either, so nobody sees it. While
+	a character's blaster fires (yours: MiningController.isFiring; the
+	others': a BlastHit within MoveConfig.FiringHold) every move but the
+	Recoil kick leaves the arms alone (MoveRules.maskArms, MoveRig masks).
 ]]
 
 local GuiService = game:GetService("GuiService")
@@ -81,10 +93,12 @@ type Entry = {
 	Pending: string?,
 	PendingAt: number,
 	KickAt: number,
+	FiredAt: number,
 	Connections: { RBXScriptConnection },
 }
 
 local SLOT_INDEX = { Loop = 1, Action = 2, Kick = 3 } :: { [string]: number }
+local SLOT_NAMES = { "Loop", "Action", "Kick" }
 local NO_OVERRIDE: { [string]: boolean } = {}
 local SEND_GAP = 0.35 -- seconds between Net "Move" sends (under its rate limit)
 
@@ -100,6 +114,12 @@ local nextKick = 0
 local lastShrug = -math.huge
 local lastSend = -math.huge
 local checkTimer = 0
+local settingsReduced = false -- the game's SETTINGS "Reduce motion"
+local systemReduced = false -- Roblox's own Reduce Motion
+
+local function reducedMotion(): boolean
+	return settingsReduced or systemReduced
+end
 
 ---------------------------------------------------------------- slots
 
@@ -109,9 +129,10 @@ end
 
 -- Starts a move in its slot; false when the slot keeps a stronger move (MoveRules.replaces).
 local function start(entry: Entry, name: string, scale: number?): boolean
-	local move = MoveConfig.Moves[MoveRules.substitute(name, GuiService.ReducedMotionEnabled)]
+	local chosen = MoveRules.substitute(name, reducedMotion())
+	local move = if chosen then MoveConfig.Moves[chosen] else nil
 	if not move then
-		return false
+		return false -- an extra under Reduce Motion
 	end
 	local slot = entry.Slots[SLOT_INDEX[move.Slot] or 2]
 	local now = os.clock()
@@ -173,6 +194,18 @@ local function removeEntry(entry: Entry)
 	end
 end
 
+-- Is this character's blaster firing? (yours: the trigger; the others': a recent BlastHit)
+local function firingOf(entry: Entry, now: number): boolean
+	if entry.Local then
+		return isFiring()
+	end
+	return now - entry.FiredAt < MoveConfig.FiringHold
+end
+
+local function holdsTool(entry: Entry): boolean
+	return entry.Character:FindFirstChildOfClass("Tool") ~= nil
+end
+
 local function onMoveAttribute(entry: Entry)
 	local name, seq = MoveRules.decode(entry.Character:GetAttribute(MoveConfig.Attribute))
 	if not name or seq == entry.Seq then
@@ -181,6 +214,9 @@ local function onMoveAttribute(entry: Entry)
 	entry.Seq = seq
 	if entry.Local and MoveConfig.ClientMoves[name] then
 		return -- you played it the moment you pressed
+	end
+	if MoveRules.skipArmed(name, holdsTool(entry), firingOf(entry, os.clock())) then
+		return -- an extra never takes the gun arm
 	end
 	if entry.Blocked then
 		if entry.Local then
@@ -214,6 +250,7 @@ local function addEntry(player: Player, character: Model)
 		Pending = nil,
 		PendingAt = 0,
 		KickAt = -math.huge,
+		FiredAt = -math.huge,
 		Connections = {},
 	}
 	for i, slot in entry.Slots do
@@ -350,9 +387,11 @@ local function stepEntry(entry: Entry, now: number)
 		return
 	end
 	local any = false
+	local firing = firingOf(entry, now)
 	for i = 1, 3 do
 		local slot = entry.Slots[i]
 		local layer = slot.Layer
+		layer.Mask = if MoveRules.maskArms(SLOT_NAMES[i], firing) then MoveRules.ArmJoints else nil
 		local move = slot.Move
 		if move then
 			local t = now - slot.Start
@@ -428,7 +467,11 @@ function MoveController.playLocal(name: string)
 	if not entry or entry.Blocked then
 		return
 	end
-	if not start(entry, name) then
+	if MoveRules.skipArmed(name, holdsTool(entry), isFiring()) then
+		return -- not on the arm holding the blaster: nobody sees it (the others only get what you send)
+	end
+	local calmSkip = MoveRules.substitute(name, reducedMotion()) == nil -- Reduce Motion: not for you, still for the others
+	if not start(entry, name) and not calmSkip then
 		return
 	end
 	local now = os.clock()
@@ -466,6 +509,22 @@ function MoveController.start()
 	local MiningController = require(script.Parent.MiningController)
 	isFiring = MiningController.isFiring
 
+	-- Reduce Motion: Roblox's own setting and the game's SETTINGS toggle
+	local function readSystem()
+		local ok, on = pcall(function()
+			return GuiService.ReducedMotionEnabled
+		end)
+		systemReduced = ok and on == true
+	end
+	readSystem()
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(readSystem)
+	end)
+	local SettingsController = require(script.Parent.SettingsController)
+	SettingsController.onChanged(function(current)
+		settingsReduced = current.ReduceMotion == true
+	end)
+
 	for _, player in Players:GetPlayers() do
 		hookPlayer(player)
 	end
@@ -484,10 +543,14 @@ function MoveController.start()
 			return
 		end
 		local entry = entryOf(shooter :: Player)
-		if not entry or not entry.Active then
+		if not entry then
 			return
 		end
 		local now = os.clock()
+		entry.FiredAt = now
+		if not entry.Active then
+			return
+		end
 		if now - entry.KickAt < MoveConfig.RecoilRepeat then
 			return
 		end

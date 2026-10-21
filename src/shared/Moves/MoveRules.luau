@@ -16,6 +16,11 @@
 	                        character) in a close-up camera
 	  visible(distance, onScreen)  in range (MoveConfig.Range) and on screen
 	  substitute(name, reducedMotion)  the calmer move for Reduce Motion
+	                        (nil: an optional extra, skipped)
+	  skipArmed(name, tool, firing)  an extra (Wave, Shrug) never takes the
+	                        arm that holds a tool or fires the blaster
+	  maskArms(slot, firing)  while the blaster fires every move but the
+	                        Recoil kick leaves the arms alone (MoveRig masks)
 	  forClean / forCapsule / forProgress / bigSell   which celebration a
 	                        server result earns (nil = none)
 ]]
@@ -101,11 +106,48 @@ function MoveRules.visible(distance: number, onScreen: boolean): boolean
 	return onScreen and distance == distance and distance <= MoveConfig.Range
 end
 
-function MoveRules.substitute(name: string, reducedMotion: boolean): string
+function MoveRules.substitute(name: string, reducedMotion: boolean): string?
 	if reducedMotion then
+		if MoveConfig.Extras[name] then
+			return nil
+		end
 		return MoveConfig.ReducedMotion[name] or name
 	end
 	return name
+end
+
+-- the arm joints (MoveRig masks them while the blaster fires)
+MoveRules.ArmJoints = {
+	LeftShoulder = true,
+	LeftElbow = true,
+	LeftWrist = true,
+	RightShoulder = true,
+	RightElbow = true,
+	RightWrist = true,
+} :: { [string]: boolean }
+
+-- Does this move replace an arm's pose (an Override arm joint)?
+function MoveRules.usesArms(name: string): boolean
+	local move = MoveConfig.Moves[name]
+	if not move then
+		return false
+	end
+	for _, joint in move.Override do
+		if MoveRules.ArmJoints[joint] then
+			return true
+		end
+	end
+	return false
+end
+
+-- An optional extra that would take the arm holding a tool / firing the blaster: skip it.
+function MoveRules.skipArmed(name: string, holdingTool: boolean, firing: boolean): boolean
+	return MoveConfig.Extras[name] == true and (holdingTool or firing) and MoveRules.usesArms(name)
+end
+
+-- While the blaster fires, the slot's move leaves the arms alone (all but the Kick slot: the recoil).
+function MoveRules.maskArms(slot: string, firing: boolean): boolean
+	return firing and slot ~= "Kick"
 end
 
 ---------------------------------------------------------------- celebrations (server results)
