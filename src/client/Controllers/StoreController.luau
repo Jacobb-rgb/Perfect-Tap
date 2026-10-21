@@ -34,6 +34,7 @@ local GolemConfig = require(Shared.Config.GolemConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local StoreConfig = require(Shared.Config.StoreConfig)
 local StarBlasterData = require(Shared.Config.StarBlasterData)
+local LimitedGolems = require(Shared.Config.LimitedGolems)
 local RebirthConfig = require(Shared.Config.RebirthConfig)
 local BlasterData = require(Shared.Config.BlasterData)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -68,6 +69,7 @@ local detailFrom: GuiObject? = nil -- the card that opened the odds panel (BACK 
 local stateAt: number? = nil -- server time of the last State (CapsuleView.luckyNow)
 -- a blaster level bought: its card stays greyed until the level changes (or BLASTER_WAIT)
 local blasterWait: { Key: string, Level: number, Until: number }? = nil
+local bannerFrame: Frame? = nil -- the limited banner whose buttons are wired
 
 function StoreController.isOpen(): boolean
 	return isOpen
@@ -165,6 +167,39 @@ local function starCard(view: StoreView.Refs, id: string, spec: StoreConfig.Card
 	return "Buy"
 end
 
+-- (defined below: the banner's buttons open the odds panel)
+local onLimited: (count: number) -> ()
+
+--[[
+	The limited edition banner at the top of FEATURED (LimitedGolems.current):
+	shown while it runs and the player may buy paid random items; its buttons
+	open the odds panel first (onLimited), its countdown follows the server clock.
+]]
+local function refreshBanner(view: StoreView.Refs)
+	local edition = if restricted() then nil else LimitedGolems.current(serverNow())
+	local banner = StoreView.setEdition(view, edition :: any)
+	if banner and banner.Frame ~= bannerFrame then
+		bannerFrame = banner.Frame
+		for count, button in banner.Buys do
+			button.Activated:Connect(function()
+				onLimited(count)
+			end)
+		end
+	elseif not banner then
+		bannerFrame = nil
+	end
+	if banner and edition then
+		StoreView.setTimer(view, banner.Edition.EndsAt - serverNow())
+		-- the tiles show what a buy rolls now (Triple Lucky included), like the odds panel
+		local lucky = tripleLuckyNow()
+		local odds: { [string]: number } = {}
+		for _, line in CapsuleConfig.odds(edition.CapsuleId, lucky) do
+			odds[line.Golem] = line.Chance
+		end
+		StoreView.setBannerOdds(view, odds, lucky)
+	end
+end
+
 -- Which product each card shows and its state.
 local function refresh()
 	local view = refs
@@ -228,6 +263,7 @@ local function refresh()
 	end
 	local income = player:GetAttribute("IncomePerSec")
 	StoreView.setCoins(view, if type(income) == "number" then income else 0)
+	refreshBanner(view)
 end
 
 ---------------------------------------------------------------- odds (paid random)
@@ -380,6 +416,31 @@ local function onCard(id: string)
 	buy(card.Key)
 end
 
+-- A limited banner button: its odds first (a paid random capsule), then BUY.
+onLimited = function(count: number)
+	local view = refs
+	local edition = LimitedGolems.current(serverNow())
+	if not view or not edition or restricted() then
+		return
+	end
+	local key = edition.Products[count]
+	local product = if key then MonetizationConfig.get(key) else nil
+	if not product or (pending[key] and os.clock() - pending[key] < PROMPT_MEMORY) then
+		return
+	end
+	local banner = view.Banner
+	detailKey = key
+	detailFrom = if banner then banner.Buys[count] else nil
+	StoreView.showDetail(view, {
+		Title = product.Name,
+		Lines = oddsFor(product),
+		Robux = product.Robux,
+		Paint = "Red",
+	})
+	GuiService.SelectedObject = if MenuPanels.usingGamepad() then view.DetailBuy else nil
+	Sfx.play("UIClick")
+end
+
 local function onPurchasePrompt(payload: any)
 	if type(payload) ~= "table" or type(payload.Product) ~= "string" then
 		return
@@ -497,6 +558,24 @@ local function onClose(_: string, inputState: Enum.UserInputState): Enum.Context
 	return Enum.ContextActionResult.Sink
 end
 
+-- The banner's quiet time left while the window is open (the edition ends: it goes).
+local function tickBanner()
+	task.spawn(function()
+		while isOpen do
+			local view = refs
+			if view and view.Banner then
+				local left = view.Banner.Edition.EndsAt - serverNow()
+				if left <= 0 then
+					refreshBanner(view)
+				else
+					StoreView.setTimer(view, left)
+				end
+			end
+			task.wait(5)
+		end
+	end)
+end
+
 function StoreController.open()
 	if isOpen then
 		return
@@ -508,6 +587,7 @@ function StoreController.open()
 	StoreView.setStatus(view, nil)
 	refresh()
 	view.Gui.Enabled = true
+	tickBanner()
 	PromptController.setSuppressed("Store", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	local first = view.Cards[view.Order[1]]

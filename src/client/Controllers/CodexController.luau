@@ -4,7 +4,7 @@
 	- Opens from the "Ore Codex" prompt at the ROCK SCANNER terminal (one
 	  ProximityPrompt on the cabinet of every Model tagged OreCodex: its
 	  PrimaryPart or the part named Cabinet, added when it streams in; a
-	  tagged BasePart gets it itself; F / gamepad Y like the other stalls)
+	  tagged BasePart gets it itself; E / gamepad Y like the other stalls)
 	  or from the side menu's CODEX button (CodexController.open / toggle).
 	- The cards come from the State snapshot's Discovered record and update
 	  live while it is open (only when what they show changes:
@@ -30,6 +30,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage:WaitForChild("Shared").Net)
+local PromptConfig = require(ReplicatedStorage:WaitForChild("Shared").Config.PromptConfig)
 local CodexView = require(script.Parent.Parent.UI.CodexView)
 local MenuPanel = require(script.Parent.Parent.UI.MenuPanel)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -394,16 +395,13 @@ local function addPrompt(part: BasePart, terminal: Instance)
 			end
 		end
 	end
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = CodexController.PromptName
-	prompt.ActionText = "Ore Codex"
-	prompt.ObjectText = "Rock Scanner"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = CodexController.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = part
+	local prompt = PromptConfig.make({
+		Name = CodexController.PromptName,
+		ActionText = "Ore Codex",
+		ObjectText = "Rock Scanner",
+		Distance = CodexController.PromptDistance,
+		Parent = part,
+	})
 	prompt.Triggered:Connect(function()
 		CodexController.open()
 	end)

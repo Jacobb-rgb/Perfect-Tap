@@ -24,8 +24,17 @@
 	  your own machine up close); a crate gulps, a Sell Chute flashes coins.
 	- Anvil: ingot stubs on IngotSlot1..n (Ingots, IngotOre), glowing while
 	  Forging.
-	- Progress billboards over YOUR busy machines (MachineBillboard, at most 12).
+	- Signs over YOUR machines (MachineBillboard, 12 of those it wants:
+	  blocked first, then working, no power, waiting, nearest first within
+	  each; MachineBillboard.signBefore): busy ones within 50 studs, and
+	  within 30 every machine with a status (working, waiting for its
+	  input, no power, blocked). The status is
+	  worked out when an attribute changes (MachineBillboard.statusOf), and
+	  a sign is updated then or, while a job runs, every frame (its bar).
 	- Fx 'Reject': red dust + a reject sound where a machine refused an item.
+	- Fx 'Full': a "FULL" (or "BUSY") chip pops up over the hopper you
+	  dropped an item into that can't take it now, with the deny sound
+	  (IntakeService; pooled, POP_COUNT at once).
 	- Water (Cleaning Station, Auto Cleaner: Base attachments WaterOut and
 	  WaterIn from MachineBuilder): the nearest WATER_MAX wet machines within
 	  WATER_RANGE borrow a pooled rig (an invisible anchor with two Beams for
@@ -39,11 +48,14 @@
 	  the soft foam rings, right under the landing point.
 	  Emitter rates follow the graphics quality (half on low quality and on
 	  phones left on automatic). Leaving the range gives the rig back.
-	- Auto Cleaner: the bed rollers turn with the brush drum, the stacked
-	  light lights one lamp (Neon, its colour toned down by Stack.Glow so it
-	  glows in its colour instead of blooming white; the others keep their
-	  hue): green (working), amber (idle) or red (blocked), and the built look
-	  (MachineBuilder.Stack.Lit) out of range. Crusher: the side
+	- Stack lights (StackRed / StackAmber / StackGreen on the Auto Cleaner,
+	  Crusher, Blast Furnace and Fusion Reactor, any machine that has them):
+	  one lamp lit (Neon, its colour toned down by Stack.Glow so it glows in
+	  its colour instead of blooming white; the others keep their hue), the
+	  lamp of the machine's status (MachineBillboard.lampOf): green working,
+	  amber waiting or no power, red blocked; a generator green while a pole
+	  takes its power. Set on every status change, in range or not.
+	- Auto Cleaner: the bed rollers turn with the brush drum. Crusher: the side
 	  cogs turn with the rollers. Furnaces: the Glow and the Molten parts
 	  (glass sections, trickle, mould) pulse from their deep built orange
 	  toward MachineBuilder.Glow.Hot (brightness, never a white blob).
@@ -59,8 +71,8 @@
 	  again), builds at most one new one every SHOW_BUILD_GAP seconds and
 	  never retries a key that failed to build. Its billboard says "Ore Pen
 	  full" while the PenFull attribute is set.
-	- Cleaning Plant: your own plant within ODDS_RANGE shows its billboard
-	  even when idle, with the grade odds of its Quality level
+	- Cleaning Plant: your own plant within MachineBillboard.OddsRange shows
+	  its billboard even when idle, with the grade odds of its Quality level
 	  (attribute QualityOdds, MachineBillboard.setNote / qualityNote). The
 	  note is built once per change of Quality / QualityOdds (onAttribute),
 	  not every frame, and set when a billboard appears or it changes.
@@ -70,6 +82,7 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
@@ -130,6 +143,7 @@ type WaterRig = {
 type Fx = {
 	Model: Model,
 	Id: string,
+	Info: MachineData.Machine?,
 	Base: BasePart?,
 	-- replicated attributes, each updated by its own change signal (so in
 	-- the Cycles handler WorkOre is still the ore of the job that finished)
@@ -160,6 +174,8 @@ type Fx = {
 	ForgeLight: PointLight?,
 	Billboard: MachineBillboard.Refs?,
 	Note: string, -- the billboard's note (Cleaning Plant odds; "" = none)
+	Status: string, -- MachineBillboard.statusOf, again on every state change
+	SignDirty: boolean, -- an attribute changed: the sign updates next frame
 	Connections: { RBXScriptConnection },
 	-- molten parts that pulse with the Glow (furnaces)
 	Hot: { BasePart },
@@ -173,7 +189,7 @@ type Fx = {
 	Pool: BasePart?,
 	PoolColor: Color3,
 	PoolTransparency: number,
-	-- stacked status light (Auto Cleaner)
+	-- stacked status light (captureSignals)
 	Signals: { [string]: BasePart }?,
 	SignalState: string?,
 	-- Iron Box: flaps by way ("Keep" / "Send"), screen labels, the item
@@ -206,7 +222,6 @@ local HUM_RANGE = 60
 local HUM_COUNT = 4
 local SHAKE_RANGE = 25
 local SHAKE = 0.06
-local BILLBOARD_RANGE = 50 -- MachineBillboard hides itself beyond 45
 local MAX_BILLBOARDS = 12
 local HEAT_RATE = 1.6 -- per second: how fast glow and spin ease in and out
 local FLASH_DECAY = 2.5
@@ -235,8 +250,6 @@ local FLOW_RATE = 1.2 -- per second
 local SOFT = "rbxasset://textures/particles/smoke_main.dds"
 local GLOW_HOT = MachineBuilder.Glow.Hot
 local WATER = MachineBuilder.Water
-local STACK = MachineBuilder.Stack
-local SIGNALS = { "StackRed", "StackAmber", "StackGreen" }
 -- Iron Box
 local IRON_BOX = MachineBuilder.IronBox
 local FLAP_OPEN, FLAP_HOLD, FLAP_CLOSE = 0.12, 0.18, 0.45 -- seconds: swing open, stay, fall shut
@@ -245,17 +258,25 @@ local SHOW_MAX = 2 -- ...of your own, the nearest this many
 local SHOW_CACHE = 4 -- display models each box keeps (by storage key)
 local SHOW_BUILD_GAP = 1.2 -- seconds: at most one new display model per box this often
 local SCREEN_TEXT = IRON_BOX.ScreenText
--- Cleaning Plant odds on your own plant's billboard, idle too, this close
-local ODDS_RANGE = 24
 -- Robot Arm: seconds to swing back to the machine behind, pick, swing to the front
 local ARM_BACK, ARM_PICK, ARM_FRONT = 0.4, 0.12, 0.45
 -- Splitter / Sorter: how far the flipper turns toward the side an item leaves by, and how fast
 local FLIP_ANGLE = 0.55
 local FLIP_RATE = 7 -- per second (eased)
+-- the FULL / BUSY pop over a hopper: pooled chips, how far and how long it rises, the fade at its end
+local POP_COUNT = 2
+local POP_LIFT = 0.6 -- studs over the hopper it starts at...
+local POP_RISE = 2.2 -- ...and rises by
+local POP_TIME = 0.9 -- seconds it shows, of which...
+local POP_FADE = 0.3 -- ...the last fade it out
+-- attributes the status (sign and stack light) is worked out from
+local STATE_ATTRS: { [string]: boolean } =
+	{ Status = true, PenFull = true, PowerSpeed = true, Powered = true, Working = true, Queue = true, Network = true }
 
 local player = Players.LocalPlayer
 local machines: { [Model]: Fx } = {}
 local active: { Fx } = {}
+local candidates: { Fx } = {} -- own machines that want a sign (pickActive, reused)
 local hums: { Hum } = {}
 local rigPool: { WaterRig } = {}
 local fxFolder: Folder? = nil
@@ -404,6 +425,12 @@ local function captureWater(fx: Fx)
 	end
 end
 
+-- The stack light's lamps (StackRed / StackAmber / StackGreen), on any
+-- machine that has them (Auto Cleaner, Crusher, Blast Furnace, Fusion Reactor).
+local function captureSignals(fx: Fx)
+	fx.Signals = MachineBillboard.stackLamps(fx.Model)
+end
+
 -- Finds the parts each machine type animates (names from MachineBuilder).
 local function capture(fx: Fx)
 	local model, base = fx.Model, fx.Base
@@ -452,18 +479,6 @@ local function capture(fx: Fx)
 		if base then
 			addSpinners(fx, base, "Drum", { "Drum", "DrumRib" }, 1)
 			addSelfSpinners(fx, base, "BedRoller", BED_ROLLER_DIR)
-		end
-		local lamps: { [string]: BasePart } = {}
-		local found = false
-		for _, name in SIGNALS do
-			local lamp = model:FindFirstChild(name)
-			if lamp and lamp:IsA("BasePart") then
-				lamps[name] = lamp
-				found = true
-			end
-		end
-		if found then
-			fx.Signals = lamps
 		end
 	elseif id == "Crusher" then
 		if base then
@@ -584,6 +599,7 @@ local function capture(fx: Fx)
 	end
 	fx.SpinRate = SPIN_RATE[id] or 0
 	captureWater(fx)
+	captureSignals(fx)
 end
 
 -- Lights and emitter rates for the current heat (no pulse).
@@ -610,29 +626,27 @@ end
 
 ---------------------------------------------------------------- status light
 
--- Auto Cleaner stack light, one lamp lit: green while working, red when
--- blocked, amber when idle; the built look (Stack.Lit) while out of range.
+-- The stack light, one lamp lit: the lamp of the machine's status
+-- (MachineBillboard.lampOf). Only touches the parts when the lamp changes.
 local function applySignal(fx: Fx)
 	local lamps = fx.Signals
 	if not lamps then
 		return
 	end
-	local status = fx.Attr.Status
-	local state = if not fx.Active
-		then STACK.Lit
-		elseif fx.Attr.Working == true then "StackGreen"
-		elseif type(status) == "string" and status ~= "" then "StackRed"
-		else "StackAmber"
+	local state = MachineBillboard.lampOf(fx.Attr, fx.Info)
 	if state == fx.SignalState then
 		return
 	end
 	fx.SignalState = state
-	for name, lamp in lamps do
-		local lit = name == state
-		local color = STACK.Lamps[name] or lamp.Color
-		lamp.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
-		lamp.Color = color:Lerp(Color3.new(0, 0, 0), if lit then STACK.Glow else STACK.Dim)
-	end
+	MachineBillboard.lightStack(lamps, state)
+end
+
+-- The machine's state changed (an attribute in STATE_ATTRS, its Job): its
+-- status again, the stack light, and the sign next frame.
+local function refreshState(fx: Fx)
+	fx.Status = MachineBillboard.statusOf(fx.Attr, fx.Info)
+	fx.SignDirty = true
+	applySignal(fx)
 end
 
 ---------------------------------------------------------------- water
@@ -1362,7 +1376,7 @@ end
 	WorkStart, WorkTime, WorkOre (the last job's values stay while idle). With
 	`live`, it plays what the separate attributes played: the done effect
 	first (Attr.WorkOre still holds the finished job's ore), then the start
-	sound, then the stack light.
+	sound, then the status (stack light, sign).
 ]]
 local function applyJob(fx: Fx, value: any, live: boolean)
 	local job = MachineBillboard.decodeJob(value)
@@ -1383,7 +1397,7 @@ local function applyJob(fx: Fx, value: any, live: boolean)
 		if fx.Active and job.Working and not wasWorking then
 			onWorkStart(fx)
 		end
-		applySignal(fx)
+		refreshState(fx)
 	end
 end
 
@@ -1391,6 +1405,7 @@ local function onAttribute(fx: Fx, name: string)
 	local value = fx.Model:GetAttribute(name)
 	local before = fx.Attr[name]
 	fx.Attr[name] = value
+	fx.SignDirty = true
 	if name == "Job" then
 		applyJob(fx, value, true)
 	elseif name == "Queue" then
@@ -1405,9 +1420,6 @@ local function onAttribute(fx: Fx, name: string)
 		if fx.Active and value == true and before ~= true then
 			onWorkStart(fx)
 		end
-		applySignal(fx)
-	elseif name == "Status" then
-		applySignal(fx)
 	elseif name == "GridX" or name == "GridZ" or name == "Rotation" or name == "GridL" then
 		-- moved: the server put every part back in its rest pose
 		fx.Angle = 0
@@ -1440,6 +1452,9 @@ local function onAttribute(fx: Fx, name: string)
 			flipper.Target = math.sign(value) * FLIP_ANGLE
 		end
 	end
+	if STATE_ATTRS[name] then
+		refreshState(fx)
+	end
 end
 
 ---------------------------------------------------------------- registry
@@ -1455,14 +1470,12 @@ local function setActive(fx: Fx, on: boolean)
 		applyHeat(fx)
 		fx.StubsDirty = true
 		fx.BoxDirty = true
-		applySignal(fx)
 		return
 	end
 	-- back to the idle look
 	fx.Heat = 0
 	applyHeat(fx)
 	releaseRig(fx)
-	applySignal(fx)
 	fx.Flash = 0
 	local coins = fx.Coins
 	if coins then
@@ -1505,6 +1518,7 @@ local function register(instance: Instance)
 	local fx: Fx = {
 		Model = model,
 		Id = id,
+		Info = info,
 		Base = if base and base:IsA("BasePart") then base else nil,
 		Attr = model:GetAttributes(),
 		Active = false,
@@ -1533,6 +1547,8 @@ local function register(instance: Instance)
 		ForgeLight = nil,
 		Billboard = nil,
 		Note = "",
+		Status = "",
+		SignDirty = false,
 		Connections = {},
 		Hot = {},
 		HotColors = {},
@@ -1567,6 +1583,7 @@ local function register(instance: Instance)
 		applyJob(fx, job, false)
 	end
 	capture(fx)
+	refreshState(fx)
 	if fx.ScreenItem or fx.ScreenCounter then
 		drawScreen(fx)
 	end
@@ -1655,16 +1672,48 @@ end
 
 ---------------------------------------------------------------- selection (every 0.5 s)
 
+-- Your own machines only; which of them, MachineBillboard.wants.
 local function wantsBillboard(fx: Fx): boolean
-	if not isOwn(fx) or fx.Distance > BILLBOARD_RANGE then
-		return false
+	return isOwn(fx) and MachineBillboard.wants(fx.Attr, fx.Status, fx.Distance)
+end
+
+--[[
+	Writes the machine's state into its sign (MachineBillboard.update
+	writes only what changed): after an attribute changed (SignDirty: the
+	info lines are read again too), and every frame while a job runs (the
+	bar).
+]]
+local function updateSign(fx: Fx, serverNow: number)
+	local refs = fx.Billboard
+	if not refs then
+		return
 	end
-	local odds = fx.Attr.QualityOdds
-	if fx.Distance <= ODDS_RANGE and type(odds) == "string" and odds ~= "" then
-		return true
-	end
+	local dirty = fx.SignDirty
+	fx.SignDirty = false
+	local queue = number(fx, "Queue")
 	local status = fx.Attr.Status
-	return number(fx, "Queue") > 0 or fx.Attr.Working == true or (type(status) == "string" and status ~= "") or fx.Attr.PenFull == true
+	local blocked = type(status) == "string" and status ~= ""
+	local progress = 0
+	local workTime = number(fx, "WorkTime")
+	if fx.Attr.Working == true and workTime > 0 then
+		progress = (serverNow - number(fx, "WorkStart")) / workTime
+	elseif blocked and queue > 0 then
+		-- finished, waiting for room to come out
+		progress = 1
+	end
+	local ore = oreOf(fx.Attr.WorkOre)
+	MachineBillboard.update(
+		refs,
+		progress,
+		queue,
+		number(fx, "QueueMax"),
+		number(fx, "OutCount"),
+		fx.Status,
+		if ore then ore.Color else nil
+	)
+	if dirty then
+		MachineBillboard.refreshInfo(refs)
+	end
 end
 
 local function byDistance(a: Fx, b: Fx): boolean
@@ -1731,24 +1780,39 @@ local function pickActive()
 		acquireRig(fx)
 	end
 
+	-- signs: the MAX_BILLBOARDS most important (blocked, working, no power,
+	-- waiting; MachineBillboard.signBefore), from their own list so `active`
+	-- keeps its distance order
 	local humming: { Fx } = {}
-	local signs = 0
+	table.clear(candidates)
 	for _, fx in active do
 		if fx.Attr.Working == true and fx.Distance <= HUM_RANGE and #humming < HUM_COUNT then
 			table.insert(humming, fx)
 		end
-		if wantsBillboard(fx) and signs < MAX_BILLBOARDS then
-			signs += 1
+		if wantsBillboard(fx) then
+			table.insert(candidates, fx)
+		elseif fx.Billboard then
+			MachineBillboard.detach(fx.Billboard :: MachineBillboard.Refs)
+			fx.Billboard = nil
+		end
+	end
+	table.sort(candidates, MachineBillboard.signBefore)
+	for i, fx in candidates do
+		if i <= MAX_BILLBOARDS then
 			if not fx.Billboard then
 				local refs = MachineBillboard.attach(fx.Model)
 				MachineBillboard.setNote(refs, fx.Note)
 				fx.Billboard = refs
+				-- filled now, so it never shows a frame of the empty sign
+				fx.SignDirty = true
+				updateSign(fx, Workspace:GetServerTimeNow())
 			end
 		elseif fx.Billboard then
 			MachineBillboard.detach(fx.Billboard :: MachineBillboard.Refs)
 			fx.Billboard = nil
 		end
 	end
+	table.clear(candidates) -- no strong refs to removed machines until the next pick
 	assignHums(humming)
 end
 
@@ -1859,38 +1923,90 @@ local function step(dt: number)
 		if forgeLight then
 			forgeLight.Brightness = 1.6 + math.sin(clock * 7) * 0.6
 		end
-		-- your own machine's progress sign
-		local refs = fx.Billboard
-		if refs then
-			local queue = number(fx, "Queue")
-			local status = fx.Attr.Status
-			local statusText = if type(status) == "string" then status else ""
-			-- an Iron Box whose kept ore can't go into the pen says so (a
-			-- MachineService status, e.g. Output blocked, comes first)
-			local signText = if statusText == "" and fx.Attr.PenFull == true then "PenFull" else statusText
-			local progress = 0
-			local workTime = number(fx, "WorkTime")
-			if fx.Attr.Working == true and workTime > 0 then
-				progress = (serverNow - number(fx, "WorkStart")) / workTime
-			elseif statusText ~= "" and queue > 0 then
-				-- finished, waiting for room to come out
-				progress = 1
-			end
-			local ore = oreOf(fx.Attr.WorkOre)
-			MachineBillboard.update(
-				refs,
-				progress,
-				queue,
-				number(fx, "QueueMax"),
-				number(fx, "OutCount"),
-				signText,
-				if ore then ore.Color else nil
-			)
+		-- your own machine's sign: after a change, every frame while working
+		if fx.Billboard and (fx.SignDirty or fx.Attr.Working == true) then
+			updateSign(fx, serverNow)
 		end
 	end
 	if #spinParts > 0 then
 		Workspace:BulkMoveTo(spinParts, spinFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+end
+
+---------------------------------------------------------------- FULL pop
+
+-- A pooled pop: its invisible anchor part, the chip (MachineBillboard.buildPop)
+-- and a token that tells a reused pop's old fade to stand down.
+type PopRig = { Part: Part, Pop: MachineBillboard.Pop, Token: number }
+
+local pops: { PopRig } = {}
+local nextPop = 1
+
+local function popRig(): PopRig
+	local index = nextPop
+	nextPop = nextPop % POP_COUNT + 1
+	local rig = pops[index]
+	if rig and rig.Part.Parent then
+		return rig
+	end
+	local part = invisiblePart("FullPop", Vector3.new(0.2, 0.2, 0.2))
+	part.Parent = folder()
+	local made: PopRig = { Part = part, Pop = MachineBillboard.buildPop(part), Token = 0 }
+	pops[index] = made
+	return made
+end
+
+-- The chip's text, face and outlines all at one transparency (tweened with `info`).
+local function fadePop(pop: MachineBillboard.Pop, value: number, info: TweenInfo?)
+	local chip = pop.Chip
+	local targets: { Instance } = { chip }
+	for _, child in chip:GetChildren() do
+		if child:IsA("UIStroke") then
+			table.insert(targets, child)
+		end
+	end
+	for _, target in targets do
+		local goal: { [string]: any } = if target:IsA("UIStroke")
+			then { Transparency = value }
+			else { TextTransparency = value, BackgroundTransparency = value }
+		if info then
+			TweenService:Create(target, info, goal):Play()
+		else
+			for key, v in goal do
+				(target :: any)[key] = v
+			end
+		end
+	end
+end
+
+-- "FULL" (or "BUSY") pops up over a hopper and rises; the deny sound plays there.
+local function showFull(position: Vector3, reason: any)
+	local rig = popRig()
+	rig.Token += 1
+	local token = rig.Token
+	local pop = rig.Pop
+	rig.Part.CFrame = CFrame.new(position)
+	pop.Chip.Text = MachineBillboard.popText(reason)
+	fadePop(pop, 0, nil)
+	pop.Scale.Scale = 0.5
+	pop.Gui.StudsOffset = Vector3.new(0, POP_LIFT, 0)
+	pop.Gui.Enabled = true
+	TweenService:Create(pop.Scale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	TweenService:Create(pop.Gui, TweenInfo.new(POP_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		StudsOffset = Vector3.new(0, POP_LIFT + POP_RISE, 0),
+	}):Play()
+	task.delay(POP_TIME - POP_FADE, function()
+		if rig.Token ~= token then
+			return -- popped again since
+		end
+		fadePop(pop, 1, TweenInfo.new(POP_FADE))
+		task.delay(POP_FADE, function()
+			if rig.Token == token then
+				pop.Gui.Enabled = false
+			end
+		end)
+	end)
+	Sfx.play("UIDeny", position) -- at the hopper, like Reject: heard only nearby
 end
 
 ---------------------------------------------------------------- lifecycle
@@ -1903,6 +2019,13 @@ function MachineFxController.init()
 		Vfx.burst("Dust", position, 6, REJECT_COLOR)
 		Vfx.burst("Sparks", position, 4, REJECT_COLOR)
 		Sfx.play("Reject", position)
+	end)
+	-- a hopper you dropped an item into is full / busy: (hopperPosition, "Full" | "Busy")
+	FxController.register("Full", function(position: any, reason: any)
+		if typeof(position) ~= "Vector3" then
+			return
+		end
+		showFull(position, reason)
 	end)
 end
 

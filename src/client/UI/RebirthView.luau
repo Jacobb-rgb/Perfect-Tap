@@ -3,21 +3,24 @@
 	menu panel in the MenuPanel frame. Pure builder + layout math, so the
 	Lune previews draw the same thing.
 
-	  tabs      REBIRTH | STAR SHOP | BLASTERS (with your unspent stars)
-	  REBIRTH   three columns, each a coloured chip over short rows:
+	  tabs      REBIRTH | STAR SHOP | BLASTERS (with your unspent stars: "12 STARS")
+	  REBIRTH   three columns, each a coloured chip over short rows (a dot
+	            in the column's colour before each):
 	            YOU LOSE (red), YOU KEEP (blue), YOU GET (green): the
 	            exact lists of RebirthConfig.reset (Head Start's level and
 	            Podium Keeper change the rows); under them what a rebirth
 	            needs and the big REBIRTH! button (grey until your blaster
 	            reaches MinBlaster; the first press turns it red "SURE?")
-	  STAR SHOP a card per perk: icon, name, what a level does, the level
-	            (2/10), and its BUY button with the star price (MAX at the top,
-	            grey without the stars)
+	  STAR SHOP a card per perk: name, what a level does, the level (2/10),
+	            and its BUY button with the star price ("BUY 2 STARS"; MAX at
+	            the top, grey without the stars)
 	  BLASTERS  a card per STAR blaster (StarBlasterData): its picture (in
 	            the game a live ViewportFrame of the gun, fillPicture; the
 	            preview draws the icon "star_<id>"), name, damage and the
-	            rebirth that opens it; buttons by weaponCard: ⭐ price + R$
-	            price (to buy), EQUIP / EQUIPPED, or a grey 🔒 REBIRTH n
+	            rebirth that opens it; buttons by weaponCard: the star price
+	            ("20 STARS") + R$ price (to buy), EQUIP / EQUIPPED, or a grey
+	            "LOCKED: REBIRTH n"
+	Words only, no emoji (the owner's "text only"; NoEmoji.spec).
 
 	setInfo(refs, info) fills both pages from the State's Rebirth field and
 	the blaster level. layout(refs, compact, maxWidth, maxHeight) sizes the
@@ -74,7 +77,6 @@ export type Column = { Frame: Frame, Chip: TextLabel, Rows: { TextLabel } }
 export type Card = {
 	Id: string,
 	Frame: Frame,
-	Icon: TextLabel,
 	Name: TextLabel,
 	Text: TextLabel,
 	Level: TextLabel,
@@ -140,6 +142,9 @@ RebirthView.TabIds = { "Rebirth", "Shop", "Blasters" }
 RebirthView.TitleRoom = 250
 -- the star count's room right of the tabs (design units)
 RebirthView.StarsRoom = 120
+-- a column row's bullet dot and the room it takes left of the row's text (design units)
+RebirthView.Dot = 8
+RebirthView.DotRoom = 18
 
 -- The rows of the three columns for a save (Head Start's level, Podium Keeper;
 -- `lifted` = the level the rebirth starts with when Robux levels lift it: RebirthConfig.startFor).
@@ -147,34 +152,39 @@ function RebirthView.lists(perks: any, lifted: number?): { [string]: { string } 
 	local start = lifted or RebirthConfig.startLevel(perks)
 	local open = EnchantConfig.unlockedSlots(start)
 	local enchantRow = if open < EnchantConfig.MaxSlots
-		then `✨  Enchant slots {open + 1}-{EnchantConfig.MaxSlots} for now`
-		else "✨  Enchant slots stay open"
+		then `Enchant slots {open + 1}-{EnchantConfig.MaxSlots} for now`
+		else "Enchant slots stay open"
 	local keepsPodiums = RebirthConfig.levelOf(perks, "PodiumKeeper") > 0
 	return {
 		Lose = {
-			"💰  Earned coins",
-			`🔫  Blaster back to LV {start}`,
-			"⛏️  Floors and elevator",
-			"⚙️  Machine speed",
-			"🚂  Train and backpack levels",
+			"Earned coins",
+			`Blaster back to LV {start}`,
+			"Floors and elevator",
+			"Machine speed",
+			"Train and backpack levels",
 			enchantRow,
-			if keepsPodiums then "🪨  Ore (podiums stay)" else "🪨  All your ore",
+			if keepsPodiums then "Ore (podiums stay)" else "All your ore",
 		},
 		Keep = {
-			"🏭  Your whole factory",
-			"🤖  Golems and enchants",
-			"🏺  Artifacts and codex",
-			"🛹  Boards, gear, star blasters",
-			"💎  Shards, Robux items",
-			"💰  Coins bought with Robux",
-			"🏆  Stats and records",
+			"Your whole factory",
+			"Golems and enchants",
+			"Artifacts and codex",
+			"Boards, gear, star blasters",
+			"Shards, Robux items",
+			"Coins bought with Robux",
+			"Stats and records",
 		},
 		Get = {
-			"⭐  Forge Stars",
-			"🔁  A new rebirth",
-			"🛒  Star Shop perks",
+			"Forge Stars",
+			"A new rebirth",
+			"Star Shop perks",
 		},
 	}
+end
+
+-- A star amount on the buttons, by the tabs and over the heads ("1 STAR", "12 STARS").
+function RebirthView.starsLabel(count: number): string
+	return string.upper(RebirthConfig.starsText(count))
 end
 
 -- What the bottom line says (the requirement, or what a rebirth pays now).
@@ -185,7 +195,7 @@ function RebirthView.needText(info: Info): string
 		return "Nothing left to forge: a rebirth now pays no stars"
 	end
 	if info.Ready then
-		return `Blaster LV {reached}: a rebirth now pays ⭐ {info.StarsNow}`
+		return `Blaster LV {reached}: a rebirth now pays {RebirthConfig.starsText(info.StarsNow)}`
 	end
 	if info.Level >= RebirthConfig.MinBlaster then
 		return RebirthView.forgeText(info.Level)
@@ -208,19 +218,19 @@ function RebirthView.cardText(perks: any, stars: number, id: string, start: numb
 	if not cost or (id == "HeadStart" and start and start >= BlasterData.MaxLevel - 1) then
 		return `{level}/{top}`, "MAX", false
 	end
-	return `{level}/{top}`, `⭐ {cost}  BUY`, stars >= cost
+	return `{level}/{top}`, `BUY {RebirthView.starsLabel(cost)}`, stars >= cost
 end
 
 -- A STAR blaster card's texts and buttons for the save (Info).
 function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): WeaponState
 	local data = { Rebirths = info.Count, Stars = info.Stars, RebirthWeapons = info.Weapons or {}, StarBlaster = info.Weapon or "" }
 	local state = StarBlasterData.cardState(data, star.Id)
-	local power = `⚡ x{star.Mult} damage`
+	local power = `Damage x{star.Mult}`
 	if state == "Locked" then
 		return {
 			State = state,
 			Line = power,
-			Main = `🔒 REBIRTH {star.Unlock}`,
+			Main = `LOCKED: REBIRTH {star.Unlock}`,
 			Style = "Off",
 			RobuxOn = false,
 		}
@@ -228,12 +238,12 @@ function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): 
 		return {
 			State = state,
 			Line = `Yours! It opens at rebirth {star.Unlock}`,
-			Main = `🔒 REBIRTH {star.Unlock}`,
+			Main = `LOCKED: REBIRTH {star.Unlock}`,
 			Style = "Off",
 			RobuxOn = false,
 		}
 	elseif state == "Equipped" then
-		return { State = state, Line = `{power} · equipped`, Main = "EQUIPPED ✓", Style = "Equipped", RobuxOn = false }
+		return { State = state, Line = `{power} · equipped`, Main = "EQUIPPED", Style = "Equipped", RobuxOn = false }
 	elseif state == "Owned" then
 		return { State = state, Line = `{power} · yours`, Main = "EQUIP", Style = "Equip", RobuxOn = false }
 	end
@@ -242,7 +252,7 @@ function RebirthView.weaponCard(info: Info, star: StarBlasterData.StarBlaster): 
 	return {
 		State = state,
 		Line = power,
-		Main = `⭐ {star.Stars}`,
+		Main = RebirthView.starsLabel(star.Stars),
 		Style = if info.Stars >= star.Stars then "Buy" else "Off",
 		Robux = `R$ {star.Robux}`,
 		RobuxOn = live and info.RobuxOn == true,
@@ -277,7 +287,6 @@ local function newCard(parent: Instance, perk: RebirthConfig.Perk, order: number
 	}, parent)
 	UIKit.corner(frame, 12)
 	UIKit.stroke(frame, 2, RebirthView.Colors.RebirthDark)
-	local icon = UIKit.label(frame, perk.Icon, 34, { Name = "Icon", TextWrapped = false })
 	local name = UIKit.label(frame, perk.Name, 20, {
 		Name = "PerkName",
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -293,7 +302,7 @@ local function newCard(parent: Instance, perk: RebirthConfig.Perk, order: number
 	local level = UIKit.label(frame, "0/0", 16, { Name = "Level", TextColor3 = RebirthView.Colors.Star, TextWrapped = false })
 	local buy = chunky(frame, "BUY", Theme.Good, Theme.GoodDark, "Buy")
 	local pick = if perk.Id == "PlotGlow" then chunky(frame, "OFF", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "Pick") else nil
-	return { Id = perk.Id, Frame = frame, Icon = icon, Name = name, Text = text, Level = level, Buy = buy, Pick = pick }
+	return { Id = perk.Id, Frame = frame, Name = name, Text = text, Level = level, Buy = buy, Pick = pick }
 end
 
 local function newWeaponCard(parent: Instance, star: StarBlasterData.StarBlaster): WeaponCard
@@ -404,7 +413,7 @@ function RebirthView.build(): Refs
 	tabs.Rebirth = chunky(body, "REBIRTH", RebirthView.Colors.Rebirth, RebirthView.Colors.RebirthDark, "TabRebirth")
 	tabs.Shop = chunky(body, "STAR SHOP", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "TabShop")
 	tabs.Blasters = chunky(body, "BLASTERS", RebirthView.Colors.Off, RebirthView.Colors.OffDark, "TabBlasters")
-	local stars = UIKit.label(body, "⭐ 0", 24, {
+	local stars = UIKit.label(body, RebirthView.starsLabel(0), 24, {
 		Name = "Stars",
 		TextColor3 = RebirthView.Colors.Star,
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -418,17 +427,26 @@ function RebirthView.build(): Refs
 		Get = newColumn(rebirthPage, "Get", "YOU GET", RebirthView.Colors.Get),
 	}
 	local lists = RebirthView.lists(nil)
+	local dotColors: { [string]: Color3 } = { Lose = RebirthView.Colors.Lose, Keep = RebirthView.Colors.Keep, Get = RebirthView.Colors.Get }
 	for id: string, column: Column in columns do
 		for i = 1, #lists[id] do
-			table.insert(
-				column.Rows,
-				UIKit.label(column.Frame, "", 18, {
-					Name = "Row" .. i,
-					TextXAlignment = Enum.TextXAlignment.Left,
-					TextWrapped = false,
-					TextTruncate = Enum.TextTruncate.AtEnd,
-				})
-			)
+			local row = UIKit.label(column.Frame, "", 18, {
+				Name = "Row" .. i,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = false,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			})
+			-- the row's bullet: a dot in the column's colour in the DotRoom left of the text
+			local dot = UIKit.new("Frame", {
+				Name = "Dot",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0, -RebirthView.DotRoom / 2, 0.5, 0),
+				Size = UDim2.fromOffset(RebirthView.Dot, RebirthView.Dot),
+				BackgroundColor3 = dotColors[id] or Theme.TextDim,
+				BorderSizePixel = 0,
+			}, row)
+			UIKit.corner(dot, RebirthView.Dot / 2)
+			table.insert(column.Rows, row)
 		end
 	end
 	local need = UIKit.label(rebirthPage, "", 18, {
@@ -556,7 +574,8 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		place(tab, tabX + (i - 1) * (tabW + 10), tabY, tabW, m.Tab)
 		TechShopView.fitText(tab :: any, tabW - 12, m.Tab, m.Text + 4, m.Text - 6)
 	end
-	refs.Stars.TextSize = m.Text + 8
+	-- "12 STARS" in the star room (smaller rather than cut off)
+	TechShopView.fitText(refs.Stars, refs.Stars.Size.X.Offset, m.Tab, m.Text + 8, m.Text - 4)
 	local pageH = h - top
 	rect(refs.Pages.Rebirth, 0, top, w, pageH)
 	rect(refs.Pages.Shop, 0, top, w, pageH)
@@ -572,9 +591,12 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		rect(column.Frame, x, 0, colW, pageH)
 		rect(column.Chip, 10, 8, colW - 20, m.Chip)
 		column.Chip.TextSize = m.Text + 2
+		-- the rows' text starts DotRoom right of the column's padding (the bullet dot is there)
+		local rowX = 12 + RebirthView.DotRoom
+		local rowW = math.floor(colW - rowX - 12) -- (an Offset is whole: fit to what the label gets)
 		for i, row in column.Rows do
-			rect(row, 12, 8 + m.Chip + 8 + (i - 1) * m.Row, colW - 24, m.Row)
-			TechShopView.fitText(row, colW - 24, m.Row, m.Text, m.Text - 6)
+			rect(row, rowX, 8 + m.Chip + 8 + (i - 1) * m.Row, rowW, m.Row)
+			TechShopView.fitText(row, rowW, m.Row, m.Text, m.Text - 6)
 			if id == "Get" then
 				rowsEnd = 8 + m.Chip + 8 + i * m.Row
 			end
@@ -599,16 +621,18 @@ function RebirthView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	local cardW = math.floor((w - 8 - (columns - 1) * 10) / columns)
 	local grid = refs.Pages.Shop:FindFirstChild("Grid") :: UIGridLayout
 	grid.CellSize = UDim2.fromOffset(cardW, m.Card)
+	-- (no icon: the name and the text start at the card's left padding)
+	local pad = 12
 	for _, card in refs.Cards do
-		rect(card.Icon, 8, 8, 48, 48)
-		rect(card.Name, 62, 8, cardW - 62 - 70, 28)
-		TechShopView.fitText(card.Name, cardW - 62 - 70, 28, m.Text + 2, m.Text - 4)
+		rect(card.Name, pad, 8, cardW - pad - 70, 28)
+		TechShopView.fitText(card.Name, cardW - pad - 70, 28, m.Text + 2, m.Text - 4)
 		rect(card.Level, cardW - 70, 8, 62, 28)
 		card.Level.TextSize = m.Text
-		rect(card.Text, 62, 38, cardW - 70, m.Card - 38 - m.Button - 14)
-		TechShopView.fitText(card.Text, cardW - 70, m.Card - 38 - m.Button - 14, m.Text - 2, m.Text - 6)
+		rect(card.Text, pad, 38, cardW - pad - 8, m.Card - 38 - m.Button - 14)
+		TechShopView.fitText(card.Text, cardW - pad - 8, m.Card - 38 - m.Button - 14, m.Text - 2, m.Text - 6)
 		place(card.Buy, cardW - 190, m.Card - m.Button - 8, 182, m.Button)
-		card.Buy.TextSize = m.Text + 2
+		-- "BUY 12 STARS" (it shrinks a little before it would leave the button)
+		TechShopView.fitText(card.Buy :: any, 182 - 12, m.Button - 6, m.Text + 2, m.Text - 6)
 		local pick = card.Pick
 		if pick then
 			place(pick, 8, m.Card - m.Button - 8, cardW - 190 - 16, m.Button)
@@ -690,8 +714,8 @@ end
 -- Fills both pages.
 function RebirthView.setInfo(refs: Refs, info: Info)
 	local lists = RebirthView.lists(info.Perks, info.Start)
-	lists.Get[1] = if info.Ready then `⭐  {info.StarsNow} Forge Stars` else `⭐  Stars from LV {RebirthConfig.MinBlaster}`
-	lists.Get[2] = `🔁  Rebirth #{info.Count + 1}`
+	lists.Get[1] = if info.Ready then `{info.StarsNow} Forge Stars` else `Stars from LV {RebirthConfig.MinBlaster}`
+	lists.Get[2] = `Rebirth #{info.Count + 1}`
 	for id, column in refs.Columns do
 		for i, row in column.Rows do
 			row.Text = lists[id][i] or ""
@@ -705,7 +729,11 @@ function RebirthView.setInfo(refs: Refs, info: Info)
 	refs.Need.TextColor3 = if info.Ready then RebirthView.Colors.Get else Theme.TextDim
 	refs.Ready = info.Ready
 	RebirthView.setConfirm(refs, refs.Confirm)
-	refs.Stars.Text = `⭐ {info.Stars}`
+	refs.Stars.Text = RebirthView.starsLabel(info.Stars)
+	if refs.Laid then
+		local m = RebirthView.metrics(refs.Compact)
+		TechShopView.fitText(refs.Stars, refs.Stars.Size.X.Offset, refs.Stars.Size.Y.Offset, m.Text + 8, m.Text - 4)
+	end
 	refs.Tabs.Shop.Text = "STAR SHOP"
 	for _, card in refs.Cards do
 		local level, buy, affordable = RebirthView.cardText(info.Perks, info.Stars, card.Id, info.Start)
@@ -811,8 +839,10 @@ function RebirthView.buildMoment(count: number, stars: number, seed: number?): M
 	local rng = Rng.new(seed or 7)
 	local list = {}
 	for i = 1, 18 do
-		local star = UIKit.label(gui, "⭐", rng:int(26, 44), {
+		-- a plain text star in gold (U+2605 BLACK STAR, not the emoji)
+		local star = UIKit.label(gui, "★", rng:int(26, 44), {
 			Name = "Star" .. i,
+			TextColor3 = RebirthView.Colors.Star,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(rng:range(0.1, 0.9), rng:range(0.05, 0.95)),
 			Size = UDim2.fromOffset(50, 50),

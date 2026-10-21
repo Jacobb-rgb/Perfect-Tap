@@ -1,6 +1,7 @@
 // Renders exported Roblox ScreenGuis as HTML (approximation of Roblox layout):
 // UDim2 position/size, AnchorPoint, UIListLayout, UIGridLayout, UIPadding,
-// UIScale, UICorner, UIStroke, UIGradient, TextScaled. For preview images only.
+// UIScale, UICorner, UIStroke, UIGradient, TextScaled, AutomaticSize,
+// UISizeConstraint. For preview images only.
 
 const TOPBAR_INSET = 36;
 const measureCanvas = document.createElement("canvas");
@@ -25,12 +26,88 @@ function fontFamily(family) {
   return "Fredoka One";
 }
 
-const isGui = (n) => ["Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame", "CanvasGroup"].includes(n.c);
+const isGui = (n) => ["Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame", "CanvasGroup", "ViewportFrame"].includes(n.c);
 const child = (n, cls) => (n.ch || []).find((c) => c.c === cls);
 
+const LINE_HEIGHT = 1.05; // the text spans' line-height below
+
+// Lines of `text` at the current measureCtx font, wrapped at maxW when `wrap` (Roblox breaks at "\n" too).
+function textLines(text, maxW, wrap) {
+  const out = [];
+  for (const para of String(text).split("\n")) {
+    if (!wrap) {
+      out.push(para);
+      continue;
+    }
+    let line = "";
+    for (const word of para.split(/\s+/)) {
+      const test = line ? line + " " + word : word;
+      if (line && measureCtx.measureText(test).width > maxW) {
+        out.push(line);
+        line = word;
+      } else line = test;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+// What an AutomaticSize node holds at size w x h: its text and its children (a
+// list's run, else the furthest child edge), plus its padding.
+function contentSize(node, w, h) {
+  const pad = child(node, "UIPadding");
+  const [pt, pr, pb, pl] = pad ? pad.p : [0, 0, 0, 0];
+  const cw = Math.max(0, w - pl - pr);
+  const chh = Math.max(0, h - pt - pb);
+  let cx = 0;
+  let cy = 0;
+  if (node.text !== undefined && node.text !== "" && !node.scaled) {
+    measureCtx.font = `${node.ts}px "${fontFamily(node.font)}"`;
+    const lines = textLines(node.text, cw, node.wrap && !node.auto.includes("X"));
+    cx = Math.max(...lines.map((l) => measureCtx.measureText(l).width));
+    cy = lines.length * node.ts * LINE_HEIGHT;
+  }
+  const kids = (node.ch || []).filter((c) => isGui(c) && c.vis !== false);
+  const list = child(node, "UIListLayout");
+  if (list) {
+    const vertical = list.dir === "Vertical";
+    const gap = vertical ? list.pad[0] * chh + list.pad[1] : list.pad[0] * cw + list.pad[1];
+    let main = gap * Math.max(0, kids.length - 1);
+    let cross = 0;
+    for (const k of kids) {
+      const s = resolveSize(k, cw, chh);
+      main += vertical ? s.h : s.w;
+      cross = Math.max(cross, vertical ? s.w : s.h);
+    }
+    cx = Math.max(cx, vertical ? cross : main);
+    cy = Math.max(cy, vertical ? main : cross);
+  } else {
+    for (const k of kids) {
+      const s = resolveSize(k, cw, chh);
+      cx = Math.max(cx, k.pos[0] * cw + k.pos[1] + (1 - k.anchor[0]) * s.w);
+      cy = Math.max(cy, k.pos[2] * chh + k.pos[3] + (1 - k.anchor[1]) * s.h);
+    }
+  }
+  return { w: cx + pl + pr, h: cy + pt + pb };
+}
+
+// A node's size in its parent: UDim2, grown by AutomaticSize (never below the
+// set size, like Roblox), then held inside a UISizeConstraint.
 function resolveSize(node, parentW, parentH) {
   const [xs, xo, ys, yo] = node.size;
-  return { w: parentW * xs + xo, h: parentH * ys + yo };
+  let w = parentW * xs + xo;
+  let h = parentH * ys + yo;
+  if (node.auto) {
+    const content = contentSize(node, w, h);
+    if (node.auto.includes("X")) w = Math.max(w, content.w);
+    if (node.auto.includes("Y")) h = Math.max(h, content.h);
+  }
+  const limit = child(node, "UISizeConstraint");
+  if (limit) {
+    w = Math.min(Math.max(w, limit.min[0]), limit.max[0]);
+    h = Math.min(Math.max(h, limit.min[1]), limit.max[1]);
+  }
+  return { w, h };
 }
 
 function fitText(text, font, maxW, maxH, wrap) {
@@ -153,7 +230,7 @@ function styleElement(el, node, w, h) {
     if (node.scaled && node.maxts) size = Math.min(size, node.maxts);
     if (node.scaled && node.mints) size = Math.max(size, node.mints);
     span.style.fontSize = `${size}px`;
-    span.style.lineHeight = "1.05";
+    span.style.lineHeight = String(LINE_HEIGHT);
     span.style.color = rgba(node.tc, 1 - node.tt);
     // Roblox always breaks lines at "\n" (wrapped or not)
     span.style.whiteSpace = node.wrap ? "pre-line" : "pre";

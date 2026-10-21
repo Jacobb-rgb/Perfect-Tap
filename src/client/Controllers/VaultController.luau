@@ -4,7 +4,7 @@
 
 	The shop
 	- Opens on OpenUI "Vault" { Counter } (the counter's "Blaster Vault"
-	  prompt, F / gamepad Y, added by VaultService). The cards come from the
+	  prompt, E / gamepad Y, added by VaultService). The cards come from the
 	  State snapshot (VaultView.cards: your blaster level, your coins counted
 	  up between snapshots like the HUD).
 	- BUY sends VaultBuy { Level } for your next level only. The button shows

@@ -46,6 +46,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GearConfig = require(Shared.Config.GearConfig)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local Bonuses = require(script.Parent.Parent.Bonuses)
@@ -358,16 +359,13 @@ local function hookCounter(counter: Instance)
 	point.Name = GearService.PointName
 	point.CFrame = CFrame.new(0, part.Size.Y / 2 + 0.6, -part.Size.Z / 2)
 	point.Parent = part
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = GearService.PromptName
-	prompt.ActionText = "Gear Shop"
-	prompt.ObjectText = "Boots, Lamp, Backpack, Gloves, Magnet"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = PROMPT_DISTANCE
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = point
+	local prompt = PromptConfig.make({
+		Name = GearService.PromptName,
+		ActionText = "Gear Shop",
+		ObjectText = "Boots, Lamp, Backpack, Gloves, Magnet",
+		Distance = PROMPT_DISTANCE,
+		Parent = point,
+	})
 	prompt.Triggered:Connect(function(player: Player)
 		openView(player, part)
 	end)

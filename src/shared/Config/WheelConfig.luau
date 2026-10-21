@@ -65,7 +65,15 @@
 	      (MaxSpins is only the prompt's "Full"; the receipt of a player who
 	      is restricted now still credits, MonetizationService logs it);
 	    * the free daily spin stays free for everyone (restricted players
-	      too): it can't be bought, and it is always used first.
+	      too): it can't be bought, and it is always used first;
+	    * a bought spin never swaps a golem for coins: with a full golem
+	      inventory it is refused before it is used ("InventoryFull", the
+	      spin stays saved) and a "Buy" answers "Full"; a full Ore Pen is
+	      no reason to refuse: the ore row says "Ore Pen full: pays N coins
+	      instead" on the BUY step and in Details (WheelView.detail), as the
+	      capsule rows do for a full inventory (the free spin's coins);
+	    * golems won with a bought spin are saved Paid = true and Locked
+	      (like every golem bought with Robux).
 	  data.Wheel.Spins = the bought spins held (whole >= 0); a bought spin
 	  ignores the 24 h cooldown and leaves NextSpinAt alone.
 	- No rewards for likes or favorites.
@@ -141,6 +149,9 @@ WheelConfig.OrePrize = {
 WheelConfig.Reasons = {
 	NotReady = "No spins: buy some or wait for your free spin",
 	Restricted = "Bought spins can't be used where you play. Your free spin comes every day.",
+	-- a bought spin never swaps a capsule prize for coins: refused before it is used
+	InventoryFull = "Your golem inventory is full: make room before using a bought spin",
+	MaxSpins = "You hold the most spins you can: spin some first",
 } :: { [string]: string }
 
 local rgb = Color3.fromRGB

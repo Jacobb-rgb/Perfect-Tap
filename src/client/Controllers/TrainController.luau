@@ -12,7 +12,9 @@
 	  arrives at ArriveAt (legSpans). The quarry leg runs from the Mine
 	  Station into the visible mouth (PortalInset in front of the line's
 	  end, like Railway) of the quarry portal on the plot's side (west plots
-	  x < 0: west portal);
+	  x < 0: west portal), pulling away to a steady speed within DepartRamp
+	  seconds (pullAway: clearly off within half a second, still in the
+	  tunnel when the leg ends);
 	  hidden underground; the coast leg comes out of the south portal and runs
 	  north along TrainConfig.lineFor(plot) to the plot's stop (ease in /
 	  out). At the stop the wagons, not the locomotive, line up with the Ore
@@ -99,11 +101,26 @@
 	  already did (takeUnload; dust and glints in that pen when its train
 	  isn't on screen); "TrainLoad" (position): a puff and a
 	  gulp at a hopper (and over your waiting wagon at the station).
+	- Presses never wait for the State push (it comes at once anyway:
+	  TrainService pushes after a press, StateService.pushNow): SEND shows
+	  "Leaving…" until a snapshot shows the train left (sendStatus, at most
+	  SendPendingSeconds), your TrainTrip fills in the trip bar as soon as
+	  it comes (tripSnapshot), and only a snapshot that shows the send
+	  unlocks SEND again (sendShown; an older one still in flight doesn't).
+	  BUY shows its level, its price off the coins and "BOUGHT!" at once
+	  (pendingView, BoughtSeconds); the next click of that kind waits until
+	  the snapshot shows it and "BOUGHT!" is over (buyOpen: a double click
+	  buys one level, SECURITY_AUDIT #7; pushNow makes that wait about one
+	  round trip, at most BuyPendingSeconds). A TrainResult that refuses a press drops what
+	  this screen showed ahead (dropBuys; Stale gets a short toast here,
+	  Coins / Max the server's). Clicks over TrainAction's rate limit (a
+	  copy of it: takeClick) get the deny sound and "…", never silence.
 
-	The pure math (ease, legSpans, legAt, poseAt, stopAt, parkedPose,
-	parkedState, returnSeconds, quarryMouth, wagonFlip, visible, occlude,
-	pourFill, arcHeight, mergeTrip, takeUnload, snapshotNews, applySnapshot,
-	snapshotTrip, ...), the prompt helpers and the consist builder are
+	The pure math (ease, legSpans, legAt, pullAway, poseAt, stopAt,
+	parkedPose, parkedState, returnSeconds, quarryMouth, wagonFlip, visible,
+	occlude, pourFill, arcHeight, mergeTrip, takeUnload, snapshotNews,
+	applySnapshot, snapshotTrip, sendStatus, tripSnapshot, pendingView,
+	buyPlan, ...), the prompt helpers and the consist builder are
 	exported for the Lune tests and the preview; the controllers it uses are
 	required in init(), so this module also loads outside Roblox.
 ]]
@@ -122,6 +139,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local SoundConfig = require(Shared.Config.SoundConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local WorldLayout = require(Shared.Config.WorldLayout)
@@ -169,6 +187,7 @@ TrainController.MinQuarrySeconds = 3.5 -- the visible legs never run faster than
 TrainController.MinCoastSeconds = 6
 TrainController.MinArriveSeconds = 0.6 -- standing at the stop before the arrival
 TrainController.MinUndergroundShare = 0.1 -- of a very short trip that stays hidden
+TrainController.DepartRamp = 0.6 -- seconds a leaving train takes to reach its steady speed (pullAway)
 TrainController.HoldLimit = 300 -- seconds another player's train (not Waiting) stands at its stop without an unload Fx
 TrainController.RollInSeconds = 3 -- your train backing into the station after a trip
 TrainController.ReturnSpeed = 30 -- studs per second (average) an empty train backs down the coast line at most
@@ -190,6 +209,17 @@ TrainController.HoldSeconds = 3 -- your departing train stands at the station th
 TrainController.SnapshotTripGrace = TrainController.HoldSeconds - 1
 TrainController.UnloadMatch = 3 -- seconds: an unload Fx belongs to a trip arriving / unloading this close to it
 TrainController.MaxTripSpan = TrainConfig.MaxTripSpan -- a TrainTrip longer than this is junk (as TrainService)
+-- presses ahead of the server (the header's "Presses never wait")
+TrainController.SendPendingSeconds = 2 -- a pressed SEND says "Leaving…" at most this long without a snapshot that shows it
+TrainController.BuyPendingSeconds = 2 -- a clicked level shows at most this long without a snapshot that has it
+TrainController.BoughtSeconds = 0.8 -- the clicked BUY says "BOUGHT!" this long
+TrainController.BusySeconds = 0.4 -- a click over the rate limit: its BUY says "…" this long
+TrainController.LeavingLine = "Leaving…"
+TrainController.StaleText = "Your train's upgrade changed – the card is up to date now."
+-- the client's copy of TrainAction's rate limit (Net.Events; one token short for the two clocks)
+local TRAIN_ACTION = Net.Events.TrainAction :: Net.Limit
+TrainController.ClickRate = TRAIN_ACTION.Rate
+TrainController.ClickBurst = TRAIN_ACTION.Burst - 1
 -- dirty ore in a wagon (the ores stay secret until cleaned): Kenney's warm
 -- carriage-dirt clay, so a load reads at a glance
 TrainController.DirtyLoad = { Color3.fromRGB(196, 134, 88), Color3.fromRGB(170, 112, 76), Color3.fromRGB(218, 160, 112) }
@@ -355,6 +385,24 @@ function TrainController.legAt(elapsed: number, duration: number): (Leg, number,
 		return within("Coast", s.Underground, s.Coast)
 	end
 	return within("Stopped", s.Coast, s.Trip)
+end
+
+--[[
+	A run of `length` studs in `seconds` that starts from rest (the quarry
+	leg): the speed rises to a steady cruise within `ramp` seconds (at most
+	half the run), quickly at first and easing into the cruise (speed =
+	cruise * ease Out), then holds it, so it covers `length` exactly at
+	`seconds`. Returns the distance and the speed `t` seconds in.
+]]
+function TrainController.pullAway(t: number, seconds: number, length: number, ramp: number): (number, number)
+	local r = math.clamp(ramp, 0, seconds / 2)
+	local cruise = length / math.max(seconds - r / 3, 1e-6)
+	local time = math.clamp(t, 0, seconds)
+	if time < r then
+		local u = time / r
+		return cruise * r * (u * u - u * u * u / 3), cruise * (2 * u - u * u)
+	end
+	return cruise * (time - r / 3), cruise
 end
 
 -- The end of the quarry line on a plot's side (west plots x < 0: the west end) and the way back along the line.
@@ -626,9 +674,11 @@ function TrainController.poseAt(
 		if leg == "Underground" then
 			return pose("Underground", start + dir * length + RAIL, dir, length, 0, 0, true, mouth + RAIL, -dir)
 		end
-		local e, slope = TrainController.ease("In", f)
-		local s = length * e
-		local speed = if leg == "Station" then 0 else length * slope / legSeconds
+		-- (it pulls away: off at once, steady before it reaches the tunnel)
+		local s, speed = TrainController.pullAway(f * legSeconds, legSeconds, length, TrainController.DepartRamp)
+		if leg == "Station" then
+			speed = 0
+		end
 		return pose(leg, start + dir * s + RAIL, dir, s, speed, 0, false, mouth + RAIL, -dir)
 	end
 	local mouth, stop, north = TrainController.coast(plot, wagons)
@@ -1384,6 +1434,220 @@ function TrainController.destroyConsist(consist: Consist)
 	table.clear(consist.Vehicles)
 end
 
+---------------------------------------------------------------- presses ahead of the server (pure)
+
+-- A SEND this screen shows before a snapshot does.
+export type PendingSend = {
+	At: number, -- os.clock() of the press
+	Server: number, -- server time of the press
+	Count: number, -- the cargo it leaves with
+}
+
+-- A clicked BUY level this screen shows before a snapshot does.
+export type PendingBuy = {
+	Level: number, -- the level the click buys
+	Price: number,
+	At: number, -- os.clock() of the click
+}
+
+-- TrainView.Kind -> its clicked levels, oldest first
+export type PendingBuys = { [string]: { PendingBuy } }
+
+-- The client's copy of TrainAction's token bucket (takeClick).
+export type ClickBudget = { Tokens: number, Last: number }
+
+local PRESS_SLACK = 0.25 -- seconds: this screen's server clock may run a little ahead of the server's
+
+--[[
+	Does a State snapshot show what a SEND did? The train is on its way or
+	waits at your stop (ore on board, Waiting), the station cargo is empty,
+	or it departed at or after the press (`pending`). A snapshot the server
+	sent before the press reached it shows none of these (it still has the
+	cargo at the station): it neither unlocks SEND nor ends "Leaving…".
+]]
+function TrainController.sendShown(train: TrainView.Snapshot, pending: PendingSend?): boolean
+	if train.Moving > 0 or train.Waiting or train.Cargo == 0 then
+		return true
+	end
+	local departAt = train.DepartAt
+	return pending ~= nil and departAt ~= nil and departAt >= pending.Server - PRESS_SLACK
+end
+
+--[[
+	What the chip and the panel say: TrainView.status, or, while a SEND you
+	pressed has no snapshot that shows it (sendShown) and for at most
+	SendPendingSeconds, "Leaving…" with the cargo it took, the trip bar at
+	0 and no SEND. `clock` is os.clock(), `now` server time. Returns the
+	status and the press that still counts (nil: the snapshot speaks).
+]]
+function TrainController.sendStatus(
+	train: TrainView.Snapshot,
+	pending: PendingSend?,
+	clock: number,
+	now: number,
+	autoLeft: number?
+): (TrainView.Status, PendingSend?)
+	local press = pending
+	if
+		press and (clock < press.At or clock - press.At >= TrainController.SendPendingSeconds or TrainController.sendShown(train, press))
+	then
+		press = nil
+	end
+	if not press then
+		return TrainView.status(train, now, autoLeft), nil
+	end
+	local capacity = train.Capacity
+	local count = press.Count
+	local leaving: TrainView.Status = {
+		Phase = "Moving",
+		Cargo = count,
+		Capacity = capacity,
+		Title = `TRAIN {count}/{capacity}`,
+		Unit = "ore on the way",
+		Line = TrainController.LeavingLine,
+		Color = Theme.Info,
+		CanSend = false,
+		Fill = if capacity > 0 then math.clamp(count / capacity, 0, 1) else 0,
+		Progress = 0,
+	}
+	return leaving, press
+end
+
+--[[
+	Your snapshot with your TrainTrip filled in before the State push that
+	follows it: a new departure (later than the snapshot's DepartAt, not
+	Waiting, still on its way) while the snapshot has the train at the
+	station gets its DepartAt / ArriveAt and the ore on board (Count; the
+	station cargo left with it), so the trip bar starts with the trip. A
+	copy; nil when there is nothing to fill in (the next snapshot replaces
+	it anyway).
+]]
+function TrainController.tripSnapshot(train: TrainView.Snapshot, trip: Trip, now: number): TrainView.Snapshot?
+	if train.Moving > 0 or train.Waiting or trip.Waiting or now >= trip.ArriveAt then
+		return nil
+	end
+	local departAt = train.DepartAt
+	if departAt and trip.DepartAt <= departAt + 0.5 then
+		return nil
+	end
+	local filled = table.clone(train)
+	filled.DepartAt = trip.DepartAt
+	filled.ArriveAt = trip.ArriveAt
+	filled.Moving = trip.Count
+	filled.Cargo = 0
+	filled.AutoDepartIn = nil
+	return filled
+end
+
+local function levelOf(train: TrainView.Snapshot, kind: string): number
+	return if kind == "Capacity" then train.CapacityLevel else train.SpeedLevel
+end
+
+--[[
+	Drops the clicked levels a snapshot has (its level reached them) and
+	the ones older than BuyPendingSeconds with every level clicked after
+	them (they counted on it); changes `buys`. The card then shows the
+	snapshot again.
+]]
+function TrainController.pruneBuys(buys: PendingBuys, train: TrainView.Snapshot, clock: number)
+	for kind, list in buys do
+		local level = levelOf(train, kind)
+		local kept: { PendingBuy } = {}
+		for _, entry in list do
+			if entry.Level > level then
+				if clock < entry.At or clock - entry.At >= TrainController.BuyPendingSeconds then
+					break
+				end
+				table.insert(kept, entry)
+			end
+		end
+		buys[kind] = kept
+	end
+end
+
+-- A refused level (TrainResult): it and the levels clicked after it go (changes `list`).
+function TrainController.dropBuys(list: { PendingBuy }, level: number)
+	for i = #list, 1, -1 do
+		if list[i].Level >= level then
+			table.remove(list, i)
+		end
+	end
+end
+
+--[[
+	The snapshot as the panel shows it while levels are clicked: each kind
+	at the higher of its snapshot level and its last clicked one (with
+	that level's cargo or trip and next price), and the coins the clicked
+	levels spend. A copy when anything differs; `train` is not changed.
+]]
+function TrainController.pendingView(train: TrainView.Snapshot, buys: PendingBuys): (TrainView.Snapshot, number)
+	local shown = train
+	local spend = 0
+	for kind, list in buys do
+		local level = levelOf(train, kind)
+		local top = level
+		for _, entry in list do
+			if entry.Level > level then
+				spend += entry.Price
+				top = math.max(top, entry.Level)
+			end
+		end
+		if top > level then
+			if shown == train then
+				shown = table.clone(train)
+			end
+			if kind == "Capacity" then
+				shown.CapacityLevel = top
+				shown.Capacity = TrainConfig.capacity(top, train.Express)
+				shown.NextCapacityPrice = TrainConfig.nextPrice(TrainConfig.Capacity, top)
+			else
+				shown.SpeedLevel = top
+				shown.TripSeconds = TrainConfig.tripSeconds(top, train.Express, train.TripCut)
+				shown.NextSpeedPrice = TrainConfig.nextPrice(TrainConfig.Speed, top)
+			end
+		end
+	end
+	return shown, spend
+end
+
+--[[
+	What a BUY click on `kind` buys now: the row as the panel shows it
+	(pendingView: the levels clicked before count, their prices come off
+	`coins`) and the level the click asks for (the shown level + 1, so a
+	quick second click buys the level after the first one).
+]]
+function TrainController.buyPlan(
+	train: TrainView.Snapshot,
+	buys: PendingBuys,
+	kind: TrainView.Kind,
+	coins: number
+): (TrainView.Upgrade, number)
+	local shown, spend = TrainController.pendingView(train, buys)
+	return TrainView.upgrade(shown, kind, coins - spend), levelOf(shown, kind) + 1
+end
+
+-- May a BUY click on `kind` send now? Not while an earlier click of that kind waits for
+-- its snapshot or still says "BOUGHT!" (`boughtClock`): a double click buys one level
+-- (SECURITY_AUDIT #7), and pushNow brings the snapshot back within a round trip.
+function TrainController.buyOpen(buys: PendingBuys, kind: TrainView.Kind, boughtClock: number?, clock: number): boolean
+	if #buys[kind] > 0 then
+		return false
+	end
+	return clock - (boughtClock or -math.huge) >= TrainController.BoughtSeconds
+end
+
+-- May a TrainAction go now (the client's copy of its rate limit; changes `budget`)?
+function TrainController.takeClick(budget: ClickBudget, clock: number): boolean
+	local refill = math.max(0, clock - budget.Last) * TrainController.ClickRate
+	budget.Tokens = math.min(TrainController.ClickBurst, budget.Tokens + refill)
+	budget.Last = clock
+	if budget.Tokens >= 1 then
+		budget.Tokens -= 1
+		return true
+	end
+	return false
+end
+
 ---------------------------------------------------------------- runtime state
 
 local player: Player? = nil
@@ -1417,7 +1681,13 @@ local panelOpen = false
 local hudShown = true
 local openedAt = -math.huge
 local sendLockedUntil = 0
-local buyLockedUntil = 0
+local pendingSend: PendingSend? = nil -- SEND pressed, no snapshot shows it yet ("Leaving…")
+local pendingBuys: PendingBuys = { Capacity = {}, Speed = {} } -- levels clicked, no snapshot has them yet
+local boughtAt: { [string]: number } = {} -- kind -> os.clock() of its last BUY ("BOUGHT!")
+local busyAt: { [string]: number } = {} -- kind -> os.clock() of a click over the rate limit ("…")
+local refusedAt: { [string]: number } = {} -- kind -> os.clock() of its last refused level
+local clicks: ClickBudget = { Tokens = TrainController.ClickBurst, Last = 0 }
+local KINDS: { TrainView.Kind } = { "Capacity", "Speed" }
 local pulse: Tween? = nil
 local shownKey = ""
 local coinsHidden = false -- the compact panel covers the HUD coins: they hide while it is open
@@ -2153,9 +2423,11 @@ local function status(): TrainView.Status?
 	if not train then
 		return nil
 	end
-	local autoLeft = if autoAt then math.max(0, autoAt - os.clock()) else nil
-	local result = TrainView.status(train, serverNow(), autoLeft)
-	if os.clock() < sendLockedUntil then
+	local clock = os.clock()
+	local autoLeft = if autoAt then math.max(0, autoAt - clock) else nil
+	local result, press = TrainController.sendStatus(train, pendingSend, clock, serverNow(), autoLeft)
+	pendingSend = press
+	if clock < sendLockedUntil then
 		result.CanSend = false
 	end
 	return result
@@ -2220,16 +2492,39 @@ local function refreshUI(force: boolean?)
 		setPulse(view, current.Phase == "Full")
 	end
 	if panelOpen then
-		-- the header's coins count along with the HUD's
-		TrainView.setCoins(view, HudController.predictedCoins(os.clock()))
+		-- the header's coins count along with the HUD's (minus the levels clicked ahead of the server)
+		local train = snapshot
+		local spend = 0
+		if train then
+			TrainController.pruneBuys(pendingBuys, train, os.clock())
+			local _, pendingSpend = TrainController.pendingView(train, pendingBuys)
+			spend = pendingSpend
+		end
+		TrainView.setCoins(view, HudController.predictedCoins(os.clock()) - spend)
 	end
 end
 
+-- The upgrade rows as this screen knows them (the levels clicked ahead of the
+-- server count); the clicked BUY says "BOUGHT!", one over the rate limit "…".
 local function refreshPanel()
 	local view = refs
 	local train = snapshot
-	if view and train and panelOpen then
-		TrainView.setUpgrades(view, train, coins)
+	if not view or not train or not panelOpen then
+		return
+	end
+	local clock = os.clock()
+	TrainController.pruneBuys(pendingBuys, train, clock)
+	local shown, spend = TrainController.pendingView(train, pendingBuys)
+	TrainView.setUpgrades(view, shown, coins - spend)
+	for _, kind: TrainView.Kind in KINDS do
+		local row = TrainView.row(view, kind)
+		if clock - (busyAt[kind] or -math.huge) < TrainController.BusySeconds then
+			row.Buy.Text = "…"
+		elseif clock - (boughtAt[kind] or -math.huge) < TrainController.BoughtSeconds then
+			-- done, not a live button: a second click waits for this one (buyOpen)
+			row.Buy.Text = "BOUGHT!"
+			TrainView.style(row.Buy, false, Theme.Good, Theme.GoodDark)
+		end
 	end
 end
 
@@ -2278,10 +2573,11 @@ end
 
 local function send()
 	local current = status()
-	if not current or os.clock() < sendLockedUntil then
+	if not current then
 		return
 	end
 	if not current.CanSend then
+		-- (while a press is on its way the status says "Leaving…": Moving)
 		if current.Phase == "Moving" or current.Phase == "Unloading" then
 			deny("Your train is on its way. It comes back after the delivery.")
 		elseif current.Phase == "Waiting" then
@@ -2293,12 +2589,23 @@ local function send()
 			end
 		elseif current.Phase == "Returning" then
 			deny("Your train is on its way back to the Mine.")
+		elseif current.Phase == "Full" or current.Phase == "Loading" then
+			-- (locked: the last press is still on its way to the server)
+			Sfx.play("UIDeny")
 		else
 			deny("Your train is empty: throw ore into the Mine Station hopper!")
 		end
 		return
 	end
-	sendLockedUntil = os.clock() + 1.5
+	local clock = os.clock()
+	if not TrainController.takeClick(clicks, clock) then
+		-- over TrainAction's rate limit the server would drop it without a word
+		Sfx.play("UIDeny")
+		return
+	end
+	-- "Leaving…" at once; only a snapshot that shows the send unlocks SEND (onState)
+	sendLockedUntil = clock + 1.5
+	pendingSend = { At = clock, Server = serverNow(), Count = current.Cargo }
 	Sfx.play("UIClick")
 	Net.send("TrainAction", "Send")
 	refreshUI(true)
@@ -2306,10 +2613,18 @@ end
 
 local function buy(kind: TrainView.Kind)
 	local train = snapshot
-	if not train or os.clock() < buyLockedUntil then
+	if not train then
 		return
 	end
-	local info = TrainView.upgrade(train, kind, coins)
+	local clock = os.clock()
+	TrainController.pruneBuys(pendingBuys, train, clock)
+	if not TrainController.buyOpen(pendingBuys, kind, boughtAt[kind], clock) then
+		-- the first click is still on its way: a double click buys one level
+		Sfx.play("UIClick")
+		refreshPanel()
+		return
+	end
+	local info, level = TrainController.buyPlan(train, pendingBuys, kind, coins)
 	if info.Maxed then
 		HudController.toast(`Your train's {string.lower(info.Name)} is at the top level.`, "Info")
 		return
@@ -2318,12 +2633,28 @@ local function buy(kind: TrainView.Kind)
 		deny(`You need {info.PriceText} for this upgrade.`)
 		return
 	end
-	buyLockedUntil = os.clock() + 0.6
+	if not TrainController.takeClick(clicks, clock) then
+		-- over TrainAction's rate limit the server would drop it without a word
+		busyAt[kind] = clock
+		Sfx.play("UIDeny")
+		refreshPanel()
+		task.delay(TrainController.BusySeconds + 0.02, refreshPanel)
+		return
+	end
+	-- the card shows the level at once; the server buys exactly this level
+	-- (a lagging card never buys a level by itself)
+	table.insert(pendingBuys[kind], { Level = level, Price = info.Price or 0, At = clock })
+	boughtAt[kind] = clock
+	busyAt[kind] = nil
 	Sfx.play("UIClick")
-	-- the level this card buys: the server buys only exactly that one (a
-	-- double click or a lagging card never buys two levels)
-	local level = if kind == "Capacity" then train.CapacityLevel else train.SpeedLevel
-	Net.send("TrainAction", "Upgrade", { Kind = kind, Level = level + 1 })
+	Net.send("TrainAction", "Upgrade", { Kind = kind, Level = level })
+	refreshUI(true)
+	refreshPanel()
+	task.delay(TrainController.BoughtSeconds + 0.02, refreshPanel)
+	task.delay(TrainController.BuyPendingSeconds + 0.05, function()
+		refreshUI(true)
+		refreshPanel()
+	end)
 end
 
 local CLOSE_ACTION = "TerraForgeTrainClose"
@@ -2457,6 +2788,20 @@ local function addTrip(trip: Trip)
 	trips[trip.UserId] = merged
 end
 
+-- Your new departure fills in the snapshot at once (tripSnapshot): the chip's
+-- trip bar starts with the train, not with the State push after it.
+local function fillFromTrip(trip: Trip)
+	local train = snapshot
+	if not train or trip.UserId ~= myId() then
+		return
+	end
+	local filled = TrainController.tripSnapshot(train, trip, serverNow())
+	if filled then
+		snapshot = filled
+		refreshUI(true)
+	end
+end
+
 local function onTrip(payload: any)
 	if type(payload) ~= "table" then
 		return
@@ -2465,6 +2810,7 @@ local function onTrip(payload: any)
 		local trip = TrainController.parseTrip(payload, bannerColor)
 		if trip then
 			addTrip(trip)
+			fillFromTrip(trip)
 		end
 		return
 	end
@@ -2472,7 +2818,38 @@ local function onTrip(payload: any)
 		local trip = TrainController.parseTrip(entry, bannerColor)
 		if trip then
 			addTrip(trip)
+			fillFromTrip(trip)
 		end
+	end
+end
+
+-- The server's answer to a TrainAction. A refused one drops what this screen
+-- showed ahead of it ("Leaving…", the level and the ones clicked after it);
+-- Coins and Max come with the server's toast, Stale gets one here (unless a
+-- refusal of the level before it just said why).
+local function onResult(payload: any)
+	if type(payload) ~= "table" or payload.Ok ~= false then
+		return
+	end
+	if payload.Action == "Send" then
+		pendingSend = nil
+		sendLockedUntil = 0
+		Sfx.play("UIDeny")
+		refreshUI(true)
+	elseif payload.Action == "Upgrade" then
+		local kind, level = payload.Kind, payload.Level
+		if (kind ~= "Capacity" and kind ~= "Speed") or not finite(level) then
+			return
+		end
+		local clock = os.clock()
+		TrainController.dropBuys(pendingBuys[kind], level)
+		boughtAt[kind] = nil
+		if payload.Reason == "Stale" and clock - (refusedAt[kind] or -math.huge) > 1 then
+			HudController.toast(TrainController.StaleText, "Info")
+		end
+		refusedAt[kind] = clock
+		refreshUI(true)
+		refreshPanel()
 	end
 end
 
@@ -2512,7 +2889,11 @@ local function onState(state: { [string]: any })
 	autoAt = if train.AutoDepartIn then os.clock() + train.AutoDepartIn else nil
 	local plot = myPlot()
 	syncSnapshotTrip()
-	sendLockedUntil = 0
+	-- only a snapshot that shows the send unlocks SEND (one sent before the
+	-- press reached the server still has the cargo: the lock runs out)
+	if TrainController.sendShown(train, pendingSend) then
+		sendLockedUntil = 0
+	end
 	local view = refs
 	if view and plot then
 		TrainView.setColor(view, bannerColor(plot.Id))
@@ -2572,22 +2953,21 @@ end
 	The prompt rules (TrainConfig.PromptSlots / PromptSlotHeight / PromptTag,
 	the same numbers TrainService uses): on every Mine Station and Mine Lift
 	PromptPoint the server's "TrainLoadPrompt" (slot 0, UIOffset (0, 0),
-	F / Y) and "TrainSendPrompt" (slot 1, (0, 72), G / B) are tagged
-	"TrainPrompt"; this client adds its own "TrainPanelPrompt" in slot 2
-	((0, 144), T / L3), untagged, so the three never overlap or share keys.
+	PromptConfig "Main": E / Y) and "TrainSendPrompt" (slot 1, (0, 72),
+	"Second": G / B) are tagged "TrainPrompt"; this client adds its own
+	"TrainPanelPrompt" in slot 2 ((0, 144), "Panel": T / L3), untagged, so
+	the three never overlap or share keys.
 ]]
 function TrainController.makePanelPrompt(objectText: string): ProximityPrompt
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = TrainController.PanelPromptName
-	prompt.ActionText = "Train"
-	prompt.ObjectText = objectText
-	prompt.KeyboardKeyCode = Enum.KeyCode.T
-	prompt.GamepadKeyCode = Enum.KeyCode.ButtonL3
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = TrainController.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, TrainController.PromptSlot * TrainController.PromptSlotHeight)
-	return prompt
+	-- UIOffset = (0, PromptSlot * PromptConfig.SlotHeight) = (0, PromptSlot * PromptSlotHeight)
+	return PromptConfig.make({
+		Role = "Panel",
+		Name = TrainController.PanelPromptName,
+		ActionText = "Train",
+		ObjectText = objectText,
+		Distance = TrainController.PromptDistance,
+		Slot = TrainController.PromptSlot,
+	})
 end
 
 -- The "Train" panel prompt on a station's / lift's PromptPoint (slot 2, under the server's Load and Send).
@@ -2690,6 +3070,7 @@ function TrainController.init()
 	refs = view
 
 	Net.listen("TrainTrip", onTrip)
+	Net.listen("TrainResult", onResult)
 	FxController.register("TrainUnload", onUnload)
 	FxController.register("TrainLoad", onLoad)
 	StateController.onChanged(onState)

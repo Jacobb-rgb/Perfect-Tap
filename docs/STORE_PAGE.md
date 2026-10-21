@@ -147,10 +147,10 @@ on-screen hints.
 | Action | PC | Mobile | Console |
 |---|---|---|---|
 | Mine | Left click, aim with the mouse | Tap | R2 |
-| Grab / drop a chunk | E | "Grab" button | X |
+| Grab / drop a chunk | F | "Grab" button | X |
 | Throw (hold to charge, release) | Q | "Throw" button | R1 |
-| Use the Cleaning Station | F | Tap the prompt | Y |
-| Take the raw ore back out of the station | G | Tap "Take Ore Back" | B |
+| Use the Cleaning Station (and every other prompt: shops, machines, pen, podiums) | E | Tap the prompt | Y |
+| Take the raw ore back out of the station (and every second prompt: Open Pen, Open Foundry, Send Train) | G | Tap "Take Ore Back" | B |
 | Cleaning: spray the dirt off | Hold left mouse button and drag | Hold your finger on the dirt and drag | Left stick moves the ring, hold A (or R2) |
 | Leave cleaning (press twice once some dirt is off) / collect the result | Leave button or Backspace / E or Enter | Leave / Collect buttons | B / A |
 | Other machines, build mode | TODO (step d) | TODO | TODO |

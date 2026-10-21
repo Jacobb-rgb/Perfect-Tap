@@ -124,6 +124,18 @@ function HudController.uiScale(): number
 	return math.clamp(math.min(size.Y / Theme.BaseHeight, size.X / 1100), 0.62, 1.25)
 end
 
+-- The top bar row's free part in screen pixels (min x, max x), or nil when
+-- Roblox doesn't say (GuiService.TopbarInset).
+local function topBarFree(): (Vector2?)
+	local ok, rect = pcall(function()
+		return (GuiService :: any).TopbarInset
+	end)
+	if ok and typeof(rect) == "Rect" and rect.Width > 0 then
+		return Vector2.new(rect.Min.X, rect.Max.X)
+	end
+	return nil
+end
+
 local function updateScale()
 	local camera = Workspace.CurrentCamera
 	if not camera then
@@ -136,11 +148,14 @@ local function updateScale()
 			uiScale.Scale = scale
 		end
 	end
-	-- the Pop teleport bar sits in Roblox's top bar row: lift it by the real inset
+	-- the Pop teleport bar sits in Roblox's top bar row: lifted by the real inset,
+	-- centred but kept inside the row's free space (GuiService.TopbarInset: clear of
+	-- Roblox's own buttons); if it doesn't fit there, it drops under the row
 	local topBar = refs and refs.TopBar
 	if topBar and topBar:GetAttribute("Pop") then
 		local inset = GuiService:GetGuiInset()
-		topBar.Position = UDim2.new(0.5, 0, 0, HudBubble.topBarY(inset.Y, scale))
+		local x, inRow = HudBubble.topBarX(topBarFree(), refs.Gui.AbsolutePosition.X, refs.Gui.AbsoluteSize.X, topBar.Size.X.Offset, scale)
+		topBar.Position = UDim2.new(0.5, x, 0, if inRow then HudBubble.topBarY(inset.Y, scale) else HudBubble.TopBarUnderRow)
 	end
 end
 
@@ -487,6 +502,9 @@ function HudController.start()
 	updateScale()
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+		pcall(function() -- (Roblox's top row changes: voice chat, self view...)
+			GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(updateScale)
+		end)
 	end
 	player:WaitForChild("PlayerGui").ChildAdded:Connect(function()
 		task.defer(updateScale)

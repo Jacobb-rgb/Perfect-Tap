@@ -9,6 +9,7 @@ return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
@@ -498,8 +499,10 @@ return function(T, Loader)
 			end
 		end
 		T.truthy(prompts.FoundryOpen and prompts.FoundryPutIn, "Open Foundry and Put In")
-		T.eq(prompts.FoundryOpen.KeyboardKeyCode, roblox.Enum.KeyCode.G)
-		T.eq(prompts.FoundryPutIn.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY)
+		T.eq(prompts.FoundryOpen.KeyboardKeyCode, PromptConfig.Keys.Second.Keyboard)
+		T.eq(prompts.FoundryOpen.GamepadKeyCode, PromptConfig.Keys.Second.Gamepad)
+		T.eq(prompts.FoundryPutIn.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard)
+		T.eq(prompts.FoundryPutIn.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad)
 		-- setting up twice changes nothing
 		T.truthy(fs.setupPlot(PLOT))
 		T.eq(FoundryService.building(PLOT), w.building, "same building")

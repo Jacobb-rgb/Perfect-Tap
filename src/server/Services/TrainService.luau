@@ -24,8 +24,8 @@
 	  hook gets two ProximityPrompts at the "PromptPoint" attachment of its
 	  station / lift (searched from the ancestor tagged "TrainStation" or
 	  "MineLift"), tagged "TrainPrompt", with attributes Action = "Load" |
-	  "Send" and Slot (UIOffset = (0, Slot * 72), the machine prompts' step):
-	    slot 0 (0, 0)    "TrainLoadPrompt"  "Load Train"  F / gamepad Y
+	  "Send" and Slot (UIOffset = (0, Slot * 72), PromptConfig.SlotHeight):
+	    slot 0 (0, 0)    "TrainLoadPrompt"  "Load Train"  E / gamepad Y
 	    slot 1 (0, 72)   "TrainSendPrompt"  "Send Train"  G / gamepad B
 	    slot 2 (0, 144)  kept free for the client's own "Train" panel prompt
 	                     (it must not stay at the default offset (0, 0))
@@ -75,9 +75,18 @@
 	- Upgrades: TrainAction "Upgrade" { Kind = "Capacity" | "Speed", Level }
 	  buys the next level (TrainConfig.nextPrice, EconomyService.spend).
 	  Level must be exactly the level being bought (current + 1, the one
-	  the card shows), else nothing happens ("Stale", quietly: a double
-	  click or a lagging card never buys two levels; Security #7). The
-	  Express perk (Perks "TrainExpress") adds cargo and speed.
+	  the card shows), else nothing happens ("Stale": a lagging card never
+	  buys a level nobody clicked; Security #7). The card counts the levels
+	  it already asked for, so a quick double click names Level n and n + 1
+	  and buys both. The Express perk (Perks "TrainExpress") adds cargo and
+	  speed.
+	- Answers: every TrainAction read gets a TrainResult { Action, Ok,
+	  Reason?, Kind?, Level? } (an upgrade's Reason: Max and Coins come
+	  with a toast too, Stale only there: the card says it), so no click is
+	  left without an answer. A sent
+	  train or a bought level pushes the owner's State at once
+	  (StateService.pushNow), not up to PushSeconds later; TrainTrip goes
+	  out even before that.
 	- Over capacity: while the Ore Pen holds more than its capacity
 	  (PenService.isOver, after a rescue move) nothing unloads into it: the
 	  cargo waits at the stop as with a full pen, and the snapshot's
@@ -111,6 +120,7 @@ local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local ItemData = require(Shared.Config.ItemData)
 local OreData = require(Shared.Config.OreData)
+local PromptConfig = require(Shared.Config.PromptConfig)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local ItemBuilder = require(Shared.Builders.ItemBuilder)
 local Format = require(Shared.Util.Format)
@@ -786,6 +796,7 @@ local function deliver(player: Player, data: { [string]: any }, away: boolean?)
 end
 
 -- "Send": the train leaves now with what it has (TrainAction or the prompt).
+-- A press that sends it pushes the owner's State at once (the chip follows the press).
 function TrainService.send(player: Player): boolean
 	local data = DataService.get(player)
 	if not data then
@@ -804,7 +815,11 @@ function TrainService.send(player: Player): boolean
 		hint(player, TrainService.NoPlotText, "Info")
 		return false
 	end
-	return TrainService.depart(player)
+	if not TrainService.depart(player) then
+		return false
+	end
+	StateService.pushNow(player)
+	return true
 end
 
 -- After items went into the cargo: remember the time, tell the HUD, leave when full.
@@ -933,20 +948,18 @@ local function makePrompt(
 	action: string,
 	text: string,
 	objectText: string,
-	key: Enum.KeyCode,
-	pad: Enum.KeyCode,
+	role: PromptConfig.Role,
 	slot: number
 ): ProximityPrompt
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = name
-	prompt.ActionText = text
-	prompt.ObjectText = objectText
-	prompt.KeyboardKeyCode = key
-	prompt.GamepadKeyCode = pad
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.UIOffset = Vector2.new(0, slot * TrainService.PromptSlotHeight)
+	-- UIOffset = (0, slot * PromptSlotHeight): TrainConfig's step is PromptConfig.SlotHeight
+	local prompt = PromptConfig.make({
+		Role = role,
+		Name = name,
+		ActionText = text,
+		ObjectText = objectText,
+		Distance = 10,
+		Slot = slot,
+	})
 	prompt:SetAttribute("Action", action)
 	prompt:SetAttribute("Slot", slot)
 	prompt:AddTag(TrainService.PromptTag)
@@ -1020,11 +1033,11 @@ local function setupHook(part: BasePart): Hook
 	end)
 	local anchor: Instance = point or part
 	local slots = TrainService.PromptSlots
-	local load = makePrompt(anchor, "TrainLoadPrompt", "Load", "Load Train", name, Enum.KeyCode.F, Enum.KeyCode.ButtonY, slots.Load)
+	local load = makePrompt(anchor, "TrainLoadPrompt", "Load", "Load Train", name, "Main", slots.Load)
 	load.Triggered:Connect(function(player: Player)
 		loadFromHands(player, hook)
 	end)
-	local send = makePrompt(anchor, "TrainSendPrompt", "Send", "Send Train", name, Enum.KeyCode.G, Enum.KeyCode.ButtonB, slots.Send)
+	local send = makePrompt(anchor, "TrainSendPrompt", "Send", "Send Train", name, "Second", slots.Send)
 	send.Triggered:Connect(function(player: Player)
 		TrainService.send(player)
 	end)
@@ -1095,7 +1108,9 @@ end
 --[[
 	Buys the next Capacity / Speed level. `expected` is the level the
 	player's card shows to buy (current + 1); anything else is "Stale" and
-	changes nothing, without a toast (the State push shows the real level).
+	changes nothing, without a toast (the TrainResult says Stale, the card
+	drops what it showed ahead and the State push shows the real level).
+	A bought level pushes the owner's State at once.
 ]]
 function TrainService.upgrade(player: Player, kind: string, expected: number?): (boolean, string?)
 	local data = DataService.get(player)
@@ -1128,6 +1143,7 @@ function TrainService.upgrade(player: Player, kind: string, expected: number?): 
 		train.SpeedLevel = level + 1
 	end
 	DataService.changed(player)
+	StateService.pushNow(player)
 	local express = hasExpress(player)
 	local text = if isCapacity
 		then `Train upgraded: {TrainConfig.capacity(level + 1, express)} cargo slots!`
@@ -1136,21 +1152,23 @@ function TrainService.upgrade(player: Player, kind: string, expected: number?): 
 	return true, nil
 end
 
--- TrainAction ("Send") or ("Upgrade", { Kind = "Capacity" | "Speed", Level = the level bought })
+-- TrainAction ("Send") or ("Upgrade", { Kind = "Capacity" | "Speed", Level = the level bought });
+-- every request read gets a TrainResult (the header's Answers).
 local function onAction(player: Player, actionArg: any, argArg: any)
 	local action = Guard.string(actionArg, 16)
 	if not action or not DataService.get(player) then
 		return
 	end
 	if action == "Send" then
-		TrainService.send(player)
+		Net.fire("TrainResult", player, { Action = "Send", Ok = TrainService.send(player) })
 	elseif action == "Upgrade" then
 		local arg = Guard.table(argArg, 4)
 		local kind = if arg then Guard.string(arg.Kind, 16) else nil
 		-- (a level that isn't a whole number in range is never the next one: Stale)
 		local level = if arg then Guard.integer(arg.Level, 1, 1000) else nil
 		if kind == "Capacity" or kind == "Speed" then
-			TrainService.upgrade(player, kind, level)
+			local ok, reason = TrainService.upgrade(player, kind, level)
+			Net.fire("TrainResult", player, { Action = "Upgrade", Ok = ok, Reason = reason, Kind = kind, Level = level })
 		end
 	end
 end

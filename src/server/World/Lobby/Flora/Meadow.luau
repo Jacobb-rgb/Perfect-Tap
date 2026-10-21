@@ -37,6 +37,7 @@ local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Parent.Plaza.Common)
+local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
 local Kit = require(script.Parent.Kit)
 local Town = require(script.Parent.Town)
 local Railway = require(script.Parent.Parent.Parent.Railway)
@@ -69,6 +70,8 @@ Meadow.FencedStrips = {
 }
 Meadow.FenceRun = 20 -- longest fence piece; a 3-stud gap follows each
 Meadow.FenceHeight = 2.4
+-- fence line past the road edge (2026-10-20: behind the street lamps' feet, so the runs pass them)
+Meadow.FenceOffset = if StreetLampPlan.Enabled then 2.8 else 2
 
 local FLOWERS = { C.FlowerYellow, C.FlowerWhite, C.FlowerPurple, C.LeafPink, C.LeafPinkLight }
 
@@ -114,11 +117,18 @@ local function isLawn(part: BasePart, box: Box): boolean
 	return box.Max.Y <= 0.65 and part.Size.Y <= 0.6 and c.G > c.R + 0.08 and c.G > c.B + 0.05
 end
 
--- Every visible part of `map` from the ground up (y -0.5..160), but the ground itself.
-function Meadow.index(map: Instance): Index
+-- Every visible part of `map` from the ground up (y -0.5..160), but the ground
+-- itself (and but `skip`'s parts: Flora/Wilds lets its pieces replace the lawn's).
+function Meadow.index(map: Instance, skip: Instance?): Index
 	local index: Index = { Cells = {}, Ground = nil }
+	local skipped: { [Instance]: boolean } = {}
+	if skip then
+		for _, d in skip:GetDescendants() do
+			skipped[d] = true
+		end
+	end
 	for _, d in map:GetDescendants() do
-		if d:IsA("BasePart") and d.Transparency < 0.95 then
+		if d:IsA("BasePart") and d.Transparency < 0.95 and not skipped[d] then
 			local box = bounds(d)
 			local parent = d.Parent
 			if d.Name == "Ground" and parent and parent.Name == "Land" then
@@ -186,10 +196,10 @@ local function inBox(p: Vector3, box: { Min: Vector3, Max: Vector3 }, margin: nu
 	return p.X > box.Min.X - margin and p.X < box.Max.X + margin and p.Z > box.Min.Z - margin and p.Z < box.Max.Z + margin
 end
 
--- Allowed for the meadow at all: in the town area, off the plots and their
--- yards, the keep-outs, the spawn and the vault approach.
-function Meadow.allowed(p: Vector3, r: number): boolean
-	if not inBox(p, Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
+-- Allowed for the meadow at all: in the town area (or `area`), off the plots
+-- and their yards, the keep-outs, the spawn and the vault approach.
+function Meadow.allowed(p: Vector3, r: number, area: Box?): boolean
+	if not inBox(p, area or Meadow.Area, -r) or inBox(p, Meadow.VaultClear, r) or inBox(p, Meadow.BridgeGarden, r) then
 		return false
 	end
 	if Vector3.new(p.X - WorldLayout.SpawnPoint.X, 0, p.Z - WorldLayout.SpawnPoint.Z).Magnitude < Meadow.SpawnClear + r then
@@ -636,8 +646,8 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 		local dir = delta / length
 		local right = Vector3.new(-dir.Z, 0, dir.X)
 		for _, side in { -1, 1 } do
-			-- (past the main roads' kerbs: half + 0.4 +- 0.4)
-			local offset = s.Width / 2 + 2
+			-- (past the road's edge border and the street lamps' feet)
+			local offset = s.Width / 2 + Meadow.FenceOffset
 			local runs: { { number } } = {}
 			local start: number? = nil
 			local t = 0
@@ -803,7 +813,8 @@ local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng)
 		for _, q in chosen do
 			far = far and (p - q).Magnitude > 40
 		end
-		if far then
+		-- (their circles reach 2.2 studs out: never over a road)
+		if far and Common.offStrips(p, 2.6) then
 			table.insert(chosen, p)
 		end
 	end

@@ -8,6 +8,7 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local Instance = roblox.Instance
 	local CFrame = Loader.CFrame
+	local PromptConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.PromptConfig")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
@@ -649,7 +650,8 @@ return function(T, Loader)
 		T.truthy(prompt, "prompt")
 		T.eq(prompt.ActionText, "Sell Ore", "action text")
 		T.eq(prompt.ObjectText, "Tobin the Miner", "object text")
-		T.eq(prompt.GamepadKeyCode, roblox.Enum.KeyCode.ButtonY, "gamepad key")
+		T.eq(prompt.GamepadKeyCode, PromptConfig.Keys.Main.Gamepad, "gamepad key")
+		T.eq(prompt.KeyboardKeyCode, PromptConfig.Keys.Main.Keyboard, "E")
 		sell.hookCounter(w.counter)
 		T.eq(#point:GetChildren(), 1, "hooked once")
 		carry(w, "Raw", "Coal")

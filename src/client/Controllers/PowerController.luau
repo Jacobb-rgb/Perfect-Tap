@@ -1,8 +1,9 @@
 --[[
 	PowerController: power cables on the plots and the small info signs on
-	your own poles, generators and Detail machines. Everything comes from the attributes
-	PowerService sets (Machines/PowerLogic encodes the cell lists); no
-	remotes, no input, so it is the same on PC, phones and consoles.
+	your own poles, generators, machines that use power and Detail machines.
+	Everything comes from the attributes PowerService sets (Machines/PowerLogic
+	encodes the cell lists); no remotes, no input, so it is the same on PC,
+	phones and consoles.
 
 	- Cables: for every pole, a Beam from its insulators (the CableL /
 	  CableR attachments of the PowerPole model, the nearer one) to each
@@ -24,10 +25,13 @@
 	- Your own plot always has its cables; other plots only within
 	  OTHER_RANGE studs (checked every SELECT_INTERVAL seconds).
 	- Info signs (MachineBillboard.attachInfo: "Network 35/50" on a pole,
-	  "⚡ +40 power" on a generator, the Detail line of e.g. a Sorter) on
-	  your own nearest INFO_MAX such machines within INFO_RANGE, unless the
-	  machine already shows its full progress sign (MachineFxController),
-	  which has the same lines. Refreshed every SELECT_INTERVAL seconds.
+	  "+40 power" on a generator, "Power 100%" / "No power 60%" on a machine
+	  that uses power (the Robot Arm; processors mostly show the full sign,
+	  whose status row says "No power: 60%"), the Detail line of e.g. a
+	  Sorter) on your own nearest INFO_MAX such machines within INFO_RANGE
+	  (wantsInfo), unless the machine already shows its full sign
+	  (MachineFxController), which has the same lines. Refreshed every
+	  SELECT_INTERVAL seconds.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -387,9 +391,11 @@ end
 
 ---------------------------------------------------------------- range and info signs
 
-local function wantsInfo(model: Model): boolean
+-- Whether a model gets an info sign: poles, generators, machines that use
+-- power, and any machine with a Detail.
+function PowerController.wantsInfo(model: Model): boolean
 	local info = infoOf(model)
-	if info and (info.IsPole or (info.PowerOut or 0) > 0) then
+	if info and (info.IsPole or (info.PowerOut or 0) > 0 or (info.Power or 0) > 0) then
 		return true
 	end
 	local detail = model:GetAttribute("Detail")
@@ -420,11 +426,11 @@ local function refresh()
 			markDirty(group)
 		end
 	end
-	-- info signs: your nearest poles, generators and Detail machines
+	-- info signs: your nearest poles, generators, powered and Detail machines
 	local candidates: { Candidate } = {}
 	if focus then
 		for model in groupOf do
-			if model.Parent and model.PrimaryPart and isOwn(model) and wantsInfo(model) and not hasFullSign(model) then
+			if model.Parent and model.PrimaryPart and isOwn(model) and PowerController.wantsInfo(model) and not hasFullSign(model) then
 				local distance = (model:GetPivot().Position - focus).Magnitude
 				if distance <= INFO_RANGE then
 					table.insert(candidates, { Model = model, Distance = distance })

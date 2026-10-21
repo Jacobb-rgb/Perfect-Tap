@@ -659,6 +659,30 @@ function HudBubble.topBarSize(layout: Layout): Vector2
 	)
 end
 
+HudBubble.TopBarUnderRow = 6 -- the bar's Y under Roblox's row when the row has no room
+
+--[[
+	The bar's X offset (design units from the centre) and whether it fits in
+	Roblox's top row: `free` is the row's free span in screen pixels
+	(GuiService.TopbarInset min / max x; nil = unknown: centred in the row),
+	the HUD gui spans guiLeft..guiLeft + guiWidth px, the bar is `width` design
+	units at `scale`. Pure (specs).
+]]
+function HudBubble.topBarX(free: Vector2?, guiLeft: number, guiWidth: number, width: number, scale: number): (number, boolean)
+	if not free then
+		return 0, true
+	end
+	local w = width * scale
+	local margin = 6
+	local lo, hi = free.X + w / 2 + margin, free.Y - w / 2 - margin
+	if lo > hi then
+		return 0, false -- the row is too full: under it, centred
+	end
+	local centre = guiLeft + guiWidth / 2
+	local placed = math.clamp(centre, lo, hi)
+	return math.floor((placed - centre) / scale), true
+end
+
 -- The bar's Y in the HUD gui (CoreUISafeInsets starts under Roblox's top bar):
 -- lifted by the top inset (px) at `scale` so it sits 4 px from the screen top.
 function HudBubble.topBarY(insetTop: number, scale: number): number
@@ -853,7 +877,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?): GameRefs
 	}
 end
 
--- The side menu's IconNames (SideMenuView.Icons keys) -> 3D icon + colour role.
+-- The side menu's IconNames (SideMenuView.Entries) -> 3D icon + colour role.
 HudBubble.EntryLooks = {
 	Golems = { Icon = "golem_GildedPorter", Role = "Golems" },
 	Shop = { Icon = "clover", Role = "Boosts" }, -- the luck boosts (the Robux STORE is the green Shop pill)
@@ -863,7 +887,7 @@ HudBubble.EntryLooks = {
 	Settings = { Icon = "cog", Role = "Settings" },
 	Store = { Icon = "coins", Role = "Shop" },
 	Elevator = { Icon = "lift", Role = "Base" },
-	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: the emoji stands in)
+	Hoverboards = { Icon = "hoverboard", Role = "Lobby" }, -- (no sheet cell yet: empty until uploaded, the label shows)
 	Wheel = { Icon = "wheel", Role = "Wheel" },
 	Gear = { Icon = "helmet", Role = "Gear" },
 	Rebirth = { Icon = "rebirth", Role = "Rebirth" }, -- STAR FORGE

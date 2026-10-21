@@ -307,8 +307,23 @@ elseif sceneName == "loading" then -- the loading screen (tools/lune/lib/loading
 	for name, guis in require("./lib/loading_preview").build(Loader) do
 		uiExports[name] = guis
 	end
+elseif
+	sceneName == "machine_ux_build"
+	or sceneName == "machine_ux_power"
+	or sceneName == "machine_ux_yard"
+	or sceneName == "machine_ux_close"
+then
+	-- the machine UX: build mode's info card, tray, keys and power preview; the status signs (tools/lune/lib/machine_ux_preview.luau)
+	WorldBuilder.build(workspace)
+	local camera, guis = require("./lib/machine_ux_preview").build(Loader, workspace, string.sub(sceneName, 12))
+	scene_extra = camera
+	for name, g in guis do
+		uiExports[name] = g
+	end
 elseif sceneName == "forge_bridge" then -- proposals: THE GREAT FORGE replaced by the bridge garden (tools/lune/lib/forge_bridge_preview.luau; arg 2 = A / B / C)
 	require("./lib/forge_bridge_preview").build(Loader, workspace, process.args[2] or "A")
+elseif sceneName == "nature_kit" then -- the Wilds pieces and secrets in rows (tools/lune/lib/nature_wilds_preview.luau)
+	require("./lib/nature_wilds_preview").kit(Loader, workspace)
 elseif sceneName == "gameplay" then
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3

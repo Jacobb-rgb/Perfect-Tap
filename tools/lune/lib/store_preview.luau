@@ -98,6 +98,24 @@ function Preview.build(Loader: any): { [string]: any }
 	StoreView.setCard(stars, "StarSupernova", "StarSupernova", "Locked")
 	StoreView.setCard(stars, "StarSingularity", "StarSingularity", "Locked")
 	exports.ui_store_pc_stars = UiExport.export({ hud(scale).Gui, stars.Gui })
+	-- the limited edition banner (FEATURED): the game's own edition, 9 days before its end
+	local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+	local function edition(): any
+		local now = LimitedGolems.Current.EndsAt - (29 * 86400 + 21 * 3600 + 15 * 60)
+		return LimitedGolems.current(now)
+	end
+	local limited = store(scale, pcW, pcH)
+	StoreView.setEdition(limited, edition())
+	StoreView.setTimer(limited, 29 * 86400 + 21 * 3600 + 15 * 60)
+	do -- (the tiles as StoreController sets them: the capsule's odds now)
+		local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+		local odds = {}
+		for _, line in CapsuleConfig.odds("Dragonforge", false) do
+			odds[line.Golem] = line.Chance
+		end
+		StoreView.setBannerOdds(limited, odds, false)
+	end
+	exports.ui_store_pc_limited = UiExport.export({ hud(scale).Gui, limited.Gui })
 	local odds = store(scale, pcW, pcH, "Eggs")
 	local lines = { "Royal Capsule x5: 5 golems, each one of:" }
 	for _, line in CapsuleConfig.odds("Royal", false) do

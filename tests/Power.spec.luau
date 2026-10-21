@@ -790,4 +790,24 @@ return function(T, Loader)
 		PowerController.clearCables(again)
 		T.eq(#PowerController.drawCables({ furnace }), 0, "no poles, no cables")
 	end)
+
+	T.test("PowerController: info signs on poles, generators, machines that use power and Detail machines", function()
+		for _, id in { "PowerPole", "SolarPanel", "WindTurbine", "FusionReactor" } do
+			T.truthy(PowerController.wantsInfo(MachineBuilder.build(id)), id)
+		end
+		-- every machine that uses power shows its power state
+		for _, info in MachineData.List do
+			if not info.Retired and (info.Power or 0) > 0 then
+				T.truthy(PowerController.wantsInfo(MachineBuilder.build(info.Id)), info.Id .. " uses power")
+			end
+		end
+		T.truthy(PowerController.wantsInfo(MachineBuilder.build("RobotArm")), "the Robot Arm (no job sign of its own)")
+		-- the starter tier needs no power: no sign
+		for _, id in { "Crusher", "ClayFurnace", "AutoCleaner", "Conveyor", "Splitter" } do
+			T.falsy(PowerController.wantsInfo(MachineBuilder.build(id)), id)
+		end
+		local crusher = MachineBuilder.build("Crusher")
+		crusher:SetAttribute("Detail", "Rare+ ▶ right")
+		T.truthy(PowerController.wantsInfo(crusher), "a Detail")
+	end)
 end

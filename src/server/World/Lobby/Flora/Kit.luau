@@ -14,6 +14,7 @@ local LobbyLayout = require(Shared.Config.LobbyLayout)
 local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
+local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
 
 local C = Style.C
 local NEON = Enum.Material.Neon
@@ -213,6 +214,10 @@ end
 ]]
 function Kit.free(placer: Placer, p: Vector3, r: number, reach: number?): boolean
 	if not LobbyLayout.isFree(p, r) then
+		return false
+	end
+	-- (2026-10-20) nothing scattered on a street lamp's spot, no crown through its pole
+	if StreetLampPlan.near(p, math.max(r, reach or 0) + 1.2) then
 		return false
 	end
 	if reach and reach > r then

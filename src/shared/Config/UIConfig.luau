@@ -14,6 +14,11 @@ UIConfig.Default = true -- the switch: the light UI is on (owner's go, 2026-10-2
 UIConfig.LightUI = UIConfig.Default
 UIConfig.Attribute = "LightUI" -- Workspace attribute that turns it on for testing
 
+-- Our own prompt pills (LightPrompt, LightWorldController) instead of the
+-- stock Roblox prompt. Off (owner 2026-10-20): the stock prompt stacks
+-- prompts by UIOffset and updates its text live; the pill does neither.
+UIConfig.CustomPrompts = false
+
 -- Is the light UI on (the flag, or the Studio test attribute)?
 function UIConfig.lightUI(): boolean
 	if UIConfig.LightUI then
