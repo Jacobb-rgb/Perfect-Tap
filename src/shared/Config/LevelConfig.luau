@@ -12,9 +12,10 @@
 	- Counters that a rebirth sets back (blaster level, gear, train,
 	  machine upgrades) re-baseline when they drop: climbing again pays
 	  again (a new run is real progress).
-	- Machines and golems count by the most you ever had (Seen keeps the
-	  high mark), so placing / picking up, deleting and buying back never
-	  farms XP.
+	- Machines (placed only, never droppers or the Money Laser: the build
+	  slots cap them, bulk-bought machines in the build menu pay nothing)
+	  and golems count by the most you ever had (Seen keeps the high mark),
+	  so placing / picking up, deleting and buying back never farms XP.
 	- A save from before levels (Ready = false) gets its XP from what it
 	  did so far at once, silently (no coins, no moment): veterans start at
 	  a fair level.
@@ -26,6 +27,8 @@
 	income per level (EconomyService.addIncomeBonus "Level"), at most
 	BonusCap.
 ]]
+
+local DropperConfig = require(script.Parent.DropperConfig)
 
 local LevelConfig = {}
 
@@ -42,7 +45,8 @@ LevelConfig.MilestoneEvery = 10
 LevelConfig.MilestoneFactor = 5
 LevelConfig.BonusPerLevel = 0.01 -- +1 % podium income per level
 LevelConfig.BonusCap = 0.5 -- at most +50 % (level 51)
--- the burst only plays for a gain this big at once (the silent start of an old save never does)
+-- at most this many level-up moments per gain (LevelService sends the last ones,
+-- LevelController skips the bar ahead past the rest); the silent backfill of an old save shows none
 LevelConfig.MaxShownLevels = 5
 
 export type Source = {
@@ -68,7 +72,7 @@ LevelConfig.Sources = {
 	{ Id = "WheelSpins", Xp = 10 },
 	{ Id = "StarsEarned", Xp = 25 },
 	{ Id = "Discovered", Xp = 30 }, -- new ores in the codex
-	{ Id = "Machines", Xp = 10, High = true }, -- machines owned (placed + in the build menu)
+	{ Id = "Machines", Xp = 10, High = true }, -- machines placed (the build slots cap them; droppers and the Money Laser left out)
 	{ Id = "Golems", Xp = 10, High = true }, -- golems owned
 	{ Id = "Upgrades", Xp = 15 }, -- Tech shop levels: Bellows, slots, pen, automation, elevator, machine upgrades
 	{ Id = "Gear", Xp = 20 }, -- gear levels
@@ -147,7 +151,19 @@ function LevelConfig.counters(data: { [string]: any }): { [string]: number }
 		end
 	end
 	out.Discovered = discovered
-	out.Machines = sumValues(data.MachineInventory) + count(data.PlacedMachines)
+	-- placed only: the Tech shop sells up to 999 of a machine into the build menu, the
+	-- build slots cap what stands (review HIGH 2026-10-22); droppers and the Money
+	-- Laser earn money, not XP (the owner's dropper brief)
+	local placed = 0
+	if type(data.PlacedMachines) == "table" then
+		for _, entry in data.PlacedMachines do
+			local id = if type(entry) == "table" then entry.Id else nil
+			if type(id) == "string" and not DropperConfig.ById[id] and id ~= DropperConfig.Laser.Id then
+				placed += 1
+			end
+		end
+	end
+	out.Machines = placed
 	local golems = if type(data.Golems) == "table" then data.Golems.Owned else nil
 	out.Golems = count(golems)
 	local upgrades = 0

@@ -132,7 +132,8 @@ LeaderboardService.ActivitySources = {
 	CapsuleService = "onOpened",
 } :: { [string]: string }
 LeaderboardService.MoveStuds = 4 -- a move this long (flat) since the last check is activity
--- boards whose value never goes down: UpdateAsync keeps the bigger number
+-- boards whose value never goes down: UpdateAsync keeps the bigger number (TotalEarned,
+-- Artifacts, HoursPlayed and Level, which a rebirth never resets)
 LeaderboardService.Growing = { TotalEarned = true, Artifacts = true, HoursPlayed = true, Level = true } :: { [string]: boolean }
 -- users hidden at runtime (removeUser): a DataStore list every server reads, and a
 -- MessagingService topic that tells the running servers at once

@@ -19,7 +19,7 @@
 	  (GetSortedAsync descending). Studio never writes (it only reads).
 	- Hidden: UserIds that never show on a board and are never written
 	  (cheaters, banned users); LeaderboardService.removeUser(userId) deletes
-	  a user's entries from all four stores (the command bar; RTBF too) and
+	  a user's entries from all five stores (the command bar; RTBF too) and
 	  hides them at runtime on every server (no deploy needed).
 	- Where they show: the lobby boards (Hall, 5.4 x 5 studs, five rank rows)
 	  show the top BoardRows (5) so the rows stay readable on phones from the

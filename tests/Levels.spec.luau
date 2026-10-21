@@ -74,20 +74,32 @@ return function(T, Loader)
 		T.near(LevelService.step(data, 0), 2, 1e-9, "a minute of active play")
 	end)
 
-	T.test("Levels: machines and golems count by the most ever (no place / pick up farming)", function()
+	T.test("Levels: placed machines count by the most ever (no bulk buys, no place / pick up farming)", function()
 		local data = save()
 		LevelService.step(data, 0)
-		data.MachineInventory = { Conveyor = 3 }
-		T.eq(LevelService.step(data, 0), 30)
-		-- placing them: inventory -> placed, the same machines
-		data.MachineInventory = { Conveyor = 1 }
-		data.PlacedMachines = { { Id = "Conveyor" }, { Id = "Conveyor" } }
+		-- 999 Conveyors bought into the build menu pay nothing (review HIGH 2026-10-22)
+		data.MachineInventory = { Conveyor = 999, Crusher = 999 }
+		T.eq(LevelService.step(data, 0), 0, "the build menu pays nothing")
+		-- placing pays per machine standing, at most the build slots
+		local slots = 12
+		for _ = 1, slots do
+			table.insert(data.PlacedMachines, { Id = "Conveyor" })
+		end
+		T.eq(LevelService.step(data, 0), slots * 10, "at most slots x 10")
+		-- picking up and placing again pays nothing
+		data.PlacedMachines = { { Id = "Conveyor" } }
 		T.eq(LevelService.step(data, 0), 0)
-		-- selling one and buying it back pays nothing either
-		data.MachineInventory = {}
-		LevelService.step(data, 0)
-		data.MachineInventory = { Conveyor = 1 }
-		T.eq(LevelService.step(data, 0), 0)
+		for _ = 2, slots do
+			table.insert(data.PlacedMachines, { Id = "Conveyor" })
+		end
+		T.eq(LevelService.step(data, 0), 0, "back to the old high mark: nothing")
+		-- droppers and the Money Laser earn money, not XP
+		local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
+		for id in DropperConfig.ById do
+			table.insert(data.PlacedMachines, { Id = id })
+		end
+		table.insert(data.PlacedMachines, { Id = DropperConfig.Laser.Id })
+		T.eq(LevelService.step(data, 0), 0, "droppers give no XP")
 	end)
 
 	T.test("Levels: a rebirth set-back counts again from there, the level stays", function()
@@ -166,5 +178,64 @@ return function(T, Loader)
 		T.eq(view.BadgeLevel.Text, "12")
 		LevelView.hideMoment(view)
 		T.eq(view.Moment.Visible, false)
+	end)
+
+	T.test("Levels: Reduce motion: no flash, no rays, LEVEL UP! at full size", function()
+		local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LevelView")
+		local view = LevelView.build()
+		local m = { Level = 12, Coins = 500, Bonus = 0.11, Increase = 0.01, Milestone = false }
+		for t = 0, LevelView.MomentSeconds, 0.1 do
+			LevelView.poseMoment(view, t, m, true)
+			T.eq(view.Flash.BackgroundTransparency, 1, "no flash at " .. t)
+			T.eq(view.TitleScale.Scale, 1, "full size at " .. t)
+			T.eq(view.Title.Rotation, 0, "no wobble")
+			T.eq(view.Rays.Visible, false, "no rays")
+		end
+		LevelView.poseGlow(view, 0.95, 1.234, true)
+		T.eq(view.BarScale.Scale, 1, "a steady bar")
+	end)
+
+	T.test("Levels: the INCOME row says what this level added, MAX at the cap", function()
+		local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LevelView")
+		local label, amount = LevelView.incomeText({ Level = 12, Coins = 0, Bonus = 0.11, Increase = 0.01, Milestone = false })
+		T.eq(label, "+1% INCOME")
+		T.eq(amount, "11%")
+		local capLabel, capAmount =
+			LevelView.incomeText({ Level = 70, Coins = 0, Bonus = LevelConfig.BonusCap, Increase = 0, Milestone = false })
+		T.eq(capLabel, "INCOME")
+		T.eq(capAmount, "MAX 50%")
+		T.near(LevelConfig.bonusFor(51) - LevelConfig.bonusFor(50), 0.01, 1e-9, "level 51 still adds")
+		T.eq(LevelConfig.bonusFor(52) - LevelConfig.bonusFor(51), 0, "past the cap: nothing")
+	end)
+
+	T.test("leaderboards: every tab word fits its tab with five boards (PC and a 568 x 320 phone)", function()
+		local LeaderboardView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LeaderboardView")
+		local panel = LeaderboardView.buildPanel(false)
+		-- PC, a 1366 x 768 window, a 568 x 320 phone (uiScale floor 0.62)
+		for _, case in
+			{
+				{ Compact = false, W = math.huge, H = math.huge },
+				{ Compact = false, W = 1366 / 1.07, H = 768 / 1.07 },
+				{ Compact = true, W = 568 / 0.62, H = 320 / 0.62 },
+			}
+		do
+			LeaderboardView.layoutPanel(panel, case.Compact, case.W, case.H)
+			for _, board in LeaderboardConfig.Boards do
+				local tab = panel.Tabs[board.Id]
+				local holder = tab.Parent
+				local tabW = if holder
+						and holder:IsA("GuiObject")
+						and holder.Size.X.Offset > 0
+					then holder.Size.X.Offset
+					else tab.Size.X.Offset
+				local word = LeaderboardView.Short[board.Id] or board.Title
+				T.le(
+					LeaderboardView.textWidth(word) * tab.TextSize,
+					tabW - LeaderboardView.TabPad + 1e-6,
+					`{word} fits (compact {case.Compact})`
+				)
+				T.truthy(tab.TextSize >= LeaderboardView.MinText, word .. " stays readable")
+			end
+		end
 	end)
 end

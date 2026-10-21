@@ -925,6 +925,9 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 	snapshot.Income = total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
 	snapshot.PodiumIncome = perSlot
 	snapshot.PodiumSlots = PodiumService.slotsFor(player)
+	-- the whole podium multiplier (IncomePct, the player level, the 2x Money pass...): the Ore
+	-- Pen's "+$X/s" (PenView.incomeMult)
+	snapshot.IncomeMult = multiplier
 end
 
 PodiumService._test = {

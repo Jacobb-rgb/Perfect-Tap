@@ -9,6 +9,8 @@
 	    (burst at the feet, flash, LEVEL UP!, the reward rows counting up),
 	    the bar starts over from 0. Several level ups play one after another.
 	The bar hides with the HUD (the cleaning close-up turns it off).
+	Reduce motion (Motion.reduced): no orbs (the fill jumps), a steady glow,
+	no flash, rays or burst; LEVEL UP! and the rewards fade in at full size.
 ]]
 
 local Players = game:GetService("Players")
@@ -20,6 +22,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LevelConfig = require(Shared.Config.LevelConfig)
 local Net = require(Shared.Net)
 local LevelView = require(script.Parent.Parent.UI.LevelView)
+local Motion = require(script.Parent.Parent.UI.Motion)
 local LevelBurst = require(script.Parent.Parent.Effects.LevelBurst)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local StateController = require(script.Parent.StateController)
@@ -46,9 +49,9 @@ type Flight = { Orb: Frame, Start: number, Seed: number, From: Vector2 }
 local flights: { Flight } = {}
 local nextOrb = 1
 
-type Up = { Level: number, Coins: number, Bonus: number, Milestone: boolean }
+type Up = { Level: number, Coins: number, Bonus: number, Increase: number?, Milestone: boolean }
 local ups: { [number]: Up } = {} -- level -> the server's reward info
-local moment: { Up: Up, Start: number, Burst: LevelBurst.Burst? }? = nil
+local moment: { Up: Up, Start: number, Burst: LevelBurst.Burst?, Reduced: boolean }? = nil
 local waiting: { Up } = {}
 
 local function frac(xp: number, need: number): number
@@ -84,7 +87,7 @@ local function launchOrbs(gain: number)
 		return
 	end
 	local from = characterPoint()
-	if not from then
+	if not from or Motion.reduced() then
 		holdUntil = os.clock()
 		return
 	end
@@ -107,7 +110,8 @@ local function startMoment(up: Up)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local hud = HudController.refs()
 	local closeUp = hud ~= nil and not hud.Gui.Enabled -- the cleaning close-up: no burst in the shot
-	if root and root:IsA("BasePart") and not closeUp then
+	local reduced = Motion.reduced()
+	if root and root:IsA("BasePart") and not closeUp and not reduced then
 		local feet = root.CFrame * CFrame.new(0, -3, 0)
 		local flat = CFrame.new(feet.Position) * CFrame.Angles(0, select(2, root.CFrame:ToEulerAnglesYXZ()), 0)
 		if not pooled then
@@ -118,7 +122,7 @@ local function startMoment(up: Up)
 			LevelBurst.setOrigin(burst, flat, up.Milestone)
 		end
 	end
-	moment = { Up = up, Start = os.clock(), Burst = burst }
+	moment = { Up = up, Start = os.clock(), Burst = burst, Reduced = reduced }
 	Sfx.play("ElevatorDing")
 	Sfx.play("CaseBurst")
 	task.delay(0.9, function()
@@ -134,6 +138,7 @@ local function onLevelReached(level: number)
 			Level = level,
 			Coins = 0,
 			Bonus = LevelConfig.bonusFor(level),
+			Increase = LevelConfig.bonusFor(level) - LevelConfig.bonusFor(level - 1),
 			Milestone = LevelConfig.isMilestone(level),
 		}
 	if moment then
@@ -178,9 +183,10 @@ local function step(dt: number)
 			end
 		end
 	end
+	local reduced = Motion.reduced()
 	if now >= holdUntil then
 		if shownLevel < target.Level then
-			shown = math.min(1, shown + dt * (0.4 + LevelController.FillRate * (1.02 - shown)))
+			shown = if reduced then 1 else math.min(1, shown + dt * (0.4 + LevelController.FillRate * (1.02 - shown)))
 			if shown >= 1 then
 				shownLevel += 1
 				shown = 0
@@ -188,21 +194,25 @@ local function step(dt: number)
 			end
 		else
 			local goal = frac(target.Xp, target.Need)
-			shown += (goal - shown) * math.min(1, dt * LevelController.FillRate)
+			shown = if reduced then goal else shown + (goal - shown) * math.min(1, dt * LevelController.FillRate)
 		end
 	end
 	local barNeed = if shownLevel < target.Level then LevelConfig.need(shownLevel) else target.Need
 	local barXp = if shownLevel < target.Level then shown * barNeed else target.Xp
 	LevelView.setBar(v, shownLevel, shown, barXp, barNeed)
-	LevelView.poseGlow(v, shown, now)
+	LevelView.poseGlow(v, shown, now, reduced)
 
 	-- the moment
 	local m = moment
 	if m then
 		local t = now - m.Start
-		LevelView.poseMoment(v, t, m.Up)
-		if m.Burst then
-			LevelBurst.pose(m.Burst, t) -- past Seconds every part is hidden
+		LevelView.poseMoment(v, t, m.Up, m.Reduced)
+		local burst = m.Burst
+		if burst then
+			LevelBurst.pose(burst, t)
+			if t >= LevelBurst.Seconds then
+				m.Burst = nil -- every part hidden: no more poses
+			end
 		end
 		-- the next one waits for most of this one
 		local done = t >= LevelView.MomentSeconds or (#waiting > 0 and t >= 1.8)
@@ -266,6 +276,7 @@ function LevelController.start()
 			Level = payload.Level,
 			Coins = tonumber(payload.Coins) or 0,
 			Bonus = tonumber(payload.Bonus) or 0,
+			Increase = tonumber(payload.Increase),
 			Milestone = payload.Milestone == true,
 		}
 	end)

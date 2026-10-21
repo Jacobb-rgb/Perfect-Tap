@@ -6,7 +6,7 @@
 	  XP for what grew (LevelConfig.collect). No other service calls in.
 	- A gain fires XpGain { Gain, Level, Xp, Need } (the client's orbs fly
 	  into the bar). Each level up pays coins (EconomyService.award, source
-	  "Level") and fires LevelUp { Level, Coins, Bonus, Milestone, Next }
+	  "Level") and fires LevelUp { Level, Coins, Bonus, Increase, Milestone, Next }
 	  (the client's juicy moment). At most LevelConfig.MaxShownLevels
 	  moments per gain; the rest are paid quietly.
 	- An old save's first look (Level.Ready = false) backfills its XP
@@ -32,7 +32,7 @@ local LevelService = {}
 
 LevelService.Attribute = "Level"
 
-export type Up = { Level: number, Coins: number, Bonus: number, Milestone: boolean, Next: number }
+export type Up = { Level: number, Coins: number, Bonus: number, Increase: number, Milestone: boolean, Next: number }
 
 local function levelOf(data: { [string]: any }?): number
 	local record = if data then data.Level else nil
@@ -63,6 +63,7 @@ function LevelService.step(data: { [string]: any }, income: number): (number, { 
 			Level = level,
 			Coins = LevelConfig.coinsFor(level, income),
 			Bonus = LevelConfig.bonusFor(level),
+			Increase = LevelConfig.bonusFor(level) - LevelConfig.bonusFor(level - 1), -- 0 past the cap
 			Milestone = LevelConfig.isMilestone(level),
 			Next = LevelConfig.need(level),
 		})
