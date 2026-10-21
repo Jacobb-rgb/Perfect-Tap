@@ -100,6 +100,7 @@ local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.Hopp
 for _, hopper in HopperConfig.List do
 	models["hopper_" .. hopper.Id] = HopperBuilder.build(hopper.Id, CF.new())
 end
+models.hopper_MoneyLaser2X = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder").build(CF.new())
 
 -- only these: lune run tools/lune/export_icon_parts.luau star_Comet star_Nebula
 local only = process.args

@@ -1,17 +1,18 @@
 --[[
 	The hopper concepts (Config/HopperConfig, Builders/HopperBuilder):
-	  scene "hoppers"  the seven hoppers in a row on a showroom stage, small
-	                   to big, each with a price plate in front
-	  scene "hopper_shop"  the HOPPER WORKS shop building (Preview.buildShop): a
-	                   factory hall with a saw-tooth roof, a giant golden funnel
-	                   the Terra Core Hopper on the roof as the landmark, the sign,
-	                   the counter with a Legendary Hopper behind it and two
-	                   hoppers on pedestals out front
+	  scene "hoppers"  the seven hoppers (block-tycoon look) on one conveyor
+	                   line on a tycoon plot, then the 2X money laser and the
+	                   collector; a price plate in front of each
+	  scene "hopper_shop"  the HOPPER WORKS house (Preview.buildShop), a cosy
+	                   Sandbox-Tycoon-style brick + plank house in forge colours:
+	                   stepped slate roof, shop windows with hoppers inside,
+	                   flower boxes, lanterns, a forge chimney, the like board and
+	                   a showcase line (Epic Hopper -> 2X laser -> SELL) in the yard
 	UI overlays (Preview.ui, drawn with HopperShopView over the stage):
-	  ui_hoppers_pc        PC: the first cards (one Epic Hopper owned, the
-	                       Legendary one affordable)
-	  ui_hoppers_pc_more   PC: scrolled to the end (Star, Rift, Terra Core)
-	  ui_hoppers_phone     667 x 375 pt phone
+	  ui_hoppers_pc        PC: HOPPERS tab, the Legendary Hopper picked (two
+	                       Epic Hoppers owned, Rift / Terra Core locked)
+	  ui_hoppers_pc_more   PC: LASERS tab, the 2X Money Laser picked
+	  ui_hoppers_phone     667 x 375 pt phone, the locked Terra Core picked
 	Shots in tools/preview/hopper_shots.json.
 ]]
 
@@ -26,9 +27,10 @@ function Preview.build(Loader: any, workspace: any)
 	local V3 = roblox.Vector3
 	local CF = Loader.CFrame
 	local C3 = roblox.Color3
-	local NEON = roblox.Enum.Material.Neon
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local BlockKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit")
 	local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
+	local LaserBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder")
 	local HopperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.HopperConfig")
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local rgb = C3.fromRGB
@@ -37,47 +39,67 @@ function Preview.build(Loader: any, workspace: any)
 	stage.Name = "HopperStage"
 	stage.Parent = workspace
 
-	local function label(cf: any, size: any, text: string, ink: any, edge: any)
-		Geo.block(stage, cf * CF.new(0, 0, -0.04), size + V3.new(0.14, 0.14, -0.04), edge, NEON)
-		local plate = Geo.block(stage, cf, size, rgb(16, 18, 24))
-		local gui = Instance.new("SurfaceGui")
-		gui.Face = roblox.Enum.NormalId.Back
-		gui.Parent = plate
-		local t = Instance.new("TextLabel")
-		t.Text = text
-		t.TextColor3 = ink
-		t.FontFace = roblox.Font.fromEnum(roblox.Enum.Font.FredokaOne)
-		t.Parent = gui
+	-- a tycoon plot: grass, a light tile floor with a grid, the build area
+	Geo.block(stage, CF.new(0, -0.5, -6), V3.new(320, 1, 200), rgb(104, 182, 76), roblox.Enum.Material.Grass)
+	local floorW, floorD = 150, 40
+	Geo.block(stage, CF.new(0, 0.05, -1), V3.new(floorW, 0.1, floorD), rgb(226, 232, 242))
+	for i = -floorW / 4, floorW / 4 do
+		Geo.block(stage, CF.new(i * 2 * 2, 0.11, -1), V3.new(0.12, 0.02, floorD), rgb(188, 204, 228))
+	end
+	for j = -5, 5 do
+		Geo.block(stage, CF.new(0, 0.11, -1 + j * 4), V3.new(floorW, 0.02, 0.12), rgb(188, 204, 228))
 	end
 
-	-- floor and back wall: a dark showroom so the trims glow
-	Geo.block(stage, CF.new(0, -0.5, -6), V3.new(260, 1, 120), rgb(34, 36, 46))
-	Geo.block(stage, CF.new(0, 30, -34), V3.new(260, 62, 1), rgb(18, 18, 26))
-	-- the stage: one long low step with a glowing front edge
-	local x = 0
-	local gap = 3.2
-	local total = 0
-	for _, hopper in HopperConfig.List do
-		total += HopperBuilder.Plate * HopperBuilder.Styles[hopper.Id].Scale + gap
-	end
-	total -= gap
-	Geo.block(stage, CF.new(0, 0.3, -2), V3.new(total + 8, 0.6, 22), rgb(46, 48, 62))
-	Geo.block(stage, CF.new(0, 0.58, 9), V3.new(total + 8, 0.06, 0.06), rgb(200, 140, 60), NEON)
-
-	x = -total / 2
+	-- the seven hoppers on one conveyor line, then the 2X laser and the collector
+	local gap = 2.4
+	local x = -66
+	local y = 0.1
 	for _, hopper in HopperConfig.List do
 		local s = HopperBuilder.Styles[hopper.Id].Scale
 		local w = HopperBuilder.Plate * s
 		local cx = x + w / 2
 		Preview.Spots[hopper.Id] = cx
-		local model = HopperBuilder.build(hopper.Id, CF.new(cx, 0.6, -2))
-		model.Parent = stage
-		-- the price plate on the stage's front
-		local trim = HopperBuilder.Styles[hopper.Id].Trim[1]
-		label(CF.new(cx, 1.15, 6.6), V3.new(math.min(w - 0.4, 6.6), 0.75, 0.1), Format.money(hopper.Price), rgb(255, 214, 80), trim)
-		x += w + gap
+		HopperBuilder.build(hopper.Id, CF.new(cx, y, -2)).Parent = stage
+		-- the price on the floor in front
+		BlockKit.text(
+			stage,
+			CF.new(cx, 0.6, -2 + w / 2 + 1.4) * CF.Angles(-0.9, 0, 0),
+			V3.new(math.min(w - 0.6, 6), 1.1, 0.1),
+			Format.money(hopper.Price),
+			rgb(255, 222, 90),
+			rgb(24, 26, 34),
+			HopperBuilder.Styles[hopper.Id].Trim[1]
+		)
+		x += w
+		-- a belt piece to the next one (the belt sits on a 0.6 base like the hoppers)
+		BlockKit.cube(stage, CF.new(x + gap / 2, y + 0.3, -2), V3.new(gap, 0.6, 3.8), rgb(56, 60, 76), rgb(32, 34, 46))
+		BlockKit.belt(stage, CF.new(x + gap / 2, y + 0.6, -2), gap, 2.4)
+		x += gap
 	end
-	print(string.format("Hopper stage: %d hoppers, %.0f studs wide", #HopperConfig.List, total))
+	-- the 2X laser
+	local laserScale = 1.4
+	local laserX = x + LaserBuilder.Length * laserScale / 2
+	Preview.Spots.Laser = laserX
+	LaserBuilder.build(CF.new(laserX, y, -2), laserScale).Parent = stage
+	x += LaserBuilder.Length * laserScale
+	BlockKit.cube(stage, CF.new(x + 2, y + 0.3, -2), V3.new(4, 0.6, 3.8), rgb(56, 60, 76), rgb(32, 34, 46))
+	BlockKit.belt(stage, CF.new(x + 2, y + 0.6, -2), 4, 2.4)
+	x += 4
+	-- the collector: a blue block with a white top that eats the ores
+	BlockKit.cube(stage, CF.new(x + 2.2, y + 1.6, -2), V3.new(4.4, 3.2, 4.4), rgb(54, 120, 220), rgb(28, 64, 150))
+	BlockKit.cube(stage, CF.new(x + 2.2, y + 3.45, -2), V3.new(4.8, 0.5, 4.8), rgb(238, 242, 250), rgb(176, 186, 206))
+	Geo.block(stage, CF.new(x + 0.02, y + 1.3, -2), V3.new(0.1, 1.2, 2.2), rgb(20, 22, 30))
+	BlockKit.text(
+		stage,
+		CF.new(x + 2.2, y + 1.6, 0.25),
+		V3.new(3.4, 0.9, 0.08),
+		"SELL",
+		rgb(255, 250, 236),
+		rgb(20, 24, 36),
+		rgb(90, 255, 110)
+	)
+	Preview.Spots.Collector = x + 2.2
+	print(string.format("Hopper line: %d hoppers, laser at x %.1f, collector at x %.1f", #HopperConfig.List, laserX, x + 2.2))
 	return stage
 end
 
@@ -107,30 +129,38 @@ function Preview.ui(Loader: any): { [string]: any }
 		refs.Toasts:ClearAllChildren()
 		return refs
 	end
-	local function shop(uiScale: number, w: number, h: number, scroll: number?): any
+	local function shop(uiScale: number, w: number, h: number, tab: string, pick: string): any
 		local refs = HopperShopView.build()
 		refs.Gui.Scale.Scale = uiScale
 		refs.Gui.Enabled = true
 		HopperShopView.layout(refs, w, h)
+		HopperShopView.setTab(refs, tab)
+		local states = {}
 		for _, hopper in HopperConfig.List do
-			HopperShopView.setCard(refs, hopper.Id, {
+			states[hopper.Id] = {
 				Owned = if hopper.Id == "EpicHopper" then 2 else 0,
 				CanAfford = hopper.Price <= coins,
-				Locked = hopper.Order >= 6,
-			})
+				Locked = if hopper.Order == 6 then "REBIRTH 1" elseif hopper.Order == 7 then "REBIRTH 3" else nil,
+			}
 		end
-		HopperShopView.setInfo(refs, "Your hoppers: 2 / 4 spots  ·  they pour ores into their chest, you earn every second")
-		HopperShopView.setStatus(refs, "Bought Epic Hopper! Place it in your base with Build mode.")
-		if scroll then
-			refs.Scroller.CanvasPosition = roblox.Vector2.new(scroll, 0)
+		local laser = HopperConfig.Laser
+		states[laser.Id] = { Owned = 1, CanAfford = laser.Price <= coins }
+		for id, state in states do
+			HopperShopView.setTile(refs, id, state)
 		end
+		HopperShopView.showDetail(refs, pick, states[pick])
+		HopperShopView.setCounts(refs, "Hoppers 2/4  ·  Lasers 1/4")
+		HopperShopView.setStatus(refs, "Bought Epic Hopper! Place it on a belt in Build mode.")
 		return refs
 	end
 	local exports: { [string]: any } = {}
 	local pcW, pcH = 1600 / scale, (900 - 36) / scale
-	exports.ui_hoppers_pc = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH).Gui })
-	exports.ui_hoppers_pc_more = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, 900).Gui })
-	exports.ui_hoppers_phone = UiExport.export({ hud(phoneScale).Gui, shop(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale).Gui })
+	exports.ui_hoppers_pc = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, "Hoppers", "LegendaryHopper").Gui })
+	exports.ui_hoppers_pc_more = UiExport.export({ hud(scale).Gui, shop(scale, pcW, pcH, "Lasers", "MoneyLaser2X").Gui })
+	exports.ui_hoppers_phone = UiExport.export({
+		hud(phoneScale).Gui,
+		shop(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, "Hoppers", "TerraCoreHopper").Gui,
+	})
 	return exports
 end
 
@@ -142,137 +172,276 @@ function Preview.buildShop(Loader: any, workspace: any)
 	local C3 = roblox.Color3
 	local Enum = roblox.Enum
 	local NEON = Enum.Material.Neon
+	local GLASS = Enum.Material.Glass
 	local Geo = Loader.requirePath("ReplicatedStorage.Shared.Builders.Geo")
+	local BlockKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.BlockKit")
 	local HopperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HopperBuilder")
-	local ItemBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.ItemBuilder")
+	local LaserBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder")
+	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local rgb = C3.fromRGB
+	local rng = Rng.new(2026)
 
 	local shop = Instance.new("Model")
 	shop.Name = "HopperWorks"
 	shop.Parent = workspace
-	local WALL = rgb(176, 104, 72) -- warm brick
-	local WALL_DARK = rgb(120, 66, 48)
-	local IRON = rgb(52, 50, 58)
-	local ROOF = rgb(70, 120, 132) -- copper patina
-	local GOLD = rgb(240, 180, 64)
-	local STONE = rgb(196, 186, 168)
-	local function block(cf: any, size: any, color: any, material: any?): any
+	-- the block palette (Sandbox Tycoon's brick + plank + stone house, in forge colours)
+	local BRICK, BRICK_DARK, MORTAR = rgb(178, 82, 58), rgb(138, 58, 42), rgb(214, 190, 168)
+	local PLANK, PLANK_RIM = rgb(196, 140, 84), rgb(140, 92, 50)
+	local LOG, LOG_RIM = rgb(112, 76, 46), rgb(70, 46, 28)
+	local STONE, STONE_RIM = rgb(150, 150, 158), rgb(98, 98, 108)
+	local SLATE, SLATE_RIM = rgb(70, 78, 96), rgb(42, 46, 60)
+	local GLOW = rgb(255, 176, 70)
+	local function cube(cf: any, size: any, face: any, rim: any, mode: string?): any
+		return BlockKit.cube(shop, cf, size, face, rim, mode)
+	end
+	local function flat(cf: any, size: any, color: any, material: any?): any
 		return Geo.block(shop, cf, size, color, material)
 	end
-	local function text(cf: any, size: any, words: string, ink: any, board: any, edge: any)
-		Geo.block(shop, cf * CF.new(0, 0, -0.06), size + V3.new(0.5, 0.5, -0.04), edge, NEON)
-		local plate = Geo.block(shop, cf, size, board)
-		local gui = Instance.new("SurfaceGui")
-		gui.Face = Enum.NormalId.Back
-		gui.Parent = plate
-		local t = Instance.new("TextLabel")
-		t.Text = words
-		t.TextColor3 = ink
-		t.FontFace = roblox.Font.fromEnum(Enum.Font.LuckiestGuy)
-		t.Parent = gui
+
+	-- the ground: grass, a tile plaza, a plank path to the door
+	flat(CF.new(0, -0.5, 0), V3.new(240, 1, 180), rgb(104, 182, 76), Enum.Material.Grass)
+	flat(CF.new(0, 0.05, 10), V3.new(76, 0.1, 30), rgb(226, 232, 242))
+	for i = -19, 19 do
+		flat(CF.new(i * 2, 0.11, 10), V3.new(0.1, 0.02, 30), rgb(190, 204, 226))
+	end
+	for j = -7, 7 do
+		flat(CF.new(0, 0.11, 10 + j * 2), V3.new(76, 0.02, 0.1), rgb(190, 204, 226))
 	end
 
-	-- the plaza: grass around, a paved square in front
-	block(CF.new(0, -0.5, 0), V3.new(220, 1, 160), rgb(110, 176, 84), Enum.Material.Grass)
-	block(CF.new(0, 0.05, 6), V3.new(60, 0.1, 44), STONE)
-	for i = -5, 5 do
-		block(CF.new(i * 5.4, 0.11, 6), V3.new(0.2, 0.04, 44), rgb(170, 160, 144))
-	end
-	for j = -4, 4 do
-		block(CF.new(0, 0.11, 6 + j * 5), V3.new(60, 0.04, 0.2), rgb(170, 160, 144))
-	end
+	-- the house: W wide (x), D deep (z), walls H high; the front faces +Z at z0
+	local W, D, H = 34, 20, 11
+	local z0 = -5
+	local zc = z0 - D / 2
+	local foundation = 1.2
+	cube(CF.new(0, foundation / 2, zc), V3.new(W + 1, foundation, D + 1), STONE, STONE_RIM)
 
-	-- the hall: back wall, side walls, the front with a wide opening
-	local W, D, H = 40, 18, 15
-	local z0 = -8 -- the front wall's z
-	local back = z0 - D
-	block(CF.new(0, H / 2, back), V3.new(W, H, 1.2), WALL)
-	for _, x in { -W / 2, W / 2 } do
-		block(CF.new(x, H / 2, z0 - D / 2), V3.new(1.2, H, D), WALL)
+	-- a brick wall from x1 to x2 at z (front/back) or along z (sides) with mortar lines and darker bricks
+	local function brickWall(cf: any, length: number, height: number, thickness: number)
+		flat(cf, V3.new(length, height, thickness), BRICK)
+		for row = 1, math.floor(height) - 1 do
+			flat(cf * CF.new(0, -height / 2 + row, thickness / 2 + 0.01), V3.new(length, 0.1, 0.04), MORTAR)
+		end
+		for _ = 1, math.floor(length * height / 14) do
+			local bx = rng:range(-length / 2 + 1, length / 2 - 1)
+			local by = math.floor(rng:range(0, height - 1)) + 0.5 - height / 2
+			flat(cf * CF.new(bx, by, thickness / 2 + 0.02), V3.new(1.9, 0.86, 0.04), BRICK_DARK)
+		end
 	end
-	local opening, openH = 22, 9
-	local side = (W - opening) / 2
+	local wallY = foundation + H / 2
+	-- the front wall in pieces around the door and the two shop windows
+	local door, winW, winH, winY = 5, 7, 5, foundation + 2.2
+	local pieces = {
+		{ -W / 2 + 1.5, -door / 2 - winW - 3 }, -- left of the left window
+		{ -door / 2 - 1.5, -door / 2 }, -- between left window and door (narrow)
+		{ door / 2, door / 2 + 1.5 },
+		{ door / 2 + winW + 3, W / 2 - 1.5 },
+	}
+	local lwx = -door / 2 - 1.5 - winW / 2 -- left window centre
+	local rwx = -lwx
+	pieces[1][2] = lwx - winW / 2
+	pieces[2] = { lwx + winW / 2, -door / 2 }
+	pieces[3] = { door / 2, rwx - winW / 2 }
+	pieces[4] = { rwx + winW / 2, W / 2 - 1.5 }
+	for _, piece in pieces do
+		local x1, x2 = piece[1], piece[2]
+		brickWall(CF.new((x1 + x2) / 2, wallY, z0), x2 - x1, H, 1)
+	end
+	-- above / below the windows and above the door
+	for _, wx in { lwx, rwx } do
+		local below = winY - winH / 2 - foundation
+		brickWall(CF.new(wx, foundation + below / 2, z0), winW, below, 1)
+		local above = foundation + H - (winY + winH / 2)
+		brickWall(CF.new(wx, foundation + H - above / 2, z0), winW, above, 1)
+	end
+	local doorH = 7
+	brickWall(CF.new(0, foundation + doorH + (H - doorH) / 2, z0), door, H - doorH, 1)
+	-- back and side walls
+	brickWall(CF.new(0, wallY, z0 - D), W, H, 1)
 	for _, sx in { -1, 1 } do
-		block(CF.new(sx * (opening / 2 + side / 2), H / 2, z0), V3.new(side, H, 1.2), WALL)
+		brickWall(CF.new(sx * (W / 2 - 0.5), wallY, zc) * CF.Angles(0, sx * math.pi / 2, 0), D, H, 1)
 	end
-	block(CF.new(0, (openH + H) / 2, z0), V3.new(opening, H - openH, 1.2), WALL)
-	-- dark brick bands, iron pillars at the corners and around the opening
-	block(CF.new(0, 0.6, z0 + 0.05), V3.new(W + 0.2, 1.2, 1.3), WALL_DARK)
-	for _, x in { -W / 2, -opening / 2 - 0.4, opening / 2 + 0.4, W / 2 } do
-		block(CF.new(x, H / 2, z0 + 0.4), V3.new(1.3, H + 0.4, 1.3), IRON)
-		Geo.ball(shop, V3.new(x, H + 0.6, z0 + 0.4), 1.2, GOLD)
+	-- log corner posts and a plank band under the roof
+	for _, c in { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } } do
+		cube(CF.new(c[1] * (W / 2 - 0.2), foundation + H / 2, zc + c[2] * (D / 2 - 0.2)), V3.new(1.6, H, 1.6), LOG, LOG_RIM, "side")
 	end
-	block(CF.new(0, openH + 0.4, z0 + 0.4), V3.new(opening + 1.6, 0.8, 1.3), IRON)
-	-- hazard stripes along the opening's top
-	for i = 0, 10 do
-		local x = -opening / 2 + 1 + i * 2
-		block(
-			CF.new(x, openH - 0.15, z0 + 0.62) * CF.Angles(0, 0, 0.6),
-			V3.new(0.6, 0.9, 0.08),
-			if i % 2 == 0 then rgb(250, 196, 40) else rgb(30, 30, 34)
-		)
+	cube(CF.new(0, foundation + H - 0.5, z0 + 0.35), V3.new(W + 1.2, 1.0, 0.6), PLANK, PLANK_RIM)
+	-- the floor inside (planks) and a warm light along the back wall
+	flat(CF.new(0, foundation + 0.05, zc), V3.new(W - 2, 0.1, D - 2), PLANK)
+	for i = -7, 7 do
+		flat(CF.new(i * 2.2, foundation + 0.11, zc), V3.new(0.08, 0.02, D - 2), PLANK_RIM)
 	end
-	-- the floor inside and the back wall's warm light
-	block(CF.new(0, 0.12, z0 - D / 2), V3.new(W - 1, 0.1, D - 1), rgb(64, 60, 66))
-	block(CF.new(0, 7, back + 0.65), V3.new(W - 6, 0.3, 0.1), rgb(255, 170, 70), NEON)
+	flat(CF.new(0, foundation + H - 1.4, z0 - D + 0.56), V3.new(W - 6, 0.25, 0.1), GLOW, NEON)
 
-	-- the saw-tooth roof: four teeth with glowing skylights
-	local teeth = 4
-	local tooth = D / teeth
-	for i = 0, teeth - 1 do
-		local zc = z0 - tooth * (i + 0.5)
-		Geo.wedge(shop, CF.new(0, H + 1.6, zc) * CF.Angles(0, math.pi, 0), V3.new(W + 1, 3.2, tooth), ROOF)
-		block(CF.new(0, H + 1.6, zc - tooth / 2 + 0.1), V3.new(W + 0.8, 3.0, 0.2), rgb(255, 214, 140), NEON)
+	-- the shop windows: plank frames, a cross, glass; two small hoppers on show inside
+	for i, wx in { lwx, rwx } do
+		local f = CF.new(wx, winY, z0 + 0.35)
+		for _, dy in { -1, 1 } do
+			cube(f * CF.new(0, dy * (winH / 2 + 0.25), 0), V3.new(winW + 1, 0.5, 0.7), PLANK, PLANK_RIM, "side")
+		end
+		for _, dx in { -1, 1 } do
+			cube(f * CF.new(dx * (winW / 2 + 0.25), 0, 0), V3.new(0.5, winH, 0.7), PLANK, PLANK_RIM, "side")
+		end
+		flat(f, V3.new(0.3, winH, 0.3), PLANK_RIM)
+		flat(f, V3.new(winW, 0.3, 0.3), PLANK_RIM)
+		Geo.block(shop, f * CF.new(0, 0, -0.1), V3.new(winW, winH, 0.1), rgb(200, 236, 255), GLASS, { Transparency = 0.6 })
+		-- the flower box under the window
+		cube(f * CF.new(0, -winH / 2 - 1.0, 0.5), V3.new(winW, 0.8, 1.0), LOG, LOG_RIM, "side")
+		for k = 1, 5 do
+			local fx = -winW / 2 + k * winW / 6
+			flat(f * CF.new(fx, -winH / 2 - 0.35, 0.5), V3.new(0.9, 0.5, 0.7), rgb(70, 150, 60))
+			flat(
+				f * CF.new(fx, -winH / 2 + 0.05, 0.5),
+				V3.new(0.4, 0.4, 0.4),
+				if (k + i) % 2 == 0 then rgb(255, 90, 120) else rgb(255, 214, 60)
+			)
+		end
+		local id = if i == 1 then "HeartHopper" else "StarHopper"
+		local show = CF.new(wx, foundation + 0.2, z0 - 4) * CF.Angles(0, if i == 1 then 0.3 else -0.3, 0)
+		local model = HopperBuilder.build(id, show)
+		BlockKit.scale(model, show, 0.55)
+		model.Parent = shop
 	end
-	block(CF.new(0, H + 0.1, z0 - D / 2), V3.new(W + 1.4, 0.3, D + 1.2), IRON)
 
-	-- the prize on the roof: the Terra Core Hopper on a turntable, seen from the whole lobby
-	Geo.cylinder(shop, V3.new(0, H + 0.7, z0 - D / 2), 0.9, 15, rgb(40, 40, 48))
-	Geo.cylinder(shop, V3.new(0, H + 1.18, z0 - D / 2), 0.1, 15.4, rgb(255, 196, 80), NEON)
-	HopperBuilder.build("TerraCoreHopper", CF.new(0, H + 1.15, z0 - D / 2)).Parent = shop
+	-- the door: two plank leaves with handles, a little lantern each side
+	for _, dx in { -1, 1 } do
+		cube(CF.new(dx * door / 4, foundation + doorH / 2, z0 + 0.1), V3.new(door / 2 - 0.1, doorH, 0.4), PLANK, PLANK_RIM)
+		flat(CF.new(dx * 0.5, foundation + doorH / 2, z0 + 0.36), V3.new(0.3, 0.6, 0.2), rgb(250, 200, 60))
+		local lx = dx * (door / 2 + 0.9)
+		cube(CF.new(lx, foundation + doorH - 0.4, z0 + 0.9), V3.new(0.9, 1.2, 0.9), rgb(40, 40, 48), rgb(20, 20, 26), "flat")
+		flat(CF.new(lx, foundation + doorH - 0.4, z0 + 0.9), V3.new(0.62, 0.8, 0.95), GLOW, NEON)
+	end
+	cube(CF.new(0, foundation + doorH + 0.3, z0 + 0.4), V3.new(door + 1.2, 0.6, 0.8), PLANK, PLANK_RIM)
+	-- plank steps up to the door
+	for k = 1, 2 do
+		cube(CF.new(0, foundation - k * 0.4 + 0.2, z0 + 0.5 + k * 1.0), V3.new(door + 2, 0.4 * (3 - k), 1.0), PLANK, PLANK_RIM)
+	end
 
-	-- the sign over the opening, and a glowing hopper mark beside the words
-	text(CF.new(2, H - 1.8, z0 + 0.9), V3.new(24, 3.2, 0.3), "HOPPER WORKS", rgb(255, 236, 170), rgb(40, 30, 30), rgb(255, 160, 40))
-	local mx, my = -13.5, H - 1.8
-	Geo.triangle(
+	-- the stepped roof: slate blocks stepping in toward the ridge (it runs front to back),
+	-- the front gable filled with planks and a pixel hopper
+	local layers = 8
+	local step = (W + 2) / (2 * layers)
+	for k = 0, layers - 1 do
+		local w = W + 2 - 2 * k * step
+		cube(CF.new(0, foundation + H + 0.5 + k, zc), V3.new(w, 1.0, D + 2.4), SLATE, SLATE_RIM, "all")
+		local gw = w - 2 * step - 0.4
+		if gw > 0.6 then
+			cube(CF.new(0, foundation + H + 0.5 + k, z0 + 1.35), V3.new(gw, 1.0, 0.4), PLANK, PLANK_RIM, "side")
+		end
+	end
+	BlockKit.pixelArt(shop, CF.new(0, foundation + H + 3.2, z0 + 1.7), {
+		"#######",
+		".#ooo#.",
+		"..#o#..",
+		"...#...",
+		"..#.#..",
+	}, 0.6, { ["#"] = rgb(250, 196, 64), o = rgb(255, 120, 60) }, 0.3)
+	-- a covered porch along the front: log posts, a slate roof, a plank deck
+	local porch = 3.4
+	cube(CF.new(0, foundation - 0.1, z0 + 0.5 + porch / 2), V3.new(W - 2, 0.4, porch), PLANK, PLANK_RIM)
+	for _, px in { -W / 2 + 1.5, -door / 2 - 0.8, door / 2 + 0.8, W / 2 - 1.5 } do
+		cube(CF.new(px, foundation + 4.1, z0 + porch), V3.new(0.7, 8.2, 0.7), LOG, LOG_RIM, "side")
+	end
+	cube(CF.new(0, foundation + 8.45, z0 + porch / 2 + 0.4), V3.new(W + 0.4, 0.5, porch + 1.2), SLATE, SLATE_RIM)
+	cube(CF.new(0, foundation + 8.1, z0 + porch + 0.6), V3.new(W + 0.4, 0.3, 0.3), PLANK, PLANK_RIM, "flat")
+
+	-- the HOPPER WORKS board on the porch roof, the small board under it
+	BlockKit.text(
 		shop,
-		V3.new(mx - 1.6, my + 1.3, z0 + 1.1),
-		V3.new(mx + 1.6, my + 1.3, z0 + 1.1),
-		V3.new(mx, my - 1.1, z0 + 1.1),
-		0.3,
-		GOLD,
-		NEON,
-		V3.new(0, 0, 1)
+		CF.new(0, foundation + 10.1, z0 + 3.9),
+		V3.new(16, 2.4, 0.3),
+		"HOPPER WORKS",
+		rgb(255, 238, 190),
+		rgb(86, 54, 30),
+		GLOW,
+		Enum.Font.LuckiestGuy
 	)
-	text(
-		CF.new(0, openH + 1.5, z0 + 0.9),
-		V3.new(15, 1.2, 0.2),
+	BlockKit.text(
+		shop,
+		CF.new(0, foundation + 7.6, z0 + 3.95),
+		V3.new(9, 0.7, 0.12),
 		"THE BIGGEST MACHINES IN TERRA",
 		rgb(255, 250, 236),
-		rgb(30, 30, 36),
-		rgb(120, 200, 255)
+		rgb(40, 30, 26),
+		nil
 	)
 
-	-- inside: the counter and a Legendary Hopper on a turntable behind it
-	block(CF.new(0, 1.6, z0 - 3.5), V3.new(14, 3, 2), rgb(96, 64, 46))
-	block(CF.new(0, 3.2, z0 - 3.5), V3.new(14.6, 0.3, 2.6), rgb(150, 104, 66))
-	block(CF.new(0, 1.3, z0 - 2.45), V3.new(13, 0.2, 0.1), rgb(255, 196, 80), NEON)
-	Geo.cylinder(shop, V3.new(0, 0.5, z0 - 11), 0.8, 10, rgb(40, 40, 48))
-	Geo.cylinder(shop, V3.new(0, 0.92, z0 - 11), 0.1, 10.4, rgb(255, 196, 80), NEON)
-	HopperBuilder.build("LegendaryHopper", CF.new(0, 0.9, z0 - 11)).Parent = shop
+	-- the forge chimney on the right: stone blocks, a glowing top and smoke cubes
+	local chx = W / 2 - 5
+	for k = 0, 7 do
+		cube(
+			CF.new(chx, foundation + H + 0.5 + k * 1.0, zc - 3),
+			V3.new(2.6, 1.0, 2.6),
+			if k % 2 == 0 then STONE else rgb(132, 132, 140),
+			STONE_RIM
+		)
+	end
+	flat(CF.new(chx, foundation + H + 8.05, zc - 3), V3.new(1.8, 0.1, 1.8), rgb(255, 110, 30), NEON)
+	for k, p in { V3.new(0.2, 9.2, 0), V3.new(-0.5, 10.4, 0.3), V3.new(0.6, 11.8, -0.2) } do
+		local size = 0.9 + k * 0.35
+		Geo.block(
+			shop,
+			CF.new(chx + p.X, foundation + H + p.Y, zc - 3 + p.Z) * CF.Angles(0, k * 0.5, 0),
+			V3.new(size, size, size),
+			rgb(220, 220, 228),
+			nil,
+			{ Transparency = 0.25 + k * 0.12 }
+		)
+	end
 
-	-- out front: two hoppers on pedestals and four lamps
-	for _, spot in { { "EpicHopper", -21 }, { "HeartHopper", 21 } } do
-		local x = spot[2] :: number
-		Geo.cylinder(shop, V3.new(x, 0.6, 2), 1.2, 12, rgb(80, 76, 86))
-		Geo.cylinder(shop, V3.new(x, 1.22, 2), 0.1, 12.3, if spot[1] == "EpicHopper" then rgb(180, 92, 255) else rgb(255, 120, 180), NEON)
-		HopperBuilder.build(spot[1] :: string, CF.new(x, 1.2, 2) * CF.Angles(0, if x < 0 then 0.35 else -0.35, 0)).Parent = shop
+	-- the like board by the path (the tycoon's "liked plots"): a pixel heart and the count
+	local lb = CF.new(11, 0, 9)
+	for _, dx in { -2.4, 2.4 } do
+		cube(lb * CF.new(dx, 1.6, 0), V3.new(0.6, 3.2, 0.6), LOG, LOG_RIM, "flat")
 	end
-	for _, x in { -13, -5, 5, 13 } do
-		block(CF.new(x, 2.5, 13), V3.new(0.4, 5, 0.4), IRON)
-		Geo.ball(shop, V3.new(x, 5.3, 13), 1.0, rgb(255, 214, 120), NEON)
+	BlockKit.text(
+		shop,
+		lb * CF.new(0, 3.6, 0.1),
+		V3.new(6.4, 2.0, 0.3),
+		"♥ 12,480 LIKES",
+		rgb(255, 130, 170),
+		rgb(40, 24, 30),
+		rgb(255, 120, 160)
+	)
+	BlockKit.pixelArt(shop, lb * CF.new(0, 5.6, 0.1), {
+		".##.##.",
+		"#######",
+		".#####.",
+		"..###..",
+		"...#...",
+	}, 0.4, { ["#"] = rgb(255, 80, 130) }, 0.4)
+
+	-- a showcase line in the yard: Epic Hopper -> 2X laser -> SELL
+	local lineZ = 6
+	local hx = -40
+	HopperBuilder.build("EpicHopper", CF.new(hx, 0.1, lineZ)).Parent = shop
+	local lx = hx + HopperBuilder.Plate / 2 + LaserBuilder.Length / 2
+	LaserBuilder.build(CF.new(lx, 0.1, lineZ)).Parent = shop
+	local sx = lx + LaserBuilder.Length / 2 + 2.6
+	BlockKit.cube(shop, CF.new(sx, 1.7, lineZ), V3.new(5.2, 3.2, 4.4), rgb(54, 120, 220), rgb(28, 64, 150))
+	BlockKit.cube(shop, CF.new(sx, 3.55, lineZ), V3.new(5.6, 0.5, 4.8), rgb(238, 242, 250), rgb(176, 186, 206))
+	BlockKit.text(
+		shop,
+		CF.new(sx, 1.7, lineZ + 2.26),
+		V3.new(3.6, 0.9, 0.08),
+		"SELL",
+		rgb(255, 250, 236),
+		rgb(20, 24, 36),
+		rgb(90, 255, 110)
+	)
+
+	-- lamp posts along the plaza (block lanterns)
+	for _, x in { -32, -14, 14, 32 } do
+		cube(CF.new(x, 2.2, 22), V3.new(0.6, 4.4, 0.6), rgb(52, 50, 58), rgb(30, 30, 36), "flat")
+		cube(CF.new(x, 4.9, 22), V3.new(1.3, 1.4, 1.3), rgb(52, 50, 58), rgb(30, 30, 36), "flat")
+		flat(CF.new(x, 4.9, 22), V3.new(0.95, 1.0, 1.35), GLOW, NEON)
 	end
-	print("Hopper Works shop built")
+	-- block trees on both sides
+	for _, t in { { -44, -8 }, { 44, -8 }, { -40, -24 }, { 42, -22 } } do
+		cube(CF.new(t[1], 2.5, t[2]), V3.new(1.4, 5, 1.4), LOG, LOG_RIM, "side")
+		cube(CF.new(t[1], 6.2, t[2]), V3.new(5, 3.4, 5), rgb(76, 160, 62), rgb(50, 116, 44))
+		cube(CF.new(t[1], 8.4, t[2]), V3.new(3, 1.6, 3), rgb(76, 160, 62), rgb(50, 116, 44))
+	end
+	print("Hopper Works house built")
 	return shop
 end
 

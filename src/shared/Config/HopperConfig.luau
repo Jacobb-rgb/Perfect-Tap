@@ -114,6 +114,18 @@ for _, hopper in HopperConfig.List do
 	HopperConfig.ById[hopper.Id] = hopper
 end
 
+-- The 2X MONEY LASER (owner 2026-10-21): a block tunnel over a hopper's belt;
+-- the hopper's ores come out worth double. One per hopper line (proposal).
+export type Laser = { Id: string, Name: string, Price: number, Resale: number, Mult: number, Tagline: string }
+HopperConfig.Laser = {
+	Id = "MoneyLaser2X",
+	Name = "2X Money Laser",
+	Price = 10e9,
+	Resale = 7e9,
+	Mult = 2,
+	Tagline = "Ores that ride through are worth double",
+} :: Laser
+
 -- Seconds the hopper needs to earn back its price.
 function HopperConfig.payback(hopper: Hopper): number
 	return hopper.Price / hopper.Income

@@ -1,219 +1,235 @@
 --[[
-	The HOPPERS shop window (concept, owner 2026-10-20): the Store card look
-	(UI/Card.luau). One row of tall cards that scrolls sideways, one per
-	hopper (Config/HopperConfig), cheapest first. A card shows the hopper,
-	its income, the ores it pours, how soon it pays itself back, the BUY
-	button with the coin price and what it sells back for.
+	The HOPPER WORKS shop window (concept, owner 2026-10-21: like Sandbox
+	Tycoon's build menu, in Terra Forge's fonts): a white panel with blue tab
+	buttons on top (HOPPERS / LASERS) and the red X, a pink title strip, a grid
+	of square tiles (name on top, the item's picture, the green price at the
+	bottom; a locked tile is dark with its yellow lock text), the detail pane on
+	the right for the picked tile with the big BUY button, and the "max counts"
+	box at the bottom.
 
-	  build()                    the window (hidden); Refs.Cards[id]
+	  build()                    the window (hidden); Refs.Tiles[id]
 	  layout(refs, w, h)         fits the window into w x h design units
-	  setCard(refs, id, state)   { Owned, CanAfford, Locked } -> button and chips
-	  setStatus(refs, text?)     the line under the cards
+	  setTab(refs, tab)          "Hoppers" | "Lasers"
+	  setTile(refs, id, state)   { Owned, CanAfford, Locked: string? }
+	  showDetail(refs, id, state) the right pane for one item
+	  setCounts(refs, text)      the max counts box
+	  setStatus(refs, text?)     the line under the grid
 
 	Pure builder + layout, no services: the Lune previews build it too.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local CardTheme = require(Shared.Config.CardTheme)
 local HopperConfig = require(Shared.Config.HopperConfig)
+local IconAssets = require(Shared.Config.IconAssets)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local Card = require(script.Parent.Card)
 local Bubble = require(script.Parent.Bubble)
 
 local HopperShopView = {}
 
-export type CardRefs = {
-	Hopper: HopperConfig.Hopper,
-	Button: TextButton,
-	Buy: TextButton,
-	BuyAmount: TextLabel,
+local rgb = Color3.fromRGB
+
+-- the look (Sandbox Tycoon's light build menu)
+HopperShopView.Colors = {
+	Panel = rgb(246, 248, 252),
+	PanelEdge = rgb(190, 202, 222),
+	Tab = rgb(150, 196, 255),
+	TabOn = rgb(56, 140, 255),
+	TabEdge = rgb(36, 92, 190),
+	Strip = rgb(240, 70, 110), -- the pink title strip
+	StripEdge = rgb(170, 30, 66),
+	Tile = rgb(226, 232, 242),
+	TileEdge = rgb(172, 184, 206),
+	TilePicked = rgb(56, 140, 255),
+	Locked = rgb(54, 58, 70),
+	LockText = rgb(255, 214, 50),
+	Ink = rgb(40, 44, 60),
+	InkSoft = rgb(104, 112, 132),
+	Price = rgb(64, 200, 60),
+	PriceEdge = rgb(20, 80, 20),
+	Buy = rgb(70, 200, 60),
+	BuyEdge = rgb(30, 110, 26),
+	Grey = rgb(150, 156, 170),
+	GreyEdge = rgb(96, 102, 118),
+	Close = rgb(236, 64, 76),
+	CloseEdge = rgb(140, 24, 36),
+	Income = rgb(64, 200, 60),
+}
+HopperShopView.Font = Font.fromEnum(Enum.Font.FredokaOne)
+HopperShopView.Size = Vector2.new(1080, 620)
+HopperShopView.Tile = Vector2.new(150, 172)
+HopperShopView.Gap = 12
+HopperShopView.Columns = 4
+
+export type TileRefs = {
+	Id: string,
+	Frame: TextButton,
+	Price: TextLabel,
 	Owned: TextLabel,
-	Lock: TextLabel,
+	Lock: Frame,
+	LockText: TextLabel,
 }
 
 export type Refs = {
 	Gui: ScreenGui,
-	Window: Card.Window,
-	Scroller: ScrollingFrame,
-	Cards: { [string]: CardRefs },
+	Root: Frame,
+	Tabs: { [string]: TextButton },
+	Title: TextLabel,
+	Grids: { [string]: Frame },
+	Tiles: { [string]: TileRefs },
 	Order: { string },
-	Info: TextLabel,
+	Detail: {
+		Picture: ImageLabel,
+		Name: TextLabel,
+		Income: TextLabel,
+		Ores: Frame,
+		Lines: TextLabel,
+		Buy: TextButton,
+		BuyText: TextLabel,
+	},
+	Counts: TextLabel,
 	Status: TextLabel,
+	Close: TextButton,
 }
 
-export type CardState = { Owned: number, CanAfford: boolean, Locked: boolean? }
+export type TileState = { Owned: number, CanAfford: boolean, Locked: string? }
 
-HopperShopView.Title = "Hoppers"
-HopperShopView.Header = 64
-HopperShopView.CardSize = Vector2.new(286, 452)
-HopperShopView.Gap = 14
-HopperShopView.MaxWidth = 1220
+local C = HopperShopView.Colors
 
-local rgb = Color3.fromRGB
-HopperShopView.BuyColor = rgb(70, 200, 60)
-HopperShopView.BuyDark = rgb(24, 96, 20)
-HopperShopView.GreyColor = rgb(96, 102, 118)
-HopperShopView.GreyDark = rgb(46, 50, 62)
-HopperShopView.Income = rgb(126, 240, 74)
-
--- the Heart Hopper's pink (CardTheme has no pink glow)
-local PINK = Card.glowFrom(rgb(255, 96, 170))
-
-local function glowOf(hopper: HopperConfig.Hopper): string | CardTheme.Glow
-	return if hopper.Glow == "Pink" then PINK else hopper.Glow
-end
-
--- "~55 min", "~1 h 15 min"
-function HopperShopView.payback(seconds: number): string
-	local minutes = math.max(1, math.floor(seconds / 60 / 5 + 0.5) * 5)
-	if minutes < 60 then
-		return `~{minutes} min`
-	end
-	local h, m = minutes // 60, minutes % 60
-	return if m == 0 then `~{h} h` else `~{h} h {m} min`
-end
-
-local function buildCard(parent: Instance, hopper: HopperConfig.Hopper, x: number): CardRefs
-	local size = HopperShopView.CardSize
-	local glow = glowOf(hopper)
-	local card = Card.card(parent, glow, {
-		Name = hopper.Id,
-		Position = UDim2.fromOffset(x, 12),
-		Size = UDim2.fromOffset(size.X, size.Y),
-		LayoutOrder = hopper.Order,
-	})
-	local edge = if type(glow) == "table" then glow.Edge else CardTheme.Glows[glow].Edge
-	Card.sparkles(card, edge:Lerp(Color3.new(1, 1, 1), 0.4), 3 + hopper.Order, 500 + hopper.Order * 29)
-	-- the name
-	Card.title(card, string.upper(hopper.Name), 26, glow, {
-		Position = UDim2.fromOffset(0, 10),
-		Size = UDim2.new(1, 0, 0, 32),
-	})
-	-- the hopper itself (a 3D icon)
-	local picture = 186
-	local pos = UDim2.new(0.5, 0, 0, 52 + picture / 2)
-	Card.picture(card, "hopper_" .. hopper.Id, picture, {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = pos,
-		ZIndex = 3,
-	})
-	Card.halo(card, pos, picture)
-	-- what it earns
-	Card.text(card, Format.perSecond(hopper.Income), 30, {
-		Name = "Income",
-		Position = UDim2.fromOffset(0, 246),
-		Size = UDim2.new(1, 0, 0, 34),
-		FontFace = CardTheme.NumberFont,
-		TextColor3 = HopperShopView.Income,
-	})
-	-- the ores it pours: their little pictures and a word
-	local row = UIKit.new("Frame", {
-		Name = "Ores",
+local function text(parent: Instance, words: string, size: number, color: Color3, props: { [string]: any }?): TextLabel
+	local label = UIKit.new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(10, 284),
-		Size = UDim2.new(1, -20, 0, 34),
+		FontFace = HopperShopView.Font,
+		Text = words,
+		TextSize = size,
+		TextColor3 = color,
+		TextWrapped = true,
 		ZIndex = 4,
-	}, card)
-	UIKit.list(row, Enum.FillDirection.Horizontal, 2, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
-	for i, oreId in hopper.Ores do
-		Bubble.icon(row, "item_Clean_" .. oreId, 34, { LayoutOrder = i, ZIndex = 5 })
+	}, parent)
+	if props then
+		for k, v in props do
+			(label :: any)[k] = v
+		end
 	end
-	Card.text(card, hopper.Tagline, 16, {
-		Name = "Pours",
-		Position = UDim2.fromOffset(8, 320),
-		Size = UDim2.new(1, -16, 0, 20),
-		TextColor3 = CardTheme.InkSoft,
-	})
-	Card.text(card, "Pays back in " .. HopperShopView.payback(HopperConfig.payback(hopper)), 16, {
-		Name = "Payback",
-		Position = UDim2.fromOffset(8, 340),
-		Size = UDim2.new(1, -16, 0, 20),
-		TextColor3 = CardTheme.InkSoft,
-	})
-	-- BUY with the coin price
-	local buy = UIKit.new("TextButton", {
-		Name = "Buy",
-		AnchorPoint = Vector2.new(0.5, 0),
+	return label
+end
+
+-- white text with a dark edge (prices, buttons)
+local function bold(parent: Instance, words: string, size: number, color: Color3, edge: Color3, props: { [string]: any }?): TextLabel
+	local label = text(parent, words, size, color, props)
+	UIKit.new("UIStroke", { Color = edge, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, label)
+	return label
+end
+
+local function button(parent: Instance, color: Color3, edge: Color3, props: { [string]: any }): TextButton
+	local b = UIKit.new("TextButton", {
 		AutoButtonColor = true,
-		BackgroundColor3 = HopperShopView.BuyColor,
+		BackgroundColor3 = color,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 0, 0, 368),
-		Size = UDim2.new(1, -28, 0, 50),
 		Text = "",
 		ZIndex = 4,
-	}, card)
-	UIKit.corner(buy, 8)
-	UIKit.new(
-		"UIStroke",
-		{ Name = "Rim", Color = HopperShopView.BuyDark, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border },
-		buy
+	}, parent)
+	for k, v in props do
+		(b :: any)[k] = v
+	end
+	UIKit.corner(b, 8)
+	UIKit.new("UIStroke", { Name = "Edge", Color = edge, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
+	return b
+end
+
+local function items(tab: string): { { Id: string, Name: string, Price: number, Icon: string } }
+	local list = {}
+	if tab == "Hoppers" then
+		for _, hopper in HopperConfig.List do
+			table.insert(list, { Id = hopper.Id, Name = hopper.Name, Price = hopper.Price, Icon = "hopper_" .. hopper.Id })
+		end
+	else
+		local laser = HopperConfig.Laser
+		table.insert(list, { Id = laser.Id, Name = laser.Name, Price = laser.Price, Icon = "hopper_" .. laser.Id })
+	end
+	return list
+end
+
+local function buildTile(grid: Instance, item: { Id: string, Name: string, Price: number, Icon: string }, index: number): TileRefs
+	local size, gap, cols = HopperShopView.Tile, HopperShopView.Gap, HopperShopView.Columns
+	local col, row = (index - 1) % cols, (index - 1) // cols
+	local tile = button(grid, C.Tile, C.TileEdge, {
+		Name = item.Id,
+		Position = UDim2.fromOffset(col * (size.X + gap), row * (size.Y + gap)),
+		Size = UDim2.fromOffset(size.X, size.Y),
+		LayoutOrder = index,
+	})
+	local nameLabel = text(
+		tile,
+		item.Name,
+		17,
+		C.Ink,
+		{ Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 22), TextWrapped = false, TextScaled = true }
 	)
-	local inside = UIKit.new("Frame", { Name = "Inside", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 5 }, buy)
-	UIKit.list(inside, Enum.FillDirection.Horizontal, 6, {
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = 17 }, nameLabel)
+	Bubble.icon(tile, item.Icon, 104, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 82), ZIndex = 4 })
+	local price = bold(tile, Format.money(item.Price), 24, C.Price, C.PriceEdge, {
+		Name = "Price",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -6),
+		Size = UDim2.new(1, -8, 0, 28),
 	})
-	Bubble.icon(inside, "coin", 30, { LayoutOrder = 1, ZIndex = 6 })
-	local priceText = Format.money(hopper.Price)
-	local amount = Card.text(inside, priceText, 28, {
-		Name = "Amount",
-		LayoutOrder = 2,
-		Size = UDim2.fromOffset(Card.digitsWidth(priceText, 28), 34),
-		FontFace = CardTheme.NumberFont,
-		TextColor3 = Color3.new(1, 1, 1),
-		TextWrapped = false,
-		ZIndex = 6,
-	})
-	-- what it sells back for
-	Card.text(card, "Sell back: " .. Format.money(hopper.Resale), 15, {
-		Name = "Resale",
-		Position = UDim2.fromOffset(8, 424),
-		Size = UDim2.new(1, -16, 0, 20),
-		TextColor3 = CardTheme.InkSoft,
-	})
-	-- OWNED x2 (top right) and the lock (a hopper you can't buy yet)
 	local owned = UIKit.new("TextLabel", {
 		Name = "Owned",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = rgb(52, 150, 50),
+		BackgroundColor3 = C.Buy,
 		BorderSizePixel = 0,
-		Position = UDim2.new(1, -8, 0, 46),
-		Size = UDim2.fromOffset(92, 26),
-		FontFace = CardTheme.NumberFont,
-		Text = "OWNED",
-		TextSize = 16,
+		Position = UDim2.new(1, -4, 0, 28),
+		Size = UDim2.fromOffset(52, 22),
+		FontFace = HopperShopView.Font,
+		Text = "x1",
+		TextSize = 15,
 		TextColor3 = Color3.new(1, 1, 1),
 		Visible = false,
 		ZIndex = 6,
-	}, card)
-	UIKit.corner(owned, 13)
-	UIKit.new("UIStroke", { Color = rgb(20, 70, 20), Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, owned)
-	Card.edge(owned, 1.5)
-	local lock = Card.text(card, "🔒", 64, {
+	}, tile)
+	UIKit.corner(owned, 11)
+	-- the dark lock cover with its yellow words (Sandbox's "Tier 2")
+	local lock = UIKit.new("Frame", {
 		Name = "Lock",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = pos,
-		Size = UDim2.fromOffset(90, 90),
+		BackgroundColor3 = C.Locked,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		ZIndex = 7,
+	}, tile)
+	UIKit.corner(lock, 8)
+	local lockName = text(
+		lock,
+		item.Name,
+		17,
+		rgb(220, 224, 236),
+		{ Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 22), TextWrapped = false, TextScaled = true, ZIndex = 8 }
+	)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = 17 }, lockName)
+	text(
+		lock,
+		"🔒",
+		40,
+		Color3.new(1, 1, 1),
+		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(60, 50), ZIndex = 8 }
+	)
+	local lockText = bold(lock, "", 22, C.LockText, rgb(40, 30, 0), {
+		Name = "LockText",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Size = UDim2.new(1, -8, 0, 26),
+		ZIndex = 8,
 	})
-	return { Hopper = hopper, Button = card, Buy = buy, BuyAmount = amount, Owned = owned, Lock = lock }
+	return { Id = item.Id, Frame = tile, Price = price, Owned = owned, Lock = lock, LockText = lockText }
 end
 
 function HopperShopView.build(): Refs
 	local gui = UIKit.screen("TerraForgeHoppers", 16)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
-	UIKit.new("Frame", {
-		Name = "Dim",
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.5,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 0,
-	}, gui)
 	local holder = UIKit.new("Frame", {
 		Name = "Fit",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -222,91 +238,241 @@ function HopperShopView.build(): Refs
 		Size = UDim2.fromScale(1, 1),
 	}, gui)
 	UIKit.new("UIScale", { Name = "FitScale", Scale = 1 }, holder)
-	local window = Card.window(holder, HopperShopView.Title, Vector2.new(1180, 640), HopperShopView.Header)
-	window.Root.SelectionGroup = true
-	local info = Card.text(window.Body, "", 17, {
-		Name = "Info",
-		Position = UDim2.fromOffset(16, 6),
-		Size = UDim2.new(1, -32, 0, 22),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = CardTheme.InkSoft,
-	})
-	local size, gap = HopperShopView.CardSize, HopperShopView.Gap
-	local scroller = UIKit.new("ScrollingFrame", {
-		Name = "Cards",
-		BackgroundTransparency = 1,
+	local size = HopperShopView.Size
+	local root = UIKit.new("Frame", {
+		Name = "Window",
+		Active = true,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = C.Panel,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 28),
-		Size = UDim2.new(1, 0, 1, -56),
-		CanvasSize = UDim2.fromOffset(gap + #HopperConfig.List * (size.X + gap), size.Y + 24),
-		ScrollingDirection = Enum.ScrollingDirection.X,
-		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = rgb(200, 204, 214),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(size.X, size.Y),
+		SelectionGroup = true,
 		ZIndex = 2,
-	}, window.Body)
-	local cards: { [string]: CardRefs } = {}
-	local order: { string } = {}
-	for i, hopper in HopperConfig.List do
-		cards[hopper.Id] = buildCard(scroller, hopper, gap + (i - 1) * (size.X + gap))
-		table.insert(order, hopper.Id)
+	}, holder)
+	UIKit.corner(root, 14)
+	UIKit.new("UIStroke", { Color = C.PanelEdge, Thickness = 4 }, root)
+
+	-- the tab buttons (icon + word) and the X
+	local tabs: { [string]: TextButton } = {}
+	for i, tab in { { "Hoppers", "hopper_EpicHopper" }, { "Lasers", "hopper_MoneyLaser2X" } } do
+		local b = button(root, C.Tab, C.TabEdge, {
+			Name = tab[1],
+			Position = UDim2.fromOffset(16 + (i - 1) * 178, 14),
+			Size = UDim2.fromOffset(166, 58),
+		})
+		Bubble.icon(b, tab[2], 48, { Position = UDim2.fromOffset(6, 5), ZIndex = 5 })
+		bold(
+			b,
+			string.upper(tab[1]),
+			22,
+			Color3.new(1, 1, 1),
+			C.TabEdge,
+			{ Position = UDim2.fromOffset(56, 0), Size = UDim2.new(1, -60, 1, 0), ZIndex = 5 }
+		)
+		tabs[tab[1]] = b
 	end
-	local status = Card.text(window.Body, "", 17, {
-		Name = "Status",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -4),
-		Size = UDim2.new(1, -24, 0, 22),
-		TextColor3 = CardTheme.InkSoft,
-		ZIndex = 3,
+	local close = button(root, C.Close, C.CloseEdge, {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, 16),
+		Size = UDim2.fromOffset(54, 54),
 	})
+	bold(close, "X", 32, Color3.new(1, 1, 1), C.CloseEdge, { Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+
+	-- the pink title strip
+	local strip = UIKit.new("Frame", {
+		Name = "Strip",
+		BackgroundColor3 = C.Strip,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(16, 84),
+		Size = UDim2.fromOffset(4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap, 40),
+		ZIndex = 3,
+	}, root)
+	UIKit.corner(strip, 8)
+	UIKit.new("UIStroke", { Color = C.StripEdge, Thickness = 3 }, strip)
+	local title = bold(strip, "Hoppers", 26, Color3.new(1, 1, 1), C.StripEdge, { Size = UDim2.fromScale(1, 1) })
+
+	-- one grid per tab
+	local grids: { [string]: Frame } = {}
+	local tiles: { [string]: TileRefs } = {}
+	local order: { string } = {}
+	for _, tab in { "Hoppers", "Lasers" } do
+		local grid = UIKit.new("Frame", {
+			Name = tab .. "Grid",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(16, 136),
+			Size = UDim2.fromOffset(4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap, 2 * HopperShopView.Tile.Y + HopperShopView.Gap),
+			Visible = tab == "Hoppers",
+			ZIndex = 3,
+		}, root)
+		grids[tab] = grid
+		for i, item in items(tab) do
+			tiles[item.Id] = buildTile(grid, item, i)
+			table.insert(order, item.Id)
+		end
+	end
+
+	-- the detail pane on the right
+	local paneX = 16 + 4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap + 16
+	local pane = UIKit.new("Frame", {
+		Name = "Detail",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(paneX, 84),
+		Size = UDim2.new(1, -paneX - 16, 1, -100),
+		ZIndex = 3,
+	}, root)
+	UIKit.corner(pane, 10)
+	UIKit.new("UIStroke", { Color = C.TileEdge, Thickness = 3 }, pane)
+	local picture =
+		Bubble.icon(pane, "hopper_EpicHopper", 170, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 34), ZIndex = 4 })
+	local name = text(pane, "", 26, C.Ink, { Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 0, 30) })
+	local income = bold(pane, "", 30, C.Income, C.PriceEdge, { Position = UDim2.fromOffset(8, 206), Size = UDim2.new(1, -16, 0, 34) })
+	local ores = UIKit.new(
+		"Frame",
+		{ Name = "Ores", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 242), Size = UDim2.new(1, -16, 0, 36), ZIndex = 4 },
+		pane
+	)
+	UIKit.list(ores, Enum.FillDirection.Horizontal, 2, { HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	local lines = text(
+		pane,
+		"",
+		17,
+		C.InkSoft,
+		{ Position = UDim2.fromOffset(10, 282), Size = UDim2.new(1, -20, 0, 66), TextYAlignment = Enum.TextYAlignment.Top }
+	)
+	local buy = button(pane, C.Buy, C.BuyEdge, {
+		Name = "Buy",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -14),
+		Size = UDim2.new(1, -28, 0, 62),
+	})
+	local buyText = bold(buy, "BUY", 30, Color3.new(1, 1, 1), C.BuyEdge, { Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+
+	-- the max counts box (bottom left) and the status line
+	local countsBox = UIKit.new("Frame", {
+		Name = "Counts",
+		BackgroundColor3 = C.Tile,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 16, 1, -58),
+		Size = UDim2.fromOffset(300, 44),
+		ZIndex = 3,
+	}, root)
+	UIKit.corner(countsBox, 8)
+	UIKit.new("UIStroke", { Color = C.TileEdge, Thickness = 2 }, countsBox)
+	local counts = text(countsBox, "", 17, C.Ink, { Size = UDim2.fromScale(1, 1) })
+	local status = text(root, "", 17, C.InkSoft, {
+		Name = "Status",
+		Position = UDim2.new(0, 330, 1, -56),
+		Size = UDim2.new(0, 4 * HopperShopView.Tile.X + 3 * HopperShopView.Gap - 314, 0, 40),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+
 	local refs: Refs = {
 		Gui = gui,
-		Window = window,
-		Scroller = scroller,
-		Cards = cards,
+		Root = root,
+		Tabs = tabs,
+		Title = title,
+		Grids = grids,
+		Tiles = tiles,
 		Order = order,
-		Info = info,
+		Detail = { Picture = picture, Name = name, Income = income, Ores = ores, Lines = lines, Buy = buy, BuyText = buyText },
+		Counts = counts,
 		Status = status,
+		Close = close,
 	}
+	HopperShopView.setTab(refs, "Hoppers")
 	HopperShopView.layout(refs, 1280, 720)
 	return refs
 end
 
--- Fits the window into a w x h design-unit screen.
+-- Fits the window into a w x h design-unit screen (the HUD's top bar and coins stay in sight).
 function HopperShopView.layout(refs: Refs, w: number, h: number)
-	local width = math.min(HopperShopView.MaxWidth, w - 40)
-	local height = HopperShopView.Header + 28 + HopperShopView.CardSize.Y + 24 + 28 + 12
-	local fit = math.min(1, (h - 150) / height) -- (the HUD's top bar and coins stay in sight)
-	refs.Window.Root.Size = UDim2.fromOffset(width / fit, height)
-	local holder = refs.Window.Root.Parent
+	local size = HopperShopView.Size
+	local fit = math.min(1, (w - 40) / size.X, (h - 150) / size.Y)
+	local holder = refs.Root.Parent
 	local scale = if holder then holder:FindFirstChild("FitScale") else nil
 	if scale and scale:IsA("UIScale") then
 		scale.Scale = fit
 	end
 end
 
-function HopperShopView.setCard(refs: Refs, id: string, state: CardState)
-	local card = refs.Cards[id]
-	if not card then
+function HopperShopView.setTab(refs: Refs, tab: string)
+	for name, b in refs.Tabs do
+		b.BackgroundColor3 = if name == tab then C.TabOn else C.Tab
+	end
+	for name, grid in refs.Grids do
+		grid.Visible = name == tab
+	end
+	refs.Title.Text = tab
+end
+
+function HopperShopView.setTile(refs: Refs, id: string, state: TileState)
+	local tile = refs.Tiles[id]
+	if not tile then
 		return
 	end
-	card.Owned.Visible = state.Owned > 0
-	card.Owned.Text = if state.Owned > 1 then `OWNED x{state.Owned}` else "OWNED"
-	card.Lock.Visible = state.Locked == true
-	local can = state.CanAfford and not state.Locked
-	card.Buy.BackgroundColor3 = if can then HopperShopView.BuyColor else HopperShopView.GreyColor
-	local rim = card.Buy:FindFirstChild("Rim") :: UIStroke?
-	if rim then
-		rim.Color = if can then HopperShopView.BuyDark else HopperShopView.GreyDark
+	tile.Owned.Visible = state.Owned > 0
+	tile.Owned.Text = `x{state.Owned}`
+	tile.Lock.Visible = state.Locked ~= nil
+	tile.LockText.Text = state.Locked or ""
+	tile.Price.TextColor3 = if state.CanAfford then C.Price else C.InkSoft
+end
+
+-- The right pane for item `id` (a hopper or the laser); `picked` outlines its tile.
+function HopperShopView.showDetail(refs: Refs, id: string, state: TileState)
+	local d = refs.Detail
+	for tileId, tile in refs.Tiles do
+		local edge = tile.Frame:FindFirstChild("Edge") :: UIStroke?
+		if edge then
+			edge.Color = if tileId == id then C.TilePicked else C.TileEdge
+			edge.Thickness = if tileId == id then 5 else 3
+		end
 	end
-	card.BuyAmount.TextColor3 = if can then Color3.new(1, 1, 1) else CardTheme.InkSoft
+	for _, child in d.Ores:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	local hopper = HopperConfig.ById[id]
+	local price: number
+	if hopper then
+		d.Name.Text = hopper.Name
+		d.Income.Text = Format.perSecond(hopper.Income)
+		for i, oreId in hopper.Ores do
+			Bubble.icon(d.Ores, "item_Clean_" .. oreId, 34, { LayoutOrder = i, ZIndex = 5 })
+		end
+		local minutes = math.max(5, math.floor(HopperConfig.payback(hopper) / 300 + 0.5) * 5)
+		local back = if minutes < 60
+			then `~{minutes} min`
+			else `~{minutes // 60} h{if minutes % 60 > 0 then " " .. minutes % 60 .. " min" else ""}`
+		d.Lines.Text = `{hopper.Tagline}\nPays back in {back}\nSell back: {Format.money(hopper.Resale)}`
+		price = hopper.Price
+	else
+		local laser = HopperConfig.Laser
+		d.Name.Text = laser.Name
+		d.Income.Text = `x{laser.Mult} MONEY`
+		d.Lines.Text = `{laser.Tagline}\nPut it on a hopper's belt\nSell back: {Format.money(laser.Resale)}`
+		price = laser.Price
+	end
+	d.Picture:SetAttribute("Icon", "hopper_" .. id)
+	IconAssets.apply(d.Picture, "hopper_" .. id)
+	local can = state.CanAfford and state.Locked == nil
+	d.Buy.BackgroundColor3 = if can then C.Buy else C.Grey
+	local edge = d.Buy:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Color = if can then C.BuyEdge else C.GreyEdge
+	end
+	d.BuyText.Text = if state.Locked then state.Locked else "BUY  " .. Format.money(price)
 end
 
-function HopperShopView.setInfo(refs: Refs, text: string)
-	refs.Info.Text = text
+function HopperShopView.setCounts(refs: Refs, words: string)
+	refs.Counts.Text = words
 end
 
-function HopperShopView.setStatus(refs: Refs, text: string?)
-	refs.Status.Text = text or ""
+function HopperShopView.setStatus(refs: Refs, words: string?)
+	refs.Status.Text = words or ""
 end
 
 return HopperShopView
