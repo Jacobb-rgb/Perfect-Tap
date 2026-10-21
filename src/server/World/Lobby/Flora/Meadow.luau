@@ -47,8 +47,12 @@ local C = Style.C
 
 local Meadow = {}
 
--- Where the meadow may grow (the town ground) and what stays clear.
-Meadow.Area = { Min = Vector3.new(-168, 0, -118), Max = Vector3.new(168, 0, 148) }
+-- Where the meadow may grow (the town ground: 2 studs inside the island's
+-- coasts, x +-168 and z 148 at 12 cells) and what stays clear.
+Meadow.Area = {
+	Min = Vector3.new(WorldLayout.Island.Min.X + 2, 0, -118),
+	Max = Vector3.new(WorldLayout.Island.Max.X - 2, 0, WorldLayout.Island.Max.Z - 2),
+}
 Meadow.VaultClear = { Min = Vector3.new(-28, 0, 72), Max = Vector3.new(28, 0, 156) }
 Meadow.SpawnClear = 12
 -- the bridge garden under and behind THE GREAT FORGE's roof (Plaza/BridgeGarden, owner 2026-10-20)
@@ -275,8 +279,9 @@ Meadow.SmallPond = Vector2.new(7.5, 6.5)
 Meadow.MaxLobbyTrees = 22
 Meadow.MaxMountainTrees = 40
 -- The pond the hamlet lane (LobbyLayout HamletLane / ToMap) now leads to,
--- where the MAP tower and its hamlet stood.
-Meadow.LanePond = { Center = Vector3.new(101, 0, 127), Size = Vector2.new(17, 12) }
+-- where the MAP tower and its hamlet stood (the south band: it moves south
+-- with the plot columns, WorldLayout.PlotGrid.SouthShift).
+Meadow.LanePond = { Center = Vector3.new(101, 0, 127 + WorldLayout.PlotGrid.SouthShift), Size = Vector2.new(17, 12) }
 
 local AUTUMN = { "Yellow", "Orange", "Pink", "Red" }
 

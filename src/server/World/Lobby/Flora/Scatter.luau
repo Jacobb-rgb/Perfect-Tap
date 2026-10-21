@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Rng = require(Shared.Util.Rng)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Kit = require(script.Parent.Kit)
 local Buildings = require(script.Parent.Buildings)
@@ -20,6 +21,10 @@ local Buildings = require(script.Parent.Buildings)
 local C = Style.C
 
 local Scatter = {}
+
+-- the south band (the MINE corner, the hamlet, the south shore) moves south
+-- with the plot columns (WorldLayout.PlotGrid, 0 at 12 cells)
+local SOUTH = WorldLayout.PlotGrid.SouthShift
 
 -- (plain bushes and boulders were cut: they read as loose cubes; the lawn
 -- gaps get garden beds, short fence runs and crates instead, see gardens)
@@ -47,15 +52,15 @@ Scatter.TreeFreeBoxes = {
 	{ Min = Vector2.new(-24, -114), Max = Vector2.new(24, -38) },
 	-- the MINE's portal, its yard and lane in the south-west corner (seen
 	-- from the hero camera over the Blaster Vault)
-	{ Min = Vector2.new(-92, 116), Max = Vector2.new(-58, 149) },
-	-- the MINE hill itself (x -110..-88, z 121..151) and a crown's reach +
+	{ Min = Vector2.new(-92, 116 + SOUTH), Max = Vector2.new(-58, 149 + SOUTH) },
+	-- the MINE hill itself (x -110..-88, z 121..151 at 12 cells) and a crown's reach +
 	-- 2 studs to the west: its voxel rock top must not sink into autumn
 	-- crowns; the autumn woods frame it from the west and the south
-	{ Min = Vector2.new(-118, 117), Max = Vector2.new(-88, 151) },
+	{ Min = Vector2.new(-118, 117 + SOUTH), Max = Vector2.new(-88, 151 + SOUTH) },
 	-- the MAP tower's and the WORKS' fronts in the south-east hamlet and the
 	-- hamlet lane (the hero camera sees them from the south-west); trees
 	-- along the island's south edge behind it stay under the sight lines
-	{ Min = Vector2.new(76, 113), Max = Vector2.new(112, 138) },
+	{ Min = Vector2.new(76, 113 + SOUTH), Max = Vector2.new(112, 138 + SOUTH) },
 }
 
 local function treeFree(p: Vector3): boolean
@@ -90,8 +95,8 @@ Scatter.Zones = {
 	-- the island's south corners beyond the bases: the autumn woods round the
 	-- MINE in the west, the MAP hamlet in the east (off the coastal railway's
 	-- portal hills at |x| 160+)
-	{ Name = "SouthWest", Min = Vector2.new(-150, 112), Max = Vector2.new(-60, 146), Trees = 12 },
-	{ Name = "SouthEast", Min = Vector2.new(60, 112), Max = Vector2.new(150, 146), Trees = 10 },
+	{ Name = "SouthWest", Min = Vector2.new(-150, 112 + SOUTH), Max = Vector2.new(-60, 146 + SOUTH), Trees = 12 },
+	{ Name = "SouthEast", Min = Vector2.new(60, 112 + SOUTH), Max = Vector2.new(150, 146 + SOUTH), Trees = 10 },
 } :: { Zone }
 
 local KIND_WEIGHTS = { Green = 45, Pink = 15, Red = 12, Yellow = 14, Orange = 14 }
@@ -189,7 +194,8 @@ local function groundCover(m: Instance, placer: Kit.Placer, counts: Counts, rng:
 	local banks = { Name = "Cover", Min = Vector2.new(-44, 66), Max = Vector2.new(44, 98), Trees = 0 }
 	local front = { Name = "Cover", Min = Vector2.new(-64, 24), Max = Vector2.new(64, 82), Trees = 0 }
 	local middle = { Name = "Cover", Min = Vector2.new(-64, -110), Max = Vector2.new(64, 24), Trees = 0 }
-	local south = { Name = "Cover", Min = Vector2.new(-150, 84), Max = Vector2.new(150, 146), Trees = 0 }
+	-- (from the south-most bases to 4 studs off the south shore)
+	local south = { Name = "Cover", Min = Vector2.new(-150, 84), Max = Vector2.new(150, 146 + SOUTH), Trees = 0 }
 	local plan = {
 		{ zone = banks, flowers = 6, bushes = 2, boulders = 0 },
 		{ zone = front, flowers = 2, bushes = 1, boulders = 0 },
@@ -344,7 +350,7 @@ Scatter.Lanterns = {
 	-- (the Plaza lights the MINE lane where it leaves the west plot road)
 	-- the hamlet lane (LobbyLayout HamletLane) where it leaves the east plot
 	-- road's end for the MAP hamlet, its arm over the lane
-	{ At = Vector3.new(72.5, 0, 127.5), Yaw = -0.705, Light = false },
+	{ At = Vector3.new(72.5, 0, 127.5 + SOUTH), Yaw = -0.705, Light = false },
 }
 
 --[[

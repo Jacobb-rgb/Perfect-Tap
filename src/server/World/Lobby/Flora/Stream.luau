@@ -22,24 +22,28 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Geo = require(Shared.Builders.Geo)
 local Rng = require(Shared.Util.Rng)
+local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 
 local C = Style.C
 
 local Stream = {}
 
-Stream.Pond = { Center = Vector3.new(101, 0, 127), Size = Vector2.new(17, 12) }
+-- the south band moves south with the plot columns (WorldLayout.PlotGrid, 0 at 12 cells)
+local SOUTH = WorldLayout.PlotGrid.SouthShift
+
+Stream.Pond = { Center = Vector3.new(101, 0, 127 + SOUTH), Size = Vector2.new(17, 12) }
 -- the stream's centre line, from the pond's south edge to the island's edge
 Stream.Path = {
-	Vector3.new(101, 0, 132.5),
-	Vector3.new(98, 0, 141),
-	Vector3.new(99.5, 0, 149),
-	Vector3.new(101, 0, 156),
+	Vector3.new(101, 0, 132.5 + SOUTH),
+	Vector3.new(98, 0, 141 + SOUTH),
+	Vector3.new(99.5, 0, 149 + SOUTH),
+	Vector3.new(101, 0, 156 + SOUTH),
 }
 Stream.Width = 4.2
 Stream.WaterTop = 0.2
 -- the bridge crosses the second leg (west to east)
-Stream.Bridge = { From = Vector3.new(91.5, 0, 142.5), To = Vector3.new(105.5, 0, 140.5), Width = 4.4, Rise = 2.2 }
+Stream.Bridge = { From = Vector3.new(91.5, 0, 142.5 + SOUTH), To = Vector3.new(105.5, 0, 140.5 + SOUTH), Width = 4.4, Rise = 2.2 }
 -- Land keeps the south rim low over this x range (Land.RimNotch)
 Stream.Notch = { X0 = 96, X1 = 106 }
 
@@ -81,10 +85,12 @@ local function water(parent: Instance, a: Vector3, b: Vector3, width: number, y:
 end
 
 -- The south rim under the stream's mouth: its outer edge and top (from the
--- built Land parts), so the fall starts at the right lip.
+-- built Land parts), so the fall starts at the right lip. The rim starts at
+-- the island's south coast (Island.Max.Z, 150 at 12 cells).
 local function rimLip(map: Instance): (number, number)
 	local land = map:FindFirstChild("Land")
-	local outer, top = 160, -0.2
+	local coast = WorldLayout.Island.Max.Z
+	local outer, top = coast + 10, -0.2
 	if land then
 		for _, d in land:GetDescendants() do
 			if d:IsA("BasePart") and d.Name ~= "Ground" and d.Transparency < 1 then
@@ -92,8 +98,8 @@ local function rimLip(map: Instance): (number, number)
 				if
 					c.X + h.X > Stream.Notch.X0
 					and c.X - h.X < Stream.Notch.X1
-					and c.Z - h.Z >= 150
-					and c.Z - h.Z < 175
+					and c.Z - h.Z >= coast
+					and c.Z - h.Z < coast + 25
 					and c.Y + h.Y > -3
 				then
 					outer = math.max(outer, c.Z + h.Z)
@@ -135,7 +141,7 @@ function Stream.build(map: Instance, rng: Rng.Rng): Model
 	-- the stretch over the rim sits on the rim's grass
 	local overRim = math.max(Stream.WaterTop, rimTop + 0.25)
 	if overRim > Stream.WaterTop + 0.05 then
-		water(channel, Vector3.new(path[#path].X, 0, 157), path[#path], Stream.Width, overRim, rng)
+		water(channel, Vector3.new(path[#path].X, 0, WorldLayout.Island.Max.Z + 7), path[#path], Stream.Width, overRim, rng)
 	end
 
 	-- the humped bridge
