@@ -1248,7 +1248,7 @@ function GolemView.build(compact: boolean?): Refs
 		Name = "Count",
 		ZIndex = 6,
 	})
-	local capsules = GolemView.popButton(panel, "CAPSULES", "Yellow", {
+	local capsules = GolemView.popButton(panel, "EGGS", "Yellow", {
 		Name = "Capsules",
 		AnchorPoint = Vector2.new(1, 0),
 		TextSize = 20,

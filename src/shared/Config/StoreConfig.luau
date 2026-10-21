@@ -68,7 +68,7 @@ StoreConfig.Sections = {
 	{ Id = "Featured", Title = "FEATURED", Colors = "Gold", Tab = "Featured", TabIcon = "pass_crown", TabModel = "pass_crown", TabPaint = "Yellow", RowHeight = 300 },
 	{ Id = "Money", Title = "MONEY", Colors = "Green", Tab = "Money", TabIcon = "cash_stack", TabModel = "cash_stack", TabPaint = "Green", RowHeight = 236 },
 	{ Id = "Luck", Title = "LUCK", Colors = "Cyan", Tab = "Luck", TabIcon = "clover", TabModel = "luck_server", TabPaint = "Teal", RowHeight = 250 },
-	{ Id = "Eggs", Title = "GOLEM CAPSULES", Colors = "Magenta", Tab = "Eggs", TabIcon = "capsule_Royal", TabModel = "capsule_Royal", TabPaint = "Purple", RowHeight = 236 },
+	{ Id = "Eggs", Title = "GOLEM EGGS", Colors = "Magenta", Tab = "Eggs", TabIcon = "capsule_Royal", TabModel = "capsule_Royal", TabPaint = "Purple", RowHeight = 236 },
 	{ Id = "Blasters", Title = "BLASTERS", Colors = "Red", Tab = "Blasters", TabIcon = "blaster", TabModel = "blaster", TabPaint = "Red", RowHeight = 250 },
 	{ Id = "Passes", Title = "PASSES", Colors = "Gold", Tab = "Passes", TabIcon = "podium", TabModel = "podium", TabPaint = "Orange", RowHeight = 196 },
 } :: { Section }

@@ -7,7 +7,7 @@
 	the purple Golems band over a dark studded body, never the LightSkin.
 
 	Shop panel (ScreenGui "TerraForgeCapsules"):
-	  header   GOLEM CAPSULES, a line about odds, your coins, MY GOLEMS, X
+	  header   GOLEM EGGS, a line about odds, your coins, MY GOLEMS, X
 	  tabs     one bright tab per capsule the player may open (LB / RB on a gamepad):
 	           STONE · CRYSTAL · ROYAL (CapsuleConfig.Stall: a limited
 	           edition's capsule is sold only in the Robux shop's banner,
@@ -778,8 +778,8 @@ function CapsuleView.build(compact: boolean?): Refs
 		SelectionBehaviorLeft = Enum.SelectionBehavior.Stop,
 		SelectionBehaviorRight = Enum.SelectionBehavior.Stop,
 	}, gui)
-	local title = GolemView.chrome(panel, "GOLEM CAPSULES", GolemView.WindowPaint)
-	local subtitle = GolemView.text(panel, "Each capsule wakes a sleeping golem: the odds of every golem are listed.", m.Small + 1, {
+	local title = GolemView.chrome(panel, "GOLEM EGGS", GolemView.WindowPaint)
+	local subtitle = GolemView.text(panel, "Each egg hatches a sleeping golem: the odds of every golem are listed.", m.Small + 1, {
 		Name = "Subtitle",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = rgb(246, 236, 255),
@@ -907,7 +907,7 @@ function CapsuleView.build(compact: boolean?): Refs
 
 	-- right: the exact odds on a dark studded well (paid random items: always shown)
 	local right = Pop.well(panel, { Name = "Right", ZIndex = 3 })
-	local oddsTitle = Pop.title(right, "ODDS FOR EACH CAPSULE", m.Text + 3, "Gold", {
+	local oddsTitle = Pop.title(right, "ODDS FOR EACH EGG", m.Text + 3, "Gold", {
 		Name = "OddsTitle",
 		FontFace = PopTheme.Heavy,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -947,7 +947,7 @@ function CapsuleView.build(compact: boolean?): Refs
 		AnchorPoint = Vector2.new(0.5, 1),
 		TextColor3 = rgb(200, 205, 218),
 	})
-	local empty = GolemView.text(panel, "Capsules aren't available where you play.", m.Text + 2, {
+	local empty = GolemView.text(panel, "Eggs aren't available where you play.", m.Text + 2, {
 		Name = "Empty",
 		TextWrapped = true,
 		Visible = false,
