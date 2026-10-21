@@ -6,7 +6,9 @@
 	Net "Emote" (client -> server, rate limited in Net.luau): (name) starts
 	an emote, ("") stops yours. A name is Guard.string + the whitelist
 	(EmoteRules.allowed: EmoteConfig.List only, never a free-form string),
-	with a cooldown per emote (EmoteRules.Cooldown). It never starts while
+	with a cooldown per emote (EmoteRules.ServerCooldown: a little shorter
+	than the client's Cooldown, so network jitter never refuses an emote the
+	client already shows). It never starts while
 	you carry ore, clean at a station, ride a hoverboard, sit or are dead,
 	and the Blaster Spin only with the blaster in hand. The server alone
 	sets the character attribute EmoteRules.Attribute = "<Name>:<seq>"
@@ -93,7 +95,7 @@ function EmoteService.play(player: Player, name: string): boolean
 		starts = {}
 		lastStart[player] = starts
 	end
-	if not EmoteRules.canPlay(starts[name], now, EmoteRules.Cooldown) then
+	if not EmoteRules.canPlay(starts[name], now, EmoteRules.ServerCooldown) then
 		return false
 	end
 	starts[name] = now

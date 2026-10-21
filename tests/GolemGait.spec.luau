@@ -1,8 +1,10 @@
 -- Golem followers that RUN (client Effects/GolemGait + WorldMotionController): legs and arms in opposition, the stride
 -- and cadence by speed and size, the lean and bounce of walk / run / sprint, Reduce motion, the flying pose of Premium
 -- golems, the level of detail and the part cap, the limb groups found on real GolemBuilder followers (Pebble Golem,
--- the crowned Diamond Duke and Celestial Sovereign, the Dragonscale Knight's shield, the Dragon King's wings), the
--- mirror of GolemController's own hop, and the controller swapping welds for running limbs and back on a rig.
+-- the crowned Diamond Duke and Celestial Sovereign, the Dragonscale Knight's shield, the Dragon King's wings), gear
+-- moving with what it is welded to (review anim/ship #8: the Knight's sword in its fist, the capes on the torso, the
+-- Dragon King's sceptre), the mirror of GolemController's own hop, the controller swapping welds for running limbs
+-- and back on a rig, and its frame loop letting go when the last running follower is gone.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
 	local Vector3 = roblox.Vector3
@@ -235,6 +237,123 @@ return function(T, Loader)
 		T.eq(Gait.groupOf("WingTip", Vector3.new(1.5, 3.5, 0.6)), "Body", "wings stay on the body whatever their height")
 	end)
 
+	T.test("GolemGait: gear moves with what it is welded to: the Knight's sword in its fist, capes on the torso", function()
+		local function groups(kind: string, extra: ((any) -> ())?): ({ [string]: string }, any, any)
+			local model = GolemBuilder.build(kind, CFrame.new(-4, 0, 2) * CFrame.Angles(0, -0.4, 0), { Welded = true, Size = FOLLOWER })
+			if extra then
+				extra(model)
+			end
+			local rig = Gait.classify(model)
+			local where: { [string]: string } = {}
+			for _, key in { "LegL", "LegR", "ArmL", "ArmR", "Head" } do
+				for _, part in rig[key].Parts do
+					where[part.Name] = key
+				end
+			end
+			return where, rig, model
+		end
+		-- the Dragonscale Knight (Epic, live): a flaming sword held up past its head, a kite shield, a cape
+		local knight, rig, model = groups("ScaleKnight")
+		for _, name in { "Blade", "BladeFire", "Guard", "Pommel" } do
+			T.eq(knight[name], "ArmR", "the sword's " .. name .. " is held in the right fist")
+		end
+		for _, name in { "Shield", "ShieldPoint", "ShieldEye", "Bracer1" } do
+			T.eq(knight[name], "ArmL", name .. " on the left arm")
+		end
+		local capes = 0
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and string.sub(d.Name, 1, 4) == "Cape" then
+				T.eq(knight[d.Name], nil, "the cape's " .. d.Name .. " follows the torso")
+				capes += 1
+			end
+		end
+		T.truthy(capes >= 8, "the cape, its flaps, hem, mantle, straps and clasps: " .. capes)
+		T.eq(knight.Pauldron1, "ArmL", "a pauldron turns with its arm, not with the head")
+		T.eq(knight.Pauldron2, "ArmR")
+		for _, name in { "Helm", "HelmFill", "HelmEdge1", "Jaw", "HelmFang1", "Horn1_1", "Horn2_2", "Crest2", "Plume" } do
+			T.eq(knight[name], "Head", "the helm's " .. name .. " turns with the head")
+		end
+		for _, name in { "Breastplate", "Belt", "Tabard" } do
+			T.eq(knight[name], nil, name .. " stays on the body")
+		end
+		-- no tearing: through a running stride, the idle wave and the equip jump the blade stays on its guard
+		local function frameOf(name: string, pose: any): any
+			for _, key in { "LegL", "LegR", "ArmL", "ArmR", "Head" } do
+				local group = rig[key]
+				for i, part in group.Parts do
+					if part.Name == name then
+						local pitch, roll = 0, 0
+						if key == "ArmL" then
+							pitch, roll = pose.ArmL, -pose.RollL
+						elseif key == "ArmR" then
+							pitch, roll = pose.ArmR, pose.RollR
+						end
+						local yaw = if key == "Head" then pose.HeadYaw else 0
+						if key == "Head" then
+							pitch = pose.HeadPitch
+						end
+						return Gait.jointFrame(rig.Body.CFrame, group, pitch, yaw, roll, 0) * group.Rest[i]
+					end
+				end
+			end
+			return rig.Body.CFrame * rig.Body.CFrame:ToObjectSpace(model:FindFirstChild(name).CFrame)
+		end
+		local rest = model:FindFirstChild("Guard").CFrame:ToObjectSpace(model:FindFirstChild("Blade").CFrame)
+		local drift = 0
+		for _, case in { { 12, 0.7, nil }, { 20, 2.1, nil }, { 0, 0, Logic.Golem.JumpTime / 2 } } do
+			local g, t = settled(case[1], FOLLOWER)
+			g.Phase = case[2]
+			local pose = Gait.newPose()
+			Gait.pose(pose, g, t, FOLLOWER, false, 1, case[3], Logic.Golem.JumpTime, false)
+			local now = frameOf("Guard", pose):ToObjectSpace(frameOf("Blade", pose))
+			drift = math.max(drift, (now.Position - rest.Position).Magnitude)
+		end
+		T.near(drift, 0, 1e-4, "the blade never leaves its guard")
+
+		-- the Dragon King (Mythic, live): the sceptre with its fire orb in the right hand, the crown on the head
+		local king, _, kingModel = groups("DragonKing")
+		for _, name in { "Staff", "StaffHead", "Orb" } do
+			T.eq(king[name], "ArmR", "the sceptre's " .. name .. " in the right hand")
+		end
+		for _, name in { "CrownBand", "CrownPoint1", "CrownGem1", "CrownFlame" } do
+			T.eq(king[name], "Head", "the crown's " .. name .. " on the head")
+		end
+		for _, d in kingModel:GetDescendants() do
+			if d:IsA("BasePart") and string.sub(d.Name, 1, 4) == "Cape" then
+				T.eq(king[d.Name], nil, "the royal cape's " .. d.Name .. " follows the torso")
+			end
+		end
+		-- the Magma Wyvern's cape collar and spiked pauldrons
+		local wyvern = groups("MagmaWyvern")
+		T.eq(wyvern.CapeCollar1, nil, "the cape's collar on the torso")
+		T.eq(wyvern.PauldronSpike1, "ArmL", "a pauldron's spike with its pauldron")
+		T.eq(wyvern.PauldronSpike2, "ArmR")
+
+		-- a builder's own weld decides: a lantern welded to the right fist, hanging over the head, goes with the fist
+		local lit = groups("PebbleGolem", function(m: any)
+			local body = m.PrimaryPart
+			local s = body.Size.X / GolemBuilder.BodySize.X
+			local lantern = Instance.new("Part")
+			lantern.Name = "Lantern"
+			lantern.Size = Vector3.new(0.2, 0.2, 0.2) * s
+			lantern.CFrame = body.CFrame * CFrame.new(1.5 * s, 2.2 * s, 0)
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = m:FindFirstChild("Fist2")
+			weld.Part1 = lantern
+			weld.Parent = lantern
+			lantern.Parent = m
+		end)
+		T.eq(lit.Lantern, "ArmR", "welded to the fist: with the fist (where it hangs would say the head)")
+		T.eq(Gait.groupOf("Lantern", Vector3.new(1.5, 3.2, 0)), "Head", "(by where it is alone)")
+
+		-- the touch test is exact for turned boxes (a box turned 45 degrees no longer reaches a corner)
+		local half = Vector3.new(0.5, 0.5, 0.5)
+		T.truthy(Gait.boxesTouch(CFrame.new(0.95, 0, 0), half, half), "side by side, overlapping")
+		T.falsy(Gait.boxesTouch(CFrame.new(1.05, 0, 0), half, half), "a gap")
+		T.falsy(Gait.boxesTouch(CFrame.new(1.2, 1.2, 0) * CFrame.Angles(0, 0, math.pi / 4), half, half), "a turned box off the corner")
+		T.truthy(Gait.boxesTouch(CFrame.new(1.2, 0, 0) * CFrame.Angles(0, 0, math.pi / 4), half, half), "its tip reaches the side")
+	end)
+
 	T.test("GolemGait: the hop it takes out is GolemController's own", function()
 		local fs = require("@lune/fs")
 		local source = fs.readFile(Loader.root .. "/src/client/Controllers/GolemController.luau")
@@ -361,6 +480,106 @@ return function(T, Loader)
 			Controller.useRig(nil)
 		end)
 		rawset(Players, "LocalPlayer", hadLocal)
+		AnimConfig.GolemMotion = hadGolems
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	-- (review anim/ship #10) the real frame loop, no rig: it lets go when the last running follower is destroyed
+	T.test("GolemGait: the limb loop disconnects when the last running follower is gone (unequipped, its owner far)", function()
+		local Players = Loader.game:GetService("Players")
+		local RunService = Loader.game:GetService("RunService")
+		local Workspace = Loader.game:GetService("Workspace")
+		local UserInputService = Loader.game:GetService("UserInputService")
+		local patched = {
+			{ Players, "LocalPlayer", { Name = "Me", UserId = 1 } },
+			{ RunService, "RenderStepped", nil },
+			{ Workspace, "CurrentCamera", nil },
+			{ Workspace, "BulkMoveTo", nil },
+			{ UserInputService, "TouchEnabled", false },
+			{ UserInputService, "MouseEnabled", true },
+		}
+		local saved = {}
+		local connects, live = 0, 0
+		local handler: ((number) -> ())? = nil
+		patched[2][3] = {
+			Connect = function(_, fn)
+				connects += 1
+				live += 1
+				handler = fn
+				local c: any = { Connected = true }
+				function c.Disconnect(self)
+					if self.Connected then
+						self.Connected = false
+						live -= 1
+					end
+				end
+				return c
+			end,
+		}
+		-- (far from the followers the tests before left behind: only this one is near the camera)
+		patched[3][3] = {
+			CFrame = CFrame.new(500, 6, 15),
+			WorldToViewportPoint = function(_, p)
+				return p, true
+			end,
+		}
+		patched[4][3] = function(_, parts, frames)
+			for i, part in parts do
+				part.CFrame = frames[i]
+			end
+		end
+		for i, p in patched do
+			saved[i] = rawget(p[1], p[2])
+			rawset(p[1], p[2], p[3])
+		end
+		local hadGolems = AnimConfig.GolemMotion
+		AnimConfig.GolemMotion = true
+		local ok, err = pcall(function()
+			local Controller = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Controllers.WorldMotionController")
+			Controller.useRig(nil)
+			local followers = Instance.new("Folder")
+			local model = GolemBuilder.build("PebbleGolem", CFrame.new(500, 0, 0), { Welded = true, Size = FOLLOWER })
+			model.Parent = followers
+			local pet = {
+				Kind = "PebbleGolem",
+				Phase = 0,
+				Seed = 3,
+				Floats = false,
+				Yaw = 0,
+				Model = model,
+				Root = model.PrimaryPart,
+			}
+			local now = 7000
+			for _ = 1, 3 do
+				now += 1 / 60
+				Controller.golemOffset(pet, nil, now, true, true, 16)
+				local step = handler
+				if step then
+					step(1 / 60)
+				end
+			end
+			local _, running = Controller.golemStats()
+			T.eq(running, 1, "near and on screen: its limbs run")
+			local _, _, _, _, _, looping = Controller.costs()
+			T.truthy(looping and live == 1, "the frame loop is connected")
+			-- GolemController destroys it (Lune reads Parent = nil); nothing calls golemOffset for it again
+			model.Parent = nil
+			local step = handler :: (number) -> ()
+			step(1 / 60)
+			local _, after, parts = Controller.golemStats()
+			T.eq(after, 0, "the destroyed follower left the running list")
+			T.eq(parts, 0, "no limb parts counted")
+			local _, _, _, _, _, still = Controller.costs()
+			T.falsy(still, "the loop let go")
+			T.eq(live, 0, "RenderStepped disconnected")
+			T.eq(connects, 1, "one connection only")
+			Controller.useRig(nil)
+		end)
+		for i, p in patched do
+			rawset(p[1], p[2], saved[i])
+		end
 		AnimConfig.GolemMotion = hadGolems
 		if not ok then
 			error(err, 0)

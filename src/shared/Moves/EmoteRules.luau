@@ -16,7 +16,8 @@
 	                           moving, seated, riding, a tool picked up (or the
 	                           blaster put away for the Blaster Spin), firing,
 	                           a panel opening
-	  canPlay(last, now, gap)  the per-emote cooldown (server)
+	  canPlay(last, now, gap)  the per-emote cooldown (Cooldown on the client,
+	                           the shorter ServerCooldown on the server)
 	Reduce Motion keeps the emotes (the player picked them).
 ]]
 
@@ -27,7 +28,10 @@ local EmoteRules = {}
 EmoteRules.Attribute = "Emote" -- character attribute, server-set only
 EmoteRules.MaxName = 24
 EmoteRules.MaxSeq = 999999
-EmoteRules.Cooldown = 1.0 -- seconds before the same emote may start again (server)
+EmoteRules.Cooldown = 1.0 -- seconds before the same emote may start again (the client's menu)
+-- the server's own gap: a little shorter, so packets that arrive closer together than they were
+-- sent (network jitter) never refuse an emote the client already shows
+EmoteRules.ServerCooldown = 0.85
 EmoteRules.MoveSpeed = 0.1 -- Humanoid.MoveDirection magnitude that counts as moving
 EmoteRules.NeedsBlaster = "Hold your blaster" -- the menu's note on a tool emote
 EmoteRules.BlasterTool = "Blaster" -- the held blaster Tool's name (ToolService)

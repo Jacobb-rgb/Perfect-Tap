@@ -39,11 +39,18 @@
 	  outro (the finishing pose; quicker while moving) when the character
 	  moves or jumps, picks a tool up (the Blaster Spin: puts the blaster
 	  away), fires, starts carrying, or (yours) a menu panel opens, or you
-	  pick it again; a seat, a board or death stop it at once. Yours tells
-	  the server (Net "Emote" ""), the others' stop on every client by the
-	  same rules. Reduce Motion keeps the emotes (you picked them). The Gem
-	  Juggle juggles three small pooled Neon gems (Moves/EmoteProps; at most
-	  EmoteProps.MaxJugglers characters, within range only).
+	  pick it again; a seat, a board or death stop it at once. Picking any
+	  emote but the Blaster Spin puts a tool in your hand away first (as
+	  cleaning and build mode do). Yours tells the server (Net "Emote" "")
+	  whenever its start was sent (also before the server's echo came back),
+	  the others' stop on every client by the same rules. Reduce Motion
+	  keeps the emotes (you picked them). The Gem Juggle juggles three small
+	  pooled Neon gems (Moves/EmoteProps; at most EmoteProps.MaxJugglers
+	  characters, within range only; any other emote gives them back). The
+	  Blaster Spin twirls the blaster: its RightGrip pose turns the RightGrip
+	  weld's C0 on every client (BlasterFx's kick moves C1), put back when it
+	  ends. A stopped emote on a character out of range is dropped, so the
+	  slow check sleeps.
 
 	Never fights other systems: no moves while seated, swimming, climbing,
 	ragdolled or dead, on a hoverboard (HoverboardController drives that
@@ -81,6 +88,7 @@ local MoveController = {}
 
 MoveController.SlowCheck = 0.5 -- seconds between checks while emotes play only out of range
 MoveController.MovingOutro = 2.5 -- an outro plays this much faster when the character walks off
+MoveController.EchoGrace = 1.0 -- seconds: a "" echo this soon after you started a new emote is your earlier stop's
 
 type Slot = {
 	Move: MoveConfig.Move?,
@@ -114,6 +122,8 @@ type Entry = {
 	FiredAt: number,
 	StateName: string?,
 	Gems: { BasePart }?,
+	Grip: Weld?, -- the RightGrip weld the Blaster Spin turns
+	GripBase: CFrame?, -- its C0 before
 	Connections: { RBXScriptConnection },
 }
 
@@ -178,6 +188,7 @@ local nextKick = 0
 local lastShrug = -math.huge
 local lastSend = -math.huge
 local lastEmoteStart: { [string]: number } = {}
+local emoteSent = false -- your emote's start went to the server and no "" since
 local checkTimer = 0
 local settingsReduced = false -- the game's SETTINGS "Reduce motion"
 local systemReduced = false -- Roblox's own Reduce Motion
@@ -278,6 +289,9 @@ local function startEmote(entry: Entry, name: string)
 	if not move then
 		return
 	end
+	if move.Name ~= "GemJuggle" then
+		releaseGems(entry) -- (switching from the Gem Juggle: the gems go back, none hang in the air)
+	end
 	local slot = entry.Slots[EMOTE]
 	slot.Move = move
 	slot.Start = clockNow()
@@ -286,6 +300,43 @@ local function startEmote(entry: Entry, name: string)
 	slot.OutroSpeed = 1
 	table.clear(slot.Layer.Pose)
 	slot.Layer.Override = MoveMath.overrides(move)
+end
+
+--[[
+	The Blaster Spin's twirl: its RightGrip pose turns the held tool about
+	the hand, on the RightGrip weld's C0 (Handle = hand * C0 * pose *
+	C1:Inverse(), like the preview; BlasterFx's kick moves C1 only).
+	`pose` nil puts the grip back as it was.
+]]
+local function setGrip(entry: Entry, pose: CFrame?)
+	local weld = entry.Grip
+	if weld and (pose == nil or weld.Parent ~= entry.RightHand) then
+		-- put back (or the tool was equipped again: a new weld)
+		local base = entry.GripBase
+		entry.Grip = nil
+		entry.GripBase = nil
+		if base and weld.Parent then
+			weld.C0 = base
+		end
+		weld = nil
+	end
+	if pose == nil then
+		return
+	end
+	if not weld then
+		local hand = entry.RightHand
+		local found = if hand then hand:FindFirstChild("RightGrip") else nil
+		if not found or not found:IsA("Weld") then
+			return
+		end
+		weld = found
+		entry.Grip = found
+		entry.GripBase = found.C0
+	end
+	local base = entry.GripBase
+	if weld and base then
+		weld.C0 = base * pose
+	end
 end
 
 -- The emote's outro starts (quicker when the character walks off); `hard`: gone at once.
@@ -298,6 +349,7 @@ local function stopEmote(entry: Entry, hard: boolean?, speed: number?)
 	if hard then
 		slot.Move = nil
 		slot.Layer.Weight = 0
+		setGrip(entry, nil)
 		return
 	end
 	if not slot.Stop then
@@ -306,9 +358,19 @@ local function stopEmote(entry: Entry, hard: boolean?, speed: number?)
 	end
 end
 
--- Your emote stopped: the server clears the attribute, so the others stop too.
+--[[
+	Your emote stopped: the server clears the attribute, so the others stop
+	too. Sent whenever your start was sent (the server's echo may not be
+	back yet: the attribute can still read "" from the emote before), or
+	the attribute still names one; "" while nothing plays is a no-op there.
+	Net "Emote" keeps the order: the start always comes first.
+]]
 local function tellStopped(entry: Entry)
-	if entry.Local and entry.Character:GetAttribute(EmoteRules.Attribute) ~= "" then
+	if not entry.Local then
+		return
+	end
+	if emoteSent or EmoteRules.decode(entry.Character:GetAttribute(EmoteRules.Attribute)) ~= nil then
+		emoteSent = false
 		MoveController.Env.send("Emote", "")
 	end
 end
@@ -339,6 +401,7 @@ local function disconnectLoop()
 			MoveRig.release(rig)
 		end
 		entry.Holding = false
+		setGrip(entry, nil)
 	end
 end
 
@@ -395,6 +458,7 @@ local function removeEntry(entry: Entry)
 		connection:Disconnect()
 	end
 	releaseGems(entry)
+	setGrip(entry, nil)
 	local rig = entry.Rig
 	if rig and entry.Holding then
 		MoveRig.release(rig)
@@ -445,7 +509,11 @@ local function onEmoteAttribute(entry: Entry)
 	local value = entry.Character:GetAttribute(EmoteRules.Attribute)
 	local name, seq = EmoteRules.decode(value)
 	if not name then
-		if emoteName(entry) then
+		-- (yours: a "" just after you started a new emote is the echo of your stop before it; your
+		-- own rules stop it for every reason the server has)
+		local slot = entry.Slots[EMOTE]
+		local stale = entry.Local and emoteSent and clockNow() - slot.Start < MoveController.EchoGrace
+		if emoteName(entry) and not stale then
 			stopEmote(entry)
 		end
 	elseif seq ~= entry.EmoteSeq then
@@ -492,6 +560,8 @@ local function addEntry(player: Player, character: Model)
 		FiredAt = -math.huge,
 		StateName = nil,
 		Gems = nil,
+		Grip = nil,
+		GripBase = nil,
 		Connections = {},
 	}
 	for i, slot in entry.Slots do
@@ -651,12 +721,16 @@ check = function(now: number)
 			entry.Slots[2].Move = nil
 			entry.Slots[3].Move = nil
 			if entry.Slots[EMOTE].Move then
+				local wasPlaying = emoteName(entry) ~= nil
 				stopEmote(entry, true)
-				tellStopped(entry)
+				if wasPlaying then
+					tellStopped(entry)
+				end
 			end
 		end
 		if not active then
 			releaseGems(entry)
+			setGrip(entry, nil)
 		end
 		entry.Active = active
 		updateLoop(entry)
@@ -675,6 +749,13 @@ check = function(now: number)
 				stopEmote(entry, false, if reason == "Moving" then MoveController.MovingOutro else 1)
 				tellStopped(entry)
 			end
+		end
+		-- out of range / off screen, a stopped emote has nothing left to show: it ends here (then
+		-- emoting() is false and the slow check sleeps)
+		local slot = entry.Slots[EMOTE]
+		if not active and slot.Move and slot.Stop then
+			slot.Move = nil
+			slot.Layer.Weight = 0
 		end
 	end
 end
@@ -755,6 +836,14 @@ local function stepEntry(entry: Entry, now: number)
 		else
 			layer.Weight = 0
 		end
+	end
+	-- the Blaster Spin twirls the blaster (the grip goes back when it ends)
+	local emoteSlot = entry.Slots[EMOTE]
+	local emoteMove = emoteSlot.Move
+	if emoteMove and emoteMove.NeedsTool and emoteSlot.Layer.Weight > 0 then
+		setGrip(entry, emoteSlot.Layer.Pose.RightGrip)
+	elseif entry.Grip then
+		setGrip(entry, nil)
 	end
 	if any or entry.Holding then
 		MoveRig.step(rig, entry.Layers, SLOTS)
@@ -897,8 +986,17 @@ function MoveController.playEmote(name: string): (boolean, string?)
 		return false, "Cooldown"
 	end
 	lastEmoteStart[name] = now
+	-- a tool in hand (the blaster stays out after mining) goes to the backpack for every emote but
+	-- the Blaster Spin, as cleaning and build mode do (else the emote's "Tool" rule stops it at once)
+	if not EmoteRules.needsTool(name) and holdsTool(entry) then
+		local humanoid = entry.Humanoid
+		if humanoid then
+			humanoid:UnequipTools()
+		end
+	end
 	startEmote(entry, name)
 	MoveController.Env.send("Emote", name)
+	emoteSent = true
 	check(now)
 	wake()
 	return true, "Playing"
@@ -909,8 +1007,14 @@ function MoveController.stopEmote()
 	local entry = entryOf(localPlayer)
 	if entry and emoteName(entry) then
 		stopEmote(entry)
-		MoveController.Env.send("Emote", "")
+		tellStopped(entry)
 	end
+end
+
+-- Is your character in a close-up now (a Scriptable camera or PlayerControls claimed: cleaning,
+-- build mode, the Foundry, the vault...)? The EMOTES menu doesn't open there.
+function MoveController.inCloseUp(): boolean
+	return started and closeUp(MoveController.Env.Workspace.CurrentCamera)
 end
 
 -- All moves on / off (a settings toggle can call this).
@@ -923,6 +1027,7 @@ function MoveController.setEnabled(on: boolean)
 				MoveRig.release(rig)
 			end
 			releaseGems(entry)
+			setGrip(entry, nil)
 			entry.Holding = false
 			entry.Active = false
 		end
@@ -1090,6 +1195,7 @@ MoveController._test = {
 			removeEntry(list[i])
 		end
 		table.clear(lastEmoteStart)
+		emoteSent = false
 		generation += 1
 		started = false
 		playerMoves = false

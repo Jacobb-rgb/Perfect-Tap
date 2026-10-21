@@ -18,6 +18,11 @@
 	the menu; picking the playing one stops it. The Blaster Spin card is
 	grey with "Hold your blaster" while the blaster isn't in hand. A refused
 	pick says why on the hint line (put the ore down first...).
+
+	Never in a close-up (cleaning, build mode, the Foundry anvil, the
+	vault, any Scriptable camera): N and the tile do nothing there (every
+	pick would be refused, and the menu's B / Backspace would take the key
+	cleaning exits with).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -66,6 +71,30 @@ EmoteController.Reasons = {
 local refs: EmoteView.Refs? = nil
 local isOpen = false
 local watchers: { RBXScriptConnection } = {}
+local cleaning: any = nil -- CleaningController (required on the first look: false = none)
+
+-- A close-up now? (MoveController: a Scriptable camera or PlayerControls claimed; the cleaning minigame)
+local function inCloseUp(): boolean
+	if MoveController.inCloseUp() then
+		return true
+	end
+	if cleaning == nil then
+		cleaning = false
+		local module = script.Parent:FindFirstChild("CleaningController")
+		if module and module:IsA("ModuleScript") then
+			local ok, controller = pcall(require, module :: any)
+			if ok and type(controller) == "table" and type((controller :: any).isActive) == "function" then
+				cleaning = controller
+			end
+		end
+	end
+	local controller = cleaning
+	if not controller then
+		return false
+	end
+	local ok, active = pcall(controller.isActive)
+	return ok and active == true
+end
 
 function EmoteController.isOpen(): boolean
 	return isOpen
@@ -187,7 +216,7 @@ local function ensureView(): EmoteView.Refs
 end
 
 function EmoteController.open()
-	if isOpen or not AnimConfig.Emotes then
+	if isOpen or not AnimConfig.Emotes or inCloseUp() then
 		return
 	end
 	MenuPanels.closeOthers(NAME)
@@ -221,6 +250,9 @@ end
 local function onKey(_: string, inputState: Enum.UserInputState): Enum.ContextActionResult
 	if inputState ~= Enum.UserInputState.Begin then
 		return Enum.ContextActionResult.Pass
+	end
+	if not isOpen and inCloseUp() then
+		return Enum.ContextActionResult.Pass -- (cleaning, build mode, the Foundry...: no menu there)
 	end
 	EmoteController.toggle()
 	return Enum.ContextActionResult.Sink

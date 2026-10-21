@@ -862,3 +862,24 @@ What to test in Studio:
    BlasterFx's own sparks only (no white star); selling shows SellController's popup only (no notes or coins).
 2. Golems: run / fly / idle / equip jump as in the anim/golem-run checks above.
 3. Set AnimConfig.GolemMotion = false in Studio: golems hop like before, no limb moves.
+
+## anim/ship review fixes (2026-10-21, branch anim/ship; build/reviews/anim_ship_review_findings.md)
+- Emotes: picking any emote but the Blaster Spin puts a tool in hand away (Humanoid:UnequipTools, as cleaning and
+  build mode do), so it never stops on its first frame; your stop is sent whenever its start was sent (also before
+  the server's echo); a "" echo of your earlier stop that lands right after you picked the next emote
+  (MoveController.EchoGrace) leaves it alone; switching away from the Gem Juggle gives the gems back; a stopped emote
+  out of range is dropped (the slow check sleeps); the Blaster Spin twirls the blaster on the RightGrip weld's C0
+  (BlasterFx's kick keeps C1) on every client and puts it back; the server's cooldown is 0.85 s (the menu's 1.0 s);
+  N and the EMOTES tile do nothing in a close-up (cleaning, build mode, the Foundry, the vault).
+- Golems: GolemGait.classify moves gear with what it is welded to (touching, or a builder's weld): the Dragonscale
+  Knight's sword (blade, fire, guard, pommel) swings with its right fist, every Cape* piece follows the torso,
+  pauldrons turn with their arm, the Dragon King's sceptre and orb stay in its hand, the crowns stay on the heads.
+  The limb loop disconnects when the last running follower is destroyed.
+- SETTINGS: with the UI motion off the Reduce motion row says "Calmer golems: no hops or lean" (what it changes now).
+What to test in Studio:
+1. Mine with the blaster, keep it in hand, press N, pick ROBOT: the blaster goes to the backpack and the robot plays
+   (for the other player too). Pick BLASTER SPIN with the blaster: the gun twirls round the finger, then sits right.
+2. Pick an emote and walk off at once: the other player never sees it keep dancing.
+3. Equip the Dragonscale Knight and the Dragon King, run: the sword and the sceptre stay in the fist, the cape stays
+   on the back, the pauldrons ride the shoulders. Unequip all golems: no errors, nothing keeps running.
+4. Start cleaning / build mode / the Foundry and press N: no EMOTES menu.

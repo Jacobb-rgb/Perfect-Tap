@@ -385,6 +385,28 @@ return function(T, Loader)
 		T.eq(refs.Toggles.ReduceMotion.Button.Text, "OFF")
 	end)
 
+	-- (review anim/ship #4) the row stays, and says what it calms with the UI motion switched off
+	T.test("UIMotion: the Reduce motion row says what it does now (UI motion off: the golems, not the menus)", function()
+		local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+		local row = nil
+		for _, spec in SettingsView.Rows do
+			if spec.Id == "ReduceMotion" then
+				row = spec
+			end
+		end
+		T.truthy(row, "the setting keeps its row")
+		if AnimConfig.UIMotion then
+			T.eq(row.Note, "Calm menus: no pops or bounces")
+		else
+			T.eq(row.Note, "Calmer golems: no hops or lean", "the menus never pop with UI motion off: it calms the golems")
+		end
+		local fs = require("@lune/fs")
+		local view = fs.readFile(Loader.root .. "/src/client/UI/SettingsView.luau")
+		T.truthy(view:find('if AnimConfig.UIMotion then "Calm menus: no pops or bounces" else', 1, true), "both notes, by the switch")
+		local world = fs.readFile(Loader.root .. "/src/client/Controllers/WorldMotionController.luau")
+		T.truthy(world:find("settings.get() :: any).ReduceMotion", 1, true), "the golems read the setting")
+	end)
+
 	-- (review anim/all #3) the windows, chips and HUD bits that animate themselves still too
 	T.test("UIMotion: Reduce motion reaches the self-animated windows, pulses and the HUD", function()
 		local fs = require("@lune/fs")

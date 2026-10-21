@@ -612,8 +612,23 @@ step = function(_dt: number): boolean
 		end
 		p -= 1
 	end
-	for _, state in animated do
-		stepLimbs(state)
+	-- (a follower GolemController destroyed (unequipped, its owner walked away) leaves the list here,
+	-- so the loop can disconnect when it was the last one: nothing calls golemOffset for it again)
+	local a = #animated
+	while a >= 1 do
+		local state = animated[a]
+		local rigged = state.Rig
+		local model = state.Model
+		if not rigged or not rigged.Body.Parent or (model and not model.Parent) then
+			state.Animated = false
+			if rigged then
+				limbParts = math.max(0, limbParts - rigged.Count)
+			end
+			table.remove(animated, a)
+		else
+			stepLimbs(state)
+		end
+		a -= 1
 	end
 	if #moveParts > 0 then
 		if rig then

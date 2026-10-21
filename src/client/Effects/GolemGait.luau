@@ -6,13 +6,21 @@
 
 	- classify(model): the follower's limb groups, worked out once per model.
 	  GolemBuilder names its core parts (Body, Leg1/2, Arm1/2, Fist1/2, Head);
-	  everything else (the gear of every accessory and limited edition, up to
-	  any part count) goes by name family first (Core, Vein, Boulder, Crystal*,
-	  Wing*, Tail*, Aura, Crack*: they stay on the body), then by geometry in
-	  the golem's own units (feet at 0, -X = its left): at or above the neck
-	  -> the head; out at the sides below the shoulders -> that arm (a shield);
-	  low and off-centre -> that leg; the rest -> the body. Each group swings
-	  around its pivot: the hips, the shoulders, the neck.
+	  name families are named too (Core, Vein, Boulder, Crystal*, Wing*,
+	  Tail*, Aura, Crack*, Cape*: they stay on the body, a cape follows the
+	  torso; Pauldron*: the arm on its side; the rounded twins *Fill /
+	  *Edge1..4 go with their block). Everything else (the gear of every
+	  accessory and limited edition, up to any part count) moves with what
+	  it is WELDED to (it touches it, or shares a weld): gear firmly welded
+	  to gear is one weld group that moves as one, and a weld group follows
+	  the named part it is welded to (a sword in the fist swings with that
+	  arm, blade, guard and pommel together; a helm with its horns turns
+	  with the head), or the gear it hangs on (the orb on a sceptre). Where
+	  that leaves a choice, and for gear welded to nothing, it goes by where
+	  it is, in the golem's own units (feet at 0, -X = its left): at or
+	  above the neck -> the head; out at the sides below the shoulders ->
+	  that arm; low and off-centre -> that leg; the rest -> the body. Each
+	  group swings around its pivot: the hips, the shoulders, the neck.
 	- step(gait, now, speed, yaw): the gait clock: the step phase advances by
 	  the cadence (steps get quicker and longer with speed, and quicker for
 	  small golems), the smoothed speed, the turn rate, braking.
@@ -100,8 +108,16 @@ GolemGait.Hip = Vector3.new(0.3, 0.5, 0.02)
 GolemGait.Shoulder = Vector3.new(0.78, 1.38, 0)
 GolemGait.Neck = Vector3.new(0, GolemBuilder.HeadBottom, 0)
 
--- names that stay on the body whatever their height (prefixes)
-GolemGait.BodyNames = { "Body", "Core", "Vein", "Boulder", "Crystal", "Wing", "Tail", "Aura", "Crack" }
+-- names that stay on the body whatever their height (prefixes; a cape and all its pieces follow the torso)
+GolemGait.BodyNames = { "Body", "Core", "Vein", "Boulder", "Crystal", "Wing", "Tail", "Aura", "Crack", "Cape" }
+-- names that go with the arm on their side (prefixes): shoulder armour sits on the arm's pivot and turns in
+-- place there (never with the head)
+GolemGait.ArmNames = { "Pauldron" }
+GolemGait.Touch = 0.04 -- golem units: parts this close count as welded (touching)
+GolemGait.Firm = 0.25 -- parts sharing this much of their volume are firmly welded
+-- named parts of every golem that gear never hangs on (exact names): the shoulder boulder and crystal
+-- reach into the head and the shoulders, the aura disc lies under the feet
+GolemGait.Decor = { Boulder = true, Crystal = true, Aura = true } :: { [string]: boolean }
 
 local function clamp01(x: number): number
 	return math.clamp(x, 0, 1)
@@ -117,9 +133,17 @@ end
 
 ---------------------------------------------------------------- limb groups
 
--- Which group a part belongs to: "LegL" | "LegR" | "ArmL" | "ArmR" | "Head" | "Body", from its name
--- and its spot `p` in golem units (feet at 0).
-function GolemGait.groupOf(name: string, p: Vector3): string
+-- The group a part's NAME decides: "LegL" | "LegR" | "ArmL" | "ArmR" | "Head" | "Body", or nil for gear
+-- (it goes with its weld group). `p` is its spot in golem units (feet at 0): the side of a named limb.
+function GolemGait.named(name: string, p: Vector3): string?
+	-- (GolemBuilder.round's twins: "HeadFill", "HeadEdge1".. go with their block)
+	local base = string.match(name, "^(%a+)Fill$") or string.match(name, "^(%a+)Edge%d+$")
+	if base then
+		local key = GolemGait.named(base, p)
+		if key then
+			return key
+		end
+	end
 	local family = string.match(name, "^(%a+)") or name
 	if family == "Leg" then
 		return if p.X < 0 then "LegL" else "LegR"
@@ -133,7 +157,16 @@ function GolemGait.groupOf(name: string, p: Vector3): string
 			return "Body"
 		end
 	end
-	-- geometry: anything else (helmets, crowns, horns, shields, boots, new gear)
+	for _, prefix in GolemGait.ArmNames do
+		if string.sub(name, 1, #prefix) == prefix then
+			return if p.X < 0 then "ArmL" else "ArmR"
+		end
+	end
+	return nil
+end
+
+-- The group of gear welded to nothing named, by where it is (`p` in golem units, its weld group's centre).
+function GolemGait.placed(p: Vector3): string
 	if p.Y >= GolemGait.Neck.Y - 0.05 then
 		return "Head"
 	elseif math.abs(p.X) >= 0.62 and p.Y < GolemGait.Shoulder.Y + 0.1 then
@@ -144,14 +177,214 @@ function GolemGait.groupOf(name: string, p: Vector3): string
 	return "Body"
 end
 
+-- A part on its own: its name first, then its spot (helmets, crowns, horns, shields, boots, new gear).
+function GolemGait.groupOf(name: string, p: Vector3): string
+	return GolemGait.named(name, p) or GolemGait.placed(p)
+end
+
 local function newGroup(pivot: CFrame): Group
 	return { Parts = {}, Rest = {}, Welds = {}, Pivot = pivot, PivotInv = pivot:Inverse() }
+end
+
+--[[
+	Do two boxes overlap? `rel` = box B's frame in box A's, `a` / `b` their
+	half sizes (the separating axis test: A's 3 axes, B's 3, their 9 cross
+	products).
+]]
+local function boxTouch(rel: CFrame, a0: number, a1: number, a2: number, b0: number, b1: number, b2: number): boolean
+	local tx, ty, tz, r00, r01, r02, r10, r11, r12, r20, r21, r22 = rel:GetComponents()
+	local e = 1e-6 -- (parallel edges)
+	local q00, q01, q02 = math.abs(r00) + e, math.abs(r01) + e, math.abs(r02) + e
+	local q10, q11, q12 = math.abs(r10) + e, math.abs(r11) + e, math.abs(r12) + e
+	local q20, q21, q22 = math.abs(r20) + e, math.abs(r21) + e, math.abs(r22) + e
+	if math.abs(tx) > a0 + b0 * q00 + b1 * q01 + b2 * q02 then
+		return false
+	elseif math.abs(ty) > a1 + b0 * q10 + b1 * q11 + b2 * q12 then
+		return false
+	elseif math.abs(tz) > a2 + b0 * q20 + b1 * q21 + b2 * q22 then
+		return false
+	elseif math.abs(tx * r00 + ty * r10 + tz * r20) > b0 + a0 * q00 + a1 * q10 + a2 * q20 then
+		return false
+	elseif math.abs(tx * r01 + ty * r11 + tz * r21) > b1 + a0 * q01 + a1 * q11 + a2 * q21 then
+		return false
+	elseif math.abs(tx * r02 + ty * r12 + tz * r22) > b2 + a0 * q02 + a1 * q12 + a2 * q22 then
+		return false
+	elseif math.abs(tz * r10 - ty * r20) > a1 * q20 + a2 * q10 + b1 * q02 + b2 * q01 then
+		return false
+	elseif math.abs(tz * r11 - ty * r21) > a1 * q21 + a2 * q11 + b0 * q02 + b2 * q00 then
+		return false
+	elseif math.abs(tz * r12 - ty * r22) > a1 * q22 + a2 * q12 + b0 * q01 + b1 * q00 then
+		return false
+	elseif math.abs(tx * r20 - tz * r00) > a0 * q20 + a2 * q00 + b1 * q12 + b2 * q11 then
+		return false
+	elseif math.abs(tx * r21 - tz * r01) > a0 * q21 + a2 * q01 + b0 * q12 + b2 * q10 then
+		return false
+	elseif math.abs(tx * r22 - tz * r02) > a0 * q22 + a2 * q02 + b0 * q11 + b1 * q10 then
+		return false
+	elseif math.abs(ty * r00 - tx * r10) > a0 * q10 + a1 * q00 + b1 * q22 + b2 * q21 then
+		return false
+	elseif math.abs(ty * r01 - tx * r11) > a0 * q11 + a1 * q01 + b0 * q22 + b2 * q20 then
+		return false
+	elseif math.abs(ty * r02 - tx * r12) > a0 * q12 + a1 * q02 + b0 * q21 + b1 * q20 then
+		return false
+	end
+	return true
+end
+
+function GolemGait.boxesTouch(rel: CFrame, a: Vector3, b: Vector3): boolean
+	return boxTouch(rel, a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+end
+
+-- one part of the model while it is sorted into groups (plain numbers: the pair tests run often)
+type Piece = {
+	Part: BasePart,
+	Rest: CFrame, -- in the Body's frame
+	HX: number, -- half its size plus half the touch margin
+	HY: number,
+	HZ: number,
+	Radius: number?, -- a ball's (with the margin): tested as a ball, not its box
+	MinX: number, -- its box in the Body's frame (axis aligned, with the margin)
+	MinY: number,
+	MinZ: number,
+	MaxX: number,
+	MaxY: number,
+	MaxZ: number,
+	Unit: Vector3, -- its centre in golem units (feet at 0)
+	Volume: number, -- with the margin
+	Named: boolean, -- its group comes from its name (else: gear, by its weld group)
+	Anchor: boolean, -- named, and gear may hang on it (not GolemGait.Decor)
+	Key: string?, -- its group
+	Links: { number }, -- the pieces it touches or shares a weld with
+	Shared: { number }, -- the volume it shares with each (a weld: WELDED)
+}
+
+local WELDED = math.huge -- a weld a builder made (or GolemBuilder.round's twin): always firm
+local LIMBS = { "ArmL", "ArmR", "LegL", "LegR" }
+
+-- (sample spots across a box, as fractions of its half size: 3 x 3 x 3)
+local SAMPLE = { -2 / 3, 0, 2 / 3 }
+
+local function boxesApart(a: Piece, b: Piece): boolean
+	return a.MaxX < b.MinX or b.MaxX < a.MinX or a.MaxY < b.MinY or b.MaxY < a.MinY or a.MaxZ < b.MinZ or b.MaxZ < a.MinZ
+end
+
+-- Do A and B touch? (`rel` = B's frame in A's)
+local function touching(a: Piece, b: Piece, rel: CFrame): boolean
+	local ra, rb = a.Radius, b.Radius
+	if not ra and not rb then
+		return boxTouch(rel, a.HX, a.HY, a.HZ, b.HX, b.HY, b.HZ)
+	end
+	-- a ball: the nearest spot of the other part to its centre
+	local box, centre = a, rel.Position -- (B's centre in A's frame)
+	local radius = rb :: number
+	if ra then
+		box, centre, radius = b, rel:Inverse().Position, ra
+	end
+	local other = box.Radius
+	if other then
+		return centre.Magnitude <= radius + other
+	end
+	local dx = math.max(math.abs(centre.X) - box.HX, 0)
+	local dy = math.max(math.abs(centre.Y) - box.HY, 0)
+	local dz = math.max(math.abs(centre.Z) - box.HZ, 0)
+	return dx * dx + dy * dy + dz * dz <= radius * radius
+end
+
+--[[
+	About how much of A lies inside B (studs^3): `rel` = A's frame in B's;
+	27 spots across A (within its ball, for a ball) are tested in B.
+]]
+local function sharedVolume(a: Piece, b: Piece, rel: CFrame): number
+	local tx, ty, tz, r00, r01, r02, r10, r11, r12, r20, r21, r22 = rel:GetComponents()
+	local hx, hy, hz = a.HX, a.HY, a.HZ
+	local ra = a.Radius
+	local rb = b.Radius
+	local bx, by, bz = b.HX, b.HY, b.HZ
+	local spots, inside = 0, 0
+	for _, fx in SAMPLE do
+		local x = fx * hx
+		for _, fy in SAMPLE do
+			local y = fy * hy
+			for _, fz in SAMPLE do
+				local z = fz * hz
+				if not ra or x * x + y * y + z * z <= ra * ra then
+					spots += 1
+					local px = tx + r00 * x + r01 * y + r02 * z
+					local py = ty + r10 * x + r11 * y + r12 * z
+					local pz = tz + r20 * x + r21 * y + r22 * z
+					if rb then
+						if px * px + py * py + pz * pz <= rb * rb then
+							inside += 1
+						end
+					elseif math.abs(px) <= bx and math.abs(py) <= by and math.abs(pz) <= bz then
+						inside += 1
+					end
+				end
+			end
+		end
+	end
+	return if spots > 0 then inside / spots * a.Volume else 0
+end
+
+local function link(a: Piece, ia: number, b: Piece, ib: number, shared: number)
+	table.insert(a.Links, ib)
+	table.insert(a.Shared, shared)
+	table.insert(b.Links, ia)
+	table.insert(b.Shared, shared)
+end
+
+local function root(parents: { number }, i: number): number
+	local r = i
+	while parents[r] ~= r do
+		r = parents[r]
+	end
+	while parents[i] ~= r do
+		local up = parents[i]
+		parents[i] = r
+		i = up
+	end
+	return r
+end
+
+-- Is the volume `shared` by two pieces a firm weld? (Firm of the smaller one)
+local function firm(shared: number, a: Piece, b: Piece): boolean
+	return shared >= GolemGait.Firm * math.min(a.Volume, b.Volume)
+end
+
+-- The limb of `votes` (key -> volume) with the most, nil when it has none.
+local function limbOf(votes: { [string]: number }): string?
+	local best: string? = nil
+	for _, key in LIMBS do
+		local value = votes[key]
+		if value and (best == nil or value > (votes[best] :: number)) then
+			best = key
+		end
+	end
+	return best
 end
 
 --[[
 	The limb groups of a follower model (GolemBuilder.build, any opts): nil
 	when it has no Body. The Body's frame is the golem's: its centre sits
 	LegHeight + BodySize.Y / 2 units over the feet.
+
+	Gear moves with what it is WELDED to (review anim/ship #8: a sword's
+	blade left its hilt, cape flaps swung with the arms). Parts are welded
+	when they touch (within Touch: an exact box test, balls as balls) or
+	share a builder's weld; FIRMLY when they share at least Firm of the
+	smaller one's volume. Gear firmly welded to other gear (rather than to
+	a named part) makes one WELD GROUP that moves as one. A weld group goes
+	  1. with the named parts it is firmly welded to (where it is when that
+	     is one of them: a helm on the head, a guard and a pommel in the
+	     fist; else a limb, else the head, else the body),
+	  2. else with a limb it touches (a blade held up past the head, welded
+	     to nothing but the fist and the arm: that arm),
+	  3. else with the gear it shares the most with (the orb on a sceptre's
+	     head on the sceptre held in the hand), when that holds firmer than
+	     anything named it brushes,
+	  4. else by where its centre is (GolemGait.placed): a halo floating
+	     over the head, a crown of flames.
+	Capes are named (BodyNames): they follow the torso.
 ]]
 function GolemGait.classify(model: Model): Rig?
 	local body = model.PrimaryPart
@@ -175,21 +408,288 @@ function GolemGait.classify(model: Model): Rig?
 		Count = 0,
 	}
 	local cf = body.CFrame
+	local pad = GolemGait.Touch * s / 2
+	local margin = Vector3.one * pad
+	local lift = Vector3.new(0, bodyY, 0)
+	local pieces: { Piece } = {}
+	local function add(part: BasePart, key: string?)
+		local rest = cf:ToObjectSpace(part.CFrame)
+		local half = part.Size / 2 + margin
+		local radius: number? = nil
+		local extent: Vector3
+		if part:IsA("Part") and part.Shape == Enum.PartType.Ball then
+			local r = math.min(half.X, half.Y, half.Z)
+			radius = r
+			half = Vector3.one * r
+			extent = half
+		else
+			local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = rest:GetComponents()
+			extent = Vector3.new(
+				math.abs(r00) * half.X + math.abs(r01) * half.Y + math.abs(r02) * half.Z,
+				math.abs(r10) * half.X + math.abs(r11) * half.Y + math.abs(r12) * half.Z,
+				math.abs(r20) * half.X + math.abs(r21) * half.Y + math.abs(r22) * half.Z
+			)
+		end
+		local unit = rest.Position / s + lift
+		local named = key or GolemGait.named(part.Name, unit)
+		local low, high = rest.Position - extent, rest.Position + extent
+		table.insert(pieces, {
+			Part = part,
+			Rest = rest,
+			HX = half.X,
+			HY = half.Y,
+			HZ = half.Z,
+			Radius = radius,
+			MinX = low.X,
+			MinY = low.Y,
+			MinZ = low.Z,
+			MaxX = high.X,
+			MaxY = high.Y,
+			MaxZ = high.Z,
+			Unit = unit,
+			Volume = if radius then 4 / 3 * math.pi * radius ^ 3 else 8 * half.X * half.Y * half.Z,
+			Named = named ~= nil,
+			Anchor = named ~= nil and not GolemGait.Decor[part.Name],
+			Key = named,
+			Links = {},
+			Shared = {},
+		})
+	end
+	add(body, "Body")
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") and d ~= body then
-			local rest = cf:ToObjectSpace(d.CFrame)
-			local p = rest.Position / s + Vector3.new(0, bodyY, 0)
-			local key = GolemGait.groupOf(d.Name, p)
-			if key ~= "Body" then
-				local group = (rig :: any)[key] :: Group
-				table.insert(group.Parts, d)
-				table.insert(group.Rest, rest)
-				local weld = d:FindFirstChildOfClass("WeldConstraint")
-				if weld then
-					group.Welds[d] = weld
+			add(d, nil)
+		end
+	end
+	local count = #pieces
+	-- the welds: touching parts (gear with anything; two named parts never need it)
+	for i = 1, count - 1 do
+		local a = pieces[i]
+		for j = i + 1, count do
+			local b = pieces[j]
+			if not (a.Named and b.Named) and not boxesApart(a, b) then
+				local rel = a.Rest:ToObjectSpace(b.Rest) -- (B in A's frame)
+				if touching(a, b, rel) then
+					-- (the smaller one is sampled inside the bigger one)
+					local shared = if a.Volume <= b.Volume then sharedVolume(a, b, rel:Inverse()) else sharedVolume(b, a, rel)
+					link(a, i, b, j, shared)
 				end
-				rig.Count += 1
 			end
+		end
+	end
+	-- ... the welds a builder made between two parts (a follower's own all go to the Body: skipped)
+	local function indexOf(part: Instance?): number?
+		if part == nil or part == body then
+			return nil
+		end
+		for k = 2, count do
+			if pieces[k].Part == part then
+				return k
+			end
+		end
+		return nil
+	end
+	for i = 2, count do
+		for _, child in pieces[i].Part:GetChildren() do
+			if child:IsA("WeldConstraint") or child:IsA("JointInstance") then
+				local i0 = indexOf((child :: any).Part0)
+				local i1 = if i0 then indexOf((child :: any).Part1) else nil
+				if i0 and i1 and i0 ~= i1 then
+					link(pieces[i0], i0, pieces[i1], i1, WELDED)
+				end
+			end
+		end
+	end
+	-- ... and GolemBuilder.round's twins of a gear block ("HelmFill", "HelmEdge1".. with the "Helm")
+	local byName: { [string]: number } = {}
+	for i = count, 2, -1 do
+		byName[pieces[i].Part.Name] = i
+	end
+	for i = 2, count do
+		local piece = pieces[i]
+		if not piece.Named then
+			local name = piece.Part.Name
+			local base = string.match(name, "^(%a+)Fill$") or string.match(name, "^(%a+)Edge%d+$")
+			local twin = if base then byName[base] else nil
+			if twin and twin ~= i then
+				link(piece, i, pieces[twin], twin, WELDED)
+			end
+		end
+	end
+	-- weld groups: gear firmly welded to gear, both ways (Firm of the bigger one too: a staff through
+	-- a big cloud, a claw in a shell or a boot in a nebula stay apart)
+	local parents: { number } = {}
+	for i = 1, count do
+		parents[i] = i
+	end
+	for i = 2, count do
+		local a = pieces[i]
+		if not a.Named then
+			for k, j in a.Links do
+				local b = pieces[j]
+				local shared = a.Shared[k]
+				if not b.Named and shared >= GolemGait.Firm * math.max(a.Volume, b.Volume) then
+					parents[root(parents, i)] = root(parents, j)
+				end
+			end
+		end
+	end
+	local groups: { [number]: { number } } = {}
+	local order: { number } = {} -- (the groups in part order: the same result every time)
+	for i = 2, count do
+		if not pieces[i].Named then
+			local r = root(parents, i)
+			local list = groups[r]
+			if not list then
+				list = {}
+				groups[r] = list
+				table.insert(order, r)
+			end
+			table.insert(list, i)
+		end
+	end
+	local function centreOf(list: { number }): Vector3
+		local centre, volume = Vector3.zero, 0
+		for _, m in list do
+			centre += pieces[m].Unit * pieces[m].Volume
+			volume += pieces[m].Volume
+		end
+		return if volume > 0 then centre / volume else pieces[list[1]].Unit
+	end
+	local function assign(list: { number }, key: string)
+		for _, m in list do
+			pieces[m].Key = key
+		end
+	end
+	-- 1. firmly welded to named parts / 2. touching a limb
+	local open: { number } = {}
+	local firmly: { [string]: number } = {}
+	local touched: { [string]: number } = {}
+	for _, r in order do
+		local list = groups[r]
+		table.clear(firmly)
+		table.clear(touched)
+		local weldedTo: string? = nil -- (a builder's own weld to a named part decides)
+		for _, m in list do
+			local piece = pieces[m]
+			for k, j in piece.Links do
+				local other = pieces[j]
+				local key = other.Key
+				if other.Anchor and key then
+					local shared = piece.Shared[k]
+					if shared > 0 then
+						touched[key] = math.max(touched[key] or 0, shared)
+					end
+					if firm(shared, piece, other) then
+						firmly[key] = math.max(firmly[key] or 0, shared)
+					end
+					if shared == WELDED and not weldedTo then
+						weldedTo = key
+					end
+				end
+			end
+		end
+		local here = GolemGait.placed(centreOf(list))
+		local key: string? = weldedTo
+		if not key and next(firmly) ~= nil then
+			key = if firmly[here] then here else limbOf(firmly) or (if firmly.Head then "Head" else "Body")
+		end
+		if not key then
+			-- (a limb it reaches into, on one side only: a belt or a robe's hem between both legs isn't held)
+			local limb = limbOf(touched)
+			local left = touched.ArmL ~= nil or touched.LegL ~= nil
+			local right = touched.ArmR ~= nil or touched.LegR ~= nil
+			if limb and not (left and right) then
+				key = limb
+			end
+		end
+		if key then
+			assign(list, key)
+		else
+			table.insert(open, r)
+		end
+	end
+	--[[
+		3. the gear it shares the most with, when that holds firmer than
+		anything named it brushes: the firmest first, each time (a spike on
+		an axe head waits for the head, which goes with the haft in the fist).
+		How firmly two parts hold each other: the share of the bigger one (a
+		backpack the big fishbowl helmet reaches into isn't the helmet's).
+		`anyTouch`: a mere touch counts too (chains of gear touching nothing named).
+	]]
+	local function follow(anyTouch: boolean)
+		while #open > 0 do
+			local at, chosen, firmest = 0, nil :: string?, -1
+			for o, r in open do
+				local best: string? = nil
+				local most, brush = -1, 0
+				for _, m in groups[r] do
+					local piece = pieces[m]
+					for k, j in piece.Links do
+						local other = pieces[j]
+						local hold = piece.Shared[k] / math.max(piece.Volume, other.Volume)
+						if other.Named then
+							if other.Anchor then
+								brush = math.max(brush, hold)
+							end
+						elseif other.Key and (hold > 0 or anyTouch) and hold > most then
+							best, most = other.Key, hold
+						end
+					end
+				end
+				if best and most >= brush and most > firmest then
+					at, chosen, firmest = o, best, most
+				end
+			end
+			if not chosen then
+				return
+			end
+			assign(groups[open[at]], chosen)
+			table.remove(open, at)
+		end
+	end
+	follow(false)
+	-- 4. where it is: first the groups that touch a limb (a staff the fist only brushes), then those
+	-- that touch something named, then the rest (after they follow any gear they touch); the gear on
+	-- them follows each time
+	local function touches(list: { number }, limbsOnly: boolean): boolean
+		for _, m in list do
+			for _, j in pieces[m].Links do
+				local other = pieces[j]
+				local key = other.Key
+				if other.Anchor and key and (not limbsOnly or table.find(LIMBS, key) ~= nil) then
+					return true
+				end
+			end
+		end
+		return false
+	end
+	for pass = 1, 3 do
+		if pass == 3 then
+			follow(true)
+		end
+		for o = #open, 1, -1 do
+			local list = groups[open[o]]
+			if pass == 3 or touches(list, pass == 1) then
+				assign(list, GolemGait.placed(centreOf(list)))
+				table.remove(open, o)
+			end
+		end
+		follow(false)
+	end
+	for i = 2, count do
+		local piece = pieces[i]
+		local key = piece.Key
+		if key and key ~= "Body" then
+			local group = (rig :: any)[key] :: Group
+			local d = piece.Part
+			table.insert(group.Parts, d)
+			table.insert(group.Rest, piece.Rest)
+			local weld = d:FindFirstChildOfClass("WeldConstraint")
+			if weld then
+				group.Welds[d] = weld
+			end
+			rig.Count += 1
 		end
 	end
 	return rig

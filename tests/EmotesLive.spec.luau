@@ -22,6 +22,13 @@
 	  keys              N is free (no other KeyCode.N, not a Roblox key, not
 	                    one the integrator listed); no new pad button
 	  EmoteProps        the gem pool and the juggling path
+	  review anim/ship  the blaster in hand goes away for every emote but the
+	                    Blaster Spin; a stop before the server's echo is
+	                    sent; a late "" echo never stops your next emote;
+	                    the gems go back on a switch; a stopped emote far
+	                    away is dropped; the Blaster Spin twirls the grip
+	                    (and puts it back); the server's cooldown is a
+	                    little shorter; no EMOTES menu in a close-up
 ]]
 return function(T, Loader)
 	local fs = require("@lune/fs")
@@ -274,6 +281,38 @@ return function(T, Loader)
 		end
 	end
 
+	T.test("emotes live: the server's cooldown is a little shorter than the menu's (network jitter)", function()
+		T.truthy(EmoteRules.ServerCooldown < EmoteRules.Cooldown, "the server waits less than the client")
+		T.truthy(EmoteRules.ServerCooldown >= 0.5 * EmoteRules.Cooldown, "still a real cooldown")
+		local now = 300
+		local test = EmoteService._test
+		test.reset()
+		test.setClock(function()
+			return now
+		end)
+		test.setCleaning(function()
+			return false
+		end)
+		local ok, err = pcall(function()
+			local p = fakeServerPlayer("Jitter")
+			test.onEmote(p, "Robot")
+			T.eq(attr(p), "Robot:1")
+			test.onEmote(p, "")
+			-- the client waited its full second, but the first packet came in late: 0.9 s apart here
+			now += EmoteRules.Cooldown - 0.1
+			test.onEmote(p, "Robot")
+			T.eq(attr(p), "Robot:2", "taken: the client shows it, so does everyone else")
+			test.onEmote(p, "")
+			now += EmoteRules.ServerCooldown - 0.2
+			test.onEmote(p, "Robot")
+			T.eq(attr(p), "", "a real spam is still refused")
+		end)
+		test.reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("emotes live: Net Emote is rate limited", function()
 		local limit = Net.Events.Emote
 		T.truthy(type(limit) == "table" and limit.Rate <= 3 and limit.Burst <= 5, "a tight limit")
@@ -413,9 +452,15 @@ return function(T, Loader)
 			Sit = false,
 			MoveDirection = Vector3.zero,
 			state = Enum.HumanoidStateType.Running,
+			unequips = 0,
 		}
 		function humanoid.GetState(self)
 			return self.state
+		end
+		-- (the tool goes to the backpack)
+		function humanoid.UnequipTools(self)
+			self.unequips += 1
+			character.tool = nil
 		end
 		function character.FindFirstChildOfClass(_, class)
 			if class == "Humanoid" then
@@ -457,8 +502,8 @@ return function(T, Loader)
 	end
 
 	-- runs `fn` with MoveController on fake services; returns nothing
-	local function withController(moves: boolean, emotes: boolean, fn: (w: any) -> ())
-		T.test(`emotes live: MoveController with PlayerMoves {moves} and Emotes {emotes}`, function()
+	local function withController(moves: boolean, emotes: boolean, fn: (w: any) -> (), title: string?)
+		T.test(title or `emotes live: MoveController with PlayerMoves {moves} and Emotes {emotes}`, function()
 			local w: any = { now = 1000, sends = {}, listens = {} }
 			local meChar, meHum, meParts = fakeCharacter("Me", Vector3.new(0, 3, 0))
 			local themChar, themHum, themParts = fakeCharacter("Them", Vector3.new(6, 3, 0))
@@ -665,6 +710,126 @@ return function(T, Loader)
 		T.eq(MoveController.status().Gems, 0, "the gems go back when it stops")
 	end)
 
+	-- a fake RightGrip weld in a hand (Roblox puts one there when a tool is equipped)
+	local GRIP_BASE = CFrame.new(0, -0.15, 0) * CFrame.Angles(-math.pi / 2, 0, 0)
+	local function gripWeld(hand: any): any
+		local grip: any = { Name = "RightGrip", Parent = hand, C0 = GRIP_BASE, C1 = CFrame.identity }
+		function grip.IsA(_, class)
+			return class == "Weld" or class == "JointInstance"
+		end
+		hand.motors.RightGrip = grip
+		return grip
+	end
+	local function turned(grip: any): number
+		return (grip.C0.LookVector - GRIP_BASE.LookVector).Magnitude
+	end
+
+	withController(false, true, function(w)
+		local entryOf = MoveController._test.entryOf
+
+		-- 1. the blaster in hand (it stays out after mining): any emote but the Blaster Spin puts it away
+		w.meChar.tool = blasterTool()
+		local ok, why = MoveController.playEmote("Robot")
+		T.truthy(ok and why == "Playing", "Robot plays with the blaster in hand")
+		T.eq(w.meHum.unequips, 1, "the blaster goes to the backpack (as cleaning and build mode do)")
+		T.eq(w.meChar.tool, nil, "nothing in hand")
+		w.step(0.6)
+		T.eq(MoveController.emote(), "Robot", "it keeps playing through the checks (no Tool stop on the first frame)")
+		T.eq(#w.sends, 1, "only the start was sent")
+		MoveController.playEmote("Robot")
+		w.step(3)
+
+		-- the Blaster Spin keeps the blaster and twirls it: the RightGrip weld's C0 turns, then goes back
+		w.now += 5
+		w.meChar.tool = blasterTool()
+		local grip = gripWeld(w.meParts.RightHand)
+		T.truthy((MoveController.playEmote("BlasterSpin")), "the Blaster Spin")
+		T.eq(w.meHum.unequips, 1, "keeps the blaster in hand")
+		w.step(0.47)
+		T.truthy(turned(grip) > 0.5, "the blaster twirls round the finger: " .. turned(grip))
+		T.near((grip.C0.Position - GRIP_BASE.Position).Magnitude, 0, 1e-6, "about the grip (the hand holds it)")
+		T.eq(grip.C1, CFrame.identity, "C1 is BlasterFx's (the kick)")
+		MoveController.playEmote("BlasterSpin")
+		w.step(3)
+		T.eq(grip.C0, GRIP_BASE, "the grip is back as it was")
+		T.eq(entryOf(w.meChar).Grip, nil, "and let go")
+		-- the others' Blaster Spin twirls on your screen too
+		w.themChar.tool = blasterTool()
+		local theirGrip = gripWeld(w.themParts.RightHand)
+		w.themChar:SetAttribute(EmoteRules.Attribute, "BlasterSpin:5")
+		w.step(0.47)
+		T.truthy(turned(theirGrip) > 0.5, "their blaster twirls")
+		w.themChar:SetAttribute(EmoteRules.Attribute, "")
+		w.step(3)
+		T.eq(theirGrip.C0, GRIP_BASE, "theirs is put back too")
+		w.themChar.tool = nil
+		w.meChar.tool = nil
+
+		-- 2. a stop before the server's echo came back is still sent (the attribute reads "" from before)
+		w.now += 5
+		w.meChar:SetAttribute(EmoteRules.Attribute, "")
+		local before = #w.sends
+		MoveController.playEmote("Worm")
+		w.meHum.MoveDirection = Vector3.new(0, 0, 1)
+		w.step(0.1)
+		T.eq(MoveController.emote(), nil, "walking off stops it")
+		T.eq(#w.sends, before + 2, "the start and the stop")
+		T.eq(w.sends[#w.sends][1], "Emote")
+		T.eq(w.sends[#w.sends][2], "", "the stop went out before the echo")
+		w.meHum.MoveDirection = Vector3.zero
+		w.meChar:SetAttribute(EmoteRules.Attribute, "Worm:7")
+		w.step(1)
+		T.eq(MoveController.emote(), nil, "the late echo never restarts yours")
+		T.eq(#w.sends, before + 2, "nothing more to send")
+		-- ... and the "" echo of that stop, arriving after you picked the next emote, never stops it
+		w.now += 5
+		MoveController.playEmote("Victory")
+		w.meChar:SetAttribute(EmoteRules.Attribute, "Victory:8")
+		w.step(0.3)
+		w.meHum.MoveDirection = Vector3.new(0, 0, 1)
+		w.step(0.1)
+		w.meHum.MoveDirection = Vector3.zero
+		T.eq(w.sends[#w.sends][2], "", "Victory's stop")
+		MoveController.playEmote("Headspin")
+		w.meChar:SetAttribute(EmoteRules.Attribute, "")
+		w.step(0.2)
+		T.eq(MoveController.emote(), "Headspin", "the echo of the earlier stop leaves the new emote alone")
+		w.meChar:SetAttribute(EmoteRules.Attribute, "Headspin:9")
+		w.step(MoveController.EchoGrace + 0.2)
+		w.meChar:SetAttribute(EmoteRules.Attribute, "")
+		T.eq(MoveController.emote(), nil, "a later stop from the server is honoured")
+		w.step(3)
+
+		-- 3. switching from the Gem Juggle gives the gems back
+		w.themChar:SetAttribute(EmoteRules.Attribute, "GemJuggle:10")
+		w.step(0.6)
+		T.eq(MoveController.status().Gems, 1, "a juggler")
+		local gems = entryOf(w.themChar).Gems
+		w.themChar:SetAttribute(EmoteRules.Attribute, "Robot:11")
+		w.step(0.2)
+		T.eq(MoveController.status().Gems, 0, "another emote: the gems go back to the pool")
+		T.eq(gems[1].Parent, nil, "none hangs in the air")
+
+		-- 4. a stopped emote far away is dropped (nothing left for the slow check to watch)
+		local root = w.themChar.FindFirstChild(nil, "HumanoidRootPart")
+		root.Position = Vector3.new(400, 3, 0)
+		w.themChar:SetAttribute(EmoteRules.Attribute, "Worm:12")
+		MoveController._test.check()
+		local slot = entryOf(w.themChar).Slots[4]
+		T.truthy(slot.Move ~= nil, "far away an emote waits (it plays when they come into view)")
+		T.falsy(MoveController.status().Loop, "no loop for it")
+		w.themChar:SetAttribute(EmoteRules.Attribute, "")
+		T.eq(slot.Move, nil, "stopped out of range: dropped")
+		T.eq(slot.Layer.Weight, 0)
+		root.Position = Vector3.new(6, 3, 0)
+
+		-- 5. a close-up (cleaning, build mode, the Foundry, the vault): no EMOTES menu there
+		T.falsy(MoveController.inCloseUp(), "no close-up now")
+		w.camera.CameraType = Enum.CameraType.Scriptable
+		T.truthy(MoveController.inCloseUp(), "a Scriptable camera is a close-up")
+		w.camera.CameraType = Enum.CameraType.Custom
+	end, "emotes live: review anim/ship: blaster, early stops, echoes, gems, far emotes, the twirl, close-ups")
+
 	withController(true, true, function(w)
 		-- moves on: everything as before
 		T.eq(w.stepped.count(), 1, "the moves keep their one loop")
@@ -799,6 +964,14 @@ return function(T, Loader)
 			T.falsy(source:find("KeyCode." .. pad, 1, true), "no " .. pad .. " binding")
 		end
 		T.truthy(source:find("Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace", 1, true), "B / Backspace close it")
+		-- (review anim/ship #13) never over a close-up: N passes, the tile does nothing there
+		T.truthy(
+			source:find("if not isOpen and inCloseUp() then\n\t\treturn Enum.ContextActionResult.Pass", 1, true),
+			"N passes in a close-up"
+		)
+		T.truthy(source:find("if isOpen or not AnimConfig.Emotes or inCloseUp() then", 1, true), "open() refuses a close-up")
+		T.truthy(source:find("MoveController.inCloseUp()", 1, true), "a Scriptable camera or claimed controls")
+		T.truthy(source:find('FindFirstChild("CleaningController")', 1, true), "and the cleaning minigame")
 		local panels = fs.readFile(Loader.root .. "/src/client/Util/MenuPanels.luau")
 		T.truthy(panels:find('"EmoteController"', 1, true), "a MenuPanels panel: it closes when another opens")
 	end)
