@@ -20,6 +20,15 @@
 	  footer   the control hint (not on phones); with a gamepad the
 	           platform's own button glyphs (TechShopView.setHint)
 
+	Where it was opened (TechShopView.Where, setWhere): at the lobby's
+	UPGRADES counter everything is sold; from your base (build mode's SHOP
+	button: TechShopController.openMachines) only machines are (ShopService
+	sells them at your own plot), so the other tabs' BUYs are greyed out
+	and say "at the UPGRADES stall". A note at the top of each list says
+	so, and the MACHINES note says where a machine you buy goes (your BUILD
+	menu) and how to place it from there (every layout: the subtitle is
+	not shown on phones).
+
 	A row shows the server's answer for a moment (the controller sets its
 	status line and button text). Designed for 720 design units of height
 	(HudController.uiScale); the compact layout (phones, uiScale 0.62) makes
@@ -44,6 +53,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UIConfig = require(Shared.Config.UIConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local MachineData = require(Shared.Config.MachineData)
 local Theme = require(Shared.Config.UITheme)
 local Format = require(Shared.Util.Format)
@@ -56,6 +66,15 @@ local TrainView = require(script.Parent.TrainView)
 local TechShopView = {}
 
 export type Tab = "Machines" | "Upgrades" | "Automation"
+--[[
+	Where the window was opened (TechShopController):
+	  Counter  the lobby's UPGRADES counter: everything is for sale
+	  Base     TechShopController.openMachines outside build mode: machines
+	           only (bought at your own plot)
+	  Build    the same from build mode's SHOP button: closing the shop
+	           goes back to build mode
+]]
+export type Where = "Counter" | "Base" | "Build"
 
 -- One BUY button on a card.
 export type Buy = {
@@ -131,6 +150,7 @@ export type Refs = {
 	Title: TextLabel,
 	Subtitle: TextLabel,
 	Receipt: TextLabel,
+	ReceiptBox: Vector2, -- the room the header message gets (design units), set by layout
 	Balance: Frame,
 	BalanceAmount: TextLabel,
 	Close: TextButton,
@@ -138,6 +158,9 @@ export type Refs = {
 	Tabs: { [string]: TextButton }, -- by Tab
 	TabGlyphs: { ImageLabel }, -- LB (left) and RB (right), shown with a gamepad
 	Lists: { [string]: ScrollingFrame }, -- by Tab
+	Notes: { [string]: TextLabel }, -- by Tab: the note at the top of each list (TechShopView.setWhere)
+	NoteBox: Vector2, -- the room a note's text gets (design units), set by layout
+	Where: Where,
 	Groups: { TextLabel }, -- the group headers in the UPGRADES list
 	Rows: { [string]: Row },
 	RowList: { Row }, -- every row in catalog order
@@ -174,6 +197,9 @@ TechShopView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap: a pan
 -- studs from the counter's surface at which the open shop closes: under the
 -- server's ShopService.Range (30), so lag never gets an open shop's BUY refused
 TechShopView.CloseRange = 24
+-- horizontal studs from your plot's centre at which a shop opened there
+-- closes: under the server's GameConfig.BuildRange (ShopService.nearOwnPlot)
+TechShopView.BaseCloseRange = GameConfig.BuildRange - 6
 
 --[[
 	Pen automation steps (EconomyConfig.PenAutomation levels), as PenService
@@ -213,7 +239,41 @@ TechShopView.StatusText = {
 	LateBought = "Bought!",
 	-- the card's other button while one BUY waits for its answer
 	Waiting = "Wait for your last buy",
+	-- a machine BUY refused as "TooFar": machines are sold at your base too
+	TooFarMachine = "Go to your BASE or the UPGRADES stall",
+	-- a greyed-out upgrade BUY in a shop opened at your base (TechShopView.cards with Where "Base" / "Build")
+	CounterOnly = "Buy this at the UPGRADES stall",
 }
+
+-- The subtitle (PC) and the notes at the top of the lists for each Where (TechShopView.setWhere; nil: no note).
+TechShopView.WhereText = {
+	Counter = {
+		Subtitle = "Machines and upgrades for your base. Machines you buy wait in your Build menu.",
+		Machines = "Machines you buy go to your BUILD menu. Go to your BASE and press B (BUILD) to place them.",
+	},
+	Base = {
+		Subtitle = "Machines for your base. Upgrades are sold at the UPGRADES stall in the lobby.",
+		Machines = "Machines you buy go to your BUILD menu. At your BASE, press B (BUILD) to place them.",
+		Upgrades = "Upgrades are sold at the UPGRADES stall in the lobby.",
+		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
+	},
+	Build = {
+		Subtitle = "Machines for your base. Upgrades are sold at the UPGRADES stall in the lobby.",
+		Machines = "Machines you buy go straight to your BUILD menu. Close the shop to place them.",
+		Upgrades = "Upgrades are sold at the UPGRADES stall in the lobby.",
+		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
+	},
+} :: { [string]: { [string]: string } }
+
+-- Where from a plain string (the counter for anything else).
+function TechShopView.toWhere(name: any): Where
+	if name == "Base" then
+		return "Base"
+	elseif name == "Build" then
+		return "Build"
+	end
+	return "Counter"
+end
 
 local rgb = Color3.fromRGB
 
@@ -275,11 +335,14 @@ type Metrics = {
 	DetailMin: number,
 	Close: number,
 	TabGap: number, -- room between the tab bar's end and the X button (compact: they share rows)
+	Note: number, -- the list notes' text size, and the smallest it may shrink to
+	NoteMin: number,
 }
 
 local PAD = 16
 local SCROLLBAR = 10
 local GAP = 8
+local NOTE_PAD = 12 -- a list note's text inset (left and right)
 
 local METRICS: { [string]: Metrics } = {
 	Normal = {
@@ -305,6 +368,8 @@ local METRICS: { [string]: Metrics } = {
 		DetailMin = 14,
 		Close = 54,
 		TabGap = 0,
+		Note = 17,
+		NoteMin = 14,
 	},
 	-- phones: at uiScale 0.62 a 72-unit button is about 44 pt
 	Compact = {
@@ -330,6 +395,8 @@ local METRICS: { [string]: Metrics } = {
 		Close = 72,
 		-- the X (72 high) reaches below the header: the tab bar ends left of it
 		TabGap = 72 + 20,
+		Note = 20,
+		NoteMin = 16,
 	},
 }
 
@@ -835,14 +902,26 @@ end
 --[[
 	Every card of the shop from a State snapshot and your coins, in catalog
 	order: the machines, the machine upgrades (by machine, Speed then
-	Quality), Bellows, Slots, then the two pen automation steps.
+	Quality), Bellows, Slots, then the two pen automation steps. `where`
+	(nil = "Counter"): in a shop opened at your base only machines are
+	sold, so every other BUY not yet done is greyed out ("Locked", with
+	StatusText.CounterOnly as its note); the server would refuse it as
+	"TooFar".
 ]]
-function TechShopView.cards(rawState: any, coins: number): { Card }
+function TechShopView.cards(rawState: any, coins: number, where: Where?): { Card }
 	local state = safeState(rawState)
 	local cash = num(coins)
 	local list: { Card } = {}
 	local order = 0
+	local machinesOnly = where == "Base" or where == "Build"
 	local function add(card: Card)
+		if machinesOnly and card.Tab ~= "Machines" and not card.Done then
+			for _, offer in card.Buys do
+				offer.CanBuy = false
+				offer.Reason = "Locked"
+			end
+			card.Note = TechShopView.StatusText.CounterOnly
+		end
 		table.insert(list, card)
 	end
 	-- machines first, then the per-machine upgrades, then Bellows and Slots
@@ -1323,6 +1402,22 @@ local function newRow(refs: Refs, spec: RowSpec, m: Metrics): Row
 	return row
 end
 
+-- The note at the top of a list (TechShopView.setWhere fills it).
+local function listNote(list: ScrollingFrame): TextLabel
+	local note = UIKit.label(list, "", 17, {
+		Name = "Note",
+		LayoutOrder = -1,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Theme.PanelDark,
+		TextColor3 = Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Visible = false,
+	})
+	UIKit.corner(note, 10)
+	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, NOTE_PAD), PaddingRight = UDim.new(0, NOTE_PAD) }, note)
+	return note
+end
+
 local function groupHeader(list: ScrollingFrame, text: string, order: number): TextLabel
 	return UIKit.label(list, text, 20, {
 		Name = "Group",
@@ -1447,6 +1542,10 @@ function TechShopView.build(compact: boolean?): Refs
 		UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10) }, list)
 		lists[tab] = list
 	end
+	local notes: { [string]: TextLabel } = {}
+	for _, tab in TABS do
+		notes[tab] = listNote(lists[tab])
+	end
 	local groups = {
 		groupHeader(lists.Upgrades, "MACHINE UPGRADES", 0),
 		groupHeader(lists.Upgrades, "FOR ALL MACHINES", TechShopView.AllMachinesOrder),
@@ -1509,6 +1608,7 @@ function TechShopView.build(compact: boolean?): Refs
 		Title = title,
 		Subtitle = subtitle,
 		Receipt = receipt,
+		ReceiptBox = Vector2.zero,
 		Balance = balance,
 		BalanceAmount = balanceAmount,
 		Close = close,
@@ -1516,6 +1616,9 @@ function TechShopView.build(compact: boolean?): Refs
 		Tabs = tabs,
 		TabGlyphs = glyphs,
 		Lists = lists,
+		Notes = notes,
+		NoteBox = Vector2.zero,
+		Where = "Counter",
 		Groups = groups,
 		Rows = {},
 		RowList = {},
@@ -1531,6 +1634,7 @@ function TechShopView.build(compact: boolean?): Refs
 		newRow(refs, spec, m)
 	end
 	TechShopView.setTab(refs, "Machines")
+	TechShopView.setWhere(refs, "Counter")
 	TechShopView.layout(refs, refs.Compact, math.huge, math.huge)
 	return refs
 end
@@ -1558,6 +1662,27 @@ local function fitRow(row: Row)
 	TechShopView.fitText(row.PriceSub, b.PriceWidth, 18, b.PriceSub, 11)
 end
 TechShopView.fitRow = fitRow
+
+-- Fits the header message into its room (a long buy toast gets a little
+-- smaller; on phones it wraps to two lines next to the title).
+local function fitReceipt(refs: Refs)
+	local box = refs.ReceiptBox
+	if box.X > 0 and refs.Receipt.Text ~= "" then
+		TechShopView.fitText(refs.Receipt, box.X, box.Y, if refs.Compact then 18 else 17, 13)
+	end
+end
+
+-- Fits the list notes' texts into the room layout gave them.
+local function fitNotes(refs: Refs)
+	local box = refs.NoteBox
+	if box.X <= 0 then
+		return -- not laid out yet
+	end
+	local m = metrics(refs.Compact)
+	for _, note in refs.Notes do
+		TechShopView.fitText(note, box.X, box.Y, m.Note, m.NoteMin)
+	end
+end
 
 --[[
 	One row (`rowWidth` design units wide): icon | title + chip, description
@@ -1695,12 +1820,14 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 		refs.Receipt.TextWrapped = true
 		refs.Receipt.TextTruncate = Enum.TextTruncate.None
 		refs.Receipt.TextSize = 18
+		refs.ReceiptBox = Vector2.new(width - (PAD + titleWidth + headRight), 56)
 	else
 		refs.Receipt.Position = UDim2.fromOffset(PAD, 50)
 		refs.Receipt.Size = UDim2.new(1, -(PAD * 2 + m.Close), 0, 24)
 		refs.Receipt.TextWrapped = false
 		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
 		refs.Receipt.TextSize = 17
+		refs.ReceiptBox = Vector2.new(width - (PAD * 2 + m.Close), 24)
 	end
 
 	-- tabs: three equal buttons, room for the LB / RB glyphs at the ends;
@@ -1735,6 +1862,14 @@ function TechShopView.layout(refs: Refs, compact: boolean, maxWidth: number, max
 	for _, row in refs.RowList do
 		placeRow(row, m, compact, rowWidth)
 	end
+	-- the notes: two lines of text over the rows' width
+	local noteHeight = math.ceil(m.Note * TechShopView.LineHeight * 2) + 10
+	refs.NoteBox = Vector2.new(rowWidth - NOTE_PAD * 2, noteHeight - 6)
+	for _, note in refs.Notes do
+		note.Size = UDim2.new(1, -SCROLLBAR, 0, noteHeight)
+	end
+	fitNotes(refs)
+	fitReceipt(refs)
 end
 
 ---------------------------------------------------------------- filling in
@@ -1750,6 +1885,23 @@ function TechShopView.setTab(refs: Refs, tab: string)
 		holderOf(button).BackgroundColor3 = if on then Theme.AccentDark else Theme.PanelDark
 		button.TextColor3 = if on then Theme.Text else Theme.TextDim
 	end
+end
+
+--[[
+	Says where the shop was opened (TechShopView.Where): the subtitle and
+	the notes at the top of the lists (TechShopView.WhereText). The cards
+	follow with TechShopView.cards(state, coins, where).
+]]
+function TechShopView.setWhere(refs: Refs, where: Where)
+	refs.Where = where
+	local texts = TechShopView.WhereText[where]
+	refs.Subtitle.Text = texts.Subtitle
+	for tab, note in refs.Notes do
+		local text = texts[tab]
+		note.Text = text or ""
+		note.Visible = text ~= nil
+	end
+	fitNotes(refs)
 end
 
 local function fillRow(row: Row, card: Card)
@@ -1837,6 +1989,7 @@ function TechShopView.showReceipt(refs: Refs, text: string, color: Color3)
 	refs.Receipt.Text = text
 	refs.Receipt.TextColor3 = color
 	refs.Receipt.Visible = true
+	fitReceipt(refs)
 	refs.Subtitle.Visible = false
 end
 
@@ -1891,7 +2044,6 @@ function TechShopView.touchTargets(refs: Refs): { GuiObject }
 	end
 	return list
 end
-
 
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
 -- While the light UI is on (ships off), the same window wears the light
