@@ -101,6 +101,13 @@ for _, star in StarBlasterData.List do
 	models["star_" .. star.Id] = BlasterBuilder.buildStar(star, 10, "")
 end
 
+-- the droppers (the DROPPERS shop tiles; in the game a live ViewportFrame)
+local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
+local DropperBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.DropperBuilder")
+for _, dropper in DropperConfig.List do
+	models["dropper_" .. dropper.Id] = DropperBuilder.build(dropper.Id, CF.new())
+end
+models.dropper_MoneyLaser2X = Loader.requirePath("ReplicatedStorage.Shared.Builders.LaserBuilder").build(CF.new())
 -- every hoverboard (the hoverboards window's cards, the shop's board passes; in the game a live ViewportFrame)
 local HoverboardData = Loader.requirePath("ReplicatedStorage.Shared.Config.HoverboardData")
 local HoverboardBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.HoverboardBuilder")

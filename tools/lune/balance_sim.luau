@@ -51,6 +51,7 @@ local Rarity = Loader.requirePath("ReplicatedStorage.Shared.Config.Rarity")
 local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
+local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 local ToolData = Loader.requirePath("ReplicatedStorage.Shared.Config.ToolData")
 local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
@@ -133,6 +134,10 @@ local A = {
 	CapsulePrices = nil :: { [string]: number }?, -- coin capsule base price (x LevelScale) instead of CapsuleConfig's
 	LevelScale = nil :: { number }?, -- capsule price multiplier per blaster level instead of CapsuleConfig's
 	CrystalMode = "Mixed", -- a label only (the floors come from MineFloors / FloorTables; kept for old override files)
+	-- the droppers (DropperConfig, 2026-10-21): buy the next dropper (one of each, in order) or a Money
+	-- Laser (at most one per dropper) when it costs at most DropperMinutes of the current total income
+	Droppers = false,
+	DropperMinutes = 30,
 }
 
 -- Scenarios run one after the other (each overrides some assumptions).
@@ -1198,6 +1203,10 @@ local function simulate(seed: number, start: any?): any
 			end
 		end
 		local income = saleRate(p, cleaned, raw, floor) + podiumIncome(p)
+		if A.Droppers and p.Placed then
+			-- the game's rule: the droppers earn through the same income multiplier as the podiums
+			income += DropperConfig.placedIncome(p.Placed) * A.IncomeMult * (1 + (statsOf(p).IncomePct or 0))
+		end
 		p.Coins += income * A.Step
 		p.Earned += income * A.Step
 		levelStep(p, rocks, cleaned, raw, t)
@@ -1223,6 +1232,32 @@ local function simulate(seed: number, start: any?): any
 				p.EnchantStats = nil
 				refillSlots(p) -- a new enchant slot may be open
 				mark(p, "Blaster " .. p.Blaster, t)
+			end
+		end
+		-- 1b) the droppers (off by default)
+		if A.Droppers then
+			p.Placed = p.Placed or {}
+			p.DropperNext = p.DropperNext or 1
+			p.Lasers = p.Lasers or 0
+			local nextDropper = DropperConfig.List[p.DropperNext]
+			local owned = p.DropperNext - 1
+			local laser = DropperConfig.Laser
+			local pick: { Id: string, Price: number, Name: string }? = nil
+			if nextDropper then
+				pick = { Id = nextDropper.Id, Price = nextDropper.Price, Name = nextDropper.Name }
+			end
+			if p.Lasers < owned and (pick == nil or laser.Price < pick.Price) then
+				pick = { Id = laser.Id, Price = laser.Price, Name = laser.Name }
+			end
+			if pick and pick.Price <= income * A.DropperMinutes * 60 and p.Coins >= pick.Price then
+				buy(p, pick.Name, pick.Price, t)
+				table.insert(p.Placed, { Id = pick.Id })
+				if pick.Id == laser.Id then
+					p.Lasers += 1
+				else
+					p.DropperNext += 1
+				end
+				mark(p, pick.Name, t)
 			end
 		end
 		-- 2) the elevator once floor 4 is in reach

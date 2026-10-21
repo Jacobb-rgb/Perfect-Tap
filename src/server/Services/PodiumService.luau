@@ -48,6 +48,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayout = require(Shared.Config.BaseLayout)
+local DropperConfig = require(Shared.Config.DropperConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local ItemData = require(Shared.Config.ItemData)
@@ -175,10 +176,11 @@ local function incomeAllSlots(player: Player, data: { [string]: any }): number
 			total += ItemData.income(desc) * multiplier
 		end
 	end
-	return total
+	-- the droppers earn on top of every podium
+	return total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
 end
 
--- Coins per second from all podiums.
+-- Coins per second from all podiums and the plot's droppers.
 function PodiumService.incomeOf(player: Player, data: { [string]: any }?): number
 	local d = data or DataService.get(player)
 	if not d then
@@ -189,6 +191,8 @@ function PodiumService.incomeOf(player: Player, data: { [string]: any }?): numbe
 	for slot = 1, MAX do
 		total += PodiumService.slotIncome(player, d, slot, multiplier)
 	end
+	-- the droppers on the plot (and their Money Lasers)
+	total += DropperConfig.placedIncome(d.PlacedMachines) * multiplier
 	return total
 end
 
@@ -907,7 +911,24 @@ end
 ---------------------------------------------------------------- lifecycle
 
 -- Internals for the Lune tests only (tests/PodiumService.spec.luau).
+-- The State snapshot's income: podiums + droppers (= incomeOf), per podium, the slots.
+local function provide(player: Player, data: { [string]: any }, snapshot: { [string]: any })
+	local multiplier = EconomyService.incomeMultiplier(player)
+	local perSlot = {}
+	local total = 0
+	for slot = 1, MAX do
+		local income = PodiumService.slotIncome(player, data, slot, multiplier)
+		perSlot[slot] = income
+		total += income
+	end
+	-- (the same total as incomeOf: the HUD chip, predicted coins, the wheel and store cards)
+	snapshot.Income = total + DropperConfig.placedIncome(data.PlacedMachines) * multiplier
+	snapshot.PodiumIncome = perSlot
+	snapshot.PodiumSlots = PodiumService.slotsFor(player)
+end
+
 PodiumService._test = {
+	provide = provide,
 	action = onAction,
 	prompt = onPrompt,
 	openPicker = openPicker,
@@ -968,19 +989,7 @@ end
 function PodiumService.init()
 	Net.on("PodiumAction", onAction)
 	PenService.setPodiumPlacer(PodiumService.place)
-	StateService.addProvider(function(player, data, snapshot)
-		local multiplier = EconomyService.incomeMultiplier(player)
-		local perSlot = {}
-		local total = 0
-		for slot = 1, MAX do
-			local income = PodiumService.slotIncome(player, data, slot, multiplier)
-			perSlot[slot] = income
-			total += income
-		end
-		snapshot.Income = total
-		snapshot.PodiumIncome = perSlot
-		snapshot.PodiumSlots = PodiumService.slotsFor(player)
-	end)
+	StateService.addProvider(PodiumService._test.provide)
 	for _, plot in WorldLayout.Plots do
 		setupPrompts(plot.Id)
 		refreshLocks(plot.Id, nil)
