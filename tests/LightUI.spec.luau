@@ -569,10 +569,7 @@ return function(T, Loader)
 	T.test("LightUI: the steps 6-7 windows wear the light skin only with the switch on", function()
 		local function builds(): { [string]: any }
 			return {
-				Boost = ui("BoostView").build(false).Gui,
 				BoostChips = ui("BoostView").buildChips().Gui,
-				Enchant = ui("EnchantView").build(false).Gui,
-				Gear = ui("GearShopView").build(false).Gui,
 				Panel = ui("MenuPanel").build("Test", "TEST", "sub", nil).Gui,
 			}
 		end
@@ -653,6 +650,31 @@ return function(T, Loader)
 				for name, gui in guis do
 					T.falsy(gui:GetAttribute("LightSkin"), `{label}: no LightSkin on {name}`)
 					T.truthy(gui:GetAttribute("PopSkin"), `{label}: the Pop {name}`)
+					gui:Destroy()
+				end
+			end
+		end
+		check("switch off")
+		withLight(function()
+			check("switch on")
+		end)
+	end)
+
+	-- the luck boosts, the Enchant shop and the Gear shop are rebuilt in the Pop
+	-- look (owner 2026-10-21): never LightSkin, switch on or off
+	T.test("LightUI: the boosts, Enchant and Gear windows keep the Pop look", function()
+		local function check(label: string)
+			for _, compact in { false, true } do
+				local guis = {
+					Boost = ui("BoostView").build(compact).Gui,
+					Enchant = ui("EnchantView").build(compact).Gui,
+					Gear = ui("GearShopView").build(compact).Gui,
+				}
+				for name, gui in guis do
+					T.falsy(gui:GetAttribute("LightSkin"), `{label}: no LightSkin on {name}`)
+					T.truthy(gui:GetAttribute("PopSkin"), `{label}: the Pop {name}`)
+					local panel = gui:FindFirstChild("Panel") :: any
+					T.truthy(panel:FindFirstChild("PopBand") and panel:FindFirstChild("PopBody"), `{label}: {name}'s band and body`)
 					gui:Destroy()
 				end
 			end
