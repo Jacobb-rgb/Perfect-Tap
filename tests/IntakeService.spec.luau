@@ -308,6 +308,7 @@ return function(T, Loader)
 		end
 		w.full = true
 		local dropped = item("Clean", inHopper)
+		dropped.HandDropped = true -- the player dropped or threw it (CarryService)
 		intake.scanOne(dropped, 10)
 		T.eq(#pops(), 1, "one pop")
 		local pop = pops()[1]
@@ -318,6 +319,7 @@ return function(T, Loader)
 		T.eq(#w.inserts, 0, "not put in")
 		-- a whole stack dropped at once: one pop per machine at a time
 		local second = item("Clean", inHopper)
+		second.HandDropped = true
 		intake.scanOne(second, 10.1)
 		T.eq(#pops(), 1, "not again so soon on the same machine")
 		-- still lying there, scan after scan: no new pop
@@ -334,6 +336,14 @@ return function(T, Loader)
 		intake.scanOne(onBelt, 30)
 		T.eq(#pops(), 2, "belts stay quiet")
 		T.eq(onBelt.State, "Loose", "the belt item waits too")
+		-- a server-spawned item (a machine pop or deck drop, never in a
+		-- player's hands) resting in the full hopper: automation, no pop
+		local spilled = item("Clean", inHopper)
+		T.eq(spilled.HandDropped, nil, "not dropped by a player")
+		intake.scanOne(spilled, 50)
+		intake.scanOne(spilled, 60)
+		T.eq(#pops(), 2, "automated drops stay quiet")
+		T.eq(spilled.State, "Loose", "it waits in the hopper")
 		-- room again: the item goes in, nothing pops
 		w.full = false
 		intake.scanOne(dropped, 40)

@@ -27,7 +27,8 @@
 	and say "at the UPGRADES stall". A note at the top of each list says
 	so, and the MACHINES note says where a machine you buy goes (your BUILD
 	menu) and how to place it from there (every layout: the subtitle is
-	not shown on phones).
+	not shown on phones), with the key of the device in use (setDevice:
+	B, D-pad Up or a tap on BUILD; TechShopView.BuildKey).
 
 	A row shows the server's answer for a moment (the controller sets its
 	status line and button text). Designed for 720 design units of height
@@ -75,6 +76,8 @@ export type Tab = "Machines" | "Upgrades" | "Automation"
 	           goes back to build mode
 ]]
 export type Where = "Counter" | "Base" | "Build"
+-- The device in use, for the key the notes name (TechShopView.setDevice).
+export type Device = "Keyboard" | "Gamepad" | "Touch"
 
 -- One BUY button on a card.
 export type Buy = {
@@ -161,6 +164,7 @@ export type Refs = {
 	Notes: { [string]: TextLabel }, -- by Tab: the note at the top of each list (TechShopView.setWhere)
 	NoteBox: Vector2, -- the room a note's text gets (design units), set by layout
 	Where: Where,
+	Device: Device, -- whose BUILD key the notes name (TechShopView.setDevice)
 	Groups: { TextLabel }, -- the group headers in the UPGRADES list
 	Rows: { [string]: Row },
 	RowList: { Row }, -- every row in catalog order
@@ -200,6 +204,18 @@ TechShopView.CloseRange = 24
 -- horizontal studs from your plot's centre at which a shop opened there
 -- closes: under the server's GameConfig.BuildRange (ShopService.nearOwnPlot)
 TechShopView.BaseCloseRange = GameConfig.BuildRange - 6
+TechShopView.BaseCloseSlack = 2 -- studs past where it opened, when that was further out
+
+--[[
+	The walk-away range of a shop with no counter, from your distance to
+	your plot's centre when it opened: BaseCloseRange, or just past where
+	it opened when that was further (build mode opens up to BuildRange
+	away), never beyond BuildRange. Every opening gets one, so walking away
+	always closes it.
+]]
+function TechShopView.baseCloseRange(distanceAtOpen: number): number
+	return math.min(GameConfig.BuildRange, math.max(TechShopView.BaseCloseRange, distanceAtOpen + TechShopView.BaseCloseSlack))
+end
 
 --[[
 	Pen automation steps (EconomyConfig.PenAutomation levels), as PenService
@@ -245,15 +261,24 @@ TechShopView.StatusText = {
 	CounterOnly = "Buy this at the UPGRADES stall",
 }
 
--- The subtitle (PC) and the notes at the top of the lists for each Where (TechShopView.setWhere; nil: no note).
+-- How each device opens build mode, for "{build}" in the notes (the HUD
+-- BUILD tile's key: B, D-pad Up, or the tile itself on touch).
+TechShopView.BuildKey = {
+	Keyboard = "press B (BUILD)",
+	Gamepad = "press D-pad Up (BUILD)",
+	Touch = "tap BUILD",
+} :: { [Device]: string }
+
+-- The subtitle (PC) and the notes at the top of the lists for each Where
+-- (TechShopView.setWhere; nil: no note; "{build}": TechShopView.BuildKey).
 TechShopView.WhereText = {
 	Counter = {
 		Subtitle = "Machines and upgrades for your base. Machines you buy wait in your Build menu.",
-		Machines = "Machines you buy go to your BUILD menu. Go to your BASE and press B (BUILD) to place them.",
+		Machines = "Machines you buy go to your BUILD menu. Go to your BASE and {build} to place them.",
 	},
 	Base = {
 		Subtitle = "Machines for your base. Upgrades are sold at the UPGRADES stall in the lobby.",
-		Machines = "Machines you buy go to your BUILD menu. At your BASE, press B (BUILD) to place them.",
+		Machines = "Machines you buy go to your BUILD menu. At your BASE, {build} to place them.",
 		Upgrades = "Upgrades are sold at the UPGRADES stall in the lobby.",
 		Automation = "Pen automation is sold at the UPGRADES stall in the lobby.",
 	},
@@ -1619,6 +1644,7 @@ function TechShopView.build(compact: boolean?): Refs
 		Notes = notes,
 		NoteBox = Vector2.zero,
 		Where = "Counter",
+		Device = "Keyboard",
 		Groups = groups,
 		Rows = {},
 		RowList = {},
@@ -1887,10 +1913,17 @@ function TechShopView.setTab(refs: Refs, tab: string)
 	end
 end
 
+-- A note's text for a device ("{build}" filled in from TechShopView.BuildKey).
+function TechShopView.noteText(text: string, device: Device): string
+	local key = TechShopView.BuildKey[device] or TechShopView.BuildKey["Keyboard" :: Device]
+	return (string.gsub(text, "{build}", key))
+end
+
 --[[
 	Says where the shop was opened (TechShopView.Where): the subtitle and
-	the notes at the top of the lists (TechShopView.WhereText). The cards
-	follow with TechShopView.cards(state, coins, where).
+	the notes at the top of the lists (TechShopView.WhereText, with
+	refs.Device's key). The cards follow with TechShopView.cards(state,
+	coins, where).
 ]]
 function TechShopView.setWhere(refs: Refs, where: Where)
 	refs.Where = where
@@ -1898,10 +1931,19 @@ function TechShopView.setWhere(refs: Refs, where: Where)
 	refs.Subtitle.Text = texts.Subtitle
 	for tab, note in refs.Notes do
 		local text = texts[tab]
-		note.Text = text or ""
+		note.Text = if text then TechShopView.noteText(text, refs.Device) else ""
 		note.Visible = text ~= nil
 	end
 	fitNotes(refs)
+end
+
+-- The device in use changed: the notes name its BUILD key (no work when it is the same).
+function TechShopView.setDevice(refs: Refs, device: Device)
+	if refs.Device == device then
+		return
+	end
+	refs.Device = device
+	TechShopView.setWhere(refs, refs.Where)
 end
 
 local function fillRow(row: Row, card: Card)

@@ -55,6 +55,12 @@
 	  - mouse: your machine under the pointer gets a soft outline; clicking
 	    the selected machine again picks it up to move it (like gamepad A
 	    and the touch MOVE button)
+	  - a click or tap on build mode's own UI (the info card, the controls,
+	    the reason line, the tray...) never acts on the plot under it, and
+	    the ghost doesn't follow the mouse there (Ux.overUi)
+	  - phones (touch, or the HUD's UIScale at about its floor): bigger
+	    texts and a shorter info card that fits under the slot pill
+	    (BuildView.setCompact, Ux.compact)
 	  - power preview: a Power Pole being placed, moved or selected shows
 	    its reach (PoleReach) and link (PoleLink) squares and a line to
 	    every pole it would link; a machine that needs or makes power a
@@ -229,6 +235,11 @@ Deck.Shown = {} :: { [number]: boolean }
 -- preview, SHOP, the BUILD tile, the way home): one table too.
 local Ux = {}
 Ux.hover = nil :: string? -- the tray card under the mouse / a gamepad's selection
+Ux.hoverBy = nil :: string? -- the device that set it (Kind)
+Ux.mouseAt = nil :: Vector2? -- where the mouse was when build mode's UI under it was last looked up...
+Ux.mouseNext = 0 -- ...and when to look again even if it stays (Ux.mouseUi)
+Ux.mouseOver = false -- the mouse is over build mode's own UI
+Ux.mouseCard = nil :: string? -- the tray card under the mouse
 Ux.hoverModel = nil :: Model? -- your machine under the mouse (Idle / Selected)
 Ux.hoverLight = nil :: Highlight?
 Ux.hoverNext = 0
@@ -993,12 +1004,24 @@ function Ux.onHover(id: string, on: boolean)
 	end
 	if on then
 		Ux.hover = id
+		Ux.hoverBy = kind
 	elseif Ux.hover == id then
 		Ux.hover = nil
 	else
 		return
 	end
 	dirty = true
+end
+
+-- Phones: touch, or a screen small enough for the HUD's UIScale floor (BuildView.setCompact).
+function Ux.compact(): boolean
+	return kind == "Touch" or HudController.uiScale() <= BuildView.CompactScale
+end
+
+-- The info card's room on this screen (design units; the build Gui doesn't ignore the top bar inset).
+function Ux.infoRoom(): number
+	local height = camera().ViewportSize.Y - GuiService:GetGuiInset().Y
+	return BuildView.infoRoom(height / HudController.uiScale())
 end
 
 local function refreshUI()
@@ -1015,6 +1038,7 @@ local function refreshUI()
 	Deck.Cells = Placement.decks(entries)
 	BuildView.setMode(refs, mode, kind == "Touch", next(Deck.Cells) ~= nil)
 	BuildView.setLayer(refs, Deck.Ground)
+	BuildView.setCompact(refs, Ux.compact(), Ux.infoRoom())
 	Ux.showKeys(refs)
 end
 
@@ -1086,37 +1110,83 @@ function Ux.showInfo(refs: BuildView.Refs)
 	BuildView.setInfo(refs, MachineInfo.describe(id), note)
 end
 
--- Is the point (viewport pixels, like GetMouseLocation) over build mode's own UI?
-function Ux.overUi(position: Vector2): boolean
+-- Build mode's own UI at a point (viewport pixels, like GetMouseLocation):
+-- whether there is any, and the tray card there (its machine id).
+function Ux.uiAt(position: Vector2): (boolean, string?)
 	local refs = view
 	local playerGui = player:FindFirstChildOfClass("PlayerGui")
 	if not refs or not playerGui then
-		return false
+		return false, nil
 	end
 	local inset = GuiService:GetGuiInset()
+	local over = false
+	local card: string? = nil
 	for _, object in playerGui:GetGuiObjectsAtPosition(position.X - inset.X, position.Y - inset.Y) do
 		if object:IsDescendantOf(refs.Gui) then
-			return true
+			over = true
+			local entry = refs.Cards[object.Name]
+			if entry and entry.Button == object then
+				card = object.Name
+			end
 		end
 	end
-	return false
+	return over, card
 end
 
--- Mouse: your machine under the pointer gets a soft outline (Idle and
--- Selected, not the selected one itself), a few times a second.
+-- Is the point over build mode's own UI (the info card, the controls row,
+-- the reason line, the tray...)? Then a click or tap there is not on the plot.
+function Ux.overUi(position: Vector2): boolean
+	local over = Ux.uiAt(position)
+	return over
+end
+
+-- Is the mouse over build mode's own UI? Looked up when it moved, else
+-- every HoverEvery (not every frame); also notes the tray card under it.
+function Ux.mouseUi(position: Vector2, now: number): boolean
+	if position ~= Ux.mouseAt or now >= Ux.mouseNext then
+		Ux.mouseAt = position
+		Ux.mouseNext = now + Ux.HoverEvery
+		Ux.mouseOver, Ux.mouseCard = Ux.uiAt(position)
+	end
+	return Ux.mouseOver
+end
+
+--[[
+	Mouse: your machine under the pointer gets a soft outline (Idle and
+	Selected, not the selected one itself), a few times a second. With the
+	mouse the tray card hover is the card really under the pointer (a
+	MouseLeave can be missed when the pointer leaves fast or leaves the
+	window, and the info card would keep showing that machine); a mouse
+	hover ends when another device takes over.
+]]
 function Ux.updateHover(now: number)
 	local model: Model? = Ux.hoverModel
-	if kind == "Mouse" and (mode == "Idle" or mode == "Selected") then
-		if now < Ux.hoverNext then
-			return
-		end
-		Ux.hoverNext = now + Ux.HoverEvery
+	if kind == "Mouse" then
 		local position = UserInputService:GetMouseLocation()
-		model = if Ux.overUi(position) then nil else machineUnder(position)
-		if model == selected then
+		local over = Ux.mouseUi(position, now)
+		local card = Ux.mouseCard
+		if card ~= Ux.hover then
+			Ux.hover = card
+			Ux.hoverBy = kind
+			dirty = true
+		end
+		if mode == "Idle" or mode == "Selected" then
+			if now < Ux.hoverNext then
+				return
+			end
+			Ux.hoverNext = now + Ux.HoverEvery
+			model = if over then nil else machineUnder(position)
+			if model == selected then
+				model = nil
+			end
+		else
 			model = nil
 		end
 	else
+		if Ux.hover ~= nil and Ux.hoverBy == "Mouse" then
+			Ux.hover = nil
+			dirty = true
+		end
 		model = nil
 	end
 	if model ~= Ux.hoverModel then
@@ -1790,6 +1860,9 @@ end
 ---------------------------------------------------------------- pointer input
 
 local function onPrimaryDown(position: Vector2)
+	if Ux.overUi(position) then
+		return -- on the info card, the controls, the reason line...: not on the plot under them
+	end
 	if (mode == "Placing" or mode == "Moving") and not holdCell and not cursorCellAt(position) then
 		return -- clicked well off the plot: the cursor there is stale
 	end
@@ -1817,6 +1890,9 @@ local function onPrimaryDown(position: Vector2)
 end
 
 local function tap(position: Vector2)
+	if Ux.overUi(position) then
+		return -- a tap on build mode's own UI never moves the ghost under it
+	end
 	local gx, gz = cursorCellAt(position)
 	if mode == "Placing" or mode == "Moving" then
 		if gx and gz then
@@ -1950,8 +2026,12 @@ local function onInputEnded(input: InputObject, _: boolean)
 	end
 end
 
-local function updateMouseCursor()
-	local gx, gz = cursorCellAt(UserInputService:GetMouseLocation())
+local function updateMouseCursor(now: number)
+	local position = UserInputService:GetMouseLocation()
+	if Ux.mouseUi(position, now) then
+		return -- over build mode's own UI: the ghost stays where the player can see it
+	end
+	local gx, gz = cursorCellAt(position)
 	local hold = holdCell
 	if hold then
 		if gx == hold.X and gz == hold.Y then
@@ -2139,7 +2219,7 @@ local function step(dt: number)
 		zoomBy(-ZOOM_SPEED * triggerR * dt)
 	end
 	if kind == "Mouse" then
-		updateMouseCursor()
+		updateMouseCursor(now)
 	elseif kind == "Gamepad" then
 		updateStickCursor(now)
 	end

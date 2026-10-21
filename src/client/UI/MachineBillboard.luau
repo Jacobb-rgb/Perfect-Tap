@@ -31,7 +31,8 @@
 	their power); stackLamps finds a model's lamps and lightStack lights
 	one. wants() says which of your machines get a sign: busy ones
 	within Range, every machine with a status within StatusRange, the
-	Cleaning Plant's odds within OddsRange.
+	Cleaning Plant's odds within OddsRange; signRank / signBefore which of
+	them keep it under the cap (blocked, working, no power, waiting).
 
 	A "FULL" / "BUSY" pop (buildPop) rises over a hopper that refused a
 	dropped item (IntakeService's Fx 'Full'; MachineFxController animates it).
@@ -455,6 +456,31 @@ function MachineBillboard.wants(attrs: { [string]: any }, status: string, distan
 		or attrs.Working == true
 		or (type(blocked) == "string" and blocked ~= "")
 		or attrs.PenFull == true
+end
+
+--[[
+	Which machines keep a sign when more want one than MachineFxController
+	hands out (its cap): blocked first (red: a Status, a full pen), then
+	working, then no power, then waiting and the Cleaning Plant's odds
+	alone (status ""). signBefore is the table.sort order: rank, then the
+	nearer first.
+]]
+function MachineBillboard.signRank(status: string): number
+	if status == "" then
+		return 3
+	end
+	local tone = MachineBillboard.toneOf(status)
+	return if tone == "Blocked" then 0 elseif tone == "Working" then 1 elseif tone == "NoPower" then 2 else 3
+end
+
+export type SignCandidate = { Status: string, Distance: number }
+
+function MachineBillboard.signBefore(a: SignCandidate, b: SignCandidate): boolean
+	local rankA, rankB = MachineBillboard.signRank(a.Status), MachineBillboard.signRank(b.Status)
+	if rankA ~= rankB then
+		return rankA < rankB
+	end
+	return a.Distance < b.Distance
 end
 
 local function infoLabel(gui: Instance, name: string, color: Color3): TextLabel

@@ -35,8 +35,9 @@
 	  successful buy also sends a "Reward" toast; a refused one only the
 	  ShopResult (the client shows the reason on the card, or as a toast
 	  when the shop is closed), so the player never reads the same message
-	  twice. A machine toast says how to place it: "Press B (BUILD)" at
-	  your base, "Go to your BASE and press B (BUILD)" at the counter.
+	  twice. A machine toast says how to place it: "Open BUILD" at your
+	  base, "Go to your BASE and open BUILD" at the counter (no key: B,
+	  D-pad Up and a tap differ per device; the shop's notes name it).
 	- Atomic: quote (techQuote), spend (EconomyService.spend) and write the
 	  inventory / level happen in one step with no yield in between, and
 	  every table the write needs is made before the coins are taken, so two
@@ -176,7 +177,7 @@ end
 function ShopService.boughtText(player: Player?, bought: Bought, place: Place?): string
 	if bought.Kind == "Machine" then
 		local name = machineName(bought.Machine)
-		local how = if place == "Base" then "Press B (BUILD)" else "Go to your BASE and press B (BUILD)"
+		local how = if place == "Base" then "Open BUILD" else "Go to your BASE and open BUILD"
 		if bought.Count == 1 then
 			local article = if name:match("^[AEIOUaeiou]") then "an" else "a"
 			return `Bought {article} {name}! {how} to place it.`

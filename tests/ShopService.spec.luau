@@ -273,7 +273,7 @@ return function(T, Loader)
 		local toast = notes(w, "Notify")
 		T.eq(#toast, 1, "one toast")
 		T.eq(toast[1].A.Kind, "Reward")
-		T.eq(toast[1].A.Text, "Bought a Cleaning Plant! Go to your BASE and press B (BUILD) to place it.")
+		T.eq(toast[1].A.Text, "Bought a Cleaning Plant! Go to your BASE and open BUILD to place it.")
 		T.eq(#w.bought, 1, "onBought")
 		local bought = w.bought[1].Bought
 		T.eq(bought.Item, "AutoCleaner")
@@ -290,16 +290,16 @@ return function(T, Loader)
 		T.eq(five.Count, 5)
 		T.eq(w.data.Coins, 0, "paid 5x")
 		T.eq(w.data.MachineInventory.Conveyor, 5)
-		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Go to your BASE and press B (BUILD) to place them.")
+		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Go to your BASE and open BUILD to place them.")
 		-- an Iron Box: "an", plural "Iron Boxes"
 		T.eq(ShopService.plural("Iron Box"), "Iron Boxes")
 		T.eq(ShopService.plural("Blast Furnace"), "Blast Furnaces")
 		w.data.Coins = MachineData.ById.IronBox.Price * 2
 		T.eq(buy(w, req("IronBox", 2)).Ok, true)
-		T.eq(notes(w, "Notify")[3].A.Text, "Bought 2 Iron Boxes! Go to your BASE and press B (BUILD) to place them.")
+		T.eq(notes(w, "Notify")[3].A.Text, "Bought 2 Iron Boxes! Go to your BASE and open BUILD to place them.")
 		w.data.Coins = MachineData.ById.IronBox.Price
 		T.eq(buy(w, req("IronBox")).Ok, true)
-		T.eq(notes(w, "Notify")[4].A.Text, "Bought an Iron Box! Go to your BASE and press B (BUILD) to place it.")
+		T.eq(notes(w, "Notify")[4].A.Text, "Bought an Iron Box! Go to your BASE and open BUILD to place it.")
 		T.eq(w.data.MachineInventory.IronBox, 3)
 	end)
 
@@ -385,12 +385,12 @@ return function(T, Loader)
 		T.eq(result.Ok, true, "bought at the base")
 		T.eq(w.data.MachineInventory.Crusher, 1, "in the Build menu")
 		T.eq(w.data.Coins, 0, "paid")
-		T.eq(notes(w, "Notify")[1].A.Text, "Bought a Crusher! Press B (BUILD) to place it.", "the base toast")
+		T.eq(notes(w, "Notify")[1].A.Text, "Bought a Crusher! Open BUILD to place it.", "the base toast")
 		T.eq(#w.bought, 1, "onBought")
 		local belt = MachineData.ById.Conveyor
 		w.data.Coins = belt.Price * 5
 		T.eq(buy(w, req("Conveyor", 5)).Count, 5, "BUY 5 at the base")
-		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Press B (BUILD) to place them.")
+		T.eq(notes(w, "Notify")[2].A.Text, "Bought 5 Conveyors! Open BUILD to place them.")
 		-- every other check still runs at the base
 		w.data.Coins = 1
 		refused(w, req("Crusher"), "NoCoins", "too poor at the base")
@@ -400,7 +400,7 @@ return function(T, Loader)
 		w.data.MachineInventory.IronBox = EconomyConfig.TechShop.MaxOwned
 		refused(w, req("IronBox"), "MaxOwned", "999 at the base")
 		-- the counter's toast where both are near is never asked for: the base wins
-		T.eq(ShopService.boughtText(w.player, w.bought[1].Bought, "Base"), "Bought a Crusher! Press B (BUILD) to place it.")
+		T.eq(ShopService.boughtText(w.player, w.bought[1].Bought, "Base"), "Bought a Crusher! Open BUILD to place it.")
 	end)
 
 	withWorld("ShopService: far from both your plot and the counter a machine buy is refused", function(w)
@@ -461,21 +461,21 @@ return function(T, Loader)
 		T.eq(ShopService.placeFor(w.player, EconomyConfig.techItem("Conveyor")), "Counter")
 		T.eq(buy(w, req("Conveyor")).Ok, true)
 		local toasts = notes(w, "Notify")
-		T.eq(toasts[#toasts].A.Text, "Bought a Conveyor! Go to your BASE and press B (BUILD) to place it.", "the lobby toast")
+		T.eq(toasts[#toasts].A.Text, "Bought a Conveyor! Go to your BASE and open BUILD to place it.", "the lobby toast")
 	end)
 
 	T.test("ShopService: the buy toast says how to place a machine from where it was bought", function()
 		local one = { Item = "AutoCleaner", Kind = "Machine", Machine = "AutoCleaner", Count = 1, Price = 1 }
 		local five = { Item = "Conveyor", Kind = "Machine", Machine = "Conveyor", Count = 5, Price = 5 }
 		local box = { Item = "IronBox", Kind = "Machine", Machine = "IronBox", Count = 1, Price = 1 }
-		T.eq(ShopService.boughtText(nil, one, "Base"), "Bought a Cleaning Plant! Press B (BUILD) to place it.")
-		T.eq(ShopService.boughtText(nil, five, "Base"), "Bought 5 Conveyors! Press B (BUILD) to place them.")
-		T.eq(ShopService.boughtText(nil, box, "Base"), "Bought an Iron Box! Press B (BUILD) to place it.")
-		T.eq(ShopService.boughtText(nil, one, "Counter"), "Bought a Cleaning Plant! Go to your BASE and press B (BUILD) to place it.")
-		T.eq(ShopService.boughtText(nil, five, "Counter"), "Bought 5 Conveyors! Go to your BASE and press B (BUILD) to place them.")
+		T.eq(ShopService.boughtText(nil, one, "Base"), "Bought a Cleaning Plant! Open BUILD to place it.")
+		T.eq(ShopService.boughtText(nil, five, "Base"), "Bought 5 Conveyors! Open BUILD to place them.")
+		T.eq(ShopService.boughtText(nil, box, "Base"), "Bought an Iron Box! Open BUILD to place it.")
+		T.eq(ShopService.boughtText(nil, one, "Counter"), "Bought a Cleaning Plant! Go to your BASE and open BUILD to place it.")
+		T.eq(ShopService.boughtText(nil, five, "Counter"), "Bought 5 Conveyors! Go to your BASE and open BUILD to place them.")
 		T.eq(
 			ShopService.boughtText(nil, box, nil),
-			"Bought an Iron Box! Go to your BASE and press B (BUILD) to place it.",
+			"Bought an Iron Box! Go to your BASE and open BUILD to place it.",
 			"the counter by default"
 		)
 		-- levelled items say the same anywhere
@@ -1302,25 +1302,49 @@ return function(T, Loader)
 		T.eq(refs.Subtitle.Text, TechShopView.WhereText.Build.Subtitle)
 		TechShopView.setWhere(refs, "Base")
 		T.truthy(string.find(refs.Notes.Machines.Text, "press B (BUILD)", 1, true), "away from build mode: press B")
+		-- the BUILD key of the device in use (B is back on a gamepad; touch has no keys)
+		TechShopView.setDevice(refs, "Gamepad")
+		T.truthy(string.find(refs.Notes.Machines.Text, "press D-pad Up (BUILD)", 1, true), "gamepad: D-pad Up")
+		T.falsy(string.find(refs.Notes.Machines.Text, "press B", 1, true), "gamepad: never B")
+		TechShopView.setDevice(refs, "Touch")
+		T.truthy(string.find(refs.Notes.Machines.Text, "tap BUILD", 1, true), "touch: tap BUILD")
+		TechShopView.setWhere(refs, "Counter")
+		T.truthy(string.find(refs.Notes.Machines.Text, "Go to your BASE and tap BUILD", 1, true), "the device stays on a new Where")
+		TechShopView.setDevice(refs, "Keyboard")
+		for _, texts in TechShopView.WhereText do
+			for _, text in texts do
+				T.falsy(string.find(text, "press B", 1, true), "no fixed key in: " .. text)
+			end
+		end
 		TechShopView.setWhere(refs, "Counter")
 		T.falsy(refs.Notes.Upgrades.Visible, "back at the counter")
 		T.eq(refs.Subtitle.Text, TechShopView.WhereText.Counter.Subtitle)
 		-- a shop at your plot closes before the server would refuse a BUY as "TooFar"
 		T.truthy(TechShopView.BaseCloseRange + 4 <= GameConfig.BuildRange, "the server is the lenient side at the base too")
+		-- ...and every shop with no counter closes when you walk away, however far out it opened
+		T.eq(TechShopView.baseCloseRange(10), TechShopView.BaseCloseRange, "opened at the base")
+		local far = GameConfig.BuildRange - 4 -- build mode opens up to BuildRange out
+		T.truthy(far > TechShopView.BaseCloseRange, "(past the base range)")
+		T.eq(TechShopView.baseCloseRange(far), far + TechShopView.BaseCloseSlack, "just past where it opened")
+		T.eq(TechShopView.baseCloseRange(GameConfig.BuildRange + 3), GameConfig.BuildRange, "never beyond BuildRange")
+		T.eq(TechShopView.baseCloseRange(math.huge), GameConfig.BuildRange, "no plot: closes at once")
 		-- every note and subtitle fits on every screen
 		for _, screen in SCREENS do
 			local laid = laidOut(screen)
 			for where, texts in TechShopView.WhereText do
-				TechShopView.setWhere(laid, TechShopView.toWhere(where))
-				for _, tab in TechShopView.Tabs do
-					local note = laid.Notes[tab]
-					if texts[tab] then
-						T.truthy(
-							TechShopView.fits(note.Text, laid.NoteBox.X, laid.NoteBox.Y, note.TextSize, true),
-							`{screen.Label} {where} {tab} note: {note.Text}`
-						)
-						T.truthy(note.TextSize >= (if screen.Compact then 16 else 14), `{screen.Label} {where} {tab}: readable`)
-						T.truthy(laid.NoteBox.X > 0 and note.Size.Y.Offset > laid.NoteBox.Y, `{screen.Label}: laid out`)
+				for _, device in { "Keyboard", "Gamepad", "Touch" } do
+					TechShopView.setDevice(laid, device :: any)
+					TechShopView.setWhere(laid, TechShopView.toWhere(where))
+					for _, tab in TechShopView.Tabs do
+						local note = laid.Notes[tab]
+						if texts[tab] then
+							T.truthy(
+								TechShopView.fits(note.Text, laid.NoteBox.X, laid.NoteBox.Y, note.TextSize, true),
+								`{screen.Label} {where} {tab} {device} note: {note.Text}`
+							)
+							T.truthy(note.TextSize >= (if screen.Compact then 16 else 14), `{screen.Label} {where} {tab}: readable`)
+							T.truthy(laid.NoteBox.X > 0 and note.Size.Y.Offset > laid.NoteBox.Y, `{screen.Label}: laid out`)
+						end
 					end
 				end
 				if not screen.Compact then
@@ -1370,6 +1394,12 @@ return function(T, Loader)
 		T.truthy(source:find('show(nil, if wasBuilding or fromBuild == true then "Build" else "Base", "Machines")', 1, true), "on MACHINES")
 		T.falsy(source:find("require(script.Parent.PlacementController)", 1, true), "looked up on use, never required")
 		T.truthy(source:find("TechShopView.cards(StateController.get(), cash, where)", 1, true), "the cards follow where it opened")
+		-- a shop with no counter always watches the walk away from your plot
+		T.truthy(
+			source:find("watch(part, if part == nil then TechShopView.baseCloseRange(plotDistance()) else nil)", 1, true),
+			"every counterless open gets a close range"
+		)
+		T.truthy(source:find("elseif baseRange and not nearOwnPlot(baseRange) then", 1, true), "and closes past it")
 		-- build mode's SHOP (PlacementController's Ux.openShop) opens it for real and hands it the way back
 		local build = fs.readFile("src/client/Controllers/PlacementController.luau")
 		T.truthy(build:find('MenuPanels.call("TechShopController", "openMachines", fromBuild)', 1, true), "SHOP calls openMachines")

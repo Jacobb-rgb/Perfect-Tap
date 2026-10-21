@@ -6,13 +6,16 @@
 	                a live 3D picture of the machine, its category band
 	                and a power chip ("⚡10" needs, "+40⚡" makes); empty,
 	                it says "Buy machines with SHOP" next to a SHOP button
+	                (not while the touch buttons show: they sit there)
 	  above tray    reason / warning line, and the controls: a row of
 	                keycap chips for the mode and device (keys / setKeys:
 	                [LMB] Place [R] Rotate ...; the platform's own glyphs
 	                on a gamepad; what to tap on touch)
 	  left          the machine info card (setInfo, MachineInfo.describe):
 	                live picture, name, category, size, TAKES -> GIVES,
-	                its power, where the results come out, the description
+	                its power, where the results come out, the description;
+	                it takes clicks and taps (Active), so they never reach
+	                the plot under it
 	  bottom right  big touch buttons: Deck / Ground (while the plot has
 	                platforms), Cancel, Rotate, Move, Pack Up, Place
 	The Gui has the TerraForge attribute, so the HUD's UIScale applies.
@@ -20,6 +23,11 @@
 	the light "Bubble" look: a slot pill with the 3D build icon, a tray
 	panel, machine cards in the category colour, chunky buttons.
 	setInventory / setCounts keep the colours readable.
+	setCompact (phones: touch, or the HUD's UIScale at about its floor):
+	every text at least BuildView.MinText design units, the tray cards
+	without their category band, a wider, shorter info card (a smaller
+	picture, no description, the size in the category chip) that never
+	grows past the room between the controls and the slot pill.
 	Machine pictures are live ViewportFrames of MachineBuilder.build(id)
 	(no uploads: the icon sheets have no ids yet; picture()), built once
 	per tray card when it first shows and once per machine for the info
@@ -78,7 +86,10 @@ export type InfoCard = {
 	Output: TextLabel,
 	Note: TextLabel, -- the selected machine's state right now
 	Description: TextLabel,
+	Room: UISizeConstraint, -- its height cap (setCompact)
 	Id: string?, -- the machine shown now
+	Shown: MachineInfo.Info?, -- what it shows now, and the note (setCompact redraws them)
+	ShownNote: string?,
 	Models: { [string]: Model }, -- pictures built so far (one per machine)
 	Cameras: { [string]: CFrame },
 }
@@ -105,6 +116,7 @@ export type Refs = {
 	Info: InfoCard,
 	OnPick: ((string) -> ())?,
 	OnHover: ((string, boolean) -> ())?, -- a tray card is hovered / selected (true) or left
+	Compact: boolean, -- the phone sizes (setCompact)
 }
 
 local rgb = Color3.fromRGB
@@ -143,7 +155,15 @@ local KEYS_ABOVE = 58 -- the controls row's bottom over the tray
 local INFO_ABOVE = 104 -- the info card's bottom over the tray (above the reason and controls rows)
 local INFO_WIDTH = 330
 local INFO_PICTURE = 76
+local INFO_PAD = 10
 local PICTURE_FOV = 30
+-- phones (setCompact)
+local INFO_WIDTH_COMPACT = 400 -- wider, so its lines wrap less
+local INFO_PICTURE_COMPACT = 48
+BuildView.CompactScale = 0.7 -- the HUD's UIScale at or under which build mode uses the phone sizes
+BuildView.MinText = 16 -- design units: no text smaller on a phone (about 10 px at the 0.62 floor)
+BuildView.InfoBottom = BuildView.TrayHeight + INFO_ABOVE -- the info card's bottom edge over the screen's
+BuildView.PillRoom = 70 -- design units the slot pill (and its build icon) takes at the top, with a gap
 
 -- Which touch buttons each mode shows.
 local MODE_BUTTONS: { [string]: { [string]: boolean } } = {
@@ -477,20 +497,25 @@ end
 ]]
 local function infoCard(gui: ScreenGui, light: boolean): InfoCard
 	local p = paletteOf(light)
+	-- Active: a click or tap on the card stays on it (never places or
+	-- moves the ghost under it); ClipsDescendants: capped by Room
 	local frame = UIKit.new("Frame", {
 		Name = "Info",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, EDGE, 1, -(BuildView.TrayHeight + INFO_ABOVE)),
+		Position = UDim2.new(0, EDGE, 1, -BuildView.InfoBottom),
 		Size = UDim2.fromOffset(INFO_WIDTH, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = p.Panel,
 		BorderSizePixel = 0,
+		Active = true,
+		ClipsDescendants = true,
 		Visible = false,
 	}, gui)
 	UIKit.corner(frame, 16)
 	UIKit.stroke(frame, 3, p.Outline)
-	UIKit.padding(frame, 10)
+	UIKit.padding(frame, INFO_PAD)
 	UIKit.list(frame, Enum.FillDirection.Vertical, 4)
+	local room = UIKit.new("UISizeConstraint", { Name = "Room" }, frame)
 
 	local header = UIKit.new("Frame", {
 		Name = "Header",
@@ -552,7 +577,10 @@ local function infoCard(gui: ScreenGui, light: boolean): InfoCard
 		Output = row("Output", 4, 16, BuildView.OutputColor),
 		Note = row("Note", 5, 16, BuildView.ReasonColors.Warn),
 		Description = row("Description", 6, 15, p.Dim),
+		Room = room,
 		Id = nil,
+		Shown = nil,
+		ShownNote = nil,
 		Models = {},
 		Cameras = {},
 	}
@@ -842,6 +870,7 @@ local function buildLight(): Refs
 		Info = infoCard(gui, true),
 		OnPick = nil,
 		OnHover = nil,
+		Compact = false,
 	}
 end
 
@@ -985,7 +1014,23 @@ function BuildView.build(): Refs
 		Info = infoCard(gui, false),
 		OnPick = nil,
 		OnHover = nil,
+		Compact = false,
 	}
+end
+
+--[[
+	The empty tray's text and SHOP button: shown while the tray is empty
+	(setInventory) and no touch buttons show (setMode: in Placing, Selected
+	and Moving they sit right where SHOP would be, and a tap meant for
+	CANCEL would open the shop). SHOP under DONE is always there.
+]]
+local function showEmpty(refs: Refs)
+	local show = refs.Gui:GetAttribute("TrayEmpty") == true and refs.Gui:GetAttribute("ActionsShown") ~= true
+	refs.Empty.Visible = show
+	local shopHolder = refs.EmptyShop.Parent
+	if shopHolder and shopHolder:IsA("GuiObject") then
+		shopHolder.Visible = show
+	end
 end
 
 --[[
@@ -994,7 +1039,8 @@ end
 	card calls onPick(id); hovering it with the mouse or selecting it with
 	a gamepad calls onHover(id, true), leaving it onHover(id, false) (the
 	latest callbacks passed here). A card's picture is built the first time
-	it shows. An empty tray says "Buy machines with SHOP" with a SHOP button.
+	it shows. An empty tray says "Buy machines with SHOP" with a SHOP button
+	(showEmpty).
 ]]
 function BuildView.setInventory(
 	refs: Refs,
@@ -1056,11 +1102,8 @@ function BuildView.setInventory(
 			end)
 		end
 	end
-	refs.Empty.Visible = not any
-	local shopHolder = refs.EmptyShop.Parent
-	if shopHolder and shopHolder:IsA("GuiObject") then
-		shopHolder.Visible = not any
-	end
+	refs.Gui:SetAttribute("TrayEmpty", not any)
+	showEmpty(refs)
 end
 
 function BuildView.setCounts(refs: Refs, machinesUsed: number, machineSlots: number, conveyorsUsed: number, conveyorSlots: number)
@@ -1100,6 +1143,7 @@ local function keyChip(row: Frame, k: Key, images: { string }, order: number, p:
 		BackgroundColor3 = p.Panel,
 		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
+		Active = true, -- a tap on "[PLACE] Put it there" is not a tap on the plot
 	}, row)
 	UIKit.corner(chip, KEY_HEIGHT // 2)
 	UIKit.stroke(chip, 2.5, p.Outline)
@@ -1204,9 +1248,12 @@ end
 	The machine info card: `info` (MachineInfo.describe) with its live 3D
 	picture (built once per machine, then reused), or nil to hide it.
 	`note` is an extra line in yellow (the selected machine's state now).
+	Compact (setCompact): the size rides in the category chip and the
+	description is left out.
 ]]
 function BuildView.setInfo(refs: Refs, info: MachineInfo.Info?, note: string?)
 	local card = refs.Info
+	card.Shown, card.ShownNote = info, note
 	if not info then
 		card.Frame.Visible = false
 		return
@@ -1214,15 +1261,16 @@ function BuildView.setInfo(refs: Refs, info: MachineInfo.Info?, note: string?)
 	if card.Id ~= info.Id then
 		card.Id = info.Id
 		local p = paletteOf(isLight(refs))
+		local category = string.upper(info.Category)
 		card.Name.Text = info.Name
-		card.Category.Text = string.upper(info.Category)
+		card.Category.Text = if refs.Compact then `{category}  {info.Size}` else category
 		card.Category.BackgroundColor3 = BuildView.CategoryColors[info.Category] or Theme.Accent
 		card.Footprint.Text = info.Size
 		setLine(card.Flow, info.Flow)
 		setLine(card.Power, info.PowerText)
 		card.Power.TextColor3 = if info.PowerText == MachineInfo.NoPowerText then p.Dim else p.Power
 		setLine(card.Output, info.OutputText)
-		setLine(card.Description, info.Description)
+		setLine(card.Description, if refs.Compact then nil else info.Description)
 		-- the picture: one model per machine, built the first time it shows
 		for _, child in card.View:GetChildren() do
 			if child:IsA("Model") then
@@ -1244,6 +1292,104 @@ end
 local function holderOf(button: TextButton): GuiObject?
 	local parent = button.Parent
 	return if parent and parent:IsA("GuiObject") then parent else nil
+end
+
+-- The room the info card has on a ScreenGui `height` design units tall:
+-- from its bottom (over the controls row) up to the slot pill.
+function BuildView.infoRoom(height: number): number
+	return math.max(INFO_PICTURE_COMPACT + 2 * INFO_PAD, height - BuildView.InfoBottom - BuildView.PillRoom)
+end
+
+local function findGui(parent: Instance, name: string): GuiObject?
+	local found = parent:FindFirstChild(name, true)
+	return if found and found:IsA("GuiObject") then found else nil
+end
+
+-- A tray card in the phone sizes or back: no category band (its text
+-- would be under MinText; the light card's body and the dark band keep
+-- the category colour), a bigger picture, power chip and size text.
+local function compactCard(entry: Card, light: boolean, compact: boolean)
+	local button = entry.Button
+	local power = entry.Power
+	local chip = if power then power.Parent else nil
+	if light then
+		local band = findGui(button, "Band")
+		if band then
+			band.Visible = not compact
+		end
+		local picture = entry.Picture
+		if picture then
+			picture.Position = UDim2.new(0.5, 0, 0, if compact then 4 else 19)
+			picture.Size = UDim2.new(1, -8, 0, if compact then 52 else 42)
+		end
+		local name = findGui(button, "MachineName")
+		if name then
+			name.Size = UDim2.new(1, -8, 0, if compact then 20 else 17)
+		end
+		if power and chip and chip:IsA("Frame") then
+			chip.Size = if compact then UDim2.fromOffset(58, 24) else UDim2.fromOffset(48, 20)
+			power.TextSize = if compact then BuildView.MinText else 13
+			local corner = chip:FindFirstChildOfClass("UICorner")
+			if corner then
+				corner.CornerRadius = UDim.new(0, if compact then 12 else 10)
+			end
+		end
+		return
+	end
+	local category = findGui(button, "Category")
+	if category then
+		category.Visible = not compact
+	end
+	if power then
+		power.Size = if compact then UDim2.fromOffset(58, 22) else UDim2.fromOffset(50, 18)
+		power.TextSize = if compact then BuildView.MinText else 13
+	end
+	local footprint = findGui(button, "Footprint")
+	if footprint and footprint:IsA("TextLabel") then
+		footprint.Size = if compact then UDim2.fromOffset(48, 20) else UDim2.fromOffset(40, 18)
+		footprint.TextSize = if compact then BuildView.MinText else 13
+	end
+end
+
+--[[
+	Phone sizes on or off (PlacementController: touch, or the HUD's UIScale
+	at or under CompactScale), and the info card's height cap `room` in
+	design units (BuildView.infoRoom; nil: none). Tray cards: compactCard.
+	The info card gets wider and shorter: a 48 picture, the size in the
+	category chip (MinText), no description. What it shows is redrawn.
+]]
+function BuildView.setCompact(refs: Refs, compact: boolean, room: number?)
+	local card = refs.Info
+	card.Room.MaxSize = Vector2.new(math.huge, if room then math.max(room, 0) else math.huge)
+	if refs.Compact == compact then
+		return
+	end
+	refs.Compact = compact
+	local light = isLight(refs)
+	for _, entry in refs.Cards do
+		compactCard(entry, light, compact)
+	end
+	local picture = if compact then INFO_PICTURE_COMPACT else INFO_PICTURE
+	local left = picture + 10
+	card.Frame.Size = UDim2.fromOffset(if compact then INFO_WIDTH_COMPACT else INFO_WIDTH, 0)
+	local header = card.View.Parent
+	if header and header:IsA("Frame") then
+		header.Size = UDim2.new(1, 0, 0, picture)
+	end
+	card.View.Size = UDim2.fromOffset(picture, picture)
+	card.Name.Position = UDim2.fromOffset(left, 0)
+	card.Name.Size = UDim2.new(1, -left, 0, if compact then 24 else 28)
+	card.Category.Position = UDim2.fromOffset(left, if compact then 26 else 31)
+	card.Category.TextSize = if compact then BuildView.MinText else 13
+	card.Footprint.Position = UDim2.fromOffset(left, 56)
+	card.Footprint.Size = UDim2.new(1, -left, 0, 18)
+	card.Footprint.Visible = not compact
+	-- redraw what it shows in the new sizes
+	card.Id = nil
+	local shown = card.Shown
+	if shown then
+		BuildView.setInfo(refs, shown, card.ShownNote)
+	end
 end
 
 -- Shows the touch buttons that fit the mode (touch only) and makes room
@@ -1274,6 +1420,8 @@ function BuildView.setMode(refs: Refs, mode: Mode, isTouch: boolean, layers: boo
 		end
 	end
 	refs.Actions.Visible = shown > 0
+	refs.Gui:SetAttribute("ActionsShown", shown > 0)
+	showEmpty(refs)
 	if shown > 0 then
 		-- the tray takes the space left of the buttons
 		local reserved = width + (shown - 1) * ACTION_GAP + 3 * EDGE

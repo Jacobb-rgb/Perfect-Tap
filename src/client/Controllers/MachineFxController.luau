@@ -24,9 +24,11 @@
 	  your own machine up close); a crate gulps, a Sell Chute flashes coins.
 	- Anvil: ingot stubs on IngotSlot1..n (Ingots, IngotOre), glowing while
 	  Forging.
-	- Signs over YOUR machines (MachineBillboard, the nearest 12 it wants):
-	  busy ones within 50 studs, and within 30 every machine with a status
-	  (working, waiting for its input, no power, blocked). The status is
+	- Signs over YOUR machines (MachineBillboard, 12 of those it wants:
+	  blocked first, then working, no power, waiting, nearest first within
+	  each; MachineBillboard.signBefore): busy ones within 50 studs, and
+	  within 30 every machine with a status (working, waiting for its
+	  input, no power, blocked). The status is
 	  worked out when an attribute changes (MachineBillboard.statusOf), and
 	  a sign is updated then or, while a job runs, every frame (its bar).
 	- Fx 'Reject': red dust + a reject sound where a machine refused an item.
@@ -274,6 +276,7 @@ local STATE_ATTRS: { [string]: boolean } =
 local player = Players.LocalPlayer
 local machines: { [Model]: Fx } = {}
 local active: { Fx } = {}
+local candidates: { Fx } = {} -- own machines that want a sign (pickActive, reused)
 local hums: { Hum } = {}
 local rigPool: { WaterRig } = {}
 local fxFolder: Folder? = nil
@@ -1777,14 +1780,25 @@ local function pickActive()
 		acquireRig(fx)
 	end
 
+	-- signs: the MAX_BILLBOARDS most important (blocked, working, no power,
+	-- waiting; MachineBillboard.signBefore), from their own list so `active`
+	-- keeps its distance order
 	local humming: { Fx } = {}
-	local signs = 0
+	table.clear(candidates)
 	for _, fx in active do
 		if fx.Attr.Working == true and fx.Distance <= HUM_RANGE and #humming < HUM_COUNT then
 			table.insert(humming, fx)
 		end
-		if wantsBillboard(fx) and signs < MAX_BILLBOARDS then
-			signs += 1
+		if wantsBillboard(fx) then
+			table.insert(candidates, fx)
+		elseif fx.Billboard then
+			MachineBillboard.detach(fx.Billboard :: MachineBillboard.Refs)
+			fx.Billboard = nil
+		end
+	end
+	table.sort(candidates, MachineBillboard.signBefore)
+	for i, fx in candidates do
+		if i <= MAX_BILLBOARDS then
 			if not fx.Billboard then
 				local refs = MachineBillboard.attach(fx.Model)
 				MachineBillboard.setNote(refs, fx.Note)
@@ -1798,6 +1812,7 @@ local function pickActive()
 			fx.Billboard = nil
 		end
 	end
+	table.clear(candidates) -- no strong refs to removed machines until the next pick
 	assignHums(humming)
 end
 
@@ -1964,7 +1979,7 @@ local function fadePop(pop: MachineBillboard.Pop, value: number, info: TweenInfo
 	end
 end
 
--- "FULL" (or "BUSY") pops up over a hopper and rises; the deny sound plays.
+-- "FULL" (or "BUSY") pops up over a hopper and rises; the deny sound plays there.
 local function showFull(position: Vector3, reason: any)
 	local rig = popRig()
 	rig.Token += 1
@@ -1991,7 +2006,7 @@ local function showFull(position: Vector3, reason: any)
 			end
 		end)
 	end)
-	Sfx.play("UIDeny")
+	Sfx.play("UIDeny", position) -- at the hopper, like Reject: heard only nearby
 end
 
 ---------------------------------------------------------------- lifecycle

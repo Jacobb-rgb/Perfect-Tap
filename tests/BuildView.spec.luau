@@ -351,4 +351,149 @@ return function(T, Loader)
 			end)
 		end
 	end)
+
+	T.test("BuildView: the empty tray's SHOP never sits on the touch buttons", function()
+		for _, light in { false, true } do
+			withLight(light, function()
+				local label = if light then "light" else "dark"
+				local refs = BuildView.build()
+				BuildView.setInventory(refs, {}, nil, function() end)
+				BuildView.setMode(refs, "Idle", true)
+				T.truthy(refs.EmptyShop.Parent.Visible, label .. ": idle: SHOP in the empty tray")
+				for _, mode in { "Moving", "Selected", "Placing" } do
+					BuildView.setMode(refs, mode, true, true)
+					T.truthy(refs.Actions.Visible, label .. " " .. mode .. ": the touch buttons")
+					T.falsy(refs.EmptyShop.Parent.Visible, label .. " " .. mode .. ": no SHOP over CANCEL / DECK")
+					T.falsy(refs.Empty.Visible, label .. " " .. mode .. ": no text under them")
+					-- refreshUI sets the inventory before the mode: a refresh never brings it back
+					BuildView.setInventory(refs, {}, nil, function() end)
+					T.falsy(refs.EmptyShop.Parent.Visible, label .. " " .. mode .. ": still hidden after a refresh")
+				end
+				T.truthy(refs.Shop.Parent.Visible, label .. ": SHOP under DONE is always there")
+				BuildView.setMode(refs, "Idle", true)
+				T.truthy(refs.EmptyShop.Parent.Visible and refs.Empty.Visible, label .. ": back in Idle")
+				-- mouse and gamepad have no touch buttons: SHOP stays in every mode
+				BuildView.setMode(refs, "Moving", false)
+				T.truthy(refs.EmptyShop.Parent.Visible, label .. ": no touch buttons, no clash")
+			end)
+		end
+	end)
+
+	-- Is the GuiObject and every GuiObject above it visible?
+	local function shown(object: any): boolean
+		local node = object
+		while node and node:IsA("GuiObject") do
+			if not node.Visible then
+				return false
+			end
+			node = node.Parent
+		end
+		return true
+	end
+
+	T.test("BuildView: clicks and taps on the info card and the controls stay off the plot", function()
+		for _, light in { false, true } do
+			withLight(light, function()
+				local refs = BuildView.build()
+				T.truthy(refs.Info.Frame.Active, "the info card sinks input")
+				BuildView.setKeys(refs, BuildView.keys("Touch", "Placing"))
+				for _, chip in BuildView.keyChips(refs) do
+					T.truthy(chip.Active, "a keycap chip sinks input")
+				end
+			end)
+		end
+		-- labels that sink nothing (the reason line, the hint, the empty text) are caught by the controller
+		local fs = require("@lune/fs") :: any
+		local source = fs.readFile("src/client/Controllers/PlacementController.luau")
+		local function body(name: string): string
+			local start = string.find(source, "local function " .. name .. "(", 1, true)
+			T.truthy(start, name)
+			local finish = string.find(source, "\nend\n", start, true)
+			return string.sub(source, start, finish)
+		end
+		T.truthy(string.find(body("tap"), "if Ux.overUi(position) then", 1, true), "tap() checks the UI first")
+		T.truthy(string.find(body("onPrimaryDown"), "if Ux.overUi(position) then", 1, true), "a click too")
+		T.truthy(string.find(body("updateMouseCursor"), "if Ux.mouseUi(position, now) then", 1, true), "the ghost doesn't follow")
+		-- the tray hover follows the card really under the mouse (a missed MouseLeave)
+		local hover = string.sub(source, string.find(source, "function Ux.updateHover(now: number)", 1, true) or 1)
+		T.truthy(string.find(hover, "local card = Ux.mouseCard", 1, true), "hover from the pointer")
+		T.truthy(string.find(hover, 'Ux.hover ~= nil and Ux.hoverBy == "Mouse"', 1, true), "cleared for another device")
+	end)
+
+	T.test("BuildView: on a phone the info card fits under the slot pill, texts readable", function()
+		local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
+		local NOTE = "Now: not enough power, runs at 60%" -- the longest note (PlacementController's Ux.noteFor)
+		local SCALE = 0.62 -- the HUD's floor: a 667x375 phone
+		local INSET = 58 -- the top bar (the build Gui doesn't ignore it)
+		local height = (375 - INSET) / SCALE
+		local room = BuildView.infoRoom(height)
+		T.le(150, room, "some room at all")
+
+		-- the card's height as Roblox lays it out: padding, the header, each
+		-- shown row at its wrapped lines (TechShopView's text estimate), 4 between
+		local function estimate(card: any): number
+			local pad = card.Frame:FindFirstChildOfClass("UIPadding")
+			local top = pad.PaddingTop.Offset + pad.PaddingBottom.Offset
+			local width = card.Frame.Size.X.Offset - pad.PaddingLeft.Offset - pad.PaddingRight.Offset
+			local total = top + card.View.Parent.Size.Y.Offset
+			for _, row in { card.Flow, card.Power, card.Output, card.Note, card.Description } do
+				if row.Visible and row.Text ~= "" then
+					total += 4 + TechShopView.textLines(row.Text, width, row.TextSize) * row.TextSize * TechShopView.LineHeight
+				end
+			end
+			return total
+		end
+
+		for _, light in { false, true } do
+			withLight(light, function()
+				local label = if light then "light" else "dark"
+				local refs = BuildView.build()
+				BuildView.setCompact(refs, true, room)
+				T.truthy(refs.Compact, label .. ": compact")
+				T.near(refs.Info.Room.MaxSize.Y, room, 1e-3, label .. ": capped to the room")
+				local worst, worstId = 0, ""
+				for _, machine in MachineData.List do
+					BuildView.setInfo(refs, MachineInfo.describe(machine.Id), NOTE)
+					local h = estimate(refs.Info)
+					if h > worst then
+						worst, worstId = h, machine.Id
+					end
+				end
+				T.le(worst, room, `{label}: the tallest card ({worstId}) fits {math.floor(room)} units`)
+				T.le(BuildView.InfoBottom + worst + BuildView.PillRoom, height, label .. ": under the slot pill")
+				-- what a phone card shows
+				local card = refs.Info
+				BuildView.setInfo(refs, MachineInfo.describe("BrickFurnace"), NOTE)
+				T.falsy(card.Description.Visible, label .. ": no description on a phone")
+				T.falsy(card.Footprint.Visible, label .. ": the size...")
+				T.truthy(has(card.Category.Text, "2x2 cells"), label .. ": ...rides in the category chip")
+				T.eq(card.View.Size.X.Offset, 48, label .. ": a smaller picture")
+				-- every text shown is readable (at least MinText; a scaled one in a box that tall)
+				local function readable(root: any, what: string)
+					for _, d in root:GetDescendants() do
+						if d:IsA("TextLabel") and shown(d) and d.Text ~= "" then
+							if d.TextScaled then
+								T.le(20, d.Size.Y.Offset, `{label} {what}: {d.Name} box`)
+							else
+								T.le(BuildView.MinText, d.TextSize, `{label} {what}: {d.Name} "{d.Text}"`)
+							end
+						end
+					end
+				end
+				readable(card.Frame, "info card")
+				BuildView.setInventory(refs, { BrickFurnace = 1, WindTurbine = 1, Crusher = 2 }, nil, function() end)
+				for _, id in { "BrickFurnace", "WindTurbine", "Crusher" } do
+					readable(refs.Cards[id].Button, id)
+				end
+				BuildView.setKeys(refs, BuildView.keys("Touch", "Selected"))
+				readable(refs.Keys, "controls")
+				-- and back to the PC sizes
+				BuildView.setCompact(refs, false, nil)
+				T.truthy(card.Description.Visible, label .. ": PC: the description")
+				T.eq(card.Category.Text, "PROCESSING", label .. ": PC: the category alone")
+				T.eq(card.View.Size.X.Offset, 76, label .. ": PC: the big picture")
+				T.eq(refs.Info.Room.MaxSize.Y, math.huge, label .. ": no cap")
+			end)
+		end
+	end)
 end

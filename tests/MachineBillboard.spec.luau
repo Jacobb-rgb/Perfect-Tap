@@ -2,6 +2,7 @@
 -- machine model: where it hangs, and what update() shows.
 return function(T, Loader)
 	local roblox = require("@lune/roblox") :: any
+	local fs = require("@lune/fs") :: any
 	local Color3 = roblox.Color3
 	local MachineBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.MachineBuilder")
 	local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
@@ -605,6 +606,39 @@ return function(T, Loader)
 		T.truthy(MachineBillboard.wants(odds, "", MachineBillboard.OddsRange), "the plant's odds up close")
 		T.falsy(MachineBillboard.wants(odds, "", MachineBillboard.OddsRange + 1), "not from afar")
 		T.truthy(MachineBillboard.StatusRange <= 45, "the sign shows that far (MaxDistance 45)")
+	end)
+
+	T.test("MachineBillboard: under the sign cap, blocked beats nearer waiting ones", function()
+		T.eq(MachineBillboard.signRank("OutputBlocked"), 0)
+		T.eq(MachineBillboard.signRank("TooManyItems"), 0)
+		T.eq(MachineBillboard.signRank("PenFull"), 0)
+		T.eq(MachineBillboard.signRank("Working"), 1)
+		T.eq(MachineBillboard.signRank("NoPower"), 2)
+		T.eq(MachineBillboard.signRank("Waiting"), 3)
+		T.eq(MachineBillboard.signRank("NeedsOtherOre"), 3)
+		T.eq(MachineBillboard.signRank(""), 3, "the plant's odds alone")
+		-- a mid-game base: 20 idle machines close by, one blocked and one
+		-- working further away, a cap of 12 (MachineFxController)
+		local cap = 12
+		local list = {}
+		for i = 1, 20 do
+			table.insert(list, { Status = "Waiting", Distance = i })
+		end
+		local blocked = { Status = "OutputBlocked", Distance = 29 }
+		local working = { Status = "Working", Distance = 45 }
+		local unpowered = { Status = "NoPower", Distance = 25 }
+		table.insert(list, blocked)
+		table.insert(list, working)
+		table.insert(list, unpowered)
+		table.sort(list, MachineBillboard.signBefore)
+		T.truthy(list[1] == blocked, "blocked first")
+		T.truthy(list[2] == working, "then working")
+		T.truthy(list[3] == unpowered, "then no power")
+		T.eq(list[4].Distance, 1, "then the nearest waiting")
+		T.eq(list[cap].Distance, cap - 3, "the farther waiting ones lose their sign")
+		local fx = fs.readFile("src/client/Controllers/MachineFxController.luau")
+		T.truthy(string.find(fx, "table.sort(candidates, MachineBillboard.signBefore)", 1, true) ~= nil, "the cap sorts by it")
+		T.truthy(string.find(fx, "local MAX_BILLBOARDS = " .. cap, 1, true) ~= nil, "the cap")
 	end)
 
 	T.test("MachineBillboard: the FULL / BUSY pop over a hopper", function()

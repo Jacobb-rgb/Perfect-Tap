@@ -14,10 +14,11 @@
 	- Items lying on someone else's plot go back to their owner's Storage
 	  after ForeignItemReturn seconds.
 	- Put In prompts (addLoadPrompt): load what you carry into a machine.
-	- An item dropped into a hopper that is full (or busy) waits there; its
-	  owner gets an Fx 'Full' ("FULL" / "BUSY" pops over the hopper with
-	  the deny sound, MachineFxController) once per drop, at most once per
-	  FULL_POP_GAP per machine.
+	- An item dropped into a hopper that is full (or busy) waits there; if
+	  the player dropped or threw it (HandDropped), its owner gets an Fx
+	  'Full' ("FULL" / "BUSY" pops over the hopper with the deny sound,
+	  MachineFxController) once per drop, at most once per FULL_POP_GAP
+	  per machine.
 
 	Zones are pure maths in a per-plot cell index, rebuilt on every layout
 	change, so the 5 Hz scan costs a few box tests per item and no spatial
@@ -353,7 +354,12 @@ local function hopperPosition(machine: PlacedMachine): Vector3
 end
 
 -- A dropped item a full or busy hopper refused: the owner's Fx 'Full' (see the header).
+-- Only items the player dropped or threw (HandDropped): machine pops, belt
+-- spills and deck drops backing up are automation and stay quiet.
 local function announceFull(machine: PlacedMachine, record: ItemRecord, reason: Reason, now: number)
+	if not record.HandDropped then
+		return
+	end
 	local last = fullSeen[record]
 	fullSeen[record] = now
 	if last and now - last <= FULL_SEEN_GAP then

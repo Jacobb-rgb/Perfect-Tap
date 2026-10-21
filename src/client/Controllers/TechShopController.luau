@@ -28,7 +28,8 @@
 	  selected button on open and on every tab switch; the selection stays
 	  inside the panel (SelectionGroup).
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
-	  counter (or from your plot, for a shop opened there), the counter
+	  counter (or from your plot, for a shop with no counter: always, past
+	  TechShopView.baseCloseRange of where it opened), the counter
 	  streaming out, respawning or another panel (Pen, Sell, Train...)
 	  opening. Other prompts are hidden while it is open.
 	- Build mode (PlacementController) takes the screen and the controls,
@@ -81,9 +82,6 @@ local TICK = 0.25
 -- less than the server's ShopService.Range: the shop closes before the server
 -- would refuse a BUY as "TooFar", with room for lag (TechShopView.CloseRange)
 local CLOSE_RANGE = TechShopView.CloseRange
--- a shop opened at your plot closes past this (horizontal studs from its
--- centre): under the server's GameConfig.BuildRange, with room for lag
-local BASE_CLOSE_RANGE = TechShopView.BaseCloseRange
 -- seconds a BUY waits for its ShopResult before its button is freed: a
 -- levelled item can be tried again safely (a repeat is refused as Stale), a
 -- machine BUY that went through slowly would buy again, so it waits longer
@@ -135,18 +133,23 @@ local function holderOf(button: TextButton): Frame
 	return button.Parent :: Frame
 end
 
--- Is your character within `range` studs (horizontally) of your own plot's
--- centre? The same test as the server's PlotService.isNear.
-local function nearOwnPlot(range: number): boolean
+-- Your character's horizontal distance from your own plot's centre
+-- (math.huge with no plot or no character): the server's PlotService.isNear test.
+local function plotDistance(): number
 	local id = player:GetAttribute("PlotId")
 	local plot = if type(id) == "number" then WorldLayout.Plots[id] else nil
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not plot or not root then
-		return false
+		return math.huge
 	end
 	local offset = root.Position - plot.Center
-	return Vector3.new(offset.X, 0, offset.Z).Magnitude <= range
+	return Vector3.new(offset.X, 0, offset.Z).Magnitude
+end
+
+-- Is your character within `range` studs (horizontally) of your own plot's centre?
+local function nearOwnPlot(range: number): boolean
+	return plotDistance() <= range
 end
 
 -- Build mode is open (PlacementController, looked up on use).
@@ -298,6 +301,8 @@ end
 -- The platform's own glyphs: B on the close button, LB / RB at the tab bar's ends.
 local function updateGlyphs(view: TechShopView.Refs)
 	local gamepad = usingGamepad()
+	-- the notes' BUILD key: B, D-pad Up, or a tap on the BUILD tile
+	TechShopView.setDevice(view, if gamepad then "Gamepad" elseif isTouch() then "Touch" else "Keyboard")
 	local holder = holderOf(view.Close)
 	local glyph = holder:FindFirstChild("Glyph") :: ImageLabel?
 	if not glyph then
@@ -578,10 +583,11 @@ local function ensureView(): TechShopView.Refs
 	return view
 end
 
--- Every TICK: close when you walk away (from the counter, or from your
--- plot for a shop opened there), the counter streams out or another panel
--- opens; count the coins up; give up on unanswered buys.
-local function watch(part: BasePart?, nearBase: boolean)
+-- Every TICK: close when you walk away (from the counter, or past
+-- `baseRange` from your plot for a shop with no counter), the counter
+-- streams out or another panel opens; count the coins up; give up on
+-- unanswered buys.
+local function watch(part: BasePart?, baseRange: number?)
 	local elapsed = 0
 	local sinceRefresh = 0
 	tickConnection = RunService.Heartbeat:Connect(function(dt)
@@ -606,7 +612,7 @@ local function watch(part: BasePart?, nearBase: boolean)
 				TechShopController.close()
 				return
 			end
-		elseif nearBase and not nearOwnPlot(BASE_CLOSE_RANGE) then
+		elseif baseRange and not nearOwnPlot(baseRange) then
 			TechShopController.close()
 			return
 		end
@@ -657,8 +663,9 @@ local function show(part: BasePart?, place: TechShopView.Where, tab: TechShopVie
 	PromptController.setSuppressed("TechShop", true)
 	ContextActionService:BindActionAtPriority(CLOSE_ACTION, onClose, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonB, Enum.KeyCode.Backspace)
 	ContextActionService:BindActionAtPriority(TAB_ACTION, onTab, false, CLOSE_PRIORITY, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)
-	-- a counterless shop opened at your plot closes when you walk away from it
-	watch(part, part == nil and nearOwnPlot(BASE_CLOSE_RANGE))
+	-- a shop with no counter always closes when you walk away from your
+	-- plot, however far out it opened (TechShopView.baseCloseRange)
+	watch(part, if part == nil then TechShopView.baseCloseRange(plotDistance()) else nil)
 	GuiService.SelectedObject = nil
 	refresh()
 	selectDefault(view, true)
