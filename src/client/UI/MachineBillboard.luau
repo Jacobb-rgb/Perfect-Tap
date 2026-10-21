@@ -47,10 +47,10 @@
 
 	Info lines (refreshInfo: read from the model's attributes, by update()
 	at most every INFO_INTERVAL seconds, or when called):
-	  machines (PowerSpeed, Powered)  "⚡ 100%" at full speed, "Low power 80%"
+	  machines (PowerSpeed, Powered)  "Power 100%" at full speed, "Low power 80%"
 	                                  while slowed, "No power 60%" when on no
 	                                  network with power
-	  generators (PowerOut, Network)  "⚡ +40 power" (", no pole" when no pole reaches it)
+	  generators (PowerOut, Network)  "+40 power" (", no pole" when no pole reaches it)
 	  poles (PowerSupply/PowerDemand) "Network 35/50" (supply/demand)
 	  Detail (string)                 shown as it is (one line; longer than DETAIL_MAX
 	                                  characters, it is cut with "…")
@@ -262,13 +262,13 @@ function MachineBillboard.powerLine(model: Instance): (string, Color3)
 		if model:GetAttribute("Powered") ~= true then
 			return `No power {pct}%`, Theme.Bad
 		elseif pct >= 100 then
-			return `⚡ {pct}%`, Theme.Good
+			return `Power {pct}%`, Theme.Good
 		end
 		return `Low power {pct}%`, Theme.Accent
 	end
 	local out = numberAttr(model, "PowerOut")
 	if out then
-		local text = `⚡ +{Format.big(round(out))} power`
+		local text = `+{Format.big(round(out))} power`
 		if model:GetAttribute("Network") == "" then
 			return text .. ", no pole", Theme.Accent
 		end

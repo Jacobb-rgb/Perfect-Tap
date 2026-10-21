@@ -25,7 +25,7 @@
 	- Your own plot always has its cables; other plots only within
 	  OTHER_RANGE studs (checked every SELECT_INTERVAL seconds).
 	- Info signs (MachineBillboard.attachInfo: "Network 35/50" on a pole,
-	  "⚡ +40 power" on a generator, "⚡ 100%" / "No power 60%" on a machine
+	  "+40 power" on a generator, "Power 100%" / "No power 60%" on a machine
 	  that uses power (the Robot Arm; processors mostly show the full sign,
 	  whose status row says "No power: 60%"), the Detail line of e.g. a
 	  Sorter) on your own nearest INFO_MAX such machines within INFO_RANGE

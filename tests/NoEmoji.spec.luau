@@ -18,10 +18,9 @@
 	                   and media buttons, the coloured squares and circle
 	Arrows (U+2190-2193), the middle dot and the like are ordinary text.
 
-	FILE_ALLOWED lets exactly one file keep exactly one emoji: the machines
-	chat owns MachineBillboard and MachineFxController and changes them now;
-	their power line keeps U+26A1 (high voltage) until that chat swaps it for
-	words. Everything else fails the spec, wherever an emoji comes back.
+	FILE_ALLOWED could let one file keep one emoji; it is empty (the machine
+	billboards' power line is words since 2026-10-21). Any emoji fails the
+	spec, wherever it comes back.
 ]]
 return function(T, Loader)
 	local fs = require("@lune/fs")
@@ -65,12 +64,8 @@ return function(T, Loader)
 	end
 
 	-- path (from the project root) -> the emoji that file may keep
-	local FILE_ALLOWED: { [string]: { [number]: boolean } } = {
-		-- the machines chat owns these two files and is changing them right now;
-		-- their power line ("<high voltage> 100%") stays until that chat turns it into words
-		["src/client/UI/MachineBillboard.luau"] = { [0x26A1] = true },
-		["src/client/Controllers/MachineFxController.luau"] = { [0x26A1] = true },
-	}
+	-- (empty: the machine billboards say "Power 100%" / "+40 power" in words since 2026-10-21)
+	local FILE_ALLOWED: { [string]: { [number]: boolean } } = {}
 
 	local function isEmoji(cp: number): boolean
 		if cp >= 0x1F000 and cp <= 0x1FAFF then
@@ -233,10 +228,9 @@ return function(T, Loader)
 		T.eq(#scan("src/x.luau", `local s = "{gear}{vs16} SETTINGS"`), 2, "a symbol + VS16: both")
 		T.eq(#scan("src/x.luau", `local s = "{utf8.char(0x1F512)} REBIRTH 1"`), 1, "a lock pictograph")
 		T.eq(#scan("src/x.luau", `local s = "{utf8.char(0x2713)}"`), 1, "the check mark (drawn from Frames instead)")
-		-- the machines chat's two files keep exactly their high voltage sign
-		T.eq(#scan("src/client/UI/MachineBillboard.luau", `local s = "{bolt} 100%"`), 0, "MachineBillboard's power line")
-		T.eq(#scan("src/client/Controllers/MachineFxController.luau", `local s = "{bolt}"`), 0, "MachineFxController")
-		T.eq(#scan("src/client/UI/MachineBillboard.luau", `local s = "{star}"`), 1, "only that one emoji")
+		-- no file keeps an emoji any more: the machine billboards say "Power 100%" in words
+		T.eq(#scan("src/client/UI/MachineBillboard.luau", `local s = "{bolt} 100%"`), 1, "MachineBillboard's power line is words now")
+		T.eq(#scan("src/client/Controllers/MachineFxController.luau", `local s = "{bolt}"`), 1, "MachineFxController too")
 		T.eq(#scan("src/client/UI/HudView.luau", `local s = "{bolt} 100%"`), 1, "the sign anywhere else fails")
 	end)
 end

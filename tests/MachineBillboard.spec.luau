@@ -199,7 +199,7 @@ return function(T, Loader)
 			return MachineBillboard.powerLine(model)
 		end
 		local text, color = line({ PowerSpeed = 1, Powered = true })
-		T.eq(text, "⚡ 100%", "full speed")
+		T.eq(text, "Power 100%", "full speed")
 		T.truthy(color == Theme.Good, "green")
 		text, color = line({ PowerSpeed = 0.8, Powered = true })
 		T.eq(text, "Low power 80%", "slowed")
@@ -212,13 +212,13 @@ return function(T, Loader)
 		T.eq((line({ PowerSpeed = 0.6 })), "No power 60%", "Powered missing counts as no")
 		-- generators
 		text, color = line({ PowerOut = 40, Network = "5,5" })
-		T.eq(text, "⚡ +40 power", "generator")
+		T.eq(text, "+40 power", "generator")
 		T.truthy(color == Theme.Good)
-		T.eq((line({ PowerOut = 18.75, Network = "5,5" })), "⚡ +19 power", "whole numbers")
-		T.eq((line({ PowerOut = 450, Network = "5,5" })), "⚡ +450 power")
-		T.eq((line({ PowerOut = 1500, Network = "5,5" })), "⚡ +1.5K power", "big numbers formatter")
+		T.eq((line({ PowerOut = 18.75, Network = "5,5" })), "+19 power", "whole numbers")
+		T.eq((line({ PowerOut = 450, Network = "5,5" })), "+450 power")
+		T.eq((line({ PowerOut = 1500, Network = "5,5" })), "+1.5K power", "big numbers formatter")
 		text, color = line({ PowerOut = 40, Network = "" })
-		T.eq(text, "⚡ +40 power, no pole", "no pole reaches it")
+		T.eq(text, "+40 power, no pole", "no pole reaches it")
 		T.truthy(color == Theme.Accent)
 		-- poles
 		text, color = line({ PowerSupply = 35, PowerDemand = 50, Network = "5,5" })
@@ -275,7 +275,7 @@ return function(T, Loader)
 		-- ...then at most every INFO_INTERVAL: refreshInfo reads them now
 		withAttrs(model, { PowerSpeed = 1, Powered = true, Detail = "Rare+ ▶ right" })
 		MachineBillboard.refreshInfo(refs)
-		T.eq(refs.Power.Text, "⚡ 100%")
+		T.eq(refs.Power.Text, "Power 100%")
 		T.truthy(refs.Power.TextColor3 == Theme.Good)
 		T.truthy(refs.Detail.Visible, "detail line")
 		T.eq(refs.Detail.Text, "Rare+ ▶ right")
@@ -344,7 +344,7 @@ return function(T, Loader)
 		local turbine = MachineBuilder.build("WindTurbine")
 		withAttrs(turbine, { PowerOut = 40, Network = "5,5" })
 		local sign = MachineBillboard.attachInfo(turbine)
-		T.eq(sign.Power.Text, "⚡ +40 power")
+		T.eq(sign.Power.Text, "+40 power")
 		T.truthy(MachineBillboard.anchorOf(turbine) == sign.Gui.Parent, "anchorOf: where signs hang")
 		MachineBillboard.detach(sign)
 	end)
@@ -354,11 +354,11 @@ return function(T, Loader)
 		local size = MachineBillboard.InfoTextSize
 		T.truthy(size >= 14, "readable text")
 		local samples = {
-			"⚡ 100%",
+			"Power 100%",
 			"Low power 99%",
 			"No power 60%",
-			"⚡ +1.23K power, no pole",
-			"⚡ +450 power",
+			"+1.23K power, no pole",
+			"+450 power",
 			"Network 999/999",
 			"Network 1.23K/4.56K",
 			"Legendary+ ▶ right",
@@ -504,7 +504,7 @@ return function(T, Loader)
 		withAttrs(model, { PowerSpeed = 1, Powered = true })
 		MachineBillboard.update(refs, 0, 0, 4, 0, "Waiting", nil)
 		T.truthy(refs.Power.Visible, "power line back")
-		T.eq(refs.Power.Text, "⚡ 100%")
+		T.eq(refs.Power.Text, "Power 100%")
 		T.eq(refs.Power.Position.Y.Offset, 20, "under the status row")
 		T.eq(refs.Gui.Size.Y.Offset, 20 + MachineBillboard.InfoSize.Y)
 

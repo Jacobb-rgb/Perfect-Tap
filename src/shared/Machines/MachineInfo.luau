@@ -8,7 +8,7 @@
 	                       (Output / OutputCount), Seconds (Time), PowerNeed /
 	                       PowerMake and their line, where the results come
 	                       out, the Description (nil for an unknown id)
-	  powerChip(id)        the tray card's chip: "⚡10" needs, "+40⚡" makes
+	  powerChip(id)        the tray card's chip: "PWR 10" needs, "+40 PWR" makes
 	  unplaced(inventory)  machines waiting in data.MachineInventory (the
 	                       BUILD tile's badge)
 	  powerPreview(...)    what PowerLogic will say about a ghost at a spot:
@@ -215,19 +215,19 @@ function MachineInfo.describe(id: any): Info?
 	}
 end
 
--- The tray card's power chip: "⚡10" (needs), "+40⚡" (makes), "⚡" (a
--- pole), nil (no part in power).
+-- The tray card's power chip in words (no emoji, owner 2026-10-21): "PWR 10"
+-- (needs), "+40 PWR" (makes), "PWR" (a pole), nil (no part in power).
 function MachineInfo.powerChip(id: any): string?
 	local machine = if type(id) == "string" then MachineData.ById[id] else nil
 	local kind = PowerLogic.kindOf(machine)
 	if not machine or kind == "Other" then
 		return nil
 	elseif kind == "Machine" then
-		return `⚡{machine.Power}`
+		return `PWR {machine.Power}`
 	elseif kind == "Generator" then
-		return `+{machine.PowerOut}⚡`
+		return `+{machine.PowerOut} PWR`
 	end
-	return "⚡"
+	return "PWR"
 end
 
 -- How many machines wait to be placed (data.MachineInventory: known ids,

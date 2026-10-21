@@ -4,7 +4,7 @@
 	  top right     DONE, and SHOP under it (the Tech shop's machines)
 	  bottom        tray of machine cards you own (MachineData order, 'x2'):
 	                a live 3D picture of the machine, its category band
-	                and a power chip ("⚡10" needs, "+40⚡" makes); empty,
+	                and a power chip ("PWR 10" needs, "+40 PWR" makes); empty,
 	                it says "Buy machines with SHOP" next to a SHOP button
 	                (not while the touch buttons show: they sit there)
 	  above tray    reason / warning line, and the controls: a row of
