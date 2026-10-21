@@ -4,8 +4,9 @@
 -- auto-depart timer, the arrival timer, delivery into the pen (capacity,
 -- retry, one toast, Waiting), the return trip as the client reads it,
 -- joining (quiet delivery and retries, re-announcing, the Express grace),
--- banner colors, upgrades, Express, junk input, one broken train, no
--- duplication, and Direct Unload (dirty ore straight off the train onto the
+-- banner colors, upgrades (a double click from the card buys two levels),
+-- every TrainAction answered (TrainResult) and a press pushing State at
+-- once, Express, junk input, one broken train, no duplication, and Direct Unload (dirty ore straight off the train onto the
 -- TRAIN chute's belt through PenService's Train lane, a full pen, why it
 -- waits on the train's line, a belt that goes away, leaving, a failing
 -- chute). The railway hooks follow the WORLD
@@ -52,6 +53,7 @@ return function(T, Loader)
 	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
 	local IntakeService = Loader.requirePath("ServerScriptService.Server.Services.IntakeService")
 	local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
+	local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
 	local Players = Loader.game:GetService("Players")
 	local HttpService = Loader.game:GetService("HttpService")
 
@@ -168,7 +170,7 @@ return function(T, Loader)
 	---------------------------------------------------------------- world
 
 	local function setup(): any
-		local w: any = { notes = {}, all = {}, near = {}, wakes = {}, changed = {}, zones = {}, now = NOW }
+		local w: any = { notes = {}, all = {}, near = {}, wakes = {}, changed = {}, pushed = {}, zones = {}, now = NOW }
 		w.player = fakePlayer(USER, "Owner")
 		w.other = fakePlayer(OTHER, "Neighbour")
 		w.data = deepCopy(DataTemplate)
@@ -194,6 +196,10 @@ return function(T, Loader)
 		end)
 		patch(DataService, "changed", function(p)
 			w.changed[p] = (w.changed[p] or 0) + 1
+		end)
+		-- a press's State push that skips the throttle (counted; StateService.spec tests the push)
+		patch(StateService, "pushNow", function(p)
+			w.pushed[p] = (w.pushed[p] or 0) + 1
 		end)
 		patch(Net, "fire", function(name, p, a, b, c)
 			table.insert(w.notes, { Name = name, Player = p, A = a, B = b, C = c })
@@ -348,6 +354,17 @@ return function(T, Loader)
 	end
 
 	-- Every "TrainTrip" sent to all players (one per departure / re-announce).
+	-- The TrainResult answers a player got, oldest first.
+	local function results(w: any, p: any): { any }
+		local list = {}
+		for _, note in w.notes do
+			if note.Name == "TrainResult" and note.Player == p then
+				table.insert(list, note.A)
+			end
+		end
+		return list
+	end
+
 	local function trips(w: any, userId: number?): { any }
 		local list = {}
 		for _, note in w.all do
@@ -1411,7 +1428,23 @@ return function(T, Loader)
 		end
 		T.eq(w.data.Train.CapacityLevel, 0, "nothing bought")
 		T.eq(w.data.Coins, coins, "nothing paid")
-		T.eq(notifyCount(), toastsBefore, "a stale request is quiet")
+		T.eq(notifyCount(), toastsBefore, "no toast (the card says it: TrainResult)")
+		local answers = results(w, w.player)
+		T.eq(#answers, 7, "but every request is answered (the list's nil is no request)")
+		local named = 0
+		for _, answer in answers do
+			T.eq(answer.Action, "Upgrade")
+			T.eq(answer.Ok, false)
+			T.eq(answer.Reason, "Stale")
+			T.eq(answer.Kind, "Capacity")
+			if answer.Level == 2 then
+				named += 1
+			else
+				T.eq(answer.Level, nil, "no level for junk or one out of range")
+			end
+		end
+		T.eq(named, 1, "with the level it named")
+		T.eq(w.pushed[w.player], nil, "nothing to push")
 		local ok, why = TrainService.upgrade(w.player, "Capacity", 3)
 		T.falsy(ok, "refused")
 		T.eq(why, "Stale", "Stale")
@@ -1428,6 +1461,76 @@ return function(T, Loader)
 		-- speed counts on its own
 		T.eq(select(2, TrainService.upgrade(w.player, "Speed", 2)), "Stale", "speed is still at 0")
 		T.truthy(TrainService.upgrade(w.player, "Speed", 1), "speed level 1")
+	end)
+
+	withWorld("TrainService: a quick double click from the card buys two levels, each answered at once", function(w)
+		local p1 = TrainConfig.nextPrice(TrainConfig.Capacity, 0)
+		local p2 = TrainConfig.nextPrice(TrainConfig.Capacity, 1)
+		w.data.Coins = p1 + p2
+		-- the card counts the level it already asked for: the second click names Level 2
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 1 })
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 2 })
+		T.eq(w.data.Train.CapacityLevel, 2, "two levels")
+		T.eq(w.data.Coins, 0, "both paid")
+		local answers = results(w, w.player)
+		T.eq(#answers, 2)
+		T.truthy(answers[1].Ok and answers[2].Ok, "both answered Ok")
+		T.eq(answers[1].Level, 1)
+		T.eq(answers[2].Level, 2)
+		T.eq(w.pushed[w.player], 2, "each pushes State at once (not a throttle window later)")
+		-- a third without the coins: refused with the reason and the server's toast, no push
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 3 })
+		local last = results(w, w.player)[3]
+		T.eq(last.Ok, false)
+		T.eq(last.Reason, "Coins")
+		T.truthy(lastToast(w, w.player).Text:find("You need", 1, true), "told the price")
+		T.eq(w.pushed[w.player], 2, "nothing bought, nothing pushed")
+		-- the card ran ahead after that refusal (Level 4): Stale, answered
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = 4 })
+		T.eq(results(w, w.player)[4].Reason, "Stale")
+		-- at the top: Max, answered and toasted
+		w.data.Train.CapacityLevel = TrainConfig.maxLevel(TrainConfig.Capacity)
+		w.data.Coins = 1e12
+		train.action(w.player, "Upgrade", { Kind = "Capacity", Level = w.data.Train.CapacityLevel + 1 })
+		local top = results(w, w.player)[5]
+		T.eq(top.Ok, false)
+		T.eq(top.Reason, "Max")
+		T.truthy(lastToast(w, w.player).Text:find("top level", 1, true), "the maxed toast")
+		T.eq(w.data.Coins, 1e12, "nothing paid")
+	end)
+
+	withWorld("TrainService: Send is answered and pushes State at once; the TrainTrip goes first", function(w)
+		dropMany(w.station, USER, COAL, 3)
+		local changes = w.changed[w.player] or 0
+		train.action(w.player, "Send")
+		T.eq(#w.data.Train.TripCargo, 3, "it left")
+		T.eq(w.pushed[w.player], 1, "State at once")
+		T.truthy((w.changed[w.player] or 0) > changes, "and the usual data change")
+		local answer = results(w, w.player)[1]
+		T.eq(answer.Action, "Send")
+		T.eq(answer.Ok, true)
+		-- the clients learn of the trip in the same step, before the State push is sent
+		local trip = trips(w, USER)[1]
+		T.truthy(trip, "TrainTrip")
+		T.eq(trip.Count, 3)
+		-- pressed again while it is away: refused, answered, told why, nothing pushed
+		train.action(w.player, "Send")
+		T.eq(results(w, w.player)[2].Ok, false)
+		T.eq(lastToast(w, w.player).Text, TrainService.AwayText)
+		T.eq(w.pushed[w.player], 1)
+		-- the station prompt's Send (TrainService.send) pushes at once too
+		advance(w, TRIP + TrainConfig.ReturnSeconds + 1)
+		runWakes(w)
+		dropMany(w.station, USER, COAL, 2)
+		T.truthy(TrainService.send(w.player), "sent from the prompt")
+		T.eq(w.pushed[w.player], 2)
+		T.eq(#results(w, w.player), 2, "(the prompt has no TrainResult)")
+		-- the automatic departures (full cargo, the timer) keep the throttled push
+		advance(w, TRIP + TrainConfig.ReturnSeconds + 1)
+		runWakes(w)
+		dropMany(w.station, USER, COAL, CAP)
+		T.truthy(#w.data.Train.TripCargo > 0, "left full by itself")
+		T.eq(w.pushed[w.player], 2, "no extra push for that")
 	end)
 
 	withWorld("TrainService: a pen over its capacity takes nothing from the train (PenOver)", function(w)

@@ -2,7 +2,8 @@
 -- pushes carry only the sections that changed (Placed only after a layout
 -- edit), a removed section is announced, the first push after a (re)join is
 -- whole and goes out at once, a push after a quiet spell goes out at once
--- and pushes close together are throttled, the coin attributes follow the
+-- and pushes close together are throttled (a press's pushNow skips that
+-- once, without a second push for the same changes), the coin attributes follow the
 -- balance (0 when it or the income is broken), the client's
 -- StateController.merge turns every partial push back into the whole
 -- snapshot (steps 6-7 Kept keys too), a failed or missed push heals (the
@@ -415,6 +416,72 @@ return function(T, Loader)
 		local gone = fakePlayer(45)
 		w.byPlayer[gone] = busyData()
 		StateService.push(gone)
+		gone.Parent = nil
+		task.wait(0.05)
+		for _, fire in w.fired do
+			T.truthy(fire.Player ~= gone, "nothing for a player who left")
+		end
+	end)
+
+	withState("StateService: pushNow skips the throttle once (a press gets its answer at once)", function(w)
+		local WINDOW = 0.3
+		StateService.PushSeconds = WINDOW
+		local data = busyData()
+		local p = fakePlayer(51)
+		w.byPlayer[p] = data
+		StateService.push(p)
+		waitUntil(function()
+			return #w.fired >= 1
+		end, 0.05)
+		T.eq(#w.fired, 1, "the first push")
+		-- a change right after it (a hopper load, a sale): held back for the window
+		data.Coins += 1
+		StateService.push(p)
+		task.wait() -- one step (see the throttle test)
+		T.eq(#w.fired, 1, "held back")
+		-- a press (TrainService: the train sent, a level bought): out at the next resumption
+		data.Coins -= 100
+		local asked = os.clock()
+		StateService.pushNow(p)
+		local steps = 0
+		repeat
+			task.wait()
+			steps += 1
+		until #w.fired >= 2 or steps > 100
+		T.eq(#w.fired, 2, "at once")
+		T.truthy(steps <= 3, "at the next resumption")
+		T.lt(w.fired[2].At - asked, WINDOW, "not a window later")
+		T.eq(w.fired[2].Payload.Coins, data.Coins, "with the change that waited too")
+		-- once only: a change right after it is throttled from the pushNow's push, as usual
+		data.Coins += 7
+		StateService.push(p)
+		task.wait()
+		T.eq(#w.fired, 2, "throttled again")
+		waitUntil(function()
+			return #w.fired >= 3
+		end, 5)
+		T.eq(#w.fired, 3)
+		-- (the push that waited before the press would have gone out a window after the first
+		-- push, sooner than this: it was dropped, its changes went with the pushNow)
+		T.truthy(w.fired[3].At - w.fired[2].At >= WINDOW - 0.02, "a window after the pushNow's push")
+		T.eq(w.fired[3].Payload.Coins, data.Coins)
+		task.wait(WINDOW + 0.1)
+		T.eq(#w.fired, 3, "no push for changes already sent")
+		-- after a quiet spell the press's data change already asked for a push: still one push
+		task.wait(WINDOW + 0.05)
+		data.Coins += 1
+		StateService.push(p) -- DataService.changed
+		StateService.pushNow(p) -- TrainService right after it
+		waitUntil(function()
+			return #w.fired >= 4
+		end, 5)
+		task.wait(WINDOW + 0.1)
+		T.eq(#w.fired, 4, "one push for one press")
+		T.eq(w.fired[4].Payload.Coins, data.Coins)
+		-- a player who left before it: nothing
+		local gone = fakePlayer(52)
+		w.byPlayer[gone] = busyData()
+		StateService.pushNow(gone)
 		gone.Parent = nil
 		task.wait(0.05)
 		for _, fire in w.fired do
