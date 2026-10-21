@@ -178,6 +178,8 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local hud1 = hud(scale, Preview.Coins, 5)
 	local pc = view(scale, false, pcWidth, pcHeight, bought, Preview.Coins)
 	local pack = pc.Slots.Backpack.Button
+	-- (as GearShopController's setBusy + style)
+	pack:SetAttribute("Busy", true)
 	pack.Text = "BOUGHT!"
 	GearShopView.style(pack, true, Theme.Good, Theme.GoodDark)
 	GearShopView.showReceipt(pc, "Ore Backpack III: you can carry 5 items!", Theme.Good)
@@ -219,6 +221,7 @@ function Preview.build(Loader: any, workspace: any): { [string]: any }
 	local boots = tv.Slots.Boots.Button
 	boots:SetAttribute("Busy", true)
 	boots.Text = "..."
+	GearShopView.syncButton(boots) -- (the game shows a new Text by itself: Roblox signals don't run in Lune)
 	GearShopView.setStatus(tv, "Gloves", GearShopView.StatusText.Waiting, Theme.Info)
 	exports.ui_gear_tv = UiExport.export({ hud7.Gui, tv.Gui })
 

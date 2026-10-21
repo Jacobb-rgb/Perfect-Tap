@@ -1,6 +1,10 @@
 --[[
 	The Enchant shop view at the rune table (pure builder + pure helpers;
-	EnchantController fills it in). One ScreenGui:
+	EnchantController fills it in). One ScreenGui in the Pop look (the
+	Robux Shop's: a pink Pop window; slots, catalog rows and the detail are
+	cards painted in their enchant's rarity, Pop.rarityPaint, with the rune
+	picture on light rays; the tier on a chip; BUY / SHARDS / EQUIP gold /
+	blue / green Pop buttons, a Robux buy green with the Robux mark):
 
 	  header   ENCHANTS, a line about enchants (or the last message), your
 	           coins and crystal shards, the X button
@@ -56,10 +60,12 @@ local MonetizationConfig = require(Shared.Config.MonetizationConfig)
 local Rarity = require(Shared.Config.Rarity)
 local StatConfig = require(Shared.Config.StatConfig)
 local Theme = require(Shared.Config.UITheme)
+local PopTheme = require(Shared.Config.PopTheme)
+local IconAssets = require(Shared.Config.IconAssets)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
-local LightSkin = require(script.Parent.LightSkin)
+local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local BoostView = require(script.Parent.BoostView)
 local TechShopView = require(script.Parent.TechShopView)
@@ -230,10 +236,14 @@ EnchantView.StatusText = {
 	LateBought = "Bought!",
 }
 
+-- the window's colour (BubbleTheme.Roles.Enchant: pink)
+EnchantView.WindowPaint = "Pink"
+
 local SEP = TechShopView.Separator
 local PAD = 16
 local GAP = 8
 local SCROLLBAR = 8
+local BODY_PAD = 8 -- the detail's dark well around its texts
 
 ---------------------------------------------------------------- pure helpers
 
@@ -714,10 +724,12 @@ end
 ---------------------------------------------------------------- the rune icon
 
 --[[
-	A rune: a diamond in the enchant's color with its first letter (`size`
-	design units). Mythic runes get a bright ring.
+	A rune: the enchant's picture (IconAssets enchant_<Id>: a gem with its
+	mark, a bit bigger than the box: a sticker) once uploaded (and in the
+	previews), else a diamond in the enchant's color with its first letter
+	(`size` design units). Mythic runes get a bright ring.
 ]]
-function EnchantView.rune(parent: Instance, size: number, color: Color3, letter: string, mythic: boolean?): Frame
+function EnchantView.rune(parent: Instance, size: number, color: Color3, letter: string, mythic: boolean?, id: string?): Frame
 	local holder = UIKit.new("Frame", {
 		Name = "Rune",
 		Size = UDim2.fromOffset(size, size),
@@ -762,11 +774,46 @@ function EnchantView.rune(parent: Instance, size: number, color: Color3, letter:
 	local pad = UIKit.new("UIPadding", {}, holder:FindFirstChild("Letter") :: Instance)
 	local inset = UDim.new(0.26, 0)
 	pad.PaddingTop, pad.PaddingBottom, pad.PaddingLeft, pad.PaddingRight = inset, inset, inset, inset
+	BoostView.popText(holder:FindFirstChild("Letter") :: TextLabel, true, Color3.new(1, 1, 1))
+	local picture = UIKit.new("ImageLabel", {
+		Name = "Picture",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromScale(1.3, 1.3),
+		Visible = false,
+		ZIndex = 2,
+	}, holder)
+	picture:SetAttribute("Icon", "")
+	EnchantView.setPicture(holder, id)
 	return holder
 end
 
--- Recolors a rune.
-function EnchantView.setRune(rune: Frame, color: Color3, letter: string, mythic: boolean?)
+-- Shows enchant `id`'s picture on a rune (nil / not uploaded: the drawn diamond).
+function EnchantView.setPicture(rune: Frame, id: string?)
+	local picture = rune:FindFirstChild("Picture") :: ImageLabel?
+	if not picture then
+		return
+	end
+	local name = if id then "enchant_" .. id else ""
+	local shows = name ~= "" and IconAssets.shows(name)
+	if picture:GetAttribute("Icon") ~= name then
+		IconAssets.apply(picture, name)
+		picture:SetAttribute("Icon", name)
+	end
+	picture.Visible = shows
+	for _, part in { "Ring", "Stone", "Letter" } do
+		local drawn = rune:FindFirstChild(part) :: GuiObject?
+		if drawn then
+			drawn.Visible = not shows
+		end
+	end
+end
+
+-- Recolors a rune (`id`: the enchant whose picture it shows).
+function EnchantView.setRune(rune: Frame, color: Color3, letter: string, mythic: boolean?, id: string?)
+	EnchantView.setPicture(rune, id)
 	local stone = rune:FindFirstChild("Stone") :: Frame?
 	if stone then
 		stone.BackgroundColor3 = color
@@ -889,68 +936,96 @@ end
 
 local holderOf = BoostView.holderOf
 
+-- the chips' dark face on the bright cards ("NEW", "II / III", the rarity)
+local CHIP_DARK = BoostView.DarkPaint
+-- the gold outline of the picked catalog row
+EnchantView.PickedOutline = Color3.fromRGB(255, 222, 40)
+
+-- An enchant slot: a painted Pop button (its enchant's rarity, slate when empty, grey when locked).
 local function newSlot(parent: Instance, index: number): SlotRefs
 	local button = UIKit.button(parent, "", Theme.PanelLight, Theme.PanelDark, { Name = "Slot" .. index })
+	BoostView.popButton(button, "Slate", 10)
 	local rune = EnchantView.rune(button, 32, Theme.PanelLight, "", false)
 	rune.AnchorPoint = Vector2.new(0, 0.5)
+	rune.ZIndex = 4
 	local name = UIKit.label(button, "EMPTY", 17, {
 		Name = "SlotName",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 4,
 	})
+	BoostView.popText(name, false, Color3.new(1, 1, 1))
 	local sub = UIKit.label(button, "", 13, {
 		Name = "SlotSub",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 4,
 	})
+	BoostView.popText(sub, false, Color3.fromRGB(240, 242, 250))
 	return { Button = button, Rune = rune, Name = name, Sub = sub }
 end
 
+--[[
+	A catalog row: a card painted in its rarity's colour (Pop.rarityPaint)
+	with rays behind its rune picture, white words, the tier on a chip
+	("NEW", "II / III", "MAX"); the picked row gets a gold outline (setRows).
+]]
 local function newRow(list: ScrollingFrame, enchant: EnchantConfig.Enchant, order: number): RowRefs
 	local button = UIKit.new("TextButton", {
 		Name = enchant.Id,
 		LayoutOrder = order,
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 	}, list)
-	UIKit.corner(button, 10)
-	UIKit.stroke(button, 2.5)
-	local rune = EnchantView.rune(button, 40, enchant.Color, enchant.Name:sub(1, 1), enchant.Rarity == "Mythic")
+	Pop.face(button, Pop.rarityPaint(enchant.Rarity), 10, false)
+	local rim = button:FindFirstChild("Rim") :: Frame?
+	if rim then
+		rim.ZIndex = 3
+	end
+	local burst = BoostView.burst(button, 8, 1)
+	burst.Name = "Burst"
+	Pop.studs(button, 10, 0.55, 40, 2)
+	local rune = EnchantView.rune(button, 40, enchant.Color, enchant.Name:sub(1, 1), enchant.Rarity == "Mythic", enchant.Id)
 	rune.AnchorPoint = Vector2.new(0, 0.5)
+	rune.ZIndex = 4
 	local name = UIKit.label(button, string.upper(enchant.Name), 20, {
 		Name = "ItemName",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Text,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	BoostView.popText(name, true, Color3.new(1, 1, 1))
 	local tier = UIKit.label(button, "", 16, {
 		Name = "Tier",
 		AnchorPoint = Vector2.new(1, 0),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = Theme.Accent,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
+		ZIndex = 5,
 	})
+	BoostView.popText(tier, false, Color3.new(1, 1, 1))
+	BoostView.backing(tier, CHIP_DARK)
 	local effect = UIKit.label(button, "", 15, {
 		Name = "Effect",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.Text,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	BoostView.popText(effect, false, Color3.new(1, 1, 1))
 	local line = UIKit.label(button, "", 15, {
 		Name = "Line",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	BoostView.popText(line, false, Color3.fromRGB(255, 240, 160))
 	return { Id = enchant.Id, Button = button, Rune = rune, Name = name, Tier = tier, Effect = effect, Line = line }
 end
 
@@ -958,6 +1033,7 @@ function EnchantView.build(compact: boolean?): Refs
 	local gui = UIKit.screen("TerraForgeEnchants", 15)
 	gui.Enabled = false
 	gui:SetAttribute("TerraForge", true)
+	gui:SetAttribute("PopSkin", true) -- the Pop look, never LightSkin's recolouring
 	local panel = UIKit.panel(gui, {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -992,36 +1068,38 @@ function EnchantView.build(compact: boolean?): Refs
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Visible = false,
 	})
-	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, { Name = "Close", AnchorPoint = Vector2.new(1, 0), TextSize = 26 })
+	local close = UIKit.button(panel, "X", Theme.Bad, Theme.BadDark, { Name = "Close", AnchorPoint = Vector2.new(1, 0), TextSize = 34 })
 	local balance, balanceAmount = BoostView.balance(panel)
-	-- crystal shards (a cyan crystal + the number)
+	-- crystal shards (a drawn crystal + the number) on a dark pill like the coins
 	local shardBalance = UIKit.new("Frame", {
 		Name = "Shards",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = Theme.PanelDark,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, panel)
-	UIKit.corner(shardBalance, 10)
-	UIKit.stroke(shardBalance, 2)
-	local crystal = UIKit.new("Frame", {
+	UIKit.corner(shardBalance, 999)
+	Pop.face(shardBalance, BoostView.DarkPaint, 999, true, false)
+	BoostView.crystal(shardBalance, 32, {
 		Name = "Crystal",
-		Position = UDim2.fromOffset(13, 11),
-		Size = UDim2.fromOffset(18, 18),
-		Rotation = 45,
-		BackgroundColor3 = EnchantView.ShardColor,
-		BorderSizePixel = 0,
-	}, shardBalance)
-	UIKit.corner(crystal, 3)
-	UIKit.stroke(crystal, 2)
-	local shardAmount = UIKit.label(shardBalance, "0", 22, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 5, 0.5, 0),
+		ZIndex = 3,
+	})
+	local shardAmount = Pop.text(shardBalance, "0", 22, {
 		Name = "Amount",
+		FontFace = PopTheme.Heavy,
 		Position = UDim2.fromOffset(40, 0),
 		Size = UDim2.new(1, -46, 1, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = EnchantView.ShardColor,
-		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
 	})
+	-- the Pop window: the pink header band (the Enchant colour), the dark body
+	BoostView.popWindow(panel, title, EnchantView.WindowPaint)
+	BoostView.popText(subtitle, false, Color3.new(1, 1, 1))
+	BoostView.popText(receipt, false, Color3.new(1, 1, 1))
+	BoostView.popButton(close, PopTheme.Close, 6, true)
 
 	-- the slots
 	local slotLabel = UIKit.label(panel, "YOUR BLASTER", 18, {
@@ -1031,6 +1109,7 @@ function EnchantView.build(compact: boolean?): Refs
 		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 	})
+	BoostView.popText(slotLabel, true)
 	local slots: { SlotRefs } = {}
 	for i = 1, EnchantConfig.MaxSlots do
 		table.insert(slots, newSlot(panel, i))
@@ -1042,14 +1121,14 @@ function EnchantView.build(compact: boolean?): Refs
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = SCROLLBAR,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
 	}, panel)
 	UIKit.list(list, Enum.FillDirection.Vertical, 6)
-	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 2) }, list)
+	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 3) }, list)
 	local groups: { [string]: TextLabel } = {}
 	local rows: { [string]: RowRefs } = {}
 	local rowList: { RowRefs } = {}
@@ -1060,15 +1139,22 @@ function EnchantView.build(compact: boolean?): Refs
 			lastRarity = enchant.Rarity
 			order += 1
 			local info = Rarity.get(enchant.Rarity)
-			groups[enchant.Rarity] = UIKit.label(list, string.upper(info.Name), 18, {
+			-- the rarity heading: "-- RARE --" in its colour (Pop.heading's look)
+			local group = UIKit.label(list, `-- {string.upper(info.Name)} --`, 18, {
 				Name = "Group" .. info.Id,
 				LayoutOrder = order,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Bottom,
 				FontFace = Theme.TitleFont,
-				TextColor3 = info.Color,
 				TextWrapped = false,
 			})
+			local paint = Pop.rarityPaint(enchant.Rarity)
+			BoostView.popText(group, true, Color3.new(1, 1, 1))
+			UIKit.new("UIGradient", {
+				Color = ColorSequence.new(paint.Top:Lerp(Color3.new(1, 1, 1), 0.35), paint.Top),
+				Rotation = 90,
+			}, group)
+			groups[enchant.Rarity] = group
 		end
 		order += 1
 		local row = newRow(list, enchant, order)
@@ -1076,38 +1162,63 @@ function EnchantView.build(compact: boolean?): Refs
 		table.insert(rowList, row)
 	end
 
-	-- the detail pane
+	-- the detail pane: a big card painted in the picked enchant's rarity
 	local detailFrame = UIKit.new("Frame", {
 		Name = "Detail",
-		BackgroundColor3 = Theme.PanelLight,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 	}, panel)
-	UIKit.corner(detailFrame, 12)
-	UIKit.stroke(detailFrame, 2.5)
 	local first = EnchantConfig.List[1]
-	local detailRune = EnchantView.rune(detailFrame, 56, first.Color, first.Name:sub(1, 1), false)
+	Pop.face(detailFrame, Pop.rarityPaint(first.Rarity), 10, false)
+	local detailRim = detailFrame:FindFirstChild("Rim") :: Frame?
+	if detailRim then
+		detailRim.ZIndex = 3
+	end
+	BoostView.burst(detailFrame, 12, 1)
+	Pop.studs(detailFrame, 10, 0.5, 44, 2)
+	for i, spot in { { 0.03, 0.2, 18 }, { 0.36, 0.06, 16 }, { 0.5, 0.14, 12 } } do
+		Pop.sparkle(detailFrame, UDim2.fromScale(spot[1], spot[2]), spot[3], 2, 0.15 + i * 0.08)
+	end
+	local detailRune = EnchantView.rune(detailFrame, 56, first.Color, first.Name:sub(1, 1), false, first.Id)
+	detailRune.ZIndex = 4
 	local detailName = UIKit.label(detailFrame, "", 28, {
 		Name = "EnchantName",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
-	local rarityChip = UIKit.chip(detailFrame, "", Theme.PanelDark, { Name = "RarityChip" })
-	local tierChip = UIKit.chip(detailFrame, "", Theme.PanelDark, { Name = "TierChip" })
+	BoostView.popText(detailName, true, Color3.new(1, 1, 1))
+	local rarityChip = UIKit.chip(detailFrame, "", Theme.PanelDark, { Name = "RarityChip", ZIndex = 5 })
+	local tierChip = UIKit.chip(detailFrame, "", Theme.PanelDark, { Name = "TierChip", ZIndex = 5 })
+	for _, chip in { rarityChip, tierChip } do
+		-- (a chip: a painted pill behind white words)
+		BoostView.strip(chip)
+		chip.BackgroundTransparency = 1
+		BoostView.popText(chip, false, Color3.new(1, 1, 1))
+		BoostView.backing(chip, CHIP_DARK)
+	end
 	local body = UIKit.new("ScrollingFrame", {
 		Name = "Body",
-		BackgroundTransparency = 1,
+		BackgroundColor3 = PopTheme.Well,
+		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = SCROLLBAR,
-		ScrollBarImageColor3 = Theme.Accent,
+		ScrollBarImageColor3 = Color3.fromRGB(196, 200, 212),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Selectable = false,
+		ZIndex = 4,
 	}, detailFrame)
+	UIKit.corner(body, 8)
 	UIKit.list(body, Enum.FillDirection.Vertical, 6)
+	UIKit.new("UIPadding", {
+		PaddingTop = UDim.new(0, BODY_PAD),
+		PaddingBottom = UDim.new(0, BODY_PAD),
+		PaddingLeft = UDim.new(0, BODY_PAD),
+	}, body)
 	local description = UIKit.label(body, "", 17, {
 		Name = "Description",
 		LayoutOrder = 1,
@@ -1115,12 +1226,14 @@ function EnchantView.build(compact: boolean?): Refs
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Theme.TextDim,
 	})
+	BoostView.popText(description)
 	local nowLine = UIKit.label(body, "", 18, {
 		Name = "Now",
 		LayoutOrder = 2,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 	})
+	BoostView.popText(nowLine)
 	local nextLine = UIKit.label(body, "", 18, {
 		Name = "Next",
 		LayoutOrder = 3,
@@ -1128,6 +1241,7 @@ function EnchantView.build(compact: boolean?): Refs
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Theme.Accent,
 	})
+	BoostView.popText(nextLine)
 	local oddsNote = UIKit.label(body, "", 17, {
 		Name = "OddsNote",
 		LayoutOrder = 4,
@@ -1135,39 +1249,51 @@ function EnchantView.build(compact: boolean?): Refs
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Theme.Info,
 	})
+	BoostView.popText(oddsNote)
 	local odds = BoostView.buildTable(body, true)
 	odds.Frame.LayoutOrder = 5
+	odds.Frame.ZIndex = 4
 	local tiersBox = UIKit.new("Frame", {
 		Name = "TiersBox",
 		LayoutOrder = 6,
-		BackgroundColor3 = Theme.PanelDark,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, body)
-	UIKit.corner(tiersBox, 12)
-	UIKit.stroke(tiersBox, 2.5)
-	local tiersTitle = UIKit.label(tiersBox, "ALL TIERS", 20, {
+	BoostView.popWell(tiersBox)
+	local tiersTitle = Pop.title(tiersBox, "ALL TIERS", 20, "Gold", {
 		Name = "TiersTitle",
+		FontFace = PopTheme.Heavy,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		FontFace = Theme.TitleFont,
-		TextColor3 = Theme.Accent,
-		TextWrapped = false,
+		ZIndex = 3,
 	})
 	local tiers = UIKit.label(tiersBox, "", 17, {
 		Name = "Tiers",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
+		ZIndex = 3,
 	})
+	BoostView.popText(tiers)
 	local status = UIKit.label(detailFrame, "", 18, {
 		Name = "Status",
+		BackgroundColor3 = PopTheme.Outline,
+		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 5,
 	})
+	UIKit.corner(status, 8)
+	BoostView.popText(status)
 	local buttons: { TextButton } = {}
 	for i = 1, 3 do
-		table.insert(buttons, UIKit.button(detailFrame, "BUY", Theme.Accent, Theme.AccentDark, { Name = "Buy" .. i, TextSize = 20 }))
+		local button = UIKit.button(detailFrame, "BUY", Theme.Accent, Theme.AccentDark, { Name = "Buy" .. i, TextSize = 20 })
+		holderOf(button).ZIndex = 5
+		BoostView.popButton(button, "Yellow", 10)
+		table.insert(buttons, button)
 	end
 	local equip = UIKit.button(detailFrame, "EQUIP", Theme.Info, Color3.fromRGB(40, 100, 170), { Name = "Equip", TextSize = 20 })
+	holderOf(equip).ZIndex = 5
+	BoostView.popButton(equip, "Green", 10)
 
 	local hint = UIKit.label(panel, "", 15, {
 		Name = "Hint",
@@ -1175,6 +1301,7 @@ function EnchantView.build(compact: boolean?): Refs
 		TextColor3 = Theme.TextDim,
 		TextWrapped = false,
 	})
+	BoostView.popText(hint)
 	local padHint, padGlyphs = BoostView.padHint(panel, {
 		{ Glyphs = 1, Word = "pick / buy", Width = 90 },
 		{ Glyphs = 1, Word = "close", Width = 52 },
@@ -1298,6 +1425,9 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		refs.Receipt.TextTruncate = Enum.TextTruncate.AtEnd
 		refs.Receipt.TextSize = 17
 	end
+	refs.Close.TextSize = if compact then 46 else 36
+	BoostView.syncButton(refs.Close)
+	BoostView.placeWindow(refs.Panel, m.Header - 8)
 
 	-- left column: YOUR BLASTER + the 2 x 2 slots, then the catalog
 	local top = m.Header
@@ -1352,6 +1482,12 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 		row.Line.TextSize = m.RowLine
 		row.Line.Position = UDim2.fromOffset(textLeft, m.RowLineY)
 		row.Line.Size = UDim2.new(1, -(textLeft + 10), 0, m.RowLine + 4)
+		-- the light burst behind the rune, the tier on its chip
+		local burst = row.Button:FindFirstChild("Burst") :: Frame?
+		if burst then
+			BoostView.placeBurst(burst, UDim2.new(0, 8 + m.RowRune / 2, 0.5, 0), m.Row * 2)
+		end
+		EnchantView.placeTier(refs, row)
 	end
 
 	-- right: the detail pane
@@ -1378,6 +1514,12 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	d.TierChip.Position = UDim2.fromOffset(textLeft + chipWidth + 8, 42)
 	d.TierChip.Size = UDim2.fromOffset(chipWidth, m.Chip)
 	d.TierChip.TextSize = d.RarityChip.TextSize
+	BoostView.placeBacking(d.RarityChip)
+	BoostView.placeBacking(d.TierChip)
+	local burst = d.Frame:FindFirstChild("Burst") :: Frame?
+	if burst then
+		BoostView.placeBurst(burst, UDim2.fromOffset(12 + m.DetailRune / 2, 10 + m.DetailRune / 2), 360)
+	end
 	local headTop = math.max(10 + m.DetailRune, 42 + m.Chip) + 8
 	-- the buttons at the bottom (the face sits 5 above its lip), the status line over them
 	local buttonsTop = bodyHeight - m.Button - 10
@@ -1395,7 +1537,8 @@ function EnchantView.layout(refs: Refs, compact: boolean, maxWidth: number, maxH
 	d.Equip.TextSize = m.ButtonText
 	d.Body.Position = UDim2.fromOffset(12, headTop)
 	d.Body.Size = UDim2.fromOffset(infoWidth, math.max(40, statusTop - headTop - 4))
-	refs.BodyWidth = infoWidth - (if wide then 4 else SCROLLBAR + 4)
+	-- (the texts sit in the body's dark well, BODY_PAD in from its sides)
+	refs.BodyWidth = infoWidth - 2 * BODY_PAD - (if wide then 0 else SCROLLBAR)
 	refs.RightWidth = if wide then detailWidth - infoWidth - 36 else refs.BodyWidth
 	refs.RightHeight = if wide then statusTop - 4 - 10 else 0
 	-- the odds table and the tiers box move between the column and the scroll
@@ -1449,11 +1592,16 @@ function EnchantView.placeButtons(refs: Refs)
 	local width = refs.Detail.Frame.Size.X.Offset - 24
 	local n = math.max(1, #shown)
 	local each = math.min(260, (width - GAP * (n - 1)) / n)
+	local textSize = metrics(refs.Compact).ButtonText
 	for i, button in shown do
 		local holder = holderOf(button)
 		holder.Size = UDim2.fromOffset(each, holder.Size.Y.Offset)
 		holder.Position = UDim2.fromOffset(12 + (i - 1) * (each + GAP), holder.Position.Y.Offset)
-		TechShopView.fitText(button :: any, each - 12, holder.Size.Y.Offset - 8, metrics(refs.Compact).ButtonText, 14)
+		-- (a coin / crystal / Robux mark beside the words takes its room)
+		local mark = button:GetAttribute("Mark")
+		local markRoom = if type(mark) == "string" and mark ~= "" then math.floor(textSize * 1.1 + 4) + 5 else 0
+		TechShopView.fitText(button :: any, each - 12 - markRoom, holder.Size.Y.Offset - 8, textSize, 14)
+		BoostView.syncButton(button)
 	end
 end
 
@@ -1508,13 +1656,35 @@ end
 local style = BoostView.style
 EnchantView.style = style
 
-local function buyColors(currency: string): (Color3, Color3)
-	if currency == "Robux" then
-		return Theme.Good, Theme.GoodDark
-	elseif currency == "Shards" then
-		return Color3.fromRGB(70, 170, 220), Color3.fromRGB(30, 100, 150)
+local WHITE = Color3.new(1, 1, 1)
+
+-- A buy button's Pop paint and mark: BUY gold with a coin, SHARDS blue with
+-- a crystal, Robux green with the Robux mark (Pop.price's look), grey when
+-- it can't be bought; TOP TIER a green tag.
+function EnchantView.buyLook(buy: Buy): (Pop.Paint, string)
+	if buy.Currency == "Max" then
+		return Pop.paint("Green"), ""
+	elseif buy.Currency == "Soon" then
+		return PopTheme.Gray, ""
 	end
-	return Theme.Accent, Theme.AccentDark
+	local mark = if buy.Currency == "Robux" then "robux" elseif buy.Currency == "Shards" then "shard" else "coin"
+	if not buy.CanBuy then
+		return PopTheme.Gray, mark
+	end
+	local paint = if buy.Currency == "Robux"
+		then PopTheme.Price
+		elseif buy.Currency == "Shards" then Pop.paint("Blue")
+		else Pop.paint("Yellow")
+	return paint, mark
+end
+
+-- The words on a buy button: a Robux price without "R$" (the mark beside it says it: "20", "20 • SOON").
+function EnchantView.buyText(buy: Buy): string
+	if buy.Currency == "Robux" then
+		local text = string.gsub(buy.Text, " R%$", "")
+		return text
+	end
+	return buy.Text
 end
 
 -- Fills the slots from EnchantView.slotCards; `picking` (an enchant id) marks the open slots as targets.
@@ -1532,16 +1702,24 @@ function EnchantView.setSlots(refs: Refs, slots: { SlotCard }, blasterLevel: num
 				slotRefs.Rune,
 				card.Color,
 				if enchant then enchant.Name:sub(1, 1) else "",
-				enchant ~= nil and enchant.Rarity == "Mythic"
+				enchant ~= nil and enchant.Rarity == "Mythic",
+				if enchant then enchant.Id else nil
 			)
 			slotRefs.Rune.Visible = card.Open
-			local target = picking ~= nil and card.Open
-			if target then
-				style(slotRefs.Button, true, Theme.Accent, Theme.AccentDark)
+			-- a target while picking: gold; a filled slot: its enchant's rarity; empty: slate; locked: grey
+			local paint: Pop.Paint
+			if picking ~= nil and card.Open then
+				paint = Pop.paint("Yellow")
+			elseif not card.Open then
+				paint = PopTheme.Gray
+			elseif enchant then
+				paint = Pop.rarityPaint(enchant.Rarity)
 			else
-				style(slotRefs.Button, card.Open, Theme.PanelLight, Theme.PanelDark)
+				paint = Pop.paint("Slate")
 			end
-			slotRefs.Name.TextColor3 = if card.Open then Theme.Text else Theme.TextDim
+			BoostView.paintButton(slotRefs.Button, paint)
+			holderOf(slotRefs.Button):SetAttribute("Enabled", card.Open)
+			slotRefs.Name.TextColor3 = if card.Open then WHITE else Color3.fromRGB(226, 230, 240)
 			local textLeft = 8 + slotRefs.Rune.Size.X.Offset + 8
 			local x = if card.Open then textLeft else 10
 			slotRefs.Name.Position = UDim2.fromOffset(x, slotRefs.Name.Position.Y.Offset)
@@ -1567,23 +1745,53 @@ function EnchantView.fitRowEffect(refs: Refs, row: RowRefs)
 	TechShopView.fitText(row.Effect, room, m.RowEffect + 4, m.RowEffect, m.RowEffect - 3)
 end
 
--- Fills the catalog rows; the `selected` row is outlined.
+-- A row's tier chip ("NEW", "II / III"): as wide as its words (at most the
+-- 88 units the name leaves), at the row's top right, its pill behind it.
+function EnchantView.placeTier(refs: Refs, row: RowRefs)
+	local m = metrics(refs.Compact)
+	local tier = row.Tier
+	local size = if refs.Compact then 18 else 16
+	local width = math.min(88, math.ceil(TechShopView.textWidth(tier.Text, size) * 0.92) + 18)
+	tier.AnchorPoint = Vector2.new(1, 0)
+	tier.Position = UDim2.new(1, -8, 0, m.RowNameY)
+	tier.Size = UDim2.fromOffset(width, m.RowName + 4)
+	tier.TextXAlignment = Enum.TextXAlignment.Center
+	TechShopView.fitText(tier, width - 10, m.RowName + 4, size, 11)
+	BoostView.placeBacking(tier)
+	local back = row.Button:FindFirstChild(tier.Name .. "Back") :: Frame?
+	if back then
+		back.Visible = tier.Text ~= ""
+	end
+end
+
+-- The tier chip's paint: NEW gold, owned blue, MAX / OWNED green.
+local function tierPaint(card: Card): Pop.Paint
+	if card.Done then
+		return Pop.paint("Green")
+	elseif card.Owned then
+		return Pop.paint("Blue")
+	end
+	return Pop.paint("Red")
+end
+
+-- Fills the catalog rows; the `selected` row gets a gold outline.
 function EnchantView.setRows(refs: Refs, cards: { Card }, selected: string)
 	for _, card in cards do
 		local row = refs.Rows[card.Id]
 		if row then
 			row.Tier.Text = card.TierText
-			row.Tier.TextColor3 = if card.Done then Theme.Good elseif card.Owned then Theme.Accent else Theme.Info
+			row.Tier.TextColor3 = WHITE
 			row.Effect.Text = card.Effect
 			EnchantView.fitRowEffect(refs, row)
 			row.Line.Text = card.ListLine
-			row.Line.TextColor3 = card.ListLineColor
+			row.Line.TextColor3 = if card.Owned then WHITE else Color3.fromRGB(255, 236, 140)
+			EnchantView.placeTier(refs, row)
+			BoostView.placeBacking(row.Tier, nil, tierPaint(card))
 			local on = card.Id == selected
-			row.Button.BackgroundColor3 = if on then Theme.Panel else Theme.PanelLight
-			local stroke = row.Button:FindFirstChildOfClass("UIStroke")
-			if stroke then
-				stroke.Color = if on then Theme.Accent else Theme.Outline
-				stroke.Thickness = if on then 3.5 else 2.5
+			local border = row.Button:FindFirstChild("Border") :: UIStroke?
+			if border then
+				border.Color = if on then EnchantView.PickedOutline else PopTheme.Outline
+				border.Thickness = if on then 4.5 else PopTheme.Edge
 			end
 		end
 	end
@@ -1597,17 +1805,18 @@ end
 function EnchantView.setDetail(refs: Refs, card: Card, odds: BoostView.OddsTable?, canSwitch: boolean)
 	refs.Selected = card.Id
 	local d = refs.Detail
-	EnchantView.setRune(d.Rune, card.Color, card.Name:sub(1, 1), card.Rarity == "Mythic")
+	Pop.repaint(d.Frame, Pop.rarityPaint(card.Rarity), false)
+	EnchantView.setRune(d.Rune, card.Color, card.Name:sub(1, 1), card.Rarity == "Mythic", card.Id)
 	d.Name.Text = string.upper(card.Name)
 	d.RarityChip.Text = string.upper(card.RarityName)
-	d.RarityChip.BackgroundColor3 = card.RarityColor
+	BoostView.placeBacking(d.RarityChip, nil, BoostView.DarkPaint)
 	d.TierChip.Text = card.TierText
-	d.TierChip.BackgroundColor3 = if card.Done then Theme.GoodDark elseif card.Owned then Theme.AccentDark else Theme.PanelDark
+	BoostView.placeBacking(d.TierChip, nil, tierPaint(card))
 	d.Description.Text = card.Description
 	d.Now.Text = card.Now
-	d.Now.TextColor3 = if card.Owned then Theme.Text else Theme.TextDim
+	d.Now.TextColor3 = if card.Owned then WHITE else BoostView.ink(Theme.TextDim)
 	d.Next.Text = card.Next
-	d.Next.TextColor3 = if card.Done then Theme.Good else Theme.Accent
+	d.Next.TextColor3 = BoostView.ink(if card.Done then Theme.Good else Theme.Accent)
 	if odds then
 		d.Odds.Frame.Visible = true
 		d.TiersBox.Visible = false
@@ -1624,14 +1833,11 @@ function EnchantView.setDetail(refs: Refs, card: Card, odds: BoostView.OddsTable
 		local buy = card.Buys[i]
 		holderOf(button).Visible = buy ~= nil
 		if buy and button:GetAttribute("Busy") ~= true then
-			button.Text = buy.Text
-			local color, dark = buyColors(buy.Currency)
-			if buy.Currency == "Max" then
-				style(button, false, Theme.Good, Theme.GoodDark)
-				button.TextColor3 = Theme.Good
-			else
-				style(button, buy.CanBuy, color, dark)
-			end
+			button.Text = EnchantView.buyText(buy)
+			local paint, mark = EnchantView.buyLook(buy)
+			BoostView.paintButton(button, paint)
+			holderOf(button):SetAttribute("Enabled", buy.CanBuy)
+			BoostView.setMark(button, mark)
 		end
 	end
 	holderOf(d.Equip).Visible = card.Owned
@@ -1641,7 +1847,7 @@ function EnchantView.setDetail(refs: Refs, card: Card, odds: BoostView.OddsTable
 			style(d.Equip, true, Theme.Bad, Theme.BadDark)
 		else
 			d.Equip.Text = "EQUIP"
-			style(d.Equip, true, Theme.Info, Color3.fromRGB(40, 100, 170))
+			style(d.Equip, true, Theme.Good, Theme.GoodDark)
 		end
 	end
 	EnchantView.placeButtons(refs)
@@ -1650,11 +1856,12 @@ function EnchantView.setDetail(refs: Refs, card: Card, odds: BoostView.OddsTable
 	TechShopView.fitText(d.Name, d.Name.Size.X.Offset, 34, m.Name, 18)
 end
 
--- The status line over the buttons: `text` in `color` (nil clears it).
+-- The status line over the buttons: `text` in a bright ink on a dark pill (nil clears it).
 function EnchantView.setStatus(refs: Refs, text: string?, color: Color3?)
 	local d = refs.Detail
 	d.Status.Text = text or ""
-	d.Status.TextColor3 = color or Theme.Text
+	d.Status.TextColor3 = BoostView.ink(color or Theme.Text)
+	d.Status.BackgroundTransparency = if text and text ~= "" then 0.3 else 1
 	if text then
 		local m = metrics(refs.Compact)
 		TechShopView.fitText(d.Status, refs.BodyWidth, m.Status + 8, m.Status, 13)
@@ -1684,13 +1891,13 @@ function EnchantView.setHint(refs: Refs, text: string, glyphs: { string }?)
 	BoostView.showHint(refs.Hint, refs.PadHint, refs.Compact, refs.PadMode)
 end
 
-function EnchantView.showReceipt(refs: Refs, text: string, color: Color3)
+-- The last message in the header band (white: readable on the pink band).
+function EnchantView.showReceipt(refs: Refs, text: string, _color: Color3)
 	refs.Receipt.Text = text
-	refs.Receipt.TextColor3 = color
+	refs.Receipt.TextColor3 = WHITE
 	refs.Receipt.Visible = true
 	refs.Subtitle.Visible = false
 end
-
 function EnchantView.hideReceipt(refs: Refs)
 	refs.Receipt.Visible = false
 	refs.Subtitle.Visible = not refs.Compact
@@ -1724,15 +1931,14 @@ function EnchantView.touchTargets(refs: Refs): { GuiObject }
 	return list
 end
 
-
 ---------------------------------------------------------------- the light look (UIConfig.LightUI)
--- While the light UI is on (ships off), the same window wears the light
--- look (LightSkin); windows also hide Roblox's touch controls while open.
-local darkBuild = EnchantView.build
+-- The window wears the Pop look switch on or off (never LightSkin's
+-- recolouring); with the light UI on it also hides Roblox's touch controls
+-- while open.
+local popBuild = EnchantView.build
 EnchantView.build = function(compact: boolean?): Refs
-	local refs = darkBuild(compact)
+	local refs = popBuild(compact)
 	if UIConfig.lightUI() then
-		LightSkin.apply(refs.Gui)
 		TouchControls.follow(refs.Gui)
 	end
 	return refs
