@@ -104,6 +104,10 @@ local DataTemplate = {
 	-- the daily wheel: os.time() second the next free spin is ready (0 = now);
 	-- Spins = the bought spins held (Robux, WheelService; used after the free one)
 	Wheel = { NextSpinAt = 0, Spins = 0 },
+	-- the Starter Pack (Robux, once per account: StarterPackService): BoughtAt = os.time() of
+	-- the first grant (0 = not bought), Count = receipts granted (a second one only when two
+	-- prompts were open at once)
+	StarterPack = { BoughtAt = 0, Count = 0 },
 	-- artifacts: Found = { [artifactId] = count }, Chapters = { [collectionId] = true } (read)
 	Artifacts = { Found = {}, Chapters = {} },
 

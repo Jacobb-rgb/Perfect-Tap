@@ -68,6 +68,7 @@ local ORDER = {
 	"RebirthService", -- rebirth STAR FORGE: the reset, Forge Stars, the Star Shop (after Plot, Train, Podium)
 	"ServerBoostService", -- Server Luck: x2 ore luck for the whole server (the "ServerBoost" receipts)
 	"StoreService", -- the Robux STORE window: StoreAction -> purchase prompts (grants: MonetizationService)
+	"StarterPackService", -- the one-time Starter Pack: its receipt handler and the State offer
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 }
 

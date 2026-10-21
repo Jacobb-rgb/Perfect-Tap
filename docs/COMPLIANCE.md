@@ -268,6 +268,8 @@ What Terra Forge sells (design v2; the source of truth is
 | Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 3 and 4 | No |
 | Night Shift (99 R$) | Game pass | `OfflineExtension` | Offline earnings up to 12 h instead of 5 | No |
 | Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
+| 2x Money (199 R$) | Game pass | `DoubleMoney` | Podium income (offline too) and sell value x2, a separate multiplier on top of the capped bonuses (`Bonuses.moneyMult`: EconomyService income factor `MoneyPass`, `Bonuses.sellMult`) | No |
+| Starter Pack (99 R$) | Developer product, once per account | `StarterPack` | The Rare golem Gilded Porter (fixed, not rolled), 20 min of podium income in coins (at least 15,000; `PaidCoins`), the Pioneer podium skin + title. Offered only during the first hour of play (`data.Stats.PlaySeconds`), only while coins are buyable; "Owned" after the purchase (`data.StarterPack`) | No (nothing random: Triple Lucky was left out on purpose so the pack is sold in every policy region) |
 | Heartfire Enchant (20 R$) | Game pass | `EnchantHeartfire` | Mythic enchant: damage | No |
 | Starbreaker Enchant (20 R$) | Game pass | `EnchantStarbreaker` | Mythic enchant: +75 % ore luck, +50 % artifact chance | **Yes** (odds booster) |
 | Royal Capsule x1 / x3 / x5 / x10 | Developer products | `RoyalCapsule1/3/5/10` | Random golems (x5: the Store) | **Yes** |
@@ -291,6 +293,16 @@ step 8 is in; until then every game pass stays **Off Sale** (see 2.6a).
 **Rules to follow** (from Roblox's monetization guidelines, plus our own
 choices marked *(ours)*):
 
+- **Starter Pack offer (2026-10-21).** The store card and a small popup say
+  plainly "Starter offer: available during your first hour". No countdown
+  clock, no "ends soon", no fake discount. The popup shows at most once per
+  session, only after the tutorial is done, never over another window, and
+  only while purchases are really on (receipts gate open, live id); it never
+  opens a purchase prompt by itself (the player taps the price). After the
+  first hour the card is hidden (never an expired price) and a buy answers
+  "Unknown"; a receipt that still arrives (a prompt opened in time) is
+  granted. A second receipt of the same account (two prompts open at once)
+  is granted in full again, never dropped.
 - **No misleading or pushy prompts.** Roblox: users must never be misled,
   confused or pressured into purchases they did not intend. Roblox also says
   to avoid "pushy or urgent messages" with minors.

@@ -255,5 +255,74 @@
     "shadowExtent": 120,
     "maxLights": 24,
     "ui": "ui_store_pc_limited"
+  },
+  "store_pc_starter": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_starter"
+  },
+  "store_pc_money": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_store_pc_money"
+  },
+  "starter_popup_pc": {
+    "scene": "store",
+    "position": [
+      6,
+      9,
+      42
+    ],
+    "target": [
+      0,
+      6,
+      -12
+    ],
+    "fov": 60,
+    "preset": "Surface",
+    "sunDir": [
+      -0.965,
+      0.225,
+      0.136
+    ],
+    "shadowExtent": 120,
+    "maxLights": 24,
+    "ui": "ui_starter_popup_pc"
   }
 }

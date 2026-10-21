@@ -243,6 +243,13 @@ local function refresh()
 			end
 		end
 		local product = MonetizationConfig.Products[key]
+		if product.Grant == "StarterPack" then
+			-- one per player: only while the offer is open (State.StarterPack, StarterPackService)
+			local offer = state().StarterPack
+			if type(offer) ~= "table" or offer.Open ~= true then
+				cardState = "Hidden"
+			end
+		end
 		if spec.Look == "Star" then
 			cardState = starCard(view, id, spec)
 			if cardState == "Buy" and pending[key] and now - pending[key] < PROMPT_MEMORY then
@@ -497,7 +504,9 @@ local function ensureView(): StoreView.Refs
 	for sectionId, tab in view.Tabs do
 		tab.Activated:Connect(function()
 			local target = Vector2.new(0, StoreView.sectionTop(view, sectionId))
-			TweenService:Create(view.Scroller, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target }):Play()
+			TweenService
+				:Create(view.Scroller, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target })
+				:Play()
 			Sfx.play("UIClick")
 		end)
 	end
@@ -635,7 +644,11 @@ function StoreController.init()
 		local view = refs
 		if cleared and view and isOpen then
 			local reasons = if kind == "Capsule" then CapsuleConfig.Reasons else BoostConfig.Reasons
-			local text = if type(result.Reason) == "string" and reasons and reasons[result.Reason] then reasons[result.Reason] else "Not now."
+			local text = if type(result.Reason) == "string"
+					and reasons
+					and reasons[result.Reason]
+				then reasons[result.Reason]
+				else "Not now."
 			StoreView.setStatus(view, text)
 			refresh()
 		end
