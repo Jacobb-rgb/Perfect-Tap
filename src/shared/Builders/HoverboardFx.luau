@@ -1,27 +1,41 @@
 --[[
-	Ride effects of the Robux hoverboards (HoverboardData.Effect), for the
-	client (HoverboardController). Built once per board and reused:
-	no instances are created while riding, only Enabled / Rate change.
+	Ride effects of every hoverboard (HoverboardData.Effect), for the client
+	(HoverboardController). Built once per board and reused: no instances are
+	created while riding, only Enabled / Rate change and bursts :Emit().
 
+	Coin boards: small thruster effects, no trail (the trail stays a Robux perk).
+	  Sparks   Timber Drifter: amber thruster puffs, a little dust under the
+	           planks                                               8 particles/s
+	  Vents    Cart Cruiser: blue flame jets from the twin exhausts, a warm
+	           headlamp glint, grey dust                           12 particles/s
+	  Lava     Emberglass Glider: a lava jet, lava drips falling from the
+	           belly and embers rising around the rider            12 particles/s
+	Robux boards: a light trail and big effects.
 	  Comet    a cyan -> magenta light trail from the tail, cyan / white
-	           star sparks from the thrusters, magenta glints on the fin tips
-	           and a shimmer around the comet orb                   30 particles/s
+	           star sparks from the thrusters, magenta glints on the fin tips,
+	           a shimmer around the comet orb and star dust under it  36 particles/s
 	  Phoenix  a gold -> flame -> violet trail, gold flames from the two
-	           thrusters, rising embers around the board and gold / violet
-	           sparkles on the wing tips                            38 particles/s
-	  None     (coin boards) no effect set
-	`lite` (low-end phones, many riders in view) halves every rate, shortens
-	the trail and drops the volume emitter (Aura).
+	           thrusters, wings of fire on the wing tips, rising embers and
+	           falling gold feathers                               37 particles/s
+	  None     no effect set
+	Bursts (one :Emit each, HoverboardFx.burst): "Start" when you hop on (a
+	dust / spark / star / fire splash under the board), "Boost" when you reach
+	top speed (sparks from the thrusters; a sonic star cone on the Comet, a
+	fire flare on the Phoenix).
+	`lite` (low-end phones, many riders in view) halves every rate and burst,
+	shortens the trail and drops the volume emitters (dust, embers, feathers).
 
 	Use:
 	  local set = HoverboardFx.acquire(boardId, lite)   -- nil for "None" boards
 	  if set and HoverboardFx.mount(set, boardModel) then
 	      HoverboardFx.setActive(set, true, speedAlpha) -- 0..1 scales the rates
+	      HoverboardFx.burst(set, "Start")
 	  end
 	  HoverboardFx.release(set)  -- disables, unmounts, keeps it for the next rider
 	Emitters sit on the board's Attachments (HoverboardBuilder contract; the
 	emitter's attribute "Mount" names it), trails between TrailLeft and
-	TrailRight. Every emitter / trail starts disabled.
+	TrailRight. Every emitter / trail starts disabled; burst emitters stay
+	disabled and only ever :Emit().
 
 	Pure: only Instance creation (no services), so Lune tests and previews can
 	build it.
@@ -35,17 +49,24 @@ local HoverboardFx = {}
 HoverboardFx.PoolSize = 4 -- spare effect sets kept per board id
 HoverboardFx.Sparkle = "rbxasset://textures/particles/sparkles_main.dds"
 HoverboardFx.Fire = "rbxasset://textures/particles/fire_main.dds"
+HoverboardFx.Smoke = "rbxasset://textures/particles/smoke_main.dds"
+HoverboardFx.BoostAt = 0.92 -- speed / board speed: the Boost burst fires when you reach this
+HoverboardFx.BoostReset = 0.6 -- ... and can fire again after slowing below this
+
+export type Burst = "Start" | "Boost"
 
 export type FxSet = {
 	BoardId: string,
 	Effect: HoverboardData.Effect,
 	Lite: boolean,
-	Emitters: { ParticleEmitter },
+	Emitters: { ParticleEmitter }, -- continuous (Rate follows the speed)
+	Bursts: { ParticleEmitter }, -- one-shot (attribute "Burst" = Start / Boost, "Count")
 	Trails: { Trail },
 	Model: Model?,
 }
 
 local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
 
 local pools: { [string]: { FxSet } } = {}
 
@@ -77,15 +98,19 @@ end
 type EmitterSpec = {
 	Name: string,
 	Mount: string,
-	Rate: number,
+	Rate: number?, -- continuous emitters
+	Burst: Burst?, -- burst emitters: fired by HoverboardFx.burst
+	Count: number?, -- particles per burst
 	Color: ColorSequence,
 	Size: NumberSequence,
+	Transparency: NumberSequence?,
 	Lifetime: NumberRange,
 	Speed: NumberRange,
 	Spread: number,
 	Acceleration: Vector3?,
 	Drag: number?,
 	Texture: string?,
+	Dull: boolean?, -- dust: lit by the world, no glow
 	Volume: boolean?, -- dropped in lite mode
 }
 
@@ -99,20 +124,29 @@ local function emitter(set: FxSet, spec: EmitterSpec)
 	e.Texture = spec.Texture or HoverboardFx.Sparkle
 	e.Color = spec.Color
 	e.Size = spec.Size
-	e.Transparency = seq(0.05, 0.25, 1)
+	e.Transparency = spec.Transparency or seq(0.05, 0.25, 1)
 	e.Lifetime = spec.Lifetime
 	e.Speed = spec.Speed
 	e.SpreadAngle = Vector2.new(spec.Spread, spec.Spread)
 	e.Acceleration = spec.Acceleration or Vector3.zero
 	e.Drag = spec.Drag or 0
-	e.LightEmission = 1
-	e.LightInfluence = 0
+	e.LightEmission = if spec.Dull then 0 else 1
+	e.LightInfluence = if spec.Dull then 1 else 0
 	e.Rotation = NumberRange.new(0, 360)
 	e.RotSpeed = NumberRange.new(-90, 90)
-	local rate = if set.Lite then spec.Rate * 0.5 else spec.Rate
+	e:SetAttribute("Mount", spec.Mount)
+	if spec.Burst then
+		e.Rate = 0
+		e:SetAttribute("Burst", spec.Burst)
+		local count = spec.Count or 8
+		e:SetAttribute("Count", math.max(1, math.floor(if set.Lite then count * 0.5 else count)))
+		table.insert(set.Bursts, e)
+		return
+	end
+	local base = spec.Rate or 0
+	local rate = if set.Lite then base * 0.5 else base
 	e.Rate = rate
 	e:SetAttribute("BaseRate", rate)
-	e:SetAttribute("Mount", spec.Mount)
 	table.insert(set.Emitters, e)
 end
 
@@ -121,8 +155,8 @@ local function trail(set: FxSet, name: string, color: ColorSequence, lifetime: n
 	t.Name = name
 	t.Enabled = false
 	t.Color = color
-	t.Transparency = seq(0.15, 0.55, 1)
-	t.WidthScale = seq(1, 0.55, 0.15)
+	t.Transparency = seq(0.1, 0.5, 1)
+	t.WidthScale = seq(1, 0.6, 0.15)
 	t.Lifetime = if set.Lite then lifetime * 0.6 else lifetime
 	t.MinLength = 0.15
 	t.LightEmission = 1
@@ -133,16 +167,168 @@ local function trail(set: FxSet, name: string, color: ColorSequence, lifetime: n
 	table.insert(set.Trails, t)
 end
 
+-- Dust kicked up under the board (Pad points down): a soft puff, lit by the world.
+local function dust(set: FxSet, name: string, color: Color3, rate: number)
+	emitter(set, {
+		Name = name,
+		Mount = "Pad",
+		Rate = rate,
+		Color = colors(color, color:Lerp(WHITE, 0.3)),
+		Size = seq(0.4, 1.1, 1.6),
+		Transparency = seq(0.55, 0.75, 1),
+		Lifetime = NumberRange.new(0.5, 0.9),
+		Speed = NumberRange.new(1.5, 3),
+		Spread = 70,
+		Drag = 3,
+		Texture = HoverboardFx.Smoke,
+		Dull = true,
+		Volume = true,
+	})
+end
+
+-- The hop-on splash under the board: `count` particles flying out low and slowing down.
+local function splash(set: FxSet, name: string, color: ColorSequence, count: number, texture: string?, dull: boolean?)
+	emitter(set, {
+		Name = name,
+		Mount = "Pad",
+		Burst = "Start",
+		Count = count,
+		Color = color,
+		Size = if dull then seq(0.5, 1.4, 2) else seq(0.5, 0.35, 0),
+		Transparency = if dull then seq(0.4, 0.65, 1) else nil,
+		Lifetime = NumberRange.new(0.45, 0.8),
+		Speed = NumberRange.new(7, 11),
+		Spread = 85,
+		Drag = 6,
+		Acceleration = Vector3.new(0, 3, 0),
+		Texture = texture,
+		Dull = dull,
+	})
+end
+
+-- Sparks shooting back out of every exhaust when you reach top speed.
+local function boostSparks(set: FxSet, prefix: string, exhausts: number, color: ColorSequence, count: number)
+	for i = 1, exhausts do
+		emitter(set, {
+			Name = prefix .. "Boost" .. i,
+			Mount = "Exhaust" .. i,
+			Burst = "Boost",
+			Count = count,
+			Color = color,
+			Size = seq(0.45, 0.3, 0),
+			Lifetime = NumberRange.new(0.25, 0.5),
+			Speed = NumberRange.new(9, 14),
+			Spread = 22,
+			Drag = 3,
+		})
+	end
+end
+
+local function sparks(set: FxSet, c: HoverboardData.Colors)
+	local amber, gold = glow(c.Glow), glow(c.Glow2)
+	for i = 1, 2 do
+		emitter(set, {
+			Name = "TimberPuff" .. i,
+			Mount = "Exhaust" .. i,
+			Rate = 3,
+			Color = colors(gold, amber, c.Trim),
+			Size = seq(0.42, 0.28, 0),
+			Lifetime = NumberRange.new(0.18, 0.35),
+			Speed = NumberRange.new(3, 5),
+			Spread = 10,
+			Drag = 2,
+			Texture = HoverboardFx.Fire,
+		})
+	end
+	dust(set, "TimberDust", c.Main:Lerp(WHITE, 0.35), 2)
+	splash(set, "TimberLift", colors(c.Main:Lerp(WHITE, 0.45)), 10, HoverboardFx.Smoke, true)
+	boostSparks(set, "Timber", 2, colors(gold:Lerp(WHITE, 0.3), amber), 4)
+end
+
+local function vents(set: FxSet, c: HoverboardData.Colors)
+	local blue, lamp = glow(c.Glow), glow(c.Glow2)
+	for i = 1, 2 do
+		emitter(set, {
+			Name = "CartJet" .. i,
+			Mount = "Exhaust" .. i,
+			Rate = 4,
+			Color = colors(blue:Lerp(WHITE, 0.45), blue, c.Main),
+			Size = seq(0.4, 0.26, 0),
+			Lifetime = NumberRange.new(0.2, 0.35),
+			Speed = NumberRange.new(5, 8),
+			Spread = 8,
+			Drag = 2,
+			Texture = HoverboardFx.Fire,
+		})
+	end
+	emitter(set, {
+		Name = "CartLamp",
+		Mount = "Nose",
+		Rate = 2,
+		Color = colors(lamp:Lerp(WHITE, 0.4), lamp),
+		Size = seq(0, 0.5, 0),
+		Lifetime = NumberRange.new(0.25, 0.45),
+		Speed = NumberRange.new(0.2, 0.6),
+		Spread = 180,
+	})
+	dust(set, "CartDust", c.Main:Lerp(WHITE, 0.2), 2)
+	splash(set, "CartLift", colors(blue:Lerp(WHITE, 0.3), blue), 12)
+	boostSparks(set, "Cart", 2, colors(blue:Lerp(WHITE, 0.5), blue), 5)
+end
+
+local function lava(set: FxSet, c: HoverboardData.Colors)
+	local hot, ember = glow(c.Glow), glow(c.Glow2)
+	emitter(set, {
+		Name = "LavaJet",
+		Mount = "Exhaust1",
+		Rate = 5,
+		Color = colors(ember:Lerp(WHITE, 0.3), hot, c.Main),
+		Size = seq(0.6, 0.38, 0),
+		Lifetime = NumberRange.new(0.25, 0.45),
+		Speed = NumberRange.new(4, 7),
+		Spread = 12,
+		Acceleration = Vector3.new(0, 3, 0),
+		Drag = 1.5,
+		Texture = HoverboardFx.Fire,
+	})
+	emitter(set, {
+		Name = "LavaDrips",
+		Mount = "Pad",
+		Rate = 3,
+		Color = colors(ember, hot, hot:Lerp(BLACK, 0.5)),
+		Size = seq(0.24, 0.2, 0.1),
+		Transparency = seq(0, 0.1, 1),
+		Lifetime = NumberRange.new(0.35, 0.6),
+		Speed = NumberRange.new(0.5, 1.5),
+		Spread = 25,
+		Acceleration = Vector3.new(0, -30, 0),
+	})
+	emitter(set, {
+		Name = "LavaEmbers",
+		Mount = "Aura",
+		Rate = 4,
+		Color = colors(ember, hot),
+		Size = seq(0.22, 0.16, 0),
+		Lifetime = NumberRange.new(0.8, 1.3),
+		Speed = NumberRange.new(0.5, 1.5),
+		Spread = 180,
+		Acceleration = Vector3.new(0, 4, 0),
+		Volume = true,
+	})
+	splash(set, "LavaSplash", colors(ember, hot), 14, HoverboardFx.Fire)
+	boostSparks(set, "Lava", 1, colors(ember:Lerp(WHITE, 0.3), hot), 10)
+end
+
 local function comet(set: FxSet, c: HoverboardData.Colors)
 	local cyan, magenta = glow(c.Glow), glow(c.Glow2)
 	local star = c.Trim
-	trail(set, "CometTrail", colors(cyan, cyan:Lerp(magenta, 0.5), magenta), 0.45)
+	trail(set, "CometTrail", colors(cyan, cyan:Lerp(magenta, 0.5), magenta), 0.55)
 	emitter(set, {
 		Name = "CometStars",
 		Mount = "Exhaust1",
 		Rate = 16,
 		Color = colors(star, cyan, magenta),
-		Size = seq(0.45, 0.3, 0),
+		Size = seq(0.5, 0.32, 0),
 		Lifetime = NumberRange.new(0.4, 0.8),
 		Speed = NumberRange.new(3, 6),
 		Spread = 18,
@@ -154,7 +340,7 @@ local function comet(set: FxSet, c: HoverboardData.Colors)
 			Mount = "Tip" .. side,
 			Rate = 5,
 			Color = colors(magenta:Lerp(WHITE, 0.3), magenta),
-			Size = seq(0, 0.3, 0),
+			Size = seq(0, 0.35, 0),
 			Lifetime = NumberRange.new(0.3, 0.6),
 			Speed = NumberRange.new(0.5, 1.5),
 			Spread = 180,
@@ -171,18 +357,55 @@ local function comet(set: FxSet, c: HoverboardData.Colors)
 		Spread = 180,
 		Volume = true,
 	})
+	emitter(set, {
+		Name = "CometDust",
+		Mount = "Pad",
+		Rate = 6,
+		Color = colors(WHITE, cyan, magenta),
+		Size = seq(0, 0.3, 0),
+		Lifetime = NumberRange.new(0.6, 1.0),
+		Speed = NumberRange.new(1, 2.5),
+		Spread = 60,
+		Drag = 1.5,
+	})
+	splash(set, "CometNova", colors(WHITE, cyan, magenta), 18)
+	-- the sonic boom at top speed: a cone of stars out of the tail and a white flash on the orb
+	emitter(set, {
+		Name = "CometBoom",
+		Mount = "Exhaust1",
+		Burst = "Boost",
+		Count = 24,
+		Color = colors(WHITE, cyan, magenta),
+		Size = seq(0.55, 0.4, 0),
+		Lifetime = NumberRange.new(0.35, 0.6),
+		Speed = NumberRange.new(10, 16),
+		Spread = 55,
+		Drag = 4,
+	})
+	emitter(set, {
+		Name = "CometFlash",
+		Mount = "Nose",
+		Burst = "Boost",
+		Count = 1,
+		Color = colors(WHITE, cyan),
+		Size = seq(0.5, 3.5, 4),
+		Transparency = seq(0, 0.5, 1),
+		Lifetime = NumberRange.new(0.25, 0.25),
+		Speed = NumberRange.new(0, 0),
+		Spread = 0,
+	})
 end
 
 local function phoenix(set: FxSet, c: HoverboardData.Colors)
 	local gold, violet, fire = glow(c.Glow2), glow(c.Glow), glow(c.Accent)
-	trail(set, "PhoenixTrail", colors(gold, fire, violet), 0.55)
+	trail(set, "PhoenixTrail", colors(gold, fire, violet), 0.65)
 	for i = 1, 2 do
 		emitter(set, {
 			Name = "PhoenixFlame" .. i,
 			Mount = "Exhaust" .. i,
 			Rate = 10,
 			Color = colors(gold, fire, violet),
-			Size = seq(0.6, 0.35, 0),
+			Size = seq(0.65, 0.38, 0),
 			Lifetime = NumberRange.new(0.3, 0.6),
 			Speed = NumberRange.new(4, 7),
 			Spread = 14,
@@ -194,7 +417,7 @@ local function phoenix(set: FxSet, c: HoverboardData.Colors)
 	emitter(set, {
 		Name = "PhoenixEmbers",
 		Mount = "Aura",
-		Rate = 6,
+		Rate = 4,
 		Color = colors(gold, fire),
 		Size = seq(0.3, 0.2, 0),
 		Lifetime = NumberRange.new(0.8, 1.4),
@@ -203,18 +426,51 @@ local function phoenix(set: FxSet, c: HoverboardData.Colors)
 		Acceleration = Vector3.new(0, 3, 0),
 		Volume = true,
 	})
+	-- wings of fire: flames licking up off both wing tips
 	for _, side in { "Left", "Right" } do
 		emitter(set, {
 			Name = "PhoenixWing" .. side,
 			Mount = "Tip" .. side,
-			Rate = 6,
-			Color = colors(gold, violet),
-			Size = seq(0, 0.35, 0),
-			Lifetime = NumberRange.new(0.35, 0.7),
-			Speed = NumberRange.new(0.5, 2),
-			Spread = 180,
+			Rate = 5,
+			Color = colors(gold:Lerp(WHITE, 0.2), fire, violet),
+			Size = seq(0.5, 0.32, 0),
+			Lifetime = NumberRange.new(0.35, 0.65),
+			Speed = NumberRange.new(0.5, 1.5),
+			Spread = 60,
+			Acceleration = Vector3.new(0, 6, 0),
+			Texture = HoverboardFx.Fire,
 		})
 	end
+	emitter(set, {
+		Name = "PhoenixFeathers",
+		Mount = "Aura",
+		Rate = 3,
+		Color = colors(gold, gold:Lerp(violet, 0.4)),
+		Size = seq(0.32, 0.26, 0),
+		Lifetime = NumberRange.new(1.0, 1.6),
+		Speed = NumberRange.new(1, 2),
+		Spread = 180,
+		Acceleration = Vector3.new(0, -2.5, 0),
+		Drag = 2,
+		Volume = true,
+	})
+	splash(set, "PhoenixRise", colors(gold, fire, violet), 20, HoverboardFx.Fire)
+	-- the flare at top speed: a burst of fire up through the rider plus gold sparks from the thrusters
+	emitter(set, {
+		Name = "PhoenixFlare",
+		Mount = "Aura",
+		Burst = "Boost",
+		Count = 16,
+		Color = colors(gold:Lerp(WHITE, 0.3), fire, violet),
+		Size = seq(0.9, 0.6, 0),
+		Lifetime = NumberRange.new(0.4, 0.7),
+		Speed = NumberRange.new(5, 9),
+		Spread = 70,
+		Acceleration = Vector3.new(0, 8, 0),
+		Drag = 3,
+		Texture = HoverboardFx.Fire,
+	})
+	boostSparks(set, "Phoenix", 2, colors(gold:Lerp(WHITE, 0.4), gold), 6)
 end
 
 -- A new (unmounted, disabled) effect set for a board, or nil when the board has no effect.
@@ -223,16 +479,26 @@ function HoverboardFx.create(boardId: string, lite: boolean?): FxSet?
 	if not board or board.Effect == "None" then
 		return nil
 	end
-	local set: FxSet = { BoardId = board.Id, Effect = board.Effect, Lite = lite == true, Emitters = {}, Trails = {}, Model = nil }
-	if board.Effect == "Comet" then
-		comet(set, board.Colors)
-	elseif board.Effect == "Phoenix" then
-		phoenix(set, board.Colors)
-	end
+	local set: FxSet = {
+		BoardId = board.Id,
+		Effect = board.Effect,
+		Lite = lite == true,
+		Emitters = {},
+		Bursts = {},
+		Trails = {},
+		Model = nil,
+	}
+	local build: (FxSet, HoverboardData.Colors) -> () = if board.Effect == "Sparks"
+		then sparks
+		elseif board.Effect == "Vents" then vents
+		elseif board.Effect == "Lava" then lava
+		elseif board.Effect == "Comet" then comet
+		else phoenix
+	build(set, board.Colors)
 	return set
 end
 
--- Particles per second of a set at full intensity (the mobile budget check).
+-- Continuous particles per second of a set at full intensity (the mobile budget check).
 function HoverboardFx.rate(set: FxSet): number
 	local total = 0
 	for _, e in set.Emitters do
@@ -252,9 +518,11 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 		local a = if type(name) == "string" then root:FindFirstChild(name) else nil
 		return if a and a:IsA("Attachment") then a else nil
 	end
-	for _, e in set.Emitters do
-		if not find(e:GetAttribute("Mount")) then
-			return false
+	for _, list in { set.Emitters, set.Bursts } do
+		for _, e in list do
+			if not find(e:GetAttribute("Mount")) then
+				return false
+			end
 		end
 	end
 	for _, t in set.Trails do
@@ -262,8 +530,10 @@ function HoverboardFx.mount(set: FxSet, model: Model): boolean
 			return false
 		end
 	end
-	for _, e in set.Emitters do
-		e.Parent = find(e:GetAttribute("Mount"))
+	for _, list in { set.Emitters, set.Bursts } do
+		for _, e in list do
+			e.Parent = find(e:GetAttribute("Mount"))
+		end
 	end
 	for _, t in set.Trails do
 		t.Attachment0 = find(t:GetAttribute("Mount0"))
@@ -277,8 +547,10 @@ end
 -- Takes the set off its board (disabled first, so nothing lingers).
 function HoverboardFx.unmount(set: FxSet)
 	HoverboardFx.setActive(set, false)
-	for _, e in set.Emitters do
-		e.Parent = nil
+	for _, list in { set.Emitters, set.Bursts } do
+		for _, e in list do
+			e.Parent = nil
+		end
 	end
 	for _, t in set.Trails do
 		t.Parent = nil
@@ -302,6 +574,32 @@ function HoverboardFx.setActive(set: FxSet, active: boolean, intensity: number?)
 	for _, t in set.Trails do
 		t.Enabled = active and k > 0.15
 	end
+end
+
+-- Fires a set's one-shot bursts of that kind ("Start" when you hop on, "Boost" at top
+-- speed). Only while mounted; a set without such a burst does nothing.
+function HoverboardFx.burst(set: FxSet, kind: Burst)
+	if not set.Model then
+		return
+	end
+	for _, e in set.Bursts do
+		local count = e:GetAttribute("Count")
+		if e:GetAttribute("Burst") == kind and type(count) == "number" and e.Parent then
+			e:Emit(count)
+		end
+	end
+end
+
+-- Particles one burst of that kind throws (the budget check).
+function HoverboardFx.burstCount(set: FxSet, kind: Burst): number
+	local total = 0
+	for _, e in set.Bursts do
+		local count = e:GetAttribute("Count")
+		if e:GetAttribute("Burst") == kind and type(count) == "number" then
+			total += count
+		end
+	end
+	return total
 end
 
 -- A set for a board from the pool (or a new one); nil for boards without effects.
@@ -334,8 +632,10 @@ function HoverboardFx.release(set: FxSet)
 		table.insert(pool, set)
 		return
 	end
-	for _, e in set.Emitters do
-		e:Destroy()
+	for _, list in { set.Emitters, set.Bursts } do
+		for _, e in list do
+			e:Destroy()
+		end
 	end
 	for _, t in set.Trails do
 		t:Destroy()
