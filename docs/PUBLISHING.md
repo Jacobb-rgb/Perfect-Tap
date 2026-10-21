@@ -42,7 +42,7 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
 
 1. **Place settings**: COMPLIANCE.md section 3 (devices, max players **8** = `GameConfig.MaxPlayers` = the 8 plots,
    private servers, no paid access, no gear, voice/camera off, HTTP off, copying off).
-2. **Streaming**: `StreamingEnabled = true`, MinRadius 96, TargetRadius 384 (default.project.json); check in Studio
+2. **Streaming**: `StreamingEnabled = true`, MinRadius 112, TargetRadius 384 (default.project.json); check in Studio
    (Workspace properties) that the published place kept them. Phone budget: tests/PhoneBudget.spec.luau.
 3. **Console**: tick Console only after a real controller test of every menu (COMPLIANCE.md section 3 "Devices").
 4. **Questionnaire**: COMPLIANCE.md section 1 (no combat, no blood, no paid random items unless odds are shown;

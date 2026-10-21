@@ -76,7 +76,7 @@ local GameConfig = {
 	MaxItemSpeed = 75, -- studs/s an item can plausibly travel after a drop or throw
 	PlausibleSlack = 6, -- extra studs allowed on top of MaxItemSpeed
 	MaxItemTravel = 90, -- further than this from its release point, an item snaps back
-	ClientPhysicsRange = 80, -- owners further away never simulate their items (below StreamingMinRadius 96)
+	ClientPhysicsRange = 80, -- owners further away never simulate their items (below StreamingMinRadius 112)
 
 	-- Conveyors
 	ConveyorStuckSpeed = 0.6, -- slower than this on a belt counts as stuck

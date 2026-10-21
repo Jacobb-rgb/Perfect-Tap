@@ -52,7 +52,7 @@ AmbienceConfig.ParentGroup = "TerraForgeSfx" -- SettingsConfig.SfxGroup (tests/A
 AmbienceConfig.Tag = "AmbienceSpot"
 AmbienceConfig.Attribute = "Ambience"
 
--- Nothing is heard further than this: under Workspace.StreamingMinRadius (96,
+-- Nothing is heard further than this: under Workspace.StreamingMinRadius (112,
 -- default.project.json), so a spot's part is always streamed in while it is audible.
 AmbienceConfig.MaxEarshot = 90
 -- a loop starts this far before its MaxDistance (it fades in from silence anyway)

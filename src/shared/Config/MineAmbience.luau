@@ -72,7 +72,7 @@ local MineAmbience = {}
 MineAmbience.Tag = "AmbienceSpot"
 MineAmbience.Attribute = "Ambience"
 
--- Nothing is heard further than this: under Workspace.StreamingMinRadius (96,
+-- Nothing is heard further than this: under Workspace.StreamingMinRadius (112,
 -- default.project.json), so a spot's part is streamed in while it is audible.
 MineAmbience.MaxEarshot = 90
 
