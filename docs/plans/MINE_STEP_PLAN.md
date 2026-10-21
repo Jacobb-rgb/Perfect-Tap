@@ -15,7 +15,7 @@ placement (front, entrance) faces the previous floor / the town.
 | 2 Ember Caves | (0, -12, -300) | -68..68, -240..-360 | Land's Ember Caves room + tunnel | front opening x -9..9 at z -240; back: the ramp down to floor 3 starts at (0,-12,-354), opening x -11..11 in the back wall |
 | 3 Deep Hollow | (0, -40, -444) | -68..68, -386..-502 | Land's Deep Hollow room | front: the ramp from floor 2 ends at (0,-40,-394), opening x -11..11 at z -386 |
 | 4 Sunken Palace | (0, -220, -800) | -66..66, -744..-856 | new | elevator only (far north and deep: never streams in near the town) |
-| 5 Heartstone Core | (0, -400, -800) | -80..80, -730..-870 | new | elevator only; a dark void enclosure and a void catcher under the islands (above FallenPartsDestroyHeight -500) |
+| 5 Heartstone Core | (0, -400, -800) | -80..80, -730..-870 | new | elevator only; a dark void enclosure and a void catcher under the islands (above FallenPartsDestroyHeight -700, default.project.json) |
 
 Land builds the town ramp, the tunnel/ramp between floors 2 and 3 (z -360..-386) and the grotto tunnel; the floors
 leave the openings. The train session's pieces stay exactly where they are (Railway, TrainConfig): the Mine Station

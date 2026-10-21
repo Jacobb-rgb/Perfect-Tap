@@ -37,6 +37,7 @@ local Rng = require(Shared.Util.Rng)
 local WorldLayout = require(Shared.Config.WorldLayout)
 local Style = require(script.Parent.Parent.Style)
 local Common = require(script.Parent.Parent.Plaza.Common)
+local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
 local Kit = require(script.Parent.Kit)
 local Town = require(script.Parent.Town)
 local Railway = require(script.Parent.Parent.Parent.Railway)
@@ -69,6 +70,8 @@ Meadow.FencedStrips = {
 }
 Meadow.FenceRun = 20 -- longest fence piece; a 3-stud gap follows each
 Meadow.FenceHeight = 2.4
+-- fence line past the road edge (2026-10-20: behind the street lamps' feet, so the runs pass them)
+Meadow.FenceOffset = if StreetLampPlan.Enabled then 2.8 else 2
 
 local FLOWERS = { C.FlowerYellow, C.FlowerWhite, C.FlowerPurple, C.LeafPink, C.LeafPinkLight }
 
@@ -636,8 +639,8 @@ local function fences(parent: Instance, index: Index, rng: Rng.Rng)
 		local dir = delta / length
 		local right = Vector3.new(-dir.Z, 0, dir.X)
 		for _, side in { -1, 1 } do
-			-- (past the main roads' kerbs: half + 0.4 +- 0.4)
-			local offset = s.Width / 2 + 2
+			-- (past the road's edge border and the street lamps' feet)
+			local offset = s.Width / 2 + Meadow.FenceOffset
 			local runs: { { number } } = {}
 			local start: number? = nil
 			local t = 0
@@ -803,7 +806,8 @@ local function butterflies(parent: Instance, beds: { Vector3 }, rng: Rng.Rng)
 		for _, q in chosen do
 			far = far and (p - q).Magnitude > 40
 		end
-		if far then
+		-- (their circles reach 2.2 studs out: never over a road)
+		if far and Common.offStrips(p, 2.6) then
 			table.insert(chosen, p)
 		end
 	end
