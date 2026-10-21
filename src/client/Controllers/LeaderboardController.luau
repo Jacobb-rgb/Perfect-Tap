@@ -1,10 +1,10 @@
 --[[
-	LeaderboardController: the four lobby leaderboards and the side menu's
+	LeaderboardController: the five lobby leaderboards and the side menu's
 	HALL OF FAME panel (LeaderboardView) on the client.
 
 	- The server sends Leaderboards { Live, Boards, Own } every
 	  LeaderboardConfig.RefreshSeconds and when you join (LeaderboardService).
-	- Every BasePart tagged Leaderboard with a Board attribute (1..4) gets a
+	- Every BasePart tagged Leaderboard with a Board attribute (1..5) gets a
 	  SurfaceGui in PlayerGui (Adornee = the board) as it streams in: the top
 	  LeaderboardConfig.BoardRows and YOUR line (your rank inside the top
 	  LeaderboardConfig.TopCount, your live value). The board's "Placeholder"

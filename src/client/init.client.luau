@@ -44,6 +44,7 @@ local ORDER = {
 	"WheelController", -- step 7: the daily wheel screen and the FREE SPIN! chip
 	"ArtifactController", -- step 7: the found moment, the collection book, the journal
 	"LeaderboardController", -- the lobby boards + the HALL OF FAME panel
+	"LevelController", -- the player LEVEL: the XP bar, orbs, the juicy level-up moment
 	"CodexController", -- the ORE CODEX (ROCK SCANNER prompt, side menu)
 	"SettingsController", -- the SETTINGS panel; applies volumes / shake / rumble
 	"RebirthController", -- rebirth STAR FORGE: the window, the moment, the stars over names

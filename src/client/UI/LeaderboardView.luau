@@ -2,7 +2,7 @@
 	The leaderboards on screen (pure builder + pure helpers;
 	LeaderboardController fills them in). Two places:
 
-	  board  a SurfaceGui on each lobby board (Board1..Board4, tag
+	  board  a SurfaceGui on each lobby board (Board1..Board5, tag
 	         Leaderboard), Adornee = the board, parented to PlayerGui: the
 	         title (the hall's own title strip covers it; it shows when a
 	         board has none), the top LeaderboardConfig.BoardRows rows (rank
@@ -68,6 +68,7 @@ LeaderboardView.Short = {
 	TotalEarned = "EARNED",
 	Artifacts = "ARTIFACTS",
 	HoursPlayed = "HOURS",
+	Level = "LEVEL",
 } :: { [string]: string }
 
 ---------------------------------------------------------------- pure helpers

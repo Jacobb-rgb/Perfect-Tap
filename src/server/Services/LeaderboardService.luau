@@ -1,5 +1,5 @@
 --[[
-	LeaderboardService: the four lobby leaderboards (LeaderboardConfig) and
+	LeaderboardService: the five lobby leaderboards (LeaderboardConfig) and
 	the hours-played counter.
 
 	Scores (one OrderedDataStore per board, LeaderboardConfig Store names,
@@ -42,7 +42,7 @@
 	  player gets the latest rows at once.
 	- removeUser(userId): hides the user at once (a runtime hidden set next
 	  to LeaderboardConfig.Hidden: never written again, never shown, also
-	  while they are online), deletes their entries from all four stores
+	  while they are online), deletes their entries from all five stores
 	  (RemoveAsync; a cheater's or banned user's score, or an RTBF request),
 	  saves the id in the HiddenStore DataStore (key HiddenKey, at most
 	  MaxHidden ids) and tells the running servers (MessagingService
@@ -133,7 +133,7 @@ LeaderboardService.ActivitySources = {
 } :: { [string]: string }
 LeaderboardService.MoveStuds = 4 -- a move this long (flat) since the last check is activity
 -- boards whose value never goes down: UpdateAsync keeps the bigger number
-LeaderboardService.Growing = { TotalEarned = true, Artifacts = true, HoursPlayed = true } :: { [string]: boolean }
+LeaderboardService.Growing = { TotalEarned = true, Artifacts = true, HoursPlayed = true, Level = true } :: { [string]: boolean }
 -- users hidden at runtime (removeUser): a DataStore list every server reads, and a
 -- MessagingService topic that tells the running servers at once
 LeaderboardService.HiddenStore = "TF_LB_Hidden_v1"
@@ -218,6 +218,9 @@ function LeaderboardService.valueOf(player: Player, data: { [string]: any }, boa
 		return if ok then clean(income) else 0
 	elseif boardId == "TotalEarned" then
 		return clean(data.TotalEarned)
+	elseif boardId == "Level" then
+		local record = data.Level
+		return if type(record) == "table" then clean(record.Level) else 0
 	end
 	local stats = data.Stats
 	if type(stats) ~= "table" then
@@ -939,7 +942,10 @@ function LeaderboardService.refresh()
 		for _, board in LeaderboardConfig.Boards do
 			local entries = {}
 			for _, p in players do
-				table.insert(entries, { UserId = p.Player.UserId, Name = LeaderboardService.displayName(p.Player), Value = p.Values[board.Id] or 0 })
+				table.insert(
+					entries,
+					{ UserId = p.Player.UserId, Name = LeaderboardService.displayName(p.Player), Value = p.Values[board.Id] or 0 }
+				)
 			end
 			tops[board.Id] = { Rows = LeaderboardService.localRows(board.Id, entries), Ready = true }
 		end
