@@ -88,19 +88,19 @@ return function(T, Loader)
 		T.truthy(EmoteConfig.Captions.Breakdance:find("větrník", 1, true), "the breakdance caption names the windmill")
 	end)
 
-	T.test("emotes: not wired into the game yet (no slot, no whitelist, no binding)", function()
+	-- (live since the owner's yes: their own Net "Emote", attribute and menu, tests/EmotesLive.spec)
+	T.test("emotes: kept apart from the player moves (their own whitelist and attribute)", function()
 		for _, name in EmoteConfig.List do
-			T.eq(MoveConfig.Moves[name], nil, name .. " is no live move")
-			T.falsy(MoveConfig.ClientMoves[name], name .. " is not in the Net whitelist")
-			T.falsy(MoveRules.clientAllowed(name), name .. ": a client can't ask for it")
+			T.eq(MoveConfig.Moves[name], nil, name .. " is no player move")
+			T.falsy(MoveConfig.ClientMoves[name], name .. " is not in the Move whitelist")
+			T.falsy(MoveRules.clientAllowed(name), name .. ": not through Net Move")
 			T.eq(MoveRules.decode(MoveRules.encode(name, 1)), nil, name .. ": the Move attribute ignores it")
 		end
-		T.eq(Net.Events.Emote, nil, "no Emote remote")
-		for _, path in
-			{ "/src/client/Controllers/MoveController.luau", "/src/server/Services/MoveService.luau", "/src/client/init.client.luau" }
-		do
-			T.falsy(fs.readFile(Loader.root .. path):find("EmoteConfig", 1, true), path .. " doesn't use the emotes yet")
-		end
+		T.truthy(Net.Events.Emote, "the emotes have their own remote")
+		T.falsy(
+			fs.readFile(Loader.root .. "/src/server/Services/MoveService.luau"):find("EmoteConfig", 1, true),
+			"MoveService never plays emotes"
+		)
 	end)
 
 	---------------------------------------------------------------- data and timing

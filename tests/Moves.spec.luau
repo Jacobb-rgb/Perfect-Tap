@@ -564,7 +564,12 @@ return function(T, Loader)
 			MoveService._test.setClock(function()
 				return now.value
 			end)
+			-- (the moves as they work when the owner switches them on: AnimConfig.PlayerMoves)
+			local AnimConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.AnimConfig")
+			local was = AnimConfig.PlayerMoves
+			AnimConfig.PlayerMoves = true
 			local ok, err = pcall(fn, now)
+			AnimConfig.PlayerMoves = was
 			MoveService._test.reset()
 			if not ok then
 				error(err, 0)

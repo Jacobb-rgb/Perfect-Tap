@@ -827,3 +827,23 @@ What to test in Studio:
 4. Walk 60 studs away from another player's golems: they switch to the plain hop; come back: running limbs again,
    never a limb left floating. Watch FPS with 8 players and their golems on the phone emulator.
 5. Reduce motion on: smaller swings, no lean into sprints or turns.
+
+## Emotes live, player moves switched off (2026-10-21, branch anim/emotes-live)
+The owner said yes to the emotes; the player moves stay built but off (AnimConfig.PlayerMoves = false).
+- Switch: with PlayerMoves off MoveController makes no Stepped loop, no Fx / ActionResult / Notify listeners, no
+  Move / MoveLoop / CarryCount listeners and sends nothing; MoveService registers no Net "Move" and no hooks.
+- Emotes: the EMOTES menu (EmoteController + UI/EmoteView, Pop look, word cards): the N key (free: no other
+  KeyCode.N, not a Roblox key), the EMOTES tile in the left HUD menu (touch; the gamepad reaches it with
+  D-pad Left, then A; no new pad button). Net "Emote" (Rate 2, Burst 4; EmoteService: EmoteConfig whitelist,
+  Guard, a 1 s cooldown per emote, never while carrying / cleaning / on a board / seated / dead, the Blaster
+  Spin only with the blaster) sets the character attribute Emote = "<Name>:<seq>" ("" = stop). Every client
+  plays it within 70 studs and on screen; the one loop runs only while an emote plays near you.
+What to test in Studio (2 players, R15):
+1. Press N (or tap EMOTES; on a pad D-pad Left, pick EMOTES, A): the menu opens, B / X / Backspace close it,
+   another panel opening closes it. Pick ROBOT: you dance, the other player sees it. Pick ROBOT again: it stops.
+2. Walk, jump, sit or ride a hoverboard while dancing: the dance stops (the finishing pose, quickly) for both.
+3. Pick up ore: the menu says "Put the ore down first."; build mode / cleaning: no dance.
+4. BLASTER SPIN is grey ("Hold your blaster") until the blaster is in hand; then the gun twirls; firing stops it.
+5. GEM JUGGLE: three gems fly between the hands; they vanish when it stops; 8 jugglers at once stay smooth.
+6. Phone: the EMOTES tile and the cards are easy to tap; the menu fits a small phone.
+7. Carry / throw / recoil / celebrations: nothing happens (switched off), no errors in the output.

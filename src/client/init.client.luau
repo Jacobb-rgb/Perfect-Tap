@@ -53,6 +53,7 @@ local ORDER = {
 	"TutorialController", -- the tutorial bubble and the guide beam to the step's target
 	"LightWorldController", -- the light UI's world labels and prompts (only with UIConfig.LightUI on)
 	"MoveController", -- the player's procedural moves (carry, throw, recoil, celebrations) on every R15 character near you
+	"EmoteController", -- the EMOTES menu: the N key, the EMOTES tile (AnimConfig.Emotes)
 	"UIMotionController", -- UI/Motion everywhere: windows pop, buttons squash, shop cards breathe, cash flies in
 }
 

@@ -24,6 +24,10 @@
 	  SellService.onSold         MoveConfig.BigSell.Items or more sold within
 	                             BigSell.Window while at Tobin's -> CashToss
 
+	AnimConfig.PlayerMoves (owner 2026-10-21: built, not approved yet) off:
+	init / start do nothing (no Net "Move" handler, no hooks, no loop) and
+	play / setLoop set no attribute.
+
 	Net "Move" (client -> server, rate limited in Net.luau): (name) a move the
 	client already plays for itself (Throw on the throw input, Wave, Shrug).
 	Only MoveConfig.ClientMoves names (Guard.string + the whitelist, never a
@@ -37,6 +41,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GolemConfig = require(Shared.Config.GolemConfig)
+local AnimConfig = require(Shared.Config.AnimConfig)
 local MoveConfig = require(Shared.Config.MoveConfig)
 local OreData = require(Shared.Config.OreData)
 local MoveRules = require(Shared.Moves.MoveRules)
@@ -67,6 +72,9 @@ local clock: () -> number = os.clock
 ---------------------------------------------------------------- playing
 
 function MoveService.play(player: Player, name: string): boolean
+	if not AnimConfig.PlayerMoves then
+		return false
+	end
 	local move = MoveConfig.Moves[name]
 	if not move or move.Loop then
 		return false
@@ -94,7 +102,7 @@ end
 -- The loop every client shows on this player's character (nil = none).
 function MoveService.setLoop(player: Player, name: string?)
 	local character = player.Character
-	if not character then
+	if not character or not AnimConfig.PlayerMoves then
 		return
 	end
 	local value = if name and MoveConfig.Moves[name] and MoveConfig.Moves[name].Loop then name else nil
@@ -270,6 +278,9 @@ MoveService._test = {
 }
 
 function MoveService.init()
+	if not AnimConfig.PlayerMoves then
+		return -- off (AnimConfig): no Net "Move" handler (Net's sink drops it), no hooks, no loop
+	end
 	Net.on("Move", onMove)
 	Discovery.onDiscovered(onDiscovered)
 	CleaningService.onCleaned(onCleaned)
@@ -287,6 +298,9 @@ function MoveService.init()
 end
 
 function MoveService.start()
+	if not AnimConfig.PlayerMoves then
+		return
+	end
 	while true do
 		task.wait(MoveConfig.LoopPoll)
 		pollLoops()

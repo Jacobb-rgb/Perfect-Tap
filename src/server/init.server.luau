@@ -69,6 +69,7 @@ local ORDER = {
 	"StoreService", -- the Robux STORE window: StoreAction -> purchase prompts (grants: MonetizationService)
 	"TutorialService", -- the first-time tutorial: steps from the save data, Skip / Got it
 	"MoveService", -- the player's moves: Net "Move", celebrations from the existing hooks, the Spray / Hammer loops
+	"EmoteService", -- the emotes: Net "Emote" (whitelist, cooldown), the Emote character attribute
 }
 
 local loaded = {}

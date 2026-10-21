@@ -30,6 +30,7 @@ Net.Events = {
 	CarryDrop = { Rate = 8, Burst = 10 },
 	CarryThrow = { Rate = 6, Burst = 8 },
 	Move = { Rate = 3, Burst = 5 }, -- (name: a MoveConfig.ClientMoves name) a move the client plays itself; MoveService shows it to the others
+	Emote = { Rate = 2, Burst = 4 }, -- (name: an EmoteConfig.List name, or "" to stop) the EMOTES menu; EmoteService sets the character attribute
 	-- cleaning minigame
 	CleanStart = { Rate = 2, Burst = 3 },
 	CleanSubmit = { Rate = 2, Burst = 3 },
