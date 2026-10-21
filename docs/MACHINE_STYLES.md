@@ -8,7 +8,10 @@ chimneys and bowls. Code: `src/shared/Builders/KitMachines.luau`. Saved before a
 - pictures of all 25 buildable machines: `docs/screenshots/machines/all_machines_sheet.jpg`
   (scene `kit_showroom`, shots `tools/preview/kit_showroom_shots.json`).
 
-## Forge Works - CONCEPT (owner 2026-10-20: "try more of a Satisfactory x Hydroneer style")
+**Decision (owner, 2026-10-21): the Soft look stays** ("the white machines, I love them, we keep that").
+
+## Forge Works - CONCEPT, PARKED (owner 2026-10-20: "try more of a Satisfactory x Hydroneer style")
+Not built further and not landed; kept on branch `art/works-machines` for reference only.
 Code: `src/shared/Builders/WorksMachines.luau` (nothing in the game uses it yet). Preview: scene `works_gallery`
 (`tools/lune/lib/works_gallery.luau`, shots `tools/preview/works_shots.json`): the new look in front, the Soft look
 behind. Pictures: `docs/screenshots/works_concept/`.
