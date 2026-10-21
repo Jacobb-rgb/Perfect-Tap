@@ -212,6 +212,9 @@ elseif sceneName == "elevator_ui" then -- the elevator's floor list (7 cards) an
 	end
 elseif sceneName == "hoverboards" then -- the hoverboard showroom, Robux close-ups, lineup (tools/lune/lib/hoverboard_preview.luau)
 	require("./lib/hoverboard_preview").build(Loader, workspace)
+elseif sceneName == "hoverboard_fx" or sceneName == "hoverboard_fx_boost" or sceneName == "hoverboard_fx_start" then -- all five boards with their ride effects / bursts
+	local moment = if sceneName == "hoverboard_fx_boost" then "Boost" elseif sceneName == "hoverboard_fx_start" then "Start" else nil
+	require("./lib/hoverboard_preview").buildFx(Loader, workspace, moment)
 elseif sceneName == "hoverboard_ride" or sceneName == "hoverboard_hero" then -- riders on hoverboards in the Greystone Quarry floor (+ the hoverboards UI)
 	local HoverboardPreview = require("./lib/hoverboard_preview")
 	HoverboardPreview.buildRide(Loader, workspace, sceneName == "hoverboard_hero")
